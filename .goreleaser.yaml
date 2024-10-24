@@ -14,19 +14,27 @@ builds:
     binary: pinocchio
     goos:
       - linux
-      # I am not able to test windows at the time
-      #      - windows
+# I am not able to test windows at the time
+#      - windows
       - darwin
 checksum:
   name_template: 'checksums.txt'
+
+signs:
+  - artifacts: checksum
+    # setup for github actions according to https://goreleaser.com/ci/actions/
+    args: [ "--batch", "-u", "{{ .Env.GPG_FINGERPRINT }}", "--output", "${signature}", "--detach-sign", "${artifact}" ]
+
 snapshot:
   name_template: "{{ incpatch .Version }}-next"
+
 changelog:
   sort: asc
   filters:
     exclude:
       - '^docs:'
       - '^test:'
+
 brews:
   - name: pinocchio
     description: "Pinocchio is a tool to interact with large language models"
