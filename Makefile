@@ -35,14 +35,17 @@ tag-patch:
 
 release:
 	git push --tags
-	GOPROXY=proxy.golang.org go list -m github.com/go-go-golems/XXX@$(shell svu current)
+	GOPROXY=proxy.golang.org go list -m github.com/go-go-golems/pinocchio@$(shell svu current)
 
 bump-glazed:
 	go get github.com/go-go-golems/glazed@latest
 	go get github.com/go-go-golems/clay@latest
+	go get github.com/go-go-golems/parka@latest
+	go get github.com/go-go-golems/bobatea@latest
+	go get github.com/go-go-golems/geppetto@latest
 	go mod tidy
 
-XXX_BINARY=$(shell which XXX)
+pinocchio_BINARY=$(shell which pinocchio)
 install:
-	go build -o ./dist/XXX ./cmd/XXX && \
-		cp ./dist/XXX $(XXX_BINARY)
+	go build -o ./dist/pinocchio ./cmd/pinocchio && \
+		cp ./dist/pinocchio $(pinocchio_BINARY)

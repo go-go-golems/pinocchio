@@ -1,4 +1,5 @@
-project_name: XXX
+version: 2
+project_name: pinocchio
 
 before:
   hooks:
@@ -9,12 +10,12 @@ before:
 builds:
   - env:
       - CGO_ENABLED=0
-    main: ./cmd/XXX
-    binary: XXX
+    main: ./cmd/pinocchio
+    binary: pinocchio
     goos:
       - linux
-# I am not able to test windows at the time
-#      - windows
+      # I am not able to test windows at the time
+      #      - windows
       - darwin
 checksum:
   name_template: 'checksums.txt'
@@ -27,14 +28,13 @@ changelog:
       - '^docs:'
       - '^test:'
 brews:
-  - name: XXX
-    description: "XXX is a tool"
-    homepage: "https://github.com/go-go-golems/XXX"
-    tap:
+  - name: pinocchio
+    description: "Pinocchio is a tool to interact with large language models"
+    homepage: "https://github.com/go-go-golems/pinocchio"
+    repository:
       owner: go-go-golems
       name: homebrew-go-go-go
       token: "{{ .Env.TAP_GITHUB_TOKEN }}"
-
 nfpms:
   -
     id: packages
@@ -44,13 +44,12 @@ nfpms:
     maintainer: Manuel Odendahl <wesen@ruinwesen.com>
 
     description: |-
-      XXX is a tool
+      Pinocchio is a tool to interact with large language models.
 
     license: MIT
 
     # Formats to be generated.
     formats:
-      # - apk
       - deb
       - rpm
 
