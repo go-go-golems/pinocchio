@@ -3,6 +3,8 @@ package main
 import (
 	"embed"
 	"fmt"
+	"os"
+
 	clay "github.com/go-go-golems/clay/pkg"
 	edit_command "github.com/go-go-golems/clay/pkg/cmds/edit-command"
 	ls_commands "github.com/go-go-golems/clay/pkg/cmds/ls-commands"
@@ -26,7 +28,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"os"
 )
 
 //go:embed prompts/*
@@ -104,6 +105,9 @@ func initRootCmd() (*help.HelpSystem, error) {
 	cobra.CheckErr(err)
 
 	err = catter_doc.AddDocToHelpSystem(helpSystem)
+	cobra.CheckErr(err)
+
+	err = clay.AddDocToHelpSystem(helpSystem)
 	cobra.CheckErr(err)
 
 	helpSystem.SetupCobraRootCommand(rootCmd)
