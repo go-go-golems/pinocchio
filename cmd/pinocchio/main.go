@@ -18,6 +18,7 @@ import (
 	"github.com/go-go-golems/glazed/pkg/types"
 	pinocchio_cmds "github.com/go-go-golems/pinocchio/cmd/pinocchio/cmds"
 	"github.com/go-go-golems/pinocchio/cmd/pinocchio/cmds/catter"
+	catter_doc "github.com/go-go-golems/pinocchio/cmd/pinocchio/cmds/catter/pkg/doc"
 	"github.com/go-go-golems/pinocchio/cmd/pinocchio/cmds/kagi"
 	"github.com/go-go-golems/pinocchio/cmd/pinocchio/cmds/openai"
 	"github.com/go-go-golems/pinocchio/cmd/pinocchio/cmds/tokens"
@@ -100,6 +101,9 @@ var runCommandCmd = &cobra.Command{
 func initRootCmd() (*help.HelpSystem, error) {
 	helpSystem := help.NewHelpSystem()
 	err := doc.AddDocToHelpSystem(helpSystem)
+	cobra.CheckErr(err)
+
+	err = catter_doc.AddDocToHelpSystem(helpSystem)
 	cobra.CheckErr(err)
 
 	helpSystem.SetupCobraRootCommand(rootCmd)

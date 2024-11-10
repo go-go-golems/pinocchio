@@ -103,9 +103,26 @@ prompt: |
   title: ...
   body: |
     ...
+  changelog: |
+    ... # A concise, single-line description of the main changes for the changelog
+  release_notes:
+    title: ... # A user-friendly title for the release notes
+    body: |
+      ... # A more detailed description focusing on user-facing changes and benefits
   ```
   
-  Capitalize the first letter of the title.
+  For the changelog entry:
+  - Keep it short and focused on the main changes
+  - Use present tense (e.g., "Add feature X" not "Added feature X")
+  - Focus on technical changes
+  
+  For the release notes:
+  - Title should be user-friendly and descriptive
+  - Body should explain the changes from a user's perspective
+  - Include any new features, improvements, or breaking changes
+  - Explain benefits and use cases where relevant
+  
+  Capitalize the first letter of all titles.
   
   {{ if .additional }}
   Additional instructions:
