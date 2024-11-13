@@ -17,12 +17,12 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
 	"github.com/go-go-golems/glazed/pkg/cmds/loaders"
 	"github.com/go-go-golems/glazed/pkg/help"
-	"github.com/go-go-golems/glazed/pkg/types"
 	pinocchio_cmds "github.com/go-go-golems/pinocchio/cmd/pinocchio/cmds"
 	"github.com/go-go-golems/pinocchio/cmd/pinocchio/cmds/catter"
 	catter_doc "github.com/go-go-golems/pinocchio/cmd/pinocchio/cmds/catter/pkg/doc"
 	"github.com/go-go-golems/pinocchio/cmd/pinocchio/cmds/kagi"
 	"github.com/go-go-golems/pinocchio/cmd/pinocchio/cmds/openai"
+	"github.com/go-go-golems/pinocchio/cmd/pinocchio/cmds/prompto"
 	"github.com/go-go-golems/pinocchio/cmd/pinocchio/cmds/tokens"
 	"github.com/go-go-golems/pinocchio/pkg/cmds"
 	"github.com/pkg/errors"
@@ -173,35 +173,6 @@ func initAllCommands(helpSystem *help.HelpSystem) error {
 		return err
 	}
 
-	lsCommandsCommand, err := ls_commands.NewListCommandsCommand(allCommands,
-		ls_commands.WithCommandDescriptionOptions(
-			glazed_cmds.WithShort("Commands related to sqleton queries"),
-		),
-		ls_commands.WithAddCommandToRowFunc(func(
-			command glazed_cmds.Command,
-			row types.Row,
-			parsedLayers *layers.ParsedLayers,
-		) ([]types.Row, error) {
-			ret := []types.Row{row}
-			switch c := command.(type) {
-			case *cmds.GeppettoCommand:
-				row.Set("prompt", c.Prompt)
-				row.Set("type", "geppetto")
-			default:
-			}
-
-			return ret, nil
-		}),
-	)
-	if err != nil {
-		return err
-	}
-	cobraQueriesCommand, err := sql.BuildCobraCommandWithSqletonMiddlewares(lsCommandsCommand)
-	if err != nil {
-		return err
-	}
-	rootCmd.AddCommand(cobraQueriesCommand)
-
 	rootCmd.AddCommand(openai.OpenaiCmd)
 
 	tokens.RegisterCommands(rootCmd)
@@ -241,6 +212,12 @@ func initAllCommands(helpSystem *help.HelpSystem) error {
 	rootCmd.AddCommand(command)
 
 	catter.AddToRootCommand(rootCmd)
+
+	promptoCommand, err := prompto.InitPromptoCmd(helpSystem)
+	if err != nil {
+		return err
+	}
+	rootCmd.AddCommand(promptoCommand)
 
 	return nil
 }
