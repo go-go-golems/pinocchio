@@ -219,5 +219,17 @@ func initAllCommands(helpSystem *help.HelpSystem) error {
 	}
 	rootCmd.AddCommand(promptoCommand)
 
+	clipCommand, err := pinocchio_cmds.NewClipCommand()
+	if err != nil {
+		return err
+	}
+	cobraClipCommand, err := cli.BuildCobraCommandFromGlazeCommand(clipCommand,
+		cli.WithCobraMiddlewaresFunc(cmds.GetCobraCommandGeppettoMiddlewares),
+	)
+	if err != nil {
+		return err
+	}
+	rootCmd.AddCommand(cobraClipCommand)
+
 	return nil
 }
