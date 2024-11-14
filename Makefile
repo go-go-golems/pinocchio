@@ -43,6 +43,7 @@ bump-glazed:
 	go get github.com/go-go-golems/parka@latest
 	go get github.com/go-go-golems/bobatea@latest
 	go get github.com/go-go-golems/geppetto@latest
+	go get github.com/go-go-golems/prompto@latest
 	go mod tidy
 
 pinocchio_BINARY=$(shell which pinocchio)
