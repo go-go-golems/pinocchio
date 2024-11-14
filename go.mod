@@ -16,7 +16,7 @@ require (
 	github.com/go-go-golems/clay v0.1.20
 	github.com/go-go-golems/geppetto v0.4.23
 	github.com/go-go-golems/glazed v0.5.21
-	github.com/go-go-golems/prompto v0.1.4
+	github.com/go-go-golems/prompto v0.1.6
 	github.com/google/uuid v1.6.0
 	github.com/iancoleman/strcase v0.3.0
 	github.com/invopop/jsonschema v0.12.0
@@ -53,7 +53,7 @@ require (
 	github.com/charmbracelet/huh v0.5.2 // indirect
 	github.com/charmbracelet/lipgloss v0.13.0 // indirect
 	github.com/charmbracelet/x/ansi v0.2.3 // indirect
-	github.com/charmbracelet/x/exp/strings v0.0.0-20240722160745-212f7b056ed0 // indirect
+	github.com/charmbracelet/x/exp/strings v0.0.0-20240725160154-f9f6568126ec // indirect
 	github.com/charmbracelet/x/term v0.2.0 // indirect
 	github.com/danwakefield/fnmatch v0.0.0-20160403171240-cbb64ac3d964 // indirect
 	github.com/denormal/go-gitignore v0.0.0-20180930084346-ae8ad1d07817 // indirect
