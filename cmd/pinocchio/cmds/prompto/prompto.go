@@ -32,7 +32,7 @@ func loadPromptoConfig() ([]string, error) {
 func InitPromptoCmd(helpSystem *help.HelpSystem) (*cobra.Command, error) {
 	repositories, err := loadPromptoConfig()
 	if err != nil {
-		return nil, fmt.Errorf("failed to load prompto repositories: %w", err)
+		repositories = []string{}
 	}
 
 	options := cmds.NewCommandOptions(repositories)
