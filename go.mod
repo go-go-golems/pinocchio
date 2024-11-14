@@ -13,9 +13,9 @@ require (
 	github.com/charmbracelet/glamour v0.7.0
 	github.com/dave/jennifer v1.7.0
 	github.com/go-go-golems/bobatea v0.0.11
-	github.com/go-go-golems/clay v0.1.19
-	github.com/go-go-golems/geppetto v0.4.22
-	github.com/go-go-golems/glazed v0.5.19
+	github.com/go-go-golems/clay v0.1.20
+	github.com/go-go-golems/geppetto v0.4.23
+	github.com/go-go-golems/glazed v0.5.21
 	github.com/go-go-golems/prompto v0.1.4
 	github.com/google/uuid v1.6.0
 	github.com/iancoleman/strcase v0.3.0
