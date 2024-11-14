@@ -53,8 +53,8 @@ github.com/charmbracelet/lipgloss v0.13.0 h1:4X3PPeoWEDCMvzDvGmTajSyYPcZM4+y8sCA
 github.com/charmbracelet/lipgloss v0.13.0/go.mod h1:nw4zy0SBX/F/eAO1cWdcvy6qnkDUxr8Lw7dvFrAIbbY=
 github.com/charmbracelet/x/ansi v0.2.3 h1:VfFN0NUpcjBRd4DnKfRaIRo53KRgey/nhOoEqosGDEY=
 github.com/charmbracelet/x/ansi v0.2.3/go.mod h1:dk73KoMTT5AX5BsX0KrqhsTqAnhZZoCBjs7dGWp4Ktw=
-github.com/charmbracelet/x/exp/strings v0.0.0-20240722160745-212f7b056ed0 h1:qko3AQ4gK1MTS/de7F5hPGx6/k1u0w4TeYmBFwzYVP4=
-github.com/charmbracelet/x/exp/strings v0.0.0-20240722160745-212f7b056ed0/go.mod h1:pBhA0ybfXv6hDjQUZ7hk1lVxBiUbupdw5R31yPUViVQ=
+github.com/charmbracelet/x/exp/strings v0.0.0-20240725160154-f9f6568126ec h1:G79PnmxvVeo5FbAip3VPqAaBkOeXExwvhIBUfrXD5MA=
+github.com/charmbracelet/x/exp/strings v0.0.0-20240725160154-f9f6568126ec/go.mod h1:pBhA0ybfXv6hDjQUZ7hk1lVxBiUbupdw5R31yPUViVQ=
 github.com/charmbracelet/x/exp/term v0.0.0-20240524151031-ff83003bf67a h1:k/s6UoOSVynWiw7PlclyGO2VdVs5ZLbMIHiGp4shFZE=
 github.com/charmbracelet/x/exp/term v0.0.0-20240524151031-ff83003bf67a/go.mod h1:YBotIGhfoWhHDlnUpJMkjebGV2pdGRCn1Y4/Nk/vVcU=
 github.com/charmbracelet/x/term v0.2.0 h1:cNB9Ot9q8I711MyZ7myUR5HFWL/lc3OpU8jZ4hwm0x0=
@@ -89,8 +89,8 @@ github.com/go-go-golems/geppetto v0.4.23 h1:cGqWqbTPWOzdA/DZ+TLkraBlsHaY+lAzQund
 github.com/go-go-golems/geppetto v0.4.23/go.mod h1:EcQOt0Kiv1PtMaT58l1kJ9EPdSemfBuevmqie98T3HA=
 github.com/go-go-golems/glazed v0.5.21 h1:irOl46wwnSvFd7o+1WJz23WNJ7PpIhV5hrUpRtanZiA=
 github.com/go-go-golems/glazed v0.5.21/go.mod h1:cceXzXliF/CEc8qM/YXhcp9AbBAQpKDMF3+HIlGTDAI=
-github.com/go-go-golems/prompto v0.1.4 h1:8b0q3TLNXGhULdQbExJwJjaUvvjx0NYpLPupZ/qEpzc=
-github.com/go-go-golems/prompto v0.1.4/go.mod h1:0TUvw2DLpXdnAB927ciN9uPEg/4LbnKtRem3+bn5t60=
+github.com/go-go-golems/prompto v0.1.6 h1:nIYsVmzcrmVmLXA4gxx3Ri32Pq1kAMr9jw8N3AjHhNM=
+github.com/go-go-golems/prompto v0.1.6/go.mod h1:Bn0X8QAAAI4kLDcDqO6Hd4Peh+Mu3siDm/6dsj3VO4A=
 github.com/go-go-golems/sqleton v0.2.4 h1:qsgX0RxBXdjOC/+zmRrVvlsbBT8HCM2otLh/bV/f5uU=
 github.com/go-go-golems/sqleton v0.2.4/go.mod h1:GAGCz4/wsFwzN5mUA3ARmJfqanYu1k5yP4rCUiTeWgs=
 github.com/go-openapi/errors v0.22.0 h1:c4xY/OLxUBSTiepAg3j/MHuAv5mJhnf53LLMWFB+u/w=
