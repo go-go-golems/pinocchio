@@ -23,6 +23,7 @@ import (
 	"github.com/go-go-golems/pinocchio/cmd/pinocchio/cmds/kagi"
 	"github.com/go-go-golems/pinocchio/cmd/pinocchio/cmds/openai"
 	"github.com/go-go-golems/pinocchio/cmd/pinocchio/cmds/prompto"
+	"github.com/go-go-golems/pinocchio/cmd/pinocchio/cmds/temporizer"
 	"github.com/go-go-golems/pinocchio/cmd/pinocchio/cmds/tokens"
 	"github.com/go-go-golems/pinocchio/pkg/cmds"
 	"github.com/pkg/errors"
@@ -230,6 +231,10 @@ func initAllCommands(helpSystem *help.HelpSystem) error {
 		return err
 	}
 	rootCmd.AddCommand(cobraClipCommand)
+
+	// Add temporizer command
+	temporizerCmd := temporizer.NewTemporizerCommand()
+	rootCmd.AddCommand(temporizerCmd)
 
 	return nil
 }
