@@ -1,0 +1,80 @@
+name: generate-tech-doc
+short: Generate a comprehensive technical document based on the provided topic and context.
+flags:
+  - name: additional_system
+    type: stringList
+    help: Additional system prompt
+    default: []
+  - name: additional
+    type: stringList
+    help: Additional prompt
+    default: []
+  - name: context
+    type: fileList
+    help: Additional context from files
+  - name: topic
+    type: string
+    help: The main topic of the technical document
+    required: true
+  - name: document_type
+    type: string
+    help: The type of document to be created
+    default: technical developer documentation
+system-prompt: |
+  You are an expert technical writer tasked with creating a comprehensive and detailed technical document. Your goal is to explain complex concepts clearly and effectively, focusing on thorough written explanations rather than relying heavily on code snippets or bullet points.
+
+  {{ .additional_system | join "\n" }}
+prompt: |
+  {{ if .additional }}Additional instructions:
+  {{ .additional | join "\n" }}{{ end }}
+
+  {{ if .context }}Additional Context:
+  {{ range .context }}
+  Path: {{ .Path }}
+  ---
+  {{ .Content }}
+  ---
+  {{- end }}
+  {{ end }}
+
+  You are an expert technical writer tasked with creating a comprehensive and detailed technical document. Your goal is to explain complex concepts clearly and effectively, focusing on thorough written explanations rather than relying heavily on code snippets or bullet points.
+
+  Here are the key details for your task:
+
+  <topic>
+  {{ .topic }}
+  </topic>
+
+  <document_type>
+  {{ .document_type }}
+  </document_type>
+
+  Before you begin writing, take some time to analyze the topic and plan your document. Wrap your document planning inside <technical_document_outline> tags, including:
+
+  1. Analysis of the topic's key components and underlying principles
+  2. Identification of the target audience and their expected level of expertise
+  3. Identification of the most important aspects to focus on
+  4. Outline of the document structure
+  5. List of any specialized terms or acronyms that need to be defined
+  6. Ideas for relevant code examples, diagrams, or illustrations
+  7. Specific explanations you'll provide before and after any code snippets
+  8. Key points for the conclusion
+  9. Potential challenges or misconceptions related to the topic and how to address them
+  10. Brainstorm potential questions or concerns the reader might have and how to address them
+  11. Consider real-world applications or case studies that could enhance understanding
+  12. Identify any areas where additional research might be needed to provide comprehensive coverage
+
+  Remember to avoid generic advice about thread synchronization, performance, or other general topics unless they are directly relevant to the specific topic at hand.
+
+  After your planning, create your technical document using the following structure:
+
+  1. Introduction: Provide a comprehensive overview of the topic and its significance.
+  2. Main Content: Divide into logical sections, each focusing on a specific aspect of the topic. Use subsections as needed. Provide detailed explanations for each concept.
+  3. Code Examples and Illustrations: Include these where appropriate to enhance understanding. Always provide thorough explanations before and after presenting code snippets.
+  4. Real-world Applications or Case Studies: If applicable, include examples of how the topic is applied in practical scenarios.
+  5. Addressing Common Questions and Concerns: Anticipate and address potential questions or misconceptions readers might have.
+  6. Conclusion: Summarize key points and discuss future directions or implications if applicable.
+
+  Use Markdown formatting for your document. Focus on providing detailed, paragraph-form explanations rather than relying on bullet points or terse summaries. When presenting code snippets, ensure they are accompanied by comprehensive explanations of their purpose and functionality.
+
+  Begin your response with your document planning in <technical_document_outline> tags, followed by your full technical document in a Markdown code block.

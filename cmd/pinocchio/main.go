@@ -107,6 +107,9 @@ func initRootCmd() (*help.HelpSystem, error) {
 	err = catter_doc.AddDocToHelpSystem(helpSystem)
 	cobra.CheckErr(err)
 
+	err = clay.AddDocToHelpSystem(helpSystem)
+	cobra.CheckErr(err)
+
 	helpSystem.SetupCobraRootCommand(rootCmd)
 
 	err = clay.InitViper("pinocchio", rootCmd)
