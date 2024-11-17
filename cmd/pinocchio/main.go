@@ -23,7 +23,9 @@ import (
 	"github.com/go-go-golems/pinocchio/cmd/pinocchio/cmds/kagi"
 	"github.com/go-go-golems/pinocchio/cmd/pinocchio/cmds/openai"
 	"github.com/go-go-golems/pinocchio/cmd/pinocchio/cmds/prompto"
+	"github.com/go-go-golems/pinocchio/cmd/pinocchio/cmds/temporizer"
 	"github.com/go-go-golems/pinocchio/cmd/pinocchio/cmds/tokens"
+	pinocchio_docs "github.com/go-go-golems/pinocchio/cmd/pinocchio/doc"
 	"github.com/go-go-golems/pinocchio/pkg/cmds"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
@@ -108,6 +110,9 @@ func initRootCmd() (*help.HelpSystem, error) {
 	cobra.CheckErr(err)
 
 	err = clay.AddDocToHelpSystem(helpSystem)
+	cobra.CheckErr(err)
+
+	err = pinocchio_docs.AddDocToHelpSystem(helpSystem)
 	cobra.CheckErr(err)
 
 	helpSystem.SetupCobraRootCommand(rootCmd)
@@ -230,6 +235,10 @@ func initAllCommands(helpSystem *help.HelpSystem) error {
 		return err
 	}
 	rootCmd.AddCommand(cobraClipCommand)
+
+	// Add temporizer command
+	temporizerCmd := temporizer.NewTemporizerCommand()
+	rootCmd.AddCommand(temporizerCmd)
 
 	return nil
 }
