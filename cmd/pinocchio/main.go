@@ -20,6 +20,7 @@ import (
 	pinocchio_cmds "github.com/go-go-golems/pinocchio/cmd/pinocchio/cmds"
 	"github.com/go-go-golems/pinocchio/cmd/pinocchio/cmds/catter"
 	catter_doc "github.com/go-go-golems/pinocchio/cmd/pinocchio/cmds/catter/pkg/doc"
+	"github.com/go-go-golems/pinocchio/cmd/pinocchio/cmds/helpers"
 	"github.com/go-go-golems/pinocchio/cmd/pinocchio/cmds/kagi"
 	"github.com/go-go-golems/pinocchio/cmd/pinocchio/cmds/openai"
 	"github.com/go-go-golems/pinocchio/cmd/pinocchio/cmds/prompto"
@@ -239,6 +240,12 @@ func initAllCommands(helpSystem *help.HelpSystem) error {
 	// Add temporizer command
 	temporizerCmd := temporizer.NewTemporizerCommand()
 	rootCmd.AddCommand(temporizerCmd)
+
+	// Add helper commands
+	err = helpers.RegisterHelperCommands(rootCmd)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
