@@ -15,7 +15,7 @@ require (
 	github.com/go-go-golems/bobatea v0.0.11
 	github.com/go-go-golems/clay v0.1.20
 	github.com/go-go-golems/geppetto v0.4.23
-	github.com/go-go-golems/glazed v0.5.21
+	github.com/go-go-golems/glazed v0.5.22
 	github.com/go-go-golems/prompto v0.1.6
 	github.com/google/uuid v1.6.0
 	github.com/iancoleman/strcase v0.3.0
