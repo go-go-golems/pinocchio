@@ -3,8 +3,9 @@ package ui
 import (
 	"context"
 	"fmt"
+
 	"github.com/ThreeDotsLabs/watermill/message"
-	"github.com/charmbracelet/bubbletea"
+	tea "github.com/charmbracelet/bubbletea"
 	boba_chat "github.com/go-go-golems/bobatea/pkg/chat"
 	conversation2 "github.com/go-go-golems/bobatea/pkg/chat/conversation"
 	"github.com/go-go-golems/geppetto/pkg/conversation"
@@ -18,6 +19,8 @@ type StepBackend struct {
 	stepFactory chat.Step
 	stepResult  steps.StepResult[string]
 }
+
+var _ boba_chat.Backend = &StepBackend{}
 
 func (s *StepBackend) Start(ctx context.Context, msgs []*conversation.Message) (tea.Cmd, error) {
 	if !s.IsFinished() {
@@ -74,6 +77,8 @@ func (s *StepBackend) IsFinished() bool {
 
 var _ boba_chat.Backend = &StepBackend{}
 
+// StepChatForwardFunc is a function that forwards watermill messages to the UI by
+// trasnforming them into bubbletea messages and injecting them into the program `p`.
 func StepChatForwardFunc(p *tea.Program) func(msg *message.Message) error {
 	return func(msg *message.Message) error {
 		msg.Ack()
