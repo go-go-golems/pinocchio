@@ -4,6 +4,11 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"strings"
+
 	tea "github.com/charmbracelet/bubbletea"
 	bobatea_chat "github.com/go-go-golems/bobatea/pkg/chat"
 	"github.com/go-go-golems/geppetto/pkg/conversation"
@@ -22,9 +27,6 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/tcnksm/go-input"
 	"golang.org/x/sync/errgroup"
-	"io"
-	"os"
-	"strings"
 )
 
 type GeppettoCommandDescription struct {
@@ -43,6 +45,8 @@ type GeppettoCommandDescription struct {
 const GeppettoHelpersSlug = "geppetto-helpers"
 
 func NewHelpersParameterLayer() (layers.ParameterLayer, error) {
+	defaultHistoryPath := filepath.Join(os.Getenv("HOME"), ".pinocchio", "history")
+
 	return layers.NewParameterLayer(GeppettoHelpersSlug, "Geppetto helpers",
 		layers.WithParameterDefinitions(
 			parameters.NewParameterDefinition(
@@ -89,8 +93,24 @@ func NewHelpersParameterLayer() (layers.ParameterLayer, error) {
 				parameters.ParameterTypeFileList,
 				parameters.WithHelp("Images to display"),
 			),
+			parameters.NewParameterDefinition(
+				"autosave",
+				parameters.ParameterTypeKeyValue,
+				parameters.WithHelp("Autosave configuration"),
+				parameters.WithDefault(map[string]interface{}{
+					"path":     defaultHistoryPath,
+					"template": "",
+					"enabled":  "no",
+				}),
+			),
 		),
 	)
+}
+
+type AutosaveSettings struct {
+	Path     string `glazed.parameter:"path"`
+	Template string `glazed.parameter:"template"`
+	Enabled  string `glazed.parameter:"enabled"`
 }
 
 type HelpersSettings struct {
@@ -102,6 +122,7 @@ type HelpersSettings struct {
 	Interactive                 bool                   `glazed.parameter:"interactive"`
 	ForceInteractive            bool                   `glazed.parameter:"force-interactive"`
 	Images                      []*parameters.FileData `glazed.parameter:"images"`
+	Autosave                    *AutosaveSettings      `glazed.parameter:"autosave,from_json"`
 }
 
 type GeppettoCommand struct {
@@ -306,7 +327,13 @@ func (g *GeppettoCommand) RunIntoWriter(
 
 	router.AddHandler("chat", "chat", chat.StepPrinterFunc("", w))
 
-	contextManager := conversation.NewManager()
+	contextManager := conversation.NewManager(
+		conversation.WithAutosave(
+			s.Autosave.Enabled,
+			s.Autosave.Template,
+			s.Autosave.Path,
+		),
+	)
 
 	var chatStep chat.Step
 	chatStep, err = stepFactory.NewStep(chat.WithPublishedTopic(router.Publisher, "chat"))
