@@ -1,6 +1,6 @@
 ---
 Title: Autosaving Conversations in Pinocchio
-Slug: autosave-functionality
+Slug: autosave
 Short: Configure automatic saving of conversation histories
 Topics:
 - configuration
