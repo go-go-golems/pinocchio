@@ -29,7 +29,7 @@ flags:
     type: string
     help: Description or reference to the issue corresponding to this commit
   - name: diff
-    type: stringFromFile
+    type: file
     help: File containing the diff of the changes
   - name: code
     type: fileList
@@ -47,7 +47,7 @@ prompt: |
   
   {{if .diff }}The diff of the changes is:
   --- BEGIN DIFF
-  {{ .diff }}
+  {{ .diff.Content }}
   --- END DIFF. {{ end }}
   
   {{ if .code }}The modified code files are:

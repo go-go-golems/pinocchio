@@ -2,6 +2,8 @@ package cmds
 
 import (
 	"fmt"
+	"os"
+
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings/claude"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings/openai"
@@ -11,7 +13,6 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cmds/middlewares"
 	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
 	"github.com/spf13/cobra"
-	"os"
 )
 
 func BuildCobraCommandWithGeppettoMiddlewares(
@@ -82,6 +83,7 @@ func GetCobraCommandGeppettoMiddlewares(
 				settings.AiClientSlug,
 				openai.OpenAiChatSlug,
 				claude.ClaudeChatSlug,
+				GeppettoHelpersSlug,
 			},
 			middlewares.GatherFlagsFromViper(parameters.WithParseStepSource("viper")),
 		),
