@@ -85,8 +85,8 @@ github.com/go-go-golems/bobatea v0.0.11 h1:ceUdMEXGhwYiXMyeW4Ym/XNbuKygKyFqpGbJh
 github.com/go-go-golems/bobatea v0.0.11/go.mod h1:M/qOKNefggUgAvKSqDSOGhaVfStcAG4GcZqgwac0SLo=
 github.com/go-go-golems/clay v0.1.20 h1:KUTbDBA/Q7vgG22B9uBnwDpacwG2+bMavQS8SDwolks=
 github.com/go-go-golems/clay v0.1.20/go.mod h1:hyQirWoEICmaSTcAiPRy7If1n5JEncPi4WVM6tivjoY=
-github.com/go-go-golems/geppetto v0.4.23 h1:cGqWqbTPWOzdA/DZ+TLkraBlsHaY+lAzQundQYOIUFg=
-github.com/go-go-golems/geppetto v0.4.23/go.mod h1:EcQOt0Kiv1PtMaT58l1kJ9EPdSemfBuevmqie98T3HA=
+github.com/go-go-golems/geppetto v0.4.24 h1:vzAJgZsyzHPOtvi7BSQYmMX/K9FpiB4ZmQjO4pDbo10=
+github.com/go-go-golems/geppetto v0.4.24/go.mod h1:oPdBF6gmsZzQnAa9RpOF+tMa/K/KK9t9yKObJuQzUHY=
 github.com/go-go-golems/glazed v0.5.22 h1:Nns2zOdg1XptPPNWJbT3QWn5IeYp76gb2lAT4wVlNao=
 github.com/go-go-golems/glazed v0.5.22/go.mod h1:cceXzXliF/CEc8qM/YXhcp9AbBAQpKDMF3+HIlGTDAI=
 github.com/go-go-golems/prompto v0.1.6 h1:nIYsVmzcrmVmLXA4gxx3Ri32Pq1kAMr9jw8N3AjHhNM=
@@ -278,8 +278,8 @@ github.com/xuri/nfp v0.0.0-20220409054826-5e722a1d9e22 h1:OAmKAfT06//esDdpi/DZ8Q
 github.com/xuri/nfp v0.0.0-20220409054826-5e722a1d9e22/go.mod h1:WwHg+CVyzlv/TX9xqBFXEZAuxOPxn2k1GNHwG41IIUQ=
 github.com/yuin/goldmark v1.4.13/go.mod h1:6yULJ656Px+3vBD8DxQVa3kxgyrAnzto9xy5taEt/CY=
 github.com/yuin/goldmark v1.7.1/go.mod h1:uzxRWxtg69N339t3louHJ7+O03ezfj6PlliRlaOzY1E=
-github.com/yuin/goldmark v1.7.4 h1:BDXOHExt+A7gwPCJgPIIq7ENvceR7we7rOS9TNoLZeg=
-github.com/yuin/goldmark v1.7.4/go.mod h1:uzxRWxtg69N339t3louHJ7+O03ezfj6PlliRlaOzY1E=
+github.com/yuin/goldmark v1.7.8 h1:iERMLn0/QJeHFhxSt3p6PeN9mGnvIKSpG9YYorDMnic=
+github.com/yuin/goldmark v1.7.8/go.mod h1:uzxRWxtg69N339t3louHJ7+O03ezfj6PlliRlaOzY1E=
 github.com/yuin/goldmark-emoji v1.0.3 h1:aLRkLHOuBR2czCY4R8olwMjID+tENfhyFDMCRhbIQY4=
 github.com/yuin/goldmark-emoji v1.0.3/go.mod h1:tTkZEbwu5wkPmgTcitqddVxY9osFZiavD+r4AzQrh1U=
 github.com/zenizh/go-capturer v0.0.0-20211219060012-52ea6c8fed04 h1:qXafrlZL1WsJW5OokjraLLRURHiw0OzKHD/RNdspp4w=

@@ -14,7 +14,7 @@ require (
 	github.com/dave/jennifer v1.7.0
 	github.com/go-go-golems/bobatea v0.0.11
 	github.com/go-go-golems/clay v0.1.20
-	github.com/go-go-golems/geppetto v0.4.23
+	github.com/go-go-golems/geppetto v0.4.24
 	github.com/go-go-golems/glazed v0.5.22
 	github.com/go-go-golems/prompto v0.1.6
 	github.com/google/uuid v1.6.0
@@ -116,7 +116,7 @@ require (
 	github.com/xuri/efp v0.0.0-20220603152613-6918739fd470 // indirect
 	github.com/xuri/excelize/v2 v2.7.1 // indirect
 	github.com/xuri/nfp v0.0.0-20220409054826-5e722a1d9e22 // indirect
-	github.com/yuin/goldmark v1.7.4 // indirect
+	github.com/yuin/goldmark v1.7.8 // indirect
 	github.com/yuin/goldmark-emoji v1.0.3 // indirect
 	go.mongodb.org/mongo-driver v1.14.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
