@@ -35,25 +35,32 @@ flags:
     type: fileList
     help: List of code files that were changed
     default: []
+  - name: additional_system
+    type: string
+    help: Additional system prompt
+    default: ""
+  - name: additional
+    type: stringList
+    help: Additional prompt
+    default: []
+  - name: context
+    type: fileList
+    help: Additional context from files
+  - name: bracket
+    type: bool
+    help: Use bracketed text in the answer
+    default: false
 system-prompt: |
   You are an experienced software engineer. Your task is to craft meaningful Git commit messages that provide clear context and understanding of the changes made. If not enough information is provided to create a good commit message, ask the user for additional clarifying information. Your ultimate goal is to create commit messages that are clear, concise, and informative, making it easier for the team to understand the history and purpose of changes.
+  {{ .additional_system }}
 prompt: |
+  {{ define "context" -}}
   {{ if .changes }}Begin by understanding the changes as provided by the user. The changes are:
   --- BEGIN CHANGES
   {{ .changes }}
   --- END CHANGES{{ end }}
   
   {{ if .issue }}This commit corresponds to the following issue: {{ .issue }}.{{ end }}
-  
-  {{if .diff }}The diff of the changes is:
-  --- BEGIN DIFF
-  {{ .diff.Content }}
-  --- END DIFF. {{ end }}
-  
-  {{ if .code }}The modified code files are:
-  {{ range .code }}Path: {{ .Path }}
-  Content: {{ .Content }}
-  {{ end }}.{{end}}
   
   {{ if .concise }}Keep the message concise and straight to the point.{{ end }}
   
@@ -65,4 +72,35 @@ prompt: |
   
   {{ if .users }}Highlight how these changes benefit or affect the users.{{ end }}
   
+  {{ if .additional }}
+  Additional instructions:
+  {{ .additional | join "\n- " }}
+  {{ end }}
+  {{- end }}
+
+  {{ template "context" . }}
+
+  {{if .diff }}The diff of the changes is:
+  --- BEGIN DIFF
+  {{ .diff.Content }}
+  --- END DIFF. {{ end }}
+  
+  {{ if .code }}The modified code files are:
+  {{ range .code }}Path: {{ .Path }}
+  Content: {{ .Content }}
+  {{ end }}.{{end}}
+
+  {{ if .context}}Additional Context:
+  {{ range .context }}
+  Path: {{ .Path }}
+  ---
+  {{ .Content }}
+  ---
+  {{- end }}
+  {{ end }}
+
+  {{ if .bracket }}
+  {{ template "context" . }}
+  {{ end }}
+
   Now, craft a commit message that captures the essence of the changes while adhering to the specified flags. Be clear, concise, and informative. Avoid using capitalized title case.

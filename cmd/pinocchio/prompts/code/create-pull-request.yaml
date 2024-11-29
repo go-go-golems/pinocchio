@@ -64,6 +64,7 @@ system-prompt: |
   facilitating the team's ability to review and merge the changes effectively.
   {{ .additional_system }}
 prompt: |
+  {{ define "context" -}}
   {{ if .commits }}Begin by understanding and describing the commits as provided by the user to ensure you have accurately captured the changes. The commits are:
   --- BEGIN COMMITS
   {{ .commits }}
@@ -84,7 +85,7 @@ prompt: |
   {{ range .code }}Path: {{ .Path }}
   Content: {{ .Content }}
   {{ end }}.{{end}}
-  
+
   Finally, craft a detailed pull request description that provides all the necessary information for reviewing the changes, using clear and understandable language.
   If not enough information is provided to create a good pull request, ask the user for additional clarifying information.
   
@@ -129,6 +130,13 @@ prompt: |
   {{ .additional | join "\n- " }}
   {{ end }}
   
+  {{ if .concise -}} Give a concise answer, answer in a single sentence if possible, skip unnecessary explanations.  {{- end }}
+  {{ if .use_bullets -}} Use bullet points in the answer.  {{- end }}
+  {{ if .use_keywords -}} Use keywords in the answer, not full sentences.  {{- end }}
+  {{- end }}
+
+  {{ template "context" . }}
+
   {{ if .context}}Additional Context:
   {{ range .context }}
   Path: {{ .Path }}
@@ -137,21 +145,9 @@ prompt: |
   ---
   {{- end }}
   {{ end }}
-  {{ if .concise -}}
-  Give a concise answer, answer in a single sentence if possible, skip unnecessary explanations.
-  {{- end }}
-  {{ if .use_bullets -}}
-  Use bullet points in the answer.
-  {{- end }}
-  {{ if .use_keywords -}}
-  Use keywords in the answer, not full sentences.
-  {{- end }}
 
-  {{ if .bracket -}}
-  The description of the pull request is: {{ .description }}.
-  {{ if .additional }}
-  Additional instructions:
-  {{ .additional | join "\n- " }}
+  {{ if .bracket }}
+  {{ template "context" . }}
   {{ end }}
-  {{ end}}
+
   
