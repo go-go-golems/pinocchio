@@ -1,6 +1,10 @@
 package cmds
 
 import (
+	"io"
+	"io/fs"
+	"strings"
+
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings/claude"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings/ollama"
@@ -12,9 +16,6 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
 	"github.com/pkg/errors"
 	"gopkg.in/yaml.v3"
-	"io"
-	"io/fs"
-	"strings"
 )
 
 type GeppettoCommandLoader struct {
@@ -129,6 +130,13 @@ func CreateGeppettoLayers(stepSettings *settings.StepSettings) ([]layers.Paramet
 		return nil, err
 	}
 
+	embeddingsParameterLayer, err := settings.NewEmbeddingsParameterLayer(
+		layers.WithDefaults(stepSettings.Embeddings),
+	)
+	if err != nil {
+		return nil, err
+	}
+
 	// TODO(manuel, 2024-01-17) Disable not fully function ollama layer for now
 	_ = ollamaParameterLayer
 
@@ -142,6 +150,7 @@ func CreateGeppettoLayers(stepSettings *settings.StepSettings) ([]layers.Paramet
 		chatParameterLayer, clientParameterLayer,
 		claudeParameterLayer,
 		openaiParameterLayer,
+		embeddingsParameterLayer,
 		//ollamaParameterLayer,
 	}, nil
 }
