@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"embed"
-	"html/template"
 	"net/http"
 
 	"github.com/go-go-golems/geppetto/pkg/events"
@@ -26,12 +25,6 @@ func main() {
 
 	log.Logger = logger
 
-	// Load templates
-	tmpl, err := template.ParseFS(templatesFS, "templates/*.html")
-	if err != nil {
-		logger.Fatal().Err(err).Msg("Failed to parse templates")
-	}
-
 	// Create event router with verbose logging
 	router, err := events.NewEventRouter(events.WithVerbose(true))
 	if err != nil {
@@ -52,10 +45,10 @@ func main() {
 	}()
 
 	// Create server
-	server := NewServer(tmpl, router)
+	server := NewServer(router)
 
 	// Register handlers
-	RegisterHandlers(server, tmpl)
+	server.Register()
 
 	logger.Info().Msg("Server starting on http://localhost:8080")
 	if err := http.ListenAndServe(":8080", nil); err != nil {

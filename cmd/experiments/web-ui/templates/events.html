@@ -59,4 +59,14 @@
         <div>{{.Text}}</div>
     </div>
 </div>
+{{end}}
+
+{{define "event-user"}}
+<div class="event">
+    <span class="timestamp">{{.Timestamp}}</span>
+    <div class="alert alert-primary">
+        <strong>You:</strong>
+        <div>{{.Message}}</div>
+    </div>
+</div>
 {{end}} 

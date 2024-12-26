@@ -56,15 +56,6 @@
                     <div class="card-header">
                         <div class="d-flex justify-content-between align-items-center">
                             <h5 class="mb-0">Chat Stream</h5>
-                            {{if not .ClientID}}
-                            <button class="btn btn-primary"
-                                    hx-post="/chat"
-                                    hx-target="#chat-container"
-                                    hx-push-url="true"
-                                    hx-swap="innerHTML">
-                                Start New Chat
-                            </button>
-                            {{end}}
                         </div>
                     </div>
                     <div class="card-body">
@@ -73,9 +64,22 @@
                                 {{template "chat-container" .}}
                             {{else}}
                                 <div class="event-container">
-                                    <div class="text-center text-muted">
-                                        Click "Start New Chat" to begin...
+                                    <div id="events">
                                     </div>
+                                </div>
+                                <div class="chat-input mt-3">
+                                    <form hx-post="/chat" 
+                                          hx-target="#chat-container"
+                                          hx-push-url="true"
+                                          hx-swap="innerHTML"
+                                          class="d-flex gap-2">
+                                        <input type="text" 
+                                               name="message" 
+                                               class="form-control" 
+                                               placeholder="Type your message..."
+                                               required>
+                                        <button type="submit" class="btn btn-primary">Send</button>
+                                    </form>
                                 </div>
                             {{end}}
                         </div>
@@ -98,6 +102,11 @@
             document.body.addEventListener('htmx:sseError', function (e) {
                 console.error('SSE Error:', e.detail);
             });
+
+            // Handle clearing input field
+            document.body.addEventListener('clearInput', function (e) {
+                document.querySelector('input[name="message"]').value = '';
+            });
         });
     </script>
 </body>
@@ -107,13 +116,17 @@
 <div class="event-container">
     <div id="events" 
          hx-ext="sse" 
-         sse-connect="/events?client_id={{.ClientID}}" 
-         sse-swap="message">
+         sse-connect="/events?client_id={{.ClientID}}">
+        <div id="messages">
+            {{if .Messages}}
+                {{template "conversation-history" .Messages}}
+            {{end}}
+        </div>
     </div>
 </div>
 <div class="chat-input mt-3">
     <form hx-post="/chat" 
-          hx-target="#events" 
+          hx-target="#messages" 
           hx-swap="beforeend"
           class="d-flex gap-2">
         <input type="hidden" name="client_id" value="{{.ClientID}}">
@@ -124,5 +137,22 @@
                required>
         <button type="submit" class="btn btn-primary">Send</button>
     </form>
+</div>
+{{end}}
+
+{{define "conversation-history"}}
+    {{range .}}
+        {{if eq .Content.Role "user"}}
+            {{template "event-user" (dict "Timestamp" .Time "Message" .Content.String)}}
+        {{else if eq .Content.Role "assistant"}}
+            {{template "event-final" (dict "Timestamp" .Time "Text" .Content.String)}}
+        {{end}}
+    {{end}}
+{{end}}
+
+{{define "message-container"}}
+<div class="message-group">
+    {{template "event-user" (dict "Timestamp" .Timestamp "Message" .Message)}}
+    <div class="assistant-response" sse-swap="message"></div>
 </div>
 {{end}} 
