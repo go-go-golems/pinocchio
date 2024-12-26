@@ -58,7 +58,7 @@
                             <h5 class="mb-0">Chat Stream</h5>
                             {{if not .ClientID}}
                             <button class="btn btn-primary"
-                                    hx-get="/start"
+                                    hx-post="/chat"
                                     hx-target="#chat-container"
                                     hx-push-url="true"
                                     hx-swap="innerHTML">
