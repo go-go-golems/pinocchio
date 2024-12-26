@@ -75,8 +75,6 @@ func (s *StepBackend) IsFinished() bool {
 	return s.stepResult == nil
 }
 
-var _ boba_chat.Backend = &StepBackend{}
-
 // StepChatForwardFunc is a function that forwards watermill messages to the UI by
 // trasnforming them into bubbletea messages and injecting them into the program `p`.
 func StepChatForwardFunc(p *tea.Program) func(msg *message.Message) error {

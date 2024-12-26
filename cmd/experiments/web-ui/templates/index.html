@@ -111,4 +111,18 @@
          sse-swap="message">
     </div>
 </div>
+<div class="chat-input mt-3">
+    <form hx-post="/chat" 
+          hx-target="#events" 
+          hx-swap="beforeend"
+          class="d-flex gap-2">
+        <input type="hidden" name="client_id" value="{{.ClientID}}">
+        <input type="text" 
+               name="message" 
+               class="form-control" 
+               placeholder="Type your message..."
+               required>
+        <button type="submit" class="btn btn-primary">Send</button>
+    </form>
+</div>
 {{end}} 
