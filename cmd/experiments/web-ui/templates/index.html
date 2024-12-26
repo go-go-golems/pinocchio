@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Geppetto Chat SSE Demo</title>
+    <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+    <script src="https://unpkg.com/htmx-ext-sse@2.2.2/sse.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .event-container {
+            height: 600px;
+            overflow-y: auto;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            background-color: #f8f9fa;
+        }
+        .event {
+            margin-bottom: 0.5rem;
+            padding: 0.5rem;
+            border-radius: 4px;
+        }
+        .timestamp {
+            font-size: 0.8rem;
+            color: #6c757d;
+        }
+        .tool-call {
+            background-color: #e9ecef;
+            padding: 0.5rem;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+        .tool-result {
+            background-color: #f1f3f5;
+            padding: 0.5rem;
+            border-radius: 4px;
+            margin-left: 1rem;
+            font-family: monospace;
+        }
+        .error {
+            color: #dc3545;
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            padding: 0.5rem;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container mt-4">
+        <h1 class="mb-4">Geppetto Chat Demo</h1>
+        
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0">Chat Stream</h5>
+                            {{if not .ClientID}}
+                            <button class="btn btn-primary"
+                                    hx-get="/start"
+                                    hx-target="#chat-container"
+                                    hx-push-url="true"
+                                    hx-swap="innerHTML">
+                                Start New Chat
+                            </button>
+                            {{end}}
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div id="chat-container">
+                            {{if .ClientID}}
+                                {{template "chat-container" .}}
+                            {{else}}
+                                <div class="event-container">
+                                    <div class="text-center text-muted">
+                                        Click "Start New Chat" to begin...
+                                    </div>
+                                </div>
+                            {{end}}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Debug info in dev mode -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            document.body.addEventListener('htmx:sseMessage', function (e) {
+                console.log('SSE Message:', {
+                    event: e.detail.event,
+                    data: e.detail.data
+                });
+            });
+            
+            document.body.addEventListener('htmx:sseError', function (e) {
+                console.error('SSE Error:', e.detail);
+            });
+        });
+    </script>
+</body>
+</html>
+
+{{define "chat-container"}}
+<div class="event-container">
+    <div id="events" 
+         hx-ext="sse" 
+         sse-connect="/events?client_id={{.ClientID}}" 
+         sse-swap="message">
+    </div>
+</div>
+{{end}} 
