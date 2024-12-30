@@ -29,7 +29,7 @@ type SSEClient struct {
 	DroppedMsgs  int64 // Counter for monitoring purposes
 	step         chat.Step
 	topic        string
-	stepResult   steps.StepResult[string]
+	stepResult   steps.StepResult[*conversation.Message]
 	logger       zerolog.Logger
 	tmpl         *template.Template
 	router       *events.EventRouter
@@ -191,10 +191,9 @@ func (c *SSEClient) SendUserMessage(ctx context.Context, message string) error {
 				continue
 			}
 			// Add assistant's response to conversation
-			c.manager.AppendMessages(conversation.NewChatMessage(conversation.RoleAssistant, result.Unwrap()))
+			c.manager.AppendMessages(result.Unwrap())
 			c.logger.Debug().
 				Int("result_count", resultCount).
-				Str("result", result.Unwrap()).
 				Msg("Received step result")
 		}
 		c.logger.Info().

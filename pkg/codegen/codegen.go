@@ -1,12 +1,13 @@
 package codegen
 
 import (
+	"strconv"
+
 	"github.com/dave/jennifer/jen"
 	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
 	"github.com/go-go-golems/glazed/pkg/codegen"
 	"github.com/go-go-golems/pinocchio/pkg/cmds"
 	"github.com/iancoleman/strcase"
-	"strconv"
 )
 
 const TemplatingPath = "github.com/go-go-golems/glazed/pkg/helpers/templating"
@@ -187,7 +188,7 @@ func (g *GeppettoCommandCodeGenerator) defineRunMethods(f *jen.File, cmdName str
 			jen.Id("ctx").Qual("context", "Context"),
 			jen.Id("manager").Qual(ConversationPath, "Manager"),
 		).
-		Params(jen.Qual(StepsPath, "StepResult").Index(jen.String()), jen.Error()).
+		Params(jen.Qual(StepsPath, "StepResult").Index(jen.Op("*").Qual(ConversationPath, "Message")), jen.Error()).
 		Block(
 			jen.Comment("instantiate step from factory"),
 			jen.List(jen.Id("step"), jen.Err()).
