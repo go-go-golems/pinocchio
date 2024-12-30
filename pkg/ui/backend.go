@@ -87,15 +87,10 @@ func StepChatForwardFunc(p *tea.Program) func(msg *message.Message) error {
 		}
 
 		metadata := conversation2.StreamMetadata{
-			ID:       e.Metadata().ID,
-			ParentID: e.Metadata().ParentID,
-			Step: &conversation2.StepMetadata{
-				StepID:     e.StepMetadata().StepID,
-				Type:       e.StepMetadata().Type,
-				InputType:  e.StepMetadata().InputType,
-				OutputType: e.StepMetadata().OutputType,
-				Metadata:   e.StepMetadata().Metadata,
-			},
+			ID:            e.Metadata().ID,
+			ParentID:      e.Metadata().ParentID,
+			StepMetadata:  e.StepMetadata(),
+			EventMetadata: e.Metadata(),
 		}
 		log.Debug().Interface("event", e).Msg("Dispatching event to UI")
 		switch e_ := e.(type) {
