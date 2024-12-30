@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/ThreeDotsLabs/watermill/message"
 	tea "github.com/charmbracelet/bubbletea"
 	bobatea_chat "github.com/go-go-golems/bobatea/pkg/chat"
 	"github.com/go-go-golems/geppetto/pkg/conversation"
@@ -103,6 +104,31 @@ func NewHelpersParameterLayer() (layers.ParameterLayer, error) {
 					"enabled":  "no",
 				}),
 			),
+			parameters.NewParameterDefinition(
+				"non-interactive",
+				parameters.ParameterTypeBool,
+				parameters.WithHelp("Skip interactive chat mode entirely"),
+				parameters.WithDefault(false),
+			),
+			parameters.NewParameterDefinition(
+				"output",
+				parameters.ParameterTypeChoice,
+				parameters.WithHelp("Output format (text, json, yaml)"),
+				parameters.WithDefault("text"),
+				parameters.WithChoices("text", "json", "yaml"),
+			),
+			parameters.NewParameterDefinition(
+				"with-metadata",
+				parameters.ParameterTypeBool,
+				parameters.WithHelp("Include event metadata in output"),
+				parameters.WithDefault(false),
+			),
+			parameters.NewParameterDefinition(
+				"full-output",
+				parameters.ParameterTypeBool,
+				parameters.WithHelp("Print all available metadata in output"),
+				parameters.WithDefault(false),
+			),
 		),
 	)
 }
@@ -123,6 +149,10 @@ type HelpersSettings struct {
 	ForceInteractive            bool                   `glazed.parameter:"force-interactive"`
 	Images                      []*parameters.FileData `glazed.parameter:"images"`
 	Autosave                    *AutosaveSettings      `glazed.parameter:"autosave,from_json"`
+	NonInteractive              bool                   `glazed.parameter:"non-interactive"`
+	Output                      string                 `glazed.parameter:"output"`
+	WithMetadata                bool                   `glazed.parameter:"with-metadata"`
+	FullOutput                  bool                   `glazed.parameter:"full-output"`
 }
 
 type GeppettoCommand struct {
@@ -262,11 +292,11 @@ func (g *GeppettoCommand) InitializeContextManager(
 
 func (g *GeppettoCommand) Run(
 	ctx context.Context,
-	step steps.Step[conversation.Conversation, string],
+	step chat.Step,
 	contextManager conversation.Manager,
 	helpersSettings *HelpersSettings,
 	ps map[string]interface{},
-) (steps.StepResult[string], error) {
+) (steps.StepResult[*conversation.Message], error) {
 	err := g.InitializeContextManager(contextManager, helpersSettings, ps)
 	if err != nil {
 		return nil, err
@@ -279,7 +309,7 @@ func (g *GeppettoCommand) Run(
 	}
 
 	messagesM := steps.Resolve(conversation_)
-	m := steps.Bind[conversation.Conversation, string](ctx, messagesM, step)
+	m := steps.Bind[conversation.Conversation, *conversation.Message](ctx, messagesM, step)
 
 	return m, nil
 }
@@ -325,7 +355,20 @@ func (g *GeppettoCommand) RunIntoWriter(
 		}
 	}()
 
-	router.AddHandler("chat", "chat", chat.StepPrinterFunc("", w))
+	// Configure the printer based on settings
+	var printer func(msg *message.Message) error
+	if s.Output != "text" || s.WithMetadata || s.FullOutput {
+		printer = chat.NewStructuredPrinter(w, chat.PrinterOptions{
+			Format:          chat.PrinterFormat(s.Output),
+			Name:            "",
+			IncludeMetadata: s.WithMetadata,
+			Full:            s.FullOutput,
+		})
+	} else {
+		printer = chat.StepPrinterFunc("", w)
+	}
+
+	router.AddHandler("chat", "chat", printer)
 
 	contextManager := conversation.NewManager(
 		conversation.WithAutosave(
@@ -388,29 +431,36 @@ func (g *GeppettoCommand) RunIntoWriter(
 		log.Debug().Bool("isStream", isStream).Msg("")
 
 		res := m.Return()
+		stepMetadata := m.GetMetadata()
+		_ = stepMetadata
 		for _, msg := range res {
 			s, err := msg.Value()
 			if err != nil {
 				// TODO(manuel, 2023-12-09) Better error handling here, to catch I guess streaming error and HTTP errors
 				return err
 			} else {
-				contextManager.AppendMessages(conversation.NewChatMessage(conversation.RoleAssistant, s))
+				contextManager.AppendMessages(s)
 
-				if !isStream {
-					_, err := w.Write([]byte(s))
-					if err != nil {
-						return err
-					}
-					endedInNewline = strings.HasSuffix(s, "\n")
+				_, err := w.Write([]byte(s.Content.String()))
+				if err != nil {
+					return err
 				}
+				endedInNewline = strings.HasSuffix(s.Content.String(), "\n")
 			}
 		}
 
 		// check if terminal is tty
 		isOutputTerminal := isatty.IsTerminal(os.Stdout.Fd())
 		forceInteractive := s.ForceInteractive
+
+		// Skip interactive mode if non-interactive is set
+		if s.NonInteractive {
+			s.Interactive = false
+			s.AutomaticallyContinueInChat = false
+		}
+
 		continueInChat := s.AutomaticallyContinueInChat && s.Interactive
-		askChat := (isOutputTerminal || forceInteractive) && !s.AutomaticallyContinueInChat && s.Interactive
+		askChat := (isOutputTerminal || forceInteractive) && !s.AutomaticallyContinueInChat && s.Interactive && !s.NonInteractive
 
 		lengthBeforeChat := len(contextManager.GetConversation())
 

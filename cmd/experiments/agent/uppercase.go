@@ -51,9 +51,9 @@ var upperCaseCmd = &cobra.Command{
 		cobra.CheckErr(err)
 
 		// uppercase lambda step
-		uppercaseStep := &utils.LambdaStep[string, string]{
-			Function: func(s string) helpers.Result[string] {
-				return helpers.NewValueResult(strings.ToUpper(s))
+		uppercaseStep := &utils.LambdaStep[*conversation.Message, string]{
+			Function: func(s *conversation.Message) helpers.Result[string] {
+				return helpers.NewValueResult(strings.ToUpper(s.Content.String()))
 			},
 		}
 
@@ -62,7 +62,7 @@ var upperCaseCmd = &cobra.Command{
 		cobra.CheckErr(err)
 
 		// chain the result through the uppercaseStep
-		res_ := steps.Bind[string, string](ctx, res, uppercaseStep)
+		res_ := steps.Bind[*conversation.Message, string](ctx, res, uppercaseStep)
 
 		c := res_.GetChannel()
 		for i := range c {

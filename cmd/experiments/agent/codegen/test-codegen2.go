@@ -52,7 +52,7 @@ func (c *TestCodegenCommand) CreateStep(options ...chat.StepOption) (
 func (c *TestCodegenCommand) RunWithManager(
 	ctx context2.Context,
 	manager conversation.Manager,
-) (steps.StepResult[string], error) {
+) (steps.StepResult[*conversation.Message], error) {
 	// instantiate step frm factory
 	step, err := c.CreateStep()
 	if err != nil {

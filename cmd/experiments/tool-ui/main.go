@@ -131,7 +131,7 @@ func (t *ToolUiCommand) RunIntoGlazeProcessor(
 			return err
 		}
 		res := <-result.GetChannel()
-		fmt.Printf("\n\nchatToolStep.Start returned %v\n", res.ValueOr("error"))
+		fmt.Printf("\n\nchatToolStep.Start returned %v\n", res.ValueOr(nil))
 		return nil
 	})
 

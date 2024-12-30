@@ -1,0 +1,72 @@
+{{define "event-start"}}
+<div class="event">
+    <span class="timestamp">{{.Timestamp}}</span>
+    <div class="alert alert-info">Starting chat session...</div>
+</div>
+{{end}}
+
+{{define "event-partial"}}
+<div class="event">
+    <span class="timestamp">{{.Timestamp}}</span>
+    <div>{{.Completion}}</div>
+</div>
+{{end}}
+
+{{define "event-final"}}
+<div class="event">
+    <span class="timestamp">{{.Timestamp}}</span>
+    <div class="alert alert-success">
+        <strong>Final Response:</strong>
+        <div>{{.Text}}</div>
+    </div>
+</div>
+{{end}}
+
+{{define "event-tool-call"}}
+<div class="event">
+    <span class="timestamp">{{.Timestamp}}</span>
+    <div class="tool-call">
+        <strong>Tool Call:</strong> {{.Name}}
+        <pre>{{.Input}}</pre>
+    </div>
+</div>
+{{end}}
+
+{{define "event-tool-result"}}
+<div class="event">
+    <span class="timestamp">{{.Timestamp}}</span>
+    <div class="tool-result">
+        <strong>Tool Result:</strong>
+        <pre>{{.Result}}</pre>
+    </div>
+</div>
+{{end}}
+
+{{define "event-error"}}
+<div class="event">
+    <span class="timestamp">{{.Timestamp}}</span>
+    <div class="error">
+        <strong>Error:</strong> {{.Error}}
+    </div>
+</div>
+{{end}}
+
+{{define "event-interrupt"}}
+<div class="event">
+    <span class="timestamp">{{.Timestamp}}</span>
+    <div class="alert alert-warning">
+        <strong>Interrupted:</strong>
+        <div>{{.Text}}</div>
+    </div>
+</div>
+{{end}}
+
+{{define "event-user"}}
+<div class="event">
+    <span class="timestamp">{{.Timestamp}}</span>
+    <div class="alert alert-primary">
+        <strong>You:</strong>
+        <div>{{.Message}}</div>
+    </div>
+</div>
+{{end}} 

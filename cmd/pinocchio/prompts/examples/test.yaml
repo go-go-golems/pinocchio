@@ -16,4 +16,4 @@ flags:
     help: Of what am I asking?
 system_prompt: You are a LLM.
 prompt: |
-  Pretend you are a {{.pretend}}. What is the {{.what}} of {{.of}}?
+  Pretend you are a {{.pretend}}. What is the {{.what}} of {{.of}}? 2 words.

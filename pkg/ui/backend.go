@@ -17,7 +17,7 @@ import (
 
 type StepBackend struct {
 	stepFactory chat.Step
-	stepResult  steps.StepResult[string]
+	stepResult  steps.StepResult[*conversation.Message]
 }
 
 var _ boba_chat.Backend = &StepBackend{}
@@ -75,8 +75,6 @@ func (s *StepBackend) IsFinished() bool {
 	return s.stepResult == nil
 }
 
-var _ boba_chat.Backend = &StepBackend{}
-
 // StepChatForwardFunc is a function that forwards watermill messages to the UI by
 // trasnforming them into bubbletea messages and injecting them into the program `p`.
 func StepChatForwardFunc(p *tea.Program) func(msg *message.Message) error {
@@ -88,16 +86,12 @@ func StepChatForwardFunc(p *tea.Program) func(msg *message.Message) error {
 			return err
 		}
 
+		eventMetadata := e.Metadata()
 		metadata := conversation2.StreamMetadata{
-			ID:       e.Metadata().ID,
-			ParentID: e.Metadata().ParentID,
-			Step: &conversation2.StepMetadata{
-				StepID:     e.StepMetadata().StepID,
-				Type:       e.StepMetadata().Type,
-				InputType:  e.StepMetadata().InputType,
-				OutputType: e.StepMetadata().OutputType,
-				Metadata:   e.StepMetadata().Metadata,
-			},
+			ID:            eventMetadata.ID,
+			ParentID:      eventMetadata.ParentID,
+			StepMetadata:  e.StepMetadata(),
+			EventMetadata: &eventMetadata,
 		}
 		log.Debug().Interface("event", e).Msg("Dispatching event to UI")
 		switch e_ := e.(type) {

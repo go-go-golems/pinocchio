@@ -48,7 +48,7 @@ func (c *UnitTestsCommand) CreateManager(params *UnitTestsCommandParameters) (co
 	return conversation.CreateManager(c.SystemPrompt, c.Prompt, c.Messages, params)
 }
 
-func (c *UnitTestsCommand) RunWithManager(ctx context.Context, manager conversation.Manager) (steps.StepResult[string], error) {
+func (c *UnitTestsCommand) RunWithManager(ctx context.Context, manager conversation.Manager) (steps.StepResult[*conversation.Message], error) {
 	// instantiate step from factory
 	step, err := c.CreateStep()
 	if err != nil {
