@@ -1,0 +1,187 @@
+type: start
+metadata:
+    id: d7fc6ccc-a31a-4d17-9220-7fa19de71ee6
+    parentid: 31619e0b-3392-4c40-a2e2-c975fcff57e8
+step_metadata:
+    stepid: c0137b11-65dd-4578-98f7-e7920139002a
+    type: claude-chat
+    inputtype: conversation.Conversation
+    outputtype: string
+    metadata:
+        claude_message_id: msg_01M3Aba6dYFtqgMef4xN9Dir
+        claude_model: claude-3-5-haiku-20241022
+        claude_role: assistant
+        claude_usage:
+            input_tokens: 22
+            output_tokens: 1
+        settings:
+            ai-api-type: claude
+            ai-engine: claude-3-5-haiku-latest
+            ai-max-response-tokens: 8192
+            ai-stream: true
+            ai-temperature: 0.2
+            ai-top-p: 0.9
+            embeddings-dimensions: 1536
+            embeddings-engine: text-embedding-3-small
+            embeddings-type: openai
+            ollama-temperature: 0.8
+            timeout: 1m0s
+            timeout_second: 60
+---
+type: partial
+content: As
+metadata:
+    id: d7fc6ccc-a31a-4d17-9220-7fa19de71ee6
+    parentid: 31619e0b-3392-4c40-a2e2-c975fcff57e8
+step_metadata:
+    stepid: c0137b11-65dd-4578-98f7-e7920139002a
+    type: claude-chat
+    inputtype: conversation.Conversation
+    outputtype: string
+    metadata:
+        claude_message_id: msg_01M3Aba6dYFtqgMef4xN9Dir
+        claude_model: claude-3-5-haiku-20241022
+        claude_role: assistant
+        claude_usage:
+            input_tokens: 22
+            output_tokens: 1
+        settings:
+            ai-api-type: claude
+            ai-engine: claude-3-5-haiku-latest
+            ai-max-response-tokens: 8192
+            ai-stream: true
+            ai-temperature: 0.2
+            ai-top-p: 0.9
+            embeddings-dimensions: 1536
+            embeddings-engine: text-embedding-3-small
+            embeddings-type: openai
+            ollama-temperature: 0.8
+            timeout: 1m0s
+            timeout_second: 60
+---
+type: partial
+content: ' an AI'
+metadata:
+    id: d7fc6ccc-a31a-4d17-9220-7fa19de71ee6
+    parentid: 31619e0b-3392-4c40-a2e2-c975fcff57e8
+step_metadata:
+    stepid: c0137b11-65dd-4578-98f7-e7920139002a
+    type: claude-chat
+    inputtype: conversation.Conversation
+    outputtype: string
+    metadata:
+        claude_message_id: msg_01M3Aba6dYFtqgMef4xN9Dir
+        claude_model: claude-3-5-haiku-20241022
+        claude_role: assistant
+        claude_usage:
+            input_tokens: 22
+            output_tokens: 1
+        settings:
+            ai-api-type: claude
+            ai-engine: claude-3-5-haiku-latest
+            ai-max-response-tokens: 8192
+            ai-stream: true
+            ai-temperature: 0.2
+            ai-top-p: 0.9
+            embeddings-dimensions: 1536
+            embeddings-engine: text-embedding-3-small
+            embeddings-type: openai
+            ollama-temperature: 0.8
+            timeout: 1m0s
+            timeout_second: 60
+---
+type: partial
+content: ','
+metadata:
+    id: d7fc6ccc-a31a-4d17-9220-7fa19de71ee6
+    parentid: 31619e0b-3392-4c40-a2e2-c975fcff57e8
+step_metadata:
+    stepid: c0137b11-65dd-4578-98f7-e7920139002a
+    type: claude-chat
+    inputtype: conversation.Conversation
+    outputtype: string
+    metadata:
+        claude_message_id: msg_01M3Aba6dYFtqgMef4xN9Dir
+        claude_model: claude-3-5-haiku-20241022
+        claude_role: assistant
+        claude_usage:
+            input_tokens: 22
+            output_tokens: 1
+        settings:
+            ai-api-type: claude
+            ai-engine: claude-3-5-haiku-latest
+            ai-max-response-tokens: 8192
+            ai-stream: true
+            ai-temperature: 0.2
+            ai-top-p: 0.9
+            embeddings-dimensions: 1536
+            embeddings-engine: text-embedding-3-small
+            embeddings-type: openai
+            ollama-temperature: 0.8
+            timeout: 1m0s
+            timeout_second: 60
+---
+type: partial
+content: ' I don''t actually'
+metadata:
+    id: d7fc6ccc-a31a-4d17-9220-7fa19de71ee6
+    parentid: 31619e0b-3392-4c40-a2e2-c975fcff57e8
+step_metadata:
+    stepid: c0137b11-65dd-4578-98f7-e7920139002a
+    type: claude-chat
+    inputtype: conversation.Conversation
+    outputtype: string
+    metadata:
+        claude_message_id: msg_01M3Aba6dYFtqgMef4xN9Dir
+        claude_model: claude-3-5-haiku-20241022
+        claude_role: assistant
+        claude_usage:
+            input_tokens: 22
+            output_tokens: 1
+        settings:
+            ai-api-type: claude
+            ai-engine: claude-3-5-haiku-latest
+            ai-max-response-tokens: 8192
+            ai-stream: true
+            ai-temperature: 0.2
+            ai-top-p: 0.9
+            embeddings-dimensions: 1536
+            embeddings-engine: text-embedding-3-small
+            embeddings-type: openai
+            ollama-temperature: 0.8
+            timeout: 1m0s
+            timeout_second: 60
+---
+# many more partial events
+---
+type: final
+content: As an AI, I don't actually have a real age. I'm an artificial intelligence created by Anthropic, so I don't experience aging like humans do. If I were roleplaying as a scientist, I might choose an age range typical for an experienced researcher, perhaps between 35-50 years old. But in reality, I don't have a true age or physical existence.
+metadata:
+    id: d7fc6ccc-a31a-4d17-9220-7fa19de71ee6
+    parentid: 31619e0b-3392-4c40-a2e2-c975fcff57e8
+step_metadata:
+    stepid: c0137b11-65dd-4578-98f7-e7920139002a
+    type: claude-chat
+    inputtype: conversation.Conversation
+    outputtype: string
+    metadata:
+        claude_message_id: msg_01M3Aba6dYFtqgMef4xN9Dir
+        claude_model: claude-3-5-haiku-20241022
+        claude_role: assistant
+        claude_stop_reason: end_turn
+        claude_usage:
+            input_tokens: 0
+            output_tokens: 84
+        settings:
+            ai-api-type: claude
+            ai-engine: claude-3-5-haiku-latest
+            ai-max-response-tokens: 8192
+            ai-stream: true
+            ai-temperature: 0.2
+            ai-top-p: 0.9
+            embeddings-dimensions: 1536
+            embeddings-engine: text-embedding-3-small
+            embeddings-type: openai
+            ollama-temperature: 0.8
+            timeout: 1m0s
+            timeout_second: 60
