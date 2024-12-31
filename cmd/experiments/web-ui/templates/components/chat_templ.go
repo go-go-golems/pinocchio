@@ -213,12 +213,12 @@ func ConversationHistory(messages *conversation.WebConversation, swap bool) temp
 				if msg.Type == "chat" {
 					if chatMsg, ok := msg.Content.(*conversation.WebChatMessage); ok {
 						if chatMsg.Role == "user" {
-							templ_7745c5c3_Err = EventUser(msg.Time, chatMsg.Text).Render(ctx, templ_7745c5c3_Buffer)
+							templ_7745c5c3_Err = UserMessage(msg.Time, chatMsg.Text).Render(ctx, templ_7745c5c3_Buffer)
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
 						} else {
-							templ_7745c5c3_Err = EventFinal(msg.Time, chatMsg.Text).Render(ctx, templ_7745c5c3_Buffer)
+							templ_7745c5c3_Err = AssistantMessage(msg.Time, chatMsg.Text).Render(ctx, templ_7745c5c3_Buffer)
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
@@ -226,14 +226,14 @@ func ConversationHistory(messages *conversation.WebConversation, swap bool) temp
 					}
 				} else if msg.Type == "tool-use" {
 					if toolMsg, ok := msg.Content.(*conversation.WebToolUseMessage); ok {
-						templ_7745c5c3_Err = EventToolUse(msg.Time, toolMsg.Name, toolMsg.Input).Render(ctx, templ_7745c5c3_Buffer)
+						templ_7745c5c3_Err = ToolUseMessage(msg.Time, toolMsg.Name, toolMsg.Input).Render(ctx, templ_7745c5c3_Buffer)
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
 					}
 				} else if msg.Type == "tool-result" {
 					if toolMsg, ok := msg.Content.(*conversation.WebToolResultMessage); ok {
-						templ_7745c5c3_Err = EventToolResult(msg.Time, toolMsg.Result).Render(ctx, templ_7745c5c3_Buffer)
+						templ_7745c5c3_Err = ToolResultMessage(msg.Time, toolMsg.Result).Render(ctx, templ_7745c5c3_Buffer)
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
@@ -272,7 +272,7 @@ func MessageContainer(msg *conversation.WebMessage) templ.Component {
 		ctx = templ.ClearChildren(ctx)
 		if msg.Type == "chat" {
 			if chatMsg, ok := msg.Content.(*conversation.WebChatMessage); ok {
-				templ_7745c5c3_Err = EventUser(msg.Time, chatMsg.Text).Render(ctx, templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = UserMessage(msg.Time, chatMsg.Text).Render(ctx, templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}

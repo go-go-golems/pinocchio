@@ -4,23 +4,25 @@ import (
     "time"
 )
 
-templ EventPartial(timestamp time.Time, completion string) {
+templ UserMessage(timestamp time.Time, message string) {
     <div class="event">
         <div class="timestamp">{timestamp.Format("15:04:05")}</div>
-        <div class="assistant-response">
-            {completion}
+        <div class="user-message">
+            <strong>User:</strong> {message}
         </div>
     </div>
 }
 
-templ EventFinal(timestamp time.Time, text string) {
+templ AssistantMessage(timestamp time.Time, text string) {
     <div class="event">
         <div class="timestamp">{timestamp.Format("15:04:05")}</div>
-        <div>Done</div>
+        <div class="assistant-message">
+            <strong>Assistant:</strong> {text}
+        </div>
     </div>
 }
 
-templ EventToolUse(timestamp time.Time, name string, input interface{}) {
+templ ToolUseMessage(timestamp time.Time, name string, input interface{}) {
     <div class="event">
         <div class="timestamp">{timestamp.Format("15:04:05")}</div>
         <div class="tool-call">
@@ -30,21 +32,12 @@ templ EventToolUse(timestamp time.Time, name string, input interface{}) {
     </div>
 }
 
-templ EventToolResult(timestamp time.Time, result interface{}) {
+templ ToolResultMessage(timestamp time.Time, result interface{}) {
     <div class="event">
         <div class="timestamp">{timestamp.Format("15:04:05")}</div>
         <div class="tool-result">
             <strong>Tool Result:</strong>
             <pre>{toJSON(result)}</pre>
-        </div>
-    </div>
-}
-
-templ EventError(timestamp time.Time, err string) {
-    <div class="event">
-        <div class="timestamp">{timestamp.Format("15:04:05")}</div>
-        <div class="error">
-            <strong>Error:</strong> {err}
         </div>
     </div>
 } 

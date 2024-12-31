@@ -66,18 +66,18 @@ templ ConversationHistory(messages *conversation.WebConversation, swap bool) {
 				if msg.Type == "chat" {
 					if chatMsg, ok := msg.Content.(*conversation.WebChatMessage); ok {
 						if chatMsg.Role == "user" {
-							@EventUser(msg.Time, chatMsg.Text)
+							@UserMessage(msg.Time, chatMsg.Text)
 						} else {
-							@EventFinal(msg.Time, chatMsg.Text)
+							@AssistantMessage(msg.Time, chatMsg.Text)
 						}
 					}
 				} else if msg.Type == "tool-use" {
 					if toolMsg, ok := msg.Content.(*conversation.WebToolUseMessage); ok {
-						@EventToolUse(msg.Time, toolMsg.Name, toolMsg.Input)
+						@ToolUseMessage(msg.Time, toolMsg.Name, toolMsg.Input)
 					}
 				} else if msg.Type == "tool-result" {
 					if toolMsg, ok := msg.Content.(*conversation.WebToolResultMessage); ok {
-						@EventToolResult(msg.Time, toolMsg.Result)
+						@ToolResultMessage(msg.Time, toolMsg.Result)
 					}
 				}
 			}
@@ -88,7 +88,7 @@ templ ConversationHistory(messages *conversation.WebConversation, swap bool) {
 templ MessageContainer(msg *conversation.WebMessage) {
 	if msg.Type == "chat" {
 		if chatMsg, ok := msg.Content.(*conversation.WebChatMessage); ok {
-			@EventUser(msg.Time, chatMsg.Text)
+			@UserMessage(msg.Time, chatMsg.Text)
 		}
 	}
 }

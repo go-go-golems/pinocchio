@@ -12,6 +12,7 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/events"
 	"github.com/go-go-golems/geppetto/pkg/steps"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/chat"
+	web_conversation "github.com/go-go-golems/pinocchio/cmd/experiments/web-ui/conversation"
 	"github.com/go-go-golems/pinocchio/cmd/experiments/web-ui/templates/components"
 	"github.com/rs/zerolog"
 )
@@ -99,7 +100,7 @@ func NewChatClient(id string, router *events.EventRouter, options ...ChatClientO
 				Msg("Parsed event")
 
 			// Convert to HTML
-			html, err := EventToHTML(e)
+			html, err := client.EventToHTML(e)
 			if err != nil {
 				baseLogger.Error().Err(err).
 					Str("event_type", string(e.Type())).
@@ -191,8 +192,6 @@ func (c *ChatClient) SendUserMessage(ctx context.Context, message string) error 
 					continue
 				}
 				// Add assistant's response to conversation
-				msg := result.Unwrap()
-				c.manager.AppendMessages(msg)
 				c.logger.Debug().
 					Int("result_count", resultCount).
 					Msg("Received step result")
@@ -211,14 +210,14 @@ func (c *ChatClient) GetConversation() []*conversation.Message {
 }
 
 // EventToHTML converts a chat event to HTML
-func EventToHTML(e chat.Event) (string, error) {
+func (c *ChatClient) EventToHTML(e chat.Event) (string, error) {
 	var buf strings.Builder
 	now := time.Now()
 
 	switch e_ := e.(type) {
 	case *chat.EventPartialCompletion:
 		// Partial completions are sent directly as text
-		return e_.Delta, nil
+		return e_.Completion, nil
 	case *chat.EventText:
 		err := components.EventFinal(now, e_.Text).Render(context.Background(), &buf)
 		if err != nil {
@@ -229,6 +228,18 @@ func EventToHTML(e chat.Event) (string, error) {
 		if err != nil {
 			return "", fmt.Errorf("failed to render final event: %w", err)
 		}
+		// XXX not the best place
+		c.manager.AppendMessages(conversation.NewChatMessage(conversation.RoleAssistant, e_.Text))
+
+		conv := c.manager.GetConversation()
+		webConv, err := web_conversation.ConvertConversation(conv)
+		if err != nil {
+			return "", fmt.Errorf("failed to convert conversation to web format: %w", err)
+		}
+		err = components.ConversationHistory(webConv, true).Render(context.Background(), &buf)
+		if err != nil {
+			return "", fmt.Errorf("failed to render conversation history: %w", err)
+		}
 	case *chat.EventError:
 		errStr := ""
 		if err := e_.Error(); err != nil {
@@ -237,6 +248,11 @@ func EventToHTML(e chat.Event) (string, error) {
 		err := components.EventError(now, errStr).Render(context.Background(), &buf)
 		if err != nil {
 			return "", fmt.Errorf("failed to render error event: %w", err)
+		}
+	case *chat.EventInterrupt:
+		err := components.EventError(now, e_.Text).Render(context.Background(), &buf)
+		if err != nil {
+			return "", fmt.Errorf("failed to render interrupt event: %w", err)
 		}
 	default:
 		return "", fmt.Errorf("unknown event type: %T", e)
