@@ -80,7 +80,7 @@ func NewHelpersParameterLayer() (layers.ParameterLayer, error) {
 			parameters.NewParameterDefinition(
 				"chat",
 				parameters.ParameterTypeBool,
-				parameters.WithHelp("Automatically continue in chat mode"),
+				parameters.WithHelp("Start in chat mode"),
 				parameters.WithDefault(false),
 			),
 			parameters.NewParameterDefinition(
@@ -140,19 +140,19 @@ type AutosaveSettings struct {
 }
 
 type HelpersSettings struct {
-	PrintPrompt                 bool                   `glazed.parameter:"print-prompt"`
-	System                      string                 `glazed.parameter:"system"`
-	AppendMessageFile           string                 `glazed.parameter:"append-message-file"`
-	MessageFile                 string                 `glazed.parameter:"message-file"`
-	AutomaticallyContinueInChat bool                   `glazed.parameter:"chat"`
-	Interactive                 bool                   `glazed.parameter:"interactive"`
-	ForceInteractive            bool                   `glazed.parameter:"force-interactive"`
-	Images                      []*parameters.FileData `glazed.parameter:"images"`
-	Autosave                    *AutosaveSettings      `glazed.parameter:"autosave,from_json"`
-	NonInteractive              bool                   `glazed.parameter:"non-interactive"`
-	Output                      string                 `glazed.parameter:"output"`
-	WithMetadata                bool                   `glazed.parameter:"with-metadata"`
-	FullOutput                  bool                   `glazed.parameter:"full-output"`
+	PrintPrompt       bool                   `glazed.parameter:"print-prompt"`
+	System            string                 `glazed.parameter:"system"`
+	AppendMessageFile string                 `glazed.parameter:"append-message-file"`
+	MessageFile       string                 `glazed.parameter:"message-file"`
+	StartInChat       bool                   `glazed.parameter:"chat"`
+	Interactive       bool                   `glazed.parameter:"interactive"`
+	ForceInteractive  bool                   `glazed.parameter:"force-interactive"`
+	Images            []*parameters.FileData `glazed.parameter:"images"`
+	Autosave          *AutosaveSettings      `glazed.parameter:"autosave,from_json"`
+	NonInteractive    bool                   `glazed.parameter:"non-interactive"`
+	Output            string                 `glazed.parameter:"output"`
+	WithMetadata      bool                   `glazed.parameter:"with-metadata"`
+	FullOutput        bool                   `glazed.parameter:"full-output"`
 }
 
 type GeppettoCommand struct {
@@ -209,8 +209,8 @@ func NewGeppettoCommand(
 	return ret, nil
 }
 
-func (g *GeppettoCommand) InitializeContextManager(
-	contextManager conversation.Manager,
+func (g *GeppettoCommand) initializeConversationManager(
+	conversationManager conversation.Manager,
 	helperSettings *HelpersSettings,
 	ps map[string]interface{},
 ) error {
@@ -227,7 +227,7 @@ func (g *GeppettoCommand) InitializeContextManager(
 		}
 
 		// TODO(manuel, 2023-12-07) Only do this conditionally, or maybe if the system prompt hasn't been set yet, if you use an agent.
-		contextManager.AppendMessages(conversation.NewChatMessage(
+		conversationManager.AppendMessages(conversation.NewChatMessage(
 			conversation.RoleSystem,
 			systemPromptBuffer.String(),
 		))
@@ -248,7 +248,7 @@ func (g *GeppettoCommand) InitializeContextManager(
 			}
 			s_ := messageBuffer.String()
 
-			contextManager.AppendMessages(conversation.NewChatMessage(
+			conversationManager.AppendMessages(conversation.NewChatMessage(
 				content.Role, s_, conversation.WithTime(message_.Time)))
 		}
 	}
@@ -284,34 +284,38 @@ func (g *GeppettoCommand) InitializeContextManager(
 			Text:   initialPrompt,
 			Images: images,
 		}
-		contextManager.AppendMessages(conversation.NewMessage(messageContent))
+		conversationManager.AppendMessages(conversation.NewMessage(messageContent))
 	}
 
 	return nil
 }
 
-func (g *GeppettoCommand) Run(
+func (g *GeppettoCommand) startInitialStep(
 	ctx context.Context,
-	step chat.Step,
-	contextManager conversation.Manager,
-	helpersSettings *HelpersSettings,
-	ps map[string]interface{},
+	cmdCtx *commandContext,
 ) (steps.StepResult[*conversation.Message], error) {
-	err := g.InitializeContextManager(contextManager, helpersSettings, ps)
+	chatStep, err := cmdCtx.stepFactory.NewStep(chat.WithPublishedTopic(cmdCtx.router.Publisher, "chat"))
 	if err != nil {
 		return nil, err
 	}
 
-	conversation_ := contextManager.GetConversation()
-	if helpersSettings.PrintPrompt {
+	conversation_ := cmdCtx.conversationManager.GetConversation()
+	if cmdCtx.settings.PrintPrompt {
 		fmt.Println(conversation_.GetSinglePrompt())
 		return nil, nil
 	}
 
 	messagesM := steps.Resolve(conversation_)
-	m := steps.Bind[conversation.Conversation, *conversation.Message](ctx, messagesM, step)
+	m := steps.Bind[conversation.Conversation, *conversation.Message](ctx, messagesM, chatStep)
 
 	return m, nil
+}
+
+type commandContext struct {
+	router              *events.EventRouter
+	conversationManager conversation.Manager
+	stepFactory         *ai.StandardStepFactory
+	settings            *HelpersSettings
 }
 
 // RunIntoWriter runs the command and writes the output into the given writer.
@@ -324,19 +328,48 @@ func (g *GeppettoCommand) RunIntoWriter(
 		return errors.Errorf("Prompt and messages are mutually exclusive")
 	}
 
+	settings, err := g.initializeSettings(parsedLayers)
+	if err != nil {
+		return err
+	}
+
+	cmdCtx, err := g.setupInfrastructure(ctx, settings, parsedLayers)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		err := cmdCtx.router.Close()
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to close pubSub")
+		}
+	}()
+
+	if settings.StartInChat {
+		return g.runChatMode(ctx, cmdCtx)
+	}
+	return g.runNonChatMode(ctx, cmdCtx, w)
+}
+
+func (g *GeppettoCommand) initializeSettings(parsedLayers *layers.ParsedLayers) (*HelpersSettings, error) {
 	s := &HelpersSettings{}
 	err := parsedLayers.InitializeStruct(GeppettoHelpersSlug, s)
 	if err != nil {
-		return errors.Wrap(err, "failed to initialize settings")
+		return nil, errors.Wrap(err, "failed to initialize settings")
 	}
 
-	endedInNewline := false
+	return s, nil
+}
 
+func (g *GeppettoCommand) setupInfrastructure(_ context.Context, settings *HelpersSettings, parsedLayers *layers.ParsedLayers) (*commandContext, error) {
 	stepSettings := g.StepSettings.Clone()
-
-	err = stepSettings.UpdateFromParsedLayers(parsedLayers)
+	err := stepSettings.UpdateFromParsedLayers(parsedLayers)
 	if err != nil {
-		return err
+		return nil, err
+	}
+
+	val, present := parsedLayers.Get(layers.DefaultSlug)
+	if !present {
+		return nil, errors.New("could not get default layer")
 	}
 
 	stepFactory := &ai.StandardStepFactory{
@@ -345,168 +378,51 @@ func (g *GeppettoCommand) RunIntoWriter(
 
 	router, err := events.NewEventRouter()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	defer func() {
-		err := router.Close()
-		if err != nil {
-			log.Error().Err(err).Msg("Failed to close pubSub")
-		}
-	}()
-
-	// Configure the printer based on settings
-	var printer func(msg *message.Message) error
-	if s.Output != "text" || s.WithMetadata || s.FullOutput {
-		printer = chat.NewStructuredPrinter(w, chat.PrinterOptions{
-			Format:          chat.PrinterFormat(s.Output),
-			Name:            "",
-			IncludeMetadata: s.WithMetadata,
-			Full:            s.FullOutput,
-		})
-	} else {
-		printer = chat.StepPrinterFunc("", w)
-	}
-
-	router.AddHandler("chat", "chat", printer)
-
-	contextManager := conversation.NewManager(
+	conversationManager := conversation.NewManager(
 		conversation.WithAutosave(
-			s.Autosave.Enabled,
-			s.Autosave.Template,
-			s.Autosave.Path,
+			settings.Autosave.Enabled,
+			settings.Autosave.Template,
+			settings.Autosave.Path,
 		),
 	)
 
-	var chatStep chat.Step
-	chatStep, err = stepFactory.NewStep(chat.WithPublishedTopic(router.Publisher, "chat"))
+	err = g.initializeConversationManager(conversationManager, settings, val.Parameters.ToMap())
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// load and render the system prompt
-	if s.System != "" {
-		g.SystemPrompt = s.System
+	if settings.System != "" {
+		g.SystemPrompt = settings.System
 	}
 
 	// load and render messages
-	if s.MessageFile != "" {
-		messages_, err := conversation.LoadFromFile(s.MessageFile)
+	if settings.MessageFile != "" {
+		messages_, err := conversation.LoadFromFile(settings.MessageFile)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		g.Messages = messages_
 	}
 
-	if s.AppendMessageFile != "" {
-		messages_, err := conversation.LoadFromFile(s.AppendMessageFile)
+	if settings.AppendMessageFile != "" {
+		messages_, err := conversation.LoadFromFile(settings.AppendMessageFile)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		g.Messages = append(g.Messages, messages_...)
 	}
 
-	ctx, cancel := context.WithCancel(ctx)
-
-	eg := errgroup.Group{}
-	eg.Go(func() error {
-		defer cancel()
-
-		// TODO(manuel, 2024-04-26) We really should only pass the default slug here
-		val, present := parsedLayers.Get(layers.DefaultSlug)
-		if !present {
-			return errors.New("could not get default layer")
-		}
-		m, err := g.Run(ctx, chatStep, contextManager, s, val.Parameters.ToMap())
-
-		if err != nil {
-			return err
-		}
-		if m == nil {
-			return nil
-		}
-
-		isStream := stepSettings.Chat.Stream
-		log.Debug().Bool("isStream", isStream).Msg("")
-
-		res := m.Return()
-		stepMetadata := m.GetMetadata()
-		_ = stepMetadata
-		for _, msg := range res {
-			s, err := msg.Value()
-			if err != nil {
-				// TODO(manuel, 2023-12-09) Better error handling here, to catch I guess streaming error and HTTP errors
-				return err
-			} else {
-				contextManager.AppendMessages(s)
-
-				_, err := w.Write([]byte(s.Content.String()))
-				if err != nil {
-					return err
-				}
-				endedInNewline = strings.HasSuffix(s.Content.String(), "\n")
-			}
-		}
-
-		// check if terminal is tty
-		isOutputTerminal := isatty.IsTerminal(os.Stdout.Fd())
-		forceInteractive := s.ForceInteractive
-
-		// Skip interactive mode if non-interactive is set
-		if s.NonInteractive {
-			s.Interactive = false
-			s.AutomaticallyContinueInChat = false
-		}
-
-		continueInChat := s.AutomaticallyContinueInChat && s.Interactive
-		askChat := (isOutputTerminal || forceInteractive) && !s.AutomaticallyContinueInChat && s.Interactive && !s.NonInteractive
-
-		lengthBeforeChat := len(contextManager.GetConversation())
-
-		if askChat {
-			if !endedInNewline {
-				fmt.Println()
-			}
-
-			continueInChat, err = g.askForChatContinuation(continueInChat)
-			if err != nil {
-				return err
-			}
-		}
-
-		if continueInChat {
-			stepFactory.Settings.Chat.Stream = true
-			chatStep, err = stepFactory.NewStep(chat.WithPublishedTopic(router.Publisher, "ui"))
-			if err != nil {
-				return err
-			}
-
-			err = chat_(ctx, chatStep, router, contextManager)
-			if err != nil {
-				return err
-			}
-
-			fmt.Printf("\n---\n")
-			for idx, msg := range contextManager.GetConversation() {
-				if idx < lengthBeforeChat {
-					continue
-				}
-				view := msg.Content.View()
-				fmt.Printf("\n%s\n", view)
-			}
-			if err != nil {
-				return err
-			}
-		}
-
-		return nil
-	})
-	eg.Go(func() error {
-		return router.Run(ctx)
-	})
-
-	return eg.Wait()
+	return &commandContext{
+		router:              router,
+		conversationManager: conversationManager,
+		stepFactory:         stepFactory,
+		settings:            settings,
+	}, nil
 }
 
 func (g *GeppettoCommand) askForChatContinuation(continueInChat bool) (bool, error) {
@@ -581,7 +497,7 @@ func chat_(
 	model := bobatea_chat.InitialModel(
 		contextManager,
 		backend,
-		bobatea_chat.WithTitle("PINOCCHIO AT YOUR SERVICE:"),
+		bobatea_chat.WithTitle("pinocchio"),
 	)
 
 	p := tea.NewProgram(
@@ -595,10 +511,167 @@ func chat_(
 		return err
 	}
 
-	if _, err = p.Run(); err != nil {
-		return err
+	eg := errgroup.Group{}
+	// eg.Go(func() error {
+	// 	p.Send(bobatea_chat.SubmitMessageMsg{})
+	// 	return nil
+	// })
+
+	eg.Go(func() error {
+
+		if _, err = p.Run(); err != nil {
+			return err
+		}
+		return nil
+	})
+
+	return eg.Wait()
+
+}
+
+func (g *GeppettoCommand) runChatMode(ctx context.Context, cmdCtx *commandContext) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	eg := errgroup.Group{}
+	eg.Go(func() error {
+		defer cancel()
+		return cmdCtx.router.Run(ctx)
+	})
+
+	eg.Go(func() error {
+		defer cancel()
+
+		cmdCtx.stepFactory.Settings.Chat.Stream = true
+		chatStep, err := cmdCtx.stepFactory.NewStep(chat.WithPublishedTopic(cmdCtx.router.Publisher, "chat"))
+		if err != nil {
+			return err
+		}
+
+		err = chat_(ctx, chatStep, cmdCtx.router, cmdCtx.conversationManager)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	})
+
+	return eg.Wait()
+}
+
+func (g *GeppettoCommand) runNonChatMode(
+	ctx context.Context,
+	cmdCtx *commandContext,
+	w io.Writer,
+) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	printer := g.setupPrinter(w, cmdCtx.settings)
+	cmdCtx.router.AddHandler("chat", "chat", printer)
+
+	eg := errgroup.Group{}
+	eg.Go(func() error {
+		defer cancel()
+		return cmdCtx.router.Run(ctx)
+	})
+
+	eg.Go(func() error {
+		defer cancel()
+
+		m, err := g.startInitialStep(ctx, cmdCtx)
+		if err != nil {
+			return err
+		}
+
+		endedInNewline := false
+		res := m.Return()
+		for _, msg := range res {
+			s, err := msg.Value()
+			if err != nil {
+				return err
+			}
+			cmdCtx.conversationManager.AppendMessages(s)
+
+			endedInNewline = strings.HasSuffix(s.Content.String(), "\n")
+		}
+
+		if err := g.handleInteractiveContinuation(ctx, cmdCtx, endedInNewline, w); err != nil {
+			return err
+		}
+
+		return nil
+	})
+
+	return eg.Wait()
+}
+
+func (g *GeppettoCommand) setupPrinter(w io.Writer, settings *HelpersSettings) func(msg *message.Message) error {
+	if settings.Output != "text" || settings.WithMetadata || settings.FullOutput {
+		return chat.NewStructuredPrinter(w, chat.PrinterOptions{
+			Format:          chat.PrinterFormat(settings.Output),
+			Name:            "",
+			IncludeMetadata: settings.WithMetadata,
+			Full:            settings.FullOutput,
+		})
+	}
+	return chat.StepPrinterFunc("", w)
+}
+
+func (g *GeppettoCommand) handleInteractiveContinuation(
+	ctx context.Context,
+	cmdCtx *commandContext,
+	endedInNewline bool,
+	_ io.Writer,
+) error {
+	isOutputTerminal := isatty.IsTerminal(os.Stdout.Fd())
+	forceInteractive := cmdCtx.settings.ForceInteractive
+
+	// Skip interactive mode if non-interactive is set
+	if cmdCtx.settings.NonInteractive {
+		cmdCtx.settings.Interactive = false
+	}
+
+	continueInChat := cmdCtx.settings.Interactive
+	askChat := (isOutputTerminal || forceInteractive) && cmdCtx.settings.Interactive && !cmdCtx.settings.NonInteractive
+
+	lengthBeforeChat := len(cmdCtx.conversationManager.GetConversation())
+
+	if askChat {
+		if !endedInNewline {
+			fmt.Println()
+		}
+
+		var err error
+		continueInChat, err = g.askForChatContinuation(continueInChat)
+		if err != nil {
+			return err
+		}
+	}
+
+	if continueInChat {
+		cmdCtx.stepFactory.Settings.Chat.Stream = true
+		chatStep, err := cmdCtx.stepFactory.NewStep(
+			chat.WithPublishedTopic(cmdCtx.router.Publisher, "ui"),
+		)
+		if err != nil {
+			return err
+		}
+
+		err = chat_(ctx, chatStep, cmdCtx.router, cmdCtx.conversationManager)
+		if err != nil {
+			return err
+		}
+
+		fmt.Printf("\n---\n")
+		for idx, msg := range cmdCtx.conversationManager.GetConversation() {
+			if idx < lengthBeforeChat {
+				continue
+			}
+			view := msg.Content.View()
+			fmt.Printf("\n%s\n", view)
+		}
 	}
 
 	return nil
-
 }
