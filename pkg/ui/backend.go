@@ -39,8 +39,8 @@ func (s *StepBackend) Start(ctx context.Context, msgs []*conversation.Message) (
 			return nil
 		}
 		stepChannel := s.stepResult.GetChannel()
-		// TODO(manuel, 2023-12-09) stream answers into the context manager
 		for range stepChannel {
+			// just wait for the step to finish, progress is handled through the published events
 		}
 
 		s.stepResult = nil

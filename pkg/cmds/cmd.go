@@ -511,22 +511,10 @@ func chat_(
 		return err
 	}
 
-	eg := errgroup.Group{}
-	// eg.Go(func() error {
-	// 	p.Send(bobatea_chat.SubmitMessageMsg{})
-	// 	return nil
-	// })
-
-	eg.Go(func() error {
-
-		if _, err = p.Run(); err != nil {
-			return err
-		}
-		return nil
-	})
-
-	return eg.Wait()
-
+	if _, err = p.Run(); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (g *GeppettoCommand) runChatMode(ctx context.Context, cmdCtx *commandContext) error {
@@ -543,7 +531,7 @@ func (g *GeppettoCommand) runChatMode(ctx context.Context, cmdCtx *commandContex
 		defer cancel()
 
 		cmdCtx.stepFactory.Settings.Chat.Stream = true
-		chatStep, err := cmdCtx.stepFactory.NewStep(chat.WithPublishedTopic(cmdCtx.router.Publisher, "chat"))
+		chatStep, err := cmdCtx.stepFactory.NewStep(chat.WithPublishedTopic(cmdCtx.router.Publisher, "ui"))
 		if err != nil {
 			return err
 		}
