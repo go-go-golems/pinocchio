@@ -12,6 +12,7 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
 	"github.com/go-go-golems/glazed/pkg/cmds/middlewares"
 	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
+	"github.com/go-go-golems/pinocchio/pkg/cmds/cmdlayers"
 	"github.com/spf13/cobra"
 )
 
@@ -21,7 +22,7 @@ func BuildCobraCommandWithGeppettoMiddlewares(
 ) (*cobra.Command, error) {
 	options_ := append([]cli.CobraParserOption{
 		cli.WithCobraMiddlewaresFunc(GetCobraCommandGeppettoMiddlewares),
-		cli.WithCobraShortHelpLayers(layers.DefaultSlug, GeppettoHelpersSlug),
+		cli.WithCobraShortHelpLayers(layers.DefaultSlug, cmdlayers.GeppettoHelpersSlug),
 	}, options...)
 
 	return cli.BuildCobraCommandFromCommand(cmd, options_...)
@@ -83,7 +84,7 @@ func GetCobraCommandGeppettoMiddlewares(
 				settings.AiClientSlug,
 				openai.OpenAiChatSlug,
 				claude.ClaudeChatSlug,
-				GeppettoHelpersSlug,
+				cmdlayers.GeppettoHelpersSlug,
 			},
 			middlewares.GatherFlagsFromViper(parameters.WithParseStepSource("viper")),
 		),

@@ -15,9 +15,9 @@ require (
 	github.com/dave/jennifer v1.7.0
 	github.com/dop251/goja v0.0.0-20241024094426-79f3a7efcdbd
 	github.com/dop251/goja_nodejs v0.0.0-20240728170619-29b559befffc
-	github.com/go-go-golems/bobatea v0.0.12
+	github.com/go-go-golems/bobatea v0.0.13
 	github.com/go-go-golems/clay v0.1.20
-	github.com/go-go-golems/geppetto v0.4.27
+	github.com/go-go-golems/geppetto v0.4.28
 	github.com/go-go-golems/glazed v0.5.23
 	github.com/go-go-golems/prompto v0.1.7
 	github.com/google/uuid v1.6.0

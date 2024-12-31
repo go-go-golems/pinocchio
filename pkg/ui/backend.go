@@ -16,8 +16,8 @@ import (
 )
 
 type StepBackend struct {
-	stepFactory chat.Step
-	stepResult  steps.StepResult[*conversation.Message]
+	step       chat.Step
+	stepResult steps.StepResult[*conversation.Message]
 }
 
 var _ boba_chat.Backend = &StepBackend{}
@@ -27,7 +27,7 @@ func (s *StepBackend) Start(ctx context.Context, msgs []*conversation.Message) (
 		return nil, errors.New("Step is already running")
 	}
 
-	stepResult, err := s.stepFactory.Start(ctx, msgs)
+	stepResult, err := s.step.Start(ctx, msgs)
 	if err != nil {
 		return nil, err
 	}
@@ -39,8 +39,8 @@ func (s *StepBackend) Start(ctx context.Context, msgs []*conversation.Message) (
 			return nil
 		}
 		stepChannel := s.stepResult.GetChannel()
-		// TODO(manuel, 2023-12-09) stream answers into the context manager
 		for range stepChannel {
+			// just wait for the step to finish, progress is handled through the published events
 		}
 
 		s.stepResult = nil
@@ -50,7 +50,7 @@ func (s *StepBackend) Start(ctx context.Context, msgs []*conversation.Message) (
 
 func NewStepBackend(step chat.Step) *StepBackend {
 	return &StepBackend{
-		stepFactory: step,
+		step: step,
 	}
 }
 

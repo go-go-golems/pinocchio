@@ -14,6 +14,7 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
 	"github.com/go-go-golems/glazed/pkg/cmds/loaders"
 	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
+	"github.com/go-go-golems/pinocchio/pkg/cmds/cmdlayers"
 	"github.com/pkg/errors"
 	"gopkg.in/yaml.v3"
 )
@@ -140,7 +141,7 @@ func CreateGeppettoLayers(stepSettings *settings.StepSettings) ([]layers.Paramet
 	// TODO(manuel, 2024-01-17) Disable not fully function ollama layer for now
 	_ = ollamaParameterLayer
 
-	helpersLayer, err := NewHelpersParameterLayer()
+	helpersLayer, err := cmdlayers.NewHelpersParameterLayer()
 	if err != nil {
 		return nil, err
 	}
