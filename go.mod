@@ -19,7 +19,7 @@ require (
 	github.com/go-go-golems/clay v0.1.20
 	github.com/go-go-golems/geppetto v0.4.28
 	github.com/go-go-golems/glazed v0.5.23
-	github.com/go-go-golems/prompto v0.1.7
+	github.com/go-go-golems/prompto v0.1.8
 	github.com/google/uuid v1.6.0
 	github.com/iancoleman/strcase v0.3.0
 	github.com/invopop/jsonschema v0.12.0
@@ -43,6 +43,7 @@ require (
 	github.com/Masterminds/goutils v1.1.1 // indirect
 	github.com/Masterminds/semver v1.5.0 // indirect
 	github.com/Masterminds/semver/v3 v3.3.0 // indirect
+	github.com/a-h/templ v0.2.793 // indirect
 	github.com/adrg/frontmatter v0.2.0 // indirect
 	github.com/alecthomas/chroma/v2 v2.14.0 // indirect
 	github.com/andybalholm/cascadia v1.3.2 // indirect
