@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/ThreeDotsLabs/watermill/message"
@@ -15,13 +14,14 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/conversation"
 	"github.com/go-go-golems/geppetto/pkg/events"
 	"github.com/go-go-golems/geppetto/pkg/steps"
-	"github.com/go-go-golems/geppetto/pkg/steps/ai"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/chat"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 	glazedcmds "github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
 	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
 	"github.com/go-go-golems/glazed/pkg/helpers/templating"
+	"github.com/go-go-golems/pinocchio/pkg/cmds/cmdcontext"
+	"github.com/go-go-golems/pinocchio/pkg/cmds/cmdlayers"
 	"github.com/go-go-golems/pinocchio/pkg/ui"
 	"github.com/mattn/go-isatty"
 	"github.com/pkg/errors"
@@ -41,118 +41,6 @@ type GeppettoCommandDescription struct {
 	Prompt       string                  `yaml:"prompt,omitempty"`
 	Messages     []*conversation.Message `yaml:"messages,omitempty"`
 	SystemPrompt string                  `yaml:"system-prompt,omitempty"`
-}
-
-const GeppettoHelpersSlug = "geppetto-helpers"
-
-func NewHelpersParameterLayer() (layers.ParameterLayer, error) {
-	defaultHistoryPath := filepath.Join(os.Getenv("HOME"), ".pinocchio", "history")
-
-	return layers.NewParameterLayer(GeppettoHelpersSlug, "Geppetto helpers",
-		layers.WithParameterDefinitions(
-			parameters.NewParameterDefinition(
-				"print-prompt",
-				parameters.ParameterTypeBool,
-				parameters.WithDefault(false),
-				parameters.WithHelp("Print the prompt"),
-			),
-			parameters.NewParameterDefinition(
-				"system",
-				parameters.ParameterTypeString,
-				parameters.WithHelp("System message"),
-			),
-			parameters.NewParameterDefinition(
-				"append-message-file",
-				parameters.ParameterTypeString,
-				parameters.WithHelp("File containing messages (json or yaml, list of objects with fields text, time, role) to be appended to the already present list of messages"),
-			),
-			parameters.NewParameterDefinition(
-				"message-file",
-				parameters.ParameterTypeString,
-				parameters.WithHelp("File containing messages (json or yaml, list of objects with fields text, time, role)"),
-			),
-			parameters.NewParameterDefinition(
-				"interactive",
-				parameters.ParameterTypeBool,
-				parameters.WithHelp("Ask for chat continuation after inference"),
-				parameters.WithDefault(true),
-			),
-			parameters.NewParameterDefinition(
-				"chat",
-				parameters.ParameterTypeBool,
-				parameters.WithHelp("Start in chat mode"),
-				parameters.WithDefault(false),
-			),
-			parameters.NewParameterDefinition(
-				"force-interactive",
-				parameters.ParameterTypeBool,
-				parameters.WithHelp("Always enter interactive mode, even with non-tty stdout"),
-				parameters.WithDefault(false),
-			),
-			parameters.NewParameterDefinition(
-				"images",
-				parameters.ParameterTypeFileList,
-				parameters.WithHelp("Images to display"),
-			),
-			parameters.NewParameterDefinition(
-				"autosave",
-				parameters.ParameterTypeKeyValue,
-				parameters.WithHelp("Autosave configuration"),
-				parameters.WithDefault(map[string]interface{}{
-					"path":     defaultHistoryPath,
-					"template": "",
-					"enabled":  "no",
-				}),
-			),
-			parameters.NewParameterDefinition(
-				"non-interactive",
-				parameters.ParameterTypeBool,
-				parameters.WithHelp("Skip interactive chat mode entirely"),
-				parameters.WithDefault(false),
-			),
-			parameters.NewParameterDefinition(
-				"output",
-				parameters.ParameterTypeChoice,
-				parameters.WithHelp("Output format (text, json, yaml)"),
-				parameters.WithDefault("text"),
-				parameters.WithChoices("text", "json", "yaml"),
-			),
-			parameters.NewParameterDefinition(
-				"with-metadata",
-				parameters.ParameterTypeBool,
-				parameters.WithHelp("Include event metadata in output"),
-				parameters.WithDefault(false),
-			),
-			parameters.NewParameterDefinition(
-				"full-output",
-				parameters.ParameterTypeBool,
-				parameters.WithHelp("Print all available metadata in output"),
-				parameters.WithDefault(false),
-			),
-		),
-	)
-}
-
-type AutosaveSettings struct {
-	Path     string `glazed.parameter:"path"`
-	Template string `glazed.parameter:"template"`
-	Enabled  string `glazed.parameter:"enabled"`
-}
-
-type HelpersSettings struct {
-	PrintPrompt       bool                   `glazed.parameter:"print-prompt"`
-	System            string                 `glazed.parameter:"system"`
-	AppendMessageFile string                 `glazed.parameter:"append-message-file"`
-	MessageFile       string                 `glazed.parameter:"message-file"`
-	StartInChat       bool                   `glazed.parameter:"chat"`
-	Interactive       bool                   `glazed.parameter:"interactive"`
-	ForceInteractive  bool                   `glazed.parameter:"force-interactive"`
-	Images            []*parameters.FileData `glazed.parameter:"images"`
-	Autosave          *AutosaveSettings      `glazed.parameter:"autosave,from_json"`
-	NonInteractive    bool                   `glazed.parameter:"non-interactive"`
-	Output            string                 `glazed.parameter:"output"`
-	WithMetadata      bool                   `glazed.parameter:"with-metadata"`
-	FullOutput        bool                   `glazed.parameter:"full-output"`
 }
 
 type GeppettoCommand struct {
@@ -190,7 +78,7 @@ func NewGeppettoCommand(
 	settings *settings.StepSettings,
 	options ...GeppettoCommandOption,
 ) (*GeppettoCommand, error) {
-	helpersParameterLayer, err := NewHelpersParameterLayer()
+	helpersParameterLayer, err := cmdlayers.NewHelpersParameterLayer()
 	if err != nil {
 		return nil, err
 	}
@@ -211,7 +99,7 @@ func NewGeppettoCommand(
 
 func (g *GeppettoCommand) initializeConversationManager(
 	conversationManager conversation.Manager,
-	helperSettings *HelpersSettings,
+	helperSettings *cmdlayers.HelpersSettings,
 	ps map[string]interface{},
 ) error {
 	if g.SystemPrompt != "" {
@@ -292,15 +180,15 @@ func (g *GeppettoCommand) initializeConversationManager(
 
 func (g *GeppettoCommand) startInitialStep(
 	ctx context.Context,
-	cmdCtx *commandContext,
+	cmdCtx *cmdcontext.CommandContext,
 ) (steps.StepResult[*conversation.Message], error) {
-	chatStep, err := cmdCtx.stepFactory.NewStep(chat.WithPublishedTopic(cmdCtx.router.Publisher, "chat"))
+	chatStep, err := cmdCtx.StepFactory.NewStep(chat.WithPublishedTopic(cmdCtx.Router.Publisher, "chat"))
 	if err != nil {
 		return nil, err
 	}
 
-	conversation_ := cmdCtx.conversationManager.GetConversation()
-	if cmdCtx.settings.PrintPrompt {
+	conversation_ := cmdCtx.ConversationManager.GetConversation()
+	if cmdCtx.Settings.PrintPrompt {
 		fmt.Println(conversation_.GetSinglePrompt())
 		return nil, nil
 	}
@@ -309,90 +197,6 @@ func (g *GeppettoCommand) startInitialStep(
 	m := steps.Bind[conversation.Conversation, *conversation.Message](ctx, messagesM, chatStep)
 
 	return m, nil
-}
-
-type commandContext struct {
-	router              *events.EventRouter
-	conversationManager conversation.Manager
-	stepFactory         *ai.StandardStepFactory
-	settings            *HelpersSettings
-}
-
-type CommandContextOption func(*commandContext) error
-
-func WithCommandContextRouter(router *events.EventRouter) CommandContextOption {
-	return func(c *commandContext) error {
-		c.router = router
-		return nil
-	}
-}
-
-func WithCommandContextConversationManager(manager conversation.Manager) CommandContextOption {
-	return func(c *commandContext) error {
-		c.conversationManager = manager
-		return nil
-	}
-}
-
-func WithCommandContextStepFactory(factory *ai.StandardStepFactory) CommandContextOption {
-	return func(c *commandContext) error {
-		c.stepFactory = factory
-		return nil
-	}
-}
-
-func WithCommandContextSettings(settings *HelpersSettings) CommandContextOption {
-	return func(c *commandContext) error {
-		c.settings = settings
-		return nil
-	}
-}
-
-func NewCommandContext(options ...CommandContextOption) (*commandContext, error) {
-	ctx := &commandContext{}
-	for _, opt := range options {
-		if err := opt(ctx); err != nil {
-			return nil, err
-		}
-	}
-	return ctx, nil
-}
-
-func NewCommandContextFromLayers(parsedLayers *layers.ParsedLayers, stepSettings *settings.StepSettings) (*commandContext, error) {
-	settings := &HelpersSettings{}
-	err := parsedLayers.InitializeStruct(GeppettoHelpersSlug, settings)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to initialize settings")
-	}
-
-	err = stepSettings.UpdateFromParsedLayers(parsedLayers)
-	if err != nil {
-		return nil, err
-	}
-
-	stepFactory := &ai.StandardStepFactory{
-		Settings: stepSettings,
-	}
-
-	router, err := events.NewEventRouter()
-	if err != nil {
-		return nil, err
-	}
-
-	conversationManager := conversation.NewManager(
-		conversation.WithAutosave(
-			settings.Autosave.Enabled,
-			settings.Autosave.Template,
-			settings.Autosave.Path,
-		),
-	)
-
-	return NewCommandContext(
-		WithCommandContextRouter(router),
-		WithCommandContextConversationManager(conversationManager),
-		WithCommandContextStepFactory(stepFactory),
-		WithCommandContextSettings(settings),
-	)
 }
 
 // RunIntoWriter runs the command and writes the output into the given writer.
@@ -405,12 +209,12 @@ func (g *GeppettoCommand) RunIntoWriter(
 		return errors.Errorf("Prompt and messages are mutually exclusive")
 	}
 
-	cmdCtx, err := NewCommandContextFromLayers(parsedLayers, g.StepSettings)
+	cmdCtx, err := cmdcontext.NewCommandContextFromLayers(parsedLayers, g.StepSettings)
 	if err != nil {
 		return err
 	}
 	defer func() {
-		err := cmdCtx.router.Close()
+		err := cmdCtx.Router.Close()
 		if err != nil {
 			log.Error().Err(err).Msg("Failed to close pubSub")
 		}
@@ -421,19 +225,19 @@ func (g *GeppettoCommand) RunIntoWriter(
 		return errors.New("could not get default layer")
 	}
 
-	err = g.initializeConversationManager(cmdCtx.conversationManager, cmdCtx.settings, val.Parameters.ToMap())
+	err = g.initializeConversationManager(cmdCtx.ConversationManager, cmdCtx.Settings, val.Parameters.ToMap())
 	if err != nil {
 		return err
 	}
 
 	// load and render the system prompt
-	if cmdCtx.settings.System != "" {
-		g.SystemPrompt = cmdCtx.settings.System
+	if cmdCtx.Settings.System != "" {
+		g.SystemPrompt = cmdCtx.Settings.System
 	}
 
 	// load and render messages
-	if cmdCtx.settings.MessageFile != "" {
-		messages_, err := conversation.LoadFromFile(cmdCtx.settings.MessageFile)
+	if cmdCtx.Settings.MessageFile != "" {
+		messages_, err := conversation.LoadFromFile(cmdCtx.Settings.MessageFile)
 		if err != nil {
 			return err
 		}
@@ -441,21 +245,21 @@ func (g *GeppettoCommand) RunIntoWriter(
 		g.Messages = messages_
 	}
 
-	if cmdCtx.settings.AppendMessageFile != "" {
-		messages_, err := conversation.LoadFromFile(cmdCtx.settings.AppendMessageFile)
+	if cmdCtx.Settings.AppendMessageFile != "" {
+		messages_, err := conversation.LoadFromFile(cmdCtx.Settings.AppendMessageFile)
 		if err != nil {
 			return err
 		}
 		g.Messages = append(g.Messages, messages_...)
 	}
 
-	if cmdCtx.settings.StartInChat {
+	if cmdCtx.Settings.StartInChat {
 		return g.runChatMode(ctx, cmdCtx)
 	}
 	return g.runNonChatMode(ctx, cmdCtx, w)
 }
 
-func (g *GeppettoCommand) setupPrinter(w io.Writer, settings *HelpersSettings) func(msg *message.Message) error {
+func (g *GeppettoCommand) setupPrinter(w io.Writer, settings *cmdlayers.HelpersSettings) func(msg *message.Message) error {
 	if settings.Output != "text" || settings.WithMetadata || settings.FullOutput {
 		return chat.NewStructuredPrinter(w, chat.PrinterOptions{
 			Format:          chat.PrinterFormat(settings.Output),
@@ -511,26 +315,26 @@ func chat_(
 	return nil
 }
 
-func (g *GeppettoCommand) runChatMode(ctx context.Context, cmdCtx *commandContext) error {
+func (g *GeppettoCommand) runChatMode(ctx context.Context, cmdCtx *cmdcontext.CommandContext) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
 	eg := errgroup.Group{}
 	eg.Go(func() error {
 		defer cancel()
-		return cmdCtx.router.Run(ctx)
+		return cmdCtx.Router.Run(ctx)
 	})
 
 	eg.Go(func() error {
 		defer cancel()
 
-		cmdCtx.stepFactory.Settings.Chat.Stream = true
-		chatStep, err := cmdCtx.stepFactory.NewStep(chat.WithPublishedTopic(cmdCtx.router.Publisher, "ui"))
+		cmdCtx.StepFactory.Settings.Chat.Stream = true
+		chatStep, err := cmdCtx.StepFactory.NewStep(chat.WithPublishedTopic(cmdCtx.Router.Publisher, "ui"))
 		if err != nil {
 			return err
 		}
 
-		err = chat_(ctx, chatStep, cmdCtx.router, cmdCtx.conversationManager, true)
+		err = chat_(ctx, chatStep, cmdCtx.Router, cmdCtx.ConversationManager, true)
 		if err != nil {
 			return err
 		}
@@ -543,19 +347,19 @@ func (g *GeppettoCommand) runChatMode(ctx context.Context, cmdCtx *commandContex
 
 func (g *GeppettoCommand) runNonChatMode(
 	ctx context.Context,
-	cmdCtx *commandContext,
+	cmdCtx *cmdcontext.CommandContext,
 	w io.Writer,
 ) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	printer := g.setupPrinter(w, cmdCtx.settings)
-	cmdCtx.router.AddHandler("chat", "chat", printer)
+	printer := g.setupPrinter(w, cmdCtx.Settings)
+	cmdCtx.Router.AddHandler("chat", "chat", printer)
 
 	eg := errgroup.Group{}
 	eg.Go(func() error {
 		defer cancel()
-		return cmdCtx.router.Run(ctx)
+		return cmdCtx.Router.Run(ctx)
 	})
 
 	eg.Go(func() error {
@@ -573,7 +377,7 @@ func (g *GeppettoCommand) runNonChatMode(
 			if err != nil {
 				return err
 			}
-			cmdCtx.conversationManager.AppendMessages(s)
+			cmdCtx.ConversationManager.AppendMessages(s)
 
 			endedInNewline = strings.HasSuffix(s.Content.String(), "\n")
 		}
@@ -590,22 +394,22 @@ func (g *GeppettoCommand) runNonChatMode(
 
 func (g *GeppettoCommand) handleInteractiveContinuation(
 	ctx context.Context,
-	cmdCtx *commandContext,
+	cmdCtx *cmdcontext.CommandContext,
 	endedInNewline bool,
 	_ io.Writer,
 ) error {
 	isOutputTerminal := isatty.IsTerminal(os.Stdout.Fd())
-	forceInteractive := cmdCtx.settings.ForceInteractive
+	forceInteractive := cmdCtx.Settings.ForceInteractive
 
 	// Skip interactive mode if non-interactive is set
-	if cmdCtx.settings.NonInteractive {
-		cmdCtx.settings.Interactive = false
+	if cmdCtx.Settings.NonInteractive {
+		cmdCtx.Settings.Interactive = false
 	}
 
-	continueInChat := cmdCtx.settings.Interactive
-	askChat := (isOutputTerminal || forceInteractive) && cmdCtx.settings.Interactive && !cmdCtx.settings.NonInteractive
+	continueInChat := cmdCtx.Settings.Interactive
+	askChat := (isOutputTerminal || forceInteractive) && cmdCtx.Settings.Interactive && !cmdCtx.Settings.NonInteractive
 
-	lengthBeforeChat := len(cmdCtx.conversationManager.GetConversation())
+	lengthBeforeChat := len(cmdCtx.ConversationManager.GetConversation())
 
 	if askChat {
 		if !endedInNewline {
@@ -620,21 +424,21 @@ func (g *GeppettoCommand) handleInteractiveContinuation(
 	}
 
 	if continueInChat {
-		cmdCtx.stepFactory.Settings.Chat.Stream = true
-		chatStep, err := cmdCtx.stepFactory.NewStep(
-			chat.WithPublishedTopic(cmdCtx.router.Publisher, "ui"),
+		cmdCtx.StepFactory.Settings.Chat.Stream = true
+		chatStep, err := cmdCtx.StepFactory.NewStep(
+			chat.WithPublishedTopic(cmdCtx.Router.Publisher, "ui"),
 		)
 		if err != nil {
 			return err
 		}
 
-		err = chat_(ctx, chatStep, cmdCtx.router, cmdCtx.conversationManager, false)
+		err = chat_(ctx, chatStep, cmdCtx.Router, cmdCtx.ConversationManager, false)
 		if err != nil {
 			return err
 		}
 
 		fmt.Printf("\n---\n")
-		for idx, msg := range cmdCtx.conversationManager.GetConversation() {
+		for idx, msg := range cmdCtx.ConversationManager.GetConversation() {
 			if idx < lengthBeforeChat {
 				continue
 			}
