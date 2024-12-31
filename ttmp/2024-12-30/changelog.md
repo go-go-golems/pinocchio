@@ -42,3 +42,23 @@ Extracted commandContext into a standalone type with a builder pattern to improv
 - Added WithXXX option functions for each context field
 - Implemented NewCommandContext and NewCommandContextFromLayers builders
 - Removed dependency on GeppettoCommand for context creation 
+
+# Refactor Command Context
+
+Moved conversation management, step execution, and chat handling from GeppettoCommand to CommandContext for better separation of concerns and reusability.
+
+- Moved `initializeConversationManager` to `CommandContext`
+- Moved step execution logic to `CommandContext`
+- Moved chat and UI handling to `CommandContext`
+- Simplified `GeppettoCommand` to focus on configuration
+- Added proper cleanup with `Close` method in `CommandContext` 
+
+# Extract ConversationContext into Standalone Type
+
+Created a new ConversationContext type to handle conversation initialization and management, improving modularity and separation of concerns.
+
+- Created ConversationContext with builder pattern for flexible configuration
+- Added support for system prompts, messages, variables, and images
+- Moved template rendering and conversation initialization logic
+- Added proper autosave settings handling
+- Simplified CommandContext by delegating conversation management 
