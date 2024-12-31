@@ -3,15 +3,16 @@ package main
 import (
 	"context"
 	"fmt"
-	"html/template"
 	"net/http"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/Masterminds/sprig/v3"
 	"github.com/go-go-golems/geppetto/pkg/events"
+	"github.com/go-go-golems/pinocchio/cmd/experiments/web-ui/client"
 	webconv "github.com/go-go-golems/pinocchio/cmd/experiments/web-ui/conversation"
+	"github.com/go-go-golems/pinocchio/cmd/experiments/web-ui/templates"
+	"github.com/go-go-golems/pinocchio/cmd/experiments/web-ui/templates/components"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 )
@@ -19,10 +20,9 @@ import (
 // Server handles the web UI and SSE connections
 type Server struct {
 	router     *events.EventRouter
-	clients    map[string]*SSEClient
+	clients    map[string]*client.ChatClient
 	clientsMux sync.RWMutex
 	logger     zerolog.Logger
-	tmpl       *template.Template
 }
 
 func NewServer(router *events.EventRouter) *Server {
@@ -35,23 +35,14 @@ func NewServer(router *events.EventRouter) *Server {
 
 	logger.Level(zerolog.TraceLevel)
 
-	// Create template with sprig functions and add toJson function
-	funcMap := sprig.HtmlFuncMap()
-	funcMap["toJson"] = func(v interface{}) string {
-		return fmt.Sprintf("%+v", v)
-	}
-
-	tmpl := template.Must(template.New("").Funcs(funcMap).ParseFS(templatesFS, "templates/*"))
-
 	return &Server{
 		router:  router,
-		clients: make(map[string]*SSEClient),
+		clients: make(map[string]*client.ChatClient),
 		logger:  logger,
-		tmpl:    tmpl,
 	}
 }
 
-func (s *Server) RegisterClient(client *SSEClient) {
+func (s *Server) RegisterClient(client *client.ChatClient) {
 	s.clientsMux.Lock()
 	defer s.clientsMux.Unlock()
 	s.clients[client.ID] = client
@@ -103,12 +94,8 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 		messages = conv
 	}
 
-	data := TemplateData{
-		ClientID: clientID,
-		Messages: messages,
-	}
-
-	if err := s.tmpl.ExecuteTemplate(w, "index.html", data); err != nil {
+	component := templates.Index(clientID, messages)
+	if err := component.Render(context.Background(), w); err != nil {
 		s.logger.Error().Err(err).Msg("Failed to render index page")
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
@@ -140,27 +127,27 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 
 	// Get existing client or create new one
 	s.clientsMux.RLock()
-	client, exists := s.clients[clientID]
+	client_, exists := s.clients[clientID]
 	s.clientsMux.RUnlock()
 
 	if !exists {
 		s.logger.Info().Str("client_id", clientID).Msg("Creating new client")
-		client = NewSSEClient(clientID, s.tmpl, s.router)
-		s.RegisterClient(client)
+		client_ = client.NewChatClient(clientID, s.router)
+		s.RegisterClient(client_)
 	}
-	defer s.UnregisterClient(client.ID)
+	defer s.UnregisterClient(client_.ID)
 
-	s.logger.Info().Str("client_id", client.ID).Msg("SSE connection established")
+	s.logger.Info().Str("client_id", client_.ID).Msg("SSE connection established")
 
 	// Write events to client with timeout to prevent stuck connections
 	for {
 		select {
 		case <-r.Context().Done():
-			s.logger.Info().Str("client_id", client.ID).Msg("SSE connection closed by client")
+			s.logger.Info().Str("client_id", client_.ID).Msg("SSE connection closed by client")
 			return
-		case msg, ok := <-client.MessageChan:
+		case msg, ok := <-client_.MessageChan:
 			if !ok {
-				s.logger.Info().Str("client_id", client.ID).Msg("SSE message channel closed")
+				s.logger.Info().Str("client_id", client_.ID).Msg("SSE message channel closed")
 				return
 			}
 			// Handle multiline messages by prefacing each line with data:
@@ -175,7 +162,7 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 			// Send heartbeat to keep connection alive
 			fmt.Fprintf(w, "event: heartbeat\ndata: ping\n\n")
 			flusher.Flush()
-			s.logger.Debug().Str("client_id", client.ID).Msg("Sent heartbeat")
+			s.logger.Debug().Str("client_id", client_.ID).Msg("Sent heartbeat")
 		}
 	}
 }
@@ -198,16 +185,16 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 
 	// Get or create client
 	s.clientsMux.RLock()
-	client, exists := s.clients[clientID]
+	client_, exists := s.clients[clientID]
 	s.clientsMux.RUnlock()
 
 	if !exists {
-		client = NewSSEClient(clientID, s.tmpl, s.router)
-		s.RegisterClient(client)
+		client_ = client.NewChatClient(clientID, s.router)
+		s.RegisterClient(client_)
 	}
 
 	// Send user message
-	if err := client.SendUserMessage(context.Background(), message); err != nil {
+	if err := client_.SendUserMessage(context.Background(), message); err != nil {
 		s.logger.Error().Err(err).Str("client_id", clientID).Msg("Failed to send message")
 		http.Error(w, fmt.Sprintf("Error sending message: %v", err), http.StatusInternalServerError)
 		return
@@ -215,19 +202,16 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 
 	// For new chats, return the chat container template
 	if !exists {
-		conv, err := webconv.ConvertConversation(client.GetConversation())
+		conv, err := webconv.ConvertConversation(client_.GetConversation())
 		if err != nil {
 			s.logger.Error().Err(err).Msg("Failed to convert conversation")
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 
-		data := TemplateData{
-			ClientID: clientID,
-			Messages: conv,
-		}
+		component := templates.Index(clientID, conv)
 		w.Header().Set("HX-Push-Url", fmt.Sprintf("/?client_id=%s", clientID))
-		if err := s.tmpl.ExecuteTemplate(w, "chat-container", data); err != nil {
+		if err := component.Render(context.Background(), w); err != nil {
 			s.logger.Error().Err(err).Msg("Failed to render chat container")
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -236,7 +220,7 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// For existing chats, get the last message and render it
-	conv := client.GetConversation()
+	conv := client_.GetConversation()
 	if len(conv) == 0 {
 		s.logger.Error().Msg("No messages in conversation")
 		http.Error(w, "No messages in conversation", http.StatusInternalServerError)
@@ -252,11 +236,8 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Render message container with user message and streaming div
-	data := MessageData{
-		Message: webMsg,
-	}
-
-	if err := s.tmpl.ExecuteTemplate(w, "message-container", data); err != nil {
+	component := components.MessageContainer(webMsg)
+	if err := component.Render(context.Background(), w); err != nil {
 		s.logger.Error().Err(err).Msg("Failed to render message container")
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

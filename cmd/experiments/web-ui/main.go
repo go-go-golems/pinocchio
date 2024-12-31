@@ -2,16 +2,12 @@ package main
 
 import (
 	"context"
-	"embed"
 	"net/http"
 
 	"github.com/go-go-golems/geppetto/pkg/events"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
-
-//go:embed templates/*
-var templatesFS embed.FS
 
 func main() {
 	// Setup zerolog

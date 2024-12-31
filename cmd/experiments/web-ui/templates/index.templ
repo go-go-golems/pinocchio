@@ -1,0 +1,48 @@
+package templates
+
+import (
+    "github.com/go-go-golems/pinocchio/cmd/experiments/web-ui/conversation"
+    "github.com/go-go-golems/pinocchio/cmd/experiments/web-ui/templates/components"
+)
+
+templ Index(clientID string, messages *conversation.WebConversation) {
+    @Base("Geppetto Chat SSE Demo") {
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0">Chat Stream</h5>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div id="chat-container">
+                            if clientID != "" {
+                                @components.ChatContainer(clientID, messages)
+                            } else {
+                                <div class="event-container">
+                                    <div id="events">
+                                    </div>
+                                </div>
+                                <div class="chat-input mt-3">
+                                    <form hx-post="/chat" 
+                                          hx-target="#chat-container"
+                                          hx-push-url="true"
+                                          hx-swap="innerHTML"
+                                          class="d-flex gap-2">
+                                        <input type="text" 
+                                               name="message" 
+                                               class="form-control" 
+                                               placeholder="Type your message..."
+                                               required/>
+                                        <button type="submit" class="btn btn-primary">Send</button>
+                                    </form>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+} 
