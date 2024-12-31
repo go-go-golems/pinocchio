@@ -217,17 +217,20 @@ func (c *ChatClient) EventToHTML(e chat.Event) (string, error) {
 	switch e_ := e.(type) {
 	case *chat.EventPartialCompletion:
 		// Partial completions are sent directly as text
-		return e_.Completion, nil
+		err := components.AssistantMessage(now, e_.Completion).Render(context.Background(), &buf)
+		if err != nil {
+			return "", fmt.Errorf("failed to render partial completion event: %w", err)
+		}
 	case *chat.EventText:
 		err := components.EventFinal(now, e_.Text).Render(context.Background(), &buf)
 		if err != nil {
 			return "", fmt.Errorf("failed to render text event: %w", err)
 		}
 	case *chat.EventFinal:
-		err := components.EventFinal(now, e_.Text).Render(context.Background(), &buf)
-		if err != nil {
-			return "", fmt.Errorf("failed to render final event: %w", err)
-		}
+		// err := components.EventFinal(now, e_.Text).Render(context.Background(), &buf)
+		// if err != nil {
+		// 	return "", fmt.Errorf("failed to render final event: %w", err)
+		// }
 		// XXX not the best place
 		c.manager.AppendMessages(conversation.NewChatMessage(conversation.RoleAssistant, e_.Text))
 
