@@ -91,12 +91,12 @@ github.com/frankban/quicktest v1.14.6 h1:7Xjx+VpznH+oBnejlPUj8oUpdxnVs4f8XU8WnHk
 github.com/frankban/quicktest v1.14.6/go.mod h1:4ptaffx2x8+WTWXmUCuVU6aPUX1/Mz7zb5vbUoiM6w0=
 github.com/fsnotify/fsnotify v1.7.0 h1:8JEhPFa5W2WU7YfeZzPNqzMP6Lwt7L2715Ggo0nosvA=
 github.com/fsnotify/fsnotify v1.7.0/go.mod h1:40Bi/Hjc2AVfZrqy+aj+yEI+/bRxZnMJyTJwOpGvigM=
-github.com/go-go-golems/bobatea v0.0.12 h1:tOVgZQ+xmIOgLZvaqgjoz8F8sD+LsdWNuqymiaSusao=
-github.com/go-go-golems/bobatea v0.0.12/go.mod h1:+mgkJU0P1rYRq6SwKkFD6FhGAVc+QIDCR/VMKOsU4fI=
+github.com/go-go-golems/bobatea v0.0.13 h1:eJBEVML2pSsHVtiqdJpTRvMnDhtI6Kp7gLiBd+LM3pI=
+github.com/go-go-golems/bobatea v0.0.13/go.mod h1:+mgkJU0P1rYRq6SwKkFD6FhGAVc+QIDCR/VMKOsU4fI=
 github.com/go-go-golems/clay v0.1.20 h1:KUTbDBA/Q7vgG22B9uBnwDpacwG2+bMavQS8SDwolks=
 github.com/go-go-golems/clay v0.1.20/go.mod h1:hyQirWoEICmaSTcAiPRy7If1n5JEncPi4WVM6tivjoY=
-github.com/go-go-golems/geppetto v0.4.27 h1:xDJjrhRGQ1fi942/bTFoacnVUzsAz5kHKk8rp0sD5Oc=
-github.com/go-go-golems/geppetto v0.4.27/go.mod h1:cAv9cYbPNrH9gdqmoefC93p//E7xgqQtDXd0KSmHzS0=
+github.com/go-go-golems/geppetto v0.4.28 h1:0KUCd5DeP4KzNUUZ/5hmMD2kSFRYCr+hN0kl5bWhesA=
+github.com/go-go-golems/geppetto v0.4.28/go.mod h1:cAv9cYbPNrH9gdqmoefC93p//E7xgqQtDXd0KSmHzS0=
 github.com/go-go-golems/glazed v0.5.23 h1:L6ua/U8y2zyi3CF49Nj2xbXKgNtBB2drpeCWO5/jeyo=
 github.com/go-go-golems/glazed v0.5.23/go.mod h1:cceXzXliF/CEc8qM/YXhcp9AbBAQpKDMF3+HIlGTDAI=
 github.com/go-go-golems/prompto v0.1.7 h1:A+A84Epo0ZLNU+ZIWlPSLk4WgGFf65Lpm3UTY4mFGAA=
