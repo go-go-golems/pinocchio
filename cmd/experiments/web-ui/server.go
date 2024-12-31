@@ -11,6 +11,7 @@ import (
 
 	"github.com/Masterminds/sprig/v3"
 	"github.com/go-go-golems/geppetto/pkg/events"
+	webconv "github.com/go-go-golems/pinocchio/cmd/experiments/web-ui/conversation"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 )
@@ -34,8 +35,13 @@ func NewServer(router *events.EventRouter) *Server {
 
 	logger.Level(zerolog.TraceLevel)
 
-	// Create template with sprig functions
-	tmpl := template.Must(template.New("").Funcs(sprig.HtmlFuncMap()).ParseFS(templatesFS, "templates/*"))
+	// Create template with sprig functions and add toJson function
+	funcMap := sprig.HtmlFuncMap()
+	funcMap["toJson"] = func(v interface{}) string {
+		return fmt.Sprintf("%+v", v)
+	}
+
+	tmpl := template.Must(template.New("").Funcs(funcMap).ParseFS(templatesFS, "templates/*"))
 
 	return &Server{
 		router:  router,
@@ -76,9 +82,10 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	clientID := r.URL.Query().Get("client_id")
 
 	// Verify client exists if ID provided
+	var messages *webconv.WebConversation
 	if clientID != "" {
 		s.clientsMux.RLock()
-		_, exists := s.clients[clientID]
+		client, exists := s.clients[clientID]
 		s.clientsMux.RUnlock()
 		if !exists {
 			// Client doesn't exist, redirect to root
@@ -86,10 +93,19 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 			http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
 			return
 		}
+		// Convert conversation to web format
+		conv, err := webconv.ConvertConversation(client.GetConversation())
+		if err != nil {
+			s.logger.Error().Err(err).Msg("Failed to convert conversation")
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		messages = conv
 	}
 
 	data := TemplateData{
 		ClientID: clientID,
+		Messages: messages,
 	}
 
 	if err := s.tmpl.ExecuteTemplate(w, "index.html", data); err != nil {
@@ -199,9 +215,16 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 
 	// For new chats, return the chat container template
 	if !exists {
+		conv, err := webconv.ConvertConversation(client.GetConversation())
+		if err != nil {
+			s.logger.Error().Err(err).Msg("Failed to convert conversation")
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
 		data := TemplateData{
 			ClientID: clientID,
-			Messages: client.GetConversation(),
+			Messages: conv,
 		}
 		w.Header().Set("HX-Push-Url", fmt.Sprintf("/?client_id=%s", clientID))
 		if err := s.tmpl.ExecuteTemplate(w, "chat-container", data); err != nil {
@@ -212,13 +235,27 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// For existing chats, render the message container with the new message
-	data := MessageData{
-		Timestamp: time.Now().Format("15:04:05"),
-		Message:   message,
+	// For existing chats, get the last message and render it
+	conv := client.GetConversation()
+	if len(conv) == 0 {
+		s.logger.Error().Msg("No messages in conversation")
+		http.Error(w, "No messages in conversation", http.StatusInternalServerError)
+		return
+	}
+
+	lastMsg := conv[len(conv)-1]
+	webMsg, err := webconv.ConvertMessage(lastMsg)
+	if err != nil {
+		s.logger.Error().Err(err).Msg("Failed to convert message")
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
 
 	// Render message container with user message and streaming div
+	data := MessageData{
+		Message: webMsg,
+	}
+
 	if err := s.tmpl.ExecuteTemplate(w, "message-container", data); err != nil {
 		s.logger.Error().Err(err).Msg("Failed to render message container")
 		http.Error(w, err.Error(), http.StatusInternalServerError)

@@ -181,24 +181,33 @@ func (c *SSEClient) SendUserMessage(ctx context.Context, message string) error {
 	go func() {
 		c.logger.Info().Msg("Starting to process step results")
 		resultCount := 0
-		for result := range result.GetChannel() {
-			resultCount++
-			if result.Error() != nil {
-				c.logger.Error().
-					Err(result.Error()).
+		for {
+			select {
+			case <-ctx.Done():
+				c.logger.Info().Msg("Context cancelled, stopping step result processing")
+				return
+			case result, ok := <-result.GetChannel():
+				if !ok {
+					c.logger.Info().
+						Int("total_results", resultCount).
+						Msg("Step completed")
+					return
+				}
+				resultCount++
+				if result.Error() != nil {
+					c.logger.Error().
+						Err(result.Error()).
+						Int("result_count", resultCount).
+						Msg("Error in step result")
+					continue
+				}
+				// Add assistant's response to conversation
+				c.manager.AppendMessages(result.Unwrap())
+				c.logger.Debug().
 					Int("result_count", resultCount).
-					Msg("Error in step result")
-				continue
+					Msg("Received step result")
 			}
-			// Add assistant's response to conversation
-			c.manager.AppendMessages(result.Unwrap())
-			c.logger.Debug().
-				Int("result_count", resultCount).
-				Msg("Received step result")
 		}
-		c.logger.Info().
-			Int("total_results", resultCount).
-			Msg("Step completed")
 	}()
 
 	return nil
@@ -207,11 +216,4 @@ func (c *SSEClient) SendUserMessage(ctx context.Context, message string) error {
 // GetConversation returns the current conversation
 func (c *SSEClient) GetConversation() conversation.Conversation {
 	return c.manager.GetConversation()
-}
-
-// AddMessage adds a new message to the conversation
-func (c *SSEClient) AddMessage(role conversation.Role, content string) *conversation.Message {
-	msg := conversation.NewChatMessage(role, content)
-	c.manager.AppendMessages(msg)
-	return msg
 }
