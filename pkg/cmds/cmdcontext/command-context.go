@@ -316,11 +316,16 @@ func (c *CommandContext) handleNonChatMode(
 func (c *CommandContext) Run(ctx context.Context, w io.Writer) error {
 	eg := errgroup.Group{}
 
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 	eg.Go(func() error {
+		defer cancel()
 		return c.Router.Run(ctx)
 	})
 
 	eg.Go(func() error {
+		defer cancel()
 		<-c.Router.Running()
 		if c.Settings.StartInChat {
 			return c.handleChat(ctx, true)
