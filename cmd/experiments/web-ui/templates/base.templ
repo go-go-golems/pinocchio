@@ -68,9 +68,6 @@ templ Base(title string) {
                         console.error('SSE Error:', e.detail);
                     });
 
-                    document.body.addEventListener('clearInput', function (e) {
-                        document.querySelector('input[name="message"]').value = '';
-                    });
                 });
             </script>
         </body>

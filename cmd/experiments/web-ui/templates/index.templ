@@ -17,28 +17,7 @@ templ Index(clientID string, messages *conversation.WebConversation) {
                     </div>
                     <div class="card-body">
                         <div id="chat-container">
-                            if clientID != "" {
-                                @components.ChatContainer(clientID, messages)
-                            } else {
-                                <div class="event-container">
-                                    <div id="events">
-                                    </div>
-                                </div>
-                                <div class="chat-input mt-3">
-                                    <form hx-post="/chat" 
-                                          hx-target="#chat-container"
-                                          hx-push-url="true"
-                                          hx-swap="innerHTML"
-                                          class="d-flex gap-2">
-                                        <input type="text" 
-                                               name="message" 
-                                               class="form-control" 
-                                               placeholder="Type your message..."
-                                               required/>
-                                        <button type="submit" class="btn btn-primary">Send</button>
-                                    </form>
-                                </div>
-                            }
+                            @components.ChatContainer(clientID, messages)
                         </div>
                     </div>
                 </div>

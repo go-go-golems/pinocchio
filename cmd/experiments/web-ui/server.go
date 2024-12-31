@@ -135,7 +135,6 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 		client_ = client.NewChatClient(clientID, s.router)
 		s.RegisterClient(client_)
 	}
-	defer s.UnregisterClient(client_.ID)
 
 	s.logger.Info().Str("client_id", client_.ID).Msg("SSE connection established")
 
@@ -152,6 +151,7 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 			}
 			// Handle multiline messages by prefacing each line with data:
 			lines := strings.Split(msg, "\n")
+			s.logger.Info().Str("client_id", client_.ID).Str("message", msg).Msg("Sending SSE message")
 			fmt.Fprintf(w, "event: message\n")
 			for _, line := range lines {
 				fmt.Fprintf(w, "data: %s\n", line)
@@ -200,49 +200,37 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// For new chats, return the chat container template
-	if !exists {
-		conv, err := webconv.ConvertConversation(client_.GetConversation())
-		if err != nil {
-			s.logger.Error().Err(err).Msg("Failed to convert conversation")
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		component := templates.Index(clientID, conv)
-		w.Header().Set("HX-Push-Url", fmt.Sprintf("/?client_id=%s", clientID))
-		if err := component.Render(context.Background(), w); err != nil {
-			s.logger.Error().Err(err).Msg("Failed to render chat container")
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		return
-	}
-
-	// For existing chats, get the last message and render it
-	conv := client_.GetConversation()
-	if len(conv) == 0 {
-		s.logger.Error().Msg("No messages in conversation")
-		http.Error(w, "No messages in conversation", http.StatusInternalServerError)
-		return
-	}
-
-	lastMsg := conv[len(conv)-1]
-	webMsg, err := webconv.ConvertMessage(lastMsg)
+	// Convert conversation for rendering
+	conv, err := webconv.ConvertConversation(client_.GetConversation())
 	if err != nil {
-		s.logger.Error().Err(err).Msg("Failed to convert message")
+		s.logger.Error().Err(err).Msg("Failed to convert conversation")
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	// Render message container with user message and streaming div
-	component := components.MessageContainer(webMsg)
-	if err := component.Render(context.Background(), w); err != nil {
-		s.logger.Error().Err(err).Msg("Failed to render message container")
+	// For new chats, update the URL and set up SSE
+	if !exists {
+		w.Header().Set("HX-Push-Url", fmt.Sprintf("/?client_id=%s", clientID))
+		err = components.EventContainer(clientID, true).Render(context.Background(), w)
+		if err != nil {
+			s.logger.Error().Err(err).Msg("Failed to render event container")
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+
+	// Render conversation history
+	err = components.ConversationHistory(conv, true).Render(context.Background(), w)
+	if err != nil {
+		s.logger.Error().Err(err).Msg("Failed to render conversation history")
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	// Add out-of-band swap to clear input
-	w.Header().Set("HX-Trigger", `{"clearInput": ""}`)
+	err = components.ChatInput(clientID).Render(context.Background(), w)
+	if err != nil {
+		s.logger.Error().Err(err).Msg("Failed to render chat input")
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 }

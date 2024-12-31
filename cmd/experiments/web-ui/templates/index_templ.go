@@ -50,16 +50,9 @@ func Index(clientID string, messages *conversation.WebConversation) templ.Compon
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			if clientID != "" {
-				templ_7745c5c3_Err = components.ChatContainer(clientID, messages).Render(ctx, templ_7745c5c3_Buffer)
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-			} else {
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString("<div class=\"event-container\"><div id=\"events\"></div></div><div class=\"chat-input mt-3\"><form hx-post=\"/chat\" hx-target=\"#chat-container\" hx-push-url=\"true\" hx-swap=\"innerHTML\" class=\"d-flex gap-2\"><input type=\"text\" name=\"message\" class=\"form-control\" placeholder=\"Type your message...\" required> <button type=\"submit\" class=\"btn btn-primary\">Send</button></form></div>")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
+			templ_7745c5c3_Err = components.ChatContainer(clientID, messages).Render(ctx, templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString("</div></div></div></div></div>")
 			if templ_7745c5c3_Err != nil {
