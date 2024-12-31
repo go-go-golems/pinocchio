@@ -318,58 +318,56 @@ type commandContext struct {
 	settings            *HelpersSettings
 }
 
-// RunIntoWriter runs the command and writes the output into the given writer.
-func (g *GeppettoCommand) RunIntoWriter(
-	ctx context.Context,
-	parsedLayers *layers.ParsedLayers,
-	w io.Writer,
-) error {
-	if g.Prompt != "" && len(g.Messages) != 0 {
-		return errors.Errorf("Prompt and messages are mutually exclusive")
-	}
+type CommandContextOption func(*commandContext) error
 
-	settings, err := g.initializeSettings(parsedLayers)
-	if err != nil {
-		return err
+func WithCommandContextRouter(router *events.EventRouter) CommandContextOption {
+	return func(c *commandContext) error {
+		c.router = router
+		return nil
 	}
-
-	cmdCtx, err := g.setupInfrastructure(ctx, settings, parsedLayers)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		err := cmdCtx.router.Close()
-		if err != nil {
-			log.Error().Err(err).Msg("Failed to close pubSub")
-		}
-	}()
-
-	if settings.StartInChat {
-		return g.runChatMode(ctx, cmdCtx)
-	}
-	return g.runNonChatMode(ctx, cmdCtx, w)
 }
 
-func (g *GeppettoCommand) initializeSettings(parsedLayers *layers.ParsedLayers) (*HelpersSettings, error) {
-	s := &HelpersSettings{}
-	err := parsedLayers.InitializeStruct(GeppettoHelpersSlug, s)
+func WithCommandContextConversationManager(manager conversation.Manager) CommandContextOption {
+	return func(c *commandContext) error {
+		c.conversationManager = manager
+		return nil
+	}
+}
+
+func WithCommandContextStepFactory(factory *ai.StandardStepFactory) CommandContextOption {
+	return func(c *commandContext) error {
+		c.stepFactory = factory
+		return nil
+	}
+}
+
+func WithCommandContextSettings(settings *HelpersSettings) CommandContextOption {
+	return func(c *commandContext) error {
+		c.settings = settings
+		return nil
+	}
+}
+
+func NewCommandContext(options ...CommandContextOption) (*commandContext, error) {
+	ctx := &commandContext{}
+	for _, opt := range options {
+		if err := opt(ctx); err != nil {
+			return nil, err
+		}
+	}
+	return ctx, nil
+}
+
+func NewCommandContextFromLayers(parsedLayers *layers.ParsedLayers, stepSettings *settings.StepSettings) (*commandContext, error) {
+	settings := &HelpersSettings{}
+	err := parsedLayers.InitializeStruct(GeppettoHelpersSlug, settings)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to initialize settings")
 	}
 
-	return s, nil
-}
-
-func (g *GeppettoCommand) setupInfrastructure(_ context.Context, settings *HelpersSettings, parsedLayers *layers.ParsedLayers) (*commandContext, error) {
-	stepSettings := g.StepSettings.Clone()
-	err := stepSettings.UpdateFromParsedLayers(parsedLayers)
+	err = stepSettings.UpdateFromParsedLayers(parsedLayers)
 	if err != nil {
 		return nil, err
-	}
-
-	val, present := parsedLayers.Get(layers.DefaultSlug)
-	if !present {
-		return nil, errors.New("could not get default layer")
 	}
 
 	stepFactory := &ai.StandardStepFactory{
@@ -389,87 +387,84 @@ func (g *GeppettoCommand) setupInfrastructure(_ context.Context, settings *Helpe
 		),
 	)
 
-	err = g.initializeConversationManager(conversationManager, settings, val.Parameters.ToMap())
+	return NewCommandContext(
+		WithCommandContextRouter(router),
+		WithCommandContextConversationManager(conversationManager),
+		WithCommandContextStepFactory(stepFactory),
+		WithCommandContextSettings(settings),
+	)
+}
+
+// RunIntoWriter runs the command and writes the output into the given writer.
+func (g *GeppettoCommand) RunIntoWriter(
+	ctx context.Context,
+	parsedLayers *layers.ParsedLayers,
+	w io.Writer,
+) error {
+	if g.Prompt != "" && len(g.Messages) != 0 {
+		return errors.Errorf("Prompt and messages are mutually exclusive")
+	}
+
+	cmdCtx, err := NewCommandContextFromLayers(parsedLayers, g.StepSettings)
 	if err != nil {
-		return nil, err
+		return err
+	}
+	defer func() {
+		err := cmdCtx.router.Close()
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to close pubSub")
+		}
+	}()
+
+	val, present := parsedLayers.Get(layers.DefaultSlug)
+	if !present {
+		return errors.New("could not get default layer")
+	}
+
+	err = g.initializeConversationManager(cmdCtx.conversationManager, cmdCtx.settings, val.Parameters.ToMap())
+	if err != nil {
+		return err
 	}
 
 	// load and render the system prompt
-	if settings.System != "" {
-		g.SystemPrompt = settings.System
+	if cmdCtx.settings.System != "" {
+		g.SystemPrompt = cmdCtx.settings.System
 	}
 
 	// load and render messages
-	if settings.MessageFile != "" {
-		messages_, err := conversation.LoadFromFile(settings.MessageFile)
+	if cmdCtx.settings.MessageFile != "" {
+		messages_, err := conversation.LoadFromFile(cmdCtx.settings.MessageFile)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
 		g.Messages = messages_
 	}
 
-	if settings.AppendMessageFile != "" {
-		messages_, err := conversation.LoadFromFile(settings.AppendMessageFile)
+	if cmdCtx.settings.AppendMessageFile != "" {
+		messages_, err := conversation.LoadFromFile(cmdCtx.settings.AppendMessageFile)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		g.Messages = append(g.Messages, messages_...)
 	}
 
-	return &commandContext{
-		router:              router,
-		conversationManager: conversationManager,
-		stepFactory:         stepFactory,
-		settings:            settings,
-	}, nil
+	if cmdCtx.settings.StartInChat {
+		return g.runChatMode(ctx, cmdCtx)
+	}
+	return g.runNonChatMode(ctx, cmdCtx, w)
 }
 
-func (g *GeppettoCommand) askForChatContinuation(continueInChat bool) (bool, error) {
-	tty_, err := bobatea_chat.OpenTTY()
-	if err != nil {
-		return false, err
+func (g *GeppettoCommand) setupPrinter(w io.Writer, settings *HelpersSettings) func(msg *message.Message) error {
+	if settings.Output != "text" || settings.WithMetadata || settings.FullOutput {
+		return chat.NewStructuredPrinter(w, chat.PrinterOptions{
+			Format:          chat.PrinterFormat(settings.Output),
+			Name:            "",
+			IncludeMetadata: settings.WithMetadata,
+			Full:            settings.FullOutput,
+		})
 	}
-	defer func() {
-		err := tty_.Close()
-		if err != nil {
-			fmt.Println("Failed to close tty:", err)
-		}
-	}()
-
-	ui := &input.UI{
-		Writer: tty_,
-		Reader: tty_,
-	}
-
-	query := "\nDo you want to continue in chat? [y/n]"
-	answer, err := ui.Ask(query, &input.Options{
-		Default:  "y",
-		Required: true,
-		Loop:     true,
-		ValidateFunc: func(answer string) error {
-			switch answer {
-			case "y", "Y", "n", "N":
-				return nil
-			default:
-				return errors.Errorf("please enter 'y' or 'n'")
-			}
-		},
-	})
-
-	if err != nil {
-		fmt.Println("Failed to get user input:", err)
-		return false, err
-	}
-
-	switch answer {
-	case "y", "Y":
-		continueInChat = true
-
-	case "n", "N":
-		return false, nil
-	}
-	return continueInChat, nil
+	return chat.StepPrinterFunc("", w)
 }
 
 func chat_(
@@ -477,10 +472,8 @@ func chat_(
 	step chat.Step,
 	router *events.EventRouter,
 	contextManager conversation.Manager,
+	autoStartBackend bool,
 ) error {
-	// switch on streaming for chatting
-	// TODO(manuel, 2023-12-09) Probably need to create a new follow on step for enabling streaming
-
 	isOutputTerminal := isatty.IsTerminal(os.Stdout.Fd())
 
 	options := []tea.ProgramOption{
@@ -498,6 +491,7 @@ func chat_(
 		contextManager,
 		backend,
 		bobatea_chat.WithTitle("pinocchio"),
+		bobatea_chat.WithAutoStartBackend(autoStartBackend),
 	)
 
 	p := tea.NewProgram(
@@ -536,7 +530,7 @@ func (g *GeppettoCommand) runChatMode(ctx context.Context, cmdCtx *commandContex
 			return err
 		}
 
-		err = chat_(ctx, chatStep, cmdCtx.router, cmdCtx.conversationManager)
+		err = chat_(ctx, chatStep, cmdCtx.router, cmdCtx.conversationManager, true)
 		if err != nil {
 			return err
 		}
@@ -594,18 +588,6 @@ func (g *GeppettoCommand) runNonChatMode(
 	return eg.Wait()
 }
 
-func (g *GeppettoCommand) setupPrinter(w io.Writer, settings *HelpersSettings) func(msg *message.Message) error {
-	if settings.Output != "text" || settings.WithMetadata || settings.FullOutput {
-		return chat.NewStructuredPrinter(w, chat.PrinterOptions{
-			Format:          chat.PrinterFormat(settings.Output),
-			Name:            "",
-			IncludeMetadata: settings.WithMetadata,
-			Full:            settings.FullOutput,
-		})
-	}
-	return chat.StepPrinterFunc("", w)
-}
-
 func (g *GeppettoCommand) handleInteractiveContinuation(
 	ctx context.Context,
 	cmdCtx *commandContext,
@@ -646,7 +628,7 @@ func (g *GeppettoCommand) handleInteractiveContinuation(
 			return err
 		}
 
-		err = chat_(ctx, chatStep, cmdCtx.router, cmdCtx.conversationManager)
+		err = chat_(ctx, chatStep, cmdCtx.router, cmdCtx.conversationManager, false)
 		if err != nil {
 			return err
 		}
@@ -662,4 +644,51 @@ func (g *GeppettoCommand) handleInteractiveContinuation(
 	}
 
 	return nil
+}
+
+func (g *GeppettoCommand) askForChatContinuation(continueInChat bool) (bool, error) {
+	tty_, err := bobatea_chat.OpenTTY()
+	if err != nil {
+		return false, err
+	}
+	defer func() {
+		err := tty_.Close()
+		if err != nil {
+			fmt.Println("Failed to close tty:", err)
+		}
+	}()
+
+	ui := &input.UI{
+		Writer: tty_,
+		Reader: tty_,
+	}
+
+	query := "\nDo you want to continue in chat? [y/n]"
+	answer, err := ui.Ask(query, &input.Options{
+		Default:  "y",
+		Required: true,
+		Loop:     true,
+		ValidateFunc: func(answer string) error {
+			switch answer {
+			case "y", "Y", "n", "N":
+				return nil
+			default:
+				return errors.Errorf("please enter 'y' or 'n'")
+			}
+		},
+	})
+
+	if err != nil {
+		fmt.Println("Failed to get user input:", err)
+		return false, err
+	}
+
+	switch answer {
+	case "y", "Y":
+		continueInChat = true
+
+	case "n", "N":
+		return false, nil
+	}
+	return continueInChat, nil
 }
