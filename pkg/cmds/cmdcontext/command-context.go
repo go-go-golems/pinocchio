@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strings"
 
 	"github.com/ThreeDotsLabs/watermill/message"
 	tea "github.com/charmbracelet/bubbletea"
@@ -16,7 +15,6 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/steps/ai"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/chat"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
-	"github.com/go-go-golems/glazed/pkg/cmds/layers"
 	"github.com/go-go-golems/pinocchio/pkg/cmds/cmdlayers"
 	"github.com/go-go-golems/pinocchio/pkg/ui"
 	"github.com/mattn/go-isatty"
@@ -67,23 +65,12 @@ func NewCommandContext(conversationManager conversation.Manager, options ...Comm
 	return ctx, nil
 }
 
-func NewCommandContextFromLayers(
-	parsedLayers *layers.ParsedLayers,
+func NewCommandContextFromSettings(
 	initialStepSettings *settings.StepSettings,
 	conversationManager conversation.Manager,
+	helpersSettings *cmdlayers.HelpersSettings,
 	options ...CommandContextOption,
 ) (*CommandContext, error) {
-	settings := &cmdlayers.HelpersSettings{}
-	err := parsedLayers.InitializeStruct(cmdlayers.GeppettoHelpersSlug, settings)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to initialize settings")
-	}
-
-	err = initialStepSettings.UpdateFromParsedLayers(parsedLayers)
-	if err != nil {
-		return nil, err
-	}
-
 	stepFactory := &ai.StandardStepFactory{
 		Settings: initialStepSettings,
 	}
@@ -96,7 +83,7 @@ func NewCommandContextFromLayers(
 	options_ := append(options,
 		WithRouter(router),
 		WithStepFactory(stepFactory),
-		WithSettings(settings),
+		WithSettings(helpersSettings),
 	)
 
 	return NewCommandContext(conversationManager, options_...)
@@ -178,7 +165,6 @@ func (c *CommandContext) handleChat(
 
 func (c *CommandContext) handleInteractiveContinuation(
 	ctx context.Context,
-	endedInNewline bool,
 ) error {
 	isOutputTerminal := isatty.IsTerminal(os.Stdout.Fd())
 	forceInteractive := c.Settings.ForceInteractive
@@ -266,7 +252,7 @@ func (c *CommandContext) askForChatContinuation(continueInChat bool) (bool, erro
 	return continueInChat, nil
 }
 
-func (c *CommandContext) setupPrinter(w io.Writer) func(msg *message.Message) error {
+func (c *CommandContext) SetupPrinter(w io.Writer) func(msg *message.Message) error {
 	if c.Settings.Output != "text" || c.Settings.WithMetadata || c.Settings.FullOutput {
 		return chat.NewStructuredPrinter(w, chat.PrinterOptions{
 			Format:          chat.PrinterFormat(c.Settings.Output),
@@ -282,7 +268,7 @@ func (c *CommandContext) handleNonChatMode(
 	ctx context.Context,
 	w io.Writer,
 ) error {
-	printer := c.setupPrinter(w)
+	printer := c.SetupPrinter(w)
 	c.Router.AddHandler("chat", "chat", printer)
 	err := c.Router.RunHandlers(ctx)
 	if err != nil {
@@ -294,7 +280,6 @@ func (c *CommandContext) handleNonChatMode(
 		return err
 	}
 
-	endedInNewline := false
 	res := m.Return()
 	for _, msg := range res {
 		s, err := msg.Value()
@@ -302,11 +287,9 @@ func (c *CommandContext) handleNonChatMode(
 			return err
 		}
 		c.ConversationManager.AppendMessages(s)
-
-		endedInNewline = strings.HasSuffix(s.Content.String(), "\n")
 	}
 
-	if err := c.handleInteractiveContinuation(ctx, endedInNewline); err != nil {
+	if err := c.handleInteractiveContinuation(ctx); err != nil {
 		return err
 	}
 
@@ -334,4 +317,44 @@ func (c *CommandContext) Run(ctx context.Context, w io.Writer) error {
 	})
 
 	return eg.Wait()
+}
+
+func (c *CommandContext) RunStepBlocking(
+	ctx context.Context,
+) ([]*conversation.Message, error) {
+	eg := errgroup.Group{}
+
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	eg.Go(func() error {
+		defer cancel()
+		return c.Router.Run(ctx)
+	})
+
+	eg.Go(func() error {
+		defer cancel()
+		<-c.Router.Running()
+
+		m, err := c.StartInitialStep(ctx)
+		if err != nil {
+			return err
+		}
+
+		for r := range m.GetChannel() {
+			if r.Error() != nil {
+				return r.Error()
+			}
+			msg := r.Unwrap()
+			c.ConversationManager.AppendMessages(msg)
+		}
+		return nil
+	})
+
+	err := eg.Wait()
+	if err != nil {
+		return nil, err
+	}
+
+	return c.ConversationManager.GetConversation(), nil
 }
