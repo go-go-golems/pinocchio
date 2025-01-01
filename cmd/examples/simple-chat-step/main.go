@@ -2,10 +2,10 @@ package main
 
 import (
 	"context"
-	"embed"
 	"fmt"
 	"io"
 	"os"
+	_ "embed"
 
 	clay "github.com/go-go-golems/clay/pkg"
 	"github.com/go-go-golems/geppetto/pkg/conversation"
@@ -25,7 +25,7 @@ import (
 )
 
 //go:embed test.yaml
-var promptsFS embed.FS
+var testYaml []byte
 
 var rootCmd = &cobra.Command{
 	Use:   "simple-chat-step",
@@ -63,16 +63,10 @@ func NewTestCommand(cmd *pinocchio_cmds.GeppettoCommand) *TestCommand {
 	}
 }
 
-func (c *TestCommand) RunIntoWriter(ctx context.Context, parsedLayers *layers.ParsedLayers, w io.Writer) error {
-	s := &TestCommandSettings{}
-	err := parsedLayers.InitializeStruct(layers.DefaultSlug, s)
-	if err != nil {
-		return errors.Wrap(err, "failed to initialize settings")
-	}
-
+func ParseGeppettoLayersFromProfiles(c *pinocchio_cmds.GeppettoCommand, s *TestCommandSettings) (*layers.ParsedLayers, error) {
 	xdgConfigPath, err := os.UserConfigDir()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defaultProfileFile := fmt.Sprintf("%s/pinocchio/profiles.yaml", xdgConfigPath)
 	middlewares_ := []middlewares.Middleware{}
@@ -103,7 +97,22 @@ func (c *TestCommand) RunIntoWriter(ctx context.Context, parsedLayers *layers.Pa
 	)
 
 	geppettoParsedLayers := layers.NewParsedLayers()
-	err = middlewares.ExecuteMiddlewares(c.pinocchioCmd.Description().Layers, geppettoParsedLayers, middlewares_...)
+	err = middlewares.ExecuteMiddlewares(c.Description().Layers, geppettoParsedLayers, middlewares_...)
+	if err != nil {
+		return nil, err
+	}
+
+	return geppettoParsedLayers, nil
+}
+
+func (c *TestCommand) RunIntoWriter(ctx context.Context, parsedLayers *layers.ParsedLayers, w io.Writer) error {
+	s := &TestCommandSettings{}
+	err := parsedLayers.InitializeStruct(layers.DefaultSlug, s)
+	if err != nil {
+		return errors.Wrap(err, "failed to initialize settings")
+	}
+
+	geppettoParsedLayers, err := ParseGeppettoLayersFromProfiles(c.pinocchioCmd, s)
 	if err != nil {
 		return err
 	}
@@ -151,9 +160,7 @@ func main() {
 	err = clay.InitLogger()
 	cobra.CheckErr(err)
 
-	// load command from yaml
-	loader := &pinocchio_cmds.GeppettoCommandLoader{}
-	commands, err := loader.LoadCommands(promptsFS, "test.yaml", nil, nil)
+	commands, err := pinocchio_cmds.LoadFromYAML(testYaml)
 	cobra.CheckErr(err)
 
 	// Register the command as a normal cobra command and let it parse its step settings by itself
