@@ -2,23 +2,20 @@ package main
 
 import (
 	"context"
+	_ "embed"
 	"fmt"
 	"io"
 	"os"
-	_ "embed"
 
 	clay "github.com/go-go-golems/clay/pkg"
 	"github.com/go-go-golems/geppetto/pkg/conversation"
-	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
-	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings/claude"
-	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings/openai"
 	"github.com/go-go-golems/glazed/pkg/cli"
 	"github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
-	"github.com/go-go-golems/glazed/pkg/cmds/middlewares"
 	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
 	pinocchio_cmds "github.com/go-go-golems/pinocchio/pkg/cmds"
 	"github.com/go-go-golems/pinocchio/pkg/cmds/cmdlayers"
+	"github.com/go-go-golems/pinocchio/pkg/cmds/helpers"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
@@ -63,48 +60,6 @@ func NewTestCommand(cmd *pinocchio_cmds.GeppettoCommand) *TestCommand {
 	}
 }
 
-func ParseGeppettoLayersFromProfiles(c *pinocchio_cmds.GeppettoCommand, s *TestCommandSettings) (*layers.ParsedLayers, error) {
-	xdgConfigPath, err := os.UserConfigDir()
-	if err != nil {
-		return nil, err
-	}
-	defaultProfileFile := fmt.Sprintf("%s/pinocchio/profiles.yaml", xdgConfigPath)
-	middlewares_ := []middlewares.Middleware{}
-	middlewares_ = append(middlewares_,
-		middlewares.GatherFlagsFromProfiles(
-			defaultProfileFile,
-			defaultProfileFile,
-			s.PinocchioProfile,
-			parameters.WithParseStepSource("profiles"),
-			parameters.WithParseStepMetadata(map[string]interface{}{
-				"profileFile": defaultProfileFile,
-				"profile":     s.PinocchioProfile,
-			}),
-		),
-	)
-	middlewares_ = append(middlewares_,
-		middlewares.WrapWithWhitelistedLayers(
-			[]string{
-				settings.AiChatSlug,
-				settings.AiClientSlug,
-				openai.OpenAiChatSlug,
-				claude.ClaudeChatSlug,
-				cmdlayers.GeppettoHelpersSlug,
-			},
-			middlewares.GatherFlagsFromViper(parameters.WithParseStepSource("viper")),
-		),
-		middlewares.SetFromDefaults(parameters.WithParseStepSource("defaults")),
-	)
-
-	geppettoParsedLayers := layers.NewParsedLayers()
-	err = middlewares.ExecuteMiddlewares(c.Description().Layers, geppettoParsedLayers, middlewares_...)
-	if err != nil {
-		return nil, err
-	}
-
-	return geppettoParsedLayers, nil
-}
-
 func (c *TestCommand) RunIntoWriter(ctx context.Context, parsedLayers *layers.ParsedLayers, w io.Writer) error {
 	s := &TestCommandSettings{}
 	err := parsedLayers.InitializeStruct(layers.DefaultSlug, s)
@@ -112,7 +67,7 @@ func (c *TestCommand) RunIntoWriter(ctx context.Context, parsedLayers *layers.Pa
 		return errors.Wrap(err, "failed to initialize settings")
 	}
 
-	geppettoParsedLayers, err := ParseGeppettoLayersFromProfiles(c.pinocchioCmd, s)
+	geppettoParsedLayers, err := helpers.ParseGeppettoLayersFromProfiles(c.pinocchioCmd, helpers.WithProfile(s.PinocchioProfile))
 	if err != nil {
 		return err
 	}
