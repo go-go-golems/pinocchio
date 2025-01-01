@@ -111,6 +111,7 @@ func (g *GeppettoCommand) CreateCommandContextFromParsedLayers(
 
 	return g.CreateCommandContextFromSettings(
 		helpersSettings,
+		stepSettings,
 		val.Parameters.ToMap(),
 	)
 }
@@ -118,6 +119,7 @@ func (g *GeppettoCommand) CreateCommandContextFromParsedLayers(
 // CreateCommandContextFromSettings creates a new command context directly from settings
 func (g *GeppettoCommand) CreateCommandContextFromSettings(
 	helpersSettings *cmdlayers.HelpersSettings,
+	stepSettings *settings.StepSettings,
 	variables map[string]interface{},
 ) (*cmdcontext.CommandContext, *cmdcontext.ConversationContext, error) {
 	if g.Prompt != "" && len(g.Messages) != 0 {
@@ -146,7 +148,7 @@ func (g *GeppettoCommand) CreateCommandContextFromSettings(
 	}
 
 	cmdCtx, err := cmdcontext.NewCommandContextFromSettings(
-		g.StepSettings,
+		stepSettings,
 		conversationContext.GetManager(),
 		helpersSettings,
 	)
@@ -164,7 +166,7 @@ func (g *GeppettoCommand) RunWithSettings(
 	variables map[string]interface{},
 	w io.Writer,
 ) error {
-	cmdCtx, _, err := g.CreateCommandContextFromSettings(helpersSettings, variables)
+	cmdCtx, _, err := g.CreateCommandContextFromSettings(helpersSettings, g.StepSettings, variables)
 	if err != nil {
 		return err
 	}
@@ -179,7 +181,7 @@ func (g *GeppettoCommand) RunStepBlockingWithSettings(
 	helpersSettings *cmdlayers.HelpersSettings,
 	variables map[string]interface{},
 ) ([]*conversation.Message, error) {
-	cmdCtx, _, err := g.CreateCommandContextFromSettings(helpersSettings, variables)
+	cmdCtx, _, err := g.CreateCommandContextFromSettings(helpersSettings, g.StepSettings, variables)
 	if err != nil {
 		return nil, err
 	}
