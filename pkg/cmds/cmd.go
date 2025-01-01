@@ -83,6 +83,21 @@ func NewGeppettoCommand(
 	return ret, nil
 }
 
+// XXX this is a mess with all its run methods and all, it would be good to have a RunOption pattern here:
+// - WithStepSettings
+// - WithParsedLayers
+// - WithPrinter / Handlers
+// - potentially others
+//   - WithMessages
+//   - WithPrompt
+//   - WithSystemPrompt
+//   - WithImages
+//   - WithAutosaveSettings
+//   - WithVariables
+//   - WithRouter
+//   - WithStepFactory
+//   - WithSettings
+
 // CreateCommandContextFromParsedLayers creates a new command context from the parsed layers
 func (g *GeppettoCommand) CreateCommandContextFromParsedLayers(
 	parsedLayers *layers.ParsedLayers,

@@ -67,7 +67,7 @@ func (c *TestCommand) RunIntoWriter(ctx context.Context, parsedLayers *layers.Pa
 		return errors.Wrap(err, "failed to initialize settings")
 	}
 
-	geppettoParsedLayers, err := helpers.ParseGeppettoLayersFromProfiles(c.pinocchioCmd, helpers.WithProfile(s.PinocchioProfile))
+	geppettoParsedLayers, err := helpers.ParseGeppettoLayers(c.pinocchioCmd, helpers.WithProfile(s.PinocchioProfile))
 	if err != nil {
 		return err
 	}
