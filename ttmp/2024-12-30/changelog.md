@@ -85,3 +85,12 @@ Enhanced the eval command to create separate conversation contexts for each data
 - Modified RunIntoGlazeProcessor to create new conversation context per entry
 - Added AI response to output rows
 - Improved error handling with entry-specific error messages 
+
+# Refactor Command Context Creation Settings
+
+Improved command context creation by moving helperSettings handling to callers.
+
+- Removed helperSettings dependency from CreateCommandContextFromSettings
+- Added ConversationContextOption support to CreateCommandContextFromSettings
+- Updated all callers to handle helperSettings locally
+- Improved separation of concerns in command context creation 

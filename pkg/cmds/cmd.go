@@ -4,9 +4,11 @@ import (
 	"context"
 	_ "embed"
 	"io"
+	"os"
 	"strings"
 
 	"github.com/go-go-golems/geppetto/pkg/conversation"
+	"github.com/go-go-golems/geppetto/pkg/steps/ai/chat"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 	glazedcmds "github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
@@ -124,10 +126,25 @@ func (g *GeppettoCommand) CreateCommandContextFromParsedLayers(
 		return nil, nil, err
 	}
 
+	// Create conversation context options from helperSettings
+	imagePaths := make([]string, len(helpersSettings.Images))
+	for i, img := range helpersSettings.Images {
+		imagePaths[i] = img.Path
+	}
+
+	options := []cmdcontext.ConversationContextOption{
+		cmdcontext.WithImages(imagePaths),
+		cmdcontext.WithAutosaveSettings(cmdcontext.AutosaveSettings{
+			Enabled:  strings.ToLower(helpersSettings.Autosave.Enabled) == "yes",
+			Template: helpersSettings.Autosave.Template,
+			Path:     helpersSettings.Autosave.Path,
+		}),
+	}
+
 	return g.CreateCommandContextFromSettings(
-		helpersSettings,
 		stepSettings,
 		val.Parameters.ToMap(),
+		options...,
 	)
 }
 
@@ -153,24 +170,10 @@ func (g *GeppettoCommand) CreateConversationContext(
 
 // CreateCommandContextFromSettings creates a new command context directly from settings
 func (g *GeppettoCommand) CreateCommandContextFromSettings(
-	helpersSettings *cmdlayers.HelpersSettings,
 	stepSettings *settings.StepSettings,
 	variables map[string]interface{},
+	options ...cmdcontext.ConversationContextOption,
 ) (*cmdcontext.CommandContext, *cmdcontext.ConversationContext, error) {
-	imagePaths := make([]string, len(helpersSettings.Images))
-	for i, img := range helpersSettings.Images {
-		imagePaths[i] = img.Path
-	}
-
-	options := []cmdcontext.ConversationContextOption{
-		cmdcontext.WithImages(imagePaths),
-		cmdcontext.WithAutosaveSettings(cmdcontext.AutosaveSettings{
-			Enabled:  strings.ToLower(helpersSettings.Autosave.Enabled) == "yes",
-			Template: helpersSettings.Autosave.Template,
-			Path:     helpersSettings.Autosave.Path,
-		}),
-	}
-
 	conversationContext, err := g.CreateConversationContext(variables, options...)
 	if err != nil {
 		return nil, nil, err
@@ -179,7 +182,7 @@ func (g *GeppettoCommand) CreateCommandContextFromSettings(
 	cmdCtx, err := cmdcontext.NewCommandContextFromSettings(
 		stepSettings,
 		conversationContext.GetManager(),
-		helpersSettings,
+		nil, // helpersSettings is no longer needed here
 	)
 	if err != nil {
 		return nil, nil, err
@@ -191,11 +194,16 @@ func (g *GeppettoCommand) CreateCommandContextFromSettings(
 // RunWithSettings runs the command with the given settings and variables
 func (g *GeppettoCommand) RunWithSettings(
 	ctx context.Context,
-	helpersSettings *cmdlayers.HelpersSettings,
+	stepSettings *settings.StepSettings,
 	variables map[string]interface{},
 	w io.Writer,
+	options ...cmdcontext.ConversationContextOption,
 ) error {
-	cmdCtx, _, err := g.CreateCommandContextFromSettings(helpersSettings, g.StepSettings, variables)
+	cmdCtx, _, err := g.CreateCommandContextFromSettings(
+		g.StepSettings,
+		variables,
+		options...,
+	)
 	if err != nil {
 		return err
 	}
@@ -207,14 +215,22 @@ func (g *GeppettoCommand) RunWithSettings(
 // RunStepBlockingWithSettings runs the command in blocking mode with the given settings and variables
 func (g *GeppettoCommand) RunStepBlockingWithSettings(
 	ctx context.Context,
-	helpersSettings *cmdlayers.HelpersSettings,
+	stepSettings *settings.StepSettings,
 	variables map[string]interface{},
+	options ...cmdcontext.ConversationContextOption,
 ) ([]*conversation.Message, error) {
-	cmdCtx, _, err := g.CreateCommandContextFromSettings(helpersSettings, g.StepSettings, variables)
+
+	cmdCtx, _, err := g.CreateCommandContextFromSettings(
+		stepSettings,
+		variables,
+		options...,
+	)
 	if err != nil {
 		return nil, err
 	}
 	defer cmdCtx.Close()
+
+	cmdCtx.Router.AddHandler("chat", "chat", chat.StepPrinterFunc("", os.Stdout))
 
 	return cmdCtx.RunStepBlocking(ctx)
 }

@@ -25,8 +25,8 @@ dataset + template -> llm calls -> compute accuracy -> eval results
 
 - [x] iterate over each entry in eval.json
 
-- [ ] load a prompt from complaint.yaml
-- [ ] interpolate the complaint.yaml command
+- [x] load a prompt from complaint.yaml
+- [x] interpolate the complaint.yaml command
 
 ### Running the actual LLM inference
 

@@ -6,15 +6,22 @@ import (
 	"fmt"
 	"os"
 
+	clay "github.com/go-go-golems/clay/pkg"
+	pinocchio_settings "github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 	"github.com/go-go-golems/glazed/pkg/cli"
 	"github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
 	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
+	"github.com/go-go-golems/glazed/pkg/help"
 	"github.com/go-go-golems/glazed/pkg/middlewares"
-	"github.com/go-go-golems/glazed/pkg/settings"
+	glazed_settings "github.com/go-go-golems/glazed/pkg/settings"
 	"github.com/go-go-golems/glazed/pkg/types"
 	pinocchio_cmds "github.com/go-go-golems/pinocchio/pkg/cmds"
+	"github.com/go-go-golems/pinocchio/pkg/cmds/cmdlayers"
 	"github.com/spf13/cobra"
+
+	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings/claude"
+	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings/openai"
 )
 
 type EvalCommand struct {
@@ -86,11 +93,31 @@ func (c *EvalCommand) RunIntoGlazeProcessor(
 		manager := conversationContext.GetManager()
 		conversation := manager.GetConversation()
 
-		// // Get the AI's response
+		// XXX CALL THE LLM
+
+		// // Update step settings from parsed layers
+		stepSettings := command.StepSettings.Clone()
+		err = stepSettings.UpdateFromParsedLayers(parsedLayers)
+		if err != nil {
+			return err
+		}
+
+		// command.Run(stepSettings, conversation)
+
+		// NOTE(manuel, 2025-01-04): not sure if we want to render the conversation inside Run or make it a parameter, maybe both.
+		resultConversation, err := command.RunStepBlockingWithSettings(ctx, stepSettings, entry.Input)
+		if err != nil {
+			return fmt.Errorf("failed to run command for entry %d: %w", i+1, err)
+		}
+
+		// Get the AI's response
 		var conversationString string
 		for _, msg := range conversation {
 			conversationString += msg.Content.View() + "\n"
 		}
+
+		// get the last message from the resultConversation
+		lastMessage := resultConversation[len(resultConversation)-1]
 
 		// Create a row with the entry data and AI response
 		row := types.NewRow(
@@ -99,18 +126,61 @@ func (c *EvalCommand) RunIntoGlazeProcessor(
 			types.MRP("golden_answer", entry.GoldenAnswer),
 			types.MRP("conversationString", conversationString),
 			types.MRP("conversation", conversation),
+			types.MRP("last_message", lastMessage.Content.View()),
+			// XXX make sure the model and all that is in the message
+			types.MRP("message_metadata", lastMessage.Metadata),
 		)
 
 		if err := gp.AddRow(ctx, row); err != nil {
 			return err
 		}
+
 	}
 
 	return nil
 }
 
 func NewEvalCommand() (*EvalCommand, error) {
-	glazedParameterLayer, err := settings.NewGlazedParameterLayers()
+	glazedParameterLayer, err := glazed_settings.NewGlazedParameterLayers()
+	if err != nil {
+		return nil, err
+	}
+
+	stepSettings, err := pinocchio_settings.NewStepSettings()
+	if err != nil {
+		return nil, err
+	}
+
+	chatParameterLayer, err := pinocchio_settings.NewChatParameterLayer(
+		layers.WithDefaults(stepSettings.Chat),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	clientParameterLayer, err := pinocchio_settings.NewClientParameterLayer(
+		layers.WithDefaults(stepSettings.Client),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	claudeParameterLayer, err := claude.NewParameterLayer(
+		layers.WithDefaults(stepSettings.Claude),
+	)
+	if err != nil {
+		return nil, err
+	}
+	openaiParameterLayer, err := openai.NewParameterLayer(
+		layers.WithDefaults(stepSettings.OpenAI),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	embeddingsParameterLayer, err := pinocchio_settings.NewEmbeddingsParameterLayer(
+		layers.WithDefaults(stepSettings.Embeddings),
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -134,27 +204,35 @@ func NewEvalCommand() (*EvalCommand, error) {
 				),
 			),
 			cmds.WithLayersList(glazedParameterLayer),
+			cmds.WithLayersList(chatParameterLayer, clientParameterLayer, claudeParameterLayer, openaiParameterLayer, embeddingsParameterLayer),
 		),
 	}, nil
 }
 
 func main() {
-	evalCmd, err := NewEvalCommand()
-	if err != nil {
-		panic(err)
-	}
-
 	rootCmd := &cobra.Command{
 		Use:   "eval",
 		Short: "Evaluate prompts against a dataset",
 	}
 
-	cobraCmd, err := cli.BuildCobraCommandFromGlazeCommand(evalCmd)
+	err := clay.InitViper("pinocchio", rootCmd)
+	cobra.CheckErr(err)
+	err = clay.InitLogger()
+	cobra.CheckErr(err)
+
+	helpSystem := help.NewHelpSystem()
+
+	helpSystem.SetupCobraRootCommand(rootCmd)
+	evalCmd, err := NewEvalCommand()
 	if err != nil {
 		panic(err)
 	}
 
-	rootCmd.AddCommand(cobraCmd)
+	cli.AddCommandsToRootCommand(
+		rootCmd, []cmds.Command{evalCmd}, nil,
+		cli.WithCobraMiddlewaresFunc(pinocchio_cmds.GetCobraCommandGeppettoMiddlewares),
+		cli.WithCobraShortHelpLayers(layers.DefaultSlug, cmdlayers.GeppettoHelpersSlug),
+	)
 
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)

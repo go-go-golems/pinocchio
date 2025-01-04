@@ -106,7 +106,8 @@ func (c *CommandContext) StartInitialStep(
 	}
 
 	conversation_ := c.ConversationManager.GetConversation()
-	if c.Settings.PrintPrompt {
+	// XXX make HelpersSettings optional for programmatic use
+	if c.Settings != nil && c.Settings.PrintPrompt {
 		return nil, errors.New("Can't run a step with --print-prompt")
 	}
 
