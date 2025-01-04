@@ -1,0 +1,21 @@
+name: complaint
+description: Classifies a customer complaint into predefined categories
+system-prompt: |
+  You are a customer support specialist with expertise in technical issue classification.
+  You should respond only with the relevant categories, separated by commas if there are multiple categories.
+  Keep your response concise and strictly limited to the categories mentioned in the prompt.
+ 
+prompt: |
+  Classify the following customer complaint into one or more of these categories: 
+  Software Bug, Hardware Malfunction, User Error, Feature Request, or Service Outage.
+  Only respond with the matching category or categories and nothing else.
+ 
+  Complaint: {{.complaint}}
+ 
+  Classification:
+ 
+flags:
+  - name: complaint
+    type: string
+    help: The customer complaint to classify
+    required: true
