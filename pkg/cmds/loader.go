@@ -28,6 +28,12 @@ func (g *GeppettoCommandLoader) IsFileSupported(f fs.FS, fileName string) bool {
 
 var _ loaders.CommandLoader = (*GeppettoCommandLoader)(nil)
 
+func LoadFromYAML(b []byte) ([]cmds.Command, error) {
+	loader := &GeppettoCommandLoader{}
+	buf := strings.NewReader(string(b))
+	return loader.loadGeppettoCommandFromReader(buf, nil, nil)
+}
+
 func (g *GeppettoCommandLoader) loadGeppettoCommandFromReader(
 	s io.Reader,
 	options []cmds.CommandDescriptionOption,

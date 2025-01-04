@@ -83,29 +83,67 @@ func NewGeppettoCommand(
 	return ret, nil
 }
 
-// RunIntoWriter runs the command and writes the output into the given writer.
-func (g *GeppettoCommand) RunIntoWriter(
-	ctx context.Context,
+// XXX this is a mess with all its run methods and all, it would be good to have a RunOption pattern here:
+// - WithStepSettings
+// - WithParsedLayers
+// - WithPrinter / Handlers
+// - WithEngine / Temperature / a whole set of LLM specific parameters
+// - potentially others
+//   - WithMessages
+//   - WithPrompt
+//   - WithSystemPrompt
+//   - WithImages
+//   - WithAutosaveSettings
+//   - WithVariables
+//   - WithRouter
+//   - WithStepFactory
+//   - WithSettings
+
+// CreateCommandContextFromParsedLayers creates a new command context from the parsed layers
+func (g *GeppettoCommand) CreateCommandContextFromParsedLayers(
 	parsedLayers *layers.ParsedLayers,
-	w io.Writer,
-) error {
+) (*cmdcontext.CommandContext, *cmdcontext.ConversationContext, error) {
 	if g.Prompt != "" && len(g.Messages) != 0 {
-		return errors.Errorf("Prompt and messages are mutually exclusive")
+		return nil, nil, errors.Errorf("Prompt and messages are mutually exclusive")
 	}
 
 	val, present := parsedLayers.Get(layers.DefaultSlug)
 	if !present {
-		return errors.New("could not get default layer")
+		return nil, nil, errors.New("could not get default layer")
 	}
 
-	settings := &cmdlayers.HelpersSettings{}
-	err := parsedLayers.InitializeStruct(cmdlayers.GeppettoHelpersSlug, settings)
+	helpersSettings := &cmdlayers.HelpersSettings{}
+	err := parsedLayers.InitializeStruct(cmdlayers.GeppettoHelpersSlug, helpersSettings)
 	if err != nil {
-		return errors.Wrap(err, "failed to initialize settings")
+		return nil, nil, errors.Wrap(err, "failed to initialize settings")
 	}
 
-	imagePaths := make([]string, len(settings.Images))
-	for i, img := range settings.Images {
+	// Update step settings from parsed layers
+	stepSettings := g.StepSettings.Clone()
+	err = stepSettings.UpdateFromParsedLayers(parsedLayers)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return g.CreateCommandContextFromSettings(
+		helpersSettings,
+		stepSettings,
+		val.Parameters.ToMap(),
+	)
+}
+
+// CreateCommandContextFromSettings creates a new command context directly from settings
+func (g *GeppettoCommand) CreateCommandContextFromSettings(
+	helpersSettings *cmdlayers.HelpersSettings,
+	stepSettings *settings.StepSettings,
+	variables map[string]interface{},
+) (*cmdcontext.CommandContext, *cmdcontext.ConversationContext, error) {
+	if g.Prompt != "" && len(g.Messages) != 0 {
+		return nil, nil, errors.Errorf("Prompt and messages are mutually exclusive")
+	}
+
+	imagePaths := make([]string, len(helpersSettings.Images))
+	for i, img := range helpersSettings.Images {
 		imagePaths[i] = img.Path
 	}
 
@@ -113,28 +151,72 @@ func (g *GeppettoCommand) RunIntoWriter(
 		cmdcontext.WithSystemPrompt(g.SystemPrompt),
 		cmdcontext.WithMessages(g.Messages),
 		cmdcontext.WithPrompt(g.Prompt),
-		cmdcontext.WithVariables(val.Parameters.ToMap()),
+		cmdcontext.WithVariables(variables),
 		cmdcontext.WithImages(imagePaths),
 		cmdcontext.WithAutosaveSettings(cmdcontext.AutosaveSettings{
-			Enabled:  strings.ToLower(settings.Autosave.Enabled) == "yes",
-			Template: settings.Autosave.Template,
-			Path:     settings.Autosave.Path,
+			Enabled:  strings.ToLower(helpersSettings.Autosave.Enabled) == "yes",
+			Template: helpersSettings.Autosave.Template,
+			Path:     helpersSettings.Autosave.Path,
 		}),
 	)
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
 
-	cmdCtx, err := cmdcontext.NewCommandContextFromLayers(
-		parsedLayers,
-		g.StepSettings,
+	cmdCtx, err := cmdcontext.NewCommandContextFromSettings(
+		stepSettings,
 		conversationContext.GetManager(),
+		helpersSettings,
 	)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return cmdCtx, conversationContext, nil
+}
+
+// RunWithSettings runs the command with the given settings and variables
+func (g *GeppettoCommand) RunWithSettings(
+	ctx context.Context,
+	helpersSettings *cmdlayers.HelpersSettings,
+	variables map[string]interface{},
+	w io.Writer,
+) error {
+	cmdCtx, _, err := g.CreateCommandContextFromSettings(helpersSettings, g.StepSettings, variables)
 	if err != nil {
 		return err
 	}
 	defer cmdCtx.Close()
 
 	return cmdCtx.Run(ctx, w)
+}
 
+// RunStepBlockingWithSettings runs the command in blocking mode with the given settings and variables
+func (g *GeppettoCommand) RunStepBlockingWithSettings(
+	ctx context.Context,
+	helpersSettings *cmdlayers.HelpersSettings,
+	variables map[string]interface{},
+) ([]*conversation.Message, error) {
+	cmdCtx, _, err := g.CreateCommandContextFromSettings(helpersSettings, g.StepSettings, variables)
+	if err != nil {
+		return nil, err
+	}
+	defer cmdCtx.Close()
+
+	return cmdCtx.RunStepBlocking(ctx)
+}
+
+// RunIntoWriter runs the command and writes the output into the given writer.
+func (g *GeppettoCommand) RunIntoWriter(
+	ctx context.Context,
+	parsedLayers *layers.ParsedLayers,
+	w io.Writer,
+) error {
+	cmdCtx, _, err := g.CreateCommandContextFromParsedLayers(parsedLayers)
+	if err != nil {
+		return err
+	}
+	defer cmdCtx.Close()
+
+	return cmdCtx.Run(ctx, w)
 }
