@@ -88,7 +88,6 @@ func NewGeppettoCommand(
 // - WithParsedLayers
 // - WithPrinter / Handlers
 // - WithEngine / Temperature / a whole set of LLM specific parameters
-// - potentially others
 //   - WithMessages
 //   - WithPrompt
 //   - WithSystemPrompt
@@ -132,33 +131,47 @@ func (g *GeppettoCommand) CreateCommandContextFromParsedLayers(
 	)
 }
 
+// CreateConversationContext creates a new conversation context with the given settings
+func (g *GeppettoCommand) CreateConversationContext(
+	variables map[string]interface{},
+	options ...cmdcontext.ConversationContextOption,
+) (*cmdcontext.ConversationContext, error) {
+	if g.Prompt != "" && len(g.Messages) != 0 {
+		return nil, errors.Errorf("Prompt and messages are mutually exclusive")
+	}
+
+	defaultOptions := []cmdcontext.ConversationContextOption{
+		cmdcontext.WithSystemPrompt(g.SystemPrompt),
+		cmdcontext.WithMessages(g.Messages),
+		cmdcontext.WithPrompt(g.Prompt),
+		cmdcontext.WithVariables(variables),
+	}
+
+	// Combine default options with provided options, with provided options taking precedence
+	return cmdcontext.NewConversationContext(append(defaultOptions, options...)...)
+}
+
 // CreateCommandContextFromSettings creates a new command context directly from settings
 func (g *GeppettoCommand) CreateCommandContextFromSettings(
 	helpersSettings *cmdlayers.HelpersSettings,
 	stepSettings *settings.StepSettings,
 	variables map[string]interface{},
 ) (*cmdcontext.CommandContext, *cmdcontext.ConversationContext, error) {
-	if g.Prompt != "" && len(g.Messages) != 0 {
-		return nil, nil, errors.Errorf("Prompt and messages are mutually exclusive")
-	}
-
 	imagePaths := make([]string, len(helpersSettings.Images))
 	for i, img := range helpersSettings.Images {
 		imagePaths[i] = img.Path
 	}
 
-	conversationContext, err := cmdcontext.NewConversationContext(
-		cmdcontext.WithSystemPrompt(g.SystemPrompt),
-		cmdcontext.WithMessages(g.Messages),
-		cmdcontext.WithPrompt(g.Prompt),
-		cmdcontext.WithVariables(variables),
+	options := []cmdcontext.ConversationContextOption{
 		cmdcontext.WithImages(imagePaths),
 		cmdcontext.WithAutosaveSettings(cmdcontext.AutosaveSettings{
 			Enabled:  strings.ToLower(helpersSettings.Autosave.Enabled) == "yes",
 			Template: helpersSettings.Autosave.Template,
 			Path:     helpersSettings.Autosave.Path,
 		}),
-	)
+	}
+
+	conversationContext, err := g.CreateConversationContext(variables, options...)
 	if err != nil {
 		return nil, nil, err
 	}

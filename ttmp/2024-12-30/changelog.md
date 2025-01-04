@@ -62,3 +62,18 @@ Created a new ConversationContext type to handle conversation initialization and
 - Moved template rendering and conversation initialization logic
 - Added proper autosave settings handling
 - Simplified CommandContext by delegating conversation management 
+
+# Extract Conversation Context Creation
+
+Refactored conversation context creation in GeppettoCommand to improve code organization and reusability.
+
+- Extracted CreateConversationContext method from CreateCommandContextFromSettings
+- Updated CreateCommandContextFromSettings to use the new method 
+
+# Refactor Conversation Context Creation
+
+Improved CreateConversationContext method to be more focused and reusable.
+
+- Removed helperSettings dependency from CreateConversationContext
+- Moved image paths and autosave settings handling to caller
+- Added support for combining default and custom conversation context options 

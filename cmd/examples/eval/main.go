@@ -70,6 +70,22 @@ func (c *EvalCommand) RunIntoGlazeProcessor(
 		return fmt.Errorf("expected exactly one command in YAML, got %d", len(commands))
 	}
 
+	command, ok := commands[0].(*pinocchio_cmds.GeppettoCommand)
+	if !ok {
+		return fmt.Errorf("expected the command to be a GeppettoCommand, got %T", commands[0])
+	}
+
+	conversationContext, err := command.CreateConversationContext(nil)
+	if err != nil {
+		return fmt.Errorf("failed to create conversation context: %w", err)
+	}
+
+	manager := conversationContext.GetManager()
+	conversation := manager.GetConversation()
+	for _, msg := range conversation {
+		fmt.Println(msg.Content.View())
+	}
+
 	// Process each entry in the dataset
 	for i, entry := range dataset {
 		// For now, just output the entry data as rows
