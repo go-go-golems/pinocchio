@@ -39,6 +39,8 @@ type TestCommandSettings struct {
 	Debug            bool   `glazed.parameter:"debug"`
 }
 
+// NewTestCommand wraps the GepettoCommand which was loaded from the yaml file,
+// and manually loads the profile to configure it.
 func NewTestCommand(cmd *pinocchio_cmds.GeppettoCommand) *TestCommand {
 	return &TestCommand{
 		CommandDescription: cmds.NewCommandDescription("test2",
@@ -119,12 +121,14 @@ func main() {
 	cobra.CheckErr(err)
 
 	// Register the command as a normal cobra command and let it parse its step settings by itself
-	cli.AddCommandsToRootCommand(rootCmd, commands, nil,
+	cli.AddCommandsToRootCommand(
+		rootCmd, commands, nil,
 		cli.WithCobraMiddlewaresFunc(pinocchio_cmds.GetCobraCommandGeppettoMiddlewares),
 		cli.WithCobraShortHelpLayers(layers.DefaultSlug, cmdlayers.GeppettoHelpersSlug),
 	)
 
-	if len(rootCmd.Commands()) == 1 {
+	// Add the test command as wrapped by NewTestCommand
+	if len(commands) == 1 {
 		cmd := commands[0].(*pinocchio_cmds.GeppettoCommand)
 		testCmd := NewTestCommand(cmd)
 		command, err := cli.BuildCobraCommandFromWriterCommand(testCmd)

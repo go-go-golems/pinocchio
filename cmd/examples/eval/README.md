@@ -11,18 +11,24 @@ dataset + template -> llm calls -> compute accuracy -> eval results
 
 # step 0
 
-- create a glazed command for evals
-- generate mock rows for eval results
-- wrap as command line tool
+- [x] create a glazed command for evals
+- [x] generate mock rows for eval results
+- [x] wrap as command line tool
 
 # step 1
 
-- load a eval data set from eval.json
-- load a prompt from complaint.yaml
-- iterate over each entry in eval.json
-- interpolate the complaint.yaml command
-- run it
-- store the answer
+- [x] load a eval data set from eval.json
+  - array of objects
+  - each object: 
+    - input: hash[string]interface{}
+    - golden answer: interface{}
+    
+
+- [ ] load a prompt from complaint.yaml
+- [ ] iterate over each entry in eval.json
+- [ ] interpolate the complaint.yaml command
+- [ ] run it
+- [ ] store the answer
 
 go run ./cmd/eval --dataset eval.json --command complaint.yaml
 

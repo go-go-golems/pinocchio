@@ -2,7 +2,8 @@ package main
 
 import (
 	"context"
-	"math/rand"
+	"encoding/json"
+	"fmt"
 	"os"
 
 	"github.com/go-go-golems/glazed/pkg/cli"
@@ -23,6 +24,14 @@ type EvalSettings struct {
 	Dataset string `glazed.parameter:"dataset"`
 	Command string `glazed.parameter:"command"`
 }
+
+// Add these new structs for the eval dataset
+type EvalEntry struct {
+	Input        map[string]interface{} `json:"input"`
+	GoldenAnswer interface{}            `json:"golden_answer"`
+}
+
+type EvalDataset []EvalEntry
 
 func NewEvalCommand() (*EvalCommand, error) {
 	glazedParameterLayer, err := settings.NewGlazedParameterLayers()
@@ -63,13 +72,24 @@ func (c *EvalCommand) RunIntoGlazeProcessor(
 		return err
 	}
 
-	// Mock data - generate 3 random evaluation rows
-	for i := 0; i < 3; i++ {
+	// Read and parse the dataset file
+	datasetBytes, err := os.ReadFile(s.Dataset)
+	if err != nil {
+		return fmt.Errorf("failed to read dataset file: %w", err)
+	}
+
+	var dataset EvalDataset
+	if err := json.Unmarshal(datasetBytes, &dataset); err != nil {
+		return fmt.Errorf("failed to parse dataset JSON: %w", err)
+	}
+
+	// Process each entry in the dataset
+	for i, entry := range dataset {
+		// For now, just output the entry data as rows
 		row := types.NewRow(
-			types.MRP("id", i+1),
-			types.MRP("accuracy", rand.Float64()),
-			types.MRP("precision", rand.Float64()),
-			types.MRP("recall", rand.Float64()),
+			types.MRP("entry_id", i+1),
+			types.MRP("input", entry.Input),
+			types.MRP("golden_answer", entry.GoldenAnswer),
 		)
 
 		if err := gp.AddRow(ctx, row); err != nil {
