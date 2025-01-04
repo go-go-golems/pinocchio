@@ -30,7 +30,7 @@ dataset + template -> llm calls -> compute accuracy -> eval results
 
 ### Running the actual LLM inference
 
-- [ ] run it
+- [x] run it
   - load the API key, etc...
   - create the chat step
   - get the step result
@@ -38,10 +38,10 @@ dataset + template -> llm calls -> compute accuracy -> eval results
 
 ### Postprocessing the LLM response
 
-- [ ] store the answer
-  - store the LLM metadata
-  - store the date
-  - give it a unique UUID
+- [x] store the answer
+  - [ ] store the LLM metadata
+  - [ ] store the date
+  - [ ] give it a unique UUID
 
 go run ./cmd/eval --dataset eval.json --command complaint.yaml
 
@@ -62,3 +62,7 @@ go run ./cmd/eval --dataset eval.json --command complaint.yaml --scoring score.j
   - import/export/manage prompts
   - log + monitoring of testruns
   - streaming display of running datasets
+
+# features
+
+- [ ] caching of inference

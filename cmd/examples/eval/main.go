@@ -4,7 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"html/template"
+	"net/http"
 	"os"
+	"strings"
+
+	"gopkg.in/yaml.v3"
 
 	clay "github.com/go-go-golems/clay/pkg"
 	pinocchio_settings "github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
@@ -209,6 +214,167 @@ func NewEvalCommand() (*EvalCommand, error) {
 	}, nil
 }
 
+// Add these new types for web view
+type WebViewCommand struct {
+	*cmds.CommandDescription
+}
+
+type WebViewSettings struct {
+	InputFile string `glazed.parameter:"input"`
+	Port      string `glazed.parameter:"port"`
+}
+
+type TestOutput struct {
+	ConversationString string                 `yaml:"conversationString"`
+	EntryID            int                    `yaml:"entry_id"`
+	GoldenAnswer       []string               `yaml:"golden_answer"`
+	Input              map[string]interface{} `yaml:"input"`
+	LastMessage        string                 `yaml:"last_message"`
+	MessageMetadata    map[string]interface{} `yaml:"message_metadata"`
+}
+
+func NewWebViewCommand() (*WebViewCommand, error) {
+	return &WebViewCommand{
+		CommandDescription: cmds.NewCommandDescription(
+			"web-view",
+			cmds.WithShort("Start a web server to view test results"),
+			cmds.WithFlags(
+				parameters.NewParameterDefinition(
+					"input",
+					parameters.ParameterTypeString,
+					parameters.WithHelp("Path to the test output YAML file"),
+					parameters.WithRequired(true),
+				),
+				parameters.NewParameterDefinition(
+					"port",
+					parameters.ParameterTypeString,
+					parameters.WithHelp("Port to run the web server on"),
+					parameters.WithDefault("8080"),
+				),
+			),
+		),
+	}, nil
+}
+
+func (c *WebViewCommand) Run(
+	ctx context.Context,
+	parsedLayers *layers.ParsedLayers,
+) error {
+	s := &WebViewSettings{}
+	if err := parsedLayers.InitializeStruct(layers.DefaultSlug, s); err != nil {
+		return err
+	}
+
+	// Read and parse the YAML file
+	data, err := os.ReadFile(s.InputFile)
+	if err != nil {
+		return fmt.Errorf("failed to read input file: %w", err)
+	}
+
+	// Split the YAML documents
+	docs := strings.Split(string(data), "---\n")
+	var outputs []TestOutput
+
+	for _, doc := range docs {
+		if strings.TrimSpace(doc) == "" {
+			continue
+		}
+		var output TestOutput
+		if err := yaml.Unmarshal([]byte(doc), &output); err != nil {
+			return fmt.Errorf("failed to parse YAML document: %w", err)
+		}
+		outputs = append(outputs, output)
+	}
+
+	// Create and parse the template
+	tmpl := `
+<!DOCTYPE html>
+<html>
+<head>
+	<title>Story Generation Results</title>
+	<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+	<script src="https://unpkg.com/htmx.org@1.9.10"></script>
+	<style>
+		.story-card { margin-bottom: 2rem; }
+		.keywords { color: #666; }
+		.story-text { font-size: 1.1rem; line-height: 1.6; }
+	</style>
+</head>
+<body>
+	<div class="container mt-4">
+		<h1 class="mb-4">Story Generation Results</h1>
+		
+		<div class="row">
+			{{ range . }}
+			<div class="col-12 story-card">
+				<div class="card">
+					<div class="card-body">
+						<h5 class="card-title">Story #{{ .EntryID }}</h5>
+						<div class="mb-3">
+							<strong>Topic:</strong> {{ index .Input "topic" }}<br>
+							<strong>Age:</strong> {{ index .Input "age" }}<br>
+							<strong>Moral:</strong> {{ index .Input "moral" }}
+						</div>
+						
+						<div class="story-text mb-3">
+							{{ .LastMessage }}
+						</div>
+						
+						<div class="keywords mb-3">
+							<strong>Expected Keywords:</strong>
+							{{ range .GoldenAnswer }}
+								<span class="badge bg-secondary me-1">{{ . }}</span>
+							{{ end }}
+						</div>
+						
+						<button class="btn btn-sm btn-primary" 
+								hx-get="#" 
+								hx-target="#conversation-{{ .EntryID }}"
+								onclick="toggleConversation({{ .EntryID }})">
+							Show Full Conversation
+						</button>
+						
+						<div id="conversation-{{ .EntryID }}" class="mt-3" style="display: none;">
+							<pre class="bg-light p-3"><code>{{ .ConversationString }}</code></pre>
+						</div>
+					</div>
+				</div>
+			</div>
+			{{ end }}
+		</div>
+	</div>
+
+	<script>
+		function toggleConversation(id) {
+			const conv = document.getElementById('conversation-' + id);
+			if (conv.style.display === 'none') {
+				conv.style.display = 'block';
+			} else {
+				conv.style.display = 'none';
+			}
+		}
+	</script>
+</body>
+</html>
+`
+
+	t, err := template.New("webpage").Parse(tmpl)
+	if err != nil {
+		return fmt.Errorf("failed to parse template: %w", err)
+	}
+
+	// Start the web server
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		err := t.Execute(w, outputs)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+	})
+
+	fmt.Printf("Starting web server on port %s...\n", s.Port)
+	return http.ListenAndServe(":"+s.Port, nil)
+}
+
 func main() {
 	rootCmd := &cobra.Command{
 		Use:   "eval",
@@ -228,8 +394,15 @@ func main() {
 		panic(err)
 	}
 
+	webViewCmd, err := NewWebViewCommand()
+	if err != nil {
+		panic(err)
+	}
+
 	cli.AddCommandsToRootCommand(
-		rootCmd, []cmds.Command{evalCmd}, nil,
+		rootCmd,
+		[]cmds.Command{evalCmd, webViewCmd},
+		nil,
 		cli.WithCobraMiddlewaresFunc(pinocchio_cmds.GetCobraCommandGeppettoMiddlewares),
 		cli.WithCobraShortHelpLayers(layers.DefaultSlug, cmdlayers.GeppettoHelpersSlug),
 	)
