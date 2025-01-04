@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/ThreeDotsLabs/watermill/message"
 	tea "github.com/charmbracelet/bubbletea"
@@ -106,8 +107,7 @@ func (c *CommandContext) StartInitialStep(
 
 	conversation_ := c.ConversationManager.GetConversation()
 	if c.Settings.PrintPrompt {
-		fmt.Println(conversation_.GetSinglePrompt())
-		return nil, nil
+		return nil, errors.New("Can't run a step with --print-prompt")
 	}
 
 	messagesM := steps.Resolve(conversation_)
@@ -273,6 +273,12 @@ func (c *CommandContext) handleNonChatMode(
 	err := c.Router.RunHandlers(ctx)
 	if err != nil {
 		return err
+	}
+
+	conversation_ := c.ConversationManager.GetConversation()
+	if c.Settings.PrintPrompt {
+		fmt.Printf("%s\n", strings.TrimSpace(conversation_.GetSinglePrompt()))
+		return nil
 	}
 
 	m, err := c.StartInitialStep(ctx)

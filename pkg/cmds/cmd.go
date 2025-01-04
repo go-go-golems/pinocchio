@@ -87,6 +87,7 @@ func NewGeppettoCommand(
 // - WithStepSettings
 // - WithParsedLayers
 // - WithPrinter / Handlers
+// - WithEngine / Temperature / a whole set of LLM specific parameters
 // - potentially others
 //   - WithMessages
 //   - WithPrompt
