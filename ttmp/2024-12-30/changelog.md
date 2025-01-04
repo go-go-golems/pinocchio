@@ -77,3 +77,11 @@ Improved CreateConversationContext method to be more focused and reusable.
 - Removed helperSettings dependency from CreateConversationContext
 - Moved image paths and autosave settings handling to caller
 - Added support for combining default and custom conversation context options 
+
+# Update Eval Command to Process Dataset Entries
+
+Enhanced the eval command to create separate conversation contexts for each dataset entry.
+
+- Modified RunIntoGlazeProcessor to create new conversation context per entry
+- Added AI response to output rows
+- Improved error handling with entry-specific error messages 

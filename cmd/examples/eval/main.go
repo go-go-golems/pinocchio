@@ -75,24 +75,30 @@ func (c *EvalCommand) RunIntoGlazeProcessor(
 		return fmt.Errorf("expected the command to be a GeppettoCommand, got %T", commands[0])
 	}
 
-	conversationContext, err := command.CreateConversationContext(nil)
-	if err != nil {
-		return fmt.Errorf("failed to create conversation context: %w", err)
-	}
-
-	manager := conversationContext.GetManager()
-	conversation := manager.GetConversation()
-	for _, msg := range conversation {
-		fmt.Println(msg.Content.View())
-	}
-
 	// Process each entry in the dataset
 	for i, entry := range dataset {
-		// For now, just output the entry data as rows
+		// Create a new conversation context for each entry
+		conversationContext, err := command.CreateConversationContext(entry.Input)
+		if err != nil {
+			return fmt.Errorf("failed to create conversation context for entry %d: %w", i+1, err)
+		}
+
+		manager := conversationContext.GetManager()
+		conversation := manager.GetConversation()
+
+		// // Get the AI's response
+		var conversationString string
+		for _, msg := range conversation {
+			conversationString += msg.Content.View() + "\n"
+		}
+
+		// Create a row with the entry data and AI response
 		row := types.NewRow(
 			types.MRP("entry_id", i+1),
 			types.MRP("input", entry.Input),
 			types.MRP("golden_answer", entry.GoldenAnswer),
+			types.MRP("conversationString", conversationString),
+			types.MRP("conversation", conversation),
 		)
 
 		if err := gp.AddRow(ctx, row); err != nil {
