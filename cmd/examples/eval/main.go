@@ -13,6 +13,7 @@ import (
 	"github.com/go-go-golems/glazed/pkg/middlewares"
 	"github.com/go-go-golems/glazed/pkg/settings"
 	"github.com/go-go-golems/glazed/pkg/types"
+	pinocchio_cmds "github.com/go-go-golems/pinocchio/pkg/cmds"
 	"github.com/spf13/cobra"
 )
 
@@ -32,6 +33,59 @@ type EvalEntry struct {
 }
 
 type EvalDataset []EvalEntry
+
+func (c *EvalCommand) RunIntoGlazeProcessor(
+	ctx context.Context,
+	parsedLayers *layers.ParsedLayers,
+	gp middlewares.Processor,
+) error {
+	s := &EvalSettings{}
+	if err := parsedLayers.InitializeStruct(layers.DefaultSlug, s); err != nil {
+		return err
+	}
+
+	// Read and parse the dataset file
+	datasetBytes, err := os.ReadFile(s.Dataset)
+	if err != nil {
+		return fmt.Errorf("failed to read dataset file: %w", err)
+	}
+
+	var dataset EvalDataset
+	if err := json.Unmarshal(datasetBytes, &dataset); err != nil {
+		return fmt.Errorf("failed to parse dataset JSON: %w", err)
+	}
+
+	// Load the command from the YAML file
+	commandBytes, err := os.ReadFile(s.Command)
+	if err != nil {
+		return fmt.Errorf("failed to read command file: %w", err)
+	}
+
+	commands, err := pinocchio_cmds.LoadFromYAML(commandBytes)
+	if err != nil {
+		return fmt.Errorf("failed to parse command YAML: %w", err)
+	}
+
+	if len(commands) != 1 {
+		return fmt.Errorf("expected exactly one command in YAML, got %d", len(commands))
+	}
+
+	// Process each entry in the dataset
+	for i, entry := range dataset {
+		// For now, just output the entry data as rows
+		row := types.NewRow(
+			types.MRP("entry_id", i+1),
+			types.MRP("input", entry.Input),
+			types.MRP("golden_answer", entry.GoldenAnswer),
+		)
+
+		if err := gp.AddRow(ctx, row); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
 
 func NewEvalCommand() (*EvalCommand, error) {
 	glazedParameterLayer, err := settings.NewGlazedParameterLayers()
@@ -60,44 +114,6 @@ func NewEvalCommand() (*EvalCommand, error) {
 			cmds.WithLayersList(glazedParameterLayer),
 		),
 	}, nil
-}
-
-func (c *EvalCommand) RunIntoGlazeProcessor(
-	ctx context.Context,
-	parsedLayers *layers.ParsedLayers,
-	gp middlewares.Processor,
-) error {
-	s := &EvalSettings{}
-	if err := parsedLayers.InitializeStruct(layers.DefaultSlug, s); err != nil {
-		return err
-	}
-
-	// Read and parse the dataset file
-	datasetBytes, err := os.ReadFile(s.Dataset)
-	if err != nil {
-		return fmt.Errorf("failed to read dataset file: %w", err)
-	}
-
-	var dataset EvalDataset
-	if err := json.Unmarshal(datasetBytes, &dataset); err != nil {
-		return fmt.Errorf("failed to parse dataset JSON: %w", err)
-	}
-
-	// Process each entry in the dataset
-	for i, entry := range dataset {
-		// For now, just output the entry data as rows
-		row := types.NewRow(
-			types.MRP("entry_id", i+1),
-			types.MRP("input", entry.Input),
-			types.MRP("golden_answer", entry.GoldenAnswer),
-		)
-
-		if err := gp.AddRow(ctx, row); err != nil {
-			return err
-		}
-	}
-
-	return nil
 }
 
 func main() {

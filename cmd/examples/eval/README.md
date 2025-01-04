@@ -22,13 +22,26 @@ dataset + template -> llm calls -> compute accuracy -> eval results
   - each object: 
     - input: hash[string]interface{}
     - golden answer: interface{}
-    
+
+- [x] iterate over each entry in eval.json
 
 - [ ] load a prompt from complaint.yaml
-- [ ] iterate over each entry in eval.json
 - [ ] interpolate the complaint.yaml command
+
+### Running the actual LLM inference
+
 - [ ] run it
+  - load the API key, etc...
+  - create the chat step
+  - get the step result
+  - store the metadata in the result json
+
+### Postprocessing the LLM response
+
 - [ ] store the answer
+  - store the LLM metadata
+  - store the date
+  - give it a unique UUID
 
 go run ./cmd/eval --dataset eval.json --command complaint.yaml
 
@@ -43,6 +56,7 @@ go run ./cmd/eval --dataset eval.json --command complaint.yaml --scoring score.j
 # step 3 
 
 - REST API
+
 - web ui (braintrust inspired)
   - import/export datasets
   - import/export/manage prompts
