@@ -127,7 +127,7 @@ func (c *TestCommand) RunIntoWriter(ctx context.Context, parsedLayers *layers.Pa
 
 	// Run with options
 	messages, err := c.pinocchioCmd.RunWithOptions(ctx,
-		run.WithManager(manager),
+		run.WithConversationManager(manager),
 		run.WithStepSettings(stepSettings),
 		run.WithWriter(w),
 		run.WithRunMode(run.RunModeBlocking),

@@ -209,7 +209,7 @@ func (g *PinocchioCommand) RunIntoWriter(
 		run.WithWriter(w),
 		run.WithRunMode(runMode),
 		run.WithUISettings(uiSettings),
-		run.WithManager(manager),
+		run.WithConversationManager(manager),
 		run.WithRouter(router),
 	)
 	if err != nil {
@@ -239,7 +239,7 @@ func (g *PinocchioCommand) RunWithOptions(ctx context.Context, options ...run.Ru
 	}
 
 	// Verify we have a manager
-	if runCtx.Manager == nil {
+	if runCtx.ConversationManager == nil {
 		return nil, errors.New("no conversation manager provided")
 	}
 
@@ -322,12 +322,12 @@ func (g *PinocchioCommand) runBlocking(ctx context.Context, rc *run.RunContext) 
 		}
 	}
 
-	return rc.Manager.GetConversation(), nil
+	return rc.ConversationManager.GetConversation(), nil
 }
 
 // runStepAndCollectMessages handles the actual step execution and message collection
 func (g *PinocchioCommand) runStepAndCollectMessages(ctx context.Context, rc *run.RunContext, chatStep chat.Step) error {
-	conversation_ := rc.Manager.GetConversation()
+	conversation_ := rc.ConversationManager.GetConversation()
 	messagesM := steps.Resolve(conversation_)
 	m := steps.Bind(ctx, messagesM, chatStep)
 
@@ -336,7 +336,7 @@ func (g *PinocchioCommand) runStepAndCollectMessages(ctx context.Context, rc *ru
 			return r.Error()
 		}
 		msg := r.Unwrap()
-		rc.Manager.AppendMessages(msg)
+		rc.ConversationManager.AppendMessages(msg)
 	}
 	return nil
 }
@@ -407,7 +407,7 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) ([]*
 	autoStartBackend := rc.UISettings != nil && rc.UISettings.StartInChat
 
 	model := bobatea_chat.InitialModel(
-		rc.Manager,
+		rc.ConversationManager,
 		backend,
 		bobatea_chat.WithTitle("pinocchio"),
 		bobatea_chat.WithAutoStartBackend(autoStartBackend),
@@ -442,7 +442,7 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) ([]*
 		return nil, err
 	}
 
-	return rc.Manager.GetConversation(), nil
+	return rc.ConversationManager.GetConversation(), nil
 }
 
 // Helper function to ask user about continuing in chat mode

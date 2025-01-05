@@ -89,7 +89,10 @@ func (c *EvalCommand) RunIntoGlazeProcessor(
 	}
 
 	// Update step settings from parsed layers
-	stepSettings := command.StepSettings.Clone()
+	stepSettings, err := pinocchio_settings.NewStepSettings()
+	if err != nil {
+		return err
+	}
 	err = stepSettings.UpdateFromParsedLayers(parsedLayers)
 	if err != nil {
 		return err
@@ -105,10 +108,9 @@ func (c *EvalCommand) RunIntoGlazeProcessor(
 
 		// Run the command with the manager and settings
 		resultConversation, err := command.RunWithOptions(ctx,
-			run.WithManager(manager),
+			run.WithConversationManager(manager),
 			run.WithStepSettings(stepSettings),
 			run.WithRunMode(run.RunModeBlocking),
-			run.WithWriter(os.Stdout),
 		)
 		if err != nil {
 			return fmt.Errorf("failed to run command for entry %d: %w", i+1, err)

@@ -1,7 +1,6 @@
 package run
 
 import (
-	"errors"
 	"io"
 	"os"
 
@@ -9,7 +8,6 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/events"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
-	"github.com/go-go-golems/glazed/pkg/cmds/layers"
 )
 
 type RunMode int
@@ -34,8 +32,8 @@ type UISettings struct {
 
 // RunContext encapsulates all the settings and state needed for a single command run
 type RunContext struct {
-	// Core components (Manager is required)
-	Manager conversation.Manager
+	// Core components (ConversationManager is required)
+	ConversationManager conversation.Manager
 
 	StepSettings *settings.StepSettings
 
@@ -48,9 +46,6 @@ type RunContext struct {
 
 	// Run configuration
 	RunMode RunMode
-
-	// Variables for templating
-	Variables map[string]interface{}
 }
 
 type RunOption func(*RunContext) error
@@ -74,9 +69,9 @@ func WithRouter(router *events.EventRouter) RunOption {
 	}
 }
 
-func WithManager(manager conversation.Manager) RunOption {
+func WithConversationManager(manager conversation.Manager) RunOption {
 	return func(rc *RunContext) error {
-		rc.Manager = manager
+		rc.ConversationManager = manager
 		return nil
 	}
 }
@@ -106,32 +101,11 @@ func WithWriter(w io.Writer) RunOption {
 	}
 }
 
-// Variables and parsed layers
-
-func WithVariables(variables map[string]interface{}) RunOption {
-	return func(rc *RunContext) error {
-		rc.Variables = variables
-		return nil
-	}
-}
-
-func WithParsedLayers(parsedLayers *layers.ParsedLayers) RunOption {
-	return func(rc *RunContext) error {
-		val, present := parsedLayers.Get(layers.DefaultSlug)
-		if !present {
-			return errors.New("could not get default layer")
-		}
-		rc.Variables = val.Parameters.ToMap()
-		return nil
-	}
-}
-
 // NewRunContext creates a new RunContext with default values and a required manager
 func NewRunContext(manager conversation.Manager) *RunContext {
 	return &RunContext{
-		Manager:   manager,
-		RunMode:   RunModeBlocking,
-		Writer:    os.Stdout,
-		Variables: make(map[string]interface{}),
+		ConversationManager: manager,
+		RunMode:             RunModeBlocking,
+		Writer:              os.Stdout,
 	}
 }
