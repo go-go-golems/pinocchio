@@ -222,52 +222,6 @@ func (g *PinocchioCommand) CreateCommandContextFromSettings(
 	return cmdCtx, manager, nil
 }
 
-// RunWithSettings runs the command with the given settings and variables
-func (g *PinocchioCommand) RunWithSettings(
-	ctx context.Context,
-	stepSettings *settings.StepSettings,
-	variables map[string]interface{},
-	w io.Writer,
-	options ...cmdcontext.ConversationManagerOption,
-) error {
-	cmdCtx, _, err := g.CreateCommandContextFromSettings(
-		g.StepSettings,
-		variables,
-		options...,
-	)
-	if err != nil {
-		return err
-	}
-	defer cmdCtx.Close()
-
-	return cmdCtx.Run(ctx, w)
-}
-
-// RunStepBlockingWithSettings runs the command in blocking mode with the given settings and variables
-func (g *PinocchioCommand) RunStepBlockingWithSettings(
-	ctx context.Context,
-	stepSettings *settings.StepSettings,
-	variables map[string]interface{},
-	options ...cmdcontext.ConversationManagerOption,
-) ([]*conversation.Message, error) {
-
-	cmdCtx, _, err := g.CreateCommandContextFromSettings(
-		stepSettings,
-		variables,
-		options...,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer func(cmdCtx *cmdcontext.CommandContext) {
-		_ = cmdCtx.Close()
-	}(cmdCtx)
-
-	cmdCtx.Router.AddHandler("chat", "chat", chat.StepPrinterFunc("", os.Stdout))
-
-	return cmdCtx.RunStepBlocking(ctx)
-}
-
 // RunIntoWriter runs the command and writes the output into the given writer.
 func (g *PinocchioCommand) RunIntoWriter(
 	ctx context.Context,
