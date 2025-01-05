@@ -3,11 +3,12 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/charmbracelet/bubbletea"
+	"os"
+
+	tea "github.com/charmbracelet/bubbletea"
 	boba_chat "github.com/go-go-golems/bobatea/pkg/chat"
 	clay "github.com/go-go-golems/clay/pkg"
 	"github.com/go-go-golems/geppetto/pkg/conversation"
-	"github.com/go-go-golems/geppetto/pkg/conversation/builder"
 	"github.com/go-go-golems/geppetto/pkg/events"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/chat"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/openai"
@@ -23,7 +24,6 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
-	"os"
 )
 
 type ToolUiCommand struct {
@@ -164,7 +164,7 @@ func (t *ToolUiCommand) Init(parsedLayers *layers.ParsedLayers) error {
 	t.stepSettings.Chat.Stream = true
 
 	t.manager = conversation.NewManager(
-		builder.WithMessages(
+		conversation.WithMessages(
 			conversation.NewChatMessage(
 				conversation.RoleUser,
 				"Give me the weather in Boston on november 9th 1924, please, including the windspeed for me, an old ass american. Also, the weather in paris today, with temperature.",
