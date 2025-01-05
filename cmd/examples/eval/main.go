@@ -98,8 +98,6 @@ func (c *EvalCommand) RunIntoGlazeProcessor(
 		manager := conversationContext.GetManager()
 		conversation := manager.GetConversation()
 
-		// XXX CALL THE LLM
-
 		// // Update step settings from parsed layers
 		stepSettings := command.StepSettings.Clone()
 		err = stepSettings.UpdateFromParsedLayers(parsedLayers)

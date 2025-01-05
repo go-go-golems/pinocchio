@@ -28,7 +28,7 @@ type CommandContext struct {
 	Router              *events.EventRouter
 	ConversationManager conversation.Manager
 	StepFactory         *ai.StandardStepFactory
-	Settings            *cmdlayers.HelpersSettings
+	HelpersSettings     *cmdlayers.HelpersSettings
 }
 
 type CommandContextOption func(*CommandContext) error
@@ -47,9 +47,9 @@ func WithStepFactory(factory *ai.StandardStepFactory) CommandContextOption {
 	}
 }
 
-func WithSettings(settings *cmdlayers.HelpersSettings) CommandContextOption {
+func WithHelpersSettings(settings *cmdlayers.HelpersSettings) CommandContextOption {
 	return func(c *CommandContext) error {
-		c.Settings = settings
+		c.HelpersSettings = settings
 		return nil
 	}
 }
@@ -84,7 +84,7 @@ func NewCommandContextFromSettings(
 	options_ := append(options,
 		WithRouter(router),
 		WithStepFactory(stepFactory),
-		WithSettings(helpersSettings),
+		WithHelpersSettings(helpersSettings),
 	)
 
 	return NewCommandContext(conversationManager, options_...)
@@ -107,7 +107,7 @@ func (c *CommandContext) StartInitialStep(
 
 	conversation_ := c.ConversationManager.GetConversation()
 	// XXX make HelpersSettings optional for programmatic use
-	if c.Settings != nil && c.Settings.PrintPrompt {
+	if c.HelpersSettings != nil && c.HelpersSettings.PrintPrompt {
 		return nil, errors.New("Can't run a step with --print-prompt")
 	}
 
@@ -168,14 +168,14 @@ func (c *CommandContext) handleInteractiveContinuation(
 	ctx context.Context,
 ) error {
 	isOutputTerminal := isatty.IsTerminal(os.Stdout.Fd())
-	forceInteractive := c.Settings.ForceInteractive
+	forceInteractive := c.HelpersSettings.ForceInteractive
 
-	if c.Settings.NonInteractive {
-		c.Settings.Interactive = false
+	if c.HelpersSettings.NonInteractive {
+		c.HelpersSettings.Interactive = false
 	}
 
-	continueInChat := c.Settings.Interactive
-	askChat := (isOutputTerminal || forceInteractive) && c.Settings.Interactive && !c.Settings.NonInteractive
+	continueInChat := c.HelpersSettings.Interactive
+	askChat := (isOutputTerminal || forceInteractive) && c.HelpersSettings.Interactive && !c.HelpersSettings.NonInteractive
 
 	lengthBeforeChat := len(c.ConversationManager.GetConversation())
 
@@ -254,12 +254,12 @@ func (c *CommandContext) askForChatContinuation(continueInChat bool) (bool, erro
 }
 
 func (c *CommandContext) SetupPrinter(w io.Writer) func(msg *message.Message) error {
-	if c.Settings.Output != "text" || c.Settings.WithMetadata || c.Settings.FullOutput {
+	if c.HelpersSettings.Output != "text" || c.HelpersSettings.WithMetadata || c.HelpersSettings.FullOutput {
 		return chat.NewStructuredPrinter(w, chat.PrinterOptions{
-			Format:          chat.PrinterFormat(c.Settings.Output),
+			Format:          chat.PrinterFormat(c.HelpersSettings.Output),
 			Name:            "",
-			IncludeMetadata: c.Settings.WithMetadata,
-			Full:            c.Settings.FullOutput,
+			IncludeMetadata: c.HelpersSettings.WithMetadata,
+			Full:            c.HelpersSettings.FullOutput,
 		})
 	}
 	return chat.StepPrinterFunc("", w)
@@ -277,7 +277,7 @@ func (c *CommandContext) handleNonChatMode(
 	}
 
 	conversation_ := c.ConversationManager.GetConversation()
-	if c.Settings.PrintPrompt {
+	if c.HelpersSettings.PrintPrompt {
 		fmt.Printf("%s\n", strings.TrimSpace(conversation_.GetSinglePrompt()))
 		return nil
 	}
@@ -317,7 +317,7 @@ func (c *CommandContext) Run(ctx context.Context, w io.Writer) error {
 	eg.Go(func() error {
 		defer cancel()
 		<-c.Router.Running()
-		if c.Settings.StartInChat {
+		if c.HelpersSettings.StartInChat {
 			return c.handleChat(ctx, true)
 		}
 		return c.handleNonChatMode(ctx, w)

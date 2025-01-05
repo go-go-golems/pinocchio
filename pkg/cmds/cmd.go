@@ -120,6 +120,8 @@ func (g *GeppettoCommand) CreateCommandContextFromParsedLayers(
 	}
 
 	// Update step settings from parsed layers
+	// NOTE: I think these StepSettings stored in the command were a way to provide base stuff to be overridden later
+	// or they were a previous attempt to make it easier to run commands from code (see experiments/agent/uppercase.go)
 	stepSettings := g.StepSettings.Clone()
 	err = stepSettings.UpdateFromParsedLayers(parsedLayers)
 	if err != nil {

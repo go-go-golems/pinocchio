@@ -8,6 +8,8 @@ import (
 	"github.com/pkg/errors"
 )
 
+// XXX this is basically just a big constructor method for a ConversationManager,
+// but also it preserves the original variables, which might be useful for metadata purposes
 type ConversationContext struct {
 	SystemPrompt string
 	Messages     []*conversation.Message
