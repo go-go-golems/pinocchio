@@ -1,0 +1,50 @@
+package components
+
+import (
+    "time"
+)
+
+templ EventPartial(timestamp time.Time, completion string) {
+    <div class="event">
+        <div class="timestamp">{timestamp.Format("15:04:05")}</div>
+        <div class="assistant-response">
+            {completion}
+        </div>
+    </div>
+}
+
+templ EventFinal(timestamp time.Time, text string) {
+    <div class="event">
+        <div class="timestamp">{timestamp.Format("15:04:05")}</div>
+        <div>Done</div>
+    </div>
+}
+
+templ EventToolUse(timestamp time.Time, name string, input interface{}) {
+    <div class="event">
+        <div class="timestamp">{timestamp.Format("15:04:05")}</div>
+        <div class="tool-call">
+            <strong>Tool Call:</strong> {name}
+            <pre>{toJSON(input)}</pre>
+        </div>
+    </div>
+}
+
+templ EventToolResult(timestamp time.Time, result interface{}) {
+    <div class="event">
+        <div class="timestamp">{timestamp.Format("15:04:05")}</div>
+        <div class="tool-result">
+            <strong>Tool Result:</strong>
+            <pre>{toJSON(result)}</pre>
+        </div>
+    </div>
+}
+
+templ EventError(timestamp time.Time, err string) {
+    <div class="event">
+        <div class="timestamp">{timestamp.Format("15:04:05")}</div>
+        <div class="error">
+            <strong>Error:</strong> {err}
+        </div>
+    </div>
+} 

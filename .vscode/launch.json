@@ -114,7 +114,18 @@
             "env": {
                 "PINOCCHIO_PROFILE": "haiku"
             }
+        },
+        {
+            "name": "Web UI",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}/cmd/experiments/web-ui",
+            "preLaunchTask": "templ generate",
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "PINOCCHIO_PROFILE": "haiku"
+            }
         }
-
     ]
 }

@@ -1,26 +1,16 @@
 package main
 
 import (
-	"context"
-
-	"github.com/go-go-golems/geppetto/pkg/conversation"
-	"github.com/go-go-golems/geppetto/pkg/steps/ai/chat"
+	webconv "github.com/go-go-golems/pinocchio/cmd/experiments/web-ui/conversation"
 )
 
-// TemplateData holds data for rendering templates
+// TemplateData represents the data passed to the main template
 type TemplateData struct {
 	ClientID string
-	Messages conversation.Conversation
+	Messages *webconv.WebConversation
 }
 
-// StepInstance represents a running chat step
-type StepInstance struct {
-	Step   *chat.EchoStep
-	Topic  string
-	Cancel context.CancelFunc
-}
-
+// MessageData represents the data passed to the message template
 type MessageData struct {
-	Timestamp string
-	Message   string
+	Message *webconv.WebMessage
 }

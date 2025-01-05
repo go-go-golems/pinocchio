@@ -6,9 +6,9 @@ toolchain go1.23.2
 
 require (
 	github.com/Masterminds/sprig v2.22.0+incompatible
-	github.com/Masterminds/sprig/v3 v3.3.0
 	github.com/PuerkitoBio/goquery v1.10.0
 	github.com/ThreeDotsLabs/watermill v1.3.7
+	github.com/a-h/templ v0.2.793
 	github.com/atotto/clipboard v0.1.4
 	github.com/charmbracelet/bubbletea v1.1.1
 	github.com/charmbracelet/glamour v0.7.0
@@ -38,7 +38,6 @@ require (
 )
 
 require (
-	dario.cat/mergo v1.0.1 // indirect
 	github.com/BurntSushi/toml v1.2.1 // indirect
 	github.com/Masterminds/goutils v1.1.1 // indirect
 	github.com/Masterminds/semver v1.5.0 // indirect
@@ -113,7 +112,6 @@ require (
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/sagikazarmark/locafero v0.4.0 // indirect
 	github.com/sagikazarmark/slog-shim v0.1.0 // indirect
-	github.com/shopspring/decimal v1.4.0 // indirect
 	github.com/sourcegraph/conc v0.3.0 // indirect
 	github.com/spf13/afero v1.11.0 // indirect
 	github.com/spf13/cast v1.7.0 // indirect
