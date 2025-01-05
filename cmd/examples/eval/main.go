@@ -82,9 +82,9 @@ func (c *EvalCommand) RunIntoGlazeProcessor(
 		return fmt.Errorf("expected exactly one command in YAML, got %d", len(commands))
 	}
 
-	command, ok := commands[0].(*pinocchio_cmds.GeppettoCommand)
+	command, ok := commands[0].(*pinocchio_cmds.PinocchioCommand)
 	if !ok {
-		return fmt.Errorf("expected the command to be a GeppettoCommand, got %T", commands[0])
+		return fmt.Errorf("expected the command to be a PinocchioCommand, got %T", commands[0])
 	}
 
 	// Process each entry in the dataset

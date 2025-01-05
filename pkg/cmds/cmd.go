@@ -18,7 +18,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-type GeppettoCommandDescription struct {
+type PinocchioCommandDescription struct {
 	Name      string                            `yaml:"name"`
 	Short     string                            `yaml:"short"`
 	Long      string                            `yaml:"long,omitempty"`
@@ -31,7 +31,7 @@ type GeppettoCommandDescription struct {
 	SystemPrompt string                  `yaml:"system-prompt,omitempty"`
 }
 
-type GeppettoCommand struct {
+type PinocchioCommand struct {
 	*glazedcmds.CommandDescription `yaml:",inline"`
 	StepSettings                   *settings.StepSettings  `yaml:"stepSettings,omitempty"`
 	Prompt                         string                  `yaml:"prompt,omitempty"`
@@ -39,33 +39,33 @@ type GeppettoCommand struct {
 	SystemPrompt                   string                  `yaml:"system-prompt,omitempty"`
 }
 
-var _ glazedcmds.WriterCommand = &GeppettoCommand{}
+var _ glazedcmds.WriterCommand = &PinocchioCommand{}
 
-type GeppettoCommandOption func(*GeppettoCommand)
+type PinocchioCommandOption func(*PinocchioCommand)
 
-func WithPrompt(prompt string) GeppettoCommandOption {
-	return func(g *GeppettoCommand) {
+func WithPrompt(prompt string) PinocchioCommandOption {
+	return func(g *PinocchioCommand) {
 		g.Prompt = prompt
 	}
 }
 
-func WithMessages(messages []*conversation.Message) GeppettoCommandOption {
-	return func(g *GeppettoCommand) {
+func WithMessages(messages []*conversation.Message) PinocchioCommandOption {
+	return func(g *PinocchioCommand) {
 		g.Messages = messages
 	}
 }
 
-func WithSystemPrompt(systemPrompt string) GeppettoCommandOption {
-	return func(g *GeppettoCommand) {
+func WithSystemPrompt(systemPrompt string) PinocchioCommandOption {
+	return func(g *PinocchioCommand) {
 		g.SystemPrompt = systemPrompt
 	}
 }
 
-func NewGeppettoCommand(
+func NewPinocchioCommand(
 	description *glazedcmds.CommandDescription,
 	settings *settings.StepSettings,
-	options ...GeppettoCommandOption,
-) (*GeppettoCommand, error) {
+	options ...PinocchioCommandOption,
+) (*PinocchioCommand, error) {
 	helpersParameterLayer, err := cmdlayers.NewHelpersParameterLayer()
 	if err != nil {
 		return nil, err
@@ -73,7 +73,7 @@ func NewGeppettoCommand(
 
 	description.Layers.PrependLayers(helpersParameterLayer)
 
-	ret := &GeppettoCommand{
+	ret := &PinocchioCommand{
 		CommandDescription: description,
 		StepSettings:       settings,
 	}
@@ -101,7 +101,7 @@ func NewGeppettoCommand(
 //   - WithSettings
 
 // CreateCommandContextFromParsedLayers creates a new command context from the parsed layers
-func (g *GeppettoCommand) CreateCommandContextFromParsedLayers(
+func (g *PinocchioCommand) CreateCommandContextFromParsedLayers(
 	parsedLayers *layers.ParsedLayers,
 ) (*cmdcontext.CommandContext, *cmdcontext.ConversationContext, error) {
 	if g.Prompt != "" && len(g.Messages) != 0 {
@@ -151,7 +151,7 @@ func (g *GeppettoCommand) CreateCommandContextFromParsedLayers(
 }
 
 // CreateConversationContext creates a new conversation context with the given settings
-func (g *GeppettoCommand) CreateConversationContext(
+func (g *PinocchioCommand) CreateConversationContext(
 	variables map[string]interface{},
 	options ...cmdcontext.ConversationContextOption,
 ) (*cmdcontext.ConversationContext, error) {
@@ -171,7 +171,7 @@ func (g *GeppettoCommand) CreateConversationContext(
 }
 
 // CreateCommandContextFromSettings creates a new command context directly from settings
-func (g *GeppettoCommand) CreateCommandContextFromSettings(
+func (g *PinocchioCommand) CreateCommandContextFromSettings(
 	stepSettings *settings.StepSettings,
 	variables map[string]interface{},
 	options ...cmdcontext.ConversationContextOption,
@@ -194,7 +194,7 @@ func (g *GeppettoCommand) CreateCommandContextFromSettings(
 }
 
 // RunWithSettings runs the command with the given settings and variables
-func (g *GeppettoCommand) RunWithSettings(
+func (g *PinocchioCommand) RunWithSettings(
 	ctx context.Context,
 	stepSettings *settings.StepSettings,
 	variables map[string]interface{},
@@ -215,7 +215,7 @@ func (g *GeppettoCommand) RunWithSettings(
 }
 
 // RunStepBlockingWithSettings runs the command in blocking mode with the given settings and variables
-func (g *GeppettoCommand) RunStepBlockingWithSettings(
+func (g *PinocchioCommand) RunStepBlockingWithSettings(
 	ctx context.Context,
 	stepSettings *settings.StepSettings,
 	variables map[string]interface{},
@@ -230,7 +230,9 @@ func (g *GeppettoCommand) RunStepBlockingWithSettings(
 	if err != nil {
 		return nil, err
 	}
-	defer cmdCtx.Close()
+	defer func(cmdCtx *cmdcontext.CommandContext) {
+		_ = cmdCtx.Close()
+	}(cmdCtx)
 
 	cmdCtx.Router.AddHandler("chat", "chat", chat.StepPrinterFunc("", os.Stdout))
 
@@ -238,7 +240,7 @@ func (g *GeppettoCommand) RunStepBlockingWithSettings(
 }
 
 // RunIntoWriter runs the command and writes the output into the given writer.
-func (g *GeppettoCommand) RunIntoWriter(
+func (g *PinocchioCommand) RunIntoWriter(
 	ctx context.Context,
 	parsedLayers *layers.ParsedLayers,
 	w io.Writer,
@@ -247,7 +249,9 @@ func (g *GeppettoCommand) RunIntoWriter(
 	if err != nil {
 		return err
 	}
-	defer cmdCtx.Close()
+	defer func(cmdCtx *cmdcontext.CommandContext) {
+		_ = cmdCtx.Close()
+	}(cmdCtx)
 
 	return cmdCtx.Run(ctx, w)
 }

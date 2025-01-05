@@ -24,7 +24,7 @@ type GeppettoCommandCodeGenerator struct {
 	PackageName string
 }
 
-func (g *GeppettoCommandCodeGenerator) defineConstants(f *jen.File, cmdName string, cmd *cmds.GeppettoCommand) {
+func (g *GeppettoCommandCodeGenerator) defineConstants(f *jen.File, cmdName string, cmd *cmds.PinocchioCommand) {
 	// Define the constants for prompts and messages.
 	promptConstName := strcase.ToLowerCamel(cmdName) + "CommandPrompt"
 	f.Const().Id(promptConstName).Op("=").Lit(cmd.Prompt)
@@ -54,7 +54,7 @@ func (g *GeppettoCommandCodeGenerator) defineStruct(f *jen.File, cmdName string)
 func (g *GeppettoCommandCodeGenerator) defineParametersStruct(
 	f *jen.File,
 	cmdName string,
-	cmd *cmds.GeppettoCommand,
+	cmd *cmds.PinocchioCommand,
 ) {
 	structName := strcase.ToCamel(cmdName) + "CommandParameters"
 	f.Type().Id(structName).StructFunc(func(g *jen.Group) {
@@ -74,7 +74,7 @@ func (g *GeppettoCommandCodeGenerator) defineParametersStruct(
 func (g *GeppettoCommandCodeGenerator) defineNewFunction(
 	f *jen.File,
 	cmdName string,
-	cmd *cmds.GeppettoCommand,
+	cmd *cmds.PinocchioCommand,
 ) error {
 	commandName := strcase.ToCamel(cmdName)
 	lowerCommandName := strcase.ToLowerCamel(cmdName)
@@ -273,7 +273,7 @@ func (g *GeppettoCommandCodeGenerator) defineRunMethods(f *jen.File, cmdName str
 		)
 }
 
-func (g *GeppettoCommandCodeGenerator) GenerateCommandCode(cmd *cmds.GeppettoCommand) (*jen.File, error) {
+func (g *GeppettoCommandCodeGenerator) GenerateCommandCode(cmd *cmds.PinocchioCommand) (*jen.File, error) {
 	f := jen.NewFile(g.PackageName)
 	cmdName := strcase.ToLowerCamel(cmd.Name)
 

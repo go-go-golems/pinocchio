@@ -40,7 +40,7 @@ func WithUseViper(useViper bool) GeppettoLayersHelperOption {
 	}
 }
 
-func ParseGeppettoLayers(c *cmds.GeppettoCommand, options ...GeppettoLayersHelperOption) (*layers.ParsedLayers, error) {
+func ParseGeppettoLayers(c *cmds.PinocchioCommand, options ...GeppettoLayersHelperOption) (*layers.ParsedLayers, error) {
 	xdgConfigPath, err := os.UserConfigDir()
 	if err != nil {
 		return nil, err

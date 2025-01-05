@@ -31,7 +31,7 @@ var rootCmd = &cobra.Command{
 
 type TestCommand struct {
 	*cmds.CommandDescription
-	pinocchioCmd *pinocchio_cmds.GeppettoCommand
+	pinocchioCmd *pinocchio_cmds.PinocchioCommand
 }
 
 type TestCommandSettings struct {
@@ -41,7 +41,7 @@ type TestCommandSettings struct {
 
 // NewTestCommand wraps the GepettoCommand which was loaded from the yaml file,
 // and manually loads the profile to configure it.
-func NewTestCommand(cmd *pinocchio_cmds.GeppettoCommand) *TestCommand {
+func NewTestCommand(cmd *pinocchio_cmds.PinocchioCommand) *TestCommand {
 	return &TestCommand{
 		CommandDescription: cmds.NewCommandDescription("test2",
 			cmds.WithShort("Test prompt"),
@@ -129,7 +129,7 @@ func main() {
 
 	// Add the test command as wrapped by NewTestCommand
 	if len(commands) == 1 {
-		cmd := commands[0].(*pinocchio_cmds.GeppettoCommand)
+		cmd := commands[0].(*pinocchio_cmds.PinocchioCommand)
 		testCmd := NewTestCommand(cmd)
 		command, err := cli.BuildCobraCommandFromWriterCommand(testCmd)
 		cobra.CheckErr(err)

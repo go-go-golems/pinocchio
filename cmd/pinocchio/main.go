@@ -54,7 +54,7 @@ func main() {
 	// we need to do this before cobra, because we don't know which flags to load yet
 	if len(os.Args) >= 3 && os.Args[1] == "run-command" && os.Args[2] != "--help" {
 		// load the command
-		loader := &cmds.GeppettoCommandLoader{}
+		loader := &cmds.PinocchioCommandLoader{}
 
 		fs_, filePath, err := loaders.FileNameToFsFilePath(os.Args[2])
 		if err != nil {
@@ -135,7 +135,7 @@ func initAllCommands(helpSystem *help.HelpSystem) error {
 	defaultDirectory := "$HOME/.pinocchio/prompts"
 	repositoryPaths = append(repositoryPaths, defaultDirectory)
 
-	loader := &cmds.GeppettoCommandLoader{}
+	loader := &cmds.PinocchioCommandLoader{}
 
 	directories := []repositories.Directory{
 		{
