@@ -86,7 +86,6 @@ func (g *PinocchioCommandLoader) loadPinocchioCommandFromReader(
 
 	sq, err := NewPinocchioCommand(
 		description,
-		stepSettings,
 		WithPrompt(scd.Prompt),
 		WithMessages(scd.Messages),
 		WithSystemPrompt(scd.SystemPrompt),

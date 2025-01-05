@@ -46,7 +46,6 @@ type PinocchioCommandDescription struct {
 
 type PinocchioCommand struct {
 	*glazedcmds.CommandDescription `yaml:",inline"`
-	StepSettings                   *settings.StepSettings  `yaml:"stepSettings,omitempty"`
 	Prompt                         string                  `yaml:"prompt,omitempty"`
 	Messages                       []*conversation.Message `yaml:"messages,omitempty"`
 	SystemPrompt                   string                  `yaml:"system-prompt,omitempty"`
@@ -76,7 +75,6 @@ func WithSystemPrompt(systemPrompt string) PinocchioCommandOption {
 
 func NewPinocchioCommand(
 	description *glazedcmds.CommandDescription,
-	settings *settings.StepSettings,
 	options ...PinocchioCommandOption,
 ) (*PinocchioCommand, error) {
 	helpersParameterLayer, err := cmdlayers.NewHelpersParameterLayer()
@@ -88,7 +86,6 @@ func NewPinocchioCommand(
 
 	ret := &PinocchioCommand{
 		CommandDescription: description,
-		StepSettings:       settings,
 	}
 
 	for _, option := range options {
@@ -152,7 +149,10 @@ func (g *PinocchioCommand) RunIntoWriter(
 	}
 
 	// Update step settings from parsed layers
-	stepSettings := g.StepSettings.Clone()
+	stepSettings, err := settings.NewStepSettings()
+	if err != nil {
+		return errors.Wrap(err, "failed to create step settings")
+	}
 	err = stepSettings.UpdateFromParsedLayers(parsedLayers)
 	if err != nil {
 		return errors.Wrap(err, "failed to update step settings from parsed layers")
@@ -246,7 +246,7 @@ func (g *PinocchioCommand) RunWithOptions(ctx context.Context, options ...run.Ru
 	// Create step factory if not provided
 	if runCtx.StepFactory == nil {
 		runCtx.StepFactory = &ai.StandardStepFactory{
-			Settings: g.StepSettings.Clone(),
+			Settings: runCtx.StepSettings.Clone(),
 		}
 	}
 
@@ -329,7 +329,7 @@ func (g *PinocchioCommand) runBlocking(ctx context.Context, rc *run.RunContext) 
 func (g *PinocchioCommand) runStepAndCollectMessages(ctx context.Context, rc *run.RunContext, chatStep chat.Step) error {
 	conversation_ := rc.Manager.GetConversation()
 	messagesM := steps.Resolve(conversation_)
-	m := steps.Bind[conversation.Conversation, *conversation.Message](ctx, messagesM, chatStep)
+	m := steps.Bind(ctx, messagesM, chatStep)
 
 	for r := range m.GetChannel() {
 		if r.Error() != nil {

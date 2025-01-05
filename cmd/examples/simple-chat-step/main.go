@@ -4,9 +4,11 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
-	"github.com/go-go-golems/geppetto/pkg/conversation/builder"
 	"io"
 	"strings"
+
+	"github.com/go-go-golems/geppetto/pkg/conversation/builder"
+	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 
 	clay "github.com/go-go-golems/clay/pkg"
 	"github.com/go-go-golems/geppetto/pkg/conversation"
@@ -94,7 +96,10 @@ func (c *TestCommand) RunIntoWriter(ctx context.Context, parsedLayers *layers.Pa
 	}
 
 	// Update step settings from parsed layers
-	stepSettings := c.pinocchioCmd.StepSettings.Clone()
+	stepSettings, err := settings.NewStepSettings()
+	if err != nil {
+		return errors.Wrap(err, "failed to create step settings")
+	}
 	err = stepSettings.UpdateFromParsedLayers(geppettoParsedLayers)
 	if err != nil {
 		return errors.Wrap(err, "failed to update step settings from parsed layers")
