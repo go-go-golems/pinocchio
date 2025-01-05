@@ -117,63 +117,6 @@ func NewPinocchioCommand(
 //   - WithStepFactory
 //   - WithSettings
 
-// CreateCommandContextFromParsedLayers creates a new command context from the parsed layers
-func (g *PinocchioCommand) CreateCommandContextFromParsedLayers(
-	parsedLayers *layers.ParsedLayers,
-) (*cmdcontext.CommandContext, conversation.Manager, error) {
-	if g.Prompt != "" && len(g.Messages) != 0 {
-		return nil, nil, errors.Errorf("Prompt and messages are mutually exclusive")
-	}
-
-	val, present := parsedLayers.Get(layers.DefaultSlug)
-	if !present {
-		return nil, nil, errors.New("could not get default layer")
-	}
-
-	helpersSettings := &cmdlayers.HelpersSettings{}
-	err := parsedLayers.InitializeStruct(cmdlayers.GeppettoHelpersSlug, helpersSettings)
-	if err != nil {
-		return nil, nil, errors.Wrap(err, "failed to initialize settings")
-	}
-
-	// Update step settings from parsed layers
-	// NOTE: I think these StepSettings stored in the command were a way to provide base stuff to be overridden later
-	// or they were a previous attempt to make it easier to run commands from code (see experiments/agent/uppercase.go)
-	stepSettings := g.StepSettings.Clone()
-	err = stepSettings.UpdateFromParsedLayers(parsedLayers)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	// Create conversation context options from helperSettings
-	imagePaths := make([]string, len(helpersSettings.Images))
-	for i, img := range helpersSettings.Images {
-		imagePaths[i] = img.Path
-	}
-
-	options := []cmdcontext.ConversationManagerOption{
-		cmdcontext.WithImages(imagePaths),
-		cmdcontext.WithAutosaveSettings(cmdcontext.AutosaveSettings{
-			Enabled:  strings.ToLower(helpersSettings.Autosave.Enabled) == "yes",
-			Template: helpersSettings.Autosave.Template,
-			Path:     helpersSettings.Autosave.Path,
-		}),
-	}
-
-	result, manager, err := g.CreateCommandContextFromSettings(
-		stepSettings,
-		val.Parameters.ToMap(),
-		options...,
-	)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	// XXX ugly mess that should be refactord
-	result.HelpersSettings = helpersSettings
-	return result, manager, nil
-}
-
 // CreateConversationManager creates a new conversation manager with the given settings
 func (g *PinocchioCommand) CreateConversationManager(
 	variables map[string]interface{},
@@ -197,29 +140,6 @@ func (g *PinocchioCommand) CreateConversationManager(
 	}
 
 	return builder.Build()
-}
-
-// CreateCommandContextFromSettings creates a new command context directly from settings
-func (g *PinocchioCommand) CreateCommandContextFromSettings(
-	stepSettings *settings.StepSettings,
-	variables map[string]interface{},
-	options ...cmdcontext.ConversationManagerOption,
-) (*cmdcontext.CommandContext, conversation.Manager, error) {
-	manager, err := g.CreateConversationManager(variables, options...)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	cmdCtx, err := cmdcontext.NewCommandContextFromSettings(
-		stepSettings,
-		manager,
-		nil, // helpersSettings is no longer needed here
-	)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return cmdCtx, manager, nil
 }
 
 // RunIntoWriter runs the command and writes the output into the given writer.

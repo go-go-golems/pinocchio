@@ -5,7 +5,7 @@ import (
 	_ "embed"
 	"fmt"
 	"io"
-	"os"
+	"strings"
 
 	clay "github.com/go-go-golems/clay/pkg"
 	"github.com/go-go-golems/geppetto/pkg/conversation"
@@ -14,8 +14,10 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
 	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
 	pinocchio_cmds "github.com/go-go-golems/pinocchio/pkg/cmds"
+	"github.com/go-go-golems/pinocchio/pkg/cmds/cmdcontext"
 	"github.com/go-go-golems/pinocchio/pkg/cmds/cmdlayers"
 	"github.com/go-go-golems/pinocchio/pkg/cmds/helpers"
+	"github.com/go-go-golems/pinocchio/pkg/cmds/run"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
@@ -84,15 +86,52 @@ func (c *TestCommand) RunIntoWriter(ctx context.Context, parsedLayers *layers.Pa
 		return nil
 	}
 
-	cmdCtx, _, err := c.pinocchioCmd.CreateCommandContextFromParsedLayers(geppettoParsedLayers)
+	// Get helpers settings from parsed layers
+	helpersSettings := &cmdlayers.HelpersSettings{}
+	err = geppettoParsedLayers.InitializeStruct(cmdlayers.GeppettoHelpersSlug, helpersSettings)
+	if err != nil {
+		return errors.Wrap(err, "failed to initialize helpers settings")
+	}
+
+	// Update step settings from parsed layers
+	stepSettings := c.pinocchioCmd.StepSettings.Clone()
+	err = stepSettings.UpdateFromParsedLayers(geppettoParsedLayers)
+	if err != nil {
+		return errors.Wrap(err, "failed to update step settings from parsed layers")
+	}
+
+	// Create image paths from helper settings
+	imagePaths := make([]string, len(helpersSettings.Images))
+	for i, img := range helpersSettings.Images {
+		imagePaths[i] = img.Path
+	}
+
+	// Create the conversation manager
+	manager, err := c.pinocchioCmd.CreateConversationManager(
+		geppettoParsedLayers.GetDefaultParameterLayer().Parameters.ToMap(),
+		cmdcontext.WithImages(imagePaths),
+		cmdcontext.WithAutosaveSettings(cmdcontext.AutosaveSettings{
+			Enabled:  strings.ToLower(helpersSettings.Autosave.Enabled) == "yes",
+			Template: helpersSettings.Autosave.Template,
+			Path:     helpersSettings.Autosave.Path,
+		}),
+	)
 	if err != nil {
 		return err
 	}
 
-	printer := cmdCtx.SetupPrinter(os.Stdout)
-	cmdCtx.Router.AddHandler("chat", "chat", printer)
-
-	messages, err := cmdCtx.RunStepBlocking(ctx)
+	// Run with options
+	messages, err := c.pinocchioCmd.RunWithOptions(ctx,
+		run.WithManager(manager),
+		run.WithStepSettings(stepSettings),
+		run.WithWriter(w),
+		run.WithRunMode(run.RunModeBlocking),
+		run.WithUISettings(&run.UISettings{
+			Output:       helpersSettings.Output,
+			WithMetadata: helpersSettings.WithMetadata,
+			FullOutput:   helpersSettings.FullOutput,
+		}),
+	)
 	if err != nil {
 		return err
 	}
