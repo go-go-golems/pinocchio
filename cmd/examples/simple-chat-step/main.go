@@ -4,6 +4,7 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
+	"github.com/go-go-golems/geppetto/pkg/conversation/builder"
 	"io"
 	"strings"
 
@@ -14,7 +15,6 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
 	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
 	pinocchio_cmds "github.com/go-go-golems/pinocchio/pkg/cmds"
-	"github.com/go-go-golems/pinocchio/pkg/cmds/cmdcontext"
 	"github.com/go-go-golems/pinocchio/pkg/cmds/cmdlayers"
 	"github.com/go-go-golems/pinocchio/pkg/cmds/helpers"
 	"github.com/go-go-golems/pinocchio/pkg/cmds/run"
@@ -109,8 +109,8 @@ func (c *TestCommand) RunIntoWriter(ctx context.Context, parsedLayers *layers.Pa
 	// Create the conversation manager
 	manager, err := c.pinocchioCmd.CreateConversationManager(
 		geppettoParsedLayers.GetDefaultParameterLayer().Parameters.ToMap(),
-		cmdcontext.WithImages(imagePaths),
-		cmdcontext.WithAutosaveSettings(cmdcontext.AutosaveSettings{
+		builder.WithImages(imagePaths),
+		builder.WithAutosaveSettings(builder.AutosaveSettings{
 			Enabled:  strings.ToLower(helpersSettings.Autosave.Enabled) == "yes",
 			Template: helpersSettings.Autosave.Template,
 			Path:     helpersSettings.Autosave.Path,

@@ -4,6 +4,7 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
+	"github.com/go-go-golems/geppetto/pkg/conversation/builder"
 	"io"
 	"os"
 	"strings"
@@ -20,7 +21,6 @@ import (
 	glazedcmds "github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
 	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
-	"github.com/go-go-golems/pinocchio/pkg/cmds/cmdcontext"
 	"github.com/go-go-golems/pinocchio/pkg/cmds/cmdlayers"
 	"github.com/go-go-golems/pinocchio/pkg/cmds/run"
 	"github.com/go-go-golems/pinocchio/pkg/ui"
@@ -120,21 +120,21 @@ func NewPinocchioCommand(
 // CreateConversationManager creates a new conversation manager with the given settings
 func (g *PinocchioCommand) CreateConversationManager(
 	variables map[string]interface{},
-	options ...cmdcontext.ConversationManagerOption,
+	options ...builder.ConversationManagerOption,
 ) (conversation.Manager, error) {
 	if g.Prompt != "" && len(g.Messages) != 0 {
 		return nil, errors.Errorf("Prompt and messages are mutually exclusive")
 	}
 
-	defaultOptions := []cmdcontext.ConversationManagerOption{
-		cmdcontext.WithSystemPrompt(g.SystemPrompt),
-		cmdcontext.WithMessages(g.Messages),
-		cmdcontext.WithPrompt(g.Prompt),
-		cmdcontext.WithVariables(variables),
+	defaultOptions := []builder.ConversationManagerOption{
+		builder.WithSystemPrompt(g.SystemPrompt),
+		builder.WithMessages(g.Messages),
+		builder.WithPrompt(g.Prompt),
+		builder.WithVariables(variables),
 	}
 
 	// Combine default options with provided options, with provided options taking precedence
-	builder, err := cmdcontext.NewConversationManagerBuilder(append(defaultOptions, options...)...)
+	builder, err := builder.NewConversationManagerBuilder(append(defaultOptions, options...)...)
 	if err != nil {
 		return nil, err
 	}
@@ -171,8 +171,8 @@ func (g *PinocchioCommand) RunIntoWriter(
 	// First create the conversation manager with all its settings
 	manager, err := g.CreateConversationManager(
 		parsedLayers.GetDefaultParameterLayer().Parameters.ToMap(),
-		cmdcontext.WithImages(imagePaths),
-		cmdcontext.WithAutosaveSettings(cmdcontext.AutosaveSettings{
+		builder.WithImages(imagePaths),
+		builder.WithAutosaveSettings(builder.AutosaveSettings{
 			Enabled:  strings.ToLower(helpersSettings.Autosave.Enabled) == "yes",
 			Template: helpersSettings.Autosave.Template,
 			Path:     helpersSettings.Autosave.Path,
@@ -217,7 +217,7 @@ func (g *PinocchioCommand) RunIntoWriter(
 	// If we're just printing the prompt, do that and return
 	if helpersSettings.PrintPrompt {
 		if len(messages) > 0 {
-			fmt.Fprintf(w, "%s\n", strings.TrimSpace(messages[len(messages)-1].Content.View()))
+			_, _ = fmt.Fprintf(w, "%s\n", strings.TrimSpace(messages[len(messages)-1].Content.View()))
 		}
 	}
 
@@ -248,7 +248,9 @@ func (g *PinocchioCommand) RunWithOptions(ctx context.Context, options ...run.Ru
 			return nil, err
 		}
 		runCtx.Router = router
-		defer router.Close()
+		defer func(router *events.EventRouter) {
+			_ = router.Close()
+		}(router)
 	}
 
 	// Create step factory if not provided
