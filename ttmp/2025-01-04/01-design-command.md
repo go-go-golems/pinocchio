@@ -30,6 +30,8 @@ I need a bunch of things for that:
         - ChatSettings
         - EmbeddingSettings
 
+- PinocchioCommand gets a StepSettings in its constructor because it allows overloading settings from within the yaml. But that's kind of broken right now anyway, and the proper way to do that would be to insert a "profile-targeted override" in the PinocchioCommandLoader step, and think about what it means for a command to give indications on what model it wants to use, etc... Maybe this could be a completely separate approach actually, like "preferred-models" or "preferred-settings"
+
 ## Current state of CommandContext
 
 -> we should ask claude for ways to refactor it. IF we only use it for PinocchioCommand, might as well just merge it back
