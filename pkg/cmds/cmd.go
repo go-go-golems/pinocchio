@@ -103,7 +103,7 @@ func NewPinocchioCommand(
 // CreateCommandContextFromParsedLayers creates a new command context from the parsed layers
 func (g *PinocchioCommand) CreateCommandContextFromParsedLayers(
 	parsedLayers *layers.ParsedLayers,
-) (*cmdcontext.CommandContext, *cmdcontext.ConversationContext, error) {
+) (*cmdcontext.CommandContext, conversation.Manager, error) {
 	if g.Prompt != "" && len(g.Messages) != 0 {
 		return nil, nil, errors.Errorf("Prompt and messages are mutually exclusive")
 	}
@@ -134,7 +134,7 @@ func (g *PinocchioCommand) CreateCommandContextFromParsedLayers(
 		imagePaths[i] = img.Path
 	}
 
-	options := []cmdcontext.ConversationContextOption{
+	options := []cmdcontext.ConversationManagerOption{
 		cmdcontext.WithImages(imagePaths),
 		cmdcontext.WithAutosaveSettings(cmdcontext.AutosaveSettings{
 			Enabled:  strings.ToLower(helpersSettings.Autosave.Enabled) == "yes",
@@ -150,16 +150,16 @@ func (g *PinocchioCommand) CreateCommandContextFromParsedLayers(
 	)
 }
 
-// CreateConversationContext creates a new conversation context with the given settings
-func (g *PinocchioCommand) CreateConversationContext(
+// CreateConversationManager creates a new conversation manager with the given settings
+func (g *PinocchioCommand) CreateConversationManager(
 	variables map[string]interface{},
-	options ...cmdcontext.ConversationContextOption,
-) (*cmdcontext.ConversationContext, error) {
+	options ...cmdcontext.ConversationManagerOption,
+) (conversation.Manager, error) {
 	if g.Prompt != "" && len(g.Messages) != 0 {
 		return nil, errors.Errorf("Prompt and messages are mutually exclusive")
 	}
 
-	defaultOptions := []cmdcontext.ConversationContextOption{
+	defaultOptions := []cmdcontext.ConversationManagerOption{
 		cmdcontext.WithSystemPrompt(g.SystemPrompt),
 		cmdcontext.WithMessages(g.Messages),
 		cmdcontext.WithPrompt(g.Prompt),
@@ -167,30 +167,35 @@ func (g *PinocchioCommand) CreateConversationContext(
 	}
 
 	// Combine default options with provided options, with provided options taking precedence
-	return cmdcontext.NewConversationContext(append(defaultOptions, options...)...)
+	builder, err := cmdcontext.NewConversationManagerBuilder(append(defaultOptions, options...)...)
+	if err != nil {
+		return nil, err
+	}
+
+	return builder.Build()
 }
 
 // CreateCommandContextFromSettings creates a new command context directly from settings
 func (g *PinocchioCommand) CreateCommandContextFromSettings(
 	stepSettings *settings.StepSettings,
 	variables map[string]interface{},
-	options ...cmdcontext.ConversationContextOption,
-) (*cmdcontext.CommandContext, *cmdcontext.ConversationContext, error) {
-	conversationContext, err := g.CreateConversationContext(variables, options...)
+	options ...cmdcontext.ConversationManagerOption,
+) (*cmdcontext.CommandContext, conversation.Manager, error) {
+	manager, err := g.CreateConversationManager(variables, options...)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	cmdCtx, err := cmdcontext.NewCommandContextFromSettings(
 		stepSettings,
-		conversationContext.GetManager(),
+		manager,
 		nil, // helpersSettings is no longer needed here
 	)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	return cmdCtx, conversationContext, nil
+	return cmdCtx, manager, nil
 }
 
 // RunWithSettings runs the command with the given settings and variables
@@ -199,7 +204,7 @@ func (g *PinocchioCommand) RunWithSettings(
 	stepSettings *settings.StepSettings,
 	variables map[string]interface{},
 	w io.Writer,
-	options ...cmdcontext.ConversationContextOption,
+	options ...cmdcontext.ConversationManagerOption,
 ) error {
 	cmdCtx, _, err := g.CreateCommandContextFromSettings(
 		g.StepSettings,
@@ -219,7 +224,7 @@ func (g *PinocchioCommand) RunStepBlockingWithSettings(
 	ctx context.Context,
 	stepSettings *settings.StepSettings,
 	variables map[string]interface{},
-	options ...cmdcontext.ConversationContextOption,
+	options ...cmdcontext.ConversationManagerOption,
 ) ([]*conversation.Message, error) {
 
 	cmdCtx, _, err := g.CreateCommandContextFromSettings(

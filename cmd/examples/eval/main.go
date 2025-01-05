@@ -89,25 +89,21 @@ func (c *EvalCommand) RunIntoGlazeProcessor(
 
 	// Process each entry in the dataset
 	for i, entry := range dataset {
-		// Create a new conversation context for each entry
-		conversationContext, err := command.CreateConversationContext(entry.Input)
+		// Create a new conversation manager for each entry
+		manager, err := command.CreateConversationManager(entry.Input)
 		if err != nil {
-			return fmt.Errorf("failed to create conversation context for entry %d: %w", i+1, err)
+			return fmt.Errorf("failed to create conversation manager for entry %d: %w", i+1, err)
 		}
 
-		manager := conversationContext.GetManager()
 		conversation := manager.GetConversation()
 
-		// // Update step settings from parsed layers
+		// Update step settings from parsed layers
 		stepSettings := command.StepSettings.Clone()
 		err = stepSettings.UpdateFromParsedLayers(parsedLayers)
 		if err != nil {
 			return err
 		}
 
-		// command.Run(stepSettings, conversation)
-
-		// NOTE(manuel, 2025-01-04): not sure if we want to render the conversation inside Run or make it a parameter, maybe both.
 		resultConversation, err := command.RunStepBlockingWithSettings(ctx, stepSettings, entry.Input)
 		if err != nil {
 			return fmt.Errorf("failed to run command for entry %d: %w", i+1, err)

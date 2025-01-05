@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"fmt"
+	"strings"
+
 	"github.com/go-go-golems/geppetto/pkg/conversation"
 	"github.com/go-go-golems/geppetto/pkg/helpers"
 	"github.com/go-go-golems/geppetto/pkg/steps"
@@ -13,13 +15,14 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
 	"github.com/go-go-golems/pinocchio/pkg/cmds"
 	"github.com/spf13/cobra"
-	"strings"
 )
 
 var upperCaseCmd = &cobra.Command{
 	Use:   "uppercase",
 	Short: "uppercase test",
 	Run: func(cmd *cobra.Command, args []string) {
+		// NOTE: this is the stuff that creates StepSettings from a cobra command and from the standard middlewares
+
 		stepSettings, err := settings.NewStepSettings()
 		cobra.CheckErr(err)
 		geppettoLayers, err := cmds.CreateGeppettoLayers(stepSettings)

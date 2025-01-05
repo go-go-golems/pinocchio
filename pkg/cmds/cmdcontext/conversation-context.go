@@ -8,51 +8,52 @@ import (
 	"github.com/pkg/errors"
 )
 
-// XXX this is basically just a big constructor method for a ConversationManager,
-// but also it preserves the original variables, which might be useful for metadata purposes
-type ConversationContext struct {
-	SystemPrompt string
-	Messages     []*conversation.Message
-	Prompt       string
-	Variables    map[string]interface{}
-	Images       []string
+// ConversationManagerBuilder helps construct a conversation.Manager with the given settings
+type ConversationManagerBuilder struct {
+	systemPrompt string
+	messages     []*conversation.Message
+	prompt       string
+	variables    map[string]interface{}
+	images       []string
 
-	manager conversation.Manager
+	autosaveEnabled  bool
+	autosaveTemplate string
+	autosavePath     string
 }
 
-type ConversationContextOption func(*ConversationContext) error
+type ConversationManagerOption func(*ConversationManagerBuilder) error
 
-func WithSystemPrompt(systemPrompt string) ConversationContextOption {
-	return func(c *ConversationContext) error {
-		c.SystemPrompt = systemPrompt
+func WithSystemPrompt(systemPrompt string) ConversationManagerOption {
+	return func(b *ConversationManagerBuilder) error {
+		b.systemPrompt = systemPrompt
 		return nil
 	}
 }
 
-func WithMessages(messages []*conversation.Message) ConversationContextOption {
-	return func(c *ConversationContext) error {
-		c.Messages = messages
+func WithMessages(messages []*conversation.Message) ConversationManagerOption {
+	return func(b *ConversationManagerBuilder) error {
+		b.messages = messages
 		return nil
 	}
 }
 
-func WithPrompt(prompt string) ConversationContextOption {
-	return func(c *ConversationContext) error {
-		c.Prompt = prompt
+func WithPrompt(prompt string) ConversationManagerOption {
+	return func(b *ConversationManagerBuilder) error {
+		b.prompt = prompt
 		return nil
 	}
 }
 
-func WithVariables(variables map[string]interface{}) ConversationContextOption {
-	return func(c *ConversationContext) error {
-		c.Variables = variables
+func WithVariables(variables map[string]interface{}) ConversationManagerOption {
+	return func(b *ConversationManagerBuilder) error {
+		b.variables = variables
 		return nil
 	}
 }
 
-func WithImages(images []string) ConversationContextOption {
-	return func(c *ConversationContext) error {
-		c.Images = images
+func WithImages(images []string) ConversationManagerOption {
+	return func(b *ConversationManagerBuilder) error {
+		b.images = images
 		return nil
 	}
 }
@@ -63,63 +64,72 @@ type AutosaveSettings struct {
 	Path     string
 }
 
-func WithAutosaveSettings(settings AutosaveSettings) ConversationContextOption {
-	return func(c *ConversationContext) error {
-		enabled := "no"
-		if settings.Enabled {
-			enabled = "yes"
-		}
-		c.manager = conversation.NewManager(
-			conversation.WithAutosave(
-				enabled,
-				settings.Template,
-				settings.Path,
-			),
-		)
+func WithAutosaveSettings(settings AutosaveSettings) ConversationManagerOption {
+	return func(b *ConversationManagerBuilder) error {
+		b.autosaveEnabled = settings.Enabled
+		b.autosaveTemplate = settings.Template
+		b.autosavePath = settings.Path
 		return nil
 	}
 }
 
-func NewConversationContext(options ...ConversationContextOption) (*ConversationContext, error) {
-	ctx := &ConversationContext{
-		Variables: make(map[string]interface{}),
-		manager:   conversation.NewManager(),
+// NewConversationManagerBuilder creates a new builder for conversation.Manager
+func NewConversationManagerBuilder(options ...ConversationManagerOption) (*ConversationManagerBuilder, error) {
+	builder := &ConversationManagerBuilder{
+		variables: make(map[string]interface{}),
 	}
 
 	for _, opt := range options {
-		if err := opt(ctx); err != nil {
+		if err := opt(builder); err != nil {
 			return nil, err
 		}
 	}
 
-	err := ctx.initialize()
-	if err != nil {
+	return builder, nil
+}
+
+// Build creates and initializes a new conversation.Manager
+func (b *ConversationManagerBuilder) Build() (conversation.Manager, error) {
+	enabled := "no"
+	if b.autosaveEnabled {
+		enabled = "yes"
+	}
+
+	manager := conversation.NewManager(
+		conversation.WithAutosave(
+			enabled,
+			b.autosaveTemplate,
+			b.autosavePath,
+		),
+	)
+
+	if err := b.initializeConversation(manager); err != nil {
 		return nil, err
 	}
 
-	return ctx, nil
+	return manager, nil
 }
 
-func (c *ConversationContext) initialize() error {
-	if c.SystemPrompt != "" {
-		systemPromptTemplate, err := templating.CreateTemplate("system-prompt").Parse(c.SystemPrompt)
+func (b *ConversationManagerBuilder) initializeConversation(manager conversation.Manager) error {
+	if b.systemPrompt != "" {
+		systemPromptTemplate, err := templating.CreateTemplate("system-prompt").Parse(b.systemPrompt)
 		if err != nil {
 			return errors.Wrap(err, "failed to parse system prompt template")
 		}
 
 		var systemPromptBuffer strings.Builder
-		err = systemPromptTemplate.Execute(&systemPromptBuffer, c.Variables)
+		err = systemPromptTemplate.Execute(&systemPromptBuffer, b.variables)
 		if err != nil {
 			return errors.Wrap(err, "failed to execute system prompt template")
 		}
 
-		c.manager.AppendMessages(conversation.NewChatMessage(
+		manager.AppendMessages(conversation.NewChatMessage(
 			conversation.RoleSystem,
 			systemPromptBuffer.String(),
 		))
 	}
 
-	for _, message_ := range c.Messages {
+	for _, message_ := range b.messages {
 		switch content := message_.Content.(type) {
 		case *conversation.ChatMessageContent:
 			messageTemplate, err := templating.CreateTemplate("message").Parse(content.Text)
@@ -128,31 +138,31 @@ func (c *ConversationContext) initialize() error {
 			}
 
 			var messageBuffer strings.Builder
-			err = messageTemplate.Execute(&messageBuffer, c.Variables)
+			err = messageTemplate.Execute(&messageBuffer, b.variables)
 			if err != nil {
 				return errors.Wrap(err, "failed to execute message template")
 			}
 			s_ := messageBuffer.String()
 
-			c.manager.AppendMessages(conversation.NewChatMessage(
+			manager.AppendMessages(conversation.NewChatMessage(
 				content.Role, s_, conversation.WithTime(message_.Time)))
 		}
 	}
 
-	if c.Prompt != "" {
-		promptTemplate, err := templating.CreateTemplate("prompt").Parse(c.Prompt)
+	if b.prompt != "" {
+		promptTemplate, err := templating.CreateTemplate("prompt").Parse(b.prompt)
 		if err != nil {
 			return errors.Wrap(err, "failed to parse prompt template")
 		}
 
 		var promptBuffer strings.Builder
-		err = promptTemplate.Execute(&promptBuffer, c.Variables)
+		err = promptTemplate.Execute(&promptBuffer, b.variables)
 		if err != nil {
 			return errors.Wrap(err, "failed to execute prompt template")
 		}
 
 		images := []*conversation.ImageContent{}
-		for _, imagePath := range c.Images {
+		for _, imagePath := range b.images {
 			image, err := conversation.NewImageContentFromFile(imagePath)
 			if err != nil {
 				return errors.Wrap(err, "failed to create image content")
@@ -165,29 +175,7 @@ func (c *ConversationContext) initialize() error {
 			Text:   promptBuffer.String(),
 			Images: images,
 		}
-		c.manager.AppendMessages(conversation.NewMessage(messageContent))
-	}
-
-	return nil
-}
-
-func (c *ConversationContext) GetManager() conversation.Manager {
-	return c.manager
-}
-
-func (c *ConversationContext) AppendImageToPrompt(imagePath string) error {
-	if c.Prompt == "" {
-		return errors.New("cannot append image to empty prompt")
-	}
-
-	image, err := conversation.NewImageContentFromFile(imagePath)
-	if err != nil {
-		return errors.Wrap(err, "failed to create image content")
-	}
-
-	lastMessage := c.manager.GetConversation()[len(c.manager.GetConversation())-1]
-	if content, ok := lastMessage.Content.(*conversation.ChatMessageContent); ok {
-		content.Images = append(content.Images, image)
+		manager.AppendMessages(conversation.NewMessage(messageContent))
 	}
 
 	return nil
