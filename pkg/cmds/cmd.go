@@ -251,16 +251,14 @@ func (g *PinocchioCommand) RunWithOptions(ctx context.Context, options ...run.Ru
 	}
 
 	// Verify router for chat mode
-	if runCtx.RunMode == run.RunModeChat && runCtx.Router == nil {
+	if (runCtx.RunMode == run.RunModeChat || runCtx.RunMode == run.RunModeInteractive) && runCtx.Router == nil {
 		return nil, errors.New("chat mode requires a router")
 	}
 
 	switch runCtx.RunMode {
 	case run.RunModeBlocking:
 		return g.runBlocking(ctx, runCtx)
-	case run.RunModeInteractive:
-		return g.runInteractive(ctx, runCtx)
-	case run.RunModeChat:
+	case run.RunModeInteractive, run.RunModeChat:
 		return g.runChat(ctx, runCtx)
 	default:
 		return nil, errors.Errorf("unknown run mode: %v", runCtx.RunMode)
@@ -301,6 +299,7 @@ func (g *PinocchioCommand) runBlocking(ctx context.Context, rc *run.RunContext) 
 
 		eg.Go(func() error {
 			defer cancel()
+			defer rc.Router.Close()
 			return rc.Router.Run(ctx)
 		})
 
@@ -341,43 +340,6 @@ func (g *PinocchioCommand) runStepAndCollectMessages(ctx context.Context, rc *ru
 	return nil
 }
 
-// runInteractive handles interactive execution mode
-func (g *PinocchioCommand) runInteractive(ctx context.Context, rc *run.RunContext) ([]*conversation.Message, error) {
-	// First run blocking to get initial response
-	messages, err := g.runBlocking(ctx, rc)
-	if err != nil {
-		return nil, err
-	}
-
-	// If we're not in interactive mode or it's explicitly disabled, return early
-	if rc.UISettings == nil || rc.UISettings.NonInteractive {
-		return messages, nil
-	}
-
-	isOutputTerminal := isatty.IsTerminal(os.Stdout.Fd())
-	forceInteractive := rc.UISettings.ForceInteractive
-
-	// Check if we should ask for chat continuation
-	askChat := (isOutputTerminal || forceInteractive) && !rc.UISettings.NonInteractive
-	if !askChat {
-		return messages, nil
-	}
-
-	// Ask user if they want to continue in chat mode
-	continueInChat, err := askForChatContinuation()
-	if err != nil {
-		return messages, err
-	}
-
-	if continueInChat {
-		// Switch to chat mode
-		rc.RunMode = run.RunModeChat
-		return g.runChat(ctx, rc)
-	}
-
-	return messages, nil
-}
-
 // runChat handles chat execution mode
 func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) ([]*conversation.Message, error) {
 	if rc.Router == nil {
@@ -401,38 +363,98 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) ([]*
 		return nil, err
 	}
 
-	backend := ui.NewStepBackend(chatStep)
-
-	// Determine if we should auto-start the backend
-	autoStartBackend := rc.UISettings != nil && rc.UISettings.StartInChat
-
-	model := bobatea_chat.InitialModel(
-		rc.ConversationManager,
-		backend,
-		bobatea_chat.WithTitle("pinocchio"),
-		bobatea_chat.WithAutoStartBackend(autoStartBackend),
-	)
-
-	p := tea.NewProgram(
-		model,
-		options...,
-	)
-
-	rc.Router.AddHandler("ui", "ui", ui.StepChatForwardFunc(p))
-
-	// Start router
+	// Start router in a goroutine
 	eg := errgroup.Group{}
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
 	eg.Go(func() error {
 		defer cancel()
+		defer rc.Router.Close()
 		return rc.Router.Run(ctx)
 	})
 
 	eg.Go(func() error {
 		defer cancel()
+
+		// Wait for router to be ready
 		<-rc.Router.Running()
+
+		// If we're in interactive mode, run initial blocking step
+		if rc.RunMode == run.RunModeInteractive {
+			// Run initial blocking step
+			initialStep, err := rc.StepFactory.NewStep(chat.WithPublishedTopic(rc.Router.Publisher, "chat"))
+			if err != nil {
+				return err
+			}
+
+			// Add default printer for initial step
+			if rc.UISettings == nil || rc.UISettings.Output == "" {
+				rc.Router.AddHandler("chat", "chat", chat.StepPrinterFunc("", rc.Writer))
+			} else {
+				printer := chat.NewStructuredPrinter(rc.Writer, chat.PrinterOptions{
+					Format:          chat.PrinterFormat(rc.UISettings.Output),
+					Name:            "",
+					IncludeMetadata: rc.UISettings.WithMetadata,
+					Full:            rc.UISettings.FullOutput,
+				})
+				rc.Router.AddHandler("chat", "chat", printer)
+			}
+			err = rc.Router.RunHandlers(ctx)
+			if err != nil {
+				return err
+			}
+
+			err = g.runStepAndCollectMessages(ctx, rc, initialStep)
+			if err != nil {
+				return err
+			}
+
+			// If we're not in interactive mode or it's explicitly disabled, return early
+			if rc.UISettings != nil && rc.UISettings.NonInteractive {
+				return nil
+			}
+
+			// Check if we should ask for chat continuation
+			askChat := (isOutputTerminal || rc.UISettings != nil && rc.UISettings.ForceInteractive) && (rc.UISettings == nil || !rc.UISettings.NonInteractive)
+			if !askChat {
+				return nil
+			}
+
+			// Ask user if they want to continue in chat mode
+			continueInChat, err := askForChatContinuation()
+			if err != nil {
+				return err
+			}
+
+			if !continueInChat {
+				return nil
+			}
+		}
+
+		backend := ui.NewStepBackend(chatStep)
+
+		// Determine if we should auto-start the backend
+		autoStartBackend := rc.UISettings != nil && rc.UISettings.StartInChat
+
+		model := bobatea_chat.InitialModel(
+			rc.ConversationManager,
+			backend,
+			bobatea_chat.WithTitle("pinocchio"),
+			bobatea_chat.WithAutoStartBackend(autoStartBackend),
+		)
+
+		p := tea.NewProgram(
+			model,
+			options...,
+		)
+
+		rc.Router.AddHandler("ui", "ui", ui.StepChatForwardFunc(p))
+		err = rc.Router.RunHandlers(ctx)
+		if err != nil {
+			return err
+		}
+
 		_, err := p.Run()
 		return err
 	})
