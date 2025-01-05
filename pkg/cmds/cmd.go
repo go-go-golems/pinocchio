@@ -4,11 +4,12 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
-	tea "github.com/charmbracelet/bubbletea"
-	bobatea_chat "github.com/go-go-golems/bobatea/pkg/chat"
 	"io"
 	"os"
 	"strings"
+
+	tea "github.com/charmbracelet/bubbletea"
+	bobatea_chat "github.com/go-go-golems/bobatea/pkg/chat"
 
 	"github.com/go-go-golems/geppetto/pkg/conversation"
 	"github.com/go-go-golems/geppetto/pkg/events"
@@ -159,11 +160,18 @@ func (g *PinocchioCommand) CreateCommandContextFromParsedLayers(
 		}),
 	}
 
-	return g.CreateCommandContextFromSettings(
+	result, manager, err := g.CreateCommandContextFromSettings(
 		stepSettings,
 		val.Parameters.ToMap(),
 		options...,
 	)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// XXX ugly mess that should be refactord
+	result.HelpersSettings = helpersSettings
+	return result, manager, nil
 }
 
 // CreateConversationManager creates a new conversation manager with the given settings
