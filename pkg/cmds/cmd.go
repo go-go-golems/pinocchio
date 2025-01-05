@@ -4,16 +4,17 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
-	"github.com/go-go-golems/geppetto/pkg/conversation/builder"
 	"io"
 	"os"
 	"strings"
+
+	"github.com/go-go-golems/geppetto/pkg/conversation/builder"
+	"github.com/go-go-golems/geppetto/pkg/events"
 
 	tea "github.com/charmbracelet/bubbletea"
 	bobatea_chat "github.com/go-go-golems/bobatea/pkg/chat"
 
 	"github.com/go-go-golems/geppetto/pkg/conversation"
-	"github.com/go-go-golems/geppetto/pkg/events"
 	"github.com/go-go-golems/geppetto/pkg/steps"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/chat"
@@ -75,11 +76,6 @@ func WithSystemPrompt(systemPrompt string) PinocchioCommandOption {
 
 func NewPinocchioCommand(
 	description *glazedcmds.CommandDescription,
-
-	// NOTE: We should remove these, as they are not needed and messy anyway, and should maybe be handled through
-	// middlewares in some way? but that's deferring computing settings until after loading the command,
-	// as though actually... we can do that now in the command loader right
-
 	settings *settings.StepSettings,
 	options ...PinocchioCommandOption,
 ) (*PinocchioCommand, error) {
@@ -202,6 +198,11 @@ func (g *PinocchioCommand) RunIntoWriter(
 		FullOutput:       helpersSettings.FullOutput,
 	}
 
+	router, err := events.NewEventRouter()
+	if err != nil {
+		return err
+	}
+
 	// Run with options
 	messages, err := g.RunWithOptions(ctx,
 		run.WithStepSettings(stepSettings),
@@ -209,6 +210,7 @@ func (g *PinocchioCommand) RunIntoWriter(
 		run.WithRunMode(runMode),
 		run.WithUISettings(uiSettings),
 		run.WithManager(manager),
+		run.WithRouter(router),
 	)
 	if err != nil {
 		return err
@@ -241,23 +243,16 @@ func (g *PinocchioCommand) RunWithOptions(ctx context.Context, options ...run.Ru
 		return nil, errors.New("no conversation manager provided")
 	}
 
-	// Create router if not provided
-	if runCtx.Router == nil {
-		router, err := events.NewEventRouter()
-		if err != nil {
-			return nil, err
-		}
-		runCtx.Router = router
-		defer func(router *events.EventRouter) {
-			_ = router.Close()
-		}(router)
-	}
-
 	// Create step factory if not provided
 	if runCtx.StepFactory == nil {
 		runCtx.StepFactory = &ai.StandardStepFactory{
 			Settings: g.StepSettings.Clone(),
 		}
+	}
+
+	// Verify router for chat mode
+	if runCtx.RunMode == run.RunModeChat && runCtx.Router == nil {
+		return nil, errors.New("chat mode requires a router")
 	}
 
 	switch runCtx.RunMode {
@@ -274,58 +269,76 @@ func (g *PinocchioCommand) RunWithOptions(ctx context.Context, options ...run.Ru
 
 // runBlocking handles blocking execution mode
 func (g *PinocchioCommand) runBlocking(ctx context.Context, rc *run.RunContext) ([]*conversation.Message, error) {
-	chatStep, err := rc.StepFactory.NewStep(chat.WithPublishedTopic(rc.Router.Publisher, "chat"))
+	chatStep, err := rc.StepFactory.NewStep()
 	if err != nil {
 		return nil, err
 	}
 
-	// Add default printer if none is set
-	if rc.UISettings == nil || rc.UISettings.Output == "" {
-		rc.Router.AddHandler("chat", "chat", chat.StepPrinterFunc("", rc.Writer))
-	} else {
-		printer := chat.NewStructuredPrinter(rc.Writer, chat.PrinterOptions{
-			Format:          chat.PrinterFormat(rc.UISettings.Output),
-			Name:            "",
-			IncludeMetadata: rc.UISettings.WithMetadata,
-			Full:            rc.UISettings.FullOutput,
-		})
-		rc.Router.AddHandler("chat", "chat", printer)
-	}
-
-	// Start router
-	eg := errgroup.Group{}
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-
-	eg.Go(func() error {
-		defer cancel()
-		return rc.Router.Run(ctx)
-	})
-
-	eg.Go(func() error {
-		defer cancel()
-		<-rc.Router.Running()
-
-		conversation_ := rc.Manager.GetConversation()
-		messagesM := steps.Resolve(conversation_)
-		m := steps.Bind[conversation.Conversation, *conversation.Message](ctx, messagesM, chatStep)
-
-		for r := range m.GetChannel() {
-			if r.Error() != nil {
-				return r.Error()
-			}
-			msg := r.Unwrap()
-			rc.Manager.AppendMessages(msg)
+	// If we have a router, set up the printer and run the router loop
+	if rc.Router != nil {
+		chatStep, err = rc.StepFactory.NewStep(chat.WithPublishedTopic(rc.Router.Publisher, "chat"))
+		if err != nil {
+			return nil, err
 		}
-		return nil
-	})
 
-	err = eg.Wait()
-	if err != nil {
-		return nil, err
+		// Add default printer if none is set
+		if rc.UISettings == nil || rc.UISettings.Output == "" {
+			rc.Router.AddHandler("chat", "chat", chat.StepPrinterFunc("", rc.Writer))
+		} else {
+			printer := chat.NewStructuredPrinter(rc.Writer, chat.PrinterOptions{
+				Format:          chat.PrinterFormat(rc.UISettings.Output),
+				Name:            "",
+				IncludeMetadata: rc.UISettings.WithMetadata,
+				Full:            rc.UISettings.FullOutput,
+			})
+			rc.Router.AddHandler("chat", "chat", printer)
+		}
+
+		// Start router
+		eg := errgroup.Group{}
+		ctx, cancel := context.WithCancel(ctx)
+		defer cancel()
+
+		eg.Go(func() error {
+			defer cancel()
+			return rc.Router.Run(ctx)
+		})
+
+		eg.Go(func() error {
+			defer cancel()
+			<-rc.Router.Running()
+			return g.runStepAndCollectMessages(ctx, rc, chatStep)
+		})
+
+		err = eg.Wait()
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		// No router, just run the step directly
+		err = g.runStepAndCollectMessages(ctx, rc, chatStep)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return rc.Manager.GetConversation(), nil
+}
+
+// runStepAndCollectMessages handles the actual step execution and message collection
+func (g *PinocchioCommand) runStepAndCollectMessages(ctx context.Context, rc *run.RunContext, chatStep chat.Step) error {
+	conversation_ := rc.Manager.GetConversation()
+	messagesM := steps.Resolve(conversation_)
+	m := steps.Bind[conversation.Conversation, *conversation.Message](ctx, messagesM, chatStep)
+
+	for r := range m.GetChannel() {
+		if r.Error() != nil {
+			return r.Error()
+		}
+		msg := r.Unwrap()
+		rc.Manager.AppendMessages(msg)
+	}
+	return nil
 }
 
 // runInteractive handles interactive execution mode
@@ -367,6 +380,10 @@ func (g *PinocchioCommand) runInteractive(ctx context.Context, rc *run.RunContex
 
 // runChat handles chat execution mode
 func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) ([]*conversation.Message, error) {
+	if rc.Router == nil {
+		return nil, errors.New("chat mode requires a router")
+	}
+
 	isOutputTerminal := isatty.IsTerminal(os.Stdout.Fd())
 
 	options := []tea.ProgramOption{

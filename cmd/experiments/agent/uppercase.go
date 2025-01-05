@@ -21,7 +21,9 @@ var upperCaseCmd = &cobra.Command{
 	Use:   "uppercase",
 	Short: "uppercase test",
 	Run: func(cmd *cobra.Command, args []string) {
-		// NOTE: this is the stuff that creates StepSettings from a cobra command and from the standard middlewares
+		// NOTE: this is the stuff that creates StepSettings from a cobra command and from the standard middlewares.
+		// This would be easier if uppercase was a standard GlazeCommand as we would be able to use the cobra BuildCommand
+		// helpers.
 
 		stepSettings, err := settings.NewStepSettings()
 		cobra.CheckErr(err)
