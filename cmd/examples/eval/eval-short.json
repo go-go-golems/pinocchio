@@ -1,0 +1,14 @@
+[
+    {
+        "input": {
+            "complaint": "The app crashes every time I try to upload a photo"
+        },
+        "golden_answer": ["Software Bug"]
+    },
+    {
+        "input": {
+            "complaint": "My printer isn't recognized by my computer"
+        },
+        "golden_answer": ["Hardware Malfunction"]
+    }
+]

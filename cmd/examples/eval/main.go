@@ -27,6 +27,7 @@ import (
 
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings/claude"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings/openai"
+	"github.com/go-go-golems/pinocchio/pkg/cmds/run"
 )
 
 type EvalCommand struct {
@@ -87,35 +88,39 @@ func (c *EvalCommand) RunIntoGlazeProcessor(
 		return fmt.Errorf("expected the command to be a PinocchioCommand, got %T", commands[0])
 	}
 
+	// Update step settings from parsed layers
+	stepSettings := command.StepSettings.Clone()
+	err = stepSettings.UpdateFromParsedLayers(parsedLayers)
+	if err != nil {
+		return err
+	}
+
 	// Process each entry in the dataset
 	for i, entry := range dataset {
-		// Create a new conversation manager for each entry
+		// Create the conversation manager for this entry
 		manager, err := command.CreateConversationManager(entry.Input)
 		if err != nil {
 			return fmt.Errorf("failed to create conversation manager for entry %d: %w", i+1, err)
 		}
 
-		conversation := manager.GetConversation()
-
-		// Update step settings from parsed layers
-		stepSettings := command.StepSettings.Clone()
-		err = stepSettings.UpdateFromParsedLayers(parsedLayers)
-		if err != nil {
-			return err
-		}
-
-		resultConversation, err := command.RunStepBlockingWithSettings(ctx, stepSettings, entry.Input)
+		// Run the command with the manager and settings
+		resultConversation, err := command.RunWithOptions(ctx,
+			run.WithManager(manager),
+			run.WithStepSettings(stepSettings),
+			run.WithRunMode(run.RunModeBlocking),
+			run.WithWriter(os.Stdout),
+		)
 		if err != nil {
 			return fmt.Errorf("failed to run command for entry %d: %w", i+1, err)
 		}
 
-		// Get the AI's response
+		// Get the conversation string
 		var conversationString string
-		for _, msg := range conversation {
+		for _, msg := range manager.GetConversation() {
 			conversationString += msg.Content.View() + "\n"
 		}
 
-		// get the last message from the resultConversation
+		// Get the last message
 		lastMessage := resultConversation[len(resultConversation)-1]
 
 		// Create a row with the entry data and AI response
@@ -124,16 +129,14 @@ func (c *EvalCommand) RunIntoGlazeProcessor(
 			types.MRP("input", entry.Input),
 			types.MRP("golden_answer", entry.GoldenAnswer),
 			types.MRP("conversationString", conversationString),
-			types.MRP("conversation", conversation),
+			types.MRP("conversation", manager.GetConversation()),
 			types.MRP("last_message", lastMessage.Content.View()),
-			// XXX make sure the model and all that is in the message
 			types.MRP("message_metadata", lastMessage.Metadata),
 		)
 
 		if err := gp.AddRow(ctx, row); err != nil {
 			return err
 		}
-
 	}
 
 	return nil

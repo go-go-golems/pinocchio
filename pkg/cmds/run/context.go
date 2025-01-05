@@ -31,7 +31,7 @@ type UISettings struct {
 
 // RunContext encapsulates all the settings and state needed for a single command run
 type RunContext struct {
-	// Core components
+	// Core components (Manager is required)
 	Manager     conversation.Manager
 	StepFactory *ai.StandardStepFactory
 	Router      *events.EventRouter
@@ -47,9 +47,10 @@ type RunContext struct {
 	Variables map[string]interface{}
 }
 
-// NewRunContext creates a new RunContext with default values
-func NewRunContext() *RunContext {
+// NewRunContext creates a new RunContext with default values and a required manager
+func NewRunContext(manager conversation.Manager) *RunContext {
 	return &RunContext{
+		Manager:   manager,
 		RunMode:   RunModeBlocking,
 		Writer:    os.Stdout,
 		Variables: make(map[string]interface{}),

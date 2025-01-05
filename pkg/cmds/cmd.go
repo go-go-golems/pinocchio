@@ -274,20 +274,86 @@ func (g *PinocchioCommand) RunIntoWriter(
 	parsedLayers *layers.ParsedLayers,
 	w io.Writer,
 ) error {
-	cmdCtx, _, err := g.CreateCommandContextFromParsedLayers(parsedLayers)
+	// Get helpers settings from parsed layers
+	helpersSettings := &cmdlayers.HelpersSettings{}
+	err := parsedLayers.InitializeStruct(cmdlayers.GeppettoHelpersSlug, helpersSettings)
+	if err != nil {
+		return errors.Wrap(err, "failed to initialize helpers settings")
+	}
+
+	// Update step settings from parsed layers
+	stepSettings := g.StepSettings.Clone()
+	err = stepSettings.UpdateFromParsedLayers(parsedLayers)
+	if err != nil {
+		return errors.Wrap(err, "failed to update step settings from parsed layers")
+	}
+
+	// Create image paths from helper settings
+	imagePaths := make([]string, len(helpersSettings.Images))
+	for i, img := range helpersSettings.Images {
+		imagePaths[i] = img.Path
+	}
+
+	// First create the conversation manager with all its settings
+	manager, err := g.CreateConversationManager(
+		parsedLayers.GetDefaultParameterLayer().Parameters.ToMap(),
+		cmdcontext.WithImages(imagePaths),
+		cmdcontext.WithAutosaveSettings(cmdcontext.AutosaveSettings{
+			Enabled:  strings.ToLower(helpersSettings.Autosave.Enabled) == "yes",
+			Template: helpersSettings.Autosave.Template,
+			Path:     helpersSettings.Autosave.Path,
+		}),
+	)
 	if err != nil {
 		return err
 	}
-	defer func(cmdCtx *cmdcontext.CommandContext) {
-		_ = cmdCtx.Close()
-	}(cmdCtx)
 
-	return cmdCtx.Run(ctx, w)
+	// Determine run mode based on helper settings
+	runMode := run.RunModeBlocking
+	if helpersSettings.StartInChat {
+		runMode = run.RunModeChat
+	} else if helpersSettings.Interactive {
+		runMode = run.RunModeInteractive
+	}
+
+	// Create UI settings from helper settings
+	uiSettings := &run.UISettings{
+		Interactive:      helpersSettings.Interactive,
+		ForceInteractive: helpersSettings.ForceInteractive,
+		NonInteractive:   helpersSettings.NonInteractive,
+		StartInChat:      helpersSettings.StartInChat,
+		PrintPrompt:      helpersSettings.PrintPrompt,
+		Output:           helpersSettings.Output,
+		WithMetadata:     helpersSettings.WithMetadata,
+		FullOutput:       helpersSettings.FullOutput,
+	}
+
+	// Run with options
+	messages, err := g.RunWithOptions(ctx,
+		run.WithStepSettings(stepSettings),
+		run.WithWriter(w),
+		run.WithRunMode(runMode),
+		run.WithUISettings(uiSettings),
+		run.WithManager(manager),
+	)
+	if err != nil {
+		return err
+	}
+
+	// If we're just printing the prompt, do that and return
+	if helpersSettings.PrintPrompt {
+		if len(messages) > 0 {
+			fmt.Fprintf(w, "%s\n", strings.TrimSpace(messages[len(messages)-1].Content.View()))
+		}
+	}
+
+	return nil
 }
 
-// Run executes the command with the given options
-func (g *PinocchioCommand) Run(ctx context.Context, options ...run.RunOption) ([]*conversation.Message, error) {
-	runCtx := run.NewRunContext()
+// RunWithOptions executes the command with the given options
+func (g *PinocchioCommand) RunWithOptions(ctx context.Context, options ...run.RunOption) ([]*conversation.Message, error) {
+	// We need at least one option that provides the manager
+	runCtx := &run.RunContext{}
 
 	// Apply options
 	for _, opt := range options {
@@ -296,13 +362,9 @@ func (g *PinocchioCommand) Run(ctx context.Context, options ...run.RunOption) ([
 		}
 	}
 
-	// Create manager if not provided
+	// Verify we have a manager
 	if runCtx.Manager == nil {
-		manager, err := g.CreateConversationManager(runCtx.Variables)
-		if err != nil {
-			return nil, err
-		}
-		runCtx.Manager = manager
+		return nil, errors.New("no conversation manager provided")
 	}
 
 	// Create router if not provided
