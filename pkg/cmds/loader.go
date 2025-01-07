@@ -19,22 +19,22 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-type GeppettoCommandLoader struct {
+type PinocchioCommandLoader struct {
 }
 
-func (g *GeppettoCommandLoader) IsFileSupported(f fs.FS, fileName string) bool {
+func (g *PinocchioCommandLoader) IsFileSupported(f fs.FS, fileName string) bool {
 	return strings.HasSuffix(fileName, ".yaml") || strings.HasSuffix(fileName, ".yml")
 }
 
-var _ loaders.CommandLoader = (*GeppettoCommandLoader)(nil)
+var _ loaders.CommandLoader = (*PinocchioCommandLoader)(nil)
 
 func LoadFromYAML(b []byte) ([]cmds.Command, error) {
-	loader := &GeppettoCommandLoader{}
+	loader := &PinocchioCommandLoader{}
 	buf := strings.NewReader(string(b))
-	return loader.loadGeppettoCommandFromReader(buf, nil, nil)
+	return loader.loadPinocchioCommandFromReader(buf, nil, nil)
 }
 
-func (g *GeppettoCommandLoader) loadGeppettoCommandFromReader(
+func (g *PinocchioCommandLoader) loadPinocchioCommandFromReader(
 	s io.Reader,
 	options []cmds.CommandDescriptionOption,
 	_ []alias.Option,
@@ -45,7 +45,7 @@ func (g *GeppettoCommandLoader) loadGeppettoCommandFromReader(
 	}
 
 	buf := strings.NewReader(string(yamlContent))
-	scd := &GeppettoCommandDescription{
+	scd := &PinocchioCommandDescription{
 		Flags:     []*parameters.ParameterDefinition{},
 		Arguments: []*parameters.ParameterDefinition{},
 	}
@@ -84,9 +84,8 @@ func (g *GeppettoCommandLoader) loadGeppettoCommandFromReader(
 		return nil, errors.Errorf("Prompt and messages are mutually exclusive")
 	}
 
-	sq, err := NewGeppettoCommand(
+	sq, err := NewPinocchioCommand(
 		description,
-		stepSettings,
 		WithPrompt(scd.Prompt),
 		WithMessages(scd.Messages),
 		WithSystemPrompt(scd.SystemPrompt),
@@ -162,7 +161,7 @@ func CreateGeppettoLayers(stepSettings *settings.StepSettings) ([]layers.Paramet
 	}, nil
 }
 
-func (scl *GeppettoCommandLoader) LoadCommands(
+func (scl *PinocchioCommandLoader) LoadCommands(
 	f fs.FS, entryName string,
 	options []cmds.CommandDescriptionOption,
 	aliasOptions []alias.Option,
@@ -176,7 +175,7 @@ func (scl *GeppettoCommandLoader) LoadCommands(
 	}(r)
 	return loaders.LoadCommandOrAliasFromReader(
 		r,
-		scl.loadGeppettoCommandFromReader,
+		scl.loadPinocchioCommandFromReader,
 		options,
 		aliasOptions)
 }

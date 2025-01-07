@@ -28,7 +28,7 @@ func NewCodegenCommand() *cobra.Command {
 			}
 
 			for _, fileName := range args {
-				loader := &cmds.GeppettoCommandLoader{}
+				loader := &cmds.PinocchioCommandLoader{}
 
 				fs_, fileName, err := loaders.FileNameToFsFilePath(fileName)
 				if err != nil {
@@ -42,7 +42,7 @@ func NewCodegenCommand() *cobra.Command {
 				if len(cmds_) != 1 {
 					return errors.Errorf("expected exactly one command, got %d", len(cmds_))
 				}
-				cmd := cmds_[0].(*cmds.GeppettoCommand)
+				cmd := cmds_[0].(*cmds.PinocchioCommand)
 
 				f, err := s.GenerateCommandCode(cmd)
 				if err != nil {

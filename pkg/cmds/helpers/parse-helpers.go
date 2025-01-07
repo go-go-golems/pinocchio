@@ -40,7 +40,9 @@ func WithUseViper(useViper bool) GeppettoLayersHelperOption {
 	}
 }
 
-func ParseGeppettoLayers(c *cmds.GeppettoCommand, options ...GeppettoLayersHelperOption) (*layers.ParsedLayers, error) {
+// ParseGeppettoLayers parses the Geppetto layers from the command and returns them, this is a way to parse
+// profiles and config file without using the GetGeppettoMiddlewares function which also parses from cobra.
+func ParseGeppettoLayers(c *cmds.PinocchioCommand, options ...GeppettoLayersHelperOption) (*layers.ParsedLayers, error) {
 	xdgConfigPath, err := os.UserConfigDir()
 	if err != nil {
 		return nil, err
@@ -78,6 +80,7 @@ func ParseGeppettoLayers(c *cmds.GeppettoCommand, options ...GeppettoLayersHelpe
 					settings.AiClientSlug,
 					openai.OpenAiChatSlug,
 					claude.ClaudeChatSlug,
+					settings.EmbeddingsSlug,
 					cmdlayers.GeppettoHelpersSlug,
 				},
 				middlewares.GatherFlagsFromViper(parameters.WithParseStepSource("viper")),

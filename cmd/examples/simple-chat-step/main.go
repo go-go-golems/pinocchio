@@ -5,7 +5,10 @@ import (
 	_ "embed"
 	"fmt"
 	"io"
-	"os"
+	"strings"
+
+	"github.com/go-go-golems/geppetto/pkg/conversation/builder"
+	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 
 	clay "github.com/go-go-golems/clay/pkg"
 	"github.com/go-go-golems/geppetto/pkg/conversation"
@@ -16,6 +19,7 @@ import (
 	pinocchio_cmds "github.com/go-go-golems/pinocchio/pkg/cmds"
 	"github.com/go-go-golems/pinocchio/pkg/cmds/cmdlayers"
 	"github.com/go-go-golems/pinocchio/pkg/cmds/helpers"
+	"github.com/go-go-golems/pinocchio/pkg/cmds/run"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
@@ -31,7 +35,7 @@ var rootCmd = &cobra.Command{
 
 type TestCommand struct {
 	*cmds.CommandDescription
-	pinocchioCmd *pinocchio_cmds.GeppettoCommand
+	pinocchioCmd *pinocchio_cmds.PinocchioCommand
 }
 
 type TestCommandSettings struct {
@@ -39,7 +43,9 @@ type TestCommandSettings struct {
 	Debug            bool   `glazed.parameter:"debug"`
 }
 
-func NewTestCommand(cmd *pinocchio_cmds.GeppettoCommand) *TestCommand {
+// NewTestCommand wraps the GepettoCommand which was loaded from the yaml file,
+// and manually loads the profile to configure it.
+func NewTestCommand(cmd *pinocchio_cmds.PinocchioCommand) *TestCommand {
 	return &TestCommand{
 		CommandDescription: cmds.NewCommandDescription("test2",
 			cmds.WithShort("Test prompt"),
@@ -82,15 +88,55 @@ func (c *TestCommand) RunIntoWriter(ctx context.Context, parsedLayers *layers.Pa
 		return nil
 	}
 
-	cmdCtx, _, err := c.pinocchioCmd.CreateCommandContextFromParsedLayers(geppettoParsedLayers)
+	// Get helpers settings from parsed layers
+	helpersSettings := &cmdlayers.HelpersSettings{}
+	err = geppettoParsedLayers.InitializeStruct(cmdlayers.GeppettoHelpersSlug, helpersSettings)
+	if err != nil {
+		return errors.Wrap(err, "failed to initialize helpers settings")
+	}
+
+	// Update step settings from parsed layers
+	stepSettings, err := settings.NewStepSettings()
+	if err != nil {
+		return errors.Wrap(err, "failed to create step settings")
+	}
+	err = stepSettings.UpdateFromParsedLayers(geppettoParsedLayers)
+	if err != nil {
+		return errors.Wrap(err, "failed to update step settings from parsed layers")
+	}
+
+	// Create image paths from helper settings
+	imagePaths := make([]string, len(helpersSettings.Images))
+	for i, img := range helpersSettings.Images {
+		imagePaths[i] = img.Path
+	}
+
+	// Create the conversation manager
+	manager, err := c.pinocchioCmd.CreateConversationManager(
+		geppettoParsedLayers.GetDefaultParameterLayer().Parameters.ToMap(),
+		builder.WithImages(imagePaths),
+		builder.WithAutosaveSettings(builder.AutosaveSettings{
+			Enabled:  strings.ToLower(helpersSettings.Autosave.Enabled) == "yes",
+			Template: helpersSettings.Autosave.Template,
+			Path:     helpersSettings.Autosave.Path,
+		}),
+	)
 	if err != nil {
 		return err
 	}
 
-	printer := cmdCtx.SetupPrinter(os.Stdout)
-	cmdCtx.Router.AddHandler("chat", "chat", printer)
-
-	messages, err := cmdCtx.RunStepBlocking(ctx)
+	// Run with options
+	messages, err := c.pinocchioCmd.RunWithOptions(ctx,
+		run.WithConversationManager(manager),
+		run.WithStepSettings(stepSettings),
+		run.WithWriter(w),
+		run.WithRunMode(run.RunModeBlocking),
+		run.WithUISettings(&run.UISettings{
+			Output:       helpersSettings.Output,
+			WithMetadata: helpersSettings.WithMetadata,
+			FullOutput:   helpersSettings.FullOutput,
+		}),
+	)
 	if err != nil {
 		return err
 	}
@@ -119,13 +165,15 @@ func main() {
 	cobra.CheckErr(err)
 
 	// Register the command as a normal cobra command and let it parse its step settings by itself
-	cli.AddCommandsToRootCommand(rootCmd, commands, nil,
+	cli.AddCommandsToRootCommand(
+		rootCmd, commands, nil,
 		cli.WithCobraMiddlewaresFunc(pinocchio_cmds.GetCobraCommandGeppettoMiddlewares),
 		cli.WithCobraShortHelpLayers(layers.DefaultSlug, cmdlayers.GeppettoHelpersSlug),
 	)
 
-	if len(rootCmd.Commands()) == 1 {
-		cmd := commands[0].(*pinocchio_cmds.GeppettoCommand)
+	// Add the test command as wrapped by NewTestCommand
+	if len(commands) == 1 {
+		cmd := commands[0].(*pinocchio_cmds.PinocchioCommand)
 		testCmd := NewTestCommand(cmd)
 		command, err := cli.BuildCobraCommandFromWriterCommand(testCmd)
 		cobra.CheckErr(err)
