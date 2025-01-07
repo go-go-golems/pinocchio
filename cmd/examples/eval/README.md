@@ -31,10 +31,10 @@ dataset + template -> llm calls -> compute accuracy -> eval results
 ### Running the actual LLM inference
 
 - [x] run it
-  - load the API key, etc...
-  - create the chat step
-  - get the step result
-  - store the metadata in the result json
+  - [x] load the API key, etc...
+  - [x] create the chat step
+  - [x] get the step result
+  - [ ] store the metadata in the result json
 
 ### Postprocessing the LLM response
 
@@ -58,10 +58,16 @@ go run ./cmd/eval --dataset eval.json --command complaint.yaml --scoring score.j
 - REST API
 
 - web ui (braintrust inspired)
+  - [ ] make it cancellable when pressing Ctrl-C
+  - [ ] show full conversation when expanding
+  - [ ] rerun a single conversation and get streaming completion
   - import/export datasets
   - import/export/manage prompts
   - log + monitoring of testruns
   - streaming display of running datasets
+
+  - [ ] edit prompt and save new revisions
+  - [ ] switch between different versions and compare results and metrics and accuracy
 
 # features
 
