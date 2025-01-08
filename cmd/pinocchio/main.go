@@ -13,9 +13,7 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/doc"
 	"github.com/go-go-golems/glazed/pkg/cli"
 	glazed_cmds "github.com/go-go-golems/glazed/pkg/cmds"
-	"github.com/go-go-golems/glazed/pkg/cmds/alias"
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
-	"github.com/go-go-golems/glazed/pkg/cmds/loaders"
 	"github.com/go-go-golems/glazed/pkg/help"
 	pinocchio_cmds "github.com/go-go-golems/pinocchio/cmd/pinocchio/cmds"
 	"github.com/go-go-golems/pinocchio/cmd/pinocchio/cmds/catter"
@@ -28,6 +26,7 @@ import (
 	"github.com/go-go-golems/pinocchio/cmd/pinocchio/cmds/tokens"
 	pinocchio_docs "github.com/go-go-golems/pinocchio/cmd/pinocchio/doc"
 	"github.com/go-go-golems/pinocchio/pkg/cmds"
+	pinocchio_cmds2 "github.com/go-go-golems/pinocchio/pkg/cmds"
 	"github.com/go-go-golems/pinocchio/pkg/cmds/cmdlayers"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
@@ -53,15 +52,12 @@ func main() {
 	// because we need to load the file and then run the command itself.
 	// we need to do this before cobra, because we don't know which flags to load yet
 	if len(os.Args) >= 3 && os.Args[1] == "run-command" && os.Args[2] != "--help" {
-		// load the command
-		loader := &cmds.PinocchioCommandLoader{}
-
-		fs_, filePath, err := loaders.FileNameToFsFilePath(os.Args[2])
+		bytes, err := os.ReadFile(os.Args[2])
 		if err != nil {
-			fmt.Printf("Could not get absolute path: %v\n", err)
+			fmt.Printf("Could not read file: %v\n", err)
 			os.Exit(1)
 		}
-		cmds_, err := loaders.LoadCommandsFromFS(fs_, filePath, os.Args[2], loader, []glazed_cmds.CommandDescriptionOption{}, []alias.Option{})
+		cmds_, err := pinocchio_cmds2.LoadFromYAML(bytes)
 		if err != nil {
 			fmt.Printf("Could not load command: %v\n", err)
 			os.Exit(1)
