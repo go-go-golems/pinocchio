@@ -218,8 +218,9 @@ func (g *PinocchioCommand) RunIntoWriter(
 
 	// If we're just printing the prompt, do that and return
 	if helpersSettings.PrintPrompt {
-		if len(messages) > 0 {
-			_, _ = fmt.Fprintf(w, "%s\n", strings.TrimSpace(messages[len(messages)-1].Content.View()))
+		for _, message := range messages {
+			_, _ = fmt.Fprintf(w, "%s\n", strings.TrimSpace(message.Content.View()))
+			_, _ = fmt.Fprintln(w)
 		}
 	}
 
@@ -241,6 +242,10 @@ func (g *PinocchioCommand) RunWithOptions(ctx context.Context, options ...run.Ru
 	// Verify we have a manager
 	if runCtx.ConversationManager == nil {
 		return nil, errors.New("no conversation manager provided")
+	}
+
+	if runCtx.UISettings != nil && runCtx.UISettings.PrintPrompt {
+		return runCtx.ConversationManager.GetConversation(), nil
 	}
 
 	// Create step factory if not provided
@@ -299,7 +304,9 @@ func (g *PinocchioCommand) runBlocking(ctx context.Context, rc *run.RunContext) 
 
 		eg.Go(func() error {
 			defer cancel()
-			defer rc.Router.Close()
+			defer func(Router *events.EventRouter) {
+				_ = Router.Close()
+			}(rc.Router)
 			return rc.Router.Run(ctx)
 		})
 
@@ -370,7 +377,9 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) ([]*
 
 	eg.Go(func() error {
 		defer cancel()
-		defer rc.Router.Close()
+		defer func(Router *events.EventRouter) {
+			_ = Router.Close()
+		}(rc.Router)
 		return rc.Router.Run(ctx)
 	})
 
