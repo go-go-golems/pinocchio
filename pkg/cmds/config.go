@@ -2,6 +2,8 @@ package cmds
 
 import (
 	"fmt"
+	"os"
+
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings/claude"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings/openai"
@@ -9,7 +11,6 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
 	"github.com/go-go-golems/glazed/pkg/cmds/middlewares"
 	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
-	"os"
 )
 
 // LoadConfigFromSettings loads the geppetto step settings from the given profile and config file.
@@ -61,7 +62,7 @@ func LoadConfigFromSettings(settings_ cli.GlazedCommandSettings) (*settings.Step
 		return nil, err
 	}
 
-	geppettoLayers, err := CreateGeppettoLayers(stepSettings)
+	geppettoLayers, err := CreateGeppettoLayers(stepSettings, WithHelpersLayer())
 	if err != nil {
 		return nil, err
 	}

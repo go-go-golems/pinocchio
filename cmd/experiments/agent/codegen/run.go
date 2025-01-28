@@ -50,7 +50,7 @@ func createSettingsFromCobra(cmd *cobra.Command) (*settings.StepSettings, error)
 	if err != nil {
 		return nil, err
 	}
-	geppettoLayers, err := cmds.CreateGeppettoLayers(stepSettings)
+	geppettoLayers, err := cmds.CreateGeppettoLayers(stepSettings, cmds.WithHelpersLayer())
 	if err != nil {
 		return nil, err
 	}
