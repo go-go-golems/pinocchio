@@ -27,7 +27,7 @@ var upperCaseCmd = &cobra.Command{
 
 		stepSettings, err := settings.NewStepSettings()
 		cobra.CheckErr(err)
-		geppettoLayers, err := cmds.CreateGeppettoLayers(stepSettings)
+		geppettoLayers, err := cmds.CreateGeppettoLayers(stepSettings, cmds.WithHelpersLayer())
 		cobra.CheckErr(err)
 		layers_ := layers.NewParameterLayers(layers.WithLayers(geppettoLayers...))
 

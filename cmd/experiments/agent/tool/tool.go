@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+
 	"github.com/go-go-golems/geppetto/pkg/conversation"
 	helpers2 "github.com/go-go-golems/geppetto/pkg/helpers"
 	"github.com/go-go-golems/geppetto/pkg/steps"
@@ -62,7 +63,7 @@ var ToolCallCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		stepSettings, err := settings.NewStepSettings()
 		cobra.CheckErr(err)
-		geppettoLayers, err := cmds.CreateGeppettoLayers(stepSettings)
+		geppettoLayers, err := cmds.CreateGeppettoLayers(stepSettings, cmds.WithHelpersLayer())
 		cobra.CheckErr(err)
 		layers_ := layers.NewParameterLayers(layers.WithLayers(geppettoLayers...))
 
