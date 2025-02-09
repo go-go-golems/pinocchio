@@ -92,7 +92,19 @@
             }
         },
         {
-            "name": "Pinocchio Test output yaml",
+            "name": "Pinocchio Test output normal (cached)",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}/cmd/pinocchio",
+            "args": ["examples", "test", "--non-interactive", "--with-metadata", "--ai-cache-type", "disk"],
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "PINOCCHIO_PROFILE": "haiku"
+            }
+        },
+        {
+            "name": "Pinocchio Test output yaml (cached)",
             "type": "go",
             "request": "launch",
             "mode": "auto",
