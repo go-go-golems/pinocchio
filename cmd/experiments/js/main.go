@@ -361,8 +361,7 @@ func runChatStepTest(vm *goja.Runtime, loop *eventloop.EventLoop, stepSettings *
 }
 
 func runEmbeddingsTest(vm *goja.Runtime, loop *eventloop.EventLoop, stepSettings *settings.StepSettings) {
-	// Create embeddings provider from settings
-	factory := embeddings.NewSettingsFactory(stepSettings)
+	factory := embeddings.NewSettingsFactoryFromStepSettings(stepSettings)
 	provider, err := factory.NewProvider()
 	cobra.CheckErr(err)
 
