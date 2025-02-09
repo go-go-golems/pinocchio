@@ -128,53 +128,92 @@ flags:
         {{ end }}
 
 system-prompt: |
-  You are an experienced technology professional and technical leader in software.
-  You generate clean YAML and go templates, using the syntax of golang templates.
-  You are good at reasoning and prompting large language models.
+  You are an expert prompt engineer tasked with creating a YAML template for
+  generating LLM prompts. Your goal is to analyze the given input and create a
+  standardized, well-structured YAML template that can be used to generate
+  effective prompts for various tasks.
+  
   {{ .additional_system | join "\n" }}
 prompt: |
-  I want to generate command templates for prompting large language models, stored in YAML and with the `prompt` and `system-prompt` 
-  field using go template syntax. The system-prompt is used to describe the role the LLM should take, as well as give
-  important but general guidelines to how it should behave and the kind of output it should generate.
-  
-  The commands expose command line parameters that the user can use to populate the prompt.
-  
-  The `flags` stored in the YAML can be of different types: {{ .types | join ", " }}. These are then passed to the go 
-  template.
-  
-  `FileData` is a structure that provides detailed information about a file.
-  This is useful when your command needs to work with files.
-  A file has the following attribute that can be used in a template.
-  
-    Content: File's string content.
-    ParsedContent: Parsed version of the file's content (for json and yaml files).
-    ParseError: Any error that occurred during parsing.
-    RawContent: File content in byte format.
-    StringContent: File content as a string.
-    IsList: Indicates if the content represents a list.
-    IsObject: Signifies if the content denotes an object.
-    BaseName: File's base name.
-    Extension: File's extension.
-    FileType: File's type.
-    Path: File's path.
-  
-  The `flags are marked XXX or in template format
-  already, using golang template curly brace syntax.
-  
-  Try to minimally modify the original prompt. Do not try to add additional flags besides the marked ones.
-  
-  --- BEGIN PROMPT
-  {{ .prompt }}
-  --- END PROMPT
-  
-  {{ if .context}}Additional Context:
-  {{ range .context }}
-  Path: {{ .Path }}
-  ---
-  {{ .Content }}
-  ---
-  {{- end }}
-  {{ end }}
-  
 
+  Here is the input text you need to analyze and transform into a YAML template:
 
+  <input_text>
+  {{.prompt}}
+  </input_text>
+
+  Before creating the final YAML template, please analyze the input text and show your reasoning process in <prompt_analysis> tags. In your analysis:
+  1. List out the key components of the input text
+  2. Identify which parts of the input can be extracted into a template
+  3. Suggest how to rewrite or use the input as guidelines for an effective LLM prompt
+  4. Brainstorm potential flags based on the input
+  5. Outline the structure of the system prompt and main prompt template
+  6. Provide reasoning on how to structure the YAML template based on the input
+
+  After your analysis, create the YAML template according to the following structure:
+
+  ```yaml
+  name: 
+  short: 
+  long: 
+  flags:
+    - name: 
+      type: 
+      help: 
+      required: 
+      default: 
+  system-prompt: |
+
+  prompt: |
+
+  ```
+
+  Guidelines for creating the YAML template:
+  1. name: Provide a short, descriptive name using lowercase letters and underscores for spaces.
+  2. short: Write a brief, one-sentence description of the prompt template's purpose.
+  3. long: Write a paragraph-long description of what the prompt is about and its intended use.
+  4. flags: List parameters that can customize the prompt. For each flag, include:
+    - name: Lowercase with underscores for spaces
+    - type: Data type (e.g., {{ .types | join ", " }})
+    - help: Short description of the flag's purpose
+    - required: Include and set to true if mandatory
+    - default: Include a default value if applicable
+  5. system-prompt: Write the context-setting system prompt, using {{ .additional_system }} for dynamic content.
+  6. prompt: Write the main prompt template, using Go template syntax for control structures and variable interpolation.
+
+  Formatting and style:
+  - Use 2-space indentation for nested elements
+  - Use lowercase for all flag names and types
+  - Use clear and concise language in descriptions and help text
+  - Include comments where necessary to explain complex logic or usage
+
+  Always add the following flags:
+
+  ```
+    - name: additional-system
+      type: stringList
+      help: Additional system prompt
+    - name: additional
+      type: stringList
+      help: Additional prompt
+    - name: context
+      type: fileList
+      help: Additional context
+  ```
+
+  which are used in the system prompt and in the body: 
+
+  ```
+    {{ "{{" }}- .additional | join "\n" }}
+  
+    {{ "{{" }} if .context}}Additional Context:
+    {{ "{{" }} range .context }}
+    Path: {{ "{{" }} .Path }}
+    ---
+    {{ "{{" }} .Content }}
+    ---
+    {{- "{{" }} end }}
+    {{ "{{" }} end }}
+  ```
+
+  Ensure that your final YAML template is properly formatted, indented, and addresses all sections according to the instructions above. Present your final YAML template enclosed in <yaml_template> tags.
