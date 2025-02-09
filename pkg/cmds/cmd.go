@@ -398,7 +398,7 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) ([]*
 			}
 
 			// Add default printer for initial step
-			if rc.UISettings == nil || rc.UISettings.Output == "" {
+			if rc.UISettings == nil || rc.UISettings.Output == "" || rc.UISettings.Output == "text" {
 				rc.Router.AddHandler("chat", "chat", chat.StepPrinterFunc("", rc.Writer))
 			} else {
 				printer := chat.NewStructuredPrinter(rc.Writer, chat.PrinterOptions{
