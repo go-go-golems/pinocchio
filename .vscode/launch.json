@@ -97,7 +97,7 @@
             "request": "launch",
             "mode": "auto",
             "program": "${workspaceFolder}/cmd/pinocchio",
-            "args": ["examples", "test", "--output", "yaml", "--non-interactive", "--with-metadata"],
+            "args": ["examples", "test", "--output", "yaml", "--non-interactive", "--with-metadata", "--ai-cache-type", "disk"],
             "cwd": "${workspaceFolder}",
             "env": {
                 "PINOCCHIO_PROFILE": "haiku"
