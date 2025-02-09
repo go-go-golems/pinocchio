@@ -138,6 +138,30 @@
             "env": {
                 "PINOCCHIO_PROFILE": "haiku"
             }
+        },
+        {
+            "name": "Transcribe Audio",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}/cmd/pinocchio",
+            "args": ["openai", "transcribe", "--file", "/home/manuel/Downloads/60832_231623.mpga", "--language", "vi"],
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "PINOCCHIO_PROFILE": "haiku"
+            }
+        },
+        {
+            "name": "Transcribe Audio with Timestamps",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}/cmd/pinocchio",
+            "args": ["openai", "transcribe", "--file", "/home/manuel/Downloads/60832_231623.mpga", "--language", "vi", "--timestamps", "word"],
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "PINOCCHIO_PROFILE": "haiku"
+            }
         }
     ]
 }
