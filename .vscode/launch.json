@@ -29,6 +29,18 @@
             }
         },
         {
+            "name": "Pinocchio Test non-interactive",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}/cmd/pinocchio",
+            "args": ["code", "professional", "--non-interactive", "--with-metadata", "foo"],
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "PINOCCHIO_PROFILE": "4o-mini"
+            }
+        },
+        {
             "name": "Pinocchio Test output yaml o4-mini",
             "type": "go",
             "request": "launch",
