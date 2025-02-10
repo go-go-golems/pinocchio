@@ -32,6 +32,8 @@ import (
 	"github.com/spf13/viper"
 )
 
+var version = "dev"
+
 //go:embed prompts/*
 var promptsFS embed.FS
 
@@ -44,6 +46,7 @@ var rootCmd = &cobra.Command{
 		err := clay.InitLogger()
 		cobra.CheckErr(err)
 	},
+	Version: version,
 }
 
 func main() {
