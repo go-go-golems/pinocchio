@@ -82,7 +82,7 @@ func (c *ProfilesCommand) newListCommand() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().BoolVarP(&concise, "concise", "c", false, "Only show profile names")
+	cmd.Flags().BoolVarP(&concise, "concise", "c", true, "Only show profile names")
 	return cmd
 }
 
