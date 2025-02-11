@@ -96,7 +96,7 @@ func (c *ConfigCommand) newListCommand() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().BoolVarP(&concise, "concise", "c", false, "Only show keys")
+	cmd.Flags().BoolVarP(&concise, "concise", "c", true, "Only show keys")
 	return cmd
 }
 
