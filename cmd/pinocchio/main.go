@@ -216,6 +216,14 @@ func initAllCommands(helpSystem *help.HelpSystem) error {
 	}
 	rootCmd.AddCommand(command)
 
+	// Add profiles command
+	profilesCmd, err := pinocchio_cmds.NewProfilesCommand()
+	if err != nil {
+		fmt.Printf("Error initializing profiles command: %v\n", err)
+		os.Exit(1)
+	}
+	rootCmd.AddCommand(profilesCmd)
+
 	catter.AddToRootCommand(rootCmd)
 
 	promptoCommand, err := prompto.InitPromptoCmd(helpSystem)
@@ -247,4 +255,7 @@ func initAllCommands(helpSystem *help.HelpSystem) error {
 	}
 
 	return nil
+}
+
+func init() {
 }
