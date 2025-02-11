@@ -6,29 +6,16 @@ import (
 	"os/exec"
 
 	"github.com/go-go-golems/pinocchio/pkg/profiles"
+	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 )
 
 type ProfilesCommand struct {
 	*cobra.Command
-
-	editor *profiles.ProfilesEditor
 }
 
-func NewProfilesCommand() (*ProfilesCommand, error) {
-	profilesPath, err := profiles.GetDefaultProfilesPath()
-	if err != nil {
-		return nil, err
-	}
-
-	editor, err := profiles.NewProfilesEditor(profilesPath)
-	if err != nil {
-		return nil, err
-	}
-
-	cmd := &ProfilesCommand{
-		editor: editor,
-	}
+func NewProfilesCommand() (*cobra.Command, error) {
+	cmd := &ProfilesCommand{}
 
 	cobraCmd := &cobra.Command{
 		Use:   "profiles",
@@ -41,9 +28,26 @@ func NewProfilesCommand() (*ProfilesCommand, error) {
 	cobraCmd.AddCommand(cmd.newDeleteCommand())
 	cobraCmd.AddCommand(cmd.newEditCommand())
 	cobraCmd.AddCommand(cmd.newInitCommand())
+	cobraCmd.AddCommand(cmd.newDuplicateCommand())
 
 	cmd.Command = cobraCmd
-	return cmd, nil
+	return cobraCmd, nil
+}
+
+// getEditor returns a new ProfilesEditor instance for the current profiles file
+func (c *ProfilesCommand) getEditor() (*profiles.ProfilesEditor, error) {
+	profilesPath, err := profiles.GetDefaultProfilesPath()
+	if err != nil {
+		return nil, fmt.Errorf("could not get profiles path: %w", err)
+	}
+
+	log.Debug().Str("profiles_path", profilesPath).Msg("using profiles file")
+	editor, err := profiles.NewProfilesEditor(profilesPath)
+	if err != nil {
+		return nil, fmt.Errorf("could not create profiles editor: %w", err)
+	}
+
+	return editor, nil
 }
 
 func (c *ProfilesCommand) newListCommand() *cobra.Command {
@@ -52,7 +56,12 @@ func (c *ProfilesCommand) newListCommand() *cobra.Command {
 		Use:   "list",
 		Short: "List all profiles",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			profiles, contents, err := c.editor.ListProfiles()
+			editor, err := c.getEditor()
+			if err != nil {
+				return err
+			}
+
+			profiles, contents, err := editor.ListProfiles()
 			if err != nil {
 				return err
 			}
@@ -82,7 +91,7 @@ func (c *ProfilesCommand) newListCommand() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().BoolVarP(&concise, "concise", "c", true, "Only show profile names")
+	cmd.Flags().BoolVarP(&concise, "concise", "c", false, "Only show profile names")
 	return cmd
 }
 
@@ -92,11 +101,16 @@ func (c *ProfilesCommand) newGetCommand() *cobra.Command {
 		Short: "Get profile settings",
 		Args:  cobra.RangeArgs(1, 3),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			editor, err := c.getEditor()
+			if err != nil {
+				return err
+			}
+
 			profile := args[0]
 
 			if len(args) == 1 {
 				// Show all layers
-				layers, err := c.editor.GetProfileLayers(profile)
+				layers, err := editor.GetProfileLayers(profile)
 				if err != nil {
 					return err
 				}
@@ -114,7 +128,7 @@ func (c *ProfilesCommand) newGetCommand() *cobra.Command {
 			layer := args[1]
 			if len(args) == 2 {
 				// Show all settings for layer
-				layers, err := c.editor.GetProfileLayers(profile)
+				layers, err := editor.GetProfileLayers(profile)
 				if err != nil {
 					return err
 				}
@@ -132,7 +146,7 @@ func (c *ProfilesCommand) newGetCommand() *cobra.Command {
 
 			// Get specific value
 			key := args[2]
-			value, err := c.editor.GetLayerValue(profile, layer, key)
+			value, err := editor.GetLayerValue(profile, layer, key)
 			if err != nil {
 				return err
 			}
@@ -149,16 +163,21 @@ func (c *ProfilesCommand) newSetCommand() *cobra.Command {
 		Short: "Set a profile setting",
 		Args:  cobra.ExactArgs(4),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			editor, err := c.getEditor()
+			if err != nil {
+				return err
+			}
+
 			profile := args[0]
 			layer := args[1]
 			key := args[2]
 			value := args[3]
 
-			if err := c.editor.SetLayerValue(profile, layer, key, value); err != nil {
+			if err := editor.SetLayerValue(profile, layer, key, value); err != nil {
 				return err
 			}
 
-			return c.editor.Save()
+			return editor.Save()
 		},
 	}
 }
@@ -169,25 +188,30 @@ func (c *ProfilesCommand) newDeleteCommand() *cobra.Command {
 		Short: "Delete a profile, layer, or setting",
 		Args:  cobra.RangeArgs(1, 3),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			editor, err := c.getEditor()
+			if err != nil {
+				return err
+			}
+
 			profile := args[0]
 
 			if len(args) == 1 {
 				// Delete entire profile
-				if err := c.editor.DeleteProfile(profile); err != nil {
+				if err := editor.DeleteProfile(profile); err != nil {
 					return err
 				}
 			} else if len(args) == 3 {
 				// Delete specific setting
 				layer := args[1]
 				key := args[2]
-				if err := c.editor.DeleteLayerValue(profile, layer, key); err != nil {
+				if err := editor.DeleteLayerValue(profile, layer, key); err != nil {
 					return err
 				}
 			} else {
 				return fmt.Errorf("must specify either profile or profile, layer, and key")
 			}
 
-			return c.editor.Save()
+			return editor.Save()
 		},
 	}
 }
@@ -278,6 +302,34 @@ func (c *ProfilesCommand) newInitCommand() *cobra.Command {
 			}
 
 			fmt.Printf("Created new profiles file at %s\n", profilesPath)
+			return nil
+		},
+	}
+}
+
+func (c *ProfilesCommand) newDuplicateCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:   "duplicate <source-profile> <new-profile>",
+		Short: "Duplicate an existing profile with a new name",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			editor, err := c.getEditor()
+			if err != nil {
+				return err
+			}
+
+			sourceProfile := args[0]
+			newProfile := args[1]
+
+			if err := editor.DuplicateProfile(sourceProfile, newProfile); err != nil {
+				return err
+			}
+
+			if err := editor.Save(); err != nil {
+				return err
+			}
+
+			fmt.Printf("Duplicated profile %s to %s\n", sourceProfile, newProfile)
 			return nil
 		},
 	}

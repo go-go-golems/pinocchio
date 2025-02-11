@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 
 	yaml_editor "github.com/go-go-golems/clay/pkg/yaml-editor"
-	"github.com/rs/zerolog/log"
 	orderedmap "github.com/wk8/go-ordered-map/v2"
 	"gopkg.in/yaml.v3"
 )
@@ -26,7 +25,6 @@ type ProfilesEditor struct {
 }
 
 func NewProfilesEditor(path string) (*ProfilesEditor, error) {
-	log.Debug().Msgf("Creating profiles editor for path: %s", path)
 	editor, err := yaml_editor.NewYAMLEditorFromFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("could not create editor: %w", err)
@@ -144,4 +142,74 @@ func GetDefaultProfilesPath() (string, error) {
 	}
 
 	return filepath.Join(configDir, "pinocchio", "profiles.yaml"), nil
+}
+
+func (p *ProfilesEditor) DuplicateProfile(sourceProfile, newProfile string) error {
+	// Get the source profile node
+	sourceNode, err := p.editor.GetNode(sourceProfile)
+	if err != nil {
+		return fmt.Errorf("could not get source profile: %w", err)
+	}
+
+	// Check if target profile already exists
+	if _, err := p.editor.GetNode(newProfile); err == nil {
+		return fmt.Errorf("profile %s already exists", newProfile)
+	}
+
+	// Create a deep copy of the source node
+	newNode := &yaml.Node{
+		Kind:        sourceNode.Kind,
+		Style:       sourceNode.Style,
+		Tag:         sourceNode.Tag,
+		Value:       sourceNode.Value,
+		Anchor:      sourceNode.Anchor,
+		Alias:       sourceNode.Alias,
+		Content:     make([]*yaml.Node, len(sourceNode.Content)),
+		HeadComment: sourceNode.HeadComment,
+		LineComment: sourceNode.LineComment,
+		FootComment: sourceNode.FootComment,
+		Line:        sourceNode.Line,
+		Column:      sourceNode.Column,
+	}
+
+	// Deep copy the content
+	for i, child := range sourceNode.Content {
+		newNode.Content[i] = &yaml.Node{
+			Kind:        child.Kind,
+			Style:       child.Style,
+			Tag:         child.Tag,
+			Value:       child.Value,
+			Anchor:      child.Anchor,
+			Alias:       child.Alias,
+			Content:     make([]*yaml.Node, len(child.Content)),
+			HeadComment: child.HeadComment,
+			LineComment: child.LineComment,
+			FootComment: child.FootComment,
+			Line:        child.Line,
+			Column:      child.Column,
+		}
+		for j, grandchild := range child.Content {
+			newNode.Content[i].Content[j] = &yaml.Node{
+				Kind:        grandchild.Kind,
+				Style:       grandchild.Style,
+				Tag:         grandchild.Tag,
+				Value:       grandchild.Value,
+				Anchor:      grandchild.Anchor,
+				Alias:       grandchild.Alias,
+				Content:     grandchild.Content,
+				HeadComment: grandchild.HeadComment,
+				LineComment: grandchild.LineComment,
+				FootComment: grandchild.FootComment,
+				Line:        grandchild.Line,
+				Column:      grandchild.Column,
+			}
+		}
+	}
+
+	// Set the new profile
+	if err := p.editor.SetNode(newNode, newProfile); err != nil {
+		return fmt.Errorf("could not set new profile: %w", err)
+	}
+
+	return nil
 }
