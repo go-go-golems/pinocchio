@@ -32,3 +32,20 @@ Fixed script handling in web view template:
 - Fixed hx-target attribute to use proper Go string concatenation
 - Added proper templ script handling for onclick events
 - Improved type safety in JavaScript event handling 
+
+# Profile Management Commands
+
+Added a new `profiles` command group to manage pinocchio profiles:
+- `list`: List all available profiles
+- `get`: Get profile settings (entire profile, layer, or specific key)
+- `set`: Set a profile setting
+- `delete`: Delete a profile or specific setting
+- `edit`: Edit the profiles file in your default editor
+- `init`: Initialize a new profiles file with documentation and examples
+
+The profiles command allows managing the profiles.yaml configuration file which contains layer-specific settings for different profiles.
+The init command creates a new profiles file with helpful documentation and examples of the file format.
+
+# Previous Changes
+
+// ... existing code ... 

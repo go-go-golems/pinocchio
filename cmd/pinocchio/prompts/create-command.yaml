@@ -216,4 +216,5 @@ prompt: |
     {{ "{{" }} end }}
   ```
 
-  Ensure that your final YAML template is properly formatted, indented, and addresses all sections according to the instructions above. Present your final YAML template enclosed in <yaml_template> tags.
+  Ensure that your final YAML template is properly formatted, indented, and addresses all sections according to the instructions above.
+   Present your final YAML template enclosed in <yaml_template> tags.
