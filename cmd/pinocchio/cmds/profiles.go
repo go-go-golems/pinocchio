@@ -47,21 +47,43 @@ func NewProfilesCommand() (*ProfilesCommand, error) {
 }
 
 func (c *ProfilesCommand) newListCommand() *cobra.Command {
-	return &cobra.Command{
+	var concise bool
+	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List all profiles",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			profiles, err := c.editor.ListProfiles()
+			profiles, contents, err := c.editor.ListProfiles()
 			if err != nil {
 				return err
 			}
 
+			if concise {
+				for _, profile := range profiles {
+					fmt.Println(profile)
+				}
+				return nil
+			}
+
+			// Show full profile contents
 			for _, profile := range profiles {
-				fmt.Println(profile)
+				fmt.Printf("%s:\n", profile)
+				layers := contents[profile]
+				// Sort layers for consistent output
+				for layerName, settings := range layers {
+					fmt.Printf("  %s:\n", layerName)
+					// Sort settings for consistent output
+					for key, value := range settings {
+						fmt.Printf("    %s: %s\n", key, value)
+					}
+				}
+				fmt.Println()
 			}
 			return nil
 		},
 	}
+
+	cmd.Flags().BoolVarP(&concise, "concise", "c", false, "Only show profile names")
+	return cmd
 }
 
 func (c *ProfilesCommand) newGetCommand() *cobra.Command {
@@ -79,10 +101,11 @@ func (c *ProfilesCommand) newGetCommand() *cobra.Command {
 					return err
 				}
 
-				for layer, settings := range layers {
-					fmt.Printf("%s:\n", layer)
-					for key, value := range settings {
-						fmt.Printf("  %s: %s\n", key, value)
+				for pair := layers.Oldest(); pair != nil; pair = pair.Next() {
+					fmt.Printf("%s:\n", pair.Key)
+					settings := pair.Value
+					for settingPair := settings.Oldest(); settingPair != nil; settingPair = settingPair.Next() {
+						fmt.Printf("  %s: %s\n", settingPair.Key, settingPair.Value)
 					}
 				}
 				return nil
@@ -96,13 +119,13 @@ func (c *ProfilesCommand) newGetCommand() *cobra.Command {
 					return err
 				}
 
-				settings, ok := layers[layer]
+				settings, ok := layers.Get(layer)
 				if !ok {
 					return fmt.Errorf("layer %s not found in profile %s", layer, profile)
 				}
 
-				for key, value := range settings {
-					fmt.Printf("%s: %s\n", key, value)
+				for pair := settings.Oldest(); pair != nil; pair = pair.Next() {
+					fmt.Printf("%s: %s\n", pair.Key, pair.Value)
 				}
 				return nil
 			}

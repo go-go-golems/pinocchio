@@ -6,8 +6,19 @@ import (
 	"path/filepath"
 
 	yaml_editor "github.com/go-go-golems/clay/pkg/yaml-editor"
+	"github.com/rs/zerolog/log"
+	orderedmap "github.com/wk8/go-ordered-map/v2"
 	"gopkg.in/yaml.v3"
 )
+
+type ProfileName = string
+type LayerName = string
+type SettingName = string
+type SettingValue = string
+
+type LayerSettings = *orderedmap.OrderedMap[SettingName, SettingValue]
+type ProfileLayers = *orderedmap.OrderedMap[LayerName, LayerSettings]
+type Profiles = *orderedmap.OrderedMap[ProfileName, ProfileLayers]
 
 type ProfilesEditor struct {
 	editor *yaml_editor.YAMLEditor
@@ -15,6 +26,7 @@ type ProfilesEditor struct {
 }
 
 func NewProfilesEditor(path string) (*ProfilesEditor, error) {
+	log.Debug().Msgf("Creating profiles editor for path: %s", path)
 	editor, err := yaml_editor.NewYAMLEditorFromFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("could not create editor: %w", err)
@@ -54,25 +66,46 @@ func (p *ProfilesEditor) DeleteLayerValue(profile, layer, key string) error {
 	return p.editor.SetNode(nil, profile, layer, key)
 }
 
-func (p *ProfilesEditor) ListProfiles() ([]string, error) {
+func (p *ProfilesEditor) ListProfiles() ([]ProfileName, map[ProfileName]map[LayerName]map[SettingName]SettingValue, error) {
 	root, err := p.editor.GetNode()
 	if err != nil {
-		return nil, fmt.Errorf("could not get root node: %w", err)
+		return nil, nil, fmt.Errorf("could not get root node: %w", err)
 	}
 
 	if root.Kind != yaml.MappingNode {
-		return nil, fmt.Errorf("root node is not a mapping")
+		return nil, nil, fmt.Errorf("root node is not a mapping")
 	}
 
-	profiles := make([]string, 0)
+	profiles := make([]ProfileName, 0)
+	profileContents := make(map[ProfileName]map[LayerName]map[SettingName]SettingValue)
+
 	for i := 0; i < len(root.Content); i += 2 {
-		profiles = append(profiles, root.Content[i].Value)
+		profileName := root.Content[i].Value
+		profiles = append(profiles, profileName)
+
+		// Get the full content for each profile
+		layers, err := p.GetProfileLayers(profileName)
+		if err != nil {
+			return nil, nil, fmt.Errorf("could not get layers for profile %s: %w", profileName, err)
+		}
+
+		// Convert the ordered maps to regular maps for backwards compatibility
+		profileContents[profileName] = make(map[LayerName]map[SettingName]SettingValue)
+		for pair := layers.Oldest(); pair != nil; pair = pair.Next() {
+			layerName := pair.Key
+			settings := pair.Value
+
+			profileContents[profileName][layerName] = make(map[SettingName]SettingValue)
+			for settingPair := settings.Oldest(); settingPair != nil; settingPair = settingPair.Next() {
+				profileContents[profileName][layerName][settingPair.Key] = settingPair.Value
+			}
+		}
 	}
 
-	return profiles, nil
+	return profiles, profileContents, nil
 }
 
-func (p *ProfilesEditor) GetProfileLayers(profile string) (map[string]map[string]string, error) {
+func (p *ProfilesEditor) GetProfileLayers(profile ProfileName) (ProfileLayers, error) {
 	profileNode, err := p.editor.GetNode(profile)
 	if err != nil {
 		return nil, fmt.Errorf("could not get profile: %w", err)
@@ -82,7 +115,7 @@ func (p *ProfilesEditor) GetProfileLayers(profile string) (map[string]map[string
 		return nil, fmt.Errorf("profile node is not a mapping")
 	}
 
-	layers := make(map[string]map[string]string)
+	layers := orderedmap.New[LayerName, LayerSettings]()
 	for i := 0; i < len(profileNode.Content); i += 2 {
 		layerName := profileNode.Content[i].Value
 		layerNode := profileNode.Content[i+1]
@@ -91,14 +124,14 @@ func (p *ProfilesEditor) GetProfileLayers(profile string) (map[string]map[string
 			continue
 		}
 
-		settings := make(map[string]string)
+		settings := orderedmap.New[SettingName, SettingValue]()
 		for j := 0; j < len(layerNode.Content); j += 2 {
 			key := layerNode.Content[j].Value
 			value := layerNode.Content[j+1].Value
-			settings[key] = value
+			settings.Set(key, value)
 		}
 
-		layers[layerName] = settings
+		layers.Set(layerName, settings)
 	}
 
 	return layers, nil

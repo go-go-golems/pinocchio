@@ -46,6 +46,23 @@ Added a new `profiles` command group to manage pinocchio profiles:
 The profiles command allows managing the profiles.yaml configuration file which contains layer-specific settings for different profiles.
 The init command creates a new profiles file with helpful documentation and examples of the file format.
 
+# Enhanced Profiles List Command
+
+Enhanced the profiles list command to show full profile contents by default, with a new --concise flag to only show profile names.
+
+- Added full profile content display in profiles list command
+- Added --concise/-c flag to show only profile names
+- Updated ListProfiles method to return both names and full content
+
+# Improved Profiles Editor with Ordered Maps
+
+Enhanced the profiles editor to use ordered maps and type aliases for better clarity and consistency:
+
+- Added type aliases for profile, layer, and setting names/values
+- Used ordered maps to preserve the order of layers and settings
+- Updated profiles commands to handle ordered maps
+- Improved code readability with semantic type names
+
 # Previous Changes
 
 // ... existing code ... 
