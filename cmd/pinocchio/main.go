@@ -109,9 +109,6 @@ func initRootCmd() (*help.HelpSystem, error) {
 	err = catter_doc.AddDocToHelpSystem(helpSystem)
 	cobra.CheckErr(err)
 
-	err = clay.AddDocToHelpSystem(helpSystem)
-	cobra.CheckErr(err)
-
 	err = pinocchio_docs.AddDocToHelpSystem(helpSystem)
 	cobra.CheckErr(err)
 
@@ -173,6 +170,8 @@ func initAllCommands(helpSystem *help.HelpSystem) error {
 		repositories_,
 		cli.WithCobraMiddlewaresFunc(cmds.GetCobraCommandGeppettoMiddlewares),
 		cli.WithCobraShortHelpLayers(layers.DefaultSlug, cmdlayers.GeppettoHelpersSlug),
+		cli.WithProfileSettingsLayer(),
+		cli.WithCreateCommandSettingsLayer(),
 	)
 	if err != nil {
 		return err

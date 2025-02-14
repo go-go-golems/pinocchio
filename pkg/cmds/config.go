@@ -14,7 +14,7 @@ import (
 )
 
 // LoadConfigFromSettings loads the geppetto step settings from the given profile and config file.
-func LoadConfigFromSettings(settings_ cli.GlazedCommandSettings) (*settings.StepSettings, error) {
+func LoadConfigFromSettings(settings_ cli.ProfileSettings) (*settings.StepSettings, error) {
 	middlewares_ := []middlewares.Middleware{}
 
 	xdgConfigPath, err := os.UserConfigDir()
@@ -85,10 +85,16 @@ func LoadConfigFromSettings(settings_ cli.GlazedCommandSettings) (*settings.Step
 }
 
 func LoadConfig() (*settings.StepSettings, error) {
-	settings_, err := cli.ParseGlazedCommandLayer(nil)
+	settings_, err := cli.ParseCommandSettingsLayer(nil)
 	if err != nil {
 		return nil, err
 	}
 
-	return LoadConfigFromSettings(*settings_)
+	profileSettings := &cli.ProfileSettings{}
+	err = settings_.InitializeStruct(cli.ProfileSettingsSlug, profileSettings)
+	if err != nil {
+		return nil, err
+	}
+
+	return LoadConfigFromSettings(*profileSettings)
 }
