@@ -2,6 +2,7 @@ package catter
 
 import (
 	"github.com/go-go-golems/glazed/pkg/cli"
+	"github.com/go-go-golems/glazed/pkg/cmds/layers"
 	"github.com/go-go-golems/glazed/pkg/cmds/middlewares"
 	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
 	"github.com/go-go-golems/pinocchio/cmd/pinocchio/cmds/catter/cmds"
@@ -37,7 +38,7 @@ func AddToRootCommand(rootCmd *cobra.Command) {
 }
 
 func getMiddlewares(
-	_ *cli.GlazedCommandSettings,
+	_ *layers.ParsedLayers,
 	cmd *cobra.Command,
 	args []string,
 ) ([]middlewares.Middleware, error) {
