@@ -9,6 +9,7 @@ import (
 	openai_steps "github.com/go-go-golems/geppetto/pkg/steps/ai/openai"
 	settings2 "github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 	openai_settings "github.com/go-go-golems/geppetto/pkg/steps/ai/settings/openai"
+	ai_types "github.com/go-go-golems/geppetto/pkg/steps/ai/types"
 	"github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
 	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
@@ -267,7 +268,7 @@ func (c *TranscribeCommand) RunIntoGlazeProcessor(
 		return err
 	}
 
-	openaiKey, ok := apiSettings.APIKeys[settings2.ApiTypeOpenAI+"-api-key"]
+	openaiKey, ok := apiSettings.APIKeys[string(ai_types.ApiTypeOpenAI)+"-api-key"]
 	if !ok {
 		return errors.New("no openai api key")
 	}

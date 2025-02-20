@@ -10,6 +10,7 @@ import (
 	settings "github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 	cmds "github.com/go-go-golems/glazed/pkg/cmds"
 	parameters "github.com/go-go-golems/glazed/pkg/cmds/parameters"
+	cast "github.com/go-go-golems/glazed/pkg/helpers/cast"
 	"io"
 )
 
@@ -100,6 +101,49 @@ func NewUnitTestsCommand() (*UnitTestsCommand, error) {
 		Help: "Whether to include signature in the output",
 		Name: "with_signature",
 		Type: "bool",
+	}, {
+		Default: cast.InterfaceAddr(false),
+		Help:    "Whether to include implementation in the output",
+		Name:    "with_implementation",
+		Type:    "bool",
+	}, {
+		Default: cast.InterfaceAddr(false),
+		Help:    "Whether to include comments in the output",
+		Name:    "with_comments",
+		Type:    "bool",
+	}, {
+		Default: cast.InterfaceAddr(false),
+		Help:    "Whether to only output the code",
+		Name:    "only_code",
+		Type:    "bool",
+	}, {
+		Help: "Framework to use for generating unit tests",
+		Name: "framework",
+		Type: "string",
+	}, {
+		Default: cast.InterfaceAddr(false),
+		Help:    "Whether to use table driven tests",
+		Name:    "table_driven",
+		Type:    "bool",
+	}, {
+		Default: cast.InterfaceAddr(""),
+		Help:    "Additional system prompt",
+		Name:    "additional_system",
+		Type:    "string",
+	}, {
+		Default: cast.InterfaceAddr([]string{}),
+		Help:    "Additional prompt",
+		Name:    "additional",
+		Type:    "stringList",
+	}, {
+		Help: "Additional context from files",
+		Name: "context",
+		Type: "fileList",
+	}, {
+		Default: cast.InterfaceAddr(false),
+		Help:    "Whether to use bracket context with instructions",
+		Name:    "bracket",
+		Type:    "bool",
 	}}
 
 	var argDefs = []*parameters.ParameterDefinition{}

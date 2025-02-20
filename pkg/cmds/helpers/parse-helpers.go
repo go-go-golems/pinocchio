@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	embeddings_config "github.com/go-go-golems/geppetto/pkg/embeddings/config"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings/claude"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings/openai"
@@ -80,7 +81,7 @@ func ParseGeppettoLayers(c *cmds.PinocchioCommand, options ...GeppettoLayersHelp
 					settings.AiClientSlug,
 					openai.OpenAiChatSlug,
 					claude.ClaudeChatSlug,
-					settings.EmbeddingsSlug,
+					embeddings_config.EmbeddingsSlug,
 					cmdlayers.GeppettoHelpersSlug,
 				},
 				middlewares.GatherFlagsFromViper(parameters.WithParseStepSource("viper")),

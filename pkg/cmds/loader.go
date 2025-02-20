@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"strings"
 
+	embeddings_config "github.com/go-go-golems/geppetto/pkg/embeddings/config"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings/claude"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings/ollama"
@@ -155,7 +156,7 @@ func CreateGeppettoLayers(stepSettings *settings.StepSettings, opts ...GeppettoL
 		return nil, err
 	}
 
-	embeddingsParameterLayer, err := settings.NewEmbeddingsParameterLayer(
+	embeddingsParameterLayer, err := embeddings_config.NewEmbeddingsParameterLayer(
 		layers.WithDefaults(stepSettings.Embeddings),
 	)
 	if err != nil {
