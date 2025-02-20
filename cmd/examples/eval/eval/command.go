@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 
+	embeddings_config "github.com/go-go-golems/geppetto/pkg/embeddings/config"
 	pinocchio_settings "github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings/claude"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings/openai"
@@ -179,7 +180,7 @@ func NewEvalCommand() (*EvalCommand, error) {
 		return nil, err
 	}
 
-	embeddingsParameterLayer, err := pinocchio_settings.NewEmbeddingsParameterLayer(
+	embeddingsParameterLayer, err := embeddings_config.NewEmbeddingsParameterLayer(
 		layers.WithDefaults(stepSettings.Embeddings),
 	)
 	if err != nil {

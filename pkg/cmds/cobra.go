@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	embeddings_config "github.com/go-go-golems/geppetto/pkg/embeddings/config"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings/claude"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings/openai"
@@ -97,6 +98,8 @@ func GetCobraCommandGeppettoMiddlewares(
 				openai.OpenAiChatSlug,
 				claude.ClaudeChatSlug,
 				cmdlayers.GeppettoHelpersSlug,
+				embeddings_config.EmbeddingsSlug,
+				cli.ProfileSettingsSlug,
 			},
 			middlewares.GatherFlagsFromViper(parameters.WithParseStepSource("viper")),
 		),

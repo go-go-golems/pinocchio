@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
+
 	"github.com/go-go-golems/clay/pkg"
 	"github.com/go-go-golems/geppetto/pkg/conversation"
 	"github.com/go-go-golems/geppetto/pkg/steps"
@@ -11,10 +13,10 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/claude"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/claude/api"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
+	ai_types "github.com/go-go-golems/geppetto/pkg/steps/ai/types"
 	"github.com/go-go-golems/pinocchio/pkg/cmds"
 	"github.com/google/uuid"
 	"gopkg.in/yaml.v3"
-	"strings"
 )
 
 //nolint:unused
@@ -114,7 +116,7 @@ func streamTestRequest() (<-chan api.StreamingEvent, *settings.StepSettings, boo
 		fmt.Printf("Error loading config: %v\n", err)
 		return nil, nil, true
 	}
-	apiKey, ok := settings_.API.APIKeys[settings.ApiTypeClaude+"-api-key"]
+	apiKey, ok := settings_.API.APIKeys[string(ai_types.ApiTypeClaude)+"-api-key"]
 	if !ok {
 		fmt.Printf("Error: Claude API key not found in settings\n")
 		return nil, nil, true
