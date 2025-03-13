@@ -12,8 +12,8 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/go-go-golems/bobatea/pkg/overlay"
 	"github.com/mitchellh/go-homedir"
+	overlay "github.com/rmhubbert/bubbletea-overlay"
 	"github.com/spf13/cobra"
 )
 
@@ -430,6 +430,7 @@ type model struct {
 	list          list.Model
 	viewport      viewport.Model
 	modalViewport viewport.Model
+	overlayModel  *overlay.Model
 	rootDir       string
 	selected      HistoryFile
 	ready         bool
@@ -448,6 +449,29 @@ func (m model) Init() tea.Cmd {
 	return nil
 }
 
+// baseView returns the normal mode view (split-pane layout)
+func (m model) baseView() string {
+	// Render the list pane
+	listContent := listPane.Width(listWidth).Render(m.list.View())
+
+	// Render the info pane
+	var infoContent string
+	if m.selected != nil {
+		infoContent = infoPane.
+			Width(m.width - listWidth - 5).
+			Height(m.height - 4).
+			Render(m.viewport.View())
+	} else {
+		infoContent = infoPane.
+			Width(m.width - listWidth - 5).
+			Height(m.height - 4).
+			Render(noSelectionStyle.Render("Select a file to view details"))
+	}
+
+	// Combine the panes horizontally
+	return lipgloss.JoinHorizontal(lipgloss.Top, listContent, infoContent)
+}
+
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 
@@ -464,6 +488,29 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.mode = modalMode
 					m.modalViewport.SetContent(m.selected.FormatDetailed())
 					m.modalViewport.GotoTop()
+
+					// Create modal content
+					modalWidth := m.width - 20
+					modalHeight := m.height - 10
+					modal := modalStyle.
+						Width(modalWidth).
+						Height(modalHeight).
+						Render(lipgloss.JoinVertical(
+							lipgloss.Left,
+							modalTitleStyle.Render(" File Details "),
+							m.modalViewport.View(),
+							modalCloseHelpStyle.Render("Press ESC or Enter to close"),
+						))
+
+					// Create overlay model
+					m.overlayModel = overlay.New(
+						&modalModel{content: modal},
+						&baseModel{view: m.baseView()},
+						overlay.Center,
+						overlay.Center,
+						0,
+						0,
+					)
 					return m, nil
 				}
 			}
@@ -507,6 +554,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "esc", "enter", "backspace":
 				// Return to normal mode
 				m.mode = normalMode
+				m.overlayModel = nil
 				return m, nil
 			}
 
@@ -523,7 +571,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if !m.ready {
 			// Set up list in the left pane
 			top, right, bottom, left := docStyle.GetMargin()
-			m.list.SetSize(listWidth, m.height-top-bottom)
+			m.list.SetSize(listWidth, m.height-top-bottom-3)
 
 			// Set up viewport in the right pane for file details
 			m.viewport = viewport.New(m.width-listWidth-left-right-5, m.height-top-bottom-2)
@@ -569,6 +617,27 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(cmds...)
 }
 
+// Helper models for overlay
+type modalModel struct {
+	content string
+}
+
+func (m *modalModel) Init() tea.Cmd { return nil }
+func (m *modalModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	return m, nil
+}
+func (m *modalModel) View() string { return m.content }
+
+type baseModel struct {
+	view string
+}
+
+func (m *baseModel) Init() tea.Cmd { return nil }
+func (m *baseModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	return m, nil
+}
+func (m *baseModel) View() string { return m.view }
+
 func (m model) View() string {
 	if !m.ready {
 		return "Loading..."
@@ -578,73 +647,15 @@ func (m model) View() string {
 		return fmt.Sprintf("Error: %v", m.err)
 	}
 
-	// Normal mode view (split-pane layout)
-	baseView := func() string {
-		// Render the list pane
-		listContent := listPane.Width(listWidth).Render(m.list.View())
-
-		// Render the info pane
-		var infoContent string
-		if m.selected != nil {
-			infoContent = infoPane.
-				Width(m.width - listWidth - 5).
-				Height(m.height - 4).
-				Render(m.viewport.View())
-		} else {
-			infoContent = infoPane.
-				Width(m.width - listWidth - 5).
-				Height(m.height - 4).
-				Render(noSelectionStyle.Render("Select a file to view details"))
-		}
-
-		// Combine the panes horizontally
-		return lipgloss.JoinHorizontal(lipgloss.Top, listContent, infoContent)
-	}
-
-	// Modal view (detailed file information)
-	modalView := func() string {
-		modalWidth := m.width - 20
-		modalHeight := m.height - 10
-
-		// Create modal title
-		title := modalTitleStyle.Render(" File Details ")
-
-		// Create modal content
-		content := m.modalViewport.View()
-
-		// Create help text
-		helpText := modalCloseHelpStyle.Render("Press ESC or Enter to close")
-
-		// Combine all parts
-		modal := lipgloss.JoinVertical(
-			lipgloss.Left,
-			title,
-			content,
-			helpText,
-		)
-
-		// Apply modal styling
-		modal = modalStyle.
-			Width(modalWidth).
-			Height(modalHeight).
-			Render(modal)
-
-		// Create overlay using the overlay package
-		return overlay.PlaceOverlay(
-			(m.width-modalWidth)/2,   // x position
-			(m.height-modalHeight)/2, // y position
-			modal,
-			baseView(), // Use the base view as background
-			true,       // Enable shadow
-		)
-	}
-
 	// Choose view based on mode
 	switch m.mode {
 	case normalMode:
-		return baseView()
+		return m.baseView()
 	case modalMode:
-		return modalView()
+		if m.overlayModel != nil {
+			return m.overlayModel.View()
+		}
+		return m.baseView()
 	default:
 		return "Unknown view mode"
 	}

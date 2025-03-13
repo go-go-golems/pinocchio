@@ -1,8 +1,8 @@
 module github.com/go-go-golems/pinocchio
 
-go 1.23
+go 1.23.4
 
-toolchain go1.23.2
+toolchain go1.23.7
 
 require (
 	github.com/Masterminds/sprig v2.22.0+incompatible
@@ -26,6 +26,7 @@ require (
 	github.com/mattn/go-isatty v0.0.20
 	github.com/mb0/glob v0.0.0-20160210091149-1eb79d2de6c4
 	github.com/pkg/errors v0.9.1
+	github.com/rmhubbert/bubbletea-overlay v0.3.2
 	github.com/rs/zerolog v1.33.0
 	github.com/sashabaranov/go-openai v1.36.0
 	github.com/spf13/cobra v1.8.1
@@ -37,6 +38,8 @@ require (
 	golang.org/x/sync v0.10.0
 	gopkg.in/yaml.v3 v3.0.1
 )
+
+require github.com/sahilm/fuzzy v0.1.1 // indirect
 
 require (
 	github.com/BurntSushi/toml v1.2.1 // indirect
@@ -54,10 +57,10 @@ require (
 	github.com/buger/jsonparser v1.1.1 // indirect
 	github.com/catppuccin/go v0.2.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
-	github.com/charmbracelet/bubbles v0.20.0 // indirect
+	github.com/charmbracelet/bubbles v0.20.0
 	github.com/charmbracelet/huh v0.6.0 // indirect
-	github.com/charmbracelet/lipgloss v1.0.0 // indirect
-	github.com/charmbracelet/x/ansi v0.4.5 // indirect
+	github.com/charmbracelet/lipgloss v1.0.0
+	github.com/charmbracelet/x/ansi v0.6.0 // indirect
 	github.com/charmbracelet/x/exp/strings v0.0.0-20240725160154-f9f6568126ec // indirect
 	github.com/charmbracelet/x/term v0.2.1 // indirect
 	github.com/danwakefield/fnmatch v0.0.0-20160403171240-cbb64ac3d964 // indirect
