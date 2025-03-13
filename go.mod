@@ -16,8 +16,8 @@ require (
 	github.com/dop251/goja v0.0.0-20241024094426-79f3a7efcdbd
 	github.com/dop251/goja_nodejs v0.0.0-20240728170619-29b559befffc
 	github.com/go-go-golems/bobatea v0.0.13
-	github.com/go-go-golems/clay v0.1.31
-	github.com/go-go-golems/geppetto v0.4.36
+	github.com/go-go-golems/clay v0.1.32
+	github.com/go-go-golems/geppetto v0.4.37
 	github.com/go-go-golems/glazed v0.5.34
 	github.com/go-go-golems/prompto v0.1.8
 	github.com/google/uuid v1.6.0
@@ -125,7 +125,7 @@ require (
 	golang.org/x/crypto v0.31.0 // indirect
 	golang.org/x/exp v0.0.0-20231006140011-7918f672742d // indirect
 	golang.org/x/net v0.33.0 // indirect
-	golang.org/x/sys v0.28.0 // indirect
+	golang.org/x/sys v0.29.0 // indirect
 	golang.org/x/term v0.27.0 // indirect
 	golang.org/x/text v0.21.0 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
