@@ -6,9 +6,9 @@ toolchain go1.23.2
 
 require (
 	github.com/Masterminds/sprig v2.22.0+incompatible
-	github.com/PuerkitoBio/goquery v1.10.0
+	github.com/PuerkitoBio/goquery v1.10.1
 	github.com/ThreeDotsLabs/watermill v1.3.7
-	github.com/a-h/templ v0.2.793
+	github.com/a-h/templ v0.3.833
 	github.com/atotto/clipboard v0.1.4
 	github.com/charmbracelet/bubbletea v1.2.4
 	github.com/charmbracelet/glamour v0.7.0
@@ -17,12 +17,12 @@ require (
 	github.com/dop251/goja_nodejs v0.0.0-20240728170619-29b559befffc
 	github.com/go-go-golems/bobatea v0.0.13
 	github.com/go-go-golems/clay v0.1.32
-	github.com/go-go-golems/geppetto v0.4.37
+	github.com/go-go-golems/geppetto v0.4.39
 	github.com/go-go-golems/glazed v0.5.34
 	github.com/go-go-golems/prompto v0.1.8
 	github.com/google/uuid v1.6.0
 	github.com/iancoleman/strcase v0.3.0
-	github.com/invopop/jsonschema v0.12.0
+	github.com/invopop/jsonschema v0.13.0
 	github.com/mattn/go-isatty v0.0.20
 	github.com/mb0/glob v0.0.0-20160210091149-1eb79d2de6c4
 	github.com/pkg/errors v0.9.1
@@ -44,7 +44,7 @@ require (
 	github.com/Masterminds/semver v1.5.0 // indirect
 	github.com/adrg/frontmatter v0.2.0 // indirect
 	github.com/alecthomas/chroma/v2 v2.14.0 // indirect
-	github.com/andybalholm/cascadia v1.3.2 // indirect
+	github.com/andybalholm/cascadia v1.3.3 // indirect
 	github.com/araddon/dateparse v0.0.0-20210429162001-6b43995a97de // indirect
 	github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2 // indirect
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
