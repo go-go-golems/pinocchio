@@ -235,7 +235,7 @@ func initAllCommands(helpSystem *help.HelpSystem) error {
 	if err != nil {
 		return err
 	}
-	cobraClipCommand, err := cli.BuildCobraCommandFromGlazeCommand(clipCommand,
+	cobraClipCommand, err := cli.BuildCobraCommandFromCommand(clipCommand,
 		cli.WithCobraMiddlewaresFunc(cmds.GetCobraCommandGeppettoMiddlewares),
 	)
 	if err != nil {

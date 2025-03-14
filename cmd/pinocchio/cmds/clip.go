@@ -13,8 +13,6 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
 	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
-	"github.com/go-go-golems/glazed/pkg/middlewares"
-	"github.com/go-go-golems/glazed/pkg/settings"
 	"github.com/weaviate/tiktoken-go"
 )
 
@@ -28,12 +26,9 @@ type ClipCommand struct {
 	*cmds.CommandDescription
 }
 
-func NewClipCommand() (*ClipCommand, error) {
-	glazedParameterLayer, err := settings.NewGlazedParameterLayers()
-	if err != nil {
-		return nil, fmt.Errorf("could not create Glazed parameter layer: %w", err)
-	}
+var _ cmds.BareCommand = &ClipCommand{}
 
+func NewClipCommand() (*ClipCommand, error) {
 	return &ClipCommand{
 		CommandDescription: cmds.NewCommandDescription(
 			"clip",
@@ -53,17 +48,13 @@ func NewClipCommand() (*ClipCommand, error) {
 					parameters.WithDefault(false),
 				),
 			),
-			cmds.WithLayersList(
-				glazedParameterLayer,
-			),
 		),
 	}, nil
 }
 
-func (c *ClipCommand) RunIntoGlazeProcessor(
+func (c *ClipCommand) Run(
 	ctx context.Context,
 	parsedLayers *layers.ParsedLayers,
-	gp middlewares.Processor,
 ) error {
 	s := &ClipSettings{}
 	err := parsedLayers.InitializeStruct(layers.DefaultSlug, s)
