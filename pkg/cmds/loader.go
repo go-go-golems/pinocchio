@@ -29,10 +29,11 @@ func (g *PinocchioCommandLoader) IsFileSupported(f fs.FS, fileName string) bool 
 
 var _ loaders.CommandLoader = (*PinocchioCommandLoader)(nil)
 
-func LoadFromYAML(b []byte) ([]cmds.Command, error) {
+// LoadFromYAML loads Pinocchio commands from YAML content with additional options
+func LoadFromYAML(b []byte, options ...cmds.CommandDescriptionOption) ([]cmds.Command, error) {
 	loader := &PinocchioCommandLoader{}
 	buf := strings.NewReader(string(b))
-	return loader.loadPinocchioCommandFromReader(buf, nil, nil)
+	return loader.loadPinocchioCommandFromReader(buf, options, nil)
 }
 
 func (g *PinocchioCommandLoader) loadPinocchioCommandFromReader(
@@ -95,6 +96,7 @@ func (g *PinocchioCommandLoader) loadPinocchioCommandFromReader(
 		return nil, err
 	}
 
+	// Apply additional options to the command
 	for _, option := range options {
 		option(sq.Description())
 	}
@@ -197,9 +199,14 @@ func (scl *PinocchioCommandLoader) LoadCommands(
 	defer func(r fs.File) {
 		_ = r.Close()
 	}(r)
+
+	// Add source tracking option
+	sourceOption := cmds.WithSource("file:" + entryName)
+	allOptions := append(options, sourceOption)
+
 	return loaders.LoadCommandOrAliasFromReader(
 		r,
 		scl.loadPinocchioCommandFromReader,
-		options,
+		allOptions,
 		aliasOptions)
 }
