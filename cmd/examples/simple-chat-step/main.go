@@ -158,8 +158,6 @@ func (c *TestCommand) RunIntoWriter(ctx context.Context, parsedLayers *layers.Pa
 func main() {
 	err := clay.InitViper("pinocchio", rootCmd)
 	cobra.CheckErr(err)
-	err = clay.InitLogger()
-	cobra.CheckErr(err)
 
 	commands, err := pinocchio_cmds.LoadFromYAML(testYaml)
 	cobra.CheckErr(err)

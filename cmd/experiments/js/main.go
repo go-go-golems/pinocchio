@@ -30,19 +30,12 @@ type testFlags struct {
 var rootCmd = &cobra.Command{
 	Use:   "js-experiments",
 	Short: "JavaScript experiments for Geppetto",
-	PersistentPreRun: func(cmd *cobra.Command, args []string) {
-		// reinitialize the logger because we can now parse --log-level and co
-		err := clay.InitLogger()
-		cobra.CheckErr(err)
-	},
 }
 
 var runCmd *cobra.Command
 
 func main() {
 	err := clay.InitViper("pinocchio", rootCmd)
-	cobra.CheckErr(err)
-	err = clay.InitLogger()
 	cobra.CheckErr(err)
 
 	stepSettings, err := settings.NewStepSettings()
