@@ -38,14 +38,8 @@ var version = "dev"
 var promptsFS embed.FS
 
 var rootCmd = &cobra.Command{
-	Use:   "pinocchio",
-	Short: "pinocchio is a tool to run LLM applications",
-	PersistentPreRun: func(cmd *cobra.Command, args []string) {
-		// reinitialize the logger because we can now parse --log-level and co
-		// from the command line flag
-		err := clay.InitLogger()
-		cobra.CheckErr(err)
-	},
+	Use:     "pinocchio",
+	Short:   "pinocchio is a tool to run LLM applications",
 	Version: version,
 }
 
@@ -115,8 +109,6 @@ func initRootCmd() (*help.HelpSystem, error) {
 	helpSystem.SetupCobraRootCommand(rootCmd)
 
 	err = clay.InitViper("pinocchio", rootCmd)
-	cobra.CheckErr(err)
-	err = clay.InitLogger()
 	cobra.CheckErr(err)
 
 	rootCmd.AddCommand(runCommandCmd)

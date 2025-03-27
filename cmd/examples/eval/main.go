@@ -23,8 +23,6 @@ func main() {
 
 	err := clay.InitViper("pinocchio", rootCmd)
 	cobra.CheckErr(err)
-	err = clay.InitLogger()
-	cobra.CheckErr(err)
 
 	helpSystem := help.NewHelpSystem()
 	helpSystem.SetupCobraRootCommand(rootCmd)

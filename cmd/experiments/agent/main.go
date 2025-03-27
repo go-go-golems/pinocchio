@@ -14,12 +14,7 @@ import (
 var rootCmd = &cobra.Command{
 	Use:   "agent",
 	Short: "agent test",
-	PersistentPreRun: func(cmd *cobra.Command, args []string) {
-		// reinitialize the logger because we can now parse --log-level and co
-		// from the command line flag
-		err := clay.InitLogger()
-		cobra.CheckErr(err)
-	}}
+}
 
 func main() {
 	helpSystem := help.NewHelpSystem()
@@ -35,8 +30,6 @@ func main() {
 	pLayers := layers.NewParameterLayers(layers.WithLayers(geppettoLayers...))
 
 	err = clay.InitViper("pinocchio", rootCmd)
-	cobra.CheckErr(err)
-	err = clay.InitLogger()
 	cobra.CheckErr(err)
 
 	err = pLayers.AddToCobraCommand(upperCaseCmd)
