@@ -16,10 +16,10 @@ require (
 	github.com/dave/jennifer v1.7.0
 	github.com/dop251/goja v0.0.0-20241024094426-79f3a7efcdbd
 	github.com/dop251/goja_nodejs v0.0.0-20240728170619-29b559befffc
-	github.com/go-go-golems/bobatea v0.0.13
-	github.com/go-go-golems/clay v0.1.32
-	github.com/go-go-golems/geppetto v0.4.39
-	github.com/go-go-golems/glazed v0.5.34
+	github.com/go-go-golems/bobatea v0.0.14
+	github.com/go-go-golems/clay v0.1.34
+	github.com/go-go-golems/geppetto v0.4.44
+	github.com/go-go-golems/glazed v0.5.39
 	github.com/go-go-golems/prompto v0.1.8
 	github.com/google/uuid v1.6.0
 	github.com/iancoleman/strcase v0.3.0
@@ -36,7 +36,7 @@ require (
 	github.com/tiktoken-go/tokenizer v0.2.0
 	github.com/weaviate/tiktoken-go v0.0.2
 	github.com/wk8/go-ordered-map/v2 v2.1.8
-	golang.org/x/sync v0.10.0
+	golang.org/x/sync v0.11.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
@@ -73,7 +73,7 @@ require (
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/erikgeiser/coninput v0.0.0-20211004153227-1c3628e74d0f // indirect
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
-	github.com/go-go-golems/go-emrichen v0.0.4 // indirect
+	github.com/go-go-golems/go-emrichen v0.0.5 // indirect
 	github.com/go-openapi/errors v0.22.0 // indirect
 	github.com/go-openapi/strfmt v0.23.0 // indirect
 	github.com/go-sourcemap/sourcemap v2.1.4+incompatible // indirect
