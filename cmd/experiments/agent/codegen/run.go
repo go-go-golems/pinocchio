@@ -7,6 +7,7 @@ import (
 	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/ThreeDotsLabs/watermill/pubsub/gochannel"
 	"github.com/go-go-golems/geppetto/pkg/conversation"
+	"github.com/go-go-golems/geppetto/pkg/events"
 	"github.com/go-go-golems/geppetto/pkg/steps"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/chat"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
@@ -147,12 +148,12 @@ var MultiStepCodgenTestCmd = &cobra.Command{
 		router.AddNoPublisherHandler("scientist",
 			"scientist",
 			pubSub,
-			chat.StepPrinterFunc("Scientist", cmd.OutOrStdout()),
+			events.StepPrinterFunc("Scientist", cmd.OutOrStdout()),
 		)
 		router.AddNoPublisherHandler("writer",
 			"writer",
 			pubSub,
-			chat.StepPrinterFunc("Writer", cmd.OutOrStdout()),
+			events.StepPrinterFunc("Writer", cmd.OutOrStdout()),
 		)
 
 		writerParams := &TestCodegenCommandParameters{

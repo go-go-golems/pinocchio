@@ -133,6 +133,12 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 	if !exists {
 		s.logger.Info().Str("client_id", clientID).Msg("Creating new client")
 		client_ = client.NewChatClient(clientID, s.router)
+		// Start the client's handler registration
+		if err := client_.Start(r.Context()); err != nil {
+			s.logger.Error().Err(err).Str("client_id", clientID).Msg("Failed to start client")
+			http.Error(w, "Internal server error starting client", http.StatusInternalServerError)
+			return
+		}
 		s.RegisterClient(client_)
 	}
 
@@ -189,7 +195,14 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	s.clientsMux.RUnlock()
 
 	if !exists {
+		s.logger.Info().Str("client_id", clientID).Msg("Creating new client for chat message")
 		client_ = client.NewChatClient(clientID, s.router)
+		// Start the client's handler registration
+		if err := client_.Start(r.Context()); err != nil {
+			s.logger.Error().Err(err).Str("client_id", clientID).Msg("Failed to start client for chat message")
+			http.Error(w, "Internal server error starting client", http.StatusInternalServerError)
+			return
+		}
 		s.RegisterClient(client_)
 	}
 

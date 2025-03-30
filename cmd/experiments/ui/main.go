@@ -4,7 +4,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	boba_chat "github.com/go-go-golems/bobatea/pkg/chat"
 	"github.com/go-go-golems/geppetto/pkg/conversation"
-	"github.com/go-go-golems/geppetto/pkg/steps/ai/chat"
+	"github.com/go-go-golems/geppetto/pkg/steps/ai/chat/steps"
 	"github.com/go-go-golems/pinocchio/pkg/ui"
 	"time"
 )
@@ -14,7 +14,7 @@ func main() {
 		conversation.NewChatMessage(conversation.RoleSystem, "hahahahaha"),
 	))
 
-	step := &chat.EchoStep{
+	step := &steps.EchoStep{
 		TimePerCharacter: 150 * time.Millisecond,
 	}
 
