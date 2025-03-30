@@ -7,8 +7,6 @@ import (
 	"sync"
 	"time"
 
-	steps2 "github.com/go-go-golems/geppetto/pkg/steps/ai/chat/steps"
-
 	"github.com/go-go-golems/geppetto/pkg/conversation"
 	"github.com/go-go-golems/geppetto/pkg/events"
 	"github.com/go-go-golems/geppetto/pkg/steps"
@@ -77,15 +75,17 @@ func NewChatClient(id string, options ...ChatClientOption) (*ChatClient, error) 
 		logger:       logger,
 	}
 
-	// Set default step if none provided
-	defaultStep := steps2.NewEchoStep()
-	options = append([]ChatClientOption{WithStep(defaultStep)}, options...)
-
 	// Apply options
 	for _, opt := range options {
 		if err := opt(client); err != nil {
 			client.logger.Error().Err(err).Msg("Failed to apply client option")
+			return nil, fmt.Errorf("failed to apply client option: %w", err)
 		}
+	}
+
+	// Verify that a step was provided
+	if client.step == nil {
+		return nil, fmt.Errorf("no step provided to chat client")
 	}
 
 	return client, nil

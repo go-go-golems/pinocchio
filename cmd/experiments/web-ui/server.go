@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/go-go-golems/geppetto/pkg/steps/ai"
 	"github.com/go-go-golems/pinocchio/cmd/experiments/web-ui/client"
 	webconv "github.com/go-go-golems/pinocchio/cmd/experiments/web-ui/conversation"
 	"github.com/go-go-golems/pinocchio/cmd/experiments/web-ui/templates"
@@ -18,14 +19,15 @@ import (
 
 // Server handles the web UI and SSE connections
 type Server struct {
-	clients    map[string]*client.ChatClient
-	clientsMux sync.RWMutex
-	logger     zerolog.Logger
-	ctx        context.Context
-	cancel     context.CancelFunc
+	clients     map[string]*client.ChatClient
+	clientsMux  sync.RWMutex
+	logger      zerolog.Logger
+	ctx         context.Context
+	cancel      context.CancelFunc
+	stepFactory *ai.StandardStepFactory
 }
 
-func NewServer() *Server {
+func NewServer(stepFactory *ai.StandardStepFactory) *Server {
 	logger := zerolog.New(zerolog.NewConsoleWriter()).
 		With().
 		Timestamp().
@@ -38,10 +40,11 @@ func NewServer() *Server {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	return &Server{
-		clients: make(map[string]*client.ChatClient),
-		logger:  logger,
-		ctx:     ctx,
-		cancel:  cancel,
+		clients:     make(map[string]*client.ChatClient),
+		logger:      logger,
+		ctx:         ctx,
+		cancel:      cancel,
+		stepFactory: stepFactory,
 	}
 }
 
@@ -74,6 +77,8 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	// Check if there's a client ID in the URL
 	clientID := r.URL.Query().Get("client_id")
 
+	s.logger.Info().Str("client_id", clientID).Msg("Handling index request")
+
 	// Verify client exists if ID provided
 	var messages *webconv.WebConversation
 	if clientID != "" {
@@ -87,6 +92,9 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 			http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
 			return
 		}
+
+		// XXX we need to redirect to /?client_id=... redirects to /?client_id=...
+
 		// Convert conversation to web format
 		conv, err := webconv.ConvertConversation(client.GetConversation())
 		if err != nil {
@@ -243,14 +251,22 @@ func (s *Server) getOrCreateClient(clientID string) (*client.ChatClient, bool, e
 	s.clientsMux.RUnlock()
 
 	if exists {
-		return client_, false, nil
+		return client_, exists, nil
 	}
 
 	s.logger.Info().Str("client_id", clientID).Msg("Creating new client")
-	client_, err := client.NewChatClient(clientID)
+
+	// Create a new step using the factory
+	step, err := s.stepFactory.NewStep()
+	if err != nil {
+		s.logger.Error().Err(err).Str("client_id", clientID).Msg("Failed to create step")
+		return nil, exists, fmt.Errorf("failed to create step: %w", err)
+	}
+
+	client_, err = client.NewChatClient(clientID, client.WithStep(step))
 	if err != nil {
 		s.logger.Error().Err(err).Str("client_id", clientID).Msg("Failed to create client")
-		return nil, false, fmt.Errorf("failed to create client: %w", err)
+		return nil, exists, fmt.Errorf("failed to create client: %w", err)
 	}
 
 	s.RegisterClient(client_)
@@ -258,10 +274,10 @@ func (s *Server) getOrCreateClient(clientID string) (*client.ChatClient, bool, e
 	// Start the client using the server's context
 	if err := client_.Start(s.ctx); err != nil {
 		s.logger.Error().Err(err).Str("client_id", clientID).Msg("Failed to start client")
-		return nil, false, fmt.Errorf("failed to start client: %w", err)
+		return nil, exists, fmt.Errorf("failed to start client: %w", err)
 	}
 
-	return client_, true, nil
+	return client_, exists, nil
 }
 
 // Close properly cleans up the server and all its clients

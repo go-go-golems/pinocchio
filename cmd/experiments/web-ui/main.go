@@ -9,6 +9,7 @@ import (
 	"time"
 
 	clay "github.com/go-go-golems/clay/pkg"
+	"github.com/go-go-golems/geppetto/pkg/steps/ai"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 	"github.com/go-go-golems/glazed/pkg/cli"
 	glazed_cmds "github.com/go-go-golems/glazed/pkg/cmds"
@@ -82,8 +83,15 @@ func (c *WebUICommand) Run(
 		return err
 	}
 
-	// Create server
-	server := NewServer()
+	c.stepSettings.Chat.Stream = true
+
+	// Create step factory
+	stepFactory := &ai.StandardStepFactory{
+		Settings: c.stepSettings,
+	}
+
+	// Create server with step factory
+	server := NewServer(stepFactory)
 	defer func() {
 		if err := server.Close(); err != nil {
 			log.Error().Err(err).Msg("Error closing server")
@@ -140,7 +148,7 @@ func main() {
 	// Setup help system with root command
 	helpSystem.SetupCobraRootCommand(webUICobraCommand)
 
-	err = clay.InitViper("web-ui", webUICobraCommand)
+	err = clay.InitViper("pinocchio", webUICobraCommand)
 	cobra.CheckErr(err)
 
 	err = webUICobraCommand.Execute()
