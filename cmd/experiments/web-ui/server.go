@@ -253,13 +253,14 @@ func (s *Server) getOrCreateClient(clientID string) (*client.ChatClient, bool, e
 		return nil, false, fmt.Errorf("failed to create client: %w", err)
 	}
 
+	s.RegisterClient(client_)
+
 	// Start the client using the server's context
 	if err := client_.Start(s.ctx); err != nil {
 		s.logger.Error().Err(err).Str("client_id", clientID).Msg("Failed to start client")
 		return nil, false, fmt.Errorf("failed to start client: %w", err)
 	}
 
-	s.RegisterClient(client_)
 	return client_, true, nil
 }
 
