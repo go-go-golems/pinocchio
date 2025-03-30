@@ -8,7 +8,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/go-go-golems/geppetto/pkg/events"
 	"github.com/go-go-golems/pinocchio/cmd/experiments/web-ui/client"
 	webconv "github.com/go-go-golems/pinocchio/cmd/experiments/web-ui/conversation"
 	"github.com/go-go-golems/pinocchio/cmd/experiments/web-ui/templates"
@@ -19,13 +18,14 @@ import (
 
 // Server handles the web UI and SSE connections
 type Server struct {
-	router     *events.EventRouter
 	clients    map[string]*client.ChatClient
 	clientsMux sync.RWMutex
 	logger     zerolog.Logger
+	ctx        context.Context
+	cancel     context.CancelFunc
 }
 
-func NewServer(router *events.EventRouter) *Server {
+func NewServer() *Server {
 	logger := zerolog.New(zerolog.NewConsoleWriter()).
 		With().
 		Timestamp().
@@ -35,10 +35,13 @@ func NewServer(router *events.EventRouter) *Server {
 
 	logger.Level(zerolog.TraceLevel)
 
+	ctx, cancel := context.WithCancel(context.Background())
+
 	return &Server{
-		router:  router,
 		clients: make(map[string]*client.ChatClient),
 		logger:  logger,
+		ctx:     ctx,
+		cancel:  cancel,
 	}
 }
 
@@ -53,8 +56,7 @@ func (s *Server) UnregisterClient(clientID string) {
 	s.clientsMux.Lock()
 	defer s.clientsMux.Unlock()
 	if client, ok := s.clients[clientID]; ok {
-		close(client.MessageChan)
-		close(client.DisconnectCh)
+		client.Close()
 		delete(s.clients, clientID)
 		s.logger.Info().Str("client_id", clientID).Msg("Unregistered client")
 	}
@@ -78,6 +80,7 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 		s.clientsMux.RLock()
 		client, exists := s.clients[clientID]
 		s.clientsMux.RUnlock()
+
 		if !exists {
 			// Client doesn't exist, redirect to root
 			s.logger.Info().Str("client_id", clientID).Msg("Client not found, redirecting to root")
@@ -125,21 +128,15 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get existing client or create new one
-	s.clientsMux.RLock()
-	client_, exists := s.clients[clientID]
-	s.clientsMux.RUnlock()
+	client_, isNew, err := s.getOrCreateClient(clientID)
+	if err != nil {
+		s.logger.Error().Err(err).Str("client_id", clientID).Msg("Failed to get or create client")
+		http.Error(w, fmt.Sprintf("Error getting or creating client: %v", err), http.StatusInternalServerError)
+		return
+	}
 
-	if !exists {
-		s.logger.Info().Str("client_id", clientID).Msg("Creating new client")
-		client_ = client.NewChatClient(clientID, s.router)
-		// Start the client's handler registration
-		if err := client_.Start(r.Context()); err != nil {
-			s.logger.Error().Err(err).Str("client_id", clientID).Msg("Failed to start client")
-			http.Error(w, "Internal server error starting client", http.StatusInternalServerError)
-			return
-		}
-		s.RegisterClient(client_)
+	if isNew {
+		s.logger.Info().Str("client_id", clientID).Msg("Created new client")
 	}
 
 	s.logger.Info().Str("client_id", client_.ID).Msg("SSE connection established")
@@ -190,20 +187,11 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get or create client
-	s.clientsMux.RLock()
-	client_, exists := s.clients[clientID]
-	s.clientsMux.RUnlock()
-
-	if !exists {
-		s.logger.Info().Str("client_id", clientID).Msg("Creating new client for chat message")
-		client_ = client.NewChatClient(clientID, s.router)
-		// Start the client's handler registration
-		if err := client_.Start(r.Context()); err != nil {
-			s.logger.Error().Err(err).Str("client_id", clientID).Msg("Failed to start client for chat message")
-			http.Error(w, "Internal server error starting client", http.StatusInternalServerError)
-			return
-		}
-		s.RegisterClient(client_)
+	client_, exists, err := s.getOrCreateClient(clientID)
+	if err != nil {
+		s.logger.Error().Err(err).Str("client_id", clientID).Msg("Failed to get or create client")
+		http.Error(w, fmt.Sprintf("Error getting or creating client: %v", err), http.StatusInternalServerError)
+		return
 	}
 
 	// Send user message
@@ -246,4 +234,59 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+}
+
+// getOrCreateClient retrieves an existing client or creates a new one
+func (s *Server) getOrCreateClient(clientID string) (*client.ChatClient, bool, error) {
+	s.clientsMux.RLock()
+	client_, exists := s.clients[clientID]
+	s.clientsMux.RUnlock()
+
+	if exists {
+		return client_, false, nil
+	}
+
+	s.logger.Info().Str("client_id", clientID).Msg("Creating new client")
+	client_, err := client.NewChatClient(clientID)
+	if err != nil {
+		s.logger.Error().Err(err).Str("client_id", clientID).Msg("Failed to create client")
+		return nil, false, fmt.Errorf("failed to create client: %w", err)
+	}
+
+	// Start the client using the server's context
+	if err := client_.Start(s.ctx); err != nil {
+		s.logger.Error().Err(err).Str("client_id", clientID).Msg("Failed to start client")
+		return nil, false, fmt.Errorf("failed to start client: %w", err)
+	}
+
+	s.RegisterClient(client_)
+	return client_, true, nil
+}
+
+// Close properly cleans up the server and all its clients
+func (s *Server) Close() error {
+	s.logger.Info().Msg("Closing server")
+
+	// Cancel the server context
+	s.cancel()
+
+	// Close all clients
+	s.clientsMux.Lock()
+	defer s.clientsMux.Unlock()
+
+	var errs []error
+	for id, client := range s.clients {
+		if err := client.Close(); err != nil {
+			s.logger.Error().Err(err).Str("client_id", id).Msg("Failed to close client")
+			errs = append(errs, fmt.Errorf("failed to close client %s: %w", id, err))
+		}
+	}
+
+	// Clear the clients map
+	s.clients = make(map[string]*client.ChatClient)
+
+	if len(errs) > 0 {
+		return fmt.Errorf("errors closing clients: %v", errs)
+	}
+	return nil
 }

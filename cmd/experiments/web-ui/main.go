@@ -3,8 +3,11 @@ package main
 import (
 	"context"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
-	"github.com/go-go-golems/geppetto/pkg/events"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
@@ -21,33 +24,46 @@ func main() {
 
 	log.Logger = logger
 
-	// Create event router with verbose logging
-	router, err := events.NewEventRouter(events.WithVerbose(true))
-	if err != nil {
-		logger.Fatal().Err(err).Msg("Failed to create event router")
-	}
-	defer router.Close()
-
-	// Start router in background
-	go func() {
-		logger.Info().Msg("Starting router")
-		if err := router.Run(context.Background()); err != nil {
-			logger.Fatal().Err(err).Msg("Router failed")
-		}
-		defer func() {
-			router.Close()
-			logger.Info().Msg("Router stopped")
-		}()
-	}()
-
 	// Create server
-	server := NewServer(router)
+	server := NewServer()
+	defer func() {
+		if err := server.Close(); err != nil {
+			logger.Error().Err(err).Msg("Error closing server")
+		}
+	}()
 
 	// Register handlers
 	server.Register()
 
-	logger.Info().Msg("Server starting on http://localhost:8080")
-	if err := http.ListenAndServe(":8080", nil); err != nil {
-		logger.Fatal().Err(err).Msg("Server failed")
+	// Create HTTP server
+	httpServer := &http.Server{
+		Addr:    ":8080",
+		Handler: nil, // Use default mux
 	}
+
+	// Handle graceful shutdown
+	done := make(chan os.Signal, 1)
+	signal.Notify(done, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
+
+	go func() {
+		logger.Info().Msg("Server starting on http://localhost:8080")
+		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			logger.Fatal().Err(err).Msg("Server failed")
+		}
+	}()
+
+	// Wait for interrupt signal
+	<-done
+	logger.Info().Msg("Server is shutting down...")
+
+	// Create shutdown context with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// Shutdown the server
+	if err := httpServer.Shutdown(ctx); err != nil {
+		logger.Error().Err(err).Msg("Server forced to shutdown")
+	}
+
+	logger.Info().Msg("Server exited properly")
 }

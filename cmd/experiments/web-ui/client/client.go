@@ -3,12 +3,12 @@ package client
 import (
 	"context"
 	"fmt"
-	steps2 "github.com/go-go-golems/geppetto/pkg/steps/ai/chat/steps"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/ThreeDotsLabs/watermill/message"
+	steps2 "github.com/go-go-golems/geppetto/pkg/steps/ai/chat/steps"
+
 	"github.com/go-go-golems/geppetto/pkg/conversation"
 	"github.com/go-go-golems/geppetto/pkg/events"
 	"github.com/go-go-golems/geppetto/pkg/steps"
@@ -41,7 +41,7 @@ type ChatClient struct {
 	logger       zerolog.Logger
 }
 
-// इंप्लीमेंट्स ChatEventHandler Interface Check - DO NOT REMOVE
+// ChatEventHandler Interface Check - DO NOT REMOVE
 var _ ChatEventHandler = (*ChatClient)(nil)
 
 type ChatClientOption func(*ChatClient) error
@@ -53,14 +53,20 @@ func WithStep(step chat.Step) ChatClientOption {
 	}
 }
 
-// NewChatClient creates a new SSE client
-func NewChatClient(id string, router *events.EventRouter, options ...ChatClientOption) *ChatClient {
+// NewChatClient creates a new SSE client with its own event router
+func NewChatClient(id string, options ...ChatClientOption) (*ChatClient, error) {
 	logger := zerolog.New(zerolog.NewConsoleWriter()).
 		With().
 		Timestamp().
 		Caller().
 		Str("client_id", id).
 		Logger()
+
+	// Create a new router for this client
+	router, err := events.NewEventRouter(events.WithVerbose(true))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create event router: %w", err)
+	}
 
 	client := &ChatClient{
 		ID:           id,
@@ -82,113 +88,42 @@ func NewChatClient(id string, router *events.EventRouter, options ...ChatClientO
 		}
 	}
 
-	// NOTE: Registration and running handlers is now done in the Start method.
-
-	return client
+	return client, nil
 }
 
-// Start registers the chat handler for the client and starts the event router handlers.
-// This should be called after the client is created.
+// Start registers the chat handler for the client and starts the event router handlers
 func (c *ChatClient) Start(ctx context.Context) error {
+	logger := c.logger.With().Str("client_id", c.ID).Logger()
+
 	// Register the client as the handler for its own chat events
-	err := c.registerChatHandler(ctx)
+	logger.Debug().Msg("Registering chat handler")
+	err := c.router.RegisterChatEventHandler(ctx, c.step, c.ID, c)
 	if err != nil {
-		c.logger.Error().Err(err).Msg("Failed to register chat handler")
+		logger.Error().Err(err).Msg("Failed to register chat handler")
 		return fmt.Errorf("failed to register chat handler: %w", err)
 	}
 
-	// Start the router handlers after registering ours, RunHandlers is idempotent and can be called multiple times
-	err = c.router.RunHandlers(ctx)
-	if err != nil {
-		c.logger.Error().Err(err).Msg("Failed to run event router handlers")
-		return fmt.Errorf("failed to run event router handlers: %w", err)
-	}
+	// Start the router in a goroutine
+	go func() {
+		c.logger.Info().Msg("Starting router for client")
+		if err := c.router.Run(ctx); err != nil {
+			logger.Error().Err(err).Msg("Router failed")
+		}
+		logger.Info().Msg("Router closed")
+	}()
 
 	c.logger.Info().Msg("ChatClient started and handlers running")
 	return nil
 }
 
-// createChatDispatchHandler creates a Watermill handler function that parses chat events
-// and dispatches them to the appropriate method of the provided ChatEventHandler.
-func createChatDispatchHandler(handler ChatEventHandler, logger zerolog.Logger) message.NoPublishHandlerFunc {
-	return func(msg *message.Message) error {
-		msgLogger := logger.With().Str("message_id", msg.UUID).Logger()
-		msgLogger.Debug().
-			Str("metadata", fmt.Sprintf("%v", msg.Metadata)).
-			Msg("Received message for chat handler")
-
-		// Parse the generic chat event
-		e, err := events.NewEventFromJson(msg.Payload)
-		if err != nil {
-			msgLogger.Error().Err(err).
-				Str("payload", string(msg.Payload)).
-				Msg("Failed to parse chat event from message payload")
-			// Don't kill the handler for one bad message, just log and continue
-			return nil // Or return err depending on desired resilience
-		}
-
-		msgLogger.Debug().
-			Str("event_type", string(e.Type())).
-			Msg("Parsed chat event")
-
-		// Dispatch to the specific handler method based on event type
-		// Pass the message context down to the handler
-		msgCtx := msg.Context()
-		var handlerErr error
-		switch ev := e.(type) {
-		case *events.EventPartialCompletion:
-			handlerErr = handler.HandlePartialCompletion(msgCtx, ev)
-		case *events.EventText:
-			handlerErr = handler.HandleText(msgCtx, ev)
-		case *events.EventFinal:
-			handlerErr = handler.HandleFinal(msgCtx, ev)
-		case *events.EventError:
-			handlerErr = handler.HandleError(msgCtx, ev)
-		case *events.EventInterrupt:
-			handlerErr = handler.HandleInterrupt(msgCtx, ev)
-		default:
-			msgLogger.Warn().Str("event_type", string(e.Type())).Msg("Unhandled chat event type")
-			// Decide if unknown types should be an error or ignored
-		}
-
-		if handlerErr != nil {
-			msgLogger.Error().Err(handlerErr).
-				Str("event_type", string(e.Type())).
-				Msg("Error processing chat event")
-			// Return the error to potentially signal Watermill handler failure
-			return handlerErr
-		}
-
-		return nil
+// Close properly cleans up the client and its router
+func (c *ChatClient) Close() error {
+	if err := c.router.Close(); err != nil {
+		c.logger.Error().Err(err).Msg("Failed to close router")
+		return err
 	}
-}
-
-// registerChatHandler sets up event publishing for the client's step and registers
-// the client itself as the handler for events on its topic.
-func (c *ChatClient) registerChatHandler(ctx context.Context) error {
-	topic := fmt.Sprintf("chat-%s", c.ID)
-	// Use client's logger instead of creating a new one or relying on context
-	logger := c.logger
-
-	logger.Info().Str("topic", topic).Msg("Setting up chat handler")
-
-	// Configure step to publish events to this client's topic
-	if err := c.step.AddPublishedTopic(c.router.Publisher, topic); err != nil {
-		logger.Error().Err(err).Msg("Failed to add published topic to step")
-		return fmt.Errorf("failed to setup event publishing for step: %w", err)
-	}
-
-	// Create the dispatch handler using the reusable function
-	dispatchHandler := createChatDispatchHandler(c, logger)
-
-	// Add the created handler to the router
-	c.router.AddHandler(
-		topic, // Handler name (using topic for uniqueness per client)
-		topic, // Topic to subscribe to
-		dispatchHandler,
-	)
-
-	logger.Info().Str("topic", topic).Msg("Chat handler added successfully")
+	close(c.MessageChan)
+	close(c.DisconnectCh)
 	return nil
 }
 
