@@ -4,16 +4,18 @@ import (
 	"context"
 	_ "embed"
 	"encoding/json"
+	"io"
+	"net/http"
+	neturl "net/url"
+	"os"
+	"strings"
+
 	"github.com/PuerkitoBio/goquery"
 	"github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
 	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
 	"github.com/go-go-golems/glazed/pkg/helpers/markdown"
 	"github.com/pkg/errors"
-	"io"
-	"net/http"
-	"os"
-	"strings"
 )
 
 type GetConversationCommand struct {
@@ -192,11 +194,11 @@ func (cmd *GetConversationCommand) RunIntoWriter(
 			}
 
 			if s.OnlyConversations {
-				outputJsons = append(outputJsons, data.Props.PageProps.ServerResponse.ServerResponseData.LinearConversation)
+				outputJsons = append(outputJsons, data.Props.PageProps.ServerResponse.LinearConversation)
 				continue
 			}
 
-			outputJsons = append(outputJsons, data.Props.PageProps.ServerResponse.ServerResponseData)
+			outputJsons = append(outputJsons, data.Props.PageProps.ServerResponse)
 		}
 
 		var data NextData
@@ -298,7 +300,29 @@ func (cmd *GetConversationCommand) RunIntoWriter(
 }
 
 func getContent(url string) ([]byte, error) {
-	resp, err := http.Get(url)
+	// Validate URL to ensure it's from trusted domains
+	parsedURL, err := neturl.Parse(url)
+	if err != nil {
+		return nil, errors.Wrap(err, "invalid URL format")
+	}
+
+	// Only allow specific domains (add more trusted domains as needed)
+	allowedDomains := []string{"chat.openai.com", "platform.openai.com"}
+
+	domainAllowed := false
+	for _, domain := range allowedDomains {
+		if parsedURL.Hostname() == domain {
+			domainAllowed = true
+			break
+		}
+	}
+
+	if !domainAllowed {
+		return nil, errors.Errorf("URL domain not allowed: %s", parsedURL.Hostname())
+	}
+
+	// Now make the request to the validated URL
+	resp, err := http.Get(url) // #nosec G107
 	if err != nil {
 		return nil, err
 	}

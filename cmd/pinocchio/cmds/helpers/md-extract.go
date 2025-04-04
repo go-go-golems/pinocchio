@@ -74,7 +74,7 @@ func NewExtractMdCommand() (*ExtractMdCommand, error) {
 
 func (c *ExtractMdCommand) RunIntoWriter(ctx context.Context, parsedLayers *layers.ParsedLayers, w io.Writer) error {
 	bw := bufio.NewWriter(w)
-	defer bw.Flush()
+	defer func() { _ = bw.Flush() }()
 
 	s := &ExtractMdSettings{}
 	err := parsedLayers.InitializeStruct(layers.DefaultSlug, s)
@@ -161,7 +161,7 @@ func generateOutput(blocks []markdown.MarkdownBlock, s *ExtractMdSettings) (stri
 			} else {
 				_, _ = fmt.Fprintln(bw, block.Content)
 			}
-			bw.Flush() // Flush after each write
+			_ = bw.Flush() // Flush after each write
 		}
 	case "list":
 		for _, block := range blocks {
@@ -180,7 +180,7 @@ func generateOutput(blocks []markdown.MarkdownBlock, s *ExtractMdSettings) (stri
 				_, _ = fmt.Fprintf(bw, "Type: normal\n%s\n", block.Content)
 			}
 			_, _ = fmt.Fprintln(bw, "---")
-			bw.Flush() // Flush after each write
+			_ = bw.Flush() // Flush after each write
 		}
 	case "yaml":
 		filteredBlocks := make([]markdown.MarkdownBlock, 0)
@@ -194,9 +194,9 @@ func generateOutput(blocks []markdown.MarkdownBlock, s *ExtractMdSettings) (stri
 		if err != nil {
 			return "", err
 		}
-		bw.Flush() // Flush after YAML encoding
+		_ = bw.Flush() // Flush after YAML encoding
 	}
 
-	bw.Flush()
+	_ = bw.Flush()
 	return buf.String(), nil
 }

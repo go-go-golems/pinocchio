@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
@@ -65,7 +66,14 @@ func (c *WebViewCommand) Run(
 	})
 
 	fmt.Printf("Starting web server on port %s...\n", s.Port)
-	return http.ListenAndServe(":"+s.Port, nil)
+	server := &http.Server{
+		Addr:              ":" + s.Port,
+		ReadTimeout:       60 * time.Second,
+		WriteTimeout:      60 * time.Second,
+		ReadHeaderTimeout: 10 * time.Second,
+		IdleTimeout:       120 * time.Second,
+	}
+	return server.ListenAndServe()
 }
 
 func NewWebViewCommand() (*WebViewCommand, error) {

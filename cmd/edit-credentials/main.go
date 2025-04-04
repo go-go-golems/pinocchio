@@ -21,7 +21,7 @@ var logger zerolog.Logger
 
 func init() {
 	// Initialize zerolog logger
-	logFile, err := os.OpenFile("/tmp/edit-credentials.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	logFile, err := os.OpenFile("/tmp/edit-credentials.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to open log file: %v\n", err)
 		os.Exit(1)
@@ -102,8 +102,8 @@ func (d customDelegate) Render(w io.Writer, m list.Model, index int, item list.I
 	// Check if this item is selected
 	if index == m.Index() {
 		// Render selected item with custom styling
-		fmt.Fprint(w, selectedItemStyle.Render(title))
-		fmt.Fprintf(w, "\n%s", selectedItemStyle.Render(desc))
+		_, _ = fmt.Fprint(w, selectedItemStyle.Render(title))
+		_, _ = fmt.Fprintf(w, "\n%s", selectedItemStyle.Render(desc))
 	} else {
 		// Use the default delegate's rendering for non-selected items
 		d.DefaultDelegate.Render(w, m, index, item)
@@ -757,10 +757,10 @@ func main() {
 	}
 
 	// Apply fixed width styles to the delegate
-	delegate.DefaultDelegate.Styles.NormalTitle = fixedWidthTitleStyle
-	delegate.DefaultDelegate.Styles.NormalDesc = fixedWidthDescStyle
-	delegate.DefaultDelegate.Styles.SelectedTitle = selectedFixedWidthTitleStyle
-	delegate.DefaultDelegate.Styles.SelectedDesc = selectedFixedWidthDescStyle
+	delegate.Styles.NormalTitle = fixedWidthTitleStyle
+	delegate.Styles.NormalDesc = fixedWidthDescStyle
+	delegate.Styles.SelectedTitle = selectedFixedWidthTitleStyle
+	delegate.Styles.SelectedDesc = selectedFixedWidthDescStyle
 	logger.Debug().Msg("Applied fixed width styles to delegate")
 
 	// Create the list with the custom delegate

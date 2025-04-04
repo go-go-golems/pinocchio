@@ -2,13 +2,14 @@ package tokens
 
 import (
 	"context"
+	"io"
+	"strconv"
+	"strings"
+
 	"github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
 	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
 	"github.com/pkg/errors"
-	"io"
-	"strconv"
-	"strings"
 )
 
 type DecodeCommand struct {
@@ -79,6 +80,9 @@ func (d *DecodeCommand) RunIntoWriter(
 		id, err := strconv.Atoi(t)
 		if err != nil {
 			return errors.Errorf("invalid token id: %s", t)
+		}
+		if id < 0 {
+			return errors.Errorf("invalid token ID: %d (must be non-negative)", id)
 		}
 		ids = append(ids, uint(id))
 	}

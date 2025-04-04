@@ -2,14 +2,15 @@ package tokens
 
 import (
 	"context"
+	"io"
+	"strconv"
+	"strings"
+
 	"github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
 	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
 	"github.com/pkg/errors"
 	_ "github.com/tiktoken-go/tokenizer"
-	"io"
-	"strconv"
-	"strings"
 )
 
 type EncodeCommand struct {
@@ -81,7 +82,7 @@ func (cmd *EncodeCommand) RunIntoWriter(
 
 	var textIds []string
 	for _, id := range ids {
-		textIds = append(textIds, strconv.Itoa(int(id)))
+		textIds = append(textIds, strconv.FormatUint(uint64(id), 10))
 	}
 
 	// Write the result into provided io.Writer

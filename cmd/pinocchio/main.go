@@ -25,7 +25,6 @@ import (
 	"github.com/go-go-golems/pinocchio/cmd/pinocchio/cmds/tokens"
 	pinocchio_docs "github.com/go-go-golems/pinocchio/cmd/pinocchio/doc"
 	"github.com/go-go-golems/pinocchio/pkg/cmds"
-	pinocchio_cmds2 "github.com/go-go-golems/pinocchio/pkg/cmds"
 	"github.com/go-go-golems/pinocchio/pkg/cmds/cmdlayers"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
@@ -53,7 +52,7 @@ func main() {
 			fmt.Printf("Could not read file: %v\n", err)
 			os.Exit(1)
 		}
-		cmds_, err := pinocchio_cmds2.LoadFromYAML(bytes)
+		cmds_, err := cmds.LoadFromYAML(bytes)
 		if err != nil {
 			fmt.Printf("Could not load command: %v\n", err)
 			os.Exit(1)

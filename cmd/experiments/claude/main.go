@@ -206,7 +206,7 @@ func testBlockMerger() {
 
 		for _, partialCompletion := range completions {
 			v_, _ := yaml.Marshal(partialCompletion)
-			fmt.Println(v_)
+			fmt.Println(string(v_))
 		}
 	}
 

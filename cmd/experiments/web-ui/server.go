@@ -59,7 +59,7 @@ func (s *Server) UnregisterClient(clientID string) {
 	s.clientsMux.Lock()
 	defer s.clientsMux.Unlock()
 	if client, ok := s.clients[clientID]; ok {
-		client.Close()
+		_ = client.Close()
 		delete(s.clients, clientID)
 		s.logger.Info().Str("client_id", clientID).Msg("Unregistered client")
 	}
@@ -163,15 +163,15 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 			// Handle multiline messages by prefacing each line with data:
 			lines := strings.Split(msg, "\n")
 			s.logger.Info().Str("client_id", client_.ID).Str("message", msg).Msg("Sending SSE message")
-			fmt.Fprintf(w, "event: message\n")
+			_, _ = fmt.Fprintf(w, "event: message\n")
 			for _, line := range lines {
-				fmt.Fprintf(w, "data: %s\n", line)
+				_, _ = fmt.Fprintf(w, "data: %s\n", line)
 			}
-			fmt.Fprintf(w, "\n")
+			_, _ = fmt.Fprintf(w, "\n")
 			flusher.Flush()
 		case <-time.After(30 * time.Second):
 			// Send heartbeat to keep connection alive
-			fmt.Fprintf(w, "event: heartbeat\ndata: ping\n\n")
+			_, _ = fmt.Fprintf(w, "event: heartbeat\ndata: ping\n\n")
 			flusher.Flush()
 			s.logger.Debug().Str("client_id", client_.ID).Msg("Sent heartbeat")
 		}

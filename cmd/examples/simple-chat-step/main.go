@@ -163,11 +163,12 @@ func main() {
 	cobra.CheckErr(err)
 
 	// Register the command as a normal cobra command and let it parse its step settings by itself
-	cli.AddCommandsToRootCommand(
+	err = cli.AddCommandsToRootCommand(
 		rootCmd, commands, nil,
 		cli.WithCobraMiddlewaresFunc(pinocchio_cmds.GetCobraCommandGeppettoMiddlewares),
 		cli.WithCobraShortHelpLayers(layers.DefaultSlug, cmdlayers.GeppettoHelpersSlug),
 	)
+	cobra.CheckErr(err)
 
 	// Add the test command as wrapped by NewTestCommand
 	if len(commands) == 1 {
