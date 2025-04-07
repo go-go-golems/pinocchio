@@ -9,9 +9,8 @@ before:
     - go generate ./...
 builds:
   - main: ./cmd/pinocchio
-    # CGO_ENABLED=1 is required for the sqlite driver
     env:
-      - CGO_ENABLED=1
+      - CGO_ENABLED=0
     goos:
       - linux
 # I am not able to test windows at the time
