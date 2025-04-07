@@ -15,6 +15,11 @@ linters:
     #    - gochecknoinits
     - nonamedreturns
     - predeclared
+  exclusions:
+    rules:
+      - linters:
+          - staticcheck
+        text: 'SA1019: cli.CreateProcessorLegacy'
 
 formatters:
   enable:
@@ -23,9 +28,3 @@ formatters:
 linters-settings:
   govet:
     check-shadowing: true
-
-issues:
-  exclude-rules:
-    - linters:
-        - staticcheck
-      text: 'SA1019: cli.CreateProcessorLegacy'

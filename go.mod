@@ -14,10 +14,10 @@ require (
 	github.com/dave/jennifer v1.7.0
 	github.com/dop251/goja v0.0.0-20241024094426-79f3a7efcdbd
 	github.com/dop251/goja_nodejs v0.0.0-20240728170619-29b559befffc
-	github.com/go-go-golems/bobatea v0.0.15
-	github.com/go-go-golems/clay v0.1.35
+	github.com/go-go-golems/bobatea v0.0.16
+	github.com/go-go-golems/clay v0.1.37
 	github.com/go-go-golems/geppetto v0.4.46
-	github.com/go-go-golems/glazed v0.5.40
+	github.com/go-go-golems/glazed v0.5.43
 	github.com/go-go-golems/prompto v0.1.8
 	github.com/google/uuid v1.6.0
 	github.com/iancoleman/strcase v0.3.0
@@ -34,7 +34,7 @@ require (
 	github.com/tiktoken-go/tokenizer v0.2.0
 	github.com/weaviate/tiktoken-go v0.0.2
 	github.com/wk8/go-ordered-map/v2 v2.1.8
-	golang.org/x/sync v0.12.0
+	golang.org/x/sync v0.13.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
@@ -131,9 +131,9 @@ require (
 	golang.org/x/crypto v0.36.0 // indirect
 	golang.org/x/exp v0.0.0-20231006140011-7918f672742d // indirect
 	golang.org/x/net v0.38.0 // indirect
-	golang.org/x/sys v0.31.0 // indirect
-	golang.org/x/term v0.30.0 // indirect
-	golang.org/x/text v0.23.0 // indirect
+	golang.org/x/sys v0.32.0 // indirect
+	golang.org/x/term v0.31.0 // indirect
+	golang.org/x/text v0.24.0 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	k8s.io/client-go v0.29.1 // indirect

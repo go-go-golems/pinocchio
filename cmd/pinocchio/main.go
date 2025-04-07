@@ -13,6 +13,7 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cli"
 	glazed_cmds "github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
+	"github.com/go-go-golems/glazed/pkg/cmds/logging"
 	"github.com/go-go-golems/glazed/pkg/help"
 	pinocchio_cmds "github.com/go-go-golems/pinocchio/cmd/pinocchio/cmds"
 	"github.com/go-go-golems/pinocchio/cmd/pinocchio/cmds/catter"
@@ -29,6 +30,8 @@ import (
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+
+	"github.com/rs/zerolog/log"
 )
 
 var version = "dev"
@@ -40,6 +43,13 @@ var rootCmd = &cobra.Command{
 	Use:     "pinocchio",
 	Short:   "pinocchio is a tool to run LLM applications",
 	Version: version,
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		err := logging.InitLoggerFromViper()
+		if err != nil {
+			return err
+		}
+		return nil
+	},
 }
 
 func main() {
@@ -109,6 +119,8 @@ func initRootCmd() (*help.HelpSystem, error) {
 
 	err = clay.InitViper("pinocchio", rootCmd)
 	cobra.CheckErr(err)
+
+	log.Info().Msg("Initializing root command")
 
 	rootCmd.AddCommand(runCommandCmd)
 	rootCmd.AddCommand(pinocchio_cmds.NewCodegenCommand())

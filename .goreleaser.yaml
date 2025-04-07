@@ -8,10 +8,10 @@ before:
     # you may remove this if you don't need go generate
     - go generate ./...
 builds:
-  - env:
-      - CGO_ENABLED=0
-    main: ./cmd/pinocchio
-    binary: pinocchio
+  - main: ./cmd/pinocchio
+    # CGO_ENABLED=1 is required for the sqlite driver
+    env:
+      - CGO_ENABLED=1
     goos:
       - linux
 # I am not able to test windows at the time
@@ -47,9 +47,7 @@ brews:
       name: homebrew-go-go-go
       token: "{{ .Env.TAP_GITHUB_TOKEN }}"
 nfpms:
-  -
-    id: packages
-
+  - id: pinocchio
     vendor: GO GO GOLEMS
     homepage: https://github.com/go-go-golems/
     maintainer: Manuel Odendahl <wesen@ruinwesen.com>
