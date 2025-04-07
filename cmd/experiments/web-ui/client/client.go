@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/go-go-golems/geppetto/pkg/conversation"
 	"github.com/go-go-golems/geppetto/pkg/events"
 	"github.com/go-go-golems/geppetto/pkg/steps"
@@ -16,6 +15,16 @@ import (
 	"github.com/go-go-golems/pinocchio/cmd/experiments/web-ui/templates/components"
 	"github.com/rs/zerolog"
 )
+
+// ChatEventHandler defines an interface for handling different chat events.
+type ChatEventHandler interface {
+	HandlePartialCompletion(ctx context.Context, e *events.EventPartialCompletion) error
+	HandleText(ctx context.Context, e *events.EventText) error // Assuming we might want separate handling
+	HandleFinal(ctx context.Context, e *events.EventFinal) error
+	HandleError(ctx context.Context, e *events.EventError) error
+	HandleInterrupt(ctx context.Context, e *events.EventInterrupt) error
+	// Add other event types as needed, e.g., HandleMetadata, HandleToolCall, etc.
+}
 
 // ChatClient represents a connected SSE client
 type ChatClient struct {
@@ -30,6 +39,9 @@ type ChatClient struct {
 	logger       zerolog.Logger
 }
 
+// ChatEventHandler Interface Check - DO NOT REMOVE
+var _ ChatEventHandler = (*ChatClient)(nil)
+
 type ChatClientOption func(*ChatClient) error
 
 func WithStep(step chat.Step) ChatClientOption {
@@ -39,14 +51,20 @@ func WithStep(step chat.Step) ChatClientOption {
 	}
 }
 
-// NewChatClient creates a new SSE client
-func NewChatClient(id string, router *events.EventRouter, options ...ChatClientOption) *ChatClient {
+// NewChatClient creates a new SSE client with its own event router
+func NewChatClient(id string, options ...ChatClientOption) (*ChatClient, error) {
 	logger := zerolog.New(zerolog.NewConsoleWriter()).
 		With().
 		Timestamp().
 		Caller().
 		Str("client_id", id).
 		Logger()
+
+	// Create a new router for this client
+	router, err := events.NewEventRouter(events.WithVerbose(true))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create event router: %w", err)
+	}
 
 	client := &ChatClient{
 		ID:           id,
@@ -57,83 +75,56 @@ func NewChatClient(id string, router *events.EventRouter, options ...ChatClientO
 		logger:       logger,
 	}
 
-	// Set default step if none provided
-	defaultStep := chat.NewEchoStep()
-	options = append([]ChatClientOption{WithStep(defaultStep)}, options...)
-
 	// Apply options
 	for _, opt := range options {
 		if err := opt(client); err != nil {
 			client.logger.Error().Err(err).Msg("Failed to apply client option")
+			return nil, fmt.Errorf("failed to apply client option: %w", err)
 		}
 	}
 
-	// Setup topic and event routing
-	topic := fmt.Sprintf("chat-%s", id)
-	if err := client.step.AddPublishedTopic(router.Publisher, topic); err != nil {
-		client.logger.Error().Err(err).Msg("Failed to setup event publishing")
-		return client
+	// Verify that a step was provided
+	if client.step == nil {
+		return nil, fmt.Errorf("no step provided to chat client")
 	}
 
-	// Add handler for this client's events
-	client.logger.Info().Str("topic", topic).Msg("Adding handler")
-	router.AddHandler(
-		topic,
-		topic,
-		func(msg *message.Message) error {
-			baseLogger := client.logger.With().Str("message_id", msg.UUID).Logger()
-			baseLogger.Debug().
-				Str("metadata", fmt.Sprintf("%v", msg.Metadata)).
-				Msg("Received message from router")
+	return client, nil
+}
 
-			// Parse event
-			e, err := chat.NewEventFromJson(msg.Payload)
-			if err != nil {
-				baseLogger.Error().Err(err).
-					Str("payload", string(msg.Payload)).
-					Msg("Failed to parse event")
-				return err
-			}
+// Start registers the chat handler for the client and starts the event router handlers
+func (c *ChatClient) Start(ctx context.Context) error {
+	logger := c.logger.With().Str("client_id", c.ID).Logger()
 
-			baseLogger.Debug().
-				Str("event_type", string(e.Type())).
-				Msg("Parsed event")
-
-			// Convert to HTML
-			html, err := client.EventToHTML(e)
-			if err != nil {
-				baseLogger.Error().Err(err).
-					Str("event_type", string(e.Type())).
-					Msg("Failed to convert event to HTML")
-				return err
-			}
-
-			baseLogger.Debug().
-				Str("event_type", string(e.Type())).
-				Int("html_length", len(html)).
-				Msg("Converted event to HTML")
-
-			// Try to send without blocking
-			select {
-			case client.MessageChan <- html:
-				baseLogger.Debug().
-					Str("event_type", string(e.Type())).
-					Msg("Sent message to client")
-			default:
-				baseLogger.Warn().
-					Str("event_type", string(e.Type())).
-					Msg("Failed to send message to client (channel full)")
-			}
-
-			return nil
-		},
-	)
-	err := router.RunHandlers(context.Background())
+	// Register the client as the handler for its own chat events
+	logger.Debug().Msg("Registering chat handler")
+	err := c.router.RegisterChatEventHandler(ctx, c.step, c.ID, c)
 	if err != nil {
-		client.logger.Error().Err(err).Msg("Failed to run event router")
+		logger.Error().Err(err).Msg("Failed to register chat handler")
+		return fmt.Errorf("failed to register chat handler: %w", err)
 	}
 
-	return client
+	// Start the router in a goroutine
+	go func() {
+		c.logger.Info().Msg("Starting router for client")
+		if err := c.router.Run(ctx); err != nil {
+			logger.Error().Err(err).Msg("Router failed")
+		}
+		logger.Info().Msg("Router closed")
+	}()
+
+	c.logger.Info().Msg("ChatClient started and handlers running")
+	return nil
+}
+
+// Close properly cleans up the client and its router
+func (c *ChatClient) Close() error {
+	if err := c.router.Close(); err != nil {
+		c.logger.Error().Err(err).Msg("Failed to close router")
+		return err
+	}
+	close(c.MessageChan)
+	close(c.DisconnectCh)
+	return nil
 }
 
 // SendUserMessage sends a user message to the conversation and starts a chat step
@@ -209,57 +200,102 @@ func (c *ChatClient) GetConversation() []*conversation.Message {
 	return c.manager.GetConversation()
 }
 
-// EventToHTML converts a chat event to HTML
-func (c *ChatClient) EventToHTML(e chat.Event) (string, error) {
+// --- ChatEventHandler Implementation ---
+
+func (c *ChatClient) HandlePartialCompletion(ctx context.Context, e *events.EventPartialCompletion) error {
 	var buf strings.Builder
 	now := time.Now()
+	err := components.AssistantMessage(now, e.Completion).Render(ctx, &buf)
+	if err != nil {
+		c.logger.Error().Err(err).Msg("Failed to render partial completion event")
+		return fmt.Errorf("failed to render partial completion event: %w", err)
+	}
+	c.sendHTMLToClient(buf.String(), e.Type())
+	return nil
+}
 
-	switch e_ := e.(type) {
-	case *chat.EventPartialCompletion:
-		// Partial completions are sent directly as text
-		err := components.AssistantMessage(now, e_.Completion).Render(context.Background(), &buf)
-		if err != nil {
-			return "", fmt.Errorf("failed to render partial completion event: %w", err)
-		}
-	case *chat.EventText:
-		err := components.EventFinal(now, e_.Text).Render(context.Background(), &buf)
-		if err != nil {
-			return "", fmt.Errorf("failed to render text event: %w", err)
-		}
-	case *chat.EventFinal:
-		// err := components.EventFinal(now, e_.Text).Render(context.Background(), &buf)
-		// if err != nil {
-		// 	return "", fmt.Errorf("failed to render final event: %w", err)
-		// }
-		// XXX not the best place
-		c.manager.AppendMessages(conversation.NewChatMessage(conversation.RoleAssistant, e_.Text))
+func (c *ChatClient) HandleText(ctx context.Context, e *events.EventText) error {
+	// NOTE: Currently, EventFinal seems to be used for the final text.
+	// Decide if EventText needs separate handling or can be merged with EventFinal.
+	// For now, rendering it similarly to a final message fragment.
+	var buf strings.Builder
+	now := time.Now()
+	err := components.EventFinal(now, e.Text).Render(ctx, &buf) // Using EventFinal component for now
+	if err != nil {
+		c.logger.Error().Err(err).Msg("Failed to render text event")
+		return fmt.Errorf("failed to render text event: %w", err)
+	}
+	c.sendHTMLToClient(buf.String(), e.Type())
+	return nil
+}
 
-		conv := c.manager.GetConversation()
-		webConv, err := web_conversation.ConvertConversation(conv)
-		if err != nil {
-			return "", fmt.Errorf("failed to convert conversation to web format: %w", err)
-		}
-		err = components.ConversationHistory(webConv, true).Render(context.Background(), &buf)
-		if err != nil {
-			return "", fmt.Errorf("failed to render conversation history: %w", err)
-		}
-	case *chat.EventError:
-		errStr := ""
-		if err := e_.Error(); err != nil {
-			errStr = err.Error()
-		}
-		err := components.EventError(now, errStr).Render(context.Background(), &buf)
-		if err != nil {
-			return "", fmt.Errorf("failed to render error event: %w", err)
-		}
-	case *chat.EventInterrupt:
-		err := components.EventError(now, e_.Text).Render(context.Background(), &buf)
-		if err != nil {
-			return "", fmt.Errorf("failed to render interrupt event: %w", err)
-		}
-	default:
-		return "", fmt.Errorf("unknown event type: %T", e)
+func (c *ChatClient) HandleFinal(ctx context.Context, e *events.EventFinal) error {
+	// XXX not the best place - This logic might be better suited elsewhere,
+	// perhaps after the step finishes entirely, but placing it here ensures
+	// the conversation history is updated before the UI refresh.
+	c.mu.Lock()
+	c.manager.AppendMessages(conversation.NewChatMessage(conversation.RoleAssistant, e.Text))
+	conv := c.manager.GetConversation() // Get updated conversation
+	c.mu.Unlock()                       // Unlock before rendering to avoid holding lock during potentially slow operations
+
+	var buf strings.Builder
+	webConv, err := web_conversation.ConvertConversation(conv)
+	if err != nil {
+		c.logger.Error().Err(err).Msg("Failed to convert conversation to web format")
+		return fmt.Errorf("failed to convert conversation to web format: %w", err)
 	}
 
-	return buf.String(), nil
+	// Render the entire conversation history
+	err = components.ConversationHistory(webConv, true).Render(ctx, &buf)
+	if err != nil {
+		c.logger.Error().Err(err).Msg("Failed to render conversation history")
+		return fmt.Errorf("failed to render conversation history: %w", err)
+	}
+
+	c.sendHTMLToClient(buf.String(), e.Type())
+	return nil
+}
+
+func (c *ChatClient) HandleError(ctx context.Context, e *events.EventError) error {
+	var buf strings.Builder
+	now := time.Now()
+	errStr := ""
+	if err := e.Error(); err != nil {
+		errStr = err.Error()
+	}
+	err := components.EventError(now, errStr).Render(ctx, &buf)
+	if err != nil {
+		c.logger.Error().Err(err).Msg("Failed to render error event")
+		return fmt.Errorf("failed to render error event: %w", err)
+	}
+	c.sendHTMLToClient(buf.String(), e.Type())
+	return nil
+}
+
+func (c *ChatClient) HandleInterrupt(ctx context.Context, e *events.EventInterrupt) error {
+	var buf strings.Builder
+	now := time.Now()
+	// Rendering as an error for now, consider a specific interrupt component later
+	err := components.EventError(now, e.Text).Render(ctx, &buf)
+	if err != nil {
+		c.logger.Error().Err(err).Msg("Failed to render interrupt event")
+		return fmt.Errorf("failed to render interrupt event: %w", err)
+	}
+	c.sendHTMLToClient(buf.String(), e.Type())
+	return nil
+}
+
+// sendHTMLToClient tries to send rendered HTML to the client's channel without blocking.
+func (c *ChatClient) sendHTMLToClient(html string, eventType events.EventType) {
+	select {
+	case c.MessageChan <- html:
+		c.logger.Debug().
+			Str("event_type", string(eventType)).
+			Int("html_length", len(html)).
+			Msg("Sent HTML message to client")
+	default:
+		c.logger.Warn().
+			Str("event_type", string(eventType)).
+			Msg("Failed to send HTML message to client (channel full)")
+	}
 }

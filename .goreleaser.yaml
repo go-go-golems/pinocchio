@@ -8,15 +8,17 @@ before:
     # you may remove this if you don't need go generate
     - go generate ./...
 builds:
-  - env:
+  - main: ./cmd/pinocchio
+    env:
       - CGO_ENABLED=0
-    main: ./cmd/pinocchio
-    binary: pinocchio
     goos:
       - linux
 # I am not able to test windows at the time
 #      - windows
       - darwin
+    goarch:
+      - amd64
+      - arm64
 checksum:
   name_template: 'checksums.txt'
 
@@ -44,9 +46,7 @@ brews:
       name: homebrew-go-go-go
       token: "{{ .Env.TAP_GITHUB_TOKEN }}"
 nfpms:
-  -
-    id: packages
-
+  - id: pinocchio
     vendor: GO GO GOLEMS
     homepage: https://github.com/go-go-golems/
     maintainer: Manuel Odendahl <wesen@ruinwesen.com>
@@ -62,7 +62,7 @@ nfpms:
       - rpm
 
     # Version Release.
-    release: 1
+    release: "1"
 
     # Section.
     section: default

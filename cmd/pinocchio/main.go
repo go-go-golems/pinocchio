@@ -13,6 +13,7 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cli"
 	glazed_cmds "github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
+	"github.com/go-go-golems/glazed/pkg/cmds/logging"
 	"github.com/go-go-golems/glazed/pkg/help"
 	pinocchio_cmds "github.com/go-go-golems/pinocchio/cmd/pinocchio/cmds"
 	"github.com/go-go-golems/pinocchio/cmd/pinocchio/cmds/catter"
@@ -25,7 +26,6 @@ import (
 	"github.com/go-go-golems/pinocchio/cmd/pinocchio/cmds/tokens"
 	pinocchio_docs "github.com/go-go-golems/pinocchio/cmd/pinocchio/doc"
 	"github.com/go-go-golems/pinocchio/pkg/cmds"
-	pinocchio_cmds2 "github.com/go-go-golems/pinocchio/pkg/cmds"
 	"github.com/go-go-golems/pinocchio/pkg/cmds/cmdlayers"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
@@ -41,6 +41,13 @@ var rootCmd = &cobra.Command{
 	Use:     "pinocchio",
 	Short:   "pinocchio is a tool to run LLM applications",
 	Version: version,
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		err := logging.InitLoggerFromViper()
+		if err != nil {
+			return err
+		}
+		return nil
+	},
 }
 
 func main() {
@@ -53,7 +60,7 @@ func main() {
 			fmt.Printf("Could not read file: %v\n", err)
 			os.Exit(1)
 		}
-		cmds_, err := pinocchio_cmds2.LoadFromYAML(bytes)
+		cmds_, err := cmds.LoadFromYAML(bytes)
 		if err != nil {
 			fmt.Printf("Could not load command: %v\n", err)
 			os.Exit(1)

@@ -10,7 +10,6 @@ import (
 	clay "github.com/go-go-golems/clay/pkg"
 	"github.com/go-go-golems/geppetto/pkg/conversation"
 	"github.com/go-go-golems/geppetto/pkg/events"
-	"github.com/go-go-golems/geppetto/pkg/steps/ai/chat"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/openai"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 	glazed_cmds "github.com/go-go-golems/glazed/pkg/cmds"
@@ -117,7 +116,7 @@ func (t *ToolUiCommand) RunIntoGlazeProcessor(
 	} else {
 		t.eventRouter.AddHandler("ui-stdout",
 			"ui",
-			chat.StepPrinterFunc("UI", os.Stdout),
+			events.StepPrinterFunc("UI", os.Stdout),
 		)
 	}
 

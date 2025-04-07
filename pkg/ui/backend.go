@@ -3,6 +3,7 @@ package ui
 import (
 	"context"
 	"fmt"
+	"github.com/go-go-golems/geppetto/pkg/events"
 
 	"github.com/ThreeDotsLabs/watermill/message"
 	tea "github.com/charmbracelet/bubbletea"
@@ -81,7 +82,7 @@ func StepChatForwardFunc(p *tea.Program) func(msg *message.Message) error {
 	return func(msg *message.Message) error {
 		msg.Ack()
 
-		e, err := chat.NewEventFromJson(msg.Payload)
+		e, err := events.NewEventFromJson(msg.Payload)
 		if err != nil {
 			return err
 		}
@@ -95,25 +96,25 @@ func StepChatForwardFunc(p *tea.Program) func(msg *message.Message) error {
 		}
 		log.Debug().Interface("event", e).Msg("Dispatching event to UI")
 		switch e_ := e.(type) {
-		case *chat.EventError:
+		case *events.EventError:
 			p.Send(conversation2.StreamCompletionError{
 				StreamMetadata: metadata,
 				Err:            e_.Error(),
 			})
-		case *chat.EventPartialCompletion:
+		case *events.EventPartialCompletion:
 			p.Send(conversation2.StreamCompletionMsg{
 				StreamMetadata: metadata,
 				Delta:          e_.Delta,
 				Completion:     e_.Completion,
 			})
-		case *chat.EventFinal:
+		case *events.EventFinal:
 			p.Send(conversation2.StreamDoneMsg{
 				StreamMetadata: metadata,
 				Completion:     e_.Text,
 			})
 
-		case *chat.EventInterrupt:
-			p_, ok := chat.ToTypedEvent[chat.EventInterrupt](e)
+		case *events.EventInterrupt:
+			p_, ok := events.ToTypedEvent[events.EventInterrupt](e)
 			if !ok {
 				return errors.New("payload is not of type EventInterrupt")
 			}
@@ -122,18 +123,18 @@ func StepChatForwardFunc(p *tea.Program) func(msg *message.Message) error {
 				Completion:     p_.Text,
 			})
 
-		case *chat.EventToolCall:
+		case *events.EventToolCall:
 			p.Send(conversation2.StreamDoneMsg{
 				StreamMetadata: metadata,
 				Completion:     fmt.Sprintf("%s(%s)", e_.ToolCall.Name, e_.ToolCall.Input),
 			})
-		case *chat.EventToolResult:
+		case *events.EventToolResult:
 			p.Send(conversation2.StreamDoneMsg{
 				StreamMetadata: metadata,
 				Completion:     fmt.Sprintf("Result: %s", e_.ToolResult.Result),
 			})
 
-		case *chat.EventPartialCompletionStart:
+		case *events.EventPartialCompletionStart:
 			p.Send(conversation2.StreamStartMsg{
 				StreamMetadata: metadata,
 			})

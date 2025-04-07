@@ -383,7 +383,9 @@ func NewHistoryFile(rootDir, path string) (HistoryFile, error) {
 		// Try to read content
 		file, err := os.Open(fullPath)
 		if err == nil {
-			defer file.Close()
+			defer func() {
+				_ = file.Close()
+			}()
 			// Read file content as JSON
 			var jsonData map[string]interface{}
 			if err := json.NewDecoder(file).Decode(&jsonData); err == nil {

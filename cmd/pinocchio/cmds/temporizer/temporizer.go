@@ -33,7 +33,7 @@ func NewTemporizerCommand() *cobra.Command {
 				_, _ = fmt.Fprintf(os.Stderr, "Error creating temporary file: %v\n", err)
 				os.Exit(1)
 			}
-			defer tempFile.Close()
+			defer func() { _ = tempFile.Close() }()
 
 			// Write prefix content if specified
 			if contentPrefix != "" {

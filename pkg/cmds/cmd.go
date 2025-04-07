@@ -286,10 +286,10 @@ func (g *PinocchioCommand) runBlocking(ctx context.Context, rc *run.RunContext) 
 
 		// Add default printer if none is set
 		if rc.UISettings == nil || rc.UISettings.Output == "" {
-			rc.Router.AddHandler("chat", "chat", chat.StepPrinterFunc("", rc.Writer))
+			rc.Router.AddHandler("chat", "chat", events.StepPrinterFunc("", rc.Writer))
 		} else {
-			printer := chat.NewStructuredPrinter(rc.Writer, chat.PrinterOptions{
-				Format:          chat.PrinterFormat(rc.UISettings.Output),
+			printer := events.NewStructuredPrinter(rc.Writer, events.PrinterOptions{
+				Format:          events.PrinterFormat(rc.UISettings.Output),
 				Name:            "",
 				IncludeMetadata: rc.UISettings.WithMetadata,
 				Full:            rc.UISettings.FullOutput,
@@ -373,18 +373,25 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) ([]*
 	// Start router in a goroutine
 	eg := errgroup.Group{}
 	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
 
-	eg.Go(func() error {
-		defer cancel()
+	f := func() {
+		cancel()
 		defer func(Router *events.EventRouter) {
 			_ = Router.Close()
 		}(rc.Router)
-		return rc.Router.Run(ctx)
+	}
+
+	eg.Go(func() error {
+		defer f()
+		ret := rc.Router.Run(ctx)
+		if ret != nil {
+			return ret
+		}
+		return nil
 	})
 
 	eg.Go(func() error {
-		defer cancel()
+		defer f()
 
 		// Wait for router to be ready
 		<-rc.Router.Running()
@@ -399,10 +406,10 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) ([]*
 
 			// Add default printer for initial step
 			if rc.UISettings == nil || rc.UISettings.Output == "" || rc.UISettings.Output == "text" {
-				rc.Router.AddHandler("chat", "chat", chat.StepPrinterFunc("", rc.Writer))
+				rc.Router.AddHandler("chat", "chat", events.StepPrinterFunc("", rc.Writer))
 			} else {
-				printer := chat.NewStructuredPrinter(rc.Writer, chat.PrinterOptions{
-					Format:          chat.PrinterFormat(rc.UISettings.Output),
+				printer := events.NewStructuredPrinter(rc.Writer, events.PrinterOptions{
+					Format:          events.PrinterFormat(rc.UISettings.Output),
 					Name:            "",
 					IncludeMetadata: rc.UISettings.WithMetadata,
 					Full:            rc.UISettings.FullOutput,

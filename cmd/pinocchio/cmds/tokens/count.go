@@ -3,11 +3,12 @@ package tokens
 import (
 	"context"
 	"fmt"
+	"io"
+
 	"github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
 	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
 	"github.com/pkg/errors"
-	"io"
 )
 
 type CountCommand struct {
@@ -82,15 +83,15 @@ func (cc *CountCommand) RunIntoWriter(
 
 	// Write the result to the provided writer.
 	// print model and encoding
-	_, err = w.Write([]byte(fmt.Sprintf("Model: %s\n", s.Model)))
+	_, err = fmt.Fprintf(w, "Model: %s\n", s.Model)
 	if err != nil {
 		return errors.Wrap(err, "error writing to output")
 	}
-	_, err = w.Write([]byte(fmt.Sprintf("Codec: %s\n", codecStr)))
+	_, err = fmt.Fprintf(w, "Codec: %s\n", codecStr)
 	if err != nil {
 		return errors.Wrap(err, "error writing to output")
 	}
-	_, err = w.Write([]byte(fmt.Sprintf("Total tokens: %d\n", count)))
+	_, err = fmt.Fprintf(w, "Total tokens: %d\n", count)
 	if err != nil {
 		return errors.Wrap(err, "error writing to output")
 	}

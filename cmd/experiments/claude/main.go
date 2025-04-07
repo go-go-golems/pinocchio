@@ -8,8 +8,8 @@ import (
 
 	"github.com/go-go-golems/clay/pkg"
 	"github.com/go-go-golems/geppetto/pkg/conversation"
+	"github.com/go-go-golems/geppetto/pkg/events"
 	"github.com/go-go-golems/geppetto/pkg/steps"
-	"github.com/go-go-golems/geppetto/pkg/steps/ai/chat"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/claude"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/claude/api"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
@@ -176,13 +176,13 @@ func streamTestRequest() (<-chan api.StreamingEvent, *settings.StepSettings, boo
 }
 
 func testBlockMerger() {
-	events, stepSettings, done := streamTestRequest()
+	events_, stepSettings, done := streamTestRequest()
 	if done {
 		fmt.Println("Error streaming message")
 		return
 	}
 
-	metadata := chat.EventMetadata{
+	metadata := events.EventMetadata{
 		ID:       conversation.NewNodeID(),
 		ParentID: conversation.NewNodeID(),
 	}
@@ -197,7 +197,7 @@ func testBlockMerger() {
 	}
 	completionMerger := claude.NewContentBlockMerger(metadata, stepMetadata)
 
-	for event := range events {
+	for event := range events_ {
 		completions, err := completionMerger.Add(event)
 		if err != nil {
 			fmt.Println("Error adding event to completionMerger:", err)
@@ -206,7 +206,7 @@ func testBlockMerger() {
 
 		for _, partialCompletion := range completions {
 			v_, _ := yaml.Marshal(partialCompletion)
-			fmt.Println(v_)
+			fmt.Println(string(v_))
 		}
 	}
 
