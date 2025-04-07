@@ -373,18 +373,25 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) ([]*
 	// Start router in a goroutine
 	eg := errgroup.Group{}
 	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
 
-	eg.Go(func() error {
-		defer cancel()
+	f := func() {
+		cancel()
 		defer func(Router *events.EventRouter) {
 			_ = Router.Close()
 		}(rc.Router)
-		return rc.Router.Run(ctx)
+	}
+
+	eg.Go(func() error {
+		defer f()
+		ret := rc.Router.Run(ctx)
+		if ret != nil {
+			return ret
+		}
+		return nil
 	})
 
 	eg.Go(func() error {
-		defer cancel()
+		defer f()
 
 		// Wait for router to be ready
 		<-rc.Router.Running()

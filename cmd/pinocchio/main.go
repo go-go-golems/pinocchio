@@ -30,8 +30,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-
-	"github.com/rs/zerolog/log"
 )
 
 var version = "dev"
@@ -119,8 +117,6 @@ func initRootCmd() (*help.HelpSystem, error) {
 
 	err = clay.InitViper("pinocchio", rootCmd)
 	cobra.CheckErr(err)
-
-	log.Info().Msg("Initializing root command")
 
 	rootCmd.AddCommand(runCommandCmd)
 	rootCmd.AddCommand(pinocchio_cmds.NewCodegenCommand())
