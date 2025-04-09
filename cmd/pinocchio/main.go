@@ -6,12 +6,9 @@ import (
 	"os"
 
 	clay "github.com/go-go-golems/clay/pkg"
-	edit_command "github.com/go-go-golems/clay/pkg/cmds/edit-command"
-	ls_commands "github.com/go-go-golems/clay/pkg/cmds/ls-commands"
 	"github.com/go-go-golems/clay/pkg/repositories"
 	"github.com/go-go-golems/geppetto/pkg/doc"
 	"github.com/go-go-golems/glazed/pkg/cli"
-	glazed_cmds "github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
 	"github.com/go-go-golems/glazed/pkg/cmds/logging"
 	"github.com/go-go-golems/glazed/pkg/help"
@@ -30,6 +27,13 @@ import (
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+
+	clay_profiles "github.com/go-go-golems/clay/pkg/cmds/profiles"
+	clay_repositories "github.com/go-go-golems/clay/pkg/cmds/repositories"
+	"github.com/rs/zerolog/log"
+
+	// New command management import
+	clay_commandmeta "github.com/go-go-golems/clay/pkg/cmds/commandmeta"
 )
 
 var version = "dev"
@@ -88,6 +92,8 @@ func main() {
 		err = initAllCommands(helpSystem)
 		cobra.CheckErr(err)
 	}
+
+	log.Debug().Msg("Executing pinocchio")
 
 	err := rootCmd.Execute()
 	cobra.CheckErr(err)
@@ -183,44 +189,23 @@ func initAllCommands(helpSystem *help.HelpSystem) error {
 	kagiCmd := kagi.RegisterKagiCommands()
 	rootCmd.AddCommand(kagiCmd)
 
-	listCommandsCommand, err := ls_commands.NewListCommandsCommand(allCommands,
-		ls_commands.WithCommandDescriptionOptions(
-			glazed_cmds.WithShort("Commands related to sqleton queries"),
-		),
-	)
+	// Create and add the unified command management group
+	commandManagementCmd, err := clay_commandmeta.NewCommandManagementCommandGroup(allCommands)
+	if err != nil {
+		return fmt.Errorf("failed to initialize command management commands: %w", err)
+	}
+	rootCmd.AddCommand(commandManagementCmd)
 
+	// Add profiles command from clay
+	profilesCmd, err := clay_profiles.NewProfilesCommand("pinocchio", pinocchioInitialProfilesContent)
 	if err != nil {
-		return err
-	}
-	cobraListCommandsCommand, err := cli.BuildCobraCommandFromGlazeCommand(listCommandsCommand)
-	if err != nil {
-		return err
-	}
-	rootCmd.AddCommand(cobraListCommandsCommand)
-
-	editCommandCommand, err := edit_command.NewEditCommand(allCommands)
-	if err != nil {
-		return err
-	}
-	cobraEditCommandCommand, err := cli.BuildCobraCommandFromCommand(editCommandCommand)
-	if err != nil {
-		return err
-	}
-	rootCmd.AddCommand(cobraEditCommandCommand)
-
-	command, err := pinocchio_cmds.NewConfigGroupCommand(helpSystem)
-	if err != nil {
-		return err
-	}
-	rootCmd.AddCommand(command)
-
-	// Add profiles command
-	profilesCmd, err := pinocchio_cmds.NewProfilesCommand()
-	if err != nil {
-		fmt.Printf("Error initializing profiles command: %v\n", err)
-		os.Exit(1)
+		// Use fmt.Errorf for consistent error handling
+		return fmt.Errorf("error initializing profiles command: %w", err)
 	}
 	rootCmd.AddCommand(profilesCmd)
+
+	// Create and add the repositories command group
+	rootCmd.AddCommand(clay_repositories.NewRepositoriesGroupCommand())
 
 	catter.AddToRootCommand(rootCmd)
 
@@ -255,5 +240,46 @@ func initAllCommands(helpSystem *help.HelpSystem) error {
 	return nil
 }
 
-func init() {
+// pinocchioInitialProfilesContent provides the default YAML content for a new pinocchio profiles file.
+func pinocchioInitialProfilesContent() string {
+	return `# Pinocchio Profiles Configuration
+#
+# This file contains profile configurations for Pinocchio.
+# Each profile can override layer parameters for different components (like AI models).
+# Profiles allow you to easily switch between different model providers, API keys,
+# or specific model settings.
+#
+# Profiles are selected using the --profile <profile-name> flag.
+#
+# Example:
+#
+# anyscale-mixtral:
+#   # Override settings for the 'openai-chat' layer (used by OpenAI compatible APIs)
+#   openai-chat:
+#     openai-base-url: https://api.endpoints.anyscale.com/v1
+#     openai-api-key: "YOUR_ANYSCALE_API_KEY" # Replace with your key or use environment variable
+#   # Override settings for the general 'ai-chat' layer
+#   ai-chat:
+#     ai-engine: mistralai/Mixtral-8x7B-Instruct-v0.1
+#     ai-api-type: openai
+#     # You could override temperature, max tokens etc. here too
+#     # temperature: 0.5
+#
+# openai-gpt4:
+#   openai-chat:
+#     # openai-base-url defaults to OpenAI, no need to set normally
+#     openai-api-key: "YOUR_OPENAI_API_KEY" # Replace with your key or use environment variable
+#   ai-chat:
+#     ai-engine: gpt-4-turbo
+#     ai-api-type: openai
+#
+# You can manage this file using the 'pinocchio profiles' commands:
+# - list: List all profiles
+# - get <profile> [layer] [key]: Get profile settings
+# - set <profile> <layer> <key> <value>: Set a profile setting
+# - delete <profile> [layer] [key]: Delete a profile, layer, or setting
+# - edit: Open this file in your editor
+# - init: Create this file if it doesn't exist
+# - duplicate <source> <new>: Copy an existing profile
+`
 }

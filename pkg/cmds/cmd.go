@@ -38,6 +38,9 @@ type PinocchioCommandDescription struct {
 	Flags     []*parameters.ParameterDefinition `yaml:"flags,omitempty"`
 	Arguments []*parameters.ParameterDefinition `yaml:"arguments,omitempty"`
 	Layers    []layers.ParameterLayer           `yaml:"layers,omitempty"`
+	Type      string                            `yaml:"type,omitempty"`
+	Tags      []string                          `yaml:"tags,omitempty"`
+	Metadata  map[string]interface{}            `yaml:"metadata,omitempty"`
 
 	Prompt       string                  `yaml:"prompt,omitempty"`
 	Messages     []*conversation.Message `yaml:"messages,omitempty"`

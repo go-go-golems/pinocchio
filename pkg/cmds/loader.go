@@ -56,6 +56,10 @@ func (g *PinocchioCommandLoader) loadPinocchioCommandFromReader(
 		return nil, err
 	}
 
+	if scd.Type == "" {
+		scd.Type = "pinocchio"
+	}
+
 	// TODO(manuel, 2023-01-27): There has to be a better way to parse YAML factories
 	// maybe the easiest is just going to be to make them a separate file in the bundle format, really
 	// rewind to read the factories...
@@ -76,6 +80,9 @@ func (g *PinocchioCommandLoader) loadPinocchioCommandFromReader(
 		cmds.WithFlags(scd.Flags...),
 		cmds.WithArguments(scd.Arguments...),
 		cmds.WithLayersList(ls...),
+		cmds.WithType(scd.Type),
+		cmds.WithTags(scd.Tags...),
+		cmds.WithMetadata(scd.Metadata),
 	}
 
 	description := cmds.NewCommandDescription(

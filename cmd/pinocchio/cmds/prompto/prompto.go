@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	clay "github.com/go-go-golems/clay/pkg"
+	clay_repositories "github.com/go-go-golems/clay/pkg/cmds/repositories"
 	"github.com/go-go-golems/glazed/pkg/help"
 	"github.com/go-go-golems/prompto/cmd/prompto/cmds"
 	"github.com/spf13/cobra"
@@ -40,11 +41,7 @@ func InitPromptoCmd(helpSystem *help.HelpSystem) (*cobra.Command, error) {
 		promptoCmd.AddCommand(cmd)
 	}
 
-	command, err := cmds.NewConfigGroupCommand(helpSystem)
-	if err != nil {
-		return nil, err
-	}
-	promptoCmd.AddCommand(command)
+	promptoCmd.AddCommand(clay_repositories.NewRepositoriesGroupCommand())
 
 	return promptoCmd, nil
 }
