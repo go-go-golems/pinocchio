@@ -3,6 +3,7 @@ package ui
 import (
 	"context"
 	"fmt"
+
 	"github.com/go-go-golems/geppetto/pkg/events"
 
 	"github.com/ThreeDotsLabs/watermill/message"
@@ -30,7 +31,12 @@ func (s *StepBackend) Start(ctx context.Context, msgs []*conversation.Message) (
 
 	stepResult, err := s.step.Start(ctx, msgs)
 	if err != nil {
-		return nil, err
+
+		return tea.Batch(
+				func() tea.Msg {
+					return boba_chat.BackendFinishedMsg{}
+				}),
+			nil
 	}
 
 	s.stepResult = stepResult
@@ -84,6 +90,7 @@ func StepChatForwardFunc(p *tea.Program) func(msg *message.Message) error {
 
 		e, err := events.NewEventFromJson(msg.Payload)
 		if err != nil {
+			log.Error().Err(err).Str("payload", string(msg.Payload)).Msg("Failed to parse event")
 			return err
 		}
 
@@ -99,7 +106,7 @@ func StepChatForwardFunc(p *tea.Program) func(msg *message.Message) error {
 		case *events.EventError:
 			p.Send(conversation2.StreamCompletionError{
 				StreamMetadata: metadata,
-				Err:            e_.Error(),
+				Err:            errors.New(e_.ErrorString),
 			})
 		case *events.EventPartialCompletion:
 			p.Send(conversation2.StreamCompletionMsg{
