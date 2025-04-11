@@ -15,8 +15,6 @@ import (
 	glazed_cmds "github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
 	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
-	"github.com/go-go-golems/glazed/pkg/middlewares"
-	glazed_settings "github.com/go-go-golems/glazed/pkg/settings"
 	"github.com/go-go-golems/pinocchio/pkg/cmds"
 	"github.com/go-go-golems/pinocchio/pkg/ui"
 	"github.com/invopop/jsonschema"
@@ -25,8 +23,7 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-type ToolUiCommand struct {
-	*glazed_cmds.CommandDescription
+type ToolUiRunner struct {
 	stepSettings *settings.StepSettings
 	manager      conversation.Manager
 	reflector    *jsonschema.Reflector
@@ -34,14 +31,13 @@ type ToolUiCommand struct {
 	eventRouter  *events.EventRouter
 }
 
-var _ glazed_cmds.GlazeCommand = (*ToolUiCommand)(nil)
+type ToolUiCommand struct {
+	*glazed_cmds.CommandDescription
+}
+
+var _ glazed_cmds.BareCommand = (*ToolUiCommand)(nil)
 
 func NewToolUiCommand() (*ToolUiCommand, error) {
-	glazedParameterLayer, err := glazed_settings.NewGlazedParameterLayers()
-	if err != nil {
-		return nil, err
-	}
-
 	stepSettings, err := settings.NewStepSettings()
 	if err != nil {
 		return nil, err
@@ -72,11 +68,9 @@ func NewToolUiCommand() (*ToolUiCommand, error) {
 					parameters.WithDefault(false),
 					parameters.WithHelp("verbose")),
 			),
-			glazed_cmds.WithLayersList(glazedParameterLayer),
 			glazed_cmds.WithLayersList(geppettoLayers...),
 		),
 	}, nil
-
 }
 
 type ToolUiSettings struct {
@@ -85,9 +79,11 @@ type ToolUiSettings struct {
 	Verbose        bool `glazed.parameter:"verbose"`
 }
 
-func (t *ToolUiCommand) RunIntoGlazeProcessor(
-	ctx context.Context, parsedLayers *layers.ParsedLayers, gp middlewares.Processor,
+func (t *ToolUiCommand) Run(
+	ctx context.Context,
+	parsedLayers *layers.ParsedLayers,
 ) error {
+	runner := &ToolUiRunner{}
 	settings := &ToolUiSettings{}
 
 	err := parsedLayers.InitializeStruct(layers.DefaultSlug, settings)
@@ -96,25 +92,25 @@ func (t *ToolUiCommand) RunIntoGlazeProcessor(
 	}
 
 	if settings.UI {
-		return t.runWithUi(ctx, parsedLayers)
+		return runner.runWithUi(ctx, parsedLayers)
 	}
 
-	err = t.Init(parsedLayers)
+	err = runner.Init(parsedLayers)
 	if err != nil {
 		return err
 	}
 
 	defer func() {
-		err := t.eventRouter.Close()
+		err := runner.eventRouter.Close()
 		if err != nil {
 			log.Error().Err(err).Msg("Failed to close eventRouter")
 		}
 	}()
 
 	if settings.PrintRawEvents {
-		t.eventRouter.AddHandler("raw-events-stdout", "ui", t.eventRouter.DumpRawEvents)
+		runner.eventRouter.AddHandler("raw-events-stdout", "ui", runner.eventRouter.DumpRawEvents)
 	} else {
-		t.eventRouter.AddHandler("ui-stdout",
+		runner.eventRouter.AddHandler("ui-stdout",
 			"ui",
 			events.StepPrinterFunc("UI", os.Stdout),
 		)
@@ -126,7 +122,7 @@ func (t *ToolUiCommand) RunIntoGlazeProcessor(
 	eg.Go(func() error {
 		defer cancel()
 
-		result, err := t.chatToolStep.Start(ctx, t.manager.GetConversation())
+		result, err := runner.chatToolStep.Start(ctx, runner.manager.GetConversation())
 		if err != nil {
 			return err
 		}
@@ -136,7 +132,7 @@ func (t *ToolUiCommand) RunIntoGlazeProcessor(
 	})
 
 	eg.Go(func() error {
-		ret := t.eventRouter.Run(ctx)
+		ret := runner.eventRouter.Run(ctx)
 		fmt.Printf("eventRouter.Run returned %v\n", ret)
 		return nil
 	})
@@ -149,20 +145,20 @@ func (t *ToolUiCommand) RunIntoGlazeProcessor(
 	return nil
 }
 
-func (t *ToolUiCommand) Init(parsedLayers *layers.ParsedLayers) error {
+func (r *ToolUiRunner) Init(parsedLayers *layers.ParsedLayers) error {
 	var err error
-	t.stepSettings, err = settings.NewStepSettings()
+	r.stepSettings, err = settings.NewStepSettings()
 	if err != nil {
 		return err
 	}
-	err = t.stepSettings.UpdateFromParsedLayers(parsedLayers)
+	err = r.stepSettings.UpdateFromParsedLayers(parsedLayers)
 	if err != nil {
 		return err
 	}
 
-	t.stepSettings.Chat.Stream = true
+	r.stepSettings.Chat.Stream = true
 
-	t.manager = conversation.NewManager(
+	r.manager = conversation.NewManager(
 		conversation.WithMessages(
 			conversation.NewChatMessage(
 				conversation.RoleUser,
@@ -170,23 +166,23 @@ func (t *ToolUiCommand) Init(parsedLayers *layers.ParsedLayers) error {
 			),
 		))
 
-	t.eventRouter, err = events.NewEventRouter()
+	r.eventRouter, err = events.NewEventRouter()
 	if err != nil {
 		return err
 	}
 
-	t.reflector = &jsonschema.Reflector{
+	r.reflector = &jsonschema.Reflector{
 		DoNotReference: true,
 	}
-	err = t.reflector.AddGoComments("github.com/go-go-golems/geppetto", "./cmd/experiments/tool-ui")
+	err = r.reflector.AddGoComments("github.com/go-go-golems/pinocchio", "./cmd/experiments/tool-ui")
 	if err != nil {
 		log.Warn().Err(err).Msg("Could not add go comments")
 	}
 
-	t.chatToolStep, err = openai.NewChatToolStep(
-		t.stepSettings,
-		openai.WithReflector(t.reflector),
-		openai.WithToolFunctions(map[string]interface{}{
+	r.chatToolStep, err = openai.NewChatToolStep(
+		r.stepSettings,
+		openai.WithReflector(r.reflector),
+		openai.WithToolFunctions(map[string]any{
 			"getWeather":      getWeather,
 			"getWeatherOnDay": getWeatherOnDay,
 		}),
@@ -194,7 +190,7 @@ func (t *ToolUiCommand) Init(parsedLayers *layers.ParsedLayers) error {
 	if err != nil {
 		return err
 	}
-	err = t.chatToolStep.AddPublishedTopic(t.eventRouter.Publisher, "ui")
+	err = r.chatToolStep.AddPublishedTopic(r.eventRouter.Publisher, "ui")
 	if err != nil {
 		return err
 	}
@@ -202,16 +198,16 @@ func (t *ToolUiCommand) Init(parsedLayers *layers.ParsedLayers) error {
 	return nil
 }
 
-func (t *ToolUiCommand) runWithUi(
+func (r *ToolUiRunner) runWithUi(
 	ctx context.Context,
 	parsedLayers *layers.ParsedLayers,
 ) error {
-	err := t.Init(parsedLayers)
+	err := r.Init(parsedLayers)
 	if err != nil {
 		return err
 	}
 
-	backend := ui.NewStepBackend(t.chatToolStep)
+	backend := ui.NewStepBackend(r.chatToolStep)
 
 	// Create bubbletea UI
 
@@ -223,19 +219,18 @@ func (t *ToolUiCommand) runWithUi(
 	// maybe test with CLI output first
 
 	p := tea.NewProgram(
-		boba_chat.InitialModel(t.manager, backend),
+		boba_chat.InitialModel(r.manager, backend),
 		options...,
 	)
-	_ = p
 
-	t.eventRouter.AddHandler("ui", "ui", ui.StepChatForwardFunc(p))
+	r.eventRouter.AddHandler("ui", "ui", ui.StepChatForwardFunc(p))
 
 	ctx, cancel := context.WithCancel(ctx)
 
 	eg := errgroup.Group{}
 
 	eg.Go(func() error {
-		ret := t.eventRouter.Run(ctx)
+		ret := r.eventRouter.Run(ctx)
 		fmt.Printf("router.Run returned %v\n", ret)
 		return nil
 	})
