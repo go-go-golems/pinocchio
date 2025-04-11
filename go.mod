@@ -14,10 +14,10 @@ require (
 	github.com/dave/jennifer v1.7.0
 	github.com/dop251/goja v0.0.0-20241024094426-79f3a7efcdbd
 	github.com/dop251/goja_nodejs v0.0.0-20240728170619-29b559befffc
-	github.com/go-go-golems/bobatea v0.0.17
+	github.com/go-go-golems/bobatea v0.0.18
 	github.com/go-go-golems/clay v0.1.38
-	github.com/go-go-golems/geppetto v0.4.47
-	github.com/go-go-golems/glazed v0.5.44
+	github.com/go-go-golems/geppetto v0.4.48
+	github.com/go-go-golems/glazed v0.5.47
 	github.com/go-go-golems/prompto v0.1.11
 	github.com/google/uuid v1.6.0
 	github.com/iancoleman/strcase v0.3.0

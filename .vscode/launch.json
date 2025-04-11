@@ -10,7 +10,10 @@
             "request": "launch",
             "mode": "auto",
             "program": "${workspaceFolder}/cmd/pinocchio",
-            "args": ["examples", "test"],
+            "args": [
+                "examples",
+                "test"
+            ],
             "cwd": "${workspaceFolder}",
             "env": {
                 "PINOCCHIO_PROFILE": "haiku"
@@ -22,7 +25,11 @@
             "request": "launch",
             "mode": "auto",
             "program": "${workspaceFolder}/cmd/pinocchio",
-            "args": ["examples", "test", "--print-prompt"],
+            "args": [
+                "examples",
+                "test",
+                "--print-prompt"
+            ],
             "cwd": "${workspaceFolder}",
             "env": {
                 "PINOCCHIO_PROFILE": "4o-mini"
@@ -34,7 +41,13 @@
             "request": "launch",
             "mode": "auto",
             "program": "${workspaceFolder}/cmd/pinocchio",
-            "args": ["code", "professional", "--non-interactive", "--with-metadata", "foo"],
+            "args": [
+                "code",
+                "professional",
+                "--non-interactive",
+                "--with-metadata",
+                "foo"
+            ],
             "cwd": "${workspaceFolder}",
             "env": {
                 "PINOCCHIO_PROFILE": "4o-mini"
@@ -46,7 +59,14 @@
             "request": "launch",
             "mode": "auto",
             "program": "${workspaceFolder}/cmd/pinocchio",
-            "args": ["examples", "test", "--output", "yaml", "--non-interactive", "--with-metadata"],
+            "args": [
+                "examples",
+                "test",
+                "--output",
+                "yaml",
+                "--non-interactive",
+                "--with-metadata"
+            ],
             "cwd": "${workspaceFolder}",
             "env": {
                 "PINOCCHIO_PROFILE": "4o-mini"
@@ -58,7 +78,15 @@
             "request": "launch",
             "mode": "auto",
             "program": "${workspaceFolder}/cmd/pinocchio",
-            "args": ["examples", "test", "--output", "yaml", "--non-interactive", "--with-metadata", "--full-output"],
+            "args": [
+                "examples",
+                "test",
+                "--output",
+                "yaml",
+                "--non-interactive",
+                "--with-metadata",
+                "--full-output"
+            ],
             "cwd": "${workspaceFolder}",
             "env": {
                 "PINOCCHIO_PROFILE": "4o-mini"
@@ -70,7 +98,10 @@
             "request": "launch",
             "mode": "auto",
             "program": "${workspaceFolder}/cmd/pinocchio",
-            "args": ["examples", "test"],
+            "args": [
+                "examples",
+                "test"
+            ],
             "cwd": "${workspaceFolder}",
             "console": "integratedTerminal",
             "env": {
@@ -83,7 +114,11 @@
             "request": "launch",
             "mode": "auto",
             "program": "${workspaceFolder}/cmd/pinocchio",
-            "args": ["examples", "test", "--chat"],
+            "args": [
+                "examples",
+                "test",
+                "--chat"
+            ],
             "cwd": "${workspaceFolder}",
             "console": "integratedTerminal",
             "env": {
@@ -96,7 +131,12 @@
             "request": "launch",
             "mode": "auto",
             "program": "${workspaceFolder}/cmd/pinocchio",
-            "args": ["examples", "test", "--chat", "--force-interactive"],
+            "args": [
+                "examples",
+                "test",
+                "--chat",
+                "--force-interactive"
+            ],
             "cwd": "${workspaceFolder}",
             "console": "integratedTerminal",
             "env": {
@@ -109,7 +149,14 @@
             "request": "launch",
             "mode": "auto",
             "program": "${workspaceFolder}/cmd/pinocchio",
-            "args": ["examples", "test", "--non-interactive", "--with-metadata", "--ai-cache-type", "disk"],
+            "args": [
+                "examples",
+                "test",
+                "--non-interactive",
+                "--with-metadata",
+                "--ai-cache-type",
+                "disk"
+            ],
             "cwd": "${workspaceFolder}",
             "env": {
                 "PINOCCHIO_PROFILE": "haiku"
@@ -121,7 +168,16 @@
             "request": "launch",
             "mode": "auto",
             "program": "${workspaceFolder}/cmd/pinocchio",
-            "args": ["examples", "test", "--output", "yaml", "--non-interactive", "--with-metadata", "--ai-cache-type", "disk"],
+            "args": [
+                "examples",
+                "test",
+                "--output",
+                "yaml",
+                "--non-interactive",
+                "--with-metadata",
+                "--ai-cache-type",
+                "disk"
+            ],
             "cwd": "${workspaceFolder}",
             "env": {
                 "PINOCCHIO_PROFILE": "haiku"
@@ -133,7 +189,12 @@
             "request": "launch",
             "mode": "auto",
             "program": "${workspaceFolder}/cmd/pinocchio",
-            "args": ["examples", "test", "--ai-max-response-tokens", "0"],
+            "args": [
+                "examples",
+                "test",
+                "--ai-max-response-tokens",
+                "0"
+            ],
             "cwd": "${workspaceFolder}",
             "env": {
                 "PINOCCHIO_PROFILE": "haiku"
@@ -145,7 +206,15 @@
             "request": "launch",
             "mode": "auto",
             "program": "${workspaceFolder}/cmd/examples/eval",
-            "args": ["eval", "--dataset", "cmd/examples/eval/eval.json", "--command", "cmd/examples/eval/complaint.yaml", "--ai-engine", "YOLOYOLO"],
+            "args": [
+                "eval",
+                "--dataset",
+                "cmd/examples/eval/eval.json",
+                "--command",
+                "cmd/examples/eval/complaint.yaml",
+                "--ai-engine",
+                "YOLOYOLO"
+            ],
             "cwd": "${workspaceFolder}",
             "env": {
                 "PINOCCHIO_PROFILE": "haiku"
@@ -169,7 +238,14 @@
             "request": "launch",
             "mode": "auto",
             "program": "${workspaceFolder}/cmd/pinocchio",
-            "args": ["openai", "transcribe", "--file", "/home/manuel/Downloads/60832_231623.mpga", "--language", "vi"],
+            "args": [
+                "openai",
+                "transcribe",
+                "--file",
+                "/home/manuel/Downloads/60832_231623.mpga",
+                "--language",
+                "vi"
+            ],
             "cwd": "${workspaceFolder}",
             "env": {
                 "PINOCCHIO_PROFILE": "haiku"
@@ -181,8 +257,29 @@
             "request": "launch",
             "mode": "auto",
             "program": "${workspaceFolder}/cmd/pinocchio",
-            "args": ["openai", "transcribe", "--file", "/home/manuel/Downloads/60832_231623.mpga", "--language", "vi", "--timestamps", "word"],
+            "args": [
+                "openai",
+                "transcribe",
+                "--file",
+                "/home/manuel/Downloads/60832_231623.mpga",
+                "--language",
+                "vi",
+                "--timestamps",
+                "word"
+            ],
             "cwd": "${workspaceFolder}",
+            "env": {
+                "PINOCCHIO_PROFILE": "haiku"
+            }
+        },
+        {
+            "name": "UI Experiment",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}/cmd/experiments/ui",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
             "env": {
                 "PINOCCHIO_PROFILE": "haiku"
             }
