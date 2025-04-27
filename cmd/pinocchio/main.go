@@ -24,6 +24,7 @@ import (
 	pinocchio_docs "github.com/go-go-golems/pinocchio/cmd/pinocchio/doc"
 	"github.com/go-go-golems/pinocchio/pkg/cmds"
 	"github.com/go-go-golems/pinocchio/pkg/cmds/cmdlayers"
+	pkg_doc "github.com/go-go-golems/pinocchio/pkg/doc"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -111,6 +112,9 @@ var runCommandCmd = &cobra.Command{
 func initRootCmd() (*help.HelpSystem, error) {
 	helpSystem := help.NewHelpSystem()
 	err := doc.AddDocToHelpSystem(helpSystem)
+	cobra.CheckErr(err)
+
+	err = pkg_doc.AddDocToHelpSystem(helpSystem)
 	cobra.CheckErr(err)
 
 	err = catter_doc.AddDocToHelpSystem(helpSystem)
