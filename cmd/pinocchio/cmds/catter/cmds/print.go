@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/go-go-golems/clay/pkg/filefilter"
 	"github.com/go-go-golems/pinocchio/cmd/pinocchio/cmds/catter/pkg"
@@ -25,6 +26,8 @@ type CatterPrintSettings struct {
 	FilterYAML    string   `glazed.parameter:"filter-yaml"`
 	FilterProfile string   `glazed.parameter:"filter-profile"`
 	Glazed        bool     `glazed.parameter:"glazed"`
+	ArchiveFile   string   `glazed.parameter:"archive-file"`
+	ArchivePrefix string   `glazed.parameter:"archive-prefix"`
 	Paths         []string `glazed.parameter:"paths"`
 }
 
@@ -46,8 +49,8 @@ func NewCatterPrintCommand() (*CatterPrintCommand, error) {
 	return &CatterPrintCommand{
 		CommandDescription: cmds.NewCommandDescription(
 			"print",
-			cmds.WithShort("Print file contents with token counting for LLM context"),
-			cmds.WithLong("A CLI tool to print file contents, recursively process directories, and count tokens for LLM context preparation."),
+			cmds.WithShort("Print or archive file contents with token counting"),
+			cmds.WithLong("A CLI tool to print or archive file contents, recursively process directories, and count tokens for LLM context preparation."),
 			cmds.WithFlags(
 				parameters.NewParameterDefinition(
 					"max-total-size",
@@ -65,20 +68,20 @@ func NewCatterPrintCommand() (*CatterPrintCommand, error) {
 				parameters.NewParameterDefinition(
 					"delimiter",
 					parameters.ParameterTypeString,
-					parameters.WithHelp("Type of delimiter to use between files: default, xml, markdown, simple, begin-end"),
+					parameters.WithHelp("Type of delimiter to use between files (text output only): default, xml, markdown, simple, begin-end"),
 					parameters.WithDefault("default"),
 					parameters.WithShortFlag("d"),
 				),
 				parameters.NewParameterDefinition(
 					"max-lines",
 					parameters.ParameterTypeInteger,
-					parameters.WithHelp("Maximum number of lines to print per file (0 for no limit)"),
+					parameters.WithHelp("Maximum number of lines to print per file (0 for no limit, text output only)"),
 					parameters.WithDefault(0),
 				),
 				parameters.NewParameterDefinition(
 					"max-tokens",
 					parameters.ParameterTypeInteger,
-					parameters.WithHelp("Maximum number of tokens to print per file (0 for no limit)"),
+					parameters.WithHelp("Maximum number of tokens to print per file (0 for no limit, text output only)"),
 					parameters.WithDefault(0),
 				),
 				parameters.NewParameterDefinition(
@@ -100,8 +103,21 @@ func NewCatterPrintCommand() (*CatterPrintCommand, error) {
 				parameters.NewParameterDefinition(
 					"glazed",
 					parameters.ParameterTypeBool,
-					parameters.WithHelp("Enable Glazed structured output"),
+					parameters.WithHelp("Enable Glazed structured output (ignored if --archive-file is used)"),
 					parameters.WithDefault(false),
+				),
+				parameters.NewParameterDefinition(
+					"archive-file",
+					parameters.ParameterTypeString,
+					parameters.WithHelp("Path to the output archive file. Format (zip or tar.gz) inferred from extension."),
+					parameters.WithDefault(""),
+					parameters.WithShortFlag("a"),
+				),
+				parameters.NewParameterDefinition(
+					"archive-prefix",
+					parameters.ParameterTypeString,
+					parameters.WithHelp("Directory prefix to add to files within the archive (e.g., 'myproject/')"),
+					parameters.WithDefault(""),
 				),
 			),
 			cmds.WithArguments(
@@ -127,6 +143,33 @@ func (c *CatterPrintCommand) RunIntoGlazeProcessor(ctx context.Context, parsedLa
 		return fmt.Errorf("error initializing settings: %w", err)
 	}
 
+	outputFormat := "text"
+	outputFile := s.ArchiveFile
+	isArchiveOutput := outputFile != ""
+
+	if isArchiveOutput {
+		if strings.HasSuffix(outputFile, ".zip") {
+			outputFormat = "zip"
+		} else if strings.HasSuffix(outputFile, ".tar.gz") || strings.HasSuffix(outputFile, ".tgz") {
+			outputFormat = "tar.gz"
+		} else {
+			return fmt.Errorf("unsupported archive file extension for %s. Use .zip, .tar.gz, or .tgz", outputFile)
+		}
+
+		if s.Glazed {
+			_, _ = fmt.Fprintln(os.Stderr, "Warning: --glazed is ignored when --archive-file is specified.")
+			s.Glazed = false
+		}
+		if s.List {
+			return fmt.Errorf("--list cannot be used with --archive-file")
+		}
+	}
+
+	archivePrefix := s.ArchivePrefix
+	if archivePrefix != "" && !strings.HasSuffix(archivePrefix, "/") {
+		archivePrefix += "/"
+	}
+
 	ff, err := createFileFilter(parsedLayers, s.FilterYAML, s.FilterProfile)
 	if err != nil {
 		return err
@@ -140,8 +183,12 @@ func (c *CatterPrintCommand) RunIntoGlazeProcessor(ctx context.Context, parsedLa
 		pkg.WithMaxTokens(s.MaxTokens),
 		pkg.WithFileFilter(ff),
 		pkg.WithPrintFilters(s.PrintFilters),
+		pkg.WithOutputFormat(outputFormat),
+		pkg.WithOutputFile(outputFile),
+		pkg.WithArchivePrefix(archivePrefix),
 	}
-	if s.Glazed {
+
+	if !isArchiveOutput && s.Glazed {
 		fileProcessorOptions = append(fileProcessorOptions, pkg.WithProcessor(gp))
 	}
 
@@ -154,7 +201,6 @@ func (c *CatterPrintCommand) RunIntoGlazeProcessor(ctx context.Context, parsedLa
 	return fp.ProcessPaths(s.Paths)
 }
 
-// Helper function to create file filter
 func createFileFilter(parsedLayers *layers.ParsedLayers, filterYAML, filterProfile string) (*filefilter.FileFilter, error) {
 	layer, ok := parsedLayers.Get(filefilter.FileFilterSlug)
 	if !ok {
@@ -171,7 +217,6 @@ func createFileFilter(parsedLayers *layers.ParsedLayers, filterYAML, filterProfi
 			return nil, fmt.Errorf("error loading filter configuration from YAML: %w", err)
 		}
 	} else {
-		// Check for default .catter-filter.yaml in the current directory
 		if _, err := os.Stat(".catter-filter.yaml"); err == nil {
 			ff, err = filefilter.LoadFromFile(".catter-filter.yaml", filterProfile)
 			if err != nil {

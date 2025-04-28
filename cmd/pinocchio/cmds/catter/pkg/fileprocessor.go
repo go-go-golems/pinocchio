@@ -1,12 +1,15 @@
 package pkg
 
 import (
-	"bufio"
-	"bytes"
+	"archive/tar"
+	"archive/zip"
+	"compress/gzip"
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -32,6 +35,13 @@ type FileProcessor struct {
 	PrintFilters  bool
 	Processor     middlewares.Processor
 	Stats         *Stats
+	OutputFormat  string
+	OutputFile    string
+	ArchivePrefix string
+	archiveWriter io.Closer
+	fileWriter    io.WriteCloser
+	zipWriter     *zip.Writer
+	tarWriter     *tar.Writer
 }
 
 type FileProcessorOption func(*FileProcessor)
@@ -111,6 +121,24 @@ func WithProcessor(processor middlewares.Processor) FileProcessorOption {
 	}
 }
 
+func WithOutputFormat(format string) FileProcessorOption {
+	return func(fp *FileProcessor) {
+		fp.OutputFormat = format
+	}
+}
+
+func WithOutputFile(file string) FileProcessorOption {
+	return func(fp *FileProcessor) {
+		fp.OutputFile = file
+	}
+}
+
+func WithArchivePrefix(prefix string) FileProcessorOption {
+	return func(fp *FileProcessor) {
+		fp.ArchivePrefix = prefix
+	}
+}
+
 func (fp *FileProcessor) ProcessPaths(paths []string) error {
 	if fp.PrintFilters {
 		fp.printConfiguredFilters()
@@ -122,6 +150,43 @@ func (fp *FileProcessor) ProcessPaths(paths []string) error {
 	if err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "Error computing stats: %v\n", err)
 		return err
+	}
+
+	isArchiveOutput := fp.OutputFormat == "zip" || fp.OutputFormat == "tar.gz"
+	if isArchiveOutput {
+		if fp.OutputFile == "" {
+			return fmt.Errorf("output file path is required for archive format")
+		}
+		outFile, err := os.Create(fp.OutputFile)
+		if err != nil {
+			return fmt.Errorf("failed to create output file %s: %w", fp.OutputFile, err)
+		}
+		fp.fileWriter = outFile
+
+		switch fp.OutputFormat {
+		case "zip":
+			zw := zip.NewWriter(outFile)
+			fp.zipWriter = zw
+			fp.archiveWriter = zw
+		case "tar.gz":
+			gw := gzip.NewWriter(outFile)
+			tw := tar.NewWriter(gw)
+			fp.tarWriter = tw
+			fp.archiveWriter = multiCloser{tw, gw}
+		}
+
+		defer func() {
+			if fp.archiveWriter != nil {
+				if cerr := fp.archiveWriter.Close(); cerr != nil {
+					_, _ = fmt.Fprintf(os.Stderr, "Error closing archive writer: %v\n", cerr)
+				}
+			}
+			if fp.fileWriter != nil {
+				if cerr := fp.fileWriter.Close(); cerr != nil {
+					_, _ = fmt.Fprintf(os.Stderr, "Error closing output file: %v\n", cerr)
+				}
+			}
+		}()
 	}
 
 	for _, path := range paths {
@@ -140,28 +205,49 @@ func (fp *FileProcessor) ProcessPaths(paths []string) error {
 		}
 	}
 
+	if isArchiveOutput && err == nil {
+		if fp.archiveWriter != nil {
+			if cerr := fp.archiveWriter.Close(); cerr != nil {
+				_, _ = fmt.Fprintf(os.Stderr, "Error closing archive writer after processing: %v\n", cerr)
+				return cerr
+			}
+		}
+		if fp.fileWriter != nil {
+			if cerr := fp.fileWriter.Close(); cerr != nil {
+				_, _ = fmt.Fprintf(os.Stderr, "Error closing output file after processing: %v\n", cerr)
+				return cerr
+			}
+		}
+		fp.archiveWriter = nil
+		fp.fileWriter = nil
+	}
+
 	return nil
 }
 
 func (fp *FileProcessor) processPath(path string) error {
-	if fp.MaxTokens != 0 && fp.TotalTokens >= fp.MaxTokens {
+	if fp.MaxTokens > 0 && fp.TotalTokens >= fp.MaxTokens {
 		return ErrMaxTokensExceeded
 	}
-	if fp.MaxTotalSize != 0 && fp.TotalSize >= fp.MaxTotalSize {
+	if fp.MaxTotalSize > 0 && fp.TotalSize >= fp.MaxTotalSize {
 		return ErrMaxTotalSizeExceeded
 	}
 
-	if fp.Filter == nil || fp.Filter.FilterPath(path) {
-		if fileInfo, err := os.Stat(path); err == nil {
-			if fileInfo.IsDir() {
-				return fp.processDirectory(path)
-			} else {
-				return fp.printFileContent(path)
-			}
-		}
+	fileInfo, err := os.Stat(path)
+	if err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "Warning: Failed to stat path %s: %v\n", path, err)
+		return nil
 	}
 
-	return nil
+	if fp.Filter != nil && !fp.Filter.FilterPath(path) {
+		return nil
+	}
+
+	if fileInfo.IsDir() {
+		return fp.processDirectory(path)
+	} else {
+		return fp.processFileContent(path, fileInfo)
+	}
 }
 
 func (fp *FileProcessor) processDirectory(dirPath string) error {
@@ -173,9 +259,14 @@ func (fp *FileProcessor) processDirectory(dirPath string) error {
 	dirTokens := 0
 	for _, file := range files {
 		fullPath := filepath.Join(dirPath, file.Name())
+
+		if fp.Filter != nil && !fp.Filter.FilterPath(fullPath) {
+			continue
+		}
+
 		err := fp.processPath(fullPath)
 		if err != nil {
-			return err // Propagate the error up
+			return err
 		}
 		dirTokens += fp.TokenCounts[fullPath]
 	}
@@ -183,7 +274,7 @@ func (fp *FileProcessor) processDirectory(dirPath string) error {
 	return nil
 }
 
-func (fp *FileProcessor) printFileContent(filePath string) error {
+func (fp *FileProcessor) processFileContent(filePath string, fileInfo os.FileInfo) error {
 	if fp.ListOnly {
 		fmt.Println(filePath)
 		return nil
@@ -191,108 +282,141 @@ func (fp *FileProcessor) printFileContent(filePath string) error {
 
 	fileStats, ok := fp.Stats.GetStats(filePath)
 	if !ok {
-		_, _ = fmt.Fprintf(os.Stderr, "Error: Stats not found for file %s\n", filePath)
+		_, _ = fmt.Fprintf(os.Stderr, "Warning: Stats not found for file %s, skipping\n", filePath)
 		return nil
 	}
 
-	content, err := os.ReadFile(filePath)
+	contentBytes, err := os.ReadFile(filePath)
 	if err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "Error reading file %s: %v\n", filePath, err)
 		return nil
 	}
 
-	limitedContent := fp.applyLimits(content)
+	limitedContent := fp.applyLimits(contentBytes)
 	actualSize := int64(len(limitedContent))
 	actualTokenCount := len(fp.TokenCounter.Encode(limitedContent, nil, nil))
 
 	fileStats.Size = actualSize
 	fileStats.TokenCount = actualTokenCount
 
-	fp.TokenCounts[filePath] = fileStats.TokenCount
-	fp.TotalTokens += fileStats.TokenCount
-
 	if fp.MaxTotalSize != 0 && fp.TotalSize+actualSize > fp.MaxTotalSize {
-		remainingSize := fp.MaxTotalSize - fp.TotalSize
-		if remainingSize > 0 {
-			limitedContent = limitedContent[:remainingSize]
-			actualSize = remainingSize
-		} else {
-			return ErrMaxTotalSizeExceeded
-		}
+		return ErrMaxTotalSizeExceeded
 	}
 	if fp.MaxTokens != 0 && fp.TotalTokens+actualTokenCount > fp.MaxTokens {
 		return ErrMaxTokensExceeded
 	}
 
-	actualLineCount := strings.Count(limitedContent, "\n")
-
-	if fp.Processor != nil {
-		ctx := context.Background()
-		err := fp.Processor.AddRow(ctx, types.NewRow(
-			types.MRP("Path", filePath),
-			types.MRP("FileSize", fileStats.Size),
-			types.MRP("FileTokenCount", fileStats.TokenCount),
-			types.MRP("FileLineCount", fileStats.LineCount),
-			types.MRP("ActualSize", actualSize),
-			types.MRP("ActualTokenCount", actualTokenCount),
-			types.MRP("ActualLineCount", actualLineCount),
-			types.MRP("Content", limitedContent),
-		))
-		if err != nil {
-			_, _ = fmt.Fprintf(os.Stderr, "Error adding row to processor: %v\n", err)
-		}
-	} else {
-		switch fp.DelimiterType {
-		case "xml":
-			fmt.Printf("<file name=\"%s\">\n<content>\n%s\n</content>\n</file>\n", filePath, limitedContent)
-		case "markdown":
-			fmt.Printf("## File: %s\n\n```\n%s\n```\n\n", filePath, limitedContent)
-		case "simple":
-			fmt.Printf("===\n\nFile: %s\n\n---\n\n%s\n\n===\n\n", filePath, limitedContent)
-		default:
-			fmt.Printf("=== BEGIN: %s ===\n%s\n=== END: %s ===\n\n", filePath, limitedContent, filePath)
-		}
-	}
-
 	fp.TotalSize += actualSize
+	fp.TotalTokens += actualTokenCount
+	fp.TokenCounts[filePath] = actualTokenCount
 	fp.FileCount++
+
+	switch fp.OutputFormat {
+	case "zip":
+		if fp.zipWriter == nil {
+			return fmt.Errorf("internal error: zip writer not initialized for file %s", filePath)
+		}
+		relativePath := getArchivePath(filePath)
+		archivePath := path.Join(fp.ArchivePrefix, relativePath)
+		fileWriter, err := fp.zipWriter.Create(archivePath)
+		if err != nil {
+			return fmt.Errorf("failed to create entry %s in zip archive: %w", archivePath, err)
+		}
+		_, err = fileWriter.Write([]byte(limitedContent))
+		if err != nil {
+			return fmt.Errorf("failed to write content for %s to zip archive: %w", archivePath, err)
+		}
+
+	case "tar.gz":
+		if fp.tarWriter == nil {
+			return fmt.Errorf("internal error: tar writer not initialized for file %s", filePath)
+		}
+		relativePath := getArchivePath(filePath)
+		archivePath := path.Join(fp.ArchivePrefix, relativePath)
+		hdr, err := tar.FileInfoHeader(fileInfo, "")
+		if err != nil {
+			return fmt.Errorf("failed to create tar header for %s: %w", filePath, err)
+		}
+		hdr.Name = archivePath
+		hdr.Size = actualSize
+		if err := fp.tarWriter.WriteHeader(hdr); err != nil {
+			return fmt.Errorf("failed to write tar header for %s: %w", archivePath, err)
+		}
+		if _, err := fp.tarWriter.Write([]byte(limitedContent)); err != nil {
+			return fmt.Errorf("failed to write content for %s to tar archive: %w", archivePath, err)
+		}
+
+	case "text", "":
+		actualLineCount := strings.Count(limitedContent, "\n")
+
+		if fp.Processor != nil {
+			ctx := context.Background()
+			err := fp.Processor.AddRow(ctx, types.NewRow(
+				types.MRP("Path", filePath),
+				types.MRP("FileSize", fileStats.Size),
+				types.MRP("FileTokenCount", fileStats.TokenCount),
+				types.MRP("FileLineCount", fileStats.LineCount),
+				types.MRP("ActualSize", actualSize),
+				types.MRP("ActualTokenCount", actualTokenCount),
+				types.MRP("ActualLineCount", actualLineCount),
+				types.MRP("Content", limitedContent),
+			))
+			if err != nil {
+				_, _ = fmt.Fprintf(os.Stderr, "Error adding row to processor: %v\n", err)
+			}
+		} else {
+			switch fp.DelimiterType {
+			case "xml":
+				fmt.Printf("<file name=\"%s\">\n<content>\n%s\n</content>\n</file>\n", filePath, limitedContent)
+			case "markdown":
+				fmt.Printf("## File: %s\n\n```\n%s\n```\n\n", filePath, limitedContent)
+			case "simple":
+				fmt.Printf("--- START FILE: %s ---\n%s\n--- END FILE: %s ---\n", filePath, limitedContent, filePath)
+			case "begin-end":
+				fmt.Printf("--- BEGIN FILE: %s ---\n%s\n--- END FILE: %s ---\n", filePath, limitedContent, filePath)
+			default:
+				fmt.Printf("File: %s\n%s\n", filePath, limitedContent)
+			}
+		}
+	default:
+		return fmt.Errorf("unknown output format: %s", fp.OutputFormat)
+	}
 
 	return nil
 }
 
-func (fp *FileProcessor) applyLimits(content []byte) string {
-	if fp.MaxLines == 0 && fp.MaxTokens == 0 {
-		return string(content)
+func getArchivePath(fullPath string) string {
+	wd, err := os.Getwd()
+	if err != nil {
+		return fullPath
+	}
+	relPath, err := filepath.Rel(wd, fullPath)
+	if err != nil {
+		return fullPath
+	}
+	return relPath
+}
+
+func (fp *FileProcessor) applyLimits(contentBytes []byte) string {
+	content := string(contentBytes)
+
+	if fp.MaxLines > 0 {
+		lines := strings.SplitN(content, "\n", fp.MaxLines+1)
+		if len(lines) > fp.MaxLines {
+			content = strings.Join(lines[:fp.MaxLines], "\n")
+		}
 	}
 
-	var limitedContent bytes.Buffer
-	scanner := bufio.NewScanner(bytes.NewReader(content))
-	lineCount := 0
-	tokenCount := 0
+	if fp.MaxTokens > 0 {
+		tokens := fp.TokenCounter.Encode(content, nil, nil)
 
-	for scanner.Scan() {
-		line := scanner.Text()
-		lineTokens := fp.TokenCounter.Encode(line, nil, nil)
-
-		if fp.MaxLines > 0 && lineCount >= fp.MaxLines {
-			break
+		if len(tokens) > fp.MaxTokens {
+			truncatedTokens := tokens[:fp.MaxTokens]
+			content = fp.TokenCounter.Decode(truncatedTokens)
 		}
-
-		if fp.MaxTokens > 0 && tokenCount+len(lineTokens) > fp.MaxTokens {
-			remainingTokens := fp.MaxTokens - tokenCount
-			if remainingTokens > 0 {
-				decodedLine := fp.TokenCounter.Decode(lineTokens[:remainingTokens])
-				limitedContent.WriteString(decodedLine)
-			}
-			break
-		}
-
-		limitedContent.WriteString(line + "\n")
-		lineCount++
-		tokenCount += len(lineTokens)
 	}
 
-	return limitedContent.String()
+	return content
 }
 
 func (fp *FileProcessor) printConfiguredFilters() {
@@ -341,4 +465,16 @@ func printRegexpList(name string, list []*regexp.Regexp) {
 		}
 		fmt.Printf("%s: %s\n", name, strings.Join(patterns, ", "))
 	}
+}
+
+type multiCloser []io.Closer
+
+func (mc multiCloser) Close() error {
+	var err error
+	for i := len(mc) - 1; i >= 0; i-- {
+		if e := mc[i].Close(); e != nil && err == nil {
+			err = e
+		}
+	}
+	return err
 }
