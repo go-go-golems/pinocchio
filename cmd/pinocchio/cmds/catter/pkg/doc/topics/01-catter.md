@@ -17,6 +17,8 @@ Flags:
 - match-path
 - exclude-dirs
 - delimiter
+- archive-file
+- archive-prefix
 IsTopLevel: true
 IsTemplate: false
 ShowPerDefault: true
@@ -215,26 +217,45 @@ A file must pass all applicable filters to be included in the output.
 
 ### 1. Preparing Code for LLM Prompts
 Flags used:
-- `-d, --delimiter`: Output format (markdown, xml, simple, begin-end)
+- `-d, --delimiter`: Output format for text (markdown, xml, simple, begin-end)
 - `-s, --stats`: Statistics detail level (overview, dir, full)
 
 ```bash
-# Get Python files with context headers
+# Get Python files with context headers (text output)
 pinocchio catter print -i .py -x tests/ -d markdown src/
 
 # Process specific files with token statistics
 pinocchio catter stats -s full main.go utils.go config.go
 ```
 
-### 2. Token-Aware Processing
-Flags:
-- `--max-tokens`: Limit total tokens processed
-- `--max-lines`: Limit lines per file
-- `--glazed`: Enable structured output
+### 2. Archiving Filtered Files
+Flags used:
+- `-a, --archive-file`: Output archive file path (e.g., `output.zip`, `codebase.tar.gz`)
+- `--archive-prefix`: Directory prefix within the archive (e.g., `my-project/`)
 
 ```bash
-# Limit tokens while getting detailed stats
+# Archive all .go files (excluding vendor) into a zip file
+pinocchio catter print -i .go -x vendor -a go_files.zip .
+
+# Archive .py and .js files into a tar.gz, placing them under a 'src' prefix
+pinocchio catter print -i .py,.js --archive-prefix src/ -a source_archive.tar.gz .
+
+# Archive files matching a path pattern into a zip file
+pinocchio catter print -p "internal/api/" -a api_files.zip .
+```
+
+### 3. Token-Aware Processing
+Flags:
+- `--max-tokens`: Limit total tokens processed (applies to text output and archive content)
+- `--max-lines`: Limit lines per file (applies to text output and archive content)
+- `--glazed`: Enable structured output (text output only)
+
+```bash
+# Limit tokens while getting detailed stats (text output)
 pinocchio catter print --max-tokens 4000 --max-lines 100 --glazed src/
+
+# Limit tokens when creating an archive
+pinocchio catter print --max-tokens 10000 -i .go -a limited_go.zip .
 
 # Get structured stats output
 pinocchio catter stats --glazed -s full . | glazed format -f json
@@ -251,16 +272,22 @@ Main flags:
 - `--max-total-size`: Limit total processed size (default: 10MB)
 - `-i, --include`: File extensions to include (e.g., .go,.js)
 - `-e, --exclude`: File extensions to exclude
-- `-d, --delimiter`: Output format (default, xml, markdown, simple, begin-end)
-- `--max-lines`: Maximum lines per file
-- `--max-tokens`: Maximum tokens per file
-- `--glazed`: Enable structured output
+- `-d, --delimiter`: Output format for text output (default, xml, markdown, simple, begin-end)
+- `--max-lines`: Maximum lines per file (applies to text and archive)
+- `--max-tokens`: Maximum tokens per file (applies to text and archive)
+- `-a, --archive-file`: Path to output archive file. Format (zip or tar.gz/.tgz) inferred from extension. If set, text output flags (`-d`, `--glazed`) are ignored.
+- `--archive-prefix`: Directory prefix to add within the archive (e.g., `myproject/`). Used only with `--archive-file`.
+- `--glazed`: Enable structured output (ignored if `--archive-file` is used)
 
 Filtering options:
 - `-f, --match-filename`: Regex patterns for filenames
 - `-p, --match-path`: Regex patterns for file paths
 - `-x, --exclude-dirs`: Directories to exclude
 - `--disable-gitignore`: Ignore .gitignore rules
+- `--print-filters`: Print the resolved filter configuration and exit.
+- `--filter-yaml`: Path to a YAML file with filter profiles.
+- `--filter-profile`: Name of a filter profile to use from YAML.
+- `--disable-default-filters`: Disable built-in default filters.
 
 ### Stats Command
 
@@ -299,13 +326,13 @@ pinocchio catter print --filter-profile python-only .
 
 ### 2. Structured Output
 
-Generate machine-readable output:
+Generate machine-readable output (only for text output modes):
 
 ```bash
 # Get JSON-formatted stats
 pinocchio catter stats --glazed -s full . | glazed format -f json
 
-# Process output with other tools
+# Process text output with other tools
 pinocchio catter print --glazed src/ | glazed filter --col Content
 ```
 
