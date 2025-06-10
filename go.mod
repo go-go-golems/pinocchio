@@ -27,7 +27,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/rmhubbert/bubbletea-overlay v0.3.2
 	github.com/rs/zerolog v1.34.0
-	github.com/sashabaranov/go-openai v1.38.1
+	github.com/sashabaranov/go-openai v1.40.1
 	github.com/spf13/cobra v1.9.1
 	github.com/spf13/viper v1.20.1
 	github.com/tcnksm/go-input v0.0.0-20180404061846-548a7d7a8ee8
