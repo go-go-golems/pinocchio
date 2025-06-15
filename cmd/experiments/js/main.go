@@ -15,6 +15,8 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/steps/utils"
 	"github.com/go-go-golems/glazed/pkg/cli"
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
+	"github.com/go-go-golems/glazed/pkg/cmds/middlewares"
+	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
 	"github.com/go-go-golems/pinocchio/pkg/cmds"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
@@ -42,11 +44,17 @@ func main() {
 	cobra.CheckErr(err)
 	geppettoLayers, err := cmds.CreateGeppettoLayers(stepSettings, cmds.WithHelpersLayer())
 	cobra.CheckErr(err)
+
+	// Add profile settings layer for --profile and --profile-file flags
+	profileLayer, err := cli.NewProfileSettingsLayer()
+	cobra.CheckErr(err)
+	geppettoLayers = append(geppettoLayers, profileLayer)
+
 	layers_ := layers.NewParameterLayers(layers.WithLayers(geppettoLayers...))
 
 	parser, err := cli.NewCobraParserFromLayers(
 		layers_,
-		cli.WithCobraMiddlewaresFunc(cmds.GetCobraCommandGeppettoMiddlewares))
+		cli.WithCobraMiddlewaresFunc(getPinocchioMiddlewares))
 	cobra.CheckErr(err)
 
 	flags := &testFlags{
@@ -124,6 +132,85 @@ func main() {
 
 	err = rootCmd.Execute()
 	cobra.CheckErr(err)
+}
+
+// getPinocchioMiddlewares creates a custom middleware chain that loads the 'pinocchio' profile
+func getPinocchioMiddlewares(
+	parsedCommandLayers *layers.ParsedLayers,
+	cmd *cobra.Command,
+	args []string,
+) ([]middlewares.Middleware, error) {
+	// Parse command settings to get file and profile options
+	commandSettings := &cli.CommandSettings{}
+	err := parsedCommandLayers.InitializeStruct(cli.CommandSettingsSlug, commandSettings)
+	if err != nil {
+		return nil, err
+	}
+
+	// Parse profile settings
+	profileSettings := &cli.ProfileSettings{}
+	err = parsedCommandLayers.InitializeStruct(cli.ProfileSettingsSlug, profileSettings)
+	if err != nil {
+		return nil, err
+	}
+
+	middlewares_ := []middlewares.Middleware{
+		// Command line arguments (highest priority)
+		middlewares.ParseFromCobraCommand(cmd,
+			parameters.WithParseStepSource("cobra"),
+		),
+		middlewares.GatherArguments(args,
+			parameters.WithParseStepSource("arguments"),
+		),
+	}
+
+	// Optional config file from command settings
+	if commandSettings.LoadParametersFromFile != "" {
+		middlewares_ = append(middlewares_,
+			middlewares.LoadParametersFromFile(commandSettings.LoadParametersFromFile))
+	}
+
+	// Profile support - force 'pinocchio' profile for consistency
+	configDir, err := os.UserConfigDir()
+	if err != nil {
+		return nil, err
+	}
+
+	defaultProfileFile := fmt.Sprintf("%s/pinocchio/profiles.yaml", configDir)
+	profileFile := profileSettings.ProfileFile
+	if profileFile == "" {
+		profileFile = defaultProfileFile
+	}
+
+	// Use pinocchio profile as default unless explicitly overridden
+	profile := profileSettings.Profile
+	if profile == "" {
+		profile = "pinocchio"
+	}
+
+	// Load pinocchio profile configuration
+	middlewares_ = append(middlewares_,
+		middlewares.GatherFlagsFromProfiles(
+			defaultProfileFile,
+			profileFile,
+			profile,
+			parameters.WithParseStepSource("pinocchio-profiles"),
+			parameters.WithParseStepMetadata(map[string]interface{}{
+				"profileFile": profileFile,
+				"profile":     profile,
+			}),
+		),
+		// Viper config for general layers
+		middlewares.GatherFlagsFromViper(
+			parameters.WithParseStepSource("viper"),
+		),
+		// Defaults (lowest priority)
+		middlewares.SetFromDefaults(
+			parameters.WithParseStepSource("defaults"),
+		),
+	)
+
+	return middlewares_, nil
 }
 
 func setupConsole(vm *goja.Runtime) {
