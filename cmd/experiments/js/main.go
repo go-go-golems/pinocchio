@@ -125,10 +125,11 @@ func main() {
 					}
 				}
 
-				// If no async operations are needed, signal completion after a delay
-				// This allows the script to call done() if needed
+				// For scripts that don't use done(), we need to signal completion
+				// But for scripts that do use done(), they will call it themselves
+				// We can't know in advance, so we'll use a longer timeout as fallback
 				go func() {
-					time.Sleep(2 * time.Second) // Give more time for async operations
+					time.Sleep(30 * time.Second) // Much longer timeout as fallback
 					if !doneCallbackUsed {
 						select {
 						case done <- nil:
