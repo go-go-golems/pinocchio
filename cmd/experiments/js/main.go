@@ -91,6 +91,9 @@ func main() {
 			done := make(chan error, 1)
 
 			loop.RunOnLoop(func(vm *goja.Runtime) {
+				// Set up field name mapper to convert Go method names to JavaScript-style names
+				vm.SetFieldNameMapper(goja.TagFieldNameMapper("json", true))
+				
 				setupConsole(vm)
 				setupJSEnvironment(vm, loop, stepSettings)
 
