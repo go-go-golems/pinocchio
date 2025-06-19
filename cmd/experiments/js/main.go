@@ -1,18 +1,11 @@
 package main
 
 import (
-	"fmt"
 	"os"
-	"time"
 
-	"github.com/dop251/goja"
-	"github.com/dop251/goja_nodejs/eventloop"
 	clay "github.com/go-go-golems/clay/pkg"
-	"github.com/go-go-golems/geppetto/pkg/embeddings"
-	"github.com/go-go-golems/geppetto/pkg/helpers"
 	"github.com/go-go-golems/geppetto/pkg/js"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
-	"github.com/go-go-golems/geppetto/pkg/steps/utils"
 	"github.com/go-go-golems/glazed/pkg/cli"
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
 	"github.com/go-go-golems/glazed/pkg/cmds/logging"
@@ -35,7 +28,6 @@ var runCmd *cobra.Command
 
 func main() {
 	helpSystem := help.NewHelpSystem()
-
 
 	err := pinocchio_docs.AddDocToHelpSystem(helpSystem)
 	cobra.CheckErr(err)
@@ -80,73 +72,38 @@ func main() {
 			err = stepSettings.UpdateFromParsedLayers(parsedLayers)
 			cobra.CheckErr(err)
 
-			// Create event loop
-			loop := eventloop.NewEventLoop()
-			loop.Start()
-			defer loop.Stop()
+			// Create the new RuntimeEngine
+			engine := js.NewRuntimeEngine()
+			defer engine.Close()
 
-			log.Info().Msg("Starting event loop")
+			log.Info().Msg("Starting RuntimeEngine")
 
-			// Channel to wait for completion
-			done := make(chan error, 1)
+			// Add setup functions
+			engine.AddSetupFunction(js.SetupDoubleStep())
+			engine.AddSetupFunction(js.SetupConversation())
+			engine.AddSetupFunction(js.SetupEmbeddings(stepSettings))
+			engine.AddSetupFunction(js.SetupChatStepFactory(stepSettings))
+			engine.AddSetupFunction(js.SetupDoneCallback())
 
-			loop.RunOnLoop(func(vm *goja.Runtime) {
-				// Set up field name mapper to convert Go method names to JavaScript-style names
-				vm.SetFieldNameMapper(goja.TagFieldNameMapper("json", true))
-				
-				setupConsole(vm)
-				setupJSEnvironment(vm, loop, stepSettings)
-
-				// Register done callback
-				doneCallbackUsed := false
-				err := vm.Set("done", func(args ...interface{}) {
-					doneCallbackUsed = true
-					if len(args) > 0 {
-						if err, ok := args[0].(error); ok {
-							done <- err
-						} else {
-							done <- fmt.Errorf("script error: %v", args[0])
-						}
-					} else {
-						done <- nil
-					}
-				})
-				cobra.CheckErr(err)
-
-				// Execute scripts
-				for _, scriptPath := range args {
-					log.Info().Str("script", scriptPath).Msg("Executing script")
-					code, err := os.ReadFile(scriptPath)
-					if err != nil {
-						done <- err
-						return
-					}
-					_, err = vm.RunString(string(code))
-					if err != nil {
-						done <- err
-						return
-					}
+			// Read all scripts
+			var allCode string
+			for _, scriptPath := range args {
+				log.Info().Str("script", scriptPath).Msg("Reading script")
+				code, err := os.ReadFile(scriptPath)
+				if err != nil {
+					log.Error().Err(err).Msg("Failed to read script")
+					os.Exit(1)
 				}
-
-				// For scripts that don't use done(), we need to signal completion
-				// But for scripts that do use done(), they will call it themselves
-				// We can't know in advance, so we'll use a longer timeout as fallback
-				go func() {
-					time.Sleep(30 * time.Second) // Much longer timeout as fallback
-					if !doneCallbackUsed {
-						select {
-						case done <- nil:
-						default:
-						}
-					}
-				}()
-			})
-
-			// Wait for completion
-			if err := <-done; err != nil {
-				log.Error().Err(err).Msg("Script execution failed")
-				os.Exit(1)
+				allCode += string(code) + "\n"
 			}
+
+			// Start the engine (this will block until completion)
+			log.Debug().Msg("Starting RuntimeEngine")
+			engine.Start()
+
+			log.Debug().Msg("Running JavaScript code")
+
+			engine.RunOnLoop(allCode)
 
 			log.Info().Msg("Script execution completed")
 		},
@@ -159,85 +116,4 @@ func main() {
 
 	err = rootCmd.Execute()
 	cobra.CheckErr(err)
-}
-
-func setupConsole(vm *goja.Runtime) {
-	console := vm.NewObject()
-	_ = console.Set("log", func(call goja.FunctionCall) goja.Value {
-		args := make([]interface{}, len(call.Arguments))
-		for i, arg := range call.Arguments {
-			args[i] = arg.Export()
-		}
-		fmt.Println(args...)
-		return goja.Undefined()
-	})
-	_ = console.Set("error", func(call goja.FunctionCall) goja.Value {
-		args := make([]interface{}, len(call.Arguments))
-		for i, arg := range call.Arguments {
-			args[i] = arg.Export()
-		}
-		fmt.Printf("ERROR: %v\n", args...)
-		return goja.Undefined()
-	})
-	_ = vm.Set("console", console)
-}
-
-func setupJSEnvironment(vm *goja.Runtime, loop *eventloop.EventLoop, stepSettings *settings.StepSettings) {
-	// Register step for stepTest.js
-	setupDoubleStep(vm, loop)
-	
-	// Register conversation for conversationTest.js
-	err := js.RegisterConversation(vm)
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to register conversation")
-	}
-	
-	// Register chat step factory for chatStepTest.js
-	err = js.RegisterFactory(vm, loop, stepSettings)
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to register factory")
-	}
-	
-	// Register embeddings for embeddingsTest.js
-	setupEmbeddings(vm, loop, stepSettings)
-}
-
-func setupDoubleStep(vm *goja.Runtime, loop *eventloop.EventLoop) {
-	// Create a simple test step that doubles numbers with delay
-	doubleStep := &utils.LambdaStep[float64, float64]{
-		Function: func(input float64) helpers.Result[float64] {
-			fmt.Println("Starting doubleStep")
-			time.Sleep(500 * time.Millisecond)
-			fmt.Println("Finished doubleStep")
-			return helpers.NewValueResult(input * 2)
-		},
-	}
-
-	// Register step in JS
-	err := js.RegisterStep(
-		vm,
-		loop,
-		"doubleStep",
-		doubleStep,
-		func(v goja.Value) float64 { return v.ToFloat() },
-		func(v float64) goja.Value { return vm.ToValue(v) },
-	)
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to register doubleStep")
-	}
-}
-
-func setupEmbeddings(vm *goja.Runtime, loop *eventloop.EventLoop, stepSettings *settings.StepSettings) {
-	factory := embeddings.NewSettingsFactoryFromStepSettings(stepSettings)
-	provider, err := factory.NewProvider()
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to create embeddings provider")
-		return
-	}
-
-	// Register embeddings in JavaScript
-	err = js.RegisterEmbeddings(vm, "embeddings", provider, loop)
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to register embeddings")
-	}
 }
