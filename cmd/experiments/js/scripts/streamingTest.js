@@ -9,8 +9,7 @@ function runTest1() {
         let testComplete = false;
         
         const stepID = doubleStep.runWithEvents(5.0, function(event) {
-            console.log("🔥 EVENT CALLBACK CALLED:", event.type, JSON.stringify(event));
-            
+            console.log("🔥 EVENT CALLBACK CALLED:", event.type);
             switch(event.type) {
                 case "start":
                     console.log("✅ Start event received");

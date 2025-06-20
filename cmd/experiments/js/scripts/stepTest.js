@@ -2,8 +2,8 @@
 async function testPromise() {
     console.log("Testing Promise API...");
     try {
-        const promise = doubleStep.startAsync(21)
-        console.log("Promise created");
+        const { promise, stepID } = doubleStep.runAsync(21)
+        console.log("Promise created", stepID);
         const result = await promise;
         console.log("Promise result:", result[0]);
     } catch (err) {
@@ -15,7 +15,7 @@ async function testPromise() {
 function testBlocking() {
     console.log("Testing Blocking API...");
     try {
-        const result = doubleStep.startBlocking(32);
+        const result = doubleStep.run(32);
         console.log("Blocking result:", result[0]);
     } catch (err) {
         console.error("Blocking error:", err);
@@ -38,7 +38,16 @@ async function runStepTests() {
     await testPromise();
     testBlocking();
     testCallbacks();
+    
+    // Wait a bit for callbacks to complete
+    await new Promise(resolve => setTimeout(resolve, 2000));
     console.log("Step tests complete");
 }
 
-runStepTests().catch(console.error); 
+runStepTests().then(() => {
+    console.log("All tests completed successfully");
+    done();
+}).catch(err => {
+    console.error("Test failed:", err);
+    done(err);
+});
