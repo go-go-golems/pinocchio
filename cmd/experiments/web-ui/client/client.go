@@ -134,7 +134,9 @@ func (c *ChatClient) SendUserMessage(ctx context.Context, message string) error 
 
 	// Add user message to conversation
 	userMsg := conversation.NewChatMessage(conversation.RoleUser, message)
-	c.manager.AppendMessages(userMsg)
+	if err := c.manager.AppendMessages(userMsg); err != nil {
+		return fmt.Errorf("failed to append user message: %w", err)
+	}
 
 	go func() {
 		c.MessageChan <- "<div class=\"event\"><div class=\"timestamp\">" + time.Now().Format("15:04:05") + "</div>Starting...</div>"
@@ -234,7 +236,10 @@ func (c *ChatClient) HandleFinal(ctx context.Context, e *events.EventFinal) erro
 	// perhaps after the step finishes entirely, but placing it here ensures
 	// the conversation history is updated before the UI refresh.
 	c.mu.Lock()
-	c.manager.AppendMessages(conversation.NewChatMessage(conversation.RoleAssistant, e.Text))
+	if err := c.manager.AppendMessages(conversation.NewChatMessage(conversation.RoleAssistant, e.Text)); err != nil {
+		c.mu.Unlock()
+		return fmt.Errorf("failed to append assistant message: %w", err)
+	}
 	conv := c.manager.GetConversation() // Get updated conversation
 	c.mu.Unlock()                       // Unlock before rendering to avoid holding lock during potentially slow operations
 

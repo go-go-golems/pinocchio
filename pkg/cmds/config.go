@@ -6,6 +6,7 @@ import (
 
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings/claude"
+	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings/gemini"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings/openai"
 	"github.com/go-go-golems/glazed/pkg/cli"
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
@@ -50,6 +51,7 @@ func LoadConfigFromSettings(settings_ cli.ProfileSettings) (*settings.StepSettin
 				settings.AiChatSlug,
 				settings.AiClientSlug,
 				openai.OpenAiChatSlug,
+				gemini.GeminiChatSlug,
 				claude.ClaudeChatSlug,
 			},
 			middlewares.GatherFlagsFromViper(parameters.WithParseStepSource("viper")),

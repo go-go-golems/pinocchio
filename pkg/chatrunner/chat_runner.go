@@ -181,7 +181,9 @@ func (cs *ChatSession) runBlockingInternal() error {
 			return r.Error()
 		}
 		msg := r.Unwrap()
-		cs.manager.AppendMessages(msg)
+		if err := cs.manager.AppendMessages(msg); err != nil {
+			return fmt.Errorf("failed to append message: %w", err)
+		}
 		lastMessage = msg
 	}
 

@@ -345,7 +345,9 @@ func (g *PinocchioCommand) runStepAndCollectMessages(ctx context.Context, rc *ru
 			return r.Error()
 		}
 		msg := r.Unwrap()
-		rc.ConversationManager.AppendMessages(msg)
+		if err := rc.ConversationManager.AppendMessages(msg); err != nil {
+			return fmt.Errorf("failed to append message: %w", err)
+		}
 	}
 	return nil
 }

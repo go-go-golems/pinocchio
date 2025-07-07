@@ -7,6 +7,7 @@ import (
 	embeddings_config "github.com/go-go-golems/geppetto/pkg/embeddings/config"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings/claude"
+	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings/gemini"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings/openai"
 	"github.com/go-go-golems/glazed/pkg/cli"
 	"github.com/go-go-golems/glazed/pkg/cmds"
@@ -97,6 +98,7 @@ func GetCobraCommandGeppettoMiddlewares(
 				settings.AiClientSlug,
 				openai.OpenAiChatSlug,
 				claude.ClaudeChatSlug,
+				gemini.GeminiChatSlug,
 				cmdlayers.GeppettoHelpersSlug,
 				embeddings_config.EmbeddingsSlug,
 				cli.ProfileSettingsSlug,
