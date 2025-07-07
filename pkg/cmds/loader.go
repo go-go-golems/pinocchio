@@ -8,6 +8,7 @@ import (
 	embeddings_config "github.com/go-go-golems/geppetto/pkg/embeddings/config"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings/claude"
+	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings/gemini"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings/ollama"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings/openai"
 	"github.com/go-go-golems/glazed/pkg/cmds"
@@ -151,6 +152,12 @@ func CreateGeppettoLayers(stepSettings *settings.StepSettings, opts ...GeppettoL
 	if err != nil {
 		return nil, err
 	}
+	geminiParameterLayer, err := gemini.NewParameterLayer(
+		layers.WithDefaults(stepSettings.Gemini),
+	)
+	if err != nil {
+		return nil, err
+	}
 	openaiParameterLayer, err := openai.NewParameterLayer(
 		layers.WithDefaults(stepSettings.OpenAI),
 	)
@@ -178,6 +185,7 @@ func CreateGeppettoLayers(stepSettings *settings.StepSettings, opts ...GeppettoL
 	result := []layers.ParameterLayer{
 		chatParameterLayer, clientParameterLayer,
 		claudeParameterLayer,
+		geminiParameterLayer,
 		openaiParameterLayer,
 		embeddingsParameterLayer,
 		//ollamaParameterLayer,

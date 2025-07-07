@@ -7,6 +7,7 @@ import (
 	embeddings_config "github.com/go-go-golems/geppetto/pkg/embeddings/config"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings/claude"
+	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings/gemini"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings/openai"
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
 	"github.com/go-go-golems/glazed/pkg/cmds/middlewares"
@@ -81,6 +82,7 @@ func ParseGeppettoLayers(c *cmds.PinocchioCommand, options ...GeppettoLayersHelp
 					settings.AiClientSlug,
 					openai.OpenAiChatSlug,
 					claude.ClaudeChatSlug,
+					gemini.GeminiChatSlug,
 					embeddings_config.EmbeddingsSlug,
 					cmdlayers.GeppettoHelpersSlug,
 				},
