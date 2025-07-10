@@ -5,6 +5,7 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
 	"github.com/go-go-golems/glazed/pkg/help"
+	help_cmd "github.com/go-go-golems/glazed/pkg/help/cmd"
 	"github.com/go-go-golems/pinocchio/cmd/experiments/agent/codegen"
 	"github.com/go-go-golems/pinocchio/cmd/experiments/agent/tool"
 	"github.com/go-go-golems/pinocchio/pkg/cmds"
@@ -19,7 +20,7 @@ var rootCmd = &cobra.Command{
 func main() {
 	helpSystem := help.NewHelpSystem()
 
-	helpSystem.SetupCobraRootCommand(rootCmd)
+	help_cmd.SetupCobraRootCommand(helpSystem, rootCmd)
 
 	stepSettings, err := settings.NewStepSettings()
 	cobra.CheckErr(err)

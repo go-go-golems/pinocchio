@@ -16,6 +16,7 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
 	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
 	"github.com/go-go-golems/glazed/pkg/help"
+	help_cmd "github.com/go-go-golems/glazed/pkg/help/cmd"
 	"github.com/go-go-golems/pinocchio/pkg/cmds"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
@@ -150,7 +151,7 @@ func main() {
 	cobra.CheckErr(err)
 
 	// Setup help system with root command
-	helpSystem.SetupCobraRootCommand(webUICobraCommand)
+	help_cmd.SetupCobraRootCommand(helpSystem, webUICobraCommand)
 
 	err = clay.InitViper("pinocchio", webUICobraCommand)
 	cobra.CheckErr(err)
