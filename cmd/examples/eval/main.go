@@ -8,6 +8,7 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
 	"github.com/go-go-golems/glazed/pkg/help"
+	help_cmd "github.com/go-go-golems/glazed/pkg/help/cmd"
 	"github.com/go-go-golems/pinocchio/cmd/examples/eval/eval"
 	"github.com/go-go-golems/pinocchio/cmd/examples/eval/serve"
 	pinocchio_cmds "github.com/go-go-golems/pinocchio/pkg/cmds"
@@ -25,7 +26,7 @@ func main() {
 	cobra.CheckErr(err)
 
 	helpSystem := help.NewHelpSystem()
-	helpSystem.SetupCobraRootCommand(rootCmd)
+	help_cmd.SetupCobraRootCommand(helpSystem, rootCmd)
 
 	evalCmd, err := eval.NewEvalCommand()
 	if err != nil {
