@@ -38,7 +38,7 @@ changelog:
       - '^test:'
 
 brews:
-  - name: pinocchio
+  - name: packages
     description: "Pinocchio is a tool to interact with large language models"
     homepage: "https://github.com/go-go-golems/pinocchio"
     repository:
