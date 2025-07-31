@@ -20,14 +20,18 @@ import (
 
 func BuildCobraCommandWithGeppettoMiddlewares(
 	cmd cmds.Command,
-	options ...cli.CobraParserOption,
+	options ...cli.CobraOption,
 ) (*cobra.Command, error) {
-	options_ := append([]cli.CobraParserOption{
-		cli.WithCobraMiddlewaresFunc(GetCobraCommandGeppettoMiddlewares),
-		cli.WithCobraShortHelpLayers(layers.DefaultSlug, cmdlayers.GeppettoHelpersSlug),
+	config := cli.CobraParserConfig{
+		MiddlewaresFunc: GetCobraCommandGeppettoMiddlewares,
+		ShortHelpLayers: []string{layers.DefaultSlug, cmdlayers.GeppettoHelpersSlug},
+	}
+	
+	options_ := append([]cli.CobraOption{
+		cli.WithParserConfig(config),
 	}, options...)
 
-	return cli.BuildCobraCommandFromCommand(cmd, options_...)
+	return cli.BuildCobraCommand(cmd, options_...)
 }
 
 func GetCobraCommandGeppettoMiddlewares(

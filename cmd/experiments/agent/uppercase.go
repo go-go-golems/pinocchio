@@ -31,11 +31,10 @@ var upperCaseCmd = &cobra.Command{
 		cobra.CheckErr(err)
 		layers_ := layers.NewParameterLayers(layers.WithLayers(geppettoLayers...))
 
-		cobraParser, err := cli.NewCobraParserFromLayers(
-			layers_,
-			cli.WithCobraMiddlewaresFunc(
-				cmds.GetCobraCommandGeppettoMiddlewares,
-			))
+		config := &cli.CobraParserConfig{
+			MiddlewaresFunc: cmds.GetCobraCommandGeppettoMiddlewares,
+		}
+		cobraParser, err := cli.NewCobraParserFromLayers(layers_, config)
 		cobra.CheckErr(err)
 
 		parsedLayers, err := cobraParser.Parse(cmd, args)
