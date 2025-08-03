@@ -153,12 +153,13 @@ func (e *EngineBackend) Start(ctx context.Context, msgs []*conversation.Message)
 }
 
 // configureEngineWithSink configures the engine to use the event sink.
-// This is a helper method that creates a new engine instance with the sink configured.
+// This is a helper method that returns the engine as-is since the engine was already
+// configured with the event sink during creation using WithSink option.
 func (e *EngineBackend) configureEngineWithSink(engine inference.Engine) (inference.Engine, error) {
-	// For now, we return the engine as-is since the Engine interface doesn't expose 
-	// configuration methods. In a real implementation, this would require creating 
-	// a new engine instance with the sink configured, or extending the Engine interface.
-	// The event publishing should happen within the specific Engine implementations.
+	// The engine was already configured with the event sink during creation in cmd.go
+	// using inference.WithSink(uiSink), so we just return it as-is.
+	// The engine implementations (OpenAIEngine, ClaudeEngine) will automatically
+	// publish events to the configured sinks during RunInference().
 	return engine, nil
 }
 

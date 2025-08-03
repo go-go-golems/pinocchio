@@ -25,6 +25,7 @@ import (
 	"github.com/go-go-golems/pinocchio/pkg/ui"
 	"github.com/mattn/go-isatty"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog/log"
 	"github.com/tcnksm/go-input"
 	"golang.org/x/sync/errgroup"
 )
@@ -197,6 +198,7 @@ func (g *PinocchioCommand) RunIntoWriter(
 		Output:           helpersSettings.Output,
 		WithMetadata:     helpersSettings.WithMetadata,
 		FullOutput:       helpersSettings.FullOutput,
+		UseStepBackend:   helpersSettings.UseStepBackend,
 	}
 
 	router, err := events.NewEventRouter()
@@ -397,6 +399,7 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) ([]*
 
 	eg.Go(func() error {
 		defer f()
+		var err error
 
 		// Wait for router to be ready
 		<-rc.Router.Running()
@@ -451,12 +454,20 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) ([]*
 			}
 		}
 
-		// Create engine for the UI backend
+		// Create backend based on feature flag
+		var backend bobatea_chat.Backend
+		if rc.UISettings != nil && rc.UISettings.UseStepBackend {
+			// StepBackend is deprecated and no longer supported
+			log.Warn().Msg("--use-step-backend flag is deprecated: StepBackend is no longer supported, falling back to EngineBackend")
+		}
+		
+		// Use EngineBackend (the only supported option)
+		log.Debug().Msg("Using EngineBackend for UI")
 		engine, err := rc.EngineFactory.CreateEngine(rc.StepSettings, engineOptions...)
 		if err != nil {
 			return err
 		}
-		backend := ui.NewEngineBackend(engine, uiSink)
+		backend = ui.NewEngineBackend(engine, uiSink)
 
 		// Determine if we should auto-start the backend
 		autoStartBackend := rc.UISettings != nil && rc.UISettings.StartInChat

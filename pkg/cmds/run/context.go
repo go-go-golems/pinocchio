@@ -28,6 +28,7 @@ type UISettings struct {
 	Output           string
 	WithMetadata     bool
 	FullOutput       bool
+	UseStepBackend   bool
 }
 
 // RunContext encapsulates all the settings and state needed for a single command run
