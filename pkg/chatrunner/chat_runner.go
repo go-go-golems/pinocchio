@@ -6,13 +6,13 @@ import (
 	"io"
 	"os"
 
-	"github.com/ThreeDotsLabs/watermill/message"
+
 	tea "github.com/charmbracelet/bubbletea"
 	bobachat "github.com/go-go-golems/bobatea/pkg/chat" // Alias for clarity
 	geppetto_conversation "github.com/go-go-golems/geppetto/pkg/conversation"
 	"github.com/go-go-golems/geppetto/pkg/events"
-	"github.com/go-go-golems/geppetto/pkg/steps"
-	"github.com/go-go-golems/geppetto/pkg/steps/ai/chat" // Needed for askForChatContinuation potentially
+	"github.com/go-go-golems/geppetto/pkg/inference"
+	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 	"github.com/go-go-golems/pinocchio/pkg/ui"
 	"github.com/mattn/go-isatty" // Needed for askForChatContinuation
 	"github.com/pkg/errors"
@@ -33,14 +33,15 @@ const (
 // ChatSession holds the validated configuration and executes the chat logic.
 // It's typically created and run by the ChatBuilder.
 type ChatSession struct {
-	ctx            context.Context
-	stepFactory    func(publisher message.Publisher, topic string) (chat.Step, error)
-	manager        geppetto_conversation.Manager
-	uiOptions      []bobachat.ModelOption
+	ctx           context.Context
+	engineFactory inference.EngineFactory
+	settings      *settings.StepSettings
+	manager       geppetto_conversation.Manager
+	uiOptions     []bobachat.ModelOption
 	programOptions []tea.ProgramOption
-	mode           RunMode
-	outputWriter   io.Writer
-	router         *events.EventRouter // Optional external router
+	mode          RunMode
+	outputWriter  io.Writer
+	router        *events.EventRouter // Optional external router
 }
 
 // Run executes the chat session based on its configured mode.
@@ -68,10 +69,11 @@ func (cs *ChatSession) runChatInternal() error {
 		}
 	}
 
-	// Use factory to create step for UI interaction
-	uiStep, err := cs.stepFactory(router.Publisher, "ui")
+	// Create engine with UI sink for event publishing
+	uiSink := inference.NewWatermillSink(router.Publisher, "ui")
+	engine, err := cs.engineFactory.CreateEngine(cs.settings, inference.WithSink(uiSink))
 	if err != nil {
-		return errors.Wrap(err, "failed to create UI step from factory")
+		return errors.Wrap(err, "failed to create engine from factory")
 	}
 
 	eg, childCtx := errgroup.WithContext(cs.ctx)
@@ -112,7 +114,7 @@ func (cs *ChatSession) runChatInternal() error {
 		}
 		log.Debug().Msg("Router handlers running")
 
-		backend := ui.NewStepBackend(uiStep)
+		backend := ui.NewEngineBackend(engine, uiSink)
 		model := bobachat.InitialModel(cs.manager, backend, cs.uiOptions...)
 		p := tea.NewProgram(model, cs.programOptions...)
 
@@ -152,51 +154,43 @@ func (cs *ChatSession) runChatInternal() error {
 	return err
 }
 
-// runBlockingInternal handles non-interactive execution.
+// runBlockingInternal handles non-interactive execution using Engine directly.
 func (cs *ChatSession) runBlockingInternal() error {
-	// For blocking mode, we typically don't need the full router unless
-	// we want structured output (JSON, YAML) via events.
-	// Let's assume a simple direct execution for now. If router/printer is needed,
-	// this logic would become more complex, mirroring parts of runChatInternal.
-
-	// Create a step without a publisher/topic
-	step, err := cs.stepFactory(nil, "") // Pass nil publisher, empty topic
+	// Create engine for blocking execution (no event sink needed)
+	engine, err := cs.engineFactory.CreateEngine(cs.settings)
 	if err != nil {
-		return errors.Wrap(err, "failed to create blocking step from factory")
+		return errors.Wrap(err, "failed to create engine for blocking execution")
 	}
 
-	// Simplified execution logic (similar to PinocchioCommand.runStepAndCollectMessages)
+	// Get current conversation
 	conversation_ := cs.manager.GetConversation()
-	messagesM := steps.Resolve(conversation_)
-	m := steps.Bind(cs.ctx, messagesM, step) // Use the configured context
 
-	var lastMessage *geppetto_conversation.Message
-	for r := range m.GetChannel() {
-		if r.Error() != nil {
-			// Don't return context cancellation errors if the context was cancelled externally
-			if errors.Is(r.Error(), context.Canceled) && cs.ctx.Err() == context.Canceled {
-				log.Debug().Msg("Blocking step cancelled by context")
-				break // Exit loop gracefully
-			}
-			return r.Error()
+	// Run inference directly
+	msg, err := engine.RunInference(cs.ctx, conversation_)
+	if err != nil {
+		// Don't return context cancellation errors if the context was cancelled externally
+		if errors.Is(err, context.Canceled) && cs.ctx.Err() == context.Canceled {
+			log.Debug().Msg("Blocking inference cancelled by context")
+			return nil // Exit gracefully
 		}
-		msg := r.Unwrap()
-		if err := cs.manager.AppendMessages(msg); err != nil {
-			return fmt.Errorf("failed to append message: %w", err)
-		}
-		lastMessage = msg
+		return errors.Wrap(err, "inference failed")
 	}
 
-	// Print the last message content to the output writer
-	if lastMessage != nil {
+	// Append the result message to the conversation
+	if err := cs.manager.AppendMessages(msg); err != nil {
+		return fmt.Errorf("failed to append message: %w", err)
+	}
+
+	// Print the message content to the output writer
+	if msg != nil {
 		// TODO: Handle different content types more robustly
-		if content, ok := lastMessage.Content.(*geppetto_conversation.ChatMessageContent); ok {
+		if content, ok := msg.Content.(*geppetto_conversation.ChatMessageContent); ok {
 			_, err := fmt.Fprintln(cs.outputWriter, content.View())
 			if err != nil {
 				return errors.Wrap(err, "failed to write output")
 			}
 		} else {
-			_, err := fmt.Fprintf(cs.outputWriter, "%v", lastMessage.Content)
+			_, err := fmt.Fprintf(cs.outputWriter, "%v", msg.Content)
 			if err != nil {
 				return errors.Wrap(err, "failed to write output")
 			}
@@ -251,15 +245,16 @@ func (cs *ChatSession) runInteractiveInternal() error {
 
 // ChatBuilder provides a fluent API for configuring and running a chat session.
 type ChatBuilder struct {
-	err            error // To collect errors during build steps
-	ctx            context.Context
-	stepFactory    func(publisher message.Publisher, topic string) (chat.Step, error)
-	manager        geppetto_conversation.Manager
-	uiOptions      []bobachat.ModelOption
+	err           error // To collect errors during build steps
+	ctx           context.Context
+	engineFactory inference.EngineFactory
+	settings      *settings.StepSettings
+	manager       geppetto_conversation.Manager
+	uiOptions     []bobachat.ModelOption
 	programOptions []tea.ProgramOption
-	mode           RunMode
-	outputWriter   io.Writer
-	router         *events.EventRouter
+	mode          RunMode
+	outputWriter  io.Writer
+	router        *events.EventRouter
 }
 
 // NewChatBuilder creates a new builder with default settings.
@@ -300,17 +295,29 @@ func (b *ChatBuilder) WithManager(manager geppetto_conversation.Manager) *ChatBu
 	return b
 }
 
-// WithStepFactory sets the factory function used to create chat steps. (Required)
-// The factory allows creating steps configured for specific event topics ("ui" or "chat").
-func (b *ChatBuilder) WithStepFactory(factory func(publisher message.Publisher, topic string) (chat.Step, error)) *ChatBuilder {
+// WithEngineFactory sets the factory used to create engines. (Required)
+func (b *ChatBuilder) WithEngineFactory(factory inference.EngineFactory) *ChatBuilder {
 	if b.err != nil {
 		return b
 	}
 	if factory == nil {
-		b.err = errors.New("step factory cannot be nil")
+		b.err = errors.New("engine factory cannot be nil")
 		return b
 	}
-	b.stepFactory = factory
+	b.engineFactory = factory
+	return b
+}
+
+// WithSettings sets the step settings for engine configuration. (Required)
+func (b *ChatBuilder) WithSettings(settings *settings.StepSettings) *ChatBuilder {
+	if b.err != nil {
+		return b
+	}
+	if settings == nil {
+		b.err = errors.New("settings cannot be nil")
+		return b
+	}
+	b.settings = settings
 	return b
 }
 
@@ -381,8 +388,11 @@ func (b *ChatBuilder) Build() (*ChatSession, error) {
 	if b.manager == nil {
 		return nil, errors.New("manager is required (use WithManager)")
 	}
-	if b.stepFactory == nil {
-		return nil, errors.New("step factory is required (use WithStepFactory)")
+	if b.engineFactory == nil {
+		return nil, errors.New("engine factory is required (use WithEngineFactory)")
+	}
+	if b.settings == nil {
+		return nil, errors.New("settings is required (use WithSettings)")
 	}
 	if b.mode == "" {
 		// Should be set by default or WithMode, but check anyway
@@ -397,14 +407,15 @@ func (b *ChatBuilder) Build() (*ChatSession, error) {
 
 	// Create the ChatSession instance from the builder's state
 	session := &ChatSession{
-		ctx:            b.ctx,
-		stepFactory:    b.stepFactory,
-		manager:        b.manager,
-		uiOptions:      b.uiOptions,
+		ctx:           b.ctx,
+		engineFactory: b.engineFactory,
+		settings:      b.settings,
+		manager:       b.manager,
+		uiOptions:     b.uiOptions,
 		programOptions: b.programOptions,
-		mode:           b.mode,
-		outputWriter:   b.outputWriter,
-		router:         b.router,
+		mode:          b.mode,
+		outputWriter:  b.outputWriter,
+		router:        b.router,
 	}
 
 	return session, nil

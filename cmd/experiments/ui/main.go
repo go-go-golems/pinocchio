@@ -5,11 +5,10 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/ThreeDotsLabs/watermill/message"
 	bobachat "github.com/go-go-golems/bobatea/pkg/chat"
 	geppetto_conversation "github.com/go-go-golems/geppetto/pkg/conversation"
-	"github.com/go-go-golems/geppetto/pkg/steps/ai/chat"
-	"github.com/go-go-golems/geppetto/pkg/steps/ai/chat/steps"
+	"github.com/go-go-golems/geppetto/pkg/inference"
+	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 	"github.com/go-go-golems/pinocchio/pkg/chatrunner"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -32,31 +31,27 @@ func main() {
 		),
 	)
 
-	// 2. Define Step Factory
-	// This factory creates a new EchoStep instance when needed by the runner.
-	// It configures the step with the provided publisher and topic.
-	stepFactory := func(publisher message.Publisher, topic string) (chat.Step, error) {
-		step := steps.NewEchoStep() // Create the base step
-		if publisher != nil && topic != "" {
-			// Configure the step to publish events *if* a publisher and topic are given
-			err := step.AddPublishedTopic(publisher, topic)
-			if err != nil {
-				return nil, err
-			}
-		}
-		return step, nil
+	// 2. Create Step Settings
+	stepSettings, err := settings.NewStepSettings()
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to create step settings")
+		os.Exit(1)
 	}
 
-	// 3. Use the ChatBuilder
+	// 3. Create Engine Factory
+	engineFactory := inference.NewStandardEngineFactory()
+
+	// 4. Use the ChatBuilder
 	log.Info().Msg("Configuring Chat Runner")
 	builder := chatrunner.NewChatBuilder().
 		WithManager(manager).
-		WithStepFactory(stepFactory).
+		WithEngineFactory(engineFactory).
+		WithSettings(stepSettings).
 		WithMode(chatrunner.RunModeChat).
-		WithUIOptions(bobachat.WithTitle("Echo Chat Runner")). // Customize UI title
+		WithUIOptions(bobachat.WithTitle("Engine Chat Runner")). // Customize UI title
 		WithContext(context.Background())
 
-	// 4. Run the chat session
+	// 5. Run the chat session
 	log.Info().Msg("Starting Chat Runner")
 	session, err := builder.Build()
 	if err != nil {
@@ -65,7 +60,7 @@ func main() {
 	}
 	err = session.Run()
 
-	// 5. Handle potential errors
+	// 6. Handle potential errors
 	if err != nil {
 		log.Error().Err(err).Msg("Chat Runner failed")
 		// Use fmt.Fprintf for cleaner exit message without log formatting

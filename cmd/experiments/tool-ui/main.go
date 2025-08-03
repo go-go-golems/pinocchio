@@ -4,12 +4,10 @@ import (
 	"context"
 	"os"
 
-	"github.com/ThreeDotsLabs/watermill/message"
 	bobachat "github.com/go-go-golems/bobatea/pkg/chat"
 	clay "github.com/go-go-golems/clay/pkg"
 	geppetto_conversation "github.com/go-go-golems/geppetto/pkg/conversation"
-	"github.com/go-go-golems/geppetto/pkg/steps/ai/chat"
-	"github.com/go-go-golems/geppetto/pkg/steps/ai/openai"
+	"github.com/go-go-golems/geppetto/pkg/inference"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/types"
 	glazed_cmds "github.com/go-go-golems/glazed/pkg/cmds"
@@ -17,9 +15,7 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
 	"github.com/go-go-golems/pinocchio/pkg/chatrunner"
 	pinocchio_cmds "github.com/go-go-golems/pinocchio/pkg/cmds"
-	"github.com/invopop/jsonschema"
 	"github.com/pkg/errors"
-	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 )
 
@@ -87,35 +83,10 @@ func (t *ToolUiCommand) Run(
 			),
 		))
 
-	reflector := &jsonschema.Reflector{
-		DoNotReference: true,
-	}
-	err = reflector.AddGoComments("github.com/go-go-golems/pinocchio", "./cmd/experiments/tool-ui")
-	if err != nil {
-		log.Warn().Err(err).Msg("Could not add go comments")
-	}
-
-	stepFactory := func(publisher message.Publisher, topic string) (chat.Step, error) {
-		toolStep, err := openai.NewChatToolStep(
-			stepSettings.Clone(),
-			openai.WithReflector(reflector),
-			openai.WithToolFunctions(map[string]any{
-				"getWeather":      getWeather,
-				"getWeatherOnDay": getWeatherOnDay,
-			}),
-		)
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to create tool step")
-		}
-
-		if publisher != nil && topic != "" {
-			err = toolStep.AddPublishedTopic(publisher, topic)
-			if err != nil {
-				return nil, errors.Wrapf(err, "failed to add published topic %s", topic)
-			}
-		}
-		return toolStep, nil
-	}
+	// Create engine factory
+	// NOTE: For now, tools are not fully implemented in the Engine interface
+	// This is a simplified version that will need to be enhanced when tool support is added
+	engineFactory := inference.NewStandardEngineFactory()
 
 	var mode chatrunner.RunMode
 	if settings_.UI {
@@ -127,7 +98,8 @@ func (t *ToolUiCommand) Run(
 	builder := chatrunner.NewChatBuilder().
 		WithMode(mode).
 		WithManager(manager).
-		WithStepFactory(stepFactory).
+		WithEngineFactory(engineFactory).
+		WithSettings(stepSettings).
 		WithContext(ctx).
 		WithOutputWriter(os.Stdout).
 		WithUIOptions(bobachat.WithTitle("Tool UI Chat"))

@@ -15,9 +15,7 @@ import (
 	bobatea_chat "github.com/go-go-golems/bobatea/pkg/chat"
 
 	"github.com/go-go-golems/geppetto/pkg/conversation"
-	"github.com/go-go-golems/geppetto/pkg/steps"
-	"github.com/go-go-golems/geppetto/pkg/steps/ai"
-	"github.com/go-go-golems/geppetto/pkg/steps/ai/chat"
+	"github.com/go-go-golems/geppetto/pkg/inference"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 	glazedcmds "github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
@@ -251,11 +249,9 @@ func (g *PinocchioCommand) RunWithOptions(ctx context.Context, options ...run.Ru
 		return runCtx.ConversationManager.GetConversation(), nil
 	}
 
-	// Create step factory if not provided
-	if runCtx.StepFactory == nil {
-		runCtx.StepFactory = &ai.StandardStepFactory{
-			Settings: runCtx.StepSettings.Clone(),
-		}
+	// Create engine factory if not provided
+	if runCtx.EngineFactory == nil {
+		runCtx.EngineFactory = inference.NewStandardEngineFactory()
 	}
 
 	// Verify router for chat mode
@@ -273,19 +269,15 @@ func (g *PinocchioCommand) RunWithOptions(ctx context.Context, options ...run.Ru
 	}
 }
 
-// runBlocking handles blocking execution mode
+// runBlocking handles blocking execution mode using Engine directly
 func (g *PinocchioCommand) runBlocking(ctx context.Context, rc *run.RunContext) ([]*conversation.Message, error) {
-	chatStep, err := rc.StepFactory.NewStep()
-	if err != nil {
-		return nil, err
-	}
-
-	// If we have a router, set up the printer and run the router loop
+	// Create engine instance options
+	var options []inference.Option
+	
+	// If we have a router, set up watermill sink for event publishing
 	if rc.Router != nil {
-		chatStep, err = rc.StepFactory.NewStep(chat.WithPublishedTopic(rc.Router.Publisher, "chat"))
-		if err != nil {
-			return nil, err
-		}
+		watermillSink := inference.NewWatermillSink(rc.Router.Publisher, "chat")
+		options = append(options, inference.WithSink(watermillSink))
 
 		// Add default printer if none is set
 		if rc.UISettings == nil || rc.UISettings.Output == "" {
@@ -316,16 +308,16 @@ func (g *PinocchioCommand) runBlocking(ctx context.Context, rc *run.RunContext) 
 		eg.Go(func() error {
 			defer cancel()
 			<-rc.Router.Running()
-			return g.runStepAndCollectMessages(ctx, rc, chatStep)
+			return g.runEngineAndCollectMessages(ctx, rc, options)
 		})
 
-		err = eg.Wait()
+		err := eg.Wait()
 		if err != nil {
 			return nil, err
 		}
 	} else {
-		// No router, just run the step directly
-		err = g.runStepAndCollectMessages(ctx, rc, chatStep)
+		// No router, just run the engine directly
+		err := g.runEngineAndCollectMessages(ctx, rc, options)
 		if err != nil {
 			return nil, err
 		}
@@ -334,21 +326,28 @@ func (g *PinocchioCommand) runBlocking(ctx context.Context, rc *run.RunContext) 
 	return rc.ConversationManager.GetConversation(), nil
 }
 
-// runStepAndCollectMessages handles the actual step execution and message collection
-func (g *PinocchioCommand) runStepAndCollectMessages(ctx context.Context, rc *run.RunContext, chatStep chat.Step) error {
-	conversation_ := rc.ConversationManager.GetConversation()
-	messagesM := steps.Resolve(conversation_)
-	m := steps.Bind(ctx, messagesM, chatStep)
-
-	for r := range m.GetChannel() {
-		if r.Error() != nil {
-			return r.Error()
-		}
-		msg := r.Unwrap()
-		if err := rc.ConversationManager.AppendMessages(msg); err != nil {
-			return fmt.Errorf("failed to append message: %w", err)
-		}
+// runEngineAndCollectMessages handles the actual engine execution and message collection
+func (g *PinocchioCommand) runEngineAndCollectMessages(ctx context.Context, rc *run.RunContext, options []inference.Option) error {
+	// Create engine with options
+	engine, err := rc.EngineFactory.CreateEngine(rc.StepSettings, options...)
+	if err != nil {
+		return fmt.Errorf("failed to create engine: %w", err)
 	}
+
+	// Get current conversation
+	conversation_ := rc.ConversationManager.GetConversation()
+
+	// Run inference
+	msg, err := engine.RunInference(ctx, conversation_)
+	if err != nil {
+		return fmt.Errorf("inference failed: %w", err)
+	}
+
+	// Append the result message to the conversation
+	if err := rc.ConversationManager.AppendMessages(msg); err != nil {
+		return fmt.Errorf("failed to append message: %w", err)
+	}
+
 	return nil
 }
 
@@ -369,11 +368,12 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) ([]*
 		options = append(options, tea.WithAltScreen())
 	}
 
-	rc.StepFactory.Settings.Chat.Stream = true
-	chatStep, err := rc.StepFactory.NewStep(chat.WithPublishedTopic(rc.Router.Publisher, "ui"))
-	if err != nil {
-		return nil, err
-	}
+	// Enable streaming for the UI
+	rc.StepSettings.Chat.Stream = true
+	
+	// Create engine options with watermill sink for UI events
+	uiSink := inference.NewWatermillSink(rc.Router.Publisher, "ui")
+	engineOptions := []inference.Option{inference.WithSink(uiSink)}
 
 	// Start router in a goroutine
 	eg := errgroup.Group{}
@@ -403,11 +403,9 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) ([]*
 
 		// If we're in interactive mode, run initial blocking step
 		if rc.RunMode == run.RunModeInteractive {
-			// Run initial blocking step
-			initialStep, err := rc.StepFactory.NewStep(chat.WithPublishedTopic(rc.Router.Publisher, "chat"))
-			if err != nil {
-				return err
-			}
+			// Create options for initial step with chat topic
+			chatSink := inference.NewWatermillSink(rc.Router.Publisher, "chat")
+			initialOptions := []inference.Option{inference.WithSink(chatSink)}
 
 			// Add default printer for initial step
 			if rc.UISettings == nil || rc.UISettings.Output == "" || rc.UISettings.Output == "text" {
@@ -421,12 +419,12 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) ([]*
 				})
 				rc.Router.AddHandler("chat", "chat", printer)
 			}
-			err = rc.Router.RunHandlers(ctx)
+			err := rc.Router.RunHandlers(ctx)
 			if err != nil {
 				return err
 			}
 
-			err = g.runStepAndCollectMessages(ctx, rc, initialStep)
+			err = g.runEngineAndCollectMessages(ctx, rc, initialOptions)
 			if err != nil {
 				return err
 			}
@@ -453,7 +451,12 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) ([]*
 			}
 		}
 
-		backend := ui.NewStepBackend(chatStep)
+		// Create engine for the UI backend
+		engine, err := rc.EngineFactory.CreateEngine(rc.StepSettings, engineOptions...)
+		if err != nil {
+			return err
+		}
+		backend := ui.NewEngineBackend(engine, uiSink)
 
 		// Determine if we should auto-start the backend
 		autoStartBackend := rc.UISettings != nil && rc.UISettings.StartInChat
@@ -476,11 +479,11 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) ([]*
 			return err
 		}
 
-		_, err := p.Run()
+		_, err = p.Run()
 		return err
 	})
 
-	err = eg.Wait()
+	err := eg.Wait()
 	if err != nil {
 		return nil, err
 	}
