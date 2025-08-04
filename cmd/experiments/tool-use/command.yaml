@@ -1,0 +1,20 @@
+name: weather-chat
+short: Chat with weather tool capability
+long: |
+  A chat command that can check weather for cities using a simulated weather tool.
+  
+  Example usage:
+  - "What's the weather in San Francisco?"
+  - "Tell me about the weather in New York and London"
+  - "Is it raining in Seattle?"
+
+prompt: |
+  {{.query}}
+
+arguments:
+  - name: query
+    type: string
+    help: Your question about weather or general chat
+    required: true
+
+type: "pinocchio-chat"

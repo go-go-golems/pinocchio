@@ -49,7 +49,7 @@ func (e *EngineBackend) Start(ctx context.Context, msgs []*conversation.Message)
 	e.isRunning = true
 
 	// Create engine with the event sink if provided
-	var engine inference.Engine = e.engine
+	engine := e.engine
 	if e.eventSink != nil {
 		// Configure engine with event sink
 		engineWithSink, err := e.configureEngineWithSink(engine)

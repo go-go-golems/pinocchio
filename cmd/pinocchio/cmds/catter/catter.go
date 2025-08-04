@@ -22,12 +22,12 @@ func AddToRootCommand(rootCmd *cobra.Command) {
 	catterStatsCmd, err := cmds.NewCatterStatsCommand()
 	cobra.CheckErr(err)
 
-	catterCobraCmd, err := cli.BuildCobraCommandFromGlazeCommand(catterPrintCommand,
+	catterCobraCmd, err := cli.BuildCobraCommand(catterPrintCommand,
 		cli.WithCobraMiddlewaresFunc(getMiddlewares),
 	)
 	cobra.CheckErr(err)
 
-	catterStatsCobraCmd, err := cli.BuildCobraCommandFromGlazeCommand(catterStatsCmd,
+	catterStatsCobraCmd, err := cli.BuildCobraCommand(catterStatsCmd,
 		cli.WithCobraMiddlewaresFunc(getMiddlewares),
 	)
 	cobra.CheckErr(err)

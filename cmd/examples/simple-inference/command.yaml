@@ -1,0 +1,18 @@
+name: simple-chat
+short: Simple chat inference example
+long: |
+  A simple chat command that demonstrates basic inference using the pinocchio infrastructure.
+  
+  This example shows how to use the Engine-first architecture with helper functions
+  for creating engines from step settings and parsed layers.
+
+prompt: |
+  {{.query}}
+
+arguments:
+  - name: query
+    type: string
+    help: Your message or question
+    required: true
+
+type: "pinocchio-chat"
