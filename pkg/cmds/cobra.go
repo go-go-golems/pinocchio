@@ -26,7 +26,7 @@ func BuildCobraCommandWithGeppettoMiddlewares(
 		MiddlewaresFunc: GetCobraCommandGeppettoMiddlewares,
 		ShortHelpLayers: []string{layers.DefaultSlug, cmdlayers.GeppettoHelpersSlug},
 	}
-	
+
 	options_ := append([]cli.CobraOption{
 		cli.WithParserConfig(config),
 	}, options...)

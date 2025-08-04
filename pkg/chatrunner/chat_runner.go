@@ -6,7 +6,6 @@ import (
 	"io"
 	"os"
 
-
 	tea "github.com/charmbracelet/bubbletea"
 	bobachat "github.com/go-go-golems/bobatea/pkg/chat" // Alias for clarity
 	geppetto_conversation "github.com/go-go-golems/geppetto/pkg/conversation"
@@ -33,15 +32,15 @@ const (
 // ChatSession holds the validated configuration and executes the chat logic.
 // It's typically created and run by the ChatBuilder.
 type ChatSession struct {
-	ctx           context.Context
-	engineFactory inference.EngineFactory
-	settings      *settings.StepSettings
-	manager       geppetto_conversation.Manager
-	uiOptions     []bobachat.ModelOption
+	ctx            context.Context
+	engineFactory  inference.EngineFactory
+	settings       *settings.StepSettings
+	manager        geppetto_conversation.Manager
+	uiOptions      []bobachat.ModelOption
 	programOptions []tea.ProgramOption
-	mode          RunMode
-	outputWriter  io.Writer
-	router        *events.EventRouter // Optional external router
+	mode           RunMode
+	outputWriter   io.Writer
+	router         *events.EventRouter // Optional external router
 }
 
 // Run executes the chat session based on its configured mode.
@@ -245,16 +244,16 @@ func (cs *ChatSession) runInteractiveInternal() error {
 
 // ChatBuilder provides a fluent API for configuring and running a chat session.
 type ChatBuilder struct {
-	err           error // To collect errors during build steps
-	ctx           context.Context
-	engineFactory inference.EngineFactory
-	settings      *settings.StepSettings
-	manager       geppetto_conversation.Manager
-	uiOptions     []bobachat.ModelOption
+	err            error // To collect errors during build steps
+	ctx            context.Context
+	engineFactory  inference.EngineFactory
+	settings       *settings.StepSettings
+	manager        geppetto_conversation.Manager
+	uiOptions      []bobachat.ModelOption
 	programOptions []tea.ProgramOption
-	mode          RunMode
-	outputWriter  io.Writer
-	router        *events.EventRouter
+	mode           RunMode
+	outputWriter   io.Writer
+	router         *events.EventRouter
 }
 
 // NewChatBuilder creates a new builder with default settings.
@@ -407,15 +406,15 @@ func (b *ChatBuilder) Build() (*ChatSession, error) {
 
 	// Create the ChatSession instance from the builder's state
 	session := &ChatSession{
-		ctx:           b.ctx,
-		engineFactory: b.engineFactory,
-		settings:      b.settings,
-		manager:       b.manager,
-		uiOptions:     b.uiOptions,
+		ctx:            b.ctx,
+		engineFactory:  b.engineFactory,
+		settings:       b.settings,
+		manager:        b.manager,
+		uiOptions:      b.uiOptions,
 		programOptions: b.programOptions,
-		mode:          b.mode,
-		outputWriter:  b.outputWriter,
-		router:        b.router,
+		mode:           b.mode,
+		outputWriter:   b.outputWriter,
+		router:         b.router,
 	}
 
 	return session, nil

@@ -28,7 +28,6 @@ type HelpersSettings struct {
 	Output            string                 `glazed.parameter:"output"`
 	WithMetadata      bool                   `glazed.parameter:"with-metadata"`
 	FullOutput        bool                   `glazed.parameter:"full-output"`
-	UseStepBackend    bool                   `glazed.parameter:"use-step-backend"`
 }
 
 const GeppettoHelpersSlug = "geppetto-helpers"
@@ -115,12 +114,6 @@ func NewHelpersParameterLayer() (layers.ParameterLayer, error) {
 				"full-output",
 				parameters.ParameterTypeBool,
 				parameters.WithHelp("Print all available metadata in output"),
-				parameters.WithDefault(false),
-			),
-			parameters.NewParameterDefinition(
-				"use-step-backend",
-				parameters.ParameterTypeBool,
-				parameters.WithHelp("Use legacy StepBackend instead of EngineBackend for UI (for testing/compatibility)"),
 				parameters.WithDefault(false),
 			),
 		),

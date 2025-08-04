@@ -198,7 +198,6 @@ func (g *PinocchioCommand) RunIntoWriter(
 		Output:           helpersSettings.Output,
 		WithMetadata:     helpersSettings.WithMetadata,
 		FullOutput:       helpersSettings.FullOutput,
-		UseStepBackend:   helpersSettings.UseStepBackend,
 	}
 
 	router, err := events.NewEventRouter()
@@ -275,7 +274,7 @@ func (g *PinocchioCommand) RunWithOptions(ctx context.Context, options ...run.Ru
 func (g *PinocchioCommand) runBlocking(ctx context.Context, rc *run.RunContext) ([]*conversation.Message, error) {
 	// Create engine instance options
 	var options []inference.Option
-	
+
 	// If we have a router, set up watermill sink for event publishing
 	if rc.Router != nil {
 		watermillSink := inference.NewWatermillSink(rc.Router.Publisher, "chat")
@@ -372,7 +371,7 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) ([]*
 
 	// Enable streaming for the UI
 	rc.StepSettings.Chat.Stream = true
-	
+
 	// Create engine options with watermill sink for UI events
 	uiSink := inference.NewWatermillSink(rc.Router.Publisher, "ui")
 	engineOptions := []inference.Option{inference.WithSink(uiSink)}
@@ -454,14 +453,8 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) ([]*
 			}
 		}
 
-		// Create backend based on feature flag
+		// Create EngineBackend
 		var backend bobatea_chat.Backend
-		if rc.UISettings != nil && rc.UISettings.UseStepBackend {
-			// StepBackend is deprecated and no longer supported
-			log.Warn().Msg("--use-step-backend flag is deprecated: StepBackend is no longer supported, falling back to EngineBackend")
-		}
-		
-		// Use EngineBackend (the only supported option)
 		log.Debug().Msg("Using EngineBackend for UI")
 		engine, err := rc.EngineFactory.CreateEngine(rc.StepSettings, engineOptions...)
 		if err != nil {
