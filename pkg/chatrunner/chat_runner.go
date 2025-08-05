@@ -3,6 +3,9 @@ package chatrunner
 import (
 	"context"
 	"fmt"
+	"github.com/go-go-golems/geppetto/pkg/inference/engine"
+	"github.com/go-go-golems/geppetto/pkg/inference/engine/factory"
+	"github.com/go-go-golems/geppetto/pkg/inference/middleware"
 	"io"
 	"os"
 
@@ -10,7 +13,6 @@ import (
 	bobachat "github.com/go-go-golems/bobatea/pkg/chat" // Alias for clarity
 	geppetto_conversation "github.com/go-go-golems/geppetto/pkg/conversation"
 	"github.com/go-go-golems/geppetto/pkg/events"
-	"github.com/go-go-golems/geppetto/pkg/inference"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 	"github.com/go-go-golems/pinocchio/pkg/ui"
 	"github.com/mattn/go-isatty" // Needed for askForChatContinuation
@@ -33,7 +35,7 @@ const (
 // It's typically created and run by the ChatBuilder.
 type ChatSession struct {
 	ctx            context.Context
-	engineFactory  inference.EngineFactory
+	engineFactory  factory.EngineFactory
 	settings       *settings.StepSettings
 	manager        geppetto_conversation.Manager
 	uiOptions      []bobachat.ModelOption
@@ -69,8 +71,8 @@ func (cs *ChatSession) runChatInternal() error {
 	}
 
 	// Create engine with UI sink for event publishing
-	uiSink := inference.NewWatermillSink(router.Publisher, "ui")
-	engine, err := cs.engineFactory.CreateEngine(cs.settings, inference.WithSink(uiSink))
+	uiSink := middleware.NewWatermillSink(router.Publisher, "ui")
+	engine, err := cs.engineFactory.CreateEngine(cs.settings, engine.WithSink(uiSink))
 	if err != nil {
 		return errors.Wrap(err, "failed to create engine from factory")
 	}
@@ -246,7 +248,7 @@ func (cs *ChatSession) runInteractiveInternal() error {
 type ChatBuilder struct {
 	err            error // To collect errors during build steps
 	ctx            context.Context
-	engineFactory  inference.EngineFactory
+	engineFactory  factory.EngineFactory
 	settings       *settings.StepSettings
 	manager        geppetto_conversation.Manager
 	uiOptions      []bobachat.ModelOption
@@ -295,7 +297,7 @@ func (b *ChatBuilder) WithManager(manager geppetto_conversation.Manager) *ChatBu
 }
 
 // WithEngineFactory sets the factory used to create engines. (Required)
-func (b *ChatBuilder) WithEngineFactory(factory inference.EngineFactory) *ChatBuilder {
+func (b *ChatBuilder) WithEngineFactory(factory factory.EngineFactory) *ChatBuilder {
 	if b.err != nil {
 		return b
 	}

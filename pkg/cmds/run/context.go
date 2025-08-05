@@ -1,12 +1,12 @@
 package run
 
 import (
+	"github.com/go-go-golems/geppetto/pkg/inference/engine/factory"
 	"io"
 	"os"
 
 	"github.com/go-go-golems/geppetto/pkg/conversation"
 	"github.com/go-go-golems/geppetto/pkg/events"
-	"github.com/go-go-golems/geppetto/pkg/inference"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 )
 
@@ -37,7 +37,7 @@ type RunContext struct {
 
 	StepSettings *settings.StepSettings
 
-	EngineFactory inference.EngineFactory
+	EngineFactory factory.EngineFactory
 	Router        *events.EventRouter
 
 	// Optional UI/Terminal specific components
@@ -56,13 +56,13 @@ func WithStepSettings(settings *settings.StepSettings) RunOption {
 	return func(rc *RunContext) error {
 		rc.StepSettings = settings
 		if rc.EngineFactory == nil {
-			rc.EngineFactory = inference.NewStandardEngineFactory()
+			rc.EngineFactory = factory.NewStandardEngineFactory()
 		}
 		return nil
 	}
 }
 
-func WithEngineFactory(factory inference.EngineFactory) RunOption {
+func WithEngineFactory(factory factory.EngineFactory) RunOption {
 	return func(rc *RunContext) error {
 		rc.EngineFactory = factory
 		return nil

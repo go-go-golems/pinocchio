@@ -4,6 +4,9 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
+	"github.com/go-go-golems/geppetto/pkg/inference/engine"
+	"github.com/go-go-golems/geppetto/pkg/inference/engine/factory"
+	"github.com/go-go-golems/geppetto/pkg/inference/middleware"
 	layers2 "github.com/go-go-golems/geppetto/pkg/layers"
 	"io"
 	"strings"
@@ -13,7 +16,6 @@ import (
 
 	clay "github.com/go-go-golems/clay/pkg"
 	"github.com/go-go-golems/geppetto/pkg/conversation"
-	"github.com/go-go-golems/geppetto/pkg/inference"
 	"github.com/go-go-golems/geppetto/pkg/toolbox"
 	"github.com/go-go-golems/glazed/pkg/cli"
 	"github.com/go-go-golems/glazed/pkg/cmds"
@@ -126,20 +128,20 @@ func (c *ToolUseCommand) RunIntoWriter(ctx context.Context, parsedLayers *layers
 	}
 
 	// Create base engine first
-	baseEngine, err := inference.NewEngineFromParsedLayers(geppettoParsedLayers)
+	baseEngine, err := factory.NewEngineFromParsedLayers(geppettoParsedLayers)
 	if err != nil {
 		return errors.Wrap(err, "failed to create base engine")
 	}
 
 	// Create tool middleware
-	toolConfig := inference.ToolConfig{
+	toolConfig := middleware.ToolConfig{
 		MaxIterations: 5,
 		Timeout:       30, // seconds
 	}
-	toolMiddleware := inference.NewToolMiddleware(tb, toolConfig)
+	toolMiddleware := middleware.NewToolMiddleware(tb, toolConfig)
 
 	// Wrap engine with tool middleware
-	engine := inference.NewEngineWithMiddleware(baseEngine, toolMiddleware)
+	engine := middleware.NewEngineWithMiddleware(baseEngine, toolMiddleware)
 
 	// Create image paths from helper settings
 	imagePaths := make([]string, len(helpersSettings.Images))
@@ -200,7 +202,7 @@ func (c *ToolUseCommand) RunIntoWriter(ctx context.Context, parsedLayers *layers
 }
 
 // runWithEngine is a simplified version that uses our engine directly
-func (c *ToolUseCommand) runWithEngine(ctx context.Context, manager conversation.Manager, engine inference.Engine, runMode run.RunMode, uiSettings *run.UISettings, w io.Writer) ([]*conversation.Message, error) {
+func (c *ToolUseCommand) runWithEngine(ctx context.Context, manager conversation.Manager, engine engine.Engine, runMode run.RunMode, uiSettings *run.UISettings, w io.Writer) ([]*conversation.Message, error) {
 	// Get current conversation
 	conversation_ := manager.GetConversation()
 

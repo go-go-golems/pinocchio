@@ -3,23 +3,22 @@ package ui
 import (
 	"context"
 	"fmt"
-
-	"github.com/go-go-golems/geppetto/pkg/events"
-	"github.com/go-go-golems/geppetto/pkg/inference"
+	"github.com/go-go-golems/geppetto/pkg/inference/engine"
 
 	"github.com/ThreeDotsLabs/watermill/message"
 	tea "github.com/charmbracelet/bubbletea"
 	boba_chat "github.com/go-go-golems/bobatea/pkg/chat"
 	conversation2 "github.com/go-go-golems/bobatea/pkg/chat/conversation"
 	"github.com/go-go-golems/geppetto/pkg/conversation"
+	"github.com/go-go-golems/geppetto/pkg/events"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 )
 
 // EngineBackend provides a Backend implementation using the Engine-first architecture.
 type EngineBackend struct {
-	engine    inference.Engine
-	eventSink inference.EventSink
+	engine    engine.Engine
+	eventSink events.EventSink
 	isRunning bool
 	cancel    context.CancelFunc
 }
@@ -28,7 +27,7 @@ var _ boba_chat.Backend = &EngineBackend{}
 
 // NewEngineBackend creates a new EngineBackend with the given engine and event sink.
 // The eventSink is used to publish events during inference for UI updates.
-func NewEngineBackend(engine inference.Engine, eventSink inference.EventSink) *EngineBackend {
+func NewEngineBackend(engine engine.Engine, eventSink events.EventSink) *EngineBackend {
 	return &EngineBackend{
 		engine:    engine,
 		eventSink: eventSink,
@@ -50,19 +49,6 @@ func (e *EngineBackend) Start(ctx context.Context, msgs []*conversation.Message)
 
 	// Create engine with the event sink if provided
 	engine := e.engine
-	if e.eventSink != nil {
-		// Configure engine with event sink
-		engineWithSink, err := e.configureEngineWithSink(engine)
-		if err != nil {
-			e.isRunning = false
-			e.cancel = nil
-			return tea.Batch(
-				func() tea.Msg {
-					return boba_chat.BackendFinishedMsg{}
-				}), nil
-		}
-		engine = engineWithSink
-	}
 
 	return func() tea.Msg {
 		if !e.isRunning {
@@ -82,17 +68,6 @@ func (e *EngineBackend) Start(ctx context.Context, msgs []*conversation.Message)
 
 		return boba_chat.BackendFinishedMsg{}
 	}, nil
-}
-
-// configureEngineWithSink configures the engine to use the event sink.
-// This is a helper method that returns the engine as-is since the engine was already
-// configured with the event sink during creation using WithSink option.
-func (e *EngineBackend) configureEngineWithSink(engine inference.Engine) (inference.Engine, error) {
-	// The engine was already configured with the event sink during creation in cmd.go
-	// using inference.WithSink(uiSink), so we just return it as-is.
-	// The engine implementations (OpenAIEngine, ClaudeEngine) will automatically
-	// publish events to the configured sinks during RunInference().
-	return engine, nil
 }
 
 // Interrupt attempts to cancel the current inference operation.
