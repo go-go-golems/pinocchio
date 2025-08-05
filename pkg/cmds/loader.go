@@ -5,12 +5,8 @@ import (
 	"io/fs"
 	"strings"
 
-	embeddings_config "github.com/go-go-golems/geppetto/pkg/embeddings/config"
+	geppettolayers "github.com/go-go-golems/geppetto/pkg/layers"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
-	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings/claude"
-	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings/gemini"
-	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings/ollama"
-	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings/openai"
 	"github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/cmds/alias"
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
@@ -69,11 +65,16 @@ func (g *PinocchioCommandLoader) loadPinocchioCommandFromReader(
 	if err != nil {
 		return nil, err
 	}
-
-	ls, err := CreateGeppettoLayers(stepSettings, WithHelpersLayer())
+	ls, err := geppettolayers.CreateGeppettoLayers(geppettolayers.WithDefaultsFromStepSettings(stepSettings))
 	if err != nil {
 		return nil, err
 	}
+	// Wrap with pinocchio helper layer
+	helpersLayer, err := cmdlayers.NewHelpersParameterLayer()
+	if err != nil {
+		return nil, err
+	}
+	ls = append([]layers.ParameterLayer{helpersLayer}, ls...)
 
 	options_ := []cmds.CommandDescriptionOption{
 		cmds.WithShort(scd.Short),
@@ -110,96 +111,6 @@ func (g *PinocchioCommandLoader) loadPinocchioCommandFromReader(
 	}
 
 	return []cmds.Command{sq}, nil
-}
-
-type GeppettoLayerOption func(*geppettoLayerOptions)
-
-type geppettoLayerOptions struct {
-	includeHelpers bool
-}
-
-func WithHelpersLayer() GeppettoLayerOption {
-	return func(o *geppettoLayerOptions) {
-		o.includeHelpers = true
-	}
-}
-
-func CreateGeppettoLayers(stepSettings *settings.StepSettings, opts ...GeppettoLayerOption) ([]layers.ParameterLayer, error) {
-	options := &geppettoLayerOptions{
-		includeHelpers: false,
-	}
-	for _, opt := range opts {
-		opt(options)
-	}
-
-	chatParameterLayer, err := settings.NewChatParameterLayer(
-		layers.WithDefaults(stepSettings.Chat),
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	clientParameterLayer, err := settings.NewClientParameterLayer(
-		layers.WithDefaults(stepSettings.Client),
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	claudeParameterLayer, err := claude.NewParameterLayer(
-		layers.WithDefaults(stepSettings.Claude),
-	)
-	if err != nil {
-		return nil, err
-	}
-	geminiParameterLayer, err := gemini.NewParameterLayer(
-		layers.WithDefaults(stepSettings.Gemini),
-	)
-	if err != nil {
-		return nil, err
-	}
-	openaiParameterLayer, err := openai.NewParameterLayer(
-		layers.WithDefaults(stepSettings.OpenAI),
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	ollamaParameterLayer, err := ollama.NewParameterLayer(
-		layers.WithDefaults(stepSettings.Ollama),
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	embeddingsParameterLayer, err := embeddings_config.NewEmbeddingsParameterLayer(
-		layers.WithDefaults(stepSettings.Embeddings),
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	// TODO(manuel, 2024-01-17) Disable not fully function ollama layer for now
-	_ = ollamaParameterLayer
-
-	result := []layers.ParameterLayer{
-		chatParameterLayer, clientParameterLayer,
-		claudeParameterLayer,
-		geminiParameterLayer,
-		openaiParameterLayer,
-		embeddingsParameterLayer,
-		//ollamaParameterLayer,
-	}
-
-	if options.includeHelpers {
-		helpersLayer, err := cmdlayers.NewHelpersParameterLayer()
-		if err != nil {
-			return nil, err
-		}
-		result = append([]layers.ParameterLayer{helpersLayer}, result...)
-	}
-
-	return result, nil
 }
 
 func (scl *PinocchioCommandLoader) LoadCommands(

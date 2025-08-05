@@ -97,44 +97,11 @@ func NewPinocchioCommand(
 	return ret, nil
 }
 
-// XXX this is a mess with all its run methods and all, it would be good to have a RunOption pattern here:
-// - WithStepSettings
-// - WithParsedLayers
-// - WithPrinter / Handlers
-// - WithEngine / Temperature / a whole set of LLM specific parameters
-//   - WithMessages
-//   - WithPrompt
-//   - WithSystemPrompt
-//   - WithImages
-//   - WithAutosaveSettings
-//   - WithVariables
-//   - WithRouter
-//   - WithStepFactory
-//   - WithSettings
-
-// CreateConversationManager creates a new conversation manager with the given settings
-func (g *PinocchioCommand) CreateConversationManager(
-	variables map[string]interface{},
-	options ...builder.ConversationManagerOption,
-) (conversation.Manager, error) {
-	if g.Prompt != "" && len(g.Messages) != 0 {
-		return nil, errors.Errorf("Prompt and messages are mutually exclusive")
-	}
-
-	defaultOptions := []builder.ConversationManagerOption{
-		builder.WithSystemPrompt(g.SystemPrompt),
-		builder.WithMessages(g.Messages),
-		builder.WithPrompt(g.Prompt),
-		builder.WithVariables(variables),
-	}
-
-	// Combine default options with provided options, with provided options taking precedence
-	builder, err := builder.NewConversationManagerBuilder(append(defaultOptions, options...)...)
-	if err != nil {
-		return nil, err
-	}
-
-	return builder.Build()
+func (g *PinocchioCommand) CreateConversationManagerBuilder() *builder.ManagerBuilder {
+	return builder.NewManagerBuilder().
+		WithSystemPrompt(g.SystemPrompt).
+		WithMessages(g.Messages).
+		WithPrompt(g.Prompt)
 }
 
 // RunIntoWriter runs the command and writes the output into the given writer.
@@ -166,19 +133,15 @@ func (g *PinocchioCommand) RunIntoWriter(
 		imagePaths[i] = img.Path
 	}
 
-	// First create the conversation manager with all its settings
-	manager, err := g.CreateConversationManager(
-		parsedLayers.GetDefaultParameterLayer().Parameters.ToMap(),
-		builder.WithImages(imagePaths),
-		builder.WithAutosaveSettings(builder.AutosaveSettings{
+	b := g.CreateConversationManagerBuilder()
+	manager, err := b.WithVariables(parsedLayers.GetDefaultParameterLayer().Parameters.ToMap()).
+		WithImages(imagePaths).
+		WithAutosaveSettings(builder.AutosaveSettings{
 			Enabled:  strings.ToLower(helpersSettings.Autosave.Enabled) == "yes",
 			Template: helpersSettings.Autosave.Template,
 			Path:     helpersSettings.Autosave.Path,
-		}),
-	)
-	if err != nil {
-		return err
-	}
+		}).
+		Build()
 
 	// Determine run mode based on helper settings
 	runMode := run.RunModeBlocking

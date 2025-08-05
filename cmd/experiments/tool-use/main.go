@@ -147,15 +147,14 @@ func (c *ToolUseCommand) RunIntoWriter(ctx context.Context, parsedLayers *layers
 	}
 
 	// Create the conversation manager
-	manager, err := c.pinocchioCmd.CreateConversationManager(
-		geppettoParsedLayers.GetDefaultParameterLayer().Parameters.ToMap(),
-		builder.WithImages(imagePaths),
-		builder.WithAutosaveSettings(builder.AutosaveSettings{
+	b := c.pinocchioCmd.CreateConversationManagerBuilder()
+	manager, err := b.WithImages(imagePaths).
+		WithAutosaveSettings(builder.AutosaveSettings{
 			Enabled:  strings.ToLower(helpersSettings.Autosave.Enabled) == "yes",
 			Template: helpersSettings.Autosave.Template,
 			Path:     helpersSettings.Autosave.Path,
-		}),
-	)
+		}).
+		Build()
 	if err != nil {
 		return err
 	}
