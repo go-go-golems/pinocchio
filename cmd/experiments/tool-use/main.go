@@ -4,6 +4,7 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
+	layers2 "github.com/go-go-golems/geppetto/pkg/layers"
 	"io"
 	"strings"
 
@@ -124,7 +125,7 @@ func (c *ToolUseCommand) RunIntoWriter(ctx context.Context, parsedLayers *layers
 		return errors.Wrap(err, "failed to register weather tool")
 	}
 
-	// Create base engine first 
+	// Create base engine first
 	baseEngine, err := inference.NewEngineFromParsedLayers(geppettoParsedLayers)
 	if err != nil {
 		return errors.Wrap(err, "failed to create base engine")
@@ -230,7 +231,7 @@ func main() {
 	// Register the command as a normal cobra command and let it parse its step settings by itself
 	err = cli.AddCommandsToRootCommand(
 		rootCmd, commands, nil,
-		cli.WithCobraMiddlewaresFunc(pinocchio_cmds.GetCobraCommandGeppettoMiddlewares),
+		cli.WithCobraMiddlewaresFunc(layers2.GetCobraCommandGeppettoMiddlewares),
 		cli.WithCobraShortHelpLayers(layers.DefaultSlug, cmdlayers.GeppettoHelpersSlug),
 	)
 	cobra.CheckErr(err)
