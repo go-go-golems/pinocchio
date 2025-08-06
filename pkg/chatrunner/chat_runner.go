@@ -167,7 +167,7 @@ func (cs *ChatSession) runBlockingInternal() error {
 	conversation_ := cs.manager.GetConversation()
 
 	// Run inference directly
-	msg, err := engine.RunInference(cs.ctx, conversation_)
+	conv, err := engine.RunInference(cs.ctx, conversation_)
 	if err != nil {
 		// Don't return context cancellation errors if the context was cancelled externally
 		if errors.Is(err, context.Canceled) && cs.ctx.Err() == context.Canceled {
@@ -177,21 +177,25 @@ func (cs *ChatSession) runBlockingInternal() error {
 		return errors.Wrap(err, "inference failed")
 	}
 
-	// Append the result message to the conversation
-	if err := cs.manager.AppendMessages(msg); err != nil {
-		return fmt.Errorf("failed to append message: %w", err)
+	// Extract only the new messages that were added by the engine
+	newMessages := conv[len(conversation_):]
+
+	// Append the new messages to the conversation
+	if err := cs.manager.AppendMessages(newMessages...); err != nil {
+		return fmt.Errorf("failed to append messages: %w", err)
 	}
 
-	// Print the message content to the output writer
-	if msg != nil {
+	// Print the last message content to the output writer
+	if len(newMessages) > 0 {
+		lastMsg := newMessages[len(newMessages)-1]
 		// TODO: Handle different content types more robustly
-		if content, ok := msg.Content.(*geppetto_conversation.ChatMessageContent); ok {
+		if content, ok := lastMsg.Content.(*geppetto_conversation.ChatMessageContent); ok {
 			_, err := fmt.Fprintln(cs.outputWriter, content.View())
 			if err != nil {
 				return errors.Wrap(err, "failed to write output")
 			}
 		} else {
-			_, err := fmt.Fprintf(cs.outputWriter, "%v", msg.Content)
+			_, err := fmt.Fprintf(cs.outputWriter, "%v", lastMsg.Content)
 			if err != nil {
 				return errors.Wrap(err, "failed to write output")
 			}

@@ -12,12 +12,12 @@ type WeatherTool struct{}
 
 // WeatherResult represents the result of a weather query
 type WeatherResult struct {
-	City        string  `json:"city"`
-	Temperature int     `json:"temperature"`
-	Condition   string  `json:"condition"`
-	Humidity    int     `json:"humidity"`
-	WindSpeed   int     `json:"wind_speed"`
-	Description string  `json:"description"`
+	City        string `json:"city"`
+	Temperature int    `json:"temperature"`
+	Condition   string `json:"condition"`
+	Humidity    int    `json:"humidity"`
+	WindSpeed   int    `json:"wind_speed"`
+	Description string `json:"description"`
 }
 
 // GetWeather returns fake weather data for a given city

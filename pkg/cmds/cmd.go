@@ -4,12 +4,13 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
-	"github.com/go-go-golems/geppetto/pkg/inference/engine"
-	"github.com/go-go-golems/geppetto/pkg/inference/engine/factory"
-	"github.com/go-go-golems/geppetto/pkg/inference/middleware"
 	"io"
 	"os"
 	"strings"
+
+	"github.com/go-go-golems/geppetto/pkg/inference/engine"
+	"github.com/go-go-golems/geppetto/pkg/inference/engine/factory"
+	"github.com/go-go-golems/geppetto/pkg/inference/middleware"
 
 	"github.com/go-go-golems/geppetto/pkg/conversation/builder"
 	"github.com/go-go-golems/geppetto/pkg/events"
@@ -144,6 +145,10 @@ func (g *PinocchioCommand) RunIntoWriter(
 			Path:     helpersSettings.Autosave.Path,
 		}).
 		Build()
+
+	if err != nil {
+		return errors.Wrap(err, "failed to build conversation manager")
+	}
 
 	// Determine run mode based on helper settings
 	runMode := run.RunModeBlocking
@@ -304,14 +309,17 @@ func (g *PinocchioCommand) runEngineAndCollectMessages(ctx context.Context, rc *
 	conversation_ := rc.ConversationManager.GetConversation()
 
 	// Run inference
-	msg, err := engine.RunInference(ctx, conversation_)
+	conv, err := engine.RunInference(ctx, conversation_)
 	if err != nil {
 		return fmt.Errorf("inference failed: %w", err)
 	}
 
-	// Append the result message to the conversation
-	if err := rc.ConversationManager.AppendMessages(msg); err != nil {
-		return fmt.Errorf("failed to append message: %w", err)
+	// Extract only the new messages that were added by the engine
+	newMessages := conv[len(conversation_):]
+
+	// Append the new messages to the conversation
+	if err := rc.ConversationManager.AppendMessages(newMessages...); err != nil {
+		return fmt.Errorf("failed to append messages: %w", err)
 	}
 
 	return nil
@@ -492,7 +500,6 @@ func askForChatContinuation() (bool, error) {
 			}
 		},
 	})
-
 	if err != nil {
 		fmt.Println("Failed to get user input:", err)
 		return false, err

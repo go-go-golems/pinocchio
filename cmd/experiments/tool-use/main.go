@@ -207,14 +207,17 @@ func (c *ToolUseCommand) runWithEngine(ctx context.Context, manager conversation
 	conversation_ := manager.GetConversation()
 
 	// Run inference with our tool-enabled engine
-	msg, err := engine.RunInference(ctx, conversation_)
+	conv, err := engine.RunInference(ctx, conversation_)
 	if err != nil {
 		return nil, fmt.Errorf("inference failed: %w", err)
 	}
 
-	// Append the result message to the conversation
-	if err := manager.AppendMessages(msg); err != nil {
-		return nil, fmt.Errorf("failed to append message: %w", err)
+	// Extract only the new messages that were added by the engine
+	newMessages := conv[len(conversation_):]
+
+	// Append the new messages to the conversation
+	if err := manager.AppendMessages(newMessages...); err != nil {
+		return nil, fmt.Errorf("failed to append messages: %w", err)
 	}
 
 	return manager.GetConversation(), nil
