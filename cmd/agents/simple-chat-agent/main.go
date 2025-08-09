@@ -123,7 +123,25 @@ func addPrettyHandlers(router *events.EventRouter, w io.Writer) {
             }
             block := []string{
                 subHeaderStyle.Render("Tool Call:"),
-                toolNameStyle.Render(fmt.Sprintf("%s", ev.ToolCall.Name)),
+                toolNameStyle.Render(fmt.Sprintf("Name: %s", ev.ToolCall.Name)),
+                jsonStyle.Render(fmt.Sprintf("ID: %s", ev.ToolCall.ID)),
+                jsonStyle.Render(inputJSON),
+            }
+            fmt.Fprintln(w, strings.Join(block, "\n"))
+        case *events.EventToolCallExecute:
+            inputJSON := ev.ToolCall.Input
+            if s := strings.TrimSpace(inputJSON); strings.HasPrefix(s, "{") || strings.HasPrefix(s, "[") {
+                var tmp interface{}
+                if err := json.Unmarshal([]byte(inputJSON), &tmp); err == nil {
+                    if b, err := json.MarshalIndent(tmp, "", "  "); err == nil {
+                        inputJSON = string(b)
+                    }
+                }
+            }
+            block := []string{
+                subHeaderStyle.Render("Tool Execute:"),
+                toolNameStyle.Render(fmt.Sprintf("Name: %s", ev.ToolCall.Name)),
+                jsonStyle.Render(fmt.Sprintf("ID: %s", ev.ToolCall.ID)),
                 jsonStyle.Render(inputJSON),
             }
             fmt.Fprintln(w, strings.Join(block, "\n"))
@@ -139,7 +157,23 @@ func addPrettyHandlers(router *events.EventRouter, w io.Writer) {
             }
             block := []string{
                 subHeaderStyle.Render("Tool Result:"),
-                toolNameStyle.Render(fmt.Sprintf("id:%s", ev.ToolResult.ID)),
+                toolNameStyle.Render(fmt.Sprintf("ID: %s", ev.ToolResult.ID)),
+                jsonStyle.Render(resultJSON),
+            }
+            fmt.Fprintln(w, strings.Join(block, "\n"))
+        case *events.EventToolCallExecutionResult:
+            resultJSON := ev.ToolResult.Result
+            if s := strings.TrimSpace(resultJSON); strings.HasPrefix(s, "{") || strings.HasPrefix(s, "[") {
+                var tmp interface{}
+                if err := json.Unmarshal([]byte(resultJSON), &tmp); err == nil {
+                    if b, err := json.MarshalIndent(tmp, "", "  "); err == nil {
+                        resultJSON = string(b)
+                    }
+                }
+            }
+            block := []string{
+                subHeaderStyle.Render("Tool Exec Result:"),
+                toolNameStyle.Render(fmt.Sprintf("ID: %s", ev.ToolResult.ID)),
                 jsonStyle.Render(resultJSON),
             }
             fmt.Fprintln(w, strings.Join(block, "\n"))
@@ -162,8 +196,8 @@ func (c *SimpleAgentCmd) RunIntoWriter(ctx context.Context, parsed *layers.Parse
     addPrettyHandlers(router, w)
     sink := middleware.NewWatermillSink(router.Publisher, "chat")
 
-    // 2) Engine
-    eng, err := factory.NewEngineFromParsedLayers(parsed, engine.WithSink(sink))
+    // 2) Engine (avoid double events: rely on context-carried sink only)
+    eng, err := factory.NewEngineFromParsedLayers(parsed)
     if err != nil {
         return errors.Wrap(err, "engine")
     }

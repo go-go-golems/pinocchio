@@ -15,314 +15,84 @@ ShowPerDefault: true
 SectionType: Tutorial
 ---
 
-### Simple Chat Agent with Streaming, Tools, and a Tiny REPL
+### Overview
 
-This example shows how to build a minimal chat agent that:
+Build a minimal yet production-ready chat agent that streams model output, supports tool calling, and renders pretty, readable events in the terminal. The agent includes a tiny REPL for iterative prompts.
 
-- Uses the Geppetto engine-first architecture for inference
-- Streams output via events and prints deltas live
-- Supports tool calling with a simple calculator tool
-- Pretty-prints tool calls and tool results using Charmbracelet Lipgloss
-- Provides a tiny REPL (type `:q` to exit)
+### Audience & Outcome
 
-It follows the patterns described in:
+- You already use Geppetto/Pinocchio and want a clean reference agent.
+- You’ll get a working `simple-chat-agent` command with streaming, tool-calling, and pretty event output.
 
-- geppetto/topics: `geppetto-inference-engines`
-- geppetto/topics: `geppetto-events-streaming-watermill`
-- geppetto/tutorials: `geppetto-streaming-inference-tools`
+### Key Features
 
-#### Code
+- Engine-first architecture (provider-agnostic)
+- Streaming via Watermill-backed event router
+- Tool calling with a simple calculator tool (`calc`)
+- Pretty event output using Charmbracelet Lipgloss
+- Tiny REPL (`:q` to quit)
 
-```go
-package main
+### Prerequisites
 
-import (
-    "bufio"
-    "context"
-    "encoding/json"
-    "fmt"
-    "io"
-    "os"
-    "strings"
-    "time"
+- Go 1.24+
+- Pinocchio profiles configured (providers/models) — Geppetto layers will pick these up automatically
 
-    "github.com/ThreeDotsLabs/watermill/message"
-    "github.com/charmbracelet/lipgloss"
-    "github.com/go-go-golems/geppetto/pkg/conversation"
-    "github.com/go-go-golems/geppetto/pkg/conversation/builder"
-    "github.com/go-go-golems/geppetto/pkg/events"
-    "github.com/go-go-golems/geppetto/pkg/inference/engine"
-    "github.com/go-go-golems/geppetto/pkg/inference/engine/factory"
-    "github.com/go-go-golems/geppetto/pkg/inference/middleware"
-    "github.com/go-go-golems/geppetto/pkg/inference/toolhelpers"
-    "github.com/go-go-golems/geppetto/pkg/inference/tools"
-    geppettolayers "github.com/go-go-golems/geppetto/pkg/layers"
-    "github.com/go-go-golems/glazed/pkg/cli"
-    "github.com/go-go-golems/glazed/pkg/cmds"
-    "github.com/go-go-golems/glazed/pkg/cmds/layers"
-    "github.com/go-go-golems/glazed/pkg/cmds/logging"
-    "github.com/go-go-golems/glazed/pkg/help"
-    help_cmd "github.com/go-go-golems/glazed/pkg/help/cmd"
-    clay "github.com/go-go-golems/clay/pkg"
-    "github.com/pkg/errors"
-    "github.com/rs/zerolog/log"
-    "github.com/spf13/cobra"
-    "golang.org/x/sync/errgroup"
-)
+### Quick Start
 
-type SimpleAgentCmd struct{ *cmds.CommandDescription }
+From the `pinocchio` module root:
 
-func NewSimpleAgentCmd() (*SimpleAgentCmd, error) {
-    geLayers, err := geppettolayers.CreateGeppettoLayers()
-    if err != nil {
-        return nil, err
-    }
-
-    desc := cmds.NewCommandDescription(
-        "simple-chat-agent",
-        cmds.WithShort("Simple streaming chat agent with a calculator tool and a tiny REPL"),
-        cmds.WithLayersList(geLayers...),
-    )
-    return &SimpleAgentCmd{CommandDescription: desc}, nil
-}
-
-// Calculator tool definitions
-type CalcRequest struct {
-    A  float64 `json:"a" jsonschema:"required,description=First operand"`
-    B  float64 `json:"b" jsonschema:"required,description=Second operand"`
-    Op string  `json:"op" jsonschema:"description=Operation,default=add,enum=add,enum=sub,enum=mul,enum=div"`
-}
-
-type CalcResponse struct {
-    Result float64 `json:"result"`
-}
-
-func calculatorTool(req CalcRequest) (CalcResponse, error) {
-    switch strings.ToLower(req.Op) {
-    case "add":
-        return CalcResponse{Result: req.A + req.B}, nil
-    case "sub":
-        return CalcResponse{Result: req.A - req.B}, nil
-    case "mul":
-        return CalcResponse{Result: req.A * req.B}, nil
-    case "div":
-        if req.B == 0 {
-            return CalcResponse{}, errors.New("division by zero")
-        }
-        return CalcResponse{Result: req.A / req.B}, nil
-    default:
-        return CalcResponse{}, errors.Errorf("unknown op: %s", req.Op)
-    }
-}
-
-// Lipgloss styles for pretty output
-var (
-    headerStyle     = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("205"))
-    subHeaderStyle  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("63"))
-    toolNameStyle   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("213"))
-    jsonStyle       = lipgloss.NewStyle().Foreground(lipgloss.Color("246"))
-    deltaStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("10"))
-    finalStyle      = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("118"))
-    errorStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("196")).Bold(true)
-)
-
-// Pretty printer handler for chat events
-func addPrettyHandlers(router *events.EventRouter, w io.Writer) {
-    router.AddHandler("pretty", "chat", func(msg *message.Message) error {
-        defer msg.Ack()
-        e, err := events.NewEventFromJson(msg.Payload)
-        if err != nil {
-            return err
-        }
-
-        switch ev := e.(type) {
-        case *events.EventPartialCompletionStart:
-            fmt.Fprintln(w, headerStyle.Render("— Inference started —"))
-        case *events.EventPartialCompletion:
-            if ev.Delta != "" {
-                fmt.Fprint(w, deltaStyle.Render(ev.Delta))
-            }
-        case *events.EventFinal:
-            if ev.Text != "" {
-                // Ensure a newline after final
-                fmt.Fprintln(w, "")
-                fmt.Fprintln(w, finalStyle.Render("— Inference finished —"))
-            }
-        case *events.EventToolCall:
-            inputJSON := ev.ToolCall.Input
-            if s := strings.TrimSpace(inputJSON); strings.HasPrefix(s, "{") || strings.HasPrefix(s, "[") {
-                var tmp interface{}
-                if err := json.Unmarshal([]byte(inputJSON), &tmp); err == nil {
-                    if b, err := json.MarshalIndent(tmp, "", "  "); err == nil {
-                        inputJSON = string(b)
-                    }
-                }
-            }
-            block := []string{
-                subHeaderStyle.Render("Tool Call:"),
-                toolNameStyle.Render(fmt.Sprintf("%s", ev.ToolCall.Name)),
-                jsonStyle.Render(inputJSON),
-            }
-            fmt.Fprintln(w, strings.Join(block, "\n"))
-        case *events.EventToolResult:
-            resultJSON := ev.ToolResult.Result
-            if s := strings.TrimSpace(resultJSON); strings.HasPrefix(s, "{") || strings.HasPrefix(s, "[") {
-                var tmp interface{}
-                if err := json.Unmarshal([]byte(resultJSON), &tmp); err == nil {
-                    if b, err := json.MarshalIndent(tmp, "", "  "); err == nil {
-                        resultJSON = string(b)
-                    }
-                }
-            }
-            block := []string{
-                subHeaderStyle.Render("Tool Result:"),
-                toolNameStyle.Render(fmt.Sprintf("id:%s", ev.ToolResult.ID)),
-                jsonStyle.Render(resultJSON),
-            }
-            fmt.Fprintln(w, strings.Join(block, "\n"))
-        case *events.EventError:
-            fmt.Fprintln(w, errorStyle.Render("Error: ")+ev.ErrorString)
-        case *events.EventInterrupt:
-            fmt.Fprintln(w, errorStyle.Render("Interrupted"))
-        }
-        return nil
-    })
-}
-
-func (c *SimpleAgentCmd) RunIntoWriter(ctx context.Context, parsed *layers.ParsedLayers, w io.Writer) error {
-
-    // 1) Event router + sink
-    router, err := events.NewEventRouter()
-    if err != nil {
-        return errors.Wrap(err, "router")
-    }
-    addPrettyHandlers(router, w)
-    sink := middleware.NewWatermillSink(router.Publisher, "chat")
-
-    // 2) Engine
-    eng, err := factory.NewEngineFromParsedLayers(parsed, engine.WithSink(sink))
-    if err != nil {
-        return errors.Wrap(err, "engine")
-    }
-
-    // 3) Tools: register a simple calculator tool
-    registry := tools.NewInMemoryToolRegistry()
-    calcDef, err := tools.NewToolFromFunc(
-        "calc",
-        "A simple calculator that computes A (op) B where op ∈ {add, sub, mul, div}",
-        calculatorTool,
-    )
-    if err != nil {
-        return errors.Wrap(err, "calc tool")
-    }
-    if err := registry.RegisterTool("calc", *calcDef); err != nil {
-        return errors.Wrap(err, "register calc tool")
-    }
-
-    // Optionally configure engine tools if supported by provider
-    if cfg, ok := eng.(interface{ ConfigureTools([]engine.ToolDefinition, engine.ToolConfig) }); ok {
-        var defs []engine.ToolDefinition
-        for _, t := range registry.ListTools() {
-            defs = append(defs, engine.ToolDefinition{Name: t.Name, Description: t.Description, Parameters: t.Parameters})
-        }
-        cfg.ConfigureTools(defs, engine.ToolConfig{Enabled: true})
-    }
-
-    // 4) Conversation manager
-    mb := builder.NewManagerBuilder().WithSystemPrompt("You are a helpful assistant. You can use tools.")
-    manager, err := mb.Build()
-    if err != nil {
-        return errors.Wrap(err, "build conversation")
-    }
-
-    // 5) Run router and REPL in parallel
-    eg, groupCtx := errgroup.WithContext(ctx)
-
-    eg.Go(func() error { return router.Run(groupCtx) })
-
-    eg.Go(func() error {
-        <-router.Running()
-        scanner := bufio.NewScanner(os.Stdin)
-        fmt.Fprintln(w, headerStyle.Render("Simple Chat Agent (type :q to quit)"))
-        for {
-            fmt.Fprint(w, "> ")
-            if !scanner.Scan() {
-                return scanner.Err()
-            }
-            line := strings.TrimSpace(scanner.Text())
-            if line == "" {
-                continue
-            }
-            if line == ":q" || line == ":quit" || line == ":exit" {
-                fmt.Fprintln(w, "Bye.")
-                return nil
-            }
-
-            // Append user message and run tool-calling loop
-            if err := manager.AppendMessages(conversation.NewChatMessage(conversation.RoleUser, line)); err != nil {
-                return err
-            }
-            conv := manager.GetConversation()
-
-            runCtx := events.WithEventSinks(groupCtx, sink)
-            updated, err := toolhelpers.RunToolCallingLoop(
-                runCtx, eng, conv, registry,
-                toolhelpers.NewToolConfig().
-                    WithMaxIterations(5).
-                    WithTimeout(30*time.Second),
-            )
-            if err != nil {
-                return err
-            }
-            for _, m := range updated[len(conv):] {
-                if err := manager.AppendMessages(m); err != nil {
-                    return err
-                }
-            }
-
-            // Ensure a newline separation between turns
-            fmt.Fprintln(w, "")
-        }
-    })
-
-    if err := eg.Wait(); err != nil {
-        return err
-    }
-    log.Info().Msg("Finished")
-    return nil
-}
-
-func main() {
-    root := &cobra.Command{Use: "simple-chat-agent", PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-        if err := logging.InitLoggerFromViper(); err != nil { return err }
-        return nil
-    }}
-    helpSystem := help.NewHelpSystem()
-    help_cmd.SetupCobraRootCommand(helpSystem, root)
-
-    if err := clay.InitViper("pinocchio", root); err != nil { cobra.CheckErr(err) }
-
-    c, err := NewSimpleAgentCmd()
-    cobra.CheckErr(err)
-    command, err := cli.BuildCobraCommand(c, cli.WithCobraMiddlewaresFunc(geppettolayers.GetCobraCommandGeppettoMiddlewares))
-    cobra.CheckErr(err)
-    root.AddCommand(command)
-    cobra.CheckErr(root.Execute())
-}
+```sh
+go run ./cmd/agents/simple-chat-agent
 ```
+
+Type your prompts at `>`. Use `:q` to quit.
+
+### How It Works
+
+- Creates a Watermill-backed `EventRouter`, adds a pretty-print handler
+- Creates an engine from Geppetto layers (no engine sink to avoid duplicate events)
+- Registers a `calc` tool and (optionally) configures tools on the engine
+- Uses `toolhelpers.RunToolCallingLoop` to orchestrate tool execution
+- Attaches the same sink to the context so helpers/tools publish events
+- REPL appends user messages to the conversation; results stream to stdout
+
+### Detailed Explanation
+
+Root command and configuration
+- A `cobra.Command` root initializes logging with `logging.InitLoggerFromViper()` in `PersistentPreRunE` so logs are consistent across subcommands.
+- `clay.InitViper("pinocchio", root)` wires Viper to load Pinocchio/Geppetto profiles and settings. This means provider/model are picked up without extra flags.
+- The command is constructed via `cli.BuildCobraCommand(..., geppetto layers middlewares)` so Geppetto’s configuration layers are applied automatically.
+
+Event router and sinks
+- A Watermill-backed `events.EventRouter` is started in the background. Handlers are added with `router.AddHandler(name, topic, handler)`.
+- A `middleware.NewWatermillSink(router.Publisher, "chat")` sink is created and attached to the context using `events.WithEventSinks(ctx, sink)` so helpers/tools can publish.
+- To prevent duplicate events, the engine is created without an engine-level sink; only context-carried sinks are used.
+
+Engine initialization
+- The engine is created with `factory.NewEngineFromParsedLayers(parsedLayers)`. This is provider-agnostic and reads settings from Geppetto layers.
+- If the selected engine supports `ConfigureTools`, the registered tools are provided as schema definitions (name/description/parameters) using `engine.ToolDefinition`.
+
+Tool registry and configuration
+- Tools live in a `tools.ToolRegistry` (here an in-memory one). The sample registers a `calc` tool via `tools.NewToolFromFunc("calc", ..., calculatorFn)`.
+- Tool orchestration is not handled by the engine. Instead, `toolhelpers` extract tool calls from model outputs, execute tools locally, and append results.
+
+Conversation manager
+- A conversation is prepared through `builder.NewManagerBuilder()` (e.g., setting a system prompt). The manager gives access to the current `conversation.Conversation` and appends new messages.
+
+REPL loop and orchestration
+- The REPL reads user input from stdin; `:q` exits.
+- Each user prompt is appended with `manager.AppendMessages(conversation.NewChatMessage(conversation.RoleUser, input))`.
+- `toolhelpers.RunToolCallingLoop(ctx, engine, conversation, registry, config)` runs the complete loop: model response → tool call detection → tool execution → results appended → next iteration as needed.
+
+Event rendering
+- The pretty-print handler uses `events.NewEventFromJson` to parse `*message.Message` payloads into events.
+- It renders: `EventPartialCompletionStart` (started), `EventPartialCompletion` (delta), `EventFinal` (finished), provider-side `EventToolCall`/`EventToolResult` (if any), and helper-side `EventToolCallExecute`/`EventToolCallExecutionResult`.
 
 #### Run
 
-- Ensure your Pinocchio profiles are configured for your provider/model.
-- Build and run this example as a standalone command, or embed it in your own project.
-- At the REPL prompt, type messages. Type `:q` to quit.
-
-Examples:
-
-```sh
-# From the pinocchio module root (provider/model are picked up from Geppetto layers / Pinocchio profiles)
-go run ./cmd/agents/simple-chat-agent
-```
+– Ensure your Pinocchio profiles are configured for your provider/model
+– Build and run from the `pinocchio` module root (layers load provider/model)
+– Type messages at the REPL; `:q` to quit
 
 To try the calculator tool, ask the model something like:
 
@@ -333,10 +103,80 @@ Tool calls and results will be printed with Lipgloss-styled blocks.
 
 #### Notes
 
-- The engine publishes streaming events; our handler formats partials, finals, tool-calls, and tool-results.
-- Helpers orchestrate tool calling; engines remain focused on provider I/O.
-- The same sink is passed to the engine and carried via context so helpers can publish events too.
+- Prefer a single publishing path to avoid duplicate events. This example publishes only via context-carried sink; the engine is created without `engine.WithSink(...)`.
+- Helpers orchestrate tool calling; engines focus on provider I/O.
+- Event types rendered: start, partial, final, provider `tool-call`, provider `tool-result` (if any), helper `tool-call-execute`, helper `tool-call-execution-result`.
+- Event type definitions: see `geppetto/pkg/events/chat-events.go`.
 
-Reference types for events: see `geppetto/pkg/events/chat-events.go`.
+### APIs Used
+
+- CLI and configuration
+  - `cobra.Command`, `PersistentPreRunE` with `logging.InitLoggerFromViper()`
+  - `clay.InitViper("pinocchio", root)` for profile/config loading
+  - `cli.BuildCobraCommand(..., geppetto layers middlewares)`
+- Events and streaming
+  - `events.NewEventRouter()`, `AddHandler(name, topic, handler)`
+  - `middleware.NewWatermillSink(router.Publisher, "chat")`
+  - `events.WithEventSinks(ctx, sink)`, `events.PublishEventToContext(...)`
+- Engine and tools
+  - `factory.NewEngineFromParsedLayers(parsedLayers)`
+  - `tools.NewInMemoryToolRegistry()`, `tools.NewToolFromFunc(...)`, `RegisterTool(...)`
+  - Optional: `engine.ConfigureTools(defs, engine.ToolConfig{ Enabled: true })`
+- Conversation and orchestration
+  - `builder.NewManagerBuilder()...Build()`
+  - `manager.AppendMessages(conversation.NewChatMessage(...))`
+  - `toolhelpers.RunToolCallingLoop(ctx, engine, conv, registry, toolhelpers.NewToolConfig()...)`
+
+### Pseudocode (sketch)
+
+```text
+main:
+  root := cobra.Command{ Use: "simple-chat-agent", PersistentPreRunE: logging.InitLoggerFromViper }
+  clay.InitViper("pinocchio", root)
+  cmd := NewSimpleAgentCmd() // description with Geppetto layers
+  root.AddCommand(cli.BuildCobraCommand(cmd, GeppettoMiddlewares))
+  root.Execute()
+
+NewSimpleAgentCmd.RunIntoWriter(ctx, parsedLayers, w):
+  router := events.NewEventRouter()
+  sink := middleware.NewWatermillSink(router.Publisher, "chat")
+  router.AddHandler("pretty", "chat", prettyPrinter(w))
+
+  engine := factory.NewEngineFromParsedLayers(parsedLayers) // no engine sink (avoid duplicates)
+
+  registry := tools.NewInMemoryToolRegistry(); registry.RegisterTool("calc", tools.NewToolFromFunc(...))
+  if engine supports ConfigureTools: engine.ConfigureTools(defs, {Enabled:true})
+
+  manager := builder.NewManagerBuilder().WithSystemPrompt("You are a helpful assistant. You can use tools.").Build()
+
+  run router in background
+  loop:
+    read line from stdin (":q" to quit)
+    manager.AppendMessages(conversation.NewChatMessage(RoleUser, line))
+    runCtx := events.WithEventSinks(ctx, sink)
+    updated := toolhelpers.RunToolCallingLoop(runCtx, engine, manager.GetConversation(), registry, ToolConfig)
+    for msg in updated[len(original):]: manager.AppendMessages(msg)
+
+prettyPrinter(w):
+  switch e := events.NewEventFromJson(msg.Payload).(type):
+    EventPartialCompletionStart → print "started"
+    EventPartialCompletion → print e.Delta
+    EventFinal → print "finished"
+    EventToolCall → print Name + ID + Input (pretty JSON)
+    EventToolCallExecute → print Name + ID + Input (pretty JSON)
+    EventToolResult → print ID + Result (if provider emits)
+    EventToolCallExecutionResult → print ID + Result (pretty JSON)
+```
+
+### Troubleshooting
+
+- Duplicate events: ensure the engine is created without `engine.WithSink(...)` if you attach sinks via context.
+- No tool result shown: confirm your provider supports tool-calling metadata and that `toolhelpers` are attached via `events.WithEventSinks(ctx, sink)`.
+- Tools not called: verify `ConfigureTools` is applied when the engine supports it, and that the registry contains your tools.
+
+### References
+
+- Topics: `geppetto-inference-engines`, `geppetto-events-streaming-watermill`
+- Tutorial: `geppetto-streaming-inference-tools`
 
 
