@@ -11,6 +11,9 @@ import (
     "time"
 
     "github.com/ThreeDotsLabs/watermill/message"
+    tea "github.com/charmbracelet/bubbletea"
+    bspinner "github.com/charmbracelet/bubbles/spinner"
+    "github.com/charmbracelet/bubbles/viewport"
     "github.com/charmbracelet/lipgloss"
     "github.com/go-go-golems/geppetto/pkg/conversation"
     "github.com/go-go-golems/geppetto/pkg/conversation/builder"
@@ -219,6 +222,182 @@ func addPrettyHandlers(router *events.EventRouter, w io.Writer) {
     })
 }
 
+// addUIForwarder forwards all chat events into a channel consumed by the Bubble Tea model.
+func addUIForwarder(router *events.EventRouter, ch chan<- interface{}) {
+    router.AddHandler("ui-forwarder", "chat", func(msg *message.Message) error {
+        defer msg.Ack()
+        e, err := events.NewEventFromJson(msg.Payload)
+        if err != nil {
+            return err
+        }
+        select {
+        case ch <- e:
+        default:
+            // drop if channel is full to avoid blocking
+        }
+        return nil
+    })
+}
+
+// streamUIModel renders a spinner and a streaming viewport from incoming events.
+type streamUIModel struct {
+    spinner     bspinner.Model
+    viewport    viewport.Model
+    uiEvents    <-chan interface{}
+    isStreaming bool
+    quitWhenDone bool
+    content     string
+    showSpinner bool
+    maxHeight   int
+    termWidth   int
+}
+
+func newStreamUIModel(ch <-chan interface{}, _ io.Writer) streamUIModel {
+    sp := bspinner.New()
+    sp.Spinner = bspinner.Line
+    sp.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("63")).Bold(true)
+    vp := viewport.New(80, 3)
+    // No border for minimal footprint
+    vp.Style = lipgloss.NewStyle()
+    return streamUIModel{
+        spinner:      sp,
+        viewport:     vp,
+        uiEvents:     ch,
+        isStreaming:  false,
+        quitWhenDone: true,
+        content:      "",
+        showSpinner:  false,
+        maxHeight:    6,
+        termWidth:    80,
+    }
+}
+
+func (m streamUIModel) Init() tea.Cmd {
+    return tea.Batch(m.spinner.Tick, waitForUIEvent(m.uiEvents))
+}
+
+// waitForUIEvent converts a channel into a Tea command delivering one message.
+func waitForUIEvent(ch <-chan interface{}) tea.Cmd {
+    return func() tea.Msg {
+        e, ok := <-ch
+        if !ok {
+            return tea.Quit
+        }
+        return e
+    }
+}
+
+func (m streamUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+    switch ev := msg.(type) {
+    case tea.WindowSizeMsg:
+        // adjust viewport height, keep a couple lines for spinner/header
+        m.termWidth = ev.Width
+        m.viewport.Width = ev.Width
+        // Height is adapted to content elsewhere
+        return m, nil
+    case tea.KeyMsg:
+        // ignore keyboard input; REPL handles input outside the program
+        return m, nil
+    case *events.EventPartialCompletionStart:
+        m.isStreaming = true
+        m.showSpinner = true
+        return m, tea.Batch(m.spinner.Tick, waitForUIEvent(m.uiEvents))
+    case *events.EventPartialCompletion:
+        if ev.Delta != "" {
+            m.content += ev.Delta
+            m.viewport.SetContent(m.content)
+            // Grow viewport height with content up to maxHeight
+            lines := strings.Count(m.content, "\n") + 1
+            if lines < 1 {
+                lines = 1
+            }
+            if lines > m.maxHeight {
+                lines = m.maxHeight
+            }
+            m.viewport.Height = lines
+        }
+        return m, tea.Batch(m.spinner.Tick, waitForUIEvent(m.uiEvents))
+    case *events.EventToolCall:
+        // Persist tool call with minimal detail
+        m.content += "\n" + toolNameStyle.Render("Tool Call: ") + ev.ToolCall.Name
+        if s := strings.TrimSpace(ev.ToolCall.Input); s != "" {
+            m.content += "\n" + jsonStyle.Render(s)
+        }
+        m.viewport.SetContent(m.content)
+        lines := strings.Count(m.content, "\n") + 1
+        if lines > m.maxHeight { lines = m.maxHeight }
+        m.viewport.Height = lines
+        return m, waitForUIEvent(m.uiEvents)
+    case *events.EventToolCallExecute:
+        m.content += "\n" + subHeaderStyle.Render("Executing: ") + ev.ToolCall.Name
+        if s := strings.TrimSpace(ev.ToolCall.Input); s != "" {
+            m.content += "\n" + jsonStyle.Render(s)
+        }
+        m.viewport.SetContent(m.content)
+        lines := strings.Count(m.content, "\n") + 1
+        if lines > m.maxHeight { lines = m.maxHeight }
+        m.viewport.Height = lines
+        return m, waitForUIEvent(m.uiEvents)
+    case *events.EventToolResult:
+        m.content += "\n" + subHeaderStyle.Render("Tool Result:")
+        if s := strings.TrimSpace(ev.ToolResult.Result); s != "" {
+            m.content += "\n" + jsonStyle.Render(s)
+        }
+        m.viewport.SetContent(m.content)
+        lines := strings.Count(m.content, "\n") + 1
+        if lines > m.maxHeight { lines = m.maxHeight }
+        m.viewport.Height = lines
+        return m, waitForUIEvent(m.uiEvents)
+    case *events.EventToolCallExecutionResult:
+        m.content += "\n" + subHeaderStyle.Render("Tool Exec Result:")
+        if s := strings.TrimSpace(ev.ToolResult.Result); s != "" {
+            m.content += "\n" + jsonStyle.Render(s)
+        }
+        m.viewport.SetContent(m.content)
+        lines := strings.Count(m.content, "\n") + 1
+        if lines > m.maxHeight { lines = m.maxHeight }
+        m.viewport.Height = lines
+        return m, waitForUIEvent(m.uiEvents)
+    case *events.EventFinal:
+        m.isStreaming = false
+        m.showSpinner = false
+        if ev.Text != "" {
+            if m.content == "" || !strings.Contains(m.content, strings.TrimSpace(ev.Text)) {
+                m.content += "\n" + ev.Text
+                m.viewport.SetContent(m.content)
+            }
+        }
+        if m.quitWhenDone {
+            return m, tea.Quit
+        }
+        return m, nil
+    case *events.EventError:
+        m.content += "\n" + errorStyle.Render("Error: ") + ev.ErrorString
+        m.viewport.SetContent(m.content)
+        if m.quitWhenDone {
+            return m, tea.Quit
+        }
+        return m, nil
+    default:
+        // spinner and viewport internal updates
+        var cmd tea.Cmd
+        m.spinner, cmd = m.spinner.Update(msg)
+        return m, tea.Batch(cmd, waitForUIEvent(m.uiEvents))
+    }
+}
+
+func (m streamUIModel) View() string {
+    var header string
+    if m.showSpinner {
+        header = headerStyle.Render("Streaming… ") + m.spinner.View()
+    }
+    body := m.viewport.View()
+    if header != "" {
+        return header + "\n" + body
+    }
+    return body
+}
+
 func (c *SimpleAgentCmd) RunIntoWriter(ctx context.Context, parsed *layers.ParsedLayers, w io.Writer) error {
 
     // 1) Event router + sink
@@ -226,7 +405,9 @@ func (c *SimpleAgentCmd) RunIntoWriter(ctx context.Context, parsed *layers.Parse
     if err != nil {
         return errors.Wrap(err, "router")
     }
-    addPrettyHandlers(router, w)
+    // Forward events to a Bubble Tea UI channel (spinner + viewport)
+    uiCh := make(chan interface{}, 1024)
+    addUIForwarder(router, uiCh)
     sink := middleware.NewWatermillSink(router.Publisher, "chat")
 
     // 2) Engine (avoid double events: rely on context-carried sink only)
@@ -315,13 +496,44 @@ func (c *SimpleAgentCmd) RunIntoWriter(ctx context.Context, parsed *layers.Parse
             conv := manager.GetConversation()
 
             runCtx := events.WithEventSinks(groupCtx, sink)
-            updated, err := toolhelpers.RunToolCallingLoop(
-                runCtx, eng, conv, registry,
-                toolhelpers.NewToolConfig().
-                    WithMaxIterations(5).
-                    WithTimeout(30*time.Second),
-            )
-            if err != nil {
+            // Drain any leftover UI events from previous turns
+            for {
+                select {
+                case <-uiCh:
+                default:
+                    goto drained
+                }
+            }
+        drained:
+
+            // Run Bubble Tea UI (spinner + viewport) alongside inference
+            uiModel := newStreamUIModel(uiCh, w)
+            pgm := tea.NewProgram(uiModel, tea.WithOutput(w))
+
+            egTurn, turnCtx := errgroup.WithContext(runCtx)
+            var updated conversation.Conversation
+            var finalUIModel streamUIModel
+            egTurn.Go(func() error {
+                // Start router-backed streaming UI and capture final state
+                m, err := pgm.Run()
+                if err == nil {
+                    if fm, ok := m.(streamUIModel); ok {
+                        finalUIModel = fm
+                    }
+                }
+                return err
+            })
+            egTurn.Go(func() error {
+                var err error
+                updated, err = toolhelpers.RunToolCallingLoop(
+                    turnCtx, eng, conv, registry,
+                    toolhelpers.NewToolConfig().
+                        WithMaxIterations(5).
+                        WithTimeout(30*time.Second),
+                )
+                return err
+            })
+            if err := egTurn.Wait(); err != nil {
                 return err
             }
             for _, m := range updated[len(conv):] {
@@ -330,7 +542,12 @@ func (c *SimpleAgentCmd) RunIntoWriter(ctx context.Context, parsed *layers.Parse
                 }
             }
 
-            // Ensure a newline separation between turns
+            // After Bubble Tea exits, re-render the final streamed content so it remains visible
+            if s := strings.TrimSpace(finalUIModel.content); s != "" {
+                fmt.Fprintln(w, finalStyle.Render(s))
+            }
+
+            // Newline separation between turns
             fmt.Fprintln(w, "")
         }
     })
