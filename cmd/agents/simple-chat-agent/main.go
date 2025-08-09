@@ -24,8 +24,10 @@ import (
     "github.com/go-go-golems/glazed/pkg/cli"
     "github.com/go-go-golems/glazed/pkg/cmds"
     "github.com/go-go-golems/glazed/pkg/cmds/layers"
+    "github.com/go-go-golems/glazed/pkg/cmds/logging"
     "github.com/go-go-golems/glazed/pkg/help"
     help_cmd "github.com/go-go-golems/glazed/pkg/help/cmd"
+    clay "github.com/go-go-golems/clay/pkg"
     "github.com/pkg/errors"
     "github.com/rs/zerolog/log"
     "github.com/spf13/cobra"
@@ -254,9 +256,18 @@ func (c *SimpleAgentCmd) RunIntoWriter(ctx context.Context, parsed *layers.Parse
 }
 
 func main() {
-    root := &cobra.Command{Use: "simple-chat-agent"}
+    root := &cobra.Command{Use: "simple-chat-agent", PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+        if err := logging.InitLoggerFromViper(); err != nil {
+            return err
+        }
+        return nil
+    }}
     helpSystem := help.NewHelpSystem()
     help_cmd.SetupCobraRootCommand(helpSystem, root)
+
+    if err := clay.InitViper("pinocchio", root); err != nil {
+        cobra.CheckErr(err)
+    }
 
     c, err := NewSimpleAgentCmd()
     cobra.CheckErr(err)
