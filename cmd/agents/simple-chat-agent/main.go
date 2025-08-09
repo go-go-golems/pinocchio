@@ -21,6 +21,8 @@ import (
     "github.com/go-go-golems/geppetto/pkg/inference/toolhelpers"
     "github.com/go-go-golems/geppetto/pkg/inference/tools"
     geppettolayers "github.com/go-go-golems/geppetto/pkg/layers"
+    uhoh "github.com/go-go-golems/uhoh/pkg"
+    uhohdoc "github.com/go-go-golems/uhoh/pkg/doc"
     "github.com/go-go-golems/glazed/pkg/cli"
     "github.com/go-go-golems/glazed/pkg/cmds"
     "github.com/go-go-golems/glazed/pkg/cmds/layers"
@@ -32,6 +34,7 @@ import (
     "github.com/rs/zerolog/log"
     "github.com/spf13/cobra"
     "golang.org/x/sync/errgroup"
+    "gopkg.in/yaml.v3"
 )
 
 type SimpleAgentCmd struct{ *cmds.CommandDescription }
@@ -77,6 +80,36 @@ func calculatorTool(req CalcRequest) (CalcResponse, error) {
     default:
         return CalcResponse{}, errors.Errorf("unknown op: %s", req.Op)
     }
+}
+
+// Generative UI tool definitions
+type GenerativeUIRequest struct {
+    DslYAML string `json:"dsl_yaml" jsonschema:"required,description=Uhoh DSL YAML 'form' to display in the terminal and collect structured values"`
+}
+
+type GenerativeUIResponse struct {
+    Values map[string]interface{} `json:"values"`
+}
+
+func generativeUITool(req GenerativeUIRequest) (GenerativeUIResponse, error) {
+    if strings.TrimSpace(req.DslYAML) == "" {
+        return GenerativeUIResponse{}, errors.New("dsl_yaml is required")
+    }
+
+    var f uhoh.Form
+    if err := yaml.Unmarshal([]byte(req.DslYAML), &f); err != nil {
+        return GenerativeUIResponse{}, errors.Wrap(err, "unmarshal uhoh DSL YAML")
+    }
+
+    ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+    defer cancel()
+
+    values, err := f.Run(ctx)
+    if err != nil {
+        return GenerativeUIResponse{}, errors.Wrap(err, "run uhoh form")
+    }
+
+    return GenerativeUIResponse{Values: values}, nil
 }
 
 // Lipgloss styles for pretty output
@@ -202,7 +235,7 @@ func (c *SimpleAgentCmd) RunIntoWriter(ctx context.Context, parsed *layers.Parse
         return errors.Wrap(err, "engine")
     }
 
-    // 3) Tools: register a simple calculator tool
+    // 3) Tools: register tools (calculator + generative UI)
     registry := tools.NewInMemoryToolRegistry()
     calcDef, err := tools.NewToolFromFunc(
         "calc",
@@ -214,6 +247,26 @@ func (c *SimpleAgentCmd) RunIntoWriter(ctx context.Context, parsed *layers.Parse
     }
     if err := registry.RegisterTool("calc", *calcDef); err != nil {
         return errors.Wrap(err, "register calc tool")
+    }
+
+    // Generative UI tool with embedded Uhoh DSL documentation in the description
+    dslDoc, err := uhohdoc.GetUhohDSLDocumentation()
+    if err != nil {
+        log.Warn().Err(err).Msg("failed to load Uhoh DSL documentation for tool description")
+    }
+    genDesc := "Collect structured input from the user via a terminal form using the Uhoh DSL. " +
+        "Provide the YAML in the 'dsl_yaml' field. The form runs and returns a JSON object of collected values.\n\n" +
+        "Uhoh DSL guide:\n" + dslDoc
+    genDef, err := tools.NewToolFromFunc(
+        "generative-ui",
+        genDesc,
+        generativeUITool,
+    )
+    if err != nil {
+        return errors.Wrap(err, "generative-ui tool")
+    }
+    if err := registry.RegisterTool("generative-ui", *genDef); err != nil {
+        return errors.Wrap(err, "register generative-ui tool")
     }
 
     // Optionally configure engine tools if supported by provider
