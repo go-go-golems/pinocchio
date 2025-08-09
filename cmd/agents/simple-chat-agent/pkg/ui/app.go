@@ -1,10 +1,7 @@
 package ui
 
 import (
-    "strings"
-
     bspinner "github.com/charmbracelet/bubbles/spinner"
-    "github.com/charmbracelet/bubbles/viewport"
     tea "github.com/charmbracelet/bubbletea"
     "github.com/charmbracelet/huh"
     "github.com/charmbracelet/lipgloss"
@@ -25,8 +22,6 @@ var (
 
 type AppModel struct {
     spinner  bspinner.Model
-    viewport viewport.Model
-    content  string
     uiEvents <-chan interface{}
 
     repl repl.Model
@@ -36,17 +31,21 @@ type AppModel struct {
     activeForm *huh.Form
     formVals   map[string]interface{}
     formReply  chan toolspkg.ToolUIReply
+
+    // Status line
+    status      string
+    isStreaming bool
+
+    // Live streamed assistant output (cleared on final)
+    live string
 }
 
 func NewAppModel(uiCh <-chan interface{}, replModel repl.Model, toolReqCh <-chan toolspkg.ToolUIRequest) AppModel {
     sp := bspinner.New()
     sp.Spinner = bspinner.Line
     sp.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("63")).Bold(true)
-    vp := viewport.New(80, 6)
-    vp.Style = lipgloss.NewStyle()
     return AppModel{
         spinner:  sp,
-        viewport: vp,
         uiEvents: uiCh,
         repl:     replModel,
         toolReqCh: toolReqCh,
@@ -96,7 +95,6 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
     switch ev := msg.(type) {
     case tea.WindowSizeMsg:
-        m.viewport.Width = ev.Width
         m.repl.SetWidth(ev.Width)
         return m, nil
     case toolspkg.ToolUIRequest:
@@ -105,53 +103,34 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
         m.formReply = ev.ReplyCh
         return m, nil
     case *events.EventPartialCompletionStart:
-        m.content += "\n" + headerStyle.Render("— Inference started —")
-        m.viewport.SetContent(m.content)
+        m.isStreaming = true
+        m.status = "Streaming…"
         return m, tea.Batch(m.spinner.Tick, waitForUIEvent(m.uiEvents))
     case *events.EventPartialCompletion:
         // append raw deltas; REPL will show final answers post-loop as well
-        if ev.Delta != "" {
-            m.content += ev.Delta
-            m.viewport.SetContent(m.content)
-        }
+        m.live += ev.Delta
         return m, tea.Batch(m.spinner.Tick, waitForUIEvent(m.uiEvents))
     case *events.EventToolCall:
-        m.content += "\n" + toolNameStyle.Render("Tool Call: ") + ev.ToolCall.Name
-        if s := strings.TrimSpace(ev.ToolCall.Input); s != "" {
-            m.content += "\n" + jsonStyle.Render(s)
-        }
-        m.viewport.SetContent(m.content)
+        m.status = "Tool: " + ev.ToolCall.Name
         return m, waitForUIEvent(m.uiEvents)
     case *events.EventToolCallExecute:
-        m.content += "\n" + subHeaderStyle.Render("Executing: ") + ev.ToolCall.Name
-        if s := strings.TrimSpace(ev.ToolCall.Input); s != "" {
-            m.content += "\n" + jsonStyle.Render(s)
-        }
-        m.viewport.SetContent(m.content)
+        m.status = "Executing: " + ev.ToolCall.Name
         return m, waitForUIEvent(m.uiEvents)
     case *events.EventToolResult:
-        m.content += "\n" + subHeaderStyle.Render("Tool Result:")
-        if s := strings.TrimSpace(ev.ToolResult.Result); s != "" {
-            m.content += "\n" + jsonStyle.Render(s)
-        }
-        m.viewport.SetContent(m.content)
+        m.status = ""
         return m, waitForUIEvent(m.uiEvents)
     case *events.EventToolCallExecutionResult:
-        m.content += "\n" + subHeaderStyle.Render("Tool Exec Result:")
-        if s := strings.TrimSpace(ev.ToolResult.Result); s != "" {
-            m.content += "\n" + jsonStyle.Render(s)
-        }
-        m.viewport.SetContent(m.content)
+        m.status = ""
         return m, waitForUIEvent(m.uiEvents)
     case *events.EventFinal:
-        if ev.Text != "" {
-            m.content += "\n" + finalStyle.Render(ev.Text)
-            m.viewport.SetContent(m.content)
-        }
+        m.isStreaming = false
+        m.live = ""
+        m.status = ""
         return m, nil
     case *events.EventError:
-        m.content += "\n" + errorStyle.Render("Error: ") + ev.ErrorString
-        m.viewport.SetContent(m.content)
+        m.isStreaming = false
+        m.live = ""
+        m.status = ""
         return m, nil
     }
 
@@ -172,8 +151,21 @@ func (m AppModel) View() string {
     if m.activeForm != nil {
         return m.activeForm.View()
     }
-    header := headerStyle.Render("Streaming… ") + m.spinner.View()
-    return header + "\n" + m.viewport.View() + "\n" + m.repl.View()
+    var header string
+    if m.status != "" || m.isStreaming {
+        header = headerStyle.Render(m.status)
+        // show spinner while streaming or when a status is set (tool running)
+        header += " " + m.spinner.View()
+        // show live streamed output as a temporary block above the REPL
+        if m.live != "" {
+            return header + "\n" + jsonStyle.Render(m.live) + "\n" + m.repl.View()
+        }
+        return header + "\n" + m.repl.View()
+    }
+    if m.live != "" {
+        return jsonStyle.Render(m.live) + "\n" + m.repl.View()
+    }
+    return m.repl.View()
 }
 
 
