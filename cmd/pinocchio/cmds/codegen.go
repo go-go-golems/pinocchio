@@ -1,17 +1,9 @@
 package cmds
 
 import (
-	"fmt"
-	cmds2 "github.com/go-go-golems/glazed/pkg/cmds"
-	"github.com/go-go-golems/glazed/pkg/cmds/alias"
-	"github.com/go-go-golems/glazed/pkg/cmds/loaders"
-	"github.com/go-go-golems/pinocchio/pkg/cmds"
-	"github.com/go-go-golems/pinocchio/pkg/codegen"
-	"github.com/pkg/errors"
-	"github.com/spf13/cobra"
-	"os"
-	"path"
-	"strings"
+    // legacy codegen removed
+    "github.com/pkg/errors"
+    "github.com/spf13/cobra"
 )
 
 func NewCodegenCommand() *cobra.Command {
@@ -20,46 +12,12 @@ func NewCodegenCommand() *cobra.Command {
 		Short: "A program to convert Geppetto YAML commands into Go code",
 		Args:  cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			packageName := cmd.Flag("package-name").Value.String()
-			outputDir := cmd.Flag("output-dir").Value.String()
+            _ = cmd.Flag("package-name").Value.String()
+            _ = cmd.Flag("output-dir").Value.String()
+            return errors.New("legacy codegen removed; use engine-first commands or templates")
 
-			s := &codegen.GeppettoCommandCodeGenerator{
-				PackageName: packageName,
-			}
-
-			for _, fileName := range args {
-				loader := &cmds.PinocchioCommandLoader{}
-
-				fs_, fileName, err := loaders.FileNameToFsFilePath(fileName)
-				if err != nil {
-					return err
-				}
-
-				cmds_, err := loader.LoadCommands(fs_, fileName, []cmds2.CommandDescriptionOption{}, []alias.Option{})
-				if err != nil {
-					return err
-				}
-				if len(cmds_) != 1 {
-					return errors.Errorf("expected exactly one command, got %d", len(cmds_))
-				}
-				cmd := cmds_[0].(*cmds.PinocchioCommand)
-
-				f, err := s.GenerateCommandCode(cmd)
-				if err != nil {
-					return err
-				}
-
-				s := f.GoString()
-				// store in path.go after removing .yaml
-				p, _ := strings.CutSuffix(path.Base(fileName), ".yaml")
-				p = p + ".go"
-				p = path.Join(outputDir, p)
-
-				fmt.Printf("Converting %s to %s\n", fileName, p)
-				_ = os.WriteFile(p, []byte(s), 0644)
-			}
-
-			return nil
+            // unreachable
+            // return nil
 		},
 	}
 

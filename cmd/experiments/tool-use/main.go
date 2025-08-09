@@ -1,254 +1,242 @@
 package main
 
 import (
-	"context"
-	_ "embed"
-	"fmt"
-	"github.com/go-go-golems/geppetto/pkg/inference/engine"
-	"github.com/go-go-golems/geppetto/pkg/inference/engine/factory"
-	"github.com/go-go-golems/geppetto/pkg/inference/middleware"
-	layers2 "github.com/go-go-golems/geppetto/pkg/layers"
-	"io"
-	"strings"
+    "context"
+    _ "embed"
+    "fmt"
+    "io"
+    "time"
 
-	"github.com/go-go-golems/geppetto/pkg/conversation/builder"
-	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
+    "github.com/go-go-golems/geppetto/pkg/conversation"
+    
+    "github.com/go-go-golems/geppetto/pkg/inference/engine"
+    "github.com/go-go-golems/geppetto/pkg/inference/engine/factory"
+    "github.com/go-go-golems/geppetto/pkg/inference/toolhelpers"
+    "github.com/go-go-golems/geppetto/pkg/inference/tools"
+    layers2 "github.com/go-go-golems/geppetto/pkg/layers"
 
-	clay "github.com/go-go-golems/clay/pkg"
-	"github.com/go-go-golems/geppetto/pkg/conversation"
-	"github.com/go-go-golems/geppetto/pkg/toolbox"
-	"github.com/go-go-golems/glazed/pkg/cli"
-	"github.com/go-go-golems/glazed/pkg/cmds"
-	"github.com/go-go-golems/glazed/pkg/cmds/layers"
-	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
-	"github.com/go-go-golems/glazed/pkg/help"
-	help_cmd "github.com/go-go-golems/glazed/pkg/help/cmd"
-	pinocchio_cmds "github.com/go-go-golems/pinocchio/pkg/cmds"
-	"github.com/go-go-golems/pinocchio/pkg/cmds/cmdlayers"
-	"github.com/go-go-golems/pinocchio/pkg/cmds/helpers"
-	"github.com/go-go-golems/pinocchio/pkg/cmds/run"
-	"github.com/pkg/errors"
-	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
+    clay "github.com/go-go-golems/clay/pkg"
+    "github.com/go-go-golems/glazed/pkg/cli"
+    "github.com/go-go-golems/glazed/pkg/cmds"
+    "github.com/go-go-golems/glazed/pkg/cmds/layers"
+    "github.com/go-go-golems/glazed/pkg/cmds/parameters"
+    "github.com/go-go-golems/glazed/pkg/help"
+    help_cmd "github.com/go-go-golems/glazed/pkg/help/cmd"
+    pinocchio_cmds "github.com/go-go-golems/pinocchio/pkg/cmds"
+    "github.com/go-go-golems/pinocchio/pkg/cmds/cmdlayers"
+    "github.com/go-go-golems/pinocchio/pkg/cmds/helpers"
+    "github.com/pkg/errors"
+    "github.com/rs/zerolog/log"
+    "github.com/spf13/cobra"
+    "gopkg.in/yaml.v3"
 )
 
 //go:embed command.yaml
 var commandYaml []byte
 
 var rootCmd = &cobra.Command{
-	Use:   "tool-use",
-	Short: "Tool use example with weather tool",
+    Use:   "tool-use",
+    Short: "Tool use example with weather tool (updated API)",
 }
 
+// WeatherRequest represents the JSON input for the weather tool
+// This is simpler than the original GetWeather(city string) signature
+// and works well with the reflection-based Tool registry.
+type WeatherRequest struct {
+    City string `json:"city" jsonschema:"required,description=City name to get weather for"`
+}
+
+// weatherTool is an adapter that calls the old WeatherTool.GetWeather method
+func weatherTool(req WeatherRequest) (*WeatherResult, error) {
+    wt := &WeatherTool{}
+    return wt.GetWeather(req.City)
+}
+
+// ToolUseCommand wraps the generated pinocchio command with additional flags
+// and demonstrates tool calling using the new inference helper APIs.
 type ToolUseCommand struct {
-	*cmds.CommandDescription
-	pinocchioCmd *pinocchio_cmds.PinocchioCommand
+    *cmds.CommandDescription
+    pinocchioCmd *pinocchio_cmds.PinocchioCommand
 }
 
 type ToolUseSettings struct {
-	PinocchioProfile string `glazed.parameter:"pinocchio-profile"`
-	Debug            bool   `glazed.parameter:"debug"`
-	CLIMode          bool   `glazed.parameter:"cli-mode"`
+    PinocchioProfile string `glazed.parameter:"pinocchio-profile"`
+    Debug            bool   `glazed.parameter:"debug"`
+    Prompt           string `glazed.parameter:"prompt"`
 }
 
 func NewToolUseCommand(cmd *pinocchio_cmds.PinocchioCommand) *ToolUseCommand {
-	return &ToolUseCommand{
-		CommandDescription: cmds.NewCommandDescription("tool-use",
-			cmds.WithShort("Weather tool use example"),
-			cmds.WithFlags(
-				parameters.NewParameterDefinition("pinocchio-profile",
-					parameters.ParameterTypeString,
-					parameters.WithHelp("Pinocchio profile"),
-					parameters.WithDefault("4o-mini"),
-				),
-				parameters.NewParameterDefinition("debug",
-					parameters.ParameterTypeBool,
-					parameters.WithHelp("Debug mode - show parsed layers"),
-					parameters.WithDefault(false),
-				),
-				parameters.NewParameterDefinition("cli-mode",
-					parameters.ParameterTypeBool,
-					parameters.WithHelp("CLI mode - single inference without chat UI"),
-					parameters.WithDefault(false),
-				),
-			),
-		),
-		pinocchioCmd: cmd,
-	}
+    return &ToolUseCommand{
+        CommandDescription: cmds.NewCommandDescription("tool-use",
+            cmds.WithShort("Weather tool use example (new inference API)"),
+            cmds.WithArguments(
+                parameters.NewParameterDefinition("prompt",
+                    parameters.ParameterTypeString,
+                    parameters.WithHelp("Prompt to run"),
+                    parameters.WithRequired(true),
+                ),
+            ),
+            cmds.WithFlags(
+                parameters.NewParameterDefinition("pinocchio-profile",
+                    parameters.ParameterTypeString,
+                    parameters.WithHelp("Pinocchio profile"),
+                    parameters.WithDefault("4o-mini"),
+                ),
+                parameters.NewParameterDefinition("debug",
+                    parameters.ParameterTypeBool,
+                    parameters.WithHelp("Debug mode - show parsed layers"),
+                    parameters.WithDefault(false),
+                ),
+            ),
+        ),
+        pinocchioCmd: cmd,
+    }
 }
 
+// RunIntoWriter implements the new helper-based tool calling workflow.
 func (c *ToolUseCommand) RunIntoWriter(ctx context.Context, parsedLayers *layers.ParsedLayers, w io.Writer) error {
-	s := &ToolUseSettings{}
-	err := parsedLayers.InitializeStruct(layers.DefaultSlug, s)
-	if err != nil {
-		return errors.Wrap(err, "failed to initialize settings")
-	}
+    s := &ToolUseSettings{}
+    if err := parsedLayers.InitializeStruct(layers.DefaultSlug, s); err != nil {
+        return errors.Wrap(err, "failed to initialize settings")
+    }
 
-	// Parse geppetto layers with the specified profile
-	geppettoParsedLayers, err := helpers.ParseGeppettoLayers(c.pinocchioCmd, helpers.WithProfile(s.PinocchioProfile))
-	if err != nil {
-		return err
-	}
+    // 1. Parse Geppetto layers (provider configuration) with the selected profile.
+    geppettoParsedLayers, err := helpers.ParseGeppettoLayers(c.pinocchioCmd, helpers.WithProfile(s.PinocchioProfile))
+    if err != nil {
+        return err
+    }
 
-	if s.Debug {
-		// Marshal geppettoParsedLayer to yaml and print it
-		b_, err := yaml.Marshal(geppettoParsedLayers)
-		if err != nil {
-			return err
-		}
-		fmt.Println("=== Parsed Layers Debug ===")
-		fmt.Println(string(b_))
-		fmt.Println("=========================")
-		return nil
-	}
+    // Debug output of parsed layers if requested.
+    if s.Debug {
+        b_, _ := yaml.Marshal(geppettoParsedLayers)
+        fmt.Fprintln(w, "=== Parsed Layers Debug ===")
+        fmt.Fprintln(w, string(b_))
+        fmt.Fprintln(w, "===========================")
+        return nil
+    }
 
-	// Get helpers settings from parsed layers
-	helpersSettings := &cmdlayers.HelpersSettings{}
-	err = geppettoParsedLayers.InitializeStruct(cmdlayers.GeppettoHelpersSlug, helpersSettings)
-	if err != nil {
-		return errors.Wrap(err, "failed to initialize helpers settings")
-	}
+    // 2. Build the base Engine from layers (provider-agnostic)
+    baseEngine, err := factory.NewEngineFromParsedLayers(geppettoParsedLayers)
+    if err != nil {
+        return errors.Wrap(err, "failed to create engine")
+    }
 
-	// Update step settings from parsed layers
-	stepSettings, err := settings.NewStepSettings()
-	if err != nil {
-		return errors.Wrap(err, "failed to create step settings")
-	}
-	err = stepSettings.UpdateFromParsedLayers(geppettoParsedLayers)
-	if err != nil {
-		return errors.Wrap(err, "failed to update step settings from parsed layers")
-	}
+    // 3. Create Tool registry and register weather tool
+    registry := tools.NewInMemoryToolRegistry()
+    weatherToolDef, err := tools.NewToolFromFunc(
+        "get_weather",
+        "Get current weather information for a specific city",
+        weatherTool,
+    )
+    if err != nil {
+        return errors.Wrap(err, "failed to create weather tool definition")
+    }
+    if err := registry.RegisterTool("get_weather", *weatherToolDef); err != nil {
+        return errors.Wrap(err, "failed to register weather tool")
+    }
 
-	// Create toolbox with weather tool
-	tb := toolbox.NewRealToolbox()
-	weatherTool := &WeatherTool{}
-	err = tb.RegisterTool("get_weather", weatherTool.GetWeather)
-	if err != nil {
-		return errors.Wrap(err, "failed to register weather tool")
-	}
+    // 4. If the underlying Engine supports tool configuration, provide the tool
+    if configurableEngine, ok := baseEngine.(interface {
+        ConfigureTools([]engine.ToolDefinition, engine.ToolConfig)
+    }); ok {
+        var engineTools []engine.ToolDefinition
+        for _, t := range registry.ListTools() {
+            engineTools = append(engineTools, engine.ToolDefinition{
+                Name:        t.Name,
+                Description: t.Description,
+                Parameters:  t.Parameters,
+            })
+        }
 
-	// Create base engine first
-	baseEngine, err := factory.NewEngineFromParsedLayers(geppettoParsedLayers)
-	if err != nil {
-		return errors.Wrap(err, "failed to create base engine")
-	}
+        engineConfig := engine.ToolConfig{
+            Enabled:           true,
+            ToolChoice:        engine.ToolChoiceAuto,
+            MaxIterations:     1, // Single iteration – orchestration handled by helpers
+            ExecutionTimeout:  30 * time.Second,
+            MaxParallelTools:  1,
+            ToolErrorHandling: engine.ToolErrorContinue,
+        }
+        configurableEngine.ConfigureTools(engineTools, engineConfig)
+    }
 
-	// Create tool middleware
-	toolConfig := middleware.ToolConfig{
-		MaxIterations: 5,
-		Timeout:       30, // seconds
-	}
-	toolMiddleware := middleware.NewToolMiddleware(tb, toolConfig)
+    // 5. Build conversation manager
+    managerBuilder := c.pinocchioCmd.CreateConversationManagerBuilder()
+    manager, err := managerBuilder.
+        WithPrompt(s.Prompt).
+        Build()
+    if err != nil {
+        return err
+    }
 
-	// Wrap engine with tool middleware
-	engine := middleware.NewEngineWithMiddleware(baseEngine, toolMiddleware)
+    conversation_ := manager.GetConversation()
 
-	// Create image paths from helper settings
-	imagePaths := make([]string, len(helpersSettings.Images))
-	for i, img := range helpersSettings.Images {
-		imagePaths[i] = img.Path
-	}
+    // 6. Configure helper loop
+    helperConfig := toolhelpers.NewToolConfig().
+        WithMaxIterations(5).
+        WithTimeout(30 * time.Second).
+        WithMaxParallelTools(1).
+        WithToolChoice(tools.ToolChoiceAuto).
+        WithToolErrorHandling(tools.ToolErrorContinue)
 
-	// Create the conversation manager
-	b := c.pinocchioCmd.CreateConversationManagerBuilder()
-	manager, err := b.WithImages(imagePaths).
-		WithAutosaveSettings(builder.AutosaveSettings{
-			Enabled:  strings.ToLower(helpersSettings.Autosave.Enabled) == "yes",
-			Template: helpersSettings.Autosave.Template,
-			Path:     helpersSettings.Autosave.Path,
-		}).
-		Build()
-	if err != nil {
-		return err
-	}
+    log.Info().Msg("Running inference with helper-based tool calling loop")
 
-	// Determine run mode
-	runMode := run.RunModeBlocking
-	if s.CLIMode {
-		runMode = run.RunModeBlocking
-	} else if helpersSettings.StartInChat {
-		runMode = run.RunModeChat
-	} else if helpersSettings.Interactive {
-		runMode = run.RunModeInteractive
-	}
+    updatedConversation, err := toolhelpers.RunToolCallingLoop(ctx, baseEngine, conversation_, registry, helperConfig)
+    if err != nil {
+        return errors.Wrap(err, "inference failed")
+    }
 
-	fmt.Printf("Using profile: %s\n", s.PinocchioProfile)
-	if stepSettings.Chat.Engine != nil {
-		fmt.Printf("Model: %s\n", *stepSettings.Chat.Engine)
-	}
-	fmt.Printf("Tool available: get_weather\n")
-	fmt.Println("---")
+    // Append new messages to manager for display
+    newMessages := updatedConversation[len(conversation_):]
+    if err := manager.AppendMessages(newMessages...); err != nil {
+        return errors.Wrap(err, "failed to append messages")
+    }
 
-	// Run with engine override
-	messages, err := c.runWithEngine(ctx, manager, engine, runMode, &run.UISettings{
-		Output:       helpersSettings.Output,
-		WithMetadata: helpersSettings.WithMetadata,
-		FullOutput:   helpersSettings.FullOutput,
-	}, w)
-	if err != nil {
-		return err
-	}
+    fmt.Fprintln(w, "\n=== Final Conversation ===")
+    for _, msg := range manager.GetConversation() {
+        switch c := msg.Content.(type) {
+        case *conversation.ChatMessageContent:
+            fmt.Fprintf(w, "%s: %s\n", c.Role, c.Text)
+        case *conversation.ToolUseContent:
+            fmt.Fprintf(w, "Tool Call (%s): %s\n", c.Name, string(c.Input))
+        case *conversation.ToolResultContent:
+            fmt.Fprintf(w, "Tool Result (%s): %s\n", c.ToolID, c.Result)
+        default:
+            fmt.Fprintf(w, "%s: %s\n", msg.Content.ContentType(), msg.Content.String())
+        }
+    }
 
-	fmt.Println("\n=== Final Conversation ===")
-	for _, msg := range messages {
-		if chatMsg, ok := msg.Content.(*conversation.ChatMessageContent); ok {
-			fmt.Printf("%s: %s\n", chatMsg.Role, chatMsg.Text)
-		} else {
-			fmt.Printf("%s: %s\n", msg.Content.ContentType(), msg.Content.String())
-		}
-	}
-
-	return nil
-}
-
-// runWithEngine is a simplified version that uses our engine directly
-func (c *ToolUseCommand) runWithEngine(ctx context.Context, manager conversation.Manager, engine engine.Engine, runMode run.RunMode, uiSettings *run.UISettings, w io.Writer) ([]*conversation.Message, error) {
-	// Get current conversation
-	conversation_ := manager.GetConversation()
-
-	// Run inference with our tool-enabled engine
-	conv, err := engine.RunInference(ctx, conversation_)
-	if err != nil {
-		return nil, fmt.Errorf("inference failed: %w", err)
-	}
-
-	// Extract only the new messages that were added by the engine
-	newMessages := conv[len(conversation_):]
-
-	// Append the new messages to the conversation
-	if err := manager.AppendMessages(newMessages...); err != nil {
-		return nil, fmt.Errorf("failed to append messages: %w", err)
-	}
-
-	return manager.GetConversation(), nil
+    return nil
 }
 
 func main() {
-	err := clay.InitViper("pinocchio", rootCmd)
-	cobra.CheckErr(err)
+    // Standard pinocchio / glazed boilerplate
+    if err := clay.InitViper("pinocchio", rootCmd); err != nil {
+        panic(err)
+    }
 
-	helpSystem := help.NewHelpSystem()
-	help_cmd.SetupCobraRootCommand(helpSystem, rootCmd)
+    helpSystem := help.NewHelpSystem()
+    help_cmd.SetupCobraRootCommand(helpSystem, rootCmd)
 
-	commands, err := pinocchio_cmds.LoadFromYAML(commandYaml)
-	cobra.CheckErr(err)
+    // Load the generated command (weather-chat) from YAML
+    commands, err := pinocchio_cmds.LoadFromYAML(commandYaml)
+    cobra.CheckErr(err)
 
-	// Register the command as a normal cobra command and let it parse its step settings by itself
-	err = cli.AddCommandsToRootCommand(
-		rootCmd, commands, nil,
-		cli.WithCobraMiddlewaresFunc(layers2.GetCobraCommandGeppettoMiddlewares),
-		cli.WithCobraShortHelpLayers(layers.DefaultSlug, cmdlayers.GeppettoHelpersSlug),
-	)
-	cobra.CheckErr(err)
+    // Register the generated command(s) so that layers get parsed correctly
+    err = cli.AddCommandsToRootCommand(
+        rootCmd, commands, nil,
+        cli.WithCobraMiddlewaresFunc(layers2.GetCobraCommandGeppettoMiddlewares),
+        cli.WithCobraShortHelpLayers(layers.DefaultSlug, cmdlayers.GeppettoHelpersSlug),
+    )
+    cobra.CheckErr(err)
 
-	// Add the tool-use command as wrapped by NewToolUseCommand
-	if len(commands) == 1 {
-		cmd := commands[0].(*pinocchio_cmds.PinocchioCommand)
-		toolCmd := NewToolUseCommand(cmd)
-		command, err := cli.BuildCobraCommand(toolCmd)
-		cobra.CheckErr(err)
-		rootCmd.AddCommand(command)
-	}
+    // Wrap with the updated ToolUseCommand that demonstrates the new API
+    if len(commands) == 1 {
+        cmd := commands[0].(*pinocchio_cmds.PinocchioCommand)
+        toolCmd := NewToolUseCommand(cmd)
+        cobraCmd, err := cli.BuildCobraCommand(toolCmd)
+        cobra.CheckErr(err)
+        rootCmd.AddCommand(cobraCmd)
+    }
 
-	cobra.CheckErr(rootCmd.Execute())
+    cobra.CheckErr(rootCmd.Execute())
 }

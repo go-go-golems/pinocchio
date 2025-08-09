@@ -8,9 +8,9 @@ import (
 	"github.com/ThreeDotsLabs/watermill/message"
 	tea "github.com/charmbracelet/bubbletea"
 	boba_chat "github.com/go-go-golems/bobatea/pkg/chat"
-	conversation2 "github.com/go-go-golems/bobatea/pkg/chat/conversation"
-	"github.com/go-go-golems/geppetto/pkg/conversation"
-	"github.com/go-go-golems/geppetto/pkg/events"
+    conversation2 "github.com/go-go-golems/bobatea/pkg/chat/conversation"
+    "github.com/go-go-golems/geppetto/pkg/conversation"
+    "github.com/go-go-golems/geppetto/pkg/events"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 )
@@ -108,10 +108,10 @@ func StepChatForwardFunc(p *tea.Program) func(msg *message.Message) error {
 		}
 
 		eventMetadata := e.Metadata()
-		metadata := conversation2.StreamMetadata{
+        metadata := conversation2.StreamMetadata{
 			ID:            eventMetadata.ID,
 			ParentID:      eventMetadata.ParentID,
-			StepMetadata:  e.StepMetadata(),
+            StepMetadata:  e.StepMetadata(),
 			EventMetadata: &eventMetadata,
 		}
 		log.Debug().Interface("event", e).Msg("Dispatching event to UI")

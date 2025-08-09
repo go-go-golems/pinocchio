@@ -263,7 +263,7 @@ func (h *CustomChatHandler) HandleInterrupt(ctx context.Context, e *events.Event
 
 ### Event Types Reference
 
-Events are published by `chat.Step` implementations to signal different stages and outcomes of their execution. All events implement the `events.Event` interface and carry `EventMetadata` and `StepMetadata`.
+Events are published by chat engines to signal different stages and outcomes of their execution. All events implement the `events.Event` interface and carry `EventMetadata` and `events.StepMetadata`.
 
 They are typically created using constructors like `events.NewStartEvent(...)` and serialized to JSON for transport via Watermill.
 
