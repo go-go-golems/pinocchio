@@ -15,6 +15,7 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/inference/middleware"
     agentmode "github.com/go-go-golems/geppetto/pkg/inference/middleware/agentmode"
 	"github.com/go-go-golems/geppetto/pkg/inference/tools"
+    "github.com/go-go-golems/geppetto/pkg/inference/toolhelpers"
     "github.com/go-go-golems/geppetto/pkg/turns"
 	geppettolayers "github.com/go-go-golems/geppetto/pkg/layers"
 	"github.com/go-go-golems/glazed/pkg/cli"
@@ -34,6 +35,7 @@ import (
 	uipkg "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/ui"
 	storepkg "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/store"
 	eventspkg "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/xevents"
+    "github.com/google/uuid"
 )
 
 type SimpleAgentCmd struct{ *cmds.CommandDescription }
@@ -145,29 +147,37 @@ func (c *SimpleAgentCmd) RunIntoWriter(ctx context.Context, parsed *layers.Parse
 		}
 		snapshotStore = ss
 	}
-	// Create a simple session run id
-	sessionRunID := "run-session"
+    // Create a session run id
+    sessionRunID := uuid.NewString()
 	wrappedEng := middleware.NewEngineWithMiddleware(eng,
 		// stable IDs
 		func(next middleware.HandlerFunc) middleware.HandlerFunc {
 			return func(ctx context.Context, t *turns.Turn) (*turns.Turn, error) {
-				if t == nil { t = &turns.Turn{} }
-				if t.RunID == "" { t.RunID = sessionRunID }
-				if t.ID == "" { t.ID = "turn" }
+                if t == nil { t = &turns.Turn{} }
+                if t.RunID == "" { t.RunID = sessionRunID }
+                if t.ID == "" { t.ID = uuid.NewString() }
 				return next(ctx, t)
 			}
 		},
-		// snapshots
-		func(next middleware.HandlerFunc) middleware.HandlerFunc {
-			return func(ctx context.Context, t *turns.Turn) (*turns.Turn, error) {
-				_ = snapshotStore.SaveTurnSnapshot(ctx, t, "pre")
-				res, err := next(ctx, t)
-				if res != nil {
-					_ = snapshotStore.SaveTurnSnapshot(ctx, res, "post")
-				}
-				return res, err
-			}
-		},
+        // snapshots: pre_middleware, pre_inference, post_inference, post_middleware, post_tools
+        func(next middleware.HandlerFunc) middleware.HandlerFunc {
+            return func(ctx context.Context, t *turns.Turn) (*turns.Turn, error) {
+                // pre_middleware
+                _ = snapshotStore.SaveTurnSnapshot(ctx, t, "pre_middleware")
+                // inject hook for tool loop phases
+                ctx = toolhelpers.WithTurnSnapshotHook(ctx, func(hctx context.Context, ht *turns.Turn, phase string) {
+                    // Map phases from helpers directly
+                    _ = snapshotStore.SaveTurnSnapshot(hctx, ht, phase)
+                })
+                // pre_inference will be captured by hook inside tool loop
+                res, err := next(ctx, t)
+                if res != nil {
+                    // post_middleware
+                    _ = snapshotStore.SaveTurnSnapshot(ctx, res, "post_middleware")
+                }
+                return res, err
+            }
+        },
 	)
 
 	evaluator := evalpkg.NewChatEvaluator(wrappedEng, manager, registry, sink)

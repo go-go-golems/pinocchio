@@ -57,4 +57,34 @@ FROM chat_events
 WHERE tool_id IS NOT NULL AND tool_id <> ''
 GROUP BY tool_id;
 
+-- View: v_turns_with_modes
+-- Purpose: Summary per turn with run_id, mode from Turn.Data, injected mode, and last mode Info event
+CREATE VIEW IF NOT EXISTS v_turns_with_modes AS
+SELECT
+  t.run_id,
+  t.id AS turn_id,
+  MAX(CASE WHEN tk.section='data' AND tk.key='agent_mode' THEN COALESCE(tk.value_text, tk.value_json) END) AS data_mode,
+  MAX(CASE WHEN bmk.key='agentmode' AND bmk.phase='post' THEN COALESCE(bmk.value_text, bmk.value_json) END) AS injected_mode,
+  (
+    SELECT e.message FROM chat_events e
+    WHERE e.turn_id = t.id AND e.type = 'info' AND e.message LIKE 'agentmode:%'
+    ORDER BY e.id DESC LIMIT 1
+  ) AS last_mode_event
+FROM turns t
+LEFT JOIN turn_kv tk ON tk.turn_id = t.id
+LEFT JOIN block_metadata_kv bmk ON bmk.turn_id = t.id
+GROUP BY t.id;
+
+-- View: v_provider_messages
+-- Purpose: Extract user and assistant texts per turn from block_payload_kv
+CREATE VIEW IF NOT EXISTS v_provider_messages AS
+SELECT
+  t.id AS turn_id,
+  MAX(CASE WHEN b.kind=0 AND bpk.key='text' THEN COALESCE(bpk.value_text, bpk.value_json) END) AS user_text,
+  MAX(CASE WHEN b.kind=1 AND bpk.key='text' THEN COALESCE(bpk.value_text, bpk.value_json) END) AS assistant_text
+FROM turns t
+LEFT JOIN blocks b ON b.turn_id = t.id
+LEFT JOIN block_payload_kv bpk ON bpk.block_id = b.id AND bpk.turn_id = b.turn_id AND bpk.phase='post'
+GROUP BY t.id;
+
 

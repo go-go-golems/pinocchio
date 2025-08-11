@@ -147,6 +147,8 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
         meta := ev.Metadata()
         if meta.RunID != "" { m.runID = meta.RunID }
         if meta.TurnID != "" { m.turnID = meta.TurnID }
+        // Mark streaming active
+        m.isStreaming = true
 	case tea.WindowSizeMsg:
 		m.totalWidth = ev.Width
 		m.totalHeight = ev.Height
@@ -178,8 +180,15 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.sidebar, _ = m.sidebar.Update(SetSidebarSizeMsg{Width: m.rightWidth})
 		}
 		return m, nil
-	case tea.KeyMsg:
-		if ev.String() == "ctrl+g" {
+    case tea.KeyMsg:
+        // Gate REPL submissions while streaming or when tools are pending
+        if ev.String() == "enter" {
+            if m.isStreaming || m.hasPendingTools() {
+                if m.status == "" { m.status = "Busy…" }
+                return m, nil
+            }
+        }
+        if ev.String() == "ctrl+g" {
 			m.showSidebar = !m.showSidebar
 			// Recompute widths based on stored totalWidth
 			if m.showSidebar {
@@ -419,6 +428,16 @@ func (m *AppModel) addCoalescedToolLineToRepl(id string) {
     line := strings.Join(parts, "  ")
     log.Debug().Str("id", id).Str("line", line).Msg("UI: addCoalescedToolLineToRepl")
     m.repl.GetHistory().Add("[tool]", line, false)
+}
+
+// hasPendingTools returns true if there are tool entries without a final result
+func (m *AppModel) hasPendingTools() bool {
+    for _, e := range m.toolEntries {
+        if (e.ProviderCalled || e.ExecStarted) && e.Result == "" {
+            return true
+        }
+    }
+    return false
 }
 
 // safeFormView wraps huh.Form.View() to avoid panics from internal selector when options are empty
