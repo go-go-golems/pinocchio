@@ -112,15 +112,13 @@ func StepChatForwardFunc(p *tea.Program) func(msg *message.Message) error {
 			return err
 		}
 
-		eventMetadata := e.Metadata()
-		metadata := conversation2.StreamMetadata{
-			ID:            eventMetadata.ID,
-			ParentID:      eventMetadata.ParentID,
-			StepMetadata:  e.StepMetadata(),
-			EventMetadata: &eventMetadata,
-		}
+        eventMetadata := e.Metadata()
+        metadata := conversation2.StreamMetadata{
+            ID:            eventMetadata.ID,
+            EventMetadata: &eventMetadata,
+        }
 		log.Debug().Interface("event", e).Msg("Dispatching event to UI")
-		switch e_ := e.(type) {
+        switch e_ := e.(type) {
 		case *events.EventError:
 			p.Send(conversation2.StreamCompletionError{
 				StreamMetadata: metadata,
@@ -159,10 +157,10 @@ func StepChatForwardFunc(p *tea.Program) func(msg *message.Message) error {
 				Completion:     fmt.Sprintf("Result: %s", e_.ToolResult.Result),
 			})
 
-		case *events.EventPartialCompletionStart:
-			p.Send(conversation2.StreamStartMsg{
-				StreamMetadata: metadata,
-			})
+        case *events.EventPartialCompletionStart:
+            p.Send(conversation2.StreamStartMsg{
+                StreamMetadata: metadata,
+            })
 		}
 
 		return nil

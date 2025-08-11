@@ -218,11 +218,10 @@ func (s *SQLiteStore) LogEvent(ctx context.Context, ev events.Event) {
         if len(e.Data) > 0 { if b, _ := json.Marshal(e.Data); b != nil { dataJSON = string(b) } }
     }
 
-    // try to extract run/turn id from Step metadata if present
-    if ev.StepMetadata() != nil && ev.StepMetadata().Metadata != nil {
-        if v, ok := ev.StepMetadata().Metadata["run_id"].(string); ok { runID = v }
-        if v, ok := ev.StepMetadata().Metadata["turn_id"].(string); ok { turnID = v }
-    }
+    // extract run/turn id from EventMetadata
+    meta := ev.Metadata()
+    if meta.RunID != "" { runID = meta.RunID }
+    if meta.TurnID != "" { turnID = meta.TurnID }
 
     _, _ = s.db.ExecContext(ctx, `INSERT INTO chat_events(
         created_at, type, message, level, tool_name, tool_id, input, result, data_json, payload_json, run_id, turn_id

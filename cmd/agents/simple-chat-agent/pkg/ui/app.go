@@ -143,11 +143,10 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
     case *events.EventPartialCompletionStart:
-        // Try to extract run/turn from step metadata if present
-        if ev.Step_ != nil && ev.Step_.Metadata != nil {
-            if rid, ok := ev.Step_.Metadata["run_id"].(string); ok && rid != "" { m.runID = rid }
-            if tid, ok := ev.Step_.Metadata["turn_id"].(string); ok && tid != "" { m.turnID = tid }
-        }
+        // Extract run/turn from event metadata
+        meta := ev.Metadata()
+        if meta.RunID != "" { m.runID = meta.RunID }
+        if meta.TurnID != "" { m.turnID = meta.TurnID }
 	case tea.WindowSizeMsg:
 		m.totalWidth = ev.Width
 		m.totalHeight = ev.Height

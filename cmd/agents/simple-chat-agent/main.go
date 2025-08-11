@@ -136,7 +136,7 @@ func (c *SimpleAgentCmd) RunIntoWriter(ctx context.Context, parsed *layers.Parse
 	}
 
 	// Evaluator for REPL
-	// Wrap engine to persist pre/post turn snapshots
+	// Wrap engine to set stable run/turn ids and persist pre/post turn snapshots
 	var snapshotStore *storepkg.SQLiteStore
 	{
 		ss, err := storepkg.NewSQLiteStore("simple-agent.db")
@@ -145,16 +145,30 @@ func (c *SimpleAgentCmd) RunIntoWriter(ctx context.Context, parsed *layers.Parse
 		}
 		snapshotStore = ss
 	}
-	wrappedEng := middleware.NewEngineWithMiddleware(eng, func(next middleware.HandlerFunc) middleware.HandlerFunc {
-		return func(ctx context.Context, t *turns.Turn) (*turns.Turn, error) {
-			_ = snapshotStore.SaveTurnSnapshot(ctx, t, "pre")
-			res, err := next(ctx, t)
-			if res != nil {
-				_ = snapshotStore.SaveTurnSnapshot(ctx, res, "post")
+	// Create a simple session run id
+	sessionRunID := "run-session"
+	wrappedEng := middleware.NewEngineWithMiddleware(eng,
+		// stable IDs
+		func(next middleware.HandlerFunc) middleware.HandlerFunc {
+			return func(ctx context.Context, t *turns.Turn) (*turns.Turn, error) {
+				if t == nil { t = &turns.Turn{} }
+				if t.RunID == "" { t.RunID = sessionRunID }
+				if t.ID == "" { t.ID = "turn" }
+				return next(ctx, t)
 			}
-			return res, err
-		}
-	})
+		},
+		// snapshots
+		func(next middleware.HandlerFunc) middleware.HandlerFunc {
+			return func(ctx context.Context, t *turns.Turn) (*turns.Turn, error) {
+				_ = snapshotStore.SaveTurnSnapshot(ctx, t, "pre")
+				res, err := next(ctx, t)
+				if res != nil {
+					_ = snapshotStore.SaveTurnSnapshot(ctx, res, "post")
+				}
+				return res, err
+			}
+		},
+	)
 
 	evaluator := evalpkg.NewChatEvaluator(wrappedEng, manager, registry, sink)
 	replCfg := repl.DefaultConfig()
