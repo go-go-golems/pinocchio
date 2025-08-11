@@ -85,6 +85,7 @@ func NewAppModel(uiCh <-chan interface{}, replModel repl.Model, toolReqCh <-chan
         sidebar:   NewSidebarModel(),
         toolEntryIndex: map[string]int{},
         toolEntries:    []events.ToolEventEntry{},
+        currentMode:    "teacher",
 	}
 }
 
@@ -130,18 +131,24 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	switch ev := msg.(type) {
-	case *events.EventLog:
-		if ev.Message == "agentmode: user prompt inserted" {
-			if mode, ok := ev.Fields["mode"].(string); ok && mode != "" {
-				m.currentMode = mode
-			}
-		}
+    case *events.EventLog:
+        if ev.Message == "agentmode: user prompt inserted" {
+            if mode, ok := ev.Fields["mode"].(string); ok && mode != "" {
+                m.currentMode = mode
+            }
+        }
+        m.sidebar, _ = m.sidebar.Update(ev)
 	case *events.EventInfo:
-		if ev.Message == "agentmode: mode switched" {
-			if to, ok := ev.Data["to"].(string); ok && to != "" {
-				m.currentMode = to
-			}
-		}
+        if ev.Message == "agentmode: mode switched" {
+            if to, ok := ev.Data["to"].(string); ok && to != "" {
+                m.currentMode = to
+            }
+        } else if ev.Message == "Mode changed" {
+            if to, ok := ev.Data["to"].(string); ok && to != "" {
+                m.currentMode = to
+            }
+        }
+        m.sidebar, _ = m.sidebar.Update(ev)
     case *events.EventPartialCompletionStart:
         // Extract run/turn from event metadata
         meta := ev.Metadata()
