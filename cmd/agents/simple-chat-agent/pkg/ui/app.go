@@ -2,6 +2,7 @@ package ui
 
 import (
 	bspinner "github.com/charmbracelet/bubbles/spinner"
+	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
@@ -14,13 +15,19 @@ import (
 var (
 	headerStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("205"))
 	jsonStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("246"))
+	// Container style for the REPL viewport
+	replContainerStyle = lipgloss.NewStyle().
+				Border(lipgloss.RoundedBorder()).
+				BorderForeground(lipgloss.Color("240")).
+				Padding(0, 1)
 )
 
 type AppModel struct {
 	spinner  bspinner.Model
 	uiEvents <-chan interface{}
 
-	repl repl.Model
+	repl     repl.Model
+	viewport viewport.Model
 
 	// Tool-driven form integration
 	toolReqCh  <-chan toolspkg.ToolUIRequest
@@ -40,19 +47,23 @@ type AppModel struct {
 	sidebar     SidebarModel
 
 	// Layout
-	totalWidth int
-	leftWidth  int
-	rightWidth int
+	totalWidth  int
+	totalHeight int
+	leftWidth   int
+	rightWidth  int
 }
 
 func NewAppModel(uiCh <-chan interface{}, replModel repl.Model, toolReqCh <-chan toolspkg.ToolUIRequest) AppModel {
 	sp := bspinner.New()
 	sp.Spinner = bspinner.Line
 	sp.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("63")).Bold(true)
+	vp := viewport.New(0, 0)
+	vp.Style = replContainerStyle
 	return AppModel{
 		spinner:   sp,
 		uiEvents:  uiCh,
 		repl:      replModel,
+		viewport:  vp,
 		toolReqCh: toolReqCh,
 		sidebar:   NewSidebarModel(),
 	}
@@ -102,14 +113,31 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch ev := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.totalWidth = ev.Width
+		m.totalHeight = ev.Height
 		if m.showSidebar {
-			m.leftWidth = int(float64(ev.Width) * 0.8)
-			m.rightWidth = ev.Width - m.leftWidth
+			// Compute sidebar desired total width ~25% of screen, clamped
+			desiredRightTotal := int(float64(ev.Width) * 0.25)
+			if desiredRightTotal < 24 {
+				desiredRightTotal = 24
+			}
+			if desiredRightTotal > ev.Width/2 {
+				desiredRightTotal = ev.Width / 2
+			}
+			// Account for border(2) + padding(2) in sidebar style
+			m.rightWidth = maxInt(0, desiredRightTotal-4)
 		} else {
-			m.leftWidth = ev.Width
 			m.rightWidth = 0
 		}
-		m.repl.SetWidth(m.leftWidth)
+		// Left width is the remainder, but actual rendering will re-measure the right view
+		m.leftWidth = ev.Width - (m.rightWidth + 4)
+		if m.leftWidth < 0 {
+			m.leftWidth = 0
+		}
+		m.repl.SetWidth(maxInt(0, m.leftWidth-2))
+		// Leave room for header line(s)
+		m.viewport.Width = maxInt(0, m.leftWidth)
+		m.viewport.Height = maxInt(0, ev.Height-3)
+		m.viewport.SetContent(m.repl.View())
 		if m.rightWidth > 0 {
 			m.sidebar, _ = m.sidebar.Update(SetSidebarSizeMsg{Width: m.rightWidth})
 		}
@@ -119,13 +147,25 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.showSidebar = !m.showSidebar
 			// Recompute widths based on stored totalWidth
 			if m.showSidebar {
-				m.leftWidth = int(float64(m.totalWidth) * 0.8)
-				m.rightWidth = m.totalWidth - m.leftWidth
+				desiredRightTotal := int(float64(m.totalWidth) * 0.25)
+				if desiredRightTotal < 24 {
+					desiredRightTotal = 24
+				}
+				if desiredRightTotal > m.totalWidth/2 {
+					desiredRightTotal = m.totalWidth / 2
+				}
+				m.rightWidth = maxInt(0, desiredRightTotal-4)
 			} else {
-				m.leftWidth = m.totalWidth
 				m.rightWidth = 0
 			}
-			m.repl.SetWidth(m.leftWidth)
+			m.leftWidth = m.totalWidth - (m.rightWidth + 4)
+			if m.leftWidth < 0 {
+				m.leftWidth = 0
+			}
+			m.repl.SetWidth(maxInt(0, m.leftWidth-2))
+			m.viewport.Width = maxInt(0, m.leftWidth)
+			m.viewport.Height = maxInt(0, m.totalHeight-3)
+			m.viewport.SetContent(m.repl.View())
 			if m.rightWidth > 0 {
 				m.sidebar, _ = m.sidebar.Update(SetSidebarSizeMsg{Width: m.rightWidth})
 			}
@@ -181,6 +221,11 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.repl = rm
 	}
 	cmds = append(cmds, cmd)
+	// Update viewport with latest content and pass through events for scrolling
+	m.viewport.SetContent(m.repl.View())
+	var vpcmd tea.Cmd
+	m.viewport, vpcmd = m.viewport.Update(msg)
+	cmds = append(cmds, vpcmd)
 	return m, tea.Batch(append(cmds, waitForUIEvent(m.uiEvents), waitForToolReq(m.toolReqCh))...)
 }
 
@@ -193,14 +238,14 @@ func (m AppModel) View() string {
 		header = headerStyle.Render(m.status)
 		header += " " + m.spinner.View()
 		if m.live != "" {
-			return m.renderLayout(header+"\n"+jsonStyle.Render(m.live), m.repl.View())
+			return m.renderLayout(header+"\n"+jsonStyle.Render(m.live), m.viewport.View())
 		}
-		return m.renderLayout(header, m.repl.View())
+		return m.renderLayout(header, m.viewport.View())
 	}
 	if m.live != "" {
-		return m.renderLayout(jsonStyle.Render(m.live), m.repl.View())
+		return m.renderLayout(jsonStyle.Render(m.live), m.viewport.View())
 	}
-	return m.renderLayout("", m.repl.View())
+	return m.renderLayout("", m.viewport.View())
 }
 
 func (m AppModel) renderLayout(top string, main string) string {
@@ -222,4 +267,11 @@ func safeFormView(f *huh.Form) string {
 		_ = recover()
 	}()
 	return f.View()
+}
+
+func maxInt(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }

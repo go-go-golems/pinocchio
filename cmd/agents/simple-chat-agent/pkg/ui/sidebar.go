@@ -11,6 +11,10 @@ import (
 )
 
 var sidebarTitleStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("63"))
+var sidebarBoxStyle = lipgloss.NewStyle().
+	Border(lipgloss.RoundedBorder()).
+	BorderForeground(lipgloss.Color("240")).
+	Padding(0, 1)
 
 // SetSidebarSizeMsg informs the sidebar of its width
 type SetSidebarSizeMsg struct {
@@ -33,7 +37,7 @@ type SidebarModel struct {
 
 func NewSidebarModel() SidebarModel {
 	return SidebarModel{
-		width:         24,
+		width:         28,
 		computations:  make([]ComputationRecord, 0, 32),
 		compIndexByID: make(map[string]int),
 	}
@@ -84,7 +88,7 @@ func (m SidebarModel) Update(msg tea.Msg) (SidebarModel, tea.Cmd) {
 func (m SidebarModel) View() string {
 	title := sidebarTitleStyle.Render("Computations (Ctrl+G)")
 	if len(m.computations) == 0 {
-		return lipgloss.NewStyle().Width(m.width).Render(title + "\nNo computations yet")
+		return sidebarBoxStyle.Width(m.width).Render(title + "\nNo computations yet")
 	}
 	var out string
 	out += title + "\n"
@@ -97,5 +101,5 @@ func (m SidebarModel) View() string {
 		}
 		out += line + "\n"
 	}
-	return lipgloss.NewStyle().Width(m.width).Render(out)
+	return sidebarBoxStyle.Width(m.width).Render(out)
 }
