@@ -1,14 +1,15 @@
 ---
 Title: Pinocchio ChatRunner API Documentation
 Slug: pinocchio-chatrunner-api
-Short: Explains how to use the ChatRunner API to build chat interfaces using Geppetto steps and events.
+Short: Build chat interfaces with the Engine/Turn architecture and streaming events from Geppetto.
 Topics:
 - pinocchio
 - chatrunner
 - architecture
 - api
 - events
-- steps
+- engines
+- turns
 - ui
 Commands: []
 Flags: []
@@ -22,9 +23,7 @@ SectionType: GeneralTopic
 
 ## Overview
 
-The ChatRunner API provides a streamlined way to create and manage chat-based interactions in Pinocchio. It leverages Geppetto's underlying step architecture and event system to facilitate communication between backend chat logic (`chat.Step`) and frontend interfaces, particularly the Bubbletea-based terminal UI.
-
-This document outlines the API's implementation, design decisions, usage patterns, and the core Geppetto concepts it builds upon.
+The ChatRunner API provides a streamlined way to create and manage chat-based interactions in Pinocchio using Geppetto’s latest Engine/Turn architecture. Engines handle provider I/O and publish streaming events; the Bubbletea-based UI consumes those events for real-time updates. This page explains the core concepts, how to wire an engine to the UI through the event router, and how to run sessions in different modes.
 
 ## Import Paths
 
@@ -37,12 +36,15 @@ import (
     "io"
     "os"
     
-    "github.com/ThreeDotsLabs/watermill/message"
     tea "github.com/charmbracelet/bubbletea"
     bobachat "github.com/go-go-golems/bobatea/pkg/chat"
-    "github.com/go-go-golems/geppetto/pkg/conversation"
+    geppetto_conversation "github.com/go-go-golems/geppetto/pkg/conversation"
     "github.com/go-go-golems/geppetto/pkg/events"
-    "github.com/go-go-golems/geppetto/pkg/steps/ai/chat"
+    "github.com/go-go-golems/geppetto/pkg/inference/engine"
+    "github.com/go-go-golems/geppetto/pkg/inference/engine/factory"
+    "github.com/go-go-golems/geppetto/pkg/inference/middleware"
+    "github.com/go-go-golems/geppetto/pkg/turns"
+    "github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
     "github.com/go-go-golems/pinocchio/pkg/chatrunner"
     "github.com/go-go-golems/pinocchio/pkg/ui"
     "github.com/rs/zerolog/log"
@@ -50,31 +52,37 @@ import (
 )
 ```
 
-## Core Concepts: Steps, Events, and Values
+## Core Concepts: Engines, Turns, and Events
 
-The ChatRunner builds upon Geppetto's core `Step` abstraction. Understanding this is key to using the ChatRunner effectively:
+The ChatRunner now builds on Geppetto’s Engine/Turn model rather than the older chat step abstraction:
 
-- **Steps (`chat.Step`):** Represent units of work, like an AI chat turn. They take input and produce results.
-- **StepResult:** The return type of a Step's `Start` method. It manages the *value* flow, often asynchronously via channels.
-- **Publisher/Topic System:** Steps can publish events (like progress updates, partial results, or errors) to specific topics using a `message.Publisher` (provided by Watermill). This handles the *event* flow.
+- Engines (`engine.Engine`): Provider-specific clients that implement a single method:
+  ```go
+  type Engine interface {
+      RunInference(ctx context.Context, t *turns.Turn) (*turns.Turn, error)
+  }
+  ```
+- Turns (`turns.Turn`): The unit of inference. Convert to/from conversations when needed.
+- Events (Watermill): Engines publish streaming events (start/partial/final; tool-call/tool-result if configured) through sinks. The UI subscribes and renders incremental output.
 
-This dual-flow architecture (values via `StepResult`, events via pub/sub) allows:
-- Immediate feedback even for long-running steps.
-- Detailed monitoring and status reporting separate from the final result.
-- Building observable pipelines where each step's progress can be tracked.
+This separation provides:
+- Immediate feedback even for long-running operations
+- Clear boundaries between provider I/O (engine) and orchestration/UI
+- Observable pipelines where each turn’s progress can be tracked
 
-The ChatRunner API primarily orchestrates the setup required to connect a `chat.Step` to the event system and a UI (like Bubbletea) that consumes these events.
+The ChatRunner orchestrates engine creation, event routing, and UI consumption—so you can focus on conversation and settings.
 
 ## Core Components
 
 ### ChatBuilder
 
-The ChatBuilder (`chatrunner.ChatBuilder`) implements a fluent builder pattern for configuring chat sessions. It provides a clean, chainable API that guides users through the necessary configuration steps.
+The ChatBuilder (`chatrunner.ChatBuilder`) implements a fluent builder for configuring chat sessions (engine factory, settings, conversation manager, mode, and UI options).
 
 ```go
 builder := chatrunner.NewChatBuilder().
     WithManager(manager).
-    WithStepFactory(stepFactory).
+    WithEngineFactory(factory.NewStandardEngineFactory()).
+    WithSettings(stepSettings).
     WithMode(chatrunner.RunModeChat).
     WithUIOptions(bobachat.WithTitle("Echo Chat Runner")).
     WithContext(context.Background())
@@ -86,19 +94,18 @@ Key features:
 - Error accumulation during the build process
 - Sensible defaults for optional components
 
-### StepFactory Pattern
+### EngineFactory Pattern
 
-The API uses a factory function pattern (`chatrunner.StepFactory`) for creating chat steps:
+The builder expects an `engine/factory.EngineFactory` to create a provider-specific engine based on `settings.StepSettings`:
 
 ```go
-// chatrunner.StepFactory type
-type StepFactory func(publisher message.Publisher, topic string) (chat.Step, error)
+// EngineFactory interface (from geppetto)
+type EngineFactory interface {
+    CreateEngine(settings *settings.StepSettings, options ...engine.Option) (engine.Engine, error)
+}
 ```
 
-This pattern is crucial because it allows the ChatRunner to:
-1. **Control Step Instantiation:** Create the step instance when needed.
-2. **Inject Dependencies:** Provide the necessary `message.Publisher` and `topic` to the step instance via its `AddPublishedTopic` method. This ensures the step is correctly configured to publish events to the topic the ChatRunner's internal handlers (or custom handlers) are listening on.
-3. **Maintain Flexibility:** Decouples the ChatRunner from the specifics of step creation.
+This allows the ChatRunner to instantiate an engine with the right sink (for event streaming) without coupling to specific providers.
 
 ### Run Modes
 
@@ -161,14 +168,14 @@ The API supports different execution modes (defined in `chatrunner` package):
 
 ## Event Routing and Architecture
 
-The ChatRunner handles the complex task of setting up the event routing between the chat step and the consuming handlers (typically the UI).
+The ChatRunner wires an engine’s streaming events to the UI via a Watermill-backed event router.
 
-1.  **EventRouter Creation:** It creates an `events.EventRouter` internally, leveraging Watermill's pub/sub capabilities, unless an external router is provided via `WithExternalRouter`.
-2.  **Step Configuration:** It uses the provided `StepFactory` to create the `chat.Step` instance, injecting the internal router's publisher and a specific topic (e.g., "ui"). This ensures the step sends its events to the router.
-3.  **Handler Registration:** It registers handlers (like the `ui.StepChatForwardFunc` for the Bubbletea UI) to subscribe to the step's topic on the router.
-4.  **Lifecycle Management:** It manages the start and stop lifecycle of the internally created router and its handlers using `errgroup` and context cancellation.
+1.  **EventRouter Creation:** An `events.EventRouter` is created (unless provided via `WithExternalRouter`).
+2.  **Engine Creation with Sink:** A `middleware.NewWatermillSink(router.Publisher, "ui")` is passed via `engine.WithSink(...)` to the engine so it can publish start/partial/final events.
+3.  **Handler Registration:** The UI forwarding handler subscribes to the same topic and forwards events to Bubbletea.
+4.  **Lifecycle Management:** Router and handlers are run under an `errgroup` and controlled by context cancellation.
 
-This encapsulates the boilerplate required to connect a step's event stream to a consumer.
+This encapsulates the boilerplate required to connect an engine’s event stream to the UI.
 
 ## Advanced Event Handling
 
@@ -191,7 +198,8 @@ if err != nil {
 // Pass it to the builder
 builder := chatrunner.NewChatBuilder().
     WithManager(manager).
-    WithStepFactory(stepFactory).
+    WithEngineFactory(engFactory).
+    WithSettings(stepSettings).
     WithMode(chatrunner.RunModeChat).
     WithExternalRouter(router)
 ```
@@ -364,10 +372,10 @@ Register your handler with the router using the `RegisterChatEventHandler` metho
 // Create a custom handler
 handler := &CustomChatHandler{}
 
-// Register it with the router for a specific step and ID
+// Register it with the router for a specific ID
 err = router.RegisterChatEventHandler(
     context.Background(),
-    step,           // Your chat.Step instance
+    step,           // Your chat step or equivalent context
     "client-123",   // Unique identifier for this handler
     handler,        // Your ChatEventHandler implementation
 )
@@ -478,7 +486,7 @@ The API implements comprehensive error handling:
 
 ## Example Usage
 
-### Basic Chat UI
+### Basic Chat UI (Engine/Turn)
 
 ```go
 package main
@@ -487,40 +495,30 @@ import (
     "context"
     "os"
 
-    "github.com/ThreeDotsLabs/watermill/message"
     bobachat "github.com/go-go-golems/bobatea/pkg/chat"
-    "github.com/go-go-golems/geppetto/pkg/conversation"
-    "github.com/go-go-golems/geppetto/pkg/steps/ai/chat"
-    "github.com/go-go-golems/geppetto/pkg/steps/ai/chat/steps"
+    geppetto_conversation "github.com/go-go-golems/geppetto/pkg/conversation"
+    "github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
     "github.com/go-go-golems/pinocchio/pkg/chatrunner"
     "github.com/rs/zerolog/log"
 )
 
 func main() {
     // 1. Create manager
-    manager := conversation.NewManager(
-        conversation.WithMessages(
-            conversation.NewChatMessage(conversation.RoleSystem, "System Prompt"),
+    manager := geppetto_conversation.NewManager(
+        geppetto_conversation.WithMessages(
+            geppetto_conversation.NewChatMessage(geppetto_conversation.RoleSystem, "System Prompt"),
         ),
     )
 
-    // 2. Create step factory
-    stepFactory := func(publisher message.Publisher, topic string) (chat.Step, error) {
-        step := steps.NewEchoStep()
-        if publisher != nil && topic != "" {
-            // AddPublishedTopic method comes from the chat.Step interface
-            err := step.AddPublishedTopic(publisher, topic)
-            if err != nil {
-                return nil, err
-            }
-        }
-        return step, nil
-    }
+    // 2. Prepare engine factory + settings
+    engFactory := factory.NewStandardEngineFactory()
+    stepSettings := &settings.StepSettings{ /* set provider + model */ }
 
     // 3. Configure and run
     builder := chatrunner.NewChatBuilder().
         WithManager(manager).
-        WithStepFactory(stepFactory).
+        WithEngineFactory(engFactory).
+        WithSettings(stepSettings).
         WithMode(chatrunner.RunModeChat).
         WithUIOptions(bobachat.WithTitle("Echo Chat"))
 
@@ -540,7 +538,8 @@ func main() {
 ```go
 builder := chatrunner.NewChatBuilder().
     WithManager(manager).
-    WithStepFactory(stepFactory).
+    WithEngineFactory(engFactory).
+    WithSettings(stepSettings).
     WithMode(chatrunner.RunModeBlocking).
     WithOutputWriter(os.Stdout)
 ```

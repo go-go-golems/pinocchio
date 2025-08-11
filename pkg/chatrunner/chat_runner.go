@@ -6,6 +6,7 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/inference/engine"
 	"github.com/go-go-golems/geppetto/pkg/inference/engine/factory"
 	"github.com/go-go-golems/geppetto/pkg/inference/middleware"
+	"github.com/go-go-golems/geppetto/pkg/turns"
 	"io"
 	"os"
 
@@ -163,11 +164,13 @@ func (cs *ChatSession) runBlockingInternal() error {
 		return errors.Wrap(err, "failed to create engine for blocking execution")
 	}
 
-	// Get current conversation
+	// Get current conversation and seed a Turn
 	conversation_ := cs.manager.GetConversation()
+	seed := &turns.Turn{}
+	turns.AppendBlocks(seed, turns.BlocksFromConversationDelta(conversation_, 0)...)
 
-	// Run inference directly
-	conv, err := engine.RunInference(cs.ctx, conversation_)
+	// Run inference directly on the Turn
+	updatedTurn, err := engine.RunInference(cs.ctx, seed)
 	if err != nil {
 		// Don't return context cancellation errors if the context was cancelled externally
 		if errors.Is(err, context.Canceled) && cs.ctx.Err() == context.Canceled {
@@ -177,7 +180,8 @@ func (cs *ChatSession) runBlockingInternal() error {
 		return errors.Wrap(err, "inference failed")
 	}
 
-	// Extract only the new messages that were added by the engine
+	// Convert back to conversation and extract only the new messages
+	conv := turns.BuildConversationFromTurn(updatedTurn)
 	newMessages := conv[len(conversation_):]
 
 	// Append the new messages to the conversation

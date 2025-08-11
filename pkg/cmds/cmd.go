@@ -20,6 +20,7 @@ import (
 
 	"github.com/go-go-golems/geppetto/pkg/conversation"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
+	"github.com/go-go-golems/geppetto/pkg/turns"
 	glazedcmds "github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
 	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
@@ -308,14 +309,17 @@ func (g *PinocchioCommand) runEngineAndCollectMessages(ctx context.Context, rc *
 	// Get current conversation
 	conversation_ := rc.ConversationManager.GetConversation()
 
-	// Run inference
-	conv, err := engine.RunInference(ctx, conversation_)
+	// Convert to Turn and run inference
+	seed := &turns.Turn{}
+	turns.AppendBlocks(seed, turns.BlocksFromConversationDelta(conversation_, 0)...)
+	updatedTurn, err := engine.RunInference(ctx, seed)
 	if err != nil {
 		return fmt.Errorf("inference failed: %w", err)
 	}
 
 	// Extract only the new messages that were added by the engine
-	newMessages := conv[len(conversation_):]
+	newMessages := turns.BuildConversationFromTurn(updatedTurn)
+	newMessages = newMessages[len(conversation_):]
 
 	// Append the new messages to the conversation
 	if err := rc.ConversationManager.AppendMessages(newMessages...); err != nil {
