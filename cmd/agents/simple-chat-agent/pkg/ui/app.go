@@ -51,6 +51,11 @@ type AppModel struct {
     toolEntryIndex map[string]int
     toolEntries    []events.ToolEventEntry
 
+    // status bar fields
+    currentMode string
+    runID       string
+    turnID      string
+
 	// Sidebar (toggle with Ctrl+G)
 	showSidebar bool
 	sidebar     SidebarModel
@@ -125,6 +130,24 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	switch ev := msg.(type) {
+	case *events.EventLog:
+		if ev.Message == "agentmode: user prompt inserted" {
+			if mode, ok := ev.Fields["mode"].(string); ok && mode != "" {
+				m.currentMode = mode
+			}
+		}
+	case *events.EventInfo:
+		if ev.Message == "agentmode: mode switched" {
+			if to, ok := ev.Data["to"].(string); ok && to != "" {
+				m.currentMode = to
+			}
+		}
+    case *events.EventPartialCompletionStart:
+        // Try to extract run/turn from step metadata if present
+        if ev.Step_ != nil && ev.Step_.Metadata != nil {
+            if rid, ok := ev.Step_.Metadata["run_id"].(string); ok && rid != "" { m.runID = rid }
+            if tid, ok := ev.Step_.Metadata["turn_id"].(string); ok && tid != "" { m.turnID = tid }
+        }
 	case tea.WindowSizeMsg:
 		m.totalWidth = ev.Width
 		m.totalHeight = ev.Height
@@ -185,15 +208,12 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		}
-	case toolspkg.ToolUIRequest:
+    case toolspkg.ToolUIRequest:
 		m.activeForm = ev.Form
 		m.formVals = ev.Values
 		m.formReply = ev.ReplyCh
 		return m, nil
-	case *events.EventPartialCompletionStart:
-		m.isStreaming = true
-		m.status = "Streaming…"
-		return m, tea.Batch(m.spinner.Tick, waitForUIEvent(m.uiEvents))
+    // removed duplicate EventPartialCompletionStart case
 	case *events.EventPartialCompletion:
 		// append raw deltas; REPL will show final answers post-loop as well
 		m.live += ev.Delta
@@ -303,9 +323,15 @@ func (m AppModel) View() string {
 	if m.activeForm != nil {
 		return safeFormView(m.activeForm)
 	}
-	var header string
+    // Build status bar: mode / run / turn
+    var statusLeft string
+    if m.currentMode != "" { statusLeft = "mode:" + m.currentMode } else { statusLeft = "mode:?" }
+    if m.runID != "" { statusLeft += "  run:" + m.runID }
+    if m.turnID != "" { statusLeft += "  turn:" + m.turnID }
+
+    var header string
     if m.status != "" || m.isStreaming {
-        header = headerStyle.Render(m.status)
+        header = headerStyle.Render(statusLeft + "  |  " + m.status)
         header += " " + m.spinner.View()
         top := header
         if m.toolEvents != "" {
@@ -317,14 +343,15 @@ func (m AppModel) View() string {
         return m.renderLayout(top, m.viewport.View())
     }
     if m.live != "" || m.toolEvents != "" {
-        top := m.toolEvents
+        top := headerStyle.Render(statusLeft)
+        if m.toolEvents != "" { top += "\n" + m.toolEvents }
         if m.live != "" {
             if top != "" { top += "\n" }
             top += jsonStyle.Render(m.live)
         }
         return m.renderLayout(top, m.viewport.View())
     }
-    return m.renderLayout("", m.viewport.View())
+    return m.renderLayout(headerStyle.Render(statusLeft), m.viewport.View())
 }
 
 func (m AppModel) renderLayout(top string, main string) string {

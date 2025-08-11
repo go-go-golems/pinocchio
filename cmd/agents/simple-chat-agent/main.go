@@ -13,7 +13,9 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/events"
 	"github.com/go-go-golems/geppetto/pkg/inference/engine/factory"
 	"github.com/go-go-golems/geppetto/pkg/inference/middleware"
+    agentmode "github.com/go-go-golems/geppetto/pkg/inference/middleware/agentmode"
 	"github.com/go-go-golems/geppetto/pkg/inference/tools"
+    "github.com/go-go-golems/geppetto/pkg/turns"
 	geppettolayers "github.com/go-go-golems/geppetto/pkg/layers"
 	"github.com/go-go-golems/glazed/pkg/cli"
 	"github.com/go-go-golems/glazed/pkg/cmds"
@@ -30,6 +32,7 @@ import (
 	evalpkg "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/eval"
 	toolspkg "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/tools"
 	uipkg "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/ui"
+	storepkg "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/store"
 	eventspkg "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/xevents"
 )
 
@@ -100,6 +103,18 @@ func (c *SimpleAgentCmd) RunIntoWriter(ctx context.Context, parsed *layers.Parse
 		return errors.Wrap(err, "engine")
 	}
 
+    // Agent modes: scientist, teacher, coach (start in teacher mode)
+    svc := agentmode.NewStaticService([]*agentmode.AgentMode{
+        {Name: "scientist", Prompt: "You are a scientist. Think rigorously, be precise, and cite evidence when possible. Prefer structured analysis and concise conclusions. Start your responses with '[Scientific Analysis]' to indicate you are in scientist mode."},
+        {Name: "teacher", Prompt: "You are a patient teacher. Explain step by step in simple language with examples. Check understanding and build intuition. Start your responses with '[Teaching Mode]' to indicate you are in teacher mode."},
+        {Name: "coach", Prompt: "You are a supportive coach. Ask guiding questions, focus on goals, and provide actionable, motivating advice. Start your responses with '[Coaching Session]' to indicate you are in coach mode."},
+    })
+    amCfg := agentmode.DefaultConfig()
+    amCfg.DefaultMode = "teacher"
+    amCfg.InsertSystemPrompt = true
+    amCfg.InsertSwitchInstructions = true
+    eng = middleware.NewEngineWithMiddleware(eng, agentmode.NewMiddleware(svc, amCfg))
+
 	// Tools: calculator + generative UI (integrated)
 	registry := tools.NewInMemoryToolRegistry()
 	if err := toolspkg.RegisterCalculatorTool(registry); err != nil {
@@ -121,13 +136,44 @@ func (c *SimpleAgentCmd) RunIntoWriter(ctx context.Context, parsed *layers.Parse
 	}
 
 	// Evaluator for REPL
-	evaluator := evalpkg.NewChatEvaluator(eng, manager, registry, sink)
+	// Wrap engine to persist pre/post turn snapshots
+	var snapshotStore *storepkg.SQLiteStore
+	{
+		ss, err := storepkg.NewSQLiteStore("simple-agent.db")
+		if err != nil {
+			return errors.Wrap(err, "open sqlite store")
+		}
+		snapshotStore = ss
+	}
+	wrappedEng := middleware.NewEngineWithMiddleware(eng, func(next middleware.HandlerFunc) middleware.HandlerFunc {
+		return func(ctx context.Context, t *turns.Turn) (*turns.Turn, error) {
+			_ = snapshotStore.SaveTurnSnapshot(ctx, t, "pre")
+			res, err := next(ctx, t)
+			if res != nil {
+				_ = snapshotStore.SaveTurnSnapshot(ctx, res, "post")
+			}
+			return res, err
+		}
+	})
+
+	evaluator := evalpkg.NewChatEvaluator(wrappedEng, manager, registry, sink)
 	replCfg := repl.DefaultConfig()
 	replCfg.Title = "Chat REPL"
 	replModel := repl.NewModel(evaluator, replCfg)
 
 	// App model
 	app := uipkg.NewAppModel(uiCh, replModel, toolReqCh)
+
+	// Also persist chat events (tool/log/info) into sqlite when received
+	router.AddHandler("event-sql-logger", "chat", func(msg *message.Message) error {
+		defer msg.Ack()
+		e, err := events.NewEventFromJson(msg.Payload)
+		if err != nil {
+			return err
+		}
+		snapshotStore.LogEvent(ctx, e)
+		return nil
+	})
 
 	// Run router and Bubble Tea app
 	eg, groupCtx := errgroup.WithContext(ctx)
