@@ -56,6 +56,9 @@ type AppModel struct {
     runID       string
     turnID      string
 
+    // When true, scroll viewport to bottom after updating content
+    needsScrollBottom bool
+
 	// Sidebar (toggle with Ctrl+G)
 	showSidebar bool
 	sidebar     SidebarModel
@@ -229,9 +232,10 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.formReply = ev.ReplyCh
 		return m, nil
     // removed duplicate EventPartialCompletionStart case
-	case *events.EventPartialCompletion:
+    case *events.EventPartialCompletion:
 		// append raw deltas; REPL will show final answers post-loop as well
 		m.live += ev.Delta
+        m.needsScrollBottom = true
 		return m, tea.Batch(m.spinner.Tick, waitForUIEvent(m.uiEvents))
     case *events.EventToolCall:
         m.status = "Tool: " + ev.ToolCall.Name
@@ -248,6 +252,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
         entry.Name = ev.ToolCall.Name
         if ev.ToolCall.Input != "" { entry.Input = ev.ToolCall.Input }
         m.renderToolEvents()
+        m.needsScrollBottom = true
         // Do not add partial tool info into REPL; we add a coalesced line on result
         m.sidebar, _ = m.sidebar.Update(ev)
         return m, waitForUIEvent(m.uiEvents)
@@ -264,6 +269,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
         m.toolEntries[idx].ExecStarted = true
         if ev.ToolCall.Input != "" && m.toolEntries[idx].Input == "" { m.toolEntries[idx].Input = ev.ToolCall.Input }
         m.renderToolEvents()
+        m.needsScrollBottom = true
         // Do not add partial tool info into REPL; we add a coalesced line on result
         return m, waitForUIEvent(m.uiEvents)
     case *events.EventToolResult:
@@ -280,6 +286,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
         m.renderToolEvents()
         // Interleave coalesced tool info into REPL history (single line)
         m.addCoalescedToolLineToRepl(ev.ToolResult.ID)
+        m.needsScrollBottom = true
         m.sidebar, _ = m.sidebar.Update(ev)
         return m, waitForUIEvent(m.uiEvents)
     case *events.EventToolCallExecutionResult:
@@ -296,6 +303,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
         m.renderToolEvents()
         // Interleave coalesced tool info into REPL history (single line)
         m.addCoalescedToolLineToRepl(ev.ToolResult.ID)
+        m.needsScrollBottom = true
         m.sidebar, _ = m.sidebar.Update(ev)
         return m, waitForUIEvent(m.uiEvents)
 	case *events.EventFinal:
@@ -305,6 +313,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
     m.toolEntryIndex = map[string]int{}
     m.toolEntries = nil
 		m.status = ""
+        m.needsScrollBottom = true
 		return m, nil
 	case *events.EventError:
 		m.isStreaming = false
@@ -313,24 +322,49 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
     m.toolEntryIndex = map[string]int{}
     m.toolEntries = nil
 		m.status = ""
+        m.needsScrollBottom = true
 		return m, nil
+    case repl.EvaluationCompleteMsg:
+        // New REPL entry added; ensure we scroll to bottom
+        m.needsScrollBottom = true
 	}
 
 	var cmds []tea.Cmd
 	var cmd tea.Cmd
 	m.spinner, cmd = m.spinner.Update(msg)
 	cmds = append(cmds, cmd)
-	var replModel tea.Model
-	replModel, cmd = m.repl.Update(msg)
+    var replModel tea.Model
+    replModel, cmd = m.repl.Update(msg)
 	if rm, ok := replModel.(repl.Model); ok {
 		m.repl = rm
 	}
 	cmds = append(cmds, cmd)
 	// Update viewport with latest content and pass through events for scrolling
-	m.viewport.SetContent(m.repl.View())
-	var vpcmd tea.Cmd
-	m.viewport, vpcmd = m.viewport.Update(msg)
-	cmds = append(cmds, vpcmd)
+    m.viewport.SetContent(m.repl.View())
+    if m.needsScrollBottom {
+        m.viewport.GotoBottom()
+        m.needsScrollBottom = false
+    }
+    var vpcmd tea.Cmd
+    // Forward only page up/down and mouse wheel events to the viewport for scrolling
+    switch ev := msg.(type) {
+    case tea.WindowSizeMsg:
+        m.viewport, vpcmd = m.viewport.Update(msg)
+        cmds = append(cmds, vpcmd)
+    case tea.MouseMsg:
+        // Allow mouse wheel and other mouse interactions to be handled by viewport
+        m.viewport, vpcmd = m.viewport.Update(msg)
+        cmds = append(cmds, vpcmd)
+    case tea.KeyMsg:
+        k := strings.ToLower(ev.String())
+        if k == "pgup" || k == "pgdown" {
+            m.viewport, vpcmd = m.viewport.Update(msg)
+            cmds = append(cmds, vpcmd)
+        }
+        // Do not forward arrow keys/home/end to viewport; REPL handles them
+    default:
+        // Do not forward other messages to viewport to avoid stealing navigation keys
+    }
 	return m, tea.Batch(append(cmds, waitForUIEvent(m.uiEvents), waitForToolReq(m.toolReqCh))...)
 }
 

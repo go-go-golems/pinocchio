@@ -14,6 +14,7 @@ import (
 
     "github.com/go-go-golems/geppetto/pkg/turns"
     "github.com/go-go-golems/geppetto/pkg/events"
+    geptools "github.com/go-go-golems/geppetto/pkg/inference/tools"
 )
 
 type SQLiteStore struct {
@@ -144,8 +145,20 @@ func (s *SQLiteStore) SaveTurnSnapshot(ctx context.Context, t *turns.Turn, phase
             _, _ = s.db.ExecContext(ctx, "INSERT OR REPLACE INTO block_metadata_kv(block_id, turn_id, phase, key, type, value_text, value_json) VALUES(?,?,?,?,?,?,?)", bid, t.ID, phase, mk, typ, vt, vj)
         }
     }
-    // turn data KV
+    // Persist tool registry definitions as JSON, if present
+    if regAny, ok := t.Data[turns.DataKeyToolRegistry]; ok && regAny != nil {
+        if reg, ok := regAny.(geptools.ToolRegistry); ok && reg != nil {
+            defs := reg.ListTools()
+            if b, err := json.Marshal(defs); err == nil {
+                _, _ = s.db.ExecContext(ctx, "INSERT OR REPLACE INTO turn_kv(turn_id, section, key, type, value_text, value_json) VALUES(?,?,?,?,?,?)", t.ID, "data", "tool_registry", "object", "", string(b))
+            }
+        }
+    }
+    // turn data KV (skip raw registry object to avoid overwriting curated JSON)
     for k, v := range t.Data {
+        if k == turns.DataKeyToolRegistry {
+            continue
+        }
         typ, vt, vj := classifyValue(v)
         _, _ = s.db.ExecContext(ctx, "INSERT OR REPLACE INTO turn_kv(turn_id, section, key, type, value_text, value_json) VALUES(?,?,?,?,?,?)", t.ID, "data", k, typ, vt, vj)
     }
