@@ -111,6 +111,22 @@ func AddPrettyHandlers(router *events.EventRouter, w io.Writer) {
 			fmt.Fprintln(w, errorStyle.Render("Error: ")+ev.ErrorString)
 		case *events.EventInterrupt:
 			fmt.Fprintln(w, errorStyle.Render("Interrupted"))
+		case *events.EventLog:
+			lvl := ev.Level
+			if lvl == "" {
+				lvl = "info"
+			}
+			fmt.Fprintln(w, subHeaderStyle.Render(fmt.Sprintf("[%s] %s", strings.ToUpper(lvl), ev.Message)))
+			if len(ev.Fields) > 0 {
+				b, _ := json.MarshalIndent(ev.Fields, "", "  ")
+				fmt.Fprintln(w, jsonStyle.Render(string(b)))
+			}
+		case *events.EventInfo:
+			fmt.Fprintln(w, subHeaderStyle.Render(fmt.Sprintf("[i] %s", ev.Message)))
+			if len(ev.Data) > 0 {
+				b, _ := json.MarshalIndent(ev.Data, "", "  ")
+				fmt.Fprintln(w, jsonStyle.Render(string(b)))
+			}
 		}
 		return nil
 	})

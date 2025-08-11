@@ -3,8 +3,10 @@ package main
 import (
 	"context"
 	"io"
+    "strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/go-go-golems/bobatea/pkg/repl"
 	clay "github.com/go-go-golems/clay/pkg"
 	"github.com/go-go-golems/geppetto/pkg/conversation/builder"
@@ -20,6 +22,7 @@ import (
 	"github.com/go-go-golems/glazed/pkg/help"
 	help_cmd "github.com/go-go-golems/glazed/pkg/help/cmd"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
@@ -68,6 +71,27 @@ func (c *SimpleAgentCmd) RunIntoWriter(ctx context.Context, parsed *layers.Parse
 	}
 	uiCh := make(chan interface{}, 1024)
 	eventspkg.AddUIForwarder(router, uiCh)
+    // Log tool-call events and info/log events to stdout via zerolog
+    router.AddHandler("tool-logger", "chat", func(msg *message.Message) error {
+        defer msg.Ack()
+        e, err := events.NewEventFromJson(msg.Payload)
+        if err != nil {
+            return err
+        }
+        switch ev := e.(type) {
+        case *events.EventToolCall:
+            log.Info().Str("tool", ev.ToolCall.Name).Str("id", ev.ToolCall.ID).Str("input", ev.ToolCall.Input).Msg("ToolCall")
+        case *events.EventToolCallExecute:
+            log.Info().Str("tool", ev.ToolCall.Name).Str("id", ev.ToolCall.ID).Str("input", ev.ToolCall.Input).Msg("ToolExecute")
+        case *events.EventLog:
+            l := ev.Level
+            if l == "" { l = "info" }
+            log.WithLevel(parseZerologLevel(l)).Str("message", ev.Message).Fields(ev.Fields).Msg("LogEvent")
+        case *events.EventInfo:
+            log.Info().Str("message", ev.Message).Fields(ev.Data).Msg("InfoEvent")
+        }
+        return nil
+    })
 	sink := middleware.NewWatermillSink(router.Publisher, "chat")
 
 	// Engine
@@ -141,4 +165,26 @@ func main() {
 	cobra.CheckErr(err)
 	root.AddCommand(command)
 	cobra.CheckErr(root.Execute())
+}
+
+// parseZerologLevel converts a string level into zerolog.Level with a safe default
+func parseZerologLevel(s string) zerolog.Level {
+    switch strings.ToLower(s) {
+    case "trace":
+        return zerolog.TraceLevel
+    case "debug":
+        return zerolog.DebugLevel
+    case "warn", "warning":
+        return zerolog.WarnLevel
+    case "error":
+        return zerolog.ErrorLevel
+    case "fatal":
+        return zerolog.FatalLevel
+    case "panic":
+        return zerolog.PanicLevel
+    case "info":
+        fallthrough
+    default:
+        return zerolog.InfoLevel
+    }
 }

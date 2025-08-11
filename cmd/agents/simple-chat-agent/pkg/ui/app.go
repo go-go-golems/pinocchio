@@ -15,6 +15,8 @@ import (
 var (
 	headerStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("205"))
 	jsonStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("246"))
+    toolCallStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("141"))
+    toolResultStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("79"))
 	// Container style for the REPL viewport
 	replContainerStyle = lipgloss.NewStyle().
 				Border(lipgloss.RoundedBorder()).
@@ -41,6 +43,9 @@ type AppModel struct {
 
 	// Live streamed assistant output (cleared on final)
 	live string
+
+    // Tool call/result short log shown above the REPL (cleared on final)
+    toolEvents string
 
 	// Sidebar (toggle with Ctrl+G)
 	showSidebar bool
@@ -184,29 +189,66 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// append raw deltas; REPL will show final answers post-loop as well
 		m.live += ev.Delta
 		return m, tea.Batch(m.spinner.Tick, waitForUIEvent(m.uiEvents))
-	case *events.EventToolCall:
-		m.status = "Tool: " + ev.ToolCall.Name
-		m.sidebar, _ = m.sidebar.Update(ev)
-		return m, waitForUIEvent(m.uiEvents)
+    case *events.EventToolCall:
+        m.status = "Tool: " + ev.ToolCall.Name
+        // Append compact line to toolEvents
+        line := toolCallStyle.Render("→ " + ev.ToolCall.Name)
+        if ev.ToolCall.Input != "" {
+            line += " " + jsonStyle.Render(ev.ToolCall.Input)
+        }
+        if m.toolEvents != "" {
+            m.toolEvents += "\n"
+        }
+        m.toolEvents += line
+        // Also interleave into REPL history
+        rm := m.repl
+        rm.GetHistory().Add("[tool] "+ev.ToolCall.Name, ev.ToolCall.Input, false)
+        m.sidebar, _ = m.sidebar.Update(ev)
+        return m, waitForUIEvent(m.uiEvents)
 	case *events.EventToolCallExecute:
-		m.status = "Executing: " + ev.ToolCall.Name
-		return m, waitForUIEvent(m.uiEvents)
+        m.status = "Executing: " + ev.ToolCall.Name
+        line := toolCallStyle.Render("↳ exec " + ev.ToolCall.Name)
+        if ev.ToolCall.Input != "" {
+            line += " " + jsonStyle.Render(ev.ToolCall.Input)
+        }
+        if m.toolEvents != "" { m.toolEvents += "\n" }
+        m.toolEvents += line
+        // Interleave into REPL history
+        rm := m.repl
+        rm.GetHistory().Add("[tool-exec] "+ev.ToolCall.Name, ev.ToolCall.Input, false)
+        return m, waitForUIEvent(m.uiEvents)
 	case *events.EventToolResult:
-		m.status = ""
-		m.sidebar, _ = m.sidebar.Update(ev)
-		return m, waitForUIEvent(m.uiEvents)
+        m.status = ""
+        res := ev.ToolResult.Result
+        line := toolResultStyle.Render("← result ") + jsonStyle.Render(res)
+        if m.toolEvents != "" { m.toolEvents += "\n" }
+        m.toolEvents += line
+        // Interleave into REPL history
+        rm := m.repl
+        rm.GetHistory().Add("[tool-result] "+ev.ToolResult.ID, res, false)
+        m.sidebar, _ = m.sidebar.Update(ev)
+        return m, waitForUIEvent(m.uiEvents)
 	case *events.EventToolCallExecutionResult:
-		m.status = ""
-		m.sidebar, _ = m.sidebar.Update(ev)
-		return m, waitForUIEvent(m.uiEvents)
+        m.status = ""
+        res := ev.ToolResult.Result
+        line := toolResultStyle.Render("↳ exec result ") + jsonStyle.Render(res)
+        if m.toolEvents != "" { m.toolEvents += "\n" }
+        m.toolEvents += line
+        // Interleave into REPL history
+        rm := m.repl
+        rm.GetHistory().Add("[tool-exec-result] "+ev.ToolResult.ID, res, false)
+        m.sidebar, _ = m.sidebar.Update(ev)
+        return m, waitForUIEvent(m.uiEvents)
 	case *events.EventFinal:
 		m.isStreaming = false
-		m.live = ""
+        m.live = ""
+        m.toolEvents = ""
 		m.status = ""
 		return m, nil
 	case *events.EventError:
 		m.isStreaming = false
-		m.live = ""
+        m.live = ""
+        m.toolEvents = ""
 		m.status = ""
 		return m, nil
 	}
@@ -234,18 +276,27 @@ func (m AppModel) View() string {
 		return safeFormView(m.activeForm)
 	}
 	var header string
-	if m.status != "" || m.isStreaming {
-		header = headerStyle.Render(m.status)
-		header += " " + m.spinner.View()
-		if m.live != "" {
-			return m.renderLayout(header+"\n"+jsonStyle.Render(m.live), m.viewport.View())
-		}
-		return m.renderLayout(header, m.viewport.View())
-	}
-	if m.live != "" {
-		return m.renderLayout(jsonStyle.Render(m.live), m.viewport.View())
-	}
-	return m.renderLayout("", m.viewport.View())
+    if m.status != "" || m.isStreaming {
+        header = headerStyle.Render(m.status)
+        header += " " + m.spinner.View()
+        top := header
+        if m.toolEvents != "" {
+            top = top + "\n" + m.toolEvents
+        }
+        if m.live != "" {
+            return m.renderLayout(top+"\n"+jsonStyle.Render(m.live), m.viewport.View())
+        }
+        return m.renderLayout(top, m.viewport.View())
+    }
+    if m.live != "" || m.toolEvents != "" {
+        top := m.toolEvents
+        if m.live != "" {
+            if top != "" { top += "\n" }
+            top += jsonStyle.Render(m.live)
+        }
+        return m.renderLayout(top, m.viewport.View())
+    }
+    return m.renderLayout("", m.viewport.View())
 }
 
 func (m AppModel) renderLayout(top string, main string) string {
