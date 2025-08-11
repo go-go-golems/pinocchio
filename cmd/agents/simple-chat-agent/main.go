@@ -116,9 +116,49 @@ func (c *SimpleAgentCmd) RunIntoWriter(ctx context.Context, parsed *layers.Parse
     amCfg := agentmode.DefaultConfig()
     amCfg.DefaultMode = "financial_analyst"
     // Ensure a consistent system prompt at the start of the Turn
+    // Middleware to snapshot tool registry as blocks before/after engine execution,
+    // placed AFTER the system prompt to keep the system prompt first.
+    toolRegistrySnapshotMw := func(next middleware.HandlerFunc) middleware.HandlerFunc {
+        return func(ctx context.Context, t *turns.Turn) (*turns.Turn, error) {
+            if t != nil {
+                if t.Data != nil {
+                    if regAny, ok := t.Data[turns.DataKeyToolRegistry]; ok && regAny != nil {
+                        if reg, ok := regAny.(tools.ToolRegistry); ok && reg != nil {
+                            defs := reg.ListTools()
+                            turns.AppendBlock(t, turns.Block{
+                                Kind:    turns.BlockKindSystem,
+                                Role:    "tool_registry",
+                                Payload: map[string]any{"phase": "pre", "tools": defs},
+                                Metadata: map[string]any{"toolsnap": "pre", "middleware": "sqlitetool"},
+                            })
+                        }
+                    }
+                }
+            }
+            res, err := next(ctx, t)
+            if res != nil {
+                if res.Data != nil {
+                    if regAny, ok := res.Data[turns.DataKeyToolRegistry]; ok && regAny != nil {
+                        if reg, ok := regAny.(tools.ToolRegistry); ok && reg != nil {
+                            defs := reg.ListTools()
+                            turns.AppendBlock(res, turns.Block{
+                                Kind:    turns.BlockKindSystem,
+                                Role:    "tool_registry",
+                                Payload: map[string]any{"phase": "post", "tools": defs},
+                                Metadata: map[string]any{"toolsnap": "post", "middleware": "sqlitetool"},
+                            })
+                        }
+                    }
+                }
+            }
+            return res, err
+        }
+    }
+
     eng = middleware.NewEngineWithMiddleware(eng,
         middleware.NewSystemPromptMiddleware("You are a financial transaction analysis assistant. Your primary role is to analyze bank transactions and extract spending categories by examining transaction descriptions and developing regular expression patterns to automatically categorize future transactions. You can use various tools to help with data analysis and pattern development."),
         agentmode.NewMiddleware(svc, amCfg),
+        toolRegistrySnapshotMw,
     )
 
 	// Tools: calculator + generative UI (integrated)
@@ -160,48 +200,7 @@ func (c *SimpleAgentCmd) RunIntoWriter(ctx context.Context, parsed *layers.Parse
         sqlitetool.NewMiddleware(sqlitetool.Config{ DB: dbWithRegexp, MaxRows: 500 }),
     )
 
-    // Middleware to snapshot tool registry as blocks before/after engine execution
-    toolRegistrySnapshotMw := func(next middleware.HandlerFunc) middleware.HandlerFunc {
-        return func(ctx context.Context, t *turns.Turn) (*turns.Turn, error) {
-            if t != nil {
-                // Pre: append a system block with current tool registry definitions
-                if t.Data != nil {
-                    if regAny, ok := t.Data[turns.DataKeyToolRegistry]; ok && regAny != nil {
-                        if reg, ok := regAny.(tools.ToolRegistry); ok && reg != nil {
-                            defs := reg.ListTools()
-                            turns.AppendBlock(t, turns.Block{
-                                Kind:    turns.BlockKindSystem,
-                                Role:    "tool_registry",
-                                Payload: map[string]any{"phase": "pre", "tools": defs},
-                                Metadata: map[string]any{"toolsnap": "pre"},
-                            })
-                        }
-                    }
-                }
-            }
-            res, err := next(ctx, t)
-            if res != nil {
-                if res.Data != nil {
-                    if regAny, ok := res.Data[turns.DataKeyToolRegistry]; ok && regAny != nil {
-                        if reg, ok := regAny.(tools.ToolRegistry); ok && reg != nil {
-                            defs := reg.ListTools()
-                            turns.AppendBlock(res, turns.Block{
-                                Kind:    turns.BlockKindSystem,
-                                Role:    "tool_registry",
-                                Payload: map[string]any{"phase": "post", "tools": defs},
-                                Metadata: map[string]any{"toolsnap": "post"},
-                            })
-                        }
-                    }
-                }
-            }
-            return res, err
-        }
-    }
-
     wrappedEng := middleware.NewEngineWithMiddleware(eng,
-        // Capture tool registry as blocks before snapshotting phases
-        toolRegistrySnapshotMw,
 		// stable IDs
 		func(next middleware.HandlerFunc) middleware.HandlerFunc {
 			return func(ctx context.Context, t *turns.Turn) (*turns.Turn, error) {

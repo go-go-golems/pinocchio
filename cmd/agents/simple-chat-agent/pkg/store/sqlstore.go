@@ -121,19 +121,20 @@ func (s *SQLiteStore) SaveTurnSnapshot(ctx context.Context, t *turns.Turn, phase
         Data:     t.Data,
         Blocks:   make([]block, 0, len(t.Blocks)),
     }
-    for _, b := range t.Blocks {
+    for i, b := range t.Blocks {
         bid := b.ID
         if bid == "" { bid = uuid.NewString() }
         snap.Blocks = append(snap.Blocks, block{
             ID:       bid,
-            Order:    b.Order,
+            Order:    i,
             Kind:     b.Kind,
             Role:     b.Role,
             Payload:  b.Payload,
             Metadata: b.Metadata,
         })
         // upsert block row
-        _, _ = s.db.ExecContext(ctx, "INSERT OR IGNORE INTO blocks(id, turn_id, ord, kind, role, created_at) VALUES(?,?,?,?,?,?)", bid, t.ID, b.Order, int(b.Kind), b.Role, time.Now().Format(time.RFC3339Nano))
+        // ord is derived from position in slice
+        _, _ = s.db.ExecContext(ctx, "INSERT OR IGNORE INTO blocks(id, turn_id, ord, kind, role, created_at) VALUES(?,?,?,?,?,?)", bid, t.ID, i, int(b.Kind), b.Role, time.Now().Format(time.RFC3339Nano))
         // payload kv
         for pk, pv := range b.Payload {
             typ, vt, vj := classifyValue(pv)
