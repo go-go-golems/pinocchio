@@ -307,17 +307,43 @@ func showBlocks(turnID string, phase string, verbose bool, head, tail int) (stri
         }
         turnID = tid
     }
-    const q = `WITH b AS (
-      SELECT * FROM blocks WHERE turn_id = ? ORDER BY ord
-    )
-    SELECT b.id, b.ord, b.kind, b.role,
-      (SELECT value_text FROM block_payload_kv WHERE block_id=b.id AND turn_id=b.turn_id AND key='name' AND (? = '' OR phase = ?) ORDER BY rowid DESC LIMIT 1) AS tool_name,
-      (SELECT value_text FROM block_payload_kv WHERE block_id=b.id AND turn_id=b.turn_id AND key='id' AND (? = '' OR phase = ?) ORDER BY rowid DESC LIMIT 1) AS tool_id,
-      (SELECT COALESCE(value_text, value_json) FROM block_payload_kv WHERE block_id=b.id AND turn_id=b.turn_id AND key='args' AND (? = '' OR phase = ?) ORDER BY rowid DESC LIMIT 1) AS args,
-      (SELECT COALESCE(value_text, value_json) FROM block_payload_kv WHERE block_id=b.id AND turn_id=b.turn_id AND key='result' AND (? = '' OR phase = ?) ORDER BY rowid DESC LIMIT 1) AS result,
-      (SELECT COALESCE(value_text, value_json) FROM block_payload_kv WHERE block_id=b.id AND turn_id=b.turn_id AND key='text' AND (? = '' OR phase = ?) ORDER BY rowid DESC LIMIT 1) AS text
-    FROM b;`
-    rows, err := db.Query(q, turnID, phase, phase, phase, phase, phase, phase, phase, phase, phase, phase)
+    var rows *sql.Rows
+    var selectStmt string
+    if phase == "" {
+        // Default to post_inference for latest
+        phase = "post_inference"
+        selectStmt = `WITH b AS (
+          SELECT * FROM blocks WHERE turn_id = ? AND EXISTS (
+            SELECT 1 FROM block_payload_kv kv WHERE kv.block_id = blocks.id AND kv.turn_id = blocks.turn_id AND kv.phase = 'post_inference'
+          ) ORDER BY ord
+        )
+        SELECT b.id, b.ord, b.kind, b.role,
+          (SELECT value_text FROM block_payload_kv WHERE block_id=b.id AND turn_id=b.turn_id AND key='name' AND phase='post_inference' ORDER BY rowid DESC LIMIT 1) AS tool_name,
+          (SELECT value_text FROM block_payload_kv WHERE block_id=b.id AND turn_id=b.turn_id AND key='id' AND phase='post_inference' ORDER BY rowid DESC LIMIT 1) AS tool_id,
+          (SELECT COALESCE(value_text, value_json) FROM block_metadata_kv WHERE block_id=b.id AND turn_id=b.turn_id AND key='tool_call_id' AND phase='post_inference' ORDER BY rowid DESC LIMIT 1) AS meta_tool_call_id,
+          (SELECT COALESCE(value_text, value_json) FROM block_payload_kv WHERE block_id=b.id AND turn_id=b.turn_id AND key='args' AND phase='post_inference' ORDER BY rowid DESC LIMIT 1) AS args,
+          (SELECT COALESCE(value_text, value_json) FROM block_payload_kv WHERE block_id=b.id AND turn_id=b.turn_id AND key='result' AND phase='post_inference' ORDER BY rowid DESC LIMIT 1) AS result,
+          (SELECT COALESCE(value_text, value_json) FROM block_payload_kv WHERE block_id=b.id AND turn_id=b.turn_id AND key='text' AND phase='post_inference' ORDER BY rowid DESC LIMIT 1) AS text
+        FROM b;`
+        rows, err = db.Query(selectStmt, turnID)
+    } else {
+        // Only include blocks that have any payload rows in the requested phase to avoid printing empty entries
+        selectStmt = `WITH b AS (
+          SELECT * FROM blocks WHERE turn_id = ? AND EXISTS (
+            SELECT 1 FROM block_payload_kv kv WHERE kv.block_id = blocks.id AND kv.turn_id = blocks.turn_id AND kv.phase = ?
+          ) ORDER BY ord
+        )
+        SELECT b.id, b.ord, b.kind, b.role,
+          (SELECT value_text FROM block_payload_kv WHERE block_id=b.id AND turn_id=b.turn_id AND key='name' AND phase = ? ORDER BY rowid DESC LIMIT 1) AS tool_name,
+          (SELECT value_text FROM block_payload_kv WHERE block_id=b.id AND turn_id=b.turn_id AND key='id' AND phase = ? ORDER BY rowid DESC LIMIT 1) AS tool_id,
+          (SELECT COALESCE(value_text, value_json) FROM block_metadata_kv WHERE block_id=b.id AND turn_id=b.turn_id AND key='tool_call_id' AND phase = ? ORDER BY rowid DESC LIMIT 1) AS meta_tool_call_id,
+          (SELECT COALESCE(value_text, value_json) FROM block_payload_kv WHERE block_id=b.id AND turn_id=b.turn_id AND key='args' AND phase = ? ORDER BY rowid DESC LIMIT 1) AS args,
+          (SELECT COALESCE(value_text, value_json) FROM block_payload_kv WHERE block_id=b.id AND turn_id=b.turn_id AND key='result' AND phase = ? ORDER BY rowid DESC LIMIT 1) AS result,
+          (SELECT COALESCE(value_text, value_json) FROM block_payload_kv WHERE block_id=b.id AND turn_id=b.turn_id AND key='text' AND phase = ? ORDER BY rowid DESC LIMIT 1) AS text
+        FROM b;`
+        // Placeholders: turnID, phase(for EXISTS), then 6 x phase for keys/metadata
+        rows, err = db.Query(selectStmt, turnID, phase, phase, phase, phase, phase, phase, phase)
+    }
     if err != nil {
         return "", err
     }
@@ -327,6 +353,7 @@ func showBlocks(turnID string, phase string, verbose bool, head, tail int) (stri
         ord      int
         kind     int
         role     sql.NullString
+        metaToolCallID sql.NullString
         toolName sql.NullString
         toolID   sql.NullString
         args     sql.NullString
@@ -339,11 +366,11 @@ func showBlocks(turnID string, phase string, verbose bool, head, tail int) (stri
         var ord int
         var kind int
         var role sql.NullString
-        var toolName, toolID, args, result, text sql.NullString
-        if err := rows.Scan(&id, &ord, &kind, &role, &toolName, &toolID, &args, &result, &text); err != nil {
+        var metaToolCallID, toolName, toolID, args, result, text sql.NullString
+        if err := rows.Scan(&id, &ord, &kind, &role, &toolName, &toolID, &metaToolCallID, &args, &result, &text); err != nil {
             return "", err
         }
-        all = append(all, blockRow{id: id, ord: ord, kind: kind, role: role, toolName: toolName, toolID: toolID, args: args, result: result, text: text})
+        all = append(all, blockRow{id: id, ord: ord, kind: kind, role: role, metaToolCallID: metaToolCallID, toolName: toolName, toolID: toolID, args: args, result: result, text: text})
     }
     // Apply head/tail slicing
     start, end := 0, len(all)
@@ -358,6 +385,21 @@ func showBlocks(turnID string, phase string, verbose bool, head, tail int) (stri
     }
     var sb strings.Builder
     count := 0
+    // Print the SELECT statement and args used (for debugging)
+    if verbose && selectStmt != "" {
+        sb.WriteString("SELECT (blocks):\n")
+        sb.WriteString(selectStmt)
+        sb.WriteString("\n")
+        sb.WriteString("ARGS: ")
+        if phase != "" {
+            sb.WriteString(fmt.Sprintf("turnID=%s, phase=%s", turnID, phase))
+        } else {
+            // phase defaults to post_tools when empty
+            sb.WriteString(fmt.Sprintf("turnID=%s, phase=%s", turnID, "post_inference"))
+        }
+        sb.WriteString("\n\n")
+    }
+    // count already declared
     for i := start; i < end; i++ {
         r := all[i]
         count++
@@ -371,6 +413,34 @@ func showBlocks(turnID string, phase string, verbose bool, head, tail int) (stri
             }
             if r.result.Valid && r.result.String != "" {
                 parts = append(parts, "Result:\n"+indent(multilineJSON(r.result.String), 2, 10))
+            }
+        }
+        // For tool_use blocks (kind=3), show tool_call_id (metadata or payload id)
+        if r.kind == 3 {
+            tcid := ""
+            if r.metaToolCallID.Valid && r.metaToolCallID.String != "" {
+                tcid = r.metaToolCallID.String
+            } else if r.toolID.Valid {
+                tcid = r.toolID.String
+            }
+            if tcid != "" {
+                parts = append(parts, "tool_call_id: "+truncateString(tcid, 48))
+            }
+            // Also show call args even if not present on this block by looking up the matching tool_call
+            needArgs := (r.args.Valid == false) || (r.args.String == "")
+            if needArgs && tcid != "" {
+                lookupPhase := phase
+                if lookupPhase == "" { lookupPhase = "post_tools" }
+                var callArgs sql.NullString
+                const qArgs = `SELECT COALESCE(a.value_text, a.value_json) AS args
+FROM block_payload_kv a
+JOIN block_payload_kv idkv ON idkv.block_id = a.block_id AND idkv.turn_id = a.turn_id AND idkv.key='id'
+JOIN blocks b2 ON b2.id = a.block_id AND b2.turn_id = a.turn_id AND b2.kind=2
+WHERE a.turn_id = ? AND a.key='args' AND a.phase = ? AND COALESCE(idkv.value_text, idkv.value_json) = ?
+LIMIT 1`
+                if err := db.QueryRow(qArgs, turnID, lookupPhase, tcid).Scan(&callArgs); err == nil && callArgs.Valid && callArgs.String != "" {
+                    parts = append(parts, "Args:\n"+indent(multilineJSON(callArgs.String), 2, 10))
+                }
             }
         }
         if r.text.Valid && r.text.String != "" {
@@ -410,6 +480,13 @@ func showBlocks(turnID string, phase string, verbose bool, head, tail int) (stri
                     }
                     mrows.Close()
                 }
+            }
+            // Extra context: turn_id and phase
+            parts = append(parts, fmt.Sprintf("turn_id: %s", turnID))
+            if phase != "" {
+                parts = append(parts, fmt.Sprintf("phase: %s", phase))
+            } else {
+                parts = append(parts, "phase: (latest)")
             }
             if len(metaMap) > 0 {
                 parts = append(parts, "Metadata:")
@@ -635,6 +712,13 @@ func showToolDefinitions(turnID string) (string, error) {
     }
 
     // Fallback: list distinct tool names used in tool_call blocks
+    // Also print the actual SELECT used, for debugging
+    selectStmt := `WITH b AS (
+        SELECT * FROM blocks WHERE turn_id = ?
+    )
+    SELECT DISTINCT (SELECT value_text FROM block_payload_kv WHERE block_id=b.id AND turn_id=b.turn_id AND key='name' LIMIT 1) AS name
+    FROM b
+    WHERE (SELECT value_text FROM block_payload_kv WHERE block_id=b.id AND turn_id=b.turn_id AND key='name' LIMIT 1) IS NOT NULL`
     const toolsQ = `WITH b AS (
         SELECT * FROM blocks WHERE turn_id = ?
     )
@@ -660,16 +744,16 @@ func showToolDefinitions(turnID string) (string, error) {
         var regJSON sql.NullString
         _ = db.QueryRow("SELECT value_json FROM turn_kv WHERE turn_id=? AND section='data' AND key='tool_registry' LIMIT 1", turnID).Scan(&regJSON)
         if regJSON.Valid && regJSON.String != "" {
-            return "tool_registry: \n" + indent(multilineJSON(regJSON.String), 2, 10), nil
+            return "SELECT (fallback):\n" + selectStmt + "\n\n" + "tool_registry: \n" + indent(multilineJSON(regJSON.String), 2, 10), nil
         }
-        return "No tool definitions observed for this turn", nil
+        return "SELECT (fallback):\n" + selectStmt + "\n\nNo tool definitions observed for this turn", nil
     }
     title := lipgloss.NewStyle().Bold(true).Render("Tools for turn " + turnID)
     list := ""
     for i, n := range names {
         list += fmt.Sprintf("%2d. %s\n", i+1, n)
     }
-    return strings.TrimRight(title+"\n"+list, "\n"), nil
+    return strings.TrimRight("SELECT (fallback):\n"+selectStmt+"\n\n"+title+"\n"+list, "\n"), nil
 }
 
 // Formatting helpers

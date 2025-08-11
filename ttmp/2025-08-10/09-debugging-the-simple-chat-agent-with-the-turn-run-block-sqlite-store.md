@@ -17,29 +17,37 @@ The store captures both full snapshots and query-friendly key-value rows:
 - Full JSON snapshots per Turn and phase:
   - Table `turn_snapshots(turn_id, phase, created_at, data)`
   - Phases captured by the current agent wiring:
-    - `pre_middleware` (before middleware chain and inference)
-    - Tool loop phases injected via hooks (from `toolhelpers`): commonly `pre_inference`, `post_inference`, `post_tools`
-    - `post_middleware` (after middleware chain and tool execution)
+    - `pre_middleware` (before middleware chain)
+    - Tool loop phases injected via hooks (from `toolhelpers`): `pre_inference`, `post_inference`, `post_tools`
+    - `post_middleware` (after tool execution)
 
-- Normalized KV for fast filtering and joins:
+- Normalized tables for fast filtering and joins:
   - `runs` and `run_metadata_kv`
   - `turns` and `turn_kv` with `section` in (`metadata`,`data`)
-  - `blocks` and `block_payload_kv`, `block_metadata_kv` keyed by `block_id`, `turn_id`, and `phase`
+  - `blocks` and `block_payload_kv`, `block_metadata_kv` keyed by `(block_id, turn_id, phase)`
   - `chat_events` for tool/log/info events with message payloads, plus `run_id`, `turn_id`
+  - `tool_registry_snapshots(run_id, turn_id, phase, created_at, tools_json)` capturing the tool registry JSON per turn/phase (debugging aid)
 
-This dual approach lets you both reconstruct the exact Turn JSON and quickly answer targeted questions with simple SQL.
+Notes
+- All blocks have stable IDs. Constructors assign IDs, and persistence warns and generates an ID if any block is missing one, then writes it back to the Turn for stability across phases.
+- In the REPL, “latest” default for blocks is `post_inference`.
 
 ### How data is written
 
 The store is invoked from the agent main:
 
-- Snapshots middleware surrounds the engine call:
-  - See: `pinocchio/cmd/agents/simple-chat-agent/main.go` → wrapper around the engine that calls:
-    - `SaveTurnSnapshot(ctx, t, "pre")` before inference
-    - `SaveTurnSnapshot(ctx, res, "post")` after inference
+- Snapshots surround the engine call:
+  - `SaveTurnSnapshot(ctx, t, "pre_middleware")` before middleware/inference
+  - Tool loop hook inside `toolhelpers` captures `pre_inference`, `post_inference`, `post_tools`
+  - `SaveTurnSnapshot(ctx, res, "post_middleware")` after tool execution
+  - Tool registry JSON is persisted into `turn_kv(data/tool_registry)` and `tool_registry_snapshots`
 
 - Event logging handler:
-  - See: the Watermill router handler in `main.go` that calls `store.LogEvent(ctx, e)` for tool calls/results and log/info events.
+  - A Watermill router handler calls `store.LogEvent(ctx, e)` for tool calls/results and Info/Log events.
+
+- Tool execution and re-inference:
+  - The sqlite tool middleware registers the `sql_query` tool (schema + executor) in the per-turn registry but no longer executes it inline.
+  - The standard tool loop (RunToolCallingLoop) detects `tool_call` blocks, executes tools via the registry, appends `tool_use`, then triggers a new inference automatically until done.
 
 ### Quickstart: open the database
 
@@ -108,7 +116,7 @@ WHERE bl.kind IN (2,3,4); -- tool_call/tool_use/llm_text depending on enum value
 ```
 
 Notes:
-- The sqlite tool middleware executes `sql_query` and writes the tool_use `result` into block payloads. Depending on provider settings, tool result events may or may not be emitted separately in `chat_events`; prefer reading block payloads for ground truth.
+- The tool loop writes the tool_use `result` into block payloads. Depending on provider settings, tool result events may or may not be emitted separately in `chat_events`; prefer reading block payloads for ground truth.
 
 6) Verify that the sql_query tool description includes schema and prompts
 
@@ -129,6 +137,32 @@ sqlite3 pinocchio/anonymized-data.db "SELECT name FROM sqlite_master WHERE type=
 ```
 
 This aggregates the phases for each `tool_id` and shows last result.
+
+7) List tool registry snapshots for a turn
+
+```sql
+SELECT phase, created_at, json_array_length(tools_json) AS tool_count
+FROM tool_registry_snapshots
+WHERE turn_id = :turn_id
+ORDER BY id;
+```
+
+8) Inspect “latest” (post_inference) blocks for a turn with args/result/text
+
+```sql
+WITH b AS (
+  SELECT * FROM blocks WHERE turn_id = :turn_id AND EXISTS (
+    SELECT 1 FROM block_payload_kv kv WHERE kv.block_id = blocks.id AND kv.turn_id = blocks.turn_id AND kv.phase = 'post_inference'
+  ) ORDER BY ord
+)
+SELECT b.id, b.ord, b.kind, b.role,
+  (SELECT value_text FROM block_payload_kv WHERE block_id=b.id AND turn_id=b.turn_id AND key='name'   AND phase='post_inference' LIMIT 1) AS tool_name,
+  (SELECT value_text FROM block_payload_kv WHERE block_id=b.id AND turn_id=b.turn_id AND key='id'     AND phase='post_inference' LIMIT 1) AS tool_id,
+  (SELECT COALESCE(value_text, value_json) FROM block_payload_kv WHERE block_id=b.id AND turn_id=b.turn_id AND key='args'   AND phase='post_inference' LIMIT 1) AS args,
+  (SELECT COALESCE(value_text, value_json) FROM block_payload_kv WHERE block_id=b.id AND turn_id=b.turn_id AND key='result' AND phase='post_inference' LIMIT 1) AS result,
+  (SELECT COALESCE(value_text, value_json) FROM block_payload_kv WHERE block_id=b.id AND turn_id=b.turn_id AND key='text'   AND phase='post_inference' LIMIT 1) AS text
+FROM b;
+```
 
 5) Inspect provider-visible prompt text (manual join)
 
@@ -179,7 +213,8 @@ Key tables (see `schema.sql` for full DDL):
 ### Where ingestion happens in code
 
 - `SaveTurnSnapshot(ctx, t, phase)` in [`sqlstore.go`](../../cmd/agents/simple-chat-agent/pkg/store/sqlstore.go):
-  - Ensures `runs` and `turns` exist (with metadata -> KV), stores blocks and their payload/metadata KV per-phase, and writes a JSON snapshot.
+  - Ensures `runs` and `turns` exist, stores blocks and their payload/metadata KV per-phase, writes a JSON snapshot, and persists tool registry JSON both in `turn_kv` and `tool_registry_snapshots`.
+  - Warns and assigns a new UUID when encountering a block without an ID; the ID is written back to the Turn so later snapshots remain consistent.
 
 - `LogEvent(ctx, e)` in [`sqlstore.go`](../../cmd/agents/simple-chat-agent/pkg/store/sqlstore.go):
   - Serializes tool-call/execute/results and Info/Log events into `chat_events`, preserving raw payload and `run_id/turn_id` from `EventMetadata`.
@@ -188,6 +223,10 @@ Key tables (see `schema.sql` for full DDL):
 
 - Always set stable `RunID` and non-empty `TurnID` prior to inference. This ensures agent-mode persistence and unambiguous debugging.
 - Prefer the views for common questions; drop to KV joins for precise payload inspection.
+- Use the REPL `/dbg` commands for quick in-app inspection:
+  - `/dbg blocks [turn_id] [--phase PHASE] [-v] [--head N|--tail N]`
+    - Default phase is `post_inference`. With `-v` it prints the SELECT and ARGS, `turn_id`, `phase`, and shows `tool_call_id` for tool_use.
+  - `/dbg tools [turn_id]` lists tool names or prints snapshots; with fallback it shows the exact SELECT used.
 - When adding new middlewares, consider adding extra snapshot phases (e.g., `pre_inference`, `post_tools`) to refine visibility.
 
 ### Appendix: handy one-liners

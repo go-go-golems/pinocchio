@@ -12,6 +12,7 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/inference/middleware"
 	"github.com/go-go-golems/geppetto/pkg/inference/toolhelpers"
 	"github.com/go-go-golems/geppetto/pkg/inference/tools"
+    "github.com/go-go-golems/geppetto/pkg/turns"
 )
 
 // Ensure ChatEvaluator implements repl.Evaluator
@@ -22,15 +23,18 @@ type ChatEvaluator struct {
 	manager  conversation.Manager
 	registry *tools.InMemoryToolRegistry
 	sink     *middleware.WatermillSink
+
+    snapshotHook toolhelpers.SnapshotHook
 }
 
 func NewChatEvaluator(
 	eng engine.Engine,
 	manager conversation.Manager,
 	registry *tools.InMemoryToolRegistry,
-	sink *middleware.WatermillSink,
+    sink *middleware.WatermillSink,
+    hook toolhelpers.SnapshotHook,
 ) *ChatEvaluator {
-	return &ChatEvaluator{eng: eng, manager: manager, registry: registry, sink: sink}
+    return &ChatEvaluator{eng: eng, manager: manager, registry: registry, sink: sink, snapshotHook: hook}
 }
 
 func (e *ChatEvaluator) Evaluate(ctx context.Context, code string) (string, error) {
@@ -40,16 +44,24 @@ func (e *ChatEvaluator) Evaluate(ctx context.Context, code string) (string, erro
 	if err := e.manager.AppendMessages(conversation.NewChatMessage(conversation.RoleUser, code)); err != nil {
 		return "", err
 	}
-	conv := e.manager.GetConversation()
-	runCtx := events.WithEventSinks(ctx, e.sink)
-	updated, err := toolhelpers.RunToolCallingLoop(
-		runCtx, e.eng, conv, e.registry,
-		toolhelpers.NewToolConfig().WithMaxIterations(5).WithTimeout(60*time.Second),
-	)
+    conv := e.manager.GetConversation()
+    runCtx := events.WithEventSinks(ctx, e.sink)
+    if e.snapshotHook != nil {
+        runCtx = toolhelpers.WithTurnSnapshotHook(runCtx, e.snapshotHook)
+    }
+    // Build a Turn from the conversation and run the tool-calling loop on Turns
+    t := &turns.Turn{Data: map[string]any{}}
+    blocks := turns.BlocksFromConversationDelta(conv, 0)
+    turns.AppendBlocks(t, blocks...)
+    t2, err := toolhelpers.RunToolCallingLoop(
+        runCtx, e.eng, t, e.registry,
+        toolhelpers.NewToolConfig().WithMaxIterations(5).WithTimeout(60*time.Second),
+    )
 	if err != nil {
 		return "", err
 	}
-	for _, m := range updated[len(conv):] {
+    updated := turns.BuildConversationFromTurn(t2)
+    for _, m := range updated[len(conv):] {
 		if err := e.manager.AppendMessages(m); err != nil {
 			return "", err
 		}

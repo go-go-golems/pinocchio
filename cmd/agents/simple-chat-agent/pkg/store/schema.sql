@@ -105,6 +105,16 @@ CREATE TABLE IF NOT EXISTS chat_events(
   turn_id TEXT
 );
 
+-- Tool registry snapshots per turn/phase (debugging aid)
+CREATE TABLE IF NOT EXISTS tool_registry_snapshots(
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  run_id TEXT NOT NULL,
+  turn_id TEXT NOT NULL,
+  phase TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  tools_json TEXT NOT NULL
+);
+
 -- Optional prompts table read by sqlitetool middleware (if present)
 CREATE TABLE IF NOT EXISTS _prompts (
   prompt TEXT NOT NULL

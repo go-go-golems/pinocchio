@@ -123,7 +123,18 @@ func (s *SQLiteStore) SaveTurnSnapshot(ctx context.Context, t *turns.Turn, phase
     }
     for i, b := range t.Blocks {
         bid := b.ID
-        if bid == "" { bid = uuid.NewString() }
+        if bid == "" {
+            log.Warn().
+                Str("run_id", t.RunID).
+                Str("turn_id", t.ID).
+                Int("index", i).
+                Int("kind", int(b.Kind)).
+                Str("role", b.Role).
+                Msg("SaveTurnSnapshot: block without ID; generating new one")
+            bid = uuid.NewString()
+            // Persist the generated ID back onto the Turn to keep it stable across phases
+            t.Blocks[i].ID = bid
+        }
         snap.Blocks = append(snap.Blocks, block{
             ID:       bid,
             Order:    i,
@@ -152,6 +163,8 @@ func (s *SQLiteStore) SaveTurnSnapshot(ctx context.Context, t *turns.Turn, phase
             defs := reg.ListTools()
             if b, err := json.Marshal(defs); err == nil {
                 _, _ = s.db.ExecContext(ctx, "INSERT OR REPLACE INTO turn_kv(turn_id, section, key, type, value_text, value_json) VALUES(?,?,?,?,?,?)", t.ID, "data", "tool_registry", "object", "", string(b))
+                // Also record a registry snapshot row for easier retrieval
+                _, _ = s.db.ExecContext(ctx, "INSERT INTO tool_registry_snapshots(run_id, turn_id, phase, created_at, tools_json) VALUES(?,?,?,?,?)", t.RunID, t.ID, phase, time.Now().Format(time.RFC3339Nano), string(b))
             }
         }
     }
