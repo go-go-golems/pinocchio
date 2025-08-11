@@ -23,7 +23,7 @@ SectionType: GeneralTopic
 
 ## Overview
 
-The ChatRunner API provides a streamlined way to create and manage chat-based interactions in Pinocchio using Geppetto’s latest Engine/Turn architecture. Engines handle provider I/O and publish streaming events; the Bubbletea-based UI consumes those events for real-time updates. This page explains the core concepts, how to wire an engine to the UI through the event router, and how to run sessions in different modes.
+The ChatRunner API provides a streamlined way to create and manage chat-based interactions in Pinocchio using Geppetto’s latest Engine/Turn architecture. Engines handle provider I/O and publish streaming events; the Bubbletea-based UI consumes those events for real-time updates. This page explains the core concepts, how to wire an engine to the UI through the event router, and how to run sessions in different modes. It reflects the current event metadata format (RunID/TurnID on `EventMetadata`) and agent-mode logging.
 
 ## Import Paths
 
@@ -63,7 +63,7 @@ The ChatRunner now builds on Geppetto’s Engine/Turn model rather than the olde
   }
   ```
 - Turns (`turns.Turn`): The unit of inference. Convert to/from conversations when needed.
-- Events (Watermill): Engines publish streaming events (start/partial/final; tool-call/tool-result if configured) through sinks. The UI subscribes and renders incremental output.
+- Events (Watermill): Engines publish streaming events (start/partial/final; tool-call/tool-result if configured) through sinks. Middlewares/tools may also publish `log`/`info` events (e.g., agent-mode insertions/switches). The UI subscribes and renders incremental output.
 
 This separation provides:
 - Immediate feedback even for long-running operations
@@ -271,9 +271,9 @@ func (h *CustomChatHandler) HandleInterrupt(ctx context.Context, e *events.Event
 
 ### Event Types Reference
 
-Events are published by chat engines to signal different stages and outcomes of their execution. All events implement the `events.Event` interface and carry `EventMetadata` and `events.StepMetadata`.
+Events are published by chat engines to signal different stages and outcomes of their execution. All events implement the `events.Event` interface and carry `EventMetadata`.
 
-They are typically created using constructors like `events.NewStartEvent(...)` and serialized to JSON for transport via Watermill.
+They are typically created using constructors like `events.NewStartEvent(...)` and serialized to JSON for transport via Watermill. `EventMetadata` includes `RunID` and `TurnID` (correlation identifiers), engine info, usage and optional provider `Extra` context.
 
 1.  **`events.EventTypeStart` (`*events.EventPartialCompletionStart`)**: Signals the beginning of a step's execution, specifically one that might produce partial completions.
     ```go

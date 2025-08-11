@@ -14,6 +14,7 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/inference/engine/factory"
 	"github.com/go-go-golems/geppetto/pkg/inference/middleware"
     agentmode "github.com/go-go-golems/geppetto/pkg/inference/middleware/agentmode"
+    sqlitetool "github.com/go-go-golems/geppetto/pkg/inference/middleware/sqlitetool"
 	"github.com/go-go-golems/geppetto/pkg/inference/tools"
     "github.com/go-go-golems/geppetto/pkg/inference/toolhelpers"
     "github.com/go-go-golems/geppetto/pkg/turns"
@@ -36,6 +37,7 @@ import (
 	storepkg "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/store"
 	eventspkg "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/xevents"
     "github.com/google/uuid"
+    sqlite_regexp "github.com/go-go-golems/go-sqlite-regexp"
 )
 
 type SimpleAgentCmd struct{ *cmds.CommandDescription }
@@ -105,17 +107,19 @@ func (c *SimpleAgentCmd) RunIntoWriter(ctx context.Context, parsed *layers.Parse
 		return errors.Wrap(err, "engine")
 	}
 
-    // Agent modes: scientist, teacher, coach (start in teacher mode)
+    // Agent modes for financial analysis and regex design/review
     svc := agentmode.NewStaticService([]*agentmode.AgentMode{
-        {Name: "scientist", Prompt: "You are a scientist. Think rigorously, be precise, and cite evidence when possible. Prefer structured analysis and concise conclusions. Start your responses with '[Scientific Analysis]' to indicate you are in scientist mode."},
-        {Name: "teacher", Prompt: "You are a patient teacher. Explain step by step in simple language with examples. Check understanding and build intuition. Start your responses with '[Teaching Mode]' to indicate you are in teacher mode."},
-        {Name: "coach", Prompt: "You are a supportive coach. Ask guiding questions, focus on goals, and provide actionable, motivating advice. Start your responses with '[Coaching Session]' to indicate you are in coach mode."},
+        {Name: "financial_analyst", Prompt: "You are a financial transaction analyst. Your role is to examine transaction data to identify spending patterns, uncover common merchant patterns in descriptions, and discover potential category groupings. Use SQL queries to explore transaction coverage, identify outliers, and find candidates for automatic categorization. Focus on analysis and discovery - do not perform any writes in this mode. Always propose changes with verification queries and explain your reasoning."},
+        {Name: "category_regexp_designer", Prompt: "You are a regex pattern designer for transaction categorization. Your job is to create precise regular expressions that match transaction descriptions and automatically assign them to appropriate spending categories. Design minimal, efficient pattern sets that avoid false positives. Always verify your patterns with SQL COUNT(*) queries and sample previews before persisting them with INSERT/UPDATE statements. Focus on accuracy over coverage - it's better to catch fewer transactions correctly than to misclassify many."},
+        {Name: "category_regexp_reviewer", Prompt: "You are a pattern review specialist for transaction categorization systems. Your role is to evaluate proposed regex patterns and manual category overrides for accuracy and potential issues. Identify risks such as overmatching (false positives) and undermatching (missed transactions). Suggest improvements to patterns and explain the reasoning behind your recommendations. You are in review-only mode - do not perform any database writes or modifications."},
     })
     amCfg := agentmode.DefaultConfig()
-    amCfg.DefaultMode = "teacher"
-    amCfg.InsertSystemPrompt = true
-    amCfg.InsertSwitchInstructions = true
-    eng = middleware.NewEngineWithMiddleware(eng, agentmode.NewMiddleware(svc, amCfg))
+    amCfg.DefaultMode = "financial_analyst"
+    // Ensure a consistent system prompt at the start of the Turn
+    eng = middleware.NewEngineWithMiddleware(eng,
+        middleware.NewSystemPromptMiddleware("You are a helpful assistant. You can use tools."),
+        agentmode.NewMiddleware(svc, amCfg),
+    )
 
 	// Tools: calculator + generative UI (integrated)
 	registry := tools.NewInMemoryToolRegistry()
@@ -130,8 +134,8 @@ func (c *SimpleAgentCmd) RunIntoWriter(ctx context.Context, parsed *layers.Parse
 
 	// Tools are provided per Turn via registry (handled in evaluator); no engine-level configuration needed
 
-	// Conversation manager
-	mb := builder.NewManagerBuilder().WithSystemPrompt("You are a helpful assistant. You can use tools.")
+    // Conversation manager (system prompt handled by middleware)
+    mb := builder.NewManagerBuilder()
 	manager, err := mb.Build()
 	if err != nil {
 		return errors.Wrap(err, "build conversation")
@@ -149,7 +153,14 @@ func (c *SimpleAgentCmd) RunIntoWriter(ctx context.Context, parsed *layers.Parse
 	}
     // Create a session run id
     sessionRunID := uuid.NewString()
-	wrappedEng := middleware.NewEngineWithMiddleware(eng,
+    // Add RW SQLite tool middleware with REGEXP and a Turn.Data DSN fallback
+    // Open DB with REGEXP and build middleware that advertises `sql_query` and executes queries
+    dbWithRegexp, _ := sqlite_regexp.OpenWithRegexp("anonymized-data.db")
+    eng = middleware.NewEngineWithMiddleware(eng,
+        sqlitetool.NewMiddleware(sqlitetool.Config{ DB: dbWithRegexp, MaxRows: 500 }),
+    )
+
+    wrappedEng := middleware.NewEngineWithMiddleware(eng,
 		// stable IDs
 		func(next middleware.HandlerFunc) middleware.HandlerFunc {
 			return func(ctx context.Context, t *turns.Turn) (*turns.Turn, error) {
@@ -180,7 +191,9 @@ func (c *SimpleAgentCmd) RunIntoWriter(ctx context.Context, parsed *layers.Parse
         },
 	)
 
-	evaluator := evalpkg.NewChatEvaluator(wrappedEng, manager, registry, sink)
+    evaluator := evalpkg.NewChatEvaluator(wrappedEng, manager, registry, sink)
+    // Ensure Turn.Data has DSN to allow the middleware to open when needed; DB provided above already handles REGEXP
+    _ = evaluator // evaluator will pass registry/turn through toolhelpers; DSN is taken from sqlitetool.Config DB
 	replCfg := repl.DefaultConfig()
 	replCfg.Title = "Chat REPL"
 	replModel := repl.NewModel(evaluator, replCfg)

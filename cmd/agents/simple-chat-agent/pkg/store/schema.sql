@@ -105,6 +105,11 @@ CREATE TABLE IF NOT EXISTS chat_events(
   turn_id TEXT
 );
 
+-- Optional prompts table read by sqlitetool middleware (if present)
+CREATE TABLE IF NOT EXISTS _prompts (
+  prompt TEXT NOT NULL
+);
+
 -- Helpful indexes
 CREATE INDEX IF NOT EXISTS idx_turn_kv_key ON turn_kv(turn_id, section, key);
 CREATE INDEX IF NOT EXISTS idx_bpk_key ON block_payload_kv(turn_id, phase, key);
