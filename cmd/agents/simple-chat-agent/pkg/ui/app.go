@@ -10,6 +10,8 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/events"
 	toolspkg "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/tools"
 	uhohdsl "github.com/go-go-golems/uhoh/pkg"
+	"github.com/rs/zerolog/log"
+	"strings"
 )
 
 var (
@@ -44,8 +46,10 @@ type AppModel struct {
 	// Live streamed assistant output (cleared on final)
 	live string
 
-    // Tool call/result short log shown above the REPL (cleared on final)
+    // Tool call/result compact log shown above the REPL (cleared on final)
     toolEvents string
+    toolEntryIndex map[string]int
+    toolEntries    []events.ToolEventEntry
 
 	// Sidebar (toggle with Ctrl+G)
 	showSidebar bool
@@ -58,19 +62,24 @@ type AppModel struct {
 	rightWidth  int
 }
 
+// ToolEventEntry aggregates provider call, local exec, and exec result by tool call ID
+// Deprecated local struct replaced by events.ToolEventEntry; keep type alias if needed in future
+
 func NewAppModel(uiCh <-chan interface{}, replModel repl.Model, toolReqCh <-chan toolspkg.ToolUIRequest) AppModel {
 	sp := bspinner.New()
 	sp.Spinner = bspinner.Line
 	sp.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("63")).Bold(true)
 	vp := viewport.New(0, 0)
 	vp.Style = replContainerStyle
-	return AppModel{
+    return AppModel{
 		spinner:   sp,
 		uiEvents:  uiCh,
 		repl:      replModel,
 		viewport:  vp,
 		toolReqCh: toolReqCh,
-		sidebar:   NewSidebarModel(),
+        sidebar:   NewSidebarModel(),
+        toolEntryIndex: map[string]int{},
+        toolEntries:    []events.ToolEventEntry{},
 	}
 }
 
@@ -191,64 +200,83 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(m.spinner.Tick, waitForUIEvent(m.uiEvents))
     case *events.EventToolCall:
         m.status = "Tool: " + ev.ToolCall.Name
-        // Append compact line to toolEvents
-        line := toolCallStyle.Render("→ " + ev.ToolCall.Name)
-        if ev.ToolCall.Input != "" {
-            line += " " + jsonStyle.Render(ev.ToolCall.Input)
+        // Aggregate into single entry per ID
+        log.Debug().Str("id", ev.ToolCall.ID).Str("name", ev.ToolCall.Name).Msg("UI: EventToolCall")
+        idx, found := m.toolEntryIndex[ev.ToolCall.ID]
+        if !found {
+            idx = len(m.toolEntries)
+            m.toolEntryIndex[ev.ToolCall.ID] = idx
+            m.toolEntries = append(m.toolEntries, events.ToolEventEntry{ID: ev.ToolCall.ID})
         }
-        if m.toolEvents != "" {
-            m.toolEvents += "\n"
-        }
-        m.toolEvents += line
-        // Also interleave into REPL history
-        rm := m.repl
-        rm.GetHistory().Add("[tool] "+ev.ToolCall.Name, ev.ToolCall.Input, false)
+        entry := &m.toolEntries[idx]
+        entry.ProviderCalled = true
+        entry.Name = ev.ToolCall.Name
+        if ev.ToolCall.Input != "" { entry.Input = ev.ToolCall.Input }
+        m.renderToolEvents()
+        // Do not add partial tool info into REPL; we add a coalesced line on result
         m.sidebar, _ = m.sidebar.Update(ev)
         return m, waitForUIEvent(m.uiEvents)
-	case *events.EventToolCallExecute:
+    case *events.EventToolCallExecute:
         m.status = "Executing: " + ev.ToolCall.Name
-        line := toolCallStyle.Render("↳ exec " + ev.ToolCall.Name)
-        if ev.ToolCall.Input != "" {
-            line += " " + jsonStyle.Render(ev.ToolCall.Input)
+        // Aggregate into entry
+        log.Debug().Str("id", ev.ToolCall.ID).Str("name", ev.ToolCall.Name).Msg("UI: EventToolCallExecute")
+        idx, ok := m.toolEntryIndex[ev.ToolCall.ID]
+        if !ok {
+            idx = len(m.toolEntries)
+            m.toolEntryIndex[ev.ToolCall.ID] = idx
+            m.toolEntries = append(m.toolEntries, events.ToolEventEntry{ID: ev.ToolCall.ID, Name: ev.ToolCall.Name})
         }
-        if m.toolEvents != "" { m.toolEvents += "\n" }
-        m.toolEvents += line
-        // Interleave into REPL history
-        rm := m.repl
-        rm.GetHistory().Add("[tool-exec] "+ev.ToolCall.Name, ev.ToolCall.Input, false)
+        m.toolEntries[idx].ExecStarted = true
+        if ev.ToolCall.Input != "" && m.toolEntries[idx].Input == "" { m.toolEntries[idx].Input = ev.ToolCall.Input }
+        m.renderToolEvents()
+        // Do not add partial tool info into REPL; we add a coalesced line on result
         return m, waitForUIEvent(m.uiEvents)
-	case *events.EventToolResult:
+    case *events.EventToolResult:
         m.status = ""
         res := ev.ToolResult.Result
-        line := toolResultStyle.Render("← result ") + jsonStyle.Render(res)
-        if m.toolEvents != "" { m.toolEvents += "\n" }
-        m.toolEvents += line
-        // Interleave into REPL history
-        rm := m.repl
-        rm.GetHistory().Add("[tool-result] "+ev.ToolResult.ID, res, false)
+        log.Debug().Str("id", ev.ToolResult.ID).Int("entries", len(m.toolEntries)).Msg("UI: EventToolResult")
+        idx, ok := m.toolEntryIndex[ev.ToolResult.ID]
+        if !ok {
+            idx = len(m.toolEntries)
+            m.toolEntryIndex[ev.ToolResult.ID] = idx
+            m.toolEntries = append(m.toolEntries, events.ToolEventEntry{ID: ev.ToolResult.ID})
+        }
+        m.toolEntries[idx].Result = res
+        m.renderToolEvents()
+        // Interleave coalesced tool info into REPL history (single line)
+        m.addCoalescedToolLineToRepl(ev.ToolResult.ID)
         m.sidebar, _ = m.sidebar.Update(ev)
         return m, waitForUIEvent(m.uiEvents)
-	case *events.EventToolCallExecutionResult:
+    case *events.EventToolCallExecutionResult:
         m.status = ""
         res := ev.ToolResult.Result
-        line := toolResultStyle.Render("↳ exec result ") + jsonStyle.Render(res)
-        if m.toolEvents != "" { m.toolEvents += "\n" }
-        m.toolEvents += line
-        // Interleave into REPL history
-        rm := m.repl
-        rm.GetHistory().Add("[tool-exec-result] "+ev.ToolResult.ID, res, false)
+        log.Debug().Str("id", ev.ToolResult.ID).Int("entries", len(m.toolEntries)).Msg("UI: EventToolCallExecutionResult")
+        idx, ok := m.toolEntryIndex[ev.ToolResult.ID]
+        if !ok {
+            idx = len(m.toolEntries)
+            m.toolEntryIndex[ev.ToolResult.ID] = idx
+            m.toolEntries = append(m.toolEntries, events.ToolEventEntry{ID: ev.ToolResult.ID})
+        }
+        m.toolEntries[idx].Result = res
+        m.renderToolEvents()
+        // Interleave coalesced tool info into REPL history (single line)
+        m.addCoalescedToolLineToRepl(ev.ToolResult.ID)
         m.sidebar, _ = m.sidebar.Update(ev)
         return m, waitForUIEvent(m.uiEvents)
 	case *events.EventFinal:
 		m.isStreaming = false
         m.live = ""
-        m.toolEvents = ""
+    m.toolEvents = ""
+    m.toolEntryIndex = map[string]int{}
+    m.toolEntries = nil
 		m.status = ""
 		return m, nil
 	case *events.EventError:
 		m.isStreaming = false
         m.live = ""
-        m.toolEvents = ""
+    m.toolEvents = ""
+    m.toolEntryIndex = map[string]int{}
+    m.toolEntries = nil
 		m.status = ""
 		return m, nil
 	}
@@ -310,6 +338,61 @@ func (m AppModel) renderLayout(top string, main string) string {
 	leftView := lipgloss.NewStyle().Width(m.leftWidth).Render(left)
 	rightView := m.sidebar.View()
 	return lipgloss.JoinHorizontal(lipgloss.Top, leftView, rightView)
+}
+
+// renderToolEvents composes a compact, single-line-per-call view across provider call, local exec, and results.
+func (m *AppModel) renderToolEvents() {
+    if len(m.toolEntries) == 0 {
+        m.toolEvents = ""
+        return
+    }
+    log.Debug().Int("entries", len(m.toolEntries)).Msg("UI: renderToolEvents")
+    var out []string
+    for _, e := range m.toolEntries {
+        if e.Name == "" && e.ID == "" { continue }
+        name := e.Name
+        if name == "" { name = e.ID }
+        parts := []string{}
+        if e.ProviderCalled {
+            parts = append(parts, toolCallStyle.Render("→ "+name))
+        }
+        if e.ExecStarted {
+            parts = append(parts, toolCallStyle.Render("↳ exec"))
+        }
+        if e.Result != "" {
+            parts = append(parts, toolResultStyle.Render("← ")+jsonStyle.Render(e.Result))
+        }
+        if e.Input != "" {
+            parts = append(parts, jsonStyle.Render(e.Input))
+        }
+        out = append(out, strings.Join(parts, "  "))
+    }
+    m.toolEvents = strings.Join(out, "\n")
+}
+
+// addCoalescedToolLineToRepl pushes the aggregated tool entry for the given ID into the REPL history.
+func (m *AppModel) addCoalescedToolLineToRepl(id string) {
+    idx, ok := m.toolEntryIndex[id]
+    if !ok || idx < 0 || idx >= len(m.toolEntries) {
+        log.Debug().Str("id", id).Msg("UI: addCoalescedToolLineToRepl missing entry")
+        return
+    }
+    e := m.toolEntries[idx]
+    name := e.Name
+    if name == "" { name = e.ID }
+    parts := []string{"→ " + name}
+    if e.ExecStarted {
+        parts = append(parts, "↳ exec")
+    }
+    if e.Result != "" {
+        parts = append(parts, "← "+e.Result)
+    }
+    if e.Input != "" {
+        parts = append(parts, e.Input)
+    }
+    line := strings.Join(parts, "  ")
+    log.Debug().Str("id", id).Str("line", line).Msg("UI: addCoalescedToolLineToRepl")
+    m.repl.GetHistory().Add("[tool]", line, false)
 }
 
 // safeFormView wraps huh.Form.View() to avoid panics from internal selector when options are empty
