@@ -7,7 +7,6 @@ import (
 	"io"
 	"os"
 	"strings"
-    "time"
 
 	"github.com/go-go-golems/geppetto/pkg/inference/engine"
 	"github.com/go-go-golems/geppetto/pkg/inference/engine/factory"
@@ -34,6 +33,21 @@ import (
 	"github.com/tcnksm/go-input"
 	"golang.org/x/sync/errgroup"
 )
+// buildInitialTurn constructs a Turn from system prompt, pre-seeded messages, and an optional user prompt
+func buildInitialTurn(systemPrompt string, msgs []*conversation.Message, userPrompt string) *turns.Turn {
+    t := &turns.Turn{}
+    if strings.TrimSpace(systemPrompt) != "" {
+        turns.AppendBlock(t, turns.NewSystemTextBlock(systemPrompt))
+    }
+    // convert legacy messages into blocks
+    if len(msgs) > 0 {
+        turns.AppendBlocks(t, turns.BlocksFromConversationDelta(conversation.Conversation(msgs), 0)...)
+    }
+    if strings.TrimSpace(userPrompt) != "" {
+        turns.AppendBlock(t, turns.NewUserTextBlock(userPrompt))
+    }
+    return t
+}
 
 type PinocchioCommandDescription struct {
 	Name      string                            `yaml:"name"`
@@ -213,14 +227,14 @@ func (g *PinocchioCommand) RunWithOptions(ctx context.Context, options ...run.Ru
 		}
 	}
 
-	// Verify we have a manager
-	if runCtx.ConversationManager == nil {
-		return nil, errors.New("no conversation manager provided")
-	}
+    // ConversationManager optional during migration; prefer Turn-based flows
 
-	if runCtx.UISettings != nil && runCtx.UISettings.PrintPrompt {
-		return runCtx.ConversationManager.GetConversation(), nil
-	}
+    if runCtx.UISettings != nil && runCtx.UISettings.PrintPrompt {
+        // Build a preview conversation from initial Turn
+        t := buildInitialTurn(g.SystemPrompt, g.Messages, g.Prompt)
+        conv := turns.BuildConversationFromTurn(t)
+        return conv, nil
+    }
 
 	// Create engine factory if not provided
 	if runCtx.EngineFactory == nil {
@@ -244,8 +258,8 @@ func (g *PinocchioCommand) RunWithOptions(ctx context.Context, options ...run.Ru
 
 // runBlocking handles blocking execution mode using Engine directly
 func (g *PinocchioCommand) runBlocking(ctx context.Context, rc *run.RunContext) ([]*conversation.Message, error) {
-	// Create engine instance options
-	var options []engine.Option
+    // Create engine instance options
+    var options []engine.Option
 
 	// If we have a router, set up watermill sink for event publishing
 	if rc.Router != nil {
@@ -289,8 +303,8 @@ func (g *PinocchioCommand) runBlocking(ctx context.Context, rc *run.RunContext) 
 			return nil, err
 		}
 	} else {
-		// No router, just run the engine directly
-		err := g.runEngineAndCollectMessages(ctx, rc, options)
+        // No router, just run the engine directly using Turns
+        err := g.runEngineAndCollectMessages(ctx, rc, options)
 		if err != nil {
 			return nil, err
 		}
@@ -301,31 +315,26 @@ func (g *PinocchioCommand) runBlocking(ctx context.Context, rc *run.RunContext) 
 
 // runEngineAndCollectMessages handles the actual engine execution and message collection
 func (g *PinocchioCommand) runEngineAndCollectMessages(ctx context.Context, rc *run.RunContext, options []engine.Option) error {
-	// Create engine with options
-	engine, err := rc.EngineFactory.CreateEngine(rc.StepSettings, options...)
+    // Create engine with options
+    engine, err := rc.EngineFactory.CreateEngine(rc.StepSettings, options...)
 	if err != nil {
 		return fmt.Errorf("failed to create engine: %w", err)
 	}
 
-	// Get current conversation
-	conversation_ := rc.ConversationManager.GetConversation()
-
-	// Convert to Turn and run inference
-	seed := &turns.Turn{}
-	turns.AppendBlocks(seed, turns.BlocksFromConversationDelta(conversation_, 0)...)
+    // Build seed Turn directly from system + messages + prompt
+    seed := buildInitialTurn(g.SystemPrompt, g.Messages, g.Prompt)
 	updatedTurn, err := engine.RunInference(ctx, seed)
 	if err != nil {
 		return fmt.Errorf("inference failed: %w", err)
 	}
-
-	// Extract only the new messages that were added by the engine
-	newMessages := turns.BuildConversationFromTurn(updatedTurn)
-	newMessages = newMessages[len(conversation_):]
-
-	// Append the new messages to the conversation
-	if err := rc.ConversationManager.AppendMessages(newMessages...); err != nil {
-		return fmt.Errorf("failed to append messages: %w", err)
-	}
+    // Convert final Turn to conversation for output
+    finalConv := turns.BuildConversationFromTurn(updatedTurn)
+    // Replace any manager state if present
+    if rc.ConversationManager != nil {
+        for _, m := range finalConv {
+            _ = rc.ConversationManager.AppendMessages(m)
+        }
+    }
 
 	return nil
 }
@@ -350,7 +359,7 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) ([]*
 	// Enable streaming for the UI
 	rc.StepSettings.Chat.Stream = true
 
-	// Create engine options with watermill sink for UI events
+        // Create engine options with watermill sink for UI events
 	uiSink := middleware.NewWatermillSink(rc.Router.Publisher, "ui")
 	engineOptions := []engine.Option{engine.WithSink(uiSink)}
 
@@ -431,10 +440,10 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) ([]*
 			}
 		}
 
-		// Create EngineBackend
+        // Create EngineBackend
 		var backend bobatea_chat.Backend
 		log.Debug().Msg("Using EngineBackend for UI")
-		engine, err := rc.EngineFactory.CreateEngine(rc.StepSettings, engineOptions...)
+        engine, err := rc.EngineFactory.CreateEngine(rc.StepSettings, engineOptions...)
 		if err != nil {
 			return err
 		}
@@ -456,39 +465,39 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) ([]*
 			options...,
 		)
 
-		rc.Router.AddHandler("ui", "ui", ui.StepChatForwardFunc(p))
-		err = rc.Router.RunHandlers(ctx)
-		if err != nil {
-			return err
-		}
+        rc.Router.AddHandler("ui", "ui", ui.StepChatForwardFunc(p))
+        err = rc.Router.RunHandlers(ctx)
+        if err != nil {
+            return err
+        }
 
-		// If auto-start is enabled, pre-fill the prompt and submit shortly after the program starts
-		if autoStartBackend {
-			go func() {
-				// small delay to ensure p.Run has started and is receiving messages
-				time.Sleep(100 * time.Millisecond)
-				promptText := strings.TrimSpace(g.Prompt)
-				if promptText == "" {
-					conv := rc.ConversationManager.GetConversation()
-					for i := len(conv) - 1; i >= 0; i-- {
-						if c, ok := conv[i].Content.(*conversation.ChatMessageContent); ok {
-							// Use the last user message content as prompt
-							promptText = strings.TrimSpace(c.View())
-							if promptText != "" {
-								break
-							}
-						}
-					}
-				}
-				if promptText != "" {
-					log.Debug().Int("len", len(promptText)).Msg("Auto-start: submitting rendered prompt")
-					p.Send(bobatea_chat.ReplaceInputTextMsg{Text: promptText})
-					p.Send(bobatea_chat.SubmitMessageMsg{})
-				} else {
-					log.Debug().Msg("Auto-start enabled, but no prompt text found; skipping submit")
-				}
-			}()
-		}
+        // Always seed backend Turn after router is running so the timeline shows prior context
+        go func() {
+            <-rc.Router.Running()
+            if be, ok := backend.(*ui.EngineBackend); ok {
+                if rc.ConversationManager != nil {
+                    be.SetSeedFromConversation(rc.ConversationManager.GetConversation())
+                } else {
+                    seed := buildInitialTurn(g.SystemPrompt, g.Messages, "")
+                    be.SetSeedTurn(seed)
+                }
+            }
+        }()
+
+        // If auto-start is enabled, pre-fill the prompt/system text, then submit
+        if autoStartBackend {
+            go func() {
+                <-rc.Router.Running()
+                promptText := strings.TrimSpace(g.Prompt)
+                if promptText != "" {
+                    log.Debug().Int("len", len(promptText)).Msg("Auto-start: submitting rendered prompt after router.Running")
+                    p.Send(bobatea_chat.ReplaceInputTextMsg{Text: promptText})
+                    p.Send(bobatea_chat.SubmitMessageMsg{})
+                } else {
+                    log.Debug().Msg("Auto-start enabled, but no prompt text found; skipping submit")
+                }
+            }()
+        }
 
 		_, err = p.Run()
 		return err

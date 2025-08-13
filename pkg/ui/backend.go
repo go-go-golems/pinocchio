@@ -3,7 +3,6 @@ package ui
 import (
     "context"
     "fmt"
-    "os"
     "sync"
     "time"
     "github.com/go-go-golems/geppetto/pkg/inference/engine"
@@ -13,9 +12,9 @@ import (
     boba_chat "github.com/go-go-golems/bobatea/pkg/chat"
     "github.com/go-go-golems/bobatea/pkg/timeline"
     "github.com/go-go-golems/geppetto/pkg/events"
+    conv "github.com/go-go-golems/geppetto/pkg/conversation"
     "github.com/go-go-golems/geppetto/pkg/turns"
     "github.com/pkg/errors"
-    "github.com/rs/zerolog"
     "github.com/rs/zerolog/log"
 )
 
@@ -24,6 +23,8 @@ type EngineBackend struct {
 	engine    engine.Engine
 	isRunning bool
 	cancel    context.CancelFunc
+    historyMu sync.RWMutex
+    history   []*turns.Turn
 }
 
 var _ boba_chat.Backend = &EngineBackend{}
@@ -40,9 +41,9 @@ func NewEngineBackend(engine engine.Engine) *EngineBackend {
 // Start executes inference using the engine and publishes events through the sink.
 // This method implements the boba_chat.Backend interface with a plain prompt string.
 func (e *EngineBackend) Start(ctx context.Context, prompt string) (tea.Cmd, error) {
-    agentLogger().Debug().Str("component", "engine_backend").Str("method", "Start").Bool("already_running", e.isRunning).Str("prompt_preview", preview(prompt)).Msg("Start called")
+    log.Debug().Str("component", "engine_backend").Str("method", "Start").Bool("already_running", e.isRunning).Msg("Start called")
 	if e.isRunning {
-        agentLogger().Debug().Str("component", "engine_backend").Msg("Start rejected: already running")
+        log.Debug().Str("component", "engine_backend").Msg("Start rejected: already running")
 		return nil, errors.New("Engine is already running")
 	}
 
@@ -59,24 +60,51 @@ func (e *EngineBackend) Start(ctx context.Context, prompt string) (tea.Cmd, erro
 			return nil
 		}
 
-        agentLogger().Debug().Str("component", "engine_backend").Msg("Building Turn from prompt and running inference")
-        // Build a Turn from the single prompt: append a user text block
-        seed := &turns.Turn{}
-        turns.AppendBlock(seed, turns.NewUserTextBlock(prompt))
-		_, err := engine.RunInference(ctx, seed)
+        log.Debug().Str("component", "engine_backend").Msg("Reducing history, appending user block, running inference")
+        // Reduce history into a seed Turn, append user Block, then run inference
+        seed := e.reduceHistory()
+        if prompt != "" {
+            turns.AppendBlock(seed, turns.NewUserTextBlock(prompt))
+        }
+        updated, err := engine.RunInference(ctx, seed)
 
 		// Mark as finished
 		e.isRunning = false
 		e.cancel = nil
 
-		if err != nil {
+        if err != nil {
 			log.Error().Err(err).Msg("Engine inference failed")
-            agentLogger().Error().Err(err).Str("component", "engine_backend").Msg("RunInference failed")
+            log.Error().Err(err).Str("component", "engine_backend").Msg("RunInference failed")
 		}
-
-        agentLogger().Debug().Str("component", "engine_backend").Msg("Returning BackendFinishedMsg")
+        // Append updated Turn to history for cohesive continuation
+        if updated != nil {
+            e.historyMu.Lock()
+            e.history = append(e.history, updated)
+            e.historyMu.Unlock()
+            log.Debug().Str("component", "engine_backend").Int("turn_blocks", len(updated.Blocks)).Int("history_len", len(e.history)).Msg("Appended updated Turn to history")
+        }
+        log.Debug().Str("component", "engine_backend").Msg("Returning BackendFinishedMsg")
         return boba_chat.BackendFinishedMsg{}
 	}, nil
+}
+
+// SetSeedFromConversation populates the initial Turn with system and prior user messages
+func (e *EngineBackend) SetSeedFromConversation(c conv.Conversation) {
+    t := &turns.Turn{}
+    // Convert existing conversation into blocks (system/user/assistant as available)
+    turns.AppendBlocks(t, turns.BlocksFromConversationDelta(c, 0)...)
+    e.historyMu.Lock()
+    e.history = append(e.history, t)
+    e.historyMu.Unlock()
+    log.Debug().Str("component", "engine_backend").Int("seed_blocks", len(t.Blocks)).Int("history_len", len(e.history)).Msg("Seed Turn appended to history from conversation")
+}
+
+// SetSeedTurn sets the seed Turn directly
+func (e *EngineBackend) SetSeedTurn(t *turns.Turn) {
+    e.historyMu.Lock()
+    e.history = append(e.history, t)
+    e.historyMu.Unlock()
+    log.Debug().Str("component", "engine_backend").Int("seed_blocks", len(t.Blocks)).Int("history_len", len(e.history)).Msg("Seed Turn appended to history")
 }
 
 // Interrupt attempts to cancel the current inference operation.
@@ -104,6 +132,18 @@ func (e *EngineBackend) IsFinished() bool {
 	return !e.isRunning
 }
 
+// reduceHistory flattens all prior Turns into a single Turn by concatenating Blocks
+func (e *EngineBackend) reduceHistory() *turns.Turn {
+    out := &turns.Turn{}
+    e.historyMu.RLock()
+    defer e.historyMu.RUnlock()
+    for _, t := range e.history {
+        if t == nil { continue }
+        turns.AppendBlocks(out, t.Blocks...)
+    }
+    return out
+}
+
 // StepChatForwardFunc is a function that forwards watermill messages to the UI by
 // trasnforming them into bubbletea messages and injecting them into the program `p`.
 func StepChatForwardFunc(p *tea.Program) func(msg *message.Message) error {
@@ -113,19 +153,18 @@ func StepChatForwardFunc(p *tea.Program) func(msg *message.Message) error {
 		e, err := events.NewEventFromJson(msg.Payload)
 		if err != nil {
 			log.Error().Err(err).Str("payload", string(msg.Payload)).Msg("Failed to parse event")
-            agentLogger().Error().Err(err).Int("payload_len", len(msg.Payload)).Str("component", "step_forward").Msg("Failed to parse event from payload")
+            log.Error().Err(err).Int("payload_len", len(msg.Payload)).Str("component", "step_forward").Msg("Failed to parse event from payload")
 			return err
 		}
 
         md := e.Metadata()
         entityID := md.ID.String()
-        log.Debug().Interface("event", e).Msg("Dispatching event to UI")
-        agentLogger().Debug().Str("component", "step_forward").Str("event_type", fmt.Sprintf("%T", e)).Str("entity_id", entityID).Msg("Dispatching event")
+        log.Debug().Interface("event", e).Str("event_type", fmt.Sprintf("%T", e)).Str("entity_id", entityID).Msg("Dispatching event to UI")
 
         switch e_ := e.(type) {
         case *events.EventPartialCompletionStart:
             // Create assistant message entity for this stream
-            agentLogger().Debug().Str("component", "step_forward").Str("entity_id", entityID).Msg("UIEntityCreated (llm_text)")
+            log.Debug().Str("component", "step_forward").Str("entity_id", entityID).Msg("UIEntityCreated (llm_text)")
             p.Send(timeline.UIEntityCreated{
                 ID:       timeline.EntityID{LocalID: entityID, Kind: "llm_text"},
                 Renderer: timeline.RendererDescriptor{Kind: "llm_text"},
@@ -134,7 +173,7 @@ func StepChatForwardFunc(p *tea.Program) func(msg *message.Message) error {
             })
         case *events.EventPartialCompletion:
             // Update accumulated assistant text using the Completion field
-            agentLogger().Debug().Str("component", "step_forward").Str("entity_id", entityID).Int("delta_len", len(e_.Delta)).Int("completion_len", len(e_.Completion)).Msg("UIEntityUpdated (llm_text)")
+            log.Debug().Str("component", "step_forward").Str("entity_id", entityID).Int("delta_len", len(e_.Delta)).Int("completion_len", len(e_.Completion)).Msg("UIEntityUpdated (llm_text)")
             p.Send(timeline.UIEntityUpdated{
                 ID:        timeline.EntityID{LocalID: entityID, Kind: "llm_text"},
                 Patch:     map[string]any{"text": e_.Completion},
@@ -142,7 +181,7 @@ func StepChatForwardFunc(p *tea.Program) func(msg *message.Message) error {
                 UpdatedAt: time.Now(),
             })
         case *events.EventFinal:
-            agentLogger().Debug().Str("component", "step_forward").Str("entity_id", entityID).Int("text_len", len(e_.Text)).Msg("UIEntityCompleted (final)")
+            log.Debug().Str("component", "step_forward").Str("entity_id", entityID).Int("text_len", len(e_.Text)).Msg("UIEntityCompleted (final)")
             p.Send(timeline.UIEntityCompleted{
                 ID:     timeline.EntityID{LocalID: entityID, Kind: "llm_text"},
                 Result: map[string]any{"text": e_.Text},
@@ -151,17 +190,17 @@ func StepChatForwardFunc(p *tea.Program) func(msg *message.Message) error {
         case *events.EventInterrupt:
             intr, ok := events.ToTypedEvent[events.EventInterrupt](e)
             if !ok {
-                agentLogger().Error().Str("component", "step_forward").Msg("EventInterrupt type assertion failed")
+                log.Error().Str("component", "step_forward").Msg("EventInterrupt type assertion failed")
                 return errors.New("payload is not of type EventInterrupt")
             }
-            agentLogger().Debug().Str("component", "step_forward").Str("entity_id", entityID).Int("text_len", len(intr.Text)).Msg("UIEntityCompleted (interrupt)")
+            log.Debug().Str("component", "step_forward").Str("entity_id", entityID).Int("text_len", len(intr.Text)).Msg("UIEntityCompleted (interrupt)")
             p.Send(timeline.UIEntityCompleted{
                 ID:     timeline.EntityID{LocalID: entityID, Kind: "llm_text"},
                 Result: map[string]any{"text": intr.Text},
             })
             p.Send(boba_chat.BackendFinishedMsg{})
         case *events.EventError:
-            agentLogger().Debug().Str("component", "step_forward").Str("entity_id", entityID).Msg("UIEntityCompleted (error)")
+            log.Debug().Str("component", "step_forward").Str("entity_id", entityID).Msg("UIEntityCompleted (error)")
             p.Send(timeline.UIEntityCompleted{
                 ID:     timeline.EntityID{LocalID: entityID, Kind: "llm_text"},
                 Result: map[string]any{"text": "**Error**\n\n" + e_.ErrorString},
@@ -172,33 +211,4 @@ func StepChatForwardFunc(p *tea.Program) func(msg *message.Message) error {
 
 		return nil
 	}
-}
-
-// --- Local agent logger writing to /tmp/agent.log ---
-var (
-    agentOnce   sync.Once
-    agentLoggerZ zerolog.Logger
-)
-
-func agentLogger() *zerolog.Logger {
-    agentOnce.Do(func() {
-        f, err := os.OpenFile("/tmp/agent.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
-        if err != nil {
-            // Fall back to global logger if file cannot be opened
-            l := log.Logger
-            agentLoggerZ = l
-            return
-        }
-        cw := zerolog.ConsoleWriter{Out: f, NoColor: true, TimeFormat: time.RFC3339}
-        l := zerolog.New(cw).With().Timestamp().Str("app", "pinocchio").Logger()
-        agentLoggerZ = l
-    })
-    return &agentLoggerZ
-}
-
-func preview(s string) string {
-    if len(s) <= 64 {
-        return s
-    }
-    return s[:64] + "…"
 }

@@ -120,6 +120,11 @@ func (cs *ChatSession) runChatInternal() error {
         log.Debug().Str("component", "chatrunner").Msg("Router handlers running")
 
         backend := ui.NewEngineBackend(engine)
+        // Seed backend from the existing conversation (system/history) so chat UI reflects prior run
+        if cs.manager != nil {
+            backend.SetSeedFromConversation(cs.manager.GetConversation())
+            log.Debug().Str("component", "chatrunner").Msg("Seeded backend from conversation for chat UI")
+        }
         model := bobachat.InitialModel(backend, cs.uiOptions...)
 		p := tea.NewProgram(model, cs.programOptions...)
 
