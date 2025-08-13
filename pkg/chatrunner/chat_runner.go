@@ -1,26 +1,26 @@
 package chatrunner
 
 import (
-	"context"
-	"fmt"
-	"github.com/go-go-golems/geppetto/pkg/inference/engine"
-	"github.com/go-go-golems/geppetto/pkg/inference/engine/factory"
-	"github.com/go-go-golems/geppetto/pkg/inference/middleware"
-	"github.com/go-go-golems/geppetto/pkg/turns"
-	"io"
-	"os"
+    "context"
+    "fmt"
+    "os"
+    "github.com/go-go-golems/geppetto/pkg/inference/engine"
+    "github.com/go-go-golems/geppetto/pkg/inference/engine/factory"
+    "github.com/go-go-golems/geppetto/pkg/inference/middleware"
+    "github.com/go-go-golems/geppetto/pkg/turns"
+    "io"
 
-	tea "github.com/charmbracelet/bubbletea"
-	bobachat "github.com/go-go-golems/bobatea/pkg/chat" // Alias for clarity
-	geppetto_conversation "github.com/go-go-golems/geppetto/pkg/conversation"
-	"github.com/go-go-golems/geppetto/pkg/events"
-	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
-	"github.com/go-go-golems/pinocchio/pkg/ui"
-	"github.com/mattn/go-isatty" // Needed for askForChatContinuation
-	"github.com/pkg/errors"
-	"github.com/rs/zerolog/log"
-	input "github.com/tcnksm/go-input" // Needed for askForChatContinuation
-	"golang.org/x/sync/errgroup"
+    tea "github.com/charmbracelet/bubbletea"
+    bobachat "github.com/go-go-golems/bobatea/pkg/chat" // Alias for clarity
+    geppetto_conversation "github.com/go-go-golems/geppetto/pkg/conversation"
+    "github.com/go-go-golems/geppetto/pkg/events"
+    "github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
+    "github.com/go-go-golems/pinocchio/pkg/ui"
+    "github.com/mattn/go-isatty" // Needed for askForChatContinuation
+    "github.com/pkg/errors"
+    "github.com/rs/zerolog/log"
+    input "github.com/tcnksm/go-input" // Needed for askForChatContinuation
+    "golang.org/x/sync/errgroup"
 )
 
 // RunMode defines the execution mode for the chat session.
@@ -72,16 +72,18 @@ func (cs *ChatSession) runChatInternal() error {
 	}
 
 	// Create engine with UI sink for event publishing
-	uiSink := middleware.NewWatermillSink(router.Publisher, "ui")
-	engine, err := cs.engineFactory.CreateEngine(cs.settings, engine.WithSink(uiSink))
+    uiSink := middleware.NewWatermillSink(router.Publisher, "ui")
+    log.Debug().Str("component", "chatrunner").Msg("Created UI watermill sink")
+    engine, err := cs.engineFactory.CreateEngine(cs.settings, engine.WithSink(uiSink))
 	if err != nil {
 		return errors.Wrap(err, "failed to create engine from factory")
 	}
+    log.Debug().Str("component", "chatrunner").Msg("Engine created with sink")
 
 	eg, childCtx := errgroup.WithContext(cs.ctx)
 	childCtx, cancel := context.WithCancel(childCtx) // Create cancellable context if router is internal
 
-	f := func() {
+    f := func() {
 		cancel()
 		defer func(router *events.EventRouter) {
 			log.Debug().Msg("Closing router")
@@ -106,7 +108,7 @@ func (cs *ChatSession) runChatInternal() error {
 
 		// RunHandlers blocks until the router is ready and handler is registered.
 		log.Debug().Msg("Running router handlers")
-		if err := router.RunHandlers(childCtx); err != nil {
+        if err := router.RunHandlers(childCtx); err != nil {
 			// Don't wrap context cancelled/closed errors if the context was intentionally cancelled
 			if errors.Is(err, context.Canceled) && childCtx.Err() == context.Canceled {
 				log.Debug().Msg("Router handlers stopped due to context cancellation")
@@ -115,14 +117,16 @@ func (cs *ChatSession) runChatInternal() error {
 			return errors.Wrap(err, "failed to run router handlers")
 		}
 		log.Debug().Msg("Router handlers running")
+        log.Debug().Str("component", "chatrunner").Msg("Router handlers running")
 
-		backend := ui.NewEngineBackend(engine, uiSink)
-		model := bobachat.InitialModel(cs.manager, backend, cs.uiOptions...)
+        backend := ui.NewEngineBackend(engine)
+        model := bobachat.InitialModel(backend, cs.uiOptions...)
 		p := tea.NewProgram(model, cs.programOptions...)
 
 		// Setup forwarding handler
 		log.Debug().Msg("Adding UI event handler")
-		router.AddHandler("ui", "ui", ui.StepChatForwardFunc(p)) // Use the forwarding func
+        log.Debug().Str("component", "chatrunner").Msg("Adding UI event handler")
+        router.AddHandler("ui", "ui", ui.StepChatForwardFunc(p)) // Use the forwarding func
 
 		err = router.RunHandlers(childCtx)
 		if err != nil {
@@ -131,8 +135,10 @@ func (cs *ChatSession) runChatInternal() error {
 
 		// Run the UI program, which blocks until quit.
 		log.Debug().Msg("Running Bubbletea program")
-		_, runErr := p.Run()
+        log.Debug().Str("component", "chatrunner").Msg("Starting Bubble Tea program")
+        _, runErr := p.Run()
 		log.Debug().Err(runErr).Msg("Bubbletea program finished")
+        log.Debug().Err(runErr).Str("component", "chatrunner").Msg("Bubble Tea program finished")
 
 		// If the UI exits (even successfully), cancel the context
 		// to signal the router goroutine (if internal) to stop.

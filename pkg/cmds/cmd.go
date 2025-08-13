@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"strings"
+    "time"
 
 	"github.com/go-go-golems/geppetto/pkg/inference/engine"
 	"github.com/go-go-golems/geppetto/pkg/inference/engine/factory"
@@ -437,17 +438,18 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) ([]*
 		if err != nil {
 			return err
 		}
-		backend = ui.NewEngineBackend(engine, uiSink)
+        backend = ui.NewEngineBackend(engine)
+        log.Debug().Msg("EngineBackend created for UI")
 
 		// Determine if we should auto-start the backend
 		autoStartBackend := rc.UISettings != nil && rc.UISettings.StartInChat
 
-		model := bobatea_chat.InitialModel(
-			rc.ConversationManager,
-			backend,
-			bobatea_chat.WithTitle("pinocchio"),
-			bobatea_chat.WithAutoStartBackend(autoStartBackend),
-		)
+        model := bobatea_chat.InitialModel(
+            backend,
+            bobatea_chat.WithTitle("pinocchio"),
+            bobatea_chat.WithAutoStartBackend(autoStartBackend),
+        )
+        log.Debug().Bool("auto_start", autoStartBackend).Msg("Chat model initialized")
 
 		p := tea.NewProgram(
 			model,
@@ -458,6 +460,34 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) ([]*
 		err = rc.Router.RunHandlers(ctx)
 		if err != nil {
 			return err
+		}
+
+		// If auto-start is enabled, pre-fill the prompt and submit shortly after the program starts
+		if autoStartBackend {
+			go func() {
+				// small delay to ensure p.Run has started and is receiving messages
+				time.Sleep(100 * time.Millisecond)
+				promptText := strings.TrimSpace(g.Prompt)
+				if promptText == "" {
+					conv := rc.ConversationManager.GetConversation()
+					for i := len(conv) - 1; i >= 0; i-- {
+						if c, ok := conv[i].Content.(*conversation.ChatMessageContent); ok {
+							// Use the last user message content as prompt
+							promptText = strings.TrimSpace(c.View())
+							if promptText != "" {
+								break
+							}
+						}
+					}
+				}
+				if promptText != "" {
+					log.Debug().Int("len", len(promptText)).Msg("Auto-start: submitting rendered prompt")
+					p.Send(bobatea_chat.ReplaceInputTextMsg{Text: promptText})
+					p.Send(bobatea_chat.SubmitMessageMsg{})
+				} else {
+					log.Debug().Msg("Auto-start enabled, but no prompt text found; skipping submit")
+				}
+			}()
 		}
 
 		_, err = p.Run()
