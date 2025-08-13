@@ -1,13 +1,13 @@
 package run
 
 import (
-	"github.com/go-go-golems/geppetto/pkg/inference/engine/factory"
-	"io"
-	"os"
+    "github.com/go-go-golems/geppetto/pkg/inference/engine/factory"
+    "io"
+    "os"
 
-	"github.com/go-go-golems/geppetto/pkg/conversation"
-	"github.com/go-go-golems/geppetto/pkg/events"
-	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
+    "github.com/go-go-golems/geppetto/pkg/events"
+    "github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
+    geppetto_conversation "github.com/go-go-golems/geppetto/pkg/conversation"
 )
 
 type RunMode int
@@ -32,9 +32,6 @@ type UISettings struct {
 
 // RunContext encapsulates all the settings and state needed for a single command run
 type RunContext struct {
-	// Core components (ConversationManager is required)
-	ConversationManager conversation.Manager
-
 	StepSettings *settings.StepSettings
 
 	EngineFactory factory.EngineFactory
@@ -42,6 +39,9 @@ type RunContext struct {
 
 	// Template variables used to render prompts/messages prior to model calls
 	Variables map[string]interface{}
+
+    // ResultConversation stores the resulting conversation extracted from Turns at output boundaries
+    ResultConversation []*geppetto_conversation.Message
 
 	// Optional UI/Terminal specific components
 	UISettings *UISettings
@@ -75,13 +75,6 @@ func WithEngineFactory(factory factory.EngineFactory) RunOption {
 func WithRouter(router *events.EventRouter) RunOption {
 	return func(rc *RunContext) error {
 		rc.Router = router
-		return nil
-	}
-}
-
-func WithConversationManager(manager conversation.Manager) RunOption {
-	return func(rc *RunContext) error {
-		rc.ConversationManager = manager
 		return nil
 	}
 }
@@ -121,9 +114,8 @@ func WithVariables(vars map[string]interface{}) RunOption {
 }
 
 // NewRunContext creates a new RunContext with default values and a required manager
-func NewRunContext(manager conversation.Manager) *RunContext {
+func NewRunContext() *RunContext {
 	return &RunContext{
-		ConversationManager: manager,
 		RunMode:             RunModeBlocking,
 		Writer:              os.Stdout,
 	}

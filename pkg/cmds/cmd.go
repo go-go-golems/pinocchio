@@ -13,13 +13,13 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/inference/engine/factory"
 	"github.com/go-go-golems/geppetto/pkg/inference/middleware"
 
-	"github.com/go-go-golems/geppetto/pkg/conversation/builder"
+    "github.com/go-go-golems/geppetto/pkg/conversation/builder"
 	"github.com/go-go-golems/geppetto/pkg/events"
 
 	tea "github.com/charmbracelet/bubbletea"
 	bobatea_chat "github.com/go-go-golems/bobatea/pkg/chat"
 
-	"github.com/go-go-golems/geppetto/pkg/conversation"
+    "github.com/go-go-golems/geppetto/pkg/conversation"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 	"github.com/go-go-golems/geppetto/pkg/turns"
 	glazedcmds "github.com/go-go-golems/glazed/pkg/cmds"
@@ -168,11 +168,12 @@ func NewPinocchioCommand(
 	return ret, nil
 }
 
+// Deprecated: conversation manager is no longer used by chat UI. Use Turn-first flows.
 func (g *PinocchioCommand) CreateConversationManagerBuilder() *builder.ManagerBuilder {
-	return builder.NewManagerBuilder().
-		WithSystemPrompt(g.SystemPrompt).
-		WithMessages(g.Messages).
-		WithPrompt(g.Prompt)
+    return builder.NewManagerBuilder().
+        WithSystemPrompt(g.SystemPrompt).
+        WithMessages(g.Messages).
+        WithPrompt(g.Prompt)
 }
 
 // RunIntoWriter runs the command and writes the output into the given writer.
@@ -204,19 +205,23 @@ func (g *PinocchioCommand) RunIntoWriter(
 		imagePaths[i] = img.Path
 	}
 
-	b := g.CreateConversationManagerBuilder()
-	manager, err := b.WithVariables(parsedLayers.GetDefaultParameterLayer().Parameters.ToMap()).
-		WithImages(imagePaths).
-		WithAutosaveSettings(builder.AutosaveSettings{
-			Enabled:  strings.ToLower(helpersSettings.Autosave.Enabled) == "yes",
-			Template: helpersSettings.Autosave.Template,
-			Path:     helpersSettings.Autosave.Path,
-		}).
-		Build()
-
-	if err != nil {
-		return errors.Wrap(err, "failed to build conversation manager")
-	}
+    // Build a preview conversation only if needed for PrintPrompt, otherwise we operate Turn-first
+    var previewConv []*conversation.Message
+    if helpersSettings.PrintPrompt {
+        b := g.CreateConversationManagerBuilder()
+        manager, err := b.WithVariables(parsedLayers.GetDefaultParameterLayer().Parameters.ToMap()).
+            WithImages(imagePaths).
+            WithAutosaveSettings(builder.AutosaveSettings{
+                Enabled:  strings.ToLower(helpersSettings.Autosave.Enabled) == "yes",
+                Template: helpersSettings.Autosave.Template,
+                Path:     helpersSettings.Autosave.Path,
+            }).
+            Build()
+        if err != nil {
+            return errors.Wrap(err, "failed to build preview conversation manager")
+        }
+        previewConv = manager.GetConversation()
+    }
 
 	// Determine run mode based on helper settings
 	runMode := run.RunModeBlocking
@@ -244,12 +249,11 @@ func (g *PinocchioCommand) RunIntoWriter(
 	}
 
 	// Run with options
-	messages, err := g.RunWithOptions(ctx,
+    messages, err := g.RunWithOptions(ctx,
 		run.WithStepSettings(stepSettings),
 		run.WithWriter(w),
 		run.WithRunMode(runMode),
 		run.WithUISettings(uiSettings),
-		run.WithConversationManager(manager),
 		run.WithRouter(router),
 		run.WithVariables(parsedLayers.GetDefaultParameterLayer().Parameters.ToMap()),
 	)
@@ -258,8 +262,12 @@ func (g *PinocchioCommand) RunIntoWriter(
 	}
 
 	// If we're just printing the prompt, do that and return
-	if helpersSettings.PrintPrompt {
-		for _, message := range messages {
+    if helpersSettings.PrintPrompt {
+        // fall back to messages returned, otherwise use previewConv
+        if len(messages) == 0 && len(previewConv) > 0 {
+            messages = previewConv
+        }
+        for _, message := range messages {
 			_, _ = fmt.Fprintf(w, "%s\n", strings.TrimSpace(message.Content.View()))
 			_, _ = fmt.Fprintln(w)
 		}
@@ -270,8 +278,7 @@ func (g *PinocchioCommand) RunIntoWriter(
 
 // RunWithOptions executes the command with the given options
 func (g *PinocchioCommand) RunWithOptions(ctx context.Context, options ...run.RunOption) ([]*conversation.Message, error) {
-	// We need at least one option that provides the manager
-	runCtx := &run.RunContext{}
+    runCtx := &run.RunContext{}
 
 	// Apply options
 	for _, opt := range options {
@@ -298,7 +305,7 @@ func (g *PinocchioCommand) RunWithOptions(ctx context.Context, options ...run.Ru
 	}
 
 	// Verify router for chat mode
-	if (runCtx.RunMode == run.RunModeChat || runCtx.RunMode == run.RunModeInteractive) && runCtx.Router == nil {
+    if (runCtx.RunMode == run.RunModeChat || runCtx.RunMode == run.RunModeInteractive) && runCtx.Router == nil {
 		return nil, errors.New("chat mode requires a router")
 	}
 
@@ -366,7 +373,12 @@ func (g *PinocchioCommand) runBlocking(ctx context.Context, rc *run.RunContext) 
 		}
 	}
 
-	return rc.ConversationManager.GetConversation(), nil
+    // For blocking mode, convert last updated turn to conversation if needed
+    // Here we return messages previously appended in runEngineAndCollectMessages via ResultConversation if set
+    if rc.ResultConversation != nil {
+        return rc.ResultConversation, nil
+    }
+    return []*conversation.Message{}, nil
 }
 
 // runEngineAndCollectMessages handles the actual engine execution and message collection
@@ -382,28 +394,14 @@ func (g *PinocchioCommand) runEngineAndCollectMessages(ctx context.Context, rc *
     if err != nil {
         return fmt.Errorf("failed to render templates: %w", err)
     }
-    // Capture baseline conversation length to append only new messages
-    var baselineLen int
-    if rc.ConversationManager != nil {
-        baselineLen = len(rc.ConversationManager.GetConversation())
-    }
-
     updatedTurn, err := engine.RunInference(ctx, seed)
 	if err != nil {
 		return fmt.Errorf("inference failed: %w", err)
 	}
     // Convert final Turn to conversation for output
     finalConv := turns.BuildConversationFromTurn(updatedTurn)
-    // Append only new messages beyond baseline
-    if rc.ConversationManager != nil {
-        if baselineLen < 0 || baselineLen > len(finalConv) {
-            baselineLen = len(finalConv)
-        }
-        newMessages := finalConv[baselineLen:]
-        for _, m := range newMessages {
-            _ = rc.ConversationManager.AppendMessages(m)
-        }
-    }
+    // Store result conversation for callers that want to print prompt
+    rc.ResultConversation = finalConv
 
 	return nil
 }
@@ -547,16 +545,12 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) ([]*
         go func() {
             <-rc.Router.Running()
             if be, ok := backend.(*ui.EngineBackend); ok {
-                if rc.ConversationManager != nil {
-                    be.SetSeedFromConversation(rc.ConversationManager.GetConversation())
+                seed, err := buildInitialTurnRendered(g.SystemPrompt, g.Messages, "", rc.Variables)
+                if err == nil {
+                    be.SetSeedTurn(seed)
                 } else {
-                    seed, err := buildInitialTurnRendered(g.SystemPrompt, g.Messages, "", rc.Variables)
-                    if err == nil {
-                        be.SetSeedTurn(seed)
-                    } else {
-                        // Fallback without rendering on error
-                        be.SetSeedTurn(buildInitialTurn(g.SystemPrompt, g.Messages, ""))
-                    }
+                    // Fallback without rendering on error
+                    be.SetSeedTurn(buildInitialTurn(g.SystemPrompt, g.Messages, ""))
                 }
             }
         }()
@@ -591,7 +585,11 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) ([]*
 		return nil, err
 	}
 
-	return rc.ConversationManager.GetConversation(), nil
+    // In chat mode, no conversation manager; return any result conversation we gathered
+    if rc.ResultConversation != nil {
+        return rc.ResultConversation, nil
+    }
+    return []*conversation.Message{}, nil
 }
 
 // Helper function to ask user about continuing in chat mode
