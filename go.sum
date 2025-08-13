@@ -154,8 +154,12 @@ github.com/go-go-golems/geppetto v0.4.54 h1:sQtPTea0ejHx6HrXvDgeXKlpQyhIKrQEVtby
 github.com/go-go-golems/geppetto v0.4.54/go.mod h1:FuFIENNZhQfXCAn7/23z56TE0kT1w+4iBJcdqaxHGk4=
 github.com/go-go-golems/glazed v0.6.9 h1:yx2PsV+gtmnMiJJcooyk1IkI3DIqrzwyI8HKeERHreY=
 github.com/go-go-golems/glazed v0.6.9/go.mod h1:xJZ2H2NUlJk02le1+ypHE0/LvAH0EW7NrPFkpD/7/6o=
+github.com/go-go-golems/go-sqlite-regexp v0.0.1 h1:EX5c+9YXEiXjTlR2187kYVfPFwOOLFyADJrNrZFnK+I=
+github.com/go-go-golems/go-sqlite-regexp v0.0.1/go.mod h1:hq4dRsHIPcPy7sHevG9vh/mf6T5/BiWwcsRll+n4PzA=
 github.com/go-go-golems/prompto v0.1.13 h1:6nAaxxyoe3MBa68TybkeiJETdOT1D+7wWo/HDaarz7Q=
 github.com/go-go-golems/prompto v0.1.13/go.mod h1:nsGdB/RitW95jbUlOiTVHYfoRLdqGUl+18ukGQn0t3I=
+github.com/go-go-golems/uhoh v0.0.5 h1:udrvNPiRNulREtZMCRPWe7rnRWxB5P3NwTIXmXF8Ye4=
+github.com/go-go-golems/uhoh v0.0.5/go.mod h1:6/1kZngxZc6eX3egmZyeFeq3c9FsteBQyWD4T/in9SU=
 github.com/go-logfmt/logfmt v0.6.0 h1:wGYYu3uicYdqXVgoYbvnkrPVXkuLM1p1ifugDMEdRi4=
 github.com/go-logfmt/logfmt v0.6.0/go.mod h1:WYhtIu8zTZfxdn5+rREduYbwxfcBr/Vr6KEVveWlfTs=
 github.com/go-openapi/errors v0.22.0 h1:c4xY/OLxUBSTiepAg3j/MHuAv5mJhnf53LLMWFB+u/w=
@@ -239,6 +243,8 @@ github.com/mattn/go-runewidth v0.0.16 h1:E5ScNMtiwvlvB5paMFdw9p4kSQzbXFikJ5SQO6T
 github.com/mattn/go-runewidth v0.0.16/go.mod h1:Jdepj2loyihRzMpdS35Xk/zdY8IAYHsh153qUoGf23w=
 github.com/mattn/go-sqlite3 v1.14.28 h1:ThEiQrnbtumT+QMknw63Befp/ce/nUPgBPMlRFEum7A=
 github.com/mattn/go-sqlite3 v1.14.28/go.mod h1:Uh1q+B4BYcTPb+yiD3kU8Ct7aC0hY9fxUwlHK0RXw+Y=
+github.com/mattn/go-sqlite3 v1.14.30 h1:bVreufq3EAIG1Quvws73du3/QgdeZ3myglJlrzSYYCY=
+github.com/mattn/go-sqlite3 v1.14.30/go.mod h1:Uh1q+B4BYcTPb+yiD3kU8Ct7aC0hY9fxUwlHK0RXw+Y=
 github.com/mb0/glob v0.0.0-20160210091149-1eb79d2de6c4 h1:NK3O7S5FRD/wj7ORQ5C3Mx1STpyEMuFe+/F0Lakd1Nk=
 github.com/mb0/glob v0.0.0-20160210091149-1eb79d2de6c4/go.mod h1:FqD3ES5hx6zpzDainDaHgkTIqrPaI9uX4CVWqYZoQjY=
 github.com/microcosm-cc/bluemonday v1.0.27 h1:MpEUotklkwCSLeH+Qdx1VJgNqLlpY2KXwXFM08ygZfk=
