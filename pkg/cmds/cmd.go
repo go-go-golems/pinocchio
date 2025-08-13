@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/go-go-golems/glazed/pkg/helpers/templating"
 	"github.com/go-go-golems/geppetto/pkg/inference/engine"
 	"github.com/go-go-golems/geppetto/pkg/inference/engine/factory"
 	"github.com/go-go-golems/geppetto/pkg/inference/middleware"
@@ -47,6 +48,57 @@ func buildInitialTurn(systemPrompt string, msgs []*conversation.Message, userPro
         turns.AppendBlock(t, turns.NewUserTextBlock(userPrompt))
     }
     return t
+}
+
+func renderTemplateString(name, text string, vars map[string]interface{}) (string, error) {
+    if strings.TrimSpace(text) == "" {
+        return text, nil
+    }
+    tpl, err := templating.CreateTemplate(name).Parse(text)
+    if err != nil {
+        return "", err
+    }
+    var b strings.Builder
+    if err := tpl.Execute(&b, vars); err != nil {
+        return "", err
+    }
+    return b.String(), nil
+}
+
+func renderMessages(msgs []*conversation.Message, vars map[string]interface{}) ([]*conversation.Message, error) {
+    if len(msgs) == 0 {
+        return msgs, nil
+    }
+    rendered := make([]*conversation.Message, 0, len(msgs))
+    for _, m := range msgs {
+        if chat, ok := m.Content.(*conversation.ChatMessageContent); ok {
+            txt, err := renderTemplateString("message", chat.Text, vars)
+            if err != nil {
+                return nil, err
+            }
+            content := &conversation.ChatMessageContent{Role: chat.Role, Text: txt, Images: chat.Images}
+            rendered = append(rendered, conversation.NewChatMessageFromContent(content, conversation.WithTime(m.Time)))
+            continue
+        }
+        rendered = append(rendered, m)
+    }
+    return rendered, nil
+}
+
+func buildInitialTurnRendered(systemPrompt string, msgs []*conversation.Message, userPrompt string, vars map[string]interface{}) (*turns.Turn, error) {
+    sp, err := renderTemplateString("system-prompt", systemPrompt, vars)
+    if err != nil {
+        return nil, err
+    }
+    renderedMsgs, err := renderMessages(msgs, vars)
+    if err != nil {
+        return nil, err
+    }
+    up, err := renderTemplateString("prompt", userPrompt, vars)
+    if err != nil {
+        return nil, err
+    }
+    return buildInitialTurn(sp, renderedMsgs, up), nil
 }
 
 type PinocchioCommandDescription struct {
@@ -199,6 +251,7 @@ func (g *PinocchioCommand) RunIntoWriter(
 		run.WithUISettings(uiSettings),
 		run.WithConversationManager(manager),
 		run.WithRouter(router),
+		run.WithVariables(parsedLayers.GetDefaultParameterLayer().Parameters.ToMap()),
 	)
 	if err != nil {
 		return err
@@ -230,8 +283,11 @@ func (g *PinocchioCommand) RunWithOptions(ctx context.Context, options ...run.Ru
     // ConversationManager optional during migration; prefer Turn-based flows
 
     if runCtx.UISettings != nil && runCtx.UISettings.PrintPrompt {
-        // Build a preview conversation from initial Turn
-        t := buildInitialTurn(g.SystemPrompt, g.Messages, g.Prompt)
+        // Build a preview conversation from initial Turn using rendered templates
+        t, err := buildInitialTurnRendered(g.SystemPrompt, g.Messages, g.Prompt, runCtx.Variables)
+        if err != nil {
+            return nil, err
+        }
         conv := turns.BuildConversationFromTurn(t)
         return conv, nil
     }
@@ -321,17 +377,30 @@ func (g *PinocchioCommand) runEngineAndCollectMessages(ctx context.Context, rc *
 		return fmt.Errorf("failed to create engine: %w", err)
 	}
 
-    // Build seed Turn directly from system + messages + prompt
-    seed := buildInitialTurn(g.SystemPrompt, g.Messages, g.Prompt)
-	updatedTurn, err := engine.RunInference(ctx, seed)
+    // Build seed Turn directly from system + messages + prompt (rendered)
+    seed, err := buildInitialTurnRendered(g.SystemPrompt, g.Messages, g.Prompt, rc.Variables)
+    if err != nil {
+        return fmt.Errorf("failed to render templates: %w", err)
+    }
+    // Capture baseline conversation length to append only new messages
+    var baselineLen int
+    if rc.ConversationManager != nil {
+        baselineLen = len(rc.ConversationManager.GetConversation())
+    }
+
+    updatedTurn, err := engine.RunInference(ctx, seed)
 	if err != nil {
 		return fmt.Errorf("inference failed: %w", err)
 	}
     // Convert final Turn to conversation for output
     finalConv := turns.BuildConversationFromTurn(updatedTurn)
-    // Replace any manager state if present
+    // Append only new messages beyond baseline
     if rc.ConversationManager != nil {
-        for _, m := range finalConv {
+        if baselineLen < 0 || baselineLen > len(finalConv) {
+            baselineLen = len(finalConv)
+        }
+        newMessages := finalConv[baselineLen:]
+        for _, m := range newMessages {
             _ = rc.ConversationManager.AppendMessages(m)
         }
     }
@@ -460,10 +529,13 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) ([]*
         )
         log.Debug().Bool("auto_start", autoStartBackend).Msg("Chat model initialized")
 
-		p := tea.NewProgram(
+        p := tea.NewProgram(
 			model,
 			options...,
 		)
+        if be, ok := backend.(*ui.EngineBackend); ok {
+            be.AttachProgram(p)
+        }
 
         rc.Router.AddHandler("ui", "ui", ui.StepChatForwardFunc(p))
         err = rc.Router.RunHandlers(ctx)
@@ -478,8 +550,13 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) ([]*
                 if rc.ConversationManager != nil {
                     be.SetSeedFromConversation(rc.ConversationManager.GetConversation())
                 } else {
-                    seed := buildInitialTurn(g.SystemPrompt, g.Messages, "")
-                    be.SetSeedTurn(seed)
+                    seed, err := buildInitialTurnRendered(g.SystemPrompt, g.Messages, "", rc.Variables)
+                    if err == nil {
+                        be.SetSeedTurn(seed)
+                    } else {
+                        // Fallback without rendering on error
+                        be.SetSeedTurn(buildInitialTurn(g.SystemPrompt, g.Messages, ""))
+                    }
                 }
             }
         }()
@@ -488,7 +565,13 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) ([]*
         if autoStartBackend {
             go func() {
                 <-rc.Router.Running()
+                // Render prompt before auto-submit in chat
                 promptText := strings.TrimSpace(g.Prompt)
+                if promptText != "" && rc.Variables != nil {
+                    if rendered, err := renderTemplateString("prompt", promptText, rc.Variables); err == nil {
+                        promptText = rendered
+                    }
+                }
                 if promptText != "" {
                     log.Debug().Int("len", len(promptText)).Msg("Auto-start: submitting rendered prompt after router.Running")
                     p.Send(bobatea_chat.ReplaceInputTextMsg{Text: promptText})

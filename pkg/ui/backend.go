@@ -25,6 +25,9 @@ type EngineBackend struct {
 	cancel    context.CancelFunc
     historyMu sync.RWMutex
     history   []*turns.Turn
+    program   *tea.Program
+    emittedMu sync.Mutex
+    emitted   map[string]struct{}
 }
 
 var _ boba_chat.Backend = &EngineBackend{}
@@ -35,7 +38,14 @@ func NewEngineBackend(engine engine.Engine) *EngineBackend {
 	return &EngineBackend{
 		engine:    engine,
 		isRunning: false,
+        emitted:   make(map[string]struct{}),
 	}
+}
+
+// AttachProgram registers the UI program to allow emitting initial timeline entities
+// when seeding history. If not attached, seeding will only populate backend state.
+func (e *EngineBackend) AttachProgram(p *tea.Program) {
+    e.program = p
 }
 
 // Start executes inference using the engine and publishes events through the sink.
@@ -97,6 +107,7 @@ func (e *EngineBackend) SetSeedFromConversation(c conv.Conversation) {
     e.history = append(e.history, t)
     e.historyMu.Unlock()
     log.Debug().Str("component", "engine_backend").Int("seed_blocks", len(t.Blocks)).Int("history_len", len(e.history)).Msg("Seed Turn appended to history from conversation")
+    e.emitInitialEntities(t)
 }
 
 // SetSeedTurn sets the seed Turn directly
@@ -105,6 +116,52 @@ func (e *EngineBackend) SetSeedTurn(t *turns.Turn) {
     e.history = append(e.history, t)
     e.historyMu.Unlock()
     log.Debug().Str("component", "engine_backend").Int("seed_blocks", len(t.Blocks)).Int("history_len", len(e.history)).Msg("Seed Turn appended to history")
+    e.emitInitialEntities(t)
+}
+
+// emitInitialEntities sends UI entities for existing blocks (system/user/assistant text)
+// so the chat timeline reflects prior context when entering chat mode.
+func (e *EngineBackend) emitInitialEntities(t *turns.Turn) {
+    if e.program == nil || t == nil || len(t.Blocks) == 0 {
+        return
+    }
+    for _, b := range t.Blocks {
+        var role string
+        var text string
+        switch b.Kind {
+        case turns.BlockKindUser:
+            role = "user"
+        case turns.BlockKindLLMText:
+            role = "assistant"
+        default:
+            continue
+        }
+        if s, ok := b.Payload[turns.PayloadKeyText].(string); ok {
+            text = s
+        }
+        if role == "" || text == "" {
+            continue
+        }
+        id := b.ID
+        // Deduplicate entity emissions by block ID
+        e.emittedMu.Lock()
+        if _, seen := e.emitted[id]; seen {
+            e.emittedMu.Unlock()
+            continue
+        }
+        e.emitted[id] = struct{}{}
+        e.emittedMu.Unlock()
+        e.program.Send(timeline.UIEntityCreated{
+            ID:       timeline.EntityID{LocalID: id, Kind: "llm_text"},
+            Renderer: timeline.RendererDescriptor{Kind: "llm_text"},
+            Props:    map[string]any{"role": role, "text": text},
+            StartedAt: time.Now(),
+        })
+        e.program.Send(timeline.UIEntityCompleted{
+            ID: timeline.EntityID{LocalID: id, Kind: "llm_text"},
+            Result: map[string]any{"text": text},
+        })
+    }
 }
 
 // Interrupt attempts to cancel the current inference operation.

@@ -40,6 +40,9 @@ type RunContext struct {
 	EngineFactory factory.EngineFactory
 	Router        *events.EventRouter
 
+	// Template variables used to render prompts/messages prior to model calls
+	Variables map[string]interface{}
+
 	// Optional UI/Terminal specific components
 	UISettings *UISettings
 	Writer     io.Writer
@@ -106,6 +109,15 @@ func WithWriter(w io.Writer) RunOption {
 		rc.Writer = w
 		return nil
 	}
+}
+
+// WithVariables passes a map of template variables used to render
+// system prompt, messages and user prompt before sending to the model.
+func WithVariables(vars map[string]interface{}) RunOption {
+    return func(rc *RunContext) error {
+        rc.Variables = vars
+        return nil
+    }
 }
 
 // NewRunContext creates a new RunContext with default values and a required manager
