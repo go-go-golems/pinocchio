@@ -13,8 +13,7 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/inference/engine/factory"
 	"github.com/go-go-golems/geppetto/pkg/inference/middleware"
 
-    "github.com/go-go-golems/geppetto/pkg/conversation/builder"
-	"github.com/go-go-golems/geppetto/pkg/events"
+    "github.com/go-go-golems/geppetto/pkg/events"
 
 	tea "github.com/charmbracelet/bubbletea"
 	bobatea_chat "github.com/go-go-golems/bobatea/pkg/chat"
@@ -65,32 +64,53 @@ func renderTemplateString(name, text string, vars map[string]interface{}) (strin
     return b.String(), nil
 }
 
-func renderMessages(msgs []*conversation.Message, vars map[string]interface{}) ([]*conversation.Message, error) {
-    if len(msgs) == 0 {
-        return msgs, nil
+// SimpleMessage represents a minimal YAML message that will be converted to a user block
+type SimpleMessage struct {
+    Text string `yaml:"text"`
+}
+
+// buildInitialTurnFromBlocks constructs a Turn from system prompt, pre-seeded blocks, and an optional user prompt
+func buildInitialTurnFromBlocks(systemPrompt string, blocks []turns.Block, userPrompt string) *turns.Turn {
+    t := &turns.Turn{}
+    if strings.TrimSpace(systemPrompt) != "" {
+        turns.AppendBlock(t, turns.NewSystemTextBlock(systemPrompt))
     }
-    rendered := make([]*conversation.Message, 0, len(msgs))
-    for _, m := range msgs {
-        if chat, ok := m.Content.(*conversation.ChatMessageContent); ok {
-            txt, err := renderTemplateString("message", chat.Text, vars)
+    if len(blocks) > 0 {
+        turns.AppendBlocks(t, blocks...)
+    }
+    if strings.TrimSpace(userPrompt) != "" {
+        turns.AppendBlock(t, turns.NewUserTextBlock(userPrompt))
+    }
+    return t
+}
+
+// renderBlocks renders text payloads in blocks using vars
+func renderBlocks(blocks []turns.Block, vars map[string]interface{}) ([]turns.Block, error) {
+    if len(blocks) == 0 {
+        return blocks, nil
+    }
+    out := make([]turns.Block, 0, len(blocks))
+    for _, b := range blocks {
+        nb := b
+        if txt, ok := b.Payload[turns.PayloadKeyText].(string); ok {
+            rt, err := renderTemplateString("message", txt, vars)
             if err != nil {
                 return nil, err
             }
-            content := &conversation.ChatMessageContent{Role: chat.Role, Text: txt, Images: chat.Images}
-            rendered = append(rendered, conversation.NewChatMessageFromContent(content, conversation.WithTime(m.Time)))
-            continue
+            if nb.Payload == nil { nb.Payload = map[string]any{} }
+            nb.Payload[turns.PayloadKeyText] = rt
         }
-        rendered = append(rendered, m)
+        out = append(out, nb)
     }
-    return rendered, nil
+    return out, nil
 }
 
-func buildInitialTurnRendered(systemPrompt string, msgs []*conversation.Message, userPrompt string, vars map[string]interface{}) (*turns.Turn, error) {
+func buildInitialTurnFromBlocksRendered(systemPrompt string, blocks []turns.Block, userPrompt string, vars map[string]interface{}) (*turns.Turn, error) {
     sp, err := renderTemplateString("system-prompt", systemPrompt, vars)
     if err != nil {
         return nil, err
     }
-    renderedMsgs, err := renderMessages(msgs, vars)
+    rblocks, err := renderBlocks(blocks, vars)
     if err != nil {
         return nil, err
     }
@@ -98,7 +118,12 @@ func buildInitialTurnRendered(systemPrompt string, msgs []*conversation.Message,
     if err != nil {
         return nil, err
     }
-    return buildInitialTurn(sp, renderedMsgs, up), nil
+    return buildInitialTurnFromBlocks(sp, rblocks, up), nil
+}
+
+// buildInitialTurn constructs a seed Turn for the command from system + blocks + user prompt using vars.
+func (g *PinocchioCommand) buildInitialTurn(vars map[string]interface{}) (*turns.Turn, error) {
+    return buildInitialTurnFromBlocksRendered(g.SystemPrompt, g.Blocks, g.Prompt, vars)
 }
 
 type PinocchioCommandDescription struct {
@@ -112,15 +137,15 @@ type PinocchioCommandDescription struct {
 	Tags      []string                          `yaml:"tags,omitempty"`
 	Metadata  map[string]interface{}            `yaml:"metadata,omitempty"`
 
-	Prompt       string                  `yaml:"prompt,omitempty"`
-	Messages     []*conversation.Message `yaml:"messages,omitempty"`
+	Prompt       string   `yaml:"prompt,omitempty"`
+	Messages     []string `yaml:"messages,omitempty"`
 	SystemPrompt string                  `yaml:"system-prompt,omitempty"`
 }
 
 type PinocchioCommand struct {
 	*glazedcmds.CommandDescription `yaml:",inline"`
 	Prompt                         string                  `yaml:"prompt,omitempty"`
-	Messages                       []*conversation.Message `yaml:"messages,omitempty"`
+    Blocks                         []turns.Block           `yaml:"-"`
 	SystemPrompt                   string                  `yaml:"system-prompt,omitempty"`
 }
 
@@ -134,10 +159,10 @@ func WithPrompt(prompt string) PinocchioCommandOption {
 	}
 }
 
-func WithMessages(messages []*conversation.Message) PinocchioCommandOption {
-	return func(g *PinocchioCommand) {
-		g.Messages = messages
-	}
+func WithBlocks(blocks []turns.Block) PinocchioCommandOption {
+    return func(g *PinocchioCommand) {
+        g.Blocks = blocks
+    }
 }
 
 func WithSystemPrompt(systemPrompt string) PinocchioCommandOption {
@@ -168,13 +193,7 @@ func NewPinocchioCommand(
 	return ret, nil
 }
 
-// Deprecated: conversation manager is no longer used by chat UI. Use Turn-first flows.
-func (g *PinocchioCommand) CreateConversationManagerBuilder() *builder.ManagerBuilder {
-    return builder.NewManagerBuilder().
-        WithSystemPrompt(g.SystemPrompt).
-        WithMessages(g.Messages).
-        WithPrompt(g.Prompt)
-}
+// conversation manager removed; no-op left intentionally for compatibility if referenced elsewhere
 
 // RunIntoWriter runs the command and writes the output into the given writer.
 func (g *PinocchioCommand) RunIntoWriter(
@@ -205,23 +224,7 @@ func (g *PinocchioCommand) RunIntoWriter(
 		imagePaths[i] = img.Path
 	}
 
-    // Build a preview conversation only if needed for PrintPrompt, otherwise we operate Turn-first
-    var previewConv []*conversation.Message
-    if helpersSettings.PrintPrompt {
-        b := g.CreateConversationManagerBuilder()
-        manager, err := b.WithVariables(parsedLayers.GetDefaultParameterLayer().Parameters.ToMap()).
-            WithImages(imagePaths).
-            WithAutosaveSettings(builder.AutosaveSettings{
-                Enabled:  strings.ToLower(helpersSettings.Autosave.Enabled) == "yes",
-                Template: helpersSettings.Autosave.Template,
-                Path:     helpersSettings.Autosave.Path,
-            }).
-            Build()
-        if err != nil {
-            return errors.Wrap(err, "failed to build preview conversation manager")
-        }
-        previewConv = manager.GetConversation()
-    }
+    // No conversation manager preview; print path handled by RunWithOptions
 
 	// Determine run mode based on helper settings
 	runMode := run.RunModeBlocking
@@ -263,10 +266,6 @@ func (g *PinocchioCommand) RunIntoWriter(
 
 	// If we're just printing the prompt, do that and return
     if helpersSettings.PrintPrompt {
-        // fall back to messages returned, otherwise use previewConv
-        if len(messages) == 0 && len(previewConv) > 0 {
-            messages = previewConv
-        }
         for _, message := range messages {
 			_, _ = fmt.Fprintf(w, "%s\n", strings.TrimSpace(message.Content.View()))
 			_, _ = fmt.Fprintln(w)
@@ -291,7 +290,7 @@ func (g *PinocchioCommand) RunWithOptions(ctx context.Context, options ...run.Ru
 
     if runCtx.UISettings != nil && runCtx.UISettings.PrintPrompt {
         // Build a preview conversation from initial Turn using rendered templates
-        t, err := buildInitialTurnRendered(g.SystemPrompt, g.Messages, g.Prompt, runCtx.Variables)
+        t, err := g.buildInitialTurn(runCtx.Variables)
         if err != nil {
             return nil, err
         }
@@ -390,7 +389,7 @@ func (g *PinocchioCommand) runEngineAndCollectMessages(ctx context.Context, rc *
 	}
 
     // Build seed Turn directly from system + messages + prompt (rendered)
-    seed, err := buildInitialTurnRendered(g.SystemPrompt, g.Messages, g.Prompt, rc.Variables)
+    seed, err := g.buildInitialTurn(rc.Variables)
     if err != nil {
         return fmt.Errorf("failed to render templates: %w", err)
     }
@@ -545,12 +544,12 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) ([]*
         go func() {
             <-rc.Router.Running()
             if be, ok := backend.(*ui.EngineBackend); ok {
-                seed, err := buildInitialTurnRendered(g.SystemPrompt, g.Messages, "", rc.Variables)
+                seed, err := buildInitialTurnFromBlocksRendered(g.SystemPrompt, g.Blocks, "", rc.Variables)
                 if err == nil {
                     be.SetSeedTurn(seed)
                 } else {
                     // Fallback without rendering on error
-                    be.SetSeedTurn(buildInitialTurn(g.SystemPrompt, g.Messages, ""))
+                    be.SetSeedTurn(buildInitialTurnFromBlocks(g.SystemPrompt, g.Blocks, ""))
                 }
             }
         }()
