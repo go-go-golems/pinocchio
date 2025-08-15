@@ -1,13 +1,13 @@
 package run
 
 import (
-    "github.com/go-go-golems/geppetto/pkg/inference/engine/factory"
-    "io"
-    "os"
+	"github.com/go-go-golems/geppetto/pkg/inference/engine/factory"
+	"io"
+	"os"
 
-    "github.com/go-go-golems/geppetto/pkg/events"
-    "github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
-    "github.com/go-go-golems/geppetto/pkg/turns"
+	"github.com/go-go-golems/geppetto/pkg/events"
+	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
+	"github.com/go-go-golems/geppetto/pkg/turns"
 )
 
 type RunMode int
@@ -40,8 +40,8 @@ type RunContext struct {
 	// Template variables used to render prompts/messages prior to model calls
 	Variables map[string]interface{}
 
-    // ResultTurn stores the resulting Turn after engine execution when needed by callers
-    ResultTurn *turns.Turn
+	// ResultTurn stores the resulting Turn after engine execution when needed by callers
+	ResultTurn *turns.Turn
 
 	// Optional UI/Terminal specific components
 	UISettings *UISettings
@@ -107,16 +107,16 @@ func WithWriter(w io.Writer) RunOption {
 // WithVariables passes a map of template variables used to render
 // system prompt, messages and user prompt before sending to the model.
 func WithVariables(vars map[string]interface{}) RunOption {
-    return func(rc *RunContext) error {
-        rc.Variables = vars
-        return nil
-    }
+	return func(rc *RunContext) error {
+		rc.Variables = vars
+		return nil
+	}
 }
 
 // NewRunContext creates a new RunContext with default values and a required manager
 func NewRunContext() *RunContext {
 	return &RunContext{
-		RunMode:             RunModeBlocking,
-		Writer:              os.Stdout,
+		RunMode: RunModeBlocking,
+		Writer:  os.Stdout,
 	}
 }

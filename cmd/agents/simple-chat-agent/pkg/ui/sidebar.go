@@ -1,15 +1,15 @@
 package ui
 
 import (
-    "encoding/json"
-    "fmt"
-    "strings"
-    "time"
+	"encoding/json"
+	"fmt"
+	"strings"
+	"time"
 
-    tea "github.com/charmbracelet/bubbletea"
-    "github.com/charmbracelet/lipgloss"
-    "github.com/go-go-golems/geppetto/pkg/events"
-    toolspkg "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/tools"
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+	"github.com/go-go-golems/geppetto/pkg/events"
+	toolspkg "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/tools"
 )
 
 var sidebarTitleStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("63"))
@@ -32,21 +32,21 @@ type ComputationRecord struct {
 }
 
 type SidebarModel struct {
-    width         int
-    // Computation tool mini-log
-    computations  []ComputationRecord
-    compIndexByID map[string]int
+	width int
+	// Computation tool mini-log
+	computations  []ComputationRecord
+	compIndexByID map[string]int
 
-    // Agent mode state and history
-    currentMode string
-    modeHistory []ModeSwitch
+	// Agent mode state and history
+	currentMode string
+	modeHistory []ModeSwitch
 }
 
 type ModeSwitch struct {
-    From     string
-    To       string
-    Analysis string
-    At       time.Time
+	From     string
+	To       string
+	Analysis string
+	At       time.Time
 }
 
 func NewSidebarModel() SidebarModel {
@@ -54,8 +54,8 @@ func NewSidebarModel() SidebarModel {
 		width:         28,
 		computations:  make([]ComputationRecord, 0, 32),
 		compIndexByID: make(map[string]int),
-        currentMode:   "",
-        modeHistory:   make([]ModeSwitch, 0, 16),
+		currentMode:   "",
+		modeHistory:   make([]ModeSwitch, 0, 16),
 	}
 }
 
@@ -97,72 +97,78 @@ func (m SidebarModel) Update(msg tea.Msg) (SidebarModel, tea.Cmd) {
 			}
 		}
 		return m, nil
-    case *events.EventLog:
-        // Capture initial mode insertion log
-        if strings.HasPrefix(ev.Message, "agentmode:") {
-            if ev.Message == "agentmode: user prompt inserted" {
-                if mode, ok := ev.Fields["mode"].(string); ok && mode != "" {
-                    m.currentMode = mode
-                }
-            }
-        }
-        return m, nil
-    case *events.EventInfo:
-        // Capture switch events with from/to/analysis
-        if ev.Message == "agentmode: mode switched" {
-            from, _ := ev.Data["from"].(string)
-            to, _ := ev.Data["to"].(string)
-            analysis, _ := ev.Data["analysis"].(string)
-            if to != "" {
-                m.modeHistory = append(m.modeHistory, ModeSwitch{From: from, To: to, Analysis: analysis, At: time.Now()})
-                m.currentMode = to
-            }
-        }
-        return m, nil
+	case *events.EventLog:
+		// Capture initial mode insertion log
+		if strings.HasPrefix(ev.Message, "agentmode:") {
+			if ev.Message == "agentmode: user prompt inserted" {
+				if mode, ok := ev.Fields["mode"].(string); ok && mode != "" {
+					m.currentMode = mode
+				}
+			}
+		}
+		return m, nil
+	case *events.EventInfo:
+		// Capture switch events with from/to/analysis
+		if ev.Message == "agentmode: mode switched" {
+			from, _ := ev.Data["from"].(string)
+			to, _ := ev.Data["to"].(string)
+			analysis, _ := ev.Data["analysis"].(string)
+			if to != "" {
+				m.modeHistory = append(m.modeHistory, ModeSwitch{From: from, To: to, Analysis: analysis, At: time.Now()})
+				m.currentMode = to
+			}
+		}
+		return m, nil
 	}
 	return m, nil
 }
 
 func (m SidebarModel) View() string {
-    var out string
-    // Agent mode section
-    titleMode := sidebarTitleStyle.Render("Agent Mode (Ctrl+G)")
-    curr := m.currentMode
-    if curr == "" { curr = "(unknown)" }
-    out += titleMode + "\nCurrent: " + curr + "\n"
-    if len(m.modeHistory) > 0 {
-        out += "History:\n"
-        // show last up to 8 entries
-        start := 0
-        if len(m.modeHistory) > 8 { start = len(m.modeHistory) - 8 }
-        for _, h := range m.modeHistory[start:] {
-            line := fmt.Sprintf("%s → %s", h.From, h.To)
-            if h.Analysis != "" {
-                // keep it short
-                s := h.Analysis
-                if len(s) > 48 { s = s[:48] + "…" }
-                line += " — " + s
-            }
-            out += line + "\n"
-        }
-    }
-    out += "\n"
+	var out string
+	// Agent mode section
+	titleMode := sidebarTitleStyle.Render("Agent Mode (Ctrl+G)")
+	curr := m.currentMode
+	if curr == "" {
+		curr = "(unknown)"
+	}
+	out += titleMode + "\nCurrent: " + curr + "\n"
+	if len(m.modeHistory) > 0 {
+		out += "History:\n"
+		// show last up to 8 entries
+		start := 0
+		if len(m.modeHistory) > 8 {
+			start = len(m.modeHistory) - 8
+		}
+		for _, h := range m.modeHistory[start:] {
+			line := fmt.Sprintf("%s → %s", h.From, h.To)
+			if h.Analysis != "" {
+				// keep it short
+				s := h.Analysis
+				if len(s) > 48 {
+					s = s[:48] + "…"
+				}
+				line += " — " + s
+			}
+			out += line + "\n"
+		}
+	}
+	out += "\n"
 
-    // Computations section
-    title := sidebarTitleStyle.Render("Computations")
-    out += title + "\n"
-    if len(m.computations) == 0 {
-        out += "No computations yet\n"
-    } else {
-        for _, c := range m.computations {
-            line := fmt.Sprintf("%s: %.2f %s %.2f", c.ID, c.A, c.Op, c.B)
-            if c.Result != nil {
-                line += fmt.Sprintf(" = %.4f", *c.Result)
-            } else {
-                line += " (running)"
-            }
-            out += line + "\n"
-        }
-    }
-    return sidebarBoxStyle.Width(m.width).Render(out)
+	// Computations section
+	title := sidebarTitleStyle.Render("Computations")
+	out += title + "\n"
+	if len(m.computations) == 0 {
+		out += "No computations yet\n"
+	} else {
+		for _, c := range m.computations {
+			line := fmt.Sprintf("%s: %.2f %s %.2f", c.ID, c.A, c.Op, c.B)
+			if c.Result != nil {
+				line += fmt.Sprintf(" = %.4f", *c.Result)
+			} else {
+				line += " (running)"
+			}
+			out += line + "\n"
+		}
+	}
+	return sidebarBoxStyle.Width(m.width).Render(out)
 }

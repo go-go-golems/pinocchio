@@ -6,8 +6,8 @@ import (
 	"strings"
 
 	geppettolayers "github.com/go-go-golems/geppetto/pkg/layers"
-    "github.com/go-go-golems/geppetto/pkg/turns"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
+	"github.com/go-go-golems/geppetto/pkg/turns"
 	"github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/cmds/alias"
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
@@ -92,23 +92,23 @@ func (g *PinocchioCommandLoader) loadPinocchioCommandFromReader(
 		scd.Name,
 		options_...,
 	)
-    if scd.Prompt != "" && len(scd.Messages) != 0 {
+	if scd.Prompt != "" && len(scd.Messages) != 0 {
 		return nil, errors.Errorf("Prompt and messages are mutually exclusive")
 	}
 
-    // Convert simple messages to user blocks (llm content)
-    blocks := make([]turns.Block, 0, len(scd.Messages))
-    for _, text := range scd.Messages {
-        if strings.TrimSpace(text) == "" {
-            continue
-        }
-        blocks = append(blocks, turns.NewUserTextBlock(text))
-    }
+	// Convert simple messages to user blocks (llm content)
+	blocks := make([]turns.Block, 0, len(scd.Messages))
+	for _, text := range scd.Messages {
+		if strings.TrimSpace(text) == "" {
+			continue
+		}
+		blocks = append(blocks, turns.NewUserTextBlock(text))
+	}
 
-    sq, err := NewPinocchioCommand(
+	sq, err := NewPinocchioCommand(
 		description,
 		WithPrompt(scd.Prompt),
-        WithBlocks(blocks),
+		WithBlocks(blocks),
 		WithSystemPrompt(scd.SystemPrompt),
 	)
 	if err != nil {

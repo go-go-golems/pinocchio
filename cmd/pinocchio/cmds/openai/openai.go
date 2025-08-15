@@ -13,7 +13,6 @@ import (
 	"github.com/go-go-golems/glazed/pkg/middlewares"
 	"github.com/go-go-golems/glazed/pkg/settings"
 	"github.com/go-go-golems/glazed/pkg/types"
-	get_conversation "github.com/go-go-golems/pinocchio/cmd/pinocchio/cmds/openai/get-conversation"
 	geppetto_cmds "github.com/go-go-golems/pinocchio/pkg/cmds"
 	"github.com/mb0/glob"
 	"github.com/pkg/errors"
@@ -254,12 +253,6 @@ func init() {
 	cobraEngineInfoCommand, err := geppetto_cmds.BuildCobraCommandWithGeppettoMiddlewares(engineInfoCommand)
 	cobra.CheckErr(err)
 	OpenaiCmd.AddCommand(cobraEngineInfoCommand)
-
-	getConversationCommand, err := get_conversation.NewGetConversationCommand()
-	cobra.CheckErr(err)
-	cobraGetConversationCommand, err := geppetto_cmds.BuildCobraCommandWithGeppettoMiddlewares(getConversationCommand)
-	cobra.CheckErr(err)
-	OpenaiCmd.AddCommand(cobraGetConversationCommand)
 
 	transcribeCommand, err := NewTranscribeCommand()
 	cobra.CheckErr(err)

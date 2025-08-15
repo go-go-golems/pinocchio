@@ -11,7 +11,7 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/inference/middleware"
 	"github.com/go-go-golems/geppetto/pkg/inference/toolhelpers"
 	"github.com/go-go-golems/geppetto/pkg/inference/tools"
-    	"github.com/go-go-golems/geppetto/pkg/turns"
+	"github.com/go-go-golems/geppetto/pkg/turns"
 )
 
 // Ensure ChatEvaluator implements repl.Evaluator
@@ -29,10 +29,10 @@ type ChatEvaluator struct {
 func NewChatEvaluator(
 	eng engine.Engine,
 	registry *tools.InMemoryToolRegistry,
-    	sink *middleware.WatermillSink,
-    	hook toolhelpers.SnapshotHook,
+	sink *middleware.WatermillSink,
+	hook toolhelpers.SnapshotHook,
 ) *ChatEvaluator {
-    	return &ChatEvaluator{eng: eng, turn: &turns.Turn{Data: map[string]any{}}, registry: registry, sink: sink, snapshotHook: hook}
+	return &ChatEvaluator{eng: eng, turn: &turns.Turn{Data: map[string]any{}}, registry: registry, sink: sink, snapshotHook: hook}
 }
 
 func (e *ChatEvaluator) Evaluate(ctx context.Context, code string) (string, error) {
