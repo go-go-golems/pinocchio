@@ -18,7 +18,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	bobatea_chat "github.com/go-go-golems/bobatea/pkg/chat"
 
-    "github.com/go-go-golems/geppetto/pkg/conversation"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 	"github.com/go-go-golems/geppetto/pkg/turns"
 	glazedcmds "github.com/go-go-golems/glazed/pkg/cmds"
@@ -33,21 +32,6 @@ import (
 	"github.com/tcnksm/go-input"
 	"golang.org/x/sync/errgroup"
 )
-// buildInitialTurn constructs a Turn from system prompt, pre-seeded messages, and an optional user prompt
-func buildInitialTurn(systemPrompt string, msgs []*conversation.Message, userPrompt string) *turns.Turn {
-    t := &turns.Turn{}
-    if strings.TrimSpace(systemPrompt) != "" {
-        turns.AppendBlock(t, turns.NewSystemTextBlock(systemPrompt))
-    }
-    // convert legacy messages into blocks
-    if len(msgs) > 0 {
-        turns.AppendBlocks(t, turns.BlocksFromConversationDelta(conversation.Conversation(msgs), 0)...)
-    }
-    if strings.TrimSpace(userPrompt) != "" {
-        turns.AppendBlock(t, turns.NewUserTextBlock(userPrompt))
-    }
-    return t
-}
 
 func renderTemplateString(name, text string, vars map[string]interface{}) (string, error) {
     if strings.TrimSpace(text) == "" {
@@ -226,167 +210,164 @@ func (g *PinocchioCommand) RunIntoWriter(
 
     // No conversation manager preview; print path handled by RunWithOptions
 
-	// Determine run mode based on helper settings
-	runMode := run.RunModeBlocking
-	if helpersSettings.StartInChat {
-		runMode = run.RunModeChat
-	} else if helpersSettings.Interactive {
-		runMode = run.RunModeInteractive
-	}
+    // Determine run mode based on helper settings
+    runMode := run.RunModeBlocking
+    if helpersSettings.StartInChat {
+        runMode = run.RunModeChat
+    } else if helpersSettings.Interactive {
+        runMode = run.RunModeInteractive
+    }
 
-	// Create UI settings from helper settings
-	uiSettings := &run.UISettings{
-		Interactive:      helpersSettings.Interactive,
-		ForceInteractive: helpersSettings.ForceInteractive,
-		NonInteractive:   helpersSettings.NonInteractive,
-		StartInChat:      helpersSettings.StartInChat,
-		PrintPrompt:      helpersSettings.PrintPrompt,
-		Output:           helpersSettings.Output,
-		WithMetadata:     helpersSettings.WithMetadata,
-		FullOutput:       helpersSettings.FullOutput,
-	}
+    // Create UI settings from helper settings
+    uiSettings := &run.UISettings{
+        Interactive:      helpersSettings.Interactive,
+        ForceInteractive: helpersSettings.ForceInteractive,
+        NonInteractive:   helpersSettings.NonInteractive,
+        StartInChat:      helpersSettings.StartInChat,
+        PrintPrompt:      helpersSettings.PrintPrompt,
+        Output:           helpersSettings.Output,
+        WithMetadata:     helpersSettings.WithMetadata,
+        FullOutput:       helpersSettings.FullOutput,
+    }
 
-	router, err := events.NewEventRouter()
-	if err != nil {
-		return err
-	}
+    router, err := events.NewEventRouter()
+    if err != nil {
+        return err
+    }
 
-	// Run with options
-    messages, err := g.RunWithOptions(ctx,
-		run.WithStepSettings(stepSettings),
-		run.WithWriter(w),
-		run.WithRunMode(runMode),
-		run.WithUISettings(uiSettings),
-		run.WithRouter(router),
-		run.WithVariables(parsedLayers.GetDefaultParameterLayer().Parameters.ToMap()),
-	)
-	if err != nil {
-		return err
-	}
-
-	// If we're just printing the prompt, do that and return
+    // If we're just printing the prompt, render and print the seed Turn and return
     if helpersSettings.PrintPrompt {
-        for _, message := range messages {
-			_, _ = fmt.Fprintf(w, "%s\n", strings.TrimSpace(message.Content.View()))
-			_, _ = fmt.Fprintln(w)
-		}
-	}
+        seed, err := g.buildInitialTurn(parsedLayers.GetDefaultParameterLayer().Parameters.ToMap())
+        if err != nil {
+            return err
+        }
+        turns.FprintTurn(w, seed)
+        return nil
+    }
 
-	return nil
+    // Run with options
+    _, err = g.RunWithOptions(ctx,
+        run.WithStepSettings(stepSettings),
+        run.WithWriter(w),
+        run.WithRunMode(runMode),
+        run.WithUISettings(uiSettings),
+        run.WithRouter(router),
+        run.WithVariables(parsedLayers.GetDefaultParameterLayer().Parameters.ToMap()),
+    )
+    if err != nil {
+        return err
+    }
+
+    return nil
 }
 
 // RunWithOptions executes the command with the given options
-func (g *PinocchioCommand) RunWithOptions(ctx context.Context, options ...run.RunOption) ([]*conversation.Message, error) {
+func (g *PinocchioCommand) RunWithOptions(ctx context.Context, options ...run.RunOption) (*turns.Turn, error) {
     runCtx := &run.RunContext{}
 
-	// Apply options
-	for _, opt := range options {
-		if err := opt(runCtx); err != nil {
-			return nil, err
-		}
-	}
+    // Apply options
+    for _, opt := range options {
+        if err := opt(runCtx); err != nil {
+            return nil, err
+        }
+    }
 
     // ConversationManager optional during migration; prefer Turn-based flows
 
     if runCtx.UISettings != nil && runCtx.UISettings.PrintPrompt {
-        // Build a preview conversation from initial Turn using rendered templates
+        // Build a preview turn from initial blocks using rendered templates
         t, err := g.buildInitialTurn(runCtx.Variables)
         if err != nil {
             return nil, err
         }
-        conv := turns.BuildConversationFromTurn(t)
-        return conv, nil
+        return t, nil
     }
 
-	// Create engine factory if not provided
-	if runCtx.EngineFactory == nil {
-		runCtx.EngineFactory = factory.NewStandardEngineFactory()
-	}
+    // Create engine factory if not provided
+    if runCtx.EngineFactory == nil {
+        runCtx.EngineFactory = factory.NewStandardEngineFactory()
+    }
 
-	// Verify router for chat mode
+    // Verify router for chat mode
     if (runCtx.RunMode == run.RunModeChat || runCtx.RunMode == run.RunModeInteractive) && runCtx.Router == nil {
-		return nil, errors.New("chat mode requires a router")
-	}
+        return nil, errors.New("chat mode requires a router")
+    }
 
-	switch runCtx.RunMode {
-	case run.RunModeBlocking:
-		return g.runBlocking(ctx, runCtx)
-	case run.RunModeInteractive, run.RunModeChat:
-		return g.runChat(ctx, runCtx)
-	default:
-		return nil, errors.Errorf("unknown run mode: %v", runCtx.RunMode)
-	}
+    switch runCtx.RunMode {
+    case run.RunModeBlocking:
+        return g.runBlocking(ctx, runCtx)
+    case run.RunModeInteractive, run.RunModeChat:
+        return g.runChat(ctx, runCtx)
+    default:
+        return nil, errors.Errorf("unknown run mode: %v", runCtx.RunMode)
+    }
 }
 
 // runBlocking handles blocking execution mode using Engine directly
-func (g *PinocchioCommand) runBlocking(ctx context.Context, rc *run.RunContext) ([]*conversation.Message, error) {
+func (g *PinocchioCommand) runBlocking(ctx context.Context, rc *run.RunContext) (*turns.Turn, error) {
     // Create engine instance options
     var options []engine.Option
 
-	// If we have a router, set up watermill sink for event publishing
-	if rc.Router != nil {
-		watermillSink := middleware.NewWatermillSink(rc.Router.Publisher, "chat")
-		options = append(options, engine.WithSink(watermillSink))
+    // If we have a router, set up watermill sink for event publishing
+    if rc.Router != nil {
+        watermillSink := middleware.NewWatermillSink(rc.Router.Publisher, "chat")
+        options = append(options, engine.WithSink(watermillSink))
 
-		// Add default printer if none is set
-		if rc.UISettings == nil || rc.UISettings.Output == "" {
-			rc.Router.AddHandler("chat", "chat", events.StepPrinterFunc("", rc.Writer))
-		} else {
-			printer := events.NewStructuredPrinter(rc.Writer, events.PrinterOptions{
-				Format:          events.PrinterFormat(rc.UISettings.Output),
-				Name:            "",
-				IncludeMetadata: rc.UISettings.WithMetadata,
-				Full:            rc.UISettings.FullOutput,
-			})
-			rc.Router.AddHandler("chat", "chat", printer)
-		}
+        // Add default printer if none is set
+        if rc.UISettings == nil || rc.UISettings.Output == "" {
+            rc.Router.AddHandler("chat", "chat", events.StepPrinterFunc("", rc.Writer))
+        } else {
+            printer := events.NewStructuredPrinter(rc.Writer, events.PrinterOptions{
+                Format:          events.PrinterFormat(rc.UISettings.Output),
+                Name:            "",
+                IncludeMetadata: rc.UISettings.WithMetadata,
+                Full:            rc.UISettings.FullOutput,
+            })
+            rc.Router.AddHandler("chat", "chat", printer)
+        }
 
-		// Start router
-		eg := errgroup.Group{}
-		ctx, cancel := context.WithCancel(ctx)
-		defer cancel()
+        // Start router
+        eg := errgroup.Group{}
+        ctx, cancel := context.WithCancel(ctx)
+        defer cancel()
 
-		eg.Go(func() error {
-			defer cancel()
-			defer func(Router *events.EventRouter) {
-				_ = Router.Close()
-			}(rc.Router)
-			return rc.Router.Run(ctx)
-		})
+        eg.Go(func() error {
+            defer cancel()
+            defer func(Router *events.EventRouter) {
+                _ = Router.Close()
+            }(rc.Router)
+            return rc.Router.Run(ctx)
+        })
 
-		eg.Go(func() error {
-			defer cancel()
-			<-rc.Router.Running()
-			return g.runEngineAndCollectMessages(ctx, rc, options)
-		})
+        eg.Go(func() error {
+            defer cancel()
+            <-rc.Router.Running()
+            return g.runEngineAndCollectMessages(ctx, rc, options)
+        })
 
-		err := eg.Wait()
-		if err != nil {
-			return nil, err
-		}
-	} else {
+        err := eg.Wait()
+        if err != nil {
+            return nil, err
+        }
+    } else {
         // No router, just run the engine directly using Turns
         err := g.runEngineAndCollectMessages(ctx, rc, options)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-    // For blocking mode, convert last updated turn to conversation if needed
-    // Here we return messages previously appended in runEngineAndCollectMessages via ResultConversation if set
-    if rc.ResultConversation != nil {
-        return rc.ResultConversation, nil
+        if err != nil {
+            return nil, err
+        }
     }
-    return []*conversation.Message{}, nil
+
+    // Return resulting Turn when available
+    return rc.ResultTurn, nil
 }
 
 // runEngineAndCollectMessages handles the actual engine execution and message collection
 func (g *PinocchioCommand) runEngineAndCollectMessages(ctx context.Context, rc *run.RunContext, options []engine.Option) error {
     // Create engine with options
     engine, err := rc.EngineFactory.CreateEngine(rc.StepSettings, options...)
-	if err != nil {
-		return fmt.Errorf("failed to create engine: %w", err)
-	}
+    if err != nil {
+        return fmt.Errorf("failed to create engine: %w", err)
+    }
 
     // Build seed Turn directly from system + messages + prompt (rendered)
     seed, err := g.buildInitialTurn(rc.Variables)
@@ -394,130 +375,128 @@ func (g *PinocchioCommand) runEngineAndCollectMessages(ctx context.Context, rc *
         return fmt.Errorf("failed to render templates: %w", err)
     }
     updatedTurn, err := engine.RunInference(ctx, seed)
-	if err != nil {
-		return fmt.Errorf("inference failed: %w", err)
-	}
-    // Convert final Turn to conversation for output
-    finalConv := turns.BuildConversationFromTurn(updatedTurn)
-    // Store result conversation for callers that want to print prompt
-    rc.ResultConversation = finalConv
+    if err != nil {
+        return fmt.Errorf("inference failed: %w", err)
+    }
+    // Store the updated Turn on the run context
+    rc.ResultTurn = updatedTurn
 
-	return nil
+    return nil
 }
 
 // runChat handles chat execution mode
-func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) ([]*conversation.Message, error) {
-	if rc.Router == nil {
-		return nil, errors.New("chat mode requires a router")
-	}
+func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) (*turns.Turn, error) {
+    if rc.Router == nil {
+        return nil, errors.New("chat mode requires a router")
+    }
 
-	isOutputTerminal := isatty.IsTerminal(os.Stdout.Fd())
+    isOutputTerminal := isatty.IsTerminal(os.Stdout.Fd())
 
-	options := []tea.ProgramOption{
-		tea.WithMouseCellMotion(),
-	}
-	if !isOutputTerminal {
-		options = append(options, tea.WithOutput(os.Stderr))
-	} else {
-		options = append(options, tea.WithAltScreen())
-	}
+    options := []tea.ProgramOption{
+        tea.WithMouseCellMotion(),
+    }
+    if !isOutputTerminal {
+        options = append(options, tea.WithOutput(os.Stderr))
+    } else {
+        options = append(options, tea.WithAltScreen())
+    }
 
-	// Enable streaming for the UI
-	rc.StepSettings.Chat.Stream = true
+    // Enable streaming for the UI
+    rc.StepSettings.Chat.Stream = true
 
-        // Create engine options with watermill sink for UI events
-	uiSink := middleware.NewWatermillSink(rc.Router.Publisher, "ui")
-	engineOptions := []engine.Option{engine.WithSink(uiSink)}
+    // Create engine options with watermill sink for UI events
+    uiSink := middleware.NewWatermillSink(rc.Router.Publisher, "ui")
+    engineOptions := []engine.Option{engine.WithSink(uiSink)}
 
-	// Start router in a goroutine
-	eg := errgroup.Group{}
-	ctx, cancel := context.WithCancel(ctx)
+    // Start router in a goroutine
+    eg := errgroup.Group{}
+    ctx, cancel := context.WithCancel(ctx)
 
-	f := func() {
-		cancel()
-		defer func(Router *events.EventRouter) {
-			_ = Router.Close()
-		}(rc.Router)
-	}
+    f := func() {
+        cancel()
+        defer func(Router *events.EventRouter) {
+            _ = Router.Close()
+        }(rc.Router)
+    }
 
-	eg.Go(func() error {
-		defer f()
-		ret := rc.Router.Run(ctx)
-		if ret != nil {
-			return ret
-		}
-		return nil
-	})
+    eg.Go(func() error {
+        defer f()
+        ret := rc.Router.Run(ctx)
+        if ret != nil {
+            return ret
+        }
+        return nil
+    })
 
-	eg.Go(func() error {
-		defer f()
-		var err error
+    eg.Go(func() error {
+        defer f()
+        var err error
 
-		// Wait for router to be ready
-		<-rc.Router.Running()
+        // Wait for router to be ready
+        <-rc.Router.Running()
 
-		// If we're in interactive mode, run initial blocking step
-		if rc.RunMode == run.RunModeInteractive {
-			// Create options for initial step with chat topic
-			chatSink := middleware.NewWatermillSink(rc.Router.Publisher, "chat")
-			initialOptions := []engine.Option{engine.WithSink(chatSink)}
+        // If we're in interactive mode, run initial blocking step
+        if rc.RunMode == run.RunModeInteractive {
+            // Create options for initial step with chat topic
+            chatSink := middleware.NewWatermillSink(rc.Router.Publisher, "chat")
+            initialOptions := []engine.Option{engine.WithSink(chatSink)}
 
-			// Add default printer for initial step
-			if rc.UISettings == nil || rc.UISettings.Output == "" || rc.UISettings.Output == "text" {
-				rc.Router.AddHandler("chat", "chat", events.StepPrinterFunc("", rc.Writer))
-			} else {
-				printer := events.NewStructuredPrinter(rc.Writer, events.PrinterOptions{
-					Format:          events.PrinterFormat(rc.UISettings.Output),
-					Name:            "",
-					IncludeMetadata: rc.UISettings.WithMetadata,
-					Full:            rc.UISettings.FullOutput,
-				})
-				rc.Router.AddHandler("chat", "chat", printer)
-			}
-			err := rc.Router.RunHandlers(ctx)
-			if err != nil {
-				return err
-			}
+            // Add default printer for initial step
+            if rc.UISettings == nil || rc.UISettings.Output == "" || rc.UISettings.Output == "text" {
+                rc.Router.AddHandler("chat", "chat", events.StepPrinterFunc("", rc.Writer))
+            } else {
+                printer := events.NewStructuredPrinter(rc.Writer, events.PrinterOptions{
+                    Format:          events.PrinterFormat(rc.UISettings.Output),
+                    Name:            "",
+                    IncludeMetadata: rc.UISettings.WithMetadata,
+                    Full:            rc.UISettings.FullOutput,
+                })
+                rc.Router.AddHandler("chat", "chat", printer)
+            }
+            err := rc.Router.RunHandlers(ctx)
+            if err != nil {
+                return err
+            }
 
-			err = g.runEngineAndCollectMessages(ctx, rc, initialOptions)
-			if err != nil {
-				return err
-			}
+            err = g.runEngineAndCollectMessages(ctx, rc, initialOptions)
+            if err != nil {
+                return err
+            }
 
-			// If we're not in interactive mode or it's explicitly disabled, return early
-			if rc.UISettings != nil && rc.UISettings.NonInteractive {
-				return nil
-			}
+            // If we're not in interactive mode or it's explicitly disabled, return early
+            if rc.UISettings != nil && rc.UISettings.NonInteractive {
+                return nil
+            }
 
-			// Check if we should ask for chat continuation
-			askChat := (isOutputTerminal || rc.UISettings != nil && rc.UISettings.ForceInteractive) && (rc.UISettings == nil || !rc.UISettings.NonInteractive)
-			if !askChat {
-				return nil
-			}
+            // Check if we should ask for chat continuation
+            askChat := (isOutputTerminal || rc.UISettings != nil && rc.UISettings.ForceInteractive) && (rc.UISettings == nil || !rc.UISettings.NonInteractive)
+            if !askChat {
+                return nil
+            }
 
-			// Ask user if they want to continue in chat mode
-			continueInChat, err := askForChatContinuation()
-			if err != nil {
-				return err
-			}
+            // Ask user if they want to continue in chat mode
+            continueInChat, err := askForChatContinuation()
+            if err != nil {
+                return err
+            }
 
-			if !continueInChat {
-				return nil
-			}
-		}
+            if !continueInChat {
+                return nil
+            }
+        }
 
         // Create EngineBackend
-		var backend bobatea_chat.Backend
-		log.Debug().Msg("Using EngineBackend for UI")
+        var backend bobatea_chat.Backend
+        log.Debug().Msg("Using EngineBackend for UI")
         engine, err := rc.EngineFactory.CreateEngine(rc.StepSettings, engineOptions...)
-		if err != nil {
-			return err
-		}
+        if err != nil {
+            return err
+        }
         backend = ui.NewEngineBackend(engine)
         log.Debug().Msg("EngineBackend created for UI")
 
-		// Determine if we should auto-start the backend
-		autoStartBackend := rc.UISettings != nil && rc.UISettings.StartInChat
+        // Determine if we should auto-start the backend
+        autoStartBackend := rc.UISettings != nil && rc.UISettings.StartInChat
 
         model := bobatea_chat.InitialModel(
             backend,
@@ -527,9 +506,9 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) ([]*
         log.Debug().Bool("auto_start", autoStartBackend).Msg("Chat model initialized")
 
         p := tea.NewProgram(
-			model,
-			options...,
-		)
+            model,
+            options...,
+        )
         if be, ok := backend.(*ui.EngineBackend); ok {
             be.AttachProgram(p)
         }
@@ -575,20 +554,17 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) ([]*
             }()
         }
 
-		_, err = p.Run()
-		return err
-	})
+        _, err = p.Run()
+        return err
+    })
 
-	err := eg.Wait()
-	if err != nil {
-		return nil, err
-	}
-
-    // In chat mode, no conversation manager; return any result conversation we gathered
-    if rc.ResultConversation != nil {
-        return rc.ResultConversation, nil
+    err := eg.Wait()
+    if err != nil {
+        return nil, err
     }
-    return []*conversation.Message{}, nil
+
+    // Return resulting Turn when available
+    return rc.ResultTurn, nil
 }
 
 // Helper function to ask user about continuing in chat mode

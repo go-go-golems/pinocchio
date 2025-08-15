@@ -7,7 +7,7 @@ import (
 
     "github.com/go-go-golems/geppetto/pkg/events"
     "github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
-    geppetto_conversation "github.com/go-go-golems/geppetto/pkg/conversation"
+    "github.com/go-go-golems/geppetto/pkg/turns"
 )
 
 type RunMode int
@@ -40,8 +40,8 @@ type RunContext struct {
 	// Template variables used to render prompts/messages prior to model calls
 	Variables map[string]interface{}
 
-    // ResultConversation stores the resulting conversation extracted from Turns at output boundaries
-    ResultConversation []*geppetto_conversation.Message
+    // ResultTurn stores the resulting Turn after engine execution when needed by callers
+    ResultTurn *turns.Turn
 
 	// Optional UI/Terminal specific components
 	UISettings *UISettings
