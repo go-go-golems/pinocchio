@@ -8,11 +8,9 @@ import (
 	"io"
 	"strings"
 
-	"github.com/go-go-golems/geppetto/pkg/conversation/builder"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 
 	clay "github.com/go-go-golems/clay/pkg"
-	"github.com/go-go-golems/geppetto/pkg/conversation"
 	"github.com/go-go-golems/glazed/pkg/cli"
 	"github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
@@ -24,6 +22,8 @@ import (
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
+
+	"github.com/go-go-golems/geppetto/pkg/turns"
 )
 
 //go:embed test.yaml
@@ -106,28 +106,18 @@ func (c *TestCommand) RunIntoWriter(ctx context.Context, parsedLayers *layers.Pa
 		return errors.Wrap(err, "failed to update step settings from parsed layers")
 	}
 
-	// Create image paths from helper settings
-	imagePaths := make([]string, len(helpersSettings.Images))
-	for i, img := range helpersSettings.Images {
-		imagePaths[i] = img.Path
+	// Build seed Turn from helpers settings (system prompt and optional user prompt)
+	seed := &turns.Turn{}
+	if sp := strings.TrimSpace(helpersSettings.System); sp != "" {
+		turns.AppendBlock(seed, turns.NewSystemTextBlock(sp))
+	}
+	// If there's a message-file or append-message-file, they will be handled downstream; here we just respect system
+	if up := strings.TrimSpace(""); up != "" {
+		turns.AppendBlock(seed, turns.NewUserTextBlock(up))
 	}
 
-	// Create the conversation manager
-	manager, err := c.pinocchioCmd.CreateConversationManagerBuilder().
-		WithImages(imagePaths).
-		WithAutosaveSettings(builder.AutosaveSettings{
-			Enabled:  strings.ToLower(helpersSettings.Autosave.Enabled) == "yes",
-			Template: helpersSettings.Autosave.Template,
-			Path:     helpersSettings.Autosave.Path,
-		}).
-		Build()
-	if err != nil {
-		return err
-	}
-
-	// Run with options
-	messages, err := c.pinocchioCmd.RunWithOptions(ctx,
-		run.WithConversationManager(manager),
+	// Run with options (Turn-first)
+	updatedTurn, err := c.pinocchioCmd.RunWithOptions(ctx,
 		run.WithStepSettings(stepSettings),
 		run.WithWriter(w),
 		run.WithRunMode(run.RunModeBlocking),
@@ -144,13 +134,8 @@ func (c *TestCommand) RunIntoWriter(ctx context.Context, parsedLayers *layers.Pa
 	fmt.Println("\n--------------------------------")
 	fmt.Println()
 
-	for _, msg := range messages {
-		if chatMsg, ok := msg.Content.(*conversation.ChatMessageContent); ok {
-			fmt.Printf("%s: %s\n", chatMsg.Role, chatMsg.Text)
-		} else {
-			fmt.Printf("%s: %s\n", msg.Content.ContentType(), msg.Content.String())
-		}
-	}
+	// Print the final Turn in a chat-like format
+	turns.FprintTurn(w, updatedTurn)
 
 	return nil
 }

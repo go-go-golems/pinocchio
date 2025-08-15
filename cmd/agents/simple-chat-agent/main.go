@@ -9,7 +9,6 @@ import (
 	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/go-go-golems/bobatea/pkg/repl"
 	clay "github.com/go-go-golems/clay/pkg"
-	"github.com/go-go-golems/geppetto/pkg/conversation/builder"
 	"github.com/go-go-golems/geppetto/pkg/events"
 	"github.com/go-go-golems/geppetto/pkg/inference/engine/factory"
 	"github.com/go-go-golems/geppetto/pkg/inference/middleware"
@@ -133,13 +132,6 @@ func (c *SimpleAgentCmd) RunIntoWriter(ctx context.Context, parsed *layers.Parse
 
 	// Tools are provided per Turn via registry (handled in evaluator); no engine-level configuration needed
 
-    // Conversation manager (system prompt handled by middleware)
-    mb := builder.NewManagerBuilder()
-	manager, err := mb.Build()
-	if err != nil {
-		return errors.Wrap(err, "build conversation")
-	}
-
 	// Evaluator for REPL
 	// Wrap engine to set stable run/turn ids and persist pre/post turn snapshots
 	var snapshotStore *storepkg.SQLiteStore
@@ -189,7 +181,7 @@ func (c *SimpleAgentCmd) RunIntoWriter(ctx context.Context, parsed *layers.Parse
     hook := func(hctx context.Context, ht *turns.Turn, phase string) {
         _ = snapshotStore.SaveTurnSnapshot(hctx, ht, phase)
     }
-    evaluator := evalpkg.NewChatEvaluator(wrappedEng, manager, registry, sink, hook)
+    evaluator := evalpkg.NewChatEvaluator(wrappedEng, registry, sink, hook)
     // Ensure Turn.Data has DSN to allow the middleware to open when needed; DB provided above already handles REGEXP
     _ = evaluator // evaluator will pass registry/turn through toolhelpers; DSN is taken from sqlitetool.Config DB
 	replCfg := repl.DefaultConfig()
