@@ -220,7 +220,7 @@ func StepChatForwardFunc(p *tea.Program) func(msg *message.Message) error {
 			p.Send(timeline.UIEntityCreated{
 				ID:        timeline.EntityID{LocalID: entityID, Kind: "llm_text"},
 				Renderer:  timeline.RendererDescriptor{Kind: "llm_text"},
-				Props:     map[string]any{"role": "assistant", "text": ""},
+				Props:     map[string]any{"role": "assistant", "text": "", "metadata": md.LLMInferenceData},
 				StartedAt: time.Now(),
 			})
 		case *events.EventPartialCompletion:
@@ -228,7 +228,7 @@ func StepChatForwardFunc(p *tea.Program) func(msg *message.Message) error {
 			log.Debug().Str("component", "step_forward").Str("entity_id", entityID).Int("delta_len", len(e_.Delta)).Int("completion_len", len(e_.Completion)).Msg("UIEntityUpdated (llm_text)")
 			p.Send(timeline.UIEntityUpdated{
 				ID:        timeline.EntityID{LocalID: entityID, Kind: "llm_text"},
-				Patch:     map[string]any{"text": e_.Completion},
+				Patch:     map[string]any{"text": e_.Completion, "metadata": md.LLMInferenceData},
 				Version:   time.Now().UnixNano(),
 				UpdatedAt: time.Now(),
 			})
@@ -236,7 +236,7 @@ func StepChatForwardFunc(p *tea.Program) func(msg *message.Message) error {
 			log.Debug().Str("component", "step_forward").Str("entity_id", entityID).Int("text_len", len(e_.Text)).Msg("UIEntityCompleted (final)")
 			p.Send(timeline.UIEntityCompleted{
 				ID:     timeline.EntityID{LocalID: entityID, Kind: "llm_text"},
-				Result: map[string]any{"text": e_.Text},
+				Result: map[string]any{"text": e_.Text, "metadata": md.LLMInferenceData},
 			})
 			p.Send(boba_chat.BackendFinishedMsg{})
 		case *events.EventInterrupt:
