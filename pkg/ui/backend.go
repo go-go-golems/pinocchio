@@ -220,7 +220,7 @@ func StepChatForwardFunc(p *tea.Program) func(msg *message.Message) error {
 			p.Send(timeline.UIEntityCreated{
 				ID:        timeline.EntityID{LocalID: entityID, Kind: "llm_text"},
 				Renderer:  timeline.RendererDescriptor{Kind: "llm_text"},
-				Props:     map[string]any{"role": "assistant", "text": "", "metadata": md.LLMInferenceData},
+				Props:     map[string]any{"role": "assistant", "text": "", "metadata": md.LLMInferenceData, "streaming": true},
 				StartedAt: time.Now(),
 			})
 		case *events.EventPartialCompletion:
@@ -228,7 +228,7 @@ func StepChatForwardFunc(p *tea.Program) func(msg *message.Message) error {
 			log.Debug().Str("component", "step_forward").Str("entity_id", entityID).Int("delta_len", len(e_.Delta)).Int("completion_len", len(e_.Completion)).Msg("UIEntityUpdated (llm_text)")
 			p.Send(timeline.UIEntityUpdated{
 				ID:        timeline.EntityID{LocalID: entityID, Kind: "llm_text"},
-				Patch:     map[string]any{"text": e_.Completion, "metadata": md.LLMInferenceData},
+				Patch:     map[string]any{"text": e_.Completion, "metadata": md.LLMInferenceData, "streaming": true},
 				Version:   time.Now().UnixNano(),
 				UpdatedAt: time.Now(),
 			})
@@ -237,6 +237,13 @@ func StepChatForwardFunc(p *tea.Program) func(msg *message.Message) error {
 			p.Send(timeline.UIEntityCompleted{
 				ID:     timeline.EntityID{LocalID: entityID, Kind: "llm_text"},
 				Result: map[string]any{"text": e_.Text, "metadata": md.LLMInferenceData},
+			})
+			// Mark streaming=false on completion by sending a final props update before BackendFinished
+			p.Send(timeline.UIEntityUpdated{
+				ID:        timeline.EntityID{LocalID: entityID, Kind: "llm_text"},
+				Patch:     map[string]any{"streaming": false},
+				Version:   time.Now().UnixNano(),
+				UpdatedAt: time.Now(),
 			})
 			p.Send(boba_chat.BackendFinishedMsg{})
 		case *events.EventInterrupt:
@@ -250,6 +257,7 @@ func StepChatForwardFunc(p *tea.Program) func(msg *message.Message) error {
 				ID:     timeline.EntityID{LocalID: entityID, Kind: "llm_text"},
 				Result: map[string]any{"text": intr.Text},
 			})
+			p.Send(timeline.UIEntityUpdated{ID: timeline.EntityID{LocalID: entityID, Kind: "llm_text"}, Patch: map[string]any{"streaming": false}, Version: time.Now().UnixNano(), UpdatedAt: time.Now()})
 			p.Send(boba_chat.BackendFinishedMsg{})
 		case *events.EventError:
 			log.Debug().Str("component", "step_forward").Str("entity_id", entityID).Msg("UIEntityCompleted (error)")
@@ -257,6 +265,7 @@ func StepChatForwardFunc(p *tea.Program) func(msg *message.Message) error {
 				ID:     timeline.EntityID{LocalID: entityID, Kind: "llm_text"},
 				Result: map[string]any{"text": "**Error**\n\n" + e_.ErrorString},
 			})
+			p.Send(timeline.UIEntityUpdated{ID: timeline.EntityID{LocalID: entityID, Kind: "llm_text"}, Patch: map[string]any{"streaming": false}, Version: time.Now().UnixNano(), UpdatedAt: time.Now()})
 			p.Send(boba_chat.BackendFinishedMsg{})
 			// Tool-related events can be mapped to dedicated tool_call entities if desired
 		}
