@@ -118,7 +118,7 @@ func (m AppModel) Init() tea.Cmd {
 
 func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if m.activeForm != nil {
-		fm, cmd := m.activeForm.Update(msg)
+        fm, cmd := safeFormUpdate(m.activeForm, msg)
 		if f, ok := fm.(*huh.Form); ok {
 			m.activeForm = f
 		}
@@ -513,6 +513,20 @@ func safeFormView(f *huh.Form) string {
 		_ = recover()
 	}()
 	return f.View()
+}
+
+// safeFormUpdate wraps huh.Form.Update() to recover from internal panics
+// (e.g., selector with empty options). It returns the original form and
+// a nil command if a panic occurs, allowing the UI loop to continue.
+func safeFormUpdate(f *huh.Form, msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
+    defer func() {
+        if r := recover(); r != nil {
+            log.Warn().Interface("recover", r).Msg("huh.Form.Update panic recovered")
+            model = f
+            cmd = nil
+        }
+    }()
+    return f.Update(msg)
 }
 
 func maxInt(a, b int) int {

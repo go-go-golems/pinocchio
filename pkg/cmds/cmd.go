@@ -25,7 +25,7 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
 	"github.com/go-go-golems/pinocchio/pkg/cmds/cmdlayers"
 	"github.com/go-go-golems/pinocchio/pkg/cmds/run"
-	"github.com/go-go-golems/pinocchio/pkg/ui"
+	"github.com/go-go-golems/pinocchio/pkg/ui/runtime"
 	"github.com/mattn/go-isatty"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
@@ -406,9 +406,6 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) (*tu
 	// Enable streaming for the UI
 	rc.StepSettings.Chat.Stream = true
 
-	// Create engine options with watermill sink for UI events
-	uiSink := middleware.NewWatermillSink(rc.Router.Publisher, "ui")
-	engineOptions := []engine.Option{engine.WithSink(uiSink)}
 
 	// Start router in a goroutine
 	eg := errgroup.Group{}
@@ -487,51 +484,41 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) (*tu
 			}
 		}
 
-		// Create EngineBackend
-		var backend bobatea_chat.Backend
-		log.Debug().Msg("Using EngineBackend for UI")
-		engine, err := rc.EngineFactory.CreateEngine(rc.StepSettings, engineOptions...)
-		if err != nil {
-			return err
-		}
-		backend = ui.NewEngineBackend(engine)
-		log.Debug().Msg("EngineBackend created for UI")
-
 		// Determine if we should auto-start the backend
 		autoStartBackend := rc.UISettings != nil && rc.UISettings.StartInChat
 
-		model := bobatea_chat.InitialModel(
-			backend,
-			bobatea_chat.WithTitle("pinocchio"),
-			bobatea_chat.WithAutoStartBackend(autoStartBackend),
-		)
-		log.Debug().Bool("auto_start", autoStartBackend).Msg("Chat model initialized")
-
-		p := tea.NewProgram(
-			model,
-			options...,
-		)
-		if be, ok := backend.(*ui.EngineBackend); ok {
-			be.AttachProgram(p)
+		// Build program and session via unified builder
+		sess, p, err := runtime.NewChatBuilder().
+			WithContext(ctx).
+			WithEngineFactory(rc.EngineFactory).
+			WithSettings(rc.StepSettings).
+			WithRouter(rc.Router).
+			WithProgramOptions(options...).
+			WithModelOptions(
+				bobatea_chat.WithTitle("pinocchio"),
+				bobatea_chat.WithAutoStartBackend(autoStartBackend),
+			).
+			BuildProgram()
+		if err != nil {
+			return err
 		}
 
-		rc.Router.AddHandler("ui", "ui", ui.StepChatForwardFunc(p))
+		// Register bound UI event handler and run handlers
+		rc.Router.AddHandler("ui", "ui", sess.EventHandler())
 		err = rc.Router.RunHandlers(ctx)
 		if err != nil {
 			return err
 		}
 
-		// Always seed backend Turn after router is running so the timeline shows prior context
+		// Seed backend Turn after router is running so the timeline shows prior context
 		go func() {
 			<-rc.Router.Running()
-			if be, ok := backend.(*ui.EngineBackend); ok {
-				seed, err := buildInitialTurnFromBlocksRendered(g.SystemPrompt, g.Blocks, "", rc.Variables)
-				if err == nil {
-					be.SetSeedTurn(seed)
-				} else {
-					// Fallback without rendering on error
-					be.SetSeedTurn(buildInitialTurnFromBlocks(g.SystemPrompt, g.Blocks, ""))
-				}
+			seed, err := buildInitialTurnFromBlocksRendered(g.SystemPrompt, g.Blocks, "", rc.Variables)
+			if err == nil {
+				sess.Backend.SetSeedTurn(seed)
+			} else {
+				// Fallback without rendering on error
+				sess.Backend.SetSeedTurn(buildInitialTurnFromBlocks(g.SystemPrompt, g.Blocks, ""))
 			}
 		}()
 
