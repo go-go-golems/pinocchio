@@ -39,6 +39,7 @@ type SidebarModel struct {
 
 	// Agent mode state and history
 	currentMode string
+	currentExplanation string
 	modeHistory []ModeSwitch
 }
 
@@ -104,6 +105,9 @@ func (m SidebarModel) Update(msg tea.Msg) (SidebarModel, tea.Cmd) {
 				if mode, ok := ev.Fields["mode"].(string); ok && mode != "" {
 					m.currentMode = mode
 				}
+				if prompt, ok := ev.Fields["prompt"].(string); ok && prompt != "" {
+					m.currentExplanation = prompt
+				}
 			}
 		}
 		return m, nil
@@ -116,6 +120,9 @@ func (m SidebarModel) Update(msg tea.Msg) (SidebarModel, tea.Cmd) {
 			if to != "" {
 				m.modeHistory = append(m.modeHistory, ModeSwitch{From: from, To: to, Analysis: analysis, At: time.Now()})
 				m.currentMode = to
+				if analysis != "" {
+					m.currentExplanation = analysis
+				}
 			}
 		}
 		return m, nil
@@ -124,49 +131,45 @@ func (m SidebarModel) Update(msg tea.Msg) (SidebarModel, tea.Cmd) {
 }
 
 func (m SidebarModel) View() string {
+	// Always render a titled, bordered sidebar even if empty
 	var out string
 	// Agent mode section
-	titleMode := sidebarTitleStyle.Render("Agent Mode (Ctrl+G)")
+	titleMode := sidebarTitleStyle.Render("Agent Mode (Ctrl+T)")
 	curr := m.currentMode
-	if curr == "" {
-		curr = "(unknown)"
-	}
+	if curr == "" { curr = "(unknown)" }
 	out += titleMode + "\nCurrent: " + curr + "\n"
+	if m.currentExplanation != "" {
+		expl := m.currentExplanation
+		if len(expl) > 96 { expl = expl[:96] + "…" }
+		out += "Why: " + expl + "\n"
+	}
+	// History block (may be empty)
+	out += "History:\n"
 	if len(m.modeHistory) > 0 {
-		out += "History:\n"
-		// show last up to 8 entries
 		start := 0
-		if len(m.modeHistory) > 8 {
-			start = len(m.modeHistory) - 8
-		}
+		if len(m.modeHistory) > 8 { start = len(m.modeHistory) - 8 }
 		for _, h := range m.modeHistory[start:] {
 			line := fmt.Sprintf("%s → %s", h.From, h.To)
 			if h.Analysis != "" {
-				// keep it short
 				s := h.Analysis
-				if len(s) > 48 {
-					s = s[:48] + "…"
-				}
+				if len(s) > 48 { s = s[:48] + "…" }
 				line += " — " + s
 			}
 			out += line + "\n"
 		}
+	} else {
+		out += "(none)\n"
 	}
 	out += "\n"
 
-	// Computations section
-	title := sidebarTitleStyle.Render("Computations")
-	out += title + "\n"
+	// Computations block (may be empty)
+	out += sidebarTitleStyle.Render("Computations") + "\n"
 	if len(m.computations) == 0 {
 		out += "No computations yet\n"
 	} else {
 		for _, c := range m.computations {
 			line := fmt.Sprintf("%s: %.2f %s %.2f", c.ID, c.A, c.Op, c.B)
-			if c.Result != nil {
-				line += fmt.Sprintf(" = %.4f", *c.Result)
-			} else {
-				line += " (running)"
-			}
+			if c.Result != nil { line += fmt.Sprintf(" = %.4f", *c.Result) } else { line += " (running)" }
 			out += line + "\n"
 		}
 	}

@@ -205,6 +205,8 @@ func (c *SimpleAgentCmd) RunIntoWriter(ctx context.Context, parsed *layers.Parse
 
 	// Wrap chat model with overlay to support generative-ui forms
 	app := uipkg.NewOverlayModel(chatModel, toolReqCh)
+	// Host model adds sidebar toggle (Ctrl+T) and composes layout around the overlay/chat UI
+	host := uipkg.NewHostModel(app, uiCh)
 
 	// Also persist chat events (tool/log/info) into sqlite when received
 	router.AddHandler("event-sql-logger", "chat", func(msg *message.Message) error {
@@ -223,7 +225,7 @@ func (c *SimpleAgentCmd) RunIntoWriter(ctx context.Context, parsed *layers.Parse
 	eg, groupCtx := errgroup.WithContext(ctx2)
 
 	// Build program first so we can register event forwarder before router starts
-	p := tea.NewProgram(app, tea.WithAltScreen())
+	p := tea.NewProgram(host, tea.WithAltScreen())
 	// Forward geppetto events to timeline UI (agent-specific forwarder, no premature finish)
 	router.AddHandler("ui-forward", "chat", backend.MakeUIForwarder(p))
 
