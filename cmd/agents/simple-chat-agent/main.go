@@ -7,7 +7,9 @@ import (
 
 	"github.com/ThreeDotsLabs/watermill/message"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/go-go-golems/bobatea/pkg/repl"
+	boba_chat "github.com/go-go-golems/bobatea/pkg/chat"
+	"github.com/go-go-golems/bobatea/pkg/timeline"
+	renderers "github.com/go-go-golems/bobatea/pkg/timeline/renderers"
 	clay "github.com/go-go-golems/clay/pkg"
 	"github.com/go-go-golems/geppetto/pkg/events"
 	"github.com/go-go-golems/geppetto/pkg/inference/engine/factory"
@@ -30,11 +32,11 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	sqlite_regexp "github.com/go-go-golems/go-sqlite-regexp"
-	evalpkg "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/eval"
+	backendpkg "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/backend"
+	eventspkg "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/xevents"
 	storepkg "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/store"
 	toolspkg "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/tools"
 	uipkg "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/ui"
-	eventspkg "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/xevents"
 	"github.com/google/uuid"
 )
 
@@ -134,8 +136,7 @@ func (c *SimpleAgentCmd) RunIntoWriter(ctx context.Context, parsed *layers.Parse
 
 	// Tools are provided per Turn via registry (handled in evaluator); no engine-level configuration needed
 
-	// Evaluator for REPL
-	// Wrap engine to set stable run/turn ids and persist pre/post turn snapshots
+	// State store and stable IDs
 	var snapshotStore *storepkg.SQLiteStore
 	{
 		ss, err := storepkg.NewSQLiteStore("simple-agent.db")
@@ -144,17 +145,16 @@ func (c *SimpleAgentCmd) RunIntoWriter(ctx context.Context, parsed *layers.Parse
 		}
 		snapshotStore = ss
 	}
-	// Create a session run id
 	sessionRunID := uuid.NewString()
-	// Add RW SQLite tool middleware with REGEXP and a Turn.Data DSN fallback
-	// Open DB with REGEXP and build middleware that advertises `sql_query` and executes queries
+
+	// Add RW SQLite tool middleware with REGEXP
 	dbWithRegexp, _ := sqlite_regexp.OpenWithRegexp("anonymized-data.db")
 	eng = middleware.NewEngineWithMiddleware(eng,
 		sqlitetool.NewMiddleware(sqlitetool.Config{DB: dbWithRegexp, MaxRows: 500}),
 	)
 
+	// Stable IDs + snapshot pre/post middleware
 	wrappedEng := middleware.NewEngineWithMiddleware(eng,
-		// stable IDs
 		func(next middleware.HandlerFunc) middleware.HandlerFunc {
 			return func(ctx context.Context, t *turns.Turn) (*turns.Turn, error) {
 				if t == nil {
@@ -169,15 +169,11 @@ func (c *SimpleAgentCmd) RunIntoWriter(ctx context.Context, parsed *layers.Parse
 				return next(ctx, t)
 			}
 		},
-		// snapshots: pre_middleware, pre_inference, post_inference, post_middleware, post_tools
 		func(next middleware.HandlerFunc) middleware.HandlerFunc {
 			return func(ctx context.Context, t *turns.Turn) (*turns.Turn, error) {
-				// pre_middleware
 				_ = snapshotStore.SaveTurnSnapshot(ctx, t, "pre_middleware")
-				// pre_inference will be captured by hook inside tool loop
 				res, err := next(ctx, t)
 				if res != nil {
-					// post_middleware
 					_ = snapshotStore.SaveTurnSnapshot(ctx, res, "post_middleware")
 				}
 				return res, err
@@ -185,21 +181,26 @@ func (c *SimpleAgentCmd) RunIntoWriter(ctx context.Context, parsed *layers.Parse
 		},
 	)
 
-	// Provide snapshot hook to evaluator to capture tool loop phases
+	// Hook for tool loop phases
 	hook := func(hctx context.Context, ht *turns.Turn, phase string) {
 		_ = snapshotStore.SaveTurnSnapshot(hctx, ht, phase)
 	}
-	evaluator := evalpkg.NewChatEvaluator(wrappedEng, registry, sink, hook)
-	// Ensure Turn.Data has DSN to allow the middleware to open when needed; DB provided above already handles REGEXP
-	_ = evaluator // evaluator will pass registry/turn through toolhelpers; DSN is taken from sqlitetool.Config DB
-	replCfg := repl.DefaultConfig()
-	replCfg.Title = "Chat REPL"
-	replModel := repl.NewModel(evaluator, replCfg)
-	// Register REPL debug commands (/dbg ...)
-	uipkg.RegisterDebugCommands(&replModel, snapshotStore)
 
-	// App model
-	app := uipkg.NewAppModel(uiCh, replModel, toolReqCh)
+	// Backend that runs tool loop
+	backend := backendpkg.NewToolLoopBackend(wrappedEng, registry, sink, hook)
+
+	// Chat model using TimelineShell + input, with our renderers
+	chatModel := boba_chat.InitialModel(backend,
+		boba_chat.WithTitle("Chat REPL"),
+		boba_chat.WithTimelineRegister(func(r *timeline.Registry) {
+			r.RegisterModelFactory(renderers.NewLLMTextFactory())
+			r.RegisterModelFactory(renderers.ToolCallsPanelFactory{})
+			r.RegisterModelFactory(renderers.PlainFactory{})
+		}),
+	)
+
+	// Wrap chat model with overlay to support generative-ui forms
+	app := uipkg.NewOverlayModel(chatModel, toolReqCh)
 
 	// Also persist chat events (tool/log/info) into sqlite when received
 	router.AddHandler("event-sql-logger", "chat", func(msg *message.Message) error {
@@ -212,13 +213,21 @@ func (c *SimpleAgentCmd) RunIntoWriter(ctx context.Context, parsed *layers.Parse
 		return nil
 	})
 
-	// Run router and Bubble Tea app
-	eg, groupCtx := errgroup.WithContext(ctx)
+	// Run router and Bubble Tea app; cancel router when UI exits
+	ctx2, cancel := context.WithCancel(ctx)
+	defer cancel()
+	eg, groupCtx := errgroup.WithContext(ctx2)
+
+	// Build program first so we can register event forwarder before router starts
+	p := tea.NewProgram(app, tea.WithAltScreen())
+	// Forward geppetto events to timeline UI (agent-specific forwarder, no premature finish)
+	router.AddHandler("ui-forward", "chat", backend.MakeUIForwarder(p))
+
 	eg.Go(func() error { return router.Run(groupCtx) })
 	eg.Go(func() error {
-		<-router.Running()
-		p := tea.NewProgram(app, tea.WithAltScreen())
 		_, err := p.Run()
+		// Ensure router shuts down when UI exits
+		cancel()
 		return err
 	})
 	if err := eg.Wait(); err != nil {
