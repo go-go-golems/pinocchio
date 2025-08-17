@@ -81,5 +81,3 @@ func (m OverlayModel) View() string {
     }
     return m.inner.View()
 }
-
-

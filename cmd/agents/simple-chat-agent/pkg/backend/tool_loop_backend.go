@@ -108,13 +108,18 @@ func (b *ToolLoopBackend) MakeUIForwarder(p *tea.Program) func(msg *message.Mess
 
         switch e_ := e.(type) {
         case *events.EventPartialCompletionStart:
+            log.Debug().Str("event", "partial_start").Str("run_id", md.RunID).Str("turn_id", md.TurnID).Str("message_id", md.ID.String()).Msg("forward: start")
             p.Send(timeline.UIEntityCreated{
                 ID:        timeline.EntityID{LocalID: entityID, Kind: "llm_text"},
                 Renderer:  timeline.RendererDescriptor{Kind: "llm_text"},
                 Props:     map[string]any{"role": "assistant", "text": "", "metadata": md.LLMInferenceData, "streaming": true},
                 StartedAt: time.Now(),
             })
+            if entityID == "00000000-0000-0000-0000-000000000000" {
+                log.Debug().Msg("forward: start has zero message_id (check event metadata assignment)")
+            }
         case *events.EventPartialCompletion:
+            log.Debug().Str("event", "partial").Str("run_id", md.RunID).Str("turn_id", md.TurnID).Int("delta_len", len(e_.Delta)).Int("completion_len", len(e_.Completion)).Msg("forward: partial")
             p.Send(timeline.UIEntityUpdated{
                 ID:        timeline.EntityID{LocalID: entityID, Kind: "llm_text"},
                 Patch:     map[string]any{"text": e_.Completion, "metadata": md.LLMInferenceData, "streaming": true},
@@ -122,12 +127,14 @@ func (b *ToolLoopBackend) MakeUIForwarder(p *tea.Program) func(msg *message.Mess
                 UpdatedAt: time.Now(),
             })
         case *events.EventFinal:
+            log.Debug().Str("event", "final").Str("run_id", md.RunID).Str("turn_id", md.TurnID).Int("text_len", len(e_.Text)).Msg("forward: final")
             p.Send(timeline.UIEntityCompleted{
                 ID:     timeline.EntityID{LocalID: entityID, Kind: "llm_text"},
                 Result: map[string]any{"text": e_.Text, "metadata": md.LLMInferenceData},
             })
             p.Send(timeline.UIEntityUpdated{ID: timeline.EntityID{LocalID: entityID, Kind: "llm_text"}, Patch: map[string]any{"streaming": false}, Version: time.Now().UnixNano(), UpdatedAt: time.Now()})
         case *events.EventInterrupt:
+            log.Debug().Str("event", "interrupt").Str("run_id", md.RunID).Str("turn_id", md.TurnID).Msg("forward: interrupt")
             intr, ok := events.ToTypedEvent[events.EventInterrupt](e)
             if !ok {
                 return errors.New("payload is not of type EventInterrupt")
@@ -135,38 +142,46 @@ func (b *ToolLoopBackend) MakeUIForwarder(p *tea.Program) func(msg *message.Mess
             p.Send(timeline.UIEntityCompleted{ID: timeline.EntityID{LocalID: entityID, Kind: "llm_text"}, Result: map[string]any{"text": intr.Text}})
             p.Send(timeline.UIEntityUpdated{ID: timeline.EntityID{LocalID: entityID, Kind: "llm_text"}, Patch: map[string]any{"streaming": false}, Version: time.Now().UnixNano(), UpdatedAt: time.Now()})
         case *events.EventError:
+            log.Debug().Str("event", "error").Str("run_id", md.RunID).Str("turn_id", md.TurnID).Str("err", e_.ErrorString).Msg("forward: error")
             p.Send(timeline.UIEntityCompleted{ID: timeline.EntityID{LocalID: entityID, Kind: "llm_text"}, Result: map[string]any{"text": "**Error**\n\n" + e_.ErrorString}})
             p.Send(timeline.UIEntityUpdated{ID: timeline.EntityID{LocalID: entityID, Kind: "llm_text"}, Patch: map[string]any{"streaming": false}, Version: time.Now().UnixNano(), UpdatedAt: time.Now()})
         case *events.EventToolCall:
+            log.Debug().Str("event", "tool_call").Str("tool_id", e_.ToolCall.ID).Str("name", e_.ToolCall.Name).Int("input_len", len(e_.ToolCall.Input)).Msg("forward: tool_call")
+            // Render tool call as a styled plain entity
             p.Send(timeline.UIEntityCreated{
-                ID:        timeline.EntityID{LocalID: e_.ToolCall.ID, Kind: "tool_call"},
-                Renderer:  timeline.RendererDescriptor{Kind: "tool_call"},
-                Props:     map[string]any{"name": e_.ToolCall.Name, "input": e_.ToolCall.Input},
+                ID:        timeline.EntityID{LocalID: e_.ToolCall.ID, Kind: "plain"},
+                Renderer:  timeline.RendererDescriptor{Kind: "plain"},
+                Props:     map[string]any{"title": "tool_call", "name": e_.ToolCall.Name, "input": e_.ToolCall.Input},
                 StartedAt: time.Now(),
             })
         case *events.EventToolCallExecute:
+            log.Debug().Str("event", "tool_exec").Str("tool_id", e_.ToolCall.ID).Str("name", e_.ToolCall.Name).Msg("forward: tool_exec")
             p.Send(timeline.UIEntityUpdated{
-                ID:        timeline.EntityID{LocalID: e_.ToolCall.ID, Kind: "tool_call"},
+                ID:        timeline.EntityID{LocalID: e_.ToolCall.ID, Kind: "plain"},
                 Patch:     map[string]any{"exec": true, "input": e_.ToolCall.Input},
                 Version:   time.Now().UnixNano(),
                 UpdatedAt: time.Now(),
             })
         case *events.EventToolResult:
-            p.Send(timeline.UIEntityUpdated{ID: timeline.EntityID{LocalID: e_.ToolResult.ID, Kind: "tool_call"}, Patch: map[string]any{"result": e_.ToolResult.Result}, Version: time.Now().UnixNano(), UpdatedAt: time.Now()})
-            p.Send(timeline.UIEntityCompleted{ID: timeline.EntityID{LocalID: e_.ToolResult.ID, Kind: "tool_call"}})
+            log.Debug().Str("event", "tool_result").Str("tool_id", e_.ToolResult.ID).Int("result_len", len(e_.ToolResult.Result)).Msg("forward: tool_result")
+            p.Send(timeline.UIEntityCreated{ID: timeline.EntityID{LocalID: e_.ToolResult.ID+":result", Kind: "tool_call_result"}, Renderer: timeline.RendererDescriptor{Kind: "tool_call_result"}, Props: map[string]any{"result": e_.ToolResult.Result}})
+            p.Send(timeline.UIEntityCompleted{ID: timeline.EntityID{LocalID: e_.ToolResult.ID+":result", Kind: "tool_call_result"}})
         case *events.EventToolCallExecutionResult:
-            p.Send(timeline.UIEntityUpdated{ID: timeline.EntityID{LocalID: e_.ToolResult.ID, Kind: "tool_call"}, Patch: map[string]any{"result": e_.ToolResult.Result}, Version: time.Now().UnixNano(), UpdatedAt: time.Now()})
-            p.Send(timeline.UIEntityCompleted{ID: timeline.EntityID{LocalID: e_.ToolResult.ID, Kind: "tool_call"}})
+            log.Debug().Str("event", "tool_exec_result").Str("tool_id", e_.ToolResult.ID).Int("result_len", len(e_.ToolResult.Result)).Msg("forward: tool_exec_result")
+            p.Send(timeline.UIEntityCreated{ID: timeline.EntityID{LocalID: e_.ToolResult.ID+":result", Kind: "tool_call_result"}, Renderer: timeline.RendererDescriptor{Kind: "tool_call_result"}, Props: map[string]any{"result": e_.ToolResult.Result}})
+            p.Send(timeline.UIEntityCompleted{ID: timeline.EntityID{LocalID: e_.ToolResult.ID+":result", Kind: "tool_call_result"}})
         case *events.EventAgentModeSwitch:
-            // Render a plain entity summarizing the mode change and analysis
+            log.Debug().Str("event", "agent_mode").Interface("data", e_.Data).Msg("forward: agent_mode")
+            // Render using agent_mode renderer; use message_id as stable ID.
             props := map[string]any{"title": e_.Message}
             for k, v := range e_.Data { props[k] = v }
+            localID := md.ID.String()
             p.Send(timeline.UIEntityCreated{
-                ID:       timeline.EntityID{LocalID: fmt.Sprintf("agentmode-%d", time.Now().UnixNano()), Kind: "plain"},
-                Renderer: timeline.RendererDescriptor{Kind: "plain"},
+                ID:       timeline.EntityID{LocalID: localID, Kind: "agent_mode"},
+                Renderer: timeline.RendererDescriptor{Kind: "agent_mode"},
                 Props:    props,
             })
-            p.Send(timeline.UIEntityCompleted{ID: timeline.EntityID{LocalID: fmt.Sprintf("agentmode-%d", time.Now().UnixNano()), Kind: "plain"}})
+            p.Send(timeline.UIEntityCompleted{ID: timeline.EntityID{LocalID: localID, Kind: "agent_mode"}})
         }
         return nil
     }

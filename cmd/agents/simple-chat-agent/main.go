@@ -33,10 +33,10 @@ import (
 
 	sqlite_regexp "github.com/go-go-golems/go-sqlite-regexp"
 	backendpkg "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/backend"
-	eventspkg "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/xevents"
 	storepkg "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/store"
 	toolspkg "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/tools"
 	uipkg "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/ui"
+	eventspkg "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/xevents"
 	"github.com/google/uuid"
 )
 
@@ -192,10 +192,14 @@ func (c *SimpleAgentCmd) RunIntoWriter(ctx context.Context, parsed *layers.Parse
 	// Chat model using TimelineShell + input, with our renderers
 	chatModel := boba_chat.InitialModel(backend,
 		boba_chat.WithTitle("Chat REPL"),
+		// register only core renderers; backend will add its own via WithTimelineRegister below
 		boba_chat.WithTimelineRegister(func(r *timeline.Registry) {
 			r.RegisterModelFactory(renderers.NewLLMTextFactory())
-			r.RegisterModelFactory(renderers.ToolCallsPanelFactory{})
+			// r.RegisterModelFactory(renderers.ToolCallsPanelFactory{})
 			r.RegisterModelFactory(renderers.PlainFactory{})
+			r.RegisterModelFactory(renderers.NewToolCallFactory())
+			r.RegisterModelFactory(renderers.ToolCallResultFactory{})
+			r.RegisterModelFactory(renderers.AgentModeFactory{})
 		}),
 	)
 
