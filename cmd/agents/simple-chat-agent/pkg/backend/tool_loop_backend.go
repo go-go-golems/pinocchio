@@ -120,7 +120,7 @@ func (b *ToolLoopBackend) MakeUIForwarder(p *tea.Program) func(msg *message.Mess
             p.Send(timeline.UIEntityCreated{
                 ID:        timeline.EntityID{LocalID: entityID, Kind: "llm_text"},
                 Renderer:  timeline.RendererDescriptor{Kind: "llm_text"},
-                Props:     map[string]any{"role": "assistant", "text": "[assistant]: ", "metadata": md.LLMInferenceData, "streaming": true},
+                Props:     map[string]any{"role": "assistant", "text": "", "metadata": md.LLMInferenceData, "streaming": true},
                 StartedAt: time.Now(),
             })
             if entityID == "00000000-0000-0000-0000-000000000000" {
@@ -130,7 +130,7 @@ func (b *ToolLoopBackend) MakeUIForwarder(p *tea.Program) func(msg *message.Mess
             log.Debug().Str("event", "partial").Str("run_id", md.RunID).Str("turn_id", md.TurnID).Int("delta_len", len(e_.Delta)).Int("completion_len", len(e_.Completion)).Msg("forward: partial")
             p.Send(timeline.UIEntityUpdated{
                 ID:        timeline.EntityID{LocalID: entityID, Kind: "llm_text"},
-                Patch:     map[string]any{"text": "[assistant]: " + e_.Completion, "metadata": md.LLMInferenceData, "streaming": true},
+                Patch:     map[string]any{"text": e_.Completion, "metadata": md.LLMInferenceData, "streaming": true},
                 Version:   time.Now().UnixNano(),
                 UpdatedAt: time.Now(),
             })
@@ -138,7 +138,7 @@ func (b *ToolLoopBackend) MakeUIForwarder(p *tea.Program) func(msg *message.Mess
             log.Debug().Str("event", "final").Str("run_id", md.RunID).Str("turn_id", md.TurnID).Int("text_len", len(e_.Text)).Msg("forward: final")
             p.Send(timeline.UIEntityCompleted{
                 ID:     timeline.EntityID{LocalID: entityID, Kind: "llm_text"},
-                Result: map[string]any{"text": "[assistant]: " + e_.Text, "metadata": md.LLMInferenceData},
+                Result: map[string]any{"text": e_.Text, "metadata": md.LLMInferenceData},
             })
             p.Send(timeline.UIEntityUpdated{ID: timeline.EntityID{LocalID: entityID, Kind: "llm_text"}, Patch: map[string]any{"streaming": false}, Version: time.Now().UnixNano(), UpdatedAt: time.Now()})
         case *events.EventInterrupt:

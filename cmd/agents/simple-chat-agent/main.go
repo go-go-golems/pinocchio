@@ -14,8 +14,6 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/events"
 	"github.com/go-go-golems/geppetto/pkg/inference/engine/factory"
 	"github.com/go-go-golems/geppetto/pkg/inference/middleware"
-	agentmode "github.com/go-go-golems/geppetto/pkg/inference/middleware/agentmode"
-	sqlitetool "github.com/go-go-golems/geppetto/pkg/inference/middleware/sqlitetool"
 	"github.com/go-go-golems/geppetto/pkg/inference/tools"
 	geppettolayers "github.com/go-go-golems/geppetto/pkg/layers"
 	"github.com/go-go-golems/geppetto/pkg/turns"
@@ -25,19 +23,20 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cmds/logging"
 	"github.com/go-go-golems/glazed/pkg/help"
 	help_cmd "github.com/go-go-golems/glazed/pkg/help/cmd"
+	backendpkg "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/backend"
+	storepkg "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/store"
+	uipkg "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/ui"
+	eventspkg "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/xevents"
+	agentmode "github.com/go-go-golems/pinocchio/pkg/middlewares/agentmode"
+	sqlitetool "github.com/go-go-golems/pinocchio/pkg/middlewares/sqlitetool"
+	toolspkg "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/tools"
+	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
-	"golang.org/x/sync/errgroup"
-
 	sqlite_regexp "github.com/go-go-golems/go-sqlite-regexp"
-	backendpkg "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/backend"
-	storepkg "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/store"
-	toolspkg "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/tools"
-	uipkg "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/ui"
-	eventspkg "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/xevents"
-	"github.com/google/uuid"
+	"golang.org/x/sync/errgroup"
 )
 
 type SimpleAgentCmd struct{ *cmds.CommandDescription }
@@ -199,7 +198,7 @@ func (c *SimpleAgentCmd) RunIntoWriter(ctx context.Context, parsed *layers.Parse
 			r.RegisterModelFactory(renderers.PlainFactory{})
 			r.RegisterModelFactory(renderers.NewToolCallFactory())
 			r.RegisterModelFactory(renderers.ToolCallResultFactory{})
-			r.RegisterModelFactory(renderers.AgentModeFactory {})
+			r.RegisterModelFactory(agentmode.AgentModeFactory {})
 			r.RegisterModelFactory(renderers.LogEventFactory{})
 		}),
 	)
