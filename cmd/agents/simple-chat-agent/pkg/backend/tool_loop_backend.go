@@ -108,15 +108,13 @@ func (b *ToolLoopBackend) MakeUIForwarder(p *tea.Program) func(msg *message.Mess
 
         switch e_ := e.(type) {
         case *events.EventLog:
-            // Render generic logs as plain entities for visibility
+            // Render logs as dedicated timeline entries with unobtrusive gray styling
             log.Debug().Str("event", "log").Str("level", e_.Level).Str("message", e_.Message).Msg("forward: log")
             localID := fmt.Sprintf("log-%s-%d", md.TurnID, time.Now().UnixNano())
-            props := map[string]any{"title": fmt.Sprintf("[%s] %s", e_.Level, e_.Message)}
-            if len(e_.Fields) > 0 {
-                props["fields"] = e_.Fields
-            }
-            p.Send(timeline.UIEntityCreated{ID: timeline.EntityID{LocalID: localID, Kind: "plain"}, Renderer: timeline.RendererDescriptor{Kind: "plain"}, Props: props})
-            p.Send(timeline.UIEntityCompleted{ID: timeline.EntityID{LocalID: localID, Kind: "plain"}})
+            props := map[string]any{"level": e_.Level, "message": e_.Message, "metadata": md}
+            if len(e_.Fields) > 0 { props["fields"] = e_.Fields }
+            p.Send(timeline.UIEntityCreated{ID: timeline.EntityID{LocalID: localID, Kind: "log_event"}, Renderer: timeline.RendererDescriptor{Kind: "log_event"}, Props: props})
+            p.Send(timeline.UIEntityCompleted{ID: timeline.EntityID{LocalID: localID, Kind: "log_event"}})
         case *events.EventPartialCompletionStart:
             log.Debug().Str("event", "partial_start").Str("run_id", md.RunID).Str("turn_id", md.TurnID).Str("message_id", md.ID.String()).Msg("forward: start")
             p.Send(timeline.UIEntityCreated{

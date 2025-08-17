@@ -199,7 +199,8 @@ func (c *SimpleAgentCmd) RunIntoWriter(ctx context.Context, parsed *layers.Parse
 			r.RegisterModelFactory(renderers.PlainFactory{})
 			r.RegisterModelFactory(renderers.NewToolCallFactory())
 			r.RegisterModelFactory(renderers.ToolCallResultFactory{})
-			r.RegisterModelFactory(renderers.AgentModeFactory{})
+			r.RegisterModelFactory(renderers.AgentModeFactory {})
+			r.RegisterModelFactory(renderers.LogEventFactory{})
 		}),
 	)
 
