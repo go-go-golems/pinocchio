@@ -29,7 +29,7 @@ require (
 	github.com/spf13/cobra v1.9.1
 	github.com/spf13/viper v1.20.1
 	github.com/tcnksm/go-input v0.0.0-20180404061846-548a7d7a8ee8
-	github.com/tiktoken-go/tokenizer v0.6.1
+	github.com/tiktoken-go/tokenizer v0.7.0
 	github.com/weaviate/tiktoken-go v0.0.2
 	golang.org/x/sync v0.16.0
 	gopkg.in/yaml.v3 v3.0.1
