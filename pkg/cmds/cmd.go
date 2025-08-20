@@ -406,7 +406,6 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) (*tu
 	// Enable streaming for the UI
 	rc.StepSettings.Chat.Stream = true
 
-
 	// Start router in a goroutine
 	eg := errgroup.Group{}
 	ctx, cancel := context.WithCancel(ctx)

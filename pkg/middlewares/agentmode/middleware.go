@@ -249,42 +249,43 @@ func DetectYamlModeSwitch(t *turns.Turn) (string, string) {
 	}
 	return "", ""
 }
+
 // DetectYamlModeSwitchInBlocks scans the provided blocks from the back and
 // returns the first detected (nearest to the end) YAML mode switch.
 func DetectYamlModeSwitchInBlocks(blocks []turns.Block) (string, string) {
-    for i := len(blocks) - 1; i >= 0; i-- {
-        b := blocks[i]
-        if b.Kind != turns.BlockKindLLMText {
-            continue
-        }
-        txt, _ := b.Payload[turns.PayloadKeyText].(string)
-        if strings.TrimSpace(txt) == "" {
-            continue
-        }
-        yblocks, err := parse.ExtractYAMLBlocks(txt)
-        if err != nil {
-            continue
-        }
-        for _, body := range yblocks {
-            body = strings.TrimSpace(body)
-            var data struct {
-                ModeSwitch struct {
-                    Analysis string `yaml:"analysis"`
-                    NewMode  string `yaml:"new_mode,omitempty"`
-                } `yaml:"mode_switch"`
-            }
-            if err := yaml.Unmarshal([]byte(body), &data); err != nil {
-                continue
-            }
-            analysis := strings.TrimSpace(data.ModeSwitch.Analysis)
-            if analysis == "" {
-                continue
-            }
-            nm := strings.TrimSpace(data.ModeSwitch.NewMode)
-            return nm, analysis
-        }
-    }
-    return "", ""
+	for i := len(blocks) - 1; i >= 0; i-- {
+		b := blocks[i]
+		if b.Kind != turns.BlockKindLLMText {
+			continue
+		}
+		txt, _ := b.Payload[turns.PayloadKeyText].(string)
+		if strings.TrimSpace(txt) == "" {
+			continue
+		}
+		yblocks, err := parse.ExtractYAMLBlocks(txt)
+		if err != nil {
+			continue
+		}
+		for _, body := range yblocks {
+			body = strings.TrimSpace(body)
+			var data struct {
+				ModeSwitch struct {
+					Analysis string `yaml:"analysis"`
+					NewMode  string `yaml:"new_mode,omitempty"`
+				} `yaml:"mode_switch"`
+			}
+			if err := yaml.Unmarshal([]byte(body), &data); err != nil {
+				continue
+			}
+			analysis := strings.TrimSpace(data.ModeSwitch.Analysis)
+			if analysis == "" {
+				continue
+			}
+			nm := strings.TrimSpace(data.ModeSwitch.NewMode)
+			return nm, analysis
+		}
+	}
+	return "", ""
 }
 
 // listModeNames extracts available mode names from the provided Service, if it is a known implementation.

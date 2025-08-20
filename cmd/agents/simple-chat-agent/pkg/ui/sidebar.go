@@ -38,9 +38,9 @@ type SidebarModel struct {
 	compIndexByID map[string]int
 
 	// Agent mode state and history
-	currentMode string
+	currentMode        string
 	currentExplanation string
-	modeHistory []ModeSwitch
+	modeHistory        []ModeSwitch
 }
 
 type ModeSwitch struct {
@@ -136,23 +136,31 @@ func (m SidebarModel) View() string {
 	// Agent mode section
 	titleMode := sidebarTitleStyle.Render("Agent Mode (Ctrl+T)")
 	curr := m.currentMode
-	if curr == "" { curr = "(unknown)" }
+	if curr == "" {
+		curr = "(unknown)"
+	}
 	out += titleMode + "\nCurrent: " + curr + "\n"
 	if m.currentExplanation != "" {
 		expl := m.currentExplanation
-		if len(expl) > 96 { expl = expl[:96] + "…" }
+		if len(expl) > 96 {
+			expl = expl[:96] + "…"
+		}
 		out += "Why: " + expl + "\n"
 	}
 	// History block (may be empty)
 	out += "History:\n"
 	if len(m.modeHistory) > 0 {
 		start := 0
-		if len(m.modeHistory) > 8 { start = len(m.modeHistory) - 8 }
+		if len(m.modeHistory) > 8 {
+			start = len(m.modeHistory) - 8
+		}
 		for _, h := range m.modeHistory[start:] {
 			line := fmt.Sprintf("%s → %s", h.From, h.To)
 			if h.Analysis != "" {
 				s := h.Analysis
-				if len(s) > 48 { s = s[:48] + "…" }
+				if len(s) > 48 {
+					s = s[:48] + "…"
+				}
 				line += " — " + s
 			}
 			out += line + "\n"
@@ -169,7 +177,11 @@ func (m SidebarModel) View() string {
 	} else {
 		for _, c := range m.computations {
 			line := fmt.Sprintf("%s: %.2f %s %.2f", c.ID, c.A, c.Op, c.B)
-			if c.Result != nil { line += fmt.Sprintf(" = %.4f", *c.Result) } else { line += " (running)" }
+			if c.Result != nil {
+				line += fmt.Sprintf(" = %.4f", *c.Result)
+			} else {
+				line += " (running)"
+			}
 			out += line + "\n"
 		}
 	}

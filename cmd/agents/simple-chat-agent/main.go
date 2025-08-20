@@ -23,19 +23,19 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cmds/logging"
 	"github.com/go-go-golems/glazed/pkg/help"
 	help_cmd "github.com/go-go-golems/glazed/pkg/help/cmd"
+	sqlite_regexp "github.com/go-go-golems/go-sqlite-regexp"
 	backendpkg "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/backend"
 	storepkg "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/store"
+	toolspkg "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/tools"
 	uipkg "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/ui"
 	eventspkg "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/xevents"
 	agentmode "github.com/go-go-golems/pinocchio/pkg/middlewares/agentmode"
 	sqlitetool "github.com/go-go-golems/pinocchio/pkg/middlewares/sqlitetool"
-	toolspkg "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/tools"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
-	sqlite_regexp "github.com/go-go-golems/go-sqlite-regexp"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -120,6 +120,8 @@ func (c *SimpleAgentCmd) RunIntoWriter(ctx context.Context, parsed *layers.Parse
 	eng = middleware.NewEngineWithMiddleware(eng,
 		middleware.NewSystemPromptMiddleware("You are a financial transaction analysis assistant. Your primary role is to analyze bank transactions and extract spending categories by examining transaction descriptions and developing regular expression patterns to automatically categorize future transactions. You can use various tools to help with data analysis and pattern development."),
 		agentmode.NewMiddleware(svc, amCfg),
+		// Ensure tool_use messages are adjacent to their tool_call group before provider
+		middleware.NewToolResultReorderMiddleware(),
 	)
 
 	// Tools: calculator + generative UI (integrated)
@@ -198,7 +200,7 @@ func (c *SimpleAgentCmd) RunIntoWriter(ctx context.Context, parsed *layers.Parse
 			r.RegisterModelFactory(renderers.PlainFactory{})
 			r.RegisterModelFactory(renderers.NewToolCallFactory())
 			r.RegisterModelFactory(renderers.ToolCallResultFactory{})
-			r.RegisterModelFactory(agentmode.AgentModeFactory {})
+			r.RegisterModelFactory(agentmode.AgentModeFactory{})
 			r.RegisterModelFactory(renderers.LogEventFactory{})
 		}),
 	)
