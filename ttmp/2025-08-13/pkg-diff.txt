@@ -1,0 +1,2276 @@
+diff --git a/pkg/chatrunner/chat_runner.go b/pkg/chatrunner/chat_runner.go
+index 0e556fa..26527a7 100644
+--- a/pkg/chatrunner/chat_runner.go
++++ b/pkg/chatrunner/chat_runner.go
+@@ -1,24 +1,26 @@
+ package chatrunner
+ 
+ import (
+-	"context"
+-	"fmt"
+-	"io"
+-	"os"
+-
+-	"github.com/ThreeDotsLabs/watermill/message"
+-	tea "github.com/charmbracelet/bubbletea"
+-	bobachat "github.com/go-go-golems/bobatea/pkg/chat" // Alias for clarity
+-	geppetto_conversation "github.com/go-go-golems/geppetto/pkg/conversation"
+-	"github.com/go-go-golems/geppetto/pkg/events"
+-	"github.com/go-go-golems/geppetto/pkg/steps"
+-	"github.com/go-go-golems/geppetto/pkg/steps/ai/chat" // Needed for askForChatContinuation potentially
+-	"github.com/go-go-golems/pinocchio/pkg/ui"
+-	"github.com/mattn/go-isatty" // Needed for askForChatContinuation
+-	"github.com/pkg/errors"
+-	"github.com/rs/zerolog/log"
+-	input "github.com/tcnksm/go-input" // Needed for askForChatContinuation
+-	"golang.org/x/sync/errgroup"
++    "context"
++    "fmt"
++    "os"
++    "github.com/go-go-golems/geppetto/pkg/inference/engine"
++    "github.com/go-go-golems/geppetto/pkg/inference/engine/factory"
++    "github.com/go-go-golems/geppetto/pkg/inference/middleware"
++    "github.com/go-go-golems/geppetto/pkg/turns"
++    "io"
++
++    tea "github.com/charmbracelet/bubbletea"
++    bobachat "github.com/go-go-golems/bobatea/pkg/chat" // Alias for clarity
++    geppetto_conversation "github.com/go-go-golems/geppetto/pkg/conversation"
++    "github.com/go-go-golems/geppetto/pkg/events"
++    "github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
++    "github.com/go-go-golems/pinocchio/pkg/ui"
++    "github.com/mattn/go-isatty" // Needed for askForChatContinuation
++    "github.com/pkg/errors"
++    "github.com/rs/zerolog/log"
++    input "github.com/tcnksm/go-input" // Needed for askForChatContinuation
++    "golang.org/x/sync/errgroup"
+ )
+ 
+ // RunMode defines the execution mode for the chat session.
+@@ -34,7 +36,8 @@ const (
+ // It's typically created and run by the ChatBuilder.
+ type ChatSession struct {
+ 	ctx            context.Context
+-	stepFactory    func(publisher message.Publisher, topic string) (chat.Step, error)
++	engineFactory  factory.EngineFactory
++	settings       *settings.StepSettings
+ 	manager        geppetto_conversation.Manager
+ 	uiOptions      []bobachat.ModelOption
+ 	programOptions []tea.ProgramOption
+@@ -68,16 +71,19 @@ func (cs *ChatSession) runChatInternal() error {
+ 		}
+ 	}
+ 
+-	// Use factory to create step for UI interaction
+-	uiStep, err := cs.stepFactory(router.Publisher, "ui")
++	// Create engine with UI sink for event publishing
++    uiSink := middleware.NewWatermillSink(router.Publisher, "ui")
++    log.Debug().Str("component", "chatrunner").Msg("Created UI watermill sink")
++    engine, err := cs.engineFactory.CreateEngine(cs.settings, engine.WithSink(uiSink))
+ 	if err != nil {
+-		return errors.Wrap(err, "failed to create UI step from factory")
++		return errors.Wrap(err, "failed to create engine from factory")
+ 	}
++    log.Debug().Str("component", "chatrunner").Msg("Engine created with sink")
+ 
+ 	eg, childCtx := errgroup.WithContext(cs.ctx)
+ 	childCtx, cancel := context.WithCancel(childCtx) // Create cancellable context if router is internal
+ 
+-	f := func() {
++    f := func() {
+ 		cancel()
+ 		defer func(router *events.EventRouter) {
+ 			log.Debug().Msg("Closing router")
+@@ -102,7 +108,7 @@ func (cs *ChatSession) runChatInternal() error {
+ 
+ 		// RunHandlers blocks until the router is ready and handler is registered.
+ 		log.Debug().Msg("Running router handlers")
+-		if err := router.RunHandlers(childCtx); err != nil {
++        if err := router.RunHandlers(childCtx); err != nil {
+ 			// Don't wrap context cancelled/closed errors if the context was intentionally cancelled
+ 			if errors.Is(err, context.Canceled) && childCtx.Err() == context.Canceled {
+ 				log.Debug().Msg("Router handlers stopped due to context cancellation")
+@@ -111,14 +117,21 @@ func (cs *ChatSession) runChatInternal() error {
+ 			return errors.Wrap(err, "failed to run router handlers")
+ 		}
+ 		log.Debug().Msg("Router handlers running")
+-
+-		backend := ui.NewStepBackend(uiStep)
+-		model := bobachat.InitialModel(cs.manager, backend, cs.uiOptions...)
++        log.Debug().Str("component", "chatrunner").Msg("Router handlers running")
++
++        backend := ui.NewEngineBackend(engine)
++        // Seed backend from the existing conversation (system/history) so chat UI reflects prior run
++        if cs.manager != nil {
++            backend.SetSeedFromConversation(cs.manager.GetConversation())
++            log.Debug().Str("component", "chatrunner").Msg("Seeded backend from conversation for chat UI")
++        }
++        model := bobachat.InitialModel(backend, cs.uiOptions...)
+ 		p := tea.NewProgram(model, cs.programOptions...)
+ 
+ 		// Setup forwarding handler
+ 		log.Debug().Msg("Adding UI event handler")
+-		router.AddHandler("ui", "ui", ui.StepChatForwardFunc(p)) // Use the forwarding func
++        log.Debug().Str("component", "chatrunner").Msg("Adding UI event handler")
++        router.AddHandler("ui", "ui", ui.StepChatForwardFunc(p)) // Use the forwarding func
+ 
+ 		err = router.RunHandlers(childCtx)
+ 		if err != nil {
+@@ -127,8 +140,10 @@ func (cs *ChatSession) runChatInternal() error {
+ 
+ 		// Run the UI program, which blocks until quit.
+ 		log.Debug().Msg("Running Bubbletea program")
+-		_, runErr := p.Run()
++        log.Debug().Str("component", "chatrunner").Msg("Starting Bubble Tea program")
++        _, runErr := p.Run()
+ 		log.Debug().Err(runErr).Msg("Bubbletea program finished")
++        log.Debug().Err(runErr).Str("component", "chatrunner").Msg("Bubble Tea program finished")
+ 
+ 		// If the UI exits (even successfully), cancel the context
+ 		// to signal the router goroutine (if internal) to stop.
+@@ -152,51 +167,50 @@ func (cs *ChatSession) runChatInternal() error {
+ 	return err
+ }
+ 
+-// runBlockingInternal handles non-interactive execution.
++// runBlockingInternal handles non-interactive execution using Engine directly.
+ func (cs *ChatSession) runBlockingInternal() error {
+-	// For blocking mode, we typically don't need the full router unless
+-	// we want structured output (JSON, YAML) via events.
+-	// Let's assume a simple direct execution for now. If router/printer is needed,
+-	// this logic would become more complex, mirroring parts of runChatInternal.
+-
+-	// Create a step without a publisher/topic
+-	step, err := cs.stepFactory(nil, "") // Pass nil publisher, empty topic
++	// Create engine for blocking execution (no event sink needed)
++	engine, err := cs.engineFactory.CreateEngine(cs.settings)
+ 	if err != nil {
+-		return errors.Wrap(err, "failed to create blocking step from factory")
++		return errors.Wrap(err, "failed to create engine for blocking execution")
+ 	}
+ 
+-	// Simplified execution logic (similar to PinocchioCommand.runStepAndCollectMessages)
++	// Get current conversation and seed a Turn
+ 	conversation_ := cs.manager.GetConversation()
+-	messagesM := steps.Resolve(conversation_)
+-	m := steps.Bind(cs.ctx, messagesM, step) // Use the configured context
+-
+-	var lastMessage *geppetto_conversation.Message
+-	for r := range m.GetChannel() {
+-		if r.Error() != nil {
+-			// Don't return context cancellation errors if the context was cancelled externally
+-			if errors.Is(r.Error(), context.Canceled) && cs.ctx.Err() == context.Canceled {
+-				log.Debug().Msg("Blocking step cancelled by context")
+-				break // Exit loop gracefully
+-			}
+-			return r.Error()
+-		}
+-		msg := r.Unwrap()
+-		if err := cs.manager.AppendMessages(msg); err != nil {
+-			return fmt.Errorf("failed to append message: %w", err)
++	seed := &turns.Turn{}
++	turns.AppendBlocks(seed, turns.BlocksFromConversationDelta(conversation_, 0)...)
++
++	// Run inference directly on the Turn
++	updatedTurn, err := engine.RunInference(cs.ctx, seed)
++	if err != nil {
++		// Don't return context cancellation errors if the context was cancelled externally
++		if errors.Is(err, context.Canceled) && cs.ctx.Err() == context.Canceled {
++			log.Debug().Msg("Blocking inference cancelled by context")
++			return nil // Exit gracefully
+ 		}
+-		lastMessage = msg
++		return errors.Wrap(err, "inference failed")
++	}
++
++	// Convert back to conversation and extract only the new messages
++	conv := turns.BuildConversationFromTurn(updatedTurn)
++	newMessages := conv[len(conversation_):]
++
++	// Append the new messages to the conversation
++	if err := cs.manager.AppendMessages(newMessages...); err != nil {
++		return fmt.Errorf("failed to append messages: %w", err)
+ 	}
+ 
+ 	// Print the last message content to the output writer
+-	if lastMessage != nil {
++	if len(newMessages) > 0 {
++		lastMsg := newMessages[len(newMessages)-1]
+ 		// TODO: Handle different content types more robustly
+-		if content, ok := lastMessage.Content.(*geppetto_conversation.ChatMessageContent); ok {
++		if content, ok := lastMsg.Content.(*geppetto_conversation.ChatMessageContent); ok {
+ 			_, err := fmt.Fprintln(cs.outputWriter, content.View())
+ 			if err != nil {
+ 				return errors.Wrap(err, "failed to write output")
+ 			}
+ 		} else {
+-			_, err := fmt.Fprintf(cs.outputWriter, "%v", lastMessage.Content)
++			_, err := fmt.Fprintf(cs.outputWriter, "%v", lastMsg.Content)
+ 			if err != nil {
+ 				return errors.Wrap(err, "failed to write output")
+ 			}
+@@ -253,7 +267,8 @@ func (cs *ChatSession) runInteractiveInternal() error {
+ type ChatBuilder struct {
+ 	err            error // To collect errors during build steps
+ 	ctx            context.Context
+-	stepFactory    func(publisher message.Publisher, topic string) (chat.Step, error)
++	engineFactory  factory.EngineFactory
++	settings       *settings.StepSettings
+ 	manager        geppetto_conversation.Manager
+ 	uiOptions      []bobachat.ModelOption
+ 	programOptions []tea.ProgramOption
+@@ -300,17 +315,29 @@ func (b *ChatBuilder) WithManager(manager geppetto_conversation.Manager) *ChatBu
+ 	return b
+ }
+ 
+-// WithStepFactory sets the factory function used to create chat steps. (Required)
+-// The factory allows creating steps configured for specific event topics ("ui" or "chat").
+-func (b *ChatBuilder) WithStepFactory(factory func(publisher message.Publisher, topic string) (chat.Step, error)) *ChatBuilder {
++// WithEngineFactory sets the factory used to create engines. (Required)
++func (b *ChatBuilder) WithEngineFactory(factory factory.EngineFactory) *ChatBuilder {
+ 	if b.err != nil {
+ 		return b
+ 	}
+ 	if factory == nil {
+-		b.err = errors.New("step factory cannot be nil")
++		b.err = errors.New("engine factory cannot be nil")
++		return b
++	}
++	b.engineFactory = factory
++	return b
++}
++
++// WithSettings sets the step settings for engine configuration. (Required)
++func (b *ChatBuilder) WithSettings(settings *settings.StepSettings) *ChatBuilder {
++	if b.err != nil {
+ 		return b
+ 	}
+-	b.stepFactory = factory
++	if settings == nil {
++		b.err = errors.New("settings cannot be nil")
++		return b
++	}
++	b.settings = settings
+ 	return b
+ }
+ 
+@@ -381,8 +408,11 @@ func (b *ChatBuilder) Build() (*ChatSession, error) {
+ 	if b.manager == nil {
+ 		return nil, errors.New("manager is required (use WithManager)")
+ 	}
+-	if b.stepFactory == nil {
+-		return nil, errors.New("step factory is required (use WithStepFactory)")
++	if b.engineFactory == nil {
++		return nil, errors.New("engine factory is required (use WithEngineFactory)")
++	}
++	if b.settings == nil {
++		return nil, errors.New("settings is required (use WithSettings)")
+ 	}
+ 	if b.mode == "" {
+ 		// Should be set by default or WithMode, but check anyway
+@@ -398,7 +428,8 @@ func (b *ChatBuilder) Build() (*ChatSession, error) {
+ 	// Create the ChatSession instance from the builder's state
+ 	session := &ChatSession{
+ 		ctx:            b.ctx,
+-		stepFactory:    b.stepFactory,
++		engineFactory:  b.engineFactory,
++		settings:       b.settings,
+ 		manager:        b.manager,
+ 		uiOptions:      b.uiOptions,
+ 		programOptions: b.programOptions,
+diff --git a/pkg/cmds/cmd.go b/pkg/cmds/cmd.go
+index 20cffd0..3f72b2c 100644
+--- a/pkg/cmds/cmd.go
++++ b/pkg/cmds/cmd.go
+@@ -8,17 +8,19 @@ import (
+ 	"os"
+ 	"strings"
+ 
+-	"github.com/go-go-golems/geppetto/pkg/conversation/builder"
+-	"github.com/go-go-golems/geppetto/pkg/events"
++	"github.com/go-go-golems/glazed/pkg/helpers/templating"
++	"github.com/go-go-golems/geppetto/pkg/inference/engine"
++	"github.com/go-go-golems/geppetto/pkg/inference/engine/factory"
++	"github.com/go-go-golems/geppetto/pkg/inference/middleware"
++
++    "github.com/go-go-golems/geppetto/pkg/events"
+ 
+ 	tea "github.com/charmbracelet/bubbletea"
+ 	bobatea_chat "github.com/go-go-golems/bobatea/pkg/chat"
+ 
+-	"github.com/go-go-golems/geppetto/pkg/conversation"
+-	"github.com/go-go-golems/geppetto/pkg/steps"
+-	"github.com/go-go-golems/geppetto/pkg/steps/ai"
+-	"github.com/go-go-golems/geppetto/pkg/steps/ai/chat"
++    "github.com/go-go-golems/geppetto/pkg/conversation"
+ 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
++	"github.com/go-go-golems/geppetto/pkg/turns"
+ 	glazedcmds "github.com/go-go-golems/glazed/pkg/cmds"
+ 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
+ 	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
+@@ -27,9 +29,102 @@ import (
+ 	"github.com/go-go-golems/pinocchio/pkg/ui"
+ 	"github.com/mattn/go-isatty"
+ 	"github.com/pkg/errors"
++	"github.com/rs/zerolog/log"
+ 	"github.com/tcnksm/go-input"
+ 	"golang.org/x/sync/errgroup"
+ )
++// buildInitialTurn constructs a Turn from system prompt, pre-seeded messages, and an optional user prompt
++func buildInitialTurn(systemPrompt string, msgs []*conversation.Message, userPrompt string) *turns.Turn {
++    t := &turns.Turn{}
++    if strings.TrimSpace(systemPrompt) != "" {
++        turns.AppendBlock(t, turns.NewSystemTextBlock(systemPrompt))
++    }
++    // convert legacy messages into blocks
++    if len(msgs) > 0 {
++        turns.AppendBlocks(t, turns.BlocksFromConversationDelta(conversation.Conversation(msgs), 0)...)
++    }
++    if strings.TrimSpace(userPrompt) != "" {
++        turns.AppendBlock(t, turns.NewUserTextBlock(userPrompt))
++    }
++    return t
++}
++
++func renderTemplateString(name, text string, vars map[string]interface{}) (string, error) {
++    if strings.TrimSpace(text) == "" {
++        return text, nil
++    }
++    tpl, err := templating.CreateTemplate(name).Parse(text)
++    if err != nil {
++        return "", err
++    }
++    var b strings.Builder
++    if err := tpl.Execute(&b, vars); err != nil {
++        return "", err
++    }
++    return b.String(), nil
++}
++
++// SimpleMessage represents a minimal YAML message that will be converted to a user block
++type SimpleMessage struct {
++    Text string `yaml:"text"`
++}
++
++// buildInitialTurnFromBlocks constructs a Turn from system prompt, pre-seeded blocks, and an optional user prompt
++func buildInitialTurnFromBlocks(systemPrompt string, blocks []turns.Block, userPrompt string) *turns.Turn {
++    t := &turns.Turn{}
++    if strings.TrimSpace(systemPrompt) != "" {
++        turns.AppendBlock(t, turns.NewSystemTextBlock(systemPrompt))
++    }
++    if len(blocks) > 0 {
++        turns.AppendBlocks(t, blocks...)
++    }
++    if strings.TrimSpace(userPrompt) != "" {
++        turns.AppendBlock(t, turns.NewUserTextBlock(userPrompt))
++    }
++    return t
++}
++
++// renderBlocks renders text payloads in blocks using vars
++func renderBlocks(blocks []turns.Block, vars map[string]interface{}) ([]turns.Block, error) {
++    if len(blocks) == 0 {
++        return blocks, nil
++    }
++    out := make([]turns.Block, 0, len(blocks))
++    for _, b := range blocks {
++        nb := b
++        if txt, ok := b.Payload[turns.PayloadKeyText].(string); ok {
++            rt, err := renderTemplateString("message", txt, vars)
++            if err != nil {
++                return nil, err
++            }
++            if nb.Payload == nil { nb.Payload = map[string]any{} }
++            nb.Payload[turns.PayloadKeyText] = rt
++        }
++        out = append(out, nb)
++    }
++    return out, nil
++}
++
++func buildInitialTurnFromBlocksRendered(systemPrompt string, blocks []turns.Block, userPrompt string, vars map[string]interface{}) (*turns.Turn, error) {
++    sp, err := renderTemplateString("system-prompt", systemPrompt, vars)
++    if err != nil {
++        return nil, err
++    }
++    rblocks, err := renderBlocks(blocks, vars)
++    if err != nil {
++        return nil, err
++    }
++    up, err := renderTemplateString("prompt", userPrompt, vars)
++    if err != nil {
++        return nil, err
++    }
++    return buildInitialTurnFromBlocks(sp, rblocks, up), nil
++}
++
++// buildInitialTurn constructs a seed Turn for the command from system + blocks + user prompt using vars.
++func (g *PinocchioCommand) buildInitialTurn(vars map[string]interface{}) (*turns.Turn, error) {
++    return buildInitialTurnFromBlocksRendered(g.SystemPrompt, g.Blocks, g.Prompt, vars)
++}
+ 
+ type PinocchioCommandDescription struct {
+ 	Name      string                            `yaml:"name"`
+@@ -42,15 +137,15 @@ type PinocchioCommandDescription struct {
+ 	Tags      []string                          `yaml:"tags,omitempty"`
+ 	Metadata  map[string]interface{}            `yaml:"metadata,omitempty"`
+ 
+-	Prompt       string                  `yaml:"prompt,omitempty"`
+-	Messages     []*conversation.Message `yaml:"messages,omitempty"`
++	Prompt       string   `yaml:"prompt,omitempty"`
++	Messages     []string `yaml:"messages,omitempty"`
+ 	SystemPrompt string                  `yaml:"system-prompt,omitempty"`
+ }
+ 
+ type PinocchioCommand struct {
+ 	*glazedcmds.CommandDescription `yaml:",inline"`
+ 	Prompt                         string                  `yaml:"prompt,omitempty"`
+-	Messages                       []*conversation.Message `yaml:"messages,omitempty"`
++    Blocks                         []turns.Block           `yaml:"-"`
+ 	SystemPrompt                   string                  `yaml:"system-prompt,omitempty"`
+ }
+ 
+@@ -64,10 +159,10 @@ func WithPrompt(prompt string) PinocchioCommandOption {
+ 	}
+ }
+ 
+-func WithMessages(messages []*conversation.Message) PinocchioCommandOption {
+-	return func(g *PinocchioCommand) {
+-		g.Messages = messages
+-	}
++func WithBlocks(blocks []turns.Block) PinocchioCommandOption {
++    return func(g *PinocchioCommand) {
++        g.Blocks = blocks
++    }
+ }
+ 
+ func WithSystemPrompt(systemPrompt string) PinocchioCommandOption {
+@@ -98,45 +193,7 @@ func NewPinocchioCommand(
+ 	return ret, nil
+ }
+ 
+-// XXX this is a mess with all its run methods and all, it would be good to have a RunOption pattern here:
+-// - WithStepSettings
+-// - WithParsedLayers
+-// - WithPrinter / Handlers
+-// - WithEngine / Temperature / a whole set of LLM specific parameters
+-//   - WithMessages
+-//   - WithPrompt
+-//   - WithSystemPrompt
+-//   - WithImages
+-//   - WithAutosaveSettings
+-//   - WithVariables
+-//   - WithRouter
+-//   - WithStepFactory
+-//   - WithSettings
+-
+-// CreateConversationManager creates a new conversation manager with the given settings
+-func (g *PinocchioCommand) CreateConversationManager(
+-	variables map[string]interface{},
+-	options ...builder.ConversationManagerOption,
+-) (conversation.Manager, error) {
+-	if g.Prompt != "" && len(g.Messages) != 0 {
+-		return nil, errors.Errorf("Prompt and messages are mutually exclusive")
+-	}
+-
+-	defaultOptions := []builder.ConversationManagerOption{
+-		builder.WithSystemPrompt(g.SystemPrompt),
+-		builder.WithMessages(g.Messages),
+-		builder.WithPrompt(g.Prompt),
+-		builder.WithVariables(variables),
+-	}
+-
+-	// Combine default options with provided options, with provided options taking precedence
+-	builder, err := builder.NewConversationManagerBuilder(append(defaultOptions, options...)...)
+-	if err != nil {
+-		return nil, err
+-	}
+-
+-	return builder.Build()
+-}
++// conversation manager removed; no-op left intentionally for compatibility if referenced elsewhere
+ 
+ // RunIntoWriter runs the command and writes the output into the given writer.
+ func (g *PinocchioCommand) RunIntoWriter(
+@@ -167,19 +224,7 @@ func (g *PinocchioCommand) RunIntoWriter(
+ 		imagePaths[i] = img.Path
+ 	}
+ 
+-	// First create the conversation manager with all its settings
+-	manager, err := g.CreateConversationManager(
+-		parsedLayers.GetDefaultParameterLayer().Parameters.ToMap(),
+-		builder.WithImages(imagePaths),
+-		builder.WithAutosaveSettings(builder.AutosaveSettings{
+-			Enabled:  strings.ToLower(helpersSettings.Autosave.Enabled) == "yes",
+-			Template: helpersSettings.Autosave.Template,
+-			Path:     helpersSettings.Autosave.Path,
+-		}),
+-	)
+-	if err != nil {
+-		return err
+-	}
++    // No conversation manager preview; print path handled by RunWithOptions
+ 
+ 	// Determine run mode based on helper settings
+ 	runMode := run.RunModeBlocking
+@@ -207,21 +252,21 @@ func (g *PinocchioCommand) RunIntoWriter(
+ 	}
+ 
+ 	// Run with options
+-	messages, err := g.RunWithOptions(ctx,
++    messages, err := g.RunWithOptions(ctx,
+ 		run.WithStepSettings(stepSettings),
+ 		run.WithWriter(w),
+ 		run.WithRunMode(runMode),
+ 		run.WithUISettings(uiSettings),
+-		run.WithConversationManager(manager),
+ 		run.WithRouter(router),
++		run.WithVariables(parsedLayers.GetDefaultParameterLayer().Parameters.ToMap()),
+ 	)
+ 	if err != nil {
+ 		return err
+ 	}
+ 
+ 	// If we're just printing the prompt, do that and return
+-	if helpersSettings.PrintPrompt {
+-		for _, message := range messages {
++    if helpersSettings.PrintPrompt {
++        for _, message := range messages {
+ 			_, _ = fmt.Fprintf(w, "%s\n", strings.TrimSpace(message.Content.View()))
+ 			_, _ = fmt.Fprintln(w)
+ 		}
+@@ -232,8 +277,7 @@ func (g *PinocchioCommand) RunIntoWriter(
+ 
+ // RunWithOptions executes the command with the given options
+ func (g *PinocchioCommand) RunWithOptions(ctx context.Context, options ...run.RunOption) ([]*conversation.Message, error) {
+-	// We need at least one option that provides the manager
+-	runCtx := &run.RunContext{}
++    runCtx := &run.RunContext{}
+ 
+ 	// Apply options
+ 	for _, opt := range options {
+@@ -242,24 +286,25 @@ func (g *PinocchioCommand) RunWithOptions(ctx context.Context, options ...run.Ru
+ 		}
+ 	}
+ 
+-	// Verify we have a manager
+-	if runCtx.ConversationManager == nil {
+-		return nil, errors.New("no conversation manager provided")
+-	}
++    // ConversationManager optional during migration; prefer Turn-based flows
+ 
+-	if runCtx.UISettings != nil && runCtx.UISettings.PrintPrompt {
+-		return runCtx.ConversationManager.GetConversation(), nil
+-	}
++    if runCtx.UISettings != nil && runCtx.UISettings.PrintPrompt {
++        // Build a preview conversation from initial Turn using rendered templates
++        t, err := g.buildInitialTurn(runCtx.Variables)
++        if err != nil {
++            return nil, err
++        }
++        conv := turns.BuildConversationFromTurn(t)
++        return conv, nil
++    }
+ 
+-	// Create step factory if not provided
+-	if runCtx.StepFactory == nil {
+-		runCtx.StepFactory = &ai.StandardStepFactory{
+-			Settings: runCtx.StepSettings.Clone(),
+-		}
++	// Create engine factory if not provided
++	if runCtx.EngineFactory == nil {
++		runCtx.EngineFactory = factory.NewStandardEngineFactory()
+ 	}
+ 
+ 	// Verify router for chat mode
+-	if (runCtx.RunMode == run.RunModeChat || runCtx.RunMode == run.RunModeInteractive) && runCtx.Router == nil {
++    if (runCtx.RunMode == run.RunModeChat || runCtx.RunMode == run.RunModeInteractive) && runCtx.Router == nil {
+ 		return nil, errors.New("chat mode requires a router")
+ 	}
+ 
+@@ -273,19 +318,15 @@ func (g *PinocchioCommand) RunWithOptions(ctx context.Context, options ...run.Ru
+ 	}
+ }
+ 
+-// runBlocking handles blocking execution mode
++// runBlocking handles blocking execution mode using Engine directly
+ func (g *PinocchioCommand) runBlocking(ctx context.Context, rc *run.RunContext) ([]*conversation.Message, error) {
+-	chatStep, err := rc.StepFactory.NewStep()
+-	if err != nil {
+-		return nil, err
+-	}
++    // Create engine instance options
++    var options []engine.Option
+ 
+-	// If we have a router, set up the printer and run the router loop
++	// If we have a router, set up watermill sink for event publishing
+ 	if rc.Router != nil {
+-		chatStep, err = rc.StepFactory.NewStep(chat.WithPublishedTopic(rc.Router.Publisher, "chat"))
+-		if err != nil {
+-			return nil, err
+-		}
++		watermillSink := middleware.NewWatermillSink(rc.Router.Publisher, "chat")
++		options = append(options, engine.WithSink(watermillSink))
+ 
+ 		// Add default printer if none is set
+ 		if rc.UISettings == nil || rc.UISettings.Output == "" {
+@@ -316,39 +357,51 @@ func (g *PinocchioCommand) runBlocking(ctx context.Context, rc *run.RunContext)
+ 		eg.Go(func() error {
+ 			defer cancel()
+ 			<-rc.Router.Running()
+-			return g.runStepAndCollectMessages(ctx, rc, chatStep)
++			return g.runEngineAndCollectMessages(ctx, rc, options)
+ 		})
+ 
+-		err = eg.Wait()
++		err := eg.Wait()
+ 		if err != nil {
+ 			return nil, err
+ 		}
+ 	} else {
+-		// No router, just run the step directly
+-		err = g.runStepAndCollectMessages(ctx, rc, chatStep)
++        // No router, just run the engine directly using Turns
++        err := g.runEngineAndCollectMessages(ctx, rc, options)
+ 		if err != nil {
+ 			return nil, err
+ 		}
+ 	}
+ 
+-	return rc.ConversationManager.GetConversation(), nil
++    // For blocking mode, convert last updated turn to conversation if needed
++    // Here we return messages previously appended in runEngineAndCollectMessages via ResultConversation if set
++    if rc.ResultConversation != nil {
++        return rc.ResultConversation, nil
++    }
++    return []*conversation.Message{}, nil
+ }
+ 
+-// runStepAndCollectMessages handles the actual step execution and message collection
+-func (g *PinocchioCommand) runStepAndCollectMessages(ctx context.Context, rc *run.RunContext, chatStep chat.Step) error {
+-	conversation_ := rc.ConversationManager.GetConversation()
+-	messagesM := steps.Resolve(conversation_)
+-	m := steps.Bind(ctx, messagesM, chatStep)
++// runEngineAndCollectMessages handles the actual engine execution and message collection
++func (g *PinocchioCommand) runEngineAndCollectMessages(ctx context.Context, rc *run.RunContext, options []engine.Option) error {
++    // Create engine with options
++    engine, err := rc.EngineFactory.CreateEngine(rc.StepSettings, options...)
++	if err != nil {
++		return fmt.Errorf("failed to create engine: %w", err)
++	}
+ 
+-	for r := range m.GetChannel() {
+-		if r.Error() != nil {
+-			return r.Error()
+-		}
+-		msg := r.Unwrap()
+-		if err := rc.ConversationManager.AppendMessages(msg); err != nil {
+-			return fmt.Errorf("failed to append message: %w", err)
+-		}
++    // Build seed Turn directly from system + messages + prompt (rendered)
++    seed, err := g.buildInitialTurn(rc.Variables)
++    if err != nil {
++        return fmt.Errorf("failed to render templates: %w", err)
++    }
++    updatedTurn, err := engine.RunInference(ctx, seed)
++	if err != nil {
++		return fmt.Errorf("inference failed: %w", err)
+ 	}
++    // Convert final Turn to conversation for output
++    finalConv := turns.BuildConversationFromTurn(updatedTurn)
++    // Store result conversation for callers that want to print prompt
++    rc.ResultConversation = finalConv
++
+ 	return nil
+ }
+ 
+@@ -369,11 +422,12 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) ([]*
+ 		options = append(options, tea.WithAltScreen())
+ 	}
+ 
+-	rc.StepFactory.Settings.Chat.Stream = true
+-	chatStep, err := rc.StepFactory.NewStep(chat.WithPublishedTopic(rc.Router.Publisher, "ui"))
+-	if err != nil {
+-		return nil, err
+-	}
++	// Enable streaming for the UI
++	rc.StepSettings.Chat.Stream = true
++
++        // Create engine options with watermill sink for UI events
++	uiSink := middleware.NewWatermillSink(rc.Router.Publisher, "ui")
++	engineOptions := []engine.Option{engine.WithSink(uiSink)}
+ 
+ 	// Start router in a goroutine
+ 	eg := errgroup.Group{}
+@@ -397,17 +451,16 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) ([]*
+ 
+ 	eg.Go(func() error {
+ 		defer f()
++		var err error
+ 
+ 		// Wait for router to be ready
+ 		<-rc.Router.Running()
+ 
+ 		// If we're in interactive mode, run initial blocking step
+ 		if rc.RunMode == run.RunModeInteractive {
+-			// Run initial blocking step
+-			initialStep, err := rc.StepFactory.NewStep(chat.WithPublishedTopic(rc.Router.Publisher, "chat"))
+-			if err != nil {
+-				return err
+-			}
++			// Create options for initial step with chat topic
++			chatSink := middleware.NewWatermillSink(rc.Router.Publisher, "chat")
++			initialOptions := []engine.Option{engine.WithSink(chatSink)}
+ 
+ 			// Add default printer for initial step
+ 			if rc.UISettings == nil || rc.UISettings.Output == "" || rc.UISettings.Output == "text" {
+@@ -421,12 +474,12 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) ([]*
+ 				})
+ 				rc.Router.AddHandler("chat", "chat", printer)
+ 			}
+-			err = rc.Router.RunHandlers(ctx)
++			err := rc.Router.RunHandlers(ctx)
+ 			if err != nil {
+ 				return err
+ 			}
+ 
+-			err = g.runStepAndCollectMessages(ctx, rc, initialStep)
++			err = g.runEngineAndCollectMessages(ctx, rc, initialOptions)
+ 			if err != nil {
+ 				return err
+ 			}
+@@ -453,39 +506,89 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) ([]*
+ 			}
+ 		}
+ 
+-		backend := ui.NewStepBackend(chatStep)
++        // Create EngineBackend
++		var backend bobatea_chat.Backend
++		log.Debug().Msg("Using EngineBackend for UI")
++        engine, err := rc.EngineFactory.CreateEngine(rc.StepSettings, engineOptions...)
++		if err != nil {
++			return err
++		}
++        backend = ui.NewEngineBackend(engine)
++        log.Debug().Msg("EngineBackend created for UI")
+ 
+ 		// Determine if we should auto-start the backend
+ 		autoStartBackend := rc.UISettings != nil && rc.UISettings.StartInChat
+ 
+-		model := bobatea_chat.InitialModel(
+-			rc.ConversationManager,
+-			backend,
+-			bobatea_chat.WithTitle("pinocchio"),
+-			bobatea_chat.WithAutoStartBackend(autoStartBackend),
+-		)
++        model := bobatea_chat.InitialModel(
++            backend,
++            bobatea_chat.WithTitle("pinocchio"),
++            bobatea_chat.WithAutoStartBackend(autoStartBackend),
++        )
++        log.Debug().Bool("auto_start", autoStartBackend).Msg("Chat model initialized")
+ 
+-		p := tea.NewProgram(
++        p := tea.NewProgram(
+ 			model,
+ 			options...,
+ 		)
+-
+-		rc.Router.AddHandler("ui", "ui", ui.StepChatForwardFunc(p))
+-		err = rc.Router.RunHandlers(ctx)
+-		if err != nil {
+-			return err
+-		}
+-
+-		_, err := p.Run()
++        if be, ok := backend.(*ui.EngineBackend); ok {
++            be.AttachProgram(p)
++        }
++
++        rc.Router.AddHandler("ui", "ui", ui.StepChatForwardFunc(p))
++        err = rc.Router.RunHandlers(ctx)
++        if err != nil {
++            return err
++        }
++
++        // Always seed backend Turn after router is running so the timeline shows prior context
++        go func() {
++            <-rc.Router.Running()
++            if be, ok := backend.(*ui.EngineBackend); ok {
++                seed, err := buildInitialTurnFromBlocksRendered(g.SystemPrompt, g.Blocks, "", rc.Variables)
++                if err == nil {
++                    be.SetSeedTurn(seed)
++                } else {
++                    // Fallback without rendering on error
++                    be.SetSeedTurn(buildInitialTurnFromBlocks(g.SystemPrompt, g.Blocks, ""))
++                }
++            }
++        }()
++
++        // If auto-start is enabled, pre-fill the prompt/system text, then submit
++        if autoStartBackend {
++            go func() {
++                <-rc.Router.Running()
++                // Render prompt before auto-submit in chat
++                promptText := strings.TrimSpace(g.Prompt)
++                if promptText != "" && rc.Variables != nil {
++                    if rendered, err := renderTemplateString("prompt", promptText, rc.Variables); err == nil {
++                        promptText = rendered
++                    }
++                }
++                if promptText != "" {
++                    log.Debug().Int("len", len(promptText)).Msg("Auto-start: submitting rendered prompt after router.Running")
++                    p.Send(bobatea_chat.ReplaceInputTextMsg{Text: promptText})
++                    p.Send(bobatea_chat.SubmitMessageMsg{})
++                } else {
++                    log.Debug().Msg("Auto-start enabled, but no prompt text found; skipping submit")
++                }
++            }()
++        }
++
++		_, err = p.Run()
+ 		return err
+ 	})
+ 
+-	err = eg.Wait()
++	err := eg.Wait()
+ 	if err != nil {
+ 		return nil, err
+ 	}
+ 
+-	return rc.ConversationManager.GetConversation(), nil
++    // In chat mode, no conversation manager; return any result conversation we gathered
++    if rc.ResultConversation != nil {
++        return rc.ResultConversation, nil
++    }
++    return []*conversation.Message{}, nil
+ }
+ 
+ // Helper function to ask user about continuing in chat mode
+@@ -520,7 +623,6 @@ func askForChatContinuation() (bool, error) {
+ 			}
+ 		},
+ 	})
+-
+ 	if err != nil {
+ 		fmt.Println("Failed to get user input:", err)
+ 		return false, err
+diff --git a/pkg/cmds/cobra.go b/pkg/cmds/cobra.go
+index c5e39ea..7189e34 100644
+--- a/pkg/cmds/cobra.go
++++ b/pkg/cmds/cobra.go
+@@ -1,19 +1,10 @@
+ package cmds
+ 
+ import (
+-	"fmt"
+-	"os"
+-
+-	embeddings_config "github.com/go-go-golems/geppetto/pkg/embeddings/config"
+-	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
+-	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings/claude"
+-	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings/gemini"
+-	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings/openai"
++	layers2 "github.com/go-go-golems/geppetto/pkg/layers"
+ 	"github.com/go-go-golems/glazed/pkg/cli"
+ 	"github.com/go-go-golems/glazed/pkg/cmds"
+ 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
+-	"github.com/go-go-golems/glazed/pkg/cmds/middlewares"
+-	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
+ 	"github.com/go-go-golems/pinocchio/pkg/cmds/cmdlayers"
+ 	"github.com/spf13/cobra"
+ )
+@@ -23,94 +14,13 @@ func BuildCobraCommandWithGeppettoMiddlewares(
+ 	options ...cli.CobraOption,
+ ) (*cobra.Command, error) {
+ 	config := cli.CobraParserConfig{
+-		MiddlewaresFunc: GetCobraCommandGeppettoMiddlewares,
++		MiddlewaresFunc: layers2.GetCobraCommandGeppettoMiddlewares,
+ 		ShortHelpLayers: []string{layers.DefaultSlug, cmdlayers.GeppettoHelpersSlug},
+ 	}
+-	
++
+ 	options_ := append([]cli.CobraOption{
+ 		cli.WithParserConfig(config),
+ 	}, options...)
+ 
+ 	return cli.BuildCobraCommand(cmd, options_...)
+ }
+-
+-func GetCobraCommandGeppettoMiddlewares(
+-	parsedCommandLayers *layers.ParsedLayers,
+-	cmd *cobra.Command,
+-	args []string,
+-) ([]middlewares.Middleware, error) {
+-	commandSettings := &cli.CommandSettings{}
+-	err := parsedCommandLayers.InitializeStruct(cli.CommandSettingsSlug, commandSettings)
+-	if err != nil {
+-		return nil, err
+-	}
+-
+-	profileSettings := &cli.ProfileSettings{}
+-	err = parsedCommandLayers.InitializeStruct(cli.ProfileSettingsSlug, profileSettings)
+-	if err != nil {
+-		return nil, err
+-	}
+-
+-	// if we want profile support here, we would have to check for a --profile and --profile-file flag,
+-	// then load the file (or the default file), check for the profile values, then apply them before load-parameters-from-file
+-
+-	middlewares_ := []middlewares.Middleware{
+-		middlewares.ParseFromCobraCommand(cmd,
+-			parameters.WithParseStepSource("cobra"),
+-		),
+-		middlewares.GatherArguments(args,
+-			parameters.WithParseStepSource("arguments"),
+-		),
+-	}
+-
+-	if commandSettings.LoadParametersFromFile != "" {
+-		middlewares_ = append(middlewares_,
+-			middlewares.LoadParametersFromFile(commandSettings.LoadParametersFromFile))
+-	}
+-
+-	xdgConfigPath, err := os.UserConfigDir()
+-	if err != nil {
+-		return nil, err
+-	}
+-
+-	// TODO(manuel, 2024-03-20) I wonder if we should just use a custom layer for the profiles, as we want to load
+-	// the profile from the environment as well. So the sequence would be defaults -> viper -> command line
+-	defaultProfileFile := fmt.Sprintf("%s/pinocchio/profiles.yaml", xdgConfigPath)
+-	if profileSettings.ProfileFile == "" {
+-		profileSettings.ProfileFile = defaultProfileFile
+-	}
+-	if profileSettings.Profile == "" {
+-		profileSettings.Profile = "default"
+-	}
+-	middlewares_ = append(middlewares_,
+-		middlewares.GatherFlagsFromProfiles(
+-			defaultProfileFile,
+-			profileSettings.ProfileFile,
+-			profileSettings.Profile,
+-			parameters.WithParseStepSource("profiles"),
+-			parameters.WithParseStepMetadata(map[string]interface{}{
+-				"profileFile": profileSettings.ProfileFile,
+-				"profile":     profileSettings.Profile,
+-			}),
+-		),
+-	)
+-
+-	middlewares_ = append(middlewares_,
+-		middlewares.WrapWithWhitelistedLayers(
+-			[]string{
+-				settings.AiChatSlug,
+-				settings.AiClientSlug,
+-				openai.OpenAiChatSlug,
+-				claude.ClaudeChatSlug,
+-				gemini.GeminiChatSlug,
+-				cmdlayers.GeppettoHelpersSlug,
+-				embeddings_config.EmbeddingsSlug,
+-				cli.ProfileSettingsSlug,
+-			},
+-			middlewares.GatherFlagsFromViper(parameters.WithParseStepSource("viper")),
+-		),
+-		middlewares.SetFromDefaults(parameters.WithParseStepSource("defaults")),
+-	)
+-
+-	return middlewares_, nil
+-}
+diff --git a/pkg/cmds/config.go b/pkg/cmds/config.go
+deleted file mode 100644
+index 1ff77bb..0000000
+--- a/pkg/cmds/config.go
++++ /dev/null
+@@ -1,102 +0,0 @@
+-package cmds
+-
+-import (
+-	"fmt"
+-	"os"
+-
+-	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
+-	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings/claude"
+-	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings/gemini"
+-	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings/openai"
+-	"github.com/go-go-golems/glazed/pkg/cli"
+-	"github.com/go-go-golems/glazed/pkg/cmds/layers"
+-	"github.com/go-go-golems/glazed/pkg/cmds/middlewares"
+-	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
+-)
+-
+-// LoadConfigFromSettings loads the geppetto step settings from the given profile and config file.
+-func LoadConfigFromSettings(settings_ cli.ProfileSettings) (*settings.StepSettings, error) {
+-	middlewares_ := []middlewares.Middleware{}
+-
+-	xdgConfigPath, err := os.UserConfigDir()
+-	if err != nil {
+-		return nil, err
+-	}
+-
+-	// TODO(manuel, 2024-03-20) I wonder if we should just use a custom layer for the profiles, as we want to load
+-	// the profile from the environment as well. So the sequence would be defaults -> viper -> command line
+-	defaultProfileFile := fmt.Sprintf("%s/pinocchio/profiles.yaml", xdgConfigPath)
+-	if settings_.ProfileFile == "" {
+-		settings_.ProfileFile = defaultProfileFile
+-	}
+-	if settings_.Profile == "" {
+-		settings_.Profile = "default"
+-	}
+-	middlewares_ = append(middlewares_,
+-		middlewares.GatherFlagsFromProfiles(
+-			defaultProfileFile,
+-			settings_.ProfileFile,
+-			settings_.Profile,
+-			parameters.WithParseStepSource("profiles"),
+-			parameters.WithParseStepMetadata(map[string]interface{}{
+-				"profileFile": settings_.ProfileFile,
+-				"profile":     settings_.Profile,
+-			}),
+-		),
+-	)
+-
+-	middlewares_ = append(middlewares_,
+-		middlewares.WrapWithWhitelistedLayers(
+-			[]string{
+-				settings.AiChatSlug,
+-				settings.AiClientSlug,
+-				openai.OpenAiChatSlug,
+-				gemini.GeminiChatSlug,
+-				claude.ClaudeChatSlug,
+-			},
+-			middlewares.GatherFlagsFromViper(parameters.WithParseStepSource("viper")),
+-		),
+-		middlewares.SetFromDefaults(parameters.WithParseStepSource("defaults")),
+-	)
+-
+-	stepSettings, err := settings.NewStepSettings()
+-	if err != nil {
+-		return nil, err
+-	}
+-
+-	geppettoLayers, err := CreateGeppettoLayers(stepSettings, WithHelpersLayer())
+-	if err != nil {
+-		return nil, err
+-	}
+-
+-	layers_ := layers.NewParameterLayers(layers.WithLayers(geppettoLayers...))
+-
+-	parsedLayers := layers.NewParsedLayers()
+-
+-	err = middlewares.ExecuteMiddlewares(layers_, parsedLayers, middlewares_...)
+-	if err != nil {
+-		return nil, err
+-	}
+-
+-	err = stepSettings.UpdateFromParsedLayers(parsedLayers)
+-	if err != nil {
+-		return nil, err
+-	}
+-
+-	return stepSettings, nil
+-}
+-
+-func LoadConfig() (*settings.StepSettings, error) {
+-	settings_, err := cli.ParseCommandSettingsLayer(nil)
+-	if err != nil {
+-		return nil, err
+-	}
+-
+-	profileSettings := &cli.ProfileSettings{}
+-	err = settings_.InitializeStruct(cli.ProfileSettingsSlug, profileSettings)
+-	if err != nil {
+-		return nil, err
+-	}
+-
+-	return LoadConfigFromSettings(*profileSettings)
+-}
+diff --git a/pkg/cmds/loader.go b/pkg/cmds/loader.go
+index d83f60b..1f9dffa 100644
+--- a/pkg/cmds/loader.go
++++ b/pkg/cmds/loader.go
+@@ -5,12 +5,9 @@ import (
+ 	"io/fs"
+ 	"strings"
+ 
+-	embeddings_config "github.com/go-go-golems/geppetto/pkg/embeddings/config"
++	geppettolayers "github.com/go-go-golems/geppetto/pkg/layers"
++    "github.com/go-go-golems/geppetto/pkg/turns"
+ 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
+-	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings/claude"
+-	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings/gemini"
+-	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings/ollama"
+-	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings/openai"
+ 	"github.com/go-go-golems/glazed/pkg/cmds"
+ 	"github.com/go-go-golems/glazed/pkg/cmds/alias"
+ 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
+@@ -69,11 +66,16 @@ func (g *PinocchioCommandLoader) loadPinocchioCommandFromReader(
+ 	if err != nil {
+ 		return nil, err
+ 	}
+-
+-	ls, err := CreateGeppettoLayers(stepSettings, WithHelpersLayer())
++	ls, err := geppettolayers.CreateGeppettoLayers(geppettolayers.WithDefaultsFromStepSettings(stepSettings))
++	if err != nil {
++		return nil, err
++	}
++	// Wrap with pinocchio helper layer
++	helpersLayer, err := cmdlayers.NewHelpersParameterLayer()
+ 	if err != nil {
+ 		return nil, err
+ 	}
++	ls = append([]layers.ParameterLayer{helpersLayer}, ls...)
+ 
+ 	options_ := []cmds.CommandDescriptionOption{
+ 		cmds.WithShort(scd.Short),
+@@ -90,14 +92,23 @@ func (g *PinocchioCommandLoader) loadPinocchioCommandFromReader(
+ 		scd.Name,
+ 		options_...,
+ 	)
+-	if scd.Prompt != "" && len(scd.Messages) != 0 {
++    if scd.Prompt != "" && len(scd.Messages) != 0 {
+ 		return nil, errors.Errorf("Prompt and messages are mutually exclusive")
+ 	}
+ 
+-	sq, err := NewPinocchioCommand(
++    // Convert simple messages to user blocks (llm content)
++    blocks := make([]turns.Block, 0, len(scd.Messages))
++    for _, text := range scd.Messages {
++        if strings.TrimSpace(text) == "" {
++            continue
++        }
++        blocks = append(blocks, turns.NewUserTextBlock(text))
++    }
++
++    sq, err := NewPinocchioCommand(
+ 		description,
+ 		WithPrompt(scd.Prompt),
+-		WithMessages(scd.Messages),
++        WithBlocks(blocks),
+ 		WithSystemPrompt(scd.SystemPrompt),
+ 	)
+ 	if err != nil {
+@@ -112,96 +123,6 @@ func (g *PinocchioCommandLoader) loadPinocchioCommandFromReader(
+ 	return []cmds.Command{sq}, nil
+ }
+ 
+-type GeppettoLayerOption func(*geppettoLayerOptions)
+-
+-type geppettoLayerOptions struct {
+-	includeHelpers bool
+-}
+-
+-func WithHelpersLayer() GeppettoLayerOption {
+-	return func(o *geppettoLayerOptions) {
+-		o.includeHelpers = true
+-	}
+-}
+-
+-func CreateGeppettoLayers(stepSettings *settings.StepSettings, opts ...GeppettoLayerOption) ([]layers.ParameterLayer, error) {
+-	options := &geppettoLayerOptions{
+-		includeHelpers: false,
+-	}
+-	for _, opt := range opts {
+-		opt(options)
+-	}
+-
+-	chatParameterLayer, err := settings.NewChatParameterLayer(
+-		layers.WithDefaults(stepSettings.Chat),
+-	)
+-	if err != nil {
+-		return nil, err
+-	}
+-
+-	clientParameterLayer, err := settings.NewClientParameterLayer(
+-		layers.WithDefaults(stepSettings.Client),
+-	)
+-	if err != nil {
+-		return nil, err
+-	}
+-
+-	claudeParameterLayer, err := claude.NewParameterLayer(
+-		layers.WithDefaults(stepSettings.Claude),
+-	)
+-	if err != nil {
+-		return nil, err
+-	}
+-	geminiParameterLayer, err := gemini.NewParameterLayer(
+-		layers.WithDefaults(stepSettings.Gemini),
+-	)
+-	if err != nil {
+-		return nil, err
+-	}
+-	openaiParameterLayer, err := openai.NewParameterLayer(
+-		layers.WithDefaults(stepSettings.OpenAI),
+-	)
+-	if err != nil {
+-		return nil, err
+-	}
+-
+-	ollamaParameterLayer, err := ollama.NewParameterLayer(
+-		layers.WithDefaults(stepSettings.Ollama),
+-	)
+-	if err != nil {
+-		return nil, err
+-	}
+-
+-	embeddingsParameterLayer, err := embeddings_config.NewEmbeddingsParameterLayer(
+-		layers.WithDefaults(stepSettings.Embeddings),
+-	)
+-	if err != nil {
+-		return nil, err
+-	}
+-
+-	// TODO(manuel, 2024-01-17) Disable not fully function ollama layer for now
+-	_ = ollamaParameterLayer
+-
+-	result := []layers.ParameterLayer{
+-		chatParameterLayer, clientParameterLayer,
+-		claudeParameterLayer,
+-		geminiParameterLayer,
+-		openaiParameterLayer,
+-		embeddingsParameterLayer,
+-		//ollamaParameterLayer,
+-	}
+-
+-	if options.includeHelpers {
+-		helpersLayer, err := cmdlayers.NewHelpersParameterLayer()
+-		if err != nil {
+-			return nil, err
+-		}
+-		result = append([]layers.ParameterLayer{helpersLayer}, result...)
+-	}
+-
+-	return result, nil
+-}
+-
+ func (scl *PinocchioCommandLoader) LoadCommands(
+ 	f fs.FS, entryName string,
+ 	options []cmds.CommandDescriptionOption,
+diff --git a/pkg/cmds/run/context.go b/pkg/cmds/run/context.go
+index 8c92a37..61e7154 100644
+--- a/pkg/cmds/run/context.go
++++ b/pkg/cmds/run/context.go
+@@ -1,13 +1,13 @@
+ package run
+ 
+ import (
+-	"io"
+-	"os"
++    "github.com/go-go-golems/geppetto/pkg/inference/engine/factory"
++    "io"
++    "os"
+ 
+-	"github.com/go-go-golems/geppetto/pkg/conversation"
+-	"github.com/go-go-golems/geppetto/pkg/events"
+-	"github.com/go-go-golems/geppetto/pkg/steps/ai"
+-	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
++    "github.com/go-go-golems/geppetto/pkg/events"
++    "github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
++    geppetto_conversation "github.com/go-go-golems/geppetto/pkg/conversation"
+ )
+ 
+ type RunMode int
+@@ -32,13 +32,16 @@ type UISettings struct {
+ 
+ // RunContext encapsulates all the settings and state needed for a single command run
+ type RunContext struct {
+-	// Core components (ConversationManager is required)
+-	ConversationManager conversation.Manager
+-
+ 	StepSettings *settings.StepSettings
+ 
+-	StepFactory *ai.StandardStepFactory
+-	Router      *events.EventRouter
++	EngineFactory factory.EngineFactory
++	Router        *events.EventRouter
++
++	// Template variables used to render prompts/messages prior to model calls
++	Variables map[string]interface{}
++
++    // ResultConversation stores the resulting conversation extracted from Turns at output boundaries
++    ResultConversation []*geppetto_conversation.Message
+ 
+ 	// Optional UI/Terminal specific components
+ 	UISettings *UISettings
+@@ -55,23 +58,23 @@ type RunOption func(*RunContext) error
+ func WithStepSettings(settings *settings.StepSettings) RunOption {
+ 	return func(rc *RunContext) error {
+ 		rc.StepSettings = settings
+-		if rc.StepFactory == nil {
+-			rc.StepFactory = &ai.StandardStepFactory{Settings: settings}
++		if rc.EngineFactory == nil {
++			rc.EngineFactory = factory.NewStandardEngineFactory()
+ 		}
+ 		return nil
+ 	}
+ }
+ 
+-func WithRouter(router *events.EventRouter) RunOption {
++func WithEngineFactory(factory factory.EngineFactory) RunOption {
+ 	return func(rc *RunContext) error {
+-		rc.Router = router
++		rc.EngineFactory = factory
+ 		return nil
+ 	}
+ }
+ 
+-func WithConversationManager(manager conversation.Manager) RunOption {
++func WithRouter(router *events.EventRouter) RunOption {
+ 	return func(rc *RunContext) error {
+-		rc.ConversationManager = manager
++		rc.Router = router
+ 		return nil
+ 	}
+ }
+@@ -101,10 +104,18 @@ func WithWriter(w io.Writer) RunOption {
+ 	}
+ }
+ 
++// WithVariables passes a map of template variables used to render
++// system prompt, messages and user prompt before sending to the model.
++func WithVariables(vars map[string]interface{}) RunOption {
++    return func(rc *RunContext) error {
++        rc.Variables = vars
++        return nil
++    }
++}
++
+ // NewRunContext creates a new RunContext with default values and a required manager
+-func NewRunContext(manager conversation.Manager) *RunContext {
++func NewRunContext() *RunContext {
+ 	return &RunContext{
+-		ConversationManager: manager,
+ 		RunMode:             RunModeBlocking,
+ 		Writer:              os.Stdout,
+ 	}
+diff --git a/pkg/codegen/codegen.go b/pkg/codegen/codegen.go
+deleted file mode 100644
+index 4569e61..0000000
+--- a/pkg/codegen/codegen.go
++++ /dev/null
+@@ -1,294 +0,0 @@
+-package codegen
+-
+-import (
+-	"strconv"
+-
+-	"github.com/dave/jennifer/jen"
+-	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
+-	"github.com/go-go-golems/glazed/pkg/codegen"
+-	"github.com/go-go-golems/pinocchio/pkg/cmds"
+-	"github.com/iancoleman/strcase"
+-)
+-
+-const TemplatingPath = "github.com/go-go-golems/glazed/pkg/helpers/templating"
+-const ChatPath = "github.com/go-go-golems/geppetto/pkg/steps/ai/chat"
+-const AiPath = "github.com/go-go-golems/geppetto/pkg/steps/ai"
+-const SettingsPath = "github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
+-const StepsPath = "github.com/go-go-golems/geppetto/pkg/steps"
+-const CommandPath = "github.com/go-go-golems/geppetto/pkg/cmds"
+-const ContextPath = "github.com/go-go-golems/geppetto/pkg/context"
+-const ConversationPath = "github.com/go-go-golems/geppetto/pkg/conversation"
+-const LayerPath = "github.com/go-go-golems/glazed/pkg/cmds/layers"
+-
+-type GeppettoCommandCodeGenerator struct {
+-	PackageName string
+-}
+-
+-func (g *GeppettoCommandCodeGenerator) defineConstants(f *jen.File, cmdName string, cmd *cmds.PinocchioCommand) {
+-	// Define the constants for prompts and messages.
+-	promptConstName := strcase.ToLowerCamel(cmdName) + "CommandPrompt"
+-	f.Const().Id(promptConstName).Op("=").Lit(cmd.Prompt)
+-
+-	systemPromptConstName := strcase.ToLowerCamel(cmdName) + "CommandSystemPrompt"
+-	f.Const().Id(systemPromptConstName).Op("=").Lit(cmd.SystemPrompt)
+-
+-	for i, message := range cmd.Messages {
+-		messageConstName := strcase.ToLowerCamel(cmdName) + "CommandMessage" + strcase.ToCamel(strconv.Itoa(i))
+-		// TODO(manuel, 2024-01-13) Handle other message types, this is a shortcut
+-		f.Const().Id(messageConstName).Op("=").Lit(message.Content.String())
+-	}
+-}
+-
+-func (g *GeppettoCommandCodeGenerator) defineStruct(f *jen.File, cmdName string) {
+-	structName := strcase.ToCamel(cmdName) + "Command"
+-	f.Type().Id(structName).Struct(
+-		jen.Op("*").Qual(codegen.GlazedCommandsPath, "CommandDescription"),
+-		jen.Id("StepSettings").Qual(SettingsPath, "StepSettings").Tag(map[string]string{"yaml": "-"}),
+-		jen.Id("Prompt").String().Tag(map[string]string{"yaml": "prompt"}),
+-		jen.Id("Messages").Qual(ConversationPath, "Conversation").
+-			Tag(map[string]string{"yaml": "messages,omitempty"}),
+-		jen.Id("SystemPrompt").String().Tag(map[string]string{"yaml": "system-prompt"}),
+-	)
+-}
+-
+-func (g *GeppettoCommandCodeGenerator) defineParametersStruct(
+-	f *jen.File,
+-	cmdName string,
+-	cmd *cmds.PinocchioCommand,
+-) {
+-	structName := strcase.ToCamel(cmdName) + "CommandParameters"
+-	f.Type().Id(structName).StructFunc(func(g *jen.Group) {
+-		cmd.GetDefaultFlags().ForEach(func(flag *parameters.ParameterDefinition) {
+-			s := g.Id(strcase.ToCamel(flag.Name))
+-			s = codegen.FlagTypeToGoType(s, flag.Type)
+-			s.Tag(map[string]string{"glazed.parameter": strcase.ToSnake(flag.Name)})
+-		})
+-		cmd.GetDefaultArguments().ForEach(func(arg *parameters.ParameterDefinition) {
+-			s := g.Id(strcase.ToCamel(arg.Name))
+-			s = codegen.FlagTypeToGoType(s, arg.Type)
+-			s.Tag(map[string]string{"glazed.argument": strcase.ToSnake(arg.Name)})
+-		})
+-	})
+-}
+-
+-func (g *GeppettoCommandCodeGenerator) defineNewFunction(
+-	f *jen.File,
+-	cmdName string,
+-	cmd *cmds.PinocchioCommand,
+-) error {
+-	commandName := strcase.ToCamel(cmdName)
+-	lowerCommandName := strcase.ToLowerCamel(cmdName)
+-
+-	funcName := "New" + commandName + "Command"
+-	commandStruct := commandName + "Command"
+-	promptConstName := lowerCommandName + "CommandPrompt"
+-	systemPromptConstName := lowerCommandName + "CommandSystemPrompt"
+-
+-	description := cmd.Description()
+-
+-	f.Var().Id("_").
+-		Qual(ContextPath, "GeppettoRunnable").
+-		Op("=").
+-		Parens(jen.Op("*").Id(commandStruct)).Parens(jen.Nil())
+-
+-	var err_ error
+-	f.Func().Id(funcName).Params().
+-		Params(jen.Op("*").Id(commandStruct), jen.Error()).
+-		Block(
+-			// TODO(manuel, 2023-12-07) Can be refactored since this is duplicated in geppetto/codegen.go
+-			jen.Var().Id("flagDefs").Op("=").
+-				Index().Op("*").
+-				Qual(codegen.GlazedParametersPath, "ParameterDefinition").
+-				ValuesFunc(func(g *jen.Group) {
+-					err_ = cmd.GetDefaultFlags().ForEachE(func(flag *parameters.ParameterDefinition) error {
+-						dict, err := codegen.ParameterDefinitionToDict(flag)
+-						if err != nil {
+-							return err
+-						}
+-						g.Values(dict)
+-						return nil
+-					})
+-				}),
+-			jen.Line(),
+-			jen.Var().Id("argDefs").Op("=").
+-				Index().Op("*").
+-				Qual(codegen.GlazedParametersPath, "ParameterDefinition").
+-				ValuesFunc(func(g *jen.Group) {
+-					err_ = cmd.GetDefaultArguments().ForEachE(func(arg *parameters.ParameterDefinition) error {
+-						dict, err := codegen.ParameterDefinitionToDict(arg)
+-						if err != nil {
+-							return err
+-						}
+-						g.Values(dict)
+-						return nil
+-					})
+-				}),
+-			jen.Id("cmdDescription").
+-				Op(":=").
+-				Qual(codegen.GlazedCommandsPath, "NewCommandDescription").
+-				Call(
+-					jen.Line().Lit(description.Name),
+-					jen.Line().Qual(codegen.GlazedCommandsPath, "WithShort").
+-						Call(jen.Lit(description.Short)),
+-					jen.Line().Qual(codegen.GlazedCommandsPath, "WithLong").
+-						Call(jen.Lit(description.Long)),
+-					jen.Line().Qual(codegen.GlazedCommandsPath, "WithFlags").
+-						Call(jen.Id("flagDefs").Op("...")),
+-					jen.Line().Qual(codegen.GlazedCommandsPath, "WithArguments").
+-						Call(jen.Id("argDefs").Op("...")),
+-				),
+-			jen.Line(),
+-			jen.Return(jen.Op("&").Id(commandStruct).Values(jen.Dict{
+-				jen.Id("CommandDescription"): jen.Id("cmdDescription"),
+-				jen.Id("Prompt"):             jen.Id(promptConstName),
+-				jen.Id("SystemPrompt"):       jen.Id(systemPromptConstName),
+-			}), jen.Nil()),
+-		)
+-
+-	return err_
+-}
+-
+-func (g *GeppettoCommandCodeGenerator) defineRunMethods(f *jen.File, cmdName string) {
+-	cmdName = strcase.ToCamel(cmdName) + "Command"
+-	// CreateStep method
+-	f.Func().
+-		Params(jen.Id("c").Op("*").Id(cmdName)).
+-		Id("CreateStep").
+-		Params(jen.Id("options").Op("...").Qual(ChatPath, "StepOption")).
+-		Parens(jen.List(jen.Qual(ChatPath, "Step"), jen.Error())).
+-		Block(
+-			jen.Id("stepFactory").Op(":=").Op("&").Qual(AiPath, "StandardStepFactory").Values(jen.Dict{
+-				jen.Id("Settings"): jen.Op("&").Id("c").Dot("StepSettings"),
+-			}),
+-			jen.Return(jen.Id("stepFactory").Dot("NewStep").Call(jen.Id("options").Op("..."))),
+-		).Line()
+-
+-	f.Func().
+-		Params(jen.Id("c").Op("*").Id(cmdName)).
+-		Id("CreateManager").
+-		Params(
+-			jen.Id("params").Op("*").Id(cmdName+"Parameters"),
+-		).
+-		Params(jen.Qual(ConversationPath, "Manager"), jen.Error()).
+-		Block(
+-			jen.Return(
+-				jen.Qual(ConversationPath, "CreateManager").Call(
+-					jen.Id("c").Dot("SystemPrompt"),
+-					jen.Id("c").Dot("Prompt"),
+-					jen.Id("c").Dot("Messages"),
+-					jen.Id("params"),
+-				),
+-			),
+-		).Line()
+-
+-	// RunWithManager method
+-	f.Func().
+-		Params(jen.Id("c").Op("*").Id(cmdName)).Id("RunWithManager").
+-		Params(
+-			jen.Id("ctx").Qual("context", "Context"),
+-			jen.Id("manager").Qual(ConversationPath, "Manager"),
+-		).
+-		Params(jen.Qual(StepsPath, "StepResult").Index(jen.Op("*").Qual(ConversationPath, "Message")), jen.Error()).
+-		Block(
+-			jen.Comment("instantiate step from factory"),
+-			jen.List(jen.Id("step"), jen.Err()).
+-				Op(":=").
+-				Id("c").Dot("CreateStep").Call(),
+-			jen.If().Err().Op("!=").Nil().Block(
+-				jen.Return(jen.Nil(), jen.Err()),
+-			),
+-			jen.List(jen.Id("stepResult"), jen.Err()).Op(":=").Id("step").Dot("Start").
+-				Call(jen.Id("ctx"), jen.Id("manager").Dot("GetConversation").Call()),
+-			jen.If().Err().Op("!=").Nil().Block(
+-				jen.Return(jen.Nil(), jen.Err()),
+-			),
+-			jen.Return(jen.Id("stepResult"), jen.Nil()),
+-		).Line()
+-
+-	// RunIntoWriter method
+-	f.Func().Params(jen.Id("c").Op("*").Id(cmdName)).Id("RunIntoWriter").
+-		Params(
+-			jen.Id("ctx").Qual("context", "Context"),
+-			jen.Id("params").Op("*").Id(cmdName+"Parameters"),
+-			jen.Id("w").Qual("io", "Writer"),
+-		).
+-		Error().
+-		Block(
+-			jen.List(
+-				jen.Id("manager"), jen.Err()).
+-				Op(":=").
+-				Id("c").Dot("CreateManager").Call(jen.Id("params")),
+-			jen.If().Err().Op("!=").Nil().Block(
+-				jen.Return(jen.Err()),
+-			),
+-			jen.Return(jen.Qual(ContextPath, "RunIntoWriter").
+-				Call(
+-					jen.Id("ctx"),
+-					jen.Id("c"),
+-					jen.Id("manager"),
+-					jen.Id("w"),
+-				)),
+-		).Line()
+-
+-	// RunToString method
+-	f.Func().Params(jen.Id("c").Op("*").Id(cmdName)).Id("RunToString").
+-		Params(
+-			jen.Id("ctx").Qual("context", "Context"),
+-			jen.Id("params").Op("*").Id(cmdName+"Parameters"),
+-		).
+-		Params(jen.String(), jen.Error()).
+-		Block(
+-			jen.List(
+-				jen.Id("manager"), jen.Err()).
+-				Op(":=").
+-				Id("c").Dot("CreateManager").Call(jen.Id("params")),
+-			jen.If().Err().Op("!=").Nil().Block(
+-				jen.Return(jen.Lit(""), jen.Err()),
+-			),
+-			jen.Return(
+-				jen.Qual(ContextPath, "RunToString").
+-					Call(jen.Id("ctx"), jen.Id("c"), jen.Id("manager"))),
+-		).Line()
+-
+-	// RunToContextManager method
+-	f.Func().Params(jen.Id("c").Op("*").Id(cmdName)).Id("RunToContextManager").
+-		Params(
+-			jen.Id("ctx").Qual("context", "Context"),
+-			jen.Id("params").Op("*").Id(cmdName+"Parameters"),
+-		).
+-		Params(
+-			jen.Qual(ConversationPath, "Manager"),
+-			jen.Error()).
+-		Block(
+-			jen.List(
+-				jen.Id("manager"), jen.Err()).
+-				Op(":=").
+-				Id("c").Dot("CreateManager").Call(jen.Id("params")),
+-			jen.If().Err().Op("!=").Nil().Block(
+-				jen.Return(jen.Nil(), jen.Err()),
+-			),
+-			jen.Return(
+-				jen.Qual(ContextPath, "RunToContextManager").
+-					Call(jen.Id("ctx"), jen.Id("c"), jen.Id("manager"))),
+-		)
+-}
+-
+-func (g *GeppettoCommandCodeGenerator) GenerateCommandCode(cmd *cmds.PinocchioCommand) (*jen.File, error) {
+-	f := jen.NewFile(g.PackageName)
+-	cmdName := strcase.ToLowerCamel(cmd.Name)
+-
+-	// Define constants, struct, and methods using helper functions.
+-	g.defineConstants(f, cmdName, cmd)
+-	g.defineStruct(f, cmdName)
+-
+-	f.Line()
+-	g.defineParametersStruct(f, cmdName, cmd)
+-	g.defineRunMethods(f, cmdName)
+-	f.Line()
+-	err := g.defineNewFunction(f, cmdName, cmd)
+-	if err != nil {
+-		return nil, err
+-	}
+-
+-	return f, nil
+-}
+diff --git a/pkg/doc/topics/01-chat-runner-events.md b/pkg/doc/topics/01-chat-runner-events.md
+index 1a871e8..4c58d21 100644
+--- a/pkg/doc/topics/01-chat-runner-events.md
++++ b/pkg/doc/topics/01-chat-runner-events.md
+@@ -1,14 +1,15 @@
+ ---
+ Title: Pinocchio ChatRunner API Documentation
+ Slug: pinocchio-chatrunner-api
+-Short: Explains how to use the ChatRunner API to build chat interfaces using Geppetto steps and events.
++Short: Build chat interfaces with the Engine/Turn architecture and streaming events from Geppetto.
+ Topics:
+ - pinocchio
+ - chatrunner
+ - architecture
+ - api
+ - events
+-- steps
++- engines
++- turns
+ - ui
+ Commands: []
+ Flags: []
+@@ -22,9 +23,7 @@ SectionType: GeneralTopic
+ 
+ ## Overview
+ 
+-The ChatRunner API provides a streamlined way to create and manage chat-based interactions in Pinocchio. It leverages Geppetto's underlying step architecture and event system to facilitate communication between backend chat logic (`chat.Step`) and frontend interfaces, particularly the Bubbletea-based terminal UI.
+-
+-This document outlines the API's implementation, design decisions, usage patterns, and the core Geppetto concepts it builds upon.
++The ChatRunner API provides a streamlined way to create and manage chat-based interactions in Pinocchio using Geppetto’s latest Engine/Turn architecture. Engines handle provider I/O and publish streaming events; the Bubbletea-based UI consumes those events for real-time updates. This page explains the core concepts, how to wire an engine to the UI through the event router, and how to run sessions in different modes. It reflects the current event metadata format (RunID/TurnID on `EventMetadata`) and agent-mode logging.
+ 
+ ## Import Paths
+ 
+@@ -37,12 +36,15 @@ import (
+     "io"
+     "os"
+     
+-    "github.com/ThreeDotsLabs/watermill/message"
+     tea "github.com/charmbracelet/bubbletea"
+     bobachat "github.com/go-go-golems/bobatea/pkg/chat"
+-    "github.com/go-go-golems/geppetto/pkg/conversation"
++    geppetto_conversation "github.com/go-go-golems/geppetto/pkg/conversation"
+     "github.com/go-go-golems/geppetto/pkg/events"
+-    "github.com/go-go-golems/geppetto/pkg/steps/ai/chat"
++    "github.com/go-go-golems/geppetto/pkg/inference/engine"
++    "github.com/go-go-golems/geppetto/pkg/inference/engine/factory"
++    "github.com/go-go-golems/geppetto/pkg/inference/middleware"
++    "github.com/go-go-golems/geppetto/pkg/turns"
++    "github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
+     "github.com/go-go-golems/pinocchio/pkg/chatrunner"
+     "github.com/go-go-golems/pinocchio/pkg/ui"
+     "github.com/rs/zerolog/log"
+@@ -50,31 +52,37 @@ import (
+ )
+ ```
+ 
+-## Core Concepts: Steps, Events, and Values
++## Core Concepts: Engines, Turns, and Events
+ 
+-The ChatRunner builds upon Geppetto's core `Step` abstraction. Understanding this is key to using the ChatRunner effectively:
++The ChatRunner now builds on Geppetto’s Engine/Turn model rather than the older chat step abstraction:
+ 
+-- **Steps (`chat.Step`):** Represent units of work, like an AI chat turn. They take input and produce results.
+-- **StepResult:** The return type of a Step's `Start` method. It manages the *value* flow, often asynchronously via channels.
+-- **Publisher/Topic System:** Steps can publish events (like progress updates, partial results, or errors) to specific topics using a `message.Publisher` (provided by Watermill). This handles the *event* flow.
++- Engines (`engine.Engine`): Provider-specific clients that implement a single method:
++  ```go
++  type Engine interface {
++      RunInference(ctx context.Context, t *turns.Turn) (*turns.Turn, error)
++  }
++  ```
++- Turns (`turns.Turn`): The unit of inference. Convert to/from conversations when needed.
++- Events (Watermill): Engines publish streaming events (start/partial/final; tool-call/tool-result if configured) through sinks. Middlewares/tools may also publish `log`/`info` events (e.g., agent-mode insertions/switches). The UI subscribes and renders incremental output.
+ 
+-This dual-flow architecture (values via `StepResult`, events via pub/sub) allows:
+-- Immediate feedback even for long-running steps.
+-- Detailed monitoring and status reporting separate from the final result.
+-- Building observable pipelines where each step's progress can be tracked.
++This separation provides:
++- Immediate feedback even for long-running operations
++- Clear boundaries between provider I/O (engine) and orchestration/UI
++- Observable pipelines where each turn’s progress can be tracked
+ 
+-The ChatRunner API primarily orchestrates the setup required to connect a `chat.Step` to the event system and a UI (like Bubbletea) that consumes these events.
++The ChatRunner orchestrates engine creation, event routing, and UI consumption—so you can focus on conversation and settings.
+ 
+ ## Core Components
+ 
+ ### ChatBuilder
+ 
+-The ChatBuilder (`chatrunner.ChatBuilder`) implements a fluent builder pattern for configuring chat sessions. It provides a clean, chainable API that guides users through the necessary configuration steps.
++The ChatBuilder (`chatrunner.ChatBuilder`) implements a fluent builder for configuring chat sessions (engine factory, settings, conversation manager, mode, and UI options).
+ 
+ ```go
+ builder := chatrunner.NewChatBuilder().
+     WithManager(manager).
+-    WithStepFactory(stepFactory).
++    WithEngineFactory(factory.NewStandardEngineFactory()).
++    WithSettings(stepSettings).
+     WithMode(chatrunner.RunModeChat).
+     WithUIOptions(bobachat.WithTitle("Echo Chat Runner")).
+     WithContext(context.Background())
+@@ -86,19 +94,18 @@ Key features:
+ - Error accumulation during the build process
+ - Sensible defaults for optional components
+ 
+-### StepFactory Pattern
++### EngineFactory Pattern
+ 
+-The API uses a factory function pattern (`chatrunner.StepFactory`) for creating chat steps:
++The builder expects an `engine/factory.EngineFactory` to create a provider-specific engine based on `settings.StepSettings`:
+ 
+ ```go
+-// chatrunner.StepFactory type
+-type StepFactory func(publisher message.Publisher, topic string) (chat.Step, error)
++// EngineFactory interface (from geppetto)
++type EngineFactory interface {
++    CreateEngine(settings *settings.StepSettings, options ...engine.Option) (engine.Engine, error)
++}
+ ```
+ 
+-This pattern is crucial because it allows the ChatRunner to:
+-1. **Control Step Instantiation:** Create the step instance when needed.
+-2. **Inject Dependencies:** Provide the necessary `message.Publisher` and `topic` to the step instance via its `AddPublishedTopic` method. This ensures the step is correctly configured to publish events to the topic the ChatRunner's internal handlers (or custom handlers) are listening on.
+-3. **Maintain Flexibility:** Decouples the ChatRunner from the specifics of step creation.
++This allows the ChatRunner to instantiate an engine with the right sink (for event streaming) without coupling to specific providers.
+ 
+ ### Run Modes
+ 
+@@ -161,14 +168,14 @@ The API supports different execution modes (defined in `chatrunner` package):
+ 
+ ## Event Routing and Architecture
+ 
+-The ChatRunner handles the complex task of setting up the event routing between the chat step and the consuming handlers (typically the UI).
++The ChatRunner wires an engine’s streaming events to the UI via a Watermill-backed event router.
+ 
+-1.  **EventRouter Creation:** It creates an `events.EventRouter` internally, leveraging Watermill's pub/sub capabilities, unless an external router is provided via `WithExternalRouter`.
+-2.  **Step Configuration:** It uses the provided `StepFactory` to create the `chat.Step` instance, injecting the internal router's publisher and a specific topic (e.g., "ui"). This ensures the step sends its events to the router.
+-3.  **Handler Registration:** It registers handlers (like the `ui.StepChatForwardFunc` for the Bubbletea UI) to subscribe to the step's topic on the router.
+-4.  **Lifecycle Management:** It manages the start and stop lifecycle of the internally created router and its handlers using `errgroup` and context cancellation.
++1.  **EventRouter Creation:** An `events.EventRouter` is created (unless provided via `WithExternalRouter`).
++2.  **Engine Creation with Sink:** A `middleware.NewWatermillSink(router.Publisher, "ui")` is passed via `engine.WithSink(...)` to the engine so it can publish start/partial/final events.
++3.  **Handler Registration:** The UI forwarding handler subscribes to the same topic and forwards events to Bubbletea.
++4.  **Lifecycle Management:** Router and handlers are run under an `errgroup` and controlled by context cancellation.
+ 
+-This encapsulates the boilerplate required to connect a step's event stream to a consumer.
++This encapsulates the boilerplate required to connect an engine’s event stream to the UI.
+ 
+ ## Advanced Event Handling
+ 
+@@ -191,7 +198,8 @@ if err != nil {
+ // Pass it to the builder
+ builder := chatrunner.NewChatBuilder().
+     WithManager(manager).
+-    WithStepFactory(stepFactory).
++    WithEngineFactory(engFactory).
++    WithSettings(stepSettings).
+     WithMode(chatrunner.RunModeChat).
+     WithExternalRouter(router)
+ ```
+@@ -263,9 +271,9 @@ func (h *CustomChatHandler) HandleInterrupt(ctx context.Context, e *events.Event
+ 
+ ### Event Types Reference
+ 
+-Events are published by `chat.Step` implementations to signal different stages and outcomes of their execution. All events implement the `events.Event` interface and carry `EventMetadata` and `StepMetadata`.
++Events are published by chat engines to signal different stages and outcomes of their execution. All events implement the `events.Event` interface and carry `EventMetadata`.
+ 
+-They are typically created using constructors like `events.NewStartEvent(...)` and serialized to JSON for transport via Watermill.
++They are typically created using constructors like `events.NewStartEvent(...)` and serialized to JSON for transport via Watermill. `EventMetadata` includes `RunID` and `TurnID` (correlation identifiers), engine info, usage and optional provider `Extra` context.
+ 
+ 1.  **`events.EventTypeStart` (`*events.EventPartialCompletionStart`)**: Signals the beginning of a step's execution, specifically one that might produce partial completions.
+     ```go
+@@ -364,10 +372,10 @@ Register your handler with the router using the `RegisterChatEventHandler` metho
+ // Create a custom handler
+ handler := &CustomChatHandler{}
+ 
+-// Register it with the router for a specific step and ID
++// Register it with the router for a specific ID
+ err = router.RegisterChatEventHandler(
+     context.Background(),
+-    step,           // Your chat.Step instance
++    step,           // Your chat step or equivalent context
+     "client-123",   // Unique identifier for this handler
+     handler,        // Your ChatEventHandler implementation
+ )
+@@ -478,7 +486,7 @@ The API implements comprehensive error handling:
+ 
+ ## Example Usage
+ 
+-### Basic Chat UI
++### Basic Chat UI (Engine/Turn)
+ 
+ ```go
+ package main
+@@ -487,40 +495,30 @@ import (
+     "context"
+     "os"
+ 
+-    "github.com/ThreeDotsLabs/watermill/message"
+     bobachat "github.com/go-go-golems/bobatea/pkg/chat"
+-    "github.com/go-go-golems/geppetto/pkg/conversation"
+-    "github.com/go-go-golems/geppetto/pkg/steps/ai/chat"
+-    "github.com/go-go-golems/geppetto/pkg/steps/ai/chat/steps"
++    geppetto_conversation "github.com/go-go-golems/geppetto/pkg/conversation"
++    "github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
+     "github.com/go-go-golems/pinocchio/pkg/chatrunner"
+     "github.com/rs/zerolog/log"
+ )
+ 
+ func main() {
+     // 1. Create manager
+-    manager := conversation.NewManager(
+-        conversation.WithMessages(
+-            conversation.NewChatMessage(conversation.RoleSystem, "System Prompt"),
++    manager := geppetto_conversation.NewManager(
++        geppetto_conversation.WithMessages(
++            geppetto_conversation.NewChatMessage(geppetto_conversation.RoleSystem, "System Prompt"),
+         ),
+     )
+ 
+-    // 2. Create step factory
+-    stepFactory := func(publisher message.Publisher, topic string) (chat.Step, error) {
+-        step := steps.NewEchoStep()
+-        if publisher != nil && topic != "" {
+-            // AddPublishedTopic method comes from the chat.Step interface
+-            err := step.AddPublishedTopic(publisher, topic)
+-            if err != nil {
+-                return nil, err
+-            }
+-        }
+-        return step, nil
+-    }
++    // 2. Prepare engine factory + settings
++    engFactory := factory.NewStandardEngineFactory()
++    stepSettings := &settings.StepSettings{ /* set provider + model */ }
+ 
+     // 3. Configure and run
+     builder := chatrunner.NewChatBuilder().
+         WithManager(manager).
+-        WithStepFactory(stepFactory).
++        WithEngineFactory(engFactory).
++        WithSettings(stepSettings).
+         WithMode(chatrunner.RunModeChat).
+         WithUIOptions(bobachat.WithTitle("Echo Chat"))
+ 
+@@ -540,7 +538,8 @@ func main() {
+ ```go
+ builder := chatrunner.NewChatBuilder().
+     WithManager(manager).
+-    WithStepFactory(stepFactory).
++    WithEngineFactory(engFactory).
++    WithSettings(stepSettings).
+     WithMode(chatrunner.RunModeBlocking).
+     WithOutputWriter(os.Stdout)
+ ```
+diff --git a/pkg/ui/backend.go b/pkg/ui/backend.go
+index 6e9e4e9..3512349 100644
+--- a/pkg/ui/backend.go
++++ b/pkg/ui/backend.go
+@@ -1,85 +1,204 @@
+ package ui
+ 
+ import (
+-	"context"
+-	"fmt"
+-
+-	"github.com/go-go-golems/geppetto/pkg/events"
+-
+-	"github.com/ThreeDotsLabs/watermill/message"
+-	tea "github.com/charmbracelet/bubbletea"
+-	boba_chat "github.com/go-go-golems/bobatea/pkg/chat"
+-	conversation2 "github.com/go-go-golems/bobatea/pkg/chat/conversation"
+-	"github.com/go-go-golems/geppetto/pkg/conversation"
+-	"github.com/go-go-golems/geppetto/pkg/steps"
+-	"github.com/go-go-golems/geppetto/pkg/steps/ai/chat"
+-	"github.com/pkg/errors"
+-	"github.com/rs/zerolog/log"
++    "context"
++    "fmt"
++    "sync"
++    "time"
++    "github.com/go-go-golems/geppetto/pkg/inference/engine"
++
++    "github.com/ThreeDotsLabs/watermill/message"
++    tea "github.com/charmbracelet/bubbletea"
++    boba_chat "github.com/go-go-golems/bobatea/pkg/chat"
++    "github.com/go-go-golems/bobatea/pkg/timeline"
++    "github.com/go-go-golems/geppetto/pkg/events"
++    conv "github.com/go-go-golems/geppetto/pkg/conversation"
++    "github.com/go-go-golems/geppetto/pkg/turns"
++    "github.com/pkg/errors"
++    "github.com/rs/zerolog/log"
+ )
+ 
+-type StepBackend struct {
+-	step       chat.Step
+-	stepResult steps.StepResult[*conversation.Message]
++// EngineBackend provides a Backend implementation using the Engine-first architecture.
++type EngineBackend struct {
++	engine    engine.Engine
++	isRunning bool
++	cancel    context.CancelFunc
++    historyMu sync.RWMutex
++    history   []*turns.Turn
++    program   *tea.Program
++    emittedMu sync.Mutex
++    emitted   map[string]struct{}
+ }
+ 
+-var _ boba_chat.Backend = &StepBackend{}
++var _ boba_chat.Backend = &EngineBackend{}
+ 
+-func (s *StepBackend) Start(ctx context.Context, msgs []*conversation.Message) (tea.Cmd, error) {
+-	if !s.IsFinished() {
+-		return nil, errors.New("Step is already running")
++// NewEngineBackend creates a new EngineBackend with the given engine and event sink.
++// The eventSink is used to publish events during inference for UI updates.
++func NewEngineBackend(engine engine.Engine) *EngineBackend {
++	return &EngineBackend{
++		engine:    engine,
++		isRunning: false,
++        emitted:   make(map[string]struct{}),
+ 	}
++}
+ 
+-	stepResult, err := s.step.Start(ctx, msgs)
+-	if err != nil {
++// AttachProgram registers the UI program to allow emitting initial timeline entities
++// when seeding history. If not attached, seeding will only populate backend state.
++func (e *EngineBackend) AttachProgram(p *tea.Program) {
++    e.program = p
++}
+ 
+-		return tea.Batch(
+-				func() tea.Msg {
+-					return boba_chat.BackendFinishedMsg{}
+-				}),
+-			nil
++// Start executes inference using the engine and publishes events through the sink.
++// This method implements the boba_chat.Backend interface with a plain prompt string.
++func (e *EngineBackend) Start(ctx context.Context, prompt string) (tea.Cmd, error) {
++    log.Debug().Str("component", "engine_backend").Str("method", "Start").Bool("already_running", e.isRunning).Msg("Start called")
++	if e.isRunning {
++        log.Debug().Str("component", "engine_backend").Msg("Start rejected: already running")
++		return nil, errors.New("Engine is already running")
+ 	}
+ 
+-	s.stepResult = stepResult
++	// Create cancellable context for this inference run
++	ctx, cancel := context.WithCancel(ctx)
++	e.cancel = cancel
++	e.isRunning = true
+ 
+-	return func() tea.Msg {
+-		if s.IsFinished() {
++	// Create engine with the event sink if provided
++	engine := e.engine
++
++    return func() tea.Msg {
++		if !e.isRunning {
+ 			return nil
+ 		}
+-		stepChannel := s.stepResult.GetChannel()
+-		for range stepChannel {
+-			// just wait for the step to finish, progress is handled through the published events
+-		}
+ 
+-		s.stepResult = nil
+-		return boba_chat.BackendFinishedMsg{}
++        log.Debug().Str("component", "engine_backend").Msg("Reducing history, appending user block, running inference")
++        // Reduce history into a seed Turn, append user Block, then run inference
++        seed := e.reduceHistory()
++        if prompt != "" {
++            turns.AppendBlock(seed, turns.NewUserTextBlock(prompt))
++        }
++        updated, err := engine.RunInference(ctx, seed)
++
++		// Mark as finished
++		e.isRunning = false
++		e.cancel = nil
++
++        if err != nil {
++			log.Error().Err(err).Msg("Engine inference failed")
++            log.Error().Err(err).Str("component", "engine_backend").Msg("RunInference failed")
++		}
++        // Append updated Turn to history for cohesive continuation
++        if updated != nil {
++            e.historyMu.Lock()
++            e.history = append(e.history, updated)
++            e.historyMu.Unlock()
++            log.Debug().Str("component", "engine_backend").Int("turn_blocks", len(updated.Blocks)).Int("history_len", len(e.history)).Msg("Appended updated Turn to history")
++        }
++        log.Debug().Str("component", "engine_backend").Msg("Returning BackendFinishedMsg")
++        return boba_chat.BackendFinishedMsg{}
+ 	}, nil
+ }
+ 
+-func NewStepBackend(step chat.Step) *StepBackend {
+-	return &StepBackend{
+-		step: step,
+-	}
++// SetSeedFromConversation populates the initial Turn with system and prior user messages
++func (e *EngineBackend) SetSeedFromConversation(c conv.Conversation) {
++    t := &turns.Turn{}
++    // Convert existing conversation into blocks (system/user/assistant as available)
++    turns.AppendBlocks(t, turns.BlocksFromConversationDelta(c, 0)...)
++    e.historyMu.Lock()
++    e.history = append(e.history, t)
++    e.historyMu.Unlock()
++    log.Debug().Str("component", "engine_backend").Int("seed_blocks", len(t.Blocks)).Int("history_len", len(e.history)).Msg("Seed Turn appended to history from conversation")
++    e.emitInitialEntities(t)
+ }
+ 
+-func (s *StepBackend) Interrupt() {
+-	if s.stepResult != nil {
+-		s.stepResult.Cancel()
++// SetSeedTurn sets the seed Turn directly
++func (e *EngineBackend) SetSeedTurn(t *turns.Turn) {
++    e.historyMu.Lock()
++    e.history = append(e.history, t)
++    e.historyMu.Unlock()
++    log.Debug().Str("component", "engine_backend").Int("seed_blocks", len(t.Blocks)).Int("history_len", len(e.history)).Msg("Seed Turn appended to history")
++    e.emitInitialEntities(t)
++}
++
++// emitInitialEntities sends UI entities for existing blocks (system/user/assistant text)
++// so the chat timeline reflects prior context when entering chat mode.
++func (e *EngineBackend) emitInitialEntities(t *turns.Turn) {
++    if e.program == nil || t == nil || len(t.Blocks) == 0 {
++        return
++    }
++    for _, b := range t.Blocks {
++        var role string
++        var text string
++        switch b.Kind {
++        case turns.BlockKindUser:
++            role = "user"
++        case turns.BlockKindLLMText:
++            role = "assistant"
++        default:
++            continue
++        }
++        if s, ok := b.Payload[turns.PayloadKeyText].(string); ok {
++            text = s
++        }
++        if role == "" || text == "" {
++            continue
++        }
++        id := b.ID
++        // Deduplicate entity emissions by block ID
++        e.emittedMu.Lock()
++        if _, seen := e.emitted[id]; seen {
++            e.emittedMu.Unlock()
++            continue
++        }
++        e.emitted[id] = struct{}{}
++        e.emittedMu.Unlock()
++        e.program.Send(timeline.UIEntityCreated{
++            ID:       timeline.EntityID{LocalID: id, Kind: "llm_text"},
++            Renderer: timeline.RendererDescriptor{Kind: "llm_text"},
++            Props:    map[string]any{"role": role, "text": text},
++            StartedAt: time.Now(),
++        })
++        e.program.Send(timeline.UIEntityCompleted{
++            ID: timeline.EntityID{LocalID: id, Kind: "llm_text"},
++            Result: map[string]any{"text": text},
++        })
++    }
++}
++
++// Interrupt attempts to cancel the current inference operation.
++func (e *EngineBackend) Interrupt() {
++	if e.cancel != nil {
++		e.cancel()
+ 	} else {
+-		log.Warn().Msg("Step is not running")
++		log.Warn().Msg("Engine is not running")
+ 	}
+ }
+ 
+-func (s *StepBackend) Kill() {
+-	if s.stepResult != nil {
+-		s.stepResult.Cancel()
+-		s.stepResult = nil
++// Kill forcefully cancels the current inference operation.
++func (e *EngineBackend) Kill() {
++	if e.cancel != nil {
++		e.cancel()
++		e.cancel = nil
++		e.isRunning = false
+ 	} else {
+-		log.Debug().Msg("Step is not running")
++		log.Debug().Msg("Engine is not running")
+ 	}
+ }
+ 
+-func (s *StepBackend) IsFinished() bool {
+-	return s.stepResult == nil
++// IsFinished returns whether the engine is currently running an inference operation.
++func (e *EngineBackend) IsFinished() bool {
++	return !e.isRunning
++}
++
++// reduceHistory flattens all prior Turns into a single Turn by concatenating Blocks
++func (e *EngineBackend) reduceHistory() *turns.Turn {
++    out := &turns.Turn{}
++    e.historyMu.RLock()
++    defer e.historyMu.RUnlock()
++    for _, t := range e.history {
++        if t == nil { continue }
++        turns.AppendBlocks(out, t.Blocks...)
++    }
++    return out
+ }
+ 
+ // StepChatForwardFunc is a function that forwards watermill messages to the UI by
+@@ -91,61 +210,61 @@ func StepChatForwardFunc(p *tea.Program) func(msg *message.Message) error {
+ 		e, err := events.NewEventFromJson(msg.Payload)
+ 		if err != nil {
+ 			log.Error().Err(err).Str("payload", string(msg.Payload)).Msg("Failed to parse event")
++            log.Error().Err(err).Int("payload_len", len(msg.Payload)).Str("component", "step_forward").Msg("Failed to parse event from payload")
+ 			return err
+ 		}
+ 
+-		eventMetadata := e.Metadata()
+-		metadata := conversation2.StreamMetadata{
+-			ID:            eventMetadata.ID,
+-			ParentID:      eventMetadata.ParentID,
+-			StepMetadata:  e.StepMetadata(),
+-			EventMetadata: &eventMetadata,
+-		}
+-		log.Debug().Interface("event", e).Msg("Dispatching event to UI")
+-		switch e_ := e.(type) {
+-		case *events.EventError:
+-			p.Send(conversation2.StreamCompletionError{
+-				StreamMetadata: metadata,
+-				Err:            errors.New(e_.ErrorString),
+-			})
+-		case *events.EventPartialCompletion:
+-			p.Send(conversation2.StreamCompletionMsg{
+-				StreamMetadata: metadata,
+-				Delta:          e_.Delta,
+-				Completion:     e_.Completion,
+-			})
+-		case *events.EventFinal:
+-			p.Send(conversation2.StreamDoneMsg{
+-				StreamMetadata: metadata,
+-				Completion:     e_.Text,
+-			})
+-
+-		case *events.EventInterrupt:
+-			p_, ok := events.ToTypedEvent[events.EventInterrupt](e)
+-			if !ok {
+-				return errors.New("payload is not of type EventInterrupt")
+-			}
+-			p.Send(conversation2.StreamDoneMsg{
+-				StreamMetadata: metadata,
+-				Completion:     p_.Text,
+-			})
+-
+-		case *events.EventToolCall:
+-			p.Send(conversation2.StreamDoneMsg{
+-				StreamMetadata: metadata,
+-				Completion:     fmt.Sprintf("%s(%s)", e_.ToolCall.Name, e_.ToolCall.Input),
+-			})
+-		case *events.EventToolResult:
+-			p.Send(conversation2.StreamDoneMsg{
+-				StreamMetadata: metadata,
+-				Completion:     fmt.Sprintf("Result: %s", e_.ToolResult.Result),
+-			})
+-
+-		case *events.EventPartialCompletionStart:
+-			p.Send(conversation2.StreamStartMsg{
+-				StreamMetadata: metadata,
+-			})
+-		}
++        md := e.Metadata()
++        entityID := md.ID.String()
++        log.Debug().Interface("event", e).Str("event_type", fmt.Sprintf("%T", e)).Str("entity_id", entityID).Msg("Dispatching event to UI")
++
++        switch e_ := e.(type) {
++        case *events.EventPartialCompletionStart:
++            // Create assistant message entity for this stream
++            log.Debug().Str("component", "step_forward").Str("entity_id", entityID).Msg("UIEntityCreated (llm_text)")
++            p.Send(timeline.UIEntityCreated{
++                ID:       timeline.EntityID{LocalID: entityID, Kind: "llm_text"},
++                Renderer: timeline.RendererDescriptor{Kind: "llm_text"},
++                Props:    map[string]any{"role": "assistant", "text": ""},
++                StartedAt: time.Now(),
++            })
++        case *events.EventPartialCompletion:
++            // Update accumulated assistant text using the Completion field
++            log.Debug().Str("component", "step_forward").Str("entity_id", entityID).Int("delta_len", len(e_.Delta)).Int("completion_len", len(e_.Completion)).Msg("UIEntityUpdated (llm_text)")
++            p.Send(timeline.UIEntityUpdated{
++                ID:        timeline.EntityID{LocalID: entityID, Kind: "llm_text"},
++                Patch:     map[string]any{"text": e_.Completion},
++                Version:   time.Now().UnixNano(),
++                UpdatedAt: time.Now(),
++            })
++        case *events.EventFinal:
++            log.Debug().Str("component", "step_forward").Str("entity_id", entityID).Int("text_len", len(e_.Text)).Msg("UIEntityCompleted (final)")
++            p.Send(timeline.UIEntityCompleted{
++                ID:     timeline.EntityID{LocalID: entityID, Kind: "llm_text"},
++                Result: map[string]any{"text": e_.Text},
++            })
++            p.Send(boba_chat.BackendFinishedMsg{})
++        case *events.EventInterrupt:
++            intr, ok := events.ToTypedEvent[events.EventInterrupt](e)
++            if !ok {
++                log.Error().Str("component", "step_forward").Msg("EventInterrupt type assertion failed")
++                return errors.New("payload is not of type EventInterrupt")
++            }
++            log.Debug().Str("component", "step_forward").Str("entity_id", entityID).Int("text_len", len(intr.Text)).Msg("UIEntityCompleted (interrupt)")
++            p.Send(timeline.UIEntityCompleted{
++                ID:     timeline.EntityID{LocalID: entityID, Kind: "llm_text"},
++                Result: map[string]any{"text": intr.Text},
++            })
++            p.Send(boba_chat.BackendFinishedMsg{})
++        case *events.EventError:
++            log.Debug().Str("component", "step_forward").Str("entity_id", entityID).Msg("UIEntityCompleted (error)")
++            p.Send(timeline.UIEntityCompleted{
++                ID:     timeline.EntityID{LocalID: entityID, Kind: "llm_text"},
++                Result: map[string]any{"text": "**Error**\n\n" + e_.ErrorString},
++            })
++            p.Send(boba_chat.BackendFinishedMsg{})
++        // Tool-related events can be mapped to dedicated tool_call entities if desired
++        }
+ 
+ 		return nil
+ 	}

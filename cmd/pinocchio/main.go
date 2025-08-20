@@ -3,6 +3,7 @@ package main
 import (
 	"embed"
 	"fmt"
+	layers2 "github.com/go-go-golems/geppetto/pkg/layers"
 	"os"
 
 	clay "github.com/go-go-golems/clay/pkg"
@@ -178,7 +179,7 @@ func initAllCommands(helpSystem *help.HelpSystem) error {
 		helpSystem,
 		rootCmd,
 		repositories_,
-		cli.WithCobraMiddlewaresFunc(cmds.GetCobraCommandGeppettoMiddlewares),
+		cli.WithCobraMiddlewaresFunc(layers2.GetCobraCommandGeppettoMiddlewares),
 		cli.WithCobraShortHelpLayers(layers.DefaultSlug, cmdlayers.GeppettoHelpersSlug),
 		cli.WithProfileSettingsLayer(),
 		cli.WithCreateCommandSettingsLayer(),
@@ -225,7 +226,7 @@ func initAllCommands(helpSystem *help.HelpSystem) error {
 		return err
 	}
 	cobraClipCommand, err := cli.BuildCobraCommandFromCommand(clipCommand,
-		cli.WithCobraMiddlewaresFunc(cmds.GetCobraCommandGeppettoMiddlewares),
+		cli.WithCobraMiddlewaresFunc(layers2.GetCobraCommandGeppettoMiddlewares),
 	)
 	if err != nil {
 		return err

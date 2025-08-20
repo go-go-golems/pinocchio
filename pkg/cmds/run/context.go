@@ -1,13 +1,13 @@
 package run
 
 import (
+	"github.com/go-go-golems/geppetto/pkg/inference/engine/factory"
 	"io"
 	"os"
 
-	"github.com/go-go-golems/geppetto/pkg/conversation"
 	"github.com/go-go-golems/geppetto/pkg/events"
-	"github.com/go-go-golems/geppetto/pkg/steps/ai"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
+	"github.com/go-go-golems/geppetto/pkg/turns"
 )
 
 type RunMode int
@@ -32,13 +32,16 @@ type UISettings struct {
 
 // RunContext encapsulates all the settings and state needed for a single command run
 type RunContext struct {
-	// Core components (ConversationManager is required)
-	ConversationManager conversation.Manager
-
 	StepSettings *settings.StepSettings
 
-	StepFactory *ai.StandardStepFactory
-	Router      *events.EventRouter
+	EngineFactory factory.EngineFactory
+	Router        *events.EventRouter
+
+	// Template variables used to render prompts/messages prior to model calls
+	Variables map[string]interface{}
+
+	// ResultTurn stores the resulting Turn after engine execution when needed by callers
+	ResultTurn *turns.Turn
 
 	// Optional UI/Terminal specific components
 	UISettings *UISettings
@@ -55,9 +58,16 @@ type RunOption func(*RunContext) error
 func WithStepSettings(settings *settings.StepSettings) RunOption {
 	return func(rc *RunContext) error {
 		rc.StepSettings = settings
-		if rc.StepFactory == nil {
-			rc.StepFactory = &ai.StandardStepFactory{Settings: settings}
+		if rc.EngineFactory == nil {
+			rc.EngineFactory = factory.NewStandardEngineFactory()
 		}
+		return nil
+	}
+}
+
+func WithEngineFactory(factory factory.EngineFactory) RunOption {
+	return func(rc *RunContext) error {
+		rc.EngineFactory = factory
 		return nil
 	}
 }
@@ -65,13 +75,6 @@ func WithStepSettings(settings *settings.StepSettings) RunOption {
 func WithRouter(router *events.EventRouter) RunOption {
 	return func(rc *RunContext) error {
 		rc.Router = router
-		return nil
-	}
-}
-
-func WithConversationManager(manager conversation.Manager) RunOption {
-	return func(rc *RunContext) error {
-		rc.ConversationManager = manager
 		return nil
 	}
 }
@@ -101,11 +104,19 @@ func WithWriter(w io.Writer) RunOption {
 	}
 }
 
+// WithVariables passes a map of template variables used to render
+// system prompt, messages and user prompt before sending to the model.
+func WithVariables(vars map[string]interface{}) RunOption {
+	return func(rc *RunContext) error {
+		rc.Variables = vars
+		return nil
+	}
+}
+
 // NewRunContext creates a new RunContext with default values and a required manager
-func NewRunContext(manager conversation.Manager) *RunContext {
+func NewRunContext() *RunContext {
 	return &RunContext{
-		ConversationManager: manager,
-		RunMode:             RunModeBlocking,
-		Writer:              os.Stdout,
+		RunMode: RunModeBlocking,
+		Writer:  os.Stdout,
 	}
 }

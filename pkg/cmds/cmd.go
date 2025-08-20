@@ -8,28 +8,109 @@ import (
 	"os"
 	"strings"
 
-	"github.com/go-go-golems/geppetto/pkg/conversation/builder"
+	"github.com/go-go-golems/geppetto/pkg/inference/engine"
+	"github.com/go-go-golems/geppetto/pkg/inference/engine/factory"
+	"github.com/go-go-golems/geppetto/pkg/inference/middleware"
+	"github.com/go-go-golems/glazed/pkg/helpers/templating"
+
 	"github.com/go-go-golems/geppetto/pkg/events"
 
 	tea "github.com/charmbracelet/bubbletea"
 	bobatea_chat "github.com/go-go-golems/bobatea/pkg/chat"
 
-	"github.com/go-go-golems/geppetto/pkg/conversation"
-	"github.com/go-go-golems/geppetto/pkg/steps"
-	"github.com/go-go-golems/geppetto/pkg/steps/ai"
-	"github.com/go-go-golems/geppetto/pkg/steps/ai/chat"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
+	"github.com/go-go-golems/geppetto/pkg/turns"
 	glazedcmds "github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
 	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
 	"github.com/go-go-golems/pinocchio/pkg/cmds/cmdlayers"
 	"github.com/go-go-golems/pinocchio/pkg/cmds/run"
-	"github.com/go-go-golems/pinocchio/pkg/ui"
+	"github.com/go-go-golems/pinocchio/pkg/ui/runtime"
 	"github.com/mattn/go-isatty"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog/log"
 	"github.com/tcnksm/go-input"
 	"golang.org/x/sync/errgroup"
 )
+
+func renderTemplateString(name, text string, vars map[string]interface{}) (string, error) {
+	if strings.TrimSpace(text) == "" {
+		return text, nil
+	}
+	tpl, err := templating.CreateTemplate(name).Parse(text)
+	if err != nil {
+		return "", err
+	}
+	var b strings.Builder
+	if err := tpl.Execute(&b, vars); err != nil {
+		return "", err
+	}
+	return b.String(), nil
+}
+
+// SimpleMessage represents a minimal YAML message that will be converted to a user block
+type SimpleMessage struct {
+	Text string `yaml:"text"`
+}
+
+// buildInitialTurnFromBlocks constructs a Turn from system prompt, pre-seeded blocks, and an optional user prompt
+func buildInitialTurnFromBlocks(systemPrompt string, blocks []turns.Block, userPrompt string) *turns.Turn {
+	t := &turns.Turn{}
+	if strings.TrimSpace(systemPrompt) != "" {
+		turns.AppendBlock(t, turns.NewSystemTextBlock(systemPrompt))
+	}
+	if len(blocks) > 0 {
+		turns.AppendBlocks(t, blocks...)
+	}
+	if strings.TrimSpace(userPrompt) != "" {
+		turns.AppendBlock(t, turns.NewUserTextBlock(userPrompt))
+	}
+	return t
+}
+
+// renderBlocks renders text payloads in blocks using vars
+func renderBlocks(blocks []turns.Block, vars map[string]interface{}) ([]turns.Block, error) {
+	if len(blocks) == 0 {
+		return blocks, nil
+	}
+	out := make([]turns.Block, 0, len(blocks))
+	for _, b := range blocks {
+		nb := b
+		if txt, ok := b.Payload[turns.PayloadKeyText].(string); ok {
+			rt, err := renderTemplateString("message", txt, vars)
+			if err != nil {
+				return nil, err
+			}
+			if nb.Payload == nil {
+				nb.Payload = map[string]any{}
+			}
+			nb.Payload[turns.PayloadKeyText] = rt
+		}
+		out = append(out, nb)
+	}
+	return out, nil
+}
+
+func buildInitialTurnFromBlocksRendered(systemPrompt string, blocks []turns.Block, userPrompt string, vars map[string]interface{}) (*turns.Turn, error) {
+	sp, err := renderTemplateString("system-prompt", systemPrompt, vars)
+	if err != nil {
+		return nil, err
+	}
+	rblocks, err := renderBlocks(blocks, vars)
+	if err != nil {
+		return nil, err
+	}
+	up, err := renderTemplateString("prompt", userPrompt, vars)
+	if err != nil {
+		return nil, err
+	}
+	return buildInitialTurnFromBlocks(sp, rblocks, up), nil
+}
+
+// buildInitialTurn constructs a seed Turn for the command from system + blocks + user prompt using vars.
+func (g *PinocchioCommand) buildInitialTurn(vars map[string]interface{}) (*turns.Turn, error) {
+	return buildInitialTurnFromBlocksRendered(g.SystemPrompt, g.Blocks, g.Prompt, vars)
+}
 
 type PinocchioCommandDescription struct {
 	Name      string                            `yaml:"name"`
@@ -42,16 +123,16 @@ type PinocchioCommandDescription struct {
 	Tags      []string                          `yaml:"tags,omitempty"`
 	Metadata  map[string]interface{}            `yaml:"metadata,omitempty"`
 
-	Prompt       string                  `yaml:"prompt,omitempty"`
-	Messages     []*conversation.Message `yaml:"messages,omitempty"`
-	SystemPrompt string                  `yaml:"system-prompt,omitempty"`
+	Prompt       string   `yaml:"prompt,omitempty"`
+	Messages     []string `yaml:"messages,omitempty"`
+	SystemPrompt string   `yaml:"system-prompt,omitempty"`
 }
 
 type PinocchioCommand struct {
 	*glazedcmds.CommandDescription `yaml:",inline"`
-	Prompt                         string                  `yaml:"prompt,omitempty"`
-	Messages                       []*conversation.Message `yaml:"messages,omitempty"`
-	SystemPrompt                   string                  `yaml:"system-prompt,omitempty"`
+	Prompt                         string        `yaml:"prompt,omitempty"`
+	Blocks                         []turns.Block `yaml:"-"`
+	SystemPrompt                   string        `yaml:"system-prompt,omitempty"`
 }
 
 var _ glazedcmds.WriterCommand = &PinocchioCommand{}
@@ -64,9 +145,9 @@ func WithPrompt(prompt string) PinocchioCommandOption {
 	}
 }
 
-func WithMessages(messages []*conversation.Message) PinocchioCommandOption {
+func WithBlocks(blocks []turns.Block) PinocchioCommandOption {
 	return func(g *PinocchioCommand) {
-		g.Messages = messages
+		g.Blocks = blocks
 	}
 }
 
@@ -98,45 +179,7 @@ func NewPinocchioCommand(
 	return ret, nil
 }
 
-// XXX this is a mess with all its run methods and all, it would be good to have a RunOption pattern here:
-// - WithStepSettings
-// - WithParsedLayers
-// - WithPrinter / Handlers
-// - WithEngine / Temperature / a whole set of LLM specific parameters
-//   - WithMessages
-//   - WithPrompt
-//   - WithSystemPrompt
-//   - WithImages
-//   - WithAutosaveSettings
-//   - WithVariables
-//   - WithRouter
-//   - WithStepFactory
-//   - WithSettings
-
-// CreateConversationManager creates a new conversation manager with the given settings
-func (g *PinocchioCommand) CreateConversationManager(
-	variables map[string]interface{},
-	options ...builder.ConversationManagerOption,
-) (conversation.Manager, error) {
-	if g.Prompt != "" && len(g.Messages) != 0 {
-		return nil, errors.Errorf("Prompt and messages are mutually exclusive")
-	}
-
-	defaultOptions := []builder.ConversationManagerOption{
-		builder.WithSystemPrompt(g.SystemPrompt),
-		builder.WithMessages(g.Messages),
-		builder.WithPrompt(g.Prompt),
-		builder.WithVariables(variables),
-	}
-
-	// Combine default options with provided options, with provided options taking precedence
-	builder, err := builder.NewConversationManagerBuilder(append(defaultOptions, options...)...)
-	if err != nil {
-		return nil, err
-	}
-
-	return builder.Build()
-}
+// conversation manager removed; no-op left intentionally for compatibility if referenced elsewhere
 
 // RunIntoWriter runs the command and writes the output into the given writer.
 func (g *PinocchioCommand) RunIntoWriter(
@@ -167,19 +210,7 @@ func (g *PinocchioCommand) RunIntoWriter(
 		imagePaths[i] = img.Path
 	}
 
-	// First create the conversation manager with all its settings
-	manager, err := g.CreateConversationManager(
-		parsedLayers.GetDefaultParameterLayer().Parameters.ToMap(),
-		builder.WithImages(imagePaths),
-		builder.WithAutosaveSettings(builder.AutosaveSettings{
-			Enabled:  strings.ToLower(helpersSettings.Autosave.Enabled) == "yes",
-			Template: helpersSettings.Autosave.Template,
-			Path:     helpersSettings.Autosave.Path,
-		}),
-	)
-	if err != nil {
-		return err
-	}
+	// No conversation manager preview; print path handled by RunWithOptions
 
 	// Determine run mode based on helper settings
 	runMode := run.RunModeBlocking
@@ -206,33 +237,34 @@ func (g *PinocchioCommand) RunIntoWriter(
 		return err
 	}
 
+	// If we're just printing the prompt, render and print the seed Turn and return
+	if helpersSettings.PrintPrompt {
+		seed, err := g.buildInitialTurn(parsedLayers.GetDefaultParameterLayer().Parameters.ToMap())
+		if err != nil {
+			return err
+		}
+		turns.FprintTurn(w, seed)
+		return nil
+	}
+
 	// Run with options
-	messages, err := g.RunWithOptions(ctx,
+	_, err = g.RunWithOptions(ctx,
 		run.WithStepSettings(stepSettings),
 		run.WithWriter(w),
 		run.WithRunMode(runMode),
 		run.WithUISettings(uiSettings),
-		run.WithConversationManager(manager),
 		run.WithRouter(router),
+		run.WithVariables(parsedLayers.GetDefaultParameterLayer().Parameters.ToMap()),
 	)
 	if err != nil {
 		return err
-	}
-
-	// If we're just printing the prompt, do that and return
-	if helpersSettings.PrintPrompt {
-		for _, message := range messages {
-			_, _ = fmt.Fprintf(w, "%s\n", strings.TrimSpace(message.Content.View()))
-			_, _ = fmt.Fprintln(w)
-		}
 	}
 
 	return nil
 }
 
 // RunWithOptions executes the command with the given options
-func (g *PinocchioCommand) RunWithOptions(ctx context.Context, options ...run.RunOption) ([]*conversation.Message, error) {
-	// We need at least one option that provides the manager
+func (g *PinocchioCommand) RunWithOptions(ctx context.Context, options ...run.RunOption) (*turns.Turn, error) {
 	runCtx := &run.RunContext{}
 
 	// Apply options
@@ -242,20 +274,20 @@ func (g *PinocchioCommand) RunWithOptions(ctx context.Context, options ...run.Ru
 		}
 	}
 
-	// Verify we have a manager
-	if runCtx.ConversationManager == nil {
-		return nil, errors.New("no conversation manager provided")
-	}
+	// ConversationManager optional during migration; prefer Turn-based flows
 
 	if runCtx.UISettings != nil && runCtx.UISettings.PrintPrompt {
-		return runCtx.ConversationManager.GetConversation(), nil
+		// Build a preview turn from initial blocks using rendered templates
+		t, err := g.buildInitialTurn(runCtx.Variables)
+		if err != nil {
+			return nil, err
+		}
+		return t, nil
 	}
 
-	// Create step factory if not provided
-	if runCtx.StepFactory == nil {
-		runCtx.StepFactory = &ai.StandardStepFactory{
-			Settings: runCtx.StepSettings.Clone(),
-		}
+	// Create engine factory if not provided
+	if runCtx.EngineFactory == nil {
+		runCtx.EngineFactory = factory.NewStandardEngineFactory()
 	}
 
 	// Verify router for chat mode
@@ -273,19 +305,15 @@ func (g *PinocchioCommand) RunWithOptions(ctx context.Context, options ...run.Ru
 	}
 }
 
-// runBlocking handles blocking execution mode
-func (g *PinocchioCommand) runBlocking(ctx context.Context, rc *run.RunContext) ([]*conversation.Message, error) {
-	chatStep, err := rc.StepFactory.NewStep()
-	if err != nil {
-		return nil, err
-	}
+// runBlocking handles blocking execution mode using Engine directly
+func (g *PinocchioCommand) runBlocking(ctx context.Context, rc *run.RunContext) (*turns.Turn, error) {
+	// Create engine instance options
+	var options []engine.Option
 
-	// If we have a router, set up the printer and run the router loop
+	// If we have a router, set up watermill sink for event publishing
 	if rc.Router != nil {
-		chatStep, err = rc.StepFactory.NewStep(chat.WithPublishedTopic(rc.Router.Publisher, "chat"))
-		if err != nil {
-			return nil, err
-		}
+		watermillSink := middleware.NewWatermillSink(rc.Router.Publisher, "chat")
+		options = append(options, engine.WithSink(watermillSink))
 
 		// Add default printer if none is set
 		if rc.UISettings == nil || rc.UISettings.Output == "" {
@@ -316,44 +344,50 @@ func (g *PinocchioCommand) runBlocking(ctx context.Context, rc *run.RunContext) 
 		eg.Go(func() error {
 			defer cancel()
 			<-rc.Router.Running()
-			return g.runStepAndCollectMessages(ctx, rc, chatStep)
+			return g.runEngineAndCollectMessages(ctx, rc, options)
 		})
 
-		err = eg.Wait()
+		err := eg.Wait()
 		if err != nil {
 			return nil, err
 		}
 	} else {
-		// No router, just run the step directly
-		err = g.runStepAndCollectMessages(ctx, rc, chatStep)
+		// No router, just run the engine directly using Turns
+		err := g.runEngineAndCollectMessages(ctx, rc, options)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	return rc.ConversationManager.GetConversation(), nil
+	// Return resulting Turn when available
+	return rc.ResultTurn, nil
 }
 
-// runStepAndCollectMessages handles the actual step execution and message collection
-func (g *PinocchioCommand) runStepAndCollectMessages(ctx context.Context, rc *run.RunContext, chatStep chat.Step) error {
-	conversation_ := rc.ConversationManager.GetConversation()
-	messagesM := steps.Resolve(conversation_)
-	m := steps.Bind(ctx, messagesM, chatStep)
-
-	for r := range m.GetChannel() {
-		if r.Error() != nil {
-			return r.Error()
-		}
-		msg := r.Unwrap()
-		if err := rc.ConversationManager.AppendMessages(msg); err != nil {
-			return fmt.Errorf("failed to append message: %w", err)
-		}
+// runEngineAndCollectMessages handles the actual engine execution and message collection
+func (g *PinocchioCommand) runEngineAndCollectMessages(ctx context.Context, rc *run.RunContext, options []engine.Option) error {
+	// Create engine with options
+	engine, err := rc.EngineFactory.CreateEngine(rc.StepSettings, options...)
+	if err != nil {
+		return fmt.Errorf("failed to create engine: %w", err)
 	}
+
+	// Build seed Turn directly from system + messages + prompt (rendered)
+	seed, err := g.buildInitialTurn(rc.Variables)
+	if err != nil {
+		return fmt.Errorf("failed to render templates: %w", err)
+	}
+	updatedTurn, err := engine.RunInference(ctx, seed)
+	if err != nil {
+		return fmt.Errorf("inference failed: %w", err)
+	}
+	// Store the updated Turn on the run context
+	rc.ResultTurn = updatedTurn
+
 	return nil
 }
 
 // runChat handles chat execution mode
-func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) ([]*conversation.Message, error) {
+func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) (*turns.Turn, error) {
 	if rc.Router == nil {
 		return nil, errors.New("chat mode requires a router")
 	}
@@ -369,11 +403,8 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) ([]*
 		options = append(options, tea.WithAltScreen())
 	}
 
-	rc.StepFactory.Settings.Chat.Stream = true
-	chatStep, err := rc.StepFactory.NewStep(chat.WithPublishedTopic(rc.Router.Publisher, "ui"))
-	if err != nil {
-		return nil, err
-	}
+	// Enable streaming for the UI
+	rc.StepSettings.Chat.Stream = true
 
 	// Start router in a goroutine
 	eg := errgroup.Group{}
@@ -397,17 +428,16 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) ([]*
 
 	eg.Go(func() error {
 		defer f()
+		var err error
 
 		// Wait for router to be ready
 		<-rc.Router.Running()
 
 		// If we're in interactive mode, run initial blocking step
 		if rc.RunMode == run.RunModeInteractive {
-			// Run initial blocking step
-			initialStep, err := rc.StepFactory.NewStep(chat.WithPublishedTopic(rc.Router.Publisher, "chat"))
-			if err != nil {
-				return err
-			}
+			// Create options for initial step with chat topic
+			chatSink := middleware.NewWatermillSink(rc.Router.Publisher, "chat")
+			initialOptions := []engine.Option{engine.WithSink(chatSink)}
 
 			// Add default printer for initial step
 			if rc.UISettings == nil || rc.UISettings.Output == "" || rc.UISettings.Output == "text" {
@@ -421,12 +451,12 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) ([]*
 				})
 				rc.Router.AddHandler("chat", "chat", printer)
 			}
-			err = rc.Router.RunHandlers(ctx)
+			err := rc.Router.RunHandlers(ctx)
 			if err != nil {
 				return err
 			}
 
-			err = g.runStepAndCollectMessages(ctx, rc, initialStep)
+			err = g.runEngineAndCollectMessages(ctx, rc, initialOptions)
 			if err != nil {
 				return err
 			}
@@ -453,39 +483,76 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) ([]*
 			}
 		}
 
-		backend := ui.NewStepBackend(chatStep)
-
 		// Determine if we should auto-start the backend
 		autoStartBackend := rc.UISettings != nil && rc.UISettings.StartInChat
 
-		model := bobatea_chat.InitialModel(
-			rc.ConversationManager,
-			backend,
-			bobatea_chat.WithTitle("pinocchio"),
-			bobatea_chat.WithAutoStartBackend(autoStartBackend),
-		)
+		// Build program and session via unified builder
+		sess, p, err := runtime.NewChatBuilder().
+			WithContext(ctx).
+			WithEngineFactory(rc.EngineFactory).
+			WithSettings(rc.StepSettings).
+			WithRouter(rc.Router).
+			WithProgramOptions(options...).
+			WithModelOptions(
+				bobatea_chat.WithTitle("pinocchio"),
+				bobatea_chat.WithAutoStartBackend(autoStartBackend),
+			).
+			BuildProgram()
+		if err != nil {
+			return err
+		}
 
-		p := tea.NewProgram(
-			model,
-			options...,
-		)
-
-		rc.Router.AddHandler("ui", "ui", ui.StepChatForwardFunc(p))
+		// Register bound UI event handler and run handlers
+		rc.Router.AddHandler("ui", "ui", sess.EventHandler())
 		err = rc.Router.RunHandlers(ctx)
 		if err != nil {
 			return err
 		}
 
-		_, err := p.Run()
+		// Seed backend Turn after router is running so the timeline shows prior context
+		go func() {
+			<-rc.Router.Running()
+			seed, err := buildInitialTurnFromBlocksRendered(g.SystemPrompt, g.Blocks, "", rc.Variables)
+			if err == nil {
+				sess.Backend.SetSeedTurn(seed)
+			} else {
+				// Fallback without rendering on error
+				sess.Backend.SetSeedTurn(buildInitialTurnFromBlocks(g.SystemPrompt, g.Blocks, ""))
+			}
+		}()
+
+		// If auto-start is enabled, pre-fill the prompt/system text, then submit
+		if autoStartBackend {
+			go func() {
+				<-rc.Router.Running()
+				// Render prompt before auto-submit in chat
+				promptText := strings.TrimSpace(g.Prompt)
+				if promptText != "" && rc.Variables != nil {
+					if rendered, err := renderTemplateString("prompt", promptText, rc.Variables); err == nil {
+						promptText = rendered
+					}
+				}
+				if promptText != "" {
+					log.Debug().Int("len", len(promptText)).Msg("Auto-start: submitting rendered prompt after router.Running")
+					p.Send(bobatea_chat.ReplaceInputTextMsg{Text: promptText})
+					p.Send(bobatea_chat.SubmitMessageMsg{})
+				} else {
+					log.Debug().Msg("Auto-start enabled, but no prompt text found; skipping submit")
+				}
+			}()
+		}
+
+		_, err = p.Run()
 		return err
 	})
 
-	err = eg.Wait()
+	err := eg.Wait()
 	if err != nil {
 		return nil, err
 	}
 
-	return rc.ConversationManager.GetConversation(), nil
+	// Return resulting Turn when available
+	return rc.ResultTurn, nil
 }
 
 // Helper function to ask user about continuing in chat mode
@@ -520,7 +587,6 @@ func askForChatContinuation() (bool, error) {
 			}
 		},
 	})
-
 	if err != nil {
 		fmt.Println("Failed to get user input:", err)
 		return false, err

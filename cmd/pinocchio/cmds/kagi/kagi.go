@@ -13,19 +13,19 @@ func RegisterKagiCommands() *cobra.Command {
 	}
 	enrichCmd, err := NewEnrichWebCommand()
 	cobra.CheckErr(err)
-	command, err := cli.BuildCobraCommandFromGlazeCommand(enrichCmd)
+	command, err := cli.BuildCobraCommand(enrichCmd)
 	cobra.CheckErr(err)
 	kagiCmd.AddCommand(command)
 
 	summarizeCmd, err := NewSummarizeCommand()
 	cobra.CheckErr(err)
-	command, err = cli.BuildCobraCommandFromWriterCommand(summarizeCmd)
+	command, err = cli.BuildCobraCommand(summarizeCmd)
 	cobra.CheckErr(err)
 	kagiCmd.AddCommand(command)
 
 	fastGPTCmd, err := NewFastGPTCommand()
 	cobra.CheckErr(err)
-	command, err = cli.BuildCobraCommandFromWriterCommand(fastGPTCmd)
+	command, err = cli.BuildCobraCommand(fastGPTCmd)
 	cobra.CheckErr(err)
 	kagiCmd.AddCommand(command)
 

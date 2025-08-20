@@ -26,31 +26,31 @@ func getCodec(model, encoding string) tokenizer.Codec {
 func RegisterTokenCommands(tokensCmd *cobra.Command) {
 	countCmdInstance, err := NewCountCommand()
 	cobra.CheckErr(err)
-	countCommand, err := cli.BuildCobraCommandFromWriterCommand(countCmdInstance)
+	countCommand, err := cli.BuildCobraCommand(countCmdInstance)
 	cobra.CheckErr(err)
 	tokensCmd.AddCommand(countCommand)
 
 	decodeCmdInstance, err := NewDecodeCommand()
 	cobra.CheckErr(err)
-	decodeCommand, err := cli.BuildCobraCommandFromWriterCommand(decodeCmdInstance)
+	decodeCommand, err := cli.BuildCobraCommand(decodeCmdInstance)
 	cobra.CheckErr(err)
 	tokensCmd.AddCommand(decodeCommand)
 
 	encodeCmdInstance, err := NewEncodeCommand()
 	cobra.CheckErr(err)
-	encodeCommand, err := cli.BuildCobraCommandFromWriterCommand(encodeCmdInstance)
+	encodeCommand, err := cli.BuildCobraCommand(encodeCmdInstance)
 	cobra.CheckErr(err)
 	tokensCmd.AddCommand(encodeCommand)
 
 	listModelsCmdInstance, err := NewListModelsCommand()
 	cobra.CheckErr(err)
-	listModelsCommand, err := cli.BuildCobraCommandFromGlazeCommand(listModelsCmdInstance)
+	listModelsCommand, err := cli.BuildCobraCommand(listModelsCmdInstance)
 	cobra.CheckErr(err)
 	tokensCmd.AddCommand(listModelsCommand)
 
 	listCodecsCmdInstance, err := NewListCodecsCommand()
 	cobra.CheckErr(err)
-	listCodecsCommand, err := cli.BuildCobraCommandFromGlazeCommand(listCodecsCmdInstance)
+	listCodecsCommand, err := cli.BuildCobraCommand(listCodecsCmdInstance)
 	cobra.CheckErr(err)
 	tokensCmd.AddCommand(listCodecsCommand)
 }
