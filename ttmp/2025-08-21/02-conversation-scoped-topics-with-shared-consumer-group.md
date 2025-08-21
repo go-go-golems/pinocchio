@@ -245,8 +245,8 @@ attachWebSocket(conv, ws)
    - [x] Reuse the running reader on additional WS connects (no new subscriber).
 
 3) Conversation manager enhancements
-   - [ ] Track `attachedSockets` and implement `attach/detach` helpers.
-   - [ ] Add idle timer: when `attachedSockets == 0`, start a grace timeout (configurable); on expiry, stop the reader and optionally engine.
+   - [x] Track `attachedSockets` and implement `attach/detach` helpers.
+   - [x] Add idle timer: when `attachedSockets == 0`, start a grace timeout (configurable); on expiry, stop the reader and optionally engine.
    - [ ] Expose metrics: current conversations, readers running, sockets attached.
 
 4) WebSocket API updates

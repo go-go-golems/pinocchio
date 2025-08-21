@@ -56,6 +56,7 @@ var staticFS embed.FS
 type WebServerSettings struct {
     Addr string `glazed.parameter:"addr"`
     AgentModeEnabled bool `glazed.parameter:"enable-agentmode"`
+    IdleTimeoutSeconds int `glazed.parameter:"idle-timeout-seconds"`
 }
 
 type Command struct {
@@ -78,6 +79,7 @@ func NewCommand() (*Command, error) {
         cmds.WithFlags(
             parameters.NewParameterDefinition("addr", parameters.ParameterTypeString, parameters.WithDefault(":8080"), parameters.WithHelp("HTTP listen address")),
             parameters.NewParameterDefinition("enable-agentmode", parameters.ParameterTypeBool, parameters.WithDefault(false), parameters.WithHelp("Enable agent mode middleware")),
+            parameters.NewParameterDefinition("idle-timeout-seconds", parameters.ParameterTypeInteger, parameters.WithDefault(60), parameters.WithHelp("Stop per-conversation reader after N seconds with no sockets (0=disabled)")),
         ),
         cmds.WithLayersList(append(geLayers, redisLayer)...),
     )
@@ -145,6 +147,8 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *layers.ParsedLayers
         connsMu  sync.RWMutex
         sub      message.Subscriber
         stopRead context.CancelFunc
+        reading  bool
+        idleTimer *time.Timer
     }
     type ConvManager struct {
         mu    sync.Mutex
@@ -152,6 +156,78 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *layers.ParsedLayers
     }
     cm := &ConvManager{conns: make(map[string]*Conversation)}
     topicForConv := func(convID string) string { return "chat:" + convID }
+    startReader := func(conv *Conversation) error {
+        if conv.reading {
+            return nil
+        }
+        log.Info().Str("conv_id", conv.ID).Str("topic", topicForConv(conv.ID)).Msg("starting conversation reader")
+        // Start reader goroutine for this conversation
+        readCtx, readCancel := context.WithCancel(srvCtx)
+        conv.stopRead = readCancel
+        ch, err := conv.sub.Subscribe(readCtx, topicForConv(conv.ID))
+        if err != nil {
+            readCancel()
+            conv.stopRead = nil
+            return err
+        }
+        conv.reading = true
+        go func() {
+            for msg := range ch {
+                e, err := events.NewEventFromJson(msg.Payload)
+                if err != nil {
+                    log.Warn().Err(err).Str("component", "ws_reader").Msg("failed to decode event json")
+                    msg.Ack();
+                    continue
+                }
+                runID := e.Metadata().RunID
+                if runID != "" && runID != conv.RunID {
+                    log.Debug().Str("component", "ws_reader").Str("event_type", fmt.Sprintf("%T", e)).Str("event_id", e.Metadata().ID.String()).Str("run_id", runID).Str("conv_run_id", conv.RunID).Msg("skipping event due to run_id mismatch")
+                    msg.Ack();
+                    continue
+                }
+                log.Debug().Str("component", "ws_reader").Str("event_type", fmt.Sprintf("%T", e)).Str("event_id", e.Metadata().ID.String()).Str("run_id", runID).Msg("forwarding event to timeline")
+                // Inline debug log handler
+                switch ev := e.(type) {
+                case *events.EventToolCall:
+                    log.Info().Str("tool", ev.ToolCall.Name).Str("id", ev.ToolCall.ID).Str("input", ev.ToolCall.Input).Msg("ToolCall")
+                case *events.EventToolCallExecute:
+                    log.Info().Str("tool", ev.ToolCall.Name).Str("id", ev.ToolCall.ID).Str("input", ev.ToolCall.Input).Msg("ToolExecute")
+                case *events.EventToolResult:
+                    log.Info().Str("tool_result_id", ev.ToolResult.ID).Interface("result", ev.ToolResult.Result).Msg("ToolResult")
+                case *events.EventToolCallExecutionResult:
+                    log.Info().Str("tool_result_id", ev.ToolResult.ID).Interface("result", ev.ToolResult.Result).Msg("ToolExecResult")
+                case *events.EventLog:
+                    lvl := ev.Level
+                    if lvl == "" { lvl = "info" }
+                    log.WithLevel(parseZerologLevel(lvl)).Str("message", ev.Message).Fields(ev.Fields).Msg("LogEvent")
+                case *events.EventInfo:
+                    log.Info().Str("message", ev.Message).Fields(ev.Data).Msg("InfoEvent")
+                }
+                convertAndBroadcast := func(e events.Event) {
+                    sendBytes := func(b []byte) {
+                        conv.connsMu.RLock()
+                        for c := range conv.conns { _ = c.WriteMessage(websocket.TextMessage, b) }
+                        conv.connsMu.RUnlock()
+                    }
+                    if bs := webbackend.TimelineEventsFromEvent(e); bs != nil {
+                        for _, b := range bs {
+                            log.Debug().Str("component", "ws_broadcast").Int("bytes", len(b)).Msg("broadcasting timeline event")
+                            sendBytes(b)
+                        }
+                    }
+                }
+                convertAndBroadcast(e)
+                msg.Ack()
+            }
+            // Channel closed; mark not reading
+            conv.mu.Lock()
+            conv.reading = false
+            conv.stopRead = nil
+            conv.mu.Unlock()
+            log.Info().Str("conv_id", conv.ID).Msg("conversation reader stopped")
+        }()
+        return nil
+    }
     getOrCreateConv := func(convID string) (*Conversation, error) {
         cm.mu.Lock()
         defer cm.mu.Unlock()
@@ -172,65 +248,7 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *layers.ParsedLayers
         } else {
             conv.sub = router.Subscriber
         }
-        // Start reader goroutine for this conversation
-        readCtx, readCancel := context.WithCancel(srvCtx)
-        conv.stopRead = readCancel
-        ch, err := conv.sub.Subscribe(readCtx, topicForConv(convID))
-        if err != nil {
-            readCancel()
-            return nil, err
-        }
-        // Helper: convert geppetto events to timeline lifecycle messages and broadcast
-        convertAndBroadcast := func(e events.Event) {
-            sendBytes := func(b []byte) {
-                conv.connsMu.RLock()
-                for c := range conv.conns { _ = c.WriteMessage(websocket.TextMessage, b) }
-                conv.connsMu.RUnlock()
-            }
-            if bs := webbackend.TimelineEventsFromEvent(e); bs != nil {
-                for _, b := range bs {
-                    log.Debug().Str("component", "ws_broadcast").Int("bytes", len(b)).Msg("broadcasting timeline event")
-                    sendBytes(b)
-                }
-            }
-        }
-
-        go func() {
-            for msg := range ch {
-                e, err := events.NewEventFromJson(msg.Payload)
-                if err != nil {
-                    log.Warn().Err(err).Str("component", "ws_reader").Msg("failed to decode event json")
-                    msg.Ack();
-                    continue
-                }
-                runID := e.Metadata().RunID
-                if runID != "" && runID != conv.RunID {
-                    log.Debug().Str("component", "ws_reader").Str("event_type", fmt.Sprintf("%T", e)).Str("event_id", e.Metadata().ID.String()).Str("run_id", runID).Str("conv_run_id", conv.RunID).Msg("skipping event due to run_id mismatch")
-                    msg.Ack();
-                    continue
-                }
-                log.Debug().Str("component", "ws_reader").Str("event_type", fmt.Sprintf("%T", e)).Str("event_id", e.Metadata().ID.String()).Str("run_id", runID).Msg("forwarding event to timeline")
-                // Inline debug log handler (replaces legacy shared-topic handler)
-                switch ev := e.(type) {
-                case *events.EventToolCall:
-                    log.Info().Str("tool", ev.ToolCall.Name).Str("id", ev.ToolCall.ID).Str("input", ev.ToolCall.Input).Msg("ToolCall")
-                case *events.EventToolCallExecute:
-                    log.Info().Str("tool", ev.ToolCall.Name).Str("id", ev.ToolCall.ID).Str("input", ev.ToolCall.Input).Msg("ToolExecute")
-                case *events.EventToolResult:
-                    log.Info().Str("tool_result_id", ev.ToolResult.ID).Interface("result", ev.ToolResult.Result).Msg("ToolResult")
-                case *events.EventToolCallExecutionResult:
-                    log.Info().Str("tool_result_id", ev.ToolResult.ID).Interface("result", ev.ToolResult.Result).Msg("ToolExecResult")
-                case *events.EventLog:
-                    lvl := ev.Level
-                    if lvl == "" { lvl = "info" }
-                    log.WithLevel(parseZerologLevel(lvl)).Str("message", ev.Message).Fields(ev.Fields).Msg("LogEvent")
-                case *events.EventInfo:
-                    log.Info().Str("message", ev.Message).Fields(ev.Data).Msg("InfoEvent")
-                }
-                convertAndBroadcast(e)
-                msg.Ack()
-            }
-        }()
+        if err := startReader(conv); err != nil { return nil, err }
         cm.conns[convID] = conv
         return conv, nil
     }
@@ -238,12 +256,45 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *layers.ParsedLayers
         conv.connsMu.Lock()
         conv.conns[c] = true
         conv.connsMu.Unlock()
+        conv.mu.Lock()
+        if conv.idleTimer != nil { conv.idleTimer.Stop(); conv.idleTimer = nil }
+        wasReading := conv.reading
+        conv.mu.Unlock()
+        if !wasReading && rs.Enabled {
+            _ = startReader(conv)
+        }
     }
     removeConn := func(conv *Conversation, c *websocket.Conn) {
         conv.connsMu.Lock()
         delete(conv.conns, c)
         conv.connsMu.Unlock()
         _ = c.Close()
+        if s.IdleTimeoutSeconds > 0 {
+            conv.connsMu.RLock()
+            empty := len(conv.conns) == 0
+            conv.connsMu.RUnlock()
+            if empty {
+                conv.mu.Lock()
+                if conv.idleTimer == nil {
+                    d := time.Duration(s.IdleTimeoutSeconds) * time.Second
+                    conv.idleTimer = time.AfterFunc(d, func(){
+                        conv.mu.Lock()
+                        defer conv.mu.Unlock()
+                        conv.connsMu.RLock()
+                        isEmpty := len(conv.conns) == 0
+                        conv.connsMu.RUnlock()
+                        if isEmpty && conv.stopRead != nil {
+                            log.Info().Str("conv_id", conv.ID).Msg("idle timeout reached; stopping conversation reader")
+                            conv.stopRead()
+                            conv.stopRead = nil
+                            conv.reading = false
+                        }
+                    })
+                    log.Debug().Str("conv_id", conv.ID).Int("idle_sec", s.IdleTimeoutSeconds).Msg("scheduled reader stop after idle period")
+                }
+                conv.mu.Unlock()
+            }
+        }
     }
 
     upgrader := websocket.Upgrader{ CheckOrigin: func(r *http.Request) bool { return true } }
