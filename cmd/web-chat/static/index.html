@@ -4,14 +4,12 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Web Chat (Redis Streams)</title>
+  <link rel="stylesheet" href="/static/css/timeline.css">
   <style>
     body { font-family: system-ui, sans-serif; margin: 0; padding: 0; background: #0b0b0b; color: #e6e6e6; }
     header { padding: 12px 16px; border-bottom: 1px solid #333; display: flex; gap: 8px; align-items: center; }
     main { display: grid; grid-template-rows: 1fr auto; height: calc(100vh - 50px); }
     #timeline { padding: 16px; overflow: auto; }
-    .msg { padding: 10px 12px; border-radius: 8px; margin: 8px 0; max-width: 900px; white-space: pre-wrap; }
-    .assistant { background: #1b1b1b; border: 1px solid #2b2b2b; }
-    .user { background: #0f2547; border: 1px solid #244b8a; }
     form { display: flex; gap: 8px; padding: 12px 16px; border-top: 1px solid #333; }
     input[type="text"] { flex: 1; padding: 10px 12px; border-radius: 8px; border: 1px solid #333; background: #121212; color: #e6e6e6; }
     button { padding: 10px 12px; border-radius: 8px; border: 1px solid #333; background: #222; color: #eee; cursor: pointer; }
