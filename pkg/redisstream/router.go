@@ -1,6 +1,9 @@
 package redisstream
 
 import (
+	"context"
+	"strings"
+
 	"github.com/ThreeDotsLabs/watermill/message"
 	rstream "github.com/ThreeDotsLabs/watermill-redisstream/pkg/redisstream"
 	"github.com/redis/go-redis/v9"
@@ -65,6 +68,22 @@ func optVerbose(v bool) events.EventRouterOption {
 		return events.WithVerbose(true)
 	}
 	return func(r *events.EventRouter) {}
+}
+
+// EnsureGroupAtTail creates the consumer group for a given stream at the tail ($) if it doesn't exist.
+// This prevents full historical replay on first subscribe.
+func EnsureGroupAtTail(ctx context.Context, addr, stream, group string) error {
+	client := redis.NewClient(&redis.Options{Addr: addr})
+	err := client.XGroupCreateMkStream(ctx, stream, group, "$").Err()
+	if err != nil {
+		// Ignore BUSYGROUP errors (group already exists)
+		if strings.Contains(err.Error(), "BUSYGROUP") {
+			return nil
+		}
+		return err
+	}
+	log.Info().Str("stream", stream).Str("group", group).Msg("created redis consumer group at $ (tail)")
+	return nil
 }
 
 

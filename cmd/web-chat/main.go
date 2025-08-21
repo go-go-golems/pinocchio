@@ -141,6 +141,10 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *layers.ParsedLayers
             log.Info().Str("tool", ev.ToolCall.Name).Str("id", ev.ToolCall.ID).Str("input", ev.ToolCall.Input).Msg("ToolCall")
         case *events.EventToolCallExecute:
             log.Info().Str("tool", ev.ToolCall.Name).Str("id", ev.ToolCall.ID).Str("input", ev.ToolCall.Input).Msg("ToolExecute")
+        case *events.EventToolResult:
+            log.Info().Str("tool_result_id", ev.ToolResult.ID).Interface("result", ev.ToolResult.Result).Msg("ToolResult")
+        case *events.EventToolCallExecutionResult:
+            log.Info().Str("tool_result_id", ev.ToolResult.ID).Interface("result", ev.ToolResult.Result).Msg("ToolExecResult")
         case *events.EventLog:
             lvl := ev.Level
             if lvl == "" { lvl = "info" }
@@ -188,6 +192,8 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *layers.ParsedLayers
         conv := &Conversation{ID: convID, RunID: runID, conns: make(map[*websocket.Conn]bool)}
         // Create dedicated subscriber per conversation
         if rs.Enabled {
+            // Create the UI consumer group at tail so we don't replay entire history on first subscribe
+            _ = rediscfg.EnsureGroupAtTail(srvCtx, rs.Addr, "chat", "ui-"+convID)
             s_, err := rediscfg.BuildGroupSubscriber(rs.Addr, "ui-"+convID, "web-"+convID)
             if err != nil {
                 return nil, err
@@ -222,9 +228,18 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *layers.ParsedLayers
         go func() {
             for msg := range ch {
                 e, err := events.NewEventFromJson(msg.Payload)
-                if err != nil { msg.Ack(); continue }
-                if e.Metadata().RunID != conv.RunID { msg.Ack(); continue }
-                log.Debug().Str("component", "ws_reader").Str("event_type", fmt.Sprintf("%T", e)).Str("event_id", e.Metadata().ID.String()).Msg("forwarding event to timeline")
+                if err != nil {
+                    log.Warn().Err(err).Str("component", "ws_reader").Msg("failed to decode event json")
+                    msg.Ack();
+                    continue
+                }
+                runID := e.Metadata().RunID
+                if runID != "" && runID != conv.RunID {
+                    log.Debug().Str("component", "ws_reader").Str("event_type", fmt.Sprintf("%T", e)).Str("event_id", e.Metadata().ID.String()).Str("run_id", runID).Str("conv_run_id", conv.RunID).Msg("skipping event due to run_id mismatch")
+                    msg.Ack();
+                    continue
+                }
+                log.Debug().Str("component", "ws_reader").Str("event_type", fmt.Sprintf("%T", e)).Str("event_id", e.Metadata().ID.String()).Str("run_id", runID).Msg("forwarding event to timeline")
                 convertAndBroadcast(e)
                 msg.Ack()
             }

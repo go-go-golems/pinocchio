@@ -40,6 +40,18 @@ export function ToolCall({ entity }) {
 
 export function ToolResult({ entity }) {
   const result = entity.props && entity.props.result;
+  const numeric = coerceNumber(result);
+  let op = '+';
+  let operand = '';
+  const onCompute = () => {
+    const a = typeof numeric === 'number' ? numeric : 0;
+    const b = parseFloat(operand);
+    if (isNaN(b)) return;
+    let c = a;
+    if (op === '+') c = a + b; else if (op === '-') c = a - b; else if (op === '×') c = a * b; else if (op === '÷') c = b === 0 ? a : a / b;
+    const ev = new CustomEvent('append-to-prompt', { detail: { text: String(c) } });
+    document.dispatchEvent(ev);
+  };
   return html`
     <div class="tool-result">
       <div class="result-header">
@@ -47,6 +59,19 @@ export function ToolResult({ entity }) {
         <span> Result:</span>
       </div>
       <pre class="result-content">${typeof result === 'string' ? result : formatJSON(result)}</pre>
+      ${numeric !== null ? html`
+        <div class="calc-continue">
+          <span class="calc-label">Continue with ${numeric}:</span>
+          <select onChange=${(e)=>{ op = e.currentTarget.value; }}>
+            <option value="+">+</option>
+            <option value="-">-</option>
+            <option value="×">×</option>
+            <option value="÷">÷</option>
+          </select>
+          <input type="number" placeholder="number" onInput=${(e)=>{ operand = e.currentTarget.value; }} />
+          <button type="button" onClick=${onCompute}>Compute & Append</button>
+        </div>
+      ` : null}
     </div>
   `;
 }
@@ -94,11 +119,16 @@ export function renderEntity(entity) {
       return html`<${ToolCall} entity=${entity} />`;
     case 'tool_call_result':
       return html`<${ToolResult} entity=${entity} />`;
+    case 'calc_result':
+      return html`<${ToolResult} entity=${entity} />`;
     case 'agent_mode':
       return html`<${AgentMode} entity=${entity} />`;
     case 'log_event':
       return html`<${LogEvent} entity=${entity} />`;
     default:
+      if (typeof entity.kind === 'string' && entity.kind.endsWith('_result')) {
+        return html`<${ToolResult} entity=${entity} />`;
+      }
       return html`<div class="timeline-entity timeline-unknown">
         <div class="unknown-header">Unknown entity type: ${entity.kind}</div>
         <pre class="unknown-props">${formatJSON(entity.props)}</pre>
@@ -120,6 +150,19 @@ function formatMetadata(metadata) {
   }
   if (metadata.duration_ms) parts.push(`${metadata.duration_ms}ms`);
   return parts.join(' ');
+}
+
+function coerceNumber(value) {
+  if (typeof value === 'number') return value;
+  if (typeof value === 'string') {
+    const n = parseFloat(value);
+    return isNaN(n) ? null : n;
+  }
+  if (value && typeof value === 'object') {
+    if ('result' in value) return coerceNumber(value.result);
+    if ('value' in value) return coerceNumber(value.value);
+  }
+  return null;
 }
 
 

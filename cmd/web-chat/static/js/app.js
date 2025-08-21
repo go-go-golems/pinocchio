@@ -102,6 +102,20 @@ function handleEvent(e){
     } else {
       connectConv(state.convId);
     }
+    // Listen for append-to-prompt events from tool result widgets
+    document.addEventListener('append-to-prompt', (e)=>{
+      try {
+        const text = (e && e.detail && e.detail.text) ? String(e.detail.text) : '';
+        const input = document.getElementById('prompt');
+        if (input) {
+          const sep = input.value && text ? ' ' : '';
+          input.value = `${input.value}${sep}${text}`;
+          input.focus();
+        }
+      } catch(err) {
+        console.error('append-to-prompt handler error', err);
+      }
+    });
     const input = document.getElementById('prompt');
     const send = ()=>{
       const v = (input.value || '').trim();
