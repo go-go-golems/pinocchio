@@ -55,6 +55,7 @@ var staticFS embed.FS
 
 type WebServerSettings struct {
     Addr string `glazed.parameter:"addr"`
+    AgentModeEnabled bool `glazed.parameter:"enable-agentmode"`
 }
 
 type Command struct {
@@ -76,6 +77,7 @@ func NewCommand() (*Command, error) {
         cmds.WithShort("Serve a minimal WebSocket web UI that streams chat events"),
         cmds.WithFlags(
             parameters.NewParameterDefinition("addr", parameters.ParameterTypeString, parameters.WithDefault(":8080"), parameters.WithHelp("HTTP listen address")),
+            parameters.NewParameterDefinition("enable-agentmode", parameters.ParameterTypeBool, parameters.WithDefault(false), parameters.WithHelp("Enable agent mode middleware")),
         ),
         cmds.WithLayersList(append(geLayers, redisLayer)...),
     )
@@ -129,40 +131,7 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *layers.ParsedLayers
     amCfg := agentmode.DefaultConfig()
     amCfg.DefaultMode = "financial_analyst"
 
-    // Logging handler for tool/info events; use separate group when Redis enabled
-    logHandler := func(msg *message.Message) error {
-        defer msg.Ack()
-        e, err := events.NewEventFromJson(msg.Payload)
-        if err != nil {
-            return err
-        }
-        switch ev := e.(type) {
-        case *events.EventToolCall:
-            log.Info().Str("tool", ev.ToolCall.Name).Str("id", ev.ToolCall.ID).Str("input", ev.ToolCall.Input).Msg("ToolCall")
-        case *events.EventToolCallExecute:
-            log.Info().Str("tool", ev.ToolCall.Name).Str("id", ev.ToolCall.ID).Str("input", ev.ToolCall.Input).Msg("ToolExecute")
-        case *events.EventToolResult:
-            log.Info().Str("tool_result_id", ev.ToolResult.ID).Interface("result", ev.ToolResult.Result).Msg("ToolResult")
-        case *events.EventToolCallExecutionResult:
-            log.Info().Str("tool_result_id", ev.ToolResult.ID).Interface("result", ev.ToolResult.Result).Msg("ToolExecResult")
-        case *events.EventLog:
-            lvl := ev.Level
-            if lvl == "" { lvl = "info" }
-            log.WithLevel(parseZerologLevel(lvl)).Str("message", ev.Message).Fields(ev.Fields).Msg("LogEvent")
-        case *events.EventInfo:
-            log.Info().Str("message", ev.Message).Fields(ev.Data).Msg("InfoEvent")
-        }
-        return nil
-    }
-    if rs.Enabled {
-        if sub, err := rediscfg.BuildGroupSubscriber(rs.Addr, "logs", "logs-web-1"); err == nil {
-            router.AddHandlerWithOptions("tool-logger", "chat", logHandler, events.WithHandlerSubscriber(sub))
-        } else {
-            router.AddHandler("tool-logger", "chat", logHandler)
-        }
-    } else {
-        router.AddHandler("tool-logger", "chat", logHandler)
-    }
+    // Note: legacy logging handler for shared "chat" topic removed in favor of per-conversation topics.
 
 
     // Conversation and run management
@@ -182,6 +151,7 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *layers.ParsedLayers
         conns map[string]*Conversation
     }
     cm := &ConvManager{conns: make(map[string]*Conversation)}
+    topicForConv := func(convID string) string { return "chat:" + convID }
     getOrCreateConv := func(convID string) (*Conversation, error) {
         cm.mu.Lock()
         defer cm.mu.Unlock()
@@ -192,9 +162,9 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *layers.ParsedLayers
         conv := &Conversation{ID: convID, RunID: runID, conns: make(map[*websocket.Conn]bool)}
         // Create dedicated subscriber per conversation
         if rs.Enabled {
-            // Create the UI consumer group at tail so we don't replay entire history on first subscribe
-            _ = rediscfg.EnsureGroupAtTail(srvCtx, rs.Addr, "chat", "ui-"+convID)
-            s_, err := rediscfg.BuildGroupSubscriber(rs.Addr, "ui-"+convID, "web-"+convID)
+            // Ensure shared UI group exists at tail for this conversation topic
+            _ = rediscfg.EnsureGroupAtTail(srvCtx, rs.Addr, topicForConv(convID), "ui")
+            s_, err := rediscfg.BuildGroupSubscriber(rs.Addr, "ui", "ws-forwarder:"+convID)
             if err != nil {
                 return nil, err
             }
@@ -205,7 +175,7 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *layers.ParsedLayers
         // Start reader goroutine for this conversation
         readCtx, readCancel := context.WithCancel(srvCtx)
         conv.stopRead = readCancel
-        ch, err := conv.sub.Subscribe(readCtx, "chat")
+        ch, err := conv.sub.Subscribe(readCtx, topicForConv(convID))
         if err != nil {
             readCancel()
             return nil, err
@@ -240,6 +210,23 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *layers.ParsedLayers
                     continue
                 }
                 log.Debug().Str("component", "ws_reader").Str("event_type", fmt.Sprintf("%T", e)).Str("event_id", e.Metadata().ID.String()).Str("run_id", runID).Msg("forwarding event to timeline")
+                // Inline debug log handler (replaces legacy shared-topic handler)
+                switch ev := e.(type) {
+                case *events.EventToolCall:
+                    log.Info().Str("tool", ev.ToolCall.Name).Str("id", ev.ToolCall.ID).Str("input", ev.ToolCall.Input).Msg("ToolCall")
+                case *events.EventToolCallExecute:
+                    log.Info().Str("tool", ev.ToolCall.Name).Str("id", ev.ToolCall.ID).Str("input", ev.ToolCall.Input).Msg("ToolExecute")
+                case *events.EventToolResult:
+                    log.Info().Str("tool_result_id", ev.ToolResult.ID).Interface("result", ev.ToolResult.Result).Msg("ToolResult")
+                case *events.EventToolCallExecutionResult:
+                    log.Info().Str("tool_result_id", ev.ToolResult.ID).Interface("result", ev.ToolResult.Result).Msg("ToolExecResult")
+                case *events.EventLog:
+                    lvl := ev.Level
+                    if lvl == "" { lvl = "info" }
+                    log.WithLevel(parseZerologLevel(lvl)).Str("message", ev.Message).Fields(ev.Fields).Msg("LogEvent")
+                case *events.EventInfo:
+                    log.Info().Str("message", ev.Message).Fields(ev.Data).Msg("InfoEvent")
+                }
                 convertAndBroadcast(e)
                 msg.Ack()
             }
@@ -336,8 +323,8 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *layers.ParsedLayers
         conv.running = true
         conv.mu.Unlock()
 
-        // Create sink publishing to topic "chat"
-        sink := middleware.NewWatermillSink(router.Publisher, "chat")
+        // Create sink publishing to per-conversation topic
+        sink := middleware.NewWatermillSink(router.Publisher, topicForConv(conv.ID))
 
         // Build engine from parsed layers
         eng, err := factory.NewEngineFromParsedLayers(parsed)
@@ -346,12 +333,12 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *layers.ParsedLayers
             return
         }
         // Compose middlewares similar to simple-chat-agent
-        // Ensure a consistent system prompt + agent mode + tool result reordering
-        eng = middleware.NewEngineWithMiddleware(eng,
-            middleware.NewSystemPromptMiddleware("You are a helpful assistant. Be concise."),
-            agentmode.NewMiddleware(amSvc, amCfg),
-            middleware.NewToolResultReorderMiddleware(),
-        )
+        // Ensure a consistent system prompt + optional agent mode + tool result reordering
+        eng = middleware.NewEngineWithMiddleware(eng, middleware.NewSystemPromptMiddleware("You are a helpful assistant. Be concise."))
+        if s.AgentModeEnabled {
+            eng = middleware.NewEngineWithMiddleware(eng, agentmode.NewMiddleware(amSvc, amCfg))
+        }
+        eng = middleware.NewEngineWithMiddleware(eng, middleware.NewToolResultReorderMiddleware())
         // Optional: SQL tool middleware if DB available
         if dbWithRegexp != nil {
             eng = middleware.NewEngineWithMiddleware(eng, sqlitetool.NewMiddleware(sqlitetool.Config{DB: dbWithRegexp, MaxRows: 500}))

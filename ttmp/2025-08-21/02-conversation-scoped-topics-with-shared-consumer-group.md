@@ -56,15 +56,9 @@ This minimizes consumer group proliferation while ensuring broadcast semantics t
 - When a chat run starts for `conv_id`, the server’s sink publishes to `chat:<conv_id>` instead of the previous shared `chat` topic
   - All event producers (engine, tool loop) remain unchanged; only the sink topic changes per run
 
-## Replay Behavior (Optional)
+## Replay
 
-We want to avoid replay by default, but allow optional replay for a connecting client:
-
-- On `/ws?conv_id=<id>&replay=lastN` (or via a POST/REST replay endpoint):
-  - The server performs an XRANGE (or XREVRANGE) on `chat:<conv_id>` to fetch the last N entries and replays them to the socket before live subscription messages
-  - This is done outside the consumer group (plain XRANGE), so it doesn’t affect offsets/acks
-
-Alternative: Maintain a small in-memory replay buffer per conversation alongside live publish. This avoids roundtrips to Redis for replay and works even for in-memory transports.
+Not implemented for now. We create consumer groups at `$` (tail) to avoid historical replays.
 
 ## Lifecycle and Cleanup
 
@@ -85,8 +79,6 @@ We can add a janitor to clean up streams older than N hours/days.
   - `XREADGROUP GROUP ui ws-forwarder:<server_id>:<conv_id> COUNT 50 BLOCK 5000 STREAMS chat:<conv_id> >`
 - Acknowledge processed message:
   - `XACK chat:<conv_id> ui <id>`
-- Replay for a client (without changing offsets):
-  - `XRANGE chat:<conv_id> - + COUNT N`
 
 ## Changes Required
 
@@ -100,10 +92,7 @@ We can add a janitor to clean up streams older than N hours/days.
    - For each conversation, maintain a goroutine that subscribes via Watermill to `chat:<conv_id>` (Subscriber bound to `ui` group) and fans out messages to all WebSockets attached to that conversation
    - Do NOT create WS-level consumers
 
-4) Replay endpoint (optional)
-   - Add an HTTP or WS param to trigger server-side `XRANGE` and send the last N records to the connecting client prior to live messages
-
-5) Trimming (later)
+4) Trimming (later)
    - Add a background janitor or manual endpoint to trim or delete `chat:<conv_id>` when a conversation is done
 
 ## Pseudocode Sketches
@@ -147,7 +136,6 @@ go func(){
 // No group creation here; just attach the socket to the existing conversation broadcaster
 conv := getOrCreateConv(convID)
 attachWebSocket(conv, ws)
-// Optional: if replay requested, XRANGE last N from chat:<conv_id> and send before live
 ```
 
 ## Observability
@@ -158,11 +146,10 @@ attachWebSocket(conv, ws)
 
 ## Migration Plan
 
-1) Add topic selection for sinks and readers; leave existing `chat` topic temporarily for backward compatibility behind a flag
-2) Roll out per-conversation `chat:<conv_id>` for new sessions
-3) Migrate existing in-flight sessions by ending/starting conversations
-4) Add optional replay endpoint to preserve user experience
-5) Implement trimming/janitor later
+1) Switch all sinks and readers to per-conversation topics `chat:<conv_id>` immediately
+2) Remove all legacy usage of the shared `chat` topic
+3) Add optional replay endpoint to preserve user experience
+4) Implement trimming/janitor later
 
 ## Tradeoffs
 
@@ -243,4 +230,53 @@ attachWebSocket(conv, ws)
 - If the reader crashes, it’s restarted and resumes from the group offset for `chat:<conv_id>`
 - If the engine crashes mid-run, the server marks Conversation as not running and allows a new run
 - Backpressure: since we broadcast to sockets, slow clients only affect their WS link; the reader continues and does not compete with other sockets
+
+## Step-by-Step Implementation Plan
+
+1) Wiring topics per conversation (server write path)
+   - [x] Add helper `topicForConv(convID) -> "chat:<conv_id>"`.
+   - [x] Replace sink creation in `/chat` handler to use `topicForConv(conv.ID)` instead of `"chat"`.
+   - [x] Remove legacy `"chat"` usage entirely.
+
+2) Reader per conversation (server read path)
+   - [x] On `getOrCreateConv`, ensure Redis group at tail for `topicForConv(convID)` via `EnsureGroupAtTail`.
+   - [x] Create one Watermill subscriber bound to group `ui` and consumer name `ws-forwarder:<server_id>:<conv_id>`.
+   - [x] Subscribe to `topicForConv(convID)` and start a goroutine that converts events via forwarder and broadcasts to WS clients.
+   - [x] Reuse the running reader on additional WS connects (no new subscriber).
+
+3) Conversation manager enhancements
+   - [ ] Track `attachedSockets` and implement `attach/detach` helpers.
+   - [ ] Add idle timer: when `attachedSockets == 0`, start a grace timeout (configurable); on expiry, stop the reader and optionally engine.
+   - [ ] Expose metrics: current conversations, readers running, sockets attached.
+
+4) WebSocket API updates
+   - [ ] Document reconnect semantics and recommend clients preserve `conv_id` in local storage.
+
+5) Forwarder compatibility
+   - [ ] No changes needed to mapping; verify events still include metadata for UI.
+   - [ ] Keep zero-UUID fallbacks and custom `<tool>_result` emission.
+
+6) Observability and logs
+   - [ ] Add logs when reader starts/stops for a conversation.
+   - [ ] Log group creation at `$` and when skipping history.
+   - [ ] Add counters: read rate per `chat:<conv_id>`, broadcast rate, and lag.
+
+7) Migration and rollout
+   - [x] Switch all codepaths to `chat:<conv_id>` and delete legacy `chat` usages.
+
+8) Cleanup/janitor (later)
+   - [ ] Background job to destroy `ui` group and delete `chat:<conv_id>` for conversations idle beyond TTL, or run `XTRIM` to a size/time threshold.
+
+9) Testing plan
+   - [ ] Unit: topic selection helper, EnsureGroupAtTail no-op when BUSYGROUP.
+   - [ ] Integration (with Redis):
+     - [ ] On first connect, assert no replay when group created at `$`.
+     - [ ] Multiple WS on same conv receive identical broadcast frames.
+     - [ ] Idle timeout stops reader; reconnect restarts reader at tail.
+   - [ ] Manual: use `redis-cli XINFO GROUPS chat:<conv_id>` to confirm `last-delivered-id` movement.
+
+10) Risks and mitigations
+   - **Too many streams**: implement janitor and TTL-based trimming.
+   - **Reader leaks**: enforce idle timeout and ensure stop on server shutdown.
+   - **Replay gaps**: prefer XRANGE-based replay buffer; consider in-memory ring buffer for hot sessions.
 
