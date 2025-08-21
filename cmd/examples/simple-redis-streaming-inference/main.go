@@ -6,11 +6,8 @@ import (
     "io"
 
     "github.com/ThreeDotsLabs/watermill/message"
-    rstream "github.com/ThreeDotsLabs/watermill-redisstream/pkg/redisstream"
-    "github.com/redis/go-redis/v9"
 
     "github.com/go-go-golems/geppetto/pkg/events"
-    "github.com/go-go-golems/geppetto/pkg/helpers"
     "github.com/go-go-golems/geppetto/pkg/inference/engine"
     "github.com/go-go-golems/geppetto/pkg/inference/engine/factory"
     "github.com/go-go-golems/geppetto/pkg/inference/middleware"
@@ -30,6 +27,8 @@ import (
     "github.com/rs/zerolog/log"
     "github.com/spf13/cobra"
     "golang.org/x/sync/errgroup"
+
+    rediscfg "github.com/go-go-golems/pinocchio/pkg/redisstream"
 )
 
 var rootCmd = &cobra.Command{
@@ -72,7 +71,7 @@ type SimpleRedisStreamingInferenceSettings struct {
     FullOutput       bool   `glazed.parameter:"full-output"`
     Verbose          bool   `glazed.parameter:"verbose"`
 
-    Redis RedisSettings
+    Redis rediscfg.Settings
 }
 
 func NewSimpleRedisStreamingInferenceCommand() (*SimpleRedisStreamingInferenceCommand, error) {
@@ -80,7 +79,7 @@ func NewSimpleRedisStreamingInferenceCommand() (*SimpleRedisStreamingInferenceCo
     if err != nil {
         return nil, errors.Wrap(err, "create geppetto layers")
     }
-    redisLayer, err := BuildRedisLayer()
+    redisLayer, err := rediscfg.NewParameterLayer()
     if err != nil {
         return nil, errors.Wrap(err, "build redis layer")
     }
@@ -120,7 +119,7 @@ func (c *SimpleRedisStreamingInferenceCommand) RunIntoWriter(ctx context.Context
 
     // Build EventRouter with Redis Streams publisher/subscriber
     log.Info().Str("addr", s.Redis.Addr).Str("group", s.Redis.Group).Str("consumer", s.Redis.Consumer).Msg("Initializing Redis router")
-    router, err := newRedisRouter(s.Redis, s.Verbose)
+    router, err := rediscfg.BuildRouter(s.Redis, s.Verbose)
     if err != nil {
         return errors.Wrap(err, "create redis event router")
     }
@@ -212,38 +211,6 @@ func (c *SimpleRedisStreamingInferenceCommand) RunIntoWriter(ctx context.Context
     return nil
 }
 
-func newRedisRouter(redisCfg RedisSettings, verbose bool) (*events.EventRouter, error) {
-    client := redis.NewClient(&redis.Options{ Addr: redisCfg.Addr })
-    marshaler := rstream.DefaultMarshallerUnmarshaller{}
-    logger := helpers.NewWatermill(log.Logger)
-
-    pub, err := rstream.NewPublisher(rstream.PublisherConfig{
-        Client:     client,
-        Marshaller: marshaler,
-    }, logger)
-    if err != nil {
-        return nil, err
-    }
-
-    sub, err := rstream.NewSubscriber(rstream.SubscriberConfig{
-        Client:        client,
-        Unmarshaller:  marshaler,
-        ConsumerGroup: redisCfg.Group,
-        Consumer:      redisCfg.Consumer,
-    }, logger)
-    if err != nil {
-        return nil, err
-    }
-
-    opts := []events.EventRouterOption{
-        events.WithPublisher(pub),
-        events.WithSubscriber(sub),
-    }
-    if verbose {
-        opts = append(opts, events.WithVerbose(true))
-    }
-    return events.NewEventRouter(opts...)
-}
 
 func main() {
     if err := clay.InitViper("pinocchio", rootCmd); err != nil {
