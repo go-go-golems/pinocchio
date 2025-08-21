@@ -47,6 +47,10 @@ func TimelineEventsFromEvent(e events.Event) [][]byte {
     case *events.EventLog:
         log.Debug().Str("component", "web_forwarder").Str("kind", "log_event").Str("level", ev.Level).Msg("mapping to timeline created+completed")
         localID := md.ID.String()
+        if md.ID == uuid.Nil {
+            localID = "log-" + uuid.NewString()
+            log.Warn().Str("component", "web_forwarder").Msg("log event has zero UUID; generating local timeline id")
+        }
         props := map[string]any{"level": ev.Level, "message": ev.Message}
         if len(ev.Fields) > 0 { props["fields"] = ev.Fields }
         return [][]byte{
@@ -55,27 +59,47 @@ func TimelineEventsFromEvent(e events.Event) [][]byte {
         }
     case *events.EventPartialCompletionStart:
         log.Debug().Str("component", "web_forwarder").Str("kind", "llm_text").Msg("mapping start to timeline created")
+        idStr := md.ID.String()
+        if md.ID == uuid.Nil {
+            idStr = "llm-" + uuid.NewString()
+            log.Warn().Str("component", "web_forwarder").Msg("llm start event has zero UUID; generating local timeline id")
+        }
         return [][]byte{
-            wrap(TimelineEvent{Type: "created", EntityID: md.ID.String(), Kind: "llm_text", Renderer: map[string]string{"kind":"llm_text"}, Props: map[string]any{"role":"assistant", "text":"", "metadata": md.LLMInferenceData, "streaming": true}, StartedAt: now.UnixMilli()}),
+            wrap(TimelineEvent{Type: "created", EntityID: idStr, Kind: "llm_text", Renderer: map[string]string{"kind":"llm_text"}, Props: map[string]any{"role":"assistant", "text":"", "metadata": md.LLMInferenceData, "streaming": true}, StartedAt: now.UnixMilli()}),
         }
     case *events.EventPartialCompletion:
         log.Debug().Str("component", "web_forwarder").Str("kind", "llm_text").Int("delta_len", len(ev.Delta)).Msg("mapping partial to timeline updated")
+        idStr := md.ID.String()
+        if md.ID == uuid.Nil {
+            idStr = "llm-" + uuid.NewString()
+            log.Warn().Str("component", "web_forwarder").Msg("llm partial event has zero UUID; generating local timeline id")
+        }
         return [][]byte{
-            wrap(TimelineEvent{Type: "updated", EntityID: md.ID.String(), Patch: map[string]any{"text": ev.Completion, "metadata": md.LLMInferenceData, "streaming": true}, Version: now.UnixNano(), UpdatedAt: now.UnixMilli()}),
+            wrap(TimelineEvent{Type: "updated", EntityID: idStr, Patch: map[string]any{"text": ev.Completion, "metadata": md.LLMInferenceData, "streaming": true}, Version: now.UnixNano(), UpdatedAt: now.UnixMilli()}),
         }
     case *events.EventFinal:
         log.Debug().Str("component", "web_forwarder").Str("kind", "llm_text").Int("text_len", len(ev.Text)).Msg("mapping final to timeline completed+updated")
+        idStr := md.ID.String()
+        if md.ID == uuid.Nil {
+            idStr = "llm-" + uuid.NewString()
+            log.Warn().Str("component", "web_forwarder").Msg("llm final event has zero UUID; generating local timeline id")
+        }
         return [][]byte{
-            wrap(TimelineEvent{Type: "completed", EntityID: md.ID.String(), Result: map[string]any{"text": ev.Text, "metadata": md.LLMInferenceData}}),
-            wrap(TimelineEvent{Type: "updated", EntityID: md.ID.String(), Patch: map[string]any{"streaming": false}, Version: now.UnixNano(), UpdatedAt: now.UnixMilli()}),
+            wrap(TimelineEvent{Type: "completed", EntityID: idStr, Result: map[string]any{"text": ev.Text, "metadata": md.LLMInferenceData}}),
+            wrap(TimelineEvent{Type: "updated", EntityID: idStr, Patch: map[string]any{"streaming": false}, Version: now.UnixNano(), UpdatedAt: now.UnixMilli()}),
         }
     case *events.EventInterrupt:
         intr, ok := events.ToTypedEvent[events.EventInterrupt](e)
         if ok {
             log.Debug().Str("component", "web_forwarder").Str("kind", "llm_text").Msg("mapping interrupt to timeline completed+updated")
+            idStr := md.ID.String()
+            if md.ID == uuid.Nil {
+                idStr = "llm-" + uuid.NewString()
+                log.Warn().Str("component", "web_forwarder").Msg("llm interrupt event has zero UUID; generating local timeline id")
+            }
             return [][]byte{
-                wrap(TimelineEvent{Type: "completed", EntityID: md.ID.String(), Result: map[string]any{"text": intr.Text}}),
-                wrap(TimelineEvent{Type: "updated", EntityID: md.ID.String(), Patch: map[string]any{"streaming": false}, Version: now.UnixNano(), UpdatedAt: now.UnixMilli()}),
+                wrap(TimelineEvent{Type: "completed", EntityID: idStr, Result: map[string]any{"text": intr.Text}}),
+                wrap(TimelineEvent{Type: "updated", EntityID: idStr, Patch: map[string]any{"streaming": false}, Version: now.UnixNano(), UpdatedAt: now.UnixMilli()}),
             }
         }
     case *events.EventToolCall:

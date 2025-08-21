@@ -1,106 +1,91 @@
-import { create } from 'https://cdn.jsdelivr.net/npm/zustand@5.0.8/+esm';
-  const useStore = create((set, get)=>({
-    convId: '',
-    runId: '',
-    ws: null,
-    status: 'idle',
-    timeline: [],
-    setConv(convId){ set({ convId }); },
-    setRun(runId){ set({ runId }); },
-    addMsg(msg){ set({ timeline: [...get().timeline, msg] }); },
-    upsertAssistant(messageId, updater){
-      const tl = get().timeline.slice();
-      const idx = tl.findIndex(m=>m.id===messageId);
-      if (idx === -1) {
-        tl.push(Object.assign({ id: messageId, role: 'assistant', text: '', final: false }, updater));
-      } else {
-        tl[idx] = Object.assign({}, tl[idx], updater);
-      }
-      set({ timeline: tl });
-    },
-    setStatus(status){ set({ status }); },
-    setWS(ws){ set({ ws }); },
-  }));
+import { h, render } from 'https://esm.sh/preact@10.22.0';
+import htm from 'https://esm.sh/htm@3.1.1';
+import { TimelineStore } from './timeline/store.js';
+import { Timeline } from './timeline/components.js';
 
-  function render(){
-    const { timeline, status } = useStore.getState();
-    console.log('render() called, timeline:', timeline);
-    document.getElementById('status').textContent = status;
-    const root = document.getElementById('timeline');
-    root.innerHTML = '';
-    for (const it of timeline) {
-      const div = document.createElement('div');
-      div.className = `msg ${it.role === 'user' ? 'user' : 'assistant'}`;
-      div.textContent = it.text || '';
-      root.appendChild(div);
-    }
-    root.scrollTop = root.scrollHeight;
-  }
-  useStore.subscribe(render);
+const html = htm.bind(h);
 
-  function handleEvent(e){
-    console.log('handleEvent received:', e);
-    const md = (e.meta || {});
-    const type = e.type;
-    const messageId = (md && md.message_id) || e.id || '';
-    if (e.type === 'user') {
-      console.log('Adding user message from WS:', e.text);
-      useStore.getState().addMsg({ id: `user-${Date.now()}`, role: 'user', text: e.text || '', final: true });
-      return;
-    }
-    if (!messageId) return;
-    if (type === 'partial') {
-      console.log('Updating assistant partial:', messageId, e.completion);
-      useStore.getState().upsertAssistant(messageId, { text: e.completion || '' });
-    } else if (type === 'final') {
-      console.log('Finalizing assistant:', messageId, e.text);
-      useStore.getState().upsertAssistant(messageId, { text: e.text || '', final: true });
-    } else if (type === 'start') {
-      console.log('Starting assistant:', messageId);
-      useStore.getState().upsertAssistant(messageId, {});
-    }
+const state = {
+  convId: '',
+  runId: '',
+  ws: null,
+  status: 'idle',
+  timelineStore: new TimelineStore(),
+};
+
+function mount() {
+  const container = document.getElementById('timeline');
+  const rerender = () => {
+    document.getElementById('status').textContent = state.status;
+    const entities = state.timelineStore.getOrderedEntities();
+    render(html`<${Timeline} entities=${entities} />`, container);
+    container.scrollTop = container.scrollHeight;
+  };
+  state.timelineStore.subscribe(rerender);
+  rerender();
+}
+
+function handleTimelineEvent(payload) {
+  // TL-wrapped messages: { tl: true, event: {...} }
+  if (!payload || !payload.tl || !payload.event) return;
+  const ev = payload.event;
+  console.debug('Timeline event:', ev);
+  state.timelineStore.applyEvent(ev);
+}
+
+function handleEvent(e){
+  // legacy non-timeline messages (user echo)
+  if (e && e.type === 'user') {
+    const id = `user-${Date.now()}`;
+    state.timelineStore.applyEvent({ type: 'created', entityId: id, kind: 'llm_text', renderer: { kind: 'llm_text' }, props: { role: 'user', text: e.text || '', streaming: false }, startedAt: Date.now() });
+    state.timelineStore.applyEvent({ type: 'completed', entityId: id, result: { text: e.text || '' } });
+    return;
   }
+  // new TL messages
+  handleTimelineEvent(e);
+}
 
   function connectConv(convId){
     console.log('connectConv called with:', convId);
-    const { ws } = useStore.getState();
-    if (ws) { try { ws.close(); } catch(_){} }
+    if (state.ws) { try { state.ws.close(); } catch(_){} }
     const proto = location.protocol === 'https:' ? 'wss' : 'ws';
     const wsUrl = `${proto}://${location.host}/ws?conv_id=${encodeURIComponent(convId)}`;
     console.log('Connecting WebSocket to:', wsUrl);
     const n = new WebSocket(wsUrl);
-    useStore.getState().setStatus('connecting ws...');
+    state.status = 'connecting ws...';
     n.onopen = ()=> {
       console.log('WebSocket connected');
-      useStore.getState().setStatus('ws connected');
+      state.status = 'ws connected';
+      document.getElementById('status').textContent = state.status;
     };
     n.onclose = ()=> {
       console.log('WebSocket closed');
-      useStore.getState().setStatus('ws closed');
+      state.status = 'ws closed';
+      document.getElementById('status').textContent = state.status;
     };
     n.onerror = (err)=> {
       console.log('WebSocket error:', err);
-      useStore.getState().setStatus('ws error');
+      state.status = 'ws error';
+      document.getElementById('status').textContent = state.status;
     };
     n.onmessage = (ev)=>{
       console.log('WebSocket message received:', ev.data);
       try { handleEvent(JSON.parse(ev.data)); } catch(e){ console.error('Failed to parse WS message:', e); }
     };
-    useStore.getState().setWS(n);
+    state.ws = n;
   }
 
   async function startChat(prompt){
     console.log('startChat called with:', prompt);
-    const { convId } = useStore.getState();
-    const payload = convId ? { prompt, conv_id: convId } : { prompt };
+    const payload = state.convId ? { prompt, conv_id: state.convId } : { prompt };
     console.log('POST /chat payload:', payload);
     const res = await fetch('/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
     const j = await res.json();
     console.log('POST /chat response:', j);
-    useStore.getState().setRun(j.run_id || '');
-    const newConv = j.conv_id || convId || '';
-    if (newConv && newConv !== convId) {
-      useStore.getState().setConv(newConv);
+    state.runId = j.run_id || '';
+    const newConv = j.conv_id || state.convId || '';
+    if (newConv && newConv !== state.convId) {
+      state.convId = newConv;
       connectConv(newConv);
     }
     // Don't add user message locally - let the server broadcast it via WS to avoid duplicates
@@ -108,14 +93,14 @@ import { create } from 'https://cdn.jsdelivr.net/npm/zustand@5.0.8/+esm';
   }
 
   window.addEventListener('DOMContentLoaded', ()=>{
+    mount();
     // Ensure we have a conversation and connect immediately
-    let { convId } = useStore.getState();
-    if (!convId) {
+    if (!state.convId) {
       const cid = `conv-${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
-      useStore.getState().setConv(cid);
+      state.convId = cid;
       connectConv(cid);
     } else {
-      connectConv(convId);
+      connectConv(state.convId);
     }
     const input = document.getElementById('prompt');
     const send = ()=>{

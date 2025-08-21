@@ -1,49 +1,51 @@
 package main
 
 import (
-    "context"
-    "embed"
-    "encoding/json"
-    "io"
-    "io/fs"
-    "net/http"
-    "os"
-    "os/signal"
-    "sync"
-    "syscall"
-    "time"
+	"context"
+	"embed"
+	"encoding/json"
+	"fmt"
+	"io"
+	"io/fs"
+	"net/http"
+	"os"
+	"os/signal"
+	"sync"
+	"syscall"
+	"time"
 
-    "github.com/ThreeDotsLabs/watermill/message"
-    "github.com/gorilla/websocket"
+	"github.com/ThreeDotsLabs/watermill/message"
+	"github.com/gorilla/websocket"
 
-    clay "github.com/go-go-golems/clay/pkg"
-    "github.com/go-go-golems/geppetto/pkg/events"
-    geppettolayers "github.com/go-go-golems/geppetto/pkg/layers"
-    "github.com/go-go-golems/geppetto/pkg/inference/engine/factory"
-    "github.com/go-go-golems/geppetto/pkg/inference/middleware"
-    "github.com/go-go-golems/geppetto/pkg/inference/toolhelpers"
-    geptools "github.com/go-go-golems/geppetto/pkg/inference/tools"
-    "github.com/go-go-golems/geppetto/pkg/turns"
-    rediscfg "github.com/go-go-golems/pinocchio/pkg/redisstream"
-    webbackend "github.com/go-go-golems/pinocchio/cmd/web-chat/pkg/backend"
-    agentmode "github.com/go-go-golems/pinocchio/pkg/middlewares/agentmode"
-    sqlitetool "github.com/go-go-golems/pinocchio/pkg/middlewares/sqlitetool"
-    toolspkg "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/tools"
-    "database/sql"
-    "strings"
-    "github.com/rs/zerolog"
-    "github.com/go-go-golems/glazed/pkg/cli"
-    "github.com/go-go-golems/glazed/pkg/cmds"
-    "github.com/go-go-golems/glazed/pkg/cmds/logging"
-    "github.com/go-go-golems/glazed/pkg/cmds/layers"
-    "github.com/go-go-golems/glazed/pkg/cmds/parameters"
-    "github.com/go-go-golems/glazed/pkg/help"
-    help_cmd "github.com/go-go-golems/glazed/pkg/help/cmd"
-    "github.com/google/uuid"
-    "github.com/pkg/errors"
-    "github.com/rs/zerolog/log"
-    "github.com/spf13/cobra"
-    "golang.org/x/sync/errgroup"
+	"database/sql"
+	"strings"
+
+	clay "github.com/go-go-golems/clay/pkg"
+	"github.com/go-go-golems/geppetto/pkg/events"
+	"github.com/go-go-golems/geppetto/pkg/inference/engine/factory"
+	"github.com/go-go-golems/geppetto/pkg/inference/middleware"
+	"github.com/go-go-golems/geppetto/pkg/inference/toolhelpers"
+	geptools "github.com/go-go-golems/geppetto/pkg/inference/tools"
+	geppettolayers "github.com/go-go-golems/geppetto/pkg/layers"
+	"github.com/go-go-golems/geppetto/pkg/turns"
+	"github.com/go-go-golems/glazed/pkg/cli"
+	"github.com/go-go-golems/glazed/pkg/cmds"
+	"github.com/go-go-golems/glazed/pkg/cmds/layers"
+	"github.com/go-go-golems/glazed/pkg/cmds/logging"
+	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
+	"github.com/go-go-golems/glazed/pkg/help"
+	help_cmd "github.com/go-go-golems/glazed/pkg/help/cmd"
+	toolspkg "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/tools"
+	webbackend "github.com/go-go-golems/pinocchio/cmd/web-chat/pkg/backend"
+	agentmode "github.com/go-go-golems/pinocchio/pkg/middlewares/agentmode"
+	sqlitetool "github.com/go-go-golems/pinocchio/pkg/middlewares/sqlitetool"
+	rediscfg "github.com/go-go-golems/pinocchio/pkg/redisstream"
+	"github.com/google/uuid"
+	"github.com/pkg/errors"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
+	"github.com/spf13/cobra"
+	"golang.org/x/sync/errgroup"
 )
 
 //go:embed static/*
@@ -210,7 +212,10 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *layers.ParsedLayers
                 conv.connsMu.RUnlock()
             }
             if bs := webbackend.TimelineEventsFromEvent(e); bs != nil {
-                for _, b := range bs { sendBytes(b) }
+                for _, b := range bs {
+                    log.Debug().Str("component", "ws_broadcast").Int("bytes", len(b)).Msg("broadcasting timeline event")
+                    sendBytes(b)
+                }
             }
         }
 
@@ -219,6 +224,7 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *layers.ParsedLayers
                 e, err := events.NewEventFromJson(msg.Payload)
                 if err != nil { msg.Ack(); continue }
                 if e.Metadata().RunID != conv.RunID { msg.Ack(); continue }
+                log.Debug().Str("component", "ws_reader").Str("event_type", fmt.Sprintf("%T", e)).Str("event_id", e.Metadata().ID.String()).Msg("forwarding event to timeline")
                 convertAndBroadcast(e)
                 msg.Ack()
             }
