@@ -17,85 +17,7 @@
     button { padding: 10px 12px; border-radius: 8px; border: 1px solid #333; background: #222; color: #eee; cursor: pointer; }
     #status { font-size: 12px; color: #9aa0a6; margin-left: auto; }
   </style>
-  <script>
-    let currentRunId = "";
-    let ws = null;
-    const timeline = [];
-    let currentConvId = '';
-
-    function connectConv(convId) {
-      if (ws) { ws.close(); }
-      const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-      ws = new WebSocket(`${proto}://${location.host}/ws?conv_id=${encodeURIComponent(convId)}`);
-      document.getElementById('status').textContent = `connecting ws...`;
-      ws.onopen = () => { document.getElementById('status').textContent = `ws connected`; };
-      ws.onclose = () => { document.getElementById('status').textContent = `ws closed`; };
-      ws.onerror = () => { document.getElementById('status').textContent = `ws error`; };
-      ws.onmessage = (ev) => {
-        try {
-          const e = JSON.parse(ev.data);
-          handleEvent(e);
-        } catch (e) { /* ignore */ }
-      };
-    }
-
-    function handleEvent(e) {
-      // minimal rendering: accumulate assistant text by message_id, show final when completed
-      const md = (e.meta || {});
-      const type = e.type;
-      const messageId = (md && md.message_id) || (e.id) || "";
-      if (!messageId) return;
-
-      let item = timeline.find(x => x.id === messageId);
-      if (!item) { item = { id: messageId, text: "", final: false }; timeline.push(item); }
-
-      if (type === 'partial') {
-        item.text = (e.completion || item.text);
-        render();
-      } else if (type === 'final') {
-        item.text = (e.text || item.text);
-        item.final = true;
-        render();
-      } else if (type === 'start') {
-        // ensure exists
-        render();
-      }
-    }
-
-    function render() {
-      const root = document.getElementById('timeline');
-      root.innerHTML = '';
-      for (const it of timeline) {
-        const div = document.createElement('div');
-        div.className = 'msg assistant';
-        div.textContent = it.text;
-        root.appendChild(div);
-      }
-      root.scrollTop = root.scrollHeight;
-    }
-
-    async function startChat(prompt) {
-      const payload = currentConvId ? { prompt, conv_id: currentConvId } : { prompt };
-      const res = await fetch('/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-      const j = await res.json();
-      currentRunId = j.run_id;
-      currentConvId = j.conv_id || currentConvId || '';
-      if (currentConvId) { connectConv(currentConvId); }
-      const root = document.getElementById('timeline');
-      const u = document.createElement('div'); u.className = 'msg user'; u.textContent = prompt; root.appendChild(u);
-    }
-
-    window.addEventListener('DOMContentLoaded', () => {
-      document.getElementById('chat-form').addEventListener('submit', (e) => {
-        e.preventDefault();
-        const input = document.getElementById('prompt');
-        const v = input.value.trim();
-        if (!v) return;
-        input.value = '';
-        startChat(v);
-      });
-    });
-  </script>
+  <script type="module" src="/static/js/app.js"></script>
 </head>
 <body>
   <header>
@@ -104,9 +26,9 @@
   </header>
   <main>
     <div id="timeline"></div>
-    <form id="chat-form">
+    <form id="chat-form" onsubmit="return false;">
       <input id="prompt" type="text" placeholder="Ask something..." />
-      <button type="submit">Send</button>
+      <button id="send-btn" type="button">Send</button>
     </form>
   </main>
 </body>

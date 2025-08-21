@@ -5,6 +5,7 @@ import (
     "embed"
     "encoding/json"
     "io"
+    "io/fs"
     "net/http"
     "sync"
 
@@ -29,8 +30,8 @@ import (
     "golang.org/x/sync/errgroup"
 )
 
-//go:embed static/index.html
-var indexHTML embed.FS
+//go:embed static/*
+var staticFS embed.FS
 
 // no package-level root; we will build a cobra command dynamically in main()
 
@@ -158,8 +159,15 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *layers.ParsedLayers
 
     upgrader := websocket.Upgrader{ CheckOrigin: func(r *http.Request) bool { return true } }
 
+    // static assets
+    staticSub, err := fs.Sub(staticFS, "static")
+    if err != nil {
+        return err
+    }
+    http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticSub))))
+
     http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-        b, err := indexHTML.ReadFile("static/index.html")
+        b, err := staticFS.ReadFile("static/index.html")
         if err != nil {
             http.Error(w, "index not found", http.StatusInternalServerError)
             return
@@ -240,6 +248,15 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *layers.ParsedLayers
         runID := conv.RunID
         seed := turns.NewTurnBuilder().WithUserPrompt(body.Prompt).Build()
         seed.RunID = runID
+
+        // Broadcast user entity to connected clients (so frontend shows user message via WS)
+        userMsg := map[string]any{"type": "user", "text": body.Prompt, "conv_id": conv.ID, "run_id": runID}
+        userPayload, _ := json.Marshal(userMsg)
+        conv.connsMu.RLock()
+        for c := range conv.conns {
+            _ = c.WriteMessage(websocket.TextMessage, userPayload)
+        }
+        conv.connsMu.RUnlock()
 
         go func(runID string, conv *Conversation) {
             // Wait for router to be running for delivery
