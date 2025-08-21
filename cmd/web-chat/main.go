@@ -4,10 +4,9 @@ import (
     "context"
     "embed"
     "encoding/json"
-    "fmt"
     "io"
     "net/http"
-    "time"
+    "sync"
 
     "github.com/ThreeDotsLabs/watermill/message"
     "github.com/gorilla/websocket"
@@ -74,7 +73,7 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *layers.ParsedLayers
     _ = parsed.InitializeStruct("redis", &rs)
 
     // Build router to obtain default subscriber for in-memory fallback, though we will prefer per-connection subscribers when Redis is enabled.
-    router, err := rediscfg.BuildRouter(rs, false)
+    router, err := rediscfg.BuildRouter(rs, true)
     if err != nil {
         return errors.Wrap(err, "build router")
     }
@@ -82,9 +81,80 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *layers.ParsedLayers
 
     // Run router so in-memory transport works and Redis handlers are active
     eg := errgroup.Group{}
-    ctx, cancel := context.WithCancel(ctx)
-    defer cancel()
-    eg.Go(func() error { return router.Run(ctx) })
+    srvCtx, srvCancel := context.WithCancel(ctx)
+    defer srvCancel()
+    eg.Go(func() error { return router.Run(srvCtx) })
+
+    // Conversation and run management
+    type Conversation struct {
+        ID       string
+        RunID    string
+        running  bool
+        cancel   context.CancelFunc
+        mu       sync.Mutex
+        conns    map[*websocket.Conn]bool
+        connsMu  sync.RWMutex
+        sub      message.Subscriber
+        stopRead context.CancelFunc
+    }
+    type ConvManager struct {
+        mu    sync.Mutex
+        conns map[string]*Conversation
+    }
+    cm := &ConvManager{conns: make(map[string]*Conversation)}
+    getOrCreateConv := func(convID string) (*Conversation, error) {
+        cm.mu.Lock()
+        defer cm.mu.Unlock()
+        if conv, ok := cm.conns[convID]; ok {
+            return conv, nil
+        }
+        runID := uuid.NewString()
+        conv := &Conversation{ID: convID, RunID: runID, conns: make(map[*websocket.Conn]bool)}
+        // Create dedicated subscriber per conversation
+        if rs.Enabled {
+            s_, err := rediscfg.BuildGroupSubscriber(rs.Addr, "ui-"+convID, "web-"+convID)
+            if err != nil {
+                return nil, err
+            }
+            conv.sub = s_
+        } else {
+            conv.sub = router.Subscriber
+        }
+        // Start reader goroutine for this conversation
+        readCtx, readCancel := context.WithCancel(srvCtx)
+        conv.stopRead = readCancel
+        ch, err := conv.sub.Subscribe(readCtx, "chat")
+        if err != nil {
+            readCancel()
+            return nil, err
+        }
+        go func() {
+            for msg := range ch {
+                e, err := events.NewEventFromJson(msg.Payload)
+                if err != nil { msg.Ack(); continue }
+                if e.Metadata().RunID != conv.RunID { msg.Ack(); continue }
+                conv.connsMu.RLock()
+                for c := range conv.conns {
+                    _ = c.WriteMessage(websocket.TextMessage, msg.Payload)
+                }
+                conv.connsMu.RUnlock()
+                msg.Ack()
+            }
+        }()
+        cm.conns[convID] = conv
+        return conv, nil
+    }
+    addConn := func(conv *Conversation, c *websocket.Conn) {
+        conv.connsMu.Lock()
+        conv.conns[c] = true
+        conv.connsMu.Unlock()
+    }
+    removeConn := func(conv *Conversation, c *websocket.Conn) {
+        conv.connsMu.Lock()
+        delete(conv.conns, c)
+        conv.connsMu.Unlock()
+        _ = c.Close()
+    }
 
     upgrader := websocket.Upgrader{ CheckOrigin: func(r *http.Request) bool { return true } }
 
@@ -104,55 +174,25 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *layers.ParsedLayers
             log.Error().Err(err).Msg("websocket upgrade failed")
             return
         }
-
-        // Unique consumer name per connection when using Redis.
-        consumerName := fmt.Sprintf("ui-%d", time.Now().UnixNano())
-        var sub message.Subscriber
-        if rs.Enabled {
-            s_, err := rediscfg.BuildGroupSubscriber(rs.Addr, "ui", consumerName)
-            if err != nil {
-                log.Error().Err(err).Msg("failed to build group subscriber")
-                _ = conn.Close()
-                return
-            }
-            sub = s_
-        } else {
-            sub = router.Subscriber
-        }
-
-        ctxConn, cancel := context.WithCancel(r.Context())
-
-        topic := "chat"
-        ch, err := sub.Subscribe(ctxConn, topic)
-        if err != nil {
-            log.Error().Err(err).Str("topic", topic).Msg("subscribe failed")
-            cancel()
+        convID := r.URL.Query().Get("conv_id")
+        if convID == "" {
+            // no conv_id; close
+            _ = conn.WriteMessage(websocket.TextMessage, []byte(`{"error":"missing conv_id"}`))
             _ = conn.Close()
             return
         }
-
-        runID := r.URL.Query().Get("run_id")
-
+        conv, err := getOrCreateConv(convID)
+        if err != nil {
+            _ = conn.WriteMessage(websocket.TextMessage, []byte(`{"error":"failed to join conversation"}`))
+            _ = conn.Close()
+            return
+        }
+        addConn(conv, conn)
+        // keep connection open until client closes
         go func() {
-            defer func() {
-                cancel()
-                _ = conn.Close()
-            }()
-            for msg := range ch {
-                e, err := events.NewEventFromJson(msg.Payload)
-                if err != nil {
-                    msg.Ack()
-                    continue
-                }
-                if runID != "" && e.Metadata().RunID != runID {
-                    msg.Ack()
-                    continue
-                }
-                if err := conn.WriteMessage(websocket.TextMessage, msg.Payload); err != nil {
-                    msg.Ack()
-                    return
-                }
-                msg.Ack()
+            defer removeConn(conv, conn)
+            for {
+                if _, _, err := conn.ReadMessage(); err != nil { return }
             }
         }()
     })
@@ -163,11 +203,28 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *layers.ParsedLayers
             http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
             return
         }
-        var body struct{ Prompt string `json:"prompt"` }
+        var body struct{ Prompt string `json:"prompt"`; ConvID string `json:"conv_id"` }
         if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
             http.Error(w, "bad request", http.StatusBadRequest)
             return
         }
+        // Conversation lookup or creation
+        convID := body.ConvID
+        if convID == "" { convID = uuid.NewString() }
+        conv, err := getOrCreateConv(convID)
+        if err != nil {
+            http.Error(w, "failed to create conversation", http.StatusInternalServerError)
+            return
+        }
+        conv.mu.Lock()
+        if conv.running {
+            conv.mu.Unlock()
+            w.WriteHeader(http.StatusConflict)
+            _ = json.NewEncoder(w).Encode(map[string]any{"error":"run in progress","conv_id": conv.ID, "run_id": conv.RunID})
+            return
+        }
+        conv.running = true
+        conv.mu.Unlock()
 
         // Create sink publishing to topic "chat"
         sink := middleware.NewWatermillSink(router.Publisher, "chat")
@@ -180,17 +237,22 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *layers.ParsedLayers
         }
 
         // Prepare turn with a fresh run_id
-        runID := uuid.NewString()
+        runID := conv.RunID
         seed := turns.NewTurnBuilder().WithUserPrompt(body.Prompt).Build()
         seed.RunID = runID
 
-        go func() {
-            // Wait for router to be running for Redis delivery
+        go func(runID string, conv *Conversation) {
+            // Wait for router to be running for delivery
             <-router.Running()
-            _, _ = eng.RunInference(r.Context(), seed)
-        }()
+            // Run in a background context independent of request lifetime
+            runCtx, runCancel := context.WithCancel(srvCtx)
+            conv.mu.Lock(); conv.cancel = runCancel; conv.mu.Unlock()
+            _, _ = eng.RunInference(runCtx, seed)
+            runCancel()
+            conv.mu.Lock(); conv.running = false; conv.cancel = nil; conv.mu.Unlock()
+        }(runID, conv)
 
-        _ = json.NewEncoder(w).Encode(map[string]string{"run_id": runID})
+        _ = json.NewEncoder(w).Encode(map[string]string{"run_id": runID, "conv_id": conv.ID})
     })
 
     log.Info().Str("addr", s.Addr).Msg("starting web-chat server")

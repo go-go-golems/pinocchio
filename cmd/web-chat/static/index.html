@@ -21,11 +21,12 @@
     let currentRunId = "";
     let ws = null;
     const timeline = [];
+    let currentConvId = '';
 
-    function connect(runId) {
+    function connectConv(convId) {
       if (ws) { ws.close(); }
       const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-      ws = new WebSocket(`${proto}://${location.host}/ws?run_id=${encodeURIComponent(runId)}`);
+      ws = new WebSocket(`${proto}://${location.host}/ws?conv_id=${encodeURIComponent(convId)}`);
       document.getElementById('status').textContent = `connecting ws...`;
       ws.onopen = () => { document.getElementById('status').textContent = `ws connected`; };
       ws.onclose = () => { document.getElementById('status').textContent = `ws closed`; };
@@ -74,10 +75,12 @@
     }
 
     async function startChat(prompt) {
-      const res = await fetch('/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt }) });
+      const payload = currentConvId ? { prompt, conv_id: currentConvId } : { prompt };
+      const res = await fetch('/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
       const j = await res.json();
       currentRunId = j.run_id;
-      connect(currentRunId);
+      currentConvId = j.conv_id || currentConvId || '';
+      if (currentConvId) { connectConv(currentConvId); }
       const root = document.getElementById('timeline');
       const u = document.createElement('div'); u.className = 'msg user'; u.textContent = prompt; root.appendChild(u);
     }
