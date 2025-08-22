@@ -74,6 +74,14 @@ export const useStore = create(devtools(subscribeWithSelector((set, get)=>({
   }),
   tlClear: ()=> set((s)=>({ timeline: { byId: {}, order: [] } })),
 
+  // Debug slice (for devtools visibility, minimal state impact)
+  debug: {
+    recvCount: 0,
+    lastWsPayload: null,
+    lastSemEvent: null,
+    lastSemType: '',
+  },
+
   // Simple dedupe buffer for user messages we just sent
   recentUserMsgs: [],
   _pushRecentUserText: (text)=>{
@@ -106,7 +114,7 @@ export const useStore = create(devtools(subscribeWithSelector((set, get)=>({
       completedAt: null,
     };
     return { timeline: { byId: { ...s.timeline.byId, [entityId]: entity }, order: [ ...s.timeline.order, entityId ] } };
-  }, false, { type: 'sem/llm.start', payload: ({ entityId, role }) }),
+  }, false, { type: 'sem/llm.start', payload: ({ entityId, role, hasMeta: !!metadata }) }),
 
   llmTextAppend: (entityId, delta)=> set((s)=>{
     const e = s.timeline.byId[entityId];
@@ -134,7 +142,7 @@ export const useStore = create(devtools(subscribeWithSelector((set, get)=>({
       result: { text: text || '' },
     };
     return { timeline: { byId: { ...s.timeline.byId, [entityId]: updated }, order: s.timeline.order } };
-  }, false, { type: 'sem/llm.final', payload: ({ entityId, textLen: (typeof text === 'string' ? text.length : 0) }) }),
+  }, false, { type: 'sem/llm.final', payload: ({ entityId, textLen: (typeof text === 'string' ? text.length : 0), hasMeta: !!metadata }) }),
 
   toolCallStart: (entityId, name, input)=> set((s)=>{
     if (s.timeline.byId[entityId]) return {};
@@ -180,7 +188,6 @@ export const useStore = create(devtools(subscribeWithSelector((set, get)=>({
   }, false, { type: 'sem/tool.done', payload: ({ entityId }) }),
 
   toolCallResult: (baseId, result)=> set((s)=>{
-    // If baseId already has ":custom" or ":result" suffix, use as-is; otherwise default to generic result suffix
     const entityId = (typeof baseId === 'string' && (baseId.endsWith(':custom') || baseId.endsWith(':result'))) ? baseId : `${baseId}:result`;
     const exists = s.timeline.byId[entityId];
     if (!exists) {
@@ -210,7 +217,7 @@ export const useStore = create(devtools(subscribeWithSelector((set, get)=>({
       result,
     };
     return { timeline: { byId: { ...s.timeline.byId, [entityId]: updated }, order: s.timeline.order } };
-  }, false, { type: 'sem/tool.result', payload: ({ baseId }) }),
+  }, false, { type: 'sem/tool.result', payload: ({ baseId, hasCustomSuffix: typeof baseId === 'string' && (baseId.endsWith(':custom') || baseId.endsWith(':result')) }) }),
 
   // User prompt orchestration: create local user message + POST /chat
   sendPrompt: async (text)=>{
@@ -282,6 +289,8 @@ export const useStore = create(devtools(subscribeWithSelector((set, get)=>({
     set((s)=>({ app: { ...s.app, status: 'ws error' }, ws: { ...s.ws, connected: false } }), false, { type: 'ws/onError', payload: { message: String(err && err.message || err) } });
   },
   wsOnMessage: (payload)=>{
+    // Log raw WS payload to devtools without mutating UI state
+    set((s)=>({ debug: { ...s.debug, lastWsPayload: payload } }), false, { type: 'ws/message', payload });
     get().handleIncoming(payload);
   },
 
@@ -289,6 +298,8 @@ export const useStore = create(devtools(subscribeWithSelector((set, get)=>({
   handleIncoming: (payload)=>{
     if (!payload || !payload.sem || !payload.event) return;
     const ev = payload.event;
+    // Log semantic event to devtools and update debug counters
+    set((s)=>({ debug: { ...s.debug, lastSemEvent: ev, lastSemType: ev.type || '', recvCount: (s.debug?.recvCount || 0) + 1 } }), false, { type: 'sem/recv', payload: ev });
     switch (ev.type) {
       case 'llm.start':
         get().llmTextStart(ev.id, ev.role || 'assistant', ev.metadata);
@@ -310,19 +321,15 @@ export const useStore = create(devtools(subscribeWithSelector((set, get)=>({
         return;
       case 'tool.result': {
         const resultId = ev.customKind ? `${ev.id}:custom` : `${ev.id}:result`;
-        if (ev.customKind) {
-          set((s)=>{
-            const exists = s.timeline.byId[resultId];
-            if (!exists) {
-              const entity = { id: resultId, kind: ev.customKind, renderer: { kind: ev.customKind }, props: { result: ev.result }, startedAt: Date.now(), completed: false, result: null, version: 0, updatedAt: null, completedAt: null };
-              return { timeline: { byId: { ...s.timeline.byId, [resultId]: entity }, order: [ ...s.timeline.order, resultId ] } };
-            }
-            const updated = { ...exists, props: { ...exists.props, result: ev.result }, completed: true, completedAt: Date.now(), version: exists.version + 1, updatedAt: Date.now(), result: ev.result };
-            return { timeline: { byId: { ...s.timeline.byId, [resultId]: updated }, order: s.timeline.order } };
-          }, false, { type: 'sem/tool.result', payload: ({ id: resultId }) });
-        } else {
-          get().toolCallResult(resultId, ev.result);
-        }
+        set((s)=>{
+          const exists = s.timeline.byId[resultId];
+          if (!exists) {
+            const entity = { id: resultId, kind: ev.customKind || 'tool_call_result', renderer: { kind: ev.customKind || 'tool_call_result' }, props: { result: ev.result }, startedAt: Date.now(), completed: false, result: null, version: 0, updatedAt: null, completedAt: null };
+            return { timeline: { byId: { ...s.timeline.byId, [resultId]: entity }, order: [ ...s.timeline.order, resultId ] } };
+          }
+          const updated = { ...exists, props: { ...exists.props, result: ev.result }, completed: true, completedAt: Date.now(), version: exists.version + 1, updatedAt: Date.now(), result: ev.result };
+          return { timeline: { byId: { ...s.timeline.byId, [resultId]: updated }, order: s.timeline.order } };
+        }, false, { type: 'sem/tool.result', payload: ({ id: resultId }) });
         return;
       }
       case 'agent.mode': {
