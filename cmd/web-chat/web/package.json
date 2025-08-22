@@ -1,0 +1,21 @@
+{
+  "name": "web-chat-frontend",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build --outDir ../static/dist",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@redux-devtools/extension": "^3.3.0",
+    "htm": "^3.1.1",
+    "preact": "^10.22.0",
+    "zustand": "^5.0.8"
+  },
+  "devDependencies": {
+    "vite": "^5.4.0"
+  }
+}
+

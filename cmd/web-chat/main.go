@@ -48,7 +48,7 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-//go:embed static/*
+//go:embed static
 var staticFS embed.FS
 
 // no package-level root; we will build a cobra command dynamically in main()
@@ -306,11 +306,20 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *layers.ParsedLayers
     }
     http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticSub))))
 
+    // Serve built vite assets at /assets/* if present (dist output)
+    if distAssets, err := fs.Sub(staticFS, "static/dist/assets"); err == nil {
+        http.Handle("/assets/", http.StripPrefix("/assets/", http.FileServer(http.FS(distAssets))))
+    }
+
     http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-        b, err := staticFS.ReadFile("static/index.html")
+        // prefer built bundle if present
+        b, err := staticFS.ReadFile("static/dist/index.html")
         if err != nil {
-            http.Error(w, "index not found", http.StatusInternalServerError)
-            return
+            b, err = staticFS.ReadFile("static/index.html")
+            if err != nil {
+                http.Error(w, "index not found", http.StatusInternalServerError)
+                return
+            }
         }
         w.Header().Set("Content-Type", "text/html; charset=utf-8")
         _, _ = w.Write(b)

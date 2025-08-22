@@ -10,6 +10,9 @@ export class LLMTextRenderer extends EntityRenderer {
   render(entity) {
     const { props } = entity;
     const { role = 'assistant', text = '', streaming = false, metadata } = props;
+    if (!text || String(text).trim() === '') {
+      return null;
+    }
     
     const div = RendererUtils.createElement('div', `msg ${role === 'user' ? 'user' : 'assistant'}`);
     

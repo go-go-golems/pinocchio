@@ -2,6 +2,8 @@ import { h, render } from 'https://esm.sh/preact@10.22.0';
 import htm from 'https://esm.sh/htm@3.1.1';
 import { TimelineStore } from './timeline/store.js';
 import { Timeline } from './timeline/components.js';
+import { create } from "https://esm.sh/zustand@4.5.2";
+import { devtools } from "https://esm.sh/zustand@4.5.2/middleware";
 
 const html = htm.bind(h);
 
@@ -13,6 +15,20 @@ const state = {
   timelineStore: new TimelineStore(),
 };
 
+// Expose app state to Redux DevTools via Zustand
+const useDevStore = create(devtools((set)=>({
+  convId: '',
+  runId: '',
+  status: 'idle',
+  wsConnected: false,
+  timelineCounts: { total: 0, completed: 0, byKind: {} },
+  setConvId: (v)=> set({ convId: v }, false, 'setConvId'),
+  setRunId: (v)=> set({ runId: v }, false, 'setRunId'),
+  setStatus: (v)=> set({ status: v }, false, 'setStatus'),
+  setWsConnected: (v)=> set({ wsConnected: v }, false, 'setWsConnected'),
+  setTimelineCounts: (v)=> set({ timelineCounts: v }, false, 'setTimelineCounts'),
+}), { name: 'web-chat' }));
+
 function mount() {
   const container = document.getElementById('timeline');
   const rerender = () => {
@@ -20,6 +36,7 @@ function mount() {
     const entities = state.timelineStore.getOrderedEntities();
     render(html`<${Timeline} entities=${entities} />`, container);
     container.scrollTop = container.scrollHeight;
+    try { useDevStore.getState().setTimelineCounts(state.timelineStore.getStats()); } catch(_){}
   };
   state.timelineStore.subscribe(rerender);
   rerender();
@@ -53,20 +70,24 @@ function handleEvent(e){
     console.log('Connecting WebSocket to:', wsUrl);
     const n = new WebSocket(wsUrl);
     state.status = 'connecting ws...';
+    try { useDevStore.getState().setStatus(state.status); } catch(_){}
     n.onopen = ()=> {
       console.log('WebSocket connected');
       state.status = 'ws connected';
       document.getElementById('status').textContent = state.status;
+      try { useDevStore.getState().setStatus(state.status); useDevStore.getState().setWsConnected(true); } catch(_){}
     };
     n.onclose = ()=> {
       console.log('WebSocket closed');
       state.status = 'ws closed';
       document.getElementById('status').textContent = state.status;
+      try { useDevStore.getState().setStatus(state.status); useDevStore.getState().setWsConnected(false); } catch(_){}
     };
     n.onerror = (err)=> {
       console.log('WebSocket error:', err);
       state.status = 'ws error';
       document.getElementById('status').textContent = state.status;
+      try { useDevStore.getState().setStatus(state.status); useDevStore.getState().setWsConnected(false); } catch(_){}
     };
     n.onmessage = (ev)=>{
       console.log('WebSocket message received:', ev.data);
@@ -83,9 +104,11 @@ function handleEvent(e){
     const j = await res.json();
     console.log('POST /chat response:', j);
     state.runId = j.run_id || '';
+    try { useDevStore.getState().setRunId(state.runId); } catch(_){}
     const newConv = j.conv_id || state.convId || '';
     if (newConv && newConv !== state.convId) {
       state.convId = newConv;
+      try { useDevStore.getState().setConvId(state.convId); } catch(_){}
       connectConv(newConv);
     }
     // Don't add user message locally - let the server broadcast it via WS to avoid duplicates
@@ -98,6 +121,7 @@ function handleEvent(e){
     if (!state.convId) {
       const cid = `conv-${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
       state.convId = cid;
+      try { useDevStore.getState().setConvId(state.convId); } catch(_){}
       connectConv(cid);
     } else {
       connectConv(state.convId);

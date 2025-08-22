@@ -90,6 +90,22 @@ export class TimelineStore {
     entity.version = version || (entity.version + 1);
     entity.updatedAt = updatedAt || Date.now();
     console.log('Timeline: updated entity', entityId, patch);
+
+    // Special rule: when a tool_call_result (generic) and a corresponding custom <tool>_result exist,
+    // suppress the generic result to avoid duplicate widgets.
+    if (entity.kind === 'tool_call_result' && typeof entity.id === 'string') {
+      const base = entity.id.replace(/:result$/, '');
+      // Custom entity id format used in forwarder: <tool_result_id>:custom
+      const customId = base + ':custom';
+      const custom = this.entities.get(customId);
+      if (custom) {
+        // Remove generic result entity
+        this.entities.delete(entityId);
+        const idx = this.order.indexOf(entityId);
+        if (idx >= 0) this.order.splice(idx, 1);
+        console.log('Timeline: removed generic tool_call_result due to presence of custom result', entityId, 'custom:', customId);
+      }
+    }
   }
 
   onComplete(entityId, data) {

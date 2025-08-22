@@ -23,6 +23,7 @@ type TimelineEvent struct {
     StartedAt int64                  `json:"startedAt,omitempty"`
     UpdatedAt int64                  `json:"updatedAt,omitempty"`
     Version   int64                  `json:"version,omitempty"`
+    Flags     map[string]any         `json:"flags,omitempty"`
 }
 
 // cache tool call inputs by ID to enrich tool results
@@ -137,48 +138,45 @@ func TimelineEventsFromEvent(e events.Event) [][]byte {
         }
     case *events.EventToolResult:
         log.Debug().Str("component", "web_forwarder").Str("kind", "tool_call_result").Msg("mapping tool_result to timeline created+completed")
-        out := [][]byte{
-            wrap(TimelineEvent{Type: "created", EntityID: ev.ToolResult.ID + ":result", Kind: "tool_call_result", Renderer: map[string]string{"kind":"tool_call_result"}, Props: map[string]any{"result": ev.ToolResult.Result}}),
-            wrap(TimelineEvent{Type: "completed", EntityID: ev.ToolResult.ID + ":result"}),
-        }
-        // Emit custom <tool>_result entity for UI components
+        // Check tool name to decide generic vs custom emission
         if v, ok := toolCallCache.Load(ev.ToolResult.ID); ok {
-            if ctc, ok2 := v.(cachedToolCall); ok2 {
-                kind := ctc.Name + "_result"
-                customID := ev.ToolResult.ID + ":custom"
-                props := map[string]any{"name": ctc.Name, "result": ev.ToolResult.Result}
-                // Enrich props with parsed input
-                if ctc.InputObj != nil {
-                    for k, vv := range ctc.InputObj { props[k] = vv }
-                }
-                log.Info().Str("component", "web_forwarder").Str("custom_kind", kind).Str("tool_id", ev.ToolResult.ID).Interface("props", props).Msg("emitting custom tool result entity")
-                out = append(out,
-                    wrap(TimelineEvent{Type: "created", EntityID: customID, Kind: kind, Renderer: map[string]string{"kind": kind}, Props: props}),
-                    wrap(TimelineEvent{Type: "completed", EntityID: customID}),
-                )
-            }
-        }
-        return out
-    case *events.EventToolCallExecutionResult:
-        log.Debug().Str("component", "web_forwarder").Str("kind", "tool_call_result").Msg("mapping tool_exec_result to timeline created+completed")
-        out := [][]byte{
-            wrap(TimelineEvent{Type: "created", EntityID: ev.ToolResult.ID + ":result", Kind: "tool_call_result", Renderer: map[string]string{"kind":"tool_call_result"}, Props: map[string]any{"result": ev.ToolResult.Result}}),
-            wrap(TimelineEvent{Type: "completed", EntityID: ev.ToolResult.ID + ":result"}),
-        }
-        if v, ok := toolCallCache.Load(ev.ToolResult.ID); ok {
-            if ctc, ok2 := v.(cachedToolCall); ok2 {
-                kind := ctc.Name + "_result"
-                customID := ev.ToolResult.ID + ":custom"
+            if ctc, ok2 := v.(cachedToolCall); ok2 && ctc.Name == "calc" {
+                // Emit ONLY custom calc_result and clear exec
                 props := map[string]any{"name": ctc.Name, "result": ev.ToolResult.Result}
                 if ctc.InputObj != nil { for k, vv := range ctc.InputObj { props[k] = vv } }
-                log.Info().Str("component", "web_forwarder").Str("custom_kind", kind).Str("tool_id", ev.ToolResult.ID).Interface("props", props).Msg("emitting custom tool result entity")
-                out = append(out,
-                    wrap(TimelineEvent{Type: "created", EntityID: customID, Kind: kind, Renderer: map[string]string{"kind": kind}, Props: props}),
+                customID := ev.ToolResult.ID + ":custom"
+                return [][]byte{
+                    wrap(TimelineEvent{Type: "created", EntityID: customID, Kind: "calc_result", Renderer: map[string]string{"kind": "calc_result"}, Props: props}),
                     wrap(TimelineEvent{Type: "completed", EntityID: customID}),
-                )
+                    wrap(TimelineEvent{Type: "updated", EntityID: ev.ToolResult.ID, Patch: map[string]any{"exec": false}, Version: now.UnixNano(), UpdatedAt: now.UnixMilli()}),
+                }
             }
         }
-        return out
+        // Default: emit generic tool_call_result and clear exec
+        return [][]byte{
+            wrap(TimelineEvent{Type: "created", EntityID: ev.ToolResult.ID + ":result", Kind: "tool_call_result", Renderer: map[string]string{"kind":"tool_call_result"}, Props: map[string]any{"result": ev.ToolResult.Result}}),
+            wrap(TimelineEvent{Type: "completed", EntityID: ev.ToolResult.ID + ":result"}),
+            wrap(TimelineEvent{Type: "updated", EntityID: ev.ToolResult.ID, Patch: map[string]any{"exec": false}, Version: now.UnixNano(), UpdatedAt: now.UnixMilli()}),
+        }
+    case *events.EventToolCallExecutionResult:
+        log.Debug().Str("component", "web_forwarder").Str("kind", "tool_call_result").Msg("mapping tool_exec_result to timeline created+completed")
+        if v, ok := toolCallCache.Load(ev.ToolResult.ID); ok {
+            if ctc, ok2 := v.(cachedToolCall); ok2 && ctc.Name == "calc" {
+                props := map[string]any{"name": ctc.Name, "result": ev.ToolResult.Result}
+                if ctc.InputObj != nil { for k, vv := range ctc.InputObj { props[k] = vv } }
+                customID := ev.ToolResult.ID + ":custom"
+                return [][]byte{
+                    wrap(TimelineEvent{Type: "created", EntityID: customID, Kind: "calc_result", Renderer: map[string]string{"kind": "calc_result"}, Props: props}),
+                    wrap(TimelineEvent{Type: "completed", EntityID: customID}),
+                    wrap(TimelineEvent{Type: "updated", EntityID: ev.ToolResult.ID, Patch: map[string]any{"exec": false}, Version: now.UnixNano(), UpdatedAt: now.UnixMilli()}),
+                }
+            }
+        }
+        return [][]byte{
+            wrap(TimelineEvent{Type: "created", EntityID: ev.ToolResult.ID + ":result", Kind: "tool_call_result", Renderer: map[string]string{"kind":"tool_call_result"}, Props: map[string]any{"result": ev.ToolResult.Result}}),
+            wrap(TimelineEvent{Type: "completed", EntityID: ev.ToolResult.ID + ":result"}),
+            wrap(TimelineEvent{Type: "updated", EntityID: ev.ToolResult.ID, Patch: map[string]any{"exec": false}, Version: now.UnixNano(), UpdatedAt: now.UnixMilli()}),
+        }
     case *events.EventAgentModeSwitch:
         log.Debug().Str("component", "web_forwarder").Str("kind", "agent_mode").Msg("mapping agent_mode to timeline created+completed")
         props := map[string]any{"title": ev.Message}
