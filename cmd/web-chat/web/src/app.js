@@ -1,18 +1,11 @@
 import { h, render } from 'https://esm.sh/preact@10.22.0';
 import htm from 'https://esm.sh/htm@3.1.1';
-import { TimelineStore } from './timeline/store.js';
 import { Timeline } from './timeline/components.js';
 import { useStore } from './store.js';
 
 const html = htm.bind(h);
 
-const state = {
-  convId: '',
-  runId: '',
-  ws: null,
-  status: 'idle',
-  timelineStore: new TimelineStore(),
-};
+const state = {};
 
 // Unified Zustand store is provided by ./store.js
 
@@ -20,30 +13,40 @@ function mount() {
   const container = document.getElementById('timeline');
   const rerender = () => {
     try { document.getElementById('status').textContent = useStore.getState().app.status; } catch(_){ }
-    const entities = state.timelineStore.getOrderedEntities();
-    render(html`<${Timeline} entities=${entities} />`, container);
+    const s = useStore.getState();
+    const entities = s.timeline.order.map((id)=> s.timeline.byId[id]).filter(Boolean);
+    console.debug('render: timeline entities count', entities.length, 'orderLen', s.timeline.order.length, 'byIdKeys', Object.keys(s.timeline.byId).length);
+    try {
+      render(html`<${Timeline} entities=${entities} />`, container);
+    } catch(err) {
+      console.error('render error', err);
+    }
     container.scrollTop = container.scrollHeight;
-    try { useStore.getState().setTimelineCounts(state.timelineStore.getStats()); } catch(_){ }
   };
-  state.timelineStore.subscribe(rerender);
+  try {
+    // Subscribe to full timeline object changes
+    const unsub1 = useStore.subscribe((s)=> s.timeline, (_)=>{ console.debug('sub: timeline changed'); rerender(); });
+    // Also subscribe to order length only (lightweight)
+    const unsub2 = useStore.subscribe((s)=> s.timeline.order.length, (len)=>{ console.debug('sub: order length', len); rerender(); });
+    // Keep a reference to unsubscribes if needed later
+    state.unsubTimeline = ()=>{ try { unsub1(); unsub2(); } catch(_){} };
+  } catch(_){ }
   rerender();
 }
 
-// Bridge: let the store deliver timeline events to our TimelineStore instance
-try {
-  useStore.getState().setTimelineEventHandler((ev)=>{
-    try { state.timelineStore.applyEvent(ev); } catch(err) { console.error('timeline handler error', err); }
-  });
-} catch(_){ }
+// No bridge needed; the store applies timeline events directly
 
   /* Connection and chat moved into store: useStore.getState().wsConnect, .startChat */
 
   window.addEventListener('DOMContentLoaded', ()=>{
+    console.debug('DOMContentLoaded');
+    try { window.__store = useStore; } catch(_){ }
     mount();
     // Keep status element in sync with store
     try {
       document.getElementById('status').textContent = useStore.getState().app.status;
       useStore.subscribe((s)=> s.app.status, (status)=>{
+        console.debug('status changed', status);
         try { document.getElementById('status').textContent = status; } catch(_){}
       });
     } catch(_){ }
@@ -51,9 +54,11 @@ try {
     const st = useStore.getState();
     if (!st.app.convId) {
       const cid = `conv-${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
+      console.debug('init convId', cid);
       useStore.getState().setConvId(cid);
       useStore.getState().wsConnect(cid);
     } else {
+      console.debug('reuse convId', st.app.convId);
       useStore.getState().wsConnect(st.app.convId);
     }
     // Listen for append-to-prompt events from tool result widgets
@@ -75,6 +80,7 @@ try {
       const v = (input.value || '').trim();
       if (!v) return;
       input.value = '';
+      console.debug('send prompt', v);
       useStore.getState().startChat(v);
     };
     document.getElementById('send-btn').addEventListener('click', send);

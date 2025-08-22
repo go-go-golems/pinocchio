@@ -1,26 +1,113 @@
 import { create } from "https://esm.sh/zustand@4.5.2";
 import { devtools } from "https://esm.sh/zustand@4.5.2/middleware";
+import { subscribeWithSelector } from "https://esm.sh/zustand@4.5.2/middleware";
 
-export const useStore = create(devtools((set, get)=>({
+export const useStore = create(devtools(subscribeWithSelector((set, get)=>({
   app: {
     convId: '',
     runId: '',
     status: 'idle',
   },
-  setConvId: (v)=> set((s)=>({ app: { ...s.app, convId: v } }), false, 'app/setConvId'),
-  setRunId: (v)=> set((s)=>({ app: { ...s.app, runId: v } }), false, 'app/setRunId'),
-  setStatus: (v)=> set((s)=>({ app: { ...s.app, status: v } }), false, 'app/setStatus'),
+  setConvId: (v)=> set((s)=>({ app: { ...s.app, convId: v } }), false, { type: 'app/setConvId', payload: { convId: v } }),
+  setRunId: (v)=> set((s)=>({ app: { ...s.app, runId: v } }), false, { type: 'app/setRunId', payload: { runId: v } }),
+  setStatus: (v)=> set((s)=>({ app: { ...s.app, status: v } }), false, { type: 'app/setStatus', payload: { status: v } }),
 
-  metrics: {
-    timelineCounts: { total: 0, completed: 0, byKind: {} },
+  // Normalized timeline slice
+  timeline: {
+    byId: {},
+    order: [],
   },
-  setTimelineCounts: (v)=> set((s)=>({ metrics: { ...s.metrics, timelineCounts: v } }), false, 'metrics/setTimelineCounts'),
-
-  // A callback provided by the UI layer to dispatch timeline events
-  handlers: {
-    timelineEventHandler: null,
-  },
-  setTimelineEventHandler: (fn)=> set((s)=>({ handlers: { ...s.handlers, timelineEventHandler: fn } }), false, 'handlers/setTimelineEventHandler'),
+  tlCreated: ({ entityId, kind, renderer, props, startedAt })=> set((s)=>{
+    console.debug('tlCreated', { entityId, kind, renderer, props, startedAt });
+    if (s.timeline.byId[entityId]) return {};
+    const entity = {
+      id: entityId,
+      kind,
+      renderer: renderer || { kind },
+      props: { ...(props || {}) },
+      startedAt: startedAt || Date.now(),
+      completed: false,
+      result: null,
+      version: 0,
+      updatedAt: null,
+      completedAt: null,
+    };
+    return {
+      timeline: {
+        byId: { ...s.timeline.byId, [entityId]: entity },
+        order: [ ...s.timeline.order, entityId ],
+      }
+    };
+  }, false, { type: 'timeline/created', payload: ({ entityId, kind, hasProps: !!props }) }),
+  tlUpdated: ({ entityId, patch, version, updatedAt })=> set((s)=>{
+    console.debug('tlUpdated', { entityId, patch, version, updatedAt });
+    const existing = s.timeline.byId[entityId];
+    let nextById = s.timeline.byId;
+    let nextOrder = s.timeline.order;
+    let entity = existing;
+    if (!existing) {
+      // create placeholder, infer kind best-effort
+      let inferredKind = 'llm_text';
+      if (patch && (Object.prototype.hasOwnProperty.call(patch, 'exec') || Object.prototype.hasOwnProperty.call(patch, 'input'))) {
+        inferredKind = 'tool_call';
+      }
+      entity = {
+        id: entityId,
+        kind: inferredKind,
+        renderer: { kind: inferredKind },
+        props: {},
+        startedAt: Date.now(),
+        completed: false,
+        result: null,
+        version: 0,
+        updatedAt: null,
+        completedAt: null,
+      };
+      nextById = { ...nextById, [entityId]: entity };
+      nextOrder = [ ...nextOrder, entityId ];
+    }
+    const updated = {
+      ...entity,
+      props: { ...entity.props, ...(patch || {}) },
+      version: version || (entity.version + 1),
+      updatedAt: updatedAt || Date.now(),
+    };
+    // Special rule: prune generic tool_call_result if custom exists
+    if (updated.kind === 'tool_call_result' && typeof updated.id === 'string') {
+      const base = updated.id.replace(/:result$/, '');
+      const customId = base + ':custom';
+      if (nextById[customId]) {
+        const newById = { ...nextById };
+        delete newById[updated.id];
+        const idx = nextOrder.indexOf(updated.id);
+        const newOrder = idx >= 0 ? [ ...nextOrder.slice(0, idx), ...nextOrder.slice(idx+1) ] : nextOrder;
+        return { timeline: { byId: newById, order: newOrder } };
+      }
+    }
+    return { timeline: { byId: { ...nextById, [entityId]: updated }, order: nextOrder } };
+  }, false, { type: 'timeline/updated', payload: ({ entityId, patchKeys: patch ? Object.keys(patch) : [] }) }),
+  tlCompleted: ({ entityId, result })=> set((s)=>{
+    console.debug('tlCompleted', { entityId, hasResult: result !== undefined && result !== null });
+    const entity = s.timeline.byId[entityId];
+    if (!entity) return {};
+    const completed = {
+      ...entity,
+      completed: true,
+      completedAt: Date.now(),
+      result: result !== undefined ? result : entity.result,
+      props: (result && typeof result === 'object') ? { ...entity.props, ...result } : entity.props,
+    };
+    return { timeline: { byId: { ...s.timeline.byId, [entityId]: completed }, order: s.timeline.order } };
+  }, false, { type: 'timeline/completed', payload: ({ entityId }) }),
+  tlDeleted: ({ entityId })=> set((s)=>{
+    console.debug('tlDeleted', { entityId });
+    if (!s.timeline.byId[entityId]) return {};
+    const nextById = { ...s.timeline.byId };
+    delete nextById[entityId];
+    const idx = s.timeline.order.indexOf(entityId);
+    const nextOrder = idx >= 0 ? [ ...s.timeline.order.slice(0, idx), ...s.timeline.order.slice(idx+1) ] : s.timeline.order;
+    return { timeline: { byId: nextById, order: nextOrder } };
+  }, false, { type: 'timeline/deleted', payload: ({ entityId }) }),
 
   ws: {
     connected: false,
@@ -29,6 +116,7 @@ export const useStore = create(devtools((set, get)=>({
     reconnectAttempts: 0,
   },
   wsConnect: (convId)=>{
+    console.debug('wsConnect', { convId });
     try {
       const state = get();
       if (state.ws && state.ws.instance) {
@@ -37,11 +125,12 @@ export const useStore = create(devtools((set, get)=>({
       const proto = location.protocol === 'https:' ? 'wss' : 'ws';
       const url = `${proto}://${location.host}/ws?conv_id=${encodeURIComponent(convId)}`;
       const n = new WebSocket(url);
-      set((s)=>({ app: { ...s.app, status: 'connecting ws...' }, ws: { ...s.ws, url, instance: n } }), false, 'ws/connect');
+      set((s)=>({ app: { ...s.app, status: 'connecting ws...' }, ws: { ...s.ws, url, instance: n } }), false, { type: 'ws/connect', payload: { url } });
       n.onopen = ()=> { get().wsOnOpen(); };
       n.onclose = ()=> { get().wsOnClose(); };
       n.onerror = (err)=> { get().wsOnError(err); };
       n.onmessage = (ev)=>{
+        console.debug('ws.onmessage', ev.data);
         try {
           const payload = JSON.parse(ev.data);
           get().wsOnMessage(payload);
@@ -54,56 +143,78 @@ export const useStore = create(devtools((set, get)=>({
     }
   },
   wsDisconnect: ()=>{
+    console.debug('wsDisconnect');
     const inst = get().ws.instance;
     if (inst) { try { inst.close(); } catch(_){} }
-    set((s)=>({ ws: { ...s.ws, instance: null, connected: false } }), false, 'ws/disconnect');
+    set((s)=>({ ws: { ...s.ws, instance: null, connected: false } }), false, { type: 'ws/disconnect' });
   },
   wsOnOpen: ()=>{
-    set((s)=>({ app: { ...s.app, status: 'ws connected' }, ws: { ...s.ws, connected: true } }), false, 'ws/onOpen');
+    console.debug('wsOnOpen');
+    set((s)=>({ app: { ...s.app, status: 'ws connected' }, ws: { ...s.ws, connected: true } }), false, { type: 'ws/onOpen' });
   },
   wsOnClose: ()=>{
-    set((s)=>({ app: { ...s.app, status: 'ws closed' }, ws: { ...s.ws, connected: false } }), false, 'ws/onClose');
+    console.debug('wsOnClose');
+    set((s)=>({ app: { ...s.app, status: 'ws closed' }, ws: { ...s.ws, connected: false } }), false, { type: 'ws/onClose' });
   },
-  wsOnError: (_err)=>{
-    set((s)=>({ app: { ...s.app, status: 'ws error' }, ws: { ...s.ws, connected: false } }), false, 'ws/onError');
+  wsOnError: (err)=>{
+    console.debug('wsOnError', err);
+    set((s)=>({ app: { ...s.app, status: 'ws error' }, ws: { ...s.ws, connected: false } }), false, { type: 'ws/onError', payload: { message: String(err && err.message || err) } });
   },
   wsOnMessage: (payload)=>{
+    console.debug('wsOnMessage', payload);
     get().handleIncoming(payload);
   },
 
   // Normalize and dispatch incoming messages to semantic handlers
   handleIncoming: (payload)=>{
-    const h = get().handlers.timelineEventHandler;
+    console.debug('handleIncoming', payload);
     if (!payload) return;
     // legacy non-timeline messages (user echo)
     if (payload && payload.type === 'user') {
-      if (typeof h === 'function') {
-        const id = `user-${Date.now()}`;
-        try { h({ type: 'created', entityId: id, kind: 'llm_text', renderer: { kind: 'llm_text' }, props: { role: 'user', text: '', streaming: false }, startedAt: Date.now() }); } catch(_){}
-        try { h({ type: 'completed', entityId: id, result: { text: payload.text || '' } }); } catch(_){ }
-      }
+      const id = `user-${Date.now()}`;
+      get().tlCreated({ entityId: id, kind: 'llm_text', renderer: { kind: 'llm_text' }, props: { role: 'user', text: '', streaming: false }, startedAt: Date.now() });
+      get().tlCompleted({ entityId: id, result: { text: payload.text || '' } });
       return;
     }
     // TL-wrapped messages: { tl: true, event: {...} }
-    if (payload.tl && payload.event && typeof h === 'function') {
-      try { h(payload.event); } catch(_){ }
+    if (payload.tl && payload.event) {
+      const ev = payload.event;
+      switch (ev.type) {
+        case 'created':
+          get().tlCreated(ev);
+          break;
+        case 'updated':
+          get().tlUpdated(ev);
+          break;
+        case 'completed':
+          get().tlCompleted(ev);
+          break;
+        case 'deleted':
+          get().tlDeleted(ev);
+          break;
+        default:
+          console.debug('handleIncoming: unknown event type', ev.type);
+          break;
+      }
       return;
     }
+    console.debug('handleIncoming: unrecognized payload shape');
   },
 
   // HTTP chat action
   startChat: async (prompt)=>{
+    console.debug('startChat', { prompt });
     const convId = get().app.convId;
     const body = convId ? { prompt, conv_id: convId } : { prompt };
     const res = await fetch('/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     const j = await res.json();
     const newRun = j.run_id || '';
     const newConv = j.conv_id || convId || '';
-    set((s)=>({ app: { ...s.app, runId: newRun, convId: newConv } }), false, 'chat/startChat:received');
+    set((s)=>({ app: { ...s.app, runId: newRun, convId: newConv } }), false, { type: 'chat/startChat:received', payload: { runId: newRun, convId: newConv } });
     if (newConv && newConv !== convId) {
       get().wsConnect(newConv);
     }
   },
-}), { name: 'web-chat' }));
+})), { name: 'web-chat' }));
 
 
