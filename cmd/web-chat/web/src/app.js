@@ -47,7 +47,7 @@ function mount() {
       document.getElementById('status').textContent = useStore.getState().app.status;
       useStore.subscribe((s)=> s.app.status, (status)=>{
         console.debug('status changed', status);
-        try { document.getElementById('status').textContent = status; } catch(_){}
+        try { document.getElementById('status').textContent = status; } catch(_){ }
       });
     } catch(_){ }
     // Ensure we have a conversation and connect immediately (store-driven)
@@ -81,7 +81,7 @@ function mount() {
       if (!v) return;
       input.value = '';
       console.debug('send prompt', v);
-      useStore.getState().startChat(v);
+      useStore.getState().sendPrompt(v);
     };
     document.getElementById('send-btn').addEventListener('click', send);
     input.addEventListener('keydown', (e)=>{

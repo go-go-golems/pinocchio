@@ -112,6 +112,21 @@ export const useStore = create(devtools(subscribeWithSelector((set, get)=>({
   }, false, { type: 'timeline/deleted', payload: ({ entityId }) }),
   tlClear: ()=> set((s)=>({ timeline: { byId: {}, order: [] } }), false, { type: 'timeline/clear' }),
 
+  // Simple dedupe buffer for user messages we just sent
+  recentUserMsgs: [], // array of { text, ts }
+  _pushRecentUserText: (text)=>{
+    const now = Date.now();
+    const arr = get().recentUserMsgs || [];
+    const next = [ ...arr.filter((x)=> now - x.ts < 5000), { text: String(text || ''), ts: now } ];
+    set({ recentUserMsgs: next }, false, { type: 'debug/recentUserMsgs:add', payload: { text: String(text || '') } });
+  },
+  _seenRecentUserText: (text)=>{
+    const now = Date.now();
+    const arr = get().recentUserMsgs || [];
+    const t = String(text || '');
+    return arr.some((x)=> x.text === t && now - x.ts < 5000);
+  },
+
   // Higher-level semantic actions (optionally used by ingestion or UI orchestration)
   llmTextStart: (entityId, role = 'assistant', metadata = undefined)=>{
     console.debug('llmTextStart', { entityId, role });
@@ -151,6 +166,18 @@ export const useStore = create(devtools(subscribeWithSelector((set, get)=>({
     if (!exists) get().tlCreated({ entityId: resultEntityId, kind: 'tool_call_result', renderer: { kind: 'tool_call_result' }, props: { result } });
     get().tlUpdated({ entityId: resultEntityId, patch: { result } });
     get().tlCompleted({ entityId: resultEntityId, result });
+  },
+
+  // User prompt orchestration: create local user message + POST /chat
+  sendPrompt: async (text)=>{
+    const t = String(text || '').trim();
+    if (!t) return;
+    const id = `user-${Date.now()}-${Math.random().toString(36).slice(2,6)}`;
+    console.debug('sendPrompt', { id, len: t.length });
+    get().tlCreated({ entityId: id, kind: 'llm_text', renderer: { kind: 'llm_text' }, props: { role: 'user', text: t, streaming: false } });
+    get().tlCompleted({ entityId: id, result: { text: t } });
+    try { get()._pushRecentUserText(t); } catch(_){ }
+    await get().startChat(t);
   },
 
   ws: {
@@ -216,6 +243,24 @@ export const useStore = create(devtools(subscribeWithSelector((set, get)=>({
     // TL-wrapped messages: { tl: true, event: {...} }
     if (payload.tl && payload.event) {
       const ev = payload.event;
+      // Deduplicate local user echoes, when backend also emits them
+      if (ev && ev.type === 'created' && ev.kind === 'llm_text' && ev.props && ev.props.role === 'user' && ev.props.text) {
+        if (get()._seenRecentUserText(ev.props.text)) {
+          console.debug('dedupe: skipping server-created user message');
+          return;
+        }
+      }
+      if (ev && ev.type === 'completed') {
+        try {
+          const ent = get().timeline.byId[ev.entityId];
+          if (ent && ent.kind === 'llm_text' && ent.props && ent.props.role === 'user' && ev.result && typeof ev.result.text === 'string') {
+            if (get()._seenRecentUserText(ev.result.text)) {
+              console.debug('dedupe: skipping server-completed user message');
+              return;
+            }
+          }
+        } catch(_){ }
+      }
       switch (ev.type) {
         case 'created':
           get().tlCreated(ev);
