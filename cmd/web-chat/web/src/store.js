@@ -12,6 +12,8 @@ export const useStore = create(devtools(subscribeWithSelector((set, get)=>({
   setRunId: (v)=> set((s)=>({ app: { ...s.app, runId: v } }), false, { type: 'app/setRunId', payload: { runId: v } }),
   setStatus: (v)=> set((s)=>({ app: { ...s.app, status: v } }), false, { type: 'app/setStatus', payload: { status: v } }),
 
+  
+
   // Normalized timeline slice
   timeline: {
     byId: {},
@@ -108,6 +110,48 @@ export const useStore = create(devtools(subscribeWithSelector((set, get)=>({
     const nextOrder = idx >= 0 ? [ ...s.timeline.order.slice(0, idx), ...s.timeline.order.slice(idx+1) ] : s.timeline.order;
     return { timeline: { byId: nextById, order: nextOrder } };
   }, false, { type: 'timeline/deleted', payload: ({ entityId }) }),
+  tlClear: ()=> set((s)=>({ timeline: { byId: {}, order: [] } }), false, { type: 'timeline/clear' }),
+
+  // Higher-level semantic actions (optionally used by ingestion or UI orchestration)
+  llmTextStart: (entityId, role = 'assistant', metadata = undefined)=>{
+    console.debug('llmTextStart', { entityId, role });
+    get().tlCreated({ entityId, kind: 'llm_text', renderer: { kind: 'llm_text' }, props: { role, text: '', streaming: true, metadata } });
+  },
+  llmTextAppend: (entityId, delta)=> set((s)=>{
+    console.debug('llmTextAppend', { entityId, deltaLen: (delta || '').length });
+    const e = s.timeline.byId[entityId];
+    if (!e) return {};
+    const cur = (e.props && e.props.text) || '';
+    const patch = { text: `${cur}${delta || ''}`, streaming: true };
+    return get().tlUpdated({ entityId, patch });
+  }, false, { type: 'llm/textAppend', payload: ({ entityId, deltaLen: (typeof delta === 'string' ? delta.length : 0) }) }),
+  llmTextFinal: (entityId, text, metadata = undefined)=>{
+    console.debug('llmTextFinal', { entityId, textLen: (text || '').length });
+    get().tlUpdated({ entityId, patch: { text: text || '', streaming: false, metadata } });
+    get().tlCompleted({ entityId, result: { text: text || '' } });
+  },
+
+  toolCallStart: (entityId, name, input)=>{
+    console.debug('toolCallStart', { entityId, name });
+    get().tlCreated({ entityId, kind: 'tool_call', renderer: { kind: 'tool_call' }, props: { name, input, exec: true } });
+  },
+  toolCallDelta: (entityId, patch)=>{
+    console.debug('toolCallDelta', { entityId, keys: patch ? Object.keys(patch) : [] });
+    get().tlUpdated({ entityId, patch });
+  },
+  toolCallDone: (entityId)=>{
+    console.debug('toolCallDone', { entityId });
+    get().tlUpdated({ entityId, patch: { exec: false } });
+    get().tlCompleted({ entityId });
+  },
+  toolCallResult: (resultEntityId, result)=>{
+    console.debug('toolCallResult', { resultEntityId });
+    // Generic tool_call_result, will be deduped if a custom result exists
+    const exists = get().timeline.byId[resultEntityId];
+    if (!exists) get().tlCreated({ entityId: resultEntityId, kind: 'tool_call_result', renderer: { kind: 'tool_call_result' }, props: { result } });
+    get().tlUpdated({ entityId: resultEntityId, patch: { result } });
+    get().tlCompleted({ entityId: resultEntityId, result });
+  },
 
   ws: {
     connected: false,
@@ -169,13 +213,6 @@ export const useStore = create(devtools(subscribeWithSelector((set, get)=>({
   handleIncoming: (payload)=>{
     console.debug('handleIncoming', payload);
     if (!payload) return;
-    // legacy non-timeline messages (user echo)
-    if (payload && payload.type === 'user') {
-      const id = `user-${Date.now()}`;
-      get().tlCreated({ entityId: id, kind: 'llm_text', renderer: { kind: 'llm_text' }, props: { role: 'user', text: '', streaming: false }, startedAt: Date.now() });
-      get().tlCompleted({ entityId: id, result: { text: payload.text || '' } });
-      return;
-    }
     // TL-wrapped messages: { tl: true, event: {...} }
     if (payload.tl && payload.event) {
       const ev = payload.event;
