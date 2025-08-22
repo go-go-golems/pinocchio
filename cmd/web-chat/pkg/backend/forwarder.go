@@ -35,6 +35,175 @@ type cachedToolCall struct {
 
 var toolCallCache sync.Map // key: ToolCall.ID -> cachedToolCall
 
+// wrapSem wraps a semantic event payload into the SEM envelope { sem: true, event: {...} }
+func wrapSem(ev map[string]any) []byte {
+    payload := map[string]any{"sem": true, "event": ev}
+    b, _ := json.Marshal(payload)
+    return b
+}
+
+// SemanticEventsFromEvent converts a Geppetto event into one or multiple semantic messages (encoded as JSON ready to send)
+func SemanticEventsFromEvent(e events.Event) [][]byte {
+    md := e.Metadata()
+
+    // Debug: received event
+    log.Debug().
+        Str("component", "web_forwarder").
+        Str("event_type", fmt.Sprintf("%T", e)).
+        Str("event_id", md.ID.String()).
+        Str("run_id", md.RunID).
+        Str("turn_id", md.TurnID).
+        Msg("received event (SEM)")
+
+    switch ev := e.(type) {
+    case *events.EventLog:
+        lvl := ev.Level
+        if lvl == "" { lvl = "info" }
+        id := md.ID.String()
+        if md.ID == uuid.Nil { id = "log-" + uuid.NewString() }
+        sem := map[string]any{
+            "type":    "log",
+            "id":      id,
+            "level":   lvl,
+            "message": ev.Message,
+        }
+        if len(ev.Fields) > 0 { sem["fields"] = ev.Fields }
+        return [][]byte{ wrapSem(sem) }
+
+    case *events.EventPartialCompletionStart:
+        id := md.ID.String()
+        if md.ID == uuid.Nil { id = "llm-" + uuid.NewString() }
+        return [][]byte{ wrapSem(map[string]any{
+            "type":     "llm.start",
+            "id":       id,
+            "role":     "assistant",
+            "metadata": md.LLMInferenceData,
+        }) }
+
+    case *events.EventPartialCompletion:
+        id := md.ID.String()
+        if md.ID == uuid.Nil { id = "llm-" + uuid.NewString() }
+        return [][]byte{ wrapSem(map[string]any{
+            "type":       "llm.delta",
+            "id":         id,
+            "delta":      ev.Delta,
+            "cumulative": ev.Completion,
+            "metadata":   md.LLMInferenceData,
+        }) }
+
+    case *events.EventFinal:
+        id := md.ID.String()
+        if md.ID == uuid.Nil { id = "llm-" + uuid.NewString() }
+        return [][]byte{ wrapSem(map[string]any{
+            "type":     "llm.final",
+            "id":       id,
+            "text":     ev.Text,
+            "metadata": md.LLMInferenceData,
+        }) }
+
+    case *events.EventInterrupt:
+        if intr, ok := events.ToTypedEvent[events.EventInterrupt](e); ok {
+            id := md.ID.String()
+            if md.ID == uuid.Nil { id = "llm-" + uuid.NewString() }
+            return [][]byte{ wrapSem(map[string]any{
+                "type": "llm.final",
+                "id":   id,
+                "text": intr.Text,
+            }) }
+        }
+
+    case *events.EventToolCall:
+        // cache input for future result enrichment
+        var inputObj map[string]any
+        if ev.ToolCall.Input != "" {
+            _ = json.Unmarshal([]byte(ev.ToolCall.Input), &inputObj)
+        }
+        toolCallCache.Store(ev.ToolCall.ID, cachedToolCall{Name: ev.ToolCall.Name, RawInput: ev.ToolCall.Input, InputObj: inputObj})
+        return [][]byte{ wrapSem(map[string]any{
+            "type":  "tool.start",
+            "id":    ev.ToolCall.ID,
+            "name":  ev.ToolCall.Name,
+            "input": inputObj,
+        }) }
+
+    case *events.EventToolCallExecute:
+        var inputObj map[string]any
+        if ev.ToolCall.Input != "" { _ = json.Unmarshal([]byte(ev.ToolCall.Input), &inputObj) }
+        toolCallCache.Store(ev.ToolCall.ID, cachedToolCall{Name: ev.ToolCall.Name, RawInput: ev.ToolCall.Input, InputObj: inputObj})
+        return [][]byte{ wrapSem(map[string]any{
+            "type":  "tool.delta",
+            "id":    ev.ToolCall.ID,
+            "patch": map[string]any{"exec": true, "input": inputObj},
+        }) }
+
+    case *events.EventToolResult:
+        var frames [][]byte
+        if v, ok := toolCallCache.Load(ev.ToolResult.ID); ok {
+            if ctc, ok2 := v.(cachedToolCall); ok2 && ctc.Name == "calc" {
+                frames = append(frames, wrapSem(map[string]any{
+                    "type":       "tool.result",
+                    "id":         ev.ToolResult.ID,
+                    "result":     ev.ToolResult.Result,
+                    "customKind": "calc_result",
+                }))
+                frames = append(frames, wrapSem(map[string]any{
+                    "type": "tool.done",
+                    "id":   ev.ToolResult.ID,
+                }))
+                return frames
+            }
+        }
+        frames = append(frames, wrapSem(map[string]any{
+            "type":   "tool.result",
+            "id":     ev.ToolResult.ID,
+            "result": ev.ToolResult.Result,
+        }))
+        frames = append(frames, wrapSem(map[string]any{
+            "type": "tool.done",
+            "id":   ev.ToolResult.ID,
+        }))
+        return frames
+
+    case *events.EventToolCallExecutionResult:
+        var frames [][]byte
+        if v, ok := toolCallCache.Load(ev.ToolResult.ID); ok {
+            if ctc, ok2 := v.(cachedToolCall); ok2 && ctc.Name == "calc" {
+                frames = append(frames, wrapSem(map[string]any{
+                    "type":       "tool.result",
+                    "id":         ev.ToolResult.ID,
+                    "result":     ev.ToolResult.Result,
+                    "customKind": "calc_result",
+                }))
+                frames = append(frames, wrapSem(map[string]any{
+                    "type": "tool.done",
+                    "id":   ev.ToolResult.ID,
+                }))
+                return frames
+            }
+        }
+        frames = append(frames, wrapSem(map[string]any{
+            "type":   "tool.result",
+            "id":     ev.ToolResult.ID,
+            "result": ev.ToolResult.Result,
+        }))
+        frames = append(frames, wrapSem(map[string]any{
+            "type": "tool.done",
+            "id":   ev.ToolResult.ID,
+        }))
+        return frames
+
+    case *events.EventAgentModeSwitch:
+        props := map[string]any{"title": ev.Message}
+        for k, v := range ev.Data { props[k] = v }
+        localID := "agentmode-" + md.TurnID + "-" + uuid.NewString()
+        return [][]byte{
+            wrapSem(map[string]any{"type": "agent.mode", "id": localID, "title": ev.Message, "data": props}),
+        }
+    }
+    log.Debug().Str("component", "web_forwarder").Msg("no semantic mapping for event; dropping")
+    return nil
+}
+
 // TimelineEventsFromEvent converts a Geppetto event into one or multiple timeline lifecycle messages (encoded as JSON ready to send)
 func TimelineEventsFromEvent(e events.Event) [][]byte {
     md := e.Metadata()

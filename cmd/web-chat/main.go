@@ -209,9 +209,9 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *layers.ParsedLayers
                         for c := range conv.conns { _ = c.WriteMessage(websocket.TextMessage, b) }
                         conv.connsMu.RUnlock()
                     }
-                    if bs := webbackend.TimelineEventsFromEvent(e); bs != nil {
+                    if bs := webbackend.SemanticEventsFromEvent(e); bs != nil {
                         for _, b := range bs {
-                            log.Debug().Str("component", "ws_broadcast").Int("bytes", len(b)).Msg("broadcasting timeline event")
+                            log.Debug().Str("component", "ws_broadcast").Int("bytes", len(b)).Msg("broadcasting semantic event")
                             sendBytes(b)
                         }
                     }

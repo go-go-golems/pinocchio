@@ -19,8 +19,8 @@ export const useStore = create(devtools(subscribeWithSelector((set, get)=>({
     byId: {},
     order: [],
   },
+  // Internal helpers (no devtools action names) — use sparingly
   tlCreated: ({ entityId, kind, renderer, props, startedAt })=> set((s)=>{
-    console.debug('tlCreated', { entityId, kind, renderer, props, startedAt });
     if (s.timeline.byId[entityId]) return {};
     const entity = {
       id: entityId,
@@ -40,56 +40,19 @@ export const useStore = create(devtools(subscribeWithSelector((set, get)=>({
         order: [ ...s.timeline.order, entityId ],
       }
     };
-  }, false, { type: 'timeline/created', payload: ({ entityId, kind, hasProps: !!props }) }),
+  }),
   tlUpdated: ({ entityId, patch, version, updatedAt })=> set((s)=>{
-    console.debug('tlUpdated', { entityId, patch, version, updatedAt });
     const existing = s.timeline.byId[entityId];
-    let nextById = s.timeline.byId;
-    let nextOrder = s.timeline.order;
-    let entity = existing;
-    if (!existing) {
-      // create placeholder, infer kind best-effort
-      let inferredKind = 'llm_text';
-      if (patch && (Object.prototype.hasOwnProperty.call(patch, 'exec') || Object.prototype.hasOwnProperty.call(patch, 'input'))) {
-        inferredKind = 'tool_call';
-      }
-      entity = {
-        id: entityId,
-        kind: inferredKind,
-        renderer: { kind: inferredKind },
-        props: {},
-        startedAt: Date.now(),
-        completed: false,
-        result: null,
-        version: 0,
-        updatedAt: null,
-        completedAt: null,
-      };
-      nextById = { ...nextById, [entityId]: entity };
-      nextOrder = [ ...nextOrder, entityId ];
-    }
+    if (!existing) return {};
     const updated = {
-      ...entity,
-      props: { ...entity.props, ...(patch || {}) },
-      version: version || (entity.version + 1),
+      ...existing,
+      props: { ...existing.props, ...(patch || {}) },
+      version: version || (existing.version + 1),
       updatedAt: updatedAt || Date.now(),
     };
-    // Special rule: prune generic tool_call_result if custom exists
-    if (updated.kind === 'tool_call_result' && typeof updated.id === 'string') {
-      const base = updated.id.replace(/:result$/, '');
-      const customId = base + ':custom';
-      if (nextById[customId]) {
-        const newById = { ...nextById };
-        delete newById[updated.id];
-        const idx = nextOrder.indexOf(updated.id);
-        const newOrder = idx >= 0 ? [ ...nextOrder.slice(0, idx), ...nextOrder.slice(idx+1) ] : nextOrder;
-        return { timeline: { byId: newById, order: newOrder } };
-      }
-    }
-    return { timeline: { byId: { ...nextById, [entityId]: updated }, order: nextOrder } };
-  }, false, { type: 'timeline/updated', payload: ({ entityId, patchKeys: patch ? Object.keys(patch) : [] }) }),
+    return { timeline: { byId: { ...s.timeline.byId, [entityId]: updated }, order: s.timeline.order } };
+  }),
   tlCompleted: ({ entityId, result })=> set((s)=>{
-    console.debug('tlCompleted', { entityId, hasResult: result !== undefined && result !== null });
     const entity = s.timeline.byId[entityId];
     if (!entity) return {};
     const completed = {
@@ -100,20 +63,19 @@ export const useStore = create(devtools(subscribeWithSelector((set, get)=>({
       props: (result && typeof result === 'object') ? { ...entity.props, ...result } : entity.props,
     };
     return { timeline: { byId: { ...s.timeline.byId, [entityId]: completed }, order: s.timeline.order } };
-  }, false, { type: 'timeline/completed', payload: ({ entityId }) }),
+  }),
   tlDeleted: ({ entityId })=> set((s)=>{
-    console.debug('tlDeleted', { entityId });
     if (!s.timeline.byId[entityId]) return {};
     const nextById = { ...s.timeline.byId };
     delete nextById[entityId];
     const idx = s.timeline.order.indexOf(entityId);
     const nextOrder = idx >= 0 ? [ ...s.timeline.order.slice(0, idx), ...s.timeline.order.slice(idx+1) ] : s.timeline.order;
     return { timeline: { byId: nextById, order: nextOrder } };
-  }, false, { type: 'timeline/deleted', payload: ({ entityId }) }),
-  tlClear: ()=> set((s)=>({ timeline: { byId: {}, order: [] } }), false, { type: 'timeline/clear' }),
+  }),
+  tlClear: ()=> set((s)=>({ timeline: { byId: {}, order: [] } })),
 
   // Simple dedupe buffer for user messages we just sent
-  recentUserMsgs: [], // array of { text, ts }
+  recentUserMsgs: [],
   _pushRecentUserText: (text)=>{
     const now = Date.now();
     const arr = get().recentUserMsgs || [];
@@ -127,55 +89,149 @@ export const useStore = create(devtools(subscribeWithSelector((set, get)=>({
     return arr.some((x)=> x.text === t && now - x.ts < 5000);
   },
 
-  // Higher-level semantic actions (optionally used by ingestion or UI orchestration)
-  llmTextStart: (entityId, role = 'assistant', metadata = undefined)=>{
-    console.debug('llmTextStart', { entityId, role });
-    get().tlCreated({ entityId, kind: 'llm_text', renderer: { kind: 'llm_text' }, props: { role, text: '', streaming: true, metadata } });
-  },
+  // Higher-level semantic actions — these alone should appear in devtools
+  llmTextStart: (entityId, role = 'assistant', metadata = undefined)=> set((s)=>{
+    const exists = s.timeline.byId[entityId];
+    if (exists) return {};
+    const entity = {
+      id: entityId,
+      kind: 'llm_text',
+      renderer: { kind: 'llm_text' },
+      props: { role, text: '', streaming: true, metadata },
+      startedAt: Date.now(),
+      completed: false,
+      result: null,
+      version: 0,
+      updatedAt: null,
+      completedAt: null,
+    };
+    return { timeline: { byId: { ...s.timeline.byId, [entityId]: entity }, order: [ ...s.timeline.order, entityId ] } };
+  }, false, { type: 'sem/llm.start', payload: ({ entityId, role }) }),
+
   llmTextAppend: (entityId, delta)=> set((s)=>{
-    console.debug('llmTextAppend', { entityId, deltaLen: (delta || '').length });
     const e = s.timeline.byId[entityId];
     if (!e) return {};
     const cur = (e.props && e.props.text) || '';
-    const patch = { text: `${cur}${delta || ''}`, streaming: true };
-    return get().tlUpdated({ entityId, patch });
-  }, false, { type: 'llm/textAppend', payload: ({ entityId, deltaLen: (typeof delta === 'string' ? delta.length : 0) }) }),
-  llmTextFinal: (entityId, text, metadata = undefined)=>{
-    console.debug('llmTextFinal', { entityId, textLen: (text || '').length });
-    get().tlUpdated({ entityId, patch: { text: text || '', streaming: false, metadata } });
-    get().tlCompleted({ entityId, result: { text: text || '' } });
-  },
+    const updated = {
+      ...e,
+      props: { ...e.props, text: `${cur}${delta || ''}`, streaming: true },
+      version: e.version + 1,
+      updatedAt: Date.now(),
+    };
+    return { timeline: { byId: { ...s.timeline.byId, [entityId]: updated }, order: s.timeline.order } };
+  }, false, { type: 'sem/llm.delta', payload: ({ entityId, deltaLen: (typeof delta === 'string' ? delta.length : 0) }) }),
 
-  toolCallStart: (entityId, name, input)=>{
-    console.debug('toolCallStart', { entityId, name });
-    get().tlCreated({ entityId, kind: 'tool_call', renderer: { kind: 'tool_call' }, props: { name, input, exec: true } });
-  },
-  toolCallDelta: (entityId, patch)=>{
-    console.debug('toolCallDelta', { entityId, keys: patch ? Object.keys(patch) : [] });
-    get().tlUpdated({ entityId, patch });
-  },
-  toolCallDone: (entityId)=>{
-    console.debug('toolCallDone', { entityId });
-    get().tlUpdated({ entityId, patch: { exec: false } });
-    get().tlCompleted({ entityId });
-  },
-  toolCallResult: (resultEntityId, result)=>{
-    console.debug('toolCallResult', { resultEntityId });
-    // Generic tool_call_result, will be deduped if a custom result exists
-    const exists = get().timeline.byId[resultEntityId];
-    if (!exists) get().tlCreated({ entityId: resultEntityId, kind: 'tool_call_result', renderer: { kind: 'tool_call_result' }, props: { result } });
-    get().tlUpdated({ entityId: resultEntityId, patch: { result } });
-    get().tlCompleted({ entityId: resultEntityId, result });
-  },
+  llmTextFinal: (entityId, text, metadata = undefined)=> set((s)=>{
+    const e = s.timeline.byId[entityId];
+    if (!e) return {};
+    const updated = {
+      ...e,
+      props: { ...e.props, text: text || '', streaming: false, metadata },
+      version: e.version + 1,
+      updatedAt: Date.now(),
+      completed: true,
+      completedAt: Date.now(),
+      result: { text: text || '' },
+    };
+    return { timeline: { byId: { ...s.timeline.byId, [entityId]: updated }, order: s.timeline.order } };
+  }, false, { type: 'sem/llm.final', payload: ({ entityId, textLen: (typeof text === 'string' ? text.length : 0) }) }),
+
+  toolCallStart: (entityId, name, input)=> set((s)=>{
+    if (s.timeline.byId[entityId]) return {};
+    const entity = {
+      id: entityId,
+      kind: 'tool_call',
+      renderer: { kind: 'tool_call' },
+      props: { name, input, exec: true },
+      startedAt: Date.now(),
+      completed: false,
+      result: null,
+      version: 0,
+      updatedAt: null,
+      completedAt: null,
+    };
+    return { timeline: { byId: { ...s.timeline.byId, [entityId]: entity }, order: [ ...s.timeline.order, entityId ] } };
+  }, false, { type: 'sem/tool.start', payload: ({ entityId, name }) }),
+
+  toolCallDelta: (entityId, patch)=> set((s)=>{
+    const e = s.timeline.byId[entityId];
+    if (!e) return {};
+    const updated = {
+      ...e,
+      props: { ...e.props, ...(patch || {}) },
+      version: e.version + 1,
+      updatedAt: Date.now(),
+    };
+    return { timeline: { byId: { ...s.timeline.byId, [entityId]: updated }, order: s.timeline.order } };
+  }, false, { type: 'sem/tool.delta', payload: ({ entityId, keys: patch ? Object.keys(patch) : [] }) }),
+
+  toolCallDone: (entityId)=> set((s)=>{
+    const e = s.timeline.byId[entityId];
+    if (!e) return {};
+    const updated = {
+      ...e,
+      props: { ...e.props, exec: false },
+      completed: true,
+      completedAt: Date.now(),
+      version: e.version + 1,
+      updatedAt: Date.now(),
+    };
+    return { timeline: { byId: { ...s.timeline.byId, [entityId]: updated }, order: s.timeline.order } };
+  }, false, { type: 'sem/tool.done', payload: ({ entityId }) }),
+
+  toolCallResult: (baseId, result)=> set((s)=>{
+    // If baseId already has ":custom" or ":result" suffix, use as-is; otherwise default to generic result suffix
+    const entityId = (typeof baseId === 'string' && (baseId.endsWith(':custom') || baseId.endsWith(':result'))) ? baseId : `${baseId}:result`;
+    const exists = s.timeline.byId[entityId];
+    if (!exists) {
+      const entity = {
+        id: entityId,
+        kind: 'tool_call_result',
+        renderer: { kind: 'tool_call_result' },
+        props: { result },
+        startedAt: Date.now(),
+        completed: false,
+        result: null,
+        version: 0,
+        updatedAt: null,
+        completedAt: null,
+      };
+      const byId = { ...s.timeline.byId, [entityId]: entity };
+      const order = [ ...s.timeline.order, entityId ];
+      return { timeline: { byId, order } };
+    }
+    const updated = {
+      ...exists,
+      props: { ...exists.props, result },
+      completed: true,
+      completedAt: Date.now(),
+      version: exists.version + 1,
+      updatedAt: Date.now(),
+      result,
+    };
+    return { timeline: { byId: { ...s.timeline.byId, [entityId]: updated }, order: s.timeline.order } };
+  }, false, { type: 'sem/tool.result', payload: ({ baseId }) }),
 
   // User prompt orchestration: create local user message + POST /chat
   sendPrompt: async (text)=>{
     const t = String(text || '').trim();
     if (!t) return;
     const id = `user-${Date.now()}-${Math.random().toString(36).slice(2,6)}`;
-    console.debug('sendPrompt', { id, len: t.length });
-    get().tlCreated({ entityId: id, kind: 'llm_text', renderer: { kind: 'llm_text' }, props: { role: 'user', text: t, streaming: false } });
-    get().tlCompleted({ entityId: id, result: { text: t } });
+    set((s)=>{
+      const entity = {
+        id,
+        kind: 'llm_text',
+        renderer: { kind: 'llm_text' },
+        props: { role: 'user', text: t, streaming: false },
+        startedAt: Date.now(),
+        completed: true,
+        result: { text: t },
+        version: 0,
+        updatedAt: Date.now(),
+        completedAt: Date.now(),
+      };
+      return { timeline: { byId: { ...s.timeline.byId, [id]: entity }, order: [ ...s.timeline.order, id ] } };
+    }, false, { type: 'sem/user.prompt', payload: ({ id, len: t.length }) });
     try { get()._pushRecentUserText(t); } catch(_){ }
     await get().startChat(t);
   },
@@ -187,7 +243,6 @@ export const useStore = create(devtools(subscribeWithSelector((set, get)=>({
     reconnectAttempts: 0,
   },
   wsConnect: (convId)=>{
-    console.debug('wsConnect', { convId });
     try {
       const state = get();
       if (state.ws && state.ws.instance) {
@@ -201,7 +256,6 @@ export const useStore = create(devtools(subscribeWithSelector((set, get)=>({
       n.onclose = ()=> { get().wsOnClose(); };
       n.onerror = (err)=> { get().wsOnError(err); };
       n.onmessage = (ev)=>{
-        console.debug('ws.onmessage', ev.data);
         try {
           const payload = JSON.parse(ev.data);
           get().wsOnMessage(payload);
@@ -214,78 +268,86 @@ export const useStore = create(devtools(subscribeWithSelector((set, get)=>({
     }
   },
   wsDisconnect: ()=>{
-    console.debug('wsDisconnect');
     const inst = get().ws.instance;
     if (inst) { try { inst.close(); } catch(_){} }
     set((s)=>({ ws: { ...s.ws, instance: null, connected: false } }), false, { type: 'ws/disconnect' });
   },
   wsOnOpen: ()=>{
-    console.debug('wsOnOpen');
     set((s)=>({ app: { ...s.app, status: 'ws connected' }, ws: { ...s.ws, connected: true } }), false, { type: 'ws/onOpen' });
   },
   wsOnClose: ()=>{
-    console.debug('wsOnClose');
     set((s)=>({ app: { ...s.app, status: 'ws closed' }, ws: { ...s.ws, connected: false } }), false, { type: 'ws/onClose' });
   },
   wsOnError: (err)=>{
-    console.debug('wsOnError', err);
     set((s)=>({ app: { ...s.app, status: 'ws error' }, ws: { ...s.ws, connected: false } }), false, { type: 'ws/onError', payload: { message: String(err && err.message || err) } });
   },
   wsOnMessage: (payload)=>{
-    console.debug('wsOnMessage', payload);
     get().handleIncoming(payload);
   },
 
-  // Normalize and dispatch incoming messages to semantic handlers
+  // SEM-only ingestion and routing
   handleIncoming: (payload)=>{
-    console.debug('handleIncoming', payload);
-    if (!payload) return;
-    // TL-wrapped messages: { tl: true, event: {...} }
-    if (payload.tl && payload.event) {
-      const ev = payload.event;
-      // Deduplicate local user echoes, when backend also emits them
-      if (ev && ev.type === 'created' && ev.kind === 'llm_text' && ev.props && ev.props.role === 'user' && ev.props.text) {
-        if (get()._seenRecentUserText(ev.props.text)) {
-          console.debug('dedupe: skipping server-created user message');
-          return;
-        }
-      }
-      if (ev && ev.type === 'completed') {
-        try {
-          const ent = get().timeline.byId[ev.entityId];
-          if (ent && ent.kind === 'llm_text' && ent.props && ent.props.role === 'user' && ev.result && typeof ev.result.text === 'string') {
-            if (get()._seenRecentUserText(ev.result.text)) {
-              console.debug('dedupe: skipping server-completed user message');
-              return;
+    if (!payload || !payload.sem || !payload.event) return;
+    const ev = payload.event;
+    switch (ev.type) {
+      case 'llm.start':
+        get().llmTextStart(ev.id, ev.role || 'assistant', ev.metadata);
+        return;
+      case 'llm.delta':
+        get().llmTextAppend(ev.id, ev.delta || '');
+        return;
+      case 'llm.final':
+        get().llmTextFinal(ev.id, ev.text || '', ev.metadata);
+        return;
+      case 'tool.start':
+        get().toolCallStart(ev.id, ev.name, ev.input);
+        return;
+      case 'tool.delta':
+        get().toolCallDelta(ev.id, ev.patch || {});
+        return;
+      case 'tool.done':
+        get().toolCallDone(ev.id);
+        return;
+      case 'tool.result': {
+        const resultId = ev.customKind ? `${ev.id}:custom` : `${ev.id}:result`;
+        if (ev.customKind) {
+          set((s)=>{
+            const exists = s.timeline.byId[resultId];
+            if (!exists) {
+              const entity = { id: resultId, kind: ev.customKind, renderer: { kind: ev.customKind }, props: { result: ev.result }, startedAt: Date.now(), completed: false, result: null, version: 0, updatedAt: null, completedAt: null };
+              return { timeline: { byId: { ...s.timeline.byId, [resultId]: entity }, order: [ ...s.timeline.order, resultId ] } };
             }
-          }
-        } catch(_){ }
+            const updated = { ...exists, props: { ...exists.props, result: ev.result }, completed: true, completedAt: Date.now(), version: exists.version + 1, updatedAt: Date.now(), result: ev.result };
+            return { timeline: { byId: { ...s.timeline.byId, [resultId]: updated }, order: s.timeline.order } };
+          }, false, { type: 'sem/tool.result', payload: ({ id: resultId }) });
+        } else {
+          get().toolCallResult(resultId, ev.result);
+        }
+        return;
       }
-      switch (ev.type) {
-        case 'created':
-          get().tlCreated(ev);
-          break;
-        case 'updated':
-          get().tlUpdated(ev);
-          break;
-        case 'completed':
-          get().tlCompleted(ev);
-          break;
-        case 'deleted':
-          get().tlDeleted(ev);
-          break;
-        default:
-          console.debug('handleIncoming: unknown event type', ev.type);
-          break;
+      case 'agent.mode': {
+        const id = ev.id || `agentmode-${Date.now()}`;
+        set((s)=>{
+          const entity = { id, kind: 'agent_mode', renderer: { kind: 'agent_mode' }, props: { title: ev.title, from: ev.from, to: ev.to, analysis: ev.analysis }, startedAt: Date.now(), completed: true, result: null, version: 0, updatedAt: Date.now(), completedAt: Date.now() };
+          return { timeline: { byId: { ...s.timeline.byId, [id]: entity }, order: [ ...s.timeline.order, id ] } };
+        }, false, { type: 'sem/agent.mode', payload: ({ id }) });
+        return;
       }
-      return;
+      case 'log': {
+        const id = ev.id || `log-${Date.now()}`;
+        set((s)=>{
+          const entity = { id, kind: 'log_event', renderer: { kind: 'log_event' }, props: { level: ev.level || 'info', message: ev.message, fields: ev.fields }, startedAt: Date.now(), completed: true, result: { message: ev.message }, version: 0, updatedAt: Date.now(), completedAt: Date.now() };
+          return { timeline: { byId: { ...s.timeline.byId, [id]: entity }, order: [ ...s.timeline.order, id ] } };
+        }, false, { type: 'sem/log', payload: ({ id }) });
+        return;
+      }
+      default:
+        return;
     }
-    console.debug('handleIncoming: unrecognized payload shape');
   },
 
   // HTTP chat action
   startChat: async (prompt)=>{
-    console.debug('startChat', { prompt });
     const convId = get().app.convId;
     const body = convId ? { prompt, conv_id: convId } : { prompt };
     const res = await fetch('/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
