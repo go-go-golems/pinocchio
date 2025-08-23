@@ -138,7 +138,7 @@ func NewMiddleware(svc Service, cfg Config) rootmw.Middleware {
 					log.Debug().Str("run_id", t.RunID).Str("turn_id", t.ID).Int("insert_pos", before).Str("preview", prev).Msg("agentmode: inserted user prompt block")
 					// Log insertion
 					events.PublishEventToContext(ctx, events.NewLogEvent(
-						events.EventMetadata{RunID: t.RunID, TurnID: t.ID}, "info",
+						events.EventMetadata{ID: uuid.New(), RunID: t.RunID, TurnID: t.ID}, "info",
 						"agentmode: user prompt inserted",
 						map[string]any{"mode": mode.Name},
 					))

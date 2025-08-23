@@ -21,3 +21,6 @@ dist/
 .history
 __debug*
 .specstory/
+
+*.db 
+*.log

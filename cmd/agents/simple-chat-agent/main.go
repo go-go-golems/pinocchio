@@ -31,6 +31,7 @@ import (
 	eventspkg "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/xevents"
 	agentmode "github.com/go-go-golems/pinocchio/pkg/middlewares/agentmode"
 	sqlitetool "github.com/go-go-golems/pinocchio/pkg/middlewares/sqlitetool"
+	rediscfg "github.com/go-go-golems/pinocchio/pkg/redisstream"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -47,10 +48,16 @@ func NewSimpleAgentCmd() (*SimpleAgentCmd, error) {
 		return nil, err
 	}
 
+	// Add redis layer to allow selecting Redis Streams transport via flags
+	redisLayer, err := rediscfg.NewParameterLayer()
+	if err != nil {
+		return nil, err
+	}
+
 	desc := cmds.NewCommandDescription(
 		"simple-chat-agent",
 		cmds.WithShort("Simple streaming chat agent with a calculator tool and a tiny REPL"),
-		cmds.WithLayersList(geLayers...),
+		cmds.WithLayersList(append(geLayers, redisLayer)...),
 	)
 	return &SimpleAgentCmd{CommandDescription: desc}, nil
 }
@@ -70,15 +77,17 @@ func NewSimpleAgentCmd() (*SimpleAgentCmd, error) {
 // App model removed (now in pkg/ui)
 
 func (c *SimpleAgentCmd) RunIntoWriter(ctx context.Context, parsed *layers.ParsedLayers, _ io.Writer) error {
-	// Event router + sink
-	router, err := events.NewEventRouter()
+	// Event router + sink (support Redis Streams when enabled)
+	rs := rediscfg.Settings{}
+	_ = parsed.InitializeStruct("redis", &rs)
+	router, err := rediscfg.BuildRouter(rs, false)
 	if err != nil {
 		return errors.Wrap(err, "router")
 	}
 	uiCh := make(chan interface{}, 1024)
 	eventspkg.AddUIForwarder(router, uiCh)
-	// Log tool-call events and info/log events to stdout via zerolog
-	router.AddHandler("tool-logger", "chat", func(msg *message.Message) error {
+	// Configure logging handler; use separate consumer group when Redis is enabled
+	logHandler := func(msg *message.Message) error {
 		defer msg.Ack()
 		e, err := events.NewEventFromJson(msg.Payload)
 		if err != nil {
@@ -99,7 +108,16 @@ func (c *SimpleAgentCmd) RunIntoWriter(ctx context.Context, parsed *layers.Parse
 			log.Info().Str("message", ev.Message).Fields(ev.Data).Msg("InfoEvent")
 		}
 		return nil
-	})
+	}
+	if rs.Enabled {
+		if sub, err := rediscfg.BuildGroupSubscriber(rs.Addr, "logs", "logs-1"); err == nil {
+			router.AddHandlerWithOptions("tool-logger", "chat", logHandler, events.WithHandlerSubscriber(sub))
+		} else {
+			router.AddHandler("tool-logger", "chat", logHandler)
+		}
+	} else {
+		router.AddHandler("tool-logger", "chat", logHandler)
+	}
 	sink := middleware.NewWatermillSink(router.Publisher, "chat")
 
 	// Engine
@@ -211,7 +229,7 @@ func (c *SimpleAgentCmd) RunIntoWriter(ctx context.Context, parsed *layers.Parse
 	host := uipkg.NewHostModel(app, uiCh)
 
 	// Also persist chat events (tool/log/info) into sqlite when received
-	router.AddHandler("event-sql-logger", "chat", func(msg *message.Message) error {
+	persistHandler := func(msg *message.Message) error {
 		defer msg.Ack()
 		e, err := events.NewEventFromJson(msg.Payload)
 		if err != nil {
@@ -219,7 +237,16 @@ func (c *SimpleAgentCmd) RunIntoWriter(ctx context.Context, parsed *layers.Parse
 		}
 		snapshotStore.LogEvent(ctx, e)
 		return nil
-	})
+	}
+	if rs.Enabled {
+		if sub, err := rediscfg.BuildGroupSubscriber(rs.Addr, "logs", "persist-1"); err == nil {
+			router.AddHandlerWithOptions("event-sql-logger", "chat", persistHandler, events.WithHandlerSubscriber(sub))
+		} else {
+			router.AddHandler("event-sql-logger", "chat", persistHandler)
+		}
+	} else {
+		router.AddHandler("event-sql-logger", "chat", persistHandler)
+	}
 
 	// Run router and Bubble Tea app; cancel router when UI exits
 	ctx2, cancel := context.WithCancel(ctx)
@@ -229,7 +256,15 @@ func (c *SimpleAgentCmd) RunIntoWriter(ctx context.Context, parsed *layers.Parse
 	// Build program first so we can register event forwarder before router starts
 	p := tea.NewProgram(host, tea.WithAltScreen())
 	// Forward geppetto events to timeline UI (agent-specific forwarder, no premature finish)
-	router.AddHandler("ui-forward", "chat", backend.MakeUIForwarder(p))
+	if rs.Enabled {
+		if sub, err := rediscfg.BuildGroupSubscriber(rs.Addr, "ui", "ui-1"); err == nil {
+			router.AddHandlerWithOptions("ui-forward", "chat", backend.MakeUIForwarder(p), events.WithHandlerSubscriber(sub))
+		} else {
+			router.AddHandler("ui-forward", "chat", backend.MakeUIForwarder(p))
+		}
+	} else {
+		router.AddHandler("ui-forward", "chat", backend.MakeUIForwarder(p))
+	}
 
 	eg.Go(func() error { return router.Run(groupCtx) })
 	eg.Go(func() error {

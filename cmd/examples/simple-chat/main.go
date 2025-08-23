@@ -24,6 +24,9 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/go-go-golems/geppetto/pkg/turns"
+
+	"github.com/go-go-golems/geppetto/pkg/events"
+	rediscfg "github.com/go-go-golems/pinocchio/pkg/redisstream"
 )
 
 //go:embed test.yaml
@@ -116,6 +119,22 @@ func (c *TestCommand) RunIntoWriter(ctx context.Context, parsedLayers *layers.Pa
 		turns.AppendBlock(seed, turns.NewUserTextBlock(up))
 	}
 
+	// Build router using optional redis layer
+	var router *events.EventRouter
+	{
+		// attempt to initialize from "redis" layer if present
+		rs := rediscfg.Settings{}
+		_ = geppettoParsedLayers.InitializeStruct("redis", &rs)
+		r, err := rediscfg.BuildRouter(rs, false)
+		if err != nil {
+			return err
+		}
+		router = r
+		defer func() { _ = router.Close() }()
+		// default printer
+		router.AddHandler("chat", "chat", events.StepPrinterFunc("", w))
+	}
+
 	// Run with options (Turn-first)
 	updatedTurn, err := c.pinocchioCmd.RunWithOptions(ctx,
 		run.WithStepSettings(stepSettings),
@@ -126,6 +145,7 @@ func (c *TestCommand) RunIntoWriter(ctx context.Context, parsedLayers *layers.Pa
 			WithMetadata: helpersSettings.WithMetadata,
 			FullOutput:   helpersSettings.FullOutput,
 		}),
+		run.WithRouter(router),
 	)
 	if err != nil {
 		return err
