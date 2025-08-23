@@ -464,7 +464,11 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *layers.ParsedLayers
 
 	// Create HTTP server
 	server := &http.Server{
-		Addr: s.Addr,
+		Addr:              s.Addr,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      60 * time.Second,
+		IdleTimeout:       120 * time.Second,
 	}
 
 	// Handle graceful shutdown
