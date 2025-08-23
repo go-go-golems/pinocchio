@@ -26,5 +26,3 @@ func NewParameterLayer() (layers.ParameterLayer, error) {
 		),
 	)
 }
-
-

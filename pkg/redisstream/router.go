@@ -4,8 +4,8 @@ import (
 	"context"
 	"strings"
 
-	"github.com/ThreeDotsLabs/watermill/message"
 	rstream "github.com/ThreeDotsLabs/watermill-redisstream/pkg/redisstream"
+	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/redis/go-redis/v9"
 
 	"github.com/go-go-golems/geppetto/pkg/events"
@@ -85,5 +85,3 @@ func EnsureGroupAtTail(ctx context.Context, addr, stream, group string) error {
 	log.Info().Str("stream", stream).Str("group", group).Msg("created redis consumer group at $ (tail)")
 	return nil
 }
-
-
