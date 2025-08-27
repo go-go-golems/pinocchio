@@ -65,6 +65,47 @@ This:
 - Builds an `http.Server` with sane timeouts.
 - Runs the event router and HTTP server.
 
+To mount the entire app under a custom root (e.g., `/chat`), start with:
+
+```bash
+web-chat --addr :8080 --root /chat
+```
+
+Then the index is served at `/chat`, assets under `/chat/assets` and `/chat/static`, and all API/WS endpoints are prefixed with `/chat`.
+
+### 4.5. How to Mount Under a Custom Root (Implementation Pattern)
+
+If you integrate `webchat.Router` into your own server and need a custom root, mount the router’s handler under a prefix using `http.ServeMux` and `http.StripPrefix`:
+
+```go
+parent := http.NewServeMux()
+prefix := "/chat/" // ensure trailing slash
+parent.Handle(prefix, http.StripPrefix(strings.TrimRight(prefix, "/"), r.Handler()))
+httpSrv.Handler = parent
+```
+
+This preserves all internal paths (`/`, `/assets`, `/static`, `/ws`, `/chat`, `/chat/{profile}`, `/api/chat/profiles`) under the chosen root.
+
+### 4.6. Embedding the Router Without webchat.Server (start the event loop!)
+
+If you integrate `webchat.Router` into an existing server and do not use `webchat.Server`, you must start the event router loop yourself or runs will never progress beyond initialization. Pattern:
+
+```go
+ctx := context.Background()
+r, _ := webchat.NewRouter(ctx, parsedLayers, staticFS)
+
+// IMPORTANT: start the event router loop
+go func() { _ = r.RunEventRouter(ctx) }()
+
+// Mount under a prefix (see 4.5)
+parent := http.NewServeMux()
+prefix := "/chat/" // ensure trailing slash
+parent.Handle(prefix, http.StripPrefix(strings.TrimRight(prefix, "/"), r.Handler()))
+httpSrv.Handler = parent
+```
+
+This mirrors what `webchat.Server.Run(ctx)` does for you (it runs the event router and the HTTP server). When you self-manage, be sure to pass a cancellable top-level `ctx` so you can stop both cleanly.
+
 ### 4.2. Register Middlewares
 
 ```go
@@ -118,6 +159,22 @@ r.AddProfile(&webchat.Profile{
 Profiles are selected by path (`/chat/agent`) or via the `chat_profile` cookie.
 
 ## 5. HTTP API
+
+### 5.0. Serving Under a Custom Root
+
+If you pass `--root /xyz`, all routes are mounted under that prefix:
+
+- `GET /` → `GET /xyz/`
+- `GET /assets/*` → `GET /xyz/assets/*`
+- `GET /static/*` → `GET /xyz/static/*`
+- `GET /ws` → `GET /xyz/ws`
+- `POST /chat` → `POST /xyz/chat`
+- `POST /chat/{profile}` → `POST /xyz/chat/{profile}`
+- `GET /api/chat/profiles` → `GET /xyz/api/chat/profiles`
+
+Frontend considerations:
+- Use relative asset URLs in `index.html` so Vite emits root-agnostic paths.
+- In JavaScript, derive the prefix from `location.pathname` for `POST ${prefix}/chat` and `WS ${prefix}/ws`.
 
 ### 5.1. Static and Index
 
@@ -198,6 +255,23 @@ The included UI is a lightweight Preact app that renders a timeline of messages 
 
 To customize UI behavior, edit `pinocchio/cmd/web-chat/web/src/` and rebuild your static assets.
 
+Mount-aware assets and API references:
+
+- The Vite config sets `base: './'` so built asset paths are relative and work under any root.
+- `index.html` references CSS/JS relatively (e.g., `./static/css/timeline.css`, `./src/main.js` for dev; the built `index.html` will point to `./assets/...`).
+- The store computes a prefix from the current URL to call `POST ${prefix}/chat` and connect `WS ${prefix}/ws`.
+- If you want Vite to manage CSS (instead of serving from `static/css`), import it in `web/src/main.js` (e.g., `import '../static/css/timeline.css'`) so Vite emits and links it automatically.
+
+### 8.1. Frontend Build from Go (`go generate`)
+
+You can automate the frontend build via a `go:generate` directive in a Go file colocated with your static assets. Example:
+
+```go
+//go:generate sh -c "cd cmd/web-chat/web && npm ci && npm run build"
+```
+
+With this in place, running `go generate ./...` triggers the Node build, which (via Vite) writes to `cmd/web-chat/static/dist`. The server serves `static/dist/index.html` (built) or falls back to `static/index.html` (dev). Ensure your Vite config sets `outDir` accordingly and `base: './'`.
+
 ## 9. Examples
 
 ### 9.1. Minimal Server Setup
@@ -235,6 +309,10 @@ _ = webchat.NewFromRouter(ctx, r, httpSrv).Run(ctx)
 - 301/405 on `/chat`: Use `POST /chat` (no trailing slash) or `POST /chat/{profile}`; the router handles both now. Ensure your frontend isn’t redirecting.
 - No WS updates: Confirm `conv_id` is sent and the WebSocket URL points to `/ws?conv_id=...`. If using Redis Streams, verify settings and connectivity.
 - No syntax highlighting: Ensure the highlight.js theme loads (see page head for a stylesheet) and code blocks have `language-xyz` classes.
+
+- Got `run_id`/`conv_id` back from `/chat` but no streaming: Ensure the event router loop is running. If you didn’t use `webchat.Server`, call `go r.RunEventRouter(ctx)` after `NewRouter(...)`. Check logs for “starting run loop” and “run loop finished”.
+- Unknown profile: Verify your profile registration and list profiles via `GET /api/chat/profiles`. If no profile cookie is set and none provided, the router uses `default`.
+- Mounting under a prefix: Ensure you’re using `http.StripPrefix(strings.TrimRight(prefix, "/"), r.Handler())` and your frontend assets use relative paths (Vite `base: './'`).
 
 ## 12. Next Steps
 

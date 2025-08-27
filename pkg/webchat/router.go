@@ -103,27 +103,50 @@ func (r *Router) BuildHTTPServer() (*http.Server, error) {
 	}, nil
 }
 
+// RunEventRouter starts the underlying event router loop with the provided context.
+// This is useful when integrating the webchat router into an existing HTTP server
+// and you need the event router running independently.
+func (r *Router) RunEventRouter(ctx context.Context) error {
+    log.Info().Str("component", "webchat").Msg("starting event router loop")
+    err := r.router.Run(ctx)
+    if err != nil {
+        log.Error().Err(err).Str("component", "webchat").Msg("event router exited with error")
+        return err
+    }
+    log.Info().Str("component", "webchat").Msg("event router loop exited")
+    return nil
+}
+
 // registerHTTPHandlers sets up static, API and websockets.
 func (r *Router) registerHTTPHandlers() {
 	// static assets
 	if staticSub, err := fsSub(r.staticFS, "static"); err == nil {
 		r.mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticSub))))
+		log.Info().Str("component", "webchat").Msg("mounted /static/ asset handler")
+	} else {
+		log.Warn().Err(err).Str("component", "webchat").Msg("failed to mount /static/ asset handler")
 	}
 	if distAssets, err := fsSub(r.staticFS, "static/dist/assets"); err == nil {
 		r.mux.Handle("/assets/", http.StripPrefix("/assets/", http.FileServer(http.FS(distAssets))))
+		log.Info().Str("component", "webchat").Msg("mounted /assets/ handler for built dist assets")
+	} else {
+		log.Warn().Err(err).Str("component", "webchat").Msg("no built dist assets found under static/dist/assets")
 	}
 	// index
 	r.mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
 		if b, err := r.staticFS.ReadFile("static/dist/index.html"); err == nil {
+			log.Debug().Str("component", "webchat").Msg("serving built index (static/dist/index.html)")
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
 			_, _ = w.Write(b)
 			return
 		}
 		if b, err := r.staticFS.ReadFile("static/index.html"); err == nil {
+			log.Debug().Str("component", "webchat").Msg("serving dev index (static/index.html)")
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
 			_, _ = w.Write(b)
 			return
 		}
+		log.Error().Str("component", "webchat").Msg("index not found in embedded FS")
 		http.Error(w, "index not found", http.StatusInternalServerError)
 	})
 
@@ -154,7 +177,9 @@ func (r *Router) registerHTTPHandlers() {
 				profileSlug = ck.Value
 			}
 		}
+		log.Info().Str("component", "webchat").Str("remote", r0.RemoteAddr).Str("conv_id", convID).Str("profile", profileSlug).Msg("ws connect request")
 		if convID == "" {
+			log.Warn().Str("component", "webchat").Msg("ws missing conv_id")
 			_ = conn.WriteMessage(websocket.TextMessage, []byte(`{"error":"missing conv_id"}`))
 			_ = conn.Close()
 			return
@@ -162,11 +187,8 @@ func (r *Router) registerHTTPHandlers() {
 		if profileSlug == "" {
 			profileSlug = "default"
 		}
-		build := func() (engine.Engine, *middleware.WatermillSink, message.Subscriber, error) {
-			var eng engine.Engine
-			var sink *middleware.WatermillSink
-			var sub message.Subscriber
-			var err error
+		log.Info().Str("component", "webchat").Str("conv_id", convID).Str("profile", profileSlug).Msg("ws joining conversation")
+		build := func() (eng_ engine.Engine, sink *middleware.WatermillSink, sub message.Subscriber, err error) {
 			// subscriber/publisher
 			if r.usesRedis {
 				_ = rediscfg.EnsureGroupAtTail(context.Background(), r.redisAddr, topicForConv(convID), "ui")
@@ -174,7 +196,7 @@ func (r *Router) registerHTTPHandlers() {
 			if r.usesRedis {
 				sub, err = rediscfg.BuildGroupSubscriber(r.redisAddr, "ui", "ws-forwarder:"+convID)
 				if err != nil {
-					return eng, sink, sub, err
+					return
 				}
 			} else {
 				sub = r.router.Subscriber
@@ -184,20 +206,24 @@ func (r *Router) registerHTTPHandlers() {
 			p, _ := r.profiles.Get(profileSlug)
 			stepSettings, _ := settings.NewStepSettingsFromParsedLayers(r.parsed)
 			sys := p.DefaultPrompt
-			eng, err = composeEngineFromSettings(stepSettings, sys, p.DefaultMws, r.mwFactories)
-			return eng, sink, sub, err
+			eng_, err = composeEngineFromSettings(stepSettings, sys, p.DefaultMws, r.mwFactories)
+			return
 		}
 		conv, err := r.getOrCreateConv(convID, build)
 		if err != nil {
+			log.Error().Err(err).Str("component", "webchat").Str("conv_id", convID).Msg("failed to join conversation")
 			_ = conn.WriteMessage(websocket.TextMessage, []byte(`{"error":"failed to join conversation"}`))
 			_ = conn.Close()
 			return
 		}
 		r.addConn(conv, conn)
+		log.Info().Str("component", "webchat").Str("conv_id", convID).Msg("ws connected")
 		go func() {
 			defer r.removeConn(conv, conn)
+			defer log.Info().Str("component", "webchat").Str("conv_id", convID).Msg("ws disconnected")
 			for {
 				if _, _, err := conn.ReadMessage(); err != nil {
+					log.Debug().Err(err).Str("component", "webchat").Msg("ws read loop end")
 					return
 				}
 			}
@@ -216,6 +242,7 @@ func (r *Router) registerHTTPHandlers() {
 			Overrides map[string]any `json:"overrides"`
 		}
 		if err := json.NewDecoder(r0.Body).Decode(&body); err != nil {
+			log.Warn().Err(err).Str("component", "webchat").Msg("bad /chat request body")
 			http.Error(w, "bad request", http.StatusBadRequest)
 			return
 		}
@@ -230,24 +257,22 @@ func (r *Router) registerHTTPHandlers() {
 		if profileSlug == "" {
 			profileSlug = "default"
 		}
+		log.Info().Str("component", "webchat").Str("conv_id", convID).Str("profile", profileSlug).Int("prompt_len", len(body.Prompt)).Msg("/chat received")
 		p, ok := r.profiles.Get(profileSlug)
 		if !ok {
+			log.Warn().Str("component", "webchat").Str("profile", profileSlug).Msg("unknown profile")
 			http.Error(w, "unknown profile", http.StatusNotFound)
 			return
 		}
 
-		build := func() (engine.Engine, *middleware.WatermillSink, message.Subscriber, error) {
-			var eng engine.Engine
-			var sink *middleware.WatermillSink
-			var sub message.Subscriber
-			var err error
+		build := func() (eng_ engine.Engine, sink *middleware.WatermillSink, sub message.Subscriber, err error) {
 			if r.usesRedis {
 				_ = rediscfg.EnsureGroupAtTail(context.Background(), r.redisAddr, topicForConv(convID), "ui")
 			}
 			if r.usesRedis {
 				sub, err = rediscfg.BuildGroupSubscriber(r.redisAddr, "ui", "ws-forwarder:"+convID)
 				if err != nil {
-					return eng, sink, sub, err
+					return
 				}
 			} else {
 				sub = r.router.Subscriber
@@ -256,7 +281,7 @@ func (r *Router) registerHTTPHandlers() {
 			stepSettings, err2 := settings.NewStepSettingsFromParsedLayers(r.parsed)
 			if err2 != nil {
 				err = err2
-				return eng, sink, sub, err
+				return
 			}
 			sys := p.DefaultPrompt
 			uses := append([]MiddlewareUse{}, p.DefaultMws...)
@@ -277,17 +302,19 @@ func (r *Router) registerHTTPHandlers() {
 					}
 				}
 			}
-			eng, err = composeEngineFromSettings(stepSettings, sys, uses, r.mwFactories)
-			return eng, sink, sub, err
+			eng_, err = composeEngineFromSettings(stepSettings, sys, uses, r.mwFactories)
+			return
 		}
 		conv, err := r.getOrCreateConv(convID, build)
 		if err != nil {
+			log.Error().Err(err).Str("component", "webchat").Str("conv_id", convID).Msg("failed to create conversation")
 			http.Error(w, "failed to create conversation", http.StatusInternalServerError)
 			return
 		}
 		conv.mu.Lock()
 		if conv.running {
 			conv.mu.Unlock()
+			log.Warn().Str("component", "webchat").Str("conv_id", conv.ID).Str("run_id", conv.RunID).Msg("run in progress")
 			w.WriteHeader(http.StatusConflict)
 			_ = json.NewEncoder(w).Encode(map[string]any{"error": "run in progress", "conv_id": conv.ID, "run_id": conv.RunID})
 			return
@@ -313,6 +340,7 @@ func (r *Router) registerHTTPHandlers() {
 			conv.cancel = runCancel
 			conv.mu.Unlock()
 			runCtx = events.WithEventSinks(runCtx, conv.Sink)
+			log.Info().Str("component", "webchat").Str("conv_id", conv.ID).Str("run_id", conv.RunID).Msg("starting run loop")
 			if conv.Turn.Data == nil {
 				conv.Turn.Data = map[string]any{}
 			}
@@ -331,6 +359,7 @@ func (r *Router) registerHTTPHandlers() {
 			conv.running = false
 			conv.cancel = nil
 			conv.mu.Unlock()
+			log.Info().Str("component", "webchat").Str("conv_id", conv.ID).Str("run_id", conv.RunID).Msg("run loop finished")
 		}(conv)
 
 		_ = json.NewEncoder(w).Encode(map[string]string{"run_id": conv.RunID, "conv_id": conv.ID})
@@ -376,18 +405,14 @@ func (r *Router) registerHTTPHandlers() {
 		}
 
 		// Build or reuse conversation with correct engine (consider overrides)
-		build := func() (engine.Engine, *middleware.WatermillSink, message.Subscriber, error) {
-			var eng engine.Engine
-			var sink *middleware.WatermillSink
-			var sub message.Subscriber
-			var err error
+		build := func() (eng_ engine.Engine, sink *middleware.WatermillSink, sub message.Subscriber, err error) {
 			if r.usesRedis {
 				_ = rediscfg.EnsureGroupAtTail(context.Background(), r.redisAddr, topicForConv(convID), "ui")
 			}
 			if r.usesRedis {
 				sub, err = rediscfg.BuildGroupSubscriber(r.redisAddr, "ui", "ws-forwarder:"+convID)
 				if err != nil {
-					return eng, sink, sub, err
+					return
 				}
 			} else {
 				sub = r.router.Subscriber
@@ -397,7 +422,7 @@ func (r *Router) registerHTTPHandlers() {
 			stepSettings, err2 := settings.NewStepSettingsFromParsedLayers(r.parsed)
 			if err2 != nil {
 				err = err2
-				return eng, sink, sub, err
+				return
 			}
 			sys := p.DefaultPrompt
 			uses := append([]MiddlewareUse{}, p.DefaultMws...)
@@ -420,8 +445,8 @@ func (r *Router) registerHTTPHandlers() {
 				}
 				// TODO: tools override can be applied via registry decision in loop
 			}
-			eng, err = composeEngineFromSettings(stepSettings, sys, uses, r.mwFactories)
-			return eng, sink, sub, err
+			eng_, err = composeEngineFromSettings(stepSettings, sys, uses, r.mwFactories)
+			return
 		}
 		conv, err := r.getOrCreateConv(convID, build)
 		if err != nil {
@@ -457,6 +482,7 @@ func (r *Router) registerHTTPHandlers() {
 			conv.cancel = runCancel
 			conv.mu.Unlock()
 			runCtx = events.WithEventSinks(runCtx, conv.Sink)
+			log.Info().Str("component", "webchat").Str("conv_id", conv.ID).Str("run_id", conv.RunID).Msg("starting run loop")
 			if conv.Turn.Data == nil {
 				conv.Turn.Data = map[string]any{}
 			}
@@ -475,6 +501,7 @@ func (r *Router) registerHTTPHandlers() {
 			conv.running = false
 			conv.cancel = nil
 			conv.mu.Unlock()
+			log.Info().Str("component", "webchat").Str("conv_id", conv.ID).Str("run_id", conv.RunID).Msg("run loop finished")
 		}(conv)
 
 		_ = json.NewEncoder(w).Encode(map[string]string{"run_id": conv.RunID, "conv_id": conv.ID})
@@ -490,16 +517,15 @@ var (
 )
 
 // fields backing runtime settings
-// useRedis enables Redis-backed event routing (used internally during setup)
-// func (r *Router) useRedis(addr string) { r.usesRedis = true; r.redisAddr = addr }
+func (r *Router) useRedis(addr string) { r.usesRedis = true; r.redisAddr = addr }
 
 // Router internal state not exposed in API
 // (kept in router.go for cohesion)
 // NOTE: small private fields for runtime toggles
-// type engineEngine interface{}
+type engineEngine interface{}
 
 // private fields
-// func (r *Router) setIdleTimeoutSec(v int) { r.idleTimeoutSec = v }
+func (r *Router) setIdleTimeoutSec(v int) { r.idleTimeoutSec = v }
 
 // private state fields appended to Router
 // (declared here for proximity to logic, defined in types.go)
