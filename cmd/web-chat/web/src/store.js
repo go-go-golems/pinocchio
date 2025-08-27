@@ -256,7 +256,12 @@ export const useStore = create(devtools(subscribeWithSelector((set, get)=>({
         try { state.ws.instance.close(); } catch(_){}
       }
       const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-      const url = `${proto}://${location.host}/ws?conv_id=${encodeURIComponent(convId)}`;
+      // Derive current path prefix to support mounting under a custom root
+      const basePath = (document.currentScript && new URL(document.currentScript.src).pathname) || location.pathname;
+      // Use the first segment as prefix if not root
+      const segs = basePath.split('/').filter(Boolean);
+      const prefix = segs.length > 0 ? `/${segs[0]}` : '';
+      const url = `${proto}://${location.host}${prefix}/ws?conv_id=${encodeURIComponent(convId)}`;
       const n = new WebSocket(url);
       set((s)=>({ app: { ...s.app, status: 'connecting ws...' }, ws: { ...s.ws, url, instance: n } }), false, { type: 'ws/connect', payload: { url } });
       n.onopen = ()=> { get().wsOnOpen(); };
@@ -356,8 +361,11 @@ export const useStore = create(devtools(subscribeWithSelector((set, get)=>({
   // HTTP chat action
   startChat: async (prompt)=>{
     const convId = get().app.convId;
+    // Derive base prefix from current URL for POST /chat
+    const segs = location.pathname.split('/').filter(Boolean);
+    const prefix = segs.length > 0 ? `/${segs[0]}` : '';
     const body = convId ? { prompt, conv_id: convId } : { prompt };
-    const res = await fetch('/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const res = await fetch(`${prefix}/chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     const j = await res.json();
     const newRun = j.run_id || '';
     const newConv = j.conv_id || convId || '';

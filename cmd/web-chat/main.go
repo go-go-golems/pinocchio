@@ -6,6 +6,7 @@ import (
 	"embed"
 	"io"
 	"net/http"
+	"strings"
 
 	clay "github.com/go-go-golems/clay/pkg"
 	"github.com/go-go-golems/glazed/pkg/cli"
@@ -18,14 +19,14 @@ import (
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 
-	geppettolayers "github.com/go-go-golems/geppetto/pkg/layers"
-	rediscfg "github.com/go-go-golems/pinocchio/pkg/redisstream"
-	webchat "github.com/go-go-golems/pinocchio/pkg/webchat"
-	geptools "github.com/go-go-golems/geppetto/pkg/inference/tools"
 	geppettomw "github.com/go-go-golems/geppetto/pkg/inference/middleware"
+	geptools "github.com/go-go-golems/geppetto/pkg/inference/tools"
+	geppettolayers "github.com/go-go-golems/geppetto/pkg/layers"
+	toolspkg "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/tools"
 	agentmode "github.com/go-go-golems/pinocchio/pkg/middlewares/agentmode"
 	sqlitetool "github.com/go-go-golems/pinocchio/pkg/middlewares/sqlitetool"
-	toolspkg "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/tools"
+	rediscfg "github.com/go-go-golems/pinocchio/pkg/redisstream"
+	webchat "github.com/go-go-golems/pinocchio/pkg/webchat"
 	"github.com/rs/zerolog/log"
 )
 
@@ -55,6 +56,7 @@ func NewCommand() (*Command, error) {
 			parameters.NewParameterDefinition("addr", parameters.ParameterTypeString, parameters.WithDefault(":8080"), parameters.WithHelp("HTTP listen address")),
 			parameters.NewParameterDefinition("enable-agentmode", parameters.ParameterTypeBool, parameters.WithDefault(false), parameters.WithHelp("Enable agent mode middleware")),
 			parameters.NewParameterDefinition("idle-timeout-seconds", parameters.ParameterTypeInteger, parameters.WithDefault(60), parameters.WithHelp("Stop per-conversation reader after N seconds with no sockets (0=disabled)")),
+			parameters.NewParameterDefinition("root", parameters.ParameterTypeString, parameters.WithDefault("/"), parameters.WithHelp("Serve the chat UI under a given URL root (e.g., /chat)")),
 		),
 		cmds.WithLayersList(append(geLayers, redisLayer)...),
 	)
@@ -62,72 +64,102 @@ func NewCommand() (*Command, error) {
 }
 
 func (c *Command) RunIntoWriter(ctx context.Context, parsed *layers.ParsedLayers, _ io.Writer) error {
-    // Build webchat router and register middlewares/tools/profiles
-    r, err := webchat.NewRouter(ctx, parsed, staticFS)
-    if err != nil {
-        return errors.Wrap(err, "new webchat router")
-    }
+	// Build webchat router and register middlewares/tools/profiles
+	r, err := webchat.NewRouter(ctx, parsed, staticFS)
+	if err != nil {
+		return errors.Wrap(err, "new webchat router")
+	}
 
-    // Optional SQLite DB (best-effort)
-    var dbWithRegexp *sql.DB
-    if db, err := sql.Open("sqlite3", "anonymized-data.db"); err == nil {
-        dbWithRegexp = db
-        log.Info().Str("dsn", "anonymized-data.db").Msg("opened sqlite database")
-    } else {
-        log.Warn().Err(err).Msg("could not open sqlite DB; SQL tool middleware disabled")
-    }
+	// Optional SQLite DB (best-effort)
+	var dbWithRegexp *sql.DB
+	if db, err := sql.Open("sqlite3", "anonymized-data.db"); err == nil {
+		dbWithRegexp = db
+		log.Info().Str("dsn", "anonymized-data.db").Msg("opened sqlite database")
+	} else {
+		log.Warn().Err(err).Msg("could not open sqlite DB; SQL tool middleware disabled")
+	}
 
-    // Agent mode configuration (optional)
-    amSvc := agentmode.NewStaticService([]*agentmode.AgentMode{
-        {Name: "financial_analyst", Prompt: "You are a financial transaction analyst. Analyze transactions and propose categories."},
-        {Name: "category_regexp_designer", Prompt: "Design regex patterns to categorize transactions. Verify with SQL counts before proposing changes."},
-        {Name: "category_regexp_reviewer", Prompt: "Review proposed regex patterns and assess over/under matching risks."},
-    })
-    amCfg := agentmode.DefaultConfig()
-    amCfg.DefaultMode = "financial_analyst"
+	// Agent mode configuration (optional)
+	amSvc := agentmode.NewStaticService([]*agentmode.AgentMode{
+		{Name: "financial_analyst", Prompt: "You are a financial transaction analyst. Analyze transactions and propose categories."},
+		{Name: "category_regexp_designer", Prompt: "Design regex patterns to categorize transactions. Verify with SQL counts before proposing changes."},
+		{Name: "category_regexp_reviewer", Prompt: "Review proposed regex patterns and assess over/under matching risks."},
+	})
+	amCfg := agentmode.DefaultConfig()
+	amCfg.DefaultMode = "financial_analyst"
 
-    // Register middlewares
-    r.RegisterMiddleware("agentmode", func(cfg any) geppettomw.Middleware { return agentmode.NewMiddleware(amSvc, cfg.(agentmode.Config)) })
-    r.RegisterMiddleware("sqlite", func(cfg any) geppettomw.Middleware {
-        c := sqlitetool.Config{DB: dbWithRegexp}
-        if cfg_, ok := cfg.(sqlitetool.Config); ok { c = cfg_ }
-        return sqlitetool.NewMiddleware(c)
-    })
+	// Register middlewares
+	r.RegisterMiddleware("agentmode", func(cfg any) geppettomw.Middleware { return agentmode.NewMiddleware(amSvc, cfg.(agentmode.Config)) })
+	r.RegisterMiddleware("sqlite", func(cfg any) geppettomw.Middleware {
+		c := sqlitetool.Config{DB: dbWithRegexp}
+		if cfg_, ok := cfg.(sqlitetool.Config); ok {
+			c = cfg_
+		}
+		return sqlitetool.NewMiddleware(c)
+	})
 
-    // Register calculator tool
-    r.RegisterTool("calculator", func(reg geptools.ToolRegistry) error {
-        if im, ok := reg.(*geptools.InMemoryToolRegistry); ok {
-            return toolspkg.RegisterCalculatorTool(im)
-        }
-        im2 := geptools.NewInMemoryToolRegistry()
-        if err := toolspkg.RegisterCalculatorTool(im2); err != nil { return err }
-        for _, td := range im2.ListTools() { _ = reg.RegisterTool(td.Name, td) }
-        return nil
-    })
+	// Register calculator tool
+	r.RegisterTool("calculator", func(reg geptools.ToolRegistry) error {
+		if im, ok := reg.(*geptools.InMemoryToolRegistry); ok {
+			return toolspkg.RegisterCalculatorTool(im)
+		}
+		im2 := geptools.NewInMemoryToolRegistry()
+		if err := toolspkg.RegisterCalculatorTool(im2); err != nil {
+			return err
+		}
+		for _, td := range im2.ListTools() {
+			_ = reg.RegisterTool(td.Name, td)
+		}
+		return nil
+	})
 
-    // Profiles
-    r.AddProfile(&webchat.Profile{Slug: "default", DefaultPrompt: "You are a helpful assistant. Be concise.", DefaultMws: []webchat.MiddlewareUse{}})
-    r.AddProfile(&webchat.Profile{Slug: "agent", DefaultPrompt: "You are a helpful assistant. Be concise.", DefaultMws: []webchat.MiddlewareUse{{Name: "agentmode", Config: amCfg}}})
+	// Profiles
+	r.AddProfile(&webchat.Profile{Slug: "default", DefaultPrompt: "You are a helpful assistant. Be concise.", DefaultMws: []webchat.MiddlewareUse{}})
+	r.AddProfile(&webchat.Profile{Slug: "agent", DefaultPrompt: "You are a helpful assistant. Be concise.", DefaultMws: []webchat.MiddlewareUse{{Name: "agentmode", Config: amCfg}}})
 
-    // Lightweight helper endpoints to switch profile from the UI via fetch GET
-    // GET /default → sets a cookie chat_profile=default and 204s
-    // GET /agent   → sets a cookie chat_profile=agent and 204s
-    r.HandleFunc("/default", func(w http.ResponseWriter, r *http.Request) {
-        http.SetCookie(w, &http.Cookie{Name: "chat_profile", Value: "default", Path: "/", SameSite: http.SameSiteLaxMode})
-        log.Info().Str("component", "profile-switch").Str("profile", "default").Str("remote", r.RemoteAddr).Msg("set chat_profile cookie")
-        w.WriteHeader(http.StatusNoContent)
-    })
-    r.HandleFunc("/agent", func(w http.ResponseWriter, r *http.Request) {
-        http.SetCookie(w, &http.Cookie{Name: "chat_profile", Value: "agent", Path: "/", SameSite: http.SameSiteLaxMode})
-        log.Info().Str("component", "profile-switch").Str("profile", "agent").Str("remote", r.RemoteAddr).Msg("set chat_profile cookie")
-        w.WriteHeader(http.StatusNoContent)
-    })
+	// Lightweight helper endpoints to switch profile from the UI via fetch GET
+	// GET /default → sets a cookie chat_profile=default and 204s
+	// GET /agent   → sets a cookie chat_profile=agent and 204s
+	r.HandleFunc("/default", func(w http.ResponseWriter, r *http.Request) {
+		http.SetCookie(w, &http.Cookie{Name: "chat_profile", Value: "default", Path: "/", SameSite: http.SameSiteLaxMode})
+		log.Info().Str("component", "profile-switch").Str("profile", "default").Str("remote", r.RemoteAddr).Msg("set chat_profile cookie")
+		w.WriteHeader(http.StatusNoContent)
+	})
+	r.HandleFunc("/agent", func(w http.ResponseWriter, r *http.Request) {
+		http.SetCookie(w, &http.Cookie{Name: "chat_profile", Value: "agent", Path: "/", SameSite: http.SameSiteLaxMode})
+		log.Info().Str("component", "profile-switch").Str("profile", "agent").Str("remote", r.RemoteAddr).Msg("set chat_profile cookie")
+		w.WriteHeader(http.StatusNoContent)
+	})
 
-    // HTTP server and run
-    httpSrv, err := r.BuildHTTPServer()
-    if err != nil { return errors.Wrap(err, "build http server") }
-    srv := webchat.NewFromRouter(ctx, r, httpSrv)
-    return srv.Run(ctx)
+	// HTTP server and run, with optional root mounting
+	httpSrv, err := r.BuildHTTPServer()
+	if err != nil {
+		return errors.Wrap(err, "build http server")
+	}
+
+	// If --root is not "/", mount router under that root with a parent mux
+	type serverSettings struct {
+		Root string `glazed.parameter:"root"`
+	}
+	s := &serverSettings{}
+	_ = parsed.InitializeStruct(layers.DefaultSlug, s)
+	if s.Root != "" && s.Root != "/" {
+		parent := http.NewServeMux()
+		// Normalize prefix: ensure it starts with "/" and ends with "/"
+		prefix := s.Root
+		if !strings.HasPrefix(prefix, "/") {
+			prefix = "/" + prefix
+		}
+		if !strings.HasSuffix(prefix, "/") {
+			prefix = prefix + "/"
+		}
+		parent.Handle(prefix, http.StripPrefix(strings.TrimRight(prefix, "/"), r.Handler()))
+		httpSrv.Handler = parent
+		log.Info().Str("root", prefix).Msg("mounted webchat under custom root")
+	}
+
+	srv := webchat.NewFromRouter(ctx, r, httpSrv)
+	return srv.Run(ctx)
 }
 
 func main() {
