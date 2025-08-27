@@ -74,6 +74,12 @@ func (r *Router) AddProfile(p *Profile) { _ = r.profiles.Add(p) }
 // Mount attaches all handlers to a parent mux with the given prefix.
 func (r *Router) Mount(mux *http.ServeMux, prefix string) { mux.Handle(prefix, r.mux) }
 
+// Expose lightweight handler registration for external customization (e.g., profile switchers)
+func (r *Router) Handle(pattern string, h http.Handler) { r.mux.Handle(pattern, h) }
+func (r *Router) HandleFunc(pattern string, handler func(http.ResponseWriter, *http.Request)) {
+    r.mux.HandleFunc(pattern, handler)
+}
+
 // BuildHTTPServer constructs an http.Server using settings from layers.
 func (r *Router) BuildHTTPServer() (*http.Server, error) {
     s := &RouterSettings{}
@@ -113,11 +119,12 @@ func (r *Router) registerHTTPHandlers() {
         _ = json.NewEncoder(w).Encode(out)
     })
 
-    // websocket join: /ws?conv_id=...&profile=slug
+    // websocket join: /ws?conv_id=...&profile=slug (falls back to chat_profile cookie)
     r.mux.HandleFunc("/ws", func(w http.ResponseWriter, r0 *http.Request) {
         conn, err := r.upgrader.Upgrade(w, r0, nil)
         if err != nil { log.Error().Err(err).Msg("websocket upgrade failed"); return }
         convID := r0.URL.Query().Get("conv_id"); profileSlug := r0.URL.Query().Get("profile")
+        if profileSlug == "" { if ck, err := r0.Cookie("chat_profile"); err == nil && ck != nil { profileSlug = ck.Value } }
         if convID == "" { _ = conn.WriteMessage(websocket.TextMessage, []byte(`{"error":"missing conv_id"}`)); _ = conn.Close(); return }
         if profileSlug == "" { profileSlug = "default" }
         build := func() (eng_ engine.Engine, sink *middleware.WatermillSink, sub message.Subscriber, err error) {
@@ -141,7 +148,7 @@ func (r *Router) registerHTTPHandlers() {
         go func() { defer r.removeConn(conv, conn); for { if _, _, err := conn.ReadMessage(); err != nil { return } } }()
     })
 
-    // start run: support both /chat (default profile) and /chat/{profile}
+    // start run: support both /chat (default/cookie/profile) and /chat/{profile}
     r.mux.HandleFunc("/chat", func(w http.ResponseWriter, r0 *http.Request) {
         if r0.Method != http.MethodPost { http.Error(w, "method not allowed", http.StatusMethodNotAllowed); return }
         var body struct {
@@ -152,7 +159,9 @@ func (r *Router) registerHTTPHandlers() {
         if err := json.NewDecoder(r0.Body).Decode(&body); err != nil { http.Error(w, "bad request", http.StatusBadRequest); return }
         convID := body.ConvID
         if convID == "" { convID = uuid.NewString() }
-        profileSlug := "default"
+        profileSlug := ""
+        if ck, err := r0.Cookie("chat_profile"); err == nil && ck != nil { profileSlug = ck.Value }
+        if profileSlug == "" { profileSlug = "default" }
         p, ok := r.profiles.Get(profileSlug)
         if !ok { http.Error(w, "unknown profile", http.StatusNotFound); return }
 

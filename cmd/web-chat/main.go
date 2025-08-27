@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"embed"
 	"io"
+	"net/http"
 
 	clay "github.com/go-go-golems/clay/pkg"
 	"github.com/go-go-golems/glazed/pkg/cli"
@@ -107,6 +108,20 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *layers.ParsedLayers
     // Profiles
     r.AddProfile(&webchat.Profile{Slug: "default", DefaultPrompt: "You are a helpful assistant. Be concise.", DefaultMws: []webchat.MiddlewareUse{}})
     r.AddProfile(&webchat.Profile{Slug: "agent", DefaultPrompt: "You are a helpful assistant. Be concise.", DefaultMws: []webchat.MiddlewareUse{{Name: "agentmode", Config: amCfg}}})
+
+    // Lightweight helper endpoints to switch profile from the UI via fetch GET
+    // GET /default → sets a cookie chat_profile=default and 204s
+    // GET /agent   → sets a cookie chat_profile=agent and 204s
+    r.HandleFunc("/default", func(w http.ResponseWriter, r *http.Request) {
+        http.SetCookie(w, &http.Cookie{Name: "chat_profile", Value: "default", Path: "/", SameSite: http.SameSiteLaxMode})
+        log.Info().Str("component", "profile-switch").Str("profile", "default").Str("remote", r.RemoteAddr).Msg("set chat_profile cookie")
+        w.WriteHeader(http.StatusNoContent)
+    })
+    r.HandleFunc("/agent", func(w http.ResponseWriter, r *http.Request) {
+        http.SetCookie(w, &http.Cookie{Name: "chat_profile", Value: "agent", Path: "/", SameSite: http.SameSiteLaxMode})
+        log.Info().Str("component", "profile-switch").Str("profile", "agent").Str("remote", r.RemoteAddr).Msg("set chat_profile cookie")
+        w.WriteHeader(http.StatusNoContent)
+    })
 
     // HTTP server and run
     httpSrv, err := r.BuildHTTPServer()
