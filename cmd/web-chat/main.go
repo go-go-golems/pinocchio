@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"embed"
 	"io"
 
@@ -17,8 +18,14 @@ import (
 	"github.com/spf13/cobra"
 
 	geppettolayers "github.com/go-go-golems/geppetto/pkg/layers"
-	webbackend "github.com/go-go-golems/pinocchio/cmd/web-chat/pkg/backend"
 	rediscfg "github.com/go-go-golems/pinocchio/pkg/redisstream"
+	webchat "github.com/go-go-golems/pinocchio/pkg/webchat"
+	geptools "github.com/go-go-golems/geppetto/pkg/inference/tools"
+	geppettomw "github.com/go-go-golems/geppetto/pkg/inference/middleware"
+	agentmode "github.com/go-go-golems/pinocchio/pkg/middlewares/agentmode"
+	sqlitetool "github.com/go-go-golems/pinocchio/pkg/middlewares/sqlitetool"
+	toolspkg "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/tools"
+	"github.com/rs/zerolog/log"
 )
 
 //go:embed static
@@ -54,11 +61,57 @@ func NewCommand() (*Command, error) {
 }
 
 func (c *Command) RunIntoWriter(ctx context.Context, parsed *layers.ParsedLayers, _ io.Writer) error {
-    // The modular backend manages routes, WS and streaming.
-    srv, err := webbackend.NewServer(ctx, parsed, staticFS)
+    // Build webchat router and register middlewares/tools/profiles
+    r, err := webchat.NewRouter(ctx, parsed, staticFS)
     if err != nil {
-        return errors.Wrap(err, "init web backend")
+        return errors.Wrap(err, "new webchat router")
     }
+
+    // Optional SQLite DB (best-effort)
+    var dbWithRegexp *sql.DB
+    if db, err := sql.Open("sqlite3", "anonymized-data.db"); err == nil {
+        dbWithRegexp = db
+        log.Info().Str("dsn", "anonymized-data.db").Msg("opened sqlite database")
+    } else {
+        log.Warn().Err(err).Msg("could not open sqlite DB; SQL tool middleware disabled")
+    }
+
+    // Agent mode configuration (optional)
+    amSvc := agentmode.NewStaticService([]*agentmode.AgentMode{
+        {Name: "financial_analyst", Prompt: "You are a financial transaction analyst. Analyze transactions and propose categories."},
+        {Name: "category_regexp_designer", Prompt: "Design regex patterns to categorize transactions. Verify with SQL counts before proposing changes."},
+        {Name: "category_regexp_reviewer", Prompt: "Review proposed regex patterns and assess over/under matching risks."},
+    })
+    amCfg := agentmode.DefaultConfig()
+    amCfg.DefaultMode = "financial_analyst"
+
+    // Register middlewares
+    r.RegisterMiddleware("agentmode", func(cfg any) geppettomw.Middleware { return agentmode.NewMiddleware(amSvc, cfg.(agentmode.Config)) })
+    r.RegisterMiddleware("sqlite", func(cfg any) geppettomw.Middleware {
+        c := sqlitetool.Config{DB: dbWithRegexp}
+        if cfg_, ok := cfg.(sqlitetool.Config); ok { c = cfg_ }
+        return sqlitetool.NewMiddleware(c)
+    })
+
+    // Register calculator tool
+    r.RegisterTool("calculator", func(reg geptools.ToolRegistry) error {
+        if im, ok := reg.(*geptools.InMemoryToolRegistry); ok {
+            return toolspkg.RegisterCalculatorTool(im)
+        }
+        im2 := geptools.NewInMemoryToolRegistry()
+        if err := toolspkg.RegisterCalculatorTool(im2); err != nil { return err }
+        for _, td := range im2.ListTools() { _ = reg.RegisterTool(td.Name, td) }
+        return nil
+    })
+
+    // Profiles
+    r.AddProfile(&webchat.Profile{Slug: "default", DefaultPrompt: "You are a helpful assistant. Be concise.", DefaultMws: []webchat.MiddlewareUse{}})
+    r.AddProfile(&webchat.Profile{Slug: "agent", DefaultPrompt: "You are a helpful assistant. Be concise.", DefaultMws: []webchat.MiddlewareUse{{Name: "agentmode", Config: amCfg}}})
+
+    // HTTP server and run
+    httpSrv, err := r.BuildHTTPServer()
+    if err != nil { return errors.Wrap(err, "build http server") }
+    srv := webchat.NewFromRouter(ctx, r, httpSrv)
     return srv.Run(ctx)
 }
 
