@@ -45,7 +45,7 @@ tag-patch:
 	git tag $(shell svu patch)
 
 release:
-	git push --tags
+	git push origin --tags
 	GOPROXY=proxy.golang.org go list -m github.com/go-go-golems/pinocchio@$(shell svu current)
 
 bump-glazed:
