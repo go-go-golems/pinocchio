@@ -2,18 +2,54 @@
 
 import { h } from 'https://esm.sh/preact@10.22.0';
 import htm from 'https://esm.sh/htm@3.1.1';
+import { marked } from 'https://esm.sh/marked@12.0.2';
+import { markedHighlight } from 'https://esm.sh/marked-highlight@2.1.1';
+import DOMPurify from 'https://esm.sh/dompurify@3.1.6';
+import hljs from 'https://esm.sh/highlight.js@11.9.0/lib/common';
 
 const html = htm.bind(h);
+
+// Configure marked + highlight.js (recommended plugin for marked v12)
+try {
+  marked.setOptions({ langPrefix: 'hljs language-' });
+  marked.use(markedHighlight({
+    langPrefix: 'hljs language-',
+    highlight(code, lang) {
+      try {
+        if (lang && hljs.getLanguage(lang)) {
+          return hljs.highlight(code, { language: lang }).value;
+        }
+        return hljs.highlightAuto(code).value;
+      } catch (_) {
+        return code;
+      }
+    },
+  }));
+} catch (_) { /* noop */ }
+
+// Ensure a highlight.js theme stylesheet is loaded (once)
+function ensureHighlightTheme() {
+  try {
+    const id = 'hljs-theme-github-dark';
+    if (document.getElementById(id)) return;
+    const link = document.createElement('link');
+    link.id = id;
+    link.rel = 'stylesheet';
+    link.href = 'https://esm.sh/highlight.js@11.9.0/styles/github-dark.min.css';
+    document.head.appendChild(link);
+  } catch (_) { /* noop */ }
+}
 
 export function LLMText({ entity }) {
   const role = (entity.props && entity.props.role) || 'assistant';
   const text = (entity.props && entity.props.text) || '';
   const streaming = !!(entity.props && entity.props.streaming);
   const metadata = entity.props && entity.props.metadata;
+  ensureHighlightTheme();
   return html`
     <div class=${`msg ${role === 'user' ? 'user' : 'assistant'}`}>
       <span class="role-label">(${role}):</span>
-      <div class="text-content">${text}</div>
+      ${html`<div class="text-content" dangerouslySetInnerHTML=${{ __html: DOMPurify.sanitize(marked.parse(text)) }} />`}
       ${streaming || metadata ? html`<div class="status-line">
         ${streaming ? html`<span class="spinner">Generating...</span>` : null}
         ${metadata ? html`<span class="metadata">${formatMetadata(metadata)}</span>` : null}
