@@ -107,14 +107,14 @@ func (r *Router) BuildHTTPServer() (*http.Server, error) {
 // This is useful when integrating the webchat router into an existing HTTP server
 // and you need the event router running independently.
 func (r *Router) RunEventRouter(ctx context.Context) error {
-    log.Info().Str("component", "webchat").Msg("starting event router loop")
-    err := r.router.Run(ctx)
-    if err != nil {
-        log.Error().Err(err).Str("component", "webchat").Msg("event router exited with error")
-        return err
-    }
-    log.Info().Str("component", "webchat").Msg("event router loop exited")
-    return nil
+	log.Info().Str("component", "webchat").Msg("starting event router loop")
+	err := r.router.Run(ctx)
+	if err != nil {
+		log.Error().Err(err).Str("component", "webchat").Msg("event router exited with error")
+		return err
+	}
+	log.Info().Str("component", "webchat").Msg("event router loop exited")
+	return nil
 }
 
 // registerHTTPHandlers sets up static, API and websockets.
@@ -188,7 +188,13 @@ func (r *Router) registerHTTPHandlers() {
 			profileSlug = "default"
 		}
 		log.Info().Str("component", "webchat").Str("conv_id", convID).Str("profile", profileSlug).Msg("ws joining conversation")
-		build := func() (eng_ engine.Engine, sink *middleware.WatermillSink, sub message.Subscriber, err error) {
+		build := func() (engine.Engine, *middleware.WatermillSink, message.Subscriber, error) {
+			var (
+				eng  engine.Engine
+				sink *middleware.WatermillSink
+				sub  message.Subscriber
+				err  error
+			)
 			// subscriber/publisher
 			if r.usesRedis {
 				_ = rediscfg.EnsureGroupAtTail(context.Background(), r.redisAddr, topicForConv(convID), "ui")
@@ -196,7 +202,7 @@ func (r *Router) registerHTTPHandlers() {
 			if r.usesRedis {
 				sub, err = rediscfg.BuildGroupSubscriber(r.redisAddr, "ui", "ws-forwarder:"+convID)
 				if err != nil {
-					return
+					return nil, nil, nil, err
 				}
 			} else {
 				sub = r.router.Subscriber
@@ -206,8 +212,8 @@ func (r *Router) registerHTTPHandlers() {
 			p, _ := r.profiles.Get(profileSlug)
 			stepSettings, _ := settings.NewStepSettingsFromParsedLayers(r.parsed)
 			sys := p.DefaultPrompt
-			eng_, err = composeEngineFromSettings(stepSettings, sys, p.DefaultMws, r.mwFactories)
-			return
+			eng, err = composeEngineFromSettings(stepSettings, sys, p.DefaultMws, r.mwFactories)
+			return eng, sink, sub, err
 		}
 		conv, err := r.getOrCreateConv(convID, build)
 		if err != nil {
@@ -265,14 +271,20 @@ func (r *Router) registerHTTPHandlers() {
 			return
 		}
 
-		build := func() (eng_ engine.Engine, sink *middleware.WatermillSink, sub message.Subscriber, err error) {
+		build := func() (engine.Engine, *middleware.WatermillSink, message.Subscriber, error) {
+			var (
+				eng  engine.Engine
+				sink *middleware.WatermillSink
+				sub  message.Subscriber
+				err  error
+			)
 			if r.usesRedis {
 				_ = rediscfg.EnsureGroupAtTail(context.Background(), r.redisAddr, topicForConv(convID), "ui")
 			}
 			if r.usesRedis {
 				sub, err = rediscfg.BuildGroupSubscriber(r.redisAddr, "ui", "ws-forwarder:"+convID)
 				if err != nil {
-					return
+					return nil, nil, nil, err
 				}
 			} else {
 				sub = r.router.Subscriber
@@ -280,8 +292,7 @@ func (r *Router) registerHTTPHandlers() {
 			sink = middleware.NewWatermillSink(r.router.Publisher, topicForConv(convID))
 			stepSettings, err2 := settings.NewStepSettingsFromParsedLayers(r.parsed)
 			if err2 != nil {
-				err = err2
-				return
+				return nil, nil, nil, err2
 			}
 			sys := p.DefaultPrompt
 			uses := append([]MiddlewareUse{}, p.DefaultMws...)
@@ -302,8 +313,8 @@ func (r *Router) registerHTTPHandlers() {
 					}
 				}
 			}
-			eng_, err = composeEngineFromSettings(stepSettings, sys, uses, r.mwFactories)
-			return
+			eng, err = composeEngineFromSettings(stepSettings, sys, uses, r.mwFactories)
+			return eng, sink, sub, err
 		}
 		conv, err := r.getOrCreateConv(convID, build)
 		if err != nil {
@@ -405,14 +416,20 @@ func (r *Router) registerHTTPHandlers() {
 		}
 
 		// Build or reuse conversation with correct engine (consider overrides)
-		build := func() (eng_ engine.Engine, sink *middleware.WatermillSink, sub message.Subscriber, err error) {
+		build := func() (engine.Engine, *middleware.WatermillSink, message.Subscriber, error) {
+			var (
+				eng  engine.Engine
+				sink *middleware.WatermillSink
+				sub  message.Subscriber
+				err  error
+			)
 			if r.usesRedis {
 				_ = rediscfg.EnsureGroupAtTail(context.Background(), r.redisAddr, topicForConv(convID), "ui")
 			}
 			if r.usesRedis {
 				sub, err = rediscfg.BuildGroupSubscriber(r.redisAddr, "ui", "ws-forwarder:"+convID)
 				if err != nil {
-					return
+					return nil, nil, nil, err
 				}
 			} else {
 				sub = r.router.Subscriber
@@ -421,8 +438,7 @@ func (r *Router) registerHTTPHandlers() {
 			// step settings from layers and apply overrides if provided
 			stepSettings, err2 := settings.NewStepSettingsFromParsedLayers(r.parsed)
 			if err2 != nil {
-				err = err2
-				return
+				return nil, nil, nil, err2
 			}
 			sys := p.DefaultPrompt
 			uses := append([]MiddlewareUse{}, p.DefaultMws...)
@@ -445,8 +461,8 @@ func (r *Router) registerHTTPHandlers() {
 				}
 				// TODO: tools override can be applied via registry decision in loop
 			}
-			eng_, err = composeEngineFromSettings(stepSettings, sys, uses, r.mwFactories)
-			return
+			eng, err = composeEngineFromSettings(stepSettings, sys, uses, r.mwFactories)
+			return eng, sink, sub, err
 		}
 		conv, err := r.getOrCreateConv(convID, build)
 		if err != nil {
@@ -515,17 +531,6 @@ func fsSub(staticFS embed.FS, path string) (fs.FS, error) { return fs.Sub(static
 var (
 	_ http.Handler
 )
-
-// fields backing runtime settings
-func (r *Router) useRedis(addr string) { r.usesRedis = true; r.redisAddr = addr }
-
-// Router internal state not exposed in API
-// (kept in router.go for cohesion)
-// NOTE: small private fields for runtime toggles
-type engineEngine interface{}
-
-// private fields
-func (r *Router) setIdleTimeoutSec(v int) { r.idleTimeoutSec = v }
 
 // private state fields appended to Router
 // (declared here for proximity to logic, defined in types.go)
