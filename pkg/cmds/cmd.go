@@ -512,13 +512,19 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) (*tu
 		// Seed backend Turn after router is running so the timeline shows prior context
 		go func() {
 			<-rc.Router.Running()
+			// Prefer seeding with the existing first Q/A from a prior blocking run when present
+			if rc.ResultTurn != nil {
+				sess.Backend.SetSeedTurn(rc.ResultTurn)
+				return
+			}
+			// Otherwise seed from initial system/blocks to provide context in a fresh chat
 			seed, err := buildInitialTurnFromBlocksRendered(g.SystemPrompt, g.Blocks, "", rc.Variables)
 			if err == nil {
 				sess.Backend.SetSeedTurn(seed)
-			} else {
-				// Fallback without rendering on error
-				sess.Backend.SetSeedTurn(buildInitialTurnFromBlocks(g.SystemPrompt, g.Blocks, ""))
+				return
 			}
+			// Fallback without rendering on error
+			sess.Backend.SetSeedTurn(buildInitialTurnFromBlocks(g.SystemPrompt, g.Blocks, ""))
 		}()
 
 		// If auto-start is enabled, pre-fill the prompt/system text, then submit
