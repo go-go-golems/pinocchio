@@ -14,6 +14,7 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cli"
 	"github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
+	"github.com/go-go-golems/glazed/pkg/cmds/logging"
 	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
 	pinocchio_cmds "github.com/go-go-golems/pinocchio/pkg/cmds"
 	"github.com/go-go-golems/pinocchio/pkg/cmds/cmdlayers"
@@ -24,9 +25,6 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/go-go-golems/geppetto/pkg/turns"
-
-	"github.com/go-go-golems/geppetto/pkg/events"
-	rediscfg "github.com/go-go-golems/pinocchio/pkg/redisstream"
 )
 
 //go:embed test.yaml
@@ -35,6 +33,9 @@ var testYaml []byte
 var rootCmd = &cobra.Command{
 	Use:   "simple-chat-step",
 	Short: "A simple chat step",
+    PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+        return logging.InitLoggerFromViper()
+    },
 }
 
 type TestCommand struct {
@@ -42,36 +43,47 @@ type TestCommand struct {
 	pinocchioCmd *pinocchio_cmds.PinocchioCommand
 }
 
-type TestCommandSettings struct {
+type ChatCommandSettings struct {
 	PinocchioProfile string `glazed.parameter:"pinocchio-profile"`
 	Debug            bool   `glazed.parameter:"debug"`
+    ServerTools      bool   `glazed.parameter:"server-tools"`
 }
 
-// NewTestCommand wraps the GepettoCommand which was loaded from the yaml file,
+// NewChatCommand wraps the GepettoCommand which was loaded from the yaml file,
 // and manually loads the profile to configure it.
-func NewTestCommand(cmd *pinocchio_cmds.PinocchioCommand) *TestCommand {
-	return &TestCommand{
-		CommandDescription: cmds.NewCommandDescription("test2",
-			cmds.WithShort("Test prompt"),
-			cmds.WithFlags(
-				parameters.NewParameterDefinition("pinocchio-profile",
-					parameters.ParameterTypeString,
-					parameters.WithHelp("Pinocchio profile"),
-					parameters.WithDefault("default"),
-				),
-				parameters.NewParameterDefinition("debug",
-					parameters.ParameterTypeBool,
-					parameters.WithHelp("Debug mode"),
-					parameters.WithDefault(false),
-				),
-			),
-		),
-		pinocchioCmd: cmd,
-	}
+func NewChatCommand(cmd *pinocchio_cmds.PinocchioCommand) (*TestCommand, error) {
+    geppettoLayers, err := layers2.CreateGeppettoLayers()
+    if err != nil { return nil, err }
+    return &TestCommand{
+        CommandDescription: cmds.NewCommandDescription("chat",
+            cmds.WithShort("Run chat with simple streaming printer"),
+            cmds.WithFlags(
+                parameters.NewParameterDefinition("pinocchio-profile",
+                    parameters.ParameterTypeString,
+                    parameters.WithHelp("Pinocchio profile"),
+                    parameters.WithDefault("default"),
+                ),
+                parameters.NewParameterDefinition("debug",
+                    parameters.ParameterTypeBool,
+                    parameters.WithHelp("Debug mode"),
+                    parameters.WithDefault(false),
+                ),
+                parameters.NewParameterDefinition("server-tools",
+                    parameters.ParameterTypeBool,
+                    parameters.WithHelp("Enable Responses server-side tools (web_search)"),
+                    parameters.WithDefault(false),
+                ),
+            ),
+            cmds.WithLayersList(
+                geppettoLayers...,
+            ),
+        ),
+        pinocchioCmd: cmd,
+    }, nil
 }
 
 func (c *TestCommand) RunIntoWriter(ctx context.Context, parsedLayers *layers.ParsedLayers, w io.Writer) error {
-	s := &TestCommandSettings{}
+    s := &ChatCommandSettings{}
 	err := parsedLayers.InitializeStruct(layers.DefaultSlug, s)
 	if err != nil {
 		return errors.Wrap(err, "failed to initialize settings")
@@ -119,21 +131,14 @@ func (c *TestCommand) RunIntoWriter(ctx context.Context, parsedLayers *layers.Pa
 		turns.AppendBlock(seed, turns.NewUserTextBlock(up))
 	}
 
-	// Build router using optional redis layer
-	var router *events.EventRouter
-	{
-		// attempt to initialize from "redis" layer if present
-		rs := rediscfg.Settings{}
-		_ = geppettoParsedLayers.InitializeStruct("redis", &rs)
-		r, err := rediscfg.BuildRouter(rs, false)
-		if err != nil {
-			return err
-		}
-		router = r
-		defer func() { _ = router.Close() }()
-		// default printer
-		router.AddHandler("chat", "chat", events.StepPrinterFunc("", w))
-	}
+    // Enable server-side tools when requested: attach built-in web_search definition
+    if s.ServerTools {
+        if seed.Data == nil { seed.Data = map[string]any{} }
+        seed.Data["responses_server_tools"] = []any{map[string]any{"type": "web_search"}}
+    }
+
+	// Let PinocchioCommand manage the EventRouter lifecycle and default printers
+	// (avoids duplicate routers/handlers and blocking issues)
 
 	// Run with options (Turn-first)
 	updatedTurn, err := c.pinocchioCmd.RunWithOptions(ctx,
@@ -145,7 +150,6 @@ func (c *TestCommand) RunIntoWriter(ctx context.Context, parsedLayers *layers.Pa
 			WithMetadata: helpersSettings.WithMetadata,
 			FullOutput:   helpersSettings.FullOutput,
 		}),
-		run.WithRouter(router),
 	)
 	if err != nil {
 		return err
@@ -161,13 +165,13 @@ func (c *TestCommand) RunIntoWriter(ctx context.Context, parsedLayers *layers.Pa
 }
 
 func main() {
-	err := clay.InitViper("pinocchio", rootCmd)
-	cobra.CheckErr(err)
+    err := clay.InitViper("pinocchio", rootCmd)
+    cobra.CheckErr(err)
 
 	commands, err := pinocchio_cmds.LoadFromYAML(testYaml)
 	cobra.CheckErr(err)
 
-	// Register the command as a normal cobra command and let it parse its step settings by itself
+    // Register the command as a normal cobra command and let it parse its step settings by itself
 	err = cli.AddCommandsToRootCommand(
 		rootCmd, commands, nil,
 		cli.WithCobraMiddlewaresFunc(layers2.GetCobraCommandGeppettoMiddlewares),
@@ -175,11 +179,12 @@ func main() {
 	)
 	cobra.CheckErr(err)
 
-	// Add the test command as wrapped by NewTestCommand
+    // Add a clearer chat command wrapper with geppetto layers
 	if len(commands) == 1 {
 		cmd := commands[0].(*pinocchio_cmds.PinocchioCommand)
-		testCmd := NewTestCommand(cmd)
-		command, err := cli.BuildCobraCommand(testCmd)
+        chatCmd, err := NewChatCommand(cmd)
+        cobra.CheckErr(err)
+        command, err := cli.BuildCobraCommand(chatCmd)
 		cobra.CheckErr(err)
 		rootCmd.AddCommand(command)
 	}
