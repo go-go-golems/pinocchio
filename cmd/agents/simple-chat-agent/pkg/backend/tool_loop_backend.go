@@ -36,6 +36,21 @@ func NewToolLoopBackend(eng engine.Engine, reg *tools.InMemoryToolRegistry, sink
 	return &ToolLoopBackend{eng: eng, reg: reg, sink: sink, hook: hook, turn: &turns.Turn{Data: map[string]any{}}}
 }
 
+// WithInitialTurnData merges provided data into the initial Turn before any input is appended.
+// Useful to enable provider/server-side tools or attach metadata.
+func (b *ToolLoopBackend) WithInitialTurnData(data map[string]any) *ToolLoopBackend {
+	if b.turn == nil {
+		b.turn = &turns.Turn{}
+	}
+	if b.turn.Data == nil {
+		b.turn.Data = map[string]any{}
+	}
+	for k, v := range data {
+		b.turn.Data[k] = v
+	}
+	return b
+}
+
 func (b *ToolLoopBackend) Start(ctx context.Context, prompt string) (tea.Cmd, error) {
 	if !b.running.CompareAndSwap(false, true) {
 		return nil, errors.New("already running")
@@ -143,6 +158,31 @@ func (b *ToolLoopBackend) MakeUIForwarder(p *tea.Program) func(msg *message.Mess
 				Result: map[string]any{"text": e_.Text, "metadata": md.LLMInferenceData},
 			})
 			p.Send(timeline.UIEntityUpdated{ID: timeline.EntityID{LocalID: entityID, Kind: "llm_text"}, Patch: map[string]any{"streaming": false}, Version: time.Now().UnixNano(), UpdatedAt: time.Now()})
+		case *events.EventInfo:
+			// Render thinking streams as their own timeline entity
+			if e_.Message == "thinking-started" {
+				thinkID := timeline.EntityID{LocalID: entityID + ":thinking", Kind: "llm_text"}
+				p.Send(timeline.UIEntityCreated{
+					ID:        thinkID,
+					Renderer:  timeline.RendererDescriptor{Kind: "llm_text"},
+					Props:     map[string]any{"role": "thinking", "text": "", "streaming": true},
+					StartedAt: time.Now(),
+				})
+			}
+			if e_.Message == "thinking-ended" {
+				thinkID := timeline.EntityID{LocalID: entityID + ":thinking", Kind: "llm_text"}
+				p.Send(timeline.UIEntityUpdated{ID: thinkID, Patch: map[string]any{"streaming": false}, Version: time.Now().UnixNano(), UpdatedAt: time.Now()})
+				p.Send(timeline.UIEntityCompleted{ID: thinkID})
+			}
+		case *events.EventThinkingPartial:
+			// Stream reasoning summary deltas into the thinking entity
+			thinkID := timeline.EntityID{LocalID: entityID + ":thinking", Kind: "llm_text"}
+			p.Send(timeline.UIEntityUpdated{
+				ID:        thinkID,
+				Patch:     map[string]any{"text": e_.Completion, "streaming": true},
+				Version:   time.Now().UnixNano(),
+				UpdatedAt: time.Now(),
+			})
 		case *events.EventInterrupt:
 			log.Debug().Str("event", "interrupt").Str("run_id", md.RunID).Str("turn_id", md.TurnID).Msg("forward: interrupt")
 			intr, ok := events.ToTypedEvent[events.EventInterrupt](e)
@@ -198,6 +238,39 @@ func (b *ToolLoopBackend) MakeUIForwarder(p *tea.Program) func(msg *message.Mess
 			// Backend-driven deletion example (unused by default):
 			// Emit timeline.UIEntityDeleted{ID: timeline.EntityID{LocalID: someID, Kind: someKind}} to remove an entity.
 			// The controller will adjust selection accordingly.
+		case *events.EventWebSearchStarted:
+			// Aggregate web_search events into a single entity per ItemID
+			id := timeline.EntityID{LocalID: e_.ItemID, Kind: "web_search"}
+			props := map[string]any{"status": "searching", "opened_urls": []string{}, "results": []map[string]any{}}
+			if e_.Query != "" {
+				props["query"] = e_.Query
+			}
+			p.Send(timeline.UIEntityCreated{ID: id, Renderer: timeline.RendererDescriptor{Kind: "web_search"}, Props: props, StartedAt: time.Now()})
+		case *events.EventWebSearchSearching:
+			id := timeline.EntityID{LocalID: e_.ItemID, Kind: "web_search"}
+			p.Send(timeline.UIEntityUpdated{ID: id, Patch: map[string]any{"status": "searching"}, Version: time.Now().UnixNano(), UpdatedAt: time.Now()})
+		case *events.EventWebSearchOpenPage:
+			id := timeline.EntityID{LocalID: e_.ItemID, Kind: "web_search"}
+			// Use append semantic; renderer will merge
+			p.Send(timeline.UIEntityUpdated{ID: id, Patch: map[string]any{"opened_urls.append": e_.URL}, Version: time.Now().UnixNano(), UpdatedAt: time.Now()})
+		case *events.EventWebSearchDone:
+			id := timeline.EntityID{LocalID: e_.ItemID, Kind: "web_search"}
+			p.Send(timeline.UIEntityUpdated{ID: id, Patch: map[string]any{"status": "completed"}, Version: time.Now().UnixNano(), UpdatedAt: time.Now()})
+			p.Send(timeline.UIEntityCompleted{ID: id})
+		case *events.EventToolSearchResults:
+			if e_.Tool == "web_search" {
+				id := timeline.EntityID{LocalID: e_.ItemID, Kind: "web_search"}
+				// Results is []events.SearchResult; convert to []map[string]any for renderer
+				conv := make([]map[string]any, 0, len(e_.Results))
+				for _, r := range e_.Results {
+					m := map[string]any{"url": r.URL, "title": r.Title, "snippet": r.Snippet}
+					if len(r.Extensions) > 0 {
+						m["ext"] = r.Extensions
+					}
+					conv = append(conv, m)
+				}
+				p.Send(timeline.UIEntityUpdated{ID: id, Patch: map[string]any{"results.append": conv}, Version: time.Now().UnixNano(), UpdatedAt: time.Now()})
+			}
 		}
 		return nil
 	}

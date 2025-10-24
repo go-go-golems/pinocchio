@@ -122,6 +122,8 @@ func (e *EngineBackend) emitInitialEntities(t *turns.Turn) {
 			role = "assistant"
 		case turns.BlockKindSystem:
 			continue
+		case turns.BlockKindReasoning:
+			continue
 		case turns.BlockKindToolCall:
 			continue
 		case turns.BlockKindToolUse:

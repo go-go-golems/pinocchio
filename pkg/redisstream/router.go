@@ -21,6 +21,12 @@ func BuildRouter(s Settings, verbose bool) (*events.EventRouter, error) {
 	}
 
 	client := redis.NewClient(&redis.Options{Addr: s.Addr})
+	// Quick connectivity check to ensure redis is reachable; callers can fallback on error
+	if err := client.Ping(context.Background()).Err(); err != nil {
+		log.Error().Err(err).Str("addr", s.Addr).Msg("redis ping failed")
+		return nil, err
+	}
+	log.Debug().Str("addr", s.Addr).Msg("redis ping ok")
 	marshaler := rstream.DefaultMarshallerUnmarshaller{}
 	logger := helpers.NewWatermill(log.Logger)
 

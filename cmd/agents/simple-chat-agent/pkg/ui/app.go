@@ -183,7 +183,8 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.leftWidth < 0 {
 			m.leftWidth = 0
 		}
-		m.repl.SetWidth(maxInt(0, m.leftWidth-2))
+		// Resize REPL to left panel width by forwarding a WindowSizeMsg
+		_, _ = m.repl.Update(tea.WindowSizeMsg{Width: maxInt(0, m.leftWidth-2), Height: maxInt(0, ev.Height-3)})
 		// Leave room for header line(s)
 		m.viewport.Width = maxInt(0, m.leftWidth)
 		m.viewport.Height = maxInt(0, ev.Height-3)
@@ -221,7 +222,8 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.leftWidth < 0 {
 				m.leftWidth = 0
 			}
-			m.repl.SetWidth(maxInt(0, m.leftWidth-2))
+			// Resize REPL to left panel width by forwarding a WindowSizeMsg
+			_, _ = m.repl.Update(tea.WindowSizeMsg{Width: maxInt(0, m.leftWidth-2), Height: maxInt(0, m.totalHeight-3)})
 			m.viewport.Width = maxInt(0, m.leftWidth)
 			m.viewport.Height = maxInt(0, m.totalHeight-3)
 			m.viewport.SetContent(m.repl.View())
@@ -343,8 +345,8 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	cmds = append(cmds, cmd)
 	var replModel tea.Model
 	replModel, cmd = m.repl.Update(msg)
-	if rm, ok := replModel.(repl.Model); ok {
-		m.repl = rm
+	if rm, ok := replModel.(*repl.Model); ok {
+		m.repl = *rm
 	}
 	cmds = append(cmds, cmd)
 	// Update viewport with latest content and pass through events for scrolling
@@ -494,7 +496,7 @@ func (m *AppModel) addCoalescedToolLineToRepl(id string) {
 	}
 	line := strings.Join(parts, "  ")
 	log.Debug().Str("id", id).Str("line", line).Msg("UI: addCoalescedToolLineToRepl")
-	m.repl.GetHistory().Add("[tool]", line, false)
+	// History API changed in bobatea REPL; skip injecting as REPL history entry
 }
 
 // hasPendingTools returns true if there are tool entries without a final result

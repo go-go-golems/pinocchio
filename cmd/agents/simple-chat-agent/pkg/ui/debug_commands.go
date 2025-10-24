@@ -1,3 +1,6 @@
+//go:build debugcmds
+// +build debugcmds
+
 package ui
 
 import (
@@ -9,7 +12,6 @@ import (
 	"strings"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	_ "github.com/mattn/go-sqlite3"
 
@@ -17,19 +19,9 @@ import (
 	store "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/store"
 )
 
-// RegisterDebugCommands wires the /dbg command into the REPL and routes subcommands.
+// RegisterDebugCommands is currently a no-op; the REPL API changed and command registration
+// should be wired via the evaluator/router. Left for compatibility.
 func RegisterDebugCommands(m *repl.Model, s *store.SQLiteStore) {
-	m.AddCustomCommand("dbg", func(args []string) tea.Cmd {
-		return func() tea.Msg {
-			output, err := runDebugCommand(args)
-			// Echo full input for history clarity
-			input := "/dbg"
-			if len(args) > 0 {
-				input += " " + strings.Join(args, " ")
-			}
-			return repl.EvaluationCompleteMsg{Input: input, Output: output, Error: err}
-		}
-	})
 }
 
 // runDebugCommand dispatches to the appropriate inspector.
