@@ -14,7 +14,7 @@ require (
 	github.com/go-go-golems/bobatea v0.0.26
 	github.com/go-go-golems/clay v0.1.47
 	github.com/go-go-golems/geppetto v0.4.56
-	github.com/go-go-golems/glazed v0.6.10
+	github.com/go-go-golems/glazed v0.6.11
 	github.com/go-go-golems/go-sqlite-regexp v0.0.1
 	github.com/go-go-golems/prompto v0.1.13
 	github.com/go-go-golems/uhoh v0.0.5

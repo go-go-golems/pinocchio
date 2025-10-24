@@ -170,8 +170,8 @@ github.com/go-go-golems/clay v0.1.47 h1:z0ls5mGJ+/Sz66F1lgTtA7h7V9dfgi2+KIqscDNk
 github.com/go-go-golems/clay v0.1.47/go.mod h1:ZLOqwSa6tUIV9gSTDx97rNbMeqUQUHq+2I3HVT2Urx0=
 github.com/go-go-golems/geppetto v0.4.56 h1:pIioDAA2vzXU17mGun34Uqo8yy1bKoOtcnZ5Zua/9AM=
 github.com/go-go-golems/geppetto v0.4.56/go.mod h1:OKjcLWii+v+tDEyHn3mTa0qA4LReC5qAIkBSjPg/W/g=
-github.com/go-go-golems/glazed v0.6.10 h1:MMngatV5zT2vzPBYW1mtiVg3Sboh5/V4DqR11nGLjQ0=
-github.com/go-go-golems/glazed v0.6.10/go.mod h1:xJZ2H2NUlJk02le1+ypHE0/LvAH0EW7NrPFkpD/7/6o=
+github.com/go-go-golems/glazed v0.6.11 h1:Fqlw/kOlzdTeY2yuHzX6hU60o8YPDVCf1X7uJxfzC9k=
+github.com/go-go-golems/glazed v0.6.11/go.mod h1:xJZ2H2NUlJk02le1+ypHE0/LvAH0EW7NrPFkpD/7/6o=
 github.com/go-go-golems/go-sqlite-regexp v0.0.1 h1:EX5c+9YXEiXjTlR2187kYVfPFwOOLFyADJrNrZFnK+I=
 github.com/go-go-golems/go-sqlite-regexp v0.0.1/go.mod h1:hq4dRsHIPcPy7sHevG9vh/mf6T5/BiWwcsRll+n4PzA=
 github.com/go-go-golems/prompto v0.1.13 h1:6nAaxxyoe3MBa68TybkeiJETdOT1D+7wWo/HDaarz7Q=
