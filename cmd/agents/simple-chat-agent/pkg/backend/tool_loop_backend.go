@@ -39,10 +39,16 @@ func NewToolLoopBackend(eng engine.Engine, reg *tools.InMemoryToolRegistry, sink
 // WithInitialTurnData merges provided data into the initial Turn before any input is appended.
 // Useful to enable provider/server-side tools or attach metadata.
 func (b *ToolLoopBackend) WithInitialTurnData(data map[string]any) *ToolLoopBackend {
-    if b.turn == nil { b.turn = &turns.Turn{} }
-    if b.turn.Data == nil { b.turn.Data = map[string]any{} }
-    for k, v := range data { b.turn.Data[k] = v }
-    return b
+	if b.turn == nil {
+		b.turn = &turns.Turn{}
+	}
+	if b.turn.Data == nil {
+		b.turn.Data = map[string]any{}
+	}
+	for k, v := range data {
+		b.turn.Data[k] = v
+	}
+	return b
 }
 
 func (b *ToolLoopBackend) Start(ctx context.Context, prompt string) (tea.Cmd, error) {
@@ -115,7 +121,7 @@ func (b *ToolLoopBackend) MakeUIForwarder(p *tea.Program) func(msg *message.Mess
 		entityID := md.ID.String()
 		log.Debug().Interface("event", e).Str("event_type", fmt.Sprintf("%T", e)).Str("entity_id", entityID).Msg("agent forwarder: dispatch")
 
-        switch e_ := e.(type) {
+		switch e_ := e.(type) {
 		case *events.EventLog:
 			// Render logs as dedicated timeline entries with unobtrusive gray styling
 			log.Debug().Str("event", "log").Str("level", e_.Level).Str("message", e_.Message).Msg("forward: log")
@@ -232,35 +238,39 @@ func (b *ToolLoopBackend) MakeUIForwarder(p *tea.Program) func(msg *message.Mess
 			// Backend-driven deletion example (unused by default):
 			// Emit timeline.UIEntityDeleted{ID: timeline.EntityID{LocalID: someID, Kind: someKind}} to remove an entity.
 			// The controller will adjust selection accordingly.
-        case *events.EventWebSearchStarted:
-            // Aggregate web_search events into a single entity per ItemID
-            id := timeline.EntityID{LocalID: e_.ItemID, Kind: "web_search"}
-            props := map[string]any{"status": "searching", "opened_urls": []string{}, "results": []map[string]any{}}
-            if e_.Query != "" { props["query"] = e_.Query }
-            p.Send(timeline.UIEntityCreated{ID: id, Renderer: timeline.RendererDescriptor{Kind: "web_search"}, Props: props, StartedAt: time.Now()})
-        case *events.EventWebSearchSearching:
-            id := timeline.EntityID{LocalID: e_.ItemID, Kind: "web_search"}
-            p.Send(timeline.UIEntityUpdated{ID: id, Patch: map[string]any{"status": "searching"}, Version: time.Now().UnixNano(), UpdatedAt: time.Now()})
-        case *events.EventWebSearchOpenPage:
-            id := timeline.EntityID{LocalID: e_.ItemID, Kind: "web_search"}
-            // Use append semantic; renderer will merge
-            p.Send(timeline.UIEntityUpdated{ID: id, Patch: map[string]any{"opened_urls.append": e_.URL}, Version: time.Now().UnixNano(), UpdatedAt: time.Now()})
-        case *events.EventWebSearchDone:
-            id := timeline.EntityID{LocalID: e_.ItemID, Kind: "web_search"}
-            p.Send(timeline.UIEntityUpdated{ID: id, Patch: map[string]any{"status": "completed"}, Version: time.Now().UnixNano(), UpdatedAt: time.Now()})
-            p.Send(timeline.UIEntityCompleted{ID: id})
-        case *events.EventToolSearchResults:
-            if e_.Tool == "web_search" {
-                id := timeline.EntityID{LocalID: e_.ItemID, Kind: "web_search"}
-                // Results is []events.SearchResult; convert to []map[string]any for renderer
-                conv := make([]map[string]any, 0, len(e_.Results))
-                for _, r := range e_.Results {
-                    m := map[string]any{"url": r.URL, "title": r.Title, "snippet": r.Snippet}
-                    if len(r.Extensions) > 0 { m["ext"] = r.Extensions }
-                    conv = append(conv, m)
-                }
-                p.Send(timeline.UIEntityUpdated{ID: id, Patch: map[string]any{"results.append": conv}, Version: time.Now().UnixNano(), UpdatedAt: time.Now()})
-            }
+		case *events.EventWebSearchStarted:
+			// Aggregate web_search events into a single entity per ItemID
+			id := timeline.EntityID{LocalID: e_.ItemID, Kind: "web_search"}
+			props := map[string]any{"status": "searching", "opened_urls": []string{}, "results": []map[string]any{}}
+			if e_.Query != "" {
+				props["query"] = e_.Query
+			}
+			p.Send(timeline.UIEntityCreated{ID: id, Renderer: timeline.RendererDescriptor{Kind: "web_search"}, Props: props, StartedAt: time.Now()})
+		case *events.EventWebSearchSearching:
+			id := timeline.EntityID{LocalID: e_.ItemID, Kind: "web_search"}
+			p.Send(timeline.UIEntityUpdated{ID: id, Patch: map[string]any{"status": "searching"}, Version: time.Now().UnixNano(), UpdatedAt: time.Now()})
+		case *events.EventWebSearchOpenPage:
+			id := timeline.EntityID{LocalID: e_.ItemID, Kind: "web_search"}
+			// Use append semantic; renderer will merge
+			p.Send(timeline.UIEntityUpdated{ID: id, Patch: map[string]any{"opened_urls.append": e_.URL}, Version: time.Now().UnixNano(), UpdatedAt: time.Now()})
+		case *events.EventWebSearchDone:
+			id := timeline.EntityID{LocalID: e_.ItemID, Kind: "web_search"}
+			p.Send(timeline.UIEntityUpdated{ID: id, Patch: map[string]any{"status": "completed"}, Version: time.Now().UnixNano(), UpdatedAt: time.Now()})
+			p.Send(timeline.UIEntityCompleted{ID: id})
+		case *events.EventToolSearchResults:
+			if e_.Tool == "web_search" {
+				id := timeline.EntityID{LocalID: e_.ItemID, Kind: "web_search"}
+				// Results is []events.SearchResult; convert to []map[string]any for renderer
+				conv := make([]map[string]any, 0, len(e_.Results))
+				for _, r := range e_.Results {
+					m := map[string]any{"url": r.URL, "title": r.Title, "snippet": r.Snippet}
+					if len(r.Extensions) > 0 {
+						m["ext"] = r.Extensions
+					}
+					conv = append(conv, m)
+				}
+				p.Send(timeline.UIEntityUpdated{ID: id, Patch: map[string]any{"results.append": conv}, Version: time.Now().UnixNano(), UpdatedAt: time.Now()})
+			}
 		}
 		return nil
 	}

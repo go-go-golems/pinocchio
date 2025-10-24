@@ -4,7 +4,6 @@ import (
 	"context"
 	"io"
 	"strings"
-	"syscall"
 
 	"github.com/ThreeDotsLabs/watermill/message"
 	tea "github.com/charmbracelet/bubbletea"
@@ -21,8 +20,8 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cli"
 	"github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
-	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
 	"github.com/go-go-golems/glazed/pkg/cmds/logging"
+	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
 	"github.com/go-go-golems/glazed/pkg/help"
 	help_cmd "github.com/go-go-golems/glazed/pkg/help/cmd"
 	sqlite_regexp "github.com/go-go-golems/go-sqlite-regexp"
@@ -42,8 +41,6 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-func getenv(k string) string { if v, ok := syscall.Getenv(k); ok { return v }; return "" }
-
 type SimpleAgentCmd struct{ *cmds.CommandDescription }
 
 func NewSimpleAgentCmd() (*SimpleAgentCmd, error) {
@@ -58,19 +55,19 @@ func NewSimpleAgentCmd() (*SimpleAgentCmd, error) {
 		return nil, err
 	}
 
-    desc := cmds.NewCommandDescription(
+	desc := cmds.NewCommandDescription(
 		"simple-chat-agent",
 		cmds.WithShort("Simple streaming chat agent with a calculator tool and a tiny REPL"),
-        // Add a simple flag to enable Responses server-side tools (web_search)
-        cmds.WithFlags(
-            parameters.NewParameterDefinition(
-                "server-tools",
-                parameters.ParameterTypeBool,
-                parameters.WithDefault(false),
-                parameters.WithHelp("Enable server-side tools (Responses builtin web_search)"),
-            ),
-        ),
-        cmds.WithLayersList(append(geLayers, redisLayer)...),
+		// Add a simple flag to enable Responses server-side tools (web_search)
+		cmds.WithFlags(
+			parameters.NewParameterDefinition(
+				"server-tools",
+				parameters.ParameterTypeBool,
+				parameters.WithDefault(false),
+				parameters.WithHelp("Enable server-side tools (Responses builtin web_search)"),
+			),
+		),
+		cmds.WithLayersList(append(geLayers, redisLayer)...),
 	)
 	return &SimpleAgentCmd{CommandDescription: desc}, nil
 }
@@ -219,15 +216,15 @@ func (c *SimpleAgentCmd) RunIntoWriter(ctx context.Context, parsed *layers.Parse
 	}
 
 	// Backend that runs tool loop
-    backend := backendpkg.NewToolLoopBackend(wrappedEng, registry, sink, hook)
-    // Glazed flag: --server-tools enables Responses builtin web_search on initial Turn
-    var agentSettings struct {
-        ServerTools bool `glazed.parameter:"server-tools"`
-    }
-    _ = parsed.InitializeStruct(layers.DefaultSlug, &agentSettings)
-    if agentSettings.ServerTools {
-        backend.WithInitialTurnData(map[string]any{"responses_server_tools": []any{map[string]any{"type": "web_search"}}})
-    }
+	backend := backendpkg.NewToolLoopBackend(wrappedEng, registry, sink, hook)
+	// Glazed flag: --server-tools enables Responses builtin web_search on initial Turn
+	var agentSettings struct {
+		ServerTools bool `glazed.parameter:"server-tools"`
+	}
+	_ = parsed.InitializeStruct(layers.DefaultSlug, &agentSettings)
+	if agentSettings.ServerTools {
+		backend.WithInitialTurnData(map[string]any{"responses_server_tools": []any{map[string]any{"type": "web_search"}}})
+	}
 
 	// Chat model using TimelineShell + input, with our renderers
 	chatModel := boba_chat.InitialModel(backend,

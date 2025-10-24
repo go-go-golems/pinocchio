@@ -1,3 +1,6 @@
+//go:build debugcmds
+// +build debugcmds
+
 package ui
 
 import (
