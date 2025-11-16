@@ -21,27 +21,29 @@ import (
 )
 
 type FileProcessor struct {
-	MaxTotalSize  int64
-	TotalSize     int64
-	TotalTokens   int
-	FileCount     int
-	TokenCounter  *tiktoken.Tiktoken
-	TokenCounts   map[string]int
-	ListOnly      bool
-	DelimiterType string
-	MaxLines      int
-	MaxTokens     int
-	Filter        *filefilter.FileFilter
-	PrintFilters  bool
-	Processor     middlewares.Processor
-	Stats         *Stats
-	OutputFormat  string
-	OutputFile    string
-	ArchivePrefix string
-	archiveWriter io.Closer
-	fileWriter    io.WriteCloser
-	zipWriter     *zip.Writer
-	tarWriter     *tar.Writer
+	MaxTotalSize   int64
+	TotalSize      int64
+	TotalTokens    int
+	FileCount      int
+	TokenCounter   *tiktoken.Tiktoken
+	TokenCounts    map[string]int
+	ListOnly       bool
+	DelimiterType  string
+	MaxLines       int
+	MaxTokens      int
+	Filter         *filefilter.FileFilter
+	PrintFilters   bool
+	Processor      middlewares.Processor
+	Stats          *Stats
+	OutputFormat   string
+	OutputFile     string
+	ArchivePrefix  string
+	archiveWriter  io.Closer
+	fileWriter     io.WriteCloser
+	zipWriter      *zip.Writer
+	tarWriter      *tar.Writer
+	gzipWriter     *gzip.Writer
+	archiveCounter *countingWriter
 }
 
 type FileProcessorOption func(*FileProcessor)
@@ -145,11 +147,15 @@ func (fp *FileProcessor) ProcessPaths(paths []string) error {
 		return nil
 	}
 
-	fp.Stats = NewStats()
-	err := fp.Stats.ComputeStats(paths, fp.Filter)
-	if err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "Error computing stats: %v\n", err)
-		return err
+	var err error
+
+	if fp.Processor != nil {
+		fp.Stats = NewStats()
+		err = fp.Stats.ComputeStats(paths, fp.Filter)
+		if err != nil {
+			_, _ = fmt.Fprintf(os.Stderr, "Error computing stats: %v\n", err)
+			return err
+		}
 	}
 
 	isArchiveOutput := fp.OutputFormat == "zip" || fp.OutputFormat == "tar.gz"
@@ -162,16 +168,18 @@ func (fp *FileProcessor) ProcessPaths(paths []string) error {
 			return fmt.Errorf("failed to create output file %s: %w", fp.OutputFile, err)
 		}
 		fp.fileWriter = outFile
+		fp.archiveCounter = newCountingWriter(outFile)
 
 		switch fp.OutputFormat {
 		case "zip":
-			zw := zip.NewWriter(outFile)
+			zw := zip.NewWriter(fp.archiveCounter)
 			fp.zipWriter = zw
 			fp.archiveWriter = zw
 		case "tar.gz":
-			gw := gzip.NewWriter(outFile)
+			gw := gzip.NewWriter(fp.archiveCounter)
 			tw := tar.NewWriter(gw)
 			fp.tarWriter = tw
+			fp.gzipWriter = gw
 			fp.archiveWriter = multiCloser{tw, gw}
 		}
 
@@ -190,7 +198,7 @@ func (fp *FileProcessor) ProcessPaths(paths []string) error {
 	}
 
 	for _, path := range paths {
-		err := fp.processPath(path)
+		err = fp.processPath(path)
 		if err != nil {
 			if errors.Is(err, ErrMaxTokensExceeded) {
 				_, _ = fmt.Fprintf(os.Stderr, "Reached maximum total tokens limit of %d\n", fp.MaxTokens)
@@ -220,6 +228,10 @@ func (fp *FileProcessor) ProcessPaths(paths []string) error {
 		}
 		fp.archiveWriter = nil
 		fp.fileWriter = nil
+		fp.zipWriter = nil
+		fp.tarWriter = nil
+		fp.gzipWriter = nil
+		fp.archiveCounter = nil
 	}
 
 	return nil
@@ -280,10 +292,15 @@ func (fp *FileProcessor) processFileContent(filePath string, fileInfo os.FileInf
 		return nil
 	}
 
-	fileStats, ok := fp.Stats.GetStats(filePath)
-	if !ok {
-		_, _ = fmt.Fprintf(os.Stderr, "Warning: Stats not found for file %s, skipping\n", filePath)
-		return nil
+	var fileStats FileStats
+	if fp.Processor != nil {
+		var ok bool
+		if fp.Stats != nil {
+			fileStats, ok = fp.Stats.GetStats(filePath)
+		}
+		if !ok {
+			_, _ = fmt.Fprintf(os.Stderr, "Warning: Stats not found for file %s, continuing without precomputed values\n", filePath)
+		}
 	}
 
 	contentBytes, err := os.ReadFile(filePath)
@@ -295,6 +312,10 @@ func (fp *FileProcessor) processFileContent(filePath string, fileInfo os.FileInf
 	limitedContent := fp.applyLimits(contentBytes)
 	actualSize := int64(len(limitedContent))
 	actualTokenCount := len(fp.TokenCounter.Encode(limitedContent, nil, nil))
+	actualLineCount := strings.Count(limitedContent, "\n")
+	if fileStats.LineCount == 0 {
+		fileStats.LineCount = actualLineCount
+	}
 
 	fileStats.Size = actualSize
 	fileStats.TokenCount = actualTokenCount
@@ -311,6 +332,9 @@ func (fp *FileProcessor) processFileContent(filePath string, fileInfo os.FileInf
 	fp.TokenCounts[filePath] = actualTokenCount
 	fp.FileCount++
 
+	contentBytesLimited := []byte(limitedContent)
+	compressedBefore := fp.currentArchiveSize()
+
 	switch fp.OutputFormat {
 	case "zip":
 		if fp.zipWriter == nil {
@@ -322,10 +346,13 @@ func (fp *FileProcessor) processFileContent(filePath string, fileInfo os.FileInf
 		if err != nil {
 			return fmt.Errorf("failed to create entry %s in zip archive: %w", archivePath, err)
 		}
-		_, err = fileWriter.Write([]byte(limitedContent))
+		_, err = fileWriter.Write(contentBytesLimited)
 		if err != nil {
 			return fmt.Errorf("failed to write content for %s to zip archive: %w", archivePath, err)
 		}
+
+		compressedDelta := fp.bytesWrittenSince(compressedBefore)
+		fp.reportArchiveInclusion(archivePath, actualSize, actualLineCount, actualTokenCount, compressedDelta)
 
 	case "tar.gz":
 		if fp.tarWriter == nil {
@@ -342,12 +369,19 @@ func (fp *FileProcessor) processFileContent(filePath string, fileInfo os.FileInf
 		if err := fp.tarWriter.WriteHeader(hdr); err != nil {
 			return fmt.Errorf("failed to write tar header for %s: %w", archivePath, err)
 		}
-		if _, err := fp.tarWriter.Write([]byte(limitedContent)); err != nil {
+		if _, err := fp.tarWriter.Write(contentBytesLimited); err != nil {
 			return fmt.Errorf("failed to write content for %s to tar archive: %w", archivePath, err)
 		}
 
+		if fp.gzipWriter != nil {
+			if err := fp.gzipWriter.Flush(); err != nil {
+				_, _ = fmt.Fprintf(os.Stderr, "Warning: failed to flush gzip writer: %v\n", err)
+			}
+		}
+		compressedDelta := fp.bytesWrittenSince(compressedBefore)
+		fp.reportArchiveInclusion(archivePath, actualSize, actualLineCount, actualTokenCount, compressedDelta)
+
 	case "text", "":
-		actualLineCount := strings.Count(limitedContent, "\n")
 
 		if fp.Processor != nil {
 			ctx := context.Background()
@@ -451,6 +485,42 @@ func (fp *FileProcessor) printConfiguredFilters() {
 	fmt.Printf("Delimiter Type: %s\n", fp.DelimiterType)
 }
 
+func (fp *FileProcessor) currentArchiveSize() int64 {
+	if fp.archiveCounter == nil {
+		return 0
+	}
+	return fp.archiveCounter.BytesWritten()
+}
+
+func (fp *FileProcessor) bytesWrittenSince(previous int64) int64 {
+	current := fp.currentArchiveSize()
+	delta := current - previous
+	if delta < 0 {
+		return 0
+	}
+	return delta
+}
+
+func (fp *FileProcessor) reportArchiveInclusion(archivePath string, sizeBytes int64, lineCount, tokenCount int, compressedBytes int64) {
+	compressionInfo := ""
+	if compressedBytes > 0 {
+		compressionInfo = fmt.Sprintf(", compressed %d bytes", compressedBytes)
+		if compressedBytes != sizeBytes {
+			ratio := float64(sizeBytes) / float64(compressedBytes)
+			compressionInfo = fmt.Sprintf("%s (%.2fx)", compressionInfo, ratio)
+		}
+	}
+
+	fmt.Printf(
+		"Added to archive: %s (%d bytes, %d lines, %d tokens%s)\n",
+		archivePath,
+		sizeBytes,
+		lineCount,
+		tokenCount,
+		compressionInfo,
+	)
+}
+
 func printStringList(name string, list []string) {
 	if len(list) > 0 {
 		fmt.Printf("%s: %s\n", name, strings.Join(list, ", "))
@@ -477,4 +547,23 @@ func (mc multiCloser) Close() error {
 		}
 	}
 	return err
+}
+
+type countingWriter struct {
+	writer  io.Writer
+	written int64
+}
+
+func newCountingWriter(w io.Writer) *countingWriter {
+	return &countingWriter{writer: w}
+}
+
+func (cw *countingWriter) Write(p []byte) (int, error) {
+	n, err := cw.writer.Write(p)
+	cw.written += int64(n)
+	return n, err
+}
+
+func (cw *countingWriter) BytesWritten() int64 {
+	return cw.written
 }
