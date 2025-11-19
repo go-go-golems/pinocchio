@@ -29,8 +29,9 @@ import (
 	pkg_doc "github.com/go-go-golems/pinocchio/pkg/doc"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
+	"gopkg.in/yaml.v3"
 
+	glazedConfig "github.com/go-go-golems/glazed/pkg/config"
 	clay_profiles "github.com/go-go-golems/clay/pkg/cmds/profiles"
 	clay_repositories "github.com/go-go-golems/clay/pkg/cmds/repositories"
 	"github.com/rs/zerolog/log"
@@ -49,7 +50,7 @@ var rootCmd = &cobra.Command{
 	Short:   "pinocchio is a tool to run LLM applications",
 	Version: version,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		err := logging.InitLoggerFromViper()
+		err := logging.InitLoggerFromCobra(cmd)
 		if err != nil {
 			return err
 		}
@@ -127,7 +128,7 @@ func initRootCmd() (*help.HelpSystem, error) {
 
 	help_cmd.SetupCobraRootCommand(helpSystem, rootCmd)
 
-	err = clay.InitViper("pinocchio", rootCmd)
+	err = clay.InitGlazed("pinocchio", rootCmd)
 	cobra.CheckErr(err)
 
 	rootCmd.AddCommand(runCommandCmd)
@@ -135,8 +136,42 @@ func initRootCmd() (*help.HelpSystem, error) {
 	return helpSystem, nil
 }
 
+// loadRepositoriesFromConfig reads repository paths from the config file
+func loadRepositoriesFromConfig() []string {
+	configPath, err := glazedConfig.ResolveAppConfigPath("pinocchio", "")
+	if err != nil || configPath == "" {
+		return []string{}
+	}
+
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		log.Debug().Err(err).Str("config", configPath).Msg("Could not read config file for repositories")
+		return []string{}
+	}
+
+	var config map[string]interface{}
+	if err := yaml.Unmarshal(data, &config); err != nil {
+		log.Debug().Err(err).Str("config", configPath).Msg("Could not parse config file")
+		return []string{}
+	}
+
+	repos, ok := config["repositories"].([]interface{})
+	if !ok {
+		return []string{}
+	}
+
+	repositoryPaths := make([]string, 0, len(repos))
+	for _, repo := range repos {
+		if repoStr, ok := repo.(string); ok {
+			repositoryPaths = append(repositoryPaths, repoStr)
+		}
+	}
+
+	return repositoryPaths
+}
+
 func initAllCommands(helpSystem *help.HelpSystem) error {
-	repositoryPaths := viper.GetStringSlice("repositories")
+	repositoryPaths := loadRepositoriesFromConfig()
 
 	defaultDirectory := "$HOME/.pinocchio/prompts"
 	repositoryPaths = append(repositoryPaths, defaultDirectory)
