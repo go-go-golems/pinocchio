@@ -38,12 +38,12 @@ func NewToolLoopBackend(eng engine.Engine, reg *tools.InMemoryToolRegistry, sink
 
 // WithInitialTurnData merges provided data into the initial Turn before any input is appended.
 // Useful to enable provider/server-side tools or attach metadata.
-func (b *ToolLoopBackend) WithInitialTurnData(data map[string]any) *ToolLoopBackend {
+func (b *ToolLoopBackend) WithInitialTurnData(data map[turns.TurnDataKey]any) *ToolLoopBackend {
 	if b.turn == nil {
 		b.turn = &turns.Turn{}
 	}
 	if b.turn.Data == nil {
-		b.turn.Data = map[string]any{}
+		b.turn.Data = map[turns.TurnDataKey]any{}
 	}
 	for k, v := range data {
 		b.turn.Data[k] = v
@@ -56,7 +56,7 @@ func (b *ToolLoopBackend) Start(ctx context.Context, prompt string) (tea.Cmd, er
 		return nil, errors.New("already running")
 	}
 	if b.turn == nil {
-		b.turn = &turns.Turn{Data: map[string]any{}}
+		b.turn = &turns.Turn{Data: map[turns.TurnDataKey]any{}}
 	}
 	if prompt != "" {
 		turns.AppendBlock(b.turn, turns.NewUserTextBlock(prompt))

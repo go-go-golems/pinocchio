@@ -16,10 +16,10 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Data keys for agent mode; local to this middleware package
-const (
-	DataKeyAgentMode             = "agent_mode"
-	DataKeyAgentModeAllowedTools = "agent_mode_allowed_tools"
+// Data keys for agent mode; use shared constants from geppetto/pkg/turns
+var (
+	DataKeyAgentMode             = turns.DataKeyAgentMode
+	DataKeyAgentModeAllowedTools = turns.DataKeyAgentModeAllowedTools
 )
 
 // AgentMode describes a mode name with allowed tools and an optional system prompt snippet.
@@ -72,7 +72,7 @@ func NewMiddleware(svc Service, cfg Config) rootmw.Middleware {
 				return next(ctx, t)
 			}
 			if t.Data == nil {
-				t.Data = map[string]any{}
+				t.Data = map[turns.TurnDataKey]any{}
 			}
 
 			log.Debug().Str("run_id", t.RunID).Str("turn_id", t.ID).Msg("agentmode: middleware start")
@@ -94,7 +94,7 @@ func NewMiddleware(svc Service, cfg Config) rootmw.Middleware {
 				log.Warn().Str("requested_mode", modeName).Msg("agentmode: unknown mode; continuing without restrictions")
 			} else {
 				// Remove previously inserted AgentMode-related blocks
-				_ = turns.RemoveBlocksByMetadata(t, "agentmode_tag",
+				_ = turns.RemoveBlocksByMetadata(t, turns.BlockMetadataKey("agentmode_tag"),
 					"agentmode_system_prompt",
 					"agentmode_switch_instructions",
 					"agentmode_user_prompt",
@@ -119,7 +119,10 @@ func NewMiddleware(svc Service, cfg Config) rootmw.Middleware {
 					}
 					usr := turns.WithBlockMetadata(
 						turns.NewUserTextBlock(text),
-						map[string]any{"agentmode_tag": "agentmode_user_prompt", "agentmode": mode.Name},
+						map[turns.BlockMetadataKey]any{
+							turns.BlockMetadataKey("agentmode_tag"): "agentmode_user_prompt",
+							turns.BlockMetadataKey("agentmode"):     mode.Name,
+						},
 					)
 					// Insert as second-to-last (before last assistant or tool block if present)
 					before := len(t.Blocks)

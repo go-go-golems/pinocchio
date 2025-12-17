@@ -353,7 +353,7 @@ func (r *Router) registerHTTPHandlers() {
 			runCtx = events.WithEventSinks(runCtx, conv.Sink)
 			log.Info().Str("component", "webchat").Str("conv_id", conv.ID).Str("run_id", conv.RunID).Msg("starting run loop")
 			if conv.Turn.Data == nil {
-				conv.Turn.Data = map[string]any{}
+				conv.Turn.Data = map[turns.TurnDataKey]any{}
 			}
 			updatedTurn, _ := toolhelpers.RunToolCallingLoop(
 				runCtx,
@@ -500,7 +500,7 @@ func (r *Router) registerHTTPHandlers() {
 			runCtx = events.WithEventSinks(runCtx, conv.Sink)
 			log.Info().Str("component", "webchat").Str("conv_id", conv.ID).Str("run_id", conv.RunID).Msg("starting run loop")
 			if conv.Turn.Data == nil {
-				conv.Turn.Data = map[string]any{}
+				conv.Turn.Data = map[turns.TurnDataKey]any{}
 			}
 			updatedTurn, _ := toolhelpers.RunToolCallingLoop(
 				runCtx,
