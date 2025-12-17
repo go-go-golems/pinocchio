@@ -97,10 +97,15 @@ func (s *SQLiteStore) SaveTurnSnapshot(ctx context.Context, t *turns.Turn, phase
 	if t.ID == "" {
 		t.ID = uuid.NewString()
 	}
-	if err := s.EnsureRun(ctx, t.RunID, t.Metadata); err != nil {
+	// Convert typed maps to string maps for storage
+	metadataStr := make(map[string]any, len(t.Metadata))
+	for k, v := range t.Metadata {
+		metadataStr[string(k)] = v
+	}
+	if err := s.EnsureRun(ctx, t.RunID, metadataStr); err != nil {
 		log.Warn().Err(err).Str("run_id", t.RunID).Msg("EnsureRun failed")
 	}
-	if err := s.EnsureTurn(ctx, t.RunID, t.ID, t.Metadata); err != nil {
+	if err := s.EnsureTurn(ctx, t.RunID, t.ID, metadataStr); err != nil {
 		log.Warn().Err(err).Str("turn_id", t.ID).Msg("EnsureTurn failed")
 	}
 	// Serialize turn as JSON
@@ -112,6 +117,11 @@ func (s *SQLiteStore) SaveTurnSnapshot(ctx context.Context, t *turns.Turn, phase
 		Payload  map[string]any         `json:"payload"`
 		Metadata map[string]interface{} `json:"metadata,omitempty"`
 	}
+	// Convert typed maps to string maps for JSON serialization
+	dataStr := make(map[string]interface{}, len(t.Data))
+	for k, v := range t.Data {
+		dataStr[string(k)] = v
+	}
 	snap := struct {
 		RunID    string                 `json:"run_id"`
 		TurnID   string                 `json:"turn_id"`
@@ -121,8 +131,8 @@ func (s *SQLiteStore) SaveTurnSnapshot(ctx context.Context, t *turns.Turn, phase
 	}{
 		RunID:    t.RunID,
 		TurnID:   t.ID,
-		Metadata: t.Metadata,
-		Data:     t.Data,
+		Metadata: metadataStr,
+		Data:     dataStr,
 		Blocks:   make([]block, 0, len(t.Blocks)),
 	}
 	for i, b := range t.Blocks {
@@ -139,13 +149,17 @@ func (s *SQLiteStore) SaveTurnSnapshot(ctx context.Context, t *turns.Turn, phase
 			// Persist the generated ID back onto the Turn to keep it stable across phases
 			t.Blocks[i].ID = bid
 		}
+		blockMeta := make(map[string]interface{}, len(b.Metadata))
+		for k, v := range b.Metadata {
+			blockMeta[string(k)] = v
+		}
 		snap.Blocks = append(snap.Blocks, block{
 			ID:       bid,
 			Order:    i,
 			Kind:     b.Kind,
 			Role:     b.Role,
 			Payload:  b.Payload,
-			Metadata: b.Metadata,
+			Metadata: blockMeta,
 		})
 		// upsert block row
 		// ord is derived from position in slice

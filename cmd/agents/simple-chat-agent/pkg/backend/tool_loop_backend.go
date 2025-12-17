@@ -33,7 +33,7 @@ type ToolLoopBackend struct {
 }
 
 func NewToolLoopBackend(eng engine.Engine, reg *tools.InMemoryToolRegistry, sink *middleware.WatermillSink, hook toolhelpers.SnapshotHook) *ToolLoopBackend {
-	return &ToolLoopBackend{eng: eng, reg: reg, sink: sink, hook: hook, turn: &turns.Turn{Data: map[string]any{}}}
+	return &ToolLoopBackend{eng: eng, reg: reg, sink: sink, hook: hook, turn: &turns.Turn{Data: map[turns.TurnDataKey]any{}}}
 }
 
 // WithInitialTurnData merges provided data into the initial Turn before any input is appended.

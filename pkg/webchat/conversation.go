@@ -113,7 +113,7 @@ func (r *Router) getOrCreateConv(convID string, buildEng func() (engine.Engine, 
 	conv.Eng = eng
 	conv.Sink = sink
 	conv.sub = sub
-	conv.Turn = &turns.Turn{RunID: conv.RunID, Data: map[string]any{}}
+	conv.Turn = &turns.Turn{RunID: conv.RunID, Data: map[turns.TurnDataKey]any{}}
 	if err := r.startReader(conv); err != nil {
 		return nil, err
 	}

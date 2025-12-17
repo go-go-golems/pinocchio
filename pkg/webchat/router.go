@@ -333,7 +333,7 @@ func (r *Router) registerHTTPHandlers() {
 		conv.running = true
 		conv.mu.Unlock()
 		if conv.Turn == nil {
-			conv.Turn = &turns.Turn{RunID: conv.RunID, Data: map[string]any{}}
+			conv.Turn = &turns.Turn{RunID: conv.RunID, Data: map[turns.TurnDataKey]any{}}
 		}
 		turns.AppendBlock(conv.Turn, turns.NewUserTextBlock(body.Prompt))
 		conv.Turn.RunID = conv.RunID
@@ -479,7 +479,7 @@ func (r *Router) registerHTTPHandlers() {
 		conv.running = true
 		conv.mu.Unlock()
 		if conv.Turn == nil {
-			conv.Turn = &turns.Turn{RunID: conv.RunID, Data: map[string]any{}}
+			conv.Turn = &turns.Turn{RunID: conv.RunID, Data: map[turns.TurnDataKey]any{}}
 		}
 		turns.AppendBlock(conv.Turn, turns.NewUserTextBlock(body.Prompt))
 		conv.Turn.RunID = conv.RunID
