@@ -223,7 +223,7 @@ func (c *SimpleAgentCmd) RunIntoWriter(ctx context.Context, parsed *layers.Parse
 	}
 	_ = parsed.InitializeStruct(layers.DefaultSlug, &agentSettings)
 	if agentSettings.ServerTools {
-		backend.WithInitialTurnData(map[turns.TurnDataKey]any{turns.TurnDataKey("responses_server_tools"): []any{map[string]any{"type": "web_search"}}})
+		backend.WithInitialTurnData(map[turns.TurnDataKey]any{turns.DataKeyResponsesServerTools: []any{map[string]any{"type": "web_search"}}})
 	}
 
 	// Chat model using TimelineShell + input, with our renderers

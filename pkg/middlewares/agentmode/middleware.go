@@ -94,7 +94,7 @@ func NewMiddleware(svc Service, cfg Config) rootmw.Middleware {
 				log.Warn().Str("requested_mode", modeName).Msg("agentmode: unknown mode; continuing without restrictions")
 			} else {
 				// Remove previously inserted AgentMode-related blocks
-				_ = turns.RemoveBlocksByMetadata(t, turns.BlockMetadataKey("agentmode_tag"),
+				_ = turns.RemoveBlocksByMetadata(t, turns.BlockMetaKeyAgentModeTag,
 					"agentmode_system_prompt",
 					"agentmode_switch_instructions",
 					"agentmode_user_prompt",
@@ -120,8 +120,8 @@ func NewMiddleware(svc Service, cfg Config) rootmw.Middleware {
 					usr := turns.WithBlockMetadata(
 						turns.NewUserTextBlock(text),
 						map[turns.BlockMetadataKey]any{
-							turns.BlockMetadataKey("agentmode_tag"): "agentmode_user_prompt",
-							turns.BlockMetadataKey("agentmode"):     mode.Name,
+							turns.BlockMetaKeyAgentModeTag: "agentmode_user_prompt",
+							turns.BlockMetaKeyAgentMode:    mode.Name,
 						},
 					)
 					// Insert as second-to-last (before last assistant or tool block if present)
