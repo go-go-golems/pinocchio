@@ -35,7 +35,7 @@ var rootCmd = &cobra.Command{
 	Use:   "simple-redis-streaming-inference",
 	Short: "Streaming inference over Redis Streams (Watermill)",
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		if err := logging.InitLoggerFromViper(); err != nil {
+		if err := logging.InitLoggerFromCobra(cmd); err != nil {
 			return err
 		}
 		if f := cmd.Flags(); f != nil {
@@ -212,7 +212,7 @@ func (c *SimpleRedisStreamingInferenceCommand) RunIntoWriter(ctx context.Context
 }
 
 func main() {
-	if err := clay.InitViper("pinocchio", rootCmd); err != nil {
+	if err := clay.InitGlazed("pinocchio", rootCmd); err != nil {
 		cobra.CheckErr(err)
 	}
 

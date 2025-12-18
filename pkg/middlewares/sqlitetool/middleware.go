@@ -106,12 +106,12 @@ func NewMiddleware(cfg Config) rootmw.Middleware {
 			}
 			log.Debug().Str("run_id", t.RunID).Str("turn_id", t.ID).Msg("sqlitetool: middleware start")
 			if t.Data == nil {
-				t.Data = map[string]any{}
+				t.Data = map[turns.TurnDataKey]interface{}{}
 			}
 
 			// Determine if the tool should be available for this turn; check DSN presence
 			dsn := cfg.DSN
-			if v, ok := t.Data[DataKeySQLiteDSN].(string); ok && v != "" {
+			if v, ok := t.Data[turns.TurnDataKey(DataKeySQLiteDSN)].(string); ok && v != "" {
 				dsn = v
 			}
 			if dsn == "" && cfg.DB == nil {

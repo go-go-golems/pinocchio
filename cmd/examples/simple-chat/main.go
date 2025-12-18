@@ -34,7 +34,7 @@ var rootCmd = &cobra.Command{
 	Use:   "simple-chat-step",
 	Short: "A simple chat step",
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		return logging.InitLoggerFromViper()
+		return logging.InitLoggerFromCobra(cmd)
 	},
 }
 
@@ -136,9 +136,9 @@ func (c *TestCommand) RunIntoWriter(ctx context.Context, parsedLayers *layers.Pa
 	// Enable server-side tools when requested: attach built-in web_search definition
 	if s.ServerTools {
 		if seed.Data == nil {
-			seed.Data = map[string]any{}
+			seed.Data = map[turns.TurnDataKey]interface{}{}
 		}
-		seed.Data["responses_server_tools"] = []any{map[string]any{"type": "web_search"}}
+		seed.Data[turns.TurnDataKey("responses_server_tools")] = []any{map[string]any{"type": "web_search"}}
 	}
 
 	// Let PinocchioCommand manage the EventRouter lifecycle and default printers
@@ -169,7 +169,7 @@ func (c *TestCommand) RunIntoWriter(ctx context.Context, parsedLayers *layers.Pa
 }
 
 func main() {
-	err := clay.InitViper("pinocchio", rootCmd)
+	err := clay.InitGlazed("pinocchio", rootCmd)
 	cobra.CheckErr(err)
 
 	commands, err := pinocchio_cmds.LoadFromYAML(testYaml)

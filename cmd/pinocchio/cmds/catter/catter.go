@@ -45,9 +45,8 @@ func getMiddlewares(
 	return []middlewares.Middleware{
 		middlewares.ParseFromCobraCommand(cmd),
 		middlewares.GatherArguments(args),
-		middlewares.GatherSpecificFlagsFromViper(
-			[]string{"filter-profile"},
-			parameters.WithParseStepSource("viper"),
+		middlewares.UpdateFromEnv("PINOCCHIO",
+			parameters.WithParseStepSource("env"),
 		),
 		middlewares.SetFromDefaults(),
 	}, nil

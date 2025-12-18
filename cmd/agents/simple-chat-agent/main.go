@@ -301,15 +301,12 @@ func (c *SimpleAgentCmd) RunIntoWriter(ctx context.Context, parsed *layers.Parse
 
 func main() {
 	root := &cobra.Command{Use: "simple-chat-agent", PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		if err := logging.InitLoggerFromViper(); err != nil {
-			return err
-		}
-		return nil
+		return logging.InitLoggerFromCobra(cmd)
 	}}
 	helpSystem := help.NewHelpSystem()
 	help_cmd.SetupCobraRootCommand(helpSystem, root)
 
-	if err := clay.InitViper("pinocchio", root); err != nil {
+	if err := clay.InitGlazed("pinocchio", root); err != nil {
 		cobra.CheckErr(err)
 	}
 
