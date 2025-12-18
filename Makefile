@@ -1,4 +1,4 @@
-.PHONY: all test build lint lintmax docker-lint gosec govulncheck goreleaser tag-major tag-minor tag-patch release bump-glazed install codeql-local
+.PHONY: all test build lint lintmax docker-lint gosec govulncheck goreleaser tag-major tag-minor tag-patch release bump-glazed install codeql-local geppetto-lint-build geppetto-lint
 
 all: test build
 
@@ -8,14 +8,27 @@ TAPES=$(shell ls doc/vhs/*tape 2>/dev/null || echo "")
 gifs:
 	for i in $(TAPES); do vhs < $$i; done
 
+# Build geppetto-lint vettool from geppetto module
+# Uses the version specified in go.mod
+GEPPETTO_LINT_BIN ?= /tmp/geppetto-lint
+
+geppetto-lint-build:
+	@echo "Building geppetto-lint from geppetto module..."
+	@GOBIN=$(dir $(GEPPETTO_LINT_BIN)) go install github.com/go-go-golems/geppetto/cmd/geppetto-lint
+
+geppetto-lint: geppetto-lint-build
+	go vet -vettool=$(GEPPETTO_LINT_BIN) ./...
+
 docker-lint:
-	docker run --rm -v $(shell pwd):/app -w /app golangci/golangci-lint:v2.0.2 golangci-lint run -v
+	docker run --rm -v $(shell pwd):/app -w /app golangci/golangci-lint:v2.4.0 golangci-lint run -v
 
-lint:
+lint: build geppetto-lint-build
 	golangci-lint run -v
+	go vet -vettool=$(GEPPETTO_LINT_BIN) ./...
 
-lintmax:
+lintmax: build geppetto-lint-build
 	golangci-lint run -v --max-same-issues=100
+	go vet -vettool=$(GEPPETTO_LINT_BIN) ./...
 
 gosec:
 	go install github.com/securego/gosec/v2/cmd/gosec@latest

@@ -644,3 +644,33 @@ The analysis doc shows the intent of turnsdatalint is “prevent raw string drif
 - Root failure mode we keep hitting in Pinocchio is the analyzer rejecting expressions like:
   - `t.Data[turns.TurnDataKey(k)]` (conversion)
   - `t.Data[key]` where `key` is a typed parameter/variable
+
+## Step 15: Consume Geppetto turnsdatalint fix locally and re-run Pinocchio geppetto-lint
+
+This step validates the main hypothesis of the ticket: once Geppetto relaxes `turnsdatalint` to typed-key enforcement, Pinocchio’s existing typed patterns (conversions/vars/params) should stop being flagged, and we can avoid accumulating awkward workaround APIs.
+
+We initially failed this verification because Pinocchio’s `geppetto-lint-build` target was installing `@latest`, which pulled an upstream binary that didn’t include our local Geppetto changes. We fixed the Makefile to build from the local workspace module (via `go.work`) by removing `@latest`.
+
+**Commit (upstream Geppetto code):** f3b75d3ca24e806ba242b1e57b39eee7a625cf24 — "turnsdatalint: relax const-only to typed-key enforcement"
+
+### What I did
+- Updated `pinocchio/Makefile`:
+  - changed `go install github.com/go-go-golems/geppetto/cmd/geppetto-lint@latest` →
+    `go install github.com/go-go-golems/geppetto/cmd/geppetto-lint` (so `go.work` local module is used)
+- Re-ran:
+  - `make geppetto-lint-build`
+  - `make geppetto-lint`
+
+### What worked
+- `make geppetto-lint` now succeeds against the local Geppetto checkout (no more “const-only” false positives for typed keys).
+
+### What was tricky to build
+- Versioned tool installation (`@latest`) bypasses the local `go.work` module override, which made it look like the upstream fix “didn’t work”.
+
+### What warrants a second pair of eyes
+- Confirm Pinocchio should *never* use `@latest` for building this vettool (pin to workspace/local module or to an explicit Geppetto version).
+
+### Code review instructions
+- Review `pinocchio/Makefile` `geppetto-lint-build` target and ensure it builds the vettool from the intended source.
+- Validate with:
+  - `make geppetto-lint-build && make geppetto-lint`
