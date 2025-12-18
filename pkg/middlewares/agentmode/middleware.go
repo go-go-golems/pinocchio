@@ -18,8 +18,14 @@ import (
 
 // Data keys for agent mode; local to this middleware package
 const (
-	DataKeyAgentMode             = "agent_mode"
-	DataKeyAgentModeAllowedTools = "agent_mode_allowed_tools"
+	DataKeyAgentMode             turns.TurnDataKey = "agent_mode"
+	DataKeyAgentModeAllowedTools turns.TurnDataKey = "agent_mode_allowed_tools"
+)
+
+// Block metadata keys used by this middleware.
+const (
+	BlockMetadataKeyAgentModeTag turns.BlockMetadataKey = "agentmode_tag"
+	BlockMetadataKeyAgentMode    turns.BlockMetadataKey = "agentmode"
 )
 
 // AgentMode describes a mode name with allowed tools and an optional system prompt snippet.
@@ -72,7 +78,7 @@ func NewMiddleware(svc Service, cfg Config) rootmw.Middleware {
 				return next(ctx, t)
 			}
 			if t.Data == nil {
-				t.Data = map[string]any{}
+				t.Data = map[turns.TurnDataKey]interface{}{}
 			}
 
 			log.Debug().Str("run_id", t.RunID).Str("turn_id", t.ID).Msg("agentmode: middleware start")
@@ -94,7 +100,7 @@ func NewMiddleware(svc Service, cfg Config) rootmw.Middleware {
 				log.Warn().Str("requested_mode", modeName).Msg("agentmode: unknown mode; continuing without restrictions")
 			} else {
 				// Remove previously inserted AgentMode-related blocks
-				_ = turns.RemoveBlocksByMetadata(t, "agentmode_tag",
+				_ = turns.RemoveBlocksByMetadata(t, BlockMetadataKeyAgentModeTag,
 					"agentmode_system_prompt",
 					"agentmode_switch_instructions",
 					"agentmode_user_prompt",
@@ -119,7 +125,10 @@ func NewMiddleware(svc Service, cfg Config) rootmw.Middleware {
 					}
 					usr := turns.WithBlockMetadata(
 						turns.NewUserTextBlock(text),
-						map[string]any{"agentmode_tag": "agentmode_user_prompt", "agentmode": mode.Name},
+						map[turns.BlockMetadataKey]interface{}{
+							BlockMetadataKeyAgentModeTag: "agentmode_user_prompt",
+							BlockMetadataKeyAgentMode:    mode.Name,
+						},
 					)
 					// Insert as second-to-last (before last assistant or tool block if present)
 					before := len(t.Blocks)

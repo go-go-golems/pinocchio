@@ -31,9 +31,9 @@ import (
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 
-	glazedConfig "github.com/go-go-golems/glazed/pkg/config"
 	clay_profiles "github.com/go-go-golems/clay/pkg/cmds/profiles"
 	clay_repositories "github.com/go-go-golems/clay/pkg/cmds/repositories"
+	glazedConfig "github.com/go-go-golems/glazed/pkg/config"
 	"github.com/rs/zerolog/log"
 
 	// New command management import

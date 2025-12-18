@@ -97,10 +97,10 @@ func (s *SQLiteStore) SaveTurnSnapshot(ctx context.Context, t *turns.Turn, phase
 	if t.ID == "" {
 		t.ID = uuid.NewString()
 	}
-	if err := s.EnsureRun(ctx, t.RunID, t.Metadata); err != nil {
+	if err := s.EnsureRun(ctx, t.RunID, convertTurnMetadataToMap(t.Metadata)); err != nil {
 		log.Warn().Err(err).Str("run_id", t.RunID).Msg("EnsureRun failed")
 	}
-	if err := s.EnsureTurn(ctx, t.RunID, t.ID, t.Metadata); err != nil {
+	if err := s.EnsureTurn(ctx, t.RunID, t.ID, convertTurnMetadataToMap(t.Metadata)); err != nil {
 		log.Warn().Err(err).Str("turn_id", t.ID).Msg("EnsureTurn failed")
 	}
 	// Serialize turn as JSON
@@ -121,8 +121,8 @@ func (s *SQLiteStore) SaveTurnSnapshot(ctx context.Context, t *turns.Turn, phase
 	}{
 		RunID:    t.RunID,
 		TurnID:   t.ID,
-		Metadata: t.Metadata,
-		Data:     t.Data,
+		Metadata: convertTurnMetadataToMap(t.Metadata),
+		Data:     convertTurnDataToMap(t.Data),
 		Blocks:   make([]block, 0, len(t.Blocks)),
 	}
 	for i, b := range t.Blocks {
@@ -145,7 +145,7 @@ func (s *SQLiteStore) SaveTurnSnapshot(ctx context.Context, t *turns.Turn, phase
 			Kind:     b.Kind,
 			Role:     b.Role,
 			Payload:  b.Payload,
-			Metadata: b.Metadata,
+			Metadata: convertBlockMetadataToMap(b.Metadata),
 		})
 		// upsert block row
 		// ord is derived from position in slice
@@ -186,6 +186,42 @@ func (s *SQLiteStore) SaveTurnSnapshot(ctx context.Context, t *turns.Turn, phase
 }
 
 func (s *SQLiteStore) Close() error { return s.db.Close() }
+
+// convertTurnMetadataToMap converts a typed TurnMetadataKey map to a string map.
+func convertTurnMetadataToMap(m map[turns.TurnMetadataKey]interface{}) map[string]any {
+	if m == nil {
+		return nil
+	}
+	result := make(map[string]any, len(m))
+	for k, v := range m {
+		result[string(k)] = v
+	}
+	return result
+}
+
+// convertTurnDataToMap converts a typed TurnDataKey map to a string map.
+func convertTurnDataToMap(m map[turns.TurnDataKey]interface{}) map[string]any {
+	if m == nil {
+		return nil
+	}
+	result := make(map[string]any, len(m))
+	for k, v := range m {
+		result[string(k)] = v
+	}
+	return result
+}
+
+// convertBlockMetadataToMap converts a typed BlockMetadataKey map to a string map.
+func convertBlockMetadataToMap(m map[turns.BlockMetadataKey]interface{}) map[string]any {
+	if m == nil {
+		return nil
+	}
+	result := make(map[string]any, len(m))
+	for k, v := range m {
+		result[string(k)] = v
+	}
+	return result
+}
 
 // classifyValue separates a generic interface{} into a type label and storage-friendly string fields.
 func classifyValue(v any) (string, string, string) {

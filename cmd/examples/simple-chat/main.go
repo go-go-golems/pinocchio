@@ -136,9 +136,9 @@ func (c *TestCommand) RunIntoWriter(ctx context.Context, parsedLayers *layers.Pa
 	// Enable server-side tools when requested: attach built-in web_search definition
 	if s.ServerTools {
 		if seed.Data == nil {
-			seed.Data = map[string]any{}
+			seed.Data = map[turns.TurnDataKey]interface{}{}
 		}
-		seed.Data["responses_server_tools"] = []any{map[string]any{"type": "web_search"}}
+		seed.Data[turns.TurnDataKey("responses_server_tools")] = []any{map[string]any{"type": "web_search"}}
 	}
 
 	// Let PinocchioCommand manage the EventRouter lifecycle and default printers

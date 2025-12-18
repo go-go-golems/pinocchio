@@ -33,7 +33,7 @@ type ToolLoopBackend struct {
 }
 
 func NewToolLoopBackend(eng engine.Engine, reg *tools.InMemoryToolRegistry, sink *middleware.WatermillSink, hook toolhelpers.SnapshotHook) *ToolLoopBackend {
-	return &ToolLoopBackend{eng: eng, reg: reg, sink: sink, hook: hook, turn: &turns.Turn{Data: map[string]any{}}}
+	return &ToolLoopBackend{eng: eng, reg: reg, sink: sink, hook: hook, turn: &turns.Turn{Data: map[turns.TurnDataKey]interface{}{}}}
 }
 
 // WithInitialTurnData merges provided data into the initial Turn before any input is appended.
@@ -43,10 +43,10 @@ func (b *ToolLoopBackend) WithInitialTurnData(data map[string]any) *ToolLoopBack
 		b.turn = &turns.Turn{}
 	}
 	if b.turn.Data == nil {
-		b.turn.Data = map[string]any{}
+		b.turn.Data = map[turns.TurnDataKey]interface{}{}
 	}
 	for k, v := range data {
-		b.turn.Data[k] = v
+		b.turn.Data[turns.TurnDataKey(k)] = v
 	}
 	return b
 }
@@ -56,7 +56,7 @@ func (b *ToolLoopBackend) Start(ctx context.Context, prompt string) (tea.Cmd, er
 		return nil, errors.New("already running")
 	}
 	if b.turn == nil {
-		b.turn = &turns.Turn{Data: map[string]any{}}
+		b.turn = &turns.Turn{Data: map[turns.TurnDataKey]interface{}{}}
 	}
 	if prompt != "" {
 		turns.AppendBlock(b.turn, turns.NewUserTextBlock(prompt))
