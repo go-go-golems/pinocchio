@@ -595,3 +595,52 @@ In addition, `cmd/agents/simple-chat-agent/main.go` still referenced a now-remov
 
 ### Technical details
 - Commit: `ee8bf085a1cefea9a73eeceadf4afe9aae453668`
+
+## Step 14: Re-center on the root fix: update turnsdatalint upstream (avoid Pinocchio workarounds)
+
+After unbreaking compilation, it became clear that continuing to “work around” turnsdatalint *inside Pinocchio* is the wrong direction. The strict const-identity rule is causing us to either:
+- introduce awkward APIs (or remove useful helpers), or
+- commit with `--no-verify` because the pre-commit hook runs `go vet -vettool=/tmp/geppetto-lint ./...` and fails on patterns that are actually type-safe.
+
+The analysis doc shows the intent of turnsdatalint is “prevent raw string drift”, not “ban typed keys that happen to be variables/conversions”. So the correct sequence is: **fix the analyzer first**, then let downstream repos (Pinocchio) use normal Go patterns without jumping through hoops.
+
+**Commit (code):** N/A — decision / direction step
+
+### What I did
+- Re-read the findings in `analysis/01-turnsdatalint-why-dynamic-keys-conversions-fail-options-to-fix-pinocchio-geppetto.md`
+- Noted the practical impact: Pinocchio commits are blocked by turnsdatalint for ergonomics reasons (typed keys), not safety reasons (raw strings)
+
+### Why
+- Upstream analyzer behavior is the source of friction; downstream workarounds are noisy and risk calcifying into API shape.
+- Fixing Geppetto benefits all downstream repos, not just Pinocchio.
+
+### What worked
+- Keeping Pinocchio changes minimal (only “compile unbreak”) avoided digging deeper into workaround design.
+
+### What didn't work
+- The current “strict const-only” rule makes it hard to provide ergonomic helper APIs (parameters/variables get flagged).
+
+### What I learned
+- Once the custom vettool is integrated into `lintmax`, **analyzer ergonomics becomes a repo-wide productivity constraint** (it’s not “just lint” anymore).
+
+### What was tricky to build
+- Resisting the temptation to keep pushing local workarounds once the root cause is understood (upstream analyzer semantics).
+
+### What warrants a second pair of eyes
+- Review the proposed “typed-key enforcement” change in Geppetto to ensure it still catches the real drift cases (raw string literals / untyped strings).
+- Confirm whether `Block.Payload` should remain const-only (since it’s `map[string]any`).
+
+### What should be done in the future
+- Create a **separate Geppetto ticket/PR** to:
+  - update `pkg/analysis/turnsdatalint/analyzer.go` to check expression type (not const identity),
+  - add/adjust tests,
+  - update the topic doc.
+- After that lands, re-run Pinocchio’s `make geppetto-lint` and remove any leftover “workaround-only” churn where it’s no longer needed.
+
+### Code review instructions
+- Treat this as a direction-setting step; the real review will be in the Geppetto PR implementing the analyzer change.
+
+### Technical details
+- Root failure mode we keep hitting in Pinocchio is the analyzer rejecting expressions like:
+  - `t.Data[turns.TurnDataKey(k)]` (conversion)
+  - `t.Data[key]` where `key` is a typed parameter/variable
