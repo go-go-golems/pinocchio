@@ -11,10 +11,21 @@ gifs:
 # Build geppetto-lint vettool from geppetto module
 # Uses the version specified in go.mod
 GEPPETTO_LINT_BIN ?= /tmp/geppetto-lint
+GEPPETTO_LINT_PKG ?= github.com/go-go-golems/geppetto/cmd/geppetto-lint
+GEPPETTO_VERSION ?= $(shell go list -m -f '{{.Version}}' github.com/go-go-golems/geppetto 2>/dev/null)
 
 geppetto-lint-build:
 	@echo "Building geppetto-lint from geppetto module..."
-	@GOBIN=$(dir $(GEPPETTO_LINT_BIN)) go install github.com/go-go-golems/geppetto/cmd/geppetto-lint
+	@# In CI, GOFLAGS often includes -mod=readonly; installing without @version can require adding go.sum entries.
+	@# Installing with an explicit version avoids modifying the current module's go.{mod,sum}.
+	@# In a go.work workspace, go list -m reports "(devel)", so we fall back to workspace install.
+	@if [ -n "$(GEPPETTO_VERSION)" ] && [ "$(GEPPETTO_VERSION)" != "(devel)" ]; then \
+		echo "Installing $(GEPPETTO_LINT_PKG)@$(GEPPETTO_VERSION)"; \
+		GOBIN=$(dir $(GEPPETTO_LINT_BIN)) go install $(GEPPETTO_LINT_PKG)@$(GEPPETTO_VERSION); \
+	else \
+		echo "Installing $(GEPPETTO_LINT_PKG) from workspace/module"; \
+		GOBIN=$(dir $(GEPPETTO_LINT_BIN)) go install $(GEPPETTO_LINT_PKG); \
+	fi
 
 geppetto-lint: geppetto-lint-build
 	go vet -vettool=$(GEPPETTO_LINT_BIN) ./...

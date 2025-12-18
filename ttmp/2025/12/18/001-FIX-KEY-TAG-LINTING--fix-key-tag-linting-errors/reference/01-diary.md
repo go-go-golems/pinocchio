@@ -674,3 +674,30 @@ We initially failed this verification because Pinocchio’s `geppetto-lint-build
 - Review `pinocchio/Makefile` `geppetto-lint-build` target and ensure it builds the vettool from the intended source.
 - Validate with:
   - `make geppetto-lint-build && make geppetto-lint`
+
+## Step 16: Fix CI “missing go.sum entry” by using versioned tool installs
+
+In CI, it’s common to run with `-mod=readonly` (directly or indirectly via environment), which means commands that *would* add missing transitive sums to `go.sum` will fail instead. After switching `geppetto-lint-build` to `go install ...` (without `@version`), CI failed with errors like:
+
+- `missing go.sum entry for module providing package golang.org/x/tools/go/analysis`
+- `missing go.sum entry for .../go/analysis/passes/inspect`
+- `missing go.sum entry for .../go/ast/inspector`
+
+These come from building `github.com/go-go-golems/geppetto/cmd/geppetto-lint` as part of the current module graph.
+
+The most robust approach is to install tools in CI **with an explicit version** (derived from the version of Geppetto in `go.mod`). Versioned installs do not require mutating the current module’s `go.sum`, so they behave well under `-mod=readonly`.
+
+### What I did
+- Updated `pinocchio/Makefile` `geppetto-lint-build` to:
+  - use `go list -m` to determine the Geppetto version
+  - install `geppetto-lint@<version>` when a real version is present
+  - fall back to workspace/module install when `go.work` reports `(devel)`
+- Updated `.github/workflows/lint.yml` to install:
+  - `github.com/go-go-golems/geppetto/cmd/geppetto-lint@${GEPPETTO_VERSION}`
+
+### What worked
+- Local `make geppetto-lint` and `make lintmax` still pass in the workspace (uses `(devel)` fallback).
+- CI should no longer hit “missing go.sum entry … golang.org/x/tools/…” for the vettool install step.
+
+### What warrants a second pair of eyes
+- Confirm CI should always install geppetto-lint with the Geppetto version from `go.mod` (not `@latest`) to avoid drift.
