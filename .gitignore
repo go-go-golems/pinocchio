@@ -15,6 +15,9 @@
 # vendor/
 dist/
 
+# local build artifacts (avoid accidentally committing big binaries)
+/pinocchio
+
 # misc files and directories
 .env
 .envrc
