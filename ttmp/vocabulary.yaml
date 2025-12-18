@@ -1,45 +1,64 @@
 topics:
-  - slug: pinocchio
-    description: Pinocchio CLI, commands, and workflows
-  - slug: geppetto
-    description: Geppetto engine integration and runtime
-  - slug: glazed
-    description: Glazed parameters, middlewares, and CLI tooling
-  - slug: config
-    description: Configuration formats, env vars, and config loading
-  - slug: profiles
-    description: Profile loading, overrides, and persona files
-  - slug: tooling
-    description: Supporting tools like docmgr, glaze, and helpers
-  - slug: bug
-    description: Bugs, regressions, and investigations
-  - slug: analysis
-    description: Deep dives, planning notes, and syntheses
-  - slug: misc
-    description: Miscellaneous tickets or topics that do not fit elsewhere
+    - slug: pinocchio
+      description: Pinocchio CLI, commands, and workflows
+    - slug: geppetto
+      description: Geppetto engine integration and runtime
+    - slug: glazed
+      description: Glazed parameters, middlewares, and CLI tooling
+    - slug: config
+      description: Configuration formats, env vars, and config loading
+    - slug: profiles
+      description: Profile loading, overrides, and persona files
+    - slug: tooling
+      description: Supporting tools like docmgr, glaze, and helpers
+    - slug: bug
+      description: Bugs, regressions, and investigations
+    - slug: analysis
+      description: Deep dives, planning notes, and syntheses
+    - slug: misc
+      description: Miscellaneous tickets or topics that do not fit elsewhere
+    - slug: chat
+      description: Chat backend and frontend surfaces
+    - slug: backend
+      description: Backend services
+    - slug: websocket
+      description: WebSocket lifecycle & events
 docTypes:
-  - slug: index
-    description: Ticket index / overall plan
-  - slug: analysis
-    description: Technical analyses, investigations, and summaries
-  - slug: design-doc
-    description: Design documents and proposals
-  - slug: playbook
-    description: Operational guides or runbooks
-  - slug: diary
-    description: Implementation diary / running log
-  - slug: tasks
-    description: Task lists / checklists
-  - slug: bug-report
-    description: Bug reports and postmortems
-  - slug: planning
-    description: Planning docs and multi-step breakdowns
-  - slug: reference
-    description: Reference material and APIs
-  - slug: misc
-    description: Miscellaneous document types
+    - slug: index
+      description: Ticket index / overall plan
+    - slug: analysis
+      description: Technical analyses, investigations, and summaries
+    - slug: design-doc
+      description: Design documents and proposals
+    - slug: playbook
+      description: Operational guides or runbooks
+    - slug: diary
+      description: Implementation diary / running log
+    - slug: tasks
+      description: Task lists / checklists
+    - slug: bug-report
+      description: Bug reports and postmortems
+    - slug: planning
+      description: Planning docs and multi-step breakdowns
+    - slug: reference
+      description: Reference material and APIs
+    - slug: misc
+      description: Miscellaneous document types
 intent:
-  - slug: long-term
-    description: Persistent documentation to keep
-  - slug: short-term
-    description: Temporary or scratch docs
+    - slug: long-term
+      description: Persistent documentation to keep
+    - slug: short-term
+      description: Temporary or scratch docs
+    - slug: throwaway
+      description: Temporary/experimental documentation
+status:
+    - slug: draft
+      description: Initial draft state
+    - slug: active
+      description: Active work in progress
+    - slug: review
+      description: Ready for review
+    - slug: complete
+      description: Work completed
+    - slug: archived
+      description: Archived/completed work

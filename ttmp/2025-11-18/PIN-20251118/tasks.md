@@ -11,3 +11,4 @@
 - [ ] Wire resolveProfileSettings into geppetto/pkg/layers.GetCobraCommandGeppettoMiddlewares so profile middleware uses resolved profile/profile-file.
 - [ ] Update helpers.ParseGeppettoLayers (and sample commands) to use the shared profile-resolution logic instead of GatherFlagsFromViper.
 - [ ] Add regression tests (env, flag, default) + docs describing profile precedence and usage.
+- [ ] Upstream the field-ignoring config mapper (used to skip repositories) into a reusable Glazed helper so other apps can drop non-layer keys cleanly.
