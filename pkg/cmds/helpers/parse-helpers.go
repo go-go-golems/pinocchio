@@ -12,6 +12,7 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
 	"github.com/go-go-golems/glazed/pkg/cmds/middlewares"
 	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
+	appconfig "github.com/go-go-golems/glazed/pkg/config"
 	"github.com/go-go-golems/pinocchio/pkg/cmds"
 	"github.com/go-go-golems/pinocchio/pkg/cmds/cmdlayers"
 )
@@ -75,6 +76,22 @@ func ParseGeppettoLayers(c *cmds.PinocchioCommand, options ...GeppettoLayersHelp
 	}
 
 	if helper.UseViper {
+		// Discover config file using ResolveAppConfigPath
+		configMiddlewares := []middlewares.Middleware{}
+		configPath, err := appconfig.ResolveAppConfigPath("pinocchio", "")
+		if err == nil && configPath != "" {
+			configMiddlewares = append(configMiddlewares,
+				middlewares.LoadParametersFromFile(configPath,
+					middlewares.WithParseOptions(parameters.WithParseStepSource("config")),
+				),
+			)
+		}
+		configMiddlewares = append(configMiddlewares,
+			middlewares.UpdateFromEnv("PINOCCHIO",
+				parameters.WithParseStepSource("env"),
+			),
+		)
+
 		middlewares_ = append(middlewares_,
 			middlewares.WrapWithWhitelistedLayers(
 				[]string{
@@ -86,7 +103,7 @@ func ParseGeppettoLayers(c *cmds.PinocchioCommand, options ...GeppettoLayersHelp
 					embeddings_config.EmbeddingsSlug,
 					cmdlayers.GeppettoHelpersSlug,
 				},
-				middlewares.GatherFlagsFromViper(parameters.WithParseStepSource("viper")),
+				middlewares.Chain(configMiddlewares...),
 			),
 			middlewares.SetFromDefaults(parameters.WithParseStepSource("defaults")),
 		)

@@ -34,7 +34,7 @@ var rootCmd = &cobra.Command{
 	Use:   "simple-chat-step",
 	Short: "A simple chat step",
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		return logging.InitLoggerFromViper()
+		return logging.InitLoggerFromCobra(cmd)
 	},
 }
 
@@ -169,7 +169,7 @@ func (c *TestCommand) RunIntoWriter(ctx context.Context, parsedLayers *layers.Pa
 }
 
 func main() {
-	err := clay.InitViper("pinocchio", rootCmd)
+	err := clay.InitGlazed("pinocchio", rootCmd)
 	cobra.CheckErr(err)
 
 	commands, err := pinocchio_cmds.LoadFromYAML(testYaml)

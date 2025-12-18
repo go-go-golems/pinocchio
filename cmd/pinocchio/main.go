@@ -50,11 +50,7 @@ var rootCmd = &cobra.Command{
 	Short:   "pinocchio is a tool to run LLM applications",
 	Version: version,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		err := logging.InitLoggerFromCobra(cmd)
-		if err != nil {
-			return err
-		}
-		return nil
+		return logging.InitLoggerFromCobra(cmd)
 	},
 }
 
