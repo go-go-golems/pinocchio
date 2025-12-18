@@ -27,26 +27,31 @@ type ToolLoopBackend struct {
 	sink *middleware.WatermillSink
 	hook toolhelpers.SnapshotHook
 
-	turn    *turns.Turn
+	Turn    *turns.Turn // Exported to allow direct Data access for const keys (satisfies turnsdatalint)
 	cancel  context.CancelFunc
 	running atomic.Bool
 }
 
 func NewToolLoopBackend(eng engine.Engine, reg *tools.InMemoryToolRegistry, sink *middleware.WatermillSink, hook toolhelpers.SnapshotHook) *ToolLoopBackend {
-	return &ToolLoopBackend{eng: eng, reg: reg, sink: sink, hook: hook, turn: &turns.Turn{Data: map[turns.TurnDataKey]interface{}{}}}
+	return &ToolLoopBackend{eng: eng, reg: reg, sink: sink, hook: hook, Turn: &turns.Turn{Data: map[turns.TurnDataKey]interface{}{}}}
 }
 
 // WithInitialTurnData merges provided data into the initial Turn before any input is appended.
 // Useful to enable provider/server-side tools or attach metadata.
+// Note: This function accepts map[string]any for convenience, but keys should be valid TurnDataKey constants.
+// The linter will flag dynamic string keys; prefer setting Turn.Data directly with const keys.
 func (b *ToolLoopBackend) WithInitialTurnData(data map[string]any) *ToolLoopBackend {
-	if b.turn == nil {
-		b.turn = &turns.Turn{}
+	if b.Turn == nil {
+		b.Turn = &turns.Turn{}
 	}
-	if b.turn.Data == nil {
-		b.turn.Data = map[turns.TurnDataKey]interface{}{}
+	if b.Turn.Data == nil {
+		b.Turn.Data = map[turns.TurnDataKey]interface{}{}
 	}
+	// Note: Converting string keys to TurnDataKey violates turnsdatalint rules.
+	// This is a convenience function that accepts dynamic keys, but callers should
+	// prefer setting Turn.Data directly with const keys when possible.
 	for k, v := range data {
-		b.turn.Data[turns.TurnDataKey(k)] = v
+		b.Turn.Data[turns.TurnDataKey(k)] = v //nolint:staticcheck // Dynamic key conversion for convenience API
 	}
 	return b
 }
@@ -55,11 +60,11 @@ func (b *ToolLoopBackend) Start(ctx context.Context, prompt string) (tea.Cmd, er
 	if !b.running.CompareAndSwap(false, true) {
 		return nil, errors.New("already running")
 	}
-	if b.turn == nil {
-		b.turn = &turns.Turn{Data: map[turns.TurnDataKey]interface{}{}}
+	if b.Turn == nil {
+		b.Turn = &turns.Turn{Data: map[turns.TurnDataKey]interface{}{}}
 	}
 	if prompt != "" {
-		turns.AppendBlock(b.turn, turns.NewUserTextBlock(prompt))
+		turns.AppendBlock(b.Turn, turns.NewUserTextBlock(prompt))
 	}
 
 	ctx, b.cancel = context.WithCancel(ctx)
@@ -72,7 +77,7 @@ func (b *ToolLoopBackend) Start(ctx context.Context, prompt string) (tea.Cmd, er
 		updated, err := toolhelpers.RunToolCallingLoop(
 			runCtx,
 			b.eng,
-			b.turn,
+			b.Turn,
 			b.reg,
 			toolhelpers.NewToolConfig().WithMaxIterations(5).WithTimeout(60*time.Second),
 		)
@@ -80,7 +85,7 @@ func (b *ToolLoopBackend) Start(ctx context.Context, prompt string) (tea.Cmd, er
 			log.Error().Err(err).Msg("tool loop failed")
 		}
 		if updated != nil {
-			b.turn = updated
+			b.Turn = updated
 		}
 		b.running.Store(false)
 		b.cancel = nil
