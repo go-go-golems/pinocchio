@@ -701,3 +701,29 @@ The most robust approach is to install tools in CI **with an explicit version** 
 
 ### What warrants a second pair of eyes
 - Confirm CI should always install geppetto-lint with the Geppetto version from `go.mod` (not `@latest`) to avoid drift.
+
+## Step 17: Fix CI golangci-lint `config verify` failure (remove unsupported top-level `go:` key)
+
+After the earlier CI/tooling updates, GitHub Actions started failing during the `golangci-lint` action with:
+
+`golangci-lint config verify`
+
+```
+jsonschema: "" does not validate with "/additionalProperties": additional properties 'go' not allowed
+The command is terminated due to an error: the configuration contains invalid elements
+```
+
+This was caused by a top-level `go: "1.24"` entry we added to `pinocchio/.golangci.yml`. While `golangci-lint run` tolerated it locally, the GitHub Action runs an explicit `config verify` step that rejects unknown top-level properties under the v2 schema.
+
+### What I did
+- Removed the unsupported top-level `go:` field from `pinocchio/.golangci.yml`
+- Verified locally:
+  - `golangci-lint config verify`
+  - `make lintmax`
+
+### Why
+- CI uses strict schema validation; keeping the config schema-clean avoids action failures.
+- The Go toolchain version for linting should come from CI’s `actions/setup-go` and the golangci-lint binary version pin.
+
+### What worked
+- `golangci-lint config verify` succeeds and `make lintmax` still passes.

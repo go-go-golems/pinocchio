@@ -58,16 +58,9 @@ func main() {
 	helpSystem, err := initRootCmd()
 	cobra.CheckErr(err)
 
-	err = rootCmd.ParseFlags(os.Args[1:])
-	if err != nil {
-		fmt.Printf("Could not parse flags: %v\n", err)
-		os.Exit(1)
-	}
-	err = logging.InitLoggerFromCobra(rootCmd)
-	if err != nil {
-		fmt.Printf("Could not initialize logger: %v\n", err)
-		os.Exit(1)
-	}
+	// Initialize logging early from CLI args so that command loading/discovery
+	// respects --log-level and defaults to quiet output (info) if unset.
+	_ = logging.InitEarlyLoggingFromArgs(os.Args[1:], "pinocchio")
 
 	// first, check if the args are "run-command file.yaml",
 	// because we need to load the file and then run the command itself.

@@ -6,10 +6,6 @@
 # The only possible value is "2".
 version: "2"
 
-# Go version to use for linting
-# This should match the go version in go.mod
-go: "1.24"
-
 # Linters configuration
 linters:
   # Default set of linters.
