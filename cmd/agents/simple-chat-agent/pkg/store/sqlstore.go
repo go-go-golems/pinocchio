@@ -13,7 +13,7 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/go-go-golems/geppetto/pkg/events"
-	geptools "github.com/go-go-golems/geppetto/pkg/inference/tools"
+	"github.com/go-go-golems/geppetto/pkg/inference/toolcontext"
 	"github.com/go-go-golems/geppetto/pkg/turns"
 )
 
@@ -161,22 +161,20 @@ func (s *SQLiteStore) SaveTurnSnapshot(ctx context.Context, t *turns.Turn, phase
 			_, _ = s.db.ExecContext(ctx, "INSERT OR REPLACE INTO block_metadata_kv(block_id, turn_id, phase, key, type, value_text, value_json) VALUES(?,?,?,?,?,?,?)", bid, t.ID, phase, mk, typ, vt, vj)
 		}
 	}
-	// Persist tool registry definitions as JSON, if present
-	if regAny, ok := t.Data[turns.DataKeyToolRegistry]; ok && regAny != nil {
-		if reg, ok := regAny.(geptools.ToolRegistry); ok && reg != nil {
-			defs := reg.ListTools()
-			if b, err := json.Marshal(defs); err == nil {
-				_, _ = s.db.ExecContext(ctx, "INSERT OR REPLACE INTO turn_kv(turn_id, section, key, type, value_text, value_json) VALUES(?,?,?,?,?,?)", t.ID, "data", "tool_registry", "object", "", string(b))
-				// Also record a registry snapshot row for easier retrieval
-				_, _ = s.db.ExecContext(ctx, "INSERT INTO tool_registry_snapshots(run_id, turn_id, phase, created_at, tools_json) VALUES(?,?,?,?,?)", t.RunID, t.ID, phase, time.Now().Format(time.RFC3339Nano), string(b))
-			}
+	// Persist tool registry definitions as JSON, if present.
+	//
+	// NOTE: The runtime registry is carried via context (toolcontext.WithRegistry),
+	// not via Turn.Data.
+	if reg, ok := toolcontext.RegistryFrom(ctx); ok && reg != nil {
+		defs := reg.ListTools()
+		if b, err := json.Marshal(defs); err == nil {
+			_, _ = s.db.ExecContext(ctx, "INSERT OR REPLACE INTO turn_kv(turn_id, section, key, type, value_text, value_json) VALUES(?,?,?,?,?,?)", t.ID, "data", "tool_registry", "object", "", string(b))
+			// Also record a registry snapshot row for easier retrieval
+			_, _ = s.db.ExecContext(ctx, "INSERT INTO tool_registry_snapshots(run_id, turn_id, phase, created_at, tools_json) VALUES(?,?,?,?,?)", t.RunID, t.ID, phase, time.Now().Format(time.RFC3339Nano), string(b))
 		}
 	}
-	// turn data KV (skip raw registry object to avoid overwriting curated JSON)
+	// turn data KV
 	for k, v := range t.Data {
-		if k == turns.DataKeyToolRegistry {
-			continue
-		}
 		typ, vt, vj := classifyValue(v)
 		_, _ = s.db.ExecContext(ctx, "INSERT OR REPLACE INTO turn_kv(turn_id, section, key, type, value_text, value_json) VALUES(?,?,?,?,?,?)", t.ID, "data", k, typ, vt, vj)
 	}

@@ -55,12 +55,19 @@ var rootCmd = &cobra.Command{
 }
 
 func main() {
+	// Initialize logging as early as possible (before command discovery / repository loading),
+	// but without parsing the full Cobra flagset before subcommands are registered.
+	//
+	// In particular, avoid calling rootCmd.ParseFlags(os.Args[1:]) here:
+	// - it returns `pflag: help requested` for --help, which should not be treated as fatal
+	// - it fails on subcommand flags like --print-parsed-parameters before commands are registered
+	if err := logging.InitEarlyLoggingFromArgs(os.Args[1:], "pinocchio"); err != nil {
+		fmt.Printf("Could not initialize early logger: %v\n", err)
+		os.Exit(1)
+	}
+
 	helpSystem, err := initRootCmd()
 	cobra.CheckErr(err)
-
-	// Initialize logging early from CLI args so that command loading/discovery
-	// respects --log-level and defaults to quiet output (info) if unset.
-	_ = logging.InitEarlyLoggingFromArgs(os.Args[1:], "pinocchio")
 
 	// first, check if the args are "run-command file.yaml",
 	// because we need to load the file and then run the command itself.
