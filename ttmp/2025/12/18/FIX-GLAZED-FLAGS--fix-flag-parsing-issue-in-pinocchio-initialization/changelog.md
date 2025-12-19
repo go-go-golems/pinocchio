@@ -31,3 +31,12 @@ Code: 4da6556 — pinocchio: pre-parse logging flags before command loading
 
 - /home/manuel/workspaces/2025-11-18/fix-pinocchio-profiles/pinocchio/cmd/pinocchio/main.go — Early logging init pre-parses logging flags; adds --debug-early-flagset dump; fixes help behavior
 
+
+## 2025-12-18
+
+Code: 2b1ac84 — pinocchio: use glazed InitEarlyLoggingFromArgs, remove duplicate code and debug flag
+
+### Related Files
+
+- /home/manuel/workspaces/2025-11-18/fix-pinocchio-profiles/pinocchio/cmd/pinocchio/main.go — Removed duplicate early logging code
+
