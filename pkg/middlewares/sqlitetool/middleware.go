@@ -8,6 +8,7 @@ import (
 	"time"
 
 	rootmw "github.com/go-go-golems/geppetto/pkg/inference/middleware"
+	"github.com/go-go-golems/geppetto/pkg/inference/toolcontext"
 	"github.com/go-go-golems/geppetto/pkg/inference/tools"
 	"github.com/go-go-golems/geppetto/pkg/turns"
 	"github.com/invopop/jsonschema"
@@ -119,72 +120,73 @@ func NewMiddleware(cfg Config) rootmw.Middleware {
 				return next(ctx, t)
 			}
 
-			// Ensure registry has sql_query tool definition and executor
-			if regAny, ok := t.Data[turns.DataKeyToolRegistry]; ok && regAny != nil {
-				if reg, ok := regAny.(tools.ToolRegistry); ok && reg != nil {
-					schemaObj := &jsonschema.Schema{Type: "object"}
-					props := jsonschema.NewProperties()
-					props.Set("sql", &jsonschema.Schema{Type: "string"})
-					schemaObj.Properties = props
-					schemaObj.Required = []string{"sql"}
-					def := tools.ToolDefinition{
-						Name:        "sql_query",
-						Description: toolDesc,
-						Parameters:  schemaObj,
-						Tags:        []string{"sqlite", "sql"},
-						Version:     "1.0",
-					}
-					if err := reg.RegisterTool("sql_query", def); err != nil {
-						log.Debug().Err(err).Msg("sqlitetool: RegisterTool failed")
+			// Ensure registry has sql_query tool definition and executor.
+			//
+			// NOTE: The runtime registry is carried via context (toolcontext.WithRegistry),
+			// not via Turn.Data.
+			if reg, ok := toolcontext.RegistryFrom(ctx); ok && reg != nil {
+				schemaObj := &jsonschema.Schema{Type: "object"}
+				props := jsonschema.NewProperties()
+				props.Set("sql", &jsonschema.Schema{Type: "string"})
+				schemaObj.Properties = props
+				schemaObj.Required = []string{"sql"}
+				def := tools.ToolDefinition{
+					Name:        "sql_query",
+					Description: toolDesc,
+					Parameters:  schemaObj,
+					Tags:        []string{"sqlite", "sql"},
+					Version:     "1.0",
+				}
+				if err := reg.RegisterTool("sql_query", def); err != nil {
+					log.Debug().Err(err).Msg("sqlitetool: RegisterTool failed")
+				} else {
+					log.Debug().Msg("sqlitetool: registered sql_query tool in registry")
+				}
+				// Attach execution function to tool definition
+				// We provide a function that runs the SQL query against cfg.DB or DSN
+				execFn := func(args struct {
+					SQL string `json:"sql"`
+				}) (string, error) {
+					// Resolve DB
+					var execDB DBLike
+					if cfg.DB != nil {
+						execDB = cfg.DB
 					} else {
-						log.Debug().Msg("sqlitetool: registered sql_query tool in registry")
-					}
-					// Attach execution function to tool definition
-					// We provide a function that runs the SQL query against cfg.DB or DSN
-					execFn := func(args struct {
-						SQL string `json:"sql"`
-					}) (string, error) {
-						// Resolve DB
-						var execDB DBLike
-						if cfg.DB != nil {
-							execDB = cfg.DB
-						} else {
-							if dsn == "" {
-								return "", fmt.Errorf("no sqlite DSN configured")
+						if dsn == "" {
+							return "", fmt.Errorf("no sqlite DSN configured")
+						}
+						opened, err := sql.Open("sqlite3", dsn)
+						if err != nil {
+							return "", err
+						}
+						defer func() {
+							if err := opened.Close(); err != nil {
+								log.Debug().Err(err).Msg("sqlitetool: failed to close DB")
 							}
-							opened, err := sql.Open("sqlite3", dsn)
-							if err != nil {
-								return "", err
-							}
-							defer func() {
-								if err := opened.Close(); err != nil {
-									log.Debug().Err(err).Msg("sqlitetool: failed to close DB")
-								}
-							}()
-							execDB = opened
-						}
-						// Limits
-						maxLines := cfg.MaxOutputLines
-						if maxLines <= 0 {
-							maxLines = 50
-						}
-						maxBytes := cfg.MaxOutputBytes
-						if maxBytes <= 0 {
-							maxBytes = 1024
-						}
-						// Execute
-						return runQueryWithLimit(context.Background(), execDB, args.SQL, cfg.MaxRows, maxLines, maxBytes, cfg.ExecutionTimeout), nil
+						}()
+						execDB = opened
 					}
-					if tdef, _ := reg.GetTool("sql_query"); tdef != nil {
-						if toolDef, err := tools.NewToolFromFunc("sql_query", def.Description, execFn); err == nil {
-							// Preserve metadata
-							toolDef.Tags = def.Tags
-							toolDef.Version = def.Version
-							_ = reg.RegisterTool("sql_query", *toolDef)
-							log.Debug().Msg("sqlitetool: registered sql_query executor function")
-						} else {
-							log.Debug().Err(err).Msg("sqlitetool: failed creating executor function")
-						}
+					// Limits
+					maxLines := cfg.MaxOutputLines
+					if maxLines <= 0 {
+						maxLines = 50
+					}
+					maxBytes := cfg.MaxOutputBytes
+					if maxBytes <= 0 {
+						maxBytes = 1024
+					}
+					// Execute
+					return runQueryWithLimit(context.Background(), execDB, args.SQL, cfg.MaxRows, maxLines, maxBytes, cfg.ExecutionTimeout), nil
+				}
+				if tdef, _ := reg.GetTool("sql_query"); tdef != nil {
+					if toolDef, err := tools.NewToolFromFunc("sql_query", def.Description, execFn); err == nil {
+						// Preserve metadata
+						toolDef.Tags = def.Tags
+						toolDef.Version = def.Version
+						_ = reg.RegisterTool("sql_query", *toolDef)
+						log.Debug().Msg("sqlitetool: registered sql_query executor function")
+					} else {
+						log.Debug().Err(err).Msg("sqlitetool: failed creating executor function")
 					}
 				}
 			}
