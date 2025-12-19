@@ -27,8 +27,16 @@ jobs:
         with:
           go-version: '>=1.24'
           cache: true
+      - name: Build geppetto-lint vettool
+        run: |
+          echo "Building geppetto-lint from geppetto module..."
+          GEPPETTO_VERSION=$(go list -m -f '{{.Version}}' github.com/go-go-golems/geppetto)
+          echo "Installing geppetto-lint @ ${GEPPETTO_VERSION}"
+          GOBIN=/tmp go install github.com/go-go-golems/geppetto/cmd/geppetto-lint@${GEPPETTO_VERSION}
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:
-          version: v2.1.0
+          version: v2.4.0
           args: --timeout=5m
+      - name: Run geppetto custom linters
+        run: go vet -vettool=/tmp/geppetto-lint ./...

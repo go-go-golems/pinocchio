@@ -55,6 +55,20 @@ var rootCmd = &cobra.Command{
 }
 
 func main() {
+	helpSystem, err := initRootCmd()
+	cobra.CheckErr(err)
+
+	err = rootCmd.ParseFlags(os.Args[1:])
+	if err != nil {
+		fmt.Printf("Could not parse flags: %v\n", err)
+		os.Exit(1)
+	}
+	err = logging.InitLoggerFromCobra(rootCmd)
+	if err != nil {
+		fmt.Printf("Could not initialize logger: %v\n", err)
+		os.Exit(1)
+	}
+
 	// first, check if the args are "run-command file.yaml",
 	// because we need to load the file and then run the command itself.
 	// we need to do this before cobra, because we don't know which flags to load yet
@@ -79,23 +93,20 @@ func main() {
 			os.Exit(1)
 		}
 
-		_, err = initRootCmd()
-		cobra.CheckErr(err)
+		// _, err = initRootCmd()
+		// cobra.CheckErr(err)
 
 		rootCmd.AddCommand(cobraCommand)
 		restArgs := os.Args[3:]
 		os.Args = append([]string{os.Args[0], cobraCommand.Use}, restArgs...)
 	} else {
-		helpSystem, err := initRootCmd()
-		cobra.CheckErr(err)
-
 		err = initAllCommands(helpSystem)
 		cobra.CheckErr(err)
 	}
 
 	log.Debug().Msg("Executing pinocchio")
 
-	err := rootCmd.Execute()
+	err = rootCmd.Execute()
 	cobra.CheckErr(err)
 }
 

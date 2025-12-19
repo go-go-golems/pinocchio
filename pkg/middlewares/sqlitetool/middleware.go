@@ -16,8 +16,8 @@ import (
 )
 
 const (
-	DataKeySQLiteDSN     = "sqlite_dsn"
-	DataKeySQLitePrompts = "sqlite_prompts" // optional []string of system snippets
+	DataKeySQLiteDSN     turns.TurnDataKey = "sqlite_dsn"
+	DataKeySQLitePrompts turns.TurnDataKey = "sqlite_prompts" // optional []string of system snippets
 )
 
 // DBLike abstracts *sql.DB (and compatible types) for this middleware.
@@ -111,7 +111,7 @@ func NewMiddleware(cfg Config) rootmw.Middleware {
 
 			// Determine if the tool should be available for this turn; check DSN presence
 			dsn := cfg.DSN
-			if v, ok := t.Data[turns.TurnDataKey(DataKeySQLiteDSN)].(string); ok && v != "" {
+			if v, ok := t.Data[DataKeySQLiteDSN].(string); ok && v != "" {
 				dsn = v
 			}
 			if dsn == "" && cfg.DB == nil {

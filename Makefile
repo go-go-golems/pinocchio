@@ -1,4 +1,4 @@
-.PHONY: all test build lint lintmax docker-lint gosec govulncheck goreleaser tag-major tag-minor tag-patch release bump-glazed install codeql-local
+.PHONY: all test build lint lintmax docker-lint gosec govulncheck goreleaser tag-major tag-minor tag-patch release bump-glazed install codeql-local geppetto-lint-build geppetto-lint
 
 all: test build
 
@@ -8,14 +8,38 @@ TAPES=$(shell ls doc/vhs/*tape 2>/dev/null || echo "")
 gifs:
 	for i in $(TAPES); do vhs < $$i; done
 
+# Build geppetto-lint vettool from geppetto module
+# Uses the version specified in go.mod
+GEPPETTO_LINT_BIN ?= /tmp/geppetto-lint
+GEPPETTO_LINT_PKG ?= github.com/go-go-golems/geppetto/cmd/geppetto-lint
+GEPPETTO_VERSION ?= $(shell go list -m -f '{{.Version}}' github.com/go-go-golems/geppetto 2>/dev/null)
+
+geppetto-lint-build:
+	@echo "Building geppetto-lint from geppetto module..."
+	@# In CI, GOFLAGS often includes -mod=readonly; installing without @version can require adding go.sum entries.
+	@# Installing with an explicit version avoids modifying the current module's go.{mod,sum}.
+	@# In a go.work workspace, go list -m reports "(devel)", so we fall back to workspace install.
+	@if [ -n "$(GEPPETTO_VERSION)" ] && [ "$(GEPPETTO_VERSION)" != "(devel)" ]; then \
+		echo "Installing $(GEPPETTO_LINT_PKG)@$(GEPPETTO_VERSION)"; \
+		GOBIN=$(dir $(GEPPETTO_LINT_BIN)) go install $(GEPPETTO_LINT_PKG)@$(GEPPETTO_VERSION); \
+	else \
+		echo "Installing $(GEPPETTO_LINT_PKG) from workspace/module"; \
+		GOBIN=$(dir $(GEPPETTO_LINT_BIN)) go install $(GEPPETTO_LINT_PKG); \
+	fi
+
+geppetto-lint: geppetto-lint-build
+	go vet -vettool=$(GEPPETTO_LINT_BIN) ./...
+
 docker-lint:
-	docker run --rm -v $(shell pwd):/app -w /app golangci/golangci-lint:v2.0.2 golangci-lint run -v
+	docker run --rm -v $(shell pwd):/app -w /app golangci/golangci-lint:v2.4.0 golangci-lint run -v
 
-lint:
+lint: build geppetto-lint-build
 	golangci-lint run -v
+	go vet -vettool=$(GEPPETTO_LINT_BIN) ./...
 
-lintmax:
+lintmax: build geppetto-lint-build
 	golangci-lint run -v --max-same-issues=100
+	go vet -vettool=$(GEPPETTO_LINT_BIN) ./...
 
 gosec:
 	go install github.com/securego/gosec/v2/cmd/gosec@latest
