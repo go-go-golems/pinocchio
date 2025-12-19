@@ -4,7 +4,9 @@ import (
 	"embed"
 	"fmt"
 	layers2 "github.com/go-go-golems/geppetto/pkg/layers"
+	"io"
 	"os"
+	"strings"
 
 	clay "github.com/go-go-golems/clay/pkg"
 	"github.com/go-go-golems/clay/pkg/repositories"
@@ -29,6 +31,7 @@ import (
 	pkg_doc "github.com/go-go-golems/pinocchio/pkg/doc"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 	"gopkg.in/yaml.v3"
 
 	clay_profiles "github.com/go-go-golems/clay/pkg/cmds/profiles"
@@ -54,20 +57,142 @@ var rootCmd = &cobra.Command{
 	},
 }
 
+func filterEarlyLoggingArgs(args []string) []string {
+	// Keep only flags that affect early logging initialization.
+	//
+	// This avoids pflag stopping early when it encounters unknown flags (which is
+	// expected before we register all cobra subcommands).
+	allowedKV := map[string]struct{}{
+		"--log-level":            {},
+		"--log-file":             {},
+		"--log-format":           {},
+		"--logstash-host":        {},
+		"--logstash-port":        {},
+		"--logstash-protocol":    {},
+		"--logstash-app-name":    {},
+		"--logstash-environment": {},
+	}
+	allowedBool := map[string]struct{}{
+		"--with-caller":         {},
+		"--log-to-stdout":       {},
+		"--logstash-enabled":    {},
+		"--debug-early-flagset": {},
+	}
+
+	out := make([]string, 0, len(args))
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+
+		// Handle --flag=value form
+		if strings.HasPrefix(a, "--") && strings.Contains(a, "=") {
+			name := a[:strings.Index(a, "=")]
+			if _, ok := allowedKV[name]; ok {
+				out = append(out, a)
+				continue
+			}
+			if _, ok := allowedBool[name]; ok {
+				out = append(out, a)
+				continue
+			}
+			continue
+		}
+
+		// Handle bare bool flags
+		if _, ok := allowedBool[a]; ok {
+			out = append(out, a)
+			continue
+		}
+
+		// Handle --flag value form
+		if _, ok := allowedKV[a]; ok {
+			out = append(out, a)
+			if i+1 < len(args) {
+				out = append(out, args[i+1])
+				i++
+			}
+			continue
+		}
+	}
+
+	return out
+}
+
+func initEarlyLoggingFromArgs(args []string) error {
+	// We want to initialize logging before we load/register commands, so that any
+	// logging during command discovery respects --log-level etc.
+	//
+	// We cannot use rootCmd.ParseFlags() here because:
+	// - it errors on --help ("pflag: help requested") and
+	// - it would fail on unknown flags (all command-specific flags) before we
+	//   have registered those commands.
+	//
+	// So: pre-parse ONLY logging flags from os.Args, ignoring everything else.
+	fs := pflag.NewFlagSet("pinocchio-early-logging", pflag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	fs.SetInterspersed(true)
+
+	// Defaults must match glazed/pkg/cmds/logging/layer.go:AddLoggingLayerToRootCommand
+	logLevel := fs.String("log-level", "info", "Log level (trace, debug, info, warn, error, fatal)")
+	logFile := fs.String("log-file", "", "Log file (default: stderr)")
+	logFormat := fs.String("log-format", "text", "Log format (json, text)")
+	withCaller := fs.Bool("with-caller", false, "Log caller information")
+	logToStdout := fs.Bool("log-to-stdout", false, "Log to stdout even when log-file is set")
+
+	logstashEnabled := fs.Bool("logstash-enabled", false, "Enable logging to Logstash")
+	logstashHost := fs.String("logstash-host", "logstash", "Logstash host")
+	logstashPort := fs.Int("logstash-port", 5044, "Logstash port")
+	logstashProtocol := fs.String("logstash-protocol", "tcp", "Logstash protocol (tcp, udp)")
+	logstashAppName := fs.String("logstash-app-name", "pinocchio", "Application name for Logstash logs")
+	logstashEnvironment := fs.String("logstash-environment", "development", "Environment name for Logstash logs (development, staging, production)")
+
+	debugEarlyFlagset := fs.Bool("debug-early-flagset", false, "Debug: print early logging flag parsing values and exit conditions")
+
+	fs.ParseErrorsAllowlist.UnknownFlags = true
+	// Always attempt parsing, but never fail early logging init on parsing errors.
+	// The critical behavior is: default to info-level logging (quiet), and if we
+	// successfully parse --log-level etc, honor them.
+	filteredArgs := filterEarlyLoggingArgs(args)
+	_ = fs.Parse(filteredArgs)
+
+	if *debugEarlyFlagset || os.Getenv("PINOCCHIO_DEBUG_EARLY_FLAGSET") == "1" {
+		fmt.Fprintf(os.Stderr, "pinocchio: early-logging filtered args: %q\n", filteredArgs)
+		fmt.Fprintf(os.Stderr, "pinocchio: early-logging values:\n")
+		// Print a stable set of known flags (even if not explicitly set).
+		fmt.Fprintf(os.Stderr, "  --log-level=%q\n", *logLevel)
+		fmt.Fprintf(os.Stderr, "  --log-file=%q\n", *logFile)
+		fmt.Fprintf(os.Stderr, "  --log-format=%q\n", *logFormat)
+		fmt.Fprintf(os.Stderr, "  --with-caller=%t\n", *withCaller)
+		fmt.Fprintf(os.Stderr, "  --log-to-stdout=%t\n", *logToStdout)
+		fmt.Fprintf(os.Stderr, "  --logstash-enabled=%t\n", *logstashEnabled)
+		fmt.Fprintf(os.Stderr, "  --logstash-host=%q\n", *logstashHost)
+		fmt.Fprintf(os.Stderr, "  --logstash-port=%d\n", *logstashPort)
+		fmt.Fprintf(os.Stderr, "  --logstash-protocol=%q\n", *logstashProtocol)
+		fmt.Fprintf(os.Stderr, "  --logstash-app-name=%q\n", *logstashAppName)
+		fmt.Fprintf(os.Stderr, "  --logstash-environment=%q\n", *logstashEnvironment)
+	}
+
+	return logging.InitLoggerFromSettings(&logging.LoggingSettings{
+		LogLevel:            *logLevel,
+		LogFile:             *logFile,
+		LogFormat:           *logFormat,
+		WithCaller:          *withCaller,
+		LogToStdout:         *logToStdout,
+		LogstashEnabled:     *logstashEnabled,
+		LogstashHost:        *logstashHost,
+		LogstashPort:        *logstashPort,
+		LogstashProtocol:    *logstashProtocol,
+		LogstashAppName:     *logstashAppName,
+		LogstashEnvironment: *logstashEnvironment,
+	})
+}
+
 func main() {
 	helpSystem, err := initRootCmd()
 	cobra.CheckErr(err)
 
-	err = rootCmd.ParseFlags(os.Args[1:])
-	if err != nil {
-		fmt.Printf("Could not parse flags: %v\n", err)
-		os.Exit(1)
-	}
-	err = logging.InitLoggerFromCobra(rootCmd)
-	if err != nil {
-		fmt.Printf("Could not initialize logger: %v\n", err)
-		os.Exit(1)
-	}
+	// Initialize logging early from CLI args so that command loading/discovery
+	// respects --log-level and defaults to quiet output (info) if unset.
+	_ = initEarlyLoggingFromArgs(os.Args[1:])
 
 	// first, check if the args are "run-command file.yaml",
 	// because we need to load the file and then run the command itself.
@@ -137,6 +262,11 @@ func initRootCmd() (*help.HelpSystem, error) {
 
 	err = clay.InitGlazed("pinocchio", rootCmd)
 	cobra.CheckErr(err)
+
+	// Debug-only flag to print early logging parsing values. Hidden so it doesn't
+	// pollute help output.
+	rootCmd.PersistentFlags().Bool("debug-early-flagset", false, "Debug: print early logging flag parsing values")
+	_ = rootCmd.PersistentFlags().MarkHidden("debug-early-flagset")
 
 	rootCmd.AddCommand(runCommandCmd)
 	rootCmd.AddCommand(pinocchio_cmds.NewCodegenCommand())
