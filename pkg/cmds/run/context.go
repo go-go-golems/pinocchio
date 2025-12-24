@@ -40,6 +40,9 @@ type RunContext struct {
 	// Template variables used to render prompts/messages prior to model calls
 	Variables map[string]interface{}
 
+	// ImagePaths are CLI-provided image paths to attach to the initial user message (if any).
+	ImagePaths []string
+
 	// ResultTurn stores the resulting Turn after engine execution when needed by callers
 	ResultTurn *turns.Turn
 
@@ -109,6 +112,14 @@ func WithWriter(w io.Writer) RunOption {
 func WithVariables(vars map[string]interface{}) RunOption {
 	return func(rc *RunContext) error {
 		rc.Variables = vars
+		return nil
+	}
+}
+
+// WithImagePaths passes a list of images that should be attached to the initial user prompt.
+func WithImagePaths(imagePaths []string) RunOption {
+	return func(rc *RunContext) error {
+		rc.ImagePaths = imagePaths
 		return nil
 	}
 }

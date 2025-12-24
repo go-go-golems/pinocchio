@@ -54,7 +54,7 @@ type SimpleMessage struct {
 }
 
 // buildInitialTurnFromBlocks constructs a Turn from system prompt, pre-seeded blocks, and an optional user prompt
-func buildInitialTurnFromBlocks(systemPrompt string, blocks []turns.Block, userPrompt string) *turns.Turn {
+func buildInitialTurnFromBlocks(systemPrompt string, blocks []turns.Block, userPrompt string, imagePaths []string) (*turns.Turn, error) {
 	t := &turns.Turn{}
 	if strings.TrimSpace(systemPrompt) != "" {
 		turns.AppendBlock(t, turns.NewSystemTextBlock(systemPrompt))
@@ -62,10 +62,17 @@ func buildInitialTurnFromBlocks(systemPrompt string, blocks []turns.Block, userP
 	if len(blocks) > 0 {
 		turns.AppendBlocks(t, blocks...)
 	}
+	if len(imagePaths) > 0 {
+		imgs, err := imagePathsToTurnImages(imagePaths)
+		if err != nil {
+			return nil, err
+		}
+		turns.AppendBlock(t, turns.NewUserMultimodalBlock(userPrompt, imgs))
+	}
 	if strings.TrimSpace(userPrompt) != "" {
 		turns.AppendBlock(t, turns.NewUserTextBlock(userPrompt))
 	}
-	return t
+	return t, nil
 }
 
 // renderBlocks renders text payloads in blocks using vars
@@ -91,7 +98,7 @@ func renderBlocks(blocks []turns.Block, vars map[string]interface{}) ([]turns.Bl
 	return out, nil
 }
 
-func buildInitialTurnFromBlocksRendered(systemPrompt string, blocks []turns.Block, userPrompt string, vars map[string]interface{}) (*turns.Turn, error) {
+func buildInitialTurnFromBlocksRendered(systemPrompt string, blocks []turns.Block, userPrompt string, vars map[string]interface{}, imagePaths []string) (*turns.Turn, error) {
 	sp, err := renderTemplateString("system-prompt", systemPrompt, vars)
 	if err != nil {
 		return nil, err
@@ -104,12 +111,12 @@ func buildInitialTurnFromBlocksRendered(systemPrompt string, blocks []turns.Bloc
 	if err != nil {
 		return nil, err
 	}
-	return buildInitialTurnFromBlocks(sp, rblocks, up), nil
+	return buildInitialTurnFromBlocks(sp, rblocks, up, imagePaths)
 }
 
 // buildInitialTurn constructs a seed Turn for the command from system + blocks + user prompt using vars.
-func (g *PinocchioCommand) buildInitialTurn(vars map[string]interface{}) (*turns.Turn, error) {
-	return buildInitialTurnFromBlocksRendered(g.SystemPrompt, g.Blocks, g.Prompt, vars)
+func (g *PinocchioCommand) buildInitialTurn(vars map[string]interface{}, imagePaths []string) (*turns.Turn, error) {
+	return buildInitialTurnFromBlocksRendered(g.SystemPrompt, g.Blocks, g.Prompt, vars, imagePaths)
 }
 
 type PinocchioCommandDescription struct {
@@ -239,7 +246,7 @@ func (g *PinocchioCommand) RunIntoWriter(
 
 	// If we're just printing the prompt, render and print the seed Turn and return
 	if helpersSettings.PrintPrompt {
-		seed, err := g.buildInitialTurn(parsedLayers.GetDefaultParameterLayer().Parameters.ToMap())
+		seed, err := g.buildInitialTurn(parsedLayers.GetDefaultParameterLayer().Parameters.ToMap(), imagePaths)
 		if err != nil {
 			return err
 		}
@@ -255,6 +262,7 @@ func (g *PinocchioCommand) RunIntoWriter(
 		run.WithUISettings(uiSettings),
 		run.WithRouter(router),
 		run.WithVariables(parsedLayers.GetDefaultParameterLayer().Parameters.ToMap()),
+		run.WithImagePaths(imagePaths),
 	)
 	if err != nil {
 		return err
@@ -265,7 +273,7 @@ func (g *PinocchioCommand) RunIntoWriter(
 
 // RunWithOptions executes the command with the given options
 func (g *PinocchioCommand) RunWithOptions(ctx context.Context, options ...run.RunOption) (*turns.Turn, error) {
-	runCtx := &run.RunContext{}
+	runCtx := run.NewRunContext()
 
 	// Apply options
 	for _, opt := range options {
@@ -278,7 +286,7 @@ func (g *PinocchioCommand) RunWithOptions(ctx context.Context, options ...run.Ru
 
 	if runCtx.UISettings != nil && runCtx.UISettings.PrintPrompt {
 		// Build a preview turn from initial blocks using rendered templates
-		t, err := g.buildInitialTurn(runCtx.Variables)
+		t, err := g.buildInitialTurn(runCtx.Variables, runCtx.ImagePaths)
 		if err != nil {
 			return nil, err
 		}
@@ -372,7 +380,7 @@ func (g *PinocchioCommand) runEngineAndCollectMessages(ctx context.Context, rc *
 	}
 
 	// Build seed Turn directly from system + messages + prompt (rendered)
-	seed, err := g.buildInitialTurn(rc.Variables)
+	seed, err := g.buildInitialTurn(rc.Variables, rc.ImagePaths)
 	if err != nil {
 		return fmt.Errorf("failed to render templates: %w", err)
 	}
@@ -509,27 +517,31 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) (*tu
 			return err
 		}
 
+		seedGroup := errgroup.Group{}
+
 		// Seed backend Turn after router is running so the timeline shows prior context
-		go func() {
+		seedGroup.Go(func() error {
 			<-rc.Router.Running()
 			// Prefer seeding with the existing first Q/A from a prior blocking run when present
 			if rc.ResultTurn != nil {
 				sess.Backend.SetSeedTurn(rc.ResultTurn)
-				return
+				return nil
 			}
 			// Otherwise seed from initial system/blocks to provide context in a fresh chat
-			seed, err := buildInitialTurnFromBlocksRendered(g.SystemPrompt, g.Blocks, "", rc.Variables)
+			seed, err := buildInitialTurnFromBlocksRendered(g.SystemPrompt, g.Blocks, "", rc.Variables, rc.ImagePaths)
 			if err == nil {
 				sess.Backend.SetSeedTurn(seed)
-				return
+				return nil
 			}
 			// Fallback without rendering on error
-			sess.Backend.SetSeedTurn(buildInitialTurnFromBlocks(g.SystemPrompt, g.Blocks, ""))
-		}()
+			fallbackSeed, _ := buildInitialTurnFromBlocks(g.SystemPrompt, g.Blocks, "", nil)
+			sess.Backend.SetSeedTurn(fallbackSeed)
+			return nil
+		})
 
 		// If auto-start is enabled, pre-fill the prompt/system text, then submit
 		if autoStartBackend {
-			go func() {
+			seedGroup.Go(func() error {
 				<-rc.Router.Running()
 				// Render prompt before auto-submit in chat
 				promptText := strings.TrimSpace(g.Prompt)
@@ -545,10 +557,14 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) (*tu
 				} else {
 					log.Debug().Msg("Auto-start enabled, but no prompt text found; skipping submit")
 				}
-			}()
+				return nil
+			})
 		}
 
 		_, err = p.Run()
+		if seedErr := seedGroup.Wait(); seedErr != nil && err == nil {
+			err = seedErr
+		}
 		return err
 	})
 
