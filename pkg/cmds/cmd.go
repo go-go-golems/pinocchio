@@ -62,16 +62,15 @@ func buildInitialTurnFromBlocks(systemPrompt string, blocks []turns.Block, userP
 	if len(blocks) > 0 {
 		turns.AppendBlocks(t, blocks...)
 	}
-	if strings.TrimSpace(userPrompt) != "" {
-		if len(imagePaths) > 0 {
-			imgs, err := imagePathsToTurnImages(imagePaths)
-			if err != nil {
-				return nil, err
-			}
-			turns.AppendBlock(t, turns.NewUserMultimodalBlock(userPrompt, imgs))
-		} else {
-			turns.AppendBlock(t, turns.NewUserTextBlock(userPrompt))
+	if len(imagePaths) > 0 {
+		imgs, err := imagePathsToTurnImages(imagePaths)
+		if err != nil {
+			return nil, err
 		}
+		turns.AppendBlock(t, turns.NewUserMultimodalBlock(userPrompt, imgs))
+	}
+	if strings.TrimSpace(userPrompt) != "" {
+		turns.AppendBlock(t, turns.NewUserTextBlock(userPrompt))
 	}
 	return t, nil
 }
@@ -518,28 +517,31 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) (*tu
 			return err
 		}
 
+		seedGroup := errgroup.Group{}
+
 		// Seed backend Turn after router is running so the timeline shows prior context
-		go func() {
+		seedGroup.Go(func() error {
 			<-rc.Router.Running()
 			// Prefer seeding with the existing first Q/A from a prior blocking run when present
 			if rc.ResultTurn != nil {
 				sess.Backend.SetSeedTurn(rc.ResultTurn)
-				return
+				return nil
 			}
 			// Otherwise seed from initial system/blocks to provide context in a fresh chat
 			seed, err := buildInitialTurnFromBlocksRendered(g.SystemPrompt, g.Blocks, "", rc.Variables, rc.ImagePaths)
 			if err == nil {
 				sess.Backend.SetSeedTurn(seed)
-				return
+				return nil
 			}
 			// Fallback without rendering on error
 			fallbackSeed, _ := buildInitialTurnFromBlocks(g.SystemPrompt, g.Blocks, "", nil)
 			sess.Backend.SetSeedTurn(fallbackSeed)
-		}()
+			return nil
+		})
 
 		// If auto-start is enabled, pre-fill the prompt/system text, then submit
 		if autoStartBackend {
-			go func() {
+			seedGroup.Go(func() error {
 				<-rc.Router.Running()
 				// Render prompt before auto-submit in chat
 				promptText := strings.TrimSpace(g.Prompt)
@@ -555,10 +557,14 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) (*tu
 				} else {
 					log.Debug().Msg("Auto-start enabled, but no prompt text found; skipping submit")
 				}
-			}()
+				return nil
+			})
 		}
 
 		_, err = p.Run()
+		if seedErr := seedGroup.Wait(); seedErr != nil && err == nil {
+			err = seedErr
+		}
 		return err
 	})
 
