@@ -11,8 +11,8 @@ require (
 	github.com/charmbracelet/log v0.4.1
 	github.com/go-go-golems/bobatea v0.0.29
 	github.com/go-go-golems/clay v0.2.1
-	github.com/go-go-golems/geppetto v0.5.12
-	github.com/go-go-golems/glazed v0.7.5
+	github.com/go-go-golems/geppetto v0.5.13
+	github.com/go-go-golems/glazed v0.7.6
 	github.com/go-go-golems/go-sqlite-regexp v0.0.1
 	github.com/go-go-golems/prompto v0.1.13
 	github.com/go-go-golems/uhoh v0.0.5
@@ -106,14 +106,14 @@ require (
 	go.opentelemetry.io/otel/metric v1.38.0 // indirect
 	go.opentelemetry.io/otel/trace v1.38.0 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
-	golang.org/x/oauth2 v0.33.0 // indirect
+	golang.org/x/oauth2 v0.34.0 // indirect
 	golang.org/x/time v0.14.0 // indirect
-	google.golang.org/api v0.239.0 // indirect
+	google.golang.org/api v0.258.0 // indirect
 	google.golang.org/appengine v1.6.8 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20251022142026-3a174f9686a8 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20251124214823-79d6a2a48846 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20251213004720-97cd9d5aeac2 // indirect
 	google.golang.org/grpc v1.77.0 // indirect
-	google.golang.org/protobuf v1.36.10 // indirect
+	google.golang.org/protobuf v1.36.11 // indirect
 )
 
 require (
