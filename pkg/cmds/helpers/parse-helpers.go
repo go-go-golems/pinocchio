@@ -66,6 +66,7 @@ func ParseGeppettoLayers(c *cmds.PinocchioCommand, options ...GeppettoLayersHelp
 				helper.ProfileFile,
 				helper.ProfileFile,
 				helper.Profile,
+				"default",
 				parameters.WithParseStepSource("profiles"),
 				parameters.WithParseStepMetadata(map[string]interface{}{
 					"profileFile": helper.ProfileFile,
