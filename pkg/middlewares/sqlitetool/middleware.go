@@ -18,13 +18,13 @@ import (
 
 const (
 	PinocchioNamespaceKey = "pinocchio"
-	SQLiteDSNValueKey      = "sqlite_dsn"
-	SQLitePromptsValueKey  = "sqlite_prompts" // optional []string of system snippets
+	SQLiteDSNValueKey     = "sqlite_dsn"
+	SQLitePromptsValueKey = "sqlite_prompts" // optional []string of system snippets
 )
 
 var (
-	KeySQLiteDSN     = turns.K[string](PinocchioNamespaceKey, SQLiteDSNValueKey, 1)
-	KeySQLitePrompts = turns.K[[]string](PinocchioNamespaceKey, SQLitePromptsValueKey, 1)
+	KeySQLiteDSN     = turns.DataK[string](PinocchioNamespaceKey, SQLiteDSNValueKey, 1)
+	KeySQLitePrompts = turns.DataK[[]string](PinocchioNamespaceKey, SQLitePromptsValueKey, 1)
 )
 
 // DBLike abstracts *sql.DB (and compatible types) for this middleware.
@@ -115,7 +115,7 @@ func NewMiddleware(cfg Config) rootmw.Middleware {
 
 			// Determine if the tool should be available for this turn; check DSN presence
 			dsn := cfg.DSN
-			if v, ok, err := turns.DataGet(t.Data, KeySQLiteDSN); err != nil {
+			if v, ok, err := KeySQLiteDSN.Get(t.Data); err != nil {
 				return nil, fmt.Errorf("get sqlite dsn: %w", err)
 			} else if ok && v != "" {
 				dsn = v

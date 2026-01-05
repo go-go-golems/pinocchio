@@ -96,9 +96,9 @@ func NewMiddleware(svc Service, cfg Config) rootmw.Middleware {
 				// Remove previously inserted AgentMode-related blocks
 				{
 					valSet := map[string]struct{}{
-						"agentmode_system_prompt":         {},
-						"agentmode_switch_instructions":   {},
-						"agentmode_user_prompt":           {},
+						"agentmode_system_prompt":       {},
+						"agentmode_switch_instructions": {},
+						"agentmode_user_prompt":         {},
 					}
 					kept := make([]turns.Block, 0, len(t.Blocks))
 					for _, b := range t.Blocks {
