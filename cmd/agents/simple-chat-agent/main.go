@@ -227,7 +227,7 @@ func (c *SimpleAgentCmd) RunIntoWriter(ctx context.Context, parsed *layers.Parse
 		if backend.Turn == nil {
 			backend.Turn = &turns.Turn{}
 		}
-		if err := turns.DataSet(&backend.Turn.Data, turns.KeyResponsesServerTools, []any{map[string]any{"type": "web_search"}}); err != nil {
+		if err := turns.KeyResponsesServerTools.Set(&backend.Turn.Data, []any{map[string]any{"type": "web_search"}}); err != nil {
 			return errors.Wrap(err, "set responses server tools")
 		}
 	}

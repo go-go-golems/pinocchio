@@ -70,7 +70,7 @@ func NewMiddleware(svc Service, cfg Config) rootmw.Middleware {
 			log.Debug().Str("run_id", t.RunID).Str("turn_id", t.ID).Msg("agentmode: middleware start")
 
 			// Determine current mode: from Turn.Data or Store fallback
-			modeName, ok, err := turns.DataGet(t.Data, turns.KeyAgentMode)
+			modeName, ok, err := turns.KeyAgentMode.Get(t.Data)
 			if err != nil {
 				return nil, errors.Wrap(err, "get agent mode")
 			}
@@ -84,7 +84,7 @@ func NewMiddleware(svc Service, cfg Config) rootmw.Middleware {
 			}
 			if modeName == "" {
 				modeName = cfg.DefaultMode
-				if err := turns.DataSet(&t.Data, turns.KeyAgentMode, modeName); err != nil {
+				if err := turns.KeyAgentMode.Set(&t.Data, modeName); err != nil {
 					return nil, errors.Wrap(err, "set default agent mode")
 				}
 			}
@@ -102,7 +102,7 @@ func NewMiddleware(svc Service, cfg Config) rootmw.Middleware {
 					}
 					kept := make([]turns.Block, 0, len(t.Blocks))
 					for _, b := range t.Blocks {
-						tag, ok, err := turns.BlockMetadataGet(b.Metadata, turns.KeyBlockMetaAgentModeTag)
+						tag, ok, err := turns.KeyBlockMetaAgentModeTag.Get(b.Metadata)
 						if err != nil {
 							return nil, errors.Wrap(err, "get agentmode tag block metadata")
 						}
@@ -134,10 +134,10 @@ func NewMiddleware(svc Service, cfg Config) rootmw.Middleware {
 						prev = prev[:120] + "…"
 					}
 					usr := turns.NewUserTextBlock(text)
-					if err := turns.BlockMetadataSet(&usr.Metadata, turns.KeyBlockMetaAgentModeTag, "agentmode_user_prompt"); err != nil {
+					if err := turns.KeyBlockMetaAgentModeTag.Set(&usr.Metadata, "agentmode_user_prompt"); err != nil {
 						return nil, errors.Wrap(err, "set agentmode_tag block metadata")
 					}
-					if err := turns.BlockMetadataSet(&usr.Metadata, turns.KeyBlockMetaAgentMode, mode.Name); err != nil {
+					if err := turns.KeyBlockMetaAgentMode.Set(&usr.Metadata, mode.Name); err != nil {
 						return nil, errors.Wrap(err, "set agentmode block metadata")
 					}
 					// Insert as second-to-last (before last assistant or tool block if present)
@@ -164,7 +164,7 @@ func NewMiddleware(svc Service, cfg Config) rootmw.Middleware {
 				}
 				// Pass allowed tools hint to downstream tool middleware
 				if len(mode.AllowedTools) > 0 {
-					if err := turns.DataSet(&t.Data, turns.KeyAgentModeAllowedTools, append([]string(nil), mode.AllowedTools...)); err != nil {
+					if err := turns.KeyAgentModeAllowedTools.Set(&t.Data, append([]string(nil), mode.AllowedTools...)); err != nil {
 						return nil, errors.Wrap(err, "set agentmode allowed tools")
 					}
 				}
@@ -188,7 +188,7 @@ func NewMiddleware(svc Service, cfg Config) rootmw.Middleware {
 			if newMode != "" && newMode != modeName {
 				log.Debug().Str("from", modeName).Str("to", newMode).Msg("agentmode: detected mode switch via YAML")
 				// Apply to turn for next call
-				if err := turns.DataSet(&res.Data, turns.KeyAgentMode, newMode); err != nil {
+				if err := turns.KeyAgentMode.Set(&res.Data, newMode); err != nil {
 					return nil, errors.Wrap(err, "set agent mode")
 				}
 				// Record change

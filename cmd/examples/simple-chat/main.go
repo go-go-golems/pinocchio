@@ -4,9 +4,10 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
-	layers2 "github.com/go-go-golems/geppetto/pkg/layers"
 	"io"
 	"strings"
+
+	layers2 "github.com/go-go-golems/geppetto/pkg/layers"
 
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 
@@ -135,7 +136,7 @@ func (c *TestCommand) RunIntoWriter(ctx context.Context, parsedLayers *layers.Pa
 
 	// Enable server-side tools when requested: attach built-in web_search definition
 	if s.ServerTools {
-		if err := turns.DataSet(&seed.Data, turns.KeyResponsesServerTools, []any{map[string]any{"type": "web_search"}}); err != nil {
+		if err := turns.KeyResponsesServerTools.Set(&seed.Data, []any{map[string]any{"type": "web_search"}}); err != nil {
 			return errors.Wrap(err, "set responses server tools")
 		}
 	}
