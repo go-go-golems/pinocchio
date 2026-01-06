@@ -22,11 +22,6 @@ const (
 	SQLitePromptsValueKey = "sqlite_prompts" // optional []string of system snippets
 )
 
-var (
-	KeySQLiteDSN     = turns.DataK[string](PinocchioNamespaceKey, SQLiteDSNValueKey, 1)
-	KeySQLitePrompts = turns.DataK[[]string](PinocchioNamespaceKey, SQLitePromptsValueKey, 1)
-)
-
 // DBLike abstracts *sql.DB (and compatible types) for this middleware.
 type DBLike interface {
 	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
