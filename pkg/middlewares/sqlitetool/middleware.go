@@ -17,8 +17,9 @@ import (
 )
 
 const (
-	DataKeySQLiteDSN     turns.TurnDataKey = "sqlite_dsn"
-	DataKeySQLitePrompts turns.TurnDataKey = "sqlite_prompts" // optional []string of system snippets
+	PinocchioNamespaceKey = "pinocchio"
+	SQLiteDSNValueKey     = "sqlite_dsn"
+	SQLitePromptsValueKey = "sqlite_prompts" // optional []string of system snippets
 )
 
 // DBLike abstracts *sql.DB (and compatible types) for this middleware.
@@ -106,13 +107,12 @@ func NewMiddleware(cfg Config) rootmw.Middleware {
 				return next(ctx, t)
 			}
 			log.Debug().Str("run_id", t.RunID).Str("turn_id", t.ID).Msg("sqlitetool: middleware start")
-			if t.Data == nil {
-				t.Data = map[turns.TurnDataKey]interface{}{}
-			}
 
 			// Determine if the tool should be available for this turn; check DSN presence
 			dsn := cfg.DSN
-			if v, ok := t.Data[DataKeySQLiteDSN].(string); ok && v != "" {
+			if v, ok, err := KeySQLiteDSN.Get(t.Data); err != nil {
+				return nil, fmt.Errorf("get sqlite dsn: %w", err)
+			} else if ok && v != "" {
 				dsn = v
 			}
 			if dsn == "" && cfg.DB == nil {

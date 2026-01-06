@@ -333,7 +333,7 @@ func (r *Router) registerHTTPHandlers() {
 		conv.running = true
 		conv.mu.Unlock()
 		if conv.Turn == nil {
-			conv.Turn = &turns.Turn{RunID: conv.RunID, Data: map[turns.TurnDataKey]interface{}{}}
+			conv.Turn = &turns.Turn{RunID: conv.RunID}
 		}
 		turns.AppendBlock(conv.Turn, turns.NewUserTextBlock(body.Prompt))
 		conv.Turn.RunID = conv.RunID
@@ -352,9 +352,6 @@ func (r *Router) registerHTTPHandlers() {
 			conv.mu.Unlock()
 			runCtx = events.WithEventSinks(runCtx, conv.Sink)
 			log.Info().Str("component", "webchat").Str("conv_id", conv.ID).Str("run_id", conv.RunID).Msg("starting run loop")
-			if conv.Turn.Data == nil {
-				conv.Turn.Data = map[turns.TurnDataKey]interface{}{}
-			}
 			updatedTurn, _ := toolhelpers.RunToolCallingLoop(
 				runCtx,
 				conv.Eng,
@@ -479,7 +476,7 @@ func (r *Router) registerHTTPHandlers() {
 		conv.running = true
 		conv.mu.Unlock()
 		if conv.Turn == nil {
-			conv.Turn = &turns.Turn{RunID: conv.RunID, Data: map[turns.TurnDataKey]interface{}{}}
+			conv.Turn = &turns.Turn{RunID: conv.RunID}
 		}
 		turns.AppendBlock(conv.Turn, turns.NewUserTextBlock(body.Prompt))
 		conv.Turn.RunID = conv.RunID
@@ -499,9 +496,6 @@ func (r *Router) registerHTTPHandlers() {
 			conv.mu.Unlock()
 			runCtx = events.WithEventSinks(runCtx, conv.Sink)
 			log.Info().Str("component", "webchat").Str("conv_id", conv.ID).Str("run_id", conv.RunID).Msg("starting run loop")
-			if conv.Turn.Data == nil {
-				conv.Turn.Data = map[turns.TurnDataKey]interface{}{}
-			}
 			updatedTurn, _ := toolhelpers.RunToolCallingLoop(
 				runCtx,
 				conv.Eng,

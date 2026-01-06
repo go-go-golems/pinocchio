@@ -12,20 +12,9 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/steps/parse"
 	"github.com/go-go-golems/geppetto/pkg/turns"
 	"github.com/google/uuid"
+	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 	"gopkg.in/yaml.v3"
-)
-
-// Data keys for agent mode; local to this middleware package
-const (
-	DataKeyAgentMode             turns.TurnDataKey = "agent_mode"
-	DataKeyAgentModeAllowedTools turns.TurnDataKey = "agent_mode_allowed_tools"
-)
-
-// Block metadata keys used by this middleware.
-const (
-	BlockMetadataKeyAgentModeTag turns.BlockMetadataKey = "agentmode_tag"
-	BlockMetadataKeyAgentMode    turns.BlockMetadataKey = "agentmode"
 )
 
 // AgentMode describes a mode name with allowed tools and an optional system prompt snippet.
@@ -77,14 +66,17 @@ func NewMiddleware(svc Service, cfg Config) rootmw.Middleware {
 			if t == nil {
 				return next(ctx, t)
 			}
-			if t.Data == nil {
-				t.Data = map[turns.TurnDataKey]interface{}{}
-			}
 
 			log.Debug().Str("run_id", t.RunID).Str("turn_id", t.ID).Msg("agentmode: middleware start")
 
 			// Determine current mode: from Turn.Data or Store fallback
-			modeName, _ := t.Data[DataKeyAgentMode].(string)
+			modeName, ok, err := turns.KeyAgentMode.Get(t.Data)
+			if err != nil {
+				return nil, errors.Wrap(err, "get agent mode")
+			}
+			if !ok {
+				modeName = ""
+			}
 			if modeName == "" && svc != nil && t.RunID != "" {
 				if m, err := svc.GetCurrentMode(ctx, t.RunID); err == nil && m != "" {
 					modeName = m
@@ -92,7 +84,9 @@ func NewMiddleware(svc Service, cfg Config) rootmw.Middleware {
 			}
 			if modeName == "" {
 				modeName = cfg.DefaultMode
-				t.Data[DataKeyAgentMode] = modeName
+				if err := turns.KeyAgentMode.Set(&t.Data, modeName); err != nil {
+					return nil, errors.Wrap(err, "set default agent mode")
+				}
 			}
 
 			mode, err := svc.GetMode(ctx, modeName)
@@ -100,11 +94,27 @@ func NewMiddleware(svc Service, cfg Config) rootmw.Middleware {
 				log.Warn().Str("requested_mode", modeName).Msg("agentmode: unknown mode; continuing without restrictions")
 			} else {
 				// Remove previously inserted AgentMode-related blocks
-				_ = turns.RemoveBlocksByMetadata(t, BlockMetadataKeyAgentModeTag,
-					"agentmode_system_prompt",
-					"agentmode_switch_instructions",
-					"agentmode_user_prompt",
-				)
+				{
+					valSet := map[string]struct{}{
+						"agentmode_system_prompt":       {},
+						"agentmode_switch_instructions": {},
+						"agentmode_user_prompt":         {},
+					}
+					kept := make([]turns.Block, 0, len(t.Blocks))
+					for _, b := range t.Blocks {
+						tag, ok, err := turns.KeyBlockMetaAgentModeTag.Get(b.Metadata)
+						if err != nil {
+							return nil, errors.Wrap(err, "get agentmode tag block metadata")
+						}
+						if ok {
+							if _, match := valSet[tag]; match {
+								continue
+							}
+						}
+						kept = append(kept, b)
+					}
+					t.Blocks = kept
+				}
 
 				// Build a single user block with mode prompt and (optionally) switch instructions
 				var bldr strings.Builder
@@ -123,13 +133,13 @@ func NewMiddleware(svc Service, cfg Config) rootmw.Middleware {
 					if len(prev) > 120 {
 						prev = prev[:120] + "…"
 					}
-					usr := turns.WithBlockMetadata(
-						turns.NewUserTextBlock(text),
-						map[turns.BlockMetadataKey]interface{}{
-							BlockMetadataKeyAgentModeTag: "agentmode_user_prompt",
-							BlockMetadataKeyAgentMode:    mode.Name,
-						},
-					)
+					usr := turns.NewUserTextBlock(text)
+					if err := turns.KeyBlockMetaAgentModeTag.Set(&usr.Metadata, "agentmode_user_prompt"); err != nil {
+						return nil, errors.Wrap(err, "set agentmode_tag block metadata")
+					}
+					if err := turns.KeyBlockMetaAgentMode.Set(&usr.Metadata, mode.Name); err != nil {
+						return nil, errors.Wrap(err, "set agentmode block metadata")
+					}
 					// Insert as second-to-last (before last assistant or tool block if present)
 					before := len(t.Blocks)
 					if before > 0 {
@@ -154,7 +164,9 @@ func NewMiddleware(svc Service, cfg Config) rootmw.Middleware {
 				}
 				// Pass allowed tools hint to downstream tool middleware
 				if len(mode.AllowedTools) > 0 {
-					t.Data[DataKeyAgentModeAllowedTools] = append([]string(nil), mode.AllowedTools...)
+					if err := turns.KeyAgentModeAllowedTools.Set(&t.Data, append([]string(nil), mode.AllowedTools...)); err != nil {
+						return nil, errors.Wrap(err, "set agentmode allowed tools")
+					}
 				}
 			}
 
@@ -176,7 +188,9 @@ func NewMiddleware(svc Service, cfg Config) rootmw.Middleware {
 			if newMode != "" && newMode != modeName {
 				log.Debug().Str("from", modeName).Str("to", newMode).Msg("agentmode: detected mode switch via YAML")
 				// Apply to turn for next call
-				res.Data[DataKeyAgentMode] = newMode
+				if err := turns.KeyAgentMode.Set(&res.Data, newMode); err != nil {
+					return nil, errors.Wrap(err, "set agent mode")
+				}
 				// Record change
 				if svc != nil {
 					_ = svc.RecordModeChange(ctx, ModeChange{RunID: res.RunID, TurnID: res.ID, FromMode: modeName, ToMode: newMode, Analysis: analysis, At: time.Now()})

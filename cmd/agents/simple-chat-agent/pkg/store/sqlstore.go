@@ -156,10 +156,11 @@ func (s *SQLiteStore) SaveTurnSnapshot(ctx context.Context, t *turns.Turn, phase
 			_, _ = s.db.ExecContext(ctx, "INSERT OR REPLACE INTO block_payload_kv(block_id, turn_id, phase, key, type, value_text, value_json) VALUES(?,?,?,?,?,?,?)", bid, t.ID, phase, pk, typ, vt, vj)
 		}
 		// metadata kv
-		for mk, mv := range b.Metadata {
+		b.Metadata.Range(func(mk turns.BlockMetadataKey, mv any) bool {
 			typ, vt, vj := classifyValue(mv)
 			_, _ = s.db.ExecContext(ctx, "INSERT OR REPLACE INTO block_metadata_kv(block_id, turn_id, phase, key, type, value_text, value_json) VALUES(?,?,?,?,?,?,?)", bid, t.ID, phase, mk, typ, vt, vj)
-		}
+			return true
+		})
 	}
 	// Persist tool registry definitions as JSON, if present.
 	//
@@ -174,10 +175,11 @@ func (s *SQLiteStore) SaveTurnSnapshot(ctx context.Context, t *turns.Turn, phase
 		}
 	}
 	// turn data KV
-	for k, v := range t.Data {
+	t.Data.Range(func(k turns.TurnDataKey, v any) bool {
 		typ, vt, vj := classifyValue(v)
 		_, _ = s.db.ExecContext(ctx, "INSERT OR REPLACE INTO turn_kv(turn_id, section, key, type, value_text, value_json) VALUES(?,?,?,?,?,?)", t.ID, "data", k, typ, vt, vj)
-	}
+		return true
+	})
 	js, _ := json.Marshal(snap)
 	_, err := s.db.ExecContext(ctx, "INSERT INTO turn_snapshots(turn_id, phase, created_at, data) VALUES(?,?,?,?)", t.ID, phase, time.Now().Format(time.RFC3339Nano), string(js))
 	return errors.Wrap(err, "insert turn snapshot")
@@ -185,39 +187,42 @@ func (s *SQLiteStore) SaveTurnSnapshot(ctx context.Context, t *turns.Turn, phase
 
 func (s *SQLiteStore) Close() error { return s.db.Close() }
 
-// convertTurnMetadataToMap converts a typed TurnMetadataKey map to a string map.
-func convertTurnMetadataToMap(m map[turns.TurnMetadataKey]interface{}) map[string]any {
-	if m == nil {
+// convertTurnMetadataToMap converts turns.Metadata into a string-keyed map.
+func convertTurnMetadataToMap(m turns.Metadata) map[string]any {
+	if m.Len() == 0 {
 		return nil
 	}
-	result := make(map[string]any, len(m))
-	for k, v := range m {
-		result[string(k)] = v
-	}
+	result := map[string]any{}
+	m.Range(func(k turns.TurnMetadataKey, v any) bool {
+		result[k.String()] = v
+		return true
+	})
 	return result
 }
 
-// convertTurnDataToMap converts a typed TurnDataKey map to a string map.
-func convertTurnDataToMap(m map[turns.TurnDataKey]interface{}) map[string]any {
-	if m == nil {
+// convertTurnDataToMap converts turns.Data into a string-keyed map.
+func convertTurnDataToMap(m turns.Data) map[string]any {
+	if m.Len() == 0 {
 		return nil
 	}
-	result := make(map[string]any, len(m))
-	for k, v := range m {
-		result[string(k)] = v
-	}
+	result := map[string]any{}
+	m.Range(func(k turns.TurnDataKey, v any) bool {
+		result[k.String()] = v
+		return true
+	})
 	return result
 }
 
-// convertBlockMetadataToMap converts a typed BlockMetadataKey map to a string map.
-func convertBlockMetadataToMap(m map[turns.BlockMetadataKey]interface{}) map[string]any {
-	if m == nil {
+// convertBlockMetadataToMap converts turns.BlockMetadata into a string-keyed map.
+func convertBlockMetadataToMap(m turns.BlockMetadata) map[string]any {
+	if m.Len() == 0 {
 		return nil
 	}
-	result := make(map[string]any, len(m))
-	for k, v := range m {
-		result[string(k)] = v
-	}
+	result := map[string]any{}
+	m.Range(func(k turns.BlockMetadataKey, v any) bool {
+		result[k.String()] = v
+		return true
+	})
 	return result
 }
 
