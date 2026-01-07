@@ -179,8 +179,8 @@ github.com/fsnotify/fsnotify v1.9.0 h1:2Ml+OJNzbYCTzsxtv8vKSFD9PbJjmhYF14k/jKC7S
 github.com/fsnotify/fsnotify v1.9.0/go.mod h1:8jBTzvmWwFyi3Pb8djgCCO5IBqzKJ/Jwo8TRcHyHii0=
 github.com/go-go-golems/bobatea v0.0.29 h1:eWyFZ1O78bimpkUOMUZxu6qAf/FyeTz8VzRweWHYlI0=
 github.com/go-go-golems/bobatea v0.0.29/go.mod h1:c88SEAaVVa+i6OfCWRvYLAgbZ2SXHWDIS0i+nKL2Fpg=
-github.com/go-go-golems/clay v0.2.1 h1:++xf+ivuWlYQ3TVOWSKub5AcElX5GVAX4e7TkTI4PnQ=
-github.com/go-go-golems/clay v0.2.1/go.mod h1:j6g1lWbsr5Fh7ArmX+iojEa1RojHpuUBa/QNb6yLqg0=
+github.com/go-go-golems/clay v0.3.0 h1:1uvs3js6P9rZBAdNh/9s1NmAJitIG0J9OyKPBNA7lqU=
+github.com/go-go-golems/clay v0.3.0/go.mod h1:7ZjqqwhrUbC0aK7qvTix926SvmFBIrj+TSyxhvE+LTc=
 github.com/go-go-golems/geppetto v0.6.0 h1:8PGgWr07gl4thkuWhyLPpP3tUzD+9X+V4f7GMK0QZzw=
 github.com/go-go-golems/geppetto v0.6.0/go.mod h1:cmiAC9AkIf8fDj/YxC6Rv87mHnxa2UlQsPcx6TOzuzU=
 github.com/go-go-golems/glazed v0.7.8 h1:ngxi53jMFK2Xkocvak3E503Xhsy5/VN+WK6gqgibOVM=

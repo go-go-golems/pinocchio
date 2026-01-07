@@ -10,7 +10,7 @@ require (
 	github.com/charmbracelet/glamour v0.10.0
 	github.com/charmbracelet/log v0.4.1
 	github.com/go-go-golems/bobatea v0.0.29
-	github.com/go-go-golems/clay v0.2.1
+	github.com/go-go-golems/clay v0.3.0
 	github.com/go-go-golems/geppetto v0.6.0
 	github.com/go-go-golems/glazed v0.7.8
 	github.com/go-go-golems/go-sqlite-regexp v0.0.1
