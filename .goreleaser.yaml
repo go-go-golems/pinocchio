@@ -8,13 +8,22 @@ before:
     # you may remove this if you don't need go generate
     - go generate ./...
 builds:
-  - main: ./cmd/pinocchio
+  - id: pinocchio-linux
+    main: ./cmd/pinocchio
     env:
-      - CGO_ENABLED=0
+      - CGO_ENABLED=1
     goos:
       - linux
 # I am not able to test windows at the time
 #      - windows
+    goarch:
+      - amd64
+      - arm64
+  - id: pinocchio-darwin
+    main: ./cmd/pinocchio
+    env:
+      - CGO_ENABLED=1
+    goos:
       - darwin
     goarch:
       - amd64
