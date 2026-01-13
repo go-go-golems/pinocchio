@@ -79,6 +79,51 @@ func SemanticEventsFromEvent(e events.Event) [][]byte {
 		}
 		sem := map[string]any{"type": "llm.final", "id": id, "text": ev.Text, "metadata": md.LLMInferenceData}
 		return [][]byte{wrapSem(sem)}
+	case *events.EventInfo:
+		switch ev.Message {
+		case "thinking-started":
+			id := md.ID.String()
+			if md.ID == uuid.Nil {
+				id = "llm-" + uuid.NewString()
+			}
+			sem := map[string]any{"type": "llm.thinking.start", "id": id + ":thinking", "role": "thinking", "metadata": md.LLMInferenceData}
+			return [][]byte{wrapSem(sem)}
+		case "thinking-ended":
+			id := md.ID.String()
+			if md.ID == uuid.Nil {
+				id = "llm-" + uuid.NewString()
+			}
+			sem := map[string]any{"type": "llm.thinking.final", "id": id + ":thinking"}
+			return [][]byte{wrapSem(sem)}
+		case "reasoning-summary":
+			if text, ok := ev.Data["text"].(string); ok && text != "" {
+				id := md.ID.String()
+				if md.ID == uuid.Nil {
+					id = "llm-" + uuid.NewString()
+				}
+				sem := map[string]any{
+					"type":       "llm.thinking.delta",
+					"id":         id + ":thinking",
+					"delta":      text,
+					"cumulative": text,
+					"metadata":   md.LLMInferenceData,
+				}
+				return [][]byte{wrapSem(sem)}
+			}
+		}
+	case *events.EventThinkingPartial:
+		id := md.ID.String()
+		if md.ID == uuid.Nil {
+			id = "llm-" + uuid.NewString()
+		}
+		sem := map[string]any{
+			"type":       "llm.thinking.delta",
+			"id":         id + ":thinking",
+			"delta":      ev.Delta,
+			"cumulative": ev.Completion,
+			"metadata":   md.LLMInferenceData,
+		}
+		return [][]byte{wrapSem(sem)}
 	case *events.EventInterrupt:
 		if intr, ok := events.ToTypedEvent[events.EventInterrupt](e); ok {
 			id := md.ID.String()
