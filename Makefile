@@ -3,6 +3,8 @@
 all: test build
 
 VERSION=v0.1.14
+GORELEASER_ARGS ?= --skip=sign --snapshot --clean
+GORELEASER_TARGET ?= --single-target
 
 TAPES=$(shell ls doc/vhs/*tape 2>/dev/null || echo "")
 gifs:
@@ -57,7 +59,7 @@ build:
 	go build ./...
 
 goreleaser:
-	goreleaser release --skip=sign --snapshot --clean
+	goreleaser release $(GORELEASER_ARGS) $(GORELEASER_TARGET)
 
 tag-major:
 	git tag $(shell svu major)
