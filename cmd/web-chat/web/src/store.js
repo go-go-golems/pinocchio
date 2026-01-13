@@ -144,6 +144,59 @@ export const useStore = create(devtools(subscribeWithSelector((set, get)=>({
     return { timeline: { byId: { ...s.timeline.byId, [entityId]: updated }, order: s.timeline.order } };
   }, false, { type: 'sem/llm.final', payload: ({ entityId, textLen: (typeof text === 'string' ? text.length : 0), hasMeta: !!metadata }) }),
 
+  llmThinkingStart: (entityId, metadata = undefined)=> set((s)=>{
+    const exists = s.timeline.byId[entityId];
+    if (exists) return {};
+    const entity = {
+      id: entityId,
+      kind: 'llm_text',
+      renderer: { kind: 'llm_text' },
+      props: { role: 'thinking', text: '', streaming: true, metadata },
+      startedAt: Date.now(),
+      completed: false,
+      result: null,
+      version: 0,
+      updatedAt: null,
+      completedAt: null,
+    };
+    return { timeline: { byId: { ...s.timeline.byId, [entityId]: entity }, order: [ ...s.timeline.order, entityId ] } };
+  }, false, { type: 'sem/llm.thinking.start', payload: ({ entityId, hasMeta: !!metadata }) }),
+
+  llmThinkingDelta: (entityId, delta, cumulative = undefined)=> set((s)=>{
+    const e = s.timeline.byId[entityId];
+    if (!e) return {};
+    const cur = (e.props && e.props.text) || '';
+    let next = cur;
+    if (typeof delta === 'string' && delta.length > 0) {
+      next = `${cur}${delta}`;
+    } else if (typeof cumulative === 'string') {
+      next = cumulative;
+    }
+    const updated = {
+      ...e,
+      props: { ...e.props, text: next, streaming: true },
+      version: e.version + 1,
+      updatedAt: Date.now(),
+    };
+    return { timeline: { byId: { ...s.timeline.byId, [entityId]: updated }, order: s.timeline.order } };
+  }, false, { type: 'sem/llm.thinking.delta', payload: ({ entityId, deltaLen: (typeof delta === 'string' ? delta.length : 0) }) }),
+
+  llmThinkingFinal: (entityId)=> set((s)=>{
+    const e = s.timeline.byId[entityId];
+    if (!e) return {};
+    const text = (e.props && e.props.text) || '';
+    const updated = {
+      ...e,
+      props: { ...e.props, text, streaming: false },
+      version: e.version + 1,
+      updatedAt: Date.now(),
+      completed: true,
+      completedAt: Date.now(),
+      result: { text },
+    };
+    return { timeline: { byId: { ...s.timeline.byId, [entityId]: updated }, order: s.timeline.order } };
+  }, false, { type: 'sem/llm.thinking.final', payload: ({ entityId }) }),
+
   toolCallStart: (entityId, name, input)=> set((s)=>{
     if (s.timeline.byId[entityId]) return {};
     const entity = {
@@ -315,6 +368,15 @@ export const useStore = create(devtools(subscribeWithSelector((set, get)=>({
       case 'llm.final':
         get().llmTextFinal(ev.id, ev.text || '', ev.metadata);
         return;
+      case 'llm.thinking.start':
+        get().llmThinkingStart(ev.id, ev.metadata);
+        return;
+      case 'llm.thinking.delta':
+        get().llmThinkingDelta(ev.id, ev.delta || '', ev.cumulative);
+        return;
+      case 'llm.thinking.final':
+        get().llmThinkingFinal(ev.id);
+        return;
       case 'tool.start':
         get().toolCallStart(ev.id, ev.name, ev.input);
         return;
@@ -375,5 +437,4 @@ export const useStore = create(devtools(subscribeWithSelector((set, get)=>({
     }
   },
 })), { name: 'web-chat' }));
-
 
