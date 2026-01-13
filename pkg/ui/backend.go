@@ -3,7 +3,6 @@ package ui
 import (
 	"context"
 	"fmt"
-	"github.com/go-go-golems/geppetto/pkg/inference/engine"
 	"sync"
 	"time"
 
@@ -11,7 +10,9 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	boba_chat "github.com/go-go-golems/bobatea/pkg/chat"
 	"github.com/go-go-golems/bobatea/pkg/timeline"
+	"github.com/go-go-golems/geppetto/pkg/conversation"
 	"github.com/go-go-golems/geppetto/pkg/events"
+	"github.com/go-go-golems/geppetto/pkg/inference/engine"
 	"github.com/go-go-golems/geppetto/pkg/turns"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
@@ -22,8 +23,8 @@ type EngineBackend struct {
 	engine    engine.Engine
 	isRunning bool
 	cancel    context.CancelFunc
-	historyMu sync.RWMutex
-	history   []*turns.Turn
+	stateMu   sync.RWMutex
+	state     *conversation.ConversationState
 	program   *tea.Program
 	emittedMu sync.Mutex
 	emitted   map[string]struct{}
@@ -69,11 +70,13 @@ func (e *EngineBackend) Start(ctx context.Context, prompt string) (tea.Cmd, erro
 			return nil
 		}
 
-		log.Debug().Str("component", "engine_backend").Msg("Reducing history, appending user block, running inference")
-		// Reduce history into a seed Turn, append user Block, then run inference
-		seed := e.reduceHistory()
-		if prompt != "" {
-			turns.AppendBlock(seed, turns.NewUserTextBlock(prompt))
+		log.Debug().Str("component", "engine_backend").Msg("Snapshotting conversation state, appending user block, running inference")
+		seed, err := e.snapshotForPrompt(prompt)
+		if err != nil {
+			log.Error().Err(err).Str("component", "engine_backend").Msg("Failed to build snapshot turn")
+			e.isRunning = false
+			e.cancel = nil
+			return boba_chat.BackendFinishedMsg{}
 		}
 		updated, err := engine.RunInference(ctx, seed)
 
@@ -85,12 +88,10 @@ func (e *EngineBackend) Start(ctx context.Context, prompt string) (tea.Cmd, erro
 			log.Error().Err(err).Msg("Engine inference failed")
 			log.Error().Err(err).Str("component", "engine_backend").Msg("RunInference failed")
 		}
-		// Append updated Turn to history for cohesive continuation
+		// Update conversation state for cohesive continuation
 		if updated != nil {
-			e.historyMu.Lock()
-			e.history = append(e.history, updated)
-			e.historyMu.Unlock()
-			log.Debug().Str("component", "engine_backend").Int("turn_blocks", len(updated.Blocks)).Int("history_len", len(e.history)).Msg("Appended updated Turn to history")
+			e.updateStateFromTurn(updated)
+			log.Debug().Str("component", "engine_backend").Int("turn_blocks", len(updated.Blocks)).Msg("Updated conversation state from inference")
 		}
 		log.Debug().Str("component", "engine_backend").Msg("Returning BackendFinishedMsg")
 		return boba_chat.BackendFinishedMsg{}
@@ -99,10 +100,21 @@ func (e *EngineBackend) Start(ctx context.Context, prompt string) (tea.Cmd, erro
 
 // SetSeedTurn sets the seed Turn directly
 func (e *EngineBackend) SetSeedTurn(t *turns.Turn) {
-	e.historyMu.Lock()
-	e.history = append(e.history, t)
-	e.historyMu.Unlock()
-	log.Debug().Str("component", "engine_backend").Int("seed_blocks", len(t.Blocks)).Int("history_len", len(e.history)).Msg("Seed Turn appended to history")
+	if t == nil {
+		return
+	}
+	e.stateMu.Lock()
+	if e.state == nil {
+		e.state = conversation.NewConversationState(t.RunID)
+	}
+	e.state.Blocks = append([]turns.Block(nil), t.Blocks...)
+	e.state.Data = t.Data.Clone()
+	e.state.Metadata = t.Metadata.Clone()
+	if t.RunID != "" {
+		e.state.RunID = t.RunID
+	}
+	e.stateMu.Unlock()
+	log.Debug().Str("component", "engine_backend").Int("seed_blocks", len(t.Blocks)).Msg("Seed Turn loaded into conversation state")
 	e.emitInitialEntities(t)
 }
 
@@ -184,18 +196,44 @@ func (e *EngineBackend) IsFinished() bool {
 	return !e.isRunning
 }
 
-// reduceHistory flattens all prior Turns into a single Turn by concatenating Blocks
-func (e *EngineBackend) reduceHistory() *turns.Turn {
-	out := &turns.Turn{}
-	e.historyMu.RLock()
-	defer e.historyMu.RUnlock()
-	for _, t := range e.history {
-		if t == nil {
-			continue
-		}
-		turns.AppendBlocks(out, t.Blocks...)
+func (e *EngineBackend) snapshotForPrompt(prompt string) (*turns.Turn, error) {
+	temp := conversation.NewConversationState("")
+	e.stateMu.RLock()
+	if e.state != nil {
+		temp.ID = e.state.ID
+		temp.RunID = e.state.RunID
+		temp.Blocks = append([]turns.Block(nil), e.state.Blocks...)
+		temp.Data = e.state.Data.Clone()
+		temp.Metadata = e.state.Metadata.Clone()
+		temp.Version = e.state.Version
 	}
-	return out
+	e.stateMu.RUnlock()
+
+	if prompt != "" {
+		if err := temp.Apply(conversation.MutateAppendUserText(prompt)); err != nil {
+			return nil, err
+		}
+	}
+	cfg := conversation.DefaultSnapshotConfig()
+	return temp.Snapshot(cfg)
+}
+
+func (e *EngineBackend) updateStateFromTurn(t *turns.Turn) {
+	if t == nil {
+		return
+	}
+	e.stateMu.Lock()
+	defer e.stateMu.Unlock()
+
+	if e.state == nil {
+		e.state = conversation.NewConversationState(t.RunID)
+	}
+	e.state.Blocks = append([]turns.Block(nil), t.Blocks...)
+	e.state.Data = t.Data.Clone()
+	e.state.Metadata = t.Metadata.Clone()
+	if t.RunID != "" {
+		e.state.RunID = t.RunID
+	}
 }
 
 // StepChatForwardFunc is a function that forwards watermill messages to the UI by
