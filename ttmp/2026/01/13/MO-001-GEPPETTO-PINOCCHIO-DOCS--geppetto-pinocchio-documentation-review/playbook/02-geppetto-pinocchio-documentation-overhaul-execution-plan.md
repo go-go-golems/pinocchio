@@ -52,7 +52,27 @@ This plan supersedes the earlier general playbook at `playbook/01-documentation-
 - Add a new docs index page in `geppetto/pkg/doc/topics/00-docs-index.md` to route by task.
 - Keep `12-turnsdatalint.md` unchanged (no corrections needed).
 - Merge `10-turn-blocks-serialization.md` into `08-turns.md` and delete or replace it with a short redirect stub.
-- Avoid documenting deprecated APIs or legacy-only flows; remove or minimize conversation-only walkthroughs unless they are still required by current code paths.
+- Merge `02-emrichen-embeddings.md` into `06-embeddings.md` and remove the standalone page.
+- Merge `11-structured-data-event-sinks.md` into `04-events.md` and remove the standalone page.
+- Remove `05-conversation.md` from the public doc set; track code removal in `MO-003-REMOVE-CONVERSATION-API`.
+- Avoid documenting deprecated APIs or legacy-only flows.
+
+## Candidate tutorials and playbooks (examples + common tasks)
+
+These are concrete docs a ghostwriter can produce after the overhaul, each tied to real examples or workflows.
+
+Tutorials (step-by-step):
+- Streaming inference with tools (Turn-based) using `geppetto/cmd/examples/*` as reference.
+- Event routing and structured logging using `events.EventRouter` and `events.NewStructuredPrinter`.
+- Embeddings workflows: single vs batch + caching (memory/file) using `embeddings` package.
+- Profiles and config precedence for Pinocchio (CLI + config files).
+- Turn serialization and test fixtures (YAML serde + linting).
+
+Playbooks (operational steps):
+- “Add a new tool”: register tool, attach registry to context, configure per-Turn tool config.
+- “Add a new event handler”: implement handler, subscribe to router, parse events.
+- “Troubleshoot missing tool calls”: verify registry, tool config, and block flow.
+- “Embed in templating”: use `!Embeddings` tag function in emrichen templates.
 
 ## Execution plan by document
 
@@ -89,14 +109,14 @@ Sources to read:
 Validation:
 - Examples use `--profile` (not custom flags).
 
-### 3) `geppetto/pkg/doc/topics/02-emrichen-embeddings.md` (update)
+### 3) `geppetto/pkg/doc/topics/02-emrichen-embeddings.md` (merge/retire)
 
-Action: Update existing doc.
+Action: Merge content into `06-embeddings.md` and remove this page (or leave a short redirect stub).
 
 Required changes:
+- Integrate the `!Embeddings` tag function into the main embeddings doc.
 - Clarify Ollama `dimensions` defaults to 384 if omitted.
 - Remove or qualify `OLLAMA_API_KEY` usage.
-- Add a short note linking to embeddings caching and batch embeddings sections in `06-embeddings.md`.
 
 Sources to read:
 - `geppetto/pkg/embeddings/ollama.go`
@@ -107,11 +127,7 @@ Validation:
 
 ### 4) `geppetto/pkg/doc/topics/03-caching.md` (replace or retire)
 
-Action: Replace with a short redirect stub or remove if the doc index does not need it.
-
-Redirect stub contents (if kept):
-- One paragraph: "Caching for embeddings lives in the embeddings guide" with link to `06-embeddings.md`.
-- Note that chat caching is deprecated or not implemented.
+Action: Remove from the public set. If needed, leave a short redirect stub pointing to `06-embeddings.md`.
 
 Sources to read:
 - `geppetto/pkg/embeddings/settings_factory.go`
@@ -138,14 +154,9 @@ Sources to read:
 Validation:
 - Event names and payload fields match code.
 
-### 6) `geppetto/pkg/doc/topics/05-conversation.md` (decision point)
+### 6) `geppetto/pkg/doc/topics/05-conversation.md` (retire)
 
-Action: Decide whether to retire or sharply reduce this doc.
-
-Required changes (if kept):
-- Remove legacy/step-based workflows and any deprecated APIs.
-- Keep only the minimum required API surface that is still used in current code (for example image helpers or conversion utilities).
-- Add a short "Conversation <-> Turn bridging" subsection that points to the canonical Turn-based flow.
+Action: Remove from the public doc set and add a short redirect stub only if needed for existing links.
 
 Sources to read:
 - `pinocchio/pkg/cmds/images.go` (image helper usage)
@@ -153,8 +164,8 @@ Sources to read:
 - `geppetto/pkg/turns/conv_conversation.go` (bridge helpers)
 
 Validation:
-- If the doc is retired, ensure the new index does not link to it.
-- If kept, examples must reflect only current, non-deprecated usage.
+- Doc index no longer links to this page.
+- Any remaining references are captured in `MO-003-REMOVE-CONVERSATION-API`.
 
 ### 7) `geppetto/pkg/doc/topics/06-embeddings.md` (update + consolidate)
 
@@ -163,8 +174,9 @@ Action: Update and include caching section from `03-caching.md`.
 Required changes:
 - Update `Provider` interface to include `GenerateBatchEmbeddings`.
 - Add a "Batch embeddings" section with `DefaultGenerateBatchEmbeddings` and `ParallelGenerateBatchEmbeddings` usage.
-- Include embeddings caching (memory + disk) with cache type `file`, and default cache directory location.
+- Include embeddings caching (memory + file) with cache type `file`, and default cache directory location.
 - Remove references to `geppetto/pkg/llm` (non-existent).
+- Include the Emrichen `!Embeddings` tag function documentation (merged from `02-emrichen-embeddings.md`).
 
 Sources to read:
 - `geppetto/pkg/embeddings/embeddings.go`
@@ -257,12 +269,12 @@ Sources to read:
 Validation:
 - No duplicate serialization content across two docs.
 
-### 13) `geppetto/pkg/doc/topics/11-structured-data-event-sinks.md` (update)
+### 13) `geppetto/pkg/doc/topics/11-structured-data-event-sinks.md` (merge/retire)
 
-Action: Add sink wiring snippet.
+Action: Merge content into `04-events.md` and remove the standalone page (or leave a redirect stub).
 
 Required changes:
-- Add a short example using `engine.WithSink(structuredsink.NewFilteringSink(...))`.
+- Add a short example using `engine.WithSink(structuredsink.NewFilteringSink(...))` inside `04-events.md`.
 
 Sources to read:
 - `geppetto/pkg/events/structuredsink/filtering_sink.go`

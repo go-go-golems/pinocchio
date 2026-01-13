@@ -69,6 +69,15 @@ Primary source packages referenced:
 - Event docs list only a subset of the event types and omit execution-stage and UI-focused events (tool-call-execute, log/info, citations, search progress). See `geppetto/pkg/doc/topics/04-events.md` and `geppetto/pkg/events/chat-events.go`.
 - Turn serialization docs show a `version` field that does not exist in `turns.Turn`. See `geppetto/pkg/doc/topics/10-turn-blocks-serialization.md` and `geppetto/pkg/turns/serde`.
 
+## Direction updates (2026-01-13)
+
+- Merge `02-emrichen-embeddings.md` into `06-embeddings.md` and keep a single embeddings doc.
+- Remove `03-caching.md` and fold embeddings caching content into `06-embeddings.md`.
+- Merge `11-structured-data-event-sinks.md` into `04-events.md`.
+- Remove conversation docs from the public set; track code removal separately in `MO-003-REMOVE-CONVERSATION-API`.
+- Merge `10-turn-blocks-serialization.md` into `08-turns.md`.
+- Do not document deprecated APIs; remove or replace such examples.
+
 ## Doc-to-code alignment by file
 
 ### `geppetto/pkg/doc/topics/01-profiles.md`
@@ -94,9 +103,9 @@ The tag function description is close to the current implementation, but a few d
   - The doc says Ollama requires explicit `dimensions`; the code provides a default (384) when missing.
   - The doc suggests `OLLAMA_API_KEY`, but the Ollama provider does not read any API key in `geppetto/pkg/embeddings/ollama.go`.
 - Improvements:
+  - Merge this content into `geppetto/pkg/doc/topics/06-embeddings.md` and retire the standalone page.
   - Clarify that `dimensions` is optional for Ollama and defaults to 384 unless overridden.
   - Remove or qualify `OLLAMA_API_KEY` unless a future provider update uses it.
-  - Cross-link to `geppetto/pkg/doc/topics/06-embeddings.md` for caching and batch behavior.
 
 ### `geppetto/pkg/doc/topics/03-caching.md`
 
@@ -111,8 +120,9 @@ This file is materially out of date relative to the removal of the old step-base
   - Disk cache default directory is `~/.geppetto/cache/embeddings/<model>`, not system temp.
   - There is no engine-level caching middleware documented for chat; the doc suggests it exists.
 - Improvements:
-  - Split caching docs into "Embeddings caching (current)" and "Chat caching (deprecated or planned)".
-  - Update the cache type string and defaults to match `embeddings/settings_factory.go` and `embeddings/config/flags/embeddings.yaml`.
+  - Retire `03-caching.md` and fold embeddings caching into `06-embeddings.md`.
+  - Do not document removed chat caching APIs; note deprecation only if strictly needed for migration.
+  - Update cache type and defaults to match `embeddings/settings_factory.go` and `embeddings/config/flags/embeddings.yaml`.
 
 ### `geppetto/pkg/doc/topics/04-events.md`
 
@@ -125,19 +135,20 @@ Event flow description is strong, but the event taxonomy is incomplete for curre
   - No brief mention of `events.EventSink` interface and where sinks are used beyond the router.
 - Improvements:
   - Add a "Full event catalog" or link to `geppetto/pkg/events/chat-events.go` with a table of event types and payload shapes.
-  - Include short guidance on which events are UI-facing vs internal.
+  - Treat all emitted events as chat events; avoid UI vs internal categorization.
 
 ### `geppetto/pkg/doc/topics/05-conversation.md`
 
-Core concepts are accurate, but the tutorial focus can be improved for Turn-based workflows.
+We plan to remove this doc from the public set and consolidate any required material into Turn-based docs. The conversation API is still referenced in code, but it is slated for removal in `MO-003-REMOVE-CONVERSATION-API`.
 
 - Doc sections touched: "Core Concepts", "Managing Conversations with the Manager", "Saving and Loading".
 - Related APIs: `conversation.NewManager`, `conversation.Manager.AppendMessages`, `conversation.WithAutosave`, `conversation.SaveToFile`, `conversation.NewChatMessage`, `conversation.NewImageContentFromFile`.
 - Missing or out of date:
-  - The docs do not mention `conversation/builder` (used in Turn-based examples) or how to bridge conversations to Turns.
+  - The docs do not mention `conversation/builder` (used in some examples) or how to bridge conversations to Turns.
   - There is little guidance on tree traversal or how to access non-left-most branches.
 - Improvements:
-  - Add a short "Conversation <-> Turn bridging" section referencing `turns.BlocksFromConversationDelta` and `turns.BuildConversationFromTurn`.
+  - Retire this doc and replace it with a short redirect stub if needed.
+  - Track code removal and any migration guidance in `MO-003-REMOVE-CONVERSATION-API`.
 
 ### `geppetto/pkg/doc/topics/06-embeddings.md`
 
@@ -209,16 +220,17 @@ Serde guidance is useful, but the example schema includes a field that does not 
 - Missing or out of date:
   - Examples include `version: 1`, but `turns.Turn` has no `Version` field.
 - Improvements:
-  - Either add `Version` to the Turn schema or remove it from examples and explain compatibility expectations.
+  - Merge this content into `08-turns.md` and remove `version` from YAML examples.
+  - Explain serde normalization behavior in the merged section.
 
 ### `geppetto/pkg/doc/topics/11-structured-data-event-sinks.md`
 
-Aligned with code, and in good shape. It could use a short note on how to attach a filtering sink to engine event sinks.
+Aligned with code, and in good shape. It should be merged into the main events doc to keep the event story in one place.
 
 - Doc sections touched: "Public API and Types", "Wiring Everything Together".
 - Related APIs: `structuredsink.NewFilteringSink`, `structuredsink.NewFilteringSinkWithContext`, `events.EventSink`.
 - Improvement:
-  - Add a short snippet showing `engine.WithSink(structuredsink.NewFilteringSink(...))` to close the loop with the event system.
+  - Move this content into `04-events.md` and include `engine.WithSink(structuredsink.NewFilteringSink(...))` there.
 
 ### `geppetto/pkg/doc/topics/12-turnsdatalint.md`
 
@@ -310,17 +322,17 @@ They want to build a semantic search loop and look for batch embeddings. The emb
 
 P0 - correctness fixes (blocking):
 - Rewrite tool calling sections in `06-inference-engines.md`, `07-tools.md`, and `01-streaming-inference-with-tools.md` to be fully Turn-based and remove `ToolsConfigurable`/`ConfigureTools`.
-- Update `03-caching.md` to remove step-based APIs and to use the correct cache type (`file`) and default directory for embeddings caching.
-- Update `06-embeddings.md` to include `GenerateBatchEmbeddings` and remove references to `geppetto/pkg/llm`.
-- Expand `04-events.md` to include execution and progress events, or link to a full event catalog.
-- Fix `10-turn-blocks-serialization.md` to align the YAML examples with the `turns.Turn` schema.
+- Merge `02-emrichen-embeddings.md` into `06-embeddings.md`; include `GenerateBatchEmbeddings` and remove references to `geppetto/pkg/llm`.
+- Retire `03-caching.md` and move embeddings caching guidance into `06-embeddings.md` (cache type `file` and correct defaults).
+- Merge `11-structured-data-event-sinks.md` into `04-events.md` and include a full chat event catalog.
+- Merge `10-turn-blocks-serialization.md` into `08-turns.md` and remove `version` from YAML examples.
+- Remove conversation docs from the public set; track code removal in `MO-003-REMOVE-CONVERSATION-API`.
 
 P1 - onboarding and workflow clarity:
 - Add a Pinocchio profile CLI section in `01-profiles.md` and a short profile-resolution flow diagram.
-- Add a "Turn <-> Conversation" bridge section in `05-conversation.md` and cross-link to Turns docs.
 - Add a short "Tool registry and Turn.Data" callout in `07-tools.md` with a minimal recipe.
 
 P2 - structure and polish:
 - Create a top-level index topic that routes readers by task: streaming, tools, embeddings, events, turns, middleware.
 - Normalize numbering and SectionType metadata.
-- Add a short "current API status" or "deprecated" callout for removed Step-based APIs to prevent drift.
+- Avoid documenting deprecated APIs; remove stale examples instead of keeping them as warnings.

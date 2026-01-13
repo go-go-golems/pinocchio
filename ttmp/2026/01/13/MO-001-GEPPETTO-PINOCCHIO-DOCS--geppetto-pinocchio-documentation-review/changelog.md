@@ -51,3 +51,13 @@ Playbook: revise execution plan to avoid deprecated APIs, merge turns serializat
 
 - /home/manuel/workspaces/2026-01-13/ocr-tui/pinocchio/ttmp/2026/01/13/MO-001-GEPPETTO-PINOCCHIO-DOCS--geppetto-pinocchio-documentation-review/playbook/02-geppetto-pinocchio-documentation-overhaul-execution-plan.md — Updated per feedback on deprecated APIs
 
+
+## 2026-01-13
+
+Docs: updated analysis and execution plan per consolidation decisions (merge embeddings/event sinks/turn serialization, retire caching and conversation docs).
+
+### Related Files
+
+- /home/manuel/workspaces/2026-01-13/ocr-tui/pinocchio/ttmp/2026/01/13/MO-001-GEPPETTO-PINOCCHIO-DOCS--geppetto-pinocchio-documentation-review/analysis/01-geppetto-pinocchio-docs-gap-analysis.md — Direction updates and revised upgrade plan.
+- /home/manuel/workspaces/2026-01-13/ocr-tui/pinocchio/ttmp/2026/01/13/MO-001-GEPPETTO-PINOCCHIO-DOCS--geppetto-pinocchio-documentation-review/playbook/02-geppetto-pinocchio-documentation-overhaul-execution-plan.md — Consolidation plan and tutorial/playbook list.
+
