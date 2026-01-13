@@ -65,14 +65,11 @@ Tutorials (step-by-step):
 - Streaming inference with tools (Turn-based) using `geppetto/cmd/examples/*` as reference.
 - Event routing and structured logging using `events.EventRouter` and `events.NewStructuredPrinter`.
 - Embeddings workflows: single vs batch + caching (memory/file) using `embeddings` package.
-- Profiles and config precedence for Pinocchio (CLI + config files).
-- Turn serialization and test fixtures (YAML serde + linting).
 
 Playbooks (operational steps):
 - “Add a new tool”: register tool, attach registry to context, configure per-Turn tool config.
 - “Add a new event handler”: implement handler, subscribe to router, parse events.
-- “Troubleshoot missing tool calls”: verify registry, tool config, and block flow.
-- “Embed in templating”: use `!Embeddings` tag function in emrichen templates.
+- “Progressive structured data”: author a structured payload spec, parse it incrementally, and consume events via a structured event sink.
 
 ## Execution plan by document
 

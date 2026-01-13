@@ -10,7 +10,19 @@ DocType: reference
 Intent: long-term
 Owners: []
 RelatedFiles:
-    - Path: pinocchio/ttmp/2026/01/13/MO-001-GEPPETTO-PINOCCHIO-DOCS--geppetto-pinocchio-documentation-review/analysis/01-geppetto-pinocchio-docs-gap-analysis.md
+    - Path: ../../../../../../../geppetto/pkg/doc/topics/04-events.md
+      Note: Expanded chat event catalog and merged structured sink guidance.
+    - Path: ../../../../../../../geppetto/pkg/doc/topics/06-embeddings.md
+      Note: Consolidated embeddings + !Embeddings tag docs and caching settings.
+    - Path: ../../../../../../../geppetto/pkg/doc/topics/06-inference-engines.md
+      Note: Turn-based inference + tool-calling examples updated.
+    - Path: ../../../../../../../geppetto/pkg/doc/topics/07-tools.md
+      Note: Updated helper loop to Turn-based tool calling.
+    - Path: ../../../../../../../geppetto/pkg/doc/topics/08-turns.md
+      Note: Merged YAML serialization details and reasoning payload keys into turns doc.
+    - Path: ../../../../../../../geppetto/pkg/doc/tutorials/01-streaming-inference-with-tools.md
+      Note: Turn-based streaming tutorial updated.
+    - Path: ttmp/2026/01/13/MO-001-GEPPETTO-PINOCCHIO-DOCS--geppetto-pinocchio-documentation-review/analysis/01-geppetto-pinocchio-docs-gap-analysis.md
       Note: Primary analysis output referenced in diary.
 ExternalSources: []
 Summary: Diary of the Geppetto/Pinocchio doc audit and persona analysis.
@@ -18,6 +30,12 @@ LastUpdated: 2026-01-13T08:26:35.740310086-05:00
 WhatFor: Track doc audit steps, sources consulted, and analysis outcomes for review and future updates.
 WhenToUse: Use when continuing or validating the documentation gap analysis work.
 ---
+
+
+
+
+
+
 
 
 # Diary
@@ -198,5 +216,55 @@ The workspace root is not a Git repository, so the status command failed. No fur
 ### Code review instructions
 - Review the analysis and diary docs for correctness and completeness
 
+## Step 5: Consolidate Turn-based docs and remove deprecated pages
+
+I merged the Emrichen embeddings content into the main embeddings guide, folded the structured data event sink into the events doc, and moved turn-block YAML serialization into the turns guide. This step also removed the deprecated conversation and caching pages so the doc set is strictly Turn-based.
+
+I also updated the inference engines, tools, and streaming tutorial examples to use Turn-based APIs end-to-end, then added a task-based docs index to keep discovery simple.
+
+**Commit (code):** 1f8cf71 — "Docs: consolidate embeddings, events, and turns"
+
+### What I did
+- Merged `02-emrichen-embeddings.md` into `06-embeddings.md` and documented the `!Embeddings` tag function
+- Moved structured sink guidance into `04-events.md` and expanded the event catalog
+- Folded turn/block YAML serialization into `08-turns.md` and removed the standalone page
+- Removed `03-caching.md` and `05-conversation.md` from the public doc set
+- Rewrote inference, tools, and streaming tutorial snippets to use Turns and `toolhelpers.RunToolCallingLoop`
+- Added the new docs index at `geppetto/pkg/doc/topics/00-docs-index.md`
+
+### Why
+- Keep public docs aligned with Turn-based APIs and remove deprecated conversation guidance
+- Consolidate scattered content so users find embeddings, events, and turns in one place
+
+### What worked
+- Consolidation reduced duplicated pages and removed outdated APIs from examples
+- Turn-based snippets now match current tool registry and Turn.Data configuration patterns
+
+### What didn't work
+- N/A
+
+### What I learned
+- The event catalog is broader than the previous docs implied; listing prefixes clarifies expected client behavior
+- Turn serialization belongs in the turns doc, not a standalone page, for discoverability
+
+### What was tricky to build
+- Ensuring nested code fences in the structured sink example render correctly without breaking Markdown
+- Updating multiple long-form examples without reintroducing conversation-based APIs
+
+### What warrants a second pair of eyes
+- Validate the updated event type list against `geppetto/pkg/events/chat-events.go`
+- Confirm the tool-calling snippets still match `toolhelpers.RunToolCallingLoop` and `toolcontext.WithRegistry` expectations
+
+### What should be done in the future
+- Add redirect stubs if any external references to removed docs surface in the help system or web output
+
+### Code review instructions
+- Start with `geppetto/pkg/doc/topics/06-embeddings.md`, `geppetto/pkg/doc/topics/04-events.md`, and `geppetto/pkg/doc/topics/08-turns.md`
+- Validate Turn-based examples in `geppetto/pkg/doc/topics/06-inference-engines.md` and `geppetto/pkg/doc/tutorials/01-streaming-inference-with-tools.md`
+
+### Technical details
+- Commands run:
+  - `rg -n "conversation" geppetto/pkg/doc`
+  - `rm geppetto/pkg/doc/topics/02-emrichen-embeddings.md geppetto/pkg/doc/topics/03-caching.md geppetto/pkg/doc/topics/05-conversation.md geppetto/pkg/doc/topics/10-turn-blocks-serialization.md geppetto/pkg/doc/topics/11-structured-data-event-sinks.md`
 ### Technical details
 - Command run: `git status -sb`

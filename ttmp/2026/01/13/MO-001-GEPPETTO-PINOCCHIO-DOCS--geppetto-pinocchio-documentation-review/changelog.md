@@ -61,3 +61,12 @@ Docs: updated analysis and execution plan per consolidation decisions (merge emb
 - /home/manuel/workspaces/2026-01-13/ocr-tui/pinocchio/ttmp/2026/01/13/MO-001-GEPPETTO-PINOCCHIO-DOCS--geppetto-pinocchio-documentation-review/analysis/01-geppetto-pinocchio-docs-gap-analysis.md — Direction updates and revised upgrade plan.
 - /home/manuel/workspaces/2026-01-13/ocr-tui/pinocchio/ttmp/2026/01/13/MO-001-GEPPETTO-PINOCCHIO-DOCS--geppetto-pinocchio-documentation-review/playbook/02-geppetto-pinocchio-documentation-overhaul-execution-plan.md — Consolidation plan and tutorial/playbook list.
 
+
+## 2026-01-13
+
+Step 5: consolidate geppetto docs into Turn-based set (commit 1f8cf71)
+
+### Related Files
+
+- /home/manuel/workspaces/2026-01-13/ocr-tui/geppetto/pkg/doc/topics/04-events.md — Merged structured sink info and expanded event catalog.
+
