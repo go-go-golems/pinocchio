@@ -53,7 +53,7 @@ changelog:
       - '^test:'
 
 brews:
-  - name: packages
+  - name: pinocchio
     description: "Pinocchio is a tool to interact with large language models"
     homepage: "https://github.com/go-go-golems/pinocchio"
     repository:
@@ -61,7 +61,7 @@ brews:
       name: homebrew-go-go-go
       token: "{{ .Env.TAP_GITHUB_TOKEN }}"
 nfpms:
-  - id: pinocchio
+  - id: packages
     vendor: GO GO GOLEMS
     homepage: https://github.com/go-go-golems/
     maintainer: Manuel Odendahl <wesen@ruinwesen.com>
