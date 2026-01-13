@@ -26,7 +26,8 @@ WhenToUse: ""
 ## Doc Index
 
 - Analysis: [Geppetto/Pinocchio docs gap analysis](./analysis/01-geppetto-pinocchio-docs-gap-analysis.md)
-- Playbook: [Documentation research and writing plan](./playbook/01-documentation-research-and-writing-plan.md)
+- Playbook: [Geppetto/Pinocchio documentation overhaul execution plan](./playbook/02-geppetto-pinocchio-documentation-overhaul-execution-plan.md)
+- Playbook (legacy): [Documentation research and writing plan](./playbook/01-documentation-research-and-writing-plan.md)
 - Diary: [Diary](./reference/01-diary.md)
 - Tasks: [tasks.md](./tasks.md)
 - Changelog: [changelog.md](./changelog.md)

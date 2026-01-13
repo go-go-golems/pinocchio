@@ -32,3 +32,13 @@ Docs: added Geppetto/Pinocchio research checklist and ticket doc index.
 - /home/manuel/workspaces/2026-01-13/ocr-tui/pinocchio/ttmp/2026/01/13/MO-001-GEPPETTO-PINOCCHIO-DOCS--geppetto-pinocchio-documentation-review/index.md — Added doc index section.
 - /home/manuel/workspaces/2026-01-13/ocr-tui/pinocchio/ttmp/2026/01/13/MO-001-GEPPETTO-PINOCCHIO-DOCS--geppetto-pinocchio-documentation-review/playbook/01-documentation-research-and-writing-plan.md — Added Geppetto/Pinocchio-specific research checklist.
 
+
+## 2026-01-13
+
+Playbook: added concrete doc-by-doc execution plan for ghostwriter handoff.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-01-13/ocr-tui/pinocchio/ttmp/2026/01/13/MO-001-GEPPETTO-PINOCCHIO-DOCS--geppetto-pinocchio-documentation-review/index.md — Doc index now points at new execution plan.
+- /home/manuel/workspaces/2026-01-13/ocr-tui/pinocchio/ttmp/2026/01/13/MO-001-GEPPETTO-PINOCCHIO-DOCS--geppetto-pinocchio-documentation-review/playbook/02-geppetto-pinocchio-documentation-overhaul-execution-plan.md — Concrete doc update plan.
+
