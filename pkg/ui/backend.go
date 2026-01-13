@@ -270,6 +270,37 @@ func StepChatForwardFunc(p *tea.Program) func(msg *message.Message) error {
 			p.Send(timeline.UIEntityUpdated{ID: timeline.EntityID{LocalID: entityID, Kind: "llm_text"}, Patch: map[string]any{"streaming": false}, Version: time.Now().UnixNano(), UpdatedAt: time.Now()})
 			p.Send(boba_chat.BackendFinishedMsg{})
 			// Tool-related events can be mapped to dedicated tool_call entities if desired
+		case *events.EventInfo:
+			if e_.Message == "thinking-started" {
+				thinkID := timeline.EntityID{LocalID: entityID + ":thinking", Kind: "llm_text"}
+				log.Debug().Str("component", "step_forward").Str("entity_id", thinkID.LocalID).Msg("UIEntityCreated (thinking)")
+				p.Send(timeline.UIEntityCreated{
+					ID:        thinkID,
+					Renderer:  timeline.RendererDescriptor{Kind: "llm_text"},
+					Props:     map[string]any{"role": "thinking", "text": "", "streaming": true},
+					StartedAt: time.Now(),
+				})
+			}
+			if e_.Message == "thinking-ended" {
+				thinkID := timeline.EntityID{LocalID: entityID + ":thinking", Kind: "llm_text"}
+				log.Debug().Str("component", "step_forward").Str("entity_id", thinkID.LocalID).Msg("UIEntityCompleted (thinking)")
+				p.Send(timeline.UIEntityUpdated{
+					ID:        thinkID,
+					Patch:     map[string]any{"streaming": false},
+					Version:   time.Now().UnixNano(),
+					UpdatedAt: time.Now(),
+				})
+				p.Send(timeline.UIEntityCompleted{ID: thinkID})
+			}
+		case *events.EventThinkingPartial:
+			thinkID := timeline.EntityID{LocalID: entityID + ":thinking", Kind: "llm_text"}
+			log.Debug().Str("component", "step_forward").Str("entity_id", thinkID.LocalID).Int("completion_len", len(e_.Completion)).Msg("UIEntityUpdated (thinking)")
+			p.Send(timeline.UIEntityUpdated{
+				ID:        thinkID,
+				Patch:     map[string]any{"text": e_.Completion, "streaming": true},
+				Version:   time.Now().UnixNano(),
+				UpdatedAt: time.Now(),
+			})
 		}
 
 		return nil
