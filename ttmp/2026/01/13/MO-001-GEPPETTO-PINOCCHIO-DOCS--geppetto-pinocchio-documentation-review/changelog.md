@@ -42,3 +42,12 @@ Playbook: added concrete doc-by-doc execution plan for ghostwriter handoff.
 - /home/manuel/workspaces/2026-01-13/ocr-tui/pinocchio/ttmp/2026/01/13/MO-001-GEPPETTO-PINOCCHIO-DOCS--geppetto-pinocchio-documentation-review/index.md — Doc index now points at new execution plan.
 - /home/manuel/workspaces/2026-01-13/ocr-tui/pinocchio/ttmp/2026/01/13/MO-001-GEPPETTO-PINOCCHIO-DOCS--geppetto-pinocchio-documentation-review/playbook/02-geppetto-pinocchio-documentation-overhaul-execution-plan.md — Concrete doc update plan.
 
+
+## 2026-01-13
+
+Playbook: revise execution plan to avoid deprecated APIs, merge turns serialization, and clarify conversation decision point.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-01-13/ocr-tui/pinocchio/ttmp/2026/01/13/MO-001-GEPPETTO-PINOCCHIO-DOCS--geppetto-pinocchio-documentation-review/playbook/02-geppetto-pinocchio-documentation-overhaul-execution-plan.md — Updated per feedback on deprecated APIs
+

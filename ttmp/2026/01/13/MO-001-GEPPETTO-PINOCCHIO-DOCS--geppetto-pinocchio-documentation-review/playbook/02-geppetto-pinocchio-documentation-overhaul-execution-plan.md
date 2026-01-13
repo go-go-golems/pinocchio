@@ -51,6 +51,8 @@ This plan supersedes the earlier general playbook at `playbook/01-documentation-
 - Consolidate caching guidance into `geppetto/pkg/doc/topics/06-embeddings.md` and remove or replace `03-caching.md` with a short redirect stub.
 - Add a new docs index page in `geppetto/pkg/doc/topics/00-docs-index.md` to route by task.
 - Keep `12-turnsdatalint.md` unchanged (no corrections needed).
+- Merge `10-turn-blocks-serialization.md` into `08-turns.md` and delete or replace it with a short redirect stub.
+- Avoid documenting deprecated APIs or legacy-only flows; remove or minimize conversation-only walkthroughs unless they are still required by current code paths.
 
 ## Execution plan by document
 
@@ -125,6 +127,7 @@ Action: Update event catalog and usage examples.
 Required changes:
 - Add a "Full event catalog" table or bullet list with current types from `events/chat-events.go`.
 - Include execution-stage events (`tool-call-execute`, `tool-call-execution-result`) and log/info events.
+- Treat all emitted events as chat events; do not split into UI vs internal categories.
 - Add a short "EventSink usage" paragraph (engine.WithSink + context sinks).
 
 Sources to read:
@@ -135,20 +138,23 @@ Sources to read:
 Validation:
 - Event names and payload fields match code.
 
-### 6) `geppetto/pkg/doc/topics/05-conversation.md` (update)
+### 6) `geppetto/pkg/doc/topics/05-conversation.md` (decision point)
 
-Action: Update to include Turn bridging.
+Action: Decide whether to retire or sharply reduce this doc.
 
-Required changes:
-- Add a section: "Conversation <-> Turn bridging" with `turns.BlocksFromConversationDelta` and `turns.BuildConversationFromTurn` examples.
-- Mention `conversation/builder` as the recommended builder for Turn-based workflows.
+Required changes (if kept):
+- Remove legacy/step-based workflows and any deprecated APIs.
+- Keep only the minimum required API surface that is still used in current code (for example image helpers or conversion utilities).
+- Add a short "Conversation <-> Turn bridging" subsection that points to the canonical Turn-based flow.
 
 Sources to read:
-- `geppetto/pkg/conversation/*`
-- `geppetto/pkg/turns/*`
+- `pinocchio/pkg/cmds/images.go` (image helper usage)
+- `geppetto/pkg/inference/toolhelpers/helpers.go` (conversation-based helpers still present)
+- `geppetto/pkg/turns/conv_conversation.go` (bridge helpers)
 
 Validation:
-- Any example using manager outputs describes left-most thread behavior.
+- If the doc is retired, ensure the new index does not link to it.
+- If kept, examples must reflect only current, non-deprecated usage.
 
 ### 7) `geppetto/pkg/doc/topics/06-embeddings.md` (update + consolidate)
 
@@ -212,10 +218,12 @@ Action: Expand the data model section.
 Required changes:
 - Add `reasoning` block kind and payload keys (`encrypted_content`, `item_id`).
 - Link to `turns/keys.go` for typed constants.
+- Add a "Serialization (YAML)" subsection merged from `10-turn-blocks-serialization.md` (data model, serde helpers, fixtures).
 
 Sources to read:
 - `geppetto/pkg/turns/types.go`
 - `geppetto/pkg/turns/keys.go`
+- `geppetto/pkg/turns/serde/serde.go`
 
 Validation:
 - Examples match current constants and payload keys.
@@ -235,19 +243,19 @@ Sources to read:
 Validation:
 - Config types and fields match code.
 
-### 12) `geppetto/pkg/doc/topics/10-turn-blocks-serialization.md` (update)
+### 12) `geppetto/pkg/doc/topics/10-turn-blocks-serialization.md` (merge/retire)
 
-Action: Fix schema example.
+Action: Merge content into `08-turns.md`, then delete or replace with a short redirect stub.
 
 Required changes:
-- Remove `version` field from YAML examples unless it is added to `turns.Turn`.
-- Add a note that serde normalizes maps and roles.
+- Move serde examples and YAML schema into the "Serialization (YAML)" subsection of `08-turns.md`.
+- If a stub remains, remove `version` from YAML examples and link to the merged section.
 
 Sources to read:
 - `geppetto/pkg/turns/serde/serde.go`
 
 Validation:
-- Example YAML mirrors actual struct fields.
+- No duplicate serialization content across two docs.
 
 ### 13) `geppetto/pkg/doc/topics/11-structured-data-event-sinks.md` (update)
 
