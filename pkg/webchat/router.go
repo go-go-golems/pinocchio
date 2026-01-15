@@ -5,8 +5,11 @@ import (
 	"database/sql"
 	"embed"
 	"encoding/json"
+	"fmt"
 	"io/fs"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -22,6 +25,8 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/inference/toolhelpers"
 	geptools "github.com/go-go-golems/geppetto/pkg/inference/tools"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
+	"github.com/go-go-golems/geppetto/pkg/turns"
+	"github.com/go-go-golems/geppetto/pkg/turns/serde"
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
 	rediscfg "github.com/go-go-golems/pinocchio/pkg/redisstream"
 )
@@ -353,6 +358,9 @@ func (r *Router) registerHTTPHandlers() {
 			conv.cancel = runCancel
 			conv.mu.Unlock()
 			runCtx = events.WithEventSinks(runCtx, conv.Sink)
+			if hook := snapshotHookForConv(conv, os.Getenv("PINOCCHIO_WEBCHAT_TURN_SNAPSHOTS_DIR")); hook != nil {
+				runCtx = toolhelpers.WithTurnSnapshotHook(runCtx, hook)
+			}
 			log.Info().Str("component", "webchat").Str("conv_id", conv.ID).Str("run_id", conv.RunID).Msg("starting run loop")
 			updatedTurn, _ := toolhelpers.RunToolCallingLoop(
 				runCtx,
@@ -500,6 +508,9 @@ func (r *Router) registerHTTPHandlers() {
 			conv.cancel = runCancel
 			conv.mu.Unlock()
 			runCtx = events.WithEventSinks(runCtx, conv.Sink)
+			if hook := snapshotHookForConv(conv, os.Getenv("PINOCCHIO_WEBCHAT_TURN_SNAPSHOTS_DIR")); hook != nil {
+				runCtx = toolhelpers.WithTurnSnapshotHook(runCtx, hook)
+			}
 			log.Info().Str("component", "webchat").Str("conv_id", conv.ID).Str("run_id", conv.RunID).Msg("starting run loop")
 			updatedTurn, _ := toolhelpers.RunToolCallingLoop(
 				runCtx,
@@ -530,6 +541,39 @@ func fsSub(staticFS embed.FS, path string) (fs.FS, error) { return fs.Sub(static
 var (
 	_ http.Handler
 )
+
+func snapshotHookForConv(conv *Conversation, dir string) toolhelpers.SnapshotHook {
+	if conv == nil || dir == "" {
+		return nil
+	}
+	return func(ctx context.Context, t *turns.Turn, phase string) {
+		if t == nil {
+			return
+		}
+		subdir := filepath.Join(dir, conv.ID, conv.RunID)
+		if err := os.MkdirAll(subdir, 0755); err != nil {
+			log.Warn().Err(err).Str("dir", subdir).Msg("webchat snapshot: mkdir failed")
+			return
+		}
+		ts := time.Now().UTC().Format("20060102-150405.000000000")
+		turnID := t.ID
+		if turnID == "" {
+			turnID = "turn"
+		}
+		name := fmt.Sprintf("%s-%s-%s.yaml", ts, phase, turnID)
+		path := filepath.Join(subdir, name)
+		data, err := serde.ToYAML(t, serde.Options{})
+		if err != nil {
+			log.Warn().Err(err).Str("path", path).Msg("webchat snapshot: serialize failed")
+			return
+		}
+		if err := os.WriteFile(path, data, 0644); err != nil {
+			log.Warn().Err(err).Str("path", path).Msg("webchat snapshot: write failed")
+			return
+		}
+		log.Debug().Str("path", path).Str("phase", phase).Msg("webchat snapshot: saved turn")
+	}
+}
 
 // private state fields appended to Router
 // (declared here for proximity to logic, defined in types.go)
