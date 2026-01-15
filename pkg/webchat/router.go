@@ -22,7 +22,6 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/inference/toolhelpers"
 	geptools "github.com/go-go-golems/geppetto/pkg/inference/tools"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
-	"github.com/go-go-golems/geppetto/pkg/turns"
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
 	rediscfg "github.com/go-go-golems/pinocchio/pkg/redisstream"
 )
@@ -332,11 +331,14 @@ func (r *Router) registerHTTPHandlers() {
 		}
 		conv.running = true
 		conv.mu.Unlock()
-		if conv.Turn == nil {
-			conv.Turn = &turns.Turn{RunID: conv.RunID}
+		turn, err := conv.snapshotForPrompt(body.Prompt)
+		if err != nil {
+			conv.mu.Lock()
+			conv.running = false
+			conv.mu.Unlock()
+			http.Error(w, "failed to build prompt snapshot", http.StatusInternalServerError)
+			return
 		}
-		turns.AppendBlock(conv.Turn, turns.NewUserTextBlock(body.Prompt))
-		conv.Turn.RunID = conv.RunID
 
 		registry := geptools.NewInMemoryToolRegistry()
 		for name, tf := range r.toolFactories {
@@ -355,12 +357,12 @@ func (r *Router) registerHTTPHandlers() {
 			updatedTurn, _ := toolhelpers.RunToolCallingLoop(
 				runCtx,
 				conv.Eng,
-				conv.Turn,
+				turn,
 				registry,
 				toolhelpers.NewToolConfig().WithMaxIterations(5).WithTimeout(60*time.Second),
 			)
 			if updatedTurn != nil {
-				conv.Turn = updatedTurn
+				conv.updateStateFromTurn(updatedTurn)
 			}
 			runCancel()
 			conv.mu.Lock()
@@ -475,11 +477,14 @@ func (r *Router) registerHTTPHandlers() {
 		}
 		conv.running = true
 		conv.mu.Unlock()
-		if conv.Turn == nil {
-			conv.Turn = &turns.Turn{RunID: conv.RunID}
+		turn, err := conv.snapshotForPrompt(body.Prompt)
+		if err != nil {
+			conv.mu.Lock()
+			conv.running = false
+			conv.mu.Unlock()
+			http.Error(w, "failed to build prompt snapshot", http.StatusInternalServerError)
+			return
 		}
-		turns.AppendBlock(conv.Turn, turns.NewUserTextBlock(body.Prompt))
-		conv.Turn.RunID = conv.RunID
 
 		// Build registry for this run from default tools (and optional overrides later)
 		registry := geptools.NewInMemoryToolRegistry()
@@ -499,12 +504,12 @@ func (r *Router) registerHTTPHandlers() {
 			updatedTurn, _ := toolhelpers.RunToolCallingLoop(
 				runCtx,
 				conv.Eng,
-				conv.Turn,
+				turn,
 				registry,
 				toolhelpers.NewToolConfig().WithMaxIterations(5).WithTimeout(60*time.Second),
 			)
 			if updatedTurn != nil {
-				conv.Turn = updatedTurn
+				conv.updateStateFromTurn(updatedTurn)
 			}
 			runCancel()
 			conv.mu.Lock()
