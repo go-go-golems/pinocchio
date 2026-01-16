@@ -22,7 +22,6 @@ type Conversation struct {
 	ID        string
 	RunID     string
 	State     *conversation.ConversationState
-	stateMu   sync.RWMutex
 	Eng       engine.Engine
 	Sink      *middleware.WatermillSink
 	running   bool
@@ -121,46 +120,6 @@ func (r *Router) getOrCreateConv(convID string, buildEng func() (engine.Engine, 
 	}
 	r.cm.conns[convID] = conv
 	return conv, nil
-}
-
-func (c *Conversation) snapshotForPrompt(prompt string) (*turns.Turn, error) {
-	temp := conversation.NewConversationState(c.RunID)
-	c.stateMu.RLock()
-	if c.State != nil {
-		temp.ID = c.State.ID
-		temp.RunID = c.State.RunID
-		temp.Blocks = append([]turns.Block(nil), c.State.Blocks...)
-		temp.Data = c.State.Data.Clone()
-		temp.Metadata = c.State.Metadata.Clone()
-		temp.Version = c.State.Version
-	}
-	c.stateMu.RUnlock()
-
-	if prompt != "" {
-		if err := temp.Apply(conversation.MutateAppendUserText(prompt)); err != nil {
-			return nil, err
-		}
-	}
-	cfg := conversation.DefaultSnapshotConfig()
-	return temp.Snapshot(cfg)
-}
-
-func (c *Conversation) updateStateFromTurn(t *turns.Turn) {
-	if t == nil {
-		return
-	}
-	c.stateMu.Lock()
-	defer c.stateMu.Unlock()
-
-	if c.State == nil {
-		c.State = conversation.NewConversationState(t.RunID)
-	}
-	c.State.Blocks = filterSystemPromptBlocks(t.Blocks)
-	c.State.Data = t.Data.Clone()
-	c.State.Metadata = t.Metadata.Clone()
-	if t.RunID != "" {
-		c.State.RunID = t.RunID
-	}
 }
 
 func filterSystemPromptBlocks(blocks []turns.Block) []turns.Block {

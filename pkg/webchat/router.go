@@ -28,6 +28,7 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/turns"
 	"github.com/go-go-golems/geppetto/pkg/turns/serde"
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
+	"github.com/go-go-golems/pinocchio/pkg/inference/runner"
 	rediscfg "github.com/go-go-golems/pinocchio/pkg/redisstream"
 )
 
@@ -336,15 +337,6 @@ func (r *Router) registerHTTPHandlers() {
 		}
 		conv.running = true
 		conv.mu.Unlock()
-		turn, err := conv.snapshotForPrompt(body.Prompt)
-		if err != nil {
-			conv.mu.Lock()
-			conv.running = false
-			conv.mu.Unlock()
-			http.Error(w, "failed to build prompt snapshot", http.StatusInternalServerError)
-			return
-		}
-
 		registry := geptools.NewInMemoryToolRegistry()
 		for name, tf := range r.toolFactories {
 			_ = tf(registry)
@@ -357,20 +349,20 @@ func (r *Router) registerHTTPHandlers() {
 			conv.mu.Lock()
 			conv.cancel = runCancel
 			conv.mu.Unlock()
-			runCtx = events.WithEventSinks(runCtx, conv.Sink)
-			if hook := snapshotHookForConv(conv, os.Getenv("PINOCCHIO_WEBCHAT_TURN_SNAPSHOTS_DIR")); hook != nil {
-				runCtx = toolhelpers.WithTurnSnapshotHook(runCtx, hook)
-			}
+			hook := snapshotHookForConv(conv, os.Getenv("PINOCCHIO_WEBCHAT_TURN_SNAPSHOTS_DIR"))
 			log.Info().Str("component", "webchat").Str("conv_id", conv.ID).Str("run_id", conv.RunID).Msg("starting run loop")
-			updatedTurn, _ := toolhelpers.RunToolCallingLoop(
-				runCtx,
-				conv.Eng,
-				turn,
-				registry,
-				toolhelpers.NewToolConfig().WithMaxIterations(5).WithTimeout(60*time.Second),
-			)
-			if updatedTurn != nil {
-				conv.updateStateFromTurn(updatedTurn)
+			cfg := toolhelpers.NewToolConfig().WithMaxIterations(5).WithTimeout(60 * time.Second)
+			_, err := runner.Run(runCtx, conv.Eng, &conv.State, body.Prompt, runner.RunOptions{
+				ToolRegistry: registry,
+				ToolConfig:   &cfg,
+				SnapshotHook: hook,
+				EventSinks:   []events.EventSink{conv.Sink},
+				Update: runner.UpdateOptions{
+					FilterBlocks: filterSystemPromptBlocks,
+				},
+			})
+			if err != nil {
+				log.Error().Err(err).Str("component", "webchat").Str("conv_id", conv.ID).Str("run_id", conv.RunID).Msg("run loop error")
 			}
 			runCancel()
 			conv.mu.Lock()
@@ -485,15 +477,6 @@ func (r *Router) registerHTTPHandlers() {
 		}
 		conv.running = true
 		conv.mu.Unlock()
-		turn, err := conv.snapshotForPrompt(body.Prompt)
-		if err != nil {
-			conv.mu.Lock()
-			conv.running = false
-			conv.mu.Unlock()
-			http.Error(w, "failed to build prompt snapshot", http.StatusInternalServerError)
-			return
-		}
-
 		// Build registry for this run from default tools (and optional overrides later)
 		registry := geptools.NewInMemoryToolRegistry()
 		for name, tf := range r.toolFactories {
@@ -507,20 +490,20 @@ func (r *Router) registerHTTPHandlers() {
 			conv.mu.Lock()
 			conv.cancel = runCancel
 			conv.mu.Unlock()
-			runCtx = events.WithEventSinks(runCtx, conv.Sink)
-			if hook := snapshotHookForConv(conv, os.Getenv("PINOCCHIO_WEBCHAT_TURN_SNAPSHOTS_DIR")); hook != nil {
-				runCtx = toolhelpers.WithTurnSnapshotHook(runCtx, hook)
-			}
+			hook := snapshotHookForConv(conv, os.Getenv("PINOCCHIO_WEBCHAT_TURN_SNAPSHOTS_DIR"))
 			log.Info().Str("component", "webchat").Str("conv_id", conv.ID).Str("run_id", conv.RunID).Msg("starting run loop")
-			updatedTurn, _ := toolhelpers.RunToolCallingLoop(
-				runCtx,
-				conv.Eng,
-				turn,
-				registry,
-				toolhelpers.NewToolConfig().WithMaxIterations(5).WithTimeout(60*time.Second),
-			)
-			if updatedTurn != nil {
-				conv.updateStateFromTurn(updatedTurn)
+			cfg := toolhelpers.NewToolConfig().WithMaxIterations(5).WithTimeout(60 * time.Second)
+			_, err := runner.Run(runCtx, conv.Eng, &conv.State, body.Prompt, runner.RunOptions{
+				ToolRegistry: registry,
+				ToolConfig:   &cfg,
+				SnapshotHook: hook,
+				EventSinks:   []events.EventSink{conv.Sink},
+				Update: runner.UpdateOptions{
+					FilterBlocks: filterSystemPromptBlocks,
+				},
+			})
+			if err != nil {
+				log.Error().Err(err).Str("component", "webchat").Str("conv_id", conv.ID).Str("run_id", conv.RunID).Msg("run loop error")
 			}
 			runCancel()
 			conv.mu.Lock()
