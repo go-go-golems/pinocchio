@@ -21,7 +21,6 @@ import (
 
 	"github.com/go-go-golems/geppetto/pkg/events"
 	"github.com/go-go-golems/geppetto/pkg/inference/engine"
-	"github.com/go-go-golems/geppetto/pkg/inference/fixtures"
 	"github.com/go-go-golems/geppetto/pkg/inference/middleware"
 	"github.com/go-go-golems/geppetto/pkg/inference/toolhelpers"
 	geptools "github.com/go-go-golems/geppetto/pkg/inference/tools"
@@ -336,8 +335,6 @@ func (r *Router) registerHTTPHandlers() {
 			return
 		}
 		conv.running = true
-		conv.runSeq++
-		runSeq := conv.runSeq
 		conv.mu.Unlock()
 		turn, err := conv.snapshotForPrompt(body.Prompt)
 		if err != nil {
@@ -354,7 +351,7 @@ func (r *Router) registerHTTPHandlers() {
 			_ = name
 		}
 
-		go func(conv *Conversation, runSeq int) {
+		go func(conv *Conversation) {
 			<-r.router.Running()
 			runCtx, runCancel := context.WithCancel(r.baseCtx)
 			conv.mu.Lock()
@@ -363,16 +360,6 @@ func (r *Router) registerHTTPHandlers() {
 			runCtx = events.WithEventSinks(runCtx, conv.Sink)
 			if hook := snapshotHookForConv(conv, os.Getenv("PINOCCHIO_WEBCHAT_TURN_SNAPSHOTS_DIR")); hook != nil {
 				runCtx = toolhelpers.WithTurnSnapshotHook(runCtx, hook)
-			}
-			if dir := os.Getenv("PINOCCHIO_WEBCHAT_DEBUG_TAP_DIR"); dir != "" {
-				log.Debug().Str("dir", dir).Msg("webchat debug tap: env set")
-				tap, closeTap := debugTapForConv(conv, dir, runSeq, turn.ID)
-				if tap != nil {
-					runCtx = engine.WithDebugTap(runCtx, tap)
-					if closeTap != nil {
-						defer closeTap()
-					}
-				}
 			}
 			log.Info().Str("component", "webchat").Str("conv_id", conv.ID).Str("run_id", conv.RunID).Msg("starting run loop")
 			updatedTurn, _ := toolhelpers.RunToolCallingLoop(
@@ -391,7 +378,7 @@ func (r *Router) registerHTTPHandlers() {
 			conv.cancel = nil
 			conv.mu.Unlock()
 			log.Info().Str("component", "webchat").Str("conv_id", conv.ID).Str("run_id", conv.RunID).Msg("run loop finished")
-		}(conv, runSeq)
+		}(conv)
 
 		_ = json.NewEncoder(w).Encode(map[string]string{"run_id": conv.RunID, "conv_id": conv.ID})
 	})
@@ -497,8 +484,6 @@ func (r *Router) registerHTTPHandlers() {
 			return
 		}
 		conv.running = true
-		conv.runSeq++
-		runSeq := conv.runSeq
 		conv.mu.Unlock()
 		turn, err := conv.snapshotForPrompt(body.Prompt)
 		if err != nil {
@@ -516,7 +501,7 @@ func (r *Router) registerHTTPHandlers() {
 			_ = name
 		}
 
-		go func(conv *Conversation, runSeq int) {
+		go func(conv *Conversation) {
 			<-r.router.Running()
 			runCtx, runCancel := context.WithCancel(r.baseCtx)
 			conv.mu.Lock()
@@ -525,16 +510,6 @@ func (r *Router) registerHTTPHandlers() {
 			runCtx = events.WithEventSinks(runCtx, conv.Sink)
 			if hook := snapshotHookForConv(conv, os.Getenv("PINOCCHIO_WEBCHAT_TURN_SNAPSHOTS_DIR")); hook != nil {
 				runCtx = toolhelpers.WithTurnSnapshotHook(runCtx, hook)
-			}
-			if dir := os.Getenv("PINOCCHIO_WEBCHAT_DEBUG_TAP_DIR"); dir != "" {
-				log.Debug().Str("dir", dir).Msg("webchat debug tap: env set")
-				tap, closeTap := debugTapForConv(conv, dir, runSeq, turn.ID)
-				if tap != nil {
-					runCtx = engine.WithDebugTap(runCtx, tap)
-					if closeTap != nil {
-						defer closeTap()
-					}
-				}
 			}
 			log.Info().Str("component", "webchat").Str("conv_id", conv.ID).Str("run_id", conv.RunID).Msg("starting run loop")
 			updatedTurn, _ := toolhelpers.RunToolCallingLoop(
@@ -553,7 +528,7 @@ func (r *Router) registerHTTPHandlers() {
 			conv.cancel = nil
 			conv.mu.Unlock()
 			log.Info().Str("component", "webchat").Str("conv_id", conv.ID).Str("run_id", conv.RunID).Msg("run loop finished")
-		}(conv, runSeq)
+		}(conv)
 
 		_ = json.NewEncoder(w).Encode(map[string]string{"run_id": conv.RunID, "conv_id": conv.ID})
 	})
@@ -598,23 +573,6 @@ func snapshotHookForConv(conv *Conversation, dir string) toolhelpers.SnapshotHoo
 		}
 		log.Debug().Str("path", path).Str("phase", phase).Msg("webchat snapshot: saved turn")
 	}
-}
-
-func debugTapForConv(conv *Conversation, dir string, runSeq int, turnID string) (engine.DebugTap, func()) {
-	if conv == nil || dir == "" {
-		return nil, nil
-	}
-	if turnID == "" {
-		turnID = "turn"
-	}
-	subdir := filepath.Join(dir, conv.ID, conv.RunID, fmt.Sprintf("run-%d", runSeq))
-	if err := os.MkdirAll(subdir, 0755); err != nil {
-		log.Warn().Err(err).Str("dir", subdir).Msg("webchat debug tap: mkdir failed")
-		return nil, nil
-	}
-	log.Debug().Str("dir", subdir).Str("turn_id", turnID).Int("run_seq", runSeq).Msg("webchat debug tap: enabled")
-	tap := fixtures.NewDiskTap(subdir, 1, turnID)
-	return tap, tap.Close
 }
 
 // private state fields appended to Router

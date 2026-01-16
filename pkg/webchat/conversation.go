@@ -21,7 +21,6 @@ import (
 type Conversation struct {
 	ID        string
 	RunID     string
-	runSeq    int
 	State     *conversation.ConversationState
 	stateMu   sync.RWMutex
 	Eng       engine.Engine
