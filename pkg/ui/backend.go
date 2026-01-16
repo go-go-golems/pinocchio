@@ -72,7 +72,14 @@ func (e *EngineBackend) Start(ctx context.Context, prompt string) (tea.Cmd, erro
 		}
 
 		log.Debug().Str("component", "engine_backend").Msg("Snapshotting conversation state, appending user block, running inference")
-		updated, err := runner.Run(ctx, engine, &e.state, prompt, runner.RunOptions{})
+		seed, err := runner.SnapshotForPrompt(e.state, prompt)
+		if err != nil {
+			log.Error().Err(err).Str("component", "engine_backend").Msg("Failed to build snapshot turn")
+			e.isRunning = false
+			e.cancel = nil
+			return boba_chat.BackendFinishedMsg{}
+		}
+		updated, err := runner.Run(ctx, engine, &e.state, seed, runner.RunOptions{})
 
 		// Mark as finished
 		e.isRunning = false

@@ -351,15 +351,22 @@ func (r *Router) registerHTTPHandlers() {
 			conv.mu.Unlock()
 			hook := snapshotHookForConv(conv, os.Getenv("PINOCCHIO_WEBCHAT_TURN_SNAPSHOTS_DIR"))
 			log.Info().Str("component", "webchat").Str("conv_id", conv.ID).Str("run_id", conv.RunID).Msg("starting run loop")
+			seed, err := runner.SnapshotForPrompt(conv.State, body.Prompt)
+			if err != nil {
+				log.Error().Err(err).Str("component", "webchat").Str("conv_id", conv.ID).Str("run_id", conv.RunID).Msg("failed to build prompt snapshot")
+				runCancel()
+				conv.mu.Lock()
+				conv.running = false
+				conv.cancel = nil
+				conv.mu.Unlock()
+				return
+			}
 			cfg := toolhelpers.NewToolConfig().WithMaxIterations(5).WithTimeout(60 * time.Second)
-			_, err := runner.Run(runCtx, conv.Eng, &conv.State, body.Prompt, runner.RunOptions{
+			_, err = runner.Run(runCtx, conv.Eng, &conv.State, seed, runner.RunOptions{
 				ToolRegistry: registry,
 				ToolConfig:   &cfg,
 				SnapshotHook: hook,
 				EventSinks:   []events.EventSink{conv.Sink},
-				Update: runner.UpdateOptions{
-					FilterBlocks: filterSystemPromptBlocks,
-				},
 			})
 			if err != nil {
 				log.Error().Err(err).Str("component", "webchat").Str("conv_id", conv.ID).Str("run_id", conv.RunID).Msg("run loop error")
@@ -492,15 +499,22 @@ func (r *Router) registerHTTPHandlers() {
 			conv.mu.Unlock()
 			hook := snapshotHookForConv(conv, os.Getenv("PINOCCHIO_WEBCHAT_TURN_SNAPSHOTS_DIR"))
 			log.Info().Str("component", "webchat").Str("conv_id", conv.ID).Str("run_id", conv.RunID).Msg("starting run loop")
+			seed, err := runner.SnapshotForPrompt(conv.State, body.Prompt)
+			if err != nil {
+				log.Error().Err(err).Str("component", "webchat").Str("conv_id", conv.ID).Str("run_id", conv.RunID).Msg("failed to build prompt snapshot")
+				runCancel()
+				conv.mu.Lock()
+				conv.running = false
+				conv.cancel = nil
+				conv.mu.Unlock()
+				return
+			}
 			cfg := toolhelpers.NewToolConfig().WithMaxIterations(5).WithTimeout(60 * time.Second)
-			_, err := runner.Run(runCtx, conv.Eng, &conv.State, body.Prompt, runner.RunOptions{
+			_, err = runner.Run(runCtx, conv.Eng, &conv.State, seed, runner.RunOptions{
 				ToolRegistry: registry,
 				ToolConfig:   &cfg,
 				SnapshotHook: hook,
 				EventSinks:   []events.EventSink{conv.Sink},
-				Update: runner.UpdateOptions{
-					FilterBlocks: filterSystemPromptBlocks,
-				},
 			})
 			if err != nil {
 				log.Error().Err(err).Str("component", "webchat").Str("conv_id", conv.ID).Str("run_id", conv.RunID).Msg("run loop error")

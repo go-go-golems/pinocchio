@@ -26,25 +26,14 @@ type RunOptions struct {
 	Update       UpdateOptions
 }
 
-// Run executes inference using a conversation state snapshot and updates the state.
+// Run executes inference using a provided Turn snapshot and updates the state.
 // If ToolRegistry is nil, it runs a single inference pass without tools.
-func Run(ctx context.Context, eng engine.Engine, state **conversation.ConversationState, prompt string, opts RunOptions) (*turns.Turn, error) {
+func Run(ctx context.Context, eng engine.Engine, state **conversation.ConversationState, seed *turns.Turn, opts RunOptions) (*turns.Turn, error) {
 	if eng == nil {
 		return nil, errors.New("engine is nil")
 	}
-	if state != nil && *state == nil {
-		*state = conversation.NewConversationState("")
-	}
-
-	var seed *turns.Turn
-	var err error
-	if state != nil {
-		seed, err = SnapshotForPrompt(*state, prompt)
-	} else {
-		seed, err = SnapshotForPrompt(nil, prompt)
-	}
-	if err != nil {
-		return nil, err
+	if seed == nil {
+		return nil, errors.New("seed turn is nil")
 	}
 
 	runCtx := ctx
@@ -55,7 +44,10 @@ func Run(ctx context.Context, eng engine.Engine, state **conversation.Conversati
 		runCtx = toolhelpers.WithTurnSnapshotHook(runCtx, opts.SnapshotHook)
 	}
 
-	var updated *turns.Turn
+	var (
+		updated *turns.Turn
+		err     error
+	)
 	if opts.ToolRegistry != nil {
 		cfg := toolhelpers.NewToolConfig()
 		if opts.ToolConfig != nil {

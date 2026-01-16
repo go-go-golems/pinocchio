@@ -14,7 +14,6 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/events"
 	"github.com/go-go-golems/geppetto/pkg/inference/engine"
 	"github.com/go-go-golems/geppetto/pkg/inference/middleware"
-	"github.com/go-go-golems/geppetto/pkg/turns"
 )
 
 // Conversation holds per-conversation state and streaming attachments.
@@ -120,31 +119,6 @@ func (r *Router) getOrCreateConv(convID string, buildEng func() (engine.Engine, 
 	}
 	r.cm.conns[convID] = conv
 	return conv, nil
-}
-
-func filterSystemPromptBlocks(blocks []turns.Block) []turns.Block {
-	if len(blocks) == 0 {
-		return nil
-	}
-	out := make([]turns.Block, 0, len(blocks))
-	for _, b := range blocks {
-		if isSystemPromptBlock(b) {
-			continue
-		}
-		out = append(out, b)
-	}
-	return out
-}
-
-func isSystemPromptBlock(b turns.Block) bool {
-	if b.Kind != turns.BlockKindSystem {
-		return false
-	}
-	val, ok, err := turns.KeyBlockMetaMiddleware.Get(b.Metadata)
-	if err != nil || !ok {
-		return false
-	}
-	return val == "systemprompt"
 }
 
 func (r *Router) addConn(conv *Conversation, c *websocket.Conn) {
