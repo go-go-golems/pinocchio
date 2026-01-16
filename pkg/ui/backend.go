@@ -14,6 +14,7 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/events"
 	"github.com/go-go-golems/geppetto/pkg/inference/engine"
 	"github.com/go-go-golems/geppetto/pkg/turns"
+	"github.com/go-go-golems/pinocchio/pkg/inference/runner"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 )
@@ -71,14 +72,7 @@ func (e *EngineBackend) Start(ctx context.Context, prompt string) (tea.Cmd, erro
 		}
 
 		log.Debug().Str("component", "engine_backend").Msg("Snapshotting conversation state, appending user block, running inference")
-		seed, err := e.snapshotForPrompt(prompt)
-		if err != nil {
-			log.Error().Err(err).Str("component", "engine_backend").Msg("Failed to build snapshot turn")
-			e.isRunning = false
-			e.cancel = nil
-			return boba_chat.BackendFinishedMsg{}
-		}
-		updated, err := engine.RunInference(ctx, seed)
+		updated, err := runner.Run(ctx, engine, &e.state, prompt, runner.RunOptions{})
 
 		// Mark as finished
 		e.isRunning = false
@@ -88,9 +82,7 @@ func (e *EngineBackend) Start(ctx context.Context, prompt string) (tea.Cmd, erro
 			log.Error().Err(err).Msg("Engine inference failed")
 			log.Error().Err(err).Str("component", "engine_backend").Msg("RunInference failed")
 		}
-		// Update conversation state for cohesive continuation
 		if updated != nil {
-			e.updateStateFromTurn(updated)
 			log.Debug().Str("component", "engine_backend").Int("turn_blocks", len(updated.Blocks)).Msg("Updated conversation state from inference")
 		}
 		log.Debug().Str("component", "engine_backend").Msg("Returning BackendFinishedMsg")
@@ -194,46 +186,6 @@ func (e *EngineBackend) Kill() {
 // IsFinished returns whether the engine is currently running an inference operation.
 func (e *EngineBackend) IsFinished() bool {
 	return !e.isRunning
-}
-
-func (e *EngineBackend) snapshotForPrompt(prompt string) (*turns.Turn, error) {
-	temp := conversation.NewConversationState("")
-	e.stateMu.RLock()
-	if e.state != nil {
-		temp.ID = e.state.ID
-		temp.RunID = e.state.RunID
-		temp.Blocks = append([]turns.Block(nil), e.state.Blocks...)
-		temp.Data = e.state.Data.Clone()
-		temp.Metadata = e.state.Metadata.Clone()
-		temp.Version = e.state.Version
-	}
-	e.stateMu.RUnlock()
-
-	if prompt != "" {
-		if err := temp.Apply(conversation.MutateAppendUserText(prompt)); err != nil {
-			return nil, err
-		}
-	}
-	cfg := conversation.DefaultSnapshotConfig()
-	return temp.Snapshot(cfg)
-}
-
-func (e *EngineBackend) updateStateFromTurn(t *turns.Turn) {
-	if t == nil {
-		return
-	}
-	e.stateMu.Lock()
-	defer e.stateMu.Unlock()
-
-	if e.state == nil {
-		e.state = conversation.NewConversationState(t.RunID)
-	}
-	e.state.Blocks = append([]turns.Block(nil), t.Blocks...)
-	e.state.Data = t.Data.Clone()
-	e.state.Metadata = t.Metadata.Clone()
-	if t.RunID != "" {
-		e.state.RunID = t.RunID
-	}
 }
 
 // StepChatForwardFunc is a function that forwards watermill messages to the UI by
