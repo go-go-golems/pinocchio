@@ -3,7 +3,6 @@ package backend
 import (
 	"context"
 	"fmt"
-	"sync/atomic"
 	"time"
 
 	"github.com/ThreeDotsLabs/watermill/message"
@@ -11,8 +10,9 @@ import (
 	boba_chat "github.com/go-go-golems/bobatea/pkg/chat"
 	"github.com/go-go-golems/bobatea/pkg/timeline"
 	"github.com/go-go-golems/geppetto/pkg/events"
+	"github.com/go-go-golems/geppetto/pkg/inference/core"
 	"github.com/go-go-golems/geppetto/pkg/inference/engine"
-	"github.com/go-go-golems/geppetto/pkg/inference/middleware"
+	"github.com/go-go-golems/geppetto/pkg/inference/state"
 	"github.com/go-go-golems/geppetto/pkg/inference/toolhelpers"
 	"github.com/go-go-golems/geppetto/pkg/inference/tools"
 	"github.com/go-go-golems/geppetto/pkg/turns"
@@ -22,73 +22,70 @@ import (
 
 // ToolLoopBackend runs the tool-calling loop across turns and emits BackendFinishedMsg when done.
 type ToolLoopBackend struct {
-	eng  engine.Engine
 	reg  *tools.InMemoryToolRegistry
-	sink *middleware.WatermillSink
+	sink events.EventSink
 	hook toolhelpers.SnapshotHook
 
-	Turn    *turns.Turn // Current accumulated Turn for the tool loop.
-	cancel  context.CancelFunc
-	running atomic.Bool
+	Inf  *state.InferenceState
+	sess *core.Session
 }
 
-func NewToolLoopBackend(eng engine.Engine, reg *tools.InMemoryToolRegistry, sink *middleware.WatermillSink, hook toolhelpers.SnapshotHook) *ToolLoopBackend {
-	return &ToolLoopBackend{eng: eng, reg: reg, sink: sink, hook: hook, Turn: &turns.Turn{}}
+func NewToolLoopBackend(eng engine.Engine, reg *tools.InMemoryToolRegistry, sink events.EventSink, hook toolhelpers.SnapshotHook) *ToolLoopBackend {
+	inf := state.NewInferenceState("", &turns.Turn{}, eng)
+	cfg := toolhelpers.NewToolConfig().WithMaxIterations(5).WithTimeout(60 * time.Second)
+	sess := &core.Session{
+		State:        inf,
+		Registry:     reg,
+		ToolConfig:   &cfg,
+		EventSinks:   []events.EventSink{sink},
+		SnapshotHook: hook,
+	}
+	return &ToolLoopBackend{reg: reg, sink: sink, hook: hook, Inf: inf, sess: sess}
 }
 
 func (b *ToolLoopBackend) Start(ctx context.Context, prompt string) (tea.Cmd, error) {
-	if !b.running.CompareAndSwap(false, true) {
+	if b == nil || b.Inf == nil || b.sess == nil {
+		return nil, errors.New("backend not initialized")
+	}
+	if err := b.Inf.StartRun(); err != nil {
 		return nil, errors.New("already running")
 	}
-	if b.Turn == nil {
-		b.Turn = &turns.Turn{}
+	if b.Inf.Turn == nil {
+		b.Inf.Turn = &turns.Turn{}
 	}
 	if prompt != "" {
-		turns.AppendBlock(b.Turn, turns.NewUserTextBlock(prompt))
+		turns.AppendBlock(b.Inf.Turn, turns.NewUserTextBlock(prompt))
 	}
 
-	ctx, b.cancel = context.WithCancel(ctx)
-	runCtx := events.WithEventSinks(ctx, b.sink)
-	if b.hook != nil {
-		runCtx = toolhelpers.WithTurnSnapshotHook(runCtx, b.hook)
-	}
+	runCtx, cancel := context.WithCancel(ctx)
+	b.Inf.SetCancel(cancel)
 
 	return func() tea.Msg {
-		updated, err := toolhelpers.RunToolCallingLoop(
-			runCtx,
-			b.eng,
-			b.Turn,
-			b.reg,
-			toolhelpers.NewToolConfig().WithMaxIterations(5).WithTimeout(60*time.Second),
-		)
+		defer func() {
+			cancel()
+			b.Inf.FinishRun()
+		}()
+
+		updated, err := b.sess.RunInferenceStarted(runCtx, b.Inf.Turn)
 		if err != nil {
 			log.Error().Err(err).Msg("tool loop failed")
 		}
-		if updated != nil {
-			b.Turn = updated
-		}
-		b.running.Store(false)
-		b.cancel = nil
+		_ = updated
 		return boba_chat.BackendFinishedMsg{}
 	}, nil
 }
 
 func (b *ToolLoopBackend) Interrupt() {
-	if b.cancel != nil {
-		b.cancel()
-	}
+	_ = b.Inf.CancelRun()
 }
 
 func (b *ToolLoopBackend) Kill() {
-	if b.cancel != nil {
-		b.cancel()
-		b.cancel = nil
-		b.running.Store(false)
-	}
+	_ = b.Inf.CancelRun()
+	b.Inf.FinishRun()
 }
 
 func (b *ToolLoopBackend) IsFinished() bool {
-	return !b.running.Load()
+	return !b.Inf.IsRunning()
 }
 
 // MakeUIForwarder returns a Watermill handler that forwards geppetto events to the Bubble Tea program p

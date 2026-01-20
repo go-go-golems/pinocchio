@@ -12,7 +12,6 @@ import (
 	renderers "github.com/go-go-golems/bobatea/pkg/timeline/renderers"
 	clay "github.com/go-go-golems/clay/pkg"
 	"github.com/go-go-golems/geppetto/pkg/events"
-	"github.com/go-go-golems/geppetto/pkg/inference/engine/factory"
 	"github.com/go-go-golems/geppetto/pkg/inference/middleware"
 	"github.com/go-go-golems/geppetto/pkg/inference/tools"
 	geppettolayers "github.com/go-go-golems/geppetto/pkg/layers"
@@ -30,6 +29,7 @@ import (
 	toolspkg "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/tools"
 	uipkg "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/ui"
 	eventspkg "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/xevents"
+	"github.com/go-go-golems/pinocchio/pkg/inference/enginebuilder"
 	agentmode "github.com/go-go-golems/pinocchio/pkg/middlewares/agentmode"
 	sqlitetool "github.com/go-go-golems/pinocchio/pkg/middlewares/sqlitetool"
 	rediscfg "github.com/go-go-golems/pinocchio/pkg/redisstream"
@@ -131,7 +131,8 @@ func (c *SimpleAgentCmd) RunIntoWriter(ctx context.Context, parsed *layers.Parse
 	sink := middleware.NewWatermillSink(router.Publisher, "chat")
 
 	// Engine
-	eng, err := factory.NewEngineFromParsedLayers(parsed)
+	engB := enginebuilder.NewParsedLayersEngineBuilder(parsed, sink)
+	eng, _, _, err := engB.Build("", "", nil)
 	if err != nil {
 		return errors.Wrap(err, "engine")
 	}
@@ -224,10 +225,10 @@ func (c *SimpleAgentCmd) RunIntoWriter(ctx context.Context, parsed *layers.Parse
 	_ = parsed.InitializeStruct(layers.DefaultSlug, &agentSettings)
 	if agentSettings.ServerTools {
 		// Set server tools data using typed key constant (satisfies turnsdatalint)
-		if backend.Turn == nil {
-			backend.Turn = &turns.Turn{}
+		if backend.Inf == nil || backend.Inf.Turn == nil {
+			return errors.New("backend inference state not initialized")
 		}
-		if err := turns.KeyResponsesServerTools.Set(&backend.Turn.Data, []any{map[string]any{"type": "web_search"}}); err != nil {
+		if err := turns.KeyResponsesServerTools.Set(&backend.Inf.Turn.Data, []any{map[string]any{"type": "web_search"}}); err != nil {
 			return errors.Wrap(err, "set responses server tools")
 		}
 	}
