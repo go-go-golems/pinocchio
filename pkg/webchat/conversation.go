@@ -10,21 +10,20 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/rs/zerolog/log"
 
-	"github.com/go-go-golems/geppetto/pkg/conversation"
 	"github.com/go-go-golems/geppetto/pkg/events"
 	"github.com/go-go-golems/geppetto/pkg/inference/engine"
 	"github.com/go-go-golems/geppetto/pkg/inference/middleware"
+	"github.com/go-go-golems/geppetto/pkg/inference/state"
+	"github.com/go-go-golems/geppetto/pkg/turns"
 )
 
 // Conversation holds per-conversation state and streaming attachments.
 type Conversation struct {
 	ID        string
 	RunID     string
-	State     *conversation.ConversationState
+	Inf       *state.InferenceState
 	Eng       engine.Engine
 	Sink      *middleware.WatermillSink
-	running   bool
-	cancel    context.CancelFunc
 	mu        sync.Mutex
 	conns     map[*websocket.Conn]bool
 	connsMu   sync.RWMutex
@@ -105,7 +104,12 @@ func (r *Router) getOrCreateConv(convID string, buildEng func() (engine.Engine, 
 	if c, ok := r.cm.conns[convID]; ok {
 		return c, nil
 	}
-	conv := &Conversation{ID: convID, RunID: uuid.NewString(), conns: map[*websocket.Conn]bool{}}
+	runID := uuid.NewString()
+	conv := &Conversation{
+		ID:    convID,
+		RunID: runID,
+		conns: map[*websocket.Conn]bool{},
+	}
 	eng, sink, sub, err := buildEng()
 	if err != nil {
 		return nil, err
@@ -113,7 +117,7 @@ func (r *Router) getOrCreateConv(convID string, buildEng func() (engine.Engine, 
 	conv.Eng = eng
 	conv.Sink = sink
 	conv.sub = sub
-	conv.State = conversation.NewConversationState(conv.RunID)
+	conv.Inf = state.NewInferenceState(runID, &turns.Turn{RunID: runID}, eng)
 	if err := r.startReader(conv); err != nil {
 		return nil, err
 	}

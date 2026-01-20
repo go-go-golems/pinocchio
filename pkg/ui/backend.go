@@ -10,23 +10,22 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	boba_chat "github.com/go-go-golems/bobatea/pkg/chat"
 	"github.com/go-go-golems/bobatea/pkg/timeline"
-	"github.com/go-go-golems/geppetto/pkg/conversation"
 	"github.com/go-go-golems/geppetto/pkg/events"
+	"github.com/go-go-golems/geppetto/pkg/inference/core"
 	"github.com/go-go-golems/geppetto/pkg/inference/engine"
+	"github.com/go-go-golems/geppetto/pkg/inference/state"
 	"github.com/go-go-golems/geppetto/pkg/turns"
-	"github.com/go-go-golems/pinocchio/pkg/inference/runner"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 )
 
 // EngineBackend provides a Backend implementation using the Engine-first architecture.
 type EngineBackend struct {
-	engine    engine.Engine
-	isRunning bool
-	cancel    context.CancelFunc
-	stateMu   sync.RWMutex
-	state     *conversation.ConversationState
-	program   *tea.Program
+	engine  engine.Engine
+	inf     *state.InferenceState
+	turnMu  sync.RWMutex
+	program *tea.Program
+
 	emittedMu sync.Mutex
 	emitted   map[string]struct{}
 }
@@ -37,9 +36,9 @@ var _ boba_chat.Backend = &EngineBackend{}
 // The eventSink is used to publish events during inference for UI updates.
 func NewEngineBackend(engine engine.Engine) *EngineBackend {
 	return &EngineBackend{
-		engine:    engine,
-		isRunning: false,
-		emitted:   make(map[string]struct{}),
+		engine:  engine,
+		inf:     state.NewInferenceState("", nil, engine),
+		emitted: make(map[string]struct{}),
 	}
 }
 
@@ -52,38 +51,25 @@ func (e *EngineBackend) AttachProgram(p *tea.Program) {
 // Start executes inference using the engine and publishes events through the sink.
 // This method implements the boba_chat.Backend interface with a plain prompt string.
 func (e *EngineBackend) Start(ctx context.Context, prompt string) (tea.Cmd, error) {
-	log.Debug().Str("component", "engine_backend").Str("method", "Start").Bool("already_running", e.isRunning).Msg("Start called")
-	if e.isRunning {
+	log.Debug().Str("component", "engine_backend").Str("method", "Start").Bool("already_running", e.inf.IsRunning()).Msg("Start called")
+	if err := e.inf.StartRun(); err != nil {
 		log.Debug().Str("component", "engine_backend").Msg("Start rejected: already running")
 		return nil, errors.New("Engine is already running")
 	}
 
-	// Create cancellable context for this inference run
-	ctx, cancel := context.WithCancel(ctx)
-	e.cancel = cancel
-	e.isRunning = true
-
-	// Create engine with the event sink if provided
-	engine := e.engine
+	runCtx, cancel := context.WithCancel(ctx)
+	e.inf.SetCancel(cancel)
 
 	return func() tea.Msg {
-		if !e.isRunning {
-			return nil
-		}
+		defer func() {
+			cancel()
+			e.inf.FinishRun()
+		}()
 
-		log.Debug().Str("component", "engine_backend").Msg("Snapshotting conversation state, appending user block, running inference")
-		seed, err := runner.SnapshotForPrompt(e.state, prompt)
-		if err != nil {
-			log.Error().Err(err).Str("component", "engine_backend").Msg("Failed to build snapshot turn")
-			e.isRunning = false
-			e.cancel = nil
-			return boba_chat.BackendFinishedMsg{}
-		}
-		updated, err := runner.Run(ctx, engine, &e.state, seed, runner.RunOptions{})
-
-		// Mark as finished
-		e.isRunning = false
-		e.cancel = nil
+		log.Debug().Str("component", "engine_backend").Msg("Building seed turn, appending user block, running inference")
+		seed := e.snapshotForPrompt(prompt)
+		sess := &core.Session{State: e.inf}
+		updated, err := sess.RunInferenceStarted(runCtx, seed)
 
 		if err != nil {
 			log.Error().Err(err).Msg("Engine inference failed")
@@ -102,19 +88,46 @@ func (e *EngineBackend) SetSeedTurn(t *turns.Turn) {
 	if t == nil {
 		return
 	}
-	e.stateMu.Lock()
-	if e.state == nil {
-		e.state = conversation.NewConversationState(t.RunID)
-	}
-	e.state.Blocks = append([]turns.Block(nil), t.Blocks...)
-	e.state.Data = t.Data.Clone()
-	e.state.Metadata = t.Metadata.Clone()
+	e.turnMu.Lock()
+	e.inf.Turn = cloneTurn(t)
 	if t.RunID != "" {
-		e.state.RunID = t.RunID
+		e.inf.RunID = t.RunID
 	}
-	e.stateMu.Unlock()
+	e.turnMu.Unlock()
 	log.Debug().Str("component", "engine_backend").Int("seed_blocks", len(t.Blocks)).Msg("Seed Turn loaded into conversation state")
 	e.emitInitialEntities(t)
+}
+
+func (e *EngineBackend) snapshotForPrompt(prompt string) *turns.Turn {
+	e.turnMu.RLock()
+	base := e.inf.Turn
+	runID := e.inf.RunID
+	e.turnMu.RUnlock()
+
+	seed := &turns.Turn{RunID: runID}
+	if base != nil {
+		seed = cloneTurn(base)
+		if seed.RunID == "" {
+			seed.RunID = runID
+		}
+	}
+	if prompt != "" {
+		turns.AppendBlock(seed, turns.NewUserTextBlock(prompt))
+	}
+	return seed
+}
+
+func cloneTurn(t *turns.Turn) *turns.Turn {
+	if t == nil {
+		return nil
+	}
+	return &turns.Turn{
+		ID:       t.ID,
+		RunID:    t.RunID,
+		Blocks:   append([]turns.Block(nil), t.Blocks...),
+		Metadata: t.Metadata.Clone(),
+		Data:     t.Data.Clone(),
+	}
 }
 
 // emitInitialEntities sends UI entities for existing blocks (system/user/assistant text)
@@ -172,27 +185,22 @@ func (e *EngineBackend) emitInitialEntities(t *turns.Turn) {
 
 // Interrupt attempts to cancel the current inference operation.
 func (e *EngineBackend) Interrupt() {
-	if e.cancel != nil {
-		e.cancel()
-	} else {
-		log.Warn().Msg("Engine is not running")
+	if err := e.inf.CancelRun(); err != nil {
+		log.Warn().Err(err).Msg("Engine is not running")
 	}
 }
 
 // Kill forcefully cancels the current inference operation.
 func (e *EngineBackend) Kill() {
-	if e.cancel != nil {
-		e.cancel()
-		e.cancel = nil
-		e.isRunning = false
-	} else {
-		log.Debug().Msg("Engine is not running")
+	if err := e.inf.CancelRun(); err != nil {
+		log.Debug().Err(err).Msg("Engine is not running")
 	}
+	e.inf.FinishRun()
 }
 
 // IsFinished returns whether the engine is currently running an inference operation.
 func (e *EngineBackend) IsFinished() bool {
-	return !e.isRunning
+	return !e.inf.IsRunning()
 }
 
 // StepChatForwardFunc is a function that forwards watermill messages to the UI by
