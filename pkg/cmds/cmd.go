@@ -8,9 +8,9 @@ import (
 	"os"
 	"strings"
 
-	"github.com/go-go-golems/geppetto/pkg/inference/engine"
 	"github.com/go-go-golems/geppetto/pkg/inference/engine/factory"
 	"github.com/go-go-golems/geppetto/pkg/inference/middleware"
+	"github.com/go-go-golems/geppetto/pkg/inference/session"
 	"github.com/go-go-golems/glazed/pkg/helpers/templating"
 
 	"github.com/go-go-golems/geppetto/pkg/events"
@@ -315,13 +315,12 @@ func (g *PinocchioCommand) RunWithOptions(ctx context.Context, options ...run.Ru
 
 // runBlocking handles blocking execution mode using Engine directly
 func (g *PinocchioCommand) runBlocking(ctx context.Context, rc *run.RunContext) (*turns.Turn, error) {
-	// Create engine instance options
-	var options []engine.Option
+	var sinks []events.EventSink
 
 	// If we have a router, set up watermill sink for event publishing
 	if rc.Router != nil {
 		watermillSink := middleware.NewWatermillSink(rc.Router.Publisher, "chat")
-		options = append(options, engine.WithSink(watermillSink))
+		sinks = []events.EventSink{watermillSink}
 
 		// Add default printer if none is set
 		if rc.UISettings == nil || rc.UISettings.Output == "" {
@@ -352,7 +351,7 @@ func (g *PinocchioCommand) runBlocking(ctx context.Context, rc *run.RunContext) 
 		eg.Go(func() error {
 			defer cancel()
 			<-rc.Router.Running()
-			return g.runEngineAndCollectMessages(ctx, rc, options)
+			return g.runEngineAndCollectMessages(ctx, rc, sinks)
 		})
 
 		err := eg.Wait()
@@ -361,7 +360,7 @@ func (g *PinocchioCommand) runBlocking(ctx context.Context, rc *run.RunContext) 
 		}
 	} else {
 		// No router, just run the engine directly using Turns
-		err := g.runEngineAndCollectMessages(ctx, rc, options)
+		err := g.runEngineAndCollectMessages(ctx, rc, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -372,9 +371,9 @@ func (g *PinocchioCommand) runBlocking(ctx context.Context, rc *run.RunContext) 
 }
 
 // runEngineAndCollectMessages handles the actual engine execution and message collection
-func (g *PinocchioCommand) runEngineAndCollectMessages(ctx context.Context, rc *run.RunContext, options []engine.Option) error {
-	// Create engine with options
-	engine, err := rc.EngineFactory.CreateEngine(rc.StepSettings, options...)
+func (g *PinocchioCommand) runEngineAndCollectMessages(ctx context.Context, rc *run.RunContext, sinks []events.EventSink) error {
+	// Create engine
+	engine, err := rc.EngineFactory.CreateEngine(rc.StepSettings)
 	if err != nil {
 		return fmt.Errorf("failed to create engine: %w", err)
 	}
@@ -384,7 +383,15 @@ func (g *PinocchioCommand) runEngineAndCollectMessages(ctx context.Context, rc *
 	if err != nil {
 		return fmt.Errorf("failed to render templates: %w", err)
 	}
-	updatedTurn, err := engine.RunInference(ctx, seed)
+
+	runner, err := (&session.ToolLoopEngineBuilder{
+		Base:       engine,
+		EventSinks: sinks,
+	}).Build(ctx, seed.RunID)
+	if err != nil {
+		return fmt.Errorf("failed to build runner: %w", err)
+	}
+	updatedTurn, err := runner.RunInference(ctx, seed)
 	if err != nil {
 		return fmt.Errorf("inference failed: %w", err)
 	}
@@ -445,7 +452,6 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) (*tu
 		if rc.RunMode == run.RunModeInteractive {
 			// Create options for initial step with chat topic
 			chatSink := middleware.NewWatermillSink(rc.Router.Publisher, "chat")
-			initialOptions := []engine.Option{engine.WithSink(chatSink)}
 
 			// Add default printer for initial step
 			if rc.UISettings == nil || rc.UISettings.Output == "" || rc.UISettings.Output == "text" {
@@ -464,7 +470,7 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) (*tu
 				return err
 			}
 
-			err = g.runEngineAndCollectMessages(ctx, rc, initialOptions)
+			err = g.runEngineAndCollectMessages(ctx, rc, []events.EventSink{chatSink})
 			if err != nil {
 				return err
 			}
