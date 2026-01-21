@@ -508,8 +508,6 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) (*tu
 			WithProgramOptions(options...).
 			WithModelOptions(
 				bobatea_chat.WithTitle("pinocchio"),
-				// The chat model starts inference on submit; do not pre-start the backend in Init().
-				bobatea_chat.WithAutoStartBackend(false),
 			).
 			BuildProgram()
 		if err != nil {
