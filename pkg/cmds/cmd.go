@@ -497,8 +497,7 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) (*tu
 			}
 		}
 
-		// Determine if we should auto-start the backend
-		autoStartBackend := rc.UISettings != nil && rc.UISettings.StartInChat
+		startInChat := rc.UISettings != nil && rc.UISettings.StartInChat
 
 		// Build program and session via unified builder
 		sess, p, err := runtime.NewChatBuilder().
@@ -509,7 +508,8 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) (*tu
 			WithProgramOptions(options...).
 			WithModelOptions(
 				bobatea_chat.WithTitle("pinocchio"),
-				bobatea_chat.WithAutoStartBackend(autoStartBackend),
+				// The chat model starts inference on submit; do not pre-start the backend in Init().
+				bobatea_chat.WithAutoStartBackend(false),
 			).
 			BuildProgram()
 		if err != nil {
@@ -545,8 +545,8 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) (*tu
 			return nil
 		})
 
-		// If auto-start is enabled, pre-fill the prompt/system text, then submit
-		if autoStartBackend {
+		// If we're starting directly in chat mode, pre-fill the prompt text (if any), then submit.
+		if startInChat {
 			seedGroup.Go(func() error {
 				<-rc.Router.Running()
 				// Render prompt before auto-submit in chat
