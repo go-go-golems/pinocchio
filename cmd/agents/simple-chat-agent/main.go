@@ -132,7 +132,7 @@ func (c *SimpleAgentCmd) RunIntoWriter(ctx context.Context, parsed *layers.Parse
 
 	// Engine
 	engB := enginebuilder.NewParsedLayersEngineBuilder(parsed, sink)
-	eng, _, _, err := engB.Build("", "", nil)
+	eng, _, err := engB.Build("", "", nil)
 	if err != nil {
 		return errors.Wrap(err, "engine")
 	}
