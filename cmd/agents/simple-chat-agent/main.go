@@ -225,10 +225,11 @@ func (c *SimpleAgentCmd) RunIntoWriter(ctx context.Context, parsed *layers.Parse
 	_ = parsed.InitializeStruct(layers.DefaultSlug, &agentSettings)
 	if agentSettings.ServerTools {
 		// Set server tools data using typed key constant (satisfies turnsdatalint)
-		if backend.Inf == nil || backend.Inf.Turn == nil {
-			return errors.New("backend inference state not initialized")
+		t := backend.CurrentTurn()
+		if t == nil {
+			return errors.New("backend turn not initialized")
 		}
-		if err := turns.KeyResponsesServerTools.Set(&backend.Inf.Turn.Data, []any{map[string]any{"type": "web_search"}}); err != nil {
+		if err := turns.KeyResponsesServerTools.Set(&t.Data, []any{map[string]any{"type": "web_search"}}); err != nil {
 			return errors.Wrap(err, "set responses server tools")
 		}
 	}

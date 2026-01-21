@@ -10,12 +10,12 @@ import (
 	boba_chat "github.com/go-go-golems/bobatea/pkg/chat"
 	"github.com/go-go-golems/bobatea/pkg/timeline"
 	"github.com/go-go-golems/geppetto/pkg/events"
-	"github.com/go-go-golems/geppetto/pkg/inference/core"
 	"github.com/go-go-golems/geppetto/pkg/inference/engine"
-	"github.com/go-go-golems/geppetto/pkg/inference/state"
+	"github.com/go-go-golems/geppetto/pkg/inference/session"
 	"github.com/go-go-golems/geppetto/pkg/inference/toolhelpers"
 	"github.com/go-go-golems/geppetto/pkg/inference/tools"
 	"github.com/go-go-golems/geppetto/pkg/turns"
+	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 )
@@ -26,66 +26,109 @@ type ToolLoopBackend struct {
 	sink events.EventSink
 	hook toolhelpers.SnapshotHook
 
-	Inf  *state.InferenceState
-	sess *core.Session
+	sess *session.Session
 }
 
 func NewToolLoopBackend(eng engine.Engine, reg *tools.InMemoryToolRegistry, sink events.EventSink, hook toolhelpers.SnapshotHook) *ToolLoopBackend {
-	inf := state.NewInferenceState("", &turns.Turn{}, eng)
 	cfg := toolhelpers.NewToolConfig().WithMaxIterations(5).WithTimeout(60 * time.Second)
-	sess := &core.Session{
-		State:        inf,
-		Registry:     reg,
-		ToolConfig:   &cfg,
-		EventSinks:   []events.EventSink{sink},
-		SnapshotHook: hook,
+	runID := uuid.NewString()
+	sess := &session.Session{
+		SessionID: runID,
+		Builder: &session.ToolLoopEngineBuilder{
+			Base:         eng,
+			Registry:     reg,
+			ToolConfig:   &cfg,
+			EventSinks:   []events.EventSink{sink},
+			SnapshotHook: hook,
+		},
+		Turns: []*turns.Turn{{RunID: runID}},
 	}
-	return &ToolLoopBackend{reg: reg, sink: sink, hook: hook, Inf: inf, sess: sess}
+	return &ToolLoopBackend{reg: reg, sink: sink, hook: hook, sess: sess}
 }
 
 func (b *ToolLoopBackend) Start(ctx context.Context, prompt string) (tea.Cmd, error) {
-	if b == nil || b.Inf == nil || b.sess == nil {
+	if b == nil || b.sess == nil {
 		return nil, errors.New("backend not initialized")
 	}
-	if err := b.Inf.StartRun(); err != nil {
+	if b.sess.IsRunning() {
 		return nil, errors.New("already running")
 	}
-	if b.Inf.Turn == nil {
-		b.Inf.Turn = &turns.Turn{}
-	}
-	if prompt != "" {
-		turns.AppendBlock(b.Inf.Turn, turns.NewUserTextBlock(prompt))
-	}
 
-	runCtx, cancel := context.WithCancel(ctx)
-	b.Inf.SetCancel(cancel)
+	seed := snapshotForPrompt(b.sess, prompt)
+	b.sess.Append(seed)
+
+	handle, err := b.sess.StartInference(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "start inference")
+	}
 
 	return func() tea.Msg {
-		defer func() {
-			cancel()
-			b.Inf.FinishRun()
-		}()
-
-		updated, err := b.sess.RunInferenceStarted(runCtx, b.Inf.Turn)
-		if err != nil {
-			log.Error().Err(err).Msg("tool loop failed")
+		_, waitErr := handle.Wait()
+		if waitErr != nil {
+			log.Error().Err(waitErr).Msg("tool loop failed")
 		}
-		_ = updated
 		return boba_chat.BackendFinishedMsg{}
 	}, nil
 }
 
 func (b *ToolLoopBackend) Interrupt() {
-	_ = b.Inf.CancelRun()
+	if b != nil && b.sess != nil {
+		_ = b.sess.CancelActive()
+	}
 }
 
 func (b *ToolLoopBackend) Kill() {
-	_ = b.Inf.CancelRun()
-	b.Inf.FinishRun()
+	if b != nil && b.sess != nil {
+		_ = b.sess.CancelActive()
+	}
 }
 
 func (b *ToolLoopBackend) IsFinished() bool {
-	return !b.Inf.IsRunning()
+	return b == nil || b.sess == nil || !b.sess.IsRunning()
+}
+
+// CurrentTurn returns the latest in-memory turn snapshot for this backend.
+// Callers may mutate the returned Turn (e.g. seed Turn.Data) before starting inference.
+func (b *ToolLoopBackend) CurrentTurn() *turns.Turn {
+	if b == nil || b.sess == nil {
+		return nil
+	}
+	return b.sess.Latest()
+}
+
+func snapshotForPrompt(sess *session.Session, prompt string) *turns.Turn {
+	if sess == nil {
+		t := &turns.Turn{}
+		if prompt != "" {
+			turns.AppendBlock(t, turns.NewUserTextBlock(prompt))
+		}
+		return t
+	}
+	base := sess.Latest()
+	seed := &turns.Turn{}
+	if base != nil {
+		seed = cloneTurn(base)
+	}
+	if seed.RunID == "" {
+		seed.RunID = sess.SessionID
+	}
+	if prompt != "" {
+		turns.AppendBlock(seed, turns.NewUserTextBlock(prompt))
+	}
+	return seed
+}
+
+func cloneTurn(t *turns.Turn) *turns.Turn {
+	if t == nil {
+		return nil
+	}
+	return &turns.Turn{
+		ID:       t.ID,
+		RunID:    t.RunID,
+		Blocks:   append([]turns.Block(nil), t.Blocks...),
+		Metadata: t.Metadata.Clone(),
+		Data:     t.Data.Clone(),
+	}
 }
 
 // MakeUIForwarder returns a Watermill handler that forwards geppetto events to the Bubble Tea program p
