@@ -13,7 +13,7 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/events"
 	"github.com/go-go-golems/geppetto/pkg/inference/engine"
 	"github.com/go-go-golems/geppetto/pkg/inference/middleware"
-	"github.com/go-go-golems/geppetto/pkg/inference/state"
+	"github.com/go-go-golems/geppetto/pkg/inference/session"
 	"github.com/go-go-golems/geppetto/pkg/turns"
 )
 
@@ -21,7 +21,7 @@ import (
 type Conversation struct {
 	ID        string
 	RunID     string
-	Inf       *state.InferenceState
+	Sess      *session.Session
 	Eng       engine.Engine
 	Sink      *middleware.WatermillSink
 	mu        sync.Mutex
@@ -117,7 +117,14 @@ func (r *Router) getOrCreateConv(convID string, buildEng func() (engine.Engine, 
 	conv.Eng = eng
 	conv.Sink = sink
 	conv.sub = sub
-	conv.Inf = state.NewInferenceState(runID, &turns.Turn{RunID: runID}, eng)
+	conv.Sess = &session.Session{
+		SessionID: runID,
+		Builder: &session.ToolLoopEngineBuilder{
+			Base:       eng,
+			EventSinks: []events.EventSink{sink},
+		},
+		Turns: []*turns.Turn{{RunID: runID}},
+	}
 	if err := r.startReader(conv); err != nil {
 		return nil, err
 	}

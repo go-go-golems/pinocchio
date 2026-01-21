@@ -20,9 +20,9 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/go-go-golems/geppetto/pkg/events"
-	"github.com/go-go-golems/geppetto/pkg/inference/core"
 	"github.com/go-go-golems/geppetto/pkg/inference/engine"
 	"github.com/go-go-golems/geppetto/pkg/inference/middleware"
+	"github.com/go-go-golems/geppetto/pkg/inference/session"
 	"github.com/go-go-golems/geppetto/pkg/inference/toolhelpers"
 	geptools "github.com/go-go-golems/geppetto/pkg/inference/tools"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
@@ -327,7 +327,11 @@ func (r *Router) registerHTTPHandlers() {
 			http.Error(w, "failed to create conversation", http.StatusInternalServerError)
 			return
 		}
-		if err := conv.Inf.StartRun(); err != nil {
+		if conv.Sess == nil {
+			http.Error(w, "conversation session not initialized", http.StatusInternalServerError)
+			return
+		}
+		if conv.Sess.IsRunning() {
 			log.Warn().Str("component", "webchat").Str("conv_id", conv.ID).Str("run_id", conv.RunID).Msg("run in progress")
 			w.WriteHeader(http.StatusConflict)
 			_ = json.NewEncoder(w).Encode(map[string]any{"error": "run in progress", "conv_id": conv.ID, "run_id": conv.RunID})
@@ -339,31 +343,38 @@ func (r *Router) registerHTTPHandlers() {
 			_ = name
 		}
 
-		go func(conv *Conversation) {
-			<-r.router.Running()
-			runCtx, runCancel := context.WithCancel(r.baseCtx)
-			conv.Inf.SetCancel(runCancel)
-			defer func() {
-				runCancel()
-				conv.Inf.FinishRun()
+		// Ensure router is running before we start inference (best-effort).
+		select {
+		case <-r.router.Running():
+		case <-time.After(2 * time.Second):
+		}
+
+		hook := snapshotHookForConv(conv, os.Getenv("PINOCCHIO_WEBCHAT_TURN_SNAPSHOTS_DIR"))
+		log.Info().Str("component", "webchat").Str("conv_id", conv.ID).Str("run_id", conv.RunID).Msg("starting run loop")
+
+		seed := seedForPrompt(conv, body.Prompt)
+		cfg := toolhelpers.NewToolConfig().WithMaxIterations(5).WithTimeout(60 * time.Second)
+		conv.Sess.Builder = &session.ToolLoopEngineBuilder{
+			Base:         conv.Eng,
+			Registry:     registry,
+			ToolConfig:   &cfg,
+			EventSinks:   []events.EventSink{conv.Sink},
+			SnapshotHook: hook,
+		}
+		conv.Sess.Append(seed)
+
+		handle, err := conv.Sess.StartInference(r.baseCtx)
+		if err != nil {
+			log.Error().Err(err).Str("component", "webchat").Str("conv_id", conv.ID).Str("run_id", conv.RunID).Msg("start inference failed")
+		} else {
+			go func() {
+				_, waitErr := handle.Wait()
+				if waitErr != nil {
+					log.Error().Err(waitErr).Str("component", "webchat").Str("conv_id", conv.ID).Str("run_id", conv.RunID).Msg("run loop error")
+				}
+				log.Info().Str("component", "webchat").Str("conv_id", conv.ID).Str("run_id", conv.RunID).Msg("run loop finished")
 			}()
-			hook := snapshotHookForConv(conv, os.Getenv("PINOCCHIO_WEBCHAT_TURN_SNAPSHOTS_DIR"))
-			log.Info().Str("component", "webchat").Str("conv_id", conv.ID).Str("run_id", conv.RunID).Msg("starting run loop")
-			seed := seedForPrompt(conv, body.Prompt)
-			cfg := toolhelpers.NewToolConfig().WithMaxIterations(5).WithTimeout(60 * time.Second)
-			sess := &core.Session{
-				State:        conv.Inf,
-				Registry:     registry,
-				ToolConfig:   &cfg,
-				SnapshotHook: hook,
-				EventSinks:   []events.EventSink{conv.Sink},
-			}
-			_, err = sess.RunInferenceStarted(runCtx, seed)
-			if err != nil {
-				log.Error().Err(err).Str("component", "webchat").Str("conv_id", conv.ID).Str("run_id", conv.RunID).Msg("run loop error")
-			}
-			log.Info().Str("component", "webchat").Str("conv_id", conv.ID).Str("run_id", conv.RunID).Msg("run loop finished")
-		}(conv)
+		}
 
 		_ = json.NewEncoder(w).Encode(map[string]string{"run_id": conv.RunID, "conv_id": conv.ID})
 	})
@@ -461,7 +472,11 @@ func (r *Router) registerHTTPHandlers() {
 			http.Error(w, "failed to create conversation", http.StatusInternalServerError)
 			return
 		}
-		if err := conv.Inf.StartRun(); err != nil {
+		if conv.Sess == nil {
+			http.Error(w, "conversation session not initialized", http.StatusInternalServerError)
+			return
+		}
+		if conv.Sess.IsRunning() {
 			w.WriteHeader(http.StatusConflict)
 			_ = json.NewEncoder(w).Encode(map[string]any{"error": "run in progress", "conv_id": conv.ID, "run_id": conv.RunID})
 			return
@@ -473,31 +488,38 @@ func (r *Router) registerHTTPHandlers() {
 			_ = name
 		}
 
-		go func(conv *Conversation) {
-			<-r.router.Running()
-			runCtx, runCancel := context.WithCancel(r.baseCtx)
-			conv.Inf.SetCancel(runCancel)
-			defer func() {
-				runCancel()
-				conv.Inf.FinishRun()
+		// Ensure router is running before we start inference (best-effort).
+		select {
+		case <-r.router.Running():
+		case <-time.After(2 * time.Second):
+		}
+
+		hook := snapshotHookForConv(conv, os.Getenv("PINOCCHIO_WEBCHAT_TURN_SNAPSHOTS_DIR"))
+		log.Info().Str("component", "webchat").Str("conv_id", conv.ID).Str("run_id", conv.RunID).Msg("starting run loop")
+
+		seed := seedForPrompt(conv, body.Prompt)
+		cfg := toolhelpers.NewToolConfig().WithMaxIterations(5).WithTimeout(60 * time.Second)
+		conv.Sess.Builder = &session.ToolLoopEngineBuilder{
+			Base:         conv.Eng,
+			Registry:     registry,
+			ToolConfig:   &cfg,
+			EventSinks:   []events.EventSink{conv.Sink},
+			SnapshotHook: hook,
+		}
+		conv.Sess.Append(seed)
+
+		handle, err := conv.Sess.StartInference(r.baseCtx)
+		if err != nil {
+			log.Error().Err(err).Str("component", "webchat").Str("conv_id", conv.ID).Str("run_id", conv.RunID).Msg("start inference failed")
+		} else {
+			go func() {
+				_, waitErr := handle.Wait()
+				if waitErr != nil {
+					log.Error().Err(waitErr).Str("component", "webchat").Str("conv_id", conv.ID).Str("run_id", conv.RunID).Msg("run loop error")
+				}
+				log.Info().Str("component", "webchat").Str("conv_id", conv.ID).Str("run_id", conv.RunID).Msg("run loop finished")
 			}()
-			hook := snapshotHookForConv(conv, os.Getenv("PINOCCHIO_WEBCHAT_TURN_SNAPSHOTS_DIR"))
-			log.Info().Str("component", "webchat").Str("conv_id", conv.ID).Str("run_id", conv.RunID).Msg("starting run loop")
-			seed := seedForPrompt(conv, body.Prompt)
-			cfg := toolhelpers.NewToolConfig().WithMaxIterations(5).WithTimeout(60 * time.Second)
-			sess := &core.Session{
-				State:        conv.Inf,
-				Registry:     registry,
-				ToolConfig:   &cfg,
-				SnapshotHook: hook,
-				EventSinks:   []events.EventSink{conv.Sink},
-			}
-			_, err = sess.RunInferenceStarted(runCtx, seed)
-			if err != nil {
-				log.Error().Err(err).Str("component", "webchat").Str("conv_id", conv.ID).Str("run_id", conv.RunID).Msg("run loop error")
-			}
-			log.Info().Str("component", "webchat").Str("conv_id", conv.ID).Str("run_id", conv.RunID).Msg("run loop finished")
-		}(conv)
+		}
 
 		_ = json.NewEncoder(w).Encode(map[string]string{"run_id": conv.RunID, "conv_id": conv.ID})
 	})
@@ -545,18 +567,19 @@ func snapshotHookForConv(conv *Conversation, dir string) toolhelpers.SnapshotHoo
 }
 
 func seedForPrompt(conv *Conversation, prompt string) *turns.Turn {
-	if conv == nil || conv.Inf == nil {
+	if conv == nil || conv.Sess == nil {
 		t := &turns.Turn{}
+		if conv != nil && conv.RunID != "" {
+			t.RunID = conv.RunID
+		}
 		if prompt != "" {
 			turns.AppendBlock(t, turns.NewUserTextBlock(prompt))
 		}
 		return t
 	}
 
-	conv.mu.Lock()
-	base := conv.Inf.Turn
-	runID := conv.Inf.RunID
-	conv.mu.Unlock()
+	base := conv.Sess.Latest()
+	runID := conv.Sess.SessionID
 
 	seed := &turns.Turn{RunID: runID}
 	if base != nil {
