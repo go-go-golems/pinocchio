@@ -225,9 +225,18 @@ Response:
 Engines are built from `StepSettings` using Geppetto’s factory:
 
 ```go
+import (
+    "context"
+    "github.com/go-go-golems/geppetto/pkg/inference/session"
+)
+
 eng, err := factory.NewEngineFromStepSettings(stepSettings)
-eng = middleware.NewEngineWithMiddleware(eng, middleware.NewSystemPromptMiddleware(sysPrompt))
-// + per-profile middlewares in order
+runner, err := session.NewToolLoopEngineBuilder(
+    session.WithToolLoopBase(eng),
+    session.WithToolLoopMiddlewares(middleware.NewSystemPromptMiddleware(sysPrompt)),
+    // + per-profile middlewares in order
+).Build(context.Background(), "")
+eng = runner
 ```
 
 This ensures parity with standard StepSettings (model, timeouts, provider settings) while keeping middleware composition declarative.
@@ -319,5 +328,3 @@ _ = webchat.NewFromRouter(ctx, r, httpSrv).Run(ctx)
 - Add a new profile (e.g., `rag`) with a retrieval middleware.
 - Implement a custom run loop for multi-turn planning.
 - Extend the frontend with profile selectors using `/api/chat/profiles`.
-
-
