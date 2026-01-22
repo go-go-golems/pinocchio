@@ -21,8 +21,9 @@ func composeEngineFromSettings(stepSettings *settings.StepSettings, sysPrompt st
 		eng = middleware.NewEngineWithMiddleware(eng, middleware.NewSystemPromptMiddleware(sysPrompt))
 	}
 
-	// Apply requested middlewares in order
-	for _, u := range uses {
+	// Apply requested middlewares in reverse (first listed becomes outermost wrapper)
+	for i := len(uses) - 1; i >= 0; i-- {
+		u := uses[i]
 		f, ok := mwFactories[u.Name]
 		if !ok {
 			return nil, errors.Errorf("unknown middleware: %s", u.Name)
