@@ -26,6 +26,7 @@ import (
 	"github.com/go-go-golems/pinocchio/pkg/cmds/cmdlayers"
 	"github.com/go-go-golems/pinocchio/pkg/cmds/run"
 	"github.com/go-go-golems/pinocchio/pkg/ui/runtime"
+	"github.com/google/uuid"
 	"github.com/mattn/go-isatty"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
@@ -387,7 +388,14 @@ func (g *PinocchioCommand) runEngineAndCollectMessages(ctx context.Context, rc *
 	runner, err := (&session.ToolLoopEngineBuilder{
 		Base:       engine,
 		EventSinks: sinks,
-	}).Build(ctx, seed.RunID)
+	}).Build(ctx, func() string {
+		if sid, ok, err := turns.KeyTurnMetaSessionID.Get(seed.Metadata); err == nil && ok && sid != "" {
+			return sid
+		}
+		sid := uuid.NewString()
+		_ = turns.KeyTurnMetaSessionID.Set(&seed.Metadata, sid)
+		return sid
+	}())
 	if err != nil {
 		return fmt.Errorf("failed to build runner: %w", err)
 	}

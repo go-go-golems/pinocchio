@@ -570,7 +570,7 @@ func seedForPrompt(conv *Conversation, prompt string) *turns.Turn {
 	if conv == nil || conv.Sess == nil {
 		t := &turns.Turn{}
 		if conv != nil && conv.RunID != "" {
-			t.RunID = conv.RunID
+			_ = turns.KeyTurnMetaSessionID.Set(&t.Metadata, conv.RunID)
 		}
 		if prompt != "" {
 			turns.AppendBlock(t, turns.NewUserTextBlock(prompt))
@@ -581,11 +581,13 @@ func seedForPrompt(conv *Conversation, prompt string) *turns.Turn {
 	base := conv.Sess.Latest()
 	runID := conv.Sess.SessionID
 
-	seed := &turns.Turn{RunID: runID}
+	seed := &turns.Turn{}
 	if base != nil {
 		seed = cloneTurn(base)
-		if seed.RunID == "" {
-			seed.RunID = runID
+	}
+	if runID != "" {
+		if _, ok, err := turns.KeyTurnMetaSessionID.Get(seed.Metadata); err != nil || !ok {
+			_ = turns.KeyTurnMetaSessionID.Set(&seed.Metadata, runID)
 		}
 	}
 	if prompt != "" {
@@ -600,7 +602,6 @@ func cloneTurn(t *turns.Turn) *turns.Turn {
 	}
 	return &turns.Turn{
 		ID:       t.ID,
-		RunID:    t.RunID,
 		Blocks:   append([]turns.Block(nil), t.Blocks...),
 		Metadata: t.Metadata.Clone(),
 		Data:     t.Data.Clone(),

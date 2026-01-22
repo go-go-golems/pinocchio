@@ -104,15 +104,14 @@ func (e *EngineBackend) SetSeedTurn(t *turns.Turn) {
 	seed := cloneTurn(t)
 
 	e.sessMu.Lock()
-	runID := ""
-	if seed.RunID != "" {
-		runID = seed.RunID
+	sess := &session.Session{Builder: e.builder}
+	if sid, ok, err := turns.KeyTurnMetaSessionID.Get(seed.Metadata); err == nil && ok && sid != "" {
+		sess.SessionID = sid
+	} else {
+		sess.SessionID = session.NewSession().SessionID
 	}
-	e.sess = &session.Session{
-		SessionID: runID,
-		Builder:   e.builder,
-		Turns:     []*turns.Turn{seed},
-	}
+	sess.Append(seed)
+	e.sess = sess
 	e.sessMu.Unlock()
 
 	e.emittedMu.Lock()
@@ -137,11 +136,13 @@ func (e *EngineBackend) snapshotForPrompt(prompt string) *turns.Turn {
 		runID = sess.SessionID
 	}
 
-	seed := &turns.Turn{RunID: runID}
+	seed := &turns.Turn{}
 	if base != nil {
 		seed = cloneTurn(base)
-		if seed.RunID == "" {
-			seed.RunID = runID
+	}
+	if runID != "" {
+		if _, ok, err := turns.KeyTurnMetaSessionID.Get(seed.Metadata); err != nil || !ok {
+			_ = turns.KeyTurnMetaSessionID.Set(&seed.Metadata, runID)
 		}
 	}
 	if prompt != "" {
@@ -156,7 +157,6 @@ func cloneTurn(t *turns.Turn) *turns.Turn {
 	}
 	return &turns.Turn{
 		ID:       t.ID,
-		RunID:    t.RunID,
 		Blocks:   append([]turns.Block(nil), t.Blocks...),
 		Metadata: t.Metadata.Clone(),
 		Data:     t.Data.Clone(),

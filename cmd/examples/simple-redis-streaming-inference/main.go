@@ -173,7 +173,10 @@ func (c *SimpleRedisStreamingInferenceCommand) RunIntoWriter(ctx context.Context
 		WithSystemPrompt("You are a helpful assistant. Answer the question in a short and concise manner. ").
 		WithUserPrompt(s.Prompt).
 		Build()
-	seed.RunID = uuid.NewString()
+	sessionID := uuid.NewString()
+	if err := turns.KeyTurnMetaSessionID.Set(&seed.Metadata, sessionID); err != nil {
+		return fmt.Errorf("set session id metadata: %w", err)
+	}
 
 	// Run router and inference concurrently
 	eg := errgroup.Group{}
@@ -194,7 +197,7 @@ func (c *SimpleRedisStreamingInferenceCommand) RunIntoWriter(ctx context.Context
 		runner, err := (&session.ToolLoopEngineBuilder{
 			Base:       eng,
 			EventSinks: []events.EventSink{sink},
-		}).Build(ctx, seed.RunID)
+		}).Build(ctx, sessionID)
 		if err != nil {
 			return fmt.Errorf("failed to build runner: %w", err)
 		}

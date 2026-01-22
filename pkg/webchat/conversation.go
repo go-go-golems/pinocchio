@@ -123,7 +123,11 @@ func (r *Router) getOrCreateConv(convID string, buildEng func() (engine.Engine, 
 			Base:       eng,
 			EventSinks: []events.EventSink{sink},
 		},
-		Turns: []*turns.Turn{{RunID: runID}},
+		Turns: func() []*turns.Turn {
+			seed := &turns.Turn{}
+			_ = turns.KeyTurnMetaSessionID.Set(&seed.Metadata, runID)
+			return []*turns.Turn{seed}
+		}(),
 	}
 	if err := r.startReader(conv); err != nil {
 		return nil, err

@@ -15,7 +15,6 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/inference/toolhelpers"
 	"github.com/go-go-golems/geppetto/pkg/inference/tools"
 	"github.com/go-go-golems/geppetto/pkg/turns"
-	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 )
@@ -31,17 +30,13 @@ type ToolLoopBackend struct {
 
 func NewToolLoopBackend(eng engine.Engine, reg *tools.InMemoryToolRegistry, sink events.EventSink, hook toolhelpers.SnapshotHook) *ToolLoopBackend {
 	cfg := toolhelpers.NewToolConfig().WithMaxIterations(5).WithTimeout(60 * time.Second)
-	runID := uuid.NewString()
-	sess := &session.Session{
-		SessionID: runID,
-		Builder: &session.ToolLoopEngineBuilder{
-			Base:         eng,
-			Registry:     reg,
-			ToolConfig:   &cfg,
-			EventSinks:   []events.EventSink{sink},
-			SnapshotHook: hook,
-		},
-		Turns: []*turns.Turn{{RunID: runID}},
+	sess := session.NewSession()
+	sess.Builder = &session.ToolLoopEngineBuilder{
+		Base:         eng,
+		Registry:     reg,
+		ToolConfig:   &cfg,
+		EventSinks:   []events.EventSink{sink},
+		SnapshotHook: hook,
 	}
 	return &ToolLoopBackend{reg: reg, sink: sink, hook: hook, sess: sess}
 }
@@ -109,8 +104,10 @@ func snapshotForPrompt(sess *session.Session, prompt string) *turns.Turn {
 	if base != nil {
 		seed = cloneTurn(base)
 	}
-	if seed.RunID == "" {
-		seed.RunID = sess.SessionID
+	if sess.SessionID != "" {
+		if _, ok, err := turns.KeyTurnMetaSessionID.Get(seed.Metadata); err != nil || !ok {
+			_ = turns.KeyTurnMetaSessionID.Set(&seed.Metadata, sess.SessionID)
+		}
 	}
 	if prompt != "" {
 		turns.AppendBlock(seed, turns.NewUserTextBlock(prompt))
@@ -124,7 +121,6 @@ func cloneTurn(t *turns.Turn) *turns.Turn {
 	}
 	return &turns.Turn{
 		ID:       t.ID,
-		RunID:    t.RunID,
 		Blocks:   append([]turns.Block(nil), t.Blocks...),
 		Metadata: t.Metadata.Clone(),
 		Data:     t.Data.Clone(),

@@ -12,6 +12,7 @@ import (
 	renderers "github.com/go-go-golems/bobatea/pkg/timeline/renderers"
 	clay "github.com/go-go-golems/clay/pkg"
 	"github.com/go-go-golems/geppetto/pkg/events"
+	"github.com/go-go-golems/geppetto/pkg/inference/engine/factory"
 	"github.com/go-go-golems/geppetto/pkg/inference/middleware"
 	"github.com/go-go-golems/geppetto/pkg/inference/tools"
 	geppettolayers "github.com/go-go-golems/geppetto/pkg/layers"
@@ -29,7 +30,6 @@ import (
 	toolspkg "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/tools"
 	uipkg "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/ui"
 	eventspkg "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/xevents"
-	"github.com/go-go-golems/pinocchio/pkg/inference/enginebuilder"
 	agentmode "github.com/go-go-golems/pinocchio/pkg/middlewares/agentmode"
 	sqlitetool "github.com/go-go-golems/pinocchio/pkg/middlewares/sqlitetool"
 	rediscfg "github.com/go-go-golems/pinocchio/pkg/redisstream"
@@ -131,8 +131,7 @@ func (c *SimpleAgentCmd) RunIntoWriter(ctx context.Context, parsed *layers.Parse
 	sink := middleware.NewWatermillSink(router.Publisher, "chat")
 
 	// Engine
-	engB := enginebuilder.NewParsedLayersEngineBuilder(parsed, sink)
-	eng, _, err := engB.Build("", "", nil)
+	eng, err := factory.NewEngineFromParsedLayers(parsed)
 	if err != nil {
 		return errors.Wrap(err, "engine")
 	}
@@ -190,8 +189,8 @@ func (c *SimpleAgentCmd) RunIntoWriter(ctx context.Context, parsed *layers.Parse
 				if t == nil {
 					t = &turns.Turn{}
 				}
-				if t.RunID == "" {
-					t.RunID = sessionRunID
+				if _, ok, err := turns.KeyTurnMetaSessionID.Get(t.Metadata); err != nil || !ok {
+					_ = turns.KeyTurnMetaSessionID.Set(&t.Metadata, sessionRunID)
 				}
 				if t.ID == "" {
 					t.ID = uuid.NewString()

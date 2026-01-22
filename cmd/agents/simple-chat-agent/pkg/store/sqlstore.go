@@ -91,16 +91,21 @@ func (s *SQLiteStore) SaveTurnSnapshot(ctx context.Context, t *turns.Turn, phase
 	if t == nil {
 		return nil
 	}
-	if t.RunID == "" {
-		t.RunID = uuid.NewString()
+	runID := ""
+	if sid, ok, err := turns.KeyTurnMetaSessionID.Get(t.Metadata); err == nil && ok {
+		runID = sid
+	}
+	if runID == "" {
+		runID = uuid.NewString()
+		_ = turns.KeyTurnMetaSessionID.Set(&t.Metadata, runID)
 	}
 	if t.ID == "" {
 		t.ID = uuid.NewString()
 	}
-	if err := s.EnsureRun(ctx, t.RunID, convertTurnMetadataToMap(t.Metadata)); err != nil {
-		log.Warn().Err(err).Str("run_id", t.RunID).Msg("EnsureRun failed")
+	if err := s.EnsureRun(ctx, runID, convertTurnMetadataToMap(t.Metadata)); err != nil {
+		log.Warn().Err(err).Str("run_id", runID).Msg("EnsureRun failed")
 	}
-	if err := s.EnsureTurn(ctx, t.RunID, t.ID, convertTurnMetadataToMap(t.Metadata)); err != nil {
+	if err := s.EnsureTurn(ctx, runID, t.ID, convertTurnMetadataToMap(t.Metadata)); err != nil {
 		log.Warn().Err(err).Str("turn_id", t.ID).Msg("EnsureTurn failed")
 	}
 	// Serialize turn as JSON
@@ -119,7 +124,7 @@ func (s *SQLiteStore) SaveTurnSnapshot(ctx context.Context, t *turns.Turn, phase
 		Data     map[string]interface{} `json:"data,omitempty"`
 		Blocks   []block                `json:"blocks"`
 	}{
-		RunID:    t.RunID,
+		RunID:    runID,
 		TurnID:   t.ID,
 		Metadata: convertTurnMetadataToMap(t.Metadata),
 		Data:     convertTurnDataToMap(t.Data),
@@ -129,7 +134,7 @@ func (s *SQLiteStore) SaveTurnSnapshot(ctx context.Context, t *turns.Turn, phase
 		bid := b.ID
 		if bid == "" {
 			log.Warn().
-				Str("run_id", t.RunID).
+				Str("run_id", runID).
 				Str("turn_id", t.ID).
 				Int("index", i).
 				Int("kind", int(b.Kind)).
@@ -171,7 +176,7 @@ func (s *SQLiteStore) SaveTurnSnapshot(ctx context.Context, t *turns.Turn, phase
 		if b, err := json.Marshal(defs); err == nil {
 			_, _ = s.db.ExecContext(ctx, "INSERT OR REPLACE INTO turn_kv(turn_id, section, key, type, value_text, value_json) VALUES(?,?,?,?,?,?)", t.ID, "data", "tool_registry", "object", "", string(b))
 			// Also record a registry snapshot row for easier retrieval
-			_, _ = s.db.ExecContext(ctx, "INSERT INTO tool_registry_snapshots(run_id, turn_id, phase, created_at, tools_json) VALUES(?,?,?,?,?)", t.RunID, t.ID, phase, time.Now().Format(time.RFC3339Nano), string(b))
+			_, _ = s.db.ExecContext(ctx, "INSERT INTO tool_registry_snapshots(run_id, turn_id, phase, created_at, tools_json) VALUES(?,?,?,?,?)", runID, t.ID, phase, time.Now().Format(time.RFC3339Nano), string(b))
 		}
 	}
 	// turn data KV
