@@ -229,13 +229,68 @@ func (r *Router) registerHTTPHandlers() {
 		}
 		r.addConn(conv, conn)
 		log.Info().Str("component", "webchat").Str("conv_id", convID).Msg("ws connected")
+
+		// Send a greeting frame to the newly connected client (mirrors moments/go-go-mento behavior).
+		if conv != nil && conv.pool != nil {
+			ts := time.Now().UnixMilli()
+			hello := map[string]any{
+				"sem": true,
+				"event": map[string]any{
+					"type":        "ws.hello",
+					"id":          fmt.Sprintf("ws.hello:%s:%d", convID, ts),
+					"conv_id":     convID,
+					"profile":     profileSlug,
+					"server_time": ts,
+				},
+			}
+			if b, err := json.Marshal(hello); err == nil {
+				conv.pool.SendToOne(conn, b)
+			}
+		}
+
 		go func() {
 			defer r.removeConn(conv, conn)
 			defer log.Info().Str("component", "webchat").Str("conv_id", convID).Msg("ws disconnected")
 			for {
-				if _, _, err := conn.ReadMessage(); err != nil {
+				msgType, data, err := conn.ReadMessage()
+				if err != nil {
 					log.Debug().Err(err).Str("component", "webchat").Msg("ws read loop end")
 					return
+				}
+
+				// Lightweight ping/pong protocol (mirrors moments/go-go-mento behavior)
+				if msgType == websocket.TextMessage && len(data) > 0 && conv != nil && conv.pool != nil {
+					s := strings.TrimSpace(strings.ToLower(string(data)))
+					isPing := s == "ping"
+					if !isPing {
+						var v map[string]any
+						if err := json.Unmarshal(data, &v); err == nil && v != nil {
+							if t, ok := v["type"].(string); ok && strings.EqualFold(t, "ws.ping") {
+								isPing = true
+							} else if sem, ok := v["sem"].(bool); ok && sem {
+								if ev, ok := v["event"].(map[string]any); ok {
+									if t2, ok := ev["type"].(string); ok && strings.EqualFold(t2, "ws.ping") {
+										isPing = true
+									}
+								}
+							}
+						}
+					}
+					if isPing {
+						ts := time.Now().UnixMilli()
+						pong := map[string]any{
+							"sem": true,
+							"event": map[string]any{
+								"type":        "ws.pong",
+								"id":          fmt.Sprintf("ws.pong:%s:%d", convID, ts),
+								"conv_id":     convID,
+								"server_time": ts,
+							},
+						}
+						if b, err := json.Marshal(pong); err == nil {
+							conv.pool.SendToOne(conn, b)
+						}
+					}
 				}
 			}
 		}()
