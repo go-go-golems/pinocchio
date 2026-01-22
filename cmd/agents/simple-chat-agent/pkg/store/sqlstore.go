@@ -307,8 +307,8 @@ func (s *SQLiteStore) LogEvent(ctx context.Context, ev events.Event) {
 
 	// extract run/turn id from EventMetadata
 	meta := ev.Metadata()
-	if meta.RunID != "" {
-		runID = meta.RunID
+	if meta.SessionID != "" {
+		runID = meta.SessionID
 	}
 	if meta.TurnID != "" {
 		turnID = meta.TurnID

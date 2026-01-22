@@ -154,7 +154,7 @@ func (c *SimpleRedisStreamingInferenceCommand) RunIntoWriter(ctx context.Context
 			return nil
 		}
 		md := e.Metadata()
-		log.Debug().Str("event_type", string(e.Type())).Str("run_id", md.RunID).Str("turn_id", md.TurnID).Str("message_id", md.ID.String()).Msg("Received event from Redis stream")
+		log.Debug().Str("event_type", string(e.Type())).Str("run_id", md.SessionID).Str("session_id", md.SessionID).Str("inference_id", md.InferenceID).Str("turn_id", md.TurnID).Str("message_id", md.ID.String()).Msg("Received event from Redis stream")
 		return nil
 	})
 

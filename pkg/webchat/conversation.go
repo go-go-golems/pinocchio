@@ -74,7 +74,7 @@ func (r *Router) getOrCreateConv(convID string, buildEng func() (engine.Engine, 
 		sub,
 		nil,
 		func(e events.Event, _ StreamCursor, frame []byte) {
-			run := e.Metadata().RunID
+			run := e.Metadata().SessionID
 			if run != "" && run != conv.RunID {
 				return
 			}

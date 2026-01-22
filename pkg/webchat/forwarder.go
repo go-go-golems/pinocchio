@@ -41,7 +41,15 @@ func wrapSem(ev map[string]any) []byte {
 // SemanticEventsFromEvent converts a Geppetto event into SEM frames for the UI.
 func SemanticEventsFromEvent(e events.Event) [][]byte {
 	md := e.Metadata()
-	log.Debug().Str("component", "web_forwarder").Str("event_type", fmt.Sprintf("%T", e)).Str("event_id", md.ID.String()).Str("run_id", md.RunID).Str("turn_id", md.TurnID).Msg("received event (SEM)")
+	log.Debug().
+		Str("component", "web_forwarder").
+		Str("event_type", fmt.Sprintf("%T", e)).
+		Str("event_id", md.ID.String()).
+		Str("run_id", md.SessionID).
+		Str("session_id", md.SessionID).
+		Str("inference_id", md.InferenceID).
+		Str("turn_id", md.TurnID).
+		Msg("received event (SEM)")
 	switch ev := e.(type) {
 	case *events.EventLog:
 		lvl := ev.Level
