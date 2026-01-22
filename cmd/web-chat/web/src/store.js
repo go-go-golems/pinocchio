@@ -429,7 +429,7 @@ export const useStore = create(devtools(subscribeWithSelector((set, get)=>({
     const body = convId ? { prompt, conv_id: convId } : { prompt };
     const res = await fetch(`${prefix}/chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     const j = await res.json();
-    const newRun = j.run_id || '';
+    const newRun = j.session_id || j.run_id || '';
     const newConv = j.conv_id || convId || '';
     set((s)=>({ app: { ...s.app, runId: newRun, convId: newConv } }), false, { type: 'chat/startChat:received', payload: { runId: newRun, convId: newConv } });
     if (newConv && newConv !== convId) {
@@ -437,4 +437,3 @@ export const useStore = create(devtools(subscribeWithSelector((set, get)=>({
     }
   },
 })), { name: 'web-chat' }));
-

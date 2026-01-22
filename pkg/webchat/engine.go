@@ -1,11 +1,13 @@
 package webchat
 
 import (
+	"context"
 	"github.com/pkg/errors"
 
 	"github.com/go-go-golems/geppetto/pkg/inference/engine"
 	"github.com/go-go-golems/geppetto/pkg/inference/engine/factory"
 	"github.com/go-go-golems/geppetto/pkg/inference/middleware"
+	"github.com/go-go-golems/geppetto/pkg/inference/session"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 )
 
@@ -16,23 +18,29 @@ func composeEngineFromSettings(stepSettings *settings.StepSettings, sysPrompt st
 		return nil, errors.Wrap(err, "engine init failed")
 	}
 
-	// System prompt first
-	if sysPrompt != "" {
-		eng = middleware.NewEngineWithMiddleware(eng, middleware.NewSystemPromptMiddleware(sysPrompt))
-	}
+	mws := make([]middleware.Middleware, 0, 2+len(uses))
 
-	// Apply requested middlewares in reverse (first listed becomes outermost wrapper)
-	for i := len(uses) - 1; i >= 0; i-- {
-		u := uses[i]
+	// Always append tool result reorder for UX (outermost).
+	mws = append(mws, middleware.NewToolResultReorderMiddleware())
+
+	// Apply requested middlewares (first listed becomes outermost among requested).
+	for _, u := range uses {
 		f, ok := mwFactories[u.Name]
 		if !ok {
 			return nil, errors.Errorf("unknown middleware: %s", u.Name)
 		}
-		eng = middleware.NewEngineWithMiddleware(eng, f(u.Config))
+		mws = append(mws, f(u.Config))
 	}
 
-	// Always append tool result reorder for UX
-	eng = middleware.NewEngineWithMiddleware(eng, middleware.NewToolResultReorderMiddleware())
+	// System prompt is innermost so it runs closest to provider inference.
+	if sysPrompt != "" {
+		mws = append(mws, middleware.NewSystemPromptMiddleware(sysPrompt))
+	}
 
-	return eng, nil
+	builder := &session.ToolLoopEngineBuilder{Base: eng, Middlewares: mws}
+	runner, err := builder.Build(context.Background(), "")
+	if err != nil {
+		return nil, err
+	}
+	return runner, nil
 }

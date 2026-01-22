@@ -2,6 +2,7 @@ package webchat
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"time"
 
@@ -12,23 +13,26 @@ import (
 
 	"github.com/go-go-golems/geppetto/pkg/events"
 	"github.com/go-go-golems/geppetto/pkg/inference/engine"
-	"github.com/go-go-golems/geppetto/pkg/inference/middleware"
 	"github.com/go-go-golems/geppetto/pkg/inference/session"
 	"github.com/go-go-golems/geppetto/pkg/turns"
 )
 
 // Conversation holds per-conversation state and streaming attachments.
 type Conversation struct {
-	ID      string
-	RunID   string
-	Sess    *session.Session
-	Eng     engine.Engine
-	Sink    *middleware.WatermillSink
-	mu      sync.Mutex
-	sub     message.Subscriber
-	pool    *ConnectionPool
-	stream  *StreamCoordinator
-	baseCtx context.Context
+	ID       string
+	RunID    string
+	Sess     *session.Session
+	Eng      engine.Engine
+	Sink     events.EventSink
+	mu       sync.Mutex
+	sub      message.Subscriber
+	subClose bool
+	pool     *ConnectionPool
+	stream   *StreamCoordinator
+	baseCtx  context.Context
+
+	ProfileSlug  string
+	EngConfigSig string
 }
 
 // ConvManager stores all live conversations.
@@ -40,26 +44,101 @@ type ConvManager struct {
 // topicForConv computes the event topic for a conversation.
 func topicForConv(convID string) string { return "chat:" + convID }
 
-// getOrCreateConv creates a new conversation with engine and sink using the provided engineFactory.
-func (r *Router) getOrCreateConv(convID string, buildEng func() (engine.Engine, *middleware.WatermillSink, message.Subscriber, error)) (*Conversation, error) {
+// getOrCreateConv creates or reuses a conversation based on engine config signature changes.
+// It centralizes engine/sink/subscriber composition by delegating to the Router EngineBuilder methods.
+func (r *Router) getOrCreateConv(convID, profileSlug string, overrides map[string]any) (*Conversation, error) {
+	if r == nil {
+		return nil, errors.New("router is nil")
+	}
+	cfg, err := r.BuildConfig(profileSlug, overrides)
+	if err != nil {
+		return nil, err
+	}
+	newSig := cfg.Signature()
+
 	r.cm.mu.Lock()
 	defer r.cm.mu.Unlock()
 	if c, ok := r.cm.conns[convID]; ok {
+		if c.ProfileSlug != profileSlug || c.EngConfigSig != newSig {
+			log.Info().
+				Str("component", "webchat").
+				Str("conv_id", convID).
+				Str("old_profile", c.ProfileSlug).
+				Str("new_profile", profileSlug).
+				Msg("profile or engine config changed, rebuilding engine")
+
+			eng, sink, err := r.BuildFromConfig(convID, cfg)
+			if err != nil {
+				return nil, err
+			}
+			sub, subClose, err := r.buildSubscriber(convID)
+			if err != nil {
+				return nil, err
+			}
+
+			// Replace stream/subscriber (avoid closing shared in-memory subscriber).
+			if c.stream != nil {
+				if c.subClose {
+					c.stream.Close()
+				} else {
+					c.stream.Stop()
+				}
+			}
+
+			c.Eng = eng
+			c.Sink = sink
+			c.sub = sub
+			c.subClose = subClose
+			c.ProfileSlug = profileSlug
+			c.EngConfigSig = newSig
+
+			c.stream = NewStreamCoordinator(
+				c.ID,
+				sub,
+				nil,
+				func(e events.Event, _ StreamCursor, frame []byte) {
+					run := e.Metadata().SessionID
+					if run != "" && run != c.RunID {
+						return
+					}
+					if c.pool != nil {
+						c.pool.Broadcast(frame)
+					}
+				},
+			)
+
+			if c.stream != nil {
+				ctx := c.baseCtx
+				if ctx == nil {
+					ctx = context.Background()
+				}
+				if err := c.stream.Start(ctx); err != nil {
+					return nil, err
+				}
+			}
+		}
 		return c, nil
 	}
 	runID := uuid.NewString()
 	conv := &Conversation{
-		ID:      convID,
-		RunID:   runID,
-		baseCtx: r.baseCtx,
+		ID:           convID,
+		RunID:        runID,
+		baseCtx:      r.baseCtx,
+		ProfileSlug:  profileSlug,
+		EngConfigSig: newSig,
 	}
-	eng, sink, sub, err := buildEng()
+	eng, sink, err := r.BuildFromConfig(convID, cfg)
+	if err != nil {
+		return nil, err
+	}
+	sub, subClose, err := r.buildSubscriber(convID)
 	if err != nil {
 		return nil, err
 	}
 	conv.Eng = eng
 	conv.Sink = sink
 	conv.sub = sub
+	conv.subClose = subClose
 
 	idleTimeout := time.Duration(r.idleTimeoutSec) * time.Second
 	onIdle := func() {

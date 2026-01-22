@@ -164,8 +164,9 @@ func (c *SimpleRedisStreamingInferenceCommand) RunIntoWriter(ctx context.Context
 		log.Error().Err(err).Msg("Failed to create engine")
 		return errors.Wrap(err, "create engine")
 	}
+	var mws []middleware.Middleware
 	if s.WithLogging {
-		eng = middleware.NewEngineWithMiddleware(eng, middleware.NewTurnLoggingMiddleware(log.Logger))
+		mws = append(mws, middleware.NewTurnLoggingMiddleware(log.Logger))
 	}
 
 	// Build initial Turn with Blocks
@@ -194,10 +195,11 @@ func (c *SimpleRedisStreamingInferenceCommand) RunIntoWriter(ctx context.Context
 		defer cancel()
 		<-router.Running()
 		log.Info().Msg("EventRouter is running; starting inference")
-		runner, err := (&session.ToolLoopEngineBuilder{
-			Base:       eng,
-			EventSinks: []events.EventSink{sink},
-		}).Build(ctx, sessionID)
+		runner, err := session.NewToolLoopEngineBuilder(
+			session.WithToolLoopBase(eng),
+			session.WithToolLoopMiddlewares(mws...),
+			session.WithToolLoopEventSinks(sink),
+		).Build(ctx, sessionID)
 		if err != nil {
 			return fmt.Errorf("failed to build runner: %w", err)
 		}

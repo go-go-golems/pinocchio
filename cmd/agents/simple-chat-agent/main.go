@@ -144,13 +144,6 @@ func (c *SimpleAgentCmd) RunIntoWriter(ctx context.Context, parsed *layers.Parse
 	})
 	amCfg := agentmode.DefaultConfig()
 	amCfg.DefaultMode = "financial_analyst"
-	// Ensure a consistent system prompt at the start of the Turn
-	eng = middleware.NewEngineWithMiddleware(eng,
-		middleware.NewSystemPromptMiddleware("You are a financial transaction analysis assistant. Your primary role is to analyze bank transactions and extract spending categories by examining transaction descriptions and developing regular expression patterns to automatically categorize future transactions. You can use various tools to help with data analysis and pattern development."),
-		agentmode.NewMiddleware(svc, amCfg),
-		// Ensure tool_use messages are adjacent to their tool_call group before provider
-		middleware.NewToolResultReorderMiddleware(),
-	)
 
 	// Tools: calculator + generative UI (integrated)
 	registry := tools.NewInMemoryToolRegistry()
@@ -178,12 +171,9 @@ func (c *SimpleAgentCmd) RunIntoWriter(ctx context.Context, parsed *layers.Parse
 
 	// Add RW SQLite tool middleware with REGEXP
 	dbWithRegexp, _ := sqlite_regexp.OpenWithRegexp("anonymized-data.db")
-	eng = middleware.NewEngineWithMiddleware(eng,
-		sqlitetool.NewMiddleware(sqlitetool.Config{DB: dbWithRegexp, MaxRows: 500}),
-	)
 
-	// Stable IDs + snapshot pre/post middleware
-	wrappedEng := middleware.NewEngineWithMiddleware(eng,
+	mws := []middleware.Middleware{
+		// Stable IDs
 		func(next middleware.HandlerFunc) middleware.HandlerFunc {
 			return func(ctx context.Context, t *turns.Turn) (*turns.Turn, error) {
 				if t == nil {
@@ -198,6 +188,7 @@ func (c *SimpleAgentCmd) RunIntoWriter(ctx context.Context, parsed *layers.Parse
 				return next(ctx, t)
 			}
 		},
+		// Snapshot pre/post
 		func(next middleware.HandlerFunc) middleware.HandlerFunc {
 			return func(ctx context.Context, t *turns.Turn) (*turns.Turn, error) {
 				_ = snapshotStore.SaveTurnSnapshot(ctx, t, "pre_middleware")
@@ -208,7 +199,15 @@ func (c *SimpleAgentCmd) RunIntoWriter(ctx context.Context, parsed *layers.Parse
 				return res, err
 			}
 		},
-	)
+		// SQLite tool
+		sqlitetool.NewMiddleware(sqlitetool.Config{DB: dbWithRegexp, MaxRows: 500}),
+		// System prompt should run close to provider inference.
+		middleware.NewSystemPromptMiddleware("You are a financial transaction analysis assistant. Your primary role is to analyze bank transactions and extract spending categories by examining transaction descriptions and developing regular expression patterns to automatically categorize future transactions. You can use various tools to help with data analysis and pattern development."),
+		// Agent mode switching
+		agentmode.NewMiddleware(svc, amCfg),
+		// Ensure tool_use messages are adjacent to their tool_call group before provider
+		middleware.NewToolResultReorderMiddleware(),
+	}
 
 	// Hook for tool loop phases
 	hook := func(hctx context.Context, ht *turns.Turn, phase string) {
@@ -216,7 +215,7 @@ func (c *SimpleAgentCmd) RunIntoWriter(ctx context.Context, parsed *layers.Parse
 	}
 
 	// Backend that runs tool loop
-	backend := backendpkg.NewToolLoopBackend(wrappedEng, registry, sink, hook)
+	backend := backendpkg.NewToolLoopBackend(eng, mws, registry, sink, hook)
 	// Glazed flag: --server-tools enables Responses builtin web_search on initial Turn
 	var agentSettings struct {
 		ServerTools bool `glazed.parameter:"server-tools"`

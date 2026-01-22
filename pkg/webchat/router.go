@@ -20,12 +20,9 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/go-go-golems/geppetto/pkg/events"
-	"github.com/go-go-golems/geppetto/pkg/inference/engine"
-	"github.com/go-go-golems/geppetto/pkg/inference/middleware"
 	"github.com/go-go-golems/geppetto/pkg/inference/session"
 	"github.com/go-go-golems/geppetto/pkg/inference/toolhelpers"
 	geptools "github.com/go-go-golems/geppetto/pkg/inference/tools"
-	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 	"github.com/go-go-golems/geppetto/pkg/turns"
 	"github.com/go-go-golems/geppetto/pkg/turns/serde"
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
@@ -193,34 +190,7 @@ func (r *Router) registerHTTPHandlers() {
 			profileSlug = "default"
 		}
 		log.Info().Str("component", "webchat").Str("conv_id", convID).Str("profile", profileSlug).Msg("ws joining conversation")
-		build := func() (engine.Engine, *middleware.WatermillSink, message.Subscriber, error) {
-			var (
-				eng  engine.Engine
-				sink *middleware.WatermillSink
-				sub  message.Subscriber
-				err  error
-			)
-			// subscriber/publisher
-			if r.usesRedis {
-				_ = rediscfg.EnsureGroupAtTail(context.Background(), r.redisAddr, topicForConv(convID), "ui")
-			}
-			if r.usesRedis {
-				sub, err = rediscfg.BuildGroupSubscriber(r.redisAddr, "ui", "ws-forwarder:"+convID)
-				if err != nil {
-					return nil, nil, nil, err
-				}
-			} else {
-				sub = r.router.Subscriber
-			}
-			sink = middleware.NewWatermillSink(r.router.Publisher, topicForConv(convID))
-			// engine from profile + overrides are not needed for ws join
-			p, _ := r.profiles.Get(profileSlug)
-			stepSettings, _ := settings.NewStepSettingsFromParsedLayers(r.parsed)
-			sys := p.DefaultPrompt
-			eng, err = composeEngineFromSettings(stepSettings, sys, p.DefaultMws, r.mwFactories)
-			return eng, sink, sub, err
-		}
-		conv, err := r.getOrCreateConv(convID, build)
+		conv, err := r.getOrCreateConv(convID, profileSlug, nil)
 		if err != nil {
 			log.Error().Err(err).Str("component", "webchat").Str("conv_id", convID).Msg("failed to join conversation")
 			_ = conn.WriteMessage(websocket.TextMessage, []byte(`{"error":"failed to join conversation"}`))
@@ -324,59 +294,13 @@ func (r *Router) registerHTTPHandlers() {
 			profileSlug = "default"
 		}
 		log.Info().Str("component", "webchat").Str("conv_id", convID).Str("profile", profileSlug).Int("prompt_len", len(body.Prompt)).Msg("/chat received")
-		p, ok := r.profiles.Get(profileSlug)
-		if !ok {
+		if _, ok := r.profiles.Get(profileSlug); !ok {
 			log.Warn().Str("component", "webchat").Str("profile", profileSlug).Msg("unknown profile")
 			http.Error(w, "unknown profile", http.StatusNotFound)
 			return
 		}
 
-		build := func() (engine.Engine, *middleware.WatermillSink, message.Subscriber, error) {
-			var (
-				eng  engine.Engine
-				sink *middleware.WatermillSink
-				sub  message.Subscriber
-				err  error
-			)
-			if r.usesRedis {
-				_ = rediscfg.EnsureGroupAtTail(context.Background(), r.redisAddr, topicForConv(convID), "ui")
-			}
-			if r.usesRedis {
-				sub, err = rediscfg.BuildGroupSubscriber(r.redisAddr, "ui", "ws-forwarder:"+convID)
-				if err != nil {
-					return nil, nil, nil, err
-				}
-			} else {
-				sub = r.router.Subscriber
-			}
-			sink = middleware.NewWatermillSink(r.router.Publisher, topicForConv(convID))
-			stepSettings, err2 := settings.NewStepSettingsFromParsedLayers(r.parsed)
-			if err2 != nil {
-				return nil, nil, nil, err2
-			}
-			sys := p.DefaultPrompt
-			uses := append([]MiddlewareUse{}, p.DefaultMws...)
-			if body.Overrides != nil {
-				if v, ok := body.Overrides["system_prompt"].(string); ok && v != "" {
-					sys = v
-				}
-				if arr, ok := body.Overrides["middlewares"].([]any); ok {
-					uses = make([]MiddlewareUse, 0, len(arr))
-					for _, it := range arr {
-						if m, ok2 := it.(map[string]any); ok2 {
-							name, _ := m["name"].(string)
-							cfg := m["config"]
-							if name != "" {
-								uses = append(uses, MiddlewareUse{Name: name, Config: cfg})
-							}
-						}
-					}
-				}
-			}
-			eng, err = composeEngineFromSettings(stepSettings, sys, uses, r.mwFactories)
-			return eng, sink, sub, err
-		}
-		conv, err := r.getOrCreateConv(convID, build)
+		conv, err := r.getOrCreateConv(convID, profileSlug, body.Overrides)
 		if err != nil {
 			log.Error().Err(err).Str("component", "webchat").Str("conv_id", convID).Msg("failed to create conversation")
 			http.Error(w, "failed to create conversation", http.StatusInternalServerError)
@@ -387,9 +311,19 @@ func (r *Router) registerHTTPHandlers() {
 			return
 		}
 		if conv.Sess.IsRunning() {
-			log.Warn().Str("component", "webchat").Str("conv_id", conv.ID).Str("run_id", conv.RunID).Msg("run in progress")
+			log.Warn().
+				Str("component", "webchat").
+				Str("conv_id", conv.ID).
+				Str("run_id", conv.RunID).
+				Str("session_id", conv.RunID).
+				Msg("run in progress")
 			w.WriteHeader(http.StatusConflict)
-			_ = json.NewEncoder(w).Encode(map[string]any{"error": "run in progress", "conv_id": conv.ID, "run_id": conv.RunID})
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"error":      "run in progress",
+				"conv_id":    conv.ID,
+				"run_id":     conv.RunID, // legacy
+				"session_id": conv.RunID,
+			})
 			return
 		}
 		registry := geptools.NewInMemoryToolRegistry()
@@ -405,7 +339,12 @@ func (r *Router) registerHTTPHandlers() {
 		}
 
 		hook := snapshotHookForConv(conv, os.Getenv("PINOCCHIO_WEBCHAT_TURN_SNAPSHOTS_DIR"))
-		log.Info().Str("component", "webchat").Str("conv_id", conv.ID).Str("run_id", conv.RunID).Msg("starting run loop")
+		log.Info().
+			Str("component", "webchat").
+			Str("conv_id", conv.ID).
+			Str("run_id", conv.RunID).
+			Str("session_id", conv.RunID).
+			Msg("starting run loop")
 
 		seed := seedForPrompt(conv, body.Prompt)
 		cfg := toolhelpers.NewToolConfig().WithMaxIterations(5).WithTimeout(60 * time.Second)
@@ -420,18 +359,50 @@ func (r *Router) registerHTTPHandlers() {
 
 		handle, err := conv.Sess.StartInference(r.baseCtx)
 		if err != nil {
-			log.Error().Err(err).Str("component", "webchat").Str("conv_id", conv.ID).Str("run_id", conv.RunID).Msg("start inference failed")
+			log.Error().
+				Err(err).
+				Str("component", "webchat").
+				Str("conv_id", conv.ID).
+				Str("run_id", conv.RunID).
+				Str("session_id", conv.RunID).
+				Msg("start inference failed")
 		} else {
 			go func() {
 				_, waitErr := handle.Wait()
 				if waitErr != nil {
-					log.Error().Err(waitErr).Str("component", "webchat").Str("conv_id", conv.ID).Str("run_id", conv.RunID).Msg("run loop error")
+					log.Error().
+						Err(waitErr).
+						Str("component", "webchat").
+						Str("conv_id", conv.ID).
+						Str("run_id", conv.RunID).
+						Str("session_id", conv.RunID).
+						Str("inference_id", handle.InferenceID).
+						Msg("run loop error")
 				}
-				log.Info().Str("component", "webchat").Str("conv_id", conv.ID).Str("run_id", conv.RunID).Msg("run loop finished")
+				log.Info().
+					Str("component", "webchat").
+					Str("conv_id", conv.ID).
+					Str("run_id", conv.RunID).
+					Str("session_id", conv.RunID).
+					Str("inference_id", handle.InferenceID).
+					Msg("run loop finished")
 			}()
 		}
 
-		_ = json.NewEncoder(w).Encode(map[string]string{"run_id": conv.RunID, "conv_id": conv.ID})
+		resp := map[string]string{
+			"conv_id":    conv.ID,
+			"run_id":     conv.RunID, // legacy
+			"session_id": conv.RunID,
+		}
+		if handle != nil {
+			if handle.InferenceID != "" {
+				resp["inference_id"] = handle.InferenceID
+			}
+			if handle.Input != nil && handle.Input.ID != "" {
+				resp["turn_id"] = handle.Input.ID
+			}
+		}
+		_ = json.NewEncoder(w).Encode(resp)
 	})
 
 	// start run: /chat/{profile}
@@ -467,62 +438,13 @@ func (r *Router) registerHTTPHandlers() {
 		if convID == "" {
 			convID = uuid.NewString()
 		}
-		p, ok := r.profiles.Get(profileSlug)
-		if !ok {
+		if _, ok := r.profiles.Get(profileSlug); !ok {
 			http.Error(w, "unknown profile", http.StatusNotFound)
 			return
 		}
 
 		// Build or reuse conversation with correct engine (consider overrides)
-		build := func() (engine.Engine, *middleware.WatermillSink, message.Subscriber, error) {
-			var (
-				eng  engine.Engine
-				sink *middleware.WatermillSink
-				sub  message.Subscriber
-				err  error
-			)
-			if r.usesRedis {
-				_ = rediscfg.EnsureGroupAtTail(context.Background(), r.redisAddr, topicForConv(convID), "ui")
-			}
-			if r.usesRedis {
-				sub, err = rediscfg.BuildGroupSubscriber(r.redisAddr, "ui", "ws-forwarder:"+convID)
-				if err != nil {
-					return nil, nil, nil, err
-				}
-			} else {
-				sub = r.router.Subscriber
-			}
-			sink = middleware.NewWatermillSink(r.router.Publisher, topicForConv(convID))
-			// step settings from layers and apply overrides if provided
-			stepSettings, err2 := settings.NewStepSettingsFromParsedLayers(r.parsed)
-			if err2 != nil {
-				return nil, nil, nil, err2
-			}
-			sys := p.DefaultPrompt
-			uses := append([]MiddlewareUse{}, p.DefaultMws...)
-			// apply overrides: system_prompt, middlewares
-			if body.Overrides != nil {
-				if v, ok := body.Overrides["system_prompt"].(string); ok && v != "" {
-					sys = v
-				}
-				if arr, ok := body.Overrides["middlewares"].([]any); ok {
-					uses = make([]MiddlewareUse, 0, len(arr))
-					for _, it := range arr {
-						if m, ok2 := it.(map[string]any); ok2 {
-							name, _ := m["name"].(string)
-							cfg := m["config"]
-							if name != "" {
-								uses = append(uses, MiddlewareUse{Name: name, Config: cfg})
-							}
-						}
-					}
-				}
-				// TODO: tools override can be applied via registry decision in loop
-			}
-			eng, err = composeEngineFromSettings(stepSettings, sys, uses, r.mwFactories)
-			return eng, sink, sub, err
-		}
-		conv, err := r.getOrCreateConv(convID, build)
+		conv, err := r.getOrCreateConv(convID, profileSlug, body.Overrides)
 		if err != nil {
 			http.Error(w, "failed to create conversation", http.StatusInternalServerError)
 			return
@@ -533,7 +455,12 @@ func (r *Router) registerHTTPHandlers() {
 		}
 		if conv.Sess.IsRunning() {
 			w.WriteHeader(http.StatusConflict)
-			_ = json.NewEncoder(w).Encode(map[string]any{"error": "run in progress", "conv_id": conv.ID, "run_id": conv.RunID})
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"error":      "run in progress",
+				"conv_id":    conv.ID,
+				"run_id":     conv.RunID, // legacy
+				"session_id": conv.RunID,
+			})
 			return
 		}
 		// Build registry for this run from default tools (and optional overrides later)
@@ -550,7 +477,12 @@ func (r *Router) registerHTTPHandlers() {
 		}
 
 		hook := snapshotHookForConv(conv, os.Getenv("PINOCCHIO_WEBCHAT_TURN_SNAPSHOTS_DIR"))
-		log.Info().Str("component", "webchat").Str("conv_id", conv.ID).Str("run_id", conv.RunID).Msg("starting run loop")
+		log.Info().
+			Str("component", "webchat").
+			Str("conv_id", conv.ID).
+			Str("run_id", conv.RunID).
+			Str("session_id", conv.RunID).
+			Msg("starting run loop")
 
 		seed := seedForPrompt(conv, body.Prompt)
 		cfg := toolhelpers.NewToolConfig().WithMaxIterations(5).WithTimeout(60 * time.Second)
@@ -565,18 +497,50 @@ func (r *Router) registerHTTPHandlers() {
 
 		handle, err := conv.Sess.StartInference(r.baseCtx)
 		if err != nil {
-			log.Error().Err(err).Str("component", "webchat").Str("conv_id", conv.ID).Str("run_id", conv.RunID).Msg("start inference failed")
+			log.Error().
+				Err(err).
+				Str("component", "webchat").
+				Str("conv_id", conv.ID).
+				Str("run_id", conv.RunID).
+				Str("session_id", conv.RunID).
+				Msg("start inference failed")
 		} else {
 			go func() {
 				_, waitErr := handle.Wait()
 				if waitErr != nil {
-					log.Error().Err(waitErr).Str("component", "webchat").Str("conv_id", conv.ID).Str("run_id", conv.RunID).Msg("run loop error")
+					log.Error().
+						Err(waitErr).
+						Str("component", "webchat").
+						Str("conv_id", conv.ID).
+						Str("run_id", conv.RunID).
+						Str("session_id", conv.RunID).
+						Str("inference_id", handle.InferenceID).
+						Msg("run loop error")
 				}
-				log.Info().Str("component", "webchat").Str("conv_id", conv.ID).Str("run_id", conv.RunID).Msg("run loop finished")
+				log.Info().
+					Str("component", "webchat").
+					Str("conv_id", conv.ID).
+					Str("run_id", conv.RunID).
+					Str("session_id", conv.RunID).
+					Str("inference_id", handle.InferenceID).
+					Msg("run loop finished")
 			}()
 		}
 
-		_ = json.NewEncoder(w).Encode(map[string]string{"run_id": conv.RunID, "conv_id": conv.ID})
+		resp := map[string]string{
+			"conv_id":    conv.ID,
+			"run_id":     conv.RunID, // legacy
+			"session_id": conv.RunID,
+		}
+		if handle != nil {
+			if handle.InferenceID != "" {
+				resp["inference_id"] = handle.InferenceID
+			}
+			if handle.Input != nil && handle.Input.ID != "" {
+				resp["turn_id"] = handle.Input.ID
+			}
+		}
+		_ = json.NewEncoder(w).Encode(resp)
 	})
 }
 
@@ -630,6 +594,9 @@ func seedForPrompt(conv *Conversation, prompt string) *turns.Turn {
 		if prompt != "" {
 			turns.AppendBlock(t, turns.NewUserTextBlock(prompt))
 		}
+		if t.ID == "" {
+			t.ID = uuid.NewString()
+		}
 		return t
 	}
 
@@ -648,7 +615,29 @@ func seedForPrompt(conv *Conversation, prompt string) *turns.Turn {
 	if prompt != "" {
 		turns.AppendBlock(seed, turns.NewUserTextBlock(prompt))
 	}
+	if seed.ID == "" {
+		seed.ID = uuid.NewString()
+	}
 	return seed
+}
+
+func (r *Router) buildSubscriber(convID string) (message.Subscriber, bool, error) {
+	if r == nil {
+		return nil, false, errors.New("router is nil")
+	}
+	if convID == "" {
+		return nil, false, errors.New("convID is empty")
+	}
+	// subscriber/publisher
+	if r.usesRedis {
+		_ = rediscfg.EnsureGroupAtTail(context.Background(), r.redisAddr, topicForConv(convID), "ui")
+		sub, err := rediscfg.BuildGroupSubscriber(r.redisAddr, "ui", "ws-forwarder:"+convID)
+		if err != nil {
+			return nil, false, err
+		}
+		return sub, true, nil
+	}
+	return r.router.Subscriber, false, nil
 }
 
 func cloneTurn(t *turns.Turn) *turns.Turn {
