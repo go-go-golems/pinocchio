@@ -43,31 +43,31 @@ func (s *SQLiteStore) init() error {
 	return nil
 }
 
-func (s *SQLiteStore) EnsureRun(ctx context.Context, runID string, metadata map[string]any) error {
-	if runID == "" {
-		return errors.New("empty run id")
+func (s *SQLiteStore) EnsureSession(ctx context.Context, sessionID string, metadata map[string]any) error {
+	if sessionID == "" {
+		return errors.New("empty session id")
 	}
 	var exists int
-	_ = s.db.QueryRowContext(ctx, "SELECT 1 FROM runs WHERE id=?", runID).Scan(&exists)
+	_ = s.db.QueryRowContext(ctx, "SELECT 1 FROM sessions WHERE id=?", sessionID).Scan(&exists)
 	if exists == 1 {
 		return nil
 	}
 	metaJSON, _ := json.Marshal(metadata)
-	_, err := s.db.ExecContext(ctx, "INSERT INTO runs(id, created_at, metadata) VALUES(?,?,?)", runID, time.Now().Format(time.RFC3339Nano), string(metaJSON))
+	_, err := s.db.ExecContext(ctx, "INSERT INTO sessions(id, created_at, metadata) VALUES(?,?,?)", sessionID, time.Now().Format(time.RFC3339Nano), string(metaJSON))
 	if err != nil {
-		return errors.Wrap(err, "insert run")
+		return errors.Wrap(err, "insert session")
 	}
 	// store metadata as KV for easier querying
 	for k, v := range metadata {
 		typ, vt, vj := classifyValue(v)
-		_, _ = s.db.ExecContext(ctx, "INSERT OR REPLACE INTO run_metadata_kv(run_id, key, type, value_text, value_json) VALUES(?,?,?,?,?)", runID, k, typ, vt, vj)
+		_, _ = s.db.ExecContext(ctx, "INSERT OR REPLACE INTO session_metadata_kv(session_id, key, type, value_text, value_json) VALUES(?,?,?,?,?)", sessionID, k, typ, vt, vj)
 	}
 	return nil
 }
 
-func (s *SQLiteStore) EnsureTurn(ctx context.Context, runID, turnID string, metadata map[string]any) error {
-	if runID == "" || turnID == "" {
-		return errors.New("empty run/turn id")
+func (s *SQLiteStore) EnsureTurn(ctx context.Context, sessionID, turnID string, metadata map[string]any) error {
+	if sessionID == "" || turnID == "" {
+		return errors.New("empty session/turn id")
 	}
 	var exists int
 	_ = s.db.QueryRowContext(ctx, "SELECT 1 FROM turns WHERE id=?", turnID).Scan(&exists)
@@ -75,7 +75,7 @@ func (s *SQLiteStore) EnsureTurn(ctx context.Context, runID, turnID string, meta
 		return nil
 	}
 	metaJSON, _ := json.Marshal(metadata)
-	_, err := s.db.ExecContext(ctx, "INSERT INTO turns(id, run_id, created_at, metadata) VALUES(?,?,?,?)", turnID, runID, time.Now().Format(time.RFC3339Nano), string(metaJSON))
+	_, err := s.db.ExecContext(ctx, "INSERT INTO turns(id, session_id, created_at, metadata) VALUES(?,?,?,?)", turnID, sessionID, time.Now().Format(time.RFC3339Nano), string(metaJSON))
 	if err != nil {
 		return errors.Wrap(err, "insert turn")
 	}
@@ -91,22 +91,26 @@ func (s *SQLiteStore) SaveTurnSnapshot(ctx context.Context, t *turns.Turn, phase
 	if t == nil {
 		return nil
 	}
-	runID := ""
+	sessionID := ""
 	if sid, ok, err := turns.KeyTurnMetaSessionID.Get(t.Metadata); err == nil && ok {
-		runID = sid
+		sessionID = sid
 	}
-	if runID == "" {
-		runID = uuid.NewString()
-		_ = turns.KeyTurnMetaSessionID.Set(&t.Metadata, runID)
+	if sessionID == "" {
+		sessionID = uuid.NewString()
+		_ = turns.KeyTurnMetaSessionID.Set(&t.Metadata, sessionID)
+	}
+	inferenceID := ""
+	if iid, ok, err := turns.KeyTurnMetaInferenceID.Get(t.Metadata); err == nil && ok {
+		inferenceID = iid
 	}
 	if t.ID == "" {
 		t.ID = uuid.NewString()
 	}
-	if err := s.EnsureRun(ctx, runID, convertTurnMetadataToMap(t.Metadata)); err != nil {
-		log.Warn().Err(err).Str("run_id", runID).Msg("EnsureRun failed")
+	if err := s.EnsureSession(ctx, sessionID, convertTurnMetadataToMap(t.Metadata)); err != nil {
+		log.Warn().Err(err).Str("session_id", sessionID).Msg("EnsureSession failed")
 	}
-	if err := s.EnsureTurn(ctx, runID, t.ID, convertTurnMetadataToMap(t.Metadata)); err != nil {
-		log.Warn().Err(err).Str("turn_id", t.ID).Msg("EnsureTurn failed")
+	if err := s.EnsureTurn(ctx, sessionID, t.ID, convertTurnMetadataToMap(t.Metadata)); err != nil {
+		log.Warn().Err(err).Str("session_id", sessionID).Str("turn_id", t.ID).Msg("EnsureTurn failed")
 	}
 	// Serialize turn as JSON
 	type block struct {
@@ -118,23 +122,25 @@ func (s *SQLiteStore) SaveTurnSnapshot(ctx context.Context, t *turns.Turn, phase
 		Metadata map[string]interface{} `json:"metadata,omitempty"`
 	}
 	snap := struct {
-		RunID    string                 `json:"run_id"`
-		TurnID   string                 `json:"turn_id"`
-		Metadata map[string]interface{} `json:"metadata,omitempty"`
-		Data     map[string]interface{} `json:"data,omitempty"`
-		Blocks   []block                `json:"blocks"`
+		SessionID   string                 `json:"session_id,omitempty"`
+		InferenceID string                 `json:"inference_id,omitempty"`
+		TurnID      string                 `json:"turn_id,omitempty"`
+		Metadata    map[string]interface{} `json:"metadata,omitempty"`
+		Data        map[string]interface{} `json:"data,omitempty"`
+		Blocks      []block                `json:"blocks"`
 	}{
-		RunID:    runID,
-		TurnID:   t.ID,
-		Metadata: convertTurnMetadataToMap(t.Metadata),
-		Data:     convertTurnDataToMap(t.Data),
-		Blocks:   make([]block, 0, len(t.Blocks)),
+		SessionID:   sessionID,
+		InferenceID: inferenceID,
+		TurnID:      t.ID,
+		Metadata:    convertTurnMetadataToMap(t.Metadata),
+		Data:        convertTurnDataToMap(t.Data),
+		Blocks:      make([]block, 0, len(t.Blocks)),
 	}
 	for i, b := range t.Blocks {
 		bid := b.ID
 		if bid == "" {
 			log.Warn().
-				Str("run_id", runID).
+				Str("session_id", sessionID).
 				Str("turn_id", t.ID).
 				Int("index", i).
 				Int("kind", int(b.Kind)).
@@ -176,7 +182,8 @@ func (s *SQLiteStore) SaveTurnSnapshot(ctx context.Context, t *turns.Turn, phase
 		if b, err := json.Marshal(defs); err == nil {
 			_, _ = s.db.ExecContext(ctx, "INSERT OR REPLACE INTO turn_kv(turn_id, section, key, type, value_text, value_json) VALUES(?,?,?,?,?,?)", t.ID, "data", "tool_registry", "object", "", string(b))
 			// Also record a registry snapshot row for easier retrieval
-			_, _ = s.db.ExecContext(ctx, "INSERT INTO tool_registry_snapshots(run_id, turn_id, phase, created_at, tools_json) VALUES(?,?,?,?,?)", runID, t.ID, phase, time.Now().Format(time.RFC3339Nano), string(b))
+			_, _ = s.db.ExecContext(ctx, "INSERT INTO tool_registry_snapshots(session_id, inference_id, turn_id, phase, created_at, tools_json) VALUES(?,?,?,?,?,?)",
+				sessionID, inferenceID, t.ID, phase, time.Now().Format(time.RFC3339Nano), string(b))
 		}
 	}
 	// turn data KV
@@ -265,7 +272,7 @@ func (s *SQLiteStore) LogEvent(ctx context.Context, ev events.Event) {
 	}
 	kind := string(ev.Type())
 	now := time.Now().Format(time.RFC3339Nano)
-	var message, level, toolName, toolID, input, result, runID, turnID string
+	var message, level, toolName, toolID, input, result, sessionID, inferenceID, turnID string
 	var dataJSON, payloadJSON string
 
 	// keep original payload
@@ -308,15 +315,18 @@ func (s *SQLiteStore) LogEvent(ctx context.Context, ev events.Event) {
 	// extract run/turn id from EventMetadata
 	meta := ev.Metadata()
 	if meta.SessionID != "" {
-		runID = meta.SessionID
+		sessionID = meta.SessionID
+	}
+	if meta.InferenceID != "" {
+		inferenceID = meta.InferenceID
 	}
 	if meta.TurnID != "" {
 		turnID = meta.TurnID
 	}
 
 	_, _ = s.db.ExecContext(ctx, `INSERT INTO chat_events(
-        created_at, type, message, level, tool_name, tool_id, input, result, data_json, payload_json, run_id, turn_id
-    ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`,
-		now, kind, message, level, toolName, toolID, input, result, dataJSON, payloadJSON, runID, turnID,
+        created_at, type, message, level, tool_name, tool_id, input, result, data_json, payload_json, session_id, inference_id, turn_id
+    ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		now, kind, message, level, toolName, toolID, input, result, dataJSON, payloadJSON, sessionID, inferenceID, turnID,
 	)
 }
