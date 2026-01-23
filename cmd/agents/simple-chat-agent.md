@@ -52,9 +52,9 @@ Type your prompts at `>`. Use `:q` to quit.
 - Creates a Watermill-backed `EventRouter`, adds a pretty-print handler
 - Creates an engine from Geppetto layers (no engine sink to avoid duplicate events)
 - Registers a `calc` tool and (optionally) configures tools on the engine
-- Uses `toolhelpers.RunToolCallingLoop` to orchestrate tool execution
-- Attaches the same sink to the context so helpers/tools publish events
-- REPL appends user messages to the conversation; results stream to stdout
+- Uses `session.Session` + `toolloop/enginebuilder` to orchestrate inference + tool execution
+- Attaches the same sink via `enginebuilder.WithEventSinks(...)` so engine/tools publish events
+- REPL appends prompts as new Turns; results stream to stdout
 
 ### Detailed Explanation
 
@@ -74,15 +74,15 @@ Engine initialization
 
 Tool registry and configuration
 - Tools live in a `tools.ToolRegistry` (here an in-memory one). The sample registers a `calc` tool via `tools.NewToolFromFunc("calc", ..., calculatorFn)`.
-- Tool orchestration is not handled by the engine. Instead, `toolhelpers` extract tool calls from model outputs, execute tools locally, and append results.
+- Tool orchestration is not handled by the engine. Instead, the tool loop (`toolloop.Loop`) extracts tool calls from Turn blocks, executes tools locally, appends `tool_use` blocks, and iterates until completion.
 
 Conversation manager
 - A conversation is prepared through `builder.NewManagerBuilder()` (e.g., setting a system prompt). The manager gives access to the current `conversation.Conversation` and appends new messages.
 
 REPL loop and orchestration
 - The REPL reads user input from stdin; `:q` exits.
-- Each user prompt is appended with `manager.AppendMessages(conversation.NewChatMessage(conversation.RoleUser, input))`.
-- `toolhelpers.RunToolCallingLoop(ctx, engine, conversation, registry, config)` runs the complete loop: model response → tool call detection → tool execution → results appended → next iteration as needed.
+- Each user prompt is appended as a new Turn (see `session.AppendNewTurnFromUserPrompt(...)`).
+- `session.StartInference(ctx)` runs the complete loop: inference → tool_call → tool execution → tool_use → repeat (bounded by `toolloop.LoopConfig`).
 
 Event rendering
 - The pretty-print handler uses `events.NewEventFromJson` to parse `*message.Message` payloads into events.
@@ -104,7 +104,7 @@ Tool calls and results will be printed with Lipgloss-styled blocks.
 #### Notes
 
 - Prefer a single publishing path to avoid duplicate events. This example publishes only via context-carried sink; the engine is created without `engine.WithSink(...)`.
-- Helpers orchestrate tool calling; engines focus on provider I/O.
+- The tool loop orchestrates tool calling; engines focus on provider I/O.
 - Event types rendered: start, partial, final, provider `tool-call`, provider `tool-result` (if any), helper `tool-call-execute`, helper `tool-call-execution-result`.
 - Event type definitions: see `geppetto/pkg/events/chat-events.go`.
 
@@ -123,9 +123,9 @@ Tool calls and results will be printed with Lipgloss-styled blocks.
   - `tools.NewInMemoryToolRegistry()`, `tools.NewToolFromFunc(...)`, `RegisterTool(...)`
   - Optional: `engine.ConfigureTools(defs, engine.ToolConfig{ Enabled: true })`
 - Conversation and orchestration
-  - `builder.NewManagerBuilder()...Build()`
-  - `manager.AppendMessages(conversation.NewChatMessage(...))`
-  - `toolhelpers.RunToolCallingLoop(ctx, engine, conv, registry, toolhelpers.NewToolConfig()...)`
+  - `session.NewSession()`, `session.AppendNewTurnFromUserPrompt(...)`
+  - `enginebuilder.New(...)` (toolloop/enginebuilder)
+  - `session.StartInference(ctx)` / `handle.Wait()`
 
 ### Pseudocode (sketch)
 
@@ -152,10 +152,9 @@ NewSimpleAgentCmd.RunIntoWriter(ctx, parsedLayers, w):
   run router in background
   loop:
     read line from stdin (":q" to quit)
-    manager.AppendMessages(conversation.NewChatMessage(RoleUser, line))
-    runCtx := events.WithEventSinks(ctx, sink)
-    updated := toolhelpers.RunToolCallingLoop(runCtx, engine, manager.GetConversation(), registry, ToolConfig)
-    for msg in updated[len(original):]: manager.AppendMessages(msg)
+    sess.AppendNewTurnFromUserPrompt(line)
+    handle := sess.StartInference(ctx)
+    handle.Wait()
 
 prettyPrinter(w):
   switch e := events.NewEventFromJson(msg.Payload).(type):
@@ -171,12 +170,10 @@ prettyPrinter(w):
 ### Troubleshooting
 
 - Duplicate events: ensure the engine is created without `engine.WithSink(...)` if you attach sinks via context.
-- No tool result shown: confirm your provider supports tool-calling metadata and that `toolhelpers` are attached via `events.WithEventSinks(ctx, sink)`.
+- No tool result shown: confirm your provider supports tool-calling metadata and that the sink is wired (via `enginebuilder.WithEventSinks(...)` or `events.WithEventSinks(ctx, sink)`).
 - Tools not called: verify `ConfigureTools` is applied when the engine supports it, and that the registry contains your tools.
 
 ### References
 
 - Topics: `geppetto-inference-engines`, `geppetto-events-streaming-watermill`
 - Tutorial: `geppetto-streaming-inference-tools`
-
-
