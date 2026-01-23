@@ -21,7 +21,7 @@ import (
 
 	"github.com/go-go-golems/geppetto/pkg/events"
 	"github.com/go-go-golems/geppetto/pkg/inference/session"
-	"github.com/go-go-golems/geppetto/pkg/inference/toolhelpers"
+	"github.com/go-go-golems/geppetto/pkg/inference/toolloop"
 	geptools "github.com/go-go-golems/geppetto/pkg/inference/tools"
 	"github.com/go-go-golems/geppetto/pkg/turns"
 	"github.com/go-go-golems/geppetto/pkg/turns/serde"
@@ -54,6 +54,7 @@ func NewRouter(ctx context.Context, parsed *layers.ParsedLayers, staticFS embed.
 		profiles:      newInMemoryProfileRegistry(),
 		upgrader:      websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }},
 		cm:            &ConvManager{conns: map[string]*Conversation{}},
+		stepCtrl:      toolloop.NewStepController(),
 	}
 	// set redis flags for ws reader
 	if rs.Enabled {
@@ -166,6 +167,124 @@ func (r *Router) registerHTTPHandlers() {
 			out = append(out, profileInfo{Slug: p.Slug, DefaultPrompt: p.DefaultPrompt})
 		}
 		_ = json.NewEncoder(w).Encode(out)
+	})
+
+	// debug endpoints (dev-gated via PINOCCHIO_WEBCHAT_DEBUG=1)
+	r.mux.HandleFunc("/debug/step/enable", func(w http.ResponseWriter, r0 *http.Request) {
+		if os.Getenv("PINOCCHIO_WEBCHAT_DEBUG") != "1" {
+			http.NotFound(w, r0)
+			return
+		}
+		if r0.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		var body struct {
+			ConvID    string `json:"conv_id"`
+			SessionID string `json:"session_id"`
+			Owner     string `json:"owner"`
+		}
+		if err := json.NewDecoder(r0.Body).Decode(&body); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		sessionID := strings.TrimSpace(body.SessionID)
+		convID := strings.TrimSpace(body.ConvID)
+		if sessionID == "" && convID != "" {
+			r.cm.mu.Lock()
+			if c, ok := r.cm.conns[convID]; ok && c != nil {
+				sessionID = c.RunID
+			}
+			r.cm.mu.Unlock()
+		}
+		if sessionID == "" {
+			http.Error(w, "missing session_id (or unknown conv_id)", http.StatusBadRequest)
+			return
+		}
+		if r.stepCtrl == nil {
+			http.Error(w, "step controller not initialized", http.StatusInternalServerError)
+			return
+		}
+		r.stepCtrl.Enable(toolloop.StepScope{SessionID: sessionID, ConversationID: convID, Owner: strings.TrimSpace(body.Owner)})
+		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "session_id": sessionID, "conv_id": convID})
+	})
+
+	r.mux.HandleFunc("/debug/step/disable", func(w http.ResponseWriter, r0 *http.Request) {
+		if os.Getenv("PINOCCHIO_WEBCHAT_DEBUG") != "1" {
+			http.NotFound(w, r0)
+			return
+		}
+		if r0.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		var body struct {
+			SessionID string `json:"session_id"`
+			ConvID    string `json:"conv_id"`
+		}
+		if err := json.NewDecoder(r0.Body).Decode(&body); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		sessionID := strings.TrimSpace(body.SessionID)
+		convID := strings.TrimSpace(body.ConvID)
+		if sessionID == "" && convID != "" {
+			r.cm.mu.Lock()
+			if c, ok := r.cm.conns[convID]; ok && c != nil {
+				sessionID = c.RunID
+			}
+			r.cm.mu.Unlock()
+		}
+		if sessionID == "" {
+			http.Error(w, "missing session_id (or unknown conv_id)", http.StatusBadRequest)
+			return
+		}
+		if r.stepCtrl != nil {
+			r.stepCtrl.DisableSession(sessionID)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "session_id": sessionID})
+	})
+
+	r.mux.HandleFunc("/debug/continue", func(w http.ResponseWriter, r0 *http.Request) {
+		if os.Getenv("PINOCCHIO_WEBCHAT_DEBUG") != "1" {
+			http.NotFound(w, r0)
+			return
+		}
+		if r0.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		var body struct {
+			PauseID string `json:"pause_id"`
+			ConvID  string `json:"conv_id,omitempty"`
+		}
+		if err := json.NewDecoder(r0.Body).Decode(&body); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		pauseID := strings.TrimSpace(body.PauseID)
+		if pauseID == "" {
+			http.Error(w, "missing pause_id", http.StatusBadRequest)
+			return
+		}
+		if r.stepCtrl == nil {
+			http.Error(w, "step controller not initialized", http.StatusInternalServerError)
+			return
+		}
+		if convID := strings.TrimSpace(body.ConvID); convID != "" {
+			if meta, ok := r.stepCtrl.Lookup(pauseID); ok {
+				if meta.Scope.ConversationID != "" && meta.Scope.ConversationID != convID {
+					http.Error(w, "pause does not belong to this conversation", http.StatusForbidden)
+					return
+				}
+			}
+		}
+		meta, ok := r.stepCtrl.Continue(pauseID)
+		if !ok {
+			http.Error(w, "unknown pause_id", http.StatusNotFound)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "pause": meta})
 	})
 
 	// websocket join: /ws?conv_id=...&profile=slug (falls back to chat_profile cookie)
@@ -360,13 +479,20 @@ func (r *Router) registerHTTPHandlers() {
 			http.Error(w, "append prompt turn failed", http.StatusInternalServerError)
 			return
 		}
-		cfg := toolhelpers.NewToolConfig().WithMaxIterations(5).WithTimeout(60 * time.Second)
+
+		if stepModeFromOverrides(body.Overrides) && r.stepCtrl != nil {
+			r.stepCtrl.Enable(toolloop.StepScope{SessionID: conv.RunID, ConversationID: conv.ID})
+		}
+
+		cfg := toolloop.NewToolConfig().WithMaxIterations(5).WithTimeout(60 * time.Second)
 		conv.Sess.Builder = &session.ToolLoopEngineBuilder{
-			Base:         conv.Eng,
-			Registry:     registry,
-			ToolConfig:   &cfg,
-			EventSinks:   []events.EventSink{conv.Sink},
-			SnapshotHook: hook,
+			Base:             conv.Eng,
+			Registry:         registry,
+			ToolConfig:       &cfg,
+			EventSinks:       []events.EventSink{conv.Sink},
+			SnapshotHook:     hook,
+			StepController:   r.stepCtrl,
+			StepPauseTimeout: 30 * time.Second,
 		}
 
 		handle, err := conv.Sess.StartInference(r.baseCtx)
@@ -497,13 +623,20 @@ func (r *Router) registerHTTPHandlers() {
 			http.Error(w, "append prompt turn failed", http.StatusInternalServerError)
 			return
 		}
-		cfg := toolhelpers.NewToolConfig().WithMaxIterations(5).WithTimeout(60 * time.Second)
+
+		if stepModeFromOverrides(body.Overrides) && r.stepCtrl != nil {
+			r.stepCtrl.Enable(toolloop.StepScope{SessionID: conv.RunID, ConversationID: conv.ID})
+		}
+
+		cfg := toolloop.NewToolConfig().WithMaxIterations(5).WithTimeout(60 * time.Second)
 		conv.Sess.Builder = &session.ToolLoopEngineBuilder{
-			Base:         conv.Eng,
-			Registry:     registry,
-			ToolConfig:   &cfg,
-			EventSinks:   []events.EventSink{conv.Sink},
-			SnapshotHook: hook,
+			Base:             conv.Eng,
+			Registry:         registry,
+			ToolConfig:       &cfg,
+			EventSinks:       []events.EventSink{conv.Sink},
+			SnapshotHook:     hook,
+			StepController:   r.stepCtrl,
+			StepPauseTimeout: 30 * time.Second,
 		}
 
 		handle, err := conv.Sess.StartInference(r.baseCtx)
@@ -552,7 +685,25 @@ var (
 	_ http.Handler
 )
 
-func snapshotHookForConv(conv *Conversation, dir string) toolhelpers.SnapshotHook {
+func stepModeFromOverrides(overrides map[string]any) bool {
+	if overrides == nil {
+		return false
+	}
+	if v, ok := overrides["step_mode"].(bool); ok {
+		return v
+	}
+	if v, ok := overrides["step_mode"].(string); ok {
+		switch strings.ToLower(strings.TrimSpace(v)) {
+		case "1", "true", "yes", "y", "on":
+			return true
+		default:
+			return false
+		}
+	}
+	return false
+}
+
+func snapshotHookForConv(conv *Conversation, dir string) toolloop.SnapshotHook {
 	if conv == nil || dir == "" {
 		return nil
 	}

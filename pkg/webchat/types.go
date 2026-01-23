@@ -9,6 +9,7 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/events"
 	"github.com/go-go-golems/geppetto/pkg/inference/engine"
 	"github.com/go-go-golems/geppetto/pkg/inference/middleware"
+	"github.com/go-go-golems/geppetto/pkg/inference/toolloop"
 	geptools "github.com/go-go-golems/geppetto/pkg/inference/tools"
 	"github.com/go-go-golems/geppetto/pkg/turns"
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
@@ -96,4 +97,7 @@ type Router struct {
 	usesRedis      bool
 	redisAddr      string
 	idleTimeoutSec int
+
+	// step mode control (shared; not conversation-owned)
+	stepCtrl *toolloop.StepController
 }

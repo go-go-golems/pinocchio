@@ -190,6 +190,20 @@ func SemanticEventsFromEvent(e events.Event) [][]byte {
 		}
 		localID := "agentmode-" + md.TurnID + "-" + uuid.NewString()
 		return [][]byte{wrapSem(map[string]any{"type": "agent.mode", "id": localID, "title": ev.Message, "data": props})}
+	case *events.EventDebuggerPause:
+		sem := map[string]any{
+			"type":        "debugger.pause",
+			"id":          ev.PauseID,
+			"pause_id":    ev.PauseID,
+			"phase":       ev.Phase,
+			"summary":     ev.Summary,
+			"deadline_ms": ev.DeadlineMs,
+			"metadata":    md,
+		}
+		if len(ev.Extra) > 0 {
+			sem["extra"] = ev.Extra
+		}
+		return [][]byte{wrapSem(sem)}
 	}
 	log.Debug().Str("component", "web_forwarder").Msg("no semantic mapping for event; dropping")
 	return nil

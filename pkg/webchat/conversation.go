@@ -166,8 +166,10 @@ func (r *Router) getOrCreateConv(convID, profileSlug string, overrides map[strin
 	conv.Sess = &session.Session{
 		SessionID: runID,
 		Builder: &session.ToolLoopEngineBuilder{
-			Base:       eng,
-			EventSinks: []events.EventSink{sink},
+			Base:             eng,
+			EventSinks:       []events.EventSink{sink},
+			StepController:   r.stepCtrl,
+			StepPauseTimeout: 30 * time.Second,
 		},
 		Turns: func() []*turns.Turn {
 			seed := &turns.Turn{}

@@ -13,7 +13,7 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/inference/engine"
 	"github.com/go-go-golems/geppetto/pkg/inference/middleware"
 	"github.com/go-go-golems/geppetto/pkg/inference/session"
-	"github.com/go-go-golems/geppetto/pkg/inference/toolhelpers"
+	"github.com/go-go-golems/geppetto/pkg/inference/toolloop"
 	"github.com/go-go-golems/geppetto/pkg/inference/tools"
 	"github.com/go-go-golems/geppetto/pkg/turns"
 	"github.com/pkg/errors"
@@ -24,13 +24,13 @@ import (
 type ToolLoopBackend struct {
 	reg  *tools.InMemoryToolRegistry
 	sink events.EventSink
-	hook toolhelpers.SnapshotHook
+	hook toolloop.SnapshotHook
 
 	sess *session.Session
 }
 
-func NewToolLoopBackend(eng engine.Engine, mws []middleware.Middleware, reg *tools.InMemoryToolRegistry, sink events.EventSink, hook toolhelpers.SnapshotHook) *ToolLoopBackend {
-	cfg := toolhelpers.NewToolConfig().WithMaxIterations(5).WithTimeout(60 * time.Second)
+func NewToolLoopBackend(eng engine.Engine, mws []middleware.Middleware, reg *tools.InMemoryToolRegistry, sink events.EventSink, hook toolloop.SnapshotHook) *ToolLoopBackend {
+	cfg := toolloop.NewToolConfig().WithMaxIterations(5).WithTimeout(60 * time.Second)
 	sess := session.NewSession()
 	sess.Builder = session.NewToolLoopEngineBuilder(
 		session.WithToolLoopBase(eng),
