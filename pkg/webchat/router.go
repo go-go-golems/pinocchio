@@ -484,11 +484,13 @@ func (r *Router) registerHTTPHandlers() {
 			r.stepCtrl.Enable(toolloop.StepScope{SessionID: conv.RunID, ConversationID: conv.ID})
 		}
 
-		cfg := toolloop.NewToolConfig().WithMaxIterations(5).WithTimeout(60 * time.Second)
+		loopCfg := toolloop.NewLoopConfig().WithMaxIterations(5)
+		toolCfg := geptools.DefaultToolConfig().WithExecutionTimeout(60 * time.Second)
 		conv.Sess.Builder = &enginebuilder.Builder{
 			Base:             conv.Eng,
 			Registry:         registry,
-			ToolConfig:       &cfg,
+			LoopConfig:       &loopCfg,
+			ToolConfig:       &toolCfg,
 			EventSinks:       []events.EventSink{conv.Sink},
 			SnapshotHook:     hook,
 			StepController:   r.stepCtrl,
@@ -628,11 +630,13 @@ func (r *Router) registerHTTPHandlers() {
 			r.stepCtrl.Enable(toolloop.StepScope{SessionID: conv.RunID, ConversationID: conv.ID})
 		}
 
-		cfg := toolloop.NewToolConfig().WithMaxIterations(5).WithTimeout(60 * time.Second)
+		loopCfg := toolloop.NewLoopConfig().WithMaxIterations(5)
+		toolCfg := geptools.DefaultToolConfig().WithExecutionTimeout(60 * time.Second)
 		conv.Sess.Builder = &enginebuilder.Builder{
 			Base:             conv.Eng,
 			Registry:         registry,
-			ToolConfig:       &cfg,
+			LoopConfig:       &loopCfg,
+			ToolConfig:       &toolCfg,
 			EventSinks:       []events.EventSink{conv.Sink},
 			SnapshotHook:     hook,
 			StepController:   r.stepCtrl,

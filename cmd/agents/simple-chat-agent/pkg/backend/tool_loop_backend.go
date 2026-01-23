@@ -31,13 +31,15 @@ type ToolLoopBackend struct {
 }
 
 func NewToolLoopBackend(eng engine.Engine, mws []middleware.Middleware, reg *tools.InMemoryToolRegistry, sink events.EventSink, hook toolloop.SnapshotHook) *ToolLoopBackend {
-	cfg := toolloop.NewToolConfig().WithMaxIterations(5).WithTimeout(60 * time.Second)
+	loopCfg := toolloop.NewLoopConfig().WithMaxIterations(5)
+	toolCfg := tools.DefaultToolConfig().WithExecutionTimeout(60 * time.Second)
 	sess := session.NewSession()
 	sess.Builder = enginebuilder.New(
 		enginebuilder.WithBase(eng),
 		enginebuilder.WithMiddlewares(mws...),
 		enginebuilder.WithToolRegistry(reg),
-		enginebuilder.WithToolConfig(cfg),
+		enginebuilder.WithLoopConfig(loopCfg),
+		enginebuilder.WithToolConfig(toolCfg),
 		enginebuilder.WithEventSinks(sink),
 		enginebuilder.WithSnapshotHook(hook),
 	)

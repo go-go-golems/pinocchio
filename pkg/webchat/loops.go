@@ -12,17 +12,19 @@ import (
 
 // ToolCallingLoop wraps geppetto's tool loop.
 func ToolCallingLoop(ctx context.Context, eng engine.Engine, t *turns.Turn, reg geptools.ToolRegistry, opts map[string]any) (*turns.Turn, error) {
-	cfg := toolloop.NewToolConfig().WithMaxIterations(5).WithTimeout(60 * time.Second)
+	loopCfg := toolloop.NewLoopConfig().WithMaxIterations(5)
+	toolCfg := geptools.DefaultToolConfig().WithExecutionTimeout(60 * time.Second)
 	if v, ok := opts["max_iterations"].(int); ok {
-		cfg = cfg.WithMaxIterations(v)
+		loopCfg = loopCfg.WithMaxIterations(v)
 	}
 	if v, ok := opts["timeout_seconds"].(int); ok {
-		cfg = cfg.WithTimeout(time.Duration(v) * time.Second)
+		toolCfg = toolCfg.WithExecutionTimeout(time.Duration(v) * time.Second)
 	}
 	loop := toolloop.New(
 		toolloop.WithEngine(eng),
 		toolloop.WithRegistry(reg),
-		toolloop.WithConfig(cfg),
+		toolloop.WithLoopConfig(loopCfg),
+		toolloop.WithToolConfig(toolCfg),
 	)
 	return loop.RunLoop(ctx, t)
 }
