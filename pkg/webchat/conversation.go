@@ -14,6 +14,7 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/events"
 	"github.com/go-go-golems/geppetto/pkg/inference/engine"
 	"github.com/go-go-golems/geppetto/pkg/inference/session"
+	"github.com/go-go-golems/geppetto/pkg/inference/toolloop"
 	"github.com/go-go-golems/geppetto/pkg/turns"
 )
 
@@ -165,7 +166,7 @@ func (r *Router) getOrCreateConv(convID, profileSlug string, overrides map[strin
 
 	conv.Sess = &session.Session{
 		SessionID: runID,
-		Builder: &session.ToolLoopEngineBuilder{
+		Builder: &toolloop.EngineBuilder{
 			Base:             eng,
 			EventSinks:       []events.EventSink{sink},
 			StepController:   r.stepCtrl,

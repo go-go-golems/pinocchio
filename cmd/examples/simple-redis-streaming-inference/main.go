@@ -10,7 +10,7 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/events"
 	"github.com/go-go-golems/geppetto/pkg/inference/engine/factory"
 	"github.com/go-go-golems/geppetto/pkg/inference/middleware"
-	"github.com/go-go-golems/geppetto/pkg/inference/session"
+	"github.com/go-go-golems/geppetto/pkg/inference/toolloop"
 	"github.com/go-go-golems/geppetto/pkg/turns"
 
 	clay "github.com/go-go-golems/clay/pkg"
@@ -195,10 +195,10 @@ func (c *SimpleRedisStreamingInferenceCommand) RunIntoWriter(ctx context.Context
 		defer cancel()
 		<-router.Running()
 		log.Info().Msg("EventRouter is running; starting inference")
-		runner, err := session.NewToolLoopEngineBuilder(
-			session.WithToolLoopBase(eng),
-			session.WithToolLoopMiddlewares(mws...),
-			session.WithToolLoopEventSinks(sink),
+		runner, err := toolloop.NewEngineBuilder(
+			toolloop.WithBase(eng),
+			toolloop.WithMiddlewares(mws...),
+			toolloop.WithEventSinks(sink),
 		).Build(ctx, sessionID)
 		if err != nil {
 			return fmt.Errorf("failed to build runner: %w", err)

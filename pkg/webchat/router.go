@@ -20,7 +20,6 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/go-go-golems/geppetto/pkg/events"
-	"github.com/go-go-golems/geppetto/pkg/inference/session"
 	"github.com/go-go-golems/geppetto/pkg/inference/toolloop"
 	geptools "github.com/go-go-golems/geppetto/pkg/inference/tools"
 	"github.com/go-go-golems/geppetto/pkg/turns"
@@ -485,7 +484,7 @@ func (r *Router) registerHTTPHandlers() {
 		}
 
 		cfg := toolloop.NewToolConfig().WithMaxIterations(5).WithTimeout(60 * time.Second)
-		conv.Sess.Builder = &session.ToolLoopEngineBuilder{
+		conv.Sess.Builder = &toolloop.EngineBuilder{
 			Base:             conv.Eng,
 			Registry:         registry,
 			ToolConfig:       &cfg,
@@ -629,7 +628,7 @@ func (r *Router) registerHTTPHandlers() {
 		}
 
 		cfg := toolloop.NewToolConfig().WithMaxIterations(5).WithTimeout(60 * time.Second)
-		conv.Sess.Builder = &session.ToolLoopEngineBuilder{
+		conv.Sess.Builder = &toolloop.EngineBuilder{
 			Base:             conv.Eng,
 			Registry:         registry,
 			ToolConfig:       &cfg,

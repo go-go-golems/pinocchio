@@ -227,13 +227,13 @@ Engines are built from `StepSettings` using Geppetto’s factory:
 ```go
 import (
     "context"
-    "github.com/go-go-golems/geppetto/pkg/inference/session"
+    "github.com/go-go-golems/geppetto/pkg/inference/toolloop"
 )
 
 eng, err := factory.NewEngineFromStepSettings(stepSettings)
-runner, err := session.NewToolLoopEngineBuilder(
-    session.WithToolLoopBase(eng),
-    session.WithToolLoopMiddlewares(middleware.NewSystemPromptMiddleware(sysPrompt)),
+runner, err := toolloop.NewEngineBuilder(
+    toolloop.WithBase(eng),
+    toolloop.WithMiddlewares(middleware.NewSystemPromptMiddleware(sysPrompt)),
     // + per-profile middlewares in order
 ).Build(context.Background(), "")
 eng = runner
@@ -243,13 +243,16 @@ This ensures parity with standard StepSettings (model, timeouts, provider settin
 
 ## 7. Run Loop
 
-The default run loop uses `toolhelpers.RunToolCallingLoop`:
+The default run loop uses the tool loop (`toolloop.Loop`) via the engine builder:
 
 ```go
-updatedTurn, _ := toolhelpers.RunToolCallingLoop(
-  ctx, eng, turn, registry,
-  toolhelpers.NewToolConfig().WithMaxIterations(5).WithTimeout(60*time.Second),
+b := toolloop.NewEngineBuilder(
+  toolloop.WithBase(eng),
+  toolloop.WithToolRegistry(registry),
+  toolloop.WithToolConfig(toolloop.NewToolConfig().WithMaxIterations(5).WithTimeout(60*time.Second)),
 )
+runner, _ := b.Build(ctx, "session-id")
+updatedTurn, _ := runner.RunInference(ctx, turn)
 ```
 
 You can plug custom loops by wiring your own handler within the router, or extend the framework to allow per-profile loop selection.

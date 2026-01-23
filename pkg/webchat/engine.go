@@ -2,12 +2,13 @@ package webchat
 
 import (
 	"context"
+
 	"github.com/pkg/errors"
 
 	"github.com/go-go-golems/geppetto/pkg/inference/engine"
 	"github.com/go-go-golems/geppetto/pkg/inference/engine/factory"
 	"github.com/go-go-golems/geppetto/pkg/inference/middleware"
-	"github.com/go-go-golems/geppetto/pkg/inference/session"
+	"github.com/go-go-golems/geppetto/pkg/inference/toolloop"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 )
 
@@ -37,7 +38,7 @@ func composeEngineFromSettings(stepSettings *settings.StepSettings, sysPrompt st
 		mws = append(mws, middleware.NewSystemPromptMiddleware(sysPrompt))
 	}
 
-	builder := &session.ToolLoopEngineBuilder{Base: eng, Middlewares: mws}
+	builder := &toolloop.EngineBuilder{Base: eng, Middlewares: mws}
 	runner, err := builder.Build(context.Background(), "")
 	if err != nil {
 		return nil, err

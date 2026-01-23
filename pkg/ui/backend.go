@@ -13,6 +13,7 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/events"
 	"github.com/go-go-golems/geppetto/pkg/inference/engine"
 	"github.com/go-go-golems/geppetto/pkg/inference/session"
+	"github.com/go-go-golems/geppetto/pkg/inference/toolloop"
 	"github.com/go-go-golems/geppetto/pkg/turns"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
@@ -21,7 +22,7 @@ import (
 // EngineBackend provides a Backend implementation using the Engine-first architecture.
 type EngineBackend struct {
 	engine  engine.Engine
-	builder *session.ToolLoopEngineBuilder
+	builder *toolloop.EngineBuilder
 
 	sessMu sync.RWMutex
 	sess   *session.Session
@@ -37,7 +38,7 @@ var _ boba_chat.Backend = &EngineBackend{}
 // NewEngineBackend creates a new EngineBackend with the given engine and event sink.
 // The eventSink is used to publish events during inference for UI updates.
 func NewEngineBackend(engine engine.Engine, sinks ...events.EventSink) *EngineBackend {
-	builder := &session.ToolLoopEngineBuilder{
+	builder := &toolloop.EngineBuilder{
 		Base:       engine,
 		EventSinks: append([]events.EventSink(nil), sinks...),
 	}

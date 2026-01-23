@@ -146,10 +146,10 @@ Parameters (via layer `redis`):
 // POST /chat handler
 conv, _ := s.getOrCreateConv(convID)
 _, _ = conv.Sess.AppendNewTurnFromUserPrompt(prompt)
-conv.Sess.Builder = &session.ToolLoopEngineBuilder{
+conv.Sess.Builder = &toolloop.EngineBuilder{
     Base:       conv.Eng,
     Registry:   s.registry,
-    ToolConfig: toolhelpers.NewToolConfig().WithMaxIterations(5),
+    ToolConfig: toolloop.NewToolConfig().WithMaxIterations(5),
     EventSinks: []events.EventSink{conv.Sink},
 }
 handle, _ := conv.Sess.StartInference(s.baseCtx)
@@ -182,4 +182,3 @@ Open `http://localhost:8080/` and connect.
 - Use consumer groups at the tail (`$`) to avoid replaying full history to the UI.
 - Use per-conversation topics to isolate runs and simplify filtering.
 - Log at debug level for event traffic to troubleshoot mapping issues.
-
