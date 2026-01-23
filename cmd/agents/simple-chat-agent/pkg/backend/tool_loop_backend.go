@@ -51,8 +51,10 @@ func (b *ToolLoopBackend) Start(ctx context.Context, prompt string) (tea.Cmd, er
 		return nil, errors.New("already running")
 	}
 
-	seed := snapshotForPrompt(b.sess, prompt)
-	b.sess.Append(seed)
+	_, err := b.sess.AppendNewTurnFromUserPrompt(prompt)
+	if err != nil {
+		return nil, errors.Wrap(err, "append prompt turn")
+	}
 
 	handle, err := b.sess.StartInference(ctx)
 	if err != nil {
@@ -91,42 +93,6 @@ func (b *ToolLoopBackend) CurrentTurn() *turns.Turn {
 		return nil
 	}
 	return b.sess.Latest()
-}
-
-func snapshotForPrompt(sess *session.Session, prompt string) *turns.Turn {
-	if sess == nil {
-		t := &turns.Turn{}
-		if prompt != "" {
-			turns.AppendBlock(t, turns.NewUserTextBlock(prompt))
-		}
-		return t
-	}
-	base := sess.Latest()
-	seed := &turns.Turn{}
-	if base != nil {
-		seed = cloneTurn(base)
-	}
-	if sess.SessionID != "" {
-		if _, ok, err := turns.KeyTurnMetaSessionID.Get(seed.Metadata); err != nil || !ok {
-			_ = turns.KeyTurnMetaSessionID.Set(&seed.Metadata, sess.SessionID)
-		}
-	}
-	if prompt != "" {
-		turns.AppendBlock(seed, turns.NewUserTextBlock(prompt))
-	}
-	return seed
-}
-
-func cloneTurn(t *turns.Turn) *turns.Turn {
-	if t == nil {
-		return nil
-	}
-	return &turns.Turn{
-		ID:       t.ID,
-		Blocks:   append([]turns.Block(nil), t.Blocks...),
-		Metadata: t.Metadata.Clone(),
-		Data:     t.Data.Clone(),
-	}
 }
 
 // MakeUIForwarder returns a Watermill handler that forwards geppetto events to the Bubble Tea program p

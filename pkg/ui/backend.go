@@ -41,12 +41,12 @@ func NewEngineBackend(engine engine.Engine, sinks ...events.EventSink) *EngineBa
 		Base:       engine,
 		EventSinks: append([]events.EventSink(nil), sinks...),
 	}
+	sess := session.NewSession()
+	sess.Builder = builder
 	return &EngineBackend{
 		engine:  engine,
 		builder: builder,
-		sess: &session.Session{
-			Builder: builder,
-		},
+		sess:    sess,
 		emitted: make(map[string]struct{}),
 	}
 }
@@ -74,8 +74,10 @@ func (e *EngineBackend) Start(ctx context.Context, prompt string) (tea.Cmd, erro
 	}
 
 	log.Debug().Str("component", "engine_backend").Msg("Building seed turn, appending user block, starting inference")
-	seed := e.snapshotForPrompt(prompt)
-	sess.Append(seed)
+	_, err := sess.AppendNewTurnFromUserPrompt(prompt)
+	if err != nil {
+		return nil, errors.Wrap(err, "append prompt turn")
+	}
 
 	handle, err := sess.StartInference(ctx)
 	if err != nil {
@@ -101,7 +103,7 @@ func (e *EngineBackend) SetSeedTurn(t *turns.Turn) {
 	if t == nil {
 		return
 	}
-	seed := cloneTurn(t)
+	seed := t.Clone()
 
 	e.sessMu.Lock()
 	sess := &session.Session{Builder: e.builder}
@@ -120,47 +122,6 @@ func (e *EngineBackend) SetSeedTurn(t *turns.Turn) {
 
 	log.Debug().Str("component", "engine_backend").Int("seed_blocks", len(t.Blocks)).Msg("Seed Turn loaded into conversation state")
 	e.emitInitialEntities(t)
-}
-
-func (e *EngineBackend) snapshotForPrompt(prompt string) *turns.Turn {
-	e.sessMu.RLock()
-	sess := e.sess
-	e.sessMu.RUnlock()
-
-	var (
-		base  *turns.Turn
-		runID string
-	)
-	if sess != nil {
-		base = sess.Latest()
-		runID = sess.SessionID
-	}
-
-	seed := &turns.Turn{}
-	if base != nil {
-		seed = cloneTurn(base)
-	}
-	if runID != "" {
-		if _, ok, err := turns.KeyTurnMetaSessionID.Get(seed.Metadata); err != nil || !ok {
-			_ = turns.KeyTurnMetaSessionID.Set(&seed.Metadata, runID)
-		}
-	}
-	if prompt != "" {
-		turns.AppendBlock(seed, turns.NewUserTextBlock(prompt))
-	}
-	return seed
-}
-
-func cloneTurn(t *turns.Turn) *turns.Turn {
-	if t == nil {
-		return nil
-	}
-	return &turns.Turn{
-		ID:       t.ID,
-		Blocks:   append([]turns.Block(nil), t.Blocks...),
-		Metadata: t.Metadata.Clone(),
-		Data:     t.Data.Clone(),
-	}
 }
 
 // emitInitialEntities sends UI entities for existing blocks (system/user/assistant text)

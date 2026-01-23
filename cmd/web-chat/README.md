@@ -127,7 +127,7 @@ s.convertAndBroadcast(conv, e) // -> SEM frames to sockets
 - `GET /ws?conv_id={string}` — Upgrades to WebSocket, attaches the socket to the conversation
 - `POST /chat` — Starts a run
   - Body: `{ "prompt": string, "conv_id": string (optional) }`
-  - Response: `{ "run_id": string, "conv_id": string }`
+  - Response: `{ "conv_id": string, "run_id": string, "session_id": string, "turn_id": string, "inference_id": string }`
 
 ## Redis Streams (Optional Transport)
 
@@ -145,12 +145,15 @@ Parameters (via layer `redis`):
 ```go
 // POST /chat handler
 conv, _ := s.getOrCreateConv(convID)
-turns.AppendBlock(conv.Turn, turns.NewUserTextBlock(prompt))
-runCtx := events.WithEventSinks(s.baseCtx, conv.Sink)
-_, _ = toolhelpers.RunToolCallingLoop(
-    runCtx, conv.Eng, conv.Turn, s.registry,
-    toolhelpers.NewToolConfig().WithMaxIterations(5),
-)
+_, _ = conv.Sess.AppendNewTurnFromUserPrompt(prompt)
+conv.Sess.Builder = &session.ToolLoopEngineBuilder{
+    Base:       conv.Eng,
+    Registry:   s.registry,
+    ToolConfig: toolhelpers.NewToolConfig().WithMaxIterations(5),
+    EventSinks: []events.EventSink{conv.Sink},
+}
+handle, _ := conv.Sess.StartInference(s.baseCtx)
+_, _ = handle.Wait()
 
 // Reader goroutine
 for msg := range ch { // subscribed to chat:{convID}
@@ -179,5 +182,4 @@ Open `http://localhost:8080/` and connect.
 - Use consumer groups at the tail (`$`) to avoid replaying full history to the UI.
 - Use per-conversation topics to isolate runs and simplify filtering.
 - Log at debug level for event traffic to troubleshoot mapping issues.
-
 

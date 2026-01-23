@@ -109,46 +109,49 @@ func (r *Router) BuildHTTPServer() (*http.Server, error) {
 // This is useful when integrating the webchat router into an existing HTTP server
 // and you need the event router running independently.
 func (r *Router) RunEventRouter(ctx context.Context) error {
-	log.Info().Str("component", "webchat").Msg("starting event router loop")
+	logger := log.With().Str("component", "webchat").Logger()
+	logger.Info().Msg("starting event router loop")
 	err := r.router.Run(ctx)
 	if err != nil {
-		log.Error().Err(err).Str("component", "webchat").Msg("event router exited with error")
+		logger.Error().Err(err).Msg("event router exited with error")
 		return err
 	}
-	log.Info().Str("component", "webchat").Msg("event router loop exited")
+	logger.Info().Msg("event router loop exited")
 	return nil
 }
 
 // registerHTTPHandlers sets up static, API and websockets.
 func (r *Router) registerHTTPHandlers() {
+	logger := log.With().Str("component", "webchat").Logger()
+
 	// static assets
 	if staticSub, err := fsSub(r.staticFS, "static"); err == nil {
 		r.mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticSub))))
-		log.Info().Str("component", "webchat").Msg("mounted /static/ asset handler")
+		logger.Info().Msg("mounted /static/ asset handler")
 	} else {
-		log.Warn().Err(err).Str("component", "webchat").Msg("failed to mount /static/ asset handler")
+		logger.Warn().Err(err).Msg("failed to mount /static/ asset handler")
 	}
 	if distAssets, err := fsSub(r.staticFS, "static/dist/assets"); err == nil {
 		r.mux.Handle("/assets/", http.StripPrefix("/assets/", http.FileServer(http.FS(distAssets))))
-		log.Info().Str("component", "webchat").Msg("mounted /assets/ handler for built dist assets")
+		logger.Info().Msg("mounted /assets/ handler for built dist assets")
 	} else {
-		log.Warn().Err(err).Str("component", "webchat").Msg("no built dist assets found under static/dist/assets")
+		logger.Warn().Err(err).Msg("no built dist assets found under static/dist/assets")
 	}
 	// index
 	r.mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
 		if b, err := r.staticFS.ReadFile("static/dist/index.html"); err == nil {
-			log.Debug().Str("component", "webchat").Msg("serving built index (static/dist/index.html)")
+			logger.Debug().Msg("serving built index (static/dist/index.html)")
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
 			_, _ = w.Write(b)
 			return
 		}
 		if b, err := r.staticFS.ReadFile("static/index.html"); err == nil {
-			log.Debug().Str("component", "webchat").Msg("serving dev index (static/index.html)")
+			logger.Debug().Msg("serving dev index (static/index.html)")
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
 			_, _ = w.Write(b)
 			return
 		}
-		log.Error().Str("component", "webchat").Msg("index not found in embedded FS")
+		logger.Error().Msg("index not found in embedded FS")
 		http.Error(w, "index not found", http.StatusInternalServerError)
 	})
 
@@ -169,7 +172,7 @@ func (r *Router) registerHTTPHandlers() {
 	r.mux.HandleFunc("/ws", func(w http.ResponseWriter, r0 *http.Request) {
 		conn, err := r.upgrader.Upgrade(w, r0, nil)
 		if err != nil {
-			log.Error().Err(err).Msg("websocket upgrade failed")
+			logger.Error().Err(err).Msg("websocket upgrade failed")
 			return
 		}
 		convID := r0.URL.Query().Get("conv_id")
@@ -179,26 +182,32 @@ func (r *Router) registerHTTPHandlers() {
 				profileSlug = ck.Value
 			}
 		}
-		log.Info().Str("component", "webchat").Str("remote", r0.RemoteAddr).Str("conv_id", convID).Str("profile", profileSlug).Msg("ws connect request")
+		wsLog := logger.With().
+			Str("remote", r0.RemoteAddr).
+			Str("conv_id", convID).
+			Str("profile", profileSlug).
+			Logger()
+		wsLog.Info().Msg("ws connect request")
 		if convID == "" {
-			log.Warn().Str("component", "webchat").Msg("ws missing conv_id")
+			wsLog.Warn().Msg("ws missing conv_id")
 			_ = conn.WriteMessage(websocket.TextMessage, []byte(`{"error":"missing conv_id"}`))
 			_ = conn.Close()
 			return
 		}
 		if profileSlug == "" {
 			profileSlug = "default"
+			wsLog = wsLog.With().Str("profile", profileSlug).Logger()
 		}
-		log.Info().Str("component", "webchat").Str("conv_id", convID).Str("profile", profileSlug).Msg("ws joining conversation")
+		wsLog.Info().Msg("ws joining conversation")
 		conv, err := r.getOrCreateConv(convID, profileSlug, nil)
 		if err != nil {
-			log.Error().Err(err).Str("component", "webchat").Str("conv_id", convID).Msg("failed to join conversation")
+			wsLog.Error().Err(err).Msg("failed to join conversation")
 			_ = conn.WriteMessage(websocket.TextMessage, []byte(`{"error":"failed to join conversation"}`))
 			_ = conn.Close()
 			return
 		}
 		r.addConn(conv, conn)
-		log.Info().Str("component", "webchat").Str("conv_id", convID).Msg("ws connected")
+		wsLog.Info().Msg("ws connected")
 
 		// Send a greeting frame to the newly connected client (mirrors moments/go-go-mento behavior).
 		if conv != nil && conv.pool != nil {
@@ -220,11 +229,11 @@ func (r *Router) registerHTTPHandlers() {
 
 		go func() {
 			defer r.removeConn(conv, conn)
-			defer log.Info().Str("component", "webchat").Str("conv_id", convID).Msg("ws disconnected")
+			defer wsLog.Info().Msg("ws disconnected")
 			for {
 				msgType, data, err := conn.ReadMessage()
 				if err != nil {
-					log.Debug().Err(err).Str("component", "webchat").Msg("ws read loop end")
+					wsLog.Debug().Err(err).Msg("ws read loop end")
 					return
 				}
 
@@ -293,16 +302,20 @@ func (r *Router) registerHTTPHandlers() {
 		if profileSlug == "" {
 			profileSlug = "default"
 		}
-		log.Info().Str("component", "webchat").Str("conv_id", convID).Str("profile", profileSlug).Int("prompt_len", len(body.Prompt)).Msg("/chat received")
+		chatReqLog := logger.With().
+			Str("conv_id", convID).
+			Str("profile", profileSlug).
+			Logger()
+		chatReqLog.Info().Int("prompt_len", len(body.Prompt)).Msg("/chat received")
 		if _, ok := r.profiles.Get(profileSlug); !ok {
-			log.Warn().Str("component", "webchat").Str("profile", profileSlug).Msg("unknown profile")
+			chatReqLog.Warn().Msg("unknown profile")
 			http.Error(w, "unknown profile", http.StatusNotFound)
 			return
 		}
 
 		conv, err := r.getOrCreateConv(convID, profileSlug, body.Overrides)
 		if err != nil {
-			log.Error().Err(err).Str("component", "webchat").Str("conv_id", convID).Msg("failed to create conversation")
+			chatReqLog.Error().Err(err).Msg("failed to create conversation")
 			http.Error(w, "failed to create conversation", http.StatusInternalServerError)
 			return
 		}
@@ -310,13 +323,13 @@ func (r *Router) registerHTTPHandlers() {
 			http.Error(w, "conversation session not initialized", http.StatusInternalServerError)
 			return
 		}
+		runLog := logger.With().
+			Str("conv_id", conv.ID).
+			Str("run_id", conv.RunID).
+			Str("session_id", conv.RunID).
+			Logger()
 		if conv.Sess.IsRunning() {
-			log.Warn().
-				Str("component", "webchat").
-				Str("conv_id", conv.ID).
-				Str("run_id", conv.RunID).
-				Str("session_id", conv.RunID).
-				Msg("run in progress")
+			runLog.Warn().Msg("run in progress")
 			w.WriteHeader(http.StatusConflict)
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"error":      "run in progress",
@@ -339,14 +352,14 @@ func (r *Router) registerHTTPHandlers() {
 		}
 
 		hook := snapshotHookForConv(conv, os.Getenv("PINOCCHIO_WEBCHAT_TURN_SNAPSHOTS_DIR"))
-		log.Info().
-			Str("component", "webchat").
-			Str("conv_id", conv.ID).
-			Str("run_id", conv.RunID).
-			Str("session_id", conv.RunID).
-			Msg("starting run loop")
+		runLog.Info().Msg("starting run loop")
 
-		seed := seedForPrompt(conv, body.Prompt)
+		seed, err := conv.Sess.AppendNewTurnFromUserPrompt(body.Prompt)
+		if err != nil {
+			runLog.Error().Err(err).Msg("append prompt turn failed")
+			http.Error(w, "append prompt turn failed", http.StatusInternalServerError)
+			return
+		}
 		cfg := toolhelpers.NewToolConfig().WithMaxIterations(5).WithTimeout(60 * time.Second)
 		conv.Sess.Builder = &session.ToolLoopEngineBuilder{
 			Base:         conv.Eng,
@@ -355,35 +368,20 @@ func (r *Router) registerHTTPHandlers() {
 			EventSinks:   []events.EventSink{conv.Sink},
 			SnapshotHook: hook,
 		}
-		conv.Sess.Append(seed)
 
 		handle, err := conv.Sess.StartInference(r.baseCtx)
 		if err != nil {
-			log.Error().
-				Err(err).
-				Str("component", "webchat").
-				Str("conv_id", conv.ID).
-				Str("run_id", conv.RunID).
-				Str("session_id", conv.RunID).
-				Msg("start inference failed")
+			runLog.Error().Err(err).Msg("start inference failed")
 		} else {
 			go func() {
 				_, waitErr := handle.Wait()
 				if waitErr != nil {
-					log.Error().
+					runLog.Error().
 						Err(waitErr).
-						Str("component", "webchat").
-						Str("conv_id", conv.ID).
-						Str("run_id", conv.RunID).
-						Str("session_id", conv.RunID).
 						Str("inference_id", handle.InferenceID).
 						Msg("run loop error")
 				}
-				log.Info().
-					Str("component", "webchat").
-					Str("conv_id", conv.ID).
-					Str("run_id", conv.RunID).
-					Str("session_id", conv.RunID).
+				runLog.Info().
 					Str("inference_id", handle.InferenceID).
 					Msg("run loop finished")
 			}()
@@ -393,6 +391,9 @@ func (r *Router) registerHTTPHandlers() {
 			"conv_id":    conv.ID,
 			"run_id":     conv.RunID, // legacy
 			"session_id": conv.RunID,
+		}
+		if seed != nil && seed.ID != "" {
+			resp["turn_id"] = seed.ID
 		}
 		if handle != nil {
 			if handle.InferenceID != "" {
@@ -438,6 +439,10 @@ func (r *Router) registerHTTPHandlers() {
 		if convID == "" {
 			convID = uuid.NewString()
 		}
+		chatReqLog := logger.With().
+			Str("conv_id", convID).
+			Str("profile", profileSlug).
+			Logger()
 		if _, ok := r.profiles.Get(profileSlug); !ok {
 			http.Error(w, "unknown profile", http.StatusNotFound)
 			return
@@ -446,6 +451,7 @@ func (r *Router) registerHTTPHandlers() {
 		// Build or reuse conversation with correct engine (consider overrides)
 		conv, err := r.getOrCreateConv(convID, profileSlug, body.Overrides)
 		if err != nil {
+			chatReqLog.Error().Err(err).Msg("failed to create conversation")
 			http.Error(w, "failed to create conversation", http.StatusInternalServerError)
 			return
 		}
@@ -453,7 +459,13 @@ func (r *Router) registerHTTPHandlers() {
 			http.Error(w, "conversation session not initialized", http.StatusInternalServerError)
 			return
 		}
+		runLog := logger.With().
+			Str("conv_id", conv.ID).
+			Str("run_id", conv.RunID).
+			Str("session_id", conv.RunID).
+			Logger()
 		if conv.Sess.IsRunning() {
+			runLog.Warn().Msg("run in progress")
 			w.WriteHeader(http.StatusConflict)
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"error":      "run in progress",
@@ -477,14 +489,14 @@ func (r *Router) registerHTTPHandlers() {
 		}
 
 		hook := snapshotHookForConv(conv, os.Getenv("PINOCCHIO_WEBCHAT_TURN_SNAPSHOTS_DIR"))
-		log.Info().
-			Str("component", "webchat").
-			Str("conv_id", conv.ID).
-			Str("run_id", conv.RunID).
-			Str("session_id", conv.RunID).
-			Msg("starting run loop")
+		runLog.Info().Msg("starting run loop")
 
-		seed := seedForPrompt(conv, body.Prompt)
+		seed, err := conv.Sess.AppendNewTurnFromUserPrompt(body.Prompt)
+		if err != nil {
+			runLog.Error().Err(err).Msg("append prompt turn failed")
+			http.Error(w, "append prompt turn failed", http.StatusInternalServerError)
+			return
+		}
 		cfg := toolhelpers.NewToolConfig().WithMaxIterations(5).WithTimeout(60 * time.Second)
 		conv.Sess.Builder = &session.ToolLoopEngineBuilder{
 			Base:         conv.Eng,
@@ -493,35 +505,20 @@ func (r *Router) registerHTTPHandlers() {
 			EventSinks:   []events.EventSink{conv.Sink},
 			SnapshotHook: hook,
 		}
-		conv.Sess.Append(seed)
 
 		handle, err := conv.Sess.StartInference(r.baseCtx)
 		if err != nil {
-			log.Error().
-				Err(err).
-				Str("component", "webchat").
-				Str("conv_id", conv.ID).
-				Str("run_id", conv.RunID).
-				Str("session_id", conv.RunID).
-				Msg("start inference failed")
+			runLog.Error().Err(err).Msg("start inference failed")
 		} else {
 			go func() {
 				_, waitErr := handle.Wait()
 				if waitErr != nil {
-					log.Error().
+					runLog.Error().
 						Err(waitErr).
-						Str("component", "webchat").
-						Str("conv_id", conv.ID).
-						Str("run_id", conv.RunID).
-						Str("session_id", conv.RunID).
 						Str("inference_id", handle.InferenceID).
 						Msg("run loop error")
 				}
-				log.Info().
-					Str("component", "webchat").
-					Str("conv_id", conv.ID).
-					Str("run_id", conv.RunID).
-					Str("session_id", conv.RunID).
+				runLog.Info().
 					Str("inference_id", handle.InferenceID).
 					Msg("run loop finished")
 			}()
@@ -531,6 +528,9 @@ func (r *Router) registerHTTPHandlers() {
 			"conv_id":    conv.ID,
 			"run_id":     conv.RunID, // legacy
 			"session_id": conv.RunID,
+		}
+		if seed != nil && seed.ID != "" {
+			resp["turn_id"] = seed.ID
 		}
 		if handle != nil {
 			if handle.InferenceID != "" {
@@ -556,13 +556,18 @@ func snapshotHookForConv(conv *Conversation, dir string) toolhelpers.SnapshotHoo
 	if conv == nil || dir == "" {
 		return nil
 	}
+	snapLog := log.With().
+		Str("component", "webchat").
+		Str("conv_id", conv.ID).
+		Str("run_id", conv.RunID).
+		Logger()
 	return func(ctx context.Context, t *turns.Turn, phase string) {
 		if t == nil {
 			return
 		}
 		subdir := filepath.Join(dir, conv.ID, conv.RunID)
 		if err := os.MkdirAll(subdir, 0755); err != nil {
-			log.Warn().Err(err).Str("dir", subdir).Msg("webchat snapshot: mkdir failed")
+			snapLog.Warn().Err(err).Str("dir", subdir).Msg("webchat snapshot: mkdir failed")
 			return
 		}
 		ts := time.Now().UTC().Format("20060102-150405.000000000")
@@ -574,51 +579,15 @@ func snapshotHookForConv(conv *Conversation, dir string) toolhelpers.SnapshotHoo
 		path := filepath.Join(subdir, name)
 		data, err := serde.ToYAML(t, serde.Options{})
 		if err != nil {
-			log.Warn().Err(err).Str("path", path).Msg("webchat snapshot: serialize failed")
+			snapLog.Warn().Err(err).Str("path", path).Msg("webchat snapshot: serialize failed")
 			return
 		}
 		if err := os.WriteFile(path, data, 0644); err != nil {
-			log.Warn().Err(err).Str("path", path).Msg("webchat snapshot: write failed")
+			snapLog.Warn().Err(err).Str("path", path).Msg("webchat snapshot: write failed")
 			return
 		}
-		log.Debug().Str("path", path).Str("phase", phase).Msg("webchat snapshot: saved turn")
+		snapLog.Debug().Str("path", path).Str("phase", phase).Msg("webchat snapshot: saved turn")
 	}
-}
-
-func seedForPrompt(conv *Conversation, prompt string) *turns.Turn {
-	if conv == nil || conv.Sess == nil {
-		t := &turns.Turn{}
-		if conv != nil && conv.RunID != "" {
-			_ = turns.KeyTurnMetaSessionID.Set(&t.Metadata, conv.RunID)
-		}
-		if prompt != "" {
-			turns.AppendBlock(t, turns.NewUserTextBlock(prompt))
-		}
-		if t.ID == "" {
-			t.ID = uuid.NewString()
-		}
-		return t
-	}
-
-	base := conv.Sess.Latest()
-	runID := conv.Sess.SessionID
-
-	seed := &turns.Turn{}
-	if base != nil {
-		seed = cloneTurn(base)
-	}
-	if runID != "" {
-		if _, ok, err := turns.KeyTurnMetaSessionID.Get(seed.Metadata); err != nil || !ok {
-			_ = turns.KeyTurnMetaSessionID.Set(&seed.Metadata, runID)
-		}
-	}
-	if prompt != "" {
-		turns.AppendBlock(seed, turns.NewUserTextBlock(prompt))
-	}
-	if seed.ID == "" {
-		seed.ID = uuid.NewString()
-	}
-	return seed
 }
 
 func (r *Router) buildSubscriber(convID string) (message.Subscriber, bool, error) {
@@ -638,18 +607,6 @@ func (r *Router) buildSubscriber(convID string) (message.Subscriber, bool, error
 		return sub, true, nil
 	}
 	return r.router.Subscriber, false, nil
-}
-
-func cloneTurn(t *turns.Turn) *turns.Turn {
-	if t == nil {
-		return nil
-	}
-	return &turns.Turn{
-		ID:       t.ID,
-		Blocks:   append([]turns.Block(nil), t.Blocks...),
-		Metadata: t.Metadata.Clone(),
-		Data:     t.Data.Clone(),
-	}
 }
 
 // private state fields appended to Router
