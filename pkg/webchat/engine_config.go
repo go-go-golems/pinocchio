@@ -13,6 +13,7 @@ type EngineConfig struct {
 	ProfileSlug  string                 `json:"profile_slug"`
 	SystemPrompt string                 `json:"system_prompt"`
 	Middlewares  []MiddlewareUse        `json:"middlewares"`
+	Tools        []string               `json:"tools"`
 	StepSettings *settings.StepSettings `json:"step_settings"`
 }
 
@@ -20,6 +21,7 @@ type engineConfigSignature struct {
 	ProfileSlug  string          `json:"profile_slug"`
 	SystemPrompt string          `json:"system_prompt"`
 	Middlewares  []MiddlewareUse `json:"middlewares"`
+	Tools        []string        `json:"tools"`
 	// StepMetadata is a sanitized subset of StepSettings that excludes secrets (notably API keys).
 	// It is used only for rebuild decisions and should remain safe to log/debug.
 	StepMetadata map[string]any `json:"step_metadata,omitempty"`
@@ -36,6 +38,7 @@ func (ec EngineConfig) Signature() string {
 		ProfileSlug:  ec.ProfileSlug,
 		SystemPrompt: ec.SystemPrompt,
 		Middlewares:  ec.Middlewares,
+		Tools:        ec.Tools,
 		StepMetadata: meta,
 	}
 	b, err := json.Marshal(sig)

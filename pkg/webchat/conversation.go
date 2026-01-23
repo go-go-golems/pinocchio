@@ -42,6 +42,17 @@ type ConvManager struct {
 	conns map[string]*Conversation
 }
 
+// GetConversation retrieves a conversation by ID (thread-safe).
+func (cm *ConvManager) GetConversation(convID string) (*Conversation, bool) {
+	if cm == nil || convID == "" {
+		return nil, false
+	}
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+	conv, ok := cm.conns[convID]
+	return conv, ok
+}
+
 // topicForConv computes the event topic for a conversation.
 func topicForConv(convID string) string { return "chat:" + convID }
 

@@ -2,6 +2,7 @@ package webchat
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/pkg/errors"
@@ -34,8 +35,13 @@ func (r *Router) BuildConfig(profileSlug string, overrides map[string]any) (Engi
 		return EngineConfig{}, errors.Errorf("profile not found: %s", profileSlug)
 	}
 
+	if err := validateOverrides(p, overrides); err != nil {
+		return EngineConfig{}, err
+	}
+
 	sysPrompt := p.DefaultPrompt
 	mws := append([]MiddlewareUse{}, p.DefaultMws...)
+	tools := append([]string{}, p.DefaultTools...)
 
 	if overrides != nil {
 		if v, ok := overrides["system_prompt"].(string); ok && v != "" {
@@ -48,6 +54,13 @@ func (r *Router) BuildConfig(profileSlug string, overrides map[string]any) (Engi
 			}
 			mws = parsed
 		}
+		if arr, ok := overrides["tools"].([]any); ok {
+			parsed, err := parseToolOverrides(arr)
+			if err != nil {
+				return EngineConfig{}, err
+			}
+			tools = parsed
+		}
 	}
 
 	stepSettings, err := settings.NewStepSettingsFromParsedLayers(r.parsed)
@@ -59,6 +72,7 @@ func (r *Router) BuildConfig(profileSlug string, overrides map[string]any) (Engi
 		ProfileSlug:  profileSlug,
 		SystemPrompt: sysPrompt,
 		Middlewares:  mws,
+		Tools:        tools,
 		StepSettings: stepSettings,
 	}, nil
 }
@@ -96,4 +110,57 @@ func parseMiddlewareOverrides(arr []any) ([]MiddlewareUse, error) {
 		mws = append(mws, MiddlewareUse{Name: name, Config: m["config"]})
 	}
 	return mws, nil
+}
+
+func validateOverrides(p *Profile, overrides map[string]any) error {
+	if overrides == nil {
+		return nil
+	}
+
+	hasEngineOverride := false
+	if _, ok := overrides["system_prompt"]; ok {
+		hasEngineOverride = true
+	}
+	if _, ok := overrides["middlewares"]; ok {
+		hasEngineOverride = true
+	}
+	if _, ok := overrides["tools"]; ok {
+		hasEngineOverride = true
+	}
+	if hasEngineOverride && p != nil && !p.AllowOverrides {
+		return errors.Errorf("profile %q does not allow overrides", strings.TrimSpace(p.Slug))
+	}
+
+	if v, ok := overrides["system_prompt"]; ok {
+		if _, ok2 := v.(string); !ok2 {
+			return fmt.Errorf("system_prompt override must be a string")
+		}
+	}
+	if v, ok := overrides["middlewares"]; ok {
+		if _, ok2 := v.([]any); !ok2 {
+			return fmt.Errorf("middlewares override must be an array")
+		}
+	}
+	if v, ok := overrides["tools"]; ok {
+		if _, ok2 := v.([]any); !ok2 {
+			return fmt.Errorf("tools override must be an array")
+		}
+	}
+	return nil
+}
+
+func parseToolOverrides(arr []any) ([]string, error) {
+	tools := make([]string, 0, len(arr))
+	for _, raw := range arr {
+		switch v := raw.(type) {
+		case string:
+			if strings.TrimSpace(v) == "" {
+				return nil, fmt.Errorf("tool override contains empty name")
+			}
+			tools = append(tools, v)
+		default:
+			return nil, fmt.Errorf("tool override entries must be strings")
+		}
+	}
+	return tools, nil
 }

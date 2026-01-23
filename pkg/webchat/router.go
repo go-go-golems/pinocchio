@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"embed"
 	"encoding/json"
+	stderrors "errors"
 	"fmt"
 	"io/fs"
 	"net/http"
@@ -14,7 +15,6 @@ import (
 	"time"
 
 	"github.com/ThreeDotsLabs/watermill/message"
-	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
@@ -56,6 +56,7 @@ func NewRouter(ctx context.Context, parsed *layers.ParsedLayers, staticFS embed.
 		cm:            &ConvManager{conns: map[string]*Conversation{}},
 		stepCtrl:      toolloop.NewStepController(),
 	}
+	r.engineFromReqBuilder = NewDefaultEngineFromReqBuilder(r.profiles, r.cm)
 	// set redis flags for ws reader
 	if rs.Enabled {
 		r.usesRedis = true
@@ -294,29 +295,31 @@ func (r *Router) registerHTTPHandlers() {
 			logger.Error().Err(err).Msg("websocket upgrade failed")
 			return
 		}
-		convID := r0.URL.Query().Get("conv_id")
-		profileSlug := r0.URL.Query().Get("profile")
-		if profileSlug == "" {
-			if ck, err := r0.Cookie("chat_profile"); err == nil && ck != nil {
-				profileSlug = ck.Value
-			}
+		b := r.engineFromReqBuilder
+		if b == nil {
+			b = NewDefaultEngineFromReqBuilder(r.profiles, r.cm)
 		}
+		input, _, err := b.BuildEngineFromReq(r0)
+		if err != nil {
+			msg := err.Error()
+			var rbe *RequestBuildError
+			if stderrors.As(err, &rbe) && rbe != nil && strings.TrimSpace(rbe.ClientMsg) != "" {
+				msg = rbe.ClientMsg
+			}
+			wsLog := logger.With().Str("remote", r0.RemoteAddr).Logger()
+			wsLog.Warn().Err(err).Msg("ws request policy failed")
+			_ = conn.WriteMessage(websocket.TextMessage, []byte(`{"error":"`+msg+`"}`))
+			_ = conn.Close()
+			return
+		}
+		convID := input.ConvID
+		profileSlug := input.ProfileSlug
 		wsLog := logger.With().
 			Str("remote", r0.RemoteAddr).
 			Str("conv_id", convID).
 			Str("profile", profileSlug).
 			Logger()
 		wsLog.Info().Msg("ws connect request")
-		if convID == "" {
-			wsLog.Warn().Msg("ws missing conv_id")
-			_ = conn.WriteMessage(websocket.TextMessage, []byte(`{"error":"missing conv_id"}`))
-			_ = conn.Close()
-			return
-		}
-		if profileSlug == "" {
-			profileSlug = "default"
-			wsLog = wsLog.With().Str("profile", profileSlug).Logger()
-		}
 		wsLog.Info().Msg("ws joining conversation")
 		conv, err := r.getOrCreateConv(convID, profileSlug, nil)
 		if err != nil {
@@ -394,45 +397,45 @@ func (r *Router) registerHTTPHandlers() {
 		}()
 	})
 
-	// start run: support both /chat (default/cookie/profile) and /chat/{profile}
-	r.mux.HandleFunc("/chat", func(w http.ResponseWriter, r0 *http.Request) {
+	handleChatRequest := func(w http.ResponseWriter, r0 *http.Request) {
 		if r0.Method != http.MethodPost {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		var body struct {
-			Prompt    string         `json:"prompt"`
-			ConvID    string         `json:"conv_id"`
-			Overrides map[string]any `json:"overrides"`
+
+		b := r.engineFromReqBuilder
+		if b == nil {
+			b = NewDefaultEngineFromReqBuilder(r.profiles, r.cm)
 		}
-		if err := json.NewDecoder(r0.Body).Decode(&body); err != nil {
-			log.Warn().Err(err).Str("component", "webchat").Msg("bad /chat request body")
+		input, body, err := b.BuildEngineFromReq(r0)
+		if err != nil {
+			status := http.StatusInternalServerError
+			msg := "failed to resolve request"
+			var rbe *RequestBuildError
+			if stderrors.As(err, &rbe) && rbe != nil {
+				if rbe.Status > 0 {
+					status = rbe.Status
+				}
+				if strings.TrimSpace(rbe.ClientMsg) != "" {
+					msg = rbe.ClientMsg
+				}
+			}
+			logger.Warn().Err(err).Msg("chat request policy failed")
+			http.Error(w, msg, status)
+			return
+		}
+		if body == nil {
+			logger.Warn().Msg("chat request policy missing parsed body")
 			http.Error(w, "bad request", http.StatusBadRequest)
 			return
 		}
-		convID := body.ConvID
-		if convID == "" {
-			convID = uuid.NewString()
-		}
-		profileSlug := ""
-		if ck, err := r0.Cookie("chat_profile"); err == nil && ck != nil {
-			profileSlug = ck.Value
-		}
-		if profileSlug == "" {
-			profileSlug = "default"
-		}
-		chatReqLog := logger.With().
-			Str("conv_id", convID).
-			Str("profile", profileSlug).
-			Logger()
+
+		convID := input.ConvID
+		profileSlug := input.ProfileSlug
+		chatReqLog := logger.With().Str("conv_id", convID).Str("profile", profileSlug).Logger()
 		chatReqLog.Info().Int("prompt_len", len(body.Prompt)).Msg("/chat received")
-		if _, ok := r.profiles.Get(profileSlug); !ok {
-			chatReqLog.Warn().Msg("unknown profile")
-			http.Error(w, "unknown profile", http.StatusNotFound)
-			return
-		}
 
-		conv, err := r.getOrCreateConv(convID, profileSlug, body.Overrides)
+		conv, err := r.getOrCreateConv(convID, profileSlug, input.Overrides)
 		if err != nil {
 			chatReqLog.Error().Err(err).Msg("failed to create conversation")
 			http.Error(w, "failed to create conversation", http.StatusInternalServerError)
@@ -442,11 +445,8 @@ func (r *Router) registerHTTPHandlers() {
 			http.Error(w, "conversation session not initialized", http.StatusInternalServerError)
 			return
 		}
-		runLog := logger.With().
-			Str("conv_id", conv.ID).
-			Str("run_id", conv.RunID).
-			Str("session_id", conv.RunID).
-			Logger()
+
+		runLog := logger.With().Str("conv_id", conv.ID).Str("run_id", conv.RunID).Str("session_id", conv.RunID).Logger()
 		if conv.Sess.IsRunning() {
 			runLog.Warn().Msg("run in progress")
 			w.WriteHeader(http.StatusConflict)
@@ -458,10 +458,35 @@ func (r *Router) registerHTTPHandlers() {
 			})
 			return
 		}
+
+		cfg, err := r.BuildConfig(profileSlug, input.Overrides)
+		if err != nil {
+			runLog.Error().Err(err).Msg("build config failed")
+			http.Error(w, "build config failed", http.StatusInternalServerError)
+			return
+		}
+
+		tmpReg := geptools.NewInMemoryToolRegistry()
+		for _, tf := range r.toolFactories {
+			_ = tf(tmpReg)
+		}
 		registry := geptools.NewInMemoryToolRegistry()
-		for name, tf := range r.toolFactories {
-			_ = tf(registry)
-			_ = name
+		if len(cfg.Tools) == 0 {
+			for _, td := range tmpReg.ListTools() {
+				_ = registry.RegisterTool(td.Name, td)
+			}
+		} else {
+			allowed := map[string]struct{}{}
+			for _, n := range cfg.Tools {
+				if s := strings.TrimSpace(n); s != "" {
+					allowed[s] = struct{}{}
+				}
+			}
+			for _, td := range tmpReg.ListTools() {
+				if _, ok := allowed[td.Name]; ok {
+					_ = registry.RegisterTool(td.Name, td)
+				}
+			}
 		}
 
 		// Ensure router is running before we start inference (best-effort).
@@ -532,153 +557,10 @@ func (r *Router) registerHTTPHandlers() {
 			}
 		}
 		_ = json.NewEncoder(w).Encode(resp)
-	})
+	}
 
-	// start run: /chat/{profile}
-	r.mux.HandleFunc("/chat/", func(w http.ResponseWriter, r0 *http.Request) {
-		if r0.Method != http.MethodPost {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		// extract profile from path: /chat/{profile}[/...]
-		path := r0.URL.Path
-		var profileSlug string
-		if strings.HasPrefix(path, "/chat/") {
-			rest := path[len("/chat/"):]
-			if i := strings.Index(rest, "/"); i >= 0 {
-				profileSlug = rest[:i]
-			} else {
-				profileSlug = rest
-			}
-		}
-		if profileSlug == "" {
-			profileSlug = "default"
-		}
-		var body struct {
-			Prompt    string         `json:"prompt"`
-			ConvID    string         `json:"conv_id"`
-			Overrides map[string]any `json:"overrides"`
-		}
-		if err := json.NewDecoder(r0.Body).Decode(&body); err != nil {
-			http.Error(w, "bad request", http.StatusBadRequest)
-			return
-		}
-		convID := body.ConvID
-		if convID == "" {
-			convID = uuid.NewString()
-		}
-		chatReqLog := logger.With().
-			Str("conv_id", convID).
-			Str("profile", profileSlug).
-			Logger()
-		if _, ok := r.profiles.Get(profileSlug); !ok {
-			http.Error(w, "unknown profile", http.StatusNotFound)
-			return
-		}
-
-		// Build or reuse conversation with correct engine (consider overrides)
-		conv, err := r.getOrCreateConv(convID, profileSlug, body.Overrides)
-		if err != nil {
-			chatReqLog.Error().Err(err).Msg("failed to create conversation")
-			http.Error(w, "failed to create conversation", http.StatusInternalServerError)
-			return
-		}
-		if conv.Sess == nil {
-			http.Error(w, "conversation session not initialized", http.StatusInternalServerError)
-			return
-		}
-		runLog := logger.With().
-			Str("conv_id", conv.ID).
-			Str("run_id", conv.RunID).
-			Str("session_id", conv.RunID).
-			Logger()
-		if conv.Sess.IsRunning() {
-			runLog.Warn().Msg("run in progress")
-			w.WriteHeader(http.StatusConflict)
-			_ = json.NewEncoder(w).Encode(map[string]any{
-				"error":      "run in progress",
-				"conv_id":    conv.ID,
-				"run_id":     conv.RunID, // legacy
-				"session_id": conv.RunID,
-			})
-			return
-		}
-		// Build registry for this run from default tools (and optional overrides later)
-		registry := geptools.NewInMemoryToolRegistry()
-		for name, tf := range r.toolFactories {
-			_ = tf(registry)
-			_ = name
-		}
-
-		// Ensure router is running before we start inference (best-effort).
-		select {
-		case <-r.router.Running():
-		case <-time.After(2 * time.Second):
-		}
-
-		hook := snapshotHookForConv(conv, os.Getenv("PINOCCHIO_WEBCHAT_TURN_SNAPSHOTS_DIR"))
-		runLog.Info().Msg("starting run loop")
-
-		seed, err := conv.Sess.AppendNewTurnFromUserPrompt(body.Prompt)
-		if err != nil {
-			runLog.Error().Err(err).Msg("append prompt turn failed")
-			http.Error(w, "append prompt turn failed", http.StatusInternalServerError)
-			return
-		}
-
-		if stepModeFromOverrides(body.Overrides) && r.stepCtrl != nil {
-			r.stepCtrl.Enable(toolloop.StepScope{SessionID: conv.RunID, ConversationID: conv.ID})
-		}
-
-		loopCfg := toolloop.NewLoopConfig().WithMaxIterations(5)
-		toolCfg := geptools.DefaultToolConfig().WithExecutionTimeout(60 * time.Second)
-		conv.Sess.Builder = &enginebuilder.Builder{
-			Base:             conv.Eng,
-			Registry:         registry,
-			LoopConfig:       &loopCfg,
-			ToolConfig:       &toolCfg,
-			EventSinks:       []events.EventSink{conv.Sink},
-			SnapshotHook:     hook,
-			StepController:   r.stepCtrl,
-			StepPauseTimeout: 30 * time.Second,
-		}
-
-		handle, err := conv.Sess.StartInference(r.baseCtx)
-		if err != nil {
-			runLog.Error().Err(err).Msg("start inference failed")
-		} else {
-			go func() {
-				_, waitErr := handle.Wait()
-				if waitErr != nil {
-					runLog.Error().
-						Err(waitErr).
-						Str("inference_id", handle.InferenceID).
-						Msg("run loop error")
-				}
-				runLog.Info().
-					Str("inference_id", handle.InferenceID).
-					Msg("run loop finished")
-			}()
-		}
-
-		resp := map[string]string{
-			"conv_id":    conv.ID,
-			"run_id":     conv.RunID, // legacy
-			"session_id": conv.RunID,
-		}
-		if seed != nil && seed.ID != "" {
-			resp["turn_id"] = seed.ID
-		}
-		if handle != nil {
-			if handle.InferenceID != "" {
-				resp["inference_id"] = handle.InferenceID
-			}
-			if handle.Input != nil && handle.Input.ID != "" {
-				resp["turn_id"] = handle.Input.ID
-			}
-		}
-		_ = json.NewEncoder(w).Encode(resp)
-	})
+	r.mux.HandleFunc("/chat", func(w http.ResponseWriter, r0 *http.Request) { handleChatRequest(w, r0) })
+	r.mux.HandleFunc("/chat/", func(w http.ResponseWriter, r0 *http.Request) { handleChatRequest(w, r0) })
 }
 
 // helpers

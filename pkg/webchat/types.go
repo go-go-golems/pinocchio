@@ -100,4 +100,7 @@ type Router struct {
 
 	// step mode control (shared; not conversation-owned)
 	stepCtrl *toolloop.StepController
+
+	// request policy
+	engineFromReqBuilder EngineFromReqBuilder
 }

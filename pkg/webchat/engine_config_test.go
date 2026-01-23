@@ -39,6 +39,7 @@ func TestEngineConfigSignature_IsDeterministicAndSensitiveToRelevantChanges(t *t
 		ProfileSlug:  "default",
 		SystemPrompt: "hi",
 		Middlewares:  []MiddlewareUse{{Name: "mw1"}},
+		Tools:        []string{"tool1"},
 		StepSettings: ss,
 	}
 
@@ -52,5 +53,12 @@ func TestEngineConfigSignature_IsDeterministicAndSensitiveToRelevantChanges(t *t
 	s3 := ec.Signature()
 	if s3 == s1 {
 		t.Fatalf("signature did not change when SystemPrompt changed")
+	}
+
+	ec.SystemPrompt = "hi"
+	ec.Tools = []string{"tool2"}
+	s4 := ec.Signature()
+	if s4 == s1 {
+		t.Fatalf("signature did not change when Tools changed")
 	}
 }
