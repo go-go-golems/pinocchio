@@ -13,7 +13,7 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/go-go-golems/geppetto/pkg/events"
-	"github.com/go-go-golems/geppetto/pkg/inference/toolcontext"
+	"github.com/go-go-golems/geppetto/pkg/inference/tools"
 	"github.com/go-go-golems/geppetto/pkg/turns"
 )
 
@@ -175,9 +175,9 @@ func (s *SQLiteStore) SaveTurnSnapshot(ctx context.Context, t *turns.Turn, phase
 	}
 	// Persist tool registry definitions as JSON, if present.
 	//
-	// NOTE: The runtime registry is carried via context (toolcontext.WithRegistry),
+	// NOTE: The runtime registry is carried via context (tools.WithRegistry),
 	// not via Turn.Data.
-	if reg, ok := toolcontext.RegistryFrom(ctx); ok && reg != nil {
+	if reg, ok := tools.RegistryFrom(ctx); ok && reg != nil {
 		defs := reg.ListTools()
 		if b, err := json.Marshal(defs); err == nil {
 			_, _ = s.db.ExecContext(ctx, "INSERT OR REPLACE INTO turn_kv(turn_id, section, key, type, value_text, value_json) VALUES(?,?,?,?,?,?)", t.ID, "data", "tool_registry", "object", "", string(b))
