@@ -14,6 +14,7 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/inference/middleware"
 	"github.com/go-go-golems/geppetto/pkg/inference/session"
 	"github.com/go-go-golems/geppetto/pkg/inference/toolloop"
+	"github.com/go-go-golems/geppetto/pkg/inference/toolloop/enginebuilder"
 	"github.com/go-go-golems/geppetto/pkg/inference/tools"
 	"github.com/go-go-golems/geppetto/pkg/turns"
 	"github.com/pkg/errors"
@@ -32,13 +33,13 @@ type ToolLoopBackend struct {
 func NewToolLoopBackend(eng engine.Engine, mws []middleware.Middleware, reg *tools.InMemoryToolRegistry, sink events.EventSink, hook toolloop.SnapshotHook) *ToolLoopBackend {
 	cfg := toolloop.NewToolConfig().WithMaxIterations(5).WithTimeout(60 * time.Second)
 	sess := session.NewSession()
-	sess.Builder = toolloop.NewEngineBuilder(
-		toolloop.WithBase(eng),
-		toolloop.WithMiddlewares(mws...),
-		toolloop.WithToolRegistry(reg),
-		toolloop.WithToolConfig(cfg),
-		toolloop.WithEventSinks(sink),
-		toolloop.WithEngineBuilderSnapshotHook(hook),
+	sess.Builder = enginebuilder.New(
+		enginebuilder.WithBase(eng),
+		enginebuilder.WithMiddlewares(mws...),
+		enginebuilder.WithToolRegistry(reg),
+		enginebuilder.WithToolConfig(cfg),
+		enginebuilder.WithEventSinks(sink),
+		enginebuilder.WithSnapshotHook(hook),
 	)
 	return &ToolLoopBackend{reg: reg, sink: sink, hook: hook, sess: sess}
 }

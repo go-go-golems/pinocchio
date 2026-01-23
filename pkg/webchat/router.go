@@ -21,6 +21,7 @@ import (
 
 	"github.com/go-go-golems/geppetto/pkg/events"
 	"github.com/go-go-golems/geppetto/pkg/inference/toolloop"
+	"github.com/go-go-golems/geppetto/pkg/inference/toolloop/enginebuilder"
 	geptools "github.com/go-go-golems/geppetto/pkg/inference/tools"
 	"github.com/go-go-golems/geppetto/pkg/turns"
 	"github.com/go-go-golems/geppetto/pkg/turns/serde"
@@ -484,7 +485,7 @@ func (r *Router) registerHTTPHandlers() {
 		}
 
 		cfg := toolloop.NewToolConfig().WithMaxIterations(5).WithTimeout(60 * time.Second)
-		conv.Sess.Builder = &toolloop.EngineBuilder{
+		conv.Sess.Builder = &enginebuilder.Builder{
 			Base:             conv.Eng,
 			Registry:         registry,
 			ToolConfig:       &cfg,
@@ -628,7 +629,7 @@ func (r *Router) registerHTTPHandlers() {
 		}
 
 		cfg := toolloop.NewToolConfig().WithMaxIterations(5).WithTimeout(60 * time.Second)
-		conv.Sess.Builder = &toolloop.EngineBuilder{
+		conv.Sess.Builder = &enginebuilder.Builder{
 			Base:             conv.Eng,
 			Registry:         registry,
 			ToolConfig:       &cfg,

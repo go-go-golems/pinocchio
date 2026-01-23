@@ -8,7 +8,7 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/inference/engine"
 	"github.com/go-go-golems/geppetto/pkg/inference/engine/factory"
 	"github.com/go-go-golems/geppetto/pkg/inference/middleware"
-	"github.com/go-go-golems/geppetto/pkg/inference/toolloop"
+	"github.com/go-go-golems/geppetto/pkg/inference/toolloop/enginebuilder"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 )
 
@@ -38,7 +38,7 @@ func composeEngineFromSettings(stepSettings *settings.StepSettings, sysPrompt st
 		mws = append(mws, middleware.NewSystemPromptMiddleware(sysPrompt))
 	}
 
-	builder := &toolloop.EngineBuilder{Base: eng, Middlewares: mws}
+	builder := &enginebuilder.Builder{Base: eng, Middlewares: mws}
 	runner, err := builder.Build(context.Background(), "")
 	if err != nil {
 		return nil, err

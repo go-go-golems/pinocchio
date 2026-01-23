@@ -10,7 +10,7 @@ import (
 
 	"github.com/go-go-golems/geppetto/pkg/inference/engine/factory"
 	"github.com/go-go-golems/geppetto/pkg/inference/middleware"
-	"github.com/go-go-golems/geppetto/pkg/inference/toolloop"
+	"github.com/go-go-golems/geppetto/pkg/inference/toolloop/enginebuilder"
 	"github.com/go-go-golems/glazed/pkg/helpers/templating"
 
 	"github.com/go-go-golems/geppetto/pkg/events"
@@ -385,7 +385,7 @@ func (g *PinocchioCommand) runEngineAndCollectMessages(ctx context.Context, rc *
 		return fmt.Errorf("failed to render templates: %w", err)
 	}
 
-	runner, err := (&toolloop.EngineBuilder{
+	runner, err := (&enginebuilder.Builder{
 		Base:       engine,
 		EventSinks: sinks,
 	}).Build(ctx, func() string {
