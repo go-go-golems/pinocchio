@@ -40,6 +40,8 @@ type Conversation struct {
 	runningKey string
 	queue      []queuedChat
 	requests   map[string]*chatRequestRecord
+
+	semBuf *semFrameBuffer
 }
 
 // ConvManager stores all live conversations.
@@ -79,6 +81,9 @@ func (r *Router) getOrCreateConv(convID, profileSlug string, overrides map[strin
 	if c, ok := r.cm.conns[convID]; ok {
 		c.mu.Lock()
 		c.ensureQueueInitLocked()
+		if c.semBuf == nil {
+			c.semBuf = newSemFrameBuffer(1000)
+		}
 		c.mu.Unlock()
 		if c.ProfileSlug != profileSlug || c.EngConfigSig != newSig {
 			log.Info().
@@ -125,6 +130,9 @@ func (r *Router) getOrCreateConv(convID, profileSlug string, overrides map[strin
 					if c.pool != nil {
 						c.pool.Broadcast(frame)
 					}
+					if c.semBuf != nil {
+						c.semBuf.Add(frame)
+					}
 				},
 			)
 
@@ -148,6 +156,7 @@ func (r *Router) getOrCreateConv(convID, profileSlug string, overrides map[strin
 		ProfileSlug:  profileSlug,
 		EngConfigSig: newSig,
 		requests:     map[string]*chatRequestRecord{},
+		semBuf:       newSemFrameBuffer(1000),
 	}
 	eng, sink, err := r.BuildFromConfig(convID, cfg)
 	if err != nil {
@@ -181,6 +190,9 @@ func (r *Router) getOrCreateConv(convID, profileSlug string, overrides map[strin
 			}
 			if conv.pool != nil {
 				conv.pool.Broadcast(frame)
+			}
+			if conv.semBuf != nil {
+				conv.semBuf.Add(frame)
 			}
 		},
 	)

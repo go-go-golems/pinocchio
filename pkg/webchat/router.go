@@ -398,6 +398,126 @@ func (r *Router) registerHTTPHandlers() {
 		}()
 	})
 
+	// Hydration endpoint: returns recent SEM frames buffered for a conversation.
+	// Intended for "hydrate then apply WS deltas" gating in the frontend.
+	hydrateHandler := func(w http.ResponseWriter, r0 *http.Request) {
+		if r0.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		b := r.engineFromReqBuilder
+		if b == nil {
+			b = NewDefaultEngineFromReqBuilder(r.profiles, r.cm)
+		}
+		input, _, err := b.BuildEngineFromReq(r0)
+		if err != nil {
+			status := http.StatusInternalServerError
+			msg := "failed to resolve request"
+			var rbe *RequestBuildError
+			if stderrors.As(err, &rbe) && rbe != nil {
+				if rbe.Status > 0 {
+					status = rbe.Status
+				}
+				if strings.TrimSpace(rbe.ClientMsg) != "" {
+					msg = rbe.ClientMsg
+				}
+			}
+			http.Error(w, msg, status)
+			return
+		}
+
+		conv, err := r.getOrCreateConv(input.ConvID, input.ProfileSlug, nil)
+		if err != nil || conv == nil {
+			http.Error(w, "failed to load conversation", http.StatusInternalServerError)
+			return
+		}
+
+		var sinceSeq uint64
+		if s := strings.TrimSpace(r0.URL.Query().Get("since_seq")); s != "" {
+			// best-effort parse (invalid values treated as 0)
+			var v uint64
+			_, _ = fmt.Sscanf(s, "%d", &v)
+			sinceSeq = v
+		}
+
+		limit := 0
+		if s := strings.TrimSpace(r0.URL.Query().Get("limit")); s != "" {
+			var v int
+			_, _ = fmt.Sscanf(s, "%d", &v)
+			if v > 0 {
+				limit = v
+			}
+		}
+
+		conv.mu.Lock()
+		buf := conv.semBuf
+		runningKey := conv.runningKey
+		queueDepth := len(conv.queue)
+		conv.mu.Unlock()
+
+		rawFrames := [][]byte(nil)
+		if buf != nil {
+			rawFrames = buf.Snapshot()
+		}
+
+		type envProbe struct {
+			Sem   bool `json:"sem"`
+			Event struct {
+				Seq      uint64 `json:"seq,omitempty"`
+				StreamID string `json:"stream_id,omitempty"`
+			} `json:"event"`
+		}
+
+		filtered := make([]json.RawMessage, 0, len(rawFrames))
+		var lastSeq uint64
+		var lastStreamID string
+		for _, fr := range rawFrames {
+			if len(fr) == 0 {
+				continue
+			}
+			var probe envProbe
+			if err := json.Unmarshal(fr, &probe); err != nil {
+				continue
+			}
+			if !probe.Sem {
+				continue
+			}
+			if probe.Event.Seq > lastSeq {
+				lastSeq = probe.Event.Seq
+			}
+			if probe.Event.StreamID != "" {
+				lastStreamID = probe.Event.StreamID
+			}
+			if sinceSeq > 0 && probe.Event.Seq > 0 && probe.Event.Seq <= sinceSeq {
+				continue
+			}
+			filtered = append(filtered, json.RawMessage(fr))
+		}
+
+		if limit > 0 && len(filtered) > limit {
+			filtered = filtered[len(filtered)-limit:]
+		}
+
+		resp := map[string]any{
+			"conv_id":               conv.ID,
+			"run_id":                conv.RunID, // legacy
+			"session_id":            conv.RunID,
+			"server_time":           time.Now().UnixMilli(),
+			"frames":                filtered,
+			"frame_count":           len(filtered),
+			"last_seq":              lastSeq,
+			"last_stream_id":        lastStreamID,
+			"queue_depth":           queueDepth,
+			"running_idempotency":   runningKey,
+			"requested_since_seq":   sinceSeq,
+			"requested_frame_limit": limit,
+		}
+		_ = json.NewEncoder(w).Encode(resp)
+	}
+	r.mux.HandleFunc("/hydrate", hydrateHandler)
+	r.mux.HandleFunc("/hydrate/", hydrateHandler)
+
 	handleChatRequest := func(w http.ResponseWriter, r0 *http.Request) {
 		if r0.Method != http.MethodPost {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -622,6 +742,18 @@ func (r *Router) startRunForPrompt(conv *Conversation, profileSlug string, overr
 	}
 
 	runLog := log.With().Str("component", "webchat").Str("conv_id", conv.ID).Str("run_id", conv.RunID).Str("session_id", conv.RunID).Logger()
+
+	// Ensure the conversation stream is running so SEM frames are produced even without an attached WS client.
+	conv.mu.Lock()
+	stream := conv.stream
+	baseCtx := conv.baseCtx
+	conv.mu.Unlock()
+	if stream != nil && !stream.IsRunning() {
+		if baseCtx == nil {
+			baseCtx = context.Background()
+		}
+		_ = stream.Start(baseCtx)
+	}
 
 	cfg, err := r.BuildConfig(profileSlug, overrides)
 	if err != nil {
