@@ -1,0 +1,50 @@
+import { createSlice, PayloadAction } from '@reduxjs/toolkit';
+import type { RootState } from './store';
+
+export type TimelineEntity = {
+  id: string;
+  kind: string;
+  createdAt: number;
+  updatedAt?: number;
+  props: any;
+};
+
+type TimelineState = {
+  byId: Record<string, TimelineEntity>;
+  order: string[];
+};
+
+export const timelineSlice = createSlice({
+  name: 'timeline',
+  initialState: { byId: {}, order: [] } as TimelineState,
+  reducers: {
+    addEntity(state, action: PayloadAction<TimelineEntity>) {
+      const e = action.payload;
+      if (state.byId[e.id]) return;
+      state.byId[e.id] = e;
+      state.order.push(e.id);
+    },
+    upsertEntity(state, action: PayloadAction<TimelineEntity>) {
+      const e = action.payload;
+      if (!state.byId[e.id]) {
+        state.byId[e.id] = e;
+        state.order.push(e.id);
+        return;
+      }
+      const existing = state.byId[e.id];
+      state.byId[e.id] = {
+        ...existing,
+        ...e,
+        createdAt: existing.createdAt,
+        kind: e.kind || existing.kind,
+        props: { ...(existing.props ?? {}), ...(e.props ?? {}) },
+      };
+    },
+    clear(state) {
+      state.byId = {};
+      state.order = [];
+    },
+  },
+});
+
+export const selectTimelineEntities = (s: RootState) => s.timeline.order.map((id) => s.timeline.byId[id]);
