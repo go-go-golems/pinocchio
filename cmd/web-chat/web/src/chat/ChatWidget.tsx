@@ -44,21 +44,29 @@ export function ChatWidget() {
     setText('');
 
     dispatch(appSlice.actions.setStatus('sending...'));
+    const idempotencyKey = (globalThis.crypto && 'randomUUID' in globalThis.crypto && typeof globalThis.crypto.randomUUID === 'function')
+      ? globalThis.crypto.randomUUID()
+      : `idem-${Date.now()}-${Math.random().toString(16).slice(2)}`;
     const body = app.convId ? { prompt, conv_id: app.convId } : { prompt };
     const res = await fetch(`${basePrefix}/chat`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Idempotency-Key': idempotencyKey },
       body: JSON.stringify(body),
     });
-    const j = await res.json();
+    const j = await res.json().catch(() => null);
+    if (!res.ok) {
+      dispatch(appSlice.actions.setStatus(`error (${res.status})`));
+      return;
+    }
 
     const convId = (j && j.conv_id) || app.convId || '';
     const runId = (j && (j.session_id || j.run_id)) || app.runId || '';
     dispatch(appSlice.actions.setConvId(convId));
     dispatch(appSlice.actions.setRunId(runId));
 
-    const st = (j && j.status) || 'sent';
-    dispatch(appSlice.actions.setStatus(`${st}`));
+    const st = (j && j.status) || (res.status === 202 ? 'queued' : 'sent');
+    const qp = j && typeof j.queue_position === 'number' ? ` (pos ${j.queue_position})` : '';
+    dispatch(appSlice.actions.setStatus(`${st}${qp}`));
   }, [app.convId, app.runId, basePrefix, dispatch, text]);
 
   const onKeyDown = useCallback(
@@ -176,4 +184,3 @@ export function ChatWidget() {
     </div>
   );
 }
-

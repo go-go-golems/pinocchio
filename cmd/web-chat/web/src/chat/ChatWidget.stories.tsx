@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import React, { useEffect } from 'react';
 import { ChatWidget } from './ChatWidget';
-import { handleSem } from '../sem/registry';
+import { handleSem, registerDefaultSemHandlers } from '../sem/registry';
 import { useAppDispatch } from '../store/hooks';
 import { timelineSlice } from '../store/timelineSlice';
 
@@ -15,26 +15,128 @@ type Story = StoryObj<typeof ChatWidget>;
 
 export const Default: Story = {};
 
-function ScenarioRunner() {
+type ScenarioRunnerProps = {
+  frames: any[];
+  delayMs?: number;
+};
+
+function ScenarioRunner({ frames, delayMs }: ScenarioRunnerProps) {
   const dispatch = useAppDispatch();
   useEffect(() => {
+    registerDefaultSemHandlers();
     dispatch(timelineSlice.actions.clear());
-    const frames = [
-      { sem: true, event: { type: 'log', id: 'log-1', data: { level: 'info', message: 'hydrated: scenario start' } } },
-      { sem: true, event: { type: 'llm.start', id: 'm1', data: { role: 'assistant' } } },
-      { sem: true, event: { type: 'llm.delta', id: 'm1', data: { delta: 'Hello', cumulative: 'Hello' } } },
-      { sem: true, event: { type: 'llm.delta', id: 'm1', data: { delta: ', world', cumulative: 'Hello, world' } } },
-      { sem: true, event: { type: 'tool.start', id: 't1', data: { name: 'calc', input: { expression: '1+1' } } } },
-      { sem: true, event: { type: 'tool.result', id: 't1', data: { result: '2', customKind: 'calc_result' } } },
-      { sem: true, event: { type: 'llm.final', id: 'm1', data: { text: 'Hello, world.' } } },
-    ];
-    for (const fr of frames) {
-      handleSem(fr, dispatch);
+    if (!delayMs) {
+      for (const fr of frames) handleSem(fr, dispatch);
+      return;
     }
-  }, [dispatch]);
+
+    let cancelled = false;
+    let idx = 0;
+    const tick = () => {
+      if (cancelled) return;
+      if (idx >= frames.length) return;
+      handleSem(frames[idx], dispatch);
+      idx++;
+      setTimeout(tick, delayMs);
+    };
+    tick();
+    return () => {
+      cancelled = true;
+    };
+  }, [delayMs, dispatch, frames]);
   return <ChatWidget />;
 }
 
 export const ScenarioBasic: Story = {
-  render: () => <ScenarioRunner />,
+  render: () => (
+    <ScenarioRunner
+      frames={[
+        { sem: true, event: { type: 'log', id: 'log-1', seq: 1, data: { id: 'log-1', level: 'info', message: 'hydrated: scenario start', fields: {} } } },
+        { sem: true, event: { type: 'llm.start', id: 'm1', seq: 2, data: { id: 'm1', role: 'assistant' } } },
+        { sem: true, event: { type: 'llm.delta', id: 'm1', seq: 3, data: { id: 'm1', delta: 'Hello', cumulative: 'Hello' } } },
+        { sem: true, event: { type: 'llm.delta', id: 'm1', seq: 4, data: { id: 'm1', delta: ', world', cumulative: 'Hello, world' } } },
+        { sem: true, event: { type: 'tool.start', id: 't1', seq: 5, data: { id: 't1', name: 'calc', input: { expression: '1+1' } } } },
+        { sem: true, event: { type: 'tool.result', id: 't1', seq: 6, data: { id: 't1', result: '2', customKind: 'calc_result' } } },
+        { sem: true, event: { type: 'tool.done', id: 't1', seq: 7, data: { id: 't1' } } },
+        { sem: true, event: { type: 'llm.final', id: 'm1', seq: 8, data: { id: 'm1', text: 'Hello, world.' } } },
+      ]}
+    />
+  ),
+};
+
+export const ScenarioStreamingAndTools: Story = {
+  render: () => (
+    <ScenarioRunner
+      delayMs={250}
+      frames={[
+        { sem: true, event: { type: 'llm.start', id: 'm2', seq: 1, data: { id: 'm2', role: 'assistant' } } },
+        { sem: true, event: { type: 'llm.delta', id: 'm2', seq: 2, data: { id: 'm2', delta: 'Let', cumulative: 'Let' } } },
+        { sem: true, event: { type: 'llm.delta', id: 'm2', seq: 3, data: { id: 'm2', delta: "'s ", cumulative: "Let's " } } },
+        { sem: true, event: { type: 'llm.delta', id: 'm2', seq: 4, data: { id: 'm2', delta: 'compute: ', cumulative: "Let's compute: " } } },
+        { sem: true, event: { type: 'tool.start', id: 't2', seq: 5, data: { id: 't2', name: 'calc', input: { expression: '40+2' } } } },
+        { sem: true, event: { type: 'tool.result', id: 't2', seq: 6, data: { id: 't2', result: '42', customKind: 'calc_result' } } },
+        { sem: true, event: { type: 'tool.done', id: 't2', seq: 7, data: { id: 't2' } } },
+        { sem: true, event: { type: 'llm.final', id: 'm2', seq: 8, data: { id: 'm2', text: "Let's compute: 42" } } },
+      ]}
+    />
+  ),
+};
+
+export const ScenarioReconnectIdempotentReplay: Story = {
+  render: () => (
+    <ScenarioRunner
+      frames={[
+        { sem: true, event: { type: 'log', id: 'log-r1', seq: 1, data: { id: 'log-r1', level: 'info', message: 'first run', fields: {} } } },
+        { sem: true, event: { type: 'llm.start', id: 'm3', seq: 2, data: { id: 'm3', role: 'assistant' } } },
+        { sem: true, event: { type: 'llm.delta', id: 'm3', seq: 3, data: { id: 'm3', delta: 'A', cumulative: 'A' } } },
+        { sem: true, event: { type: 'llm.final', id: 'm3', seq: 4, data: { id: 'm3', text: 'A.' } } },
+        // Simulate hydration replay on reconnect (same IDs, different seq ordering shouldn't create duplicates).
+        { sem: true, event: { type: 'log', id: 'log-r1', seq: 5, data: { id: 'log-r1', level: 'info', message: 'first run', fields: {} } } },
+        { sem: true, event: { type: 'llm.final', id: 'm3', seq: 6, data: { id: 'm3', text: 'A.' } } },
+        { sem: true, event: { type: 'llm.delta', id: 'm3', seq: 7, data: { id: 'm3', delta: 'A', cumulative: 'A' } } },
+        { sem: true, event: { type: 'llm.start', id: 'm3', seq: 8, data: { id: 'm3', role: 'assistant' } } },
+        // Then a new message after reconnect.
+        { sem: true, event: { type: 'llm.start', id: 'm4', seq: 9, data: { id: 'm4', role: 'assistant' } } },
+        { sem: true, event: { type: 'llm.final', id: 'm4', seq: 10, data: { id: 'm4', text: 'B.' } } },
+      ]}
+    />
+  ),
+};
+
+export const WidgetOnlyDebuggerPause: Story = {
+  render: () => (
+    <ScenarioRunner
+      frames={[
+        {
+          sem: true,
+          event: {
+            type: 'debugger.pause',
+            id: 'pause-1',
+            seq: 1,
+            data: {
+              id: 'pause-1',
+              pauseId: 'pause-1',
+              phase: 'toolloop',
+              summary: 'paused for approval',
+              deadlineMs: '1737760000000',
+              extra: { owner: 'storybook' },
+            },
+          },
+        },
+      ]}
+    />
+  ),
+};
+
+export const WidgetOnlyAgentMode: Story = {
+  render: () => (
+    <ScenarioRunner
+      frames={[
+        {
+          sem: true,
+          event: { type: 'agent.mode', id: 'agent-1', seq: 1, data: { id: 'agent-1', title: 'Research mode', data: { depth: 'high' } } },
+        },
+      ]}
+    />
+  ),
 };

@@ -6,6 +6,12 @@ plugins:
       - target=ts
       - import_extension=none
 
+  - plugin: buf.build/bufbuild/es
+    out: cmd/web-chat/web/src/sem/pb
+    opt:
+      - target=ts
+      - import_extension=none
+
   - plugin: buf.build/protocolbuffers/go
     out: pkg/sem/pb
     opt:
