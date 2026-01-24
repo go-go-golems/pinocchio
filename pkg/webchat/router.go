@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/ThreeDotsLabs/watermill/message"
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
@@ -447,114 +448,85 @@ func (r *Router) registerHTTPHandlers() {
 		}
 
 		runLog := logger.With().Str("conv_id", conv.ID).Str("run_id", conv.RunID).Str("session_id", conv.RunID).Logger()
-		if conv.Sess.IsRunning() {
-			runLog.Warn().Msg("run in progress")
-			w.WriteHeader(http.StatusConflict)
-			_ = json.NewEncoder(w).Encode(map[string]any{
-				"error":      "run in progress",
-				"conv_id":    conv.ID,
-				"run_id":     conv.RunID, // legacy
-				"session_id": conv.RunID,
+		idempotencyKey := idempotencyKeyFromRequest(r0, body)
+
+		// Fast idempotency path (returns the previously computed response).
+		conv.mu.Lock()
+		conv.ensureQueueInitLocked()
+		if rec, ok := conv.getRecordLocked(idempotencyKey); ok && rec != nil && rec.Response != nil {
+			status := strings.ToLower(strings.TrimSpace(rec.Status))
+			resp := make(map[string]any, len(rec.Response))
+			for k, v := range rec.Response {
+				resp[k] = v
+			}
+			conv.mu.Unlock()
+			switch status {
+			case "queued":
+				w.WriteHeader(http.StatusAccepted)
+			default:
+				w.WriteHeader(http.StatusOK)
+			}
+			_ = json.NewEncoder(w).Encode(resp)
+			return
+		}
+
+		// Busy -> enqueue and return 202 Accepted.
+		if conv.isBusyLocked() {
+			pos := conv.enqueueLocked(queuedChat{
+				IdempotencyKey: idempotencyKey,
+				ProfileSlug:    profileSlug,
+				Overrides:      input.Overrides,
+				Prompt:         body.Prompt,
+				EnqueuedAt:     time.Now(),
 			})
+			resp := map[string]any{
+				"status":          "queued",
+				"queue_position":  pos,
+				"queue_depth":     len(conv.queue),
+				"idempotency_key": idempotencyKey,
+				"conv_id":         conv.ID,
+				"run_id":          conv.RunID, // legacy
+				"session_id":      conv.RunID,
+			}
+			conv.upsertRecordLocked(&chatRequestRecord{
+				IdempotencyKey: idempotencyKey,
+				Status:         "queued",
+				EnqueuedAt:     time.Now(),
+				Response:       resp,
+			})
+			conv.mu.Unlock()
+
+			runLog.Info().
+				Str("idempotency_key", idempotencyKey).
+				Int("queue_position", pos).
+				Msg("run in progress; queued prompt")
+
+			w.WriteHeader(http.StatusAccepted)
+			_ = json.NewEncoder(w).Encode(resp)
 			return
 		}
 
-		cfg, err := r.BuildConfig(profileSlug, input.Overrides)
+		// Not busy -> claim running slot before starting inference (prevents concurrent starts).
+		conv.runningKey = idempotencyKey
+		conv.upsertRecordLocked(&chatRequestRecord{
+			IdempotencyKey: idempotencyKey,
+			Status:         "running",
+			StartedAt:      time.Now(),
+			Response: map[string]any{
+				"status":          "running",
+				"idempotency_key": idempotencyKey,
+				"conv_id":         conv.ID,
+				"run_id":          conv.RunID, // legacy
+				"session_id":      conv.RunID,
+			},
+		})
+		conv.mu.Unlock()
+
+		resp, err := r.startRunForPrompt(conv, profileSlug, input.Overrides, body.Prompt, idempotencyKey)
 		if err != nil {
-			runLog.Error().Err(err).Msg("build config failed")
-			http.Error(w, "build config failed", http.StatusInternalServerError)
+			runLog.Error().Err(err).Msg("start run failed")
+			http.Error(w, "start run failed", http.StatusInternalServerError)
 			return
-		}
-
-		tmpReg := geptools.NewInMemoryToolRegistry()
-		for _, tf := range r.toolFactories {
-			_ = tf(tmpReg)
-		}
-		registry := geptools.NewInMemoryToolRegistry()
-		if len(cfg.Tools) == 0 {
-			for _, td := range tmpReg.ListTools() {
-				_ = registry.RegisterTool(td.Name, td)
-			}
-		} else {
-			allowed := map[string]struct{}{}
-			for _, n := range cfg.Tools {
-				if s := strings.TrimSpace(n); s != "" {
-					allowed[s] = struct{}{}
-				}
-			}
-			for _, td := range tmpReg.ListTools() {
-				if _, ok := allowed[td.Name]; ok {
-					_ = registry.RegisterTool(td.Name, td)
-				}
-			}
-		}
-
-		// Ensure router is running before we start inference (best-effort).
-		select {
-		case <-r.router.Running():
-		case <-time.After(2 * time.Second):
-		}
-
-		hook := snapshotHookForConv(conv, os.Getenv("PINOCCHIO_WEBCHAT_TURN_SNAPSHOTS_DIR"))
-		runLog.Info().Msg("starting run loop")
-
-		seed, err := conv.Sess.AppendNewTurnFromUserPrompt(body.Prompt)
-		if err != nil {
-			runLog.Error().Err(err).Msg("append prompt turn failed")
-			http.Error(w, "append prompt turn failed", http.StatusInternalServerError)
-			return
-		}
-
-		if stepModeFromOverrides(body.Overrides) && r.stepCtrl != nil {
-			r.stepCtrl.Enable(toolloop.StepScope{SessionID: conv.RunID, ConversationID: conv.ID})
-		}
-
-		loopCfg := toolloop.NewLoopConfig().WithMaxIterations(5)
-		toolCfg := geptools.DefaultToolConfig().WithExecutionTimeout(60 * time.Second)
-		conv.Sess.Builder = &enginebuilder.Builder{
-			Base:             conv.Eng,
-			Registry:         registry,
-			LoopConfig:       &loopCfg,
-			ToolConfig:       &toolCfg,
-			EventSinks:       []events.EventSink{conv.Sink},
-			SnapshotHook:     hook,
-			StepController:   r.stepCtrl,
-			StepPauseTimeout: 30 * time.Second,
-		}
-
-		handle, err := conv.Sess.StartInference(r.baseCtx)
-		if err != nil {
-			runLog.Error().Err(err).Msg("start inference failed")
-		} else {
-			go func() {
-				_, waitErr := handle.Wait()
-				if waitErr != nil {
-					runLog.Error().
-						Err(waitErr).
-						Str("inference_id", handle.InferenceID).
-						Msg("run loop error")
-				}
-				runLog.Info().
-					Str("inference_id", handle.InferenceID).
-					Msg("run loop finished")
-			}()
-		}
-
-		resp := map[string]string{
-			"conv_id":    conv.ID,
-			"run_id":     conv.RunID, // legacy
-			"session_id": conv.RunID,
-		}
-		if seed != nil && seed.ID != "" {
-			resp["turn_id"] = seed.ID
-		}
-		if handle != nil {
-			if handle.InferenceID != "" {
-				resp["inference_id"] = handle.InferenceID
-			}
-			if handle.Input != nil && handle.Input.ID != "" {
-				resp["turn_id"] = handle.Input.ID
-			}
 		}
 		_ = json.NewEncoder(w).Encode(resp)
 	}
@@ -624,6 +596,213 @@ func snapshotHookForConv(conv *Conversation, dir string) toolloop.SnapshotHook {
 			return
 		}
 		snapLog.Debug().Str("path", path).Str("phase", phase).Msg("webchat snapshot: saved turn")
+	}
+}
+
+func idempotencyKeyFromRequest(r *http.Request, body *ChatRequestBody) string {
+	var key string
+	if r != nil {
+		key = strings.TrimSpace(r.Header.Get("Idempotency-Key"))
+		if key == "" {
+			key = strings.TrimSpace(r.Header.Get("X-Idempotency-Key"))
+		}
+	}
+	if key == "" && body != nil {
+		key = strings.TrimSpace(body.IdempotencyKey)
+	}
+	if key == "" {
+		key = uuid.NewString()
+	}
+	return key
+}
+
+func (r *Router) startRunForPrompt(conv *Conversation, profileSlug string, overrides map[string]any, prompt string, idempotencyKey string) (map[string]any, error) {
+	if r == nil || conv == nil || conv.Sess == nil {
+		return nil, errors.New("invalid conversation")
+	}
+
+	runLog := log.With().Str("component", "webchat").Str("conv_id", conv.ID).Str("run_id", conv.RunID).Str("session_id", conv.RunID).Logger()
+
+	cfg, err := r.BuildConfig(profileSlug, overrides)
+	if err != nil {
+		r.finishRun(conv, idempotencyKey, "", "", err)
+		return nil, err
+	}
+
+	tmpReg := geptools.NewInMemoryToolRegistry()
+	for _, tf := range r.toolFactories {
+		_ = tf(tmpReg)
+	}
+	registry := geptools.NewInMemoryToolRegistry()
+	if len(cfg.Tools) == 0 {
+		for _, td := range tmpReg.ListTools() {
+			_ = registry.RegisterTool(td.Name, td)
+		}
+	} else {
+		allowed := map[string]struct{}{}
+		for _, n := range cfg.Tools {
+			if s := strings.TrimSpace(n); s != "" {
+				allowed[s] = struct{}{}
+			}
+		}
+		for _, td := range tmpReg.ListTools() {
+			if _, ok := allowed[td.Name]; ok {
+				_ = registry.RegisterTool(td.Name, td)
+			}
+		}
+	}
+
+	// Ensure router is running before we start inference (best-effort).
+	select {
+	case <-r.router.Running():
+	case <-time.After(2 * time.Second):
+	}
+
+	hook := snapshotHookForConv(conv, os.Getenv("PINOCCHIO_WEBCHAT_TURN_SNAPSHOTS_DIR"))
+
+	seed, err := conv.Sess.AppendNewTurnFromUserPrompt(prompt)
+	if err != nil {
+		r.finishRun(conv, idempotencyKey, "", "", err)
+		return nil, err
+	}
+
+	if stepModeFromOverrides(overrides) && r.stepCtrl != nil {
+		r.stepCtrl.Enable(toolloop.StepScope{SessionID: conv.RunID, ConversationID: conv.ID})
+	}
+
+	loopCfg := toolloop.NewLoopConfig().WithMaxIterations(5)
+	toolCfg := geptools.DefaultToolConfig().WithExecutionTimeout(60 * time.Second)
+	conv.Sess.Builder = &enginebuilder.Builder{
+		Base:             conv.Eng,
+		Registry:         registry,
+		LoopConfig:       &loopCfg,
+		ToolConfig:       &toolCfg,
+		EventSinks:       []events.EventSink{conv.Sink},
+		SnapshotHook:     hook,
+		StepController:   r.stepCtrl,
+		StepPauseTimeout: 30 * time.Second,
+	}
+
+	runLog.Info().Str("idempotency_key", idempotencyKey).Msg("starting run loop")
+
+	handle, err := conv.Sess.StartInference(r.baseCtx)
+	if err != nil {
+		r.finishRun(conv, idempotencyKey, "", seed.ID, err)
+		return nil, err
+	}
+
+	resp := map[string]any{
+		"status":          "started",
+		"idempotency_key": idempotencyKey,
+		"conv_id":         conv.ID,
+		"run_id":          conv.RunID, // legacy
+		"session_id":      conv.RunID,
+	}
+	if seed != nil && seed.ID != "" {
+		resp["turn_id"] = seed.ID
+	}
+	if handle != nil {
+		if handle.InferenceID != "" {
+			resp["inference_id"] = handle.InferenceID
+		}
+		if handle.Input != nil && handle.Input.ID != "" {
+			resp["turn_id"] = handle.Input.ID
+		}
+	}
+
+	conv.mu.Lock()
+	conv.ensureQueueInitLocked()
+	if rec, ok := conv.getRecordLocked(idempotencyKey); ok && rec != nil {
+		rec.Status = "running"
+		rec.StartedAt = time.Now()
+		rec.Response = resp
+	} else {
+		conv.upsertRecordLocked(&chatRequestRecord{IdempotencyKey: idempotencyKey, Status: "running", StartedAt: time.Now(), Response: resp})
+	}
+	conv.mu.Unlock()
+
+	go func() {
+		_, waitErr := handle.Wait()
+		var turnID string
+		if v, ok := resp["turn_id"].(string); ok {
+			turnID = v
+		}
+		r.finishRun(conv, idempotencyKey, handle.InferenceID, turnID, waitErr)
+		if waitErr != nil {
+			runLog.Error().Err(waitErr).Str("inference_id", handle.InferenceID).Msg("run loop error")
+		}
+		runLog.Info().Str("inference_id", handle.InferenceID).Msg("run loop finished")
+		r.tryDrainQueue(conv)
+	}()
+
+	return resp, nil
+}
+
+func (r *Router) finishRun(conv *Conversation, idempotencyKey string, inferenceID string, turnID string, err error) {
+	if conv == nil {
+		return
+	}
+	conv.mu.Lock()
+	defer conv.mu.Unlock()
+
+	if conv.runningKey == idempotencyKey {
+		conv.runningKey = ""
+	}
+	conv.ensureQueueInitLocked()
+	if rec, ok := conv.getRecordLocked(idempotencyKey); ok && rec != nil {
+		if err != nil {
+			rec.Status = "error"
+			rec.Error = err.Error()
+		} else if rec.Status == "running" {
+			rec.Status = "completed"
+		}
+		rec.CompletedAt = time.Now()
+		if rec.Response == nil {
+			rec.Response = map[string]any{}
+		}
+		if inferenceID != "" {
+			rec.Response["inference_id"] = inferenceID
+		}
+		if turnID != "" {
+			rec.Response["turn_id"] = turnID
+		}
+		rec.Response["status"] = rec.Status
+	}
+}
+
+func (r *Router) tryDrainQueue(conv *Conversation) {
+	if r == nil || conv == nil {
+		return
+	}
+	for {
+		conv.mu.Lock()
+		if conv.isBusyLocked() {
+			conv.mu.Unlock()
+			return
+		}
+		q, ok := conv.dequeueLocked()
+		if !ok {
+			conv.mu.Unlock()
+			return
+		}
+		conv.runningKey = q.IdempotencyKey
+		conv.ensureQueueInitLocked()
+		if rec, ok := conv.getRecordLocked(q.IdempotencyKey); ok && rec != nil {
+			rec.Status = "running"
+			rec.StartedAt = time.Now()
+		} else {
+			conv.upsertRecordLocked(&chatRequestRecord{IdempotencyKey: q.IdempotencyKey, Status: "running", StartedAt: time.Now()})
+		}
+		conv.mu.Unlock()
+
+		_, err := r.startRunForPrompt(conv, q.ProfileSlug, q.Overrides, q.Prompt, q.IdempotencyKey)
+		if err != nil {
+			r.finishRun(conv, q.IdempotencyKey, "", "", err)
+			// Continue draining so later queued items can still run.
+			continue
+		}
+		// Successfully started one run; subsequent items are handled when it finishes.
+		return
 	}
 }
 

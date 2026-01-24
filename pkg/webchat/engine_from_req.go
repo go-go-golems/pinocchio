@@ -11,9 +11,10 @@ import (
 
 // ChatRequestBody represents the expected JSON body for chat requests.
 type ChatRequestBody struct {
-	Prompt    string         `json:"prompt"`
-	ConvID    string         `json:"conv_id"`
-	Overrides map[string]any `json:"overrides"`
+	Prompt         string         `json:"prompt"`
+	ConvID         string         `json:"conv_id"`
+	Overrides      map[string]any `json:"overrides"`
+	IdempotencyKey string         `json:"idempotency_key,omitempty"`
 }
 
 // EngineBuildInput is the canonical output of request policy resolution.

@@ -34,6 +34,12 @@ type Conversation struct {
 
 	ProfileSlug  string
 	EngConfigSig string
+
+	// Server-side send serialization / queue semantics.
+	// All fields below are guarded by mu.
+	runningKey string
+	queue      []queuedChat
+	requests   map[string]*chatRequestRecord
 }
 
 // ConvManager stores all live conversations.
@@ -71,6 +77,9 @@ func (r *Router) getOrCreateConv(convID, profileSlug string, overrides map[strin
 	r.cm.mu.Lock()
 	defer r.cm.mu.Unlock()
 	if c, ok := r.cm.conns[convID]; ok {
+		c.mu.Lock()
+		c.ensureQueueInitLocked()
+		c.mu.Unlock()
 		if c.ProfileSlug != profileSlug || c.EngConfigSig != newSig {
 			log.Info().
 				Str("component", "webchat").
@@ -138,6 +147,7 @@ func (r *Router) getOrCreateConv(convID, profileSlug string, overrides map[strin
 		baseCtx:      r.baseCtx,
 		ProfileSlug:  profileSlug,
 		EngConfigSig: newSig,
+		requests:     map[string]*chatRequestRecord{},
 	}
 	eng, sink, err := r.BuildFromConfig(convID, cfg)
 	if err != nil {
