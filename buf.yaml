@@ -1,0 +1,15 @@
+version: v1
+deps:
+  - buf.build/google/protobuf
+lint:
+  use:
+    - STANDARD
+  except:
+    # We intentionally keep protos grouped by domain folder (e.g. proto/sem/middleware/*.proto)
+    # and we do not suffix packages with .v1 yet. Disable the strict directory/package rules.
+    - PACKAGE_DIRECTORY_MATCH
+    - PACKAGE_VERSION_SUFFIX
+    - DIRECTORY_SAME_PACKAGE
+breaking:
+  use:
+    - FILE

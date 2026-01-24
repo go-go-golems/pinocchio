@@ -1,0 +1,37 @@
+syntax = "proto3";
+
+package sem.domain.team_analysis;
+
+option go_package = "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/domain;domain";
+
+message TeamAnalysisStart {
+  string analysis_id = 1;
+  int32 team_size = 2;
+  string depth = 3;
+}
+
+message TeamAnalysisProgress {
+  string analysis_id = 1;
+  string analyzing = 2;
+  double progress = 3;
+  int32 processed = 4;
+  int32 total = 5;
+}
+
+message TeamAnalysisResult {
+  string analysis_id = 1;
+  double network_score = 2;
+  repeated string insights = 3;
+
+  message Node { string id = 1; string label = 2; }
+  message Edge { string source = 1; string target = 2; double strength = 3; string sentiment = 4; }
+
+  message VisualizationData {
+    repeated Node nodes = 1;
+    repeated Edge edges = 2;
+  }
+
+  VisualizationData visualization_data = 10;
+}
+
+

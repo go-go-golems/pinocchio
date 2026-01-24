@@ -1,0 +1,35 @@
+syntax = "proto3";
+
+package sem.timeline;
+
+option go_package = "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/timeline;timeline";
+
+// ThinkingModeSnapshotV1 maps 'thinking_mode' entity props
+message ThinkingModeSnapshotV1 {
+  uint32 schema_version = 1; // =1
+  string status = 2;     // active|completed|error
+  string mode = 3;
+  string phase = 4;
+  string reasoning = 5;
+}
+
+// ModeEvaluationSnapshotV1 maps 'mode_evaluation' entity props
+message ModeEvaluationSnapshotV1 {
+  uint32 schema_version = 1; // =1
+  string status = 2;           // active|completed|error
+  string current_mode = 3;
+  string analysis = 4;
+  string decision = 5;
+  string recommended_mode = 6;
+  bool success = 7;
+  string error = 8;
+}
+
+// InnerThoughtsSnapshotV1 maps 'inner_thoughts' entity props
+message InnerThoughtsSnapshotV1 {
+  uint32 schema_version = 1; // =1
+  string status = 2; // active|completed|error
+  string text = 3;
+}
+
+

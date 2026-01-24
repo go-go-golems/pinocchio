@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+package sem.timeline;
+
+option go_package = "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/timeline;timeline";
+
+import "google/protobuf/struct.proto";
+
+// ToolCallSnapshotV1 defines the payload for a 'tool_call' entity.
+message ToolCallSnapshotV1 {
+  uint32 schema_version = 1; // =1
+  string name = 2;
+  google.protobuf.Struct input = 3; // structured input
+  string status = 4;                 // queued|running|completed|error
+  double progress = 5;               // 0..1
+}
+
+// ToolResultSnapshotV1 defines the payload for a 'tool_result' entity.
+message ToolResultSnapshotV1 {
+  uint32 schema_version = 1; // =1
+  string tool_call_id = 2;   // -> toolCallId (camelCase) in JSON
+  google.protobuf.Struct result = 3; // structured result
+  string error = 4;                  // optional
+}
+
+
