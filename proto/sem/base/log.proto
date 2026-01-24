@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package sem.base.log;
+
+option go_package = "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/base;base";
+
+import "google/protobuf/struct.proto";
+
+message LogV1 {
+  string id = 1;
+  string level = 2;
+  string message = 3;
+  google.protobuf.Struct fields = 4;
+}
+

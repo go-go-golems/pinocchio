@@ -27,6 +27,7 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/turns/serde"
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
 	rediscfg "github.com/go-go-golems/pinocchio/pkg/redisstream"
+	sempb "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/base"
 )
 
 // RouterSettings are exposed via parameter layers (addr, agent, idle timeout, etc.).
@@ -334,14 +335,13 @@ func (r *Router) registerHTTPHandlers() {
 		// Send a greeting frame to the newly connected client (mirrors moments/go-go-mento behavior).
 		if conv != nil && conv.pool != nil {
 			ts := time.Now().UnixMilli()
+			data, _ := protoToRaw(&sempb.WsHelloV1{ConvId: convID, Profile: profileSlug, ServerTime: ts})
 			hello := map[string]any{
 				"sem": true,
 				"event": map[string]any{
-					"type":        "ws.hello",
-					"id":          fmt.Sprintf("ws.hello:%s:%d", convID, ts),
-					"conv_id":     convID,
-					"profile":     profileSlug,
-					"server_time": ts,
+					"type": "ws.hello",
+					"id":   fmt.Sprintf("ws.hello:%s:%d", convID, ts),
+					"data": data,
 				},
 			}
 			if b, err := json.Marshal(hello); err == nil {
@@ -379,13 +379,13 @@ func (r *Router) registerHTTPHandlers() {
 					}
 					if isPing {
 						ts := time.Now().UnixMilli()
+						data, _ := protoToRaw(&sempb.WsPongV1{ConvId: convID, ServerTime: ts})
 						pong := map[string]any{
 							"sem": true,
 							"event": map[string]any{
-								"type":        "ws.pong",
-								"id":          fmt.Sprintf("ws.pong:%s:%d", convID, ts),
-								"conv_id":     convID,
-								"server_time": ts,
+								"type": "ws.pong",
+								"id":   fmt.Sprintf("ws.pong:%s:%d", convID, ts),
+								"data": data,
 							},
 						}
 						if b, err := json.Marshal(pong); err == nil {

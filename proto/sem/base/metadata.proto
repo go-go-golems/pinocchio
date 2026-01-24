@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+package sem.base.meta;
+
+option go_package = "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/base;base";
+
+message UsageV1 {
+  int32 input_tokens = 1;
+  int32 output_tokens = 2;
+  int32 cached_tokens = 3;
+  int32 cache_creation_input_tokens = 4;
+  int32 cache_read_input_tokens = 5;
+}
+
+message LlmInferenceMetadataV1 {
+  string model = 1;
+  optional double temperature = 2;
+  optional double top_p = 3;
+  optional int32 max_tokens = 4;
+  optional string stop_reason = 5;
+  UsageV1 usage = 6;
+  optional int64 duration_ms = 7;
+}
+

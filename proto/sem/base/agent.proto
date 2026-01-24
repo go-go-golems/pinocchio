@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package sem.base.agent;
+
+option go_package = "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/base;base";
+
+import "google/protobuf/struct.proto";
+
+message AgentModeV1 {
+  string id = 1;
+  string title = 2;
+  google.protobuf.Struct data = 3;
+}
+

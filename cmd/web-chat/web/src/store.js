@@ -356,53 +356,55 @@ export const useStore = create(devtools(subscribeWithSelector((set, get)=>({
   handleIncoming: (payload)=>{
     if (!payload || !payload.sem || !payload.event) return;
     const ev = payload.event;
+    const data = (ev && ev.data) || {};
     // Log semantic event to devtools and update debug counters
     set((s)=>({ debug: { ...s.debug, lastSemEvent: ev, lastSemType: ev.type || '', recvCount: (s.debug?.recvCount || 0) + 1 } }), false, { type: 'sem/recv', payload: ev });
     switch (ev.type) {
       case 'llm.start':
-        get().llmTextStart(ev.id, ev.role || 'assistant', ev.metadata);
+        get().llmTextStart(ev.id, data.role || 'assistant', ev.metadata);
         return;
       case 'llm.delta':
-        get().llmTextAppend(ev.id, ev.delta || '');
+        get().llmTextAppend(ev.id, data.delta || '');
         return;
       case 'llm.final':
-        get().llmTextFinal(ev.id, ev.text || '', ev.metadata);
+        get().llmTextFinal(ev.id, data.text || '', ev.metadata);
         return;
       case 'llm.thinking.start':
         get().llmThinkingStart(ev.id, ev.metadata);
         return;
       case 'llm.thinking.delta':
-        get().llmThinkingDelta(ev.id, ev.delta || '', ev.cumulative);
+        get().llmThinkingDelta(ev.id, data.delta || '', data.cumulative);
         return;
       case 'llm.thinking.final':
         get().llmThinkingFinal(ev.id);
         return;
       case 'tool.start':
-        get().toolCallStart(ev.id, ev.name, ev.input);
+        get().toolCallStart(ev.id, data.name, data.input);
         return;
       case 'tool.delta':
-        get().toolCallDelta(ev.id, ev.patch || {});
+        get().toolCallDelta(ev.id, data.patch || {});
         return;
       case 'tool.done':
         get().toolCallDone(ev.id);
         return;
       case 'tool.result': {
-        const resultId = ev.customKind ? `${ev.id}:custom` : `${ev.id}:result`;
+        const resultId = data.customKind ? `${ev.id}:custom` : `${ev.id}:result`;
         set((s)=>{
           const exists = s.timeline.byId[resultId];
           if (!exists) {
-            const entity = { id: resultId, kind: ev.customKind || 'tool_call_result', renderer: { kind: ev.customKind || 'tool_call_result' }, props: { result: ev.result }, startedAt: Date.now(), completed: false, result: null, version: 0, updatedAt: null, completedAt: null };
+            const entity = { id: resultId, kind: data.customKind || 'tool_call_result', renderer: { kind: data.customKind || 'tool_call_result' }, props: { result: data.result }, startedAt: Date.now(), completed: false, result: null, version: 0, updatedAt: null, completedAt: null };
             return { timeline: { byId: { ...s.timeline.byId, [resultId]: entity }, order: [ ...s.timeline.order, resultId ] } };
           }
-          const updated = { ...exists, props: { ...exists.props, result: ev.result }, completed: true, completedAt: Date.now(), version: exists.version + 1, updatedAt: Date.now(), result: ev.result };
+          const updated = { ...exists, props: { ...exists.props, result: data.result }, completed: true, completedAt: Date.now(), version: exists.version + 1, updatedAt: Date.now(), result: data.result };
           return { timeline: { byId: { ...s.timeline.byId, [resultId]: updated }, order: s.timeline.order } };
         }, false, { type: 'sem/tool.result', payload: ({ id: resultId }) });
         return;
       }
       case 'agent.mode': {
         const id = ev.id || `agentmode-${Date.now()}`;
+        const dd = (data && data.data) || {};
         set((s)=>{
-          const entity = { id, kind: 'agent_mode', renderer: { kind: 'agent_mode' }, props: { title: ev.title, from: ev.from, to: ev.to, analysis: ev.analysis }, startedAt: Date.now(), completed: true, result: null, version: 0, updatedAt: Date.now(), completedAt: Date.now() };
+          const entity = { id, kind: 'agent_mode', renderer: { kind: 'agent_mode' }, props: { title: data.title, ...dd }, startedAt: Date.now(), completed: true, result: null, version: 0, updatedAt: Date.now(), completedAt: Date.now() };
           return { timeline: { byId: { ...s.timeline.byId, [id]: entity }, order: [ ...s.timeline.order, id ] } };
         }, false, { type: 'sem/agent.mode', payload: ({ id }) });
         return;
@@ -410,7 +412,7 @@ export const useStore = create(devtools(subscribeWithSelector((set, get)=>({
       case 'log': {
         const id = ev.id || `log-${Date.now()}`;
         set((s)=>{
-          const entity = { id, kind: 'log_event', renderer: { kind: 'log_event' }, props: { level: ev.level || 'info', message: ev.message, fields: ev.fields }, startedAt: Date.now(), completed: true, result: { message: ev.message }, version: 0, updatedAt: Date.now(), completedAt: Date.now() };
+          const entity = { id, kind: 'log_event', renderer: { kind: 'log_event' }, props: { level: data.level || 'info', message: data.message, fields: data.fields }, startedAt: Date.now(), completed: true, result: { message: data.message }, version: 0, updatedAt: Date.now(), completedAt: Date.now() };
           return { timeline: { byId: { ...s.timeline.byId, [id]: entity }, order: [ ...s.timeline.order, id ] } };
         }, false, { type: 'sem/log', payload: ({ id }) });
         return;
