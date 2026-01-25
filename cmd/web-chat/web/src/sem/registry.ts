@@ -112,6 +112,16 @@ function ensurePlanningAgg(runId: string, now: number): PlanningAgg {
 }
 
 function planningEntityFromAgg(agg: PlanningAgg, now: number): TimelineEntity {
+  // Important: never share mutable aggregates with Redux state.
+  // RTK/Immer will freeze state trees; if we keep references in this Map,
+  // later mutations will throw (e.g. "can't define array index ... non-writable length").
+  const iterations = agg.iterations.map((it) => ({ ...it }));
+  const reflectionByIter = Object.fromEntries(
+    Object.entries(agg.reflectionByIter).map(([k, v]) => [k, { ...v }]),
+  ) as PlanningAgg['reflectionByIter'];
+  const completed = agg.completed ? { ...agg.completed } : undefined;
+  const execution = agg.execution ? { ...agg.execution } : undefined;
+
   return {
     id: agg.runId,
     kind: 'planning',
@@ -123,10 +133,10 @@ function planningEntityFromAgg(agg: PlanningAgg, now: number): TimelineEntity {
       plannerModel: agg.plannerModel,
       maxIterations: agg.maxIterations,
       startedAt: agg.startedAt,
-      iterations: agg.iterations,
-      reflectionByIter: agg.reflectionByIter,
-      completed: agg.completed,
-      execution: agg.execution,
+      iterations,
+      reflectionByIter,
+      completed,
+      execution,
     },
   };
 }
