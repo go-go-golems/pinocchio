@@ -20,6 +20,32 @@ function basePrefixFromLocation(): string {
   return segs.length > 0 ? `/${segs[0]}` : '';
 }
 
+function convIdFromLocation(): string {
+  try {
+    const u = new URL(window.location.href);
+    const q = u.searchParams.get('conv_id') || u.searchParams.get('convId') || '';
+    return q.trim();
+  } catch {
+    return '';
+  }
+}
+
+function setConvIdInLocation(convId: string | null) {
+  try {
+    const u = new URL(window.location.href);
+    if (!convId) {
+      u.searchParams.delete('conv_id');
+      u.searchParams.delete('convId');
+    } else {
+      u.searchParams.set('conv_id', convId);
+      u.searchParams.delete('convId');
+    }
+    window.history.replaceState({}, '', u.toString());
+  } catch {
+    // ignore
+  }
+}
+
 function fmtShort(n: number): string {
   if (!Number.isFinite(n) || n <= 0) return '0';
   if (n < 1000) return String(n);
@@ -265,8 +291,15 @@ export function ChatWidget() {
 
   const [text, setText] = useState('');
   const basePrefix = useMemo(() => basePrefixFromLocation(), []);
+  const initialUrlConvId = useMemo(() => convIdFromLocation(), []);
   const mainRef = useRef<HTMLDivElement | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!app.convId && initialUrlConvId) {
+      dispatch(appSlice.actions.setConvId(initialUrlConvId));
+    }
+  }, [app.convId, dispatch, initialUrlConvId]);
 
   useEffect(() => {
     if (!app.convId) return;
@@ -319,6 +352,9 @@ export function ChatWidget() {
 
     const convId = (j && j.conv_id) || app.convId || '';
     const runId = (j && (j.session_id || j.run_id)) || app.runId || '';
+    if (!app.convId && convId) {
+      setConvIdInLocation(convId);
+    }
     dispatch(appSlice.actions.setConvId(convId));
     dispatch(appSlice.actions.setRunId(runId));
 
@@ -392,6 +428,7 @@ export function ChatWidget() {
               onClick={() => {
                 dispatch(appSlice.actions.setConvId(''));
                 dispatch(appSlice.actions.setRunId(''));
+                setConvIdInLocation(null);
               }}
             >
               New conv

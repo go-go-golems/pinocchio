@@ -11,6 +11,8 @@ message ThinkingModeSnapshotV1 {
   string mode = 3;
   string phase = 4;
   string reasoning = 5;
+  bool success = 6;
+  string error = 7;
 }
 
 // ModeEvaluationSnapshotV1 maps 'mode_evaluation' entity props
@@ -31,5 +33,4 @@ message InnerThoughtsSnapshotV1 {
   string status = 2; // active|completed|error
   string text = 3;
 }
-
 

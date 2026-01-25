@@ -10,7 +10,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file proto/sem/timeline/middleware.proto.
  */
 export const file_proto_sem_timeline_middleware: GenFile = /*@__PURE__*/
-  fileDesc("CiNwcm90by9zZW0vdGltZWxpbmUvbWlkZGxld2FyZS5wcm90bxIMc2VtLnRpbWVsaW5lInAKFlRoaW5raW5nTW9kZVNuYXBzaG90VjESFgoOc2NoZW1hX3ZlcnNpb24YASABKA0SDgoGc3RhdHVzGAIgASgJEgwKBG1vZGUYAyABKAkSDQoFcGhhc2UYBCABKAkSEQoJcmVhc29uaW5nGAUgASgJIrYBChhNb2RlRXZhbHVhdGlvblNuYXBzaG90VjESFgoOc2NoZW1hX3ZlcnNpb24YASABKA0SDgoGc3RhdHVzGAIgASgJEhQKDGN1cnJlbnRfbW9kZRgDIAEoCRIQCghhbmFseXNpcxgEIAEoCRIQCghkZWNpc2lvbhgFIAEoCRIYChByZWNvbW1lbmRlZF9tb2RlGAYgASgJEg8KB3N1Y2Nlc3MYByABKAgSDQoFZXJyb3IYCCABKAkiTwoXSW5uZXJUaG91Z2h0c1NuYXBzaG90VjESFgoOc2NoZW1hX3ZlcnNpb24YASABKA0SDgoGc3RhdHVzGAIgASgJEgwKBHRleHQYAyABKAlCSlpIZ2l0aHViLmNvbS9nby1nby1nb2xlbXMvcGlub2NjaGlvL3BrZy9zZW0vcGIvcHJvdG8vc2VtL3RpbWVsaW5lO3RpbWVsaW5lYgZwcm90bzM");
+  fileDesc("CiNwcm90by9zZW0vdGltZWxpbmUvbWlkZGxld2FyZS5wcm90bxIMc2VtLnRpbWVsaW5lIpABChZUaGlua2luZ01vZGVTbmFwc2hvdFYxEhYKDnNjaGVtYV92ZXJzaW9uGAEgASgNEg4KBnN0YXR1cxgCIAEoCRIMCgRtb2RlGAMgASgJEg0KBXBoYXNlGAQgASgJEhEKCXJlYXNvbmluZxgFIAEoCRIPCgdzdWNjZXNzGAYgASgIEg0KBWVycm9yGAcgASgJIrYBChhNb2RlRXZhbHVhdGlvblNuYXBzaG90VjESFgoOc2NoZW1hX3ZlcnNpb24YASABKA0SDgoGc3RhdHVzGAIgASgJEhQKDGN1cnJlbnRfbW9kZRgDIAEoCRIQCghhbmFseXNpcxgEIAEoCRIQCghkZWNpc2lvbhgFIAEoCRIYChByZWNvbW1lbmRlZF9tb2RlGAYgASgJEg8KB3N1Y2Nlc3MYByABKAgSDQoFZXJyb3IYCCABKAkiTwoXSW5uZXJUaG91Z2h0c1NuYXBzaG90VjESFgoOc2NoZW1hX3ZlcnNpb24YASABKA0SDgoGc3RhdHVzGAIgASgJEgwKBHRleHQYAyABKAlCSlpIZ2l0aHViLmNvbS9nby1nby1nb2xlbXMvcGlub2NjaGlvL3BrZy9zZW0vcGIvcHJvdG8vc2VtL3RpbWVsaW5lO3RpbWVsaW5lYgZwcm90bzM");
 
 /**
  * ThinkingModeSnapshotV1 maps 'thinking_mode' entity props
@@ -46,6 +46,16 @@ export type ThinkingModeSnapshotV1 = Message<"sem.timeline.ThinkingModeSnapshotV
    * @generated from field: string reasoning = 5;
    */
   reasoning: string;
+
+  /**
+   * @generated from field: bool success = 6;
+   */
+  success: boolean;
+
+  /**
+   * @generated from field: string error = 7;
+   */
+  error: string;
 };
 
 /**

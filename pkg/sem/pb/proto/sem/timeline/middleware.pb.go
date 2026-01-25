@@ -29,6 +29,8 @@ type ThinkingModeSnapshotV1 struct {
 	Mode          string                 `protobuf:"bytes,3,opt,name=mode,proto3" json:"mode,omitempty"`
 	Phase         string                 `protobuf:"bytes,4,opt,name=phase,proto3" json:"phase,omitempty"`
 	Reasoning     string                 `protobuf:"bytes,5,opt,name=reasoning,proto3" json:"reasoning,omitempty"`
+	Success       bool                   `protobuf:"varint,6,opt,name=success,proto3" json:"success,omitempty"`
+	Error         string                 `protobuf:"bytes,7,opt,name=error,proto3" json:"error,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -94,6 +96,20 @@ func (x *ThinkingModeSnapshotV1) GetPhase() string {
 func (x *ThinkingModeSnapshotV1) GetReasoning() string {
 	if x != nil {
 		return x.Reasoning
+	}
+	return ""
+}
+
+func (x *ThinkingModeSnapshotV1) GetSuccess() bool {
+	if x != nil {
+		return x.Success
+	}
+	return false
+}
+
+func (x *ThinkingModeSnapshotV1) GetError() string {
+	if x != nil {
+		return x.Error
 	}
 	return ""
 }
@@ -264,13 +280,15 @@ var File_proto_sem_timeline_middleware_proto protoreflect.FileDescriptor
 
 const file_proto_sem_timeline_middleware_proto_rawDesc = "" +
 	"\n" +
-	"#proto/sem/timeline/middleware.proto\x12\fsem.timeline\"\x9f\x01\n" +
+	"#proto/sem/timeline/middleware.proto\x12\fsem.timeline\"\xcf\x01\n" +
 	"\x16ThinkingModeSnapshotV1\x12%\n" +
 	"\x0eschema_version\x18\x01 \x01(\rR\rschemaVersion\x12\x16\n" +
 	"\x06status\x18\x02 \x01(\tR\x06status\x12\x12\n" +
 	"\x04mode\x18\x03 \x01(\tR\x04mode\x12\x14\n" +
 	"\x05phase\x18\x04 \x01(\tR\x05phase\x12\x1c\n" +
-	"\treasoning\x18\x05 \x01(\tR\treasoning\"\x8f\x02\n" +
+	"\treasoning\x18\x05 \x01(\tR\treasoning\x12\x18\n" +
+	"\asuccess\x18\x06 \x01(\bR\asuccess\x12\x14\n" +
+	"\x05error\x18\a \x01(\tR\x05error\"\x8f\x02\n" +
 	"\x18ModeEvaluationSnapshotV1\x12%\n" +
 	"\x0eschema_version\x18\x01 \x01(\rR\rschemaVersion\x12\x16\n" +
 	"\x06status\x18\x02 \x01(\tR\x06status\x12!\n" +

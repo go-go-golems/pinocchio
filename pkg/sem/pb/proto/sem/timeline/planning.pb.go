@@ -226,11 +226,14 @@ type PlanningSnapshotV1 struct {
 	StartedAtUnixMs   int64  `protobuf:"varint,10,opt,name=started_at_unix_ms,json=startedAtUnixMs,proto3" json:"started_at_unix_ms,omitempty"`
 	CompletedAtUnixMs int64  `protobuf:"varint,11,opt,name=completed_at_unix_ms,json=completedAtUnixMs,proto3" json:"completed_at_unix_ms,omitempty"`
 	// planning|executing|completed|error
-	Status        string                         `protobuf:"bytes,12,opt,name=status,proto3" json:"status,omitempty"`
-	Iterations    []*PlanningIterationSnapshotV1 `protobuf:"bytes,20,rep,name=iterations,proto3" json:"iterations,omitempty"`
-	Execution     *ExecutionSnapshotV1           `protobuf:"bytes,21,opt,name=execution,proto3" json:"execution,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Status         string                         `protobuf:"bytes,12,opt,name=status,proto3" json:"status,omitempty"`
+	FinalDecision  string                         `protobuf:"bytes,13,opt,name=final_decision,json=finalDecision,proto3" json:"final_decision,omitempty"`
+	StatusReason   string                         `protobuf:"bytes,14,opt,name=status_reason,json=statusReason,proto3" json:"status_reason,omitempty"`
+	FinalDirective string                         `protobuf:"bytes,15,opt,name=final_directive,json=finalDirective,proto3" json:"final_directive,omitempty"`
+	Iterations     []*PlanningIterationSnapshotV1 `protobuf:"bytes,20,rep,name=iterations,proto3" json:"iterations,omitempty"`
+	Execution      *ExecutionSnapshotV1           `protobuf:"bytes,21,opt,name=execution,proto3" json:"execution,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *PlanningSnapshotV1) Reset() {
@@ -319,6 +322,27 @@ func (x *PlanningSnapshotV1) GetStatus() string {
 	return ""
 }
 
+func (x *PlanningSnapshotV1) GetFinalDecision() string {
+	if x != nil {
+		return x.FinalDecision
+	}
+	return ""
+}
+
+func (x *PlanningSnapshotV1) GetStatusReason() string {
+	if x != nil {
+		return x.StatusReason
+	}
+	return ""
+}
+
+func (x *PlanningSnapshotV1) GetFinalDirective() string {
+	if x != nil {
+		return x.FinalDirective
+	}
+	return ""
+}
+
 func (x *PlanningSnapshotV1) GetIterations() []*PlanningIterationSnapshotV1 {
 	if x != nil {
 		return x.Iterations
@@ -354,7 +378,7 @@ const file_proto_sem_timeline_planning_proto_rawDesc = "" +
 	"\x12started_at_unix_ms\x18\x03 \x01(\x03R\x0fstartedAtUnixMs\x12/\n" +
 	"\x14completed_at_unix_ms\x18\x04 \x01(\x03R\x11completedAtUnixMs\x12\x16\n" +
 	"\x06status\x18\x05 \x01(\tR\x06status\x12#\n" +
-	"\rerror_message\x18\x06 \x01(\tR\ferrorMessage\"\xbc\x03\n" +
+	"\rerror_message\x18\x06 \x01(\tR\ferrorMessage\"\xb1\x04\n" +
 	"\x12PlanningSnapshotV1\x12%\n" +
 	"\x0eschema_version\x18\x01 \x01(\rR\rschemaVersion\x12\x15\n" +
 	"\x06run_id\x18\x02 \x01(\tR\x05runId\x12\x1a\n" +
@@ -364,7 +388,10 @@ const file_proto_sem_timeline_planning_proto_rawDesc = "" +
 	"\x12started_at_unix_ms\x18\n" +
 	" \x01(\x03R\x0fstartedAtUnixMs\x12/\n" +
 	"\x14completed_at_unix_ms\x18\v \x01(\x03R\x11completedAtUnixMs\x12\x16\n" +
-	"\x06status\x18\f \x01(\tR\x06status\x12I\n" +
+	"\x06status\x18\f \x01(\tR\x06status\x12%\n" +
+	"\x0efinal_decision\x18\r \x01(\tR\rfinalDecision\x12#\n" +
+	"\rstatus_reason\x18\x0e \x01(\tR\fstatusReason\x12'\n" +
+	"\x0ffinal_directive\x18\x0f \x01(\tR\x0efinalDirective\x12I\n" +
 	"\n" +
 	"iterations\x18\x14 \x03(\v2).sem.timeline.PlanningIterationSnapshotV1R\n" +
 	"iterations\x12?\n" +

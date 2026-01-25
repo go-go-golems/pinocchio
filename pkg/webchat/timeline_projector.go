@@ -349,6 +349,8 @@ func (p *TimelineProjector) ApplySemFrame(ctx context.Context, frame []byte) err
 					Mode:          mode,
 					Phase:         phase,
 					Reasoning:     reason,
+					Success:       success,
+					Error:         errStr,
 				},
 			},
 		})
@@ -518,6 +520,9 @@ func (p *TimelineProjector) applyPlanning(ctx context.Context, typ string, data 
 		if pb.CompletedAtUnixMs > 0 {
 			agg.snap.CompletedAtUnixMs = pb.CompletedAtUnixMs
 		}
+		agg.snap.FinalDecision = pb.FinalDecision
+		agg.snap.StatusReason = pb.StatusReason
+		agg.snap.FinalDirective = pb.FinalDirective
 		// After planning completes we typically enter execution.
 		agg.snap.Status = "executing"
 		p.mu.Unlock()
