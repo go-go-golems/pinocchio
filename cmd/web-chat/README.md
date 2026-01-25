@@ -116,8 +116,23 @@ return srv.ListenAndServe()
   - Body: `{ "prompt": string, "conv_id": string (optional) }`
   - Response: `{ "status": "started"|"queued", "conv_id": string, "session_id": string, "turn_id": string, "inference_id": string, "queue_position"?: number, "idempotency_key": string }`
 - `GET /hydrate?conv_id={string}&since_seq={int?}&limit={int?}` — Returns buffered SEM frames for hydration gating
+- `GET /timeline?conv_id={string}&since_version={uint64?}&limit={int?}` — Returns durable timeline snapshot entities (enabled when `--timeline-dsn` or `--timeline-db` is set)
 
 ## Redis Streams (Optional Transport)
+
+## Durable Timeline Snapshots (PI-004 “actual hydration”)
+
+The `/timeline` endpoint is backed by a SQLite projection store and is disabled by default.
+
+Enable it by passing one of:
+- `--timeline-dsn "<sqlite dsn>"`
+- `--timeline-db "<path/to/timeline.db>"`
+
+Example:
+
+```bash
+go run ./cmd/web-chat --addr :8080 --timeline-db /tmp/pinocchio-timeline.db
+```
 
 When `redis` is enabled via flags, the backend uses a Redis Streams publisher/subscriber under the hood. Each conversation gets a topic `chat:{convID}` with a consumer group `ui`. This allows horizontal scaling of readers and decouples event production from UI delivery.
 

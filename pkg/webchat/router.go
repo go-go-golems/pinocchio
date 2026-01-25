@@ -39,6 +39,12 @@ import (
 type RouterSettings struct {
 	Addr               string `glazed.parameter:"addr"`
 	IdleTimeoutSeconds int    `glazed.parameter:"idle-timeout-seconds"`
+	// Durable timeline projection store configuration (optional).
+	// Use either:
+	// - timeline-dsn (preferred; full sqlite DSN)
+	// - timeline-db (file path; DSN derived)
+	TimelineDSN string `glazed.parameter:"timeline-dsn"`
+	TimelineDB  string `glazed.parameter:"timeline-db"`
 }
 
 // RouterBuilder creates a new composable webchat router.
@@ -69,17 +75,18 @@ func NewRouter(ctx context.Context, parsed *layers.ParsedLayers, staticFS embed.
 		r.redisAddr = rs.Addr
 	}
 
-	// Optional durable timeline store for "actual hydration".
-	// Configuration:
-	// - PINOCCHIO_WEBCHAT_TIMELINE_DSN (preferred; full sqlite DSN)
-	// - PINOCCHIO_WEBCHAT_TIMELINE_DB (file path; DSN is derived)
-	if dsn := strings.TrimSpace(os.Getenv("PINOCCHIO_WEBCHAT_TIMELINE_DSN")); dsn != "" {
+	// Optional durable timeline store for "actual hydration" (configured via Glazed parameters).
+	s := &RouterSettings{}
+	if err := parsed.InitializeStruct(layers.DefaultSlug, s); err != nil {
+		return nil, errors.Wrap(err, "parse router settings")
+	}
+	if dsn := strings.TrimSpace(s.TimelineDSN); dsn != "" {
 		store, err := NewSQLiteTimelineStore(dsn)
 		if err != nil {
 			return nil, errors.Wrap(err, "open timeline store (dsn)")
 		}
 		r.timelineStore = store
-	} else if p := strings.TrimSpace(os.Getenv("PINOCCHIO_WEBCHAT_TIMELINE_DB")); p != "" {
+	} else if p := strings.TrimSpace(s.TimelineDB); p != "" {
 		if dir := filepath.Dir(p); dir != "" && dir != "." {
 			_ = os.MkdirAll(dir, 0755)
 		}

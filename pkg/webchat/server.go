@@ -61,6 +61,11 @@ func (s *Server) Run(ctx context.Context) error {
 			log.Error().Err(err).Msg("server shutdown error")
 			return err
 		}
+		if s.router != nil && s.router.timelineStore != nil {
+			if err := s.router.timelineStore.Close(); err != nil {
+				log.Error().Err(err).Msg("timeline store close error")
+			}
+		}
 		if err := s.router.router.Close(); err != nil {
 			log.Error().Err(err).Msg("router close error")
 		} else {
