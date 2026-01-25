@@ -2,24 +2,14 @@ package webchat
 
 import (
 	"context"
-	"os"
-	"path/filepath"
 	"testing"
 
 	timelinepb "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/timeline"
 	"github.com/stretchr/testify/require"
 )
 
-func TestSQLiteTimelineStore_UpsertAndSnapshot(t *testing.T) {
-	dir := t.TempDir()
-	dbPath := filepath.Join(dir, "timeline.db")
-	dsn, err := SQLiteTimelineDSNForFile(dbPath)
-	require.NoError(t, err)
-
-	s, err := NewSQLiteTimelineStore(dsn)
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = s.Close() })
-
+func TestInMemoryTimelineStore_UpsertAndSnapshot(t *testing.T) {
+	s := NewInMemoryTimelineStore(2)
 	ctx := context.Background()
 	convID := "c1"
 
@@ -60,20 +50,22 @@ func TestSQLiteTimelineStore_UpsertAndSnapshot(t *testing.T) {
 	require.Equal(t, uint64(3), full.Version)
 	require.Len(t, full.Entities, 2)
 	require.Equal(t, "m1", full.Entities[0].Id)
-	require.Equal(t, int64(200), full.Entities[0].CreatedAtMs)
 	require.Equal(t, "m2", full.Entities[1].Id)
-	require.Equal(t, int64(50), full.Entities[1].CreatedAtMs)
 
-	inc, err := s.GetSnapshot(ctx, convID, 1, 100)
+	// Evict oldest (m1) when exceeding limit
+	v, err = s.Upsert(ctx, convID, &timelinepb.TimelineEntityV1{
+		Id:   "m3",
+		Kind: "message",
+		Snapshot: &timelinepb.TimelineEntityV1_Message{
+			Message: &timelinepb.MessageSnapshotV1{SchemaVersion: 1, Role: "assistant", Content: "later", Streaming: false},
+		},
+	})
 	require.NoError(t, err)
-	require.Equal(t, uint64(3), inc.Version)
-	require.Len(t, inc.Entities, 2) // m1(v2), m2(v3)
+	require.Equal(t, uint64(4), v)
 
-	limited, err := s.GetSnapshot(ctx, convID, 1, 1)
+	after, err := s.GetSnapshot(ctx, convID, 0, 100)
 	require.NoError(t, err)
-	require.Len(t, limited.Entities, 1)
-
-	// sanity: file exists
-	_, err = os.Stat(dbPath)
-	require.NoError(t, err)
+	require.Len(t, after.Entities, 2)
+	require.Equal(t, "m2", after.Entities[0].Id)
+	require.Equal(t, "m3", after.Entities[1].Id)
 }

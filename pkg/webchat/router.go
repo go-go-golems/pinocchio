@@ -45,6 +45,8 @@ type RouterSettings struct {
 	// - timeline-db (file path; DSN derived)
 	TimelineDSN string `glazed.parameter:"timeline-dsn"`
 	TimelineDB  string `glazed.parameter:"timeline-db"`
+	// In-memory timeline store sizing (used when no timeline DB is configured).
+	TimelineInMemoryMaxEntities int `glazed.parameter:"timeline-inmem-max-entities"`
 	// Optional: emit stub "agentic" planning/thinking events so the UI can render
 	// planning widgets even when no real planning middleware is configured.
 	EmitPlanningStubs bool `glazed.parameter:"emit-planning-stubs"`
@@ -78,7 +80,7 @@ func NewRouter(ctx context.Context, parsed *layers.ParsedLayers, staticFS embed.
 		r.redisAddr = rs.Addr
 	}
 
-	// Optional durable timeline store for "actual hydration" (configured via Glazed parameters).
+	// Timeline store for hydration (SQLite when configured, in-memory otherwise).
 	s := &RouterSettings{}
 	if err := parsed.InitializeStruct(layers.DefaultSlug, s); err != nil {
 		return nil, errors.Wrap(err, "parse router settings")
@@ -103,6 +105,8 @@ func NewRouter(ctx context.Context, parsed *layers.ParsedLayers, staticFS embed.
 			return nil, errors.Wrap(err, "open timeline store (file)")
 		}
 		r.timelineStore = store
+	} else {
+		r.timelineStore = NewInMemoryTimelineStore(s.TimelineInMemoryMaxEntities)
 	}
 
 	r.registerHTTPHandlers()
@@ -440,126 +444,6 @@ func (r *Router) registerHTTPHandlers() {
 		}()
 	})
 
-	// Hydration endpoint: returns recent SEM frames buffered for a conversation.
-	// Intended for "hydrate then apply WS deltas" gating in the frontend.
-	hydrateHandler := func(w http.ResponseWriter, r0 *http.Request) {
-		if r0.Method != http.MethodGet {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-
-		b := r.engineFromReqBuilder
-		if b == nil {
-			b = NewDefaultEngineFromReqBuilder(r.profiles, r.cm)
-		}
-		input, _, err := b.BuildEngineFromReq(r0)
-		if err != nil {
-			status := http.StatusInternalServerError
-			msg := "failed to resolve request"
-			var rbe *RequestBuildError
-			if stderrors.As(err, &rbe) && rbe != nil {
-				if rbe.Status > 0 {
-					status = rbe.Status
-				}
-				if strings.TrimSpace(rbe.ClientMsg) != "" {
-					msg = rbe.ClientMsg
-				}
-			}
-			http.Error(w, msg, status)
-			return
-		}
-
-		conv, err := r.getOrCreateConv(input.ConvID, input.ProfileSlug, nil)
-		if err != nil || conv == nil {
-			http.Error(w, "failed to load conversation", http.StatusInternalServerError)
-			return
-		}
-
-		var sinceSeq uint64
-		if s := strings.TrimSpace(r0.URL.Query().Get("since_seq")); s != "" {
-			// best-effort parse (invalid values treated as 0)
-			var v uint64
-			_, _ = fmt.Sscanf(s, "%d", &v)
-			sinceSeq = v
-		}
-
-		limit := 0
-		if s := strings.TrimSpace(r0.URL.Query().Get("limit")); s != "" {
-			var v int
-			_, _ = fmt.Sscanf(s, "%d", &v)
-			if v > 0 {
-				limit = v
-			}
-		}
-
-		conv.mu.Lock()
-		buf := conv.semBuf
-		runningKey := conv.runningKey
-		queueDepth := len(conv.queue)
-		conv.mu.Unlock()
-
-		rawFrames := [][]byte(nil)
-		if buf != nil {
-			rawFrames = buf.Snapshot()
-		}
-
-		type envProbe struct {
-			Sem   bool `json:"sem"`
-			Event struct {
-				Seq      uint64 `json:"seq,omitempty"`
-				StreamID string `json:"stream_id,omitempty"`
-			} `json:"event"`
-		}
-
-		filtered := make([]json.RawMessage, 0, len(rawFrames))
-		var lastSeq uint64
-		var lastStreamID string
-		for _, fr := range rawFrames {
-			if len(fr) == 0 {
-				continue
-			}
-			var probe envProbe
-			if err := json.Unmarshal(fr, &probe); err != nil {
-				continue
-			}
-			if !probe.Sem {
-				continue
-			}
-			if probe.Event.Seq > lastSeq {
-				lastSeq = probe.Event.Seq
-			}
-			if probe.Event.StreamID != "" {
-				lastStreamID = probe.Event.StreamID
-			}
-			if sinceSeq > 0 && probe.Event.Seq > 0 && probe.Event.Seq <= sinceSeq {
-				continue
-			}
-			filtered = append(filtered, json.RawMessage(fr))
-		}
-
-		if limit > 0 && len(filtered) > limit {
-			filtered = filtered[len(filtered)-limit:]
-		}
-
-		resp := map[string]any{
-			"conv_id":               conv.ID,
-			"run_id":                conv.RunID, // legacy
-			"session_id":            conv.RunID,
-			"server_time":           time.Now().UnixMilli(),
-			"frames":                filtered,
-			"frame_count":           len(filtered),
-			"last_seq":              lastSeq,
-			"last_stream_id":        lastStreamID,
-			"queue_depth":           queueDepth,
-			"running_idempotency":   runningKey,
-			"requested_since_seq":   sinceSeq,
-			"requested_frame_limit": limit,
-		}
-		_ = json.NewEncoder(w).Encode(resp)
-	}
-	r.mux.HandleFunc("/hydrate", hydrateHandler)
-	r.mux.HandleFunc("/hydrate/", hydrateHandler)
-
 	timelineHandler := func(w http.ResponseWriter, r0 *http.Request) {
 		if r0.Method != http.MethodGet {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -894,7 +778,7 @@ func (r *Router) startRunForPrompt(conv *Conversation, profileSlug string, overr
 		turnID = seed.ID
 	}
 	if r.timelineStore != nil && turnID != "" && strings.TrimSpace(prompt) != "" {
-		_, _ = r.timelineStore.Upsert(r.baseCtx, conv.ID, &timelinepb.TimelineEntityV1{
+		entity := &timelinepb.TimelineEntityV1{
 			Id:   "user-" + turnID,
 			Kind: "message",
 			Snapshot: &timelinepb.TimelineEntityV1_Message{
@@ -905,7 +789,10 @@ func (r *Router) startRunForPrompt(conv *Conversation, profileSlug string, overr
 					Streaming:     false,
 				},
 			},
-		})
+		}
+		if v, err := r.timelineStore.Upsert(r.baseCtx, conv.ID, entity); err == nil {
+			r.emitTimelineUpsert(conv, entity, v)
+		}
 	}
 
 	if stepModeFromOverrides(overrides) && r.stepCtrl != nil {

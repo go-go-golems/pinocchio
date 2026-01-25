@@ -6,6 +6,7 @@ export type TimelineEntity = {
   kind: string;
   createdAt: number;
   updatedAt?: number;
+  version?: number;
   props: any;
 };
 
@@ -32,6 +33,30 @@ export const timelineSlice = createSlice({
         return;
       }
       const existing = state.byId[e.id];
+      const incomingVersion = typeof e.version === 'number' && Number.isFinite(e.version) ? e.version : 0;
+      const existingVersion = typeof existing.version === 'number' && Number.isFinite(existing.version) ? existing.version : 0;
+      if (incomingVersion > 0) {
+        if (incomingVersion < existingVersion) {
+          return;
+        }
+        state.byId[e.id] = {
+          ...existing,
+          ...e,
+          createdAt: e.createdAt || existing.createdAt,
+          kind: e.kind || existing.kind,
+          version: incomingVersion,
+          props: { ...(existing.props ?? {}), ...(e.props ?? {}) },
+        };
+        return;
+      }
+      if (existingVersion > 0) {
+        state.byId[e.id] = {
+          ...existing,
+          updatedAt: e.updatedAt ?? existing.updatedAt,
+          props: { ...(existing.props ?? {}), ...(e.props ?? {}) },
+        };
+        return;
+      }
       state.byId[e.id] = {
         ...existing,
         ...e,

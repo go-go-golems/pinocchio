@@ -88,7 +88,7 @@ func (r *Router) getOrCreateConv(convID, profileSlug string, overrides map[strin
 			c.semBuf = newSemFrameBuffer(1000)
 		}
 		if c.timelineProj == nil && r.timelineStore != nil {
-			c.timelineProj = NewTimelineProjector(c.ID, r.timelineStore)
+			c.timelineProj = NewTimelineProjector(c.ID, r.timelineStore, r.timelineUpsertHook(c))
 		}
 		c.mu.Unlock()
 		if c.ProfileSlug != profileSlug || c.EngConfigSig != newSig {
@@ -168,7 +168,7 @@ func (r *Router) getOrCreateConv(convID, profileSlug string, overrides map[strin
 		semBuf:       newSemFrameBuffer(1000),
 	}
 	if r.timelineStore != nil {
-		conv.timelineProj = NewTimelineProjector(conv.ID, r.timelineStore)
+		conv.timelineProj = NewTimelineProjector(conv.ID, r.timelineStore, r.timelineUpsertHook(conv))
 	}
 	eng, sink, err := r.BuildFromConfig(convID, cfg)
 	if err != nil {

@@ -3,11 +3,13 @@ Title: Pinocchio Web-Chat Example
 Slug: pinocchio-web-chat
 Short: Modular WebSocket chat UI that streams Geppetto events to the browser.
 Topics:
-- web-chat
+- webchat
 - streaming
 - events
 - websocket
 - middleware
+Commands:
+- web-chat
 IsTemplate: false
 IsTopLevel: false
 ShowPerDefault: true
@@ -34,7 +36,7 @@ The code is intentionally modular: the CLI entrypoint (`main.go`) wires flags an
 - `static/` — Embedded HTML/JS assets (built output under `static/dist/`)
 - `web/` — Vite + React + TypeScript frontend source
 - `pinocchio/pkg/webchat/`
-  - `router.go` — HTTP wiring (static assets, `/ws`, `/chat`, `/hydrate`), engine creation
+  - `router.go` — HTTP wiring (static assets, `/ws`, `/chat`, `/timeline`), engine creation
   - `conversation.go` — Per-conversation lifecycle, queue state, WebSocket fan-out
   - `stream_coordinator.go` — Single-writer + fan-out coordination for streaming SEM frames
   - `sem_translator.go` — Geppetto events → SEM envelope frames (registry-only; protobuf payloads)
@@ -115,16 +117,15 @@ return srv.ListenAndServe()
 - `POST /chat` — Starts a run
   - Body: `{ "prompt": string, "conv_id": string (optional) }`
   - Response: `{ "status": "started"|"queued", "conv_id": string, "session_id": string, "turn_id": string, "inference_id": string, "queue_position"?: number, "idempotency_key": string }`
-- `GET /hydrate?conv_id={string}&since_seq={int?}&limit={int?}` — Returns buffered SEM frames for hydration gating
-- `GET /timeline?conv_id={string}&since_version={uint64?}&limit={int?}` — Returns durable timeline snapshot entities (enabled when `--timeline-dsn` or `--timeline-db` is set)
+- `GET /timeline?conv_id={string}&since_version={uint64?}&limit={int?}` — Returns timeline snapshot entities (backed by SQLite when configured, otherwise in-memory)
 
 ## Redis Streams (Optional Transport)
 
 ## Durable Timeline Snapshots (PI-004 “actual hydration”)
 
-The `/timeline` endpoint is backed by a SQLite projection store and is disabled by default.
+The `/timeline` endpoint is backed by a SQLite projection store when configured, otherwise it falls back to an in-memory store for a single unified hydration path.
 
-Enable it by passing one of:
+Enable durable persistence by passing one of:
 - `--timeline-dsn "<sqlite dsn>"`
 - `--timeline-db "<path/to/timeline.db>"`
 
@@ -177,3 +178,14 @@ Open `http://localhost:8080/` and connect.
 - Use consumer groups at the tail (`$`) to avoid replaying full history to the UI.
 - Use per-conversation topics to isolate runs and simplify filtering.
 - Log at debug level for event traffic to troubleshoot mapping issues.
+
+## Related Documentation
+
+For deeper understanding of the webchat framework:
+
+- [Webchat Framework Guide](../../pkg/doc/topics/webchat-framework-guide.md) — End-to-end usage guide
+- [Backend Reference](../../pkg/doc/topics/webchat-backend-reference.md) — StreamCoordinator and ConnectionPool API
+- [Backend Internals](../../pkg/doc/topics/webchat-backend-internals.md) — Implementation details
+- [Debugging and Ops](../../pkg/doc/topics/webchat-debugging-and-ops.md) — Troubleshooting
+- [Frontend Integration](../../pkg/doc/topics/webchat-frontend-integration.md) — WebSocket and HTTP patterns
+- [SEM and UI](../../pkg/doc/topics/webchat-sem-and-ui.md) — Event routing and entities

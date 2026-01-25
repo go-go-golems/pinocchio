@@ -39,8 +39,9 @@ type planningAgg struct {
 // - aggregate planning events into a single PlanningSnapshotV1
 // - throttle high-frequency writes (llm.delta)
 type TimelineProjector struct {
-	convID string
-	store  TimelineStore
+	convID   string
+	store    TimelineStore
+	onUpsert func(entity *timelinepb.TimelineEntityV1, version uint64)
 
 	mu           sync.Mutex
 	msgRoles     map[string]string
@@ -50,16 +51,31 @@ type TimelineProjector struct {
 	planning     map[string]*planningAgg // key: run_id
 }
 
-func NewTimelineProjector(convID string, store TimelineStore) *TimelineProjector {
+func NewTimelineProjector(convID string, store TimelineStore, onUpsert func(entity *timelinepb.TimelineEntityV1, version uint64)) *TimelineProjector {
 	return &TimelineProjector{
 		convID:       convID,
 		store:        store,
+		onUpsert:     onUpsert,
 		msgRoles:     map[string]string{},
 		lastMsgWrite: map[string]int64{},
 		toolNames:    map[string]string{},
 		toolInputs:   map[string]*structpb.Struct{},
 		planning:     map[string]*planningAgg{},
 	}
+}
+
+func (p *TimelineProjector) upsert(ctx context.Context, entity *timelinepb.TimelineEntityV1) error {
+	if p == nil || p.store == nil {
+		return nil
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	version, err := p.store.Upsert(ctx, p.convID, entity)
+	if err == nil && p.onUpsert != nil {
+		p.onUpsert(entity, version)
+	}
+	return err
 }
 
 func (p *TimelineProjector) ApplySemFrame(ctx context.Context, frame []byte) error {
@@ -102,7 +118,7 @@ func (p *TimelineProjector) ApplySemFrame(ctx context.Context, frame []byte) err
 		p.mu.Lock()
 		p.msgRoles[env.Event.ID] = role
 		p.mu.Unlock()
-		_, err := p.store.Upsert(ctx, p.convID, &timelinepb.TimelineEntityV1{
+		err := p.upsert(ctx, &timelinepb.TimelineEntityV1{
 			Id:   env.Event.ID,
 			Kind: "message",
 			Snapshot: &timelinepb.TimelineEntityV1_Message{
@@ -140,7 +156,7 @@ func (p *TimelineProjector) ApplySemFrame(ctx context.Context, frame []byte) err
 		p.lastMsgWrite[env.Event.ID] = now
 		p.mu.Unlock()
 
-		_, err := p.store.Upsert(ctx, p.convID, &timelinepb.TimelineEntityV1{
+		err := p.upsert(ctx, &timelinepb.TimelineEntityV1{
 			Id:   env.Event.ID,
 			Kind: "message",
 			Snapshot: &timelinepb.TimelineEntityV1_Message{
@@ -166,7 +182,7 @@ func (p *TimelineProjector) ApplySemFrame(ctx context.Context, frame []byte) err
 		}
 		delete(p.lastMsgWrite, env.Event.ID)
 		p.mu.Unlock()
-		_, err := p.store.Upsert(ctx, p.convID, &timelinepb.TimelineEntityV1{
+		err := p.upsert(ctx, &timelinepb.TimelineEntityV1{
 			Id:   env.Event.ID,
 			Kind: "message",
 			Snapshot: &timelinepb.TimelineEntityV1_Message{
@@ -189,7 +205,7 @@ func (p *TimelineProjector) ApplySemFrame(ctx context.Context, frame []byte) err
 		}
 		delete(p.lastMsgWrite, env.Event.ID)
 		p.mu.Unlock()
-		_, err := p.store.Upsert(ctx, p.convID, &timelinepb.TimelineEntityV1{
+		err := p.upsert(ctx, &timelinepb.TimelineEntityV1{
 			Id:   env.Event.ID,
 			Kind: "message",
 			Snapshot: &timelinepb.TimelineEntityV1_Message{
@@ -211,7 +227,7 @@ func (p *TimelineProjector) ApplySemFrame(ctx context.Context, frame []byte) err
 		p.toolNames[env.Event.ID] = pb.Name
 		p.toolInputs[env.Event.ID] = pb.Input
 		p.mu.Unlock()
-		_, err := p.store.Upsert(ctx, p.convID, &timelinepb.TimelineEntityV1{
+		err := p.upsert(ctx, &timelinepb.TimelineEntityV1{
 			Id:   env.Event.ID,
 			Kind: "tool_call",
 			Snapshot: &timelinepb.TimelineEntityV1_ToolCall{
@@ -232,7 +248,7 @@ func (p *TimelineProjector) ApplySemFrame(ctx context.Context, frame []byte) err
 		name := p.toolNames[env.Event.ID]
 		input := p.toolInputs[env.Event.ID]
 		p.mu.Unlock()
-		_, err := p.store.Upsert(ctx, p.convID, &timelinepb.TimelineEntityV1{
+		err := p.upsert(ctx, &timelinepb.TimelineEntityV1{
 			Id:   env.Event.ID,
 			Kind: "tool_call",
 			Snapshot: &timelinepb.TimelineEntityV1_ToolCall{
@@ -268,7 +284,7 @@ func (p *TimelineProjector) ApplySemFrame(ctx context.Context, frame []byte) err
 				resultStruct = st
 			}
 		}
-		_, err := p.store.Upsert(ctx, p.convID, &timelinepb.TimelineEntityV1{
+		err := p.upsert(ctx, &timelinepb.TimelineEntityV1{
 			Id:   resultEntityID,
 			Kind: "tool_result",
 			Snapshot: &timelinepb.TimelineEntityV1_ToolResult{
@@ -339,7 +355,7 @@ func (p *TimelineProjector) ApplySemFrame(ctx context.Context, frame []byte) err
 		if errStr != "" {
 			status = "error"
 		}
-		_, err := p.store.Upsert(ctx, p.convID, &timelinepb.TimelineEntityV1{
+		err := p.upsert(ctx, &timelinepb.TimelineEntityV1{
 			Id:   itemID,
 			Kind: "thinking_mode",
 			Snapshot: &timelinepb.TimelineEntityV1_ThinkingMode{
@@ -606,7 +622,7 @@ func (p *TimelineProjector) applyPlanning(ctx context.Context, typ string, data 
 	snapCopy.Iterations = iters
 	p.mu.Unlock()
 
-	_, err := p.store.Upsert(ctx, p.convID, &timelinepb.TimelineEntityV1{
+	err := p.upsert(ctx, &timelinepb.TimelineEntityV1{
 		Id:   snapCopy.RunId,
 		Kind: "planning",
 		Snapshot: &timelinepb.TimelineEntityV1_Planning{

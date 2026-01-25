@@ -30,6 +30,8 @@ import {
   type ExecutionCompleted,
   type ExecutionStarted,
 } from '../sem/pb/proto/sem/middleware/planning_pb';
+import { TimelineUpsertV1Schema, type TimelineUpsertV1 } from '../sem/pb/proto/sem/timeline/transport_pb';
+import { timelineEntityFromProto } from './timelineMapper';
 
 export type SemEnvelope = { sem: true; event: SemEvent };
 export type SemEvent = {
@@ -144,6 +146,15 @@ function planningEntityFromAgg(agg: PlanningAgg, now: number): TimelineEntity {
 export function registerDefaultSemHandlers() {
   handlers.clear();
   planningAggs.clear();
+
+  registerSem('timeline.upsert', (ev, dispatch) => {
+    const data = decodeProto<TimelineUpsertV1>(TimelineUpsertV1Schema, ev.data);
+    const entity = data?.entity;
+    if (!entity) return;
+    const mapped = timelineEntityFromProto(entity, data?.version);
+    if (!mapped) return;
+    upsertEntity(dispatch, mapped);
+  });
 
   registerSem('llm.start', (ev, dispatch) => {
     const data = decodeProto<LlmStart>(LlmStartSchema, ev.data);
