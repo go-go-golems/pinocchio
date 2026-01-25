@@ -248,9 +248,11 @@ class WsManager {
       const res = await fetch(`${args.basePrefix}/timeline?conv_id=${encodeURIComponent(args.convId)}`);
       if (res.ok) {
         const j = await res.json();
+        if (nonce !== this.connectNonce) return;
         if (isObject(j)) {
           const snap = fromJson(TimelineSnapshotV1Schema as any, j as any, { ignoreUnknownFields: true }) as any;
           if (snap) {
+            if (nonce !== this.connectNonce) return;
             applyTimelineSnapshot(snap, args.dispatch);
             hydratedViaTimeline = true;
           }
