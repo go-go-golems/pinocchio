@@ -95,9 +95,10 @@ type Router struct {
 	cm *ConvManager
 
 	// runtime flags
-	usesRedis      bool
-	redisAddr      string
-	idleTimeoutSec int
+	usesRedis         bool
+	redisAddr         string
+	idleTimeoutSec    int
+	emitPlanningStubs bool
 
 	// step mode control (shared; not conversation-owned)
 	stepCtrl *toolloop.StepController

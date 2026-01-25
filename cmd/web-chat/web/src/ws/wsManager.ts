@@ -126,6 +126,8 @@ class WsManager {
   private connectNonce = 0;
   private hydrated: boolean = false;
   private buffered: RawSemEnvelope[] = [];
+  private lastDispatch: AppDispatch | null = null;
+  private lastOnStatus: ((s: string) => void) | null = null;
 
   async connect(args: ConnectArgs) {
     if (this.ws && this.convId === args.convId) return;
@@ -137,6 +139,8 @@ class WsManager {
     this.convId = args.convId;
     this.hydrated = false;
     this.buffered = [];
+    this.lastDispatch = args.dispatch;
+    this.lastOnStatus = args.onStatus ?? null;
 
     registerDefaultSemHandlers();
 
@@ -184,6 +188,8 @@ class WsManager {
 
   disconnect() {
     this.connectNonce++;
+    this.lastOnStatus?.('ws disconnected');
+    this.lastDispatch?.(appSlice.actions.setWsStatus('disconnected'));
     try {
       this.ws?.close();
     } catch {

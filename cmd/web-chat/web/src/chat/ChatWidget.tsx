@@ -373,6 +373,18 @@ export function ChatWidget() {
     [send],
   );
 
+  const onNewConversation = useCallback(() => {
+    wsManager.disconnect();
+    dispatch(appSlice.actions.setConvId(''));
+    dispatch(appSlice.actions.setRunId(''));
+    dispatch(appSlice.actions.setStatus('idle'));
+    dispatch(appSlice.actions.setWsStatus('disconnected'));
+    dispatch(appSlice.actions.setLastSeq(0));
+    dispatch(appSlice.actions.setQueueDepth(0));
+    dispatch(timelineSlice.actions.clear());
+    setConvIdInLocation(null);
+  }, [dispatch]);
+
   return (
     <div className="chatRoot">
       <header className="chatHeader">
@@ -425,11 +437,7 @@ export function ChatWidget() {
             <button
               type="button"
               className="btn btnGhost"
-              onClick={() => {
-                dispatch(appSlice.actions.setConvId(''));
-                dispatch(appSlice.actions.setRunId(''));
-                setConvIdInLocation(null);
-              }}
+              onClick={onNewConversation}
             >
               New conv
             </button>

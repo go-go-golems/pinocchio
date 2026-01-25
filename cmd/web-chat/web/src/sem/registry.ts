@@ -143,6 +143,7 @@ function planningEntityFromAgg(agg: PlanningAgg, now: number): TimelineEntity {
 
 export function registerDefaultSemHandlers() {
   handlers.clear();
+  planningAggs.clear();
 
   registerSem('llm.start', (ev, dispatch) => {
     const data = decodeProto<LlmStart>(LlmStartSchema, ev.data);

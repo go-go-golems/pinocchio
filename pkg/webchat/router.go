@@ -45,6 +45,9 @@ type RouterSettings struct {
 	// - timeline-db (file path; DSN derived)
 	TimelineDSN string `glazed.parameter:"timeline-dsn"`
 	TimelineDB  string `glazed.parameter:"timeline-db"`
+	// Optional: emit stub "agentic" planning/thinking events so the UI can render
+	// planning widgets even when no real planning middleware is configured.
+	EmitPlanningStubs bool `glazed.parameter:"emit-planning-stubs"`
 }
 
 // RouterBuilder creates a new composable webchat router.
@@ -80,6 +83,7 @@ func NewRouter(ctx context.Context, parsed *layers.ParsedLayers, staticFS embed.
 	if err := parsed.InitializeStruct(layers.DefaultSlug, s); err != nil {
 		return nil, errors.Wrap(err, "parse router settings")
 	}
+	r.emitPlanningStubs = s.EmitPlanningStubs
 	if dsn := strings.TrimSpace(s.TimelineDSN); dsn != "" {
 		store, err := NewSQLiteTimelineStore(dsn)
 		if err != nil {
@@ -939,7 +943,9 @@ func (r *Router) startRunForPrompt(conv *Conversation, profileSlug string, overr
 		agenticRunID = uuid.NewString()
 	}
 	agenticDirective := fmt.Sprintf("Respond to the user prompt (turn %s).", turnID)
-	r.emitAgenticPlanningAndThinking(runLog, conv, cfg, agenticRunID, turnID, handle.InferenceID, agenticDirective)
+	if r.emitPlanningStubs {
+		r.emitAgenticPlanningAndThinking(runLog, conv, cfg, agenticRunID, turnID, handle.InferenceID, agenticDirective)
+	}
 
 	resp := map[string]any{
 		"status":          "started",
@@ -978,7 +984,9 @@ func (r *Router) startRunForPrompt(conv *Conversation, profileSlug string, overr
 		if finalTurnID == "" {
 			finalTurnID = turnID
 		}
-		r.emitAgenticExecutionComplete(runLog, conv, agenticRunID, finalTurnID, handle.InferenceID, waitErr)
+		if r.emitPlanningStubs {
+			r.emitAgenticExecutionComplete(runLog, conv, agenticRunID, finalTurnID, handle.InferenceID, waitErr)
+		}
 		r.finishRun(conv, idempotencyKey, handle.InferenceID, turnID, waitErr)
 		if waitErr != nil {
 			runLog.Error().Err(waitErr).Str("inference_id", handle.InferenceID).Msg("run loop error")
