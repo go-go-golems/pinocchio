@@ -1,0 +1,48 @@
+syntax = "proto3";
+
+package sem.timeline;
+
+option go_package = "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/timeline;timeline";
+
+import "google/protobuf/struct.proto";
+
+message PlanningIterationSnapshotV1 {
+  int32 iteration_index = 1; // 1-based
+  string action = 2;
+  string reasoning = 3;
+  string strategy = 4;
+  string progress = 5;
+  string tool_name = 6;
+  google.protobuf.Struct extra = 7;
+  int64 emitted_at_unix_ms = 8;
+  string reflection_text = 9;
+}
+
+message ExecutionSnapshotV1 {
+  string executor_model = 1;
+  string directive = 2;
+  int64 started_at_unix_ms = 3;
+  int64 completed_at_unix_ms = 4;
+  string status = 5;        // running|completed|error
+  string error_message = 6; // optional
+}
+
+// PlanningSnapshotV1 defines the payload for a timeline 'planning' entity.
+message PlanningSnapshotV1 {
+  uint32 schema_version = 1; // =1
+
+  // A single planner run (correlates to sem.middleware.planning.PlanningRun.run_id).
+  string run_id = 2;
+  string provider = 3;
+  string planner_model = 4;
+  int32 max_iterations = 5;
+
+  int64 started_at_unix_ms = 10;
+  int64 completed_at_unix_ms = 11;
+
+  // planning|executing|completed|error
+  string status = 12;
+
+  repeated PlanningIterationSnapshotV1 iterations = 20;
+  ExecutionSnapshotV1 execution = 21;
+}

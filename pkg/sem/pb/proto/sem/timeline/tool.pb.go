@@ -30,6 +30,7 @@ type ToolCallSnapshotV1 struct {
 	Input         *structpb.Struct       `protobuf:"bytes,3,opt,name=input,proto3" json:"input,omitempty"`         // structured input
 	Status        string                 `protobuf:"bytes,4,opt,name=status,proto3" json:"status,omitempty"`       // queued|running|completed|error
 	Progress      float64                `protobuf:"fixed64,5,opt,name=progress,proto3" json:"progress,omitempty"` // 0..1
+	Done          bool                   `protobuf:"varint,6,opt,name=done,proto3" json:"done,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -99,6 +100,13 @@ func (x *ToolCallSnapshotV1) GetProgress() float64 {
 	return 0
 }
 
+func (x *ToolCallSnapshotV1) GetDone() bool {
+	if x != nil {
+		return x.Done
+	}
+	return false
+}
+
 // ToolResultSnapshotV1 defines the payload for a 'tool_result' entity.
 type ToolResultSnapshotV1 struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -106,6 +114,10 @@ type ToolResultSnapshotV1 struct {
 	ToolCallId    string                 `protobuf:"bytes,2,opt,name=tool_call_id,json=toolCallId,proto3" json:"tool_call_id,omitempty"`         // -> toolCallId (camelCase) in JSON
 	Result        *structpb.Struct       `protobuf:"bytes,3,opt,name=result,proto3" json:"result,omitempty"`                                     // structured result
 	Error         string                 `protobuf:"bytes,4,opt,name=error,proto3" json:"error,omitempty"`                                       // optional
+	// Optional: raw result text when the tool result is not structured JSON.
+	ResultRaw string `protobuf:"bytes,5,opt,name=result_raw,json=resultRaw,proto3" json:"result_raw,omitempty"`
+	// Optional: renderer hint (e.g. "calc_result") carried through from SEM tool.result.
+	CustomKind    string `protobuf:"bytes,6,opt,name=custom_kind,json=customKind,proto3" json:"custom_kind,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -168,23 +180,42 @@ func (x *ToolResultSnapshotV1) GetError() string {
 	return ""
 }
 
+func (x *ToolResultSnapshotV1) GetResultRaw() string {
+	if x != nil {
+		return x.ResultRaw
+	}
+	return ""
+}
+
+func (x *ToolResultSnapshotV1) GetCustomKind() string {
+	if x != nil {
+		return x.CustomKind
+	}
+	return ""
+}
+
 var File_proto_sem_timeline_tool_proto protoreflect.FileDescriptor
 
 const file_proto_sem_timeline_tool_proto_rawDesc = "" +
 	"\n" +
-	"\x1dproto/sem/timeline/tool.proto\x12\fsem.timeline\x1a\x1cgoogle/protobuf/struct.proto\"\xb2\x01\n" +
+	"\x1dproto/sem/timeline/tool.proto\x12\fsem.timeline\x1a\x1cgoogle/protobuf/struct.proto\"\xc6\x01\n" +
 	"\x12ToolCallSnapshotV1\x12%\n" +
 	"\x0eschema_version\x18\x01 \x01(\rR\rschemaVersion\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12-\n" +
 	"\x05input\x18\x03 \x01(\v2\x17.google.protobuf.StructR\x05input\x12\x16\n" +
 	"\x06status\x18\x04 \x01(\tR\x06status\x12\x1a\n" +
-	"\bprogress\x18\x05 \x01(\x01R\bprogress\"\xa6\x01\n" +
+	"\bprogress\x18\x05 \x01(\x01R\bprogress\x12\x12\n" +
+	"\x04done\x18\x06 \x01(\bR\x04done\"\xe6\x01\n" +
 	"\x14ToolResultSnapshotV1\x12%\n" +
 	"\x0eschema_version\x18\x01 \x01(\rR\rschemaVersion\x12 \n" +
 	"\ftool_call_id\x18\x02 \x01(\tR\n" +
 	"toolCallId\x12/\n" +
 	"\x06result\x18\x03 \x01(\v2\x17.google.protobuf.StructR\x06result\x12\x14\n" +
-	"\x05error\x18\x04 \x01(\tR\x05errorBJZHgithub.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/timeline;timelineb\x06proto3"
+	"\x05error\x18\x04 \x01(\tR\x05error\x12\x1d\n" +
+	"\n" +
+	"result_raw\x18\x05 \x01(\tR\tresultRaw\x12\x1f\n" +
+	"\vcustom_kind\x18\x06 \x01(\tR\n" +
+	"customKindBJZHgithub.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/timeline;timelineb\x06proto3"
 
 var (
 	file_proto_sem_timeline_tool_proto_rawDescOnce sync.Once

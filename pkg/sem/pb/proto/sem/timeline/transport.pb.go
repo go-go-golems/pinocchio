@@ -41,6 +41,7 @@ type TimelineEntityV1 struct {
 	//	*TimelineEntityV1_ModeEvaluation
 	//	*TimelineEntityV1_InnerThoughts
 	//	*TimelineEntityV1_TeamAnalysis
+	//	*TimelineEntityV1_Planning
 	Snapshot      isTimelineEntityV1_Snapshot `protobuf_oneof:"snapshot"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -183,6 +184,15 @@ func (x *TimelineEntityV1) GetTeamAnalysis() *TeamAnalysisSnapshotV1 {
 	return nil
 }
 
+func (x *TimelineEntityV1) GetPlanning() *PlanningSnapshotV1 {
+	if x != nil {
+		if x, ok := x.Snapshot.(*TimelineEntityV1_Planning); ok {
+			return x.Planning
+		}
+	}
+	return nil
+}
+
 type isTimelineEntityV1_Snapshot interface {
 	isTimelineEntityV1_Snapshot()
 }
@@ -219,6 +229,10 @@ type TimelineEntityV1_TeamAnalysis struct {
 	TeamAnalysis *TeamAnalysisSnapshotV1 `protobuf:"bytes,17,opt,name=team_analysis,json=teamAnalysis,proto3,oneof"`
 }
 
+type TimelineEntityV1_Planning struct {
+	Planning *PlanningSnapshotV1 `protobuf:"bytes,18,opt,name=planning,proto3,oneof"`
+}
+
 func (*TimelineEntityV1_Message) isTimelineEntityV1_Snapshot() {}
 
 func (*TimelineEntityV1_ToolCall) isTimelineEntityV1_Snapshot() {}
@@ -234,6 +248,8 @@ func (*TimelineEntityV1_ModeEvaluation) isTimelineEntityV1_Snapshot() {}
 func (*TimelineEntityV1_InnerThoughts) isTimelineEntityV1_Snapshot() {}
 
 func (*TimelineEntityV1_TeamAnalysis) isTimelineEntityV1_Snapshot() {}
+
+func (*TimelineEntityV1_Planning) isTimelineEntityV1_Snapshot() {}
 
 // TimelineUpsertV1 is emitted when an entity is inserted/updated in the projection.
 type TimelineUpsertV1 struct {
@@ -370,7 +386,7 @@ var File_proto_sem_timeline_transport_proto protoreflect.FileDescriptor
 
 const file_proto_sem_timeline_transport_proto_rawDesc = "" +
 	"\n" +
-	"\"proto/sem/timeline/transport.proto\x12\fsem.timeline\x1a proto/sem/timeline/message.proto\x1a#proto/sem/timeline/middleware.proto\x1a\x1fproto/sem/timeline/status.proto\x1a&proto/sem/timeline/team_analysis.proto\x1a\x1dproto/sem/timeline/tool.proto\"\xc6\x05\n" +
+	"\"proto/sem/timeline/transport.proto\x12\fsem.timeline\x1a proto/sem/timeline/message.proto\x1a#proto/sem/timeline/middleware.proto\x1a!proto/sem/timeline/planning.proto\x1a\x1fproto/sem/timeline/status.proto\x1a&proto/sem/timeline/team_analysis.proto\x1a\x1dproto/sem/timeline/tool.proto\"\x86\x06\n" +
 	"\x10TimelineEntityV1\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04kind\x18\x02 \x01(\tR\x04kind\x12\"\n" +
@@ -385,7 +401,8 @@ const file_proto_sem_timeline_transport_proto_rawDesc = "" +
 	"\rthinking_mode\x18\x0e \x01(\v2$.sem.timeline.ThinkingModeSnapshotV1H\x00R\fthinkingMode\x12Q\n" +
 	"\x0fmode_evaluation\x18\x0f \x01(\v2&.sem.timeline.ModeEvaluationSnapshotV1H\x00R\x0emodeEvaluation\x12N\n" +
 	"\x0einner_thoughts\x18\x10 \x01(\v2%.sem.timeline.InnerThoughtsSnapshotV1H\x00R\rinnerThoughts\x12K\n" +
-	"\rteam_analysis\x18\x11 \x01(\v2$.sem.timeline.TeamAnalysisSnapshotV1H\x00R\fteamAnalysisB\n" +
+	"\rteam_analysis\x18\x11 \x01(\v2$.sem.timeline.TeamAnalysisSnapshotV1H\x00R\fteamAnalysis\x12>\n" +
+	"\bplanning\x18\x12 \x01(\v2 .sem.timeline.PlanningSnapshotV1H\x00R\bplanningB\n" +
 	"\n" +
 	"\bsnapshot\"}\n" +
 	"\x10TimelineUpsertV1\x12\x17\n" +
@@ -424,6 +441,7 @@ var file_proto_sem_timeline_transport_proto_goTypes = []any{
 	(*ModeEvaluationSnapshotV1)(nil), // 8: sem.timeline.ModeEvaluationSnapshotV1
 	(*InnerThoughtsSnapshotV1)(nil),  // 9: sem.timeline.InnerThoughtsSnapshotV1
 	(*TeamAnalysisSnapshotV1)(nil),   // 10: sem.timeline.TeamAnalysisSnapshotV1
+	(*PlanningSnapshotV1)(nil),       // 11: sem.timeline.PlanningSnapshotV1
 }
 var file_proto_sem_timeline_transport_proto_depIdxs = []int32{
 	3,  // 0: sem.timeline.TimelineEntityV1.message:type_name -> sem.timeline.MessageSnapshotV1
@@ -434,13 +452,14 @@ var file_proto_sem_timeline_transport_proto_depIdxs = []int32{
 	8,  // 5: sem.timeline.TimelineEntityV1.mode_evaluation:type_name -> sem.timeline.ModeEvaluationSnapshotV1
 	9,  // 6: sem.timeline.TimelineEntityV1.inner_thoughts:type_name -> sem.timeline.InnerThoughtsSnapshotV1
 	10, // 7: sem.timeline.TimelineEntityV1.team_analysis:type_name -> sem.timeline.TeamAnalysisSnapshotV1
-	0,  // 8: sem.timeline.TimelineUpsertV1.entity:type_name -> sem.timeline.TimelineEntityV1
-	0,  // 9: sem.timeline.TimelineSnapshotV1.entities:type_name -> sem.timeline.TimelineEntityV1
-	10, // [10:10] is the sub-list for method output_type
-	10, // [10:10] is the sub-list for method input_type
-	10, // [10:10] is the sub-list for extension type_name
-	10, // [10:10] is the sub-list for extension extendee
-	0,  // [0:10] is the sub-list for field type_name
+	11, // 8: sem.timeline.TimelineEntityV1.planning:type_name -> sem.timeline.PlanningSnapshotV1
+	0,  // 9: sem.timeline.TimelineUpsertV1.entity:type_name -> sem.timeline.TimelineEntityV1
+	0,  // 10: sem.timeline.TimelineSnapshotV1.entities:type_name -> sem.timeline.TimelineEntityV1
+	11, // [11:11] is the sub-list for method output_type
+	11, // [11:11] is the sub-list for method input_type
+	11, // [11:11] is the sub-list for extension type_name
+	11, // [11:11] is the sub-list for extension extendee
+	0,  // [0:11] is the sub-list for field type_name
 }
 
 func init() { file_proto_sem_timeline_transport_proto_init() }
@@ -450,6 +469,7 @@ func file_proto_sem_timeline_transport_proto_init() {
 	}
 	file_proto_sem_timeline_message_proto_init()
 	file_proto_sem_timeline_middleware_proto_init()
+	file_proto_sem_timeline_planning_proto_init()
 	file_proto_sem_timeline_status_proto_init()
 	file_proto_sem_timeline_team_analysis_proto_init()
 	file_proto_sem_timeline_tool_proto_init()
@@ -462,6 +482,7 @@ func file_proto_sem_timeline_transport_proto_init() {
 		(*TimelineEntityV1_ModeEvaluation)(nil),
 		(*TimelineEntityV1_InnerThoughts)(nil),
 		(*TimelineEntityV1_TeamAnalysis)(nil),
+		(*TimelineEntityV1_Planning)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{

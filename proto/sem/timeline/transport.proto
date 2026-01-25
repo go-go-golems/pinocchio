@@ -6,6 +6,7 @@ option go_package = "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/time
 
 import "proto/sem/timeline/message.proto";
 import "proto/sem/timeline/middleware.proto";
+import "proto/sem/timeline/planning.proto";
 import "proto/sem/timeline/status.proto";
 import "proto/sem/timeline/team_analysis.proto";
 import "proto/sem/timeline/tool.proto";
@@ -28,6 +29,7 @@ message TimelineEntityV1 {
     sem.timeline.ModeEvaluationSnapshotV1 mode_evaluation = 15;
     sem.timeline.InnerThoughtsSnapshotV1 inner_thoughts = 16;
     sem.timeline.TeamAnalysisSnapshotV1 team_analysis = 17;
+    sem.timeline.PlanningSnapshotV1 planning = 18;
   }
 }
 

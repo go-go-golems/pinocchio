@@ -13,6 +13,7 @@ message ToolCallSnapshotV1 {
   google.protobuf.Struct input = 3; // structured input
   string status = 4;                 // queued|running|completed|error
   double progress = 5;               // 0..1
+  bool done = 6;
 }
 
 // ToolResultSnapshotV1 defines the payload for a 'tool_result' entity.
@@ -21,6 +22,8 @@ message ToolResultSnapshotV1 {
   string tool_call_id = 2;   // -> toolCallId (camelCase) in JSON
   google.protobuf.Struct result = 3; // structured result
   string error = 4;                  // optional
+  // Optional: raw result text when the tool result is not structured JSON.
+  string result_raw = 5;
+  // Optional: renderer hint (e.g. "calc_result") carried through from SEM tool.result.
+  string custom_kind = 6;
 }
-
-
