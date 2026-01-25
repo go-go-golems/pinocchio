@@ -8,8 +8,10 @@ Topics:
 - middleware
 - tools
 - http
+Commands:
+- web-chat
 IsTemplate: false
-IsTopLevel: false
+IsTopLevel: true
 ShowPerDefault: true
 SectionType: GeneralTopic
 ---
@@ -326,7 +328,22 @@ _ = webchat.NewFromRouter(ctx, r, httpSrv).Run(ctx)
 - Unknown profile: Verify your profile registration and list profiles via `GET /api/chat/profiles`. If no profile cookie is set and none provided, the router uses `default`.
 - Mounting under a prefix: Ensure you’re using `http.StripPrefix(strings.TrimRight(prefix, "/"), r.Handler())` and your frontend assets use relative paths (Vite `base: './'`).
 
-## 12. Next Steps
+## 12. Related Documentation
+
+For deeper understanding of specific components:
+
+- [Backend Reference](webchat-backend-reference.md) — API reference for StreamCoordinator and ConnectionPool
+- [Backend Internals](webchat-backend-internals.md) — Implementation details, concurrency, and performance
+- [Debugging and Ops](webchat-debugging-and-ops.md) — Operational procedures and troubleshooting
+- [Frontend Integration](webchat-frontend-integration.md) — WebSocket and HTTP integration patterns
+- [SEM and UI](webchat-sem-and-ui.md) — SEM event format, routing, and timeline entities
+
+For geppetto core concepts (session lifecycle, events, tool loop):
+
+- See `geppetto/pkg/doc/topics/` for event sinks and session management
+- See `geppetto/pkg/doc/playbooks/04-migrate-to-session-api.md` for session migration
+
+## 13. Next Steps
 
 - Add a new profile (e.g., `rag`) with a retrieval middleware.
 - Implement a custom run loop for multi-turn planning.
