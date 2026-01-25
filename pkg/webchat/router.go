@@ -18,6 +18,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 
 	"github.com/go-go-golems/geppetto/pkg/events"
@@ -27,6 +28,7 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/turns"
 	"github.com/go-go-golems/geppetto/pkg/turns/serde"
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
+	inevents "github.com/go-go-golems/pinocchio/pkg/inference/events"
 	rediscfg "github.com/go-go-golems/pinocchio/pkg/redisstream"
 	sempb "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/base"
 )
@@ -797,6 +799,10 @@ func (r *Router) startRunForPrompt(conv *Conversation, profileSlug string, overr
 		r.finishRun(conv, idempotencyKey, "", "", err)
 		return nil, err
 	}
+	turnID := ""
+	if seed != nil && seed.ID != "" {
+		turnID = seed.ID
+	}
 
 	if stepModeFromOverrides(overrides) && r.stepCtrl != nil {
 		r.stepCtrl.Enable(toolloop.StepScope{SessionID: conv.RunID, ConversationID: conv.ID})
@@ -819,9 +825,21 @@ func (r *Router) startRunForPrompt(conv *Conversation, profileSlug string, overr
 
 	handle, err := conv.Sess.StartInference(r.baseCtx)
 	if err != nil {
-		r.finishRun(conv, idempotencyKey, "", seed.ID, err)
+		r.finishRun(conv, idempotencyKey, "", turnID, err)
 		return nil, err
 	}
+	if handle == nil {
+		err := errors.New("start inference returned nil handle")
+		r.finishRun(conv, idempotencyKey, "", turnID, err)
+		return nil, err
+	}
+
+	agenticRunID := handle.InferenceID
+	if agenticRunID == "" {
+		agenticRunID = uuid.NewString()
+	}
+	agenticDirective := fmt.Sprintf("Respond to the user prompt (turn %s).", turnID)
+	r.emitAgenticPlanningAndThinking(runLog, conv, cfg, agenticRunID, turnID, handle.InferenceID, agenticDirective)
 
 	resp := map[string]any{
 		"status":          "started",
@@ -830,16 +848,14 @@ func (r *Router) startRunForPrompt(conv *Conversation, profileSlug string, overr
 		"run_id":          conv.RunID, // legacy
 		"session_id":      conv.RunID,
 	}
-	if seed != nil && seed.ID != "" {
-		resp["turn_id"] = seed.ID
+	if turnID != "" {
+		resp["turn_id"] = turnID
 	}
-	if handle != nil {
-		if handle.InferenceID != "" {
-			resp["inference_id"] = handle.InferenceID
-		}
-		if handle.Input != nil && handle.Input.ID != "" {
-			resp["turn_id"] = handle.Input.ID
-		}
+	if handle.InferenceID != "" {
+		resp["inference_id"] = handle.InferenceID
+	}
+	if handle.Input != nil && handle.Input.ID != "" {
+		resp["turn_id"] = handle.Input.ID
 	}
 
 	conv.mu.Lock()
@@ -855,10 +871,14 @@ func (r *Router) startRunForPrompt(conv *Conversation, profileSlug string, overr
 
 	go func() {
 		_, waitErr := handle.Wait()
-		var turnID string
+		var finalTurnID string
 		if v, ok := resp["turn_id"].(string); ok {
-			turnID = v
+			finalTurnID = v
 		}
+		if finalTurnID == "" {
+			finalTurnID = turnID
+		}
+		r.emitAgenticExecutionComplete(runLog, conv, agenticRunID, finalTurnID, handle.InferenceID, waitErr)
 		r.finishRun(conv, idempotencyKey, handle.InferenceID, turnID, waitErr)
 		if waitErr != nil {
 			runLog.Error().Err(waitErr).Str("inference_id", handle.InferenceID).Msg("run loop error")
@@ -868,6 +888,100 @@ func (r *Router) startRunForPrompt(conv *Conversation, profileSlug string, overr
 	}()
 
 	return resp, nil
+}
+
+func (r *Router) emitAgenticPlanningAndThinking(
+	logger zerolog.Logger,
+	conv *Conversation,
+	cfg EngineConfig,
+	agenticRunID string,
+	turnID string,
+	inferenceID string,
+	directive string,
+) {
+	if conv == nil || conv.Sink == nil {
+		return
+	}
+
+	provider := ""
+	model := ""
+	if cfg.StepSettings != nil && cfg.StepSettings.Chat != nil {
+		if cfg.StepSettings.Chat.ApiType != nil {
+			provider = string(*cfg.StepSettings.Chat.ApiType)
+		}
+		if cfg.StepSettings.Chat.Engine != nil {
+			model = *cfg.StepSettings.Chat.Engine
+		}
+	}
+
+	md := events.EventMetadata{
+		ID:          uuid.New(),
+		SessionID:   conv.RunID,
+		InferenceID: inferenceID,
+		TurnID:      turnID,
+	}
+
+	// Thinking mode: emit a simple selection/completion pair so the UI can render.
+	itemID := agenticRunID + ":thinking-mode"
+	thinking := &inevents.ThinkingModePayload{
+		Mode:      "deep",
+		Phase:     "selected",
+		Reasoning: "Selected thinking mode for this run.",
+	}
+	_ = conv.Sink.PublishEvent(inevents.NewThinkingModeStarted(md, itemID, thinking))
+	_ = conv.Sink.PublishEvent(inevents.NewThinkingModeCompleted(md, itemID, thinking, true, ""))
+
+	// Planning: minimal, single-iteration plan that leads directly into execution.
+	started := time.Now().UnixMilli()
+	_ = conv.Sink.PublishEvent(inevents.NewPlanningStart(md, agenticRunID, provider, model, 1, started))
+
+	iter := inevents.NewPlanningIteration(md, agenticRunID, 1, "respond", "Direct response", "Executing")
+	iter.Provider = provider
+	iter.PlannerModel = model
+	iter.MaxIterations = 1
+	iter.Reasoning = "Proceed directly to execution for this prompt."
+	iter.EmittedAtUnixMs = time.Now().UnixMilli()
+	iter.ReflectionText = "No additional planning required."
+	_ = conv.Sink.PublishEvent(iter)
+
+	done := inevents.NewPlanningComplete(md, agenticRunID, 1, "execute")
+	done.Provider = provider
+	done.PlannerModel = model
+	done.MaxIterations = 1
+	done.StatusReason = "auto"
+	done.FinalDirective = directive
+	_ = conv.Sink.PublishEvent(done)
+
+	_ = conv.Sink.PublishEvent(inevents.NewExecutionStart(md, agenticRunID, model, directive))
+
+	logger.Debug().Str("agentic_run_id", agenticRunID).Msg("emitted planning/thinking-mode semantic events")
+}
+
+func (r *Router) emitAgenticExecutionComplete(
+	logger zerolog.Logger,
+	conv *Conversation,
+	agenticRunID string,
+	turnID string,
+	inferenceID string,
+	waitErr error,
+) {
+	if conv == nil || conv.Sink == nil {
+		return
+	}
+	md := events.EventMetadata{
+		ID:          uuid.New(),
+		SessionID:   conv.RunID,
+		InferenceID: inferenceID,
+		TurnID:      turnID,
+	}
+	status := "completed"
+	errMsg := ""
+	if waitErr != nil {
+		status = "error"
+		errMsg = waitErr.Error()
+	}
+	_ = conv.Sink.PublishEvent(inevents.NewExecutionComplete(md, agenticRunID, status, errMsg))
+	logger.Debug().Str("agentic_run_id", agenticRunID).Str("status", status).Msg("emitted execution.complete semantic event")
 }
 
 func (r *Router) finishRun(conv *Conversation, idempotencyKey string, inferenceID string, turnID string, err error) {

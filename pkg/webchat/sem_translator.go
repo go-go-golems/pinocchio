@@ -6,7 +6,9 @@ import (
 	"sync"
 
 	"github.com/go-go-golems/geppetto/pkg/events"
+	pinevents "github.com/go-go-golems/pinocchio/pkg/inference/events"
 	sempb "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/base"
+	semMw "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/middleware"
 	semregistry "github.com/go-go-golems/pinocchio/pkg/sem/registry"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
@@ -503,5 +505,191 @@ func (et *EventTranslator) RegisterDefaultHandlers() {
 			return nil, err
 		}
 		return [][]byte{wrapSem(map[string]any{"type": "debugger.pause", "id": ev.PauseID, "data": data})}, nil
+	})
+
+	// Agentic planning and thinking mode (typed events emitted by Pinocchio).
+	semregistry.RegisterByType[*pinevents.EventThinkingModeStarted](func(ev *pinevents.EventThinkingModeStarted) ([][]byte, error) {
+		var payload *semMw.ThinkingModePayload
+		if ev.Data != nil {
+			extra, err := mapToStruct(ev.Data.ExtraData)
+			if err != nil {
+				return nil, err
+			}
+			payload = &semMw.ThinkingModePayload{
+				Mode:      ev.Data.Mode,
+				Phase:     ev.Data.Phase,
+				Reasoning: ev.Data.Reasoning,
+				ExtraData: extra,
+			}
+		}
+		data, err := protoToRaw(&semMw.ThinkingModeStarted{ItemId: ev.ItemID, Data: payload})
+		if err != nil {
+			return nil, err
+		}
+		return [][]byte{wrapSem(map[string]any{"type": "thinking.mode.started", "id": ev.ItemID, "data": data})}, nil
+	})
+
+	semregistry.RegisterByType[*pinevents.EventThinkingModeUpdate](func(ev *pinevents.EventThinkingModeUpdate) ([][]byte, error) {
+		var payload *semMw.ThinkingModePayload
+		if ev.Data != nil {
+			extra, err := mapToStruct(ev.Data.ExtraData)
+			if err != nil {
+				return nil, err
+			}
+			payload = &semMw.ThinkingModePayload{
+				Mode:      ev.Data.Mode,
+				Phase:     ev.Data.Phase,
+				Reasoning: ev.Data.Reasoning,
+				ExtraData: extra,
+			}
+		}
+		data, err := protoToRaw(&semMw.ThinkingModeUpdate{ItemId: ev.ItemID, Data: payload})
+		if err != nil {
+			return nil, err
+		}
+		return [][]byte{wrapSem(map[string]any{"type": "thinking.mode.update", "id": ev.ItemID, "data": data})}, nil
+	})
+
+	semregistry.RegisterByType[*pinevents.EventThinkingModeCompleted](func(ev *pinevents.EventThinkingModeCompleted) ([][]byte, error) {
+		var payload *semMw.ThinkingModePayload
+		if ev.Data != nil {
+			extra, err := mapToStruct(ev.Data.ExtraData)
+			if err != nil {
+				return nil, err
+			}
+			payload = &semMw.ThinkingModePayload{
+				Mode:      ev.Data.Mode,
+				Phase:     ev.Data.Phase,
+				Reasoning: ev.Data.Reasoning,
+				ExtraData: extra,
+			}
+		}
+		data, err := protoToRaw(&semMw.ThinkingModeCompleted{ItemId: ev.ItemID, Data: payload, Success: ev.Success, Error: ev.Error})
+		if err != nil {
+			return nil, err
+		}
+		return [][]byte{wrapSem(map[string]any{"type": "thinking.mode.completed", "id": ev.ItemID, "data": data})}, nil
+	})
+
+	semregistry.RegisterByType[*pinevents.EventPlanningStart](func(ev *pinevents.EventPlanningStart) ([][]byte, error) {
+		m := &semMw.PlanningStarted{
+			Run: &semMw.PlanningRun{
+				RunId:         ev.RunID,
+				Provider:      ev.Provider,
+				PlannerModel:  ev.PlannerModel,
+				MaxIterations: int32(ev.MaxIterations),
+			},
+			StartedAtUnixMs: ev.StartedAtUnixMs,
+		}
+		data, err := protoToRaw(m)
+		if err != nil {
+			return nil, err
+		}
+		return [][]byte{wrapSem(map[string]any{"type": "planning.start", "id": ev.RunID, "data": data})}, nil
+	})
+
+	semregistry.RegisterByType[*pinevents.EventPlanningIteration](func(ev *pinevents.EventPlanningIteration) ([][]byte, error) {
+		var extraStruct *structpb.Struct
+		if len(ev.Extra) > 0 {
+			st, err := mapToStruct(ev.Extra)
+			if err != nil {
+				return nil, err
+			}
+			extraStruct = st
+		}
+		action := ev.Action
+		if action == "" {
+			action = ev.Decision
+		}
+		m := &semMw.PlanningIteration{
+			Run: &semMw.PlanningRun{
+				RunId:         ev.RunID,
+				Provider:      ev.Provider,
+				PlannerModel:  ev.PlannerModel,
+				MaxIterations: int32(ev.MaxIterations),
+			},
+			IterationIndex:  int32(ev.Iteration),
+			Action:          action,
+			Reasoning:       ev.Reasoning,
+			Strategy:        ev.Strategy,
+			Progress:        ev.Progress,
+			ToolName:        ev.ToolName,
+			Extra:           extraStruct,
+			EmittedAtUnixMs: ev.EmittedAtUnixMs,
+			ReflectionText:  ev.ReflectionText,
+		}
+		data, err := protoToRaw(m)
+		if err != nil {
+			return nil, err
+		}
+		return [][]byte{wrapSem(map[string]any{"type": "planning.iteration", "id": ev.RunID, "data": data})}, nil
+	})
+
+	semregistry.RegisterByType[*pinevents.EventPlanningReflection](func(ev *pinevents.EventPlanningReflection) ([][]byte, error) {
+		m := &semMw.PlanningReflection{
+			Run: &semMw.PlanningRun{
+				RunId: ev.RunID,
+			},
+			IterationIndex:  int32(ev.Iteration),
+			ReflectionText:  ev.ReflectionText,
+			ProgressScore:   ev.ProgressScore,
+			EmittedAtUnixMs: ev.EmittedAtUnixMs,
+		}
+		data, err := protoToRaw(m)
+		if err != nil {
+			return nil, err
+		}
+		return [][]byte{wrapSem(map[string]any{"type": "planning.reflection", "id": ev.RunID, "data": data})}, nil
+	})
+
+	semregistry.RegisterByType[*pinevents.EventPlanningComplete](func(ev *pinevents.EventPlanningComplete) ([][]byte, error) {
+		m := &semMw.PlanningCompleted{
+			Run: &semMw.PlanningRun{
+				RunId:         ev.RunID,
+				Provider:      ev.Provider,
+				PlannerModel:  ev.PlannerModel,
+				MaxIterations: int32(ev.MaxIterations),
+			},
+			TotalIterations:   int32(ev.TotalIterations),
+			FinalDecision:     ev.FinalDecision,
+			StatusReason:      ev.StatusReason,
+			FinalDirective:    ev.FinalDirective,
+			CompletedAtUnixMs: ev.CompletedAtUnixMs,
+		}
+		data, err := protoToRaw(m)
+		if err != nil {
+			return nil, err
+		}
+		return [][]byte{wrapSem(map[string]any{"type": "planning.complete", "id": ev.RunID, "data": data})}, nil
+	})
+
+	semregistry.RegisterByType[*pinevents.EventExecutionStart](func(ev *pinevents.EventExecutionStart) ([][]byte, error) {
+		m := &semMw.ExecutionStarted{
+			RunId:           ev.RunID,
+			ExecutorModel:   ev.ExecutorModel,
+			Directive:       ev.Directive,
+			StartedAtUnixMs: ev.StartedAtUnixMs,
+		}
+		data, err := protoToRaw(m)
+		if err != nil {
+			return nil, err
+		}
+		return [][]byte{wrapSem(map[string]any{"type": "execution.start", "id": ev.RunID, "data": data})}, nil
+	})
+
+	semregistry.RegisterByType[*pinevents.EventExecutionComplete](func(ev *pinevents.EventExecutionComplete) ([][]byte, error) {
+		m := &semMw.ExecutionCompleted{
+			RunId:             ev.RunID,
+			CompletedAtUnixMs: ev.CompletedAtUnixMs,
+			Status:            ev.Status,
+			ErrorMessage:      ev.ErrorMessage,
+			TokensUsed:        int32(ev.TokensUsed),
+			ResponseLength:    int32(ev.ResponseLength),
+		}
+		data, err := protoToRaw(m)
+		if err != nil {
+			return nil, err
+		}
+		return [][]byte{wrapSem(map[string]any{"type": "execution.complete", "id": ev.RunID, "data": data})}, nil
 	})
 }
