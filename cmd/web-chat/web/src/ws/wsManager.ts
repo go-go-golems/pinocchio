@@ -266,11 +266,18 @@ class WsManager {
     let lastSeqFromServer: number | null = null;
     let queueDepth: number | null = null;
     if (!hydratedViaTimeline) {
-      const res = await fetch(`${args.basePrefix}/hydrate?conv_id=${encodeURIComponent(args.convId)}`);
-      const j = await res.json();
-      frames = ((j && j.frames) || []) as RawSemEnvelope[];
-      lastSeqFromServer = j && typeof j.last_seq === 'number' ? j.last_seq : null;
-      queueDepth = j && typeof j.queue_depth === 'number' ? j.queue_depth : null;
+      try {
+        const res = await fetch(`${args.basePrefix}/hydrate?conv_id=${encodeURIComponent(args.convId)}`);
+        const j = await res.json();
+        frames = ((j && j.frames) || []) as RawSemEnvelope[];
+        lastSeqFromServer = j && typeof j.last_seq === 'number' ? j.last_seq : null;
+        queueDepth = j && typeof j.queue_depth === 'number' ? j.queue_depth : null;
+      } catch {
+        // If hydration fails (e.g. dev proxy misconfigured and we get HTML), don't block streaming.
+        frames = [];
+        lastSeqFromServer = null;
+        queueDepth = null;
+      }
     }
 
     if (nonce !== this.connectNonce) return;
