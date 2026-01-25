@@ -8,6 +8,28 @@ import { ToolDeltaSchema, ToolDoneSchema, ToolResultSchema, ToolStartSchema, typ
 import { LogV1Schema, type LogV1 } from '../sem/pb/proto/sem/base/log_pb';
 import { AgentModeV1Schema, type AgentModeV1 } from '../sem/pb/proto/sem/base/agent_pb';
 import { DebuggerPauseV1Schema, type DebuggerPauseV1 } from '../sem/pb/proto/sem/base/debugger_pb';
+import {
+  ThinkingModeCompletedSchema,
+  ThinkingModeStartedSchema,
+  ThinkingModeUpdateSchema,
+  type ThinkingModeCompleted,
+  type ThinkingModeStarted,
+  type ThinkingModeUpdate,
+} from '../sem/pb/proto/sem/middleware/thinking_mode_pb';
+import {
+  PlanningCompletedSchema,
+  PlanningIterationSchema,
+  PlanningReflectionSchema,
+  PlanningStartedSchema,
+  ExecutionCompletedSchema,
+  ExecutionStartedSchema,
+  type PlanningCompleted,
+  type PlanningIteration,
+  type PlanningReflection,
+  type PlanningStarted,
+  type ExecutionCompleted,
+  type ExecutionStarted,
+} from '../sem/pb/proto/sem/middleware/planning_pb';
 
 export type SemEnvelope = { sem: true; event: SemEvent };
 export type SemEvent = {
@@ -55,6 +77,58 @@ function decodeProto<T extends Message>(schema: GenMessage<T>, raw: unknown): T 
   } catch {
     return null;
   }
+}
+
+type PlanningAgg = {
+  runId: string;
+  createdAt: number;
+  startedAt?: number;
+  provider?: string;
+  plannerModel?: string;
+  maxIterations?: number;
+  iterations: Array<{
+    index: number;
+    action: string;
+    reasoning: string;
+    strategy: string;
+    progress: string;
+    toolName: string;
+    reflectionText: string;
+    emittedAt?: number;
+  }>;
+  reflectionByIter: Record<number, { text: string; score: number; emittedAt?: number }>;
+  completed?: { totalIterations: number; finalDecision: string; statusReason: string; finalDirective: string; completedAt?: number };
+  execution?: { executorModel?: string; directive?: string; startedAt?: number; status?: string; errorMessage?: string; tokensUsed?: number; responseLength?: number };
+};
+
+const planningAggs = new Map<string, PlanningAgg>();
+
+function ensurePlanningAgg(runId: string, now: number): PlanningAgg {
+  const existing = planningAggs.get(runId);
+  if (existing) return existing;
+  const agg: PlanningAgg = { runId, createdAt: now, iterations: [], reflectionByIter: {} };
+  planningAggs.set(runId, agg);
+  return agg;
+}
+
+function planningEntityFromAgg(agg: PlanningAgg, now: number): TimelineEntity {
+  return {
+    id: agg.runId,
+    kind: 'planning',
+    createdAt: agg.createdAt,
+    updatedAt: now,
+    props: {
+      runId: agg.runId,
+      provider: agg.provider,
+      plannerModel: agg.plannerModel,
+      maxIterations: agg.maxIterations,
+      startedAt: agg.startedAt,
+      iterations: agg.iterations,
+      reflectionByIter: agg.reflectionByIter,
+      completed: agg.completed,
+      execution: agg.execution,
+    },
+  };
 }
 
 export function registerDefaultSemHandlers() {
@@ -175,5 +249,157 @@ export function registerDefaultSemHandlers() {
         extra: data?.extra ?? {},
       },
     });
+  });
+
+  // thinking mode selection widget (separate from llm.thinking.* streaming)
+  registerSem('thinking.mode.started', (ev, dispatch) => {
+    const pb = decodeProto<ThinkingModeStarted>(ThinkingModeStartedSchema, ev.data);
+    const id = pb?.itemId || ev.id;
+    const data = pb?.data;
+    upsertEntity(dispatch, {
+      id,
+      kind: 'thinking_mode',
+      createdAt: createdAtFromEvent(ev),
+      updatedAt: Date.now(),
+      props: { mode: data?.mode, phase: data?.phase, reasoning: data?.reasoning, extraData: data?.extraData ?? {}, status: 'started' },
+    });
+  });
+
+  registerSem('thinking.mode.update', (ev, dispatch) => {
+    const pb = decodeProto<ThinkingModeUpdate>(ThinkingModeUpdateSchema, ev.data);
+    const id = pb?.itemId || ev.id;
+    const data = pb?.data;
+    upsertEntity(dispatch, {
+      id,
+      kind: 'thinking_mode',
+      createdAt: createdAtFromEvent(ev),
+      updatedAt: Date.now(),
+      props: { mode: data?.mode, phase: data?.phase, reasoning: data?.reasoning, extraData: data?.extraData ?? {}, status: 'update' },
+    });
+  });
+
+  registerSem('thinking.mode.completed', (ev, dispatch) => {
+    const pb = decodeProto<ThinkingModeCompleted>(ThinkingModeCompletedSchema, ev.data);
+    const id = pb?.itemId || ev.id;
+    const data = pb?.data;
+    upsertEntity(dispatch, {
+      id,
+      kind: 'thinking_mode',
+      createdAt: createdAtFromEvent(ev),
+      updatedAt: Date.now(),
+      props: {
+        mode: data?.mode,
+        phase: data?.phase,
+        reasoning: data?.reasoning,
+        extraData: data?.extraData ?? {},
+        status: 'completed',
+        success: pb?.success,
+        error: pb?.error,
+      },
+    });
+  });
+
+  // planning widget (aggregated)
+  registerSem('planning.start', (ev, dispatch) => {
+    const pb = decodeProto<PlanningStarted>(PlanningStartedSchema, ev.data);
+    const runId = pb?.run?.runId || '';
+    if (!runId) return;
+    const now = Date.now();
+    const agg = ensurePlanningAgg(runId, now);
+    agg.provider = pb?.run?.provider;
+    agg.plannerModel = pb?.run?.plannerModel;
+    agg.maxIterations = pb?.run?.maxIterations;
+    agg.startedAt = Number(pb?.startedAtUnixMs ?? 0n) || now;
+    upsertEntity(dispatch, planningEntityFromAgg(agg, now));
+  });
+
+  registerSem('planning.iteration', (ev, dispatch) => {
+    const pb = decodeProto<PlanningIteration>(PlanningIterationSchema, ev.data);
+    const runId = pb?.run?.runId || '';
+    if (!runId) return;
+    const now = Date.now();
+    const agg = ensurePlanningAgg(runId, now);
+    agg.provider = pb?.run?.provider || agg.provider;
+    agg.plannerModel = pb?.run?.plannerModel || agg.plannerModel;
+    agg.maxIterations = pb?.run?.maxIterations || agg.maxIterations;
+    const idx = pb?.iterationIndex ?? 0;
+    const existingIndex = agg.iterations.findIndex((it) => it.index === idx);
+    const iteration = {
+      index: idx,
+      action: pb?.action ?? '',
+      reasoning: pb?.reasoning ?? '',
+      strategy: pb?.strategy ?? '',
+      progress: pb?.progress ?? '',
+      toolName: pb?.toolName ?? '',
+      reflectionText: pb?.reflectionText ?? '',
+      emittedAt: Number(pb?.emittedAtUnixMs ?? 0n) || undefined,
+    };
+    if (existingIndex >= 0) agg.iterations[existingIndex] = iteration;
+    else agg.iterations.push(iteration);
+    agg.iterations.sort((a, b) => a.index - b.index);
+    upsertEntity(dispatch, planningEntityFromAgg(agg, now));
+  });
+
+  registerSem('planning.reflection', (ev, dispatch) => {
+    const pb = decodeProto<PlanningReflection>(PlanningReflectionSchema, ev.data);
+    const runId = pb?.run?.runId || '';
+    if (!runId) return;
+    const now = Date.now();
+    const agg = ensurePlanningAgg(runId, now);
+    const idx = pb?.iterationIndex ?? 0;
+    agg.reflectionByIter[idx] = {
+      text: pb?.reflectionText ?? '',
+      score: pb?.progressScore ?? 0,
+      emittedAt: Number(pb?.emittedAtUnixMs ?? 0n) || undefined,
+    };
+    upsertEntity(dispatch, planningEntityFromAgg(agg, now));
+  });
+
+  registerSem('planning.complete', (ev, dispatch) => {
+    const pb = decodeProto<PlanningCompleted>(PlanningCompletedSchema, ev.data);
+    const runId = pb?.run?.runId || '';
+    if (!runId) return;
+    const now = Date.now();
+    const agg = ensurePlanningAgg(runId, now);
+    agg.completed = {
+      totalIterations: pb?.totalIterations ?? 0,
+      finalDecision: pb?.finalDecision ?? '',
+      statusReason: pb?.statusReason ?? '',
+      finalDirective: pb?.finalDirective ?? '',
+      completedAt: Number(pb?.completedAtUnixMs ?? 0n) || undefined,
+    };
+    upsertEntity(dispatch, planningEntityFromAgg(agg, now));
+  });
+
+  registerSem('execution.start', (ev, dispatch) => {
+    const pb = decodeProto<ExecutionStarted>(ExecutionStartedSchema, ev.data);
+    const runId = pb?.runId || '';
+    if (!runId) return;
+    const now = Date.now();
+    const agg = ensurePlanningAgg(runId, now);
+    agg.execution = {
+      ...(agg.execution ?? {}),
+      executorModel: pb?.executorModel,
+      directive: pb?.directive,
+      startedAt: Number(pb?.startedAtUnixMs ?? 0n) || undefined,
+      status: 'started',
+    };
+    upsertEntity(dispatch, planningEntityFromAgg(agg, now));
+  });
+
+  registerSem('execution.complete', (ev, dispatch) => {
+    const pb = decodeProto<ExecutionCompleted>(ExecutionCompletedSchema, ev.data);
+    const runId = pb?.runId || '';
+    if (!runId) return;
+    const now = Date.now();
+    const agg = ensurePlanningAgg(runId, now);
+    agg.execution = {
+      ...(agg.execution ?? {}),
+      status: pb?.status || 'completed',
+      errorMessage: pb?.errorMessage,
+      tokensUsed: pb?.tokensUsed,
+      responseLength: pb?.responseLength,
+    };
+    upsertEntity(dispatch, planningEntityFromAgg(agg, now));
   });
 }

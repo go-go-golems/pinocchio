@@ -140,3 +140,136 @@ export const WidgetOnlyAgentMode: Story = {
     />
   ),
 };
+
+export const WidgetOnlyThinkingMode: Story = {
+  render: () => (
+    <ScenarioRunner
+      frames={[
+        {
+          sem: true,
+          event: {
+            type: 'thinking.mode.started',
+            id: 'tm-1',
+            seq: 1,
+            data: {
+              itemId: 'tm-1',
+              data: { mode: 'deep', phase: 'selection', reasoning: 'The task benefits from deep reasoning and careful planning.' },
+            },
+          },
+        },
+        {
+          sem: true,
+          event: {
+            type: 'thinking.mode.update',
+            id: 'tm-1',
+            seq: 2,
+            data: {
+              itemId: 'tm-1',
+              data: { mode: 'deep', phase: 'confirmed', reasoning: 'Proceeding with deep mode.' },
+            },
+          },
+        },
+        {
+          sem: true,
+          event: {
+            type: 'thinking.mode.completed',
+            id: 'tm-1',
+            seq: 3,
+            data: {
+              itemId: 'tm-1',
+              data: { mode: 'deep', phase: 'confirmed', reasoning: 'Locked in.' },
+              success: true,
+              error: '',
+            },
+          },
+        },
+      ]}
+    />
+  ),
+};
+
+export const WidgetOnlyPlanning: Story = {
+  render: () => (
+    <ScenarioRunner
+      frames={[
+        {
+          sem: true,
+          event: {
+            type: 'planning.start',
+            id: 'plan-1',
+            seq: 1,
+            data: { run: { runId: 'plan-run-1', provider: 'agent', plannerModel: 'gpt-x', maxIterations: 3 }, startedAtUnixMs: '1737760000000' },
+          },
+        },
+        {
+          sem: true,
+          event: {
+            type: 'planning.iteration',
+            id: 'plan-iter-1',
+            seq: 2,
+            data: {
+              run: { runId: 'plan-run-1', provider: 'agent', plannerModel: 'gpt-x', maxIterations: 3 },
+              iterationIndex: 1,
+              action: 'search',
+              reasoning: 'We should gather context from a few sources.',
+              strategy: 'Start broad, then narrow to primary docs.',
+              progress: 'Collecting references',
+              toolName: 'search',
+              emittedAtUnixMs: '1737760000100',
+              reflectionText: 'Need at least 2 primary sources.',
+            },
+          },
+        },
+        {
+          sem: true,
+          event: {
+            type: 'planning.reflection',
+            id: 'plan-refl-1',
+            seq: 3,
+            data: {
+              run: { runId: 'plan-run-1', provider: 'agent', plannerModel: 'gpt-x', maxIterations: 3 },
+              iterationIndex: 1,
+              reflectionText: 'Good progress; proceed to execution.',
+              progressScore: 0.82,
+              emittedAtUnixMs: '1737760000200',
+            },
+          },
+        },
+        {
+          sem: true,
+          event: {
+            type: 'planning.complete',
+            id: 'plan-done-1',
+            seq: 4,
+            data: {
+              run: { runId: 'plan-run-1', provider: 'agent', plannerModel: 'gpt-x', maxIterations: 3 },
+              totalIterations: 1,
+              finalDecision: 'execute',
+              statusReason: 'sufficient context',
+              finalDirective: 'Execute the plan and produce the answer.',
+              completedAtUnixMs: '1737760000300',
+            },
+          },
+        },
+        {
+          sem: true,
+          event: {
+            type: 'execution.start',
+            id: 'exec-1',
+            seq: 5,
+            data: { runId: 'plan-run-1', executorModel: 'gpt-x', directive: 'Execute the plan and produce the answer.', startedAtUnixMs: '1737760000400' },
+          },
+        },
+        {
+          sem: true,
+          event: {
+            type: 'execution.complete',
+            id: 'exec-1',
+            seq: 6,
+            data: { runId: 'plan-run-1', completedAtUnixMs: '1737760000500', status: 'completed', errorMessage: '', tokensUsed: 1234, responseLength: 456 },
+          },
+        },
+      ]}
+    />
+  ),
+};

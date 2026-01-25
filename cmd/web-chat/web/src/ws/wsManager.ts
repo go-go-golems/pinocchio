@@ -1,6 +1,7 @@
 import type { AppDispatch } from '../store/store';
 import { timelineSlice } from '../store/timelineSlice';
 import { handleSem, registerDefaultSemHandlers } from '../sem/registry';
+import { appSlice } from '../store/appSlice';
 
 type ConnectArgs = {
   convId: string;
@@ -38,6 +39,7 @@ class WsManager {
     registerDefaultSemHandlers();
 
     args.onStatus?.('connecting ws...');
+    args.dispatch(appSlice.actions.setWsStatus('connecting'));
     const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
     const url = `${proto}://${window.location.host}${args.basePrefix}/ws?conv_id=${encodeURIComponent(args.convId)}`;
     const ws = new WebSocket(url);
@@ -46,19 +48,24 @@ class WsManager {
     ws.onopen = () => {
       if (nonce !== this.connectNonce) return;
       args.onStatus?.('ws connected');
+      args.dispatch(appSlice.actions.setWsStatus('connected'));
     };
     ws.onclose = () => {
       if (nonce !== this.connectNonce) return;
       args.onStatus?.('ws closed');
+      args.dispatch(appSlice.actions.setWsStatus('closed'));
     };
     ws.onerror = () => {
       if (nonce !== this.connectNonce) return;
       args.onStatus?.('ws error');
+      args.dispatch(appSlice.actions.setWsStatus('error'));
     };
     ws.onmessage = (m) => {
       if (nonce !== this.connectNonce) return;
       try {
         const payload = JSON.parse(String(m.data));
+        const seq = seqFromEnvelope(payload);
+        if (seq !== null) args.dispatch(appSlice.actions.setLastSeq(seq));
         if (!this.hydrated) {
           this.buffered.push(payload);
           return;
@@ -93,8 +100,13 @@ class WsManager {
     const res = await fetch(`${args.basePrefix}/hydrate?conv_id=${encodeURIComponent(args.convId)}`);
     const j = await res.json();
     const frames = ((j && j.frames) || []) as RawSemEnvelope[];
+    const lastSeqFromServer = j && typeof j.last_seq === 'number' ? j.last_seq : null;
+    const queueDepth = j && typeof j.queue_depth === 'number' ? j.queue_depth : null;
 
     if (nonce !== this.connectNonce) return;
+
+    if (queueDepth !== null) args.dispatch(appSlice.actions.setQueueDepth(queueDepth));
+    if (lastSeqFromServer !== null) args.dispatch(appSlice.actions.setLastSeq(lastSeqFromServer));
 
     const orderedFrames = [...frames].sort((a, b) => (seqFromEnvelope(a) ?? 0) - (seqFromEnvelope(b) ?? 0));
     let lastSeq = 0;
