@@ -1,11 +1,14 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { wsManager } from '../ws/wsManager';
+import type React from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { appSlice } from '../store/appSlice';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
 import { selectTimelineEntities } from '../store/timelineSlice';
-import { appSlice } from '../store/appSlice';
+import { wsManager } from '../ws/wsManager';
 import { Markdown } from './Markdown';
 import './chat.css';
+import { errorsSlice, makeAppError } from '../store/errorsSlice';
 import { timelineSlice } from '../store/timelineSlice';
+import { logWarn } from '../utils/logger';
 
 type RenderEntity = {
   id: string;
@@ -25,7 +28,8 @@ function convIdFromLocation(): string {
     const u = new URL(window.location.href);
     const q = u.searchParams.get('conv_id') || u.searchParams.get('convId') || '';
     return q.trim();
-  } catch {
+  } catch (err) {
+    logWarn('convIdFromLocation failed', { scope: 'convIdFromLocation' }, err);
     return '';
   }
 }
@@ -41,8 +45,8 @@ function setConvIdInLocation(convId: string | null) {
       u.searchParams.delete('convId');
     }
     window.history.replaceState({}, '', u.toString());
-  } catch {
-    // ignore
+  } catch (err) {
+    logWarn('setConvIdInLocation failed', { scope: 'setConvIdInLocation' }, err);
   }
 }
 
@@ -95,7 +99,11 @@ function ToolCallCard({ e }: { e: RenderEntity }) {
           <button
             type="button"
             className="btn btnGhost"
-            onClick={() => void navigator.clipboard.writeText(JSON.stringify(input ?? {}, null, 2)).catch(() => {})}
+            onClick={() =>
+              void navigator.clipboard
+                .writeText(JSON.stringify(input ?? {}, null, 2))
+                .catch((err) => logWarn('clipboard copy failed', { scope: 'tool.copyArgs' }, err))
+            }
           >
             Copy args
           </button>
@@ -120,7 +128,11 @@ function ToolResultCard({ e }: { e: RenderEntity }) {
       </div>
       <div className="cardBody">
         <div className="toolbar">
-          <button type="button" className="btn btnGhost" onClick={() => void navigator.clipboard.writeText(result).catch(() => {})}>
+          <button
+            type="button"
+            className="btn btnGhost"
+            onClick={() => void navigator.clipboard.writeText(result).catch((err) => logWarn('clipboard copy failed', { scope: 'tool.copyResult' }, err))}
+          >
             Copy
           </button>
         </div>
@@ -290,11 +302,21 @@ export function ChatWidget() {
   const dispatch = useAppDispatch();
   const app = useAppSelector((s) => s.app);
   const entities = useAppSelector(selectTimelineEntities) as RenderEntity[];
+  const errors = useAppSelector((s) => s.errors);
 
   const [text, setText] = useState('');
+  const [showErrors, setShowErrors] = useState(false);
   const basePrefix = useMemo(() => basePrefixFromLocation(), []);
   const mainRef = useRef<HTMLDivElement | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
+  const errorCount = errors.length;
+
+  const reportError = useCallback(
+    (message: string, scope: string, err?: unknown, extra?: Record<string, unknown>) => {
+      dispatch(errorsSlice.actions.reportError(makeAppError(message, scope, err, extra)));
+    },
+    [dispatch],
+  );
 
   useEffect(() => {
     // Bootstrap from the *current* URL. Do not memoize the initial value: New conv clears the URL,
@@ -320,6 +342,7 @@ export function ChatWidget() {
 
   useEffect(() => {
     // naive “always scroll” works for a chat widget; we can make this smarter later.
+    if (!entities.length) return;
     bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
   }, [entities.length]);
 
@@ -368,8 +391,9 @@ export function ChatWidget() {
           hydrate: false,
           onStatus: (status) => dispatch(appSlice.actions.setStatus(status)),
         });
-      } catch {
-        // best-effort; we can still continue and rely on timeline hydration later
+      } catch (err) {
+        logWarn('ws connect failed', { scope: 'ws.connect', convId }, err);
+        reportError('ws connect failed', 'ws.connect', err, { convId });
       }
     }
 
@@ -379,14 +403,22 @@ export function ChatWidget() {
       headers: { 'Content-Type': 'application/json', 'Idempotency-Key': idempotencyKey },
       body: JSON.stringify(body),
     });
-    const j = await res.json().catch(() => null);
+    let j: any = null;
+    try {
+      j = await res.json();
+    } catch (err) {
+      logWarn('chat response json parse failed', { scope: 'chat.response', convId }, err);
+      reportError('chat response json parse failed', 'chat.response', err, { convId });
+      j = null;
+    }
     if (!res.ok) {
       dispatch(appSlice.actions.setStatus(`error (${res.status})`));
+      reportError('chat request failed', 'chat.response', undefined, { convId, status: res.status });
       return;
     }
 
-    const returnedConvId = (j && j.conv_id) || convId || '';
-    const runId = (j && (j.session_id || j.run_id)) || app.runId || '';
+    const returnedConvId = j?.conv_id || convId || '';
+    const runId = (j?.session_id || j?.run_id) || app.runId || '';
     if (returnedConvId && returnedConvId !== convId) {
       setConvIdInLocation(returnedConvId);
     }
@@ -401,15 +433,16 @@ export function ChatWidget() {
           dispatch,
           onStatus: (status) => dispatch(appSlice.actions.setStatus(status)),
         });
-      } catch {
-        // ignore
+      } catch (err) {
+        logWarn('ws hydrate failed', { scope: 'ws.ensureHydrated', convId: returnedConvId }, err);
+        reportError('ws hydrate failed', 'ws.ensureHydrated', err, { convId: returnedConvId });
       }
     }
 
-    const st = (j && j.status) || (res.status === 202 ? 'queued' : 'sent');
-    const qp = j && typeof j.queue_position === 'number' ? ` (pos ${j.queue_position})` : '';
+    const st = j?.status || (res.status === 202 ? 'queued' : 'sent');
+    const qp = typeof j?.queue_position === 'number' ? ` (pos ${j.queue_position})` : '';
     dispatch(appSlice.actions.setStatus(`${st}${qp}`));
-  }, [app.convId, app.runId, basePrefix, dispatch, text]);
+  }, [app.convId, app.runId, basePrefix, dispatch, reportError, text]);
 
   const onKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -420,6 +453,15 @@ export function ChatWidget() {
     },
     [send],
   );
+
+  const toggleErrors = useCallback(() => {
+    setShowErrors((prev) => !prev);
+  }, []);
+
+  const clearErrors = useCallback(() => {
+    dispatch(errorsSlice.actions.clearErrors());
+    setShowErrors(false);
+  }, [dispatch]);
 
   const onNewConversation = useCallback(() => {
     wsManager.disconnect();
@@ -442,11 +484,49 @@ export function ChatWidget() {
           <span className="pill">seq: {fmtShort(app.lastSeq)}</span>
           <span className="pill">q: {fmtShort(app.queueDepth)}</span>
           <span className="pill">{app.status}</span>
+          {errorCount > 0 ? (
+            <button type="button" className="pillButton pillDanger" onClick={toggleErrors}>
+              errors: {errorCount}
+            </button>
+          ) : null}
         </div>
       </header>
 
       <main ref={mainRef} className="chatMain">
         <div className="timeline">
+          {showErrors && errorCount > 0 ? (
+            <div className="errorPanel">
+              <div className="errorPanelHeader">
+                <div className="row">
+                  <span className="pill pillDanger">errors</span>
+                  <span className="pill">{errorCount}</span>
+                </div>
+                <div className="row">
+                  <button type="button" className="btn btnGhost" onClick={clearErrors}>
+                    Clear
+                  </button>
+                  <button type="button" className="btn btnGhost" onClick={toggleErrors}>
+                    Hide
+                  </button>
+                </div>
+              </div>
+              <div className="errorPanelBody">
+                {errors.map((err) => (
+                  <div key={err.id} className="errorItem">
+                    <div className="row">
+                      <span className="pill pillDanger">{err.scope}</span>
+                      <span className="pill mono">{new Date(err.time).toLocaleTimeString()}</span>
+                    </div>
+                    <div className="errorItemMessage">{err.message}</div>
+                    {err.detail ? <div className="errorItemDetail mono">{err.detail}</div> : null}
+                    {err.extra ? (
+                      <pre className="mono errorItemDetail">{JSON.stringify(err.extra, null, 2)}</pre>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
           {entities.map((e) => {
             if (e.kind === 'message') return <MessageCard key={e.id} e={e} />;
             if (e.kind === 'tool_call') return <ToolCallCard key={e.id} e={e} />;

@@ -1,36 +1,36 @@
-import type { AppDispatch } from '../store/store';
-import { timelineSlice, type TimelineEntity } from '../store/timelineSlice';
 import { fromJson, type Message } from '@bufbuild/protobuf';
 import type { GenMessage } from '@bufbuild/protobuf/codegenv2';
+import { type AgentModeV1, AgentModeV1Schema } from '../sem/pb/proto/sem/base/agent_pb';
+import { type DebuggerPauseV1, DebuggerPauseV1Schema } from '../sem/pb/proto/sem/base/debugger_pb';
 
-import { LlmDeltaSchema, LlmDoneSchema, LlmFinalSchema, LlmStartSchema, type LlmDelta, type LlmFinal, type LlmStart } from '../sem/pb/proto/sem/base/llm_pb';
-import { ToolDeltaSchema, ToolDoneSchema, ToolResultSchema, ToolStartSchema, type ToolDelta, type ToolResult, type ToolStart } from '../sem/pb/proto/sem/base/tool_pb';
-import { LogV1Schema, type LogV1 } from '../sem/pb/proto/sem/base/log_pb';
-import { AgentModeV1Schema, type AgentModeV1 } from '../sem/pb/proto/sem/base/agent_pb';
-import { DebuggerPauseV1Schema, type DebuggerPauseV1 } from '../sem/pb/proto/sem/base/debugger_pb';
+import { type LlmDelta, LlmDeltaSchema, LlmDoneSchema, type LlmFinal, LlmFinalSchema, type LlmStart, LlmStartSchema } from '../sem/pb/proto/sem/base/llm_pb';
+import { type LogV1, LogV1Schema } from '../sem/pb/proto/sem/base/log_pb';
+import { type ToolDelta, ToolDeltaSchema, ToolDoneSchema, type ToolResult, ToolResultSchema, type ToolStart, ToolStartSchema } from '../sem/pb/proto/sem/base/tool_pb';
 import {
-  ThinkingModeCompletedSchema,
-  ThinkingModeStartedSchema,
-  ThinkingModeUpdateSchema,
-  type ThinkingModeCompleted,
-  type ThinkingModeStarted,
-  type ThinkingModeUpdate,
-} from '../sem/pb/proto/sem/middleware/thinking_mode_pb';
-import {
-  PlanningCompletedSchema,
-  PlanningIterationSchema,
-  PlanningReflectionSchema,
-  PlanningStartedSchema,
+  type ExecutionCompleted,
   ExecutionCompletedSchema,
+  type ExecutionStarted,
   ExecutionStartedSchema,
   type PlanningCompleted,
+  PlanningCompletedSchema,
   type PlanningIteration,
+  PlanningIterationSchema,
   type PlanningReflection,
+  PlanningReflectionSchema,
   type PlanningStarted,
-  type ExecutionCompleted,
-  type ExecutionStarted,
+  PlanningStartedSchema,
 } from '../sem/pb/proto/sem/middleware/planning_pb';
-import { TimelineUpsertV1Schema, type TimelineUpsertV1 } from '../sem/pb/proto/sem/timeline/transport_pb';
+import {
+  type ThinkingModeCompleted,
+  ThinkingModeCompletedSchema,
+  type ThinkingModeStarted,
+  ThinkingModeStartedSchema,
+  type ThinkingModeUpdate,
+  ThinkingModeUpdateSchema,
+} from '../sem/pb/proto/sem/middleware/thinking_mode_pb';
+import { type TimelineUpsertV1, TimelineUpsertV1Schema } from '../sem/pb/proto/sem/timeline/transport_pb';
+import type { AppDispatch } from '../store/store';
+import { type TimelineEntity, timelineSlice } from '../store/timelineSlice';
 import { timelineEntityFromProto } from './timelineMapper';
 
 export type SemEnvelope = { sem: true; event: SemEvent };

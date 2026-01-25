@@ -1,10 +1,13 @@
+import { fromJson } from '@bufbuild/protobuf';
+import { type TimelineSnapshotV1, TimelineSnapshotV1Schema } from '../sem/pb/proto/sem/timeline/transport_pb';
+import { handleSem, registerDefaultSemHandlers } from '../sem/registry';
+import { timelineEntityFromProto } from '../sem/timelineMapper';
+import { appSlice } from '../store/appSlice';
+import { errorsSlice, makeAppError } from '../store/errorsSlice';
 import type { AppDispatch } from '../store/store';
 import { timelineSlice } from '../store/timelineSlice';
-import { handleSem, registerDefaultSemHandlers } from '../sem/registry';
-import { appSlice } from '../store/appSlice';
-import { fromJson } from '@bufbuild/protobuf';
-import { TimelineSnapshotV1Schema, type TimelineSnapshotV1 } from '../sem/pb/proto/sem/timeline/transport_pb';
-import { timelineEntityFromProto } from '../sem/timelineMapper';
+import { isRecord } from '../utils/guards';
+import { logError, logWarn } from '../utils/logger';
 
 type ConnectArgs = {
   convId: string;
@@ -23,12 +26,22 @@ function seqFromEnvelope(envelope: RawSemEnvelope): number | null {
 }
 
 function applyTimelineSnapshot(snapshot: TimelineSnapshotV1, dispatch: AppDispatch) {
-  if (!snapshot?.entities) return;
+  if (!snapshot?.entities || !Array.isArray(snapshot.entities)) return;
   for (const e of snapshot.entities) {
     const mapped = timelineEntityFromProto(e, snapshot.version);
     if (!mapped) continue;
     dispatch(timelineSlice.actions.upsertEntity(mapped));
   }
+}
+
+function reportError(
+  dispatch: AppDispatch,
+  message: string,
+  scope: string,
+  err?: unknown,
+  extra?: Record<string, unknown>,
+) {
+  dispatch(errorsSlice.actions.reportError(makeAppError(message, scope, err, extra)));
 }
 
 class WsManager {
@@ -94,6 +107,8 @@ class WsManager {
     ws.onerror = () => {
       settleOpen?.();
       if (nonce !== this.connectNonce) return;
+      logWarn('websocket error', { scope: 'ws.onerror', convId: args.convId });
+      reportError(args.dispatch, 'websocket error', 'ws.onerror', undefined, { convId: args.convId });
       args.onStatus?.('ws error');
       args.dispatch(appSlice.actions.setWsStatus('error'));
     };
@@ -108,8 +123,8 @@ class WsManager {
           return;
         }
         handleSem(payload, args.dispatch);
-      } catch {
-        // ignore
+      } catch (err) {
+        logWarn('ws message parse failed', { scope: 'ws.onmessage', extra: { data: String(m.data).slice(0, 200) } }, err);
       }
     };
 
@@ -128,8 +143,8 @@ class WsManager {
     this.lastDispatch?.(appSlice.actions.setWsStatus('disconnected'));
     try {
       this.ws?.close();
-    } catch {
-      // ignore
+    } catch (err) {
+      logWarn('ws close failed', { scope: 'ws.close', convId: this.convId }, err);
     }
     this.ws = null;
     this.convId = '';
@@ -152,28 +167,40 @@ class WsManager {
     args.dispatch(timelineSlice.actions.clear());
 
     // Hydrate via GET /timeline (canonical path).
-    let hydratedViaTimeline = false;
     try {
       const res = await fetch(`${args.basePrefix}/timeline?conv_id=${encodeURIComponent(args.convId)}`);
       if (res.ok) {
-        const j = await res.json();
+        let j: unknown = null;
+        try {
+          j = await res.json();
+        } catch (err) {
+          logError('hydrate json parse failed', err, { scope: 'hydrate', convId: args.convId });
+          reportError(args.dispatch, 'hydrate json parse failed', 'hydrate', err, { convId: args.convId });
+          j = null;
+        }
         if (nonce !== this.connectNonce) return;
-        if (isObject(j)) {
+        if (isRecord(j)) {
           const snap = fromJson(TimelineSnapshotV1Schema as any, j as any, { ignoreUnknownFields: true }) as any;
           if (snap) {
             if (nonce !== this.connectNonce) return;
             applyTimelineSnapshot(snap, args.dispatch);
-            hydratedViaTimeline = true;
           }
+        } else if (j !== null) {
+          logWarn('hydrate payload invalid', { scope: 'hydrate', convId: args.convId });
+          reportError(args.dispatch, 'hydrate payload invalid', 'hydrate', undefined, { convId: args.convId });
         }
+      } else {
+        logWarn('hydrate http error', { scope: 'hydrate', convId: args.convId, extra: { status: res.status } });
+        reportError(args.dispatch, 'hydrate http error', 'hydrate', undefined, { convId: args.convId, status: res.status });
       }
-    } catch {
-      // ignore
+    } catch (err) {
+      logError('hydrate failed', err, { scope: 'hydrate', convId: args.convId });
+      reportError(args.dispatch, 'hydrate failed', 'hydrate', err, { convId: args.convId });
     }
 
     if (nonce !== this.connectNonce) return;
 
-    let lastSeq = 0;
+    const lastSeq = 0;
 
     if (nonce !== this.connectNonce) return;
 

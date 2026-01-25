@@ -1,4 +1,4 @@
-.PHONY: all test build lint lintmax docker-lint gosec govulncheck goreleaser tag-major tag-minor tag-patch release bump-glazed install codeql-local geppetto-lint-build geppetto-lint
+.PHONY: all test build lint lintmax docker-lint gosec govulncheck goreleaser tag-major tag-minor tag-patch release bump-glazed install codeql-local geppetto-lint-build geppetto-lint web-typecheck web-lint web-check
 
 all: test build
 
@@ -57,6 +57,14 @@ test:
 build:
 	go generate ./...
 	go build ./...
+
+web-typecheck:
+	cd cmd/web-chat/web && npm run typecheck
+
+web-lint:
+	cd cmd/web-chat/web && npm run lint
+
+web-check: web-typecheck web-lint
 
 goreleaser:
 	goreleaser release $(GORELEASER_ARGS) $(GORELEASER_TARGET)

@@ -1,5 +1,6 @@
-import type { TimelineEntity } from '../store/timelineSlice';
 import type { TimelineEntityV1 } from '../sem/pb/proto/sem/timeline/transport_pb';
+import type { TimelineEntity } from '../store/timelineSlice';
+import { toNumber, toNumberOr } from '../utils/number';
 
 function isObject(v: unknown): v is Record<string, any> {
   return !!v && typeof v === 'object';
@@ -85,16 +86,17 @@ export function propsFromTimelineEntity(e: TimelineEntityV1): any {
   return val ?? {};
 }
 
-export function timelineEntityFromProto(e: TimelineEntityV1, version?: number): TimelineEntity | null {
+export function timelineEntityFromProto(e: TimelineEntityV1, version?: unknown): TimelineEntity | null {
   if (!e?.id || !e?.kind) return null;
-  const createdAt = Number((e as any).createdAtMs ?? 0) || Date.now();
-  const updatedAt = Number((e as any).updatedAtMs ?? 0) || undefined;
+  const createdAt = toNumberOr((e as any).createdAtMs, Date.now());
+  const updatedAt = toNumber((e as any).updatedAtMs) || undefined;
+  const versionNum = toNumber(version);
   return {
     id: e.id,
     kind: e.kind,
     createdAt,
     updatedAt,
-    version: typeof version === 'number' ? version : undefined,
+    version: typeof versionNum === 'number' ? versionNum : undefined,
     props: propsFromTimelineEntity(e),
   };
 }

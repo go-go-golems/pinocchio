@@ -1,9 +1,9 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import React, { useEffect } from 'react';
-import { ChatWidget } from './ChatWidget';
+import { useEffect } from 'react';
 import { handleSem, registerDefaultSemHandlers } from '../sem/registry';
 import { useAppDispatch } from '../store/hooks';
 import { timelineSlice } from '../store/timelineSlice';
+import { ChatWidget } from './ChatWidget';
 
 const meta: Meta<typeof ChatWidget> = {
   title: 'WebChat/ChatWidget',

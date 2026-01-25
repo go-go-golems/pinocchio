@@ -172,6 +172,16 @@ go run ./cmd/web-chat --addr :8080 --redis-enabled=false
 
 Open `http://localhost:8080/` and connect.
 
+## Frontend Checks (Webchat)
+
+Run these from `cmd/web-chat/web`:
+
+```bash
+npm run typecheck   # TypeScript checks
+npm run lint        # Biome lint
+npm run check       # typecheck + lint
+```
+
 ## Notes and Best Practices
 
 - Keep examples minimal and focused: semantic conversion and event routing are the core ideas.

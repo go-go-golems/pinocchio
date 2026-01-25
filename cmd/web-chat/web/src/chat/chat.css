@@ -65,6 +65,26 @@ body {
   border-color: rgba(122, 162, 255, 0.45);
 }
 
+.pillDanger {
+  color: var(--danger);
+  border-color: rgba(255, 107, 107, 0.45);
+}
+
+.pillButton {
+  appearance: none;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 4px 8px;
+  font-size: 12px;
+  background: var(--panel2);
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.pillButton:hover {
+  border-color: rgba(255, 107, 107, 0.4);
+}
+
 .chatMain {
   overflow: auto;
   padding: 16px;
@@ -76,6 +96,50 @@ body {
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+
+.errorPanel {
+  border: 1px solid rgba(255, 107, 107, 0.45);
+  border-radius: var(--radius);
+  background: rgba(20, 10, 10, 0.85);
+  box-shadow: 0 6px 28px var(--shadow);
+  overflow: hidden;
+}
+
+.errorPanelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(255, 107, 107, 0.2);
+  background: rgba(30, 12, 12, 0.9);
+}
+
+.errorPanelBody {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+}
+
+.errorItem {
+  border: 1px solid rgba(255, 107, 107, 0.2);
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: rgba(20, 8, 8, 0.65);
+}
+
+.errorItemMessage {
+  margin-top: 6px;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.errorItemDetail {
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  white-space: pre-wrap;
 }
 
 .card {
@@ -266,4 +330,3 @@ body {
 .ok {
   color: var(--ok);
 }
-

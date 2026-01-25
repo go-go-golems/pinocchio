@@ -1,5 +1,6 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
+import { logWarn } from '../utils/logger';
 
 type MarkdownProps = {
   text: string;
@@ -13,8 +14,8 @@ function CopyButton({ getText }: { getText: () => string }) {
       await navigator.clipboard.writeText(getText());
       setCopied(true);
       setTimeout(() => setCopied(false), 900);
-    } catch {
-      // ignore
+    } catch (err) {
+      logWarn('clipboard copy failed', { scope: 'markdown.copy' }, err);
     }
   }, [getText]);
 
@@ -61,4 +62,3 @@ export function Markdown({ text, className }: MarkdownProps) {
     </div>
   );
 }
-
