@@ -1,6 +1,7 @@
 package webchat
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"sync"
@@ -17,6 +18,12 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/inference/toolloop/enginebuilder"
 	"github.com/go-go-golems/geppetto/pkg/turns"
 )
+
+func isVolatilePlanningTextFrame(frame []byte) bool {
+	// These frames can be extremely high-volume (token streaming) and are intended for live UX.
+	// Avoid buffering them for legacy /hydrate, which has a small ring buffer.
+	return bytes.Contains(frame, []byte(`"type":"planning.text.`))
+}
 
 // Conversation holds per-conversation state and streaming attachments.
 type Conversation struct {
@@ -137,7 +144,9 @@ func (r *Router) getOrCreateConv(convID, profileSlug string, overrides map[strin
 						c.pool.Broadcast(frame)
 					}
 					if c.semBuf != nil {
-						c.semBuf.Add(frame)
+						if !isVolatilePlanningTextFrame(frame) {
+							c.semBuf.Add(frame)
+						}
 					}
 					if c.timelineProj != nil {
 						_ = c.timelineProj.ApplySemFrame(context.Background(), frame)
@@ -204,7 +213,9 @@ func (r *Router) getOrCreateConv(convID, profileSlug string, overrides map[strin
 				conv.pool.Broadcast(frame)
 			}
 			if conv.semBuf != nil {
-				conv.semBuf.Add(frame)
+				if !isVolatilePlanningTextFrame(frame) {
+					conv.semBuf.Add(frame)
+				}
 			}
 			if conv.timelineProj != nil {
 				_ = conv.timelineProj.ApplySemFrame(context.Background(), frame)

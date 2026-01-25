@@ -17,6 +17,41 @@ import (
 	"github.com/pkg/errors"
 )
 
+type plannerTokenSink struct {
+	publishCtx    context.Context
+	md            events.EventMetadata
+	runID         string
+	providerLabel string
+	modelLabel    string
+	maxIters      int
+}
+
+func (s *plannerTokenSink) PublishEvent(ev events.Event) error {
+	if s == nil || ev == nil || s.publishCtx == nil {
+		return nil
+	}
+
+	switch e := ev.(type) {
+	case *events.EventPartialCompletionStart:
+		start := pinevents.NewPlanningTextStarted(s.md, s.runID, s.providerLabel, s.modelLabel, s.maxIters, time.Now().UnixMilli())
+		events.PublishEventToContext(s.publishCtx, start)
+	case *events.EventPartialCompletion:
+		delta := pinevents.NewPlanningTextDelta(s.md, s.runID, e.Delta, e.Completion)
+		delta.Provider = s.providerLabel
+		delta.PlannerModel = s.modelLabel
+		delta.MaxIterations = s.maxIters
+		events.PublishEventToContext(s.publishCtx, delta)
+	case *events.EventFinal:
+		final := pinevents.NewPlanningTextFinal(s.md, s.runID, e.Text)
+		final.Provider = s.providerLabel
+		final.PlannerModel = s.modelLabel
+		final.MaxIterations = s.maxIters
+		events.PublishEventToContext(s.publishCtx, final)
+	default:
+	}
+	return nil
+}
+
 // LifecycleEngine wraps an engine.Engine with a planning→execution lifecycle.
 //
 // It performs one planning call per inference_id, emits planning.* + execution.* events,
@@ -145,6 +180,14 @@ func (e *LifecycleEngine) planOnce(ctx context.Context, t *turns.Turn, runID str
 
 	plannerCtx, cancel := plannerContext(ctx)
 	defer cancel()
+	plannerCtx = events.WithEventSinks(plannerCtx, &plannerTokenSink{
+		publishCtx:    ctx,
+		md:            md,
+		runID:         runID,
+		providerLabel: e.providerLabel,
+		modelLabel:    e.modelLabel,
+		maxIters:      maxIters,
+	})
 	planned, err := e.inner.RunInference(plannerCtx, planTurn)
 	if err != nil {
 		complete := pinevents.NewPlanningComplete(md, runID, 0, "error")

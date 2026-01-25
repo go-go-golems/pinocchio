@@ -179,6 +179,8 @@ function PlanningCard({ e }: { e: RenderEntity }) {
   const provider = String(e.props?.provider ?? '');
   const plannerModel = String(e.props?.plannerModel ?? '');
   const maxIterations = e.props?.maxIterations;
+  const plannerText = String(e.props?.plannerText ?? '');
+  const plannerTextStreaming = !!e.props?.plannerTextStreaming;
   const iterations = Array.isArray(e.props?.iterations) ? (e.props.iterations as any[]) : [];
   const reflectionByIter = e.props?.reflectionByIter ?? {};
   const completed = e.props?.completed ?? null;
@@ -195,6 +197,18 @@ function PlanningCard({ e }: { e: RenderEntity }) {
         <div className="cardHeaderMeta">#{fmtShort(e.createdAt)}</div>
       </div>
       <div className="cardBody">
+        {plannerText || plannerTextStreaming ? (
+          <div style={{ marginBottom: 10 }}>
+            <div className="row" style={{ justifyContent: 'space-between', marginBottom: 6 }}>
+              <div className="pill mono">planner output</div>
+              {plannerTextStreaming ? <div className="pill pillAccent">streaming</div> : <div className="pill">final</div>}
+            </div>
+            <pre className="mono" style={{ margin: 0, whiteSpace: 'pre-wrap' }}>
+              {plannerText || ''}
+            </pre>
+          </div>
+        ) : null}
+
         <div className="kv" style={{ marginBottom: 10 }}>
           <div className="kvKey">Iterations</div>
           <div>{iterations.length}</div>

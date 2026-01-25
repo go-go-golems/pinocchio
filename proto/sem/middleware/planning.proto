@@ -53,6 +53,26 @@ message PlanningCompleted {
   int64 completed_at_unix_ms = 6;
 }
 
+// Optional: token-level streaming of the planner's raw output (typically JSON).
+// These events are meant for live UX only; they are usually not persisted into projections.
+message PlanningTextStarted {
+  PlanningRun run = 1;
+  int64 started_at_unix_ms = 2;
+}
+
+message PlanningTextDelta {
+  PlanningRun run = 1;
+  string delta = 2;
+  string cumulative = 3;
+  int64 emitted_at_unix_ms = 4;
+}
+
+message PlanningTextFinal {
+  PlanningRun run = 1;
+  string text = 2;
+  int64 completed_at_unix_ms = 3;
+}
+
 // Execution starts once a final directive is available.
 message ExecutionStarted {
   string run_id = 1;
