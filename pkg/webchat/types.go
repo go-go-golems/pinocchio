@@ -82,7 +82,8 @@ type Router struct {
 	toolFactories map[string]ToolFactory
 
 	// shared deps
-	db *sql.DB
+	db            *sql.DB
+	timelineStore TimelineStore
 
 	// profiles
 	profiles ProfileRegistry

@@ -31,6 +31,8 @@ import (
 	inevents "github.com/go-go-golems/pinocchio/pkg/inference/events"
 	rediscfg "github.com/go-go-golems/pinocchio/pkg/redisstream"
 	sempb "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/base"
+	timelinepb "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/timeline"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 // RouterSettings are exposed via parameter layers (addr, agent, idle timeout, etc.).
@@ -66,12 +68,39 @@ func NewRouter(ctx context.Context, parsed *layers.ParsedLayers, staticFS embed.
 		r.usesRedis = true
 		r.redisAddr = rs.Addr
 	}
+
+	// Optional durable timeline store for "actual hydration".
+	// Configuration:
+	// - PINOCCHIO_WEBCHAT_TIMELINE_DSN (preferred; full sqlite DSN)
+	// - PINOCCHIO_WEBCHAT_TIMELINE_DB (file path; DSN is derived)
+	if dsn := strings.TrimSpace(os.Getenv("PINOCCHIO_WEBCHAT_TIMELINE_DSN")); dsn != "" {
+		store, err := NewSQLiteTimelineStore(dsn)
+		if err != nil {
+			return nil, errors.Wrap(err, "open timeline store (dsn)")
+		}
+		r.timelineStore = store
+	} else if p := strings.TrimSpace(os.Getenv("PINOCCHIO_WEBCHAT_TIMELINE_DB")); p != "" {
+		if dir := filepath.Dir(p); dir != "" && dir != "." {
+			_ = os.MkdirAll(dir, 0755)
+		}
+		dsn, err := SQLiteTimelineDSNForFile(p)
+		if err != nil {
+			return nil, errors.Wrap(err, "build timeline DSN")
+		}
+		store, err := NewSQLiteTimelineStore(dsn)
+		if err != nil {
+			return nil, errors.Wrap(err, "open timeline store (file)")
+		}
+		r.timelineStore = store
+	}
+
 	r.registerHTTPHandlers()
 	return r, nil
 }
 
 // Allow setting optional shared DB for middlewares that need it (e.g., sqlite tool)
-func (r *Router) WithDB(db *sql.DB) *Router { r.db = db; return r }
+func (r *Router) WithDB(db *sql.DB) *Router                 { r.db = db; return r }
+func (r *Router) WithTimelineStore(s TimelineStore) *Router { r.timelineStore = s; return r }
 
 // RegisterMiddleware adds a named middleware factory to the router.
 func (r *Router) RegisterMiddleware(name string, f MiddlewareFactory) { r.mwFactories[name] = f }
@@ -520,6 +549,56 @@ func (r *Router) registerHTTPHandlers() {
 	r.mux.HandleFunc("/hydrate", hydrateHandler)
 	r.mux.HandleFunc("/hydrate/", hydrateHandler)
 
+	timelineHandler := func(w http.ResponseWriter, r0 *http.Request) {
+		if r0.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		if r.timelineStore == nil {
+			http.Error(w, "timeline store not enabled", http.StatusNotFound)
+			return
+		}
+
+		convID := strings.TrimSpace(r0.URL.Query().Get("conv_id"))
+		if convID == "" {
+			http.Error(w, "missing conv_id", http.StatusBadRequest)
+			return
+		}
+
+		var sinceVersion uint64
+		if s := strings.TrimSpace(r0.URL.Query().Get("since_version")); s != "" {
+			_, _ = fmt.Sscanf(s, "%d", &sinceVersion)
+		}
+		limit := 0
+		if s := strings.TrimSpace(r0.URL.Query().Get("limit")); s != "" {
+			var v int
+			_, _ = fmt.Sscanf(s, "%d", &v)
+			if v > 0 {
+				limit = v
+			}
+		}
+
+		snap, err := r.timelineStore.GetSnapshot(r0.Context(), convID, sinceVersion, limit)
+		if err != nil {
+			logger.Error().Err(err).Str("conv_id", convID).Msg("timeline snapshot failed")
+			http.Error(w, "timeline snapshot failed", http.StatusInternalServerError)
+			return
+		}
+		out, err := protojson.MarshalOptions{
+			EmitUnpopulated: false,
+			UseProtoNames:   false,
+		}.Marshal(snap)
+		if err != nil {
+			logger.Error().Err(err).Str("conv_id", convID).Msg("timeline marshal failed")
+			http.Error(w, "timeline marshal failed", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(out)
+	}
+	r.mux.HandleFunc("/timeline", timelineHandler)
+	r.mux.HandleFunc("/timeline/", timelineHandler)
+
 	handleChatRequest := func(w http.ResponseWriter, r0 *http.Request) {
 		if r0.Method != http.MethodPost {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -802,6 +881,20 @@ func (r *Router) startRunForPrompt(conv *Conversation, profileSlug string, overr
 	turnID := ""
 	if seed != nil && seed.ID != "" {
 		turnID = seed.ID
+	}
+	if r.timelineStore != nil && turnID != "" && strings.TrimSpace(prompt) != "" {
+		_, _ = r.timelineStore.Upsert(r.baseCtx, conv.ID, &timelinepb.TimelineEntityV1{
+			Id:   "user-" + turnID,
+			Kind: "message",
+			Snapshot: &timelinepb.TimelineEntityV1_Message{
+				Message: &timelinepb.MessageSnapshotV1{
+					SchemaVersion: 1,
+					Role:          "user",
+					Content:       prompt,
+					Streaming:     false,
+				},
+			},
+		})
 	}
 
 	if stepModeFromOverrides(overrides) && r.stepCtrl != nil {

@@ -42,6 +42,9 @@ type Conversation struct {
 	requests   map[string]*chatRequestRecord
 
 	semBuf *semFrameBuffer
+
+	// Durable "actual hydration" projection (optional; enabled when Router has a TimelineStore).
+	timelineProj *TimelineProjector
 }
 
 // ConvManager stores all live conversations.
@@ -83,6 +86,9 @@ func (r *Router) getOrCreateConv(convID, profileSlug string, overrides map[strin
 		c.ensureQueueInitLocked()
 		if c.semBuf == nil {
 			c.semBuf = newSemFrameBuffer(1000)
+		}
+		if c.timelineProj == nil && r.timelineStore != nil {
+			c.timelineProj = NewTimelineProjector(c.ID, r.timelineStore)
 		}
 		c.mu.Unlock()
 		if c.ProfileSlug != profileSlug || c.EngConfigSig != newSig {
@@ -133,6 +139,9 @@ func (r *Router) getOrCreateConv(convID, profileSlug string, overrides map[strin
 					if c.semBuf != nil {
 						c.semBuf.Add(frame)
 					}
+					if c.timelineProj != nil {
+						_ = c.timelineProj.ApplySemFrame(context.Background(), frame)
+					}
 				},
 			)
 
@@ -157,6 +166,9 @@ func (r *Router) getOrCreateConv(convID, profileSlug string, overrides map[strin
 		EngConfigSig: newSig,
 		requests:     map[string]*chatRequestRecord{},
 		semBuf:       newSemFrameBuffer(1000),
+	}
+	if r.timelineStore != nil {
+		conv.timelineProj = NewTimelineProjector(conv.ID, r.timelineStore)
 	}
 	eng, sink, err := r.BuildFromConfig(convID, cfg)
 	if err != nil {
@@ -193,6 +205,9 @@ func (r *Router) getOrCreateConv(convID, profileSlug string, overrides map[strin
 			}
 			if conv.semBuf != nil {
 				conv.semBuf.Add(frame)
+			}
+			if conv.timelineProj != nil {
+				_ = conv.timelineProj.ApplySemFrame(context.Background(), frame)
 			}
 		},
 	)
