@@ -137,51 +137,68 @@ func (e *LifecycleEngine) planOnce(ctx context.Context, t *turns.Turn, runID str
 	}
 	events.PublishEventToContext(ctx, pinevents.NewPlanningStart(md, runID, e.providerLabel, e.modelLabel, maxIters, time.Now().UnixMilli()))
 
-	planTurn := t.Clone()
-	setPlannerSystemPrompt(planTurn, e.cfg.Prompt)
-
-	// Disable tools for the planner call (we want a JSON plan, not tool invocations).
-	_ = engine.KeyToolConfig.Set(&planTurn.Data, engine.ToolConfig{Enabled: false})
-
-	plannerCtx, cancel := plannerContext(ctx)
-	defer cancel()
-	planned, err := e.inner.RunInference(plannerCtx, planTurn)
-	if err != nil {
-		complete := pinevents.NewPlanningComplete(md, runID, 0, "error")
-		complete.Provider = e.providerLabel
-		complete.PlannerModel = e.modelLabel
-		complete.MaxIterations = maxIters
-		complete.StatusReason = "planner_inference_error"
-		complete.FinalDirective = ""
-		events.PublishEventToContext(ctx, complete)
-		return err
-	}
-
-	raw, err := lastAssistantText(planned)
-	if err != nil {
-		complete := pinevents.NewPlanningComplete(md, runID, 0, "error")
-		complete.Provider = e.providerLabel
-		complete.PlannerModel = e.modelLabel
-		complete.MaxIterations = maxIters
-		complete.StatusReason = "planner_output_empty"
-		events.PublishEventToContext(ctx, complete)
-		return err
-	}
-
-	plan, err := parsePlanJSON(raw)
-	if err != nil {
-		complete := pinevents.NewPlanningComplete(md, runID, 0, "error")
-		complete.Provider = e.providerLabel
-		complete.PlannerModel = e.modelLabel
-		complete.MaxIterations = maxIters
-		complete.StatusReason = "planner_parse_error"
-		complete.FinalDirective = ""
-		events.PublishEventToContext(ctx, complete)
-		return err
-	}
-
+	prior := make([]planIteration, 0, maxIters)
+	finalDecision := ""
+	statusReason := ""
+	finalDirective := ""
 	totalIterations := 0
-	for _, it := range plan.Iterations {
+
+	for i := 1; i <= maxIters; i++ {
+		state := plannerStateJSON{
+			IterationIndex:  i,
+			MaxIterations:   maxIters,
+			PriorIterations: prior,
+		}
+		stateRaw, _ := json.Marshal(state)
+		prompt := strings.TrimSpace(e.cfg.Prompt) + "\n\nSTATE_JSON:\n" + string(stateRaw)
+
+		planTurn := t.Clone()
+		setPlannerSystemPrompt(planTurn, prompt)
+
+		// Disable tools for the planner call (we want JSON plan events, not tool invocations).
+		_ = engine.KeyToolConfig.Set(&planTurn.Data, engine.ToolConfig{Enabled: false})
+
+		plannerCtx, cancel := plannerContext(ctx)
+		planned, err := e.inner.RunInference(plannerCtx, planTurn)
+		cancel()
+		if err != nil {
+			complete := pinevents.NewPlanningComplete(md, runID, totalIterations, "error")
+			complete.Provider = e.providerLabel
+			complete.PlannerModel = e.modelLabel
+			complete.MaxIterations = maxIters
+			complete.StatusReason = "planner_inference_error"
+			complete.FinalDirective = ""
+			events.PublishEventToContext(ctx, complete)
+			return err
+		}
+
+		raw, err := lastAssistantText(planned)
+		if err != nil {
+			complete := pinevents.NewPlanningComplete(md, runID, totalIterations, "error")
+			complete.Provider = e.providerLabel
+			complete.PlannerModel = e.modelLabel
+			complete.MaxIterations = maxIters
+			complete.StatusReason = "planner_output_empty"
+			events.PublishEventToContext(ctx, complete)
+			return err
+		}
+
+		step, err := parsePlannerStepJSON(raw)
+		if err != nil {
+			complete := pinevents.NewPlanningComplete(md, runID, totalIterations, "error")
+			complete.Provider = e.providerLabel
+			complete.PlannerModel = e.modelLabel
+			complete.MaxIterations = maxIters
+			complete.StatusReason = "planner_parse_error"
+			complete.FinalDirective = ""
+			events.PublishEventToContext(ctx, complete)
+			return err
+		}
+
+		it := step.Iteration
+		if it.IterationIndex <= 0 {
+			it.IterationIndex = i
+		}
 		totalIterations++
 		ev := pinevents.NewPlanningIteration(md, runID, it.IterationIndex, it.Action, it.Strategy, it.Progress)
 		ev.Provider = e.providerLabel
@@ -192,18 +209,42 @@ func (e *LifecycleEngine) planOnce(ctx context.Context, t *turns.Turn, runID str
 		ev.ReflectionText = it.ReflectionText
 		ev.EmittedAtUnixMs = time.Now().UnixMilli()
 		events.PublishEventToContext(ctx, ev)
+
+		prior = append(prior, it)
+		finalDecision = strings.TrimSpace(step.FinalDecision)
+		statusReason = strings.TrimSpace(step.StatusReason)
+		finalDirective = strings.TrimSpace(step.FinalDirective)
+
+		if !step.Continue {
+			break
+		}
 	}
 
-	finalDirective := strings.TrimSpace(plan.FinalDirective)
+	if finalDecision == "" {
+		finalDecision = "execute"
+	}
+	if statusReason == "" {
+		if totalIterations >= maxIters {
+			statusReason = "max_iterations_reached"
+		} else {
+			statusReason = "ok"
+		}
+	}
+	if strings.TrimSpace(finalDirective) == "" {
+		finalDirective = ""
+		finalDecision = "error"
+		statusReason = "missing_final_directive"
+	}
+
 	if finalDirective != "" {
 		_ = KeyDirective.Set(&t.Data, finalDirective)
 	}
 
-	complete := pinevents.NewPlanningComplete(md, runID, totalIterations, strings.TrimSpace(plan.FinalDecision))
+	complete := pinevents.NewPlanningComplete(md, runID, totalIterations, finalDecision)
 	complete.Provider = e.providerLabel
 	complete.PlannerModel = e.modelLabel
 	complete.MaxIterations = maxIters
-	complete.StatusReason = strings.TrimSpace(plan.StatusReason)
+	complete.StatusReason = statusReason
 	complete.FinalDirective = finalDirective
 	events.PublishEventToContext(ctx, complete)
 
@@ -269,13 +310,6 @@ func responseLength(t *turns.Turn) int {
 	return len([]rune(s))
 }
 
-type planJSON struct {
-	Iterations     []planIteration `json:"iterations"`
-	FinalDecision  string          `json:"final_decision"`
-	StatusReason   string          `json:"status_reason"`
-	FinalDirective string          `json:"final_directive"`
-}
-
 type planIteration struct {
 	IterationIndex int    `json:"iteration_index"`
 	Action         string `json:"action"`
@@ -286,25 +320,31 @@ type planIteration struct {
 	ReflectionText string `json:"reflection_text"`
 }
 
-func parsePlanJSON(raw string) (*planJSON, error) {
+type plannerStepJSON struct {
+	Iteration      planIteration `json:"iteration"`
+	Continue       bool          `json:"continue"`
+	FinalDecision  string        `json:"final_decision"`
+	StatusReason   string        `json:"status_reason"`
+	FinalDirective string        `json:"final_directive"`
+}
+
+type plannerStateJSON struct {
+	IterationIndex  int             `json:"iteration_index"`
+	MaxIterations   int             `json:"max_iterations"`
+	PriorIterations []planIteration `json:"prior_iterations"`
+}
+
+func parsePlannerStepJSON(raw string) (*plannerStepJSON, error) {
 	s := strings.TrimSpace(raw)
 	if s == "" || !strings.HasPrefix(s, "{") {
 		return nil, fmt.Errorf("planner output is not JSON object")
 	}
-	var out planJSON
+	var out plannerStepJSON
 	if err := json.Unmarshal([]byte(s), &out); err != nil {
-		return nil, errors.Wrap(err, "unmarshal planner json")
+		return nil, errors.Wrap(err, "unmarshal planner step json")
 	}
-	if len(out.Iterations) == 0 {
-		return nil, fmt.Errorf("planner output has no iterations")
-	}
-	for i := range out.Iterations {
-		if out.Iterations[i].IterationIndex <= 0 {
-			out.Iterations[i].IterationIndex = i + 1
-		}
-		if strings.TrimSpace(out.Iterations[i].Action) == "" {
-			return nil, fmt.Errorf("planner iteration %d missing action", out.Iterations[i].IterationIndex)
-		}
+	if strings.TrimSpace(out.Iteration.Action) == "" {
+		return nil, fmt.Errorf("planner output missing iteration.action")
 	}
 	if strings.TrimSpace(out.FinalDecision) == "" {
 		return nil, fmt.Errorf("planner output missing final_decision")

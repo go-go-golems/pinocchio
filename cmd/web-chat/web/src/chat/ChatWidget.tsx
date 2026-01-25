@@ -183,6 +183,7 @@ function PlanningCard({ e }: { e: RenderEntity }) {
   const reflectionByIter = e.props?.reflectionByIter ?? {};
   const completed = e.props?.completed ?? null;
   const execution = e.props?.execution ?? null;
+  const planningInProgress = !completed;
 
   return (
     <div className="card">
@@ -192,6 +193,7 @@ function PlanningCard({ e }: { e: RenderEntity }) {
         {provider ? <div className="pill">{provider}</div> : null}
         {plannerModel ? <div className="pill mono">{plannerModel}</div> : null}
         {typeof maxIterations === 'number' ? <div className="pill">max {maxIterations}</div> : null}
+        {planningInProgress ? <div className="streamingDot" /> : null}
         <div className="cardHeaderMeta">#{fmtShort(e.createdAt)}</div>
       </div>
       <div className="cardBody">

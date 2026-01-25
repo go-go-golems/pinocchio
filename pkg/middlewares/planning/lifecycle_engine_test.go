@@ -2,6 +2,7 @@ package planning
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -30,18 +31,30 @@ func (e *fakeEngine) RunInference(_ context.Context, t *turns.Turn) (*turns.Turn
 	}
 	// Detect planner prompt marker in system blocks.
 	isPlanner := false
+	iterationIndex := 0
 	for _, b := range t.Blocks {
 		if b.Kind != turns.BlockKindSystem {
 			continue
 		}
 		txt, _ := b.Payload[turns.PayloadKeyText].(string)
-		if txt != "" && strings.Contains(txt, "PINOCCHIO_PLANNER_JSON_V1") {
+		if txt != "" && strings.Contains(txt, "PINOCCHIO_PLANNER_ITER_V1") {
 			isPlanner = true
+			if idx := strings.Index(txt, "STATE_JSON:"); idx >= 0 {
+				stateRaw := strings.TrimSpace(txt[idx+len("STATE_JSON:"):])
+				var st plannerStateJSON
+				if err := json.Unmarshal([]byte(stateRaw), &st); err == nil {
+					iterationIndex = st.IterationIndex
+				}
+			}
 			break
 		}
 	}
 	if isPlanner {
-		turns.AppendBlock(t, turns.NewAssistantTextBlock(`{"iterations":[{"iteration_index":1,"action":"respond","reasoning":"ok","strategy":"direct","progress":"ready","tool_name":"","reflection_text":""}],"final_decision":"execute","status_reason":"ok","final_directive":"Answer concisely."}`))
+		if iterationIndex <= 1 {
+			turns.AppendBlock(t, turns.NewAssistantTextBlock(`{"iteration":{"iteration_index":1,"action":"reflect","reasoning":"ok","strategy":"gather context","progress":"initial","tool_name":"","reflection_text":""},"continue":true,"final_decision":"execute","status_reason":"ok","final_directive":"Answer concisely."}`))
+			return t, nil
+		}
+		turns.AppendBlock(t, turns.NewAssistantTextBlock(`{"iteration":{"iteration_index":2,"action":"respond","reasoning":"ready","strategy":"write answer","progress":"done","tool_name":"","reflection_text":""},"continue":false,"final_decision":"execute","status_reason":"ok","final_directive":"Answer concisely."}`))
 		return t, nil
 	}
 	turns.AppendBlock(t, turns.NewAssistantTextBlock("hello"))
@@ -51,7 +64,9 @@ func (e *fakeEngine) RunInference(_ context.Context, t *turns.Turn) (*turns.Turn
 func TestLifecycleEngine_EmitsPlanningAndExecutionEvents(t *testing.T) {
 	base := &fakeEngine{}
 	inner := &engineWithMiddleware{base: base, mws: []middleware.Middleware{NewDirectiveMiddleware()}}
-	eng := NewLifecycleEngine(inner, DefaultConfig(), "test", "model-x")
+	cfg := DefaultConfig()
+	cfg.MaxIterations = 2
+	eng := NewLifecycleEngine(inner, cfg, "test", "model-x")
 
 	sink := &captureSink{}
 	ctx := events.WithEventSinks(context.Background(), sink)
@@ -71,6 +86,7 @@ func TestLifecycleEngine_EmitsPlanningAndExecutionEvents(t *testing.T) {
 	}
 	assert.Equal(t, []string{
 		"planning.start",
+		"planning.iteration",
 		"planning.iteration",
 		"planning.complete",
 		"execution.start",
