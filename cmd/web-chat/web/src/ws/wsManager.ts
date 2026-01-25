@@ -10,6 +10,7 @@ type ConnectArgs = {
   basePrefix: string;
   dispatch: AppDispatch;
   onStatus?: (s: string) => void;
+  hydrate?: boolean;
 };
 
 type RawSemEnvelope = any;
@@ -130,7 +131,12 @@ class WsManager {
   private lastOnStatus: ((s: string) => void) | null = null;
 
   async connect(args: ConnectArgs) {
-    if (this.ws && this.convId === args.convId) return;
+    if (this.ws && this.convId === args.convId) {
+      if (args.hydrate !== false) {
+        await this.ensureHydrated(args);
+      }
+      return;
+    }
     this.disconnect();
 
     this.connectNonce++;
@@ -151,17 +157,32 @@ class WsManager {
     const ws = new WebSocket(url);
     this.ws = ws;
 
+    let settleOpen: (() => void) | null = null;
+    const openPromise = new Promise<void>((resolve) => {
+      let settled = false;
+      settleOpen = () => {
+        if (settled) return;
+        settled = true;
+        resolve();
+      };
+      // Don't hang forever on first-message send; best-effort timeout.
+      setTimeout(() => settleOpen?.(), 1500);
+    });
+
     ws.onopen = () => {
+      settleOpen?.();
       if (nonce !== this.connectNonce) return;
       args.onStatus?.('ws connected');
       args.dispatch(appSlice.actions.setWsStatus('connected'));
     };
     ws.onclose = () => {
+      settleOpen?.();
       if (nonce !== this.connectNonce) return;
       args.onStatus?.('ws closed');
       args.dispatch(appSlice.actions.setWsStatus('closed'));
     };
     ws.onerror = () => {
+      settleOpen?.();
       if (nonce !== this.connectNonce) return;
       args.onStatus?.('ws error');
       args.dispatch(appSlice.actions.setWsStatus('error'));
@@ -182,6 +203,11 @@ class WsManager {
       }
     };
 
+    await openPromise;
+    if (nonce !== this.connectNonce) return;
+
+    if (args.hydrate === false) return;
+
     args.onStatus?.('hydrating...');
     await this.hydrate(args, nonce);
   }
@@ -201,8 +227,18 @@ class WsManager {
     this.buffered = [];
   }
 
+  async ensureHydrated(args: ConnectArgs) {
+    if (!args?.convId) return;
+    if (!this.ws || this.convId !== args.convId) return;
+    if (this.hydrated) return;
+    const nonce = this.connectNonce;
+    args.onStatus?.('hydrating...');
+    await this.hydrate(args, nonce);
+  }
+
   private async hydrate(args: ConnectArgs, nonce: number) {
     if (this.hydrated) return;
+    if (nonce !== this.connectNonce) return;
     args.dispatch(timelineSlice.actions.clear());
 
     // Prefer durable hydration via GET /timeline (PI-004).

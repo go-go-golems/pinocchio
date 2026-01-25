@@ -324,6 +324,19 @@ export function ChatWidget() {
     if (!prompt) return;
     setText('');
 
+    const convId =
+      app.convId ||
+      ((globalThis.crypto && 'randomUUID' in globalThis.crypto && typeof globalThis.crypto.randomUUID === 'function')
+        ? globalThis.crypto.randomUUID()
+        : `conv-${Date.now()}-${Math.random().toString(16).slice(2)}`);
+    const isFirstMessage = !app.convId;
+
+    // First message: pin a conv_id into the URL so reload can hydrate.
+    // We intentionally don't set Redux convId yet; we attach WS early, then hydrate after /chat returns.
+    if (isFirstMessage && convId) {
+      setConvIdInLocation(convId);
+    }
+
     // optimistic user echo
     dispatch(
       timelineSlice.actions.addEntity({
@@ -338,7 +351,25 @@ export function ChatWidget() {
     const idempotencyKey = (globalThis.crypto && 'randomUUID' in globalThis.crypto && typeof globalThis.crypto.randomUUID === 'function')
       ? globalThis.crypto.randomUUID()
       : `idem-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-    const body = app.convId ? { prompt, conv_id: app.convId } : { prompt };
+
+    // Attach WS before starting inference so SEM widget updates can stream from the very beginning.
+    // We connect without hydration here to avoid wiping the optimistic prompt; we'll hydrate once
+    // the backend has created the run and the timeline store has the canonical user message entity.
+    if (isFirstMessage && convId) {
+      try {
+        await wsManager.connect({
+          convId,
+          basePrefix,
+          dispatch,
+          hydrate: false,
+          onStatus: (status) => dispatch(appSlice.actions.setStatus(status)),
+        });
+      } catch {
+        // best-effort; we can still continue and rely on timeline hydration later
+      }
+    }
+
+    const body = { prompt, conv_id: convId };
     const res = await fetch(`${basePrefix}/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Idempotency-Key': idempotencyKey },
@@ -350,13 +381,26 @@ export function ChatWidget() {
       return;
     }
 
-    const convId = (j && j.conv_id) || app.convId || '';
+    const returnedConvId = (j && j.conv_id) || convId || '';
     const runId = (j && (j.session_id || j.run_id)) || app.runId || '';
-    if (!app.convId && convId) {
-      setConvIdInLocation(convId);
+    if (returnedConvId && returnedConvId !== convId) {
+      setConvIdInLocation(returnedConvId);
     }
-    dispatch(appSlice.actions.setConvId(convId));
+    dispatch(appSlice.actions.setConvId(returnedConvId));
     dispatch(appSlice.actions.setRunId(runId));
+
+    if (isFirstMessage && returnedConvId) {
+      try {
+        await wsManager.ensureHydrated({
+          convId: returnedConvId,
+          basePrefix,
+          dispatch,
+          onStatus: (status) => dispatch(appSlice.actions.setStatus(status)),
+        });
+      } catch {
+        // ignore
+      }
+    }
 
     const st = (j && j.status) || (res.status === 202 ? 'queued' : 'sent');
     const qp = j && typeof j.queue_position === 'number' ? ` (pos ${j.queue_position})` : '';
