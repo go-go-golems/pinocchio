@@ -1,0 +1,49 @@
+syntax = "proto3";
+
+package sem.timeline;
+
+option go_package = "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/timeline;timeline";
+
+import "proto/sem/timeline/message.proto";
+import "proto/sem/timeline/middleware.proto";
+import "proto/sem/timeline/status.proto";
+import "proto/sem/timeline/team_analysis.proto";
+import "proto/sem/timeline/tool.proto";
+
+// TimelineEntityV1 represents one upsertable timeline entity.
+// It is the canonical "projection state" unit owned by the backend.
+message TimelineEntityV1 {
+  string id = 1;       // stable entity ID for upsert
+  string kind = 2;     // message|tool_call|tool_result|status|thinking_mode|planning|...
+  int64 created_at_ms = 3;
+  int64 updated_at_ms = 4;
+
+  // Exactly one payload should be set.
+  oneof snapshot {
+    sem.timeline.MessageSnapshotV1 message = 10;
+    sem.timeline.ToolCallSnapshotV1 tool_call = 11;
+    sem.timeline.ToolResultSnapshotV1 tool_result = 12;
+    sem.timeline.StatusSnapshotV1 status = 13;
+    sem.timeline.ThinkingModeSnapshotV1 thinking_mode = 14;
+    sem.timeline.ModeEvaluationSnapshotV1 mode_evaluation = 15;
+    sem.timeline.InnerThoughtsSnapshotV1 inner_thoughts = 16;
+    sem.timeline.TeamAnalysisSnapshotV1 team_analysis = 17;
+  }
+}
+
+// TimelineUpsertV1 is emitted when an entity is inserted/updated in the projection.
+message TimelineUpsertV1 {
+  string conv_id = 1;
+  uint64 version = 2; // monotonically increasing per conv_id
+  TimelineEntityV1 entity = 3;
+}
+
+// TimelineSnapshotV1 is returned by GET /timeline.
+message TimelineSnapshotV1 {
+  string conv_id = 1;
+  uint64 version = 2;     // current projection version for conv_id
+  int64 server_time_ms = 3;
+
+  // Full snapshot or incremental updates (depending on since_version).
+  repeated TimelineEntityV1 entities = 10;
+}
