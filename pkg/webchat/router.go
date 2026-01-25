@@ -987,6 +987,16 @@ func (r *Router) startRunForPrompt(conv *Conversation, profileSlug string, overr
 		if r.emitPlanningStubs {
 			r.emitAgenticExecutionComplete(runLog, conv, agenticRunID, finalTurnID, handle.InferenceID, waitErr)
 		}
+		if waitErr != nil && conv != nil && conv.Sink != nil && middlewareEnabled(cfg.Middlewares, "planning") {
+			// Ensure execution.complete exists even when the tool loop exits with an error (e.g. max iterations).
+			md := events.EventMetadata{
+				ID:          uuid.New(),
+				SessionID:   conv.RunID,
+				InferenceID: handle.InferenceID,
+				TurnID:      finalTurnID,
+			}
+			_ = conv.Sink.PublishEvent(inevents.NewExecutionComplete(md, handle.InferenceID, "error", waitErr.Error()))
+		}
 		r.finishRun(conv, idempotencyKey, handle.InferenceID, turnID, waitErr)
 		if waitErr != nil {
 			runLog.Error().Err(waitErr).Str("inference_id", handle.InferenceID).Msg("run loop error")
@@ -996,6 +1006,15 @@ func (r *Router) startRunForPrompt(conv *Conversation, profileSlug string, overr
 	}()
 
 	return resp, nil
+}
+
+func middlewareEnabled(mws []MiddlewareUse, name string) bool {
+	for _, mw := range mws {
+		if mw.Name == name {
+			return true
+		}
+	}
+	return false
 }
 
 func (r *Router) emitAgenticPlanningAndThinking(
