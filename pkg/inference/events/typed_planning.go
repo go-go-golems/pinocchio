@@ -112,78 +112,6 @@ func NewPlanningComplete(metadata gepevents.EventMetadata, runID string, totalIt
 
 var _ gepevents.Event = &EventPlanningComplete{}
 
-// EventPlanningTextStarted marks the beginning of token streaming for the planner's raw output.
-type EventPlanningTextStarted struct {
-	gepevents.EventImpl
-	RunID           string `json:"run_id"`
-	Provider        string `json:"provider,omitempty"`
-	PlannerModel    string `json:"planner_model,omitempty"`
-	MaxIterations   int    `json:"max_iterations,omitempty"`
-	StartedAtUnixMs int64  `json:"started_at_unix_ms,omitempty"`
-}
-
-func NewPlanningTextStarted(metadata gepevents.EventMetadata, runID, provider, plannerModel string, maxIterations int, startedAtUnixMs int64) *EventPlanningTextStarted {
-	if startedAtUnixMs == 0 {
-		startedAtUnixMs = time.Now().UnixMilli()
-	}
-	return &EventPlanningTextStarted{
-		EventImpl:       gepevents.EventImpl{Type_: gepevents.EventType("planning.text.start"), Metadata_: metadata},
-		RunID:           runID,
-		Provider:        provider,
-		PlannerModel:    plannerModel,
-		MaxIterations:   maxIterations,
-		StartedAtUnixMs: startedAtUnixMs,
-	}
-}
-
-var _ gepevents.Event = &EventPlanningTextStarted{}
-
-// EventPlanningTextDelta streams the planner's raw output tokens.
-type EventPlanningTextDelta struct {
-	gepevents.EventImpl
-	RunID           string `json:"run_id"`
-	Provider        string `json:"provider,omitempty"`
-	PlannerModel    string `json:"planner_model,omitempty"`
-	MaxIterations   int    `json:"max_iterations,omitempty"`
-	Delta           string `json:"delta"`
-	Cumulative      string `json:"cumulative"`
-	EmittedAtUnixMs int64  `json:"emitted_at_unix_ms,omitempty"`
-}
-
-func NewPlanningTextDelta(metadata gepevents.EventMetadata, runID, delta, cumulative string) *EventPlanningTextDelta {
-	return &EventPlanningTextDelta{
-		EventImpl:       gepevents.EventImpl{Type_: gepevents.EventType("planning.text.delta"), Metadata_: metadata},
-		RunID:           runID,
-		Delta:           delta,
-		Cumulative:      cumulative,
-		EmittedAtUnixMs: time.Now().UnixMilli(),
-	}
-}
-
-var _ gepevents.Event = &EventPlanningTextDelta{}
-
-// EventPlanningTextFinal is the final raw planner output.
-type EventPlanningTextFinal struct {
-	gepevents.EventImpl
-	RunID             string `json:"run_id"`
-	Provider          string `json:"provider,omitempty"`
-	PlannerModel      string `json:"planner_model,omitempty"`
-	MaxIterations     int    `json:"max_iterations,omitempty"`
-	Text              string `json:"text"`
-	CompletedAtUnixMs int64  `json:"completed_at_unix_ms,omitempty"`
-}
-
-func NewPlanningTextFinal(metadata gepevents.EventMetadata, runID, text string) *EventPlanningTextFinal {
-	return &EventPlanningTextFinal{
-		EventImpl:         gepevents.EventImpl{Type_: gepevents.EventType("planning.text.final"), Metadata_: metadata},
-		RunID:             runID,
-		Text:              text,
-		CompletedAtUnixMs: time.Now().UnixMilli(),
-	}
-}
-
-var _ gepevents.Event = &EventPlanningTextFinal{}
-
 // EventExecutionStart marks the beginning of execution.
 type EventExecutionStart struct {
 	gepevents.EventImpl
@@ -241,15 +169,6 @@ func init() {
 	})
 	_ = gepevents.RegisterEventFactory("planning.complete", func() gepevents.Event {
 		return &EventPlanningComplete{EventImpl: gepevents.EventImpl{Type_: gepevents.EventType("planning.complete")}}
-	})
-	_ = gepevents.RegisterEventFactory("planning.text.start", func() gepevents.Event {
-		return &EventPlanningTextStarted{EventImpl: gepevents.EventImpl{Type_: gepevents.EventType("planning.text.start")}}
-	})
-	_ = gepevents.RegisterEventFactory("planning.text.delta", func() gepevents.Event {
-		return &EventPlanningTextDelta{EventImpl: gepevents.EventImpl{Type_: gepevents.EventType("planning.text.delta")}}
-	})
-	_ = gepevents.RegisterEventFactory("planning.text.final", func() gepevents.Event {
-		return &EventPlanningTextFinal{EventImpl: gepevents.EventImpl{Type_: gepevents.EventType("planning.text.final")}}
 	})
 	_ = gepevents.RegisterEventFactory("execution.start", func() gepevents.Event {
 		return &EventExecutionStart{EventImpl: gepevents.EventImpl{Type_: gepevents.EventType("execution.start")}}

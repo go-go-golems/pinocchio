@@ -423,188 +423,6 @@ func (x *PlanningCompleted) GetCompletedAtUnixMs() int64 {
 	return 0
 }
 
-// Optional: token-level streaming of the planner's raw output (typically JSON).
-// These events are meant for live UX only; they are usually not persisted into projections.
-type PlanningTextStarted struct {
-	state           protoimpl.MessageState `protogen:"open.v1"`
-	Run             *PlanningRun           `protobuf:"bytes,1,opt,name=run,proto3" json:"run,omitempty"`
-	StartedAtUnixMs int64                  `protobuf:"varint,2,opt,name=started_at_unix_ms,json=startedAtUnixMs,proto3" json:"started_at_unix_ms,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
-}
-
-func (x *PlanningTextStarted) Reset() {
-	*x = PlanningTextStarted{}
-	mi := &file_proto_sem_middleware_planning_proto_msgTypes[5]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *PlanningTextStarted) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*PlanningTextStarted) ProtoMessage() {}
-
-func (x *PlanningTextStarted) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_sem_middleware_planning_proto_msgTypes[5]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use PlanningTextStarted.ProtoReflect.Descriptor instead.
-func (*PlanningTextStarted) Descriptor() ([]byte, []int) {
-	return file_proto_sem_middleware_planning_proto_rawDescGZIP(), []int{5}
-}
-
-func (x *PlanningTextStarted) GetRun() *PlanningRun {
-	if x != nil {
-		return x.Run
-	}
-	return nil
-}
-
-func (x *PlanningTextStarted) GetStartedAtUnixMs() int64 {
-	if x != nil {
-		return x.StartedAtUnixMs
-	}
-	return 0
-}
-
-type PlanningTextDelta struct {
-	state           protoimpl.MessageState `protogen:"open.v1"`
-	Run             *PlanningRun           `protobuf:"bytes,1,opt,name=run,proto3" json:"run,omitempty"`
-	Delta           string                 `protobuf:"bytes,2,opt,name=delta,proto3" json:"delta,omitempty"`
-	Cumulative      string                 `protobuf:"bytes,3,opt,name=cumulative,proto3" json:"cumulative,omitempty"`
-	EmittedAtUnixMs int64                  `protobuf:"varint,4,opt,name=emitted_at_unix_ms,json=emittedAtUnixMs,proto3" json:"emitted_at_unix_ms,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
-}
-
-func (x *PlanningTextDelta) Reset() {
-	*x = PlanningTextDelta{}
-	mi := &file_proto_sem_middleware_planning_proto_msgTypes[6]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *PlanningTextDelta) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*PlanningTextDelta) ProtoMessage() {}
-
-func (x *PlanningTextDelta) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_sem_middleware_planning_proto_msgTypes[6]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use PlanningTextDelta.ProtoReflect.Descriptor instead.
-func (*PlanningTextDelta) Descriptor() ([]byte, []int) {
-	return file_proto_sem_middleware_planning_proto_rawDescGZIP(), []int{6}
-}
-
-func (x *PlanningTextDelta) GetRun() *PlanningRun {
-	if x != nil {
-		return x.Run
-	}
-	return nil
-}
-
-func (x *PlanningTextDelta) GetDelta() string {
-	if x != nil {
-		return x.Delta
-	}
-	return ""
-}
-
-func (x *PlanningTextDelta) GetCumulative() string {
-	if x != nil {
-		return x.Cumulative
-	}
-	return ""
-}
-
-func (x *PlanningTextDelta) GetEmittedAtUnixMs() int64 {
-	if x != nil {
-		return x.EmittedAtUnixMs
-	}
-	return 0
-}
-
-type PlanningTextFinal struct {
-	state             protoimpl.MessageState `protogen:"open.v1"`
-	Run               *PlanningRun           `protobuf:"bytes,1,opt,name=run,proto3" json:"run,omitempty"`
-	Text              string                 `protobuf:"bytes,2,opt,name=text,proto3" json:"text,omitempty"`
-	CompletedAtUnixMs int64                  `protobuf:"varint,3,opt,name=completed_at_unix_ms,json=completedAtUnixMs,proto3" json:"completed_at_unix_ms,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
-}
-
-func (x *PlanningTextFinal) Reset() {
-	*x = PlanningTextFinal{}
-	mi := &file_proto_sem_middleware_planning_proto_msgTypes[7]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *PlanningTextFinal) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*PlanningTextFinal) ProtoMessage() {}
-
-func (x *PlanningTextFinal) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_sem_middleware_planning_proto_msgTypes[7]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use PlanningTextFinal.ProtoReflect.Descriptor instead.
-func (*PlanningTextFinal) Descriptor() ([]byte, []int) {
-	return file_proto_sem_middleware_planning_proto_rawDescGZIP(), []int{7}
-}
-
-func (x *PlanningTextFinal) GetRun() *PlanningRun {
-	if x != nil {
-		return x.Run
-	}
-	return nil
-}
-
-func (x *PlanningTextFinal) GetText() string {
-	if x != nil {
-		return x.Text
-	}
-	return ""
-}
-
-func (x *PlanningTextFinal) GetCompletedAtUnixMs() int64 {
-	if x != nil {
-		return x.CompletedAtUnixMs
-	}
-	return 0
-}
-
 // Execution starts once a final directive is available.
 type ExecutionStarted struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
@@ -618,7 +436,7 @@ type ExecutionStarted struct {
 
 func (x *ExecutionStarted) Reset() {
 	*x = ExecutionStarted{}
-	mi := &file_proto_sem_middleware_planning_proto_msgTypes[8]
+	mi := &file_proto_sem_middleware_planning_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -630,7 +448,7 @@ func (x *ExecutionStarted) String() string {
 func (*ExecutionStarted) ProtoMessage() {}
 
 func (x *ExecutionStarted) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_sem_middleware_planning_proto_msgTypes[8]
+	mi := &file_proto_sem_middleware_planning_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -643,7 +461,7 @@ func (x *ExecutionStarted) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExecutionStarted.ProtoReflect.Descriptor instead.
 func (*ExecutionStarted) Descriptor() ([]byte, []int) {
-	return file_proto_sem_middleware_planning_proto_rawDescGZIP(), []int{8}
+	return file_proto_sem_middleware_planning_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *ExecutionStarted) GetRunId() string {
@@ -690,7 +508,7 @@ type ExecutionCompleted struct {
 
 func (x *ExecutionCompleted) Reset() {
 	*x = ExecutionCompleted{}
-	mi := &file_proto_sem_middleware_planning_proto_msgTypes[9]
+	mi := &file_proto_sem_middleware_planning_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -702,7 +520,7 @@ func (x *ExecutionCompleted) String() string {
 func (*ExecutionCompleted) ProtoMessage() {}
 
 func (x *ExecutionCompleted) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_sem_middleware_planning_proto_msgTypes[9]
+	mi := &file_proto_sem_middleware_planning_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -715,7 +533,7 @@ func (x *ExecutionCompleted) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExecutionCompleted.ProtoReflect.Descriptor instead.
 func (*ExecutionCompleted) Descriptor() ([]byte, []int) {
-	return file_proto_sem_middleware_planning_proto_rawDescGZIP(), []int{9}
+	return file_proto_sem_middleware_planning_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *ExecutionCompleted) GetRunId() string {
@@ -804,21 +622,7 @@ const file_proto_sem_middleware_planning_proto_rawDesc = "" +
 	"\x0efinal_decision\x18\x03 \x01(\tR\rfinalDecision\x12#\n" +
 	"\rstatus_reason\x18\x04 \x01(\tR\fstatusReason\x12'\n" +
 	"\x0ffinal_directive\x18\x05 \x01(\tR\x0efinalDirective\x12/\n" +
-	"\x14completed_at_unix_ms\x18\x06 \x01(\x03R\x11completedAtUnixMs\"z\n" +
-	"\x13PlanningTextStarted\x126\n" +
-	"\x03run\x18\x01 \x01(\v2$.sem.middleware.planning.PlanningRunR\x03run\x12+\n" +
-	"\x12started_at_unix_ms\x18\x02 \x01(\x03R\x0fstartedAtUnixMs\"\xae\x01\n" +
-	"\x11PlanningTextDelta\x126\n" +
-	"\x03run\x18\x01 \x01(\v2$.sem.middleware.planning.PlanningRunR\x03run\x12\x14\n" +
-	"\x05delta\x18\x02 \x01(\tR\x05delta\x12\x1e\n" +
-	"\n" +
-	"cumulative\x18\x03 \x01(\tR\n" +
-	"cumulative\x12+\n" +
-	"\x12emitted_at_unix_ms\x18\x04 \x01(\x03R\x0femittedAtUnixMs\"\x90\x01\n" +
-	"\x11PlanningTextFinal\x126\n" +
-	"\x03run\x18\x01 \x01(\v2$.sem.middleware.planning.PlanningRunR\x03run\x12\x12\n" +
-	"\x04text\x18\x02 \x01(\tR\x04text\x12/\n" +
-	"\x14completed_at_unix_ms\x18\x03 \x01(\x03R\x11completedAtUnixMs\"\x9b\x01\n" +
+	"\x14completed_at_unix_ms\x18\x06 \x01(\x03R\x11completedAtUnixMs\"\x9b\x01\n" +
 	"\x10ExecutionStarted\x12\x15\n" +
 	"\x06run_id\x18\x01 \x01(\tR\x05runId\x12%\n" +
 	"\x0eexecutor_model\x18\x02 \x01(\tR\rexecutorModel\x12\x1c\n" +
@@ -846,35 +650,29 @@ func file_proto_sem_middleware_planning_proto_rawDescGZIP() []byte {
 	return file_proto_sem_middleware_planning_proto_rawDescData
 }
 
-var file_proto_sem_middleware_planning_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
+var file_proto_sem_middleware_planning_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
 var file_proto_sem_middleware_planning_proto_goTypes = []any{
-	(*PlanningRun)(nil),         // 0: sem.middleware.planning.PlanningRun
-	(*PlanningStarted)(nil),     // 1: sem.middleware.planning.PlanningStarted
-	(*PlanningIteration)(nil),   // 2: sem.middleware.planning.PlanningIteration
-	(*PlanningReflection)(nil),  // 3: sem.middleware.planning.PlanningReflection
-	(*PlanningCompleted)(nil),   // 4: sem.middleware.planning.PlanningCompleted
-	(*PlanningTextStarted)(nil), // 5: sem.middleware.planning.PlanningTextStarted
-	(*PlanningTextDelta)(nil),   // 6: sem.middleware.planning.PlanningTextDelta
-	(*PlanningTextFinal)(nil),   // 7: sem.middleware.planning.PlanningTextFinal
-	(*ExecutionStarted)(nil),    // 8: sem.middleware.planning.ExecutionStarted
-	(*ExecutionCompleted)(nil),  // 9: sem.middleware.planning.ExecutionCompleted
-	(*structpb.Struct)(nil),     // 10: google.protobuf.Struct
+	(*PlanningRun)(nil),        // 0: sem.middleware.planning.PlanningRun
+	(*PlanningStarted)(nil),    // 1: sem.middleware.planning.PlanningStarted
+	(*PlanningIteration)(nil),  // 2: sem.middleware.planning.PlanningIteration
+	(*PlanningReflection)(nil), // 3: sem.middleware.planning.PlanningReflection
+	(*PlanningCompleted)(nil),  // 4: sem.middleware.planning.PlanningCompleted
+	(*ExecutionStarted)(nil),   // 5: sem.middleware.planning.ExecutionStarted
+	(*ExecutionCompleted)(nil), // 6: sem.middleware.planning.ExecutionCompleted
+	(*structpb.Struct)(nil),    // 7: google.protobuf.Struct
 }
 var file_proto_sem_middleware_planning_proto_depIdxs = []int32{
-	0,  // 0: sem.middleware.planning.PlanningStarted.run:type_name -> sem.middleware.planning.PlanningRun
-	0,  // 1: sem.middleware.planning.PlanningIteration.run:type_name -> sem.middleware.planning.PlanningRun
-	10, // 2: sem.middleware.planning.PlanningIteration.extra:type_name -> google.protobuf.Struct
-	0,  // 3: sem.middleware.planning.PlanningReflection.run:type_name -> sem.middleware.planning.PlanningRun
-	0,  // 4: sem.middleware.planning.PlanningCompleted.run:type_name -> sem.middleware.planning.PlanningRun
-	0,  // 5: sem.middleware.planning.PlanningTextStarted.run:type_name -> sem.middleware.planning.PlanningRun
-	0,  // 6: sem.middleware.planning.PlanningTextDelta.run:type_name -> sem.middleware.planning.PlanningRun
-	0,  // 7: sem.middleware.planning.PlanningTextFinal.run:type_name -> sem.middleware.planning.PlanningRun
-	10, // 8: sem.middleware.planning.ExecutionCompleted.extra:type_name -> google.protobuf.Struct
-	9,  // [9:9] is the sub-list for method output_type
-	9,  // [9:9] is the sub-list for method input_type
-	9,  // [9:9] is the sub-list for extension type_name
-	9,  // [9:9] is the sub-list for extension extendee
-	0,  // [0:9] is the sub-list for field type_name
+	0, // 0: sem.middleware.planning.PlanningStarted.run:type_name -> sem.middleware.planning.PlanningRun
+	0, // 1: sem.middleware.planning.PlanningIteration.run:type_name -> sem.middleware.planning.PlanningRun
+	7, // 2: sem.middleware.planning.PlanningIteration.extra:type_name -> google.protobuf.Struct
+	0, // 3: sem.middleware.planning.PlanningReflection.run:type_name -> sem.middleware.planning.PlanningRun
+	0, // 4: sem.middleware.planning.PlanningCompleted.run:type_name -> sem.middleware.planning.PlanningRun
+	7, // 5: sem.middleware.planning.ExecutionCompleted.extra:type_name -> google.protobuf.Struct
+	6, // [6:6] is the sub-list for method output_type
+	6, // [6:6] is the sub-list for method input_type
+	6, // [6:6] is the sub-list for extension type_name
+	6, // [6:6] is the sub-list for extension extendee
+	0, // [0:6] is the sub-list for field type_name
 }
 
 func init() { file_proto_sem_middleware_planning_proto_init() }
@@ -888,7 +686,7 @@ func file_proto_sem_middleware_planning_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_sem_middleware_planning_proto_rawDesc), len(file_proto_sem_middleware_planning_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   10,
+			NumMessages:   7,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

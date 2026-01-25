@@ -625,60 +625,6 @@ func (et *EventTranslator) RegisterDefaultHandlers() {
 		return [][]byte{wrapSem(map[string]any{"type": "planning.iteration", "id": ev.RunID, "data": data})}, nil
 	})
 
-	semregistry.RegisterByType[*pinevents.EventPlanningTextStarted](func(ev *pinevents.EventPlanningTextStarted) ([][]byte, error) {
-		m := &semMw.PlanningTextStarted{
-			Run: &semMw.PlanningRun{
-				RunId:         ev.RunID,
-				Provider:      ev.Provider,
-				PlannerModel:  ev.PlannerModel,
-				MaxIterations: int32(ev.MaxIterations),
-			},
-			StartedAtUnixMs: ev.StartedAtUnixMs,
-		}
-		data, err := protoToRaw(m)
-		if err != nil {
-			return nil, err
-		}
-		return [][]byte{wrapSem(map[string]any{"type": "planning.text.start", "id": ev.RunID, "data": data})}, nil
-	})
-
-	semregistry.RegisterByType[*pinevents.EventPlanningTextDelta](func(ev *pinevents.EventPlanningTextDelta) ([][]byte, error) {
-		m := &semMw.PlanningTextDelta{
-			Run: &semMw.PlanningRun{
-				RunId:         ev.RunID,
-				Provider:      ev.Provider,
-				PlannerModel:  ev.PlannerModel,
-				MaxIterations: int32(ev.MaxIterations),
-			},
-			Delta:           ev.Delta,
-			Cumulative:      ev.Cumulative,
-			EmittedAtUnixMs: ev.EmittedAtUnixMs,
-		}
-		data, err := protoToRaw(m)
-		if err != nil {
-			return nil, err
-		}
-		return [][]byte{wrapSem(map[string]any{"type": "planning.text.delta", "id": ev.RunID, "data": data})}, nil
-	})
-
-	semregistry.RegisterByType[*pinevents.EventPlanningTextFinal](func(ev *pinevents.EventPlanningTextFinal) ([][]byte, error) {
-		m := &semMw.PlanningTextFinal{
-			Run: &semMw.PlanningRun{
-				RunId:         ev.RunID,
-				Provider:      ev.Provider,
-				PlannerModel:  ev.PlannerModel,
-				MaxIterations: int32(ev.MaxIterations),
-			},
-			Text:              ev.Text,
-			CompletedAtUnixMs: ev.CompletedAtUnixMs,
-		}
-		data, err := protoToRaw(m)
-		if err != nil {
-			return nil, err
-		}
-		return [][]byte{wrapSem(map[string]any{"type": "planning.text.final", "id": ev.RunID, "data": data})}, nil
-	})
-
 	semregistry.RegisterByType[*pinevents.EventPlanningReflection](func(ev *pinevents.EventPlanningReflection) ([][]byte, error) {
 		m := &semMw.PlanningReflection{
 			Run: &semMw.PlanningRun{

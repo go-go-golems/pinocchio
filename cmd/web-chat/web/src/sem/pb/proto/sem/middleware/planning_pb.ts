@@ -11,7 +11,7 @@ import type { JsonObject, Message } from "@bufbuild/protobuf";
  * Describes the file proto/sem/middleware/planning.proto.
  */
 export const file_proto_sem_middleware_planning: GenFile = /*@__PURE__*/
-  fileDesc("CiNwcm90by9zZW0vbWlkZGxld2FyZS9wbGFubmluZy5wcm90bxIXc2VtLm1pZGRsZXdhcmUucGxhbm5pbmciXgoLUGxhbm5pbmdSdW4SDgoGcnVuX2lkGAEgASgJEhAKCHByb3ZpZGVyGAIgASgJEhUKDXBsYW5uZXJfbW9kZWwYAyABKAkSFgoObWF4X2l0ZXJhdGlvbnMYBCABKAUiYAoPUGxhbm5pbmdTdGFydGVkEjEKA3J1bhgBIAEoCzIkLnNlbS5taWRkbGV3YXJlLnBsYW5uaW5nLlBsYW5uaW5nUnVuEhoKEnN0YXJ0ZWRfYXRfdW5peF9tcxgCIAEoAyKWAgoRUGxhbm5pbmdJdGVyYXRpb24SMQoDcnVuGAEgASgLMiQuc2VtLm1pZGRsZXdhcmUucGxhbm5pbmcuUGxhbm5pbmdSdW4SFwoPaXRlcmF0aW9uX2luZGV4GAIgASgFEg4KBmFjdGlvbhgDIAEoCRIRCglyZWFzb25pbmcYBCABKAkSEAoIc3RyYXRlZ3kYBSABKAkSEAoIcHJvZ3Jlc3MYBiABKAkSEQoJdG9vbF9uYW1lGAcgASgJEiYKBWV4dHJhGAggASgLMhcuZ29vZ2xlLnByb3RvYnVmLlN0cnVjdBIaChJlbWl0dGVkX2F0X3VuaXhfbXMYCSABKAMSFwoPcmVmbGVjdGlvbl90ZXh0GAogASgJIq0BChJQbGFubmluZ1JlZmxlY3Rpb24SMQoDcnVuGAEgASgLMiQuc2VtLm1pZGRsZXdhcmUucGxhbm5pbmcuUGxhbm5pbmdSdW4SFwoPaXRlcmF0aW9uX2luZGV4GAIgASgFEhcKD3JlZmxlY3Rpb25fdGV4dBgDIAEoCRIWCg5wcm9ncmVzc19zY29yZRgEIAEoARIaChJlbWl0dGVkX2F0X3VuaXhfbXMYBSABKAMixgEKEVBsYW5uaW5nQ29tcGxldGVkEjEKA3J1bhgBIAEoCzIkLnNlbS5taWRkbGV3YXJlLnBsYW5uaW5nLlBsYW5uaW5nUnVuEhgKEHRvdGFsX2l0ZXJhdGlvbnMYAiABKAUSFgoOZmluYWxfZGVjaXNpb24YAyABKAkSFQoNc3RhdHVzX3JlYXNvbhgEIAEoCRIXCg9maW5hbF9kaXJlY3RpdmUYBSABKAkSHAoUY29tcGxldGVkX2F0X3VuaXhfbXMYBiABKAMiZAoTUGxhbm5pbmdUZXh0U3RhcnRlZBIxCgNydW4YASABKAsyJC5zZW0ubWlkZGxld2FyZS5wbGFubmluZy5QbGFubmluZ1J1bhIaChJzdGFydGVkX2F0X3VuaXhfbXMYAiABKAMihQEKEVBsYW5uaW5nVGV4dERlbHRhEjEKA3J1bhgBIAEoCzIkLnNlbS5taWRkbGV3YXJlLnBsYW5uaW5nLlBsYW5uaW5nUnVuEg0KBWRlbHRhGAIgASgJEhIKCmN1bXVsYXRpdmUYAyABKAkSGgoSZW1pdHRlZF9hdF91bml4X21zGAQgASgDInIKEVBsYW5uaW5nVGV4dEZpbmFsEjEKA3J1bhgBIAEoCzIkLnNlbS5taWRkbGV3YXJlLnBsYW5uaW5nLlBsYW5uaW5nUnVuEgwKBHRleHQYAiABKAkSHAoUY29tcGxldGVkX2F0X3VuaXhfbXMYAyABKAMiaQoQRXhlY3V0aW9uU3RhcnRlZBIOCgZydW5faWQYASABKAkSFgoOZXhlY3V0b3JfbW9kZWwYAiABKAkSEQoJZGlyZWN0aXZlGAMgASgJEhoKEnN0YXJ0ZWRfYXRfdW5peF9tcxgEIAEoAyK/AQoSRXhlY3V0aW9uQ29tcGxldGVkEg4KBnJ1bl9pZBgBIAEoCRIcChRjb21wbGV0ZWRfYXRfdW5peF9tcxgCIAEoAxIOCgZzdGF0dXMYAyABKAkSFQoNZXJyb3JfbWVzc2FnZRgEIAEoCRITCgt0b2tlbnNfdXNlZBgFIAEoBRIXCg9yZXNwb25zZV9sZW5ndGgYBiABKAUSJgoFZXh0cmEYByABKAsyFy5nb29nbGUucHJvdG9idWYuU3RydWN0Qk5aTGdpdGh1Yi5jb20vZ28tZ28tZ29sZW1zL3Bpbm9jY2hpby9wa2cvc2VtL3BiL3Byb3RvL3NlbS9taWRkbGV3YXJlO21pZGRsZXdhcmViBnByb3RvMw", [file_google_protobuf_struct]);
+  fileDesc("CiNwcm90by9zZW0vbWlkZGxld2FyZS9wbGFubmluZy5wcm90bxIXc2VtLm1pZGRsZXdhcmUucGxhbm5pbmciXgoLUGxhbm5pbmdSdW4SDgoGcnVuX2lkGAEgASgJEhAKCHByb3ZpZGVyGAIgASgJEhUKDXBsYW5uZXJfbW9kZWwYAyABKAkSFgoObWF4X2l0ZXJhdGlvbnMYBCABKAUiYAoPUGxhbm5pbmdTdGFydGVkEjEKA3J1bhgBIAEoCzIkLnNlbS5taWRkbGV3YXJlLnBsYW5uaW5nLlBsYW5uaW5nUnVuEhoKEnN0YXJ0ZWRfYXRfdW5peF9tcxgCIAEoAyKWAgoRUGxhbm5pbmdJdGVyYXRpb24SMQoDcnVuGAEgASgLMiQuc2VtLm1pZGRsZXdhcmUucGxhbm5pbmcuUGxhbm5pbmdSdW4SFwoPaXRlcmF0aW9uX2luZGV4GAIgASgFEg4KBmFjdGlvbhgDIAEoCRIRCglyZWFzb25pbmcYBCABKAkSEAoIc3RyYXRlZ3kYBSABKAkSEAoIcHJvZ3Jlc3MYBiABKAkSEQoJdG9vbF9uYW1lGAcgASgJEiYKBWV4dHJhGAggASgLMhcuZ29vZ2xlLnByb3RvYnVmLlN0cnVjdBIaChJlbWl0dGVkX2F0X3VuaXhfbXMYCSABKAMSFwoPcmVmbGVjdGlvbl90ZXh0GAogASgJIq0BChJQbGFubmluZ1JlZmxlY3Rpb24SMQoDcnVuGAEgASgLMiQuc2VtLm1pZGRsZXdhcmUucGxhbm5pbmcuUGxhbm5pbmdSdW4SFwoPaXRlcmF0aW9uX2luZGV4GAIgASgFEhcKD3JlZmxlY3Rpb25fdGV4dBgDIAEoCRIWCg5wcm9ncmVzc19zY29yZRgEIAEoARIaChJlbWl0dGVkX2F0X3VuaXhfbXMYBSABKAMixgEKEVBsYW5uaW5nQ29tcGxldGVkEjEKA3J1bhgBIAEoCzIkLnNlbS5taWRkbGV3YXJlLnBsYW5uaW5nLlBsYW5uaW5nUnVuEhgKEHRvdGFsX2l0ZXJhdGlvbnMYAiABKAUSFgoOZmluYWxfZGVjaXNpb24YAyABKAkSFQoNc3RhdHVzX3JlYXNvbhgEIAEoCRIXCg9maW5hbF9kaXJlY3RpdmUYBSABKAkSHAoUY29tcGxldGVkX2F0X3VuaXhfbXMYBiABKAMiaQoQRXhlY3V0aW9uU3RhcnRlZBIOCgZydW5faWQYASABKAkSFgoOZXhlY3V0b3JfbW9kZWwYAiABKAkSEQoJZGlyZWN0aXZlGAMgASgJEhoKEnN0YXJ0ZWRfYXRfdW5peF9tcxgEIAEoAyK/AQoSRXhlY3V0aW9uQ29tcGxldGVkEg4KBnJ1bl9pZBgBIAEoCRIcChRjb21wbGV0ZWRfYXRfdW5peF9tcxgCIAEoAxIOCgZzdGF0dXMYAyABKAkSFQoNZXJyb3JfbWVzc2FnZRgEIAEoCRITCgt0b2tlbnNfdXNlZBgFIAEoBRIXCg9yZXNwb25zZV9sZW5ndGgYBiABKAUSJgoFZXh0cmEYByABKAsyFy5nb29nbGUucHJvdG9idWYuU3RydWN0Qk5aTGdpdGh1Yi5jb20vZ28tZ28tZ29sZW1zL3Bpbm9jY2hpby9wa2cvc2VtL3BiL3Byb3RvL3NlbS9taWRkbGV3YXJlO21pZGRsZXdhcmViBnByb3RvMw", [file_google_protobuf_struct]);
 
 /**
  * Shared identifier for a single planner run.
@@ -219,90 +219,6 @@ export const PlanningCompletedSchema: GenMessage<PlanningCompleted> = /*@__PURE_
   messageDesc(file_proto_sem_middleware_planning, 4);
 
 /**
- * Optional: token-level streaming of the planner's raw output (typically JSON).
- * These events are meant for live UX only; they are usually not persisted into projections.
- *
- * @generated from message sem.middleware.planning.PlanningTextStarted
- */
-export type PlanningTextStarted = Message<"sem.middleware.planning.PlanningTextStarted"> & {
-  /**
-   * @generated from field: sem.middleware.planning.PlanningRun run = 1;
-   */
-  run?: PlanningRun;
-
-  /**
-   * @generated from field: int64 started_at_unix_ms = 2;
-   */
-  startedAtUnixMs: bigint;
-};
-
-/**
- * Describes the message sem.middleware.planning.PlanningTextStarted.
- * Use `create(PlanningTextStartedSchema)` to create a new message.
- */
-export const PlanningTextStartedSchema: GenMessage<PlanningTextStarted> = /*@__PURE__*/
-  messageDesc(file_proto_sem_middleware_planning, 5);
-
-/**
- * @generated from message sem.middleware.planning.PlanningTextDelta
- */
-export type PlanningTextDelta = Message<"sem.middleware.planning.PlanningTextDelta"> & {
-  /**
-   * @generated from field: sem.middleware.planning.PlanningRun run = 1;
-   */
-  run?: PlanningRun;
-
-  /**
-   * @generated from field: string delta = 2;
-   */
-  delta: string;
-
-  /**
-   * @generated from field: string cumulative = 3;
-   */
-  cumulative: string;
-
-  /**
-   * @generated from field: int64 emitted_at_unix_ms = 4;
-   */
-  emittedAtUnixMs: bigint;
-};
-
-/**
- * Describes the message sem.middleware.planning.PlanningTextDelta.
- * Use `create(PlanningTextDeltaSchema)` to create a new message.
- */
-export const PlanningTextDeltaSchema: GenMessage<PlanningTextDelta> = /*@__PURE__*/
-  messageDesc(file_proto_sem_middleware_planning, 6);
-
-/**
- * @generated from message sem.middleware.planning.PlanningTextFinal
- */
-export type PlanningTextFinal = Message<"sem.middleware.planning.PlanningTextFinal"> & {
-  /**
-   * @generated from field: sem.middleware.planning.PlanningRun run = 1;
-   */
-  run?: PlanningRun;
-
-  /**
-   * @generated from field: string text = 2;
-   */
-  text: string;
-
-  /**
-   * @generated from field: int64 completed_at_unix_ms = 3;
-   */
-  completedAtUnixMs: bigint;
-};
-
-/**
- * Describes the message sem.middleware.planning.PlanningTextFinal.
- * Use `create(PlanningTextFinalSchema)` to create a new message.
- */
-export const PlanningTextFinalSchema: GenMessage<PlanningTextFinal> = /*@__PURE__*/
-  messageDesc(file_proto_sem_middleware_planning, 7);
-
-/**
  * Execution starts once a final directive is available.
  *
  * @generated from message sem.middleware.planning.ExecutionStarted
@@ -334,7 +250,7 @@ export type ExecutionStarted = Message<"sem.middleware.planning.ExecutionStarted
  * Use `create(ExecutionStartedSchema)` to create a new message.
  */
 export const ExecutionStartedSchema: GenMessage<ExecutionStarted> = /*@__PURE__*/
-  messageDesc(file_proto_sem_middleware_planning, 8);
+  messageDesc(file_proto_sem_middleware_planning, 5);
 
 /**
  * Completion of the execution phase; reserved for richer result payloads.
@@ -383,5 +299,5 @@ export type ExecutionCompleted = Message<"sem.middleware.planning.ExecutionCompl
  * Use `create(ExecutionCompletedSchema)` to create a new message.
  */
 export const ExecutionCompletedSchema: GenMessage<ExecutionCompleted> = /*@__PURE__*/
-  messageDesc(file_proto_sem_middleware_planning, 9);
+  messageDesc(file_proto_sem_middleware_planning, 6);
 

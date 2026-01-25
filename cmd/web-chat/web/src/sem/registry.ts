@@ -21,18 +21,12 @@ import {
   PlanningIterationSchema,
   PlanningReflectionSchema,
   PlanningStartedSchema,
-  PlanningTextDeltaSchema,
-  PlanningTextFinalSchema,
-  PlanningTextStartedSchema,
   ExecutionCompletedSchema,
   ExecutionStartedSchema,
   type PlanningCompleted,
   type PlanningIteration,
   type PlanningReflection,
   type PlanningStarted,
-  type PlanningTextDelta,
-  type PlanningTextFinal,
-  type PlanningTextStarted,
   type ExecutionCompleted,
   type ExecutionStarted,
 } from '../sem/pb/proto/sem/middleware/planning_pb';
@@ -92,10 +86,6 @@ type PlanningAgg = {
   provider?: string;
   plannerModel?: string;
   maxIterations?: number;
-  plannerText: string;
-  plannerTextStreaming: boolean;
-  plannerTextStartedAt?: number;
-  plannerTextCompletedAt?: number;
   iterations: Array<{
     index: number;
     action: string;
@@ -116,14 +106,7 @@ const planningAggs = new Map<string, PlanningAgg>();
 function ensurePlanningAgg(runId: string, now: number): PlanningAgg {
   const existing = planningAggs.get(runId);
   if (existing) return existing;
-  const agg: PlanningAgg = {
-    runId,
-    createdAt: now,
-    plannerText: '',
-    plannerTextStreaming: false,
-    iterations: [],
-    reflectionByIter: {},
-  };
+  const agg: PlanningAgg = { runId, createdAt: now, iterations: [], reflectionByIter: {} };
   planningAggs.set(runId, agg);
   return agg;
 }
@@ -150,10 +133,6 @@ function planningEntityFromAgg(agg: PlanningAgg, now: number): TimelineEntity {
       plannerModel: agg.plannerModel,
       maxIterations: agg.maxIterations,
       startedAt: agg.startedAt,
-      plannerText: agg.plannerText,
-      plannerTextStreaming: agg.plannerTextStreaming,
-      plannerTextStartedAt: agg.plannerTextStartedAt,
-      plannerTextCompletedAt: agg.plannerTextCompletedAt,
       iterations,
       reflectionByIter,
       completed,
@@ -332,51 +311,6 @@ export function registerDefaultSemHandlers() {
   });
 
   // planning widget (aggregated)
-  registerSem('planning.text.start', (ev, dispatch) => {
-    const pb = decodeProto<PlanningTextStarted>(PlanningTextStartedSchema, ev.data);
-    const runId = pb?.run?.runId || '';
-    if (!runId) return;
-    const now = Date.now();
-    const agg = ensurePlanningAgg(runId, now);
-    agg.provider = pb?.run?.provider || agg.provider;
-    agg.plannerModel = pb?.run?.plannerModel || agg.plannerModel;
-    agg.maxIterations = pb?.run?.maxIterations || agg.maxIterations;
-    agg.plannerText = '';
-    agg.plannerTextStreaming = true;
-    agg.plannerTextStartedAt = Number(pb?.startedAtUnixMs ?? 0n) || now;
-    agg.plannerTextCompletedAt = undefined;
-    upsertEntity(dispatch, planningEntityFromAgg(agg, now));
-  });
-
-  registerSem('planning.text.delta', (ev, dispatch) => {
-    const pb = decodeProto<PlanningTextDelta>(PlanningTextDeltaSchema, ev.data);
-    const runId = pb?.run?.runId || '';
-    if (!runId) return;
-    const now = Date.now();
-    const agg = ensurePlanningAgg(runId, now);
-    agg.provider = pb?.run?.provider || agg.provider;
-    agg.plannerModel = pb?.run?.plannerModel || agg.plannerModel;
-    agg.maxIterations = pb?.run?.maxIterations || agg.maxIterations;
-    agg.plannerText = pb?.cumulative ?? agg.plannerText;
-    agg.plannerTextStreaming = true;
-    upsertEntity(dispatch, planningEntityFromAgg(agg, now));
-  });
-
-  registerSem('planning.text.final', (ev, dispatch) => {
-    const pb = decodeProto<PlanningTextFinal>(PlanningTextFinalSchema, ev.data);
-    const runId = pb?.run?.runId || '';
-    if (!runId) return;
-    const now = Date.now();
-    const agg = ensurePlanningAgg(runId, now);
-    agg.provider = pb?.run?.provider || agg.provider;
-    agg.plannerModel = pb?.run?.plannerModel || agg.plannerModel;
-    agg.maxIterations = pb?.run?.maxIterations || agg.maxIterations;
-    agg.plannerText = pb?.text ?? agg.plannerText;
-    agg.plannerTextStreaming = false;
-    agg.plannerTextCompletedAt = Number(pb?.completedAtUnixMs ?? 0n) || now;
-    upsertEntity(dispatch, planningEntityFromAgg(agg, now));
-  });
-
   registerSem('planning.start', (ev, dispatch) => {
     const pb = decodeProto<PlanningStarted>(PlanningStartedSchema, ev.data);
     const runId = pb?.run?.runId || '';
