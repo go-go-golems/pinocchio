@@ -293,15 +293,17 @@ export function ChatWidget() {
 
   const [text, setText] = useState('');
   const basePrefix = useMemo(() => basePrefixFromLocation(), []);
-  const initialUrlConvId = useMemo(() => convIdFromLocation(), []);
   const mainRef = useRef<HTMLDivElement | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    if (!app.convId && initialUrlConvId) {
-      dispatch(appSlice.actions.setConvId(initialUrlConvId));
+    // Bootstrap from the *current* URL. Do not memoize the initial value: New conv clears the URL,
+    // and we don't want a stale initial conv_id to be re-applied to Redux.
+    if (!app.convId) {
+      const urlConvId = convIdFromLocation();
+      if (urlConvId) dispatch(appSlice.actions.setConvId(urlConvId));
     }
-  }, [app.convId, dispatch, initialUrlConvId]);
+  }, [app.convId, dispatch]);
 
   useEffect(() => {
     if (!app.convId) return;
