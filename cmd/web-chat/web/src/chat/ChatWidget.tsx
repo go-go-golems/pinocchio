@@ -364,12 +364,14 @@ export function ChatWidget() {
       setConvIdInLocation(convId);
     }
 
-    // optimistic user echo
+    // optimistic user echo (rekeyed once we get turn_id from /chat)
+    const optimisticAt = Date.now();
+    const optimisticId = `user-${optimisticAt}`;
     dispatch(
       timelineSlice.actions.addEntity({
-        id: `user-${Date.now()}`,
+        id: optimisticId,
         kind: 'message',
-        createdAt: Date.now(),
+        createdAt: optimisticAt,
         props: { role: 'user', content: prompt, streaming: false },
       }),
     );
@@ -419,6 +421,10 @@ export function ChatWidget() {
 
     const returnedConvId = j?.conv_id || convId || '';
     const runId = (j?.session_id || j?.run_id) || app.runId || '';
+    const turnId = typeof j?.turn_id === 'string' ? j.turn_id : '';
+    if (turnId) {
+      dispatch(timelineSlice.actions.rekeyEntity({ fromId: optimisticId, toId: `user-${turnId}` }));
+    }
     if (returnedConvId && returnedConvId !== convId) {
       setConvIdInLocation(returnedConvId);
     }

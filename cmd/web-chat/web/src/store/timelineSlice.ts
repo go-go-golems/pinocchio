@@ -19,6 +19,37 @@ export const timelineSlice = createSlice({
   name: 'timeline',
   initialState: { byId: {}, order: [] } as TimelineState,
   reducers: {
+    rekeyEntity(state, action: PayloadAction<{ fromId: string; toId: string }>) {
+      const { fromId, toId } = action.payload;
+      if (!fromId || !toId || fromId === toId) return;
+      const from = state.byId[fromId];
+      if (!from) return;
+      const existing = state.byId[toId];
+      if (existing) {
+        state.byId[toId] = {
+          ...from,
+          ...existing,
+          id: toId,
+          createdAt: existing.createdAt || from.createdAt,
+          updatedAt: existing.updatedAt ?? from.updatedAt,
+          version: existing.version ?? from.version,
+          props: { ...(from.props ?? {}), ...(existing.props ?? {}) },
+        };
+      } else {
+        state.byId[toId] = { ...from, id: toId };
+      }
+      delete state.byId[fromId];
+
+      const fromIdx = state.order.indexOf(fromId);
+      if (fromIdx >= 0) {
+        const toIdx = state.order.indexOf(toId);
+        if (toIdx >= 0) {
+          state.order.splice(fromIdx, 1);
+        } else {
+          state.order[fromIdx] = toId;
+        }
+      }
+    },
     addEntity(state, action: PayloadAction<TimelineEntity>) {
       const e = action.payload;
       if (state.byId[e.id]) return;
