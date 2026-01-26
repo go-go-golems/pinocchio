@@ -23,6 +23,10 @@ func AddToRootCommand(root *cobra.Command) {
 	cobra.CheckErr(err)
 	entityCmd, err := NewTimelineEntityCommand()
 	cobra.CheckErr(err)
+	statsCmd, err := NewTimelineStatsCommand()
+	cobra.CheckErr(err)
+	verifyCmd, err := NewTimelineVerifyCommand()
+	cobra.CheckErr(err)
 
 	cobraListCmd, err := cli.BuildCobraCommand(listCmd, cli.WithCobraMiddlewaresFunc(timelineMiddlewares))
 	cobra.CheckErr(err)
@@ -32,11 +36,17 @@ func AddToRootCommand(root *cobra.Command) {
 	cobra.CheckErr(err)
 	cobraEntityCmd, err := cli.BuildCobraCommand(entityCmd, cli.WithCobraMiddlewaresFunc(timelineMiddlewares))
 	cobra.CheckErr(err)
+	cobraStatsCmd, err := cli.BuildCobraCommand(statsCmd, cli.WithCobraMiddlewaresFunc(timelineMiddlewares))
+	cobra.CheckErr(err)
+	cobraVerifyCmd, err := cli.BuildCobraCommand(verifyCmd, cli.WithCobraMiddlewaresFunc(timelineMiddlewares))
+	cobra.CheckErr(err)
 
 	timelineCmd.AddCommand(cobraListCmd)
 	timelineCmd.AddCommand(cobraSnapshotCmd)
 	timelineCmd.AddCommand(cobraEntitiesCmd)
 	timelineCmd.AddCommand(cobraEntityCmd)
+	timelineCmd.AddCommand(cobraStatsCmd)
+	timelineCmd.AddCommand(cobraVerifyCmd)
 
 	root.AddCommand(timelineCmd)
 }
