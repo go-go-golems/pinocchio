@@ -23,6 +23,7 @@ import (
 	geptools "github.com/go-go-golems/geppetto/pkg/inference/tools"
 	geppettolayers "github.com/go-go-golems/geppetto/pkg/layers"
 	toolspkg "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/tools"
+	timelinecmd "github.com/go-go-golems/pinocchio/cmd/web-chat/timeline"
 	agentmode "github.com/go-go-golems/pinocchio/pkg/middlewares/agentmode"
 	planningmw "github.com/go-go-golems/pinocchio/pkg/middlewares/planning"
 	sqlitetool "github.com/go-go-golems/pinocchio/pkg/middlewares/sqlitetool"
@@ -164,6 +165,8 @@ func main() {
 	if err := clay.InitGlazed("pinocchio", root); err != nil {
 		cobra.CheckErr(err)
 	}
+
+	timelinecmd.AddToRootCommand(root)
 
 	c, err := NewCommand()
 	cobra.CheckErr(err)
