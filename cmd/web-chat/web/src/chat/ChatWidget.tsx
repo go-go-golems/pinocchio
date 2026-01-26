@@ -57,6 +57,13 @@ function fmtShort(n: number): string {
   return `${(n / 1_000_000).toFixed(1)}m`;
 }
 
+function fmtSentAt(n: number): string {
+  if (!Number.isFinite(n) || n <= 0) return 'sent at —';
+  const dt = new Date(n);
+  if (!Number.isFinite(dt.getTime())) return 'sent at —';
+  return `sent at ${dt.toLocaleTimeString()}`;
+}
+
 function MessageCard({ e }: { e: RenderEntity }) {
   const role = String(e.props?.role ?? 'assistant');
   const content = String(e.props?.content ?? '');
@@ -73,7 +80,7 @@ function MessageCard({ e }: { e: RenderEntity }) {
       <div className="cardHeader">
         <div className={`messageRole ${roleClass}`}>{role}</div>
         {streaming ? <div className="streamingDot" /> : null}
-        <div className="cardHeaderMeta">#{fmtShort(e.createdAt)}</div>
+        <div className="cardHeaderMeta">{fmtSentAt(e.createdAt)}</div>
       </div>
       <div className="cardBody">
         {content ? <Markdown text={content} /> : <div className="pill">...</div>}
@@ -92,7 +99,7 @@ function ToolCallCard({ e }: { e: RenderEntity }) {
       <div className="cardHeader">
         <div className="cardHeaderTitle">Tool</div>
         <div className="pill pillAccent mono">{title}</div>
-        <div className="cardHeaderMeta">#{fmtShort(e.createdAt)}</div>
+        <div className="cardHeaderMeta">{fmtSentAt(e.createdAt)}</div>
       </div>
       <div className="cardBody">
         <div className="toolbar">
@@ -124,7 +131,7 @@ function ToolResultCard({ e }: { e: RenderEntity }) {
       <div className="cardHeader">
         <div className="cardHeaderTitle">Result</div>
         {customKind ? <div className="pill mono">{customKind}</div> : null}
-        <div className="cardHeaderMeta">#{fmtShort(e.createdAt)}</div>
+        <div className="cardHeaderMeta">{fmtSentAt(e.createdAt)}</div>
       </div>
       <div className="cardBody">
         <div className="toolbar">
@@ -152,7 +159,7 @@ function LogCard({ e }: { e: RenderEntity }) {
       <div className="cardBody">
         <div className="row" style={{ justifyContent: 'space-between' }}>
           <div className="pill mono">{level}</div>
-          <div className="cardHeaderMeta">#{fmtShort(e.createdAt)}</div>
+          <div className="cardHeaderMeta">{fmtSentAt(e.createdAt)}</div>
         </div>
         <div style={{ marginTop: 8, color: 'var(--muted)', fontSize: 13 }}>{message}</div>
       </div>
@@ -176,7 +183,7 @@ function ThinkingModeCard({ e }: { e: RenderEntity }) {
         {phase ? <div className="pill mono">{phase}</div> : null}
         {status ? <div className="pill">{status}</div> : null}
         {typeof success === 'boolean' ? <div className={`pill ${success ? 'ok' : 'error'}`}>{success ? 'ok' : 'fail'}</div> : null}
-        <div className="cardHeaderMeta">#{fmtShort(e.createdAt)}</div>
+        <div className="cardHeaderMeta">{fmtSentAt(e.createdAt)}</div>
       </div>
       <div className="cardBody">
         {reasoning ? <Markdown text={reasoning} /> : <div className="pill">No reasoning</div>}
@@ -206,7 +213,7 @@ function PlanningCard({ e }: { e: RenderEntity }) {
         {plannerModel ? <div className="pill mono">{plannerModel}</div> : null}
         {typeof maxIterations === 'number' ? <div className="pill">max {maxIterations}</div> : null}
         {planningInProgress ? <div className="streamingDot" /> : null}
-        <div className="cardHeaderMeta">#{fmtShort(e.createdAt)}</div>
+        <div className="cardHeaderMeta">{fmtSentAt(e.createdAt)}</div>
       </div>
       <div className="cardBody">
         <div className="kv" style={{ marginBottom: 10 }}>
@@ -287,7 +294,7 @@ function GenericCard({ e }: { e: RenderEntity }) {
     <div className="card">
       <div className="cardHeader">
         <div className="cardHeaderTitle mono">{e.kind}</div>
-        <div className="cardHeaderMeta">#{fmtShort(e.createdAt)}</div>
+        <div className="cardHeaderMeta">{fmtSentAt(e.createdAt)}</div>
       </div>
       <div className="cardBody">
         <pre className="mono" style={{ margin: 0, whiteSpace: 'pre-wrap' }}>

@@ -68,7 +68,6 @@ function addEntity(dispatch: AppDispatch, entity: TimelineEntity) {
 }
 
 function createdAtFromEvent(ev: SemEvent): number {
-  if (typeof ev.seq === 'number' && Number.isFinite(ev.seq)) return ev.seq;
   return Date.now();
 }
 
