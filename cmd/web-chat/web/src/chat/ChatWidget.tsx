@@ -2,12 +2,14 @@ import type React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { appSlice } from '../store/appSlice';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
+import { type ProfileInfo, useGetProfileQuery, useGetProfilesQuery, useSetProfileMutation } from '../store/profileApi';
 import { selectTimelineEntities } from '../store/timelineSlice';
 import { wsManager } from '../ws/wsManager';
 import { Markdown } from './Markdown';
 import './chat.css';
 import { errorsSlice, makeAppError } from '../store/errorsSlice';
 import { timelineSlice } from '../store/timelineSlice';
+import { basePrefixFromLocation } from '../utils/basePrefix';
 import { logWarn } from '../utils/logger';
 
 type RenderEntity = {
@@ -17,11 +19,6 @@ type RenderEntity = {
   createdAt: number;
   updatedAt?: number;
 };
-
-function basePrefixFromLocation(): string {
-  const segs = window.location.pathname.split('/').filter(Boolean);
-  return segs.length > 0 ? `/${segs[0]}` : '';
-}
 
 function convIdFromLocation(): string {
   try {
@@ -317,6 +314,9 @@ export function ChatWidget() {
   const mainRef = useRef<HTMLDivElement | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const errorCount = errors.length;
+  const { data: profilesData } = useGetProfilesQuery();
+  const { data: currentProfile } = useGetProfileQuery();
+  const [setProfile] = useSetProfileMutation();
 
   const reportError = useCallback(
     (message: string, scope: string, err?: unknown, extra?: Record<string, unknown>) => {
@@ -333,6 +333,12 @@ export function ChatWidget() {
       if (urlConvId) dispatch(appSlice.actions.setConvId(urlConvId));
     }
   }, [app.convId, dispatch]);
+
+  useEffect(() => {
+    if (currentProfile?.slug && currentProfile.slug !== app.profile) {
+      dispatch(appSlice.actions.setProfile(currentProfile.slug));
+    }
+  }, [app.profile, currentProfile?.slug, dispatch]);
 
   useEffect(() => {
     if (!app.convId) return;
@@ -406,8 +412,10 @@ export function ChatWidget() {
       }
     }
 
+    const profileSlug = app.profile?.trim() || 'default';
+    const chatPath = profileSlug ? `/chat/${encodeURIComponent(profileSlug)}` : '/chat';
     const body = { prompt, conv_id: convId };
-    const res = await fetch(`${basePrefix}/chat`, {
+    const res = await fetch(`${basePrefix}${chatPath}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Idempotency-Key': idempotencyKey },
       body: JSON.stringify(body),
@@ -455,7 +463,7 @@ export function ChatWidget() {
     const st = j?.status || (res.status === 202 ? 'queued' : 'sent');
     const qp = typeof j?.queue_position === 'number' ? ` (pos ${j.queue_position})` : '';
     dispatch(appSlice.actions.setStatus(`${st}${qp}`));
-  }, [app.convId, app.runId, basePrefix, dispatch, reportError, text]);
+  }, [app.convId, app.profile, app.runId, basePrefix, dispatch, reportError, text]);
 
   const onKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -465,6 +473,26 @@ export function ChatWidget() {
       }
     },
     [send],
+  );
+
+  const profileOptions = useMemo(() => {
+    const data = Array.isArray(profilesData) ? (profilesData as ProfileInfo[]) : [];
+    if (data.length) return data;
+    return [{ slug: 'default' }, { slug: 'agent' }, { slug: 'planning' }];
+  }, [profilesData]);
+
+  const onProfileChange = useCallback(
+    async (nextProfile: string) => {
+      const profile = nextProfile.trim();
+      if (!profile || profile === app.profile) return;
+      try {
+        const res = await setProfile({ slug: profile }).unwrap();
+        dispatch(appSlice.actions.setProfile(res.slug));
+      } catch (err) {
+        logWarn('profile switch failed', { scope: 'profiles.switch', extra: { profile } }, err);
+      }
+    },
+    [app.profile, dispatch, setProfile],
   );
 
   const toggleErrors = useCallback(() => {
@@ -493,6 +521,20 @@ export function ChatWidget() {
       <header className="chatHeader">
         <div className="chatHeaderTitle">Web Chat</div>
         <div className="chatStatus">
+          <label className="pill">
+            profile
+            <select
+              className="pillSelect"
+              value={app.profile || 'default'}
+              onChange={(e) => void onProfileChange(e.target.value)}
+            >
+              {profileOptions.map((p) => (
+                <option key={p.slug} value={p.slug}>
+                  {p.slug}
+                </option>
+              ))}
+            </select>
+          </label>
           <span className={`pill ${app.wsStatus === 'connected' ? 'pillAccent' : ''}`}>ws: {app.wsStatus}</span>
           <span className="pill">seq: {fmtShort(app.lastSeq)}</span>
           <span className="pill">q: {fmtShort(app.queueDepth)}</span>

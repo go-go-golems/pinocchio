@@ -5,6 +5,7 @@ export const appSlice = createSlice({
   initialState: {
     convId: '' as string,
     runId: '' as string,
+    profile: 'default' as string,
     status: 'idle' as string,
     wsStatus: 'disconnected' as string,
     lastSeq: 0 as number,
@@ -16,6 +17,9 @@ export const appSlice = createSlice({
     },
     setRunId(state, action: PayloadAction<string>) {
       state.runId = action.payload;
+    },
+    setProfile(state, action: PayloadAction<string>) {
+      state.profile = action.payload;
     },
     setStatus(state, action: PayloadAction<string>) {
       state.status = action.payload;

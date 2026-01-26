@@ -218,6 +218,66 @@ func (r *Router) registerHTTPHandlers() {
 		_ = json.NewEncoder(w).Encode(out)
 	})
 
+	// get/set current profile (cookie-backed)
+	r.mux.HandleFunc("/api/chat/profile", func(w http.ResponseWriter, r0 *http.Request) {
+		type profilePayload struct {
+			Slug    string `json:"slug"`
+			Profile string `json:"profile"`
+		}
+		writeJSON := func(payload any) {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(payload)
+		}
+		resolveDefault := func() string {
+			if p, ok := r.profiles.Get("default"); ok && p != nil {
+				return p.Slug
+			}
+			list := r.profiles.List()
+			if len(list) > 0 && list[0] != nil {
+				return list[0].Slug
+			}
+			return "default"
+		}
+		switch r0.Method {
+		case http.MethodGet:
+			slug := ""
+			if ck, err := r0.Cookie("chat_profile"); err == nil && ck != nil {
+				slug = strings.TrimSpace(ck.Value)
+			}
+			if slug == "" {
+				slug = resolveDefault()
+			} else if _, ok := r.profiles.Get(slug); !ok {
+				slug = resolveDefault()
+			}
+			writeJSON(profilePayload{Slug: slug})
+			return
+		case http.MethodPost:
+			var body profilePayload
+			if err := json.NewDecoder(r0.Body).Decode(&body); err != nil {
+				http.Error(w, "bad request", http.StatusBadRequest)
+				return
+			}
+			slug := strings.TrimSpace(body.Slug)
+			if slug == "" {
+				slug = strings.TrimSpace(body.Profile)
+			}
+			if slug == "" {
+				http.Error(w, "missing profile slug", http.StatusBadRequest)
+				return
+			}
+			if _, ok := r.profiles.Get(slug); !ok {
+				http.Error(w, "profile not found", http.StatusNotFound)
+				return
+			}
+			http.SetCookie(w, &http.Cookie{Name: "chat_profile", Value: slug, Path: "/", SameSite: http.SameSiteLaxMode})
+			writeJSON(profilePayload{Slug: slug})
+			return
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+	})
+
 	// debug endpoints (dev-gated via PINOCCHIO_WEBCHAT_DEBUG=1)
 	r.mux.HandleFunc("/debug/step/enable", func(w http.ResponseWriter, r0 *http.Request) {
 		if os.Getenv("PINOCCHIO_WEBCHAT_DEBUG") != "1" {

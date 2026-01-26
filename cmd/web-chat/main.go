@@ -122,25 +122,6 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *layers.ParsedLayers
 	r.AddProfile(&webchat.Profile{Slug: "agent", DefaultPrompt: "You are a helpful assistant. Be concise.", DefaultMws: []webchat.MiddlewareUse{{Name: "agentmode", Config: amCfg}}})
 	r.AddProfile(&webchat.Profile{Slug: "planning", DefaultPrompt: "You are a helpful assistant. Be concise.", DefaultMws: []webchat.MiddlewareUse{{Name: "planning", Config: planningmw.DefaultConfig()}}})
 
-	// Lightweight helper endpoints to switch profile from the UI via fetch GET
-	// GET /default → sets a cookie chat_profile=default and 204s
-	// GET /agent   → sets a cookie chat_profile=agent and 204s
-	r.HandleFunc("/default", func(w http.ResponseWriter, r *http.Request) {
-		http.SetCookie(w, &http.Cookie{Name: "chat_profile", Value: "default", Path: "/", SameSite: http.SameSiteLaxMode})
-		log.Info().Str("component", "profile-switch").Str("profile", "default").Str("remote", r.RemoteAddr).Msg("set chat_profile cookie")
-		w.WriteHeader(http.StatusNoContent)
-	})
-	r.HandleFunc("/agent", func(w http.ResponseWriter, r *http.Request) {
-		http.SetCookie(w, &http.Cookie{Name: "chat_profile", Value: "agent", Path: "/", SameSite: http.SameSiteLaxMode})
-		log.Info().Str("component", "profile-switch").Str("profile", "agent").Str("remote", r.RemoteAddr).Msg("set chat_profile cookie")
-		w.WriteHeader(http.StatusNoContent)
-	})
-	r.HandleFunc("/planning", func(w http.ResponseWriter, r *http.Request) {
-		http.SetCookie(w, &http.Cookie{Name: "chat_profile", Value: "planning", Path: "/", SameSite: http.SameSiteLaxMode})
-		log.Info().Str("component", "profile-switch").Str("profile", "planning").Str("remote", r.RemoteAddr).Msg("set chat_profile cookie")
-		w.WriteHeader(http.StatusNoContent)
-	})
-
 	// HTTP server and run, with optional root mounting
 	httpSrv, err := r.BuildHTTPServer()
 	if err != nil {

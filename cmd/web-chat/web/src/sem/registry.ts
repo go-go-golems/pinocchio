@@ -67,7 +67,7 @@ function addEntity(dispatch: AppDispatch, entity: TimelineEntity) {
   dispatch(timelineSlice.actions.addEntity(entity));
 }
 
-function createdAtFromEvent(ev: SemEvent): number {
+function createdAtFromEvent(_ev: SemEvent): number {
   return Date.now();
 }
 

@@ -85,6 +85,16 @@ body {
   border-color: rgba(255, 107, 107, 0.4);
 }
 
+.pillSelect {
+  margin-left: 6px;
+  font-size: 12px;
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--text);
+}
+
 .chatMain {
   overflow: auto;
   padding: 16px;
