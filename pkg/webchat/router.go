@@ -945,15 +945,6 @@ func (r *Router) startRunForPrompt(conv *Conversation, profileSlug string, overr
 	return resp, nil
 }
 
-func middlewareEnabled(mws []MiddlewareUse, name string) bool {
-	for _, mw := range mws {
-		if mw.Name == name {
-			return true
-		}
-	}
-	return false
-}
-
 func (r *Router) emitAgenticPlanningAndThinking(
 	logger zerolog.Logger,
 	conv *Conversation,

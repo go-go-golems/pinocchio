@@ -1,10 +1,12 @@
 package cmds
 
 import (
+	"mime"
+	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 
-	"github.com/go-go-golems/geppetto/pkg/conversation"
 	"github.com/pkg/errors"
 )
 
@@ -20,35 +22,67 @@ func imagePathsToTurnImages(imagePaths []string) ([]map[string]any, error) {
 
 	images := make([]map[string]any, 0, len(imagePaths))
 	for _, p := range imagePaths {
-		img, err := conversation.NewImageContentFromFile(p)
+		m, err := imagePathToPayload(p)
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to load image %q", p)
 		}
 
-		mediaType := img.MediaType
-		if mediaType == "" {
-			// Best-effort for URL images where MediaType isn't populated.
-			mediaType = conversationMediaTypeFromExtension(filepath.Ext(p))
+		if len(m) > 0 {
+			images = append(images, m)
 		}
-
-		m := map[string]any{}
-		if mediaType != "" {
-			m["media_type"] = mediaType
-		}
-		if len(img.ImageContent) > 0 {
-			m["content"] = img.ImageContent
-		} else if img.ImageURL != "" {
-			m["url"] = img.ImageURL
-		}
-
-		images = append(images, m)
 	}
 
 	return images, nil
 }
 
-// conversationMediaTypeFromExtension mirrors conversation's internal media-type mapping (best-effort).
-func conversationMediaTypeFromExtension(ext string) string {
+func imagePathToPayload(p string) (map[string]any, error) {
+	if p == "" {
+		return nil, nil
+	}
+	mediaType := mediaTypeFromExtension(filepath.Ext(p))
+	if isRemoteImage(p) {
+		if mediaType == "" || !strings.HasPrefix(mediaType, "image/") {
+			return nil, errors.New("unsupported image type")
+		}
+		m := map[string]any{
+			"url": p,
+		}
+		if mediaType != "" {
+			m["media_type"] = mediaType
+		}
+		return m, nil
+	}
+	raw, err := os.ReadFile(p)
+	if err != nil {
+		return nil, err
+	}
+	if mediaType == "" {
+		mediaType = http.DetectContentType(raw)
+	}
+	if mediaType == "" || !strings.HasPrefix(mediaType, "image/") {
+		return nil, errors.New("unsupported image type")
+	}
+	m := map[string]any{
+		"content": raw,
+	}
+	if mediaType != "" {
+		m["media_type"] = mediaType
+	}
+	return m, nil
+}
+
+func isRemoteImage(p string) bool {
+	p = strings.TrimSpace(strings.ToLower(p))
+	return strings.HasPrefix(p, "http://") || strings.HasPrefix(p, "https://")
+}
+
+func mediaTypeFromExtension(ext string) string {
+	if ext == "" {
+		return ""
+	}
+	if mt := mime.TypeByExtension(ext); mt != "" {
+		return mt
+	}
 	switch strings.ToLower(ext) {
 	case ".png":
 		return "image/png"
