@@ -63,11 +63,11 @@ Pinocchio uses protobuf-backed payloads under the hood (see `sem/pb/` directory)
 
 ### Middleware Events
 
-These events are emitted by middleware (planning, thinking mode, etc.):
+These events are emitted by optional middleware/features (e.g., thinking mode). Planning events are only emitted if explicitly enabled elsewhere.
 
 | Type | Description |
 |------|-------------|
-| `planning.*` | Planning lifecycle events |
+| `planning.*` | Planning lifecycle events (optional/legacy) |
 | `thinking.mode.*` | Thinking mode indicators |
 | `mode.evaluation.*` | Mode evaluation results |
 

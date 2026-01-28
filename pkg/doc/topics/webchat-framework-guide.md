@@ -346,5 +346,4 @@ For geppetto core concepts (session lifecycle, events, tool loop):
 ## 13. Next Steps
 
 - Add a new profile (e.g., `rag`) with a retrieval middleware.
-- Implement a custom run loop for multi-turn planning.
 - Extend the frontend with profile selectors using `/api/chat/profiles`.

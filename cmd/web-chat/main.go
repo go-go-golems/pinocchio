@@ -25,7 +25,6 @@ import (
 	toolspkg "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/tools"
 	timelinecmd "github.com/go-go-golems/pinocchio/cmd/web-chat/timeline"
 	agentmode "github.com/go-go-golems/pinocchio/pkg/middlewares/agentmode"
-	planningmw "github.com/go-go-golems/pinocchio/pkg/middlewares/planning"
 	sqlitetool "github.com/go-go-golems/pinocchio/pkg/middlewares/sqlitetool"
 	rediscfg "github.com/go-go-golems/pinocchio/pkg/redisstream"
 	webchat "github.com/go-go-golems/pinocchio/pkg/webchat"
@@ -121,7 +120,6 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *layers.ParsedLayers
 	// Profiles
 	r.AddProfile(&webchat.Profile{Slug: "default", DefaultPrompt: "You are a helpful assistant. Be concise.", DefaultMws: []webchat.MiddlewareUse{}})
 	r.AddProfile(&webchat.Profile{Slug: "agent", DefaultPrompt: "You are a helpful assistant. Be concise.", DefaultMws: []webchat.MiddlewareUse{{Name: "agentmode", Config: amCfg}}})
-	r.AddProfile(&webchat.Profile{Slug: "planning", DefaultPrompt: "You are a helpful assistant. Be concise.", DefaultMws: []webchat.MiddlewareUse{{Name: "planning", Config: planningmw.DefaultConfig()}}})
 
 	// HTTP server and run, with optional root mounting
 	httpSrv, err := r.BuildHTTPServer()
