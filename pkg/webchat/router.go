@@ -18,7 +18,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"github.com/pkg/errors"
-	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 
 	"github.com/go-go-golems/geppetto/pkg/events"
@@ -47,9 +46,6 @@ type RouterSettings struct {
 	TimelineDB  string `glazed.parameter:"timeline-db"`
 	// In-memory timeline store sizing (used when no timeline DB is configured).
 	TimelineInMemoryMaxEntities int `glazed.parameter:"timeline-inmem-max-entities"`
-	// Optional: emit stub "agentic" planning/thinking events so the UI can render
-	// planning widgets even when no real planning middleware is configured.
-	EmitPlanningStubs bool `glazed.parameter:"emit-planning-stubs"`
 }
 
 // RouterBuilder creates a new composable webchat router.
@@ -85,7 +81,6 @@ func NewRouter(ctx context.Context, parsed *layers.ParsedLayers, staticFS embed.
 	if err := parsed.InitializeStruct(layers.DefaultSlug, s); err != nil {
 		return nil, errors.Wrap(err, "parse router settings")
 	}
-	r.emitPlanningStubs = s.EmitPlanningStubs
 	if dsn := strings.TrimSpace(s.TimelineDSN); dsn != "" {
 		store, err := NewSQLiteTimelineStore(dsn)
 		if err != nil {
@@ -885,15 +880,6 @@ func (r *Router) startRunForPrompt(conv *Conversation, profileSlug string, overr
 		return nil, err
 	}
 
-	agenticRunID := handle.InferenceID
-	if agenticRunID == "" {
-		agenticRunID = uuid.NewString()
-	}
-	agenticDirective := fmt.Sprintf("Respond to the user prompt (turn %s).", turnID)
-	if r.emitPlanningStubs {
-		r.emitAgenticPlanningAndThinking(runLog, conv, cfg, agenticRunID, turnID, handle.InferenceID, agenticDirective)
-	}
-
 	resp := map[string]any{
 		"status":          "started",
 		"idempotency_key": idempotencyKey,
@@ -931,8 +917,15 @@ func (r *Router) startRunForPrompt(conv *Conversation, profileSlug string, overr
 		if finalTurnID == "" {
 			finalTurnID = turnID
 		}
-		if r.emitPlanningStubs {
-			r.emitAgenticExecutionComplete(runLog, conv, agenticRunID, finalTurnID, handle.InferenceID, waitErr)
+		if waitErr != nil && conv != nil && conv.Sink != nil && middlewareEnabled(cfg.Middlewares, "planning") {
+			// Ensure execution.complete exists even when the tool loop exits with an error (e.g. max iterations).
+			md := events.EventMetadata{
+				ID:          uuid.New(),
+				SessionID:   conv.RunID,
+				InferenceID: handle.InferenceID,
+				TurnID:      finalTurnID,
+			}
+			_ = conv.Sink.PublishEvent(inevents.NewExecutionComplete(md, handle.InferenceID, "error", waitErr.Error()))
 		}
 		r.finishRun(conv, idempotencyKey, handle.InferenceID, turnID, waitErr)
 		if waitErr != nil {
@@ -945,98 +938,13 @@ func (r *Router) startRunForPrompt(conv *Conversation, profileSlug string, overr
 	return resp, nil
 }
 
-func (r *Router) emitAgenticPlanningAndThinking(
-	logger zerolog.Logger,
-	conv *Conversation,
-	cfg EngineConfig,
-	agenticRunID string,
-	turnID string,
-	inferenceID string,
-	directive string,
-) {
-	if conv == nil || conv.Sink == nil {
-		return
-	}
-
-	provider := ""
-	model := ""
-	if cfg.StepSettings != nil && cfg.StepSettings.Chat != nil {
-		if cfg.StepSettings.Chat.ApiType != nil {
-			provider = string(*cfg.StepSettings.Chat.ApiType)
-		}
-		if cfg.StepSettings.Chat.Engine != nil {
-			model = *cfg.StepSettings.Chat.Engine
+func middlewareEnabled(mws []MiddlewareUse, name string) bool {
+	for _, mw := range mws {
+		if mw.Name == name {
+			return true
 		}
 	}
-
-	md := events.EventMetadata{
-		ID:          uuid.New(),
-		SessionID:   conv.RunID,
-		InferenceID: inferenceID,
-		TurnID:      turnID,
-	}
-
-	// Thinking mode: emit a simple selection/completion pair so the UI can render.
-	itemID := agenticRunID + ":thinking-mode"
-	thinking := &inevents.ThinkingModePayload{
-		Mode:      "deep",
-		Phase:     "selected",
-		Reasoning: "Selected thinking mode for this run.",
-	}
-	_ = conv.Sink.PublishEvent(inevents.NewThinkingModeStarted(md, itemID, thinking))
-	_ = conv.Sink.PublishEvent(inevents.NewThinkingModeCompleted(md, itemID, thinking, true, ""))
-
-	// Planning: minimal, single-iteration plan that leads directly into execution.
-	started := time.Now().UnixMilli()
-	_ = conv.Sink.PublishEvent(inevents.NewPlanningStart(md, agenticRunID, provider, model, 1, started))
-
-	iter := inevents.NewPlanningIteration(md, agenticRunID, 1, "respond", "Direct response", "Executing")
-	iter.Provider = provider
-	iter.PlannerModel = model
-	iter.MaxIterations = 1
-	iter.Reasoning = "Proceed directly to execution for this prompt."
-	iter.EmittedAtUnixMs = time.Now().UnixMilli()
-	iter.ReflectionText = "No additional planning required."
-	_ = conv.Sink.PublishEvent(iter)
-
-	done := inevents.NewPlanningComplete(md, agenticRunID, 1, "execute")
-	done.Provider = provider
-	done.PlannerModel = model
-	done.MaxIterations = 1
-	done.StatusReason = "auto"
-	done.FinalDirective = directive
-	_ = conv.Sink.PublishEvent(done)
-
-	_ = conv.Sink.PublishEvent(inevents.NewExecutionStart(md, agenticRunID, model, directive))
-
-	logger.Debug().Str("agentic_run_id", agenticRunID).Msg("emitted planning/thinking-mode semantic events")
-}
-
-func (r *Router) emitAgenticExecutionComplete(
-	logger zerolog.Logger,
-	conv *Conversation,
-	agenticRunID string,
-	turnID string,
-	inferenceID string,
-	waitErr error,
-) {
-	if conv == nil || conv.Sink == nil {
-		return
-	}
-	md := events.EventMetadata{
-		ID:          uuid.New(),
-		SessionID:   conv.RunID,
-		InferenceID: inferenceID,
-		TurnID:      turnID,
-	}
-	status := "completed"
-	errMsg := ""
-	if waitErr != nil {
-		status = "error"
-		errMsg = waitErr.Error()
-	}
-	_ = conv.Sink.PublishEvent(inevents.NewExecutionComplete(md, agenticRunID, status, errMsg))
-	logger.Debug().Str("agentic_run_id", agenticRunID).Str("status", status).Msg("emitted execution.complete semantic event")
+	return false
 }
 
 func (r *Router) finishRun(conv *Conversation, idempotencyKey string, inferenceID string, turnID string, err error) {
