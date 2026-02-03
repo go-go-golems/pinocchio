@@ -3,6 +3,7 @@ package webchat
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync"
 	"time"
 
@@ -221,9 +222,7 @@ func (r *Router) getOrCreateConv(convID, profileSlug string, overrides map[strin
 			StepPauseTimeout: 30 * time.Second,
 		},
 		Turns: func() []*turns.Turn {
-			seed := &turns.Turn{}
-			_ = turns.KeyTurnMetaSessionID.Set(&seed.Metadata, runID)
-			return []*turns.Turn{seed}
+			return []*turns.Turn{buildSeedTurn(runID, cfg.SystemPrompt)}
 		}(),
 	}
 
@@ -240,6 +239,15 @@ func (r *Router) getOrCreateConv(convID, profileSlug string, overrides map[strin
 
 	r.cm.conns[convID] = conv
 	return conv, nil
+}
+
+func buildSeedTurn(runID string, systemPrompt string) *turns.Turn {
+	seed := &turns.Turn{}
+	if strings.TrimSpace(systemPrompt) != "" {
+		turns.AppendBlock(seed, turns.NewSystemTextBlock(systemPrompt))
+	}
+	_ = turns.KeyTurnMetaSessionID.Set(&seed.Metadata, runID)
+	return seed
 }
 
 func (r *Router) addConn(conv *Conversation, c *websocket.Conn) {

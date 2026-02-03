@@ -62,6 +62,9 @@ func (r *Router) BuildConfig(profileSlug string, overrides map[string]any) (Engi
 			tools = parsed
 		}
 	}
+	if strings.TrimSpace(sysPrompt) == "" {
+		sysPrompt = "You are an assistant"
+	}
 
 	stepSettings, err := settings.NewStepSettingsFromParsedLayers(r.parsed)
 	if err != nil {

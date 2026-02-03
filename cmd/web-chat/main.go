@@ -118,7 +118,7 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *layers.ParsedLayers
 	})
 
 	// Profiles
-	r.AddProfile(&webchat.Profile{Slug: "default", DefaultPrompt: "You are a helpful assistant. Be concise.", DefaultMws: []webchat.MiddlewareUse{}})
+	r.AddProfile(&webchat.Profile{Slug: "default", DefaultPrompt: "You are an assistant", DefaultMws: []webchat.MiddlewareUse{}})
 	r.AddProfile(&webchat.Profile{Slug: "agent", DefaultPrompt: "You are a helpful assistant. Be concise.", DefaultMws: []webchat.MiddlewareUse{{Name: "agentmode", Config: amCfg}}})
 
 	// HTTP server and run, with optional root mounting
