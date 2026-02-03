@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react';
+import type { ComponentProps } from 'react';
 import { useEffect } from 'react';
 import { handleSem, registerDefaultSemHandlers } from '../sem/registry';
 import { useAppDispatch } from '../store/hooks';
@@ -15,12 +16,69 @@ type Story = StoryObj<typeof ChatWidget>;
 
 export const Default: Story = {};
 
+export const ThemeOverrides: Story = {
+  args: {
+    themeVars: {
+      '--pwchat-accent': '#ff9f1a',
+      '--pwchat-border': '#3b2c1f',
+      '--pwchat-surface-1': '#14110e',
+      '--pwchat-surface-2': '#1b1510',
+      '--pwchat-muted': '#c9a67a',
+    },
+  },
+};
+
+export const Unstyled: Story = {
+  render: () => (
+    <div>
+      <style>{`
+        [data-pwchat][data-part="root"] {
+          --pwchat-bg: #f7f4ef;
+          --pwchat-fg: #222;
+          --pwchat-surface-1: #ffffff;
+          --pwchat-surface-2: #f1ece6;
+          --pwchat-border: #d8cfc4;
+          --pwchat-accent: #1f6feb;
+          --pwchat-muted: #6b6258;
+          --pwchat-radius: 16px;
+          --pwchat-gap: 12px;
+        }
+      `}</style>
+      <ChatWidget unstyled />
+    </div>
+  ),
+};
+
+export const CustomRenderer: Story = {
+  render: () => (
+    <ScenarioRunner
+      frames={[
+        { sem: true, event: { type: 'log', id: 'log-1', seq: 1, data: { id: 'log-1', level: 'info', message: 'hydrated: scenario start', fields: {} } } },
+        { sem: true, event: { type: 'llm.start', id: 'm1', seq: 2, data: { id: 'm1', role: 'assistant' } } },
+        { sem: true, event: { type: 'llm.final', id: 'm1', seq: 3, data: { id: 'm1', text: 'Custom renderer example' } } },
+      ]}
+      widgetProps={{
+        renderers: {
+          log: ({ e }) => (
+            <div data-part="card">
+              <div data-part="card-body">
+                <strong>LOG:</strong> {String(e.props?.message ?? '')}
+              </div>
+            </div>
+          ),
+        },
+      }}
+    />
+  ),
+};
+
 type ScenarioRunnerProps = {
   frames: any[];
   delayMs?: number;
+  widgetProps?: ComponentProps<typeof ChatWidget>;
 };
 
-function ScenarioRunner({ frames, delayMs }: ScenarioRunnerProps) {
+function ScenarioRunner({ frames, delayMs, widgetProps }: ScenarioRunnerProps) {
   const dispatch = useAppDispatch();
   useEffect(() => {
     registerDefaultSemHandlers();
@@ -44,7 +102,7 @@ function ScenarioRunner({ frames, delayMs }: ScenarioRunnerProps) {
       cancelled = true;
     };
   }, [delayMs, dispatch, frames]);
-  return <ChatWidget />;
+  return <ChatWidget {...widgetProps} />;
 }
 
 export const ScenarioBasic: Story = {
