@@ -148,7 +148,7 @@ export function ChatWidget({
     const basePrefix = basePrefixFromLocation();
     const payload = {
       conv_id: app.convId || convIdFromLocation(),
-      text,
+      prompt: text,
     };
     setText('');
     void fetch(`${basePrefix}/chat`, {

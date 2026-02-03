@@ -12,6 +12,7 @@ import (
 // ChatRequestBody represents the expected JSON body for chat requests.
 type ChatRequestBody struct {
 	Prompt         string         `json:"prompt"`
+	Text           string         `json:"text,omitempty"`
 	ConvID         string         `json:"conv_id"`
 	Overrides      map[string]any `json:"overrides"`
 	IdempotencyKey string         `json:"idempotency_key,omitempty"`
@@ -109,6 +110,9 @@ func (b *DefaultEngineFromReqBuilder) buildFromChatReq(req *http.Request) (Engin
 	var body ChatRequestBody
 	if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
 		return EngineBuildInput{}, nil, &RequestBuildError{Status: http.StatusBadRequest, ClientMsg: "bad request", Err: err}
+	}
+	if body.Prompt == "" && body.Text != "" {
+		body.Prompt = body.Text
 	}
 
 	convID := strings.TrimSpace(body.ConvID)
