@@ -863,8 +863,9 @@ func (r *Router) startRunForPrompt(conv *Conversation, profileSlug string, overr
 				},
 			},
 		}
-		if v, err := r.timelineStore.Upsert(r.baseCtx, conv.ID, entity); err == nil {
-			r.emitTimelineUpsert(conv, entity, v)
+		version := uint64(time.Now().UnixMilli()) * 1_000_000
+		if err := r.timelineStore.Upsert(r.baseCtx, conv.ID, version, entity); err == nil {
+			r.emitTimelineUpsert(conv, entity, version)
 		}
 	}
 

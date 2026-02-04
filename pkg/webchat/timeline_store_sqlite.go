@@ -74,21 +74,24 @@ func (s *SQLiteTimelineStore) migrate() error {
 	return nil
 }
 
-func (s *SQLiteTimelineStore) Upsert(ctx context.Context, convID string, entity *timelinepb.TimelineEntityV1) (uint64, error) {
+func (s *SQLiteTimelineStore) Upsert(ctx context.Context, convID string, version uint64, entity *timelinepb.TimelineEntityV1) error {
 	if s == nil || s.db == nil {
-		return 0, errors.New("sqlite timeline store: db is nil")
+		return errors.New("sqlite timeline store: db is nil")
 	}
 	if convID == "" {
-		return 0, errors.New("sqlite timeline store: convID is empty")
+		return errors.New("sqlite timeline store: convID is empty")
+	}
+	if version == 0 {
+		return errors.New("sqlite timeline store: version is 0")
 	}
 	if entity == nil {
-		return 0, errors.New("sqlite timeline store: entity is nil")
+		return errors.New("sqlite timeline store: entity is nil")
 	}
 	if entity.Id == "" {
-		return 0, errors.New("sqlite timeline store: entity.id is empty")
+		return errors.New("sqlite timeline store: entity.id is empty")
 	}
 	if entity.Kind == "" {
-		return 0, errors.New("sqlite timeline store: entity.kind is empty")
+		return errors.New("sqlite timeline store: entity.kind is empty")
 	}
 	if ctx == nil {
 		ctx = context.Background()
@@ -97,19 +100,22 @@ func (s *SQLiteTimelineStore) Upsert(ctx context.Context, convID string, entity 
 	now := time.Now().UnixMilli()
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return 0, err
+		return err
 	}
 	defer func() { _ = tx.Rollback() }()
 
 	var current int64
 	_ = tx.QueryRowContext(ctx, `SELECT version FROM timeline_versions WHERE conv_id = ?`, convID).Scan(&current)
-	newVersion := current + 1
+	newVersion := current
+	if version > uint64(current) {
+		newVersion = int64(version)
+	}
 
 	var existingCreated int64
 	err = tx.QueryRowContext(ctx, `SELECT created_at_ms FROM timeline_entities WHERE conv_id = ? AND entity_id = ?`, convID, entity.Id).
 		Scan(&existingCreated)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return 0, err
+		return err
 	}
 
 	createdAt := existingCreated
@@ -129,7 +135,7 @@ func (s *SQLiteTimelineStore) Upsert(ctx context.Context, convID string, entity 
 		UseProtoNames:   false, // protojson lowerCamelCase
 	}.Marshal(entity)
 	if err != nil {
-		return 0, errors.Wrap(err, "sqlite timeline store: marshal entity")
+		return errors.Wrap(err, "sqlite timeline store: marshal entity")
 	}
 
 	if _, err := tx.ExecContext(ctx, `
@@ -140,8 +146,8 @@ func (s *SQLiteTimelineStore) Upsert(ctx context.Context, convID string, entity 
 		  updated_at_ms = excluded.updated_at_ms,
 		  version = excluded.version,
 		  entity_json = excluded.entity_json
-	`, convID, entity.Id, entity.Kind, createdAt, now, newVersion, string(entityJSON)); err != nil {
-		return 0, errors.Wrap(err, "sqlite timeline store: upsert entity")
+	`, convID, entity.Id, entity.Kind, createdAt, now, int64(version), string(entityJSON)); err != nil {
+		return errors.Wrap(err, "sqlite timeline store: upsert entity")
 	}
 
 	if _, err := tx.ExecContext(ctx, `
@@ -149,13 +155,13 @@ func (s *SQLiteTimelineStore) Upsert(ctx context.Context, convID string, entity 
 		VALUES(?, ?)
 		ON CONFLICT(conv_id) DO UPDATE SET version = excluded.version
 	`, convID, newVersion); err != nil {
-		return 0, errors.Wrap(err, "sqlite timeline store: upsert version")
+		return errors.Wrap(err, "sqlite timeline store: upsert version")
 	}
 
 	if err := tx.Commit(); err != nil {
-		return 0, err
+		return err
 	}
-	return uint64(newVersion), nil
+	return nil
 }
 
 func (s *SQLiteTimelineStore) GetSnapshot(ctx context.Context, convID string, sinceVersion uint64, limit int) (*timelinepb.TimelineSnapshotV1, error) {

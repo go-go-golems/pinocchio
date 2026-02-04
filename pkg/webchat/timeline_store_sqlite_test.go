@@ -23,7 +23,16 @@ func TestSQLiteTimelineStore_UpsertAndSnapshot(t *testing.T) {
 	ctx := context.Background()
 	convID := "c1"
 
-	v, err := s.Upsert(ctx, convID, &timelinepb.TimelineEntityV1{
+	err = s.Upsert(ctx, convID, 0, &timelinepb.TimelineEntityV1{
+		Id:   "bad",
+		Kind: "message",
+		Snapshot: &timelinepb.TimelineEntityV1_Message{
+			Message: &timelinepb.MessageSnapshotV1{SchemaVersion: 1, Role: "assistant", Content: "bad", Streaming: true},
+		},
+	})
+	require.Error(t, err)
+
+	err = s.Upsert(ctx, convID, 10, &timelinepb.TimelineEntityV1{
 		Id:          "m1",
 		Kind:        "message",
 		CreatedAtMs: 200,
@@ -32,9 +41,8 @@ func TestSQLiteTimelineStore_UpsertAndSnapshot(t *testing.T) {
 		},
 	})
 	require.NoError(t, err)
-	require.Equal(t, uint64(1), v)
 
-	v, err = s.Upsert(ctx, convID, &timelinepb.TimelineEntityV1{
+	err = s.Upsert(ctx, convID, 20, &timelinepb.TimelineEntityV1{
 		Id:   "m1",
 		Kind: "message",
 		Snapshot: &timelinepb.TimelineEntityV1_Message{
@@ -42,9 +50,8 @@ func TestSQLiteTimelineStore_UpsertAndSnapshot(t *testing.T) {
 		},
 	})
 	require.NoError(t, err)
-	require.Equal(t, uint64(2), v)
 
-	v, err = s.Upsert(ctx, convID, &timelinepb.TimelineEntityV1{
+	err = s.Upsert(ctx, convID, 30, &timelinepb.TimelineEntityV1{
 		Id:          "m2",
 		Kind:        "message",
 		CreatedAtMs: 50,
@@ -53,11 +60,10 @@ func TestSQLiteTimelineStore_UpsertAndSnapshot(t *testing.T) {
 		},
 	})
 	require.NoError(t, err)
-	require.Equal(t, uint64(3), v)
 
 	full, err := s.GetSnapshot(ctx, convID, 0, 100)
 	require.NoError(t, err)
-	require.Equal(t, uint64(3), full.Version)
+	require.Equal(t, uint64(30), full.Version)
 	require.Len(t, full.Entities, 2)
 	require.Equal(t, "m1", full.Entities[0].Id)
 	require.Equal(t, int64(200), full.Entities[0].CreatedAtMs)
@@ -66,8 +72,8 @@ func TestSQLiteTimelineStore_UpsertAndSnapshot(t *testing.T) {
 
 	inc, err := s.GetSnapshot(ctx, convID, 1, 100)
 	require.NoError(t, err)
-	require.Equal(t, uint64(3), inc.Version)
-	require.Len(t, inc.Entities, 2) // m1(v2), m2(v3)
+	require.Equal(t, uint64(30), inc.Version)
+	require.Len(t, inc.Entities, 2) // m1(v20), m2(v30)
 
 	limited, err := s.GetSnapshot(ctx, convID, 1, 1)
 	require.NoError(t, err)

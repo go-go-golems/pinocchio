@@ -188,8 +188,8 @@ Returns durable timeline entities from SQLite (when enabled with `--timeline-db`
 
 Entities track versions for correct hydration merging:
 
-- **Streaming events** (`version = 0`): Treated as "live" data
-- **DB snapshots**: Include version timestamps
+- **Streaming events**: Carry `event.seq` (monotonic stream order); use `version = seq`
+- **DB snapshots**: Use the same version values stored by the backend
 - **Merge rule**: Higher version wins; equal versions merge shallowly
 
 ## Conversation ID Lifecycle

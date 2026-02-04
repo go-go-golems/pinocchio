@@ -40,21 +40,24 @@ func NewInMemoryTimelineStore(maxEntitiesPerConv int) *InMemoryTimelineStore {
 
 func (s *InMemoryTimelineStore) Close() error { return nil }
 
-func (s *InMemoryTimelineStore) Upsert(ctx context.Context, convID string, entity *timelinepb.TimelineEntityV1) (uint64, error) {
+func (s *InMemoryTimelineStore) Upsert(ctx context.Context, convID string, version uint64, entity *timelinepb.TimelineEntityV1) error {
 	if s == nil {
-		return 0, errors.New("in-memory timeline store: nil store")
+		return errors.New("in-memory timeline store: nil store")
 	}
 	if convID == "" {
-		return 0, errors.New("in-memory timeline store: convID is empty")
+		return errors.New("in-memory timeline store: convID is empty")
+	}
+	if version == 0 {
+		return errors.New("in-memory timeline store: version is 0")
 	}
 	if entity == nil {
-		return 0, errors.New("in-memory timeline store: entity is nil")
+		return errors.New("in-memory timeline store: entity is nil")
 	}
 	if entity.Id == "" {
-		return 0, errors.New("in-memory timeline store: entity.id is empty")
+		return errors.New("in-memory timeline store: entity.id is empty")
 	}
 	if entity.Kind == "" {
-		return 0, errors.New("in-memory timeline store: entity.kind is empty")
+		return errors.New("in-memory timeline store: entity.kind is empty")
 	}
 	_ = ctx
 
@@ -71,8 +74,7 @@ func (s *InMemoryTimelineStore) Upsert(ctx context.Context, convID string, entit
 		s.convs[convID] = conv
 	}
 
-	conv.version++
-	newVersion := conv.version
+	newVersion := version
 
 	now := time.Now().UnixMilli()
 	createdAt := entity.CreatedAtMs
@@ -89,6 +91,9 @@ func (s *InMemoryTimelineStore) Upsert(ctx context.Context, convID string, entit
 
 	conv.entities[entity.Id] = clone
 	conv.entityVersion[entity.Id] = newVersion
+	if newVersion > conv.version {
+		conv.version = newVersion
+	}
 
 	// Enforce per-conversation size limit by evicting the oldest versioned entities.
 	if s.maxEntitiesPerConv > 0 && len(conv.entities) > s.maxEntitiesPerConv {
@@ -113,7 +118,7 @@ func (s *InMemoryTimelineStore) Upsert(ctx context.Context, convID string, entit
 		}
 	}
 
-	return newVersion, nil
+	return nil
 }
 
 func (s *InMemoryTimelineStore) GetSnapshot(ctx context.Context, convID string, sinceVersion uint64, limit int) (*timelinepb.TimelineSnapshotV1, error) {

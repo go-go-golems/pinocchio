@@ -27,6 +27,7 @@ SEM events arrive as JSON frames:
   "event": {
     "type": "llm.delta",
     "id": "eae401d8-...",
+    "seq": 1707053365123000000,
     "delta": "Hi"
   }
 }
@@ -196,13 +197,13 @@ UI component re-renders
 
 Entities come from two sources:
 
-- **Streaming** (WebSocket): `version = 0`, treated as "live"
-- **Hydration** (HTTP): Include version timestamp
+- **Streaming** (WebSocket): Frames include `event.seq` (monotonic stream order); timeline entities use `version = seq`.
+- **Hydration** (HTTP): Snapshots use the same version values stored by the backend.
 
 **Merge rules:**
 
 - Higher version wins
-- Equal zero versions merge shallowly
+- Equal versions merge shallowly
 - Hydration can overwrite stale streaming data
 
 ## Adding New Event Handlers

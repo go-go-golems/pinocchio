@@ -21,7 +21,7 @@ This document provides API reference for `StreamCoordinator` and `ConnectionPool
 
 ### Purpose
 
-`StreamCoordinator` bridges event topics and WebSocket connections. It owns a subscriber, converts inbound `events.Event` payloads into SEM frames via an injected translator, and fans out frames through callbacks so conversations can log emissions and broadcast bytes to every `ConnectionPool` member.
+`StreamCoordinator` bridges event topics and WebSocket connections. It owns a subscriber, converts inbound `events.Event` payloads into SEM frames, stamps them with a `StreamCursor` (stream ID + sequence), and fans out frames through callbacks so conversations can log emissions and broadcast bytes to every `ConnectionPool` member.
 
 The coordinator never writes directly to WebSockets—it relies entirely on callbacks, keeping the component reusable and testable.
 
@@ -31,13 +31,12 @@ The coordinator never writes directly to WebSockets—it relies entirely on call
 NewStreamCoordinator(
     convID string,
     subscriber message.Subscriber,
-    translator *SEMTranslator,
-    onEvent func(events.Event),
-    onFrame func(events.Event, []byte),
+    onEvent func(events.Event, StreamCursor),
+    onFrame func(events.Event, StreamCursor, []byte),
 ) *StreamCoordinator
 ```
 
-Creates a coordinator for the given conversation ID, wiring the subscriber, translator (defaults to shared one), and callbacks. `onEvent` handles timeline hydration; `onFrame` handles logging and WebSocket broadcast.
+Creates a coordinator for the given conversation ID, wiring the subscriber and callbacks. `onEvent` handles timeline hydration; `onFrame` handles logging and WebSocket broadcast.
 
 ### Methods
 
@@ -52,10 +51,10 @@ Creates a coordinator for the given conversation ID, wiring the subscriber, tran
 
 **`onEvent` (Synchronous)**
 
-Called synchronously in the consume goroutine to preserve event ordering and avoid races in downstream persistence.
+Called synchronously in the consume goroutine to preserve event ordering and avoid races in downstream persistence. The `StreamCursor` includes a monotonic `Seq` and the upstream stream ID (if available).
 
 ```go
-onEvent := func(ev events.Event) {
+onEvent := func(ev events.Event, cur StreamCursor) {
     // Hydrate timeline from event
     projector.HandleEvent(ctx, convID, ev)
 }
@@ -66,8 +65,8 @@ onEvent := func(ev events.Event) {
 Called synchronously after translation for each SEM frame.
 
 ```go
-onFrame := func(ev events.Event, frame []byte) {
-    log.Debug().Str("sem_type", ev.Type).Msg("frame ready")
+onFrame := func(ev events.Event, cur StreamCursor, frame []byte) {
+    log.Debug().Str("sem_type", ev.Type).Uint64("seq", cur.Seq).Msg("frame ready")
     conv.pool.Broadcast(frame)
 }
 ```
@@ -77,7 +76,7 @@ onFrame := func(ev events.Event, frame []byte) {
 The `consume` goroutine:
 
 1. Subscribes to the conversation topic once and logs start/stop.
-2. For each message: decode JSON into `events.Event`, call `onEvent` synchronously, translate to SEM frames, invoke `onFrame` for each frame, then ack.
+2. For each message: decode JSON into `events.Event`, derive a `StreamCursor`, call `onEvent` synchronously, build SEM frames with cursor metadata (`event.seq`, `event.stream_id`), invoke `onFrame` for each frame, then ack.
 3. When the channel closes, mark `running=false` and clear the cancel handle.
 
 ### Lifecycle
@@ -87,8 +86,7 @@ The `consume` goroutine:
 ```go
 onEvent := r.streamOnEvent(conv)
 onFrame := r.streamOnFrame(conv)
-translator := NewSEMTranslator()
-conv.stream = NewStreamCoordinator(conv.ID, subscriber, translator, onEvent, onFrame)
+conv.stream = NewStreamCoordinator(conv.ID, subscriber, onEvent, onFrame)
 ```
 
 **Best practices:**
