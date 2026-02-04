@@ -1,6 +1,9 @@
 package webchat
 
 import (
+	"errors"
+	"net/http"
+	"strings"
 	"time"
 )
 
@@ -22,6 +25,13 @@ type chatRequestRecord struct {
 
 	Response map[string]any
 	Error    string
+}
+
+// RunPreparation describes what to do with an incoming chat request.
+type RunPreparation struct {
+	Start      bool
+	HTTPStatus int
+	Response   map[string]any
 }
 
 func (c *Conversation) ensureQueueInitLocked() {
@@ -74,4 +84,107 @@ func (c *Conversation) dequeueLocked() (queuedChat, bool) {
 	q := c.queue[0]
 	c.queue = c.queue[1:]
 	return q, true
+}
+
+// PrepareRun applies idempotency + queue logic and indicates whether a run should start now.
+func (c *Conversation) PrepareRun(idempotencyKey, profileSlug string, overrides map[string]any, prompt string) (RunPreparation, error) {
+	if c == nil {
+		return RunPreparation{}, errors.New("conversation is nil")
+	}
+	if idempotencyKey == "" {
+		return RunPreparation{}, errors.New("idempotency key is empty")
+	}
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	c.ensureQueueInitLocked()
+	if rec, ok := c.getRecordLocked(idempotencyKey); ok && rec != nil && rec.Response != nil {
+		status := strings.ToLower(strings.TrimSpace(rec.Status))
+		resp := cloneResponse(rec.Response)
+		httpStatus := http.StatusOK
+		if status == "queued" {
+			httpStatus = http.StatusAccepted
+		}
+		return RunPreparation{Start: false, HTTPStatus: httpStatus, Response: resp}, nil
+	}
+
+	if c.isBusyLocked() {
+		pos := c.enqueueLocked(queuedChat{
+			IdempotencyKey: idempotencyKey,
+			ProfileSlug:    profileSlug,
+			Overrides:      overrides,
+			Prompt:         prompt,
+			EnqueuedAt:     time.Now(),
+		})
+		resp := map[string]any{
+			"status":          "queued",
+			"queue_position":  pos,
+			"queue_depth":     len(c.queue),
+			"idempotency_key": idempotencyKey,
+			"conv_id":         c.ID,
+			"run_id":          c.RunID, // legacy
+			"session_id":      c.RunID,
+		}
+		c.upsertRecordLocked(&chatRequestRecord{
+			IdempotencyKey: idempotencyKey,
+			Status:         "queued",
+			EnqueuedAt:     time.Now(),
+			Response:       resp,
+		})
+		return RunPreparation{Start: false, HTTPStatus: http.StatusAccepted, Response: resp}, nil
+	}
+
+	c.runningKey = idempotencyKey
+	resp := map[string]any{
+		"status":          "running",
+		"idempotency_key": idempotencyKey,
+		"conv_id":         c.ID,
+		"run_id":          c.RunID, // legacy
+		"session_id":      c.RunID,
+	}
+	c.upsertRecordLocked(&chatRequestRecord{
+		IdempotencyKey: idempotencyKey,
+		Status:         "running",
+		StartedAt:      time.Now(),
+		Response:       resp,
+	})
+	return RunPreparation{Start: true, HTTPStatus: http.StatusOK, Response: resp}, nil
+}
+
+// ClaimNextQueued pops the next queued request and marks it running.
+func (c *Conversation) ClaimNextQueued() (queuedChat, bool) {
+	if c == nil {
+		return queuedChat{}, false
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.isBusyLocked() {
+		return queuedChat{}, false
+	}
+	q, ok := c.dequeueLocked()
+	if !ok {
+		return queuedChat{}, false
+	}
+	c.runningKey = q.IdempotencyKey
+	c.ensureQueueInitLocked()
+	if rec, ok := c.getRecordLocked(q.IdempotencyKey); ok && rec != nil {
+		rec.Status = "running"
+		rec.StartedAt = time.Now()
+	} else {
+		c.upsertRecordLocked(&chatRequestRecord{IdempotencyKey: q.IdempotencyKey, Status: "running", StartedAt: time.Now()})
+	}
+	return q, true
+}
+
+func cloneResponse(resp map[string]any) map[string]any {
+	if resp == nil {
+		return nil
+	}
+	out := make(map[string]any, len(resp))
+	for k, v := range resp {
+		out[k] = v
+	}
+	return out
 }

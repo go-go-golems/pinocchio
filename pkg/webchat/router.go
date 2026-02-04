@@ -654,77 +654,27 @@ func (r *Router) registerAPIHandlers(mux *http.ServeMux) {
 		runLog := logger.With().Str("conv_id", conv.ID).Str("run_id", conv.RunID).Str("session_id", conv.RunID).Logger()
 		idempotencyKey := idempotencyKeyFromRequest(r0, body)
 
-		// Fast idempotency path (returns the previously computed response).
-		conv.mu.Lock()
-		conv.ensureQueueInitLocked()
-		if rec, ok := conv.getRecordLocked(idempotencyKey); ok && rec != nil && rec.Response != nil {
-			status := strings.ToLower(strings.TrimSpace(rec.Status))
-			resp := make(map[string]any, len(rec.Response))
-			for k, v := range rec.Response {
-				resp[k] = v
-			}
-			conv.mu.Unlock()
-			switch status {
-			case "queued":
-				w.WriteHeader(http.StatusAccepted)
-			default:
-				w.WriteHeader(http.StatusOK)
-			}
-			_ = json.NewEncoder(w).Encode(resp)
+		prep, err := conv.PrepareRun(idempotencyKey, profileSlug, input.Overrides, body.Prompt)
+		if err != nil {
+			runLog.Error().Err(err).Msg("prepare run failed")
+			http.Error(w, "prepare run failed", http.StatusInternalServerError)
 			return
 		}
-
-		// Busy -> enqueue and return 202 Accepted.
-		if conv.isBusyLocked() {
-			pos := conv.enqueueLocked(queuedChat{
-				IdempotencyKey: idempotencyKey,
-				ProfileSlug:    profileSlug,
-				Overrides:      input.Overrides,
-				Prompt:         body.Prompt,
-				EnqueuedAt:     time.Now(),
-			})
-			resp := map[string]any{
-				"status":          "queued",
-				"queue_position":  pos,
-				"queue_depth":     len(conv.queue),
-				"idempotency_key": idempotencyKey,
-				"conv_id":         conv.ID,
-				"run_id":          conv.RunID, // legacy
-				"session_id":      conv.RunID,
+		if !prep.Start {
+			if status, ok := prep.Response["status"].(string); ok && strings.EqualFold(status, "queued") {
+				if pos, ok := prep.Response["queue_position"].(int); ok {
+					runLog.Info().
+						Str("idempotency_key", idempotencyKey).
+						Int("queue_position", pos).
+						Msg("run in progress; queued prompt")
+				}
 			}
-			conv.upsertRecordLocked(&chatRequestRecord{
-				IdempotencyKey: idempotencyKey,
-				Status:         "queued",
-				EnqueuedAt:     time.Now(),
-				Response:       resp,
-			})
-			conv.mu.Unlock()
-
-			runLog.Info().
-				Str("idempotency_key", idempotencyKey).
-				Int("queue_position", pos).
-				Msg("run in progress; queued prompt")
-
-			w.WriteHeader(http.StatusAccepted)
-			_ = json.NewEncoder(w).Encode(resp)
+			if prep.HTTPStatus > 0 {
+				w.WriteHeader(prep.HTTPStatus)
+			}
+			_ = json.NewEncoder(w).Encode(prep.Response)
 			return
 		}
-
-		// Not busy -> claim running slot before starting inference (prevents concurrent starts).
-		conv.runningKey = idempotencyKey
-		conv.upsertRecordLocked(&chatRequestRecord{
-			IdempotencyKey: idempotencyKey,
-			Status:         "running",
-			StartedAt:      time.Now(),
-			Response: map[string]any{
-				"status":          "running",
-				"idempotency_key": idempotencyKey,
-				"conv_id":         conv.ID,
-				"run_id":          conv.RunID, // legacy
-				"session_id":      conv.RunID,
-			},
-		})
-		conv.mu.Unlock()
 
 		resp, err := r.startRunForPrompt(conv, profileSlug, input.Overrides, body.Prompt, idempotencyKey)
 		if err != nil {
@@ -1037,26 +987,10 @@ func (r *Router) tryDrainQueue(conv *Conversation) {
 		return
 	}
 	for {
-		conv.mu.Lock()
-		if conv.isBusyLocked() {
-			conv.mu.Unlock()
-			return
-		}
-		q, ok := conv.dequeueLocked()
+		q, ok := conv.ClaimNextQueued()
 		if !ok {
-			conv.mu.Unlock()
 			return
 		}
-		conv.runningKey = q.IdempotencyKey
-		conv.ensureQueueInitLocked()
-		if rec, ok := conv.getRecordLocked(q.IdempotencyKey); ok && rec != nil {
-			rec.Status = "running"
-			rec.StartedAt = time.Now()
-		} else {
-			conv.upsertRecordLocked(&chatRequestRecord{IdempotencyKey: q.IdempotencyKey, Status: "running", StartedAt: time.Now()})
-		}
-		conv.mu.Unlock()
-
 		_, err := r.startRunForPrompt(conv, q.ProfileSlug, q.Overrides, q.Prompt, q.IdempotencyKey)
 		if err != nil {
 			r.finishRun(conv, q.IdempotencyKey, "", "", err)
