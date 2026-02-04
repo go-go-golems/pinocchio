@@ -122,7 +122,18 @@ func (r *Router) RegisterTool(name string, f ToolFactory) { r.toolFactories[name
 func (r *Router) AddProfile(p *Profile) { _ = r.profiles.Add(p) }
 
 // Mount attaches all handlers to a parent mux with the given prefix.
-func (r *Router) Mount(mux *http.ServeMux, prefix string) { mux.Handle(prefix, r.mux) }
+// http.ServeMux does not strip prefixes, so we must use StripPrefix explicitly.
+func (r *Router) Mount(mux *http.ServeMux, prefix string) {
+	if prefix == "" || prefix == "/" {
+		mux.Handle("/", r.mux)
+		return
+	}
+	prefix = strings.TrimRight(prefix, "/")
+	mux.Handle(prefix+"/", http.StripPrefix(prefix, r.mux))
+	mux.HandleFunc(prefix, func(w http.ResponseWriter, r0 *http.Request) {
+		http.Redirect(w, r0, prefix+"/", http.StatusPermanentRedirect)
+	})
+}
 
 // Expose lightweight handler registration for external customization (e.g., profile switchers)
 func (r *Router) Handle(pattern string, h http.Handler) { r.mux.Handle(pattern, h) }
