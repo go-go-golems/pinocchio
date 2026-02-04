@@ -43,6 +43,7 @@ The webchat framework provides composable components for building real-time chat
 |-----|-------------|
 | [Getting Started](../tutorials/02-webchat-getting-started.md) | Run the UI locally and connect |
 | [Frontend Integration](webchat-frontend-integration.md) | WebSocket and HTTP integration patterns |
+| [Frontend Architecture](webchat-frontend-architecture.md) | Component + state architecture and extension points |
 | [SEM and UI](webchat-sem-and-ui.md) | Event format, routing, timeline entities |
 
 ### Operations / Debugging

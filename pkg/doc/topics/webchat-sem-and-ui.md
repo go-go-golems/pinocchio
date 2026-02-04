@@ -44,36 +44,39 @@ Pinocchio uses protobuf-backed payloads under the hood (see `sem/pb/` directory)
 
 | Type | Payload | Description |
 |------|---------|-------------|
-| `llm.start` | `{ id }` | Model started generating |
-| `llm.delta` | `{ id, delta, cumulative? }` | Incremental text chunk |
-| `llm.final` | `{ id, text? }` | Generation complete |
+| `llm.start` | `{ role? }` | Model started generating |
+| `llm.delta` | `{ cumulative }` | Incremental text (cumulative) |
+| `llm.final` | `{ text? }` | Generation complete |
+| `llm.thinking.start` | `{ role? }` | Thinking stream started |
+| `llm.thinking.delta` | `{ cumulative }` | Thinking stream delta |
+| `llm.thinking.final` | `{}` | Thinking stream complete |
 
 ### Tool Events
 
 | Type | Payload | Description |
 |------|---------|-------------|
 | `tool.start` | `{ id, name, input }` | Tool invocation started |
-| `tool.delta` | `{ id, progress? }` | Tool progress update |
-| `tool.result` | `{ id, result }` | Tool execution result |
+| `tool.delta` | `{ patch }` | Tool update patch |
+| `tool.result` | `{ result, customKind? }` | Tool execution result |
 | `tool.done` | `{ id }` | Tool execution complete |
-| `tool.log` | `{ id, message, level? }` | Tool log message |
 
-### Status Events
+### UI / System Events
 
 | Type | Payload | Description |
 |------|---------|-------------|
-| `log` | `{ message, level }` | Backend log message |
-| `status` | `{ text, type }` | Status update |
-
-### Middleware Events
-
-These events are emitted by optional middleware/features (e.g., thinking mode). Planning events are only emitted if explicitly enabled elsewhere.
-
-| Type | Description |
-|------|-------------|
-| `planning.*` | Planning lifecycle events (optional/legacy) |
-| `thinking.mode.*` | Thinking mode indicators |
-| `mode.evaluation.*` | Mode evaluation results |
+| `log` | `{ message, level, fields? }` | Backend log message |
+| `agent.mode` | `{ title, data }` | Agent mode widget |
+| `debugger.pause` | `{ pauseId, phase, summary }` | Step-controller pause prompt |
+| `thinking.mode.started` | `{ mode, phase, reasoning }` | Thinking mode widget |
+| `thinking.mode.update` | `{ mode, phase, reasoning }` | Thinking mode widget update |
+| `thinking.mode.completed` | `{ mode, phase, reasoning, success }` | Thinking mode widget complete |
+| `planning.start` | `{ run }` | Planning widget (start) |
+| `planning.iteration` | `{ run, iterationIndex, ... }` | Planning widget update |
+| `planning.reflection` | `{ run, iterationIndex, ... }` | Planning widget reflection |
+| `planning.complete` | `{ run, ... }` | Planning widget complete |
+| `execution.start` | `{ runId, ... }` | Planning widget execution status |
+| `execution.complete` | `{ runId, status, ... }` | Planning widget execution status |
+| `timeline.upsert` | `{ entity, version }` | Durable timeline entity upsert |
 
 ## Handler Registration
 
@@ -81,47 +84,39 @@ Handlers are registered in the SEM registry:
 
 ```typescript
 // sem/registry.ts
-type SemHandler = (ctx: { ev: BaseEvent; now: number; convId: string }) => SemCmd | null;
+type Handler = (ev: SemEvent, dispatch: AppDispatch) => void;
 
-const registry = new Map<string, SemHandler>();
+const handlers = new Map<string, Handler>();
 
-export function registerSem(type: string, handler: SemHandler): void {
-  registry.set(type, handler);
+export function registerSem(type: string, handler: Handler) {
+  handlers.set(type, handler);
 }
 
-export function handleSem(ctx: { ev: BaseEvent; now: number; convId: string }): SemCmd | null {
-  const handler = registry.get(ctx.ev.type);
-  return handler ? handler(ctx) : null;
+export function handleSem(envelope: any, dispatch: AppDispatch) {
+  if (!envelope || envelope.sem !== true || !envelope.event) return;
+  const ev = envelope.event as SemEvent;
+  const h = handlers.get(ev.type);
+  if (!h) return;
+  h(ev, dispatch);
 }
 ```
 
 ### Handler Pattern
 
 ```typescript
-registerSem('llm.delta', ({ ev, now, convId }) => {
-  return {
-    kind: 'upsert',
-    convId,
-    entity: {
+registerSem('llm.delta', (ev, dispatch) => {
+  const cumulative = (ev.data as any)?.cumulative ?? '';
+  dispatch(
+    timelineSlice.actions.upsertEntity({
       id: ev.id,
       kind: 'message',
-      timestamp: now,
-      props: {
-        role: 'assistant',
-        streaming: true,
-        delta: ev.delta ?? '',
-      },
-    },
-  };
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      props: { content: String(cumulative), streaming: true },
+    }),
+  );
 });
 ```
-
-### Command Types
-
-| Command | Use When |
-|---------|----------|
-| `AddCmd` | Event creates new entity |
-| `UpsertCmd` | Event updates existing entity by ID |
 
 ## Timeline Entities
 
@@ -131,7 +126,8 @@ registerSem('llm.delta', ({ ev, now, convId }) => {
 type TimelineEntity = {
   id: string;
   kind: string;
-  timestamp: number;
+  createdAt: number;
+  updatedAt?: number;
   version?: number;
   props: Record<string, unknown>;
 };
@@ -144,8 +140,12 @@ type TimelineEntity = {
 | `message` | User or assistant text | `llm.*` events |
 | `tool_call` | Tool invocation | `tool.start` + updates |
 | `tool_result` | Tool output | `tool.result` |
-| `tool_log` | Tool logs | `tool.log` |
-| `status` | Status banners | `log`, `status` events |
+| `log` | Log message | `log` |
+| `thinking_mode` | Thinking mode widget | `thinking.mode.*` |
+| `planning` | Planning widget | `planning.*`, `execution.*` |
+| `agent_mode` | Agent mode widget | `agent.mode` |
+| `debugger_pause` | Step-controller pause | `debugger.pause` |
+| `default` | Fallback card | Unknown kinds |
 
 ### Message Entity
 
@@ -153,7 +153,7 @@ type TimelineEntity = {
 {
   id: "asst-123",
   kind: "message",
-  timestamp: 1763501040615,
+  createdAt: 1763501040615,
   props: {
     role: "assistant",
     content: "Hello!",
@@ -168,12 +168,11 @@ type TimelineEntity = {
 {
   id: "tool-456",
   kind: "tool_call",
-  timestamp: 1763501041000,
+  createdAt: 1763501041000,
   props: {
     name: "search",
     input: { query: "..." },
-    status: "running",
-    progress: 0.5,
+    done: false,
   }
 }
 ```
@@ -189,7 +188,7 @@ WebSocket delivers → wsManager
     ↓
 handleSem() looks up handler in registry
     ↓
-Handler returns SemCmd (add/upsert)
+Handler dispatches timelineSlice actions
     ↓
 State store updated
     ↓
@@ -200,8 +199,8 @@ UI component re-renders
 
 Entities come from two sources:
 
-- **Streaming** (WebSocket): Frames include `event.seq` (monotonic stream order); timeline entities use `version = seq`.
-- **Hydration** (HTTP): Snapshots use the same version values stored by the backend.
+- **Streaming** (WebSocket): Frames include `event.seq` (monotonic stream order); most streaming entities do not carry a version.
+- **Hydration** (HTTP): Snapshots include per-entity `version` values stored by the backend.
 
 **Merge rules:**
 
@@ -211,17 +210,17 @@ Entities come from two sources:
 
 ## Adding New Event Handlers
 
-1. **Define the handler** in `sem/handlers/` directory
-2. **Call `registerSem`** at module load time
-3. **Ensure module is imported** in app bundle
-4. **Add UI component** to render the entity kind
-5. **Verify** with `?ws_debug=1` logs
+1. **Add a handler** in `sem/registry.ts` (or import a helper module that calls `registerSem`)
+2. **Map to a timeline entity** via `addEntity`/`upsertEntity`
+3. **Add a renderer** in `webchat/cards.tsx` (or rely on `GenericCard`)
+4. **Wire the renderer** in `ChatWidget` via the `renderers` map if it needs custom UI
+5. **Verify** by watching WS frames and timeline state
 
 ### Implementation Tips
 
 - Keep handlers idempotent (safe to replay)
 - Derive entity IDs from `ev.id`
-- Use `upsert` for updates, `add` for new entities
+- Use `upsertEntity` for updates, `addEntity` for new entities
 - Log unhandled events for debugging
 
 ## Key Files
@@ -232,6 +231,8 @@ Entities come from two sources:
 | `pinocchio/cmd/web-chat/web/src/sem/registry.ts` | Frontend SEM registry |
 | `pinocchio/cmd/web-chat/web/src/sem/pb/` | Protobuf definitions |
 | `pinocchio/cmd/web-chat/web/src/store/timelineSlice.ts` | Timeline state |
+| `pinocchio/cmd/web-chat/web/src/webchat/cards.tsx` | Default entity renderers |
+| `pinocchio/cmd/web-chat/web/src/webchat/ChatWidget.tsx` | Renderer wiring |
 
 ## See Also
 
