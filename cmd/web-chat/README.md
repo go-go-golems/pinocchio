@@ -87,7 +87,8 @@ return srv.ListenAndServe()
   - `NewRouter(ctx, parsed, staticFS)` — builds a composable router:
     - Parses settings (default layer + `redis` layer)
     - Builds an event router (in-memory or Redis Streams)
-    - Registers HTTP routes `/`, `/static/*`, optional `/assets/*`, `/ws`, `/chat`, `/hydrate`
+    - Registers HTTP routes `/`, `/static/*`, optional `/assets/*`, `/ws`, `/chat`, `/timeline`
+  - `APIHandler()` / `UIHandler()` — optional split handlers to serve API/WS separately from the UI
   - `RunEventRouter(ctx)` — runs the underlying Watermill router loop
   - `BuildHTTPServer()` — constructs the `http.Server` using parsed layers
 

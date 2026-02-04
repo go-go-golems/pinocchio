@@ -2,7 +2,7 @@ package webchat
 
 import (
 	"context"
-	"embed"
+	"io/fs"
 	"net/http"
 	"os"
 	"os/signal"
@@ -23,7 +23,7 @@ type Server struct {
 	httpSrv *http.Server
 }
 
-func NewServer(ctx context.Context, parsed *layers.ParsedLayers, staticFS embed.FS) (*Server, error) {
+func NewServer(ctx context.Context, parsed *layers.ParsedLayers, staticFS fs.FS) (*Server, error) {
 	r, err := NewRouter(ctx, parsed, staticFS)
 	if err != nil {
 		return nil, err

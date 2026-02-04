@@ -3,7 +3,6 @@ package webchat
 import (
 	"context"
 	"database/sql"
-	"embed"
 	"encoding/json"
 	stderrors "errors"
 	"fmt"
@@ -49,7 +48,7 @@ type RouterSettings struct {
 }
 
 // RouterBuilder creates a new composable webchat router.
-func NewRouter(ctx context.Context, parsed *layers.ParsedLayers, staticFS embed.FS) (*Router, error) {
+func NewRouter(ctx context.Context, parsed *layers.ParsedLayers, staticFS fs.FS) (*Router, error) {
 	rs := rediscfg.Settings{}
 	_ = parsed.InitializeStruct("redis", &rs)
 	router, err := rediscfg.BuildRouter(rs, true)
@@ -178,30 +177,54 @@ func (r *Router) RunEventRouter(ctx context.Context) error {
 
 // registerHTTPHandlers sets up static, API and websockets.
 func (r *Router) registerHTTPHandlers() {
+	r.registerUIHandlers(r.mux)
+	r.registerAPIHandlers(r.mux)
+}
+
+// APIHandler returns an http.Handler that only exposes API + websocket routes.
+func (r *Router) APIHandler() http.Handler {
+	mux := http.NewServeMux()
+	r.registerAPIHandlers(mux)
+	return mux
+}
+
+// UIHandler returns an http.Handler that only serves the embedded web UI assets.
+func (r *Router) UIHandler() http.Handler {
+	mux := http.NewServeMux()
+	r.registerUIHandlers(mux)
+	return mux
+}
+
+func (r *Router) registerUIHandlers(mux *http.ServeMux) {
 	logger := log.With().Str("component", "webchat").Logger()
+
+	if r.staticFS == nil {
+		logger.Warn().Msg("static FS not configured; UI handler disabled")
+		return
+	}
 
 	// static assets
 	if staticSub, err := fsSub(r.staticFS, "static"); err == nil {
-		r.mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticSub))))
+		mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticSub))))
 		logger.Info().Msg("mounted /static/ asset handler")
 	} else {
 		logger.Warn().Err(err).Msg("failed to mount /static/ asset handler")
 	}
 	if distAssets, err := fsSub(r.staticFS, "static/dist/assets"); err == nil {
-		r.mux.Handle("/assets/", http.StripPrefix("/assets/", http.FileServer(http.FS(distAssets))))
+		mux.Handle("/assets/", http.StripPrefix("/assets/", http.FileServer(http.FS(distAssets))))
 		logger.Info().Msg("mounted /assets/ handler for built dist assets")
 	} else {
 		logger.Warn().Err(err).Msg("no built dist assets found under static/dist/assets")
 	}
 	// index
-	r.mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
-		if b, err := r.staticFS.ReadFile("static/dist/index.html"); err == nil {
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		if b, err := fs.ReadFile(r.staticFS, "static/dist/index.html"); err == nil {
 			logger.Debug().Msg("serving built index (static/dist/index.html)")
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
 			_, _ = w.Write(b)
 			return
 		}
-		if b, err := r.staticFS.ReadFile("static/index.html"); err == nil {
+		if b, err := fs.ReadFile(r.staticFS, "static/index.html"); err == nil {
 			logger.Debug().Msg("serving dev index (static/index.html)")
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
 			_, _ = w.Write(b)
@@ -210,9 +233,13 @@ func (r *Router) registerHTTPHandlers() {
 		logger.Error().Msg("index not found in embedded FS")
 		http.Error(w, "index not found", http.StatusInternalServerError)
 	})
+}
+
+func (r *Router) registerAPIHandlers(mux *http.ServeMux) {
+	logger := log.With().Str("component", "webchat").Logger()
 
 	// list profiles for UI
-	r.mux.HandleFunc("/api/chat/profiles", func(w http.ResponseWriter, _ *http.Request) {
+	mux.HandleFunc("/api/chat/profiles", func(w http.ResponseWriter, _ *http.Request) {
 		type profileInfo struct {
 			Slug          string `json:"slug"`
 			DefaultPrompt string `json:"default_prompt"`
@@ -225,7 +252,7 @@ func (r *Router) registerHTTPHandlers() {
 	})
 
 	// get/set current profile (cookie-backed)
-	r.mux.HandleFunc("/api/chat/profile", func(w http.ResponseWriter, r0 *http.Request) {
+	mux.HandleFunc("/api/chat/profile", func(w http.ResponseWriter, r0 *http.Request) {
 		type profilePayload struct {
 			Slug    string `json:"slug"`
 			Profile string `json:"profile"`
@@ -285,7 +312,7 @@ func (r *Router) registerHTTPHandlers() {
 	})
 
 	// debug endpoints (dev-gated via PINOCCHIO_WEBCHAT_DEBUG=1)
-	r.mux.HandleFunc("/debug/step/enable", func(w http.ResponseWriter, r0 *http.Request) {
+	mux.HandleFunc("/debug/step/enable", func(w http.ResponseWriter, r0 *http.Request) {
 		if os.Getenv("PINOCCHIO_WEBCHAT_DEBUG") != "1" {
 			http.NotFound(w, r0)
 			return
@@ -324,7 +351,7 @@ func (r *Router) registerHTTPHandlers() {
 		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "session_id": sessionID, "conv_id": convID})
 	})
 
-	r.mux.HandleFunc("/debug/step/disable", func(w http.ResponseWriter, r0 *http.Request) {
+	mux.HandleFunc("/debug/step/disable", func(w http.ResponseWriter, r0 *http.Request) {
 		if os.Getenv("PINOCCHIO_WEBCHAT_DEBUG") != "1" {
 			http.NotFound(w, r0)
 			return
@@ -360,7 +387,7 @@ func (r *Router) registerHTTPHandlers() {
 		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "session_id": sessionID})
 	})
 
-	r.mux.HandleFunc("/debug/continue", func(w http.ResponseWriter, r0 *http.Request) {
+	mux.HandleFunc("/debug/continue", func(w http.ResponseWriter, r0 *http.Request) {
 		if os.Getenv("PINOCCHIO_WEBCHAT_DEBUG") != "1" {
 			http.NotFound(w, r0)
 			return
@@ -403,7 +430,7 @@ func (r *Router) registerHTTPHandlers() {
 	})
 
 	// websocket join: /ws?conv_id=...&profile=slug (falls back to chat_profile cookie)
-	r.mux.HandleFunc("/ws", func(w http.ResponseWriter, r0 *http.Request) {
+	mux.HandleFunc("/ws", func(w http.ResponseWriter, r0 *http.Request) {
 		conn, err := r.upgrader.Upgrade(w, r0, nil)
 		if err != nil {
 			logger.Error().Err(err).Msg("websocket upgrade failed")
@@ -557,8 +584,8 @@ func (r *Router) registerHTTPHandlers() {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write(out)
 	}
-	r.mux.HandleFunc("/timeline", timelineHandler)
-	r.mux.HandleFunc("/timeline/", timelineHandler)
+	mux.HandleFunc("/timeline", timelineHandler)
+	mux.HandleFunc("/timeline/", timelineHandler)
 
 	handleChatRequest := func(w http.ResponseWriter, r0 *http.Request) {
 		if r0.Method != http.MethodPost {
@@ -693,12 +720,12 @@ func (r *Router) registerHTTPHandlers() {
 		_ = json.NewEncoder(w).Encode(resp)
 	}
 
-	r.mux.HandleFunc("/chat", func(w http.ResponseWriter, r0 *http.Request) { handleChatRequest(w, r0) })
-	r.mux.HandleFunc("/chat/", func(w http.ResponseWriter, r0 *http.Request) { handleChatRequest(w, r0) })
+	mux.HandleFunc("/chat", func(w http.ResponseWriter, r0 *http.Request) { handleChatRequest(w, r0) })
+	mux.HandleFunc("/chat/", func(w http.ResponseWriter, r0 *http.Request) { handleChatRequest(w, r0) })
 }
 
 // helpers
-func fsSub(staticFS embed.FS, path string) (fs.FS, error) { return fs.Sub(staticFS, path) }
+func fsSub(staticFS fs.FS, path string) (fs.FS, error) { return fs.Sub(staticFS, path) }
 
 // runtime wiring bits
 var (

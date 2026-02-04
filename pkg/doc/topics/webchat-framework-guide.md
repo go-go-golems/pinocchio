@@ -77,18 +77,31 @@ Then the index is served at `/chat`, assets under `/chat/assets` and `/chat/stat
 
 ### 4.5. How to Mount Under a Custom Root (Implementation Pattern)
 
-If you integrate `webchat.Router` into your own server and need a custom root, mount the router’s handler under a prefix using `http.ServeMux` and `http.StripPrefix`:
+If you integrate `webchat.Router` into your own server and need a custom root, mount the router under a prefix using `Router.Mount` (it wraps `http.StripPrefix` for you):
 
 ```go
 parent := http.NewServeMux()
-prefix := "/chat/" // ensure trailing slash
-parent.Handle(prefix, http.StripPrefix(strings.TrimRight(prefix, "/"), r.Handler()))
+prefix := "/chat"
+r.Mount(parent, prefix)
 httpSrv.Handler = parent
 ```
 
 This preserves all internal paths (`/`, `/assets`, `/static`, `/ws`, `/chat`, `/chat/{profile}`, `/api/chat/profiles`) under the chosen root.
 
-### 4.6. Embedding the Router Without webchat.Server (start the event loop!)
+### 4.6. Split API and UI Handlers (Optional)
+
+If you want to serve the web UI separately from the API/websocket endpoints, use the dedicated handlers:
+
+```go
+parent := http.NewServeMux()
+parent.Handle("/api/webchat/", http.StripPrefix("/api/webchat", r.APIHandler()))
+parent.Handle("/chat/", http.StripPrefix("/chat", r.UIHandler()))
+httpSrv.Handler = parent
+```
+
+You can omit `UIHandler()` entirely if you serve the frontend elsewhere.
+
+### 4.7. Embedding the Router Without webchat.Server (start the event loop!)
 
 If you integrate `webchat.Router` into an existing server and do not use `webchat.Server`, you must start the event router loop yourself or runs will never progress beyond initialization. Pattern:
 

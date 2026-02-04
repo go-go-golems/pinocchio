@@ -3,7 +3,7 @@ package webchat
 import (
 	"context"
 	"database/sql"
-	"embed"
+	"io/fs"
 	"net/http"
 
 	"github.com/go-go-golems/geppetto/pkg/events"
@@ -72,7 +72,7 @@ type Router struct {
 	baseCtx  context.Context
 	parsed   *layers.ParsedLayers
 	mux      *http.ServeMux
-	staticFS embed.FS
+	staticFS fs.FS
 
 	// event router (in-memory or Redis)
 	router *events.EventRouter
