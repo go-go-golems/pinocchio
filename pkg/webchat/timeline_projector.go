@@ -82,6 +82,11 @@ func (p *TimelineProjector) upsert(ctx context.Context, version uint64, entity *
 	return nil
 }
 
+// Upsert exposes timeline writes for custom SEM handlers.
+func (p *TimelineProjector) Upsert(ctx context.Context, version uint64, entity *timelinepb.TimelineEntityV1) error {
+	return p.upsert(ctx, version, entity)
+}
+
 func (p *TimelineProjector) ApplySemFrame(ctx context.Context, frame []byte) error {
 	if p == nil || p.store == nil {
 		return nil
@@ -109,6 +114,16 @@ func (p *TimelineProjector) ApplySemFrame(ctx context.Context, frame []byte) err
 	}
 
 	now := time.Now().UnixMilli()
+	customEvent := TimelineSemEvent{
+		Type:     env.Event.Type,
+		ID:       env.Event.ID,
+		Seq:      env.Event.Seq,
+		StreamID: env.Event.StreamID,
+		Data:     env.Event.Data,
+	}
+	if handled, err := handleTimelineHandlers(ctx, p, customEvent, now); handled {
+		return err
+	}
 	switch env.Event.Type {
 	case "llm.start", "llm.thinking.start":
 		var pb sempb.LlmStart
