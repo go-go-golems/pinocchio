@@ -44,6 +44,7 @@ On startup you'll see `[ws.mgr] debug-config { ... enabled: true }` confirming t
 - `[ws.mgr] message:forward { type, id }` — event received
 - Parsed and routed to timeline state handlers
 - Unhandled events logged for debugging
+ - `seq` values indicate ordering; large jumps usually mean time-based fallback
 
 ### Common Issues
 
@@ -64,6 +65,13 @@ On startup you'll see `[ws.mgr] debug-config { ... enabled: true }` confirming t
 
 - Use `__WS_DEBUG__` (two underscores)
 - Verify via `localStorage.getItem('__WS_DEBUG__')`
+
+**"Hydration order is wrong (user messages at bottom)"**
+
+1. Inspect `/timeline` payload ordering
+2. Check backend logs or SEM frames for `event.seq` values
+3. Ensure stream metadata (`xid`/`redis_xid`) is present or fallback seq is time-based
+4. If using an old SQLite DB, regenerate or migrate so versions reflect correct ordering
 
 ## Sequence Diagrams
 

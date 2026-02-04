@@ -35,10 +35,11 @@ This document provides implementation details for `StreamCoordinator` and `Conne
 │       ↓                                              │
 │  for msg := range ch {                              │
 │    event := events.NewEventFromJson(msg.Payload)    │
-│    onEvent(event)         // Synchronous hydration  │
-│    frames := translator.Translate(event)            │
+│    cursor := derive StreamCursor (seq + stream_id)  │
+│    onEvent(event, cursor)  // Synchronous hydration │
+│    frames := SemanticEventsFromEventWithCursor(...) │
 │    for _, frame := range frames {                   │
-│      onFrame(event, frame) // WebSocket broadcast   │
+│      onFrame(event, cursor, frame) // broadcast     │
 │    }                                                 │
 │    msg.Ack()              // Confirm processed      │
 │  }                                                   │
@@ -102,6 +103,7 @@ Callbacks are synchronous to preserve event ordering:
 1. WebSocket read loop (router.go)
 2. Tool loop (if inference running)
 3. StreamCoordinator.consume()
+4. One writer goroutine per active WebSocket connection (ConnectionPool)
 ```
 
 Steady state: 3 long-lived goroutines per conversation.
@@ -120,6 +122,10 @@ Steady state: 3 long-lived goroutines per conversation.
 **Bottleneck**: Usually timeline projection or WebSocket writes, not Redis.
 
 **Trade-offs**: Synchronous projection ensures ordering but can delay broadcasts if the database is slow.
+
+### Sequence Derivation
+
+`StreamCoordinator` derives `event.seq` from Redis stream IDs when metadata is present. If not present, it falls back to a time-based monotonic sequence so timeline versions stay comparable to user-message versions.
 
 ## ConnectionPool Internals
 
@@ -162,7 +168,7 @@ Dead connections are automatically pruned; clients can reconnect.
 
 - Verify `conv.stream.IsRunning()` returns true
 - Check `pool.Count() > 0`
-- Review logs for decode errors or translator warnings
+- Review logs for decode errors or SEM frame build warnings
 - Confirm consumer group is active (when using Redis)
 
 ### Duplicate frames

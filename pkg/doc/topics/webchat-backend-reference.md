@@ -21,7 +21,7 @@ This document provides API reference for `StreamCoordinator` and `ConnectionPool
 
 ### Purpose
 
-`StreamCoordinator` bridges event topics and WebSocket connections. It owns a subscriber, converts inbound `events.Event` payloads into SEM frames, stamps them with a `StreamCursor` (stream ID + sequence), and fans out frames through callbacks so conversations can log emissions and broadcast bytes to every `ConnectionPool` member.
+`StreamCoordinator` bridges event topics and WebSocket connections. It owns a subscriber, converts inbound `events.Event` payloads into SEM frames, stamps them with a `StreamCursor` (stream ID + sequence), and fans out frames through callbacks so conversations can log emissions and broadcast bytes to every `ConnectionPool` member. The sequence is derived from Redis stream IDs when available; otherwise it falls back to a time-based monotonic sequence.
 
 The coordinator never writes directly to WebSockets—it relies entirely on callbacks, keeping the component reusable and testable.
 
@@ -36,7 +36,7 @@ NewStreamCoordinator(
 ) *StreamCoordinator
 ```
 
-Creates a coordinator for the given conversation ID, wiring the subscriber and callbacks. `onEvent` handles timeline hydration; `onFrame` handles logging and WebSocket broadcast.
+Creates a coordinator for the given conversation ID, wiring the subscriber and callbacks. `onEvent` is optional for custom bookkeeping; `onFrame` handles logging, WebSocket broadcast, and timeline projection from SEM frames.
 
 ### Methods
 
@@ -55,8 +55,8 @@ Called synchronously in the consume goroutine to preserve event ordering and avo
 
 ```go
 onEvent := func(ev events.Event, cur StreamCursor) {
-    // Hydrate timeline from event
-    projector.HandleEvent(ctx, convID, ev)
+    // Optional: metrics/logging per event
+    log.Debug().Str("type", ev.Type()).Uint64("seq", cur.Seq).Msg("event received")
 }
 ```
 
@@ -68,6 +68,8 @@ Called synchronously after translation for each SEM frame.
 onFrame := func(ev events.Event, cur StreamCursor, frame []byte) {
     log.Debug().Str("sem_type", ev.Type).Uint64("seq", cur.Seq).Msg("frame ready")
     conv.pool.Broadcast(frame)
+    // Optional: timeline projection from SEM frames
+    // _ = conv.timelineProj.ApplySemFrame(ctx, frame)
 }
 ```
 
@@ -76,7 +78,7 @@ onFrame := func(ev events.Event, cur StreamCursor, frame []byte) {
 The `consume` goroutine:
 
 1. Subscribes to the conversation topic once and logs start/stop.
-2. For each message: decode JSON into `events.Event`, derive a `StreamCursor`, call `onEvent` synchronously, build SEM frames with cursor metadata (`event.seq`, `event.stream_id`), invoke `onFrame` for each frame, then ack.
+2. For each message: decode JSON into `events.Event`, derive a `StreamCursor` (stream-ID-derived when available, time-based otherwise), call `onEvent` synchronously, build SEM frames with cursor metadata (`event.seq`, `event.stream_id`), invoke `onFrame` for each frame, then ack.
 3. When the channel closes, mark `running=false` and clear the cancel handle.
 
 ### Lifecycle
@@ -91,7 +93,6 @@ conv.stream = NewStreamCoordinator(conv.ID, subscriber, onEvent, onFrame)
 
 **Best practices:**
 
-- Create one translator per conversation to isolate tool-call caches.
 - Close previous coordinators before swapping in a new subscriber.
 - Handle nil subscribers when routing is disabled.
 
@@ -105,7 +106,7 @@ conv.stream = NewStreamCoordinator(conv.ID, subscriber, onEvent, onFrame)
 
 - **Subscription failures**: Logged, triggers `Stop()`. Next `Start` retries.
 - **JSON decode failures**: Log warning, ack message to avoid stalling.
-- **Translator errors**: Log warning, drop event without crashing.
+- **SEM frame build errors**: Log warning, drop event without crashing.
 
 ## ConnectionPool
 
@@ -165,7 +166,7 @@ pool := NewConnectionPool(conv.ID, 30*time.Second, func() {
 
 ## Related Components
 
-- **`SEMTranslator`**: Converts `events.Event` into SEM frames; scoped per coordinator.
+- **SEM translation helpers**: `SemanticEventsFromEvent*` converts `events.Event` into SEM frames.
 - **`Router`**: Orchestrates coordinator and pool creation.
 - **`Conversation`**: Owns both `StreamCoordinator` and `ConnectionPool`.
 

@@ -28,10 +28,13 @@ SEM events arrive as JSON frames:
     "type": "llm.delta",
     "id": "eae401d8-...",
     "seq": 1707053365123000000,
-    "delta": "Hi"
+    "stream_id": "1707053365123-0",
+    "data": { "cumulative": "Hi" }
   }
 }
 ```
+
+`event.seq` is always present and monotonic. When Redis stream metadata is present (`xid`/`redis_xid`), it is derived from that stream ID; otherwise the backend falls back to a time-based sequence. `event.stream_id` is optional.
 
 Pinocchio uses protobuf-backed payloads under the hood (see `sem/pb/` directory), but frames are transmitted as JSON for WebSocket compatibility.
 

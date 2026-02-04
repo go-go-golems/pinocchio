@@ -100,7 +100,7 @@ return srv.ListenAndServe()
     - active WebSocket connections set
   - `ConvManager.GetOrCreate` — Creates or reuses a conversation, builds engine and sink, subscribes reader
   - `ConvManager.AddConn/RemoveConn` — Manages WebSocket lifetimes and idle-stop of the reader
-  - `StreamCoordinator` derives `seq` from Redis stream IDs when available and includes `stream_id` in SEM frames
+- `StreamCoordinator` derives `seq` from Redis stream IDs when available and includes `stream_id` in SEM frames; if missing it falls back to a time-based monotonic `seq` so timeline ordering remains stable
 
 ### Semantic Conversion
 

@@ -120,6 +120,8 @@ If a timeline store is configured (`--timeline-db` or `--timeline-dsn`), the ser
 GET /timeline?conv_id=<uuid>&since_version=<n>&limit=<n>
 ```
 
+Timeline entities are ordered by `version`, which is derived from `event.seq` in SEM frames (Redis stream ID when present, otherwise a time-based monotonic seq). This keeps user and assistant messages ordered consistently across hydration and streaming.
+
 ## Eviction
 
 The backend evicts idle conversations when no sockets are connected and no runs are queued or active. Tune with:

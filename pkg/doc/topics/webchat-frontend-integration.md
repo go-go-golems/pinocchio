@@ -25,10 +25,10 @@ This guide explains how the frontend integrates with the webchat backend. The sy
 
 ```
 ┌──────────────────────────────────────────────────────┐
-│              Browser (Preact/React + Zustand/Redux)  │
+│              Browser (React + Redux Toolkit)         │
 │                                                      │
 │  ┌──────────────────────────────────────────────┐   │
-│  │            Chat Component                     │   │
+│  │            Chat Widget                        │   │
 │  │  - Manages conv_id lifecycle                 │   │
 │  │  - Dispatches actions for user messages      │   │
 │  │  - Reads entities from store for rendering   │   │
@@ -38,19 +38,19 @@ This guide explains how the frontend integrates with the webchat backend. The sy
 │  ┌───────────────┐    ┌─────────────────────────┐   │
 │  │  wsManager    │    │  HTTP API calls         │   │
 │  │  (WebSocket)  │    │  - POST /chat           │   │
-│  │  - Hydration  │    │  - GET /hydrate         │   │
+│  │  - Hydration  │    │  - GET /timeline        │   │
 │  │  - SEM events │    │                         │   │
 │  └───────┬───────┘    └────────────┬────────────┘   │
 │          │                         │                 │
 │          ↓                         ↓                 │
 │  ┌──────────────────────────────────────────────┐   │
 │  │            Timeline State Store              │   │
-│  │  - byConvId: { [id]: { byId, order } }      │   │
-│  │  - Entities: message, tool_call, status...  │   │
+│  │  - byId + order (single convo)              │   │
+│  │  - Entities: message, tool_call, log...     │   │
 │  └──────────────────────────────────────────────┘   │
 └────────────┬───────────────────────┬────────────────┘
              │ WebSocket             │ HTTP
-             │ /ws?conv_id=...       │ /chat, /hydrate
+             │ /ws?conv_id=...       │ /chat, /timeline
              ↓                       ↓
 ┌──────────────────────────────────────────────────────┐
 │               Backend (Go - pinocchio)               │
@@ -68,18 +68,18 @@ This guide explains how the frontend integrates with the webchat backend. The sy
 The `wsManager` handles WebSocket connection lifecycle:
 
 ```typescript
-// Connect with conversation ID and profile
+// Connect with conversation ID and base prefix
 wsManager.connect({
   convId: 'conv-123',
-  profile: 'default',
+  basePrefix: '',
+  dispatch,
 });
 ```
 
 **Key behaviors:**
 
-- **Hydration gating**: Waits for document ready before opening socket
-- **URL detection**: Uses relative paths or configured backend URL
-- **Logging**: Enable with `?ws_debug=1` or `window.__WS_DEBUG__ = true`
+- **Hydration gating**: Buffers WS events until hydration completes
+- **URL detection**: Uses `window.location` to derive the base prefix
 
 ### SEM Event Format
 
@@ -91,7 +91,8 @@ Backend emits JSON frames over WebSocket:
   "event": {
     "type": "llm.delta",
     "id": "eae401d8-...",
-    "delta": "Hi"
+    "seq": 1707053365123000000,
+    "data": { "cumulative": "Hi" }
   }
 }
 ```
@@ -106,7 +107,7 @@ Frontend parses and routes through the SEM registry to update state.
 | `llm.delta` | Incremental text chunk |
 | `llm.final` | Generation complete |
 | `tool.start` | Tool invocation started |
-| `tool.delta` | Tool progress update |
+| `tool.delta` | Tool update patch |
 | `tool.result` | Tool execution result |
 | `tool.done` | Tool execution complete |
 | `log` | Log message from backend |
@@ -137,41 +138,31 @@ Frontend parses and routes through the SEM registry to update state.
 }
 ```
 
-### Hydrate Timeline
+### Hydrate Timeline (Canonical)
 
-**GET** `/hydrate?conv_id={id}&since_seq={n}`
+**GET** `/timeline?conv_id={id}&since_version={n}&limit={n}`
 
-Returns buffered SEM frames for hydration gating. Used when reconnecting to restore recent events.
-
-### Timeline Snapshots
-
-**GET** `/timeline?conv_id={id}&since_version={n}`
-
-Returns durable timeline entities from SQLite (when enabled with `--timeline-db`).
+Returns durable timeline entities from SQLite (when enabled with `--timeline-db`) or the in-memory store. This is the canonical hydration path used by the frontend on load/reconnect.
 
 ## Timeline State Structure
 
 ```typescript
 {
-  byConvId: {
-    "conv-123": {
-      byId: {
-        "user-1": {
-          id: "user-1",
-          kind: "message",
-          timestamp: 1763501038000,
-          props: { role: "user", content: "hello" }
-        },
-        "asst-1": {
-          id: "asst-1",
-          kind: "message",
-          timestamp: 1763501040615,
-          props: { role: "assistant", content: "Hi", streaming: false }
-        }
-      },
-      order: ["user-1", "asst-1"]
+  byId: {
+    "user-1": {
+      id: "user-1",
+      kind: "message",
+      createdAt: 1763501038000,
+      props: { role: "user", content: "hello" }
+    },
+    "asst-1": {
+      id: "asst-1",
+      kind: "message",
+      createdAt: 1763501040615,
+      props: { role: "assistant", content: "Hi", streaming: false }
     }
-  }
+  },
+  order: ["user-1", "asst-1"]
 }
 ```
 
@@ -179,16 +170,16 @@ Returns durable timeline entities from SQLite (when enabled with `--timeline-db`
 
 | Action | Purpose | When Used |
 |--------|---------|-----------|
-| `addEntity` | Add new entity | User message, llm.start |
-| `upsertEntity` | Create or merge entity | Hydration, tool updates |
-| `appendMessageText` | Streaming text append | llm.delta events |
-| `finalizeMessage` | Stop streaming | llm.final event |
+| `addEntity` | Add new entity | llm.start, tool.start |
+| `upsertEntity` | Create or merge entity | timeline.upsert, tool updates |
+| `rekeyEntity` | Change entity ID | Hydration fixes |
+| `clear` | Reset timeline state | New conversation |
 
 ### Version-Based Merging
 
 Entities track versions for correct hydration merging:
 
-- **Streaming events**: Carry `event.seq` (monotonic stream order); use `version = seq`
+- **Streaming events**: Carry `event.seq` (monotonic stream order)
 - **DB snapshots**: Use the same version values stored by the backend
 - **Merge rule**: Higher version wins; equal versions merge shallowly
 
@@ -197,15 +188,15 @@ Entities track versions for correct hydration merging:
 Conversation IDs persist in the URL for bookmarking and reload:
 
 ```
-/chat              → generates new conv_id, redirects
-/chat/conv-123     → loads existing conversation
+/?conv_id=<uuid>  → loads existing conversation
+/                → generates new conv_id on first send
 ```
 
 **Priority chain:**
 
 1. URL params (primary)
 2. State store (fallback)
-3. Generate new (`conv-${Date.now()}`)
+3. Generate new UUID
 
 ## Key Files
 
@@ -214,14 +205,13 @@ Conversation IDs persist in the URL for bookmarking and reload:
 | `pinocchio/cmd/web-chat/web/src/ws/wsManager.ts` | WebSocket connection manager |
 | `pinocchio/cmd/web-chat/web/src/sem/registry.ts` | SEM event routing |
 | `pinocchio/cmd/web-chat/web/src/store/timelineSlice.ts` | Timeline state management |
-| `pinocchio/cmd/web-chat/web/src/chat/ChatWidget.tsx` | Main chat component |
+| `pinocchio/cmd/web-chat/web/src/webchat/ChatWidget.tsx` | Main chat component |
 
 ## Best Practices
 
 - **One connection per conversation**: Avoid duplicate WebSocket connections
-- **Handle disconnects gracefully**: Reconnect and hydrate missed events
-- **Use hydration on reconnect**: Restore state from `/hydrate` or `/timeline`
-- **Enable debug logs during development**: `?ws_debug=1`
+- **Handle disconnects gracefully**: Reconnect and re-hydrate timeline
+- **Use hydration on reconnect**: Restore state from `/timeline`
 
 ## See Also
 

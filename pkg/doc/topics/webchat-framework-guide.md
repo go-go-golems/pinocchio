@@ -207,7 +207,7 @@ Frontend considerations:
 
 - `GET /ws?conv_id=<id>&profile=<slug>` – join streaming for a conversation
   - If `profile` is omitted, the server falls back to `chat_profile` cookie, else `default`.
-  - SEM envelopes include `seq` and `stream_id`; when Redis stream metadata is present (`xid`/`redis_xid`), `seq` is derived from it for stable ordering.
+  - SEM envelopes include `seq` and `stream_id`; when Redis stream metadata is present (`xid`/`redis_xid`), `seq` is derived from it for stable ordering. If missing, the backend uses a time-based monotonic `seq` so timeline versions stay ordered.
 
 ### 5.4. Start a Chat Run
 
@@ -235,6 +235,12 @@ Response:
 ```json
 { "run_id": "<uuid>", "conv_id": "<uuid>" }
 ```
+
+### 5.5. Timeline Snapshots
+
+- `GET /timeline?conv_id=<id>&since_version=<n>&limit=<n>` – returns durable timeline entities for hydration.
+- Versions are derived from `event.seq` (Redis stream ID when present, time-based monotonic fallback otherwise).
+- Backed by SQLite when configured (`--timeline-db`/`--timeline-dsn`), otherwise in-memory.
 
 ## 6. Engine Composition
 

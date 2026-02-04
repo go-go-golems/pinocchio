@@ -68,7 +68,7 @@ Browser                          Backend (pinocchio)
    │                                   │   │      │             │
    │                                   │   │      ├─> StreamCoordinator
    │                                   │   │      │      │
-   │ SEM frames (llm.delta, etc.)     │   │      │      └─> SEMTranslator
+   │ SEM frames (llm.delta, etc.)     │   │      │      └─> StreamCursor (seq + stream_id)
    │<──────────────────────────────────│   │      │
    │                                   │   │      └─> ConnectionPool
    │                                   │   │             │
@@ -78,9 +78,9 @@ Browser                          Backend (pinocchio)
 ## Key Concepts
 
 - **Conversation**: Per-conversation state, owns engine, stream coordinator, and connection pool
-- **StreamCoordinator**: Bridges event source to WebSocket via callbacks
+- **StreamCoordinator**: Bridges event source to WebSocket via callbacks; stamps `event.seq` for ordering
 - **ConnectionPool**: Manages WebSocket connections, idle timers, broadcast
-- **SEMTranslator**: Converts Geppetto events to SEM frames
+- **TimelineStore**: Durable projection store keyed by `event.seq`
 - **Profile**: Named configuration with default prompt and middlewares
 
 ## Key Files
