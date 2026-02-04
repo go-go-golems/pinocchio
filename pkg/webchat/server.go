@@ -47,6 +47,10 @@ func (s *Server) Run(ctx context.Context) error {
 	srvCtx, srvCancel := context.WithCancel(ctx)
 	defer srvCancel()
 
+	if s.router != nil && s.router.cm != nil {
+		s.router.cm.StartEvictionLoop(srvCtx)
+	}
+
 	eg.Go(func() error { return s.router.router.Run(srvCtx) })
 
 	eg.Go(func() error {

@@ -57,6 +57,8 @@ func NewCommand() (*Command, error) {
 			parameters.NewParameterDefinition("addr", parameters.ParameterTypeString, parameters.WithDefault(":8080"), parameters.WithHelp("HTTP listen address")),
 			parameters.NewParameterDefinition("enable-agentmode", parameters.ParameterTypeBool, parameters.WithDefault(false), parameters.WithHelp("Enable agent mode middleware")),
 			parameters.NewParameterDefinition("idle-timeout-seconds", parameters.ParameterTypeInteger, parameters.WithDefault(60), parameters.WithHelp("Stop per-conversation reader after N seconds with no sockets (0=disabled)")),
+			parameters.NewParameterDefinition("evict-idle-seconds", parameters.ParameterTypeInteger, parameters.WithDefault(300), parameters.WithHelp("Evict conversations after N seconds idle (0=disabled)")),
+			parameters.NewParameterDefinition("evict-interval-seconds", parameters.ParameterTypeInteger, parameters.WithDefault(60), parameters.WithHelp("Sweep idle conversations every N seconds (0=disabled)")),
 			parameters.NewParameterDefinition("root", parameters.ParameterTypeString, parameters.WithDefault("/"), parameters.WithHelp("Serve the chat UI under a given URL root (e.g., /chat)")),
 			parameters.NewParameterDefinition("emit-planning-stubs", parameters.ParameterTypeBool, parameters.WithDefault(false), parameters.WithHelp("Emit stub planning/thinking-mode semantic events (for UI demos); disabled by default")),
 			parameters.NewParameterDefinition("timeline-dsn", parameters.ParameterTypeString, parameters.WithDefault(""), parameters.WithHelp("SQLite DSN for durable timeline snapshots (enables GET /timeline); preferred over timeline-db")),

@@ -120,6 +120,13 @@ If a timeline store is configured (`--timeline-db` or `--timeline-dsn`), the ser
 GET /timeline?conv_id=<uuid>&since_version=<n>&limit=<n>
 ```
 
+## Eviction
+
+The backend evicts idle conversations when no sockets are connected and no runs are queued or active. Tune with:
+
+- `--evict-idle-seconds` (0 disables eviction)
+- `--evict-interval-seconds` (0 disables eviction)
+
 The example UI calls `/timeline` on load to hydrate the timeline before handling WS frames.
 
 ## Base Prefix (mounting under a root)

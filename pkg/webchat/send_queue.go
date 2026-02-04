@@ -98,6 +98,7 @@ func (c *Conversation) PrepareRun(idempotencyKey, profileSlug string, overrides 
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	c.touchLocked(time.Now())
 	c.ensureQueueInitLocked()
 	if rec, ok := c.getRecordLocked(idempotencyKey); ok && rec != nil && rec.Response != nil {
 		status := strings.ToLower(strings.TrimSpace(rec.Status))
@@ -160,6 +161,7 @@ func (c *Conversation) ClaimNextQueued() (queuedChat, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	c.touchLocked(time.Now())
 	if c.isBusyLocked() {
 		return queuedChat{}, false
 	}

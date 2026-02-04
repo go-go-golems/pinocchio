@@ -146,6 +146,12 @@ Parameters (via layer `redis`):
 - `redis-group` (string) — Consumer group (default `chat-ui`)
 - `redis-consumer` (string) — Consumer name (default `ui-1`)
 
+Eviction controls (flags):
+
+- `idle-timeout-seconds` — stop per-conversation reader after N seconds with no sockets
+- `evict-idle-seconds` — evict idle conversations after N seconds (0 disables)
+- `evict-interval-seconds` — sweep idle conversations every N seconds (0 disables)
+
 ## Minimal End-to-End Run (Pseudocode)
 
 ```go

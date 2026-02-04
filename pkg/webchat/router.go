@@ -35,8 +35,10 @@ import (
 
 // RouterSettings are exposed via parameter layers (addr, agent, idle timeout, etc.).
 type RouterSettings struct {
-	Addr               string `glazed.parameter:"addr"`
-	IdleTimeoutSeconds int    `glazed.parameter:"idle-timeout-seconds"`
+	Addr                 string `glazed.parameter:"addr"`
+	IdleTimeoutSeconds   int    `glazed.parameter:"idle-timeout-seconds"`
+	EvictIdleSeconds     int    `glazed.parameter:"evict-idle-seconds"`
+	EvictIntervalSeconds int    `glazed.parameter:"evict-interval-seconds"`
 	// Durable timeline projection store configuration (optional).
 	// Use either:
 	// - timeline-dsn (preferred; full sqlite DSN)
@@ -111,7 +113,13 @@ func NewRouter(ctx context.Context, parsed *layers.ParsedLayers, staticFS fs.FS)
 	}
 	if r.cm != nil {
 		r.cm.SetTimelineStore(r.timelineStore)
+		r.cm.SetIdleTimeoutSeconds(s.IdleTimeoutSeconds)
+		r.cm.SetEvictionConfig(
+			time.Duration(s.EvictIdleSeconds)*time.Second,
+			time.Duration(s.EvictIntervalSeconds)*time.Second,
+		)
 	}
+	r.idleTimeoutSec = s.IdleTimeoutSeconds
 
 	r.registerHTTPHandlers()
 	return r, nil
@@ -168,6 +176,10 @@ func (r *Router) BuildHTTPServer() (*http.Server, error) {
 	r.idleTimeoutSec = s.IdleTimeoutSeconds
 	if r.cm != nil {
 		r.cm.SetIdleTimeoutSeconds(s.IdleTimeoutSeconds)
+		r.cm.SetEvictionConfig(
+			time.Duration(s.EvictIdleSeconds)*time.Second,
+			time.Duration(s.EvictIntervalSeconds)*time.Second,
+		)
 	}
 	return &http.Server{
 		Addr:              s.Addr,
@@ -184,6 +196,9 @@ func (r *Router) BuildHTTPServer() (*http.Server, error) {
 // and you need the event router running independently.
 func (r *Router) RunEventRouter(ctx context.Context) error {
 	logger := log.With().Str("component", "webchat").Logger()
+	if r.cm != nil {
+		r.cm.StartEvictionLoop(ctx)
+	}
 	logger.Info().Msg("starting event router loop")
 	err := r.router.Run(ctx)
 	if err != nil {
@@ -960,6 +975,7 @@ func (r *Router) finishRun(conv *Conversation, idempotencyKey string, inferenceI
 	if conv.runningKey == idempotencyKey {
 		conv.runningKey = ""
 	}
+	conv.touchLocked(time.Now())
 	conv.ensureQueueInitLocked()
 	if rec, ok := conv.getRecordLocked(idempotencyKey); ok && rec != nil {
 		if err != nil {

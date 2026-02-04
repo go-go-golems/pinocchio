@@ -44,6 +44,8 @@ type Conversation struct {
 	queue      []queuedChat
 	requests   map[string]*chatRequestRecord
 
+	lastActivity time.Time
+
 	semBuf *semFrameBuffer
 
 	// Durable "actual hydration" projection (optional; enabled when Router has a TimelineStore).
@@ -65,6 +67,10 @@ type ConvManager struct {
 	buildConfig     func(profileSlug string, overrides map[string]any) (EngineConfig, error)
 	buildFromConfig func(convID string, cfg EngineConfig) (engine.Engine, events.EventSink, error)
 	buildSubscriber func(convID string) (message.Subscriber, bool, error)
+
+	evictIdle     time.Duration
+	evictInterval time.Duration
+	evictRunning  bool
 }
 
 // ConvManagerOptions configures the conversation manager dependencies.
@@ -72,6 +78,8 @@ type ConvManagerOptions struct {
 	BaseCtx        context.Context
 	IdleTimeoutSec int
 	StepController *toolloop.StepController
+	EvictIdle      time.Duration
+	EvictInterval  time.Duration
 
 	TimelineStore      TimelineStore
 	TimelineUpsertHook func(*Conversation) func(entity *timelinepb.TimelineEntityV1, version uint64)
@@ -92,6 +100,8 @@ func NewConvManager(opts ConvManagerOptions) *ConvManager {
 		buildConfig:        opts.BuildConfig,
 		buildFromConfig:    opts.BuildFromConfig,
 		buildSubscriber:    opts.BuildSubscriber,
+		evictIdle:          opts.EvictIdle,
+		evictInterval:      opts.EvictInterval,
 	}
 }
 
@@ -124,6 +134,13 @@ func (cm *ConvManager) GetConversation(convID string) (*Conversation, bool) {
 	return conv, ok
 }
 
+func (c *Conversation) touchLocked(now time.Time) {
+	if c == nil {
+		return
+	}
+	c.lastActivity = now
+}
+
 // topicForConv computes the event topic for a conversation.
 func topicForConv(convID string) string { return "chat:" + convID }
 
@@ -141,12 +158,14 @@ func (cm *ConvManager) GetOrCreate(convID, profileSlug string, overrides map[str
 		return nil, err
 	}
 	newSig := cfg.Signature()
+	now := time.Now()
 
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
 	if c, ok := cm.conns[convID]; ok {
 		c.mu.Lock()
 		c.ensureQueueInitLocked()
+		c.touchLocked(now)
 		if c.semBuf == nil {
 			c.semBuf = newSemFrameBuffer(1000)
 		}
@@ -234,6 +253,7 @@ func (cm *ConvManager) GetOrCreate(convID, profileSlug string, overrides map[str
 		EngConfigSig: newSig,
 		requests:     map[string]*chatRequestRecord{},
 		semBuf:       newSemFrameBuffer(1000),
+		lastActivity: now,
 	}
 	if cm.timelineStore != nil {
 		hook := cm.timelineUpsertHook
@@ -326,6 +346,9 @@ func (cm *ConvManager) AddConn(conv *Conversation, c *websocket.Conn) {
 	if conv == nil || c == nil {
 		return
 	}
+	conv.mu.Lock()
+	conv.touchLocked(time.Now())
+	conv.mu.Unlock()
 	if conv.pool != nil {
 		conv.pool.Add(c)
 	}
@@ -345,6 +368,9 @@ func (cm *ConvManager) RemoveConn(conv *Conversation, c *websocket.Conn) {
 	if conv == nil || c == nil {
 		return
 	}
+	conv.mu.Lock()
+	conv.touchLocked(time.Now())
+	conv.mu.Unlock()
 	if conv.pool != nil {
 		conv.pool.Remove(c)
 		return
