@@ -461,6 +461,13 @@ func (r *Router) registerAPIHandlers(mux *http.ServeMux) {
 
 	// websocket join: /ws?conv_id=...&profile=slug (falls back to chat_profile cookie)
 	mux.HandleFunc("/ws", func(w http.ResponseWriter, r0 *http.Request) {
+		queryConv := strings.TrimSpace(r0.URL.Query().Get("conv_id"))
+		queryProfile := strings.TrimSpace(r0.URL.Query().Get("profile"))
+		logger.Debug().
+			Str("conv_id_query", queryConv).
+			Str("profile_query", queryProfile).
+			Str("remote", r0.RemoteAddr).
+			Msg("ws request query")
 		conn, err := r.upgrader.Upgrade(w, r0, nil)
 		if err != nil {
 			logger.Error().Err(err).Msg("websocket upgrade failed")
@@ -490,6 +497,10 @@ func (r *Router) registerAPIHandlers(mux *http.ServeMux) {
 			Str("conv_id", convID).
 			Str("profile", profileSlug).
 			Logger()
+		wsLog.Debug().
+			Str("conv_id_query", queryConv).
+			Str("profile_query", queryProfile).
+			Msg("ws resolved request")
 		wsLog.Info().Msg("ws connect request")
 		wsLog.Info().Msg("ws joining conversation")
 		conv, err := r.cm.GetOrCreate(convID, profileSlug, nil)
@@ -515,6 +526,7 @@ func (r *Router) registerAPIHandlers(mux *http.ServeMux) {
 				},
 			}
 			if b, err := json.Marshal(hello); err == nil {
+				wsLog.Debug().Msg("ws sending hello")
 				conv.pool.SendToOne(conn, b)
 			}
 		}
@@ -559,6 +571,7 @@ func (r *Router) registerAPIHandlers(mux *http.ServeMux) {
 							},
 						}
 						if b, err := json.Marshal(pong); err == nil {
+							wsLog.Debug().Msg("ws sending pong")
 							conv.pool.SendToOne(conn, b)
 						}
 					}
@@ -654,6 +667,11 @@ func (r *Router) registerAPIHandlers(mux *http.ServeMux) {
 		profileSlug := input.ProfileSlug
 		chatReqLog := logger.With().Str("conv_id", convID).Str("profile", profileSlug).Logger()
 		chatReqLog.Info().Int("prompt_len", len(body.Prompt)).Msg("/chat received")
+		if input.Overrides != nil {
+			chatReqLog.Debug().Interface("overrides", input.Overrides).Msg("/chat overrides")
+		} else {
+			chatReqLog.Debug().Msg("/chat overrides empty")
+		}
 
 		conv, err := r.cm.GetOrCreate(convID, profileSlug, input.Overrides)
 		if err != nil {
