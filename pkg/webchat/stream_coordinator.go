@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/rs/zerolog/log"
@@ -121,21 +122,7 @@ func (sc *StreamCoordinator) consume(ctx context.Context) {
 		}
 
 		streamID := extractStreamID(msg)
-		seq := sc.seq.Add(1)
-		if streamID != "" {
-			if derived, ok := deriveSeqFromStreamID(streamID); ok {
-				seq = derived
-				for {
-					current := sc.seq.Load()
-					if derived <= current {
-						break
-					}
-					if sc.seq.CompareAndSwap(current, derived) {
-						break
-					}
-				}
-			}
-		}
+		seq := sc.nextSeq(streamID)
 
 		cur := StreamCursor{
 			StreamID: streamID,
@@ -160,6 +147,34 @@ func (sc *StreamCoordinator) consume(ctx context.Context) {
 	sc.running = false
 	sc.cancel = nil
 	sc.mu.Unlock()
+}
+
+func (sc *StreamCoordinator) nextSeq(streamID string) uint64 {
+	if streamID != "" {
+		if derived, ok := deriveSeqFromStreamID(streamID); ok {
+			for {
+				current := sc.seq.Load()
+				next := derived
+				if next <= current {
+					next = current + 1
+				}
+				if sc.seq.CompareAndSwap(current, next) {
+					return next
+				}
+			}
+		}
+	}
+	for {
+		current := sc.seq.Load()
+		now := uint64(time.Now().UnixMilli()) * 1_000_000
+		next := now
+		if next <= current {
+			next = current + 1
+		}
+		if sc.seq.CompareAndSwap(current, next) {
+			return next
+		}
+	}
 }
 
 func extractStreamID(msg *message.Message) string {
