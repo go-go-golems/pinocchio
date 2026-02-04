@@ -113,7 +113,7 @@ conv.stream = NewStreamCoordinator(conv.ID, subscriber, translator, onEvent, onF
 
 ### Purpose
 
-`ConnectionPool` centralizes WebSocket bookkeeping for a single conversation. It owns add/remove/broadcast semantics, handles connection errors, and raises idle callbacks so the router can stop `StreamCoordinator` instances when no clients remain.
+`ConnectionPool` centralizes WebSocket bookkeeping for a single conversation. It owns add/remove/broadcast semantics, fans out frames through per-connection writers, and raises idle callbacks so the router can stop `StreamCoordinator` instances when no clients remain.
 
 ### Constructor
 
@@ -131,21 +131,23 @@ Creates a pool for the conversation ID with an idle timeout and callback for whe
 
 | Method | Description |
 |--------|-------------|
-| `Add(conn *websocket.Conn)` | Registers a connection and cancels any pending idle timer. |
-| `Remove(conn *websocket.Conn)` | Removes the socket, schedules idle timer if empty, closes connection. Safe to call multiple times. |
-| `Broadcast(data []byte)` | Sends frame to every connection; write errors cause removal. |
-| `SendToOne(conn *websocket.Conn, data []byte)` | Writes to a single connection. Logs and removes on failure. |
+| `Add(conn wsConn)` | Registers a connection and cancels any pending idle timer. |
+| `Remove(conn wsConn)` | Removes the socket, schedules idle timer if empty, closes connection. Safe to call multiple times. |
+| `Broadcast(data []byte)` | Enqueues frames to every connection; full buffers cause drop. |
+| `SendToOne(conn wsConn, data []byte)` | Enqueues to a single connection; full buffers cause drop. |
 | `Count() int` | Number of active sockets. |
 | `IsEmpty() bool` | Whether the pool has zero connections. |
 | `CloseAll()` | Closes every socket, clears set, cancels idle timer. |
 | `CancelIdleTimer()` | Stops pending idle timer without closing connections. |
+
+`wsConn` is any connection implementing `WriteMessage`, `Close`, and `SetWriteDeadline` (e.g., `*websocket.Conn`).
 
 ### Idle Timer Behavior
 
 - Timer only runs when **all** connections removed and `idleTimeout > 0`.
 - Callback runs outside the mutex to avoid deadlocks.
 - `Add` cancels the timer immediately.
-- `Broadcast` re-checks emptiness after writes.
+- Empty detection is driven by `Add`/`Remove`, not by broadcasts.
 
 **Typical `onIdle` implementation:**
 
@@ -159,8 +161,8 @@ pool := NewConnectionPool(conv.ID, 30*time.Second, func() {
 
 ### Error Handling
 
-- `Broadcast` logs warning with `conv_id` on `WriteMessage` failure, then closes/removes.
-- Passing nil to `Remove` simply closes it.
+- `Broadcast` logs warning with `conv_id` when the send buffer is full, then closes/removes.
+- Writer goroutines log and drop connections on `WriteMessage` failure.
 - Idle callbacks should be idempotent.
 
 ## Related Components

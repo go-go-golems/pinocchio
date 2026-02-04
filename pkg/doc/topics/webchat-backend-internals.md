@@ -125,14 +125,14 @@ Steady state: 3 long-lived goroutines per conversation.
 
 ### Locking Strategy
 
-`ConnectionPool` uses a single mutex to protect all state. This works because connection operations are infrequent and critical sections short.
+`ConnectionPool` uses a mutex to protect the connection map and idle timer, while writes happen in per-connection goroutines. Broadcasts are non-blocking and enqueue to buffered channels.
 
 **Lock Scope:**
 
 - `Add()`: Locks to add connection and cancel timer
 - `Remove()`: Locks to remove connection and schedule timer
-- `Broadcast()`: Locks to iterate connections, releases during writes
-- `SendToOne()`: Locks to verify connection exists, releases during write
+- `Broadcast()`: Locks to snapshot clients, then enqueues without blocking
+- `SendToOne()`: Locks to locate client, then enqueues without blocking
 
 ### Idle Timer Implementation
 
@@ -148,10 +148,10 @@ The callback runs outside the mutex to prevent deadlocks.
 
 ### Error Handling
 
-`Broadcast()` and `SendToOne()` handle write failures by removing dead connections:
+`Broadcast()` and `SendToOne()` handle backpressure and write failures by removing connections:
 
-- **Write error**: Log warning, close connection, remove from pool
-- **Nil connection**: No-op
+- **Send buffer full**: Log warning, close connection, remove from pool
+- **Write error** (writer goroutine): Log warning, close connection, remove from pool
 - **Empty payload**: Ignored
 
 Dead connections are automatically pruned; clients can reconnect.

@@ -8,47 +8,99 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+const (
+	defaultSendBuffer   = 64
+	defaultWriteTimeout = 5 * time.Second
+)
+
+type wsConn interface {
+	WriteMessage(messageType int, data []byte) error
+	Close() error
+	SetWriteDeadline(t time.Time) error
+}
+
+type poolClient struct {
+	conn      wsConn
+	send      chan []byte
+	closeOnce sync.Once
+}
+
+func (c *poolClient) TrySend(data []byte) bool {
+	select {
+	case c.send <- data:
+		return true
+	default:
+		return false
+	}
+}
+
+func (c *poolClient) Close() {
+	if c == nil {
+		return
+	}
+	c.closeOnce.Do(func() {
+		close(c.send)
+		if c.conn != nil {
+			_ = c.conn.Close()
+		}
+	})
+}
+
 // ConnectionPool manages websocket connections for a conversation.
 // It centralizes broadcasting, error handling, and idle detection so higher-level
 // router logic stays small.
 type ConnectionPool struct {
-	convID      string
-	mu          sync.Mutex
-	conns       map[*websocket.Conn]struct{}
-	idleTimer   *time.Timer
-	idleTimeout time.Duration
-	onIdle      func()
+	convID       string
+	mu           sync.Mutex
+	conns        map[wsConn]*poolClient
+	idleTimer    *time.Timer
+	idleTimeout  time.Duration
+	onIdle       func()
+	sendBuffer   int
+	writeTimeout time.Duration
 }
 
 func NewConnectionPool(convID string, idleTimeout time.Duration, onIdle func()) *ConnectionPool {
 	return &ConnectionPool{
-		convID:      convID,
-		conns:       map[*websocket.Conn]struct{}{},
-		idleTimeout: idleTimeout,
-		onIdle:      onIdle,
+		convID:       convID,
+		conns:        map[wsConn]*poolClient{},
+		idleTimeout:  idleTimeout,
+		onIdle:       onIdle,
+		sendBuffer:   defaultSendBuffer,
+		writeTimeout: defaultWriteTimeout,
 	}
 }
 
-func (cp *ConnectionPool) Add(conn *websocket.Conn) {
+func (cp *ConnectionPool) Add(conn wsConn) {
 	if cp == nil || conn == nil {
 		return
 	}
 	cp.mu.Lock()
-	cp.conns[conn] = struct{}{}
+	if _, ok := cp.conns[conn]; ok {
+		cp.mu.Unlock()
+		return
+	}
+	client := &poolClient{conn: conn, send: make(chan []byte, cp.sendBuffer)}
+	cp.conns[conn] = client
 	cp.stopIdleTimerLocked()
 	cp.mu.Unlock()
+
+	go cp.writer(client)
 }
 
-func (cp *ConnectionPool) Remove(conn *websocket.Conn) {
+func (cp *ConnectionPool) Remove(conn wsConn) {
 	if cp == nil || conn == nil {
-		_ = closeConn(conn)
 		return
 	}
 	cp.mu.Lock()
+	client := cp.conns[conn]
 	delete(cp.conns, conn)
 	cp.scheduleIdleTimerLocked()
 	cp.mu.Unlock()
-	_ = closeConn(conn)
+
+	if client != nil {
+		client.Close()
+	}
 }
 
 func (cp *ConnectionPool) Broadcast(data []byte) {
@@ -56,30 +108,36 @@ func (cp *ConnectionPool) Broadcast(data []byte) {
 		return
 	}
 	cp.mu.Lock()
-	for conn := range cp.conns {
-		if err := conn.WriteMessage(websocket.TextMessage, data); err != nil {
-			log.Warn().Err(err).Str("component", "webchat").Str("conv_id", cp.convID).Msg("ws broadcast failed, dropping connection")
-			delete(cp.conns, conn)
-			_ = closeConn(conn)
+	clients := make([]*poolClient, 0, len(cp.conns))
+	for _, client := range cp.conns {
+		clients = append(clients, client)
+	}
+	cp.mu.Unlock()
+
+	for _, client := range clients {
+		if client == nil {
+			continue
+		}
+		if !client.TrySend(data) {
+			log.Warn().Str("component", "webchat").Str("conv_id", cp.convID).Msg("ws send buffer full, dropping connection")
+			cp.dropClient(client)
 		}
 	}
-	cp.scheduleIdleTimerLocked()
-	cp.mu.Unlock()
 }
 
-func (cp *ConnectionPool) SendToOne(conn *websocket.Conn, data []byte) {
+func (cp *ConnectionPool) SendToOne(conn wsConn, data []byte) {
 	if cp == nil || conn == nil || len(data) == 0 {
 		return
 	}
 	cp.mu.Lock()
-	defer cp.mu.Unlock()
-	if _, ok := cp.conns[conn]; !ok {
+	client := cp.conns[conn]
+	cp.mu.Unlock()
+	if client == nil {
 		return
 	}
-	if err := conn.WriteMessage(websocket.TextMessage, data); err != nil {
-		log.Warn().Err(err).Str("component", "webchat").Str("conv_id", cp.convID).Msg("ws send failed, dropping connection")
-		delete(cp.conns, conn)
-		_ = closeConn(conn)
+	if !client.TrySend(data) {
+		log.Warn().Str("component", "webchat").Str("conv_id", cp.convID).Msg("ws send buffer full, dropping connection")
+		cp.dropClient(client)
 	}
 }
 
@@ -101,12 +159,19 @@ func (cp *ConnectionPool) CloseAll() {
 		return
 	}
 	cp.mu.Lock()
-	for conn := range cp.conns {
-		_ = closeConn(conn)
-		delete(cp.conns, conn)
+	clients := make([]*poolClient, 0, len(cp.conns))
+	for _, client := range cp.conns {
+		clients = append(clients, client)
 	}
+	cp.conns = map[wsConn]*poolClient{}
 	cp.stopIdleTimerLocked()
 	cp.mu.Unlock()
+
+	for _, client := range clients {
+		if client != nil {
+			client.Close()
+		}
+	}
 }
 
 func (cp *ConnectionPool) CancelIdleTimer() {
@@ -116,6 +181,38 @@ func (cp *ConnectionPool) CancelIdleTimer() {
 	cp.mu.Lock()
 	cp.stopIdleTimerLocked()
 	cp.mu.Unlock()
+}
+
+func (cp *ConnectionPool) writer(client *poolClient) {
+	if cp == nil || client == nil {
+		return
+	}
+	for msg := range client.send {
+		if client.conn == nil {
+			continue
+		}
+		if cp.writeTimeout > 0 {
+			_ = client.conn.SetWriteDeadline(time.Now().Add(cp.writeTimeout))
+		}
+		if err := client.conn.WriteMessage(websocket.TextMessage, msg); err != nil {
+			log.Warn().Err(err).Str("component", "webchat").Str("conv_id", cp.convID).Msg("ws write failed, dropping connection")
+			cp.dropClient(client)
+			return
+		}
+	}
+}
+
+func (cp *ConnectionPool) dropClient(client *poolClient) {
+	if cp == nil || client == nil {
+		return
+	}
+	cp.mu.Lock()
+	if _, ok := cp.conns[client.conn]; ok {
+		delete(cp.conns, client.conn)
+		cp.scheduleIdleTimerLocked()
+	}
+	cp.mu.Unlock()
+	client.Close()
 }
 
 func (cp *ConnectionPool) stopIdleTimerLocked() {
@@ -148,11 +245,4 @@ func (cp *ConnectionPool) triggerIdle() {
 	if callback != nil {
 		callback()
 	}
-}
-
-func closeConn(conn *websocket.Conn) error {
-	if conn == nil {
-		return nil
-	}
-	return conn.Close()
 }
