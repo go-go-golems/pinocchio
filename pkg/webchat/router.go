@@ -65,9 +65,16 @@ func NewRouter(ctx context.Context, parsed *layers.ParsedLayers, staticFS fs.FS)
 		toolFactories: map[string]ToolFactory{},
 		profiles:      newInMemoryProfileRegistry(),
 		upgrader:      websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }},
-		cm:            &ConvManager{conns: map[string]*Conversation{}},
 		stepCtrl:      toolloop.NewStepController(),
 	}
+	r.cm = NewConvManager(ConvManagerOptions{
+		BaseCtx:            ctx,
+		StepController:     r.stepCtrl,
+		BuildConfig:        r.BuildConfig,
+		BuildFromConfig:    r.BuildFromConfig,
+		BuildSubscriber:    r.buildSubscriber,
+		TimelineUpsertHook: r.timelineUpsertHook,
+	})
 	r.engineFromReqBuilder = NewDefaultEngineFromReqBuilder(r.profiles, r.cm)
 	// set redis flags for ws reader
 	if rs.Enabled {
@@ -102,14 +109,23 @@ func NewRouter(ctx context.Context, parsed *layers.ParsedLayers, staticFS fs.FS)
 	} else {
 		r.timelineStore = NewInMemoryTimelineStore(s.TimelineInMemoryMaxEntities)
 	}
+	if r.cm != nil {
+		r.cm.SetTimelineStore(r.timelineStore)
+	}
 
 	r.registerHTTPHandlers()
 	return r, nil
 }
 
 // Allow setting optional shared DB for middlewares that need it (e.g., sqlite tool)
-func (r *Router) WithDB(db *sql.DB) *Router                 { r.db = db; return r }
-func (r *Router) WithTimelineStore(s TimelineStore) *Router { r.timelineStore = s; return r }
+func (r *Router) WithDB(db *sql.DB) *Router { r.db = db; return r }
+func (r *Router) WithTimelineStore(s TimelineStore) *Router {
+	r.timelineStore = s
+	if r.cm != nil {
+		r.cm.SetTimelineStore(s)
+	}
+	return r
+}
 
 // RegisterMiddleware adds a named middleware factory to the router.
 func (r *Router) RegisterMiddleware(name string, f MiddlewareFactory) { r.mwFactories[name] = f }
@@ -150,6 +166,9 @@ func (r *Router) BuildHTTPServer() (*http.Server, error) {
 		return nil, err
 	}
 	r.idleTimeoutSec = s.IdleTimeoutSeconds
+	if r.cm != nil {
+		r.cm.SetIdleTimeoutSeconds(s.IdleTimeoutSeconds)
+	}
 	return &http.Server{
 		Addr:              s.Addr,
 		Handler:           r.mux,
@@ -333,11 +352,9 @@ func (r *Router) registerAPIHandlers(mux *http.ServeMux) {
 		sessionID := strings.TrimSpace(body.SessionID)
 		convID := strings.TrimSpace(body.ConvID)
 		if sessionID == "" && convID != "" {
-			r.cm.mu.Lock()
-			if c, ok := r.cm.conns[convID]; ok && c != nil {
+			if c, ok := r.cm.GetConversation(convID); ok && c != nil {
 				sessionID = c.RunID
 			}
-			r.cm.mu.Unlock()
 		}
 		if sessionID == "" {
 			http.Error(w, "missing session_id (or unknown conv_id)", http.StatusBadRequest)
@@ -371,11 +388,9 @@ func (r *Router) registerAPIHandlers(mux *http.ServeMux) {
 		sessionID := strings.TrimSpace(body.SessionID)
 		convID := strings.TrimSpace(body.ConvID)
 		if sessionID == "" && convID != "" {
-			r.cm.mu.Lock()
-			if c, ok := r.cm.conns[convID]; ok && c != nil {
+			if c, ok := r.cm.GetConversation(convID); ok && c != nil {
 				sessionID = c.RunID
 			}
-			r.cm.mu.Unlock()
 		}
 		if sessionID == "" {
 			http.Error(w, "missing session_id (or unknown conv_id)", http.StatusBadRequest)
@@ -462,14 +477,14 @@ func (r *Router) registerAPIHandlers(mux *http.ServeMux) {
 			Logger()
 		wsLog.Info().Msg("ws connect request")
 		wsLog.Info().Msg("ws joining conversation")
-		conv, err := r.getOrCreateConv(convID, profileSlug, nil)
+		conv, err := r.cm.GetOrCreate(convID, profileSlug, nil)
 		if err != nil {
 			wsLog.Error().Err(err).Msg("failed to join conversation")
 			_ = conn.WriteMessage(websocket.TextMessage, []byte(`{"error":"failed to join conversation"}`))
 			_ = conn.Close()
 			return
 		}
-		r.addConn(conv, conn)
+		r.cm.AddConn(conv, conn)
 		wsLog.Info().Msg("ws connected")
 
 		// Send a greeting frame to the newly connected client (mirrors moments/go-go-mento behavior).
@@ -490,7 +505,7 @@ func (r *Router) registerAPIHandlers(mux *http.ServeMux) {
 		}
 
 		go func() {
-			defer r.removeConn(conv, conn)
+			defer r.cm.RemoveConn(conv, conn)
 			defer wsLog.Info().Msg("ws disconnected")
 			for {
 				msgType, data, err := conn.ReadMessage()
@@ -625,7 +640,7 @@ func (r *Router) registerAPIHandlers(mux *http.ServeMux) {
 		chatReqLog := logger.With().Str("conv_id", convID).Str("profile", profileSlug).Logger()
 		chatReqLog.Info().Int("prompt_len", len(body.Prompt)).Msg("/chat received")
 
-		conv, err := r.getOrCreateConv(convID, profileSlug, input.Overrides)
+		conv, err := r.cm.GetOrCreate(convID, profileSlug, input.Overrides)
 		if err != nil {
 			chatReqLog.Error().Err(err).Msg("failed to create conversation")
 			http.Error(w, "failed to create conversation", http.StatusInternalServerError)

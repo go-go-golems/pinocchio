@@ -15,8 +15,10 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/events"
 	"github.com/go-go-golems/geppetto/pkg/inference/engine"
 	"github.com/go-go-golems/geppetto/pkg/inference/session"
+	"github.com/go-go-golems/geppetto/pkg/inference/toolloop"
 	"github.com/go-go-golems/geppetto/pkg/inference/toolloop/enginebuilder"
 	"github.com/go-go-golems/geppetto/pkg/turns"
+	timelinepb "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/timeline"
 )
 
 // Conversation holds per-conversation state and streaming attachments.
@@ -48,10 +50,67 @@ type Conversation struct {
 	timelineProj *TimelineProjector
 }
 
-// ConvManager stores all live conversations.
+// ConvManager stores all live conversations and centralizes lifecycle wiring.
 type ConvManager struct {
 	mu    sync.Mutex
 	conns map[string]*Conversation
+
+	baseCtx        context.Context
+	idleTimeoutSec int
+	stepCtrl       *toolloop.StepController
+
+	timelineStore      TimelineStore
+	timelineUpsertHook func(*Conversation) func(entity *timelinepb.TimelineEntityV1, version uint64)
+
+	buildConfig     func(profileSlug string, overrides map[string]any) (EngineConfig, error)
+	buildFromConfig func(convID string, cfg EngineConfig) (engine.Engine, events.EventSink, error)
+	buildSubscriber func(convID string) (message.Subscriber, bool, error)
+}
+
+// ConvManagerOptions configures the conversation manager dependencies.
+type ConvManagerOptions struct {
+	BaseCtx        context.Context
+	IdleTimeoutSec int
+	StepController *toolloop.StepController
+
+	TimelineStore      TimelineStore
+	TimelineUpsertHook func(*Conversation) func(entity *timelinepb.TimelineEntityV1, version uint64)
+
+	BuildConfig     func(profileSlug string, overrides map[string]any) (EngineConfig, error)
+	BuildFromConfig func(convID string, cfg EngineConfig) (engine.Engine, events.EventSink, error)
+	BuildSubscriber func(convID string) (message.Subscriber, bool, error)
+}
+
+func NewConvManager(opts ConvManagerOptions) *ConvManager {
+	return &ConvManager{
+		conns:              map[string]*Conversation{},
+		baseCtx:            opts.BaseCtx,
+		idleTimeoutSec:     opts.IdleTimeoutSec,
+		stepCtrl:           opts.StepController,
+		timelineStore:      opts.TimelineStore,
+		timelineUpsertHook: opts.TimelineUpsertHook,
+		buildConfig:        opts.BuildConfig,
+		buildFromConfig:    opts.BuildFromConfig,
+		buildSubscriber:    opts.BuildSubscriber,
+	}
+}
+
+func (cm *ConvManager) SetTimelineStore(store TimelineStore) {
+	if cm == nil {
+		return
+	}
+	cm.mu.Lock()
+	cm.timelineStore = store
+	cm.mu.Unlock()
+}
+
+func (cm *ConvManager) SetIdleTimeoutSeconds(sec int) {
+	if cm == nil {
+		return
+	}
+	cm.mu.Lock()
+	cm.idleTimeoutSec = sec
+	cm.mu.Unlock()
 }
 
 // GetConversation retrieves a conversation by ID (thread-safe).
@@ -68,28 +127,36 @@ func (cm *ConvManager) GetConversation(convID string) (*Conversation, bool) {
 // topicForConv computes the event topic for a conversation.
 func topicForConv(convID string) string { return "chat:" + convID }
 
-// getOrCreateConv creates or reuses a conversation based on engine config signature changes.
-// It centralizes engine/sink/subscriber composition by delegating to the Router EngineBuilder methods.
-func (r *Router) getOrCreateConv(convID, profileSlug string, overrides map[string]any) (*Conversation, error) {
-	if r == nil {
-		return nil, errors.New("router is nil")
+// GetOrCreate creates or reuses a conversation based on engine config signature changes.
+// It centralizes engine/sink/subscriber composition through injected builder hooks.
+func (cm *ConvManager) GetOrCreate(convID, profileSlug string, overrides map[string]any) (*Conversation, error) {
+	if cm == nil {
+		return nil, errors.New("conversation manager is nil")
 	}
-	cfg, err := r.BuildConfig(profileSlug, overrides)
+	if cm.buildConfig == nil || cm.buildFromConfig == nil || cm.buildSubscriber == nil {
+		return nil, errors.New("conversation manager missing dependencies")
+	}
+	cfg, err := cm.buildConfig(profileSlug, overrides)
 	if err != nil {
 		return nil, err
 	}
 	newSig := cfg.Signature()
 
-	r.cm.mu.Lock()
-	defer r.cm.mu.Unlock()
-	if c, ok := r.cm.conns[convID]; ok {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+	if c, ok := cm.conns[convID]; ok {
 		c.mu.Lock()
 		c.ensureQueueInitLocked()
 		if c.semBuf == nil {
 			c.semBuf = newSemFrameBuffer(1000)
 		}
-		if c.timelineProj == nil && r.timelineStore != nil {
-			c.timelineProj = NewTimelineProjector(c.ID, r.timelineStore, r.timelineUpsertHook(c))
+		if c.timelineProj == nil && cm.timelineStore != nil {
+			hook := cm.timelineUpsertHook
+			if hook != nil {
+				c.timelineProj = NewTimelineProjector(c.ID, cm.timelineStore, hook(c))
+			} else {
+				c.timelineProj = NewTimelineProjector(c.ID, cm.timelineStore, nil)
+			}
 		}
 		c.mu.Unlock()
 		if c.ProfileSlug != profileSlug || c.EngConfigSig != newSig {
@@ -100,11 +167,11 @@ func (r *Router) getOrCreateConv(convID, profileSlug string, overrides map[strin
 				Str("new_profile", profileSlug).
 				Msg("profile or engine config changed, rebuilding engine")
 
-			eng, sink, err := r.BuildFromConfig(convID, cfg)
+			eng, sink, err := cm.buildFromConfig(convID, cfg)
 			if err != nil {
 				return nil, err
 			}
-			sub, subClose, err := r.buildSubscriber(convID)
+			sub, subClose, err := cm.buildSubscriber(convID)
 			if err != nil {
 				return nil, err
 			}
@@ -162,20 +229,25 @@ func (r *Router) getOrCreateConv(convID, profileSlug string, overrides map[strin
 	conv := &Conversation{
 		ID:           convID,
 		RunID:        runID,
-		baseCtx:      r.baseCtx,
+		baseCtx:      cm.baseCtx,
 		ProfileSlug:  profileSlug,
 		EngConfigSig: newSig,
 		requests:     map[string]*chatRequestRecord{},
 		semBuf:       newSemFrameBuffer(1000),
 	}
-	if r.timelineStore != nil {
-		conv.timelineProj = NewTimelineProjector(conv.ID, r.timelineStore, r.timelineUpsertHook(conv))
+	if cm.timelineStore != nil {
+		hook := cm.timelineUpsertHook
+		if hook != nil {
+			conv.timelineProj = NewTimelineProjector(conv.ID, cm.timelineStore, hook(conv))
+		} else {
+			conv.timelineProj = NewTimelineProjector(conv.ID, cm.timelineStore, nil)
+		}
 	}
-	eng, sink, err := r.BuildFromConfig(convID, cfg)
+	eng, sink, err := cm.buildFromConfig(convID, cfg)
 	if err != nil {
 		return nil, err
 	}
-	sub, subClose, err := r.buildSubscriber(convID)
+	sub, subClose, err := cm.buildSubscriber(convID)
 	if err != nil {
 		return nil, err
 	}
@@ -184,7 +256,7 @@ func (r *Router) getOrCreateConv(convID, profileSlug string, overrides map[strin
 	conv.sub = sub
 	conv.subClose = subClose
 
-	idleTimeout := time.Duration(r.idleTimeoutSec) * time.Second
+	idleTimeout := time.Duration(cm.idleTimeoutSec) * time.Second
 	onIdle := func() {
 		if conv.stream != nil {
 			log.Info().Str("component", "webchat").Str("conv_id", conv.ID).Dur("idle_timeout", idleTimeout).Msg("idle timeout reached, stopping stream")
@@ -218,7 +290,7 @@ func (r *Router) getOrCreateConv(convID, profileSlug string, overrides map[strin
 		Builder: &enginebuilder.Builder{
 			Base:             eng,
 			EventSinks:       []events.EventSink{sink},
-			StepController:   r.stepCtrl,
+			StepController:   cm.stepCtrl,
 			StepPauseTimeout: 30 * time.Second,
 		},
 		Turns: func() []*turns.Turn {
@@ -237,7 +309,7 @@ func (r *Router) getOrCreateConv(convID, profileSlug string, overrides map[strin
 		}
 	}
 
-	r.cm.conns[convID] = conv
+	cm.conns[convID] = conv
 	return conv, nil
 }
 
@@ -250,7 +322,7 @@ func buildSeedTurn(runID string, systemPrompt string) *turns.Turn {
 	return seed
 }
 
-func (r *Router) addConn(conv *Conversation, c *websocket.Conn) {
+func (cm *ConvManager) AddConn(conv *Conversation, c *websocket.Conn) {
 	if conv == nil || c == nil {
 		return
 	}
@@ -269,7 +341,7 @@ func (r *Router) addConn(conv *Conversation, c *websocket.Conn) {
 	}
 }
 
-func (r *Router) removeConn(conv *Conversation, c *websocket.Conn) {
+func (cm *ConvManager) RemoveConn(conv *Conversation, c *websocket.Conn) {
 	if conv == nil || c == nil {
 		return
 	}
