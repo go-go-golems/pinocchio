@@ -78,6 +78,7 @@ export function ChatWidget({
   partProps,
   components,
   renderers,
+  buildOverrides,
 }: ChatWidgetProps) {
   const dispatch = useAppDispatch();
   const app = useAppSelector((s) => s.app);
@@ -146,10 +147,14 @@ export function ChatWidget({
       setConvIdInLocation(next);
     }
     const basePrefix = basePrefixFromLocation();
-    const payload = {
+    const overrides = buildOverrides?.();
+    const payload: Record<string, any> = {
       conv_id: app.convId || convIdFromLocation(),
       prompt: text,
     };
+    if (overrides && Object.keys(overrides).length > 0) {
+      payload.overrides = overrides;
+    }
     setText('');
     void fetch(`${basePrefix}/chat`, {
       method: 'POST',
@@ -165,7 +170,7 @@ export function ChatWidget({
       .catch((err) => {
         dispatch(errorsSlice.actions.reportError(makeAppError('send failed', 'send', err)));
       });
-  }, [app.convId, dispatch, text]);
+  }, [app.convId, buildOverrides, dispatch, text]);
 
   const onKeyDown = useCallback(
     (e: KeyboardEvent<HTMLTextAreaElement>) => {
