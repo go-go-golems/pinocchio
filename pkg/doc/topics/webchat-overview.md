@@ -19,7 +19,9 @@ The webchat framework provides composable components for building real-time chat
 
 **New to webchat?** Start here:
 
-1. [Webchat Framework Guide](webchat-framework-guide.md) — End-to-end usage, profiles, middlewares, and HTTP API
+1. [Webchat Getting Started](../tutorials/02-webchat-getting-started.md) — Run the backend + UI locally
+2. [Webchat User Guide](webchat-user-guide.md) — Practical usage and customization
+3. [Webchat Framework Guide](webchat-framework-guide.md) — End-to-end usage, profiles, middlewares, and HTTP API
 
 **Building the example app?**
 
@@ -31,6 +33,7 @@ The webchat framework provides composable components for building real-time chat
 
 | Doc | Description |
 |-----|-------------|
+| [User Guide](webchat-user-guide.md) | Practical backend usage and customization |
 | [Backend Reference](webchat-backend-reference.md) | API for StreamCoordinator and ConnectionPool |
 | [Backend Internals](webchat-backend-internals.md) | Implementation details, concurrency, performance |
 
@@ -38,6 +41,7 @@ The webchat framework provides composable components for building real-time chat
 
 | Doc | Description |
 |-----|-------------|
+| [Getting Started](../tutorials/02-webchat-getting-started.md) | Run the UI locally and connect |
 | [Frontend Integration](webchat-frontend-integration.md) | WebSocket and HTTP integration patterns |
 | [SEM and UI](webchat-sem-and-ui.md) | Event format, routing, timeline entities |
 
