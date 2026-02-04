@@ -27,7 +27,7 @@ With Webchat you can:
 - Register tools and middlewares globally, then configure per-profile.
 - Compose engines from `StepSettings` using `NewEngineFromStepSettings`.
 - Serve a minimal frontend that listens to SEM events over WebSocket and renders Markdown with syntax highlighting.
-- Support multiple chat profiles: `POST /chat`, `POST /chat/{profile}`, `GET /ws?profile=...`, or set the `chat_profile` cookie via `/default` and `/agent` endpoints.
+- Support multiple chat profiles: `POST /chat`, `POST /chat/{profile}`, `GET /ws?profile=...`, or set the `chat_profile` cookie via `/api/chat/profile`.
 
 ## 2. Core Concepts
 
@@ -200,13 +200,14 @@ Frontend considerations:
 ### 5.2. Profiles
 
 - `GET /api/chat/profiles` → list available profiles; the UI can present these.
-- `GET /default` → set `chat_profile=default` (204 No Content)
-- `GET /agent` → set `chat_profile=agent` (204 No Content)
+- `GET /api/chat/profile` → get current profile (cookie-backed)
+- `POST /api/chat/profile` → set current profile (cookie-backed)
 
 ### 5.3. WebSocket
 
 - `GET /ws?conv_id=<id>&profile=<slug>` – join streaming for a conversation
   - If `profile` is omitted, the server falls back to `chat_profile` cookie, else `default`.
+  - SEM envelopes include `seq` and `stream_id`; when Redis stream metadata is present (`xid`/`redis_xid`), `seq` is derived from it for stable ordering.
 
 ### 5.4. Start a Chat Run
 

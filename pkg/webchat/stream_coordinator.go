@@ -3,6 +3,8 @@ package webchat
 import (
 	"context"
 	"encoding/json"
+	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -118,9 +120,26 @@ func (sc *StreamCoordinator) consume(ctx context.Context) {
 			continue
 		}
 
+		streamID := extractStreamID(msg)
+		seq := sc.seq.Add(1)
+		if streamID != "" {
+			if derived, ok := deriveSeqFromStreamID(streamID); ok {
+				seq = derived
+				for {
+					current := sc.seq.Load()
+					if derived <= current {
+						break
+					}
+					if sc.seq.CompareAndSwap(current, derived) {
+						break
+					}
+				}
+			}
+		}
+
 		cur := StreamCursor{
-			StreamID: extractStreamID(msg),
-			Seq:      sc.seq.Add(1),
+			StreamID: streamID,
+			Seq:      seq,
 		}
 
 		if sc.onEvent != nil {
@@ -147,13 +166,29 @@ func extractStreamID(msg *message.Message) string {
 	if msg == nil || msg.Metadata == nil {
 		return ""
 	}
-	keys := []string{"xid", "redis_xid", "stream_id", "redis_stream_id"}
+	keys := []string{"xid", "redis_xid"}
 	for _, k := range keys {
 		if v := msg.Metadata.Get(k); v != "" {
 			return v
 		}
 	}
 	return ""
+}
+
+func deriveSeqFromStreamID(streamID string) (uint64, bool) {
+	parts := strings.Split(streamID, "-")
+	if len(parts) != 2 {
+		return 0, false
+	}
+	ms, err := strconv.ParseUint(parts[0], 10, 64)
+	if err != nil {
+		return 0, false
+	}
+	seq, err := strconv.ParseUint(parts[1], 10, 64)
+	if err != nil {
+		return 0, false
+	}
+	return ms*1_000_000 + seq, true
 }
 
 func SemanticEventsFromEventWithCursor(e events.Event, cur StreamCursor) [][]byte {

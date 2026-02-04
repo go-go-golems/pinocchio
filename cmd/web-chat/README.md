@@ -98,8 +98,9 @@ return srv.ListenAndServe()
   - `type Conversation` — Per-conversation state:
     - `RunID`, queue state/idempotency records, stream coordinator
     - active WebSocket connections set
-  - `getOrCreateConv(convID)` — Creates a conversation, builds engine and sink, subscribes reader
-  - `addConn/removeConn` — Manages WebSocket lifetimes and idle-stop of the reader
+  - `ConvManager.GetOrCreate` — Creates or reuses a conversation, builds engine and sink, subscribes reader
+  - `ConvManager.AddConn/RemoveConn` — Manages WebSocket lifetimes and idle-stop of the reader
+  - `StreamCoordinator` derives `seq` from Redis stream IDs when available and includes `stream_id` in SEM frames
 
 ### Semantic Conversion
 
@@ -149,12 +150,12 @@ Parameters (via layer `redis`):
 
 ```go
 // POST /chat handler (enqueue; at most one active run per conversation)
-conv, _ := r.getOrCreateConv(convID, profileSlug, overrides)
-queued := conv.EnqueuePrompt(prompt, idempotencyKey)
-if queued {
-    return 202
+conv, _ := r.cm.GetOrCreate(convID, profileSlug, overrides)
+prep, _ := conv.PrepareRun(idempotencyKey, profileSlug, overrides, prompt)
+if !prep.Start {
+    return prep.HTTPStatus
 }
-go conv.DrainQueueAndRun(ctx) // emits SEM frames via stream coordinator
+go r.startRunForPrompt(conv, profileSlug, overrides, prompt, idempotencyKey) // emits SEM frames via stream coordinator
 ```
 
 ## Building and Running
