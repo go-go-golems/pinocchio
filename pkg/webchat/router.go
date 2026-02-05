@@ -2,7 +2,6 @@ package webchat
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	stderrors "errors"
 	"fmt"
@@ -50,7 +49,7 @@ type RouterSettings struct {
 }
 
 // RouterBuilder creates a new composable webchat router.
-func NewRouter(ctx context.Context, parsed *layers.ParsedLayers, staticFS fs.FS) (*Router, error) {
+func NewRouter(ctx context.Context, parsed *layers.ParsedLayers, staticFS fs.FS, opts ...RouterOption) (*Router, error) {
 	rs := rediscfg.Settings{}
 	_ = parsed.InitializeStruct("redis", &rs)
 	router, err := rediscfg.BuildRouter(rs, true)
@@ -67,17 +66,7 @@ func NewRouter(ctx context.Context, parsed *layers.ParsedLayers, staticFS fs.FS)
 		toolFactories: map[string]ToolFactory{},
 		profiles:      newInMemoryProfileRegistry(),
 		upgrader:      websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }},
-		stepCtrl:      toolloop.NewStepController(),
 	}
-	r.cm = NewConvManager(ConvManagerOptions{
-		BaseCtx:            ctx,
-		StepController:     r.stepCtrl,
-		BuildConfig:        r.BuildConfig,
-		BuildFromConfig:    r.BuildFromConfig,
-		BuildSubscriber:    r.buildSubscriber,
-		TimelineUpsertHook: r.timelineUpsertHook,
-	})
-	r.engineFromReqBuilder = NewDefaultEngineFromReqBuilder(r.profiles, r.cm)
 	// set redis flags for ws reader
 	if rs.Enabled {
 		r.usesRedis = true
@@ -113,6 +102,36 @@ func NewRouter(ctx context.Context, parsed *layers.ParsedLayers, staticFS fs.FS)
 	}
 	if r.cm != nil {
 		r.cm.SetTimelineStore(r.timelineStore)
+	}
+
+	for _, opt := range opts {
+		if opt == nil {
+			continue
+		}
+		if err := opt(r); err != nil {
+			return nil, err
+		}
+	}
+
+	if r.stepCtrl == nil {
+		r.stepCtrl = toolloop.NewStepController()
+	}
+	if r.cm == nil {
+		r.cm = NewConvManager(ConvManagerOptions{
+			BaseCtx:            ctx,
+			StepController:     r.stepCtrl,
+			BuildConfig:        r.BuildConfig,
+			BuildFromConfig:    r.BuildFromConfig,
+			BuildSubscriber:    r.buildSubscriber,
+			TimelineUpsertHook: r.timelineUpsertHook,
+		})
+	}
+	if r.engineFromReqBuilder == nil {
+		r.engineFromReqBuilder = NewDefaultEngineFromReqBuilder(r.profiles, r.cm)
+	}
+
+	if r.cm != nil {
+		r.cm.SetTimelineStore(r.timelineStore)
 		r.cm.SetIdleTimeoutSeconds(s.IdleTimeoutSeconds)
 		r.cm.SetEvictionConfig(
 			time.Duration(s.EvictIdleSeconds)*time.Second,
@@ -123,16 +142,6 @@ func NewRouter(ctx context.Context, parsed *layers.ParsedLayers, staticFS fs.FS)
 
 	r.registerHTTPHandlers()
 	return r, nil
-}
-
-// Allow setting optional shared DB for middlewares that need it (e.g., sqlite tool)
-func (r *Router) WithDB(db *sql.DB) *Router { r.db = db; return r }
-func (r *Router) WithTimelineStore(s TimelineStore) *Router {
-	r.timelineStore = s
-	if r.cm != nil {
-		r.cm.SetTimelineStore(s)
-	}
-	return r
 }
 
 // RegisterMiddleware adds a named middleware factory to the router.

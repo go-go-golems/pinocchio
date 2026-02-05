@@ -1,0 +1,90 @@
+package webchat
+
+import (
+	"database/sql"
+	"errors"
+
+	"github.com/go-go-golems/geppetto/pkg/events"
+	"github.com/go-go-golems/geppetto/pkg/inference/toolloop"
+	"github.com/gorilla/websocket"
+)
+
+// RouterOption configures optional dependencies for a Router.
+type RouterOption func(*Router) error
+
+func WithEngineFromReqBuilder(b EngineFromReqBuilder) RouterOption {
+	return func(r *Router) error {
+		if b == nil {
+			return errors.New("engineFromReqBuilder is nil")
+		}
+		r.engineFromReqBuilder = b
+		return nil
+	}
+}
+
+func WithWebSocketUpgrader(u websocket.Upgrader) RouterOption {
+	return func(r *Router) error {
+		r.upgrader = u
+		return nil
+	}
+}
+
+func WithProfileRegistry(reg ProfileRegistry) RouterOption {
+	return func(r *Router) error {
+		if reg == nil {
+			return errors.New("profile registry is nil")
+		}
+		r.profiles = reg
+		return nil
+	}
+}
+
+func WithConvManager(cm *ConvManager) RouterOption {
+	return func(r *Router) error {
+		if cm == nil {
+			return errors.New("conv manager is nil")
+		}
+		r.cm = cm
+		return nil
+	}
+}
+
+func WithEventRouter(er *events.EventRouter) RouterOption {
+	return func(r *Router) error {
+		if er == nil {
+			return errors.New("event router is nil")
+		}
+		r.router = er
+		return nil
+	}
+}
+
+func WithStepController(sc *toolloop.StepController) RouterOption {
+	return func(r *Router) error {
+		if sc == nil {
+			return errors.New("step controller is nil")
+		}
+		r.stepCtrl = sc
+		return nil
+	}
+}
+
+func WithDB(db *sql.DB) RouterOption {
+	return func(r *Router) error {
+		r.db = db
+		return nil
+	}
+}
+
+func WithTimelineStore(s TimelineStore) RouterOption {
+	return func(r *Router) error {
+		if s == nil {
+			return errors.New("timeline store is nil")
+		}
+		r.timelineStore = s
+		if r.cm != nil {
+			r.cm.SetTimelineStore(s)
+		}
+		return nil
+	}
+}
