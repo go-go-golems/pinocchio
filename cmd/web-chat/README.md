@@ -120,6 +120,7 @@ return srv.ListenAndServe()
   - Body: `{ "prompt": string, "conv_id": string (optional) }`
   - Response: `{ "status": "started"|"queued", "conv_id": string, "session_id": string, "turn_id": string, "inference_id": string, "queue_position"?: number, "idempotency_key": string }`
 - `GET /timeline?conv_id={string}&since_version={uint64?}&limit={int?}` — Returns timeline snapshot entities (backed by SQLite when configured, otherwise in-memory)
+- `GET /turns?conv_id={string}&run_id={string?}&phase={string?}&since_ms={int64?}&limit={int?}` — Returns stored turn snapshots (only when turn store is configured)
 
 ## Redis Streams (Optional Transport)
 
@@ -136,6 +137,22 @@ Example:
 ```bash
 go run ./cmd/web-chat --addr :8080 --timeline-db /tmp/pinocchio-timeline.db
 ```
+
+## Durable Turn Snapshots (Turn Inspection)
+
+Turn snapshots persist the **exact** LLM input blocks (including middleware-injected system prompts). This is intended for debugging and inspection.
+
+Enable turn persistence by passing one of:
+- `--turns-dsn "<sqlite dsn>"`
+- `--turns-db "<path/to/turns.db>"`
+
+Example:
+
+```bash
+go run ./cmd/web-chat --addr :8080 --turns-db /tmp/pinocchio-turns.db
+```
+
+You can then query `/turns` to see YAML payloads for each stored phase.
 
 When `redis` is enabled via flags, the backend uses a Redis Streams publisher/subscriber under the hood. Each conversation gets a topic `chat:{convID}` with a consumer group `ui`. This allows horizontal scaling of readers and decouples event production from UI delivery.
 

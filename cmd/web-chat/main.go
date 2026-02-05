@@ -63,6 +63,8 @@ func NewCommand() (*Command, error) {
 			parameters.NewParameterDefinition("emit-planning-stubs", parameters.ParameterTypeBool, parameters.WithDefault(false), parameters.WithHelp("Emit stub planning/thinking-mode semantic events (for UI demos); disabled by default")),
 			parameters.NewParameterDefinition("timeline-dsn", parameters.ParameterTypeString, parameters.WithDefault(""), parameters.WithHelp("SQLite DSN for durable timeline snapshots (enables GET /timeline); preferred over timeline-db")),
 			parameters.NewParameterDefinition("timeline-db", parameters.ParameterTypeString, parameters.WithDefault(""), parameters.WithHelp("SQLite DB file path for durable timeline snapshots (enables GET /timeline); DSN is derived with WAL/busy_timeout")),
+			parameters.NewParameterDefinition("turns-dsn", parameters.ParameterTypeString, parameters.WithDefault(""), parameters.WithHelp("SQLite DSN for durable turn snapshots (enables GET /turns); preferred over turns-db")),
+			parameters.NewParameterDefinition("turns-db", parameters.ParameterTypeString, parameters.WithDefault(""), parameters.WithHelp("SQLite DB file path for durable turn snapshots (enables GET /turns); DSN is derived with WAL/busy_timeout")),
 		),
 		cmds.WithLayersList(append(geLayers, redisLayer)...),
 	)

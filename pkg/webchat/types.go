@@ -89,6 +89,7 @@ type Router struct {
 	// shared deps
 	db            *sql.DB
 	timelineStore TimelineStore
+	turnStore     TurnStore
 
 	// profiles
 	profiles ProfileRegistry

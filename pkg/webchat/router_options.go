@@ -111,6 +111,17 @@ func WithTimelineStore(s TimelineStore) RouterOption {
 	}
 }
 
+// WithTurnStore configures a durable turn snapshot store.
+func WithTurnStore(s TurnStore) RouterOption {
+	return func(r *Router) error {
+		if s == nil {
+			return errors.New("turn store is nil")
+		}
+		r.turnStore = s
+		return nil
+	}
+}
+
 // WithEventSinkWrapper allows callers to wrap the default event sink (e.g., FilteringSink).
 func WithEventSinkWrapper(fn EventSinkWrapper) RouterOption {
 	return func(r *Router) error {

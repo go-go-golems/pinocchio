@@ -44,6 +44,12 @@ type RouterSettings struct {
 	// - timeline-db (file path; DSN derived)
 	TimelineDSN string `glazed.parameter:"timeline-dsn"`
 	TimelineDB  string `glazed.parameter:"timeline-db"`
+	// Durable turn snapshot store configuration (optional).
+	// Use either:
+	// - turns-dsn (preferred; full sqlite DSN)
+	// - turns-db (file path; DSN derived)
+	TurnsDSN string `glazed.parameter:"turns-dsn"`
+	TurnsDB  string `glazed.parameter:"turns-db"`
 	// In-memory timeline store sizing (used when no timeline DB is configured).
 	TimelineInMemoryMaxEntities int `glazed.parameter:"timeline-inmem-max-entities"`
 }
@@ -102,6 +108,28 @@ func NewRouter(ctx context.Context, parsed *layers.ParsedLayers, staticFS fs.FS,
 	}
 	if r.cm != nil {
 		r.cm.SetTimelineStore(r.timelineStore)
+	}
+
+	// Optional turn snapshot store (SQLite when configured).
+	if dsn := strings.TrimSpace(s.TurnsDSN); dsn != "" {
+		store, err := NewSQLiteTurnStore(dsn)
+		if err != nil {
+			return nil, errors.Wrap(err, "open turn store (dsn)")
+		}
+		r.turnStore = store
+	} else if p := strings.TrimSpace(s.TurnsDB); p != "" {
+		if dir := filepath.Dir(p); dir != "" && dir != "." {
+			_ = os.MkdirAll(dir, 0755)
+		}
+		dsn, err := SQLiteTurnDSNForFile(p)
+		if err != nil {
+			return nil, errors.Wrap(err, "build turn DSN")
+		}
+		store, err := NewSQLiteTurnStore(dsn)
+		if err != nil {
+			return nil, errors.Wrap(err, "open turn store (file)")
+		}
+		r.turnStore = store
 	}
 
 	for _, opt := range opts {
@@ -639,6 +667,67 @@ func (r *Router) registerAPIHandlers(mux *http.ServeMux) {
 	mux.HandleFunc("/timeline", timelineHandler)
 	mux.HandleFunc("/timeline/", timelineHandler)
 
+	turnsHandler := func(w http.ResponseWriter, r0 *http.Request) {
+		if r0.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		if r.turnStore == nil {
+			http.Error(w, "turn store not enabled", http.StatusNotFound)
+			return
+		}
+
+		convID := strings.TrimSpace(r0.URL.Query().Get("conv_id"))
+		runID := strings.TrimSpace(r0.URL.Query().Get("run_id"))
+		if convID == "" && runID == "" {
+			http.Error(w, "missing conv_id or run_id", http.StatusBadRequest)
+			return
+		}
+		phase := strings.TrimSpace(r0.URL.Query().Get("phase"))
+
+		var sinceMs int64
+		if s := strings.TrimSpace(r0.URL.Query().Get("since_ms")); s != "" {
+			var v int64
+			_, _ = fmt.Sscanf(s, "%d", &v)
+			if v > 0 {
+				sinceMs = v
+			}
+		}
+		limit := 0
+		if s := strings.TrimSpace(r0.URL.Query().Get("limit")); s != "" {
+			var v int
+			_, _ = fmt.Sscanf(s, "%d", &v)
+			if v > 0 {
+				limit = v
+			}
+		}
+
+		items, err := r.turnStore.List(r0.Context(), TurnQuery{
+			ConvID:  convID,
+			RunID:   runID,
+			Phase:   phase,
+			SinceMs: sinceMs,
+			Limit:   limit,
+		})
+		if err != nil {
+			logger.Error().Err(err).Str("conv_id", convID).Str("run_id", runID).Msg("turns query failed")
+			http.Error(w, "turns query failed", http.StatusInternalServerError)
+			return
+		}
+
+		resp := map[string]any{
+			"conv_id":  convID,
+			"run_id":   runID,
+			"phase":    phase,
+			"since_ms": sinceMs,
+			"items":    items,
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(resp)
+	}
+	mux.HandleFunc("/turns", turnsHandler)
+	mux.HandleFunc("/turns/", turnsHandler)
+
 	handleChatRequest := func(w http.ResponseWriter, r0 *http.Request) {
 		if r0.Method != http.MethodPost {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -757,8 +846,8 @@ func stepModeFromOverrides(overrides map[string]any) bool {
 	return false
 }
 
-func snapshotHookForConv(conv *Conversation, dir string) toolloop.SnapshotHook {
-	if conv == nil || dir == "" {
+func snapshotHookForConv(conv *Conversation, dir string, store TurnStore) toolloop.SnapshotHook {
+	if conv == nil || (dir == "" && store == nil) {
 		return nil
 	}
 	snapLog := log.With().
@@ -768,6 +857,29 @@ func snapshotHookForConv(conv *Conversation, dir string) toolloop.SnapshotHook {
 		Logger()
 	return func(ctx context.Context, t *turns.Turn, phase string) {
 		if t == nil {
+			return
+		}
+		if store != nil {
+			turnID := t.ID
+			if turnID == "" {
+				turnID = "turn"
+			}
+			runID := conv.RunID
+			if runID == "" {
+				if v, ok, err := turns.KeyTurnMetaSessionID.Get(t.Metadata); err == nil && ok {
+					runID = v
+				}
+			}
+			if runID != "" {
+				payload, err := serde.ToYAML(t, serde.Options{})
+				if err != nil {
+					snapLog.Warn().Err(err).Str("phase", phase).Msg("webchat snapshot: serialize failed (store)")
+				} else if err := store.Save(ctx, conv.ID, runID, turnID, phase, time.Now().UnixMilli(), string(payload)); err != nil {
+					snapLog.Warn().Err(err).Str("phase", phase).Msg("webchat snapshot: store save failed")
+				}
+			}
+		}
+		if dir == "" {
 			return
 		}
 		subdir := filepath.Join(dir, conv.ID, conv.RunID)
@@ -866,7 +978,7 @@ func (r *Router) startRunForPrompt(conv *Conversation, profileSlug string, overr
 	case <-time.After(2 * time.Second):
 	}
 
-	hook := snapshotHookForConv(conv, os.Getenv("PINOCCHIO_WEBCHAT_TURN_SNAPSHOTS_DIR"))
+	hook := snapshotHookForConv(conv, os.Getenv("PINOCCHIO_WEBCHAT_TURN_SNAPSHOTS_DIR"), r.turnStore)
 
 	seed, err := conv.Sess.AppendNewTurnFromUserPrompt(prompt)
 	if err != nil {
@@ -911,6 +1023,7 @@ func (r *Router) startRunForPrompt(conv *Conversation, profileSlug string, overr
 		SnapshotHook:     hook,
 		StepController:   r.stepCtrl,
 		StepPauseTimeout: 30 * time.Second,
+		Persister:        newTurnStorePersister(r.turnStore, conv, "final"),
 	}
 
 	runLog.Info().Str("idempotency_key", idempotencyKey).Msg("starting run loop")
