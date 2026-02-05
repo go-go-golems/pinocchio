@@ -6,7 +6,15 @@ import (
 	timelinepb "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/timeline"
 )
 
-func (r *Router) timelineUpsertHook(conv *Conversation) func(entity *timelinepb.TimelineEntityV1, version uint64) {
+// TimelineUpsertHook exposes the timeline upsert hook for external use.
+func (r *Router) TimelineUpsertHook(conv *Conversation) func(entity *timelinepb.TimelineEntityV1, version uint64) {
+	if r != nil && r.timelineUpsertHookOverride != nil {
+		return r.timelineUpsertHookOverride(conv)
+	}
+	return r.timelineUpsertHookDefault(conv)
+}
+
+func (r *Router) timelineUpsertHookDefault(conv *Conversation) func(entity *timelinepb.TimelineEntityV1, version uint64) {
 	if r == nil || conv == nil {
 		return nil
 	}

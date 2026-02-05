@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"net/http"
 
+	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/go-go-golems/geppetto/pkg/events"
 	"github.com/go-go-golems/geppetto/pkg/inference/engine"
 	"github.com/go-go-golems/geppetto/pkg/inference/middleware"
@@ -13,6 +14,7 @@ import (
 	geptools "github.com/go-go-golems/geppetto/pkg/inference/tools"
 	"github.com/go-go-golems/geppetto/pkg/turns"
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
+	timelinepb "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/timeline"
 	"github.com/gorilla/websocket"
 )
 
@@ -104,4 +106,8 @@ type Router struct {
 
 	// request policy
 	engineFromReqBuilder EngineFromReqBuilder
+
+	// optional overrides for conv manager hooks
+	buildSubscriberOverride    func(convID string) (message.Subscriber, bool, error)
+	timelineUpsertHookOverride func(*Conversation) func(entity *timelinepb.TimelineEntityV1, version uint64)
 }

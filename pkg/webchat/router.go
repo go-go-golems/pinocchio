@@ -122,8 +122,8 @@ func NewRouter(ctx context.Context, parsed *layers.ParsedLayers, staticFS fs.FS,
 			StepController:     r.stepCtrl,
 			BuildConfig:        r.BuildConfig,
 			BuildFromConfig:    r.BuildFromConfig,
-			BuildSubscriber:    r.buildSubscriber,
-			TimelineUpsertHook: r.timelineUpsertHook,
+			BuildSubscriber:    r.BuildSubscriber,
+			TimelineUpsertHook: r.TimelineUpsertHook,
 		})
 	}
 	if r.engineFromReqBuilder == nil {
@@ -1046,7 +1046,15 @@ func (r *Router) tryDrainQueue(conv *Conversation) {
 	}
 }
 
-func (r *Router) buildSubscriber(convID string) (message.Subscriber, bool, error) {
+// BuildSubscriber exposes the subscriber builder for external use.
+func (r *Router) BuildSubscriber(convID string) (message.Subscriber, bool, error) {
+	if r != nil && r.buildSubscriberOverride != nil {
+		return r.buildSubscriberOverride(convID)
+	}
+	return r.buildSubscriberDefault(convID)
+}
+
+func (r *Router) buildSubscriberDefault(convID string) (message.Subscriber, bool, error) {
 	if r == nil {
 		return nil, false, errors.New("router is nil")
 	}

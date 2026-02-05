@@ -4,8 +4,10 @@ import (
 	"database/sql"
 	"errors"
 
+	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/go-go-golems/geppetto/pkg/events"
 	"github.com/go-go-golems/geppetto/pkg/inference/toolloop"
+	timelinepb "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/timeline"
 	"github.com/gorilla/websocket"
 )
 
@@ -55,6 +57,26 @@ func WithEventRouter(er *events.EventRouter) RouterOption {
 			return errors.New("event router is nil")
 		}
 		r.router = er
+		return nil
+	}
+}
+
+func WithBuildSubscriber(fn func(convID string) (message.Subscriber, bool, error)) RouterOption {
+	return func(r *Router) error {
+		if fn == nil {
+			return errors.New("build subscriber is nil")
+		}
+		r.buildSubscriberOverride = fn
+		return nil
+	}
+}
+
+func WithTimelineUpsertHook(fn func(*Conversation) func(entity *timelinepb.TimelineEntityV1, version uint64)) RouterOption {
+	return func(r *Router) error {
+		if fn == nil {
+			return errors.New("timeline upsert hook is nil")
+		}
+		r.timelineUpsertHookOverride = fn
 		return nil
 	}
 }
