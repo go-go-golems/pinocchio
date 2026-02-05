@@ -34,3 +34,41 @@ message InnerThoughtsSnapshotV1 {
   string text = 3;
 }
 
+// DiscoDialogueLineSnapshotV1 maps 'disco_dialogue_line' entity props.
+message DiscoDialogueLineSnapshotV1 {
+  uint32 schema_version = 1; // =1
+  string status = 2; // started|update|completed|error
+  string dialogue_id = 3;
+  string line_id = 4;
+  string persona = 5;
+  string tone = 6;
+  string text = 7;
+  string trigger = 8;
+  double progress = 9;
+  bool success = 10;
+  string error = 11;
+}
+
+// DiscoDialogueCheckSnapshotV1 maps 'disco_dialogue_check' entity props.
+message DiscoDialogueCheckSnapshotV1 {
+  uint32 schema_version = 1; // =1
+  string status = 2; // started|update|completed|error
+  string dialogue_id = 3;
+  string line_id = 4;
+  string check_type = 5;
+  string skill = 6;
+  int32 difficulty = 7;
+  int32 roll = 8;
+  bool success = 9;
+  string error = 10;
+}
+
+// DiscoDialogueStateSnapshotV1 maps 'disco_dialogue_state' entity props.
+message DiscoDialogueStateSnapshotV1 {
+  uint32 schema_version = 1; // =1
+  string status = 2; // started|update|completed|error
+  string dialogue_id = 3;
+  string summary = 4;
+  bool success = 5;
+  string error = 6;
+}

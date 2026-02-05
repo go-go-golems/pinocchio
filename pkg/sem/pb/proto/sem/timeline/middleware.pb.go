@@ -276,6 +276,333 @@ func (x *InnerThoughtsSnapshotV1) GetText() string {
 	return ""
 }
 
+// DiscoDialogueLineSnapshotV1 maps 'disco_dialogue_line' entity props.
+type DiscoDialogueLineSnapshotV1 struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	SchemaVersion uint32                 `protobuf:"varint,1,opt,name=schema_version,json=schemaVersion,proto3" json:"schema_version,omitempty"` // =1
+	Status        string                 `protobuf:"bytes,2,opt,name=status,proto3" json:"status,omitempty"`                                     // started|update|completed|error
+	DialogueId    string                 `protobuf:"bytes,3,opt,name=dialogue_id,json=dialogueId,proto3" json:"dialogue_id,omitempty"`
+	LineId        string                 `protobuf:"bytes,4,opt,name=line_id,json=lineId,proto3" json:"line_id,omitempty"`
+	Persona       string                 `protobuf:"bytes,5,opt,name=persona,proto3" json:"persona,omitempty"`
+	Tone          string                 `protobuf:"bytes,6,opt,name=tone,proto3" json:"tone,omitempty"`
+	Text          string                 `protobuf:"bytes,7,opt,name=text,proto3" json:"text,omitempty"`
+	Trigger       string                 `protobuf:"bytes,8,opt,name=trigger,proto3" json:"trigger,omitempty"`
+	Progress      float64                `protobuf:"fixed64,9,opt,name=progress,proto3" json:"progress,omitempty"`
+	Success       bool                   `protobuf:"varint,10,opt,name=success,proto3" json:"success,omitempty"`
+	Error         string                 `protobuf:"bytes,11,opt,name=error,proto3" json:"error,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DiscoDialogueLineSnapshotV1) Reset() {
+	*x = DiscoDialogueLineSnapshotV1{}
+	mi := &file_proto_sem_timeline_middleware_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DiscoDialogueLineSnapshotV1) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DiscoDialogueLineSnapshotV1) ProtoMessage() {}
+
+func (x *DiscoDialogueLineSnapshotV1) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_sem_timeline_middleware_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DiscoDialogueLineSnapshotV1.ProtoReflect.Descriptor instead.
+func (*DiscoDialogueLineSnapshotV1) Descriptor() ([]byte, []int) {
+	return file_proto_sem_timeline_middleware_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *DiscoDialogueLineSnapshotV1) GetSchemaVersion() uint32 {
+	if x != nil {
+		return x.SchemaVersion
+	}
+	return 0
+}
+
+func (x *DiscoDialogueLineSnapshotV1) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *DiscoDialogueLineSnapshotV1) GetDialogueId() string {
+	if x != nil {
+		return x.DialogueId
+	}
+	return ""
+}
+
+func (x *DiscoDialogueLineSnapshotV1) GetLineId() string {
+	if x != nil {
+		return x.LineId
+	}
+	return ""
+}
+
+func (x *DiscoDialogueLineSnapshotV1) GetPersona() string {
+	if x != nil {
+		return x.Persona
+	}
+	return ""
+}
+
+func (x *DiscoDialogueLineSnapshotV1) GetTone() string {
+	if x != nil {
+		return x.Tone
+	}
+	return ""
+}
+
+func (x *DiscoDialogueLineSnapshotV1) GetText() string {
+	if x != nil {
+		return x.Text
+	}
+	return ""
+}
+
+func (x *DiscoDialogueLineSnapshotV1) GetTrigger() string {
+	if x != nil {
+		return x.Trigger
+	}
+	return ""
+}
+
+func (x *DiscoDialogueLineSnapshotV1) GetProgress() float64 {
+	if x != nil {
+		return x.Progress
+	}
+	return 0
+}
+
+func (x *DiscoDialogueLineSnapshotV1) GetSuccess() bool {
+	if x != nil {
+		return x.Success
+	}
+	return false
+}
+
+func (x *DiscoDialogueLineSnapshotV1) GetError() string {
+	if x != nil {
+		return x.Error
+	}
+	return ""
+}
+
+// DiscoDialogueCheckSnapshotV1 maps 'disco_dialogue_check' entity props.
+type DiscoDialogueCheckSnapshotV1 struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	SchemaVersion uint32                 `protobuf:"varint,1,opt,name=schema_version,json=schemaVersion,proto3" json:"schema_version,omitempty"` // =1
+	Status        string                 `protobuf:"bytes,2,opt,name=status,proto3" json:"status,omitempty"`                                     // started|update|completed|error
+	DialogueId    string                 `protobuf:"bytes,3,opt,name=dialogue_id,json=dialogueId,proto3" json:"dialogue_id,omitempty"`
+	LineId        string                 `protobuf:"bytes,4,opt,name=line_id,json=lineId,proto3" json:"line_id,omitempty"`
+	CheckType     string                 `protobuf:"bytes,5,opt,name=check_type,json=checkType,proto3" json:"check_type,omitempty"`
+	Skill         string                 `protobuf:"bytes,6,opt,name=skill,proto3" json:"skill,omitempty"`
+	Difficulty    int32                  `protobuf:"varint,7,opt,name=difficulty,proto3" json:"difficulty,omitempty"`
+	Roll          int32                  `protobuf:"varint,8,opt,name=roll,proto3" json:"roll,omitempty"`
+	Success       bool                   `protobuf:"varint,9,opt,name=success,proto3" json:"success,omitempty"`
+	Error         string                 `protobuf:"bytes,10,opt,name=error,proto3" json:"error,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DiscoDialogueCheckSnapshotV1) Reset() {
+	*x = DiscoDialogueCheckSnapshotV1{}
+	mi := &file_proto_sem_timeline_middleware_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DiscoDialogueCheckSnapshotV1) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DiscoDialogueCheckSnapshotV1) ProtoMessage() {}
+
+func (x *DiscoDialogueCheckSnapshotV1) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_sem_timeline_middleware_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DiscoDialogueCheckSnapshotV1.ProtoReflect.Descriptor instead.
+func (*DiscoDialogueCheckSnapshotV1) Descriptor() ([]byte, []int) {
+	return file_proto_sem_timeline_middleware_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *DiscoDialogueCheckSnapshotV1) GetSchemaVersion() uint32 {
+	if x != nil {
+		return x.SchemaVersion
+	}
+	return 0
+}
+
+func (x *DiscoDialogueCheckSnapshotV1) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *DiscoDialogueCheckSnapshotV1) GetDialogueId() string {
+	if x != nil {
+		return x.DialogueId
+	}
+	return ""
+}
+
+func (x *DiscoDialogueCheckSnapshotV1) GetLineId() string {
+	if x != nil {
+		return x.LineId
+	}
+	return ""
+}
+
+func (x *DiscoDialogueCheckSnapshotV1) GetCheckType() string {
+	if x != nil {
+		return x.CheckType
+	}
+	return ""
+}
+
+func (x *DiscoDialogueCheckSnapshotV1) GetSkill() string {
+	if x != nil {
+		return x.Skill
+	}
+	return ""
+}
+
+func (x *DiscoDialogueCheckSnapshotV1) GetDifficulty() int32 {
+	if x != nil {
+		return x.Difficulty
+	}
+	return 0
+}
+
+func (x *DiscoDialogueCheckSnapshotV1) GetRoll() int32 {
+	if x != nil {
+		return x.Roll
+	}
+	return 0
+}
+
+func (x *DiscoDialogueCheckSnapshotV1) GetSuccess() bool {
+	if x != nil {
+		return x.Success
+	}
+	return false
+}
+
+func (x *DiscoDialogueCheckSnapshotV1) GetError() string {
+	if x != nil {
+		return x.Error
+	}
+	return ""
+}
+
+// DiscoDialogueStateSnapshotV1 maps 'disco_dialogue_state' entity props.
+type DiscoDialogueStateSnapshotV1 struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	SchemaVersion uint32                 `protobuf:"varint,1,opt,name=schema_version,json=schemaVersion,proto3" json:"schema_version,omitempty"` // =1
+	Status        string                 `protobuf:"bytes,2,opt,name=status,proto3" json:"status,omitempty"`                                     // started|update|completed|error
+	DialogueId    string                 `protobuf:"bytes,3,opt,name=dialogue_id,json=dialogueId,proto3" json:"dialogue_id,omitempty"`
+	Summary       string                 `protobuf:"bytes,4,opt,name=summary,proto3" json:"summary,omitempty"`
+	Success       bool                   `protobuf:"varint,5,opt,name=success,proto3" json:"success,omitempty"`
+	Error         string                 `protobuf:"bytes,6,opt,name=error,proto3" json:"error,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DiscoDialogueStateSnapshotV1) Reset() {
+	*x = DiscoDialogueStateSnapshotV1{}
+	mi := &file_proto_sem_timeline_middleware_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DiscoDialogueStateSnapshotV1) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DiscoDialogueStateSnapshotV1) ProtoMessage() {}
+
+func (x *DiscoDialogueStateSnapshotV1) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_sem_timeline_middleware_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DiscoDialogueStateSnapshotV1.ProtoReflect.Descriptor instead.
+func (*DiscoDialogueStateSnapshotV1) Descriptor() ([]byte, []int) {
+	return file_proto_sem_timeline_middleware_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *DiscoDialogueStateSnapshotV1) GetSchemaVersion() uint32 {
+	if x != nil {
+		return x.SchemaVersion
+	}
+	return 0
+}
+
+func (x *DiscoDialogueStateSnapshotV1) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *DiscoDialogueStateSnapshotV1) GetDialogueId() string {
+	if x != nil {
+		return x.DialogueId
+	}
+	return ""
+}
+
+func (x *DiscoDialogueStateSnapshotV1) GetSummary() string {
+	if x != nil {
+		return x.Summary
+	}
+	return ""
+}
+
+func (x *DiscoDialogueStateSnapshotV1) GetSuccess() bool {
+	if x != nil {
+		return x.Success
+	}
+	return false
+}
+
+func (x *DiscoDialogueStateSnapshotV1) GetError() string {
+	if x != nil {
+		return x.Error
+	}
+	return ""
+}
+
 var File_proto_sem_timeline_middleware_proto protoreflect.FileDescriptor
 
 const file_proto_sem_timeline_middleware_proto_rawDesc = "" +
@@ -301,7 +628,45 @@ const file_proto_sem_timeline_middleware_proto_rawDesc = "" +
 	"\x17InnerThoughtsSnapshotV1\x12%\n" +
 	"\x0eschema_version\x18\x01 \x01(\rR\rschemaVersion\x12\x16\n" +
 	"\x06status\x18\x02 \x01(\tR\x06status\x12\x12\n" +
-	"\x04text\x18\x03 \x01(\tR\x04textBJZHgithub.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/timeline;timelineb\x06proto3"
+	"\x04text\x18\x03 \x01(\tR\x04text\"\xbe\x02\n" +
+	"\x1bDiscoDialogueLineSnapshotV1\x12%\n" +
+	"\x0eschema_version\x18\x01 \x01(\rR\rschemaVersion\x12\x16\n" +
+	"\x06status\x18\x02 \x01(\tR\x06status\x12\x1f\n" +
+	"\vdialogue_id\x18\x03 \x01(\tR\n" +
+	"dialogueId\x12\x17\n" +
+	"\aline_id\x18\x04 \x01(\tR\x06lineId\x12\x18\n" +
+	"\apersona\x18\x05 \x01(\tR\apersona\x12\x12\n" +
+	"\x04tone\x18\x06 \x01(\tR\x04tone\x12\x12\n" +
+	"\x04text\x18\a \x01(\tR\x04text\x12\x18\n" +
+	"\atrigger\x18\b \x01(\tR\atrigger\x12\x1a\n" +
+	"\bprogress\x18\t \x01(\x01R\bprogress\x12\x18\n" +
+	"\asuccess\x18\n" +
+	" \x01(\bR\asuccess\x12\x14\n" +
+	"\x05error\x18\v \x01(\tR\x05error\"\xb0\x02\n" +
+	"\x1cDiscoDialogueCheckSnapshotV1\x12%\n" +
+	"\x0eschema_version\x18\x01 \x01(\rR\rschemaVersion\x12\x16\n" +
+	"\x06status\x18\x02 \x01(\tR\x06status\x12\x1f\n" +
+	"\vdialogue_id\x18\x03 \x01(\tR\n" +
+	"dialogueId\x12\x17\n" +
+	"\aline_id\x18\x04 \x01(\tR\x06lineId\x12\x1d\n" +
+	"\n" +
+	"check_type\x18\x05 \x01(\tR\tcheckType\x12\x14\n" +
+	"\x05skill\x18\x06 \x01(\tR\x05skill\x12\x1e\n" +
+	"\n" +
+	"difficulty\x18\a \x01(\x05R\n" +
+	"difficulty\x12\x12\n" +
+	"\x04roll\x18\b \x01(\x05R\x04roll\x12\x18\n" +
+	"\asuccess\x18\t \x01(\bR\asuccess\x12\x14\n" +
+	"\x05error\x18\n" +
+	" \x01(\tR\x05error\"\xc8\x01\n" +
+	"\x1cDiscoDialogueStateSnapshotV1\x12%\n" +
+	"\x0eschema_version\x18\x01 \x01(\rR\rschemaVersion\x12\x16\n" +
+	"\x06status\x18\x02 \x01(\tR\x06status\x12\x1f\n" +
+	"\vdialogue_id\x18\x03 \x01(\tR\n" +
+	"dialogueId\x12\x18\n" +
+	"\asummary\x18\x04 \x01(\tR\asummary\x12\x18\n" +
+	"\asuccess\x18\x05 \x01(\bR\asuccess\x12\x14\n" +
+	"\x05error\x18\x06 \x01(\tR\x05errorBJZHgithub.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/timeline;timelineb\x06proto3"
 
 var (
 	file_proto_sem_timeline_middleware_proto_rawDescOnce sync.Once
@@ -315,11 +680,14 @@ func file_proto_sem_timeline_middleware_proto_rawDescGZIP() []byte {
 	return file_proto_sem_timeline_middleware_proto_rawDescData
 }
 
-var file_proto_sem_timeline_middleware_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
+var file_proto_sem_timeline_middleware_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
 var file_proto_sem_timeline_middleware_proto_goTypes = []any{
-	(*ThinkingModeSnapshotV1)(nil),   // 0: sem.timeline.ThinkingModeSnapshotV1
-	(*ModeEvaluationSnapshotV1)(nil), // 1: sem.timeline.ModeEvaluationSnapshotV1
-	(*InnerThoughtsSnapshotV1)(nil),  // 2: sem.timeline.InnerThoughtsSnapshotV1
+	(*ThinkingModeSnapshotV1)(nil),       // 0: sem.timeline.ThinkingModeSnapshotV1
+	(*ModeEvaluationSnapshotV1)(nil),     // 1: sem.timeline.ModeEvaluationSnapshotV1
+	(*InnerThoughtsSnapshotV1)(nil),      // 2: sem.timeline.InnerThoughtsSnapshotV1
+	(*DiscoDialogueLineSnapshotV1)(nil),  // 3: sem.timeline.DiscoDialogueLineSnapshotV1
+	(*DiscoDialogueCheckSnapshotV1)(nil), // 4: sem.timeline.DiscoDialogueCheckSnapshotV1
+	(*DiscoDialogueStateSnapshotV1)(nil), // 5: sem.timeline.DiscoDialogueStateSnapshotV1
 }
 var file_proto_sem_timeline_middleware_proto_depIdxs = []int32{
 	0, // [0:0] is the sub-list for method output_type
@@ -340,7 +708,7 @@ func file_proto_sem_timeline_middleware_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_sem_timeline_middleware_proto_rawDesc), len(file_proto_sem_timeline_middleware_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   3,
+			NumMessages:   6,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

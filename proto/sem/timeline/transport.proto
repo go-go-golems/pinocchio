@@ -30,6 +30,9 @@ message TimelineEntityV1 {
     sem.timeline.InnerThoughtsSnapshotV1 inner_thoughts = 16;
     sem.timeline.TeamAnalysisSnapshotV1 team_analysis = 17;
     sem.timeline.PlanningSnapshotV1 planning = 18;
+    sem.timeline.DiscoDialogueLineSnapshotV1 disco_dialogue_line = 19;
+    sem.timeline.DiscoDialogueCheckSnapshotV1 disco_dialogue_check = 20;
+    sem.timeline.DiscoDialogueStateSnapshotV1 disco_dialogue_state = 21;
   }
 }
 

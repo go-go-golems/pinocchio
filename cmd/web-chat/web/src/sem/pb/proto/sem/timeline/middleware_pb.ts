@@ -10,7 +10,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file proto/sem/timeline/middleware.proto.
  */
 export const file_proto_sem_timeline_middleware: GenFile = /*@__PURE__*/
-  fileDesc("CiNwcm90by9zZW0vdGltZWxpbmUvbWlkZGxld2FyZS5wcm90bxIMc2VtLnRpbWVsaW5lIpABChZUaGlua2luZ01vZGVTbmFwc2hvdFYxEhYKDnNjaGVtYV92ZXJzaW9uGAEgASgNEg4KBnN0YXR1cxgCIAEoCRIMCgRtb2RlGAMgASgJEg0KBXBoYXNlGAQgASgJEhEKCXJlYXNvbmluZxgFIAEoCRIPCgdzdWNjZXNzGAYgASgIEg0KBWVycm9yGAcgASgJIrYBChhNb2RlRXZhbHVhdGlvblNuYXBzaG90VjESFgoOc2NoZW1hX3ZlcnNpb24YASABKA0SDgoGc3RhdHVzGAIgASgJEhQKDGN1cnJlbnRfbW9kZRgDIAEoCRIQCghhbmFseXNpcxgEIAEoCRIQCghkZWNpc2lvbhgFIAEoCRIYChByZWNvbW1lbmRlZF9tb2RlGAYgASgJEg8KB3N1Y2Nlc3MYByABKAgSDQoFZXJyb3IYCCABKAkiTwoXSW5uZXJUaG91Z2h0c1NuYXBzaG90VjESFgoOc2NoZW1hX3ZlcnNpb24YASABKA0SDgoGc3RhdHVzGAIgASgJEgwKBHRleHQYAyABKAlCSlpIZ2l0aHViLmNvbS9nby1nby1nb2xlbXMvcGlub2NjaGlvL3BrZy9zZW0vcGIvcHJvdG8vc2VtL3RpbWVsaW5lO3RpbWVsaW5lYgZwcm90bzM");
+  fileDesc("CiNwcm90by9zZW0vdGltZWxpbmUvbWlkZGxld2FyZS5wcm90bxIMc2VtLnRpbWVsaW5lIpABChZUaGlua2luZ01vZGVTbmFwc2hvdFYxEhYKDnNjaGVtYV92ZXJzaW9uGAEgASgNEg4KBnN0YXR1cxgCIAEoCRIMCgRtb2RlGAMgASgJEg0KBXBoYXNlGAQgASgJEhEKCXJlYXNvbmluZxgFIAEoCRIPCgdzdWNjZXNzGAYgASgIEg0KBWVycm9yGAcgASgJIrYBChhNb2RlRXZhbHVhdGlvblNuYXBzaG90VjESFgoOc2NoZW1hX3ZlcnNpb24YASABKA0SDgoGc3RhdHVzGAIgASgJEhQKDGN1cnJlbnRfbW9kZRgDIAEoCRIQCghhbmFseXNpcxgEIAEoCRIQCghkZWNpc2lvbhgFIAEoCRIYChByZWNvbW1lbmRlZF9tb2RlGAYgASgJEg8KB3N1Y2Nlc3MYByABKAgSDQoFZXJyb3IYCCABKAkiTwoXSW5uZXJUaG91Z2h0c1NuYXBzaG90VjESFgoOc2NoZW1hX3ZlcnNpb24YASABKA0SDgoGc3RhdHVzGAIgASgJEgwKBHRleHQYAyABKAki2wEKG0Rpc2NvRGlhbG9ndWVMaW5lU25hcHNob3RWMRIWCg5zY2hlbWFfdmVyc2lvbhgBIAEoDRIOCgZzdGF0dXMYAiABKAkSEwoLZGlhbG9ndWVfaWQYAyABKAkSDwoHbGluZV9pZBgEIAEoCRIPCgdwZXJzb25hGAUgASgJEgwKBHRvbmUYBiABKAkSDAoEdGV4dBgHIAEoCRIPCgd0cmlnZ2VyGAggASgJEhAKCHByb2dyZXNzGAkgASgBEg8KB3N1Y2Nlc3MYCiABKAgSDQoFZXJyb3IYCyABKAki0QEKHERpc2NvRGlhbG9ndWVDaGVja1NuYXBzaG90VjESFgoOc2NoZW1hX3ZlcnNpb24YASABKA0SDgoGc3RhdHVzGAIgASgJEhMKC2RpYWxvZ3VlX2lkGAMgASgJEg8KB2xpbmVfaWQYBCABKAkSEgoKY2hlY2tfdHlwZRgFIAEoCRINCgVza2lsbBgGIAEoCRISCgpkaWZmaWN1bHR5GAcgASgFEgwKBHJvbGwYCCABKAUSDwoHc3VjY2VzcxgJIAEoCBINCgVlcnJvchgKIAEoCSKMAQocRGlzY29EaWFsb2d1ZVN0YXRlU25hcHNob3RWMRIWCg5zY2hlbWFfdmVyc2lvbhgBIAEoDRIOCgZzdGF0dXMYAiABKAkSEwoLZGlhbG9ndWVfaWQYAyABKAkSDwoHc3VtbWFyeRgEIAEoCRIPCgdzdWNjZXNzGAUgASgIEg0KBWVycm9yGAYgASgJQkpaSGdpdGh1Yi5jb20vZ28tZ28tZ29sZW1zL3Bpbm9jY2hpby9wa2cvc2VtL3BiL3Byb3RvL3NlbS90aW1lbGluZTt0aW1lbGluZWIGcHJvdG8z");
 
 /**
  * ThinkingModeSnapshotV1 maps 'thinking_mode' entity props
@@ -155,4 +155,193 @@ export type InnerThoughtsSnapshotV1 = Message<"sem.timeline.InnerThoughtsSnapsho
  */
 export const InnerThoughtsSnapshotV1Schema: GenMessage<InnerThoughtsSnapshotV1> = /*@__PURE__*/
   messageDesc(file_proto_sem_timeline_middleware, 2);
+
+/**
+ * DiscoDialogueLineSnapshotV1 maps 'disco_dialogue_line' entity props.
+ *
+ * @generated from message sem.timeline.DiscoDialogueLineSnapshotV1
+ */
+export type DiscoDialogueLineSnapshotV1 = Message<"sem.timeline.DiscoDialogueLineSnapshotV1"> & {
+  /**
+   * =1
+   *
+   * @generated from field: uint32 schema_version = 1;
+   */
+  schemaVersion: number;
+
+  /**
+   * started|update|completed|error
+   *
+   * @generated from field: string status = 2;
+   */
+  status: string;
+
+  /**
+   * @generated from field: string dialogue_id = 3;
+   */
+  dialogueId: string;
+
+  /**
+   * @generated from field: string line_id = 4;
+   */
+  lineId: string;
+
+  /**
+   * @generated from field: string persona = 5;
+   */
+  persona: string;
+
+  /**
+   * @generated from field: string tone = 6;
+   */
+  tone: string;
+
+  /**
+   * @generated from field: string text = 7;
+   */
+  text: string;
+
+  /**
+   * @generated from field: string trigger = 8;
+   */
+  trigger: string;
+
+  /**
+   * @generated from field: double progress = 9;
+   */
+  progress: number;
+
+  /**
+   * @generated from field: bool success = 10;
+   */
+  success: boolean;
+
+  /**
+   * @generated from field: string error = 11;
+   */
+  error: string;
+};
+
+/**
+ * Describes the message sem.timeline.DiscoDialogueLineSnapshotV1.
+ * Use `create(DiscoDialogueLineSnapshotV1Schema)` to create a new message.
+ */
+export const DiscoDialogueLineSnapshotV1Schema: GenMessage<DiscoDialogueLineSnapshotV1> = /*@__PURE__*/
+  messageDesc(file_proto_sem_timeline_middleware, 3);
+
+/**
+ * DiscoDialogueCheckSnapshotV1 maps 'disco_dialogue_check' entity props.
+ *
+ * @generated from message sem.timeline.DiscoDialogueCheckSnapshotV1
+ */
+export type DiscoDialogueCheckSnapshotV1 = Message<"sem.timeline.DiscoDialogueCheckSnapshotV1"> & {
+  /**
+   * =1
+   *
+   * @generated from field: uint32 schema_version = 1;
+   */
+  schemaVersion: number;
+
+  /**
+   * started|update|completed|error
+   *
+   * @generated from field: string status = 2;
+   */
+  status: string;
+
+  /**
+   * @generated from field: string dialogue_id = 3;
+   */
+  dialogueId: string;
+
+  /**
+   * @generated from field: string line_id = 4;
+   */
+  lineId: string;
+
+  /**
+   * @generated from field: string check_type = 5;
+   */
+  checkType: string;
+
+  /**
+   * @generated from field: string skill = 6;
+   */
+  skill: string;
+
+  /**
+   * @generated from field: int32 difficulty = 7;
+   */
+  difficulty: number;
+
+  /**
+   * @generated from field: int32 roll = 8;
+   */
+  roll: number;
+
+  /**
+   * @generated from field: bool success = 9;
+   */
+  success: boolean;
+
+  /**
+   * @generated from field: string error = 10;
+   */
+  error: string;
+};
+
+/**
+ * Describes the message sem.timeline.DiscoDialogueCheckSnapshotV1.
+ * Use `create(DiscoDialogueCheckSnapshotV1Schema)` to create a new message.
+ */
+export const DiscoDialogueCheckSnapshotV1Schema: GenMessage<DiscoDialogueCheckSnapshotV1> = /*@__PURE__*/
+  messageDesc(file_proto_sem_timeline_middleware, 4);
+
+/**
+ * DiscoDialogueStateSnapshotV1 maps 'disco_dialogue_state' entity props.
+ *
+ * @generated from message sem.timeline.DiscoDialogueStateSnapshotV1
+ */
+export type DiscoDialogueStateSnapshotV1 = Message<"sem.timeline.DiscoDialogueStateSnapshotV1"> & {
+  /**
+   * =1
+   *
+   * @generated from field: uint32 schema_version = 1;
+   */
+  schemaVersion: number;
+
+  /**
+   * started|update|completed|error
+   *
+   * @generated from field: string status = 2;
+   */
+  status: string;
+
+  /**
+   * @generated from field: string dialogue_id = 3;
+   */
+  dialogueId: string;
+
+  /**
+   * @generated from field: string summary = 4;
+   */
+  summary: string;
+
+  /**
+   * @generated from field: bool success = 5;
+   */
+  success: boolean;
+
+  /**
+   * @generated from field: string error = 6;
+   */
+  error: string;
+};
+
+/**
+ * Describes the message sem.timeline.DiscoDialogueStateSnapshotV1.
+ * Use `create(DiscoDialogueStateSnapshotV1Schema)` to create a new message.
+ */
+export const DiscoDialogueStateSnapshotV1Schema: GenMessage<DiscoDialogueStateSnapshotV1> = /*@__PURE__*/
+  messageDesc(file_proto_sem_timeline_middleware, 5);
 
