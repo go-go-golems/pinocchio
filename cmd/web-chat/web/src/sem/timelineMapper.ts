@@ -36,6 +36,48 @@ export function propsFromTimelineEntity(e: TimelineEntityV1): any {
       error: val?.error ?? '',
     };
   }
+  if (kind === 'disco_dialogue_line' && oneof.case === 'discoDialogueLine') {
+    const status = val?.status ?? '';
+    const success = status === 'completed' ? true : status === 'error' ? false : undefined;
+    return {
+      status,
+      dialogueId: val?.dialogueId ?? '',
+      lineId: val?.lineId ?? '',
+      persona: val?.persona ?? '',
+      tone: val?.tone ?? '',
+      text: val?.text ?? '',
+      trigger: val?.trigger ?? '',
+      progress: toNumber(val?.progress),
+      success: typeof val?.success === 'boolean' ? val.success : success,
+      error: val?.error ?? '',
+    };
+  }
+  if (kind === 'disco_dialogue_check' && oneof.case === 'discoDialogueCheck') {
+    const status = val?.status ?? '';
+    const success = status === 'completed' ? true : status === 'error' ? false : undefined;
+    return {
+      status,
+      dialogueId: val?.dialogueId ?? '',
+      lineId: val?.lineId ?? '',
+      checkType: val?.checkType ?? '',
+      skill: val?.skill ?? '',
+      difficulty: toNumber(val?.difficulty),
+      roll: toNumber(val?.roll),
+      success: typeof val?.success === 'boolean' ? val.success : success,
+      error: val?.error ?? '',
+    };
+  }
+  if (kind === 'disco_dialogue_state' && oneof.case === 'discoDialogueState') {
+    const status = val?.status ?? '';
+    const success = status === 'completed' ? true : status === 'error' ? false : undefined;
+    return {
+      status,
+      dialogueId: val?.dialogueId ?? '',
+      summary: val?.summary ?? '',
+      success: typeof val?.success === 'boolean' ? val.success : success,
+      error: val?.error ?? '',
+    };
+  }
   if (kind === 'planning' && oneof.case === 'planning') {
     const iterations = Array.isArray(val?.iterations)
       ? val.iterations.map((it: any) => ({
