@@ -110,3 +110,14 @@ func WithTimelineStore(s TimelineStore) RouterOption {
 		return nil
 	}
 }
+
+// WithEventSinkWrapper allows callers to wrap the default event sink (e.g., FilteringSink).
+func WithEventSinkWrapper(fn EventSinkWrapper) RouterOption {
+	return func(r *Router) error {
+		if fn == nil {
+			return errors.New("event sink wrapper is nil")
+		}
+		r.eventSinkWrapper = fn
+		return nil
+	}
+}

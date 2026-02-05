@@ -27,6 +27,9 @@ type ToolFactory func(reg geptools.ToolRegistry) error
 // RunLoop is a backend loop strategy for a conversation.
 type RunLoop func(ctx context.Context, eng engine.Engine, t *turns.Turn, reg geptools.ToolRegistry, opts map[string]any) (*turns.Turn, error)
 
+// EventSinkWrapper allows callers to wrap or replace the default event sink.
+type EventSinkWrapper func(convID string, cfg EngineConfig, sink events.EventSink) (events.EventSink, error)
+
 // MiddlewareUse declares a middleware to attach and its config.
 type MiddlewareUse struct {
 	Name   string
@@ -110,4 +113,7 @@ type Router struct {
 	// optional overrides for conv manager hooks
 	buildSubscriberOverride    func(convID string) (message.Subscriber, bool, error)
 	timelineUpsertHookOverride func(*Conversation) func(entity *timelinepb.TimelineEntityV1, version uint64)
+
+	// optional event sink wrapper
+	eventSinkWrapper EventSinkWrapper
 }
