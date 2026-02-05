@@ -4,12 +4,12 @@ import "context"
 
 // TurnSnapshot captures a serialized turn for inspection.
 type TurnSnapshot struct {
-	ConvID      string
-	RunID       string
-	TurnID      string
-	Phase       string
-	CreatedAtMs int64
-	Payload     string
+	ConvID      string `json:"conv_id"`
+	RunID       string `json:"run_id"`
+	TurnID      string `json:"turn_id"`
+	Phase       string `json:"phase"`
+	CreatedAtMs int64  `json:"created_at_ms"`
+	Payload     string `json:"payload"`
 }
 
 // TurnQuery describes filters for loading stored turns.
