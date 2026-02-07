@@ -7,10 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"sort"
-
 	"google.golang.org/protobuf/encoding/protojson"
-	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/structpb"
 
 	sempb "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/base"
@@ -29,16 +26,10 @@ type semEnvelope struct {
 	} `json:"event"`
 }
 
-type planningAgg struct {
-	snap       *timelinepb.PlanningSnapshotV1
-	iterations map[int32]*timelinepb.PlanningIterationSnapshotV1
-}
-
 // TimelineProjector converts SEM frames into sem.timeline.* projection snapshots and persists them via a TimelineStore.
 //
 // It is per-conversation and keeps small in-memory caches to:
 // - remember message roles (assistant vs thinking) across llm.delta events
-// - aggregate planning events into a single PlanningSnapshotV1
 // - throttle high-frequency writes (llm.delta)
 type TimelineProjector struct {
 	convID   string
@@ -50,7 +41,6 @@ type TimelineProjector struct {
 	lastMsgWrite map[string]int64
 	toolNames    map[string]string
 	toolInputs   map[string]*structpb.Struct
-	planning     map[string]*planningAgg // key: run_id
 }
 
 func NewTimelineProjector(convID string, store TimelineStore, onUpsert func(entity *timelinepb.TimelineEntityV1, version uint64)) *TimelineProjector {
@@ -62,7 +52,6 @@ func NewTimelineProjector(convID string, store TimelineStore, onUpsert func(enti
 		lastMsgWrite: map[string]int64{},
 		toolNames:    map[string]string{},
 		toolInputs:   map[string]*structpb.Struct{},
-		planning:     map[string]*planningAgg{},
 	}
 }
 
@@ -395,262 +384,7 @@ func (p *TimelineProjector) ApplySemFrame(ctx context.Context, frame []byte) err
 		})
 		return err
 
-	case "planning.start", "planning.iteration", "planning.reflection", "planning.complete", "execution.start", "execution.complete":
-		return p.applyPlanning(ctx, seq, env.Event.Type, env.Event.Data)
 	}
 
 	return nil
-}
-
-func (p *TimelineProjector) applyPlanning(ctx context.Context, seq uint64, typ string, data json.RawMessage) error {
-	if p == nil || p.store == nil {
-		return nil
-	}
-	now := time.Now().UnixMilli()
-
-	ensureAgg := func(runID string) *planningAgg {
-		if runID == "" {
-			return nil
-		}
-		if existing := p.planning[runID]; existing != nil {
-			return existing
-		}
-		agg := &planningAgg{
-			snap: &timelinepb.PlanningSnapshotV1{
-				SchemaVersion: 1,
-				RunId:         runID,
-				Status:        "planning",
-			},
-			iterations: map[int32]*timelinepb.PlanningIterationSnapshotV1{},
-		}
-		p.planning[runID] = agg
-		return agg
-	}
-
-	runID := ""
-	switch typ {
-	case "planning.start":
-		var pb semMw.PlanningStarted
-		if err := protojson.Unmarshal(data, &pb); err != nil {
-			return nil
-		}
-		if pb.Run != nil {
-			runID = pb.Run.RunId
-		}
-		if runID == "" {
-			return nil
-		}
-		p.mu.Lock()
-		agg := ensureAgg(runID)
-		if agg == nil || agg.snap == nil {
-			p.mu.Unlock()
-			return nil
-		}
-		if pb.Run != nil {
-			agg.snap.Provider = pb.Run.Provider
-			agg.snap.PlannerModel = pb.Run.PlannerModel
-			agg.snap.MaxIterations = pb.Run.MaxIterations
-		}
-		if pb.StartedAtUnixMs > 0 {
-			agg.snap.StartedAtUnixMs = pb.StartedAtUnixMs
-		} else if agg.snap.StartedAtUnixMs == 0 {
-			agg.snap.StartedAtUnixMs = now
-		}
-		agg.snap.Status = "planning"
-		p.mu.Unlock()
-
-	case "planning.iteration":
-		var pb semMw.PlanningIteration
-		if err := protojson.Unmarshal(data, &pb); err != nil {
-			return nil
-		}
-		if pb.Run != nil {
-			runID = pb.Run.RunId
-		}
-		if runID == "" {
-			return nil
-		}
-		p.mu.Lock()
-		agg := ensureAgg(runID)
-		if agg == nil || agg.snap == nil {
-			p.mu.Unlock()
-			return nil
-		}
-		if pb.Run != nil {
-			if agg.snap.Provider == "" {
-				agg.snap.Provider = pb.Run.Provider
-			}
-			if agg.snap.PlannerModel == "" {
-				agg.snap.PlannerModel = pb.Run.PlannerModel
-			}
-			if agg.snap.MaxIterations == 0 {
-				agg.snap.MaxIterations = pb.Run.MaxIterations
-			}
-		}
-		idx := pb.IterationIndex
-		it := agg.iterations[idx]
-		if it == nil {
-			it = &timelinepb.PlanningIterationSnapshotV1{IterationIndex: idx}
-			agg.iterations[idx] = it
-		}
-		it.Action = pb.Action
-		it.Reasoning = pb.Reasoning
-		it.Strategy = pb.Strategy
-		it.Progress = pb.Progress
-		it.ToolName = pb.ToolName
-		it.Extra = pb.Extra
-		it.EmittedAtUnixMs = pb.EmittedAtUnixMs
-		if pb.ReflectionText != "" {
-			it.ReflectionText = pb.ReflectionText
-		}
-		agg.snap.Status = "planning"
-		p.mu.Unlock()
-
-	case "planning.reflection":
-		var pb semMw.PlanningReflection
-		if err := protojson.Unmarshal(data, &pb); err != nil {
-			return nil
-		}
-		if pb.Run != nil {
-			runID = pb.Run.RunId
-		}
-		if runID == "" {
-			return nil
-		}
-		p.mu.Lock()
-		agg := ensureAgg(runID)
-		if agg == nil || agg.snap == nil {
-			p.mu.Unlock()
-			return nil
-		}
-		idx := pb.IterationIndex
-		it := agg.iterations[idx]
-		if it == nil {
-			it = &timelinepb.PlanningIterationSnapshotV1{IterationIndex: idx}
-			agg.iterations[idx] = it
-		}
-		it.ReflectionText = pb.ReflectionText
-		it.EmittedAtUnixMs = pb.EmittedAtUnixMs
-		agg.snap.Status = "planning"
-		p.mu.Unlock()
-
-	case "planning.complete":
-		var pb semMw.PlanningCompleted
-		if err := protojson.Unmarshal(data, &pb); err != nil {
-			return nil
-		}
-		if pb.Run != nil {
-			runID = pb.Run.RunId
-		}
-		if runID == "" {
-			return nil
-		}
-		p.mu.Lock()
-		agg := ensureAgg(runID)
-		if agg == nil || agg.snap == nil {
-			p.mu.Unlock()
-			return nil
-		}
-		if pb.Run != nil {
-			agg.snap.Provider = pb.Run.Provider
-			agg.snap.PlannerModel = pb.Run.PlannerModel
-			agg.snap.MaxIterations = pb.Run.MaxIterations
-		}
-		if pb.CompletedAtUnixMs > 0 {
-			agg.snap.CompletedAtUnixMs = pb.CompletedAtUnixMs
-		}
-		agg.snap.FinalDecision = pb.FinalDecision
-		agg.snap.StatusReason = pb.StatusReason
-		agg.snap.FinalDirective = pb.FinalDirective
-		// After planning completes we typically enter execution.
-		agg.snap.Status = "executing"
-		p.mu.Unlock()
-
-	case "execution.start":
-		var pb semMw.ExecutionStarted
-		if err := protojson.Unmarshal(data, &pb); err != nil {
-			return nil
-		}
-		runID = pb.RunId
-		if runID == "" {
-			return nil
-		}
-		p.mu.Lock()
-		agg := ensureAgg(runID)
-		if agg == nil || agg.snap == nil {
-			p.mu.Unlock()
-			return nil
-		}
-		if agg.snap.Execution == nil {
-			agg.snap.Execution = &timelinepb.ExecutionSnapshotV1{}
-		}
-		agg.snap.Execution.ExecutorModel = pb.ExecutorModel
-		agg.snap.Execution.Directive = pb.Directive
-		agg.snap.Execution.StartedAtUnixMs = pb.StartedAtUnixMs
-		if agg.snap.Execution.StartedAtUnixMs == 0 {
-			agg.snap.Execution.StartedAtUnixMs = now
-		}
-		agg.snap.Execution.Status = "running"
-		agg.snap.Status = "executing"
-		p.mu.Unlock()
-
-	case "execution.complete":
-		var pb semMw.ExecutionCompleted
-		if err := protojson.Unmarshal(data, &pb); err != nil {
-			return nil
-		}
-		runID = pb.RunId
-		if runID == "" {
-			return nil
-		}
-		p.mu.Lock()
-		agg := ensureAgg(runID)
-		if agg == nil || agg.snap == nil {
-			p.mu.Unlock()
-			return nil
-		}
-		if agg.snap.Execution == nil {
-			agg.snap.Execution = &timelinepb.ExecutionSnapshotV1{}
-		}
-		agg.snap.Execution.CompletedAtUnixMs = pb.CompletedAtUnixMs
-		agg.snap.Execution.Status = pb.Status
-		if agg.snap.Execution.Status == "" {
-			agg.snap.Execution.Status = "completed"
-		}
-		agg.snap.Execution.ErrorMessage = pb.ErrorMessage
-		agg.snap.Status = "completed"
-		if strings.TrimSpace(pb.Status) == "error" || strings.TrimSpace(pb.ErrorMessage) != "" {
-			agg.snap.Status = "error"
-		}
-		p.mu.Unlock()
-	}
-
-	if runID == "" {
-		return nil
-	}
-
-	p.mu.Lock()
-	agg := p.planning[runID]
-	if agg == nil || agg.snap == nil {
-		p.mu.Unlock()
-		return nil
-	}
-	iters := make([]*timelinepb.PlanningIterationSnapshotV1, 0, len(agg.iterations))
-	for _, v := range agg.iterations {
-		iters = append(iters, v)
-	}
-	sort.Slice(iters, func(i, j int) bool { return iters[i].IterationIndex < iters[j].IterationIndex })
-
-	snapCopy := proto.Clone(agg.snap).(*timelinepb.PlanningSnapshotV1)
-	snapCopy.Iterations = iters
-	p.mu.Unlock()
-
-	err := p.upsert(ctx, seq, &timelinepb.TimelineEntityV1{
-		Id:   snapCopy.RunId,
-		Kind: "planning",
-		Snapshot: &timelinepb.TimelineEntityV1_Planning{
-			Planning: snapCopy,
-		},
-	})
-	return err
 }

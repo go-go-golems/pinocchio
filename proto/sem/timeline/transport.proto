@@ -6,7 +6,6 @@ option go_package = "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/time
 
 import "proto/sem/timeline/message.proto";
 import "proto/sem/timeline/middleware.proto";
-import "proto/sem/timeline/planning.proto";
 import "proto/sem/timeline/status.proto";
 import "proto/sem/timeline/team_analysis.proto";
 import "proto/sem/timeline/tool.proto";
@@ -15,7 +14,7 @@ import "proto/sem/timeline/tool.proto";
 // It is the canonical "projection state" unit owned by the backend.
 message TimelineEntityV1 {
   string id = 1;       // stable entity ID for upsert
-  string kind = 2;     // message|tool_call|tool_result|status|thinking_mode|planning|...
+  string kind = 2;     // message|tool_call|tool_result|status|thinking_mode|...
   int64 created_at_ms = 3;
   int64 updated_at_ms = 4;
 
@@ -29,7 +28,6 @@ message TimelineEntityV1 {
     sem.timeline.ModeEvaluationSnapshotV1 mode_evaluation = 15;
     sem.timeline.InnerThoughtsSnapshotV1 inner_thoughts = 16;
     sem.timeline.TeamAnalysisSnapshotV1 team_analysis = 17;
-    sem.timeline.PlanningSnapshotV1 planning = 18;
     sem.timeline.DiscoDialogueLineSnapshotV1 disco_dialogue_line = 19;
     sem.timeline.DiscoDialogueCheckSnapshotV1 disco_dialogue_check = 20;
     sem.timeline.DiscoDialogueStateSnapshotV1 disco_dialogue_state = 21;

@@ -26,7 +26,7 @@ const (
 type TimelineEntityV1 struct {
 	state       protoimpl.MessageState `protogen:"open.v1"`
 	Id          string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`     // stable entity ID for upsert
-	Kind        string                 `protobuf:"bytes,2,opt,name=kind,proto3" json:"kind,omitempty"` // message|tool_call|tool_result|status|thinking_mode|planning|...
+	Kind        string                 `protobuf:"bytes,2,opt,name=kind,proto3" json:"kind,omitempty"` // message|tool_call|tool_result|status|thinking_mode|...
 	CreatedAtMs int64                  `protobuf:"varint,3,opt,name=created_at_ms,json=createdAtMs,proto3" json:"created_at_ms,omitempty"`
 	UpdatedAtMs int64                  `protobuf:"varint,4,opt,name=updated_at_ms,json=updatedAtMs,proto3" json:"updated_at_ms,omitempty"`
 	// Exactly one payload should be set.
@@ -41,7 +41,6 @@ type TimelineEntityV1 struct {
 	//	*TimelineEntityV1_ModeEvaluation
 	//	*TimelineEntityV1_InnerThoughts
 	//	*TimelineEntityV1_TeamAnalysis
-	//	*TimelineEntityV1_Planning
 	//	*TimelineEntityV1_DiscoDialogueLine
 	//	*TimelineEntityV1_DiscoDialogueCheck
 	//	*TimelineEntityV1_DiscoDialogueState
@@ -187,15 +186,6 @@ func (x *TimelineEntityV1) GetTeamAnalysis() *TeamAnalysisSnapshotV1 {
 	return nil
 }
 
-func (x *TimelineEntityV1) GetPlanning() *PlanningSnapshotV1 {
-	if x != nil {
-		if x, ok := x.Snapshot.(*TimelineEntityV1_Planning); ok {
-			return x.Planning
-		}
-	}
-	return nil
-}
-
 func (x *TimelineEntityV1) GetDiscoDialogueLine() *DiscoDialogueLineSnapshotV1 {
 	if x != nil {
 		if x, ok := x.Snapshot.(*TimelineEntityV1_DiscoDialogueLine); ok {
@@ -259,10 +249,6 @@ type TimelineEntityV1_TeamAnalysis struct {
 	TeamAnalysis *TeamAnalysisSnapshotV1 `protobuf:"bytes,17,opt,name=team_analysis,json=teamAnalysis,proto3,oneof"`
 }
 
-type TimelineEntityV1_Planning struct {
-	Planning *PlanningSnapshotV1 `protobuf:"bytes,18,opt,name=planning,proto3,oneof"`
-}
-
 type TimelineEntityV1_DiscoDialogueLine struct {
 	DiscoDialogueLine *DiscoDialogueLineSnapshotV1 `protobuf:"bytes,19,opt,name=disco_dialogue_line,json=discoDialogueLine,proto3,oneof"`
 }
@@ -290,8 +276,6 @@ func (*TimelineEntityV1_ModeEvaluation) isTimelineEntityV1_Snapshot() {}
 func (*TimelineEntityV1_InnerThoughts) isTimelineEntityV1_Snapshot() {}
 
 func (*TimelineEntityV1_TeamAnalysis) isTimelineEntityV1_Snapshot() {}
-
-func (*TimelineEntityV1_Planning) isTimelineEntityV1_Snapshot() {}
 
 func (*TimelineEntityV1_DiscoDialogueLine) isTimelineEntityV1_Snapshot() {}
 
@@ -434,7 +418,7 @@ var File_proto_sem_timeline_transport_proto protoreflect.FileDescriptor
 
 const file_proto_sem_timeline_transport_proto_rawDesc = "" +
 	"\n" +
-	"\"proto/sem/timeline/transport.proto\x12\fsem.timeline\x1a proto/sem/timeline/message.proto\x1a#proto/sem/timeline/middleware.proto\x1a!proto/sem/timeline/planning.proto\x1a\x1fproto/sem/timeline/status.proto\x1a&proto/sem/timeline/team_analysis.proto\x1a\x1dproto/sem/timeline/tool.proto\"\xa3\b\n" +
+	"\"proto/sem/timeline/transport.proto\x12\fsem.timeline\x1a proto/sem/timeline/message.proto\x1a#proto/sem/timeline/middleware.proto\x1a\x1fproto/sem/timeline/status.proto\x1a&proto/sem/timeline/team_analysis.proto\x1a\x1dproto/sem/timeline/tool.proto\"\xe3\a\n" +
 	"\x10TimelineEntityV1\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04kind\x18\x02 \x01(\tR\x04kind\x12\"\n" +
@@ -449,8 +433,7 @@ const file_proto_sem_timeline_transport_proto_rawDesc = "" +
 	"\rthinking_mode\x18\x0e \x01(\v2$.sem.timeline.ThinkingModeSnapshotV1H\x00R\fthinkingMode\x12Q\n" +
 	"\x0fmode_evaluation\x18\x0f \x01(\v2&.sem.timeline.ModeEvaluationSnapshotV1H\x00R\x0emodeEvaluation\x12N\n" +
 	"\x0einner_thoughts\x18\x10 \x01(\v2%.sem.timeline.InnerThoughtsSnapshotV1H\x00R\rinnerThoughts\x12K\n" +
-	"\rteam_analysis\x18\x11 \x01(\v2$.sem.timeline.TeamAnalysisSnapshotV1H\x00R\fteamAnalysis\x12>\n" +
-	"\bplanning\x18\x12 \x01(\v2 .sem.timeline.PlanningSnapshotV1H\x00R\bplanning\x12[\n" +
+	"\rteam_analysis\x18\x11 \x01(\v2$.sem.timeline.TeamAnalysisSnapshotV1H\x00R\fteamAnalysis\x12[\n" +
 	"\x13disco_dialogue_line\x18\x13 \x01(\v2).sem.timeline.DiscoDialogueLineSnapshotV1H\x00R\x11discoDialogueLine\x12^\n" +
 	"\x14disco_dialogue_check\x18\x14 \x01(\v2*.sem.timeline.DiscoDialogueCheckSnapshotV1H\x00R\x12discoDialogueCheck\x12^\n" +
 	"\x14disco_dialogue_state\x18\x15 \x01(\v2*.sem.timeline.DiscoDialogueStateSnapshotV1H\x00R\x12discoDialogueStateB\n" +
@@ -492,10 +475,9 @@ var file_proto_sem_timeline_transport_proto_goTypes = []any{
 	(*ModeEvaluationSnapshotV1)(nil),     // 8: sem.timeline.ModeEvaluationSnapshotV1
 	(*InnerThoughtsSnapshotV1)(nil),      // 9: sem.timeline.InnerThoughtsSnapshotV1
 	(*TeamAnalysisSnapshotV1)(nil),       // 10: sem.timeline.TeamAnalysisSnapshotV1
-	(*PlanningSnapshotV1)(nil),           // 11: sem.timeline.PlanningSnapshotV1
-	(*DiscoDialogueLineSnapshotV1)(nil),  // 12: sem.timeline.DiscoDialogueLineSnapshotV1
-	(*DiscoDialogueCheckSnapshotV1)(nil), // 13: sem.timeline.DiscoDialogueCheckSnapshotV1
-	(*DiscoDialogueStateSnapshotV1)(nil), // 14: sem.timeline.DiscoDialogueStateSnapshotV1
+	(*DiscoDialogueLineSnapshotV1)(nil),  // 11: sem.timeline.DiscoDialogueLineSnapshotV1
+	(*DiscoDialogueCheckSnapshotV1)(nil), // 12: sem.timeline.DiscoDialogueCheckSnapshotV1
+	(*DiscoDialogueStateSnapshotV1)(nil), // 13: sem.timeline.DiscoDialogueStateSnapshotV1
 }
 var file_proto_sem_timeline_transport_proto_depIdxs = []int32{
 	3,  // 0: sem.timeline.TimelineEntityV1.message:type_name -> sem.timeline.MessageSnapshotV1
@@ -506,17 +488,16 @@ var file_proto_sem_timeline_transport_proto_depIdxs = []int32{
 	8,  // 5: sem.timeline.TimelineEntityV1.mode_evaluation:type_name -> sem.timeline.ModeEvaluationSnapshotV1
 	9,  // 6: sem.timeline.TimelineEntityV1.inner_thoughts:type_name -> sem.timeline.InnerThoughtsSnapshotV1
 	10, // 7: sem.timeline.TimelineEntityV1.team_analysis:type_name -> sem.timeline.TeamAnalysisSnapshotV1
-	11, // 8: sem.timeline.TimelineEntityV1.planning:type_name -> sem.timeline.PlanningSnapshotV1
-	12, // 9: sem.timeline.TimelineEntityV1.disco_dialogue_line:type_name -> sem.timeline.DiscoDialogueLineSnapshotV1
-	13, // 10: sem.timeline.TimelineEntityV1.disco_dialogue_check:type_name -> sem.timeline.DiscoDialogueCheckSnapshotV1
-	14, // 11: sem.timeline.TimelineEntityV1.disco_dialogue_state:type_name -> sem.timeline.DiscoDialogueStateSnapshotV1
-	0,  // 12: sem.timeline.TimelineUpsertV1.entity:type_name -> sem.timeline.TimelineEntityV1
-	0,  // 13: sem.timeline.TimelineSnapshotV1.entities:type_name -> sem.timeline.TimelineEntityV1
-	14, // [14:14] is the sub-list for method output_type
-	14, // [14:14] is the sub-list for method input_type
-	14, // [14:14] is the sub-list for extension type_name
-	14, // [14:14] is the sub-list for extension extendee
-	0,  // [0:14] is the sub-list for field type_name
+	11, // 8: sem.timeline.TimelineEntityV1.disco_dialogue_line:type_name -> sem.timeline.DiscoDialogueLineSnapshotV1
+	12, // 9: sem.timeline.TimelineEntityV1.disco_dialogue_check:type_name -> sem.timeline.DiscoDialogueCheckSnapshotV1
+	13, // 10: sem.timeline.TimelineEntityV1.disco_dialogue_state:type_name -> sem.timeline.DiscoDialogueStateSnapshotV1
+	0,  // 11: sem.timeline.TimelineUpsertV1.entity:type_name -> sem.timeline.TimelineEntityV1
+	0,  // 12: sem.timeline.TimelineSnapshotV1.entities:type_name -> sem.timeline.TimelineEntityV1
+	13, // [13:13] is the sub-list for method output_type
+	13, // [13:13] is the sub-list for method input_type
+	13, // [13:13] is the sub-list for extension type_name
+	13, // [13:13] is the sub-list for extension extendee
+	0,  // [0:13] is the sub-list for field type_name
 }
 
 func init() { file_proto_sem_timeline_transport_proto_init() }
@@ -526,7 +507,6 @@ func file_proto_sem_timeline_transport_proto_init() {
 	}
 	file_proto_sem_timeline_message_proto_init()
 	file_proto_sem_timeline_middleware_proto_init()
-	file_proto_sem_timeline_planning_proto_init()
 	file_proto_sem_timeline_status_proto_init()
 	file_proto_sem_timeline_team_analysis_proto_init()
 	file_proto_sem_timeline_tool_proto_init()
@@ -539,7 +519,6 @@ func file_proto_sem_timeline_transport_proto_init() {
 		(*TimelineEntityV1_ModeEvaluation)(nil),
 		(*TimelineEntityV1_InnerThoughts)(nil),
 		(*TimelineEntityV1_TeamAnalysis)(nil),
-		(*TimelineEntityV1_Planning)(nil),
 		(*TimelineEntityV1_DiscoDialogueLine)(nil),
 		(*TimelineEntityV1_DiscoDialogueCheck)(nil),
 		(*TimelineEntityV1_DiscoDialogueState)(nil),

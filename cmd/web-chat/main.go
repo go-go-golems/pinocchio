@@ -60,7 +60,6 @@ func NewCommand() (*Command, error) {
 			parameters.NewParameterDefinition("evict-idle-seconds", parameters.ParameterTypeInteger, parameters.WithDefault(300), parameters.WithHelp("Evict conversations after N seconds idle (0=disabled)")),
 			parameters.NewParameterDefinition("evict-interval-seconds", parameters.ParameterTypeInteger, parameters.WithDefault(60), parameters.WithHelp("Sweep idle conversations every N seconds (0=disabled)")),
 			parameters.NewParameterDefinition("root", parameters.ParameterTypeString, parameters.WithDefault("/"), parameters.WithHelp("Serve the chat UI under a given URL root (e.g., /chat)")),
-			parameters.NewParameterDefinition("emit-planning-stubs", parameters.ParameterTypeBool, parameters.WithDefault(false), parameters.WithHelp("Emit stub planning/thinking-mode semantic events (for UI demos); disabled by default")),
 			parameters.NewParameterDefinition("timeline-dsn", parameters.ParameterTypeString, parameters.WithDefault(""), parameters.WithHelp("SQLite DSN for durable timeline snapshots (enables GET /timeline); preferred over timeline-db")),
 			parameters.NewParameterDefinition("timeline-db", parameters.ParameterTypeString, parameters.WithDefault(""), parameters.WithHelp("SQLite DB file path for durable timeline snapshots (enables GET /timeline); DSN is derived with WAL/busy_timeout")),
 			parameters.NewParameterDefinition("turns-dsn", parameters.ParameterTypeString, parameters.WithDefault(""), parameters.WithHelp("SQLite DSN for durable turn snapshots (enables GET /turns); preferred over turns-db")),

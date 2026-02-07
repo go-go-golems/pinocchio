@@ -8,8 +8,6 @@ import type { MessageSnapshotV1 } from "./message_pb";
 import { file_proto_sem_timeline_message } from "./message_pb";
 import type { DiscoDialogueCheckSnapshotV1, DiscoDialogueLineSnapshotV1, DiscoDialogueStateSnapshotV1, InnerThoughtsSnapshotV1, ModeEvaluationSnapshotV1, ThinkingModeSnapshotV1 } from "./middleware_pb";
 import { file_proto_sem_timeline_middleware } from "./middleware_pb";
-import type { PlanningSnapshotV1 } from "./planning_pb";
-import { file_proto_sem_timeline_planning } from "./planning_pb";
 import type { StatusSnapshotV1 } from "./status_pb";
 import { file_proto_sem_timeline_status } from "./status_pb";
 import type { TeamAnalysisSnapshotV1 } from "./team_analysis_pb";
@@ -22,7 +20,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file proto/sem/timeline/transport.proto.
  */
 export const file_proto_sem_timeline_transport: GenFile = /*@__PURE__*/
-  fileDesc("CiJwcm90by9zZW0vdGltZWxpbmUvdHJhbnNwb3J0LnByb3RvEgxzZW0udGltZWxpbmUi2AYKEFRpbWVsaW5lRW50aXR5VjESCgoCaWQYASABKAkSDAoEa2luZBgCIAEoCRIVCg1jcmVhdGVkX2F0X21zGAMgASgDEhUKDXVwZGF0ZWRfYXRfbXMYBCABKAMSMgoHbWVzc2FnZRgKIAEoCzIfLnNlbS50aW1lbGluZS5NZXNzYWdlU25hcHNob3RWMUgAEjUKCXRvb2xfY2FsbBgLIAEoCzIgLnNlbS50aW1lbGluZS5Ub29sQ2FsbFNuYXBzaG90VjFIABI5Cgt0b29sX3Jlc3VsdBgMIAEoCzIiLnNlbS50aW1lbGluZS5Ub29sUmVzdWx0U25hcHNob3RWMUgAEjAKBnN0YXR1cxgNIAEoCzIeLnNlbS50aW1lbGluZS5TdGF0dXNTbmFwc2hvdFYxSAASPQoNdGhpbmtpbmdfbW9kZRgOIAEoCzIkLnNlbS50aW1lbGluZS5UaGlua2luZ01vZGVTbmFwc2hvdFYxSAASQQoPbW9kZV9ldmFsdWF0aW9uGA8gASgLMiYuc2VtLnRpbWVsaW5lLk1vZGVFdmFsdWF0aW9uU25hcHNob3RWMUgAEj8KDmlubmVyX3Rob3VnaHRzGBAgASgLMiUuc2VtLnRpbWVsaW5lLklubmVyVGhvdWdodHNTbmFwc2hvdFYxSAASPQoNdGVhbV9hbmFseXNpcxgRIAEoCzIkLnNlbS50aW1lbGluZS5UZWFtQW5hbHlzaXNTbmFwc2hvdFYxSAASNAoIcGxhbm5pbmcYEiABKAsyIC5zZW0udGltZWxpbmUuUGxhbm5pbmdTbmFwc2hvdFYxSAASSAoTZGlzY29fZGlhbG9ndWVfbGluZRgTIAEoCzIpLnNlbS50aW1lbGluZS5EaXNjb0RpYWxvZ3VlTGluZVNuYXBzaG90VjFIABJKChRkaXNjb19kaWFsb2d1ZV9jaGVjaxgUIAEoCzIqLnNlbS50aW1lbGluZS5EaXNjb0RpYWxvZ3VlQ2hlY2tTbmFwc2hvdFYxSAASSgoUZGlzY29fZGlhbG9ndWVfc3RhdGUYFSABKAsyKi5zZW0udGltZWxpbmUuRGlzY29EaWFsb2d1ZVN0YXRlU25hcHNob3RWMUgAQgoKCHNuYXBzaG90ImQKEFRpbWVsaW5lVXBzZXJ0VjESDwoHY29udl9pZBgBIAEoCRIPCgd2ZXJzaW9uGAIgASgEEi4KBmVudGl0eRgDIAEoCzIeLnNlbS50aW1lbGluZS5UaW1lbGluZUVudGl0eVYxIoABChJUaW1lbGluZVNuYXBzaG90VjESDwoHY29udl9pZBgBIAEoCRIPCgd2ZXJzaW9uGAIgASgEEhYKDnNlcnZlcl90aW1lX21zGAMgASgDEjAKCGVudGl0aWVzGAogAygLMh4uc2VtLnRpbWVsaW5lLlRpbWVsaW5lRW50aXR5VjFCSlpIZ2l0aHViLmNvbS9nby1nby1nb2xlbXMvcGlub2NjaGlvL3BrZy9zZW0vcGIvcHJvdG8vc2VtL3RpbWVsaW5lO3RpbWVsaW5lYgZwcm90bzM", [file_proto_sem_timeline_message, file_proto_sem_timeline_middleware, file_proto_sem_timeline_planning, file_proto_sem_timeline_status, file_proto_sem_timeline_team_analysis, file_proto_sem_timeline_tool]);
+  fileDesc("CiJwcm90by9zZW0vdGltZWxpbmUvdHJhbnNwb3J0LnByb3RvEgxzZW0udGltZWxpbmUiogYKEFRpbWVsaW5lRW50aXR5VjESCgoCaWQYASABKAkSDAoEa2luZBgCIAEoCRIVCg1jcmVhdGVkX2F0X21zGAMgASgDEhUKDXVwZGF0ZWRfYXRfbXMYBCABKAMSMgoHbWVzc2FnZRgKIAEoCzIfLnNlbS50aW1lbGluZS5NZXNzYWdlU25hcHNob3RWMUgAEjUKCXRvb2xfY2FsbBgLIAEoCzIgLnNlbS50aW1lbGluZS5Ub29sQ2FsbFNuYXBzaG90VjFIABI5Cgt0b29sX3Jlc3VsdBgMIAEoCzIiLnNlbS50aW1lbGluZS5Ub29sUmVzdWx0U25hcHNob3RWMUgAEjAKBnN0YXR1cxgNIAEoCzIeLnNlbS50aW1lbGluZS5TdGF0dXNTbmFwc2hvdFYxSAASPQoNdGhpbmtpbmdfbW9kZRgOIAEoCzIkLnNlbS50aW1lbGluZS5UaGlua2luZ01vZGVTbmFwc2hvdFYxSAASQQoPbW9kZV9ldmFsdWF0aW9uGA8gASgLMiYuc2VtLnRpbWVsaW5lLk1vZGVFdmFsdWF0aW9uU25hcHNob3RWMUgAEj8KDmlubmVyX3Rob3VnaHRzGBAgASgLMiUuc2VtLnRpbWVsaW5lLklubmVyVGhvdWdodHNTbmFwc2hvdFYxSAASPQoNdGVhbV9hbmFseXNpcxgRIAEoCzIkLnNlbS50aW1lbGluZS5UZWFtQW5hbHlzaXNTbmFwc2hvdFYxSAASSAoTZGlzY29fZGlhbG9ndWVfbGluZRgTIAEoCzIpLnNlbS50aW1lbGluZS5EaXNjb0RpYWxvZ3VlTGluZVNuYXBzaG90VjFIABJKChRkaXNjb19kaWFsb2d1ZV9jaGVjaxgUIAEoCzIqLnNlbS50aW1lbGluZS5EaXNjb0RpYWxvZ3VlQ2hlY2tTbmFwc2hvdFYxSAASSgoUZGlzY29fZGlhbG9ndWVfc3RhdGUYFSABKAsyKi5zZW0udGltZWxpbmUuRGlzY29EaWFsb2d1ZVN0YXRlU25hcHNob3RWMUgAQgoKCHNuYXBzaG90ImQKEFRpbWVsaW5lVXBzZXJ0VjESDwoHY29udl9pZBgBIAEoCRIPCgd2ZXJzaW9uGAIgASgEEi4KBmVudGl0eRgDIAEoCzIeLnNlbS50aW1lbGluZS5UaW1lbGluZUVudGl0eVYxIoABChJUaW1lbGluZVNuYXBzaG90VjESDwoHY29udl9pZBgBIAEoCRIPCgd2ZXJzaW9uGAIgASgEEhYKDnNlcnZlcl90aW1lX21zGAMgASgDEjAKCGVudGl0aWVzGAogAygLMh4uc2VtLnRpbWVsaW5lLlRpbWVsaW5lRW50aXR5VjFCSlpIZ2l0aHViLmNvbS9nby1nby1nb2xlbXMvcGlub2NjaGlvL3BrZy9zZW0vcGIvcHJvdG8vc2VtL3RpbWVsaW5lO3RpbWVsaW5lYgZwcm90bzM", [file_proto_sem_timeline_message, file_proto_sem_timeline_middleware, file_proto_sem_timeline_status, file_proto_sem_timeline_team_analysis, file_proto_sem_timeline_tool]);
 
 /**
  * TimelineEntityV1 represents one upsertable timeline entity.
@@ -39,7 +37,7 @@ export type TimelineEntityV1 = Message<"sem.timeline.TimelineEntityV1"> & {
   id: string;
 
   /**
-   * message|tool_call|tool_result|status|thinking_mode|planning|...
+   * message|tool_call|tool_result|status|thinking_mode|...
    *
    * @generated from field: string kind = 2;
    */
@@ -108,12 +106,6 @@ export type TimelineEntityV1 = Message<"sem.timeline.TimelineEntityV1"> & {
      */
     value: TeamAnalysisSnapshotV1;
     case: "teamAnalysis";
-  } | {
-    /**
-     * @generated from field: sem.timeline.PlanningSnapshotV1 planning = 18;
-     */
-    value: PlanningSnapshotV1;
-    case: "planning";
   } | {
     /**
      * @generated from field: sem.timeline.DiscoDialogueLineSnapshotV1 disco_dialogue_line = 19;
