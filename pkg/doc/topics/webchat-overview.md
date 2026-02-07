@@ -13,7 +13,25 @@ ShowPerDefault: true
 SectionType: GeneralTopic
 ---
 
-The webchat framework provides composable components for building real-time chat applications with streaming LLM responses and tool execution.
+## What Is Webchat?
+
+Webchat is pinocchio's real-time chat framework. It connects a geppetto inference engine to a browser UI through WebSocket streaming, giving you a working chat application with tool execution, timeline persistence, and hot-swappable middleware — out of the box.
+
+**What it handles for you:**
+
+- **Streaming delivery** — Token-by-token LLM output over WebSocket using SEM (Structured Event Messages)
+- **Tool execution UI** — Tool calls, progress, and results rendered as timeline cards
+- **Session persistence** — Timeline entities stored in SQLite, restored on page reload
+- **Connection management** — WebSocket lifecycle, idle cleanup, reconnection with hydration
+- **Middleware composition** — Swap prompting strategies, add safety layers, or inject custom behaviors via profiles
+
+**What it does NOT do:**
+
+- Authentication or user management (bring your own)
+- Multi-tenant routing (one conversation = one engine instance)
+- Custom model hosting (relies on geppetto's provider abstraction)
+
+**In one sentence:** Webchat turns a geppetto engine into a production-ready chat UI with streaming, tools, and persistence.
 
 ## Quick Start
 

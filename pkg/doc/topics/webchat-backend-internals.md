@@ -189,6 +189,126 @@ Dead connections are automatically pruned; clients can reconnect.
 - Check that `Remove()` is called on disconnect
 - `CloseAll()` stops the timer; reinitialize for new connections
 
+## Timeline Projector Internals
+
+The `TimelineProjector` converts ephemeral SEM frames into durable, version-tracked timeline entities stored via a `TimelineStore`. It maintains in-memory state to reconstruct complete entities across streaming events.
+
+### Architecture
+
+```
+SEM Frame (JSON)
+    ↓
+TimelineProjector.ApplySemFrame()
+    ├── Parse envelope (type, id, seq, stream_id, data)
+    ├── Switch on event type
+    ├── Unmarshal protobuf data payload
+    ├── Construct TimelineEntityV1 snapshot
+    └── Upsert to TimelineStore with seq as version
+```
+
+The projector is per-conversation: each `Conversation` creates its own projector instance. The projector is called synchronously from the `StreamCoordinator.consume()` loop, which means projection happens in event order.
+
+### SEM Frame to Entity Mapping
+
+| SEM Event Type | Entity Kind | Snapshot Proto | Notes |
+|---------------|-------------|---------------|-------|
+| `llm.start` | `message` | `MessageSnapshotV1` | Sets role, marks streaming=true |
+| `llm.delta` | `message` | `MessageSnapshotV1` | Cumulative content, throttled writes |
+| `llm.final` | `message` | `MessageSnapshotV1` | Final text, streaming=false |
+| `llm.thinking.start` | `message` | `MessageSnapshotV1` | role=thinking |
+| `llm.thinking.delta` | `message` | `MessageSnapshotV1` | Thinking content, throttled |
+| `llm.thinking.final` | `message` | `MessageSnapshotV1` | Thinking complete |
+| `tool.start` | `tool_call` | `ToolCallSnapshotV1` | name, input, status=running |
+| `tool.done` | `tool_call` | `ToolCallSnapshotV1` | status=completed, progress=1 |
+| `tool.result` | `tool_result` | `ToolResultSnapshotV1` | Result (structured or raw) |
+| `thinking.mode.*` | `thinking_mode` | `ThinkingModeSnapshotV1` | Status: active/completed/error |
+| `planning.*` | `planning` | `PlanningSnapshotV1` | Aggregated from multiple events |
+| `execution.*` | (updates planning) | `PlanningSnapshotV1` | Updates nested execution snapshot |
+
+### Write Throttling
+
+High-frequency `llm.delta` events would overwhelm the database during fast streaming. The projector throttles these writes:
+
+```
+if now - lastMsgWrite[id] < 250ms:
+    skip DB write (return nil)
+else:
+    write to DB, update lastMsgWrite[id]
+```
+
+This means the DB state can lag up to 250ms behind the in-memory/WebSocket state during streaming. The `llm.final` event always writes (no throttling), so the final state is always persisted.
+
+**Impact on hydration:** If the server crashes during streaming, the hydrated state may be up to 250ms stale. The `llm.final` event ensures the completed message is always durable.
+
+### Role Memory
+
+The projector stores the role from `llm.start` and applies it to all subsequent `llm.delta` events for the same message ID:
+
+```
+llm.start (id=abc, role=assistant)  → store msgRoles["abc"] = "assistant"
+llm.delta (id=abc)                  → use msgRoles["abc"] for entity role
+llm.final (id=abc)                  → use msgRoles["abc"] for entity role
+```
+
+If the `llm.start` event is missed (e.g., late WebSocket connection), deltas will have no role. The entity will still be created but the role field will be empty.
+
+Thinking events use the same mechanism with `role=thinking` and append `:thinking` to the message ID to create a separate entity from the main assistant message.
+
+### Stable ID Resolution
+
+The SEM translator (not the projector, but closely related) resolves stable message IDs using a three-tier fallback:
+
+1. **Metadata ID** — if the event has an explicit `metadata.ID`, use it
+2. **Cached ID** — look up by inference ID → turn ID → session ID (first match wins)
+3. **Generated fallback** — `"llm-" + uuid.New()`
+
+IDs are cached per-translator to ensure streaming events for the same logical message use the same ID. The cache is cleared when `EventFinal` is processed to prevent memory leaks.
+
+### Tool Result Handling
+
+Each `tool.result` event creates **two** entities:
+
+1. **Tool call completion** — updates the existing `tool_call` entity with `status=completed`, `progress=1.0`, cached name and input from `tool.start`
+2. **Tool result entity** — new entity with ID `{toolCallID}:result` (or `{toolCallID}:custom` for custom kinds) containing the result data
+
+The projector attempts to parse tool results as JSON. If successful and the result is an object, it stores the structured form. Otherwise it stores the raw string.
+
+Special case: "calc" tool results get `CustomKind: "calc_result"` for specialized widget rendering.
+
+### Planning Aggregation
+
+Planning events are stateful — they build up over time. The projector maintains a `planningAgg` struct per `run_id`:
+
+```
+planning.start       → create planningAgg, set provider/model/maxIterations
+planning.iteration   → add/update iteration in map[iterationIndex]
+planning.reflection  → update iteration's reflection text
+planning.complete    → set finalDecision, status=executing
+execution.start      → set nested execution snapshot
+execution.complete   → set execution status, overall status=completed
+```
+
+On **every** planning event, the projector:
+1. Acquires the lock and updates the in-memory aggregate
+2. Collects all iterations, sorts them by index
+3. Clones the snapshot (to avoid holding the lock during DB write)
+4. Releases the lock
+5. Upserts the full snapshot to the store
+
+This ensures the stored entity always reflects the complete planning state, not just the latest event.
+
+### Version Semantics
+
+The `version` parameter passed to `TimelineStore.Upsert()` is the SEM frame's `Seq` value — a monotonic number derived from Redis stream IDs (when available) or a time-based fallback. This enables:
+
+- **Incremental hydration**: `GetSnapshot(sinceVersion=N)` returns only entities updated after version N
+- **Conflict resolution**: Higher version wins during merge
+- **Ordering**: Versions are comparable across entity types within a conversation
+
+### Custom Timeline Handlers
+
+The projector supports an extension point via `handleTimelineHandlers()` which allows external code to register handlers for specific event types. These run before the built-in switch statement, enabling applications to intercept and handle custom events without modifying the projector code.
+
 ## Key Files
 
 | File | Purpose |
@@ -197,6 +317,8 @@ Dead connections are automatically pruned; clients can reconnect.
 | `pinocchio/pkg/webchat/connection_pool.go` | ConnectionPool implementation |
 | `pinocchio/pkg/webchat/sem_translator.go` | Event to SEM translation |
 | `pinocchio/pkg/webchat/timeline_projector.go` | Timeline hydration/projection |
+| `pinocchio/pkg/webchat/timeline_store.go` | TimelineStore interface |
+| `pinocchio/pkg/webchat/timeline_store_sqlite.go` | SQLite implementation |
 
 ## See Also
 

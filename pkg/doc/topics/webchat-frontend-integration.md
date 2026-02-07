@@ -207,11 +207,90 @@ Conversation IDs persist in the URL for bookmarking and reload:
 | `pinocchio/cmd/web-chat/web/src/store/timelineSlice.ts` | Timeline state management |
 | `pinocchio/cmd/web-chat/web/src/webchat/ChatWidget.tsx` | Main chat component |
 
+## Error Handling Patterns
+
+### WebSocket Disconnects
+
+The `wsManager` handles disconnects by cleaning up state. On reconnect, hydrate from the timeline endpoint before processing new events:
+
+```typescript
+// Reconnection pattern
+wsManager.connect({
+  convId,
+  basePrefix,
+  dispatch,
+  onDisconnect: () => {
+    // Optionally show "reconnecting..." UI
+  },
+  onReconnect: async () => {
+    // Re-hydrate from timeline to fill any gaps
+    const resp = await fetch(`/timeline?conv_id=${convId}&since_version=${lastVersion}`);
+    const entities = await resp.json();
+    entities.forEach((e: any) => dispatch(timelineSlice.actions.upsertEntity(e)));
+  },
+});
+```
+
+### Backend Error Events
+
+Backend errors arrive as SEM frames with type `error` or as HTTP error responses. Handle both paths:
+
+```typescript
+// SEM error events (from WebSocket)
+registerSem('error', (ev, dispatch) => {
+  dispatch(timelineSlice.actions.addEntity({
+    id: ev.id,
+    kind: 'error',
+    createdAt: Date.now(),
+    props: {
+      message: (ev.data as any)?.error ?? 'Unknown error',
+    },
+  }));
+});
+
+// HTTP error responses (from POST /chat)
+async function sendMessage(prompt: string, convId: string) {
+  const resp = await fetch('/chat', {
+    method: 'POST',
+    body: JSON.stringify({ prompt, conv_id: convId }),
+  });
+  if (!resp.ok) {
+    const body = await resp.text();
+    // Show error in UI — don't silently swallow
+    throw new Error(`Chat request failed (${resp.status}): ${body}`);
+  }
+  return resp.json();
+}
+```
+
+### Hydration Race Conditions
+
+When the WebSocket connects and hydration runs simultaneously, events can arrive before hydration completes. The `wsManager` addresses this with a hydration gate:
+
+1. **Buffer phase**: WebSocket events are buffered during hydration
+2. **Hydration**: `/timeline` response loads durable entities into the store
+3. **Replay phase**: Buffered events are replayed in order
+4. **Live phase**: Subsequent events are dispatched immediately
+
+If you build a custom integration, ensure hydration completes before processing live events — otherwise streaming entities may appear before their context (e.g., a `tool.result` before its `tool.start`).
+
+### Stale Entity Merging
+
+When hydration loads entities that also arrive via WebSocket, version-based merging prevents data loss:
+
+- Entity with **higher version** wins
+- Entity with **equal version** merges `props` shallowly (WebSocket data may have more recent streaming state)
+- Entity with **lower version** is ignored
+
+This means you don't need to deduplicate manually — the timeline store handles it.
+
 ## Best Practices
 
 - **One connection per conversation**: Avoid duplicate WebSocket connections
 - **Handle disconnects gracefully**: Reconnect and re-hydrate timeline
 - **Use hydration on reconnect**: Restore state from `/timeline`
+- **Don't ignore HTTP errors**: Always check POST /chat responses and surface failures to the user
+- **Trust the hydration gate**: Don't process WebSocket events before hydration completes
 
 ## See Also
 
