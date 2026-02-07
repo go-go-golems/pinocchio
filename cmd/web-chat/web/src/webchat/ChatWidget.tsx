@@ -207,7 +207,6 @@ export function ChatWidget({
   const onNewConversation = useCallback(() => {
     wsManager.disconnect();
     dispatch(appSlice.actions.setConvId(''));
-    dispatch(appSlice.actions.setRunId(''));
     dispatch(appSlice.actions.setStatus('idle'));
     dispatch(appSlice.actions.setWsStatus('disconnected'));
     dispatch(appSlice.actions.setLastSeq(0));

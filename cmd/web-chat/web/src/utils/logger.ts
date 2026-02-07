@@ -1,7 +1,7 @@
 export type LogContext = {
   scope: string;
   convId?: string;
-  runId?: string;
+  sessionId?: string;
   seq?: number;
   extra?: Record<string, unknown>;
 };

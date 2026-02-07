@@ -15,14 +15,14 @@ var ErrUnknownMode = Err("unknown agent mode")
 // Service merges resolving modes and recording changes.
 type Service interface {
 	GetMode(ctx context.Context, name string) (*AgentMode, error)
-	GetCurrentMode(ctx context.Context, runID string) (string, error)
+	GetCurrentMode(ctx context.Context, sessionID string) (string, error)
 	RecordModeChange(ctx context.Context, change ModeChange) error
 }
 
 // StaticService implements Service purely in-memory.
 type StaticService struct {
 	modes   map[string]*AgentMode // keyed by lower-case name
-	current map[string]string     // last per runID
+	current map[string]string     // last per sessionID
 }
 
 func NewStaticService(modes []*AgentMode) *StaticService {
@@ -44,11 +44,13 @@ func (s *StaticService) GetMode(ctx context.Context, name string) (*AgentMode, e
 	}
 	return nil, ErrUnknownMode
 }
-func (s *StaticService) GetCurrentMode(ctx context.Context, runID string) (string, error) {
-	return s.current[runID], nil
+
+func (s *StaticService) GetCurrentMode(ctx context.Context, sessionID string) (string, error) {
+	return s.current[sessionID], nil
 }
+
 func (s *StaticService) RecordModeChange(ctx context.Context, change ModeChange) error {
-	s.current[change.RunID] = change.ToMode
+	s.current[change.SessionID] = change.ToMode
 	return nil
 }
 
@@ -77,14 +79,16 @@ func (s *SQLiteService) GetMode(ctx context.Context, name string) (*AgentMode, e
 	}
 	return nil, ErrUnknownMode
 }
-func (s *SQLiteService) GetCurrentMode(ctx context.Context, runID string) (string, error) {
-	return s.s.GetCurrentMode(ctx, runID)
+
+func (s *SQLiteService) GetCurrentMode(ctx context.Context, sessionID string) (string, error) {
+	return s.s.GetCurrentMode(ctx, sessionID)
 }
+
 func (s *SQLiteService) RecordModeChange(ctx context.Context, change ModeChange) error {
 	return s.s.RecordModeChange(ctx, change)
 }
 
-// Helper to stamp a change
-func NewChange(runID, turnID, from, to, analysis string) ModeChange {
-	return ModeChange{RunID: runID, TurnID: turnID, FromMode: from, ToMode: to, Analysis: analysis, At: time.Now()}
+// Helper to stamp a change.
+func NewChange(sessionID, turnID, from, to, analysis string) ModeChange {
+	return ModeChange{SessionID: sessionID, TurnID: turnID, FromMode: from, ToMode: to, Analysis: analysis, At: time.Now()}
 }

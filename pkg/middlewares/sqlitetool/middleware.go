@@ -105,11 +105,11 @@ func NewMiddleware(cfg Config) rootmw.Middleware {
 			if t == nil {
 				return next(ctx, t)
 			}
-			runID := ""
+			sessionID := ""
 			if sid, ok, err := turns.KeyTurnMetaSessionID.Get(t.Metadata); err == nil && ok {
-				runID = sid
+				sessionID = sid
 			}
-			log.Debug().Str("run_id", runID).Str("turn_id", t.ID).Msg("sqlitetool: middleware start")
+			log.Debug().Str("session_id", sessionID).Str("turn_id", t.ID).Msg("sqlitetool: middleware start")
 
 			// Determine if the tool should be available for this turn; check DSN presence
 			dsn := cfg.DSN
@@ -200,11 +200,11 @@ func NewMiddleware(cfg Config) rootmw.Middleware {
 				return updated, err
 			}
 			// Do not execute tools here; rely on standard tool loop so a new inference is triggered after results
-			updatedRunID := runID
+			updatedSessionID := sessionID
 			if sid, ok, err := turns.KeyTurnMetaSessionID.Get(updated.Metadata); err == nil && ok {
-				updatedRunID = sid
+				updatedSessionID = sid
 			}
-			log.Debug().Str("run_id", updatedRunID).Str("turn_id", updated.ID).Msg("sqlitetool: middleware end (no inline exec)")
+			log.Debug().Str("session_id", updatedSessionID).Str("turn_id", updated.ID).Msg("sqlitetool: middleware end (no inline exec)")
 			return updated, nil
 		}
 	}

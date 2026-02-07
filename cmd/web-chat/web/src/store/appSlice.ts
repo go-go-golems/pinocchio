@@ -4,7 +4,6 @@ export const appSlice = createSlice({
   name: 'app',
   initialState: {
     convId: '' as string,
-    runId: '' as string,
     profile: 'default' as string,
     status: 'idle' as string,
     wsStatus: 'disconnected' as string,
@@ -14,9 +13,6 @@ export const appSlice = createSlice({
   reducers: {
     setConvId(state, action: PayloadAction<string>) {
       state.convId = action.payload;
-    },
-    setRunId(state, action: PayloadAction<string>) {
-      state.runId = action.payload;
     },
     setProfile(state, action: PayloadAction<string>) {
       state.profile = action.payload;

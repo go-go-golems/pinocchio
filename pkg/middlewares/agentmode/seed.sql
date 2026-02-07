@@ -13,8 +13,8 @@ INSERT INTO agent_modes (name, prompt, allowed_tools) VALUES
    'web_search,fetch_url');
 
 -- Example: record a couple of changes
-INSERT INTO agent_mode_changes (run_id, turn_id, from_mode, to_mode, analysis, at) VALUES
-  ('run-1', 'turn-1', NULL, 'chat', 'Initial mode selection for a greeting.', datetime('now')),
-  ('run-1', 'turn-2', 'chat', 'clock', 'User asked for the current time; switching to clock.', datetime('now'));
+INSERT INTO agent_mode_changes (session_id, turn_id, from_mode, to_mode, analysis, at) VALUES
+  ('session-1', 'turn-1', NULL, 'chat', 'Initial mode selection for a greeting.', datetime('now')),
+  ('session-1', 'turn-2', 'chat', 'clock', 'User asked for the current time; switching to clock.', datetime('now'));
 
 

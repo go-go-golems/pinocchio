@@ -30,18 +30,18 @@ type Resolver interface {
 	GetMode(ctx context.Context, name string) (*AgentMode, error)
 }
 type Store interface {
-	GetCurrentMode(ctx context.Context, runID string) (string, error)
+	GetCurrentMode(ctx context.Context, sessionID string) (string, error)
 	RecordModeChange(ctx context.Context, change ModeChange) error
 }
 
 // ModeChange captures a mode transition with optional analysis text.
 type ModeChange struct {
-	RunID    string
-	TurnID   string
-	FromMode string
-	ToMode   string
-	Analysis string
-	At       time.Time
+	SessionID string
+	TurnID    string
+	FromMode  string
+	ToMode    string
+	Analysis  string
+	At        time.Time
 }
 
 // Config configures the behavior of the middleware.
@@ -77,8 +77,8 @@ func NewMiddleware(svc Service, cfg Config) rootmw.Middleware {
 				return next(ctx, t)
 			}
 
-			runID := sessionIDFromTurn(t)
-			log.Debug().Str("run_id", runID).Str("turn_id", t.ID).Msg("agentmode: middleware start")
+			sessionID := sessionIDFromTurn(t)
+			log.Debug().Str("session_id", sessionID).Str("turn_id", t.ID).Msg("agentmode: middleware start")
 
 			// Determine current mode: from Turn.Data or Store fallback
 			modeName, ok, err := turns.KeyAgentMode.Get(t.Data)
@@ -88,8 +88,8 @@ func NewMiddleware(svc Service, cfg Config) rootmw.Middleware {
 			if !ok {
 				modeName = ""
 			}
-			if modeName == "" && svc != nil && runID != "" {
-				if m, err := svc.GetCurrentMode(ctx, runID); err == nil && m != "" {
+			if modeName == "" && svc != nil && sessionID != "" {
+				if m, err := svc.GetCurrentMode(ctx, sessionID); err == nil && m != "" {
 					modeName = m
 				}
 			}
@@ -165,10 +165,10 @@ func NewMiddleware(svc Service, cfg Config) rootmw.Middleware {
 					} else {
 						t.Blocks = append(t.Blocks[:before], append([]turns.Block{usr}, t.Blocks[before:]...)...)
 					}
-					log.Debug().Str("run_id", runID).Str("turn_id", t.ID).Int("insert_pos", before).Str("preview", prev).Msg("agentmode: inserted user prompt block")
+					log.Debug().Str("session_id", sessionID).Str("turn_id", t.ID).Int("insert_pos", before).Str("preview", prev).Msg("agentmode: inserted user prompt block")
 					// Log insertion
 					events.PublishEventToContext(ctx, events.NewLogEvent(
-						events.EventMetadata{ID: uuid.New(), SessionID: runID, TurnID: t.ID}, "info",
+						events.EventMetadata{ID: uuid.New(), SessionID: sessionID, TurnID: t.ID}, "info",
 						"agentmode: user prompt inserted",
 						map[string]any{"mode": mode.Name},
 					))
@@ -187,9 +187,9 @@ func NewMiddleware(svc Service, cfg Config) rootmw.Middleware {
 			if err != nil {
 				return res, err
 			}
-			resRunID := sessionIDFromTurn(res)
-			if resRunID == "" {
-				resRunID = runID
+			resSessionID := sessionIDFromTurn(res)
+			if resSessionID == "" {
+				resSessionID = sessionID
 			}
 
 			// Parse assistant response to detect YAML mode switch only in newly added blocks (by ID)
@@ -198,7 +198,7 @@ func NewMiddleware(svc Service, cfg Config) rootmw.Middleware {
 			log.Debug().Str("new_mode", newMode).Str("analysis", analysis).Msg("agentmode: detected mode switch via YAML")
 			// Emit analysis event even when not switching (allocate a message_id)
 			if strings.TrimSpace(analysis) != "" && newMode == "" {
-				publishAgentModeSwitchEvent(ctx, events.EventMetadata{ID: uuid.New(), SessionID: resRunID, TurnID: res.ID}, modeName, modeName, analysis)
+				publishAgentModeSwitchEvent(ctx, events.EventMetadata{ID: uuid.New(), SessionID: resSessionID, TurnID: res.ID}, modeName, modeName, analysis)
 			}
 			if newMode != "" && newMode != modeName {
 				log.Debug().Str("from", modeName).Str("to", newMode).Msg("agentmode: detected mode switch via YAML")
@@ -208,13 +208,13 @@ func NewMiddleware(svc Service, cfg Config) rootmw.Middleware {
 				}
 				// Record change
 				if svc != nil {
-					_ = svc.RecordModeChange(ctx, ModeChange{RunID: resRunID, TurnID: res.ID, FromMode: modeName, ToMode: newMode, Analysis: analysis, At: time.Now()})
+					_ = svc.RecordModeChange(ctx, ModeChange{SessionID: resSessionID, TurnID: res.ID, FromMode: modeName, ToMode: newMode, Analysis: analysis, At: time.Now()})
 				}
 				// Announce: append system message and emit custom agent-mode event with analysis
 				turns.AppendBlock(res, turns.NewSystemTextBlock(fmt.Sprintf("[agent-mode] switched to %s", newMode)))
-				publishAgentModeSwitchEvent(ctx, events.EventMetadata{ID: uuid.New(), SessionID: resRunID, TurnID: res.ID}, modeName, newMode, analysis)
+				publishAgentModeSwitchEvent(ctx, events.EventMetadata{ID: uuid.New(), SessionID: resSessionID, TurnID: res.ID}, modeName, newMode, analysis)
 			}
-			log.Debug().Str("run_id", resRunID).Str("turn_id", res.ID).Msg("agentmode: middleware end")
+			log.Debug().Str("session_id", resSessionID).Str("turn_id", res.ID).Msg("agentmode: middleware end")
 			return res, nil
 		}
 	}
