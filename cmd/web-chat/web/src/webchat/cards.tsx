@@ -151,62 +151,6 @@ export function ThinkingModeCard({ e }: { e: RenderEntity }) {
   );
 }
 
-export function PlanningCard({ e }: { e: RenderEntity }) {
-  const runId = String(e.props?.runId ?? e.id);
-  const provider = String(e.props?.provider ?? '');
-  const plannerModel = String(e.props?.plannerModel ?? '');
-  const maxIterations = e.props?.maxIterations;
-  const iterations = Array.isArray(e.props?.iterations) ? (e.props.iterations as any[]) : [];
-  const reflectionByIter = e.props?.reflectionByIter ?? {};
-  const completed = e.props?.completed ?? null;
-  const current = iterations.length ? iterations[iterations.length - 1] : null;
-
-  return (
-    <div data-part="card">
-      <div data-part="card-header">
-        <div data-part="card-header-title">Planning</div>
-        <div data-part="pill" data-mono="true">
-          {runId}
-        </div>
-        {provider ? <div data-part="pill">{provider}</div> : null}
-        {plannerModel ? <div data-part="pill">{plannerModel}</div> : null}
-        {typeof maxIterations === 'number' ? <div data-part="pill">max {maxIterations}</div> : null}
-        {completed === true ? <div data-part="pill" data-variant="ok">done</div> : null}
-        {completed === false ? <div data-part="pill" data-variant="error">failed</div> : null}
-        <div data-part="card-header-meta">{fmtSentAt(e.createdAt)}</div>
-      </div>
-      <div data-part="card-body">
-        <div data-part="kv">
-          <div data-part="kv-key">iterations</div>
-          <div>{iterations.length}</div>
-          <div data-part="kv-key">current</div>
-          <div>{current ? String(current?.name ?? '') : '—'}</div>
-        </div>
-        {current?.steps ? (
-          <div style={{ marginTop: 12 }}>
-            <div data-part="pill" style={{ marginBottom: 6 }}>
-              steps
-            </div>
-            <pre data-part="mono" style={{ margin: 0, whiteSpace: 'pre-wrap' }}>
-              {JSON.stringify(current.steps, null, 2)}
-            </pre>
-          </div>
-        ) : null}
-        {reflectionByIter && Object.keys(reflectionByIter).length ? (
-          <div style={{ marginTop: 12 }}>
-            <div data-part="pill" style={{ marginBottom: 6 }}>
-              reflection
-            </div>
-            <pre data-part="mono" style={{ margin: 0, whiteSpace: 'pre-wrap' }}>
-              {JSON.stringify(reflectionByIter, null, 2)}
-            </pre>
-          </div>
-        ) : null}
-      </div>
-    </div>
-  );
-}
-
 export function GenericCard({ e }: { e: RenderEntity }) {
   return (
     <div data-part="card">

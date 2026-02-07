@@ -12,7 +12,6 @@ import {
   GenericCard,
   LogCard,
   MessageCard,
-  PlanningCard,
   ThinkingModeCard,
   ToolCallCard,
   ToolResultCard,
@@ -101,7 +100,7 @@ export function ChatWidget({
   const profileOptions = useMemo(() => {
     const data = profilesData ?? [];
     if (data.length) return data;
-    return [{ slug: 'default' }, { slug: 'agent' }, { slug: 'planning' }];
+    return [{ slug: 'default' }, { slug: 'agent' }];
   }, [profilesData]);
 
   useEffect(() => {
@@ -224,7 +223,6 @@ export function ChatWidget({
       tool_result: ToolResultCard,
       log: LogCard,
       thinking_mode: ThinkingModeCard,
-      planning: PlanningCard,
       default: GenericCard,
       ...(renderers ?? {}),
     }),
