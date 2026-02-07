@@ -70,12 +70,6 @@ Pinocchio uses protobuf-backed payloads under the hood (see `sem/pb/` directory)
 | `thinking.mode.started` | `{ mode, phase, reasoning }` | Thinking mode widget |
 | `thinking.mode.update` | `{ mode, phase, reasoning }` | Thinking mode widget update |
 | `thinking.mode.completed` | `{ mode, phase, reasoning, success }` | Thinking mode widget complete |
-| `planning.start` | `{ run }` | Planning widget (start) |
-| `planning.iteration` | `{ run, iterationIndex, ... }` | Planning widget update |
-| `planning.reflection` | `{ run, iterationIndex, ... }` | Planning widget reflection |
-| `planning.complete` | `{ run, ... }` | Planning widget complete |
-| `execution.start` | `{ runId, ... }` | Planning widget execution status |
-| `execution.complete` | `{ runId, status, ... }` | Planning widget execution status |
 | `timeline.upsert` | `{ entity, version }` | Durable timeline entity upsert |
 
 ## SEM Frame Payload Examples

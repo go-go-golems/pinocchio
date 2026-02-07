@@ -167,7 +167,7 @@ func (c *SimpleAgentCmd) RunIntoWriter(ctx context.Context, parsed *layers.Parse
 		}
 		snapshotStore = ss
 	}
-	sessionRunID := uuid.NewString()
+	sessionID := uuid.NewString()
 
 	// Add RW SQLite tool middleware with REGEXP
 	dbWithRegexp, _ := sqlite_regexp.OpenWithRegexp("anonymized-data.db")
@@ -180,7 +180,7 @@ func (c *SimpleAgentCmd) RunIntoWriter(ctx context.Context, parsed *layers.Parse
 					t = &turns.Turn{}
 				}
 				if _, ok, err := turns.KeyTurnMetaSessionID.Get(t.Metadata); err != nil || !ok {
-					_ = turns.KeyTurnMetaSessionID.Set(&t.Metadata, sessionRunID)
+					_ = turns.KeyTurnMetaSessionID.Set(&t.Metadata, sessionID)
 				}
 				if t.ID == "" {
 					t.ID = uuid.NewString()

@@ -125,7 +125,7 @@ func (b *ToolLoopBackend) MakeUIForwarder(p *tea.Program) func(msg *message.Mess
 			p.Send(timeline.UIEntityCreated{ID: timeline.EntityID{LocalID: localID, Kind: "log_event"}, Renderer: timeline.RendererDescriptor{Kind: "log_event"}, Props: props})
 			p.Send(timeline.UIEntityCompleted{ID: timeline.EntityID{LocalID: localID, Kind: "log_event"}})
 		case *events.EventPartialCompletionStart:
-			log.Debug().Str("event", "partial_start").Str("run_id", md.SessionID).Str("session_id", md.SessionID).Str("inference_id", md.InferenceID).Str("turn_id", md.TurnID).Str("message_id", md.ID.String()).Msg("forward: start")
+			log.Debug().Str("event", "partial_start").Str("session_id", md.SessionID).Str("inference_id", md.InferenceID).Str("turn_id", md.TurnID).Str("message_id", md.ID.String()).Msg("forward: start")
 			p.Send(timeline.UIEntityCreated{
 				ID:        timeline.EntityID{LocalID: entityID, Kind: "llm_text"},
 				Renderer:  timeline.RendererDescriptor{Kind: "llm_text"},
@@ -136,7 +136,7 @@ func (b *ToolLoopBackend) MakeUIForwarder(p *tea.Program) func(msg *message.Mess
 				log.Debug().Msg("forward: start has zero message_id (check event metadata assignment)")
 			}
 		case *events.EventPartialCompletion:
-			log.Debug().Str("event", "partial").Str("run_id", md.SessionID).Str("session_id", md.SessionID).Str("inference_id", md.InferenceID).Str("turn_id", md.TurnID).Int("delta_len", len(e_.Delta)).Int("completion_len", len(e_.Completion)).Msg("forward: partial")
+			log.Debug().Str("event", "partial").Str("session_id", md.SessionID).Str("inference_id", md.InferenceID).Str("turn_id", md.TurnID).Int("delta_len", len(e_.Delta)).Int("completion_len", len(e_.Completion)).Msg("forward: partial")
 			p.Send(timeline.UIEntityUpdated{
 				ID:        timeline.EntityID{LocalID: entityID, Kind: "llm_text"},
 				Patch:     map[string]any{"text": e_.Completion, "metadata": md.LLMInferenceData, "streaming": true},
@@ -144,7 +144,7 @@ func (b *ToolLoopBackend) MakeUIForwarder(p *tea.Program) func(msg *message.Mess
 				UpdatedAt: time.Now(),
 			})
 		case *events.EventFinal:
-			log.Debug().Str("event", "final").Str("run_id", md.SessionID).Str("session_id", md.SessionID).Str("inference_id", md.InferenceID).Str("turn_id", md.TurnID).Int("text_len", len(e_.Text)).Msg("forward: final")
+			log.Debug().Str("event", "final").Str("session_id", md.SessionID).Str("inference_id", md.InferenceID).Str("turn_id", md.TurnID).Int("text_len", len(e_.Text)).Msg("forward: final")
 			p.Send(timeline.UIEntityCompleted{
 				ID:     timeline.EntityID{LocalID: entityID, Kind: "llm_text"},
 				Result: map[string]any{"text": e_.Text, "metadata": md.LLMInferenceData},
@@ -176,7 +176,7 @@ func (b *ToolLoopBackend) MakeUIForwarder(p *tea.Program) func(msg *message.Mess
 				UpdatedAt: time.Now(),
 			})
 		case *events.EventInterrupt:
-			log.Debug().Str("event", "interrupt").Str("run_id", md.SessionID).Str("session_id", md.SessionID).Str("inference_id", md.InferenceID).Str("turn_id", md.TurnID).Msg("forward: interrupt")
+			log.Debug().Str("event", "interrupt").Str("session_id", md.SessionID).Str("inference_id", md.InferenceID).Str("turn_id", md.TurnID).Msg("forward: interrupt")
 			intr, ok := events.ToTypedEvent[events.EventInterrupt](e)
 			if !ok {
 				return errors.New("payload is not of type EventInterrupt")
@@ -184,7 +184,7 @@ func (b *ToolLoopBackend) MakeUIForwarder(p *tea.Program) func(msg *message.Mess
 			p.Send(timeline.UIEntityCompleted{ID: timeline.EntityID{LocalID: entityID, Kind: "llm_text"}, Result: map[string]any{"text": intr.Text}})
 			p.Send(timeline.UIEntityUpdated{ID: timeline.EntityID{LocalID: entityID, Kind: "llm_text"}, Patch: map[string]any{"streaming": false}, Version: time.Now().UnixNano(), UpdatedAt: time.Now()})
 		case *events.EventError:
-			log.Debug().Str("event", "error").Str("run_id", md.SessionID).Str("session_id", md.SessionID).Str("inference_id", md.InferenceID).Str("turn_id", md.TurnID).Str("err", e_.ErrorString).Msg("forward: error")
+			log.Debug().Str("event", "error").Str("session_id", md.SessionID).Str("inference_id", md.InferenceID).Str("turn_id", md.TurnID).Str("err", e_.ErrorString).Msg("forward: error")
 			p.Send(timeline.UIEntityCompleted{ID: timeline.EntityID{LocalID: entityID, Kind: "llm_text"}, Result: map[string]any{"text": "**Error**\n\n" + e_.ErrorString}})
 			p.Send(timeline.UIEntityUpdated{ID: timeline.EntityID{LocalID: entityID, Kind: "llm_text"}, Patch: map[string]any{"streaming": false}, Version: time.Now().UnixNano(), UpdatedAt: time.Now()})
 		case *events.EventToolCall:

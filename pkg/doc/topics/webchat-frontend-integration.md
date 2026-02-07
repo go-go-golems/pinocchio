@@ -133,7 +133,7 @@ Frontend parses and routes through the SEM registry to update state.
 
 ```json
 {
-  "run_id": "uuid",
+  "session_id": "uuid",
   "conv_id": "conv-123"
 }
 ```

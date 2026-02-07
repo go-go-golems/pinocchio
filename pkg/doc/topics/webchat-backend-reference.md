@@ -245,14 +245,14 @@ This ensures engines are only recomposed when inputs actually change.
 
 ### Purpose
 
-`Conversation` holds per-conversation state: the engine, sink, session, stream coordinator, connection pool, and run queue. `ConvManager` manages all live conversations and centralizes lifecycle wiring (idle eviction, timeline store, builder injection).
+`Conversation` holds per-conversation state: the engine, sink, session, stream coordinator, connection pool, and request queue. `ConvManager` manages all live conversations and centralizes lifecycle wiring (idle eviction, timeline store, builder injection).
 
 ### Conversation Struct
 
 ```go
 type Conversation struct {
     ID           string
-    RunID        string
+    SessionID    string
     Sess         *session.Session
     Eng          engine.Engine
     Sink         events.EventSink
@@ -265,15 +265,15 @@ type Conversation struct {
 }
 ```
 
-### Run Queue
+### Request Queue
 
 Conversations serialize chat requests through a queue:
 
-- `runningKey` tracks the currently executing request
-- `queue` holds pending requests waiting for the current run to complete
+- `activeRequestKey` tracks the currently executing request
+- `queue` holds pending requests waiting for the current inference to complete
 - `requests` maps request IDs to their records (for cancellation, status)
 
-This prevents concurrent inference runs on the same conversation, which would corrupt the session state.
+This prevents concurrent inferences on the same conversation, which would corrupt the session state.
 
 ### ConvManager
 

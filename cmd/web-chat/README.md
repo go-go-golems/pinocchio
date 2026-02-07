@@ -96,7 +96,7 @@ return srv.ListenAndServe()
 
 - File: `pinocchio/pkg/webchat/conversation.go`
   - `type Conversation` — Per-conversation state:
-    - `RunID`, queue state/idempotency records, stream coordinator
+    - `SessionID`, queue state/idempotency records, stream coordinator
     - active WebSocket connections set
   - `ConvManager.GetOrCreate` — Creates or reuses a conversation, builds engine and sink, subscribes reader
   - `ConvManager.AddConn/RemoveConn` — Manages WebSocket lifetimes and idle-stop of the reader
@@ -116,11 +116,11 @@ return srv.ListenAndServe()
 
 - `GET /` — Serves `static/dist/index.html` if present, otherwise `static/index.html`
 - `GET /ws?conv_id={string}` — Upgrades to WebSocket, attaches the socket to the conversation
-- `POST /chat` — Starts a run
+- `POST /chat` — Starts an inference for the current session
   - Body: `{ "prompt": string, "conv_id": string (optional) }`
   - Response: `{ "status": "started"|"queued", "conv_id": string, "session_id": string, "turn_id": string, "inference_id": string, "queue_position"?: number, "idempotency_key": string }`
 - `GET /timeline?conv_id={string}&since_version={uint64?}&limit={int?}` — Returns timeline snapshot entities (backed by SQLite when configured, otherwise in-memory)
-- `GET /turns?conv_id={string}&run_id={string?}&phase={string?}&since_ms={int64?}&limit={int?}` — Returns stored turn snapshots (only when turn store is configured)
+- `GET /turns?conv_id={string}&session_id={string?}&phase={string?}&since_ms={int64?}&limit={int?}` — Returns stored turn snapshots (only when turn store is configured)
 
 ## Redis Streams (Optional Transport)
 
@@ -169,16 +169,16 @@ Eviction controls (flags):
 - `evict-idle-seconds` — evict idle conversations after N seconds (0 disables)
 - `evict-interval-seconds` — sweep idle conversations every N seconds (0 disables)
 
-## Minimal End-to-End Run (Pseudocode)
+## Minimal End-to-End Inference (Pseudocode)
 
 ```go
-// POST /chat handler (enqueue; at most one active run per conversation)
+// POST /chat handler (enqueue; at most one active inference per conversation/session)
 conv, _ := r.cm.GetOrCreate(convID, profileSlug, overrides)
-prep, _ := conv.PrepareRun(idempotencyKey, profileSlug, overrides, prompt)
+prep, _ := conv.PrepareSessionInference(idempotencyKey, profileSlug, overrides, prompt)
 if !prep.Start {
     return prep.HTTPStatus
 }
-go r.startRunForPrompt(conv, profileSlug, overrides, prompt, idempotencyKey) // emits SEM frames via stream coordinator
+go r.startInferenceForPrompt(conv, profileSlug, overrides, prompt, idempotencyKey) // emits SEM frames via stream coordinator
 ```
 
 ## Building and Running
@@ -211,7 +211,7 @@ npm run check       # typecheck + lint
 
 - Keep examples minimal and focused: semantic conversion and event routing are the core ideas.
 - Use consumer groups at the tail (`$`) to avoid replaying full history to the UI.
-- Use per-conversation topics to isolate runs and simplify filtering.
+- Use per-conversation topics to isolate sessions and simplify filtering.
 - Log at debug level for event traffic to troubleshoot mapping issues.
 
 ## Related Documentation

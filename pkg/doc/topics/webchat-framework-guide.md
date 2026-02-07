@@ -233,7 +233,7 @@ Request body:
 Response:
 
 ```json
-{ "run_id": "<uuid>", "conv_id": "<uuid>" }
+{ "session_id": "<uuid>", "conv_id": "<uuid>" }
 ```
 
 ### 5.5. Timeline Snapshots
@@ -344,7 +344,7 @@ _ = webchat.NewFromRouter(ctx, r, httpSrv).Run(ctx)
 - No WS updates: Confirm `conv_id` is sent and the WebSocket URL points to `/ws?conv_id=...`. If using Redis Streams, verify settings and connectivity.
 - No syntax highlighting: Ensure the highlight.js theme loads (see page head for a stylesheet) and code blocks have `language-xyz` classes.
 
-- Got `run_id`/`conv_id` back from `/chat` but no streaming: Ensure the event router loop is running. If you didn’t use `webchat.Server`, call `go r.RunEventRouter(ctx)` after `NewRouter(...)`. Check logs for “starting run loop” and “run loop finished”.
+- Got `session_id`/`conv_id` back from `/chat` but no streaming: Ensure the event router loop is running. If you didn’t use `webchat.Server`, call `go r.RunEventRouter(ctx)` after `NewRouter(...)`. Check logs for “starting inference loop” and “inference loop finished”.
 - Unknown profile: Verify your profile registration and list profiles via `GET /api/chat/profiles`. If no profile cookie is set and none provided, the router uses `default`.
 - Mounting under a prefix: Ensure you’re using `http.StripPrefix(strings.TrimRight(prefix, "/"), r.Handler())` and your frontend assets use relative paths (Vite `base: './'`).
 

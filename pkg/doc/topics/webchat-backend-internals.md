@@ -277,7 +277,7 @@ Special case: "calc" tool results get `CustomKind: "calc_result"` for specialize
 
 ### Planning Aggregation
 
-Planning events are stateful — they build up over time. The projector maintains a `planningAgg` struct per `run_id`:
+Planning events are stateful — they build up over time. The projector maintains a `planningAgg` struct per `session_id`:
 
 ```
 planning.start       → create planningAgg, set provider/model/maxIterations
