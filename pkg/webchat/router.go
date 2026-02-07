@@ -404,7 +404,7 @@ func (r *Router) registerAPIHandlers(mux *http.ServeMux) {
 		convID := strings.TrimSpace(body.ConvID)
 		if sessionID == "" && convID != "" {
 			if c, ok := r.cm.GetConversation(convID); ok && c != nil {
-				sessionID = c.RunID
+				sessionID = c.SessionID
 			}
 		}
 		if sessionID == "" {
@@ -440,7 +440,7 @@ func (r *Router) registerAPIHandlers(mux *http.ServeMux) {
 		convID := strings.TrimSpace(body.ConvID)
 		if sessionID == "" && convID != "" {
 			if c, ok := r.cm.GetConversation(convID); ok && c != nil {
-				sessionID = c.RunID
+				sessionID = c.SessionID
 			}
 		}
 		if sessionID == "" {
@@ -677,9 +677,9 @@ func (r *Router) registerAPIHandlers(mux *http.ServeMux) {
 		}
 
 		convID := strings.TrimSpace(r0.URL.Query().Get("conv_id"))
-		runID := strings.TrimSpace(r0.URL.Query().Get("run_id"))
-		if convID == "" && runID == "" {
-			http.Error(w, "missing conv_id or run_id", http.StatusBadRequest)
+		sessionID := strings.TrimSpace(r0.URL.Query().Get("session_id"))
+		if convID == "" && sessionID == "" {
+			http.Error(w, "missing conv_id or session_id", http.StatusBadRequest)
 			return
 		}
 		phase := strings.TrimSpace(r0.URL.Query().Get("phase"))
@@ -702,24 +702,24 @@ func (r *Router) registerAPIHandlers(mux *http.ServeMux) {
 		}
 
 		items, err := r.turnStore.List(r0.Context(), TurnQuery{
-			ConvID:  convID,
-			RunID:   runID,
-			Phase:   phase,
-			SinceMs: sinceMs,
-			Limit:   limit,
+			ConvID:    convID,
+			SessionID: sessionID,
+			Phase:     phase,
+			SinceMs:   sinceMs,
+			Limit:     limit,
 		})
 		if err != nil {
-			logger.Error().Err(err).Str("conv_id", convID).Str("run_id", runID).Msg("turns query failed")
+			logger.Error().Err(err).Str("conv_id", convID).Str("session_id", sessionID).Msg("turns query failed")
 			http.Error(w, "turns query failed", http.StatusInternalServerError)
 			return
 		}
 
 		resp := map[string]any{
-			"conv_id":  convID,
-			"run_id":   runID,
-			"phase":    phase,
-			"since_ms": sinceMs,
-			"items":    items,
+			"conv_id":    convID,
+			"session_id": sessionID,
+			"phase":      phase,
+			"since_ms":   sinceMs,
+			"items":      items,
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(resp)
@@ -781,22 +781,22 @@ func (r *Router) registerAPIHandlers(mux *http.ServeMux) {
 			return
 		}
 
-		runLog := logger.With().Str("conv_id", conv.ID).Str("run_id", conv.RunID).Str("session_id", conv.RunID).Logger()
+		sessionLog := logger.With().Str("conv_id", conv.ID).Str("session_id", conv.SessionID).Logger()
 		idempotencyKey := idempotencyKeyFromRequest(r0, body)
 
-		prep, err := conv.PrepareRun(idempotencyKey, profileSlug, input.Overrides, body.Prompt)
+		prep, err := conv.PrepareSessionInference(idempotencyKey, profileSlug, input.Overrides, body.Prompt)
 		if err != nil {
-			runLog.Error().Err(err).Msg("prepare run failed")
-			http.Error(w, "prepare run failed", http.StatusInternalServerError)
+			sessionLog.Error().Err(err).Msg("prepare session inference failed")
+			http.Error(w, "prepare session inference failed", http.StatusInternalServerError)
 			return
 		}
 		if !prep.Start {
 			if status, ok := prep.Response["status"].(string); ok && strings.EqualFold(status, "queued") {
 				if pos, ok := prep.Response["queue_position"].(int); ok {
-					runLog.Info().
+					sessionLog.Info().
 						Str("idempotency_key", idempotencyKey).
 						Int("queue_position", pos).
-						Msg("run in progress; queued prompt")
+						Msg("session inference in progress; queued prompt")
 				}
 			}
 			if prep.HTTPStatus > 0 {
@@ -806,10 +806,10 @@ func (r *Router) registerAPIHandlers(mux *http.ServeMux) {
 			return
 		}
 
-		resp, err := r.startRunForPrompt(conv, profileSlug, input.Overrides, body.Prompt, idempotencyKey)
+		resp, err := r.startInferenceForPrompt(conv, profileSlug, input.Overrides, body.Prompt, idempotencyKey)
 		if err != nil {
-			runLog.Error().Err(err).Msg("start run failed")
-			http.Error(w, "start run failed", http.StatusInternalServerError)
+			sessionLog.Error().Err(err).Msg("start session inference failed")
+			http.Error(w, "start session inference failed", http.StatusInternalServerError)
 			return
 		}
 		_ = json.NewEncoder(w).Encode(resp)
@@ -852,7 +852,7 @@ func snapshotHookForConv(conv *Conversation, dir string, store TurnStore) toollo
 	snapLog := log.With().
 		Str("component", "webchat").
 		Str("conv_id", conv.ID).
-		Str("run_id", conv.RunID).
+		Str("session_id", conv.SessionID).
 		Logger()
 	return func(ctx context.Context, t *turns.Turn, phase string) {
 		if t == nil {
@@ -863,17 +863,17 @@ func snapshotHookForConv(conv *Conversation, dir string, store TurnStore) toollo
 			if turnID == "" {
 				turnID = "turn"
 			}
-			runID := conv.RunID
-			if runID == "" {
+			sessionID := conv.SessionID
+			if sessionID == "" {
 				if v, ok, err := turns.KeyTurnMetaSessionID.Get(t.Metadata); err == nil && ok {
-					runID = v
+					sessionID = v
 				}
 			}
-			if runID != "" {
+			if sessionID != "" {
 				payload, err := serde.ToYAML(t, serde.Options{})
 				if err != nil {
 					snapLog.Warn().Err(err).Str("phase", phase).Msg("webchat snapshot: serialize failed (store)")
-				} else if err := store.Save(ctx, conv.ID, runID, turnID, phase, time.Now().UnixMilli(), string(payload)); err != nil {
+				} else if err := store.Save(ctx, conv.ID, sessionID, turnID, phase, time.Now().UnixMilli(), string(payload)); err != nil {
 					snapLog.Warn().Err(err).Str("phase", phase).Msg("webchat snapshot: store save failed")
 				}
 			}
@@ -881,7 +881,7 @@ func snapshotHookForConv(conv *Conversation, dir string, store TurnStore) toollo
 		if dir == "" {
 			return
 		}
-		subdir := filepath.Join(dir, conv.ID, conv.RunID)
+		subdir := filepath.Join(dir, conv.ID, conv.SessionID)
 		if err := os.MkdirAll(subdir, 0755); err != nil {
 			snapLog.Warn().Err(err).Str("dir", subdir).Msg("webchat snapshot: mkdir failed")
 			return
@@ -923,12 +923,12 @@ func idempotencyKeyFromRequest(r *http.Request, body *ChatRequestBody) string {
 	return key
 }
 
-func (r *Router) startRunForPrompt(conv *Conversation, profileSlug string, overrides map[string]any, prompt string, idempotencyKey string) (map[string]any, error) {
+func (r *Router) startInferenceForPrompt(conv *Conversation, profileSlug string, overrides map[string]any, prompt string, idempotencyKey string) (map[string]any, error) {
 	if r == nil || conv == nil || conv.Sess == nil {
 		return nil, errors.New("invalid conversation")
 	}
 
-	runLog := log.With().Str("component", "webchat").Str("conv_id", conv.ID).Str("run_id", conv.RunID).Str("session_id", conv.RunID).Logger()
+	sessionLog := log.With().Str("component", "webchat").Str("conv_id", conv.ID).Str("session_id", conv.SessionID).Logger()
 
 	// Ensure the conversation stream is running so SEM frames are produced even without an attached WS client.
 	conv.mu.Lock()
@@ -944,7 +944,7 @@ func (r *Router) startRunForPrompt(conv *Conversation, profileSlug string, overr
 
 	cfg, err := r.BuildConfig(profileSlug, overrides)
 	if err != nil {
-		r.finishRun(conv, idempotencyKey, "", "", err)
+		r.finishSessionInference(conv, idempotencyKey, "", "", err)
 		return nil, err
 	}
 
@@ -981,7 +981,7 @@ func (r *Router) startRunForPrompt(conv *Conversation, profileSlug string, overr
 
 	seed, err := conv.Sess.AppendNewTurnFromUserPrompt(prompt)
 	if err != nil {
-		r.finishRun(conv, idempotencyKey, "", "", err)
+		r.finishSessionInference(conv, idempotencyKey, "", "", err)
 		return nil, err
 	}
 	turnID := ""
@@ -1008,7 +1008,7 @@ func (r *Router) startRunForPrompt(conv *Conversation, profileSlug string, overr
 	}
 
 	if stepModeFromOverrides(overrides) && r.stepCtrl != nil {
-		r.stepCtrl.Enable(toolloop.StepScope{SessionID: conv.RunID, ConversationID: conv.ID})
+		r.stepCtrl.Enable(toolloop.StepScope{SessionID: conv.SessionID, ConversationID: conv.ID})
 	}
 
 	loopCfg := toolloop.NewLoopConfig().WithMaxIterations(5)
@@ -1025,16 +1025,16 @@ func (r *Router) startRunForPrompt(conv *Conversation, profileSlug string, overr
 		Persister:        newTurnStorePersister(r.turnStore, conv, "final"),
 	}
 
-	runLog.Info().Str("idempotency_key", idempotencyKey).Msg("starting run loop")
+	sessionLog.Info().Str("idempotency_key", idempotencyKey).Msg("starting inference loop")
 
 	handle, err := conv.Sess.StartInference(r.baseCtx)
 	if err != nil {
-		r.finishRun(conv, idempotencyKey, "", turnID, err)
+		r.finishSessionInference(conv, idempotencyKey, "", turnID, err)
 		return nil, err
 	}
 	if handle == nil {
 		err := errors.New("start inference returned nil handle")
-		r.finishRun(conv, idempotencyKey, "", turnID, err)
+		r.finishSessionInference(conv, idempotencyKey, "", turnID, err)
 		return nil, err
 	}
 
@@ -1042,8 +1042,7 @@ func (r *Router) startRunForPrompt(conv *Conversation, profileSlug string, overr
 		"status":          "started",
 		"idempotency_key": idempotencyKey,
 		"conv_id":         conv.ID,
-		"run_id":          conv.RunID, // legacy
-		"session_id":      conv.RunID,
+		"session_id":      conv.SessionID,
 	}
 	if turnID != "" {
 		resp["turn_id"] = turnID
@@ -1068,26 +1067,26 @@ func (r *Router) startRunForPrompt(conv *Conversation, profileSlug string, overr
 
 	go func() {
 		_, waitErr := handle.Wait()
-		r.finishRun(conv, idempotencyKey, handle.InferenceID, turnID, waitErr)
+		r.finishSessionInference(conv, idempotencyKey, handle.InferenceID, turnID, waitErr)
 		if waitErr != nil {
-			runLog.Error().Err(waitErr).Str("inference_id", handle.InferenceID).Msg("run loop error")
+			sessionLog.Error().Err(waitErr).Str("inference_id", handle.InferenceID).Msg("inference loop error")
 		}
-		runLog.Info().Str("inference_id", handle.InferenceID).Msg("run loop finished")
+		sessionLog.Info().Str("inference_id", handle.InferenceID).Msg("inference loop finished")
 		r.tryDrainQueue(conv)
 	}()
 
 	return resp, nil
 }
 
-func (r *Router) finishRun(conv *Conversation, idempotencyKey string, inferenceID string, turnID string, err error) {
+func (r *Router) finishSessionInference(conv *Conversation, idempotencyKey string, inferenceID string, turnID string, err error) {
 	if conv == nil {
 		return
 	}
 	conv.mu.Lock()
 	defer conv.mu.Unlock()
 
-	if conv.runningKey == idempotencyKey {
-		conv.runningKey = ""
+	if conv.activeRequestKey == idempotencyKey {
+		conv.activeRequestKey = ""
 	}
 	conv.touchLocked(time.Now())
 	conv.ensureQueueInitLocked()
@@ -1121,13 +1120,13 @@ func (r *Router) tryDrainQueue(conv *Conversation) {
 		if !ok {
 			return
 		}
-		_, err := r.startRunForPrompt(conv, q.ProfileSlug, q.Overrides, q.Prompt, q.IdempotencyKey)
+		_, err := r.startInferenceForPrompt(conv, q.ProfileSlug, q.Overrides, q.Prompt, q.IdempotencyKey)
 		if err != nil {
-			r.finishRun(conv, q.IdempotencyKey, "", "", err)
-			// Continue draining so later queued items can still run.
+			r.finishSessionInference(conv, q.IdempotencyKey, "", "", err)
+			// Continue draining so later queued items can still execute.
 			continue
 		}
-		// Successfully started one run; subsequent items are handled when it finishes.
+		// Successfully started one inference; subsequent items are handled when it finishes.
 		return
 	}
 }

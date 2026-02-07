@@ -27,8 +27,8 @@ type chatRequestRecord struct {
 	Error    string
 }
 
-// RunPreparation describes what to do with an incoming chat request.
-type RunPreparation struct {
+// SessionPreparation describes what to do with an incoming chat request.
+type SessionPreparation struct {
 	Start      bool
 	HTTPStatus int
 	Response   map[string]any
@@ -44,7 +44,7 @@ func (c *Conversation) isBusyLocked() bool {
 	if c == nil {
 		return false
 	}
-	if c.runningKey != "" {
+	if c.activeRequestKey != "" {
 		return true
 	}
 	if c.Sess != nil && c.Sess.IsRunning() {
@@ -86,13 +86,13 @@ func (c *Conversation) dequeueLocked() (queuedChat, bool) {
 	return q, true
 }
 
-// PrepareRun applies idempotency + queue logic and indicates whether a run should start now.
-func (c *Conversation) PrepareRun(idempotencyKey, profileSlug string, overrides map[string]any, prompt string) (RunPreparation, error) {
+// PrepareSessionInference applies idempotency + queue logic and indicates whether inference should start now.
+func (c *Conversation) PrepareSessionInference(idempotencyKey, profileSlug string, overrides map[string]any, prompt string) (SessionPreparation, error) {
 	if c == nil {
-		return RunPreparation{}, errors.New("conversation is nil")
+		return SessionPreparation{}, errors.New("conversation is nil")
 	}
 	if idempotencyKey == "" {
-		return RunPreparation{}, errors.New("idempotency key is empty")
+		return SessionPreparation{}, errors.New("idempotency key is empty")
 	}
 
 	c.mu.Lock()
@@ -107,7 +107,7 @@ func (c *Conversation) PrepareRun(idempotencyKey, profileSlug string, overrides 
 		if status == "queued" {
 			httpStatus = http.StatusAccepted
 		}
-		return RunPreparation{Start: false, HTTPStatus: httpStatus, Response: resp}, nil
+		return SessionPreparation{Start: false, HTTPStatus: httpStatus, Response: resp}, nil
 	}
 
 	if c.isBusyLocked() {
@@ -124,8 +124,7 @@ func (c *Conversation) PrepareRun(idempotencyKey, profileSlug string, overrides 
 			"queue_depth":     len(c.queue),
 			"idempotency_key": idempotencyKey,
 			"conv_id":         c.ID,
-			"run_id":          c.RunID, // legacy
-			"session_id":      c.RunID,
+			"session_id":      c.SessionID,
 		}
 		c.upsertRecordLocked(&chatRequestRecord{
 			IdempotencyKey: idempotencyKey,
@@ -133,16 +132,15 @@ func (c *Conversation) PrepareRun(idempotencyKey, profileSlug string, overrides 
 			EnqueuedAt:     time.Now(),
 			Response:       resp,
 		})
-		return RunPreparation{Start: false, HTTPStatus: http.StatusAccepted, Response: resp}, nil
+		return SessionPreparation{Start: false, HTTPStatus: http.StatusAccepted, Response: resp}, nil
 	}
 
-	c.runningKey = idempotencyKey
+	c.activeRequestKey = idempotencyKey
 	resp := map[string]any{
 		"status":          "running",
 		"idempotency_key": idempotencyKey,
 		"conv_id":         c.ID,
-		"run_id":          c.RunID, // legacy
-		"session_id":      c.RunID,
+		"session_id":      c.SessionID,
 	}
 	c.upsertRecordLocked(&chatRequestRecord{
 		IdempotencyKey: idempotencyKey,
@@ -150,7 +148,7 @@ func (c *Conversation) PrepareRun(idempotencyKey, profileSlug string, overrides 
 		StartedAt:      time.Now(),
 		Response:       resp,
 	})
-	return RunPreparation{Start: true, HTTPStatus: http.StatusOK, Response: resp}, nil
+	return SessionPreparation{Start: true, HTTPStatus: http.StatusOK, Response: resp}, nil
 }
 
 // ClaimNextQueued pops the next queued request and marks it running.
@@ -169,7 +167,7 @@ func (c *Conversation) ClaimNextQueued() (queuedChat, bool) {
 	if !ok {
 		return queuedChat{}, false
 	}
-	c.runningKey = q.IdempotencyKey
+	c.activeRequestKey = q.IdempotencyKey
 	c.ensureQueueInitLocked()
 	if rec, ok := c.getRecordLocked(q.IdempotencyKey); ok && rec != nil {
 		rec.Status = "running"

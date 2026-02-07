@@ -33,10 +33,10 @@ func TestConvManagerEvictIdleOnce_SkipsBusy(t *testing.T) {
 	cm.SetEvictionConfig(10*time.Second, time.Second)
 
 	conv := &Conversation{
-		ID:           "c1",
-		runningKey:   "busy",
-		lastActivity: time.Now().Add(-time.Hour),
-		pool:         NewConnectionPool("c1", 0, nil),
+		ID:               "c1",
+		activeRequestKey: "busy",
+		lastActivity:     time.Now().Add(-time.Hour),
+		pool:             NewConnectionPool("c1", 0, nil),
 	}
 
 	cm.mu.Lock()

@@ -44,18 +44,38 @@ func (s *SQLiteTurnStore) migrate() error {
 	if s == nil || s.db == nil {
 		return errors.New("sqlite turn store: db is nil")
 	}
+
+	if _, err := s.db.Exec(`CREATE TABLE IF NOT EXISTS turns (
+		conv_id TEXT NOT NULL,
+		session_id TEXT NOT NULL,
+		turn_id TEXT NOT NULL,
+		phase TEXT NOT NULL,
+		created_at_ms INTEGER NOT NULL,
+		payload TEXT NOT NULL,
+		PRIMARY KEY (conv_id, session_id, turn_id, phase, created_at_ms)
+	);`); err != nil {
+		return errors.Wrap(err, "sqlite turn store: create table")
+	}
+
+	runIDExists, err := s.columnExists("turns", "run_id")
+	if err != nil {
+		return errors.Wrap(err, "sqlite turn store: inspect run_id column")
+	}
+	sessionIDExists, err := s.columnExists("turns", "session_id")
+	if err != nil {
+		return errors.Wrap(err, "sqlite turn store: inspect session_id column")
+	}
+
+	if runIDExists && !sessionIDExists {
+		if _, err := s.db.Exec(`ALTER TABLE turns RENAME COLUMN run_id TO session_id`); err != nil {
+			return errors.Wrap(err, "sqlite turn store: rename run_id column")
+		}
+	}
+
 	stmts := []string{
-		`CREATE TABLE IF NOT EXISTS turns (
-			conv_id TEXT NOT NULL,
-			run_id TEXT NOT NULL,
-			turn_id TEXT NOT NULL,
-			phase TEXT NOT NULL,
-			created_at_ms INTEGER NOT NULL,
-			payload TEXT NOT NULL,
-			PRIMARY KEY (conv_id, run_id, turn_id, phase, created_at_ms)
-		);`,
+		`DROP INDEX IF EXISTS turns_by_run;`,
 		`CREATE INDEX IF NOT EXISTS turns_by_conv ON turns(conv_id, created_at_ms DESC);`,
-		`CREATE INDEX IF NOT EXISTS turns_by_run ON turns(run_id, created_at_ms DESC);`,
+		`CREATE INDEX IF NOT EXISTS turns_by_session ON turns(session_id, created_at_ms DESC);`,
 		`CREATE INDEX IF NOT EXISTS turns_by_phase ON turns(phase, created_at_ms DESC);`,
 	}
 	for _, st := range stmts {
@@ -66,15 +86,47 @@ func (s *SQLiteTurnStore) migrate() error {
 	return nil
 }
 
-func (s *SQLiteTurnStore) Save(ctx context.Context, convID, runID, turnID, phase string, createdAtMs int64, payload string) error {
+func (s *SQLiteTurnStore) columnExists(table string, column string) (bool, error) {
+	if s == nil || s.db == nil {
+		return false, errors.New("sqlite turn store: db is nil")
+	}
+	rows, err := s.db.Query(`PRAGMA table_info(` + table + `)`)
+	if err != nil {
+		return false, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	for rows.Next() {
+		var (
+			cid       int
+			name      string
+			typeName  string
+			notNull   int
+			dfltValue any
+			pk        int
+		)
+		if err := rows.Scan(&cid, &name, &typeName, &notNull, &dfltValue, &pk); err != nil {
+			return false, err
+		}
+		if strings.EqualFold(name, column) {
+			return true, nil
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return false, err
+	}
+	return false, nil
+}
+
+func (s *SQLiteTurnStore) Save(ctx context.Context, convID, sessionID, turnID, phase string, createdAtMs int64, payload string) error {
 	if s == nil || s.db == nil {
 		return errors.New("sqlite turn store: db is nil")
 	}
 	if strings.TrimSpace(convID) == "" {
 		return errors.New("sqlite turn store: convID is empty")
 	}
-	if strings.TrimSpace(runID) == "" {
-		return errors.New("sqlite turn store: runID is empty")
+	if strings.TrimSpace(sessionID) == "" {
+		return errors.New("sqlite turn store: sessionID is empty")
 	}
 	if strings.TrimSpace(turnID) == "" {
 		return errors.New("sqlite turn store: turnID is empty")
@@ -90,9 +142,9 @@ func (s *SQLiteTurnStore) Save(ctx context.Context, convID, runID, turnID, phase
 	}
 
 	_, err := s.db.ExecContext(ctx, `
-		INSERT INTO turns(conv_id, run_id, turn_id, phase, created_at_ms, payload)
+		INSERT INTO turns(conv_id, session_id, turn_id, phase, created_at_ms, payload)
 		VALUES(?, ?, ?, ?, ?, ?)
-	`, convID, runID, turnID, phase, createdAtMs, payload)
+	`, convID, sessionID, turnID, phase, createdAtMs, payload)
 	if err != nil {
 		return errors.Wrap(err, "sqlite turn store: insert")
 	}
@@ -103,8 +155,8 @@ func (s *SQLiteTurnStore) List(ctx context.Context, q TurnQuery) ([]TurnSnapshot
 	if s == nil || s.db == nil {
 		return nil, errors.New("sqlite turn store: db is nil")
 	}
-	if strings.TrimSpace(q.ConvID) == "" && strings.TrimSpace(q.RunID) == "" {
-		return nil, errors.New("sqlite turn store: convID or runID required")
+	if strings.TrimSpace(q.ConvID) == "" && strings.TrimSpace(q.SessionID) == "" {
+		return nil, errors.New("sqlite turn store: convID or sessionID required")
 	}
 	if ctx == nil {
 		ctx = context.Background()
@@ -120,8 +172,8 @@ func (s *SQLiteTurnStore) List(ctx context.Context, q TurnQuery) ([]TurnSnapshot
 		clauses = append(clauses, "conv_id = ?")
 		args = append(args, v)
 	}
-	if v := strings.TrimSpace(q.RunID); v != "" {
-		clauses = append(clauses, "run_id = ?")
+	if v := strings.TrimSpace(q.SessionID); v != "" {
+		clauses = append(clauses, "session_id = ?")
 		args = append(args, v)
 	}
 	if v := strings.TrimSpace(q.Phase); v != "" {
@@ -139,7 +191,7 @@ func (s *SQLiteTurnStore) List(ctx context.Context, q TurnQuery) ([]TurnSnapshot
 	}
 
 	query := fmt.Sprintf(`
-		SELECT conv_id, run_id, turn_id, phase, created_at_ms, payload
+		SELECT conv_id, session_id, turn_id, phase, created_at_ms, payload
 		FROM turns
 		%s
 		ORDER BY created_at_ms DESC
@@ -156,7 +208,7 @@ func (s *SQLiteTurnStore) List(ctx context.Context, q TurnQuery) ([]TurnSnapshot
 	items := []TurnSnapshot{}
 	for rows.Next() {
 		var item TurnSnapshot
-		if err := rows.Scan(&item.ConvID, &item.RunID, &item.TurnID, &item.Phase, &item.CreatedAtMs, &item.Payload); err != nil {
+		if err := rows.Scan(&item.ConvID, &item.SessionID, &item.TurnID, &item.Phase, &item.CreatedAtMs, &item.Payload); err != nil {
 			return nil, err
 		}
 		items = append(items, item)

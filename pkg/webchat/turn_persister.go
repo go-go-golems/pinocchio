@@ -11,10 +11,10 @@ import (
 )
 
 type turnStorePersister struct {
-	store  TurnStore
-	convID string
-	runID  string
-	phase  string
+	store     TurnStore
+	convID    string
+	sessionID string
+	phase     string
 }
 
 func newTurnStorePersister(store TurnStore, conv *Conversation, phase string) *turnStorePersister {
@@ -22,10 +22,10 @@ func newTurnStorePersister(store TurnStore, conv *Conversation, phase string) *t
 		return nil
 	}
 	return &turnStorePersister{
-		store:  store,
-		convID: conv.ID,
-		runID:  conv.RunID,
-		phase:  phase,
+		store:     store,
+		convID:    conv.ID,
+		sessionID: conv.SessionID,
+		phase:     phase,
 	}
 }
 
@@ -37,14 +37,14 @@ func (p *turnStorePersister) PersistTurn(ctx context.Context, t *turns.Turn) err
 	if convID == "" {
 		return errors.New("turn persister: convID is empty")
 	}
-	runID := strings.TrimSpace(p.runID)
-	if runID == "" {
+	sessionID := strings.TrimSpace(p.sessionID)
+	if sessionID == "" {
 		if v, ok, err := turns.KeyTurnMetaSessionID.Get(t.Metadata); err == nil && ok {
-			runID = v
+			sessionID = v
 		}
 	}
-	if runID == "" {
-		return errors.New("turn persister: runID is empty")
+	if sessionID == "" {
+		return errors.New("turn persister: sessionID is empty")
 	}
 	turnID := strings.TrimSpace(t.ID)
 	if turnID == "" {
@@ -58,5 +58,5 @@ func (p *turnStorePersister) PersistTurn(ctx context.Context, t *turns.Turn) err
 	if err != nil {
 		return errors.Wrap(err, "turn persister: serialize")
 	}
-	return p.store.Save(ctx, convID, runID, turnID, phase, time.Now().UnixMilli(), string(payload))
+	return p.store.Save(ctx, convID, sessionID, turnID, phase, time.Now().UnixMilli(), string(payload))
 }

@@ -23,26 +23,26 @@ import (
 
 // Conversation holds per-conversation state and streaming attachments.
 type Conversation struct {
-	ID       string
-	RunID    string
-	Sess     *session.Session
-	Eng      engine.Engine
-	Sink     events.EventSink
-	mu       sync.Mutex
-	sub      message.Subscriber
-	subClose bool
-	pool     *ConnectionPool
-	stream   *StreamCoordinator
-	baseCtx  context.Context
+	ID        string
+	SessionID string
+	Sess      *session.Session
+	Eng       engine.Engine
+	Sink      events.EventSink
+	mu        sync.Mutex
+	sub       message.Subscriber
+	subClose  bool
+	pool      *ConnectionPool
+	stream    *StreamCoordinator
+	baseCtx   context.Context
 
 	ProfileSlug  string
 	EngConfigSig string
 
 	// Server-side send serialization / queue semantics.
 	// All fields below are guarded by mu.
-	runningKey string
-	queue      []queuedChat
-	requests   map[string]*chatRequestRecord
+	activeRequestKey string
+	queue            []queuedChat
+	requests         map[string]*chatRequestRecord
 
 	lastActivity time.Time
 
@@ -216,8 +216,8 @@ func (cm *ConvManager) GetOrCreate(convID, profileSlug string, overrides map[str
 				sub,
 				nil,
 				func(e events.Event, _ StreamCursor, frame []byte) {
-					run := e.Metadata().SessionID
-					if run != "" && run != c.RunID {
+					eventSessionID := e.Metadata().SessionID
+					if eventSessionID != "" && eventSessionID != c.SessionID {
 						return
 					}
 					if c.pool != nil {
@@ -244,10 +244,10 @@ func (cm *ConvManager) GetOrCreate(convID, profileSlug string, overrides map[str
 		}
 		return c, nil
 	}
-	runID := uuid.NewString()
+	sessionID := uuid.NewString()
 	conv := &Conversation{
 		ID:           convID,
-		RunID:        runID,
+		SessionID:    sessionID,
 		baseCtx:      cm.baseCtx,
 		ProfileSlug:  profileSlug,
 		EngConfigSig: newSig,
@@ -289,8 +289,8 @@ func (cm *ConvManager) GetOrCreate(convID, profileSlug string, overrides map[str
 		sub,
 		nil,
 		func(e events.Event, _ StreamCursor, frame []byte) {
-			run := e.Metadata().SessionID
-			if run != "" && run != conv.RunID {
+			eventSessionID := e.Metadata().SessionID
+			if eventSessionID != "" && eventSessionID != conv.SessionID {
 				return
 			}
 			if conv.pool != nil {
@@ -306,7 +306,7 @@ func (cm *ConvManager) GetOrCreate(convID, profileSlug string, overrides map[str
 	)
 
 	conv.Sess = &session.Session{
-		SessionID: runID,
+		SessionID: sessionID,
 		Builder: &enginebuilder.Builder{
 			Base:             eng,
 			EventSinks:       []events.EventSink{sink},
@@ -314,7 +314,7 @@ func (cm *ConvManager) GetOrCreate(convID, profileSlug string, overrides map[str
 			StepPauseTimeout: 30 * time.Second,
 		},
 		Turns: func() []*turns.Turn {
-			return []*turns.Turn{buildSeedTurn(runID, cfg.SystemPrompt)}
+			return []*turns.Turn{buildSeedTurn(sessionID, cfg.SystemPrompt)}
 		}(),
 	}
 
@@ -333,12 +333,12 @@ func (cm *ConvManager) GetOrCreate(convID, profileSlug string, overrides map[str
 	return conv, nil
 }
 
-func buildSeedTurn(runID string, systemPrompt string) *turns.Turn {
+func buildSeedTurn(sessionID string, systemPrompt string) *turns.Turn {
 	seed := &turns.Turn{}
 	if strings.TrimSpace(systemPrompt) != "" {
 		turns.AppendBlock(seed, turns.NewSystemTextBlock(systemPrompt))
 	}
-	_ = turns.KeyTurnMetaSessionID.Set(&seed.Metadata, runID)
+	_ = turns.KeyTurnMetaSessionID.Set(&seed.Metadata, sessionID)
 	return seed
 }
 

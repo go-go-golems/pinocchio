@@ -36,7 +36,7 @@ type MiddlewareUse struct {
 	Config any
 }
 
-// Profile describes how to build engines and run loops for a chat namespace.
+// Profile describes how to build engines and inference loops for a chat namespace.
 type Profile struct {
 	Slug           string
 	DefaultPrompt  string
