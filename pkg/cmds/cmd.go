@@ -25,6 +25,7 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
 	"github.com/go-go-golems/pinocchio/pkg/cmds/cmdlayers"
 	"github.com/go-go-golems/pinocchio/pkg/cmds/run"
+	pinui "github.com/go-go-golems/pinocchio/pkg/ui"
 	"github.com/go-go-golems/pinocchio/pkg/ui/runtime"
 	"github.com/google/uuid"
 	"github.com/mattn/go-isatty"
@@ -261,6 +262,12 @@ func (g *PinocchioCommand) RunIntoWriter(
 		run.WithWriter(w),
 		run.WithRunMode(runMode),
 		run.WithUISettings(uiSettings),
+		run.WithPersistenceSettings(run.PersistenceSettings{
+			TimelineDSN: helpersSettings.TimelineDSN,
+			TimelineDB:  helpersSettings.TimelineDB,
+			TurnsDSN:    helpersSettings.TurnsDSN,
+			TurnsDB:     helpersSettings.TurnsDB,
+		}),
 		run.WithRouter(router),
 		run.WithVariables(parsedLayers.GetDefaultParameterLayer().Parameters.ToMap()),
 		run.WithImagePaths(imagePaths),
@@ -415,6 +422,13 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) (*tu
 		return nil, errors.New("chat mode requires a router")
 	}
 
+	chatConvID := "cli-" + uuid.NewString()
+	timelineStore, turnStore, closeStores, err := openChatPersistenceStores(rc.Persistence)
+	if err != nil {
+		return nil, errors.Wrap(err, "open chat persistence stores")
+	}
+	defer closeStores()
+
 	isOutputTerminal := isatty.IsTerminal(os.Stdout.Fd())
 
 	options := []tea.ProgramOption{
@@ -522,6 +536,15 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) (*tu
 			return err
 		}
 
+		if turnStore != nil {
+			sess.Backend.SetTurnPersister(
+				newCLITurnStorePersister(turnStore, chatConvID, sess.Backend.SessionID(), "final"),
+			)
+		}
+		if timelineStore != nil {
+			rc.Router.AddHandler("ui-persist", "ui", pinui.StepTimelinePersistFunc(timelineStore, chatConvID))
+		}
+
 		// Register bound UI event handler and run handlers
 		rc.Router.AddHandler("ui", "ui", sess.EventHandler())
 		err = rc.Router.RunHandlers(ctx)
@@ -580,7 +603,7 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) (*tu
 		return err
 	})
 
-	err := eg.Wait()
+	err = eg.Wait()
 	if err != nil {
 		return nil, err
 	}

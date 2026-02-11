@@ -14,6 +14,7 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/events"
 	"github.com/go-go-golems/geppetto/pkg/inference/engine"
 	"github.com/go-go-golems/geppetto/pkg/inference/session"
+	"github.com/go-go-golems/geppetto/pkg/inference/toolloop"
 	"github.com/go-go-golems/geppetto/pkg/inference/toolloop/enginebuilder"
 	"github.com/go-go-golems/geppetto/pkg/turns"
 	"github.com/pkg/errors"
@@ -57,6 +58,32 @@ func NewEngineBackend(engine engine.Engine, sinks ...events.EventSink) *EngineBa
 // when seeding history. If not attached, seeding will only populate backend state.
 func (e *EngineBackend) AttachProgram(p *tea.Program) {
 	e.program = p
+}
+
+// SetTurnPersister configures final-turn persistence for subsequent inference runs.
+func (e *EngineBackend) SetTurnPersister(p enginebuilder.TurnPersister) {
+	if e == nil || e.builder == nil {
+		return
+	}
+	e.builder.Persister = p
+}
+
+// SetSnapshotHook configures snapshot capture for subsequent inference runs.
+func (e *EngineBackend) SetSnapshotHook(h toolloop.SnapshotHook) {
+	if e == nil || e.builder == nil {
+		return
+	}
+	e.builder.SnapshotHook = h
+}
+
+// SessionID returns the current backend session identifier.
+func (e *EngineBackend) SessionID() string {
+	e.sessMu.RLock()
+	defer e.sessMu.RUnlock()
+	if e.sess == nil {
+		return ""
+	}
+	return e.sess.SessionID
 }
 
 // Start executes inference using the engine and publishes events through the sink.

@@ -22,6 +22,10 @@ type HelpersSettings struct {
 	StartInChat       bool                   `glazed.parameter:"chat"`
 	Interactive       bool                   `glazed.parameter:"interactive"`
 	ForceInteractive  bool                   `glazed.parameter:"force-interactive"`
+	TimelineDSN       string                 `glazed.parameter:"timeline-dsn"`
+	TimelineDB        string                 `glazed.parameter:"timeline-db"`
+	TurnsDSN          string                 `glazed.parameter:"turns-dsn"`
+	TurnsDB           string                 `glazed.parameter:"turns-db"`
 	Images            []*parameters.FileData `glazed.parameter:"images"`
 	Autosave          *AutosaveSettings      `glazed.parameter:"autosave,from_json"`
 	NonInteractive    bool                   `glazed.parameter:"non-interactive"`
@@ -75,6 +79,30 @@ func NewHelpersParameterLayer() (layers.ParameterLayer, error) {
 				parameters.ParameterTypeBool,
 				parameters.WithHelp("Always enter interactive mode, even with non-tty stdout"),
 				parameters.WithDefault(false),
+			),
+			parameters.NewParameterDefinition(
+				"timeline-dsn",
+				parameters.ParameterTypeString,
+				parameters.WithDefault(""),
+				parameters.WithHelp("SQLite DSN for durable timeline snapshots (preferred over timeline-db)"),
+			),
+			parameters.NewParameterDefinition(
+				"timeline-db",
+				parameters.ParameterTypeString,
+				parameters.WithDefault(""),
+				parameters.WithHelp("SQLite DB file path for durable timeline snapshots (DSN derived with WAL/busy_timeout)"),
+			),
+			parameters.NewParameterDefinition(
+				"turns-dsn",
+				parameters.ParameterTypeString,
+				parameters.WithDefault(""),
+				parameters.WithHelp("SQLite DSN for durable turn snapshots (preferred over turns-db)"),
+			),
+			parameters.NewParameterDefinition(
+				"turns-db",
+				parameters.ParameterTypeString,
+				parameters.WithDefault(""),
+				parameters.WithHelp("SQLite DB file path for durable turn snapshots (DSN derived with WAL/busy_timeout)"),
 			),
 			parameters.NewParameterDefinition(
 				"images",

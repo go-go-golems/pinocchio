@@ -30,6 +30,13 @@ type UISettings struct {
 	FullOutput       bool
 }
 
+type PersistenceSettings struct {
+	TimelineDSN string
+	TimelineDB  string
+	TurnsDSN    string
+	TurnsDB     string
+}
+
 // RunContext encapsulates all the settings and state needed for a single command run
 type RunContext struct {
 	StepSettings *settings.StepSettings
@@ -47,8 +54,9 @@ type RunContext struct {
 	ResultTurn *turns.Turn
 
 	// Optional UI/Terminal specific components
-	UISettings *UISettings
-	Writer     io.Writer
+	UISettings  *UISettings
+	Writer      io.Writer
+	Persistence PersistenceSettings
 
 	// Run configuration
 	RunMode RunMode
@@ -103,6 +111,13 @@ func WithUISettings(settings *UISettings) RunOption {
 func WithWriter(w io.Writer) RunOption {
 	return func(rc *RunContext) error {
 		rc.Writer = w
+		return nil
+	}
+}
+
+func WithPersistenceSettings(settings PersistenceSettings) RunOption {
+	return func(rc *RunContext) error {
+		rc.Persistence = settings
 		return nil
 	}
 }
