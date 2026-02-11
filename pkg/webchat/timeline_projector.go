@@ -39,6 +39,7 @@ type TimelineProjector struct {
 
 	mu           sync.Mutex
 	msgRoles     map[string]string
+	msgContents  map[string]string
 	lastMsgWrite map[string]int64
 	toolNames    map[string]string
 	toolInputs   map[string]*structpb.Struct
@@ -50,6 +51,7 @@ func NewTimelineProjector(convID string, store chatstore.TimelineStore, onUpsert
 		store:        store,
 		onUpsert:     onUpsert,
 		msgRoles:     map[string]string{},
+		msgContents:  map[string]string{},
 		lastMsgWrite: map[string]int64{},
 		toolNames:    map[string]string{},
 		toolInputs:   map[string]*structpb.Struct{},
@@ -130,6 +132,7 @@ func (p *TimelineProjector) ApplySemFrame(ctx context.Context, frame []byte) err
 		}
 		p.mu.Lock()
 		p.msgRoles[env.Event.ID] = role
+		p.msgContents[env.Event.ID] = ""
 		p.mu.Unlock()
 		err := p.upsert(ctx, seq, &timelinepb.TimelineEntityV1{
 			Id:   env.Event.ID,
@@ -162,6 +165,7 @@ func (p *TimelineProjector) ApplySemFrame(ctx context.Context, frame []byte) err
 		if role == "" {
 			role = "assistant"
 		}
+		p.msgContents[env.Event.ID] = cum
 		if now-last < 250 {
 			p.mu.Unlock()
 			return nil
@@ -193,6 +197,13 @@ func (p *TimelineProjector) ApplySemFrame(ctx context.Context, frame []byte) err
 		if role == "" {
 			role = "assistant"
 		}
+		content := pb.Text
+		if strings.TrimSpace(content) == "" {
+			content = p.msgContents[env.Event.ID]
+		}
+		if strings.TrimSpace(content) != "" {
+			p.msgContents[env.Event.ID] = content
+		}
 		delete(p.lastMsgWrite, env.Event.ID)
 		p.mu.Unlock()
 		err := p.upsert(ctx, seq, &timelinepb.TimelineEntityV1{
@@ -202,7 +213,7 @@ func (p *TimelineProjector) ApplySemFrame(ctx context.Context, frame []byte) err
 				Message: &timelinepb.MessageSnapshotV1{
 					SchemaVersion: 1,
 					Role:          role,
-					Content:       pb.Text,
+					Content:       content,
 					Streaming:     false,
 				},
 			},
@@ -216,6 +227,7 @@ func (p *TimelineProjector) ApplySemFrame(ctx context.Context, frame []byte) err
 		if role == "" {
 			role = "thinking"
 		}
+		content := p.msgContents[env.Event.ID]
 		delete(p.lastMsgWrite, env.Event.ID)
 		p.mu.Unlock()
 		err := p.upsert(ctx, seq, &timelinepb.TimelineEntityV1{
@@ -225,6 +237,7 @@ func (p *TimelineProjector) ApplySemFrame(ctx context.Context, frame []byte) err
 				Message: &timelinepb.MessageSnapshotV1{
 					SchemaVersion: 1,
 					Role:          role,
+					Content:       content,
 					Streaming:     false,
 				},
 			},
