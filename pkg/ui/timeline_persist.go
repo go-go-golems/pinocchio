@@ -2,9 +2,11 @@ package ui
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/go-go-golems/geppetto/pkg/events"
@@ -65,7 +67,19 @@ func StepTimelinePersistFunc(store chatstore.TimelineStore, convID string) func(
 		}
 
 		persist := func(id string, role string, content string, streaming bool) {
-			if err := upsertMessage(ctx, id, role, content, streaming); err != nil {
+			persistCtx := ctx
+			cancel := func() {}
+			if persistCtx.Err() != nil {
+				// During shutdown, Watermill message contexts can be canceled before the queue drains.
+				// Use a short detached context so final timeline upserts can still land without log spam.
+				persistCtx, cancel = context.WithTimeout(context.Background(), 250*time.Millisecond)
+			}
+			defer cancel()
+
+			if err := upsertMessage(persistCtx, id, role, content, streaming); err != nil {
+				if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+					return
+				}
 				log.Warn().Err(err).
 					Str("component", "timeline_persist").
 					Str("conv_id", convID).
