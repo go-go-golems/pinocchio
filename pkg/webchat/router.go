@@ -25,6 +25,7 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/turns"
 	"github.com/go-go-golems/geppetto/pkg/turns/serde"
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
+	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
 	rediscfg "github.com/go-go-golems/pinocchio/pkg/redisstream"
 	sempb "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/base"
 	timelinepb "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/timeline"
@@ -84,7 +85,7 @@ func NewRouter(ctx context.Context, parsed *layers.ParsedLayers, staticFS fs.FS,
 		return nil, errors.Wrap(err, "parse router settings")
 	}
 	if dsn := strings.TrimSpace(s.TimelineDSN); dsn != "" {
-		store, err := NewSQLiteTimelineStore(dsn)
+		store, err := chatstore.NewSQLiteTimelineStore(dsn)
 		if err != nil {
 			return nil, errors.Wrap(err, "open timeline store (dsn)")
 		}
@@ -93,17 +94,17 @@ func NewRouter(ctx context.Context, parsed *layers.ParsedLayers, staticFS fs.FS,
 		if dir := filepath.Dir(p); dir != "" && dir != "." {
 			_ = os.MkdirAll(dir, 0755)
 		}
-		dsn, err := SQLiteTimelineDSNForFile(p)
+		dsn, err := chatstore.SQLiteTimelineDSNForFile(p)
 		if err != nil {
 			return nil, errors.Wrap(err, "build timeline DSN")
 		}
-		store, err := NewSQLiteTimelineStore(dsn)
+		store, err := chatstore.NewSQLiteTimelineStore(dsn)
 		if err != nil {
 			return nil, errors.Wrap(err, "open timeline store (file)")
 		}
 		r.timelineStore = store
 	} else {
-		r.timelineStore = NewInMemoryTimelineStore(s.TimelineInMemoryMaxEntities)
+		r.timelineStore = chatstore.NewInMemoryTimelineStore(s.TimelineInMemoryMaxEntities)
 	}
 	if r.cm != nil {
 		r.cm.SetTimelineStore(r.timelineStore)
@@ -111,7 +112,7 @@ func NewRouter(ctx context.Context, parsed *layers.ParsedLayers, staticFS fs.FS,
 
 	// Optional turn snapshot store (SQLite when configured).
 	if dsn := strings.TrimSpace(s.TurnsDSN); dsn != "" {
-		store, err := NewSQLiteTurnStore(dsn)
+		store, err := chatstore.NewSQLiteTurnStore(dsn)
 		if err != nil {
 			return nil, errors.Wrap(err, "open turn store (dsn)")
 		}
@@ -120,11 +121,11 @@ func NewRouter(ctx context.Context, parsed *layers.ParsedLayers, staticFS fs.FS,
 		if dir := filepath.Dir(p); dir != "" && dir != "." {
 			_ = os.MkdirAll(dir, 0755)
 		}
-		dsn, err := SQLiteTurnDSNForFile(p)
+		dsn, err := chatstore.SQLiteTurnDSNForFile(p)
 		if err != nil {
 			return nil, errors.Wrap(err, "build turn DSN")
 		}
-		store, err := NewSQLiteTurnStore(dsn)
+		store, err := chatstore.NewSQLiteTurnStore(dsn)
 		if err != nil {
 			return nil, errors.Wrap(err, "open turn store (file)")
 		}
@@ -701,7 +702,7 @@ func (r *Router) registerAPIHandlers(mux *http.ServeMux) {
 			}
 		}
 
-		items, err := r.turnStore.List(r0.Context(), TurnQuery{
+		items, err := r.turnStore.List(r0.Context(), chatstore.TurnQuery{
 			ConvID:    convID,
 			SessionID: sessionID,
 			Phase:     phase,
@@ -845,7 +846,7 @@ func stepModeFromOverrides(overrides map[string]any) bool {
 	return false
 }
 
-func snapshotHookForConv(conv *Conversation, dir string, store TurnStore) toolloop.SnapshotHook {
+func snapshotHookForConv(conv *Conversation, dir string, store chatstore.TurnStore) toolloop.SnapshotHook {
 	if conv == nil || (dir == "" && store == nil) {
 		return nil
 	}

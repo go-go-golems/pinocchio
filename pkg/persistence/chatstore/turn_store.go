@@ -1,4 +1,4 @@
-package webchat
+package chatstore
 
 import "context"
 

@@ -7,7 +7,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/pkg/errors"
 
-	webchat "github.com/go-go-golems/pinocchio/pkg/webchat"
+	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
 )
 
 type StoreSettings struct {
@@ -42,7 +42,7 @@ func (s *StoreSettings) resolveTimelineDSN() (string, error) {
 	if s.TimelineDB == "" {
 		return "", errors.New("timeline store not configured (set --timeline-dsn or --timeline-db)")
 	}
-	return webchat.SQLiteTimelineDSNForFile(s.TimelineDB)
+	return chatstore.SQLiteTimelineDSNForFile(s.TimelineDB)
 }
 
 func openTimelineDB(settings *StoreSettings) (*sql.DB, error) {
@@ -53,10 +53,10 @@ func openTimelineDB(settings *StoreSettings) (*sql.DB, error) {
 	return sql.Open("sqlite3", dsn)
 }
 
-func openTimelineStore(settings *StoreSettings) (*webchat.SQLiteTimelineStore, error) {
+func openTimelineStore(settings *StoreSettings) (*chatstore.SQLiteTimelineStore, error) {
 	dsn, err := settings.resolveTimelineDSN()
 	if err != nil {
 		return nil, err
 	}
-	return webchat.NewSQLiteTimelineStore(dsn)
+	return chatstore.NewSQLiteTimelineStore(dsn)
 }

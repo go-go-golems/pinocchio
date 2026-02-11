@@ -7,17 +7,18 @@ import (
 
 	"github.com/go-go-golems/geppetto/pkg/turns"
 	"github.com/go-go-golems/geppetto/pkg/turns/serde"
+	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
 	"github.com/pkg/errors"
 )
 
 type turnStorePersister struct {
-	store     TurnStore
+	store     chatstore.TurnStore
 	convID    string
 	sessionID string
 	phase     string
 }
 
-func newTurnStorePersister(store TurnStore, conv *Conversation, phase string) *turnStorePersister {
+func newTurnStorePersister(store chatstore.TurnStore, conv *Conversation, phase string) *turnStorePersister {
 	if store == nil || conv == nil {
 		return nil
 	}

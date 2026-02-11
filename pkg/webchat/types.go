@@ -14,6 +14,7 @@ import (
 	geptools "github.com/go-go-golems/geppetto/pkg/inference/tools"
 	"github.com/go-go-golems/geppetto/pkg/turns"
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
+	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
 	timelinepb "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/timeline"
 	"github.com/gorilla/websocket"
 )
@@ -88,8 +89,8 @@ type Router struct {
 
 	// shared deps
 	db            *sql.DB
-	timelineStore TimelineStore
-	turnStore     TurnStore
+	timelineStore chatstore.TimelineStore
+	turnStore     chatstore.TurnStore
 
 	// profiles
 	profiles ProfileRegistry

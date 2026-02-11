@@ -7,6 +7,7 @@ import (
 	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/go-go-golems/geppetto/pkg/events"
 	"github.com/go-go-golems/geppetto/pkg/inference/toolloop"
+	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
 	timelinepb "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/timeline"
 	"github.com/gorilla/websocket"
 )
@@ -98,7 +99,7 @@ func WithDB(db *sql.DB) RouterOption {
 	}
 }
 
-func WithTimelineStore(s TimelineStore) RouterOption {
+func WithTimelineStore(s chatstore.TimelineStore) RouterOption {
 	return func(r *Router) error {
 		if s == nil {
 			return errors.New("timeline store is nil")
@@ -112,7 +113,7 @@ func WithTimelineStore(s TimelineStore) RouterOption {
 }
 
 // WithTurnStore configures a durable turn snapshot store.
-func WithTurnStore(s TurnStore) RouterOption {
+func WithTurnStore(s chatstore.TurnStore) RouterOption {
 	return func(r *Router) error {
 		if s == nil {
 			return errors.New("turn store is nil")

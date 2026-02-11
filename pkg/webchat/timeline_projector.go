@@ -10,6 +10,7 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/types/known/structpb"
 
+	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
 	sempb "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/base"
 	semMw "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/middleware"
 	timelinepb "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/timeline"
@@ -33,7 +34,7 @@ type semEnvelope struct {
 // - throttle high-frequency writes (llm.delta)
 type TimelineProjector struct {
 	convID   string
-	store    TimelineStore
+	store    chatstore.TimelineStore
 	onUpsert func(entity *timelinepb.TimelineEntityV1, version uint64)
 
 	mu           sync.Mutex
@@ -43,7 +44,7 @@ type TimelineProjector struct {
 	toolInputs   map[string]*structpb.Struct
 }
 
-func NewTimelineProjector(convID string, store TimelineStore, onUpsert func(entity *timelinepb.TimelineEntityV1, version uint64)) *TimelineProjector {
+func NewTimelineProjector(convID string, store chatstore.TimelineStore, onUpsert func(entity *timelinepb.TimelineEntityV1, version uint64)) *TimelineProjector {
 	return &TimelineProjector{
 		convID:       convID,
 		store:        store,

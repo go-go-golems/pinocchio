@@ -18,6 +18,7 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/inference/toolloop"
 	"github.com/go-go-golems/geppetto/pkg/inference/toolloop/enginebuilder"
 	"github.com/go-go-golems/geppetto/pkg/turns"
+	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
 	timelinepb "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/timeline"
 )
 
@@ -61,7 +62,7 @@ type ConvManager struct {
 	idleTimeoutSec int
 	stepCtrl       *toolloop.StepController
 
-	timelineStore      TimelineStore
+	timelineStore      chatstore.TimelineStore
 	timelineUpsertHook func(*Conversation) func(entity *timelinepb.TimelineEntityV1, version uint64)
 
 	buildConfig     func(profileSlug string, overrides map[string]any) (EngineConfig, error)
@@ -81,7 +82,7 @@ type ConvManagerOptions struct {
 	EvictIdle      time.Duration
 	EvictInterval  time.Duration
 
-	TimelineStore      TimelineStore
+	TimelineStore      chatstore.TimelineStore
 	TimelineUpsertHook func(*Conversation) func(entity *timelinepb.TimelineEntityV1, version uint64)
 
 	BuildConfig     func(profileSlug string, overrides map[string]any) (EngineConfig, error)
@@ -105,7 +106,7 @@ func NewConvManager(opts ConvManagerOptions) *ConvManager {
 	}
 }
 
-func (cm *ConvManager) SetTimelineStore(store TimelineStore) {
+func (cm *ConvManager) SetTimelineStore(store chatstore.TimelineStore) {
 	if cm == nil {
 		return
 	}

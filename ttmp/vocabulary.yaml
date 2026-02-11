@@ -23,6 +23,10 @@ topics:
       description: Backend services
     - slug: websocket
       description: WebSocket lifecycle & events
+    - slug: persistence
+      description: Persistence and storage concerns
+    - slug: refactor
+      description: Codebase refactoring and package extraction work
 docTypes:
     - slug: index
       description: Ticket index / overall plan
