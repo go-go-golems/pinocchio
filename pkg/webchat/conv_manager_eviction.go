@@ -136,7 +136,4 @@ func (cm *ConvManager) cleanupConversation(conv *Conversation) {
 			conv.stream.Stop()
 		}
 	}
-	if conv.subClose && conv.sub != nil {
-		_ = conv.sub.Close()
-	}
 }
