@@ -11,6 +11,22 @@ DocType: diary
 Intent: long-term
 Owners: []
 RelatedFiles:
+    - Path: pkg/cmds/chat_persistence.go
+      Note: Store bootstrap and CLI turn persister implementation
+    - Path: pkg/cmds/chat_persistence_test.go
+      Note: Tests for store bootstrap and turn persister
+    - Path: pkg/cmds/cmd.go
+      Note: runChat wiring for persistence store setup and handlers
+    - Path: pkg/cmds/cmdlayers/helpers.go
+      Note: Added sqlite persistence CLI flags for chat mode
+    - Path: pkg/cmds/run/context.go
+      Note: RunContext now carries persistence settings
+    - Path: pkg/ui/backend.go
+      Note: Added backend hooks for persister/snapshot/session-id
+    - Path: pkg/ui/timeline_persist.go
+      Note: UI event stream timeline persistence handler
+    - Path: pkg/ui/timeline_persist_test.go
+      Note: Tests for assistant/thinking timeline persistence
     - Path: ttmp/2026/02/10/PIN-20260211-CMD-PINOCCHIO-SQLITE--study-and-plan-sqlite-persistence-for-cmd-pinocchio-chat-runtime/analysis/01-study-sqlite-persistence-architecture-for-cmd-pinocchio-chat.md
       Note: Diary records production of architecture study
     - Path: ttmp/2026/02/10/PIN-20260211-CMD-PINOCCHIO-SQLITE--study-and-plan-sqlite-persistence-for-cmd-pinocchio-chat-runtime/planning/01-implementation-plan-add-sqlite-conversation-and-timeline-persistence-to-cmd-pinocchio.md
@@ -23,6 +39,7 @@ LastUpdated: 2026-02-11T02:10:00-05:00
 WhatFor: Capture study steps, command evidence, findings, and decisions before implementation.
 WhenToUse: Use when reviewing how the persistence plan and ticket artifacts were produced.
 ---
+
 
 
 # Diary
@@ -345,3 +362,109 @@ This step ensures the documentation work is auditable and the ticket can be resu
   - `/home/manuel/workspaces/2025-10-30/implement-openai-responses-api/pinocchio/ttmp/2026/02/10/PIN-20260211-CMD-PINOCCHIO-SQLITE--study-and-plan-sqlite-persistence-for-cmd-pinocchio-chat-runtime/tasks.md`
 - Changelog file:
   - `/home/manuel/workspaces/2025-10-30/implement-openai-responses-api/pinocchio/ttmp/2026/02/10/PIN-20260211-CMD-PINOCCHIO-SQLITE--study-and-plan-sqlite-persistence-for-cmd-pinocchio-chat-runtime/changelog.md`
+
+## Step 5: Implement cmd/pinocchio SQLite persistence wiring (turns + timeline)
+
+I implemented the SQLite persistence plan for `cmd/pinocchio` chat mode using the newly extracted shared store package (`pkg/persistence/chatstore`). The implementation adds configuration plumbing, store bootstrap/cleanup, final-turn persistence via enginebuilder persister, and timeline persistence via a dedicated UI-topic handler.
+
+I kept the runtime behavior best-effort for write failures: chat interaction remains live even if persistence upserts fail. This matches the stability goals in the planning document and avoids making the TUI fragile when local sqlite files are unavailable or temporarily locked.
+
+### Prompt Context
+
+**User prompt (verbatim):** "yes go ahead."
+
+**Assistant interpretation:** Close the extraction ticket, then begin implementation of the cmd/pinocchio SQLite persistence integration using the completed study/plan as execution blueprint.
+
+**Inferred user intent:** Move immediately from planning to production code with task tracking, tests, and clean git commits.
+
+**Commit (code):** pending (implementation staged in this step; commit follows after final diary/changelog updates)
+
+### What I did
+
+- Closed extraction ticket as requested:
+  - `PIN-20260211-EXTRACT-PERSISTENCE-PKG`
+- Replaced this ticket’s completed study tasks with implementation tasks and checked them off as each segment landed.
+- Added helper flags/settings for persistence in `cmd/pinocchio`:
+  - `timeline-dsn`, `timeline-db`, `turns-dsn`, `turns-db`
+  - files: `pkg/cmds/cmdlayers/helpers.go`, `pkg/cmds/run/context.go`, `pkg/cmds/cmd.go`
+- Implemented chat persistence bootstrap and turn persister:
+  - file: `pkg/cmds/chat_persistence.go`
+  - opens timeline/turn stores from DSN or DB path
+  - creates DB directories as needed
+  - wires final-turn persistence through `enginebuilder` persister path
+- Extended backend wiring points:
+  - file: `pkg/ui/backend.go`
+  - added `SetTurnPersister`, `SetSnapshotHook`, `SessionID`
+- Implemented UI-event-driven timeline persistence handler:
+  - file: `pkg/ui/timeline_persist.go`
+  - persists assistant/thinking message entities to timeline store with per-conversation monotonic version sequence
+  - avoids creating empty assistant entries on start-only events
+- Added tests:
+  - `pkg/cmds/chat_persistence_test.go`
+  - `pkg/ui/timeline_persist_test.go`
+- Ran validations:
+  - `go test ./pkg/cmds ./pkg/ui ./pkg/ui/runtime -count=1`
+  - `go test ./... -count=1` in `pinocchio`
+  - `go test ./... -count=1` in `web-agent-example`
+
+### Why
+
+- These are the minimum changes needed to make CLI chat persistence real and usable end-to-end.
+- Dedicated timeline persistence handler keeps UI rendering concerns separated from storage logic.
+- Using `pkg/persistence/chatstore` avoids reintroducing webchat package coupling after the hard extraction.
+
+### What worked
+
+- New persistence flags parse cleanly.
+- Store bootstrap opens both timeline and turns DBs correctly when configured.
+- Turn persister writes final turns through session/enginebuilder flow.
+- Timeline persistence handler writes assistant/thinking entities and respects the no-empty-assistant behavior.
+- Full repository tests in `pinocchio` and `web-agent-example` passed.
+
+### What didn't work
+
+- Initial compile failed once due stale type reference (`TurnQuery` in `pkg/webchat/router.go`) from the earlier extraction; fixed by switching to `chatstore.TurnQuery`.
+- During persistence helper drafting I briefly produced an overcomplicated draft helper; replaced immediately with a minimal, direct implementation.
+
+### What I learned
+
+- The current CLI chat architecture can support persistence cleanly with small, targeted extension points.
+- A second handler on the same `ui` topic is a practical way to add durable timeline projection without perturbing existing TUI update flow.
+
+### What was tricky to build
+
+- The tricky part was preserving behavior parity with the existing deferred assistant creation semantics while mapping event streams to durable timeline snapshots.
+- Final/interrupted assistant paths can arrive without partial deltas, so persistence logic needs stateful fallbacks to avoid wiping content or creating empty artifacts.
+
+### What warrants a second pair of eyes
+
+- Review whether timeline persistence should include broader event classes (tool call/result entities) in this same PR or in follow-up.
+- Confirm desired behavior when both `timeline-dsn` and `timeline-db` are supplied (current behavior prefers DSN).
+
+### What should be done in the future
+
+- Add a small user-facing doc snippet for `cmd/pinocchio` showing recommended sqlite flags and troubleshooting for local file permissions/locking.
+- Consider retention/compaction strategy for long-running chat histories.
+
+### Code review instructions
+
+- Start with persistence plumbing in:
+  - `pkg/cmds/cmdlayers/helpers.go`
+  - `pkg/cmds/run/context.go`
+  - `pkg/cmds/chat_persistence.go`
+  - `pkg/cmds/cmd.go`
+- Then inspect timeline persistence behavior in:
+  - `pkg/ui/timeline_persist.go`
+  - `pkg/ui/timeline_persist_test.go`
+- Validate backend integration points in:
+  - `pkg/ui/backend.go`
+- Re-run validation commands listed above.
+
+### Technical details
+
+- New persistence tests:
+  - `pkg/cmds/chat_persistence_test.go`
+  - `pkg/ui/timeline_persist_test.go`
+- Full validation completed on:
+  - `pinocchio` module (`go test ./...`)
+  - `web-agent-example` module (`go test ./...`)

@@ -25,3 +25,16 @@ Uploaded study and plan documents to reMarkable, verified remote destination, an
 - /home/manuel/workspaces/2025-10-30/implement-openai-responses-api/pinocchio/ttmp/2026/02/10/PIN-20260211-CMD-PINOCCHIO-SQLITE--study-and-plan-sqlite-persistence-for-cmd-pinocchio-chat-runtime/diary/01-diary.md — Added upload troubleshooting and final bookkeeping steps
 - /home/manuel/workspaces/2025-10-30/implement-openai-responses-api/pinocchio/ttmp/2026/02/10/PIN-20260211-CMD-PINOCCHIO-SQLITE--study-and-plan-sqlite-persistence-for-cmd-pinocchio-chat-runtime/tasks.md — Marked all checklist items complete
 
+
+## 2026-02-11
+
+Implemented cmd/pinocchio chat sqlite persistence (flags, store bootstrap, final-turn persister, timeline persistence handler) and validated pinocchio + web-agent-example builds/tests.
+
+### Related Files
+
+- /home/manuel/workspaces/2025-10-30/implement-openai-responses-api/pinocchio/pkg/cmds/chat_persistence.go — Introduced CLI store bootstrap and final-turn persister
+- /home/manuel/workspaces/2025-10-30/implement-openai-responses-api/pinocchio/pkg/cmds/chat_persistence_test.go — Added persistence plumbing tests
+- /home/manuel/workspaces/2025-10-30/implement-openai-responses-api/pinocchio/pkg/ui/timeline_persist.go — Introduced timeline persistence projection handler
+- /home/manuel/workspaces/2025-10-30/implement-openai-responses-api/pinocchio/pkg/ui/timeline_persist_test.go — Added timeline handler behavior tests
+- /home/manuel/workspaces/2025-10-30/implement-openai-responses-api/pinocchio/ttmp/2026/02/10/PIN-20260211-CMD-PINOCCHIO-SQLITE--study-and-plan-sqlite-persistence-for-cmd-pinocchio-chat-runtime/tasks.md — Checked implementation tasks 1-6 complete
+
