@@ -35,3 +35,13 @@ Verified web-chat-example has no Go module or Go sources in this workspace snaps
 
 - /home/manuel/workspaces/2025-10-30/implement-openai-responses-api/web-chat-example/pkg/docs/debug-ui-storybook-widget-playbook.md — Only file present in web-chat-example during verification
 
+
+## 2026-02-11
+
+Added diary coverage and corrected downstream validation target to web-agent-example; confirmed it compiles/tests after hard-cut extraction.
+
+### Related Files
+
+- /home/manuel/workspaces/2025-10-30/implement-openai-responses-api/pinocchio/ttmp/2026/02/11/PIN-20260211-EXTRACT-PERSISTENCE-PKG--extract-persistence-stores-from-webchat-into-shared-package/diary/01-diary.md — Detailed implementation diary and correction log
+- /home/manuel/workspaces/2025-10-30/implement-openai-responses-api/pinocchio/ttmp/2026/02/11/PIN-20260211-EXTRACT-PERSISTENCE-PKG--extract-persistence-stores-from-webchat-into-shared-package/tasks.md — Task 6 renamed to web-agent-example and remained complete
+

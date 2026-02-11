@@ -7,4 +7,4 @@
 - [x] Update `pkg/webchat` to consume `pkg/persistence/chatstore` (hard cutoff, no compatibility shims)
 - [x] Update `cmd/web-chat` timeline DB command imports/usages to the new package
 - [x] Compile and test `pinocchio` packages affected by migration
-- [x] Compile and test `web-chat-example` against migrated APIs and fix any fallout
+- [x] Compile and test `web-agent-example` against migrated APIs and fix any fallout
