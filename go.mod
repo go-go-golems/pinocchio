@@ -1,6 +1,6 @@
 module github.com/go-go-golems/pinocchio
 
-go 1.25.6
+go 1.25.7
 
 require (
 	github.com/ThreeDotsLabs/watermill v1.5.1
@@ -11,8 +11,8 @@ require (
 	github.com/charmbracelet/log v0.4.1
 	github.com/go-go-golems/bobatea v0.0.29
 	github.com/go-go-golems/clay v0.3.0
-	github.com/go-go-golems/geppetto v0.6.0
-	github.com/go-go-golems/glazed v0.7.8
+	github.com/go-go-golems/geppetto v0.7.0
+	github.com/go-go-golems/glazed v0.7.14
 	github.com/go-go-golems/go-sqlite-regexp v0.0.1
 	github.com/go-go-golems/prompto v0.1.13
 	github.com/go-go-golems/uhoh v0.0.5
@@ -34,16 +34,17 @@ require (
 	github.com/tiktoken-go/tokenizer v0.7.0
 	github.com/weaviate/tiktoken-go v0.0.2
 	golang.org/x/sync v0.19.0
+	google.golang.org/protobuf v1.36.11
 	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
-	cloud.google.com/go v0.116.0 // indirect
+	cloud.google.com/go v0.121.1 // indirect
 	cloud.google.com/go/ai v0.8.0 // indirect
 	cloud.google.com/go/auth v0.17.0 // indirect
 	cloud.google.com/go/auth/oauth2adapt v0.2.8 // indirect
 	cloud.google.com/go/compute/metadata v0.9.0 // indirect
-	cloud.google.com/go/longrunning v0.5.7 // indirect
+	cloud.google.com/go/longrunning v0.6.7 // indirect
 	github.com/Masterminds/sprig v2.22.0+incompatible // indirect
 	github.com/Rican7/retry v0.3.1 // indirect
 	github.com/RoaringBitmap/roaring/v2 v2.4.5 // indirect
@@ -87,7 +88,6 @@ require (
 	github.com/google/s2a-go v0.1.9 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.3.7 // indirect
 	github.com/googleapis/gax-go/v2 v2.15.0 // indirect
-	github.com/huandu/go-assert v1.1.6 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
@@ -113,7 +113,6 @@ require (
 	google.golang.org/genproto/googleapis/api v0.0.0-20251022142026-3a174f9686a8 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20251213004720-97cd9d5aeac2 // indirect
 	google.golang.org/grpc v1.77.0 // indirect
-	google.golang.org/protobuf v1.36.11 // indirect
 )
 
 require (
@@ -127,7 +126,7 @@ require (
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
 	github.com/aymerick/douceur v0.2.0 // indirect
 	github.com/bahlo/generic-list-go v0.2.0 // indirect
-	github.com/bmatcuk/doublestar/v4 v4.9.0 // indirect
+	github.com/bmatcuk/doublestar/v4 v4.10.0 // indirect
 	github.com/buger/jsonparser v1.1.1 // indirect
 	github.com/catppuccin/go v0.3.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
@@ -189,12 +188,12 @@ require (
 	github.com/yuin/goldmark v1.7.8 // indirect
 	github.com/yuin/goldmark-emoji v1.0.5 // indirect
 	go.mongodb.org/mongo-driver v1.14.0 // indirect
-	golang.org/x/crypto v0.46.0 // indirect
+	golang.org/x/crypto v0.47.0 // indirect
 	golang.org/x/exp v0.0.0-20250408133849-7e4ce0ab07d0 // indirect
-	golang.org/x/net v0.48.0 // indirect
-	golang.org/x/sys v0.39.0 // indirect
-	golang.org/x/term v0.38.0 // indirect
-	golang.org/x/text v0.32.0 // indirect
+	golang.org/x/net v0.49.0 // indirect
+	golang.org/x/sys v0.40.0 // indirect
+	golang.org/x/term v0.39.0 // indirect
+	golang.org/x/text v0.33.0 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
