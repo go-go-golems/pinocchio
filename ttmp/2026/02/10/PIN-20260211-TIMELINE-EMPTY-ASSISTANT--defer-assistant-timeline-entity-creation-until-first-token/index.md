@@ -1,7 +1,7 @@
 ---
 Title: Defer assistant timeline entity creation until first token
 Ticket: PIN-20260211-TIMELINE-EMPTY-ASSISTANT
-Status: active
+Status: complete
 Topics:
     - pinocchio
     - bug
@@ -21,10 +21,11 @@ RelatedFiles:
       Note: Secondary path to keep behavior consistent
 ExternalSources: []
 Summary: Investigation ticket documenting why thinking-model sessions show an empty assistant timeline block before first assistant token and recommending deferred assistant entity creation.
-LastUpdated: 2026-02-10T20:09:57.764562421-05:00
+LastUpdated: 2026-02-10T20:26:16.586351574-05:00
 WhatFor: ""
 WhenToUse: ""
 ---
+
 
 
 # Defer assistant timeline entity creation until first token
