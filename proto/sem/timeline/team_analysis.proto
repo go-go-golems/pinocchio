@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+package sem.timeline;
+
+option go_package = "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/timeline;timeline";
+
+import "proto/sem/domain/team_analysis.proto";
+
+// TeamAnalysisSnapshotV1 defines the payload for a 'team_analysis' entity.
+message TeamAnalysisSnapshotV1 {
+  uint32 schema_version = 1; // =1
+
+  string status = 2; // analyzing|completed|error
+  int32 team_size = 3;
+  string depth = 4;
+  double progress = 5;
+  string current_pair = 6;
+  repeated string insights = 7;
+
+  // Reuse VisualizationData from domain proto
+  sem.domain.team_analysis.TeamAnalysisResult.VisualizationData visualization_data = 10;
+}
+
+

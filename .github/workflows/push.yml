@@ -19,5 +19,8 @@ jobs:
           go-version-file: go.mod
           cache: true
       -
+        name: Generate files
+        run: go generate ./...
+      -
         name: Run unit tests
         run: go test ./...

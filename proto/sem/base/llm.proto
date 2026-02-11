@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+package sem.base.llm;
+
+option go_package = "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/base;base";
+
+message LlmStart {
+  string id = 1;
+  string role = 2; // "assistant" | "thinking"
+}
+
+message LlmDelta {
+  string id = 1;
+  string delta = 2;
+  string cumulative = 3;
+}
+
+message LlmFinal {
+  string id = 1;
+  string text = 2;
+}
+
+message LlmDone {
+  string id = 1;
+}

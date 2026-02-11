@@ -43,6 +43,9 @@ linters:
       - linters:
           - staticcheck
         text: 'SA1019: cli.CreateProcessorLegacy'
+    # Ignore generated protobuf code from repo lint signal.
+    paths:
+      - '.*\.pb\.go$'
   settings:
     errcheck:
       exclude-functions:

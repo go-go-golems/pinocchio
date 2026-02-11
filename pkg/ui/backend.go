@@ -3,7 +3,7 @@ package ui
 import (
 	"context"
 	"fmt"
-	"github.com/go-go-golems/geppetto/pkg/inference/engine"
+	"strings"
 	"sync"
 	"time"
 
@@ -12,6 +12,10 @@ import (
 	boba_chat "github.com/go-go-golems/bobatea/pkg/chat"
 	"github.com/go-go-golems/bobatea/pkg/timeline"
 	"github.com/go-go-golems/geppetto/pkg/events"
+	"github.com/go-go-golems/geppetto/pkg/inference/engine"
+	"github.com/go-go-golems/geppetto/pkg/inference/session"
+	"github.com/go-go-golems/geppetto/pkg/inference/toolloop"
+	"github.com/go-go-golems/geppetto/pkg/inference/toolloop/enginebuilder"
 	"github.com/go-go-golems/geppetto/pkg/turns"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
@@ -19,12 +23,14 @@ import (
 
 // EngineBackend provides a Backend implementation using the Engine-first architecture.
 type EngineBackend struct {
-	engine    engine.Engine
-	isRunning bool
-	cancel    context.CancelFunc
-	historyMu sync.RWMutex
-	history   []*turns.Turn
-	program   *tea.Program
+	engine  engine.Engine
+	builder *enginebuilder.Builder
+
+	sessMu sync.RWMutex
+	sess   *session.Session
+
+	program *tea.Program
+
 	emittedMu sync.Mutex
 	emitted   map[string]struct{}
 }
@@ -33,11 +39,18 @@ var _ boba_chat.Backend = &EngineBackend{}
 
 // NewEngineBackend creates a new EngineBackend with the given engine and event sink.
 // The eventSink is used to publish events during inference for UI updates.
-func NewEngineBackend(engine engine.Engine) *EngineBackend {
+func NewEngineBackend(engine engine.Engine, sinks ...events.EventSink) *EngineBackend {
+	builder := &enginebuilder.Builder{
+		Base:       engine,
+		EventSinks: append([]events.EventSink(nil), sinks...),
+	}
+	sess := session.NewSession()
+	sess.Builder = builder
 	return &EngineBackend{
-		engine:    engine,
-		isRunning: false,
-		emitted:   make(map[string]struct{}),
+		engine:  engine,
+		builder: builder,
+		sess:    sess,
+		emitted: make(map[string]struct{}),
 	}
 }
 
@@ -47,50 +60,67 @@ func (e *EngineBackend) AttachProgram(p *tea.Program) {
 	e.program = p
 }
 
+// SetTurnPersister configures final-turn persistence for subsequent inference runs.
+func (e *EngineBackend) SetTurnPersister(p enginebuilder.TurnPersister) {
+	if e == nil || e.builder == nil {
+		return
+	}
+	e.builder.Persister = p
+}
+
+// SetSnapshotHook configures snapshot capture for subsequent inference runs.
+func (e *EngineBackend) SetSnapshotHook(h toolloop.SnapshotHook) {
+	if e == nil || e.builder == nil {
+		return
+	}
+	e.builder.SnapshotHook = h
+}
+
+// SessionID returns the current backend session identifier.
+func (e *EngineBackend) SessionID() string {
+	e.sessMu.RLock()
+	defer e.sessMu.RUnlock()
+	if e.sess == nil {
+		return ""
+	}
+	return e.sess.SessionID
+}
+
 // Start executes inference using the engine and publishes events through the sink.
 // This method implements the boba_chat.Backend interface with a plain prompt string.
 func (e *EngineBackend) Start(ctx context.Context, prompt string) (tea.Cmd, error) {
-	log.Debug().Str("component", "engine_backend").Str("method", "Start").Bool("already_running", e.isRunning).Msg("Start called")
-	if e.isRunning {
+	log.Debug().Str("component", "engine_backend").Str("method", "Start").Msg("Start called")
+
+	e.sessMu.RLock()
+	sess := e.sess
+	e.sessMu.RUnlock()
+	if sess == nil {
+		return nil, errors.New("session is nil")
+	}
+	if sess.IsRunning() {
 		log.Debug().Str("component", "engine_backend").Msg("Start rejected: already running")
 		return nil, errors.New("Engine is already running")
 	}
 
-	// Create cancellable context for this inference run
-	ctx, cancel := context.WithCancel(ctx)
-	e.cancel = cancel
-	e.isRunning = true
+	log.Debug().Str("component", "engine_backend").Msg("Building seed turn, appending user block, starting inference")
+	_, err := sess.AppendNewTurnFromUserPrompt(prompt)
+	if err != nil {
+		return nil, errors.Wrap(err, "append prompt turn")
+	}
 
-	// Create engine with the event sink if provided
-	engine := e.engine
+	handle, err := sess.StartInference(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "start inference")
+	}
 
 	return func() tea.Msg {
-		if !e.isRunning {
-			return nil
-		}
-
-		log.Debug().Str("component", "engine_backend").Msg("Reducing history, appending user block, running inference")
-		// Reduce history into a seed Turn, append user Block, then run inference
-		seed := e.reduceHistory()
-		if prompt != "" {
-			turns.AppendBlock(seed, turns.NewUserTextBlock(prompt))
-		}
-		updated, err := engine.RunInference(ctx, seed)
-
-		// Mark as finished
-		e.isRunning = false
-		e.cancel = nil
-
+		updated, err := handle.Wait()
 		if err != nil {
 			log.Error().Err(err).Msg("Engine inference failed")
 			log.Error().Err(err).Str("component", "engine_backend").Msg("RunInference failed")
 		}
-		// Append updated Turn to history for cohesive continuation
 		if updated != nil {
-			e.historyMu.Lock()
-			e.history = append(e.history, updated)
-			e.historyMu.Unlock()
-			log.Debug().Str("component", "engine_backend").Int("turn_blocks", len(updated.Blocks)).Int("history_len", len(e.history)).Msg("Appended updated Turn to history")
+			log.Debug().Str("component", "engine_backend").Int("turn_blocks", len(updated.Blocks)).Msg("Updated conversation state from inference")
 		}
 		log.Debug().Str("component", "engine_backend").Msg("Returning BackendFinishedMsg")
 		return boba_chat.BackendFinishedMsg{}
@@ -99,10 +129,27 @@ func (e *EngineBackend) Start(ctx context.Context, prompt string) (tea.Cmd, erro
 
 // SetSeedTurn sets the seed Turn directly
 func (e *EngineBackend) SetSeedTurn(t *turns.Turn) {
-	e.historyMu.Lock()
-	e.history = append(e.history, t)
-	e.historyMu.Unlock()
-	log.Debug().Str("component", "engine_backend").Int("seed_blocks", len(t.Blocks)).Int("history_len", len(e.history)).Msg("Seed Turn appended to history")
+	if t == nil {
+		return
+	}
+	seed := t.Clone()
+
+	e.sessMu.Lock()
+	sess := &session.Session{Builder: e.builder}
+	if sid, ok, err := turns.KeyTurnMetaSessionID.Get(seed.Metadata); err == nil && ok && sid != "" {
+		sess.SessionID = sid
+	} else {
+		sess.SessionID = session.NewSession().SessionID
+	}
+	sess.Append(seed)
+	e.sess = sess
+	e.sessMu.Unlock()
+
+	e.emittedMu.Lock()
+	e.emitted = make(map[string]struct{})
+	e.emittedMu.Unlock()
+
+	log.Debug().Str("component", "engine_backend").Int("seed_blocks", len(t.Blocks)).Msg("Seed Turn loaded into conversation state")
 	e.emitInitialEntities(t)
 }
 
@@ -161,46 +208,89 @@ func (e *EngineBackend) emitInitialEntities(t *turns.Turn) {
 
 // Interrupt attempts to cancel the current inference operation.
 func (e *EngineBackend) Interrupt() {
-	if e.cancel != nil {
-		e.cancel()
-	} else {
+	e.sessMu.RLock()
+	sess := e.sess
+	e.sessMu.RUnlock()
+	if sess == nil {
 		log.Warn().Msg("Engine is not running")
+		return
+	}
+	if err := sess.CancelActive(); err != nil {
+		log.Warn().Err(err).Msg("Engine is not running")
 	}
 }
 
 // Kill forcefully cancels the current inference operation.
 func (e *EngineBackend) Kill() {
-	if e.cancel != nil {
-		e.cancel()
-		e.cancel = nil
-		e.isRunning = false
-	} else {
-		log.Debug().Msg("Engine is not running")
+	e.sessMu.RLock()
+	sess := e.sess
+	e.sessMu.RUnlock()
+	if sess == nil {
+		return
+	}
+	if err := sess.CancelActive(); err != nil {
+		log.Debug().Err(err).Msg("Engine is not running")
 	}
 }
 
 // IsFinished returns whether the engine is currently running an inference operation.
 func (e *EngineBackend) IsFinished() bool {
-	return !e.isRunning
-}
-
-// reduceHistory flattens all prior Turns into a single Turn by concatenating Blocks
-func (e *EngineBackend) reduceHistory() *turns.Turn {
-	out := &turns.Turn{}
-	e.historyMu.RLock()
-	defer e.historyMu.RUnlock()
-	for _, t := range e.history {
-		if t == nil {
-			continue
-		}
-		turns.AppendBlocks(out, t.Blocks...)
-	}
-	return out
+	e.sessMu.RLock()
+	sess := e.sess
+	e.sessMu.RUnlock()
+	return sess == nil || !sess.IsRunning()
 }
 
 // StepChatForwardFunc is a function that forwards watermill messages to the UI by
 // trasnforming them into bubbletea messages and injecting them into the program `p`.
 func StepChatForwardFunc(p *tea.Program) func(msg *message.Message) error {
+	var assistantMu sync.Mutex
+	assistantCreated := map[string]bool{}
+	assistantStartedAt := map[string]time.Time{}
+
+	markAssistantStart := func(entityID string) {
+		assistantMu.Lock()
+		if _, ok := assistantStartedAt[entityID]; !ok {
+			assistantStartedAt[entityID] = time.Now()
+		}
+		assistantMu.Unlock()
+	}
+
+	hasAssistantEntity := func(entityID string) bool {
+		assistantMu.Lock()
+		defer assistantMu.Unlock()
+		return assistantCreated[entityID]
+	}
+
+	ensureAssistantEntity := func(entityID string, md events.EventMetadata, initialText string) {
+		assistantMu.Lock()
+		if assistantCreated[entityID] {
+			assistantMu.Unlock()
+			return
+		}
+		startedAt := assistantStartedAt[entityID]
+		if startedAt.IsZero() {
+			startedAt = time.Now()
+		}
+		assistantCreated[entityID] = true
+		assistantMu.Unlock()
+
+		log.Debug().Str("component", "step_forward").Str("entity_id", entityID).Msg("UIEntityCreated (llm_text)")
+		p.Send(timeline.UIEntityCreated{
+			ID:        timeline.EntityID{LocalID: entityID, Kind: "llm_text"},
+			Renderer:  timeline.RendererDescriptor{Kind: "llm_text"},
+			Props:     map[string]any{"role": "assistant", "text": initialText, "metadata": md.LLMInferenceData, "streaming": true},
+			StartedAt: startedAt,
+		})
+	}
+
+	clearAssistantTracking := func(entityID string) {
+		assistantMu.Lock()
+		delete(assistantCreated, entityID)
+		delete(assistantStartedAt, entityID)
+		assistantMu.Unlock()
+	}
+
 	return func(msg *message.Message) error {
 		msg.Ack()
 
@@ -217,16 +307,16 @@ func StepChatForwardFunc(p *tea.Program) func(msg *message.Message) error {
 
 		switch e_ := e.(type) {
 		case *events.EventPartialCompletionStart:
-			// Create assistant message entity for this stream
-			log.Debug().Str("component", "step_forward").Str("entity_id", entityID).Msg("UIEntityCreated (llm_text)")
-			p.Send(timeline.UIEntityCreated{
-				ID:        timeline.EntityID{LocalID: entityID, Kind: "llm_text"},
-				Renderer:  timeline.RendererDescriptor{Kind: "llm_text"},
-				Props:     map[string]any{"role": "assistant", "text": "", "metadata": md.LLMInferenceData, "streaming": true},
-				StartedAt: time.Now(),
-			})
+			// Defer assistant entity creation until first visible assistant token arrives.
+			markAssistantStart(entityID)
 		case *events.EventPartialCompletion:
-			// Update accumulated assistant text using the Completion field
+			// Create on first non-empty completion; then update as tokens stream in.
+			if strings.TrimSpace(e_.Completion) != "" {
+				ensureAssistantEntity(entityID, md, e_.Completion)
+			}
+			if !hasAssistantEntity(entityID) {
+				break
+			}
 			log.Debug().Str("component", "step_forward").Str("entity_id", entityID).Int("delta_len", len(e_.Delta)).Int("completion_len", len(e_.Completion)).Msg("UIEntityUpdated (llm_text)")
 			p.Send(timeline.UIEntityUpdated{
 				ID:        timeline.EntityID{LocalID: entityID, Kind: "llm_text"},
@@ -235,6 +325,14 @@ func StepChatForwardFunc(p *tea.Program) func(msg *message.Message) error {
 				UpdatedAt: time.Now(),
 			})
 		case *events.EventFinal:
+			if strings.TrimSpace(e_.Text) != "" {
+				ensureAssistantEntity(entityID, md, e_.Text)
+			}
+			if !hasAssistantEntity(entityID) {
+				clearAssistantTracking(entityID)
+				p.Send(boba_chat.BackendFinishedMsg{})
+				break
+			}
 			log.Debug().Str("component", "step_forward").Str("entity_id", entityID).Int("text_len", len(e_.Text)).Msg("UIEntityCompleted (final)")
 			p.Send(timeline.UIEntityCompleted{
 				ID:     timeline.EntityID{LocalID: entityID, Kind: "llm_text"},
@@ -247,6 +345,7 @@ func StepChatForwardFunc(p *tea.Program) func(msg *message.Message) error {
 				Version:   time.Now().UnixNano(),
 				UpdatedAt: time.Now(),
 			})
+			clearAssistantTracking(entityID)
 			p.Send(boba_chat.BackendFinishedMsg{})
 		case *events.EventInterrupt:
 			intr, ok := events.ToTypedEvent[events.EventInterrupt](e)
@@ -254,22 +353,70 @@ func StepChatForwardFunc(p *tea.Program) func(msg *message.Message) error {
 				log.Error().Str("component", "step_forward").Msg("EventInterrupt type assertion failed")
 				return errors.New("payload is not of type EventInterrupt")
 			}
+			if strings.TrimSpace(intr.Text) != "" {
+				ensureAssistantEntity(entityID, md, intr.Text)
+			}
+			if !hasAssistantEntity(entityID) {
+				clearAssistantTracking(entityID)
+				p.Send(boba_chat.BackendFinishedMsg{})
+				break
+			}
 			log.Debug().Str("component", "step_forward").Str("entity_id", entityID).Int("text_len", len(intr.Text)).Msg("UIEntityCompleted (interrupt)")
 			p.Send(timeline.UIEntityCompleted{
 				ID:     timeline.EntityID{LocalID: entityID, Kind: "llm_text"},
 				Result: map[string]any{"text": intr.Text},
 			})
 			p.Send(timeline.UIEntityUpdated{ID: timeline.EntityID{LocalID: entityID, Kind: "llm_text"}, Patch: map[string]any{"streaming": false}, Version: time.Now().UnixNano(), UpdatedAt: time.Now()})
+			clearAssistantTracking(entityID)
 			p.Send(boba_chat.BackendFinishedMsg{})
 		case *events.EventError:
+			errText := "**Error**\n\n" + e_.ErrorString
+			ensureAssistantEntity(entityID, md, errText)
+			if !hasAssistantEntity(entityID) {
+				clearAssistantTracking(entityID)
+				p.Send(boba_chat.BackendFinishedMsg{})
+				break
+			}
 			log.Debug().Str("component", "step_forward").Str("entity_id", entityID).Msg("UIEntityCompleted (error)")
 			p.Send(timeline.UIEntityCompleted{
 				ID:     timeline.EntityID{LocalID: entityID, Kind: "llm_text"},
-				Result: map[string]any{"text": "**Error**\n\n" + e_.ErrorString},
+				Result: map[string]any{"text": errText},
 			})
 			p.Send(timeline.UIEntityUpdated{ID: timeline.EntityID{LocalID: entityID, Kind: "llm_text"}, Patch: map[string]any{"streaming": false}, Version: time.Now().UnixNano(), UpdatedAt: time.Now()})
+			clearAssistantTracking(entityID)
 			p.Send(boba_chat.BackendFinishedMsg{})
 			// Tool-related events can be mapped to dedicated tool_call entities if desired
+		case *events.EventInfo:
+			if e_.Message == "thinking-started" {
+				thinkID := timeline.EntityID{LocalID: entityID + ":thinking", Kind: "llm_text"}
+				log.Debug().Str("component", "step_forward").Str("entity_id", thinkID.LocalID).Msg("UIEntityCreated (thinking)")
+				p.Send(timeline.UIEntityCreated{
+					ID:        thinkID,
+					Renderer:  timeline.RendererDescriptor{Kind: "llm_text"},
+					Props:     map[string]any{"role": "thinking", "text": "", "streaming": true},
+					StartedAt: time.Now(),
+				})
+			}
+			if e_.Message == "thinking-ended" {
+				thinkID := timeline.EntityID{LocalID: entityID + ":thinking", Kind: "llm_text"}
+				log.Debug().Str("component", "step_forward").Str("entity_id", thinkID.LocalID).Msg("UIEntityCompleted (thinking)")
+				p.Send(timeline.UIEntityUpdated{
+					ID:        thinkID,
+					Patch:     map[string]any{"streaming": false},
+					Version:   time.Now().UnixNano(),
+					UpdatedAt: time.Now(),
+				})
+				p.Send(timeline.UIEntityCompleted{ID: thinkID})
+			}
+		case *events.EventThinkingPartial:
+			thinkID := timeline.EntityID{LocalID: entityID + ":thinking", Kind: "llm_text"}
+			log.Debug().Str("component", "step_forward").Str("entity_id", thinkID.LocalID).Int("completion_len", len(e_.Completion)).Msg("UIEntityUpdated (thinking)")
+			p.Send(timeline.UIEntityUpdated{
+				ID:        thinkID,
+				Patch:     map[string]any{"text": e_.Completion, "streaming": true},
+				Version:   time.Now().UnixNano(),
+				UpdatedAt: time.Now(),
+			})
 		}
 
 		return nil

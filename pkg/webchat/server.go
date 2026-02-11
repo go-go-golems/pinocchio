@@ -2,7 +2,7 @@ package webchat
 
 import (
 	"context"
-	"embed"
+	"io/fs"
 	"net/http"
 	"os"
 	"os/signal"
@@ -23,7 +23,7 @@ type Server struct {
 	httpSrv *http.Server
 }
 
-func NewServer(ctx context.Context, parsed *layers.ParsedLayers, staticFS embed.FS) (*Server, error) {
+func NewServer(ctx context.Context, parsed *layers.ParsedLayers, staticFS fs.FS) (*Server, error) {
 	r, err := NewRouter(ctx, parsed, staticFS)
 	if err != nil {
 		return nil, err
@@ -47,6 +47,10 @@ func (s *Server) Run(ctx context.Context) error {
 	srvCtx, srvCancel := context.WithCancel(ctx)
 	defer srvCancel()
 
+	if s.router != nil && s.router.cm != nil {
+		s.router.cm.StartEvictionLoop(srvCtx)
+	}
+
 	eg.Go(func() error { return s.router.router.Run(srvCtx) })
 
 	eg.Go(func() error {
@@ -60,6 +64,11 @@ func (s *Server) Run(ctx context.Context) error {
 		if err := s.httpSrv.Shutdown(shutdownCtx); err != nil {
 			log.Error().Err(err).Msg("server shutdown error")
 			return err
+		}
+		if s.router != nil && s.router.timelineStore != nil {
+			if err := s.router.timelineStore.Close(); err != nil {
+				log.Error().Err(err).Msg("timeline store close error")
+			}
 		}
 		if err := s.router.router.Close(); err != nil {
 			log.Error().Err(err).Msg("router close error")

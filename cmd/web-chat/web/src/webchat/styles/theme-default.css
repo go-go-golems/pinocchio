@@ -1,0 +1,26 @@
+:where([data-pwchat][data-theme="default"]) {
+  --pwchat-bg: #0b0b0b;
+  --pwchat-fg: #e6e6e6;
+  --pwchat-surface-1: #111111;
+  --pwchat-surface-2: #141414;
+  --pwchat-border: #2a2a2a;
+  --pwchat-accent: #7aa2ff;
+  --pwchat-accent-fg: #0b0b0b;
+  --pwchat-muted: #9aa0a6;
+  --pwchat-muted-fg: rgba(154, 160, 166, 0.85);
+  --pwchat-danger: #ff6b6b;
+  --pwchat-ok: #3ddc97;
+  --pwchat-shadow: rgba(0, 0, 0, 0.45);
+
+  --pwchat-font-sans: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+  --pwchat-font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  --pwchat-font-size: 14px;
+  --pwchat-line-height: 1.45;
+
+  --pwchat-radius: 12px;
+  --pwchat-gap: 10px;
+  --pwchat-padding: 12px;
+
+  --pwchat-header-h: 44px;
+  --pwchat-composer-min-h: 52px;
+}

@@ -8,7 +8,6 @@ import (
 	"time"
 
 	rootmw "github.com/go-go-golems/geppetto/pkg/inference/middleware"
-	"github.com/go-go-golems/geppetto/pkg/inference/toolcontext"
 	"github.com/go-go-golems/geppetto/pkg/inference/tools"
 	"github.com/go-go-golems/geppetto/pkg/turns"
 	"github.com/invopop/jsonschema"
@@ -106,7 +105,11 @@ func NewMiddleware(cfg Config) rootmw.Middleware {
 			if t == nil {
 				return next(ctx, t)
 			}
-			log.Debug().Str("run_id", t.RunID).Str("turn_id", t.ID).Msg("sqlitetool: middleware start")
+			sessionID := ""
+			if sid, ok, err := turns.KeyTurnMetaSessionID.Get(t.Metadata); err == nil && ok {
+				sessionID = sid
+			}
+			log.Debug().Str("session_id", sessionID).Str("turn_id", t.ID).Msg("sqlitetool: middleware start")
 
 			// Determine if the tool should be available for this turn; check DSN presence
 			dsn := cfg.DSN
@@ -122,9 +125,9 @@ func NewMiddleware(cfg Config) rootmw.Middleware {
 
 			// Ensure registry has sql_query tool definition and executor.
 			//
-			// NOTE: The runtime registry is carried via context (toolcontext.WithRegistry),
+			// NOTE: The runtime registry is carried via context (tools.WithRegistry),
 			// not via Turn.Data.
-			if reg, ok := toolcontext.RegistryFrom(ctx); ok && reg != nil {
+			if reg, ok := tools.RegistryFrom(ctx); ok && reg != nil {
 				schemaObj := &jsonschema.Schema{Type: "object"}
 				props := jsonschema.NewProperties()
 				props.Set("sql", &jsonschema.Schema{Type: "string"})
@@ -197,7 +200,11 @@ func NewMiddleware(cfg Config) rootmw.Middleware {
 				return updated, err
 			}
 			// Do not execute tools here; rely on standard tool loop so a new inference is triggered after results
-			log.Debug().Str("run_id", updated.RunID).Str("turn_id", updated.ID).Msg("sqlitetool: middleware end (no inline exec)")
+			updatedSessionID := sessionID
+			if sid, ok, err := turns.KeyTurnMetaSessionID.Get(updated.Metadata); err == nil && ok {
+				updatedSessionID = sid
+			}
+			log.Debug().Str("session_id", updatedSessionID).Str("turn_id", updated.ID).Msg("sqlitetool: middleware end (no inline exec)")
 			return updated, nil
 		}
 	}

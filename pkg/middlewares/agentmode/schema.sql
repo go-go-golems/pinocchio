@@ -1,7 +1,7 @@
 -- Example schema for Agent Mode middleware (SQLite)
 -- This file defines a minimal schema for:
 -- 1) agent_modes: declarative catalog of modes (name, prompt, allowed tools)
--- 2) agent_mode_changes: audit log of mode transitions per run/turn
+-- 2) agent_mode_changes: audit log of mode transitions per session/turn
 
 PRAGMA foreign_keys = ON;
 
@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS agent_modes (
 -- 2) Audit log of changes
 CREATE TABLE IF NOT EXISTS agent_mode_changes (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  run_id TEXT NOT NULL,
+  session_id TEXT NOT NULL,
   turn_id TEXT NOT NULL,
   from_mode TEXT,
   to_mode TEXT NOT NULL,
@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS agent_mode_changes (
   at TIMESTAMP NOT NULL
 );
 
-CREATE INDEX IF NOT EXISTS idx_agent_mode_changes_run_id_at
-  ON agent_mode_changes(run_id, at);
+CREATE INDEX IF NOT EXISTS idx_agent_mode_changes_session_id_at
+  ON agent_mode_changes(session_id, at);
 
 

@@ -2,11 +2,13 @@ package webchat
 
 import (
 	"context"
-	"database/sql"
-	"embed"
 	"encoding/json"
+	stderrors "errors"
+	"fmt"
 	"io/fs"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -17,24 +19,43 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/go-go-golems/geppetto/pkg/events"
-	"github.com/go-go-golems/geppetto/pkg/inference/engine"
-	"github.com/go-go-golems/geppetto/pkg/inference/middleware"
-	"github.com/go-go-golems/geppetto/pkg/inference/toolhelpers"
+	"github.com/go-go-golems/geppetto/pkg/inference/toolloop"
+	"github.com/go-go-golems/geppetto/pkg/inference/toolloop/enginebuilder"
 	geptools "github.com/go-go-golems/geppetto/pkg/inference/tools"
-	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 	"github.com/go-go-golems/geppetto/pkg/turns"
+	"github.com/go-go-golems/geppetto/pkg/turns/serde"
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
+	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
 	rediscfg "github.com/go-go-golems/pinocchio/pkg/redisstream"
+	sempb "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/base"
+	timelinepb "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/timeline"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 // RouterSettings are exposed via parameter layers (addr, agent, idle timeout, etc.).
 type RouterSettings struct {
-	Addr               string `glazed.parameter:"addr"`
-	IdleTimeoutSeconds int    `glazed.parameter:"idle-timeout-seconds"`
+	Addr                 string `glazed.parameter:"addr"`
+	IdleTimeoutSeconds   int    `glazed.parameter:"idle-timeout-seconds"`
+	EvictIdleSeconds     int    `glazed.parameter:"evict-idle-seconds"`
+	EvictIntervalSeconds int    `glazed.parameter:"evict-interval-seconds"`
+	// Durable timeline projection store configuration (optional).
+	// Use either:
+	// - timeline-dsn (preferred; full sqlite DSN)
+	// - timeline-db (file path; DSN derived)
+	TimelineDSN string `glazed.parameter:"timeline-dsn"`
+	TimelineDB  string `glazed.parameter:"timeline-db"`
+	// Durable turn snapshot store configuration (optional).
+	// Use either:
+	// - turns-dsn (preferred; full sqlite DSN)
+	// - turns-db (file path; DSN derived)
+	TurnsDSN string `glazed.parameter:"turns-dsn"`
+	TurnsDB  string `glazed.parameter:"turns-db"`
+	// In-memory timeline store sizing (used when no timeline DB is configured).
+	TimelineInMemoryMaxEntities int `glazed.parameter:"timeline-inmem-max-entities"`
 }
 
 // RouterBuilder creates a new composable webchat router.
-func NewRouter(ctx context.Context, parsed *layers.ParsedLayers, staticFS embed.FS) (*Router, error) {
+func NewRouter(ctx context.Context, parsed *layers.ParsedLayers, staticFS fs.FS, opts ...RouterOption) (*Router, error) {
 	rs := rediscfg.Settings{}
 	_ = parsed.InitializeStruct("redis", &rs)
 	router, err := rediscfg.BuildRouter(rs, true)
@@ -51,19 +72,105 @@ func NewRouter(ctx context.Context, parsed *layers.ParsedLayers, staticFS embed.
 		toolFactories: map[string]ToolFactory{},
 		profiles:      newInMemoryProfileRegistry(),
 		upgrader:      websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }},
-		cm:            &ConvManager{conns: map[string]*Conversation{}},
 	}
 	// set redis flags for ws reader
 	if rs.Enabled {
 		r.usesRedis = true
 		r.redisAddr = rs.Addr
 	}
+
+	// Timeline store for hydration (SQLite when configured, in-memory otherwise).
+	s := &RouterSettings{}
+	if err := parsed.InitializeStruct(layers.DefaultSlug, s); err != nil {
+		return nil, errors.Wrap(err, "parse router settings")
+	}
+	if dsn := strings.TrimSpace(s.TimelineDSN); dsn != "" {
+		store, err := chatstore.NewSQLiteTimelineStore(dsn)
+		if err != nil {
+			return nil, errors.Wrap(err, "open timeline store (dsn)")
+		}
+		r.timelineStore = store
+	} else if p := strings.TrimSpace(s.TimelineDB); p != "" {
+		if dir := filepath.Dir(p); dir != "" && dir != "." {
+			_ = os.MkdirAll(dir, 0755)
+		}
+		dsn, err := chatstore.SQLiteTimelineDSNForFile(p)
+		if err != nil {
+			return nil, errors.Wrap(err, "build timeline DSN")
+		}
+		store, err := chatstore.NewSQLiteTimelineStore(dsn)
+		if err != nil {
+			return nil, errors.Wrap(err, "open timeline store (file)")
+		}
+		r.timelineStore = store
+	} else {
+		r.timelineStore = chatstore.NewInMemoryTimelineStore(s.TimelineInMemoryMaxEntities)
+	}
+	if r.cm != nil {
+		r.cm.SetTimelineStore(r.timelineStore)
+	}
+
+	// Optional turn snapshot store (SQLite when configured).
+	if dsn := strings.TrimSpace(s.TurnsDSN); dsn != "" {
+		store, err := chatstore.NewSQLiteTurnStore(dsn)
+		if err != nil {
+			return nil, errors.Wrap(err, "open turn store (dsn)")
+		}
+		r.turnStore = store
+	} else if p := strings.TrimSpace(s.TurnsDB); p != "" {
+		if dir := filepath.Dir(p); dir != "" && dir != "." {
+			_ = os.MkdirAll(dir, 0755)
+		}
+		dsn, err := chatstore.SQLiteTurnDSNForFile(p)
+		if err != nil {
+			return nil, errors.Wrap(err, "build turn DSN")
+		}
+		store, err := chatstore.NewSQLiteTurnStore(dsn)
+		if err != nil {
+			return nil, errors.Wrap(err, "open turn store (file)")
+		}
+		r.turnStore = store
+	}
+
+	for _, opt := range opts {
+		if opt == nil {
+			continue
+		}
+		if err := opt(r); err != nil {
+			return nil, err
+		}
+	}
+
+	if r.stepCtrl == nil {
+		r.stepCtrl = toolloop.NewStepController()
+	}
+	if r.cm == nil {
+		r.cm = NewConvManager(ConvManagerOptions{
+			BaseCtx:            ctx,
+			StepController:     r.stepCtrl,
+			BuildConfig:        r.BuildConfig,
+			BuildFromConfig:    r.BuildFromConfig,
+			BuildSubscriber:    r.BuildSubscriber,
+			TimelineUpsertHook: r.TimelineUpsertHook,
+		})
+	}
+	if r.engineFromReqBuilder == nil {
+		r.engineFromReqBuilder = NewDefaultEngineFromReqBuilder(r.profiles, r.cm)
+	}
+
+	if r.cm != nil {
+		r.cm.SetTimelineStore(r.timelineStore)
+		r.cm.SetIdleTimeoutSeconds(s.IdleTimeoutSeconds)
+		r.cm.SetEvictionConfig(
+			time.Duration(s.EvictIdleSeconds)*time.Second,
+			time.Duration(s.EvictIntervalSeconds)*time.Second,
+		)
+	}
+	r.idleTimeoutSec = s.IdleTimeoutSeconds
+
 	r.registerHTTPHandlers()
 	return r, nil
 }
-
-// Allow setting optional shared DB for middlewares that need it (e.g., sqlite tool)
-func (r *Router) WithDB(db *sql.DB) *Router { r.db = db; return r }
 
 // RegisterMiddleware adds a named middleware factory to the router.
 func (r *Router) RegisterMiddleware(name string, f MiddlewareFactory) { r.mwFactories[name] = f }
@@ -75,7 +182,18 @@ func (r *Router) RegisterTool(name string, f ToolFactory) { r.toolFactories[name
 func (r *Router) AddProfile(p *Profile) { _ = r.profiles.Add(p) }
 
 // Mount attaches all handlers to a parent mux with the given prefix.
-func (r *Router) Mount(mux *http.ServeMux, prefix string) { mux.Handle(prefix, r.mux) }
+// http.ServeMux does not strip prefixes, so we must use StripPrefix explicitly.
+func (r *Router) Mount(mux *http.ServeMux, prefix string) {
+	if prefix == "" || prefix == "/" {
+		mux.Handle("/", r.mux)
+		return
+	}
+	prefix = strings.TrimRight(prefix, "/")
+	mux.Handle(prefix+"/", http.StripPrefix(prefix, r.mux))
+	mux.HandleFunc(prefix, func(w http.ResponseWriter, r0 *http.Request) {
+		http.Redirect(w, r0, prefix+"/", http.StatusPermanentRedirect)
+	})
+}
 
 // Expose lightweight handler registration for external customization (e.g., profile switchers)
 func (r *Router) Handle(pattern string, h http.Handler) { r.mux.Handle(pattern, h) }
@@ -93,6 +211,13 @@ func (r *Router) BuildHTTPServer() (*http.Server, error) {
 		return nil, err
 	}
 	r.idleTimeoutSec = s.IdleTimeoutSeconds
+	if r.cm != nil {
+		r.cm.SetIdleTimeoutSeconds(s.IdleTimeoutSeconds)
+		r.cm.SetEvictionConfig(
+			time.Duration(s.EvictIdleSeconds)*time.Second,
+			time.Duration(s.EvictIntervalSeconds)*time.Second,
+		)
+	}
 	return &http.Server{
 		Addr:              s.Addr,
 		Handler:           r.mux,
@@ -107,51 +232,85 @@ func (r *Router) BuildHTTPServer() (*http.Server, error) {
 // This is useful when integrating the webchat router into an existing HTTP server
 // and you need the event router running independently.
 func (r *Router) RunEventRouter(ctx context.Context) error {
-	log.Info().Str("component", "webchat").Msg("starting event router loop")
+	logger := log.With().Str("component", "webchat").Logger()
+	if r.cm != nil {
+		r.cm.StartEvictionLoop(ctx)
+	}
+	logger.Info().Msg("starting event router loop")
 	err := r.router.Run(ctx)
 	if err != nil {
-		log.Error().Err(err).Str("component", "webchat").Msg("event router exited with error")
+		logger.Error().Err(err).Msg("event router exited with error")
 		return err
 	}
-	log.Info().Str("component", "webchat").Msg("event router loop exited")
+	logger.Info().Msg("event router loop exited")
 	return nil
 }
 
 // registerHTTPHandlers sets up static, API and websockets.
 func (r *Router) registerHTTPHandlers() {
+	r.registerUIHandlers(r.mux)
+	r.registerAPIHandlers(r.mux)
+}
+
+// APIHandler returns an http.Handler that only exposes API + websocket routes.
+func (r *Router) APIHandler() http.Handler {
+	mux := http.NewServeMux()
+	r.registerAPIHandlers(mux)
+	return mux
+}
+
+// UIHandler returns an http.Handler that only serves the embedded web UI assets.
+func (r *Router) UIHandler() http.Handler {
+	mux := http.NewServeMux()
+	r.registerUIHandlers(mux)
+	return mux
+}
+
+func (r *Router) registerUIHandlers(mux *http.ServeMux) {
+	logger := log.With().Str("component", "webchat").Logger()
+
+	if r.staticFS == nil {
+		logger.Warn().Msg("static FS not configured; UI handler disabled")
+		return
+	}
+
 	// static assets
 	if staticSub, err := fsSub(r.staticFS, "static"); err == nil {
-		r.mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticSub))))
-		log.Info().Str("component", "webchat").Msg("mounted /static/ asset handler")
+		mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticSub))))
+		logger.Info().Msg("mounted /static/ asset handler")
 	} else {
-		log.Warn().Err(err).Str("component", "webchat").Msg("failed to mount /static/ asset handler")
+		logger.Warn().Err(err).Msg("failed to mount /static/ asset handler")
 	}
 	if distAssets, err := fsSub(r.staticFS, "static/dist/assets"); err == nil {
-		r.mux.Handle("/assets/", http.StripPrefix("/assets/", http.FileServer(http.FS(distAssets))))
-		log.Info().Str("component", "webchat").Msg("mounted /assets/ handler for built dist assets")
+		mux.Handle("/assets/", http.StripPrefix("/assets/", http.FileServer(http.FS(distAssets))))
+		logger.Info().Msg("mounted /assets/ handler for built dist assets")
 	} else {
-		log.Warn().Err(err).Str("component", "webchat").Msg("no built dist assets found under static/dist/assets")
+		logger.Warn().Err(err).Msg("no built dist assets found under static/dist/assets")
 	}
 	// index
-	r.mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
-		if b, err := r.staticFS.ReadFile("static/dist/index.html"); err == nil {
-			log.Debug().Str("component", "webchat").Msg("serving built index (static/dist/index.html)")
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		if b, err := fs.ReadFile(r.staticFS, "static/dist/index.html"); err == nil {
+			logger.Debug().Msg("serving built index (static/dist/index.html)")
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
 			_, _ = w.Write(b)
 			return
 		}
-		if b, err := r.staticFS.ReadFile("static/index.html"); err == nil {
-			log.Debug().Str("component", "webchat").Msg("serving dev index (static/index.html)")
+		if b, err := fs.ReadFile(r.staticFS, "static/index.html"); err == nil {
+			logger.Debug().Msg("serving dev index (static/index.html)")
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
 			_, _ = w.Write(b)
 			return
 		}
-		log.Error().Str("component", "webchat").Msg("index not found in embedded FS")
+		logger.Error().Msg("index not found in embedded FS")
 		http.Error(w, "index not found", http.StatusInternalServerError)
 	})
+}
+
+func (r *Router) registerAPIHandlers(mux *http.ServeMux) {
+	logger := log.With().Str("component", "webchat").Logger()
 
 	// list profiles for UI
-	r.mux.HandleFunc("/api/chat/profiles", func(w http.ResponseWriter, _ *http.Request) {
+	mux.HandleFunc("/api/chat/profiles", func(w http.ResponseWriter, _ *http.Request) {
 		type profileInfo struct {
 			Slug          string `json:"slug"`
 			DefaultPrompt string `json:"default_prompt"`
@@ -163,368 +322,842 @@ func (r *Router) registerHTTPHandlers() {
 		_ = json.NewEncoder(w).Encode(out)
 	})
 
-	// websocket join: /ws?conv_id=...&profile=slug (falls back to chat_profile cookie)
-	r.mux.HandleFunc("/ws", func(w http.ResponseWriter, r0 *http.Request) {
-		conn, err := r.upgrader.Upgrade(w, r0, nil)
-		if err != nil {
-			log.Error().Err(err).Msg("websocket upgrade failed")
+	// get/set current profile (cookie-backed)
+	mux.HandleFunc("/api/chat/profile", func(w http.ResponseWriter, r0 *http.Request) {
+		type profilePayload struct {
+			Slug    string `json:"slug"`
+			Profile string `json:"profile"`
+		}
+		writeJSON := func(payload any) {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(payload)
+		}
+		resolveDefault := func() string {
+			if p, ok := r.profiles.Get("default"); ok && p != nil {
+				return p.Slug
+			}
+			list := r.profiles.List()
+			if len(list) > 0 && list[0] != nil {
+				return list[0].Slug
+			}
+			return "default"
+		}
+		switch r0.Method {
+		case http.MethodGet:
+			slug := ""
+			if ck, err := r0.Cookie("chat_profile"); err == nil && ck != nil {
+				slug = strings.TrimSpace(ck.Value)
+			}
+			if slug == "" {
+				slug = resolveDefault()
+			} else if _, ok := r.profiles.Get(slug); !ok {
+				slug = resolveDefault()
+			}
+			writeJSON(profilePayload{Slug: slug})
+			return
+		case http.MethodPost:
+			var body profilePayload
+			if err := json.NewDecoder(r0.Body).Decode(&body); err != nil {
+				http.Error(w, "bad request", http.StatusBadRequest)
+				return
+			}
+			slug := strings.TrimSpace(body.Slug)
+			if slug == "" {
+				slug = strings.TrimSpace(body.Profile)
+			}
+			if slug == "" {
+				http.Error(w, "missing profile slug", http.StatusBadRequest)
+				return
+			}
+			if _, ok := r.profiles.Get(slug); !ok {
+				http.Error(w, "profile not found", http.StatusNotFound)
+				return
+			}
+			http.SetCookie(w, &http.Cookie{Name: "chat_profile", Value: slug, Path: "/", SameSite: http.SameSiteLaxMode})
+			writeJSON(profilePayload{Slug: slug})
+			return
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		convID := r0.URL.Query().Get("conv_id")
-		profileSlug := r0.URL.Query().Get("profile")
-		if profileSlug == "" {
-			if ck, err := r0.Cookie("chat_profile"); err == nil && ck != nil {
-				profileSlug = ck.Value
+	})
+
+	// debug endpoints (dev-gated via PINOCCHIO_WEBCHAT_DEBUG=1)
+	mux.HandleFunc("/debug/step/enable", func(w http.ResponseWriter, r0 *http.Request) {
+		if os.Getenv("PINOCCHIO_WEBCHAT_DEBUG") != "1" {
+			http.NotFound(w, r0)
+			return
+		}
+		if r0.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		var body struct {
+			ConvID    string `json:"conv_id"`
+			SessionID string `json:"session_id"`
+			Owner     string `json:"owner"`
+		}
+		if err := json.NewDecoder(r0.Body).Decode(&body); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		sessionID := strings.TrimSpace(body.SessionID)
+		convID := strings.TrimSpace(body.ConvID)
+		if sessionID == "" && convID != "" {
+			if c, ok := r.cm.GetConversation(convID); ok && c != nil {
+				sessionID = c.SessionID
 			}
 		}
-		log.Info().Str("component", "webchat").Str("remote", r0.RemoteAddr).Str("conv_id", convID).Str("profile", profileSlug).Msg("ws connect request")
-		if convID == "" {
-			log.Warn().Str("component", "webchat").Msg("ws missing conv_id")
-			_ = conn.WriteMessage(websocket.TextMessage, []byte(`{"error":"missing conv_id"}`))
+		if sessionID == "" {
+			http.Error(w, "missing session_id (or unknown conv_id)", http.StatusBadRequest)
+			return
+		}
+		if r.stepCtrl == nil {
+			http.Error(w, "step controller not initialized", http.StatusInternalServerError)
+			return
+		}
+		r.stepCtrl.Enable(toolloop.StepScope{SessionID: sessionID, ConversationID: convID, Owner: strings.TrimSpace(body.Owner)})
+		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "session_id": sessionID, "conv_id": convID})
+	})
+
+	mux.HandleFunc("/debug/step/disable", func(w http.ResponseWriter, r0 *http.Request) {
+		if os.Getenv("PINOCCHIO_WEBCHAT_DEBUG") != "1" {
+			http.NotFound(w, r0)
+			return
+		}
+		if r0.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		var body struct {
+			SessionID string `json:"session_id"`
+			ConvID    string `json:"conv_id"`
+		}
+		if err := json.NewDecoder(r0.Body).Decode(&body); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		sessionID := strings.TrimSpace(body.SessionID)
+		convID := strings.TrimSpace(body.ConvID)
+		if sessionID == "" && convID != "" {
+			if c, ok := r.cm.GetConversation(convID); ok && c != nil {
+				sessionID = c.SessionID
+			}
+		}
+		if sessionID == "" {
+			http.Error(w, "missing session_id (or unknown conv_id)", http.StatusBadRequest)
+			return
+		}
+		if r.stepCtrl != nil {
+			r.stepCtrl.DisableSession(sessionID)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "session_id": sessionID})
+	})
+
+	mux.HandleFunc("/debug/continue", func(w http.ResponseWriter, r0 *http.Request) {
+		if os.Getenv("PINOCCHIO_WEBCHAT_DEBUG") != "1" {
+			http.NotFound(w, r0)
+			return
+		}
+		if r0.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		var body struct {
+			PauseID string `json:"pause_id"`
+			ConvID  string `json:"conv_id,omitempty"`
+		}
+		if err := json.NewDecoder(r0.Body).Decode(&body); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		pauseID := strings.TrimSpace(body.PauseID)
+		if pauseID == "" {
+			http.Error(w, "missing pause_id", http.StatusBadRequest)
+			return
+		}
+		if r.stepCtrl == nil {
+			http.Error(w, "step controller not initialized", http.StatusInternalServerError)
+			return
+		}
+		if convID := strings.TrimSpace(body.ConvID); convID != "" {
+			if meta, ok := r.stepCtrl.Lookup(pauseID); ok {
+				if meta.Scope.ConversationID != "" && meta.Scope.ConversationID != convID {
+					http.Error(w, "pause does not belong to this conversation", http.StatusForbidden)
+					return
+				}
+			}
+		}
+		meta, ok := r.stepCtrl.Continue(pauseID)
+		if !ok {
+			http.Error(w, "unknown pause_id", http.StatusNotFound)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "pause": meta})
+	})
+
+	// websocket join: /ws?conv_id=...&profile=slug (falls back to chat_profile cookie)
+	mux.HandleFunc("/ws", func(w http.ResponseWriter, r0 *http.Request) {
+		queryConv := strings.TrimSpace(r0.URL.Query().Get("conv_id"))
+		queryProfile := strings.TrimSpace(r0.URL.Query().Get("profile"))
+		logger.Debug().
+			Str("conv_id_query", queryConv).
+			Str("profile_query", queryProfile).
+			Str("remote", r0.RemoteAddr).
+			Msg("ws request query")
+		conn, err := r.upgrader.Upgrade(w, r0, nil)
+		if err != nil {
+			logger.Error().Err(err).Msg("websocket upgrade failed")
+			return
+		}
+		b := r.engineFromReqBuilder
+		if b == nil {
+			b = NewDefaultEngineFromReqBuilder(r.profiles, r.cm)
+		}
+		input, _, err := b.BuildEngineFromReq(r0)
+		if err != nil {
+			msg := err.Error()
+			var rbe *RequestBuildError
+			if stderrors.As(err, &rbe) && rbe != nil && strings.TrimSpace(rbe.ClientMsg) != "" {
+				msg = rbe.ClientMsg
+			}
+			wsLog := logger.With().Str("remote", r0.RemoteAddr).Logger()
+			wsLog.Warn().Err(err).Msg("ws request policy failed")
+			_ = conn.WriteMessage(websocket.TextMessage, []byte(`{"error":"`+msg+`"}`))
 			_ = conn.Close()
 			return
 		}
-		if profileSlug == "" {
-			profileSlug = "default"
-		}
-		log.Info().Str("component", "webchat").Str("conv_id", convID).Str("profile", profileSlug).Msg("ws joining conversation")
-		build := func() (engine.Engine, *middleware.WatermillSink, message.Subscriber, error) {
-			var (
-				eng  engine.Engine
-				sink *middleware.WatermillSink
-				sub  message.Subscriber
-				err  error
-			)
-			// subscriber/publisher
-			if r.usesRedis {
-				_ = rediscfg.EnsureGroupAtTail(context.Background(), r.redisAddr, topicForConv(convID), "ui")
-			}
-			if r.usesRedis {
-				sub, err = rediscfg.BuildGroupSubscriber(r.redisAddr, "ui", "ws-forwarder:"+convID)
-				if err != nil {
-					return nil, nil, nil, err
-				}
-			} else {
-				sub = r.router.Subscriber
-			}
-			sink = middleware.NewWatermillSink(r.router.Publisher, topicForConv(convID))
-			// engine from profile + overrides are not needed for ws join
-			p, _ := r.profiles.Get(profileSlug)
-			stepSettings, _ := settings.NewStepSettingsFromParsedLayers(r.parsed)
-			sys := p.DefaultPrompt
-			eng, err = composeEngineFromSettings(stepSettings, sys, p.DefaultMws, r.mwFactories)
-			return eng, sink, sub, err
-		}
-		conv, err := r.getOrCreateConv(convID, build)
+		convID := input.ConvID
+		profileSlug := input.ProfileSlug
+		wsLog := logger.With().
+			Str("remote", r0.RemoteAddr).
+			Str("conv_id", convID).
+			Str("profile", profileSlug).
+			Logger()
+		wsLog.Debug().
+			Str("conv_id_query", queryConv).
+			Str("profile_query", queryProfile).
+			Msg("ws resolved request")
+		wsLog.Info().Msg("ws connect request")
+		wsLog.Info().Msg("ws joining conversation")
+		conv, err := r.cm.GetOrCreate(convID, profileSlug, nil)
 		if err != nil {
-			log.Error().Err(err).Str("component", "webchat").Str("conv_id", convID).Msg("failed to join conversation")
+			wsLog.Error().Err(err).Msg("failed to join conversation")
 			_ = conn.WriteMessage(websocket.TextMessage, []byte(`{"error":"failed to join conversation"}`))
 			_ = conn.Close()
 			return
 		}
-		r.addConn(conv, conn)
-		log.Info().Str("component", "webchat").Str("conv_id", convID).Msg("ws connected")
+		r.cm.AddConn(conv, conn)
+		wsLog.Info().Msg("ws connected")
+
+		// Send a greeting frame to the newly connected client (mirrors moments/go-go-mento behavior).
+		if conv != nil && conv.pool != nil {
+			ts := time.Now().UnixMilli()
+			data, _ := protoToRaw(&sempb.WsHelloV1{ConvId: convID, Profile: profileSlug, ServerTime: ts})
+			hello := map[string]any{
+				"sem": true,
+				"event": map[string]any{
+					"type": "ws.hello",
+					"id":   fmt.Sprintf("ws.hello:%s:%d", convID, ts),
+					"data": data,
+				},
+			}
+			if b, err := json.Marshal(hello); err == nil {
+				wsLog.Debug().Msg("ws sending hello")
+				conv.pool.SendToOne(conn, b)
+			}
+		}
+
 		go func() {
-			defer r.removeConn(conv, conn)
-			defer log.Info().Str("component", "webchat").Str("conv_id", convID).Msg("ws disconnected")
+			defer r.cm.RemoveConn(conv, conn)
+			defer wsLog.Info().Msg("ws disconnected")
 			for {
-				if _, _, err := conn.ReadMessage(); err != nil {
-					log.Debug().Err(err).Str("component", "webchat").Msg("ws read loop end")
+				msgType, data, err := conn.ReadMessage()
+				if err != nil {
+					wsLog.Debug().Err(err).Msg("ws read loop end")
 					return
+				}
+
+				// Lightweight ping/pong protocol (mirrors moments/go-go-mento behavior)
+				if msgType == websocket.TextMessage && len(data) > 0 && conv != nil && conv.pool != nil {
+					s := strings.TrimSpace(strings.ToLower(string(data)))
+					isPing := s == "ping"
+					if !isPing {
+						var v map[string]any
+						if err := json.Unmarshal(data, &v); err == nil && v != nil {
+							if t, ok := v["type"].(string); ok && strings.EqualFold(t, "ws.ping") {
+								isPing = true
+							} else if sem, ok := v["sem"].(bool); ok && sem {
+								if ev, ok := v["event"].(map[string]any); ok {
+									if t2, ok := ev["type"].(string); ok && strings.EqualFold(t2, "ws.ping") {
+										isPing = true
+									}
+								}
+							}
+						}
+					}
+					if isPing {
+						ts := time.Now().UnixMilli()
+						data, _ := protoToRaw(&sempb.WsPongV1{ConvId: convID, ServerTime: ts})
+						pong := map[string]any{
+							"sem": true,
+							"event": map[string]any{
+								"type": "ws.pong",
+								"id":   fmt.Sprintf("ws.pong:%s:%d", convID, ts),
+								"data": data,
+							},
+						}
+						if b, err := json.Marshal(pong); err == nil {
+							wsLog.Debug().Msg("ws sending pong")
+							conv.pool.SendToOne(conn, b)
+						}
+					}
 				}
 			}
 		}()
 	})
 
-	// start run: support both /chat (default/cookie/profile) and /chat/{profile}
-	r.mux.HandleFunc("/chat", func(w http.ResponseWriter, r0 *http.Request) {
+	timelineHandler := func(w http.ResponseWriter, r0 *http.Request) {
+		if r0.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		if r.timelineStore == nil {
+			http.Error(w, "timeline store not enabled", http.StatusNotFound)
+			return
+		}
+
+		convID := strings.TrimSpace(r0.URL.Query().Get("conv_id"))
+		if convID == "" {
+			http.Error(w, "missing conv_id", http.StatusBadRequest)
+			return
+		}
+
+		var sinceVersion uint64
+		if s := strings.TrimSpace(r0.URL.Query().Get("since_version")); s != "" {
+			_, _ = fmt.Sscanf(s, "%d", &sinceVersion)
+		}
+		limit := 0
+		if s := strings.TrimSpace(r0.URL.Query().Get("limit")); s != "" {
+			var v int
+			_, _ = fmt.Sscanf(s, "%d", &v)
+			if v > 0 {
+				limit = v
+			}
+		}
+
+		snap, err := r.timelineStore.GetSnapshot(r0.Context(), convID, sinceVersion, limit)
+		if err != nil {
+			logger.Error().Err(err).Str("conv_id", convID).Msg("timeline snapshot failed")
+			http.Error(w, "timeline snapshot failed", http.StatusInternalServerError)
+			return
+		}
+		out, err := protojson.MarshalOptions{
+			EmitUnpopulated: false,
+			UseProtoNames:   false,
+		}.Marshal(snap)
+		if err != nil {
+			logger.Error().Err(err).Str("conv_id", convID).Msg("timeline marshal failed")
+			http.Error(w, "timeline marshal failed", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(out)
+	}
+	mux.HandleFunc("/timeline", timelineHandler)
+	mux.HandleFunc("/timeline/", timelineHandler)
+
+	turnsHandler := func(w http.ResponseWriter, r0 *http.Request) {
+		if r0.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		if r.turnStore == nil {
+			http.Error(w, "turn store not enabled", http.StatusNotFound)
+			return
+		}
+
+		convID := strings.TrimSpace(r0.URL.Query().Get("conv_id"))
+		sessionID := strings.TrimSpace(r0.URL.Query().Get("session_id"))
+		if convID == "" && sessionID == "" {
+			http.Error(w, "missing conv_id or session_id", http.StatusBadRequest)
+			return
+		}
+		phase := strings.TrimSpace(r0.URL.Query().Get("phase"))
+
+		var sinceMs int64
+		if s := strings.TrimSpace(r0.URL.Query().Get("since_ms")); s != "" {
+			var v int64
+			_, _ = fmt.Sscanf(s, "%d", &v)
+			if v > 0 {
+				sinceMs = v
+			}
+		}
+		limit := 0
+		if s := strings.TrimSpace(r0.URL.Query().Get("limit")); s != "" {
+			var v int
+			_, _ = fmt.Sscanf(s, "%d", &v)
+			if v > 0 {
+				limit = v
+			}
+		}
+
+		items, err := r.turnStore.List(r0.Context(), chatstore.TurnQuery{
+			ConvID:    convID,
+			SessionID: sessionID,
+			Phase:     phase,
+			SinceMs:   sinceMs,
+			Limit:     limit,
+		})
+		if err != nil {
+			logger.Error().Err(err).Str("conv_id", convID).Str("session_id", sessionID).Msg("turns query failed")
+			http.Error(w, "turns query failed", http.StatusInternalServerError)
+			return
+		}
+
+		resp := map[string]any{
+			"conv_id":    convID,
+			"session_id": sessionID,
+			"phase":      phase,
+			"since_ms":   sinceMs,
+			"items":      items,
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(resp)
+	}
+	mux.HandleFunc("/turns", turnsHandler)
+	mux.HandleFunc("/turns/", turnsHandler)
+
+	handleChatRequest := func(w http.ResponseWriter, r0 *http.Request) {
 		if r0.Method != http.MethodPost {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		var body struct {
-			Prompt    string         `json:"prompt"`
-			ConvID    string         `json:"conv_id"`
-			Overrides map[string]any `json:"overrides"`
+
+		b := r.engineFromReqBuilder
+		if b == nil {
+			b = NewDefaultEngineFromReqBuilder(r.profiles, r.cm)
 		}
-		if err := json.NewDecoder(r0.Body).Decode(&body); err != nil {
-			log.Warn().Err(err).Str("component", "webchat").Msg("bad /chat request body")
+		input, body, err := b.BuildEngineFromReq(r0)
+		if err != nil {
+			status := http.StatusInternalServerError
+			msg := "failed to resolve request"
+			var rbe *RequestBuildError
+			if stderrors.As(err, &rbe) && rbe != nil {
+				if rbe.Status > 0 {
+					status = rbe.Status
+				}
+				if strings.TrimSpace(rbe.ClientMsg) != "" {
+					msg = rbe.ClientMsg
+				}
+			}
+			logger.Warn().Err(err).Msg("chat request policy failed")
+			http.Error(w, msg, status)
+			return
+		}
+		if body == nil {
+			logger.Warn().Msg("chat request policy missing parsed body")
 			http.Error(w, "bad request", http.StatusBadRequest)
 			return
 		}
-		convID := body.ConvID
-		if convID == "" {
-			convID = uuid.NewString()
-		}
-		profileSlug := ""
-		if ck, err := r0.Cookie("chat_profile"); err == nil && ck != nil {
-			profileSlug = ck.Value
-		}
-		if profileSlug == "" {
-			profileSlug = "default"
-		}
-		log.Info().Str("component", "webchat").Str("conv_id", convID).Str("profile", profileSlug).Int("prompt_len", len(body.Prompt)).Msg("/chat received")
-		p, ok := r.profiles.Get(profileSlug)
-		if !ok {
-			log.Warn().Str("component", "webchat").Str("profile", profileSlug).Msg("unknown profile")
-			http.Error(w, "unknown profile", http.StatusNotFound)
-			return
+
+		convID := input.ConvID
+		profileSlug := input.ProfileSlug
+		chatReqLog := logger.With().Str("conv_id", convID).Str("profile", profileSlug).Logger()
+		chatReqLog.Info().Int("prompt_len", len(body.Prompt)).Msg("/chat received")
+		if input.Overrides != nil {
+			chatReqLog.Debug().Interface("overrides", input.Overrides).Msg("/chat overrides")
+		} else {
+			chatReqLog.Debug().Msg("/chat overrides empty")
 		}
 
-		build := func() (engine.Engine, *middleware.WatermillSink, message.Subscriber, error) {
-			var (
-				eng  engine.Engine
-				sink *middleware.WatermillSink
-				sub  message.Subscriber
-				err  error
-			)
-			if r.usesRedis {
-				_ = rediscfg.EnsureGroupAtTail(context.Background(), r.redisAddr, topicForConv(convID), "ui")
-			}
-			if r.usesRedis {
-				sub, err = rediscfg.BuildGroupSubscriber(r.redisAddr, "ui", "ws-forwarder:"+convID)
-				if err != nil {
-					return nil, nil, nil, err
-				}
-			} else {
-				sub = r.router.Subscriber
-			}
-			sink = middleware.NewWatermillSink(r.router.Publisher, topicForConv(convID))
-			stepSettings, err2 := settings.NewStepSettingsFromParsedLayers(r.parsed)
-			if err2 != nil {
-				return nil, nil, nil, err2
-			}
-			sys := p.DefaultPrompt
-			uses := append([]MiddlewareUse{}, p.DefaultMws...)
-			if body.Overrides != nil {
-				if v, ok := body.Overrides["system_prompt"].(string); ok && v != "" {
-					sys = v
-				}
-				if arr, ok := body.Overrides["middlewares"].([]any); ok {
-					uses = make([]MiddlewareUse, 0, len(arr))
-					for _, it := range arr {
-						if m, ok2 := it.(map[string]any); ok2 {
-							name, _ := m["name"].(string)
-							cfg := m["config"]
-							if name != "" {
-								uses = append(uses, MiddlewareUse{Name: name, Config: cfg})
-							}
-						}
-					}
-				}
-			}
-			eng, err = composeEngineFromSettings(stepSettings, sys, uses, r.mwFactories)
-			return eng, sink, sub, err
-		}
-		conv, err := r.getOrCreateConv(convID, build)
+		conv, err := r.cm.GetOrCreate(convID, profileSlug, input.Overrides)
 		if err != nil {
-			log.Error().Err(err).Str("component", "webchat").Str("conv_id", convID).Msg("failed to create conversation")
+			chatReqLog.Error().Err(err).Msg("failed to create conversation")
 			http.Error(w, "failed to create conversation", http.StatusInternalServerError)
 			return
 		}
-		conv.mu.Lock()
-		if conv.running {
-			conv.mu.Unlock()
-			log.Warn().Str("component", "webchat").Str("conv_id", conv.ID).Str("run_id", conv.RunID).Msg("run in progress")
-			w.WriteHeader(http.StatusConflict)
-			_ = json.NewEncoder(w).Encode(map[string]any{"error": "run in progress", "conv_id": conv.ID, "run_id": conv.RunID})
-			return
-		}
-		conv.running = true
-		conv.mu.Unlock()
-		if conv.Turn == nil {
-			conv.Turn = &turns.Turn{RunID: conv.RunID}
-		}
-		turns.AppendBlock(conv.Turn, turns.NewUserTextBlock(body.Prompt))
-		conv.Turn.RunID = conv.RunID
-
-		registry := geptools.NewInMemoryToolRegistry()
-		for name, tf := range r.toolFactories {
-			_ = tf(registry)
-			_ = name
-		}
-
-		go func(conv *Conversation) {
-			<-r.router.Running()
-			runCtx, runCancel := context.WithCancel(r.baseCtx)
-			conv.mu.Lock()
-			conv.cancel = runCancel
-			conv.mu.Unlock()
-			runCtx = events.WithEventSinks(runCtx, conv.Sink)
-			log.Info().Str("component", "webchat").Str("conv_id", conv.ID).Str("run_id", conv.RunID).Msg("starting run loop")
-			updatedTurn, _ := toolhelpers.RunToolCallingLoop(
-				runCtx,
-				conv.Eng,
-				conv.Turn,
-				registry,
-				toolhelpers.NewToolConfig().WithMaxIterations(5).WithTimeout(60*time.Second),
-			)
-			if updatedTurn != nil {
-				conv.Turn = updatedTurn
-			}
-			runCancel()
-			conv.mu.Lock()
-			conv.running = false
-			conv.cancel = nil
-			conv.mu.Unlock()
-			log.Info().Str("component", "webchat").Str("conv_id", conv.ID).Str("run_id", conv.RunID).Msg("run loop finished")
-		}(conv)
-
-		_ = json.NewEncoder(w).Encode(map[string]string{"run_id": conv.RunID, "conv_id": conv.ID})
-	})
-
-	// start run: /chat/{profile}
-	r.mux.HandleFunc("/chat/", func(w http.ResponseWriter, r0 *http.Request) {
-		if r0.Method != http.MethodPost {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		// extract profile from path: /chat/{profile}[/...]
-		path := r0.URL.Path
-		var profileSlug string
-		if strings.HasPrefix(path, "/chat/") {
-			rest := path[len("/chat/"):]
-			if i := strings.Index(rest, "/"); i >= 0 {
-				profileSlug = rest[:i]
-			} else {
-				profileSlug = rest
-			}
-		}
-		if profileSlug == "" {
-			profileSlug = "default"
-		}
-		var body struct {
-			Prompt    string         `json:"prompt"`
-			ConvID    string         `json:"conv_id"`
-			Overrides map[string]any `json:"overrides"`
-		}
-		if err := json.NewDecoder(r0.Body).Decode(&body); err != nil {
-			http.Error(w, "bad request", http.StatusBadRequest)
-			return
-		}
-		convID := body.ConvID
-		if convID == "" {
-			convID = uuid.NewString()
-		}
-		p, ok := r.profiles.Get(profileSlug)
-		if !ok {
-			http.Error(w, "unknown profile", http.StatusNotFound)
+		if conv.Sess == nil {
+			http.Error(w, "conversation session not initialized", http.StatusInternalServerError)
 			return
 		}
 
-		// Build or reuse conversation with correct engine (consider overrides)
-		build := func() (engine.Engine, *middleware.WatermillSink, message.Subscriber, error) {
-			var (
-				eng  engine.Engine
-				sink *middleware.WatermillSink
-				sub  message.Subscriber
-				err  error
-			)
-			if r.usesRedis {
-				_ = rediscfg.EnsureGroupAtTail(context.Background(), r.redisAddr, topicForConv(convID), "ui")
-			}
-			if r.usesRedis {
-				sub, err = rediscfg.BuildGroupSubscriber(r.redisAddr, "ui", "ws-forwarder:"+convID)
-				if err != nil {
-					return nil, nil, nil, err
-				}
-			} else {
-				sub = r.router.Subscriber
-			}
-			sink = middleware.NewWatermillSink(r.router.Publisher, topicForConv(convID))
-			// step settings from layers and apply overrides if provided
-			stepSettings, err2 := settings.NewStepSettingsFromParsedLayers(r.parsed)
-			if err2 != nil {
-				return nil, nil, nil, err2
-			}
-			sys := p.DefaultPrompt
-			uses := append([]MiddlewareUse{}, p.DefaultMws...)
-			// apply overrides: system_prompt, middlewares
-			if body.Overrides != nil {
-				if v, ok := body.Overrides["system_prompt"].(string); ok && v != "" {
-					sys = v
-				}
-				if arr, ok := body.Overrides["middlewares"].([]any); ok {
-					uses = make([]MiddlewareUse, 0, len(arr))
-					for _, it := range arr {
-						if m, ok2 := it.(map[string]any); ok2 {
-							name, _ := m["name"].(string)
-							cfg := m["config"]
-							if name != "" {
-								uses = append(uses, MiddlewareUse{Name: name, Config: cfg})
-							}
-						}
-					}
-				}
-				// TODO: tools override can be applied via registry decision in loop
-			}
-			eng, err = composeEngineFromSettings(stepSettings, sys, uses, r.mwFactories)
-			return eng, sink, sub, err
-		}
-		conv, err := r.getOrCreateConv(convID, build)
+		sessionLog := logger.With().Str("conv_id", conv.ID).Str("session_id", conv.SessionID).Logger()
+		idempotencyKey := idempotencyKeyFromRequest(r0, body)
+
+		prep, err := conv.PrepareSessionInference(idempotencyKey, profileSlug, input.Overrides, body.Prompt)
 		if err != nil {
-			http.Error(w, "failed to create conversation", http.StatusInternalServerError)
+			sessionLog.Error().Err(err).Msg("prepare session inference failed")
+			http.Error(w, "prepare session inference failed", http.StatusInternalServerError)
 			return
 		}
-		conv.mu.Lock()
-		if conv.running {
-			conv.mu.Unlock()
-			w.WriteHeader(http.StatusConflict)
-			_ = json.NewEncoder(w).Encode(map[string]any{"error": "run in progress", "conv_id": conv.ID, "run_id": conv.RunID})
-			return
-		}
-		conv.running = true
-		conv.mu.Unlock()
-		if conv.Turn == nil {
-			conv.Turn = &turns.Turn{RunID: conv.RunID}
-		}
-		turns.AppendBlock(conv.Turn, turns.NewUserTextBlock(body.Prompt))
-		conv.Turn.RunID = conv.RunID
-
-		// Build registry for this run from default tools (and optional overrides later)
-		registry := geptools.NewInMemoryToolRegistry()
-		for name, tf := range r.toolFactories {
-			_ = tf(registry)
-			_ = name
-		}
-
-		go func(conv *Conversation) {
-			<-r.router.Running()
-			runCtx, runCancel := context.WithCancel(r.baseCtx)
-			conv.mu.Lock()
-			conv.cancel = runCancel
-			conv.mu.Unlock()
-			runCtx = events.WithEventSinks(runCtx, conv.Sink)
-			log.Info().Str("component", "webchat").Str("conv_id", conv.ID).Str("run_id", conv.RunID).Msg("starting run loop")
-			updatedTurn, _ := toolhelpers.RunToolCallingLoop(
-				runCtx,
-				conv.Eng,
-				conv.Turn,
-				registry,
-				toolhelpers.NewToolConfig().WithMaxIterations(5).WithTimeout(60*time.Second),
-			)
-			if updatedTurn != nil {
-				conv.Turn = updatedTurn
+		if !prep.Start {
+			if status, ok := prep.Response["status"].(string); ok && strings.EqualFold(status, "queued") {
+				if pos, ok := prep.Response["queue_position"].(int); ok {
+					sessionLog.Info().
+						Str("idempotency_key", idempotencyKey).
+						Int("queue_position", pos).
+						Msg("session inference in progress; queued prompt")
+				}
 			}
-			runCancel()
-			conv.mu.Lock()
-			conv.running = false
-			conv.cancel = nil
-			conv.mu.Unlock()
-			log.Info().Str("component", "webchat").Str("conv_id", conv.ID).Str("run_id", conv.RunID).Msg("run loop finished")
-		}(conv)
+			if prep.HTTPStatus > 0 {
+				w.WriteHeader(prep.HTTPStatus)
+			}
+			_ = json.NewEncoder(w).Encode(prep.Response)
+			return
+		}
 
-		_ = json.NewEncoder(w).Encode(map[string]string{"run_id": conv.RunID, "conv_id": conv.ID})
-	})
+		resp, err := r.startInferenceForPrompt(conv, profileSlug, input.Overrides, body.Prompt, idempotencyKey)
+		if err != nil {
+			sessionLog.Error().Err(err).Msg("start session inference failed")
+			http.Error(w, "start session inference failed", http.StatusInternalServerError)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(resp)
+	}
+
+	mux.HandleFunc("/chat", func(w http.ResponseWriter, r0 *http.Request) { handleChatRequest(w, r0) })
+	mux.HandleFunc("/chat/", func(w http.ResponseWriter, r0 *http.Request) { handleChatRequest(w, r0) })
 }
 
 // helpers
-func fsSub(staticFS embed.FS, path string) (fs.FS, error) { return fs.Sub(staticFS, path) }
+func fsSub(staticFS fs.FS, path string) (fs.FS, error) { return fs.Sub(staticFS, path) }
 
 // runtime wiring bits
 var (
 	_ http.Handler
 )
+
+func stepModeFromOverrides(overrides map[string]any) bool {
+	if overrides == nil {
+		return false
+	}
+	if v, ok := overrides["step_mode"].(bool); ok {
+		return v
+	}
+	if v, ok := overrides["step_mode"].(string); ok {
+		switch strings.ToLower(strings.TrimSpace(v)) {
+		case "1", "true", "yes", "y", "on":
+			return true
+		default:
+			return false
+		}
+	}
+	return false
+}
+
+func snapshotHookForConv(conv *Conversation, dir string, store chatstore.TurnStore) toolloop.SnapshotHook {
+	if conv == nil || (dir == "" && store == nil) {
+		return nil
+	}
+	snapLog := log.With().
+		Str("component", "webchat").
+		Str("conv_id", conv.ID).
+		Str("session_id", conv.SessionID).
+		Logger()
+	return func(ctx context.Context, t *turns.Turn, phase string) {
+		if t == nil {
+			return
+		}
+		if store != nil {
+			turnID := t.ID
+			if turnID == "" {
+				turnID = "turn"
+			}
+			sessionID := conv.SessionID
+			if sessionID == "" {
+				if v, ok, err := turns.KeyTurnMetaSessionID.Get(t.Metadata); err == nil && ok {
+					sessionID = v
+				}
+			}
+			if sessionID != "" {
+				payload, err := serde.ToYAML(t, serde.Options{})
+				if err != nil {
+					snapLog.Warn().Err(err).Str("phase", phase).Msg("webchat snapshot: serialize failed (store)")
+				} else if err := store.Save(ctx, conv.ID, sessionID, turnID, phase, time.Now().UnixMilli(), string(payload)); err != nil {
+					snapLog.Warn().Err(err).Str("phase", phase).Msg("webchat snapshot: store save failed")
+				}
+			}
+		}
+		if dir == "" {
+			return
+		}
+		subdir := filepath.Join(dir, conv.ID, conv.SessionID)
+		if err := os.MkdirAll(subdir, 0755); err != nil {
+			snapLog.Warn().Err(err).Str("dir", subdir).Msg("webchat snapshot: mkdir failed")
+			return
+		}
+		ts := time.Now().UTC().Format("20060102-150405.000000000")
+		turnID := t.ID
+		if turnID == "" {
+			turnID = "turn"
+		}
+		name := fmt.Sprintf("%s-%s-%s.yaml", ts, phase, turnID)
+		path := filepath.Join(subdir, name)
+		data, err := serde.ToYAML(t, serde.Options{})
+		if err != nil {
+			snapLog.Warn().Err(err).Str("path", path).Msg("webchat snapshot: serialize failed")
+			return
+		}
+		if err := os.WriteFile(path, data, 0644); err != nil {
+			snapLog.Warn().Err(err).Str("path", path).Msg("webchat snapshot: write failed")
+			return
+		}
+		snapLog.Debug().Str("path", path).Str("phase", phase).Msg("webchat snapshot: saved turn")
+	}
+}
+
+func idempotencyKeyFromRequest(r *http.Request, body *ChatRequestBody) string {
+	var key string
+	if r != nil {
+		key = strings.TrimSpace(r.Header.Get("Idempotency-Key"))
+		if key == "" {
+			key = strings.TrimSpace(r.Header.Get("X-Idempotency-Key"))
+		}
+	}
+	if key == "" && body != nil {
+		key = strings.TrimSpace(body.IdempotencyKey)
+	}
+	if key == "" {
+		key = uuid.NewString()
+	}
+	return key
+}
+
+func (r *Router) startInferenceForPrompt(conv *Conversation, profileSlug string, overrides map[string]any, prompt string, idempotencyKey string) (map[string]any, error) {
+	if r == nil || conv == nil || conv.Sess == nil {
+		return nil, errors.New("invalid conversation")
+	}
+
+	sessionLog := log.With().Str("component", "webchat").Str("conv_id", conv.ID).Str("session_id", conv.SessionID).Logger()
+
+	// Ensure the conversation stream is running so SEM frames are produced even without an attached WS client.
+	conv.mu.Lock()
+	stream := conv.stream
+	baseCtx := conv.baseCtx
+	conv.mu.Unlock()
+	if stream != nil && !stream.IsRunning() {
+		if baseCtx == nil {
+			baseCtx = context.Background()
+		}
+		_ = stream.Start(baseCtx)
+	}
+
+	cfg, err := r.BuildConfig(profileSlug, overrides)
+	if err != nil {
+		r.finishSessionInference(conv, idempotencyKey, "", "", err)
+		return nil, err
+	}
+
+	tmpReg := geptools.NewInMemoryToolRegistry()
+	for _, tf := range r.toolFactories {
+		_ = tf(tmpReg)
+	}
+	registry := geptools.NewInMemoryToolRegistry()
+	if len(cfg.Tools) == 0 {
+		for _, td := range tmpReg.ListTools() {
+			_ = registry.RegisterTool(td.Name, td)
+		}
+	} else {
+		allowed := map[string]struct{}{}
+		for _, n := range cfg.Tools {
+			if s := strings.TrimSpace(n); s != "" {
+				allowed[s] = struct{}{}
+			}
+		}
+		for _, td := range tmpReg.ListTools() {
+			if _, ok := allowed[td.Name]; ok {
+				_ = registry.RegisterTool(td.Name, td)
+			}
+		}
+	}
+
+	// Ensure router is running before we start inference (best-effort).
+	select {
+	case <-r.router.Running():
+	case <-time.After(2 * time.Second):
+	}
+
+	hook := snapshotHookForConv(conv, os.Getenv("PINOCCHIO_WEBCHAT_TURN_SNAPSHOTS_DIR"), r.turnStore)
+
+	seed, err := conv.Sess.AppendNewTurnFromUserPrompt(prompt)
+	if err != nil {
+		r.finishSessionInference(conv, idempotencyKey, "", "", err)
+		return nil, err
+	}
+	turnID := ""
+	if seed != nil && seed.ID != "" {
+		turnID = seed.ID
+	}
+	if r.timelineStore != nil && turnID != "" && strings.TrimSpace(prompt) != "" {
+		entity := &timelinepb.TimelineEntityV1{
+			Id:   "user-" + turnID,
+			Kind: "message",
+			Snapshot: &timelinepb.TimelineEntityV1_Message{
+				Message: &timelinepb.MessageSnapshotV1{
+					SchemaVersion: 1,
+					Role:          "user",
+					Content:       prompt,
+					Streaming:     false,
+				},
+			},
+		}
+		version := uint64(time.Now().UnixMilli()) * 1_000_000
+		if err := r.timelineStore.Upsert(r.baseCtx, conv.ID, version, entity); err == nil {
+			r.emitTimelineUpsert(conv, entity, version)
+		}
+	}
+
+	if stepModeFromOverrides(overrides) && r.stepCtrl != nil {
+		r.stepCtrl.Enable(toolloop.StepScope{SessionID: conv.SessionID, ConversationID: conv.ID})
+	}
+
+	loopCfg := toolloop.NewLoopConfig().WithMaxIterations(5)
+	toolCfg := geptools.DefaultToolConfig().WithExecutionTimeout(60 * time.Second)
+	conv.Sess.Builder = &enginebuilder.Builder{
+		Base:             conv.Eng,
+		Registry:         registry,
+		LoopConfig:       &loopCfg,
+		ToolConfig:       &toolCfg,
+		EventSinks:       []events.EventSink{conv.Sink},
+		SnapshotHook:     hook,
+		StepController:   r.stepCtrl,
+		StepPauseTimeout: 30 * time.Second,
+		Persister:        newTurnStorePersister(r.turnStore, conv, "final"),
+	}
+
+	sessionLog.Info().Str("idempotency_key", idempotencyKey).Msg("starting inference loop")
+
+	handle, err := conv.Sess.StartInference(r.baseCtx)
+	if err != nil {
+		r.finishSessionInference(conv, idempotencyKey, "", turnID, err)
+		return nil, err
+	}
+	if handle == nil {
+		err := errors.New("start inference returned nil handle")
+		r.finishSessionInference(conv, idempotencyKey, "", turnID, err)
+		return nil, err
+	}
+
+	resp := map[string]any{
+		"status":          "started",
+		"idempotency_key": idempotencyKey,
+		"conv_id":         conv.ID,
+		"session_id":      conv.SessionID,
+	}
+	if turnID != "" {
+		resp["turn_id"] = turnID
+	}
+	if handle.InferenceID != "" {
+		resp["inference_id"] = handle.InferenceID
+	}
+	if handle.Input != nil && handle.Input.ID != "" {
+		resp["turn_id"] = handle.Input.ID
+	}
+
+	conv.mu.Lock()
+	conv.ensureQueueInitLocked()
+	if rec, ok := conv.getRecordLocked(idempotencyKey); ok && rec != nil {
+		rec.Status = "running"
+		rec.StartedAt = time.Now()
+		rec.Response = resp
+	} else {
+		conv.upsertRecordLocked(&chatRequestRecord{IdempotencyKey: idempotencyKey, Status: "running", StartedAt: time.Now(), Response: resp})
+	}
+	conv.mu.Unlock()
+
+	go func() {
+		_, waitErr := handle.Wait()
+		r.finishSessionInference(conv, idempotencyKey, handle.InferenceID, turnID, waitErr)
+		if waitErr != nil {
+			sessionLog.Error().Err(waitErr).Str("inference_id", handle.InferenceID).Msg("inference loop error")
+		}
+		sessionLog.Info().Str("inference_id", handle.InferenceID).Msg("inference loop finished")
+		r.tryDrainQueue(conv)
+	}()
+
+	return resp, nil
+}
+
+func (r *Router) finishSessionInference(conv *Conversation, idempotencyKey string, inferenceID string, turnID string, err error) {
+	if conv == nil {
+		return
+	}
+	conv.mu.Lock()
+	defer conv.mu.Unlock()
+
+	if conv.activeRequestKey == idempotencyKey {
+		conv.activeRequestKey = ""
+	}
+	conv.touchLocked(time.Now())
+	conv.ensureQueueInitLocked()
+	if rec, ok := conv.getRecordLocked(idempotencyKey); ok && rec != nil {
+		if err != nil {
+			rec.Status = "error"
+			rec.Error = err.Error()
+		} else if rec.Status == "running" {
+			rec.Status = "completed"
+		}
+		rec.CompletedAt = time.Now()
+		if rec.Response == nil {
+			rec.Response = map[string]any{}
+		}
+		if inferenceID != "" {
+			rec.Response["inference_id"] = inferenceID
+		}
+		if turnID != "" {
+			rec.Response["turn_id"] = turnID
+		}
+		rec.Response["status"] = rec.Status
+	}
+}
+
+func (r *Router) tryDrainQueue(conv *Conversation) {
+	if r == nil || conv == nil {
+		return
+	}
+	for {
+		q, ok := conv.ClaimNextQueued()
+		if !ok {
+			return
+		}
+		_, err := r.startInferenceForPrompt(conv, q.ProfileSlug, q.Overrides, q.Prompt, q.IdempotencyKey)
+		if err != nil {
+			r.finishSessionInference(conv, q.IdempotencyKey, "", "", err)
+			// Continue draining so later queued items can still execute.
+			continue
+		}
+		// Successfully started one inference; subsequent items are handled when it finishes.
+		return
+	}
+}
+
+// BuildSubscriber exposes the subscriber builder for external use.
+func (r *Router) BuildSubscriber(convID string) (message.Subscriber, bool, error) {
+	if r != nil && r.buildSubscriberOverride != nil {
+		return r.buildSubscriberOverride(convID)
+	}
+	return r.buildSubscriberDefault(convID)
+}
+
+func (r *Router) buildSubscriberDefault(convID string) (message.Subscriber, bool, error) {
+	if r == nil {
+		return nil, false, errors.New("router is nil")
+	}
+	if convID == "" {
+		return nil, false, errors.New("convID is empty")
+	}
+	// subscriber/publisher
+	if r.usesRedis {
+		_ = rediscfg.EnsureGroupAtTail(context.Background(), r.redisAddr, topicForConv(convID), "ui")
+		sub, err := rediscfg.BuildGroupSubscriber(r.redisAddr, "ui", "ws-forwarder:"+convID)
+		if err != nil {
+			return nil, false, err
+		}
+		return sub, true, nil
+	}
+	return r.router.Subscriber, false, nil
+}
 
 // private state fields appended to Router
 // (declared here for proximity to logic, defined in types.go)

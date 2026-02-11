@@ -1,31 +1,31 @@
 -- Schema for simple-agent debug storage
--- Tables capture runs, turns, blocks, snapshots and chat events.
+-- Tables capture sessions, turns, blocks, snapshots and chat events.
 
--- Runs
-CREATE TABLE IF NOT EXISTS runs(
+-- Sessions
+CREATE TABLE IF NOT EXISTS sessions(
   id TEXT PRIMARY KEY,
   created_at TEXT NOT NULL,
   metadata TEXT
 );
 
--- Per-run metadata kv for fast querying
-CREATE TABLE IF NOT EXISTS run_metadata_kv(
-  run_id TEXT NOT NULL,
+-- Per-session metadata kv for fast querying
+CREATE TABLE IF NOT EXISTS session_metadata_kv(
+  session_id TEXT NOT NULL,
   key TEXT NOT NULL,
   type TEXT,
   value_text TEXT,
   value_json TEXT,
-  PRIMARY KEY (run_id, key),
-  FOREIGN KEY(run_id) REFERENCES runs(id)
+  PRIMARY KEY (session_id, key),
+  FOREIGN KEY(session_id) REFERENCES sessions(id)
 );
 
 -- Turns
 CREATE TABLE IF NOT EXISTS turns(
   id TEXT PRIMARY KEY,
-  run_id TEXT NOT NULL,
+  session_id TEXT NOT NULL,
   created_at TEXT NOT NULL,
   metadata TEXT,
-  FOREIGN KEY(run_id) REFERENCES runs(id)
+  FOREIGN KEY(session_id) REFERENCES sessions(id)
 );
 
 -- Turn kv (section is 'metadata' or 'data')
@@ -101,14 +101,16 @@ CREATE TABLE IF NOT EXISTS chat_events(
   result TEXT,
   data_json TEXT,
   payload_json TEXT,
-  run_id TEXT,
+  session_id TEXT,
+  inference_id TEXT,
   turn_id TEXT
 );
 
 -- Tool registry snapshots per turn/phase (debugging aid)
 CREATE TABLE IF NOT EXISTS tool_registry_snapshots(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  run_id TEXT NOT NULL,
+  session_id TEXT NOT NULL,
+  inference_id TEXT NOT NULL,
   turn_id TEXT NOT NULL,
   phase TEXT NOT NULL,
   created_at TEXT NOT NULL,
@@ -125,5 +127,4 @@ CREATE INDEX IF NOT EXISTS idx_turn_kv_key ON turn_kv(turn_id, section, key);
 CREATE INDEX IF NOT EXISTS idx_bpk_key ON block_payload_kv(turn_id, phase, key);
 CREATE INDEX IF NOT EXISTS idx_bmk_key ON block_metadata_kv(turn_id, phase, key);
 CREATE INDEX IF NOT EXISTS idx_events_time ON chat_events(type, created_at);
-
 

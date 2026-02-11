@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package sem.timeline;
+
+option go_package = "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/timeline;timeline";
+
+// StatusSnapshotV1 defines the payload for a 'status' entity.
+message StatusSnapshotV1 {
+  uint32 schema_version = 1; // =1
+  string text = 2;
+  string type = 3; // info|success|warning|error
+}
+
+

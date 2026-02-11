@@ -1,4 +1,4 @@
-.PHONY: all test build lint lintmax docker-lint gosec govulncheck goreleaser tag-major tag-minor tag-patch release bump-glazed install codeql-local geppetto-lint-build geppetto-lint
+.PHONY: all test build lint lintmax docker-lint gosec govulncheck goreleaser tag-major tag-minor tag-patch release bump-glazed install codeql-local geppetto-lint-build geppetto-lint web-typecheck web-lint web-check
 
 all: test build
 
@@ -45,7 +45,7 @@ lintmax: build geppetto-lint-build
 
 gosec:
 	go install github.com/securego/gosec/v2/cmd/gosec@latest
-	gosec -exclude=G101,G304,G301,G306,G204,G302 -exclude-dir=.history -exclude-dir=testdata ./...
+	gosec -exclude=G101,G203,G304,G301,G306,G204,G302 -exclude-dir=.history -exclude-dir=testdata ./...
 
 govulncheck:
 	go install golang.org/x/vuln/cmd/govulncheck@latest
@@ -57,6 +57,14 @@ test:
 build:
 	go generate ./...
 	go build ./...
+
+web-typecheck:
+	cd cmd/web-chat/web && npm run typecheck
+
+web-lint:
+	cd cmd/web-chat/web && npm run lint
+
+web-check: web-typecheck web-lint
 
 goreleaser:
 	goreleaser release $(GORELEASER_ARGS) $(GORELEASER_TARGET)

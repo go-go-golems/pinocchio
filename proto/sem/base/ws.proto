@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package sem.base.ws;
+
+option go_package = "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/base;base";
+
+message WsHelloV1 {
+  string conv_id = 1;
+  string profile = 2;
+  int64 server_time = 3;
+}
+
+message WsPongV1 {
+  string conv_id = 1;
+  int64 server_time = 2;
+}
+

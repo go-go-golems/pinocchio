@@ -8,9 +8,9 @@ import (
 	"github.com/ThreeDotsLabs/watermill/message"
 
 	"github.com/go-go-golems/geppetto/pkg/events"
-	"github.com/go-go-golems/geppetto/pkg/inference/engine"
 	"github.com/go-go-golems/geppetto/pkg/inference/engine/factory"
 	"github.com/go-go-golems/geppetto/pkg/inference/middleware"
+	"github.com/go-go-golems/geppetto/pkg/inference/toolloop/enginebuilder"
 	"github.com/go-go-golems/geppetto/pkg/turns"
 
 	clay "github.com/go-go-golems/clay/pkg"
@@ -22,6 +22,7 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
 	"github.com/go-go-golems/glazed/pkg/help"
 	help_cmd "github.com/go-go-golems/glazed/pkg/help/cmd"
+	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -153,18 +154,19 @@ func (c *SimpleRedisStreamingInferenceCommand) RunIntoWriter(ctx context.Context
 			return nil
 		}
 		md := e.Metadata()
-		log.Debug().Str("event_type", string(e.Type())).Str("run_id", md.RunID).Str("turn_id", md.TurnID).Str("message_id", md.ID.String()).Msg("Received event from Redis stream")
+		log.Debug().Str("event_type", string(e.Type())).Str("session_id", md.SessionID).Str("inference_id", md.InferenceID).Str("turn_id", md.TurnID).Str("message_id", md.ID.String()).Msg("Received event from Redis stream")
 		return nil
 	})
 
-	// Build engine with sink
-	eng, err := factory.NewEngineFromParsedLayers(parsedLayers, engine.WithSink(sink))
+	// Build engine (events flow via context sinks)
+	eng, err := factory.NewEngineFromParsedLayers(parsedLayers)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to create engine")
 		return errors.Wrap(err, "create engine")
 	}
+	var mws []middleware.Middleware
 	if s.WithLogging {
-		eng = middleware.NewEngineWithMiddleware(eng, middleware.NewTurnLoggingMiddleware(log.Logger))
+		mws = append(mws, middleware.NewTurnLoggingMiddleware(log.Logger))
 	}
 
 	// Build initial Turn with Blocks
@@ -172,6 +174,10 @@ func (c *SimpleRedisStreamingInferenceCommand) RunIntoWriter(ctx context.Context
 		WithSystemPrompt("You are a helpful assistant. Answer the question in a short and concise manner. ").
 		WithUserPrompt(s.Prompt).
 		Build()
+	sessionID := uuid.NewString()
+	if err := turns.KeyTurnMetaSessionID.Set(&seed.Metadata, sessionID); err != nil {
+		return fmt.Errorf("set session id metadata: %w", err)
+	}
 
 	// Run router and inference concurrently
 	eg := errgroup.Group{}
@@ -189,7 +195,15 @@ func (c *SimpleRedisStreamingInferenceCommand) RunIntoWriter(ctx context.Context
 		defer cancel()
 		<-router.Running()
 		log.Info().Msg("EventRouter is running; starting inference")
-		updatedTurn, err := eng.RunInference(ctx, seed)
+		runner, err := enginebuilder.New(
+			enginebuilder.WithBase(eng),
+			enginebuilder.WithMiddlewares(mws...),
+			enginebuilder.WithEventSinks(sink),
+		).Build(ctx, sessionID)
+		if err != nil {
+			return fmt.Errorf("failed to build runner: %w", err)
+		}
+		updatedTurn, err := runner.RunInference(ctx, seed)
 		if err != nil {
 			log.Error().Err(err).Msg("Inference failed")
 			return fmt.Errorf("inference failed: %w", err)

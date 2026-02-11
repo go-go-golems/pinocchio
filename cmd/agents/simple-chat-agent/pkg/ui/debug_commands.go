@@ -30,13 +30,13 @@ func runDebugCommand(args []string) (string, error) {
 		return helpText(), nil
 	}
 	switch args[0] {
-	case "runs":
+	case "sessions":
 		n := parseOptionalInt(args, 1, 10)
-		return listRuns(n)
+		return listSessions(n)
 	case "turns":
-		runID := argOrEmpty(args, 1)
+		sessionID := argOrEmpty(args, 1)
 		n := parseOptionalInt(args, 2, 10)
-		return listTurns(runID, n)
+		return listTurns(sessionID, n)
 	case "last-turn":
 		return showLastTurn()
 	case "blocks":
@@ -116,8 +116,8 @@ func openTxnDBRO() (*sql.DB, error) {
 func helpText() string {
 	return strings.TrimSpace(`Debug commands:
   /dbg help                                Show this help
-  /dbg runs [N]                            List last N runs (default 10)
-  /dbg turns [run_id] [N]                  List last N turns for run (default latest run, N=10)
+  /dbg sessions [N]                        List last N sessions (default 10)
+  /dbg turns [session_id] [N]              List last N turns for session (default latest session, N=10)
   /dbg last-turn                           Show last turn id and quick facts
   /dbg blocks [turn_id] [--phase PHASE] [-v] [--head N|--tail N]
                                            List blocks for a turn (defaults to last).
@@ -191,13 +191,13 @@ func oneLineJSON(s string) string {
 
 // Command impls
 
-func listRuns(n int) (string, error) {
+func listSessions(n int) (string, error) {
 	db, err := openAppDBRO()
 	if err != nil {
 		return "", err
 	}
 	defer func() { _ = db.Close() }()
-	rows, err := db.Query("SELECT id, created_at FROM runs ORDER BY created_at DESC LIMIT ?", n)
+	rows, err := db.Query("SELECT id, created_at FROM sessions ORDER BY created_at DESC LIMIT ?", n)
 	if err != nil {
 		return "", err
 	}
@@ -218,16 +218,16 @@ func listRuns(n int) (string, error) {
 	return strings.TrimRight(sb.String(), "\n"), nil
 }
 
-func getLatestRunID(ctx context.Context, db *sql.DB) (string, error) {
+func getLatestSessionID(ctx context.Context, db *sql.DB) (string, error) {
 	var id string
-	err := db.QueryRowContext(ctx, "SELECT id FROM runs ORDER BY created_at DESC LIMIT 1").Scan(&id)
+	err := db.QueryRowContext(ctx, "SELECT id FROM sessions ORDER BY created_at DESC LIMIT 1").Scan(&id)
 	if err != nil {
 		return "", err
 	}
 	return id, nil
 }
 
-func listTurns(runID string, n int) (string, error) {
+func listTurns(sessionID string, n int) (string, error) {
 	db, err := openAppDBRO()
 	if err != nil {
 		return "", err
@@ -235,14 +235,14 @@ func listTurns(runID string, n int) (string, error) {
 	defer func() { _ = db.Close() }()
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	if runID == "" {
-		rid, err := getLatestRunID(ctx, db)
+	if sessionID == "" {
+		rid, err := getLatestSessionID(ctx, db)
 		if err != nil {
 			return "", err
 		}
-		runID = rid
+		sessionID = rid
 	}
-	rows, err := db.QueryContext(ctx, "SELECT id, created_at FROM turns WHERE run_id=? ORDER BY created_at DESC LIMIT ?", runID, n)
+	rows, err := db.QueryContext(ctx, "SELECT id, created_at FROM turns WHERE session_id=? ORDER BY created_at DESC LIMIT ?", sessionID, n)
 	if err != nil {
 		return "", err
 	}

@@ -153,8 +153,8 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case *events.EventPartialCompletionStart:
 		// Extract run/turn from event metadata
 		meta := ev.Metadata()
-		if meta.RunID != "" {
-			m.runID = meta.RunID
+		if meta.SessionID != "" {
+			m.runID = meta.SessionID
 		}
 		if meta.TurnID != "" {
 			m.turnID = meta.TurnID

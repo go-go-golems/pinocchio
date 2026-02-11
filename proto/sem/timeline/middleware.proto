@@ -1,0 +1,74 @@
+syntax = "proto3";
+
+package sem.timeline;
+
+option go_package = "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/timeline;timeline";
+
+// ThinkingModeSnapshotV1 maps 'thinking_mode' entity props
+message ThinkingModeSnapshotV1 {
+  uint32 schema_version = 1; // =1
+  string status = 2;     // active|completed|error
+  string mode = 3;
+  string phase = 4;
+  string reasoning = 5;
+  bool success = 6;
+  string error = 7;
+}
+
+// ModeEvaluationSnapshotV1 maps 'mode_evaluation' entity props
+message ModeEvaluationSnapshotV1 {
+  uint32 schema_version = 1; // =1
+  string status = 2;           // active|completed|error
+  string current_mode = 3;
+  string analysis = 4;
+  string decision = 5;
+  string recommended_mode = 6;
+  bool success = 7;
+  string error = 8;
+}
+
+// InnerThoughtsSnapshotV1 maps 'inner_thoughts' entity props
+message InnerThoughtsSnapshotV1 {
+  uint32 schema_version = 1; // =1
+  string status = 2; // active|completed|error
+  string text = 3;
+}
+
+// DiscoDialogueLineSnapshotV1 maps 'disco_dialogue_line' entity props.
+message DiscoDialogueLineSnapshotV1 {
+  uint32 schema_version = 1; // =1
+  string status = 2; // started|update|completed|error
+  string dialogue_id = 3;
+  string line_id = 4;
+  string persona = 5;
+  string tone = 6;
+  string text = 7;
+  string trigger = 8;
+  double progress = 9;
+  bool success = 10;
+  string error = 11;
+}
+
+// DiscoDialogueCheckSnapshotV1 maps 'disco_dialogue_check' entity props.
+message DiscoDialogueCheckSnapshotV1 {
+  uint32 schema_version = 1; // =1
+  string status = 2; // started|update|completed|error
+  string dialogue_id = 3;
+  string line_id = 4;
+  string check_type = 5;
+  string skill = 6;
+  int32 difficulty = 7;
+  int32 roll = 8;
+  bool success = 9;
+  string error = 10;
+}
+
+// DiscoDialogueStateSnapshotV1 maps 'disco_dialogue_state' entity props.
+message DiscoDialogueStateSnapshotV1 {
+  uint32 schema_version = 1; // =1
+  string status = 2; // started|update|completed|error
+  string dialogue_id = 3;
+  string summary = 4;
+  bool success = 5;
+  string error = 6;
+}

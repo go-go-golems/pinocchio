@@ -6,6 +6,9 @@ pre-commit:
     test:
       glob: '*.go'
       run: make test
+    web-check:
+      glob: 'cmd/web-chat/web/**'
+      run: cd cmd/web-chat/web && npm run check
   parallel: true
 
 pre-push:

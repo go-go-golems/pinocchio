@@ -8,8 +8,10 @@ Topics:
 - middleware
 - tools
 - http
+Commands:
+- web-chat
 IsTemplate: false
-IsTopLevel: false
+IsTopLevel: true
 ShowPerDefault: true
 SectionType: GeneralTopic
 ---
@@ -25,7 +27,7 @@ With Webchat you can:
 - Register tools and middlewares globally, then configure per-profile.
 - Compose engines from `StepSettings` using `NewEngineFromStepSettings`.
 - Serve a minimal frontend that listens to SEM events over WebSocket and renders Markdown with syntax highlighting.
-- Support multiple chat profiles: `POST /chat`, `POST /chat/{profile}`, `GET /ws?profile=...`, or set the `chat_profile` cookie via `/default` and `/agent` endpoints.
+- Support multiple chat profiles: `POST /chat`, `POST /chat/{profile}`, `GET /ws?profile=...`, or set the `chat_profile` cookie via `/api/chat/profile`.
 
 ## 2. Core Concepts
 
@@ -75,18 +77,31 @@ Then the index is served at `/chat`, assets under `/chat/assets` and `/chat/stat
 
 ### 4.5. How to Mount Under a Custom Root (Implementation Pattern)
 
-If you integrate `webchat.Router` into your own server and need a custom root, mount the router’s handler under a prefix using `http.ServeMux` and `http.StripPrefix`:
+If you integrate `webchat.Router` into your own server and need a custom root, mount the router under a prefix using `Router.Mount` (it wraps `http.StripPrefix` for you):
 
 ```go
 parent := http.NewServeMux()
-prefix := "/chat/" // ensure trailing slash
-parent.Handle(prefix, http.StripPrefix(strings.TrimRight(prefix, "/"), r.Handler()))
+prefix := "/chat"
+r.Mount(parent, prefix)
 httpSrv.Handler = parent
 ```
 
 This preserves all internal paths (`/`, `/assets`, `/static`, `/ws`, `/chat`, `/chat/{profile}`, `/api/chat/profiles`) under the chosen root.
 
-### 4.6. Embedding the Router Without webchat.Server (start the event loop!)
+### 4.6. Split API and UI Handlers (Optional)
+
+If you want to serve the web UI separately from the API/websocket endpoints, use the dedicated handlers:
+
+```go
+parent := http.NewServeMux()
+parent.Handle("/api/webchat/", http.StripPrefix("/api/webchat", r.APIHandler()))
+parent.Handle("/chat/", http.StripPrefix("/chat", r.UIHandler()))
+httpSrv.Handler = parent
+```
+
+You can omit `UIHandler()` entirely if you serve the frontend elsewhere.
+
+### 4.7. Embedding the Router Without webchat.Server (start the event loop!)
 
 If you integrate `webchat.Router` into an existing server and do not use `webchat.Server`, you must start the event router loop yourself or runs will never progress beyond initialization. Pattern:
 
@@ -185,13 +200,14 @@ Frontend considerations:
 ### 5.2. Profiles
 
 - `GET /api/chat/profiles` → list available profiles; the UI can present these.
-- `GET /default` → set `chat_profile=default` (204 No Content)
-- `GET /agent` → set `chat_profile=agent` (204 No Content)
+- `GET /api/chat/profile` → get current profile (cookie-backed)
+- `POST /api/chat/profile` → set current profile (cookie-backed)
 
 ### 5.3. WebSocket
 
 - `GET /ws?conv_id=<id>&profile=<slug>` – join streaming for a conversation
   - If `profile` is omitted, the server falls back to `chat_profile` cookie, else `default`.
+  - SEM envelopes include `seq` and `stream_id`; when Redis stream metadata is present (`xid`/`redis_xid`), `seq` is derived from it for stable ordering. If missing, the backend uses a time-based monotonic `seq` so timeline versions stay ordered.
 
 ### 5.4. Start a Chat Run
 
@@ -217,30 +233,48 @@ Request body:
 Response:
 
 ```json
-{ "run_id": "<uuid>", "conv_id": "<uuid>" }
+{ "session_id": "<uuid>", "conv_id": "<uuid>" }
 ```
+
+### 5.5. Timeline Snapshots
+
+- `GET /timeline?conv_id=<id>&since_version=<n>&limit=<n>` – returns durable timeline entities for hydration.
+- Versions are derived from `event.seq` (Redis stream ID when present, time-based monotonic fallback otherwise).
+- Backed by SQLite when configured (`--timeline-db`/`--timeline-dsn`), otherwise in-memory.
 
 ## 6. Engine Composition
 
 Engines are built from `StepSettings` using Geppetto’s factory:
 
 ```go
+import (
+    "context"
+    "github.com/go-go-golems/geppetto/pkg/inference/toolloop"
+)
+
 eng, err := factory.NewEngineFromStepSettings(stepSettings)
-eng = middleware.NewEngineWithMiddleware(eng, middleware.NewSystemPromptMiddleware(sysPrompt))
-// + per-profile middlewares in order
+runner, err := toolloop.NewEngineBuilder(
+    toolloop.WithBase(eng),
+    toolloop.WithMiddlewares(middleware.NewSystemPromptMiddleware(sysPrompt)),
+    // + per-profile middlewares in order
+).Build(context.Background(), "")
+eng = runner
 ```
 
 This ensures parity with standard StepSettings (model, timeouts, provider settings) while keeping middleware composition declarative.
 
 ## 7. Run Loop
 
-The default run loop uses `toolhelpers.RunToolCallingLoop`:
+The default run loop uses the tool loop (`toolloop.Loop`) via the engine builder:
 
 ```go
-updatedTurn, _ := toolhelpers.RunToolCallingLoop(
-  ctx, eng, turn, registry,
-  toolhelpers.NewToolConfig().WithMaxIterations(5).WithTimeout(60*time.Second),
+b := toolloop.NewEngineBuilder(
+  toolloop.WithBase(eng),
+  toolloop.WithToolRegistry(registry),
+  toolloop.WithToolConfig(toolloop.NewToolConfig().WithMaxIterations(5).WithTimeout(60*time.Second)),
 )
+runner, _ := b.Build(ctx, "session-id")
+updatedTurn, _ := runner.RunInference(ctx, turn)
 ```
 
 You can plug custom loops by wiring your own handler within the router, or extend the framework to allow per-profile loop selection.
@@ -310,14 +344,26 @@ _ = webchat.NewFromRouter(ctx, r, httpSrv).Run(ctx)
 - No WS updates: Confirm `conv_id` is sent and the WebSocket URL points to `/ws?conv_id=...`. If using Redis Streams, verify settings and connectivity.
 - No syntax highlighting: Ensure the highlight.js theme loads (see page head for a stylesheet) and code blocks have `language-xyz` classes.
 
-- Got `run_id`/`conv_id` back from `/chat` but no streaming: Ensure the event router loop is running. If you didn’t use `webchat.Server`, call `go r.RunEventRouter(ctx)` after `NewRouter(...)`. Check logs for “starting run loop” and “run loop finished”.
+- Got `session_id`/`conv_id` back from `/chat` but no streaming: Ensure the event router loop is running. If you didn’t use `webchat.Server`, call `go r.RunEventRouter(ctx)` after `NewRouter(...)`. Check logs for “starting inference loop” and “inference loop finished”.
 - Unknown profile: Verify your profile registration and list profiles via `GET /api/chat/profiles`. If no profile cookie is set and none provided, the router uses `default`.
 - Mounting under a prefix: Ensure you’re using `http.StripPrefix(strings.TrimRight(prefix, "/"), r.Handler())` and your frontend assets use relative paths (Vite `base: './'`).
 
-## 12. Next Steps
+## 12. Related Documentation
+
+For deeper understanding of specific components:
+
+- [Backend Reference](webchat-backend-reference.md) — API reference for StreamCoordinator and ConnectionPool
+- [Backend Internals](webchat-backend-internals.md) — Implementation details, concurrency, and performance
+- [Debugging and Ops](webchat-debugging-and-ops.md) — Operational procedures and troubleshooting
+- [Frontend Integration](webchat-frontend-integration.md) — WebSocket and HTTP integration patterns
+- [SEM and UI](webchat-sem-and-ui.md) — SEM event format, routing, and timeline entities
+
+For geppetto core concepts (session lifecycle, events, tool loop):
+
+- See `geppetto/pkg/doc/topics/` for event sinks and session management
+- See `geppetto/pkg/doc/playbooks/04-migrate-to-session-api.md` for session migration
+
+## 13. Next Steps
 
 - Add a new profile (e.g., `rag`) with a retrieval middleware.
-- Implement a custom run loop for multi-turn planning.
 - Extend the frontend with profile selectors using `/api/chat/profiles`.
-
-

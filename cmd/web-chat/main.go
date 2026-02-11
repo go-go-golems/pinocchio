@@ -23,6 +23,7 @@ import (
 	geptools "github.com/go-go-golems/geppetto/pkg/inference/tools"
 	geppettolayers "github.com/go-go-golems/geppetto/pkg/layers"
 	toolspkg "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/tools"
+	timelinecmd "github.com/go-go-golems/pinocchio/cmd/web-chat/timeline"
 	agentmode "github.com/go-go-golems/pinocchio/pkg/middlewares/agentmode"
 	sqlitetool "github.com/go-go-golems/pinocchio/pkg/middlewares/sqlitetool"
 	rediscfg "github.com/go-go-golems/pinocchio/pkg/redisstream"
@@ -56,7 +57,13 @@ func NewCommand() (*Command, error) {
 			parameters.NewParameterDefinition("addr", parameters.ParameterTypeString, parameters.WithDefault(":8080"), parameters.WithHelp("HTTP listen address")),
 			parameters.NewParameterDefinition("enable-agentmode", parameters.ParameterTypeBool, parameters.WithDefault(false), parameters.WithHelp("Enable agent mode middleware")),
 			parameters.NewParameterDefinition("idle-timeout-seconds", parameters.ParameterTypeInteger, parameters.WithDefault(60), parameters.WithHelp("Stop per-conversation reader after N seconds with no sockets (0=disabled)")),
+			parameters.NewParameterDefinition("evict-idle-seconds", parameters.ParameterTypeInteger, parameters.WithDefault(300), parameters.WithHelp("Evict conversations after N seconds idle (0=disabled)")),
+			parameters.NewParameterDefinition("evict-interval-seconds", parameters.ParameterTypeInteger, parameters.WithDefault(60), parameters.WithHelp("Sweep idle conversations every N seconds (0=disabled)")),
 			parameters.NewParameterDefinition("root", parameters.ParameterTypeString, parameters.WithDefault("/"), parameters.WithHelp("Serve the chat UI under a given URL root (e.g., /chat)")),
+			parameters.NewParameterDefinition("timeline-dsn", parameters.ParameterTypeString, parameters.WithDefault(""), parameters.WithHelp("SQLite DSN for durable timeline snapshots (enables GET /timeline); preferred over timeline-db")),
+			parameters.NewParameterDefinition("timeline-db", parameters.ParameterTypeString, parameters.WithDefault(""), parameters.WithHelp("SQLite DB file path for durable timeline snapshots (enables GET /timeline); DSN is derived with WAL/busy_timeout")),
+			parameters.NewParameterDefinition("turns-dsn", parameters.ParameterTypeString, parameters.WithDefault(""), parameters.WithHelp("SQLite DSN for durable turn snapshots (enables GET /turns); preferred over turns-db")),
+			parameters.NewParameterDefinition("turns-db", parameters.ParameterTypeString, parameters.WithDefault(""), parameters.WithHelp("SQLite DB file path for durable turn snapshots (enables GET /turns); DSN is derived with WAL/busy_timeout")),
 		),
 		cmds.WithLayersList(append(geLayers, redisLayer)...),
 	)
@@ -114,22 +121,8 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *layers.ParsedLayers
 	})
 
 	// Profiles
-	r.AddProfile(&webchat.Profile{Slug: "default", DefaultPrompt: "You are a helpful assistant. Be concise.", DefaultMws: []webchat.MiddlewareUse{}})
+	r.AddProfile(&webchat.Profile{Slug: "default", DefaultPrompt: "You are an assistant", DefaultMws: []webchat.MiddlewareUse{}})
 	r.AddProfile(&webchat.Profile{Slug: "agent", DefaultPrompt: "You are a helpful assistant. Be concise.", DefaultMws: []webchat.MiddlewareUse{{Name: "agentmode", Config: amCfg}}})
-
-	// Lightweight helper endpoints to switch profile from the UI via fetch GET
-	// GET /default → sets a cookie chat_profile=default and 204s
-	// GET /agent   → sets a cookie chat_profile=agent and 204s
-	r.HandleFunc("/default", func(w http.ResponseWriter, r *http.Request) {
-		http.SetCookie(w, &http.Cookie{Name: "chat_profile", Value: "default", Path: "/", SameSite: http.SameSiteLaxMode})
-		log.Info().Str("component", "profile-switch").Str("profile", "default").Str("remote", r.RemoteAddr).Msg("set chat_profile cookie")
-		w.WriteHeader(http.StatusNoContent)
-	})
-	r.HandleFunc("/agent", func(w http.ResponseWriter, r *http.Request) {
-		http.SetCookie(w, &http.Cookie{Name: "chat_profile", Value: "agent", Path: "/", SameSite: http.SameSiteLaxMode})
-		log.Info().Str("component", "profile-switch").Str("profile", "agent").Str("remote", r.RemoteAddr).Msg("set chat_profile cookie")
-		w.WriteHeader(http.StatusNoContent)
-	})
 
 	// HTTP server and run, with optional root mounting
 	httpSrv, err := r.BuildHTTPServer()
@@ -173,6 +166,8 @@ func main() {
 	if err := clay.InitGlazed("pinocchio", root); err != nil {
 		cobra.CheckErr(err)
 	}
+
+	timelinecmd.AddToRootCommand(root)
 
 	c, err := NewCommand()
 	cobra.CheckErr(err)

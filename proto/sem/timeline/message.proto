@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+package sem.timeline;
+
+option go_package = "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/timeline;timeline";
+
+// MessageSnapshotV1 defines the payload for a timeline 'message' entity.
+message MessageSnapshotV1 {
+  uint32 schema_version = 1; // =1
+
+  // "user" | "assistant"
+  string role = 2;
+
+  // Message content (aligns with TS Timeline types: props.content)
+  string content = 3;
+
+  // True during streaming
+  bool streaming = 4;
+
+  // Optional metadata; empty map if absent
+  map<string, string> metadata = 10;
+}
+
+

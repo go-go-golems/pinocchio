@@ -3,15 +3,19 @@ package webchat
 import (
 	"context"
 	"database/sql"
-	"embed"
+	"io/fs"
 	"net/http"
 
+	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/go-go-golems/geppetto/pkg/events"
 	"github.com/go-go-golems/geppetto/pkg/inference/engine"
 	"github.com/go-go-golems/geppetto/pkg/inference/middleware"
+	"github.com/go-go-golems/geppetto/pkg/inference/toolloop"
 	geptools "github.com/go-go-golems/geppetto/pkg/inference/tools"
 	"github.com/go-go-golems/geppetto/pkg/turns"
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
+	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
+	timelinepb "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/timeline"
 	"github.com/gorilla/websocket"
 )
 
@@ -24,13 +28,16 @@ type ToolFactory func(reg geptools.ToolRegistry) error
 // RunLoop is a backend loop strategy for a conversation.
 type RunLoop func(ctx context.Context, eng engine.Engine, t *turns.Turn, reg geptools.ToolRegistry, opts map[string]any) (*turns.Turn, error)
 
+// EventSinkWrapper allows callers to wrap or replace the default event sink.
+type EventSinkWrapper func(convID string, cfg EngineConfig, sink events.EventSink) (events.EventSink, error)
+
 // MiddlewareUse declares a middleware to attach and its config.
 type MiddlewareUse struct {
 	Name   string
 	Config any
 }
 
-// Profile describes how to build engines and run loops for a chat namespace.
+// Profile describes how to build engines and inference loops for a chat namespace.
 type Profile struct {
 	Slug           string
 	DefaultPrompt  string
@@ -71,7 +78,7 @@ type Router struct {
 	baseCtx  context.Context
 	parsed   *layers.ParsedLayers
 	mux      *http.ServeMux
-	staticFS embed.FS
+	staticFS fs.FS
 
 	// event router (in-memory or Redis)
 	router *events.EventRouter
@@ -81,7 +88,9 @@ type Router struct {
 	toolFactories map[string]ToolFactory
 
 	// shared deps
-	db *sql.DB
+	db            *sql.DB
+	timelineStore chatstore.TimelineStore
+	turnStore     chatstore.TurnStore
 
 	// profiles
 	profiles ProfileRegistry
@@ -96,4 +105,17 @@ type Router struct {
 	usesRedis      bool
 	redisAddr      string
 	idleTimeoutSec int
+
+	// step mode control (shared; not conversation-owned)
+	stepCtrl *toolloop.StepController
+
+	// request policy
+	engineFromReqBuilder EngineFromReqBuilder
+
+	// optional overrides for conv manager hooks
+	buildSubscriberOverride    func(convID string) (message.Subscriber, bool, error)
+	timelineUpsertHookOverride func(*Conversation) func(entity *timelinepb.TimelineEntityV1, version uint64)
+
+	// optional event sink wrapper
+	eventSinkWrapper EventSinkWrapper
 }

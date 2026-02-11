@@ -76,7 +76,13 @@ pgm := tea.NewProgram(uiModel, tea.WithOutput(w))
 egTurn, turnCtx := errgroup.WithContext(runCtx)
 egTurn.Go(func() error { _, err := pgm.Run(); return err })
 egTurn.Go(func() error {
-    updated, err := toolhelpers.RunToolCallingLoop(turnCtx, eng, conv, registry, cfg)
+    loop := toolloop.New(
+        toolloop.WithEngine(eng),
+        toolloop.WithRegistry(registry),
+        toolloop.WithLoopConfig(loopCfg),
+        toolloop.WithToolConfig(toolCfg),
+    )
+    updated, err := loop.RunLoop(turnCtx, conv)
     // append updates to conversation
     return err
 })
@@ -95,4 +101,3 @@ _ = egTurn.Wait()
 - Bubbles spinner: https://github.com/charmbracelet/bubbles/tree/master/spinner
 - Bubbles viewport: https://github.com/charmbracelet/bubbles/tree/master/viewport
 - Huh spinner accessible example: `huh/spinner/examples/accessible/main.go`
-

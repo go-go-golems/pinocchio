@@ -109,7 +109,7 @@ func detectModeSwitch(t *turns.Turn) *ModeSwitch {
 Attach this middleware when constructing the engine wrapper (see “Composition” in `glaze help geppetto-middlewares`).
 
 ```go
-engineWithMw := middleware.NewEngineWithMiddleware(baseEngine, agentmode.NewMiddleware())
+mws := []middleware.Middleware{agentmode.NewMiddleware()}
 ```
 
 ## 2) Build the renderer (EntityModel)
@@ -228,7 +228,7 @@ watermillSink := middleware.NewWatermillSink(router.Publisher, "chat")
 
 // 2) Create engine and wrap with our middleware
 baseEngine, _ := factory.NewEngineFromParsedLayers(parsed)
-engineWithMw := middleware.NewEngineWithMiddleware(baseEngine, agentmode.NewMiddleware())
+mws := []middleware.Middleware{agentmode.NewMiddleware()}
 
 // 3) Build Bubble Tea program with timeline shell and register renderer
 shell := timeline.NewShell()
@@ -236,7 +236,7 @@ shell.Controller().RegisterModelFactory(agentmode.AgentModeFactory{})
 p := tea.NewProgram(shell)
 
 // 4) Forward events from router to UI
-backend := backendpkg.NewToolLoopBackend(engineWithMw, registry, watermillSink, nil)
+backend := backendpkg.NewToolLoopBackend(baseEngine, mws, registry, watermillSink, nil)
 router.AddHandler("chat-ui", "chat", backend.MakeUIForwarder(p))
 
 // 5) Run router and TUI concurrently, then start the backend
@@ -269,5 +269,4 @@ p.Send(cmd())
 - Renderer examples: `pinocchio/pkg/middlewares/agentmode/agent_mode_model.go`
 - Middleware example: `pinocchio/pkg/middlewares/agentmode/middleware.go`
 - Backend forwarder: `pinocchio/cmd/agents/simple-chat-agent/pkg/backend/tool_loop_backend.go`
-
 

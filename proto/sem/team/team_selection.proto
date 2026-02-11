@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package sem.team.team_selection;
+
+option go_package = "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/team;team";
+
+// Payload for team member messages
+message TeamMemberPayload {
+  string name = 1;
+  string person_id = 2;   // resolved by backend, not provided by LLM
+  string email = 3;
+  string role = 4;
+  string role_text = 5;
+  double score = 6;       // optional by presence (0 means unset)
+}
+
+message TeamMemberAdded {
+  string item_id = 1;
+  TeamMemberPayload data = 2;
+}
+

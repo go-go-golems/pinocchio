@@ -2,6 +2,8 @@ package webchat
 
 import (
 	"context"
+	"errors"
+	"strings"
 	"sync"
 	"time"
 
@@ -12,160 +14,367 @@ import (
 
 	"github.com/go-go-golems/geppetto/pkg/events"
 	"github.com/go-go-golems/geppetto/pkg/inference/engine"
-	"github.com/go-go-golems/geppetto/pkg/inference/middleware"
+	"github.com/go-go-golems/geppetto/pkg/inference/session"
+	"github.com/go-go-golems/geppetto/pkg/inference/toolloop"
+	"github.com/go-go-golems/geppetto/pkg/inference/toolloop/enginebuilder"
 	"github.com/go-go-golems/geppetto/pkg/turns"
+	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
+	timelinepb "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/timeline"
 )
 
 // Conversation holds per-conversation state and streaming attachments.
 type Conversation struct {
 	ID        string
-	RunID     string
-	Turn      *turns.Turn
+	SessionID string
+	Sess      *session.Session
 	Eng       engine.Engine
-	Sink      *middleware.WatermillSink
-	running   bool
-	cancel    context.CancelFunc
+	Sink      events.EventSink
 	mu        sync.Mutex
-	conns     map[*websocket.Conn]bool
-	connsMu   sync.RWMutex
 	sub       message.Subscriber
-	stopRead  context.CancelFunc
-	reading   bool
-	idleTimer *time.Timer
+	subClose  bool
+	pool      *ConnectionPool
+	stream    *StreamCoordinator
+	baseCtx   context.Context
+
+	ProfileSlug  string
+	EngConfigSig string
+
+	// Server-side send serialization / queue semantics.
+	// All fields below are guarded by mu.
+	activeRequestKey string
+	queue            []queuedChat
+	requests         map[string]*chatRequestRecord
+
+	lastActivity time.Time
+
+	semBuf *semFrameBuffer
+
+	// Durable "actual hydration" projection (optional; enabled when Router has a TimelineStore).
+	timelineProj *TimelineProjector
 }
 
-// ConvManager stores all live conversations.
+// ConvManager stores all live conversations and centralizes lifecycle wiring.
 type ConvManager struct {
 	mu    sync.Mutex
 	conns map[string]*Conversation
+
+	baseCtx        context.Context
+	idleTimeoutSec int
+	stepCtrl       *toolloop.StepController
+
+	timelineStore      chatstore.TimelineStore
+	timelineUpsertHook func(*Conversation) func(entity *timelinepb.TimelineEntityV1, version uint64)
+
+	buildConfig     func(profileSlug string, overrides map[string]any) (EngineConfig, error)
+	buildFromConfig func(convID string, cfg EngineConfig) (engine.Engine, events.EventSink, error)
+	buildSubscriber func(convID string) (message.Subscriber, bool, error)
+
+	evictIdle     time.Duration
+	evictInterval time.Duration
+	evictRunning  bool
+}
+
+// ConvManagerOptions configures the conversation manager dependencies.
+type ConvManagerOptions struct {
+	BaseCtx        context.Context
+	IdleTimeoutSec int
+	StepController *toolloop.StepController
+	EvictIdle      time.Duration
+	EvictInterval  time.Duration
+
+	TimelineStore      chatstore.TimelineStore
+	TimelineUpsertHook func(*Conversation) func(entity *timelinepb.TimelineEntityV1, version uint64)
+
+	BuildConfig     func(profileSlug string, overrides map[string]any) (EngineConfig, error)
+	BuildFromConfig func(convID string, cfg EngineConfig) (engine.Engine, events.EventSink, error)
+	BuildSubscriber func(convID string) (message.Subscriber, bool, error)
+}
+
+func NewConvManager(opts ConvManagerOptions) *ConvManager {
+	return &ConvManager{
+		conns:              map[string]*Conversation{},
+		baseCtx:            opts.BaseCtx,
+		idleTimeoutSec:     opts.IdleTimeoutSec,
+		stepCtrl:           opts.StepController,
+		timelineStore:      opts.TimelineStore,
+		timelineUpsertHook: opts.TimelineUpsertHook,
+		buildConfig:        opts.BuildConfig,
+		buildFromConfig:    opts.BuildFromConfig,
+		buildSubscriber:    opts.BuildSubscriber,
+		evictIdle:          opts.EvictIdle,
+		evictInterval:      opts.EvictInterval,
+	}
+}
+
+func (cm *ConvManager) SetTimelineStore(store chatstore.TimelineStore) {
+	if cm == nil {
+		return
+	}
+	cm.mu.Lock()
+	cm.timelineStore = store
+	cm.mu.Unlock()
+}
+
+func (cm *ConvManager) SetIdleTimeoutSeconds(sec int) {
+	if cm == nil {
+		return
+	}
+	cm.mu.Lock()
+	cm.idleTimeoutSec = sec
+	cm.mu.Unlock()
+}
+
+// GetConversation retrieves a conversation by ID (thread-safe).
+func (cm *ConvManager) GetConversation(convID string) (*Conversation, bool) {
+	if cm == nil || convID == "" {
+		return nil, false
+	}
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+	conv, ok := cm.conns[convID]
+	return conv, ok
+}
+
+func (c *Conversation) touchLocked(now time.Time) {
+	if c == nil {
+		return
+	}
+	c.lastActivity = now
 }
 
 // topicForConv computes the event topic for a conversation.
 func topicForConv(convID string) string { return "chat:" + convID }
 
-// startReader subscribes to the per-conversation topic and forwards events to websocket clients.
-func (r *Router) startReader(conv *Conversation) error {
-	if conv.reading {
-		return nil
+// GetOrCreate creates or reuses a conversation based on engine config signature changes.
+// It centralizes engine/sink/subscriber composition through injected builder hooks.
+func (cm *ConvManager) GetOrCreate(convID, profileSlug string, overrides map[string]any) (*Conversation, error) {
+	if cm == nil {
+		return nil, errors.New("conversation manager is nil")
 	}
-	log.Info().Str("conv_id", conv.ID).Str("topic", topicForConv(conv.ID)).Msg("starting conversation reader")
-	readCtx, readCancel := context.WithCancel(context.Background())
-	conv.stopRead = readCancel
-	ch, err := conv.sub.Subscribe(readCtx, topicForConv(conv.ID))
+	if cm.buildConfig == nil || cm.buildFromConfig == nil || cm.buildSubscriber == nil {
+		return nil, errors.New("conversation manager missing dependencies")
+	}
+	cfg, err := cm.buildConfig(profileSlug, overrides)
 	if err != nil {
-		readCancel()
-		conv.stopRead = nil
-		return err
+		return nil, err
 	}
-	conv.reading = true
-	go func() {
-		for msg := range ch {
-			e, err := events.NewEventFromJson(msg.Payload)
+	newSig := cfg.Signature()
+	now := time.Now()
+
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+	if c, ok := cm.conns[convID]; ok {
+		c.mu.Lock()
+		c.ensureQueueInitLocked()
+		c.touchLocked(now)
+		if c.semBuf == nil {
+			c.semBuf = newSemFrameBuffer(1000)
+		}
+		if c.timelineProj == nil && cm.timelineStore != nil {
+			hook := cm.timelineUpsertHook
+			if hook != nil {
+				c.timelineProj = NewTimelineProjector(c.ID, cm.timelineStore, hook(c))
+			} else {
+				c.timelineProj = NewTimelineProjector(c.ID, cm.timelineStore, nil)
+			}
+		}
+		c.mu.Unlock()
+		if c.ProfileSlug != profileSlug || c.EngConfigSig != newSig {
+			log.Info().
+				Str("component", "webchat").
+				Str("conv_id", convID).
+				Str("old_profile", c.ProfileSlug).
+				Str("new_profile", profileSlug).
+				Msg("profile or engine config changed, rebuilding engine")
+
+			eng, sink, err := cm.buildFromConfig(convID, cfg)
 			if err != nil {
-				log.Warn().Err(err).Str("component", "ws_reader").Msg("failed to decode event json")
-				msg.Ack()
-				continue
+				return nil, err
 			}
-			runID := e.Metadata().RunID
-			if runID != "" && runID != conv.RunID {
-				msg.Ack()
-				continue
+			sub, subClose, err := cm.buildSubscriber(convID)
+			if err != nil {
+				return nil, err
 			}
-			r.convertAndBroadcast(conv, e)
-			msg.Ack()
-		}
-		conv.mu.Lock()
-		conv.reading = false
-		conv.stopRead = nil
-		conv.mu.Unlock()
-		log.Info().Str("conv_id", conv.ID).Msg("conversation reader stopped")
-	}()
-	return nil
-}
 
-func (r *Router) convertAndBroadcast(conv *Conversation, e events.Event) {
-	send := func(b []byte) {
-		conv.connsMu.RLock()
-		for c := range conv.conns {
-			_ = c.WriteMessage(websocket.TextMessage, b)
-		}
-		conv.connsMu.RUnlock()
-	}
-	if frames := SemanticEventsFromEvent(e); frames != nil {
-		for _, b := range frames {
-			send(b)
-		}
-	}
-}
+			// Replace stream/subscriber (avoid closing shared in-memory subscriber).
+			if c.stream != nil {
+				if c.subClose {
+					c.stream.Close()
+				} else {
+					c.stream.Stop()
+				}
+			}
 
-// getOrCreateConv creates a new conversation with engine and sink using the provided engineFactory.
-func (r *Router) getOrCreateConv(convID string, buildEng func() (engine.Engine, *middleware.WatermillSink, message.Subscriber, error)) (*Conversation, error) {
-	r.cm.mu.Lock()
-	defer r.cm.mu.Unlock()
-	if c, ok := r.cm.conns[convID]; ok {
+			c.Eng = eng
+			c.Sink = sink
+			c.sub = sub
+			c.subClose = subClose
+			c.ProfileSlug = profileSlug
+			c.EngConfigSig = newSig
+
+			c.stream = NewStreamCoordinator(
+				c.ID,
+				sub,
+				nil,
+				func(e events.Event, _ StreamCursor, frame []byte) {
+					eventSessionID := e.Metadata().SessionID
+					if eventSessionID != "" && eventSessionID != c.SessionID {
+						return
+					}
+					if c.pool != nil {
+						c.pool.Broadcast(frame)
+					}
+					if c.semBuf != nil {
+						c.semBuf.Add(frame)
+					}
+					if c.timelineProj != nil {
+						_ = c.timelineProj.ApplySemFrame(context.Background(), frame)
+					}
+				},
+			)
+
+			if c.stream != nil {
+				ctx := c.baseCtx
+				if ctx == nil {
+					ctx = context.Background()
+				}
+				if err := c.stream.Start(ctx); err != nil {
+					return nil, err
+				}
+			}
+		}
 		return c, nil
 	}
-	conv := &Conversation{ID: convID, RunID: uuid.NewString(), conns: map[*websocket.Conn]bool{}}
-	eng, sink, sub, err := buildEng()
+	sessionID := uuid.NewString()
+	conv := &Conversation{
+		ID:           convID,
+		SessionID:    sessionID,
+		baseCtx:      cm.baseCtx,
+		ProfileSlug:  profileSlug,
+		EngConfigSig: newSig,
+		requests:     map[string]*chatRequestRecord{},
+		semBuf:       newSemFrameBuffer(1000),
+		lastActivity: now,
+	}
+	if cm.timelineStore != nil {
+		hook := cm.timelineUpsertHook
+		if hook != nil {
+			conv.timelineProj = NewTimelineProjector(conv.ID, cm.timelineStore, hook(conv))
+		} else {
+			conv.timelineProj = NewTimelineProjector(conv.ID, cm.timelineStore, nil)
+		}
+	}
+	eng, sink, err := cm.buildFromConfig(convID, cfg)
+	if err != nil {
+		return nil, err
+	}
+	sub, subClose, err := cm.buildSubscriber(convID)
 	if err != nil {
 		return nil, err
 	}
 	conv.Eng = eng
 	conv.Sink = sink
 	conv.sub = sub
-	conv.Turn = &turns.Turn{RunID: conv.RunID}
-	if err := r.startReader(conv); err != nil {
-		return nil, err
+	conv.subClose = subClose
+
+	idleTimeout := time.Duration(cm.idleTimeoutSec) * time.Second
+	onIdle := func() {
+		if conv.stream != nil {
+			log.Info().Str("component", "webchat").Str("conv_id", conv.ID).Dur("idle_timeout", idleTimeout).Msg("idle timeout reached, stopping stream")
+			conv.stream.Stop()
+		}
 	}
-	r.cm.conns[convID] = conv
+	conv.pool = NewConnectionPool(conv.ID, idleTimeout, onIdle)
+	conv.stream = NewStreamCoordinator(
+		conv.ID,
+		sub,
+		nil,
+		func(e events.Event, _ StreamCursor, frame []byte) {
+			eventSessionID := e.Metadata().SessionID
+			if eventSessionID != "" && eventSessionID != conv.SessionID {
+				return
+			}
+			if conv.pool != nil {
+				conv.pool.Broadcast(frame)
+			}
+			if conv.semBuf != nil {
+				conv.semBuf.Add(frame)
+			}
+			if conv.timelineProj != nil {
+				_ = conv.timelineProj.ApplySemFrame(context.Background(), frame)
+			}
+		},
+	)
+
+	conv.Sess = &session.Session{
+		SessionID: sessionID,
+		Builder: &enginebuilder.Builder{
+			Base:             eng,
+			EventSinks:       []events.EventSink{sink},
+			StepController:   cm.stepCtrl,
+			StepPauseTimeout: 30 * time.Second,
+		},
+		Turns: func() []*turns.Turn {
+			return []*turns.Turn{buildSeedTurn(sessionID, cfg.SystemPrompt)}
+		}(),
+	}
+
+	// Start streaming immediately; ConnectionPool idle logic will stop it when no clients are connected.
+	if conv.stream != nil {
+		ctx := conv.baseCtx
+		if ctx == nil {
+			ctx = context.Background()
+		}
+		if err := conv.stream.Start(ctx); err != nil {
+			return nil, err
+		}
+	}
+
+	cm.conns[convID] = conv
 	return conv, nil
 }
 
-func (r *Router) addConn(conv *Conversation, c *websocket.Conn) {
-	conv.connsMu.Lock()
-	conv.conns[c] = true
-	conv.connsMu.Unlock()
-	conv.mu.Lock()
-	if conv.idleTimer != nil {
-		conv.idleTimer.Stop()
-		conv.idleTimer = nil
+func buildSeedTurn(sessionID string, systemPrompt string) *turns.Turn {
+	seed := &turns.Turn{}
+	if strings.TrimSpace(systemPrompt) != "" {
+		turns.AppendBlock(seed, turns.NewSystemTextBlock(systemPrompt))
 	}
-	wasReading := conv.reading
+	_ = turns.KeyTurnMetaSessionID.Set(&seed.Metadata, sessionID)
+	return seed
+}
+
+func (cm *ConvManager) AddConn(conv *Conversation, c *websocket.Conn) {
+	if conv == nil || c == nil {
+		return
+	}
+	conv.mu.Lock()
+	conv.touchLocked(time.Now())
 	conv.mu.Unlock()
-	if !wasReading && r.usesRedis {
-		_ = r.startReader(conv)
+	if conv.pool != nil {
+		conv.pool.Add(c)
+	}
+	conv.mu.Lock()
+	baseCtx := conv.baseCtx
+	stream := conv.stream
+	conv.mu.Unlock()
+	if stream != nil && !stream.IsRunning() {
+		if baseCtx == nil {
+			baseCtx = context.Background()
+		}
+		_ = stream.Start(baseCtx)
 	}
 }
 
-func (r *Router) removeConn(conv *Conversation, c *websocket.Conn) {
-	conv.connsMu.Lock()
-	delete(conv.conns, c)
-	conv.connsMu.Unlock()
-	_ = c.Close()
-	if r.idleTimeoutSec <= 0 {
-		return
-	}
-	conv.connsMu.RLock()
-	empty := len(conv.conns) == 0
-	conv.connsMu.RUnlock()
-	if !empty {
+func (cm *ConvManager) RemoveConn(conv *Conversation, c *websocket.Conn) {
+	if conv == nil || c == nil {
 		return
 	}
 	conv.mu.Lock()
-	if conv.idleTimer == nil {
-		d := time.Duration(r.idleTimeoutSec) * time.Second
-		conv.idleTimer = time.AfterFunc(d, func() {
-			conv.mu.Lock()
-			defer conv.mu.Unlock()
-			conv.connsMu.RLock()
-			isEmpty := len(conv.conns) == 0
-			conv.connsMu.RUnlock()
-			if isEmpty && conv.stopRead != nil {
-				conv.stopRead()
-				conv.stopRead = nil
-				conv.reading = false
-			}
-		})
-	}
+	conv.touchLocked(time.Now())
 	conv.mu.Unlock()
+	if conv.pool != nil {
+		conv.pool.Remove(c)
+		return
+	}
+	_ = c.Close()
 }

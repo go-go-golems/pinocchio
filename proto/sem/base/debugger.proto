@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package sem.base.debugger;
+
+option go_package = "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/base;base";
+
+import "google/protobuf/struct.proto";
+
+message DebuggerPauseV1 {
+  string id = 1;
+  string pause_id = 2;
+  string phase = 3;
+  string summary = 4;
+  int64 deadline_ms = 5;
+  google.protobuf.Struct extra = 6;
+}
+

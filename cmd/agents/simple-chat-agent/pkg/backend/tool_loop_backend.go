@@ -3,7 +3,6 @@ package backend
 import (
 	"context"
 	"fmt"
-	"sync/atomic"
 	"time"
 
 	"github.com/ThreeDotsLabs/watermill/message"
@@ -13,7 +12,9 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/events"
 	"github.com/go-go-golems/geppetto/pkg/inference/engine"
 	"github.com/go-go-golems/geppetto/pkg/inference/middleware"
-	"github.com/go-go-golems/geppetto/pkg/inference/toolhelpers"
+	"github.com/go-go-golems/geppetto/pkg/inference/session"
+	"github.com/go-go-golems/geppetto/pkg/inference/toolloop"
+	"github.com/go-go-golems/geppetto/pkg/inference/toolloop/enginebuilder"
 	"github.com/go-go-golems/geppetto/pkg/inference/tools"
 	"github.com/go-go-golems/geppetto/pkg/turns"
 	"github.com/pkg/errors"
@@ -22,73 +23,79 @@ import (
 
 // ToolLoopBackend runs the tool-calling loop across turns and emits BackendFinishedMsg when done.
 type ToolLoopBackend struct {
-	eng  engine.Engine
 	reg  *tools.InMemoryToolRegistry
-	sink *middleware.WatermillSink
-	hook toolhelpers.SnapshotHook
+	sink events.EventSink
+	hook toolloop.SnapshotHook
 
-	Turn    *turns.Turn // Current accumulated Turn for the tool loop.
-	cancel  context.CancelFunc
-	running atomic.Bool
+	sess *session.Session
 }
 
-func NewToolLoopBackend(eng engine.Engine, reg *tools.InMemoryToolRegistry, sink *middleware.WatermillSink, hook toolhelpers.SnapshotHook) *ToolLoopBackend {
-	return &ToolLoopBackend{eng: eng, reg: reg, sink: sink, hook: hook, Turn: &turns.Turn{}}
+func NewToolLoopBackend(eng engine.Engine, mws []middleware.Middleware, reg *tools.InMemoryToolRegistry, sink events.EventSink, hook toolloop.SnapshotHook) *ToolLoopBackend {
+	loopCfg := toolloop.NewLoopConfig().WithMaxIterations(5)
+	toolCfg := tools.DefaultToolConfig().WithExecutionTimeout(60 * time.Second)
+	sess := session.NewSession()
+	sess.Builder = enginebuilder.New(
+		enginebuilder.WithBase(eng),
+		enginebuilder.WithMiddlewares(mws...),
+		enginebuilder.WithToolRegistry(reg),
+		enginebuilder.WithLoopConfig(loopCfg),
+		enginebuilder.WithToolConfig(toolCfg),
+		enginebuilder.WithEventSinks(sink),
+		enginebuilder.WithSnapshotHook(hook),
+	)
+	return &ToolLoopBackend{reg: reg, sink: sink, hook: hook, sess: sess}
 }
 
 func (b *ToolLoopBackend) Start(ctx context.Context, prompt string) (tea.Cmd, error) {
-	if !b.running.CompareAndSwap(false, true) {
+	if b == nil || b.sess == nil {
+		return nil, errors.New("backend not initialized")
+	}
+	if b.sess.IsRunning() {
 		return nil, errors.New("already running")
 	}
-	if b.Turn == nil {
-		b.Turn = &turns.Turn{}
-	}
-	if prompt != "" {
-		turns.AppendBlock(b.Turn, turns.NewUserTextBlock(prompt))
+
+	_, err := b.sess.AppendNewTurnFromUserPrompt(prompt)
+	if err != nil {
+		return nil, errors.Wrap(err, "append prompt turn")
 	}
 
-	ctx, b.cancel = context.WithCancel(ctx)
-	runCtx := events.WithEventSinks(ctx, b.sink)
-	if b.hook != nil {
-		runCtx = toolhelpers.WithTurnSnapshotHook(runCtx, b.hook)
+	handle, err := b.sess.StartInference(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "start inference")
 	}
 
 	return func() tea.Msg {
-		updated, err := toolhelpers.RunToolCallingLoop(
-			runCtx,
-			b.eng,
-			b.Turn,
-			b.reg,
-			toolhelpers.NewToolConfig().WithMaxIterations(5).WithTimeout(60*time.Second),
-		)
-		if err != nil {
-			log.Error().Err(err).Msg("tool loop failed")
+		_, waitErr := handle.Wait()
+		if waitErr != nil {
+			log.Error().Err(waitErr).Msg("tool loop failed")
 		}
-		if updated != nil {
-			b.Turn = updated
-		}
-		b.running.Store(false)
-		b.cancel = nil
 		return boba_chat.BackendFinishedMsg{}
 	}, nil
 }
 
 func (b *ToolLoopBackend) Interrupt() {
-	if b.cancel != nil {
-		b.cancel()
+	if b != nil && b.sess != nil {
+		_ = b.sess.CancelActive()
 	}
 }
 
 func (b *ToolLoopBackend) Kill() {
-	if b.cancel != nil {
-		b.cancel()
-		b.cancel = nil
-		b.running.Store(false)
+	if b != nil && b.sess != nil {
+		_ = b.sess.CancelActive()
 	}
 }
 
 func (b *ToolLoopBackend) IsFinished() bool {
-	return !b.running.Load()
+	return b == nil || b.sess == nil || !b.sess.IsRunning()
+}
+
+// CurrentTurn returns the latest in-memory turn snapshot for this backend.
+// Callers may mutate the returned Turn (e.g. seed Turn.Data) before starting inference.
+func (b *ToolLoopBackend) CurrentTurn() *turns.Turn {
+	if b == nil || b.sess == nil {
+		return nil
+	}
+	return b.sess.Latest()
 }
 
 // MakeUIForwarder returns a Watermill handler that forwards geppetto events to the Bubble Tea program p
@@ -118,7 +125,7 @@ func (b *ToolLoopBackend) MakeUIForwarder(p *tea.Program) func(msg *message.Mess
 			p.Send(timeline.UIEntityCreated{ID: timeline.EntityID{LocalID: localID, Kind: "log_event"}, Renderer: timeline.RendererDescriptor{Kind: "log_event"}, Props: props})
 			p.Send(timeline.UIEntityCompleted{ID: timeline.EntityID{LocalID: localID, Kind: "log_event"}})
 		case *events.EventPartialCompletionStart:
-			log.Debug().Str("event", "partial_start").Str("run_id", md.RunID).Str("turn_id", md.TurnID).Str("message_id", md.ID.String()).Msg("forward: start")
+			log.Debug().Str("event", "partial_start").Str("session_id", md.SessionID).Str("inference_id", md.InferenceID).Str("turn_id", md.TurnID).Str("message_id", md.ID.String()).Msg("forward: start")
 			p.Send(timeline.UIEntityCreated{
 				ID:        timeline.EntityID{LocalID: entityID, Kind: "llm_text"},
 				Renderer:  timeline.RendererDescriptor{Kind: "llm_text"},
@@ -129,7 +136,7 @@ func (b *ToolLoopBackend) MakeUIForwarder(p *tea.Program) func(msg *message.Mess
 				log.Debug().Msg("forward: start has zero message_id (check event metadata assignment)")
 			}
 		case *events.EventPartialCompletion:
-			log.Debug().Str("event", "partial").Str("run_id", md.RunID).Str("turn_id", md.TurnID).Int("delta_len", len(e_.Delta)).Int("completion_len", len(e_.Completion)).Msg("forward: partial")
+			log.Debug().Str("event", "partial").Str("session_id", md.SessionID).Str("inference_id", md.InferenceID).Str("turn_id", md.TurnID).Int("delta_len", len(e_.Delta)).Int("completion_len", len(e_.Completion)).Msg("forward: partial")
 			p.Send(timeline.UIEntityUpdated{
 				ID:        timeline.EntityID{LocalID: entityID, Kind: "llm_text"},
 				Patch:     map[string]any{"text": e_.Completion, "metadata": md.LLMInferenceData, "streaming": true},
@@ -137,7 +144,7 @@ func (b *ToolLoopBackend) MakeUIForwarder(p *tea.Program) func(msg *message.Mess
 				UpdatedAt: time.Now(),
 			})
 		case *events.EventFinal:
-			log.Debug().Str("event", "final").Str("run_id", md.RunID).Str("turn_id", md.TurnID).Int("text_len", len(e_.Text)).Msg("forward: final")
+			log.Debug().Str("event", "final").Str("session_id", md.SessionID).Str("inference_id", md.InferenceID).Str("turn_id", md.TurnID).Int("text_len", len(e_.Text)).Msg("forward: final")
 			p.Send(timeline.UIEntityCompleted{
 				ID:     timeline.EntityID{LocalID: entityID, Kind: "llm_text"},
 				Result: map[string]any{"text": e_.Text, "metadata": md.LLMInferenceData},
@@ -169,7 +176,7 @@ func (b *ToolLoopBackend) MakeUIForwarder(p *tea.Program) func(msg *message.Mess
 				UpdatedAt: time.Now(),
 			})
 		case *events.EventInterrupt:
-			log.Debug().Str("event", "interrupt").Str("run_id", md.RunID).Str("turn_id", md.TurnID).Msg("forward: interrupt")
+			log.Debug().Str("event", "interrupt").Str("session_id", md.SessionID).Str("inference_id", md.InferenceID).Str("turn_id", md.TurnID).Msg("forward: interrupt")
 			intr, ok := events.ToTypedEvent[events.EventInterrupt](e)
 			if !ok {
 				return errors.New("payload is not of type EventInterrupt")
@@ -177,7 +184,7 @@ func (b *ToolLoopBackend) MakeUIForwarder(p *tea.Program) func(msg *message.Mess
 			p.Send(timeline.UIEntityCompleted{ID: timeline.EntityID{LocalID: entityID, Kind: "llm_text"}, Result: map[string]any{"text": intr.Text}})
 			p.Send(timeline.UIEntityUpdated{ID: timeline.EntityID{LocalID: entityID, Kind: "llm_text"}, Patch: map[string]any{"streaming": false}, Version: time.Now().UnixNano(), UpdatedAt: time.Now()})
 		case *events.EventError:
-			log.Debug().Str("event", "error").Str("run_id", md.RunID).Str("turn_id", md.TurnID).Str("err", e_.ErrorString).Msg("forward: error")
+			log.Debug().Str("event", "error").Str("session_id", md.SessionID).Str("inference_id", md.InferenceID).Str("turn_id", md.TurnID).Str("err", e_.ErrorString).Msg("forward: error")
 			p.Send(timeline.UIEntityCompleted{ID: timeline.EntityID{LocalID: entityID, Kind: "llm_text"}, Result: map[string]any{"text": "**Error**\n\n" + e_.ErrorString}})
 			p.Send(timeline.UIEntityUpdated{ID: timeline.EntityID{LocalID: entityID, Kind: "llm_text"}, Patch: map[string]any{"streaming": false}, Version: time.Now().UnixNano(), UpdatedAt: time.Now()})
 		case *events.EventToolCall:

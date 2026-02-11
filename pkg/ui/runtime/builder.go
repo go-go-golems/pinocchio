@@ -7,7 +7,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	boba_chat "github.com/go-go-golems/bobatea/pkg/chat"
 	"github.com/go-go-golems/geppetto/pkg/events"
-	"github.com/go-go-golems/geppetto/pkg/inference/engine"
 	"github.com/go-go-golems/geppetto/pkg/inference/engine/factory"
 	"github.com/go-go-golems/geppetto/pkg/inference/middleware"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
@@ -149,12 +148,12 @@ func (b *ChatBuilder) BuildProgram() (*ChatSession, *tea.Program, error) {
 
 	// Create engine with a UI sink attached
 	uiSink := middleware.NewWatermillSink(b.router.Publisher, "ui")
-	eng, err := b.engineFactory.CreateEngine(b.settings, engine.WithSink(uiSink))
+	eng, err := b.engineFactory.CreateEngine(b.settings)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "failed to create engine")
 	}
 
-	backend := ui.NewEngineBackend(eng)
+	backend := ui.NewEngineBackend(eng, uiSink)
 
 	model := boba_chat.InitialModel(backend, b.modelOptions...)
 	program := tea.NewProgram(model, b.programOptions...)
@@ -193,12 +192,12 @@ func (b *ChatBuilder) BuildComponents() (*ChatSession, tea.Model, boba_chat.Back
 
 	// Create engine with a UI sink attached
 	uiSink := middleware.NewWatermillSink(b.router.Publisher, "ui")
-	eng, err := b.engineFactory.CreateEngine(b.settings, engine.WithSink(uiSink))
+	eng, err := b.engineFactory.CreateEngine(b.settings)
 	if err != nil {
 		return nil, nil, nil, nil, errors.Wrap(err, "failed to create engine")
 	}
 
-	backend := ui.NewEngineBackend(eng)
+	backend := ui.NewEngineBackend(eng, uiSink)
 
 	model := boba_chat.InitialModel(backend, b.modelOptions...)
 

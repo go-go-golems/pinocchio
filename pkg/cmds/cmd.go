@@ -8,9 +8,9 @@ import (
 	"os"
 	"strings"
 
-	"github.com/go-go-golems/geppetto/pkg/inference/engine"
 	"github.com/go-go-golems/geppetto/pkg/inference/engine/factory"
 	"github.com/go-go-golems/geppetto/pkg/inference/middleware"
+	"github.com/go-go-golems/geppetto/pkg/inference/toolloop/enginebuilder"
 	"github.com/go-go-golems/glazed/pkg/helpers/templating"
 
 	"github.com/go-go-golems/geppetto/pkg/events"
@@ -25,7 +25,9 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
 	"github.com/go-go-golems/pinocchio/pkg/cmds/cmdlayers"
 	"github.com/go-go-golems/pinocchio/pkg/cmds/run"
+	pinui "github.com/go-go-golems/pinocchio/pkg/ui"
 	"github.com/go-go-golems/pinocchio/pkg/ui/runtime"
+	"github.com/google/uuid"
 	"github.com/mattn/go-isatty"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
@@ -260,6 +262,12 @@ func (g *PinocchioCommand) RunIntoWriter(
 		run.WithWriter(w),
 		run.WithRunMode(runMode),
 		run.WithUISettings(uiSettings),
+		run.WithPersistenceSettings(run.PersistenceSettings{
+			TimelineDSN: helpersSettings.TimelineDSN,
+			TimelineDB:  helpersSettings.TimelineDB,
+			TurnsDSN:    helpersSettings.TurnsDSN,
+			TurnsDB:     helpersSettings.TurnsDB,
+		}),
 		run.WithRouter(router),
 		run.WithVariables(parsedLayers.GetDefaultParameterLayer().Parameters.ToMap()),
 		run.WithImagePaths(imagePaths),
@@ -315,13 +323,12 @@ func (g *PinocchioCommand) RunWithOptions(ctx context.Context, options ...run.Ru
 
 // runBlocking handles blocking execution mode using Engine directly
 func (g *PinocchioCommand) runBlocking(ctx context.Context, rc *run.RunContext) (*turns.Turn, error) {
-	// Create engine instance options
-	var options []engine.Option
+	var sinks []events.EventSink
 
 	// If we have a router, set up watermill sink for event publishing
 	if rc.Router != nil {
 		watermillSink := middleware.NewWatermillSink(rc.Router.Publisher, "chat")
-		options = append(options, engine.WithSink(watermillSink))
+		sinks = []events.EventSink{watermillSink}
 
 		// Add default printer if none is set
 		if rc.UISettings == nil || rc.UISettings.Output == "" {
@@ -352,7 +359,7 @@ func (g *PinocchioCommand) runBlocking(ctx context.Context, rc *run.RunContext) 
 		eg.Go(func() error {
 			defer cancel()
 			<-rc.Router.Running()
-			return g.runEngineAndCollectMessages(ctx, rc, options)
+			return g.runEngineAndCollectMessages(ctx, rc, sinks)
 		})
 
 		err := eg.Wait()
@@ -361,7 +368,7 @@ func (g *PinocchioCommand) runBlocking(ctx context.Context, rc *run.RunContext) 
 		}
 	} else {
 		// No router, just run the engine directly using Turns
-		err := g.runEngineAndCollectMessages(ctx, rc, options)
+		err := g.runEngineAndCollectMessages(ctx, rc, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -372,9 +379,9 @@ func (g *PinocchioCommand) runBlocking(ctx context.Context, rc *run.RunContext) 
 }
 
 // runEngineAndCollectMessages handles the actual engine execution and message collection
-func (g *PinocchioCommand) runEngineAndCollectMessages(ctx context.Context, rc *run.RunContext, options []engine.Option) error {
-	// Create engine with options
-	engine, err := rc.EngineFactory.CreateEngine(rc.StepSettings, options...)
+func (g *PinocchioCommand) runEngineAndCollectMessages(ctx context.Context, rc *run.RunContext, sinks []events.EventSink) error {
+	// Create engine
+	engine, err := rc.EngineFactory.CreateEngine(rc.StepSettings)
 	if err != nil {
 		return fmt.Errorf("failed to create engine: %w", err)
 	}
@@ -384,7 +391,22 @@ func (g *PinocchioCommand) runEngineAndCollectMessages(ctx context.Context, rc *
 	if err != nil {
 		return fmt.Errorf("failed to render templates: %w", err)
 	}
-	updatedTurn, err := engine.RunInference(ctx, seed)
+
+	runner, err := (&enginebuilder.Builder{
+		Base:       engine,
+		EventSinks: sinks,
+	}).Build(ctx, func() string {
+		if sid, ok, err := turns.KeyTurnMetaSessionID.Get(seed.Metadata); err == nil && ok && sid != "" {
+			return sid
+		}
+		sid := uuid.NewString()
+		_ = turns.KeyTurnMetaSessionID.Set(&seed.Metadata, sid)
+		return sid
+	}())
+	if err != nil {
+		return fmt.Errorf("failed to build runner: %w", err)
+	}
+	updatedTurn, err := runner.RunInference(ctx, seed)
 	if err != nil {
 		return fmt.Errorf("inference failed: %w", err)
 	}
@@ -399,6 +421,13 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) (*tu
 	if rc.Router == nil {
 		return nil, errors.New("chat mode requires a router")
 	}
+
+	chatConvID := "cli-" + uuid.NewString()
+	timelineStore, turnStore, closeStores, err := openChatPersistenceStores(rc.Persistence)
+	if err != nil {
+		return nil, errors.Wrap(err, "open chat persistence stores")
+	}
+	defer closeStores()
 
 	isOutputTerminal := isatty.IsTerminal(os.Stdout.Fd())
 
@@ -445,7 +474,6 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) (*tu
 		if rc.RunMode == run.RunModeInteractive {
 			// Create options for initial step with chat topic
 			chatSink := middleware.NewWatermillSink(rc.Router.Publisher, "chat")
-			initialOptions := []engine.Option{engine.WithSink(chatSink)}
 
 			// Add default printer for initial step
 			if rc.UISettings == nil || rc.UISettings.Output == "" || rc.UISettings.Output == "text" {
@@ -464,7 +492,7 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) (*tu
 				return err
 			}
 
-			err = g.runEngineAndCollectMessages(ctx, rc, initialOptions)
+			err = g.runEngineAndCollectMessages(ctx, rc, []events.EventSink{chatSink})
 			if err != nil {
 				return err
 			}
@@ -491,8 +519,7 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) (*tu
 			}
 		}
 
-		// Determine if we should auto-start the backend
-		autoStartBackend := rc.UISettings != nil && rc.UISettings.StartInChat
+		startInChat := rc.UISettings != nil && rc.UISettings.StartInChat
 
 		// Build program and session via unified builder
 		sess, p, err := runtime.NewChatBuilder().
@@ -503,11 +530,19 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) (*tu
 			WithProgramOptions(options...).
 			WithModelOptions(
 				bobatea_chat.WithTitle("pinocchio"),
-				bobatea_chat.WithAutoStartBackend(autoStartBackend),
 			).
 			BuildProgram()
 		if err != nil {
 			return err
+		}
+
+		if turnStore != nil {
+			sess.Backend.SetTurnPersister(
+				newCLITurnStorePersister(turnStore, chatConvID, sess.Backend.SessionID(), "final"),
+			)
+		}
+		if timelineStore != nil {
+			rc.Router.AddHandler("ui-persist", "ui", pinui.StepTimelinePersistFunc(timelineStore, chatConvID))
 		}
 
 		// Register bound UI event handler and run handlers
@@ -539,8 +574,8 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) (*tu
 			return nil
 		})
 
-		// If auto-start is enabled, pre-fill the prompt/system text, then submit
-		if autoStartBackend {
+		// If we're starting directly in chat mode, pre-fill the prompt text (if any), then submit.
+		if startInChat {
 			seedGroup.Go(func() error {
 				<-rc.Router.Running()
 				// Render prompt before auto-submit in chat
@@ -568,7 +603,7 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) (*tu
 		return err
 	})
 
-	err := eg.Wait()
+	err = eg.Wait()
 	if err != nil {
 		return nil, err
 	}

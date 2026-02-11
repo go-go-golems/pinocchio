@@ -1,0 +1,29 @@
+syntax = "proto3";
+
+package sem.base.tool;
+
+option go_package = "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/base;base";
+
+import "google/protobuf/struct.proto";
+
+message ToolStart {
+  string id = 1;
+  string name = 2;
+  google.protobuf.Struct input = 3;
+}
+
+message ToolDelta {
+  string id = 1;
+  google.protobuf.Struct patch = 2;
+}
+
+message ToolResult {
+  string id = 1;
+  string result = 2; // raw string; may contain JSON
+  string custom_kind = 3; // optional: custom renderer hint (e.g. "calc_result")
+}
+
+message ToolDone {
+  string id = 1;
+}
+

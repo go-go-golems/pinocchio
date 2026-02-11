@@ -1,0 +1,18 @@
+version: v1
+plugins:
+  - plugin: buf.build/bufbuild/es
+    out: web/src/sem/pb
+    opt:
+      - target=ts
+      - import_extension=none
+
+  - plugin: buf.build/bufbuild/es
+    out: cmd/web-chat/web/src/sem/pb
+    opt:
+      - target=ts
+      - import_extension=none
+
+  - plugin: buf.build/protocolbuffers/go
+    out: pkg/sem/pb
+    opt:
+      - paths=source_relative
