@@ -3,6 +3,7 @@ package ui
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -216,6 +217,53 @@ func (e *EngineBackend) IsFinished() bool {
 // StepChatForwardFunc is a function that forwards watermill messages to the UI by
 // trasnforming them into bubbletea messages and injecting them into the program `p`.
 func StepChatForwardFunc(p *tea.Program) func(msg *message.Message) error {
+	var assistantMu sync.Mutex
+	assistantCreated := map[string]bool{}
+	assistantStartedAt := map[string]time.Time{}
+
+	markAssistantStart := func(entityID string) {
+		assistantMu.Lock()
+		if _, ok := assistantStartedAt[entityID]; !ok {
+			assistantStartedAt[entityID] = time.Now()
+		}
+		assistantMu.Unlock()
+	}
+
+	hasAssistantEntity := func(entityID string) bool {
+		assistantMu.Lock()
+		defer assistantMu.Unlock()
+		return assistantCreated[entityID]
+	}
+
+	ensureAssistantEntity := func(entityID string, md events.EventMetadata, initialText string) {
+		assistantMu.Lock()
+		if assistantCreated[entityID] {
+			assistantMu.Unlock()
+			return
+		}
+		startedAt := assistantStartedAt[entityID]
+		if startedAt.IsZero() {
+			startedAt = time.Now()
+		}
+		assistantCreated[entityID] = true
+		assistantMu.Unlock()
+
+		log.Debug().Str("component", "step_forward").Str("entity_id", entityID).Msg("UIEntityCreated (llm_text)")
+		p.Send(timeline.UIEntityCreated{
+			ID:        timeline.EntityID{LocalID: entityID, Kind: "llm_text"},
+			Renderer:  timeline.RendererDescriptor{Kind: "llm_text"},
+			Props:     map[string]any{"role": "assistant", "text": initialText, "metadata": md.LLMInferenceData, "streaming": true},
+			StartedAt: startedAt,
+		})
+	}
+
+	clearAssistantTracking := func(entityID string) {
+		assistantMu.Lock()
+		delete(assistantCreated, entityID)
+		delete(assistantStartedAt, entityID)
+		assistantMu.Unlock()
+	}
+
 	return func(msg *message.Message) error {
 		msg.Ack()
 
@@ -232,16 +280,16 @@ func StepChatForwardFunc(p *tea.Program) func(msg *message.Message) error {
 
 		switch e_ := e.(type) {
 		case *events.EventPartialCompletionStart:
-			// Create assistant message entity for this stream
-			log.Debug().Str("component", "step_forward").Str("entity_id", entityID).Msg("UIEntityCreated (llm_text)")
-			p.Send(timeline.UIEntityCreated{
-				ID:        timeline.EntityID{LocalID: entityID, Kind: "llm_text"},
-				Renderer:  timeline.RendererDescriptor{Kind: "llm_text"},
-				Props:     map[string]any{"role": "assistant", "text": "", "metadata": md.LLMInferenceData, "streaming": true},
-				StartedAt: time.Now(),
-			})
+			// Defer assistant entity creation until first visible assistant token arrives.
+			markAssistantStart(entityID)
 		case *events.EventPartialCompletion:
-			// Update accumulated assistant text using the Completion field
+			// Create on first non-empty completion; then update as tokens stream in.
+			if strings.TrimSpace(e_.Completion) != "" {
+				ensureAssistantEntity(entityID, md, e_.Completion)
+			}
+			if !hasAssistantEntity(entityID) {
+				break
+			}
 			log.Debug().Str("component", "step_forward").Str("entity_id", entityID).Int("delta_len", len(e_.Delta)).Int("completion_len", len(e_.Completion)).Msg("UIEntityUpdated (llm_text)")
 			p.Send(timeline.UIEntityUpdated{
 				ID:        timeline.EntityID{LocalID: entityID, Kind: "llm_text"},
@@ -250,6 +298,14 @@ func StepChatForwardFunc(p *tea.Program) func(msg *message.Message) error {
 				UpdatedAt: time.Now(),
 			})
 		case *events.EventFinal:
+			if strings.TrimSpace(e_.Text) != "" {
+				ensureAssistantEntity(entityID, md, e_.Text)
+			}
+			if !hasAssistantEntity(entityID) {
+				clearAssistantTracking(entityID)
+				p.Send(boba_chat.BackendFinishedMsg{})
+				break
+			}
 			log.Debug().Str("component", "step_forward").Str("entity_id", entityID).Int("text_len", len(e_.Text)).Msg("UIEntityCompleted (final)")
 			p.Send(timeline.UIEntityCompleted{
 				ID:     timeline.EntityID{LocalID: entityID, Kind: "llm_text"},
@@ -262,6 +318,7 @@ func StepChatForwardFunc(p *tea.Program) func(msg *message.Message) error {
 				Version:   time.Now().UnixNano(),
 				UpdatedAt: time.Now(),
 			})
+			clearAssistantTracking(entityID)
 			p.Send(boba_chat.BackendFinishedMsg{})
 		case *events.EventInterrupt:
 			intr, ok := events.ToTypedEvent[events.EventInterrupt](e)
@@ -269,20 +326,37 @@ func StepChatForwardFunc(p *tea.Program) func(msg *message.Message) error {
 				log.Error().Str("component", "step_forward").Msg("EventInterrupt type assertion failed")
 				return errors.New("payload is not of type EventInterrupt")
 			}
+			if strings.TrimSpace(intr.Text) != "" {
+				ensureAssistantEntity(entityID, md, intr.Text)
+			}
+			if !hasAssistantEntity(entityID) {
+				clearAssistantTracking(entityID)
+				p.Send(boba_chat.BackendFinishedMsg{})
+				break
+			}
 			log.Debug().Str("component", "step_forward").Str("entity_id", entityID).Int("text_len", len(intr.Text)).Msg("UIEntityCompleted (interrupt)")
 			p.Send(timeline.UIEntityCompleted{
 				ID:     timeline.EntityID{LocalID: entityID, Kind: "llm_text"},
 				Result: map[string]any{"text": intr.Text},
 			})
 			p.Send(timeline.UIEntityUpdated{ID: timeline.EntityID{LocalID: entityID, Kind: "llm_text"}, Patch: map[string]any{"streaming": false}, Version: time.Now().UnixNano(), UpdatedAt: time.Now()})
+			clearAssistantTracking(entityID)
 			p.Send(boba_chat.BackendFinishedMsg{})
 		case *events.EventError:
+			errText := "**Error**\n\n" + e_.ErrorString
+			ensureAssistantEntity(entityID, md, errText)
+			if !hasAssistantEntity(entityID) {
+				clearAssistantTracking(entityID)
+				p.Send(boba_chat.BackendFinishedMsg{})
+				break
+			}
 			log.Debug().Str("component", "step_forward").Str("entity_id", entityID).Msg("UIEntityCompleted (error)")
 			p.Send(timeline.UIEntityCompleted{
 				ID:     timeline.EntityID{LocalID: entityID, Kind: "llm_text"},
-				Result: map[string]any{"text": "**Error**\n\n" + e_.ErrorString},
+				Result: map[string]any{"text": errText},
 			})
 			p.Send(timeline.UIEntityUpdated{ID: timeline.EntityID{LocalID: entityID, Kind: "llm_text"}, Patch: map[string]any{"streaming": false}, Version: time.Now().UnixNano(), UpdatedAt: time.Now()})
+			clearAssistantTracking(entityID)
 			p.Send(boba_chat.BackendFinishedMsg{})
 			// Tool-related events can be mapped to dedicated tool_call entities if desired
 		case *events.EventInfo:
