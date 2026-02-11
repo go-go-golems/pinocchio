@@ -9,5 +9,5 @@
 - [x] Upload analysis document to reMarkable and record destination/path
 - [x] Keep detailed diary with prompt context, commands, findings, and unresolved risks
 - [x] Validate implementation with focused go tests for ui/webchat packages
-- [ ] Commit implementation and diary/changelog updates
+- [x] Commit implementation and diary/changelog updates
 - [x] Implement deferred assistant entity creation in StepChatForwardFunc (create on first assistant text)

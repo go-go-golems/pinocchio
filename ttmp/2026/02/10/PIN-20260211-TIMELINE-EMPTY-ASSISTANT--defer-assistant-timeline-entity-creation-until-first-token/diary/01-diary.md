@@ -214,7 +214,7 @@ I kept the change scoped to `cmd/pinocchio`’s forwarder path (`pkg/ui/backend.
 
 **Inferred user intent:** Move from analysis to a testable patch with minimal delay and clear documentation.
 
-**Commit (code):** pending
+**Commit (code):** 87f3da4 — "fix(ui): defer assistant timeline entity creation until first token"
 
 ### What I did
 
