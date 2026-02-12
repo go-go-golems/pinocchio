@@ -14,9 +14,9 @@ import (
 	clay "github.com/go-go-golems/clay/pkg"
 	"github.com/go-go-golems/glazed/pkg/cli"
 	"github.com/go-go-golems/glazed/pkg/cmds"
-	"github.com/go-go-golems/glazed/pkg/cmds/layers"
+	"github.com/go-go-golems/glazed/pkg/cmds/fields"
 	"github.com/go-go-golems/glazed/pkg/cmds/logging"
-	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
+	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	pinocchio_cmds "github.com/go-go-golems/pinocchio/pkg/cmds"
 	"github.com/go-go-golems/pinocchio/pkg/cmds/cmdlayers"
 	"github.com/go-go-golems/pinocchio/pkg/cmds/helpers"
@@ -45,9 +45,9 @@ type TestCommand struct {
 }
 
 type ChatCommandSettings struct {
-	PinocchioProfile string `glazed.parameter:"pinocchio-profile"`
-	Debug            bool   `glazed.parameter:"debug"`
-	ServerTools      bool   `glazed.parameter:"server-tools"`
+	PinocchioProfile string `glazed:"pinocchio-profile"`
+	Debug            bool   `glazed:"debug"`
+	ServerTools      bool   `glazed:"server-tools"`
 }
 
 // NewChatCommand wraps the GepettoCommand which was loaded from the yaml file,
@@ -61,23 +61,23 @@ func NewChatCommand(cmd *pinocchio_cmds.PinocchioCommand) (*TestCommand, error) 
 		CommandDescription: cmds.NewCommandDescription("chat",
 			cmds.WithShort("Run chat with simple streaming printer"),
 			cmds.WithFlags(
-				parameters.NewParameterDefinition("pinocchio-profile",
-					parameters.ParameterTypeString,
-					parameters.WithHelp("Pinocchio profile"),
-					parameters.WithDefault("default"),
+				fields.New("pinocchio-profile",
+					fields.TypeString,
+					fields.WithHelp("Pinocchio profile"),
+					fields.WithDefault("default"),
 				),
-				parameters.NewParameterDefinition("debug",
-					parameters.ParameterTypeBool,
-					parameters.WithHelp("Debug mode"),
-					parameters.WithDefault(false),
+				fields.New("debug",
+					fields.TypeBool,
+					fields.WithHelp("Debug mode"),
+					fields.WithDefault(false),
 				),
-				parameters.NewParameterDefinition("server-tools",
-					parameters.ParameterTypeBool,
-					parameters.WithHelp("Enable Responses server-side tools (web_search)"),
-					parameters.WithDefault(false),
+				fields.New("server-tools",
+					fields.TypeBool,
+					fields.WithHelp("Enable Responses server-side tools (web_search)"),
+					fields.WithDefault(false),
 				),
 			),
-			cmds.WithLayersList(
+			cmds.WithSections(
 				geppettoLayers...,
 			),
 		),
@@ -85,9 +85,9 @@ func NewChatCommand(cmd *pinocchio_cmds.PinocchioCommand) (*TestCommand, error) 
 	}, nil
 }
 
-func (c *TestCommand) RunIntoWriter(ctx context.Context, parsedLayers *layers.ParsedLayers, w io.Writer) error {
+func (c *TestCommand) RunIntoWriter(ctx context.Context, parsedLayers *values.Values, w io.Writer) error {
 	s := &ChatCommandSettings{}
-	err := parsedLayers.InitializeStruct(layers.DefaultSlug, s)
+	err := parsedLayers.DecodeSectionInto(values.DefaultSlug, s)
 	if err != nil {
 		return errors.Wrap(err, "failed to initialize settings")
 	}
@@ -109,7 +109,7 @@ func (c *TestCommand) RunIntoWriter(ctx context.Context, parsedLayers *layers.Pa
 
 	// Get helpers settings from parsed layers
 	helpersSettings := &cmdlayers.HelpersSettings{}
-	err = geppettoParsedLayers.InitializeStruct(cmdlayers.GeppettoHelpersSlug, helpersSettings)
+	err = geppettoParsedLayers.DecodeSectionInto(cmdlayers.GeppettoHelpersSlug, helpersSettings)
 	if err != nil {
 		return errors.Wrap(err, "failed to initialize helpers settings")
 	}
@@ -179,7 +179,7 @@ func main() {
 	err = cli.AddCommandsToRootCommand(
 		rootCmd, commands, nil,
 		cli.WithCobraMiddlewaresFunc(layers2.GetCobraCommandGeppettoMiddlewares),
-		cli.WithCobraShortHelpLayers(layers.DefaultSlug, cmdlayers.GeppettoHelpersSlug),
+		cli.WithCobraShortHelpSections(values.DefaultSlug, cmdlayers.GeppettoHelpersSlug),
 	)
 	cobra.CheckErr(err)
 
