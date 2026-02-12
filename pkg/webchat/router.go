@@ -662,7 +662,11 @@ func (r *Router) registerAPIHandlers(mux *http.ServeMux) {
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write(out)
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		// #nosec G705 -- payload is protobuf-generated JSON served as application/json.
+		if _, err := w.Write(out); err != nil {
+			logger.Warn().Err(err).Str("conv_id", convID).Msg("timeline write failed")
+		}
 	}
 	mux.HandleFunc("/timeline", timelineHandler)
 	mux.HandleFunc("/timeline/", timelineHandler)

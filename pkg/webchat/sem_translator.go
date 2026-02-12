@@ -3,6 +3,7 @@ package webchat
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"sync"
 
 	"github.com/go-go-golems/geppetto/pkg/events"
@@ -74,7 +75,7 @@ func buildLlmInferenceMetadata(md events.LLMInferenceData) *sempb.LlmInferenceMe
 		meta.TopP = md.TopP
 	}
 	if md.MaxTokens != nil {
-		v := int32(*md.MaxTokens)
+		v := clampIntToInt32(*md.MaxTokens)
 		meta.MaxTokens = &v
 	}
 	if md.StopReason != nil {
@@ -82,11 +83,11 @@ func buildLlmInferenceMetadata(md events.LLMInferenceData) *sempb.LlmInferenceMe
 	}
 	if md.Usage != nil {
 		meta.Usage = &sempb.UsageV1{
-			InputTokens:              int32(md.Usage.InputTokens),
-			OutputTokens:             int32(md.Usage.OutputTokens),
-			CachedTokens:             int32(md.Usage.CachedTokens),
-			CacheCreationInputTokens: int32(md.Usage.CacheCreationInputTokens),
-			CacheReadInputTokens:     int32(md.Usage.CacheReadInputTokens),
+			InputTokens:              clampIntToInt32(md.Usage.InputTokens),
+			OutputTokens:             clampIntToInt32(md.Usage.OutputTokens),
+			CachedTokens:             clampIntToInt32(md.Usage.CachedTokens),
+			CacheCreationInputTokens: clampIntToInt32(md.Usage.CacheCreationInputTokens),
+			CacheReadInputTokens:     clampIntToInt32(md.Usage.CacheReadInputTokens),
 		}
 	}
 	if md.DurationMs != nil {
@@ -194,6 +195,16 @@ func fallbackMessageID(md events.EventMetadata) string {
 		return "llm-" + md.SessionID
 	}
 	return "llm-" + uuid.NewString()
+}
+
+func clampIntToInt32(v int) int32 {
+	if v > math.MaxInt32 {
+		return math.MaxInt32
+	}
+	if v < math.MinInt32 {
+		return math.MinInt32
+	}
+	return int32(v)
 }
 
 func (et *EventTranslator) resolveMessageID(md events.EventMetadata) string {

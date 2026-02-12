@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"math"
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -98,6 +99,11 @@ func (s *SQLiteTimelineStore) Upsert(ctx context.Context, convID string, version
 	}
 
 	now := time.Now().UnixMilli()
+	versionI64, err := uint64ToInt64(version)
+	if err != nil {
+		return err
+	}
+
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -107,8 +113,8 @@ func (s *SQLiteTimelineStore) Upsert(ctx context.Context, convID string, version
 	var current int64
 	_ = tx.QueryRowContext(ctx, `SELECT version FROM timeline_versions WHERE conv_id = ?`, convID).Scan(&current)
 	newVersion := current
-	if version > uint64(current) {
-		newVersion = int64(version)
+	if versionI64 > current {
+		newVersion = versionI64
 	}
 
 	var existingCreated int64
@@ -146,7 +152,7 @@ func (s *SQLiteTimelineStore) Upsert(ctx context.Context, convID string, version
 		  updated_at_ms = excluded.updated_at_ms,
 		  version = excluded.version,
 		  entity_json = excluded.entity_json
-	`, convID, entity.Id, entity.Kind, createdAt, now, int64(version), string(entityJSON)); err != nil {
+	`, convID, entity.Id, entity.Kind, createdAt, now, versionI64, string(entityJSON)); err != nil {
 		return errors.Wrap(err, "sqlite timeline store: upsert entity")
 	}
 
@@ -229,9 +235,14 @@ func (s *SQLiteTimelineStore) GetSnapshot(ctx context.Context, convID string, si
 		return nil, err
 	}
 
+	versionU64, err := int64ToUint64(current)
+	if err != nil {
+		return nil, errors.Wrap(err, "sqlite timeline store: invalid snapshot version")
+	}
+
 	return &timelinepb.TimelineSnapshotV1{
 		ConvId:       convID,
-		Version:      uint64(current),
+		Version:      versionU64,
 		ServerTimeMs: time.Now().UnixMilli(),
 		Entities:     entities,
 	}, nil
@@ -243,4 +254,18 @@ func SQLiteTimelineDSNForFile(path string) (string, error) {
 	}
 	// WAL for concurrent readers + writer. busy_timeout to avoid transient SQLITE_BUSY.
 	return fmt.Sprintf("file:%s?_journal_mode=WAL&_busy_timeout=5000&_foreign_keys=on", path), nil
+}
+
+func uint64ToInt64(v uint64) (int64, error) {
+	if v > math.MaxInt64 {
+		return 0, errors.Errorf("value %d overflows int64", v)
+	}
+	return int64(v), nil
+}
+
+func int64ToUint64(v int64) (uint64, error) {
+	if v < 0 {
+		return 0, errors.Errorf("value %d cannot be represented as uint64", v)
+	}
+	return uint64(v), nil
 }

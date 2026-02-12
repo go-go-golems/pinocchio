@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"path"
 	"strings"
+	"time"
 
 	"github.com/go-go-golems/glazed/pkg/cli"
 	"github.com/go-go-golems/glazed/pkg/cmds"
@@ -17,6 +18,7 @@ import (
 	"github.com/go-go-golems/glazed/pkg/middlewares"
 	"github.com/go-go-golems/glazed/pkg/settings"
 	"github.com/go-go-golems/glazed/pkg/types"
+	"github.com/go-go-golems/pinocchio/pkg/security"
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/encoding/protojson"
 
@@ -188,7 +190,15 @@ func fetchSnapshotHTTP(ctx context.Context, baseURL, convID string, sinceVersion
 	if err != nil {
 		return nil, nil, err
 	}
-	resp, err := http.DefaultClient.Do(req)
+	if err := security.ValidateOutboundURL(u.String(), security.OutboundURLOptions{
+		AllowHTTP:          true,
+		AllowLocalNetworks: true,
+	}); err != nil {
+		return nil, nil, errors.Wrap(err, "invalid timeline endpoint URL")
+	}
+	client := &http.Client{Timeout: 30 * time.Second}
+	// #nosec G704 -- URL is validated with ValidateOutboundURL before outbound request.
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, nil, err
 	}
