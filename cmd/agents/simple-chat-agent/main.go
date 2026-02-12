@@ -30,6 +30,7 @@ import (
 	toolspkg "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/tools"
 	uipkg "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/ui"
 	eventspkg "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/xevents"
+	gcompat "github.com/go-go-golems/pinocchio/pkg/geppettocompat"
 	agentmode "github.com/go-go-golems/pinocchio/pkg/middlewares/agentmode"
 	sqlitetool "github.com/go-go-golems/pinocchio/pkg/middlewares/sqlitetool"
 	rediscfg "github.com/go-go-golems/pinocchio/pkg/redisstream"
@@ -144,6 +145,24 @@ func (c *SimpleAgentCmd) RunIntoWriter(ctx context.Context, parsed *values.Value
 	})
 	amCfg := agentmode.DefaultConfig()
 	amCfg.DefaultMode = "financial_analyst"
+<<<<<<< HEAD
+||||||| parent of 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
+	// Ensure a consistent system prompt at the start of the Turn
+	eng = middleware.NewEngineWithMiddleware(eng,
+		middleware.NewSystemPromptMiddleware("You are a financial transaction analysis assistant. Your primary role is to analyze bank transactions and extract spending categories by examining transaction descriptions and developing regular expression patterns to automatically categorize future transactions. You can use various tools to help with data analysis and pattern development."),
+		agentmode.NewMiddleware(svc, amCfg),
+		// Ensure tool_use messages are adjacent to their tool_call group before provider
+		middleware.NewToolResultReorderMiddleware(),
+	)
+=======
+	// Ensure a consistent system prompt at the start of the Turn
+	eng = gcompat.WrapEngineWithMiddlewares(eng,
+		middleware.NewSystemPromptMiddleware("You are a financial transaction analysis assistant. Your primary role is to analyze bank transactions and extract spending categories by examining transaction descriptions and developing regular expression patterns to automatically categorize future transactions. You can use various tools to help with data analysis and pattern development."),
+		agentmode.NewMiddleware(svc, amCfg),
+		// Ensure tool_use messages are adjacent to their tool_call group before provider
+		middleware.NewToolResultReorderMiddleware(),
+	)
+>>>>>>> 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
 
 	// Tools: calculator + generative UI (integrated)
 	registry := tools.NewInMemoryToolRegistry()
@@ -171,20 +190,51 @@ func (c *SimpleAgentCmd) RunIntoWriter(ctx context.Context, parsed *values.Value
 
 	// Add RW SQLite tool middleware with REGEXP
 	dbWithRegexp, _ := sqlite_regexp.OpenWithRegexp("anonymized-data.db")
+<<<<<<< HEAD
+||||||| parent of 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
+	eng = middleware.NewEngineWithMiddleware(eng,
+		sqlitetool.NewMiddleware(sqlitetool.Config{DB: dbWithRegexp, MaxRows: 500}),
+	)
+=======
+	eng = gcompat.WrapEngineWithMiddlewares(eng,
+		sqlitetool.NewMiddleware(sqlitetool.Config{DB: dbWithRegexp, MaxRows: 500}),
+	)
+>>>>>>> 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
 
+<<<<<<< HEAD
 	mws := []middleware.Middleware{
 		// Stable IDs
+||||||| parent of 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
+	// Stable IDs + snapshot pre/post middleware
+	wrappedEng := middleware.NewEngineWithMiddleware(eng,
+=======
+	// Stable IDs + snapshot pre/post middleware
+	wrappedEng := gcompat.WrapEngineWithMiddlewares(eng,
+>>>>>>> 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
 		func(next middleware.HandlerFunc) middleware.HandlerFunc {
 			return func(ctx context.Context, t *turns.Turn) (*turns.Turn, error) {
 				if t == nil {
 					t = &turns.Turn{}
 				}
+<<<<<<< HEAD
 				if _, ok, err := turns.KeyTurnMetaSessionID.Get(t.Metadata); err != nil || !ok {
 					_ = turns.KeyTurnMetaSessionID.Set(&t.Metadata, sessionID)
 				}
 				if t.ID == "" {
 					t.ID = uuid.NewString()
 				}
+||||||| parent of 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
+				if t.RunID == "" {
+					t.RunID = sessionRunID
+				}
+				if t.ID == "" {
+					t.ID = uuid.NewString()
+				}
+=======
+				gcompat.EnsureTurnSessionID(t, sessionRunID)
+				gcompat.EnsureTurnInferenceID(t, "")
+				gcompat.EnsureTurnID(t)
+>>>>>>> 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
 				return next(ctx, t)
 			}
 		},

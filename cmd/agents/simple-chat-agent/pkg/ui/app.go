@@ -9,6 +9,7 @@ import (
 	"github.com/go-go-golems/bobatea/pkg/repl"
 	"github.com/go-go-golems/geppetto/pkg/events"
 	toolspkg "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/tools"
+	gcompat "github.com/go-go-golems/pinocchio/pkg/geppettocompat"
 	uhohdsl "github.com/go-go-golems/uhoh/pkg"
 	"github.com/rs/zerolog/log"
 	"strings"
@@ -153,8 +154,16 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case *events.EventPartialCompletionStart:
 		// Extract run/turn from event metadata
 		meta := ev.Metadata()
+<<<<<<< HEAD
 		if meta.SessionID != "" {
 			m.runID = meta.SessionID
+||||||| parent of 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
+		if meta.RunID != "" {
+			m.runID = meta.RunID
+=======
+		if runID := gcompat.EventSessionID(meta); runID != "" {
+			m.runID = runID
+>>>>>>> 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
 		}
 		if meta.TurnID != "" {
 			m.turnID = meta.TurnID

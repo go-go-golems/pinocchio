@@ -105,11 +105,18 @@ func NewMiddleware(cfg Config) rootmw.Middleware {
 			if t == nil {
 				return next(ctx, t)
 			}
+<<<<<<< HEAD
 			sessionID := ""
 			if sid, ok, err := turns.KeyTurnMetaSessionID.Get(t.Metadata); err == nil && ok {
 				sessionID = sid
 			}
 			log.Debug().Str("session_id", sessionID).Str("turn_id", t.ID).Msg("sqlitetool: middleware start")
+||||||| parent of 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
+			log.Debug().Str("run_id", t.RunID).Str("turn_id", t.ID).Msg("sqlitetool: middleware start")
+=======
+			runID, _, _ := turns.KeyTurnMetaSessionID.Get(t.Metadata)
+			log.Debug().Str("run_id", runID).Str("turn_id", t.ID).Msg("sqlitetool: middleware start")
+>>>>>>> 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
 
 			// Determine if the tool should be available for this turn; check DSN presence
 			dsn := cfg.DSN
@@ -200,11 +207,18 @@ func NewMiddleware(cfg Config) rootmw.Middleware {
 				return updated, err
 			}
 			// Do not execute tools here; rely on standard tool loop so a new inference is triggered after results
+<<<<<<< HEAD
 			updatedSessionID := sessionID
 			if sid, ok, err := turns.KeyTurnMetaSessionID.Get(updated.Metadata); err == nil && ok {
 				updatedSessionID = sid
 			}
 			log.Debug().Str("session_id", updatedSessionID).Str("turn_id", updated.ID).Msg("sqlitetool: middleware end (no inline exec)")
+||||||| parent of 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
+			log.Debug().Str("run_id", updated.RunID).Str("turn_id", updated.ID).Msg("sqlitetool: middleware end (no inline exec)")
+=======
+			updatedRunID, _, _ := turns.KeyTurnMetaSessionID.Get(updated.Metadata)
+			log.Debug().Str("run_id", updatedRunID).Str("turn_id", updated.ID).Msg("sqlitetool: middleware end (no inline exec)")
+>>>>>>> 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
 			return updated, nil
 		}
 	}

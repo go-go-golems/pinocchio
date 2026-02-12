@@ -11,6 +11,7 @@ import (
 	rootmw "github.com/go-go-golems/geppetto/pkg/inference/middleware"
 	"github.com/go-go-golems/geppetto/pkg/steps/parse"
 	"github.com/go-go-golems/geppetto/pkg/turns"
+	gcompat "github.com/go-go-golems/pinocchio/pkg/geppettocompat"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
@@ -77,8 +78,15 @@ func NewMiddleware(svc Service, cfg Config) rootmw.Middleware {
 				return next(ctx, t)
 			}
 
+<<<<<<< HEAD
 			sessionID := sessionIDFromTurn(t)
 			log.Debug().Str("session_id", sessionID).Str("turn_id", t.ID).Msg("agentmode: middleware start")
+||||||| parent of 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
+			log.Debug().Str("run_id", t.RunID).Str("turn_id", t.ID).Msg("agentmode: middleware start")
+=======
+			runID := gcompat.TurnSessionID(t)
+			log.Debug().Str("run_id", runID).Str("turn_id", t.ID).Msg("agentmode: middleware start")
+>>>>>>> 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
 
 			// Determine current mode: from Turn.Data or Store fallback
 			modeName, ok, err := turns.KeyAgentMode.Get(t.Data)
@@ -88,8 +96,16 @@ func NewMiddleware(svc Service, cfg Config) rootmw.Middleware {
 			if !ok {
 				modeName = ""
 			}
+<<<<<<< HEAD
 			if modeName == "" && svc != nil && sessionID != "" {
 				if m, err := svc.GetCurrentMode(ctx, sessionID); err == nil && m != "" {
+||||||| parent of 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
+			if modeName == "" && svc != nil && t.RunID != "" {
+				if m, err := svc.GetCurrentMode(ctx, t.RunID); err == nil && m != "" {
+=======
+			if modeName == "" && svc != nil && runID != "" {
+				if m, err := svc.GetCurrentMode(ctx, runID); err == nil && m != "" {
+>>>>>>> 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
 					modeName = m
 				}
 			}
@@ -165,10 +181,28 @@ func NewMiddleware(svc Service, cfg Config) rootmw.Middleware {
 					} else {
 						t.Blocks = append(t.Blocks[:before], append([]turns.Block{usr}, t.Blocks[before:]...)...)
 					}
+<<<<<<< HEAD
 					log.Debug().Str("session_id", sessionID).Str("turn_id", t.ID).Int("insert_pos", before).Str("preview", prev).Msg("agentmode: inserted user prompt block")
+||||||| parent of 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
+					log.Debug().Str("run_id", t.RunID).Str("turn_id", t.ID).Int("insert_pos", before).Str("preview", prev).Msg("agentmode: inserted user prompt block")
+=======
+					log.Debug().Str("run_id", runID).Str("turn_id", t.ID).Int("insert_pos", before).Str("preview", prev).Msg("agentmode: inserted user prompt block")
+>>>>>>> 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
 					// Log insertion
 					events.PublishEventToContext(ctx, events.NewLogEvent(
+<<<<<<< HEAD
 						events.EventMetadata{ID: uuid.New(), SessionID: sessionID, TurnID: t.ID}, "info",
+||||||| parent of 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
+						events.EventMetadata{ID: uuid.New(), RunID: t.RunID, TurnID: t.ID}, "info",
+=======
+						events.EventMetadata{
+							ID:          uuid.New(),
+							SessionID:   runID,
+							InferenceID: gcompat.TurnInferenceID(t),
+							TurnID:      t.ID,
+						},
+						"info",
+>>>>>>> 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
 						"agentmode: user prompt inserted",
 						map[string]any{"mode": mode.Name},
 					))
@@ -196,9 +230,22 @@ func NewMiddleware(svc Service, cfg Config) rootmw.Middleware {
 			addedBlocks := rootmw.NewBlocksNotIn(res, baselineIDs)
 			newMode, analysis := DetectYamlModeSwitchInBlocks(addedBlocks)
 			log.Debug().Str("new_mode", newMode).Str("analysis", analysis).Msg("agentmode: detected mode switch via YAML")
+			resRunID := gcompat.TurnSessionID(res)
+			resInferenceID := gcompat.TurnInferenceID(res)
 			// Emit analysis event even when not switching (allocate a message_id)
 			if strings.TrimSpace(analysis) != "" && newMode == "" {
+<<<<<<< HEAD
 				publishAgentModeSwitchEvent(ctx, events.EventMetadata{ID: uuid.New(), SessionID: resSessionID, TurnID: res.ID}, modeName, modeName, analysis)
+||||||| parent of 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
+				publishAgentModeSwitchEvent(ctx, events.EventMetadata{ID: uuid.New(), RunID: res.RunID, TurnID: res.ID}, modeName, modeName, analysis)
+=======
+				publishAgentModeSwitchEvent(ctx, events.EventMetadata{
+					ID:          uuid.New(),
+					SessionID:   resRunID,
+					InferenceID: resInferenceID,
+					TurnID:      res.ID,
+				}, modeName, modeName, analysis)
+>>>>>>> 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
 			}
 			if newMode != "" && newMode != modeName {
 				log.Debug().Str("from", modeName).Str("to", newMode).Msg("agentmode: detected mode switch via YAML")
@@ -208,13 +255,43 @@ func NewMiddleware(svc Service, cfg Config) rootmw.Middleware {
 				}
 				// Record change
 				if svc != nil {
+<<<<<<< HEAD
 					_ = svc.RecordModeChange(ctx, ModeChange{SessionID: resSessionID, TurnID: res.ID, FromMode: modeName, ToMode: newMode, Analysis: analysis, At: time.Now()})
+||||||| parent of 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
+					_ = svc.RecordModeChange(ctx, ModeChange{RunID: res.RunID, TurnID: res.ID, FromMode: modeName, ToMode: newMode, Analysis: analysis, At: time.Now()})
+=======
+					_ = svc.RecordModeChange(ctx, ModeChange{
+						RunID:    resRunID,
+						TurnID:   res.ID,
+						FromMode: modeName,
+						ToMode:   newMode,
+						Analysis: analysis,
+						At:       time.Now(),
+					})
+>>>>>>> 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
 				}
 				// Announce: append system message and emit custom agent-mode event with analysis
 				turns.AppendBlock(res, turns.NewSystemTextBlock(fmt.Sprintf("[agent-mode] switched to %s", newMode)))
+<<<<<<< HEAD
 				publishAgentModeSwitchEvent(ctx, events.EventMetadata{ID: uuid.New(), SessionID: resSessionID, TurnID: res.ID}, modeName, newMode, analysis)
+||||||| parent of 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
+				publishAgentModeSwitchEvent(ctx, events.EventMetadata{ID: uuid.New(), RunID: res.RunID, TurnID: res.ID}, modeName, newMode, analysis)
+=======
+				publishAgentModeSwitchEvent(ctx, events.EventMetadata{
+					ID:          uuid.New(),
+					SessionID:   resRunID,
+					InferenceID: resInferenceID,
+					TurnID:      res.ID,
+				}, modeName, newMode, analysis)
+>>>>>>> 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
 			}
+<<<<<<< HEAD
 			log.Debug().Str("session_id", resSessionID).Str("turn_id", res.ID).Msg("agentmode: middleware end")
+||||||| parent of 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
+			log.Debug().Str("run_id", res.RunID).Str("turn_id", res.ID).Msg("agentmode: middleware end")
+=======
+			log.Debug().Str("run_id", resRunID).Str("turn_id", res.ID).Msg("agentmode: middleware end")
+>>>>>>> 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
 			return res, nil
 		}
 	}
