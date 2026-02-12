@@ -4,145 +4,145 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/go-go-golems/glazed/pkg/cmds/layers"
-	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
+	"github.com/go-go-golems/glazed/pkg/cmds/fields"
+	"github.com/go-go-golems/glazed/pkg/cmds/schema"
 )
 
 type AutosaveSettings struct {
-	Path     string `glazed.parameter:"path"`
-	Template string `glazed.parameter:"template"`
-	Enabled  string `glazed.parameter:"enabled"`
+	Path     string `glazed:"path"`
+	Template string `glazed:"template"`
+	Enabled  string `glazed:"enabled"`
 }
 
 type HelpersSettings struct {
-	PrintPrompt       bool                   `glazed.parameter:"print-prompt"`
-	System            string                 `glazed.parameter:"system"`
-	AppendMessageFile string                 `glazed.parameter:"append-message-file"`
-	MessageFile       string                 `glazed.parameter:"message-file"`
-	StartInChat       bool                   `glazed.parameter:"chat"`
-	Interactive       bool                   `glazed.parameter:"interactive"`
-	ForceInteractive  bool                   `glazed.parameter:"force-interactive"`
-	TimelineDSN       string                 `glazed.parameter:"timeline-dsn"`
-	TimelineDB        string                 `glazed.parameter:"timeline-db"`
-	TurnsDSN          string                 `glazed.parameter:"turns-dsn"`
-	TurnsDB           string                 `glazed.parameter:"turns-db"`
-	Images            []*parameters.FileData `glazed.parameter:"images"`
-	Autosave          *AutosaveSettings      `glazed.parameter:"autosave,from_json"`
-	NonInteractive    bool                   `glazed.parameter:"non-interactive"`
-	Output            string                 `glazed.parameter:"output"`
-	WithMetadata      bool                   `glazed.parameter:"with-metadata"`
-	FullOutput        bool                   `glazed.parameter:"full-output"`
+	PrintPrompt       bool               `glazed:"print-prompt"`
+	System            string             `glazed:"system"`
+	AppendMessageFile string             `glazed:"append-message-file"`
+	MessageFile       string             `glazed:"message-file"`
+	StartInChat       bool               `glazed:"chat"`
+	Interactive       bool               `glazed:"interactive"`
+	ForceInteractive  bool               `glazed:"force-interactive"`
+	TimelineDSN       string             `glazed:"timeline-dsn"`
+	TimelineDB        string             `glazed:"timeline-db"`
+	TurnsDSN          string             `glazed:"turns-dsn"`
+	TurnsDB           string             `glazed:"turns-db"`
+	Images            []*fields.FileData `glazed:"images"`
+	Autosave          *AutosaveSettings  `glazed:"autosave,from_json"`
+	NonInteractive    bool               `glazed:"non-interactive"`
+	Output            string             `glazed:"output"`
+	WithMetadata      bool               `glazed:"with-metadata"`
+	FullOutput        bool               `glazed:"full-output"`
 }
 
 const GeppettoHelpersSlug = "geppetto-helpers"
 
-func NewHelpersParameterLayer() (layers.ParameterLayer, error) {
+func NewHelpersParameterLayer() (schema.Section, error) {
 	defaultHistoryPath := filepath.Join(os.Getenv("HOME"), ".pinocchio", "history")
 
-	return layers.NewParameterLayer(GeppettoHelpersSlug, "Geppetto helpers",
-		layers.WithParameterDefinitions(
-			parameters.NewParameterDefinition(
+	return schema.NewSection(GeppettoHelpersSlug, "Geppetto helpers",
+		schema.WithFields(
+			fields.New(
 				"print-prompt",
-				parameters.ParameterTypeBool,
-				parameters.WithDefault(false),
-				parameters.WithHelp("Print the prompt"),
+				fields.TypeBool,
+				fields.WithDefault(false),
+				fields.WithHelp("Print the prompt"),
 			),
-			parameters.NewParameterDefinition(
+			fields.New(
 				"system",
-				parameters.ParameterTypeString,
-				parameters.WithHelp("System message"),
+				fields.TypeString,
+				fields.WithHelp("System message"),
 			),
-			parameters.NewParameterDefinition(
+			fields.New(
 				"append-message-file",
-				parameters.ParameterTypeString,
-				parameters.WithHelp("File containing messages (json or yaml, list of objects with fields text, time, role) to be appended to the already present list of messages"),
+				fields.TypeString,
+				fields.WithHelp("File containing messages (json or yaml, list of objects with fields text, time, role) to be appended to the already present list of messages"),
 			),
-			parameters.NewParameterDefinition(
+			fields.New(
 				"message-file",
-				parameters.ParameterTypeString,
-				parameters.WithHelp("File containing messages (json or yaml, list of objects with fields text, time, role)"),
+				fields.TypeString,
+				fields.WithHelp("File containing messages (json or yaml, list of objects with fields text, time, role)"),
 			),
-			parameters.NewParameterDefinition(
+			fields.New(
 				"interactive",
-				parameters.ParameterTypeBool,
-				parameters.WithHelp("Ask for chat continuation after inference"),
-				parameters.WithDefault(true),
+				fields.TypeBool,
+				fields.WithHelp("Ask for chat continuation after inference"),
+				fields.WithDefault(true),
 			),
-			parameters.NewParameterDefinition(
+			fields.New(
 				"chat",
-				parameters.ParameterTypeBool,
-				parameters.WithHelp("Start in chat mode"),
-				parameters.WithDefault(false),
+				fields.TypeBool,
+				fields.WithHelp("Start in chat mode"),
+				fields.WithDefault(false),
 			),
-			parameters.NewParameterDefinition(
+			fields.New(
 				"force-interactive",
-				parameters.ParameterTypeBool,
-				parameters.WithHelp("Always enter interactive mode, even with non-tty stdout"),
-				parameters.WithDefault(false),
+				fields.TypeBool,
+				fields.WithHelp("Always enter interactive mode, even with non-tty stdout"),
+				fields.WithDefault(false),
 			),
-			parameters.NewParameterDefinition(
+			fields.New(
 				"timeline-dsn",
-				parameters.ParameterTypeString,
-				parameters.WithDefault(""),
-				parameters.WithHelp("SQLite DSN for durable timeline snapshots (preferred over timeline-db)"),
+				fields.TypeString,
+				fields.WithDefault(""),
+				fields.WithHelp("SQLite DSN for durable timeline snapshots (preferred over timeline-db)"),
 			),
-			parameters.NewParameterDefinition(
+			fields.New(
 				"timeline-db",
-				parameters.ParameterTypeString,
-				parameters.WithDefault(""),
-				parameters.WithHelp("SQLite DB file path for durable timeline snapshots (DSN derived with WAL/busy_timeout)"),
+				fields.TypeString,
+				fields.WithDefault(""),
+				fields.WithHelp("SQLite DB file path for durable timeline snapshots (DSN derived with WAL/busy_timeout)"),
 			),
-			parameters.NewParameterDefinition(
+			fields.New(
 				"turns-dsn",
-				parameters.ParameterTypeString,
-				parameters.WithDefault(""),
-				parameters.WithHelp("SQLite DSN for durable turn snapshots (preferred over turns-db)"),
+				fields.TypeString,
+				fields.WithDefault(""),
+				fields.WithHelp("SQLite DSN for durable turn snapshots (preferred over turns-db)"),
 			),
-			parameters.NewParameterDefinition(
+			fields.New(
 				"turns-db",
-				parameters.ParameterTypeString,
-				parameters.WithDefault(""),
-				parameters.WithHelp("SQLite DB file path for durable turn snapshots (DSN derived with WAL/busy_timeout)"),
+				fields.TypeString,
+				fields.WithDefault(""),
+				fields.WithHelp("SQLite DB file path for durable turn snapshots (DSN derived with WAL/busy_timeout)"),
 			),
-			parameters.NewParameterDefinition(
+			fields.New(
 				"images",
-				parameters.ParameterTypeFileList,
-				parameters.WithHelp("Images to display"),
+				fields.TypeFileList,
+				fields.WithHelp("Images to display"),
 			),
-			parameters.NewParameterDefinition(
+			fields.New(
 				"autosave",
-				parameters.ParameterTypeKeyValue,
-				parameters.WithHelp("Autosave configuration"),
-				parameters.WithDefault(map[string]interface{}{
+				fields.TypeKeyValue,
+				fields.WithHelp("Autosave configuration"),
+				fields.WithDefault(map[string]interface{}{
 					"path":     defaultHistoryPath,
 					"template": "",
 					"enabled":  "no",
 				}),
 			),
-			parameters.NewParameterDefinition(
+			fields.New(
 				"non-interactive",
-				parameters.ParameterTypeBool,
-				parameters.WithHelp("Skip interactive chat mode entirely"),
-				parameters.WithDefault(false),
+				fields.TypeBool,
+				fields.WithHelp("Skip interactive chat mode entirely"),
+				fields.WithDefault(false),
 			),
-			parameters.NewParameterDefinition(
+			fields.New(
 				"output",
-				parameters.ParameterTypeChoice,
-				parameters.WithHelp("Output format (text, json, yaml)"),
-				parameters.WithDefault("text"),
-				parameters.WithChoices("text", "json", "yaml"),
+				fields.TypeChoice,
+				fields.WithHelp("Output format (text, json, yaml)"),
+				fields.WithDefault("text"),
+				fields.WithChoices("text", "json", "yaml"),
 			),
-			parameters.NewParameterDefinition(
+			fields.New(
 				"with-metadata",
-				parameters.ParameterTypeBool,
-				parameters.WithHelp("Include event metadata in output"),
-				parameters.WithDefault(false),
+				fields.TypeBool,
+				fields.WithHelp("Include event metadata in output"),
+				fields.WithDefault(false),
 			),
-			parameters.NewParameterDefinition(
+			fields.New(
 				"full-output",
-				parameters.ParameterTypeBool,
-				parameters.WithHelp("Print all available metadata in output"),
-				parameters.WithDefault(false),
+				fields.TypeBool,
+				fields.WithHelp("Print all available metadata in output"),
+				fields.WithDefault(false),
 			),
 		),
 	)
