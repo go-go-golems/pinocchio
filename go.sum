@@ -189,8 +189,6 @@ github.com/go-go-golems/glazed v0.7.14 h1:esm8sl2xfhthBZ+P87i+tJobkZMAL3+IKULRPS
 github.com/go-go-golems/glazed v0.7.14/go.mod h1:FsJvSjq+gh2cn5todidMF9BYlPWWt5AjUdnUfoP6hcY=
 github.com/go-go-golems/go-sqlite-regexp v0.0.1 h1:EX5c+9YXEiXjTlR2187kYVfPFwOOLFyADJrNrZFnK+I=
 github.com/go-go-golems/go-sqlite-regexp v0.0.1/go.mod h1:hq4dRsHIPcPy7sHevG9vh/mf6T5/BiWwcsRll+n4PzA=
-github.com/go-go-golems/prompto v0.1.13 h1:6nAaxxyoe3MBa68TybkeiJETdOT1D+7wWo/HDaarz7Q=
-github.com/go-go-golems/prompto v0.1.13/go.mod h1:nsGdB/RitW95jbUlOiTVHYfoRLdqGUl+18ukGQn0t3I=
 github.com/go-go-golems/uhoh v0.0.5 h1:udrvNPiRNulREtZMCRPWe7rnRWxB5P3NwTIXmXF8Ye4=
 github.com/go-go-golems/uhoh v0.0.5/go.mod h1:6/1kZngxZc6eX3egmZyeFeq3c9FsteBQyWD4T/in9SU=
 github.com/go-logfmt/logfmt v0.6.0 h1:wGYYu3uicYdqXVgoYbvnkrPVXkuLM1p1ifugDMEdRi4=

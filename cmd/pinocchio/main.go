@@ -20,7 +20,6 @@ import (
 	"github.com/go-go-golems/pinocchio/cmd/pinocchio/cmds/helpers"
 	"github.com/go-go-golems/pinocchio/cmd/pinocchio/cmds/kagi"
 	"github.com/go-go-golems/pinocchio/cmd/pinocchio/cmds/openai"
-	"github.com/go-go-golems/pinocchio/cmd/pinocchio/cmds/prompto"
 	"github.com/go-go-golems/pinocchio/cmd/pinocchio/cmds/temporizer"
 	"github.com/go-go-golems/pinocchio/cmd/pinocchio/cmds/tokens"
 	pinocchio_docs "github.com/go-go-golems/pinocchio/cmd/pinocchio/doc"
@@ -256,12 +255,6 @@ func initAllCommands(helpSystem *help.HelpSystem) error {
 	rootCmd.AddCommand(clay_repositories.NewRepositoriesGroupCommand())
 
 	catter.AddToRootCommand(rootCmd)
-
-	promptoCommand, err := prompto.InitPromptoCmd(helpSystem)
-	if err != nil {
-		return err
-	}
-	rootCmd.AddCommand(promptoCommand)
 
 	clipCommand, err := pinocchio_cmds.NewClipCommand()
 	if err != nil {
