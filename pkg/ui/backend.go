@@ -23,7 +23,6 @@ import (
 
 // EngineBackend provides a Backend implementation using the Engine-first architecture.
 type EngineBackend struct {
-<<<<<<< HEAD
 	engine  engine.Engine
 	builder *enginebuilder.Builder
 
@@ -34,31 +33,10 @@ type EngineBackend struct {
 
 	emittedMu sync.Mutex
 	emitted   map[string]struct{}
-||||||| parent of 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
-	engine    engine.Engine
-	isRunning bool
-	cancel    context.CancelFunc
-	historyMu sync.RWMutex
-	history   []*turns.Turn
-	program   *tea.Program
-	emittedMu sync.Mutex
-	emitted   map[string]struct{}
-=======
-	engine     engine.Engine
-	eventSinks []events.EventSink
-	isRunning  bool
-	cancel     context.CancelFunc
-	historyMu  sync.RWMutex
-	history    []*turns.Turn
-	program    *tea.Program
-	emittedMu  sync.Mutex
-	emitted    map[string]struct{}
->>>>>>> 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
 }
 
 var _ boba_chat.Backend = &EngineBackend{}
 
-<<<<<<< HEAD
 // NewEngineBackend creates a new EngineBackend with the given engine and event sink.
 // The eventSink is used to publish events during inference for UI updates.
 func NewEngineBackend(engine engine.Engine, sinks ...events.EventSink) *EngineBackend {
@@ -68,30 +46,11 @@ func NewEngineBackend(engine engine.Engine, sinks ...events.EventSink) *EngineBa
 	}
 	sess := session.NewSession()
 	sess.Builder = builder
-||||||| parent of 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
-// NewEngineBackend creates a new EngineBackend with the given engine and event sink.
-// The eventSink is used to publish events during inference for UI updates.
-func NewEngineBackend(engine engine.Engine) *EngineBackend {
-=======
-// NewEngineBackend creates a new EngineBackend with the given engine and optional event sinks.
-func NewEngineBackend(engine engine.Engine, eventSinks ...events.EventSink) *EngineBackend {
->>>>>>> 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
 	return &EngineBackend{
-<<<<<<< HEAD
 		engine:  engine,
 		builder: builder,
 		sess:    sess,
 		emitted: make(map[string]struct{}),
-||||||| parent of 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
-		engine:    engine,
-		isRunning: false,
-		emitted:   make(map[string]struct{}),
-=======
-		engine:     engine,
-		eventSinks: eventSinks,
-		isRunning:  false,
-		emitted:    make(map[string]struct{}),
->>>>>>> 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
 	}
 }
 
@@ -155,47 +114,7 @@ func (e *EngineBackend) Start(ctx context.Context, prompt string) (tea.Cmd, erro
 	}
 
 	return func() tea.Msg {
-<<<<<<< HEAD
 		updated, err := handle.Wait()
-||||||| parent of 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
-		if !e.isRunning {
-			return nil
-		}
-
-		log.Debug().Str("component", "engine_backend").Msg("Reducing history, appending user block, running inference")
-		// Reduce history into a seed Turn, append user Block, then run inference
-		seed := e.reduceHistory()
-		if prompt != "" {
-			turns.AppendBlock(seed, turns.NewUserTextBlock(prompt))
-		}
-		updated, err := engine.RunInference(ctx, seed)
-
-		// Mark as finished
-		e.isRunning = false
-		e.cancel = nil
-
-=======
-		if !e.isRunning {
-			return nil
-		}
-
-		log.Debug().Str("component", "engine_backend").Msg("Reducing history, appending user block, running inference")
-		// Reduce history into a seed Turn, append user Block, then run inference
-		seed := e.reduceHistory()
-		if prompt != "" {
-			turns.AppendBlock(seed, turns.NewUserTextBlock(prompt))
-		}
-		runCtx := ctx
-		if len(e.eventSinks) > 0 {
-			runCtx = events.WithEventSinks(runCtx, e.eventSinks...)
-		}
-		updated, err := engine.RunInference(runCtx, seed)
-
-		// Mark as finished
-		e.isRunning = false
-		e.cancel = nil
-
->>>>>>> 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
 		if err != nil {
 			log.Error().Err(err).Msg("Engine inference failed")
 			log.Error().Err(err).Str("component", "engine_backend").Msg("RunInference failed")

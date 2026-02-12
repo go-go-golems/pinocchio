@@ -10,13 +10,7 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/turns"
 )
 
-<<<<<<< HEAD
 // ToolCallingLoop wraps geppetto's tool loop.
-||||||| parent of 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
-// ToolCallingLoop wraps geppetto's toolhelpers.RunToolCallingLoop.
-=======
-// ToolCallingLoop wraps geppetto's toolloop.Loop.
->>>>>>> 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
 func ToolCallingLoop(ctx context.Context, eng engine.Engine, t *turns.Turn, reg geptools.ToolRegistry, opts map[string]any) (*turns.Turn, error) {
 	loopCfg := toolloop.NewLoopConfig().WithMaxIterations(5)
 	toolCfg := geptools.DefaultToolConfig().WithExecutionTimeout(60 * time.Second)

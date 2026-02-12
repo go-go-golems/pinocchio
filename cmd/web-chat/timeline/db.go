@@ -3,7 +3,7 @@ package timeline
 import (
 	"database/sql"
 
-	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
+	"github.com/go-go-golems/glazed/pkg/cmds/fields"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/pkg/errors"
 
@@ -11,23 +11,23 @@ import (
 )
 
 type StoreSettings struct {
-	TimelineDSN string `glazed.parameter:"timeline-dsn"`
-	TimelineDB  string `glazed.parameter:"timeline-db"`
+	TimelineDSN string `glazed:"timeline-dsn"`
+	TimelineDB  string `glazed:"timeline-db"`
 }
 
-func timelineStoreFlagDefs() []*parameters.ParameterDefinition {
-	return []*parameters.ParameterDefinition{
-		parameters.NewParameterDefinition(
+func timelineStoreFlagDefs() []*fields.Definition {
+	return []*fields.Definition{
+		fields.New(
 			"timeline-dsn",
-			parameters.ParameterTypeString,
-			parameters.WithDefault(""),
-			parameters.WithHelp("SQLite DSN for durable timeline snapshots (preferred over timeline-db)"),
+			fields.TypeString,
+			fields.WithDefault(""),
+			fields.WithHelp("SQLite DSN for durable timeline snapshots (preferred over timeline-db)"),
 		),
-		parameters.NewParameterDefinition(
+		fields.New(
 			"timeline-db",
-			parameters.ParameterTypeString,
-			parameters.WithDefault(""),
-			parameters.WithHelp("SQLite DB file path for durable timeline snapshots (DSN derived with WAL/busy_timeout)"),
+			fields.TypeString,
+			fields.WithDefault(""),
+			fields.WithHelp("SQLite DB file path for durable timeline snapshots (DSN derived with WAL/busy_timeout)"),
 		),
 	}
 }

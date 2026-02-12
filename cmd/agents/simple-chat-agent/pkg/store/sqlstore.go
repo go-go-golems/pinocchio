@@ -91,7 +91,6 @@ func (s *SQLiteStore) SaveTurnSnapshot(ctx context.Context, t *turns.Turn, phase
 	if t == nil {
 		return nil
 	}
-<<<<<<< HEAD
 	sessionID := ""
 	if sid, ok, err := turns.KeyTurnMetaSessionID.Get(t.Metadata); err == nil && ok {
 		sessionID = sid
@@ -103,40 +102,15 @@ func (s *SQLiteStore) SaveTurnSnapshot(ctx context.Context, t *turns.Turn, phase
 	inferenceID := ""
 	if iid, ok, err := turns.KeyTurnMetaInferenceID.Get(t.Metadata); err == nil && ok {
 		inferenceID = iid
-||||||| parent of 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
-	if t.RunID == "" {
-		t.RunID = uuid.NewString()
-=======
-	runID := turnSessionID(t)
-	if runID == "" {
-		runID = uuid.NewString()
-		_ = turns.KeyTurnMetaSessionID.Set(&t.Metadata, runID)
->>>>>>> 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
 	}
 	if t.ID == "" {
 		t.ID = uuid.NewString()
 	}
-<<<<<<< HEAD
 	if err := s.EnsureSession(ctx, sessionID, convertTurnMetadataToMap(t.Metadata)); err != nil {
 		log.Warn().Err(err).Str("session_id", sessionID).Msg("EnsureSession failed")
-||||||| parent of 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
-	if err := s.EnsureRun(ctx, t.RunID, convertTurnMetadataToMap(t.Metadata)); err != nil {
-		log.Warn().Err(err).Str("run_id", t.RunID).Msg("EnsureRun failed")
-=======
-	if err := s.EnsureRun(ctx, runID, convertTurnMetadataToMap(t.Metadata)); err != nil {
-		log.Warn().Err(err).Str("run_id", runID).Msg("EnsureRun failed")
->>>>>>> 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
 	}
-<<<<<<< HEAD
 	if err := s.EnsureTurn(ctx, sessionID, t.ID, convertTurnMetadataToMap(t.Metadata)); err != nil {
 		log.Warn().Err(err).Str("session_id", sessionID).Str("turn_id", t.ID).Msg("EnsureTurn failed")
-||||||| parent of 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
-	if err := s.EnsureTurn(ctx, t.RunID, t.ID, convertTurnMetadataToMap(t.Metadata)); err != nil {
-		log.Warn().Err(err).Str("turn_id", t.ID).Msg("EnsureTurn failed")
-=======
-	if err := s.EnsureTurn(ctx, runID, t.ID, convertTurnMetadataToMap(t.Metadata)); err != nil {
-		log.Warn().Err(err).Str("turn_id", t.ID).Msg("EnsureTurn failed")
->>>>>>> 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
 	}
 	// Serialize turn as JSON
 	type block struct {
@@ -155,38 +129,18 @@ func (s *SQLiteStore) SaveTurnSnapshot(ctx context.Context, t *turns.Turn, phase
 		Data        map[string]interface{} `json:"data,omitempty"`
 		Blocks      []block                `json:"blocks"`
 	}{
-<<<<<<< HEAD
 		SessionID:   sessionID,
 		InferenceID: inferenceID,
 		TurnID:      t.ID,
 		Metadata:    convertTurnMetadataToMap(t.Metadata),
 		Data:        convertTurnDataToMap(t.Data),
 		Blocks:      make([]block, 0, len(t.Blocks)),
-||||||| parent of 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
-		RunID:    t.RunID,
-		TurnID:   t.ID,
-		Metadata: convertTurnMetadataToMap(t.Metadata),
-		Data:     convertTurnDataToMap(t.Data),
-		Blocks:   make([]block, 0, len(t.Blocks)),
-=======
-		RunID:    runID,
-		TurnID:   t.ID,
-		Metadata: convertTurnMetadataToMap(t.Metadata),
-		Data:     convertTurnDataToMap(t.Data),
-		Blocks:   make([]block, 0, len(t.Blocks)),
->>>>>>> 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
 	}
 	for i, b := range t.Blocks {
 		bid := b.ID
 		if bid == "" {
 			log.Warn().
-<<<<<<< HEAD
 				Str("session_id", sessionID).
-||||||| parent of 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
-				Str("run_id", t.RunID).
-=======
-				Str("run_id", runID).
->>>>>>> 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
 				Str("turn_id", t.ID).
 				Int("index", i).
 				Int("kind", int(b.Kind)).
@@ -228,14 +182,8 @@ func (s *SQLiteStore) SaveTurnSnapshot(ctx context.Context, t *turns.Turn, phase
 		if b, err := json.Marshal(defs); err == nil {
 			_, _ = s.db.ExecContext(ctx, "INSERT OR REPLACE INTO turn_kv(turn_id, section, key, type, value_text, value_json) VALUES(?,?,?,?,?,?)", t.ID, "data", "tool_registry", "object", "", string(b))
 			// Also record a registry snapshot row for easier retrieval
-<<<<<<< HEAD
 			_, _ = s.db.ExecContext(ctx, "INSERT INTO tool_registry_snapshots(session_id, inference_id, turn_id, phase, created_at, tools_json) VALUES(?,?,?,?,?,?)",
 				sessionID, inferenceID, t.ID, phase, time.Now().Format(time.RFC3339Nano), string(b))
-||||||| parent of 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
-			_, _ = s.db.ExecContext(ctx, "INSERT INTO tool_registry_snapshots(run_id, turn_id, phase, created_at, tools_json) VALUES(?,?,?,?,?)", t.RunID, t.ID, phase, time.Now().Format(time.RFC3339Nano), string(b))
-=======
-			_, _ = s.db.ExecContext(ctx, "INSERT INTO tool_registry_snapshots(run_id, turn_id, phase, created_at, tools_json) VALUES(?,?,?,?,?)", runID, t.ID, phase, time.Now().Format(time.RFC3339Nano), string(b))
->>>>>>> 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
 		}
 	}
 	// turn data KV
@@ -366,21 +314,11 @@ func (s *SQLiteStore) LogEvent(ctx context.Context, ev events.Event) {
 
 	// extract run/turn id from EventMetadata
 	meta := ev.Metadata()
-<<<<<<< HEAD
 	if meta.SessionID != "" {
 		sessionID = meta.SessionID
 	}
 	if meta.InferenceID != "" {
 		inferenceID = meta.InferenceID
-||||||| parent of 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
-	if meta.RunID != "" {
-		runID = meta.RunID
-=======
-	if meta.SessionID != "" {
-		runID = meta.SessionID
-	} else if meta.InferenceID != "" {
-		runID = meta.InferenceID
->>>>>>> 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
 	}
 	if meta.TurnID != "" {
 		turnID = meta.TurnID
@@ -391,15 +329,4 @@ func (s *SQLiteStore) LogEvent(ctx context.Context, ev events.Event) {
     ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		now, kind, message, level, toolName, toolID, input, result, dataJSON, payloadJSON, sessionID, inferenceID, turnID,
 	)
-}
-
-func turnSessionID(t *turns.Turn) string {
-	if t == nil {
-		return ""
-	}
-	sid, ok, err := turns.KeyTurnMetaSessionID.Get(t.Metadata)
-	if err != nil || !ok {
-		return ""
-	}
-	return sid
 }

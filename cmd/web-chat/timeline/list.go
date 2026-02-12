@@ -6,8 +6,8 @@ import (
 
 	"github.com/go-go-golems/glazed/pkg/cli"
 	"github.com/go-go-golems/glazed/pkg/cmds"
-	"github.com/go-go-golems/glazed/pkg/cmds/layers"
-	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
+	"github.com/go-go-golems/glazed/pkg/cmds/fields"
+	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	"github.com/go-go-golems/glazed/pkg/middlewares"
 	"github.com/go-go-golems/glazed/pkg/settings"
 	"github.com/go-go-golems/glazed/pkg/types"
@@ -19,34 +19,34 @@ type TimelineListCommand struct {
 }
 
 type TimelineListSettings struct {
-	TimelineDSN  string `glazed.parameter:"timeline-dsn"`
-	TimelineDB   string `glazed.parameter:"timeline-db"`
-	ConvIDPrefix string `glazed.parameter:"conv-id-prefix"`
-	Limit        int    `glazed.parameter:"limit"`
+	TimelineDSN  string `glazed:"timeline-dsn"`
+	TimelineDB   string `glazed:"timeline-db"`
+	ConvIDPrefix string `glazed:"conv-id-prefix"`
+	Limit        int    `glazed:"limit"`
 }
 
 func NewTimelineListCommand() (*TimelineListCommand, error) {
-	glazedLayer, err := settings.NewGlazedParameterLayers()
+	glazedLayer, err := settings.NewGlazedSection()
 	if err != nil {
 		return nil, err
 	}
-	commandSettingsLayer, err := cli.NewCommandSettingsLayer()
+	commandSettingsLayer, err := cli.NewCommandSettingsSection()
 	if err != nil {
 		return nil, err
 	}
 
 	flags := append(timelineStoreFlagDefs(),
-		parameters.NewParameterDefinition(
+		fields.New(
 			"conv-id-prefix",
-			parameters.ParameterTypeString,
-			parameters.WithDefault(""),
-			parameters.WithHelp("Filter conversations by prefix"),
+			fields.TypeString,
+			fields.WithDefault(""),
+			fields.WithHelp("Filter conversations by prefix"),
 		),
-		parameters.NewParameterDefinition(
+		fields.New(
 			"limit",
-			parameters.ParameterTypeInteger,
-			parameters.WithDefault(200),
-			parameters.WithHelp("Limit number of conversations (0 = no limit)"),
+			fields.TypeInteger,
+			fields.WithDefault(200),
+			fields.WithHelp("Limit number of conversations (0 = no limit)"),
 		),
 	)
 
@@ -55,7 +55,7 @@ func NewTimelineListCommand() (*TimelineListCommand, error) {
 		cmds.WithShort("List conversations in the timeline store"),
 		cmds.WithLong("List conversations with version and entity counts from the timeline store."),
 		cmds.WithFlags(flags...),
-		cmds.WithLayersList(glazedLayer, commandSettingsLayer),
+		cmds.WithSections(glazedLayer, commandSettingsLayer),
 	)
 
 	return &TimelineListCommand{CommandDescription: desc}, nil
@@ -63,11 +63,11 @@ func NewTimelineListCommand() (*TimelineListCommand, error) {
 
 func (c *TimelineListCommand) RunIntoGlazeProcessor(
 	ctx context.Context,
-	parsedLayers *layers.ParsedLayers,
+	parsedLayers *values.Values,
 	gp middlewares.Processor,
 ) error {
 	settings := &TimelineListSettings{}
-	if err := parsedLayers.InitializeStruct(layers.DefaultSlug, settings); err != nil {
+	if err := parsedLayers.DecodeSectionInto(values.DefaultSlug, settings); err != nil {
 		return err
 	}
 	db, err := openTimelineDB(&StoreSettings{TimelineDSN: settings.TimelineDSN, TimelineDB: settings.TimelineDB})

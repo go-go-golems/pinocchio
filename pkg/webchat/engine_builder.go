@@ -66,7 +66,7 @@ func (r *Router) BuildConfig(profileSlug string, overrides map[string]any) (Engi
 		sysPrompt = "You are an assistant"
 	}
 
-	stepSettings, err := settings.NewStepSettingsFromParsedLayers(r.parsed)
+	stepSettings, err := settings.NewStepSettingsFromParsedValues(r.parsed)
 	if err != nil {
 		return EngineConfig{}, err
 	}

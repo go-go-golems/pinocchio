@@ -12,15 +12,9 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/events"
 	"github.com/go-go-golems/geppetto/pkg/inference/engine"
 	"github.com/go-go-golems/geppetto/pkg/inference/middleware"
-<<<<<<< HEAD
 	"github.com/go-go-golems/geppetto/pkg/inference/session"
 	"github.com/go-go-golems/geppetto/pkg/inference/toolloop"
 	"github.com/go-go-golems/geppetto/pkg/inference/toolloop/enginebuilder"
-||||||| parent of 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
-	"github.com/go-go-golems/geppetto/pkg/inference/toolhelpers"
-=======
-	"github.com/go-go-golems/geppetto/pkg/inference/toolloop"
->>>>>>> 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
 	"github.com/go-go-golems/geppetto/pkg/inference/tools"
 	"github.com/go-go-golems/geppetto/pkg/turns"
 	"github.com/pkg/errors"
@@ -30,21 +24,12 @@ import (
 // ToolLoopBackend runs the tool-calling loop across turns and emits BackendFinishedMsg when done.
 type ToolLoopBackend struct {
 	reg  *tools.InMemoryToolRegistry
-<<<<<<< HEAD
 	sink events.EventSink
 	hook toolloop.SnapshotHook
-||||||| parent of 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
-	sink *middleware.WatermillSink
-	hook toolhelpers.SnapshotHook
-=======
-	sink *middleware.WatermillSink
-	hook toolloop.SnapshotHook
->>>>>>> 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
 
 	sess *session.Session
 }
 
-<<<<<<< HEAD
 func NewToolLoopBackend(eng engine.Engine, mws []middleware.Middleware, reg *tools.InMemoryToolRegistry, sink events.EventSink, hook toolloop.SnapshotHook) *ToolLoopBackend {
 	loopCfg := toolloop.NewLoopConfig().WithMaxIterations(5)
 	toolCfg := tools.DefaultToolConfig().WithExecutionTimeout(60 * time.Second)
@@ -59,13 +44,6 @@ func NewToolLoopBackend(eng engine.Engine, mws []middleware.Middleware, reg *too
 		enginebuilder.WithSnapshotHook(hook),
 	)
 	return &ToolLoopBackend{reg: reg, sink: sink, hook: hook, sess: sess}
-||||||| parent of 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
-func NewToolLoopBackend(eng engine.Engine, reg *tools.InMemoryToolRegistry, sink *middleware.WatermillSink, hook toolhelpers.SnapshotHook) *ToolLoopBackend {
-	return &ToolLoopBackend{eng: eng, reg: reg, sink: sink, hook: hook, Turn: &turns.Turn{}}
-=======
-func NewToolLoopBackend(eng engine.Engine, reg *tools.InMemoryToolRegistry, sink *middleware.WatermillSink, hook toolloop.SnapshotHook) *ToolLoopBackend {
-	return &ToolLoopBackend{eng: eng, reg: reg, sink: sink, hook: hook, Turn: &turns.Turn{}}
->>>>>>> 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
 }
 
 func (b *ToolLoopBackend) Start(ctx context.Context, prompt string) (tea.Cmd, error) {
@@ -81,49 +59,15 @@ func (b *ToolLoopBackend) Start(ctx context.Context, prompt string) (tea.Cmd, er
 		return nil, errors.Wrap(err, "append prompt turn")
 	}
 
-<<<<<<< HEAD
 	handle, err := b.sess.StartInference(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "start inference")
-||||||| parent of 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
-	ctx, b.cancel = context.WithCancel(ctx)
-	runCtx := events.WithEventSinks(ctx, b.sink)
-	if b.hook != nil {
-		runCtx = toolhelpers.WithTurnSnapshotHook(runCtx, b.hook)
-=======
-	ctx, b.cancel = context.WithCancel(ctx)
-	runCtx := events.WithEventSinks(ctx, b.sink)
-	if b.hook != nil {
-		runCtx = toolloop.WithTurnSnapshotHook(runCtx, b.hook)
->>>>>>> 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
 	}
 
 	return func() tea.Msg {
-<<<<<<< HEAD
 		_, waitErr := handle.Wait()
 		if waitErr != nil {
 			log.Error().Err(waitErr).Msg("tool loop failed")
-||||||| parent of 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
-		updated, err := toolhelpers.RunToolCallingLoop(
-			runCtx,
-			b.eng,
-			b.Turn,
-			b.reg,
-			toolhelpers.NewToolConfig().WithMaxIterations(5).WithTimeout(60*time.Second),
-		)
-		if err != nil {
-			log.Error().Err(err).Msg("tool loop failed")
-=======
-		loop := toolloop.New(
-			toolloop.WithEngine(b.eng),
-			toolloop.WithRegistry(b.reg),
-			toolloop.WithLoopConfig(toolloop.NewLoopConfig().WithMaxIterations(5)),
-			toolloop.WithToolConfig(tools.DefaultToolConfig().WithExecutionTimeout(60*time.Second)),
-		)
-		updated, err := loop.RunLoop(runCtx, b.Turn)
-		if err != nil {
-			log.Error().Err(err).Msg("tool loop failed")
->>>>>>> 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
 		}
 		return boba_chat.BackendFinishedMsg{}
 	}, nil
@@ -181,13 +125,7 @@ func (b *ToolLoopBackend) MakeUIForwarder(p *tea.Program) func(msg *message.Mess
 			p.Send(timeline.UIEntityCreated{ID: timeline.EntityID{LocalID: localID, Kind: "log_event"}, Renderer: timeline.RendererDescriptor{Kind: "log_event"}, Props: props})
 			p.Send(timeline.UIEntityCompleted{ID: timeline.EntityID{LocalID: localID, Kind: "log_event"}})
 		case *events.EventPartialCompletionStart:
-<<<<<<< HEAD
 			log.Debug().Str("event", "partial_start").Str("session_id", md.SessionID).Str("inference_id", md.InferenceID).Str("turn_id", md.TurnID).Str("message_id", md.ID.String()).Msg("forward: start")
-||||||| parent of 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
-			log.Debug().Str("event", "partial_start").Str("run_id", md.RunID).Str("turn_id", md.TurnID).Str("message_id", md.ID.String()).Msg("forward: start")
-=======
-			log.Debug().Str("event", "partial_start").Str("session_id", md.SessionID).Str("turn_id", md.TurnID).Str("message_id", md.ID.String()).Msg("forward: start")
->>>>>>> 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
 			p.Send(timeline.UIEntityCreated{
 				ID:        timeline.EntityID{LocalID: entityID, Kind: "llm_text"},
 				Renderer:  timeline.RendererDescriptor{Kind: "llm_text"},
@@ -198,13 +136,7 @@ func (b *ToolLoopBackend) MakeUIForwarder(p *tea.Program) func(msg *message.Mess
 				log.Debug().Msg("forward: start has zero message_id (check event metadata assignment)")
 			}
 		case *events.EventPartialCompletion:
-<<<<<<< HEAD
 			log.Debug().Str("event", "partial").Str("session_id", md.SessionID).Str("inference_id", md.InferenceID).Str("turn_id", md.TurnID).Int("delta_len", len(e_.Delta)).Int("completion_len", len(e_.Completion)).Msg("forward: partial")
-||||||| parent of 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
-			log.Debug().Str("event", "partial").Str("run_id", md.RunID).Str("turn_id", md.TurnID).Int("delta_len", len(e_.Delta)).Int("completion_len", len(e_.Completion)).Msg("forward: partial")
-=======
-			log.Debug().Str("event", "partial").Str("session_id", md.SessionID).Str("turn_id", md.TurnID).Int("delta_len", len(e_.Delta)).Int("completion_len", len(e_.Completion)).Msg("forward: partial")
->>>>>>> 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
 			p.Send(timeline.UIEntityUpdated{
 				ID:        timeline.EntityID{LocalID: entityID, Kind: "llm_text"},
 				Patch:     map[string]any{"text": e_.Completion, "metadata": md.LLMInferenceData, "streaming": true},
@@ -212,13 +144,7 @@ func (b *ToolLoopBackend) MakeUIForwarder(p *tea.Program) func(msg *message.Mess
 				UpdatedAt: time.Now(),
 			})
 		case *events.EventFinal:
-<<<<<<< HEAD
 			log.Debug().Str("event", "final").Str("session_id", md.SessionID).Str("inference_id", md.InferenceID).Str("turn_id", md.TurnID).Int("text_len", len(e_.Text)).Msg("forward: final")
-||||||| parent of 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
-			log.Debug().Str("event", "final").Str("run_id", md.RunID).Str("turn_id", md.TurnID).Int("text_len", len(e_.Text)).Msg("forward: final")
-=======
-			log.Debug().Str("event", "final").Str("session_id", md.SessionID).Str("turn_id", md.TurnID).Int("text_len", len(e_.Text)).Msg("forward: final")
->>>>>>> 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
 			p.Send(timeline.UIEntityCompleted{
 				ID:     timeline.EntityID{LocalID: entityID, Kind: "llm_text"},
 				Result: map[string]any{"text": e_.Text, "metadata": md.LLMInferenceData},
@@ -250,13 +176,7 @@ func (b *ToolLoopBackend) MakeUIForwarder(p *tea.Program) func(msg *message.Mess
 				UpdatedAt: time.Now(),
 			})
 		case *events.EventInterrupt:
-<<<<<<< HEAD
 			log.Debug().Str("event", "interrupt").Str("session_id", md.SessionID).Str("inference_id", md.InferenceID).Str("turn_id", md.TurnID).Msg("forward: interrupt")
-||||||| parent of 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
-			log.Debug().Str("event", "interrupt").Str("run_id", md.RunID).Str("turn_id", md.TurnID).Msg("forward: interrupt")
-=======
-			log.Debug().Str("event", "interrupt").Str("session_id", md.SessionID).Str("turn_id", md.TurnID).Msg("forward: interrupt")
->>>>>>> 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
 			intr, ok := events.ToTypedEvent[events.EventInterrupt](e)
 			if !ok {
 				return errors.New("payload is not of type EventInterrupt")
@@ -264,13 +184,7 @@ func (b *ToolLoopBackend) MakeUIForwarder(p *tea.Program) func(msg *message.Mess
 			p.Send(timeline.UIEntityCompleted{ID: timeline.EntityID{LocalID: entityID, Kind: "llm_text"}, Result: map[string]any{"text": intr.Text}})
 			p.Send(timeline.UIEntityUpdated{ID: timeline.EntityID{LocalID: entityID, Kind: "llm_text"}, Patch: map[string]any{"streaming": false}, Version: time.Now().UnixNano(), UpdatedAt: time.Now()})
 		case *events.EventError:
-<<<<<<< HEAD
 			log.Debug().Str("event", "error").Str("session_id", md.SessionID).Str("inference_id", md.InferenceID).Str("turn_id", md.TurnID).Str("err", e_.ErrorString).Msg("forward: error")
-||||||| parent of 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
-			log.Debug().Str("event", "error").Str("run_id", md.RunID).Str("turn_id", md.TurnID).Str("err", e_.ErrorString).Msg("forward: error")
-=======
-			log.Debug().Str("event", "error").Str("session_id", md.SessionID).Str("turn_id", md.TurnID).Str("err", e_.ErrorString).Msg("forward: error")
->>>>>>> 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
 			p.Send(timeline.UIEntityCompleted{ID: timeline.EntityID{LocalID: entityID, Kind: "llm_text"}, Result: map[string]any{"text": "**Error**\n\n" + e_.ErrorString}})
 			p.Send(timeline.UIEntityUpdated{ID: timeline.EntityID{LocalID: entityID, Kind: "llm_text"}, Patch: map[string]any{"streaming": false}, Version: time.Now().UnixNano(), UpdatedAt: time.Now()})
 		case *events.EventToolCall:

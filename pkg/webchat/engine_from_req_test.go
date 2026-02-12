@@ -6,7 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/go-go-golems/glazed/pkg/cmds/layers"
+	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 )
@@ -124,7 +124,7 @@ func TestDefaultEngineFromReqBuilder_WS_ProfilePrecedence(t *testing.T) {
 
 func TestBuildConfig_RejectsEngineOverridesWhenDisallowed(t *testing.T) {
 	r := &Router{
-		parsed:   &layers.ParsedLayers{},
+		parsed:   &values.Values{},
 		profiles: newInMemoryProfileRegistry(),
 	}
 	require.NoError(t, r.profiles.Add(&Profile{Slug: "default", AllowOverrides: false}))

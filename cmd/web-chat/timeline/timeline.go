@@ -2,9 +2,6 @@ package timeline
 
 import (
 	"github.com/go-go-golems/glazed/pkg/cli"
-	"github.com/go-go-golems/glazed/pkg/cmds/layers"
-	"github.com/go-go-golems/glazed/pkg/cmds/middlewares"
-	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
 	"github.com/spf13/cobra"
 )
 
@@ -28,17 +25,17 @@ func AddToRootCommand(root *cobra.Command) {
 	verifyCmd, err := NewTimelineVerifyCommand()
 	cobra.CheckErr(err)
 
-	cobraListCmd, err := cli.BuildCobraCommand(listCmd, cli.WithCobraMiddlewaresFunc(timelineMiddlewares))
+	cobraListCmd, err := cli.BuildCobraCommand(listCmd)
 	cobra.CheckErr(err)
-	cobraSnapshotCmd, err := cli.BuildCobraCommand(snapshotCmd, cli.WithCobraMiddlewaresFunc(timelineMiddlewares))
+	cobraSnapshotCmd, err := cli.BuildCobraCommand(snapshotCmd)
 	cobra.CheckErr(err)
-	cobraEntitiesCmd, err := cli.BuildCobraCommand(entitiesCmd, cli.WithCobraMiddlewaresFunc(timelineMiddlewares))
+	cobraEntitiesCmd, err := cli.BuildCobraCommand(entitiesCmd)
 	cobra.CheckErr(err)
-	cobraEntityCmd, err := cli.BuildCobraCommand(entityCmd, cli.WithCobraMiddlewaresFunc(timelineMiddlewares))
+	cobraEntityCmd, err := cli.BuildCobraCommand(entityCmd)
 	cobra.CheckErr(err)
-	cobraStatsCmd, err := cli.BuildCobraCommand(statsCmd, cli.WithCobraMiddlewaresFunc(timelineMiddlewares))
+	cobraStatsCmd, err := cli.BuildCobraCommand(statsCmd)
 	cobra.CheckErr(err)
-	cobraVerifyCmd, err := cli.BuildCobraCommand(verifyCmd, cli.WithCobraMiddlewaresFunc(timelineMiddlewares))
+	cobraVerifyCmd, err := cli.BuildCobraCommand(verifyCmd)
 	cobra.CheckErr(err)
 
 	timelineCmd.AddCommand(cobraListCmd)
@@ -49,25 +46,4 @@ func AddToRootCommand(root *cobra.Command) {
 	timelineCmd.AddCommand(cobraVerifyCmd)
 
 	root.AddCommand(timelineCmd)
-}
-
-func timelineMiddlewares(
-	_ *layers.ParsedLayers,
-	cmd *cobra.Command,
-	args []string,
-) ([]middlewares.Middleware, error) {
-	return []middlewares.Middleware{
-		middlewares.ParseFromCobraCommand(cmd,
-			parameters.WithParseStepSource("cobra"),
-		),
-		middlewares.GatherArguments(args,
-			parameters.WithParseStepSource("arguments"),
-		),
-		middlewares.UpdateFromEnv("PINOCCHIO",
-			parameters.WithParseStepSource("env"),
-		),
-		middlewares.SetFromDefaults(
-			parameters.WithParseStepSource("defaults"),
-		),
-	}, nil
 }

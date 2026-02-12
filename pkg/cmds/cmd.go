@@ -336,26 +336,11 @@ func (g *PinocchioCommand) RunWithOptions(ctx context.Context, options ...run.Ru
 
 // runBlocking handles blocking execution mode using Engine directly
 func (g *PinocchioCommand) runBlocking(ctx context.Context, rc *run.RunContext) (*turns.Turn, error) {
-<<<<<<< HEAD
-	var sinks []events.EventSink
-
-||||||| parent of 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
-	// Create engine instance options
-	var options []engine.Option
-
-=======
->>>>>>> 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
 	// If we have a router, set up watermill sink for event publishing
 	var sinks []events.EventSink
 	if rc.Router != nil {
 		watermillSink := middleware.NewWatermillSink(rc.Router.Publisher, "chat")
-<<<<<<< HEAD
 		sinks = []events.EventSink{watermillSink}
-||||||| parent of 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
-		options = append(options, engine.WithSink(watermillSink))
-=======
-		sinks = append(sinks, watermillSink)
->>>>>>> 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
 
 		// Add default printer if none is set
 		if rc.UISettings == nil || rc.UISettings.Output == "" {
@@ -386,13 +371,7 @@ func (g *PinocchioCommand) runBlocking(ctx context.Context, rc *run.RunContext) 
 		eg.Go(func() error {
 			defer cancel()
 			<-rc.Router.Running()
-<<<<<<< HEAD
 			return g.runEngineAndCollectMessages(ctx, rc, sinks)
-||||||| parent of 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
-			return g.runEngineAndCollectMessages(ctx, rc, options)
-=======
-			return g.runEngineAndCollectMessages(ctx, rc, sinks...)
->>>>>>> 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
 		})
 
 		err := eg.Wait()
@@ -401,13 +380,7 @@ func (g *PinocchioCommand) runBlocking(ctx context.Context, rc *run.RunContext) 
 		}
 	} else {
 		// No router, just run the engine directly using Turns
-<<<<<<< HEAD
 		err := g.runEngineAndCollectMessages(ctx, rc, nil)
-||||||| parent of 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
-		err := g.runEngineAndCollectMessages(ctx, rc, options)
-=======
-		err := g.runEngineAndCollectMessages(ctx, rc, sinks...)
->>>>>>> 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
 		if err != nil {
 			return nil, err
 		}
@@ -418,18 +391,9 @@ func (g *PinocchioCommand) runBlocking(ctx context.Context, rc *run.RunContext) 
 }
 
 // runEngineAndCollectMessages handles the actual engine execution and message collection
-<<<<<<< HEAD
 func (g *PinocchioCommand) runEngineAndCollectMessages(ctx context.Context, rc *run.RunContext, sinks []events.EventSink) error {
 	// Create engine
 	engine, err := rc.EngineFactory.CreateEngine(rc.StepSettings)
-||||||| parent of 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
-func (g *PinocchioCommand) runEngineAndCollectMessages(ctx context.Context, rc *run.RunContext, options []engine.Option) error {
-	// Create engine with options
-	engine, err := rc.EngineFactory.CreateEngine(rc.StepSettings, options...)
-=======
-func (g *PinocchioCommand) runEngineAndCollectMessages(ctx context.Context, rc *run.RunContext, sinks ...events.EventSink) error {
-	engine, err := rc.EngineFactory.CreateEngine(rc.StepSettings)
->>>>>>> 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
 	if err != nil {
 		return fmt.Errorf("failed to create engine: %w", err)
 	}
@@ -439,7 +403,6 @@ func (g *PinocchioCommand) runEngineAndCollectMessages(ctx context.Context, rc *
 	if err != nil {
 		return fmt.Errorf("failed to render templates: %w", err)
 	}
-<<<<<<< HEAD
 
 	runner, err := (&enginebuilder.Builder{
 		Base:       engine,
@@ -456,15 +419,6 @@ func (g *PinocchioCommand) runEngineAndCollectMessages(ctx context.Context, rc *
 		return fmt.Errorf("failed to build runner: %w", err)
 	}
 	updatedTurn, err := runner.RunInference(ctx, seed)
-||||||| parent of 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
-	updatedTurn, err := engine.RunInference(ctx, seed)
-=======
-	runCtx := ctx
-	if len(sinks) > 0 {
-		runCtx = events.WithEventSinks(runCtx, sinks...)
-	}
-	updatedTurn, err := engine.RunInference(runCtx, seed)
->>>>>>> 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
 	if err != nil {
 		return fmt.Errorf("inference failed: %w", err)
 	}
@@ -550,13 +504,7 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) (*tu
 				return err
 			}
 
-<<<<<<< HEAD
 			err = g.runEngineAndCollectMessages(ctx, rc, []events.EventSink{chatSink})
-||||||| parent of 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
-			err = g.runEngineAndCollectMessages(ctx, rc, initialOptions)
-=======
-			err = g.runEngineAndCollectMessages(ctx, rc, chatSink)
->>>>>>> 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
 			if err != nil {
 				return err
 			}

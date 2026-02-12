@@ -18,13 +18,8 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/inference/toolloop"
 	"github.com/go-go-golems/geppetto/pkg/inference/toolloop/enginebuilder"
 	"github.com/go-go-golems/geppetto/pkg/turns"
-<<<<<<< HEAD
 	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
 	timelinepb "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/timeline"
-||||||| parent of 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
-=======
-	gcompat "github.com/go-go-golems/pinocchio/pkg/geppettocompat"
->>>>>>> 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
 )
 
 // Conversation holds per-conversation state and streaming attachments.
@@ -196,21 +191,9 @@ func (cm *ConvManager) GetOrCreate(convID, profileSlug string, overrides map[str
 			if err != nil {
 				return nil, err
 			}
-<<<<<<< HEAD
 			sub, subClose, err := cm.buildSubscriber(convID)
 			if err != nil {
 				return nil, err
-||||||| parent of 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
-			runID := e.Metadata().RunID
-			if runID != "" && runID != conv.RunID {
-				msg.Ack()
-				continue
-=======
-			runID := gcompat.EventSessionID(e.Metadata())
-			if runID != "" && runID != conv.RunID {
-				msg.Ack()
-				continue
->>>>>>> 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
 			}
 
 			// Replace stream/subscriber (avoid closing shared in-memory subscriber).
@@ -292,7 +275,6 @@ func (cm *ConvManager) GetOrCreate(convID, profileSlug string, overrides map[str
 	conv.Eng = eng
 	conv.Sink = sink
 	conv.sub = sub
-<<<<<<< HEAD
 	conv.subClose = subClose
 
 	idleTimeout := time.Duration(cm.idleTimeoutSec) * time.Second
@@ -301,16 +283,6 @@ func (cm *ConvManager) GetOrCreate(convID, profileSlug string, overrides map[str
 			log.Info().Str("component", "webchat").Str("conv_id", conv.ID).Dur("idle_timeout", idleTimeout).Msg("idle timeout reached, stopping stream")
 			conv.stream.Stop()
 		}
-||||||| parent of 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
-	conv.Turn = &turns.Turn{RunID: conv.RunID}
-	if err := r.startReader(conv); err != nil {
-		return nil, err
-=======
-	conv.Turn = &turns.Turn{}
-	gcompat.EnsureTurnSessionID(conv.Turn, conv.RunID)
-	if err := r.startReader(conv); err != nil {
-		return nil, err
->>>>>>> 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
 	}
 	conv.pool = NewConnectionPool(conv.ID, idleTimeout, onIdle)
 	conv.stream = NewStreamCoordinator(

@@ -12,8 +12,8 @@ import (
 
 	"github.com/go-go-golems/glazed/pkg/cli"
 	"github.com/go-go-golems/glazed/pkg/cmds"
-	"github.com/go-go-golems/glazed/pkg/cmds/layers"
-	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
+	"github.com/go-go-golems/glazed/pkg/cmds/fields"
+	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	"github.com/go-go-golems/glazed/pkg/middlewares"
 	"github.com/go-go-golems/glazed/pkg/settings"
 	"github.com/go-go-golems/glazed/pkg/types"
@@ -28,61 +28,61 @@ type TimelineSnapshotCommand struct {
 }
 
 type TimelineSnapshotSettings struct {
-	TimelineDSN     string `glazed.parameter:"timeline-dsn"`
-	TimelineDB      string `glazed.parameter:"timeline-db"`
-	ConvID          string `glazed.parameter:"conv-id"`
-	SinceVersion    uint64 `glazed.parameter:"since-version"`
-	Limit           int    `glazed.parameter:"limit"`
-	BaseURL         string `glazed.parameter:"base-url"`
-	IncludeEntities bool   `glazed.parameter:"include-entities"`
-	RawJSON         bool   `glazed.parameter:"raw-json"`
+	TimelineDSN     string `glazed:"timeline-dsn"`
+	TimelineDB      string `glazed:"timeline-db"`
+	ConvID          string `glazed:"conv-id"`
+	SinceVersion    uint64 `glazed:"since-version"`
+	Limit           int    `glazed:"limit"`
+	BaseURL         string `glazed:"base-url"`
+	IncludeEntities bool   `glazed:"include-entities"`
+	RawJSON         bool   `glazed:"raw-json"`
 }
 
 func NewTimelineSnapshotCommand() (*TimelineSnapshotCommand, error) {
-	glazedLayer, err := settings.NewGlazedParameterLayers()
+	glazedLayer, err := settings.NewGlazedSection()
 	if err != nil {
 		return nil, err
 	}
-	commandSettingsLayer, err := cli.NewCommandSettingsLayer()
+	commandSettingsLayer, err := cli.NewCommandSettingsSection()
 	if err != nil {
 		return nil, err
 	}
 
 	flags := append(timelineStoreFlagDefs(),
-		parameters.NewParameterDefinition(
+		fields.New(
 			"conv-id",
-			parameters.ParameterTypeString,
-			parameters.WithHelp("Conversation ID to snapshot"),
+			fields.TypeString,
+			fields.WithHelp("Conversation ID to snapshot"),
 		),
-		parameters.NewParameterDefinition(
+		fields.New(
 			"since-version",
-			parameters.ParameterTypeInteger,
-			parameters.WithDefault(0),
-			parameters.WithHelp("Only include entities after this version"),
+			fields.TypeInteger,
+			fields.WithDefault(0),
+			fields.WithHelp("Only include entities after this version"),
 		),
-		parameters.NewParameterDefinition(
+		fields.New(
 			"limit",
-			parameters.ParameterTypeInteger,
-			parameters.WithDefault(5000),
-			parameters.WithHelp("Limit number of entities (0 = default server limit)"),
+			fields.TypeInteger,
+			fields.WithDefault(5000),
+			fields.WithHelp("Limit number of entities (0 = default server limit)"),
 		),
-		parameters.NewParameterDefinition(
+		fields.New(
 			"base-url",
-			parameters.ParameterTypeString,
-			parameters.WithDefault(""),
-			parameters.WithHelp("Optional HTTP base URL to call /timeline instead of reading SQLite"),
+			fields.TypeString,
+			fields.WithDefault(""),
+			fields.WithHelp("Optional HTTP base URL to call /timeline instead of reading SQLite"),
 		),
-		parameters.NewParameterDefinition(
+		fields.New(
 			"include-entities",
-			parameters.ParameterTypeBool,
-			parameters.WithDefault(false),
-			parameters.WithHelp("Include entities array in output"),
+			fields.TypeBool,
+			fields.WithDefault(false),
+			fields.WithHelp("Include entities array in output"),
 		),
-		parameters.NewParameterDefinition(
+		fields.New(
 			"raw-json",
-			parameters.ParameterTypeBool,
-			parameters.WithDefault(false),
-			parameters.WithHelp("Include raw snapshot JSON in output"),
+			fields.TypeBool,
+			fields.WithDefault(false),
+			fields.WithHelp("Include raw snapshot JSON in output"),
 		),
 	)
 
@@ -91,7 +91,7 @@ func NewTimelineSnapshotCommand() (*TimelineSnapshotCommand, error) {
 		cmds.WithShort("Fetch a timeline snapshot"),
 		cmds.WithLong("Fetch a timeline snapshot from SQLite or a remote /timeline endpoint."),
 		cmds.WithFlags(flags...),
-		cmds.WithLayersList(glazedLayer, commandSettingsLayer),
+		cmds.WithSections(glazedLayer, commandSettingsLayer),
 	)
 
 	return &TimelineSnapshotCommand{CommandDescription: desc}, nil
@@ -99,11 +99,11 @@ func NewTimelineSnapshotCommand() (*TimelineSnapshotCommand, error) {
 
 func (c *TimelineSnapshotCommand) RunIntoGlazeProcessor(
 	ctx context.Context,
-	parsedLayers *layers.ParsedLayers,
+	parsedLayers *values.Values,
 	gp middlewares.Processor,
 ) error {
 	settings := &TimelineSnapshotSettings{}
-	if err := parsedLayers.InitializeStruct(layers.DefaultSlug, settings); err != nil {
+	if err := parsedLayers.DecodeSectionInto(values.DefaultSlug, settings); err != nil {
 		return err
 	}
 	convID := strings.TrimSpace(settings.ConvID)
