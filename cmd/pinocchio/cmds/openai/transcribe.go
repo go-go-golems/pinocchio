@@ -11,8 +11,8 @@ import (
 	openai_settings "github.com/go-go-golems/geppetto/pkg/steps/ai/settings/openai"
 	ai_types "github.com/go-go-golems/geppetto/pkg/steps/ai/types"
 	"github.com/go-go-golems/glazed/pkg/cmds"
-	"github.com/go-go-golems/glazed/pkg/cmds/layers"
-	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
+	"github.com/go-go-golems/glazed/pkg/cmds/fields"
+	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	"github.com/go-go-golems/glazed/pkg/middlewares"
 	"github.com/go-go-golems/glazed/pkg/settings"
 	"github.com/go-go-golems/glazed/pkg/types"
@@ -28,12 +28,12 @@ type TranscribeCommand struct {
 var _ cmds.GlazeCommand = &TranscribeCommand{}
 
 func NewTranscribeCommand() (*TranscribeCommand, error) {
-	layer, err := openai_settings.NewParameterLayer()
+	layer, err := openai_settings.NewValueSection()
 	if err != nil {
 		return nil, errors.Wrap(err, "could not create OpenAI parameter layer")
 	}
 
-	glazedParameterLayer, err := settings.NewGlazedParameterLayers()
+	glazedParameterLayer, err := settings.NewGlazedSection()
 	if err != nil {
 		return nil, errors.Wrap(err, "could not create Glazed parameter layer")
 	}
@@ -44,226 +44,226 @@ func NewTranscribeCommand() (*TranscribeCommand, error) {
 			cmds.WithShort("Transcribe MP3 files using OpenAI"),
 			cmds.WithFlags(
 				// File Input Options
-				parameters.NewParameterDefinition(
+				fields.New(
 					"dir",
-					parameters.ParameterTypeString,
-					parameters.WithHelp("Path to the directory containing MP3 files"),
-					parameters.WithDefault(""),
+					fields.TypeString,
+					fields.WithHelp("Path to the directory containing MP3 files"),
+					fields.WithDefault(""),
 				),
-				parameters.NewParameterDefinition(
+				fields.New(
 					"file",
-					parameters.ParameterTypeString,
-					parameters.WithHelp("Path to the MP3 file to transcribe"),
-					parameters.WithDefault(""),
+					fields.TypeString,
+					fields.WithHelp("Path to the MP3 file to transcribe"),
+					fields.WithDefault(""),
 				),
 
 				// Model Options
-				parameters.NewParameterDefinition(
+				fields.New(
 					"model",
-					parameters.ParameterTypeString,
-					parameters.WithHelp("Model used for transcription"),
-					parameters.WithDefault(openai.Whisper1),
+					fields.TypeString,
+					fields.WithHelp("Model used for transcription"),
+					fields.WithDefault(openai.Whisper1),
 				),
-				parameters.NewParameterDefinition(
+				fields.New(
 					"prompt",
-					parameters.ParameterTypeString,
-					parameters.WithHelp("Prompt for the transcription model"),
-					parameters.WithDefault(""),
+					fields.TypeString,
+					fields.WithHelp("Prompt for the transcription model"),
+					fields.WithDefault(""),
 				),
-				parameters.NewParameterDefinition(
+				fields.New(
 					"language",
-					parameters.ParameterTypeString,
-					parameters.WithHelp("Language for the transcription model"),
-					parameters.WithDefault(""),
+					fields.TypeString,
+					fields.WithHelp("Language for the transcription model"),
+					fields.WithDefault(""),
 				),
-				parameters.NewParameterDefinition(
+				fields.New(
 					"temperature",
-					parameters.ParameterTypeFloat,
-					parameters.WithHelp("Temperature for the transcription model"),
-					parameters.WithDefault(0.0),
+					fields.TypeFloat,
+					fields.WithHelp("Temperature for the transcription model"),
+					fields.WithDefault(0.0),
 				),
 
 				// Processing Options
-				parameters.NewParameterDefinition(
+				fields.New(
 					"max-duration",
-					parameters.ParameterTypeFloat,
-					parameters.WithHelp("Maximum duration in seconds to process"),
-					parameters.WithDefault(0.0),
+					fields.TypeFloat,
+					fields.WithHelp("Maximum duration in seconds to process"),
+					fields.WithDefault(0.0),
 				),
-				parameters.NewParameterDefinition(
+				fields.New(
 					"start-time",
-					parameters.ParameterTypeFloat,
-					parameters.WithHelp("Start processing from this timestamp (in seconds)"),
-					parameters.WithDefault(0.0),
+					fields.TypeFloat,
+					fields.WithHelp("Start processing from this timestamp (in seconds)"),
+					fields.WithDefault(0.0),
 				),
-				parameters.NewParameterDefinition(
+				fields.New(
 					"quality",
-					parameters.ParameterTypeFloat,
-					parameters.WithHelp("Quality level (0.0 = fastest/lowest quality, 1.0 = slowest/highest quality)"),
-					parameters.WithDefault(0.5),
+					fields.TypeFloat,
+					fields.WithHelp("Quality level (0.0 = fastest/lowest quality, 1.0 = slowest/highest quality)"),
+					fields.WithDefault(0.5),
 				),
 
 				// Output Options
-				parameters.NewParameterDefinition(
+				fields.New(
 					"format",
-					parameters.ParameterTypeChoice,
-					parameters.WithHelp("Output format (json, verbose-json, text, srt, vtt)"),
-					parameters.WithChoices("json", "verbose-json", "text", "srt", "vtt"),
-					parameters.WithDefault("verbose-json"),
+					fields.TypeChoice,
+					fields.WithHelp("Output format (json, verbose-json, text, srt, vtt)"),
+					fields.WithChoices("json", "verbose-json", "text", "srt", "vtt"),
+					fields.WithDefault("verbose-json"),
 				),
-				parameters.NewParameterDefinition(
+				fields.New(
 					"timestamps",
-					parameters.ParameterTypeChoiceList,
-					parameters.WithHelp("Timestamp granularities to include (word, segment)"),
-					parameters.WithChoices("word", "segment"),
-					parameters.WithDefault([]string{}),
+					fields.TypeChoiceList,
+					fields.WithHelp("Timestamp granularities to include (word, segment)"),
+					fields.WithChoices("word", "segment"),
+					fields.WithDefault([]string{}),
 				),
 
 				// Speaker Options
-				parameters.NewParameterDefinition(
+				fields.New(
 					"enable-diarization",
-					parameters.ParameterTypeBool,
-					parameters.WithHelp("Enable speaker diarization"),
-					parameters.WithDefault(false),
+					fields.TypeBool,
+					fields.WithHelp("Enable speaker diarization"),
+					fields.WithDefault(false),
 				),
-				parameters.NewParameterDefinition(
+				fields.New(
 					"min-speakers",
-					parameters.ParameterTypeInteger,
-					parameters.WithHelp("Minimum number of speakers to detect"),
-					parameters.WithDefault(1),
+					fields.TypeInteger,
+					fields.WithHelp("Minimum number of speakers to detect"),
+					fields.WithDefault(1),
 				),
-				parameters.NewParameterDefinition(
+				fields.New(
 					"max-speakers",
-					parameters.ParameterTypeInteger,
-					parameters.WithHelp("Maximum number of speakers to detect"),
-					parameters.WithDefault(10),
+					fields.TypeInteger,
+					fields.WithHelp("Maximum number of speakers to detect"),
+					fields.WithDefault(10),
 				),
-				parameters.NewParameterDefinition(
+				fields.New(
 					"allow-profanity",
-					parameters.ParameterTypeBool,
-					parameters.WithHelp("Allow profanity in output"),
-					parameters.WithDefault(false),
+					fields.TypeBool,
+					fields.WithHelp("Allow profanity in output"),
+					fields.WithDefault(false),
 				),
 
 				// Performance Options
-				parameters.NewParameterDefinition(
+				fields.New(
 					"chunk-size",
-					parameters.ParameterTypeInteger,
-					parameters.WithHelp("Size of chunks for streaming mode (in bytes)"),
-					parameters.WithDefault(1024*1024),
+					fields.TypeInteger,
+					fields.WithHelp("Size of chunks for streaming mode (in bytes)"),
+					fields.WithDefault(1024*1024),
 				),
-				parameters.NewParameterDefinition(
+				fields.New(
 					"concurrent-chunks",
-					parameters.ParameterTypeInteger,
-					parameters.WithHelp("Number of chunks to process concurrently"),
-					parameters.WithDefault(1),
+					fields.TypeInteger,
+					fields.WithHelp("Number of chunks to process concurrently"),
+					fields.WithDefault(1),
 				),
 
 				// Error Handling Options
-				parameters.NewParameterDefinition(
+				fields.New(
 					"max-retries",
-					parameters.ParameterTypeInteger,
-					parameters.WithHelp("Maximum number of retries for failed chunks"),
-					parameters.WithDefault(3),
+					fields.TypeInteger,
+					fields.WithHelp("Maximum number of retries for failed chunks"),
+					fields.WithDefault(3),
 				),
-				parameters.NewParameterDefinition(
+				fields.New(
 					"retry-delay",
-					parameters.ParameterTypeInteger,
-					parameters.WithHelp("Delay between retries (in milliseconds)"),
-					parameters.WithDefault(1000),
+					fields.TypeInteger,
+					fields.WithHelp("Delay between retries (in milliseconds)"),
+					fields.WithDefault(1000),
 				),
-				parameters.NewParameterDefinition(
+				fields.New(
 					"fail-fast",
-					parameters.ParameterTypeBool,
-					parameters.WithHelp("Stop on first error"),
-					parameters.WithDefault(false),
+					fields.TypeBool,
+					fields.WithHelp("Stop on first error"),
+					fields.WithDefault(false),
 				),
 
 				// Rate Limiting Options
-				parameters.NewParameterDefinition(
+				fields.New(
 					"requests-per-minute",
-					parameters.ParameterTypeInteger,
-					parameters.WithHelp("Maximum requests per minute"),
-					parameters.WithDefault(60),
+					fields.TypeInteger,
+					fields.WithHelp("Maximum requests per minute"),
+					fields.WithDefault(60),
 				),
-				parameters.NewParameterDefinition(
+				fields.New(
 					"min-request-gap",
-					parameters.ParameterTypeInteger,
-					parameters.WithHelp("Minimum time between requests (in milliseconds)"),
-					parameters.WithDefault(100),
+					fields.TypeInteger,
+					fields.WithHelp("Minimum time between requests (in milliseconds)"),
+					fields.WithDefault(100),
 				),
-				parameters.NewParameterDefinition(
+				fields.New(
 					"cooldown-period",
-					parameters.ParameterTypeInteger,
-					parameters.WithHelp("Time to wait when rate limit is hit (in milliseconds)"),
-					parameters.WithDefault(5000),
+					fields.TypeInteger,
+					fields.WithHelp("Time to wait when rate limit is hit (in milliseconds)"),
+					fields.WithDefault(5000),
 				),
 			),
-			cmds.WithLayersList(layer, glazedParameterLayer),
+			cmds.WithSections(layer, glazedParameterLayer),
 		),
 	}, nil
 }
 
 type TranscribeSettings struct {
 	// File Input Options
-	DirPath  string `glazed.parameter:"dir"`
-	FilePath string `glazed.parameter:"file"`
+	DirPath  string `glazed:"dir"`
+	FilePath string `glazed:"file"`
 
 	// Model Options
-	Model       string  `glazed.parameter:"model"`
-	Prompt      string  `glazed.parameter:"prompt"`
-	Language    string  `glazed.parameter:"language"`
-	Temperature float64 `glazed.parameter:"temperature"`
+	Model       string  `glazed:"model"`
+	Prompt      string  `glazed:"prompt"`
+	Language    string  `glazed:"language"`
+	Temperature float64 `glazed:"temperature"`
 
 	// Processing Options
-	MaxDuration float64 `glazed.parameter:"max-duration"`
-	StartTime   float64 `glazed.parameter:"start-time"`
-	Quality     float64 `glazed.parameter:"quality"`
+	MaxDuration float64 `glazed:"max-duration"`
+	StartTime   float64 `glazed:"start-time"`
+	Quality     float64 `glazed:"quality"`
 
 	// Output Options
-	Format     string   `glazed.parameter:"format"`
-	Timestamps []string `glazed.parameter:"timestamps"`
+	Format     string   `glazed:"format"`
+	Timestamps []string `glazed:"timestamps"`
 
 	// Speaker Options
-	EnableDiarization bool `glazed.parameter:"enable-diarization"`
-	MinSpeakers       int  `glazed.parameter:"min-speakers"`
-	MaxSpeakers       int  `glazed.parameter:"max-speakers"`
-	AllowProfanity    bool `glazed.parameter:"allow-profanity"`
+	EnableDiarization bool `glazed:"enable-diarization"`
+	MinSpeakers       int  `glazed:"min-speakers"`
+	MaxSpeakers       int  `glazed:"max-speakers"`
+	AllowProfanity    bool `glazed:"allow-profanity"`
 
 	// Performance Options
-	ChunkSize        int `glazed.parameter:"chunk-size"`
-	ConcurrentChunks int `glazed.parameter:"concurrent-chunks"`
+	ChunkSize        int `glazed:"chunk-size"`
+	ConcurrentChunks int `glazed:"concurrent-chunks"`
 
 	// Error Handling Options
-	MaxRetries int  `glazed.parameter:"max-retries"`
-	RetryDelay int  `glazed.parameter:"retry-delay"`
-	FailFast   bool `glazed.parameter:"fail-fast"`
+	MaxRetries int  `glazed:"max-retries"`
+	RetryDelay int  `glazed:"retry-delay"`
+	FailFast   bool `glazed:"fail-fast"`
 
 	// Rate Limiting Options
-	RequestsPerMinute int `glazed.parameter:"requests-per-minute"`
-	MinRequestGap     int `glazed.parameter:"min-request-gap"`
-	CooldownPeriod    int `glazed.parameter:"cooldown-period"`
+	RequestsPerMinute int `glazed:"requests-per-minute"`
+	MinRequestGap     int `glazed:"min-request-gap"`
+	CooldownPeriod    int `glazed:"cooldown-period"`
 }
 
 func (c *TranscribeCommand) RunIntoGlazeProcessor(
 	ctx context.Context,
-	parsedLayers *layers.ParsedLayers,
+	parsedLayers *values.Values,
 	gp middlewares.Processor,
 ) error {
 	s := &TranscribeSettings{}
-	err := parsedLayers.InitializeStruct(layers.DefaultSlug, s)
+	err := parsedLayers.DecodeSectionInto(values.DefaultSlug, s)
 	if err != nil {
 		return err
 	}
 
 	openaiSettings := &openai_settings.Settings{}
-	err = parsedLayers.InitializeStruct(openai_settings.OpenAiChatSlug, openaiSettings)
+	err = parsedLayers.DecodeSectionInto(openai_settings.OpenAiChatSlug, openaiSettings)
 	if err != nil {
 		return err
 	}
 
 	apiSettings := &settings2.APISettings{}
-	err = parsedLayers.InitializeStruct(openai_settings.OpenAiChatSlug, apiSettings)
+	err = parsedLayers.DecodeSectionInto(openai_settings.OpenAiChatSlug, apiSettings)
 	if err != nil {
 		return err
 	}

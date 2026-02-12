@@ -24,7 +24,7 @@ import (
 	geptools "github.com/go-go-golems/geppetto/pkg/inference/tools"
 	"github.com/go-go-golems/geppetto/pkg/turns"
 	"github.com/go-go-golems/geppetto/pkg/turns/serde"
-	"github.com/go-go-golems/glazed/pkg/cmds/layers"
+	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
 	rediscfg "github.com/go-go-golems/pinocchio/pkg/redisstream"
 	sempb "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/base"
@@ -34,30 +34,30 @@ import (
 
 // RouterSettings are exposed via parameter layers (addr, agent, idle timeout, etc.).
 type RouterSettings struct {
-	Addr                 string `glazed.parameter:"addr"`
-	IdleTimeoutSeconds   int    `glazed.parameter:"idle-timeout-seconds"`
-	EvictIdleSeconds     int    `glazed.parameter:"evict-idle-seconds"`
-	EvictIntervalSeconds int    `glazed.parameter:"evict-interval-seconds"`
+	Addr                 string `glazed:"addr"`
+	IdleTimeoutSeconds   int    `glazed:"idle-timeout-seconds"`
+	EvictIdleSeconds     int    `glazed:"evict-idle-seconds"`
+	EvictIntervalSeconds int    `glazed:"evict-interval-seconds"`
 	// Durable timeline projection store configuration (optional).
 	// Use either:
 	// - timeline-dsn (preferred; full sqlite DSN)
 	// - timeline-db (file path; DSN derived)
-	TimelineDSN string `glazed.parameter:"timeline-dsn"`
-	TimelineDB  string `glazed.parameter:"timeline-db"`
+	TimelineDSN string `glazed:"timeline-dsn"`
+	TimelineDB  string `glazed:"timeline-db"`
 	// Durable turn snapshot store configuration (optional).
 	// Use either:
 	// - turns-dsn (preferred; full sqlite DSN)
 	// - turns-db (file path; DSN derived)
-	TurnsDSN string `glazed.parameter:"turns-dsn"`
-	TurnsDB  string `glazed.parameter:"turns-db"`
+	TurnsDSN string `glazed:"turns-dsn"`
+	TurnsDB  string `glazed:"turns-db"`
 	// In-memory timeline store sizing (used when no timeline DB is configured).
-	TimelineInMemoryMaxEntities int `glazed.parameter:"timeline-inmem-max-entities"`
+	TimelineInMemoryMaxEntities int `glazed:"timeline-inmem-max-entities"`
 }
 
 // RouterBuilder creates a new composable webchat router.
-func NewRouter(ctx context.Context, parsed *layers.ParsedLayers, staticFS fs.FS, opts ...RouterOption) (*Router, error) {
+func NewRouter(ctx context.Context, parsed *values.Values, staticFS fs.FS, opts ...RouterOption) (*Router, error) {
 	rs := rediscfg.Settings{}
-	_ = parsed.InitializeStruct("redis", &rs)
+	_ = parsed.DecodeSectionInto("redis", &rs)
 	router, err := rediscfg.BuildRouter(rs, true)
 	if err != nil {
 		return nil, errors.Wrap(err, "build event router")
@@ -81,7 +81,7 @@ func NewRouter(ctx context.Context, parsed *layers.ParsedLayers, staticFS fs.FS,
 
 	// Timeline store for hydration (SQLite when configured, in-memory otherwise).
 	s := &RouterSettings{}
-	if err := parsed.InitializeStruct(layers.DefaultSlug, s); err != nil {
+	if err := parsed.DecodeSectionInto(values.DefaultSlug, s); err != nil {
 		return nil, errors.Wrap(err, "parse router settings")
 	}
 	if dsn := strings.TrimSpace(s.TimelineDSN); dsn != "" {
@@ -207,7 +207,7 @@ func (r *Router) Handler() http.Handler { return r.mux }
 // BuildHTTPServer constructs an http.Server using settings from layers.
 func (r *Router) BuildHTTPServer() (*http.Server, error) {
 	s := &RouterSettings{}
-	if err := r.parsed.InitializeStruct(layers.DefaultSlug, s); err != nil {
+	if err := r.parsed.DecodeSectionInto(values.DefaultSlug, s); err != nil {
 		return nil, err
 	}
 	r.idleTimeoutSec = s.IdleTimeoutSeconds
@@ -662,7 +662,11 @@ func (r *Router) registerAPIHandlers(mux *http.ServeMux) {
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write(out)
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		// #nosec G705 -- payload is protobuf-generated JSON served as application/json.
+		if _, err := w.Write(out); err != nil {
+			logger.Warn().Err(err).Str("conv_id", convID).Msg("timeline write failed")
+		}
 	}
 	mux.HandleFunc("/timeline", timelineHandler)
 	mux.HandleFunc("/timeline/", timelineHandler)

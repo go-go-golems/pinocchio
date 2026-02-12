@@ -11,15 +11,15 @@ import (
 
 	"github.com/atotto/clipboard"
 	"github.com/go-go-golems/glazed/pkg/cmds"
-	"github.com/go-go-golems/glazed/pkg/cmds/layers"
-	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
+	"github.com/go-go-golems/glazed/pkg/cmds/fields"
+	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	"github.com/weaviate/tiktoken-go"
 )
 
 type ClipSettings struct {
-	Stats   bool     `glazed.parameter:"stats"`
-	Preview bool     `glazed.parameter:"preview"`
-	Args    []string `glazed.parameter:"__args"`
+	Stats   bool     `glazed:"stats"`
+	Preview bool     `glazed:"preview"`
+	Args    []string `glazed:"__args"`
 }
 
 type ClipCommand struct {
@@ -35,17 +35,17 @@ func NewClipCommand() (*ClipCommand, error) {
 			cmds.WithShort("Copy command output to clipboard"),
 			cmds.WithLong("Execute a command and copy its output to the clipboard, with optional statistics and preview"),
 			cmds.WithFlags(
-				parameters.NewParameterDefinition(
+				fields.New(
 					"stats",
-					parameters.ParameterTypeBool,
-					parameters.WithHelp("Show statistics about the output"),
-					parameters.WithDefault(false),
+					fields.TypeBool,
+					fields.WithHelp("Show statistics about the output"),
+					fields.WithDefault(false),
 				),
-				parameters.NewParameterDefinition(
+				fields.New(
 					"preview",
-					parameters.ParameterTypeBool,
-					parameters.WithHelp("Preview the content in $PAGER"),
-					parameters.WithDefault(false),
+					fields.TypeBool,
+					fields.WithHelp("Preview the content in $PAGER"),
+					fields.WithDefault(false),
 				),
 			),
 		),
@@ -54,10 +54,10 @@ func NewClipCommand() (*ClipCommand, error) {
 
 func (c *ClipCommand) Run(
 	ctx context.Context,
-	parsedLayers *layers.ParsedLayers,
+	parsedLayers *values.Values,
 ) error {
 	s := &ClipSettings{}
-	err := parsedLayers.InitializeStruct(layers.DefaultSlug, s)
+	err := parsedLayers.DecodeSectionInto(values.DefaultSlug, s)
 	if err != nil {
 		return fmt.Errorf("error initializing settings: %w", err)
 	}
@@ -136,8 +136,29 @@ func previewInPager(content string) {
 	if pager == "" {
 		pager = "less" // Default to less if $PAGER is not set
 	}
+	parts := strings.Fields(pager)
+	if len(parts) == 0 {
+		parts = []string{"less"}
+	}
+	pagerName := parts[0]
 
-	cmd := exec.Command(pager)
+	var cmd *exec.Cmd
+	switch pagerName {
+	case "less":
+		cmd = exec.Command("less")
+	case "more":
+		cmd = exec.Command("more")
+	case "most":
+		cmd = exec.Command("most")
+	case "cat":
+		cmd = exec.Command("cat")
+	case "bat":
+		cmd = exec.Command("bat")
+	default:
+		// Use a safe default instead of executing arbitrary commands from $PAGER.
+		cmd = exec.Command("less")
+	}
+
 	cmd.Stdin = strings.NewReader(content)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr

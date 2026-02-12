@@ -1,28 +1,28 @@
 package redisstream
 
 import (
-	"github.com/go-go-golems/glazed/pkg/cmds/layers"
-	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
+	"github.com/go-go-golems/glazed/pkg/cmds/fields"
+	"github.com/go-go-golems/glazed/pkg/cmds/schema"
 )
 
 // Settings holds Redis Streams transport configuration for Watermill.
 type Settings struct {
-	Enabled  bool   `glazed.parameter:"redis-enabled" glazed.default:"false" glazed.help:"Enable Redis Streams transport for events"`
-	Addr     string `glazed.parameter:"redis-addr" glazed.default:"localhost:6379" glazed.help:"Redis address host:port"`
-	Group    string `glazed.parameter:"redis-group" glazed.default:"chat-ui" glazed.help:"Redis consumer group"`
-	Consumer string `glazed.parameter:"redis-consumer" glazed.default:"ui-1" glazed.help:"Redis consumer name"`
+	Enabled  bool   `glazed:"redis-enabled" glazed.default:"false" glazed.help:"Enable Redis Streams transport for events"`
+	Addr     string `glazed:"redis-addr" glazed.default:"localhost:6379" glazed.help:"Redis address host:port"`
+	Group    string `glazed:"redis-group" glazed.default:"chat-ui" glazed.help:"Redis consumer group"`
+	Consumer string `glazed:"redis-consumer" glazed.default:"ui-1" glazed.help:"Redis consumer name"`
 }
 
-// NewParameterLayer returns a LayerDefinition for Redis Streams settings.
-func NewParameterLayer() (layers.ParameterLayer, error) {
-	return layers.NewParameterLayer(
+// NewParameterLayer returns a section definition for Redis Streams settings.
+func NewParameterLayer() (schema.Section, error) {
+	return schema.NewSection(
 		"redis",
 		"Redis configuration for Watermill Redis Streams",
-		layers.WithParameterDefinitions(
-			parameters.NewParameterDefinition("redis-enabled", parameters.ParameterTypeBool, parameters.WithDefault(false)),
-			parameters.NewParameterDefinition("redis-addr", parameters.ParameterTypeString, parameters.WithDefault("localhost:6379")),
-			parameters.NewParameterDefinition("redis-group", parameters.ParameterTypeString, parameters.WithDefault("chat-ui")),
-			parameters.NewParameterDefinition("redis-consumer", parameters.ParameterTypeString, parameters.WithDefault("ui-1")),
+		schema.WithFields(
+			fields.New("redis-enabled", fields.TypeBool, fields.WithDefault(false)),
+			fields.New("redis-addr", fields.TypeString, fields.WithDefault("localhost:6379")),
+			fields.New("redis-group", fields.TypeString, fields.WithDefault("chat-ui")),
+			fields.New("redis-consumer", fields.TypeString, fields.WithDefault("ui-1")),
 		),
 	)
 }

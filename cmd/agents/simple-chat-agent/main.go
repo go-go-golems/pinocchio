@@ -15,13 +15,13 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/inference/engine/factory"
 	"github.com/go-go-golems/geppetto/pkg/inference/middleware"
 	"github.com/go-go-golems/geppetto/pkg/inference/tools"
-	geppettolayers "github.com/go-go-golems/geppetto/pkg/layers"
+	geppettosections "github.com/go-go-golems/geppetto/pkg/sections"
 	"github.com/go-go-golems/geppetto/pkg/turns"
 	"github.com/go-go-golems/glazed/pkg/cli"
 	"github.com/go-go-golems/glazed/pkg/cmds"
-	"github.com/go-go-golems/glazed/pkg/cmds/layers"
+	"github.com/go-go-golems/glazed/pkg/cmds/fields"
 	"github.com/go-go-golems/glazed/pkg/cmds/logging"
-	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
+	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	"github.com/go-go-golems/glazed/pkg/help"
 	help_cmd "github.com/go-go-golems/glazed/pkg/help/cmd"
 	sqlite_regexp "github.com/go-go-golems/go-sqlite-regexp"
@@ -44,7 +44,7 @@ import (
 type SimpleAgentCmd struct{ *cmds.CommandDescription }
 
 func NewSimpleAgentCmd() (*SimpleAgentCmd, error) {
-	geLayers, err := geppettolayers.CreateGeppettoLayers()
+	geLayers, err := geppettosections.CreateGeppettoSections()
 	if err != nil {
 		return nil, err
 	}
@@ -60,14 +60,14 @@ func NewSimpleAgentCmd() (*SimpleAgentCmd, error) {
 		cmds.WithShort("Simple streaming chat agent with a calculator tool and a tiny REPL"),
 		// Add a simple flag to enable Responses server-side tools (web_search)
 		cmds.WithFlags(
-			parameters.NewParameterDefinition(
+			fields.New(
 				"server-tools",
-				parameters.ParameterTypeBool,
-				parameters.WithDefault(false),
-				parameters.WithHelp("Enable server-side tools (Responses builtin web_search)"),
+				fields.TypeBool,
+				fields.WithDefault(false),
+				fields.WithHelp("Enable server-side tools (Responses builtin web_search)"),
 			),
 		),
-		cmds.WithLayersList(append(geLayers, redisLayer)...),
+		cmds.WithSections(append(geLayers, redisLayer)...),
 	)
 	return &SimpleAgentCmd{CommandDescription: desc}, nil
 }
@@ -86,10 +86,10 @@ func NewSimpleAgentCmd() (*SimpleAgentCmd, error) {
 
 // App model removed (now in pkg/ui)
 
-func (c *SimpleAgentCmd) RunIntoWriter(ctx context.Context, parsed *layers.ParsedLayers, _ io.Writer) error {
+func (c *SimpleAgentCmd) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io.Writer) error {
 	// Event router + sink (support Redis Streams when enabled)
 	rs := rediscfg.Settings{}
-	_ = parsed.InitializeStruct("redis", &rs)
+	_ = parsed.DecodeSectionInto("redis", &rs)
 	router, err := rediscfg.BuildRouter(rs, false)
 	if err != nil {
 		return errors.Wrap(err, "router")
@@ -131,7 +131,7 @@ func (c *SimpleAgentCmd) RunIntoWriter(ctx context.Context, parsed *layers.Parse
 	sink := middleware.NewWatermillSink(router.Publisher, "chat")
 
 	// Engine
-	eng, err := factory.NewEngineFromParsedLayers(parsed)
+	eng, err := factory.NewEngineFromParsedValues(parsed)
 	if err != nil {
 		return errors.Wrap(err, "engine")
 	}
@@ -218,9 +218,9 @@ func (c *SimpleAgentCmd) RunIntoWriter(ctx context.Context, parsed *layers.Parse
 	backend := backendpkg.NewToolLoopBackend(eng, mws, registry, sink, hook)
 	// Glazed flag: --server-tools enables Responses builtin web_search on initial Turn
 	var agentSettings struct {
-		ServerTools bool `glazed.parameter:"server-tools"`
+		ServerTools bool `glazed:"server-tools"`
 	}
-	_ = parsed.InitializeStruct(layers.DefaultSlug, &agentSettings)
+	_ = parsed.DecodeSectionInto(values.DefaultSlug, &agentSettings)
 	if agentSettings.ServerTools {
 		// Set server tools data using typed key constant (satisfies turnsdatalint)
 		t := backend.CurrentTurn()
@@ -318,7 +318,7 @@ func main() {
 
 	c, err := NewSimpleAgentCmd()
 	cobra.CheckErr(err)
-	command, err := cli.BuildCobraCommand(c, cli.WithCobraMiddlewaresFunc(geppettolayers.GetCobraCommandGeppettoMiddlewares))
+	command, err := cli.BuildCobraCommand(c, cli.WithCobraMiddlewaresFunc(geppettosections.GetCobraCommandGeppettoMiddlewares))
 	cobra.CheckErr(err)
 	root.AddCommand(command)
 	cobra.CheckErr(root.Execute())

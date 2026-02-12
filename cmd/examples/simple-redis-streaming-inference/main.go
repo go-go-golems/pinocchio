@@ -14,12 +14,12 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/turns"
 
 	clay "github.com/go-go-golems/clay/pkg"
-	geppettolayers "github.com/go-go-golems/geppetto/pkg/layers"
+	geppettosections "github.com/go-go-golems/geppetto/pkg/sections"
 	"github.com/go-go-golems/glazed/pkg/cli"
 	"github.com/go-go-golems/glazed/pkg/cmds"
-	"github.com/go-go-golems/glazed/pkg/cmds/layers"
+	"github.com/go-go-golems/glazed/pkg/cmds/fields"
 	"github.com/go-go-golems/glazed/pkg/cmds/logging"
-	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
+	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	"github.com/go-go-golems/glazed/pkg/help"
 	help_cmd "github.com/go-go-golems/glazed/pkg/help/cmd"
 	"github.com/google/uuid"
@@ -63,20 +63,20 @@ type SimpleRedisStreamingInferenceCommand struct {
 var _ cmds.WriterCommand = (*SimpleRedisStreamingInferenceCommand)(nil)
 
 type SimpleRedisStreamingInferenceSettings struct {
-	PinocchioProfile string `glazed.parameter:"pinocchio-profile"`
-	WithLogging      bool   `glazed.parameter:"with-logging"`
-	WithCaller       bool   `glazed.parameter:"with-caller"`
-	Prompt           string `glazed.parameter:"prompt"`
-	OutputFormat     string `glazed.parameter:"output-format"`
-	WithMetadata     bool   `glazed.parameter:"with-metadata"`
-	FullOutput       bool   `glazed.parameter:"full-output"`
-	Verbose          bool   `glazed.parameter:"verbose"`
+	PinocchioProfile string `glazed:"pinocchio-profile"`
+	WithLogging      bool   `glazed:"with-logging"`
+	WithCaller       bool   `glazed:"with-caller"`
+	Prompt           string `glazed:"prompt"`
+	OutputFormat     string `glazed:"output-format"`
+	WithMetadata     bool   `glazed:"with-metadata"`
+	FullOutput       bool   `glazed:"full-output"`
+	Verbose          bool   `glazed:"verbose"`
 
 	Redis rediscfg.Settings
 }
 
 func NewSimpleRedisStreamingInferenceCommand() (*SimpleRedisStreamingInferenceCommand, error) {
-	geLayers, err := geppettolayers.CreateGeppettoLayers()
+	geLayers, err := geppettosections.CreateGeppettoSections()
 	if err != nil {
 		return nil, errors.Wrap(err, "create geppetto layers")
 	}
@@ -89,32 +89,32 @@ func NewSimpleRedisStreamingInferenceCommand() (*SimpleRedisStreamingInferenceCo
 		"simple-redis-streaming-inference",
 		cmds.WithShort("Simple streaming inference that publishes events to Redis Streams"),
 		cmds.WithArguments(
-			parameters.NewParameterDefinition("prompt", parameters.ParameterTypeString, parameters.WithHelp("Prompt to run")),
+			fields.New("prompt", fields.TypeString, fields.WithHelp("Prompt to run")),
 		),
 		cmds.WithFlags(
-			parameters.NewParameterDefinition("pinocchio-profile", parameters.ParameterTypeString, parameters.WithHelp("Pinocchio profile"), parameters.WithDefault("4o-mini")),
-			parameters.NewParameterDefinition("with-logging", parameters.ParameterTypeBool, parameters.WithHelp("Enable logging middleware"), parameters.WithDefault(false)),
-			parameters.NewParameterDefinition("with-caller", parameters.ParameterTypeBool, parameters.WithHelp("Include caller (file:line) in logs"), parameters.WithDefault(false)),
-			parameters.NewParameterDefinition("output-format", parameters.ParameterTypeString, parameters.WithHelp("Output format (text, json, yaml)"), parameters.WithDefault("text")),
-			parameters.NewParameterDefinition("with-metadata", parameters.ParameterTypeBool, parameters.WithHelp("Include metadata in output"), parameters.WithDefault(false)),
-			parameters.NewParameterDefinition("full-output", parameters.ParameterTypeBool, parameters.WithHelp("Include full output details"), parameters.WithDefault(false)),
-			parameters.NewParameterDefinition("verbose", parameters.ParameterTypeBool, parameters.WithHelp("Verbose event router logging"), parameters.WithDefault(false)),
-			parameters.NewParameterDefinition("log-level", parameters.ParameterTypeString, parameters.WithHelp("Global log level (trace, debug, info, warn, error)"), parameters.WithDefault("")),
+			fields.New("pinocchio-profile", fields.TypeString, fields.WithHelp("Pinocchio profile"), fields.WithDefault("4o-mini")),
+			fields.New("with-logging", fields.TypeBool, fields.WithHelp("Enable logging middleware"), fields.WithDefault(false)),
+			fields.New("with-caller", fields.TypeBool, fields.WithHelp("Include caller (file:line) in logs"), fields.WithDefault(false)),
+			fields.New("output-format", fields.TypeString, fields.WithHelp("Output format (text, json, yaml)"), fields.WithDefault("text")),
+			fields.New("with-metadata", fields.TypeBool, fields.WithHelp("Include metadata in output"), fields.WithDefault(false)),
+			fields.New("full-output", fields.TypeBool, fields.WithHelp("Include full output details"), fields.WithDefault(false)),
+			fields.New("verbose", fields.TypeBool, fields.WithHelp("Verbose event router logging"), fields.WithDefault(false)),
+			fields.New("log-level", fields.TypeString, fields.WithHelp("Global log level (trace, debug, info, warn, error)"), fields.WithDefault("")),
 		),
-		cmds.WithLayersList(append(geLayers, redisLayer)...),
+		cmds.WithSections(append(geLayers, redisLayer)...),
 	)
 
 	return &SimpleRedisStreamingInferenceCommand{CommandDescription: desc}, nil
 }
 
-func (c *SimpleRedisStreamingInferenceCommand) RunIntoWriter(ctx context.Context, parsedLayers *layers.ParsedLayers, w io.Writer) error {
+func (c *SimpleRedisStreamingInferenceCommand) RunIntoWriter(ctx context.Context, parsedLayers *values.Values, w io.Writer) error {
 	log.Info().Msg("Starting simple Redis streaming inference command")
 
 	s := &SimpleRedisStreamingInferenceSettings{}
-	if err := parsedLayers.InitializeStruct(layers.DefaultSlug, s); err != nil {
+	if err := parsedLayers.DecodeSectionInto(values.DefaultSlug, s); err != nil {
 		return errors.Wrap(err, "init default settings")
 	}
-	if err := parsedLayers.InitializeStruct("redis", &s.Redis); err != nil {
+	if err := parsedLayers.DecodeSectionInto("redis", &s.Redis); err != nil {
 		return errors.Wrap(err, "init redis settings")
 	}
 
@@ -158,8 +158,8 @@ func (c *SimpleRedisStreamingInferenceCommand) RunIntoWriter(ctx context.Context
 		return nil
 	})
 
-	// Build engine (events flow via context sinks)
-	eng, err := factory.NewEngineFromParsedLayers(parsedLayers)
+	// Build engine and attach the sink via run context.
+	eng, err := factory.NewEngineFromParsedValues(parsedLayers)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to create engine")
 		return errors.Wrap(err, "create engine")
@@ -236,7 +236,7 @@ func main() {
 	c, err := NewSimpleRedisStreamingInferenceCommand()
 	cobra.CheckErr(err)
 
-	command, err := cli.BuildCobraCommand(c, cli.WithCobraMiddlewaresFunc(geppettolayers.GetCobraCommandGeppettoMiddlewares))
+	command, err := cli.BuildCobraCommand(c, cli.WithCobraMiddlewaresFunc(geppettosections.GetCobraCommandGeppettoMiddlewares))
 	cobra.CheckErr(err)
 	rootCmd.AddCommand(command)
 

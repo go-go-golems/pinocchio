@@ -21,8 +21,9 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 	"github.com/go-go-golems/geppetto/pkg/turns"
 	glazedcmds "github.com/go-go-golems/glazed/pkg/cmds"
-	"github.com/go-go-golems/glazed/pkg/cmds/layers"
-	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
+	"github.com/go-go-golems/glazed/pkg/cmds/fields"
+	"github.com/go-go-golems/glazed/pkg/cmds/schema"
+	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	"github.com/go-go-golems/pinocchio/pkg/cmds/cmdlayers"
 	"github.com/go-go-golems/pinocchio/pkg/cmds/run"
 	pinui "github.com/go-go-golems/pinocchio/pkg/ui"
@@ -122,15 +123,15 @@ func (g *PinocchioCommand) buildInitialTurn(vars map[string]interface{}, imagePa
 }
 
 type PinocchioCommandDescription struct {
-	Name      string                            `yaml:"name"`
-	Short     string                            `yaml:"short"`
-	Long      string                            `yaml:"long,omitempty"`
-	Flags     []*parameters.ParameterDefinition `yaml:"flags,omitempty"`
-	Arguments []*parameters.ParameterDefinition `yaml:"arguments,omitempty"`
-	Layers    []layers.ParameterLayer           `yaml:"layers,omitempty"`
-	Type      string                            `yaml:"type,omitempty"`
-	Tags      []string                          `yaml:"tags,omitempty"`
-	Metadata  map[string]interface{}            `yaml:"metadata,omitempty"`
+	Name      string                 `yaml:"name"`
+	Short     string                 `yaml:"short"`
+	Long      string                 `yaml:"long,omitempty"`
+	Flags     []*fields.Definition   `yaml:"flags,omitempty"`
+	Arguments []*fields.Definition   `yaml:"arguments,omitempty"`
+	Layers    []schema.Section       `yaml:"layers,omitempty"`
+	Type      string                 `yaml:"type,omitempty"`
+	Tags      []string               `yaml:"tags,omitempty"`
+	Metadata  map[string]interface{} `yaml:"metadata,omitempty"`
 
 	Prompt       string   `yaml:"prompt,omitempty"`
 	Messages     []string `yaml:"messages,omitempty"`
@@ -175,7 +176,7 @@ func NewPinocchioCommand(
 		return nil, err
 	}
 
-	description.Layers.PrependLayers(helpersParameterLayer)
+	description.Schema.PrependSections(helpersParameterLayer)
 
 	ret := &PinocchioCommand{
 		CommandDescription: description,
@@ -193,12 +194,12 @@ func NewPinocchioCommand(
 // RunIntoWriter runs the command and writes the output into the given writer.
 func (g *PinocchioCommand) RunIntoWriter(
 	ctx context.Context,
-	parsedLayers *layers.ParsedLayers,
+	parsedValues *values.Values,
 	w io.Writer,
 ) error {
 	// Get helpers settings from parsed layers
 	helpersSettings := &cmdlayers.HelpersSettings{}
-	err := parsedLayers.InitializeStruct(cmdlayers.GeppettoHelpersSlug, helpersSettings)
+	err := parsedValues.DecodeSectionInto(cmdlayers.GeppettoHelpersSlug, helpersSettings)
 	if err != nil {
 		return errors.Wrap(err, "failed to initialize helpers settings")
 	}
@@ -208,7 +209,7 @@ func (g *PinocchioCommand) RunIntoWriter(
 	if err != nil {
 		return errors.Wrap(err, "failed to create step settings")
 	}
-	err = stepSettings.UpdateFromParsedLayers(parsedLayers)
+	err = stepSettings.UpdateFromParsedValues(parsedValues)
 	if err != nil {
 		return errors.Wrap(err, "failed to update step settings from parsed layers")
 	}
@@ -248,7 +249,7 @@ func (g *PinocchioCommand) RunIntoWriter(
 
 	// If we're just printing the prompt, render and print the seed Turn and return
 	if helpersSettings.PrintPrompt {
-		seed, err := g.buildInitialTurn(parsedLayers.GetDefaultParameterLayer().Parameters.ToMap(), imagePaths)
+		seed, err := g.buildInitialTurn(getDefaultTemplateVariables(parsedValues), imagePaths)
 		if err != nil {
 			return err
 		}
@@ -269,7 +270,7 @@ func (g *PinocchioCommand) RunIntoWriter(
 			TurnsDB:     helpersSettings.TurnsDB,
 		}),
 		run.WithRouter(router),
-		run.WithVariables(parsedLayers.GetDefaultParameterLayer().Parameters.ToMap()),
+		run.WithVariables(getDefaultTemplateVariables(parsedValues)),
 		run.WithImagePaths(imagePaths),
 	)
 	if err != nil {
@@ -277,6 +278,18 @@ func (g *PinocchioCommand) RunIntoWriter(
 	}
 
 	return nil
+}
+
+func getDefaultTemplateVariables(parsedValues *values.Values) map[string]interface{} {
+	ret := map[string]interface{}{}
+	defaultSectionValues, ok := parsedValues.Get(values.DefaultSlug)
+	if !ok {
+		return ret
+	}
+	defaultSectionValues.Fields.ForEach(func(key string, value *fields.FieldValue) {
+		ret[key] = value.Value
+	})
+	return ret
 }
 
 // RunWithOptions executes the command with the given options
@@ -323,9 +336,8 @@ func (g *PinocchioCommand) RunWithOptions(ctx context.Context, options ...run.Ru
 
 // runBlocking handles blocking execution mode using Engine directly
 func (g *PinocchioCommand) runBlocking(ctx context.Context, rc *run.RunContext) (*turns.Turn, error) {
-	var sinks []events.EventSink
-
 	// If we have a router, set up watermill sink for event publishing
+	var sinks []events.EventSink
 	if rc.Router != nil {
 		watermillSink := middleware.NewWatermillSink(rc.Router.Publisher, "chat")
 		sinks = []events.EventSink{watermillSink}

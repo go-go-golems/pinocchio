@@ -8,8 +8,8 @@ import (
 
 	"github.com/go-go-golems/glazed/pkg/cli"
 	"github.com/go-go-golems/glazed/pkg/cmds"
-	"github.com/go-go-golems/glazed/pkg/cmds/layers"
-	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
+	"github.com/go-go-golems/glazed/pkg/cmds/fields"
+	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	"github.com/go-go-golems/glazed/pkg/middlewares"
 	"github.com/go-go-golems/glazed/pkg/settings"
 	"github.com/go-go-golems/glazed/pkg/types"
@@ -21,46 +21,46 @@ type TimelineEntityCommand struct {
 }
 
 type TimelineEntitySettings struct {
-	TimelineDSN    string `glazed.parameter:"timeline-dsn"`
-	TimelineDB     string `glazed.parameter:"timeline-db"`
-	ConvID         string `glazed.parameter:"conv-id"`
-	EntityID       string `glazed.parameter:"entity-id"`
-	IncludeJSON    bool   `glazed.parameter:"include-json"`
-	IncludeSummary bool   `glazed.parameter:"include-summary"`
+	TimelineDSN    string `glazed:"timeline-dsn"`
+	TimelineDB     string `glazed:"timeline-db"`
+	ConvID         string `glazed:"conv-id"`
+	EntityID       string `glazed:"entity-id"`
+	IncludeJSON    bool   `glazed:"include-json"`
+	IncludeSummary bool   `glazed:"include-summary"`
 }
 
 func NewTimelineEntityCommand() (*TimelineEntityCommand, error) {
-	glazedLayer, err := settings.NewGlazedParameterLayers()
+	glazedLayer, err := settings.NewGlazedSection()
 	if err != nil {
 		return nil, err
 	}
-	commandSettingsLayer, err := cli.NewCommandSettingsLayer()
+	commandSettingsLayer, err := cli.NewCommandSettingsSection()
 	if err != nil {
 		return nil, err
 	}
 
 	flags := append(timelineStoreFlagDefs(),
-		parameters.NewParameterDefinition(
+		fields.New(
 			"conv-id",
-			parameters.ParameterTypeString,
-			parameters.WithHelp("Conversation ID"),
+			fields.TypeString,
+			fields.WithHelp("Conversation ID"),
 		),
-		parameters.NewParameterDefinition(
+		fields.New(
 			"entity-id",
-			parameters.ParameterTypeString,
-			parameters.WithHelp("Entity ID to fetch"),
+			fields.TypeString,
+			fields.WithHelp("Entity ID to fetch"),
 		),
-		parameters.NewParameterDefinition(
+		fields.New(
 			"include-json",
-			parameters.ParameterTypeBool,
-			parameters.WithDefault(true),
-			parameters.WithHelp("Include raw entity JSON"),
+			fields.TypeBool,
+			fields.WithDefault(true),
+			fields.WithHelp("Include raw entity JSON"),
 		),
-		parameters.NewParameterDefinition(
+		fields.New(
 			"include-summary",
-			parameters.ParameterTypeBool,
-			parameters.WithDefault(true),
-			parameters.WithHelp("Include a human summary"),
+			fields.TypeBool,
+			fields.WithDefault(true),
+			fields.WithHelp("Include a human summary"),
 		),
 	)
 
@@ -69,7 +69,7 @@ func NewTimelineEntityCommand() (*TimelineEntityCommand, error) {
 		cmds.WithShort("Fetch a single timeline entity"),
 		cmds.WithLong("Fetch a single timeline entity by ID."),
 		cmds.WithFlags(flags...),
-		cmds.WithLayersList(glazedLayer, commandSettingsLayer),
+		cmds.WithSections(glazedLayer, commandSettingsLayer),
 	)
 
 	return &TimelineEntityCommand{CommandDescription: desc}, nil
@@ -77,11 +77,11 @@ func NewTimelineEntityCommand() (*TimelineEntityCommand, error) {
 
 func (c *TimelineEntityCommand) RunIntoGlazeProcessor(
 	ctx context.Context,
-	parsedLayers *layers.ParsedLayers,
+	parsedLayers *values.Values,
 	gp middlewares.Processor,
 ) error {
 	settings := &TimelineEntitySettings{}
-	if err := parsedLayers.InitializeStruct(layers.DefaultSlug, settings); err != nil {
+	if err := parsedLayers.DecodeSectionInto(values.DefaultSlug, settings); err != nil {
 		return err
 	}
 	convID := strings.TrimSpace(settings.ConvID)

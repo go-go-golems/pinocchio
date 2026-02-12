@@ -6,8 +6,8 @@ import (
 
 	"github.com/go-go-golems/glazed/pkg/cli"
 	"github.com/go-go-golems/glazed/pkg/cmds"
-	"github.com/go-go-golems/glazed/pkg/cmds/layers"
-	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
+	"github.com/go-go-golems/glazed/pkg/cmds/fields"
+	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	"github.com/go-go-golems/glazed/pkg/middlewares"
 	"github.com/go-go-golems/glazed/pkg/settings"
 	"github.com/go-go-golems/glazed/pkg/types"
@@ -19,110 +19,110 @@ type TimelineEntitiesCommand struct {
 }
 
 type TimelineEntitiesSettings struct {
-	TimelineDSN     string `glazed.parameter:"timeline-dsn"`
-	TimelineDB      string `glazed.parameter:"timeline-db"`
-	ConvID          string `glazed.parameter:"conv-id"`
-	Kind            string `glazed.parameter:"kind"`
-	EntityID        string `glazed.parameter:"entity-id"`
-	VersionMin      int64  `glazed.parameter:"version-min"`
-	VersionMax      int64  `glazed.parameter:"version-max"`
-	CreatedAfterMs  int64  `glazed.parameter:"created-after-ms"`
-	CreatedBeforeMs int64  `glazed.parameter:"created-before-ms"`
-	UpdatedAfterMs  int64  `glazed.parameter:"updated-after-ms"`
-	UpdatedBeforeMs int64  `glazed.parameter:"updated-before-ms"`
-	Limit           int    `glazed.parameter:"limit"`
-	Order           string `glazed.parameter:"order"`
-	IncludeJSON     bool   `glazed.parameter:"include-json"`
-	IncludeSummary  bool   `glazed.parameter:"include-summary"`
+	TimelineDSN     string `glazed:"timeline-dsn"`
+	TimelineDB      string `glazed:"timeline-db"`
+	ConvID          string `glazed:"conv-id"`
+	Kind            string `glazed:"kind"`
+	EntityID        string `glazed:"entity-id"`
+	VersionMin      int64  `glazed:"version-min"`
+	VersionMax      int64  `glazed:"version-max"`
+	CreatedAfterMs  int64  `glazed:"created-after-ms"`
+	CreatedBeforeMs int64  `glazed:"created-before-ms"`
+	UpdatedAfterMs  int64  `glazed:"updated-after-ms"`
+	UpdatedBeforeMs int64  `glazed:"updated-before-ms"`
+	Limit           int    `glazed:"limit"`
+	Order           string `glazed:"order"`
+	IncludeJSON     bool   `glazed:"include-json"`
+	IncludeSummary  bool   `glazed:"include-summary"`
 }
 
 func NewTimelineEntitiesCommand() (*TimelineEntitiesCommand, error) {
-	glazedLayer, err := settings.NewGlazedParameterLayers()
+	glazedLayer, err := settings.NewGlazedSection()
 	if err != nil {
 		return nil, err
 	}
-	commandSettingsLayer, err := cli.NewCommandSettingsLayer()
+	commandSettingsLayer, err := cli.NewCommandSettingsSection()
 	if err != nil {
 		return nil, err
 	}
 
 	flags := append(timelineStoreFlagDefs(),
-		parameters.NewParameterDefinition(
+		fields.New(
 			"conv-id",
-			parameters.ParameterTypeString,
-			parameters.WithHelp("Conversation ID to query"),
+			fields.TypeString,
+			fields.WithHelp("Conversation ID to query"),
 		),
-		parameters.NewParameterDefinition(
+		fields.New(
 			"kind",
-			parameters.ParameterTypeString,
-			parameters.WithDefault(""),
-			parameters.WithHelp("Filter by entity kind"),
+			fields.TypeString,
+			fields.WithDefault(""),
+			fields.WithHelp("Filter by entity kind"),
 		),
-		parameters.NewParameterDefinition(
+		fields.New(
 			"entity-id",
-			parameters.ParameterTypeString,
-			parameters.WithDefault(""),
-			parameters.WithHelp("Filter by entity ID"),
+			fields.TypeString,
+			fields.WithDefault(""),
+			fields.WithHelp("Filter by entity ID"),
 		),
-		parameters.NewParameterDefinition(
+		fields.New(
 			"version-min",
-			parameters.ParameterTypeInteger,
-			parameters.WithDefault(0),
-			parameters.WithHelp("Minimum entity version"),
+			fields.TypeInteger,
+			fields.WithDefault(0),
+			fields.WithHelp("Minimum entity version"),
 		),
-		parameters.NewParameterDefinition(
+		fields.New(
 			"version-max",
-			parameters.ParameterTypeInteger,
-			parameters.WithDefault(0),
-			parameters.WithHelp("Maximum entity version"),
+			fields.TypeInteger,
+			fields.WithDefault(0),
+			fields.WithHelp("Maximum entity version"),
 		),
-		parameters.NewParameterDefinition(
+		fields.New(
 			"created-after-ms",
-			parameters.ParameterTypeInteger,
-			parameters.WithDefault(0),
-			parameters.WithHelp("Only include entities created after this timestamp (ms)"),
+			fields.TypeInteger,
+			fields.WithDefault(0),
+			fields.WithHelp("Only include entities created after this timestamp (ms)"),
 		),
-		parameters.NewParameterDefinition(
+		fields.New(
 			"created-before-ms",
-			parameters.ParameterTypeInteger,
-			parameters.WithDefault(0),
-			parameters.WithHelp("Only include entities created before this timestamp (ms)"),
+			fields.TypeInteger,
+			fields.WithDefault(0),
+			fields.WithHelp("Only include entities created before this timestamp (ms)"),
 		),
-		parameters.NewParameterDefinition(
+		fields.New(
 			"updated-after-ms",
-			parameters.ParameterTypeInteger,
-			parameters.WithDefault(0),
-			parameters.WithHelp("Only include entities updated after this timestamp (ms)"),
+			fields.TypeInteger,
+			fields.WithDefault(0),
+			fields.WithHelp("Only include entities updated after this timestamp (ms)"),
 		),
-		parameters.NewParameterDefinition(
+		fields.New(
 			"updated-before-ms",
-			parameters.ParameterTypeInteger,
-			parameters.WithDefault(0),
-			parameters.WithHelp("Only include entities updated before this timestamp (ms)"),
+			fields.TypeInteger,
+			fields.WithDefault(0),
+			fields.WithHelp("Only include entities updated before this timestamp (ms)"),
 		),
-		parameters.NewParameterDefinition(
+		fields.New(
 			"limit",
-			parameters.ParameterTypeInteger,
-			parameters.WithDefault(5000),
-			parameters.WithHelp("Maximum number of entities to return"),
+			fields.TypeInteger,
+			fields.WithDefault(5000),
+			fields.WithHelp("Maximum number of entities to return"),
 		),
-		parameters.NewParameterDefinition(
+		fields.New(
 			"order",
-			parameters.ParameterTypeString,
-			parameters.WithDefault("version"),
-			parameters.WithHelp("Order by version|created|updated (prefix with - for desc)"),
+			fields.TypeString,
+			fields.WithDefault("version"),
+			fields.WithHelp("Order by version|created|updated (prefix with - for desc)"),
 		),
-		parameters.NewParameterDefinition(
+		fields.New(
 			"include-json",
-			parameters.ParameterTypeBool,
-			parameters.WithDefault(false),
-			parameters.WithHelp("Include raw entity JSON"),
+			fields.TypeBool,
+			fields.WithDefault(false),
+			fields.WithHelp("Include raw entity JSON"),
 		),
-		parameters.NewParameterDefinition(
+		fields.New(
 			"include-summary",
-			parameters.ParameterTypeBool,
-			parameters.WithDefault(true),
-			parameters.WithHelp("Include a human summary"),
+			fields.TypeBool,
+			fields.WithDefault(true),
+			fields.WithHelp("Include a human summary"),
 		),
 	)
 
@@ -131,7 +131,7 @@ func NewTimelineEntitiesCommand() (*TimelineEntitiesCommand, error) {
 		cmds.WithShort("List timeline entities for a conversation"),
 		cmds.WithLong("List timeline entities with optional filters and ordering."),
 		cmds.WithFlags(flags...),
-		cmds.WithLayersList(glazedLayer, commandSettingsLayer),
+		cmds.WithSections(glazedLayer, commandSettingsLayer),
 	)
 
 	return &TimelineEntitiesCommand{CommandDescription: desc}, nil
@@ -139,11 +139,11 @@ func NewTimelineEntitiesCommand() (*TimelineEntitiesCommand, error) {
 
 func (c *TimelineEntitiesCommand) RunIntoGlazeProcessor(
 	ctx context.Context,
-	parsedLayers *layers.ParsedLayers,
+	parsedLayers *values.Values,
 	gp middlewares.Processor,
 ) error {
 	settings := &TimelineEntitiesSettings{}
-	if err := parsedLayers.InitializeStruct(layers.DefaultSlug, settings); err != nil {
+	if err := parsedLayers.DecodeSectionInto(values.DefaultSlug, settings); err != nil {
 		return err
 	}
 	convID := strings.TrimSpace(settings.ConvID)

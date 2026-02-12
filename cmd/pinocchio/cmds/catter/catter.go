@@ -2,9 +2,9 @@ package catter
 
 import (
 	"github.com/go-go-golems/glazed/pkg/cli"
-	"github.com/go-go-golems/glazed/pkg/cmds/layers"
-	"github.com/go-go-golems/glazed/pkg/cmds/middlewares"
-	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
+	"github.com/go-go-golems/glazed/pkg/cmds/fields"
+	"github.com/go-go-golems/glazed/pkg/cmds/sources"
+	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	"github.com/go-go-golems/pinocchio/cmd/pinocchio/cmds/catter/cmds"
 	"github.com/spf13/cobra"
 )
@@ -38,16 +38,16 @@ func AddToRootCommand(rootCmd *cobra.Command) {
 }
 
 func getMiddlewares(
-	_ *layers.ParsedLayers,
+	_ *values.Values,
 	cmd *cobra.Command,
 	args []string,
-) ([]middlewares.Middleware, error) {
-	return []middlewares.Middleware{
-		middlewares.ParseFromCobraCommand(cmd),
-		middlewares.GatherArguments(args),
-		middlewares.UpdateFromEnv("PINOCCHIO",
-			parameters.WithParseStepSource("env"),
+) ([]sources.Middleware, error) {
+	return []sources.Middleware{
+		sources.FromCobra(cmd),
+		sources.FromArgs(args),
+		sources.FromEnv("PINOCCHIO",
+			fields.WithSource("env"),
 		),
-		middlewares.SetFromDefaults(),
+		sources.FromDefaults(),
 	}, nil
 }

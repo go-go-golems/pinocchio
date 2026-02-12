@@ -11,9 +11,9 @@ import (
 	clay "github.com/go-go-golems/clay/pkg"
 	"github.com/go-go-golems/glazed/pkg/cli"
 	"github.com/go-go-golems/glazed/pkg/cmds"
-	"github.com/go-go-golems/glazed/pkg/cmds/layers"
+	"github.com/go-go-golems/glazed/pkg/cmds/fields"
 	"github.com/go-go-golems/glazed/pkg/cmds/logging"
-	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
+	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	"github.com/go-go-golems/glazed/pkg/help"
 	help_cmd "github.com/go-go-golems/glazed/pkg/help/cmd"
 	"github.com/pkg/errors"
@@ -21,7 +21,7 @@ import (
 
 	geppettomw "github.com/go-go-golems/geppetto/pkg/inference/middleware"
 	geptools "github.com/go-go-golems/geppetto/pkg/inference/tools"
-	geppettolayers "github.com/go-go-golems/geppetto/pkg/layers"
+	geppettosections "github.com/go-go-golems/geppetto/pkg/sections"
 	toolspkg "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/tools"
 	timelinecmd "github.com/go-go-golems/pinocchio/cmd/web-chat/timeline"
 	agentmode "github.com/go-go-golems/pinocchio/pkg/middlewares/agentmode"
@@ -41,7 +41,7 @@ type Command struct {
 }
 
 func NewCommand() (*Command, error) {
-	geLayers, err := geppettolayers.CreateGeppettoLayers()
+	geLayers, err := geppettosections.CreateGeppettoSections()
 	if err != nil {
 		return nil, errors.Wrap(err, "create geppetto layers")
 	}
@@ -54,23 +54,23 @@ func NewCommand() (*Command, error) {
 		"web-chat",
 		cmds.WithShort("Serve a minimal WebSocket web UI that streams chat events"),
 		cmds.WithFlags(
-			parameters.NewParameterDefinition("addr", parameters.ParameterTypeString, parameters.WithDefault(":8080"), parameters.WithHelp("HTTP listen address")),
-			parameters.NewParameterDefinition("enable-agentmode", parameters.ParameterTypeBool, parameters.WithDefault(false), parameters.WithHelp("Enable agent mode middleware")),
-			parameters.NewParameterDefinition("idle-timeout-seconds", parameters.ParameterTypeInteger, parameters.WithDefault(60), parameters.WithHelp("Stop per-conversation reader after N seconds with no sockets (0=disabled)")),
-			parameters.NewParameterDefinition("evict-idle-seconds", parameters.ParameterTypeInteger, parameters.WithDefault(300), parameters.WithHelp("Evict conversations after N seconds idle (0=disabled)")),
-			parameters.NewParameterDefinition("evict-interval-seconds", parameters.ParameterTypeInteger, parameters.WithDefault(60), parameters.WithHelp("Sweep idle conversations every N seconds (0=disabled)")),
-			parameters.NewParameterDefinition("root", parameters.ParameterTypeString, parameters.WithDefault("/"), parameters.WithHelp("Serve the chat UI under a given URL root (e.g., /chat)")),
-			parameters.NewParameterDefinition("timeline-dsn", parameters.ParameterTypeString, parameters.WithDefault(""), parameters.WithHelp("SQLite DSN for durable timeline snapshots (enables GET /timeline); preferred over timeline-db")),
-			parameters.NewParameterDefinition("timeline-db", parameters.ParameterTypeString, parameters.WithDefault(""), parameters.WithHelp("SQLite DB file path for durable timeline snapshots (enables GET /timeline); DSN is derived with WAL/busy_timeout")),
-			parameters.NewParameterDefinition("turns-dsn", parameters.ParameterTypeString, parameters.WithDefault(""), parameters.WithHelp("SQLite DSN for durable turn snapshots (enables GET /turns); preferred over turns-db")),
-			parameters.NewParameterDefinition("turns-db", parameters.ParameterTypeString, parameters.WithDefault(""), parameters.WithHelp("SQLite DB file path for durable turn snapshots (enables GET /turns); DSN is derived with WAL/busy_timeout")),
+			fields.New("addr", fields.TypeString, fields.WithDefault(":8080"), fields.WithHelp("HTTP listen address")),
+			fields.New("enable-agentmode", fields.TypeBool, fields.WithDefault(false), fields.WithHelp("Enable agent mode middleware")),
+			fields.New("idle-timeout-seconds", fields.TypeInteger, fields.WithDefault(60), fields.WithHelp("Stop per-conversation reader after N seconds with no sockets (0=disabled)")),
+			fields.New("evict-idle-seconds", fields.TypeInteger, fields.WithDefault(300), fields.WithHelp("Evict conversations after N seconds idle (0=disabled)")),
+			fields.New("evict-interval-seconds", fields.TypeInteger, fields.WithDefault(60), fields.WithHelp("Sweep idle conversations every N seconds (0=disabled)")),
+			fields.New("root", fields.TypeString, fields.WithDefault("/"), fields.WithHelp("Serve the chat UI under a given URL root (e.g., /chat)")),
+			fields.New("timeline-dsn", fields.TypeString, fields.WithDefault(""), fields.WithHelp("SQLite DSN for durable timeline snapshots (enables GET /timeline); preferred over timeline-db")),
+			fields.New("timeline-db", fields.TypeString, fields.WithDefault(""), fields.WithHelp("SQLite DB file path for durable timeline snapshots (enables GET /timeline); DSN is derived with WAL/busy_timeout")),
+			fields.New("turns-dsn", fields.TypeString, fields.WithDefault(""), fields.WithHelp("SQLite DSN for durable turn snapshots (enables GET /turns); preferred over turns-db")),
+			fields.New("turns-db", fields.TypeString, fields.WithDefault(""), fields.WithHelp("SQLite DB file path for durable turn snapshots (enables GET /turns); DSN is derived with WAL/busy_timeout")),
 		),
-		cmds.WithLayersList(append(geLayers, redisLayer)...),
+		cmds.WithSections(append(geLayers, redisLayer)...),
 	)
 	return &Command{CommandDescription: desc}, nil
 }
 
-func (c *Command) RunIntoWriter(ctx context.Context, parsed *layers.ParsedLayers, _ io.Writer) error {
+func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io.Writer) error {
 	// Build webchat router and register middlewares/tools/profiles
 	r, err := webchat.NewRouter(ctx, parsed, staticFS)
 	if err != nil {
@@ -132,10 +132,10 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *layers.ParsedLayers
 
 	// If --root is not "/", mount router under that root with a parent mux
 	type serverSettings struct {
-		Root string `glazed.parameter:"root"`
+		Root string `glazed:"root"`
 	}
 	s := &serverSettings{}
-	_ = parsed.InitializeStruct(layers.DefaultSlug, s)
+	_ = parsed.DecodeSectionInto(values.DefaultSlug, s)
 	if s.Root != "" && s.Root != "/" {
 		parent := http.NewServeMux()
 		// Normalize prefix: ensure it starts with "/" and ends with "/"
@@ -171,7 +171,7 @@ func main() {
 
 	c, err := NewCommand()
 	cobra.CheckErr(err)
-	command, err := cli.BuildCobraCommand(c, cli.WithCobraMiddlewaresFunc(geppettolayers.GetCobraCommandGeppettoMiddlewares))
+	command, err := cli.BuildCobraCommand(c, cli.WithCobraMiddlewaresFunc(geppettosections.GetCobraCommandGeppettoMiddlewares))
 	cobra.CheckErr(err)
 	root.AddCommand(command)
 	cobra.CheckErr(root.Execute())

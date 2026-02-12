@@ -3,15 +3,16 @@ package main
 import (
 	"embed"
 	"fmt"
-	layers2 "github.com/go-go-golems/geppetto/pkg/layers"
+	sections2 "github.com/go-go-golems/geppetto/pkg/sections"
 	"os"
+	"path/filepath"
 
 	clay "github.com/go-go-golems/clay/pkg"
 	"github.com/go-go-golems/clay/pkg/repositories"
 	"github.com/go-go-golems/geppetto/pkg/doc"
 	"github.com/go-go-golems/glazed/pkg/cli"
-	"github.com/go-go-golems/glazed/pkg/cmds/layers"
 	"github.com/go-go-golems/glazed/pkg/cmds/logging"
+	"github.com/go-go-golems/glazed/pkg/cmds/schema"
 	"github.com/go-go-golems/glazed/pkg/help"
 	help_cmd "github.com/go-go-golems/glazed/pkg/help/cmd"
 	pinocchio_cmds "github.com/go-go-golems/pinocchio/cmd/pinocchio/cmds"
@@ -20,7 +21,6 @@ import (
 	"github.com/go-go-golems/pinocchio/cmd/pinocchio/cmds/helpers"
 	"github.com/go-go-golems/pinocchio/cmd/pinocchio/cmds/kagi"
 	"github.com/go-go-golems/pinocchio/cmd/pinocchio/cmds/openai"
-	"github.com/go-go-golems/pinocchio/cmd/pinocchio/cmds/prompto"
 	"github.com/go-go-golems/pinocchio/cmd/pinocchio/cmds/temporizer"
 	"github.com/go-go-golems/pinocchio/cmd/pinocchio/cmds/tokens"
 	pinocchio_docs "github.com/go-go-golems/pinocchio/cmd/pinocchio/doc"
@@ -73,7 +73,7 @@ func main() {
 	// because we need to load the file and then run the command itself.
 	// we need to do this before cobra, because we don't know which flags to load yet
 	if len(os.Args) >= 3 && os.Args[1] == "run-command" && os.Args[2] != "--help" {
-		bytes, err := os.ReadFile(os.Args[2])
+		bytes, err := readRunCommandFile(os.Args[2])
 		if err != nil {
 			fmt.Printf("Could not read file: %v\n", err)
 			os.Exit(1)
@@ -108,6 +108,30 @@ func main() {
 
 	err = rootCmd.Execute()
 	cobra.CheckErr(err)
+}
+
+func readRunCommandFile(pathArg string) ([]byte, error) {
+	cleanPath := filepath.Clean(pathArg)
+	if filepath.IsAbs(cleanPath) {
+		root, err := os.OpenRoot(filepath.Dir(cleanPath))
+		if err != nil {
+			return nil, err
+		}
+		defer func() {
+			_ = root.Close()
+		}()
+		return root.ReadFile(filepath.Base(cleanPath))
+	}
+
+	root, err := os.OpenRoot(".")
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		_ = root.Close()
+	}()
+
+	return root.ReadFile(cleanPath)
 }
 
 var runCommandCmd = &cobra.Command{
@@ -221,10 +245,10 @@ func initAllCommands(helpSystem *help.HelpSystem) error {
 		helpSystem,
 		rootCmd,
 		repositories_,
-		cli.WithCobraMiddlewaresFunc(layers2.GetCobraCommandGeppettoMiddlewares),
-		cli.WithCobraShortHelpLayers(layers.DefaultSlug, cmdlayers.GeppettoHelpersSlug),
-		cli.WithProfileSettingsLayer(),
-		cli.WithCreateCommandSettingsLayer(),
+		cli.WithCobraMiddlewaresFunc(sections2.GetCobraCommandGeppettoMiddlewares),
+		cli.WithCobraShortHelpSections(schema.DefaultSlug, cmdlayers.GeppettoHelpersSlug),
+		cli.WithProfileSettingsSection(),
+		cli.WithCreateCommandSettingsSection(),
 	)
 	if err != nil {
 		return err
@@ -257,18 +281,12 @@ func initAllCommands(helpSystem *help.HelpSystem) error {
 
 	catter.AddToRootCommand(rootCmd)
 
-	promptoCommand, err := prompto.InitPromptoCmd(helpSystem)
-	if err != nil {
-		return err
-	}
-	rootCmd.AddCommand(promptoCommand)
-
 	clipCommand, err := pinocchio_cmds.NewClipCommand()
 	if err != nil {
 		return err
 	}
 	cobraClipCommand, err := cli.BuildCobraCommandFromCommand(clipCommand,
-		cli.WithCobraMiddlewaresFunc(layers2.GetCobraCommandGeppettoMiddlewares),
+		cli.WithCobraMiddlewaresFunc(sections2.GetCobraCommandGeppettoMiddlewares),
 	)
 	if err != nil {
 		return err

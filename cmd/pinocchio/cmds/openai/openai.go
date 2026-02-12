@@ -8,8 +8,8 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings/openai"
 	ai_types "github.com/go-go-golems/geppetto/pkg/steps/ai/types"
 	"github.com/go-go-golems/glazed/pkg/cmds"
-	"github.com/go-go-golems/glazed/pkg/cmds/layers"
-	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
+	"github.com/go-go-golems/glazed/pkg/cmds/fields"
+	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	"github.com/go-go-golems/glazed/pkg/middlewares"
 	"github.com/go-go-golems/glazed/pkg/settings"
 	"github.com/go-go-golems/glazed/pkg/types"
@@ -32,11 +32,11 @@ type ListEnginesCommand struct {
 var _ cmds.GlazeCommand = &ListEnginesCommand{}
 
 func NewListEngineCommand() (*ListEnginesCommand, error) {
-	glazedParameterLayer, err := settings.NewGlazedParameterLayers()
+	glazedParameterLayer, err := settings.NewGlazedSection()
 	if err != nil {
 		return nil, err
 	}
-	openaiParameterLayer, err := openai.NewParameterLayer()
+	openaiParameterLayer, err := openai.NewValueSection()
 	if err != nil {
 		return nil, err
 	}
@@ -46,25 +46,25 @@ func NewListEngineCommand() (*ListEnginesCommand, error) {
 			"list-engines",
 			cmds.WithShort("list engines"),
 			cmds.WithFlags(
-				parameters.NewParameterDefinition(
+				fields.New(
 					"id",
-					parameters.ParameterTypeString,
-					parameters.WithHelp("glob to match engine id"),
+					fields.TypeString,
+					fields.WithHelp("glob to match engine id"),
 				),
-				parameters.NewParameterDefinition(
+				fields.New(
 					"owner",
-					parameters.ParameterTypeString,
-					parameters.WithHelp("glob to match engine owner"),
+					fields.TypeString,
+					fields.WithHelp("glob to match engine owner"),
 				),
 
-				parameters.NewParameterDefinition(
+				fields.New(
 					"only-ready",
-					parameters.ParameterTypeBool,
-					parameters.WithHelp("glob to match engine ready"),
-					parameters.WithDefault(false),
+					fields.TypeBool,
+					fields.WithHelp("glob to match engine ready"),
+					fields.WithDefault(false),
 				),
 			),
-			cmds.WithLayersList(
+			cmds.WithSections(
 				glazedParameterLayer,
 				openaiParameterLayer,
 			),
@@ -73,30 +73,30 @@ func NewListEngineCommand() (*ListEnginesCommand, error) {
 }
 
 type ListEnginesSettings struct {
-	ID        string `glazed.parameter:"id"`
-	Owner     string `glazed.parameter:"owner"`
-	OnlyReady bool   `glazed.parameter:"only-ready"`
+	ID        string `glazed:"id"`
+	Owner     string `glazed:"owner"`
+	OnlyReady bool   `glazed:"only-ready"`
 }
 
 func (c *ListEnginesCommand) RunIntoGlazeProcessor(
 	ctx context.Context,
-	parsedLayers *layers.ParsedLayers,
+	parsedLayers *values.Values,
 	gp middlewares.Processor,
 ) error {
 	s := &ListEnginesSettings{}
-	err := parsedLayers.InitializeStruct(layers.DefaultSlug, s)
+	err := parsedLayers.DecodeSectionInto(values.DefaultSlug, s)
 	if err != nil {
 		return err
 	}
 
 	openaiSettings := &openai.Settings{}
-	err = parsedLayers.InitializeStruct(openai.OpenAiChatSlug, openaiSettings)
+	err = parsedLayers.DecodeSectionInto(openai.OpenAiChatSlug, openaiSettings)
 	if err != nil {
 		return err
 	}
 
 	apiSettings := &settings2.APISettings{}
-	err = parsedLayers.InitializeStruct(openai.OpenAiChatSlug, apiSettings)
+	err = parsedLayers.DecodeSectionInto(openai.OpenAiChatSlug, apiSettings)
 	if err != nil {
 		return err
 	}
@@ -166,11 +166,11 @@ type EngineInfoCommand struct {
 var _ cmds.GlazeCommand = &EngineInfoCommand{}
 
 func NewEngineInfoCommand() (*EngineInfoCommand, error) {
-	glazedParameterLayer, err := settings.NewGlazedParameterLayers()
+	glazedParameterLayer, err := settings.NewGlazedSection()
 	if err != nil {
 		return nil, err
 	}
-	openaiParameterLayer, err := openai.NewParameterLayer()
+	openaiParameterLayer, err := openai.NewValueSection()
 	if err != nil {
 		return nil, err
 	}
@@ -180,13 +180,13 @@ func NewEngineInfoCommand() (*EngineInfoCommand, error) {
 			"engine-info",
 			cmds.WithShort("get engine info"),
 			cmds.WithArguments(
-				parameters.NewParameterDefinition(
+				fields.New(
 					"engine",
-					parameters.ParameterTypeString,
-					parameters.WithHelp("engine id"),
+					fields.TypeString,
+					fields.WithHelp("engine id"),
 				),
 			),
-			cmds.WithLayersList(
+			cmds.WithSections(
 				glazedParameterLayer,
 				openaiParameterLayer,
 			),
@@ -195,26 +195,26 @@ func NewEngineInfoCommand() (*EngineInfoCommand, error) {
 }
 
 type EngineInfoSettings struct {
-	Engine string `glazed.parameter:"engine"`
+	Engine string `glazed:"engine"`
 }
 
 func (c *EngineInfoCommand) RunIntoGlazeProcessor(
 	ctx context.Context,
-	parsedLayers *layers.ParsedLayers,
+	parsedLayers *values.Values,
 	gp middlewares.Processor,
 ) error {
 	s := &EngineInfoSettings{}
-	err := parsedLayers.InitializeStruct(layers.DefaultSlug, s)
+	err := parsedLayers.DecodeSectionInto(values.DefaultSlug, s)
 	if err != nil {
 		return err
 	}
 
 	openaiSettings := &openai.Settings{}
-	err = parsedLayers.InitializeStruct(openai.OpenAiChatSlug, openaiSettings)
+	err = parsedLayers.DecodeSectionInto(openai.OpenAiChatSlug, openaiSettings)
 	cobra.CheckErr(err)
 
 	apiSettings := &settings2.APISettings{}
-	err = parsedLayers.InitializeStruct(openai.OpenAiChatSlug, apiSettings)
+	err = parsedLayers.DecodeSectionInto(openai.OpenAiChatSlug, apiSettings)
 	if err != nil {
 		return err
 	}

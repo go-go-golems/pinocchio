@@ -45,7 +45,7 @@ lintmax: build geppetto-lint-build
 
 gosec:
 	go install github.com/securego/gosec/v2/cmd/gosec@latest
-	gosec -exclude=G101,G203,G304,G301,G306,G204,G302 -exclude-dir=.history -exclude-dir=testdata ./...
+	gosec -exclude=G101,G203,G304,G301,G306,G204,G302 -exclude-dir=.history -exclude-dir=testdata -exclude-dir=pkg/sem/pb ./...
 
 govulncheck:
 	go install golang.org/x/vuln/cmd/govulncheck@latest
@@ -88,7 +88,6 @@ bump-glazed:
 	go get github.com/go-go-golems/parka@latest
 	go get github.com/go-go-golems/bobatea@latest
 	go get github.com/go-go-golems/geppetto@latest
-	go get github.com/go-go-golems/prompto@latest
 	go mod tidy
 
 # Path to CodeQL CLI - adjust based on installation location

@@ -6,29 +6,29 @@ import (
 	"os"
 	"strings"
 
-	"github.com/go-go-golems/clay/pkg/filefilter"
 	"github.com/go-go-golems/pinocchio/cmd/pinocchio/cmds/catter/pkg"
+	"github.com/go-go-golems/pinocchio/pkg/filefilter"
 
 	"github.com/go-go-golems/glazed/pkg/cmds"
-	"github.com/go-go-golems/glazed/pkg/cmds/layers"
-	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
+	"github.com/go-go-golems/glazed/pkg/cmds/fields"
+	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	"github.com/go-go-golems/glazed/pkg/middlewares"
 	"github.com/go-go-golems/glazed/pkg/settings"
 )
 
 type CatterPrintSettings struct {
-	MaxTotalSize  int64    `glazed.parameter:"max-total-size"`
-	List          bool     `glazed.parameter:"list"`
-	Delimiter     string   `glazed.parameter:"delimiter"`
-	MaxLines      int      `glazed.parameter:"max-lines"`
-	MaxTokens     int      `glazed.parameter:"max-tokens"`
-	PrintFilters  bool     `glazed.parameter:"print-filters"`
-	FilterYAML    string   `glazed.parameter:"filter-yaml"`
-	FilterProfile string   `glazed.parameter:"filter-profile"`
-	Glazed        bool     `glazed.parameter:"glazed"`
-	ArchiveFile   string   `glazed.parameter:"archive-file"`
-	ArchivePrefix string   `glazed.parameter:"archive-prefix"`
-	Paths         []string `glazed.parameter:"paths"`
+	MaxTotalSize  int64    `glazed:"max-total-size"`
+	List          bool     `glazed:"list"`
+	Delimiter     string   `glazed:"delimiter"`
+	MaxLines      int      `glazed:"max-lines"`
+	MaxTokens     int      `glazed:"max-tokens"`
+	PrintFilters  bool     `glazed:"print-filters"`
+	FilterYAML    string   `glazed:"filter-yaml"`
+	FilterProfile string   `glazed:"filter-profile"`
+	Glazed        bool     `glazed:"glazed"`
+	ArchiveFile   string   `glazed:"archive-file"`
+	ArchivePrefix string   `glazed:"archive-prefix"`
+	Paths         []string `glazed:"paths"`
 }
 
 type CatterPrintCommand struct {
@@ -36,7 +36,7 @@ type CatterPrintCommand struct {
 }
 
 func NewCatterPrintCommand() (*CatterPrintCommand, error) {
-	glazedParameterLayer, err := settings.NewGlazedParameterLayers()
+	glazedParameterLayer, err := settings.NewGlazedSection()
 	if err != nil {
 		return nil, fmt.Errorf("could not create Glazed parameter layer: %w", err)
 	}
@@ -52,83 +52,83 @@ func NewCatterPrintCommand() (*CatterPrintCommand, error) {
 			cmds.WithShort("Print or archive file contents with token counting"),
 			cmds.WithLong("A CLI tool to print or archive file contents, recursively process directories, and count tokens for LLM context preparation."),
 			cmds.WithFlags(
-				parameters.NewParameterDefinition(
+				fields.New(
 					"max-total-size",
-					parameters.ParameterTypeInteger,
-					parameters.WithHelp("Maximum total size of all files in bytes (default no limit)"),
-					parameters.WithDefault(0),
+					fields.TypeInteger,
+					fields.WithHelp("Maximum total size of all files in bytes (default no limit)"),
+					fields.WithDefault(0),
 				),
-				parameters.NewParameterDefinition(
+				fields.New(
 					"list",
-					parameters.ParameterTypeBool,
-					parameters.WithHelp("List filenames only without printing content"),
-					parameters.WithDefault(false),
-					parameters.WithShortFlag("l"),
+					fields.TypeBool,
+					fields.WithHelp("List filenames only without printing content"),
+					fields.WithDefault(false),
+					fields.WithShortFlag("l"),
 				),
-				parameters.NewParameterDefinition(
+				fields.New(
 					"delimiter",
-					parameters.ParameterTypeString,
-					parameters.WithHelp("Type of delimiter to use between files (text output only): default, xml, markdown, simple, begin-end"),
-					parameters.WithDefault("default"),
-					parameters.WithShortFlag("d"),
+					fields.TypeString,
+					fields.WithHelp("Type of delimiter to use between files (text output only): default, xml, markdown, simple, begin-end"),
+					fields.WithDefault("default"),
+					fields.WithShortFlag("d"),
 				),
-				parameters.NewParameterDefinition(
+				fields.New(
 					"max-lines",
-					parameters.ParameterTypeInteger,
-					parameters.WithHelp("Maximum number of lines to print per file (0 for no limit, text output only)"),
-					parameters.WithDefault(0),
+					fields.TypeInteger,
+					fields.WithHelp("Maximum number of lines to print per file (0 for no limit, text output only)"),
+					fields.WithDefault(0),
 				),
-				parameters.NewParameterDefinition(
+				fields.New(
 					"max-tokens",
-					parameters.ParameterTypeInteger,
-					parameters.WithHelp("Maximum number of tokens to print per file (0 for no limit, text output only)"),
-					parameters.WithDefault(0),
+					fields.TypeInteger,
+					fields.WithHelp("Maximum number of tokens to print per file (0 for no limit, text output only)"),
+					fields.WithDefault(0),
 				),
-				parameters.NewParameterDefinition(
+				fields.New(
 					"print-filters",
-					parameters.ParameterTypeBool,
-					parameters.WithHelp("Print configured filters"),
-					parameters.WithDefault(false),
+					fields.TypeBool,
+					fields.WithHelp("Print configured filters"),
+					fields.WithDefault(false),
 				),
-				parameters.NewParameterDefinition(
+				fields.New(
 					"filter-yaml",
-					parameters.ParameterTypeString,
-					parameters.WithHelp("Path to YAML file containing filter configuration"),
+					fields.TypeString,
+					fields.WithHelp("Path to YAML file containing filter configuration"),
 				),
-				parameters.NewParameterDefinition(
+				fields.New(
 					"filter-profile",
-					parameters.ParameterTypeString,
-					parameters.WithHelp("Name of the filter profile to use"),
+					fields.TypeString,
+					fields.WithHelp("Name of the filter profile to use"),
 				),
-				parameters.NewParameterDefinition(
+				fields.New(
 					"glazed",
-					parameters.ParameterTypeBool,
-					parameters.WithHelp("Enable Glazed structured output (ignored if --archive-file is used)"),
-					parameters.WithDefault(false),
+					fields.TypeBool,
+					fields.WithHelp("Enable Glazed structured output (ignored if --archive-file is used)"),
+					fields.WithDefault(false),
 				),
-				parameters.NewParameterDefinition(
+				fields.New(
 					"archive-file",
-					parameters.ParameterTypeString,
-					parameters.WithHelp("Path to the output archive file. Format (zip or tar.gz) inferred from extension."),
-					parameters.WithDefault(""),
-					parameters.WithShortFlag("a"),
+					fields.TypeString,
+					fields.WithHelp("Path to the output archive file. Format (zip or tar.gz) inferred from extension."),
+					fields.WithDefault(""),
+					fields.WithShortFlag("a"),
 				),
-				parameters.NewParameterDefinition(
+				fields.New(
 					"archive-prefix",
-					parameters.ParameterTypeString,
-					parameters.WithHelp("Directory prefix to add to files within the archive (e.g., 'myproject/')"),
-					parameters.WithDefault(""),
+					fields.TypeString,
+					fields.WithHelp("Directory prefix to add to files within the archive (e.g., 'myproject/')"),
+					fields.WithDefault(""),
 				),
 			),
 			cmds.WithArguments(
-				parameters.NewParameterDefinition(
+				fields.New(
 					"paths",
-					parameters.ParameterTypeStringList,
-					parameters.WithHelp("Paths to process"),
-					parameters.WithDefault([]string{"."}),
+					fields.TypeStringList,
+					fields.WithHelp("Paths to process"),
+					fields.WithDefault([]string{"."}),
 				),
 			),
-			cmds.WithLayersList(
+			cmds.WithSections(
 				glazedParameterLayer,
 				fileFilterLayer,
 			),
@@ -136,9 +136,9 @@ func NewCatterPrintCommand() (*CatterPrintCommand, error) {
 	}, nil
 }
 
-func (c *CatterPrintCommand) RunIntoGlazeProcessor(ctx context.Context, parsedLayers *layers.ParsedLayers, gp middlewares.Processor) error {
+func (c *CatterPrintCommand) RunIntoGlazeProcessor(ctx context.Context, parsedLayers *values.Values, gp middlewares.Processor) error {
 	s := &CatterPrintSettings{}
-	err := parsedLayers.InitializeStruct(layers.DefaultSlug, s)
+	err := parsedLayers.DecodeSectionInto(values.DefaultSlug, s)
 	if err != nil {
 		return fmt.Errorf("error initializing settings: %w", err)
 	}
@@ -201,7 +201,7 @@ func (c *CatterPrintCommand) RunIntoGlazeProcessor(ctx context.Context, parsedLa
 	return fp.ProcessPaths(s.Paths)
 }
 
-func createFileFilter(parsedLayers *layers.ParsedLayers, filterYAML, filterProfile string) (*filefilter.FileFilter, error) {
+func createFileFilter(parsedLayers *values.Values, filterYAML, filterProfile string) (*filefilter.FileFilter, error) {
 	layer, ok := parsedLayers.Get(filefilter.FileFilterSlug)
 	if !ok {
 		return nil, fmt.Errorf("file filter layer not found")

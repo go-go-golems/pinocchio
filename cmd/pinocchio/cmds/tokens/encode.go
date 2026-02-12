@@ -7,8 +7,8 @@ import (
 	"strings"
 
 	"github.com/go-go-golems/glazed/pkg/cmds"
-	"github.com/go-go-golems/glazed/pkg/cmds/layers"
-	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
+	"github.com/go-go-golems/glazed/pkg/cmds/fields"
+	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	"github.com/pkg/errors"
 	_ "github.com/tiktoken-go/tokenizer"
 )
@@ -25,23 +25,23 @@ func NewEncodeCommand() (*EncodeCommand, error) {
 			"encode",
 			cmds.WithShort("Encode data using a specific model and codec"),
 			cmds.WithFlags(
-				parameters.NewParameterDefinition(
+				fields.New(
 					"model",
-					parameters.ParameterTypeString,
-					parameters.WithHelp("Model used for encoding"),
-					parameters.WithDefault("gpt-4"),
+					fields.TypeString,
+					fields.WithHelp("Model used for encoding"),
+					fields.WithDefault("gpt-4"),
 				),
-				parameters.NewParameterDefinition(
+				fields.New(
 					"codec",
-					parameters.ParameterTypeString,
-					parameters.WithHelp("Codec used for encoding"),
+					fields.TypeString,
+					fields.WithHelp("Codec used for encoding"),
 				),
 			),
 			cmds.WithArguments(
-				parameters.NewParameterDefinition(
+				fields.New(
 					"input",
-					parameters.ParameterTypeStringFromFiles,
-					parameters.WithHelp("Input file"),
+					fields.TypeStringFromFiles,
+					fields.WithHelp("Input file"),
 				),
 			),
 		),
@@ -49,18 +49,18 @@ func NewEncodeCommand() (*EncodeCommand, error) {
 }
 
 type EncodeSettings struct {
-	Model string `glazed.parameter:"model"`
-	Codec string `glazed.parameter:"codec"`
-	Input string `glazed.parameter:"input"`
+	Model string `glazed:"model"`
+	Codec string `glazed:"codec"`
+	Input string `glazed:"input"`
 }
 
 func (cmd *EncodeCommand) RunIntoWriter(
 	ctx context.Context,
-	parsedLayers *layers.ParsedLayers,
+	parsedLayers *values.Values,
 	w io.Writer,
 ) error {
 	s := &EncodeSettings{}
-	err := parsedLayers.InitializeStruct(layers.DefaultSlug, s)
+	err := parsedLayers.DecodeSectionInto(values.DefaultSlug, s)
 	if err != nil {
 		return err
 	}

@@ -3,7 +3,7 @@ package tokens
 import (
 	"context"
 	"github.com/go-go-golems/glazed/pkg/cmds"
-	"github.com/go-go-golems/glazed/pkg/cmds/layers"
+	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	"github.com/go-go-golems/glazed/pkg/middlewares"
 	"github.com/go-go-golems/glazed/pkg/settings"
 	"github.com/go-go-golems/glazed/pkg/types"
@@ -16,7 +16,7 @@ type ListModelsCommand struct {
 
 func (c *ListModelsCommand) RunIntoGlazeProcessor(
 	ctx context.Context,
-	parsedLayers *layers.ParsedLayers,
+	parsedLayers *values.Values,
 	gp middlewares.Processor,
 ) error {
 	models := []tokenizer.Model{
@@ -65,7 +65,7 @@ func (c *ListModelsCommand) RunIntoGlazeProcessor(
 }
 
 func NewListModelsCommand() (*ListModelsCommand, error) {
-	glazedLayer, err := settings.NewGlazedParameterLayers()
+	glazedLayer, err := settings.NewGlazedSection()
 	if err != nil {
 		return nil, err
 	}
@@ -73,7 +73,7 @@ func NewListModelsCommand() (*ListModelsCommand, error) {
 		CommandDescription: cmds.NewCommandDescription(
 			"list-models",
 			cmds.WithShort("List available models"),
-			cmds.WithLayersList(glazedLayer),
+			cmds.WithSections(glazedLayer),
 		),
 	}, nil
 }
@@ -88,7 +88,7 @@ var _ cmds.GlazeCommand = (*ListCodecsCommand)(nil)
 
 func (l *ListCodecsCommand) RunIntoGlazeProcessor(
 	ctx context.Context,
-	parsedLayers *layers.ParsedLayers,
+	parsedLayers *values.Values,
 	gp middlewares.Processor,
 ) error {
 	encodings := []tokenizer.Encoding{
@@ -112,7 +112,7 @@ func (l *ListCodecsCommand) RunIntoGlazeProcessor(
 var _ cmds.GlazeCommand = (*ListCodecsCommand)(nil)
 
 func NewListCodecsCommand() (*ListCodecsCommand, error) {
-	glazedLayer, err := settings.NewGlazedParameterLayers()
+	glazedLayer, err := settings.NewGlazedSection()
 	if err != nil {
 		return nil, err
 	}
@@ -120,7 +120,7 @@ func NewListCodecsCommand() (*ListCodecsCommand, error) {
 		CommandDescription: cmds.NewCommandDescription(
 			"list-codecs",
 			cmds.WithShort("List available codecs"),
-			cmds.WithLayersList(glazedLayer),
+			cmds.WithSections(glazedLayer),
 		),
 	}, nil
 }

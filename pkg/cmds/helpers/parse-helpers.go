@@ -9,9 +9,9 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings/claude"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings/gemini"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings/openai"
-	"github.com/go-go-golems/glazed/pkg/cmds/layers"
-	"github.com/go-go-golems/glazed/pkg/cmds/middlewares"
-	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
+	"github.com/go-go-golems/glazed/pkg/cmds/fields"
+	"github.com/go-go-golems/glazed/pkg/cmds/sources"
+	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	appconfig "github.com/go-go-golems/glazed/pkg/config"
 	"github.com/go-go-golems/pinocchio/pkg/cmds"
 	"github.com/go-go-golems/pinocchio/pkg/cmds/cmdlayers"
@@ -45,7 +45,7 @@ func WithUseViper(useViper bool) GeppettoLayersHelperOption {
 
 // ParseGeppettoLayers parses the Geppetto layers from the command and returns them, this is a way to parse
 // profiles and config file without using the GetGeppettoMiddlewares function which also parses from cobra.
-func ParseGeppettoLayers(c *cmds.PinocchioCommand, options ...GeppettoLayersHelperOption) (*layers.ParsedLayers, error) {
+func ParseGeppettoLayers(c *cmds.PinocchioCommand, options ...GeppettoLayersHelperOption) (*values.Values, error) {
 	xdgConfigPath, err := os.UserConfigDir()
 	if err != nil {
 		return nil, err
@@ -59,16 +59,16 @@ func ParseGeppettoLayers(c *cmds.PinocchioCommand, options ...GeppettoLayersHelp
 	for _, option := range options {
 		option(helper)
 	}
-	middlewares_ := []middlewares.Middleware{}
+	middlewares_ := []sources.Middleware{}
 	if helper.Profile != "" {
 		middlewares_ = append(middlewares_,
-			middlewares.GatherFlagsFromProfiles(
+			sources.GatherFlagsFromProfiles(
 				helper.ProfileFile,
 				helper.ProfileFile,
 				helper.Profile,
 				"default",
-				parameters.WithParseStepSource("profiles"),
-				parameters.WithParseStepMetadata(map[string]interface{}{
+				fields.WithSource("profiles"),
+				fields.WithMetadata(map[string]interface{}{
 					"profileFile": helper.ProfileFile,
 					"profile":     helper.Profile,
 				}),
@@ -78,23 +78,23 @@ func ParseGeppettoLayers(c *cmds.PinocchioCommand, options ...GeppettoLayersHelp
 
 	if helper.UseViper {
 		// Discover config file using ResolveAppConfigPath
-		configMiddlewares := []middlewares.Middleware{}
+		configMiddlewares := []sources.Middleware{}
 		configPath, err := appconfig.ResolveAppConfigPath("pinocchio", "")
 		if err == nil && configPath != "" {
 			configMiddlewares = append(configMiddlewares,
-				middlewares.LoadParametersFromFile(configPath,
-					middlewares.WithParseOptions(parameters.WithParseStepSource("config")),
+				sources.FromFile(configPath,
+					sources.WithParseOptions(fields.WithSource("config")),
 				),
 			)
 		}
 		configMiddlewares = append(configMiddlewares,
-			middlewares.UpdateFromEnv("PINOCCHIO",
-				parameters.WithParseStepSource("env"),
+			sources.FromEnv("PINOCCHIO",
+				fields.WithSource("env"),
 			),
 		)
 
 		middlewares_ = append(middlewares_,
-			middlewares.WrapWithWhitelistedLayers(
+			sources.WrapWithWhitelistedSections(
 				[]string{
 					settings.AiChatSlug,
 					settings.AiClientSlug,
@@ -104,17 +104,17 @@ func ParseGeppettoLayers(c *cmds.PinocchioCommand, options ...GeppettoLayersHelp
 					embeddings_config.EmbeddingsSlug,
 					cmdlayers.GeppettoHelpersSlug,
 				},
-				middlewares.Chain(configMiddlewares...),
+				sources.Chain(configMiddlewares...),
 			),
-			middlewares.SetFromDefaults(parameters.WithParseStepSource("defaults")),
+			sources.FromDefaults(fields.WithSource(fields.SourceDefaults)),
 		)
 	}
 
-	geppettoParsedLayers := layers.NewParsedLayers()
-	err = middlewares.ExecuteMiddlewares(c.Description().Layers, geppettoParsedLayers, middlewares_...)
+	geppettoParsedValues := values.New()
+	err = sources.Execute(c.Description().Schema, geppettoParsedValues, middlewares_...)
 	if err != nil {
 		return nil, err
 	}
 
-	return geppettoParsedLayers, nil
+	return geppettoParsedValues, nil
 }

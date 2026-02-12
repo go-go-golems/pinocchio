@@ -5,14 +5,14 @@ import (
 	"io/fs"
 	"strings"
 
-	geppettolayers "github.com/go-go-golems/geppetto/pkg/layers"
+	geppettosections "github.com/go-go-golems/geppetto/pkg/sections"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 	"github.com/go-go-golems/geppetto/pkg/turns"
 	"github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/cmds/alias"
-	"github.com/go-go-golems/glazed/pkg/cmds/layers"
+	"github.com/go-go-golems/glazed/pkg/cmds/fields"
 	"github.com/go-go-golems/glazed/pkg/cmds/loaders"
-	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
+	"github.com/go-go-golems/glazed/pkg/cmds/schema"
 	"github.com/go-go-golems/pinocchio/pkg/cmds/cmdlayers"
 	"github.com/pkg/errors"
 	"gopkg.in/yaml.v3"
@@ -46,8 +46,8 @@ func (g *PinocchioCommandLoader) loadPinocchioCommandFromReader(
 
 	buf := strings.NewReader(string(yamlContent))
 	scd := &PinocchioCommandDescription{
-		Flags:     []*parameters.ParameterDefinition{},
-		Arguments: []*parameters.ParameterDefinition{},
+		Flags:     []*fields.Definition{},
+		Arguments: []*fields.Definition{},
 	}
 	err = yaml.NewDecoder(buf).Decode(scd)
 	if err != nil {
@@ -66,7 +66,7 @@ func (g *PinocchioCommandLoader) loadPinocchioCommandFromReader(
 	if err != nil {
 		return nil, err
 	}
-	ls, err := geppettolayers.CreateGeppettoLayers(geppettolayers.WithDefaultsFromStepSettings(stepSettings))
+	ls, err := geppettosections.CreateGeppettoSections(geppettosections.WithDefaultsFromStepSettings(stepSettings))
 	if err != nil {
 		return nil, err
 	}
@@ -75,14 +75,14 @@ func (g *PinocchioCommandLoader) loadPinocchioCommandFromReader(
 	if err != nil {
 		return nil, err
 	}
-	ls = append([]layers.ParameterLayer{helpersLayer}, ls...)
+	ls = append([]schema.Section{helpersLayer}, ls...)
 
 	options_ := []cmds.CommandDescriptionOption{
 		cmds.WithShort(scd.Short),
 		cmds.WithLong(scd.Long),
 		cmds.WithFlags(scd.Flags...),
 		cmds.WithArguments(scd.Arguments...),
-		cmds.WithLayersList(ls...),
+		cmds.WithSections(ls...),
 		cmds.WithType(scd.Type),
 		cmds.WithTags(scd.Tags...),
 		cmds.WithMetadata(scd.Metadata),

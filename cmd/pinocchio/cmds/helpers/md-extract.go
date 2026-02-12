@@ -10,8 +10,8 @@ import (
 	"strings"
 
 	"github.com/go-go-golems/glazed/pkg/cmds"
-	"github.com/go-go-golems/glazed/pkg/cmds/layers"
-	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
+	"github.com/go-go-golems/glazed/pkg/cmds/fields"
+	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	"github.com/go-go-golems/glazed/pkg/helpers/markdown"
 	"gopkg.in/yaml.v3"
 )
@@ -21,11 +21,11 @@ type ExtractMdCommand struct {
 }
 
 type ExtractMdSettings struct {
-	Output           string   `glazed.parameter:"output"`
-	WithQuotes       bool     `glazed.parameter:"with-quotes"`
-	File             string   `glazed.parameter:"file"`
-	AllowedLanguages []string `glazed.parameter:"allowed-languages"`
-	BlockType        string   `glazed.parameter:"blocks"`
+	Output           string   `glazed:"output"`
+	WithQuotes       bool     `glazed:"with-quotes"`
+	File             string   `glazed:"file"`
+	AllowedLanguages []string `glazed:"allowed-languages"`
+	BlockType        string   `glazed:"blocks"`
 }
 
 func NewExtractMdCommand() (*ExtractMdCommand, error) {
@@ -34,50 +34,50 @@ func NewExtractMdCommand() (*ExtractMdCommand, error) {
 			"md-extract",
 			cmds.WithShort("Extract code blocks from markdown"),
 			cmds.WithFlags(
-				parameters.NewParameterDefinition(
+				fields.New(
 					"output",
-					parameters.ParameterTypeChoice,
-					parameters.WithHelp("Output format"),
-					parameters.WithDefault("concatenated"),
-					parameters.WithChoices("concatenated", "list", "yaml"),
+					fields.TypeChoice,
+					fields.WithHelp("Output format"),
+					fields.WithDefault("concatenated"),
+					fields.WithChoices("concatenated", "list", "yaml"),
 				),
-				parameters.NewParameterDefinition(
+				fields.New(
 					"with-quotes",
-					parameters.ParameterTypeBool,
-					parameters.WithHelp("Include code block quotes"),
-					parameters.WithDefault(false),
+					fields.TypeBool,
+					fields.WithHelp("Include code block quotes"),
+					fields.WithDefault(false),
 				),
-				parameters.NewParameterDefinition(
+				fields.New(
 					"allowed-languages",
-					parameters.ParameterTypeStringList,
-					parameters.WithHelp("List of allowed languages to extract"),
+					fields.TypeStringList,
+					fields.WithHelp("List of allowed languages to extract"),
 				),
-				parameters.NewParameterDefinition(
+				fields.New(
 					"blocks",
-					parameters.ParameterTypeChoice,
-					parameters.WithHelp("Type of blocks to extract"),
-					parameters.WithDefault("code"),
-					parameters.WithChoices("all", "normal", "code"),
+					fields.TypeChoice,
+					fields.WithHelp("Type of blocks to extract"),
+					fields.WithDefault("code"),
+					fields.WithChoices("all", "normal", "code"),
 				),
 			),
 			cmds.WithArguments(
-				parameters.NewParameterDefinition(
+				fields.New(
 					"file",
-					parameters.ParameterTypeString,
-					parameters.WithHelp("Input file (use - for stdin)"),
-					parameters.WithDefault("-"),
+					fields.TypeString,
+					fields.WithHelp("Input file (use - for stdin)"),
+					fields.WithDefault("-"),
 				),
 			),
 		),
 	}, nil
 }
 
-func (c *ExtractMdCommand) RunIntoWriter(ctx context.Context, parsedLayers *layers.ParsedLayers, w io.Writer) error {
+func (c *ExtractMdCommand) RunIntoWriter(ctx context.Context, parsedLayers *values.Values, w io.Writer) error {
 	bw := bufio.NewWriter(w)
 	defer func() { _ = bw.Flush() }()
 
 	s := &ExtractMdSettings{}
-	err := parsedLayers.InitializeStruct(layers.DefaultSlug, s)
+	err := parsedLayers.DecodeSectionInto(values.DefaultSlug, s)
 	if err != nil {
 		return err
 	}
