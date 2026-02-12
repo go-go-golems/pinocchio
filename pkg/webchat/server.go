@@ -13,7 +13,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/go-go-golems/glazed/pkg/cmds/layers"
+	"github.com/go-go-golems/glazed/pkg/cmds/values"
 )
 
 // Server drives the event router and HTTP server lifecycle.
@@ -23,7 +23,7 @@ type Server struct {
 	httpSrv *http.Server
 }
 
-func NewServer(ctx context.Context, parsed *layers.ParsedLayers, staticFS fs.FS) (*Server, error) {
+func NewServer(ctx context.Context, parsed *values.Values, staticFS fs.FS) (*Server, error) {
 	r, err := NewRouter(ctx, parsed, staticFS)
 	if err != nil {
 		return nil, err

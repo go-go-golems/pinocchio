@@ -13,7 +13,7 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/inference/toolloop"
 	geptools "github.com/go-go-golems/geppetto/pkg/inference/tools"
 	"github.com/go-go-golems/geppetto/pkg/turns"
-	"github.com/go-go-golems/glazed/pkg/cmds/layers"
+	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
 	timelinepb "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/timeline"
 	"github.com/gorilla/websocket"
@@ -76,7 +76,7 @@ func (r *inMemoryProfileRegistry) List() []*Profile {
 // Router wires HTTP, profiles, registries and conversation lifecycle.
 type Router struct {
 	baseCtx  context.Context
-	parsed   *layers.ParsedLayers
+	parsed   *values.Values
 	mux      *http.ServeMux
 	staticFS fs.FS
 
