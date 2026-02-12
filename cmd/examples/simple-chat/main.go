@@ -7,7 +7,7 @@ import (
 	"io"
 	"strings"
 
-	layers2 "github.com/go-go-golems/geppetto/pkg/layers"
+	sections2 "github.com/go-go-golems/geppetto/pkg/sections"
 
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 
@@ -53,7 +53,7 @@ type ChatCommandSettings struct {
 // NewChatCommand wraps the GepettoCommand which was loaded from the yaml file,
 // and manually loads the profile to configure it.
 func NewChatCommand(cmd *pinocchio_cmds.PinocchioCommand) (*TestCommand, error) {
-	geppettoLayers, err := layers2.CreateGeppettoLayers()
+	geppettoLayers, err := sections2.CreateGeppettoSections()
 	if err != nil {
 		return nil, err
 	}
@@ -119,7 +119,7 @@ func (c *TestCommand) RunIntoWriter(ctx context.Context, parsedLayers *values.Va
 	if err != nil {
 		return errors.Wrap(err, "failed to create step settings")
 	}
-	err = stepSettings.UpdateFromParsedLayers(geppettoParsedLayers)
+	err = stepSettings.UpdateFromParsedValues(geppettoParsedLayers)
 	if err != nil {
 		return errors.Wrap(err, "failed to update step settings from parsed layers")
 	}
@@ -178,7 +178,7 @@ func main() {
 	// Register the command as a normal cobra command and let it parse its step settings by itself
 	err = cli.AddCommandsToRootCommand(
 		rootCmd, commands, nil,
-		cli.WithCobraMiddlewaresFunc(layers2.GetCobraCommandGeppettoMiddlewares),
+		cli.WithCobraMiddlewaresFunc(sections2.GetCobraCommandGeppettoMiddlewares),
 		cli.WithCobraShortHelpSections(values.DefaultSlug, cmdlayers.GeppettoHelpersSlug),
 	)
 	cobra.CheckErr(err)

@@ -14,7 +14,7 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/turns"
 
 	clay "github.com/go-go-golems/clay/pkg"
-	geppettolayers "github.com/go-go-golems/geppetto/pkg/layers"
+	geppettosections "github.com/go-go-golems/geppetto/pkg/sections"
 	"github.com/go-go-golems/glazed/pkg/cli"
 	"github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/cmds/fields"
@@ -82,7 +82,7 @@ type SimpleRedisStreamingInferenceSettings struct {
 }
 
 func NewSimpleRedisStreamingInferenceCommand() (*SimpleRedisStreamingInferenceCommand, error) {
-	geLayers, err := geppettolayers.CreateGeppettoLayers()
+	geLayers, err := geppettosections.CreateGeppettoSections()
 	if err != nil {
 		return nil, errors.Wrap(err, "create geppetto layers")
 	}
@@ -164,8 +164,8 @@ func (c *SimpleRedisStreamingInferenceCommand) RunIntoWriter(ctx context.Context
 		return nil
 	})
 
-	// Build engine (events flow via context sinks)
-	eng, err := factory.NewEngineFromParsedLayers(parsedLayers)
+	// Build engine and attach the sink via run context.
+	eng, err := factory.NewEngineFromParsedValues(parsedLayers)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to create engine")
 		return errors.Wrap(err, "create engine")
@@ -242,7 +242,7 @@ func main() {
 	c, err := NewSimpleRedisStreamingInferenceCommand()
 	cobra.CheckErr(err)
 
-	command, err := cli.BuildCobraCommand(c, cli.WithCobraMiddlewaresFunc(geppettolayers.GetCobraCommandGeppettoMiddlewares))
+	command, err := cli.BuildCobraCommand(c, cli.WithCobraMiddlewaresFunc(geppettosections.GetCobraCommandGeppettoMiddlewares))
 	cobra.CheckErr(err)
 	rootCmd.AddCommand(command)
 

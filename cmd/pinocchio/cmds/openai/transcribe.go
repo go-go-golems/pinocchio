@@ -28,7 +28,7 @@ type TranscribeCommand struct {
 var _ cmds.GlazeCommand = &TranscribeCommand{}
 
 func NewTranscribeCommand() (*TranscribeCommand, error) {
-	layer, err := openai_settings.NewParameterLayer()
+	layer, err := openai_settings.NewValueSection()
 	if err != nil {
 		return nil, errors.Wrap(err, "could not create OpenAI parameter layer")
 	}

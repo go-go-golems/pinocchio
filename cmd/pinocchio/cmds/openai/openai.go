@@ -36,7 +36,7 @@ func NewListEngineCommand() (*ListEnginesCommand, error) {
 	if err != nil {
 		return nil, err
 	}
-	openaiParameterLayer, err := openai.NewParameterLayer()
+	openaiParameterLayer, err := openai.NewValueSection()
 	if err != nil {
 		return nil, err
 	}
@@ -170,7 +170,7 @@ func NewEngineInfoCommand() (*EngineInfoCommand, error) {
 	if err != nil {
 		return nil, err
 	}
-	openaiParameterLayer, err := openai.NewParameterLayer()
+	openaiParameterLayer, err := openai.NewValueSection()
 	if err != nil {
 		return nil, err
 	}

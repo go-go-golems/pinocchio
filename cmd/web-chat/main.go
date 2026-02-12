@@ -21,7 +21,7 @@ import (
 
 	geppettomw "github.com/go-go-golems/geppetto/pkg/inference/middleware"
 	geptools "github.com/go-go-golems/geppetto/pkg/inference/tools"
-	geppettolayers "github.com/go-go-golems/geppetto/pkg/layers"
+	geppettosections "github.com/go-go-golems/geppetto/pkg/sections"
 	toolspkg "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/tools"
 	timelinecmd "github.com/go-go-golems/pinocchio/cmd/web-chat/timeline"
 	agentmode "github.com/go-go-golems/pinocchio/pkg/middlewares/agentmode"
@@ -41,7 +41,7 @@ type Command struct {
 }
 
 func NewCommand() (*Command, error) {
-	geLayers, err := geppettolayers.CreateGeppettoLayers()
+	geLayers, err := geppettosections.CreateGeppettoSections()
 	if err != nil {
 		return nil, errors.Wrap(err, "create geppetto layers")
 	}
@@ -171,7 +171,7 @@ func main() {
 
 	c, err := NewCommand()
 	cobra.CheckErr(err)
-	command, err := cli.BuildCobraCommand(c, cli.WithCobraMiddlewaresFunc(geppettolayers.GetCobraCommandGeppettoMiddlewares))
+	command, err := cli.BuildCobraCommand(c, cli.WithCobraMiddlewaresFunc(geppettosections.GetCobraCommandGeppettoMiddlewares))
 	cobra.CheckErr(err)
 	root.AddCommand(command)
 	cobra.CheckErr(root.Execute())

@@ -5,7 +5,7 @@ import (
 	"io/fs"
 	"strings"
 
-	geppettolayers "github.com/go-go-golems/geppetto/pkg/layers"
+	geppettosections "github.com/go-go-golems/geppetto/pkg/sections"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 	"github.com/go-go-golems/geppetto/pkg/turns"
 	"github.com/go-go-golems/glazed/pkg/cmds"
@@ -66,7 +66,7 @@ func (g *PinocchioCommandLoader) loadPinocchioCommandFromReader(
 	if err != nil {
 		return nil, err
 	}
-	ls, err := geppettolayers.CreateGeppettoLayers(geppettolayers.WithDefaultsFromStepSettings(stepSettings))
+	ls, err := geppettosections.CreateGeppettoSections(geppettosections.WithDefaultsFromStepSettings(stepSettings))
 	if err != nil {
 		return nil, err
 	}

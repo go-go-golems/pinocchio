@@ -19,27 +19,13 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/go-go-golems/geppetto/pkg/events"
-<<<<<<< HEAD
 	"github.com/go-go-golems/geppetto/pkg/inference/toolloop"
 	"github.com/go-go-golems/geppetto/pkg/inference/toolloop/enginebuilder"
-||||||| parent of 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
-	"github.com/go-go-golems/geppetto/pkg/inference/engine"
-	"github.com/go-go-golems/geppetto/pkg/inference/middleware"
-	"github.com/go-go-golems/geppetto/pkg/inference/toolhelpers"
-=======
-	"github.com/go-go-golems/geppetto/pkg/inference/engine"
-	"github.com/go-go-golems/geppetto/pkg/inference/middleware"
->>>>>>> 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
 	geptools "github.com/go-go-golems/geppetto/pkg/inference/tools"
 	"github.com/go-go-golems/geppetto/pkg/turns"
 	"github.com/go-go-golems/geppetto/pkg/turns/serde"
 	"github.com/go-go-golems/glazed/pkg/cmds/values"
-<<<<<<< HEAD
 	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
-||||||| parent of 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
-=======
-	gcompat "github.com/go-go-golems/pinocchio/pkg/geppettocompat"
->>>>>>> 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
 	rediscfg "github.com/go-go-golems/pinocchio/pkg/redisstream"
 	sempb "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/base"
 	timelinepb "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/timeline"
@@ -791,185 +777,8 @@ func (r *Router) registerAPIHandlers(mux *http.ServeMux) {
 			http.Error(w, "failed to create conversation", http.StatusInternalServerError)
 			return
 		}
-<<<<<<< HEAD
 		if conv.Sess == nil {
 			http.Error(w, "conversation session not initialized", http.StatusInternalServerError)
-||||||| parent of 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
-		conv.mu.Lock()
-		if conv.running {
-			conv.mu.Unlock()
-			log.Warn().Str("component", "webchat").Str("conv_id", conv.ID).Str("run_id", conv.RunID).Msg("run in progress")
-			w.WriteHeader(http.StatusConflict)
-			_ = json.NewEncoder(w).Encode(map[string]any{"error": "run in progress", "conv_id": conv.ID, "run_id": conv.RunID})
-			return
-		}
-		conv.running = true
-		conv.mu.Unlock()
-		if conv.Turn == nil {
-			conv.Turn = &turns.Turn{RunID: conv.RunID}
-		}
-		turns.AppendBlock(conv.Turn, turns.NewUserTextBlock(body.Prompt))
-		conv.Turn.RunID = conv.RunID
-
-		registry := geptools.NewInMemoryToolRegistry()
-		for name, tf := range r.toolFactories {
-			_ = tf(registry)
-			_ = name
-		}
-
-		go func(conv *Conversation) {
-			<-r.router.Running()
-			runCtx, runCancel := context.WithCancel(r.baseCtx)
-			conv.mu.Lock()
-			conv.cancel = runCancel
-			conv.mu.Unlock()
-			runCtx = events.WithEventSinks(runCtx, conv.Sink)
-			log.Info().Str("component", "webchat").Str("conv_id", conv.ID).Str("run_id", conv.RunID).Msg("starting run loop")
-			updatedTurn, _ := toolhelpers.RunToolCallingLoop(
-				runCtx,
-				conv.Eng,
-				conv.Turn,
-				registry,
-				toolhelpers.NewToolConfig().WithMaxIterations(5).WithTimeout(60*time.Second),
-			)
-			if updatedTurn != nil {
-				conv.Turn = updatedTurn
-			}
-			runCancel()
-			conv.mu.Lock()
-			conv.running = false
-			conv.cancel = nil
-			conv.mu.Unlock()
-			log.Info().Str("component", "webchat").Str("conv_id", conv.ID).Str("run_id", conv.RunID).Msg("run loop finished")
-		}(conv)
-
-		_ = json.NewEncoder(w).Encode(map[string]string{"run_id": conv.RunID, "conv_id": conv.ID})
-	})
-
-	// start run: /chat/{profile}
-	r.mux.HandleFunc("/chat/", func(w http.ResponseWriter, r0 *http.Request) {
-		if r0.Method != http.MethodPost {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		// extract profile from path: /chat/{profile}[/...]
-		path := r0.URL.Path
-		var profileSlug string
-		if strings.HasPrefix(path, "/chat/") {
-			rest := path[len("/chat/"):]
-			if i := strings.Index(rest, "/"); i >= 0 {
-				profileSlug = rest[:i]
-			} else {
-				profileSlug = rest
-			}
-		}
-		if profileSlug == "" {
-			profileSlug = "default"
-		}
-		var body struct {
-			Prompt    string         `json:"prompt"`
-			ConvID    string         `json:"conv_id"`
-			Overrides map[string]any `json:"overrides"`
-		}
-		if err := json.NewDecoder(r0.Body).Decode(&body); err != nil {
-			http.Error(w, "bad request", http.StatusBadRequest)
-			return
-		}
-		convID := body.ConvID
-		if convID == "" {
-			convID = uuid.NewString()
-		}
-		p, ok := r.profiles.Get(profileSlug)
-		if !ok {
-			http.Error(w, "unknown profile", http.StatusNotFound)
-=======
-		conv.mu.Lock()
-		if conv.running {
-			conv.mu.Unlock()
-			log.Warn().Str("component", "webchat").Str("conv_id", conv.ID).Str("run_id", conv.RunID).Msg("run in progress")
-			w.WriteHeader(http.StatusConflict)
-			_ = json.NewEncoder(w).Encode(map[string]any{"error": "run in progress", "conv_id": conv.ID, "run_id": conv.RunID})
-			return
-		}
-		conv.running = true
-		conv.mu.Unlock()
-		if conv.Turn == nil {
-			conv.Turn = &turns.Turn{}
-		}
-		turns.AppendBlock(conv.Turn, turns.NewUserTextBlock(body.Prompt))
-		gcompat.EnsureTurnSessionID(conv.Turn, conv.RunID)
-		gcompat.EnsureTurnID(conv.Turn)
-		_ = turns.KeyTurnMetaInferenceID.Set(&conv.Turn.Metadata, uuid.NewString())
-
-		registry := geptools.NewInMemoryToolRegistry()
-		for name, tf := range r.toolFactories {
-			_ = tf(registry)
-			_ = name
-		}
-
-		go func(conv *Conversation) {
-			<-r.router.Running()
-			runCtx, runCancel := context.WithCancel(r.baseCtx)
-			conv.mu.Lock()
-			conv.cancel = runCancel
-			conv.mu.Unlock()
-			runCtx = events.WithEventSinks(runCtx, conv.Sink)
-			log.Info().Str("component", "webchat").Str("conv_id", conv.ID).Str("run_id", conv.RunID).Msg("starting run loop")
-			updatedTurn, _ := ToolCallingLoop(runCtx, conv.Eng, conv.Turn, registry, map[string]any{
-				"max_iterations":  5,
-				"timeout_seconds": 60,
-			})
-			if updatedTurn != nil {
-				conv.Turn = updatedTurn
-			}
-			runCancel()
-			conv.mu.Lock()
-			conv.running = false
-			conv.cancel = nil
-			conv.mu.Unlock()
-			log.Info().Str("component", "webchat").Str("conv_id", conv.ID).Str("run_id", conv.RunID).Msg("run loop finished")
-		}(conv)
-
-		_ = json.NewEncoder(w).Encode(map[string]string{"run_id": conv.RunID, "conv_id": conv.ID})
-	})
-
-	// start run: /chat/{profile}
-	r.mux.HandleFunc("/chat/", func(w http.ResponseWriter, r0 *http.Request) {
-		if r0.Method != http.MethodPost {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		// extract profile from path: /chat/{profile}[/...]
-		path := r0.URL.Path
-		var profileSlug string
-		if strings.HasPrefix(path, "/chat/") {
-			rest := path[len("/chat/"):]
-			if i := strings.Index(rest, "/"); i >= 0 {
-				profileSlug = rest[:i]
-			} else {
-				profileSlug = rest
-			}
-		}
-		if profileSlug == "" {
-			profileSlug = "default"
-		}
-		var body struct {
-			Prompt    string         `json:"prompt"`
-			ConvID    string         `json:"conv_id"`
-			Overrides map[string]any `json:"overrides"`
-		}
-		if err := json.NewDecoder(r0.Body).Decode(&body); err != nil {
-			http.Error(w, "bad request", http.StatusBadRequest)
-			return
-		}
-		convID := body.ConvID
-		if convID == "" {
-			convID = uuid.NewString()
-		}
-		p, ok := r.profiles.Get(profileSlug)
-		if !ok {
-			http.Error(w, "unknown profile", http.StatusNotFound)
->>>>>>> 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
 			return
 		}
 
@@ -982,7 +791,6 @@ func (r *Router) registerAPIHandlers(mux *http.ServeMux) {
 			http.Error(w, "prepare session inference failed", http.StatusInternalServerError)
 			return
 		}
-<<<<<<< HEAD
 		if !prep.Start {
 			if status, ok := prep.Response["status"].(string); ok && strings.EqualFold(status, "queued") {
 				if pos, ok := prep.Response["queue_position"].(int); ok {
@@ -991,86 +799,6 @@ func (r *Router) registerAPIHandlers(mux *http.ServeMux) {
 						Int("queue_position", pos).
 						Msg("session inference in progress; queued prompt")
 				}
-||||||| parent of 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
-		conv.mu.Lock()
-		if conv.running {
-			conv.mu.Unlock()
-			w.WriteHeader(http.StatusConflict)
-			_ = json.NewEncoder(w).Encode(map[string]any{"error": "run in progress", "conv_id": conv.ID, "run_id": conv.RunID})
-			return
-		}
-		conv.running = true
-		conv.mu.Unlock()
-		if conv.Turn == nil {
-			conv.Turn = &turns.Turn{RunID: conv.RunID}
-		}
-		turns.AppendBlock(conv.Turn, turns.NewUserTextBlock(body.Prompt))
-		conv.Turn.RunID = conv.RunID
-
-		// Build registry for this run from default tools (and optional overrides later)
-		registry := geptools.NewInMemoryToolRegistry()
-		for name, tf := range r.toolFactories {
-			_ = tf(registry)
-			_ = name
-		}
-
-		go func(conv *Conversation) {
-			<-r.router.Running()
-			runCtx, runCancel := context.WithCancel(r.baseCtx)
-			conv.mu.Lock()
-			conv.cancel = runCancel
-			conv.mu.Unlock()
-			runCtx = events.WithEventSinks(runCtx, conv.Sink)
-			log.Info().Str("component", "webchat").Str("conv_id", conv.ID).Str("run_id", conv.RunID).Msg("starting run loop")
-			updatedTurn, _ := toolhelpers.RunToolCallingLoop(
-				runCtx,
-				conv.Eng,
-				conv.Turn,
-				registry,
-				toolhelpers.NewToolConfig().WithMaxIterations(5).WithTimeout(60*time.Second),
-			)
-			if updatedTurn != nil {
-				conv.Turn = updatedTurn
-=======
-		conv.mu.Lock()
-		if conv.running {
-			conv.mu.Unlock()
-			w.WriteHeader(http.StatusConflict)
-			_ = json.NewEncoder(w).Encode(map[string]any{"error": "run in progress", "conv_id": conv.ID, "run_id": conv.RunID})
-			return
-		}
-		conv.running = true
-		conv.mu.Unlock()
-		if conv.Turn == nil {
-			conv.Turn = &turns.Turn{}
-		}
-		turns.AppendBlock(conv.Turn, turns.NewUserTextBlock(body.Prompt))
-		gcompat.EnsureTurnSessionID(conv.Turn, conv.RunID)
-		gcompat.EnsureTurnID(conv.Turn)
-		_ = turns.KeyTurnMetaInferenceID.Set(&conv.Turn.Metadata, uuid.NewString())
-
-		// Build registry for this run from default tools (and optional overrides later)
-		registry := geptools.NewInMemoryToolRegistry()
-		for name, tf := range r.toolFactories {
-			_ = tf(registry)
-			_ = name
-		}
-
-		go func(conv *Conversation) {
-			<-r.router.Running()
-			runCtx, runCancel := context.WithCancel(r.baseCtx)
-			conv.mu.Lock()
-			conv.cancel = runCancel
-			conv.mu.Unlock()
-			runCtx = events.WithEventSinks(runCtx, conv.Sink)
-			log.Info().Str("component", "webchat").Str("conv_id", conv.ID).Str("run_id", conv.RunID).Msg("starting run loop")
-			updatedTurn, _ := ToolCallingLoop(runCtx, conv.Eng, conv.Turn, registry, map[string]any{
-				"max_iterations":  5,
-				"timeout_seconds": 60,
-			})
-			if updatedTurn != nil {
-				conv.Turn = updatedTurn
->>>>>>> 9909af2 (refactor(pinocchio): port runtime to toolloop/tools and metadata-based IDs)
 			}
 			if prep.HTTPStatus > 0 {
 				w.WriteHeader(prep.HTTPStatus)

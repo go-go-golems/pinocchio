@@ -209,7 +209,7 @@ func (g *PinocchioCommand) RunIntoWriter(
 	if err != nil {
 		return errors.Wrap(err, "failed to create step settings")
 	}
-	err = stepSettings.UpdateFromParsedLayers(parsedValues)
+	err = stepSettings.UpdateFromParsedValues(parsedValues)
 	if err != nil {
 		return errors.Wrap(err, "failed to update step settings from parsed layers")
 	}
