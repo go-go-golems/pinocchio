@@ -6,8 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/go-go-golems/glazed/pkg/cmds"
-	"github.com/go-go-golems/glazed/pkg/cmds/layers"
-	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
+	"github.com/go-go-golems/glazed/pkg/cmds/fields"
+	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	"github.com/pkg/errors"
 	"github.com/spf13/viper"
 	"io"
@@ -42,11 +42,11 @@ type SummarizationRequest struct {
 }
 
 type SummarizeSettings struct {
-	URL            string `glazed.parameter:"url"`
-	Text           string `glazed.parameter:"text"`
-	Engine         string `glazed.parameter:"engine"`
-	SummaryType    string `glazed.parameter:"summary_type"`
-	TargetLanguage string `glazed.parameter:"target_language"`
+	URL            string `glazed:"url"`
+	Text           string `glazed:"text"`
+	Engine         string `glazed:"engine"`
+	SummaryType    string `glazed:"summary_type"`
+	TargetLanguage string `glazed:"target_language"`
 }
 
 func NewSummarizeCommand() (*SummarizeCommand, error) {
@@ -55,37 +55,37 @@ func NewSummarizeCommand() (*SummarizeCommand, error) {
 			"summarize",
 			cmds.WithShort("Summarize content"),
 			cmds.WithFlags(
-				parameters.NewParameterDefinition(
+				fields.New(
 					"url",
-					parameters.ParameterTypeString,
-					parameters.WithHelp("URL to a document to summarize"),
+					fields.TypeString,
+					fields.WithHelp("URL to a document to summarize"),
 				),
-				parameters.NewParameterDefinition(
+				fields.New(
 					"text",
-					parameters.ParameterTypeStringFromFile,
-					parameters.WithHelp("Text to summarize"),
+					fields.TypeStringFromFile,
+					fields.WithHelp("Text to summarize"),
 					// NOTE(manuel, 2023-09-27) This exclusive with is pretty cool as an idea
-					//parameters.WithExclusiveWith("url"),
+					//fields.WithExclusiveWith("url"),
 				),
-				parameters.NewParameterDefinition(
+				fields.New(
 					"engine",
-					parameters.ParameterTypeChoice,
-					parameters.WithHelp("Summarization engine"),
-					parameters.WithChoices("agnes", "cecil", "daphne", "muriel"),
-					parameters.WithDefault("cecil"),
+					fields.TypeChoice,
+					fields.WithHelp("Summarization engine"),
+					fields.WithChoices("agnes", "cecil", "daphne", "muriel"),
+					fields.WithDefault("cecil"),
 				),
-				parameters.NewParameterDefinition(
+				fields.New(
 					"summary_type",
-					parameters.ParameterTypeChoice,
-					parameters.WithHelp("Type of summary to generate"),
-					parameters.WithChoices("summary", "takeaway"),
-					parameters.WithDefault("summary"),
+					fields.TypeChoice,
+					fields.WithHelp("Type of summary to generate"),
+					fields.WithChoices("summary", "takeaway"),
+					fields.WithDefault("summary"),
 				),
-				parameters.NewParameterDefinition(
+				fields.New(
 					"target_language",
-					parameters.ParameterTypeString,
-					parameters.WithHelp("Target language for the summary"),
-					parameters.WithDefault("en"),
+					fields.TypeString,
+					fields.WithHelp("Target language for the summary"),
+					fields.WithDefault("en"),
 				),
 			),
 		),
@@ -94,7 +94,7 @@ func NewSummarizeCommand() (*SummarizeCommand, error) {
 
 func (c *SummarizeCommand) RunIntoWriter(
 	ctx context.Context,
-	parsedLayers *layers.ParsedLayers,
+	parsedLayers *values.Values,
 	w io.Writer,
 ) error {
 	token := viper.GetString("kagi-api-key")
@@ -103,7 +103,7 @@ func (c *SummarizeCommand) RunIntoWriter(
 	}
 
 	s := &SummarizeSettings{}
-	err := parsedLayers.InitializeStruct(layers.DefaultSlug, s)
+	err := parsedLayers.DecodeSectionInto(values.DefaultSlug, s)
 	if err != nil {
 		return errors.Wrap(err, "failed to initialize settings")
 	}

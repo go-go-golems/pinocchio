@@ -9,7 +9,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/go-go-golems/clay/pkg/filefilter"
+	"github.com/go-go-golems/pinocchio/pkg/filefilter"
 
 	"github.com/go-go-golems/clay/pkg/filewalker"
 	"github.com/go-go-golems/glazed/pkg/middlewares"

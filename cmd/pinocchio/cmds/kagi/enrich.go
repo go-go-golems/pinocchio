@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"github.com/charmbracelet/glamour"
 	"github.com/go-go-golems/glazed/pkg/cmds"
-	"github.com/go-go-golems/glazed/pkg/cmds/layers"
-	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
+	"github.com/go-go-golems/glazed/pkg/cmds/fields"
+	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	"github.com/go-go-golems/glazed/pkg/middlewares"
 	"github.com/go-go-golems/glazed/pkg/settings"
 	"github.com/go-go-golems/glazed/pkg/types"
@@ -80,15 +80,15 @@ func RenderMarkdown(searchObjects []SearchObject) (string, error) {
 }
 
 type EnrichWebSettings struct {
-	Query    string `glazed.parameter:"query"`
-	Token    string `glazed.parameter:"token"`
-	Markdown bool   `glazed.parameter:"markdown"`
-	Limit    int    `glazed.parameter:"limit"`
-	News     bool   `glazed.parameter:"news"`
+	Query    string `glazed:"query"`
+	Token    string `glazed:"token"`
+	Markdown bool   `glazed:"markdown"`
+	Limit    int    `glazed:"limit"`
+	News     bool   `glazed:"news"`
 }
 
 func NewEnrichWebCommand() (*EnrichWebCommand, error) {
-	glazedParameterLayer, err := settings.NewGlazedParameterLayers()
+	glazedParameterLayer, err := settings.NewGlazedSection()
 	if err != nil {
 		return nil, errors.Wrap(err, "could not create Glazed parameter layer")
 	}
@@ -98,37 +98,37 @@ func NewEnrichWebCommand() (*EnrichWebCommand, error) {
 			"enrich",
 			cmds.WithShort("Fetch enrichment results for web content"),
 			cmds.WithFlags(
-				parameters.NewParameterDefinition(
+				fields.New(
 					"query",
-					parameters.ParameterTypeString,
-					parameters.WithHelp("Search query"),
-					parameters.WithRequired(true),
+					fields.TypeString,
+					fields.WithHelp("Search query"),
+					fields.WithRequired(true),
 				),
-				parameters.NewParameterDefinition(
+				fields.New(
 					"token",
-					parameters.ParameterTypeString,
-					parameters.WithHelp("API Token"),
+					fields.TypeString,
+					fields.WithHelp("API Token"),
 				),
-				parameters.NewParameterDefinition(
+				fields.New(
 					"markdown",
-					parameters.ParameterTypeBool,
-					parameters.WithHelp("Render output as markdown"),
-					parameters.WithDefault(false),
+					fields.TypeBool,
+					fields.WithHelp("Render output as markdown"),
+					fields.WithDefault(false),
 				),
-				parameters.NewParameterDefinition(
+				fields.New(
 					"limit",
-					parameters.ParameterTypeInteger,
-					parameters.WithHelp("Limit number of results"),
-					parameters.WithDefault(10),
+					fields.TypeInteger,
+					fields.WithHelp("Limit number of results"),
+					fields.WithDefault(10),
 				),
-				parameters.NewParameterDefinition(
+				fields.New(
 					"news",
-					parameters.ParameterTypeBool,
-					parameters.WithHelp("Search news"),
-					parameters.WithDefault(false),
+					fields.TypeBool,
+					fields.WithHelp("Search news"),
+					fields.WithDefault(false),
 				),
 			),
-			cmds.WithLayersList(
+			cmds.WithSections(
 				glazedParameterLayer,
 			),
 		),
@@ -137,11 +137,11 @@ func NewEnrichWebCommand() (*EnrichWebCommand, error) {
 
 func (c *EnrichWebCommand) RunIntoGlazeProcessor(
 	ctx context.Context,
-	parsedLayers *layers.ParsedLayers,
+	parsedLayers *values.Values,
 	gp middlewares.Processor,
 ) error {
 	s := &EnrichWebSettings{}
-	err := parsedLayers.InitializeStruct(layers.DefaultSlug, s)
+	err := parsedLayers.DecodeSectionInto(values.DefaultSlug, s)
 	if err != nil {
 		return errors.Wrap(err, "failed to initialize settings")
 	}

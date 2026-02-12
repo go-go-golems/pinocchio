@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"github.com/charmbracelet/glamour"
 	"github.com/go-go-golems/glazed/pkg/cmds"
-	"github.com/go-go-golems/glazed/pkg/cmds/layers"
-	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
+	"github.com/go-go-golems/glazed/pkg/cmds/fields"
+	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	"github.com/go-go-golems/glazed/pkg/helpers/templating"
 	"github.com/pkg/errors"
 	"github.com/spf13/viper"
@@ -107,25 +107,25 @@ func NewFastGPTCommand() (*FastGPTCommand, error) {
 			"fastgpt",
 			cmds.WithShort("Answer a query using FastGPT"),
 			cmds.WithFlags(
-				parameters.NewParameterDefinition(
+				fields.New(
 					"query",
-					parameters.ParameterTypeString,
-					parameters.WithHelp("A query to be answered"),
-					parameters.WithRequired(true),
+					fields.TypeString,
+					fields.WithHelp("A query to be answered"),
+					fields.WithRequired(true),
 				),
-				parameters.NewParameterDefinition(
+				fields.New(
 					"web_search",
-					parameters.ParameterTypeBool,
-					parameters.WithHelp("Whether to use web search"),
-					parameters.WithDefault(true),
+					fields.TypeBool,
+					fields.WithHelp("Whether to use web search"),
+					fields.WithDefault(true),
 				),
 			),
 			cmds.WithArguments(
-				parameters.NewParameterDefinition(
+				fields.New(
 					"cache",
-					parameters.ParameterTypeBool,
-					parameters.WithHelp("Whether to allow cached requests & responses"),
-					parameters.WithDefault(true),
+					fields.TypeBool,
+					fields.WithHelp("Whether to allow cached requests & responses"),
+					fields.WithDefault(true),
 				),
 			),
 		),
@@ -133,14 +133,14 @@ func NewFastGPTCommand() (*FastGPTCommand, error) {
 }
 
 type FastGPTSettings struct {
-	Query     string `glazed.parameter:"query"`
-	Cache     bool   `glazed.parameter:"cache"`
-	WebSearch bool   `glazed.parameter:"web_search"`
+	Query     string `glazed:"query"`
+	Cache     bool   `glazed:"cache"`
+	WebSearch bool   `glazed:"web_search"`
 }
 
 func (c *FastGPTCommand) RunIntoWriter(
 	ctx context.Context,
-	parsedLayers *layers.ParsedLayers,
+	parsedLayers *values.Values,
 	w io.Writer,
 ) error {
 	token := viper.GetString("kagi-api-key")
@@ -149,7 +149,7 @@ func (c *FastGPTCommand) RunIntoWriter(
 	}
 
 	s := &FastGPTSettings{}
-	err := parsedLayers.InitializeStruct(layers.DefaultSlug, s)
+	err := parsedLayers.DecodeSectionInto(values.DefaultSlug, s)
 	if err != nil {
 		return errors.Wrap(err, "failed to initialize settings")
 	}

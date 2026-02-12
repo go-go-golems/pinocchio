@@ -6,23 +6,23 @@ import (
 	"os"
 	"strings"
 
-	"github.com/go-go-golems/clay/pkg/filefilter"
 	"github.com/go-go-golems/pinocchio/cmd/pinocchio/cmds/catter/pkg"
+	"github.com/go-go-golems/pinocchio/pkg/filefilter"
 
 	"github.com/go-go-golems/glazed/pkg/cmds"
-	"github.com/go-go-golems/glazed/pkg/cmds/layers"
-	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
+	"github.com/go-go-golems/glazed/pkg/cmds/fields"
+	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	"github.com/go-go-golems/glazed/pkg/middlewares"
 	"github.com/go-go-golems/glazed/pkg/settings"
 )
 
 type CatterStatsSettings struct {
-	Stats         []string `glazed.parameter:"stats"`
-	PrintFilters  bool     `glazed.parameter:"print-filters"`
-	FilterYAML    string   `glazed.parameter:"filter-yaml"`
-	FilterProfile string   `glazed.parameter:"filter-profile"`
-	Glazed        bool     `glazed.parameter:"glazed"`
-	Paths         []string `glazed.parameter:"paths"`
+	Stats         []string `glazed:"stats"`
+	PrintFilters  bool     `glazed:"print-filters"`
+	FilterYAML    string   `glazed:"filter-yaml"`
+	FilterProfile string   `glazed:"filter-profile"`
+	Glazed        bool     `glazed:"glazed"`
+	Paths         []string `glazed:"paths"`
 }
 
 type CatterStatsCommand struct {
@@ -30,7 +30,7 @@ type CatterStatsCommand struct {
 }
 
 func NewCatterStatsCommand() (*CatterStatsCommand, error) {
-	glazedParameterLayer, err := settings.NewGlazedParameterLayers()
+	glazedParameterLayer, err := settings.NewGlazedSection()
 	if err != nil {
 		return nil, fmt.Errorf("could not create Glazed parameter layer: %w", err)
 	}
@@ -46,45 +46,45 @@ func NewCatterStatsCommand() (*CatterStatsCommand, error) {
 			cmds.WithShort("Print statistics for files and directories"),
 			cmds.WithLong("A CLI tool to print statistics for files and directories, including token counts and sizes."),
 			cmds.WithFlags(
-				parameters.NewParameterDefinition(
+				fields.New(
 					"stats",
-					parameters.ParameterTypeStringList,
-					parameters.WithHelp("Types of statistics to show: overview, dir, full"),
-					parameters.WithShortFlag("s"),
-					parameters.WithDefault([]string{"overview"}),
+					fields.TypeStringList,
+					fields.WithHelp("Types of statistics to show: overview, dir, full"),
+					fields.WithShortFlag("s"),
+					fields.WithDefault([]string{"overview"}),
 				),
-				parameters.NewParameterDefinition(
+				fields.New(
 					"print-filters",
-					parameters.ParameterTypeBool,
-					parameters.WithHelp("Print configured filters"),
-					parameters.WithDefault(false),
+					fields.TypeBool,
+					fields.WithHelp("Print configured filters"),
+					fields.WithDefault(false),
 				),
-				parameters.NewParameterDefinition(
+				fields.New(
 					"filter-yaml",
-					parameters.ParameterTypeString,
-					parameters.WithHelp("Path to YAML file containing filter configuration"),
+					fields.TypeString,
+					fields.WithHelp("Path to YAML file containing filter configuration"),
 				),
-				parameters.NewParameterDefinition(
+				fields.New(
 					"filter-profile",
-					parameters.ParameterTypeString,
-					parameters.WithHelp("Name of the filter profile to use"),
+					fields.TypeString,
+					fields.WithHelp("Name of the filter profile to use"),
 				),
-				parameters.NewParameterDefinition(
+				fields.New(
 					"glazed",
-					parameters.ParameterTypeBool,
-					parameters.WithHelp("Enable Glazed structured output"),
-					parameters.WithDefault(true),
+					fields.TypeBool,
+					fields.WithHelp("Enable Glazed structured output"),
+					fields.WithDefault(true),
 				),
 			),
 			cmds.WithArguments(
-				parameters.NewParameterDefinition(
+				fields.New(
 					"paths",
-					parameters.ParameterTypeStringList,
-					parameters.WithHelp("Paths to process"),
-					parameters.WithDefault([]string{"."}),
+					fields.TypeStringList,
+					fields.WithHelp("Paths to process"),
+					fields.WithDefault([]string{"."}),
 				),
 			),
-			cmds.WithLayersList(
+			cmds.WithSections(
 				glazedParameterLayer,
 				fileFilterLayer,
 			),
@@ -92,9 +92,9 @@ func NewCatterStatsCommand() (*CatterStatsCommand, error) {
 	}, nil
 }
 
-func (c *CatterStatsCommand) RunIntoGlazeProcessor(ctx context.Context, parsedLayers *layers.ParsedLayers, gp middlewares.Processor) error {
+func (c *CatterStatsCommand) RunIntoGlazeProcessor(ctx context.Context, parsedLayers *values.Values, gp middlewares.Processor) error {
 	s := &CatterStatsSettings{}
-	err := parsedLayers.InitializeStruct(layers.DefaultSlug, s)
+	err := parsedLayers.DecodeSectionInto(values.DefaultSlug, s)
 	if err != nil {
 		return fmt.Errorf("error initializing settings: %w", err)
 	}
