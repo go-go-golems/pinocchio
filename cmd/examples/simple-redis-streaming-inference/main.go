@@ -62,6 +62,12 @@ type SimpleRedisStreamingInferenceCommand struct {
 
 var _ cmds.WriterCommand = (*SimpleRedisStreamingInferenceCommand)(nil)
 
+type inferenceRunnerFunc func(ctx context.Context, t *turns.Turn) (*turns.Turn, error)
+
+func (f inferenceRunnerFunc) RunInference(ctx context.Context, t *turns.Turn) (*turns.Turn, error) {
+	return f(ctx, t)
+}
+
 type SimpleRedisStreamingInferenceSettings struct {
 	PinocchioProfile string `glazed:"pinocchio-profile"`
 	WithLogging      bool   `glazed:"with-logging"`
