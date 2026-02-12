@@ -12,6 +12,7 @@ import (
 	"github.com/go-go-golems/glazed/pkg/middlewares"
 	"github.com/go-go-golems/glazed/pkg/settings"
 	"github.com/go-go-golems/glazed/pkg/types"
+	"github.com/go-go-golems/pinocchio/pkg/security"
 	"github.com/pkg/errors"
 	"github.com/spf13/viper"
 	"io"
@@ -161,12 +162,19 @@ func (c *EnrichWebCommand) RunIntoGlazeProcessor(
 	if news {
 		url_ = fmt.Sprintf("https://kagi.com/api/v0/enrich/news?q=%s", url.QueryEscape(query))
 	}
+	if err := security.ValidateOutboundURL(url_, security.OutboundURLOptions{
+		AllowHTTP: false,
+	}); err != nil {
+		return errors.Wrap(err, "invalid enrich endpoint URL")
+	}
+
 	req, err := http.NewRequest("GET", url_, nil)
 	if err != nil {
 		return errors.Wrap(err, "failed to create request")
 	}
 
 	req.Header.Set("Authorization", "Bot "+token)
+	// #nosec G704 -- endpoint URL is validated with ValidateOutboundURL.
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return errors.Wrap(err, "failed to send request")

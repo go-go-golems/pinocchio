@@ -10,6 +10,7 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cmds/fields"
 	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	"github.com/go-go-golems/glazed/pkg/helpers/templating"
+	"github.com/go-go-golems/pinocchio/pkg/security"
 	"github.com/pkg/errors"
 	"github.com/spf13/viper"
 	"io"
@@ -165,13 +166,21 @@ func (c *FastGPTCommand) RunIntoWriter(
 		return errors.Wrap(err, "failed to marshal request body")
 	}
 
-	req, err := http.NewRequest("POST", "https://kagi.com/api/v0/fastgpt", bytes.NewBuffer(bodyData))
+	const endpointURL = "https://kagi.com/api/v0/fastgpt"
+	if err := security.ValidateOutboundURL(endpointURL, security.OutboundURLOptions{
+		AllowHTTP: false,
+	}); err != nil {
+		return errors.Wrap(err, "invalid fastgpt endpoint URL")
+	}
+
+	req, err := http.NewRequest("POST", endpointURL, bytes.NewBuffer(bodyData))
 	if err != nil {
 		return errors.Wrap(err, "failed to create request")
 	}
 
 	req.Header.Set("Authorization", "Bot "+token)
 	req.Header.Set("Content-Type", "application/json")
+	// #nosec G704 -- endpoint URL is validated with ValidateOutboundURL.
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return errors.Wrap(err, "failed to send request")

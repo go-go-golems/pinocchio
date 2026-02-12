@@ -136,8 +136,29 @@ func previewInPager(content string) {
 	if pager == "" {
 		pager = "less" // Default to less if $PAGER is not set
 	}
+	parts := strings.Fields(pager)
+	if len(parts) == 0 {
+		parts = []string{"less"}
+	}
+	pagerName := parts[0]
 
-	cmd := exec.Command(pager)
+	var cmd *exec.Cmd
+	switch pagerName {
+	case "less":
+		cmd = exec.Command("less")
+	case "more":
+		cmd = exec.Command("more")
+	case "most":
+		cmd = exec.Command("most")
+	case "cat":
+		cmd = exec.Command("cat")
+	case "bat":
+		cmd = exec.Command("bat")
+	default:
+		// Use a safe default instead of executing arbitrary commands from $PAGER.
+		cmd = exec.Command("less")
+	}
+
 	cmd.Stdin = strings.NewReader(content)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr

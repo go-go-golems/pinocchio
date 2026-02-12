@@ -5,6 +5,7 @@ import (
 	"fmt"
 	layers2 "github.com/go-go-golems/geppetto/pkg/layers"
 	"os"
+	"path/filepath"
 
 	clay "github.com/go-go-golems/clay/pkg"
 	"github.com/go-go-golems/clay/pkg/repositories"
@@ -72,7 +73,7 @@ func main() {
 	// because we need to load the file and then run the command itself.
 	// we need to do this before cobra, because we don't know which flags to load yet
 	if len(os.Args) >= 3 && os.Args[1] == "run-command" && os.Args[2] != "--help" {
-		bytes, err := os.ReadFile(os.Args[2])
+		bytes, err := readRunCommandFile(os.Args[2])
 		if err != nil {
 			fmt.Printf("Could not read file: %v\n", err)
 			os.Exit(1)
@@ -107,6 +108,30 @@ func main() {
 
 	err = rootCmd.Execute()
 	cobra.CheckErr(err)
+}
+
+func readRunCommandFile(pathArg string) ([]byte, error) {
+	cleanPath := filepath.Clean(pathArg)
+	if filepath.IsAbs(cleanPath) {
+		root, err := os.OpenRoot(filepath.Dir(cleanPath))
+		if err != nil {
+			return nil, err
+		}
+		defer func() {
+			_ = root.Close()
+		}()
+		return root.ReadFile(filepath.Base(cleanPath))
+	}
+
+	root, err := os.OpenRoot(".")
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		_ = root.Close()
+	}()
+
+	return root.ReadFile(cleanPath)
 }
 
 var runCommandCmd = &cobra.Command{
