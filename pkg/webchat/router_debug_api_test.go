@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/go-go-golems/geppetto/pkg/inference/toolloop"
 	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
@@ -151,6 +152,133 @@ func TestAPIHandler_DebugStepRoutes(t *testing.T) {
 	require.NoError(t, json.Unmarshal(disableBody, &disableResp))
 	require.Equal(t, true, disableResp["ok"])
 	require.Equal(t, "session-1", disableResp["session_id"])
+}
+
+func TestAPIHandler_DebugConversationsAndDetail(t *testing.T) {
+	convA := &Conversation{
+		ID:           "conv-a",
+		SessionID:    "session-a",
+		ProfileSlug:  "default",
+		semBuf:       newSemFrameBuffer(10),
+		lastActivity: time.UnixMilli(1000),
+	}
+	convA.semBuf.Add([]byte(`{"event":{"type":"chat.message","id":"e1"}}`))
+
+	convB := &Conversation{
+		ID:               "conv-b",
+		SessionID:        "session-b",
+		ProfileSlug:      "agent",
+		semBuf:           newSemFrameBuffer(10),
+		activeRequestKey: "req-1",
+		lastActivity:     time.UnixMilli(2000),
+		timelineProj:     &TimelineProjector{},
+	}
+	convB.semBuf.Add([]byte(`{"event":{"type":"chat.message","id":"e2"}}`))
+	convB.semBuf.Add([]byte(`{"event":{"type":"tool.call","id":"e3"}}`))
+
+	r := &Router{
+		profiles: newInMemoryProfileRegistry(),
+		cm: &ConvManager{
+			conns: map[string]*Conversation{
+				"conv-a": convA,
+				"conv-b": convB,
+			},
+		},
+	}
+	h := r.APIHandler()
+
+	status, body := runRequest(t, h, http.MethodGet, "/api/debug/conversations", nil)
+	require.Equal(t, http.StatusOK, status)
+	resp := map[string]any{}
+	require.NoError(t, json.Unmarshal(body, &resp))
+
+	items, ok := resp["items"].([]any)
+	require.True(t, ok)
+	require.Len(t, items, 2)
+	first := items[0].(map[string]any)
+	require.Equal(t, "conv-b", first["conv_id"])
+
+	detailStatus, detailBody := runRequest(t, h, http.MethodGet, "/api/debug/conversations/conv-b", nil)
+	require.Equal(t, http.StatusOK, detailStatus)
+	detail := map[string]any{}
+	require.NoError(t, json.Unmarshal(detailBody, &detail))
+	require.Equal(t, "conv-b", detail["conv_id"])
+	require.Equal(t, "session-b", detail["session_id"])
+	require.Equal(t, "agent", detail["profile"])
+	require.Equal(t, float64(2), detail["buffered_events"])
+	require.Equal(t, "req-1", detail["active_request_key"])
+	require.Equal(t, true, detail["has_timeline_source"])
+}
+
+func TestAPIHandler_DebugEventsFilters(t *testing.T) {
+	conv := &Conversation{
+		ID:        "conv-events",
+		SessionID: "session-1",
+		semBuf:    newSemFrameBuffer(10),
+	}
+	conv.semBuf.Add([]byte(`{"event":{"type":"chat.message","id":"e1"}}`))
+	conv.semBuf.Add([]byte(`{"event":{"type":"tool.call","id":"e2"}}`))
+	conv.semBuf.Add([]byte(`{"event":{"type":"tool.call","id":"e3"}}`))
+
+	r := &Router{
+		profiles: newInMemoryProfileRegistry(),
+		cm: &ConvManager{
+			conns: map[string]*Conversation{
+				"conv-events": conv,
+			},
+		},
+	}
+	h := r.APIHandler()
+
+	status, body := runRequest(t, h, http.MethodGet, "/api/debug/events/conv-events?since_seq=1&type=tool.call&limit=1", nil)
+	require.Equal(t, http.StatusOK, status)
+	resp := map[string]any{}
+	require.NoError(t, json.Unmarshal(body, &resp))
+	require.Equal(t, "conv-events", resp["conv_id"])
+	require.Equal(t, float64(1), resp["since_seq"])
+	require.Equal(t, "tool.call", resp["type"])
+	require.Equal(t, float64(1), resp["limit"])
+
+	items, ok := resp["items"].([]any)
+	require.True(t, ok)
+	require.Len(t, items, 1)
+	item := items[0].(map[string]any)
+	require.Equal(t, float64(2), item["seq"])
+	require.Equal(t, "tool.call", item["type"])
+	require.Equal(t, "e2", item["id"])
+}
+
+func TestAPIHandler_DebugTurnDetail(t *testing.T) {
+	payloadDraft := "id: turn-1\nblocks:\n  - kind: llm_text\n    role: assistant\n    payload:\n      text: hi\n"
+	payloadFinal := "id: turn-1\nblocks:\n  - kind: llm_text\n    role: assistant\n    payload:\n      text: hello\n"
+	r := &Router{
+		profiles: newInMemoryProfileRegistry(),
+		cm:       &ConvManager{conns: map[string]*Conversation{}},
+		turnStore: &stubTurnStore{
+			items: []chatstore.TurnSnapshot{
+				{ConvID: "conv-1", SessionID: "session-1", TurnID: "turn-1", Phase: "draft", CreatedAtMs: 100, Payload: payloadDraft},
+				{ConvID: "conv-1", SessionID: "session-1", TurnID: "turn-1", Phase: "final", CreatedAtMs: 200, Payload: payloadFinal},
+				{ConvID: "conv-1", SessionID: "session-1", TurnID: "turn-2", Phase: "final", CreatedAtMs: 300, Payload: payloadFinal},
+			},
+		},
+	}
+	h := r.APIHandler()
+
+	status, body := runRequest(t, h, http.MethodGet, "/api/debug/turn/conv-1/session-1/turn-1", nil)
+	require.Equal(t, http.StatusOK, status)
+	resp := map[string]any{}
+	require.NoError(t, json.Unmarshal(body, &resp))
+	require.Equal(t, "conv-1", resp["conv_id"])
+	require.Equal(t, "session-1", resp["session_id"])
+	require.Equal(t, "turn-1", resp["turn_id"])
+
+	items, ok := resp["items"].([]any)
+	require.True(t, ok)
+	require.Len(t, items, 2)
+	first := items[0].(map[string]any)
+	require.Equal(t, "final", first["phase"])
+	_, hasParsed := first["parsed"]
+	require.True(t, hasParsed)
 }
 
 func runRequest(t *testing.T, h http.Handler, method string, path string, payload map[string]any) (int, []byte) {
