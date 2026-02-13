@@ -383,7 +383,7 @@ func (r *Router) registerAPIHandlers(mux *http.ServeMux) {
 	})
 
 	// debug endpoints (dev-gated via PINOCCHIO_WEBCHAT_DEBUG=1)
-	mux.HandleFunc("/debug/step/enable", func(w http.ResponseWriter, r0 *http.Request) {
+	stepEnableHandler := func(w http.ResponseWriter, r0 *http.Request) {
 		if os.Getenv("PINOCCHIO_WEBCHAT_DEBUG") != "1" {
 			http.NotFound(w, r0)
 			return
@@ -418,9 +418,11 @@ func (r *Router) registerAPIHandlers(mux *http.ServeMux) {
 		}
 		r.stepCtrl.Enable(toolloop.StepScope{SessionID: sessionID, ConversationID: convID, Owner: strings.TrimSpace(body.Owner)})
 		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "session_id": sessionID, "conv_id": convID})
-	})
+	}
+	mux.HandleFunc("/debug/step/enable", stepEnableHandler)
+	mux.HandleFunc("/api/debug/step/enable", stepEnableHandler)
 
-	mux.HandleFunc("/debug/step/disable", func(w http.ResponseWriter, r0 *http.Request) {
+	stepDisableHandler := func(w http.ResponseWriter, r0 *http.Request) {
 		if os.Getenv("PINOCCHIO_WEBCHAT_DEBUG") != "1" {
 			http.NotFound(w, r0)
 			return
@@ -452,9 +454,11 @@ func (r *Router) registerAPIHandlers(mux *http.ServeMux) {
 			r.stepCtrl.DisableSession(sessionID)
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "session_id": sessionID})
-	})
+	}
+	mux.HandleFunc("/debug/step/disable", stepDisableHandler)
+	mux.HandleFunc("/api/debug/step/disable", stepDisableHandler)
 
-	mux.HandleFunc("/debug/continue", func(w http.ResponseWriter, r0 *http.Request) {
+	continueHandler := func(w http.ResponseWriter, r0 *http.Request) {
 		if os.Getenv("PINOCCHIO_WEBCHAT_DEBUG") != "1" {
 			http.NotFound(w, r0)
 			return
@@ -494,7 +498,9 @@ func (r *Router) registerAPIHandlers(mux *http.ServeMux) {
 			return
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "pause": meta})
-	})
+	}
+	mux.HandleFunc("/debug/continue", continueHandler)
+	mux.HandleFunc("/api/debug/continue", continueHandler)
 
 	// websocket join: /ws?conv_id=...&profile=slug (falls back to chat_profile cookie)
 	mux.HandleFunc("/ws", func(w http.ResponseWriter, r0 *http.Request) {
@@ -670,6 +676,8 @@ func (r *Router) registerAPIHandlers(mux *http.ServeMux) {
 	}
 	mux.HandleFunc("/timeline", timelineHandler)
 	mux.HandleFunc("/timeline/", timelineHandler)
+	mux.HandleFunc("/api/debug/timeline", timelineHandler)
+	mux.HandleFunc("/api/debug/timeline/", timelineHandler)
 
 	turnsHandler := func(w http.ResponseWriter, r0 *http.Request) {
 		if r0.Method != http.MethodGet {
@@ -731,6 +739,8 @@ func (r *Router) registerAPIHandlers(mux *http.ServeMux) {
 	}
 	mux.HandleFunc("/turns", turnsHandler)
 	mux.HandleFunc("/turns/", turnsHandler)
+	mux.HandleFunc("/api/debug/turns", turnsHandler)
+	mux.HandleFunc("/api/debug/turns/", turnsHandler)
 
 	handleChatRequest := func(w http.ResponseWriter, r0 *http.Request) {
 		if r0.Method != http.MethodPost {
