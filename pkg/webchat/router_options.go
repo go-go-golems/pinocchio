@@ -15,12 +15,12 @@ import (
 // RouterOption configures optional dependencies for a Router.
 type RouterOption func(*Router) error
 
-func WithEngineFromReqBuilder(b EngineFromReqBuilder) RouterOption {
+func WithConversationRequestResolver(resolver ConversationRequestResolver) RouterOption {
 	return func(r *Router) error {
-		if b == nil {
-			return errors.New("engineFromReqBuilder is nil")
+		if resolver == nil {
+			return errors.New("conversation request resolver is nil")
 		}
-		r.engineFromReqBuilder = b
+		r.requestResolver = resolver
 		return nil
 	}
 }

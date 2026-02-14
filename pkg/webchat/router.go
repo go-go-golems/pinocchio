@@ -156,8 +156,8 @@ func NewRouter(ctx context.Context, parsed *values.Values, staticFS fs.FS, opts 
 			TimelineUpsertHook: r.TimelineUpsertHook,
 		})
 	}
-	if r.engineFromReqBuilder == nil {
-		r.engineFromReqBuilder = NewDefaultEngineFromReqBuilder(r.profiles, r.cm)
+	if r.requestResolver == nil {
+		r.requestResolver = NewDefaultConversationRequestResolver(r.profiles, r.cm)
 	}
 
 	if r.cm != nil {
@@ -402,14 +402,14 @@ func (r *Router) registerAPIHandlers(mux *http.ServeMux) {
 			logger.Error().Err(err).Msg("websocket upgrade failed")
 			return
 		}
-		b := r.engineFromReqBuilder
-		if b == nil {
-			b = NewDefaultEngineFromReqBuilder(r.profiles, r.cm)
+		resolver := r.requestResolver
+		if resolver == nil {
+			resolver = NewDefaultConversationRequestResolver(r.profiles, r.cm)
 		}
-		input, _, err := b.BuildEngineFromReq(r0)
+		plan, err := resolver.Resolve(r0)
 		if err != nil {
 			msg := err.Error()
-			var rbe *RequestBuildError
+			var rbe *RequestResolutionError
 			if stderrors.As(err, &rbe) && rbe != nil && strings.TrimSpace(rbe.ClientMsg) != "" {
 				msg = rbe.ClientMsg
 			}
@@ -419,12 +419,12 @@ func (r *Router) registerAPIHandlers(mux *http.ServeMux) {
 			_ = conn.Close()
 			return
 		}
-		convID := input.ConvID
-		profileSlug := input.ProfileSlug
+		convID := plan.ConvID
+		runtimeKey := plan.RuntimeKey
 		wsLog := logger.With().
 			Str("remote", r0.RemoteAddr).
 			Str("conv_id", convID).
-			Str("profile", profileSlug).
+			Str("runtime_key", runtimeKey).
 			Logger()
 		wsLog.Debug().
 			Str("conv_id_query", queryConv).
@@ -432,7 +432,7 @@ func (r *Router) registerAPIHandlers(mux *http.ServeMux) {
 			Msg("ws resolved request")
 		wsLog.Info().Msg("ws connect request")
 		wsLog.Info().Msg("ws joining conversation")
-		conv, err := r.cm.GetOrCreate(convID, profileSlug, nil)
+		conv, err := r.cm.GetOrCreate(convID, runtimeKey, nil)
 		if err != nil {
 			wsLog.Error().Err(err).Msg("failed to join conversation")
 			_ = conn.WriteMessage(websocket.TextMessage, []byte(`{"error":"failed to join conversation"}`))
@@ -445,7 +445,7 @@ func (r *Router) registerAPIHandlers(mux *http.ServeMux) {
 		// Send a greeting frame to the newly connected client (mirrors moments/go-go-mento behavior).
 		if conv != nil && conv.pool != nil {
 			ts := time.Now().UnixMilli()
-			data, _ := protoToRaw(&sempb.WsHelloV1{ConvId: convID, Profile: profileSlug, ServerTime: ts})
+			data, _ := protoToRaw(&sempb.WsHelloV1{ConvId: convID, Profile: runtimeKey, ServerTime: ts})
 			hello := map[string]any{
 				"sem": true,
 				"event": map[string]any{
@@ -515,15 +515,15 @@ func (r *Router) registerAPIHandlers(mux *http.ServeMux) {
 			return
 		}
 
-		b := r.engineFromReqBuilder
-		if b == nil {
-			b = NewDefaultEngineFromReqBuilder(r.profiles, r.cm)
+		resolver := r.requestResolver
+		if resolver == nil {
+			resolver = NewDefaultConversationRequestResolver(r.profiles, r.cm)
 		}
-		input, body, err := b.BuildEngineFromReq(r0)
+		plan, err := resolver.Resolve(r0)
 		if err != nil {
 			status := http.StatusInternalServerError
 			msg := "failed to resolve request"
-			var rbe *RequestBuildError
+			var rbe *RequestResolutionError
 			if stderrors.As(err, &rbe) && rbe != nil {
 				if rbe.Status > 0 {
 					status = rbe.Status
@@ -536,23 +536,23 @@ func (r *Router) registerAPIHandlers(mux *http.ServeMux) {
 			http.Error(w, msg, status)
 			return
 		}
-		if body == nil {
-			logger.Warn().Msg("chat request policy missing parsed body")
-			http.Error(w, "bad request", http.StatusBadRequest)
+		if strings.TrimSpace(plan.Prompt) == "" {
+			logger.Warn().Msg("chat request resolver missing prompt")
+			http.Error(w, "missing prompt", http.StatusBadRequest)
 			return
 		}
 
-		convID := input.ConvID
-		profileSlug := input.ProfileSlug
-		chatReqLog := logger.With().Str("conv_id", convID).Str("profile", profileSlug).Logger()
-		chatReqLog.Info().Int("prompt_len", len(body.Prompt)).Msg("/chat received")
-		if input.Overrides != nil {
-			chatReqLog.Debug().Interface("overrides", input.Overrides).Msg("/chat overrides")
+		convID := plan.ConvID
+		runtimeKey := plan.RuntimeKey
+		chatReqLog := logger.With().Str("conv_id", convID).Str("runtime_key", runtimeKey).Logger()
+		chatReqLog.Info().Int("prompt_len", len(plan.Prompt)).Msg("/chat received")
+		if plan.Overrides != nil {
+			chatReqLog.Debug().Interface("overrides", plan.Overrides).Msg("/chat overrides")
 		} else {
 			chatReqLog.Debug().Msg("/chat overrides empty")
 		}
 
-		conv, err := r.cm.GetOrCreate(convID, profileSlug, input.Overrides)
+		conv, err := r.cm.GetOrCreate(convID, runtimeKey, plan.Overrides)
 		if err != nil {
 			chatReqLog.Error().Err(err).Msg("failed to create conversation")
 			http.Error(w, "failed to create conversation", http.StatusInternalServerError)
@@ -564,9 +564,12 @@ func (r *Router) registerAPIHandlers(mux *http.ServeMux) {
 		}
 
 		sessionLog := logger.With().Str("conv_id", conv.ID).Str("session_id", conv.SessionID).Logger()
-		idempotencyKey := idempotencyKeyFromRequest(r0, body)
+		idempotencyKey := strings.TrimSpace(plan.IdempotencyKey)
+		if idempotencyKey == "" {
+			idempotencyKey = idempotencyKeyFromRequest(r0, nil)
+		}
 
-		prep, err := conv.PrepareSessionInference(idempotencyKey, profileSlug, input.Overrides, body.Prompt)
+		prep, err := conv.PrepareSessionInference(idempotencyKey, runtimeKey, plan.Overrides, plan.Prompt)
 		if err != nil {
 			sessionLog.Error().Err(err).Msg("prepare session inference failed")
 			http.Error(w, "prepare session inference failed", http.StatusInternalServerError)
@@ -588,7 +591,7 @@ func (r *Router) registerAPIHandlers(mux *http.ServeMux) {
 			return
 		}
 
-		resp, err := r.startInferenceForPrompt(conv, profileSlug, input.Overrides, body.Prompt, idempotencyKey)
+		resp, err := r.startInferenceForPrompt(conv, runtimeKey, plan.Overrides, plan.Prompt, idempotencyKey)
 		if err != nil {
 			sessionLog.Error().Err(err).Msg("start session inference failed")
 			http.Error(w, "start session inference failed", http.StatusInternalServerError)

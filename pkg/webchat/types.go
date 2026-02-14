@@ -113,7 +113,7 @@ type Router struct {
 	stepCtrl *toolloop.StepController
 
 	// request policy
-	engineFromReqBuilder EngineFromReqBuilder
+	requestResolver ConversationRequestResolver
 
 	// optional overrides for conv manager hooks
 	buildSubscriberOverride    func(convID string) (message.Subscriber, bool, error)
