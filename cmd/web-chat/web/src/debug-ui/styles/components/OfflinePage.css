@@ -33,6 +33,27 @@
   margin: 0 0 8px;
 }
 
+.offline-tab-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.offline-tab-row .btn.active {
+  border-color: var(--accent-blue);
+  color: var(--accent-blue);
+}
+
+.offline-panel-body {
+  display: grid;
+  gap: 12px;
+}
+
+.offline-entity-grid {
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+}
+
 .offline-detail-section pre {
   margin: 0;
   max-height: 480px;

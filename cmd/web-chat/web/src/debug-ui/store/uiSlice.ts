@@ -1,11 +1,12 @@
 import { createSlice, type PayloadAction } from '@reduxjs/toolkit';
-import type { Anomaly, TurnPhase } from '../types';
+import type { TurnPhase } from '../types';
 
 interface UiState {
   // Selection state
   selectedConvId: string | null;
   selectedSessionId: string | null;
   selectedTurnId: string | null;
+  selectedEntityId: string | null;
   selectedRunId: string | null;
   selectedPhase: TurnPhase;
   selectedSeq: number | null;
@@ -20,32 +21,13 @@ interface UiState {
   // Diff state
   comparePhaseA: TurnPhase | null;
   comparePhaseB: TurnPhase | null;
-
-  // View state
-  viewMode: 'semantic' | 'sem' | 'raw';
-  liveStreamEnabled: boolean;
-  sidebarCollapsed: boolean;
-  filterBarOpen: boolean;
-  anomalyPanelOpen: boolean;
-  inspectorPanel: 'none' | 'event' | 'turn' | 'mw';
-
-  // Filters
-  filters: {
-    eventTypes: string[];
-    snapshotPhases: string[];
-    middlewares: string[];
-    blockKinds: string[];
-  };
-
-  // Anomalies
-  pinnedAnomalies: Anomaly[];
-  autoDetectedAnomalies: Anomaly[];
 }
 
 const initialState: UiState = {
   selectedConvId: null,
   selectedSessionId: null,
   selectedTurnId: null,
+  selectedEntityId: null,
   selectedRunId: null,
   selectedPhase: 'final',
   selectedSeq: null,
@@ -57,23 +39,6 @@ const initialState: UiState = {
 
   comparePhaseA: null,
   comparePhaseB: null,
-
-  viewMode: 'semantic',
-  liveStreamEnabled: true,
-  sidebarCollapsed: false,
-  filterBarOpen: false,
-  anomalyPanelOpen: false,
-  inspectorPanel: 'none',
-
-  filters: {
-    eventTypes: [],
-    snapshotPhases: [],
-    middlewares: [],
-    blockKinds: [],
-  },
-
-  pinnedAnomalies: [],
-  autoDetectedAnomalies: [],
 };
 
 export const uiSlice = createSlice({
@@ -84,16 +49,23 @@ export const uiSlice = createSlice({
       state.selectedConvId = action.payload;
       state.selectedSessionId = null;
       state.selectedTurnId = null;
+      state.selectedEntityId = null;
+      state.selectedSeq = null;
     },
     selectSession: (state, action: PayloadAction<string | null>) => {
       state.selectedSessionId = action.payload;
       state.selectedTurnId = null;
+      state.selectedEntityId = null;
+      state.selectedSeq = null;
     },
     selectTurn: (state, action: PayloadAction<string | null>) => {
       state.selectedTurnId = action.payload;
     },
     selectRun: (state, action: PayloadAction<string | null>) => {
       state.selectedRunId = action.payload;
+    },
+    selectEntity: (state, action: PayloadAction<string | null>) => {
+      state.selectedEntityId = action.payload;
     },
     setOfflineConfig: (
       state,
@@ -114,44 +86,6 @@ export const uiSlice = createSlice({
       state.comparePhaseA = action.payload.a;
       state.comparePhaseB = action.payload.b;
     },
-    setViewMode: (state, action: PayloadAction<'semantic' | 'sem' | 'raw'>) => {
-      state.viewMode = action.payload;
-    },
-    toggleLiveStream: (state) => {
-      state.liveStreamEnabled = !state.liveStreamEnabled;
-    },
-    toggleSidebar: (state) => {
-      state.sidebarCollapsed = !state.sidebarCollapsed;
-    },
-    toggleFilterBar: (state) => {
-      state.filterBarOpen = !state.filterBarOpen;
-    },
-    toggleAnomalyPanel: (state) => {
-      state.anomalyPanelOpen = !state.anomalyPanelOpen;
-    },
-    setInspectorPanel: (
-      state,
-      action: PayloadAction<'none' | 'event' | 'turn' | 'mw'>
-    ) => {
-      state.inspectorPanel = action.payload;
-    },
-    setFilters: (
-      state,
-      action: PayloadAction<Partial<UiState['filters']>>
-    ) => {
-      state.filters = { ...state.filters, ...action.payload };
-    },
-    pinAnomaly: (state, action: PayloadAction<Anomaly>) => {
-      state.pinnedAnomalies.push(action.payload);
-    },
-    unpinAnomaly: (state, action: PayloadAction<string>) => {
-      state.pinnedAnomalies = state.pinnedAnomalies.filter(
-        (a) => a.id !== action.payload
-      );
-    },
-    setAutoDetectedAnomalies: (state, action: PayloadAction<Anomaly[]>) => {
-      state.autoDetectedAnomalies = action.payload;
-    },
   },
 });
 
@@ -160,18 +94,9 @@ export const {
   selectSession,
   selectTurn,
   selectRun,
+  selectEntity,
   setOfflineConfig,
   selectPhase,
   selectEvent,
   setComparePhases,
-  setViewMode,
-  toggleLiveStream,
-  toggleSidebar,
-  toggleFilterBar,
-  toggleAnomalyPanel,
-  setInspectorPanel,
-  setFilters,
-  pinAnomaly,
-  unpinAnomaly,
-  setAutoDetectedAnomalies,
 } = uiSlice.actions;

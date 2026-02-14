@@ -1,29 +1,16 @@
 
-import { useGetEventsQuery, useGetTimelineQuery, useGetTurnsQuery } from '../api/debugApi';
 import { TimelineLanes } from '../components/TimelineLanes';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
-import { selectEvent, selectSession, selectTurn } from '../store/uiSlice';
+import { selectEntity, selectEvent, selectSession, selectTurn } from '../store/uiSlice';
+import { useLiveLaneData } from './useLaneData';
 
 export function TimelinePage() {
   const dispatch = useAppDispatch();
   const selectedConvId = useAppSelector((state) => state.ui.selectedConvId);
   const selectedTurnId = useAppSelector((state) => state.ui.selectedTurnId);
   const selectedEventSeq = useAppSelector((state) => state.ui.selectedSeq);
-
-  const { data: timeline, isLoading: timelineLoading } = useGetTimelineQuery(
-    { convId: selectedConvId ?? '' },
-    { skip: !selectedConvId }
-  );
-
-  const { data: eventsData, isLoading: eventsLoading } = useGetEventsQuery(
-    { convId: selectedConvId ?? '' },
-    { skip: !selectedConvId }
-  );
-
-  const { data: turns, isLoading: turnsLoading } = useGetTurnsQuery(
-    { convId: selectedConvId ?? '' },
-    { skip: !selectedConvId }
-  );
+  const selectedEntityId = useAppSelector((state) => state.ui.selectedEntityId);
+  const laneData = useLiveLaneData(selectedConvId);
 
   if (!selectedConvId) {
     return (
@@ -34,9 +21,7 @@ export function TimelinePage() {
     );
   }
 
-  const isLoading = timelineLoading || eventsLoading || turnsLoading;
-
-  if (isLoading) {
+  if (laneData.isLoading) {
     return (
       <div className="timeline-loading-state">
         <p>Loading timeline...</p>
@@ -49,19 +34,20 @@ export function TimelinePage() {
       <div className="timeline-page-header">
         <h2>📊 Timeline</h2>
         <div className="timeline-header-meta">
-          <span>{turns?.length ?? 0} turns</span>
-          <span>{eventsData?.events?.length ?? 0} events</span>
-          <span>{timeline?.entities?.length ?? 0} entities</span>
+          <span>{laneData.turns.length} turns</span>
+          <span>{laneData.events.length} events</span>
+          <span>{laneData.entities.length} entities</span>
         </div>
       </div>
 
       <TimelineLanes
-        turns={turns ?? []}
-        events={eventsData?.events ?? []}
-        entities={timeline?.entities ?? []}
+        turns={laneData.turns}
+        events={laneData.events}
+        entities={laneData.entities}
         isLive={false}
         selectedTurnId={selectedTurnId ?? undefined}
         selectedEventSeq={selectedEventSeq ?? undefined}
+        selectedEntityId={selectedEntityId ?? undefined}
         onTurnSelect={(turn) => {
           dispatch(selectSession(turn.session_id));
           dispatch(selectTurn(turn.turn_id));
@@ -69,6 +55,7 @@ export function TimelinePage() {
         onEventSelect={(event) => {
           dispatch(selectEvent(event.seq));
         }}
+        onEntitySelect={(entity) => dispatch(selectEntity(entity.id))}
       />
     </div>
   );

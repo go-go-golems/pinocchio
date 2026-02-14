@@ -228,6 +228,21 @@
   text-overflow: ellipsis;
 }
 
+.snapshot-diff .block-preview-meta {
+  margin-top: 6px;
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.snapshot-diff .meta-chip {
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  padding: 1px 6px;
+}
+
 .snapshot-diff .tool-name {
   color: var(--accent-yellow);
   font-weight: 500;
@@ -246,6 +261,8 @@
 .snapshot-diff .meta-change {
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
   gap: 8px;
   padding: 6px 8px;
   background: var(--bg-secondary);
@@ -277,4 +294,14 @@
 .snapshot-diff .meta-changed .meta-type {
   background: var(--accent-yellow-a20);
   color: var(--accent-yellow);
+}
+
+.snapshot-diff .meta-values {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-family: var(--font-family-mono);
 }

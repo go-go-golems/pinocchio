@@ -1,17 +1,28 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
 import { selectPhase, setComparePhases } from '../store/uiSlice';
-import type { TurnDetail, TurnPhase } from '../types';
+import type { ParsedBlock, TurnDetail, TurnPhase } from '../types';
 import { formatPhaseLabel } from '../ui/format/phase';
 import { formatTimeShort } from '../ui/format/time';
 import { BlockCard } from './BlockCard';
 import { CorrelationIdBar } from './CorrelationIdBar';
+import { SnapshotDiff } from './SnapshotDiff';
+import {
+  getAvailableTurnPhases,
+  resolveBlockSelectionIndex,
+  resolveCompareSelection,
+  TURN_PHASE_ORDER,
+} from './turnInspectorState';
 
 export interface TurnInspectorProps {
   turnDetail: TurnDetail;
 }
 
-const PHASES: TurnPhase[] = ['draft', 'pre_inference', 'post_inference', 'post_tools', 'final'];
+const PHASES: TurnPhase[] = TURN_PHASE_ORDER;
+
+function toPhaseOrNull(value: string): TurnPhase | null {
+  return PHASES.includes(value as TurnPhase) ? (value as TurnPhase) : null;
+}
 
 export function TurnInspector({ turnDetail }: TurnInspectorProps) {
   const dispatch = useAppDispatch();
@@ -21,17 +32,58 @@ export function TurnInspector({ turnDetail }: TurnInspectorProps) {
   const [turnMetadataExpanded, setTurnMetadataExpanded] = useState(false);
   const [selectedBlockIndex, setSelectedBlockIndex] = useState<number | null>(null);
 
-  const { conv_id, session_id, turn_id, phases } = turnDetail;
+  const { conv_id, session_id, turn_id } = turnDetail;
+  const previousTurnIdRef = useRef(turn_id);
+  const phases = turnDetail.phases;
   const currentPhaseData = phases[selectedPhase];
-  const availablePhases = PHASES.filter((p) => phases[p] !== undefined);
+  const availablePhases = useMemo(() => getAvailableTurnPhases(turnDetail), [turnDetail]);
+  const compareSelection = useMemo(
+    () =>
+      resolveCompareSelection(availablePhases, {
+        a: comparePhaseA,
+        b: comparePhaseB,
+      }),
+    [availablePhases, comparePhaseA, comparePhaseB]
+  );
+  const compareTurnA = compareSelection.a ? phases[compareSelection.a]?.turn : undefined;
+  const compareTurnB = compareSelection.b ? phases[compareSelection.b]?.turn : undefined;
 
   const handlePhaseClick = (phase: TurnPhase) => {
     dispatch(selectPhase(phase));
+    setSelectedBlockIndex(null);
   };
 
-  const handleCompare = (phaseA: TurnPhase, phaseB: TurnPhase) => {
+  const handleCompare = (phaseA: TurnPhase | null, phaseB: TurnPhase | null) => {
     dispatch(setComparePhases({ a: phaseA, b: phaseB }));
   };
+
+  const handleDiffBlockSelect = (block: ParsedBlock, side: 'A' | 'B') => {
+    const targetPhase = side === 'A' ? compareSelection.a : compareSelection.b;
+    if (!targetPhase) {
+      return;
+    }
+    const nextIndex = resolveBlockSelectionIndex(turnDetail, targetPhase, block);
+    dispatch(selectPhase(targetPhase));
+    setSelectedBlockIndex(nextIndex !== null && nextIndex >= 0 ? nextIndex : null);
+  };
+
+  useEffect(() => {
+    if (
+      compareSelection.a !== comparePhaseA ||
+      compareSelection.b !== comparePhaseB
+    ) {
+      dispatch(setComparePhases(compareSelection));
+    }
+  }, [comparePhaseA, comparePhaseB, compareSelection, dispatch]);
+
+  useEffect(() => {
+    if (previousTurnIdRef.current === turn_id) {
+      return;
+    }
+    previousTurnIdRef.current = turn_id;
+    setSelectedBlockIndex(null);
+    setTurnMetadataExpanded(false);
+  }, [turn_id]);
 
   // Get inference_id from turn metadata
   const inferenceId = currentPhaseData?.turn.metadata['geppetto.inference_id@v1'] as string | undefined;
@@ -75,9 +127,12 @@ export function TurnInspector({ turnDetail }: TurnInspectorProps) {
           <span className="text-sm text-muted">Compare:</span>
           <select
             className="btn btn-secondary text-sm"
-            value={comparePhaseA ?? ''}
+            value={compareSelection.a ?? ''}
             onChange={(e) =>
-              handleCompare(e.target.value as TurnPhase, comparePhaseB ?? availablePhases[1])
+              handleCompare(
+                toPhaseOrNull(e.target.value),
+                compareSelection.b ?? availablePhases[availablePhases.length - 1]
+              )
             }
             style={{ padding: '4px 8px' }}
           >
@@ -91,9 +146,9 @@ export function TurnInspector({ turnDetail }: TurnInspectorProps) {
           <span className="text-muted">↔</span>
           <select
             className="btn btn-secondary text-sm"
-            value={comparePhaseB ?? ''}
+            value={compareSelection.b ?? ''}
             onChange={(e) =>
-              handleCompare(comparePhaseA ?? availablePhases[0], e.target.value as TurnPhase)
+              handleCompare(compareSelection.a ?? availablePhases[0], toPhaseOrNull(e.target.value))
             }
             style={{ padding: '4px 8px' }}
           >
@@ -105,6 +160,16 @@ export function TurnInspector({ turnDetail }: TurnInspectorProps) {
             ))}
           </select>
         </div>
+      )}
+
+      {compareSelection.a && compareSelection.b && compareTurnA && compareTurnB && (
+        <SnapshotDiff
+          phaseA={compareSelection.a}
+          phaseB={compareSelection.b}
+          turnA={compareTurnA}
+          turnB={compareTurnB}
+          onBlockSelect={handleDiffBlockSelect}
+        />
       )}
 
       {/* Turn metadata */}

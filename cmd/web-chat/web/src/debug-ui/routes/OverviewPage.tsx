@@ -1,10 +1,11 @@
 
 import { useParams } from 'react-router-dom';
-import { useGetConversationQuery, useGetTurnDetailQuery, useGetTurnsQuery } from '../api/debugApi';
+import { useGetConversationQuery, useGetTurnDetailQuery } from '../api/debugApi';
 import { TimelineLanes } from '../components/TimelineLanes';
 import { TurnInspector } from '../components/TurnInspector';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
-import { selectSession, selectTurn } from '../store/uiSlice';
+import { selectEntity, selectEvent, selectSession, selectTurn } from '../store/uiSlice';
+import { useLiveLaneData } from './useLaneData';
 
 export function OverviewPage() {
   const dispatch = useAppDispatch();
@@ -12,16 +13,15 @@ export function OverviewPage() {
   const selectedConvId = useAppSelector((state) => state.ui.selectedConvId);
   const selectedSessionId = useAppSelector((state) => state.ui.selectedSessionId);
   const selectedTurnId = useAppSelector((state) => state.ui.selectedTurnId);
+  const selectedEventSeq = useAppSelector((state) => state.ui.selectedSeq);
+  const selectedEntityId = useAppSelector((state) => state.ui.selectedEntityId);
 
   const { data: conversation, isLoading: convLoading } = useGetConversationQuery(
     selectedConvId ?? '',
     { skip: !selectedConvId }
   );
 
-  const { data: turns, isLoading: turnsLoading } = useGetTurnsQuery(
-    { convId: selectedConvId ?? '', sessionId },
-    { skip: !selectedConvId }
-  );
+  const laneData = useLiveLaneData(selectedConvId, sessionId ?? selectedSessionId ?? undefined);
 
   const { data: turnDetail, isLoading: turnDetailLoading } = useGetTurnDetailQuery(
     { 
@@ -41,7 +41,7 @@ export function OverviewPage() {
     );
   }
 
-  if (convLoading || turnsLoading) {
+  if (convLoading || laneData.isLoading) {
     return (
       <div className="overview-loading-state">
         <p>Loading...</p>
@@ -56,7 +56,9 @@ export function OverviewPage() {
         <h2>Conversation {selectedConvId.slice(0, 8)}</h2>
         <div className="overview-conv-meta">
           <span>Session: {sessionId || conversation?.session_id || '—'}</span>
-          <span>Turns: {turns?.length ?? 0}</span>
+          <span>Turns: {laneData.turns.length}</span>
+          <span>Events: {laneData.events.length}</span>
+          <span>Entities: {laneData.entities.length}</span>
         </div>
       </div>
 
@@ -64,15 +66,19 @@ export function OverviewPage() {
       <div className="overview-timeline-section">
         <h3>Timeline</h3>
         <TimelineLanes
-          turns={turns ?? []}
-          events={[]}
-          entities={[]}
+          turns={laneData.turns}
+          events={laneData.events}
+          entities={laneData.entities}
           isLive={false}
           selectedTurnId={selectedTurnId ?? undefined}
+          selectedEventSeq={selectedEventSeq ?? undefined}
+          selectedEntityId={selectedEntityId ?? undefined}
           onTurnSelect={(turn) => {
             dispatch(selectSession(turn.session_id));
             dispatch(selectTurn(turn.turn_id));
           }}
+          onEventSelect={(event) => dispatch(selectEvent(event.seq))}
+          onEntitySelect={(entity) => dispatch(selectEntity(entity.id))}
         />
       </div>
 

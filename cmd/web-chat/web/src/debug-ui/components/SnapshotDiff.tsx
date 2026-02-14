@@ -1,7 +1,7 @@
 
 import type { ParsedBlock, ParsedTurn } from '../types';
 import { formatPhaseLabel } from '../ui/format/phase';
-import { truncateText } from '../ui/format/text';
+import { safeStringify, truncateText } from '../ui/format/text';
 
 export type BlockDiffStatus = 'same' | 'added' | 'removed' | 'changed' | 'reordered';
 
@@ -164,9 +164,13 @@ interface BlockPreviewProps {
 }
 
 function BlockPreview({ block, dimmed, highlighted }: BlockPreviewProps) {
-  const { index, kind, payload } = block;
+  const { index, kind, payload, metadata } = block;
   const text = payload.text as string | undefined;
   const name = payload.name as string | undefined;
+  const metadataKeys = Object.keys(metadata);
+  const middleware = metadata['geppetto.middleware@v1'];
+  const trace =
+    metadata['geppetto.trace_role@v1'] ?? metadata['geppetto.trace.kind@v1'];
 
   return (
     <div 
@@ -181,6 +185,19 @@ function BlockPreview({ block, dimmed, highlighted }: BlockPreviewProps) {
         {name && <span className="tool-name">{name}</span>}
         {!text && !name && <span className="no-content">—</span>}
       </div>
+      {(metadataKeys.length > 0 ||
+        (typeof middleware === 'string' && middleware.length > 0) ||
+        (typeof trace === 'string' && trace.length > 0)) && (
+        <div className="block-preview-meta">
+          {metadataKeys.length > 0 && <span>📋 {metadataKeys.length}</span>}
+          {typeof middleware === 'string' && middleware.length > 0 && (
+            <span className="meta-chip">via {truncateText(middleware, 20)}</span>
+          )}
+          {typeof trace === 'string' && trace.length > 0 && (
+            <span className="meta-chip">{truncateText(trace, 20)}</span>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -203,6 +220,13 @@ function MetadataDiff({ changes }: MetadataDiffProps) {
         <div key={idx} className={`meta-change meta-${change.type}`}>
           <span className="meta-key">{change.key}</span>
           <span className="meta-type">{change.type}</span>
+          {change.type === 'changed' && (
+            <div className="meta-values">
+              <span title={safeStringify(change.valueA)}>{truncateText(safeStringify(change.valueA), 48)}</span>
+              <span>→</span>
+              <span title={safeStringify(change.valueB)}>{truncateText(safeStringify(change.valueB), 48)}</span>
+            </div>
+          )}
         </div>
       ))}
     </div>
