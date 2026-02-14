@@ -55,6 +55,7 @@ func TestCLITurnStorePersister_PersistTurn(t *testing.T) {
 	turn := &turns.Turn{ID: "turn-a"}
 	err = turns.KeyTurnMetaSessionID.Set(&turn.Metadata, "session-a")
 	require.NoError(t, err)
+	turns.AppendBlock(turn, turns.NewUserTextBlock("hello"))
 
 	err = persister.PersistTurn(context.Background(), turn)
 	require.NoError(t, err)

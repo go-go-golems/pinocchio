@@ -24,7 +24,6 @@ import (
 	geppettosections "github.com/go-go-golems/geppetto/pkg/sections"
 	toolspkg "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/tools"
 	timelinecmd "github.com/go-go-golems/pinocchio/cmd/web-chat/timeline"
-	turnscmd "github.com/go-go-golems/pinocchio/cmd/web-chat/turns"
 	agentmode "github.com/go-go-golems/pinocchio/pkg/middlewares/agentmode"
 	sqlitetool "github.com/go-go-golems/pinocchio/pkg/middlewares/sqlitetool"
 	rediscfg "github.com/go-go-golems/pinocchio/pkg/redisstream"
@@ -169,7 +168,6 @@ func main() {
 	}
 
 	timelinecmd.AddToRootCommand(root)
-	turnscmd.AddToRootCommand(root)
 
 	c, err := NewCommand()
 	cobra.CheckErr(err)

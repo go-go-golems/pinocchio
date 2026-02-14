@@ -65,8 +65,9 @@ func TestAPIHandler_OfflineRunsAndTurnsSQLiteDetail(t *testing.T) {
 	require.NoError(t, err)
 	defer func() { _ = store.Close() }()
 
-	require.NoError(t, store.Save(context.Background(), "conv-1", "session-1", "turn-1", "draft", 100, "id: turn-1\nblocks: []\n"))
-	require.NoError(t, store.Save(context.Background(), "conv-1", "session-1", "turn-1", "final", 200, "id: turn-1\nblocks: []\n"))
+	payload := "id: turn-1\nblocks:\n  - id: b1\n    kind: llm_text\n    role: assistant\n    payload:\n      text: hello\n"
+	require.NoError(t, store.Save(context.Background(), "conv-1", "session-1", "turn-1", "draft", 100, payload))
+	require.NoError(t, store.Save(context.Background(), "conv-1", "session-1", "turn-1", "final", 200, payload))
 
 	r := &Router{
 		profiles: newInMemoryProfileRegistry(),
