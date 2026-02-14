@@ -15,7 +15,7 @@ func TestEngineConfigSignature_DoesNotIncludeAPIKeys(t *testing.T) {
 	ss.API.APIKeys["openai"] = "sk-this-should-not-appear"
 
 	ec := EngineConfig{
-		ProfileSlug:  "default",
+		RuntimeKey:  "default",
 		SystemPrompt: "hi",
 		StepSettings: ss,
 	}
@@ -36,7 +36,7 @@ func TestEngineConfigSignature_IsDeterministicAndSensitiveToRelevantChanges(t *t
 	}
 
 	ec := EngineConfig{
-		ProfileSlug:  "default",
+		RuntimeKey:  "default",
 		SystemPrompt: "hi",
 		Middlewares:  []MiddlewareUse{{Name: "mw1"}},
 		Tools:        []string{"tool1"},

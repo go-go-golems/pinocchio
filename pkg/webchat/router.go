@@ -193,7 +193,7 @@ func (r *Router) Mount(mux *http.ServeMux, prefix string) {
 	})
 }
 
-// Expose lightweight handler registration for external customization (e.g., profile switchers)
+// Expose lightweight handler registration for external customization (e.g., runtime policy handlers).
 func (r *Router) Handle(pattern string, h http.Handler) { r.mux.Handle(pattern, h) }
 func (r *Router) HandleFunc(pattern string, handler func(http.ResponseWriter, *http.Request)) {
 	r.mux.HandleFunc(pattern, handler)
@@ -366,6 +366,7 @@ func (r *Router) registerAPIHandlers(mux *http.ServeMux) {
 		wsLog.Info().Msg("ws connected")
 
 		// Send a greeting frame to the newly connected client (mirrors moments/go-go-mento behavior).
+		// WsHelloV1 uses a legacy proto field name ("profile"); we populate it with runtimeKey.
 		if conv != nil && conv.pool != nil {
 			ts := time.Now().UnixMilli()
 			data, _ := protoToRaw(&sempb.WsHelloV1{ConvId: convID, Profile: runtimeKey, ServerTime: ts})
@@ -631,7 +632,7 @@ func idempotencyKeyFromRequest(r *http.Request, body *ChatRequestBody) string {
 	return key
 }
 
-func (r *Router) startInferenceForPrompt(conv *Conversation, profileSlug string, overrides map[string]any, prompt string, idempotencyKey string) (map[string]any, error) {
+func (r *Router) startInferenceForPrompt(conv *Conversation, runtimeKey string, overrides map[string]any, prompt string, idempotencyKey string) (map[string]any, error) {
 	if r == nil || conv == nil || conv.Sess == nil {
 		return nil, errors.New("invalid conversation")
 	}
@@ -653,7 +654,7 @@ func (r *Router) startInferenceForPrompt(conv *Conversation, profileSlug string,
 		_ = stream.Start(baseCtx)
 	}
 
-	cfg, err := r.BuildConfig(profileSlug, overrides)
+	cfg, err := r.BuildConfig(runtimeKey, overrides)
 	if err != nil {
 		r.finishSessionInference(conv, idempotencyKey, "", "", err)
 		return nil, err
@@ -837,7 +838,7 @@ func (r *Router) tryDrainQueue(conv *Conversation) {
 		if !ok {
 			return
 		}
-		_, err := r.startInferenceForPrompt(conv, q.ProfileSlug, q.Overrides, q.Prompt, q.IdempotencyKey)
+		_, err := r.startInferenceForPrompt(conv, q.RuntimeKey, q.Overrides, q.Prompt, q.IdempotencyKey)
 		if err != nil {
 			r.finishSessionInference(conv, q.IdempotencyKey, "", "", err)
 			// Continue draining so later queued items can still execute.

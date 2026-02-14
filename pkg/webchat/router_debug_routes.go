@@ -61,7 +61,7 @@ func (r *Router) registerDebugAPIHandlers(mux *http.ServeMux) {
 			}
 			conv.mu.Lock()
 			sessionID := conv.SessionID
-			runtimeKey := conv.ProfileSlug
+			runtimeKey := conv.RuntimeKey
 			queueDepth := len(conv.queue)
 			streamRunning := conv.stream != nil && conv.stream.IsRunning()
 			lastActivityMs := int64(0)
@@ -135,7 +135,7 @@ func (r *Router) registerDebugAPIHandlers(mux *http.ServeMux) {
 
 		conv.mu.Lock()
 		sessionID := conv.SessionID
-		runtimeKey := conv.ProfileSlug
+		runtimeKey := conv.RuntimeKey
 		queueDepth := len(conv.queue)
 		streamRunning := conv.stream != nil && conv.stream.IsRunning()
 		lastActivityMs := int64(0)

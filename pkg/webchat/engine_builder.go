@@ -68,7 +68,7 @@ func (r *Router) BuildConfig(runtimeKey string, overrides map[string]any) (Engin
 	}
 
 	return EngineConfig{
-		ProfileSlug:  runtimeKey,
+		RuntimeKey:   runtimeKey,
 		SystemPrompt: sysPrompt,
 		Middlewares:  mws,
 		Tools:        tools,

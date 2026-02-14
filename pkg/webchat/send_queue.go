@@ -9,7 +9,7 @@ import (
 
 type queuedChat struct {
 	IdempotencyKey string
-	ProfileSlug    string
+	RuntimeKey     string
 	Overrides      map[string]any
 	Prompt         string
 	EnqueuedAt     time.Time
@@ -87,7 +87,7 @@ func (c *Conversation) dequeueLocked() (queuedChat, bool) {
 }
 
 // PrepareSessionInference applies idempotency + queue logic and indicates whether inference should start now.
-func (c *Conversation) PrepareSessionInference(idempotencyKey, profileSlug string, overrides map[string]any, prompt string) (SessionPreparation, error) {
+func (c *Conversation) PrepareSessionInference(idempotencyKey, runtimeKey string, overrides map[string]any, prompt string) (SessionPreparation, error) {
 	if c == nil {
 		return SessionPreparation{}, errors.New("conversation is nil")
 	}
@@ -113,7 +113,7 @@ func (c *Conversation) PrepareSessionInference(idempotencyKey, profileSlug strin
 	if c.isBusyLocked() {
 		pos := c.enqueueLocked(queuedChat{
 			IdempotencyKey: idempotencyKey,
-			ProfileSlug:    profileSlug,
+			RuntimeKey:     runtimeKey,
 			Overrides:      overrides,
 			Prompt:         prompt,
 			EnqueuedAt:     time.Now(),

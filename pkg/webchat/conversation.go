@@ -36,8 +36,8 @@ type Conversation struct {
 	stream    *StreamCoordinator
 	baseCtx   context.Context
 
-	ProfileSlug  string
-	EngConfigSig string
+	RuntimeKey            string
+	EngineConfigSignature string
 
 	// Server-side send serialization / queue semantics.
 	// All fields below are guarded by mu.
@@ -65,7 +65,7 @@ type ConvManager struct {
 	timelineStore      chatstore.TimelineStore
 	timelineUpsertHook func(*Conversation) func(entity *timelinepb.TimelineEntityV1, version uint64)
 
-	buildConfig     func(profileSlug string, overrides map[string]any) (EngineConfig, error)
+	buildConfig     func(runtimeKey string, overrides map[string]any) (EngineConfig, error)
 	buildFromConfig func(convID string, cfg EngineConfig) (engine.Engine, events.EventSink, error)
 	buildSubscriber func(convID string) (message.Subscriber, bool, error)
 
@@ -85,7 +85,7 @@ type ConvManagerOptions struct {
 	TimelineStore      chatstore.TimelineStore
 	TimelineUpsertHook func(*Conversation) func(entity *timelinepb.TimelineEntityV1, version uint64)
 
-	BuildConfig     func(profileSlug string, overrides map[string]any) (EngineConfig, error)
+	BuildConfig     func(runtimeKey string, overrides map[string]any) (EngineConfig, error)
 	BuildFromConfig func(convID string, cfg EngineConfig) (engine.Engine, events.EventSink, error)
 	BuildSubscriber func(convID string) (message.Subscriber, bool, error)
 }
@@ -148,16 +148,16 @@ func (c *Conversation) touchLocked(now time.Time) {
 // topicForConv computes the event topic for a conversation.
 func topicForConv(convID string) string { return "chat:" + convID }
 
-// GetOrCreate creates or reuses a conversation based on engine config signature changes.
+// GetOrCreate creates or reuses a conversation based on runtime config signature changes.
 // It centralizes engine/sink/subscriber composition through injected builder hooks.
-func (cm *ConvManager) GetOrCreate(convID, profileSlug string, overrides map[string]any) (*Conversation, error) {
+func (cm *ConvManager) GetOrCreate(convID, runtimeKey string, overrides map[string]any) (*Conversation, error) {
 	if cm == nil {
 		return nil, errors.New("conversation manager is nil")
 	}
 	if cm.buildConfig == nil || cm.buildFromConfig == nil || cm.buildSubscriber == nil {
 		return nil, errors.New("conversation manager missing dependencies")
 	}
-	cfg, err := cm.buildConfig(profileSlug, overrides)
+	cfg, err := cm.buildConfig(runtimeKey, overrides)
 	if err != nil {
 		return nil, err
 	}
@@ -182,13 +182,13 @@ func (cm *ConvManager) GetOrCreate(convID, profileSlug string, overrides map[str
 			}
 		}
 		c.mu.Unlock()
-		if c.ProfileSlug != profileSlug || c.EngConfigSig != newSig {
+		if c.EngineConfigSignature != newSig {
 			log.Info().
 				Str("component", "webchat").
 				Str("conv_id", convID).
-				Str("old_profile", c.ProfileSlug).
-				Str("new_profile", profileSlug).
-				Msg("profile or engine config changed, rebuilding engine")
+				Str("old_runtime_key", c.RuntimeKey).
+				Str("new_runtime_key", runtimeKey).
+				Msg("runtime config changed, rebuilding engine")
 
 			eng, sink, err := cm.buildFromConfig(convID, cfg)
 			if err != nil {
@@ -212,8 +212,8 @@ func (cm *ConvManager) GetOrCreate(convID, profileSlug string, overrides map[str
 			c.Sink = sink
 			c.sub = sub
 			c.subClose = subClose
-			c.ProfileSlug = profileSlug
-			c.EngConfigSig = newSig
+			c.RuntimeKey = runtimeKey
+			c.EngineConfigSignature = newSig
 
 			c.stream = NewStreamCoordinator(
 				c.ID,
@@ -246,14 +246,14 @@ func (cm *ConvManager) GetOrCreate(convID, profileSlug string, overrides map[str
 	}
 	sessionID := uuid.NewString()
 	conv := &Conversation{
-		ID:           convID,
-		SessionID:    sessionID,
-		baseCtx:      cm.baseCtx,
-		ProfileSlug:  profileSlug,
-		EngConfigSig: newSig,
-		requests:     map[string]*chatRequestRecord{},
-		semBuf:       newSemFrameBuffer(1000),
-		lastActivity: now,
+		ID:                    convID,
+		SessionID:             sessionID,
+		baseCtx:               cm.baseCtx,
+		RuntimeKey:            runtimeKey,
+		EngineConfigSignature: newSig,
+		requests:              map[string]*chatRequestRecord{},
+		semBuf:                newSemFrameBuffer(1000),
+		lastActivity:          now,
 	}
 	if cm.timelineStore != nil {
 		hook := cm.timelineUpsertHook

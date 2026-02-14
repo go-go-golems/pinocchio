@@ -32,7 +32,7 @@ type ConversationRequestResolver interface {
 	Resolve(req *http.Request) (ConversationRequestPlan, error)
 }
 
-// ConversationLookup is the minimal dependency needed to preserve an existing conversation's profile.
+// ConversationLookup is the minimal dependency needed to preserve an existing conversation runtime key.
 type ConversationLookup interface {
 	GetConversation(convID string) (*Conversation, bool)
 }
@@ -88,8 +88,8 @@ func (b *DefaultConversationRequestResolver) buildFromWSReq(req *http.Request) (
 
 	runtimeKey := strings.TrimSpace(req.URL.Query().Get("runtime"))
 	if runtimeKey == "" && b.conversations != nil {
-		if existing, ok := b.conversations.GetConversation(convID); ok && existing != nil && strings.TrimSpace(existing.ProfileSlug) != "" {
-			runtimeKey = strings.TrimSpace(existing.ProfileSlug)
+		if existing, ok := b.conversations.GetConversation(convID); ok && existing != nil && strings.TrimSpace(existing.RuntimeKey) != "" {
+			runtimeKey = strings.TrimSpace(existing.RuntimeKey)
 		}
 	}
 	if runtimeKey == "" {
@@ -121,8 +121,8 @@ func (b *DefaultConversationRequestResolver) buildFromChatReq(req *http.Request)
 		runtimeKey = strings.TrimSpace(req.URL.Query().Get("runtime"))
 	}
 	if runtimeKey == "" && b.conversations != nil {
-		if existing, ok := b.conversations.GetConversation(convID); ok && existing != nil && strings.TrimSpace(existing.ProfileSlug) != "" {
-			runtimeKey = strings.TrimSpace(existing.ProfileSlug)
+		if existing, ok := b.conversations.GetConversation(convID); ok && existing != nil && strings.TrimSpace(existing.RuntimeKey) != "" {
+			runtimeKey = strings.TrimSpace(existing.RuntimeKey)
 		}
 	}
 	if runtimeKey == "" {

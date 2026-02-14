@@ -10,7 +10,7 @@ import (
 // EngineConfig captures all inputs that influence engine composition.
 // It is JSON-serializable so we can derive a deterministic signature for caching and rebuild decisions.
 type EngineConfig struct {
-	ProfileSlug  string                 `json:"profile_slug"`
+	RuntimeKey   string                 `json:"runtime_key"`
 	SystemPrompt string                 `json:"system_prompt"`
 	Middlewares  []MiddlewareUse        `json:"middlewares"`
 	Tools        []string               `json:"tools"`
@@ -18,7 +18,7 @@ type EngineConfig struct {
 }
 
 type engineConfigSignature struct {
-	ProfileSlug  string          `json:"profile_slug"`
+	RuntimeKey   string          `json:"runtime_key"`
 	SystemPrompt string          `json:"system_prompt"`
 	Middlewares  []MiddlewareUse `json:"middlewares"`
 	Tools        []string        `json:"tools"`
@@ -35,7 +35,7 @@ func (ec EngineConfig) Signature() string {
 		meta = ec.StepSettings.GetMetadata()
 	}
 	sig := engineConfigSignature{
-		ProfileSlug:  ec.ProfileSlug,
+		RuntimeKey:   ec.RuntimeKey,
 		SystemPrompt: ec.SystemPrompt,
 		Middlewares:  ec.Middlewares,
 		Tools:        ec.Tools,
@@ -44,7 +44,7 @@ func (ec EngineConfig) Signature() string {
 	b, err := json.Marshal(sig)
 	if err != nil {
 		log.Warn().Err(err).Str("component", "webchat").Msg("engine config signature fallback")
-		return ec.ProfileSlug
+		return ec.RuntimeKey
 	}
 	return string(b)
 }

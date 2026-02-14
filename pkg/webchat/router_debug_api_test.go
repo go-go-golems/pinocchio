@@ -154,7 +154,7 @@ func TestAPIHandler_DebugConversationsAndDetail(t *testing.T) {
 	convA := &Conversation{
 		ID:           "conv-a",
 		SessionID:    "session-a",
-		ProfileSlug:  "default",
+		RuntimeKey:   "default",
 		semBuf:       newSemFrameBuffer(10),
 		lastActivity: time.UnixMilli(1000),
 	}
@@ -163,7 +163,7 @@ func TestAPIHandler_DebugConversationsAndDetail(t *testing.T) {
 	convB := &Conversation{
 		ID:               "conv-b",
 		SessionID:        "session-b",
-		ProfileSlug:      "agent",
+		RuntimeKey:       "agent",
 		semBuf:           newSemFrameBuffer(10),
 		activeRequestKey: "req-1",
 		lastActivity:     time.UnixMilli(2000),

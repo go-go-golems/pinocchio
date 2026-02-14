@@ -18,9 +18,9 @@ func (s stubConversationLookup) GetConversation(convID string) (*Conversation, b
 	return c, ok
 }
 
-func TestDefaultConversationRequestResolver_Chat_ProfilePrecedence(t *testing.T) {
+func TestDefaultConversationRequestResolver_Chat_RuntimePrecedence(t *testing.T) {
 	lookup := stubConversationLookup{
-		"c1": {ProfileSlug: "existing"},
+		"c1": {RuntimeKey: "existing"},
 	}
 	b := NewDefaultConversationRequestResolver(lookup)
 
@@ -82,9 +82,9 @@ func TestDefaultConversationRequestResolver_Chat_GeneratesConvIDWhenMissing(t *t
 	require.NoError(t, parseErr)
 }
 
-func TestDefaultConversationRequestResolver_WS_ProfilePrecedence(t *testing.T) {
+func TestDefaultConversationRequestResolver_WS_RuntimePrecedence(t *testing.T) {
 	lookup := stubConversationLookup{
-		"c1": {ProfileSlug: "existing"},
+		"c1": {RuntimeKey: "existing"},
 	}
 	b := NewDefaultConversationRequestResolver(lookup)
 
