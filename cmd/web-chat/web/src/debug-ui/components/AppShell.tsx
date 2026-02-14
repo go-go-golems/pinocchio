@@ -15,6 +15,7 @@ import {
   setOfflineConfig,
 } from '../store/uiSlice';
 import { type Anomaly, AnomalyPanel } from './AnomalyPanel';
+import { shouldDelayUrlSync } from './appShellSync';
 import { FilterBar, type FilterState } from './FilterBar';
 import { OfflineSourcesPanel } from './OfflineSourcesPanel';
 import { SessionList } from './SessionList';
@@ -134,14 +135,22 @@ export function AppShell({ anomalies = [] }: AppShellProps) {
   ]);
 
   useEffect(() => {
-    const pendingHydration =
-      (!!convFromURL && convFromURL !== selectedConvId) ||
-      (!!desiredSession && desiredSession !== selectedSessionId) ||
-      (!!desiredTurn && desiredTurn !== selectedTurnId) ||
-      (!!runFromURL && runFromURL !== selectedRunId) ||
-      (artifactsRootFromURL !== null && artifactsRootFromURL !== offline.artifactsRoot) ||
-      (turnsDBFromURL !== null && turnsDBFromURL !== offline.turnsDB) ||
-      (timelineDBFromURL !== null && timelineDBFromURL !== offline.timelineDB);
+    const pendingHydration = shouldDelayUrlSync({
+      convFromURL,
+      desiredSession,
+      desiredTurn,
+      runFromURL,
+      artifactsRootFromURL,
+      turnsDBFromURL,
+      timelineDBFromURL,
+      selectedConvId,
+      selectedSessionId,
+      selectedTurnId,
+      selectedRunId,
+      offlineArtifactsRoot: offline.artifactsRoot,
+      offlineTurnsDB: offline.turnsDB,
+      offlineTimelineDB: offline.timelineDB,
+    });
 
     if (pendingHydration) {
       return;
