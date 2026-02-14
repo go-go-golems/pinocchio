@@ -62,22 +62,22 @@ interface DebugTurnsEnvelope {
     session_id: string;
     turn_id: string;
     phase: string;
-    created_at_ms: number;
-    payload: string;
+    created_at_ms: number | string;
+    payload: string | Record<string, unknown>;
   }>;
 }
 
 interface DebugTurnPhaseItem {
   phase: string;
-  created_at_ms: number;
-  payload: string;
+  created_at_ms: number | string;
+  payload: string | Record<string, unknown>;
   parsed?: Record<string, unknown>;
 }
 
 interface DebugEventsEnvelope {
   limit: number;
   items: Array<{
-    seq: number;
+    seq: number | string;
     type?: string;
     id?: string;
     frame?: Record<string, unknown>;
@@ -105,7 +105,18 @@ function asString(value: unknown): string {
 }
 
 function asNumber(value: unknown): number {
-  return typeof value === 'number' && Number.isFinite(value) ? value : 0;
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === 'string') {
+    const parsed = Number(value.trim());
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  if (typeof value === 'bigint') {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return 0;
 }
 
 function toIsoFromMs(value: unknown): string {
@@ -164,15 +175,24 @@ function toParsedTurn(raw: unknown, fallbackID = ''): ParsedTurn {
   };
 }
 
-function parseTurnPayload(payload: string, fallbackID = ''): ParsedTurn {
-  if (!payload.trim()) {
+function parseTurnPayload(payload: unknown, fallbackID = ''): ParsedTurn {
+  if (typeof payload === 'string') {
+    if (!payload.trim()) {
+      return { id: fallbackID, blocks: [], metadata: {}, data: {} };
+    }
+    try {
+      return toParsedTurn(parseYAML(payload), fallbackID);
+    } catch {
+      return { id: fallbackID, blocks: [], metadata: {}, data: {} };
+    }
+  }
+  if (payload && typeof payload === 'object') {
+    return toParsedTurn(payload, fallbackID);
+  }
+  if (!payload) {
     return { id: fallbackID, blocks: [], metadata: {}, data: {} };
   }
-  try {
-    return toParsedTurn(parseYAML(payload), fallbackID);
-  } catch {
-    return { id: fallbackID, blocks: [], metadata: {}, data: {} };
-  }
+  return { id: fallbackID, blocks: [], metadata: {}, data: {} };
 }
 
 function flattenTimelineProps(entity: Record<string, unknown>): Record<string, unknown> {
@@ -213,8 +233,8 @@ function toTimelineEntity(raw: unknown): TimelineEntity {
   return {
     id: asString(entity.id),
     kind: asString(entity.kind),
-    created_at: asNumber(entity.createdAtMs ?? entity.created_at_ms),
-    updated_at: asNumber(entity.updatedAtMs ?? entity.updated_at_ms) || undefined,
+    created_at: asNumber(entity.createdAtMs ?? entity.created_at_ms ?? entity.createdAt ?? entity.created_at),
+    updated_at: asNumber(entity.updatedAtMs ?? entity.updated_at_ms ?? entity.updatedAt ?? entity.updated_at) || undefined,
     version: asNumber(entity.version) || undefined,
     props: flattenTimelineProps(entity),
   };
@@ -279,7 +299,7 @@ export const debugApi = createApi({
           session_id: item.session_id,
           turn_id: item.turn_id,
           phase: normalizePhase(item.phase),
-          created_at_ms: item.created_at_ms,
+          created_at_ms: asNumber(item.created_at_ms),
           turn: parseTurnPayload(item.payload, item.turn_id),
         })),
       providesTags: ['Turns'],
