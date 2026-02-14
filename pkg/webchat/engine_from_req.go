@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
-	"github.com/pkg/errors"
 )
 
 // ChatRequestBody represents the expected JSON body for chat requests.
@@ -59,12 +58,11 @@ func (e *RequestResolutionError) Error() string {
 func (e *RequestResolutionError) Unwrap() error { return e.Err }
 
 type DefaultConversationRequestResolver struct {
-	profiles      ProfileRegistry
 	conversations ConversationLookup
 }
 
-func NewDefaultConversationRequestResolver(profiles ProfileRegistry, conversations ConversationLookup) *DefaultConversationRequestResolver {
-	return &DefaultConversationRequestResolver{profiles: profiles, conversations: conversations}
+func NewDefaultConversationRequestResolver(conversations ConversationLookup) *DefaultConversationRequestResolver {
+	return &DefaultConversationRequestResolver{conversations: conversations}
 }
 
 func (b *DefaultConversationRequestResolver) Resolve(req *http.Request) (ConversationRequestPlan, error) {
@@ -88,12 +86,7 @@ func (b *DefaultConversationRequestResolver) buildFromWSReq(req *http.Request) (
 		return ConversationRequestPlan{}, &RequestResolutionError{Status: http.StatusBadRequest, ClientMsg: "missing conv_id"}
 	}
 
-	runtimeKey := strings.TrimSpace(req.URL.Query().Get("profile"))
-	if runtimeKey == "" {
-		if ck, err := req.Cookie("chat_profile"); err == nil && ck != nil {
-			runtimeKey = strings.TrimSpace(ck.Value)
-		}
-	}
+	runtimeKey := strings.TrimSpace(req.URL.Query().Get("runtime"))
 	if runtimeKey == "" && b.conversations != nil {
 		if existing, ok := b.conversations.GetConversation(convID); ok && existing != nil && strings.TrimSpace(existing.ProfileSlug) != "" {
 			runtimeKey = strings.TrimSpace(existing.ProfileSlug)
@@ -101,9 +94,6 @@ func (b *DefaultConversationRequestResolver) buildFromWSReq(req *http.Request) (
 	}
 	if runtimeKey == "" {
 		runtimeKey = "default"
-	}
-	if _, ok := b.profiles.Get(runtimeKey); !ok {
-		return ConversationRequestPlan{}, &RequestResolutionError{Status: http.StatusNotFound, ClientMsg: "profile not found: " + runtimeKey}
 	}
 	return ConversationRequestPlan{
 		ConvID:     convID,
@@ -126,26 +116,17 @@ func (b *DefaultConversationRequestResolver) buildFromChatReq(req *http.Request)
 		body.ConvID = convID
 	}
 
-	runtimeKey := strings.TrimSpace(profileSlugFromChatRequest(req))
+	runtimeKey := strings.TrimSpace(runtimeKeyFromChatRequest(req))
+	if runtimeKey == "" {
+		runtimeKey = strings.TrimSpace(req.URL.Query().Get("runtime"))
+	}
 	if runtimeKey == "" && b.conversations != nil {
 		if existing, ok := b.conversations.GetConversation(convID); ok && existing != nil && strings.TrimSpace(existing.ProfileSlug) != "" {
 			runtimeKey = strings.TrimSpace(existing.ProfileSlug)
 		}
 	}
 	if runtimeKey == "" {
-		if ck, err := req.Cookie("chat_profile"); err == nil && ck != nil {
-			runtimeKey = strings.TrimSpace(ck.Value)
-		}
-	}
-	if runtimeKey == "" {
 		runtimeKey = "default"
-	}
-	if _, ok := b.profiles.Get(runtimeKey); !ok {
-		return ConversationRequestPlan{}, &RequestResolutionError{
-			Status:    http.StatusNotFound,
-			ClientMsg: "unknown profile",
-			Err:       errors.New("profile " + runtimeKey + " does not exist"),
-		}
 	}
 	return ConversationRequestPlan{
 		ConvID:         convID,
@@ -156,7 +137,7 @@ func (b *DefaultConversationRequestResolver) buildFromChatReq(req *http.Request)
 	}, nil
 }
 
-func profileSlugFromChatRequest(req *http.Request) string {
+func runtimeKeyFromChatRequest(req *http.Request) string {
 	if req == nil {
 		return ""
 	}

@@ -157,7 +157,7 @@ func NewRouter(ctx context.Context, parsed *values.Values, staticFS fs.FS, opts 
 		})
 	}
 	if r.requestResolver == nil {
-		r.requestResolver = NewDefaultConversationRequestResolver(r.profiles, r.cm)
+		r.requestResolver = NewDefaultConversationRequestResolver(r.cm)
 	}
 
 	if r.cm != nil {
@@ -311,90 +311,17 @@ func (r *Router) registerUIHandlers(mux *http.ServeMux) {
 func (r *Router) registerAPIHandlers(mux *http.ServeMux) {
 	logger := log.With().Str("component", "webchat").Logger()
 
-	// list profiles for UI
-	mux.HandleFunc("/api/chat/profiles", func(w http.ResponseWriter, _ *http.Request) {
-		type profileInfo struct {
-			Slug          string `json:"slug"`
-			DefaultPrompt string `json:"default_prompt"`
-		}
-		var out []profileInfo
-		for _, p := range r.profiles.List() {
-			out = append(out, profileInfo{Slug: p.Slug, DefaultPrompt: p.DefaultPrompt})
-		}
-		_ = json.NewEncoder(w).Encode(out)
-	})
-
-	// get/set current profile (cookie-backed)
-	mux.HandleFunc("/api/chat/profile", func(w http.ResponseWriter, r0 *http.Request) {
-		type profilePayload struct {
-			Slug    string `json:"slug"`
-			Profile string `json:"profile"`
-		}
-		writeJSON := func(payload any) {
-			w.Header().Set("Content-Type", "application/json")
-			_ = json.NewEncoder(w).Encode(payload)
-		}
-		resolveDefault := func() string {
-			if p, ok := r.profiles.Get("default"); ok && p != nil {
-				return p.Slug
-			}
-			list := r.profiles.List()
-			if len(list) > 0 && list[0] != nil {
-				return list[0].Slug
-			}
-			return "default"
-		}
-		switch r0.Method {
-		case http.MethodGet:
-			slug := ""
-			if ck, err := r0.Cookie("chat_profile"); err == nil && ck != nil {
-				slug = strings.TrimSpace(ck.Value)
-			}
-			if slug == "" {
-				slug = resolveDefault()
-			} else if _, ok := r.profiles.Get(slug); !ok {
-				slug = resolveDefault()
-			}
-			writeJSON(profilePayload{Slug: slug})
-			return
-		case http.MethodPost:
-			var body profilePayload
-			if err := json.NewDecoder(r0.Body).Decode(&body); err != nil {
-				http.Error(w, "bad request", http.StatusBadRequest)
-				return
-			}
-			slug := strings.TrimSpace(body.Slug)
-			if slug == "" {
-				slug = strings.TrimSpace(body.Profile)
-			}
-			if slug == "" {
-				http.Error(w, "missing profile slug", http.StatusBadRequest)
-				return
-			}
-			if _, ok := r.profiles.Get(slug); !ok {
-				http.Error(w, "profile not found", http.StatusNotFound)
-				return
-			}
-			http.SetCookie(w, &http.Cookie{Name: "chat_profile", Value: slug, Path: "/", SameSite: http.SameSiteLaxMode})
-			writeJSON(profilePayload{Slug: slug})
-			return
-		default:
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-	})
-
 	if r.debugRoutesEnabled() {
 		r.registerDebugAPIHandlers(mux)
 	}
 
-	// websocket join: /ws?conv_id=...&profile=slug (falls back to chat_profile cookie)
+	// websocket join: /ws?conv_id=...&runtime=key
 	mux.HandleFunc("/ws", func(w http.ResponseWriter, r0 *http.Request) {
 		queryConv := strings.TrimSpace(r0.URL.Query().Get("conv_id"))
-		queryProfile := strings.TrimSpace(r0.URL.Query().Get("profile"))
+		queryRuntime := strings.TrimSpace(r0.URL.Query().Get("runtime"))
 		logger.Debug().
 			Str("conv_id_query", queryConv).
-			Str("profile_query", queryProfile).
+			Str("runtime_query", queryRuntime).
 			Str("remote", r0.RemoteAddr).
 			Msg("ws request query")
 		conn, err := r.upgrader.Upgrade(w, r0, nil)
@@ -404,7 +331,7 @@ func (r *Router) registerAPIHandlers(mux *http.ServeMux) {
 		}
 		resolver := r.requestResolver
 		if resolver == nil {
-			resolver = NewDefaultConversationRequestResolver(r.profiles, r.cm)
+			resolver = NewDefaultConversationRequestResolver(r.cm)
 		}
 		plan, err := resolver.Resolve(r0)
 		if err != nil {
@@ -428,7 +355,7 @@ func (r *Router) registerAPIHandlers(mux *http.ServeMux) {
 			Logger()
 		wsLog.Debug().
 			Str("conv_id_query", queryConv).
-			Str("profile_query", queryProfile).
+			Str("runtime_query", queryRuntime).
 			Msg("ws resolved request")
 		wsLog.Info().Msg("ws connect request")
 		wsLog.Info().Msg("ws joining conversation")
@@ -517,7 +444,7 @@ func (r *Router) registerAPIHandlers(mux *http.ServeMux) {
 
 		resolver := r.requestResolver
 		if resolver == nil {
-			resolver = NewDefaultConversationRequestResolver(r.profiles, r.cm)
+			resolver = NewDefaultConversationRequestResolver(r.cm)
 		}
 		plan, err := resolver.Resolve(r0)
 		if err != nil {

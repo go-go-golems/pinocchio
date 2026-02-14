@@ -19,20 +19,13 @@ func (s stubConversationLookup) GetConversation(convID string) (*Conversation, b
 }
 
 func TestDefaultConversationRequestResolver_Chat_ProfilePrecedence(t *testing.T) {
-	profiles := newInMemoryProfileRegistry()
-	require.NoError(t, profiles.Add(&Profile{Slug: "default"}))
-	require.NoError(t, profiles.Add(&Profile{Slug: "existing"}))
-	require.NoError(t, profiles.Add(&Profile{Slug: "cookie"}))
-	require.NoError(t, profiles.Add(&Profile{Slug: "explicit"}))
-
 	lookup := stubConversationLookup{
 		"c1": {ProfileSlug: "existing"},
 	}
-	b := NewDefaultConversationRequestResolver(profiles, lookup)
+	b := NewDefaultConversationRequestResolver(lookup)
 
-	t.Run("path beats existing and cookie", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "http://example.com/chat/explicit", bytes.NewBufferString(`{"prompt":"hi","conv_id":"c1"}`))
-		req.AddCookie(&http.Cookie{Name: "chat_profile", Value: "cookie"})
+	t.Run("path runtime beats query and existing", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "http://example.com/chat/explicit?runtime=query", bytes.NewBufferString(`{"prompt":"hi","conv_id":"c1"}`))
 		plan, err := b.Resolve(req)
 		require.NoError(t, err)
 		require.Equal(t, "c1", plan.ConvID)
@@ -40,9 +33,26 @@ func TestDefaultConversationRequestResolver_Chat_ProfilePrecedence(t *testing.T)
 		require.Equal(t, "hi", plan.Prompt)
 	})
 
-	t.Run("existing beats cookie", func(t *testing.T) {
+	t.Run("query runtime beats existing", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "http://example.com/chat?runtime=query", bytes.NewBufferString(`{"prompt":"hi","conv_id":"c1"}`))
+		plan, err := b.Resolve(req)
+		require.NoError(t, err)
+		require.Equal(t, "c1", plan.ConvID)
+		require.Equal(t, "query", plan.RuntimeKey)
+		require.Equal(t, "hi", plan.Prompt)
+	})
+
+	t.Run("existing beats default", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "http://example.com/chat/explicit", bytes.NewBufferString(`{"prompt":"hi","conv_id":"c1"}`))
+		plan, err := b.Resolve(req)
+		require.NoError(t, err)
+		require.Equal(t, "c1", plan.ConvID)
+		require.Equal(t, "explicit", plan.RuntimeKey)
+		require.Equal(t, "hi", plan.Prompt)
+	})
+
+	t.Run("default runtime when no path/query/existing", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "http://example.com/chat", bytes.NewBufferString(`{"prompt":"hi","conv_id":"c1"}`))
-		req.AddCookie(&http.Cookie{Name: "chat_profile", Value: "cookie"})
 		plan, err := b.Resolve(req)
 		require.NoError(t, err)
 		require.Equal(t, "c1", plan.ConvID)
@@ -50,21 +60,18 @@ func TestDefaultConversationRequestResolver_Chat_ProfilePrecedence(t *testing.T)
 		require.Equal(t, "hi", plan.Prompt)
 	})
 
-	t.Run("cookie beats default", func(t *testing.T) {
+	t.Run("default runtime when conversation unknown", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "http://example.com/chat", bytes.NewBufferString(`{"prompt":"hi","conv_id":"c2"}`))
-		req.AddCookie(&http.Cookie{Name: "chat_profile", Value: "cookie"})
 		plan, err := b.Resolve(req)
 		require.NoError(t, err)
 		require.Equal(t, "c2", plan.ConvID)
-		require.Equal(t, "cookie", plan.RuntimeKey)
+		require.Equal(t, "default", plan.RuntimeKey)
 		require.Equal(t, "hi", plan.Prompt)
 	})
 }
 
 func TestDefaultConversationRequestResolver_Chat_GeneratesConvIDWhenMissing(t *testing.T) {
-	profiles := newInMemoryProfileRegistry()
-	require.NoError(t, profiles.Add(&Profile{Slug: "default"}))
-	b := NewDefaultConversationRequestResolver(profiles, stubConversationLookup{})
+	b := NewDefaultConversationRequestResolver(stubConversationLookup{})
 
 	req := httptest.NewRequest(http.MethodPost, "http://example.com/chat", bytes.NewBufferString(`{"prompt":"hi"}`))
 	plan, err := b.Resolve(req)
@@ -76,20 +83,13 @@ func TestDefaultConversationRequestResolver_Chat_GeneratesConvIDWhenMissing(t *t
 }
 
 func TestDefaultConversationRequestResolver_WS_ProfilePrecedence(t *testing.T) {
-	profiles := newInMemoryProfileRegistry()
-	require.NoError(t, profiles.Add(&Profile{Slug: "default"}))
-	require.NoError(t, profiles.Add(&Profile{Slug: "cookie"}))
-	require.NoError(t, profiles.Add(&Profile{Slug: "existing"}))
-	require.NoError(t, profiles.Add(&Profile{Slug: "explicit"}))
-
 	lookup := stubConversationLookup{
 		"c1": {ProfileSlug: "existing"},
 	}
-	b := NewDefaultConversationRequestResolver(profiles, lookup)
+	b := NewDefaultConversationRequestResolver(lookup)
 
-	t.Run("query beats cookie and existing", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "http://example.com/ws?conv_id=c1&profile=explicit", nil)
-		req.AddCookie(&http.Cookie{Name: "chat_profile", Value: "cookie"})
+	t.Run("query runtime beats existing", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "http://example.com/ws?conv_id=c1&runtime=explicit", nil)
 		plan, err := b.Resolve(req)
 		require.NoError(t, err)
 		require.Equal(t, "c1", plan.ConvID)
@@ -97,19 +97,18 @@ func TestDefaultConversationRequestResolver_WS_ProfilePrecedence(t *testing.T) {
 		require.Empty(t, plan.Prompt)
 	})
 
-	t.Run("cookie beats existing", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "http://example.com/ws?conv_id=c1", nil)
-		req.AddCookie(&http.Cookie{Name: "chat_profile", Value: "cookie"})
-		plan, err := b.Resolve(req)
-		require.NoError(t, err)
-		require.Equal(t, "cookie", plan.RuntimeKey)
-	})
-
-	t.Run("existing beats default", func(t *testing.T) {
+	t.Run("existing runtime beats default", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "http://example.com/ws?conv_id=c1", nil)
 		plan, err := b.Resolve(req)
 		require.NoError(t, err)
 		require.Equal(t, "existing", plan.RuntimeKey)
+	})
+
+	t.Run("default runtime when conversation unknown", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "http://example.com/ws?conv_id=c2", nil)
+		plan, err := b.Resolve(req)
+		require.NoError(t, err)
+		require.Equal(t, "default", plan.RuntimeKey)
 	})
 
 	t.Run("missing conv_id is a 400", func(t *testing.T) {

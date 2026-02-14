@@ -38,7 +38,7 @@ func (r *Router) registerDebugAPIHandlers(mux *http.ServeMux) {
 		type convSummary struct {
 			ConvID            string `json:"conv_id"`
 			SessionID         string `json:"session_id"`
-			Profile           string `json:"profile"`
+			RuntimeKey        string `json:"runtime_key"`
 			ActiveSockets     int    `json:"active_sockets"`
 			StreamRunning     bool   `json:"stream_running"`
 			QueueDepth        int    `json:"queue_depth"`
@@ -61,7 +61,7 @@ func (r *Router) registerDebugAPIHandlers(mux *http.ServeMux) {
 			}
 			conv.mu.Lock()
 			sessionID := conv.SessionID
-			profile := conv.ProfileSlug
+			runtimeKey := conv.ProfileSlug
 			queueDepth := len(conv.queue)
 			streamRunning := conv.stream != nil && conv.stream.IsRunning()
 			lastActivityMs := int64(0)
@@ -84,7 +84,7 @@ func (r *Router) registerDebugAPIHandlers(mux *http.ServeMux) {
 			items = append(items, convSummary{
 				ConvID:            conv.ID,
 				SessionID:         sessionID,
-				Profile:           profile,
+				RuntimeKey:        runtimeKey,
 				ActiveSockets:     activeSockets,
 				StreamRunning:     streamRunning,
 				QueueDepth:        queueDepth,
@@ -135,7 +135,7 @@ func (r *Router) registerDebugAPIHandlers(mux *http.ServeMux) {
 
 		conv.mu.Lock()
 		sessionID := conv.SessionID
-		profile := conv.ProfileSlug
+		runtimeKey := conv.ProfileSlug
 		queueDepth := len(conv.queue)
 		streamRunning := conv.stream != nil && conv.stream.IsRunning()
 		lastActivityMs := int64(0)
@@ -160,7 +160,7 @@ func (r *Router) registerDebugAPIHandlers(mux *http.ServeMux) {
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"conv_id":             convID,
 			"session_id":          sessionID,
-			"profile":             profile,
+			"runtime_key":         runtimeKey,
 			"active_sockets":      activeSockets,
 			"stream_running":      streamRunning,
 			"queue_depth":         queueDepth,

@@ -204,7 +204,7 @@ func TestAPIHandler_DebugConversationsAndDetail(t *testing.T) {
 	require.NoError(t, json.Unmarshal(detailBody, &detail))
 	require.Equal(t, "conv-b", detail["conv_id"])
 	require.Equal(t, "session-b", detail["session_id"])
-	require.Equal(t, "agent", detail["profile"])
+	require.Equal(t, "agent", detail["runtime_key"])
 	require.Equal(t, float64(2), detail["buffered_events"])
 	require.Equal(t, "req-1", detail["active_request_key"])
 	require.Equal(t, true, detail["has_timeline_source"])
