@@ -396,8 +396,8 @@ Key files:
 
 ```go
 func discoSinkWrapper() webchat.EventSinkWrapper {
-  return func(convID string, cfg webchat.EngineConfig, sink events.EventSink) (events.EventSink, error) {
-    if !hasMiddleware(cfg.Middlewares, discoMiddlewareName) {
+  return func(convID string, req webchat.RuntimeComposeRequest, sink events.EventSink) (events.EventSink, error) {
+    if !hasMiddleware(req.Overrides, discoMiddlewareName) {
       return sink, nil
     }
 
@@ -418,7 +418,7 @@ func discoSinkWrapper() webchat.EventSinkWrapper {
 
 ### Fundamental Callout: Wrap the Event Sink
 
-If you want to parse the model output, you must wrap the `events.EventSink` in your router using `WithEventSinkWrapper`. This is how you hook structured parsing into the pipeline. See `web-agent-example/cmd/web-agent-example/main.go`.
+If you want to parse the model output, wrap the `events.EventSink` in your router using `WithEventSinkWrapper`. This is how you hook structured parsing into the pipeline. See `web-agent-example/cmd/web-agent-example/main.go`.
 
 ## 10. Backend: Timeline Projection for Custom Events
 

@@ -164,82 +164,51 @@ pool := NewConnectionPool(conv.ID, 30*time.Second, func() {
 - Writer goroutines log and drop connections on `WriteMessage` failure.
 - Idle callbacks should be idempotent.
 
-## EngineBuilder
+## Runtime Composer
 
 ### Purpose
 
-`EngineBuilder` is the composition hub for webchat conversations. It turns profile metadata plus request overrides into an `EngineConfig`, materializes inference engines, and wraps Watermill sinks with profile-specific extractors. By centralizing this logic, Router handlers stay lean and recomposition happens deterministically.
+Runtime policy is now app-owned via `RuntimeComposer` and no longer lives in `pkg/webchat`. Core webchat only handles conversation lifecycle, streaming, and rebuild orchestration.
 
 ### Interface
 
 ```go
-type EngineBuilder interface {
-    BuildConfig(profileSlug string, overrides map[string]any) (EngineConfig, error)
-    BuildFromConfig(convID string, config EngineConfig) (engine.Engine, events.EventSink, error)
+type RuntimeComposeRequest struct {
+    ConvID     string
+    RuntimeKey string
+    Overrides  map[string]any
+}
+
+type RuntimeArtifacts struct {
+    Engine             engine.Engine
+    Sink               events.EventSink // optional; core creates a default sink if nil
+    RuntimeFingerprint string
+    RuntimeKey         string
+    SeedSystemPrompt   string
+    AllowedTools       []string
+}
+
+type RuntimeComposer interface {
+    Compose(ctx context.Context, req RuntimeComposeRequest) (RuntimeArtifacts, error)
 }
 ```
 
-`Router` implements this interface directly.
+### Behavior
 
-### Methods
-
-| Method | Description |
-|--------|-------------|
-| `BuildConfig(profileSlug, overrides)` | Parses overrides and builds a config without allocating engines. Enables signature comparisons before recomposition. |
-| `BuildFromConfig(convID, config)` | Materializes the engine and sink from a ready config. Requires `config.StepSettings` to be non-nil. |
-
-### EngineConfig
-
-`EngineConfig` captures all inputs that influence engine composition:
-
-```go
-type EngineConfig struct {
-    ProfileSlug  string
-    SystemPrompt string
-    Middlewares  []MiddlewareUse
-    Tools        []string
-    StepSettings *settings.StepSettings
-}
-```
-
-`Signature()` returns a deterministic JSON representation (not a hash) so it's debuggable. Comparison of signatures determines whether the engine needs recomposition.
-
-### Override Parsing
-
-Request overrides are validated and merged with profile defaults:
-
-| Override | Type | Behavior |
-|----------|------|----------|
-| `system_prompt` | `string` | Replaces profile default prompt. Must be non-empty string. |
-| `middlewares` | `[{ name, config }]` | Replaces profile default middleware list. Each entry must have a `name`. |
-| `tools` | `[string]` | Replaces profile default tools. Entries trimmed and validated. |
-
-Profiles can disable overrides via `AllowOverrides: false`, which causes any override attempt to return an error.
+- Applications implement `Compose(...)` in app code (for example `cmd/web-chat/runtime_composer.go`).
+- Core compares `RuntimeFingerprint` to `Conversation.RuntimeFingerprint` and only rebuilds when changed.
+- Core creates the default `WatermillSink` if `RuntimeArtifacts.Sink` is nil, then applies `WithEventSinkWrapper(...)` if configured.
+- `AllowedTools` is consumed by the inference loop; empty means "all registered tools".
 
 ### Typical Flow
 
 ```
-1. Router receives chat request with profileSlug + overrides
-2. BuildConfig(profileSlug, overrides) → EngineConfig
-3. Compare config.Signature() with conv.EngConfigSig
-4. If different: BuildFromConfig(convID, config) → engine + sink
-5. Store engine, sink, and new signature on Conversation
+1. Resolver produces (conv_id, runtime_key, overrides)
+2. ConvManager calls RuntimeComposer.Compose(...)
+3. Compare runtime_fingerprint with existing conversation
+4. If changed: swap engine/sink/subscriber/stream and store new runtime metadata
+5. Inference loop uses conversation's allowed_tools + sink
 ```
-
-This ensures engines are only recomposed when inputs actually change.
-
-### Sink Wrapping
-
-`BuildFromConfig` creates a `WatermillSink` for the conversation topic and optionally wraps it through an `eventSinkWrapper` hook. This hook allows applications to layer extractors (timeline hydration, structured data extraction, etc.) without modifying the builder.
-
-### Error Handling
-
-| Error | Cause | HTTP Status |
-|-------|-------|-------------|
-| "profile not found" | Unknown profile slug | 400 |
-| "profile does not allow overrides" | Overrides sent to locked profile | 400 |
-| "engine config missing step settings" | Config not produced by BuildConfig | 500 |
-| "router is nil" | Nil receiver (shouldn't happen) | 500 |
 
 ## Conversation Lifecycle
 
@@ -256,8 +225,8 @@ type Conversation struct {
     Sess         *session.Session
     Eng          engine.Engine
     Sink         events.EventSink
-    ProfileSlug  string
-    EngConfigSig string       // Signature for rebuild detection
+    RuntimeKey         string
+    RuntimeFingerprint string
 
     pool         *ConnectionPool
     stream       *StreamCoordinator
@@ -282,7 +251,7 @@ This prevents concurrent inferences on the same conversation, which would corrup
 | Responsibility | Mechanism |
 |----------------|-----------|
 | **Creation** | `getOrCreate(convID)` — builds engine, subscriber, coordinator, pool |
-| **Rebuild detection** | Compares `EngineConfig.Signature()` — only rebuilds when inputs change |
+| **Rebuild detection** | Compares `RuntimeFingerprint` — only rebuilds when inputs change |
 | **Idle eviction** | Configurable `evictIdle` duration, periodic scan via `evictInterval` |
 | **Timeline store** | Optional — when set, enables durable projection per conversation |
 
@@ -292,7 +261,7 @@ This prevents concurrent inferences on the same conversation, which would corrup
 New WebSocket connection
     │
     ├─ ConvManager.getOrCreate(convID)
-    │   ├─ BuildConfig + BuildFromConfig (if new or signature changed)
+    │   ├─ RuntimeComposer.Compose (if new or fingerprint changed)
     │   ├─ Create StreamCoordinator + ConnectionPool
     │   ├─ Start coordinator
     │   └─ Return Conversation
@@ -330,7 +299,7 @@ The tool loop and engine both respect context cancellation, so calling `cancel()
 ## Related Components
 
 - **SEM translation helpers**: `SemanticEventsFromEvent*` converts `events.Event` into SEM frames.
-- **`Router`**: Orchestrates coordinator and pool creation, implements `EngineBuilder`.
+- **`Router`**: Orchestrates coordinator/pool creation and injects runtime composer + resolver.
 - **`Conversation`**: Owns both `StreamCoordinator` and `ConnectionPool`.
 - **`ConvManager`**: Manages conversation lifecycle, idle eviction, and rebuild detection.
 
@@ -341,8 +310,7 @@ The tool loop and engine both respect context cancellation, so calling `cancel()
 | `pinocchio/pkg/webchat/stream_coordinator.go` | StreamCoordinator implementation |
 | `pinocchio/pkg/webchat/connection_pool.go` | ConnectionPool implementation |
 | `pinocchio/pkg/webchat/conversation.go` | Conversation and ConvManager lifecycle |
-| `pinocchio/pkg/webchat/engine_builder.go` | EngineBuilder interface and Router implementation |
-| `pinocchio/pkg/webchat/engine_config.go` | EngineConfig struct and signature generation |
+| `pinocchio/pkg/webchat/runtime_composer.go` | Runtime composer request/artifact contract |
 | `pinocchio/pkg/webchat/sem_translator.go` | Event to SEM frame translation |
 
 ## See Also
