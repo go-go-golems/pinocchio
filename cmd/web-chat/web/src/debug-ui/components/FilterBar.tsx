@@ -1,4 +1,4 @@
-import React from 'react';
+
 import type { BlockKind } from '../types';
 import { getBlockPresentation } from '../ui/presentation/blocks';
 

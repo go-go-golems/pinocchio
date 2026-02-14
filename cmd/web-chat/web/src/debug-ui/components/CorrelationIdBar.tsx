@@ -1,4 +1,4 @@
-import React from 'react';
+
 
 export interface CorrelationIdBarProps {
   convId?: string;
@@ -48,7 +48,7 @@ function CorrelationChip({ label, value }: CorrelationChipProps) {
   };
 
   // Truncate long values
-  const displayValue = value.length > 16 ? value.slice(0, 16) + '...' : value;
+  const displayValue = value.length > 16 ? `${value.slice(0, 16)}...` : value;
 
   return (
     <div

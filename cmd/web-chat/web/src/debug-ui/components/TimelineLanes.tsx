@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import type { SemEvent, TimelineEntity, TurnSnapshot } from '../types';
 import { EventTrackLane } from './EventTrackLane';
 import { NowMarker } from './NowMarker';

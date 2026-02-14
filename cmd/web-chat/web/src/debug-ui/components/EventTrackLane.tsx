@@ -1,4 +1,4 @@
-import React from 'react';
+
 import type { SemEvent } from '../types';
 import { formatTimeShort } from '../ui/format/time';
 import { getEventPresentation } from '../ui/presentation/events';

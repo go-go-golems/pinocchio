@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 
 export type AnomalyType = 'orphan_event' | 'missing_correlation' | 'timing_outlier' | 'sequence_gap' | 'schema_error';
 export type AnomalySeverity = 'error' | 'warning' | 'info';

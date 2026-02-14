@@ -1,4 +1,4 @@
-import React from 'react';
+
 import type { TurnSnapshot } from '../types';
 import { formatPhaseShort } from '../ui/format/phase';
 import { formatTimeShort } from '../ui/format/time';

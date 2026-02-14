@@ -1,4 +1,4 @@
-import React from 'react';
+
 
 export interface NowMarkerProps {
   label?: string;

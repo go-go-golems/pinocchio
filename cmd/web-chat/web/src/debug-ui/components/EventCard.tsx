@@ -80,14 +80,14 @@ export function EventCard({ event, selected = false, onClick, compact = false }:
 
 function truncateId(id: string): string {
   if (id.length <= 12) return id;
-  return id.slice(0, 12) + '...';
+  return `${id.slice(0, 12)}...`;
 }
 
 function formatSeq(seq: number): string {
   // Format large sequence numbers more readably
   const str = String(seq);
   if (str.length > 10) {
-    return str.slice(0, 4) + '...' + str.slice(-4);
+    return `${str.slice(0, 4)}...${str.slice(-4)}`;
   }
   return str;
 }

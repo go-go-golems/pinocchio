@@ -1,4 +1,4 @@
-import React from 'react';
+
 import type { TimelineEntity } from '../types';
 import { safeStringify, truncateText } from '../ui/format/text';
 import { formatTimeShort } from '../ui/format/time';

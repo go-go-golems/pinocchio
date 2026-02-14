@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useGetEventsQuery } from '../api/debugApi';
 import { EventCard } from '../components/EventCard';
 import { EventInspector } from '../components/EventInspector';

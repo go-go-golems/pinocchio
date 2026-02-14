@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import type { ParsedBlock } from '../types';
 import { safeStringify, truncateText } from '../ui/format/text';
 import { getBlockPresentation } from '../ui/presentation/blocks';
@@ -190,7 +190,7 @@ function MetadataItem({ name, value }: MetadataItemProps) {
           textOverflow: 'ellipsis', 
           whiteSpace: 'nowrap' 
         }}>
-          {isLong ? displayValue.slice(0, 50) + '...' : displayValue}
+          {isLong ? `${displayValue.slice(0, 50)}...` : displayValue}
         </div>
       )}
     </div>

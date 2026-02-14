@@ -52,7 +52,7 @@ export function TimelineEntityCard({ entity, selected = false, onClick, compact 
 
 function truncateId(id: string): string {
   if (id.length <= 20) return id;
-  return id.slice(0, 8) + '...' + id.slice(-8);
+  return `${id.slice(0, 8)}...${id.slice(-8)}`;
 }
 
 function renderEntityContent(kind: string, props: Record<string, unknown>): React.ReactNode {

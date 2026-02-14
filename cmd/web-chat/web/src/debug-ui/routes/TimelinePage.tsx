@@ -1,4 +1,4 @@
-import React from 'react';
+
 import { useGetEventsQuery, useGetTimelineQuery, useGetTurnsQuery } from '../api/debugApi';
 import { TimelineLanes } from '../components/TimelineLanes';
 import { useAppDispatch, useAppSelector } from '../store/hooks';

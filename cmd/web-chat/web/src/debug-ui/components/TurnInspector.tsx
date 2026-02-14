@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
 import { selectPhase, setComparePhases } from '../store/uiSlice';
 import type { TurnDetail, TurnPhase } from '../types';
@@ -61,7 +61,7 @@ export function TurnInspector({ turnDetail }: TurnInspectorProps) {
               {formatPhaseLabel(phase)}
               {phases[phase] && (
                 <span className="text-xs text-muted" style={{ marginLeft: '4px' }}>
-                  ({phases[phase]!.turn.blocks.length})
+                  ({phases[phase]?.turn.blocks.length})
                 </span>
               )}
             </button>
@@ -238,7 +238,7 @@ function MetadataField({ name, value }: MetadataFieldProps) {
           textOverflow: 'ellipsis', 
           whiteSpace: 'nowrap' 
         }}>
-          {isLong ? displayValue.slice(0, 60) + '...' : displayValue}
+          {isLong ? `${displayValue.slice(0, 60)}...` : displayValue}
         </div>
       )}
     </div>

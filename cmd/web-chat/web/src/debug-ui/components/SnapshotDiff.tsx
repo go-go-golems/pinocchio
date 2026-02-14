@@ -1,4 +1,4 @@
-import React from 'react';
+
 import type { ParsedBlock, ParsedTurn } from '../types';
 import { formatPhaseLabel } from '../ui/format/phase';
 import { truncateText } from '../ui/format/text';

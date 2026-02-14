@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import type { ParsedBlock, ParsedTurn } from '../types';
+import type { ParsedTurn } from '../types';
 import { SnapshotDiff } from './SnapshotDiff';
 
 const meta: Meta<typeof SnapshotDiff> = {

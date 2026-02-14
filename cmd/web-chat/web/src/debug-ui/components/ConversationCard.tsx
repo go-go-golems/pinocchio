@@ -1,4 +1,4 @@
-import React from 'react';
+
 import type { ConversationSummary } from '../types';
 
 export interface ConversationCardProps {

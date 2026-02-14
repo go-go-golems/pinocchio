@@ -1,4 +1,4 @@
-import React from 'react';
+
 import type { EngineStats, MwTrace, MwTraceLayer } from '../types';
 import { CorrelationIdBar } from './CorrelationIdBar';
 
