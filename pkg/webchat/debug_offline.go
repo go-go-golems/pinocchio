@@ -204,7 +204,7 @@ func (r *Router) registerOfflineDebugHandlers(mux *http.ServeMux) {
 			}
 			convID := parts[0]
 			sessionID := parts[1]
-			detail, err := loadTurnsSQLiteRunDetail(turnsDB, convID, sessionID, limit)
+			detail, err := loadTurnsSQLiteRunDetail(req.Context(), turnsDB, convID, sessionID, limit)
 			if err != nil {
 				http.Error(w, fmt.Sprintf("load turns run: %v", err), http.StatusInternalServerError)
 				return
@@ -228,7 +228,7 @@ func (r *Router) registerOfflineDebugHandlers(mux *http.ServeMux) {
 			}
 			convID := parts[0]
 			sinceVersion := uint64(parsePositiveInt(req.URL.Query().Get("since_version"), 0))
-			detail, err := loadTimelineSQLiteRunDetail(timelineDB, convID, sinceVersion, limit)
+			detail, err := loadTimelineSQLiteRunDetail(req.Context(), timelineDB, convID, sinceVersion, limit)
 			if err != nil {
 				http.Error(w, fmt.Sprintf("load timeline run: %v", err), http.StatusInternalServerError)
 				return
@@ -540,7 +540,10 @@ func loadArtifactRunDetail(root string, runName string, limit int) (map[string]a
 	return detail, nil
 }
 
-func loadTurnsSQLiteRunDetail(dbPath string, convID string, sessionID string, limit int) (map[string]any, error) {
+func loadTurnsSQLiteRunDetail(ctx context.Context, dbPath string, convID string, sessionID string, limit int) (map[string]any, error) {
+	if ctx == nil {
+		return nil, errors.New("ctx is nil")
+	}
 	dsn, err := chatstore.SQLiteTurnDSNForFile(dbPath)
 	if err != nil {
 		return nil, err
@@ -551,7 +554,7 @@ func loadTurnsSQLiteRunDetail(dbPath string, convID string, sessionID string, li
 	}
 	defer func() { _ = store.Close() }()
 
-	rows, err := store.List(context.Background(), chatstore.TurnQuery{
+	rows, err := store.List(ctx, chatstore.TurnQuery{
 		ConvID:    convID,
 		SessionID: sessionID,
 		Limit:     limit,
@@ -587,7 +590,10 @@ func loadTurnsSQLiteRunDetail(dbPath string, convID string, sessionID string, li
 	}, nil
 }
 
-func loadTimelineSQLiteRunDetail(dbPath string, convID string, sinceVersion uint64, limit int) (map[string]any, error) {
+func loadTimelineSQLiteRunDetail(ctx context.Context, dbPath string, convID string, sinceVersion uint64, limit int) (map[string]any, error) {
+	if ctx == nil {
+		return nil, errors.New("ctx is nil")
+	}
 	dsn, err := chatstore.SQLiteTimelineDSNForFile(dbPath)
 	if err != nil {
 		return nil, err
@@ -598,7 +604,7 @@ func loadTimelineSQLiteRunDetail(dbPath string, convID string, sinceVersion uint
 	}
 	defer func() { _ = store.Close() }()
 
-	snap, err := store.GetSnapshot(context.Background(), convID, sinceVersion, limit)
+	snap, err := store.GetSnapshot(ctx, convID, sinceVersion, limit)
 	if err != nil {
 		return nil, err
 	}

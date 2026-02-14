@@ -3,6 +3,7 @@ package webchat
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strconv"
 	"strings"
 	"sync"
@@ -54,13 +55,13 @@ func (sc *StreamCoordinator) Start(ctx context.Context) error {
 	if sc == nil || sc.subscriber == nil {
 		return nil
 	}
+	if ctx == nil {
+		return errors.New("ctx is nil")
+	}
 	sc.mu.Lock()
 	if sc.running {
 		sc.mu.Unlock()
 		return nil
-	}
-	if ctx == nil {
-		ctx = context.Background()
 	}
 	runCtx, cancel := context.WithCancel(ctx)
 	sc.cancel = cancel

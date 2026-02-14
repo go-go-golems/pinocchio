@@ -91,6 +91,9 @@ type ConvManagerOptions struct {
 }
 
 func NewConvManager(opts ConvManagerOptions) *ConvManager {
+	if opts.BaseCtx == nil {
+		panic("webchat: NewConvManager requires non-nil BaseCtx")
+	}
 	return &ConvManager{
 		conns:              map[string]*Conversation{},
 		baseCtx:            opts.BaseCtx,
@@ -228,17 +231,13 @@ func (cm *ConvManager) GetOrCreate(convID, profileSlug string, overrides map[str
 						c.semBuf.Add(frame)
 					}
 					if c.timelineProj != nil {
-						_ = c.timelineProj.ApplySemFrame(context.Background(), frame)
+						_ = c.timelineProj.ApplySemFrame(c.baseCtx, frame)
 					}
 				},
 			)
 
 			if c.stream != nil {
-				ctx := c.baseCtx
-				if ctx == nil {
-					ctx = context.Background()
-				}
-				if err := c.stream.Start(ctx); err != nil {
+				if err := c.stream.Start(c.baseCtx); err != nil {
 					return nil, err
 				}
 			}
@@ -301,7 +300,7 @@ func (cm *ConvManager) GetOrCreate(convID, profileSlug string, overrides map[str
 				conv.semBuf.Add(frame)
 			}
 			if conv.timelineProj != nil {
-				_ = conv.timelineProj.ApplySemFrame(context.Background(), frame)
+				_ = conv.timelineProj.ApplySemFrame(conv.baseCtx, frame)
 			}
 		},
 	)
@@ -321,11 +320,7 @@ func (cm *ConvManager) GetOrCreate(convID, profileSlug string, overrides map[str
 
 	// Start streaming immediately; ConnectionPool idle logic will stop it when no clients are connected.
 	if conv.stream != nil {
-		ctx := conv.baseCtx
-		if ctx == nil {
-			ctx = context.Background()
-		}
-		if err := conv.stream.Start(ctx); err != nil {
+		if err := conv.stream.Start(conv.baseCtx); err != nil {
 			return nil, err
 		}
 	}
@@ -358,9 +353,6 @@ func (cm *ConvManager) AddConn(conv *Conversation, c *websocket.Conn) {
 	stream := conv.stream
 	conv.mu.Unlock()
 	if stream != nil && !stream.IsRunning() {
-		if baseCtx == nil {
-			baseCtx = context.Background()
-		}
 		_ = stream.Start(baseCtx)
 	}
 }

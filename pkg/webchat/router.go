@@ -55,6 +55,9 @@ type RouterSettings struct {
 
 // RouterBuilder creates a new composable webchat router.
 func NewRouter(ctx context.Context, parsed *values.Values, staticFS fs.FS, opts ...RouterOption) (*Router, error) {
+	if ctx == nil {
+		return nil, errors.New("ctx is nil")
+	}
 	rs := rediscfg.Settings{}
 	_ = parsed.DecodeSectionInto("redis", &rs)
 	router, err := rediscfg.BuildRouter(rs, true)
@@ -714,10 +717,13 @@ func (r *Router) startInferenceForPrompt(conv *Conversation, profileSlug string,
 	stream := conv.stream
 	baseCtx := conv.baseCtx
 	conv.mu.Unlock()
+	if baseCtx == nil {
+		baseCtx = r.baseCtx
+	}
+	if baseCtx == nil {
+		return nil, errors.New("conversation context is nil")
+	}
 	if stream != nil && !stream.IsRunning() {
-		if baseCtx == nil {
-			baseCtx = context.Background()
-		}
 		_ = stream.Start(baseCtx)
 	}
 
@@ -781,6 +787,9 @@ func (r *Router) startInferenceForPrompt(conv *Conversation, profileSlug string,
 			},
 		}
 		version := uint64(time.Now().UnixMilli()) * 1_000_000
+		if r.baseCtx == nil {
+			return nil, errors.New("router context is nil")
+		}
 		if err := r.timelineStore.Upsert(r.baseCtx, conv.ID, version, entity); err == nil {
 			r.emitTimelineUpsert(conv, entity, version)
 		}
@@ -806,6 +815,9 @@ func (r *Router) startInferenceForPrompt(conv *Conversation, profileSlug string,
 
 	sessionLog.Info().Str("idempotency_key", idempotencyKey).Msg("starting inference loop")
 
+	if r.baseCtx == nil {
+		return nil, errors.New("router context is nil")
+	}
 	handle, err := conv.Sess.StartInference(r.baseCtx)
 	if err != nil {
 		r.finishSessionInference(conv, idempotencyKey, "", turnID, err)
@@ -927,7 +939,10 @@ func (r *Router) buildSubscriberDefault(convID string) (message.Subscriber, bool
 	}
 	// subscriber/publisher
 	if r.usesRedis {
-		_ = rediscfg.EnsureGroupAtTail(context.Background(), r.redisAddr, topicForConv(convID), "ui")
+		if r.baseCtx == nil {
+			return nil, false, errors.New("router context is nil")
+		}
+		_ = rediscfg.EnsureGroupAtTail(r.baseCtx, r.redisAddr, topicForConv(convID), "ui")
 		sub, err := rediscfg.BuildGroupSubscriber(r.redisAddr, "ui", "ws-forwarder:"+convID)
 		if err != nil {
 			return nil, false, err

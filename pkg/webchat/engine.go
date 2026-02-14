@@ -13,7 +13,16 @@ import (
 )
 
 // composeEngineFromSettings builds an engine from step settings then applies middlewares.
-func composeEngineFromSettings(stepSettings *settings.StepSettings, sysPrompt string, uses []MiddlewareUse, mwFactories map[string]MiddlewareFactory) (engine.Engine, error) {
+func composeEngineFromSettings(
+	ctx context.Context,
+	stepSettings *settings.StepSettings,
+	sysPrompt string,
+	uses []MiddlewareUse,
+	mwFactories map[string]MiddlewareFactory,
+) (engine.Engine, error) {
+	if ctx == nil {
+		return nil, errors.New("ctx is nil")
+	}
 	eng, err := factory.NewEngineFromStepSettings(stepSettings)
 	if err != nil {
 		return nil, errors.Wrap(err, "engine init failed")
@@ -39,7 +48,7 @@ func composeEngineFromSettings(stepSettings *settings.StepSettings, sysPrompt st
 	}
 
 	builder := &enginebuilder.Builder{Base: eng, Middlewares: mws}
-	runner, err := builder.Build(context.Background(), "")
+	runner, err := builder.Build(ctx, "")
 	if err != nil {
 		return nil, err
 	}

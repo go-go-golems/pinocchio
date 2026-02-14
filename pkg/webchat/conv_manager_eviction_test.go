@@ -11,7 +11,7 @@ import (
 )
 
 func TestConvManagerEvictIdleOnce(t *testing.T) {
-	cm := NewConvManager(ConvManagerOptions{})
+	cm := NewConvManager(ConvManagerOptions{BaseCtx: context.Background()})
 	cm.SetEvictionConfig(10*time.Second, time.Second)
 
 	conv := &Conversation{
@@ -32,7 +32,7 @@ func TestConvManagerEvictIdleOnce(t *testing.T) {
 }
 
 func TestConvManagerEvictIdleOnce_SkipsBusy(t *testing.T) {
-	cm := NewConvManager(ConvManagerOptions{})
+	cm := NewConvManager(ConvManagerOptions{BaseCtx: context.Background()})
 	cm.SetEvictionConfig(10*time.Second, time.Second)
 
 	conv := &Conversation{
@@ -81,7 +81,7 @@ func (s *evictionStubSubscriber) calls() int {
 }
 
 func TestCleanupConversation_ClosesSubscriberOnlyOnceWhenStreamOwnsClose(t *testing.T) {
-	cm := NewConvManager(ConvManagerOptions{})
+	cm := NewConvManager(ConvManagerOptions{BaseCtx: context.Background()})
 	sub := &evictionStubSubscriber{ch: make(chan *message.Message)}
 	conv := &Conversation{
 		ID:       "c1",

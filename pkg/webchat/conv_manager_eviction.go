@@ -19,6 +19,9 @@ func (cm *ConvManager) StartEvictionLoop(ctx context.Context) {
 	if cm == nil {
 		return
 	}
+	if ctx == nil {
+		panic("webchat: StartEvictionLoop requires non-nil ctx")
+	}
 	cm.mu.Lock()
 	if cm.evictRunning {
 		cm.mu.Unlock()
@@ -32,10 +35,6 @@ func (cm *ConvManager) StartEvictionLoop(ctx context.Context) {
 	}
 	cm.evictRunning = true
 	cm.mu.Unlock()
-
-	if ctx == nil {
-		ctx = context.Background()
-	}
 
 	go cm.runEvictionLoop(ctx, interval)
 }

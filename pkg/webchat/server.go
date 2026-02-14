@@ -24,6 +24,9 @@ type Server struct {
 }
 
 func NewServer(ctx context.Context, parsed *values.Values, staticFS fs.FS) (*Server, error) {
+	if ctx == nil {
+		return nil, errors.New("ctx is nil")
+	}
 	r, err := NewRouter(ctx, parsed, staticFS)
 	if err != nil {
 		return nil, err
@@ -39,10 +42,25 @@ func (s *Server) Router() *Router { return s.router }
 
 // NewFromRouter constructs a server from an existing Router and http.Server.
 func NewFromRouter(ctx context.Context, r *Router, httpSrv *http.Server) *Server {
+	if ctx == nil {
+		panic("webchat: NewFromRouter requires non-nil ctx")
+	}
+	if r == nil {
+		panic("webchat: NewFromRouter requires non-nil router")
+	}
+	if httpSrv == nil {
+		panic("webchat: NewFromRouter requires non-nil http server")
+	}
 	return &Server{baseCtx: ctx, router: r, httpSrv: httpSrv}
 }
 
 func (s *Server) Run(ctx context.Context) error {
+	if ctx == nil {
+		return errors.New("ctx is nil")
+	}
+	if s == nil || s.router == nil || s.httpSrv == nil {
+		return errors.New("server is not initialized")
+	}
 	eg := errgroup.Group{}
 	srvCtx, srvCancel := context.WithCancel(ctx)
 	defer srvCancel()
@@ -59,7 +77,8 @@ func (s *Server) Run(ctx context.Context) error {
 		<-sigChan
 		log.Info().Msg("received interrupt signal, shutting down gracefully...")
 		srvCancel()
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		shutdownBase := context.WithoutCancel(ctx)
+		shutdownCtx, cancel := context.WithTimeout(shutdownBase, 30*time.Second)
 		defer cancel()
 		if err := s.httpSrv.Shutdown(shutdownCtx); err != nil {
 			log.Error().Err(err).Msg("server shutdown error")

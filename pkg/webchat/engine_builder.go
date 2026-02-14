@@ -90,6 +90,9 @@ func (r *Router) BuildFromConfig(convID string, config EngineConfig) (engine.Eng
 	if convID == "" {
 		return nil, nil, errors.New("convID is empty")
 	}
+	if r.baseCtx == nil {
+		return nil, nil, errors.New("router context is nil")
+	}
 
 	var sink events.EventSink = middleware.NewWatermillSink(r.router.Publisher, topicForConv(convID))
 	if r.eventSinkWrapper != nil {
@@ -99,7 +102,13 @@ func (r *Router) BuildFromConfig(convID string, config EngineConfig) (engine.Eng
 		}
 		sink = wrapped
 	}
-	eng, err := composeEngineFromSettings(config.StepSettings.Clone(), config.SystemPrompt, config.Middlewares, r.mwFactories)
+	eng, err := composeEngineFromSettings(
+		r.baseCtx,
+		config.StepSettings.Clone(),
+		config.SystemPrompt,
+		config.Middlewares,
+		r.mwFactories,
+	)
 	if err != nil {
 		return nil, nil, err
 	}
