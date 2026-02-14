@@ -569,7 +569,7 @@ The `buildOverrides` result is sent in the `/chat` request body under `overrides
 ### Where to look
 
 - `web-agent-example/web/src/App.tsx`
-- `pinocchio/pkg/webchat/engine_config.go`
+- `pinocchio/cmd/web-chat/runtime_composer.go`
 - `pinocchio/pkg/webchat/engine_from_req.go`
 
 ## 15. Frontend: Packaging and Build System
