@@ -340,13 +340,19 @@ func scanTurnsSQLiteRuns(dbPath string, limit int) ([]offlineRunSummary, error) 
 	}
 	defer func() { _ = db.Close() }()
 
-	rows, err := db.Query(`
+	snapshotTable, err := detectTurnSnapshotTable(db)
+	if err != nil {
+		return nil, err
+	}
+
+	query := fmt.Sprintf(`
 		SELECT conv_id, session_id, COUNT(*) AS n, MAX(created_at_ms) AS max_created, MIN(created_at_ms) AS min_created
-		FROM turns
+		FROM %s
 		GROUP BY conv_id, session_id
 		ORDER BY max_created DESC
 		LIMIT ?
-	`, limit)
+	`, snapshotTable)
+	rows, err := db.Query(query, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -379,6 +385,75 @@ func scanTurnsSQLiteRuns(dbPath string, limit int) ([]offlineRunSummary, error) 
 		return nil, err
 	}
 	return items, nil
+}
+
+func detectTurnSnapshotTable(db *sql.DB) (string, error) {
+	if db == nil {
+		return "", errors.New("db is nil")
+	}
+	if exists, err := sqliteTableExists(db, "turn_snapshots"); err != nil {
+		return "", err
+	} else if exists {
+		return "turn_snapshots", nil
+	}
+	if exists, err := sqliteTableExists(db, "turns"); err != nil {
+		return "", err
+	} else if !exists {
+		return "", errors.New("neither turn_snapshots nor turns table exists")
+	}
+	for _, col := range []string{"session_id", "phase", "created_at_ms", "payload"} {
+		ok, err := sqliteColumnExists(db, "turns", col)
+		if err != nil {
+			return "", err
+		}
+		if !ok {
+			return "", errors.New("turns table is normalized-only; no turn snapshot table found")
+		}
+	}
+	return "turns", nil
+}
+
+func sqliteTableExists(db *sql.DB, table string) (bool, error) {
+	if db == nil {
+		return false, errors.New("db is nil")
+	}
+	var n int
+	if err := db.QueryRow(`SELECT COUNT(1) FROM sqlite_master WHERE type = 'table' AND name = ?`, table).Scan(&n); err != nil {
+		return false, err
+	}
+	return n > 0, nil
+}
+
+func sqliteColumnExists(db *sql.DB, table string, column string) (bool, error) {
+	if db == nil {
+		return false, errors.New("db is nil")
+	}
+	rows, err := db.Query(`PRAGMA table_info(` + table + `)`)
+	if err != nil {
+		return false, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	for rows.Next() {
+		var (
+			cid       int
+			name      string
+			typeName  string
+			notNull   int
+			dfltValue any
+			pk        int
+		)
+		if err := rows.Scan(&cid, &name, &typeName, &notNull, &dfltValue, &pk); err != nil {
+			return false, err
+		}
+		if name == column {
+			return true, nil
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return false, err
+	}
+	return false, nil
 }
 
 func scanTimelineSQLiteRuns(dbPath string, limit int) ([]offlineRunSummary, error) {

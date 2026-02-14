@@ -17,6 +17,11 @@ type SQLiteTurnStore struct {
 
 var _ TurnStore = &SQLiteTurnStore{}
 
+const (
+	legacyTurnSnapshotsTable = "turn_snapshots"
+	normalizedTurnsTable     = "turns"
+)
+
 func NewSQLiteTurnStore(dsn string) (*SQLiteTurnStore, error) {
 	if strings.TrimSpace(dsn) == "" {
 		return nil, errors.New("sqlite turn store: empty dsn")
@@ -45,7 +50,87 @@ func (s *SQLiteTurnStore) migrate() error {
 		return errors.New("sqlite turn store: db is nil")
 	}
 
-	if _, err := s.db.Exec(`CREATE TABLE IF NOT EXISTS turns (
+	if err := s.migrateLegacySnapshotTable(); err != nil {
+		return err
+	}
+
+	stmts := []string{
+		`CREATE TABLE IF NOT EXISTS turns (
+			conv_id TEXT NOT NULL,
+			session_id TEXT NOT NULL,
+			turn_id TEXT NOT NULL,
+			turn_created_at_ms INTEGER NOT NULL,
+			turn_metadata_json TEXT NOT NULL DEFAULT '{}',
+			turn_data_json TEXT NOT NULL DEFAULT '{}',
+			updated_at_ms INTEGER NOT NULL,
+			PRIMARY KEY (conv_id, session_id, turn_id)
+		);`,
+		`CREATE TABLE IF NOT EXISTS blocks (
+			block_id TEXT NOT NULL,
+			content_hash TEXT NOT NULL,
+			hash_algorithm TEXT NOT NULL DEFAULT 'sha256-canonical-json-v1',
+			kind TEXT NOT NULL,
+			role TEXT NOT NULL DEFAULT '',
+			payload_json TEXT NOT NULL DEFAULT '{}',
+			block_metadata_json TEXT NOT NULL DEFAULT '{}',
+			first_seen_at_ms INTEGER NOT NULL,
+			PRIMARY KEY (block_id, content_hash)
+		);`,
+		`CREATE TABLE IF NOT EXISTS turn_block_membership (
+			conv_id TEXT NOT NULL,
+			session_id TEXT NOT NULL,
+			turn_id TEXT NOT NULL,
+			phase TEXT NOT NULL,
+			snapshot_created_at_ms INTEGER NOT NULL,
+			ordinal INTEGER NOT NULL,
+			block_id TEXT NOT NULL,
+			content_hash TEXT NOT NULL,
+			PRIMARY KEY (conv_id, session_id, turn_id, phase, snapshot_created_at_ms, ordinal),
+			FOREIGN KEY (conv_id, session_id, turn_id) REFERENCES turns(conv_id, session_id, turn_id) ON DELETE CASCADE,
+			FOREIGN KEY (block_id, content_hash) REFERENCES blocks(block_id, content_hash)
+		);`,
+		`CREATE INDEX IF NOT EXISTS turns_by_conv_session ON turns(conv_id, session_id, updated_at_ms DESC);`,
+		`CREATE INDEX IF NOT EXISTS turns_by_session ON turns(session_id, updated_at_ms DESC);`,
+		`CREATE INDEX IF NOT EXISTS blocks_by_kind_role ON blocks(kind, role);`,
+		`CREATE INDEX IF NOT EXISTS turn_block_membership_by_turn_phase ON turn_block_membership(conv_id, session_id, turn_id, phase, snapshot_created_at_ms DESC, ordinal);`,
+		`CREATE INDEX IF NOT EXISTS turn_block_membership_by_block ON turn_block_membership(block_id, content_hash);`,
+	}
+	for _, st := range stmts {
+		if _, err := s.db.Exec(st); err != nil {
+			return errors.Wrap(err, "sqlite turn store: migrate")
+		}
+	}
+	return nil
+}
+
+func (s *SQLiteTurnStore) migrateLegacySnapshotTable() error {
+	if s == nil || s.db == nil {
+		return errors.New("sqlite turn store: db is nil")
+	}
+
+	legacyTurnsExists, err := s.tableExists(normalizedTurnsTable)
+	if err != nil {
+		return errors.Wrap(err, "sqlite turn store: inspect turns table")
+	}
+	snapshotsExists, err := s.tableExists(legacyTurnSnapshotsTable)
+	if err != nil {
+		return errors.Wrap(err, "sqlite turn store: inspect turn_snapshots table")
+	}
+	if legacyTurnsExists && !snapshotsExists {
+		legacyHasPayload, err := s.columnExists(normalizedTurnsTable, "payload")
+		if err != nil {
+			return errors.Wrap(err, "sqlite turn store: inspect legacy turns payload")
+		}
+		if legacyHasPayload {
+			if _, err := s.db.Exec(`ALTER TABLE turns RENAME TO turn_snapshots`); err != nil {
+				return errors.Wrap(err, "sqlite turn store: rename turns to turn_snapshots")
+			}
+			snapshotsExists = true
+		}
+	}
+
+	if !snapshotsExists {
+		if _, err := s.db.Exec(`CREATE TABLE IF NOT EXISTS turn_snapshots (
 		conv_id TEXT NOT NULL,
 		session_id TEXT NOT NULL,
 		turn_id TEXT NOT NULL,
@@ -54,36 +139,50 @@ func (s *SQLiteTurnStore) migrate() error {
 		payload TEXT NOT NULL,
 		PRIMARY KEY (conv_id, session_id, turn_id, phase, created_at_ms)
 	);`); err != nil {
-		return errors.Wrap(err, "sqlite turn store: create table")
+			return errors.Wrap(err, "sqlite turn store: create turn_snapshots table")
+		}
 	}
 
-	runIDExists, err := s.columnExists("turns", "run_id")
+	runIDExists, err := s.columnExists(legacyTurnSnapshotsTable, "run_id")
 	if err != nil {
 		return errors.Wrap(err, "sqlite turn store: inspect run_id column")
 	}
-	sessionIDExists, err := s.columnExists("turns", "session_id")
+	sessionIDExists, err := s.columnExists(legacyTurnSnapshotsTable, "session_id")
 	if err != nil {
 		return errors.Wrap(err, "sqlite turn store: inspect session_id column")
 	}
 
 	if runIDExists && !sessionIDExists {
-		if _, err := s.db.Exec(`ALTER TABLE turns RENAME COLUMN run_id TO session_id`); err != nil {
+		if _, err := s.db.Exec(`ALTER TABLE turn_snapshots RENAME COLUMN run_id TO session_id`); err != nil {
 			return errors.Wrap(err, "sqlite turn store: rename run_id column")
 		}
 	}
 
-	stmts := []string{
+	legacyStmts := []string{
 		`DROP INDEX IF EXISTS turns_by_run;`,
-		`CREATE INDEX IF NOT EXISTS turns_by_conv ON turns(conv_id, created_at_ms DESC);`,
-		`CREATE INDEX IF NOT EXISTS turns_by_session ON turns(session_id, created_at_ms DESC);`,
-		`CREATE INDEX IF NOT EXISTS turns_by_phase ON turns(phase, created_at_ms DESC);`,
+		`DROP INDEX IF EXISTS turn_snapshots_by_run;`,
+		`CREATE INDEX IF NOT EXISTS turn_snapshots_by_conv ON turn_snapshots(conv_id, created_at_ms DESC);`,
+		`CREATE INDEX IF NOT EXISTS turn_snapshots_by_session ON turn_snapshots(session_id, created_at_ms DESC);`,
+		`CREATE INDEX IF NOT EXISTS turn_snapshots_by_phase ON turn_snapshots(phase, created_at_ms DESC);`,
 	}
-	for _, st := range stmts {
+	for _, st := range legacyStmts {
 		if _, err := s.db.Exec(st); err != nil {
-			return errors.Wrap(err, "sqlite turn store: migrate")
+			return errors.Wrap(err, "sqlite turn store: migrate legacy turn_snapshots")
 		}
 	}
 	return nil
+}
+
+func (s *SQLiteTurnStore) tableExists(table string) (bool, error) {
+	if s == nil || s.db == nil {
+		return false, errors.New("sqlite turn store: db is nil")
+	}
+	var n int
+	err := s.db.QueryRow(`SELECT COUNT(1) FROM sqlite_master WHERE type = 'table' AND name = ?`, table).Scan(&n)
+	if err != nil {
+		return false, err
+	}
+	return n > 0, nil
 }
 
 func (s *SQLiteTurnStore) columnExists(table string, column string) (bool, error) {
@@ -135,14 +234,14 @@ func (s *SQLiteTurnStore) Save(ctx context.Context, convID, sessionID, turnID, p
 		return errors.New("sqlite turn store: phase is empty")
 	}
 	if ctx == nil {
-		ctx = context.Background()
+		return errors.New("sqlite turn store: ctx is nil")
 	}
 	if createdAtMs <= 0 {
 		createdAtMs = time.Now().UnixMilli()
 	}
 
 	_, err := s.db.ExecContext(ctx, `
-		INSERT INTO turns(conv_id, session_id, turn_id, phase, created_at_ms, payload)
+		INSERT INTO turn_snapshots(conv_id, session_id, turn_id, phase, created_at_ms, payload)
 		VALUES(?, ?, ?, ?, ?, ?)
 	`, convID, sessionID, turnID, phase, createdAtMs, payload)
 	if err != nil {
@@ -159,7 +258,7 @@ func (s *SQLiteTurnStore) List(ctx context.Context, q TurnQuery) ([]TurnSnapshot
 		return nil, errors.New("sqlite turn store: convID or sessionID required")
 	}
 	if ctx == nil {
-		ctx = context.Background()
+		return nil, errors.New("sqlite turn store: ctx is nil")
 	}
 	limit := q.Limit
 	if limit <= 0 {
@@ -192,7 +291,7 @@ func (s *SQLiteTurnStore) List(ctx context.Context, q TurnQuery) ([]TurnSnapshot
 
 	query := fmt.Sprintf(`
 		SELECT conv_id, session_id, turn_id, phase, created_at_ms, payload
-		FROM turns
+		FROM turn_snapshots
 		%s
 		ORDER BY created_at_ms DESC
 		LIMIT ?
