@@ -23,11 +23,11 @@ type Server struct {
 	httpSrv *http.Server
 }
 
-func NewServer(ctx context.Context, parsed *values.Values, staticFS fs.FS) (*Server, error) {
+func NewServer(ctx context.Context, parsed *values.Values, staticFS fs.FS, opts ...RouterOption) (*Server, error) {
 	if ctx == nil {
 		return nil, errors.New("ctx is nil")
 	}
-	r, err := NewRouter(ctx, parsed, staticFS)
+	r, err := NewRouter(ctx, parsed, staticFS, opts...)
 	if err != nil {
 		return nil, err
 	}

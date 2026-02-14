@@ -64,7 +64,14 @@ func TestRegisterProfileHandlers_GetAndSetProfile(t *testing.T) {
 		&chatProfile{Slug: "agent", DefaultPrompt: "You are agent"},
 	)
 
-	r, err := webchat.NewRouter(context.Background(), values.New(), staticFS)
+	r, err := webchat.NewRouter(
+		context.Background(),
+		values.New(),
+		staticFS,
+		webchat.WithRuntimeComposer(webchat.RuntimeComposerFunc(func(context.Context, webchat.RuntimeComposeRequest) (webchat.RuntimeArtifacts, error) {
+			return webchat.RuntimeArtifacts{}, nil
+		})),
+	)
 	require.NoError(t, err)
 	registerProfileHandlers(r, profiles)
 

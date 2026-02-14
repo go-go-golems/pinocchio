@@ -19,6 +19,7 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/go-go-golems/geppetto/pkg/events"
+	"github.com/go-go-golems/geppetto/pkg/inference/middleware"
 	"github.com/go-go-golems/geppetto/pkg/inference/toolloop"
 	"github.com/go-go-golems/geppetto/pkg/inference/toolloop/enginebuilder"
 	geptools "github.com/go-go-golems/geppetto/pkg/inference/tools"
@@ -141,6 +142,9 @@ func NewRouter(ctx context.Context, parsed *values.Values, staticFS fs.FS, opts 
 			return nil, err
 		}
 	}
+	if r.runtimeComposer == nil {
+		return nil, errors.New("runtime composer is not configured")
+	}
 
 	if r.stepCtrl == nil {
 		r.stepCtrl = toolloop.NewStepController()
@@ -149,11 +153,12 @@ func NewRouter(ctx context.Context, parsed *values.Values, staticFS fs.FS, opts 
 		r.cm = NewConvManager(ConvManagerOptions{
 			BaseCtx:            ctx,
 			StepController:     r.stepCtrl,
-			BuildConfig:        r.BuildConfig,
-			BuildFromConfig:    r.BuildFromConfig,
+			RuntimeComposer:    r.convRuntimeComposer(),
 			BuildSubscriber:    r.BuildSubscriber,
 			TimelineUpsertHook: r.TimelineUpsertHook,
 		})
+	} else {
+		r.cm.SetRuntimeComposer(r.convRuntimeComposer())
 	}
 	if r.requestResolver == nil {
 		r.requestResolver = NewDefaultConversationRequestResolver(r.cm)
@@ -355,7 +360,7 @@ func (r *Router) registerAPIHandlers(mux *http.ServeMux) {
 			Msg("ws resolved request")
 		wsLog.Info().Msg("ws connect request")
 		wsLog.Info().Msg("ws joining conversation")
-		conv, err := r.cm.GetOrCreate(convID, runtimeKey, nil)
+		conv, err := r.cm.GetOrCreate(convID, runtimeKey, plan.Overrides)
 		if err != nil {
 			wsLog.Error().Err(err).Msg("failed to join conversation")
 			_ = conn.WriteMessage(websocket.TextMessage, []byte(`{"error":"failed to join conversation"}`))
@@ -514,7 +519,7 @@ func (r *Router) registerAPIHandlers(mux *http.ServeMux) {
 			return
 		}
 
-		resp, err := r.startInferenceForPrompt(conv, runtimeKey, plan.Overrides, plan.Prompt, idempotencyKey)
+		resp, err := r.startInferenceForPrompt(conv, plan.Overrides, plan.Prompt, idempotencyKey)
 		if err != nil {
 			sessionLog.Error().Err(err).Msg("start session inference failed")
 			http.Error(w, "start session inference failed", http.StatusInternalServerError)
@@ -534,6 +539,41 @@ func fsSub(staticFS fs.FS, path string) (fs.FS, error) { return fs.Sub(staticFS,
 var (
 	_ http.Handler
 )
+
+func (r *Router) convRuntimeComposer() RuntimeComposer {
+	return RuntimeComposerFunc(func(ctx context.Context, req RuntimeComposeRequest) (RuntimeArtifacts, error) {
+		if r == nil {
+			return RuntimeArtifacts{}, errors.New("router is nil")
+		}
+		if r.runtimeComposer == nil {
+			return RuntimeArtifacts{}, errors.New("runtime composer is not configured")
+		}
+		artifacts, err := r.runtimeComposer.Compose(ctx, req)
+		if err != nil {
+			return RuntimeArtifacts{}, err
+		}
+		if artifacts.Engine == nil {
+			return RuntimeArtifacts{}, errors.New("runtime composer returned nil engine")
+		}
+		if artifacts.Sink == nil {
+			artifacts.Sink = middleware.NewWatermillSink(r.router.Publisher, topicForConv(req.ConvID))
+		}
+		if r.eventSinkWrapper != nil {
+			wrapped, err := r.eventSinkWrapper(req.ConvID, req, artifacts.Sink)
+			if err != nil {
+				return RuntimeArtifacts{}, err
+			}
+			artifacts.Sink = wrapped
+		}
+		if strings.TrimSpace(artifacts.RuntimeKey) == "" {
+			artifacts.RuntimeKey = strings.TrimSpace(req.RuntimeKey)
+		}
+		if strings.TrimSpace(artifacts.RuntimeFingerprint) == "" {
+			artifacts.RuntimeFingerprint = artifacts.RuntimeKey
+		}
+		return artifacts, nil
+	})
+}
 
 func stepModeFromOverrides(overrides map[string]any) bool {
 	if overrides == nil {
@@ -631,7 +671,7 @@ func idempotencyKeyFromRequest(r *http.Request, body *ChatRequestBody) string {
 	return key
 }
 
-func (r *Router) startInferenceForPrompt(conv *Conversation, runtimeKey string, overrides map[string]any, prompt string, idempotencyKey string) (map[string]any, error) {
+func (r *Router) startInferenceForPrompt(conv *Conversation, overrides map[string]any, prompt string, idempotencyKey string) (map[string]any, error) {
 	if r == nil || conv == nil || conv.Sess == nil {
 		return nil, errors.New("invalid conversation")
 	}
@@ -642,6 +682,7 @@ func (r *Router) startInferenceForPrompt(conv *Conversation, runtimeKey string, 
 	conv.mu.Lock()
 	stream := conv.stream
 	baseCtx := conv.baseCtx
+	allowedTools := append([]string(nil), conv.AllowedTools...)
 	conv.mu.Unlock()
 	if baseCtx == nil {
 		baseCtx = r.baseCtx
@@ -653,24 +694,18 @@ func (r *Router) startInferenceForPrompt(conv *Conversation, runtimeKey string, 
 		_ = stream.Start(baseCtx)
 	}
 
-	cfg, err := r.BuildConfig(runtimeKey, overrides)
-	if err != nil {
-		r.finishSessionInference(conv, idempotencyKey, "", "", err)
-		return nil, err
-	}
-
 	tmpReg := geptools.NewInMemoryToolRegistry()
 	for _, tf := range r.toolFactories {
 		_ = tf(tmpReg)
 	}
 	registry := geptools.NewInMemoryToolRegistry()
-	if len(cfg.Tools) == 0 {
+	if len(allowedTools) == 0 {
 		for _, td := range tmpReg.ListTools() {
 			_ = registry.RegisterTool(td.Name, td)
 		}
 	} else {
 		allowed := map[string]struct{}{}
-		for _, n := range cfg.Tools {
+		for _, n := range allowedTools {
 			if s := strings.TrimSpace(n); s != "" {
 				allowed[s] = struct{}{}
 			}
@@ -837,7 +872,7 @@ func (r *Router) tryDrainQueue(conv *Conversation) {
 		if !ok {
 			return
 		}
-		_, err := r.startInferenceForPrompt(conv, q.RuntimeKey, q.Overrides, q.Prompt, q.IdempotencyKey)
+		_, err := r.startInferenceForPrompt(conv, q.Overrides, q.Prompt, q.IdempotencyKey)
 		if err != nil {
 			r.finishSessionInference(conv, q.IdempotencyKey, "", "", err)
 			// Continue draining so later queued items can still execute.

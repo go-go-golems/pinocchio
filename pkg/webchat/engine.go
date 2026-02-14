@@ -12,8 +12,8 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 )
 
-// composeEngineFromSettings builds an engine from step settings then applies middlewares.
-func composeEngineFromSettings(
+// ComposeEngineFromSettings builds an engine from step settings then applies middlewares.
+func ComposeEngineFromSettings(
 	ctx context.Context,
 	stepSettings *settings.StepSettings,
 	sysPrompt string,

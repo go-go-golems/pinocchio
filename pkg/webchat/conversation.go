@@ -36,8 +36,10 @@ type Conversation struct {
 	stream    *StreamCoordinator
 	baseCtx   context.Context
 
-	RuntimeKey            string
-	EngineConfigSignature string
+	RuntimeKey         string
+	RuntimeFingerprint string
+	SeedSystemPrompt   string
+	AllowedTools       []string
 
 	// Server-side send serialization / queue semantics.
 	// All fields below are guarded by mu.
@@ -65,8 +67,7 @@ type ConvManager struct {
 	timelineStore      chatstore.TimelineStore
 	timelineUpsertHook func(*Conversation) func(entity *timelinepb.TimelineEntityV1, version uint64)
 
-	buildConfig     func(runtimeKey string, overrides map[string]any) (EngineConfig, error)
-	buildFromConfig func(convID string, cfg EngineConfig) (engine.Engine, events.EventSink, error)
+	runtimeComposer RuntimeComposer
 	buildSubscriber func(convID string) (message.Subscriber, bool, error)
 
 	evictIdle     time.Duration
@@ -85,8 +86,7 @@ type ConvManagerOptions struct {
 	TimelineStore      chatstore.TimelineStore
 	TimelineUpsertHook func(*Conversation) func(entity *timelinepb.TimelineEntityV1, version uint64)
 
-	BuildConfig     func(runtimeKey string, overrides map[string]any) (EngineConfig, error)
-	BuildFromConfig func(convID string, cfg EngineConfig) (engine.Engine, events.EventSink, error)
+	RuntimeComposer RuntimeComposer
 	BuildSubscriber func(convID string) (message.Subscriber, bool, error)
 }
 
@@ -101,8 +101,7 @@ func NewConvManager(opts ConvManagerOptions) *ConvManager {
 		stepCtrl:           opts.StepController,
 		timelineStore:      opts.TimelineStore,
 		timelineUpsertHook: opts.TimelineUpsertHook,
-		buildConfig:        opts.BuildConfig,
-		buildFromConfig:    opts.BuildFromConfig,
+		runtimeComposer:    opts.RuntimeComposer,
 		buildSubscriber:    opts.BuildSubscriber,
 		evictIdle:          opts.EvictIdle,
 		evictInterval:      opts.EvictInterval,
@@ -127,6 +126,15 @@ func (cm *ConvManager) SetIdleTimeoutSeconds(sec int) {
 	cm.mu.Unlock()
 }
 
+func (cm *ConvManager) SetRuntimeComposer(composer RuntimeComposer) {
+	if cm == nil || composer == nil {
+		return
+	}
+	cm.mu.Lock()
+	cm.runtimeComposer = composer
+	cm.mu.Unlock()
+}
+
 // GetConversation retrieves a conversation by ID (thread-safe).
 func (cm *ConvManager) GetConversation(convID string) (*Conversation, bool) {
 	if cm == nil || convID == "" {
@@ -148,20 +156,35 @@ func (c *Conversation) touchLocked(now time.Time) {
 // topicForConv computes the event topic for a conversation.
 func topicForConv(convID string) string { return "chat:" + convID }
 
-// GetOrCreate creates or reuses a conversation based on runtime config signature changes.
-// It centralizes engine/sink/subscriber composition through injected builder hooks.
+// GetOrCreate creates or reuses a conversation based on runtime fingerprint changes.
 func (cm *ConvManager) GetOrCreate(convID, runtimeKey string, overrides map[string]any) (*Conversation, error) {
 	if cm == nil {
 		return nil, errors.New("conversation manager is nil")
 	}
-	if cm.buildConfig == nil || cm.buildFromConfig == nil || cm.buildSubscriber == nil {
+	if cm.runtimeComposer == nil || cm.buildSubscriber == nil {
 		return nil, errors.New("conversation manager missing dependencies")
 	}
-	cfg, err := cm.buildConfig(runtimeKey, overrides)
+	req := RuntimeComposeRequest{
+		ConvID:     convID,
+		RuntimeKey: runtimeKey,
+		Overrides:  overrides,
+	}
+	runtime, err := cm.runtimeComposer.Compose(cm.baseCtx, req)
 	if err != nil {
 		return nil, err
 	}
-	newSig := cfg.Signature()
+	if runtime.Engine == nil {
+		return nil, errors.New("runtime composer returned nil engine")
+	}
+	if runtime.Sink == nil {
+		return nil, errors.New("runtime composer returned nil sink")
+	}
+	if strings.TrimSpace(runtime.RuntimeKey) == "" {
+		runtime.RuntimeKey = runtimeKey
+	}
+	if strings.TrimSpace(runtime.RuntimeFingerprint) == "" {
+		runtime.RuntimeFingerprint = runtime.RuntimeKey
+	}
 	now := time.Now()
 
 	cm.mu.Lock()
@@ -182,18 +205,14 @@ func (cm *ConvManager) GetOrCreate(convID, runtimeKey string, overrides map[stri
 			}
 		}
 		c.mu.Unlock()
-		if c.EngineConfigSignature != newSig {
+		if c.RuntimeFingerprint != runtime.RuntimeFingerprint {
 			log.Info().
 				Str("component", "webchat").
 				Str("conv_id", convID).
 				Str("old_runtime_key", c.RuntimeKey).
-				Str("new_runtime_key", runtimeKey).
+				Str("new_runtime_key", runtime.RuntimeKey).
 				Msg("runtime config changed, rebuilding engine")
 
-			eng, sink, err := cm.buildFromConfig(convID, cfg)
-			if err != nil {
-				return nil, err
-			}
 			sub, subClose, err := cm.buildSubscriber(convID)
 			if err != nil {
 				return nil, err
@@ -208,12 +227,14 @@ func (cm *ConvManager) GetOrCreate(convID, runtimeKey string, overrides map[stri
 				}
 			}
 
-			c.Eng = eng
-			c.Sink = sink
+			c.Eng = runtime.Engine
+			c.Sink = runtime.Sink
 			c.sub = sub
 			c.subClose = subClose
-			c.RuntimeKey = runtimeKey
-			c.EngineConfigSignature = newSig
+			c.RuntimeKey = runtime.RuntimeKey
+			c.RuntimeFingerprint = runtime.RuntimeFingerprint
+			c.SeedSystemPrompt = runtime.SeedSystemPrompt
+			c.AllowedTools = append([]string(nil), runtime.AllowedTools...)
 
 			c.stream = NewStreamCoordinator(
 				c.ID,
@@ -246,14 +267,16 @@ func (cm *ConvManager) GetOrCreate(convID, runtimeKey string, overrides map[stri
 	}
 	sessionID := uuid.NewString()
 	conv := &Conversation{
-		ID:                    convID,
-		SessionID:             sessionID,
-		baseCtx:               cm.baseCtx,
-		RuntimeKey:            runtimeKey,
-		EngineConfigSignature: newSig,
-		requests:              map[string]*chatRequestRecord{},
-		semBuf:                newSemFrameBuffer(1000),
-		lastActivity:          now,
+		ID:                 convID,
+		SessionID:          sessionID,
+		baseCtx:            cm.baseCtx,
+		RuntimeKey:         runtime.RuntimeKey,
+		RuntimeFingerprint: runtime.RuntimeFingerprint,
+		SeedSystemPrompt:   runtime.SeedSystemPrompt,
+		AllowedTools:       append([]string(nil), runtime.AllowedTools...),
+		requests:           map[string]*chatRequestRecord{},
+		semBuf:             newSemFrameBuffer(1000),
+		lastActivity:       now,
 	}
 	if cm.timelineStore != nil {
 		hook := cm.timelineUpsertHook
@@ -263,16 +286,12 @@ func (cm *ConvManager) GetOrCreate(convID, runtimeKey string, overrides map[stri
 			conv.timelineProj = NewTimelineProjector(conv.ID, cm.timelineStore, nil)
 		}
 	}
-	eng, sink, err := cm.buildFromConfig(convID, cfg)
-	if err != nil {
-		return nil, err
-	}
 	sub, subClose, err := cm.buildSubscriber(convID)
 	if err != nil {
 		return nil, err
 	}
-	conv.Eng = eng
-	conv.Sink = sink
+	conv.Eng = runtime.Engine
+	conv.Sink = runtime.Sink
 	conv.sub = sub
 	conv.subClose = subClose
 
@@ -308,13 +327,13 @@ func (cm *ConvManager) GetOrCreate(convID, runtimeKey string, overrides map[stri
 	conv.Sess = &session.Session{
 		SessionID: sessionID,
 		Builder: &enginebuilder.Builder{
-			Base:             eng,
-			EventSinks:       []events.EventSink{sink},
+			Base:             runtime.Engine,
+			EventSinks:       []events.EventSink{runtime.Sink},
 			StepController:   cm.stepCtrl,
 			StepPauseTimeout: 30 * time.Second,
 		},
 		Turns: func() []*turns.Turn {
-			return []*turns.Turn{buildSeedTurn(sessionID, cfg.SystemPrompt)}
+			return []*turns.Turn{buildSeedTurn(sessionID, runtime.SeedSystemPrompt)}
 		}(),
 	}
 

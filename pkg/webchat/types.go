@@ -29,7 +29,7 @@ type ToolFactory func(reg geptools.ToolRegistry) error
 type RunLoop func(ctx context.Context, eng engine.Engine, t *turns.Turn, reg geptools.ToolRegistry, opts map[string]any) (*turns.Turn, error)
 
 // EventSinkWrapper allows callers to wrap or replace the default event sink.
-type EventSinkWrapper func(convID string, cfg EngineConfig, sink events.EventSink) (events.EventSink, error)
+type EventSinkWrapper func(convID string, req RuntimeComposeRequest, sink events.EventSink) (events.EventSink, error)
 
 // MiddlewareUse declares a middleware to attach and its config.
 type MiddlewareUse struct {
@@ -75,6 +75,7 @@ type Router struct {
 
 	// request policy
 	requestResolver ConversationRequestResolver
+	runtimeComposer RuntimeComposer
 
 	// optional overrides for conv manager hooks
 	buildSubscriberOverride    func(convID string) (message.Subscriber, bool, error)

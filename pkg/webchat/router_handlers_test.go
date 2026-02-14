@@ -1,11 +1,13 @@
 package webchat
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"testing/fstest"
 
+	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	"github.com/stretchr/testify/require"
 )
 
@@ -35,4 +37,9 @@ func TestAPIHandler_DoesNotServeIndex(t *testing.T) {
 	h.ServeHTTP(rec, req)
 
 	require.Equal(t, http.StatusNotFound, rec.Code)
+}
+
+func TestNewRouter_RequiresRuntimeComposer(t *testing.T) {
+	_, err := NewRouter(context.Background(), values.New(), fstest.MapFS{})
+	require.ErrorContains(t, err, "runtime composer is not configured")
 }

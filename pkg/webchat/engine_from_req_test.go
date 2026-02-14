@@ -6,7 +6,6 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 )
@@ -118,12 +117,4 @@ func TestDefaultConversationRequestResolver_WS_RuntimePrecedence(t *testing.T) {
 		require.ErrorAs(t, err, &rbe)
 		require.Equal(t, http.StatusBadRequest, rbe.Status)
 	})
-}
-
-func TestBuildConfig_RejectsInvalidOverrideTypes(t *testing.T) {
-	r := &Router{
-		parsed: &values.Values{},
-	}
-	_, err := r.BuildConfig("default", map[string]any{"middlewares": "bad"})
-	require.Error(t, err)
 }

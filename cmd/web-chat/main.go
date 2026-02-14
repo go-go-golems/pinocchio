@@ -100,11 +100,26 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 		},
 	)
 
+	middlewareFactories := map[string]webchat.MiddlewareFactory{
+		"agentmode": func(cfg any) geppettomw.Middleware {
+			return agentmode.NewMiddleware(amSvc, cfg.(agentmode.Config))
+		},
+		"sqlite": func(cfg any) geppettomw.Middleware {
+			c := sqlitetool.Config{DB: dbWithRegexp}
+			if cfg_, ok := cfg.(sqlitetool.Config); ok {
+				c = cfg_
+			}
+			return sqlitetool.NewMiddleware(c)
+		},
+	}
+	runtimeComposer := newWebChatRuntimeComposer(parsed, middlewareFactories)
+
 	// Build webchat router and register middlewares/tools/profile handlers.
 	r, err := webchat.NewRouter(
 		ctx,
 		parsed,
 		staticFS,
+		webchat.WithRuntimeComposer(runtimeComposer),
 		webchat.WithConversationRequestResolver(newWebChatProfileResolver(profiles)),
 	)
 	if err != nil {
@@ -112,14 +127,9 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 	}
 
 	// Register middlewares
-	r.RegisterMiddleware("agentmode", func(cfg any) geppettomw.Middleware { return agentmode.NewMiddleware(amSvc, cfg.(agentmode.Config)) })
-	r.RegisterMiddleware("sqlite", func(cfg any) geppettomw.Middleware {
-		c := sqlitetool.Config{DB: dbWithRegexp}
-		if cfg_, ok := cfg.(sqlitetool.Config); ok {
-			c = cfg_
-		}
-		return sqlitetool.NewMiddleware(c)
-	})
+	for name, factory := range middlewareFactories {
+		r.RegisterMiddleware(name, factory)
+	}
 
 	// Register calculator tool
 	r.RegisterTool("calculator", func(reg geptools.ToolRegistry) error {

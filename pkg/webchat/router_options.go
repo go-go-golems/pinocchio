@@ -25,6 +25,16 @@ func WithConversationRequestResolver(resolver ConversationRequestResolver) Route
 	}
 }
 
+func WithRuntimeComposer(composer RuntimeComposer) RouterOption {
+	return func(r *Router) error {
+		if composer == nil {
+			return errors.New("runtime composer is nil")
+		}
+		r.runtimeComposer = composer
+		return nil
+	}
+}
+
 func WithWebSocketUpgrader(u websocket.Upgrader) RouterOption {
 	return func(r *Router) error {
 		r.upgrader = u
