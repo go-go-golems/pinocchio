@@ -35,6 +35,7 @@ func TestSQLiteTurnStore_SaveAndList(t *testing.T) {
 	require.Equal(t, "turn-2", items[0].TurnID)
 	require.Equal(t, "turn-1", items[1].TurnID)
 	require.Contains(t, items[0].Payload, "blocks")
+	require.Contains(t, items[1].Payload, "text: hello")
 
 	bySession, err := s.List(ctx, TurnQuery{SessionID: "sess-2", Limit: 10})
 	require.NoError(t, err)
