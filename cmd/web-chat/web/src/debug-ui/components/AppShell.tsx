@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   NavLink,
   Outlet,
@@ -44,27 +44,29 @@ export function AppShell({ anomalies = [] }: AppShellProps) {
   const selectedRunId = useAppSelector((state) => state.ui.selectedRunId);
   const offline = useAppSelector((state) => state.ui.offline);
   const location = useLocation();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [, setSearchParams] = useSearchParams();
   const { sessionId, turnId } = useParams();
   const offlineRoute = location.pathname.startsWith('/offline');
+  const params = useMemo(() => new URLSearchParams(location.search), [location.search]);
 
   const activeFilterCount =
     filters.blockKinds.length +
     filters.eventTypes.length +
     (filters.searchQuery ? 1 : 0);
 
-  useEffect(() => {
-    const convFromURL = searchParams.get('conv');
-    const sessionFromURL = searchParams.get('session');
-    const turnFromURL = searchParams.get('turn');
-    const runFromURL = searchParams.get('run');
-    const artifactsRootFromURL = searchParams.get('artifacts_root');
-    const turnsDBFromURL = searchParams.get('turns_db');
-    const timelineDBFromURL = searchParams.get('timeline_db');
+  const convFromURL = params.get('conv');
+  const sessionFromURL = params.get('session');
+  const turnFromURL = params.get('turn');
+  const runFromURL = params.get('run');
+  const artifactsRootFromURL = params.get('artifacts_root');
+  const turnsDBFromURL = params.get('turns_db');
+  const timelineDBFromURL = params.get('timeline_db');
+  const desiredSession = sessionId ?? sessionFromURL;
+  const desiredTurn = turnId ?? turnFromURL;
 
+  useEffect(() => {
     if (convFromURL && convFromURL !== selectedConvId) {
       dispatch(selectConversation(convFromURL));
-      return;
     }
 
     if (!convFromURL && !selectedConvId) {
@@ -74,21 +76,12 @@ export function AppShell({ anomalies = [] }: AppShellProps) {
       }
     }
 
-    if (sessionId && sessionId !== selectedSessionId) {
-      dispatch(selectSession(sessionId));
-      return;
-    }
-    if (!sessionId && sessionFromURL && sessionFromURL !== selectedSessionId) {
-      dispatch(selectSession(sessionFromURL));
-      return;
+    if (desiredSession && desiredSession !== selectedSessionId) {
+      dispatch(selectSession(desiredSession));
     }
 
-    if (turnId && turnId !== selectedTurnId) {
-      dispatch(selectTurn(turnId));
-      return;
-    }
-    if (!turnId && turnFromURL && turnFromURL !== selectedTurnId) {
-      dispatch(selectTurn(turnFromURL));
+    if (desiredTurn && desiredTurn !== selectedTurnId) {
+      dispatch(selectTurn(desiredTurn));
     }
 
     if (runFromURL && runFromURL !== selectedRunId) {
@@ -124,20 +117,37 @@ export function AppShell({ anomalies = [] }: AppShellProps) {
     }
   }, [
     dispatch,
+    desiredSession,
+    desiredTurn,
     offline.artifactsRoot,
     offline.timelineDB,
     offline.turnsDB,
-    searchParams,
+    convFromURL,
+    runFromURL,
+    artifactsRootFromURL,
+    turnsDBFromURL,
+    timelineDBFromURL,
     selectedConvId,
     selectedRunId,
     selectedSessionId,
     selectedTurnId,
-    sessionId,
-    turnId,
   ]);
 
   useEffect(() => {
-    const nextParams = new URLSearchParams(searchParams);
+    const pendingHydration =
+      (!!convFromURL && convFromURL !== selectedConvId) ||
+      (!!desiredSession && desiredSession !== selectedSessionId) ||
+      (!!desiredTurn && desiredTurn !== selectedTurnId) ||
+      (!!runFromURL && runFromURL !== selectedRunId) ||
+      (artifactsRootFromURL !== null && artifactsRootFromURL !== offline.artifactsRoot) ||
+      (turnsDBFromURL !== null && turnsDBFromURL !== offline.turnsDB) ||
+      (timelineDBFromURL !== null && timelineDBFromURL !== offline.timelineDB);
+
+    if (pendingHydration) {
+      return;
+    }
+
+    const nextParams = new URLSearchParams(location.search);
     let changed = false;
 
     const applyParam = (key: string, value: string | null) => {
@@ -177,7 +187,14 @@ export function AppShell({ anomalies = [] }: AppShellProps) {
     offline.artifactsRoot,
     offline.timelineDB,
     offline.turnsDB,
-    searchParams,
+    convFromURL,
+    desiredSession,
+    desiredTurn,
+    runFromURL,
+    artifactsRootFromURL,
+    turnsDBFromURL,
+    timelineDBFromURL,
+    location.search,
     selectedConvId,
     selectedRunId,
     selectedSessionId,

@@ -187,7 +187,32 @@ function normalizePhase(raw: string): TurnPhase {
 }
 
 function toBlockKind(raw: unknown): BlockKind {
+  if (typeof raw === 'number' && Number.isFinite(raw)) {
+    switch (raw) {
+      case 0:
+        return 'user';
+      case 1:
+        return 'llm_text';
+      case 2:
+        return 'tool_call';
+      case 3:
+        return 'tool_use';
+      case 4:
+        return 'system';
+      case 5:
+        return 'reasoning';
+      default:
+        return 'other';
+    }
+  }
   const kind = asString(raw);
+  const upperKind = kind.toUpperCase();
+  if (upperKind === 'SYSTEM' || upperKind === 'BLOCK_KIND_SYSTEM') return 'system';
+  if (upperKind === 'USER' || upperKind === 'BLOCK_KIND_USER') return 'user';
+  if (upperKind === 'LLM_TEXT' || upperKind === 'BLOCK_KIND_LLM_TEXT') return 'llm_text';
+  if (upperKind === 'TOOL_CALL' || upperKind === 'BLOCK_KIND_TOOL_CALL') return 'tool_call';
+  if (upperKind === 'TOOL_USE' || upperKind === 'BLOCK_KIND_TOOL_USE') return 'tool_use';
+  if (upperKind === 'REASONING' || upperKind === 'BLOCK_KIND_REASONING') return 'reasoning';
   if (BLOCK_KINDS.has(kind as BlockKind)) {
     return kind as BlockKind;
   }
@@ -198,22 +223,26 @@ function toParsedBlock(raw: unknown, index: number): ParsedBlock {
   const obj = asRecord(raw);
   return {
     index,
-    id: asString(obj.id) || undefined,
-    kind: toBlockKind(obj.kind),
-    role: asString(obj.role) || undefined,
-    payload: asRecord(obj.payload),
-    metadata: asRecord(obj.metadata),
+    id: asString(obj.id ?? obj.ID) || undefined,
+    kind: toBlockKind(obj.kind ?? obj.Kind),
+    role: asString(obj.role ?? obj.Role) || undefined,
+    payload: asRecord(obj.payload ?? obj.Payload),
+    metadata: asRecord(obj.metadata ?? obj.Metadata),
   };
 }
 
 function toParsedTurn(raw: unknown, fallbackID = ''): ParsedTurn {
   const obj = asRecord(raw);
-  const blocksRaw = Array.isArray(obj.blocks) ? obj.blocks : [];
+  const blocksRaw = Array.isArray(obj.blocks)
+    ? obj.blocks
+    : Array.isArray(obj.Blocks)
+      ? obj.Blocks
+      : [];
   return {
-    id: asString(obj.id) || fallbackID,
+    id: asString(obj.id ?? obj.ID) || fallbackID,
     blocks: blocksRaw.map((block, idx) => toParsedBlock(block, idx)),
-    metadata: asRecord(obj.metadata),
-    data: asRecord(obj.data),
+    metadata: asRecord(obj.metadata ?? obj.Metadata),
+    data: asRecord(obj.data ?? obj.Data),
   };
 }
 
@@ -393,9 +422,10 @@ export const debugApi = createApi({
         const phases: TurnDetail['phases'] = {};
         for (const item of response.items ?? []) {
           const phase = normalizePhase(item.phase);
-          const parsed = item.parsed
-            ? toParsedTurn(item.parsed, response.turn_id)
-            : parseTurnPayload(item.payload, response.turn_id);
+          let parsed = parseTurnPayload(item.payload, response.turn_id);
+          if (parsed.blocks.length === 0 && item.parsed) {
+            parsed = toParsedTurn(item.parsed, response.turn_id);
+          }
           phases[phase] = {
             captured_at: toIsoFromMs(item.created_at_ms),
             turn: parsed,
