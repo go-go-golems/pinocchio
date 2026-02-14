@@ -366,10 +366,9 @@ func (r *Router) registerAPIHandlers(mux *http.ServeMux) {
 		wsLog.Info().Msg("ws connected")
 
 		// Send a greeting frame to the newly connected client (mirrors moments/go-go-mento behavior).
-		// WsHelloV1 uses a legacy proto field name ("profile"); we populate it with runtimeKey.
 		if conv != nil && conv.pool != nil {
 			ts := time.Now().UnixMilli()
-			data, _ := protoToRaw(&sempb.WsHelloV1{ConvId: convID, Profile: runtimeKey, ServerTime: ts})
+			data, _ := protoToRaw(&sempb.WsHelloV1{ConvId: convID, RuntimeKey: runtimeKey, ServerTime: ts})
 			hello := map[string]any{
 				"sem": true,
 				"event": map[string]any{

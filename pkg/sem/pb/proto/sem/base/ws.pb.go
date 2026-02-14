@@ -24,7 +24,7 @@ const (
 type WsHelloV1 struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	ConvId        string                 `protobuf:"bytes,1,opt,name=conv_id,json=convId,proto3" json:"conv_id,omitempty"`
-	Profile       string                 `protobuf:"bytes,2,opt,name=profile,proto3" json:"profile,omitempty"`
+	RuntimeKey    string                 `protobuf:"bytes,2,opt,name=runtime_key,json=runtimeKey,proto3" json:"runtime_key,omitempty"`
 	ServerTime    int64                  `protobuf:"varint,3,opt,name=server_time,json=serverTime,proto3" json:"server_time,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -67,9 +67,9 @@ func (x *WsHelloV1) GetConvId() string {
 	return ""
 }
 
-func (x *WsHelloV1) GetProfile() string {
+func (x *WsHelloV1) GetRuntimeKey() string {
 	if x != nil {
-		return x.Profile
+		return x.RuntimeKey
 	}
 	return ""
 }
@@ -137,10 +137,11 @@ var File_proto_sem_base_ws_proto protoreflect.FileDescriptor
 
 const file_proto_sem_base_ws_proto_rawDesc = "" +
 	"\n" +
-	"\x17proto/sem/base/ws.proto\x12\vsem.base.ws\"_\n" +
+	"\x17proto/sem/base/ws.proto\x12\vsem.base.ws\"f\n" +
 	"\tWsHelloV1\x12\x17\n" +
-	"\aconv_id\x18\x01 \x01(\tR\x06convId\x12\x18\n" +
-	"\aprofile\x18\x02 \x01(\tR\aprofile\x12\x1f\n" +
+	"\aconv_id\x18\x01 \x01(\tR\x06convId\x12\x1f\n" +
+	"\vruntime_key\x18\x02 \x01(\tR\n" +
+	"runtimeKey\x12\x1f\n" +
 	"\vserver_time\x18\x03 \x01(\x03R\n" +
 	"serverTime\"D\n" +
 	"\bWsPongV1\x12\x17\n" +
