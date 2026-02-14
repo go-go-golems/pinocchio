@@ -26,8 +26,7 @@ func TestUIHandler_ServesIndexFromStaticFS(t *testing.T) {
 
 func TestAPIHandler_DoesNotServeIndex(t *testing.T) {
 	r := &Router{
-		profiles: newInMemoryProfileRegistry(),
-		cm:       &ConvManager{conns: map[string]*Conversation{}},
+		cm: &ConvManager{conns: map[string]*Conversation{}},
 	}
 
 	h := r.APIHandler()

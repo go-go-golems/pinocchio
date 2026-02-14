@@ -48,7 +48,6 @@ func (s *stubTurnStore) Close() error { return nil }
 
 func TestAPIHandler_DebugTimelineParity(t *testing.T) {
 	r := &Router{
-		profiles:      newInMemoryProfileRegistry(),
 		cm:            &ConvManager{conns: map[string]*Conversation{}},
 		timelineStore: &stubTimelineStore{snapshot: sampleTimelineSnapshot()},
 	}
@@ -66,7 +65,6 @@ func TestAPIHandler_DebugTurnsParity(t *testing.T) {
 		{ConvID: "conv-1", SessionID: "session-1", TurnID: "turn-1", Phase: "final", CreatedAtMs: 101, Payload: "payload-1"},
 	}
 	r := &Router{
-		profiles:  newInMemoryProfileRegistry(),
 		cm:        &ConvManager{conns: map[string]*Conversation{}},
 		turnStore: &stubTurnStore{items: items},
 	}
@@ -86,7 +84,6 @@ func TestAPIHandler_DebugTurnsEnvelopeMetadata(t *testing.T) {
 		{ConvID: "conv-1", SessionID: "session-1", TurnID: "turn-2", Phase: "final", CreatedAtMs: 200, Payload: "p2"},
 	}
 	r := &Router{
-		profiles:  newInMemoryProfileRegistry(),
 		cm:        &ConvManager{conns: map[string]*Conversation{}},
 		turnStore: &stubTurnStore{items: items},
 	}
@@ -112,7 +109,6 @@ func TestAPIHandler_DebugStepRoutes(t *testing.T) {
 
 	stepCtrl := toolloop.NewStepController()
 	r := &Router{
-		profiles: newInMemoryProfileRegistry(),
 		cm:       &ConvManager{conns: map[string]*Conversation{}},
 		stepCtrl: stepCtrl,
 	}
@@ -177,7 +173,6 @@ func TestAPIHandler_DebugConversationsAndDetail(t *testing.T) {
 	convB.semBuf.Add([]byte(`{"event":{"type":"tool.call","id":"e3"}}`))
 
 	r := &Router{
-		profiles: newInMemoryProfileRegistry(),
 		cm: &ConvManager{
 			conns: map[string]*Conversation{
 				"conv-a": convA,
@@ -221,7 +216,6 @@ func TestAPIHandler_DebugEventsFilters(t *testing.T) {
 	conv.semBuf.Add([]byte(`{"event":{"type":"tool.call","id":"e3"}}`))
 
 	r := &Router{
-		profiles: newInMemoryProfileRegistry(),
 		cm: &ConvManager{
 			conns: map[string]*Conversation{
 				"conv-events": conv,
@@ -252,8 +246,7 @@ func TestAPIHandler_DebugTurnDetail(t *testing.T) {
 	payloadDraft := "id: turn-1\nblocks:\n  - kind: llm_text\n    role: assistant\n    payload:\n      text: hi\n"
 	payloadFinal := "id: turn-1\nblocks:\n  - kind: llm_text\n    role: assistant\n    payload:\n      text: hello\n"
 	r := &Router{
-		profiles: newInMemoryProfileRegistry(),
-		cm:       &ConvManager{conns: map[string]*Conversation{}},
+		cm: &ConvManager{conns: map[string]*Conversation{}},
 		turnStore: &stubTurnStore{
 			items: []chatstore.TurnSnapshot{
 				{ConvID: "conv-1", SessionID: "session-1", TurnID: "turn-1", Phase: "draft", CreatedAtMs: 100, Payload: payloadDraft},
@@ -285,7 +278,6 @@ func TestAPIHandler_DebugRoutesDisabled(t *testing.T) {
 	t.Setenv("PINOCCHIO_WEBCHAT_DEBUG", "1")
 
 	r := &Router{
-		profiles:           newInMemoryProfileRegistry(),
 		cm:                 &ConvManager{conns: map[string]*Conversation{}},
 		stepCtrl:           toolloop.NewStepController(),
 		timelineStore:      &stubTimelineStore{snapshot: sampleTimelineSnapshot()},

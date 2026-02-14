@@ -120,13 +120,10 @@ func TestDefaultConversationRequestResolver_WS_ProfilePrecedence(t *testing.T) {
 	})
 }
 
-func TestBuildConfig_RejectsEngineOverridesWhenDisallowed(t *testing.T) {
+func TestBuildConfig_RejectsInvalidOverrideTypes(t *testing.T) {
 	r := &Router{
-		parsed:   &values.Values{},
-		profiles: newInMemoryProfileRegistry(),
+		parsed: &values.Values{},
 	}
-	require.NoError(t, r.profiles.Add(&Profile{Slug: "default", AllowOverrides: false}))
-
-	_, err := r.BuildConfig("default", map[string]any{"system_prompt": "x"})
+	_, err := r.BuildConfig("default", map[string]any{"middlewares": "bad"})
 	require.Error(t, err)
 }

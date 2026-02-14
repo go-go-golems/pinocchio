@@ -32,16 +32,6 @@ func WithWebSocketUpgrader(u websocket.Upgrader) RouterOption {
 	}
 }
 
-func WithProfileRegistry(reg ProfileRegistry) RouterOption {
-	return func(r *Router) error {
-		if reg == nil {
-			return errors.New("profile registry is nil")
-		}
-		r.profiles = reg
-		return nil
-	}
-}
-
 func WithConvManager(cm *ConvManager) RouterOption {
 	return func(r *Router) error {
 		if cm == nil {

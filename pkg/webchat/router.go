@@ -72,7 +72,6 @@ func NewRouter(ctx context.Context, parsed *values.Values, staticFS fs.FS, opts 
 		router:        router,
 		mwFactories:   map[string]MiddlewareFactory{},
 		toolFactories: map[string]ToolFactory{},
-		profiles:      newInMemoryProfileRegistry(),
 		upgrader:      websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }},
 	}
 	// set redis flags for ws reader
@@ -179,9 +178,6 @@ func (r *Router) RegisterMiddleware(name string, f MiddlewareFactory) { r.mwFact
 
 // RegisterTool adds a named tool factory to the router.
 func (r *Router) RegisterTool(name string, f ToolFactory) { r.toolFactories[name] = f }
-
-// AddProfile registers a chat profile.
-func (r *Router) AddProfile(p *Profile) { _ = r.profiles.Add(p) }
 
 // Mount attaches all handlers to a parent mux with the given prefix.
 // http.ServeMux does not strip prefixes, so we must use StripPrefix explicitly.

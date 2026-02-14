@@ -71,12 +71,6 @@ func NewCommand() (*Command, error) {
 }
 
 func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io.Writer) error {
-	// Build webchat router and register middlewares/tools/profiles
-	r, err := webchat.NewRouter(ctx, parsed, staticFS)
-	if err != nil {
-		return errors.Wrap(err, "new webchat router")
-	}
-
 	// Optional SQLite DB (best-effort)
 	var dbWithRegexp *sql.DB
 	if db, err := sql.Open("sqlite3", "anonymized-data.db"); err == nil {
@@ -94,6 +88,28 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 	})
 	amCfg := agentmode.DefaultConfig()
 	amCfg.DefaultMode = "financial_analyst"
+
+	profiles := newChatProfileRegistry(
+		"default",
+		&chatProfile{Slug: "default", DefaultPrompt: "You are an assistant", DefaultMws: []webchat.MiddlewareUse{}},
+		&chatProfile{
+			Slug:           "agent",
+			DefaultPrompt:  "You are a helpful assistant. Be concise.",
+			DefaultMws:     []webchat.MiddlewareUse{{Name: "agentmode", Config: amCfg}},
+			AllowOverrides: true,
+		},
+	)
+
+	// Build webchat router and register middlewares/tools/profile handlers.
+	r, err := webchat.NewRouter(
+		ctx,
+		parsed,
+		staticFS,
+		webchat.WithConversationRequestResolver(newWebChatProfileResolver(profiles)),
+	)
+	if err != nil {
+		return errors.Wrap(err, "new webchat router")
+	}
 
 	// Register middlewares
 	r.RegisterMiddleware("agentmode", func(cfg any) geppettomw.Middleware { return agentmode.NewMiddleware(amSvc, cfg.(agentmode.Config)) })
@@ -120,9 +136,7 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 		return nil
 	})
 
-	// Profiles
-	r.AddProfile(&webchat.Profile{Slug: "default", DefaultPrompt: "You are an assistant", DefaultMws: []webchat.MiddlewareUse{}})
-	r.AddProfile(&webchat.Profile{Slug: "agent", DefaultPrompt: "You are a helpful assistant. Be concise.", DefaultMws: []webchat.MiddlewareUse{{Name: "agentmode", Config: amCfg}}})
+	registerProfileHandlers(r, profiles)
 
 	// HTTP server and run, with optional root mounting
 	httpSrv, err := r.BuildHTTPServer()

@@ -37,43 +37,7 @@ type MiddlewareUse struct {
 	Config any
 }
 
-// Profile describes how to build engines and inference loops for a chat namespace.
-type Profile struct {
-	Slug           string
-	DefaultPrompt  string
-	DefaultTools   []string
-	DefaultMws     []MiddlewareUse
-	LoopName       string
-	AllowOverrides bool
-}
-
-// ProfileRegistry stores profiles by slug.
-type ProfileRegistry interface {
-	Add(p *Profile) error
-	Get(slug string) (*Profile, bool)
-	List() []*Profile
-}
-
-// simple in-memory implementation
-type inMemoryProfileRegistry struct{ profiles map[string]*Profile }
-
-func newInMemoryProfileRegistry() *inMemoryProfileRegistry {
-	return &inMemoryProfileRegistry{profiles: map[string]*Profile{}}
-}
-func (r *inMemoryProfileRegistry) Add(p *Profile) error { r.profiles[p.Slug] = p; return nil }
-func (r *inMemoryProfileRegistry) Get(slug string) (*Profile, bool) {
-	p, ok := r.profiles[slug]
-	return p, ok
-}
-func (r *inMemoryProfileRegistry) List() []*Profile {
-	out := make([]*Profile, 0, len(r.profiles))
-	for _, p := range r.profiles {
-		out = append(out, p)
-	}
-	return out
-}
-
-// Router wires HTTP, profiles, registries and conversation lifecycle.
+// Router wires HTTP endpoints, registries and conversation lifecycle.
 type Router struct {
 	baseCtx  context.Context
 	parsed   *values.Values
@@ -91,9 +55,6 @@ type Router struct {
 	db            *sql.DB
 	timelineStore chatstore.TimelineStore
 	turnStore     chatstore.TurnStore
-
-	// profiles
-	profiles ProfileRegistry
 
 	// ws
 	upgrader websocket.Upgrader

@@ -25,8 +25,7 @@ func TestAPIHandler_OfflineRunsAndArtifactDetail(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(runDir, "events.ndjson"), []byte("{\"type\":\"x\",\"event\":{\"type\":\"chat.message\"}}\n"), 0o644))
 
 	r := &Router{
-		profiles: newInMemoryProfileRegistry(),
-		cm:       &ConvManager{conns: map[string]*Conversation{}},
+		cm: &ConvManager{conns: map[string]*Conversation{}},
 	}
 	h := r.APIHandler()
 
@@ -70,8 +69,7 @@ func TestAPIHandler_OfflineRunsAndTurnsSQLiteDetail(t *testing.T) {
 	require.NoError(t, store.Save(context.Background(), "conv-1", "session-1", "turn-1", "final", 200, payload))
 
 	r := &Router{
-		profiles: newInMemoryProfileRegistry(),
-		cm:       &ConvManager{conns: map[string]*Conversation{}},
+		cm: &ConvManager{conns: map[string]*Conversation{}},
 	}
 	h := r.APIHandler()
 
@@ -123,8 +121,7 @@ func TestAPIHandler_OfflineRunsAndTimelineSQLiteDetail(t *testing.T) {
 	require.NoError(t, err)
 
 	r := &Router{
-		profiles: newInMemoryProfileRegistry(),
-		cm:       &ConvManager{conns: map[string]*Conversation{}},
+		cm: &ConvManager{conns: map[string]*Conversation{}},
 	}
 	h := r.APIHandler()
 

@@ -18,7 +18,7 @@ import (
 //
 // This mirrors the go-go-mento pattern closely so Moments can later adopt the same shape.
 type EngineBuilder interface {
-	BuildConfig(profileSlug string, overrides map[string]any) (EngineConfig, error)
+	BuildConfig(runtimeKey string, overrides map[string]any) (EngineConfig, error)
 	BuildFromConfig(convID string, config EngineConfig) (engine.Engine, events.EventSink, error)
 }
 
@@ -26,22 +26,18 @@ type EngineBuilder interface {
 // when the conversation is rebuilt or evicted.
 type SubscriberFactory func(convID string) (sub message.Subscriber, closeOnReplace bool, err error)
 
-func (r *Router) BuildConfig(profileSlug string, overrides map[string]any) (EngineConfig, error) {
+func (r *Router) BuildConfig(runtimeKey string, overrides map[string]any) (EngineConfig, error) {
 	if r == nil {
 		return EngineConfig{}, errors.New("router is nil")
 	}
-	p, ok := r.profiles.Get(profileSlug)
-	if !ok {
-		return EngineConfig{}, errors.Errorf("profile not found: %s", profileSlug)
-	}
 
-	if err := validateOverrides(p, overrides); err != nil {
+	if err := validateOverrides(overrides); err != nil {
 		return EngineConfig{}, err
 	}
 
-	sysPrompt := p.DefaultPrompt
-	mws := append([]MiddlewareUse{}, p.DefaultMws...)
-	tools := append([]string{}, p.DefaultTools...)
+	sysPrompt := "You are an assistant"
+	mws := []MiddlewareUse{}
+	tools := []string{}
 
 	if overrides != nil {
 		if v, ok := overrides["system_prompt"].(string); ok && v != "" {
@@ -72,7 +68,7 @@ func (r *Router) BuildConfig(profileSlug string, overrides map[string]any) (Engi
 	}
 
 	return EngineConfig{
-		ProfileSlug:  profileSlug,
+		ProfileSlug:  runtimeKey,
 		SystemPrompt: sysPrompt,
 		Middlewares:  mws,
 		Tools:        tools,
@@ -131,23 +127,9 @@ func parseMiddlewareOverrides(arr []any) ([]MiddlewareUse, error) {
 	return mws, nil
 }
 
-func validateOverrides(p *Profile, overrides map[string]any) error {
+func validateOverrides(overrides map[string]any) error {
 	if overrides == nil {
 		return nil
-	}
-
-	hasEngineOverride := false
-	if _, ok := overrides["system_prompt"]; ok {
-		hasEngineOverride = true
-	}
-	if _, ok := overrides["middlewares"]; ok {
-		hasEngineOverride = true
-	}
-	if _, ok := overrides["tools"]; ok {
-		hasEngineOverride = true
-	}
-	if hasEngineOverride && p != nil && !p.AllowOverrides {
-		return errors.Errorf("profile %q does not allow overrides", strings.TrimSpace(p.Slug))
 	}
 
 	if v, ok := overrides["system_prompt"]; ok {
