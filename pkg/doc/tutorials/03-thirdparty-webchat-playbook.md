@@ -188,10 +188,17 @@ parsed := loadGlazedLayers()
 staticFS := embedStatic()
 
 router, _ := webchat.NewRouter(ctx, parsed, staticFS)
-router.AddProfile(&webchat.Profile{
-    Slug: "default",
-    DefaultPrompt: "You are a helpful assistant.",
-})
+profiles := newChatProfileRegistry(
+    "default",
+    &chatProfile{Slug: "default", DefaultPrompt: "You are a helpful assistant."},
+)
+router, _ = webchat.NewRouter(
+    ctx,
+    parsed,
+    staticFS,
+    webchat.WithConversationRequestResolver(newWebChatProfileResolver(profiles)),
+)
+registerProfileHandlers(router, profiles)
 
 srv, _ := router.BuildHTTPServer()
 return webchat.NewFromRouter(ctx, router, srv).Run(ctx)
@@ -200,7 +207,7 @@ return webchat.NewFromRouter(ctx, router, srv).Run(ctx)
 ### Key APIs and Files
 
 - `pinocchio/pkg/webchat/router.go` — HTTP endpoints and WebSocket wiring.
-- `pinocchio/pkg/webchat/types.go` — Core types, profile definitions.
+- `pinocchio/pkg/webchat/types.go` — Core router/runtime types.
 - `pinocchio/pkg/webchat/server.go` — `webchat.Server` orchestration.
 - `pinocchio/cmd/web-chat/main.go` — Fully wired example server.
 
@@ -210,26 +217,13 @@ return webchat.NewFromRouter(ctx, router, srv).Run(ctx)
 - `GET /ws` — WebSocket streaming.
 - `GET /timeline` — hydration snapshots.
 - `GET /turns` — turn snapshots (if enabled).
-- `GET /api/chat/profiles` — list profiles.
+- app-owned profile endpoints are optional (`/api/chat/profiles`, `/api/chat/profile`).
 
 All of these are documented in `pinocchio/cmd/web-chat/README.md` and `pinocchio/pkg/doc/topics/webchat-framework-guide.md`.
 
-## 5. Backend: Profiles, Middlewares, Tools
+## 5. Backend: Runtime Policy, Middlewares, Tools
 
-Profiles are how you expose different behavior without branching your server. Each profile has a default system prompt and a list of middlewares.
-
-### Example profile
-
-```go
-r.AddProfile(&webchat.Profile{
-    Slug: "default",
-    DefaultPrompt: "You are a helpful assistant.",
-    DefaultMws: []webchat.MiddlewareUse{
-        {Name: "webagent-thinking-mode", Config: thinkingmode.DefaultConfig()},
-    },
-    AllowOverrides: true,
-})
-```
+Runtime policy is app-owned via `ConversationRequestResolver`. If you want profile UX, define it in your app layer and resolve to `ConversationRequestPlan` (`RuntimeKey`, `Overrides`, etc.).
 
 ### Registering middleware factories
 
@@ -255,39 +249,38 @@ r.RegisterTool("calculator", func(reg geptools.ToolRegistry) error {
 
 Middleware order matters. The tool loop wraps the base engine, then appends a system prompt middleware, then your custom middlewares in order. If you add multiple system prompt blocks, the first one can be rewritten by the `systemprompt` middleware. If you need your own system block to survive, insert it after the first system block, as shown in `web-agent-example/pkg/discodialogue/middleware.go`.
 
-## 6. Backend: Request Policy and Profile Selection
+## 6. Backend: Request Policy and Runtime Selection
 
-The webchat router has a request policy layer that decides which profile to use and how overrides are applied. This logic lives in `pinocchio/pkg/webchat/engine_from_req.go` and is exposed via the `EngineFromReqBuilder` interface.
+The webchat router has a request policy layer that decides which runtime key to use and how overrides are applied. This logic is exposed via `ConversationRequestResolver`.
 
 ### Default behavior
 
-The default builder chooses a profile in this order:
-
-- If the request path is `/chat/{profile}`, use that slug.
-- Else if the conversation already exists, reuse its profile.
-- Else if the `chat_profile` cookie is set, use that value.
-- Else fall back to `default`.
-
-If the profile does not exist, the server returns `unknown profile` with HTTP 404.
+The default resolver in `pkg/webchat` is runtime-key based:
+- `/chat/{runtime}` path segment
+- `runtime` query parameter
+- existing conversation runtime key
+- fallback `default`
 
 ### Custom request policy
 
-If you want a different policy, you can override it with `WithEngineFromReqBuilder`:
+If you want app-specific profile/cookie behavior, provide your own resolver with `WithConversationRequestResolver`:
 
 ```go
-type MyBuilder struct{ profiles webchat.ProfileRegistry }
+type MyResolver struct{}
 
-func (b *MyBuilder) BuildEngineFromReq(req *http.Request) (webchat.EngineBuildInput, *webchat.ChatRequestBody, error) {
-  // Implement your own rules, for example: require an auth token,
-  // map tokens to profiles, or enforce a default profile by tenant.
+func (r *MyResolver) Resolve(req *http.Request) (webchat.ConversationRequestPlan, error) {
+  // Implement your own rules:
+  // - map request/cookie/auth to RuntimeKey
+  // - enforce override policy
+  // - set ConvID/Prompt/IdempotencyKey as needed
 }
 
-router, _ := webchat.NewRouter(ctx, parsed, staticFS, webchat.WithEngineFromReqBuilder(&MyBuilder{profiles: r.Profiles()}))
+router, _ := webchat.NewRouter(ctx, parsed, staticFS, webchat.WithConversationRequestResolver(&MyResolver{}))
 ```
 
-### Fundamental Callout: Cookie behavior is optional
+### Fundamental Callout: Profile/cookie behavior is app-owned
 
-Profile selection via cookie is only part of the default builder. If you want a stateless API, override it. If you want strict profile locking, override it. The core router does not force you to use cookies.
+`pkg/webchat` does not prescribe cookies or profile endpoints. If your UX needs profile switching, implement it in the app layer (as `cmd/web-chat` does).
 
 ## 7. Backend: Durable Timeline and Turn Snapshots
 
@@ -894,7 +887,7 @@ If these commands show both your custom entity and the system prompt in the turn
 
 These are the most important extension points for third-party apps. They live in `pinocchio/pkg/webchat/router_options.go`.
 
-- `WithEngineFromReqBuilder` to control profile selection and cookie behavior.
+- `WithConversationRequestResolver` to control runtime selection and app-owned profile/cookie behavior.
 - `WithBuildSubscriber` to override how subscribers are created.
 - `WithTimelineUpsertHook` to intercept timeline upserts.
 - `WithEventSinkWrapper` to wrap the event sink for structured parsing.

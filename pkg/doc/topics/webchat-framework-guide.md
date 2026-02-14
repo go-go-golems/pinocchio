@@ -20,19 +20,19 @@ SectionType: GeneralTopic
 
 ## 1. Overview
 
-The Webchat framework provides a composable way to build multi-profile chat applications on top of Geppetto. It cleanly separates: (1) engine creation from step settings, (2) middleware and tool registration, (3) routing and streaming to the browser via Semantic Events. This design lets you define multiple “profiles” (e.g., `default`, `agent`) that differ in middlewares, tools, and prompts, selectable per-request or via a cookie, without duplicating server code.
+The Webchat framework provides a composable way to build chat applications on top of Geppetto. It cleanly separates: (1) engine creation from step settings, (2) middleware and tool registration, (3) routing and streaming to the browser via Semantic Events, and (4) request policy via app-owned resolvers. Runtime/profile policy is implemented in your app, not in `pkg/webchat`.
 
 With Webchat you can:
 
-- Register tools and middlewares globally, then configure per-profile.
+- Register tools and middlewares globally, then configure them per runtime plan.
 - Compose engines from `StepSettings` using `NewEngineFromStepSettings`.
 - Serve a minimal frontend that listens to SEM events over WebSocket and renders Markdown with syntax highlighting.
-- Support multiple chat profiles: `POST /chat`, `POST /chat/{profile}`, `GET /ws?profile=...`, or set the `chat_profile` cookie via `/api/chat/profile`.
+- Support multiple chat runtimes: `POST /chat`, `POST /chat/{runtime}`, `GET /ws?runtime=...`, with optional app-owned profile/cookie endpoints.
 
 ## 2. Core Concepts
 
-- **Router**: Central object wiring HTTP endpoints, WebSocket, profiles, and registries.
-- **Profile**: A named configuration (slug) with default system prompt and an ordered list of middlewares.
+- **Router**: Central object wiring HTTP endpoints, WebSocket, and runtime execution dependencies.
+- **ConversationRequestResolver**: App-provided request policy for runtime selection and override handling.
 - **Middleware Registry**: Map of name → factory(cfg) that returns a Geppetto middleware.
 - **Tool Registry**: Builder for tools (e.g., calculator, SQL) that the tool-calling loop can invoke.
 - **Run Loop**: The server-side orchestration (default provided: tool-calling loop).
@@ -86,7 +86,7 @@ r.Mount(parent, prefix)
 httpSrv.Handler = parent
 ```
 
-This preserves all internal paths (`/`, `/assets`, `/static`, `/ws`, `/chat`, `/chat/{profile}`, `/api/chat/profiles`) under the chosen root.
+This preserves all internal paths (`/`, `/assets`, `/static`, `/ws`, `/chat`, `/chat/{runtime}` and any app-owned endpoints like `/api/chat/profiles`) under the chosen root.
 
 ### 4.6. Split API and UI Handlers (Optional)
 
@@ -137,7 +137,7 @@ r.RegisterMiddleware("sqlite", func(cfg any) middleware.Middleware {
 })
 ```
 
-Middlewares are composed per profile (and can be overridden via request body).
+Middlewares are composed per runtime plan (and can be overridden via request body).
 
 ### 4.3. Register Tools
 
@@ -155,23 +155,30 @@ r.RegisterTool("calculator", func(reg geptools.ToolRegistry) error {
 
 Tools become available to the tool-calling loop for the active conversation.
 
-### 4.4. Define Profiles
+### 4.4. Define Runtime Policy in App Layer
 
 ```go
-r.AddProfile(&webchat.Profile{
-  Slug: "default",
-  DefaultPrompt: "You are a helpful assistant. Be concise.",
-  DefaultMws: []webchat.MiddlewareUse{},
-})
+profiles := newChatProfileRegistry(
+  "default",
+  &chatProfile{Slug: "default", DefaultPrompt: "You are a helpful assistant. Be concise."},
+  &chatProfile{
+    Slug: "agent",
+    DefaultPrompt: "You are a helpful assistant. Be concise.",
+    DefaultMws: []webchat.MiddlewareUse{{Name: "agentmode", Config: amCfg}},
+    AllowOverrides: true,
+  },
+)
 
-r.AddProfile(&webchat.Profile{
-  Slug: "agent",
-  DefaultPrompt: "You are a helpful assistant. Be concise.",
-  DefaultMws: []webchat.MiddlewareUse{{Name: "agentmode", Config: amCfg}},
-})
+r, _ := webchat.NewRouter(
+  ctx,
+  parsedLayers,
+  staticFS,
+  webchat.WithConversationRequestResolver(newWebChatProfileResolver(profiles)),
+)
+registerProfileHandlers(r, profiles)
 ```
 
-Profiles are selected by path (`/chat/agent`) or via the `chat_profile` cookie.
+`pkg/webchat` core is profile-agnostic. Profile selection/cookies/endpoints are app-owned policy built on `ConversationRequestResolver`.
 
 ## 5. HTTP API
 
@@ -184,8 +191,8 @@ If you pass `--root /xyz`, all routes are mounted under that prefix:
 - `GET /static/*` → `GET /xyz/static/*`
 - `GET /ws` → `GET /xyz/ws`
 - `POST /chat` → `POST /xyz/chat`
-- `POST /chat/{profile}` → `POST /xyz/chat/{profile}`
-- `GET /api/chat/profiles` → `GET /xyz/api/chat/profiles`
+- `POST /chat/{runtime}` → `POST /xyz/chat/{runtime}`
+- app-owned profile endpoints (optional), e.g. `GET /xyz/api/chat/profiles`
 
 Frontend considerations:
 - Use relative asset URLs in `index.html` so Vite emits root-agnostic paths.
@@ -197,22 +204,23 @@ Frontend considerations:
 - `GET /assets/*` – built dist assets
 - `GET /` – returns index.html (tries dist first, falls back to dev index)
 
-### 5.2. Profiles
+### 5.2. App-Owned Profile Endpoints (Optional)
 
-- `GET /api/chat/profiles` → list available profiles; the UI can present these.
-- `GET /api/chat/profile` → get current profile (cookie-backed)
-- `POST /api/chat/profile` → set current profile (cookie-backed)
+When your app defines profile policy (like `cmd/web-chat`), it may expose:
+- `GET /api/chat/profiles` → list available profiles.
+- `GET /api/chat/profile` → get current selected profile (often cookie-backed).
+- `POST /api/chat/profile` → set selected profile.
 
 ### 5.3. WebSocket
 
-- `GET /ws?conv_id=<id>&profile=<slug>` – join streaming for a conversation
-  - If `profile` is omitted, the server falls back to `chat_profile` cookie, else `default`.
+- `GET /ws?conv_id=<id>&runtime=<key>` – join streaming for a conversation
+  - Runtime resolution order is app-defined by your `ConversationRequestResolver`.
   - SEM envelopes include `seq` and `stream_id`; when Redis stream metadata is present (`xid`/`redis_xid`), `seq` is derived from it for stable ordering. If missing, the backend uses a time-based monotonic `seq` so timeline versions stay ordered.
 
 ### 5.4. Start a Chat Run
 
-- `POST /chat` – use cookie or default profile
-- `POST /chat/{profile}` – force a given profile
+- `POST /chat` – resolve runtime from app policy.
+- `POST /chat/{runtime}` – force a runtime key via path.
 
 Request body:
 
@@ -256,7 +264,7 @@ eng, err := factory.NewEngineFromStepSettings(stepSettings)
 runner, err := toolloop.NewEngineBuilder(
     toolloop.WithBase(eng),
     toolloop.WithMiddlewares(middleware.NewSystemPromptMiddleware(sysPrompt)),
-    // + per-profile middlewares in order
+    // + per-runtime middlewares in order
 ).Build(context.Background(), "")
 eng = runner
 ```
@@ -277,7 +285,7 @@ runner, _ := b.Build(ctx, "session-id")
 updatedTurn, _ := runner.RunInference(ctx, turn)
 ```
 
-You can plug custom loops by wiring your own handler within the router, or extend the framework to allow per-profile loop selection.
+You can plug custom loops by wiring your own handler within the router, or extend the framework to allow per-runtime loop selection.
 
 ## 8. Frontend Rendering (Timeline)
 
@@ -311,11 +319,13 @@ With this in place, running `go generate ./...` triggers the Node build, which (
 ### 9.1. Minimal Server Setup
 
 ```go
-// Register middlewares/tools, add profiles, run server
+// Register middlewares/tools, define app runtime policy, run server
 r.RegisterMiddleware("agentmode", func(cfg any) middleware.Middleware { return agentmode.NewMiddleware(amSvc, cfg.(agentmode.Config)) })
 r.RegisterMiddleware("sqlite", func(cfg any) middleware.Middleware { return sqlitetool.NewMiddleware(sqlitetool.Config{DB: db}) })
 r.RegisterTool("calculator", registerCalculator)
-r.AddProfile(&webchat.Profile{Slug: "default", DefaultPrompt: "Be concise.", DefaultMws: nil})
+profiles := newChatProfileRegistry("default", &chatProfile{Slug: "default", DefaultPrompt: "Be concise."})
+r, _ := webchat.NewRouter(ctx, parsedLayers, staticFS, webchat.WithConversationRequestResolver(newWebChatProfileResolver(profiles)))
+registerProfileHandlers(r, profiles)
 httpSrv, _ := r.BuildHTTPServer()
 _ = webchat.NewFromRouter(ctx, r, httpSrv).Run(ctx)
 ```
@@ -333,19 +343,19 @@ _ = webchat.NewFromRouter(ctx, r, httpSrv).Run(ctx)
 
 ## 10. Best Practices
 
-- Keep profiles minimal; prefer request-time overrides for experimentation.
+- Keep runtime policies minimal; prefer request-time overrides for experimentation.
 - Add middlewares in an intentional order (e.g., system prompt first, tool result reordering last).
 - Limit run loop iterations and timeouts to avoid runaway tool calling.
 - When adding DB-backed tools, ensure safe limits (e.g., `MaxRows`, output truncation) and timeouts.
 
 ## 11. Troubleshooting
 
-- 301/405 on `/chat`: Use `POST /chat` (no trailing slash) or `POST /chat/{profile}`; the router handles both now. Ensure your frontend isn’t redirecting.
+- 301/405 on `/chat`: Use `POST /chat` (no trailing slash) or `POST /chat/{runtime}`; ensure your frontend isn’t redirecting.
 - No WS updates: Confirm `conv_id` is sent and the WebSocket URL points to `/ws?conv_id=...`. If using Redis Streams, verify settings and connectivity.
 - No syntax highlighting: Ensure the highlight.js theme loads (see page head for a stylesheet) and code blocks have `language-xyz` classes.
 
 - Got `session_id`/`conv_id` back from `/chat` but no streaming: Ensure the event router loop is running. If you didn’t use `webchat.Server`, call `go r.RunEventRouter(ctx)` after `NewRouter(...)`. Check logs for “starting inference loop” and “inference loop finished”.
-- Unknown profile: Verify your profile registration and list profiles via `GET /api/chat/profiles`. If no profile cookie is set and none provided, the router uses `default`.
+- Unknown runtime/profile: Verify your app resolver and app-owned profile registry/handlers.
 - Mounting under a prefix: Ensure you’re using `http.StripPrefix(strings.TrimRight(prefix, "/"), r.Handler())` and your frontend assets use relative paths (Vite `base: './'`).
 
 ## 12. Related Documentation
@@ -365,5 +375,5 @@ For geppetto core concepts (session lifecycle, events, tool loop):
 
 ## 13. Next Steps
 
-- Add a new profile (e.g., `rag`) with a retrieval middleware.
-- Extend the frontend with profile selectors using `/api/chat/profiles`.
+- Add a new runtime preset (e.g., `rag`) with a retrieval middleware.
+- Extend the frontend with app-owned profile selectors using `/api/chat/profiles`.
