@@ -140,6 +140,31 @@ export interface TimelineSnapshot {
   version: number;
 }
 
+export interface OfflineRunSummary {
+  run_id: string;
+  kind: string;
+  display: string;
+  source_path: string;
+  timestamp_ms?: number;
+  conv_id?: string;
+  session_id?: string;
+  counts?: Record<string, unknown>;
+}
+
+export interface RunsResponse {
+  artifacts_root?: string;
+  turns_db?: string;
+  timeline_db?: string;
+  limit: number;
+  items: OfflineRunSummary[];
+}
+
+export interface RunDetailResponse {
+  run_id: string;
+  kind: string;
+  detail: Record<string, unknown>;
+}
+
 export interface Anomaly {
   id: string;
   severity: 'warning' | 'info' | 'error';

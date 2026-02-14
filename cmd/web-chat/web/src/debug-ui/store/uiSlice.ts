@@ -6,8 +6,16 @@ interface UiState {
   selectedConvId: string | null;
   selectedSessionId: string | null;
   selectedTurnId: string | null;
+  selectedRunId: string | null;
   selectedPhase: TurnPhase;
   selectedSeq: number | null;
+
+  // Offline source configuration
+  offline: {
+    artifactsRoot: string;
+    turnsDB: string;
+    timelineDB: string;
+  };
 
   // Diff state
   comparePhaseA: TurnPhase | null;
@@ -38,8 +46,14 @@ const initialState: UiState = {
   selectedConvId: null,
   selectedSessionId: null,
   selectedTurnId: null,
+  selectedRunId: null,
   selectedPhase: 'final',
   selectedSeq: null,
+  offline: {
+    artifactsRoot: '',
+    turnsDB: '',
+    timelineDB: '',
+  },
 
   comparePhaseA: null,
   comparePhaseB: null,
@@ -77,6 +91,15 @@ export const uiSlice = createSlice({
     },
     selectTurn: (state, action: PayloadAction<string | null>) => {
       state.selectedTurnId = action.payload;
+    },
+    selectRun: (state, action: PayloadAction<string | null>) => {
+      state.selectedRunId = action.payload;
+    },
+    setOfflineConfig: (
+      state,
+      action: PayloadAction<Partial<UiState['offline']>>
+    ) => {
+      state.offline = { ...state.offline, ...action.payload };
     },
     selectPhase: (state, action: PayloadAction<TurnPhase>) => {
       state.selectedPhase = action.payload;
@@ -136,6 +159,8 @@ export const {
   selectConversation,
   selectSession,
   selectTurn,
+  selectRun,
+  setOfflineConfig,
   selectPhase,
   selectEvent,
   setComparePhases,

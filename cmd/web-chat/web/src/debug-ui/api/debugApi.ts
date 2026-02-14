@@ -5,8 +5,11 @@ import type {
   ConversationDetail,
   ConversationSummary,
   EventsResponse,
+  OfflineRunSummary,
   ParsedBlock,
   ParsedTurn,
+  RunDetailResponse,
+  RunsResponse,
   TimelineEntity,
   TimelineSnapshot,
   TurnDetail,
@@ -39,6 +42,22 @@ export interface TimelineQuery {
   convId: string;
   sinceVersion?: number;
   limit?: number;
+}
+
+export interface RunsQuery {
+  artifactsRoot?: string;
+  turnsDB?: string;
+  timelineDB?: string;
+  limit?: number;
+}
+
+export interface RunDetailQuery {
+  runId: string;
+  artifactsRoot?: string;
+  turnsDB?: string;
+  timelineDB?: string;
+  limit?: number;
+  sinceVersion?: number;
 }
 
 interface DebugConversationItem {
@@ -82,6 +101,29 @@ interface DebugEventsEnvelope {
     id?: string;
     frame?: Record<string, unknown>;
   }>;
+}
+
+interface DebugRunsEnvelope {
+  artifacts_root?: string;
+  turns_db?: string;
+  timeline_db?: string;
+  limit?: number;
+  items?: Array<{
+    run_id?: string;
+    kind?: string;
+    display?: string;
+    source_path?: string;
+    timestamp_ms?: number | string;
+    conv_id?: string;
+    session_id?: string;
+    counts?: Record<string, unknown>;
+  }>;
+}
+
+interface DebugRunDetailEnvelope {
+  run_id?: string;
+  kind?: string;
+  detail?: Record<string, unknown>;
 }
 
 const BLOCK_KINDS = new Set<BlockKind>([
@@ -254,15 +296,36 @@ function mapConversation(item: DebugConversationItem): ConversationSummary {
   };
 }
 
+function toRunSummary(raw: unknown): OfflineRunSummary {
+  const item = asRecord(raw);
+  return {
+    run_id: asString(item.run_id),
+    kind: asString(item.kind),
+    display: asString(item.display),
+    source_path: asString(item.source_path),
+    timestamp_ms: asNumber(item.timestamp_ms) || undefined,
+    conv_id: asString(item.conv_id) || undefined,
+    session_id: asString(item.session_id) || undefined,
+    counts: asRecord(item.counts),
+  };
+}
+
 export const debugApi = createApi({
   reducerPath: 'debugApi',
   baseQuery: fetchBaseQuery({ baseUrl: '/api/debug/' }),
-  tagTypes: ['Conversations', 'Turns', 'Events', 'Timeline'],
+  tagTypes: ['Conversations', 'Turns', 'Events', 'Timeline', 'Runs'],
   endpoints: (builder) => ({
     getConversations: builder.query<ConversationSummary[], void>({
       query: () => 'conversations',
-      transformResponse: (response: { items?: DebugConversationItem[] }) =>
-        (response.items ?? []).map(mapConversation),
+      transformResponse: (response: { items?: DebugConversationItem[]; conversations?: ConversationSummary[] }) => {
+        if (Array.isArray(response.items)) {
+          return response.items.map(mapConversation);
+        }
+        if (Array.isArray(response.conversations)) {
+          return response.conversations;
+        }
+        return [];
+      },
       providesTags: ['Conversations'],
     }),
 
@@ -293,15 +356,19 @@ export const debugApi = createApi({
         if (limit !== undefined) params.set('limit', String(limit));
         return `turns?${params.toString()}`;
       },
-      transformResponse: (response: DebugTurnsEnvelope) =>
-        (response.items ?? []).map((item) => ({
+      transformResponse: (response: DebugTurnsEnvelope | TurnSnapshot[]) => {
+        if (Array.isArray(response)) {
+          return response;
+        }
+        return (response.items ?? []).map((item) => ({
           conv_id: item.conv_id,
           session_id: item.session_id,
           turn_id: item.turn_id,
           phase: normalizePhase(item.phase),
           created_at_ms: asNumber(item.created_at_ms),
           turn: parseTurnPayload(item.payload, item.turn_id),
-        })),
+        }));
+      },
       providesTags: ['Turns'],
     }),
 
@@ -313,7 +380,16 @@ export const debugApi = createApi({
         session_id: string;
         turn_id: string;
         items?: DebugTurnPhaseItem[];
+        phases?: TurnDetail['phases'];
       }) => {
+        if (response.phases) {
+          return {
+            conv_id: response.conv_id,
+            session_id: response.session_id,
+            turn_id: response.turn_id,
+            phases: response.phases,
+          };
+        }
         const phases: TurnDetail['phases'] = {};
         for (const item of response.items ?? []) {
           const phase = normalizePhase(item.phase);
@@ -343,9 +419,13 @@ export const debugApi = createApi({
         if (limit !== undefined) params.set('limit', String(limit));
         return `events/${encodeURIComponent(convId)}?${params.toString()}`;
       },
-      transformResponse: (response: DebugEventsEnvelope): EventsResponse => {
+      transformResponse: (response: DebugEventsEnvelope | EventsResponse): EventsResponse => {
+        if (Array.isArray((response as EventsResponse).events)) {
+          return response as EventsResponse;
+        }
+        const envelope = response as DebugEventsEnvelope;
         const nowISO = new Date().toISOString();
-        const events = (response.items ?? []).map((item) => {
+        const events = (envelope.items ?? []).map((item) => {
           const frame = asRecord(item.frame);
           const event = asRecord(frame.event);
           const eventType = asString(item.type) || asString(event.type);
@@ -362,7 +442,7 @@ export const debugApi = createApi({
         return {
           events,
           total: events.length,
-          buffer_capacity: asNumber(response.limit) || events.length,
+          buffer_capacity: asNumber(envelope.limit) || events.length,
         };
       },
       providesTags: ['Events'],
@@ -382,6 +462,43 @@ export const debugApi = createApi({
       }),
       providesTags: ['Timeline'],
     }),
+
+    getRuns: builder.query<RunsResponse, RunsQuery>({
+      query: ({ artifactsRoot, turnsDB, timelineDB, limit }) => {
+        const params = new URLSearchParams();
+        if (artifactsRoot) params.set('artifacts_root', artifactsRoot);
+        if (turnsDB) params.set('turns_db', turnsDB);
+        if (timelineDB) params.set('timeline_db', timelineDB);
+        if (limit !== undefined) params.set('limit', String(limit));
+        return `runs?${params.toString()}`;
+      },
+      transformResponse: (response: DebugRunsEnvelope): RunsResponse => ({
+        artifacts_root: asString(response.artifacts_root) || undefined,
+        turns_db: asString(response.turns_db) || undefined,
+        timeline_db: asString(response.timeline_db) || undefined,
+        limit: asNumber(response.limit) || 0,
+        items: (response.items ?? []).map(toRunSummary),
+      }),
+      providesTags: ['Runs'],
+    }),
+
+    getRunDetail: builder.query<RunDetailResponse, RunDetailQuery>({
+      query: ({ runId, artifactsRoot, turnsDB, timelineDB, limit, sinceVersion }) => {
+        const params = new URLSearchParams();
+        if (artifactsRoot) params.set('artifacts_root', artifactsRoot);
+        if (turnsDB) params.set('turns_db', turnsDB);
+        if (timelineDB) params.set('timeline_db', timelineDB);
+        if (limit !== undefined) params.set('limit', String(limit));
+        if (sinceVersion !== undefined) params.set('since_version', String(sinceVersion));
+        return `runs/${encodeURIComponent(runId)}?${params.toString()}`;
+      },
+      transformResponse: (response: DebugRunDetailEnvelope): RunDetailResponse => ({
+        run_id: asString(response.run_id),
+        kind: asString(response.kind),
+        detail: asRecord(response.detail),
+      }),
+      providesTags: (_result, _error, { runId }) => [{ type: 'Runs', id: runId }],
+    }),
   }),
 });
 
@@ -392,4 +509,6 @@ export const {
   useGetTurnDetailQuery,
   useGetEventsQuery,
   useGetTimelineQuery,
+  useGetRunsQuery,
+  useGetRunDetailQuery,
 } = debugApi;

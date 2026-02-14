@@ -3,6 +3,8 @@ import type {
   ConversationDetail,
   ConversationSummary,
   MwTrace,
+  OfflineRunSummary,
+  RunDetailResponse,
   SemEvent,
   SessionSummary,
   TimelineEntity,
@@ -19,12 +21,13 @@ export interface DebugHandlerData {
   events: SemEvent[];
   timelineEntities: TimelineEntity[];
   mwTrace: MwTrace;
+  offlineRuns: OfflineRunSummary[];
+  runDetails: Record<string, RunDetailResponse>;
 }
 
 export interface CreateDebugHandlersOptions {
   data: DebugHandlerData;
   nowMs?: () => number;
-  nowIso?: () => string;
   delayMs?: {
     conversations?: number;
   };
@@ -34,7 +37,6 @@ export function createDebugHandlers(options: CreateDebugHandlersOptions) {
   const {
     data,
     nowMs = () => Date.now(),
-    nowIso = () => new Date().toISOString(),
     delayMs,
   } = options;
   const conversationsDelayMs = Math.max(0, delayMs?.conversations ?? 0);
@@ -47,6 +49,8 @@ export function createDebugHandlers(options: CreateDebugHandlersOptions) {
     events,
     timelineEntities,
     mwTrace,
+    offlineRuns,
+    runDetails,
   } = data;
 
   return [
@@ -54,16 +58,24 @@ export function createDebugHandlers(options: CreateDebugHandlersOptions) {
       if (conversationsDelayMs > 0) {
         await new Promise((resolve) => setTimeout(resolve, conversationsDelayMs));
       }
-      return HttpResponse.json({ conversations });
+      return HttpResponse.json({
+        items: conversations.map((conversation) => ({
+          conv_id: conversation.id,
+          session_id: conversation.session_id,
+          profile: conversation.profile_slug,
+          active_sockets: conversation.ws_connections,
+          stream_running: conversation.is_running,
+          queue_depth: 0,
+          buffered_events: conversation.turn_count,
+          last_activity_ms: Date.parse(conversation.last_activity),
+          has_timeline_source: conversation.has_timeline,
+        })),
+      });
     }),
 
     http.get('/api/debug/conversations/:id', ({ params }) => {
       const { id } = params;
       const conversationId = String(id ?? '');
-
-      if (conversationId === conversationDetail.id) {
-        return HttpResponse.json(conversationDetail);
-      }
 
       const summary = conversations.find((conversation) => conversation.id === conversationId);
       if (!summary) {
@@ -72,8 +84,16 @@ export function createDebugHandlers(options: CreateDebugHandlersOptions) {
 
       return HttpResponse.json(
         {
-          ...summary,
-          engine_config: conversationDetail.engine_config,
+          conv_id: summary.id,
+          session_id: summary.session_id,
+          profile: summary.profile_slug,
+          active_sockets: summary.ws_connections,
+          stream_running: summary.is_running,
+          queue_depth: 0,
+          buffered_events: summary.turn_count,
+          last_activity_ms: Date.parse(summary.last_activity),
+          has_timeline_source: summary.has_timeline,
+          active_request_key: conversationId === conversationDetail.id ? 'req-001' : '',
         },
         { status: 200 }
       );
@@ -87,6 +107,9 @@ export function createDebugHandlers(options: CreateDebugHandlersOptions) {
       const url = new URL(request.url);
       const convId = url.searchParams.get('conv_id');
       const sessionId = url.searchParams.get('session_id');
+      const phase = url.searchParams.get('phase') ?? 'final';
+      const sinceMs = Number(url.searchParams.get('since_ms') ?? '0');
+      const limit = Number(url.searchParams.get('limit') ?? '200');
 
       let filtered = turns;
       if (convId) {
@@ -95,7 +118,25 @@ export function createDebugHandlers(options: CreateDebugHandlersOptions) {
       if (sessionId) {
         filtered = filtered.filter((turn) => turn.session_id === sessionId);
       }
-      return HttpResponse.json(filtered);
+      if (Number.isFinite(sinceMs) && sinceMs > 0) {
+        filtered = filtered.filter((turn) => turn.created_at_ms >= sinceMs);
+      }
+      filtered = filtered.slice(0, Math.max(1, limit));
+
+      return HttpResponse.json({
+        conv_id: convId ?? filtered[0]?.conv_id ?? '',
+        session_id: sessionId ?? filtered[0]?.session_id ?? '',
+        phase,
+        since_ms: sinceMs,
+        items: filtered.map((turn) => ({
+          conv_id: turn.conv_id,
+          session_id: turn.session_id,
+          turn_id: turn.turn_id,
+          phase: turn.phase,
+          created_at_ms: turn.created_at_ms,
+          payload: turn.turn,
+        })),
+      });
     }),
 
     http.get('/api/debug/turn/:convId/:sessionId/:turnId', ({ params }) => {
@@ -113,17 +154,48 @@ export function createDebugHandlers(options: CreateDebugHandlersOptions) {
         conv_id: turn.conv_id,
         session_id: turn.session_id,
         turn_id: turn.turn_id,
-        phases: {
-          final: { captured_at: nowIso(), turn: turn.turn },
-        },
+        items: [
+          {
+            phase: 'final',
+            created_at_ms: turn.created_at_ms,
+            payload: turn.turn,
+            parsed: turn.turn,
+          },
+        ],
       });
     }),
 
-    http.get('/api/debug/events/:convId', () => {
+    http.get('/api/debug/events/:convId', ({ request }) => {
+      const url = new URL(request.url);
+      const type = url.searchParams.get('type');
+      const sinceSeq = Number(url.searchParams.get('since_seq') ?? '0');
+      const limit = Number(url.searchParams.get('limit') ?? '1000');
+
+      let filtered = events;
+      if (type) {
+        filtered = filtered.filter((event) => event.type === type);
+      }
+      if (Number.isFinite(sinceSeq) && sinceSeq > 0) {
+        filtered = filtered.filter((event) => event.seq >= sinceSeq);
+      }
+      filtered = filtered.slice(0, Math.max(1, limit));
+
       return HttpResponse.json({
-        events,
-        total: events.length,
-        buffer_capacity: 1000,
+        limit,
+        items: filtered.map((event) => ({
+          seq: String(event.seq),
+          type: event.type,
+          id: event.id,
+          frame: {
+            event: {
+              id: event.id,
+              type: event.type,
+              streamId: event.stream_id,
+              data: event.data,
+              receivedAt: event.received_at,
+            },
+          },
+        })),
       });
     }),
 
@@ -132,6 +204,47 @@ export function createDebugHandlers(options: CreateDebugHandlersOptions) {
         entities: timelineEntities,
         version: nowMs(),
       });
+    }),
+
+    http.get('/api/debug/runs', ({ request }) => {
+      const url = new URL(request.url);
+      const artifactsRoot = url.searchParams.get('artifacts_root');
+      const turnsDB = url.searchParams.get('turns_db');
+      const timelineDB = url.searchParams.get('timeline_db');
+      const limit = Number(url.searchParams.get('limit') ?? '200');
+
+      if (!artifactsRoot && !turnsDB && !timelineDB) {
+        return HttpResponse.json(
+          { error: 'at least one source is required (artifacts_root, turns_db, timeline_db)' },
+          { status: 400 }
+        );
+      }
+
+      const filtered = offlineRuns
+        .filter((run) => {
+          if (run.kind === 'artifact') return !!artifactsRoot;
+          if (run.kind === 'turns') return !!turnsDB;
+          if (run.kind === 'timeline') return !!timelineDB;
+          return true;
+        })
+        .slice(0, Math.max(1, limit));
+
+      return HttpResponse.json({
+        artifacts_root: artifactsRoot ?? '',
+        turns_db: turnsDB ?? '',
+        timeline_db: timelineDB ?? '',
+        limit,
+        items: filtered,
+      });
+    }),
+
+    http.get('/api/debug/runs/:runId', ({ params }) => {
+      const runId = decodeURIComponent(String(params.runId ?? ''));
+      const detail = runDetails[runId];
+      if (!detail) {
+        return HttpResponse.json({ error: 'run not found' }, { status: 404 });
+      }
+      return HttpResponse.json(detail);
     }),
 
     http.get('/api/debug/mw-trace/:convId/:inferenceId', () => {

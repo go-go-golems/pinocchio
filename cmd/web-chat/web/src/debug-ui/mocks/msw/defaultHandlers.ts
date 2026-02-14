@@ -4,6 +4,7 @@ import {
   mockSessions,
 } from '../fixtures/conversations';
 import { mockEvents, mockMwTrace } from '../fixtures/events';
+import { mockOfflineRunDetails, mockOfflineRuns } from '../fixtures/offline';
 import { mockTimelineEntities } from '../fixtures/timeline';
 import { mockTurnDetail, mockTurns } from '../fixtures/turns';
 import {
@@ -21,6 +22,8 @@ export const defaultDebugHandlerData: DebugHandlerData = {
   events: mockEvents,
   timelineEntities: mockTimelineEntities,
   mwTrace: mockMwTrace,
+  offlineRuns: mockOfflineRuns,
+  runDetails: mockOfflineRunDetails,
 };
 
 type DefaultDebugHandlerOptions = Omit<CreateDebugHandlersOptions, 'data'>;

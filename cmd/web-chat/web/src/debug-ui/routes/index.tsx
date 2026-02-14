@@ -2,6 +2,7 @@
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import { AppShell } from '../components/AppShell';
 import { EventsPage } from './EventsPage';
+import { OfflinePage } from './OfflinePage';
 import { OverviewPage } from './OverviewPage';
 import { TimelinePage } from './TimelinePage';
 import { TurnDetailPage } from './TurnDetailPage';
@@ -22,6 +23,10 @@ export const router = createBrowserRouter([
       {
         path: 'events',
         element: <EventsPage />,
+      },
+      {
+        path: 'offline',
+        element: <OfflinePage />,
       },
       {
         path: 'session/:sessionId',
