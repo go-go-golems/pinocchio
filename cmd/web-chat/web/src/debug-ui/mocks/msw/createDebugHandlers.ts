@@ -50,14 +50,14 @@ export function createDebugHandlers(options: CreateDebugHandlersOptions) {
   } = data;
 
   return [
-    http.get('/debug/conversations', async () => {
+    http.get('/api/debug/conversations', async () => {
       if (conversationsDelayMs > 0) {
         await new Promise((resolve) => setTimeout(resolve, conversationsDelayMs));
       }
       return HttpResponse.json({ conversations });
     }),
 
-    http.get('/debug/conversation/:id', ({ params }) => {
+    http.get('/api/debug/conversations/:id', ({ params }) => {
       const { id } = params;
       const conversationId = String(id ?? '');
 
@@ -79,11 +79,11 @@ export function createDebugHandlers(options: CreateDebugHandlersOptions) {
       );
     }),
 
-    http.get('/debug/conversation/:id/sessions', () => {
+    http.get('/api/debug/conversations/:id/sessions', () => {
       return HttpResponse.json({ sessions });
     }),
 
-    http.get('/debug/turns', ({ request }) => {
+    http.get('/api/debug/turns', ({ request }) => {
       const url = new URL(request.url);
       const convId = url.searchParams.get('conv_id');
       const sessionId = url.searchParams.get('session_id');
@@ -98,7 +98,7 @@ export function createDebugHandlers(options: CreateDebugHandlersOptions) {
       return HttpResponse.json(filtered);
     }),
 
-    http.get('/debug/turn/:convId/:sessionId/:turnId', ({ params }) => {
+    http.get('/api/debug/turn/:convId/:sessionId/:turnId', ({ params }) => {
       const turnId = String(params.turnId ?? '');
       if (turnId === turnDetail.turn_id) {
         return HttpResponse.json(turnDetail);
@@ -119,7 +119,7 @@ export function createDebugHandlers(options: CreateDebugHandlersOptions) {
       });
     }),
 
-    http.get('/debug/events/:convId', () => {
+    http.get('/api/debug/events/:convId', () => {
       return HttpResponse.json({
         events,
         total: events.length,
@@ -127,14 +127,14 @@ export function createDebugHandlers(options: CreateDebugHandlersOptions) {
       });
     }),
 
-    http.get('/debug/timeline', () => {
+    http.get('/api/debug/timeline', () => {
       return HttpResponse.json({
         entities: timelineEntities,
         version: nowMs(),
       });
     }),
 
-    http.get('/debug/mw-trace/:convId/:inferenceId', () => {
+    http.get('/api/debug/mw-trace/:convId/:inferenceId', () => {
       return HttpResponse.json(mwTrace);
     }),
   ];
