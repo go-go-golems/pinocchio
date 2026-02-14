@@ -1,0 +1,473 @@
+import type { TurnDetail, TurnSnapshot } from '../../types';
+
+// Standard metadata that appears on most blocks
+const stdBlockMeta = (blockId: string, turnId: string, sessionId: string) => ({
+  'geppetto.block_id@v1': blockId,
+  'geppetto.turn_id@v1': turnId,
+  'geppetto.session_id@v1': sessionId,
+  'geppetto.created_at@v1': '2026-02-06T14:32:08.000Z',
+});
+
+// Mock turns
+export const mockTurns: TurnSnapshot[] = [
+  {
+    conv_id: 'conv_8a3f',
+    session_id: 'sess_01',
+    turn_id: 'turn_01',
+    phase: 'final',
+    created_at_ms: 1707229938000,
+    turn: {
+      id: 'turn_01',
+      blocks: [
+        {
+          index: 0,
+          kind: 'system',
+          role: 'system',
+          payload: { text: 'You are a helpful assistant.' },
+          metadata: { 
+            ...stdBlockMeta('blk_sys_001', 'turn_01', 'sess_01'),
+            'geppetto.middleware@v1': 'system-prompt-mw',
+            'geppetto.source@v1': 'profile.yaml',
+            'geppetto.profile@v1': 'general',
+          },
+        },
+        {
+          index: 1,
+          kind: 'user',
+          role: 'user',
+          payload: { text: 'What is the weather in Paris?' },
+          metadata: {
+            ...stdBlockMeta('blk_usr_001', 'turn_01', 'sess_01'),
+            'webchat.client_id@v1': 'client_abc123',
+            'webchat.input_method@v1': 'keyboard',
+            'webchat.timestamp@v1': 1707229920000,
+          },
+        },
+        {
+          index: 2,
+          id: 'tc_001',
+          kind: 'tool_call',
+          payload: { id: 'tc_001', name: 'get_weather', args: { location: 'Paris' } },
+          metadata: {
+            ...stdBlockMeta('blk_tc_001', 'turn_01', 'sess_01'),
+            'geppetto.inference_id@v1': 'inf_abc',
+            'geppetto.model@v1': 'claude-3.5-sonnet',
+            'geppetto.tool_config@v1': { timeout_ms: 5000, retries: 2 },
+          },
+        },
+        {
+          index: 3,
+          kind: 'tool_use',
+          payload: { id: 'tc_001', result: { temperature: 18, condition: 'cloudy' } },
+          metadata: {
+            ...stdBlockMeta('blk_tu_001', 'turn_01', 'sess_01'),
+            'geppetto.tool_call_id@v1': 'tc_001',
+            'geppetto.tool_name@v1': 'get_weather',
+            'geppetto.execution@v1': { 
+              duration_ms: 234, 
+              status: 'success',
+              retries: 0,
+            },
+            'geppetto.cache@v1': { hit: false, ttl_s: 300 },
+          },
+        },
+        {
+          index: 4,
+          kind: 'llm_text',
+          role: 'assistant',
+          payload: { text: 'The weather in Paris is currently 18°C and cloudy.' },
+          metadata: {
+            ...stdBlockMeta('blk_llm_001', 'turn_01', 'sess_01'),
+            'geppetto.inference_id@v1': 'inf_abc',
+            'geppetto.model@v1': 'claude-3.5-sonnet',
+            'geppetto.usage@v1': { prompt_tokens: 847, completion_tokens: 42, total_tokens: 889 },
+            'geppetto.latency_ms@v1': 1823,
+            'geppetto.stop_reason@v1': 'end_turn',
+            'geppetto.stream_seq@v1': 15,
+          },
+        },
+      ],
+      metadata: {
+        'geppetto.session_id@v1': 'sess_01',
+        'geppetto.inference_id@v1': 'inf_abc',
+        'geppetto.conv_id@v1': 'conv_8a3f',
+        'geppetto.total_usage@v1': { prompt_tokens: 847, completion_tokens: 42, total_tokens: 889, cost_usd: 0.0089 },
+        'geppetto.total_latency_ms@v1': 2057,
+        'geppetto.tool_calls@v1': ['get_weather'],
+      },
+      data: {},
+    },
+  },
+  {
+    conv_id: 'conv_8a3f',
+    session_id: 'sess_01',
+    turn_id: 'turn_02',
+    phase: 'final',
+    created_at_ms: 1707229998000,
+    turn: {
+      id: 'turn_02',
+      blocks: [
+        {
+          index: 0,
+          kind: 'system',
+          role: 'system',
+          payload: { text: 'You are a helpful assistant.' },
+          metadata: { 
+            ...stdBlockMeta('blk_sys_002', 'turn_02', 'sess_01'),
+            'geppetto.middleware@v1': 'system-prompt-mw',
+            'geppetto.source@v1': 'profile.yaml',
+          },
+        },
+        {
+          index: 1,
+          kind: 'user',
+          role: 'user',
+          payload: { text: 'What is the weather in Paris?' },
+          metadata: {
+            ...stdBlockMeta('blk_usr_002', 'turn_02', 'sess_01'),
+            'webchat.client_id@v1': 'client_abc123',
+            'geppetto.copied_from@v1': 'turn_01',
+          },
+        },
+        {
+          index: 2,
+          id: 'tc_001',
+          kind: 'tool_call',
+          payload: { id: 'tc_001', name: 'get_weather', args: { location: 'Paris' } },
+          metadata: {
+            ...stdBlockMeta('blk_tc_002', 'turn_02', 'sess_01'),
+            'geppetto.inference_id@v1': 'inf_abc',
+            'geppetto.copied_from@v1': 'turn_01',
+          },
+        },
+        {
+          index: 3,
+          kind: 'tool_use',
+          payload: { id: 'tc_001', result: { temperature: 18, condition: 'cloudy' } },
+          metadata: {
+            ...stdBlockMeta('blk_tu_002', 'turn_02', 'sess_01'),
+            'geppetto.tool_call_id@v1': 'tc_001',
+            'geppetto.copied_from@v1': 'turn_01',
+          },
+        },
+        {
+          index: 4,
+          kind: 'llm_text',
+          role: 'assistant',
+          payload: { text: 'The weather in Paris is currently 18°C and cloudy.' },
+          metadata: {
+            ...stdBlockMeta('blk_llm_002', 'turn_02', 'sess_01'),
+            'geppetto.inference_id@v1': 'inf_abc',
+            'geppetto.copied_from@v1': 'turn_01',
+          },
+        },
+        {
+          index: 5,
+          kind: 'user',
+          role: 'user',
+          payload: { text: 'What about tomorrow?' },
+          metadata: {
+            ...stdBlockMeta('blk_usr_003', 'turn_02', 'sess_01'),
+            'webchat.client_id@v1': 'client_abc123',
+            'webchat.input_method@v1': 'keyboard',
+            'webchat.timestamp@v1': 1707229990000,
+          },
+        },
+        {
+          index: 6,
+          kind: 'llm_text',
+          role: 'assistant',
+          payload: { text: 'I don\'t have access to weather forecasts, only current conditions.' },
+          metadata: {
+            ...stdBlockMeta('blk_llm_003', 'turn_02', 'sess_01'),
+            'geppetto.inference_id@v1': 'inf_def',
+            'geppetto.model@v1': 'claude-3.5-sonnet',
+            'geppetto.usage@v1': { prompt_tokens: 912, completion_tokens: 18, total_tokens: 930 },
+            'geppetto.latency_ms@v1': 892,
+            'geppetto.stop_reason@v1': 'end_turn',
+          },
+        },
+      ],
+      metadata: {
+        'geppetto.session_id@v1': 'sess_01',
+        'geppetto.inference_id@v1': 'inf_def',
+        'geppetto.conv_id@v1': 'conv_8a3f',
+        'geppetto.previous_turn@v1': 'turn_01',
+        'geppetto.total_usage@v1': { prompt_tokens: 912, completion_tokens: 18, total_tokens: 930, cost_usd: 0.0093 },
+        'geppetto.total_latency_ms@v1': 892,
+      },
+      data: {},
+    },
+  },
+];
+
+// Mock turn detail with all phases and rich metadata
+export const mockTurnDetail: TurnDetail = {
+  conv_id: 'conv_8a3f',
+  session_id: 'sess_01',
+  turn_id: 'turn_01',
+  phases: {
+    pre_inference: {
+      captured_at: '2026-02-06T14:32:08.001Z',
+      turn: {
+        id: 'turn_01',
+        blocks: [
+          {
+            index: 0,
+            kind: 'system',
+            role: 'system',
+            payload: { text: 'You are a helpful assistant.' },
+            metadata: { 
+              ...stdBlockMeta('blk_sys_001', 'turn_01', 'sess_01'),
+              'geppetto.middleware@v1': 'system-prompt-mw',
+              'geppetto.source@v1': 'profile.yaml',
+              'geppetto.profile@v1': 'general',
+              'geppetto.phase@v1': 'pre_inference',
+            },
+          },
+          {
+            index: 1,
+            kind: 'user',
+            role: 'user',
+            payload: { text: 'What is the weather in Paris?' },
+            metadata: {
+              ...stdBlockMeta('blk_usr_001', 'turn_01', 'sess_01'),
+              'webchat.source@v1': 'user_input',
+              'webchat.client_id@v1': 'client_abc123',
+              'webchat.input_method@v1': 'keyboard',
+              'geppetto.phase@v1': 'pre_inference',
+            },
+          },
+        ],
+        metadata: { 
+          'geppetto.session_id@v1': 'sess_01',
+          'geppetto.conv_id@v1': 'conv_8a3f',
+          'geppetto.turn_id@v1': 'turn_01',
+          'geppetto.profile@v1': 'general',
+          'geppetto.phase@v1': 'pre_inference',
+          'geppetto.middleware_chain@v1': ['logging-mw', 'system-prompt-mw', 'tool-reorder-mw'],
+        },
+        data: {},
+      },
+    },
+    post_inference: {
+      captured_at: '2026-02-06T14:32:10.500Z',
+      turn: {
+        id: 'turn_01',
+        blocks: [
+          {
+            index: 0,
+            kind: 'system',
+            role: 'system',
+            payload: { text: 'You are a helpful assistant.' },
+            metadata: { 
+              ...stdBlockMeta('blk_sys_001', 'turn_01', 'sess_01'),
+              'geppetto.middleware@v1': 'system-prompt-mw',
+              'geppetto.phase@v1': 'post_inference',
+            },
+          },
+          {
+            index: 1,
+            kind: 'user',
+            role: 'user',
+            payload: { text: 'What is the weather in Paris?' },
+            metadata: {
+              ...stdBlockMeta('blk_usr_001', 'turn_01', 'sess_01'),
+              'webchat.client_id@v1': 'client_abc123',
+              'geppetto.phase@v1': 'post_inference',
+            },
+          },
+          {
+            index: 2,
+            id: 'tc_001',
+            kind: 'tool_call',
+            payload: { id: 'tc_001', name: 'get_weather', args: { location: 'Paris' } },
+            metadata: {
+              ...stdBlockMeta('blk_tc_001', 'turn_01', 'sess_01'),
+              'geppetto.inference_id@v1': 'inf_abc',
+              'geppetto.model@v1': 'claude-3.5-sonnet',
+              'geppetto.tool_config@v1': { timeout_ms: 5000, retries: 2 },
+              'geppetto.generated_by@v1': 'inference',
+              'geppetto.phase@v1': 'post_inference',
+            },
+          },
+        ],
+        metadata: { 
+          'geppetto.session_id@v1': 'sess_01',
+          'geppetto.conv_id@v1': 'conv_8a3f',
+          'geppetto.turn_id@v1': 'turn_01',
+          'geppetto.inference_id@v1': 'inf_abc',
+          'geppetto.model@v1': 'claude-3.5-sonnet',
+          'geppetto.usage@v1': { prompt_tokens: 847, completion_tokens: 42, total_tokens: 889 },
+          'geppetto.latency_ms@v1': 2412,
+          'geppetto.stop_reason@v1': 'tool_use',
+          'geppetto.phase@v1': 'post_inference',
+        },
+        data: {},
+      },
+    },
+    post_tools: {
+      captured_at: '2026-02-06T14:32:11.200Z',
+      turn: {
+        id: 'turn_01',
+        blocks: [
+          {
+            index: 0,
+            kind: 'system',
+            role: 'system',
+            payload: { text: 'You are a helpful assistant.' },
+            metadata: { 
+              ...stdBlockMeta('blk_sys_001', 'turn_01', 'sess_01'),
+              'geppetto.middleware@v1': 'system-prompt-mw',
+              'geppetto.phase@v1': 'post_tools',
+            },
+          },
+          {
+            index: 1,
+            kind: 'user',
+            role: 'user',
+            payload: { text: 'What is the weather in Paris?' },
+            metadata: {
+              ...stdBlockMeta('blk_usr_001', 'turn_01', 'sess_01'),
+              'geppetto.phase@v1': 'post_tools',
+            },
+          },
+          {
+            index: 2,
+            id: 'tc_001',
+            kind: 'tool_call',
+            payload: { id: 'tc_001', name: 'get_weather', args: { location: 'Paris' } },
+            metadata: { 
+              ...stdBlockMeta('blk_tc_001', 'turn_01', 'sess_01'),
+              'geppetto.inference_id@v1': 'inf_abc',
+              'geppetto.tool_config@v1': { timeout_ms: 5000, retries: 2 },
+              'geppetto.phase@v1': 'post_tools',
+            },
+          },
+          {
+            index: 3,
+            kind: 'tool_use',
+            payload: { id: 'tc_001', result: { temperature: 18, condition: 'cloudy' } },
+            metadata: {
+              ...stdBlockMeta('blk_tu_001', 'turn_01', 'sess_01'),
+              'geppetto.tool_call_id@v1': 'tc_001',
+              'geppetto.tool_name@v1': 'get_weather',
+              'geppetto.execution@v1': { 
+                duration_ms: 234, 
+                status: 'success',
+                api_calls: 1,
+                retries: 0,
+              },
+              'geppetto.cache@v1': { hit: false, key: 'weather_paris_2026020614', ttl_s: 300 },
+              'geppetto.phase@v1': 'post_tools',
+            },
+          },
+        ],
+        metadata: { 
+          'geppetto.session_id@v1': 'sess_01',
+          'geppetto.conv_id@v1': 'conv_8a3f',
+          'geppetto.turn_id@v1': 'turn_01',
+          'geppetto.inference_id@v1': 'inf_abc',
+          'geppetto.tools_executed@v1': ['get_weather'],
+          'geppetto.tool_total_ms@v1': 234,
+          'geppetto.phase@v1': 'post_tools',
+        },
+        data: {},
+      },
+    },
+    final: {
+      captured_at: '2026-02-06T14:32:18.000Z',
+      turn: {
+        id: 'turn_01',
+        blocks: [
+          {
+            index: 0,
+            kind: 'system',
+            role: 'system',
+            payload: { text: 'You are a helpful assistant.' },
+            metadata: { 
+              ...stdBlockMeta('blk_sys_001', 'turn_01', 'sess_01'),
+              'geppetto.middleware@v1': 'system-prompt-mw',
+              'geppetto.source@v1': 'profile.yaml',
+              'geppetto.profile@v1': 'general',
+              'geppetto.phase@v1': 'final',
+            },
+          },
+          {
+            index: 1,
+            kind: 'user',
+            role: 'user',
+            payload: { text: 'What is the weather in Paris?' },
+            metadata: {
+              ...stdBlockMeta('blk_usr_001', 'turn_01', 'sess_01'),
+              'webchat.client_id@v1': 'client_abc123',
+              'webchat.input_method@v1': 'keyboard',
+              'geppetto.phase@v1': 'final',
+            },
+          },
+          {
+            index: 2,
+            id: 'tc_001',
+            kind: 'tool_call',
+            payload: { id: 'tc_001', name: 'get_weather', args: { location: 'Paris' } },
+            metadata: {
+              ...stdBlockMeta('blk_tc_001', 'turn_01', 'sess_01'),
+              'geppetto.inference_id@v1': 'inf_abc',
+              'geppetto.model@v1': 'claude-3.5-sonnet',
+              'geppetto.tool_config@v1': { timeout_ms: 5000, retries: 2 },
+              'geppetto.phase@v1': 'final',
+            },
+          },
+          {
+            index: 3,
+            kind: 'tool_use',
+            payload: { id: 'tc_001', result: { temperature: 18, condition: 'cloudy' } },
+            metadata: {
+              ...stdBlockMeta('blk_tu_001', 'turn_01', 'sess_01'),
+              'geppetto.tool_call_id@v1': 'tc_001',
+              'geppetto.tool_name@v1': 'get_weather',
+              'geppetto.execution@v1': { duration_ms: 234, status: 'success' },
+              'geppetto.cache@v1': { hit: false },
+              'geppetto.phase@v1': 'final',
+            },
+          },
+          {
+            index: 4,
+            kind: 'llm_text',
+            role: 'assistant',
+            payload: { text: 'The weather in Paris is currently 18°C and cloudy.' },
+            metadata: {
+              ...stdBlockMeta('blk_llm_001', 'turn_01', 'sess_01'),
+              'geppetto.inference_id@v1': 'inf_abc2',
+              'geppetto.model@v1': 'claude-3.5-sonnet',
+              'geppetto.usage@v1': { prompt_tokens: 912, completion_tokens: 42, total_tokens: 954 },
+              'geppetto.latency_ms@v1': 1823,
+              'geppetto.stop_reason@v1': 'end_turn',
+              'geppetto.stream_seq@v1': 15,
+              'geppetto.phase@v1': 'final',
+            },
+          },
+        ],
+        metadata: {
+          'geppetto.session_id@v1': 'sess_01',
+          'geppetto.conv_id@v1': 'conv_8a3f',
+          'geppetto.turn_id@v1': 'turn_01',
+          'geppetto.inference_id@v1': 'inf_abc2',
+          'geppetto.total_usage@v1': { 
+            prompt_tokens: 1759, 
+            completion_tokens: 84, 
+            total_tokens: 1843,
+            cost_usd: 0.0187,
+          },
+          'geppetto.total_latency_ms@v1': 4469,
+          'geppetto.inference_rounds@v1': 2,
+          'geppetto.tools_used@v1': ['get_weather'],
+          'geppetto.middleware_chain@v1': ['logging-mw', 'system-prompt-mw', 'tool-reorder-mw'],
+          'webchat.render_hints@v1': { format: 'markdown', show_sources: false },
+          'geppetto.phase@v1': 'final',
+        },
+        data: {},
+      },
+    },
+  },
+};

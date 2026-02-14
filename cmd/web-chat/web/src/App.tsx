@@ -1,4 +1,6 @@
-import { DebugAppProvider } from './debug-app';
+import { Provider } from 'react-redux';
+import { DebugUIApp } from './debug-ui';
+import { store } from './store/store';
 import { ChatWidget } from './webchat';
 
 export function App() {
@@ -6,5 +8,13 @@ export function App() {
     typeof window !== 'undefined' &&
     new URLSearchParams(window.location.search).get('debug') === '1';
 
-  return debugMode ? <DebugAppProvider /> : <ChatWidget />;
+  if (debugMode) {
+    return <DebugUIApp />;
+  }
+
+  return (
+    <Provider store={store}>
+      <ChatWidget />
+    </Provider>
+  );
 }

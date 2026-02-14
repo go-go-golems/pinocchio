@@ -1,0 +1,31 @@
+.turn-detail-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.turn-detail-empty-state,
+.turn-detail-loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  text-align: center;
+  color: var(--text-muted);
+  gap: 16px;
+}
+
+.turn-detail-page-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.turn-detail-page-header h2 {
+  margin: 0;
+  font-size: 18px;
+  font-family: monospace;
+}

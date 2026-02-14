@@ -1,0 +1,36 @@
+.timeline-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.timeline-empty-state,
+.timeline-loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+.timeline-page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.timeline-page-header h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.timeline-header-meta {
+  display: flex;
+  gap: 16px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}

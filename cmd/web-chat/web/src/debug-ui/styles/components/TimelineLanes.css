@@ -1,0 +1,66 @@
+.timeline-lanes {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--bg-primary);
+}
+
+.timeline-lanes-header {
+  display: flex;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+}
+
+.timeline-lane-header {
+  flex: 1;
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-right: 1px solid var(--border-color);
+}
+
+.timeline-lane-header:last-child {
+  border-right: none;
+}
+
+.timeline-lane-title {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.timeline-lane-count {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.timeline-lanes-body {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.timeline-lane {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 8px;
+  border-right: 1px solid var(--border-color);
+  position: relative;
+}
+
+.timeline-lane:last-child {
+  border-right: none;
+}
+
+.timeline-lane-state {
+  background: var(--accent-purple-a03);
+}
+
+.timeline-lane-event {
+  background: var(--accent-blue-a03);
+}
+
+.timeline-lane-projection {
+  background: var(--accent-green-a03);
+}

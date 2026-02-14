@@ -1,0 +1,229 @@
+.anomaly-panel-overlay {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 400px;
+  background: var(--bg-secondary);
+  border-left: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  z-index: 100;
+  box-shadow: -4px 0 20px var(--shadow-overlay-strong);
+}
+
+.anomaly-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.anomaly-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.anomaly-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.anomaly-title h3 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.anomaly-total {
+  font-size: 12px;
+  padding: 2px 8px;
+  background: var(--accent-red);
+  color: white;
+  border-radius: 10px;
+}
+
+.severity-filter {
+  display: flex;
+  gap: 4px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-color);
+  overflow-x: auto;
+}
+
+.severity-btn {
+  padding: 6px 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s;
+}
+
+.severity-btn:hover {
+  background: var(--bg-hover);
+}
+
+.severity-btn.active {
+  background: var(--bg-tertiary);
+  border-color: var(--accent-blue);
+  color: var(--text-primary);
+}
+
+.anomaly-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.anomaly-empty-state {
+  text-align: center;
+  padding: 24px;
+  color: var(--text-muted);
+}
+
+.anomaly-card {
+  padding: 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.anomaly-card:hover {
+  background: var(--bg-hover);
+}
+
+.anomaly-card.selected {
+  border-color: var(--accent-blue);
+  background: var(--accent-blue-a10);
+}
+
+.anomaly-card.severity-error {
+  border-left: 3px solid var(--accent-red);
+}
+
+.anomaly-card.severity-warning {
+  border-left: 3px solid var(--accent-yellow);
+}
+
+.anomaly-card.severity-info {
+  border-left: 3px solid var(--accent-blue);
+}
+
+.anomaly-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.anomaly-type {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+}
+
+.anomaly-time {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.anomaly-message {
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.anomaly-detail {
+  border-top: 1px solid var(--border-color);
+  background: var(--bg-tertiary);
+}
+
+.anomaly-detail-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.anomaly-detail-header h4 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.anomaly-detail-content {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.anomaly-detail-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.anomaly-detail-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.anomaly-detail-value {
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.severity-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.severity-badge.severity-error {
+  background: var(--accent-red-a20);
+  color: var(--accent-red);
+}
+
+.severity-badge.severity-warning {
+  background: var(--accent-yellow-a20);
+  color: var(--accent-yellow);
+}
+
+.severity-badge.severity-info {
+  background: var(--accent-blue-a20);
+  color: var(--accent-blue);
+}
+
+.anomaly-detail-pre {
+  font-size: 11px;
+  padding: 8px;
+  background: var(--bg-secondary);
+  border-radius: 4px;
+  overflow-x: auto;
+}
+
+.anomaly-related-ids {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  font-family: monospace;
+  color: var(--accent-cyan);
+}
