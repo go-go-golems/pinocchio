@@ -105,6 +105,9 @@ type Router struct {
 	usesRedis      bool
 	redisAddr      string
 	idleTimeoutSec int
+	// disableDebugRoutes disables registration of /api/debug/* and legacy /debug/* handlers.
+	// Default is false (debug routes enabled).
+	disableDebugRoutes bool
 
 	// step mode control (shared; not conversation-owned)
 	stepCtrl *toolloop.StepController

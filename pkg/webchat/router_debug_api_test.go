@@ -281,6 +281,34 @@ func TestAPIHandler_DebugTurnDetail(t *testing.T) {
 	require.True(t, hasParsed)
 }
 
+func TestAPIHandler_DebugRoutesDisabled(t *testing.T) {
+	t.Setenv("PINOCCHIO_WEBCHAT_DEBUG", "1")
+
+	r := &Router{
+		profiles:           newInMemoryProfileRegistry(),
+		cm:                 &ConvManager{conns: map[string]*Conversation{}},
+		stepCtrl:           toolloop.NewStepController(),
+		timelineStore:      &stubTimelineStore{snapshot: sampleTimelineSnapshot()},
+		turnStore:          &stubTurnStore{items: []chatstore.TurnSnapshot{{ConvID: "conv-1", SessionID: "session-1"}}},
+		disableDebugRoutes: true,
+	}
+	h := r.APIHandler()
+
+	status, _ := runRequest(t, h, http.MethodGet, "/api/debug/conversations", nil)
+	require.Equal(t, http.StatusNotFound, status)
+
+	status, _ = runRequest(t, h, http.MethodGet, "/api/debug/timeline?conv_id=conv-1", nil)
+	require.Equal(t, http.StatusNotFound, status)
+
+	status, _ = runRequest(t, h, http.MethodGet, "/timeline?conv_id=conv-1", nil)
+	require.Equal(t, http.StatusNotFound, status)
+
+	status, _ = runRequest(t, h, http.MethodPost, "/api/debug/step/enable", map[string]any{
+		"session_id": "session-1",
+	})
+	require.Equal(t, http.StatusNotFound, status)
+}
+
 func runRequest(t *testing.T, h http.Handler, method string, path string, payload map[string]any) (int, []byte) {
 	t.Helper()
 

@@ -133,3 +133,12 @@ func WithEventSinkWrapper(fn EventSinkWrapper) RouterOption {
 		return nil
 	}
 }
+
+// WithDebugRoutesEnabled toggles registration of debug API endpoints.
+// When disabled, /api/debug/* and legacy /debug/* routes are not mounted.
+func WithDebugRoutesEnabled(enabled bool) RouterOption {
+	return func(r *Router) error {
+		r.disableDebugRoutes = !enabled
+		return nil
+	}
+}
