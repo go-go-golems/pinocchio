@@ -212,6 +212,14 @@ func (r *Router) Handler() http.Handler { return r.mux }
 // ConversationService returns the service used by app-owned /chat and /ws handlers.
 func (r *Router) ConversationService() *ConversationService { return r.conversationService }
 
+// StreamHub returns the stream lifecycle service used by websocket helpers.
+func (r *Router) StreamHub() *StreamHub {
+	if r == nil || r.conversationService == nil {
+		return nil
+	}
+	return r.conversationService.StreamHub()
+}
+
 // BuildHTTPServer constructs an http.Server using settings from layers.
 func (r *Router) BuildHTTPServer() (*http.Server, error) {
 	s := &RouterSettings{}

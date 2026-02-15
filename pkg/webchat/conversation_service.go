@@ -3,7 +3,6 @@ package webchat
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"os"
 	"strings"
 	"time"
@@ -19,7 +18,6 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/inference/toolloop/enginebuilder"
 	geptools "github.com/go-go-golems/geppetto/pkg/inference/tools"
 	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
-	sempb "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/base"
 	timelinepb "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/timeline"
 )
 
@@ -37,6 +35,7 @@ type ConversationServiceConfig struct {
 type ConversationService struct {
 	baseCtx context.Context
 	cm      *ConvManager
+	streams *StreamHub
 
 	stepCtrl       *toolloop.StepController
 	timelineStore  chatstore.TimelineStore
@@ -87,6 +86,13 @@ func NewConversationService(cfg ConversationServiceConfig) (*ConversationService
 	if cfg.ConvManager == nil {
 		return nil, errors.New("conversation service conv manager is nil")
 	}
+	streams, err := NewStreamHub(StreamHubConfig{
+		BaseCtx:     cfg.BaseCtx,
+		ConvManager: cfg.ConvManager,
+	})
+	if err != nil {
+		return nil, err
+	}
 	toolFactories := cfg.ToolFactories
 	if toolFactories == nil {
 		toolFactories = map[string]ToolFactory{}
@@ -94,6 +100,7 @@ func NewConversationService(cfg ConversationServiceConfig) (*ConversationService
 	return &ConversationService{
 		baseCtx:        cfg.BaseCtx,
 		cm:             cfg.ConvManager,
+		streams:        streams,
 		stepCtrl:       cfg.StepController,
 		timelineStore:  cfg.TimelineStore,
 		turnStore:      cfg.TurnStore,
@@ -109,6 +116,13 @@ func (s *ConversationService) WSPublisher() WSPublisher {
 		return nil
 	}
 	return s.publisher
+}
+
+func (s *ConversationService) StreamHub() *StreamHub {
+	if s == nil {
+		return nil
+	}
+	return s.streams
 }
 
 func (s *ConversationService) SetTimelineStore(store chatstore.TimelineStore) {
@@ -143,32 +157,10 @@ func (s *ConversationService) RegisterTool(name string, f ToolFactory) {
 }
 
 func (s *ConversationService) ResolveAndEnsureConversation(ctx context.Context, req AppConversationRequest) (*ConversationHandle, error) {
-	if s == nil || s.cm == nil {
+	if s == nil || s.streams == nil {
 		return nil, errors.New("conversation service is not initialized")
 	}
-	convID := strings.TrimSpace(req.ConvID)
-	if convID == "" {
-		convID = uuid.NewString()
-	}
-	runtimeKey := strings.TrimSpace(req.RuntimeKey)
-	if runtimeKey == "" {
-		runtimeKey = "default"
-	}
-	conv, err := s.cm.GetOrCreate(convID, runtimeKey, req.Overrides)
-	if err != nil {
-		return nil, err
-	}
-	if conv == nil {
-		return nil, errors.New("conversation not available")
-	}
-	return &ConversationHandle{
-		ConvID:             conv.ID,
-		SessionID:          conv.SessionID,
-		RuntimeKey:         conv.RuntimeKey,
-		RuntimeFingerprint: conv.RuntimeFingerprint,
-		SeedSystemPrompt:   conv.SeedSystemPrompt,
-		AllowedTools:       append([]string(nil), conv.AllowedTools...),
-	}, nil
+	return s.streams.ResolveAndEnsureConversation(ctx, req)
 }
 
 func (s *ConversationService) SubmitPrompt(ctx context.Context, in SubmitPromptInput) (SubmitPromptResult, error) {
@@ -225,94 +217,10 @@ func (s *ConversationService) SubmitPrompt(ctx context.Context, in SubmitPromptI
 }
 
 func (s *ConversationService) AttachWebSocket(ctx context.Context, convID string, conn *websocket.Conn, opts WebSocketAttachOptions) error {
-	if s == nil || s.cm == nil {
+	if s == nil || s.streams == nil {
 		return errors.New("conversation service is not initialized")
 	}
-	convID = strings.TrimSpace(convID)
-	if convID == "" {
-		return errors.New("missing convID")
-	}
-	if conn == nil {
-		return errors.New("websocket connection is nil")
-	}
-	conv, ok := s.cm.GetConversation(convID)
-	if !ok || conv == nil {
-		var err error
-		conv, err = s.cm.GetOrCreate(convID, "default", nil)
-		if err != nil {
-			return err
-		}
-	}
-	s.cm.AddConn(conv, conn)
-	wsLog := log.With().
-		Str("component", "webchat").
-		Str("remote", conn.RemoteAddr().String()).
-		Str("conv_id", convID).
-		Str("runtime_key", conv.RuntimeKey).
-		Logger()
-	if opts.SendHello && conv != nil && conv.pool != nil {
-		ts := time.Now().UnixMilli()
-		data, _ := protoToRaw(&sempb.WsHelloV1{ConvId: convID, RuntimeKey: conv.RuntimeKey, ServerTime: ts})
-		hello := map[string]any{
-			"sem": true,
-			"event": map[string]any{
-				"type": "ws.hello",
-				"id":   fmt.Sprintf("ws.hello:%s:%d", convID, ts),
-				"data": data,
-			},
-		}
-		if b, err := json.Marshal(hello); err == nil {
-			wsLog.Debug().Msg("ws sending hello")
-			conv.pool.SendToOne(conn, b)
-		}
-	}
-	go func() {
-		defer s.cm.RemoveConn(conv, conn)
-		defer wsLog.Info().Msg("ws disconnected")
-		for {
-			msgType, data, err := conn.ReadMessage()
-			if err != nil {
-				wsLog.Debug().Err(err).Msg("ws read loop end")
-				return
-			}
-
-			if opts.HandlePingPong && msgType == websocket.TextMessage && len(data) > 0 && conv != nil && conv.pool != nil {
-				text := strings.TrimSpace(strings.ToLower(string(data)))
-				isPing := text == "ping"
-				if !isPing {
-					var v map[string]any
-					if err := json.Unmarshal(data, &v); err == nil && v != nil {
-						if t, ok := v["type"].(string); ok && strings.EqualFold(t, "ws.ping") {
-							isPing = true
-						} else if sem, ok := v["sem"].(bool); ok && sem {
-							if ev, ok := v["event"].(map[string]any); ok {
-								if t2, ok := ev["type"].(string); ok && strings.EqualFold(t2, "ws.ping") {
-									isPing = true
-								}
-							}
-						}
-					}
-				}
-				if isPing {
-					ts := time.Now().UnixMilli()
-					data, _ := protoToRaw(&sempb.WsPongV1{ConvId: convID, ServerTime: ts})
-					pong := map[string]any{
-						"sem": true,
-						"event": map[string]any{
-							"type": "ws.pong",
-							"id":   fmt.Sprintf("ws.pong:%s:%d", convID, ts),
-							"data": data,
-						},
-					}
-					if b, err := json.Marshal(pong); err == nil {
-						wsLog.Debug().Msg("ws sending pong")
-						conv.pool.SendToOne(conn, b)
-					}
-				}
-			}
-		}
-	}()
-	return nil
+	return s.streams.AttachWebSocket(ctx, convID, conn, opts)
 }
 
 func (s *ConversationService) TimelineUpsertHook(conv *Conversation) func(entity *timelinepb.TimelineEntityV1, version uint64) {
