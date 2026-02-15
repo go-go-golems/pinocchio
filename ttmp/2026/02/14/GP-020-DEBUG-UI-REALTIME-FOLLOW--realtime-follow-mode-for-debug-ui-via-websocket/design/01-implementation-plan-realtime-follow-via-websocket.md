@@ -23,14 +23,18 @@ RelatedFiles:
     - Path: pinocchio/cmd/web-chat/web/src/ws/wsManager.ts
       Note: Reference websocket lifecycle for connect/hydrate/replay
     - Path: pinocchio/pkg/webchat/router_debug_routes.go
-      Note: Bootstrap source via /api/debug/timeline and turns endpoints
+      Note: Debug API routes and optional legacy fallback endpoints
+    - Path: pinocchio/pkg/webchat/router_timeline_api.go
+      Note: Canonical timeline hydration endpoint (/api/timeline)
+    - Path: pinocchio/cmd/web-chat/main.go
+      Note: App-owned /ws and /api/timeline route wiring
     - Path: pinocchio/pkg/webchat/timeline_projector.go
       Note: Persisted projection source and upsert ordering
     - Path: pinocchio/pkg/webchat/timeline_upsert.go
       Note: Server emits websocket timeline.upsert frames after persistence
 ExternalSources: []
 Summary: Implementation plan to add read-only websocket follow mode in debug UI when selecting a socket-backed live conversation.
-LastUpdated: 2026-02-14T12:12:00-05:00
+LastUpdated: 2026-02-15T16:30:00-05:00
 WhatFor: Plan realtime conversation following from debug UI with socket attach semantics.
 WhenToUse: Use when implementing socket selection and live stream follow in debug-ui runtime.
 ---
@@ -45,15 +49,16 @@ Enable debug UI to attach read-only to a live conversation over websocket and co
 ## Intended UX
 1. User selects a conversation with active sockets in sidebar.
 2. User enables "Follow live" mode for that conversation/session.
-3. UI bootstraps timeline entities from debug API, then applies incoming websocket `timeline.upsert` frames incrementally.
+3. UI bootstraps timeline entities from canonical timeline API (`/api/timeline`), then applies incoming websocket `timeline.upsert` frames incrementally.
 4. User can pause follow mode and inspect current snapshot without mutating backend state.
 
 ## Current State (Code Facts)
-1. Debug UI uses RTK Query polling-style HTTP endpoints (`/api/debug/*`) only.
+1. Debug UI currently reads via RTK Query polling-style debug endpoints (`/api/debug/*`) and does not yet consume canonical timeline hydration for follow bootstrap.
 2. Existing websocket manager lives in non-debug `webchat` (`src/ws/wsManager.ts`) and writes to `store/timelineSlice` in the webchat store, not debug-ui store.
 3. Server already broadcasts persisted projection updates as websocket SEM frames (`event.type = "timeline.upsert"`) from `timeline_upsert.go`.
 4. `ConversationSummary` already includes `ws_connections`, so sidebar has enough signal to present live-attach affordance.
 5. Full turn/block snapshots are persisted to turn storage and exposed via debug HTTP routes (`/api/debug/turns`, `/api/debug/turn/...`), not streamed as full snapshots over websocket today.
+6. In the current app-owned route model, `/ws` and `/api/timeline` are mounted by app code, while `/api/debug/*` remains diagnostics-only.
 
 ## Architecture Decision
 Use a debug-ui scoped websocket client that listens for `timeline.upsert` and upserts generic timeline entities into debug-ui state. Keep debug UI read-only: no command sending, no mutation messages.
@@ -73,7 +78,8 @@ Use a debug-ui scoped websocket client that listens for `timeline.upsert` and up
    - `debugTimelineWsManager.ts` (connect/disconnect/bootstrap/buffer/flush)
 2. Reuse timeline proto decode/mapping for `TimelineUpsertV1` only.
 3. Bootstrap flow:
-   - initial GET (`/api/debug/timeline?conv_id=...`)
+   - initial GET (`/api/timeline?conv_id=...`) as canonical source
+   - optional fallback GET (`/api/debug/timeline?conv_id=...`) only when canonical endpoint is unavailable in older environments
    - record high-water version from snapshot
    - replay buffered websocket envelopes in sequence order, dropping frames at or below high-water
 4. On conversation switch, ensure hard disconnect then reconnect for new conv id.
@@ -96,6 +102,7 @@ Use a debug-ui scoped websocket client that listens for `timeline.upsert` and up
 2. Drop unknown SEM event types safely, keep them visible in raw inspector.
 3. Add retry/backoff for socket reconnect with explicit user override.
 4. On parse/decode errors, surface to follow status panel but keep existing snapshot rendered.
+5. Derive base prefix from current location so follow mode works under custom roots (for example `--root /chat`).
 
 ### Phase 6: Testing
 1. Unit tests for debug websocket manager:
@@ -126,6 +133,7 @@ Use a debug-ui scoped websocket client that listens for `timeline.upsert` and up
 3. Pause stops live application while retaining current state.
 4. Reconnect and conversation switching do not leak stale updates.
 5. Read-only behavior is preserved (no side-effect commands sent).
+6. Follow mode works under non-root mounts by correctly prefixing `/ws` and `/api/timeline`.
 
 ## Risks and Mitigations
 1. Risk: Drift between webchat ws manager and debug ws manager.

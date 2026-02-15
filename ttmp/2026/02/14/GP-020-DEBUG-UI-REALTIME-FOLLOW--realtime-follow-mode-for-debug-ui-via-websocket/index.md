@@ -13,10 +13,10 @@ Intent: long-term
 Owners: []
 RelatedFiles: []
 ExternalSources: []
-Summary: ""
-LastUpdated: 2026-02-14T11:43:23.845533537-05:00
-WhatFor: ""
-WhenToUse: ""
+Summary: "Track implementation of read-only realtime debug follow mode using app-owned /ws and canonical /api/timeline bootstrap."
+LastUpdated: 2026-02-15T16:30:00-05:00
+WhatFor: "Align GP-020 follow-mode implementation with the current webchat route ownership and HTTP API model."
+WhenToUse: "Use when implementing or reviewing debug-ui realtime follow behavior and endpoint usage."
 ---
 
 # Realtime Follow Mode for Debug UI via WebSocket

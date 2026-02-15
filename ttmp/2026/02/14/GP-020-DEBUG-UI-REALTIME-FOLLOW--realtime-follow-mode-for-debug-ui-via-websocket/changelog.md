@@ -25,3 +25,13 @@ Refined scope: follow mode now targets generic timeline.upsert stream + API boot
 - geppetto/ttmp/2026/02/14/GP-020-DEBUG-UI-REALTIME-FOLLOW--realtime-follow-mode-for-debug-ui-via-websocket/reference/01-diary.md — Added exploration step documenting scope change and websocket findings
 - geppetto/ttmp/2026/02/14/GP-020-DEBUG-UI-REALTIME-FOLLOW--realtime-follow-mode-for-debug-ui-via-websocket/tasks.md — Updated task list for timeline-upsert-only scope
 
+
+## 2026-02-15
+
+Aligned GP-020 plan with current app-owned webchat HTTP setup and canonical routes.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/ttmp/2026/02/14/GP-020-DEBUG-UI-REALTIME-FOLLOW--realtime-follow-mode-for-debug-ui-via-websocket/design/01-implementation-plan-realtime-follow-via-websocket.md — Switched bootstrap guidance to `/api/timeline`, added app-owned route ownership notes, and documented root-prefix requirement
+- /home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/ttmp/2026/02/14/GP-020-DEBUG-UI-REALTIME-FOLLOW--realtime-follow-mode-for-debug-ui-via-websocket/tasks.md — Updated task checklist for canonical timeline endpoint and base-prefix handling
+- /home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/ttmp/2026/02/14/GP-020-DEBUG-UI-REALTIME-FOLLOW--realtime-follow-mode-for-debug-ui-via-websocket/index.md — Refreshed ticket summary/intent metadata
