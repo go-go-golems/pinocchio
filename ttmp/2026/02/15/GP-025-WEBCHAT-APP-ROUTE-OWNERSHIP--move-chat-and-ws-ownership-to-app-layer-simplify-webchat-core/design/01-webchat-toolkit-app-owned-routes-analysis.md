@@ -484,6 +484,12 @@ Websocket behavior contract:
 3. Ping response is `ws.pong` SEM frame sent to the requesting socket.
 4. Non-ping client messages are ignored unless future app policy opts in.
 
+### 11.5 Frozen Route Ownership Boundary
+Ownership rule (locked for GP-025):
+1. `pkg/webchat` must not register `/chat` or `/ws` routes.
+2. `pkg/webchat` may expose handler helpers/services, but route mounting lives in app code.
+3. Any remaining router utility in `pkg/webchat` must be optional and non-central.
+
 ## 12. Tradeoffs
 ### 12.1 Benefits
 1. Lower conceptual load for contributors.
