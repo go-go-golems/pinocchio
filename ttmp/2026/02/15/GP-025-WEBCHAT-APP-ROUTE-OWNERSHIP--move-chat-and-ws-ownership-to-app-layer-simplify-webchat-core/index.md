@@ -1,7 +1,7 @@
 ---
 Title: Move /chat and /ws ownership to app layer; simplify webchat core
 Ticket: GP-025-WEBCHAT-APP-ROUTE-OWNERSHIP
-Status: active
+Status: complete
 Topics:
     - architecture
     - webchat
@@ -14,10 +14,11 @@ Owners: []
 RelatedFiles: []
 ExternalSources: []
 Summary: Move route ownership out of `pkg/webchat` and refactor webchat core into reusable conversation/runtime primitives with lower abstraction overhead.
-LastUpdated: 2026-02-15T01:35:00-05:00
+LastUpdated: 2026-02-15T17:46:56.602209312-05:00
 WhatFor: Track analysis and implementation planning for route ownership inversion and router simplification.
 WhenToUse: Use when designing or implementing the GP-025 webchat architecture cutover.
 ---
+
 
 # Move /chat and /ws ownership to app layer; simplify webchat core
 

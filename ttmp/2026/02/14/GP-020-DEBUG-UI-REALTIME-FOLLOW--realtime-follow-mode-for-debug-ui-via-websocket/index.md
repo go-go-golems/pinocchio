@@ -1,7 +1,7 @@
 ---
 Title: Realtime Follow Mode for Debug UI via WebSocket
 Ticket: GP-020-DEBUG-UI-REALTIME-FOLLOW
-Status: active
+Status: complete
 Topics:
     - frontend
     - debugging
@@ -13,11 +13,12 @@ Intent: long-term
 Owners: []
 RelatedFiles: []
 ExternalSources: []
-Summary: "Track implementation of read-only realtime debug follow mode using app-owned /ws and canonical /api/timeline bootstrap."
-LastUpdated: 2026-02-15T16:30:00-05:00
-WhatFor: "Align GP-020 follow-mode implementation with the current webchat route ownership and HTTP API model."
-WhenToUse: "Use when implementing or reviewing debug-ui realtime follow behavior and endpoint usage."
+Summary: Track implementation of read-only realtime debug follow mode using app-owned /ws and canonical /api/timeline bootstrap.
+LastUpdated: 2026-02-15T17:46:56.513382445-05:00
+WhatFor: Align GP-020 follow-mode implementation with the current webchat route ownership and HTTP API model.
+WhenToUse: Use when implementing or reviewing debug-ui realtime follow behavior and endpoint usage.
 ---
+
 
 # Realtime Follow Mode for Debug UI via WebSocket
 

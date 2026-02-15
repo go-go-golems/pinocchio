@@ -31,3 +31,8 @@ Completed initial refactor slice: SEM stream ingestion + builtin chat.message pr
 
 - /home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/pkg/webchat/conversation_service.go — Core migration from direct timeline writes to stream events
 
+
+## 2026-02-15
+
+Ticket closed
+
