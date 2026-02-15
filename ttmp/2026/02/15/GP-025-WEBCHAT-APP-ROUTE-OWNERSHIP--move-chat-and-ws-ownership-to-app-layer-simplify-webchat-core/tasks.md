@@ -14,7 +14,7 @@
 - [x] Freeze minimal core API surface for cutover:
 - [x] `ConversationService` constructor/config object.
 - [x] `ConversationService.ResolveAndEnsureConversation(...)`.
-- [ ] `ConversationService.SubmitPrompt(...)`.
+- [x] `ConversationService.SubmitPrompt(...)`.
 - [ ] `ConversationService.AttachWebSocket(...)`.
 - [ ] `WSPublisher.PublishJSON(...)` conversation-scoped API.
 - [ ] Freeze app-owned handler contracts:

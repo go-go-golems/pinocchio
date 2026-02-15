@@ -324,3 +324,53 @@ I added explicit request/handle types, method signature, and behavior notes, the
 ### Technical details
 - Updated file: `pinocchio/ttmp/2026/02/15/GP-025-WEBCHAT-APP-ROUTE-OWNERSHIP--move-chat-and-ws-ownership-to-app-layer-simplify-webchat-core/design/01-webchat-toolkit-app-owned-routes-analysis.md`
 - Checked task: `9`
+
+## Step 17: Lock `SubmitPrompt(...)` lifecycle contract
+After resolve/ensure, prompt submission is the highest-risk behavior because it touches queueing, idempotency, runtime start, and client-visible status semantics. I froze this method next to avoid accidental behavior changes during refactor.
+
+This step added explicit input/result shapes and status guarantees for submission behavior, then checked task 10.
+
+### Prompt Context
+
+**User prompt (verbatim):** (see Step 13)
+
+**Assistant interpretation:** Keep executing the GP-025 checklist in strict order with committed contract slices.
+
+**Inferred user intent:** Preserve existing runtime semantics while changing architecture, with clear reviewable contracts.
+
+**Commit (code):** pending — "docs(gp-025): freeze submit-prompt contract"
+
+### What I did
+- Added `SubmitPromptInput` and `SubmitPromptResult` contract types.
+- Locked `SubmitPrompt(ctx, in)` signature.
+- Documented queue/idempotency status behavior and required response keys.
+- Ran `docmgr task check --ticket GP-025-WEBCHAT-APP-ROUTE-OWNERSHIP --id 10`.
+
+### Why
+- The `/chat` migration depends on preserving observable enqueue/start semantics while moving ownership to app handlers.
+
+### What worked
+- The design now defines transport-neutral submission behavior that HTTP handlers can adapt with stable status mapping.
+
+### What didn't work
+- N/A
+
+### What I learned
+- Explicitly documenting response-status vocabulary (`queued`/`running`/`started`/`completed`/`error`) makes integration-test expectations easier to derive.
+
+### What was tricky to build
+- Avoiding over-coupling to HTTP while still documenting HTTP-facing status implications required a split between service result and adapter behavior.
+
+### What warrants a second pair of eyes
+- Validate whether `HTTPStatus` belongs in service result or should stay entirely in handler adapters.
+
+### What should be done in the future
+- Reconcile this service contract with existing `/chat` response behavior in `router.go` during task 25.
+
+### Code review instructions
+- Review section `7.3` and compare to current `Conversation.PrepareSessionInference` flow.
+- Confirm task 10 is checked.
+
+### Technical details
+- Updated file: `pinocchio/ttmp/2026/02/15/GP-025-WEBCHAT-APP-ROUTE-OWNERSHIP--move-chat-and-ws-ownership-to-app-layer-simplify-webchat-core/design/01-webchat-toolkit-app-owned-routes-analysis.md`
+- Checked task: `10`

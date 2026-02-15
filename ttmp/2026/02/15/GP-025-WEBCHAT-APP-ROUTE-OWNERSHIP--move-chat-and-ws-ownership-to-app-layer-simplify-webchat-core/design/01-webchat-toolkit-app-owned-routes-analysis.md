@@ -237,6 +237,34 @@ Behavior notes:
 3. Method ensures the conversation exists and runtime composition is applied.
 4. Returned handle is stable for downstream `SubmitPrompt` and `AttachWebSocket` calls.
 
+### 7.3 Frozen `SubmitPrompt(...)` Contract
+
+```go
+type SubmitPromptInput struct {
+    ConvID          string
+    RuntimeKey      string
+    Overrides       map[string]any
+    Prompt          string
+    IdempotencyKey  string
+}
+
+type SubmitPromptResult struct {
+    HTTPStatus int
+    Response   map[string]any
+}
+
+func (s *ConversationService) SubmitPrompt(
+    ctx context.Context,
+    in SubmitPromptInput,
+) (SubmitPromptResult, error)
+```
+
+Behavior notes:
+1. Empty prompt returns a validation error (`400` for HTTP adapters).
+2. Idempotency and queue semantics are preserved from current `Conversation.PrepareSessionInference(...)` behavior.
+3. Result `Response["status"]` is one of: `queued`, `running`, `started`, `completed`, `error`.
+4. Response always includes `conv_id`, `session_id`, and `idempotency_key` when submission reaches queue/runtime path.
+
 The key simplification is that app code passes explicit values instead of registering many global options that interact indirectly.
 
 ## 8. Sequence Diagrams
