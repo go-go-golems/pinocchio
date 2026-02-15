@@ -108,7 +108,10 @@ func NewWSHandler(svc *ConversationService, resolver ConversationRequestResolver
 			_ = conn.Close()
 			return
 		}
-		if err := svc.AttachWebSocket(req.Context(), handle.ConvID, conn, WebSocketAttachOptions{SendHello: true}); err != nil {
+		if err := svc.AttachWebSocket(req.Context(), handle.ConvID, conn, WebSocketAttachOptions{
+			SendHello:      true,
+			HandlePingPong: true,
+		}); err != nil {
 			_ = conn.WriteMessage(websocket.TextMessage, []byte(`{"error":"failed to attach websocket"}`))
 			_ = conn.Close()
 			return

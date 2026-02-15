@@ -73,7 +73,8 @@ type SubmitPromptResult struct {
 }
 
 type WebSocketAttachOptions struct {
-	SendHello bool
+	SendHello      bool
+	HandlePingPong bool
 }
 
 func NewConversationService(cfg ConversationServiceConfig) (*ConversationService, error) {
@@ -271,7 +272,7 @@ func (s *ConversationService) AttachWebSocket(ctx context.Context, convID string
 				return
 			}
 
-			if msgType == websocket.TextMessage && len(data) > 0 && conv != nil && conv.pool != nil {
+			if opts.HandlePingPong && msgType == websocket.TextMessage && len(data) > 0 && conv != nil && conv.pool != nil {
 				text := strings.TrimSpace(strings.ToLower(string(data)))
 				isPing := text == "ping"
 				if !isPing {
