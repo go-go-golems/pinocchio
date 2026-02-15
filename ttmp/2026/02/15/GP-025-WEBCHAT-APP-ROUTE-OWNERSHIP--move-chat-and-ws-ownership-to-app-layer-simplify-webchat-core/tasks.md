@@ -66,7 +66,7 @@
 - [x] Add integration tests for app-owned `/ws` flow in `cmd/web-chat`.
 - [x] Add integration tests for migrated `web-agent-example` chat/ws flow.
 - [ ] Run focused backend tests:
-- [ ] `go test ./pinocchio/pkg/webchat/...`
+- [x] `go test ./pinocchio/pkg/webchat/...`
 - [ ] `go test ./pinocchio/cmd/web-chat/...`
 - [ ] `go test ./web-agent-example/...`
 - [ ] Run relevant frontend checks for impacted apps.
