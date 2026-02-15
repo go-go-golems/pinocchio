@@ -60,7 +60,7 @@
 
 ## Phase 6: Validation and Test Matrix
 
-- [ ] Add/adjust unit tests for `ConversationService` lifecycle APIs.
+- [x] Add/adjust unit tests for `ConversationService` lifecycle APIs.
 - [ ] Add/adjust tests for `WSPublisher` behavior (conversation not found, no pool, successful fanout).
 - [ ] Add integration tests for app-owned `/chat` flow in `cmd/web-chat`.
 - [ ] Add integration tests for app-owned `/ws` flow in `cmd/web-chat`.
