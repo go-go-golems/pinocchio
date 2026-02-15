@@ -87,3 +87,29 @@ func TestTimelineProjector_LlmFinalFallsBackToDeltaContentWhenFinalTextEmpty(t *
 	require.Equal(t, "assistant cumulative", msg.Content)
 	require.False(t, msg.Streaming)
 }
+
+func TestTimelineProjector_ProjectsChatMessageEvent(t *testing.T) {
+	store := chatstore.NewInMemoryTimelineStore(100)
+	p := NewTimelineProjector("conv-chat-message", store, nil)
+
+	require.NoError(t, p.ApplySemFrame(context.Background(), semFrame(t, "chat.message", "user-turn-1", 5, map[string]any{
+		"schemaVersion": 1,
+		"role":          "user",
+		"content":       "hello from chat.message",
+		"streaming":     false,
+	})))
+
+	snap, err := store.GetSnapshot(context.Background(), "conv-chat-message", 0, 100)
+	require.NoError(t, err)
+	require.Len(t, snap.Entities, 1)
+	require.Equal(t, uint64(5), snap.Version)
+
+	entity := snap.Entities[0]
+	require.Equal(t, "user-turn-1", entity.Id)
+	require.Equal(t, "message", entity.Kind)
+	msg := entity.GetMessage()
+	require.NotNil(t, msg)
+	require.Equal(t, "user", msg.Role)
+	require.Equal(t, "hello from chat.message", msg.Content)
+	require.False(t, msg.Streaming)
+}
