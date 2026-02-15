@@ -207,6 +207,36 @@ Behavior notes:
 2. Constructor owns `ConvManager` initialization and persistence wiring.
 3. Router/HTTP concerns are intentionally absent from config.
 
+### 7.2 Frozen `ResolveAndEnsureConversation(...)` Contract
+
+```go
+type AppConversationRequest struct {
+    ConvID     string
+    RuntimeKey string
+    Overrides  map[string]any
+}
+
+type ConversationHandle struct {
+    ConvID             string
+    SessionID          string
+    RuntimeKey         string
+    RuntimeFingerprint string
+    SeedSystemPrompt   string
+    AllowedTools       []string
+}
+
+func (s *ConversationService) ResolveAndEnsureConversation(
+    ctx context.Context,
+    req AppConversationRequest,
+) (*ConversationHandle, error)
+```
+
+Behavior notes:
+1. Empty `ConvID` is normalized to a generated conversation id.
+2. Empty `RuntimeKey` is normalized to `"default"` unless app policy already resolved a value.
+3. Method ensures the conversation exists and runtime composition is applied.
+4. Returned handle is stable for downstream `SubmitPrompt` and `AttachWebSocket` calls.
+
 The key simplification is that app code passes explicit values instead of registering many global options that interact indirectly.
 
 ## 8. Sequence Diagrams

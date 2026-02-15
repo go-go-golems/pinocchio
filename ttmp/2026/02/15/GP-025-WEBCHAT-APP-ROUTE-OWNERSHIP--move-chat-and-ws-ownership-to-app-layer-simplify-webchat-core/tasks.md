@@ -13,7 +13,7 @@
 - [x] Add explicit decision note in design doc: clean cutover only, no compatibility adapter layer.
 - [x] Freeze minimal core API surface for cutover:
 - [x] `ConversationService` constructor/config object.
-- [ ] `ConversationService.ResolveAndEnsureConversation(...)`.
+- [x] `ConversationService.ResolveAndEnsureConversation(...)`.
 - [ ] `ConversationService.SubmitPrompt(...)`.
 - [ ] `ConversationService.AttachWebSocket(...)`.
 - [ ] `WSPublisher.PublishJSON(...)` conversation-scoped API.

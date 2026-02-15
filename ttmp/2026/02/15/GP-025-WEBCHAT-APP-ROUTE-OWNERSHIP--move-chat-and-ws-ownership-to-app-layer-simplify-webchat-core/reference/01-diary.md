@@ -274,3 +274,53 @@ This step adds an explicit config shape and constructor signature, then checks o
 ### Technical details
 - Updated file: `pinocchio/ttmp/2026/02/15/GP-025-WEBCHAT-APP-ROUTE-OWNERSHIP--move-chat-and-ws-ownership-to-app-layer-simplify-webchat-core/design/01-webchat-toolkit-app-owned-routes-analysis.md`
 - Checked task: `8`
+
+## Step 16: Lock `ResolveAndEnsureConversation(...)` request/handle semantics
+With constructor scope fixed, the next critical contract is the method that bridges app request policy into conversation lifecycle. This method defines canonical normalization and conversation existence guarantees.
+
+I added explicit request/handle types, method signature, and behavior notes, then checked task 9.
+
+### Prompt Context
+
+**User prompt (verbatim):** (see Step 13)
+
+**Assistant interpretation:** Continue GP-025 checklist execution by freezing each required service API one at a time.
+
+**Inferred user intent:** Make the migration sequence auditable and enforceable through concrete contracts before code changes.
+
+**Commit (code):** pending — "docs(gp-025): freeze resolve-and-ensure contract"
+
+### What I did
+- Added `AppConversationRequest` and `ConversationHandle` contract types.
+- Locked `ResolveAndEnsureConversation(ctx, req)` method signature in the design.
+- Documented normalization behavior for empty `conv_id` and `runtime_key`.
+- Ran `docmgr task check --ticket GP-025-WEBCHAT-APP-ROUTE-OWNERSHIP --id 9`.
+
+### Why
+- The app-owned `/chat` and `/ws` handlers both depend on a deterministic “ensure conversation” method.
+
+### What worked
+- Contract now clarifies exactly what callers can expect after resolve/ensure succeeds.
+
+### What didn't work
+- N/A
+
+### What I learned
+- Making normalization behavior explicit in the contract reduces hidden coupling to current resolver behavior.
+
+### What was tricky to build
+- Needed to balance fidelity to existing runtime behavior with cleaner service-level semantics that are independent of HTTP parsing.
+
+### What warrants a second pair of eyes
+- Confirm whether `ConversationHandle` should include additional fields for debug/timeline workflows.
+
+### What should be done in the future
+- Map this contract directly onto `ConvManager.GetOrCreate` during task 17 implementation.
+
+### Code review instructions
+- Review section `7.2` and verify contract clarity for both `/chat` and `/ws` handler usage.
+- Confirm task 9 is checked in ticket tasks.
+
+### Technical details
+- Updated file: `pinocchio/ttmp/2026/02/15/GP-025-WEBCHAT-APP-ROUTE-OWNERSHIP--move-chat-and-ws-ownership-to-app-layer-simplify-webchat-core/design/01-webchat-toolkit-app-owned-routes-analysis.md`
+- Checked task: `9`
