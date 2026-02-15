@@ -8,6 +8,7 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/events"
 	"github.com/go-go-golems/geppetto/pkg/inference/session"
 	"github.com/go-go-golems/geppetto/pkg/turns"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 )
 
@@ -85,4 +86,93 @@ func TestConversationService_SubmitPromptQueuesWhenConversationBusy(t *testing.T
 	require.Equal(t, "queued", resp.Response["status"])
 	require.Equal(t, "k-1", resp.Response["idempotency_key"])
 	require.Len(t, conv.queue, 1)
+}
+
+func TestConversationService_ResolveAndEnsureConversation_DefaultsAndLifecycle(t *testing.T) {
+	runtimeComposer := RuntimeComposerFunc(func(context.Context, RuntimeComposeRequest) (RuntimeArtifacts, error) {
+		return RuntimeArtifacts{
+			Engine:             noopEngine{},
+			Sink:               noopSink{},
+			RuntimeKey:         "default",
+			RuntimeFingerprint: "fp-default",
+			SeedSystemPrompt:   "seed",
+		}, nil
+	})
+	cm := NewConvManager(ConvManagerOptions{
+		BaseCtx:         context.Background(),
+		RuntimeComposer: runtimeComposer,
+		BuildSubscriber: func(string) (message.Subscriber, bool, error) { return nil, false, nil },
+	})
+	svc, err := NewConversationService(ConversationServiceConfig{
+		BaseCtx:     context.Background(),
+		ConvManager: cm,
+	})
+	require.NoError(t, err)
+
+	handle, err := svc.ResolveAndEnsureConversation(context.Background(), AppConversationRequest{})
+	require.NoError(t, err)
+	require.NotEmpty(t, handle.ConvID)
+	_, parseErr := uuid.Parse(handle.ConvID)
+	require.NoError(t, parseErr)
+	require.Equal(t, "default", handle.RuntimeKey)
+	require.Equal(t, "fp-default", handle.RuntimeFingerprint)
+	require.Equal(t, "seed", handle.SeedSystemPrompt)
+}
+
+func TestConversationService_SubmitPromptRejectsMissingPrompt(t *testing.T) {
+	runtimeComposer := RuntimeComposerFunc(func(context.Context, RuntimeComposeRequest) (RuntimeArtifacts, error) {
+		return RuntimeArtifacts{
+			Engine:             noopEngine{},
+			Sink:               noopSink{},
+			RuntimeKey:         "default",
+			RuntimeFingerprint: "fp-default",
+		}, nil
+	})
+	cm := NewConvManager(ConvManagerOptions{
+		BaseCtx:         context.Background(),
+		RuntimeComposer: runtimeComposer,
+		BuildSubscriber: func(string) (message.Subscriber, bool, error) { return nil, false, nil },
+	})
+	svc, err := NewConversationService(ConversationServiceConfig{
+		BaseCtx:     context.Background(),
+		ConvManager: cm,
+	})
+	require.NoError(t, err)
+
+	resp, err := svc.SubmitPrompt(context.Background(), SubmitPromptInput{
+		ConvID:     "conv-1",
+		RuntimeKey: "default",
+		Prompt:     "   ",
+	})
+	require.NoError(t, err)
+	require.Equal(t, 400, resp.HTTPStatus)
+	require.Equal(t, "error", resp.Response["status"])
+	require.Equal(t, "missing prompt", resp.Response["error"])
+}
+
+func TestConversationService_AttachWebSocketValidatesArguments(t *testing.T) {
+	runtimeComposer := RuntimeComposerFunc(func(context.Context, RuntimeComposeRequest) (RuntimeArtifacts, error) {
+		return RuntimeArtifacts{
+			Engine:             noopEngine{},
+			Sink:               noopSink{},
+			RuntimeKey:         "default",
+			RuntimeFingerprint: "fp-default",
+		}, nil
+	})
+	cm := NewConvManager(ConvManagerOptions{
+		BaseCtx:         context.Background(),
+		RuntimeComposer: runtimeComposer,
+		BuildSubscriber: func(string) (message.Subscriber, bool, error) { return nil, false, nil },
+	})
+	svc, err := NewConversationService(ConversationServiceConfig{
+		BaseCtx:     context.Background(),
+		ConvManager: cm,
+	})
+	require.NoError(t, err)
+
+	err = svc.AttachWebSocket(context.Background(), "", nil, WebSocketAttachOptions{})
+	require.ErrorContains(t, err, "missing convID")
+
+	err = svc.AttachWebSocket(context.Background(), "conv-1", nil, WebSocketAttachOptions{})
+	require.ErrorContains(t, err, "websocket connection is nil")
 }
