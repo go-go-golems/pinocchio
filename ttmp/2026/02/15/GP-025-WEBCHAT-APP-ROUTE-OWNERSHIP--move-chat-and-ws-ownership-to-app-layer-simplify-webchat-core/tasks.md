@@ -47,8 +47,8 @@
 - [x] Audit existing `web-agent-example` dependencies on `pkg/webchat` router route ownership.
 - [x] Define target app-owned handlers for `web-agent-example` (`/chat`, `/ws`, optional debug routes).
 - [x] Implement `ConversationService` wiring in `web-agent-example` main/bootstrap path.
-- [ ] Move resolver/runtime policy usage to app-owned request handling code.
-- [ ] Remove reliance on legacy router-owned `/chat` and `/ws`.
+- [x] Move resolver/runtime policy usage to app-owned request handling code.
+- [x] Remove reliance on legacy router-owned `/chat` and `/ws`.
 - [ ] Validate live conversations, websocket updates, and timeline upserts in `web-agent-example` after migration.
 
 ## Phase 5: Router Simplification and Deletion Pass
