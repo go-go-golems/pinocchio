@@ -7,6 +7,7 @@ import (
 	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/go-go-golems/geppetto/pkg/events"
 	"github.com/go-go-golems/geppetto/pkg/inference/toolloop"
+	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
 	timelinepb "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/timeline"
 )
@@ -14,7 +15,7 @@ import (
 // RouterOption configures optional dependencies for a Router.
 type RouterOption func(*Router) error
 
-func WithRuntimeComposer(composer RuntimeComposer) RouterOption {
+func WithRuntimeComposer(composer infruntime.RuntimeComposer) RouterOption {
 	return func(r *Router) error {
 		if composer == nil {
 			return errors.New("runtime composer is nil")

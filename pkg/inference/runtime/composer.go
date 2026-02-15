@@ -1,4 +1,4 @@
-package webchat
+package runtime
 
 import (
 	"context"
@@ -14,7 +14,7 @@ type RuntimeComposeRequest struct {
 	Overrides  map[string]any
 }
 
-// RuntimeArtifacts are the composed runtime pieces consumed by core conversation lifecycle code.
+// RuntimeArtifacts are the composed runtime pieces consumed by conversation lifecycle code.
 type RuntimeArtifacts struct {
 	Engine             engine.Engine
 	Sink               events.EventSink
@@ -27,10 +27,12 @@ type RuntimeArtifacts struct {
 	AllowedTools []string
 }
 
+// RuntimeComposer composes an engine/sink runtime for a conversation request.
 type RuntimeComposer interface {
 	Compose(ctx context.Context, req RuntimeComposeRequest) (RuntimeArtifacts, error)
 }
 
+// RuntimeComposerFunc adapts a function to RuntimeComposer.
 type RuntimeComposerFunc func(ctx context.Context, req RuntimeComposeRequest) (RuntimeArtifacts, error)
 
 func (f RuntimeComposerFunc) Compose(ctx context.Context, req RuntimeComposeRequest) (RuntimeArtifacts, error) {

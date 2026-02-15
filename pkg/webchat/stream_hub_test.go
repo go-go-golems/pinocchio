@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/ThreeDotsLabs/watermill/message"
+	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 	"github.com/stretchr/testify/require"
 )
 
@@ -17,8 +18,8 @@ func TestNewStreamHub_ValidatesRequiredDependencies(t *testing.T) {
 }
 
 func TestStreamHub_ResolveAndEnsureConversation_Defaults(t *testing.T) {
-	runtimeComposer := RuntimeComposerFunc(func(context.Context, RuntimeComposeRequest) (RuntimeArtifacts, error) {
-		return RuntimeArtifacts{
+	runtimeComposer := infruntime.RuntimeComposerFunc(func(context.Context, infruntime.RuntimeComposeRequest) (infruntime.RuntimeArtifacts, error) {
+		return infruntime.RuntimeArtifacts{
 			Engine:             noopEngine{},
 			Sink:               noopSink{},
 			RuntimeKey:         "default",
@@ -46,8 +47,8 @@ func TestStreamHub_ResolveAndEnsureConversation_Defaults(t *testing.T) {
 }
 
 func TestStreamHub_AttachWebSocketValidatesArguments(t *testing.T) {
-	runtimeComposer := RuntimeComposerFunc(func(context.Context, RuntimeComposeRequest) (RuntimeArtifacts, error) {
-		return RuntimeArtifacts{
+	runtimeComposer := infruntime.RuntimeComposerFunc(func(context.Context, infruntime.RuntimeComposeRequest) (infruntime.RuntimeArtifacts, error) {
+		return infruntime.RuntimeArtifacts{
 			Engine:             noopEngine{},
 			Sink:               noopSink{},
 			RuntimeKey:         "default",

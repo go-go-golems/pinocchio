@@ -8,7 +8,6 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
-	webchat "github.com/go-go-golems/pinocchio/pkg/webchat"
 )
 
 func TestRuntimeFingerprint_DoesNotIncludeAPIKeys(t *testing.T) {
@@ -30,7 +29,7 @@ func TestRuntimeFingerprint_DoesNotIncludeAPIKeys(t *testing.T) {
 func TestWebChatRuntimeComposer_RejectsInvalidOverrideTypes(t *testing.T) {
 	composer := newWebChatRuntimeComposer(values.New(), map[string]infruntime.MiddlewareFactory{})
 
-	_, err := composer.Compose(context.Background(), webchat.RuntimeComposeRequest{
+	_, err := composer.Compose(context.Background(), infruntime.RuntimeComposeRequest{
 		ConvID:     "c1",
 		RuntimeKey: "default",
 		Overrides:  map[string]any{"middlewares": "bad"},

@@ -9,7 +9,6 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
-	webchat "github.com/go-go-golems/pinocchio/pkg/webchat"
 	"github.com/rs/zerolog/log"
 )
 
@@ -25,15 +24,15 @@ func newWebChatRuntimeComposer(parsed *values.Values, mwFactories map[string]inf
 	}
 }
 
-func (c *webChatRuntimeComposer) Compose(ctx context.Context, req webchat.RuntimeComposeRequest) (webchat.RuntimeArtifacts, error) {
+func (c *webChatRuntimeComposer) Compose(ctx context.Context, req infruntime.RuntimeComposeRequest) (infruntime.RuntimeArtifacts, error) {
 	if c == nil || c.parsed == nil {
-		return webchat.RuntimeArtifacts{}, fmt.Errorf("runtime composer is not configured")
+		return infruntime.RuntimeArtifacts{}, fmt.Errorf("runtime composer is not configured")
 	}
 	if err := validateOverrides(req.Overrides); err != nil {
-		return webchat.RuntimeArtifacts{}, err
+		return infruntime.RuntimeArtifacts{}, err
 	}
 	if ctx == nil {
-		return webchat.RuntimeArtifacts{}, fmt.Errorf("compose context is nil")
+		return infruntime.RuntimeArtifacts{}, fmt.Errorf("compose context is nil")
 	}
 
 	runtimeKey := strings.TrimSpace(req.RuntimeKey)
@@ -51,14 +50,14 @@ func (c *webChatRuntimeComposer) Compose(ctx context.Context, req webchat.Runtim
 		if arr, ok := req.Overrides["middlewares"].([]any); ok {
 			parsed, err := parseMiddlewareOverrides(arr)
 			if err != nil {
-				return webchat.RuntimeArtifacts{}, err
+				return infruntime.RuntimeArtifacts{}, err
 			}
 			middlewares = parsed
 		}
 		if arr, ok := req.Overrides["tools"].([]any); ok {
 			parsed, err := parseToolOverrides(arr)
 			if err != nil {
-				return webchat.RuntimeArtifacts{}, err
+				return infruntime.RuntimeArtifacts{}, err
 			}
 			tools = parsed
 		}
@@ -69,7 +68,7 @@ func (c *webChatRuntimeComposer) Compose(ctx context.Context, req webchat.Runtim
 
 	stepSettings, err := settings.NewStepSettingsFromParsedValues(c.parsed)
 	if err != nil {
-		return webchat.RuntimeArtifacts{}, err
+		return infruntime.RuntimeArtifacts{}, err
 	}
 	eng, err := infruntime.ComposeEngineFromSettings(
 		ctx,
@@ -79,10 +78,10 @@ func (c *webChatRuntimeComposer) Compose(ctx context.Context, req webchat.Runtim
 		c.mwFactories,
 	)
 	if err != nil {
-		return webchat.RuntimeArtifacts{}, err
+		return infruntime.RuntimeArtifacts{}, err
 	}
 
-	return webchat.RuntimeArtifacts{
+	return infruntime.RuntimeArtifacts{
 		Engine:             eng,
 		RuntimeKey:         runtimeKey,
 		RuntimeFingerprint: runtimeFingerprint(runtimeKey, systemPrompt, middlewares, tools, stepSettings),

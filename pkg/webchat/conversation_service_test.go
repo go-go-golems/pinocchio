@@ -8,6 +8,7 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/events"
 	"github.com/go-go-golems/geppetto/pkg/inference/session"
 	"github.com/go-go-golems/geppetto/pkg/turns"
+	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 )
@@ -44,8 +45,8 @@ type noopSink struct{}
 func (noopSink) PublishEvent(events.Event) error { return nil }
 
 func TestConversationService_SubmitPromptQueuesWhenConversationBusy(t *testing.T) {
-	runtimeComposer := RuntimeComposerFunc(func(context.Context, RuntimeComposeRequest) (RuntimeArtifacts, error) {
-		return RuntimeArtifacts{
+	runtimeComposer := infruntime.RuntimeComposerFunc(func(context.Context, infruntime.RuntimeComposeRequest) (infruntime.RuntimeArtifacts, error) {
+		return infruntime.RuntimeArtifacts{
 			Engine:             noopEngine{},
 			Sink:               noopSink{},
 			RuntimeKey:         "default",
@@ -89,8 +90,8 @@ func TestConversationService_SubmitPromptQueuesWhenConversationBusy(t *testing.T
 }
 
 func TestConversationService_ResolveAndEnsureConversation_DefaultsAndLifecycle(t *testing.T) {
-	runtimeComposer := RuntimeComposerFunc(func(context.Context, RuntimeComposeRequest) (RuntimeArtifacts, error) {
-		return RuntimeArtifacts{
+	runtimeComposer := infruntime.RuntimeComposerFunc(func(context.Context, infruntime.RuntimeComposeRequest) (infruntime.RuntimeArtifacts, error) {
+		return infruntime.RuntimeArtifacts{
 			Engine:             noopEngine{},
 			Sink:               noopSink{},
 			RuntimeKey:         "default",
@@ -120,8 +121,8 @@ func TestConversationService_ResolveAndEnsureConversation_DefaultsAndLifecycle(t
 }
 
 func TestConversationService_SubmitPromptRejectsMissingPrompt(t *testing.T) {
-	runtimeComposer := RuntimeComposerFunc(func(context.Context, RuntimeComposeRequest) (RuntimeArtifacts, error) {
-		return RuntimeArtifacts{
+	runtimeComposer := infruntime.RuntimeComposerFunc(func(context.Context, infruntime.RuntimeComposeRequest) (infruntime.RuntimeArtifacts, error) {
+		return infruntime.RuntimeArtifacts{
 			Engine:             noopEngine{},
 			Sink:               noopSink{},
 			RuntimeKey:         "default",
@@ -151,8 +152,8 @@ func TestConversationService_SubmitPromptRejectsMissingPrompt(t *testing.T) {
 }
 
 func TestConversationService_AttachWebSocketValidatesArguments(t *testing.T) {
-	runtimeComposer := RuntimeComposerFunc(func(context.Context, RuntimeComposeRequest) (RuntimeArtifacts, error) {
-		return RuntimeArtifacts{
+	runtimeComposer := infruntime.RuntimeComposerFunc(func(context.Context, infruntime.RuntimeComposeRequest) (infruntime.RuntimeArtifacts, error) {
+		return infruntime.RuntimeArtifacts{
 			Engine:             noopEngine{},
 			Sink:               noopSink{},
 			RuntimeKey:         "default",

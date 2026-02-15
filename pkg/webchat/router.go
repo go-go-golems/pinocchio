@@ -356,20 +356,20 @@ var (
 	_ http.Handler
 )
 
-func (r *Router) convRuntimeComposer() RuntimeComposer {
-	return RuntimeComposerFunc(func(ctx context.Context, req RuntimeComposeRequest) (RuntimeArtifacts, error) {
+func (r *Router) convRuntimeComposer() infruntime.RuntimeComposer {
+	return infruntime.RuntimeComposerFunc(func(ctx context.Context, req infruntime.RuntimeComposeRequest) (infruntime.RuntimeArtifacts, error) {
 		if r == nil {
-			return RuntimeArtifacts{}, errors.New("router is nil")
+			return infruntime.RuntimeArtifacts{}, errors.New("router is nil")
 		}
 		if r.runtimeComposer == nil {
-			return RuntimeArtifacts{}, errors.New("runtime composer is not configured")
+			return infruntime.RuntimeArtifacts{}, errors.New("runtime composer is not configured")
 		}
 		artifacts, err := r.runtimeComposer.Compose(ctx, req)
 		if err != nil {
-			return RuntimeArtifacts{}, err
+			return infruntime.RuntimeArtifacts{}, err
 		}
 		if artifacts.Engine == nil {
-			return RuntimeArtifacts{}, errors.New("runtime composer returned nil engine")
+			return infruntime.RuntimeArtifacts{}, errors.New("runtime composer returned nil engine")
 		}
 		if artifacts.Sink == nil {
 			artifacts.Sink = middleware.NewWatermillSink(r.router.Publisher, topicForConv(req.ConvID))
@@ -377,7 +377,7 @@ func (r *Router) convRuntimeComposer() RuntimeComposer {
 		if r.eventSinkWrapper != nil {
 			wrapped, err := r.eventSinkWrapper(req.ConvID, req, artifacts.Sink)
 			if err != nil {
-				return RuntimeArtifacts{}, err
+				return infruntime.RuntimeArtifacts{}, err
 			}
 			artifacts.Sink = wrapped
 		}
