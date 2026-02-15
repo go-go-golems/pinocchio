@@ -215,9 +215,6 @@ func (r *Router) HandleFunc(pattern string, handler func(http.ResponseWriter, *h
 // Applications should still own and mount /chat and /ws themselves.
 func (r *Router) Handler() http.Handler { return r.mux }
 
-// ConversationService returns the service used by app-owned /chat and /ws handlers.
-func (r *Router) ConversationService() *ConversationService { return r.conversationService }
-
 // ChatService returns the chat-focused service surface (queue/idempotency/inference).
 func (r *Router) ChatService() *ChatService { return r.chatService }
 

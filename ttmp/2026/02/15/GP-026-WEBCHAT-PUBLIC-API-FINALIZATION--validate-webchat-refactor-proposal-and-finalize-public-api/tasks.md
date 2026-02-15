@@ -14,7 +14,7 @@
 - [x] Split ConversationService into ChatService-focused API (queue/idempotency/inference only, no websocket attach)
 - [x] Cut cmd/web-chat over to service-based wiring and remove direct Router dependency
 - [ ] Finalize docs, migration notes, and API contract tests for public release readiness
-- [ ] Delete legacy Router/ConvManager/old service paths once replacement services are verified
-- [ ] Cut web-agent-example over to service-based wiring and verify event sink wrapper behavior
+- [x] Delete legacy Router/ConvManager/old service paths once replacement services are verified
+- [x] Cut web-agent-example over to service-based wiring and verify event sink wrapper behavior
 - [x] Extract TimelineService and timeline HTTP helper independent of Router
 - [ ] Reorganize package layout into stream/chat/timeline/http/bootstrap subpackages with stable public exports

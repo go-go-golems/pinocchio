@@ -7,6 +7,6 @@
 //
 // Recommended setup:
 //   - Build a Router with a RuntimeComposer.
-//   - Create app-owned /chat and /ws handlers via NewChatHandler/NewWSHandler and ConversationService.
+//   - Create app-owned /chat and /ws handlers via NewChatHTTPHandler/NewWSHTTPHandler with ChatService/StreamHub.
 //   - Mount Router API/UI helpers where needed (for example under /api/ and /).
 package webchat
