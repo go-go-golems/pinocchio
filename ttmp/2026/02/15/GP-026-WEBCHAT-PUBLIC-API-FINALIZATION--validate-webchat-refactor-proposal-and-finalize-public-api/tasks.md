@@ -12,7 +12,7 @@
 - [x] Introduce explicit HTTP helpers wired to ChatService + StreamHub + TimelineService
 - [x] Implement StreamHub to own per-conversation stream state (subscriber/coordinator/ws pool/projector/maintenance)
 - [x] Split ConversationService into ChatService-focused API (queue/idempotency/inference only, no websocket attach)
-- [ ] Cut cmd/web-chat over to service-based wiring and remove direct Router dependency
+- [x] Cut cmd/web-chat over to service-based wiring and remove direct Router dependency
 - [ ] Finalize docs, migration notes, and API contract tests for public release readiness
 - [ ] Delete legacy Router/ConvManager/old service paths once replacement services are verified
 - [ ] Cut web-agent-example over to service-based wiring and verify event sink wrapper behavior

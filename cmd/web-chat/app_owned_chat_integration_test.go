@@ -51,7 +51,7 @@ func newAppOwnedIntegrationServer(t *testing.T) *httptest.Server {
 		}, nil
 	})
 
-	r, err := webchat.NewRouter(context.Background(), parsed, staticFS, webchat.WithRuntimeComposer(runtimeComposer))
+	webchatSrv, err := webchat.NewServer(context.Background(), parsed, staticFS, webchat.WithRuntimeComposer(runtimeComposer))
 	require.NoError(t, err)
 
 	profiles := newChatProfileRegistry(
@@ -60,9 +60,9 @@ func newAppOwnedIntegrationServer(t *testing.T) *httptest.Server {
 		&chatProfile{Slug: "agent", DefaultPrompt: "You are agent", AllowOverrides: true},
 	)
 	requestResolver := newWebChatProfileResolver(profiles)
-	chatHandler := webchat.NewChatHandler(r.ConversationService(), requestResolver)
-	wsHandler := webchat.NewWSHandler(
-		r.ConversationService(),
+	chatHandler := webchat.NewChatHTTPHandler(webchatSrv.ChatService(), requestResolver)
+	wsHandler := webchat.NewWSHTTPHandler(
+		webchatSrv.StreamHub(),
 		requestResolver,
 		websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }},
 	)
@@ -71,11 +71,11 @@ func newAppOwnedIntegrationServer(t *testing.T) *httptest.Server {
 	appMux.HandleFunc("/chat", chatHandler)
 	appMux.HandleFunc("/chat/", chatHandler)
 	appMux.HandleFunc("/ws", wsHandler)
-	appMux.Handle("/api/", r.APIHandler())
-	appMux.Handle("/", r.UIHandler())
+	appMux.Handle("/api/", webchatSrv.APIHandler())
+	appMux.Handle("/", webchatSrv.UIHandler())
 
-	srv := httptest.NewServer(appMux)
-	return srv
+	httpSrv := httptest.NewServer(appMux)
+	return httpSrv
 }
 
 func TestAppOwnedChatHandler_Integration_DefaultProfilePath(t *testing.T) {

@@ -43,6 +43,55 @@ func NewServer(ctx context.Context, parsed *values.Values, staticFS fs.FS, opts 
 
 func (s *Server) Router() *Router { return s.router }
 
+func (s *Server) RegisterMiddleware(name string, f MiddlewareFactory) {
+	if s == nil || s.router == nil {
+		return
+	}
+	s.router.RegisterMiddleware(name, f)
+}
+
+func (s *Server) RegisterTool(name string, f ToolFactory) {
+	if s == nil || s.router == nil {
+		return
+	}
+	s.router.RegisterTool(name, f)
+}
+
+func (s *Server) ChatService() *ChatService {
+	if s == nil || s.router == nil {
+		return nil
+	}
+	return s.router.ChatService()
+}
+
+func (s *Server) StreamHub() *StreamHub {
+	if s == nil || s.router == nil {
+		return nil
+	}
+	return s.router.StreamHub()
+}
+
+func (s *Server) APIHandler() http.Handler {
+	if s == nil || s.router == nil {
+		return http.NotFoundHandler()
+	}
+	return s.router.APIHandler()
+}
+
+func (s *Server) UIHandler() http.Handler {
+	if s == nil || s.router == nil {
+		return http.NotFoundHandler()
+	}
+	return s.router.UIHandler()
+}
+
+func (s *Server) HTTPServer() *http.Server {
+	if s == nil {
+		return nil
+	}
+	return s.httpSrv
+}
+
 // NewFromRouter constructs a server from an existing Router and http.Server.
 func NewFromRouter(ctx context.Context, r *Router, httpSrv *http.Server) *Server {
 	if ctx == nil {

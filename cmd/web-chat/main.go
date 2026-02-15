@@ -116,24 +116,24 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 	runtimeComposer := newWebChatRuntimeComposer(parsed, middlewareFactories)
 	requestResolver := newWebChatProfileResolver(profiles)
 
-	// Build webchat router and register middlewares/tools/profile handlers.
-	r, err := webchat.NewRouter(
+	// Build webchat server and register middlewares/tools/profile handlers.
+	srv, err := webchat.NewServer(
 		ctx,
 		parsed,
 		staticFS,
 		webchat.WithRuntimeComposer(runtimeComposer),
 	)
 	if err != nil {
-		return errors.Wrap(err, "new webchat router")
+		return errors.Wrap(err, "new webchat server")
 	}
 
 	// Register middlewares
 	for name, factory := range middlewareFactories {
-		r.RegisterMiddleware(name, factory)
+		srv.RegisterMiddleware(name, factory)
 	}
 
 	// Register calculator tool
-	r.RegisterTool("calculator", func(reg geptools.ToolRegistry) error {
+	srv.RegisterTool("calculator", func(reg geptools.ToolRegistry) error {
 		if im, ok := reg.(*geptools.InMemoryToolRegistry); ok {
 			return toolspkg.RegisterCalculatorTool(im)
 		}
@@ -147,9 +147,9 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 		return nil
 	})
 
-	chatHandler := webchat.NewChatHandler(r.ConversationService(), requestResolver)
-	wsHandler := webchat.NewWSHandler(
-		r.ConversationService(),
+	chatHandler := webchat.NewChatHTTPHandler(srv.ChatService(), requestResolver)
+	wsHandler := webchat.NewWSHTTPHandler(
+		srv.StreamHub(),
 		requestResolver,
 		websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }},
 	)
@@ -158,13 +158,13 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 	appMux.HandleFunc("/chat/", chatHandler)
 	appMux.HandleFunc("/ws", wsHandler)
 	registerProfileHandlers(appMux, profiles)
-	appMux.Handle("/api/", r.APIHandler())
-	appMux.Handle("/", r.UIHandler())
+	appMux.Handle("/api/", srv.APIHandler())
+	appMux.Handle("/", srv.UIHandler())
 
 	// HTTP server and run, with optional root mounting
-	httpSrv, err := r.BuildHTTPServer()
-	if err != nil {
-		return errors.Wrap(err, "build http server")
+	httpSrv := srv.HTTPServer()
+	if httpSrv == nil {
+		return errors.New("http server is not initialized")
 	}
 
 	// If --root is not "/", mount router under that root with a parent mux
@@ -190,7 +190,6 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 		httpSrv.Handler = appMux
 	}
 
-	srv := webchat.NewFromRouter(ctx, r, httpSrv)
 	return srv.Run(ctx)
 }
 
