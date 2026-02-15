@@ -312,6 +312,9 @@ func (r *Router) registerUIHandlers(mux *http.ServeMux) {
 func (r *Router) registerAPIHandlers(mux *http.ServeMux) {
 	logger := log.With().Str("component", "webchat").Logger()
 
+	// Timeline hydration is part of core webchat and available independent of debug routes.
+	r.registerTimelineAPIHandlers(mux)
+
 	if r.debugRoutesEnabled() {
 		r.registerDebugAPIHandlers(mux)
 	}

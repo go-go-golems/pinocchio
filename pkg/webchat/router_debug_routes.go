@@ -13,7 +13,6 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/turns/serde"
 	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
 	"github.com/rs/zerolog/log"
-	"google.golang.org/protobuf/encoding/protojson"
 )
 
 func (r *Router) debugRoutesEnabled() bool {
@@ -402,59 +401,7 @@ func (r *Router) registerDebugAPIHandlers(mux *http.ServeMux) {
 	mux.HandleFunc("/debug/continue", continueHandler)
 	mux.HandleFunc("/api/debug/continue", continueHandler)
 
-	timelineHandler := func(w http.ResponseWriter, r0 *http.Request) {
-		if r0.Method != http.MethodGet {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		if r.timelineStore == nil {
-			http.Error(w, "timeline store not enabled", http.StatusNotFound)
-			return
-		}
-
-		convID := strings.TrimSpace(r0.URL.Query().Get("conv_id"))
-		if convID == "" {
-			http.Error(w, "missing conv_id", http.StatusBadRequest)
-			return
-		}
-
-		var sinceVersion uint64
-		if s := strings.TrimSpace(r0.URL.Query().Get("since_version")); s != "" {
-			_, _ = fmt.Sscanf(s, "%d", &sinceVersion)
-		}
-		limit := 0
-		if s := strings.TrimSpace(r0.URL.Query().Get("limit")); s != "" {
-			var v int
-			_, _ = fmt.Sscanf(s, "%d", &v)
-			if v > 0 {
-				limit = v
-			}
-		}
-
-		snap, err := r.timelineStore.GetSnapshot(r0.Context(), convID, sinceVersion, limit)
-		if err != nil {
-			logger.Error().Err(err).Str("conv_id", convID).Msg("timeline snapshot failed")
-			http.Error(w, "timeline snapshot failed", http.StatusInternalServerError)
-			return
-		}
-		out, err := protojson.MarshalOptions{
-			EmitUnpopulated: false,
-			UseProtoNames:   false,
-		}.Marshal(snap)
-		if err != nil {
-			logger.Error().Err(err).Str("conv_id", convID).Msg("timeline marshal failed")
-			http.Error(w, "timeline marshal failed", http.StatusInternalServerError)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		w.Header().Set("X-Content-Type-Options", "nosniff")
-		// #nosec G705 -- payload is protobuf-generated JSON served as application/json.
-		if _, err := w.Write(out); err != nil {
-			logger.Warn().Err(err).Str("conv_id", convID).Msg("timeline write failed")
-		}
-	}
-	mux.HandleFunc("/timeline", timelineHandler)
-	mux.HandleFunc("/timeline/", timelineHandler)
+	timelineHandler := r.timelineSnapshotHandler(logger)
 	mux.HandleFunc("/api/debug/timeline", timelineHandler)
 	mux.HandleFunc("/api/debug/timeline/", timelineHandler)
 

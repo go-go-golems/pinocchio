@@ -46,18 +46,18 @@ func (s *stubTurnStore) List(context.Context, chatstore.TurnQuery) ([]chatstore.
 
 func (s *stubTurnStore) Close() error { return nil }
 
-func TestAPIHandler_DebugTimelineParity(t *testing.T) {
+func TestAPIHandler_TimelineAndDebugAliasParity(t *testing.T) {
 	r := &Router{
 		cm:            &ConvManager{conns: map[string]*Conversation{}},
 		timelineStore: &stubTimelineStore{snapshot: sampleTimelineSnapshot()},
 	}
 	h := r.APIHandler()
 
-	oldStatus, oldBody := runRequest(t, h, http.MethodGet, "/timeline?conv_id=conv-1", nil)
-	newStatus, newBody := runRequest(t, h, http.MethodGet, "/api/debug/timeline?conv_id=conv-1", nil)
+	coreStatus, coreBody := runRequest(t, h, http.MethodGet, "/api/timeline?conv_id=conv-1", nil)
+	debugStatus, debugBody := runRequest(t, h, http.MethodGet, "/api/debug/timeline?conv_id=conv-1", nil)
 
-	require.Equal(t, oldStatus, newStatus)
-	require.Equal(t, oldBody, newBody)
+	require.Equal(t, coreStatus, debugStatus)
+	require.Equal(t, coreBody, debugBody)
 }
 
 func TestAPIHandler_DebugTurnsParity(t *testing.T) {
@@ -292,8 +292,8 @@ func TestAPIHandler_DebugRoutesDisabled(t *testing.T) {
 	status, _ = runRequest(t, h, http.MethodGet, "/api/debug/timeline?conv_id=conv-1", nil)
 	require.Equal(t, http.StatusNotFound, status)
 
-	status, _ = runRequest(t, h, http.MethodGet, "/timeline?conv_id=conv-1", nil)
-	require.Equal(t, http.StatusNotFound, status)
+	status, _ = runRequest(t, h, http.MethodGet, "/api/timeline?conv_id=conv-1", nil)
+	require.Equal(t, http.StatusOK, status)
 
 	status, _ = runRequest(t, h, http.MethodPost, "/api/debug/step/enable", map[string]any{
 		"session_id": "session-1",

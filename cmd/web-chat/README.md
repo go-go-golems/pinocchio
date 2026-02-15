@@ -119,7 +119,7 @@ return srv.ListenAndServe()
 - `POST /chat` — Starts an inference for the current session
   - Body: `{ "prompt": string, "conv_id": string (optional) }`
   - Response: `{ "status": "started"|"queued", "conv_id": string, "session_id": string, "turn_id": string, "inference_id": string, "queue_position"?: number, "idempotency_key": string }`
-- `GET /timeline?conv_id={string}&since_version={uint64?}&limit={int?}` — Returns timeline snapshot entities (backed by SQLite when configured, otherwise in-memory)
+- `GET /api/timeline?conv_id={string}&since_version={uint64?}&limit={int?}` — Returns timeline snapshot entities (backed by SQLite when configured, otherwise in-memory)
 - `GET /turns?conv_id={string}&session_id={string?}&phase={string?}&since_ms={int64?}&limit={int?}` — Returns stored turn snapshots (only when turn store is configured)
 
 ## Redis Streams (Optional Transport)
