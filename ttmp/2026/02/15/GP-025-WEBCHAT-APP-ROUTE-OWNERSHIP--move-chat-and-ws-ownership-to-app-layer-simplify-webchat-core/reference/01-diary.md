@@ -612,3 +612,44 @@ Phase 4 is complete. `web-agent-example` no longer relies on router-owned `/chat
 - `web-agent-example/cmd/web-agent-example/main.go`
 - `web-agent-example/cmd/web-agent-example/app_owned_routes_integration_test.go`
 - Completed phase: `Phase 4`
+
+## Step 24: Phase 5 completion summary (router simplification + docs cleanup)
+Phase 5 is complete. I removed obsolete router route-parameterization options, deleted dead legacy resolver paths tied to monolithic ownership, clarified remaining router helpers as optional utilities, and updated package docs to match the new ownership model.
+
+### What I did
+- Removed obsolete router options/state:
+- deleted `WithConversationRequestResolver` and `WithWebSocketUpgrader`.
+- removed unused `Router` fields and constructor branches that supported those options.
+- Removed dead default resolver implementation and tests no longer used after app-owned handler migration:
+- deleted `DefaultConversationRequestResolver` + `ConversationLookup` path.
+- deleted `pkg/webchat/engine_from_req_test.go`.
+- Clarified helper scoping:
+- updated comments to make `Handler`/`Handle`/`Mount` utility role explicit.
+- added test asserting `APIHandler` does not serve `/chat` or `/ws`.
+- Added package docs with current setup guidance:
+- new `pkg/webchat/doc.go` describing app-owned `/chat`/`/ws` and optional UI/API helper usage.
+
+### Key commits
+- `fcff5b9` remove obsolete router request/ws options.
+- `30609fe` remove legacy default request resolver path.
+- `a093f94` clarify router helpers as optional utilities.
+- `79e5f67` document app-owned route ownership model.
+
+### Validation
+- `go test ./pkg/webchat/... -count=1`
+- `go test ./cmd/web-chat/... -count=1`
+- pre-commit `go test ./...` + lint suite repeatedly passed after each slice.
+
+### Notes
+- Observed one intermittent pre-commit failure (`go test ./...` trying to open a missing `cmd/web-chat/web/node_modules/...` path). Immediate retry succeeded without code changes, consistent with prior transient behavior in this workspace.
+
+### Technical details
+- Primary files:
+- `pinocchio/pkg/webchat/router_options.go`
+- `pinocchio/pkg/webchat/types.go`
+- `pinocchio/pkg/webchat/router.go`
+- `pinocchio/pkg/webchat/engine_from_req.go`
+- `pinocchio/pkg/webchat/doc.go`
+- `pinocchio/pkg/webchat/server.go`
+- `pinocchio/pkg/webchat/router_handlers_test.go`
+- Completed phase: `Phase 5`
