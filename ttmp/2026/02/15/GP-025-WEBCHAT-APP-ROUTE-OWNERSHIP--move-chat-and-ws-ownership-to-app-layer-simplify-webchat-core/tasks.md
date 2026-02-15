@@ -64,7 +64,7 @@
 - [x] Add/adjust tests for `WSPublisher` behavior (conversation not found, no pool, successful fanout).
 - [x] Add integration tests for app-owned `/chat` flow in `cmd/web-chat`.
 - [x] Add integration tests for app-owned `/ws` flow in `cmd/web-chat`.
-- [ ] Add integration tests for migrated `web-agent-example` chat/ws flow.
+- [x] Add integration tests for migrated `web-agent-example` chat/ws flow.
 - [ ] Run focused backend tests:
 - [ ] `go test ./pinocchio/pkg/webchat/...`
 - [ ] `go test ./pinocchio/cmd/web-chat/...`
