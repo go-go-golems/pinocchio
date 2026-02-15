@@ -2,6 +2,7 @@ package webchat
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -83,5 +84,42 @@ func TestStreamCoordinator_FallsBackToLocalSeq(t *testing.T) {
 		require.GreaterOrEqual(t, got, minBase)
 	case <-time.After(2 * time.Second):
 		t.Fatal("timeout waiting for stream coordinator")
+	}
+}
+
+func TestStreamCoordinator_PatchesAndForwardsSEMPayload(t *testing.T) {
+	ch := make(chan *message.Message, 1)
+	sub := &stubSubscriber{ch: ch}
+	frameCh := make(chan []byte, 1)
+
+	sc := NewStreamCoordinator("c1", sub, nil, func(_ events.Event, _ StreamCursor, frame []byte) {
+		frameCh <- frame
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	require.NoError(t, sc.Start(ctx))
+
+	msg := message.NewMessage("1", []byte(`{"sem":true,"event":{"type":"chat.message","id":"user-turn-1","seq":1,"data":{"role":"user"}}}`))
+	msg.Metadata.Set("xid", "1700000000000-7")
+	ch <- msg
+	close(ch)
+
+	select {
+	case frame := <-frameCh:
+		var env map[string]any
+		require.NoError(t, json.Unmarshal(frame, &env))
+		require.Equal(t, true, env["sem"])
+		ev, ok := env["event"].(map[string]any)
+		require.True(t, ok)
+		require.Equal(t, "chat.message", ev["type"])
+		require.Equal(t, "user-turn-1", ev["id"])
+		require.Equal(t, "1700000000000-7", ev["stream_id"])
+
+		seq, ok := ev["seq"].(float64)
+		require.True(t, ok)
+		require.Equal(t, float64(1700000000000*1_000_000+7), seq)
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout waiting for sem frame")
 	}
 }

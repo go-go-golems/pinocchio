@@ -115,19 +115,32 @@ func (sc *StreamCoordinator) consume(ctx context.Context) {
 	}
 	log.Info().Str("component", "webchat").Str("conv_id", sc.convID).Msg("stream coordinator: started")
 	for msg := range ch {
-		ev, err := events.NewEventFromJson(msg.Payload)
-		if err != nil {
-			log.Warn().Err(err).Str("component", "webchat").Str("conv_id", sc.convID).Msg("stream coordinator: failed to decode event")
-			msg.Ack()
-			continue
-		}
-
 		streamID := extractStreamID(msg)
 		seq := sc.nextSeq(streamID)
 
 		cur := StreamCursor{
 			StreamID: streamID,
 			Seq:      seq,
+		}
+
+		if semFrame, isSEM, semErr := patchSEMPayloadWithCursor(msg.Payload, cur); isSEM {
+			if semErr != nil {
+				log.Warn().Err(semErr).Str("component", "webchat").Str("conv_id", sc.convID).Msg("stream coordinator: invalid sem envelope payload")
+				msg.Ack()
+				continue
+			}
+			if sc.onFrame != nil && len(semFrame) > 0 {
+				sc.onFrame(nil, cur, semFrame)
+			}
+			msg.Ack()
+			continue
+		}
+
+		ev, err := events.NewEventFromJson(msg.Payload)
+		if err != nil {
+			log.Warn().Err(err).Str("component", "webchat").Str("conv_id", sc.convID).Msg("stream coordinator: failed to decode event")
+			msg.Ack()
+			continue
 		}
 
 		if sc.onEvent != nil {
@@ -205,6 +218,31 @@ func deriveSeqFromStreamID(streamID string) (uint64, bool) {
 		return 0, false
 	}
 	return ms*1_000_000 + seq, true
+}
+
+func patchSEMPayloadWithCursor(payload []byte, cur StreamCursor) ([]byte, bool, error) {
+	var env map[string]any
+	if err := json.Unmarshal(payload, &env); err != nil {
+		return nil, false, nil
+	}
+	semFlag, ok := env["sem"].(bool)
+	if !ok || !semFlag {
+		return nil, false, nil
+	}
+	evObj, ok := env["event"].(map[string]any)
+	if !ok || evObj == nil {
+		return nil, true, errors.New("missing event object")
+	}
+	evObj["seq"] = cur.Seq
+	if cur.StreamID != "" {
+		evObj["stream_id"] = cur.StreamID
+	}
+	env["event"] = evObj
+	rebuilt, err := json.Marshal(env)
+	if err != nil {
+		return nil, true, err
+	}
+	return rebuilt, true, nil
 }
 
 func SemanticEventsFromEventWithCursor(e events.Event, cur StreamCursor) [][]byte {
