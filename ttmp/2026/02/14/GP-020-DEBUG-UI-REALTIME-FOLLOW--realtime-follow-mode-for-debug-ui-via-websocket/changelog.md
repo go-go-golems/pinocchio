@@ -63,3 +63,13 @@ Step 4: added debug timeline websocket manager core and checked Tasks 2-4 (commi
 
 - /home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/cmd/web-chat/web/src/debug-ui/ws/debugTimelineWsManager.ts — Canonical bootstrap and timeline.upsert dedupe pipeline
 
+
+## 2026-02-15
+
+Step 5: implemented Tasks 5-8 by wiring follow controls/status UI, app-level lifecycle hook, mount-aware follow connect/bootstrap paths, and explicit read-only follow transport note (commit c4a7c4c).
+
+### Related Files
+
+- /home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/cmd/web-chat/web/src/debug-ui/components/SessionList.tsx — User-facing follow/pause/resume/reconnect controls
+- /home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/cmd/web-chat/web/src/debug-ui/ws/useDebugTimelineFollow.ts — Central follow lifecycle owner with reconnect token and base prefix support
+

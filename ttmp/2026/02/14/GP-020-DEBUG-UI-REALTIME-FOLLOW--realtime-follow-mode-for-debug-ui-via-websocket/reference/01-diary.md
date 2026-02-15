@@ -14,11 +14,26 @@ Owners: []
 RelatedFiles:
     - Path: cmd/web-chat/web/src/debug-ui/api/debugApi.ts
       Note: Exploration source for debug-ui data model and conversation metadata
+    - Path: cmd/web-chat/web/src/debug-ui/components/AppShell.tsx
+      Note: Task 5 app-level follow hook mount and global status badge (commit c4a7c4c)
     - Path: cmd/web-chat/web/src/debug-ui/components/SessionList.tsx
+      Note: Task 5/6 follow controls and status chip wiring (commit c4a7c4c)
+    - Path: cmd/web-chat/web/src/debug-ui/routes/OverviewPage.tsx
+      Note: Task 5 route live status indicator and isLive semantics (commit c4a7c4c)
+    - Path: cmd/web-chat/web/src/debug-ui/routes/TimelinePage.tsx
+      Note: Task 5 route live status indicator and isLive semantics (commit c4a7c4c)
     - Path: cmd/web-chat/web/src/debug-ui/store/uiSlice.ts
       Note: Added follow-mode state/actions/selectors and reconnect token for GP-020 Task 1 (commit 8c13fbe)
+    - Path: cmd/web-chat/web/src/debug-ui/styles/components/AppShell.css
+      Note: Task 5 follow badges/chips/styles for status visibility (commit c4a7c4c)
+    - Path: cmd/web-chat/web/src/debug-ui/styles/primitives.css
+      Note: Task 5 small button primitive for follow controls (commit c4a7c4c)
     - Path: cmd/web-chat/web/src/debug-ui/ws/debugTimelineWsManager.ts
-      Note: Implements Task 2-4 follow transport core (connect/bootstrap/replay/upsert) in commit b6117d6
+      Note: |-
+        Implements Task 2-4 follow transport core (connect/bootstrap/replay/upsert) in commit b6117d6
+        Task 7 read-only websocket behavior note and lifecycle integration point (commit c4a7c4c)
+    - Path: cmd/web-chat/web/src/debug-ui/ws/useDebugTimelineFollow.ts
+      Note: Task 8 lifecycle hook with mount-aware basePrefix connect/bootstrap URLs (commit c4a7c4c)
     - Path: cmd/web-chat/web/src/sem/registry.ts
       Note: Exploration source for SEM event type support
     - Path: cmd/web-chat/web/src/ws/wsManager.ts
@@ -37,6 +52,7 @@ LastUpdated: 2026-02-14T12:12:00-05:00
 WhatFor: Record how realtime follow architecture and tasks were derived.
 WhenToUse: Use when implementing GP-020 or reviewing assumptions around live attach behavior.
 ---
+
 
 
 
@@ -292,3 +308,84 @@ The manager now handles canonical timeline bootstrap (`/api/timeline`), websocke
 ### Technical details
 - Manager intentionally ignores non-`timeline.upsert` websocket frames in this ticket scope.
 - Bootstrap source is canonical `/api/timeline` only, consistent with fresh-cutover policy.
+
+## Step 5: Wire follow controls, status badges, and mount-aware lifecycle hook
+This phase connected the follow-mode transport core into the debug UI so operators can actually control live attach behavior. I focused on minimal UI controls in `SessionList`, global status visibility in the shell, and route-level live indicators, while keeping lifecycle logic centralized in one hook.
+
+I also completed the two policy tasks in this phase: read-only behavior and base-prefix correctness. Read-only is enforced by design (no `ws.send` paths), and connect/bootstrap URLs are now derived from runtime mount prefix so follow mode works when the app is served from a non-root base path.
+
+### Prompt Context
+**User prompt (verbatim):** (same as Step 3)
+
+**Assistant interpretation:** Finish the next GP-020 task group by wiring user-facing follow controls and lifecycle behavior, then keep ticket docs/checklists in sync.
+
+**Inferred user intent:** Move GP-020 from backend-ready plumbing to usable debug UI behavior with explicit status, reconnect control, and no legacy/fallback behavior.
+
+**Commit (code):** `c4a7c4c` — "feat(debug-ui): wire follow controls and lifecycle"
+
+### What I did
+- Added follow controls and status/error rendering in `pinocchio/cmd/web-chat/web/src/debug-ui/components/SessionList.tsx`:
+  - `Follow Live`, `Pause Follow`, `Resume Follow`, `Reconnect`
+  - Status chip and inline error message
+  - Selection behavior retargets follow to the newly selected conversation
+- Mounted follow lifecycle hook in `pinocchio/cmd/web-chat/web/src/debug-ui/components/AppShell.tsx` and added a global header status badge (`live: <status>`).
+- Added route-level live status badges and `isLive` wiring in:
+  - `pinocchio/cmd/web-chat/web/src/debug-ui/routes/TimelinePage.tsx`
+  - `pinocchio/cmd/web-chat/web/src/debug-ui/routes/OverviewPage.tsx`
+- Added new lifecycle hook `pinocchio/cmd/web-chat/web/src/debug-ui/ws/useDebugTimelineFollow.ts`:
+  - Connects/disconnects manager based on follow state and selected/target conversation
+  - Uses `basePrefixFromLocation()` to build mount-aware `/ws` and `/api/timeline` paths
+  - Supports reconnect via `reconnectToken`
+- Added supporting styles in:
+  - `pinocchio/cmd/web-chat/web/src/debug-ui/styles/components/AppShell.css`
+  - `pinocchio/cmd/web-chat/web/src/debug-ui/styles/primitives.css` (`.btn-sm`)
+- Added explicit read-only note in `pinocchio/cmd/web-chat/web/src/debug-ui/ws/debugTimelineWsManager.ts`.
+- Validation:
+  - `cd pinocchio/cmd/web-chat/web && npm run typecheck && npm run lint`
+  - Git hook `web-check` re-ran these checks during commit and passed.
+
+### Why
+- Tasks 5 and 6 required tangible operator controls and visibility into follow lifecycle state.
+- Task 8 required path correctness under app mounting; using location-derived base prefix avoids hardcoded-root assumptions.
+- Task 7 required confirming read-only semantics end-to-end in the debug UI transport path.
+
+### What worked
+- Follow control state transitions are now fully wired from UI -> store -> hook -> websocket manager.
+- Status visibility is consistent across shell/session/timeline surfaces.
+- Frontend checks passed before and during commit, confirming no type/lint regressions.
+
+### What didn't work
+- A temporary Biome warning in `useDebugTimelineFollow.ts` (`lint/correctness/useExhaustiveDependencies`) appeared when reconnect logic referenced nested state indirectly.
+- Resolved by capturing `reconnectToken` as a local dependency and using it directly in the effect dependency list.
+
+### What I learned
+- A single mount-level hook in `AppShell` keeps follow lifecycle deterministic and prevents duplicated websocket ownership across routes.
+- Follow UX is clearer when pause/resume/reconnect are explicit buttons instead of implicit reconnect side effects.
+
+### What was tricky to build
+- The sharp edge was preventing reconnect churn while still honoring explicit reconnect requests.
+- Symptoms included effect dependency ambiguity and potential duplicate connect attempts if conversation/follow fields changed together.
+- I handled it by:
+  - Centralizing lifecycle in one `useEffect`
+  - Using `reconnectToken` as the explicit reconnect trigger
+  - Ensuring cleanup always disconnects and marks status closed
+
+### What warrants a second pair of eyes
+- `SessionList` button enable/disable logic around paused follow with conversation switches.
+- `useDebugTimelineFollow` cleanup/status behavior during rapid route unmount/remount cycles.
+- Whether `isLive` should include `connecting` state or remain limited to `bootstrapping|connected`.
+
+### What should be done in the future
+1. Implement Task 9 tests for lifecycle/reconnect/two-tab follow assertions.
+2. Consider adding bounded retention policy for `getEvents` cache if long-running follow sessions grow large.
+
+### Code review instructions
+- Start in `pinocchio/cmd/web-chat/web/src/debug-ui/ws/useDebugTimelineFollow.ts` for lifecycle ownership.
+- Review UI/store integration in `pinocchio/cmd/web-chat/web/src/debug-ui/components/SessionList.tsx` and `pinocchio/cmd/web-chat/web/src/debug-ui/components/AppShell.tsx`.
+- Verify route status wiring in `pinocchio/cmd/web-chat/web/src/debug-ui/routes/TimelinePage.tsx` and `pinocchio/cmd/web-chat/web/src/debug-ui/routes/OverviewPage.tsx`.
+- Validate with `cd pinocchio/cmd/web-chat/web && npm run typecheck && npm run lint`.
+
+### Technical details
+- Connect URL format: `${proto}://${host}${basePrefix}/ws?conv_id=<id>`.
+- Bootstrap URL format: `${basePrefix}/api/timeline?conv_id=<id>`.
+- Reconnect semantics: `requestFollowReconnect` increments `reconnectToken`; hook observes token and forces disconnect + reconnect.
