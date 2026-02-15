@@ -25,7 +25,7 @@ RelatedFiles:
     - Path: pinocchio/pkg/webchat/timeline_upsert.go
       Note: websocket emission currently tied to ConnectionPool access
 Summary: Detailed analysis and design for removing route ownership from core webchat and replacing the monolithic router with a simpler toolkit that end applications compose explicitly.
-LastUpdated: 2026-02-15T01:25:00-05:00
+LastUpdated: 2026-02-15T01:35:00-05:00
 WhatFor: Reduce conceptual and implementation complexity in webchat by moving /chat and /ws handlers to app code and shrinking core abstractions.
 WhenToUse: Use when implementing or reviewing the post-router webchat architecture and cutover strategy.
 ---
@@ -147,8 +147,8 @@ pkg/webchat/
 
 Important: `handlers/` can be optional helpers but should not recreate a new god-router.
 
-## 7. Minimal Public Surface (Proposed)
-A minimal API can replace most current router indirection.
+## 7. Minimal Public Surface (Implemented)
+The cutover API below reflects the final implemented surface.
 
 ### 7.0 Frozen Cutover Surface (Locked)
 For GP-025 implementation, the core cutover API is frozen to the `ConversationService` + `WSPublisher` surface below. New abstractions should not be added unless required to preserve correctness.
@@ -161,21 +161,14 @@ Frozen entries:
 5. `WSPublisher.PublishJSON(...)`.
 
 ```go
-// App composes this from its own policy objects.
-type ConversationService struct {
-    // wraps ConvManager + runtime compose callback + persistence dependencies
-}
+type ConversationService struct { /* ... */ }
 
-// App route calls this directly.
+func NewConversationService(cfg ConversationServiceConfig) (*ConversationService, error)
 func (s *ConversationService) ResolveAndEnsureConversation(ctx context.Context, req AppConversationRequest) (*ConversationHandle, error)
-
-// App route calls this for prompt submission.
 func (s *ConversationService) SubmitPrompt(ctx context.Context, in SubmitPromptInput) (SubmitPromptResult, error)
+func (s *ConversationService) AttachWebSocket(ctx context.Context, convID string, conn *websocket.Conn, opts WebSocketAttachOptions) error
+func (s *ConversationService) WSPublisher() WSPublisher
 
-// App route calls this for websocket attach.
-func (s *ConversationService) AttachWebSocket(ctx context.Context, convID string, conn *websocket.Conn) error
-
-// App and middleware can publish without touching ConnectionPool.
 type WSPublisher interface {
     PublishJSON(ctx context.Context, convID string, envelope map[string]any) error
 }
@@ -187,24 +180,20 @@ Cutover constructor contract (locked for GP-025):
 ```go
 type ConversationServiceConfig struct {
     BaseCtx            context.Context
+    ConvManager        *ConvManager
     StepController     *toolloop.StepController
-    RuntimeComposer    RuntimeComposer
-    BuildSubscriber    func(convID string) (message.Subscriber, bool, error)
     TimelineStore      chatstore.TimelineStore
     TurnStore          chatstore.TurnStore
     TimelineUpsertHook func(*Conversation) func(entity *timelinepb.TimelineEntityV1, version uint64)
-    ToolRegistry       map[string]ToolFactory
-    IdleTimeoutSec     int
-    EvictIdle          time.Duration
-    EvictInterval      time.Duration
+    ToolFactories      map[string]ToolFactory
 }
 
 func NewConversationService(cfg ConversationServiceConfig) (*ConversationService, error)
 ```
 
 Behavior notes:
-1. Constructor validates required dependencies (`BaseCtx`, `RuntimeComposer`, `BuildSubscriber`).
-2. Constructor owns `ConvManager` initialization and persistence wiring.
+1. Constructor validates required dependencies (`BaseCtx`, `ConvManager`).
+2. Runtime composition and subscriber wiring remain owned by `ConvManager` construction path.
 3. Router/HTTP concerns are intentionally absent from config.
 
 ### 7.2 Frozen `ResolveAndEnsureConversation(...)` Contract
@@ -269,7 +258,8 @@ Behavior notes:
 
 ```go
 type WebSocketAttachOptions struct {
-    SendHello bool
+    SendHello      bool
+    HandlePingPong bool
 }
 
 func (s *ConversationService) AttachWebSocket(
@@ -284,7 +274,7 @@ Behavior notes:
 1. Returns validation error when `convID` is empty or `conn` is nil.
 2. Ensures conversation exists before attach (or returns not-found/resolve error).
 3. Adds connection to conversation pool and starts stream when needed.
-4. Supports sending hello frame and responding to ping (`"ping"`, `ws.ping`) with `ws.pong`.
+4. Supports sending hello frame and responding to ping (`"ping"`, `ws.ping`) with `ws.pong` when `HandlePingPong` is enabled.
 
 ### 7.5 Frozen `WSPublisher.PublishJSON(...)` Contract
 
@@ -520,6 +510,16 @@ Ownership rule (locked for GP-025):
 1. Update framework docs to app-owned handler assembly.
 2. Provide minimal and advanced templates.
 
+### 13.5 Final Implementation Deltas (As-Built)
+Implemented deltas relative to the original proposal:
+1. `pkg/webchat` no longer registers `/chat` or `/ws`; app-owned handlers are mounted in application code.
+2. `ConversationService` and `WSPublisher` are implemented and used for app-owned transport flows.
+3. Non-transport timeline-upsert fanout paths route through `WSPublisher.PublishJSON` instead of direct `ConnectionPool` access.
+4. `cmd/web-chat` now composes app mux directly (`/chat`, `/ws`, `/api/*`, UI root) with profile/runtime resolver logic in app code.
+5. `web-agent-example` now composes app-owned `/chat` and `/ws` handlers and does not rely on router-owned route behavior.
+6. Obsolete router options and dead legacy request resolver code paths were removed.
+7. Remaining router helpers (`UIHandler`, `APIHandler`, `Mount`, `Handler`) are documented and tested as optional utilities.
+
 ## 14. Testing Strategy
 ### 14.1 Core tests
 1. Conversation lifecycle and queue semantics unchanged.
@@ -531,10 +531,10 @@ Ownership rule (locked for GP-025):
 2. `/ws` connect/auth and attach behavior.
 3. End-to-end prompt -> emitted websocket frames.
 
-## 15. Open Questions to Resolve in Implementation Planning
-1. Should helper handler builders exist at all, or should examples be the only guidance?
-2. Do we keep any legacy path temporarily as a local branch-only migration aid?
-3. What exact minimal public API for `ConversationService` avoids leaking internals while staying ergonomic?
+## 15. Resolved Questions from Implementation
+1. Helper handler builders remain (`NewChatHandler`, `NewWSHandler`) and are used as thin adapters in app code.
+2. No legacy compatibility route path was kept; cutover is clean.
+3. The implemented minimal `ConversationService` surface remained ergonomic without exposing transport internals.
 
 ## 16. Recommended Decision
 Adopt the clean cutover to **app-owned `/chat` and `/ws` handlers** and refactor `pkg/webchat` into a toolkit-oriented core. Do not add new protocol complexity (no channels/filtering) during this refactor. Add only the minimum missing primitive: conversation-scoped websocket publishing without `ConnectionPool` exposure.
