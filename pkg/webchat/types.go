@@ -16,7 +16,6 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
 	timelinepb "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/timeline"
-	"github.com/gorilla/websocket"
 )
 
 // MiddlewareFactory creates a middleware instance from an arbitrary config object.
@@ -56,9 +55,6 @@ type Router struct {
 	timelineStore chatstore.TimelineStore
 	turnStore     chatstore.TurnStore
 
-	// ws
-	upgrader websocket.Upgrader
-
 	// conversations
 	cm *ConvManager
 	// service API for app-owned /chat and /ws flows
@@ -75,8 +71,7 @@ type Router struct {
 	// step mode control (shared; not conversation-owned)
 	stepCtrl *toolloop.StepController
 
-	// request policy
-	requestResolver ConversationRequestResolver
+	// app-owned runtime wiring
 	runtimeComposer RuntimeComposer
 
 	// optional overrides for conv manager hooks

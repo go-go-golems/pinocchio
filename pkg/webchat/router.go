@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/ThreeDotsLabs/watermill/message"
-	"github.com/gorilla/websocket"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 
@@ -62,7 +61,6 @@ func NewRouter(ctx context.Context, parsed *values.Values, staticFS fs.FS, opts 
 		router:        router,
 		mwFactories:   map[string]MiddlewareFactory{},
 		toolFactories: map[string]ToolFactory{},
-		upgrader:      websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }},
 	}
 	// set redis flags for ws reader
 	if rs.Enabled {
@@ -149,10 +147,6 @@ func NewRouter(ctx context.Context, parsed *values.Values, staticFS fs.FS, opts 
 	} else {
 		r.cm.SetRuntimeComposer(r.convRuntimeComposer())
 	}
-	if r.requestResolver == nil {
-		r.requestResolver = NewDefaultConversationRequestResolver(r.cm)
-	}
-
 	if r.cm != nil {
 		r.cm.SetTimelineStore(r.timelineStore)
 		r.cm.SetIdleTimeoutSeconds(s.IdleTimeoutSeconds)

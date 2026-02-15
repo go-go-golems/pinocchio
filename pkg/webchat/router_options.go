@@ -9,21 +9,10 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/inference/toolloop"
 	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
 	timelinepb "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/timeline"
-	"github.com/gorilla/websocket"
 )
 
 // RouterOption configures optional dependencies for a Router.
 type RouterOption func(*Router) error
-
-func WithConversationRequestResolver(resolver ConversationRequestResolver) RouterOption {
-	return func(r *Router) error {
-		if resolver == nil {
-			return errors.New("conversation request resolver is nil")
-		}
-		r.requestResolver = resolver
-		return nil
-	}
-}
 
 func WithRuntimeComposer(composer RuntimeComposer) RouterOption {
 	return func(r *Router) error {
@@ -31,13 +20,6 @@ func WithRuntimeComposer(composer RuntimeComposer) RouterOption {
 			return errors.New("runtime composer is nil")
 		}
 		r.runtimeComposer = composer
-		return nil
-	}
-}
-
-func WithWebSocketUpgrader(u websocket.Upgrader) RouterOption {
-	return func(r *Router) error {
-		r.upgrader = u
 		return nil
 	}
 }
