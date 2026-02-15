@@ -150,6 +150,16 @@ Important: `handlers/` can be optional helpers but should not recreate a new god
 ## 7. Minimal Public Surface (Proposed)
 A minimal API can replace most current router indirection.
 
+### 7.0 Frozen Cutover Surface (Locked)
+For GP-025 implementation, the core cutover API is frozen to the `ConversationService` + `WSPublisher` surface below. New abstractions should not be added unless required to preserve correctness.
+
+Frozen entries:
+1. `ConversationService` constructor/config object.
+2. `ConversationService.ResolveAndEnsureConversation(...)`.
+3. `ConversationService.SubmitPrompt(...)`.
+4. `ConversationService.AttachWebSocket(...)`.
+5. `WSPublisher.PublishJSON(...)`.
+
 ```go
 // App composes this from its own policy objects.
 type ConversationService struct {

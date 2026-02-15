@@ -11,7 +11,7 @@
 ## Phase 1: Finalize Cutover Contract (No Backward Compatibility)
 
 - [x] Add explicit decision note in design doc: clean cutover only, no compatibility adapter layer.
-- [ ] Freeze minimal core API surface for cutover:
+- [x] Freeze minimal core API surface for cutover:
 - [ ] `ConversationService` constructor/config object.
 - [ ] `ConversationService.ResolveAndEnsureConversation(...)`.
 - [ ] `ConversationService.SubmitPrompt(...)`.

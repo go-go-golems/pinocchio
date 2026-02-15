@@ -175,3 +175,52 @@ This step updated the design text to state a locked no-adapter migration policy 
 ### Technical details
 - Updated file: `pinocchio/ttmp/2026/02/15/GP-025-WEBCHAT-APP-ROUTE-OWNERSHIP--move-chat-and-ws-ownership-to-app-layer-simplify-webchat-core/design/01-webchat-toolkit-app-owned-routes-analysis.md`
 - Checked task: `6`
+
+## Step 14: Freeze the minimal core cutover surface
+After locking the no-compatibility rule, I needed a single section that defines exactly which core APIs are in-scope for migration. This prevents scope drift before coding starts.
+
+I added a frozen-surface declaration and checked task 7 so method-level contract tasks can now be completed one by one.
+
+### Prompt Context
+
+**User prompt (verbatim):** (see Step 13)
+
+**Assistant interpretation:** Continue sequential ticket execution by locking API scope before implementation.
+
+**Inferred user intent:** Ensure refactor work follows an explicit, versioned contract instead of ad-hoc API expansion.
+
+**Commit (code):** pending — "docs(gp-025): freeze minimal core cutover surface"
+
+### What I did
+- Added a `Frozen Cutover Surface (Locked)` subsection to the design doc.
+- Enumerated the five allowed surface entries (`ConversationService` constructor + three methods + `WSPublisher.PublishJSON`).
+- Ran `docmgr task check --ticket GP-025-WEBCHAT-APP-ROUTE-OWNERSHIP --id 7`.
+
+### Why
+- Parent task 7 requires a contract-level freeze independent of any specific method signature detail.
+
+### What worked
+- The design now has a single canonical list for the upcoming method-level freeze tasks.
+
+### What didn't work
+- N/A
+
+### What I learned
+- Separate parent-level scope freeze from method-level details to keep task boundaries clear.
+
+### What was tricky to build
+- The challenge was writing task-7 content that is meaningful without duplicating all method signatures that belong to tasks 8–12.
+
+### What warrants a second pair of eyes
+- Confirm whether the frozen-surface wording is strict enough to block accidental API additions during code review.
+
+### What should be done in the future
+- Complete tasks 8–12 by locking exact signatures and behavior notes for each listed API.
+
+### Code review instructions
+- Review section `7.0` in the GP-025 design doc and compare it with open tasks 8–12.
+- Validate checklist state via `docmgr task list --ticket GP-025-WEBCHAT-APP-ROUTE-OWNERSHIP`.
+
+### Technical details
+- Updated file: `pinocchio/ttmp/2026/02/15/GP-025-WEBCHAT-APP-ROUTE-OWNERSHIP--move-chat-and-ws-ownership-to-app-layer-simplify-webchat-core/design/01-webchat-toolkit-app-owned-routes-analysis.md`
+- Checked task: `7`
