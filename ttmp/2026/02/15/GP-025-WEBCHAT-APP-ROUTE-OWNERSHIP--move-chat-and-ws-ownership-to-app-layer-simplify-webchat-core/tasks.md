@@ -68,7 +68,7 @@
 - [ ] Run focused backend tests:
 - [x] `go test ./pinocchio/pkg/webchat/...`
 - [x] `go test ./pinocchio/cmd/web-chat/...`
-- [ ] `go test ./web-agent-example/...`
+- [x] `go test ./web-agent-example/...`
 - [ ] Run relevant frontend checks for impacted apps.
 
 ## Phase 7: Documentation and Handoff
