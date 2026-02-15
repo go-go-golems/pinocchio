@@ -19,7 +19,7 @@
 - [x] `WSPublisher.PublishJSON(...)` conversation-scoped API.
 - [x] Freeze app-owned handler contracts:
 - [x] `/chat` request parsing, validation, response schema, and status codes.
-- [ ] `/ws` connect requirements and websocket hello/ping/pong behavior.
+- [x] `/ws` connect requirements and websocket hello/ping/pong behavior.
 - [ ] Freeze route ownership boundary: `pkg/webchat` does not register `/chat` or `/ws`.
 
 ## Phase 2: Core Refactor in `pkg/webchat`

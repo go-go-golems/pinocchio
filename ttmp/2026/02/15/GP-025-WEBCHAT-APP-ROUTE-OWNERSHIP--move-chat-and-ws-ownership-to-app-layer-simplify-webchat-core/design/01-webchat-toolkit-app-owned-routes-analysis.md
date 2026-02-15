@@ -466,6 +466,24 @@ Response/status contract:
 4. `500` for runtime/engine errors.
 5. Response JSON includes `status`, `conv_id`, `session_id`, `idempotency_key`, plus optional `turn_id` and `inference_id`.
 
+### 11.4 Frozen `/ws` Handler Contract
+`/ws` remains a websocket upgrade endpoint owned by app code.
+
+Connection/validation contract:
+1. Method: `GET` upgrade request.
+2. Required query parameter: `conv_id`.
+3. Optional query parameters: `runtime`, `profile` (app policy may normalize these before resolve/ensure).
+4. Missing/invalid `conv_id` maps to client-visible connection error and close.
+
+Websocket behavior contract:
+1. On successful attach, server sends `ws.hello` SEM frame (conversation id, runtime key, server time).
+2. Client ping compatibility:
+   - text frame `"ping"`
+   - JSON `{ "type": "ws.ping" }`
+   - SEM envelope carrying `event.type == "ws.ping"`
+3. Ping response is `ws.pong` SEM frame sent to the requesting socket.
+4. Non-ping client messages are ignored unless future app policy opts in.
+
 ## 12. Tradeoffs
 ### 12.1 Benefits
 1. Lower conceptual load for contributors.
