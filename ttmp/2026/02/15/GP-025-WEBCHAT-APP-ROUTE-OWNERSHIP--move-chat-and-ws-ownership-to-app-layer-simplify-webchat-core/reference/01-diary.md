@@ -720,3 +720,29 @@ Phase 7 handoff work started after Phase 6 validation completion.
 - Primary file:
 - `pinocchio/ttmp/2026/02/15/GP-025-WEBCHAT-APP-ROUTE-OWNERSHIP--move-chat-and-ws-ownership-to-app-layer-simplify-webchat-core/design/01-webchat-toolkit-app-owned-routes-analysis.md`
 - Current phase: `Phase 7 (in progress)`
+
+## Step 27: Phase 7 completion summary (documentation and handoff)
+Phase 7 is complete. Final design, diary, and changelog documentation are updated and the final GP-025 implementation bundle has been uploaded to reMarkable.
+
+### What I did
+- Finalized design doc with as-built API signatures and implementation deltas.
+- Updated changelog entries across major cutover slices.
+- Completed ticket checkoff for all remaining handoff tasks.
+- Uploaded final bundle to reMarkable:
+- document name: `GP-025 Webchat Toolkit Refactor Final`
+- destination: `/ai/2026/02/15/GP-025`
+- confirmed by cloud listing.
+
+### Validation
+- `remarquee upload bundle --dry-run ...` succeeded.
+- `remarquee upload bundle ...` succeeded.
+- `remarquee cloud ls /ai/2026/02/15/GP-025/ --long --non-interactive` shows:
+- `GP-025 Webchat Toolkit Refactor Analysis`
+- `GP-025 Webchat Toolkit Refactor Final`
+
+### Technical details
+- Primary files:
+- `pinocchio/ttmp/2026/02/15/GP-025-WEBCHAT-APP-ROUTE-OWNERSHIP--move-chat-and-ws-ownership-to-app-layer-simplify-webchat-core/design/01-webchat-toolkit-app-owned-routes-analysis.md`
+- `pinocchio/ttmp/2026/02/15/GP-025-WEBCHAT-APP-ROUTE-OWNERSHIP--move-chat-and-ws-ownership-to-app-layer-simplify-webchat-core/reference/01-diary.md`
+- `pinocchio/ttmp/2026/02/15/GP-025-WEBCHAT-APP-ROUTE-OWNERSHIP--move-chat-and-ws-ownership-to-app-layer-simplify-webchat-core/changelog.md`
+- Completed phase: `Phase 7`
