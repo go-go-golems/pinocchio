@@ -21,9 +21,9 @@ export function StateTrackLane({ turns, selectedTurnId, onTurnSelect }: StateTra
 
   return (
     <div className="state-track-lane">
-      {turns.map((turn) => (
+      {turns.map((turn, index) => (
         <TurnCard
-          key={`${turn.turn_id}-${turn.phase}`}
+          key={`${turn.session_id}-${turn.turn_id}-${turn.phase}-${turn.created_at_ms}-${index}`}
           turn={turn}
           selected={turn.turn_id === selectedTurnId}
           onClick={() => onTurnSelect?.(turn)}
