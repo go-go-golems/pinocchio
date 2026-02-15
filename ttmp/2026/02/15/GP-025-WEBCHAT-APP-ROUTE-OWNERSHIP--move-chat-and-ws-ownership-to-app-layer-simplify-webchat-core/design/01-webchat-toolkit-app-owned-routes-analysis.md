@@ -181,6 +181,32 @@ type WSPublisher interface {
 }
 ```
 
+### 7.1 Frozen Constructor + Config Contract
+Cutover constructor contract (locked for GP-025):
+
+```go
+type ConversationServiceConfig struct {
+    BaseCtx            context.Context
+    StepController     *toolloop.StepController
+    RuntimeComposer    RuntimeComposer
+    BuildSubscriber    func(convID string) (message.Subscriber, bool, error)
+    TimelineStore      chatstore.TimelineStore
+    TurnStore          chatstore.TurnStore
+    TimelineUpsertHook func(*Conversation) func(entity *timelinepb.TimelineEntityV1, version uint64)
+    ToolRegistry       map[string]ToolFactory
+    IdleTimeoutSec     int
+    EvictIdle          time.Duration
+    EvictInterval      time.Duration
+}
+
+func NewConversationService(cfg ConversationServiceConfig) (*ConversationService, error)
+```
+
+Behavior notes:
+1. Constructor validates required dependencies (`BaseCtx`, `RuntimeComposer`, `BuildSubscriber`).
+2. Constructor owns `ConvManager` initialization and persistence wiring.
+3. Router/HTTP concerns are intentionally absent from config.
+
 The key simplification is that app code passes explicit values instead of registering many global options that interact indirectly.
 
 ## 8. Sequence Diagrams

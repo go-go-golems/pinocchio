@@ -224,3 +224,53 @@ I added a frozen-surface declaration and checked task 7 so method-level contract
 ### Technical details
 - Updated file: `pinocchio/ttmp/2026/02/15/GP-025-WEBCHAT-APP-ROUTE-OWNERSHIP--move-chat-and-ws-ownership-to-app-layer-simplify-webchat-core/design/01-webchat-toolkit-app-owned-routes-analysis.md`
 - Checked task: `7`
+
+## Step 15: Lock `ConversationService` constructor/config contract
+I treated constructor/config as the first concrete API boundary because it determines which responsibilities remain core versus app-owned. Without this lock, later method contracts can silently depend on router-era fields.
+
+This step adds an explicit config shape and constructor signature, then checks off task 8.
+
+### Prompt Context
+
+**User prompt (verbatim):** (see Step 13)
+
+**Assistant interpretation:** Continue methodical task-by-task contract freezing before refactor implementation.
+
+**Inferred user intent:** Keep migration deterministic by freezing dependency injection and lifecycle ownership up front.
+
+**Commit (code):** pending — "docs(gp-025): freeze conversation service constructor contract"
+
+### What I did
+- Added `ConversationServiceConfig` fields to the design contract (runtime, subscriber, persistence, tool factories, timeouts).
+- Added `NewConversationService(cfg ConversationServiceConfig) (*ConversationService, error)` as the locked constructor signature.
+- Documented constructor validation and ownership expectations.
+- Ran `docmgr task check --ticket GP-025-WEBCHAT-APP-ROUTE-OWNERSHIP --id 8`.
+
+### Why
+- Constructor shape governs composability and is the primary cut line between app wiring and core behavior.
+
+### What worked
+- The design now has an explicit DI contract instead of a vague “constructor/config object” placeholder.
+
+### What didn't work
+- N/A
+
+### What I learned
+- Locking constructor dependencies early reduces accidental backsliding into router-owned responsibilities.
+
+### What was tricky to build
+- Choosing fields that preserve current behavior without leaking HTTP transport concerns required careful boundary discipline.
+
+### What warrants a second pair of eyes
+- Validate that `ToolRegistry` and persistence fields are sufficient for current runtime and timeline flows.
+
+### What should be done in the future
+- Align implementation types with this config shape in task 17.
+
+### Code review instructions
+- Review section `7.1` and compare to existing `Router` dependency fields for migration parity.
+- Confirm task 8 is checked in `tasks.md`.
+
+### Technical details
+- Updated file: `pinocchio/ttmp/2026/02/15/GP-025-WEBCHAT-APP-ROUTE-OWNERSHIP--move-chat-and-ws-ownership-to-app-layer-simplify-webchat-core/design/01-webchat-toolkit-app-owned-routes-analysis.md`
+- Checked task: `8`
