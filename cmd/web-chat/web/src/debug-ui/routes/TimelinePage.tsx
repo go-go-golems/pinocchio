@@ -10,7 +10,13 @@ export function TimelinePage() {
   const selectedTurnId = useAppSelector((state) => state.ui.selectedTurnId);
   const selectedEventSeq = useAppSelector((state) => state.ui.selectedSeq);
   const selectedEntityId = useAppSelector((state) => state.ui.selectedEntityId);
+  const follow = useAppSelector((state) => state.ui.follow);
   const laneData = useLiveLaneData(selectedConvId);
+  const followOnSelectedConv =
+    !!selectedConvId &&
+    follow.enabled &&
+    (follow.targetConvId ?? selectedConvId) === selectedConvId;
+  const liveBadgeStatus = followOnSelectedConv ? follow.status : 'idle';
 
   if (!selectedConvId) {
     return (
@@ -37,6 +43,9 @@ export function TimelinePage() {
           <span>{laneData.turns.length} turns</span>
           <span>{laneData.events.length} events</span>
           <span>{laneData.entities.length} entities</span>
+          <span className={`timeline-live-status status-${liveBadgeStatus}`}>
+            live: {liveBadgeStatus}
+          </span>
         </div>
       </div>
 
@@ -44,7 +53,7 @@ export function TimelinePage() {
         turns={laneData.turns}
         events={laneData.events}
         entities={laneData.entities}
-        isLive={false}
+        isLive={followOnSelectedConv && (follow.status === 'connected' || follow.status === 'bootstrapping')}
         selectedTurnId={selectedTurnId ?? undefined}
         selectedEventSeq={selectedEventSeq ?? undefined}
         selectedEntityId={selectedEntityId ?? undefined}

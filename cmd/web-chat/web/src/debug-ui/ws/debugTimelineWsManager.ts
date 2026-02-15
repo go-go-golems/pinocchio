@@ -176,6 +176,7 @@ export class DebugTimelineWsManager {
       }
       args.dispatch(setFollowStatus('connecting'));
     };
+    // Read-only follow mode: no outbound websocket messages are ever sent.
     ws.onclose = () => {
       settleOpen?.();
       if (nonce !== this.connectNonce) {

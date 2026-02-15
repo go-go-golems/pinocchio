@@ -55,7 +55,73 @@
 
 .app-header-right {
   display: flex;
+  align-items: center;
   gap: 8px;
+}
+
+.app-follow-badge {
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  background: var(--bg-primary);
+  text-transform: lowercase;
+}
+
+.app-follow-badge.status-connected {
+  border-color: var(--accent-green);
+  color: var(--accent-green);
+}
+
+.app-follow-badge.status-connecting,
+.app-follow-badge.status-bootstrapping {
+  border-color: var(--accent-yellow);
+  color: var(--accent-yellow);
+}
+
+.app-follow-badge.status-error {
+  border-color: var(--accent-red);
+  color: var(--accent-red);
+}
+
+.session-follow-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.follow-status-chip {
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  background: var(--bg-primary);
+  text-transform: lowercase;
+}
+
+.follow-status-chip.status-connected {
+  border-color: var(--accent-green);
+  color: var(--accent-green);
+}
+
+.follow-status-chip.status-connecting,
+.follow-status-chip.status-bootstrapping {
+  border-color: var(--accent-yellow);
+  color: var(--accent-yellow);
+}
+
+.follow-status-chip.status-error {
+  border-color: var(--accent-red);
+  color: var(--accent-red);
+}
+
+.session-follow-error {
+  font-size: 11px;
+  color: var(--accent-red);
+  margin-bottom: 8px;
 }
 
 .app-btn-icon {
@@ -137,6 +203,30 @@
   flex: 1;
   overflow: auto;
   padding: 16px;
+}
+
+.timeline-live-status {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border-color);
+  text-transform: lowercase;
+}
+
+.timeline-live-status.status-connected {
+  border-color: var(--accent-green);
+  color: var(--accent-green);
+}
+
+.timeline-live-status.status-connecting,
+.timeline-live-status.status-bootstrapping {
+  border-color: var(--accent-yellow);
+  color: var(--accent-yellow);
+}
+
+.timeline-live-status.status-error {
+  border-color: var(--accent-red);
+  color: var(--accent-red);
 }
 
 .app-filter-sidebar {

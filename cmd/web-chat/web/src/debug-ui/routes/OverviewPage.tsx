@@ -15,6 +15,7 @@ export function OverviewPage() {
   const selectedTurnId = useAppSelector((state) => state.ui.selectedTurnId);
   const selectedEventSeq = useAppSelector((state) => state.ui.selectedSeq);
   const selectedEntityId = useAppSelector((state) => state.ui.selectedEntityId);
+  const follow = useAppSelector((state) => state.ui.follow);
 
   const { data: conversation, isLoading: convLoading } = useGetConversationQuery(
     selectedConvId ?? '',
@@ -22,6 +23,10 @@ export function OverviewPage() {
   );
 
   const laneData = useLiveLaneData(selectedConvId, sessionId ?? selectedSessionId ?? undefined);
+  const followOnSelectedConv =
+    !!selectedConvId &&
+    follow.enabled &&
+    (follow.targetConvId ?? selectedConvId) === selectedConvId;
 
   const { data: turnDetail, isLoading: turnDetailLoading } = useGetTurnDetailQuery(
     { 
@@ -59,6 +64,9 @@ export function OverviewPage() {
           <span>Turns: {laneData.turns.length}</span>
           <span>Events: {laneData.events.length}</span>
           <span>Entities: {laneData.entities.length}</span>
+          <span className={`timeline-live-status status-${followOnSelectedConv ? follow.status : 'idle'}`}>
+            live: {followOnSelectedConv ? follow.status : 'idle'}
+          </span>
         </div>
       </div>
 
@@ -69,7 +77,7 @@ export function OverviewPage() {
           turns={laneData.turns}
           events={laneData.events}
           entities={laneData.entities}
-          isLive={false}
+          isLive={followOnSelectedConv && (follow.status === 'connected' || follow.status === 'bootstrapping')}
           selectedTurnId={selectedTurnId ?? undefined}
           selectedEventSeq={selectedEventSeq ?? undefined}
           selectedEntityId={selectedEntityId ?? undefined}

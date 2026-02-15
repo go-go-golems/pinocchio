@@ -14,6 +14,7 @@ import {
   selectTurn,
   setOfflineConfig,
 } from '../store/uiSlice';
+import { useDebugTimelineFollow } from '../ws/useDebugTimelineFollow';
 import { type Anomaly, AnomalyPanel } from './AnomalyPanel';
 import { shouldDelayUrlSync } from './appShellSync';
 import { FilterBar, type FilterState } from './FilterBar';
@@ -44,6 +45,7 @@ export function AppShell({ anomalies = [] }: AppShellProps) {
   const selectedTurnId = useAppSelector((state) => state.ui.selectedTurnId);
   const selectedRunId = useAppSelector((state) => state.ui.selectedRunId);
   const offline = useAppSelector((state) => state.ui.offline);
+  const follow = useAppSelector((state) => state.ui.follow);
   const location = useLocation();
   const [, setSearchParams] = useSearchParams();
   const { sessionId, turnId } = useParams();
@@ -54,6 +56,8 @@ export function AppShell({ anomalies = [] }: AppShellProps) {
     filters.blockKinds.length +
     filters.eventTypes.length +
     (filters.searchQuery ? 1 : 0);
+
+  useDebugTimelineFollow();
 
   const convFromURL = params.get('conv');
   const sessionFromURL = params.get('session');
@@ -257,6 +261,12 @@ export function AppShell({ anomalies = [] }: AppShellProps) {
         </nav>
 
         <div className="app-header-right">
+          <span
+            className={`app-follow-badge status-${follow.status}`}
+            title={follow.lastError ?? 'Realtime follow status'}
+          >
+            live: {follow.status}
+          </span>
           <button
             className={`btn app-btn-icon ${activeFilterCount > 0 ? 'has-badge' : ''}`}
             onClick={() => setFilterOpen(!filterOpen)}

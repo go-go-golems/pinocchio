@@ -113,6 +113,11 @@ h4 {
   transition: background 0.15s;
 }
 
+.btn-sm {
+  padding: 4px 10px;
+  font-size: 12px;
+}
+
 .btn-primary {
   background: var(--accent-blue);
   color: white;
