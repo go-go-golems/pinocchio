@@ -45,3 +45,8 @@ Refreshed GP-021 design + inventory scripts after webchat runtime cleanup: repla
 - /home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/geppetto/ttmp/2026/02/14/GP-021-WEBSOCKET-BROADCAST-REFACTOR--refactor-websocket-broadcast-architecture-and-extension-hooks/design/01-websocket-broadcast-refactor-analysis-brainstorm-and-design.md — Updated architecture text and snapshot emission design
 - /home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/geppetto/ttmp/2026/02/14/GP-021-WEBSOCKET-BROADCAST-REFACTOR--refactor-websocket-broadcast-architecture-and-extension-hooks/scripts/02-inventory-ws-protocol-surface.sh — Updated grep probes for resolver/runtime path
 - /home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/geppetto/ttmp/2026/02/14/GP-021-WEBSOCKET-BROADCAST-REFACTOR--refactor-websocket-broadcast-architecture-and-extension-hooks/scripts/03-hookability-audit.sh — Updated hook audit probes for resolver/composer options
+
+## 2026-02-15
+
+Ticket closed
+
