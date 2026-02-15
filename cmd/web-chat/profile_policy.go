@@ -286,12 +286,12 @@ func runtimeKeyFromPath(req *http.Request) string {
 	return ""
 }
 
-func registerProfileHandlers(router *webchat.Router, profiles *chatProfileRegistry) {
-	if router == nil || profiles == nil {
+func registerProfileHandlers(mux *http.ServeMux, profiles *chatProfileRegistry) {
+	if mux == nil || profiles == nil {
 		return
 	}
 
-	router.HandleFunc("/api/chat/profiles", func(w http.ResponseWriter, _ *http.Request) {
+	mux.HandleFunc("/api/chat/profiles", func(w http.ResponseWriter, _ *http.Request) {
 		type profileInfo struct {
 			Slug          string `json:"slug"`
 			DefaultPrompt string `json:"default_prompt"`
@@ -310,7 +310,7 @@ func registerProfileHandlers(router *webchat.Router, profiles *chatProfileRegist
 		_ = json.NewEncoder(w).Encode(items)
 	})
 
-	router.HandleFunc("/api/chat/profile", func(w http.ResponseWriter, req *http.Request) {
+	mux.HandleFunc("/api/chat/profile", func(w http.ResponseWriter, req *http.Request) {
 		type profilePayload struct {
 			Slug    string `json:"slug"`
 			Profile string `json:"profile"`

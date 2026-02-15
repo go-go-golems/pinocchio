@@ -147,16 +147,19 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 		return nil
 	})
 
-	registerProfileHandlers(r, profiles)
 	chatHandler := webchat.NewChatHandler(r.ConversationService(), requestResolver)
-	r.HandleFunc("/chat", chatHandler)
-	r.HandleFunc("/chat/", chatHandler)
 	wsHandler := webchat.NewWSHandler(
 		r.ConversationService(),
 		requestResolver,
 		websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }},
 	)
-	r.HandleFunc("/ws", wsHandler)
+	appMux := http.NewServeMux()
+	appMux.HandleFunc("/chat", chatHandler)
+	appMux.HandleFunc("/chat/", chatHandler)
+	appMux.HandleFunc("/ws", wsHandler)
+	registerProfileHandlers(appMux, profiles)
+	appMux.Handle("/api/", r.APIHandler())
+	appMux.Handle("/", r.UIHandler())
 
 	// HTTP server and run, with optional root mounting
 	httpSrv, err := r.BuildHTTPServer()
@@ -180,9 +183,11 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 		if !strings.HasSuffix(prefix, "/") {
 			prefix = prefix + "/"
 		}
-		parent.Handle(prefix, http.StripPrefix(strings.TrimRight(prefix, "/"), r.Handler()))
+		parent.Handle(prefix, http.StripPrefix(strings.TrimRight(prefix, "/"), appMux))
 		httpSrv.Handler = parent
 		log.Info().Str("root", prefix).Msg("mounted webchat under custom root")
+	} else {
+		httpSrv.Handler = appMux
 	}
 
 	srv := webchat.NewFromRouter(ctx, r, httpSrv)

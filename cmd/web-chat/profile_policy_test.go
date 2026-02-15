@@ -2,14 +2,11 @@ package main
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
-	"github.com/go-go-golems/glazed/pkg/cmds/values"
-	webchat "github.com/go-go-golems/pinocchio/pkg/webchat"
 	"github.com/stretchr/testify/require"
 )
 
@@ -64,22 +61,12 @@ func TestRegisterProfileHandlers_GetAndSetProfile(t *testing.T) {
 		&chatProfile{Slug: "agent", DefaultPrompt: "You are agent"},
 	)
 
-	r, err := webchat.NewRouter(
-		context.Background(),
-		values.New(),
-		staticFS,
-		webchat.WithRuntimeComposer(webchat.RuntimeComposerFunc(func(context.Context, webchat.RuntimeComposeRequest) (webchat.RuntimeArtifacts, error) {
-			return webchat.RuntimeArtifacts{}, nil
-		})),
-	)
-	require.NoError(t, err)
-	registerProfileHandlers(r, profiles)
-
-	h := r.Handler()
+	mux := http.NewServeMux()
+	registerProfileHandlers(mux, profiles)
 
 	reqList := httptest.NewRequest(http.MethodGet, "/api/chat/profiles", nil)
 	recList := httptest.NewRecorder()
-	h.ServeHTTP(recList, reqList)
+	mux.ServeHTTP(recList, reqList)
 	require.Equal(t, http.StatusOK, recList.Code)
 
 	var listed []map[string]any
@@ -90,7 +77,7 @@ func TestRegisterProfileHandlers_GetAndSetProfile(t *testing.T) {
 
 	reqSet := httptest.NewRequest(http.MethodPost, "/api/chat/profile", bytes.NewBufferString(`{"slug":"agent"}`))
 	recSet := httptest.NewRecorder()
-	h.ServeHTTP(recSet, reqSet)
+	mux.ServeHTTP(recSet, reqSet)
 	require.Equal(t, http.StatusOK, recSet.Code)
 
 	var setResp map[string]any
@@ -102,7 +89,7 @@ func TestRegisterProfileHandlers_GetAndSetProfile(t *testing.T) {
 	reqGet := httptest.NewRequest(http.MethodGet, "/api/chat/profile", nil)
 	reqGet.AddCookie(cookies[0])
 	recGet := httptest.NewRecorder()
-	h.ServeHTTP(recGet, reqGet)
+	mux.ServeHTTP(recGet, reqGet)
 	require.Equal(t, http.StatusOK, recGet.Code)
 
 	var getResp map[string]any
