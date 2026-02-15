@@ -73,7 +73,7 @@
 
 ## Phase 7: Documentation and Handoff
 
-- [ ] Update GP-025 design doc with final API signatures and implementation deltas.
+- [x] Update GP-025 design doc with final API signatures and implementation deltas.
 - [ ] Keep diary updated for each implementation slice and test run.
 - [ ] Update changelog after each major cutover slice.
 - [ ] Upload final implementation package to reMarkable after cutover completion.
