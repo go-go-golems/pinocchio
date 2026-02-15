@@ -165,6 +165,8 @@ func NewRouter(ctx context.Context, parsed *values.Values, staticFS fs.FS, opts 
 		return nil, errors.Wrap(err, "new conversation service")
 	}
 	r.conversationService = svc
+	r.chatService = NewChatServiceFromConversation(svc)
+	r.streamHub = svc.StreamHub()
 
 	r.registerHTTPHandlers()
 	return r, nil
@@ -212,12 +214,21 @@ func (r *Router) Handler() http.Handler { return r.mux }
 // ConversationService returns the service used by app-owned /chat and /ws handlers.
 func (r *Router) ConversationService() *ConversationService { return r.conversationService }
 
+// ChatService returns the chat-focused service surface (queue/idempotency/inference).
+func (r *Router) ChatService() *ChatService { return r.chatService }
+
 // StreamHub returns the stream lifecycle service used by websocket helpers.
 func (r *Router) StreamHub() *StreamHub {
-	if r == nil || r.conversationService == nil {
+	if r == nil {
 		return nil
 	}
-	return r.conversationService.StreamHub()
+	if r.streamHub != nil {
+		return r.streamHub
+	}
+	if r.conversationService != nil {
+		return r.conversationService.StreamHub()
+	}
+	return nil
 }
 
 // BuildHTTPServer constructs an http.Server using settings from layers.

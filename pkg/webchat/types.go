@@ -59,8 +59,11 @@ type Router struct {
 
 	// conversations
 	cm *ConvManager
-	// service API for app-owned /chat and /ws flows
+	// compatibility service API for app-owned /chat and /ws flows
 	conversationService *ConversationService
+	// split service APIs.
+	chatService *ChatService
+	streamHub   *StreamHub
 
 	// runtime flags
 	usesRedis      bool

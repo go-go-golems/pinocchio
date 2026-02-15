@@ -11,7 +11,7 @@
 - [x] Extract StreamBackend abstraction (in-memory + redis) from Router wiring and add constructor helpers
 - [x] Introduce explicit HTTP helpers wired to ChatService + StreamHub + TimelineService
 - [x] Implement StreamHub to own per-conversation stream state (subscriber/coordinator/ws pool/projector/maintenance)
-- [ ] Split ConversationService into ChatService-focused API (queue/idempotency/inference only, no websocket attach)
+- [x] Split ConversationService into ChatService-focused API (queue/idempotency/inference only, no websocket attach)
 - [ ] Cut cmd/web-chat over to service-based wiring and remove direct Router dependency
 - [ ] Finalize docs, migration notes, and API contract tests for public release readiness
 - [ ] Delete legacy Router/ConvManager/old service paths once replacement services are verified
