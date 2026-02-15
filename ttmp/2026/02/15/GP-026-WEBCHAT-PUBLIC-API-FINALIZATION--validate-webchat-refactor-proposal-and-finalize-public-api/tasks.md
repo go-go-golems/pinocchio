@@ -9,7 +9,7 @@
 - [x] Add regression tests for mixed stream ingestion and chat.message projection flow
 - [x] Diary: record phase progress and decisions for implemented refactor changes
 - [x] Extract StreamBackend abstraction (in-memory + redis) from Router wiring and add constructor helpers
-- [ ] Introduce explicit HTTP helpers wired to ChatService + StreamHub + TimelineService
+- [x] Introduce explicit HTTP helpers wired to ChatService + StreamHub + TimelineService
 - [ ] Implement StreamHub to own per-conversation stream state (subscriber/coordinator/ws pool/projector/maintenance)
 - [ ] Split ConversationService into ChatService-focused API (queue/idempotency/inference only, no websocket attach)
 - [ ] Cut cmd/web-chat over to service-based wiring and remove direct Router dependency
