@@ -69,7 +69,7 @@
 - [x] `go test ./pinocchio/pkg/webchat/...`
 - [x] `go test ./pinocchio/cmd/web-chat/...`
 - [x] `go test ./web-agent-example/...`
-- [ ] Run relevant frontend checks for impacted apps.
+- [x] Run relevant frontend checks for impacted apps.
 
 ## Phase 7: Documentation and Handoff
 
