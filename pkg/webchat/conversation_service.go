@@ -327,7 +327,7 @@ func (s *ConversationService) timelineUpsertHookDefault(conv *Conversation) func
 }
 
 func (s *ConversationService) emitTimelineUpsert(conv *Conversation, entity *timelinepb.TimelineEntityV1, version uint64) {
-	if s == nil || conv == nil || conv.pool == nil || entity == nil {
+	if s == nil || conv == nil || entity == nil {
 		return
 	}
 	payload, err := protoToRaw(&timelinepb.TimelineUpsertV1{
@@ -347,8 +347,8 @@ func (s *ConversationService) emitTimelineUpsert(conv *Conversation, entity *tim
 			"data": payload,
 		},
 	}
-	if b, err := json.Marshal(env); err == nil {
-		conv.pool.Broadcast(b)
+	if s.publisher != nil {
+		_ = s.publisher.PublishJSON(s.baseCtx, conv.ID, env)
 	}
 }
 

@@ -1,10 +1,6 @@
 package webchat
 
-import (
-	"encoding/json"
-
-	timelinepb "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/timeline"
-)
+import timelinepb "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/timeline"
 
 // TimelineUpsertHook exposes the timeline upsert hook for external use.
 func (r *Router) TimelineUpsertHook(conv *Conversation) func(entity *timelinepb.TimelineEntityV1, version uint64) {
@@ -27,7 +23,7 @@ func (r *Router) timelineUpsertHookDefault(conv *Conversation) func(entity *time
 }
 
 func (r *Router) emitTimelineUpsert(conv *Conversation, entity *timelinepb.TimelineEntityV1, version uint64) {
-	if r == nil || conv == nil || conv.pool == nil || entity == nil {
+	if r == nil || conv == nil || entity == nil {
 		return
 	}
 	payload, err := protoToRaw(&timelinepb.TimelineUpsertV1{
@@ -47,7 +43,11 @@ func (r *Router) emitTimelineUpsert(conv *Conversation, entity *timelinepb.Timel
 			"data": payload,
 		},
 	}
-	if b, err := json.Marshal(env); err == nil {
-		conv.pool.Broadcast(b)
+	if r.conversationService != nil && r.conversationService.WSPublisher() != nil {
+		_ = r.conversationService.WSPublisher().PublishJSON(r.baseCtx, conv.ID, env)
+		return
+	}
+	if r.cm != nil {
+		_ = NewWSPublisher(r.cm).PublishJSON(r.baseCtx, conv.ID, env)
 	}
 }
