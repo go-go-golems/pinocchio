@@ -44,7 +44,7 @@
 
 ## Phase 4: `web-agent-example` Migration Plan and Execution
 
-- [ ] Audit existing `web-agent-example` dependencies on `pkg/webchat` router route ownership.
+- [x] Audit existing `web-agent-example` dependencies on `pkg/webchat` router route ownership.
 - [ ] Define target app-owned handlers for `web-agent-example` (`/chat`, `/ws`, optional debug routes).
 - [ ] Implement `ConversationService` wiring in `web-agent-example` main/bootstrap path.
 - [ ] Move resolver/runtime policy usage to app-owned request handling code.
