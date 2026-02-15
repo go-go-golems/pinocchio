@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"github.com/pkg/errors"
@@ -28,6 +29,7 @@ type ConversationServiceConfig struct {
 	StepController     *toolloop.StepController
 	TimelineStore      chatstore.TimelineStore
 	TurnStore          chatstore.TurnStore
+	SEMPublisher       message.Publisher
 	TimelineUpsertHook func(*Conversation) func(entity *timelinepb.TimelineEntityV1, version uint64)
 	ToolFactories      map[string]ToolFactory
 }
@@ -39,6 +41,7 @@ type ConversationService struct {
 	stepCtrl       *toolloop.StepController
 	timelineStore  chatstore.TimelineStore
 	turnStore      chatstore.TurnStore
+	semPublisher   message.Publisher
 	timelineUpsert func(*Conversation) func(entity *timelinepb.TimelineEntityV1, version uint64)
 	toolFactories  map[string]ToolFactory
 	publisher      WSPublisher
@@ -94,6 +97,7 @@ func NewConversationService(cfg ConversationServiceConfig) (*ConversationService
 		stepCtrl:       cfg.StepController,
 		timelineStore:  cfg.TimelineStore,
 		turnStore:      cfg.TurnStore,
+		semPublisher:   cfg.SEMPublisher,
 		timelineUpsert: cfg.TimelineUpsertHook,
 		toolFactories:  toolFactories,
 		publisher:      NewWSPublisher(cfg.ConvManager),
@@ -409,25 +413,9 @@ func (s *ConversationService) startInferenceForPrompt(conv *Conversation, overri
 	if seed != nil && seed.ID != "" {
 		turnID = seed.ID
 	}
-	if s.timelineStore != nil && turnID != "" && strings.TrimSpace(prompt) != "" {
-		entity := &timelinepb.TimelineEntityV1{
-			Id:   "user-" + turnID,
-			Kind: "message",
-			Snapshot: &timelinepb.TimelineEntityV1_Message{
-				Message: &timelinepb.MessageSnapshotV1{
-					SchemaVersion: 1,
-					Role:          "user",
-					Content:       prompt,
-					Streaming:     false,
-				},
-			},
-		}
-		version := uint64(time.Now().UnixMilli()) * 1_000_000
-		if s.baseCtx == nil {
-			return nil, errors.New("service context is nil")
-		}
-		if err := s.timelineStore.Upsert(s.baseCtx, conv.ID, version, entity); err == nil {
-			s.emitTimelineUpsert(conv, entity, version)
+	if turnID != "" && strings.TrimSpace(prompt) != "" {
+		if err := s.publishUserChatMessageEvent(baseCtx, conv.ID, "user-"+turnID, prompt); err != nil {
+			return nil, errors.Wrap(err, "publish user chat.message event")
 		}
 	}
 
@@ -501,6 +489,35 @@ func (s *ConversationService) startInferenceForPrompt(conv *Conversation, overri
 		s.tryDrainQueue(conv)
 	}()
 	return resp, nil
+}
+
+func (s *ConversationService) publishUserChatMessageEvent(ctx context.Context, convID string, eventID string, prompt string) error {
+	if s == nil || s.semPublisher == nil {
+		return errors.New("sem publisher not configured")
+	}
+	payload, err := protoToRaw(&timelinepb.MessageSnapshotV1{
+		SchemaVersion: 1,
+		Role:          "user",
+		Content:       prompt,
+		Streaming:     false,
+	})
+	if err != nil {
+		return err
+	}
+	env := map[string]any{
+		"sem": true,
+		"event": map[string]any{
+			"type": "chat.message",
+			"id":   eventID,
+			"data": payload,
+		},
+	}
+	b, err := json.Marshal(env)
+	if err != nil {
+		return err
+	}
+	msg := message.NewMessage(uuid.NewString(), b)
+	return s.semPublisher.Publish(topicForConv(convID), msg)
 }
 
 func (s *ConversationService) finishSessionInference(conv *Conversation, idempotencyKey string, inferenceID string, turnID string, err error) {

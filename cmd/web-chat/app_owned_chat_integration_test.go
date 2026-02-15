@@ -130,6 +130,62 @@ func TestAppOwnedWSHandler_Integration_HelloAndPong(t *testing.T) {
 	require.True(t, seenPong, "expected ws.pong response to ping")
 }
 
+func TestAppOwnedChatHandler_Integration_UserMessageProjectedViaStream(t *testing.T) {
+	srv := newAppOwnedIntegrationServer(t)
+	defer srv.Close()
+
+	convID := "conv-chat-proj-1"
+	prompt := "hello from chat.message projection"
+	reqBody := []byte(`{"prompt":"` + prompt + `","conv_id":"` + convID + `"}`)
+	resp, err := http.Post(srv.URL+"/chat/default", "application/json", bytes.NewReader(reqBody))
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var payload map[string]any
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&payload))
+	turnID, _ := payload["turn_id"].(string)
+	require.NotEmpty(t, turnID)
+	expectedID := "user-" + turnID
+
+	found := false
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) && !found {
+		timelineResp, err := http.Get(srv.URL + "/api/timeline?conv_id=" + convID)
+		require.NoError(t, err)
+		var snap map[string]any
+		require.NoError(t, json.NewDecoder(timelineResp.Body).Decode(&snap))
+		_ = timelineResp.Body.Close()
+
+		entities, _ := snap["entities"].([]any)
+		for _, raw := range entities {
+			entity, ok := raw.(map[string]any)
+			if !ok {
+				continue
+			}
+			id, _ := entity["id"].(string)
+			if id != expectedID {
+				continue
+			}
+			msg, _ := entity["message"].(map[string]any)
+			if msg == nil {
+				continue
+			}
+			role, _ := msg["role"].(string)
+			content, _ := msg["content"].(string)
+			streaming, _ := msg["streaming"].(bool)
+			if role == "user" && content == prompt && !streaming {
+				found = true
+				break
+			}
+		}
+		if !found {
+			time.Sleep(50 * time.Millisecond)
+		}
+	}
+	require.True(t, found, "expected user timeline entity projected from chat.message stream event")
+}
+
 func integrationSemEventType(frame []byte) string {
 	var env struct {
 		Event struct {

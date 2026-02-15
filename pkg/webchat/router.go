@@ -164,6 +164,7 @@ func NewRouter(ctx context.Context, parsed *values.Values, staticFS fs.FS, opts 
 		StepController:     r.stepCtrl,
 		TimelineStore:      r.timelineStore,
 		TurnStore:          r.turnStore,
+		SEMPublisher:       r.router.Publisher,
 		TimelineUpsertHook: r.timelineUpsertHookOverride,
 		ToolFactories:      r.toolFactories,
 	})

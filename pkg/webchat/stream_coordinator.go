@@ -68,8 +68,25 @@ func (sc *StreamCoordinator) Start(ctx context.Context) error {
 	sc.running = true
 	sc.mu.Unlock()
 
-	go sc.consume(runCtx)
-	return nil
+	ready := make(chan error, 1)
+	go sc.consume(runCtx, ready)
+	select {
+	case err := <-ready:
+		if err != nil {
+			sc.mu.Lock()
+			if sc.cancel != nil {
+				sc.cancel()
+			}
+			sc.cancel = nil
+			sc.running = false
+			sc.mu.Unlock()
+			return err
+		}
+		return nil
+	case <-ctx.Done():
+		sc.Stop()
+		return ctx.Err()
+	}
 }
 
 func (sc *StreamCoordinator) Stop() {
@@ -106,12 +123,21 @@ func (sc *StreamCoordinator) IsRunning() bool {
 	return sc.running
 }
 
-func (sc *StreamCoordinator) consume(ctx context.Context) {
+func (sc *StreamCoordinator) consume(ctx context.Context, ready chan<- error) {
 	ch, err := sc.subscriber.Subscribe(ctx, topicForConv(sc.convID))
 	if err != nil {
 		log.Error().Err(err).Str("component", "webchat").Str("conv_id", sc.convID).Msg("stream coordinator: subscribe failed")
-		sc.Stop()
+		if ready != nil {
+			ready <- err
+		}
+		sc.mu.Lock()
+		sc.running = false
+		sc.cancel = nil
+		sc.mu.Unlock()
 		return
+	}
+	if ready != nil {
+		ready <- nil
 	}
 	log.Info().Str("component", "webchat").Str("conv_id", sc.convID).Msg("stream coordinator: started")
 	for msg := range ch {

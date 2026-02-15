@@ -241,9 +241,11 @@ func (cm *ConvManager) GetOrCreate(convID, runtimeKey string, overrides map[stri
 				sub,
 				nil,
 				func(e events.Event, _ StreamCursor, frame []byte) {
-					eventSessionID := e.Metadata().SessionID
-					if eventSessionID != "" && eventSessionID != c.SessionID {
-						return
+					if e != nil {
+						eventSessionID := e.Metadata().SessionID
+						if eventSessionID != "" && eventSessionID != c.SessionID {
+							return
+						}
 					}
 					if c.pool != nil {
 						c.pool.Broadcast(frame)
@@ -308,9 +310,11 @@ func (cm *ConvManager) GetOrCreate(convID, runtimeKey string, overrides map[stri
 		sub,
 		nil,
 		func(e events.Event, _ StreamCursor, frame []byte) {
-			eventSessionID := e.Metadata().SessionID
-			if eventSessionID != "" && eventSessionID != conv.SessionID {
-				return
+			if e != nil {
+				eventSessionID := e.Metadata().SessionID
+				if eventSessionID != "" && eventSessionID != conv.SessionID {
+					return
+				}
 			}
 			if conv.pool != nil {
 				conv.pool.Broadcast(frame)
