@@ -653,3 +653,46 @@ Phase 5 is complete. I removed obsolete router route-parameterization options, d
 - `pinocchio/pkg/webchat/server.go`
 - `pinocchio/pkg/webchat/router_handlers_test.go`
 - Completed phase: `Phase 5`
+
+## Step 25: Phase 6 completion summary (validation and test matrix)
+Phase 6 is complete. I added the missing unit/integration tests for the app-owned route model, then ran the focused backend test matrix and frontend build checks as ticketed.
+
+### What I did
+- Expanded `ConversationService` lifecycle coverage:
+- default resolve/ensure behavior.
+- prompt validation behavior.
+- websocket attach argument validation.
+- Added `WSPublisher` behavior tests:
+- conversation not found.
+- no connection pool.
+- successful fanout.
+- Added `cmd/web-chat` app-owned integration tests:
+- `/chat` flow with profile-aware resolver path.
+- `/ws` flow with `ws.hello` and `ws.pong` verification.
+- Strengthened `web-agent-example` migrated integration flow:
+- explicit websocket ping/pong assertion in existing chat/ws/timeline integration test.
+- Executed focused backend matrix commands from workspace root:
+- `go test ./pinocchio/pkg/webchat/...`
+- `go test ./pinocchio/cmd/web-chat/...`
+- `go test ./web-agent-example/...`
+- Executed frontend check for impacted app:
+- `cd pinocchio/cmd/web-chat/web && npm run build`
+
+### Key commits
+- `420e665` expand `ConversationService` lifecycle test coverage.
+- `d4e3499` add `WSPublisher` behavior tests.
+- `b4e1e91` add app-owned `/chat` integration test in `cmd/web-chat`.
+- `cf402ee` add app-owned `/ws` integration test in `cmd/web-chat`.
+- `b0b9c81` strengthen `web-agent-example` integration with ping/pong assertion.
+
+### Validation
+- All Phase 6 tests and matrix commands passed.
+- Frontend build succeeded with existing Vite chunk-size warning only (no build failure).
+
+### Technical details
+- Primary files:
+- `pinocchio/pkg/webchat/conversation_service_test.go`
+- `pinocchio/pkg/webchat/ws_publisher_test.go`
+- `pinocchio/cmd/web-chat/app_owned_chat_integration_test.go`
+- `web-agent-example/cmd/web-agent-example/app_owned_routes_integration_test.go`
+- Completed phase: `Phase 6`
