@@ -12,20 +12,22 @@ DocType: reference
 Intent: long-term
 Owners: []
 RelatedFiles:
-    - Path: pinocchio/cmd/web-chat/web/src/debug-ui/api/debugApi.ts
+    - Path: cmd/web-chat/web/src/debug-ui/api/debugApi.ts
       Note: Exploration source for debug-ui data model and conversation metadata
-    - Path: pinocchio/cmd/web-chat/web/src/debug-ui/components/SessionList.tsx
-    - Path: pinocchio/cmd/web-chat/web/src/sem/registry.ts
+    - Path: cmd/web-chat/web/src/debug-ui/components/SessionList.tsx
+    - Path: cmd/web-chat/web/src/debug-ui/store/uiSlice.ts
+      Note: Added follow-mode state/actions/selectors and reconnect token for GP-020 Task 1 (commit 8c13fbe)
+    - Path: cmd/web-chat/web/src/sem/registry.ts
       Note: Exploration source for SEM event type support
-    - Path: pinocchio/cmd/web-chat/web/src/ws/wsManager.ts
+    - Path: cmd/web-chat/web/src/ws/wsManager.ts
       Note: Exploration source for websocket ordering and buffering semantics
-    - Path: pinocchio/pkg/webchat/router.go
+    - Path: pkg/webchat/router.go
       Note: Snapshot hook persists turns but does not websocket-stream full turn snapshots
-    - Path: pinocchio/pkg/webchat/sem_translator.go
+    - Path: pkg/webchat/sem_translator.go
       Note: Current websocket semantic event classes
-    - Path: pinocchio/pkg/webchat/timeline_upsert.go
+    - Path: pkg/webchat/timeline_upsert.go
       Note: Evidence for timeline.upsert websocket emission
-    - Path: pinocchio/pkg/webchat/turn_persister.go
+    - Path: pkg/webchat/turn_persister.go
       Note: Turn persistence path used for stored snapshots
 ExternalSources: []
 Summary: Exploration diary for realtime websocket follow planning in debug UI.
@@ -33,6 +35,7 @@ LastUpdated: 2026-02-14T12:12:00-05:00
 WhatFor: Record how realtime follow architecture and tasks were derived.
 WhenToUse: Use when implementing GP-020 or reviewing assumptions around live attach behavior.
 ---
+
 
 
 
@@ -156,3 +159,61 @@ I also verified the turn/block question: full turn snapshots are not currently s
 ### Technical details
 - Upsert emission flow is persist-first then broadcast (`store.Upsert` then `onUpsert` -> `conv.pool.Broadcast`).
 - Websocket payloads include `timeline.upsert`, plus SEM llm/tool/log-style frames, but not full turn YAML/blocks snapshots.
+
+## Step 3: Add follow-mode state/actions/selectors in debug-ui store
+I started implementation by adding a dedicated follow-state model in the debug-ui store, instead of interleaving follow flags into existing selection fields. This keeps websocket lifecycle control explicit and easier to test.
+
+This step establishes the contract needed by later tasks: a target conversation id, status enum, reconnect token, and explicit pause/resume/start actions. That allows follow behavior to be wired from UI controls and websocket manager hooks without ad-hoc state mutation.
+
+### Prompt Context
+**User prompt (verbatim):** "alright, let's implement GP-020 then, task by task, committing as appropriate, keeping a frequent detailed diary, checking tasks off in docmgr."
+
+**Assistant interpretation:** Implement GP-020 incrementally with small commits, update task checkboxes through docmgr, and keep a detailed ongoing diary.
+
+**Inferred user intent:** Execute the follow-mode ticket as auditable engineering work with clear checkpoints and traceability between code, tasks, and docs.
+
+**Commit (code):** `8c13fbe` — "feat(debug-ui): add realtime follow state/actions/selectors"
+
+### What I did
+- Extended `uiSlice` in `pinocchio/cmd/web-chat/web/src/debug-ui/store/uiSlice.ts`:
+  - Added `FollowStatus` union type (`idle|connecting|bootstrapping|connected|error|closed`).
+  - Added `follow` state object (`enabled`, `targetConvId`, `status`, `reconnectToken`, `lastError`).
+  - Added actions for lifecycle control: `startFollow`, `pauseFollow`, `resumeFollow`, `stopFollow`, `setFollowTarget`, `setFollowStatus`, `setFollowError`, `requestFollowReconnect`.
+  - Added selectors: `selectFollowState`, `selectFollowStatus`, `selectFollowEnabled`, `selectFollowTargetConvId`.
+  - Updated `selectConversation` behavior so active follow mode retargets on conversation switch.
+- Ran `npm run typecheck` in `pinocchio/cmd/web-chat/web`.
+- Marked Task 1 complete with:
+  - `docmgr task check --ticket GP-020-DEBUG-UI-REALTIME-FOLLOW --id 1`
+
+### Why
+- Follow mode needs explicit state transitions to avoid coupling websocket lifecycle to route components.
+- Reconnect token is needed for user-driven reconnect semantics without inventing imperative side channels later.
+
+### What worked
+- TypeScript compiled cleanly after state/action additions.
+- `docmgr task check` correctly updated ticket task markdown.
+
+### What didn't work
+- No hard failures in this step.
+
+### What I learned
+- Existing debug-ui store was small and selection-focused, so adding a nested `follow` state shape is low-risk and keeps reducer intent clear.
+- Having explicit `FollowStatus` now will simplify consistent status badges across SessionList/AppShell/TimelinePage.
+
+### What was tricky to build
+- The main subtlety was deciding how conversation changes should interact with active follow mode.
+- I chose to retarget active follow during `selectConversation` to preserve expected “follow currently selected live conversation” behavior and avoid stale sockets.
+
+### What warrants a second pair of eyes
+- Retarget-on-selection behavior in `selectConversation` may need UX confirmation if we later allow following a conversation different from currently selected one.
+
+### What should be done in the future
+1. Wire websocket manager to these actions and ensure status transitions are deterministic under reconnect/error paths.
+
+### Code review instructions
+- Start in `pinocchio/cmd/web-chat/web/src/debug-ui/store/uiSlice.ts`.
+- Verify state model and action naming match GP-020 task intent.
+- Validate with `cd pinocchio/cmd/web-chat/web && npm run typecheck`.
+
+### Technical details
+- Follow state now stores both control flags (`enabled`, `reconnectToken`) and presentation state (`status`, `lastError`) so UI can be stateless about transport internals.

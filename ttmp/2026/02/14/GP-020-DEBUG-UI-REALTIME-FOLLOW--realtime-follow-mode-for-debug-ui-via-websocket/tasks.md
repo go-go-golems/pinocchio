@@ -2,7 +2,7 @@
 
 ## TODO
 
-- [ ] Add follow-mode state/actions/selectors in debug-ui uiSlice
+- [x] Add follow-mode state/actions/selectors in debug-ui uiSlice
 - [ ] Implement debug timeline websocket manager with conversation-scoped connect/disconnect
 - [ ] Implement bootstrap (`/api/timeline` canonical only) then buffered replay ordering for live attach
 - [ ] Decode `timeline.upsert` and upsert generic timeline entities with dedupe by version/entity
