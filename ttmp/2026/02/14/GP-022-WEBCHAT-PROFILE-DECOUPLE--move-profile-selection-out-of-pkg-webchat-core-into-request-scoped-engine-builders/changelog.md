@@ -147,3 +147,8 @@ Renamed WS hello protobuf field from `profile` to `runtime_key`, regenerated Go/
 - /home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/cmd/web-chat/web/src/sem/pb/proto/sem/base/ws_pb.ts — Regenerated TS protobuf bindings
 - /home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/web/src/sem/pb/proto/sem/base/ws_pb.ts — Regenerated TS protobuf bindings
 - /home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/pkg/webchat/router.go — Updated hello frame construction to `RuntimeKey`
+
+## 2026-02-14
+
+Ticket closed
+

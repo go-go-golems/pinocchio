@@ -14,3 +14,8 @@ Step 1: Migrated all deprecated Viper usage to Glazed config middlewares. Fixed 
 - /home/manuel/workspaces/2025-12-01/integrate-moments-persistence/pinocchio/cmd/pinocchio/main.go — Replaced InitViper and InitLoggerFromViper
 - /home/manuel/workspaces/2025-12-01/integrate-moments-persistence/pinocchio/pkg/cmds/helpers/parse-helpers.go — Replaced GatherFlagsFromViper with config middlewares
 
+
+## 2026-02-14
+
+Ticket closed
+

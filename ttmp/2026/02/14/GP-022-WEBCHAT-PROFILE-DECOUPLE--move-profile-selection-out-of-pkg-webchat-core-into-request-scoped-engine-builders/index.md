@@ -1,7 +1,7 @@
 ---
 Title: Move profile selection out of pkg/webchat core into request-scoped engine builders
 Ticket: GP-022-WEBCHAT-PROFILE-DECOUPLE
-Status: active
+Status: complete
 Topics:
     - architecture
     - pinocchio
@@ -14,10 +14,11 @@ Owners: []
 RelatedFiles: []
 ExternalSources: []
 Summary: ""
-LastUpdated: 2026-02-14T15:53:15.347283634-05:00
+LastUpdated: 2026-02-14T20:14:30.8170112-05:00
 WhatFor: ""
 WhenToUse: ""
 ---
+
 
 # Move profile selection out of pkg/webchat core into request-scoped engine builders
 
