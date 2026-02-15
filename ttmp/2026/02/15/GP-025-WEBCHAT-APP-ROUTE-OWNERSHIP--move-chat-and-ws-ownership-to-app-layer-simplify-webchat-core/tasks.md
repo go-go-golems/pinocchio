@@ -54,7 +54,7 @@
 ## Phase 5: Router Simplification and Deletion Pass
 
 - [x] Remove obsolete router options/interfaces that only existed to parameterize app route behavior.
-- [ ] Remove dead code paths and tests tied to old monolithic route ownership.
+- [x] Remove dead code paths and tests tied to old monolithic route ownership.
 - [ ] If any router helper remains, ensure it is clearly scoped as optional utility, not central architecture.
 - [ ] Update package docs to reflect new ownership model and remove old setup guidance.
 
