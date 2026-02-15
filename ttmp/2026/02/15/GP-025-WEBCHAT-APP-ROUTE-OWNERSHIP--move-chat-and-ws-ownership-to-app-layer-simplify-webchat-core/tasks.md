@@ -17,7 +17,7 @@
 - [x] `ConversationService.SubmitPrompt(...)`.
 - [x] `ConversationService.AttachWebSocket(...)`.
 - [x] `WSPublisher.PublishJSON(...)` conversation-scoped API.
-- [ ] Freeze app-owned handler contracts:
+- [x] Freeze app-owned handler contracts:
 - [ ] `/chat` request parsing, validation, response schema, and status codes.
 - [ ] `/ws` connect requirements and websocket hello/ping/pong behavior.
 - [ ] Freeze route ownership boundary: `pkg/webchat` does not register `/chat` or `/ws`.

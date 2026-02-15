@@ -423,7 +423,14 @@ mux.HandleFunc("/ws", appWSHandler(svc, authz))
 
 This removes implicit policy from core router options and makes behavior easy to audit.
 
-## 11. Route Ownership and Complexity Reduction
+## 11. App-Owned Handler Contracts and Route Boundary
+### 11.0 Frozen App-Owned Handler Contracts (Locked)
+For GP-025, applications (`cmd/web-chat`, `web-agent-example`) own `/chat` and `/ws` HTTP contracts directly. Core webchat exposes reusable services and helpers, but does not own handler registration policy.
+
+Frozen handler entries:
+1. `/chat` request parsing, validation, response schema, and status mapping.
+2. `/ws` connection requirements and websocket hello/ping/pong behavior.
+
 ### 11.1 What can be removed or shrunk
 If route ownership moves to apps, we can simplify or remove:
 
