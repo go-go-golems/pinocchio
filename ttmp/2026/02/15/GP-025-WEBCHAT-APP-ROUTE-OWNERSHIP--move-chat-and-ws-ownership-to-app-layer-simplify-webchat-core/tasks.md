@@ -28,7 +28,7 @@
 - [x] Introduce conversation-scoped websocket publisher service that does not expose `ConnectionPool`.
 - [x] Replace direct `conv.pool.Broadcast(...)` calls in non-transport code with publisher usage.
 - [x] Move or split reusable pieces from `router.go` into focused files/types.
-- [ ] Delete or deprecate monolithic route registration from `router.go` (clean cutover target: remove route ownership completely).
+- [x] Delete or deprecate monolithic route registration from `router.go` (clean cutover target: remove route ownership completely).
 - [ ] Keep persistence wiring (timeline/turn store integration) available through service config.
 - [ ] Keep request/runtime composition callback integration explicit and app-driven.
 - [ ] Ensure stream coordinator and queue/idempotency behavior remain intact after refactor.

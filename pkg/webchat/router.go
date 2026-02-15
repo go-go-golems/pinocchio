@@ -2,8 +2,6 @@ package webchat
 
 import (
 	"context"
-	"encoding/json"
-	stderrors "errors"
 	"io/fs"
 	"net/http"
 	"os"
@@ -323,136 +321,12 @@ func (r *Router) registerUIHandlers(mux *http.ServeMux) {
 }
 
 func (r *Router) registerAPIHandlers(mux *http.ServeMux) {
-	logger := log.With().Str("component", "webchat").Logger()
-
 	// Timeline hydration is part of core webchat and available independent of debug routes.
 	r.registerTimelineAPIHandlers(mux)
 
 	if r.debugRoutesEnabled() {
 		r.registerDebugAPIHandlers(mux)
 	}
-
-	// websocket join: /ws?conv_id=...&runtime=key
-	mux.HandleFunc("/ws", func(w http.ResponseWriter, r0 *http.Request) {
-		if r.conversationService == nil {
-			http.Error(w, "conversation service not initialized", http.StatusServiceUnavailable)
-			return
-		}
-		resolver := r.requestResolver
-		if resolver == nil {
-			resolver = NewDefaultConversationRequestResolver(r.cm)
-		}
-		plan, err := resolver.Resolve(r0)
-		if err != nil {
-			status := http.StatusInternalServerError
-			msg := "failed to resolve request"
-			var rbe *RequestResolutionError
-			if stderrors.As(err, &rbe) && rbe != nil {
-				if rbe.Status > 0 {
-					status = rbe.Status
-				}
-				if strings.TrimSpace(rbe.ClientMsg) != "" {
-					msg = rbe.ClientMsg
-				}
-			}
-			logger.Warn().Err(err).Msg("ws request policy failed")
-			http.Error(w, msg, status)
-			return
-		}
-		conn, err := r.upgrader.Upgrade(w, r0, nil)
-		if err != nil {
-			logger.Error().Err(err).Msg("websocket upgrade failed")
-			return
-		}
-		handle, err := r.conversationService.ResolveAndEnsureConversation(r0.Context(), AppConversationRequest{
-			ConvID:     plan.ConvID,
-			RuntimeKey: plan.RuntimeKey,
-			Overrides:  plan.Overrides,
-		})
-		if err != nil {
-			logger.Error().Err(err).Msg("failed to resolve conversation for websocket attach")
-			_ = conn.WriteMessage(websocket.TextMessage, []byte(`{"error":"failed to join conversation"}`))
-			_ = conn.Close()
-			return
-		}
-		if err := r.conversationService.AttachWebSocket(r0.Context(), handle.ConvID, conn, WebSocketAttachOptions{SendHello: true}); err != nil {
-			logger.Error().Err(err).Msg("failed to attach websocket")
-			_ = conn.WriteMessage(websocket.TextMessage, []byte(`{"error":"failed to attach websocket"}`))
-			_ = conn.Close()
-			return
-		}
-	})
-
-	handleChatRequest := func(w http.ResponseWriter, r0 *http.Request) {
-		if r0.Method != http.MethodPost {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-
-		resolver := r.requestResolver
-		if resolver == nil {
-			resolver = NewDefaultConversationRequestResolver(r.cm)
-		}
-		plan, err := resolver.Resolve(r0)
-		if err != nil {
-			status := http.StatusInternalServerError
-			msg := "failed to resolve request"
-			var rbe *RequestResolutionError
-			if stderrors.As(err, &rbe) && rbe != nil {
-				if rbe.Status > 0 {
-					status = rbe.Status
-				}
-				if strings.TrimSpace(rbe.ClientMsg) != "" {
-					msg = rbe.ClientMsg
-				}
-			}
-			logger.Warn().Err(err).Msg("chat request policy failed")
-			http.Error(w, msg, status)
-			return
-		}
-		if strings.TrimSpace(plan.Prompt) == "" {
-			logger.Warn().Msg("chat request resolver missing prompt")
-			http.Error(w, "missing prompt", http.StatusBadRequest)
-			return
-		}
-
-		convID := plan.ConvID
-		runtimeKey := plan.RuntimeKey
-		chatReqLog := logger.With().Str("conv_id", convID).Str("runtime_key", runtimeKey).Logger()
-		chatReqLog.Info().Int("prompt_len", len(plan.Prompt)).Msg("/chat received")
-		if plan.Overrides != nil {
-			chatReqLog.Debug().Interface("overrides", plan.Overrides).Msg("/chat overrides")
-		} else {
-			chatReqLog.Debug().Msg("/chat overrides empty")
-		}
-		idempotencyKey := strings.TrimSpace(plan.IdempotencyKey)
-		if idempotencyKey == "" {
-			idempotencyKey = idempotencyKeyFromRequest(r0, nil)
-		}
-		if r.conversationService == nil {
-			http.Error(w, "conversation service not initialized", http.StatusServiceUnavailable)
-			return
-		}
-		resp, err := r.conversationService.SubmitPrompt(r0.Context(), SubmitPromptInput{
-			ConvID:         convID,
-			RuntimeKey:     runtimeKey,
-			Overrides:      plan.Overrides,
-			Prompt:         plan.Prompt,
-			IdempotencyKey: idempotencyKey,
-		})
-		if err != nil {
-			chatReqLog.Error().Err(err).Msg("start session inference failed")
-			http.Error(w, "start session inference failed", http.StatusInternalServerError)
-			return
-		}
-		if resp.HTTPStatus > 0 {
-			w.WriteHeader(resp.HTTPStatus)
-		}
-		_ = json.NewEncoder(w).Encode(resp.Response)
-	}
-
-	mux.HandleFunc("/chat", func(w http.ResponseWriter, r0 *http.Request) { handleChatRequest(w, r0) })
-	mux.HandleFunc("/chat/", func(w http.ResponseWriter, r0 *http.Request) { handleChatRequest(w, r0) })
 }
 
 // helpers
