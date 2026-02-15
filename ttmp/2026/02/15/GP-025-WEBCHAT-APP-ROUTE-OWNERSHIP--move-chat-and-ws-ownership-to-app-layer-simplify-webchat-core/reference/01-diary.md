@@ -15,8 +15,8 @@ RelatedFiles:
     - Path: pinocchio/pkg/webchat/runtime_composer.go
     - Path: pinocchio/pkg/webchat/types.go
     - Path: pinocchio/pkg/webchat/timeline_upsert.go
-Summary: Detailed chronological diary for the GP-025 analysis and design pass.
-LastUpdated: 2026-02-15T01:30:00-05:00
+Summary: Detailed chronological diary for GP-025 analysis and implementation.
+LastUpdated: 2026-02-15T02:10:00-05:00
 WhatFor: Preserve step-by-step exploration, findings, and writing decisions.
 WhenToUse: Use when reviewing why the new proposal moved route ownership to applications.
 ---
@@ -527,3 +527,88 @@ I also executed per-task commits/checkoffs for tasks 6 through 16, then switched
 ### Technical details
 - Ticket: `GP-025-WEBCHAT-APP-ROUTE-OWNERSHIP`
 - Completed phase: `Phase 1`
+
+## Step 21: Phase 2 completion summary (`pkg/webchat` core refactor)
+Phase 2 is complete. The core moved from router-centric orchestration toward explicit service primitives, with `ConversationService` and conversation-scoped websocket publishing as first-class APIs.
+
+### What I did
+- Added `ConversationService` implementation and tests in `pkg/webchat`.
+- Added `WSPublisher` abstraction (`PublishJSON`) and replaced non-transport direct pool broadcasts with publisher calls.
+- Split router helper logic out of `router.go` into focused files (`idempotency`, `turn snapshot hook`, app-owned handler adapters).
+- Removed router-owned `/chat` and `/ws` registration from `pkg/webchat/router.go`.
+- Preserved persistence wiring (timeline/turn stores), explicit runtime composition callbacks, and queue/idempotency behavior.
+
+### Key commits
+- `11357a2` introduce conversation service orchestration.
+- `27b6b39` add conversation-scoped ws publisher.
+- `c47b9ed` route timeline upserts through publisher.
+- `afe05f9` split router helpers into focused files.
+- `26e84d8` remove router-owned chat/ws registration.
+- `3e56b9c` add app-owned handler adapters.
+- `ed4ea78` queue semantics regression test.
+
+### Validation
+- `go test ./pkg/webchat/... -count=1`
+
+### Technical details
+- Primary files:
+- `pinocchio/pkg/webchat/conversation_service.go`
+- `pinocchio/pkg/webchat/ws_publisher.go`
+- `pinocchio/pkg/webchat/app_owned_handlers.go`
+- `pinocchio/pkg/webchat/router.go`
+- Completed phase: `Phase 2`
+
+## Step 22: Phase 3 completion summary (`cmd/web-chat` app-owned route migration)
+Phase 3 is complete. `cmd/web-chat` now owns `/chat` and `/ws` directly, while `pkg/webchat` is used as reusable core (`ConversationService`, `UIHandler`, `APIHandler`).
+
+### What I did
+- Mounted app-owned `/chat` and `/ws` handlers in `cmd/web-chat/main.go`.
+- Moved websocket hello/ping/pong behavior into app-owned websocket handler path using explicit attach options.
+- Re-homed API/UI composition decisions in app mux (`/api/` and `/` mounting).
+- Kept profile/runtime policy app-driven through resolver/composer integration in app code.
+
+### Key commits
+- `232368e` mount app-owned chat handler in `cmd/web-chat`.
+- `15e874a` mount app-owned websocket handler in `cmd/web-chat`.
+- `b730c84` make ping/pong behavior explicit in app-owned path.
+- `aeb6ab2` compose UI/API mounts in app router.
+- `c6587c5` validate route wiring with focused smoke tests.
+
+### Validation
+- `go test ./cmd/web-chat/... -count=1`
+- `go test ./pkg/webchat/... -count=1`
+
+### Technical details
+- Primary files:
+- `pinocchio/cmd/web-chat/main.go`
+- `pinocchio/cmd/web-chat/profile_policy.go`
+- `pinocchio/cmd/web-chat/profile_policy_test.go`
+- Completed phase: `Phase 3`
+
+## Step 23: Phase 4 completion summary (`web-agent-example` migration)
+Phase 4 is complete. `web-agent-example` no longer relies on router-owned `/chat` and `/ws`, and now validates live websocket/timeline behavior through an integration test that uses app-owned handler wiring.
+
+### What I did
+- Completed dependency audit and defined target app-owned handlers.
+- Wired `ConversationService` explicitly in `web-agent-example` bootstrap.
+- Moved resolver/runtime policy usage fully into app-owned request handling.
+- Removed reliance on router mux route registration for `/chat` and `/ws` by introducing app mux composition using `APIHandler`/`UIHandler`.
+- Added integration validation for live `/chat` + `/ws` + `/api/timeline` flow.
+
+### Key commits (`web-agent-example`)
+- `127e54e` define app-owned chat/ws handlers.
+- `e384903` wire conversation service in bootstrap.
+- `24b6ce2` move resolver policy to app-owned handlers.
+- `327b4df` remove router mux ownership of chat/ws routes.
+- `a4b5101` validate app-owned chat/ws/timeline flow.
+
+### Validation
+- `go test ./...` (in `web-agent-example`)
+- Integration test added:
+- `web-agent-example/cmd/web-agent-example/app_owned_routes_integration_test.go`
+
+### Technical details
+- Primary files:
+- `web-agent-example/cmd/web-agent-example/main.go`
+- `web-agent-example/cmd/web-agent-example/app_owned_routes_integration_test.go`
+- Completed phase: `Phase 4`
