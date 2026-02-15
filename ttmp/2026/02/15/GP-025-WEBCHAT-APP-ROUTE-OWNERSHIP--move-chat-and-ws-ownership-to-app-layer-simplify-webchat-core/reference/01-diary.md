@@ -473,3 +473,57 @@ This step formalized publisher error semantics and broadcast behavior, then chec
 ### Technical details
 - Updated file: `pinocchio/ttmp/2026/02/15/GP-025-WEBCHAT-APP-ROUTE-OWNERSHIP--move-chat-and-ws-ownership-to-app-layer-simplify-webchat-core/design/01-webchat-toolkit-app-owned-routes-analysis.md`
 - Checked task: `12`
+
+## Step 20: Phase 1 completion summary (cutover contract locked)
+Phase 1 is complete. I finalized the no-compatibility decision, froze the minimal core service API, froze app-owned `/chat` and `/ws` contracts, and locked the route-ownership boundary so implementation work can proceed without contract churn.
+
+I also executed per-task commits/checkoffs for tasks 6 through 16, then switched diary cadence to phase-level updates per user instruction.
+
+### Prompt Context
+
+**User prompt (verbatim):** (see Step 13)
+
+**Assistant interpretation:** Complete tasks sequentially with commits/checkoffs, while maintaining diary updates at the requested cadence.
+
+**Inferred user intent:** Enforce disciplined execution traceability before starting risky refactor implementation.
+
+**Commit (code):** pending — "docs(gp-025): phase 1 diary checkpoint"
+
+### What I did
+- Completed and checked off tasks `6..16`.
+- Added/updated design sections for:
+  - clean cutover decision,
+  - frozen `ConversationService`/`WSPublisher` contracts,
+  - frozen app-owned `/chat` and `/ws` handler contracts,
+  - frozen route ownership boundary (`pkg/webchat` does not mount `/chat` or `/ws`).
+- Recorded per-task commits for the contract-freeze sequence.
+
+### Why
+- Core refactor and app migration tasks need a stable contract baseline to avoid mid-implementation API drift.
+
+### What worked
+- Task board now shows full Phase 1 completion.
+- Design contract is explicit enough to guide implementation tasks 17+.
+
+### What didn't work
+- Earlier in Phase 1, diary entries were created per task; cadence has now been adjusted to phase-level updates.
+
+### What I learned
+- Contract freezing before code changes made task sequencing straightforward and reviewable.
+
+### What was tricky to build
+- Balancing service-level contracts (transport-neutral) with concrete HTTP behavior guarantees required explicit adapter notes.
+
+### What warrants a second pair of eyes
+- Confirm contract granularity is sufficient to implement Phase 2 without reopening design decisions.
+
+### What should be done in the future
+- Start Phase 2 by introducing `ConversationService` and publisher implementation in `pkg/webchat`.
+
+### Code review instructions
+- Verify tasks `6..16` are checked in `tasks.md`.
+- Review design sections `5.3`, `7.x`, and `11.x` for consistency with Phase 2 goals.
+
+### Technical details
+- Ticket: `GP-025-WEBCHAT-APP-ROUTE-OWNERSHIP`
+- Completed phase: `Phase 1`
