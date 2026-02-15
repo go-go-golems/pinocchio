@@ -8,16 +8,17 @@ import (
 
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 	"github.com/go-go-golems/glazed/pkg/cmds/values"
+	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 	webchat "github.com/go-go-golems/pinocchio/pkg/webchat"
 	"github.com/rs/zerolog/log"
 )
 
 type webChatRuntimeComposer struct {
 	parsed      *values.Values
-	mwFactories map[string]webchat.MiddlewareFactory
+	mwFactories map[string]infruntime.MiddlewareFactory
 }
 
-func newWebChatRuntimeComposer(parsed *values.Values, mwFactories map[string]webchat.MiddlewareFactory) *webChatRuntimeComposer {
+func newWebChatRuntimeComposer(parsed *values.Values, mwFactories map[string]infruntime.MiddlewareFactory) *webChatRuntimeComposer {
 	return &webChatRuntimeComposer{
 		parsed:      parsed,
 		mwFactories: mwFactories,
@@ -41,7 +42,7 @@ func (c *webChatRuntimeComposer) Compose(ctx context.Context, req webchat.Runtim
 	}
 
 	systemPrompt := "You are an assistant"
-	middlewares := []webchat.MiddlewareUse{}
+	middlewares := []infruntime.MiddlewareUse{}
 	tools := []string{}
 	if req.Overrides != nil {
 		if v, ok := req.Overrides["system_prompt"].(string); ok && strings.TrimSpace(v) != "" {
@@ -70,7 +71,7 @@ func (c *webChatRuntimeComposer) Compose(ctx context.Context, req webchat.Runtim
 	if err != nil {
 		return webchat.RuntimeArtifacts{}, err
 	}
-	eng, err := webchat.ComposeEngineFromSettings(
+	eng, err := infruntime.ComposeEngineFromSettings(
 		ctx,
 		stepSettings.Clone(),
 		systemPrompt,
@@ -91,17 +92,17 @@ func (c *webChatRuntimeComposer) Compose(ctx context.Context, req webchat.Runtim
 }
 
 type runtimeFingerprintPayload struct {
-	RuntimeKey   string                  `json:"runtime_key"`
-	SystemPrompt string                  `json:"system_prompt"`
-	Middlewares  []webchat.MiddlewareUse `json:"middlewares"`
-	Tools        []string                `json:"tools"`
-	StepMetadata map[string]any          `json:"step_metadata,omitempty"`
+	RuntimeKey   string                     `json:"runtime_key"`
+	SystemPrompt string                     `json:"system_prompt"`
+	Middlewares  []infruntime.MiddlewareUse `json:"middlewares"`
+	Tools        []string                   `json:"tools"`
+	StepMetadata map[string]any             `json:"step_metadata,omitempty"`
 }
 
 func runtimeFingerprint(
 	runtimeKey string,
 	systemPrompt string,
-	middlewares []webchat.MiddlewareUse,
+	middlewares []infruntime.MiddlewareUse,
 	tools []string,
 	stepSettings *settings.StepSettings,
 ) string {
@@ -147,8 +148,8 @@ func validateOverrides(overrides map[string]any) error {
 	return nil
 }
 
-func parseMiddlewareOverrides(arr []any) ([]webchat.MiddlewareUse, error) {
-	mws := make([]webchat.MiddlewareUse, 0, len(arr))
+func parseMiddlewareOverrides(arr []any) ([]infruntime.MiddlewareUse, error) {
+	mws := make([]infruntime.MiddlewareUse, 0, len(arr))
 	for _, raw := range arr {
 		m, ok := raw.(map[string]any)
 		if !ok {
@@ -158,7 +159,7 @@ func parseMiddlewareOverrides(arr []any) ([]webchat.MiddlewareUse, error) {
 		if strings.TrimSpace(name) == "" {
 			return nil, fmt.Errorf("middleware override missing name")
 		}
-		mws = append(mws, webchat.MiddlewareUse{Name: strings.TrimSpace(name), Config: m["config"]})
+		mws = append(mws, infruntime.MiddlewareUse{Name: strings.TrimSpace(name), Config: m["config"]})
 	}
 	return mws, nil
 }

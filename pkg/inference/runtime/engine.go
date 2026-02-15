@@ -1,4 +1,4 @@
-package webchat
+package runtime
 
 import (
 	"context"
@@ -9,8 +9,21 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/inference/engine/factory"
 	"github.com/go-go-golems/geppetto/pkg/inference/middleware"
 	"github.com/go-go-golems/geppetto/pkg/inference/toolloop/enginebuilder"
+	geptools "github.com/go-go-golems/geppetto/pkg/inference/tools"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 )
+
+// MiddlewareFactory creates a middleware instance from an arbitrary config object.
+type MiddlewareFactory func(cfg any) middleware.Middleware
+
+// ToolFactory registers a tool into a registry.
+type ToolFactory func(reg geptools.ToolRegistry) error
+
+// MiddlewareUse declares a middleware to attach and its config.
+type MiddlewareUse struct {
+	Name   string
+	Config any
+}
 
 // ComposeEngineFromSettings builds an engine from step settings then applies middlewares.
 func ComposeEngineFromSettings(

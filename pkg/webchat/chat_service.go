@@ -6,6 +6,7 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/inference/toolloop"
 	"github.com/pkg/errors"
 
+	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
 )
 
@@ -55,7 +56,7 @@ func (s *ChatService) SetStepController(sc *toolloop.StepController) {
 	s.svc.SetStepController(sc)
 }
 
-func (s *ChatService) RegisterTool(name string, f ToolFactory) {
+func (s *ChatService) RegisterTool(name string, f infruntime.ToolFactory) {
 	if s == nil || s.svc == nil {
 		return
 	}

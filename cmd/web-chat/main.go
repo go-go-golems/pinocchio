@@ -24,6 +24,7 @@ import (
 	geppettosections "github.com/go-go-golems/geppetto/pkg/sections"
 	toolspkg "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/tools"
 	timelinecmd "github.com/go-go-golems/pinocchio/cmd/web-chat/timeline"
+	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 	agentmode "github.com/go-go-golems/pinocchio/pkg/middlewares/agentmode"
 	sqlitetool "github.com/go-go-golems/pinocchio/pkg/middlewares/sqlitetool"
 	rediscfg "github.com/go-go-golems/pinocchio/pkg/redisstream"
@@ -92,16 +93,16 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 
 	profiles := newChatProfileRegistry(
 		"default",
-		&chatProfile{Slug: "default", DefaultPrompt: "You are an assistant", DefaultMws: []webchat.MiddlewareUse{}},
+		&chatProfile{Slug: "default", DefaultPrompt: "You are an assistant", DefaultMws: []infruntime.MiddlewareUse{}},
 		&chatProfile{
 			Slug:           "agent",
 			DefaultPrompt:  "You are a helpful assistant. Be concise.",
-			DefaultMws:     []webchat.MiddlewareUse{{Name: "agentmode", Config: amCfg}},
+			DefaultMws:     []infruntime.MiddlewareUse{{Name: "agentmode", Config: amCfg}},
 			AllowOverrides: true,
 		},
 	)
 
-	middlewareFactories := map[string]webchat.MiddlewareFactory{
+	middlewareFactories := map[string]infruntime.MiddlewareFactory{
 		"agentmode": func(cfg any) geppettomw.Middleware {
 			return agentmode.NewMiddleware(amSvc, cfg.(agentmode.Config))
 		},

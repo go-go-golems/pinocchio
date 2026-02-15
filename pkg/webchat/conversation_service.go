@@ -3,7 +3,6 @@ package webchat
 import (
 	"context"
 	"encoding/json"
-	"os"
 	"strings"
 	"time"
 
@@ -17,6 +16,7 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/inference/toolloop"
 	"github.com/go-go-golems/geppetto/pkg/inference/toolloop/enginebuilder"
 	geptools "github.com/go-go-golems/geppetto/pkg/inference/tools"
+	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
 	timelinepb "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/timeline"
 )
@@ -29,7 +29,7 @@ type ConversationServiceConfig struct {
 	TurnStore          chatstore.TurnStore
 	SEMPublisher       message.Publisher
 	TimelineUpsertHook func(*Conversation) func(entity *timelinepb.TimelineEntityV1, version uint64)
-	ToolFactories      map[string]ToolFactory
+	ToolFactories      map[string]infruntime.ToolFactory
 }
 
 type ConversationService struct {
@@ -42,7 +42,7 @@ type ConversationService struct {
 	turnStore      chatstore.TurnStore
 	semPublisher   message.Publisher
 	timelineUpsert func(*Conversation) func(entity *timelinepb.TimelineEntityV1, version uint64)
-	toolFactories  map[string]ToolFactory
+	toolFactories  map[string]infruntime.ToolFactory
 }
 
 type AppConversationRequest struct {
@@ -94,7 +94,7 @@ func NewConversationService(cfg ConversationServiceConfig) (*ConversationService
 	}
 	toolFactories := cfg.ToolFactories
 	if toolFactories == nil {
-		toolFactories = map[string]ToolFactory{}
+		toolFactories = map[string]infruntime.ToolFactory{}
 	}
 	return &ConversationService{
 		baseCtx:        cfg.BaseCtx,
@@ -137,12 +137,12 @@ func (s *ConversationService) SetStepController(sc *toolloop.StepController) {
 	s.stepCtrl = sc
 }
 
-func (s *ConversationService) RegisterTool(name string, f ToolFactory) {
+func (s *ConversationService) RegisterTool(name string, f infruntime.ToolFactory) {
 	if s == nil || strings.TrimSpace(name) == "" || f == nil {
 		return
 	}
 	if s.toolFactories == nil {
-		s.toolFactories = map[string]ToolFactory{}
+		s.toolFactories = map[string]infruntime.ToolFactory{}
 	}
 	s.toolFactories[strings.TrimSpace(name)] = f
 }
@@ -301,7 +301,7 @@ func (s *ConversationService) startInferenceForPrompt(conv *Conversation, overri
 		}
 	}
 
-	hook := snapshotHookForConv(conv, os.Getenv("PINOCCHIO_WEBCHAT_TURN_SNAPSHOTS_DIR"), s.turnStore)
+	hook := snapshotHookForConv(conv, s.turnStore)
 
 	seed, err := conv.Sess.AppendNewTurnFromUserPrompt(prompt)
 	if err != nil {

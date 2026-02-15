@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 
+	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 	webchat "github.com/go-go-golems/pinocchio/pkg/webchat"
 )
 
@@ -14,7 +15,7 @@ type chatProfile struct {
 	Slug           string
 	DefaultPrompt  string
 	DefaultTools   []string
-	DefaultMws     []webchat.MiddlewareUse
+	DefaultMws     []infruntime.MiddlewareUse
 	AllowOverrides bool
 }
 

@@ -16,6 +16,7 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/inference/middleware"
 	"github.com/go-go-golems/geppetto/pkg/inference/toolloop"
 	"github.com/go-go-golems/glazed/pkg/cmds/values"
+	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
 )
 
@@ -58,8 +59,8 @@ func NewRouter(ctx context.Context, parsed *values.Values, staticFS fs.FS, opts 
 		staticFS:      staticFS,
 		router:        streamBackend.EventRouter(),
 		streamBackend: streamBackend,
-		mwFactories:   map[string]MiddlewareFactory{},
-		toolFactories: map[string]ToolFactory{},
+		mwFactories:   map[string]infruntime.MiddlewareFactory{},
+		toolFactories: map[string]infruntime.ToolFactory{},
 	}
 
 	// Timeline store for hydration (SQLite when configured, in-memory otherwise).
@@ -176,10 +177,12 @@ func NewRouter(ctx context.Context, parsed *values.Values, staticFS fs.FS, opts 
 }
 
 // RegisterMiddleware adds a named middleware factory to the router.
-func (r *Router) RegisterMiddleware(name string, f MiddlewareFactory) { r.mwFactories[name] = f }
+func (r *Router) RegisterMiddleware(name string, f infruntime.MiddlewareFactory) {
+	r.mwFactories[name] = f
+}
 
 // RegisterTool adds a named tool factory to the router.
-func (r *Router) RegisterTool(name string, f ToolFactory) {
+func (r *Router) RegisterTool(name string, f infruntime.ToolFactory) {
 	r.toolFactories[name] = f
 	if r.chatService != nil {
 		r.chatService.RegisterTool(name, f)

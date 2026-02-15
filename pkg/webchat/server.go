@@ -14,6 +14,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/go-go-golems/glazed/pkg/cmds/values"
+	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 )
 
 // Server drives the event router and HTTP server lifecycle for app-composed handlers.
@@ -43,14 +44,14 @@ func NewServer(ctx context.Context, parsed *values.Values, staticFS fs.FS, opts 
 
 func (s *Server) Router() *Router { return s.router }
 
-func (s *Server) RegisterMiddleware(name string, f MiddlewareFactory) {
+func (s *Server) RegisterMiddleware(name string, f infruntime.MiddlewareFactory) {
 	if s == nil || s.router == nil {
 		return
 	}
 	s.router.RegisterMiddleware(name, f)
 }
 
-func (s *Server) RegisterTool(name string, f ToolFactory) {
+func (s *Server) RegisterTool(name string, f infruntime.ToolFactory) {
 	if s == nil || s.router == nil {
 		return
 	}
