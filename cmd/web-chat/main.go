@@ -28,6 +28,7 @@ import (
 	sqlitetool "github.com/go-go-golems/pinocchio/pkg/middlewares/sqlitetool"
 	rediscfg "github.com/go-go-golems/pinocchio/pkg/redisstream"
 	webchat "github.com/go-go-golems/pinocchio/pkg/webchat"
+	"github.com/gorilla/websocket"
 	"github.com/rs/zerolog/log"
 )
 
@@ -150,6 +151,12 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 	chatHandler := webchat.NewChatHandler(r.ConversationService(), requestResolver)
 	r.HandleFunc("/chat", chatHandler)
 	r.HandleFunc("/chat/", chatHandler)
+	wsHandler := webchat.NewWSHandler(
+		r.ConversationService(),
+		requestResolver,
+		websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }},
+	)
+	r.HandleFunc("/ws", wsHandler)
 
 	// HTTP server and run, with optional root mounting
 	httpSrv, err := r.BuildHTTPServer()

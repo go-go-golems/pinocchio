@@ -36,7 +36,7 @@
 ## Phase 3: `cmd/web-chat` Migration to App-Owned Routes
 
 - [x] Implement app-owned `/chat` handler in `cmd/web-chat` using `ConversationService`.
-- [ ] Implement app-owned `/ws` handler in `cmd/web-chat` using `ConversationService`.
+- [x] Implement app-owned `/ws` handler in `cmd/web-chat` using `ConversationService`.
 - [ ] Move websocket hello/ping/pong handling to app-owned path while reusing core helpers where sensible.
 - [ ] Wire app profile/runtime policy directly in handlers and runtime composer without router indirection.
 - [ ] Re-home timeline API and debug API mounting decisions in app code.
