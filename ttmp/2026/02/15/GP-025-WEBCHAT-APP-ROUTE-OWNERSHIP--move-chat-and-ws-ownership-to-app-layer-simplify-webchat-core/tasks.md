@@ -49,7 +49,7 @@
 - [x] Implement `ConversationService` wiring in `web-agent-example` main/bootstrap path.
 - [x] Move resolver/runtime policy usage to app-owned request handling code.
 - [x] Remove reliance on legacy router-owned `/chat` and `/ws`.
-- [ ] Validate live conversations, websocket updates, and timeline upserts in `web-agent-example` after migration.
+- [x] Validate live conversations, websocket updates, and timeline upserts in `web-agent-example` after migration.
 
 ## Phase 5: Router Simplification and Deletion Pass
 
