@@ -445,6 +445,27 @@ Yes, if we accept a clean cutover. A practical route is:
 2. Migrate first-party `cmd/web-chat` to app-owned handlers.
 3. Delete or drastically reduce `router.go` to legacy shim (then remove).
 
+### 11.3 Frozen `/chat` Handler Contract
+`/chat` remains a `POST` endpoint with JSON body owned by app code.
+
+Request parse/validation contract:
+1. Content type: `application/json`.
+2. Supported fields:
+   - `prompt` (string, preferred)
+   - `text` (string alias; used when `prompt` is empty)
+   - `conv_id` (string; empty means generate)
+   - `overrides` (object; optional)
+   - `idempotency_key` (string; optional, fallback to headers/generated key)
+3. Validation failures map to `400`.
+4. Unsupported method maps to `405`.
+
+Response/status contract:
+1. `200` for immediate `started`/`running` responses.
+2. `202` for `queued` responses.
+3. `400` for invalid request payload or missing prompt.
+4. `500` for runtime/engine errors.
+5. Response JSON includes `status`, `conv_id`, `session_id`, `idempotency_key`, plus optional `turn_id` and `inference_id`.
+
 ## 12. Tradeoffs
 ### 12.1 Benefits
 1. Lower conceptual load for contributors.
