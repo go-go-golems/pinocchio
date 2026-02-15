@@ -61,8 +61,6 @@ type Router struct {
 
 	// conversations
 	cm *ConvManager
-	// compatibility service API for app-owned /chat and /ws flows
-	conversationService *ConversationService
 	// split service APIs.
 	chatService *ChatService
 	streamHub   *StreamHub
@@ -71,7 +69,7 @@ type Router struct {
 	usesRedis      bool
 	redisAddr      string
 	idleTimeoutSec int
-	// disableDebugRoutes disables registration of /api/debug/* and legacy /debug/* handlers.
+	// disableDebugRoutes disables registration of /api/debug/* handlers.
 	// Default is false (debug routes enabled).
 	disableDebugRoutes bool
 

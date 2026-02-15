@@ -60,7 +60,7 @@ func TestAPIHandler_TimelineAndDebugAliasParity(t *testing.T) {
 	require.Equal(t, coreBody, debugBody)
 }
 
-func TestAPIHandler_DebugTurnsParity(t *testing.T) {
+func TestAPIHandler_DebugTurnsCanonicalRouteOnly(t *testing.T) {
 	items := []chatstore.TurnSnapshot{
 		{ConvID: "conv-1", SessionID: "session-1", TurnID: "turn-1", Phase: "final", CreatedAtMs: 101, Payload: "payload-1"},
 	}
@@ -70,12 +70,13 @@ func TestAPIHandler_DebugTurnsParity(t *testing.T) {
 	}
 	h := r.APIHandler()
 
-	query := "/turns?conv_id=conv-1&session_id=session-1&phase=final&since_ms=100&limit=1"
-	oldStatus, oldBody := runRequest(t, h, http.MethodGet, query, nil)
-	newStatus, newBody := runRequest(t, h, http.MethodGet, "/api/debug"+query, nil)
+	query := "/api/debug/turns?conv_id=conv-1&session_id=session-1&phase=final&since_ms=100&limit=1"
+	status, body := runRequest(t, h, http.MethodGet, query, nil)
+	require.Equal(t, http.StatusOK, status)
+	require.Contains(t, string(body), `"turn_id":"turn-1"`)
 
-	require.Equal(t, oldStatus, newStatus)
-	require.Equal(t, oldBody, newBody)
+	legacyStatus, _ := runRequest(t, h, http.MethodGet, "/turns?conv_id=conv-1", nil)
+	require.Equal(t, http.StatusNotFound, legacyStatus)
 }
 
 func TestAPIHandler_DebugTurnsEnvelopeMetadata(t *testing.T) {

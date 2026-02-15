@@ -168,7 +168,6 @@ func NewRouter(ctx context.Context, parsed *values.Values, staticFS fs.FS, opts 
 	if err != nil {
 		return nil, errors.Wrap(err, "new conversation service")
 	}
-	r.conversationService = svc
 	r.chatService = NewChatServiceFromConversation(svc)
 	r.streamHub = svc.StreamHub()
 
@@ -182,8 +181,8 @@ func (r *Router) RegisterMiddleware(name string, f MiddlewareFactory) { r.mwFact
 // RegisterTool adds a named tool factory to the router.
 func (r *Router) RegisterTool(name string, f ToolFactory) {
 	r.toolFactories[name] = f
-	if r.conversationService != nil {
-		r.conversationService.RegisterTool(name, f)
+	if r.chatService != nil {
+		r.chatService.RegisterTool(name, f)
 	}
 }
 
@@ -223,13 +222,7 @@ func (r *Router) StreamHub() *StreamHub {
 	if r == nil {
 		return nil
 	}
-	if r.streamHub != nil {
-		return r.streamHub
-	}
-	if r.conversationService != nil {
-		return r.conversationService.StreamHub()
-	}
-	return nil
+	return r.streamHub
 }
 
 // TimelineService returns the timeline hydration service.

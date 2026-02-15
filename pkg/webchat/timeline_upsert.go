@@ -4,9 +4,6 @@ import timelinepb "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/timeli
 
 // TimelineUpsertHook exposes the timeline upsert hook for external use.
 func (r *Router) TimelineUpsertHook(conv *Conversation) func(entity *timelinepb.TimelineEntityV1, version uint64) {
-	if r != nil && r.conversationService != nil {
-		return r.conversationService.TimelineUpsertHook(conv)
-	}
 	if r != nil && r.timelineUpsertHookOverride != nil {
 		return r.timelineUpsertHookOverride(conv)
 	}
@@ -42,10 +39,6 @@ func (r *Router) emitTimelineUpsert(conv *Conversation, entity *timelinepb.Timel
 			"seq":  version,
 			"data": payload,
 		},
-	}
-	if r.conversationService != nil && r.conversationService.WSPublisher() != nil {
-		_ = r.conversationService.WSPublisher().PublishJSON(r.baseCtx, conv.ID, env)
-		return
 	}
 	if r.cm != nil {
 		_ = NewWSPublisher(r.cm).PublishJSON(r.baseCtx, conv.ID, env)

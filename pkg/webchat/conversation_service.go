@@ -43,7 +43,6 @@ type ConversationService struct {
 	semPublisher   message.Publisher
 	timelineUpsert func(*Conversation) func(entity *timelinepb.TimelineEntityV1, version uint64)
 	toolFactories  map[string]ToolFactory
-	publisher      WSPublisher
 }
 
 type AppConversationRequest struct {
@@ -107,15 +106,7 @@ func NewConversationService(cfg ConversationServiceConfig) (*ConversationService
 		semPublisher:   cfg.SEMPublisher,
 		timelineUpsert: cfg.TimelineUpsertHook,
 		toolFactories:  toolFactories,
-		publisher:      NewWSPublisher(cfg.ConvManager),
 	}, nil
-}
-
-func (s *ConversationService) WSPublisher() WSPublisher {
-	if s == nil {
-		return nil
-	}
-	return s.publisher
 }
 
 func (s *ConversationService) StreamHub() *StreamHub {
@@ -260,8 +251,8 @@ func (s *ConversationService) emitTimelineUpsert(conv *Conversation, entity *tim
 			"data": payload,
 		},
 	}
-	if s.publisher != nil {
-		_ = s.publisher.PublishJSON(s.baseCtx, conv.ID, env)
+	if s.cm != nil {
+		_ = NewWSPublisher(s.cm).PublishJSON(s.baseCtx, conv.ID, env)
 	}
 }
 

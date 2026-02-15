@@ -70,8 +70,8 @@ func WithStepController(sc *toolloop.StepController) RouterOption {
 			return errors.New("step controller is nil")
 		}
 		r.stepCtrl = sc
-		if r.conversationService != nil {
-			r.conversationService.SetStepController(sc)
+		if r.chatService != nil {
+			r.chatService.SetStepController(sc)
 		}
 		return nil
 	}
@@ -94,8 +94,8 @@ func WithTimelineStore(s chatstore.TimelineStore) RouterOption {
 		if r.cm != nil {
 			r.cm.SetTimelineStore(s)
 		}
-		if r.conversationService != nil {
-			r.conversationService.SetTimelineStore(s)
+		if r.chatService != nil {
+			r.chatService.SetTimelineStore(s)
 		}
 		return nil
 	}
@@ -108,8 +108,8 @@ func WithTurnStore(s chatstore.TurnStore) RouterOption {
 			return errors.New("turn store is nil")
 		}
 		r.turnStore = s
-		if r.conversationService != nil {
-			r.conversationService.SetTurnStore(s)
+		if r.chatService != nil {
+			r.chatService.SetTurnStore(s)
 		}
 		return nil
 	}
@@ -127,7 +127,7 @@ func WithEventSinkWrapper(fn EventSinkWrapper) RouterOption {
 }
 
 // WithDebugRoutesEnabled toggles registration of debug API endpoints.
-// When disabled, /api/debug/* and legacy /debug/* routes are not mounted.
+// When disabled, /api/debug/* routes are not mounted.
 func WithDebugRoutesEnabled(enabled bool) RouterOption {
 	return func(r *Router) error {
 		r.disableDebugRoutes = !enabled

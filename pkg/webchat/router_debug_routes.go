@@ -318,7 +318,6 @@ func (r *Router) registerDebugAPIHandlers(mux *http.ServeMux) {
 		r.stepCtrl.Enable(toolloop.StepScope{SessionID: sessionID, ConversationID: convID, Owner: strings.TrimSpace(body.Owner)})
 		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "session_id": sessionID, "conv_id": convID})
 	}
-	mux.HandleFunc("/debug/step/enable", stepEnableHandler)
 	mux.HandleFunc("/api/debug/step/enable", stepEnableHandler)
 
 	stepDisableHandler := func(w http.ResponseWriter, r0 *http.Request) {
@@ -354,7 +353,6 @@ func (r *Router) registerDebugAPIHandlers(mux *http.ServeMux) {
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "session_id": sessionID})
 	}
-	mux.HandleFunc("/debug/step/disable", stepDisableHandler)
 	mux.HandleFunc("/api/debug/step/disable", stepDisableHandler)
 
 	continueHandler := func(w http.ResponseWriter, r0 *http.Request) {
@@ -398,7 +396,6 @@ func (r *Router) registerDebugAPIHandlers(mux *http.ServeMux) {
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "pause": meta})
 	}
-	mux.HandleFunc("/debug/continue", continueHandler)
 	mux.HandleFunc("/api/debug/continue", continueHandler)
 
 	timelineHandler := r.timelineSnapshotHandler(logger)
@@ -463,8 +460,6 @@ func (r *Router) registerDebugAPIHandlers(mux *http.ServeMux) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(resp)
 	}
-	mux.HandleFunc("/turns", turnsHandler)
-	mux.HandleFunc("/turns/", turnsHandler)
 	mux.HandleFunc("/api/debug/turns", turnsHandler)
 	mux.HandleFunc("/api/debug/turns/", turnsHandler)
 
