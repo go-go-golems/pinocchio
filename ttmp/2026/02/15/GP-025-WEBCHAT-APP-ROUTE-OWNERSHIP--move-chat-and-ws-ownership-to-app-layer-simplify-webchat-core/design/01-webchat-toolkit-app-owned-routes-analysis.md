@@ -286,6 +286,25 @@ Behavior notes:
 3. Adds connection to conversation pool and starts stream when needed.
 4. Supports sending hello frame and responding to ping (`"ping"`, `ws.ping`) with `ws.pong`.
 
+### 7.5 Frozen `WSPublisher.PublishJSON(...)` Contract
+
+```go
+var (
+    ErrConversationNotFound = errors.New("conversation not found")
+    ErrConnectionPoolAbsent = errors.New("connection pool not available")
+)
+
+type WSPublisher interface {
+    PublishJSON(ctx context.Context, convID string, envelope map[string]any) error
+}
+```
+
+Behavior notes:
+1. Returns `ErrConversationNotFound` when conversation id cannot be resolved.
+2. Returns `ErrConnectionPoolAbsent` when conversation exists but websocket pool is unavailable.
+3. Marshals envelope as JSON and broadcasts to all connections for the conversation.
+4. Does not expose `ConnectionPool` directly to callers.
+
 The key simplification is that app code passes explicit values instead of registering many global options that interact indirectly.
 
 ## 8. Sequence Diagrams

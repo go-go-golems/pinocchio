@@ -16,7 +16,7 @@
 - [x] `ConversationService.ResolveAndEnsureConversation(...)`.
 - [x] `ConversationService.SubmitPrompt(...)`.
 - [x] `ConversationService.AttachWebSocket(...)`.
-- [ ] `WSPublisher.PublishJSON(...)` conversation-scoped API.
+- [x] `WSPublisher.PublishJSON(...)` conversation-scoped API.
 - [ ] Freeze app-owned handler contracts:
 - [ ] `/chat` request parsing, validation, response schema, and status codes.
 - [ ] `/ws` connect requirements and websocket hello/ping/pong behavior.

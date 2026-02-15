@@ -423,3 +423,53 @@ This step defined attach options/signature and locked expected hello/ping/pong b
 ### Technical details
 - Updated file: `pinocchio/ttmp/2026/02/15/GP-025-WEBCHAT-APP-ROUTE-OWNERSHIP--move-chat-and-ws-ownership-to-app-layer-simplify-webchat-core/design/01-webchat-toolkit-app-owned-routes-analysis.md`
 - Checked task: `11`
+
+## Step 19: Lock conversation-scoped `WSPublisher` contract
+The publisher boundary is the key decoupling point for removing direct `ConnectionPool` access from non-transport code. I froze this contract now so core refactor tasks can replace direct broadcasts without inventing new behavior ad hoc.
+
+This step formalized publisher error semantics and broadcast behavior, then checked task 12.
+
+### Prompt Context
+
+**User prompt (verbatim):** (see Step 13)
+
+**Assistant interpretation:** Continue the task-by-task freeze by locking the publisher API before code migration.
+
+**Inferred user intent:** Ensure middleware and timeline code can emit websocket frames through a stable service abstraction.
+
+**Commit (code):** pending — "docs(gp-025): freeze ws publisher contract"
+
+### What I did
+- Added explicit publisher sentinel errors: `ErrConversationNotFound`, `ErrConnectionPoolAbsent`.
+- Locked `WSPublisher.PublishJSON(ctx, convID, envelope)` contract and behavior.
+- Documented no direct `ConnectionPool` exposure.
+- Ran `docmgr task check --ticket GP-025-WEBCHAT-APP-ROUTE-OWNERSHIP --id 12`.
+
+### Why
+- Task 19 requires replacing direct pool broadcast calls; a frozen publisher contract is the prerequisite.
+
+### What worked
+- The design now states exactly how publish failures should surface to callers.
+
+### What didn't work
+- N/A
+
+### What I learned
+- Error vocabulary at the interface boundary makes later test design (task 42) much clearer.
+
+### What was tricky to build
+- Needed to define useful error modes without overfitting to current internal pool lifecycle details.
+
+### What warrants a second pair of eyes
+- Validate whether `ErrConnectionPoolAbsent` should be distinct from not-found in caller-facing behavior.
+
+### What should be done in the future
+- Implement publisher tests for not-found/no-pool/success fanout exactly against this contract.
+
+### Code review instructions
+- Review section `7.5` and compare against current direct `conv.pool.Broadcast(...)` callsites.
+- Confirm task 12 is checked.
+
+### Technical details
+- Updated file: `pinocchio/ttmp/2026/02/15/GP-025-WEBCHAT-APP-ROUTE-OWNERSHIP--move-chat-and-ws-ownership-to-app-layer-simplify-webchat-core/design/01-webchat-toolkit-app-owned-routes-analysis.md`
+- Checked task: `12`
