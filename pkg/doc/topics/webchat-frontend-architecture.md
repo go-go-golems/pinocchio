@@ -14,123 +14,79 @@ ShowPerDefault: true
 SectionType: GeneralTopic
 ---
 
-# Webchat Frontend Architecture
-
-This document explains how the React webchat UI is structured, how data flows from the backend into the UI, and how to extend it.
-
 ## Source Layout
 
 ```
 cmd/web-chat/web/src/
-  webchat/                # Reusable chat widget + styles
-    ChatWidget.tsx        # Top-level component
-    components/           # Header / Timeline / Composer / Statusbar
-    cards.tsx             # Default entity renderers
-    styles/               # theme-default.css + webchat.css
-    types.ts              # Public props and types
-    parts.ts              # data-part contract
-  sem/                    # SEM registry + proto bindings
-  ws/                     # wsManager (connect + hydrate + buffer)
-  store/                  # Redux slices (app, timeline, errors)
-  utils/                  # basePrefix + logger helpers
+  webchat/
+    ChatWidget.tsx
+    components/
+    cards.tsx
+    styles/
+    types.ts
+    parts.ts
+  sem/
+  ws/
+  store/
+  utils/
 ```
 
 ## Runtime Data Flow
 
-1. **ChatWidget** reads `conv_id` from URL and initializes the store.
-2. **wsManager** opens `/ws?conv_id=...` and buffers SEM frames.
-3. **Hydration** happens via `GET /timeline` (durable snapshot).
-4. **SEM registry** decodes frames and dispatches timeline updates.
-5. **ChatWidget** renders `timelineSlice` entities using renderer cards.
+1. `ChatWidget` initializes conversation state from URL or generated ID.
+2. `wsManager` opens `/ws?conv_id=...`.
+3. Hydration loads `/api/timeline`.
+4. SEM registry decodes websocket events.
+5. Timeline slice merges hydration + stream updates.
+6. Renderers map entity kinds to cards.
 
 ## Component Hierarchy
 
 ```
 ChatWidget
-  ├─ Header (DefaultHeader or override)
-  ├─ Statusbar (DefaultStatusbar or override)
-  ├─ Timeline (ChatTimeline)
-  │    └─ Renderers (MessageCard, ToolCallCard, etc.)
-  └─ Composer (DefaultComposer or override)
+  Header
+  Statusbar
+  Timeline
+    MessageCard
+    ToolCallCard
+    ToolResultCard
+    LogCard
+  Composer
 ```
 
-Renderer mapping is configured in `ChatWidget`:
+## State Slices
 
-- `message` → `MessageCard`
-- `tool_call` → `ToolCallCard`
-- `tool_result` → `ToolResultCard`
-- `log` → `LogCard`
-- `thinking_mode` → `ThinkingModeCard`
-- `planning` → `PlanningCard`
-- `default` → `GenericCard`
-
-## State Architecture
-
-Redux Toolkit slices:
-
-- `appSlice`: conv_id, profile, ws status, queue depth
-- `timelineSlice`: ordered list of entities (`byId` + `order`)
-- `errorsSlice`: UI-visible errors
-- `profileApi`: RTK Query for profile endpoints
-
-The timeline state is single-conversation scoped (no per-conv nesting).
+- `appSlice`: connection status, profile, queue signals
+- `timelineSlice`: timeline entities (`byId` + `order`)
+- `errorsSlice`: user-visible errors
+- `profileApi`: profile endpoints when app provides them
 
 ## SEM Pipeline
 
-SEM frames are decoded in `sem/registry.ts`:
+1. Validate envelope (`sem: true`).
+2. Decode payload.
+3. Dispatch timeline updates (`addEntity`, `upsertEntity`, `rekeyEntity`).
+4. Preserve ordering via version/sequence semantics.
 
-1. Envelope validation (`sem: true`)
-2. Protobuf decode (`fromJson`)
-3. Dispatch `addEntity` / `upsertEntity` to `timelineSlice`
+## Theming and Extension
 
-Timeline snapshots are converted via `timelineMapper.ts` and upserted on hydrate.
+- Token source: `styles/theme-default.css`
+- Structural CSS: `styles/webchat.css`
+- Stable selectors: `data-part`, `data-role`, `data-state`
+- Override points: `components`, `renderers`, `themeVars`, `partProps`
 
-## Theming + Styling
+## Route Assumptions
 
-Styling is tokenized:
+This UI assumes canonical backend routes:
 
-- `styles/theme-default.css` defines CSS variables (tokens).
-- `styles/webchat.css` applies layout and part-based styles.
-- DOM uses `data-part` + `data-role` + `data-state` for stable hooks.
+- `POST /chat`
+- `GET /ws`
+- `GET /api/timeline`
 
-Public styling hooks:
+When mounted with `--root`, the same relative endpoints are used under that prefix.
 
-- `data-pwchat` root attribute
-- `data-part="..."` on stable UI regions
-
-Customization options (props):
-
-- `theme`: select theme name
-- `themeVars`: override CSS variables
-- `partProps`: customize props per part (className/style)
-- `components`: override Header/Composer/Statusbar
-- `renderers`: override entity renderers
-- `unstyled`: opt out of bundled styles
-
-## How to Extend
-
-### Add a new SEM event + UI card
-
-1. Register a handler in `sem/registry.ts`.
-2. Emit a timeline entity (`addEntity` / `upsertEntity`).
-3. Add a renderer in `webchat/cards.tsx`.
-4. Wire it in `ChatWidget` via `renderers`.
-5. Add styling via `data-part` tokens.
-
-### Add a new layout component
-
-1. Create a new component under `webchat/components/`.
-2. Add it to `ChatWidget` or expose via `components` props.
-3. Add `data-part` hooks and CSS tokens.
-
-### Add a new token/part
-
-1. Add the token to `theme-default.css`.
-2. Consume it in `webchat.css`.
-3. Use `data-part` attributes for selectors.
-
-## Related Docs
+## See Also
 
 - [Webchat Frontend Integration](webchat-frontend-integration.md)
-- [SEM and UI](webchat-sem-and-ui.md)
+- [Webchat HTTP Chat Setup](webchat-http-chat-setup.md)
 - [Webchat User Guide](webchat-user-guide.md)

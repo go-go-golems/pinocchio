@@ -6,7 +6,8 @@
 //     and core APIs (timeline/debug), not the canonical transport composition layer.
 //
 // Recommended setup:
-//   - Build a Router with a RuntimeComposer.
+//   - Build a Server with NewServer and a RuntimeComposer.
 //   - Create app-owned /chat and /ws handlers via NewChatHTTPHandler/NewWSHTTPHandler with ChatService/StreamHub.
-//   - Mount Router API/UI helpers where needed (for example under /api/ and /).
+//   - Mount NewTimelineHTTPHandler at /api/timeline.
+//   - Mount Router/API/UI helpers where needed (for example under /api/ and /).
 package webchat

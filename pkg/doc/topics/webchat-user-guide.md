@@ -1,7 +1,7 @@
 ---
 Title: Webchat User Guide
 Slug: webchat-user-guide
-Short: Practical guide to using the Pinocchio webchat packages in your app.
+Short: Practical guide for wiring the new HTTP chat setup in your app.
 Topics:
 - webchat
 - backend
@@ -15,147 +15,125 @@ ShowPerDefault: true
 SectionType: GeneralTopic
 ---
 
-# Webchat User Guide
+## What This Guide Covers
 
-This guide explains how to use the `pinocchio/pkg/webchat` packages to build a reusable chat backend and integrate it with a frontend. Runtime/profile policy is owned by your app via a request resolver.
+This guide shows the current production pattern for integrating `pinocchio/pkg/webchat`:
 
-## Package Overview
-
-Key backend packages:
-
-- `pinocchio/pkg/webchat` — router, conversation lifecycle, timeline hydration, WS streaming.
-- `geppetto/pkg/inference/session` — session + turn lifecycle.
-- `geppetto/pkg/inference/middleware` — middleware chain (system prompt, tool reordering, etc.).
-
-Key frontend pieces (example app):
-
-- `pinocchio/cmd/web-chat/web/src/ws/wsManager.ts` — WS connect + hydration flow.
-- `pinocchio/cmd/web-chat/web/src/sem/*` — SEM frame parsing and routing.
-- `pinocchio/cmd/web-chat/web/src/webchat/*` — reusable UI widget.
+- app-owned `/chat` and `/ws` handlers
+- canonical timeline hydration path `/api/timeline`
+- debug endpoints under `/api/debug/*`
+- profile/runtime policy via app-owned request resolver
 
 ## Minimal Backend Wiring
-
-The `web-chat` command is the reference implementation. To embed webchat in your own app:
 
 ```go
 //go:embed static
 var staticFS embed.FS
 
-func run(ctx context.Context, parsed *layers.ParsedLayers) error {
-    profiles := newChatProfileRegistry(
-        "default",
-        &chatProfile{Slug: "default", DefaultPrompt: "You are an assistant"},
-    )
+func run(ctx context.Context, parsed *values.Values) error {
+  runtimeComposer := newRuntimeComposer(parsed)
+  resolver := newRequestResolver()
 
-    r, err := webchat.NewRouter(
-        ctx,
-        parsed,
-        staticFS,
-        webchat.WithConversationRequestResolver(newWebChatProfileResolver(profiles)),
-    )
-    if err != nil {
-        return err
-    }
+  srv, err := webchat.NewServer(
+    ctx,
+    parsed,
+    staticFS,
+    webchat.WithRuntimeComposer(runtimeComposer),
+  )
+  if err != nil {
+    return err
+  }
 
-    // Register middlewares and tools
-    r.RegisterMiddleware("agentmode", func(cfg any) middleware.Middleware {
-        return agentmode.NewMiddleware(cfg.(agentmode.Config))
-    })
-    r.RegisterTool("calculator", func(reg geptools.ToolRegistry) error {
-        return toolspkg.RegisterCalculatorTool(reg.(*geptools.InMemoryToolRegistry))
-    })
+  chatHandler := webchat.NewChatHTTPHandler(srv.ChatService(), resolver)
+  wsHandler := webchat.NewWSHTTPHandler(
+    srv.StreamHub(),
+    resolver,
+    websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }},
+  )
+  timelineHandler := webchat.NewTimelineHTTPHandler(
+    srv.TimelineService(),
+    log.With().Str("component", "webchat").Str("route", "/api/timeline").Logger(),
+  )
 
-    // Optional app-owned profile endpoints
-    registerProfileHandlers(r, profiles)
+  mux := http.NewServeMux()
+  mux.HandleFunc("/chat", chatHandler)
+  mux.HandleFunc("/chat/", chatHandler)
+  mux.HandleFunc("/ws", wsHandler)
+  mux.HandleFunc("/api/timeline", timelineHandler)
+  mux.HandleFunc("/api/timeline/", timelineHandler)
+  mux.Handle("/api/", srv.APIHandler())
+  mux.Handle("/", srv.UIHandler())
 
-    // Build and run HTTP server
-    srv, err := r.BuildHTTPServer()
-    if err != nil {
-        return err
-    }
-    return webchat.NewFromRouter(ctx, r, srv).Run(ctx)
+  httpSrv := srv.HTTPServer()
+  httpSrv.Handler = mux
+  return srv.Run(ctx)
 }
 ```
 
-## Runtime Policy
+## Route Contract
 
-`pkg/webchat` is profile-agnostic. Your app defines request policy via `ConversationRequestResolver`, including:
-- runtime key selection (`RuntimeKey`)
-- default prompt/middleware/tool composition
-- override allow/deny policy
-- optional profile/cookie endpoints for UI convenience
+- `POST /chat` and `POST /chat/{runtime}`
+- `GET /ws?conv_id=<id>`
+- `GET /api/timeline?conv_id=<id>&since_version=<n>&limit=<n>`
+- `GET /api/debug/turns?...` (when turn store enabled)
 
-## HTTP + WebSocket API
+Legacy paths that should be removed from app docs and clients:
 
-### WebSocket
+- `/timeline`
+- `/turns`
+- `/hydrate`
 
-```
-GET /ws?conv_id=<uuid>&runtime=<key>
-```
+## Request Policy Ownership
 
-The server sends SEM frames over this socket. A `ws.hello` frame is emitted on connect.
+Runtime and profile policy is app-owned through `ConversationRequestResolver`.
 
-### Chat POST
+Typical resolver behavior:
 
-```
-POST /chat
-{
-  "conv_id": "<uuid>",
-  "prompt": "hello",
-  "overrides": { ... }
-}
-```
-
-If the prompt is empty, the session still starts because the seed turn contains the system prompt block.
-
-### Optional app-owned profile endpoints
-
-- `GET /api/chat/profiles` — list available profiles (app-owned, optional)
-- `GET /api/chat/profile` — get current profile (app-owned, optional)
-- `POST /api/chat/profile` — set current profile (app-owned, optional)
+- parse body/query/path/cookies
+- select runtime/profile key
+- merge default overrides and request overrides
+- enforce override policy
+- return typed `RequestResolutionError` for client-visible errors
 
 ## Timeline Hydration
 
-If a timeline store is configured (`--timeline-db` or `--timeline-dsn`), the server stores timeline entities and supports:
+Hydration should always call `/api/timeline`.
 
-```
-GET /timeline?conv_id=<uuid>&since_version=<n>&limit=<n>
-```
+- `conv_id` is required.
+- `since_version` and `limit` are optional.
+- versions align with streaming sequence semantics.
 
-Timeline entities are ordered by `version`, which is derived from `event.seq` in SEM frames (Redis stream ID when present, otherwise a time-based monotonic seq). This keeps user and assistant messages ordered consistently across hydration and streaming.
+## Turns Debugging
 
-## Eviction
+Enable turn snapshots:
 
-The backend evicts idle conversations when no sockets are connected and no runs are queued or active. Tune with:
+- `--turns-dsn`
+- `--turns-db`
 
-- `--evict-idle-seconds` (0 disables eviction)
-- `--evict-interval-seconds` (0 disables eviction)
+Query:
 
-The example UI calls `/timeline` on load to hydrate the timeline before handling WS frames.
+- `GET /api/debug/turns?conv_id=<id>&session_id=<id>&phase=<phase>&since_ms=<ms>&limit=<n>`
 
-## Base Prefix (mounting under a root)
+## Root Prefix
 
-If you run the server under a root prefix (`--root /chat`), the UI must use that base prefix for `/chat`, `/ws`, `/timeline`, and `/api`.
+If the app is mounted with `--root /chat`, prepend `/chat` to all endpoints:
 
-The example UI derives this from `window.location.pathname`.
+- `/chat/chat`
+- `/chat/ws`
+- `/chat/api/timeline`
+- `/chat/api/debug/turns`
 
-## Common Customizations
+## Frontend Expectations
 
-1) **Add a middleware**  
-Register the middleware factory with `RegisterMiddleware`, then include it in resolver defaults or request overrides.
+Frontend code should:
 
-2) **Enable tools**  
-Register tools with `RegisterTool`, then include them in resolver defaults or in overrides.
+- call `POST /chat`
+- connect to `/ws`
+- hydrate from `/api/timeline`
+- treat `/api/debug/*` as diagnostics-only
 
-3) **Custom system prompt**  
-Set resolver default prompt and optionally allow overrides.
+## See Also
 
-4) **Durable timeline**  
-Pass `--timeline-db` or `--timeline-dsn` on startup.
-
-## Troubleshooting Checklist
-
-- **Prompt not delivered**: ensure the JSON key is `prompt` (backend also accepts `text` as an alias).
-- **WS errors**: check `/ws` proxy in Vite and confirm backend port.
-- **No timeline data**: confirm timeline store is configured.
-- **Unknown runtime/profile**: verify app resolver logic and app-owned profile registry.
+- [Webchat HTTP Chat Setup](webchat-http-chat-setup.md)
+- [Webchat Framework Guide](webchat-framework-guide.md)
+- [Webchat Frontend Integration](webchat-frontend-integration.md)
