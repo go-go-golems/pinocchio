@@ -18,11 +18,11 @@ RelatedFiles:
       Note: watermill sink publishes events to router topic
     - Path: geppetto/pkg/inference/toolloop/enginebuilder/builder.go
       Note: attaches EventSinks to inference run context
-    - Path: geppetto/ttmp/2026/02/14/GP-021-WEBSOCKET-BROADCAST-REFACTOR--refactor-websocket-broadcast-architecture-and-extension-hooks/sources/ws-broadcast-paths.txt
+    - Path: pinocchio/ttmp/2026/02/14/GP-021-WEBSOCKET-BROADCAST-REFACTOR--refactor-websocket-broadcast-architecture-and-extension-hooks/sources/ws-broadcast-paths.txt
       Note: experiment output for broadcast call graph
-    - Path: geppetto/ttmp/2026/02/14/GP-021-WEBSOCKET-BROADCAST-REFACTOR--refactor-websocket-broadcast-architecture-and-extension-hooks/sources/ws-hookability-audit.txt
+    - Path: pinocchio/ttmp/2026/02/14/GP-021-WEBSOCKET-BROADCAST-REFACTOR--refactor-websocket-broadcast-architecture-and-extension-hooks/sources/ws-hookability-audit.txt
       Note: experiment output for extension seam audit
-    - Path: geppetto/ttmp/2026/02/14/GP-021-WEBSOCKET-BROADCAST-REFACTOR--refactor-websocket-broadcast-architecture-and-extension-hooks/sources/ws-protocol-surface.txt
+    - Path: pinocchio/ttmp/2026/02/14/GP-021-WEBSOCKET-BROADCAST-REFACTOR--refactor-websocket-broadcast-architecture-and-extension-hooks/sources/ws-protocol-surface.txt
       Note: experiment output for protocol and event-type inventory
     - Path: pinocchio/pkg/webchat/connection_pool.go
       Note: transport fanout primitive and backpressure
@@ -45,8 +45,8 @@ RelatedFiles:
     - Path: pinocchio/pkg/webchat/timeline_upsert.go
       Note: timeline upsert websocket emission
 ExternalSources: []
-Summary: Deep analysis and refactor design for websocket broadcast architecture, connection subscription profiles/channels, and server-side extension hooks without direct ConnectionPool access.
-LastUpdated: 2026-02-14T17:30:00-05:00
+Summary: Deep analysis and refactor design for websocket broadcast architecture, connection channel subscriptions, and server-side extension hooks without direct ConnectionPool access.
+LastUpdated: 2026-02-15T01:05:00-05:00
 WhatFor: Guide websocket refactor work to support per-connection subscription filtering and pluggable backend event producers.
 WhenToUse: Use when implementing websocket routing/fanout changes, subscription semantics, and extension APIs.
 ---
@@ -58,7 +58,7 @@ WhenToUse: Use when implementing websocket routing/fanout changes, subscription 
 ## 1. Objective
 This document analyzes the current websocket broadcast architecture in `pinocchio/pkg/webchat` and proposes a refactor plan that enables:
 
-1. Per-connection websocket subscription profiles/channels and filtering controls.
+1. Per-connection websocket channel subscriptions and filtering controls.
 2. Pluggable backend-side event producers that can publish websocket frames without directly depending on `ConnectionPool` internals.
 3. Clear layering between event ingestion, semantic frame translation, projection upserts, and client fanout.
 
@@ -74,7 +74,7 @@ The websocket endpoint is implemented in `router.go` (`/ws` handler). Current re
 
 The request is normalized through `ConversationRequestResolver.Resolve(...)` into a `ConversationRequestPlan`, then the conversation is obtained via `GetOrCreate`. The connection is added to `ConvManager`/`ConnectionPool`. On connect, a targeted `ws.hello` message is sent via `SendToOne`. The read loop handles ping/pong and then idles until disconnect.
 
-Key consequence: websocket capabilities are currently implicit and global to conversation membership; no per-connection subscription state (profile/channels) is tracked.
+Key consequence: websocket capabilities are currently implicit and global to conversation membership; no per-connection channel subscription state is tracked.
 
 ### 2.2 How broadcast frames are produced
 There are two active broadcast producers:
@@ -187,9 +187,8 @@ Implication: extension ergonomics are currently inversion-of-control in some lay
 ### Problem A: Broadcast path is not policy-aware per connection
 `Broadcast` sends identical frames to all clients for a conversation. There is no built-in support for:
 
-1. “debug” vs “chat” subscription profiles
-2. event category filtering
-3. opt-in high-volume channels (e.g. turn snapshots)
+1. event category filtering
+2. opt-in high-volume channels (future)
 
 ### Problem B: Backend producers must know too much
 To publish websocket events today, new code tends to require access to conversation/pool internals or must be wedged into existing translator/projector paths.
@@ -209,7 +208,7 @@ The closure works, but it is doing orchestration work that should be captured as
 ## 5. Design Goals and Non-Goals
 
 ### 5.1 Goals
-1. Introduce explicit websocket subscription/profile semantics at connection time.
+1. Introduce explicit websocket channel subscription semantics at connection time.
 2. Decouple event production from direct `ConnectionPool` usage.
 3. Preserve existing default behavior for current clients (at least during migration).
 4. Keep conversation-level isolation (still scoped by `conv_id`).
@@ -224,7 +223,7 @@ The closure works, but it is doing orchestration work that should be captured as
 ## 6. Brainstormed Refactor Options
 
 ### Option 1: Thin wrapper around `ConnectionPool`
-Create a `ConversationBroadcaster` interface and implement it over existing pool. Add profile filtering outside the pool.
+Create a `ConversationBroadcaster` interface and implement it over existing pool. Add channel filtering outside the pool.
 
 Pros:
 1. Low-risk migration.
@@ -235,7 +234,7 @@ Cons:
 2. Harder to reason about per-connection state lifecycle.
 
 ### Option 2: Metadata-aware pool (stateful clients)
-Extend pool client state with subscription/profile metadata and dispatch decisions inside pool methods.
+Extend pool client state with subscription/channel metadata and dispatch decisions inside pool methods.
 
 Pros:
 1. Single place for fanout policy.
@@ -250,7 +249,7 @@ Add an intermediate conversation-scoped broker that owns:
 
 1. subscription registry
 2. event classification
-3. profile filtering
+3. channel filtering
 4. dispatch to transport adapter (`ConnectionPool`)
 
 `ConnectionPool` remains transport-only. Producers publish into broker, not pool.
@@ -285,9 +284,7 @@ type WSFrame struct {
 type WSSubscription struct {
     ConnectionID string
     ConvID       string
-    Profile      string            // e.g. "chat", "debug-lite", "debug-full"
-    Channels     map[string]bool   // explicit channel opts
-    Filters      map[string]string // optional key/value filters
+    Channels     map[string]bool // explicit channel opts
 }
 
 type ConversationWSPublisher interface {
@@ -308,13 +305,11 @@ type ConversationWSBroker interface {
 4. Pool remains responsible for channel buffering, deadlines, and socket closure.
 
 ### 7.3 Connection subscription model
-At `/ws` connect, allow query params like:
+At `/ws` connect, use a single query param:
 
-1. `ws_profile=chat|debug-lite|debug-full`
-2. `channels=sem,timeline,debug.turn_snapshot`
-3. `filter_types=timeline.upsert,llm.final` (optional advanced override)
+1. `channels=sem,timeline,control`
 
-Default if omitted: current behavior (default subscription profile with existing channels).
+Default if omitted: current behavior via a default channel set (`sem,timeline,control`).
 
 ### 7.4 Event classification strategy
 Map outgoing frames to channels using deterministic rules:
@@ -326,7 +321,13 @@ Map outgoing frames to channels using deterministic rules:
 
 Classification can happen once near producer boundary or centrally in broker.
 
-### 7.5 Backend hook strategy (no ConnectionPool dependency)
+### 7.5 Ordering and sequence semantics (locked)
+1. `seq` remains a single global monotonic sequence per conversation.
+2. Filtering happens server-side in the broker before per-connection dispatch.
+3. Filtered clients can observe sequence gaps; gaps are expected behavior.
+4. Timeline consumers should continue using timeline `version` for timeline-entity ordering/dedupe.
+
+### 7.6 Backend hook strategy (no ConnectionPool dependency)
 Introduce router-level registration for websocket emitters:
 
 ```go
@@ -383,34 +384,13 @@ Add optional debug channel frame (reference-style payload by default):
 2. `data = {conv_id, session_id, turn_id, phase, created_at_ms, inference_id}`
 3. Classified as `debug.turn_snapshot`
 
-Optional extension (debug-full only): include a compact snapshot payload in `data.payload` when explicitly requested.
+Optional extension (future only): include a compact snapshot payload in `data.payload` when explicitly requested.
 
-### 10.3 Two-signal gating model (recommended)
-Emit turn snapshot websocket frames only when both signals are true:
+### 10.3 Scope simplification
+Turn snapshot websocket delivery is explicitly deferred from the first GP-021 implementation.
+If implemented later, it should be an opt-in channel (`channels=debug.turn_snapshot`) and still publish through the broker interface.
 
-1. Producer intent (request/runtime policy): this inference is debug-snapshot-enabled.
-2. Consumer subscription: at least one websocket client for this conversation has `debug.turn_snapshot` channel enabled.
-
-This prevents accidental high-volume emissions while keeping explicit control.
-
-### 10.4 Producer intent source (`ConversationRequestResolver` + runtime policy path)
-Use request policy resolution to carry debug intent:
-
-1. Extend `ConversationRequestPlan` (or overrides convention) with typed debug options (e.g. `DebugOptions.EmitTurnSnapshots`).
-2. `startInferenceForPrompt` receives this option and composes hooks accordingly.
-3. Snapshot emit hook runs after successful persistence save (persist-first ordering).
-
-This keeps policy selection in request/runtime policy layers, not in low-level transport code.
-
-### 10.5 Consumer subscription source (`/ws` path)
-At websocket connect, parse connection capabilities:
-
-1. `ws_profile=debug-full`, or
-2. explicit `channels=debug.turn_snapshot`
-
-This avoids forcing high-volume snapshot payloads on normal chat clients.
-
-### 10.6 Clean emission API (no direct pool dependency)
+### 10.4 Clean emission API (no direct pool dependency)
 Snapshot persistence hook should publish via websocket publisher interface (broker-backed), not by touching `ConnectionPool` directly from persistence code.
 
 ## 11. Migration Plan
@@ -426,7 +406,7 @@ Snapshot persistence hook should publish via websocket publisher interface (brok
 3. Broker initially broadcasts to all to preserve behavior.
 
 ### Phase 2: Add subscription metadata
-1. Parse `ws_profile/channels` on connect.
+1. Parse `channels` on connect.
 2. Store subscription record for each socket.
 3. Add channel classification and filtering.
 
@@ -437,7 +417,7 @@ Snapshot persistence hook should publish via websocket publisher interface (brok
 
 ### Phase 4: Optional debug channels
 1. Implement `debug.turn_snapshot` emitter.
-2. Gate by producer intent + channel subscription.
+2. Gate by explicit `channels=debug.turn_snapshot` subscription.
 3. Add client support only in debug UI paths.
 
 ### Phase 5: Cleanup
@@ -447,16 +427,18 @@ Snapshot persistence hook should publish via websocket publisher interface (brok
 ## 12. Testing Strategy
 
 ### Unit tests
-1. Broker dispatch eligibility by profile/channel matrix.
+1. Broker dispatch eligibility by channel matrix.
 2. Subscription add/remove lifecycle.
 3. Drop behavior unaffected by filtering logic.
 4. Channel classification for known event types.
+5. Global conversation sequence remains monotonic and is not renumbered per connection.
 
 ### Integration tests
-1. Two clients same conversation, different subscription profiles/channels -> different received frame sets.
+1. Two clients same conversation, different channel selections -> different received frame sets.
 2. Timeline upsert reaches timeline subscribers.
 3. Existing chat client with default params receives current behavior.
-4. Optional debug turn snapshot channel only emits when producer intent + subscription are both set.
+4. Optional debug turn snapshot channel only emits when that channel is explicitly subscribed.
+5. Filtered clients may skip sequence numbers; sequence gaps are accepted and documented.
 
 ### Load/safety tests
 1. Backpressure under high `llm.delta` rate.
@@ -471,29 +453,27 @@ Add counters and logs for:
 1. frames published by source and type
 2. frames delivered by channel/subscription-profile
 3. dropped frames / dropped connections
-4. subscription counts by subscription profile
+4. subscription counts by channel
 
 ### 12.2 Security and policy
 Potential policy controls:
 
-1. restrict debug subscription profiles by auth context
-2. reject unsupported channel requests
-3. enforce maximum channel combinations per connection
+1. reject unsupported channel requests
+2. enforce maximum channel combinations per connection
 
 ### 12.3 Compatibility envelope
-Even if we later remove legacy modes, migration should include one stable default subscription profile (`chat`) matching today’s behavior to keep existing frontend intact while debug profile work lands.
+Migration should include one stable default channel set (`sem,timeline,control`) matching current behavior when `channels` is omitted.
 
 ## 14. Open Questions
-1. Should subscription profile selection be query params only, or also negotiable via first client frame?
-2. Should filtering happen at frame-envelope level (`event.type`) or after protobuf decode?
-3. Is a single broker per conversation sufficient, or do we need broker shards by channel for performance?
-4. How long do we keep `semBuf` as-is once broker metrics/history exist?
-5. Should debug UI bootstrap/catch-up remain HTTP-only or gain broker-backed replay endpoint?
+1. Should filtering happen at frame-envelope level (`event.type`) or after protobuf decode?
+2. Is a single broker per conversation sufficient, or do we need broker shards by channel for performance?
+3. How long do we keep `semBuf` as-is once broker metrics/history exist?
+4. Should debug UI bootstrap/catch-up remain HTTP-only or gain broker-backed replay endpoint?
 
 ## 15. Recommended Decision
 Adopt the broker + transport split (Option 3), then stage in subscription-aware filtering and backend emitter hooks. This gives a clean answer to both goals:
 
-1. Connection-specific websocket behavior via subscription profiles/channels.
+1. Connection-specific websocket behavior via explicit channel subscriptions.
 2. Backend-side pluggability without requiring direct `ConnectionPool` access.
 
 The first implementation increment should preserve today’s payload semantics and default fanout, then layer policy gradually.
@@ -503,11 +483,10 @@ The first implementation increment should preserve today’s payload semantics a
 2. Wrap `ConnectionPool` behind a transport adapter used by broker.
 3. Route existing stream callback and timeline upsert through broker publish API.
 4. Add connection IDs and subscription records at `/ws` connect.
-5. Parse `ws_profile` and `channels` query params with validation.
+5. Parse `channels` query param with validation and default fallback.
 6. Add frame channel classification helper and filtering rules.
 7. Add router option for websocket emitter factories.
-8. Add tests for profile/channel filtering and default compatibility.
+8. Add tests for channel filtering and default compatibility.
 9. Add observability counters/log fields for publication and dispatch.
 10. Document protocol and extension contract for backend teams.
-11. Add typed debug options in request plan/policy output for producer-intent gating.
-12. Wire turn snapshot emission through publisher API with persist-first ordering.
+11. Keep turn snapshot websocket emission out of the first implementation; revisit only after channel-only flow is stable.
