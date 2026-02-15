@@ -28,6 +28,8 @@ RelatedFiles:
       Note: Task 5 follow badges/chips/styles for status visibility (commit c4a7c4c)
     - Path: cmd/web-chat/web/src/debug-ui/styles/primitives.css
       Note: Task 5 small button primitive for follow controls (commit c4a7c4c)
+    - Path: cmd/web-chat/web/src/debug-ui/ws/debugTimelineWsManager.test.ts
+      Note: Task 9 lifecycle and two-tab follow integration coverage (commit dd35d25)
     - Path: cmd/web-chat/web/src/debug-ui/ws/debugTimelineWsManager.ts
       Note: |-
         Implements Task 2-4 follow transport core (connect/bootstrap/replay/upsert) in commit b6117d6
@@ -52,6 +54,7 @@ LastUpdated: 2026-02-14T12:12:00-05:00
 WhatFor: Record how realtime follow architecture and tasks were derived.
 WhenToUse: Use when implementing GP-020 or reviewing assumptions around live attach behavior.
 ---
+
 
 
 
@@ -389,3 +392,78 @@ I also completed the two policy tasks in this phase: read-only behavior and base
 - Connect URL format: `${proto}://${host}${basePrefix}/ws?conv_id=<id>`.
 - Bootstrap URL format: `${basePrefix}/api/timeline?conv_id=<id>`.
 - Reconnect semantics: `requestFollowReconnect` increments `reconnectToken`; hook observes token and forces disconnect + reconnect.
+
+## Step 6: Add Task 9 lifecycle and two-tab follow tests for timeline upserts
+This phase closed the final GP-020 task by adding executable coverage around the websocket follow manager. I wrote integration-style unit tests that exercise the manager against a real RTK store, mocked fetch bootstrap responses, and a controllable mock websocket transport.
+
+The goal was to validate the exact behaviors that are risky in production: bootstrap + buffered replay ordering, mount-aware URL construction, conversation-switch lifecycle teardown, and read-only websocket semantics. This gives us a guardrail for future refactors while preserving the fresh-cutover API contract.
+
+### Prompt Context
+**User prompt (verbatim):** (same as Step 3)
+
+**Assistant interpretation:** Finish GP-020 by implementing the final test task and keep ticket/diary/changelog updated as part of the same execution loop.
+
+**Inferred user intent:** Ensure realtime follow is not only implemented but releasable with concrete automated coverage for lifecycle and cross-tab update behavior.
+
+**Commit (code):** `dd35d25` — "test(debug-ui): add follow websocket lifecycle coverage"
+
+### What I did
+- Added `pinocchio/cmd/web-chat/web/src/debug-ui/ws/debugTimelineWsManager.test.ts`.
+- Implemented a `MockWebSocket` transport with controllable `emitOpen`, `emitMessage`, `emitClose`, `close`, and `send` recording.
+- Implemented `createTestStore()` using:
+  - `debugApi.reducer` + `debugApi.middleware`
+  - `uiSlice.reducer`
+- Added test coverage:
+  - `replays buffered timeline.upsert after bootstrap (two-tab follow path)`
+  - `handles connect-switch lifecycle across conversations`
+- Assertions include:
+  - mount-aware websocket URL (`/chat/ws`) and bootstrap URL (`/chat/api/timeline`)
+  - buffered `timeline.upsert` replay updates timeline entity state and events cache
+  - conversation switch closes previous socket and boots a new one
+  - status transitions reach `connected` and `closed` as expected
+  - no outbound websocket sends in follow mode (`sendCalls.length === 0`)
+- Validation commands:
+  - `cd pinocchio/cmd/web-chat/web && npx vitest run src/debug-ui/ws/debugTimelineWsManager.test.ts`
+  - `cd pinocchio/cmd/web-chat/web && npm run typecheck && npm run lint`
+
+### Why
+- Task 9 explicitly required lifecycle and two-tab follow coverage.
+- The manager is stateful and sequence-sensitive, so regression risk is highest around connect/bootstrap/replay and conversation switching.
+
+### What worked
+- Both new tests passed immediately under Vitest.
+- Full frontend typecheck/lint remained green with the new test file included in `tsconfig` scope.
+- Pre-commit `web-check` re-ran and passed, confirming no local-only assumptions.
+
+### What didn't work
+- No failing test iterations were required in this phase.
+
+### What I learned
+- Testing the manager against a real Redux store (instead of action snapshots only) gives much stronger confidence for RTK Query cache mutation behavior.
+- A focused mock transport is enough to model two-tab follow semantics without UI rendering tests.
+
+### What was tricky to build
+- The tricky edge was preserving deterministic async ordering between websocket open, bootstrap fetch, and buffered message replay.
+- I solved this by explicitly controlling socket open timing in the test and sending `timeline.upsert` before bootstrap completion to assert replay semantics.
+
+### What warrants a second pair of eyes
+- Mock websocket fidelity vs browser WebSocket behavior for error edge cases (this suite currently focuses on happy-path + close lifecycle).
+- Whether we want additional coverage for bootstrap HTTP failure and reconnect-token driven reconnect loops.
+
+### What should be done in the future
+1. Add negative-path tests for bootstrap decode/HTTP failures and stale-version upsert drops.
+2. Consider a UI-level test harness once React test tooling is introduced for this package.
+
+### Code review instructions
+- Start in `pinocchio/cmd/web-chat/web/src/debug-ui/ws/debugTimelineWsManager.test.ts`.
+- Check how `MockWebSocket` drives ordering and how assertions read RTK Query cache via endpoint selectors.
+- Re-run validation with:
+  - `cd pinocchio/cmd/web-chat/web && npx vitest run src/debug-ui/ws/debugTimelineWsManager.test.ts`
+  - `cd pinocchio/cmd/web-chat/web && npm run typecheck && npm run lint`
+
+### Technical details
+- Test bootstrap payloads are protobuf-JSON compatible (`convId`, `version`, `entities`, oneof `message` payload).
+- Timeline cache assertion path:
+  - `debugApi.endpoints.getTimeline.select({ convId })(state).data`
+- Events cache assertion path:
+  - `debugApi.endpoints.getEvents.select({ convId })(state).data`

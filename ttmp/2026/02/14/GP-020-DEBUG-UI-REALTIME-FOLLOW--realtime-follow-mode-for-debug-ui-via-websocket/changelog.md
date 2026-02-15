@@ -73,3 +73,12 @@ Step 5: implemented Tasks 5-8 by wiring follow controls/status UI, app-level lif
 - /home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/cmd/web-chat/web/src/debug-ui/components/SessionList.tsx — User-facing follow/pause/resume/reconnect controls
 - /home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/cmd/web-chat/web/src/debug-ui/ws/useDebugTimelineFollow.ts — Central follow lifecycle owner with reconnect token and base prefix support
 
+
+## 2026-02-15
+
+Step 6: completed Task 9 by adding websocket lifecycle and two-tab follow integration tests for timeline.upsert replay, mount-aware URLs, and read-only send semantics (commit dd35d25).
+
+### Related Files
+
+- /home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/cmd/web-chat/web/src/debug-ui/ws/debugTimelineWsManager.test.ts — New follow manager test suite
+

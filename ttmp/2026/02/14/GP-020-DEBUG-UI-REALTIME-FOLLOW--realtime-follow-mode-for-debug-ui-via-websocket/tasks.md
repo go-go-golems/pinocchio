@@ -10,4 +10,4 @@
 - [x] Support pause/resume/reconnect UX for follow mode
 - [x] Ensure read-only behavior (no outbound control messages)
 - [x] Ensure follow mode respects app base prefix/root mount for `/ws` and `/api/timeline`
-- [ ] Add websocket lifecycle and two-tab follow integration tests (timeline upsert path)
+- [x] Add websocket lifecycle and two-tab follow integration tests (timeline upsert path)
