@@ -345,7 +345,14 @@ func registerProfileHandlers(mux *http.ServeMux, profiles *chatProfileRegistry) 
 				http.Error(w, "profile not found", http.StatusNotFound)
 				return
 			}
-			http.SetCookie(w, &http.Cookie{Name: "chat_profile", Value: slug, Path: "/", SameSite: http.SameSiteLaxMode})
+			http.SetCookie(w, &http.Cookie{
+				Name:     "chat_profile",
+				Value:    slug,
+				Path:     "/",
+				SameSite: http.SameSiteLaxMode,
+				Secure:   true,
+				HttpOnly: true,
+			})
 			writeJSON(profilePayload{Slug: slug})
 		default:
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)

@@ -16,7 +16,7 @@ import (
 )
 
 func (r *Router) debugRoutesEnabled() bool {
-	return !r.disableDebugRoutes
+	return r != nil && r.enableDebugRoutes
 }
 
 func (r *Router) registerDebugAPIHandlers(mux *http.ServeMux) {

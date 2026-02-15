@@ -6,6 +6,7 @@ import (
 	"embed"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 
 	clay "github.com/go-go-golems/clay/pkg"
@@ -124,6 +125,7 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 		parsed,
 		staticFS,
 		webchat.WithRuntimeComposer(runtimeComposer),
+		webchat.WithDebugRoutesEnabled(os.Getenv("PINOCCHIO_WEBCHAT_DEBUG") == "1"),
 	)
 	if err != nil {
 		return errors.Wrap(err, "new webchat server")

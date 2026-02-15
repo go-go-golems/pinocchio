@@ -85,6 +85,8 @@ func TestRegisterProfileHandlers_GetAndSetProfile(t *testing.T) {
 	require.Equal(t, "agent", setResp["slug"])
 	cookies := recSet.Result().Cookies()
 	require.NotEmpty(t, cookies)
+	require.True(t, cookies[0].Secure)
+	require.True(t, cookies[0].HttpOnly)
 
 	reqGet := httptest.NewRequest(http.MethodGet, "/api/chat/profile", nil)
 	reqGet.AddCookie(cookies[0])

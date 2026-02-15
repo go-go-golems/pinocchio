@@ -55,9 +55,9 @@ type Router struct {
 
 	// runtime flags
 	idleTimeoutSec int
-	// disableDebugRoutes disables registration of /api/debug/* handlers.
-	// Default is false (debug routes enabled).
-	disableDebugRoutes bool
+	// enableDebugRoutes controls registration of /api/debug/* handlers.
+	// Default is false (debug routes disabled).
+	enableDebugRoutes bool
 
 	// step mode control (shared; not conversation-owned)
 	stepCtrl *toolloop.StepController

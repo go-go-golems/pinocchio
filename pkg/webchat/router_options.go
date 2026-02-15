@@ -131,7 +131,7 @@ func WithEventSinkWrapper(fn EventSinkWrapper) RouterOption {
 // When disabled, /api/debug/* routes are not mounted.
 func WithDebugRoutesEnabled(enabled bool) RouterOption {
 	return func(r *Router) error {
-		r.disableDebugRoutes = !enabled
+		r.enableDebugRoutes = enabled
 		return nil
 	}
 }
