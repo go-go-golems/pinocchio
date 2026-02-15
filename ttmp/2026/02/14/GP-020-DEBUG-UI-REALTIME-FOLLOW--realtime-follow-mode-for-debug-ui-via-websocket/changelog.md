@@ -54,3 +54,12 @@ Step 3: implemented follow state/actions/selectors in debug-ui store and checked
 
 - /home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/cmd/web-chat/web/src/debug-ui/store/uiSlice.ts — Store contract for realtime follow lifecycle
 
+
+## 2026-02-15
+
+Step 4: added debug timeline websocket manager core and checked Tasks 2-4 (commit b6117d6).
+
+### Related Files
+
+- /home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/cmd/web-chat/web/src/debug-ui/ws/debugTimelineWsManager.ts — Canonical bootstrap and timeline.upsert dedupe pipeline
+

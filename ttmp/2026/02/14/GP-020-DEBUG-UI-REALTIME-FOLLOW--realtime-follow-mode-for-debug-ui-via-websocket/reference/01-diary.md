@@ -17,6 +17,8 @@ RelatedFiles:
     - Path: cmd/web-chat/web/src/debug-ui/components/SessionList.tsx
     - Path: cmd/web-chat/web/src/debug-ui/store/uiSlice.ts
       Note: Added follow-mode state/actions/selectors and reconnect token for GP-020 Task 1 (commit 8c13fbe)
+    - Path: cmd/web-chat/web/src/debug-ui/ws/debugTimelineWsManager.ts
+      Note: Implements Task 2-4 follow transport core (connect/bootstrap/replay/upsert) in commit b6117d6
     - Path: cmd/web-chat/web/src/sem/registry.ts
       Note: Exploration source for SEM event type support
     - Path: cmd/web-chat/web/src/ws/wsManager.ts
@@ -35,6 +37,7 @@ LastUpdated: 2026-02-14T12:12:00-05:00
 WhatFor: Record how realtime follow architecture and tasks were derived.
 WhenToUse: Use when implementing GP-020 or reviewing assumptions around live attach behavior.
 ---
+
 
 
 
@@ -217,3 +220,75 @@ This step establishes the contract needed by later tasks: a target conversation 
 
 ### Technical details
 - Follow state now stores both control flags (`enabled`, `reconnectToken`) and presentation state (`status`, `lastError`) so UI can be stateless about transport internals.
+
+## Step 4: Implement websocket manager core (connect/bootstrap/replay/upsert)
+This step implemented the transport engine for follow mode as an isolated debug-ui manager. I kept it decoupled from UI components so lifecycle behavior can be tested directly and reused from a single hook.
+
+The manager now handles canonical timeline bootstrap (`/api/timeline`), websocket buffering before bootstrap completion, deterministic replay ordering, and `timeline.upsert` merge rules with version-based dedupe.
+
+### Prompt Context
+**User prompt (verbatim):** (same as Step 3)
+
+**Assistant interpretation:** Execute the next GP-020 tasks with focused commits while preserving traceability in docmgr.
+
+**Inferred user intent:** Build the realtime-follow core first, then layer UI controls and tests on top of a stable transport/cache merge foundation.
+
+**Commit (code):** `b6117d6` — "feat(debug-ui): add timeline follow websocket manager core"
+
+### What I did
+- Added `pinocchio/cmd/web-chat/web/src/debug-ui/ws/debugTimelineWsManager.ts`.
+- Implemented conversation-scoped lifecycle:
+  - `connect({ convId, basePrefix, dispatch })`
+  - `disconnect()`
+- Implemented bootstrap and replay:
+  - Bootstrap from canonical `GET /api/timeline?conv_id=...`
+  - Decode protobuf snapshot (`TimelineSnapshotV1`)
+  - Seed RTK Query caches (`getTimeline`, `getEvents`)
+  - Buffer websocket frames until bootstrap completes
+  - Replay buffered frames sorted by `event.seq`
+- Implemented `timeline.upsert` handling:
+  - Decode `TimelineUpsertV1` protobuf
+  - Convert proto entity to debug-ui `TimelineEntity`
+  - Merge into `getTimeline` cache with version checks (skip stale lower versions)
+  - Append corresponding `SemEvent` into `getEvents` cache with duplicate suppression
+- Ran `npm run typecheck`.
+- Marked tasks complete via docmgr:
+  - Task 2
+  - Task 3
+  - Task 4
+
+### Why
+- Needed a dedicated manager before wiring UI so follow lifecycle logic remains deterministic and testable.
+- Cache patching via RTK Query utilities avoids introducing a second shadow timeline state structure.
+
+### What worked
+- Canonical bootstrap and upsert decode pipeline compiled and integrated with existing debug-ui types.
+- Version-based dedupe logic now exists in one place (manager) rather than spread across components.
+
+### What didn't work
+- No runtime failures in this phase; implementation compiled cleanly.
+
+### What I learned
+- Existing `timelineEntityFromProto` helper from the non-debug SEM path can be reused for debug follow mapping with a thin shape conversion layer.
+- RTK Query `upsertQueryData` + `updateQueryData` is sufficient for live overlays without introducing a new reducer slice.
+
+### What was tricky to build
+- The tricky part was bootstrap/replay ordering with a strict no-fallback policy.
+- I handled this by gating all websocket application behind bootstrap completion and tracking a single `highWaterVersion` to drop stale frames.
+
+### What warrants a second pair of eyes
+- Replay gating and `highWaterVersion` advancement logic should be reviewed carefully for edge cases when `seq` and `version` differ.
+- Event cache growth policy is currently unbounded; this is acceptable for now but may need limits later.
+
+### What should be done in the future
+1. Wire manager lifecycle to UI follow controls and status badges (next phase).
+2. Add tests that assert replay order, dedupe behavior, and reconnect semantics.
+
+### Code review instructions
+- Start in `pinocchio/cmd/web-chat/web/src/debug-ui/ws/debugTimelineWsManager.ts`.
+- Validate connection flow (`connect`), bootstrap path (`bootstrapFromTimeline`), and merge path (`applyEnvelope`).
+- Run `cd pinocchio/cmd/web-chat/web && npm run typecheck`.
+
+### Technical details
+- Manager intentionally ignores non-`timeline.upsert` websocket frames in this ticket scope.
+- Bootstrap source is canonical `/api/timeline` only, consistent with fresh-cutover policy.
