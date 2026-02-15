@@ -374,3 +374,52 @@ This step added explicit input/result shapes and status guarantees for submissio
 ### Technical details
 - Updated file: `pinocchio/ttmp/2026/02/15/GP-025-WEBCHAT-APP-ROUTE-OWNERSHIP--move-chat-and-ws-ownership-to-app-layer-simplify-webchat-core/design/01-webchat-toolkit-app-owned-routes-analysis.md`
 - Checked task: `10`
+
+## Step 18: Lock `AttachWebSocket(...)` contract
+Websocket attach behavior is where route ownership and core lifecycle behavior intersect most directly. I froze this method contract before implementation so handler migration can stay mechanical instead of interpretive.
+
+This step defined attach options/signature and locked expected hello/ping/pong behavior at the service boundary, then checked task 11.
+
+### Prompt Context
+
+**User prompt (verbatim):** (see Step 13)
+
+**Assistant interpretation:** Continue sequentially by freezing the websocket lifecycle API before route migration.
+
+**Inferred user intent:** Keep websocket semantics stable while moving HTTP ownership out of core.
+
+**Commit (code):** pending — "docs(gp-025): freeze websocket attach contract"
+
+### What I did
+- Added `WebSocketAttachOptions` and `AttachWebSocket(...)` signature.
+- Documented attach validation, stream start behavior, and hello/ping/pong expectations.
+- Ran `docmgr task check --ticket GP-025-WEBCHAT-APP-ROUTE-OWNERSHIP --id 11`.
+
+### Why
+- Task 26/27 depend on a clear core websocket contract that app handlers can call directly.
+
+### What worked
+- The design now separates HTTP upgrade concerns (app-owned) from connection lifecycle mechanics (service-owned).
+
+### What didn't work
+- N/A
+
+### What I learned
+- Encoding ping/pong behavior explicitly in the service contract reduces ambiguity when moving reader loops out of router code.
+
+### What was tricky to build
+- Needed to keep the contract small while still capturing behavior that currently lives in router handler internals.
+
+### What warrants a second pair of eyes
+- Decide whether ping/pong should always be enabled or remain configurable via attach options.
+
+### What should be done in the future
+- Implement this method in core and use it from both `cmd/web-chat` and `web-agent-example` websocket handlers.
+
+### Code review instructions
+- Review section `7.4` for transport boundary correctness.
+- Confirm task 11 is checked in ticket tasks.
+
+### Technical details
+- Updated file: `pinocchio/ttmp/2026/02/15/GP-025-WEBCHAT-APP-ROUTE-OWNERSHIP--move-chat-and-ws-ownership-to-app-layer-simplify-webchat-core/design/01-webchat-toolkit-app-owned-routes-analysis.md`
+- Checked task: `11`

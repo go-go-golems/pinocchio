@@ -15,7 +15,7 @@
 - [x] `ConversationService` constructor/config object.
 - [x] `ConversationService.ResolveAndEnsureConversation(...)`.
 - [x] `ConversationService.SubmitPrompt(...)`.
-- [ ] `ConversationService.AttachWebSocket(...)`.
+- [x] `ConversationService.AttachWebSocket(...)`.
 - [ ] `WSPublisher.PublishJSON(...)` conversation-scoped API.
 - [ ] Freeze app-owned handler contracts:
 - [ ] `/chat` request parsing, validation, response schema, and status codes.

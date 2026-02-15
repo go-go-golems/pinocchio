@@ -265,6 +265,27 @@ Behavior notes:
 3. Result `Response["status"]` is one of: `queued`, `running`, `started`, `completed`, `error`.
 4. Response always includes `conv_id`, `session_id`, and `idempotency_key` when submission reaches queue/runtime path.
 
+### 7.4 Frozen `AttachWebSocket(...)` Contract
+
+```go
+type WebSocketAttachOptions struct {
+    SendHello bool
+}
+
+func (s *ConversationService) AttachWebSocket(
+    ctx context.Context,
+    convID string,
+    conn *websocket.Conn,
+    opts WebSocketAttachOptions,
+) error
+```
+
+Behavior notes:
+1. Returns validation error when `convID` is empty or `conn` is nil.
+2. Ensures conversation exists before attach (or returns not-found/resolve error).
+3. Adds connection to conversation pool and starts stream when needed.
+4. Supports sending hello frame and responding to ping (`"ping"`, `ws.ping`) with `ws.pong`.
+
 The key simplification is that app code passes explicit values instead of registering many global options that interact indirectly.
 
 ## 8. Sequence Diagrams
