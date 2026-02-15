@@ -1,0 +1,90 @@
+# Hookability Audit
+
+## Existing explicit extension hooks in webchat
+/home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/pkg/webchat/router_handlers_test.go:42:func TestNewRouter_RequiresRuntimeComposer(t *testing.T) {
+/home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/pkg/webchat/timeline_registry.go:28:// RegisterTimelineHandler registers a handler for a SEM event type.
+/home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/pkg/webchat/timeline_registry.go:29:func RegisterTimelineHandler(eventType string, handler TimelineSemHandler) {
+/home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/pkg/webchat/server.go:26:func NewServer(ctx context.Context, parsed *values.Values, staticFS fs.FS, opts ...RouterOption) (*Server, error) {
+/home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/pkg/webchat/timeline_upsert.go:11:	if r != nil && r.timelineUpsertHookOverride != nil {
+/home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/pkg/webchat/timeline_upsert.go:12:		return r.timelineUpsertHookOverride(conv)
+/home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/pkg/webchat/conversation.go:70:	runtimeComposer RuntimeComposer
+/home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/pkg/webchat/conversation.go:89:	RuntimeComposer RuntimeComposer
+/home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/pkg/webchat/conversation.go:104:		runtimeComposer:    opts.RuntimeComposer,
+/home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/pkg/webchat/conversation.go:129:func (cm *ConvManager) SetRuntimeComposer(composer RuntimeComposer) {
+/home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/pkg/webchat/types.go:77:	requestResolver ConversationRequestResolver
+/home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/pkg/webchat/types.go:78:	runtimeComposer RuntimeComposer
+/home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/pkg/webchat/types.go:82:	timelineUpsertHookOverride func(*Conversation) func(entity *timelinepb.TimelineEntityV1, version uint64)
+/home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/pkg/webchat/runtime_composer.go:30:type RuntimeComposer interface {
+/home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/pkg/webchat/runtime_composer.go:34:type RuntimeComposerFunc func(ctx context.Context, req RuntimeComposeRequest) (RuntimeArtifacts, error)
+/home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/pkg/webchat/runtime_composer.go:36:func (f RuntimeComposerFunc) Compose(ctx context.Context, req RuntimeComposeRequest) (RuntimeArtifacts, error) {
+/home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/pkg/webchat/engine_from_req_test.go:20:func TestDefaultConversationRequestResolver_Chat_RuntimePrecedence(t *testing.T) {
+/home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/pkg/webchat/engine_from_req_test.go:24:	b := NewDefaultConversationRequestResolver(lookup)
+/home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/pkg/webchat/engine_from_req_test.go:72:func TestDefaultConversationRequestResolver_Chat_GeneratesConvIDWhenMissing(t *testing.T) {
+/home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/pkg/webchat/engine_from_req_test.go:73:	b := NewDefaultConversationRequestResolver(stubConversationLookup{})
+/home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/pkg/webchat/engine_from_req_test.go:84:func TestDefaultConversationRequestResolver_WS_RuntimePrecedence(t *testing.T) {
+/home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/pkg/webchat/engine_from_req_test.go:88:	b := NewDefaultConversationRequestResolver(lookup)
+/home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/pkg/webchat/router_options.go:15:// RouterOption configures optional dependencies for a Router.
+/home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/pkg/webchat/router_options.go:16:type RouterOption func(*Router) error
+/home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/pkg/webchat/router_options.go:18:func WithConversationRequestResolver(resolver ConversationRequestResolver) RouterOption {
+/home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/pkg/webchat/router_options.go:28:func WithRuntimeComposer(composer RuntimeComposer) RouterOption {
+/home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/pkg/webchat/router_options.go:38:func WithWebSocketUpgrader(u websocket.Upgrader) RouterOption {
+/home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/pkg/webchat/router_options.go:45:func WithConvManager(cm *ConvManager) RouterOption {
+/home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/pkg/webchat/router_options.go:55:func WithEventRouter(er *events.EventRouter) RouterOption {
+/home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/pkg/webchat/router_options.go:65:func WithBuildSubscriber(fn func(convID string) (message.Subscriber, bool, error)) RouterOption {
+/home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/pkg/webchat/router_options.go:75:func WithTimelineUpsertHook(fn func(*Conversation) func(entity *timelinepb.TimelineEntityV1, version uint64)) RouterOption {
+/home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/pkg/webchat/router_options.go:80:		r.timelineUpsertHookOverride = fn
+/home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/pkg/webchat/router_options.go:85:func WithStepController(sc *toolloop.StepController) RouterOption {
+/home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/pkg/webchat/router_options.go:95:func WithDB(db *sql.DB) RouterOption {
+/home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/pkg/webchat/router_options.go:102:func WithTimelineStore(s chatstore.TimelineStore) RouterOption {
+/home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/pkg/webchat/router_options.go:116:func WithTurnStore(s chatstore.TurnStore) RouterOption {
+/home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/pkg/webchat/router_options.go:126:// WithEventSinkWrapper allows callers to wrap the default event sink (e.g., FilteringSink).
+/home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/pkg/webchat/router_options.go:127:func WithEventSinkWrapper(fn EventSinkWrapper) RouterOption {
+/home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/pkg/webchat/router_options.go:139:func WithDebugRoutesEnabled(enabled bool) RouterOption {
+/home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/pkg/webchat/engine_from_req.go:30:// ConversationRequestResolver resolves request policy (conv/runtime/overrides) for both HTTP and WS handlers.
+/home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/pkg/webchat/engine_from_req.go:31:type ConversationRequestResolver interface {
+/home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/pkg/webchat/engine_from_req.go:60:type DefaultConversationRequestResolver struct {
+/home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/pkg/webchat/engine_from_req.go:64:func NewDefaultConversationRequestResolver(conversations ConversationLookup) *DefaultConversationRequestResolver {
+/home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/pkg/webchat/engine_from_req.go:65:	return &DefaultConversationRequestResolver{conversations: conversations}
+/home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/pkg/webchat/engine_from_req.go:68:func (b *DefaultConversationRequestResolver) Resolve(req *http.Request) (ConversationRequestPlan, error) {
+/home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/pkg/webchat/engine_from_req.go:83:func (b *DefaultConversationRequestResolver) buildFromWSReq(req *http.Request) (ConversationRequestPlan, error) {
+/home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/pkg/webchat/engine_from_req.go:104:func (b *DefaultConversationRequestResolver) buildFromChatReq(req *http.Request) (ConversationRequestPlan, error) {
+/home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/pkg/webchat/router.go:58:func NewRouter(ctx context.Context, parsed *values.Values, staticFS fs.FS, opts ...RouterOption) (*Router, error) {
+/home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/pkg/webchat/router.go:156:			RuntimeComposer:    r.convRuntimeComposer(),
+/home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/pkg/webchat/router.go:161:		r.cm.SetRuntimeComposer(r.convRuntimeComposer())
+/home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/pkg/webchat/router.go:164:		r.requestResolver = NewDefaultConversationRequestResolver(r.cm)
+/home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/pkg/webchat/router.go:335:			resolver = NewDefaultConversationRequestResolver(r.cm)
+/home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/pkg/webchat/router.go:448:			resolver = NewDefaultConversationRequestResolver(r.cm)
+/home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/pkg/webchat/router.go:543:func (r *Router) convRuntimeComposer() RuntimeComposer {
+/home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/pkg/webchat/router.go:544:	return RuntimeComposerFunc(func(ctx context.Context, req RuntimeComposeRequest) (RuntimeArtifacts, error) {
+
+## Areas where direct ConnectionPool access is currently required
+/home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/pkg/webchat/timeline_upsert.go:48:		conv.pool.Broadcast(b)
+/home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/pkg/webchat/connection_pool.go:28:func (c *poolClient) TrySend(data []byte) bool {
+/home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/pkg/webchat/connection_pool.go:52:type ConnectionPool struct {
+/home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/pkg/webchat/connection_pool.go:121:		if !client.TrySend(data) {
+/home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/pkg/webchat/connection_pool.go:123:			cp.dropClient(client)
+/home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/pkg/webchat/connection_pool.go:138:	if !client.TrySend(data) {
+/home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/pkg/webchat/connection_pool.go:140:		cp.dropClient(client)
+/home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/pkg/webchat/connection_pool.go:199:			cp.dropClient(client)
+/home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/pkg/webchat/connection_pool.go:205:func (cp *ConnectionPool) dropClient(client *poolClient) {
+/home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/pkg/webchat/router.go:387:				conv.pool.SendToOne(conn, b)
+/home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/pkg/webchat/router.go:432:							conv.pool.SendToOne(conn, b)
+/home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/pkg/webchat/conversation.go:249:						c.pool.Broadcast(frame)
+/home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/pkg/webchat/conversation.go:316:				conv.pool.Broadcast(frame)
+/home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/pkg/webchat/connection_pool_test.go:63:	pool.Broadcast([]byte("one"))
+/home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/pkg/webchat/connection_pool_test.go:64:	pool.Broadcast([]byte("two"))
+/home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/pkg/webchat/connection_pool_test.go:65:	pool.Broadcast([]byte("three"))
+
+## Debug API data sources relevant to websocket bootstrap/catch-up
+73:				bufferedEvents = len(conv.semBuf.Snapshot())
+147:			bufferedEvents = len(conv.semBuf.Snapshot())
+174:	mux.HandleFunc("/api/debug/events/", func(w http.ResponseWriter, r0 *http.Request) {
+202:		if s := strings.TrimSpace(r0.URL.Query().Get("since_seq")); s != "" {
+278:			"since_seq": sinceSeq,
+422:		if s := strings.TrimSpace(r0.URL.Query().Get("since_version")); s != "" {
+458:	mux.HandleFunc("/api/debug/timeline", timelineHandler)
+459:	mux.HandleFunc("/api/debug/timeline/", timelineHandler)
+480:		if s := strings.TrimSpace(r0.URL.Query().Get("since_ms")); s != "" {
+513:			"since_ms":   sinceMs,
+521:	mux.HandleFunc("/api/debug/turns", turnsHandler)
+522:	mux.HandleFunc("/api/debug/turns/", turnsHandler)
