@@ -166,9 +166,9 @@ class WsManager {
     if (nonce !== this.connectNonce) return;
     args.dispatch(timelineSlice.actions.clear());
 
-    // Hydrate via GET /timeline (canonical path).
+    // Hydrate via debug API timeline endpoint so SPA route /timeline does not conflict in dev.
     try {
-      const res = await fetch(`${args.basePrefix}/timeline?conv_id=${encodeURIComponent(args.convId)}`);
+      const res = await fetch(`${args.basePrefix}/api/debug/timeline?conv_id=${encodeURIComponent(args.convId)}`);
       if (res.ok) {
         let j: unknown = null;
         try {
