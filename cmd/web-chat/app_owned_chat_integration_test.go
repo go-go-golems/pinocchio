@@ -17,6 +17,7 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	webchat "github.com/go-go-golems/pinocchio/pkg/webchat"
 	"github.com/gorilla/websocket"
+	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/require"
 )
 
@@ -71,6 +72,10 @@ func newAppOwnedIntegrationServer(t *testing.T) *httptest.Server {
 	appMux.HandleFunc("/chat", chatHandler)
 	appMux.HandleFunc("/chat/", chatHandler)
 	appMux.HandleFunc("/ws", wsHandler)
+	timelineLogger := log.With().Str("component", "webchat-test").Str("route", "/api/timeline").Logger()
+	timelineHandler := webchat.NewTimelineHTTPHandler(webchatSrv.TimelineService(), timelineLogger)
+	appMux.HandleFunc("/api/timeline", timelineHandler)
+	appMux.HandleFunc("/api/timeline/", timelineHandler)
 	appMux.Handle("/api/", webchatSrv.APIHandler())
 	appMux.Handle("/", webchatSrv.UIHandler())
 

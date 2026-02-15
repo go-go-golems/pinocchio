@@ -158,6 +158,10 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 	appMux.HandleFunc("/chat/", chatHandler)
 	appMux.HandleFunc("/ws", wsHandler)
 	registerProfileHandlers(appMux, profiles)
+	timelineLogger := log.With().Str("component", "webchat").Str("route", "/api/timeline").Logger()
+	timelineHandler := webchat.NewTimelineHTTPHandler(srv.TimelineService(), timelineLogger)
+	appMux.HandleFunc("/api/timeline", timelineHandler)
+	appMux.HandleFunc("/api/timeline/", timelineHandler)
 	appMux.Handle("/api/", srv.APIHandler())
 	appMux.Handle("/", srv.UIHandler())
 

@@ -16,5 +16,5 @@
 - [ ] Finalize docs, migration notes, and API contract tests for public release readiness
 - [ ] Delete legacy Router/ConvManager/old service paths once replacement services are verified
 - [ ] Cut web-agent-example over to service-based wiring and verify event sink wrapper behavior
-- [ ] Extract TimelineService and timeline HTTP helper independent of Router
+- [x] Extract TimelineService and timeline HTTP helper independent of Router
 - [ ] Reorganize package layout into stream/chat/timeline/http/bootstrap subpackages with stable public exports

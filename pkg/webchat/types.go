@@ -55,7 +55,9 @@ type Router struct {
 	// shared deps
 	db            *sql.DB
 	timelineStore chatstore.TimelineStore
-	turnStore     chatstore.TurnStore
+	// split timeline service surface for hydration reads.
+	timelineService *TimelineService
+	turnStore       chatstore.TurnStore
 
 	// conversations
 	cm *ConvManager

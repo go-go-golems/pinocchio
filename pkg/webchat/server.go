@@ -85,6 +85,13 @@ func (s *Server) UIHandler() http.Handler {
 	return s.router.UIHandler()
 }
 
+func (s *Server) TimelineService() *TimelineService {
+	if s == nil || s.router == nil {
+		return nil
+	}
+	return s.router.TimelineService()
+}
+
 func (s *Server) HTTPServer() *http.Server {
 	if s == nil {
 		return nil

@@ -90,6 +90,7 @@ func WithTimelineStore(s chatstore.TimelineStore) RouterOption {
 			return errors.New("timeline store is nil")
 		}
 		r.timelineStore = s
+		r.timelineService = NewTimelineService(s)
 		if r.cm != nil {
 			r.cm.SetTimelineStore(s)
 		}

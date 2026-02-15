@@ -92,6 +92,7 @@ func NewRouter(ctx context.Context, parsed *values.Values, staticFS fs.FS, opts 
 	if r.cm != nil {
 		r.cm.SetTimelineStore(r.timelineStore)
 	}
+	r.timelineService = NewTimelineService(r.timelineStore)
 
 	// Optional turn snapshot store (SQLite when configured).
 	if dsn := strings.TrimSpace(s.TurnsDSN); dsn != "" {
@@ -125,6 +126,9 @@ func NewRouter(ctx context.Context, parsed *values.Values, staticFS fs.FS, opts 
 	}
 	if r.runtimeComposer == nil {
 		return nil, errors.New("runtime composer is not configured")
+	}
+	if r.timelineService == nil {
+		r.timelineService = NewTimelineService(r.timelineStore)
 	}
 
 	if r.stepCtrl == nil {
@@ -229,6 +233,14 @@ func (r *Router) StreamHub() *StreamHub {
 		return r.conversationService.StreamHub()
 	}
 	return nil
+}
+
+// TimelineService returns the timeline hydration service.
+func (r *Router) TimelineService() *TimelineService {
+	if r == nil {
+		return nil
+	}
+	return r.timelineService
 }
 
 // BuildHTTPServer constructs an http.Server using settings from layers.
