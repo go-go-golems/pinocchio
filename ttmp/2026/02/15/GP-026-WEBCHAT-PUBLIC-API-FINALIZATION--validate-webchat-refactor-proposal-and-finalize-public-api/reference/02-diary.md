@@ -318,3 +318,132 @@ The implementation was done as sequential, test-verified slices so each ticket t
   - `StreamHub.AttachWebSocket(...)`
 - cmd cutover target:
   - app-owned routes mount against `webchat.Server` accessors and split services, without direct `Router` composition in command code.
+
+## Step 4: Final Public API Stabilization, Legacy Cleanup, and Cross-App Cutover
+
+This phase completed the remaining ticket objectives for release readiness: finalize API contract coverage, remove remaining legacy public entry points, cut the second app (`web-agent-example`) to the split service model, and publish migration documentation.
+
+The implementation targeted low-risk stabilization over deep rewrites. Instead of moving internals across dozens of files at once, I added stable subpackage exports and explicit contract tests so external consumers can migrate to a clean public surface immediately.
+
+### Prompt Context
+
+**User prompt (verbatim):** (same as Step 1)
+
+**Assistant interpretation:** Finish all remaining refactor tasks, commit each logical slice, keep diary updates at phase level, and complete final publication steps.
+
+**Inferred user intent:** Ship a complete, auditable GP-026 implementation with releasable APIs, completed ticket tasks, and final documentation/upload artifacts.
+
+**Commit (code):** `06e30a7` — "webchat: extract timeline service and independent timeline handler"
+
+**Commit (code):** `1a6b0ab` — "webchat: remove legacy conversation handler entry points"
+
+**Commit (code):** `33386bb` — "webchat: add subpackage exports and HTTP contract tests"
+
+**Commit (code/docs):** `7ca15c5` — "docs(gp-026): add analysis, phase diary, and migration notes"
+
+**Commit (other repo):** `6b25156` (web-agent-example) — "web-agent-example: cut over to webchat split services"
+
+### What I did
+
+- Completed task 14 by extracting a standalone timeline domain service:
+  - added `pkg/webchat/timeline_service.go` and tests in `pkg/webchat/timeline_service_test.go`
+  - added router/server timeline service accessors
+  - mounted `/api/timeline` with `NewTimelineHTTPHandler` in first-party app wiring
+- Completed task 13 in `web-agent-example`:
+  - switched to `webchat.NewServer(...)` + split services (`ChatService`, `StreamHub`)
+  - switched handlers to `NewChatHTTPHandler` and `NewWSHTTPHandler`
+  - added `cmd/web-agent-example/sink_wrapper_test.go` to verify event sink wrapper behavior
+- Completed task 12 legacy cleanup:
+  - removed legacy exported handler entry points (`pkg/webchat/app_owned_handlers.go`)
+  - removed `Router.ConversationService()` public accessor
+  - updated package docs to point to split helper APIs
+- Completed task 15 package reorg for stable exports:
+  - added subpackage API façades:
+    - `pkg/webchat/chat/api.go`
+    - `pkg/webchat/stream/api.go`
+    - `pkg/webchat/timeline/api.go`
+    - `pkg/webchat/http/api.go`
+    - `pkg/webchat/bootstrap/api.go`
+- Completed task 11 release docs and contract tests:
+  - added HTTP helper contract tests in `pkg/webchat/http_helpers_contract_test.go`
+  - added migration notes document:
+    - `ttmp/.../reference/03-public-api-migration-notes.md`
+  - finalized ticket docs and source imports under GP-026 workspace
+- Uploaded final GP-026 document bundle to reMarkable:
+  - file name: `GP-026 Webchat API Finalization`
+  - remote path: `/ai/2026/02/15/GP-026-WEBCHAT-PUBLIC-API-FINALIZATION`
+
+### Why
+
+- Final public API needed explicit domain entry points (`chat`, `stream`, `timeline`, `http`, `bootstrap`) that can be imported without depending on unstable internals.
+- Legacy handler/path cleanup was required to avoid dual public surfaces and confusion during migration.
+- Contract tests and migration notes were necessary to treat this as a releasable API slice, not only a refactor.
+
+### What worked
+
+- All GP-026 tasks are now checked complete in `tasks.md`.
+- Test suites remained green across both repos:
+  - `go test ./pkg/webchat/... -count=1` (pinocchio)
+  - `go test ./cmd/web-chat -count=1` (pinocchio)
+  - `go test ./... -count=1` (web-agent-example)
+- reMarkable upload succeeded and was verified with `remarquee cloud ls`.
+
+### What didn't work
+
+- `pkg/webchat/timeline_service_test.go` initially used an incorrect protobuf oneof field (`Value` instead of `Snapshot`) and failed compile.
+  - fixed by using `Kind + Snapshot` shape matching existing timeline entity tests.
+- `pkg/webchat/router_debug_api_test.go` temporarily regressed (`404` instead of `200`) when `timelineService` was nil on manually-constructed `Router` test instances.
+  - fixed by lazy-initializing `timelineService` from `timelineStore` inside `timelineSnapshotHandler(...)`.
+
+### What I learned
+
+- Subpackage re-export façades are a practical path for API stabilization when full physical code moves are high-risk late in a ticket.
+- Maintaining route-level behavior in tests catches subtle regressions when introducing split services and lazy initialization semantics.
+
+### What was tricky to build
+
+- The trickiest part was finishing a hard-cut API outcome without destabilizing the internal router-driven implementation immediately. I solved this by:
+  - moving app callsites first (`cmd/web-chat`, `web-agent-example`)
+  - deleting only unused legacy public entry points
+  - adding explicit stable subpackage exports as the public contract layer.
+
+### What warrants a second pair of eyes
+
+- Review whether `ConversationService` should now be formally deprecated in code comments (or deleted in a follow-up major bump) since split APIs are fully in use.
+- Review the long-term plan for `ConvManager` internals if full physical package moves from root to domain directories are required beyond API export façades.
+
+### What should be done in the future
+
+- Optionally close the ticket via:
+  - `docmgr ticket close --ticket GP-026-WEBCHAT-PUBLIC-API-FINALIZATION`
+- If desired, add one external-facing public API guide that references the new subpackage imports directly.
+
+### Code review instructions
+
+- Start in:
+  - `pkg/webchat/timeline_service.go`
+  - `pkg/webchat/http_helpers_contract_test.go`
+  - `pkg/webchat/chat/api.go`
+  - `pkg/webchat/stream/api.go`
+  - `pkg/webchat/http/api.go`
+  - `pkg/webchat/bootstrap/api.go`
+  - `cmd/web-agent-example/main.go` (in web-agent-example repo)
+  - `cmd/web-agent-example/sink_wrapper_test.go` (in web-agent-example repo)
+  - `ttmp/.../reference/03-public-api-migration-notes.md`
+- Validate with:
+  - `go test ./pkg/webchat/... -count=1`
+  - `go test ./cmd/web-chat -count=1`
+  - `go test ./... -count=1` (from `web-agent-example`)
+
+### Technical details
+
+- Canonical helper constructors are now:
+  - `NewChatHTTPHandler`
+  - `NewWSHTTPHandler`
+  - `NewTimelineHTTPHandler`
+- New public import surfaces:
+  - `github.com/go-go-golems/pinocchio/pkg/webchat/chat`
+  - `github.com/go-go-golems/pinocchio/pkg/webchat/stream`
+  - `github.com/go-go-golems/pinocchio/pkg/webchat/timeline`
+  - `github.com/go-go-golems/pinocchio/pkg/webchat/http`
+  - `github.com/go-go-golems/pinocchio/pkg/webchat/bootstrap`
