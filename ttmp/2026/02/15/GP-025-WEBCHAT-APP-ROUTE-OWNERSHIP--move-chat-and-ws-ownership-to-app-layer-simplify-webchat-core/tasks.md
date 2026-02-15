@@ -31,7 +31,7 @@
 - [x] Delete or deprecate monolithic route registration from `router.go` (clean cutover target: remove route ownership completely).
 - [x] Keep persistence wiring (timeline/turn store integration) available through service config.
 - [x] Keep request/runtime composition callback integration explicit and app-driven.
-- [ ] Ensure stream coordinator and queue/idempotency behavior remain intact after refactor.
+- [x] Ensure stream coordinator and queue/idempotency behavior remain intact after refactor.
 
 ## Phase 3: `cmd/web-chat` Migration to App-Owned Routes
 
