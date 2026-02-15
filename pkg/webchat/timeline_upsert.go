@@ -8,6 +8,9 @@ import (
 
 // TimelineUpsertHook exposes the timeline upsert hook for external use.
 func (r *Router) TimelineUpsertHook(conv *Conversation) func(entity *timelinepb.TimelineEntityV1, version uint64) {
+	if r != nil && r.conversationService != nil {
+		return r.conversationService.TimelineUpsertHook(conv)
+	}
 	if r != nil && r.timelineUpsertHookOverride != nil {
 		return r.timelineUpsertHookOverride(conv)
 	}

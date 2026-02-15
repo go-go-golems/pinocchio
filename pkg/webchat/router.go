@@ -18,18 +18,13 @@ import (
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 
-	"github.com/go-go-golems/geppetto/pkg/events"
 	"github.com/go-go-golems/geppetto/pkg/inference/middleware"
 	"github.com/go-go-golems/geppetto/pkg/inference/toolloop"
-	"github.com/go-go-golems/geppetto/pkg/inference/toolloop/enginebuilder"
-	geptools "github.com/go-go-golems/geppetto/pkg/inference/tools"
 	"github.com/go-go-golems/geppetto/pkg/turns"
 	"github.com/go-go-golems/geppetto/pkg/turns/serde"
 	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
 	rediscfg "github.com/go-go-golems/pinocchio/pkg/redisstream"
-	sempb "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/base"
-	timelinepb "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/timeline"
 )
 
 // RouterSettings are exposed via parameter layers (addr, agent, idle timeout, etc.).
@@ -174,6 +169,20 @@ func NewRouter(ctx context.Context, parsed *values.Values, staticFS fs.FS, opts 
 	}
 	r.idleTimeoutSec = s.IdleTimeoutSeconds
 
+	svc, err := NewConversationService(ConversationServiceConfig{
+		BaseCtx:            ctx,
+		ConvManager:        r.cm,
+		StepController:     r.stepCtrl,
+		TimelineStore:      r.timelineStore,
+		TurnStore:          r.turnStore,
+		TimelineUpsertHook: r.timelineUpsertHookOverride,
+		ToolFactories:      r.toolFactories,
+	})
+	if err != nil {
+		return nil, errors.Wrap(err, "new conversation service")
+	}
+	r.conversationService = svc
+
 	r.registerHTTPHandlers()
 	return r, nil
 }
@@ -182,7 +191,12 @@ func NewRouter(ctx context.Context, parsed *values.Values, staticFS fs.FS, opts 
 func (r *Router) RegisterMiddleware(name string, f MiddlewareFactory) { r.mwFactories[name] = f }
 
 // RegisterTool adds a named tool factory to the router.
-func (r *Router) RegisterTool(name string, f ToolFactory) { r.toolFactories[name] = f }
+func (r *Router) RegisterTool(name string, f ToolFactory) {
+	r.toolFactories[name] = f
+	if r.conversationService != nil {
+		r.conversationService.RegisterTool(name, f)
+	}
+}
 
 // Mount attaches all handlers to a parent mux with the given prefix.
 // http.ServeMux does not strip prefixes, so we must use StripPrefix explicitly.
@@ -206,6 +220,9 @@ func (r *Router) HandleFunc(pattern string, handler func(http.ResponseWriter, *h
 
 // Handler returns the internal mux as an http.Handler.
 func (r *Router) Handler() http.Handler { return r.mux }
+
+// ConversationService returns the service used by app-owned /chat and /ws handlers.
+func (r *Router) ConversationService() *ConversationService { return r.conversationService }
 
 // BuildHTTPServer constructs an http.Server using settings from layers.
 func (r *Router) BuildHTTPServer() (*http.Server, error) {
@@ -321,16 +338,8 @@ func (r *Router) registerAPIHandlers(mux *http.ServeMux) {
 
 	// websocket join: /ws?conv_id=...&runtime=key
 	mux.HandleFunc("/ws", func(w http.ResponseWriter, r0 *http.Request) {
-		queryConv := strings.TrimSpace(r0.URL.Query().Get("conv_id"))
-		queryRuntime := strings.TrimSpace(r0.URL.Query().Get("runtime"))
-		logger.Debug().
-			Str("conv_id_query", queryConv).
-			Str("runtime_query", queryRuntime).
-			Str("remote", r0.RemoteAddr).
-			Msg("ws request query")
-		conn, err := r.upgrader.Upgrade(w, r0, nil)
-		if err != nil {
-			logger.Error().Err(err).Msg("websocket upgrade failed")
+		if r.conversationService == nil {
+			http.Error(w, "conversation service not initialized", http.StatusServiceUnavailable)
 			return
 		}
 		resolver := r.requestResolver
@@ -339,105 +348,43 @@ func (r *Router) registerAPIHandlers(mux *http.ServeMux) {
 		}
 		plan, err := resolver.Resolve(r0)
 		if err != nil {
-			msg := err.Error()
+			status := http.StatusInternalServerError
+			msg := "failed to resolve request"
 			var rbe *RequestResolutionError
-			if stderrors.As(err, &rbe) && rbe != nil && strings.TrimSpace(rbe.ClientMsg) != "" {
-				msg = rbe.ClientMsg
+			if stderrors.As(err, &rbe) && rbe != nil {
+				if rbe.Status > 0 {
+					status = rbe.Status
+				}
+				if strings.TrimSpace(rbe.ClientMsg) != "" {
+					msg = rbe.ClientMsg
+				}
 			}
-			wsLog := logger.With().Str("remote", r0.RemoteAddr).Logger()
-			wsLog.Warn().Err(err).Msg("ws request policy failed")
-			_ = conn.WriteMessage(websocket.TextMessage, []byte(`{"error":"`+msg+`"}`))
-			_ = conn.Close()
+			logger.Warn().Err(err).Msg("ws request policy failed")
+			http.Error(w, msg, status)
 			return
 		}
-		convID := plan.ConvID
-		runtimeKey := plan.RuntimeKey
-		wsLog := logger.With().
-			Str("remote", r0.RemoteAddr).
-			Str("conv_id", convID).
-			Str("runtime_key", runtimeKey).
-			Logger()
-		wsLog.Debug().
-			Str("conv_id_query", queryConv).
-			Str("runtime_query", queryRuntime).
-			Msg("ws resolved request")
-		wsLog.Info().Msg("ws connect request")
-		wsLog.Info().Msg("ws joining conversation")
-		conv, err := r.cm.GetOrCreate(convID, runtimeKey, plan.Overrides)
+		conn, err := r.upgrader.Upgrade(w, r0, nil)
 		if err != nil {
-			wsLog.Error().Err(err).Msg("failed to join conversation")
+			logger.Error().Err(err).Msg("websocket upgrade failed")
+			return
+		}
+		handle, err := r.conversationService.ResolveAndEnsureConversation(r0.Context(), AppConversationRequest{
+			ConvID:     plan.ConvID,
+			RuntimeKey: plan.RuntimeKey,
+			Overrides:  plan.Overrides,
+		})
+		if err != nil {
+			logger.Error().Err(err).Msg("failed to resolve conversation for websocket attach")
 			_ = conn.WriteMessage(websocket.TextMessage, []byte(`{"error":"failed to join conversation"}`))
 			_ = conn.Close()
 			return
 		}
-		r.cm.AddConn(conv, conn)
-		wsLog.Info().Msg("ws connected")
-
-		// Send a greeting frame to the newly connected client (mirrors moments/go-go-mento behavior).
-		if conv != nil && conv.pool != nil {
-			ts := time.Now().UnixMilli()
-			data, _ := protoToRaw(&sempb.WsHelloV1{ConvId: convID, RuntimeKey: runtimeKey, ServerTime: ts})
-			hello := map[string]any{
-				"sem": true,
-				"event": map[string]any{
-					"type": "ws.hello",
-					"id":   fmt.Sprintf("ws.hello:%s:%d", convID, ts),
-					"data": data,
-				},
-			}
-			if b, err := json.Marshal(hello); err == nil {
-				wsLog.Debug().Msg("ws sending hello")
-				conv.pool.SendToOne(conn, b)
-			}
+		if err := r.conversationService.AttachWebSocket(r0.Context(), handle.ConvID, conn, WebSocketAttachOptions{SendHello: true}); err != nil {
+			logger.Error().Err(err).Msg("failed to attach websocket")
+			_ = conn.WriteMessage(websocket.TextMessage, []byte(`{"error":"failed to attach websocket"}`))
+			_ = conn.Close()
+			return
 		}
-
-		go func() {
-			defer r.cm.RemoveConn(conv, conn)
-			defer wsLog.Info().Msg("ws disconnected")
-			for {
-				msgType, data, err := conn.ReadMessage()
-				if err != nil {
-					wsLog.Debug().Err(err).Msg("ws read loop end")
-					return
-				}
-
-				// Lightweight ping/pong protocol (mirrors moments/go-go-mento behavior)
-				if msgType == websocket.TextMessage && len(data) > 0 && conv != nil && conv.pool != nil {
-					s := strings.TrimSpace(strings.ToLower(string(data)))
-					isPing := s == "ping"
-					if !isPing {
-						var v map[string]any
-						if err := json.Unmarshal(data, &v); err == nil && v != nil {
-							if t, ok := v["type"].(string); ok && strings.EqualFold(t, "ws.ping") {
-								isPing = true
-							} else if sem, ok := v["sem"].(bool); ok && sem {
-								if ev, ok := v["event"].(map[string]any); ok {
-									if t2, ok := ev["type"].(string); ok && strings.EqualFold(t2, "ws.ping") {
-										isPing = true
-									}
-								}
-							}
-						}
-					}
-					if isPing {
-						ts := time.Now().UnixMilli()
-						data, _ := protoToRaw(&sempb.WsPongV1{ConvId: convID, ServerTime: ts})
-						pong := map[string]any{
-							"sem": true,
-							"event": map[string]any{
-								"type": "ws.pong",
-								"id":   fmt.Sprintf("ws.pong:%s:%d", convID, ts),
-								"data": data,
-							},
-						}
-						if b, err := json.Marshal(pong); err == nil {
-							wsLog.Debug().Msg("ws sending pong")
-							conv.pool.SendToOne(conn, b)
-						}
-					}
-				}
-			}
-		}()
 	})
 
 	handleChatRequest := func(w http.ResponseWriter, r0 *http.Request) {
@@ -482,53 +429,30 @@ func (r *Router) registerAPIHandlers(mux *http.ServeMux) {
 		} else {
 			chatReqLog.Debug().Msg("/chat overrides empty")
 		}
-
-		conv, err := r.cm.GetOrCreate(convID, runtimeKey, plan.Overrides)
-		if err != nil {
-			chatReqLog.Error().Err(err).Msg("failed to create conversation")
-			http.Error(w, "failed to create conversation", http.StatusInternalServerError)
-			return
-		}
-		if conv.Sess == nil {
-			http.Error(w, "conversation session not initialized", http.StatusInternalServerError)
-			return
-		}
-
-		sessionLog := logger.With().Str("conv_id", conv.ID).Str("session_id", conv.SessionID).Logger()
 		idempotencyKey := strings.TrimSpace(plan.IdempotencyKey)
 		if idempotencyKey == "" {
 			idempotencyKey = idempotencyKeyFromRequest(r0, nil)
 		}
-
-		prep, err := conv.PrepareSessionInference(idempotencyKey, runtimeKey, plan.Overrides, plan.Prompt)
-		if err != nil {
-			sessionLog.Error().Err(err).Msg("prepare session inference failed")
-			http.Error(w, "prepare session inference failed", http.StatusInternalServerError)
+		if r.conversationService == nil {
+			http.Error(w, "conversation service not initialized", http.StatusServiceUnavailable)
 			return
 		}
-		if !prep.Start {
-			if status, ok := prep.Response["status"].(string); ok && strings.EqualFold(status, "queued") {
-				if pos, ok := prep.Response["queue_position"].(int); ok {
-					sessionLog.Info().
-						Str("idempotency_key", idempotencyKey).
-						Int("queue_position", pos).
-						Msg("session inference in progress; queued prompt")
-				}
-			}
-			if prep.HTTPStatus > 0 {
-				w.WriteHeader(prep.HTTPStatus)
-			}
-			_ = json.NewEncoder(w).Encode(prep.Response)
-			return
-		}
-
-		resp, err := r.startInferenceForPrompt(conv, plan.Overrides, plan.Prompt, idempotencyKey)
+		resp, err := r.conversationService.SubmitPrompt(r0.Context(), SubmitPromptInput{
+			ConvID:         convID,
+			RuntimeKey:     runtimeKey,
+			Overrides:      plan.Overrides,
+			Prompt:         plan.Prompt,
+			IdempotencyKey: idempotencyKey,
+		})
 		if err != nil {
-			sessionLog.Error().Err(err).Msg("start session inference failed")
+			chatReqLog.Error().Err(err).Msg("start session inference failed")
 			http.Error(w, "start session inference failed", http.StatusInternalServerError)
 			return
 		}
-		_ = json.NewEncoder(w).Encode(resp)
+		if resp.HTTPStatus > 0 {
+			w.WriteHeader(resp.HTTPStatus)
+		}
+		_ = json.NewEncoder(w).Encode(resp.Response)
 	}
 
 	mux.HandleFunc("/chat", func(w http.ResponseWriter, r0 *http.Request) { handleChatRequest(w, r0) })
@@ -672,218 +596,6 @@ func idempotencyKeyFromRequest(r *http.Request, body *ChatRequestBody) string {
 		key = uuid.NewString()
 	}
 	return key
-}
-
-func (r *Router) startInferenceForPrompt(conv *Conversation, overrides map[string]any, prompt string, idempotencyKey string) (map[string]any, error) {
-	if r == nil || conv == nil || conv.Sess == nil {
-		return nil, errors.New("invalid conversation")
-	}
-
-	sessionLog := log.With().Str("component", "webchat").Str("conv_id", conv.ID).Str("session_id", conv.SessionID).Logger()
-
-	// Ensure the conversation stream is running so SEM frames are produced even without an attached WS client.
-	conv.mu.Lock()
-	stream := conv.stream
-	baseCtx := conv.baseCtx
-	allowedTools := append([]string(nil), conv.AllowedTools...)
-	conv.mu.Unlock()
-	if baseCtx == nil {
-		baseCtx = r.baseCtx
-	}
-	if baseCtx == nil {
-		return nil, errors.New("conversation context is nil")
-	}
-	if stream != nil && !stream.IsRunning() {
-		_ = stream.Start(baseCtx)
-	}
-
-	tmpReg := geptools.NewInMemoryToolRegistry()
-	for _, tf := range r.toolFactories {
-		_ = tf(tmpReg)
-	}
-	registry := geptools.NewInMemoryToolRegistry()
-	if len(allowedTools) == 0 {
-		for _, td := range tmpReg.ListTools() {
-			_ = registry.RegisterTool(td.Name, td)
-		}
-	} else {
-		allowed := map[string]struct{}{}
-		for _, n := range allowedTools {
-			if s := strings.TrimSpace(n); s != "" {
-				allowed[s] = struct{}{}
-			}
-		}
-		for _, td := range tmpReg.ListTools() {
-			if _, ok := allowed[td.Name]; ok {
-				_ = registry.RegisterTool(td.Name, td)
-			}
-		}
-	}
-
-	// Ensure router is running before we start inference (best-effort).
-	select {
-	case <-r.router.Running():
-	case <-time.After(2 * time.Second):
-	}
-
-	hook := snapshotHookForConv(conv, os.Getenv("PINOCCHIO_WEBCHAT_TURN_SNAPSHOTS_DIR"), r.turnStore)
-
-	seed, err := conv.Sess.AppendNewTurnFromUserPrompt(prompt)
-	if err != nil {
-		r.finishSessionInference(conv, idempotencyKey, "", "", err)
-		return nil, err
-	}
-	turnID := ""
-	if seed != nil && seed.ID != "" {
-		turnID = seed.ID
-	}
-	if r.timelineStore != nil && turnID != "" && strings.TrimSpace(prompt) != "" {
-		entity := &timelinepb.TimelineEntityV1{
-			Id:   "user-" + turnID,
-			Kind: "message",
-			Snapshot: &timelinepb.TimelineEntityV1_Message{
-				Message: &timelinepb.MessageSnapshotV1{
-					SchemaVersion: 1,
-					Role:          "user",
-					Content:       prompt,
-					Streaming:     false,
-				},
-			},
-		}
-		version := uint64(time.Now().UnixMilli()) * 1_000_000
-		if r.baseCtx == nil {
-			return nil, errors.New("router context is nil")
-		}
-		if err := r.timelineStore.Upsert(r.baseCtx, conv.ID, version, entity); err == nil {
-			r.emitTimelineUpsert(conv, entity, version)
-		}
-	}
-
-	if stepModeFromOverrides(overrides) && r.stepCtrl != nil {
-		r.stepCtrl.Enable(toolloop.StepScope{SessionID: conv.SessionID, ConversationID: conv.ID})
-	}
-
-	loopCfg := toolloop.NewLoopConfig().WithMaxIterations(5)
-	toolCfg := geptools.DefaultToolConfig().WithExecutionTimeout(60 * time.Second)
-	conv.Sess.Builder = &enginebuilder.Builder{
-		Base:             conv.Eng,
-		Registry:         registry,
-		LoopConfig:       &loopCfg,
-		ToolConfig:       &toolCfg,
-		EventSinks:       []events.EventSink{conv.Sink},
-		SnapshotHook:     hook,
-		StepController:   r.stepCtrl,
-		StepPauseTimeout: 30 * time.Second,
-		Persister:        newTurnStorePersister(r.turnStore, conv, "final"),
-	}
-
-	sessionLog.Info().Str("idempotency_key", idempotencyKey).Msg("starting inference loop")
-
-	if r.baseCtx == nil {
-		return nil, errors.New("router context is nil")
-	}
-	handle, err := conv.Sess.StartInference(r.baseCtx)
-	if err != nil {
-		r.finishSessionInference(conv, idempotencyKey, "", turnID, err)
-		return nil, err
-	}
-	if handle == nil {
-		err := errors.New("start inference returned nil handle")
-		r.finishSessionInference(conv, idempotencyKey, "", turnID, err)
-		return nil, err
-	}
-
-	resp := map[string]any{
-		"status":          "started",
-		"idempotency_key": idempotencyKey,
-		"conv_id":         conv.ID,
-		"session_id":      conv.SessionID,
-	}
-	if turnID != "" {
-		resp["turn_id"] = turnID
-	}
-	if handle.InferenceID != "" {
-		resp["inference_id"] = handle.InferenceID
-	}
-	if handle.Input != nil && handle.Input.ID != "" {
-		resp["turn_id"] = handle.Input.ID
-	}
-
-	conv.mu.Lock()
-	conv.ensureQueueInitLocked()
-	if rec, ok := conv.getRecordLocked(idempotencyKey); ok && rec != nil {
-		rec.Status = "running"
-		rec.StartedAt = time.Now()
-		rec.Response = resp
-	} else {
-		conv.upsertRecordLocked(&chatRequestRecord{IdempotencyKey: idempotencyKey, Status: "running", StartedAt: time.Now(), Response: resp})
-	}
-	conv.mu.Unlock()
-
-	go func() {
-		_, waitErr := handle.Wait()
-		r.finishSessionInference(conv, idempotencyKey, handle.InferenceID, turnID, waitErr)
-		if waitErr != nil {
-			sessionLog.Error().Err(waitErr).Str("inference_id", handle.InferenceID).Msg("inference loop error")
-		}
-		sessionLog.Info().Str("inference_id", handle.InferenceID).Msg("inference loop finished")
-		r.tryDrainQueue(conv)
-	}()
-
-	return resp, nil
-}
-
-func (r *Router) finishSessionInference(conv *Conversation, idempotencyKey string, inferenceID string, turnID string, err error) {
-	if conv == nil {
-		return
-	}
-	conv.mu.Lock()
-	defer conv.mu.Unlock()
-
-	if conv.activeRequestKey == idempotencyKey {
-		conv.activeRequestKey = ""
-	}
-	conv.touchLocked(time.Now())
-	conv.ensureQueueInitLocked()
-	if rec, ok := conv.getRecordLocked(idempotencyKey); ok && rec != nil {
-		if err != nil {
-			rec.Status = "error"
-			rec.Error = err.Error()
-		} else if rec.Status == "running" {
-			rec.Status = "completed"
-		}
-		rec.CompletedAt = time.Now()
-		if rec.Response == nil {
-			rec.Response = map[string]any{}
-		}
-		if inferenceID != "" {
-			rec.Response["inference_id"] = inferenceID
-		}
-		if turnID != "" {
-			rec.Response["turn_id"] = turnID
-		}
-		rec.Response["status"] = rec.Status
-	}
-}
-
-func (r *Router) tryDrainQueue(conv *Conversation) {
-	if r == nil || conv == nil {
-		return
-	}
-	for {
-		q, ok := conv.ClaimNextQueued()
-		if !ok {
-			return
-		}
-		_, err := r.startInferenceForPrompt(conv, q.Overrides, q.Prompt, q.IdempotencyKey)
-		if err != nil {
-			r.finishSessionInference(conv, q.IdempotencyKey, "", "", err)
-			// Continue draining so later queued items can still execute.
-			continue
-		}
-		// Successfully started one inference; subsequent items are handled when it finishes.
-		return
-	}
 }
 
 // BuildSubscriber exposes the subscriber builder for external use.

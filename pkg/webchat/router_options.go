@@ -88,6 +88,9 @@ func WithStepController(sc *toolloop.StepController) RouterOption {
 			return errors.New("step controller is nil")
 		}
 		r.stepCtrl = sc
+		if r.conversationService != nil {
+			r.conversationService.SetStepController(sc)
+		}
 		return nil
 	}
 }
@@ -108,6 +111,9 @@ func WithTimelineStore(s chatstore.TimelineStore) RouterOption {
 		if r.cm != nil {
 			r.cm.SetTimelineStore(s)
 		}
+		if r.conversationService != nil {
+			r.conversationService.SetTimelineStore(s)
+		}
 		return nil
 	}
 }
@@ -119,6 +125,9 @@ func WithTurnStore(s chatstore.TurnStore) RouterOption {
 			return errors.New("turn store is nil")
 		}
 		r.turnStore = s
+		if r.conversationService != nil {
+			r.conversationService.SetTurnStore(s)
+		}
 		return nil
 	}
 }

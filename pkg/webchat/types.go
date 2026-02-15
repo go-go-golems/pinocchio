@@ -61,6 +61,8 @@ type Router struct {
 
 	// conversations
 	cm *ConvManager
+	// service API for app-owned /chat and /ws flows
+	conversationService *ConversationService
 
 	// runtime flags
 	usesRedis      bool
