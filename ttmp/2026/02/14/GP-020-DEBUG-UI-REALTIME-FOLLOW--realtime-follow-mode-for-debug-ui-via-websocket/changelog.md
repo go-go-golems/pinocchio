@@ -35,3 +35,13 @@ Aligned GP-020 plan with current app-owned webchat HTTP setup and canonical rout
 - /home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/ttmp/2026/02/14/GP-020-DEBUG-UI-REALTIME-FOLLOW--realtime-follow-mode-for-debug-ui-via-websocket/design/01-implementation-plan-realtime-follow-via-websocket.md — Switched bootstrap guidance to `/api/timeline`, added app-owned route ownership notes, and documented root-prefix requirement
 - /home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/ttmp/2026/02/14/GP-020-DEBUG-UI-REALTIME-FOLLOW--realtime-follow-mode-for-debug-ui-via-websocket/tasks.md — Updated task checklist for canonical timeline endpoint and base-prefix handling
 - /home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/ttmp/2026/02/14/GP-020-DEBUG-UI-REALTIME-FOLLOW--realtime-follow-mode-for-debug-ui-via-websocket/index.md — Refreshed ticket summary/intent metadata
+
+
+## 2026-02-15
+
+Applied fresh-cutover policy to GP-020: removed all legacy fallback wording for follow bootstrap.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/ttmp/2026/02/14/GP-020-DEBUG-UI-REALTIME-FOLLOW--realtime-follow-mode-for-debug-ui-via-websocket/design/01-implementation-plan-realtime-follow-via-websocket.md — Removed `/api/debug/timeline` fallback path from implementation plan
+- /home/manuel/workspaces/2026-02-13/mv-debug-ui-geppetto/pinocchio/ttmp/2026/02/14/GP-020-DEBUG-UI-REALTIME-FOLLOW--realtime-follow-mode-for-debug-ui-via-websocket/tasks.md — Updated bootstrap task to canonical-only `/api/timeline`

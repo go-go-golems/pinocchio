@@ -23,7 +23,7 @@ RelatedFiles:
     - Path: pinocchio/cmd/web-chat/web/src/ws/wsManager.ts
       Note: Reference websocket lifecycle for connect/hydrate/replay
     - Path: pinocchio/pkg/webchat/router_debug_routes.go
-      Note: Debug API routes and optional legacy fallback endpoints
+      Note: Debug API routes for diagnostics-only context
     - Path: pinocchio/pkg/webchat/router_timeline_api.go
       Note: Canonical timeline hydration endpoint (/api/timeline)
     - Path: pinocchio/cmd/web-chat/main.go
@@ -79,7 +79,6 @@ Use a debug-ui scoped websocket client that listens for `timeline.upsert` and up
 2. Reuse timeline proto decode/mapping for `TimelineUpsertV1` only.
 3. Bootstrap flow:
    - initial GET (`/api/timeline?conv_id=...`) as canonical source
-   - optional fallback GET (`/api/debug/timeline?conv_id=...`) only when canonical endpoint is unavailable in older environments
    - record high-water version from snapshot
    - replay buffered websocket envelopes in sequence order, dropping frames at or below high-water
 4. On conversation switch, ensure hard disconnect then reconnect for new conv id.
