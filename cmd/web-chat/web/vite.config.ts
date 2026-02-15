@@ -20,7 +20,8 @@ export default defineConfig({
       '/api/timeline': {
         target: process.env.VITE_BACKEND_ORIGIN ?? 'http://localhost:8080',
         changeOrigin: true,
-        rewrite: () => '/api/debug/timeline',
+        // Preserve query string (e.g. ?conv_id=...) while remapping path.
+        rewrite: (path) => path.replace(/^\/api\/timeline/, '/api/debug/timeline'),
       },
       '/api': { target: process.env.VITE_BACKEND_ORIGIN ?? 'http://localhost:8080', changeOrigin: true },
       '/ws': { target: process.env.VITE_BACKEND_ORIGIN ?? 'http://localhost:8080', ws: true, changeOrigin: true },
