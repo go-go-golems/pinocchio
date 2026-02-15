@@ -16,13 +16,16 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cmds/values"
 )
 
-// Server drives the event router and HTTP server lifecycle.
+// Server drives the event router and HTTP server lifecycle for app-composed handlers.
+// It does not add /chat or /ws routes; applications mount those routes themselves.
 type Server struct {
 	baseCtx context.Context
 	router  *Router
 	httpSrv *http.Server
 }
 
+// NewServer builds a Router and http.Server pair for app-composed webchat services.
+// The returned server runs event routing plus whichever HTTP handlers the caller mounted.
 func NewServer(ctx context.Context, parsed *values.Values, staticFS fs.FS, opts ...RouterOption) (*Server, error) {
 	if ctx == nil {
 		return nil, errors.New("ctx is nil")
