@@ -45,6 +45,8 @@ type Router struct {
 
 	// event router (in-memory or Redis)
 	router *events.EventRouter
+	// stream backend abstraction for publisher/subscriber construction.
+	streamBackend StreamBackend
 
 	// registries
 	mwFactories   map[string]MiddlewareFactory

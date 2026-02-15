@@ -17,7 +17,6 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/inference/toolloop"
 	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
-	rediscfg "github.com/go-go-golems/pinocchio/pkg/redisstream"
 )
 
 // RouterSettings are exposed via parameter layers (addr, agent, idle timeout, etc.).
@@ -48,25 +47,19 @@ func NewRouter(ctx context.Context, parsed *values.Values, staticFS fs.FS, opts 
 	if ctx == nil {
 		return nil, errors.New("ctx is nil")
 	}
-	rs := rediscfg.Settings{}
-	_ = parsed.DecodeSectionInto("redis", &rs)
-	router, err := rediscfg.BuildRouter(rs, true)
+	streamBackend, err := NewStreamBackendFromValues(ctx, parsed)
 	if err != nil {
-		return nil, errors.Wrap(err, "build event router")
+		return nil, err
 	}
 	r := &Router{
 		baseCtx:       ctx,
 		parsed:        parsed,
 		mux:           http.NewServeMux(),
 		staticFS:      staticFS,
-		router:        router,
+		router:        streamBackend.EventRouter(),
+		streamBackend: streamBackend,
 		mwFactories:   map[string]MiddlewareFactory{},
 		toolFactories: map[string]ToolFactory{},
-	}
-	// set redis flags for ws reader
-	if rs.Enabled {
-		r.usesRedis = true
-		r.redisAddr = rs.Addr
 	}
 
 	// Timeline store for hydration (SQLite when configured, in-memory otherwise).
@@ -164,7 +157,7 @@ func NewRouter(ctx context.Context, parsed *values.Values, staticFS fs.FS, opts 
 		StepController:     r.stepCtrl,
 		TimelineStore:      r.timelineStore,
 		TurnStore:          r.turnStore,
-		SEMPublisher:       r.router.Publisher,
+		SEMPublisher:       r.streamBackend.Publisher(),
 		TimelineUpsertHook: r.timelineUpsertHookOverride,
 		ToolFactories:      r.toolFactories,
 	})
@@ -404,22 +397,10 @@ func (r *Router) buildSubscriberDefault(convID string) (message.Subscriber, bool
 	if r == nil {
 		return nil, false, errors.New("router is nil")
 	}
-	if convID == "" {
-		return nil, false, errors.New("convID is empty")
+	if r.streamBackend == nil {
+		return nil, false, errors.New("stream backend is nil")
 	}
-	// subscriber/publisher
-	if r.usesRedis {
-		if r.baseCtx == nil {
-			return nil, false, errors.New("router context is nil")
-		}
-		_ = rediscfg.EnsureGroupAtTail(r.baseCtx, r.redisAddr, topicForConv(convID), "ui")
-		sub, err := rediscfg.BuildGroupSubscriber(r.redisAddr, "ui", "ws-forwarder:"+convID)
-		if err != nil {
-			return nil, false, err
-		}
-		return sub, true, nil
-	}
-	return r.router.Subscriber, false, nil
+	return r.streamBackend.BuildSubscriber(r.baseCtx, convID)
 }
 
 // private state fields appended to Router
