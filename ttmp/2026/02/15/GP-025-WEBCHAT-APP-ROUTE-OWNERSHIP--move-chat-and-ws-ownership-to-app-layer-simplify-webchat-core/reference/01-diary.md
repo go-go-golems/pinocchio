@@ -696,3 +696,27 @@ Phase 6 is complete. I added the missing unit/integration tests for the app-owne
 - `pinocchio/cmd/web-chat/app_owned_chat_integration_test.go`
 - `web-agent-example/cmd/web-agent-example/app_owned_routes_integration_test.go`
 - Completed phase: `Phase 6`
+
+## Step 26: Phase 7 in-progress diary slice (documentation/handoff)
+Phase 7 handoff work started after Phase 6 validation completion.
+
+### What I did
+- Updated the GP-025 design document with as-built API signatures and implementation deltas.
+- Converted “open questions” into “resolved questions” based on implemented outcome.
+- Kept validation continuity by retaining exact focused test matrix commands in the ticket task log.
+
+### Why
+- Handoff docs need to describe what is actually implemented, not planned sketches.
+- Final reviewers should see a direct mapping between ticket tasks and shipped behavior.
+
+### What worked
+- Design now matches final `ConversationService`/`WSPublisher`/app-owned handler contracts.
+- Ticket state and commit trail remain aligned per task.
+
+### What didn't work
+- N/A
+
+### Technical details
+- Primary file:
+- `pinocchio/ttmp/2026/02/15/GP-025-WEBCHAT-APP-ROUTE-OWNERSHIP--move-chat-and-ws-ownership-to-app-layer-simplify-webchat-core/design/01-webchat-toolkit-app-owned-routes-analysis.md`
+- Current phase: `Phase 7 (in progress)`
