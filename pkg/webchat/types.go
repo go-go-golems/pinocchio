@@ -54,8 +54,6 @@ type Router struct {
 	streamHub   *StreamHub
 
 	// runtime flags
-	usesRedis      bool
-	redisAddr      string
 	idleTimeoutSec int
 	// disableDebugRoutes disables registration of /api/debug/* handlers.
 	// Default is false (debug routes enabled).
