@@ -113,6 +113,7 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 		},
 	}
 	runtimeComposer := newWebChatRuntimeComposer(parsed, middlewareFactories)
+	requestResolver := newWebChatProfileResolver(profiles)
 
 	// Build webchat router and register middlewares/tools/profile handlers.
 	r, err := webchat.NewRouter(
@@ -120,7 +121,6 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 		parsed,
 		staticFS,
 		webchat.WithRuntimeComposer(runtimeComposer),
-		webchat.WithConversationRequestResolver(newWebChatProfileResolver(profiles)),
 	)
 	if err != nil {
 		return errors.Wrap(err, "new webchat router")
@@ -147,6 +147,9 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 	})
 
 	registerProfileHandlers(r, profiles)
+	chatHandler := webchat.NewChatHandler(r.ConversationService(), requestResolver)
+	r.HandleFunc("/chat", chatHandler)
+	r.HandleFunc("/chat/", chatHandler)
 
 	// HTTP server and run, with optional root mounting
 	httpSrv, err := r.BuildHTTPServer()
