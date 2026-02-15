@@ -1,4 +1,4 @@
-package webchat
+package webchat_test
 
 import (
 	"context"
@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 
+	webchat "github.com/go-go-golems/pinocchio/pkg/webchat"
+	webhttp "github.com/go-go-golems/pinocchio/pkg/webchat/http"
 	"github.com/gorilla/websocket"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
@@ -17,47 +19,47 @@ import (
 )
 
 type fakeResolver struct {
-	plan ConversationRequestPlan
+	plan webhttp.ConversationRequestPlan
 	err  error
 }
 
-func (r fakeResolver) Resolve(_ *http.Request) (ConversationRequestPlan, error) {
+func (r fakeResolver) Resolve(_ *http.Request) (webhttp.ConversationRequestPlan, error) {
 	if r.err != nil {
-		return ConversationRequestPlan{}, r.err
+		return webhttp.ConversationRequestPlan{}, r.err
 	}
 	return r.plan, nil
 }
 
 type fakeChatHTTPService struct {
-	lastIn SubmitPromptInput
-	resp   SubmitPromptResult
+	lastIn webchat.SubmitPromptInput
+	resp   webchat.SubmitPromptResult
 	err    error
 }
 
-func (s *fakeChatHTTPService) SubmitPrompt(_ context.Context, in SubmitPromptInput) (SubmitPromptResult, error) {
+func (s *fakeChatHTTPService) SubmitPrompt(_ context.Context, in webchat.SubmitPromptInput) (webchat.SubmitPromptResult, error) {
 	s.lastIn = in
 	if s.err != nil {
-		return SubmitPromptResult{}, s.err
+		return webchat.SubmitPromptResult{}, s.err
 	}
 	return s.resp, nil
 }
 
 type fakeStreamHTTPService struct {
-	handle *ConversationHandle
+	handle *webchat.ConversationHandle
 	err    error
 }
 
-func (s *fakeStreamHTTPService) ResolveAndEnsureConversation(_ context.Context, _ AppConversationRequest) (*ConversationHandle, error) {
+func (s *fakeStreamHTTPService) ResolveAndEnsureConversation(_ context.Context, _ webchat.AppConversationRequest) (*webchat.ConversationHandle, error) {
 	if s.err != nil {
 		return nil, s.err
 	}
 	if s.handle != nil {
 		return s.handle, nil
 	}
-	return &ConversationHandle{ConvID: "c1"}, nil
+	return &webchat.ConversationHandle{ConvID: "c1"}, nil
 }
 
-func (s *fakeStreamHTTPService) AttachWebSocket(_ context.Context, _ string, _ *websocket.Conn, _ WebSocketAttachOptions) error {
+func (s *fakeStreamHTTPService) AttachWebSocket(_ context.Context, _ string, _ *websocket.Conn, _ webchat.WebSocketAttachOptions) error {
 	return s.err
 }
 
@@ -75,15 +77,15 @@ func (s *fakeTimelineHTTPService) Snapshot(_ context.Context, _ string, _ uint64
 
 func TestNewChatHTTPHandler_SubmitPromptContract(t *testing.T) {
 	svc := &fakeChatHTTPService{
-		resp: SubmitPromptResult{
+		resp: webchat.SubmitPromptResult{
 			HTTPStatus: http.StatusAccepted,
 			Response: map[string]any{
 				"status": "queued",
 			},
 		},
 	}
-	h := NewChatHTTPHandler(svc, fakeResolver{
-		plan: ConversationRequestPlan{
+	h := webhttp.NewChatHandler(svc, fakeResolver{
+		plan: webhttp.ConversationRequestPlan{
 			ConvID:     "conv-1",
 			RuntimeKey: "default",
 			Prompt:     "hello",
@@ -106,8 +108,8 @@ func TestNewChatHTTPHandler_SubmitPromptContract(t *testing.T) {
 }
 
 func TestNewWSHTTPHandler_ResolverErrorContract(t *testing.T) {
-	h := NewWSHTTPHandler(&fakeStreamHTTPService{}, fakeResolver{
-		err: &RequestResolutionError{
+	h := webhttp.NewWSHandler(&fakeStreamHTTPService{}, fakeResolver{
+		err: &webhttp.RequestResolutionError{
 			Status:    http.StatusBadRequest,
 			ClientMsg: "missing conv_id",
 		},
@@ -125,7 +127,7 @@ func TestNewTimelineHTTPHandler_Contract(t *testing.T) {
 	logger := zerolog.Nop()
 
 	t.Run("disabled service", func(t *testing.T) {
-		h := NewTimelineHTTPHandler(nil, logger)
+		h := webhttp.NewTimelineHandler(nil, logger)
 		req := httptest.NewRequest(http.MethodGet, "http://example.com/api/timeline?conv_id=c1", nil)
 		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, req)
@@ -133,7 +135,7 @@ func TestNewTimelineHTTPHandler_Contract(t *testing.T) {
 	})
 
 	t.Run("snapshot error", func(t *testing.T) {
-		h := NewTimelineHTTPHandler(&fakeTimelineHTTPService{err: errors.New("boom")}, logger)
+		h := webhttp.NewTimelineHandler(&fakeTimelineHTTPService{err: errors.New("boom")}, logger)
 		req := httptest.NewRequest(http.MethodGet, "http://example.com/api/timeline?conv_id=c1", nil)
 		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, req)
@@ -141,7 +143,7 @@ func TestNewTimelineHTTPHandler_Contract(t *testing.T) {
 	})
 
 	t.Run("successful snapshot", func(t *testing.T) {
-		h := NewTimelineHTTPHandler(&fakeTimelineHTTPService{
+		h := webhttp.NewTimelineHandler(&fakeTimelineHTTPService{
 			snap: &timelinepb.TimelineSnapshotV1{
 				ConvId:  "c1",
 				Version: 1,

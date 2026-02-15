@@ -29,6 +29,7 @@ import (
 	sqlitetool "github.com/go-go-golems/pinocchio/pkg/middlewares/sqlitetool"
 	rediscfg "github.com/go-go-golems/pinocchio/pkg/redisstream"
 	webchat "github.com/go-go-golems/pinocchio/pkg/webchat"
+	webhttp "github.com/go-go-golems/pinocchio/pkg/webchat/http"
 	"github.com/gorilla/websocket"
 	"github.com/rs/zerolog/log"
 )
@@ -148,8 +149,8 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 		return nil
 	})
 
-	chatHandler := webchat.NewChatHTTPHandler(srv.ChatService(), requestResolver)
-	wsHandler := webchat.NewWSHTTPHandler(
+	chatHandler := webhttp.NewChatHandler(srv.ChatService(), requestResolver)
+	wsHandler := webhttp.NewWSHandler(
 		srv.StreamHub(),
 		requestResolver,
 		websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }},
@@ -160,7 +161,7 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 	appMux.HandleFunc("/ws", wsHandler)
 	registerProfileHandlers(appMux, profiles)
 	timelineLogger := log.With().Str("component", "webchat").Str("route", "/api/timeline").Logger()
-	timelineHandler := webchat.NewTimelineHTTPHandler(srv.TimelineService(), timelineLogger)
+	timelineHandler := webhttp.NewTimelineHandler(srv.TimelineService(), timelineLogger)
 	appMux.HandleFunc("/api/timeline", timelineHandler)
 	appMux.HandleFunc("/api/timeline/", timelineHandler)
 	appMux.Handle("/api/", srv.APIHandler())

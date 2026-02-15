@@ -8,7 +8,7 @@ import (
 	"github.com/google/uuid"
 
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
-	webchat "github.com/go-go-golems/pinocchio/pkg/webchat"
+	webhttp "github.com/go-go-golems/pinocchio/pkg/webchat/http"
 )
 
 type chatProfile struct {
@@ -97,9 +97,9 @@ func newWebChatProfileResolver(profiles *chatProfileRegistry) *webChatProfileRes
 	return &webChatProfileResolver{profiles: profiles}
 }
 
-func (r *webChatProfileResolver) Resolve(req *http.Request) (webchat.ConversationRequestPlan, error) {
+func (r *webChatProfileResolver) Resolve(req *http.Request) (webhttp.ConversationRequestPlan, error) {
 	if req == nil {
-		return webchat.ConversationRequestPlan{}, &webchat.RequestResolutionError{Status: http.StatusBadRequest, ClientMsg: "bad request"}
+		return webhttp.ConversationRequestPlan{}, &webhttp.RequestResolutionError{Status: http.StatusBadRequest, ClientMsg: "bad request"}
 	}
 
 	switch req.Method {
@@ -108,33 +108,33 @@ func (r *webChatProfileResolver) Resolve(req *http.Request) (webchat.Conversatio
 	case http.MethodPost:
 		return r.resolveChat(req)
 	default:
-		return webchat.ConversationRequestPlan{}, &webchat.RequestResolutionError{Status: http.StatusMethodNotAllowed, ClientMsg: "method not allowed"}
+		return webhttp.ConversationRequestPlan{}, &webhttp.RequestResolutionError{Status: http.StatusMethodNotAllowed, ClientMsg: "method not allowed"}
 	}
 }
 
-func (r *webChatProfileResolver) resolveWS(req *http.Request) (webchat.ConversationRequestPlan, error) {
+func (r *webChatProfileResolver) resolveWS(req *http.Request) (webhttp.ConversationRequestPlan, error) {
 	convID := strings.TrimSpace(req.URL.Query().Get("conv_id"))
 	if convID == "" {
-		return webchat.ConversationRequestPlan{}, &webchat.RequestResolutionError{Status: http.StatusBadRequest, ClientMsg: "missing conv_id"}
+		return webhttp.ConversationRequestPlan{}, &webhttp.RequestResolutionError{Status: http.StatusBadRequest, ClientMsg: "missing conv_id"}
 	}
 
 	slug, profile, err := r.resolveProfile(req, "")
 	if err != nil {
-		return webchat.ConversationRequestPlan{}, err
+		return webhttp.ConversationRequestPlan{}, err
 	}
 	overrides := baseOverridesForProfile(profile)
 
-	return webchat.ConversationRequestPlan{
+	return webhttp.ConversationRequestPlan{
 		ConvID:     convID,
 		RuntimeKey: slug,
 		Overrides:  overrides,
 	}, nil
 }
 
-func (r *webChatProfileResolver) resolveChat(req *http.Request) (webchat.ConversationRequestPlan, error) {
-	var body webchat.ChatRequestBody
+func (r *webChatProfileResolver) resolveChat(req *http.Request) (webhttp.ConversationRequestPlan, error) {
+	var body webhttp.ChatRequestBody
 	if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
-		return webchat.ConversationRequestPlan{}, &webchat.RequestResolutionError{Status: http.StatusBadRequest, ClientMsg: "bad request", Err: err}
+		return webhttp.ConversationRequestPlan{}, &webhttp.RequestResolutionError{Status: http.StatusBadRequest, ClientMsg: "bad request", Err: err}
 	}
 	if body.Prompt == "" && body.Text != "" {
 		body.Prompt = body.Text
@@ -148,15 +148,15 @@ func (r *webChatProfileResolver) resolveChat(req *http.Request) (webchat.Convers
 	pathSlug := runtimeKeyFromPath(req)
 	slug, profile, err := r.resolveProfile(req, pathSlug)
 	if err != nil {
-		return webchat.ConversationRequestPlan{}, err
+		return webhttp.ConversationRequestPlan{}, err
 	}
 
 	overrides, err := mergeOverrides(profile, body.Overrides)
 	if err != nil {
-		return webchat.ConversationRequestPlan{}, err
+		return webhttp.ConversationRequestPlan{}, err
 	}
 
-	return webchat.ConversationRequestPlan{
+	return webhttp.ConversationRequestPlan{
 		ConvID:         convID,
 		RuntimeKey:     slug,
 		Overrides:      overrides,
@@ -183,7 +183,7 @@ func (r *webChatProfileResolver) resolveProfile(req *http.Request, pathSlug stri
 	}
 	p, ok := r.profiles.get(slug)
 	if !ok || p == nil {
-		return "", nil, &webchat.RequestResolutionError{Status: http.StatusNotFound, ClientMsg: "profile not found: " + slug}
+		return "", nil, &webhttp.RequestResolutionError{Status: http.StatusNotFound, ClientMsg: "profile not found: " + slug}
 	}
 	return slug, p, nil
 }
@@ -254,7 +254,7 @@ func mergeOverrides(profile *chatProfile, requestOverrides map[string]any) (map[
 		hasEngineOverride = true
 	}
 	if hasEngineOverride && profile != nil && !profile.AllowOverrides {
-		return nil, &webchat.RequestResolutionError{Status: http.StatusBadRequest, ClientMsg: "profile does not allow engine overrides"}
+		return nil, &webhttp.RequestResolutionError{Status: http.StatusBadRequest, ClientMsg: "profile does not allow engine overrides"}
 	}
 
 	for k, v := range requestOverrides {

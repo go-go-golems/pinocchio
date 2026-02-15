@@ -15,7 +15,9 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/events"
 	"github.com/go-go-golems/geppetto/pkg/turns"
 	"github.com/go-go-golems/glazed/pkg/cmds/values"
+	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 	webchat "github.com/go-go-golems/pinocchio/pkg/webchat"
+	webhttp "github.com/go-go-golems/pinocchio/pkg/webchat/http"
 	"github.com/gorilla/websocket"
 	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/require"
@@ -38,12 +40,12 @@ func newAppOwnedIntegrationServer(t *testing.T) *httptest.Server {
 	staticFS := fstest.MapFS{
 		"static/index.html": {Data: []byte("<html><body>ok</body></html>")},
 	}
-	runtimeComposer := webchat.RuntimeComposerFunc(func(_ context.Context, req webchat.RuntimeComposeRequest) (webchat.RuntimeArtifacts, error) {
+	runtimeComposer := infruntime.RuntimeComposerFunc(func(_ context.Context, req infruntime.RuntimeComposeRequest) (infruntime.RuntimeArtifacts, error) {
 		runtimeKey := strings.TrimSpace(req.RuntimeKey)
 		if runtimeKey == "" {
 			runtimeKey = "default"
 		}
-		return webchat.RuntimeArtifacts{
+		return infruntime.RuntimeArtifacts{
 			Engine:             integrationNoopEngine{},
 			Sink:               integrationNoopSink{},
 			RuntimeKey:         runtimeKey,
@@ -61,8 +63,8 @@ func newAppOwnedIntegrationServer(t *testing.T) *httptest.Server {
 		&chatProfile{Slug: "agent", DefaultPrompt: "You are agent", AllowOverrides: true},
 	)
 	requestResolver := newWebChatProfileResolver(profiles)
-	chatHandler := webchat.NewChatHTTPHandler(webchatSrv.ChatService(), requestResolver)
-	wsHandler := webchat.NewWSHTTPHandler(
+	chatHandler := webhttp.NewChatHandler(webchatSrv.ChatService(), requestResolver)
+	wsHandler := webhttp.NewWSHandler(
 		webchatSrv.StreamHub(),
 		requestResolver,
 		websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }},
@@ -73,7 +75,7 @@ func newAppOwnedIntegrationServer(t *testing.T) *httptest.Server {
 	appMux.HandleFunc("/chat/", chatHandler)
 	appMux.HandleFunc("/ws", wsHandler)
 	timelineLogger := log.With().Str("component", "webchat-test").Str("route", "/api/timeline").Logger()
-	timelineHandler := webchat.NewTimelineHTTPHandler(webchatSrv.TimelineService(), timelineLogger)
+	timelineHandler := webhttp.NewTimelineHandler(webchatSrv.TimelineService(), timelineLogger)
 	appMux.HandleFunc("/api/timeline", timelineHandler)
 	appMux.HandleFunc("/api/timeline/", timelineHandler)
 	appMux.Handle("/api/", webchatSrv.APIHandler())
