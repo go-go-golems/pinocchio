@@ -42,7 +42,8 @@ type RouterSettings struct {
 	TimelineInMemoryMaxEntities int `glazed:"timeline-inmem-max-entities"`
 }
 
-// RouterBuilder creates a new composable webchat router.
+// NewRouter creates webchat core plus optional HTTP utility handlers (UI + core API).
+// It does not register app-owned transport routes such as /chat or /ws.
 func NewRouter(ctx context.Context, parsed *values.Values, staticFS fs.FS, opts ...RouterOption) (*Router, error) {
 	if ctx == nil {
 		return nil, errors.New("ctx is nil")
@@ -200,13 +201,18 @@ func (r *Router) Mount(mux *http.ServeMux, prefix string) {
 	})
 }
 
-// Expose lightweight handler registration for external customization (e.g., runtime policy handlers).
+// Handle attaches an extra handler to the router utility mux.
+// This is optional convenience for app composition, not a central route-ownership mechanism.
 func (r *Router) Handle(pattern string, h http.Handler) { r.mux.Handle(pattern, h) }
+
+// HandleFunc attaches an extra handler to the router utility mux.
+// This is optional convenience for app composition, not a central route-ownership mechanism.
 func (r *Router) HandleFunc(pattern string, handler func(http.ResponseWriter, *http.Request)) {
 	r.mux.HandleFunc(pattern, handler)
 }
 
-// Handler returns the internal mux as an http.Handler.
+// Handler returns the router utility mux (UI + core API + any explicitly attached extras).
+// Applications should still own and mount /chat and /ws themselves.
 func (r *Router) Handler() http.Handler { return r.mux }
 
 // ConversationService returns the service used by app-owned /chat and /ws handlers.
@@ -254,13 +260,14 @@ func (r *Router) RunEventRouter(ctx context.Context) error {
 	return nil
 }
 
-// registerHTTPHandlers sets up static, API and websockets.
+// registerHTTPHandlers sets up UI and core API utility handlers.
 func (r *Router) registerHTTPHandlers() {
 	r.registerUIHandlers(r.mux)
 	r.registerAPIHandlers(r.mux)
 }
 
-// APIHandler returns an http.Handler that only exposes API + websocket routes.
+// APIHandler returns an http.Handler that only exposes core API utilities (timeline/debug).
+// It intentionally does not expose app-owned /chat or /ws routes.
 func (r *Router) APIHandler() http.Handler {
 	mux := http.NewServeMux()
 	r.registerAPIHandlers(mux)

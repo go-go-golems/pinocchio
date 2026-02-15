@@ -39,6 +39,23 @@ func TestAPIHandler_DoesNotServeIndex(t *testing.T) {
 	require.Equal(t, http.StatusNotFound, rec.Code)
 }
 
+func TestAPIHandler_DoesNotOwnChatOrWSRoutes(t *testing.T) {
+	r := &Router{
+		cm: &ConvManager{conns: map[string]*Conversation{}},
+	}
+	h := r.APIHandler()
+
+	chatReq := httptest.NewRequest(http.MethodPost, "http://example.com/chat", nil)
+	chatRec := httptest.NewRecorder()
+	h.ServeHTTP(chatRec, chatReq)
+	require.Equal(t, http.StatusNotFound, chatRec.Code)
+
+	wsReq := httptest.NewRequest(http.MethodGet, "http://example.com/ws?conv_id=c1", nil)
+	wsRec := httptest.NewRecorder()
+	h.ServeHTTP(wsRec, wsReq)
+	require.Equal(t, http.StatusNotFound, wsRec.Code)
+}
+
 func TestNewRouter_RequiresRuntimeComposer(t *testing.T) {
 	_, err := NewRouter(context.Background(), values.New(), fstest.MapFS{})
 	require.ErrorContains(t, err, "runtime composer is not configured")
