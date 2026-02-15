@@ -41,6 +41,7 @@ type ConversationService struct {
 	turnStore      chatstore.TurnStore
 	timelineUpsert func(*Conversation) func(entity *timelinepb.TimelineEntityV1, version uint64)
 	toolFactories  map[string]ToolFactory
+	publisher      WSPublisher
 }
 
 type AppConversationRequest struct {
@@ -94,7 +95,15 @@ func NewConversationService(cfg ConversationServiceConfig) (*ConversationService
 		turnStore:      cfg.TurnStore,
 		timelineUpsert: cfg.TimelineUpsertHook,
 		toolFactories:  toolFactories,
+		publisher:      NewWSPublisher(cfg.ConvManager),
 	}, nil
+}
+
+func (s *ConversationService) WSPublisher() WSPublisher {
+	if s == nil {
+		return nil
+	}
+	return s.publisher
 }
 
 func (s *ConversationService) SetTimelineStore(store chatstore.TimelineStore) {
