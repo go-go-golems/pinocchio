@@ -450,7 +450,7 @@ Event not appearing in UI?
 | Entity appears but widget is blank | `kind` mismatch | Ensure entity `kind` matches the registered widget kind exactly |
 | Entity appears only during streaming, gone on reload | Missing projector case | Add a case in `TimelineProjector.ApplySemFrame()` |
 | Duplicate entities | Unstable IDs | Use `ev.id` consistently; ensure ID resolution is deterministic |
-| Old data after reconnect | Hydration version mismatch | Check `since_version` parameter in `/timeline` request |
+| Old data after reconnect | Hydration version mismatch | Check `since_version` parameter in `/api/timeline` request |
 
 ## Key Files
 

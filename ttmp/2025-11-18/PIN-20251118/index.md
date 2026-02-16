@@ -1,7 +1,7 @@
 ---
 Title: Pinocchio config + profile migration
 Ticket: PIN-20251118
-Status: active
+Status: complete
 Topics:
     - pinocchio
     - glazed
@@ -35,8 +35,11 @@ RelatedFiles:
       Note: Initial vocabulary for pinocchio tickets
 ExternalSources: []
 Summary: ""
-LastUpdated: 2025-11-18T22:01:50.400616627-05:00
+LastUpdated: 2026-02-14T20:11:42.631856668-05:00
+WhatFor: ""
+WhenToUse: ""
 ---
+
 
 
 

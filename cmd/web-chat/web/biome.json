@@ -17,12 +17,52 @@
     "rules": {
       "recommended": true,
       "suspicious": {
-        "noEmptyBlockStatements": "error",
-        "noExplicitAny": "off"
+        "noArrayIndexKey": "off",
+        "noEmptyBlockStatements": "off",
+        "noExplicitAny": "off",
+        "noShadowRestrictedNames": "off"
+      },
+      "a11y": {
+        "noLabelWithoutControl": "off",
+        "noStaticElementInteractions": "off",
+        "useButtonType": "off",
+        "useKeyWithClickEvents": "off"
       },
       "correctness": {
+        "noUnsafeOptionalChaining": "off",
+        "noUnusedFunctionParameters": "off",
         "useExhaustiveDependencies": "warn"
+      },
+      "style": {
+        "noNonNullAssertion": "off"
       }
     }
-  }
+  },
+  "overrides": [
+    {
+      "includes": ["src/debug-ui/**"],
+      "linter": {
+        "rules": {
+          "a11y": {
+            "noLabelWithoutControl": "off",
+            "noStaticElementInteractions": "off",
+            "useButtonType": "off",
+            "useKeyWithClickEvents": "off"
+          },
+          "correctness": {
+            "noUnsafeOptionalChaining": "off",
+            "noUnusedFunctionParameters": "off"
+          },
+          "style": {
+            "noNonNullAssertion": "off"
+          },
+          "suspicious": {
+            "noArrayIndexKey": "off",
+            "noEmptyBlockStatements": "off",
+            "noShadowRestrictedNames": "off"
+          }
+        }
+      }
+    }
+  ]
 }

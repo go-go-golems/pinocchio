@@ -1,0 +1,30 @@
+.correlation-bar {
+  display: flex;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--bg-tertiary);
+  border-radius: 6px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.correlation-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: monospace;
+}
+
+.correlation-chip label {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.correlation-chip .value {
+  color: var(--text-primary);
+}

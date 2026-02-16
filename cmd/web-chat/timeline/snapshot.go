@@ -72,7 +72,7 @@ func NewTimelineSnapshotCommand() (*TimelineSnapshotCommand, error) {
 			"base-url",
 			fields.TypeString,
 			fields.WithDefault(""),
-			fields.WithHelp("Optional HTTP base URL to call /timeline instead of reading SQLite"),
+			fields.WithHelp("Optional HTTP base URL to call /api/timeline instead of reading SQLite"),
 		),
 		fields.New(
 			"include-entities",
@@ -91,7 +91,7 @@ func NewTimelineSnapshotCommand() (*TimelineSnapshotCommand, error) {
 	desc := cmds.NewCommandDescription(
 		"snapshot",
 		cmds.WithShort("Fetch a timeline snapshot"),
-		cmds.WithLong("Fetch a timeline snapshot from SQLite or a remote /timeline endpoint."),
+		cmds.WithLong("Fetch a timeline snapshot from SQLite or a remote /api/timeline endpoint."),
 		cmds.WithFlags(flags...),
 		cmds.WithSections(glazedLayer, commandSettingsLayer),
 	)
@@ -227,7 +227,7 @@ func timelineEndpoint(baseURL string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	u.Path = path.Join(strings.TrimRight(u.Path, "/"), "timeline")
+	u.Path = path.Join(strings.TrimRight(u.Path, "/"), "api", "timeline")
 	return u.String(), nil
 }
 

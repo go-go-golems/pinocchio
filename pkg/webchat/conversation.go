@@ -18,6 +18,7 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/inference/toolloop"
 	"github.com/go-go-golems/geppetto/pkg/inference/toolloop/enginebuilder"
 	"github.com/go-go-golems/geppetto/pkg/turns"
+	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
 	timelinepb "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/timeline"
 )
@@ -36,8 +37,10 @@ type Conversation struct {
 	stream    *StreamCoordinator
 	baseCtx   context.Context
 
-	ProfileSlug  string
-	EngConfigSig string
+	RuntimeKey         string
+	RuntimeFingerprint string
+	SeedSystemPrompt   string
+	AllowedTools       []string
 
 	// Server-side send serialization / queue semantics.
 	// All fields below are guarded by mu.
@@ -65,8 +68,7 @@ type ConvManager struct {
 	timelineStore      chatstore.TimelineStore
 	timelineUpsertHook func(*Conversation) func(entity *timelinepb.TimelineEntityV1, version uint64)
 
-	buildConfig     func(profileSlug string, overrides map[string]any) (EngineConfig, error)
-	buildFromConfig func(convID string, cfg EngineConfig) (engine.Engine, events.EventSink, error)
+	runtimeComposer infruntime.RuntimeComposer
 	buildSubscriber func(convID string) (message.Subscriber, bool, error)
 
 	evictIdle     time.Duration
@@ -85,12 +87,14 @@ type ConvManagerOptions struct {
 	TimelineStore      chatstore.TimelineStore
 	TimelineUpsertHook func(*Conversation) func(entity *timelinepb.TimelineEntityV1, version uint64)
 
-	BuildConfig     func(profileSlug string, overrides map[string]any) (EngineConfig, error)
-	BuildFromConfig func(convID string, cfg EngineConfig) (engine.Engine, events.EventSink, error)
+	RuntimeComposer infruntime.RuntimeComposer
 	BuildSubscriber func(convID string) (message.Subscriber, bool, error)
 }
 
 func NewConvManager(opts ConvManagerOptions) *ConvManager {
+	if opts.BaseCtx == nil {
+		panic("webchat: NewConvManager requires non-nil BaseCtx")
+	}
 	return &ConvManager{
 		conns:              map[string]*Conversation{},
 		baseCtx:            opts.BaseCtx,
@@ -98,8 +102,7 @@ func NewConvManager(opts ConvManagerOptions) *ConvManager {
 		stepCtrl:           opts.StepController,
 		timelineStore:      opts.TimelineStore,
 		timelineUpsertHook: opts.TimelineUpsertHook,
-		buildConfig:        opts.BuildConfig,
-		buildFromConfig:    opts.BuildFromConfig,
+		runtimeComposer:    opts.RuntimeComposer,
 		buildSubscriber:    opts.BuildSubscriber,
 		evictIdle:          opts.EvictIdle,
 		evictInterval:      opts.EvictInterval,
@@ -124,6 +127,15 @@ func (cm *ConvManager) SetIdleTimeoutSeconds(sec int) {
 	cm.mu.Unlock()
 }
 
+func (cm *ConvManager) SetRuntimeComposer(composer infruntime.RuntimeComposer) {
+	if cm == nil || composer == nil {
+		return
+	}
+	cm.mu.Lock()
+	cm.runtimeComposer = composer
+	cm.mu.Unlock()
+}
+
 // GetConversation retrieves a conversation by ID (thread-safe).
 func (cm *ConvManager) GetConversation(convID string) (*Conversation, bool) {
 	if cm == nil || convID == "" {
@@ -145,20 +157,35 @@ func (c *Conversation) touchLocked(now time.Time) {
 // topicForConv computes the event topic for a conversation.
 func topicForConv(convID string) string { return "chat:" + convID }
 
-// GetOrCreate creates or reuses a conversation based on engine config signature changes.
-// It centralizes engine/sink/subscriber composition through injected builder hooks.
-func (cm *ConvManager) GetOrCreate(convID, profileSlug string, overrides map[string]any) (*Conversation, error) {
+// GetOrCreate creates or reuses a conversation based on runtime fingerprint changes.
+func (cm *ConvManager) GetOrCreate(convID, runtimeKey string, overrides map[string]any) (*Conversation, error) {
 	if cm == nil {
 		return nil, errors.New("conversation manager is nil")
 	}
-	if cm.buildConfig == nil || cm.buildFromConfig == nil || cm.buildSubscriber == nil {
+	if cm.runtimeComposer == nil || cm.buildSubscriber == nil {
 		return nil, errors.New("conversation manager missing dependencies")
 	}
-	cfg, err := cm.buildConfig(profileSlug, overrides)
+	req := infruntime.RuntimeComposeRequest{
+		ConvID:     convID,
+		RuntimeKey: runtimeKey,
+		Overrides:  overrides,
+	}
+	runtime, err := cm.runtimeComposer.Compose(cm.baseCtx, req)
 	if err != nil {
 		return nil, err
 	}
-	newSig := cfg.Signature()
+	if runtime.Engine == nil {
+		return nil, errors.New("runtime composer returned nil engine")
+	}
+	if runtime.Sink == nil {
+		return nil, errors.New("runtime composer returned nil sink")
+	}
+	if strings.TrimSpace(runtime.RuntimeKey) == "" {
+		runtime.RuntimeKey = runtimeKey
+	}
+	if strings.TrimSpace(runtime.RuntimeFingerprint) == "" {
+		runtime.RuntimeFingerprint = runtime.RuntimeKey
+	}
 	now := time.Now()
 
 	cm.mu.Lock()
@@ -179,18 +206,14 @@ func (cm *ConvManager) GetOrCreate(convID, profileSlug string, overrides map[str
 			}
 		}
 		c.mu.Unlock()
-		if c.ProfileSlug != profileSlug || c.EngConfigSig != newSig {
+		if c.RuntimeFingerprint != runtime.RuntimeFingerprint {
 			log.Info().
 				Str("component", "webchat").
 				Str("conv_id", convID).
-				Str("old_profile", c.ProfileSlug).
-				Str("new_profile", profileSlug).
-				Msg("profile or engine config changed, rebuilding engine")
+				Str("old_runtime_key", c.RuntimeKey).
+				Str("new_runtime_key", runtime.RuntimeKey).
+				Msg("runtime config changed, rebuilding engine")
 
-			eng, sink, err := cm.buildFromConfig(convID, cfg)
-			if err != nil {
-				return nil, err
-			}
 			sub, subClose, err := cm.buildSubscriber(convID)
 			if err != nil {
 				return nil, err
@@ -205,21 +228,25 @@ func (cm *ConvManager) GetOrCreate(convID, profileSlug string, overrides map[str
 				}
 			}
 
-			c.Eng = eng
-			c.Sink = sink
+			c.Eng = runtime.Engine
+			c.Sink = runtime.Sink
 			c.sub = sub
 			c.subClose = subClose
-			c.ProfileSlug = profileSlug
-			c.EngConfigSig = newSig
+			c.RuntimeKey = runtime.RuntimeKey
+			c.RuntimeFingerprint = runtime.RuntimeFingerprint
+			c.SeedSystemPrompt = runtime.SeedSystemPrompt
+			c.AllowedTools = append([]string(nil), runtime.AllowedTools...)
 
 			c.stream = NewStreamCoordinator(
 				c.ID,
 				sub,
 				nil,
 				func(e events.Event, _ StreamCursor, frame []byte) {
-					eventSessionID := e.Metadata().SessionID
-					if eventSessionID != "" && eventSessionID != c.SessionID {
-						return
+					if e != nil {
+						eventSessionID := e.Metadata().SessionID
+						if eventSessionID != "" && eventSessionID != c.SessionID {
+							return
+						}
 					}
 					if c.pool != nil {
 						c.pool.Broadcast(frame)
@@ -228,17 +255,13 @@ func (cm *ConvManager) GetOrCreate(convID, profileSlug string, overrides map[str
 						c.semBuf.Add(frame)
 					}
 					if c.timelineProj != nil {
-						_ = c.timelineProj.ApplySemFrame(context.Background(), frame)
+						_ = c.timelineProj.ApplySemFrame(c.baseCtx, frame)
 					}
 				},
 			)
 
 			if c.stream != nil {
-				ctx := c.baseCtx
-				if ctx == nil {
-					ctx = context.Background()
-				}
-				if err := c.stream.Start(ctx); err != nil {
+				if err := c.stream.Start(c.baseCtx); err != nil {
 					return nil, err
 				}
 			}
@@ -247,14 +270,16 @@ func (cm *ConvManager) GetOrCreate(convID, profileSlug string, overrides map[str
 	}
 	sessionID := uuid.NewString()
 	conv := &Conversation{
-		ID:           convID,
-		SessionID:    sessionID,
-		baseCtx:      cm.baseCtx,
-		ProfileSlug:  profileSlug,
-		EngConfigSig: newSig,
-		requests:     map[string]*chatRequestRecord{},
-		semBuf:       newSemFrameBuffer(1000),
-		lastActivity: now,
+		ID:                 convID,
+		SessionID:          sessionID,
+		baseCtx:            cm.baseCtx,
+		RuntimeKey:         runtime.RuntimeKey,
+		RuntimeFingerprint: runtime.RuntimeFingerprint,
+		SeedSystemPrompt:   runtime.SeedSystemPrompt,
+		AllowedTools:       append([]string(nil), runtime.AllowedTools...),
+		requests:           map[string]*chatRequestRecord{},
+		semBuf:             newSemFrameBuffer(1000),
+		lastActivity:       now,
 	}
 	if cm.timelineStore != nil {
 		hook := cm.timelineUpsertHook
@@ -264,16 +289,12 @@ func (cm *ConvManager) GetOrCreate(convID, profileSlug string, overrides map[str
 			conv.timelineProj = NewTimelineProjector(conv.ID, cm.timelineStore, nil)
 		}
 	}
-	eng, sink, err := cm.buildFromConfig(convID, cfg)
-	if err != nil {
-		return nil, err
-	}
 	sub, subClose, err := cm.buildSubscriber(convID)
 	if err != nil {
 		return nil, err
 	}
-	conv.Eng = eng
-	conv.Sink = sink
+	conv.Eng = runtime.Engine
+	conv.Sink = runtime.Sink
 	conv.sub = sub
 	conv.subClose = subClose
 
@@ -290,9 +311,11 @@ func (cm *ConvManager) GetOrCreate(convID, profileSlug string, overrides map[str
 		sub,
 		nil,
 		func(e events.Event, _ StreamCursor, frame []byte) {
-			eventSessionID := e.Metadata().SessionID
-			if eventSessionID != "" && eventSessionID != conv.SessionID {
-				return
+			if e != nil {
+				eventSessionID := e.Metadata().SessionID
+				if eventSessionID != "" && eventSessionID != conv.SessionID {
+					return
+				}
 			}
 			if conv.pool != nil {
 				conv.pool.Broadcast(frame)
@@ -301,7 +324,7 @@ func (cm *ConvManager) GetOrCreate(convID, profileSlug string, overrides map[str
 				conv.semBuf.Add(frame)
 			}
 			if conv.timelineProj != nil {
-				_ = conv.timelineProj.ApplySemFrame(context.Background(), frame)
+				_ = conv.timelineProj.ApplySemFrame(conv.baseCtx, frame)
 			}
 		},
 	)
@@ -309,23 +332,19 @@ func (cm *ConvManager) GetOrCreate(convID, profileSlug string, overrides map[str
 	conv.Sess = &session.Session{
 		SessionID: sessionID,
 		Builder: &enginebuilder.Builder{
-			Base:             eng,
-			EventSinks:       []events.EventSink{sink},
+			Base:             runtime.Engine,
+			EventSinks:       []events.EventSink{runtime.Sink},
 			StepController:   cm.stepCtrl,
 			StepPauseTimeout: 30 * time.Second,
 		},
 		Turns: func() []*turns.Turn {
-			return []*turns.Turn{buildSeedTurn(sessionID, cfg.SystemPrompt)}
+			return []*turns.Turn{buildSeedTurn(sessionID, runtime.SeedSystemPrompt)}
 		}(),
 	}
 
 	// Start streaming immediately; ConnectionPool idle logic will stop it when no clients are connected.
 	if conv.stream != nil {
-		ctx := conv.baseCtx
-		if ctx == nil {
-			ctx = context.Background()
-		}
-		if err := conv.stream.Start(ctx); err != nil {
+		if err := conv.stream.Start(conv.baseCtx); err != nil {
 			return nil, err
 		}
 	}
@@ -358,9 +377,6 @@ func (cm *ConvManager) AddConn(conv *Conversation, c *websocket.Conn) {
 	stream := conv.stream
 	conv.mu.Unlock()
 	if stream != nil && !stream.IsRunning() {
-		if baseCtx == nil {
-			baseCtx = context.Background()
-		}
 		_ = stream.Start(baseCtx)
 	}
 }

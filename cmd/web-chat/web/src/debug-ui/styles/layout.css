@@ -1,0 +1,114 @@
+.app-shell {
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.sidebar {
+  width: 280px;
+  min-width: 280px;
+  background: var(--bg-secondary);
+  border-right: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.sidebar.collapsed {
+  width: 60px;
+  min-width: 60px;
+}
+
+.main-content {
+  flex: 1;
+  overflow: auto;
+  padding: 16px;
+}
+
+.block-kind-system {
+  border-left: 3px solid var(--block-system);
+}
+
+.block-kind-user {
+  border-left: 3px solid var(--block-user);
+}
+
+.block-kind-llm_text {
+  border-left: 3px solid var(--block-assistant);
+}
+
+.block-kind-tool_call {
+  border-left: 3px solid var(--block-tool-call);
+}
+
+.block-kind-tool_use {
+  border-left: 3px solid var(--block-tool-use);
+}
+
+.block-kind-reasoning {
+  border-left: 3px solid var(--block-reasoning);
+}
+
+.flex {
+  display: flex;
+}
+
+.flex-col {
+  flex-direction: column;
+}
+
+.flex-1 {
+  flex: 1;
+}
+
+.items-center {
+  align-items: center;
+}
+
+.justify-between {
+  justify-content: space-between;
+}
+
+.gap-1 {
+  gap: 4px;
+}
+
+.gap-2 {
+  gap: 8px;
+}
+
+.gap-3 {
+  gap: 12px;
+}
+
+.gap-4 {
+  gap: 16px;
+}
+
+.p-2 {
+  padding: 8px;
+}
+
+.p-3 {
+  padding: 12px;
+}
+
+.p-4 {
+  padding: 16px;
+}
+
+.mt-2 {
+  margin-top: 8px;
+}
+
+.mt-4 {
+  margin-top: 16px;
+}
+
+.mb-2 {
+  margin-bottom: 8px;
+}
+
+.mb-4 {
+  margin-bottom: 16px;
+}

@@ -6,6 +6,7 @@ import (
 	"embed"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 
 	clay "github.com/go-go-golems/clay/pkg"
@@ -24,10 +25,13 @@ import (
 	geppettosections "github.com/go-go-golems/geppetto/pkg/sections"
 	toolspkg "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/tools"
 	timelinecmd "github.com/go-go-golems/pinocchio/cmd/web-chat/timeline"
+	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 	agentmode "github.com/go-go-golems/pinocchio/pkg/middlewares/agentmode"
 	sqlitetool "github.com/go-go-golems/pinocchio/pkg/middlewares/sqlitetool"
 	rediscfg "github.com/go-go-golems/pinocchio/pkg/redisstream"
 	webchat "github.com/go-go-golems/pinocchio/pkg/webchat"
+	webhttp "github.com/go-go-golems/pinocchio/pkg/webchat/http"
+	"github.com/gorilla/websocket"
 	"github.com/rs/zerolog/log"
 )
 
@@ -71,12 +75,6 @@ func NewCommand() (*Command, error) {
 }
 
 func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io.Writer) error {
-	// Build webchat router and register middlewares/tools/profiles
-	r, err := webchat.NewRouter(ctx, parsed, staticFS)
-	if err != nil {
-		return errors.Wrap(err, "new webchat router")
-	}
-
 	// Optional SQLite DB (best-effort)
 	var dbWithRegexp *sql.DB
 	if db, err := sql.Open("sqlite3", "anonymized-data.db"); err == nil {
@@ -95,18 +93,51 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 	amCfg := agentmode.DefaultConfig()
 	amCfg.DefaultMode = "financial_analyst"
 
+	profiles := newChatProfileRegistry(
+		"default",
+		&chatProfile{Slug: "default", DefaultPrompt: "You are an assistant", DefaultMws: []infruntime.MiddlewareUse{}},
+		&chatProfile{
+			Slug:           "agent",
+			DefaultPrompt:  "You are a helpful assistant. Be concise.",
+			DefaultMws:     []infruntime.MiddlewareUse{{Name: "agentmode", Config: amCfg}},
+			AllowOverrides: true,
+		},
+	)
+
+	middlewareFactories := map[string]infruntime.MiddlewareFactory{
+		"agentmode": func(cfg any) geppettomw.Middleware {
+			return agentmode.NewMiddleware(amSvc, cfg.(agentmode.Config))
+		},
+		"sqlite": func(cfg any) geppettomw.Middleware {
+			c := sqlitetool.Config{DB: dbWithRegexp}
+			if cfg_, ok := cfg.(sqlitetool.Config); ok {
+				c = cfg_
+			}
+			return sqlitetool.NewMiddleware(c)
+		},
+	}
+	runtimeComposer := newWebChatRuntimeComposer(parsed, middlewareFactories)
+	requestResolver := newWebChatProfileResolver(profiles)
+
+	// Build webchat server and register middlewares/tools/profile handlers.
+	srv, err := webchat.NewServer(
+		ctx,
+		parsed,
+		staticFS,
+		webchat.WithRuntimeComposer(runtimeComposer),
+		webchat.WithDebugRoutesEnabled(os.Getenv("PINOCCHIO_WEBCHAT_DEBUG") == "1"),
+	)
+	if err != nil {
+		return errors.Wrap(err, "new webchat server")
+	}
+
 	// Register middlewares
-	r.RegisterMiddleware("agentmode", func(cfg any) geppettomw.Middleware { return agentmode.NewMiddleware(amSvc, cfg.(agentmode.Config)) })
-	r.RegisterMiddleware("sqlite", func(cfg any) geppettomw.Middleware {
-		c := sqlitetool.Config{DB: dbWithRegexp}
-		if cfg_, ok := cfg.(sqlitetool.Config); ok {
-			c = cfg_
-		}
-		return sqlitetool.NewMiddleware(c)
-	})
+	for name, factory := range middlewareFactories {
+		srv.RegisterMiddleware(name, factory)
+	}
 
 	// Register calculator tool
-	r.RegisterTool("calculator", func(reg geptools.ToolRegistry) error {
+	srv.RegisterTool("calculator", func(reg geptools.ToolRegistry) error {
 		if im, ok := reg.(*geptools.InMemoryToolRegistry); ok {
 			return toolspkg.RegisterCalculatorTool(im)
 		}
@@ -120,14 +151,28 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 		return nil
 	})
 
-	// Profiles
-	r.AddProfile(&webchat.Profile{Slug: "default", DefaultPrompt: "You are an assistant", DefaultMws: []webchat.MiddlewareUse{}})
-	r.AddProfile(&webchat.Profile{Slug: "agent", DefaultPrompt: "You are a helpful assistant. Be concise.", DefaultMws: []webchat.MiddlewareUse{{Name: "agentmode", Config: amCfg}}})
+	chatHandler := webhttp.NewChatHandler(srv.ChatService(), requestResolver)
+	wsHandler := webhttp.NewWSHandler(
+		srv.StreamHub(),
+		requestResolver,
+		websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }},
+	)
+	appMux := http.NewServeMux()
+	appMux.HandleFunc("/chat", chatHandler)
+	appMux.HandleFunc("/chat/", chatHandler)
+	appMux.HandleFunc("/ws", wsHandler)
+	registerProfileHandlers(appMux, profiles)
+	timelineLogger := log.With().Str("component", "webchat").Str("route", "/api/timeline").Logger()
+	timelineHandler := webhttp.NewTimelineHandler(srv.TimelineService(), timelineLogger)
+	appMux.HandleFunc("/api/timeline", timelineHandler)
+	appMux.HandleFunc("/api/timeline/", timelineHandler)
+	appMux.Handle("/api/", srv.APIHandler())
+	appMux.Handle("/", srv.UIHandler())
 
 	// HTTP server and run, with optional root mounting
-	httpSrv, err := r.BuildHTTPServer()
-	if err != nil {
-		return errors.Wrap(err, "build http server")
+	httpSrv := srv.HTTPServer()
+	if httpSrv == nil {
+		return errors.New("http server is not initialized")
 	}
 
 	// If --root is not "/", mount router under that root with a parent mux
@@ -146,12 +191,13 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 		if !strings.HasSuffix(prefix, "/") {
 			prefix = prefix + "/"
 		}
-		parent.Handle(prefix, http.StripPrefix(strings.TrimRight(prefix, "/"), r.Handler()))
+		parent.Handle(prefix, http.StripPrefix(strings.TrimRight(prefix, "/"), appMux))
 		httpSrv.Handler = parent
 		log.Info().Str("root", prefix).Msg("mounted webchat under custom root")
+	} else {
+		httpSrv.Handler = appMux
 	}
 
-	srv := webchat.NewFromRouter(ctx, r, httpSrv)
 	return srv.Run(ctx)
 }
 

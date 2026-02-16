@@ -96,3 +96,8 @@ Captured profile parsing plan (mini middleware chain, helper, wiring + tests) in
 
 - /home/manuel/workspaces/2025-11-18/fix-pinocchio-profiles/pinocchio/ttmp/2025-11-18/PIN-20251118/design/01-profile-loading-plan.md — Plan doc
 
+
+## 2026-02-14
+
+Ticket closed
+

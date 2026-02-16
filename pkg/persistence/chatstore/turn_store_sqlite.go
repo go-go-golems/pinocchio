@@ -3,12 +3,16 @@ package chatstore
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
 
+	"github.com/go-go-golems/geppetto/pkg/turns"
+	"github.com/go-go-golems/geppetto/pkg/turns/serde"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/pkg/errors"
+	"gopkg.in/yaml.v3"
 )
 
 type SQLiteTurnStore struct {
@@ -16,6 +20,15 @@ type SQLiteTurnStore struct {
 }
 
 var _ TurnStore = &SQLiteTurnStore{}
+
+type snapshotBackfillRow struct {
+	convID      string
+	sessionID   string
+	turnID      string
+	phase       string
+	createdAtMs int64
+	payload     string
+}
 
 func NewSQLiteTurnStore(dsn string) (*SQLiteTurnStore, error) {
 	if strings.TrimSpace(dsn) == "" {
@@ -45,38 +58,46 @@ func (s *SQLiteTurnStore) migrate() error {
 		return errors.New("sqlite turn store: db is nil")
 	}
 
-	if _, err := s.db.Exec(`CREATE TABLE IF NOT EXISTS turns (
-		conv_id TEXT NOT NULL,
-		session_id TEXT NOT NULL,
-		turn_id TEXT NOT NULL,
-		phase TEXT NOT NULL,
-		created_at_ms INTEGER NOT NULL,
-		payload TEXT NOT NULL,
-		PRIMARY KEY (conv_id, session_id, turn_id, phase, created_at_ms)
-	);`); err != nil {
-		return errors.Wrap(err, "sqlite turn store: create table")
-	}
-
-	runIDExists, err := s.columnExists("turns", "run_id")
-	if err != nil {
-		return errors.Wrap(err, "sqlite turn store: inspect run_id column")
-	}
-	sessionIDExists, err := s.columnExists("turns", "session_id")
-	if err != nil {
-		return errors.Wrap(err, "sqlite turn store: inspect session_id column")
-	}
-
-	if runIDExists && !sessionIDExists {
-		if _, err := s.db.Exec(`ALTER TABLE turns RENAME COLUMN run_id TO session_id`); err != nil {
-			return errors.Wrap(err, "sqlite turn store: rename run_id column")
-		}
-	}
-
 	stmts := []string{
-		`DROP INDEX IF EXISTS turns_by_run;`,
-		`CREATE INDEX IF NOT EXISTS turns_by_conv ON turns(conv_id, created_at_ms DESC);`,
-		`CREATE INDEX IF NOT EXISTS turns_by_session ON turns(session_id, created_at_ms DESC);`,
-		`CREATE INDEX IF NOT EXISTS turns_by_phase ON turns(phase, created_at_ms DESC);`,
+		`CREATE TABLE IF NOT EXISTS turns (
+			conv_id TEXT NOT NULL,
+			session_id TEXT NOT NULL,
+			turn_id TEXT NOT NULL,
+			turn_created_at_ms INTEGER NOT NULL,
+			turn_metadata_json TEXT NOT NULL DEFAULT '{}',
+			turn_data_json TEXT NOT NULL DEFAULT '{}',
+			updated_at_ms INTEGER NOT NULL,
+			PRIMARY KEY (conv_id, session_id, turn_id)
+		);`,
+		`CREATE TABLE IF NOT EXISTS blocks (
+			block_id TEXT NOT NULL,
+			content_hash TEXT NOT NULL,
+			hash_algorithm TEXT NOT NULL DEFAULT 'sha256-canonical-json-v1',
+			kind TEXT NOT NULL,
+			role TEXT NOT NULL DEFAULT '',
+			payload_json TEXT NOT NULL DEFAULT '{}',
+			block_metadata_json TEXT NOT NULL DEFAULT '{}',
+			first_seen_at_ms INTEGER NOT NULL,
+			PRIMARY KEY (block_id, content_hash)
+		);`,
+		`CREATE TABLE IF NOT EXISTS turn_block_membership (
+			conv_id TEXT NOT NULL,
+			session_id TEXT NOT NULL,
+			turn_id TEXT NOT NULL,
+			phase TEXT NOT NULL,
+			snapshot_created_at_ms INTEGER NOT NULL,
+			ordinal INTEGER NOT NULL,
+			block_id TEXT NOT NULL,
+			content_hash TEXT NOT NULL,
+			PRIMARY KEY (conv_id, session_id, turn_id, phase, snapshot_created_at_ms, ordinal),
+			FOREIGN KEY (conv_id, session_id, turn_id) REFERENCES turns(conv_id, session_id, turn_id) ON DELETE CASCADE,
+			FOREIGN KEY (block_id, content_hash) REFERENCES blocks(block_id, content_hash)
+		);`,
+		`CREATE INDEX IF NOT EXISTS turns_by_conv_session ON turns(conv_id, session_id, updated_at_ms DESC);`,
+		`CREATE INDEX IF NOT EXISTS turns_by_session ON turns(session_id, updated_at_ms DESC);`,
+		`CREATE INDEX IF NOT EXISTS blocks_by_kind_role ON blocks(kind, role);`,
+		`CREATE INDEX IF NOT EXISTS turn_block_membership_by_turn_phase ON turn_block_membership(conv_id, session_id, turn_id, phase, snapshot_created_at_ms DESC, ordinal);`,
+		`CREATE INDEX IF NOT EXISTS turn_block_membership_by_block ON turn_block_membership(block_id, content_hash);`,
 	}
 	for _, st := range stmts {
 		if _, err := s.db.Exec(st); err != nil {
@@ -84,38 +105,6 @@ func (s *SQLiteTurnStore) migrate() error {
 		}
 	}
 	return nil
-}
-
-func (s *SQLiteTurnStore) columnExists(table string, column string) (bool, error) {
-	if s == nil || s.db == nil {
-		return false, errors.New("sqlite turn store: db is nil")
-	}
-	rows, err := s.db.Query(`PRAGMA table_info(` + table + `)`)
-	if err != nil {
-		return false, err
-	}
-	defer func() { _ = rows.Close() }()
-
-	for rows.Next() {
-		var (
-			cid       int
-			name      string
-			typeName  string
-			notNull   int
-			dfltValue any
-			pk        int
-		)
-		if err := rows.Scan(&cid, &name, &typeName, &notNull, &dfltValue, &pk); err != nil {
-			return false, err
-		}
-		if strings.EqualFold(name, column) {
-			return true, nil
-		}
-	}
-	if err := rows.Err(); err != nil {
-		return false, err
-	}
-	return false, nil
 }
 
 func (s *SQLiteTurnStore) Save(ctx context.Context, convID, sessionID, turnID, phase string, createdAtMs int64, payload string) error {
@@ -135,20 +124,128 @@ func (s *SQLiteTurnStore) Save(ctx context.Context, convID, sessionID, turnID, p
 		return errors.New("sqlite turn store: phase is empty")
 	}
 	if ctx == nil {
-		ctx = context.Background()
+		return errors.New("sqlite turn store: ctx is nil")
 	}
 	if createdAtMs <= 0 {
 		createdAtMs = time.Now().UnixMilli()
 	}
 
-	_, err := s.db.ExecContext(ctx, `
-		INSERT INTO turns(conv_id, session_id, turn_id, phase, created_at_ms, payload)
-		VALUES(?, ?, ?, ?, ?, ?)
-	`, convID, sessionID, turnID, phase, createdAtMs, payload)
-	if err != nil {
-		return errors.Wrap(err, "sqlite turn store: insert")
+	t, err := serde.FromYAML([]byte(payload))
+	if err != nil || t == nil {
+		return errors.Wrap(err, "sqlite turn store: parse payload yaml")
 	}
-	return nil
+
+	row := snapshotBackfillRow{
+		convID:      convID,
+		sessionID:   sessionID,
+		turnID:      turnID,
+		phase:       phase,
+		createdAtMs: createdAtMs,
+		payload:     payload,
+	}
+	_, err = s.persistNormalizedSnapshot(ctx, row, t)
+	return err
+}
+
+func (s *SQLiteTurnStore) persistNormalizedSnapshot(ctx context.Context, row snapshotBackfillRow, t *turns.Turn) (int, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, errors.Wrap(err, "sqlite turn store: begin tx")
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+
+	turnID := strings.TrimSpace(row.turnID)
+	if tid := strings.TrimSpace(t.ID); tid != "" {
+		turnID = tid
+	}
+	if turnID == "" {
+		turnID = "turn"
+	}
+
+	turnMetadataJSON, err := marshalJSONObject(turnMetadataToMap(t.Metadata))
+	if err != nil {
+		return 0, errors.Wrap(err, "sqlite turn store: marshal turn metadata")
+	}
+	turnDataJSON, err := marshalJSONObject(turnDataToMap(t.Data))
+	if err != nil {
+		return 0, errors.Wrap(err, "sqlite turn store: marshal turn data")
+	}
+
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO turns(
+			conv_id, session_id, turn_id, turn_created_at_ms, turn_metadata_json, turn_data_json, updated_at_ms
+		)
+		VALUES(?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT(conv_id, session_id, turn_id) DO UPDATE SET
+			turn_created_at_ms = MIN(turns.turn_created_at_ms, excluded.turn_created_at_ms),
+			turn_metadata_json = excluded.turn_metadata_json,
+			turn_data_json = excluded.turn_data_json,
+			updated_at_ms = MAX(turns.updated_at_ms, excluded.updated_at_ms)
+	`, row.convID, row.sessionID, turnID, row.createdAtMs, turnMetadataJSON, turnDataJSON, row.createdAtMs); err != nil {
+		return 0, errors.Wrap(err, "sqlite turn store: upsert turns row")
+	}
+
+	if _, err := tx.ExecContext(ctx, `
+		DELETE FROM turn_block_membership
+		WHERE conv_id = ? AND session_id = ? AND turn_id = ? AND phase = ? AND snapshot_created_at_ms = ?
+	`, row.convID, row.sessionID, turnID, row.phase, row.createdAtMs); err != nil {
+		return 0, errors.Wrap(err, "sqlite turn store: clear existing membership rowset")
+	}
+
+	membershipInserted := 0
+	for i, block := range t.Blocks {
+		blockID := normalizeBlockID(block.ID, turnID, i)
+		payloadMap := cloneStringAnyMap(block.Payload)
+		blockMetadata := blockMetadataToMap(block.Metadata)
+
+		contentHash, err := ComputeBlockContentHash(block.Kind.String(), block.Role, payloadMap, blockMetadata)
+		if err != nil {
+			return 0, errors.Wrap(err, "sqlite turn store: compute block content hash")
+		}
+		payloadJSON, err := marshalJSONObject(payloadMap)
+		if err != nil {
+			return 0, errors.Wrap(err, "sqlite turn store: marshal block payload")
+		}
+		blockMetadataJSON, err := marshalJSONObject(blockMetadata)
+		if err != nil {
+			return 0, errors.Wrap(err, "sqlite turn store: marshal block metadata")
+		}
+
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO blocks(
+				block_id, content_hash, hash_algorithm, kind, role, payload_json, block_metadata_json, first_seen_at_ms
+			)
+			VALUES(?, ?, ?, ?, ?, ?, ?, ?)
+			ON CONFLICT(block_id, content_hash) DO UPDATE SET
+				kind = excluded.kind,
+				role = excluded.role,
+				payload_json = excluded.payload_json,
+				block_metadata_json = excluded.block_metadata_json,
+				first_seen_at_ms = MIN(blocks.first_seen_at_ms, excluded.first_seen_at_ms)
+		`, blockID, contentHash, BlockContentHashAlgorithmV1, strings.TrimSpace(block.Kind.String()), strings.TrimSpace(block.Role), payloadJSON, blockMetadataJSON, row.createdAtMs); err != nil {
+			return 0, errors.Wrap(err, "sqlite turn store: upsert blocks row")
+		}
+
+		if _, err := tx.ExecContext(ctx, `
+			INSERT OR REPLACE INTO turn_block_membership(
+				conv_id, session_id, turn_id, phase, snapshot_created_at_ms, ordinal, block_id, content_hash
+			) VALUES(?, ?, ?, ?, ?, ?, ?, ?)
+		`, row.convID, row.sessionID, turnID, row.phase, row.createdAtMs, i, blockID, contentHash); err != nil {
+			return 0, errors.Wrap(err, "sqlite turn store: insert turn_block_membership")
+		}
+		membershipInserted++
+	}
+
+	if err := tx.Commit(); err != nil {
+		return 0, errors.Wrap(err, "sqlite turn store: commit tx")
+	}
+	committed = true
+	return membershipInserted, nil
 }
 
 func (s *SQLiteTurnStore) List(ctx context.Context, q TurnQuery) ([]TurnSnapshot, error) {
@@ -159,7 +256,7 @@ func (s *SQLiteTurnStore) List(ctx context.Context, q TurnQuery) ([]TurnSnapshot
 		return nil, errors.New("sqlite turn store: convID or sessionID required")
 	}
 	if ctx == nil {
-		ctx = context.Background()
+		return nil, errors.New("sqlite turn store: ctx is nil")
 	}
 	limit := q.Limit
 	if limit <= 0 {
@@ -169,19 +266,19 @@ func (s *SQLiteTurnStore) List(ctx context.Context, q TurnQuery) ([]TurnSnapshot
 	clauses := []string{}
 	args := []any{}
 	if v := strings.TrimSpace(q.ConvID); v != "" {
-		clauses = append(clauses, "conv_id = ?")
+		clauses = append(clauses, "m.conv_id = ?")
 		args = append(args, v)
 	}
 	if v := strings.TrimSpace(q.SessionID); v != "" {
-		clauses = append(clauses, "session_id = ?")
+		clauses = append(clauses, "m.session_id = ?")
 		args = append(args, v)
 	}
 	if v := strings.TrimSpace(q.Phase); v != "" {
-		clauses = append(clauses, "phase = ?")
+		clauses = append(clauses, "m.phase = ?")
 		args = append(args, v)
 	}
 	if q.SinceMs > 0 {
-		clauses = append(clauses, "created_at_ms >= ?")
+		clauses = append(clauses, "m.snapshot_created_at_ms >= ?")
 		args = append(args, q.SinceMs)
 	}
 
@@ -191,10 +288,27 @@ func (s *SQLiteTurnStore) List(ctx context.Context, q TurnQuery) ([]TurnSnapshot
 	}
 
 	query := fmt.Sprintf(`
-		SELECT conv_id, session_id, turn_id, phase, created_at_ms, payload
-		FROM turns
+		SELECT
+			m.conv_id,
+			m.session_id,
+			m.turn_id,
+			m.phase,
+			m.snapshot_created_at_ms,
+			COALESCE(MAX(t.turn_metadata_json), '{}') AS turn_metadata_json,
+			COALESCE(MAX(t.turn_data_json), '{}') AS turn_data_json
+		FROM turn_block_membership m
+		LEFT JOIN turns t
+			ON t.conv_id = m.conv_id
+			AND t.session_id = m.session_id
+			AND t.turn_id = m.turn_id
 		%s
-		ORDER BY created_at_ms DESC
+		GROUP BY
+			m.conv_id,
+			m.session_id,
+			m.turn_id,
+			m.phase,
+			m.snapshot_created_at_ms
+		ORDER BY m.snapshot_created_at_ms DESC
 		LIMIT ?
 	`, where)
 	args = append(args, limit)
@@ -207,10 +321,32 @@ func (s *SQLiteTurnStore) List(ctx context.Context, q TurnQuery) ([]TurnSnapshot
 
 	items := []TurnSnapshot{}
 	for rows.Next() {
-		var item TurnSnapshot
-		if err := rows.Scan(&item.ConvID, &item.SessionID, &item.TurnID, &item.Phase, &item.CreatedAtMs, &item.Payload); err != nil {
+		var (
+			item             TurnSnapshot
+			turnMetadataJSON string
+			turnDataJSON     string
+		)
+		if err := rows.Scan(
+			&item.ConvID,
+			&item.SessionID,
+			&item.TurnID,
+			&item.Phase,
+			&item.CreatedAtMs,
+			&turnMetadataJSON,
+			&turnDataJSON,
+		); err != nil {
 			return nil, err
 		}
+
+		blockRows, err := s.loadSnapshotBlocks(ctx, item.ConvID, item.SessionID, item.TurnID, item.Phase, item.CreatedAtMs)
+		if err != nil {
+			return nil, err
+		}
+		payload, err := buildTurnPayloadYAML(item.TurnID, blockRows, turnMetadataJSON, turnDataJSON)
+		if err != nil {
+			return nil, err
+		}
+		item.Payload = payload
 		items = append(items, item)
 	}
 	if err := rows.Err(); err != nil {
@@ -224,4 +360,167 @@ func SQLiteTurnDSNForFile(path string) (string, error) {
 		return "", errors.New("sqlite turn store: empty path")
 	}
 	return fmt.Sprintf("file:%s?_journal_mode=WAL&_busy_timeout=5000&_foreign_keys=on", path), nil
+}
+
+func (s *SQLiteTurnStore) loadSnapshotBlocks(ctx context.Context, convID string, sessionID string, turnID string, phase string, snapshotCreatedAtMs int64) ([]map[string]any, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT
+			m.ordinal,
+			b.block_id,
+			b.kind,
+			b.role,
+			COALESCE(b.payload_json, '{}') AS payload_json,
+			COALESCE(b.block_metadata_json, '{}') AS block_metadata_json
+		FROM turn_block_membership m
+		JOIN blocks b
+			ON b.block_id = m.block_id
+			AND b.content_hash = m.content_hash
+		WHERE
+			m.conv_id = ?
+			AND m.session_id = ?
+			AND m.turn_id = ?
+			AND m.phase = ?
+			AND m.snapshot_created_at_ms = ?
+		ORDER BY m.ordinal ASC
+	`, convID, sessionID, turnID, phase, snapshotCreatedAtMs)
+	if err != nil {
+		return nil, errors.Wrap(err, "sqlite turn store: query snapshot blocks")
+	}
+	defer func() { _ = rows.Close() }()
+
+	blocks := make([]map[string]any, 0, 16)
+	for rows.Next() {
+		var (
+			ordinal           int
+			blockID           string
+			kind              string
+			role              string
+			payloadJSON       string
+			blockMetadataJSON string
+		)
+		if err := rows.Scan(&ordinal, &blockID, &kind, &role, &payloadJSON, &blockMetadataJSON); err != nil {
+			return nil, errors.Wrap(err, "sqlite turn store: scan snapshot block")
+		}
+		_ = ordinal
+		payloadMap, err := parseJSONObject(payloadJSON)
+		if err != nil {
+			return nil, errors.Wrap(err, "sqlite turn store: parse block payload json")
+		}
+		metadataMap, err := parseJSONObject(blockMetadataJSON)
+		if err != nil {
+			return nil, errors.Wrap(err, "sqlite turn store: parse block metadata json")
+		}
+		block := map[string]any{
+			"id":   blockID,
+			"kind": kind,
+		}
+		if strings.TrimSpace(role) != "" {
+			block["role"] = role
+		}
+		if len(payloadMap) > 0 {
+			block["payload"] = payloadMap
+		}
+		if len(metadataMap) > 0 {
+			block["metadata"] = metadataMap
+		}
+		blocks = append(blocks, block)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, errors.Wrap(err, "sqlite turn store: iterate snapshot blocks")
+	}
+	return blocks, nil
+}
+
+func buildTurnPayloadYAML(turnID string, blocks []map[string]any, turnMetadataJSON string, turnDataJSON string) (string, error) {
+	payload := map[string]any{
+		"id":     turnID,
+		"blocks": blocks,
+	}
+	turnMetadata, err := parseJSONObject(turnMetadataJSON)
+	if err != nil {
+		return "", err
+	}
+	if len(turnMetadata) > 0 {
+		payload["metadata"] = turnMetadata
+	}
+	turnData, err := parseJSONObject(turnDataJSON)
+	if err != nil {
+		return "", err
+	}
+	if len(turnData) > 0 {
+		payload["data"] = turnData
+	}
+	b, err := yaml.Marshal(payload)
+	if err != nil {
+		return "", err
+	}
+	return string(b), nil
+}
+
+func parseJSONObject(raw string) (map[string]any, error) {
+	if strings.TrimSpace(raw) == "" {
+		return map[string]any{}, nil
+	}
+	out := map[string]any{}
+	if err := json.Unmarshal([]byte(raw), &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func normalizeBlockID(blockID string, turnID string, ordinal int) string {
+	id := strings.TrimSpace(blockID)
+	if id != "" {
+		return id
+	}
+	return fmt.Sprintf("%s#%d", strings.TrimSpace(turnID), ordinal)
+}
+
+func cloneStringAnyMap(in map[string]any) map[string]any {
+	if len(in) == 0 {
+		return map[string]any{}
+	}
+	out := make(map[string]any, len(in))
+	for k, v := range in {
+		out[k] = v
+	}
+	return out
+}
+
+func turnMetadataToMap(metadata turns.Metadata) map[string]any {
+	out := map[string]any{}
+	metadata.Range(func(key turns.TurnMetadataKey, value any) bool {
+		out[string(key)] = value
+		return true
+	})
+	return out
+}
+
+func turnDataToMap(data turns.Data) map[string]any {
+	out := map[string]any{}
+	data.Range(func(key turns.TurnDataKey, value any) bool {
+		out[string(key)] = value
+		return true
+	})
+	return out
+}
+
+func blockMetadataToMap(metadata turns.BlockMetadata) map[string]any {
+	out := map[string]any{}
+	metadata.Range(func(key turns.BlockMetadataKey, value any) bool {
+		out[string(key)] = value
+		return true
+	})
+	return out
+}
+
+func marshalJSONObject(v map[string]any) (string, error) {
+	if len(v) == 0 {
+		return "{}", nil
+	}
+	b, err := json.Marshal(v)
+	if err != nil {
+		return "", err
+	}
+	return string(b), nil
 }

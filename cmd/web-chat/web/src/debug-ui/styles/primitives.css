@@ -1,0 +1,226 @@
+h1,
+h2,
+h3,
+h4 {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+h1 {
+  font-size: 24px;
+}
+
+h2 {
+  font-size: 20px;
+}
+
+h3 {
+  font-size: 16px;
+}
+
+h4 {
+  font-size: 14px;
+}
+
+.text-muted {
+  color: var(--text-muted);
+}
+
+.text-secondary {
+  color: var(--text-secondary);
+}
+
+.text-sm {
+  font-size: 12px;
+}
+
+.text-xs {
+  font-size: 11px;
+}
+
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 8px;
+}
+
+.card:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-light);
+}
+
+.card.selected {
+  border-color: var(--accent-blue);
+  background: var(--accent-blue-a10);
+}
+
+.card.running {
+  border-color: var(--accent-green);
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+}
+
+.badge-blue {
+  background: var(--accent-blue-a20);
+  color: var(--accent-blue);
+}
+
+.badge-green {
+  background: var(--accent-green-a20);
+  color: var(--accent-green);
+}
+
+.badge-yellow {
+  background: var(--accent-yellow-a20);
+  color: var(--accent-yellow);
+}
+
+.badge-red {
+  background: var(--accent-red-a20);
+  color: var(--accent-red);
+}
+
+.badge-purple {
+  background: var(--accent-purple-a20);
+  color: var(--accent-purple);
+}
+
+.badge-cyan {
+  background: var(--accent-cyan-a20);
+  color: var(--accent-cyan);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.btn-sm {
+  padding: 4px 10px;
+  font-size: 12px;
+}
+
+.btn-primary {
+  background: var(--accent-blue);
+  color: white;
+}
+
+.btn-primary:hover {
+  background: #2563eb;
+}
+
+.btn-secondary {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.btn-secondary:hover {
+  background: var(--bg-hover);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+.btn-ghost:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.list-item {
+  padding: 8px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.list-item:hover {
+  background: var(--bg-hover);
+}
+
+.list-item.active {
+  background: var(--accent-blue-a15);
+  color: var(--accent-blue);
+}
+
+.tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 8px;
+  margin-bottom: 16px;
+}
+
+.tab {
+  padding: 8px 16px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 14px;
+  cursor: pointer;
+  border-radius: 6px 6px 0 0;
+  transition: all 0.15s;
+}
+
+.tab:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.tab.active {
+  color: var(--accent-blue);
+  background: var(--accent-blue-a10);
+  border-bottom: 2px solid var(--accent-blue);
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.status-dot.running {
+  background: var(--accent-green);
+  animation: pulse 1.5s infinite;
+}
+
+.status-dot.idle {
+  background: var(--text-muted);
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.5;
+  }
+}

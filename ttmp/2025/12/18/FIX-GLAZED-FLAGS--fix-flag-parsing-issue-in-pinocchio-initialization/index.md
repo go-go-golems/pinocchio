@@ -1,7 +1,7 @@
 ---
 Title: Fix flag parsing issue in pinocchio initialization
 Ticket: FIX-GLAZED-FLAGS
-Status: active
+Status: complete
 Topics:
     - bug
     - flags
@@ -17,8 +17,12 @@ RelatedFiles:
         Now uses glazed InitEarlyLoggingFromArgs helper
 ExternalSources: []
 Summary: ""
-LastUpdated: 2025-12-18T19:02:28.300746541-05:00
+LastUpdated: 2026-02-14T20:12:02.344983932-05:00
+WhatFor: ""
+WhenToUse: ""
 ---
+
+
 
 
 

@@ -9,71 +9,22 @@ import (
 	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/go-go-golems/geppetto/pkg/events"
 	"github.com/go-go-golems/geppetto/pkg/inference/engine"
-	"github.com/go-go-golems/geppetto/pkg/inference/middleware"
 	"github.com/go-go-golems/geppetto/pkg/inference/toolloop"
 	geptools "github.com/go-go-golems/geppetto/pkg/inference/tools"
 	"github.com/go-go-golems/geppetto/pkg/turns"
 	"github.com/go-go-golems/glazed/pkg/cmds/values"
+	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
 	timelinepb "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/timeline"
-	"github.com/gorilla/websocket"
 )
-
-// MiddlewareFactory creates a middleware instance from an arbitrary config object.
-type MiddlewareFactory func(cfg any) middleware.Middleware
-
-// ToolFactory registers a tool into a registry.
-type ToolFactory func(reg geptools.ToolRegistry) error
 
 // RunLoop is a backend loop strategy for a conversation.
 type RunLoop func(ctx context.Context, eng engine.Engine, t *turns.Turn, reg geptools.ToolRegistry, opts map[string]any) (*turns.Turn, error)
 
 // EventSinkWrapper allows callers to wrap or replace the default event sink.
-type EventSinkWrapper func(convID string, cfg EngineConfig, sink events.EventSink) (events.EventSink, error)
+type EventSinkWrapper func(convID string, req infruntime.RuntimeComposeRequest, sink events.EventSink) (events.EventSink, error)
 
-// MiddlewareUse declares a middleware to attach and its config.
-type MiddlewareUse struct {
-	Name   string
-	Config any
-}
-
-// Profile describes how to build engines and inference loops for a chat namespace.
-type Profile struct {
-	Slug           string
-	DefaultPrompt  string
-	DefaultTools   []string
-	DefaultMws     []MiddlewareUse
-	LoopName       string
-	AllowOverrides bool
-}
-
-// ProfileRegistry stores profiles by slug.
-type ProfileRegistry interface {
-	Add(p *Profile) error
-	Get(slug string) (*Profile, bool)
-	List() []*Profile
-}
-
-// simple in-memory implementation
-type inMemoryProfileRegistry struct{ profiles map[string]*Profile }
-
-func newInMemoryProfileRegistry() *inMemoryProfileRegistry {
-	return &inMemoryProfileRegistry{profiles: map[string]*Profile{}}
-}
-func (r *inMemoryProfileRegistry) Add(p *Profile) error { r.profiles[p.Slug] = p; return nil }
-func (r *inMemoryProfileRegistry) Get(slug string) (*Profile, bool) {
-	p, ok := r.profiles[slug]
-	return p, ok
-}
-func (r *inMemoryProfileRegistry) List() []*Profile {
-	out := make([]*Profile, 0, len(r.profiles))
-	for _, p := range r.profiles {
-		out = append(out, p)
-	}
-	return out
-}
-
-// Router wires HTTP, profiles, registries and conversation lifecycle.
+// Router wires HTTP endpoints, registries and conversation lifecycle.
 type Router struct {
 	baseCtx  context.Context
 	parsed   *values.Values
@@ -82,35 +33,37 @@ type Router struct {
 
 	// event router (in-memory or Redis)
 	router *events.EventRouter
+	// stream backend abstraction for publisher/subscriber construction.
+	streamBackend StreamBackend
 
 	// registries
-	mwFactories   map[string]MiddlewareFactory
-	toolFactories map[string]ToolFactory
+	mwFactories   map[string]infruntime.MiddlewareFactory
+	toolFactories map[string]infruntime.ToolFactory
 
 	// shared deps
 	db            *sql.DB
 	timelineStore chatstore.TimelineStore
-	turnStore     chatstore.TurnStore
-
-	// profiles
-	profiles ProfileRegistry
-
-	// ws
-	upgrader websocket.Upgrader
+	// split timeline service surface for hydration reads.
+	timelineService *TimelineService
+	turnStore       chatstore.TurnStore
 
 	// conversations
 	cm *ConvManager
+	// split service APIs.
+	chatService *ChatService
+	streamHub   *StreamHub
 
 	// runtime flags
-	usesRedis      bool
-	redisAddr      string
 	idleTimeoutSec int
+	// enableDebugRoutes controls registration of /api/debug/* handlers.
+	// Default is false (debug routes disabled).
+	enableDebugRoutes bool
 
 	// step mode control (shared; not conversation-owned)
 	stepCtrl *toolloop.StepController
 
-	// request policy
-	engineFromReqBuilder EngineFromReqBuilder
+	// app-owned runtime wiring
+	runtimeComposer infruntime.RuntimeComposer
 
 	// optional overrides for conv manager hooks
 	buildSubscriberOverride    func(convID string) (message.Subscriber, bool, error)

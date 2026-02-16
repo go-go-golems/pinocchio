@@ -1,0 +1,132 @@
+.state-track-lane {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.empty-lane {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  color: var(--text-muted);
+}
+
+.turn-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 10px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.turn-card:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-light);
+}
+
+.turn-card.selected {
+  border-color: var(--accent-purple);
+  background: var(--accent-purple-a10);
+}
+
+.turn-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.phase-badge {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+
+.phase-pre_inference {
+  background: var(--accent-yellow-a20);
+  color: var(--accent-yellow);
+}
+
+.phase-post_inference {
+  background: var(--accent-blue-a20);
+  color: var(--accent-blue);
+}
+
+.phase-post_tools {
+  background: var(--accent-cyan-a20);
+  color: var(--accent-cyan);
+}
+
+.phase-final {
+  background: var(--accent-green-a20);
+  color: var(--accent-green);
+}
+
+.turn-time {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.turn-card-id {
+  display: flex;
+  gap: 8px;
+  font-size: 11px;
+  font-family: monospace;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+
+.turn-id {
+  color: var(--accent-purple);
+}
+
+.session-id {
+  color: var(--text-muted);
+}
+
+.turn-card-blocks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+
+.block-chip {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: var(--bg-secondary);
+}
+
+.turn-card-blocks .block-kind-system {
+  border-left: 2px solid var(--block-system);
+}
+
+.turn-card-blocks .block-kind-user {
+  border-left: 2px solid var(--block-user);
+}
+
+.turn-card-blocks .block-kind-llm_text {
+  border-left: 2px solid var(--block-assistant);
+}
+
+.turn-card-blocks .block-kind-tool_call {
+  border-left: 2px solid var(--block-tool-call);
+}
+
+.turn-card-blocks .block-kind-tool_use {
+  border-left: 2px solid var(--block-tool-use);
+}
+
+.turn-card-blocks .block-kind-reasoning {
+  border-left: 2px solid var(--block-reasoning);
+}
+
+.turn-card-footer {
+  font-size: 10px;
+  color: var(--text-muted);
+}

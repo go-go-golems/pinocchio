@@ -3,6 +3,7 @@ package webchat
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"sync"
 	"time"
@@ -63,7 +64,7 @@ func (p *TimelineProjector) upsert(ctx context.Context, version uint64, entity *
 		return nil
 	}
 	if ctx == nil {
-		ctx = context.Background()
+		return errors.New("ctx is nil")
 	}
 	if err := p.store.Upsert(ctx, p.convID, version, entity); err != nil {
 		return err
@@ -87,7 +88,7 @@ func (p *TimelineProjector) ApplySemFrame(ctx context.Context, frame []byte) err
 		return nil
 	}
 	if ctx == nil {
-		ctx = context.Background()
+		return errors.New("ctx is nil")
 	}
 
 	var env semEnvelope

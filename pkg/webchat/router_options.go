@@ -7,37 +7,20 @@ import (
 	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/go-go-golems/geppetto/pkg/events"
 	"github.com/go-go-golems/geppetto/pkg/inference/toolloop"
+	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
 	timelinepb "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/timeline"
-	"github.com/gorilla/websocket"
 )
 
 // RouterOption configures optional dependencies for a Router.
 type RouterOption func(*Router) error
 
-func WithEngineFromReqBuilder(b EngineFromReqBuilder) RouterOption {
+func WithRuntimeComposer(composer infruntime.RuntimeComposer) RouterOption {
 	return func(r *Router) error {
-		if b == nil {
-			return errors.New("engineFromReqBuilder is nil")
+		if composer == nil {
+			return errors.New("runtime composer is nil")
 		}
-		r.engineFromReqBuilder = b
-		return nil
-	}
-}
-
-func WithWebSocketUpgrader(u websocket.Upgrader) RouterOption {
-	return func(r *Router) error {
-		r.upgrader = u
-		return nil
-	}
-}
-
-func WithProfileRegistry(reg ProfileRegistry) RouterOption {
-	return func(r *Router) error {
-		if reg == nil {
-			return errors.New("profile registry is nil")
-		}
-		r.profiles = reg
+		r.runtimeComposer = composer
 		return nil
 	}
 }
@@ -88,6 +71,9 @@ func WithStepController(sc *toolloop.StepController) RouterOption {
 			return errors.New("step controller is nil")
 		}
 		r.stepCtrl = sc
+		if r.chatService != nil {
+			r.chatService.SetStepController(sc)
+		}
 		return nil
 	}
 }
@@ -105,8 +91,12 @@ func WithTimelineStore(s chatstore.TimelineStore) RouterOption {
 			return errors.New("timeline store is nil")
 		}
 		r.timelineStore = s
+		r.timelineService = NewTimelineService(s)
 		if r.cm != nil {
 			r.cm.SetTimelineStore(s)
+		}
+		if r.chatService != nil {
+			r.chatService.SetTimelineStore(s)
 		}
 		return nil
 	}
@@ -119,6 +109,9 @@ func WithTurnStore(s chatstore.TurnStore) RouterOption {
 			return errors.New("turn store is nil")
 		}
 		r.turnStore = s
+		if r.chatService != nil {
+			r.chatService.SetTurnStore(s)
+		}
 		return nil
 	}
 }
@@ -130,6 +123,15 @@ func WithEventSinkWrapper(fn EventSinkWrapper) RouterOption {
 			return errors.New("event sink wrapper is nil")
 		}
 		r.eventSinkWrapper = fn
+		return nil
+	}
+}
+
+// WithDebugRoutesEnabled toggles registration of debug API endpoints.
+// When disabled, /api/debug/* routes are not mounted.
+func WithDebugRoutesEnabled(enabled bool) RouterOption {
+	return func(r *Router) error {
+		r.enableDebugRoutes = enabled
 		return nil
 	}
 }

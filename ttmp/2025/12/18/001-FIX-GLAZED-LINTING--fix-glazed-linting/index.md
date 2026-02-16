@@ -1,7 +1,7 @@
 ---
 Title: Fix Glazed Linting
 Ticket: 001-FIX-GLAZED-LINTING
-Status: active
+Status: complete
 Topics:
     - pinocchio
     - glaze
@@ -20,8 +20,11 @@ RelatedFiles:
       Note: Helper function - migrated GatherFlagsFromViper to config middlewares
 ExternalSources: []
 Summary: ""
-LastUpdated: 2025-12-18T15:13:58.384754989-05:00
+LastUpdated: 2026-02-14T20:11:53.366069723-05:00
+WhatFor: ""
+WhenToUse: ""
 ---
+
 
 
 # Fix Glazed Linting

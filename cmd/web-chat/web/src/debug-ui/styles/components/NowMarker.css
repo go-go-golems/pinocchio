@@ -1,0 +1,71 @@
+.now-marker {
+  position: relative;
+  margin-top: 8px;
+  padding-top: 8px;
+}
+
+.now-marker-line {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--accent-green) 20%,
+    var(--accent-green) 80%,
+    transparent 100%
+  );
+  animation: pulse-line 2s ease-in-out infinite;
+}
+
+@keyframes pulse-line {
+  0%,
+  100% {
+    opacity: 0.5;
+  }
+
+  50% {
+    opacity: 1;
+  }
+}
+
+.now-marker-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--accent-green);
+  border-radius: 12px;
+  font-size: 11px;
+  color: var(--accent-green);
+  font-weight: 500;
+}
+
+.now-marker-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent-green);
+  animation: pulse-dot 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-dot {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: 0.6;
+    transform: scale(0.8);
+  }
+}
+
+.now-marker-text {
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}

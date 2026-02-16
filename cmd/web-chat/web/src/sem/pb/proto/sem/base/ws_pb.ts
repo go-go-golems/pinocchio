@@ -10,7 +10,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file proto/sem/base/ws.proto.
  */
 export const file_proto_sem_base_ws: GenFile = /*@__PURE__*/
-  fileDesc("Chdwcm90by9zZW0vYmFzZS93cy5wcm90bxILc2VtLmJhc2Uud3MiQgoJV3NIZWxsb1YxEg8KB2NvbnZfaWQYASABKAkSDwoHcHJvZmlsZRgCIAEoCRITCgtzZXJ2ZXJfdGltZRgDIAEoAyIwCghXc1BvbmdWMRIPCgdjb252X2lkGAEgASgJEhMKC3NlcnZlcl90aW1lGAIgASgDQkJaQGdpdGh1Yi5jb20vZ28tZ28tZ29sZW1zL3Bpbm9jY2hpby9wa2cvc2VtL3BiL3Byb3RvL3NlbS9iYXNlO2Jhc2ViBnByb3RvMw");
+  fileDesc("Chdwcm90by9zZW0vYmFzZS93cy5wcm90bxILc2VtLmJhc2Uud3MiRgoJV3NIZWxsb1YxEg8KB2NvbnZfaWQYASABKAkSEwoLcnVudGltZV9rZXkYAiABKAkSEwoLc2VydmVyX3RpbWUYAyABKAMiMAoIV3NQb25nVjESDwoHY29udl9pZBgBIAEoCRITCgtzZXJ2ZXJfdGltZRgCIAEoA0JCWkBnaXRodWIuY29tL2dvLWdvLWdvbGVtcy9waW5vY2NoaW8vcGtnL3NlbS9wYi9wcm90by9zZW0vYmFzZTtiYXNlYgZwcm90bzM");
 
 /**
  * @generated from message sem.base.ws.WsHelloV1
@@ -22,9 +22,9 @@ export type WsHelloV1 = Message<"sem.base.ws.WsHelloV1"> & {
   convId: string;
 
   /**
-   * @generated from field: string profile = 2;
+   * @generated from field: string runtime_key = 2;
    */
-  profile: string;
+  runtimeKey: string;
 
   /**
    * @generated from field: int64 server_time = 3;

@@ -440,7 +440,7 @@ After implementing all steps, verify the pipeline works:
 
 4. **Widget rendering**: Confirm the widget appears in the chat timeline.
 
-5. **Hydration** (if using projector): Reload the page and confirm the entity reappears from the `/timeline` endpoint.
+5. **Hydration** (if using projector): Reload the page and confirm the entity reappears from the `/api/timeline` endpoint.
 
 6. **Storybook** (if applicable): Write a story with synthetic entity data to test widget rendering in isolation.
 

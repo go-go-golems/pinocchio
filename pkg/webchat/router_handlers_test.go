@@ -1,11 +1,13 @@
 package webchat
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"testing/fstest"
 
+	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	"github.com/stretchr/testify/require"
 )
 
@@ -26,8 +28,7 @@ func TestUIHandler_ServesIndexFromStaticFS(t *testing.T) {
 
 func TestAPIHandler_DoesNotServeIndex(t *testing.T) {
 	r := &Router{
-		profiles: newInMemoryProfileRegistry(),
-		cm:       &ConvManager{conns: map[string]*Conversation{}},
+		cm: &ConvManager{conns: map[string]*Conversation{}},
 	}
 
 	h := r.APIHandler()
@@ -36,4 +37,26 @@ func TestAPIHandler_DoesNotServeIndex(t *testing.T) {
 	h.ServeHTTP(rec, req)
 
 	require.Equal(t, http.StatusNotFound, rec.Code)
+}
+
+func TestAPIHandler_DoesNotOwnChatOrWSRoutes(t *testing.T) {
+	r := &Router{
+		cm: &ConvManager{conns: map[string]*Conversation{}},
+	}
+	h := r.APIHandler()
+
+	chatReq := httptest.NewRequest(http.MethodPost, "http://example.com/chat", nil)
+	chatRec := httptest.NewRecorder()
+	h.ServeHTTP(chatRec, chatReq)
+	require.Equal(t, http.StatusNotFound, chatRec.Code)
+
+	wsReq := httptest.NewRequest(http.MethodGet, "http://example.com/ws?conv_id=c1", nil)
+	wsRec := httptest.NewRecorder()
+	h.ServeHTTP(wsRec, wsReq)
+	require.Equal(t, http.StatusNotFound, wsRec.Code)
+}
+
+func TestNewRouter_RequiresRuntimeComposer(t *testing.T) {
+	_, err := NewRouter(context.Background(), values.New(), fstest.MapFS{})
+	require.ErrorContains(t, err, "runtime composer is not configured")
 }
