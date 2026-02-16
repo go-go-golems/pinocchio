@@ -22,8 +22,6 @@ func (r *Router) debugRoutesEnabled() bool {
 func (r *Router) registerDebugAPIHandlers(mux *http.ServeMux) {
 	logger := log.With().Str("component", "webchat").Logger()
 
-	r.registerOfflineDebugHandlers(mux)
-
 	mux.HandleFunc("/api/debug/conversations", func(w http.ResponseWriter, r0 *http.Request) {
 		if r0.Method != http.MethodGet {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)

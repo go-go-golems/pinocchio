@@ -9,16 +9,12 @@ import {
 import { useAppDispatch, useAppSelector } from '../store/hooks';
 import {
   selectConversation,
-  selectRun,
   selectSession,
   selectTurn,
-  setOfflineConfig,
 } from '../store/uiSlice';
 import { useDebugTimelineFollow } from '../ws/useDebugTimelineFollow';
 import { type Anomaly, AnomalyPanel } from './AnomalyPanel';
-import { shouldDelayUrlSync } from './appShellSync';
 import { FilterBar, type FilterState } from './FilterBar';
-import { OfflineSourcesPanel } from './OfflineSourcesPanel';
 import { SessionList } from './SessionList';
 
 const defaultFilters: FilterState = {
@@ -43,13 +39,10 @@ export function AppShell({ anomalies = [] }: AppShellProps) {
   const selectedConvId = useAppSelector((state) => state.ui.selectedConvId);
   const selectedSessionId = useAppSelector((state) => state.ui.selectedSessionId);
   const selectedTurnId = useAppSelector((state) => state.ui.selectedTurnId);
-  const selectedRunId = useAppSelector((state) => state.ui.selectedRunId);
-  const offline = useAppSelector((state) => state.ui.offline);
   const follow = useAppSelector((state) => state.ui.follow);
   const location = useLocation();
   const [, setSearchParams] = useSearchParams();
   const { sessionId, turnId } = useParams();
-  const offlineRoute = location.pathname.startsWith('/offline');
   const params = useMemo(() => new URLSearchParams(location.search), [location.search]);
 
   const activeFilterCount =
@@ -62,10 +55,6 @@ export function AppShell({ anomalies = [] }: AppShellProps) {
   const convFromURL = params.get('conv');
   const sessionFromURL = params.get('session');
   const turnFromURL = params.get('turn');
-  const runFromURL = params.get('run');
-  const artifactsRootFromURL = params.get('artifacts_root');
-  const turnsDBFromURL = params.get('turns_db');
-  const timelineDBFromURL = params.get('timeline_db');
   const desiredSession = sessionId ?? sessionFromURL;
   const desiredTurn = turnId ?? turnFromURL;
 
@@ -88,73 +77,21 @@ export function AppShell({ anomalies = [] }: AppShellProps) {
     if (desiredTurn && desiredTurn !== selectedTurnId) {
       dispatch(selectTurn(desiredTurn));
     }
-
-    if (runFromURL && runFromURL !== selectedRunId) {
-      dispatch(selectRun(runFromURL));
-    }
-
-    const nextArtifactsRoot =
-      artifactsRootFromURL ??
-      (!offline.artifactsRoot
-        ? window.localStorage.getItem('debug-ui:offline:artifacts_root')
-        : null);
-    const nextTurnsDB =
-      turnsDBFromURL ??
-      (!offline.turnsDB ? window.localStorage.getItem('debug-ui:offline:turns_db') : null);
-    const nextTimelineDB =
-      timelineDBFromURL ??
-      (!offline.timelineDB
-        ? window.localStorage.getItem('debug-ui:offline:timeline_db')
-        : null);
-
-    const patch: Partial<typeof offline> = {};
-    if (nextArtifactsRoot !== null && nextArtifactsRoot !== offline.artifactsRoot) {
-      patch.artifactsRoot = nextArtifactsRoot;
-    }
-    if (nextTurnsDB !== null && nextTurnsDB !== offline.turnsDB) {
-      patch.turnsDB = nextTurnsDB;
-    }
-    if (nextTimelineDB !== null && nextTimelineDB !== offline.timelineDB) {
-      patch.timelineDB = nextTimelineDB;
-    }
-    if (Object.keys(patch).length > 0) {
-      dispatch(setOfflineConfig(patch));
-    }
   }, [
     dispatch,
     desiredSession,
     desiredTurn,
-    offline.artifactsRoot,
-    offline.timelineDB,
-    offline.turnsDB,
     convFromURL,
-    runFromURL,
-    artifactsRootFromURL,
-    turnsDBFromURL,
-    timelineDBFromURL,
     selectedConvId,
-    selectedRunId,
     selectedSessionId,
     selectedTurnId,
   ]);
 
   useEffect(() => {
-    const pendingHydration = shouldDelayUrlSync({
-      convFromURL,
-      desiredSession,
-      desiredTurn,
-      runFromURL,
-      artifactsRootFromURL,
-      turnsDBFromURL,
-      timelineDBFromURL,
-      selectedConvId,
-      selectedSessionId,
-      selectedTurnId,
-      selectedRunId,
-      offlineArtifactsRoot: offline.artifactsRoot,
-      offlineTurnsDB: offline.turnsDB,
-      offlineTimelineDB: offline.timelineDB,
-    });
+    const pendingHydration =
+      (!!convFromURL && convFromURL !== selectedConvId) ||
+      (!!desiredSession && desiredSession !== selectedSessionId) ||
+      (!!desiredTurn && desiredTurn !== selectedTurnId);
 
     if (pendingHydration) {
       return;
@@ -181,35 +118,20 @@ export function AppShell({ anomalies = [] }: AppShellProps) {
     applyParam('conv', selectedConvId);
     applyParam('session', selectedSessionId ?? sessionId ?? null);
     applyParam('turn', selectedTurnId ?? turnId ?? null);
-    applyParam('run', selectedRunId);
-    applyParam('artifacts_root', offline.artifactsRoot || null);
-    applyParam('turns_db', offline.turnsDB || null);
-    applyParam('timeline_db', offline.timelineDB || null);
 
     if (selectedConvId) {
       window.localStorage.setItem('debug-ui:selected-conv', selectedConvId);
     }
-    window.localStorage.setItem('debug-ui:offline:artifacts_root', offline.artifactsRoot);
-    window.localStorage.setItem('debug-ui:offline:turns_db', offline.turnsDB);
-    window.localStorage.setItem('debug-ui:offline:timeline_db', offline.timelineDB);
 
     if (changed) {
       setSearchParams(nextParams, { replace: true });
     }
   }, [
-    offline.artifactsRoot,
-    offline.timelineDB,
-    offline.turnsDB,
     convFromURL,
     desiredSession,
     desiredTurn,
-    runFromURL,
-    artifactsRootFromURL,
-    turnsDBFromURL,
-    timelineDBFromURL,
     location.search,
     selectedConvId,
-    selectedRunId,
     selectedSessionId,
     selectedTurnId,
     sessionId,
@@ -252,12 +174,6 @@ export function AppShell({ anomalies = [] }: AppShellProps) {
           >
             Events
           </NavLink>
-          <NavLink
-            to={{ pathname: '/offline', search: location.search }}
-            className={({ isActive }) => `app-nav-link ${isActive ? 'active' : ''}`}
-          >
-            Offline
-          </NavLink>
         </nav>
 
         <div className="app-header-right">
@@ -271,7 +187,6 @@ export function AppShell({ anomalies = [] }: AppShellProps) {
             className={`btn app-btn-icon ${activeFilterCount > 0 ? 'has-badge' : ''}`}
             onClick={() => setFilterOpen(!filterOpen)}
             title="Filters"
-            disabled={offlineRoute}
           >
             🔍
             {activeFilterCount > 0 && <span className="app-btn-badge">{activeFilterCount}</span>}
@@ -280,7 +195,6 @@ export function AppShell({ anomalies = [] }: AppShellProps) {
             className={`btn app-btn-icon ${anomalies.length > 0 ? 'has-badge' : ''}`}
             onClick={() => setAnomalyOpen(!anomalyOpen)}
             title="Anomalies"
-            disabled={offlineRoute}
           >
             ⚠️
             {anomalies.length > 0 && <span className="app-btn-badge">{anomalies.length}</span>}
@@ -291,23 +205,17 @@ export function AppShell({ anomalies = [] }: AppShellProps) {
       <div className="app-body">
         {/* Sidebar */}
         <aside className={`app-sidebar ${sidebarCollapsed ? 'collapsed' : ''}`}>
-          {!sidebarCollapsed && (offlineRoute ? <OfflineSourcesPanel /> : <SessionList />)}
+          {!sidebarCollapsed && <SessionList />}
         </aside>
 
         {/* Main content */}
         <main className="app-main">
           {/* Breadcrumb */}
           <div className="app-breadcrumb">
-            {offlineRoute ? (
-              <span className="app-breadcrumb-crumb">
-                {selectedRunId ? `run: ${selectedRunId}` : 'No run selected'}
-              </span>
-            ) : (
-              <span className="app-breadcrumb-crumb">
-                {selectedConvId ? `conv: ${selectedConvId.slice(0, 8)}...` : 'No conversation selected'}
-              </span>
-            )}
-            {!offlineRoute && sessionId && (
+            <span className="app-breadcrumb-crumb">
+              {selectedConvId ? `conv: ${selectedConvId.slice(0, 8)}...` : 'No conversation selected'}
+            </span>
+            {sessionId && (
               <>
                 <span className="app-breadcrumb-sep">/</span>
                 <span className="app-breadcrumb-crumb">session: {sessionId.slice(0, 8)}...</span>
@@ -322,7 +230,7 @@ export function AppShell({ anomalies = [] }: AppShellProps) {
         </main>
 
         {/* Filter sidebar (right) */}
-        {!offlineRoute && filterOpen && (
+        {filterOpen && (
           <aside className="app-filter-sidebar">
             <FilterBar
               filters={filters}
@@ -336,7 +244,7 @@ export function AppShell({ anomalies = [] }: AppShellProps) {
       {/* Anomaly panel overlay */}
       <AnomalyPanel
         anomalies={anomalies}
-        isOpen={!offlineRoute && anomalyOpen}
+        isOpen={anomalyOpen}
         onClose={() => setAnomalyOpen(false)}
       />
     </div>
