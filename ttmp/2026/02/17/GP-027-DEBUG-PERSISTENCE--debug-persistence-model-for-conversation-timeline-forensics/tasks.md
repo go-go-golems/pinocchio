@@ -5,7 +5,7 @@
 - [x] Create broad debug persistence inventory document covering conversation, timeline, turns, raw events, transport, runtime, and error domains
 - [x] Create restricted implementation plan document focused on persisting conversation index in existing timeline store
 - [x] Create implementation diary document and keep it updated per implementation step
-- [ ] Add `ConversationRecord` model and extend `TimelineStore` interface with conversation index APIs (`UpsertConversation`, `GetConversation`, `ListConversations`)
+- [x] Add `ConversationRecord` model and extend `TimelineStore` interface with conversation index APIs (`UpsertConversation`, `GetConversation`, `ListConversations`)
 - [ ] Add SQLite migration for `timeline_conversations` table and indexes
 - [ ] Add in-memory timeline store parity for conversation index
 - [ ] Wire conversation index writes from `ConvManager` lifecycle touch points

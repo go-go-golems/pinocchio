@@ -40,6 +40,18 @@ func NewInMemoryTimelineStore(maxEntitiesPerConv int) *InMemoryTimelineStore {
 
 func (s *InMemoryTimelineStore) Close() error { return nil }
 
+func (s *InMemoryTimelineStore) UpsertConversation(context.Context, ConversationRecord) error {
+	return nil
+}
+
+func (s *InMemoryTimelineStore) GetConversation(context.Context, string) (ConversationRecord, bool, error) {
+	return ConversationRecord{}, false, nil
+}
+
+func (s *InMemoryTimelineStore) ListConversations(context.Context, int, int64) ([]ConversationRecord, error) {
+	return []ConversationRecord{}, nil
+}
+
 func (s *InMemoryTimelineStore) Upsert(ctx context.Context, convID string, version uint64, entity *timelinepb.TimelineEntityV1) error {
 	if s == nil {
 		return errors.New("in-memory timeline store: nil store")

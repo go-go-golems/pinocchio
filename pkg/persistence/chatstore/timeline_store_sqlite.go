@@ -43,6 +43,18 @@ func (s *SQLiteTimelineStore) Close() error {
 	return s.db.Close()
 }
 
+func (s *SQLiteTimelineStore) UpsertConversation(context.Context, ConversationRecord) error {
+	return nil
+}
+
+func (s *SQLiteTimelineStore) GetConversation(context.Context, string) (ConversationRecord, bool, error) {
+	return ConversationRecord{}, false, nil
+}
+
+func (s *SQLiteTimelineStore) ListConversations(context.Context, int, int64) ([]ConversationRecord, error) {
+	return []ConversationRecord{}, nil
+}
+
 func (s *SQLiteTimelineStore) migrate() error {
 	if s == nil || s.db == nil {
 		return errors.New("sqlite timeline store: db is nil")

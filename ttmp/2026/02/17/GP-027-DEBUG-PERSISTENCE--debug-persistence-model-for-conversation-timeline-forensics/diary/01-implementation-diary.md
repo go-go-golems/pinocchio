@@ -47,3 +47,35 @@ Prepared the ticket for active implementation with a concrete one-task-at-a-time
 
 1. Implement `ConversationRecord` and extend `TimelineStore` interfaces.
 2. Update stubs/tests to compile against the new interface.
+
+## Step 2: Introduce conversation index contract in `TimelineStore`
+
+Added the shared `ConversationRecord` model and extended `TimelineStore` with conversation-index methods, then patched test doubles and store implementations to compile.
+
+### What I changed
+
+- Extended timeline store contract:
+  - `pinocchio/pkg/persistence/chatstore/timeline_store.go`
+  - added `ConversationRecord`
+  - added `UpsertConversation`, `GetConversation`, `ListConversations`
+- Added temporary no-op method implementations to concrete stores:
+  - `pinocchio/pkg/persistence/chatstore/timeline_store_sqlite.go`
+  - `pinocchio/pkg/persistence/chatstore/timeline_store_memory.go`
+- Updated interface stubs in tests:
+  - `pinocchio/pkg/webchat/router_debug_api_test.go`
+  - `pinocchio/pkg/ui/timeline_persist_test.go`
+
+### Why
+
+- This creates the API surface needed for conversation persistence without yet changing runtime behavior.
+- Keeping no-op implementations at this stage preserves compile/test stability for incremental delivery.
+
+### Validation
+
+- Ran: `go test ./pkg/persistence/chatstore ./pkg/webchat ./pkg/ui -count=1`
+- Result: all green.
+
+### Next
+
+1. Implement real SQLite `timeline_conversations` migration and CRUD/list queries.
+2. Implement in-memory conversation index parity.

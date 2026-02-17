@@ -30,6 +30,18 @@ func (s *stubTimelineStore) GetSnapshot(context.Context, string, uint64, int) (*
 	return s.snapshot, nil
 }
 
+func (s *stubTimelineStore) UpsertConversation(context.Context, chatstore.ConversationRecord) error {
+	return nil
+}
+
+func (s *stubTimelineStore) GetConversation(context.Context, string) (chatstore.ConversationRecord, bool, error) {
+	return chatstore.ConversationRecord{}, false, nil
+}
+
+func (s *stubTimelineStore) ListConversations(context.Context, int, int64) ([]chatstore.ConversationRecord, error) {
+	return nil, nil
+}
+
 func (s *stubTimelineStore) Close() error { return nil }
 
 type stubTurnStore struct {
