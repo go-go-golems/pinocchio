@@ -113,3 +113,34 @@ Replaced no-op methods with working conversation index implementations in both t
 
 1. Wire `ConvManager` lifecycle writes into `UpsertConversation` for richer metadata (`session_id`, `runtime_key`, status).
 2. Update debug routes to merge live + persisted conversations.
+
+## Step 4: Wire conversation index writes from `ConvManager` lifecycle
+
+Wired persistence writes at conversation lifecycle points so conversation metadata gets stored as conversations are created, touched by connection activity, and evicted.
+
+### What I changed
+
+- Added conversation index persistence helpers:
+  - `pinocchio/pkg/webchat/conversation.go`
+  - `persistConversationIndex`, `persistConversationIndexToStore`, `buildConversationRecord`
+- Added `createdAt` tracking in `Conversation` and persisted it through conversation record creation.
+- Called persistence writes in key lifecycle points:
+  - existing `GetOrCreate` path
+  - new conversation creation path
+  - `AddConn` and `RemoveConn`
+- Marked evicted conversations in persistence during idle eviction:
+  - `pinocchio/pkg/webchat/conv_manager_eviction.go`
+
+### Why
+
+- Store-only capability is not sufficient; we need runtime write wiring so persisted conversation records actually exist and stay fresh.
+
+### Validation
+
+- Ran: `go test ./pkg/webchat -count=1`
+- Result: green.
+
+### Next
+
+1. Update debug API conversation endpoints to merge live + persisted records.
+2. Add tests for persisted-only and merged responses.

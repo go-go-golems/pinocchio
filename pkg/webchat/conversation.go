@@ -49,6 +49,7 @@ type Conversation struct {
 	requests         map[string]*chatRequestRecord
 
 	lastActivity time.Time
+	createdAt    time.Time
 
 	semBuf *semFrameBuffer
 
@@ -154,6 +155,68 @@ func (c *Conversation) touchLocked(now time.Time) {
 	c.lastActivity = now
 }
 
+func (cm *ConvManager) persistConversationIndex(conv *Conversation, status string, lastError string) {
+	if cm == nil {
+		return
+	}
+	cm.mu.Lock()
+	store := cm.timelineStore
+	cm.mu.Unlock()
+	cm.persistConversationIndexToStore(store, conv, status, lastError)
+}
+
+func (cm *ConvManager) persistConversationIndexToStore(store chatstore.TimelineStore, conv *Conversation, status string, lastError string) {
+	if store == nil || conv == nil {
+		return
+	}
+	record := buildConversationRecord(conv, status, lastError)
+	if record.ConvID == "" {
+		return
+	}
+	persistCtx := conv.baseCtx
+	if persistCtx == nil {
+		persistCtx = context.Background()
+	}
+	persistCtx = context.WithoutCancel(persistCtx)
+	if err := store.UpsertConversation(persistCtx, record); err != nil {
+		log.Warn().Err(err).Str("component", "webchat").Str("conv_id", conv.ID).Msg("persist conversation index failed")
+	}
+}
+
+func buildConversationRecord(conv *Conversation, status string, lastError string) chatstore.ConversationRecord {
+	now := time.Now()
+	conv.mu.Lock()
+	defer conv.mu.Unlock()
+
+	createdAtMs := int64(0)
+	if !conv.createdAt.IsZero() {
+		createdAtMs = conv.createdAt.UnixMilli()
+	}
+	lastActivityMs := int64(0)
+	if !conv.lastActivity.IsZero() {
+		lastActivityMs = conv.lastActivity.UnixMilli()
+	}
+	if lastActivityMs == 0 {
+		lastActivityMs = now.UnixMilli()
+	}
+	if createdAtMs == 0 {
+		createdAtMs = lastActivityMs
+	}
+	if strings.TrimSpace(status) == "" {
+		status = "active"
+	}
+	return chatstore.ConversationRecord{
+		ConvID:         conv.ID,
+		SessionID:      conv.SessionID,
+		RuntimeKey:     conv.RuntimeKey,
+		CreatedAtMs:    createdAtMs,
+		LastActivityMs: lastActivityMs,
+		HasTimeline:    conv.timelineProj != nil,
+		Status:         strings.TrimSpace(status),
+		LastError:      strings.TrimSpace(lastError),
+	}
+}
+
 // topicForConv computes the event topic for a conversation.
 func topicForConv(convID string) string { return "chat:" + convID }
 
@@ -190,6 +253,7 @@ func (cm *ConvManager) GetOrCreate(convID, runtimeKey string, overrides map[stri
 
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
+	timelineStore := cm.timelineStore
 	if c, ok := cm.conns[convID]; ok {
 		c.mu.Lock()
 		c.ensureQueueInitLocked()
@@ -266,6 +330,7 @@ func (cm *ConvManager) GetOrCreate(convID, runtimeKey string, overrides map[stri
 				}
 			}
 		}
+		cm.persistConversationIndexToStore(timelineStore, c, "active", "")
 		return c, nil
 	}
 	sessionID := uuid.NewString()
@@ -280,13 +345,14 @@ func (cm *ConvManager) GetOrCreate(convID, runtimeKey string, overrides map[stri
 		requests:           map[string]*chatRequestRecord{},
 		semBuf:             newSemFrameBuffer(1000),
 		lastActivity:       now,
+		createdAt:          now,
 	}
-	if cm.timelineStore != nil {
+	if timelineStore != nil {
 		hook := cm.timelineUpsertHook
 		if hook != nil {
-			conv.timelineProj = NewTimelineProjector(conv.ID, cm.timelineStore, hook(conv))
+			conv.timelineProj = NewTimelineProjector(conv.ID, timelineStore, hook(conv))
 		} else {
-			conv.timelineProj = NewTimelineProjector(conv.ID, cm.timelineStore, nil)
+			conv.timelineProj = NewTimelineProjector(conv.ID, timelineStore, nil)
 		}
 	}
 	sub, subClose, err := cm.buildSubscriber(convID)
@@ -350,6 +416,7 @@ func (cm *ConvManager) GetOrCreate(convID, runtimeKey string, overrides map[stri
 	}
 
 	cm.conns[convID] = conv
+	cm.persistConversationIndexToStore(timelineStore, conv, "active", "")
 	return conv, nil
 }
 
@@ -379,6 +446,7 @@ func (cm *ConvManager) AddConn(conv *Conversation, c *websocket.Conn) {
 	if stream != nil && !stream.IsRunning() {
 		_ = stream.Start(baseCtx)
 	}
+	cm.persistConversationIndex(conv, "active", "")
 }
 
 func (cm *ConvManager) RemoveConn(conv *Conversation, c *websocket.Conn) {
@@ -390,7 +458,9 @@ func (cm *ConvManager) RemoveConn(conv *Conversation, c *websocket.Conn) {
 	conv.mu.Unlock()
 	if conv.pool != nil {
 		conv.pool.Remove(c)
+		cm.persistConversationIndex(conv, "active", "")
 		return
 	}
 	_ = c.Close()
+	cm.persistConversationIndex(conv, "active", "")
 }
