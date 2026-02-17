@@ -22,19 +22,19 @@ RelatedFiles:
     - Path: pinocchio/cmd/web-chat/web/src/config/runtimeConfig.ts
       Note: Runtime config contract for window.__PINOCCHIO_WEBCHAT_CONFIG__
     - Path: pinocchio/cmd/web-chat/web/src/debug-ui/api/debugApi.test.ts
-      Note: Regression test for root-load fallback retry and sticky prefix
+      Note: Regression test for runtime-config driven `/chat/api/debug/*` URL construction
     - Path: pinocchio/cmd/web-chat/web/src/debug-ui/api/debugApi.ts
-      Note: Investigated absolute API path usage
+      Note: Runtime-config driven debug API base path (legacy fallback removed)
     - Path: pinocchio/cmd/web-chat/web/src/debug-ui/routes/index.tsx
       Note: Router basename now sourced from runtime config
     - Path: pinocchio/cmd/web-chat/web/src/utils/basePrefix.test.ts
       Note: Coverage for runtime-config and router basename behavior
     - Path: pinocchio/cmd/web-chat/web/src/utils/basePrefix.ts
-      Note: Added runtime prefix cache for discovered debug-api mount prefix
+      Note: Runtime-config driven base prefix resolution (no fallback cache)
     - Path: pinocchio/cmd/web-chat/web/vite.config.ts
       Note: |-
         Investigated backend port proxy configuration
-        Dev server runtime config provider for app-config.js
+        Dev server proxy for backend-served app-config.js
     - Path: pinocchio/pkg/webchat/router.go
       Note: Investigated route registration rules
     - Path: pinocchio/pkg/webchat/router_debug_api_test.go
@@ -47,7 +47,7 @@ RelatedFiles:
       Note: Primary investigation output
 ExternalSources: []
 Summary: Step-by-step investigation and implementation diary for the debug UI 404 issue.
-LastUpdated: 2026-02-17T13:59:00-05:00
+LastUpdated: 2026-02-17T14:19:00-05:00
 WhatFor: Record command-level investigation progress, findings, and follow-up implementation tasks.
 WhenToUse: Use when reviewing how GP-01-FIX-DEBUG-UI findings were derived and validated.
 ---
@@ -655,4 +655,95 @@ The implementation now works for both deployment modes:
 ### Technical details
 
 - Recommended Vite dev invocation for your case:
-  - `VITE_BACKEND_ORIGIN=http://localhost:8081 VITE_WEBCHAT_BASE_PREFIX=/chat npm run dev -- --port 5714`
+  - `VITE_BACKEND_ORIGIN=http://localhost:8081 npm run dev -- --port 5714`
+
+## Step 9: Remove backward-compat fallback and simplify Vite runtime config
+
+I implemented the follow-up cleanup: remove the fallback retry/cached-prefix behavior and rely on a single runtime-config path for prefix resolution.
+
+I also removed the extra Vite prefix env (`VITE_WEBCHAT_BASE_PREFIX`) and switched dev mode to pull `app-config.js` from the backend directly.
+
+### Prompt Context
+
+**User prompt (verbatim):** "do we need the VITE_WEBCHAT_BASE_PREFIX if it's served by appconfig now?"
+
+**Assistant interpretation:** If backend can serve config centrally, remove duplicated prefix config in Vite and legacy fallback code.
+
+**Inferred user intent:** simplify local/dev setup and reduce divergent configuration paths.
+
+**Commit (code):** pending in current workspace
+
+### What I did
+
+- Removed legacy fallback/cache in debug API client:
+  - `pinocchio/cmd/web-chat/web/src/debug-ui/api/debugApi.ts`
+  - now uses runtime base prefix directly for `/api/debug/*`
+- Updated debug API tests to assert direct runtime-config pathing:
+  - `pinocchio/cmd/web-chat/web/src/debug-ui/api/debugApi.test.ts`
+- Removed runtime prefix mutators from base prefix helper:
+  - `pinocchio/cmd/web-chat/web/src/utils/basePrefix.ts`
+  - updated tests in `pinocchio/cmd/web-chat/web/src/utils/basePrefix.test.ts`
+- Simplified Vite config:
+  - `pinocchio/cmd/web-chat/web/vite.config.ts`
+  - removed runtime-config plugin/env-based `VITE_WEBCHAT_BASE_PREFIX`
+  - added `/app-config.js` proxy to `VITE_BACKEND_ORIGIN`
+- Exposed top-level `/app-config.js` from backend even with root mount:
+  - `pinocchio/cmd/web-chat/main.go`
+  - when `--root /chat`, both `/chat/app-config.js` and `/app-config.js` now serve identical config
+- Updated docs:
+  - `pinocchio/cmd/web-chat/README.md`
+  - removed `VITE_WEBCHAT_BASE_PREFIX` from runbook
+
+### Why
+
+- One runtime config source (backend) avoids split-brain behavior between Go flags and Vite env.
+- Removing fallback retries makes endpoint resolution explicit and easier to reason about.
+
+### What worked
+
+- Test suite remained green:
+  - `go test ./cmd/web-chat/... ./pkg/webchat -count=1`
+  - `npm run check`
+  - `npx vitest run src/debug-ui/api/debugApi.test.ts src/utils/basePrefix.test.ts`
+- Live port validation (`8081` backend, `5714` Vite):
+  - `curl http://localhost:8081/app-config.js` -> 200 with `{\"basePrefix\":\"/chat\"...}`
+  - `curl http://localhost:8081/chat/app-config.js` -> 200 with same payload
+  - `curl http://localhost:5714/app-config.js` -> 200 (proxied)
+  - `curl http://localhost:5714/chat/api/debug/conversations` -> 200
+  - `curl http://localhost:5714/api/debug/conversations` -> 404 (expected under `/chat` root)
+
+### What didn't work
+
+- N/A.
+
+### What I learned
+
+- Serving top-level `/app-config.js` from backend is the key piece that lets Vite stay prefix-agnostic while still letting the frontend compute `/chat/*` URLs correctly.
+
+### What was tricky to build
+
+- Keeping bundled mode and Vite mode both valid required serving config in two reachable places when mounted under custom root (`/chat/app-config.js` for bundled pages and `/app-config.js` for Vite root pages).
+
+### What warrants a second pair of eyes
+
+- Whether we also want to expose `/chat/app-config.js` in Vite dev for parity, or leave only `/app-config.js` as the supported dev entrypoint.
+
+### What should be done in the future
+
+1. Add an HTTP integration test that asserts `/app-config.js` availability and payload when `--root` is custom.
+2. Add a small UI message when debug API is disabled instead of surfacing raw fetch errors.
+
+### Code review instructions
+
+- Read config ownership and mount behavior first:
+  - `pinocchio/cmd/web-chat/main.go`
+  - `pinocchio/cmd/web-chat/web/vite.config.ts`
+- Then verify prefix consumer changes:
+  - `pinocchio/cmd/web-chat/web/src/utils/basePrefix.ts`
+  - `pinocchio/cmd/web-chat/web/src/debug-ui/api/debugApi.ts`
+  - `pinocchio/cmd/web-chat/web/src/debug-ui/api/debugApi.test.ts`
+
+### Technical details
+
+- Updated dev invocation:
+  - `VITE_BACKEND_ORIGIN=http://localhost:8081 npm run dev -- --port 5714`

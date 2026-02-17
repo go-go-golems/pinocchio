@@ -1,7 +1,5 @@
 import { getRuntimeConfig } from '../config/runtimeConfig';
 
-let runtimeBasePrefix: string | null = null;
-
 function normalizePrefix(prefix: string): string {
   const trimmed = prefix.trim();
   if (!trimmed || trimmed === '/') {
@@ -11,22 +9,11 @@ function normalizePrefix(prefix: string): string {
   return withLeadingSlash.replace(/\/+$/, '');
 }
 
-export function setRuntimeBasePrefix(prefix: string): void {
-  runtimeBasePrefix = normalizePrefix(prefix);
-}
-
-export function clearRuntimeBasePrefix(): void {
-  runtimeBasePrefix = null;
-}
-
 function configuredBasePrefix(): string {
   return normalizePrefix(getRuntimeConfig().basePrefix ?? '');
 }
 
 export function basePrefixFromLocation(): string {
-  if (runtimeBasePrefix !== null) {
-    return runtimeBasePrefix;
-  }
   const configured = configuredBasePrefix();
   if (configured) {
     return configured;

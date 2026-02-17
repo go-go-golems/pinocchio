@@ -18,3 +18,7 @@
 - Added explicit runtime config channel via `app-config.js` for both Go-served and Vite-served modes
 - Wired frontend prefix consumers to runtime config (`basePrefix`) and debug router basename
 - Added `src/utils/basePrefix.test.ts` and rebuilt bundled frontend assets in `static/dist`
+- Removed legacy fallback retry/cache in debug API client; requests now use runtime `basePrefix` directly
+- Simplified Vite setup: removed `VITE_WEBCHAT_BASE_PREFIX` and proxied `/app-config.js` to backend via `VITE_BACKEND_ORIGIN`
+- Updated backend routing so `/app-config.js` is served at top-level even with `--root /chat` (while keeping `/chat/app-config.js`)
+- Verified live with backend `:8081` and Vite `:5714`: `/app-config.js` returns `{\"basePrefix\":\"/chat\"...}` and `/chat/api/debug/conversations` returns 200

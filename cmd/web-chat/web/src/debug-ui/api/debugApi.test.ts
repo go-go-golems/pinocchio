@@ -1,6 +1,5 @@
 import { configureStore } from '@reduxjs/toolkit';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { clearRuntimeBasePrefix } from '../../utils/basePrefix';
 import { debugApi } from './debugApi';
 
 function createTestStore() {
@@ -12,13 +11,12 @@ function createTestStore() {
   });
 }
 
-describe('debugApi baseQuery prefix fallback', () => {
+describe('debugApi baseQuery prefix resolution', () => {
   const originalFetch = globalThis.fetch;
   const originalRequest = globalThis.Request;
   const originalWindow = (globalThis as { window?: Window }).window;
 
   beforeEach(() => {
-    clearRuntimeBasePrefix();
     Object.defineProperty(globalThis, 'window', {
       configurable: true,
       value: {
@@ -26,8 +24,13 @@ describe('debugApi baseQuery prefix fallback', () => {
           pathname: '/',
           search: '?debug=1',
         },
+        __PINOCCHIO_WEBCHAT_CONFIG__: {
+          basePrefix: '/chat',
+          debugApiEnabled: true,
+        },
       },
     });
+
     globalThis.Request = class extends originalRequest {
       constructor(input: RequestInfo | URL, init?: RequestInit) {
         if (typeof input === 'string' && input.startsWith('/')) {
@@ -44,7 +47,6 @@ describe('debugApi baseQuery prefix fallback', () => {
   });
 
   afterEach(() => {
-    clearRuntimeBasePrefix();
     vi.restoreAllMocks();
     globalThis.fetch = originalFetch;
     globalThis.Request = originalRequest;
@@ -54,7 +56,7 @@ describe('debugApi baseQuery prefix fallback', () => {
     });
   });
 
-  it('retries /chat-prefixed debug API paths after a root 404', async () => {
+  it('uses configured base prefix for debug API paths', async () => {
     const store = createTestStore();
     const calls: string[] = [];
 
@@ -62,9 +64,6 @@ describe('debugApi baseQuery prefix fallback', () => {
       const rawUrl = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
       const url = rawUrl.replace(/^https?:\/\/[^/]+/, '');
       calls.push(url);
-      if (url === '/api/debug/conversations') {
-        return new Response('404 page not found', { status: 404 });
-      }
       if (url === '/chat/api/debug/conversations') {
         return new Response(JSON.stringify({ items: [] }), {
           status: 200,
@@ -95,16 +94,10 @@ describe('debugApi baseQuery prefix fallback', () => {
 
     const conversations = await store.dispatch(debugApi.endpoints.getConversations.initiate()).unwrap();
     expect(conversations).toEqual([]);
-    expect(calls).toEqual(['/api/debug/conversations', '/chat/api/debug/conversations']);
 
     const conversation = await store.dispatch(debugApi.endpoints.getConversation.initiate('conv-1')).unwrap();
     expect(conversation.id).toBe('conv-1');
 
-    // Prefix discovery should be sticky after successful fallback.
-    expect(calls).toEqual([
-      '/api/debug/conversations',
-      '/chat/api/debug/conversations',
-      '/chat/api/debug/conversations/conv-1',
-    ]);
+    expect(calls).toEqual(['/chat/api/debug/conversations', '/chat/api/debug/conversations/conv-1']);
   });
 });

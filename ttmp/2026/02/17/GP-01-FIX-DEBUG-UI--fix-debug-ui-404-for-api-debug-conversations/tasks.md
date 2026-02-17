@@ -10,3 +10,6 @@
 - [x] Update `cmd/web-chat/web/vite.config.ts` docs and runbook to emphasize `VITE_BACKEND_ORIGIN=http://localhost:8081` when backend is not on `:8080`
 - [ ] Add smoke/integration test coverage for debug endpoint access when mounted under `--root /chat` (`/chat/api/debug/conversations`)
 - [x] Validate end-to-end manually with backend on `:8081` and Vite on `:5714`, and record results in ticket changelog/diary
+- [x] Remove legacy debug-api fallback retry (`/api/debug/*` -> `/chat/api/debug/*`) and make debug API prefix purely runtime-config driven
+- [x] Simplify Vite dev setup by removing `VITE_WEBCHAT_BASE_PREFIX` and proxying `/app-config.js` from `VITE_BACKEND_ORIGIN`
+- [x] Expose top-level `/app-config.js` from Go backend even when mounted under `--root /chat` so Vite can fetch runtime prefix/debug flags without extra envs

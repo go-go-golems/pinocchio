@@ -1,20 +1,13 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import {
   basePrefixFromLocation,
-  clearRuntimeBasePrefix,
   routerBasenameFromRuntimeConfig,
-  setRuntimeBasePrefix,
 } from './basePrefix';
 
 describe('basePrefix helpers', () => {
   const originalWindow = (globalThis as { window?: Window }).window;
 
-  beforeEach(() => {
-    clearRuntimeBasePrefix();
-  });
-
   afterEach(() => {
-    clearRuntimeBasePrefix();
     Object.defineProperty(globalThis, 'window', {
       configurable: true,
       value: originalWindow,
@@ -33,16 +26,14 @@ describe('basePrefix helpers', () => {
     expect(basePrefixFromLocation()).toBe('/chat');
   });
 
-  it('runtime override has higher precedence than runtime config', () => {
+  it('falls back to first location segment when runtime config is missing', () => {
     Object.defineProperty(globalThis, 'window', {
       configurable: true,
       value: {
-        location: { pathname: '/' },
-        __PINOCCHIO_WEBCHAT_CONFIG__: { basePrefix: '/chat' },
+        location: { pathname: '/chat/inspect' },
       },
     });
-    setRuntimeBasePrefix('/other');
-    expect(basePrefixFromLocation()).toBe('/other');
+    expect(basePrefixFromLocation()).toBe('/chat');
   });
 
   it('only applies router basename when location is under configured prefix', () => {

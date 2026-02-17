@@ -101,14 +101,14 @@ go run ./cmd/web-chat --addr :8081 --root /chat --debug-api
 
 # frontend (from cmd/web-chat/web)
 VITE_BACKEND_ORIGIN=http://localhost:8081 \
-VITE_WEBCHAT_BASE_PREFIX=/chat \
 npm run dev -- --port 5714
 ```
 
 Runtime prefix is communicated to the TS app via `app-config.js`:
 
-- bundled Go app serves `/<root>/app-config.js` from command settings
-- Vite dev server serves `/app-config.js` from `VITE_WEBCHAT_BASE_PREFIX`
+- Go backend serves `app-config.js` from command settings (`--root`, `--debug-api`)
+- when mounted under `--root /chat`, backend exposes both `/chat/app-config.js` and `/app-config.js`
+- Vite dev server proxies `/app-config.js` to `VITE_BACKEND_ORIGIN`
 
 ## Frontend Dev Checks
 

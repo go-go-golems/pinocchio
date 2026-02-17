@@ -207,7 +207,7 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 	timelineHandler := webhttp.NewTimelineHandler(srv.TimelineService(), timelineLogger)
 	appMux.HandleFunc("/api/timeline", timelineHandler)
 	appMux.HandleFunc("/api/timeline/", timelineHandler)
-	appMux.HandleFunc("/app-config.js", func(w http.ResponseWriter, r *http.Request) {
+	serveAppConfigJS := func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
@@ -218,7 +218,8 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 			return
 		}
 		_, _ = io.WriteString(w, appConfigJS)
-	})
+	}
+	appMux.HandleFunc("/app-config.js", serveAppConfigJS)
 	appMux.Handle("/api/", srv.APIHandler())
 	appMux.Handle("/", srv.UIHandler())
 
@@ -239,6 +240,7 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 		if !strings.HasSuffix(prefix, "/") {
 			prefix = prefix + "/"
 		}
+		parent.HandleFunc("/app-config.js", serveAppConfigJS)
 		parent.Handle(prefix, http.StripPrefix(strings.TrimRight(prefix, "/"), appMux))
 		httpSrv.Handler = parent
 		log.Info().Str("root", prefix).Msg("mounted webchat under custom root")
