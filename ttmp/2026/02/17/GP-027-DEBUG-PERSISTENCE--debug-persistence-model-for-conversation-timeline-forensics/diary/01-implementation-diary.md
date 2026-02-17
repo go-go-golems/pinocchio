@@ -144,3 +144,34 @@ Wired persistence writes at conversation lifecycle points so conversation metada
 
 1. Update debug API conversation endpoints to merge live + persisted records.
 2. Add tests for persisted-only and merged responses.
+
+## Step 5: Merge live + persisted conversation data in debug endpoints
+
+Implemented merge behavior for debug conversation list/detail endpoints so historical persisted records are surfaced even when conversations are no longer live.
+
+### What I changed
+
+- Updated conversation list endpoint:
+  - `pinocchio/pkg/webchat/router_debug_routes.go`
+  - `/api/debug/conversations` now merges:
+    - persisted records from `timelineStore.ListConversations`
+    - live records from `ConvManager`
+  - added `source` marker (`persisted`, `live`, `merged`) in response items
+- Updated conversation detail endpoint:
+  - `pinocchio/pkg/webchat/router_debug_routes.go`
+  - `/api/debug/conversations/:id` now resolves from persisted store when conversation is not live
+  - merges fields when both live and persisted records exist
+
+### Why
+
+- This is the API behavior required for debug UI to discover historical conversations post-restart.
+
+### Validation
+
+- Ran: `go test ./pkg/webchat -count=1`
+- Result: green.
+
+### Next
+
+1. Add explicit regression tests for persisted-only and merged live/persisted responses.
+2. Run broader package tests and finalize task/changelog state.
