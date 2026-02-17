@@ -175,3 +175,30 @@ Implemented merge behavior for debug conversation list/detail endpoints so histo
 
 1. Add explicit regression tests for persisted-only and merged live/persisted responses.
 2. Run broader package tests and finalize task/changelog state.
+
+## Step 6: Add persisted/merged debug endpoint tests and finalize phase-1 scope decision
+
+Added explicit regression tests for persisted-only and merged conversation responses, and finalized the phase-1 scope decision on turns enrichment.
+
+### What I changed
+
+- Expanded debug API tests:
+  - `pinocchio/pkg/webchat/router_debug_api_test.go`
+  - upgraded `stubTimelineStore` to support persisted conversation list/get
+  - added `TestAPIHandler_DebugConversations_PersistedOnly`
+  - added `TestAPIHandler_DebugConversations_MergedLiveAndPersisted`
+
+### Scope decision
+
+- Turn enrichment helper on `TurnStore` is deferred to phase-2.
+- Rationale: phase-1 historical discovery is already unlocked by timeline conversation index; turns remain queryable by existing `conv_id`/`session_id` fields.
+
+### Validation
+
+- Ran: `go test ./pkg/webchat -count=1`
+- Result: green.
+
+### Next
+
+1. Run full targeted suite for changed packages.
+2. Finalize changelog/task state and share commit sequence.

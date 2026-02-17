@@ -10,6 +10,6 @@
 - [x] Add in-memory timeline store parity for conversation index
 - [x] Wire conversation index writes from `ConvManager` lifecycle touch points
 - [x] Update `/api/debug/conversations` and `/api/debug/conversations/:id` to merge live + persisted conversation records
-- [ ] Add test coverage for persisted-only and merged live/persisted debug conversation responses
-- [ ] Decide whether turn enrichment should be phase-1 (`TurnStore` helper) or deferred
+- [x] Add test coverage for persisted-only and merged live/persisted debug conversation responses
+- [x] Decide whether turn enrichment should be phase-1 (`TurnStore` helper) or deferred (decision: defer to phase-2; current `conv_id`/`session_id` keys are sufficient for phase-1)
 - [x] Upload restricted implementation plan to reMarkable under ticket folder and record artifact path

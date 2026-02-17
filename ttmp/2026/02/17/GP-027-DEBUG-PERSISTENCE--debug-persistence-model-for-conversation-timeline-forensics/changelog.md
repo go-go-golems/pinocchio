@@ -11,3 +11,4 @@
 - Implemented `timeline_conversations` persistence in SQLite and in-memory timeline stores, with new conversation index tests
 - Wired conversation index write-through in `ConvManager` lifecycle (`GetOrCreate`, connection attach/detach, idle eviction)
 - Updated debug conversation endpoints to merge live in-memory and persisted timeline conversation index data
+- Added regression tests for persisted-only and merged debug conversation responses; deferred turn-summary enrichment helper to phase-2
