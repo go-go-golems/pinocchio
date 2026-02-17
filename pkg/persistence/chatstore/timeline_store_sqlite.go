@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"math"
+	"strings"
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -43,16 +44,188 @@ func (s *SQLiteTimelineStore) Close() error {
 	return s.db.Close()
 }
 
-func (s *SQLiteTimelineStore) UpsertConversation(context.Context, ConversationRecord) error {
+func (s *SQLiteTimelineStore) UpsertConversation(ctx context.Context, record ConversationRecord) error {
+	if s == nil || s.db == nil {
+		return errors.New("sqlite timeline store: db is nil")
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	now := time.Now().UnixMilli()
+	record = normalizeConversationRecord(record, now)
+	if record.ConvID == "" {
+		return errors.New("sqlite timeline store: convID is empty")
+	}
+	lastSeenVersion, err := uint64ToInt64(record.LastSeenVersion)
+	if err != nil {
+		return errors.Wrap(err, "sqlite timeline store: last_seen_version overflow")
+	}
+	hasTimeline := int64(0)
+	if record.HasTimeline {
+		hasTimeline = 1
+	}
+
+	_, err = s.db.ExecContext(ctx, `
+		INSERT INTO timeline_conversations (
+			conv_id, session_id, runtime_key, created_at_ms, last_activity_ms,
+			last_seen_version, has_timeline, status, last_error
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT(conv_id) DO UPDATE SET
+			session_id = CASE
+				WHEN excluded.session_id <> '' THEN excluded.session_id
+				ELSE timeline_conversations.session_id
+			END,
+			runtime_key = CASE
+				WHEN excluded.runtime_key <> '' THEN excluded.runtime_key
+				ELSE timeline_conversations.runtime_key
+			END,
+			created_at_ms = CASE
+				WHEN timeline_conversations.created_at_ms > 0 THEN timeline_conversations.created_at_ms
+				ELSE excluded.created_at_ms
+			END,
+			last_activity_ms = CASE
+				WHEN excluded.last_activity_ms > timeline_conversations.last_activity_ms THEN excluded.last_activity_ms
+				ELSE timeline_conversations.last_activity_ms
+			END,
+			last_seen_version = CASE
+				WHEN excluded.last_seen_version > timeline_conversations.last_seen_version THEN excluded.last_seen_version
+				ELSE timeline_conversations.last_seen_version
+			END,
+			has_timeline = CASE
+				WHEN excluded.has_timeline = 1 OR timeline_conversations.has_timeline = 1 THEN 1
+				ELSE 0
+			END,
+			status = CASE
+				WHEN excluded.status <> '' THEN excluded.status
+				ELSE timeline_conversations.status
+			END,
+			last_error = CASE
+				WHEN excluded.last_error <> '' THEN excluded.last_error
+				ELSE timeline_conversations.last_error
+			END
+	`, record.ConvID, record.SessionID, record.RuntimeKey, record.CreatedAtMs, record.LastActivityMs, lastSeenVersion, hasTimeline, record.Status, record.LastError)
+	if err != nil {
+		return errors.Wrap(err, "sqlite timeline store: upsert conversation")
+	}
 	return nil
 }
 
-func (s *SQLiteTimelineStore) GetConversation(context.Context, string) (ConversationRecord, bool, error) {
-	return ConversationRecord{}, false, nil
+func (s *SQLiteTimelineStore) GetConversation(ctx context.Context, convID string) (ConversationRecord, bool, error) {
+	if s == nil || s.db == nil {
+		return ConversationRecord{}, false, errors.New("sqlite timeline store: db is nil")
+	}
+	convID = strings.TrimSpace(convID)
+	if convID == "" {
+		return ConversationRecord{}, false, errors.New("sqlite timeline store: convID is empty")
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	var (
+		record          ConversationRecord
+		lastSeenVersion int64
+		hasTimeline     int64
+	)
+	err := s.db.QueryRowContext(ctx, `
+		SELECT conv_id, session_id, runtime_key, created_at_ms, last_activity_ms,
+		       last_seen_version, has_timeline, status, last_error
+		FROM timeline_conversations
+		WHERE conv_id = ?
+	`, convID).Scan(
+		&record.ConvID,
+		&record.SessionID,
+		&record.RuntimeKey,
+		&record.CreatedAtMs,
+		&record.LastActivityMs,
+		&lastSeenVersion,
+		&hasTimeline,
+		&record.Status,
+		&record.LastError,
+	)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ConversationRecord{}, false, nil
+	}
+	if err != nil {
+		return ConversationRecord{}, false, errors.Wrap(err, "sqlite timeline store: get conversation")
+	}
+	lastSeenU64, err := int64ToUint64(lastSeenVersion)
+	if err != nil {
+		return ConversationRecord{}, false, errors.Wrap(err, "sqlite timeline store: invalid conversation version")
+	}
+	record.LastSeenVersion = lastSeenU64
+	record.HasTimeline = hasTimeline == 1
+	if record.Status == "" {
+		record.Status = "active"
+	}
+	return record, true, nil
 }
 
-func (s *SQLiteTimelineStore) ListConversations(context.Context, int, int64) ([]ConversationRecord, error) {
-	return []ConversationRecord{}, nil
+func (s *SQLiteTimelineStore) ListConversations(ctx context.Context, limit int, sinceMs int64) ([]ConversationRecord, error) {
+	if s == nil || s.db == nil {
+		return nil, errors.New("sqlite timeline store: db is nil")
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if limit <= 0 {
+		limit = 200
+	}
+
+	query := `
+		SELECT conv_id, session_id, runtime_key, created_at_ms, last_activity_ms,
+		       last_seen_version, has_timeline, status, last_error
+		FROM timeline_conversations
+	`
+	args := make([]any, 0, 2)
+	if sinceMs > 0 {
+		query += ` WHERE last_activity_ms >= ?`
+		args = append(args, sinceMs)
+	}
+	query += ` ORDER BY last_activity_ms DESC, conv_id ASC LIMIT ?`
+	args = append(args, limit)
+
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, errors.Wrap(err, "sqlite timeline store: list conversations")
+	}
+	defer func() { _ = rows.Close() }()
+
+	records := make([]ConversationRecord, 0, limit)
+	for rows.Next() {
+		var (
+			record          ConversationRecord
+			lastSeenVersion int64
+			hasTimeline     int64
+		)
+		if err := rows.Scan(
+			&record.ConvID,
+			&record.SessionID,
+			&record.RuntimeKey,
+			&record.CreatedAtMs,
+			&record.LastActivityMs,
+			&lastSeenVersion,
+			&hasTimeline,
+			&record.Status,
+			&record.LastError,
+		); err != nil {
+			return nil, errors.Wrap(err, "sqlite timeline store: scan conversation")
+		}
+		lastSeenU64, err := int64ToUint64(lastSeenVersion)
+		if err != nil {
+			return nil, errors.Wrap(err, "sqlite timeline store: invalid conversation version")
+		}
+		record.LastSeenVersion = lastSeenU64
+		record.HasTimeline = hasTimeline == 1
+		if record.Status == "" {
+			record.Status = "active"
+		}
+		records = append(records, record)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, errors.Wrap(err, "sqlite timeline store: iterate conversations")
+	}
+	return records, nil
 }
 
 func (s *SQLiteTimelineStore) migrate() error {
@@ -78,6 +251,21 @@ func (s *SQLiteTimelineStore) migrate() error {
 		  ON timeline_entities(conv_id, version);`,
 		`CREATE INDEX IF NOT EXISTS timeline_entities_by_created
 		  ON timeline_entities(conv_id, created_at_ms);`,
+		`CREATE TABLE IF NOT EXISTS timeline_conversations (
+		  conv_id TEXT PRIMARY KEY,
+		  session_id TEXT NOT NULL,
+		  runtime_key TEXT NOT NULL DEFAULT '',
+		  created_at_ms INTEGER NOT NULL,
+		  last_activity_ms INTEGER NOT NULL,
+		  last_seen_version INTEGER NOT NULL DEFAULT 0,
+		  has_timeline INTEGER NOT NULL DEFAULT 1,
+		  status TEXT NOT NULL DEFAULT 'active',
+		  last_error TEXT NOT NULL DEFAULT ''
+		);`,
+		`CREATE INDEX IF NOT EXISTS timeline_conversations_by_last_activity
+		  ON timeline_conversations(last_activity_ms DESC, conv_id ASC);`,
+		`CREATE INDEX IF NOT EXISTS timeline_conversations_by_session
+		  ON timeline_conversations(session_id);`,
 	}
 	for _, st := range stmts {
 		if _, err := s.db.Exec(st); err != nil {

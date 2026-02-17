@@ -79,3 +79,37 @@ Added the shared `ConversationRecord` model and extended `TimelineStore` with co
 
 1. Implement real SQLite `timeline_conversations` migration and CRUD/list queries.
 2. Implement in-memory conversation index parity.
+
+## Step 3: Implement conversation index persistence in timeline stores
+
+Replaced no-op methods with working conversation index implementations in both timeline stores and added dedicated persistence tests.
+
+### What I changed
+
+- SQLite timeline store implementation:
+  - `pinocchio/pkg/persistence/chatstore/timeline_store_sqlite.go`
+  - added migration for `timeline_conversations`
+  - implemented `UpsertConversation`, `GetConversation`, `ListConversations`
+- In-memory timeline store parity:
+  - `pinocchio/pkg/persistence/chatstore/timeline_store_memory.go`
+  - added `conversations` index map
+  - implemented `UpsertConversation`, `GetConversation`, `ListConversations`
+  - auto-updated conversation index on timeline `Upsert` writes (last activity/version)
+- Added tests:
+  - `pinocchio/pkg/persistence/chatstore/timeline_store_sqlite_test.go`
+  - `pinocchio/pkg/persistence/chatstore/timeline_store_memory_test.go`
+
+### Why
+
+- This is the storage backbone needed before wiring conversation lifecycle writes and debug endpoint merge behavior.
+
+### Validation
+
+- Ran: `go test ./pkg/persistence/chatstore -count=1`
+- Ran: `go test ./pkg/webchat ./pkg/ui -count=1`
+- Result: all green.
+
+### Next
+
+1. Wire `ConvManager` lifecycle writes into `UpsertConversation` for richer metadata (`session_id`, `runtime_key`, status).
+2. Update debug routes to merge live + persisted conversations.

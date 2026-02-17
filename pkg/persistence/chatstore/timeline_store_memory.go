@@ -3,6 +3,7 @@ package chatstore
 import (
 	"context"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -18,6 +19,7 @@ type InMemoryTimelineStore struct {
 	mu                 sync.Mutex
 	maxEntitiesPerConv int
 	convs              map[string]*inMemTimeline
+	conversations      map[string]ConversationRecord
 }
 
 type inMemTimeline struct {
@@ -35,21 +37,73 @@ func NewInMemoryTimelineStore(maxEntitiesPerConv int) *InMemoryTimelineStore {
 	return &InMemoryTimelineStore{
 		maxEntitiesPerConv: maxEntitiesPerConv,
 		convs:              map[string]*inMemTimeline{},
+		conversations:      map[string]ConversationRecord{},
 	}
 }
 
 func (s *InMemoryTimelineStore) Close() error { return nil }
 
-func (s *InMemoryTimelineStore) UpsertConversation(context.Context, ConversationRecord) error {
+func (s *InMemoryTimelineStore) UpsertConversation(_ context.Context, record ConversationRecord) error {
+	if s == nil {
+		return errors.New("in-memory timeline store: nil store")
+	}
+	now := time.Now().UnixMilli()
+	record = normalizeConversationRecord(record, now)
+	if record.ConvID == "" {
+		return errors.New("in-memory timeline store: convID is empty")
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.conversations[record.ConvID] = mergeConversationRecord(s.conversations[record.ConvID], record, now)
 	return nil
 }
 
-func (s *InMemoryTimelineStore) GetConversation(context.Context, string) (ConversationRecord, bool, error) {
-	return ConversationRecord{}, false, nil
+func (s *InMemoryTimelineStore) GetConversation(_ context.Context, convID string) (ConversationRecord, bool, error) {
+	if s == nil {
+		return ConversationRecord{}, false, errors.New("in-memory timeline store: nil store")
+	}
+	convID = strings.TrimSpace(convID)
+	if convID == "" {
+		return ConversationRecord{}, false, errors.New("in-memory timeline store: convID is empty")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	record, ok := s.conversations[convID]
+	if !ok {
+		return ConversationRecord{}, false, nil
+	}
+	return record, true, nil
 }
 
-func (s *InMemoryTimelineStore) ListConversations(context.Context, int, int64) ([]ConversationRecord, error) {
-	return []ConversationRecord{}, nil
+func (s *InMemoryTimelineStore) ListConversations(_ context.Context, limit int, sinceMs int64) ([]ConversationRecord, error) {
+	if s == nil {
+		return nil, errors.New("in-memory timeline store: nil store")
+	}
+	if limit <= 0 {
+		limit = 200
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	records := make([]ConversationRecord, 0, len(s.conversations))
+	for _, record := range s.conversations {
+		if sinceMs > 0 && record.LastActivityMs < sinceMs {
+			continue
+		}
+		records = append(records, record)
+	}
+	sort.Slice(records, func(i, j int) bool {
+		if records[i].LastActivityMs == records[j].LastActivityMs {
+			return records[i].ConvID < records[j].ConvID
+		}
+		return records[i].LastActivityMs > records[j].LastActivityMs
+	})
+	if len(records) > limit {
+		records = records[:limit]
+	}
+	return records, nil
 }
 
 func (s *InMemoryTimelineStore) Upsert(ctx context.Context, convID string, version uint64, entity *timelinepb.TimelineEntityV1) error {
@@ -106,6 +160,13 @@ func (s *InMemoryTimelineStore) Upsert(ctx context.Context, convID string, versi
 	if newVersion > conv.version {
 		conv.version = newVersion
 	}
+	s.conversations[convID] = mergeConversationRecord(s.conversations[convID], ConversationRecord{
+		ConvID:          convID,
+		LastActivityMs:  now,
+		LastSeenVersion: conv.version,
+		HasTimeline:     true,
+		Status:          "active",
+	}, now)
 
 	// Enforce per-conversation size limit by evicting the oldest versioned entities.
 	if s.maxEntitiesPerConv > 0 && len(conv.entities) > s.maxEntitiesPerConv {
@@ -199,4 +260,61 @@ func (s *InMemoryTimelineStore) GetSnapshot(ctx context.Context, convID string, 
 		ServerTimeMs: time.Now().UnixMilli(),
 		Entities:     entities,
 	}, nil
+}
+
+func normalizeConversationRecord(record ConversationRecord, now int64) ConversationRecord {
+	record.ConvID = strings.TrimSpace(record.ConvID)
+	record.SessionID = strings.TrimSpace(record.SessionID)
+	record.RuntimeKey = strings.TrimSpace(record.RuntimeKey)
+	record.Status = strings.TrimSpace(record.Status)
+	record.LastError = strings.TrimSpace(record.LastError)
+	if record.CreatedAtMs <= 0 {
+		record.CreatedAtMs = now
+	}
+	if record.LastActivityMs <= 0 {
+		record.LastActivityMs = record.CreatedAtMs
+	}
+	if record.Status == "" {
+		record.Status = "active"
+	}
+	if record.LastSeenVersion > 0 {
+		record.HasTimeline = true
+	}
+	return record
+}
+
+func mergeConversationRecord(existing, incoming ConversationRecord, now int64) ConversationRecord {
+	incoming = normalizeConversationRecord(incoming, now)
+	if existing.ConvID == "" {
+		return incoming
+	}
+	if incoming.ConvID == "" {
+		incoming.ConvID = existing.ConvID
+	}
+	if existing.CreatedAtMs > 0 {
+		incoming.CreatedAtMs = existing.CreatedAtMs
+	}
+	if incoming.LastActivityMs < existing.LastActivityMs {
+		incoming.LastActivityMs = existing.LastActivityMs
+	}
+	if incoming.LastSeenVersion < existing.LastSeenVersion {
+		incoming.LastSeenVersion = existing.LastSeenVersion
+	}
+	if incoming.SessionID == "" {
+		incoming.SessionID = existing.SessionID
+	}
+	if incoming.RuntimeKey == "" {
+		incoming.RuntimeKey = existing.RuntimeKey
+	}
+	incoming.HasTimeline = existing.HasTimeline || incoming.HasTimeline
+	if incoming.Status == "" {
+		incoming.Status = existing.Status
+	}
+	if incoming.LastError == "" {
+		incoming.LastError = existing.LastError
+	}
+	if incoming.Status == "" {
+		incoming.Status = "active"
+	}
+	return incoming
 }
