@@ -12,3 +12,4 @@
 - Wired conversation index write-through in `ConvManager` lifecycle (`GetOrCreate`, connection attach/detach, idle eviction)
 - Updated debug conversation endpoints to merge live in-memory and persisted timeline conversation index data
 - Added regression tests for persisted-only and merged debug conversation responses; deferred turn-summary enrichment helper to phase-2
+- Final validation passed: `go test ./cmd/web-chat/... ./pkg/persistence/chatstore ./pkg/webchat ./pkg/ui -count=1`

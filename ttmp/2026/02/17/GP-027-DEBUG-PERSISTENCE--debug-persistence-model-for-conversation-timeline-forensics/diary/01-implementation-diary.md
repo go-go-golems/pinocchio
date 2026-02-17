@@ -202,3 +202,20 @@ Added explicit regression tests for persisted-only and merged conversation respo
 
 1. Run full targeted suite for changed packages.
 2. Finalize changelog/task state and share commit sequence.
+
+## Step 7: Final validation run across changed packages
+
+Ran the broader validation set for all touched backend areas and confirmed a clean pass.
+
+### Validation commands
+
+- `go test ./cmd/web-chat/... ./pkg/persistence/chatstore ./pkg/webchat ./pkg/ui -count=1`
+
+### Result
+
+- All targeted packages passed.
+
+### Completion state
+
+- All tasks in `GP-027-DEBUG-PERSISTENCE` are complete for phase-1 scope.
+- Turn enrichment helper remains intentionally deferred to phase-2.
