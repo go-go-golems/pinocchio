@@ -109,8 +109,6 @@ func TestAPIHandler_DebugTurnsEnvelopeMetadata(t *testing.T) {
 }
 
 func TestAPIHandler_DebugStepRoutes(t *testing.T) {
-	t.Setenv("PINOCCHIO_WEBCHAT_DEBUG", "1")
-
 	stepCtrl := toolloop.NewStepController()
 	r := &Router{
 		cm:                &ConvManager{conns: map[string]*Conversation{}},
@@ -283,8 +281,6 @@ func TestAPIHandler_DebugTurnDetail(t *testing.T) {
 }
 
 func TestAPIHandler_DebugRoutesDisabled(t *testing.T) {
-	t.Setenv("PINOCCHIO_WEBCHAT_DEBUG", "1")
-
 	r := &Router{
 		cm:                &ConvManager{conns: map[string]*Conversation{}},
 		stepCtrl:          toolloop.NewStepController(),

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"os"
 	"sort"
 	"strings"
 
@@ -279,12 +278,9 @@ func (r *Router) registerDebugAPIHandlers(mux *http.ServeMux) {
 		})
 	})
 
-	// debug endpoints (dev-gated via PINOCCHIO_WEBCHAT_DEBUG=1)
+	// step-control endpoints are mounted with the rest of debug routes and
+	// inherit the router-level debug gating.
 	stepEnableHandler := func(w http.ResponseWriter, r0 *http.Request) {
-		if os.Getenv("PINOCCHIO_WEBCHAT_DEBUG") != "1" {
-			http.NotFound(w, r0)
-			return
-		}
 		if r0.Method != http.MethodPost {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
@@ -319,10 +315,6 @@ func (r *Router) registerDebugAPIHandlers(mux *http.ServeMux) {
 	mux.HandleFunc("/api/debug/step/enable", stepEnableHandler)
 
 	stepDisableHandler := func(w http.ResponseWriter, r0 *http.Request) {
-		if os.Getenv("PINOCCHIO_WEBCHAT_DEBUG") != "1" {
-			http.NotFound(w, r0)
-			return
-		}
 		if r0.Method != http.MethodPost {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
@@ -354,10 +346,6 @@ func (r *Router) registerDebugAPIHandlers(mux *http.ServeMux) {
 	mux.HandleFunc("/api/debug/step/disable", stepDisableHandler)
 
 	continueHandler := func(w http.ResponseWriter, r0 *http.Request) {
-		if os.Getenv("PINOCCHIO_WEBCHAT_DEBUG") != "1" {
-			http.NotFound(w, r0)
-			return
-		}
 		if r0.Method != http.MethodPost {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
