@@ -137,6 +137,17 @@ export function registerDefaultSemHandlers() {
     });
   });
 
+  registerSem('llm.thinking.summary', (ev, dispatch) => {
+    const data = decodeProto<LlmFinal>(LlmFinalSchema, ev.data);
+    upsertEntity(dispatch, {
+      id: ev.id,
+      kind: 'message',
+      createdAt: createdAtFromEvent(ev),
+      updatedAt: Date.now(),
+      props: { content: data?.text ?? '', streaming: false },
+    });
+  });
+
   registerSem('tool.start', (ev, dispatch) => {
     const data = decodeProto<ToolStart>(ToolStartSchema, ev.data);
     addEntity(dispatch, { id: ev.id, kind: 'tool_call', createdAt: createdAtFromEvent(ev), props: { name: data?.name, input: data?.input } });

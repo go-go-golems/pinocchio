@@ -88,6 +88,41 @@ func TestTimelineProjector_LlmFinalFallsBackToDeltaContentWhenFinalTextEmpty(t *
 	require.False(t, msg.Streaming)
 }
 
+func TestTimelineProjector_ThinkingSummaryRemainsNonStreaming(t *testing.T) {
+	store := chatstore.NewInMemoryTimelineStore(100)
+	p := NewTimelineProjector("conv-thinking-summary", store, nil)
+
+	const msgID = "msg-thinking-summary"
+	require.NoError(t, p.ApplySemFrame(context.Background(), semFrame(t, "llm.thinking.start", msgID, 1, map[string]any{
+		"id":   msgID,
+		"role": "thinking",
+	})))
+	require.NoError(t, p.ApplySemFrame(context.Background(), semFrame(t, "llm.thinking.delta", msgID, 2, map[string]any{
+		"id":         msgID,
+		"delta":      "partial",
+		"cumulative": "partial reasoning",
+	})))
+	require.NoError(t, p.ApplySemFrame(context.Background(), semFrame(t, "llm.thinking.final", msgID, 3, map[string]any{
+		"id": msgID,
+	})))
+	require.NoError(t, p.ApplySemFrame(context.Background(), semFrame(t, "llm.thinking.summary", msgID, 4, map[string]any{
+		"id":   msgID,
+		"text": "final summary text",
+	})))
+
+	snap, err := store.GetSnapshot(context.Background(), "conv-thinking-summary", 0, 100)
+	require.NoError(t, err)
+	require.Len(t, snap.Entities, 1)
+
+	entity := snap.Entities[0]
+	require.Equal(t, msgID, entity.Id)
+	msg := entity.GetMessage()
+	require.NotNil(t, msg)
+	require.Equal(t, "thinking", msg.Role)
+	require.Equal(t, "final summary text", msg.Content)
+	require.False(t, msg.Streaming)
+}
+
 func TestTimelineProjector_ProjectsChatMessageEvent(t *testing.T) {
 	store := chatstore.NewInMemoryTimelineStore(100)
 	p := NewTimelineProjector("conv-chat-message", store, nil)

@@ -1,0 +1,19 @@
+idx  event_id                                       seq                  role      streaming  content_len
+---  ---------------------------------------------  -------------------  --------  ---------  -----------
+238  dcce2010-8ce4-434d-a6b4-8c7fa1e72899:thinking  1771453377987000000  thinking                        
+215  dcce2010-8ce4-434d-a6b4-8c7fa1e72899:thinking  1771453377691000000  thinking                        
+213  dcce2010-8ce4-434d-a6b4-8c7fa1e72899:thinking  1771453377664000000  thinking                        
+194  dcce2010-8ce4-434d-a6b4-8c7fa1e72899:thinking  1771453377410000000  thinking                        
+186  dcce2010-8ce4-434d-a6b4-8c7fa1e72899:thinking  1771453377153000000  thinking                        
+170  dcce2010-8ce4-434d-a6b4-8c7fa1e72899:thinking  1771453376898000000  thinking                        
+156  dcce2010-8ce4-434d-a6b4-8c7fa1e72899:thinking  1771453376644000000  thinking                        
+144  dcce2010-8ce4-434d-a6b4-8c7fa1e72899:thinking  1771453376380000000  thinking                        
+132  dcce2010-8ce4-434d-a6b4-8c7fa1e72899:thinking  1771453376125000000  thinking                        
+111  dcce2010-8ce4-434d-a6b4-8c7fa1e72899:thinking  1771453375874000000  thinking                        
+97   dcce2010-8ce4-434d-a6b4-8c7fa1e72899:thinking  1771453375622000000  thinking                        
+85   dcce2010-8ce4-434d-a6b4-8c7fa1e72899:thinking  1771453374057000000  thinking                        
+74   dcce2010-8ce4-434d-a6b4-8c7fa1e72899:thinking  1771453373795000000  thinking                        
+55   dcce2010-8ce4-434d-a6b4-8c7fa1e72899:thinking  1771453373533000000  thinking                        
+37   dcce2010-8ce4-434d-a6b4-8c7fa1e72899:thinking  1771453373257000000  thinking                        
+23   dcce2010-8ce4-434d-a6b4-8c7fa1e72899:thinking  1771453372992000000  thinking                        
+2    dcce2010-8ce4-434d-a6b4-8c7fa1e72899:thinking  1771453372730000000  thinking  1          7          

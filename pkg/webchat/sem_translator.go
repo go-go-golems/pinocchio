@@ -342,11 +342,13 @@ func (et *EventTranslator) RegisterDefaultHandlers() {
 		case "reasoning-summary":
 			if text, ok := ev.Data["text"].(string); ok && text != "" {
 				id := baseID + ":thinking"
-				data, err := protoToRaw(&sempb.LlmDelta{Id: id, Delta: text, Cumulative: text})
+				// Emit a dedicated non-streaming summary event so we never reopen
+				// thinking stream state after llm.thinking.final.
+				data, err := protoToRaw(&sempb.LlmFinal{Id: id, Text: text})
 				if err != nil {
 					return nil, err
 				}
-				out := map[string]any{"type": "llm.thinking.delta", "id": id, "data": data}
+				out := map[string]any{"type": "llm.thinking.summary", "id": id, "data": data}
 				if metaPB := buildLlmInferenceMetadata(md.LLMInferenceData); metaPB != nil {
 					if metaRaw, err := protoToRaw(metaPB); err == nil && metaRaw != nil {
 						out["metadata"] = metaRaw
