@@ -40,7 +40,7 @@ RelatedFiles:
         Current closed oneof timeline schema targeted for V2 open model
 ExternalSources: []
 Summary: Hard-cutover design for replacing TimelineEntityV1 closed oneof snapshots with open TimelineEntityV2 kind/props model so new domain kinds can ship without touching pinocchio transport proto again.
-LastUpdated: 2026-02-19T10:22:00-05:00
+LastUpdated: 2026-02-19T10:58:00-05:00
 WhatFor: Define the pinocchio-side architectural change needed to decouple future custom timeline kinds from core schema churn.
 WhenToUse: Use when implementing timeline transport changes, frontend mapping updates, and projection pipeline cutover in pinocchio webchat.
 ---
@@ -197,6 +197,26 @@ runtime event
 - Decision: renderer selection must be by entity kind.
 - Rationale: predictable plugin registration and simpler mapper code.
 
+## Extension Rule (No Future Proto Edits)
+
+After this cutover, adding a new timeline kind must not require editing `pinocchio/proto/sem/timeline/transport.proto`.
+
+Required steps for a new domain kind:
+
+1. Backend projector (or custom timeline handler) emits:
+- `TimelineEntityV2.kind = "<new_kind>"`
+- `TimelineEntityV2.props = { ...domain payload... }`
+2. Frontend optional props normalization:
+- register normalizer in `cmd/web-chat/web/src/sem/timelinePropsRegistry.ts`
+3. Frontend renderer:
+- register renderer via `registerTimelineRenderer("<new_kind>", Renderer)` from `cmd/web-chat/web/src/webchat/rendererRegistry.ts`
+
+Explicit non-requirement:
+
+1. No new transport protobuf messages.
+2. No `oneof` expansion.
+3. No pinocchio-core schema churn for app-owned kinds.
+
 ## Alternatives Considered
 
 1. Keep V1 and add more oneof cases:
@@ -280,6 +300,8 @@ Frontend decode + render pipeline:
 4. `pinocchio/cmd/web-chat/web/src/store/timelineSlice.ts`
 5. `pinocchio/cmd/web-chat/web/src/webchat/ChatWidget.tsx`
 6. `pinocchio/cmd/web-chat/web/src/webchat/components/Timeline.tsx`
+7. `pinocchio/cmd/web-chat/web/src/sem/timelinePropsRegistry.ts`
+8. `pinocchio/cmd/web-chat/web/src/webchat/rendererRegistry.ts`
 
 Debug/UI paths:
 

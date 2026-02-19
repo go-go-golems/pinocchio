@@ -2,7 +2,7 @@
 
 ## TODO
 
-- [ ] Replace closed `TimelineEntityV1` oneof with open `TimelineEntityV2` transport model in `proto/sem/timeline/transport.proto`
+- [x] Replace closed `TimelineEntityV1` oneof with open `TimelineEntityV2` transport model in `proto/sem/timeline/transport.proto`
 - [x] Define and generate protobuf messages for `TimelineEntityV2`, `TimelineUpsertV2`, and `TimelineSnapshotV2` (Go + TS)
 - [x] Update backend projection path to construct/store `TimelineEntityV2` instead of `TimelineEntityV1`:
   - `pkg/webchat/timeline_projector.go`
@@ -18,8 +18,8 @@
   - `cmd/web-chat/web/src/debug-ui/ws/debugTimelineWsManager.ts`
 - [x] Remove oneof-case mapping logic and enforce `kind + props` as canonical frontend render contract
 - [x] Update tests for V2-only behavior across backend/frontend/websocket hydration
-- [ ] Remove V1-specific helper code/comments/docs from active paths (hard cutover, no compatibility)
-- [ ] Document extension rule in pinocchio docs: new domain kinds must not require transport proto edits after V2
+- [x] Remove V1-specific helper code/comments/docs from active paths (hard cutover, no compatibility)
+- [x] Document extension rule in pinocchio docs: new domain kinds must not require transport proto edits after V2
 - [x] P2 fix: persist `LastSeenVersion` in conversation index records (issue from `pkg/webchat/conversation.go`):
   - populate `LastSeenVersion` in `buildConversationRecord` (`pkg/webchat/conversation.go`)
   - on timeline upsert, update `timeline_conversations.last_seen_version` (and `has_timeline`) in SQLite path (`pkg/persistence/chatstore/timeline_store_sqlite.go`)

@@ -88,3 +88,21 @@ Implemented frontend TimelineEntityV2 decode/mapping cutover and added a timelin
 - /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/cmd/web-chat/web/src/webchat/index.ts — Exports renderer registry APIs for app integration
 - /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/ttmp/2026/02/19/GP-028-TIMELINE-ENTITY-V2-OPEN-MODEL--replace-timelineentityv1-oneof-with-open-timelineentityv2-for-decoupled-kind-extension/tasks.md — Checked off frontend decode/mapping + oneof-removal + test update tasks
 - /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/ttmp/2026/02/19/GP-028-TIMELINE-ENTITY-V2-OPEN-MODEL--replace-timelineentityv1-oneof-with-open-timelineentityv2-for-decoupled-kind-extension/reference/01-diary.md — Added Step 4 implementation diary entry
+
+
+## 2026-02-19
+
+Completed final V1 hard cut by removing V1 timeline transport messages from proto and adding a props-normalizer registry so special-case kind handling is registry-driven.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/proto/sem/timeline/transport.proto — Removed `TimelineEntityV1`/`TimelineUpsertV1`/`TimelineSnapshotV1` definitions and stale V1 imports
+- /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/pkg/sem/pb/proto/sem/timeline/transport.pb.go — Regenerated Go bindings now V2-only
+- /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/cmd/web-chat/web/src/sem/pb/proto/sem/timeline/transport_pb.ts — Regenerated web frontend bindings now V2-only
+- /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/web/src/sem/pb/proto/sem/timeline/transport_pb.ts — Regenerated shared web bindings now V2-only
+- /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/cmd/web-chat/web/src/sem/timelinePropsRegistry.ts — Added registry for kind-specific props normalizers (`tool_result`, `thinking_mode`)
+- /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/cmd/web-chat/web/src/sem/timelineMapper.ts — Delegates normalization to registry instead of hardcoded per-kind checks
+- /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/cmd/web-chat/web/src/webchat/index.ts — Exports props-normalizer registration API for app-level extensions
+- /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/ttmp/2026/02/19/GP-028-TIMELINE-ENTITY-V2-OPEN-MODEL--replace-timelineentityv1-oneof-with-open-timelineentityv2-for-decoupled-kind-extension/design-doc/01-timelineentityv2-open-model-cutover-plan.md — Added explicit extension rule: new kinds must not require transport proto edits
+- /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/ttmp/2026/02/19/GP-028-TIMELINE-ENTITY-V2-OPEN-MODEL--replace-timelineentityv1-oneof-with-open-timelineentityv2-for-decoupled-kind-extension/tasks.md — Marked remaining V1-hard-cut and extension-rule tasks complete
+- /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/ttmp/2026/02/19/GP-028-TIMELINE-ENTITY-V2-OPEN-MODEL--replace-timelineentityv1-oneof-with-open-timelineentityv2-for-decoupled-kind-extension/reference/01-diary.md — Added Step 5 diary entry

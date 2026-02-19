@@ -22,7 +22,7 @@ RelatedFiles:
       Note: Added test verifying buildConversationRecord includes LastSeenVersion
 ExternalSources: []
 Summary: Implementation diary for GP-028 task-by-task execution and commits.
-LastUpdated: 2026-02-19T10:54:17-05:00
+LastUpdated: 2026-02-19T10:58:26-05:00
 WhatFor: Preserve exact implementation history, commands, failures, and validation for the TimelineEntityV2 cutover ticket.
 WhenToUse: Use when reviewing GP-028 progress or continuing implementation from the latest completed task.
 ---
@@ -418,3 +418,90 @@ Answer then continue"
 - Render dispatch now supports both:
   - built-in kind renderers,
   - extension renderers registered externally, plus per-instance `renderers` overrides.
+
+## Step 5: Final hard cut of V1 transport + props normalizer registry
+
+This slice completed the “no compatibility” requirement by removing V1 timeline transport messages from proto, regenerating bindings, and introducing a props-normalizer registry so the two previously hardcoded normalizations are registry-managed.
+
+### Prompt Context
+
+**User prompt (verbatim):** "did we register the two special widgets though now that we have the registry? instaed of the manual tests in propsFromTimelineEntity?"
+
+**Assistant interpretation:** Confirm whether special-case kind handling is registry-backed, then continue implementation to make it registry-backed.
+
+**Inferred user intent:** Avoid hardcoded per-kind logic in core mapper; keep extension model consistent.
+
+### What I did
+
+- Removed V1 transport definitions from proto:
+  - `proto/sem/timeline/transport.proto`
+  - removed:
+    - `TimelineEntityV1`
+    - `TimelineUpsertV1`
+    - `TimelineSnapshotV1`
+  - removed old V1 snapshot imports not needed by V2 transport.
+- Regenerated protobuf outputs after hard cut:
+  - `pkg/sem/pb/proto/sem/timeline/transport.pb.go`
+  - `cmd/web-chat/web/src/sem/pb/proto/sem/timeline/transport_pb.ts`
+  - `web/src/sem/pb/proto/sem/timeline/transport_pb.ts`
+- Replaced hardcoded special-case checks in `timelineMapper.ts` with registry dispatch:
+  - added `cmd/web-chat/web/src/sem/timelinePropsRegistry.ts`
+  - registered built-in normalizers for:
+    - `tool_result`
+    - `thinking_mode`
+  - `timelineMapper.ts` now delegates to `normalizeTimelineProps(kind, props)`.
+- Exposed props-normalizer registration APIs through webchat export surface:
+  - `cmd/web-chat/web/src/webchat/index.ts`
+- Documented extension rule in design doc:
+  - `design-doc/01-timelineentityv2-open-model-cutover-plan.md` now includes “Extension Rule (No Future Proto Edits)”.
+
+### Why
+
+- This enforces the hard cut: active code cannot accidentally rely on V1 symbols.
+- Props normalizer registry aligns projection extensibility with renderer extensibility.
+
+### What worked
+
+- Full backend suite passed after regeneration:
+  - `go test ./...`
+- Frontend checks passed:
+  - `cd cmd/web-chat/web && npm run check`
+- Debug websocket tests passed:
+  - `cd cmd/web-chat/web && npx vitest run src/debug-ui/ws/debugTimelineWsManager.test.ts`
+- Repository scan showed no non-generated V1 symbol usage remained.
+
+### What didn't work
+
+- `webchat/index.ts` export ordering failed Biome after adding new exports; fixed with Biome write pass.
+
+### What I learned
+
+- Maintaining both renderer and props-normalizer registries provides a clean split:
+  - normalization handles payload-shape quirks,
+  - renderer registry handles UI dispatch.
+
+### What was tricky to build
+
+- Ensuring generated bindings were actually purged of V1 required explicit post-regeneration symbol scans rather than assuming proto edits were enough.
+
+### What warrants a second pair of eyes
+
+- Confirm whether we want to expose props-normalizer APIs publicly long-term or keep them internal and app-owned via composition wrappers.
+
+### What should be done in the future
+
+- Optional: add a small frontend integration test that registers a custom kind normalizer + renderer end-to-end and asserts render fallback/override behavior.
+
+### Code review instructions
+
+- Hard cut:
+  - `proto/sem/timeline/transport.proto`
+  - regenerated transport bindings in Go/TS
+- Normalizer registry:
+  - `cmd/web-chat/web/src/sem/timelinePropsRegistry.ts`
+  - `cmd/web-chat/web/src/sem/timelineMapper.ts`
+  - `cmd/web-chat/web/src/webchat/index.ts`
+- Validation:
+  - `go test ./...`
+  - `cd cmd/web-chat/web && npm run check`
+  - `cd cmd/web-chat/web && npx vitest run src/debug-ui/ws/debugTimelineWsManager.test.ts`
