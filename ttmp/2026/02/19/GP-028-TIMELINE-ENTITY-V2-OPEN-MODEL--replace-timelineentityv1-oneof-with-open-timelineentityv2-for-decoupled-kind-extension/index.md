@@ -1,7 +1,7 @@
 ---
 Title: Replace TimelineEntityV1 oneof with open TimelineEntityV2 for decoupled kind extension
 Ticket: GP-028-TIMELINE-ENTITY-V2-OPEN-MODEL
-Status: completed
+Status: active
 Topics:
     - architecture
     - backend
@@ -22,7 +22,7 @@ RelatedFiles:
       Note: Conversation index persistence path with LastSeenVersion gap called out in ticket tasks
 ExternalSources: []
 Summary: Pinocchio-side plan for hard cutover from TimelineEntityV1 oneof snapshots to open TimelineEntityV2 kind/props transport, plus conversation-index version persistence fix.
-LastUpdated: 2026-02-19T10:59:10-05:00
+LastUpdated: 2026-02-19T11:01:15-05:00
 WhatFor: Track architecture, implementation tasks, and acceptance criteria for decoupling future custom timeline kinds from core pinocchio transport schema edits.
 WhenToUse: Use when implementing or reviewing timeline transport refactor and related persistence correctness fixes in pinocchio.
 ---
@@ -46,7 +46,7 @@ This ticket defines a pinocchio-core architectural refactor:
 
 ## Status
 
-Current status: **completed**
+Current status: **active**
 
 ## Topics
 

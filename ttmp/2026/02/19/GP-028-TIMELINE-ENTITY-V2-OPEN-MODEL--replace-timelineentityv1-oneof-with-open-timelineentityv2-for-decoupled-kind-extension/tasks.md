@@ -2,6 +2,25 @@
 
 ## TODO
 
+- [ ] Follow-up modularization: extract thinking-mode projection into self-contained backend module with explicit bootstrap (no `init()`):
+  - create `pkg/webchat/timeline_handlers_thinking_mode.go` containing only thinking-mode SEM decode + `TimelineEntityV2` upsert logic
+  - remove thinking-mode cases from `pkg/webchat/timeline_projector.go` switch
+  - replace `init()` registration in timeline handlers with explicit bootstrap API (for example `RegisterDefaultTimelineHandlers()` called by router/service startup)
+  - ensure startup bootstrap registers both generic built-ins and thinking-mode handler deterministically exactly once
+  - add backend tests proving:
+    - handler registration occurs through explicit bootstrap path
+    - thinking-mode projection still produces expected timeline entities
+- [ ] Follow-up modularization: isolate thinking-mode frontend behavior into self-contained files and explicit registration:
+  - add a thinking-mode frontend module (for example `cmd/web-chat/web/src/features/thinkingMode/timeline.tsx|.ts`) that exports:
+    - props normalizer registration
+    - renderer registration
+    - a single bootstrap function used by app startup
+  - stop referring to thinking-mode details from generic mapper/registry files after bootstrap wiring
+  - add frontend tests proving thinking-mode still renders correctly after module registration
+- [ ] Modularity acceptance gate: verify thinking-mode references are isolated:
+  - add a test/check (or script + test) that fails if `thinking.mode.*` projection logic appears outside thinking-mode module files
+  - add a test/check that fails if thinking-mode renderer/normalizer logic is duplicated outside thinking-mode frontend module files
+
 - [x] Replace closed `TimelineEntityV1` oneof with open `TimelineEntityV2` transport model in `proto/sem/timeline/transport.proto`
 - [x] Define and generate protobuf messages for `TimelineEntityV2`, `TimelineUpsertV2`, and `TimelineSnapshotV2` (Go + TS)
 - [x] Update backend projection path to construct/store `TimelineEntityV2` instead of `TimelineEntityV1`:

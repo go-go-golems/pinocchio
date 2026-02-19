@@ -22,7 +22,7 @@ RelatedFiles:
       Note: Added test verifying buildConversationRecord includes LastSeenVersion
 ExternalSources: []
 Summary: Implementation diary for GP-028 task-by-task execution and commits.
-LastUpdated: 2026-02-19T10:58:26-05:00
+LastUpdated: 2026-02-19T11:04:42-05:00
 WhatFor: Preserve exact implementation history, commands, failures, and validation for the TimelineEntityV2 cutover ticket.
 WhenToUse: Use when reviewing GP-028 progress or continuing implementation from the latest completed task.
 ---
@@ -505,3 +505,45 @@ This slice completed the “no compatibility” requirement by removing V1 timel
   - `go test ./...`
   - `cd cmd/web-chat/web && npm run check`
   - `cd cmd/web-chat/web && npx vitest run src/debug-ui/ws/debugTimelineWsManager.test.ts`
+
+## Step 6: Added explicit-bootstrap modularization follow-up tasks (thinking-mode isolation)
+
+I did not implement code in this step; I added concrete follow-up tasks to enforce true thinking-mode modularity with explicit bootstrap registration and isolation checks, then reopened ticket status to active.
+
+### Prompt Context
+
+**User prompt (verbatim):** "add tasks to do that, and register through explicit bootstrap (I don't like init). If that works, and we only refer to thiinking mode functionality in thinking mode files, then we know we have something truly modular."
+
+**Assistant interpretation:** Add actionable ticket tasks for extracting thinking-mode into self-contained backend/frontend modules, replacing `init()` registration with explicit bootstrap.
+
+**Inferred user intent:** Lock modularity in by design and tests, not by convention.
+
+### What I did
+
+- Added new TODO tasks in `tasks.md` for:
+  - backend extraction of thinking-mode projection into dedicated handler file(s),
+  - explicit bootstrap registration path (no `init()`),
+  - frontend self-contained thinking-mode module for normalizer + renderer registration,
+  - modularity acceptance gates that fail when thinking-mode logic leaks outside designated module files.
+- Reopened ticket status from `completed` to `active` in `index.md`.
+- Recorded this follow-up planning step in `changelog.md`.
+
+### Why
+
+- The core V2 migration is complete, but the remaining modularity objective is architectural: ensure thinking-mode behavior is isolated and bootstrapped explicitly.
+
+### What worked
+
+- Task additions are concrete enough to execute as incremental commits and include measurable acceptance criteria.
+
+### What didn't work
+
+- N/A (documentation-only step).
+
+### What should be done in the future
+
+- Execute the new follow-up tasks in order:
+  1. Replace timeline handler `init()` usage with explicit bootstrap.
+  2. Extract backend thinking-mode handler module.
+  3. Extract frontend thinking-mode module registration.
+  4. Add isolation enforcement tests/checks.
