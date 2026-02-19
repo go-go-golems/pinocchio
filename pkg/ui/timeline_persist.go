@@ -42,8 +42,8 @@ func StepTimelinePersistFunc(store chatstore.TimelineStore, convID string) func(
 			return err
 		}
 		entity := &timelinepb.TimelineEntityV2{
-			Id:   entityID,
-			Kind: "message",
+			Id:    entityID,
+			Kind:  "message",
 			Props: props,
 		}
 		return store.Upsert(ctx, convID, seq, entity)

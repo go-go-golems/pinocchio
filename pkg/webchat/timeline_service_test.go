@@ -15,8 +15,8 @@ func TestTimelineService_Snapshot(t *testing.T) {
 	t.Cleanup(func() { _ = store.Close() })
 
 	err := store.Upsert(context.Background(), "c1", 1, &timelinepb.TimelineEntityV2{
-		Id:   "m1",
-		Kind: "message",
+		Id:    "m1",
+		Kind:  "message",
 		Props: mustStruct(t, map[string]any{"role": "user", "content": "hello"}),
 	})
 	require.NoError(t, err)

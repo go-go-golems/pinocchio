@@ -150,8 +150,8 @@ func TestNewTimelineHTTPHandler_Contract(t *testing.T) {
 				Version: 1,
 				Entities: []*timelinepb.TimelineEntityV2{
 					{
-						Id:   "m1",
-						Kind: "message",
+						Id:    "m1",
+						Kind:  "message",
 						Props: mustStruct(t, map[string]any{"role": "assistant", "content": "ok"}),
 					},
 				},
