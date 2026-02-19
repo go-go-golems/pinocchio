@@ -22,6 +22,12 @@ RelatedFiles:
       Note: Extracted thinking-mode SEM decode and thinking_mode timeline upsert logic into a self-contained module
     - Path: /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/pkg/webchat/timeline_handlers_bootstrap_test.go
       Note: Added tests proving bootstrap idempotence and registry-dispatch behavior
+    - Path: /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/cmd/web-chat/thinkingmode/backend.go
+      Note: App-owned thinking-mode backend integration module (SEM + timeline handler registration)
+    - Path: /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/cmd/web-chat/web/src/features/thinkingMode/registerThinkingMode.tsx
+      Note: App-owned thinking-mode frontend module (SEM + normalizer + renderer registration)
+    - Path: /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/cmd/web-chat/web/src/features/thinkingMode/registerThinkingMode.test.tsx
+      Note: Frontend tests validating thinking-mode module registration behavior
     - Path: /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/pkg/persistence/chatstore/timeline_store_sqlite.go
       Note: Updated SQLite timeline upsert path to persist timeline_conversations.last_seen_version progression
     - Path: /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/pkg/persistence/chatstore/timeline_store_sqlite_test.go
@@ -30,7 +36,7 @@ RelatedFiles:
       Note: Added test verifying buildConversationRecord includes LastSeenVersion
 ExternalSources: []
 Summary: Implementation diary for GP-028 task-by-task execution and commits.
-LastUpdated: 2026-02-19T11:11:59-05:00
+LastUpdated: 2026-02-19T11:22:15-05:00
 WhatFor: Preserve exact implementation history, commands, failures, and validation for the TimelineEntityV2 cutover ticket.
 WhenToUse: Use when reviewing GP-028 progress or continuing implementation from the latest completed task.
 ---
@@ -664,3 +670,125 @@ I kept this as a focused code slice and committed it separately before docs, so 
   2. `TimelineProjector.ApplySemFrame(...)` invokes `handleTimelineHandlers(...)` before built-in switch cases.
   3. For `thinking.mode.*`, handler decodes proto payload and emits `TimelineEntityV2(kind="thinking_mode", props=ThinkingModeSnapshotV1)`.
   4. If no handler registered, projector falls through and no `thinking_mode` entity is produced.
+
+## Step 8: Move thinking-mode ownership into cmd/web-chat modules (backend + web)
+
+This step re-scoped thinking-mode from shared `pkg/webchat` defaults into app-owned `cmd/web-chat` modules, matching the requested ownership boundary. I moved both backend and frontend extension logic so thinking-mode registration is explicit at app startup and no longer hardcoded in core registries.
+
+I also adjusted generic core behavior so it no longer references `thinking_mode` directly (normalizer/renderer/SEM-core handlers), while preserving behavior by bootstrapping the new feature modules in command/web runtime entrypoints.
+
+### Prompt Context
+
+**User prompt (verbatim):** "the thinking mode stuff should entirely be inside cmd/web-chat, including the middlewares, in a thinking-mode package if possible (or subdirectory for the web part)."
+
+**Assistant interpretation:** Move thinking-mode implementation ownership out of shared core (`pkg/webchat`) and into `cmd/web-chat` app-owned packages/modules, including projection/translation/renderer wiring.
+
+**Inferred user intent:** Ensure thinking-mode is modular, app-specific, and removable without editing shared core code.
+
+**Commit (code):** d0a649dc4942b174d9363ed0da0d8e824d18b849 — "web-chat: move thinking-mode pipeline into cmd/web-chat modules"
+
+### What I did
+
+- Backend app-owned module:
+  - added `cmd/web-chat/thinkingmode/backend.go`
+  - added `Register()` bootstrap with `sync.Once`
+  - registers:
+    - SEM translation handlers for `EventThinkingModeStarted|Update|Completed`
+    - timeline projection handlers for `thinking.mode.*` via `webchat.RegisterTimelineHandler`.
+- Backend startup wiring:
+  - `cmd/web-chat/main.go` now calls `thinkingmode.Register()` explicitly.
+- Removed thinking-mode from shared backend defaults:
+  - deleted `pkg/webchat/timeline_handlers_thinking_mode.go`
+  - `pkg/webchat/timeline_handlers_bootstrap.go` now registers only builtin generic handlers
+  - `pkg/webchat/sem_translator.go` no longer registers thinking-mode typed-event SEM mappings.
+- Added backend regression tests for app-owned module:
+  - `cmd/web-chat/thinkingmode/backend_test.go`
+  - validates SEM translation registration and timeline projection behavior.
+- Frontend app-owned module:
+  - added `cmd/web-chat/web/src/features/thinkingMode/registerThinkingMode.tsx`
+  - module registers:
+    - `thinking.mode.*` SEM handlers,
+    - `thinking_mode` props normalizer,
+    - `thinking_mode` renderer (`ThinkingModeCard`).
+- Frontend explicit bootstrap wiring:
+  - `cmd/web-chat/web/src/ws/wsManager.ts` calls `registerThinkingModeModule()` after `registerDefaultSemHandlers()`
+  - `cmd/web-chat/web/src/webchat/ChatWidget.stories.tsx` does the same for scenario bootstrap.
+- Removed thinking-mode from frontend core registries:
+  - `cmd/web-chat/web/src/sem/registry.ts` (removed hardcoded `thinking.mode.*` handlers)
+  - `cmd/web-chat/web/src/sem/timelinePropsRegistry.ts` (removed builtin `thinking_mode` normalizer)
+  - `cmd/web-chat/web/src/webchat/rendererRegistry.ts` and `cmd/web-chat/web/src/webchat/cards.tsx` (removed builtin `thinking_mode` renderer/card).
+- Generalized timeline role mapping:
+  - `cmd/web-chat/web/src/webchat/components/Timeline.tsx` no longer special-cases `thinking_mode`; unknown non-log kinds render as system role.
+- Added frontend test:
+  - `cmd/web-chat/web/src/features/thinkingMode/registerThinkingMode.test.tsx`
+  - validates module-based normalizer/renderer registration and `thinking.mode.*` SEM projection behavior.
+
+### Why
+
+- This enforces an app/plugin boundary: shared webchat/core remains generic, while thinking-mode behavior is owned and bootstrapped by `cmd/web-chat`.
+
+### What worked
+
+- Go tests passed with app-owned backend module:
+  - `go test ./pkg/webchat ./cmd/web-chat/thinkingmode ./cmd/web-chat -count=1`
+  - `go test ./... -count=1`
+- Frontend checks/tests passed after module extraction:
+  - `cd cmd/web-chat/web && npm run check`
+  - `cd cmd/web-chat/web && npx vitest run src/features/thinkingMode/registerThinkingMode.test.tsx`
+  - `cd cmd/web-chat/web && npx vitest run src/debug-ui/ws/debugTimelineWsManager.test.ts`
+
+### What didn't work
+
+- First frontend lint run failed due Biome import-ordering in new files:
+  - `src/features/thinkingMode/registerThinkingMode.tsx`
+  - `src/features/thinkingMode/registerThinkingMode.test.tsx`
+- Fixed with:
+  - `npx --yes @biomejs/biome@2.3.8 check --write src/features/thinkingMode/registerThinkingMode.tsx src/features/thinkingMode/registerThinkingMode.test.tsx`
+
+### What I learned
+
+- For app-owned extensions where core handler maps are reset (`registerDefaultSemHandlers()`), module bootstrap should be explicit and repeatable (safe re-registration), not once-only on the frontend.
+
+### What was tricky to build
+
+- Two global registries have different semantics:
+  - backend `semregistry.RegisterByType` appends handlers (needs once semantics),
+  - frontend `registerDefaultSemHandlers()` clears SEM handlers on reconnect (needs re-bootstrap on each connect).
+- I used `sync.Once` only in backend app bootstrap, while frontend re-registers the module after each core reset.
+
+### What warrants a second pair of eyes
+
+- Confirm desired long-term ownership boundary for typed thinking-mode event structs in `pkg/inference/events`; current move localizes projection/rendering ownership, but typed event definitions remain shared.
+
+### What should be done in the future
+
+- Complete the remaining modularity acceptance gate:
+  1. add enforceable checks that fail if `thinking.mode.*` projection logic appears outside designated thinking-mode module paths,
+  2. add enforceable checks for renderer/normalizer duplication outside the frontend thinking-mode module.
+
+### Code review instructions
+
+- Backend module and startup wiring:
+  - `cmd/web-chat/thinkingmode/backend.go`
+  - `cmd/web-chat/main.go`
+  - `pkg/webchat/sem_translator.go`
+  - `pkg/webchat/timeline_handlers_bootstrap.go`
+- Frontend module and bootstrap wiring:
+  - `cmd/web-chat/web/src/features/thinkingMode/registerThinkingMode.tsx`
+  - `cmd/web-chat/web/src/ws/wsManager.ts`
+  - `cmd/web-chat/web/src/sem/registry.ts`
+  - `cmd/web-chat/web/src/sem/timelinePropsRegistry.ts`
+  - `cmd/web-chat/web/src/webchat/rendererRegistry.ts`
+- Validation:
+  - `go test ./... -count=1`
+  - `cd cmd/web-chat/web && npm run check`
+  - `cd cmd/web-chat/web && npx vitest run src/features/thinkingMode/registerThinkingMode.test.tsx`
+
+### Technical details
+
+- Backend ownership model now is:
+  - core registers generic timeline handlers only,
+  - `cmd/web-chat/thinkingmode.Register()` adds app-owned thinking handlers.
+- Frontend ownership model now is:
+  - core SEM/normalizer/renderer registries are generic defaults,
+  - `registerThinkingModeModule()` attaches thinking-mode behavior explicitly after core SEM handler reset.

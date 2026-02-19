@@ -10,13 +10,17 @@
   - add backend tests proving:
     - handler registration occurs through explicit bootstrap path
     - thinking-mode projection still produces expected timeline entities
-- [ ] Follow-up modularization: isolate thinking-mode frontend behavior into self-contained files and explicit registration:
+- [x] Follow-up modularization: isolate thinking-mode frontend behavior into self-contained files and explicit registration:
   - add a thinking-mode frontend module (for example `cmd/web-chat/web/src/features/thinkingMode/timeline.tsx|.ts`) that exports:
     - props normalizer registration
     - renderer registration
     - a single bootstrap function used by app startup
   - stop referring to thinking-mode details from generic mapper/registry files after bootstrap wiring
   - add frontend tests proving thinking-mode still renders correctly after module registration
+- [x] Move thinking-mode ownership to `cmd/web-chat` package modules (backend + web), removing app-specific thinking-mode behavior from `pkg/webchat` defaults:
+  - backend module: `cmd/web-chat/thinkingmode` registers SEM translation + timeline projection handlers
+  - frontend module: `cmd/web-chat/web/src/features/thinkingMode` registers SEM projection + props normalizer + renderer
+  - startup bootstrap explicitly wires module registration in app entrypoints (`cmd/web-chat/main.go`, web `wsManager`/storybook scenario bootstrap)
 - [ ] Modularity acceptance gate: verify thinking-mode references are isolated:
   - add a test/check (or script + test) that fails if `thinking.mode.*` projection logic appears outside thinking-mode module files
   - add a test/check that fails if thinking-mode renderer/normalizer logic is duplicated outside thinking-mode frontend module files

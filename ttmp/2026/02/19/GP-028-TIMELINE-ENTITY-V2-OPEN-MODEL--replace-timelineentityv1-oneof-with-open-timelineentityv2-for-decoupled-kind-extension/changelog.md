@@ -130,3 +130,23 @@ Implemented backend thinking-mode modularization with explicit bootstrap registr
 - /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/pkg/webchat/timeline_projector.go — Removed inline `thinking.mode.*` switch branch so custom dispatch goes through handler registry
 - /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/pkg/webchat/conversation.go — Wired startup bootstrap via `RegisterDefaultTimelineHandlers()` in `NewConvManager`
 - /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/pkg/webchat/timeline_handlers_bootstrap_test.go — Added idempotence + bootstrap-required projection tests
+
+
+## 2026-02-19
+
+Moved thinking-mode ownership into app-scoped `cmd/web-chat` modules (backend + frontend), removing thinking-mode handlers/normalizers/renderers from `pkg/webchat` and core webchat registries.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/cmd/web-chat/thinkingmode/backend.go — New app-owned backend module that registers SEM translation and timeline projection handlers for `thinking.mode.*`
+- /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/cmd/web-chat/thinkingmode/backend_test.go — Added backend tests for SEM translation and timeline projection registration
+- /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/cmd/web-chat/main.go — Explicit bootstrap for app-owned thinking-mode backend module
+- /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/pkg/webchat/sem_translator.go — Removed thinking-mode SEM mapping from default core translator registration
+- /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/pkg/webchat/timeline_handlers_bootstrap.go — Core default timeline handlers now register only generic built-ins
+- /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/pkg/webchat/timeline_handlers_thinking_mode.go — Deleted; thinking-mode projection moved to app-owned module
+- /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/cmd/web-chat/web/src/features/thinkingMode/registerThinkingMode.tsx — New frontend feature module with explicit registration for SEM handlers, normalizer, and renderer
+- /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/cmd/web-chat/web/src/features/thinkingMode/registerThinkingMode.test.tsx — Added frontend tests proving module registration behavior
+- /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/cmd/web-chat/web/src/ws/wsManager.ts — Startup bootstrap now explicitly registers thinking-mode frontend module after core SEM handlers
+- /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/cmd/web-chat/web/src/sem/registry.ts — Removed thinking-mode SEM projections from core default registry
+- /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/cmd/web-chat/web/src/sem/timelinePropsRegistry.ts — Removed thinking-mode normalizer from core built-ins
+- /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/cmd/web-chat/web/src/webchat/rendererRegistry.ts — Removed thinking-mode renderer from core built-ins
