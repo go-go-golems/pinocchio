@@ -14,13 +14,15 @@ import type { TeamAnalysisSnapshotV1 } from "./team_analysis_pb";
 import { file_proto_sem_timeline_team_analysis } from "./team_analysis_pb";
 import type { ToolCallSnapshotV1, ToolResultSnapshotV1 } from "./tool_pb";
 import { file_proto_sem_timeline_tool } from "./tool_pb";
-import type { Message } from "@bufbuild/protobuf";
+import type { Any } from "@bufbuild/protobuf/wkt";
+import { file_google_protobuf_any, file_google_protobuf_struct } from "@bufbuild/protobuf/wkt";
+import type { JsonObject, Message } from "@bufbuild/protobuf";
 
 /**
  * Describes the file proto/sem/timeline/transport.proto.
  */
 export const file_proto_sem_timeline_transport: GenFile = /*@__PURE__*/
-  fileDesc("CiJwcm90by9zZW0vdGltZWxpbmUvdHJhbnNwb3J0LnByb3RvEgxzZW0udGltZWxpbmUiogYKEFRpbWVsaW5lRW50aXR5VjESCgoCaWQYASABKAkSDAoEa2luZBgCIAEoCRIVCg1jcmVhdGVkX2F0X21zGAMgASgDEhUKDXVwZGF0ZWRfYXRfbXMYBCABKAMSMgoHbWVzc2FnZRgKIAEoCzIfLnNlbS50aW1lbGluZS5NZXNzYWdlU25hcHNob3RWMUgAEjUKCXRvb2xfY2FsbBgLIAEoCzIgLnNlbS50aW1lbGluZS5Ub29sQ2FsbFNuYXBzaG90VjFIABI5Cgt0b29sX3Jlc3VsdBgMIAEoCzIiLnNlbS50aW1lbGluZS5Ub29sUmVzdWx0U25hcHNob3RWMUgAEjAKBnN0YXR1cxgNIAEoCzIeLnNlbS50aW1lbGluZS5TdGF0dXNTbmFwc2hvdFYxSAASPQoNdGhpbmtpbmdfbW9kZRgOIAEoCzIkLnNlbS50aW1lbGluZS5UaGlua2luZ01vZGVTbmFwc2hvdFYxSAASQQoPbW9kZV9ldmFsdWF0aW9uGA8gASgLMiYuc2VtLnRpbWVsaW5lLk1vZGVFdmFsdWF0aW9uU25hcHNob3RWMUgAEj8KDmlubmVyX3Rob3VnaHRzGBAgASgLMiUuc2VtLnRpbWVsaW5lLklubmVyVGhvdWdodHNTbmFwc2hvdFYxSAASPQoNdGVhbV9hbmFseXNpcxgRIAEoCzIkLnNlbS50aW1lbGluZS5UZWFtQW5hbHlzaXNTbmFwc2hvdFYxSAASSAoTZGlzY29fZGlhbG9ndWVfbGluZRgTIAEoCzIpLnNlbS50aW1lbGluZS5EaXNjb0RpYWxvZ3VlTGluZVNuYXBzaG90VjFIABJKChRkaXNjb19kaWFsb2d1ZV9jaGVjaxgUIAEoCzIqLnNlbS50aW1lbGluZS5EaXNjb0RpYWxvZ3VlQ2hlY2tTbmFwc2hvdFYxSAASSgoUZGlzY29fZGlhbG9ndWVfc3RhdGUYFSABKAsyKi5zZW0udGltZWxpbmUuRGlzY29EaWFsb2d1ZVN0YXRlU25hcHNob3RWMUgAQgoKCHNuYXBzaG90ImQKEFRpbWVsaW5lVXBzZXJ0VjESDwoHY29udl9pZBgBIAEoCRIPCgd2ZXJzaW9uGAIgASgEEi4KBmVudGl0eRgDIAEoCzIeLnNlbS50aW1lbGluZS5UaW1lbGluZUVudGl0eVYxIoABChJUaW1lbGluZVNuYXBzaG90VjESDwoHY29udl9pZBgBIAEoCRIPCgd2ZXJzaW9uGAIgASgEEhYKDnNlcnZlcl90aW1lX21zGAMgASgDEjAKCGVudGl0aWVzGAogAygLMh4uc2VtLnRpbWVsaW5lLlRpbWVsaW5lRW50aXR5VjFCSlpIZ2l0aHViLmNvbS9nby1nby1nb2xlbXMvcGlub2NjaGlvL3BrZy9zZW0vcGIvcHJvdG8vc2VtL3RpbWVsaW5lO3RpbWVsaW5lYgZwcm90bzM", [file_proto_sem_timeline_message, file_proto_sem_timeline_middleware, file_proto_sem_timeline_status, file_proto_sem_timeline_team_analysis, file_proto_sem_timeline_tool]);
+  fileDesc("CiJwcm90by9zZW0vdGltZWxpbmUvdHJhbnNwb3J0LnByb3RvEgxzZW0udGltZWxpbmUiogYKEFRpbWVsaW5lRW50aXR5VjESCgoCaWQYASABKAkSDAoEa2luZBgCIAEoCRIVCg1jcmVhdGVkX2F0X21zGAMgASgDEhUKDXVwZGF0ZWRfYXRfbXMYBCABKAMSMgoHbWVzc2FnZRgKIAEoCzIfLnNlbS50aW1lbGluZS5NZXNzYWdlU25hcHNob3RWMUgAEjUKCXRvb2xfY2FsbBgLIAEoCzIgLnNlbS50aW1lbGluZS5Ub29sQ2FsbFNuYXBzaG90VjFIABI5Cgt0b29sX3Jlc3VsdBgMIAEoCzIiLnNlbS50aW1lbGluZS5Ub29sUmVzdWx0U25hcHNob3RWMUgAEjAKBnN0YXR1cxgNIAEoCzIeLnNlbS50aW1lbGluZS5TdGF0dXNTbmFwc2hvdFYxSAASPQoNdGhpbmtpbmdfbW9kZRgOIAEoCzIkLnNlbS50aW1lbGluZS5UaGlua2luZ01vZGVTbmFwc2hvdFYxSAASQQoPbW9kZV9ldmFsdWF0aW9uGA8gASgLMiYuc2VtLnRpbWVsaW5lLk1vZGVFdmFsdWF0aW9uU25hcHNob3RWMUgAEj8KDmlubmVyX3Rob3VnaHRzGBAgASgLMiUuc2VtLnRpbWVsaW5lLklubmVyVGhvdWdodHNTbmFwc2hvdFYxSAASPQoNdGVhbV9hbmFseXNpcxgRIAEoCzIkLnNlbS50aW1lbGluZS5UZWFtQW5hbHlzaXNTbmFwc2hvdFYxSAASSAoTZGlzY29fZGlhbG9ndWVfbGluZRgTIAEoCzIpLnNlbS50aW1lbGluZS5EaXNjb0RpYWxvZ3VlTGluZVNuYXBzaG90VjFIABJKChRkaXNjb19kaWFsb2d1ZV9jaGVjaxgUIAEoCzIqLnNlbS50aW1lbGluZS5EaXNjb0RpYWxvZ3VlQ2hlY2tTbmFwc2hvdFYxSAASSgoUZGlzY29fZGlhbG9ndWVfc3RhdGUYFSABKAsyKi5zZW0udGltZWxpbmUuRGlzY29EaWFsb2d1ZVN0YXRlU25hcHNob3RWMUgAQgoKCHNuYXBzaG90ImQKEFRpbWVsaW5lVXBzZXJ0VjESDwoHY29udl9pZBgBIAEoCRIPCgd2ZXJzaW9uGAIgASgEEi4KBmVudGl0eRgDIAEoCzIeLnNlbS50aW1lbGluZS5UaW1lbGluZUVudGl0eVYxIoABChJUaW1lbGluZVNuYXBzaG90VjESDwoHY29udl9pZBgBIAEoCRIPCgd2ZXJzaW9uGAIgASgEEhYKDnNlcnZlcl90aW1lX21zGAMgASgDEjAKCGVudGl0aWVzGAogAygLMh4uc2VtLnRpbWVsaW5lLlRpbWVsaW5lRW50aXR5VjEijAIKEFRpbWVsaW5lRW50aXR5VjISCgoCaWQYASABKAkSDAoEa2luZBgCIAEoCRIVCg1jcmVhdGVkX2F0X21zGAMgASgDEhUKDXVwZGF0ZWRfYXRfbXMYBCABKAMSJgoFcHJvcHMYCiABKAsyFy5nb29nbGUucHJvdG9idWYuU3RydWN0EiMKBXR5cGVkGAsgASgLMhQuZ29vZ2xlLnByb3RvYnVmLkFueRI2CgRtZXRhGAwgAygLMiguc2VtLnRpbWVsaW5lLlRpbWVsaW5lRW50aXR5VjIuTWV0YUVudHJ5GisKCU1ldGFFbnRyeRILCgNrZXkYASABKAkSDQoFdmFsdWUYAiABKAk6AjgBImQKEFRpbWVsaW5lVXBzZXJ0VjISDwoHY29udl9pZBgBIAEoCRIPCgd2ZXJzaW9uGAIgASgEEi4KBmVudGl0eRgDIAEoCzIeLnNlbS50aW1lbGluZS5UaW1lbGluZUVudGl0eVYyIoABChJUaW1lbGluZVNuYXBzaG90VjISDwoHY29udl9pZBgBIAEoCRIPCgd2ZXJzaW9uGAIgASgEEhYKDnNlcnZlcl90aW1lX21zGAMgASgDEjAKCGVudGl0aWVzGAogAygLMh4uc2VtLnRpbWVsaW5lLlRpbWVsaW5lRW50aXR5VjJCSlpIZ2l0aHViLmNvbS9nby1nby1nb2xlbXMvcGlub2NjaGlvL3BrZy9zZW0vcGIvcHJvdG8vc2VtL3RpbWVsaW5lO3RpbWVsaW5lYgZwcm90bzM", [file_proto_sem_timeline_message, file_proto_sem_timeline_middleware, file_proto_sem_timeline_status, file_proto_sem_timeline_team_analysis, file_proto_sem_timeline_tool, file_google_protobuf_any, file_google_protobuf_struct]);
 
 /**
  * TimelineEntityV1 represents one upsertable timeline entity.
@@ -202,4 +204,131 @@ export type TimelineSnapshotV1 = Message<"sem.timeline.TimelineSnapshotV1"> & {
  */
 export const TimelineSnapshotV1Schema: GenMessage<TimelineSnapshotV1> = /*@__PURE__*/
   messageDesc(file_proto_sem_timeline_transport, 2);
+
+/**
+ * TimelineEntityV2 is an open payload transport model keyed by `kind`.
+ * It avoids oneof growth for each new domain kind.
+ *
+ * @generated from message sem.timeline.TimelineEntityV2
+ */
+export type TimelineEntityV2 = Message<"sem.timeline.TimelineEntityV2"> & {
+  /**
+   * stable entity ID for upsert
+   *
+   * @generated from field: string id = 1;
+   */
+  id: string;
+
+  /**
+   * renderer dispatch key (e.g. message, tool_call, hypercard_widget)
+   *
+   * @generated from field: string kind = 2;
+   */
+  kind: string;
+
+  /**
+   * @generated from field: int64 created_at_ms = 3;
+   */
+  createdAtMs: bigint;
+
+  /**
+   * @generated from field: int64 updated_at_ms = 4;
+   */
+  updatedAtMs: bigint;
+
+  /**
+   * Canonical open payload used by frontend render mapping.
+   *
+   * @generated from field: google.protobuf.Struct props = 10;
+   */
+  props?: JsonObject;
+
+  /**
+   * Optional typed payload for advanced consumers.
+   *
+   * @generated from field: google.protobuf.Any typed = 11;
+   */
+  typed?: Any;
+
+  /**
+   * Optional transport metadata.
+   *
+   * @generated from field: map<string, string> meta = 12;
+   */
+  meta: { [key: string]: string };
+};
+
+/**
+ * Describes the message sem.timeline.TimelineEntityV2.
+ * Use `create(TimelineEntityV2Schema)` to create a new message.
+ */
+export const TimelineEntityV2Schema: GenMessage<TimelineEntityV2> = /*@__PURE__*/
+  messageDesc(file_proto_sem_timeline_transport, 3);
+
+/**
+ * TimelineUpsertV2 is emitted when a V2 entity is inserted/updated.
+ *
+ * @generated from message sem.timeline.TimelineUpsertV2
+ */
+export type TimelineUpsertV2 = Message<"sem.timeline.TimelineUpsertV2"> & {
+  /**
+   * @generated from field: string conv_id = 1;
+   */
+  convId: string;
+
+  /**
+   * monotonically increasing per conv_id
+   *
+   * @generated from field: uint64 version = 2;
+   */
+  version: bigint;
+
+  /**
+   * @generated from field: sem.timeline.TimelineEntityV2 entity = 3;
+   */
+  entity?: TimelineEntityV2;
+};
+
+/**
+ * Describes the message sem.timeline.TimelineUpsertV2.
+ * Use `create(TimelineUpsertV2Schema)` to create a new message.
+ */
+export const TimelineUpsertV2Schema: GenMessage<TimelineUpsertV2> = /*@__PURE__*/
+  messageDesc(file_proto_sem_timeline_transport, 4);
+
+/**
+ * TimelineSnapshotV2 is returned by GET /timeline for V2 payloads.
+ *
+ * @generated from message sem.timeline.TimelineSnapshotV2
+ */
+export type TimelineSnapshotV2 = Message<"sem.timeline.TimelineSnapshotV2"> & {
+  /**
+   * @generated from field: string conv_id = 1;
+   */
+  convId: string;
+
+  /**
+   * current projection version for conv_id
+   *
+   * @generated from field: uint64 version = 2;
+   */
+  version: bigint;
+
+  /**
+   * @generated from field: int64 server_time_ms = 3;
+   */
+  serverTimeMs: bigint;
+
+  /**
+   * @generated from field: repeated sem.timeline.TimelineEntityV2 entities = 10;
+   */
+  entities: TimelineEntityV2[];
+};
+
+/**
+ * Describes the message sem.timeline.TimelineSnapshotV2.
+ * Use `create(TimelineSnapshotV2Schema)` to create a new message.
+ */
+export const TimelineSnapshotV2Schema: GenMessage<TimelineSnapshotV2> = /*@__PURE__*/
+  messageDesc(file_proto_sem_timeline_transport, 5);
 

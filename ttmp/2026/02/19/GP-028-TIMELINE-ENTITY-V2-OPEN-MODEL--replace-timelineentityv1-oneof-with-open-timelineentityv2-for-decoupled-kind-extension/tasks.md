@@ -3,7 +3,7 @@
 ## TODO
 
 - [ ] Replace closed `TimelineEntityV1` oneof with open `TimelineEntityV2` transport model in `proto/sem/timeline/transport.proto`
-- [ ] Define and generate protobuf messages for `TimelineEntityV2`, `TimelineUpsertV2`, and `TimelineSnapshotV2` (Go + TS)
+- [x] Define and generate protobuf messages for `TimelineEntityV2`, `TimelineUpsertV2`, and `TimelineSnapshotV2` (Go + TS)
 - [ ] Update backend projection path to construct/store `TimelineEntityV2` instead of `TimelineEntityV1`:
   - `pkg/webchat/timeline_projector.go`
   - `pkg/persistence/chatstore/timeline_store_sqlite.go`

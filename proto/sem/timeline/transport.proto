@@ -9,6 +9,8 @@ import "proto/sem/timeline/middleware.proto";
 import "proto/sem/timeline/status.proto";
 import "proto/sem/timeline/team_analysis.proto";
 import "proto/sem/timeline/tool.proto";
+import "google/protobuf/any.proto";
+import "google/protobuf/struct.proto";
 
 // TimelineEntityV1 represents one upsertable timeline entity.
 // It is the canonical "projection state" unit owned by the backend.
@@ -49,4 +51,37 @@ message TimelineSnapshotV1 {
 
   // Full snapshot or incremental updates (depending on since_version).
   repeated TimelineEntityV1 entities = 10;
+}
+
+// TimelineEntityV2 is an open payload transport model keyed by `kind`.
+// It avoids oneof growth for each new domain kind.
+message TimelineEntityV2 {
+  string id = 1;       // stable entity ID for upsert
+  string kind = 2;     // renderer dispatch key (e.g. message, tool_call, hypercard_widget)
+  int64 created_at_ms = 3;
+  int64 updated_at_ms = 4;
+
+  // Canonical open payload used by frontend render mapping.
+  google.protobuf.Struct props = 10;
+
+  // Optional typed payload for advanced consumers.
+  google.protobuf.Any typed = 11;
+
+  // Optional transport metadata.
+  map<string, string> meta = 12;
+}
+
+// TimelineUpsertV2 is emitted when a V2 entity is inserted/updated.
+message TimelineUpsertV2 {
+  string conv_id = 1;
+  uint64 version = 2; // monotonically increasing per conv_id
+  TimelineEntityV2 entity = 3;
+}
+
+// TimelineSnapshotV2 is returned by GET /timeline for V2 payloads.
+message TimelineSnapshotV2 {
+  string conv_id = 1;
+  uint64 version = 2;     // current projection version for conv_id
+  int64 server_time_ms = 3;
+  repeated TimelineEntityV2 entities = 10;
 }

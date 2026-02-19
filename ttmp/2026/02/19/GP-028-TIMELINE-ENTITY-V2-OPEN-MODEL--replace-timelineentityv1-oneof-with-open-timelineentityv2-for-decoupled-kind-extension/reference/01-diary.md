@@ -144,3 +144,82 @@ Useful? React with 👍 / 👎.
   - monotonic update for `last_seen_version`
   - monotonic update for `last_activity_ms`
   - forced `has_timeline=1`.
+
+## Step 2: Add and generate TimelineEntityV2 protobuf contracts
+
+After completing the P2 persistence fix, I moved to the next discrete migration task: define V2 timeline transport messages and regenerate bindings. This commit is intentionally schema-focused and does not yet switch runtime codepaths from V1 to V2.
+
+I kept V1 and V2 side-by-side in `transport.proto` for staged migration. That allows subsequent task commits (projector/store/frontend cutover) to be narrow and testable while still advancing the core decoupling goal.
+
+### Prompt Context
+
+**User prompt (verbatim):** "continue"
+
+**Assistant interpretation:** Continue executing GP-028 task-by-task with one validated commit per completed task slice.
+
+**Inferred user intent:** Maintain forward momentum without bundling too many migration layers into a single risky change.
+
+### What I did
+
+- Updated timeline transport schema:
+  - `proto/sem/timeline/transport.proto`
+  - added imports for `google.protobuf.Struct` and `google.protobuf.Any`
+  - added:
+    - `TimelineEntityV2`
+    - `TimelineUpsertV2`
+    - `TimelineSnapshotV2`
+- Regenerated protobuf artifacts scoped to this proto path:
+  - `buf generate --path proto/sem/timeline/transport.proto`
+- Verified affected backend packages still compile/test:
+  - `go test ./pkg/webchat ./pkg/persistence/chatstore`
+
+### Why
+
+- This establishes the open model contract needed for future decoupled kinds.
+- It keeps transport evolution and runtime migration as separate commits.
+
+### What worked
+
+- Scoped `buf generate --path ...` completed quickly and touched only expected generated files.
+- Go package tests passed after regeneration.
+
+### What didn't work
+
+- N/A for this step.
+
+### What I learned
+
+- The repo supports narrow proto regeneration by path, which is helpful for task-isolated commits.
+
+### What was tricky to build
+
+- The subtle part is balancing hard-cutover intent with incremental delivery: V2 must be introduced first without immediately breaking active V1 runtime paths.
+
+### What warrants a second pair of eyes
+
+- Confirm generated TS outputs in both frontend trees are both intended to remain in sync:
+  - `cmd/web-chat/web/src/sem/pb/...`
+  - `web/src/sem/pb/...`
+
+### What should be done in the future
+
+- Next task: switch backend projector/store/upsert emission to V2 payloads and update hydration responses accordingly.
+
+### Code review instructions
+
+- Review schema additions in:
+  - `proto/sem/timeline/transport.proto`
+- Review regenerated outputs:
+  - `pkg/sem/pb/proto/sem/timeline/transport.pb.go`
+  - `cmd/web-chat/web/src/sem/pb/proto/sem/timeline/transport_pb.ts`
+  - `web/src/sem/pb/proto/sem/timeline/transport_pb.ts`
+- Validation command:
+  - `go test ./pkg/webchat ./pkg/persistence/chatstore`
+
+### Technical details
+
+- Added open payload fields on `TimelineEntityV2`:
+  - `props` (`google.protobuf.Struct`)
+  - `typed` (`google.protobuf.Any`)
+  - `meta` (`map<string,string>`)
+- `TimelineUpsertV2` and `TimelineSnapshotV2` mirror existing V1 envelope semantics with V2 entity payload.

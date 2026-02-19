@@ -37,3 +37,17 @@ Implemented Task 1 (P2): persist timeline progression in conversation index meta
 - /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/pkg/persistence/chatstore/timeline_store_sqlite_test.go — Added regression test proving upsert-driven conversation progress persistence
 - /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/ttmp/2026/02/19/GP-028-TIMELINE-ENTITY-V2-OPEN-MODEL--replace-timelineentityv1-oneof-with-open-timelineentityv2-for-decoupled-kind-extension/reference/01-diary.md — Added Step 1 implementation diary entry with command outputs and validation notes
 - /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/ttmp/2026/02/19/GP-028-TIMELINE-ENTITY-V2-OPEN-MODEL--replace-timelineentityv1-oneof-with-open-timelineentityv2-for-decoupled-kind-extension/tasks.md — Checked off P2 LastSeenVersion persistence task
+
+
+## 2026-02-19
+
+Implemented Task 2: added TimelineEntityV2/TimelineUpsertV2/TimelineSnapshotV2 protobuf contracts and regenerated Go/TS bindings.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/proto/sem/timeline/transport.proto — Added V2 open model messages and required protobuf imports
+- /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/pkg/sem/pb/proto/sem/timeline/transport.pb.go — Regenerated Go protobuf bindings for timeline V2 messages
+- /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/cmd/web-chat/web/src/sem/pb/proto/sem/timeline/transport_pb.ts — Regenerated web-chat TS protobuf bindings for timeline V2 messages
+- /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/web/src/sem/pb/proto/sem/timeline/transport_pb.ts — Regenerated shared web TS protobuf bindings for timeline V2 messages
+- /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/ttmp/2026/02/19/GP-028-TIMELINE-ENTITY-V2-OPEN-MODEL--replace-timelineentityv1-oneof-with-open-timelineentityv2-for-decoupled-kind-extension/reference/01-diary.md — Added Step 2 implementation diary entry and validation commands
+- /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/ttmp/2026/02/19/GP-028-TIMELINE-ENTITY-V2-OPEN-MODEL--replace-timelineentityv1-oneof-with-open-timelineentityv2-for-decoupled-kind-extension/tasks.md — Checked off protobuf definition/generation task

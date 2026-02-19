@@ -9,6 +9,8 @@ package timeline
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+	anypb "google.golang.org/protobuf/types/known/anypb"
+	structpb "google.golang.org/protobuf/types/known/structpb"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
@@ -414,11 +416,238 @@ func (x *TimelineSnapshotV1) GetEntities() []*TimelineEntityV1 {
 	return nil
 }
 
+// TimelineEntityV2 is an open payload transport model keyed by `kind`.
+// It avoids oneof growth for each new domain kind.
+type TimelineEntityV2 struct {
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	Id          string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`     // stable entity ID for upsert
+	Kind        string                 `protobuf:"bytes,2,opt,name=kind,proto3" json:"kind,omitempty"` // renderer dispatch key (e.g. message, tool_call, hypercard_widget)
+	CreatedAtMs int64                  `protobuf:"varint,3,opt,name=created_at_ms,json=createdAtMs,proto3" json:"created_at_ms,omitempty"`
+	UpdatedAtMs int64                  `protobuf:"varint,4,opt,name=updated_at_ms,json=updatedAtMs,proto3" json:"updated_at_ms,omitempty"`
+	// Canonical open payload used by frontend render mapping.
+	Props *structpb.Struct `protobuf:"bytes,10,opt,name=props,proto3" json:"props,omitempty"`
+	// Optional typed payload for advanced consumers.
+	Typed *anypb.Any `protobuf:"bytes,11,opt,name=typed,proto3" json:"typed,omitempty"`
+	// Optional transport metadata.
+	Meta          map[string]string `protobuf:"bytes,12,rep,name=meta,proto3" json:"meta,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TimelineEntityV2) Reset() {
+	*x = TimelineEntityV2{}
+	mi := &file_proto_sem_timeline_transport_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TimelineEntityV2) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TimelineEntityV2) ProtoMessage() {}
+
+func (x *TimelineEntityV2) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_sem_timeline_transport_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TimelineEntityV2.ProtoReflect.Descriptor instead.
+func (*TimelineEntityV2) Descriptor() ([]byte, []int) {
+	return file_proto_sem_timeline_transport_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *TimelineEntityV2) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *TimelineEntityV2) GetKind() string {
+	if x != nil {
+		return x.Kind
+	}
+	return ""
+}
+
+func (x *TimelineEntityV2) GetCreatedAtMs() int64 {
+	if x != nil {
+		return x.CreatedAtMs
+	}
+	return 0
+}
+
+func (x *TimelineEntityV2) GetUpdatedAtMs() int64 {
+	if x != nil {
+		return x.UpdatedAtMs
+	}
+	return 0
+}
+
+func (x *TimelineEntityV2) GetProps() *structpb.Struct {
+	if x != nil {
+		return x.Props
+	}
+	return nil
+}
+
+func (x *TimelineEntityV2) GetTyped() *anypb.Any {
+	if x != nil {
+		return x.Typed
+	}
+	return nil
+}
+
+func (x *TimelineEntityV2) GetMeta() map[string]string {
+	if x != nil {
+		return x.Meta
+	}
+	return nil
+}
+
+// TimelineUpsertV2 is emitted when a V2 entity is inserted/updated.
+type TimelineUpsertV2 struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ConvId        string                 `protobuf:"bytes,1,opt,name=conv_id,json=convId,proto3" json:"conv_id,omitempty"`
+	Version       uint64                 `protobuf:"varint,2,opt,name=version,proto3" json:"version,omitempty"` // monotonically increasing per conv_id
+	Entity        *TimelineEntityV2      `protobuf:"bytes,3,opt,name=entity,proto3" json:"entity,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TimelineUpsertV2) Reset() {
+	*x = TimelineUpsertV2{}
+	mi := &file_proto_sem_timeline_transport_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TimelineUpsertV2) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TimelineUpsertV2) ProtoMessage() {}
+
+func (x *TimelineUpsertV2) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_sem_timeline_transport_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TimelineUpsertV2.ProtoReflect.Descriptor instead.
+func (*TimelineUpsertV2) Descriptor() ([]byte, []int) {
+	return file_proto_sem_timeline_transport_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *TimelineUpsertV2) GetConvId() string {
+	if x != nil {
+		return x.ConvId
+	}
+	return ""
+}
+
+func (x *TimelineUpsertV2) GetVersion() uint64 {
+	if x != nil {
+		return x.Version
+	}
+	return 0
+}
+
+func (x *TimelineUpsertV2) GetEntity() *TimelineEntityV2 {
+	if x != nil {
+		return x.Entity
+	}
+	return nil
+}
+
+// TimelineSnapshotV2 is returned by GET /timeline for V2 payloads.
+type TimelineSnapshotV2 struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ConvId        string                 `protobuf:"bytes,1,opt,name=conv_id,json=convId,proto3" json:"conv_id,omitempty"`
+	Version       uint64                 `protobuf:"varint,2,opt,name=version,proto3" json:"version,omitempty"` // current projection version for conv_id
+	ServerTimeMs  int64                  `protobuf:"varint,3,opt,name=server_time_ms,json=serverTimeMs,proto3" json:"server_time_ms,omitempty"`
+	Entities      []*TimelineEntityV2    `protobuf:"bytes,10,rep,name=entities,proto3" json:"entities,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TimelineSnapshotV2) Reset() {
+	*x = TimelineSnapshotV2{}
+	mi := &file_proto_sem_timeline_transport_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TimelineSnapshotV2) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TimelineSnapshotV2) ProtoMessage() {}
+
+func (x *TimelineSnapshotV2) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_sem_timeline_transport_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TimelineSnapshotV2.ProtoReflect.Descriptor instead.
+func (*TimelineSnapshotV2) Descriptor() ([]byte, []int) {
+	return file_proto_sem_timeline_transport_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *TimelineSnapshotV2) GetConvId() string {
+	if x != nil {
+		return x.ConvId
+	}
+	return ""
+}
+
+func (x *TimelineSnapshotV2) GetVersion() uint64 {
+	if x != nil {
+		return x.Version
+	}
+	return 0
+}
+
+func (x *TimelineSnapshotV2) GetServerTimeMs() int64 {
+	if x != nil {
+		return x.ServerTimeMs
+	}
+	return 0
+}
+
+func (x *TimelineSnapshotV2) GetEntities() []*TimelineEntityV2 {
+	if x != nil {
+		return x.Entities
+	}
+	return nil
+}
+
 var File_proto_sem_timeline_transport_proto protoreflect.FileDescriptor
 
 const file_proto_sem_timeline_transport_proto_rawDesc = "" +
 	"\n" +
-	"\"proto/sem/timeline/transport.proto\x12\fsem.timeline\x1a proto/sem/timeline/message.proto\x1a#proto/sem/timeline/middleware.proto\x1a\x1fproto/sem/timeline/status.proto\x1a&proto/sem/timeline/team_analysis.proto\x1a\x1dproto/sem/timeline/tool.proto\"\xe3\a\n" +
+	"\"proto/sem/timeline/transport.proto\x12\fsem.timeline\x1a proto/sem/timeline/message.proto\x1a#proto/sem/timeline/middleware.proto\x1a\x1fproto/sem/timeline/status.proto\x1a&proto/sem/timeline/team_analysis.proto\x1a\x1dproto/sem/timeline/tool.proto\x1a\x19google/protobuf/any.proto\x1a\x1cgoogle/protobuf/struct.proto\"\xe3\a\n" +
 	"\x10TimelineEntityV1\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04kind\x18\x02 \x01(\tR\x04kind\x12\"\n" +
@@ -448,7 +677,29 @@ const file_proto_sem_timeline_transport_proto_rawDesc = "" +
 	"\aversion\x18\x02 \x01(\x04R\aversion\x12$\n" +
 	"\x0eserver_time_ms\x18\x03 \x01(\x03R\fserverTimeMs\x12:\n" +
 	"\bentities\x18\n" +
-	" \x03(\v2\x1e.sem.timeline.TimelineEntityV1R\bentitiesBJZHgithub.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/timeline;timelineb\x06proto3"
+	" \x03(\v2\x1e.sem.timeline.TimelineEntityV1R\bentities\"\xd0\x02\n" +
+	"\x10TimelineEntityV2\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
+	"\x04kind\x18\x02 \x01(\tR\x04kind\x12\"\n" +
+	"\rcreated_at_ms\x18\x03 \x01(\x03R\vcreatedAtMs\x12\"\n" +
+	"\rupdated_at_ms\x18\x04 \x01(\x03R\vupdatedAtMs\x12-\n" +
+	"\x05props\x18\n" +
+	" \x01(\v2\x17.google.protobuf.StructR\x05props\x12*\n" +
+	"\x05typed\x18\v \x01(\v2\x14.google.protobuf.AnyR\x05typed\x12<\n" +
+	"\x04meta\x18\f \x03(\v2(.sem.timeline.TimelineEntityV2.MetaEntryR\x04meta\x1a7\n" +
+	"\tMetaEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"}\n" +
+	"\x10TimelineUpsertV2\x12\x17\n" +
+	"\aconv_id\x18\x01 \x01(\tR\x06convId\x12\x18\n" +
+	"\aversion\x18\x02 \x01(\x04R\aversion\x126\n" +
+	"\x06entity\x18\x03 \x01(\v2\x1e.sem.timeline.TimelineEntityV2R\x06entity\"\xa9\x01\n" +
+	"\x12TimelineSnapshotV2\x12\x17\n" +
+	"\aconv_id\x18\x01 \x01(\tR\x06convId\x12\x18\n" +
+	"\aversion\x18\x02 \x01(\x04R\aversion\x12$\n" +
+	"\x0eserver_time_ms\x18\x03 \x01(\x03R\fserverTimeMs\x12:\n" +
+	"\bentities\x18\n" +
+	" \x03(\v2\x1e.sem.timeline.TimelineEntityV2R\bentitiesBJZHgithub.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/timeline;timelineb\x06proto3"
 
 var (
 	file_proto_sem_timeline_transport_proto_rawDescOnce sync.Once
@@ -462,42 +713,53 @@ func file_proto_sem_timeline_transport_proto_rawDescGZIP() []byte {
 	return file_proto_sem_timeline_transport_proto_rawDescData
 }
 
-var file_proto_sem_timeline_transport_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
+var file_proto_sem_timeline_transport_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
 var file_proto_sem_timeline_transport_proto_goTypes = []any{
 	(*TimelineEntityV1)(nil),             // 0: sem.timeline.TimelineEntityV1
 	(*TimelineUpsertV1)(nil),             // 1: sem.timeline.TimelineUpsertV1
 	(*TimelineSnapshotV1)(nil),           // 2: sem.timeline.TimelineSnapshotV1
-	(*MessageSnapshotV1)(nil),            // 3: sem.timeline.MessageSnapshotV1
-	(*ToolCallSnapshotV1)(nil),           // 4: sem.timeline.ToolCallSnapshotV1
-	(*ToolResultSnapshotV1)(nil),         // 5: sem.timeline.ToolResultSnapshotV1
-	(*StatusSnapshotV1)(nil),             // 6: sem.timeline.StatusSnapshotV1
-	(*ThinkingModeSnapshotV1)(nil),       // 7: sem.timeline.ThinkingModeSnapshotV1
-	(*ModeEvaluationSnapshotV1)(nil),     // 8: sem.timeline.ModeEvaluationSnapshotV1
-	(*InnerThoughtsSnapshotV1)(nil),      // 9: sem.timeline.InnerThoughtsSnapshotV1
-	(*TeamAnalysisSnapshotV1)(nil),       // 10: sem.timeline.TeamAnalysisSnapshotV1
-	(*DiscoDialogueLineSnapshotV1)(nil),  // 11: sem.timeline.DiscoDialogueLineSnapshotV1
-	(*DiscoDialogueCheckSnapshotV1)(nil), // 12: sem.timeline.DiscoDialogueCheckSnapshotV1
-	(*DiscoDialogueStateSnapshotV1)(nil), // 13: sem.timeline.DiscoDialogueStateSnapshotV1
+	(*TimelineEntityV2)(nil),             // 3: sem.timeline.TimelineEntityV2
+	(*TimelineUpsertV2)(nil),             // 4: sem.timeline.TimelineUpsertV2
+	(*TimelineSnapshotV2)(nil),           // 5: sem.timeline.TimelineSnapshotV2
+	nil,                                  // 6: sem.timeline.TimelineEntityV2.MetaEntry
+	(*MessageSnapshotV1)(nil),            // 7: sem.timeline.MessageSnapshotV1
+	(*ToolCallSnapshotV1)(nil),           // 8: sem.timeline.ToolCallSnapshotV1
+	(*ToolResultSnapshotV1)(nil),         // 9: sem.timeline.ToolResultSnapshotV1
+	(*StatusSnapshotV1)(nil),             // 10: sem.timeline.StatusSnapshotV1
+	(*ThinkingModeSnapshotV1)(nil),       // 11: sem.timeline.ThinkingModeSnapshotV1
+	(*ModeEvaluationSnapshotV1)(nil),     // 12: sem.timeline.ModeEvaluationSnapshotV1
+	(*InnerThoughtsSnapshotV1)(nil),      // 13: sem.timeline.InnerThoughtsSnapshotV1
+	(*TeamAnalysisSnapshotV1)(nil),       // 14: sem.timeline.TeamAnalysisSnapshotV1
+	(*DiscoDialogueLineSnapshotV1)(nil),  // 15: sem.timeline.DiscoDialogueLineSnapshotV1
+	(*DiscoDialogueCheckSnapshotV1)(nil), // 16: sem.timeline.DiscoDialogueCheckSnapshotV1
+	(*DiscoDialogueStateSnapshotV1)(nil), // 17: sem.timeline.DiscoDialogueStateSnapshotV1
+	(*structpb.Struct)(nil),              // 18: google.protobuf.Struct
+	(*anypb.Any)(nil),                    // 19: google.protobuf.Any
 }
 var file_proto_sem_timeline_transport_proto_depIdxs = []int32{
-	3,  // 0: sem.timeline.TimelineEntityV1.message:type_name -> sem.timeline.MessageSnapshotV1
-	4,  // 1: sem.timeline.TimelineEntityV1.tool_call:type_name -> sem.timeline.ToolCallSnapshotV1
-	5,  // 2: sem.timeline.TimelineEntityV1.tool_result:type_name -> sem.timeline.ToolResultSnapshotV1
-	6,  // 3: sem.timeline.TimelineEntityV1.status:type_name -> sem.timeline.StatusSnapshotV1
-	7,  // 4: sem.timeline.TimelineEntityV1.thinking_mode:type_name -> sem.timeline.ThinkingModeSnapshotV1
-	8,  // 5: sem.timeline.TimelineEntityV1.mode_evaluation:type_name -> sem.timeline.ModeEvaluationSnapshotV1
-	9,  // 6: sem.timeline.TimelineEntityV1.inner_thoughts:type_name -> sem.timeline.InnerThoughtsSnapshotV1
-	10, // 7: sem.timeline.TimelineEntityV1.team_analysis:type_name -> sem.timeline.TeamAnalysisSnapshotV1
-	11, // 8: sem.timeline.TimelineEntityV1.disco_dialogue_line:type_name -> sem.timeline.DiscoDialogueLineSnapshotV1
-	12, // 9: sem.timeline.TimelineEntityV1.disco_dialogue_check:type_name -> sem.timeline.DiscoDialogueCheckSnapshotV1
-	13, // 10: sem.timeline.TimelineEntityV1.disco_dialogue_state:type_name -> sem.timeline.DiscoDialogueStateSnapshotV1
+	7,  // 0: sem.timeline.TimelineEntityV1.message:type_name -> sem.timeline.MessageSnapshotV1
+	8,  // 1: sem.timeline.TimelineEntityV1.tool_call:type_name -> sem.timeline.ToolCallSnapshotV1
+	9,  // 2: sem.timeline.TimelineEntityV1.tool_result:type_name -> sem.timeline.ToolResultSnapshotV1
+	10, // 3: sem.timeline.TimelineEntityV1.status:type_name -> sem.timeline.StatusSnapshotV1
+	11, // 4: sem.timeline.TimelineEntityV1.thinking_mode:type_name -> sem.timeline.ThinkingModeSnapshotV1
+	12, // 5: sem.timeline.TimelineEntityV1.mode_evaluation:type_name -> sem.timeline.ModeEvaluationSnapshotV1
+	13, // 6: sem.timeline.TimelineEntityV1.inner_thoughts:type_name -> sem.timeline.InnerThoughtsSnapshotV1
+	14, // 7: sem.timeline.TimelineEntityV1.team_analysis:type_name -> sem.timeline.TeamAnalysisSnapshotV1
+	15, // 8: sem.timeline.TimelineEntityV1.disco_dialogue_line:type_name -> sem.timeline.DiscoDialogueLineSnapshotV1
+	16, // 9: sem.timeline.TimelineEntityV1.disco_dialogue_check:type_name -> sem.timeline.DiscoDialogueCheckSnapshotV1
+	17, // 10: sem.timeline.TimelineEntityV1.disco_dialogue_state:type_name -> sem.timeline.DiscoDialogueStateSnapshotV1
 	0,  // 11: sem.timeline.TimelineUpsertV1.entity:type_name -> sem.timeline.TimelineEntityV1
 	0,  // 12: sem.timeline.TimelineSnapshotV1.entities:type_name -> sem.timeline.TimelineEntityV1
-	13, // [13:13] is the sub-list for method output_type
-	13, // [13:13] is the sub-list for method input_type
-	13, // [13:13] is the sub-list for extension type_name
-	13, // [13:13] is the sub-list for extension extendee
-	0,  // [0:13] is the sub-list for field type_name
+	18, // 13: sem.timeline.TimelineEntityV2.props:type_name -> google.protobuf.Struct
+	19, // 14: sem.timeline.TimelineEntityV2.typed:type_name -> google.protobuf.Any
+	6,  // 15: sem.timeline.TimelineEntityV2.meta:type_name -> sem.timeline.TimelineEntityV2.MetaEntry
+	3,  // 16: sem.timeline.TimelineUpsertV2.entity:type_name -> sem.timeline.TimelineEntityV2
+	3,  // 17: sem.timeline.TimelineSnapshotV2.entities:type_name -> sem.timeline.TimelineEntityV2
+	18, // [18:18] is the sub-list for method output_type
+	18, // [18:18] is the sub-list for method input_type
+	18, // [18:18] is the sub-list for extension type_name
+	18, // [18:18] is the sub-list for extension extendee
+	0,  // [0:18] is the sub-list for field type_name
 }
 
 func init() { file_proto_sem_timeline_transport_proto_init() }
@@ -529,7 +791,7 @@ func file_proto_sem_timeline_transport_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_sem_timeline_transport_proto_rawDesc), len(file_proto_sem_timeline_transport_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   3,
+			NumMessages:   7,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
