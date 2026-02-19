@@ -150,3 +150,13 @@ Moved thinking-mode ownership into app-scoped `cmd/web-chat` modules (backend + 
 - /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/cmd/web-chat/web/src/sem/registry.ts — Removed thinking-mode SEM projections from core default registry
 - /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/cmd/web-chat/web/src/sem/timelinePropsRegistry.ts — Removed thinking-mode normalizer from core built-ins
 - /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/cmd/web-chat/web/src/webchat/rendererRegistry.ts — Removed thinking-mode renderer from core built-ins
+
+
+## 2026-02-19
+
+Added enforceable modularity acceptance gates for thinking-mode isolation via source-scanning tests.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/cmd/web-chat/thinkingmode/isolation_test.go — Added backend/frontend isolation checks that fail if thinking-mode projection/registration markers leak outside designated module paths
+- /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/ttmp/2026/02/19/GP-028-TIMELINE-ENTITY-V2-OPEN-MODEL--replace-timelineentityv1-oneof-with-open-timelineentityv2-for-decoupled-kind-extension/tasks.md — Marked modularity acceptance gate task complete

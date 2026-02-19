@@ -21,7 +21,7 @@
   - backend module: `cmd/web-chat/thinkingmode` registers SEM translation + timeline projection handlers
   - frontend module: `cmd/web-chat/web/src/features/thinkingMode` registers SEM projection + props normalizer + renderer
   - startup bootstrap explicitly wires module registration in app entrypoints (`cmd/web-chat/main.go`, web `wsManager`/storybook scenario bootstrap)
-- [ ] Modularity acceptance gate: verify thinking-mode references are isolated:
+- [x] Modularity acceptance gate: verify thinking-mode references are isolated:
   - add a test/check (or script + test) that fails if `thinking.mode.*` projection logic appears outside thinking-mode module files
   - add a test/check that fails if thinking-mode renderer/normalizer logic is duplicated outside thinking-mode frontend module files
 

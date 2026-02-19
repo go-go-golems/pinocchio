@@ -28,6 +28,8 @@ RelatedFiles:
       Note: App-owned thinking-mode frontend module (SEM + normalizer + renderer registration)
     - Path: /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/cmd/web-chat/web/src/features/thinkingMode/registerThinkingMode.test.tsx
       Note: Frontend tests validating thinking-mode module registration behavior
+    - Path: /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/cmd/web-chat/thinkingmode/isolation_test.go
+      Note: Source-isolation acceptance gates for thinking-mode projection and frontend registration markers
     - Path: /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/pkg/persistence/chatstore/timeline_store_sqlite.go
       Note: Updated SQLite timeline upsert path to persist timeline_conversations.last_seen_version progression
     - Path: /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/pkg/persistence/chatstore/timeline_store_sqlite_test.go
@@ -36,7 +38,7 @@ RelatedFiles:
       Note: Added test verifying buildConversationRecord includes LastSeenVersion
 ExternalSources: []
 Summary: Implementation diary for GP-028 task-by-task execution and commits.
-LastUpdated: 2026-02-19T11:22:15-05:00
+LastUpdated: 2026-02-19T11:24:43-05:00
 WhatFor: Preserve exact implementation history, commands, failures, and validation for the TimelineEntityV2 cutover ticket.
 WhenToUse: Use when reviewing GP-028 progress or continuing implementation from the latest completed task.
 ---
@@ -792,3 +794,80 @@ I also adjusted generic core behavior so it no longer references `thinking_mode`
 - Frontend ownership model now is:
   - core SEM/normalizer/renderer registries are generic defaults,
   - `registerThinkingModeModule()` attaches thinking-mode behavior explicitly after core SEM handler reset.
+
+## Step 9: Add enforceable isolation acceptance gates for thinking-mode ownership
+
+This step implemented the remaining modularity acceptance gate by adding a deterministic source-scanning test that fails when thinking-mode projection/registration markers appear outside the designated module files. This converts architectural intent into executable enforcement.
+
+I intentionally put the check in Go (`cmd/web-chat/thinkingmode/isolation_test.go`) so it runs under the existing `go test ./...` path used by contributors and CI, without requiring extra frontend test wiring changes.
+
+### Prompt Context
+
+**User prompt (verbatim):** (same as Step 8)
+
+**Assistant interpretation:** Finish modularization by adding enforceable checks that prevent future leakage of thinking-mode logic back into shared core files.
+
+**Inferred user intent:** Keep the new module boundary durable over time with automated guardrails.
+
+**Commit (code):** 28ba5e52958f970bb06bc8bc4088b8d1a21944dc — "web-chat: add thinking-mode isolation acceptance tests"
+
+### What I did
+
+- Added `cmd/web-chat/thinkingmode/isolation_test.go` with two acceptance-gate tests:
+  - backend isolation check:
+    - scans `pkg/webchat` + `cmd/web-chat` Go sources
+    - fails if backend thinking-mode projection/translation markers exist outside `cmd/web-chat/thinkingmode`.
+  - frontend registration isolation check:
+    - scans `cmd/web-chat/web/src` TS/TSX sources
+    - fails if `registerSem('thinking.mode.*')`, `registerTimelineRenderer('thinking_mode')`, or `registerTimelinePropsNormalizer('thinking_mode')` appear outside `features/thinkingMode`.
+- Validation:
+  - `go test ./cmd/web-chat/thinkingmode -count=1`
+  - `go test ./... -count=1`
+
+### Why
+
+- This closes the final open TODO for modularity by making boundary violations test-failures instead of review-time heuristics.
+
+### What worked
+
+- The checks passed against current code layout and now protect against regressions in both backend and frontend module ownership.
+
+### What didn't work
+
+- N/A in this step (no failing iterations required after initial implementation).
+
+### What I learned
+
+- Path-based source scanning is a practical and low-maintenance enforcement mechanism when ownership boundaries are explicit and narrow.
+
+### What was tricky to build
+
+- The scanner needed to avoid noisy directories (`node_modules`, build outputs) while still covering all relevant source roots. I implemented explicit walk pruning and marker-based checks scoped to meaningful extension points.
+
+### What warrants a second pair of eyes
+
+- Confirm whether we want the marker allowlist/denylist to include additional symbols as thinking-mode evolves (for example future payload/schema aliases).
+
+### What should be done in the future
+
+- Optional hardening:
+  1. add a small README in `cmd/web-chat/thinkingmode` documenting protected markers and expected extension points,
+  2. extend gate coverage if additional app-owned feature modules adopt the same pattern.
+
+### Code review instructions
+
+- Review:
+  - `cmd/web-chat/thinkingmode/isolation_test.go`
+- Re-run:
+  - `go test ./cmd/web-chat/thinkingmode -count=1`
+  - `go test ./... -count=1`
+
+### Technical details
+
+- Backend marker set currently includes:
+  - `thinking.mode.started|update|completed`
+  - `EventThinkingModeStarted|Update|Completed`
+- Frontend marker set currently includes:
+  - `registerSem('thinking.mode.started|update|completed'`
+  - `registerTimelineRenderer('thinking_mode'`
+  - `registerTimelinePropsNormalizer('thinking_mode'`
