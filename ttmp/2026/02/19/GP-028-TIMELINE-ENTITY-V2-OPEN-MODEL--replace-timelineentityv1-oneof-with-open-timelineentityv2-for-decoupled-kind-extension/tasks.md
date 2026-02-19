@@ -2,6 +2,20 @@
 
 ## TODO
 
+- [x] Split app-owned middleware/timeline proto ownership out of shared `proto/sem` module into `cmd/web-chat/proto`:
+  - move `proto/sem/middleware/*.proto` and `proto/sem/timeline/middleware.proto` to `cmd/web-chat/proto/...`
+  - keep shared/core SEM schemas in root `proto/sem/...`
+  - ensure root Buf module excludes `cmd/web-chat/proto` so app schemas are not regenerated into `pkg/sem/pb`
+- [x] Add a dedicated `cmd/web-chat/proto` Buf generation pipeline that emits app-owned generated code under `cmd/web-chat` paths:
+  - Go output under `cmd/web-chat/thinkingmode/pb`
+  - TS output under `cmd/web-chat/web/src/features/thinkingMode/pb`
+  - document deterministic commands for regenerating both shared and app-owned proto outputs
+- [x] Cut over generated artifact locations and remove stale shared artifacts for moved app-owned schemas:
+  - delete `pkg/sem/pb/proto/sem/middleware/*.pb.go`
+  - delete `pkg/sem/pb/proto/sem/timeline/middleware.pb.go`
+  - delete mirrored TS generated files in shared paths no longer sourced by root proto module
+  - verify no runtime imports still point at removed generated paths
+
 - [x] Follow-up modularization: extract thinking-mode projection into self-contained backend module with explicit bootstrap (no `init()`):
   - create `pkg/webchat/timeline_handlers_thinking_mode.go` containing only thinking-mode SEM decode + `TimelineEntityV2` upsert logic
   - remove thinking-mode cases from `pkg/webchat/timeline_projector.go` switch

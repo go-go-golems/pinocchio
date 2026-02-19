@@ -173,3 +173,21 @@ Moved remaining app-owned thinking-mode event contracts out of `pkg/` into `cmd/
 - /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/cmd/web-chat/thinkingmode/backend_test.go — Updated translation tests to use module-local thinking-mode event constructors
 - /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/cmd/web-chat/web/src/features/thinkingMode/registerThinkingMode.tsx — Updated frontend SEM projection handlers to parse module-local JSON payloads
 - /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/ttmp/2026/02/19/GP-028-TIMELINE-ENTITY-V2-OPEN-MODEL--replace-timelineentityv1-oneof-with-open-timelineentityv2-for-decoupled-kind-extension/reference/01-diary.md — Added implementation diary step for this modularization pass
+
+
+## 2026-02-19
+
+Split app-owned middleware/timeline protobuf schemas out of shared root proto ownership into `cmd/web-chat/proto`, added dedicated app-module Buf generation, and removed stale middleware generated artifacts from shared `pkg/sem/pb` and shared web bindings.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/cmd/web-chat/proto/buf.yaml — New app-owned Buf module for cmd/web-chat middleware/timeline schemas
+- /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/cmd/web-chat/proto/buf.gen.yaml — Dedicated app-owned generation template emitting Go bindings into `cmd/web-chat/thinkingmode/pb` and TS bindings into `cmd/web-chat/web/src/features/thinkingMode/pb`
+- /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/cmd/web-chat/proto/sem/middleware/thinking_mode.proto — Moved from shared proto tree; now owned by cmd/web-chat module
+- /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/cmd/web-chat/proto/sem/timeline/middleware.proto — Moved app-owned timeline snapshot schemas under cmd/web-chat proto module
+- /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/buf.yaml — Root Buf module now excludes `cmd/web-chat/proto` to prevent app schemas from regenerating under `pkg/sem/pb`
+- /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/Makefile — Added deterministic proto generation targets: `proto-gen-core`, `proto-gen-web-chat`, and `proto-gen`
+- /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/cmd/web-chat/thinkingmode/pb/thinking_mode.pb.go — New app-owned Go protobuf bindings
+- /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/cmd/web-chat/web/src/features/thinkingMode/pb/sem/middleware/thinking_mode_pb.ts — New app-owned web protobuf bindings
+- /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/pkg/sem/pb/proto/sem/middleware/thinking_mode.pb.go — Deleted shared generated artifact (no longer app-owned)
+- /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/pkg/sem/pb/proto/sem/timeline/middleware.pb.go — Deleted shared generated artifact for app-owned timeline middleware snapshots

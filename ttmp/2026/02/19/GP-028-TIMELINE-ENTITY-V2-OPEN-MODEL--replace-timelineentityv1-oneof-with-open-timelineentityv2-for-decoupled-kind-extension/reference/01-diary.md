@@ -933,3 +933,80 @@ No matches.
 ### Follow-up note
 
 - Generated protobuf files in `pkg/sem/pb` and docs still include thinking-mode schema symbols because those proto files remain in the shared schema set; runtime feature ownership is now app-local.
+
+## Step 11: Move app-owned middleware protobuf generation to cmd/web-chat module paths
+
+This step moved app-owned middleware/timeline schemas out of the shared root proto module and switched generation so bindings for those schemas are emitted under `cmd/web-chat` instead of `pkg/sem/pb` and shared web binding directories.
+
+### Prompt Context
+
+**User prompt (verbatim):** `yes, add tasks to do this, and continue working task by task, committing as you go and keeping a diary.`
+
+**Assistant interpretation:** Add ticket tasks first, then execute the proto-generation relocation cutover in bounded commits with validation.
+
+### Task breakdown executed
+
+1. Split ownership:
+   - moved app-owned schemas from:
+     - `proto/sem/middleware/*.proto`
+     - `proto/sem/timeline/middleware.proto`
+   - to:
+     - `cmd/web-chat/proto/sem/middleware/*.proto`
+     - `cmd/web-chat/proto/sem/timeline/middleware.proto`
+   - updated those files to use app-owned Go package target:
+     - `option go_package = "github.com/go-go-golems/pinocchio/cmd/web-chat/thinkingmode/pb;thinkingmodepb";`
+2. Module isolation:
+   - updated root `buf.yaml` with:
+     - `build.excludes: [cmd/web-chat/proto]`
+   - created app-owned Buf module:
+     - `cmd/web-chat/proto/buf.yaml`
+     - `cmd/web-chat/proto/buf.gen.yaml`
+3. Generation cutover:
+   - generated app-owned bindings with:
+     - `cd cmd/web-chat/proto && buf generate`
+   - removed stale shared artifacts:
+     - `pkg/sem/pb/proto/sem/middleware/*.pb.go`
+     - `pkg/sem/pb/proto/sem/timeline/middleware.pb.go`
+     - `cmd/web-chat/web/src/sem/pb/proto/sem/middleware/*_pb.ts`
+     - `cmd/web-chat/web/src/sem/pb/proto/sem/timeline/middleware_pb.ts`
+     - `web/src/sem/pb/proto/sem/middleware/*_pb.ts`
+     - `web/src/sem/pb/proto/sem/timeline/middleware_pb.ts`
+   - new generated locations:
+     - Go: `cmd/web-chat/thinkingmode/pb/*.pb.go`
+     - TS: `cmd/web-chat/web/src/features/thinkingMode/pb/sem/.../*_pb.ts`
+4. Deterministic regen commands:
+   - added Makefile targets:
+     - `proto-gen-core` => `buf generate --path proto/sem`
+     - `proto-gen-web-chat` => `cd cmd/web-chat/proto && buf generate`
+     - `proto-gen`
+
+### Commits for this step
+
+- `26e312a` — `proto(web-chat): move middleware schemas to app-owned buf module`
+- `cd06092` — `proto(web-chat): generate app-owned middleware bindings under cmd paths`
+
+### Validation commands and outcomes
+
+```bash
+cd cmd/web-chat/proto && buf generate
+buf lint --path proto/sem
+cd cmd/web-chat/proto && buf lint
+make proto-gen
+go test ./... -count=1
+cd cmd/web-chat/web && npm run check
+```
+
+All commands passed.
+
+Note: running `buf lint` at repository root without a `--path` filter still traverses third-party `.proto` files under `cmd/web-chat/web/node_modules`; existing project convention is to run root lint/generation with path filters (`--path proto/sem`), and app-owned module commands from `cmd/web-chat/proto`.
+
+### What was tricky
+
+- Biome lint initially failed on generated TS bindings under `src/features/thinkingMode/pb` due import-order rules. I aligned lint behavior with existing generated protobuf strategy by excluding that generated directory in:
+  - `cmd/web-chat/web/.biomeignore`
+  - `cmd/web-chat/web/biome.json`
+
+### Result
+
+- App-owned middleware protobuf generation is now isolated to `cmd/web-chat`.
+- Shared `pkg/sem/pb` no longer contains app-owned middleware timeline/event generated artifacts.
