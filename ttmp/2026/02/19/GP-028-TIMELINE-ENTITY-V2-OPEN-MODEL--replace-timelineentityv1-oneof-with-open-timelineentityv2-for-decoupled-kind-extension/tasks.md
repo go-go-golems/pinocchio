@@ -15,6 +15,8 @@
   - delete `pkg/sem/pb/proto/sem/timeline/middleware.pb.go`
   - delete mirrored TS generated files in shared paths no longer sourced by root proto module
   - verify no runtime imports still point at removed generated paths
+- [x] Update public docs to reflect app-owned proto generation ownership split and current TimelineEntityV2 model (remove stale oneof-era guidance in key docs).
+- [x] Add an intern-oriented end-to-end tutorial (8+ pages) for building a thinking-mode-style feature module: middleware -> events -> SEM translation -> timeline projection -> React widget registration/testing.
 
 - [x] Follow-up modularization: extract thinking-mode projection into self-contained backend module with explicit bootstrap (no `init()`):
   - create `pkg/webchat/timeline_handlers_thinking_mode.go` containing only thinking-mode SEM decode + `TimelineEntityV2` upsert logic

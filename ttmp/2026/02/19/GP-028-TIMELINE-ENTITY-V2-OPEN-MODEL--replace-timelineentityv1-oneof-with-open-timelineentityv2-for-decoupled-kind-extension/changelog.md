@@ -191,3 +191,16 @@ Split app-owned middleware/timeline protobuf schemas out of shared root proto ow
 - /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/cmd/web-chat/web/src/features/thinkingMode/pb/sem/middleware/thinking_mode_pb.ts — New app-owned web protobuf bindings
 - /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/pkg/sem/pb/proto/sem/middleware/thinking_mode.pb.go — Deleted shared generated artifact (no longer app-owned)
 - /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/pkg/sem/pb/proto/sem/timeline/middleware.pb.go — Deleted shared generated artifact for app-owned timeline middleware snapshots
+
+
+## 2026-02-19
+
+Updated public webchat documentation to reflect app-owned proto/module ownership and added a detailed intern tutorial for building a thinking-mode-style feature end-to-end.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/pkg/doc/topics/webchat-adding-event-types.md — Updated to TimelineEntityV2/open-kind guidance and explicit app-owned module bootstrap/renderer registration pattern
+- /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/pkg/doc/topics/webchat-backend-internals.md — Updated projector mapping language from oneof snapshots to V2 kind+props and app-owned thinking-mode projection ownership
+- /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/pkg/doc/topics/webchat-sem-and-ui.md — Updated protobuf ownership paths and frontend registration conventions for app-owned feature modules
+- /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/pkg/doc/tutorials/03-thirdparty-webchat-playbook.md — Updated custom middleware references to current `cmd/web-chat` locations
+- /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/ttmp/2026/02/19/GP-028-TIMELINE-ENTITY-V2-OPEN-MODEL--replace-timelineentityv1-oneof-with-open-timelineentityv2-for-decoupled-kind-extension/design-doc/02-intern-tutorial-app-owned-middleware-events-timeline-widgets.md — New 8+ page didactic tutorial for intern developers

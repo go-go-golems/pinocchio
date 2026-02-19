@@ -1010,3 +1010,83 @@ Note: running `buf lint` at repository root without a `--path` filter still trav
 
 - App-owned middleware protobuf generation is now isolated to `cmd/web-chat`.
 - Shared `pkg/sem/pb` no longer contains app-owned middleware timeline/event generated artifacts.
+
+## Step 12: Update public docs and add intern end-to-end tutorial for app-owned feature modules
+
+This step translated the architectural refactor into developer-facing documentation so new contributors can implement features correctly without reverse-engineering from code. I updated stale oneof-era guidance and old path references in core docs, then added a long-form, didactic tutorial targeted at interns.
+
+The key objective was to make the \"thinking-mode style\" implementation pattern reproducible: explicit bootstrap, app-owned module boundaries, TimelineEntityV2 kind+props projection, and frontend renderer/normalizer registration.
+
+### Prompt Context
+
+**User prompt (verbatim):** `yes, and create a detailed tutorial on creating your own thinking-mode style middleware + events + timeline entities s+ react widgets, from start ot finish, in a very didactic style, explaining everything needed for a new intern developer to get it done starat to finish. 8+ pages.`
+
+**Assistant interpretation:** Update docs to match the new ownership architecture and produce a comprehensive 8+ page tutorial that teaches the full implementation workflow from backend middleware to frontend widget rendering.
+
+**Inferred user intent:** Ensure team onboarding and future feature work follow the modular architecture by default, not legacy oneof/shared-core assumptions.
+
+### What I did
+
+- Updated stale documentation references and architecture descriptions:
+  - `pkg/doc/topics/webchat-adding-event-types.md`
+  - `pkg/doc/topics/webchat-backend-internals.md`
+  - `pkg/doc/topics/webchat-sem-and-ui.md`
+  - `pkg/doc/tutorials/03-thirdparty-webchat-playbook.md`
+- Added a new long-form tutorial document:
+  - `ttmp/.../design-doc/02-intern-tutorial-app-owned-middleware-events-timeline-widgets.md`
+- Updated ticket bookkeeping:
+  - marked tutorial/docs tasks complete in `tasks.md`
+  - added changelog entry in `changelog.md`
+
+### Why
+
+- Existing docs still contained oneof-era and path assumptions that no longer match current code layout.
+- Without explicit tutorial guidance, interns are likely to put feature logic in `pkg/`, skip explicit bootstrap, or bypass projection/renderer registries.
+
+### What worked
+
+- The doc set now references app-owned proto generation under `cmd/web-chat/proto` and app-owned registration under `cmd/web-chat/thinkingmode` + `cmd/web-chat/web/src/features/...`.
+- The new tutorial provides a complete implementation path with diagrams, pseudocode, file references, and validation commands.
+
+### What didn't work
+
+- N/A for this step (no command/tooling failures during the documentation pass itself).
+
+### What I learned
+
+- The most confusing onboarding gap was not API syntax; it was ownership boundaries and registration lifecycle. Making those explicit (with concrete bootstrap points) dramatically clarifies the architecture.
+
+### What was tricky to build
+
+- The tricky part was balancing updates to existing docs without rewriting them completely, while still removing the highest-risk stale guidance (notably TimelineEntityV1/oneof references and outdated widget registration assumptions).
+
+### What warrants a second pair of eyes
+
+- Review whether `pkg/doc/topics/webchat-adding-event-types.md` should be further split into \"shared-core event types\" vs \"app-owned feature modules\" pages to avoid future scope creep.
+
+### What should be done in the future
+
+1. Add cross-links from `README.md`/main onboarding docs to the new intern tutorial so it is discoverable outside ticket context.
+2. Consider adding a feature-module scaffold command/template using this tutorial’s structure.
+
+### Code review instructions
+
+- Read doc updates:
+  - `pkg/doc/topics/webchat-adding-event-types.md`
+  - `pkg/doc/topics/webchat-backend-internals.md`
+  - `pkg/doc/topics/webchat-sem-and-ui.md`
+  - `pkg/doc/tutorials/03-thirdparty-webchat-playbook.md`
+- Read the new tutorial:
+  - `ttmp/2026/02/19/GP-028-TIMELINE-ENTITY-V2-OPEN-MODEL--replace-timelineentityv1-oneof-with-open-timelineentityv2-for-decoupled-kind-extension/design-doc/02-intern-tutorial-app-owned-middleware-events-timeline-widgets.md`
+- Verify ticket bookkeeping:
+  - `ttmp/.../tasks.md`
+  - `ttmp/.../changelog.md`
+
+### Technical details
+
+- Documentation updates intentionally align with current symbols:
+  - backend app bootstrap: `cmd/web-chat/main.go` + `thinkingmode.Register()`
+  - backend app module: `cmd/web-chat/thinkingmode/backend.go`
+  - frontend app module registration: `cmd/web-chat/web/src/features/thinkingMode/registerThinkingMode.tsx`
+  - frontend bootstrap: `cmd/web-chat/web/src/ws/wsManager.ts`
+  - app-owned proto module: `cmd/web-chat/proto/`
