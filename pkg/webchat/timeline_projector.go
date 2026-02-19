@@ -36,7 +36,7 @@ type semEnvelope struct {
 type TimelineProjector struct {
 	convID   string
 	store    chatstore.TimelineStore
-	onUpsert func(entity *timelinepb.TimelineEntityV1, version uint64)
+	onUpsert func(entity *timelinepb.TimelineEntityV2, version uint64)
 
 	mu           sync.Mutex
 	msgRoles     map[string]string
@@ -46,7 +46,7 @@ type TimelineProjector struct {
 	toolInputs   map[string]*structpb.Struct
 }
 
-func NewTimelineProjector(convID string, store chatstore.TimelineStore, onUpsert func(entity *timelinepb.TimelineEntityV1, version uint64)) *TimelineProjector {
+func NewTimelineProjector(convID string, store chatstore.TimelineStore, onUpsert func(entity *timelinepb.TimelineEntityV2, version uint64)) *TimelineProjector {
 	return &TimelineProjector{
 		convID:       convID,
 		store:        store,
@@ -59,7 +59,7 @@ func NewTimelineProjector(convID string, store chatstore.TimelineStore, onUpsert
 	}
 }
 
-func (p *TimelineProjector) upsert(ctx context.Context, version uint64, entity *timelinepb.TimelineEntityV1) error {
+func (p *TimelineProjector) upsert(ctx context.Context, version uint64, entity *timelinepb.TimelineEntityV2) error {
 	if p == nil || p.store == nil {
 		return nil
 	}
@@ -76,7 +76,7 @@ func (p *TimelineProjector) upsert(ctx context.Context, version uint64, entity *
 }
 
 // Upsert exposes timeline writes for custom SEM handlers.
-func (p *TimelineProjector) Upsert(ctx context.Context, version uint64, entity *timelinepb.TimelineEntityV1) error {
+func (p *TimelineProjector) Upsert(ctx context.Context, version uint64, entity *timelinepb.TimelineEntityV2) error {
 	return p.upsert(ctx, version, entity)
 }
 
@@ -135,18 +135,12 @@ func (p *TimelineProjector) ApplySemFrame(ctx context.Context, frame []byte) err
 		p.msgRoles[env.Event.ID] = role
 		p.msgContents[env.Event.ID] = ""
 		p.mu.Unlock()
-		err := p.upsert(ctx, seq, &timelinepb.TimelineEntityV1{
-			Id:   env.Event.ID,
-			Kind: "message",
-			Snapshot: &timelinepb.TimelineEntityV1_Message{
-				Message: &timelinepb.MessageSnapshotV1{
-					SchemaVersion: 1,
-					Role:          role,
-					Content:       "",
-					Streaming:     true,
-				},
-			},
-		})
+		err := p.upsert(ctx, seq, timelineEntityV2FromProtoMessage(env.Event.ID, "message", &timelinepb.MessageSnapshotV1{
+			SchemaVersion: 1,
+			Role:          role,
+			Content:       "",
+			Streaming:     true,
+		}))
 		return err
 
 	case "llm.delta", "llm.thinking.delta":
@@ -174,18 +168,12 @@ func (p *TimelineProjector) ApplySemFrame(ctx context.Context, frame []byte) err
 		p.lastMsgWrite[env.Event.ID] = now
 		p.mu.Unlock()
 
-		err := p.upsert(ctx, seq, &timelinepb.TimelineEntityV1{
-			Id:   env.Event.ID,
-			Kind: "message",
-			Snapshot: &timelinepb.TimelineEntityV1_Message{
-				Message: &timelinepb.MessageSnapshotV1{
-					SchemaVersion: 1,
-					Role:          role,
-					Content:       cum,
-					Streaming:     true,
-				},
-			},
-		})
+		err := p.upsert(ctx, seq, timelineEntityV2FromProtoMessage(env.Event.ID, "message", &timelinepb.MessageSnapshotV1{
+			SchemaVersion: 1,
+			Role:          role,
+			Content:       cum,
+			Streaming:     true,
+		}))
 		return err
 
 	case "llm.final":
@@ -207,18 +195,12 @@ func (p *TimelineProjector) ApplySemFrame(ctx context.Context, frame []byte) err
 		}
 		delete(p.lastMsgWrite, env.Event.ID)
 		p.mu.Unlock()
-		err := p.upsert(ctx, seq, &timelinepb.TimelineEntityV1{
-			Id:   env.Event.ID,
-			Kind: "message",
-			Snapshot: &timelinepb.TimelineEntityV1_Message{
-				Message: &timelinepb.MessageSnapshotV1{
-					SchemaVersion: 1,
-					Role:          role,
-					Content:       content,
-					Streaming:     false,
-				},
-			},
-		})
+		err := p.upsert(ctx, seq, timelineEntityV2FromProtoMessage(env.Event.ID, "message", &timelinepb.MessageSnapshotV1{
+			SchemaVersion: 1,
+			Role:          role,
+			Content:       content,
+			Streaming:     false,
+		}))
 		return err
 
 	case "llm.thinking.final":
@@ -231,18 +213,12 @@ func (p *TimelineProjector) ApplySemFrame(ctx context.Context, frame []byte) err
 		content := p.msgContents[env.Event.ID]
 		delete(p.lastMsgWrite, env.Event.ID)
 		p.mu.Unlock()
-		err := p.upsert(ctx, seq, &timelinepb.TimelineEntityV1{
-			Id:   env.Event.ID,
-			Kind: "message",
-			Snapshot: &timelinepb.TimelineEntityV1_Message{
-				Message: &timelinepb.MessageSnapshotV1{
-					SchemaVersion: 1,
-					Role:          role,
-					Content:       content,
-					Streaming:     false,
-				},
-			},
-		})
+		err := p.upsert(ctx, seq, timelineEntityV2FromProtoMessage(env.Event.ID, "message", &timelinepb.MessageSnapshotV1{
+			SchemaVersion: 1,
+			Role:          role,
+			Content:       content,
+			Streaming:     false,
+		}))
 		return err
 
 	case "llm.thinking.summary":
@@ -264,18 +240,12 @@ func (p *TimelineProjector) ApplySemFrame(ctx context.Context, frame []byte) err
 		}
 		delete(p.lastMsgWrite, env.Event.ID)
 		p.mu.Unlock()
-		err := p.upsert(ctx, seq, &timelinepb.TimelineEntityV1{
-			Id:   env.Event.ID,
-			Kind: "message",
-			Snapshot: &timelinepb.TimelineEntityV1_Message{
-				Message: &timelinepb.MessageSnapshotV1{
-					SchemaVersion: 1,
-					Role:          role,
-					Content:       content,
-					Streaming:     false,
-				},
-			},
-		})
+		err := p.upsert(ctx, seq, timelineEntityV2FromProtoMessage(env.Event.ID, "message", &timelinepb.MessageSnapshotV1{
+			SchemaVersion: 1,
+			Role:          role,
+			Content:       content,
+			Streaming:     false,
+		}))
 		return err
 
 	case "tool.start":
@@ -287,20 +257,14 @@ func (p *TimelineProjector) ApplySemFrame(ctx context.Context, frame []byte) err
 		p.toolNames[env.Event.ID] = pb.Name
 		p.toolInputs[env.Event.ID] = pb.Input
 		p.mu.Unlock()
-		err := p.upsert(ctx, seq, &timelinepb.TimelineEntityV1{
-			Id:   env.Event.ID,
-			Kind: "tool_call",
-			Snapshot: &timelinepb.TimelineEntityV1_ToolCall{
-				ToolCall: &timelinepb.ToolCallSnapshotV1{
-					SchemaVersion: 1,
-					Name:          pb.Name,
-					Input:         pb.Input,
-					Status:        "running",
-					Progress:      0,
-					Done:          false,
-				},
-			},
-		})
+		err := p.upsert(ctx, seq, timelineEntityV2FromProtoMessage(env.Event.ID, "tool_call", &timelinepb.ToolCallSnapshotV1{
+			SchemaVersion: 1,
+			Name:          pb.Name,
+			Input:         pb.Input,
+			Status:        "running",
+			Progress:      0,
+			Done:          false,
+		}))
 		return err
 
 	case "tool.done":
@@ -308,20 +272,14 @@ func (p *TimelineProjector) ApplySemFrame(ctx context.Context, frame []byte) err
 		name := p.toolNames[env.Event.ID]
 		input := p.toolInputs[env.Event.ID]
 		p.mu.Unlock()
-		err := p.upsert(ctx, seq, &timelinepb.TimelineEntityV1{
-			Id:   env.Event.ID,
-			Kind: "tool_call",
-			Snapshot: &timelinepb.TimelineEntityV1_ToolCall{
-				ToolCall: &timelinepb.ToolCallSnapshotV1{
-					SchemaVersion: 1,
-					Name:          name,
-					Input:         input,
-					Status:        "completed",
-					Progress:      1,
-					Done:          true,
-				},
-			},
-		})
+		err := p.upsert(ctx, seq, timelineEntityV2FromProtoMessage(env.Event.ID, "tool_call", &timelinepb.ToolCallSnapshotV1{
+			SchemaVersion: 1,
+			Name:          name,
+			Input:         input,
+			Status:        "completed",
+			Progress:      1,
+			Done:          true,
+		}))
 		return err
 
 	case "tool.result":
@@ -344,19 +302,13 @@ func (p *TimelineProjector) ApplySemFrame(ctx context.Context, frame []byte) err
 				resultStruct = st
 			}
 		}
-		err := p.upsert(ctx, seq, &timelinepb.TimelineEntityV1{
-			Id:   resultEntityID,
-			Kind: "tool_result",
-			Snapshot: &timelinepb.TimelineEntityV1_ToolResult{
-				ToolResult: &timelinepb.ToolResultSnapshotV1{
-					SchemaVersion: 1,
-					ToolCallId:    env.Event.ID,
-					Result:        resultStruct,
-					ResultRaw:     pb.Result,
-					CustomKind:    pb.CustomKind,
-				},
-			},
-		})
+		err := p.upsert(ctx, seq, timelineEntityV2FromProtoMessage(resultEntityID, "tool_result", &timelinepb.ToolResultSnapshotV1{
+			SchemaVersion: 1,
+			ToolCallId:    env.Event.ID,
+			Result:        resultStruct,
+			ResultRaw:     pb.Result,
+			CustomKind:    pb.CustomKind,
+		}))
 		return err
 
 	case "thinking.mode.started", "thinking.mode.update", "thinking.mode.completed":
@@ -415,21 +367,15 @@ func (p *TimelineProjector) ApplySemFrame(ctx context.Context, frame []byte) err
 		if errStr != "" {
 			status = "error"
 		}
-		err := p.upsert(ctx, seq, &timelinepb.TimelineEntityV1{
-			Id:   itemID,
-			Kind: "thinking_mode",
-			Snapshot: &timelinepb.TimelineEntityV1_ThinkingMode{
-				ThinkingMode: &timelinepb.ThinkingModeSnapshotV1{
-					SchemaVersion: 1,
-					Status:        status,
-					Mode:          mode,
-					Phase:         phase,
-					Reasoning:     reason,
-					Success:       success,
-					Error:         errStr,
-				},
-			},
-		})
+		err := p.upsert(ctx, seq, timelineEntityV2FromProtoMessage(itemID, "thinking_mode", &timelinepb.ThinkingModeSnapshotV1{
+			SchemaVersion: 1,
+			Status:        status,
+			Mode:          mode,
+			Phase:         phase,
+			Reasoning:     reason,
+			Success:       success,
+			Error:         errStr,
+		}))
 		return err
 
 	}

@@ -13,41 +13,29 @@ func TestInMemoryTimelineStore_UpsertAndSnapshot(t *testing.T) {
 	ctx := context.Background()
 	convID := "c1"
 
-	err := s.Upsert(ctx, convID, 0, &timelinepb.TimelineEntityV1{
+	err := s.Upsert(ctx, convID, 0, &timelinepb.TimelineEntityV2{
 		Id:   "bad",
 		Kind: "message",
-		Snapshot: &timelinepb.TimelineEntityV1_Message{
-			Message: &timelinepb.MessageSnapshotV1{SchemaVersion: 1, Role: "assistant", Content: "bad", Streaming: true},
-		},
 	})
 	require.Error(t, err)
 
-	err = s.Upsert(ctx, convID, 10, &timelinepb.TimelineEntityV1{
+	err = s.Upsert(ctx, convID, 10, &timelinepb.TimelineEntityV2{
 		Id:          "m1",
 		Kind:        "message",
 		CreatedAtMs: 200,
-		Snapshot: &timelinepb.TimelineEntityV1_Message{
-			Message: &timelinepb.MessageSnapshotV1{SchemaVersion: 1, Role: "assistant", Content: "hi", Streaming: true},
-		},
 	})
 	require.NoError(t, err)
 
-	err = s.Upsert(ctx, convID, 20, &timelinepb.TimelineEntityV1{
+	err = s.Upsert(ctx, convID, 20, &timelinepb.TimelineEntityV2{
 		Id:   "m1",
 		Kind: "message",
-		Snapshot: &timelinepb.TimelineEntityV1_Message{
-			Message: &timelinepb.MessageSnapshotV1{SchemaVersion: 1, Role: "assistant", Content: "hello", Streaming: false},
-		},
 	})
 	require.NoError(t, err)
 
-	err = s.Upsert(ctx, convID, 30, &timelinepb.TimelineEntityV1{
+	err = s.Upsert(ctx, convID, 30, &timelinepb.TimelineEntityV2{
 		Id:          "m2",
 		Kind:        "message",
 		CreatedAtMs: 50,
-		Snapshot: &timelinepb.TimelineEntityV1_Message{
-			Message: &timelinepb.MessageSnapshotV1{SchemaVersion: 1, Role: "user", Content: "yo", Streaming: false},
-		},
 	})
 	require.NoError(t, err)
 
@@ -59,12 +47,9 @@ func TestInMemoryTimelineStore_UpsertAndSnapshot(t *testing.T) {
 	require.Equal(t, "m2", full.Entities[1].Id)
 
 	// Evict oldest (m1) when exceeding limit
-	err = s.Upsert(ctx, convID, 40, &timelinepb.TimelineEntityV1{
+	err = s.Upsert(ctx, convID, 40, &timelinepb.TimelineEntityV2{
 		Id:   "m3",
 		Kind: "message",
-		Snapshot: &timelinepb.TimelineEntityV1_Message{
-			Message: &timelinepb.MessageSnapshotV1{SchemaVersion: 1, Role: "assistant", Content: "later", Streaming: false},
-		},
 	})
 	require.NoError(t, err)
 

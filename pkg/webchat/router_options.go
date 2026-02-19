@@ -55,7 +55,7 @@ func WithBuildSubscriber(fn func(convID string) (message.Subscriber, bool, error
 	}
 }
 
-func WithTimelineUpsertHook(fn func(*Conversation) func(entity *timelinepb.TimelineEntityV1, version uint64)) RouterOption {
+func WithTimelineUpsertHook(fn func(*Conversation) func(entity *timelinepb.TimelineEntityV2, version uint64)) RouterOption {
 	return func(r *Router) error {
 		if fn == nil {
 			return errors.New("timeline upsert hook is nil")

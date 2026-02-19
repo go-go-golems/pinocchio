@@ -69,7 +69,7 @@ type ConvManager struct {
 	stepCtrl       *toolloop.StepController
 
 	timelineStore      chatstore.TimelineStore
-	timelineUpsertHook func(*Conversation) func(entity *timelinepb.TimelineEntityV1, version uint64)
+	timelineUpsertHook func(*Conversation) func(entity *timelinepb.TimelineEntityV2, version uint64)
 
 	runtimeComposer infruntime.RuntimeComposer
 	buildSubscriber func(convID string) (message.Subscriber, bool, error)
@@ -88,7 +88,7 @@ type ConvManagerOptions struct {
 	EvictInterval  time.Duration
 
 	TimelineStore      chatstore.TimelineStore
-	TimelineUpsertHook func(*Conversation) func(entity *timelinepb.TimelineEntityV1, version uint64)
+	TimelineUpsertHook func(*Conversation) func(entity *timelinepb.TimelineEntityV2, version uint64)
 
 	RuntimeComposer infruntime.RuntimeComposer
 	BuildSubscriber func(convID string) (message.Subscriber, bool, error)
@@ -220,12 +220,12 @@ func buildConversationRecord(conv *Conversation, status string, lastError string
 	}
 }
 
-func (cm *ConvManager) timelineProjectorUpsertHook(conv *Conversation) func(entity *timelinepb.TimelineEntityV1, version uint64) {
-	var downstream func(entity *timelinepb.TimelineEntityV1, version uint64)
+func (cm *ConvManager) timelineProjectorUpsertHook(conv *Conversation) func(entity *timelinepb.TimelineEntityV2, version uint64) {
+	var downstream func(entity *timelinepb.TimelineEntityV2, version uint64)
 	if cm != nil && cm.timelineUpsertHook != nil {
 		downstream = cm.timelineUpsertHook(conv)
 	}
-	return func(entity *timelinepb.TimelineEntityV1, version uint64) {
+	return func(entity *timelinepb.TimelineEntityV2, version uint64) {
 		if conv != nil {
 			conv.mu.Lock()
 			if version > conv.lastSeenVersion {

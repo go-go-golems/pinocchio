@@ -49,11 +49,11 @@ func TestTimelineProjector_ThinkingFinalPreservesDeltaContent(t *testing.T) {
 
 	entity := snap.Entities[0]
 	require.Equal(t, msgID, entity.Id)
-	msg := entity.GetMessage()
-	require.NotNil(t, msg)
-	require.Equal(t, "thinking", msg.Role)
-	require.Equal(t, "reasoning content", msg.Content)
-	require.False(t, msg.Streaming)
+	require.NotNil(t, entity.Props)
+	props := entity.Props.AsMap()
+	require.Equal(t, "thinking", props["role"])
+	require.Equal(t, "reasoning content", props["content"])
+	require.Equal(t, false, props["streaming"])
 }
 
 func TestTimelineProjector_LlmFinalFallsBackToDeltaContentWhenFinalTextEmpty(t *testing.T) {
@@ -81,11 +81,11 @@ func TestTimelineProjector_LlmFinalFallsBackToDeltaContentWhenFinalTextEmpty(t *
 
 	entity := snap.Entities[0]
 	require.Equal(t, msgID, entity.Id)
-	msg := entity.GetMessage()
-	require.NotNil(t, msg)
-	require.Equal(t, "assistant", msg.Role)
-	require.Equal(t, "assistant cumulative", msg.Content)
-	require.False(t, msg.Streaming)
+	require.NotNil(t, entity.Props)
+	props := entity.Props.AsMap()
+	require.Equal(t, "assistant", props["role"])
+	require.Equal(t, "assistant cumulative", props["content"])
+	require.Equal(t, false, props["streaming"])
 }
 
 func TestTimelineProjector_ThinkingSummaryRemainsNonStreaming(t *testing.T) {
@@ -116,11 +116,11 @@ func TestTimelineProjector_ThinkingSummaryRemainsNonStreaming(t *testing.T) {
 
 	entity := snap.Entities[0]
 	require.Equal(t, msgID, entity.Id)
-	msg := entity.GetMessage()
-	require.NotNil(t, msg)
-	require.Equal(t, "thinking", msg.Role)
-	require.Equal(t, "final summary text", msg.Content)
-	require.False(t, msg.Streaming)
+	require.NotNil(t, entity.Props)
+	props := entity.Props.AsMap()
+	require.Equal(t, "thinking", props["role"])
+	require.Equal(t, "final summary text", props["content"])
+	require.Equal(t, false, props["streaming"])
 }
 
 func TestTimelineProjector_ProjectsChatMessageEvent(t *testing.T) {
@@ -142,9 +142,9 @@ func TestTimelineProjector_ProjectsChatMessageEvent(t *testing.T) {
 	entity := snap.Entities[0]
 	require.Equal(t, "user-turn-1", entity.Id)
 	require.Equal(t, "message", entity.Kind)
-	msg := entity.GetMessage()
-	require.NotNil(t, msg)
-	require.Equal(t, "user", msg.Role)
-	require.Equal(t, "hello from chat.message", msg.Content)
-	require.False(t, msg.Streaming)
+	require.NotNil(t, entity.Props)
+	props := entity.Props.AsMap()
+	require.Equal(t, "user", props["role"])
+	require.Equal(t, "hello from chat.message", props["content"])
+	require.Equal(t, false, props["streaming"])
 }

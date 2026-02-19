@@ -22,7 +22,7 @@ RelatedFiles:
       Note: Added test verifying buildConversationRecord includes LastSeenVersion
 ExternalSources: []
 Summary: Implementation diary for GP-028 task-by-task execution and commits.
-LastUpdated: 2026-02-19T10:42:00-05:00
+LastUpdated: 2026-02-19T10:49:25-05:00
 WhatFor: Preserve exact implementation history, commands, failures, and validation for the TimelineEntityV2 cutover ticket.
 WhenToUse: Use when reviewing GP-028 progress or continuing implementation from the latest completed task.
 ---
@@ -223,3 +223,107 @@ I kept V1 and V2 side-by-side in `transport.proto` for staged migration. That al
   - `typed` (`google.protobuf.Any`)
   - `meta` (`map<string,string>`)
 - `TimelineUpsertV2` and `TimelineSnapshotV2` mirror existing V1 envelope semantics with V2 entity payload.
+
+## Step 3: Backend hard-cut to TimelineEntityV2 for projection/store/upsert/hydration
+
+This slice moved runtime behavior from V1 transport entities to V2 across backend projection/storage and timeline APIs. I combined closely coupled TODOs (projection path, upsert emission, hydration response) in one commit-sized unit because partial signature changes between these layers do not compile independently.
+
+### Prompt Context
+
+**User prompt (verbatim):** "continue"
+
+**Assistant interpretation:** Continue GP-028 execution task-by-task, commit each completed slice, and keep the diary current.
+
+**Inferred user intent:** Keep momentum while preserving strict implementation traceability.
+
+### What I did
+
+- Switched core timeline store contracts to V2:
+  - `chatstore.TimelineStore.Upsert(..., *TimelineEntityV2)`
+  - `chatstore.TimelineStore.GetSnapshot(... ) -> *TimelineSnapshotV2`
+  - updated both implementations:
+    - `pkg/persistence/chatstore/timeline_store_memory.go`
+    - `pkg/persistence/chatstore/timeline_store_sqlite.go`
+- Migrated projector writes from V1 oneof entities to V2 `kind + props`:
+  - `pkg/webchat/timeline_projector.go`
+  - added `pkg/webchat/timeline_entity_v2.go` helper for converting typed snapshot protos into `Struct` props consistently.
+- Updated custom timeline handler path:
+  - `pkg/webchat/timeline_handlers_builtin.go` now upserts V2 entities.
+- Updated conversation/router hook types and emitted timeline upsert payloads to V2:
+  - `pkg/webchat/conversation.go`
+  - `pkg/webchat/conversation_service.go`
+  - `pkg/webchat/timeline_upsert.go`
+  - `pkg/webchat/router_options.go`
+  - `pkg/webchat/types.go`
+- Updated hydration service/API surfaces to V2 snapshots:
+  - `pkg/webchat/timeline_service.go`
+  - `pkg/webchat/http/api.go`
+  - `pkg/webchat/router_timeline_api.go`
+- Updated CLI/debug/UI code paths expecting V1 snapshots:
+  - `cmd/web-chat/timeline/snapshot.go`
+  - `cmd/web-chat/timeline/entity_helpers.go`
+  - `cmd/web-chat/timeline/verify.go`
+  - `pkg/ui/timeline_persist.go`
+- Updated tests to assert V2 `props` shape (instead of oneof getters):
+  - `pkg/persistence/chatstore/*_test.go`
+  - `pkg/webchat/*_test.go`
+  - `pkg/ui/timeline_persist_test.go`
+  - `cmd/web-chat/app_owned_chat_integration_test.go`
+
+### Why
+
+- This establishes V2 as the active backend contract and removes runtime dependence on `TimelineEntityV1` oneof decoding/encoding in active paths.
+- It directly enables domain-specific kinds to flow through without adding new `oneof` members.
+
+### What worked
+
+- Focused package tests passed after migration:
+  - `go test ./pkg/persistence/chatstore ./pkg/webchat`
+- Full repo tests passed after patching downstream V1 assumptions:
+  - `go test ./...`
+
+### What didn't work
+
+- Initial full test run failed in several downstream packages due stale V1 assumptions:
+  - `pkg/ui/timeline_persist.go` still writing V1 entities.
+  - `cmd/web-chat/timeline/*` still decoding V1 oneof snapshots.
+  - integration assertion in `cmd/web-chat/app_owned_chat_integration_test.go` still expected top-level `"message"` instead of `props`.
+- Resolved by systematically migrating those paths to V2 `props` reads/writes.
+
+### What I learned
+
+- The decoupled V2 model is straightforward in storage and transport, but many tests had implicit coupling to oneof helper accessors (`GetMessage` etc.). Converting assertions to inspect `props` is the critical cleanup step.
+
+### What was tricky to build
+
+- `protojson` omits zero-values by default; this initially dropped `streaming:false` from V2 props. I switched helper marshaling to `EmitUnpopulated: true` in `timeline_entity_v2.go` so boolean lifecycle flags remain stable in test and UI expectations.
+
+### What warrants a second pair of eyes
+
+- Confirm `EmitUnpopulated: true` on props generation is desired globally for payload consistency (it increases payload verbosity but avoids missing false/zero fields).
+
+### What should be done in the future
+
+- Next slice: update frontend websocket decode/mappers (`registry.ts`, `timelineMapper.ts`, debug timeline ws manager) to consume `TimelineUpsertV2`/`TimelineSnapshotV2` directly, then remove remaining V1 mapper branches.
+
+### Code review instructions
+
+- Start with interface/type changes:
+  - `pkg/persistence/chatstore/timeline_store.go`
+  - `pkg/webchat/timeline_projector.go`
+  - `pkg/webchat/timeline_upsert.go`
+- Review V2 helper:
+  - `pkg/webchat/timeline_entity_v2.go`
+- Review consumer updates:
+  - `pkg/ui/timeline_persist.go`
+  - `cmd/web-chat/timeline/entity_helpers.go`
+  - `cmd/web-chat/app_owned_chat_integration_test.go`
+- Validate:
+  - `go test ./pkg/persistence/chatstore ./pkg/webchat`
+  - `go test ./...`
+
+### Technical details
+
+- Backend now emits `timeline.upsert` with protobuf payload `TimelineUpsertV2`.
+- Hydration `/api/timeline` now returns protobuf JSON for `TimelineSnapshotV2`.
+- Active Go paths no longer use `TimelineEntityV1`/`TimelineSnapshotV1` symbols (excluding generated protobuf bindings retained temporarily in `transport.proto`).

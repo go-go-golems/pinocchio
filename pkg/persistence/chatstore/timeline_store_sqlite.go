@@ -275,7 +275,7 @@ func (s *SQLiteTimelineStore) migrate() error {
 	return nil
 }
 
-func (s *SQLiteTimelineStore) Upsert(ctx context.Context, convID string, version uint64, entity *timelinepb.TimelineEntityV1) error {
+func (s *SQLiteTimelineStore) Upsert(ctx context.Context, convID string, version uint64, entity *timelinepb.TimelineEntityV2) error {
 	if s == nil || s.db == nil {
 		return errors.New("sqlite timeline store: db is nil")
 	}
@@ -394,7 +394,7 @@ func (s *SQLiteTimelineStore) Upsert(ctx context.Context, convID string, version
 	return nil
 }
 
-func (s *SQLiteTimelineStore) GetSnapshot(ctx context.Context, convID string, sinceVersion uint64, limit int) (*timelinepb.TimelineSnapshotV1, error) {
+func (s *SQLiteTimelineStore) GetSnapshot(ctx context.Context, convID string, sinceVersion uint64, limit int) (*timelinepb.TimelineSnapshotV2, error) {
 	if s == nil || s.db == nil {
 		return nil, errors.New("sqlite timeline store: db is nil")
 	}
@@ -441,13 +441,13 @@ func (s *SQLiteTimelineStore) GetSnapshot(ctx context.Context, convID string, si
 	}
 	defer func() { _ = rows.Close() }()
 
-	entities := make([]*timelinepb.TimelineEntityV1, 0, 128)
+	entities := make([]*timelinepb.TimelineEntityV2, 0, 128)
 	for rows.Next() {
 		var raw string
 		if err := rows.Scan(&raw); err != nil {
 			return nil, err
 		}
-		var e timelinepb.TimelineEntityV1
+		var e timelinepb.TimelineEntityV2
 		if err := (protojson.UnmarshalOptions{
 			DiscardUnknown: true,
 		}).Unmarshal([]byte(raw), &e); err != nil {
@@ -464,7 +464,7 @@ func (s *SQLiteTimelineStore) GetSnapshot(ctx context.Context, convID string, si
 		return nil, errors.Wrap(err, "sqlite timeline store: invalid snapshot version")
 	}
 
-	return &timelinepb.TimelineSnapshotV1{
+	return &timelinepb.TimelineSnapshotV2{
 		ConvId:       convID,
 		Version:      versionU64,
 		ServerTimeMs: time.Now().UnixMilli(),

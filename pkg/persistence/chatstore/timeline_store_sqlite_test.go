@@ -23,41 +23,29 @@ func TestSQLiteTimelineStore_UpsertAndSnapshot(t *testing.T) {
 	ctx := context.Background()
 	convID := "c1"
 
-	err = s.Upsert(ctx, convID, 0, &timelinepb.TimelineEntityV1{
+	err = s.Upsert(ctx, convID, 0, &timelinepb.TimelineEntityV2{
 		Id:   "bad",
 		Kind: "message",
-		Snapshot: &timelinepb.TimelineEntityV1_Message{
-			Message: &timelinepb.MessageSnapshotV1{SchemaVersion: 1, Role: "assistant", Content: "bad", Streaming: true},
-		},
 	})
 	require.Error(t, err)
 
-	err = s.Upsert(ctx, convID, 10, &timelinepb.TimelineEntityV1{
+	err = s.Upsert(ctx, convID, 10, &timelinepb.TimelineEntityV2{
 		Id:          "m1",
 		Kind:        "message",
 		CreatedAtMs: 200,
-		Snapshot: &timelinepb.TimelineEntityV1_Message{
-			Message: &timelinepb.MessageSnapshotV1{SchemaVersion: 1, Role: "assistant", Content: "hi", Streaming: true},
-		},
 	})
 	require.NoError(t, err)
 
-	err = s.Upsert(ctx, convID, 20, &timelinepb.TimelineEntityV1{
+	err = s.Upsert(ctx, convID, 20, &timelinepb.TimelineEntityV2{
 		Id:   "m1",
 		Kind: "message",
-		Snapshot: &timelinepb.TimelineEntityV1_Message{
-			Message: &timelinepb.MessageSnapshotV1{SchemaVersion: 1, Role: "assistant", Content: "hello", Streaming: false},
-		},
 	})
 	require.NoError(t, err)
 
-	err = s.Upsert(ctx, convID, 30, &timelinepb.TimelineEntityV1{
+	err = s.Upsert(ctx, convID, 30, &timelinepb.TimelineEntityV2{
 		Id:          "m2",
 		Kind:        "message",
 		CreatedAtMs: 50,
-		Snapshot: &timelinepb.TimelineEntityV1_Message{
-			Message: &timelinepb.MessageSnapshotV1{SchemaVersion: 1, Role: "user", Content: "yo", Streaming: false},
-		},
 	})
 	require.NoError(t, err)
 
@@ -161,21 +149,15 @@ func TestSQLiteTimelineStore_UpsertAdvancesConversationProgress(t *testing.T) {
 	ctx := context.Background()
 	convID := "conv-progress-1"
 
-	err = s.Upsert(ctx, convID, 7, &timelinepb.TimelineEntityV1{
+	err = s.Upsert(ctx, convID, 7, &timelinepb.TimelineEntityV2{
 		Id:   "m1",
 		Kind: "message",
-		Snapshot: &timelinepb.TimelineEntityV1_Message{
-			Message: &timelinepb.MessageSnapshotV1{SchemaVersion: 1, Role: "assistant", Content: "hello", Streaming: true},
-		},
 	})
 	require.NoError(t, err)
 
-	err = s.Upsert(ctx, convID, 15, &timelinepb.TimelineEntityV1{
+	err = s.Upsert(ctx, convID, 15, &timelinepb.TimelineEntityV2{
 		Id:   "m1",
 		Kind: "message",
-		Snapshot: &timelinepb.TimelineEntityV1_Message{
-			Message: &timelinepb.MessageSnapshotV1{SchemaVersion: 1, Role: "assistant", Content: "done", Streaming: false},
-		},
 	})
 	require.NoError(t, err)
 

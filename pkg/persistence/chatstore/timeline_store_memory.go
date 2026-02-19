@@ -24,7 +24,7 @@ type InMemoryTimelineStore struct {
 
 type inMemTimeline struct {
 	version       uint64
-	entities      map[string]*timelinepb.TimelineEntityV1
+	entities      map[string]*timelinepb.TimelineEntityV2
 	entityVersion map[string]uint64
 }
 
@@ -106,7 +106,7 @@ func (s *InMemoryTimelineStore) ListConversations(_ context.Context, limit int, 
 	return records, nil
 }
 
-func (s *InMemoryTimelineStore) Upsert(ctx context.Context, convID string, version uint64, entity *timelinepb.TimelineEntityV1) error {
+func (s *InMemoryTimelineStore) Upsert(ctx context.Context, convID string, version uint64, entity *timelinepb.TimelineEntityV2) error {
 	if s == nil {
 		return errors.New("in-memory timeline store: nil store")
 	}
@@ -134,7 +134,7 @@ func (s *InMemoryTimelineStore) Upsert(ctx context.Context, convID string, versi
 	if conv == nil {
 		conv = &inMemTimeline{
 			version:       0,
-			entities:      map[string]*timelinepb.TimelineEntityV1{},
+			entities:      map[string]*timelinepb.TimelineEntityV2{},
 			entityVersion: map[string]uint64{},
 		}
 		s.convs[convID] = conv
@@ -151,7 +151,7 @@ func (s *InMemoryTimelineStore) Upsert(ctx context.Context, convID string, versi
 		createdAt = now
 	}
 
-	clone := proto.Clone(entity).(*timelinepb.TimelineEntityV1)
+	clone := proto.Clone(entity).(*timelinepb.TimelineEntityV2)
 	clone.CreatedAtMs = createdAt
 	clone.UpdatedAtMs = now
 
@@ -194,7 +194,7 @@ func (s *InMemoryTimelineStore) Upsert(ctx context.Context, convID string, versi
 	return nil
 }
 
-func (s *InMemoryTimelineStore) GetSnapshot(ctx context.Context, convID string, sinceVersion uint64, limit int) (*timelinepb.TimelineSnapshotV1, error) {
+func (s *InMemoryTimelineStore) GetSnapshot(ctx context.Context, convID string, sinceVersion uint64, limit int) (*timelinepb.TimelineSnapshotV2, error) {
 	if s == nil {
 		return nil, errors.New("in-memory timeline store: nil store")
 	}
@@ -211,7 +211,7 @@ func (s *InMemoryTimelineStore) GetSnapshot(ctx context.Context, convID string, 
 
 	conv := s.convs[convID]
 	if conv == nil {
-		return &timelinepb.TimelineSnapshotV1{
+		return &timelinepb.TimelineSnapshotV2{
 			ConvId:       convID,
 			Version:      0,
 			ServerTimeMs: time.Now().UnixMilli(),
@@ -220,7 +220,7 @@ func (s *InMemoryTimelineStore) GetSnapshot(ctx context.Context, convID string, 
 	}
 
 	type pair struct {
-		entity  *timelinepb.TimelineEntityV1
+		entity  *timelinepb.TimelineEntityV2
 		version uint64
 	}
 	pairs := make([]pair, 0, len(conv.entities))
@@ -245,16 +245,16 @@ func (s *InMemoryTimelineStore) GetSnapshot(ctx context.Context, convID string, 
 		pairs = pairs[:limit]
 	}
 
-	entities := make([]*timelinepb.TimelineEntityV1, 0, len(pairs))
+	entities := make([]*timelinepb.TimelineEntityV2, 0, len(pairs))
 	for _, p := range pairs {
 		if p.entity == nil {
 			continue
 		}
-		clone := proto.Clone(p.entity).(*timelinepb.TimelineEntityV1)
+		clone := proto.Clone(p.entity).(*timelinepb.TimelineEntityV2)
 		entities = append(entities, clone)
 	}
 
-	return &timelinepb.TimelineSnapshotV1{
+	return &timelinepb.TimelineSnapshotV2{
 		ConvId:       convID,
 		Version:      conv.version,
 		ServerTimeMs: time.Now().UnixMilli(),

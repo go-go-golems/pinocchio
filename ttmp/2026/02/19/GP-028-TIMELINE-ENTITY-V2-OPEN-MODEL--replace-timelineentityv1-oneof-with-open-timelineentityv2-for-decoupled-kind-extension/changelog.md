@@ -51,3 +51,22 @@ Implemented Task 2: added TimelineEntityV2/TimelineUpsertV2/TimelineSnapshotV2 p
 - /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/web/src/sem/pb/proto/sem/timeline/transport_pb.ts — Regenerated shared web TS protobuf bindings for timeline V2 messages
 - /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/ttmp/2026/02/19/GP-028-TIMELINE-ENTITY-V2-OPEN-MODEL--replace-timelineentityv1-oneof-with-open-timelineentityv2-for-decoupled-kind-extension/reference/01-diary.md — Added Step 2 implementation diary entry and validation commands
 - /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/ttmp/2026/02/19/GP-028-TIMELINE-ENTITY-V2-OPEN-MODEL--replace-timelineentityv1-oneof-with-open-timelineentityv2-for-decoupled-kind-extension/tasks.md — Checked off protobuf definition/generation task
+
+
+## 2026-02-19
+
+Implemented backend TimelineEntityV2 cutover for projection/store/upsert/hydration and migrated downstream Go/UI/CLI tests to V2 `kind + props`.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/pkg/persistence/chatstore/timeline_store.go — TimelineStore contract now uses `TimelineEntityV2` and `TimelineSnapshotV2`
+- /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/pkg/webchat/timeline_projector.go — Projector now writes V2 entities via `kind + props`
+- /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/pkg/webchat/timeline_entity_v2.go — Added shared helpers to materialize V2 props from snapshot protos/maps
+- /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/pkg/webchat/timeline_upsert.go — `timeline.upsert` emission switched to `TimelineUpsertV2`
+- /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/pkg/webchat/conversation_service.go — conversation service upsert emission switched to `TimelineUpsertV2`
+- /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/pkg/webchat/http/api.go — timeline HTTP service contract switched to `TimelineSnapshotV2`
+- /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/pkg/ui/timeline_persist.go — UI timeline persistence writes V2 message props
+- /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/cmd/web-chat/timeline/entity_helpers.go — CLI summarization switched from oneof getters to V2 props mapping
+- /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/cmd/web-chat/app_owned_chat_integration_test.go — Integration assertion updated for V2 `props`
+- /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/ttmp/2026/02/19/GP-028-TIMELINE-ENTITY-V2-OPEN-MODEL--replace-timelineentityv1-oneof-with-open-timelineentityv2-for-decoupled-kind-extension/reference/01-diary.md — Added Step 3 implementation diary entry with failures and fixes
+- /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/ttmp/2026/02/19/GP-028-TIMELINE-ENTITY-V2-OPEN-MODEL--replace-timelineentityv1-oneof-with-open-timelineentityv2-for-decoupled-kind-extension/tasks.md — Checked off backend projection/upsert/hydration tasks

@@ -4,14 +4,14 @@
 
 - [ ] Replace closed `TimelineEntityV1` oneof with open `TimelineEntityV2` transport model in `proto/sem/timeline/transport.proto`
 - [x] Define and generate protobuf messages for `TimelineEntityV2`, `TimelineUpsertV2`, and `TimelineSnapshotV2` (Go + TS)
-- [ ] Update backend projection path to construct/store `TimelineEntityV2` instead of `TimelineEntityV1`:
+- [x] Update backend projection path to construct/store `TimelineEntityV2` instead of `TimelineEntityV1`:
   - `pkg/webchat/timeline_projector.go`
   - `pkg/persistence/chatstore/timeline_store_sqlite.go`
   - `pkg/persistence/chatstore/timeline_store_memory.go`
-- [ ] Update backend upsert emission to send V2 payloads under `event.type = timeline.upsert`:
+- [x] Update backend upsert emission to send V2 payloads under `event.type = timeline.upsert`:
   - `pkg/webchat/timeline_upsert.go`
   - `pkg/webchat/conversation_service.go`
-- [ ] Update hydration API to return `TimelineSnapshotV2` and remove V1 read/write path
+- [x] Update hydration API to return `TimelineSnapshotV2` and remove V1 read/write path
 - [ ] Update frontend SEM decode + mapper for V2 payloads:
   - `cmd/web-chat/web/src/sem/registry.ts`
   - `cmd/web-chat/web/src/sem/timelineMapper.ts`

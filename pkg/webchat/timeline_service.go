@@ -18,7 +18,7 @@ func NewTimelineService(store chatstore.TimelineStore) *TimelineService {
 	return &TimelineService{store: store}
 }
 
-func (s *TimelineService) Snapshot(ctx context.Context, convID string, sinceVersion uint64, limit int) (*timelinepb.TimelineSnapshotV1, error) {
+func (s *TimelineService) Snapshot(ctx context.Context, convID string, sinceVersion uint64, limit int) (*timelinepb.TimelineSnapshotV2, error) {
 	if s == nil || s.store == nil {
 		return nil, errors.New("timeline service not enabled")
 	}

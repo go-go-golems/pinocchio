@@ -344,7 +344,7 @@ FROM timeline_entities
 		if err := rows.Scan(&convID, &entityID, &raw); err != nil {
 			return err
 		}
-		var entity timelinepb.TimelineEntityV1
+		var entity timelinepb.TimelineEntityV2
 		if err := (protojson.UnmarshalOptions{DiscardUnknown: true}).Unmarshal([]byte(raw), &entity); err != nil {
 			row := types.NewRow(
 				types.MRP("conv_id", convID),

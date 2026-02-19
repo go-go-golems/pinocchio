@@ -42,14 +42,18 @@ func summarizeEntity(raw string) (string, error) {
 	if trimmed == "" {
 		return "", nil
 	}
-	var entity timelinepb.TimelineEntityV1
+	var entity timelinepb.TimelineEntityV2
 	if err := (protojson.UnmarshalOptions{DiscardUnknown: true}).Unmarshal([]byte(trimmed), &entity); err != nil {
 		return "", err
 	}
 	kind := strings.TrimSpace(entity.GetKind())
-	if msg := entity.GetMessage(); msg != nil {
-		role := strings.TrimSpace(msg.GetRole())
-		content := truncateString(msg.GetContent(), 160)
+	props := map[string]any{}
+	if entity.GetProps() != nil {
+		props = entity.GetProps().AsMap()
+	}
+	if kind == "message" {
+		role := strings.TrimSpace(asString(props["role"]))
+		content := truncateString(asString(props["content"]), 160)
 		if role == "" {
 			role = "message"
 		}
@@ -58,9 +62,12 @@ func summarizeEntity(raw string) (string, error) {
 		}
 		return role, nil
 	}
-	if tc := entity.GetToolCall(); tc != nil {
-		name := strings.TrimSpace(tc.GetName())
-		status := strings.TrimSpace(tc.GetStatus())
+	if kind == "tool_call" {
+		name := strings.TrimSpace(asString(props["name"]))
+		status := strings.TrimSpace(asString(props["status"]))
+		if status == "" && asBool(props["done"]) {
+			status = "completed"
+		}
 		if name == "" {
 			name = "tool_call"
 		}
@@ -69,9 +76,12 @@ func summarizeEntity(raw string) (string, error) {
 		}
 		return fmt.Sprintf("tool_call %s", name), nil
 	}
-	if tr := entity.GetToolResult(); tr != nil {
-		toolID := strings.TrimSpace(tr.GetToolCallId())
-		errText := truncateString(tr.GetError(), 120)
+	if kind == "tool_result" {
+		toolID := strings.TrimSpace(asString(props["toolCallId"]))
+		if toolID == "" {
+			toolID = strings.TrimSpace(asString(props["tool_call_id"]))
+		}
+		errText := truncateString(asString(props["error"]), 120)
 		if toolID == "" {
 			toolID = "tool_result"
 		}
@@ -80,16 +90,17 @@ func summarizeEntity(raw string) (string, error) {
 		}
 		return fmt.Sprintf("tool_result %s", toolID), nil
 	}
-	if st := entity.GetStatus(); st != nil {
-		text := truncateString(st.GetText(), 160)
+	if kind == "status" {
+		text := truncateString(asString(props["text"]), 160)
+		statusType := strings.TrimSpace(asString(props["type"]))
 		if text != "" {
-			if st.GetType() != "" {
-				return fmt.Sprintf("status %s: %s", st.GetType(), text), nil
+			if statusType != "" {
+				return fmt.Sprintf("status %s: %s", statusType, text), nil
 			}
 			return fmt.Sprintf("status: %s", text), nil
 		}
-		if st.GetType() != "" {
-			return fmt.Sprintf("status %s", st.GetType()), nil
+		if statusType != "" {
+			return fmt.Sprintf("status %s", statusType), nil
 		}
 		return "status", nil
 	}
@@ -105,4 +116,20 @@ func truncateString(s string, maxLen int) string {
 		return s
 	}
 	return string(runes[:maxLen]) + "..."
+}
+
+func asString(v any) string {
+	switch x := v.(type) {
+	case string:
+		return x
+	case fmt.Stringer:
+		return x.String()
+	default:
+		return ""
+	}
+}
+
+func asBool(v any) bool {
+	b, ok := v.(bool)
+	return ok && b
 }
