@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package sem.timeline;
 
-option go_package = "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/timeline;timeline";
+option go_package = "github.com/go-go-golems/pinocchio/cmd/web-chat/thinkingmode/pb;thinkingmodepb";
 
 // ThinkingModeSnapshotV1 maps 'thinking_mode' entity props
 message ThinkingModeSnapshotV1 {

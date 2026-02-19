@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package sem.middleware.disco_dialogue;
 
-option go_package = "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/middleware;middleware";
+option go_package = "github.com/go-go-golems/pinocchio/cmd/web-chat/thinkingmode/pb;thinkingmodepb";
 
 // Payload for a single internal dialogue line.
 message DiscoDialogueLinePayload {

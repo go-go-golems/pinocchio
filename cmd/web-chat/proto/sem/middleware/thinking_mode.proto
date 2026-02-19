@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package sem.middleware.thinking_mode;
 
-option go_package = "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/middleware;middleware";
+option go_package = "github.com/go-go-golems/pinocchio/cmd/web-chat/thinkingmode/pb;thinkingmodepb";
 
 import "google/protobuf/struct.proto";
 

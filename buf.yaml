@@ -1,4 +1,7 @@
 version: v1
+build:
+  excludes:
+    - cmd/web-chat/proto
 deps:
   - buf.build/google/protobuf
 lint:
