@@ -99,6 +99,18 @@ func (s *recordingTimelineStore) GetSnapshot(ctx context.Context, convID string,
 	return &timelinepb.TimelineSnapshotV1{ConvId: convID}, nil
 }
 
+func (s *recordingTimelineStore) UpsertConversation(context.Context, chatstore.ConversationRecord) error {
+	return nil
+}
+
+func (s *recordingTimelineStore) GetConversation(context.Context, string) (chatstore.ConversationRecord, bool, error) {
+	return chatstore.ConversationRecord{}, false, nil
+}
+
+func (s *recordingTimelineStore) ListConversations(context.Context, int, int64) ([]chatstore.ConversationRecord, error) {
+	return nil, nil
+}
+
 func (s *recordingTimelineStore) Close() error { return nil }
 
 func TestStepTimelinePersistFunc_UsesDetachedContextAfterMessageContextCancellation(t *testing.T) {

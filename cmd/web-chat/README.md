@@ -23,7 +23,7 @@ SectionType: GeneralTopic
 - App code owns `/chat` and `/ws`.
 - `pkg/webchat` provides service surfaces and helper handlers.
 - Timeline hydration is served at `/api/timeline`.
-- Debug endpoints live under `/api/debug/*`.
+- Debug endpoints live under `/api/debug/*` when `--debug-api` is enabled.
 
 ## Directory Structure
 
@@ -58,6 +58,8 @@ SectionType: GeneralTopic
 - `GET /api/debug/turns?...` (debug only, turn store required)
 - `GET /api/debug/turn/:convId/:sessionId/:turnId` (debug only)
 
+Debug routes are opt-in and only mounted when `--debug-api` is set.
+
 Legacy route names are intentionally not documented here:
 
 - `/timeline`
@@ -85,6 +87,29 @@ go run ./cmd/web-chat --addr :8080
 
 Open `http://localhost:8080/`.
 
+Enable debug API routes:
+
+```bash
+go run ./cmd/web-chat --addr :8080 --debug-api
+```
+
+Example with root mount and non-default dev ports:
+
+```bash
+# backend
+go run ./cmd/web-chat --addr :8081 --root /chat --debug-api
+
+# frontend (from cmd/web-chat/web)
+VITE_BACKEND_ORIGIN=http://localhost:8081 \
+npm run dev -- --port 5714
+```
+
+Runtime prefix is communicated to the TS app via `app-config.js`:
+
+- Go backend serves `app-config.js` from command settings (`--root`, `--debug-api`)
+- when mounted under `--root /chat`, backend exposes both `/chat/app-config.js` and `/app-config.js`
+- Vite dev server proxies `/app-config.js` to `VITE_BACKEND_ORIGIN`
+
 ## Frontend Dev Checks
 
 Run from `cmd/web-chat/web`:
@@ -102,6 +127,7 @@ With `--root /chat`, routes are mounted under `/chat`:
 - `/chat/chat`
 - `/chat/ws`
 - `/chat/api/timeline`
+- `/chat/api/debug/conversations`
 - `/chat/api/debug/turns`
 
 ## Related Docs

@@ -12,6 +12,7 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
+      '/app-config.js': { target: process.env.VITE_BACKEND_ORIGIN ?? 'http://localhost:8080', changeOrigin: true },
       // Development convenience: forward API/WS to the Go server.
       // Adjust backend port via VITE_BACKEND_ORIGIN if needed.
       // Note: Vite proxy contexts are prefix matches, not regex keys.

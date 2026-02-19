@@ -101,3 +101,24 @@ func TestSemanticEventsFromEvent_CalcToolResultGetsCustomKind(t *testing.T) {
 	require.Equal(t, "calc_result", resData["customKind"])
 	require.Equal(t, "tool.done", doneEv["type"])
 }
+
+func TestSemanticEventsFromEvent_ReasoningSummaryMapsToThinkingSummary(t *testing.T) {
+	meta := events.EventMetadata{
+		SessionID:   "sess-summary",
+		InferenceID: "inf-summary",
+		TurnID:      "turn-summary",
+	}
+
+	frames := SemanticEventsFromEvent(events.NewInfoEvent(meta, "reasoning-summary", map[string]any{
+		"text": "final reasoning summary",
+	}))
+	require.Len(t, frames, 1)
+
+	ev := decodeSemEvent(t, frames[0])
+	require.Equal(t, "llm.thinking.summary", ev["type"])
+	require.Equal(t, "llm-inf-summary:thinking", ev["id"])
+
+	data, ok := ev["data"].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "final reasoning summary", data["text"])
+}

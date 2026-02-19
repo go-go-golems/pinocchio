@@ -1,0 +1,10 @@
+event_type                    n  
+----------------------------  ---
+llm.thinking.delta            199
+timeline.upsert               19 
+llm.delta                     14 
+hypercard.suggestions.update  4  
+hypercard.suggestions.start   1  
+hypercard.suggestions.v1      1  
+llm.final                     1  
+llm.thinking.final            1  

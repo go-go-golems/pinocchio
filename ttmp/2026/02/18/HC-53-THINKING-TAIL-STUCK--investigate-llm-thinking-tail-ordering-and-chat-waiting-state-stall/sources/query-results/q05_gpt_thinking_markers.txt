@@ -1,0 +1,1189 @@
+line_no  ts_iso                               level  module_ref                                         message               kv_json                                                     
+-------  -----------------------------------  -----  -------------------------------------------------  --------------------  ------------------------------------------------------------
+596      2026-02-18T17:22:52.730874122-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+603      2026-02-18T17:22:52.751430103-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+610      2026-02-18T17:22:52.769753048-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+617      2026-02-18T17:22:52.790149346-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+624      2026-02-18T17:22:52.793903585-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+631      2026-02-18T17:22:52.82404367-05:00   DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+638      2026-02-18T17:22:52.834159191-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+645      2026-02-18T17:22:52.841622289-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+652      2026-02-18T17:22:52.852300049-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+659      2026-02-18T17:22:52.861192672-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+666      2026-02-18T17:22:52.8707351-05:00    DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+673      2026-02-18T17:22:52.879838191-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+680      2026-02-18T17:22:52.88961068-05:00   DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+687      2026-02-18T17:22:52.906832483-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+694      2026-02-18T17:22:52.910745726-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+701      2026-02-18T17:22:52.931399928-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+708      2026-02-18T17:22:52.946822139-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+715      2026-02-18T17:22:52.954789157-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+722      2026-02-18T17:22:52.969129912-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+729      2026-02-18T17:22:52.977133046-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+736      2026-02-18T17:22:52.992593825-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+743      2026-02-18T17:22:52.999225004-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+750      2026-02-18T17:22:53.011320297-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+757      2026-02-18T17:22:53.039856651-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+764      2026-02-18T17:22:53.071427603-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+771      2026-02-18T17:22:53.092494531-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+778      2026-02-18T17:22:53.120483535-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+785      2026-02-18T17:22:53.152395115-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+792      2026-02-18T17:22:53.185862272-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+799      2026-02-18T17:22:53.211999144-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+806      2026-02-18T17:22:53.222200355-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+813      2026-02-18T17:22:53.230520331-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+820      2026-02-18T17:22:53.239625701-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+827      2026-02-18T17:22:53.257403513-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+834      2026-02-18T17:22:53.263794891-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+841      2026-02-18T17:22:53.272821829-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+848      2026-02-18T17:22:53.28618808-05:00   DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+855      2026-02-18T17:22:53.296138146-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+862      2026-02-18T17:22:53.309407908-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+869      2026-02-18T17:22:53.319398707-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+876      2026-02-18T17:22:53.330814352-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+883      2026-02-18T17:22:53.342044469-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+890      2026-02-18T17:22:53.350752849-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+897      2026-02-18T17:22:53.383365492-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+904      2026-02-18T17:22:53.41240399-05:00   DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+911      2026-02-18T17:22:53.421189007-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+918      2026-02-18T17:22:53.434671461-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+925      2026-02-18T17:22:53.446705194-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+932      2026-02-18T17:22:53.467556974-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+939      2026-02-18T17:22:53.500524965-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+946      2026-02-18T17:22:53.533367703-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+953      2026-02-18T17:22:53.571068286-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+960      2026-02-18T17:22:53.581234048-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+967      2026-02-18T17:22:53.594746928-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+974      2026-02-18T17:22:53.609016694-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+981      2026-02-18T17:22:53.621468459-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+988      2026-02-18T17:22:53.631760155-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+995      2026-02-18T17:22:53.64144816-05:00   DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1002     2026-02-18T17:22:53.649055243-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1009     2026-02-18T17:22:53.660074218-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1016     2026-02-18T17:22:53.674436019-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1023     2026-02-18T17:22:53.677982641-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1030     2026-02-18T17:22:53.707792796-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1037     2026-02-18T17:22:53.727122931-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1044     2026-02-18T17:22:53.745196039-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1051     2026-02-18T17:22:53.758038846-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1058     2026-02-18T17:22:53.768721663-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1065     2026-02-18T17:22:53.77625957-05:00   DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1072     2026-02-18T17:22:53.795858556-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1079     2026-02-18T17:22:53.804972325-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1086     2026-02-18T17:22:53.821677155-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1093     2026-02-18T17:22:53.831284275-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1100     2026-02-18T17:22:53.870738917-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1107     2026-02-18T17:22:53.931116395-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1114     2026-02-18T17:22:53.961921731-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1121     2026-02-18T17:22:53.993006308-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1128     2026-02-18T17:22:54.016613728-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1135     2026-02-18T17:22:54.024772058-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1142     2026-02-18T17:22:54.057781267-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1149     2026-02-18T17:22:54.090708352-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1156     2026-02-18T17:22:54.123877843-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1163     2026-02-18T17:22:54.136357579-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1170     2026-02-18T17:22:54.145096051-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1177     2026-02-18T17:22:54.169622292-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1184     2026-02-18T17:22:54.175798466-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1191     2026-02-18T17:22:54.183517836-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1198     2026-02-18T17:22:54.205887066-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1205     2026-02-18T17:22:54.211504723-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1212     2026-02-18T17:22:54.219449794-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1237     2026-02-18T17:22:55.622709435-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1244     2026-02-18T17:22:55.653436126-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1251     2026-02-18T17:22:55.714250084-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1258     2026-02-18T17:22:55.734437548-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1265     2026-02-18T17:22:55.77172205-05:00   DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1272     2026-02-18T17:22:55.77908323-05:00   DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1279     2026-02-18T17:22:55.789579157-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1286     2026-02-18T17:22:55.798567628-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1293     2026-02-18T17:22:55.811498816-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1300     2026-02-18T17:22:55.82186793-05:00   DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1307     2026-02-18T17:22:55.838499325-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1314     2026-02-18T17:22:55.849768541-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1321     2026-02-18T17:22:55.856222037-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1328     2026-02-18T17:22:55.874928634-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1335     2026-02-18T17:22:55.882455313-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1342     2026-02-18T17:22:55.902209554-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1349     2026-02-18T17:22:55.912822285-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1356     2026-02-18T17:22:55.926937883-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1363     2026-02-18T17:22:55.93558123-05:00   DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1370     2026-02-18T17:22:55.951860141-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1377     2026-02-18T17:22:55.959403369-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1384     2026-02-18T17:22:55.968813175-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1391     2026-02-18T17:22:55.980596249-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1398     2026-02-18T17:22:55.990842745-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1405     2026-02-18T17:22:55.999684864-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1412     2026-02-18T17:22:56.020387513-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1419     2026-02-18T17:22:56.033145259-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1426     2026-02-18T17:22:56.043460008-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1433     2026-02-18T17:22:56.050765253-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1440     2026-02-18T17:22:56.060255029-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1447     2026-02-18T17:22:56.074928539-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1454     2026-02-18T17:22:56.087058314-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1461     2026-02-18T17:22:56.11786703-05:00   DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1468     2026-02-18T17:22:56.125747509-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1475     2026-02-18T17:22:56.13656284-05:00   DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1482     2026-02-18T17:22:56.144451683-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1489     2026-02-18T17:22:56.157587278-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1496     2026-02-18T17:22:56.163778451-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1503     2026-02-18T17:22:56.17523789-05:00   DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1510     2026-02-18T17:22:56.187658595-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1517     2026-02-18T17:22:56.228668474-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1524     2026-02-18T17:22:56.260237343-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1531     2026-02-18T17:22:56.323236152-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1538     2026-02-18T17:22:56.357385904-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1545     2026-02-18T17:22:56.380811726-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1552     2026-02-18T17:22:56.415653462-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1559     2026-02-18T17:22:56.445084596-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1566     2026-02-18T17:22:56.479440368-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1573     2026-02-18T17:22:56.493688624-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1580     2026-02-18T17:22:56.504375786-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1587     2026-02-18T17:22:56.514346683-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1594     2026-02-18T17:22:56.542753189-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1601     2026-02-18T17:22:56.572889769-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1608     2026-02-18T17:22:56.600846355-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1615     2026-02-18T17:22:56.628773302-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1622     2026-02-18T17:22:56.644519757-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1629     2026-02-18T17:22:56.661506612-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1636     2026-02-18T17:22:56.668911374-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1643     2026-02-18T17:22:56.678622838-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1650     2026-02-18T17:22:56.704270894-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1657     2026-02-18T17:22:56.725019414-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1664     2026-02-18T17:22:56.7364597-05:00    DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1671     2026-02-18T17:22:56.746963313-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1678     2026-02-18T17:22:56.782751745-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1685     2026-02-18T17:22:56.805956135-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1692     2026-02-18T17:22:56.819507625-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1699     2026-02-18T17:22:56.851713048-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1706     2026-02-18T17:22:56.865046174-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1713     2026-02-18T17:22:56.898368871-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1720     2026-02-18T17:22:56.93427834-05:00   DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1727     2026-02-18T17:22:56.955810188-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1734     2026-02-18T17:22:56.977558009-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1741     2026-02-18T17:22:56.998591443-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1748     2026-02-18T17:22:57.00841451-05:00   DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1755     2026-02-18T17:22:57.024705698-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1762     2026-02-18T17:22:57.03372339-05:00   DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1769     2026-02-18T17:22:57.055791985-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1776     2026-02-18T17:22:57.066748583-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1783     2026-02-18T17:22:57.087550638-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1790     2026-02-18T17:22:57.098255602-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1797     2026-02-18T17:22:57.10779132-05:00   DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1804     2026-02-18T17:22:57.129229038-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1811     2026-02-18T17:22:57.140055688-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1818     2026-02-18T17:22:57.153162267-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1825     2026-02-18T17:22:57.171251808-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1832     2026-02-18T17:22:57.215973573-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1839     2026-02-18T17:22:57.247269307-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1846     2026-02-18T17:22:57.315291945-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1853     2026-02-18T17:22:57.347126458-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1860     2026-02-18T17:22:57.377447793-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1867     2026-02-18T17:22:57.410211841-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1874     2026-02-18T17:22:57.420305971-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1881     2026-02-18T17:22:57.442046534-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1888     2026-02-18T17:22:57.453009694-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1895     2026-02-18T17:22:57.461645731-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1902     2026-02-18T17:22:57.470193108-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1909     2026-02-18T17:22:57.479837152-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1916     2026-02-18T17:22:57.506622966-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1923     2026-02-18T17:22:57.538585445-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1930     2026-02-18T17:22:57.567775822-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1937     2026-02-18T17:22:57.580660945-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1944     2026-02-18T17:22:57.592618472-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1951     2026-02-18T17:22:57.602031997-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1958     2026-02-18T17:22:57.613860133-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1965     2026-02-18T17:22:57.623809189-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1972     2026-02-18T17:22:57.633795788-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1979     2026-02-18T17:22:57.643294109-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1986     2026-02-18T17:22:57.656465717-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      
+
+1993     2026-02-18T17:22:57.664437193-05:00  DBG    ../../pinocchio/pkg/webchat/sem_translator.go:153  received event (SEM)  {"component":"web_forwarder","event_id":"dcce2010-8ce4-434d-
+                                                                                                                              a6b4-8c7fa1e72899","event_type":"*events.EventThinkingPartia
+                                                                                                                              l","inference_id":"733efb8e-9d96-4228-becc-395d63fd9578","se
+                                                                                                                              ssion_id":"51221b4b-ff5c-4cab-afae-c0688ede71d2","turn_id":"
+                                                                                                                              405203e6-4026-4668-a030-43a52d818cc3"}                      

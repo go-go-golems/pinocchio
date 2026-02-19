@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"os"
 	"sort"
 	"strings"
 
@@ -27,8 +26,8 @@ func (r *Router) registerDebugAPIHandlers(mux *http.ServeMux) {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		if r.cm == nil {
-			http.Error(w, "conversation manager not initialized", http.StatusServiceUnavailable)
+		if r.cm == nil && r.timelineStore == nil {
+			http.Error(w, "conversation sources not initialized", http.StatusServiceUnavailable)
 			return
 		}
 
@@ -42,53 +41,91 @@ func (r *Router) registerDebugAPIHandlers(mux *http.ServeMux) {
 			BufferedEvents    int    `json:"buffered_events"`
 			LastActivityMs    int64  `json:"last_activity_ms"`
 			HasTimelineSource bool   `json:"has_timeline_source"`
+			Source            string `json:"source,omitempty"`
 		}
 
-		r.cm.mu.Lock()
-		convs := make([]*Conversation, 0, len(r.cm.conns))
-		for _, conv := range r.cm.conns {
-			convs = append(convs, conv)
+		itemsByConvID := map[string]convSummary{}
+		if r.timelineStore != nil {
+			persisted, err := r.timelineStore.ListConversations(r0.Context(), 500, 0)
+			if err != nil {
+				logger.Warn().Err(err).Msg("list persisted conversations failed")
+			} else {
+				for _, rec := range persisted {
+					itemsByConvID[rec.ConvID] = convSummary{
+						ConvID:            rec.ConvID,
+						SessionID:         rec.SessionID,
+						RuntimeKey:        rec.RuntimeKey,
+						LastActivityMs:    rec.LastActivityMs,
+						HasTimelineSource: rec.HasTimeline || rec.LastSeenVersion > 0,
+						Source:            "persisted",
+					}
+				}
+			}
 		}
-		r.cm.mu.Unlock()
+		if r.cm != nil {
+			r.cm.mu.Lock()
+			convs := make([]*Conversation, 0, len(r.cm.conns))
+			for _, conv := range r.cm.conns {
+				convs = append(convs, conv)
+			}
+			r.cm.mu.Unlock()
+			for _, conv := range convs {
+				if conv == nil {
+					continue
+				}
+				conv.mu.Lock()
+				sessionID := conv.SessionID
+				runtimeKey := conv.RuntimeKey
+				queueDepth := len(conv.queue)
+				streamRunning := conv.stream != nil && conv.stream.IsRunning()
+				lastActivityMs := int64(0)
+				if !conv.lastActivity.IsZero() {
+					lastActivityMs = conv.lastActivity.UnixMilli()
+				}
+				bufferedEvents := 0
+				if conv.semBuf != nil {
+					bufferedEvents = len(conv.semBuf.Snapshot())
+				}
+				hasTimelineSource := conv.timelineProj != nil
+				pool := conv.pool
+				conv.mu.Unlock()
 
-		items := make([]convSummary, 0, len(convs))
-		for _, conv := range convs {
-			if conv == nil {
-				continue
-			}
-			conv.mu.Lock()
-			sessionID := conv.SessionID
-			runtimeKey := conv.RuntimeKey
-			queueDepth := len(conv.queue)
-			streamRunning := conv.stream != nil && conv.stream.IsRunning()
-			lastActivityMs := int64(0)
-			if !conv.lastActivity.IsZero() {
-				lastActivityMs = conv.lastActivity.UnixMilli()
-			}
-			bufferedEvents := 0
-			if conv.semBuf != nil {
-				bufferedEvents = len(conv.semBuf.Snapshot())
-			}
-			hasTimelineSource := conv.timelineProj != nil
-			pool := conv.pool
-			conv.mu.Unlock()
+				activeSockets := 0
+				if pool != nil {
+					activeSockets = pool.Count()
+				}
 
-			activeSockets := 0
-			if pool != nil {
-				activeSockets = pool.Count()
+				item, hasExisting := itemsByConvID[conv.ID]
+				if !hasExisting {
+					item = convSummary{
+						ConvID: conv.ID,
+						Source: "live",
+					}
+				}
+				if sessionID != "" {
+					item.SessionID = sessionID
+				}
+				if runtimeKey != "" {
+					item.RuntimeKey = runtimeKey
+				}
+				item.ActiveSockets = activeSockets
+				item.StreamRunning = streamRunning
+				item.QueueDepth = queueDepth
+				item.BufferedEvents = bufferedEvents
+				if lastActivityMs > item.LastActivityMs {
+					item.LastActivityMs = lastActivityMs
+				}
+				item.HasTimelineSource = item.HasTimelineSource || hasTimelineSource
+				if hasExisting {
+					item.Source = "merged"
+				}
+				itemsByConvID[conv.ID] = item
 			}
+		}
 
-			items = append(items, convSummary{
-				ConvID:            conv.ID,
-				SessionID:         sessionID,
-				RuntimeKey:        runtimeKey,
-				ActiveSockets:     activeSockets,
-				StreamRunning:     streamRunning,
-				QueueDepth:        queueDepth,
-				BufferedEvents:    bufferedEvents,
-				LastActivityMs:    lastActivityMs,
-				HasTimelineSource: hasTimelineSource,
-			})
+		items := make([]convSummary, 0, len(itemsByConvID))
+		for _, item := range itemsByConvID {
+			items = append(items, item)
 		}
 		sort.Slice(items, func(i, j int) bool {
 			if items[i].LastActivityMs == items[j].LastActivityMs {
@@ -108,8 +145,8 @@ func (r *Router) registerDebugAPIHandlers(mux *http.ServeMux) {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		if r.cm == nil {
-			http.Error(w, "conversation manager not initialized", http.StatusServiceUnavailable)
+		if r.cm == nil && r.timelineStore == nil {
+			http.Error(w, "conversation sources not initialized", http.StatusServiceUnavailable)
 			return
 		}
 
@@ -124,34 +161,78 @@ func (r *Router) registerDebugAPIHandlers(mux *http.ServeMux) {
 			return
 		}
 
-		conv, ok := r.cm.GetConversation(convID)
-		if !ok || conv == nil {
+		var (
+			persisted   chatstore.ConversationRecord
+			persistedOK bool
+		)
+		if r.timelineStore != nil {
+			pRec, ok, err := r.timelineStore.GetConversation(r0.Context(), convID)
+			if err != nil {
+				logger.Warn().Err(err).Str("conv_id", convID).Msg("get persisted conversation failed")
+			} else {
+				persisted = pRec
+				persistedOK = ok
+			}
+		}
+
+		var (
+			conv             *Conversation
+			ok               bool
+			sessionID        string
+			runtimeKey       string
+			queueDepth       int
+			streamRunning    bool
+			lastActivityMs   int64
+			bufferedEvents   int
+			activeRequestKey string
+			hasTimelineSrc   bool
+			activeSockets    int
+		)
+		if r.cm != nil {
+			conv, ok = r.cm.GetConversation(convID)
+			if ok && conv != nil {
+				conv.mu.Lock()
+				sessionID = conv.SessionID
+				runtimeKey = conv.RuntimeKey
+				queueDepth = len(conv.queue)
+				streamRunning = conv.stream != nil && conv.stream.IsRunning()
+				if !conv.lastActivity.IsZero() {
+					lastActivityMs = conv.lastActivity.UnixMilli()
+				}
+				if conv.semBuf != nil {
+					bufferedEvents = len(conv.semBuf.Snapshot())
+				}
+				activeRequestKey = conv.activeRequestKey
+				hasTimelineSrc = conv.timelineProj != nil
+				pool := conv.pool
+				conv.mu.Unlock()
+				if pool != nil {
+					activeSockets = pool.Count()
+				}
+			}
+		}
+		if (conv == nil || !ok) && !persistedOK {
 			http.Error(w, "conversation not found", http.StatusNotFound)
 			return
 		}
 
-		conv.mu.Lock()
-		sessionID := conv.SessionID
-		runtimeKey := conv.RuntimeKey
-		queueDepth := len(conv.queue)
-		streamRunning := conv.stream != nil && conv.stream.IsRunning()
-		lastActivityMs := int64(0)
-		if !conv.lastActivity.IsZero() {
-			lastActivityMs = conv.lastActivity.UnixMilli()
+		source := "live"
+		if persistedOK {
+			source = "persisted"
 		}
-		bufferedEvents := 0
-		if conv.semBuf != nil {
-			bufferedEvents = len(conv.semBuf.Snapshot())
+		if conv != nil && ok && persistedOK {
+			source = "merged"
 		}
-		activeRequestKey := conv.activeRequestKey
-		hasTimelineSource := conv.timelineProj != nil
-		pool := conv.pool
-		conv.mu.Unlock()
-
-		activeSockets := 0
-		if pool != nil {
-			activeSockets = pool.Count()
+		if sessionID == "" {
+			sessionID = persisted.SessionID
 		}
+		if runtimeKey == "" {
+			runtimeKey = persisted.RuntimeKey
+		}
+		if lastActivityMs < persisted.LastActivityMs {
+			lastActivityMs = persisted.LastActivityMs
+		}
+		hasTimelineSrc = hasTimelineSrc || persisted.HasTimeline || persisted.LastSeenVersion > 0
 
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{
@@ -164,7 +245,8 @@ func (r *Router) registerDebugAPIHandlers(mux *http.ServeMux) {
 			"buffered_events":     bufferedEvents,
 			"last_activity_ms":    lastActivityMs,
 			"active_request_key":  activeRequestKey,
-			"has_timeline_source": hasTimelineSource,
+			"has_timeline_source": hasTimelineSrc,
+			"source":              source,
 		})
 	})
 
@@ -279,12 +361,9 @@ func (r *Router) registerDebugAPIHandlers(mux *http.ServeMux) {
 		})
 	})
 
-	// debug endpoints (dev-gated via PINOCCHIO_WEBCHAT_DEBUG=1)
+	// step-control endpoints are mounted with the rest of debug routes and
+	// inherit the router-level debug gating.
 	stepEnableHandler := func(w http.ResponseWriter, r0 *http.Request) {
-		if os.Getenv("PINOCCHIO_WEBCHAT_DEBUG") != "1" {
-			http.NotFound(w, r0)
-			return
-		}
 		if r0.Method != http.MethodPost {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
@@ -319,10 +398,6 @@ func (r *Router) registerDebugAPIHandlers(mux *http.ServeMux) {
 	mux.HandleFunc("/api/debug/step/enable", stepEnableHandler)
 
 	stepDisableHandler := func(w http.ResponseWriter, r0 *http.Request) {
-		if os.Getenv("PINOCCHIO_WEBCHAT_DEBUG") != "1" {
-			http.NotFound(w, r0)
-			return
-		}
 		if r0.Method != http.MethodPost {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
@@ -354,10 +429,6 @@ func (r *Router) registerDebugAPIHandlers(mux *http.ServeMux) {
 	mux.HandleFunc("/api/debug/step/disable", stepDisableHandler)
 
 	continueHandler := func(w http.ResponseWriter, r0 *http.Request) {
-		if os.Getenv("PINOCCHIO_WEBCHAT_DEBUG") != "1" {
-			http.NotFound(w, r0)
-			return
-		}
 		if r0.Method != http.MethodPost {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return

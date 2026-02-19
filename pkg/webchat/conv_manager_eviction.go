@@ -93,6 +93,7 @@ func (cm *ConvManager) evictIdleOnce(now time.Time) int {
 		delete(cm.conns, conv.ID)
 		cm.mu.Unlock()
 
+		cm.persistConversationIndex(conv, "evicted", "")
 		cm.cleanupConversation(conv)
 		evicted++
 	}

@@ -21,13 +21,18 @@ type SQLiteTurnStore struct {
 
 var _ TurnStore = &SQLiteTurnStore{}
 
+var sqliteSchemaIntrospectionTables = map[string]struct{}{
+	"turns":                 {},
+	"blocks":                {},
+	"turn_block_membership": {},
+}
+
 type snapshotBackfillRow struct {
 	convID      string
 	sessionID   string
 	turnID      string
 	phase       string
 	createdAtMs int64
-	payload     string
 }
 
 func NewSQLiteTurnStore(dsn string) (*SQLiteTurnStore, error) {
@@ -58,7 +63,7 @@ func (s *SQLiteTurnStore) migrate() error {
 		return errors.New("sqlite turn store: db is nil")
 	}
 
-	stmts := []string{
+	createTableStmts := []string{
 		`CREATE TABLE IF NOT EXISTS turns (
 			conv_id TEXT NOT NULL,
 			session_id TEXT NOT NULL,
@@ -93,18 +98,112 @@ func (s *SQLiteTurnStore) migrate() error {
 			FOREIGN KEY (conv_id, session_id, turn_id) REFERENCES turns(conv_id, session_id, turn_id) ON DELETE CASCADE,
 			FOREIGN KEY (block_id, content_hash) REFERENCES blocks(block_id, content_hash)
 		);`,
+	}
+	for _, st := range createTableStmts {
+		if _, err := s.db.Exec(st); err != nil {
+			return errors.Wrap(err, "sqlite turn store: migrate")
+		}
+	}
+
+	if err := s.ensureTurnsTableColumns(); err != nil {
+		return errors.Wrap(err, "sqlite turn store: ensure turns columns")
+	}
+
+	createIndexStmts := []string{
 		`CREATE INDEX IF NOT EXISTS turns_by_conv_session ON turns(conv_id, session_id, updated_at_ms DESC);`,
 		`CREATE INDEX IF NOT EXISTS turns_by_session ON turns(session_id, updated_at_ms DESC);`,
 		`CREATE INDEX IF NOT EXISTS blocks_by_kind_role ON blocks(kind, role);`,
 		`CREATE INDEX IF NOT EXISTS turn_block_membership_by_turn_phase ON turn_block_membership(conv_id, session_id, turn_id, phase, snapshot_created_at_ms DESC, ordinal);`,
 		`CREATE INDEX IF NOT EXISTS turn_block_membership_by_block ON turn_block_membership(block_id, content_hash);`,
 	}
-	for _, st := range stmts {
+	for _, st := range createIndexStmts {
 		if _, err := s.db.Exec(st); err != nil {
 			return errors.Wrap(err, "sqlite turn store: migrate")
 		}
 	}
+
 	return nil
+}
+
+func (s *SQLiteTurnStore) ensureTurnsTableColumns() error {
+	cols, err := s.tableColumns("turns")
+	if err != nil {
+		return err
+	}
+
+	if !cols["turn_created_at_ms"] {
+		if _, err := s.db.Exec(`ALTER TABLE turns ADD COLUMN turn_created_at_ms INTEGER NOT NULL DEFAULT 0`); err != nil {
+			return err
+		}
+		if cols["created_at_ms"] {
+			if _, err := s.db.Exec(`UPDATE turns SET turn_created_at_ms = CASE WHEN turn_created_at_ms > 0 THEN turn_created_at_ms ELSE COALESCE(created_at_ms, 0) END`); err != nil {
+				return err
+			}
+		}
+	}
+
+	if !cols["turn_metadata_json"] {
+		if _, err := s.db.Exec(`ALTER TABLE turns ADD COLUMN turn_metadata_json TEXT NOT NULL DEFAULT '{}'`); err != nil {
+			return err
+		}
+	}
+	if !cols["turn_data_json"] {
+		if _, err := s.db.Exec(`ALTER TABLE turns ADD COLUMN turn_data_json TEXT NOT NULL DEFAULT '{}'`); err != nil {
+			return err
+		}
+	}
+	if !cols["updated_at_ms"] {
+		if _, err := s.db.Exec(`ALTER TABLE turns ADD COLUMN updated_at_ms INTEGER NOT NULL DEFAULT 0`); err != nil {
+			return err
+		}
+	}
+	if _, err := s.db.Exec(`
+		UPDATE turns
+		SET updated_at_ms = CASE
+			WHEN COALESCE(updated_at_ms, 0) > 0 THEN updated_at_ms
+			WHEN COALESCE(turn_created_at_ms, 0) > 0 THEN turn_created_at_ms
+			ELSE CAST(strftime('%s','now') AS INTEGER) * 1000
+		END
+	`); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *SQLiteTurnStore) tableColumns(table string) (map[string]bool, error) {
+	if s == nil || s.db == nil {
+		return nil, errors.New("sqlite turn store: db is nil")
+	}
+	table, err := normalizeSQLiteIntrospectionTable(table)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := s.db.Query(`SELECT name FROM pragma_table_info(?)`, table)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	out := map[string]bool{}
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, err
+		}
+		out[strings.ToLower(strings.TrimSpace(name))] = true
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func normalizeSQLiteIntrospectionTable(table string) (string, error) {
+	table = strings.ToLower(strings.TrimSpace(table))
+	if _, ok := sqliteSchemaIntrospectionTables[table]; !ok {
+		return "", errors.Errorf("sqlite turn store: unsupported table for schema introspection: %q", table)
+	}
+	return table, nil
 }
 
 func (s *SQLiteTurnStore) Save(ctx context.Context, convID, sessionID, turnID, phase string, createdAtMs int64, payload string) error {
@@ -131,8 +230,11 @@ func (s *SQLiteTurnStore) Save(ctx context.Context, convID, sessionID, turnID, p
 	}
 
 	t, err := serde.FromYAML([]byte(payload))
-	if err != nil || t == nil {
+	if err != nil {
 		return errors.Wrap(err, "sqlite turn store: parse payload yaml")
+	}
+	if t == nil {
+		return errors.New("sqlite turn store: parse payload yaml: decoded nil turn")
 	}
 
 	row := snapshotBackfillRow{
@@ -141,7 +243,6 @@ func (s *SQLiteTurnStore) Save(ctx context.Context, convID, sessionID, turnID, p
 		turnID:      turnID,
 		phase:       phase,
 		createdAtMs: createdAtMs,
-		payload:     payload,
 	}
 	_, err = s.persistNormalizedSnapshot(ctx, row, t)
 	return err

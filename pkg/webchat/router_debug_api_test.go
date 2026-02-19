@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"sort"
 	"testing"
 	"time"
 
@@ -16,7 +17,8 @@ import (
 )
 
 type stubTimelineStore struct {
-	snapshot *timelinepb.TimelineSnapshotV1
+	snapshot      *timelinepb.TimelineSnapshotV1
+	conversations map[string]chatstore.ConversationRecord
 }
 
 func (s *stubTimelineStore) Upsert(context.Context, string, uint64, *timelinepb.TimelineEntityV1) error {
@@ -28,6 +30,47 @@ func (s *stubTimelineStore) GetSnapshot(context.Context, string, uint64, int) (*
 		return &timelinepb.TimelineSnapshotV1{}, nil
 	}
 	return s.snapshot, nil
+}
+
+func (s *stubTimelineStore) UpsertConversation(context.Context, chatstore.ConversationRecord) error {
+	return nil
+}
+
+func (s *stubTimelineStore) GetConversation(_ context.Context, convID string) (chatstore.ConversationRecord, bool, error) {
+	if s.conversations == nil {
+		return chatstore.ConversationRecord{}, false, nil
+	}
+	rec, ok := s.conversations[convID]
+	if !ok {
+		return chatstore.ConversationRecord{}, false, nil
+	}
+	return rec, true, nil
+}
+
+func (s *stubTimelineStore) ListConversations(_ context.Context, limit int, sinceMs int64) ([]chatstore.ConversationRecord, error) {
+	if s.conversations == nil {
+		return nil, nil
+	}
+	if limit <= 0 {
+		limit = 200
+	}
+	out := make([]chatstore.ConversationRecord, 0, len(s.conversations))
+	for _, rec := range s.conversations {
+		if sinceMs > 0 && rec.LastActivityMs < sinceMs {
+			continue
+		}
+		out = append(out, rec)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].LastActivityMs == out[j].LastActivityMs {
+			return out[i].ConvID < out[j].ConvID
+		}
+		return out[i].LastActivityMs > out[j].LastActivityMs
+	})
+	if len(out) > limit {
+		out = out[:limit]
+	}
+	return out, nil
 }
 
 func (s *stubTimelineStore) Close() error { return nil }
@@ -109,8 +152,6 @@ func TestAPIHandler_DebugTurnsEnvelopeMetadata(t *testing.T) {
 }
 
 func TestAPIHandler_DebugStepRoutes(t *testing.T) {
-	t.Setenv("PINOCCHIO_WEBCHAT_DEBUG", "1")
-
 	stepCtrl := toolloop.NewStepController()
 	r := &Router{
 		cm:                &ConvManager{conns: map[string]*Conversation{}},
@@ -211,6 +252,115 @@ func TestAPIHandler_DebugConversationsAndDetail(t *testing.T) {
 	require.Equal(t, true, detail["has_timeline_source"])
 }
 
+func TestAPIHandler_DebugConversations_PersistedOnly(t *testing.T) {
+	r := &Router{
+		enableDebugRoutes: true,
+		cm:                &ConvManager{conns: map[string]*Conversation{}},
+		timelineStore: &stubTimelineStore{
+			conversations: map[string]chatstore.ConversationRecord{
+				"conv-past": {
+					ConvID:          "conv-past",
+					SessionID:       "session-past",
+					RuntimeKey:      "default",
+					CreatedAtMs:     1000,
+					LastActivityMs:  5000,
+					LastSeenVersion: 12,
+					HasTimeline:     true,
+					Status:          "active",
+				},
+			},
+		},
+	}
+	h := r.APIHandler()
+
+	status, body := runRequest(t, h, http.MethodGet, "/api/debug/conversations", nil)
+	require.Equal(t, http.StatusOK, status)
+
+	resp := map[string]any{}
+	require.NoError(t, json.Unmarshal(body, &resp))
+	items, ok := resp["items"].([]any)
+	require.True(t, ok)
+	require.Len(t, items, 1)
+	item := items[0].(map[string]any)
+	require.Equal(t, "conv-past", item["conv_id"])
+	require.Equal(t, "persisted", item["source"])
+	require.Equal(t, "session-past", item["session_id"])
+	require.Equal(t, "default", item["runtime_key"])
+	require.Equal(t, true, item["has_timeline_source"])
+
+	detailStatus, detailBody := runRequest(t, h, http.MethodGet, "/api/debug/conversations/conv-past", nil)
+	require.Equal(t, http.StatusOK, detailStatus)
+	detail := map[string]any{}
+	require.NoError(t, json.Unmarshal(detailBody, &detail))
+	require.Equal(t, "conv-past", detail["conv_id"])
+	require.Equal(t, "persisted", detail["source"])
+	require.Equal(t, "session-past", detail["session_id"])
+	require.Equal(t, "default", detail["runtime_key"])
+	require.Equal(t, true, detail["has_timeline_source"])
+}
+
+func TestAPIHandler_DebugConversations_MergedLiveAndPersisted(t *testing.T) {
+	conv := &Conversation{
+		ID:           "conv-merge",
+		SessionID:    "session-live",
+		RuntimeKey:   "agent",
+		semBuf:       newSemFrameBuffer(10),
+		lastActivity: time.UnixMilli(2000),
+	}
+	conv.semBuf.Add([]byte(`{"event":{"type":"chat.message","id":"e1"}}`))
+
+	r := &Router{
+		enableDebugRoutes: true,
+		cm: &ConvManager{
+			conns: map[string]*Conversation{
+				"conv-merge": conv,
+			},
+		},
+		timelineStore: &stubTimelineStore{
+			conversations: map[string]chatstore.ConversationRecord{
+				"conv-merge": {
+					ConvID:          "conv-merge",
+					SessionID:       "session-persisted",
+					RuntimeKey:      "default",
+					CreatedAtMs:     1000,
+					LastActivityMs:  7000,
+					LastSeenVersion: 7,
+					HasTimeline:     true,
+					Status:          "active",
+				},
+			},
+		},
+	}
+	h := r.APIHandler()
+
+	status, body := runRequest(t, h, http.MethodGet, "/api/debug/conversations", nil)
+	require.Equal(t, http.StatusOK, status)
+
+	resp := map[string]any{}
+	require.NoError(t, json.Unmarshal(body, &resp))
+	items, ok := resp["items"].([]any)
+	require.True(t, ok)
+	require.Len(t, items, 1)
+	item := items[0].(map[string]any)
+	require.Equal(t, "conv-merge", item["conv_id"])
+	require.Equal(t, "merged", item["source"])
+	require.Equal(t, "session-live", item["session_id"])
+	require.Equal(t, "agent", item["runtime_key"])
+	require.Equal(t, true, item["has_timeline_source"])
+	// Merged output should keep the most recent activity from either source.
+	require.Equal(t, float64(7000), item["last_activity_ms"])
+
+	detailStatus, detailBody := runRequest(t, h, http.MethodGet, "/api/debug/conversations/conv-merge", nil)
+	require.Equal(t, http.StatusOK, detailStatus)
+	detail := map[string]any{}
+	require.NoError(t, json.Unmarshal(detailBody, &detail))
+	require.Equal(t, "merged", detail["source"])
+	require.Equal(t, "session-live", detail["session_id"])
+	require.Equal(t, "agent", detail["runtime_key"])
+	require.Equal(t, true, detail["has_timeline_source"])
+	require.Equal(t, float64(7000), detail["last_activity_ms"])
+}
+
 func TestAPIHandler_DebugEventsFilters(t *testing.T) {
 	conv := &Conversation{
 		ID:        "conv-events",
@@ -283,8 +433,6 @@ func TestAPIHandler_DebugTurnDetail(t *testing.T) {
 }
 
 func TestAPIHandler_DebugRoutesDisabled(t *testing.T) {
-	t.Setenv("PINOCCHIO_WEBCHAT_DEBUG", "1")
-
 	r := &Router{
 		cm:                &ConvManager{conns: map[string]*Conversation{}},
 		stepCtrl:          toolloop.NewStepController(),

@@ -76,6 +76,46 @@ func TestSQLiteTurnStore_Validation(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestSQLiteTurnStore_AddsMissingUpdatedAtColumn(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "turns.db")
+	dsn, err := SQLiteTurnDSNForFile(dbPath)
+	require.NoError(t, err)
+
+	db, err := sql.Open("sqlite3", dsn)
+	require.NoError(t, err)
+	_, err = db.Exec(`
+		CREATE TABLE turns (
+			conv_id TEXT NOT NULL,
+			session_id TEXT NOT NULL,
+			turn_id TEXT NOT NULL,
+			turn_created_at_ms INTEGER NOT NULL,
+			turn_metadata_json TEXT NOT NULL DEFAULT '{}',
+			turn_data_json TEXT NOT NULL DEFAULT '{}',
+			PRIMARY KEY (conv_id, session_id, turn_id)
+		);
+	`)
+	require.NoError(t, err)
+	_, err = db.Exec(
+		`INSERT INTO turns(conv_id, session_id, turn_id, turn_created_at_ms, turn_metadata_json, turn_data_json) VALUES(?, ?, ?, ?, '{}', '{}')`,
+		"conv-1",
+		"sess-1",
+		"turn-1",
+		int64(123),
+	)
+	require.NoError(t, err)
+	require.NoError(t, db.Close())
+
+	s, err := NewSQLiteTurnStore(dsn)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = s.Close() })
+
+	require.True(t, hasColumn(t, s.db, "turns", "updated_at_ms"))
+	var updatedAt int64
+	require.NoError(t, s.db.QueryRow(`SELECT updated_at_ms FROM turns WHERE conv_id = ? AND session_id = ? AND turn_id = ?`, "conv-1", "sess-1", "turn-1").Scan(&updatedAt))
+	require.Equal(t, int64(123), updatedAt)
+}
+
 func requireTurnSchemaTables(t *testing.T, db *sql.DB) {
 	t.Helper()
 	require.True(t, hasTable(t, db, "turns"))
@@ -86,6 +126,24 @@ func requireTurnSchemaTables(t *testing.T, db *sql.DB) {
 func hasTable(t *testing.T, db *sql.DB, name string) bool {
 	t.Helper()
 	return queryRowCount(t, db, "SELECT COUNT(1) FROM sqlite_master WHERE type = 'table' AND name = ?", name) > 0
+}
+
+func hasColumn(t *testing.T, db *sql.DB, table string, name string) bool {
+	t.Helper()
+	table, err := normalizeSQLiteIntrospectionTable(table)
+	require.NoError(t, err)
+	rows, err := db.Query(`SELECT name FROM pragma_table_info(?)`, table)
+	require.NoError(t, err)
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var colName string
+		require.NoError(t, rows.Scan(&colName))
+		if colName == name {
+			return true
+		}
+	}
+	require.NoError(t, rows.Err())
+	return false
 }
 
 func queryRowCount(t *testing.T, db *sql.DB, query string, args ...any) int64 {

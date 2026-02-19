@@ -245,6 +245,39 @@ func (p *TimelineProjector) ApplySemFrame(ctx context.Context, frame []byte) err
 		})
 		return err
 
+	case "llm.thinking.summary":
+		var pb sempb.LlmFinal
+		if err := protojson.Unmarshal(env.Event.Data, &pb); err != nil {
+			return nil
+		}
+		p.mu.Lock()
+		role := p.msgRoles[env.Event.ID]
+		if role == "" {
+			role = "thinking"
+		}
+		content := pb.Text
+		if strings.TrimSpace(content) == "" {
+			content = p.msgContents[env.Event.ID]
+		}
+		if strings.TrimSpace(content) != "" {
+			p.msgContents[env.Event.ID] = content
+		}
+		delete(p.lastMsgWrite, env.Event.ID)
+		p.mu.Unlock()
+		err := p.upsert(ctx, seq, &timelinepb.TimelineEntityV1{
+			Id:   env.Event.ID,
+			Kind: "message",
+			Snapshot: &timelinepb.TimelineEntityV1_Message{
+				Message: &timelinepb.MessageSnapshotV1{
+					SchemaVersion: 1,
+					Role:          role,
+					Content:       content,
+					Streaming:     false,
+				},
+			},
+		})
+		return err
+
 	case "tool.start":
 		var pb sempb.ToolStart
 		if err := protojson.Unmarshal(env.Event.Data, &pb); err != nil {

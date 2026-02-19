@@ -1,4 +1,6 @@
+import type { BaseQueryFn, FetchArgs, FetchBaseQueryError } from '@reduxjs/toolkit/query';
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
+import { basePrefixFromLocation } from '../../utils/basePrefix';
 import type {
   ConversationDetail,
   ConversationSummary,
@@ -248,9 +250,36 @@ function toRunSummary(raw: unknown): OfflineRunSummary {
   };
 }
 
+const rawBaseQuery = fetchBaseQuery({ baseUrl: '' });
+
+function withDebugBasePrefix(prefix: string, path: string): string {
+  const normalizedPrefix = prefix.replace(/\/+$/, '');
+  const normalizedPath = path.replace(/^\/+/, '');
+  if (normalizedPath.length === 0) {
+    return `${normalizedPrefix}/api/debug/`;
+  }
+  return `${normalizedPrefix}/api/debug/${normalizedPath}`;
+}
+
+const baseQuery: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryError> = async (
+  args,
+  api,
+  extraOptions
+) => {
+  const prefix = basePrefixFromLocation();
+  const nextArgs =
+    typeof args === 'string'
+      ? withDebugBasePrefix(prefix, args)
+      : {
+          ...args,
+          url: withDebugBasePrefix(prefix, args.url),
+        };
+  return rawBaseQuery(nextArgs, api, extraOptions);
+};
+
 export const debugApi = createApi({
   reducerPath: 'debugApi',
-  baseQuery: fetchBaseQuery({ baseUrl: '/api/debug/' }),
+  baseQuery,
   tagTypes: ['Conversations', 'Turns', 'Events', 'Timeline', 'Runs'],
   endpoints: (builder) => ({
     getConversations: builder.query<ConversationSummary[], void>({
