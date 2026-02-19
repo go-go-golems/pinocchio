@@ -160,3 +160,16 @@ Added enforceable modularity acceptance gates for thinking-mode isolation via so
 
 - /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/cmd/web-chat/thinkingmode/isolation_test.go — Added backend/frontend isolation checks that fail if thinking-mode projection/registration markers leak outside designated module paths
 - /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/ttmp/2026/02/19/GP-028-TIMELINE-ENTITY-V2-OPEN-MODEL--replace-timelineentityv1-oneof-with-open-timelineentityv2-for-decoupled-kind-extension/tasks.md — Marked modularity acceptance gate task complete
+
+
+## 2026-02-19
+
+Moved remaining app-owned thinking-mode event contracts out of `pkg/` into `cmd/web-chat/thinkingmode`, and switched thinking-mode SEM payload translation/projection/render decoding to module-local JSON contract handling.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/cmd/web-chat/thinkingmode/events.go — Moved typed thinking-mode event definitions from `pkg/inference/events`; replaced `init()` registration with explicit bootstrap helper
+- /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/cmd/web-chat/thinkingmode/backend.go — Updated SEM translation/projection to use module-local JSON payload structs (no shared thinking-mode protobuf wrapper dependency)
+- /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/cmd/web-chat/thinkingmode/backend_test.go — Updated translation tests to use module-local thinking-mode event constructors
+- /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/cmd/web-chat/web/src/features/thinkingMode/registerThinkingMode.tsx — Updated frontend SEM projection handlers to parse module-local JSON payloads
+- /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/ttmp/2026/02/19/GP-028-TIMELINE-ENTITY-V2-OPEN-MODEL--replace-timelineentityv1-oneof-with-open-timelineentityv2-for-decoupled-kind-extension/reference/01-diary.md — Added implementation diary step for this modularization pass

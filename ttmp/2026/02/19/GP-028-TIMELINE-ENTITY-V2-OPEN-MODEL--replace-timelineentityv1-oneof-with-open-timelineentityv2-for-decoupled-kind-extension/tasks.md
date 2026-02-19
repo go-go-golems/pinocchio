@@ -24,6 +24,11 @@
 - [x] Modularity acceptance gate: verify thinking-mode references are isolated:
   - add a test/check (or script + test) that fails if `thinking.mode.*` projection logic appears outside thinking-mode module files
   - add a test/check that fails if thinking-mode renderer/normalizer logic is duplicated outside thinking-mode frontend module files
+- [x] Move remaining app-owned thinking-mode event contracts out of `pkg/` and into `cmd/web-chat/thinkingmode`, and remove backend/frontend dependence on shared thinking-mode protobuf payload wrappers:
+  - `git mv pkg/inference/events/typed_thinking_mode.go -> cmd/web-chat/thinkingmode/events.go`
+  - register event factories via explicit module bootstrap path (no `init()`)
+  - keep `thinking.mode.*` SEM payloads as module-local JSON object shapes for this app module
+  - update backend projection + frontend registration tests to validate module-local payload flow
 
 - [x] Replace closed `TimelineEntityV1` oneof with open `TimelineEntityV2` transport model in `proto/sem/timeline/transport.proto`
 - [x] Define and generate protobuf messages for `TimelineEntityV2`, `TimelineUpsertV2`, and `TimelineSnapshotV2` (Go + TS)

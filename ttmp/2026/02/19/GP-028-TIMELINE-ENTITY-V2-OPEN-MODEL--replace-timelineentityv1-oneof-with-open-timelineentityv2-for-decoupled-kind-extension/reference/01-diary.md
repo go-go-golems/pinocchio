@@ -871,3 +871,65 @@ I intentionally put the check in Go (`cmd/web-chat/thinkingmode/isolation_test.g
   - `registerSem('thinking.mode.started|update|completed'`
   - `registerTimelineRenderer('thinking_mode'`
   - `registerTimelinePropsNormalizer('thinking_mode'`
+
+## Step 10: Move remaining app-owned thinking-mode contracts out of `pkg/` into `cmd/web-chat`
+
+This step addressed the remaining non-generated `pkg/` ownership leakage for thinking-mode by moving typed event contracts into the app-owned module and updating the module to use local JSON SEM payload structs for projection and rendering registration.
+
+### Prompt Context
+
+**User prompt (verbatim):** `can we move those over to cmd/web-chat as well?`
+
+**Assistant interpretation:** Yes; move the remaining app-owned thinking-mode contracts/logic out of `pkg/` and keep them self-contained under `cmd/web-chat` while preserving existing behavior.
+
+**Inferred user intent:** Tighten ownership boundaries so thinking-mode is truly modular and app-local.
+
+### What I changed
+
+1. Moved typed thinking-mode events from shared package to app module:
+   - `git mv pkg/inference/events/typed_thinking_mode.go cmd/web-chat/thinkingmode/events.go`
+   - changed package from `events` to `thinkingmode`
+   - replaced `init()` event factory registration with explicit `registerThinkingModeEventFactories()` called by `Register()`
+2. Updated backend module to consume module-local contracts:
+   - `cmd/web-chat/thinkingmode/backend.go`
+   - removed imports of:
+     - `pkg/inference/events`
+     - `pkg/sem/pb/proto/sem/middleware` (thinking payload wrappers)
+   - switched SEM translator payload encoding to local JSON structs:
+     - `semThinkingModeStarted`
+     - `semThinkingModeUpdate`
+     - `semThinkingModeCompleted`
+   - switched timeline projection decode path from protobuf decode to JSON decode for `ev.data`
+   - switched timeline props construction from `ThinkingModeSnapshotV1` proto helper to direct map -> `structpb.Struct`
+3. Updated tests and frontend parsing:
+   - `cmd/web-chat/thinkingmode/backend_test.go` now uses local `NewThinkingModeStarted(...)`
+   - `cmd/web-chat/web/src/features/thinkingMode/registerThinkingMode.tsx` now parses thinking-mode SEM payloads as module-local JSON objects (no generated thinking-mode protobuf import)
+
+### Validation commands run
+
+```bash
+go test ./cmd/web-chat/thinkingmode -count=1
+cd cmd/web-chat/web && npx vitest run src/features/thinkingMode/registerThinkingMode.test.tsx
+go test ./cmd/web-chat/... -count=1
+cd cmd/web-chat/web && npm run check
+```
+
+All commands passed.
+
+### Ownership check result
+
+I re-scanned for non-generated thinking-mode references in `pkg/` and confirmed there are none left in active non-doc source outside generated protobuf/doc files:
+
+```bash
+rg -n "thinking[ _-]?mode|thinking_mode|thinking\\.mode" pkg --glob '!**/*.pb.go' --glob '!**/doc/**'
+```
+
+No matches.
+
+### What was tricky
+
+- Event codec registration is process-global and does not expose a duplicate-registration sentinel error type. I handled this by keeping explicit bootstrap semantics and allowing idempotent re-entry in tests by ignoring `"already registered"` errors from `RegisterEventFactory`.
+
+### Follow-up note
+
+- Generated protobuf files in `pkg/sem/pb` and docs still include thinking-mode schema symbols because those proto files remain in the shared schema set; runtime feature ownership is now app-local.
