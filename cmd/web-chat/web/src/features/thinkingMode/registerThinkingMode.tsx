@@ -1,13 +1,3 @@
-import { fromJson, type Message } from '@bufbuild/protobuf';
-import type { GenMessage } from '@bufbuild/protobuf/codegenv2';
-import {
-  type ThinkingModeCompleted,
-  ThinkingModeCompletedSchema,
-  type ThinkingModeStarted,
-  ThinkingModeStartedSchema,
-  type ThinkingModeUpdate,
-  ThinkingModeUpdateSchema,
-} from '../../sem/pb/proto/sem/middleware/thinking_mode_pb';
 import { registerSem, type SemEvent } from '../../sem/registry';
 import { registerTimelinePropsNormalizer } from '../../sem/timelinePropsRegistry';
 import type { AppDispatch } from '../../store/store';
@@ -16,15 +6,6 @@ import { Markdown } from '../../webchat/Markdown';
 import { registerTimelineRenderer } from '../../webchat/rendererRegistry';
 import type { RenderEntity } from '../../webchat/types';
 import { fmtSentAt } from '../../webchat/utils';
-
-function decodeProto<T extends Message>(schema: GenMessage<T>, raw: unknown): T | null {
-  if (!raw || typeof raw !== 'object') return null;
-  try {
-    return fromJson(schema as any, raw as any, { ignoreUnknownFields: true }) as T;
-  } catch {
-    return null;
-  }
-}
 
 function createdAtFromEvent(_ev: SemEvent): number {
   return Date.now();
@@ -40,6 +21,42 @@ function asString(v: unknown): string {
 
 function asBoolean(v: unknown): boolean | undefined {
   return typeof v === 'boolean' ? v : undefined;
+}
+
+function asRecord(v: unknown): Record<string, unknown> | null {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return null;
+  return v as Record<string, unknown>;
+}
+
+type ParsedThinkingModeData = {
+  mode: string;
+  phase: string;
+  reasoning: string;
+  extraData: Record<string, unknown>;
+};
+
+type ParsedThinkingModeSem = {
+  itemId: string;
+  data: ParsedThinkingModeData;
+  success?: boolean;
+  error: string;
+};
+
+function parseThinkingModeSem(raw: unknown): ParsedThinkingModeSem {
+  const obj = asRecord(raw) ?? {};
+  const dataObj = asRecord(obj.data) ?? {};
+  const extraData = asRecord(dataObj.extraData) ?? {};
+  return {
+    itemId: asString(obj.itemId),
+    data: {
+      mode: asString(dataObj.mode),
+      phase: asString(dataObj.phase),
+      reasoning: asString(dataObj.reasoning),
+      extraData,
+    },
+    success: asBoolean(obj.success),
+    error: asString(obj.error),
+  };
 }
 
 function ThinkingModeCard({ e }: { e: RenderEntity }) {
@@ -97,60 +114,57 @@ export function registerThinkingModeModule() {
   registerTimelineRenderer('thinking_mode', ThinkingModeCard);
 
   registerSem('thinking.mode.started', (ev, dispatch) => {
-    const pb = decodeProto<ThinkingModeStarted>(ThinkingModeStartedSchema, ev.data);
-    const id = pb?.itemId || ev.id;
-    const data = pb?.data;
+    const parsed = parseThinkingModeSem(ev.data);
+    const id = parsed.itemId || ev.id;
     upsertEntity(dispatch, {
       id,
       kind: 'thinking_mode',
       createdAt: createdAtFromEvent(ev),
       updatedAt: Date.now(),
       props: {
-        mode: data?.mode,
-        phase: data?.phase,
-        reasoning: data?.reasoning,
-        extraData: data?.extraData ?? {},
+        mode: parsed.data.mode,
+        phase: parsed.data.phase,
+        reasoning: parsed.data.reasoning,
+        extraData: parsed.data.extraData,
         status: 'started',
       },
     });
   });
 
   registerSem('thinking.mode.update', (ev, dispatch) => {
-    const pb = decodeProto<ThinkingModeUpdate>(ThinkingModeUpdateSchema, ev.data);
-    const id = pb?.itemId || ev.id;
-    const data = pb?.data;
+    const parsed = parseThinkingModeSem(ev.data);
+    const id = parsed.itemId || ev.id;
     upsertEntity(dispatch, {
       id,
       kind: 'thinking_mode',
       createdAt: createdAtFromEvent(ev),
       updatedAt: Date.now(),
       props: {
-        mode: data?.mode,
-        phase: data?.phase,
-        reasoning: data?.reasoning,
-        extraData: data?.extraData ?? {},
+        mode: parsed.data.mode,
+        phase: parsed.data.phase,
+        reasoning: parsed.data.reasoning,
+        extraData: parsed.data.extraData,
         status: 'update',
       },
     });
   });
 
   registerSem('thinking.mode.completed', (ev, dispatch) => {
-    const pb = decodeProto<ThinkingModeCompleted>(ThinkingModeCompletedSchema, ev.data);
-    const id = pb?.itemId || ev.id;
-    const data = pb?.data;
+    const parsed = parseThinkingModeSem(ev.data);
+    const id = parsed.itemId || ev.id;
     upsertEntity(dispatch, {
       id,
       kind: 'thinking_mode',
       createdAt: createdAtFromEvent(ev),
       updatedAt: Date.now(),
       props: {
-        mode: data?.mode,
-        phase: data?.phase,
-        reasoning: data?.reasoning,
-        extraData: data?.extraData ?? {},
+        mode: parsed.data.mode,
+        phase: parsed.data.phase,
+        reasoning: parsed.data.reasoning,
+        extraData: parsed.data.extraData,
         status: 'completed',
-        success: pb?.success,
-        error: pb?.error,
+        success: parsed.success,
+        error: parsed.error,
       },
     });
   });

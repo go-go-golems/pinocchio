@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	gepevents "github.com/go-go-golems/geppetto/pkg/events"
-	pinevents "github.com/go-go-golems/pinocchio/pkg/inference/events"
 	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
 	semregistry "github.com/go-go-golems/pinocchio/pkg/sem/registry"
 	webchat "github.com/go-go-golems/pinocchio/pkg/webchat"
@@ -75,7 +74,7 @@ func TestRegister_RegistersThinkingModeSemTranslation(t *testing.T) {
 	resetForTests()
 	Register()
 
-	ev := pinevents.NewThinkingModeStarted(gepevents.EventMetadata{}, "thinking-item-2", &pinevents.ThinkingModePayload{
+	ev := NewThinkingModeStarted(gepevents.EventMetadata{}, "thinking-item-2", &ThinkingModePayload{
 		Mode:      "chain",
 		Phase:     "selection",
 		Reasoning: "choose chain for speed",

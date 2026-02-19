@@ -1,12 +1,13 @@
-package events
+package thinkingmode
 
 import (
+	"strings"
+
 	gepevents "github.com/go-go-golems/geppetto/pkg/events"
 )
 
 // ThinkingModePayload represents the structured data payload for thinking mode events.
-// This is a lightweight Go-native structure; the SEM translator will map it into
-// protobuf-authored `sem.middleware.thinking_mode` payloads at the boundary.
+// This is a lightweight Go-native structure used by cmd/web-chat's app-owned module.
 type ThinkingModePayload struct {
 	Mode      string         `json:"mode" yaml:"mode"`
 	Phase     string         `json:"phase" yaml:"phase"`
@@ -66,14 +67,23 @@ func NewThinkingModeCompleted(metadata gepevents.EventMetadata, itemID string, d
 
 var _ gepevents.Event = &EventThinkingModeCompleted{}
 
-func init() {
-	_ = gepevents.RegisterEventFactory("thinking.mode.started", func() gepevents.Event {
+func registerThinkingModeEventFactories() {
+	registerThinkingModeFactory("thinking.mode.started", func() gepevents.Event {
 		return &EventThinkingModeStarted{EventImpl: gepevents.EventImpl{Type_: gepevents.EventType("thinking.mode.started")}}
 	})
-	_ = gepevents.RegisterEventFactory("thinking.mode.update", func() gepevents.Event {
+	registerThinkingModeFactory("thinking.mode.update", func() gepevents.Event {
 		return &EventThinkingModeUpdate{EventImpl: gepevents.EventImpl{Type_: gepevents.EventType("thinking.mode.update")}}
 	})
-	_ = gepevents.RegisterEventFactory("thinking.mode.completed", func() gepevents.Event {
+	registerThinkingModeFactory("thinking.mode.completed", func() gepevents.Event {
 		return &EventThinkingModeCompleted{EventImpl: gepevents.EventImpl{Type_: gepevents.EventType("thinking.mode.completed")}}
 	})
+}
+
+func registerThinkingModeFactory(typeName string, factory func() gepevents.Event) {
+	if err := gepevents.RegisterEventFactory(typeName, factory); err != nil {
+		// Registry is process-global and tests may call Register() repeatedly.
+		if !strings.Contains(err.Error(), "already registered") {
+			panic(err)
+		}
+	}
 }
