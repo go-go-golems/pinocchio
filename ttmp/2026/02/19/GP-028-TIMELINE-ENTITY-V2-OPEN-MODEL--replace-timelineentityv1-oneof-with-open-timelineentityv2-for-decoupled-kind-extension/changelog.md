@@ -203,4 +203,14 @@ Updated public webchat documentation to reflect app-owned proto/module ownership
 - /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/pkg/doc/topics/webchat-backend-internals.md — Updated projector mapping language from oneof snapshots to V2 kind+props and app-owned thinking-mode projection ownership
 - /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/pkg/doc/topics/webchat-sem-and-ui.md — Updated protobuf ownership paths and frontend registration conventions for app-owned feature modules
 - /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/pkg/doc/tutorials/03-thirdparty-webchat-playbook.md — Updated custom middleware references to current `cmd/web-chat` locations
-- /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/ttmp/2026/02/19/GP-028-TIMELINE-ENTITY-V2-OPEN-MODEL--replace-timelineentityv1-oneof-with-open-timelineentityv2-for-decoupled-kind-extension/design-doc/02-intern-tutorial-app-owned-middleware-events-timeline-widgets.md — New 8+ page didactic tutorial for intern developers
+- /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/pkg/doc/tutorials/04-intern-app-owned-middleware-events-timeline-widgets.md — New 8+ page didactic tutorial for intern developers (moved from ticket-local path)
+
+## 2026-02-19
+
+Moved the intern feature-module tutorial into canonical `pkg/doc/tutorials` and added a second exhaustive tutorial focused on building a standalone webchat web UI (chat submission, websocket streaming, timeline hydration/projection, and renderer dispatch).
+
+### Related Files
+
+- /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/pkg/doc/tutorials/04-intern-app-owned-middleware-events-timeline-widgets.md — Moved and normalized intern tutorial with Glazed tutorial frontmatter under canonical docs tree
+- /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/pkg/doc/tutorials/05-building-standalone-webchat-ui.md — New exhaustive standalone web UI tutorial covering `/chat`, `/ws`, `/api/timeline`, SEM handlers, timeline mapping, and renderer pipeline
+- /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/ttmp/2026/02/19/GP-028-TIMELINE-ENTITY-V2-OPEN-MODEL--replace-timelineentityv1-oneof-with-open-timelineentityv2-for-decoupled-kind-extension/index.md — Updated key links to reference canonical tutorial location

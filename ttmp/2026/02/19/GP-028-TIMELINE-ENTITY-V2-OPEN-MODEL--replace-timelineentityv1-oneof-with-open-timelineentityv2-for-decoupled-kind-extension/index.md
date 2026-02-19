@@ -41,7 +41,7 @@ This ticket defines a pinocchio-core architectural refactor:
 ## Key Links
 
 - Design plan: `design-doc/01-timelineentityv2-open-model-cutover-plan.md`
-- Intern tutorial: `design-doc/02-intern-tutorial-app-owned-middleware-events-timeline-widgets.md`
+- Intern tutorial: `pkg/doc/tutorials/04-intern-app-owned-middleware-events-timeline-widgets.md`
 - Tasks: `tasks.md`
 - Changelog: `changelog.md`
 

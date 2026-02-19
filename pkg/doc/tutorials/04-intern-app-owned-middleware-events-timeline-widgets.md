@@ -1,4 +1,21 @@
-# Intern Tutorial: Build an App-Owned Middleware Feature from Event Emission to Timeline Widget Rendering
+---
+Title: Intern Tutorial: Build an App-Owned Middleware Feature from Event Emission to Timeline Widget Rendering
+Slug: intern-app-owned-middleware-events-timeline-widgets
+Short: Exhaustive step-by-step tutorial for implementing an app-owned middleware feature from backend events to frontend timeline widget rendering.
+Topics:
+- webchat
+- middleware
+- timeline
+- widgets
+- sem
+- protobuf
+- frontend
+- backend
+IsTemplate: false
+IsTopLevel: true
+ShowPerDefault: true
+SectionType: Tutorial
+---
 
 ## Who this is for
 

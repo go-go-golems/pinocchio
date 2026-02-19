@@ -1077,7 +1077,7 @@ The key objective was to make the \"thinking-mode style\" implementation pattern
   - `pkg/doc/topics/webchat-sem-and-ui.md`
   - `pkg/doc/tutorials/03-thirdparty-webchat-playbook.md`
 - Read the new tutorial:
-  - `ttmp/2026/02/19/GP-028-TIMELINE-ENTITY-V2-OPEN-MODEL--replace-timelineentityv1-oneof-with-open-timelineentityv2-for-decoupled-kind-extension/design-doc/02-intern-tutorial-app-owned-middleware-events-timeline-widgets.md`
+  - `pkg/doc/tutorials/04-intern-app-owned-middleware-events-timeline-widgets.md`
 - Verify ticket bookkeeping:
   - `ttmp/.../tasks.md`
   - `ttmp/.../changelog.md`
@@ -1090,3 +1090,93 @@ The key objective was to make the \"thinking-mode style\" implementation pattern
   - frontend app module registration: `cmd/web-chat/web/src/features/thinkingMode/registerThinkingMode.tsx`
   - frontend bootstrap: `cmd/web-chat/web/src/ws/wsManager.ts`
   - app-owned proto module: `cmd/web-chat/proto/`
+
+## Step 13: Canonicalize tutorial locations and add standalone web UI implementation guide
+
+This step moved the previously ticket-local intern tutorial into the canonical `pkg/doc/tutorials` help-doc tree and added a second long-form tutorial focused specifically on building a standalone web UI around the existing webchat backend contracts. The goal was to make both onboarding paths discoverable in product docs instead of buried in `ttmp`.
+
+I treated this as documentation architecture work: preserve the prior intern tutorial content, normalize it to Glazed frontmatter/discovery conventions, and author a new exhaustive tutorial centered on `/chat`, `/ws`, and `/api/timeline` flow, including SEM projection and renderer dispatch in the frontend runtime.
+
+### Prompt Context
+
+**User prompt (verbatim):** `Move the tutorial into the pinocchio docs/ . Did you upload the other docs?`
+
+**Assistant interpretation:** Relocate the intern tutorial from ticket workspace into canonical docs and report upload status clearly.
+
+**Inferred user intent:** Keep major guides in durable docs locations and confirm whether reMarkable publishing happened.
+
+**User prompt (verbatim):** `Create a similar tutorial on how to build a standalone webUI for the webchat, like in cmd/web-chat. So the focus is not on end to end widgets, but rather on setting up websocket connection, streaming events into the chatwindow, rendering a timeline, etc... It should be similarly exhaustive`
+
+**Assistant interpretation:** Author a second deeply detailed tutorial that teaches standalone web UI architecture and implementation around existing backend streaming/timeline APIs.
+
+**Inferred user intent:** Provide a complete didactic guide for developers building reusable webchat UIs independent of specific middleware widget implementations.
+
+### What I did
+
+- Moved the existing intern tutorial into canonical docs path:
+  - `git mv ttmp/.../design-doc/02-intern-tutorial-app-owned-middleware-events-timeline-widgets.md pkg/doc/tutorials/04-intern-app-owned-middleware-events-timeline-widgets.md`
+- Normalized moved tutorial to Glazed tutorial format:
+  - added full frontmatter (`Title`, `Slug`, `Short`, `Topics`, `SectionType: Tutorial`, etc.)
+  - removed top-level `#` body heading to match help-entry rendering conventions
+- Authored new exhaustive standalone UI tutorial:
+  - `pkg/doc/tutorials/05-building-standalone-webchat-ui.md`
+  - covers backend handler surface, resolver contracts, websocket hydration/replay, SEM registry projection, timeline state semantics, renderer registry dispatch, basePrefix handling, testing, and troubleshooting
+- Updated ticket pointers and history:
+  - `ttmp/.../index.md` key link now points at canonical tutorial location
+  - `ttmp/.../changelog.md` includes a new entry for tutorial move + new standalone tutorial
+
+### Why
+
+- The previous intern tutorial lived only in ticket-local workspace, which reduced discoverability for developers using `glaze help`/docs tree.
+- A dedicated standalone web UI tutorial was missing; existing docs were either feature-specific or less exhaustive about transport/projection/render pipeline wiring.
+
+### What worked
+
+- Existing intern tutorial content was preserved while becoming a first-class docs page.
+- New standalone tutorial maps directly onto concrete runtime symbols (`wsManager`, `registerDefaultSemHandlers`, `timelineEntityFromProto`, `timelineSlice`, renderer registry), making it implementation-ready.
+
+### What didn't work
+
+- N/A; no tooling or command failures occurred during this documentation step.
+
+### What I learned
+
+- The strongest onboarding docs split is now explicit:
+  - feature-module tutorial (`04-...`) for custom module authors,
+  - standalone web UI tutorial (`05-...`) for app-shell/frontend transport implementers.
+
+### What was tricky to build
+
+- Balancing detail and abstraction in the standalone UI tutorial required careful anchoring to real filenames while keeping guidance reusable for non-`cmd/web-chat` consumers.
+
+### What warrants a second pair of eyes
+
+- Validate that the new tutorial’s route and wiring guidance remains aligned if webchat endpoint mount policy changes (especially `basePrefix` and root mounting behavior).
+
+### What should be done in the future
+
+1. Add explicit cross-links from `pkg/doc/tutorials/02-webchat-getting-started.md` to both new tutorial tracks.
+2. Consider adding a dedicated `glaze help` index topic listing “frontend implementation playbooks” for faster discoverability.
+
+### Code review instructions
+
+- Review moved tutorial + frontmatter normalization:
+  - `pkg/doc/tutorials/04-intern-app-owned-middleware-events-timeline-widgets.md`
+- Review new standalone UI tutorial:
+  - `pkg/doc/tutorials/05-building-standalone-webchat-ui.md`
+- Verify ticket link/history updates:
+  - `ttmp/2026/02/19/GP-028-TIMELINE-ENTITY-V2-OPEN-MODEL--replace-timelineentityv1-oneof-with-open-timelineentityv2-for-decoupled-kind-extension/index.md`
+  - `ttmp/2026/02/19/GP-028-TIMELINE-ENTITY-V2-OPEN-MODEL--replace-timelineentityv1-oneof-with-open-timelineentityv2-for-decoupled-kind-extension/changelog.md`
+
+### Technical details
+
+- Key implementation references used while authoring standalone UI tutorial:
+  - `pkg/webchat/http/api.go`
+  - `cmd/web-chat/main.go`
+  - `cmd/web-chat/web/src/ws/wsManager.ts`
+  - `cmd/web-chat/web/src/sem/registry.ts`
+  - `cmd/web-chat/web/src/sem/timelineMapper.ts`
+  - `cmd/web-chat/web/src/store/timelineSlice.ts`
+  - `cmd/web-chat/web/src/webchat/ChatWidget.tsx`
+  - `cmd/web-chat/web/src/webchat/components/Timeline.tsx`
+  - `cmd/web-chat/web/src/webchat/rendererRegistry.ts`
