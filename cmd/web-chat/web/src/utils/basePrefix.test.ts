@@ -36,6 +36,28 @@ describe('basePrefix helpers', () => {
     expect(basePrefixFromLocation()).toBe('/chat');
   });
 
+  it('returns empty prefix when runtime config explicitly sets root', () => {
+    Object.defineProperty(globalThis, 'window', {
+      configurable: true,
+      value: {
+        location: { pathname: '/timeline' },
+        __PINOCCHIO_WEBCHAT_CONFIG__: { basePrefix: '' },
+      },
+    });
+    expect(basePrefixFromLocation()).toBe('');
+  });
+
+  it('returns empty prefix when runtime config basePrefix is slash', () => {
+    Object.defineProperty(globalThis, 'window', {
+      configurable: true,
+      value: {
+        location: { pathname: '/session/abc' },
+        __PINOCCHIO_WEBCHAT_CONFIG__: { basePrefix: '/' },
+      },
+    });
+    expect(basePrefixFromLocation()).toBe('');
+  });
+
   it('only applies router basename when location is under configured prefix', () => {
     Object.defineProperty(globalThis, 'window', {
       configurable: true,

@@ -126,6 +126,56 @@ func TestSQLiteTurnStore_MigrateLegacyTurnsPayloadTable(t *testing.T) {
 	require.False(t, hasTable(t, s.db, "turn_snapshots_legacy"))
 }
 
+func TestSQLiteTurnStore_MigrateLegacyTurnsPayloadTable_ParseFailureKeepsLegacyTable(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "turns.db")
+	dsn, err := SQLiteTurnDSNForFile(dbPath)
+	require.NoError(t, err)
+
+	db, err := sql.Open("sqlite3", dsn)
+	require.NoError(t, err)
+	_, err = db.Exec(`
+		CREATE TABLE turns (
+			conv_id TEXT NOT NULL,
+			session_id TEXT NOT NULL,
+			turn_id TEXT NOT NULL,
+			phase TEXT NOT NULL,
+			created_at_ms INTEGER NOT NULL,
+			payload TEXT NOT NULL,
+			PRIMARY KEY (conv_id, session_id, turn_id, phase, created_at_ms)
+		);
+	`)
+	require.NoError(t, err)
+	_, err = db.Exec(`CREATE INDEX turns_by_conv ON turns(conv_id, created_at_ms DESC);`)
+	require.NoError(t, err)
+	_, err = db.Exec(`CREATE INDEX turns_by_session ON turns(session_id, created_at_ms DESC);`)
+	require.NoError(t, err)
+	_, err = db.Exec(`CREATE INDEX turns_by_phase ON turns(phase, created_at_ms DESC);`)
+	require.NoError(t, err)
+	_, err = db.Exec(
+		`INSERT INTO turns(conv_id, session_id, turn_id, phase, created_at_ms, payload) VALUES(?, ?, ?, ?, ?, ?)`,
+		"conv-legacy",
+		"sess-legacy",
+		"turn-legacy",
+		"final",
+		int64(111),
+		"not: [valid",
+	)
+	require.NoError(t, err)
+	require.NoError(t, db.Close())
+
+	s, err := NewSQLiteTurnStore(dsn)
+	require.Error(t, err)
+	require.Nil(t, s)
+	require.Contains(t, err.Error(), "sqlite turn store: backfill legacy snapshots")
+	require.Contains(t, err.Error(), "parse legacy turn payload")
+
+	checkDB, err := sql.Open("sqlite3", dsn)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = checkDB.Close() })
+	require.True(t, hasTable(t, checkDB, "turn_snapshots_legacy"))
+}
+
 func TestSQLiteTurnStore_AddsMissingUpdatedAtColumn(t *testing.T) {
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "turns.db")

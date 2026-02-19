@@ -13,10 +13,19 @@ function configuredBasePrefix(): string {
   return normalizePrefix(getRuntimeConfig().basePrefix ?? '');
 }
 
+function configuredBasePrefixInfo(): { hasValue: boolean; value: string } {
+  const config = getRuntimeConfig();
+  const hasValue = Object.hasOwn(config, 'basePrefix');
+  return {
+    hasValue,
+    value: normalizePrefix(config.basePrefix ?? ''),
+  };
+}
+
 export function basePrefixFromLocation(): string {
-  const configured = configuredBasePrefix();
-  if (configured) {
-    return configured;
+  const configured = configuredBasePrefixInfo();
+  if (configured.hasValue) {
+    return configured.value;
   }
   if (typeof window === 'undefined') return '';
   const segs = window.location.pathname.split('/').filter(Boolean);

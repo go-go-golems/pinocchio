@@ -264,8 +264,18 @@ func (s *SQLiteTurnStore) backfillLegacySnapshotTable(table string) error {
 			return err
 		}
 		t, err := serde.FromYAML([]byte(row.payload))
-		if err != nil || t == nil {
+		if err != nil {
 			return errors.Wrap(err, "parse legacy turn payload")
+		}
+		if t == nil {
+			return errors.Errorf(
+				"parse legacy turn payload: decoded nil turn (conv_id=%s session_id=%s turn_id=%s phase=%s created_at_ms=%d)",
+				row.convID,
+				row.sessionID,
+				row.turnID,
+				row.phase,
+				row.createdAtMs,
+			)
 		}
 		if _, err := s.persistNormalizedSnapshot(ctx, row, t); err != nil {
 			return err
@@ -380,8 +390,11 @@ func (s *SQLiteTurnStore) Save(ctx context.Context, convID, sessionID, turnID, p
 	}
 
 	t, err := serde.FromYAML([]byte(payload))
-	if err != nil || t == nil {
+	if err != nil {
 		return errors.Wrap(err, "sqlite turn store: parse payload yaml")
+	}
+	if t == nil {
+		return errors.New("sqlite turn store: parse payload yaml: decoded nil turn")
 	}
 
 	row := snapshotBackfillRow{
