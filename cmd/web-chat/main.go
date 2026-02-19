@@ -24,6 +24,7 @@ import (
 	geptools "github.com/go-go-golems/geppetto/pkg/inference/tools"
 	geppettosections "github.com/go-go-golems/geppetto/pkg/sections"
 	toolspkg "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/tools"
+	thinkingmode "github.com/go-go-golems/pinocchio/cmd/web-chat/thinkingmode"
 	timelinecmd "github.com/go-go-golems/pinocchio/cmd/web-chat/timeline"
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 	agentmode "github.com/go-go-golems/pinocchio/pkg/middlewares/agentmode"
@@ -159,6 +160,9 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 	}
 	runtimeComposer := newWebChatRuntimeComposer(parsed, middlewareFactories)
 	requestResolver := newWebChatProfileResolver(profiles)
+
+	// Register app-owned thinking-mode SEM/timeline handlers.
+	thinkingmode.Register()
 
 	// Build webchat server and register middlewares/tools/profile handlers.
 	srv, err := webchat.NewServer(

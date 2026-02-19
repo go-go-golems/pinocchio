@@ -11,7 +11,6 @@ var (
 func RegisterDefaultTimelineHandlers() {
 	timelineHandlersBootstrapOnce.Do(func() {
 		registerBuiltinTimelineHandlers()
-		registerThinkingModeTimelineHandlers()
 	})
 }
 

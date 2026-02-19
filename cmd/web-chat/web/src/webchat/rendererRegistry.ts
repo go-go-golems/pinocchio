@@ -3,7 +3,6 @@ import {
   GenericCard,
   LogCard,
   MessageCard,
-  ThinkingModeCard,
   ToolCallCard,
   ToolResultCard,
 } from './cards';
@@ -16,7 +15,6 @@ const builtinRenderers: Record<string, Renderer> = {
   tool_call: ToolCallCard,
   tool_result: ToolResultCard,
   log: LogCard,
-  thinking_mode: ThinkingModeCard,
 };
 
 const extensionRenderers = new Map<string, Renderer>();

@@ -1,4 +1,5 @@
 import { fromJson } from '@bufbuild/protobuf';
+import { registerThinkingModeModule } from '../features/thinkingMode/registerThinkingMode';
 import { type TimelineSnapshotV2, TimelineSnapshotV2Schema } from '../sem/pb/proto/sem/timeline/transport_pb';
 import { handleSem, registerDefaultSemHandlers } from '../sem/registry';
 import { timelineEntityFromProto } from '../sem/timelineMapper';
@@ -72,6 +73,7 @@ class WsManager {
     this.lastOnStatus = args.onStatus ?? null;
 
     registerDefaultSemHandlers();
+    registerThinkingModeModule();
 
     args.onStatus?.('connecting ws...');
     args.dispatch(appSlice.actions.setWsStatus('connecting'));

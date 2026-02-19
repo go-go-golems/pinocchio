@@ -113,44 +113,6 @@ export function LogCard({ e }: { e: RenderEntity }) {
   );
 }
 
-export function ThinkingModeCard({ e }: { e: RenderEntity }) {
-  const mode = String(e.props?.mode ?? '');
-  const phase = String(e.props?.phase ?? '');
-  const status = String(e.props?.status ?? '');
-  const success = e.props?.success;
-  const error = e.props?.error ? String(e.props.error) : '';
-  const reasoning = e.props?.reasoning ? String(e.props.reasoning) : '';
-  const header = mode ? `Thinking mode: ${mode}` : 'Thinking mode';
-
-  return (
-    <div data-part="card">
-      <div data-part="card-header">
-        <div data-part="card-header-title">{header}</div>
-        {phase ? (
-          <div data-part="pill" data-mono="true">
-            {phase}
-          </div>
-        ) : null}
-        {status ? <div data-part="pill">{status}</div> : null}
-        {typeof success === 'boolean' ? (
-          <div data-part="pill" data-variant={success ? 'ok' : 'error'}>
-            {success ? 'ok' : 'fail'}
-          </div>
-        ) : null}
-        <div data-part="card-header-meta">{fmtSentAt(e.createdAt)}</div>
-      </div>
-      <div data-part="card-body">
-        {reasoning ? <Markdown text={reasoning} /> : <div data-part="pill">No reasoning</div>}
-        {error ? (
-          <div data-part="status-text" data-variant="error" style={{ marginTop: 10 }}>
-            {error}
-          </div>
-        ) : null}
-      </div>
-    </div>
-  );
-}
-
 export function GenericCard({ e }: { e: RenderEntity }) {
   return (
     <div data-part="card">

@@ -5,10 +5,6 @@ function asString(v: unknown): string {
   return typeof v === 'string' ? v : '';
 }
 
-function asBoolean(v: unknown): boolean | undefined {
-  return typeof v === 'boolean' ? v : undefined;
-}
-
 const builtinNormalizers: Record<string, TimelinePropsNormalizer> = {
   tool_result: (props) => {
     const resultRaw = asString(props.resultRaw);
@@ -16,17 +12,6 @@ const builtinNormalizers: Record<string, TimelinePropsNormalizer> = {
       ...props,
       customKind: asString(props.customKind),
       result: resultRaw || props.result || '',
-    };
-  },
-  thinking_mode: (props) => {
-    const status = asString(props.status);
-    const successFromStatus = status === 'completed' ? true : status === 'error' ? false : undefined;
-    const success = asBoolean(props.success);
-    return {
-      ...props,
-      status,
-      success: typeof success === 'boolean' ? success : successFromStatus,
-      error: asString(props.error),
     };
   },
 };
