@@ -8,19 +8,12 @@ import { selectTimelineEntities, timelineSlice } from '../store/timelineSlice';
 import { basePrefixFromLocation } from '../utils/basePrefix';
 import { logWarn } from '../utils/logger';
 import { wsManager } from '../ws/wsManager';
-import {
-  GenericCard,
-  LogCard,
-  MessageCard,
-  ThinkingModeCard,
-  ToolCallCard,
-  ToolResultCard,
-} from './cards';
 import { DefaultComposer } from './components/Composer';
 import { DefaultHeader } from './components/Header';
 import { DefaultStatusbar } from './components/Statusbar';
 import { ChatTimeline } from './components/Timeline';
 import { getPartProps, mergeClassName, mergeStyle } from './parts';
+import { resolveTimelineRenderers } from './rendererRegistry';
 import type {
   ChatWidgetComponents,
   ChatWidgetProps,
@@ -216,15 +209,7 @@ export function ChatWidget({
   }, [dispatch]);
 
   const mergedRenderers: ChatWidgetRenderers = useMemo(
-    () => ({
-      message: MessageCard,
-      tool_call: ToolCallCard,
-      tool_result: ToolResultCard,
-      log: LogCard,
-      thinking_mode: ThinkingModeCard,
-      default: GenericCard,
-      ...(renderers ?? {}),
-    }),
+    () => resolveTimelineRenderers(renderers),
     [renderers],
   );
 

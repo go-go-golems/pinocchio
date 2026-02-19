@@ -14,7 +14,7 @@ import {
   type ThinkingModeUpdate,
   ThinkingModeUpdateSchema,
 } from '../sem/pb/proto/sem/middleware/thinking_mode_pb';
-import { type TimelineUpsertV1, TimelineUpsertV1Schema } from '../sem/pb/proto/sem/timeline/transport_pb';
+import { type TimelineUpsertV2, TimelineUpsertV2Schema } from '../sem/pb/proto/sem/timeline/transport_pb';
 import type { AppDispatch } from '../store/store';
 import { type TimelineEntity, timelineSlice } from '../store/timelineSlice';
 import { timelineEntityFromProto } from './timelineMapper';
@@ -70,7 +70,7 @@ export function registerDefaultSemHandlers() {
   handlers.clear();
 
   registerSem('timeline.upsert', (ev, dispatch) => {
-    const data = decodeProto<TimelineUpsertV1>(TimelineUpsertV1Schema, ev.data);
+    const data = decodeProto<TimelineUpsertV2>(TimelineUpsertV2Schema, ev.data);
     const entity = data?.entity;
     if (!entity) return;
     const mapped = timelineEntityFromProto(entity, data?.version);

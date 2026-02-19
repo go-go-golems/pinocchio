@@ -4,6 +4,12 @@ export { DefaultComposer } from './components/Composer';
 export { DefaultHeader } from './components/Header';
 export { DefaultStatusbar } from './components/Statusbar';
 export { ChatTimeline } from './components/Timeline';
+export {
+  clearRegisteredTimelineRenderers,
+  registerTimelineRenderer,
+  resolveTimelineRenderers,
+  unregisterTimelineRenderer,
+} from './rendererRegistry';
 export type {
   ChatPart,
   ChatWidgetComponents,

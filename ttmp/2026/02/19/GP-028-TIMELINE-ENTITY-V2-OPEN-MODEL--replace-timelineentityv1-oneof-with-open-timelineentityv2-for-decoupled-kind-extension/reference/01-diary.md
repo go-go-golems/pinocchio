@@ -22,7 +22,7 @@ RelatedFiles:
       Note: Added test verifying buildConversationRecord includes LastSeenVersion
 ExternalSources: []
 Summary: Implementation diary for GP-028 task-by-task execution and commits.
-LastUpdated: 2026-02-19T10:49:25-05:00
+LastUpdated: 2026-02-19T10:54:17-05:00
 WhatFor: Preserve exact implementation history, commands, failures, and validation for the TimelineEntityV2 cutover ticket.
 WhenToUse: Use when reviewing GP-028 progress or continuing implementation from the latest completed task.
 ---
@@ -327,3 +327,94 @@ This slice moved runtime behavior from V1 transport entities to V2 across backen
 - Backend now emits `timeline.upsert` with protobuf payload `TimelineUpsertV2`.
 - Hydration `/api/timeline` now returns protobuf JSON for `TimelineSnapshotV2`.
 - Active Go paths no longer use `TimelineEntityV1`/`TimelineSnapshotV1` symbols (excluding generated protobuf bindings retained temporarily in `transport.proto`).
+
+## Step 4: Frontend V2 decode/mapping + renderer registry for self-contained widgets
+
+This slice moved the web frontend off V1 timeline envelopes and oneof-case mapper logic, then added a render-dispatch registry so domain packages can register custom timeline renderers without editing `ChatWidget`.
+
+### Prompt Context
+
+**User prompt (verbatim):** "are we going to add a registry for the dispatching of rops from timeline entity? that way we can easily add "self contained" widgets?
+
+Answer then continue"
+
+**Assistant interpretation:** Confirm whether renderer dispatch registry is planned, then continue implementation and include this as part of current migration.
+
+**Inferred user intent:** Make timeline rendering extension points explicit and app-owned, not hardcoded in core.
+
+### What I did
+
+- Switched frontend timeline protobuf decode to V2:
+  - `cmd/web-chat/web/src/sem/registry.ts` now decodes `TimelineUpsertV2`.
+  - `cmd/web-chat/web/src/ws/wsManager.ts` now hydrates from `TimelineSnapshotV2`.
+  - `cmd/web-chat/web/src/debug-ui/ws/debugTimelineWsManager.ts` now decodes `TimelineUpsertV2` and `TimelineSnapshotV2`.
+- Replaced oneof-case projection mapper with V2 `kind + props` mapper:
+  - rewrote `cmd/web-chat/web/src/sem/timelineMapper.ts`.
+  - removed oneof `snapshot.case` branching; now consumes `entity.props` directly with small normalization for `tool_result` and `thinking_mode`.
+- Updated debug websocket tests for V2 payload shape (`props` instead of `message` oneof):
+  - `cmd/web-chat/web/src/debug-ui/ws/debugTimelineWsManager.test.ts`.
+- Added renderer registry for self-contained widget/kind extensions:
+  - new `cmd/web-chat/web/src/webchat/rendererRegistry.ts`
+  - exported APIs from `cmd/web-chat/web/src/webchat/index.ts`:
+    - `registerTimelineRenderer`
+    - `unregisterTimelineRenderer`
+    - `clearRegisteredTimelineRenderers`
+    - `resolveTimelineRenderers`
+  - `cmd/web-chat/web/src/webchat/ChatWidget.tsx` now resolves renderers via registry (instead of hardcoded map merge).
+
+### Why
+
+- V2 decode path removes frontend dependency on transport oneof growth.
+- Registry-based renderer dispatch directly addresses the “self-contained widgets” requirement: a domain package can register renderer(s) for custom `kind` values at initialization time.
+
+### What worked
+
+- Frontend static checks passed:
+  - `cd cmd/web-chat/web && npm run check`
+- Debug websocket follow tests passed:
+  - `cd cmd/web-chat/web && npx vitest run src/debug-ui/ws/debugTimelineWsManager.test.ts`
+- Backend integration safety net remained green:
+  - `go test ./...`
+
+### What didn't work
+
+- Biome initially failed import/export sort in `webchat/index.ts` after adding registry exports.
+- Fixed by running Biome write pass on that file.
+
+### What I learned
+
+- Existing `ChatWidget` already accepted ad-hoc `renderers`, but a module-level registry is the missing reusable extension surface for app-owned plugin packages.
+
+### What was tricky to build
+
+- Preserving current card behavior while switching to raw `props` required a small normalization layer in `timelineMapper.ts` (`tool_result.resultRaw -> result`) to avoid UI regressions.
+
+### What warrants a second pair of eyes
+
+- Confirm whether registry registration lifecycle should be idempotent across hot-reload/module reload in dev. Current Map-based behavior is safe but global for the module instance.
+
+### What should be done in the future
+
+- Next slice: remove V1 message definitions from `transport.proto` (hard cut), regenerate bindings, and clean remaining V1 docs/comments from active references.
+
+### Code review instructions
+
+- Frontend decode/mapping:
+  - `cmd/web-chat/web/src/sem/registry.ts`
+  - `cmd/web-chat/web/src/sem/timelineMapper.ts`
+  - `cmd/web-chat/web/src/ws/wsManager.ts`
+  - `cmd/web-chat/web/src/debug-ui/ws/debugTimelineWsManager.ts`
+- Renderer registry:
+  - `cmd/web-chat/web/src/webchat/rendererRegistry.ts`
+  - `cmd/web-chat/web/src/webchat/ChatWidget.tsx`
+  - `cmd/web-chat/web/src/webchat/index.ts`
+- Validate:
+  - `cd cmd/web-chat/web && npm run check`
+  - `cd cmd/web-chat/web && npx vitest run src/debug-ui/ws/debugTimelineWsManager.test.ts`
+
+### Technical details
+
+- Canonical frontend projection contract is now `TimelineEntityV2.kind + TimelineEntityV2.props`.
+- Render dispatch now supports both:
+  - built-in kind renderers,
+  - extension renderers registered externally, plus per-instance `renderers` overrides.

@@ -1,5 +1,5 @@
 import { fromJson } from '@bufbuild/protobuf';
-import { type TimelineSnapshotV1, TimelineSnapshotV1Schema } from '../sem/pb/proto/sem/timeline/transport_pb';
+import { type TimelineSnapshotV2, TimelineSnapshotV2Schema } from '../sem/pb/proto/sem/timeline/transport_pb';
 import { handleSem, registerDefaultSemHandlers } from '../sem/registry';
 import { timelineEntityFromProto } from '../sem/timelineMapper';
 import { appSlice } from '../store/appSlice';
@@ -25,7 +25,7 @@ function seqFromEnvelope(envelope: RawSemEnvelope): number | null {
   return null;
 }
 
-function applyTimelineSnapshot(snapshot: TimelineSnapshotV1, dispatch: AppDispatch) {
+function applyTimelineSnapshot(snapshot: TimelineSnapshotV2, dispatch: AppDispatch) {
   if (!snapshot?.entities || !Array.isArray(snapshot.entities)) return;
   for (const e of snapshot.entities) {
     const mapped = timelineEntityFromProto(e, snapshot.version);
@@ -180,7 +180,7 @@ class WsManager {
         }
         if (nonce !== this.connectNonce) return;
         if (isRecord(j)) {
-          const snap = fromJson(TimelineSnapshotV1Schema as any, j as any, { ignoreUnknownFields: true }) as any;
+          const snap = fromJson(TimelineSnapshotV2Schema as any, j as any, { ignoreUnknownFields: true }) as any;
           if (snap) {
             if (nonce !== this.connectNonce) return;
             applyTimelineSnapshot(snap, args.dispatch);

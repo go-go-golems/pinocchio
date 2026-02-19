@@ -12,12 +12,12 @@
   - `pkg/webchat/timeline_upsert.go`
   - `pkg/webchat/conversation_service.go`
 - [x] Update hydration API to return `TimelineSnapshotV2` and remove V1 read/write path
-- [ ] Update frontend SEM decode + mapper for V2 payloads:
+- [x] Update frontend SEM decode + mapper for V2 payloads:
   - `cmd/web-chat/web/src/sem/registry.ts`
   - `cmd/web-chat/web/src/sem/timelineMapper.ts`
   - `cmd/web-chat/web/src/debug-ui/ws/debugTimelineWsManager.ts`
-- [ ] Remove oneof-case mapping logic and enforce `kind + props` as canonical frontend render contract
-- [ ] Update tests for V2-only behavior across backend/frontend/websocket hydration
+- [x] Remove oneof-case mapping logic and enforce `kind + props` as canonical frontend render contract
+- [x] Update tests for V2-only behavior across backend/frontend/websocket hydration
 - [ ] Remove V1-specific helper code/comments/docs from active paths (hard cutover, no compatibility)
 - [ ] Document extension rule in pinocchio docs: new domain kinds must not require transport proto edits after V2
 - [x] P2 fix: persist `LastSeenVersion` in conversation index records (issue from `pkg/webchat/conversation.go`):

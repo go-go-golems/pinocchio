@@ -70,3 +70,21 @@ Implemented backend TimelineEntityV2 cutover for projection/store/upsert/hydrati
 - /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/cmd/web-chat/app_owned_chat_integration_test.go — Integration assertion updated for V2 `props`
 - /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/ttmp/2026/02/19/GP-028-TIMELINE-ENTITY-V2-OPEN-MODEL--replace-timelineentityv1-oneof-with-open-timelineentityv2-for-decoupled-kind-extension/reference/01-diary.md — Added Step 3 implementation diary entry with failures and fixes
 - /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/ttmp/2026/02/19/GP-028-TIMELINE-ENTITY-V2-OPEN-MODEL--replace-timelineentityv1-oneof-with-open-timelineentityv2-for-decoupled-kind-extension/tasks.md — Checked off backend projection/upsert/hydration tasks
+
+
+## 2026-02-19
+
+Implemented frontend TimelineEntityV2 decode/mapping cutover and added a timeline renderer registry for app-owned self-contained widget kinds.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/cmd/web-chat/web/src/sem/registry.ts — `timeline.upsert` now decodes `TimelineUpsertV2`
+- /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/cmd/web-chat/web/src/sem/timelineMapper.ts — Replaced oneof-case mapping with V2 `kind + props` mapper
+- /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/cmd/web-chat/web/src/ws/wsManager.ts — Timeline hydration decode switched to `TimelineSnapshotV2`
+- /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/cmd/web-chat/web/src/debug-ui/ws/debugTimelineWsManager.ts — Debug websocket bootstrap/upsert decode switched to V2 transport
+- /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/cmd/web-chat/web/src/debug-ui/ws/debugTimelineWsManager.test.ts — Updated fixture payloads to V2 `props` format
+- /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/cmd/web-chat/web/src/webchat/rendererRegistry.ts — Added register/unregister/resolve registry for timeline renderer dispatch
+- /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/cmd/web-chat/web/src/webchat/ChatWidget.tsx — Uses registry-resolved renderers
+- /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/cmd/web-chat/web/src/webchat/index.ts — Exports renderer registry APIs for app integration
+- /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/ttmp/2026/02/19/GP-028-TIMELINE-ENTITY-V2-OPEN-MODEL--replace-timelineentityv1-oneof-with-open-timelineentityv2-for-decoupled-kind-extension/tasks.md — Checked off frontend decode/mapping + oneof-removal + test update tasks
+- /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/ttmp/2026/02/19/GP-028-TIMELINE-ENTITY-V2-OPEN-MODEL--replace-timelineentityv1-oneof-with-open-timelineentityv2-for-decoupled-kind-extension/reference/01-diary.md — Added Step 4 implementation diary entry
