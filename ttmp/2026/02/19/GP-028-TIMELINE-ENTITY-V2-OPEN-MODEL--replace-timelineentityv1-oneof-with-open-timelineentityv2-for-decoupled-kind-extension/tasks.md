@@ -2,7 +2,7 @@
 
 ## TODO
 
-- [ ] Follow-up modularization: extract thinking-mode projection into self-contained backend module with explicit bootstrap (no `init()`):
+- [x] Follow-up modularization: extract thinking-mode projection into self-contained backend module with explicit bootstrap (no `init()`):
   - create `pkg/webchat/timeline_handlers_thinking_mode.go` containing only thinking-mode SEM decode + `TimelineEntityV2` upsert logic
   - remove thinking-mode cases from `pkg/webchat/timeline_projector.go` switch
   - replace `init()` registration in timeline handlers with explicit bootstrap API (for example `RegisterDefaultTimelineHandlers()` called by router/service startup)

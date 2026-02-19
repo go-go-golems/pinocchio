@@ -116,3 +116,17 @@ Added follow-up modularization tasks for thinking-mode explicit-bootstrap extrac
 
 - /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/ttmp/2026/02/19/GP-028-TIMELINE-ENTITY-V2-OPEN-MODEL--replace-timelineentityv1-oneof-with-open-timelineentityv2-for-decoupled-kind-extension/tasks.md — Added TODOs for explicit bootstrap registration and thinking-mode self-contained module extraction
 - /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/ttmp/2026/02/19/GP-028-TIMELINE-ENTITY-V2-OPEN-MODEL--replace-timelineentityv1-oneof-with-open-timelineentityv2-for-decoupled-kind-extension/index.md — Reopened ticket status to `active` for follow-up modularization work
+
+
+## 2026-02-19
+
+Implemented backend thinking-mode modularization with explicit bootstrap registration and registry-only projection dispatch (removed inline `thinking.mode.*` handling from projector).
+
+### Related Files
+
+- /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/pkg/webchat/timeline_handlers_bootstrap.go — Added `RegisterDefaultTimelineHandlers()` bootstrap with `sync.Once` and test reset helper
+- /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/pkg/webchat/timeline_handlers_thinking_mode.go — Extracted thinking-mode SEM decode/upsert projection handler module
+- /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/pkg/webchat/timeline_handlers_builtin.go — Replaced `init()` registration with explicit builtin registration function
+- /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/pkg/webchat/timeline_projector.go — Removed inline `thinking.mode.*` switch branch so custom dispatch goes through handler registry
+- /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/pkg/webchat/conversation.go — Wired startup bootstrap via `RegisterDefaultTimelineHandlers()` in `NewConvManager`
+- /home/manuel/workspaces/2026-02-14/hypercard-add-webchat/pinocchio/pkg/webchat/timeline_handlers_bootstrap_test.go — Added idempotence + bootstrap-required projection tests
