@@ -174,13 +174,13 @@ func TestAppOwnedChatHandler_Integration_UserMessageProjectedViaStream(t *testin
 			if id != expectedID {
 				continue
 			}
-			msg, _ := entity["message"].(map[string]any)
-			if msg == nil {
+			props, _ := entity["props"].(map[string]any)
+			if props == nil {
 				continue
 			}
-			role, _ := msg["role"].(string)
-			content, _ := msg["content"].(string)
-			streaming, _ := msg["streaming"].(bool)
+			role, _ := props["role"].(string)
+			content, _ := props["content"].(string)
+			streaming, _ := props["streaming"].(bool)
 			if role == "user" && content == prompt && !streaming {
 				found = true
 				break

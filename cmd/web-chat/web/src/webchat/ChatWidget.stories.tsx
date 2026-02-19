@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import type { ComponentProps } from 'react';
 import { useEffect } from 'react';
+import { registerThinkingModeModule } from '../features/thinkingMode/registerThinkingMode';
 import { handleSem, registerDefaultSemHandlers } from '../sem/registry';
 import { useAppDispatch } from '../store/hooks';
 import { timelineSlice } from '../store/timelineSlice';
@@ -82,6 +83,7 @@ function ScenarioRunner({ frames, delayMs, widgetProps }: ScenarioRunnerProps) {
   const dispatch = useAppDispatch();
   useEffect(() => {
     registerDefaultSemHandlers();
+    registerThinkingModeModule();
     dispatch(timelineSlice.actions.clear());
     if (!delayMs) {
       for (const fr of frames) handleSem(fr, dispatch);
@@ -245,4 +247,3 @@ export const WidgetOnlyThinkingMode: Story = {
     />
   ),
 };
-

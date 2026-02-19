@@ -28,7 +28,7 @@ type ConversationServiceConfig struct {
 	TimelineStore      chatstore.TimelineStore
 	TurnStore          chatstore.TurnStore
 	SEMPublisher       message.Publisher
-	TimelineUpsertHook func(*Conversation) func(entity *timelinepb.TimelineEntityV1, version uint64)
+	TimelineUpsertHook func(*Conversation) func(entity *timelinepb.TimelineEntityV2, version uint64)
 	ToolFactories      map[string]infruntime.ToolFactory
 }
 
@@ -41,7 +41,7 @@ type ConversationService struct {
 	timelineStore  chatstore.TimelineStore
 	turnStore      chatstore.TurnStore
 	semPublisher   message.Publisher
-	timelineUpsert func(*Conversation) func(entity *timelinepb.TimelineEntityV1, version uint64)
+	timelineUpsert func(*Conversation) func(entity *timelinepb.TimelineEntityV2, version uint64)
 	toolFactories  map[string]infruntime.ToolFactory
 }
 
@@ -214,27 +214,27 @@ func (s *ConversationService) AttachWebSocket(ctx context.Context, convID string
 	return s.streams.AttachWebSocket(ctx, convID, conn, opts)
 }
 
-func (s *ConversationService) TimelineUpsertHook(conv *Conversation) func(entity *timelinepb.TimelineEntityV1, version uint64) {
+func (s *ConversationService) TimelineUpsertHook(conv *Conversation) func(entity *timelinepb.TimelineEntityV2, version uint64) {
 	if s != nil && s.timelineUpsert != nil {
 		return s.timelineUpsert(conv)
 	}
 	return s.timelineUpsertHookDefault(conv)
 }
 
-func (s *ConversationService) timelineUpsertHookDefault(conv *Conversation) func(entity *timelinepb.TimelineEntityV1, version uint64) {
+func (s *ConversationService) timelineUpsertHookDefault(conv *Conversation) func(entity *timelinepb.TimelineEntityV2, version uint64) {
 	if s == nil || conv == nil {
 		return nil
 	}
-	return func(entity *timelinepb.TimelineEntityV1, version uint64) {
+	return func(entity *timelinepb.TimelineEntityV2, version uint64) {
 		s.emitTimelineUpsert(conv, entity, version)
 	}
 }
 
-func (s *ConversationService) emitTimelineUpsert(conv *Conversation, entity *timelinepb.TimelineEntityV1, version uint64) {
+func (s *ConversationService) emitTimelineUpsert(conv *Conversation, entity *timelinepb.TimelineEntityV2, version uint64) {
 	if s == nil || conv == nil || entity == nil {
 		return
 	}
-	payload, err := protoToRaw(&timelinepb.TimelineUpsertV1{
+	payload, err := protoToRaw(&timelinepb.TimelineUpsertV2{
 		ConvId:  conv.ID,
 		Version: version,
 		Entity:  entity,

@@ -1,927 +1,635 @@
-# Pinocchio Webchat Flow: From SEM Event to Widget/Card Render
+# Pinocchio Webchat Extensibility: Ground-Up Architecture, Flow, and Registration Model
 
 ## Abstract
 
-This document explains, in implementation detail, how Pinocchio webchat turns backend events into rendered UI cards, and how developers can extend rendering behavior without changing core framework code. The focus is the current code path in `pinocchio/cmd/web-chat/web/src` and `pinocchio/pkg/webchat`, with special attention to custom types, custom renderers, and widget switching semantics.
+This document defines a pinocchio-only architecture for making webchat extensible from the ground up. It explains the entire flow from incoming backend event to rendered timeline entity, identifies the current extension seams and limits, and proposes a concrete plugin style model that lets developers add new semantic types and custom renderers without modifying core code paths.
 
-The key conclusion is that Pinocchio webchat is intentionally generic at the UI boundary. The primary renderer switch is by timeline entity `kind`, and secondary specialization can be done by inspecting payload fields such as `customKind` on `tool_result`. This is less hardcoded than older app-specific render pipelines.
+The design center is simple:
+
+1. Treat `timeline.upsert` as the durable canonical state stream.
+2. Keep semantic translation and timeline projection extensible on the backend.
+3. Make frontend projection and renderer registration explicit, ordered, and composable.
+4. Preserve deterministic replay and hydration behavior.
+
+This document is implementation oriented. It references concrete symbols and files in the pinocchio codebase and includes diagrams, pseudocode, and a step-by-step developer workflow.
 
 ---
 
-## 1. System Model and Vocabulary
+## 1. Why Extensibility Is the First Problem
 
-Pinocchio webchat has three major transformation stages:
+Pinocchio webchat already has strong foundations: typed protobuf schemas, timeline projection, hydration, and renderer overrides. The missing piece is not capability, but composition ergonomics. Today, extension points exist in several places, but they are not yet unified as one explicit plugin model.
 
-1. Domain events -> SEM envelopes (backend translation).
-2. SEM envelopes -> timeline entities (backend projection and frontend mapping).
-3. Timeline entities -> React renderers (frontend renderer dispatch).
+When extension seams are implicit, teams usually add features by patching core switch statements, singleton registries, or app-level render conditionals. That works in the short term but makes future migration expensive. The right direction is to stabilize extension APIs first, then build domain packs on top.
 
-A simplified event contract used across the stack is:
+The rest of this document describes how to do that with the code that already exists.
+
+---
+
+## 2. Current End-to-End Flow in Pinocchio
+
+### 2.1 System overview
+
+```text
+Geppetto runtime events
+  -> SEM translation registry (Go)
+     pkg/sem/registry + pkg/webchat/sem_translator.go
+  -> Stream coordinator (seq, stream_id)
+     pkg/webchat/stream_coordinator.go
+  -> Timeline projector (Go)
+     pkg/webchat/timeline_projector.go
+     + custom timeline handlers pkg/webchat/timeline_registry.go
+  -> Timeline store upsert
+     pkg/persistence/chatstore/*
+  -> timeline.upsert SEM emission
+     pkg/webchat/timeline_upsert.go
+  -> WebSocket + hydration in browser
+     cmd/web-chat/web/src/ws/wsManager.ts
+  -> Frontend SEM registry + proto decode
+     cmd/web-chat/web/src/sem/registry.ts
+  -> Redux timeline slice upsert
+     cmd/web-chat/web/src/store/timelineSlice.ts
+  -> ChatTimeline kind->renderer dispatch
+     cmd/web-chat/web/src/webchat/components/Timeline.tsx
+```
+
+### 2.2 Backend translation stage
+
+Core API:
+
+- `semregistry.RegisterByType[T](fn)` in `pkg/sem/registry/registry.go`
+- `semregistry.Handle(e)` in `pkg/sem/registry/registry.go`
+- `EventTranslator.Translate(e)` in `pkg/webchat/sem_translator.go`
+
+`EventTranslator.RegisterDefaultHandlers()` wires known event families (LLM, tool, logs, mode, debugger, thinking-mode). Each handler emits one or more SEM envelopes using protobuf-backed payloads (`protoToRaw`).
+
+Important properties:
+
+1. Type-driven registration avoids a giant monolithic switch.
+2. Payloads are schema-based, not ad hoc maps.
+3. IDs are stabilized via local caches (`resolveMessageID`, tool call cache), which matters for streaming updates.
+
+### 2.3 Backend projection stage
+
+Core API:
+
+- `TimelineProjector.ApplySemFrame(...)` in `pkg/webchat/timeline_projector.go`
+- `RegisterTimelineHandler(eventType, handler)` in `pkg/webchat/timeline_registry.go`
+- `TimelineProjector.Upsert(...)` public helper for custom handlers
+
+`ApplySemFrame` does this in order:
+
+1. Parse SEM envelope.
+2. Validate `sem`, `event.type`, `event.id`, `event.seq`.
+3. Run custom timeline handlers first via `handleTimelineHandlers(...)`.
+4. If not handled, run built-in projection switch (`llm.*`, `tool.*`, `thinking.mode.*`, etc.).
+5. Upsert `TimelineEntityV1` into store.
+
+This ordering is a strong extension seam: custom handlers can own event type families before core fallback logic.
+
+### 2.4 `timeline.upsert` emission
+
+Core API:
+
+- `emitTimelineUpsert(...)` in `pkg/webchat/timeline_upsert.go`
+- equivalent service-level emission in `pkg/webchat/conversation_service.go`
+
+After store upsert, backend emits:
 
 ```json
 {
   "sem": true,
   "event": {
-    "type": "tool.result",
-    "id": "tc-1",
-    "seq": 1739960001000001,
-    "stream_id": "1739960001000-1",
-    "data": { "id": "tc-1", "result": "2", "customKind": "calc_result" }
+    "type": "timeline.upsert",
+    "id": "<entity-id>",
+    "seq": <version>,
+    "data": {
+      "convId": "...",
+      "version": <version>,
+      "entity": { "id": "...", "kind": "...", "snapshot": ... }
+    }
   }
 }
 ```
 
-Important terms:
+That event is the canonical projection stream and should be treated as authoritative UI state.
 
-- `SEM envelope`: wire-level frame (`sem=true`, `event` payload).
-- `Timeline entity`: normalized UI projection unit (`id`, `kind`, `props`, timestamps).
-- `kind`: primary renderer routing key (for example: `message`, `tool_result`, `thinking_mode`).
-- `customKind`: optional subtype hint, currently used in `tool.result` payloads.
+### 2.5 Frontend ingestion stage
 
----
+Core API:
 
-## 2. End-to-End Data Flow (Concrete Path)
+- `registerSem(type, handler)` in `cmd/web-chat/web/src/sem/registry.ts`
+- `registerDefaultSemHandlers()` in `cmd/web-chat/web/src/sem/registry.ts`
+- `wsManager.connect(...)` in `cmd/web-chat/web/src/ws/wsManager.ts`
 
-### 2.1 High-level diagram
+`wsManager.connect` behavior:
 
-```text
-Geppetto/Runtime Events
-        |
-        v
-EventTranslator (Go)
-  pinocchio/pkg/webchat/sem_translator.go
-        |
-        v
-SEM frames (with seq/stream_id patched)
-  pinocchio/pkg/webchat/stream_coordinator.go
-        |
-        +--> WebSocket broadcast to clients
-        |
-        +--> TimelineProjector.ApplySemFrame(...)
-              pinocchio/pkg/webchat/timeline_projector.go
-              writes TimelineStore + emits timeline.upsert
-        |
-        v
-Frontend wsManager
-  pinocchio/cmd/web-chat/web/src/ws/wsManager.ts
-        |
-        +--> handleSem(...) for live frames
-        +--> hydration via GET /api/timeline
-        |
-        v
-timelineSlice (Redux)
-  pinocchio/cmd/web-chat/web/src/store/timelineSlice.ts
-        |
-        v
-ChatWidget -> ChatTimeline renderer switch
-  pinocchio/cmd/web-chat/web/src/webchat/ChatWidget.tsx
-  pinocchio/cmd/web-chat/web/src/webchat/components/Timeline.tsx
-```
+1. Calls `registerDefaultSemHandlers()`.
+2. Opens websocket.
+3. Buffers frames until hydration completes.
+4. Hydrates full snapshot from `/api/timeline`.
+5. Replays buffered frames in seq order.
 
-### 2.2 Route ownership and entrypoints
+This ensures UI can recover from reconnects and multi-tab races.
 
-The command app mounts app-owned handlers in `pinocchio/cmd/web-chat/main.go`:
+### 2.6 Frontend render stage
 
-- `/chat` -> `webhttp.NewChatHandler(...)`
-- `/ws` -> `webhttp.NewWSHandler(...)`
-- `/api/timeline` -> `webhttp.NewTimelineHandler(...)`
+Core API:
 
-References:
+- `timelineSlice.upsertEntity(...)` in `cmd/web-chat/web/src/store/timelineSlice.ts`
+- `ChatWidget` renderer merge in `cmd/web-chat/web/src/webchat/ChatWidget.tsx`
+- `ChatTimeline` dispatch in `cmd/web-chat/web/src/webchat/components/Timeline.tsx`
 
-- `pinocchio/cmd/web-chat/main.go:195`
-- `pinocchio/cmd/web-chat/main.go:204`
-- `pinocchio/cmd/web-chat/main.go:207`
-
----
-
-## 3. Backend Stage A: Domain Event -> SEM Envelope
-
-### 3.1 Translator registry
-
-`EventTranslator` delegates mappings through registry handlers:
-
-- `semregistry.RegisterByType[T](...)`
-- `semregistry.Handle(e)`
-
-References:
-
-- `pinocchio/pkg/sem/registry/registry.go:20`
-- `pinocchio/pkg/webchat/sem_translator.go:155`
-
-This means semantic mapping is type-driven and extensible on the Go side.
-
-### 3.2 Built-in mappings
-
-`EventTranslator.RegisterDefaultHandlers()` maps core event classes to SEM event types:
-
-- LLM: `llm.start`, `llm.delta`, `llm.final`, `llm.thinking.*`
-- Tools: `tool.start`, `tool.delta`, `tool.result`, `tool.done`
-- Middleware-ish/control: `agent.mode`, `debugger.pause`, `thinking.mode.*`
-
-Reference: `pinocchio/pkg/webchat/sem_translator.go:243`
-
-### 3.3 `customKind` creation for tool results
-
-`EventToolResult` and `EventToolCallExecutionResult` can emit `customKind` for `calc` tool:
-
-- `ToolResult{custom_kind: "calc_result"}`
-
-Reference:
-
-- `pinocchio/pkg/webchat/sem_translator.go:426`
-- `pinocchio/pkg/webchat/sem_translator_test.go:81`
-
-This is the canonical subtype hint path that avoids introducing a brand-new top-level SEM event type for every tool result widget variant.
-
-### 3.4 Sequence assignment and normalization
-
-`StreamCoordinator` assigns stable monotonic `seq` and attaches `stream_id`:
-
-- `SemanticEventsFromEventWithCursor(...)`
-- `patchSEMPayloadWithCursor(...)`
-
-Reference: `pinocchio/pkg/webchat/stream_coordinator.go:145`
-
-This is critical for deterministic ordering and reconciliation in the browser.
-
----
-
-## 4. Backend Stage B: SEM -> Timeline Projection
-
-### 4.1 Timeline projector role
-
-`TimelineProjector.ApplySemFrame(...)` converts SEM frames into typed timeline snapshots and persists them to `TimelineStore`.
-
-Reference: `pinocchio/pkg/webchat/timeline_projector.go:83`
-
-### 4.2 Projection output model
-
-Projection writes `TimelineEntityV1` with a `kind` plus `oneof snapshot` payload.
-
-Reference: `pinocchio/proto/sem/timeline/transport.proto:15`
-
-Built-in snapshot variants include:
-
-- `message`, `tool_call`, `tool_result`, `status`
-- `thinking_mode`, `mode_evaluation`, `inner_thoughts`
-- `team_analysis`, `disco_dialogue_line/check/state`
-
-Reference: `pinocchio/proto/sem/timeline/transport.proto:22`
-
-### 4.3 Tool result identity strategy
-
-For `tool.result`, projector writes:
-
-- ID: `<toolCallId>:result`, or `<toolCallId>:custom` when `customKind` is set
-- Kind: `tool_result`
-- Payload: raw + structured + `custom_kind`
-
-Reference: `pinocchio/pkg/webchat/timeline_projector.go:327`
-
-This mirrors frontend live-sem behavior and preserves subtype hint continuity across hydration.
-
-### 4.4 Custom timeline handler registry
-
-Before switch-based built-ins run, projector checks custom timeline handlers:
-
-- `RegisterTimelineHandler(eventType, handler)`
-- `handleTimelineHandlers(...)`
-
-References:
-
-- `pinocchio/pkg/webchat/timeline_registry.go:28`
-- `pinocchio/pkg/webchat/timeline_projector.go:117`
-
-Built-in example:
-
-- `chat.message` -> `message` snapshot handler (`timeline_handlers_builtin.go`)
-
-Reference: `pinocchio/pkg/webchat/timeline_handlers_builtin.go:10`
-
-This is an important extension seam: backend teams can project additional SEM event types without editing projector switch logic, as long as payloads map to existing timeline snapshot types.
-
-### 4.5 `timeline.upsert` publication
-
-After store upsert, router/service emits websocket frame:
-
-```text
-event.type = "timeline.upsert"
-event.id   = entity.Id
-event.seq  = version
-event.data = TimelineUpsertV1
-```
-
-References:
-
-- `pinocchio/pkg/webchat/timeline_upsert.go:22`
-- `pinocchio/pkg/webchat/conversation_service.go:233`
-
-This gives a stable projection-first stream to the frontend.
-
----
-
-## 5. Frontend Ingestion: WebSocket, Hydration, Registry
-
-### 5.1 Connection lifecycle
-
-`ChatWidget` calls `wsManager.connect(...)` after resolving `conv_id`.
-
-Reference: `pinocchio/cmd/web-chat/web/src/webchat/ChatWidget.tsx:121`
-
-`wsManager.connect(...)` performs:
-
-1. `registerDefaultSemHandlers()`
-2. open websocket `/ws?conv_id=...`
-3. buffer incoming frames until hydration completes
-4. `GET /api/timeline?conv_id=...`
-5. replay buffered frames in `seq` order
-
-References:
-
-- `pinocchio/cmd/web-chat/web/src/ws/wsManager.ts:74`
-- `pinocchio/cmd/web-chat/web/src/ws/wsManager.ts:121`
-- `pinocchio/cmd/web-chat/web/src/ws/wsManager.ts:171`
-- `pinocchio/cmd/web-chat/web/src/ws/wsManager.ts:212`
-
-### 5.2 Registry dispatch
-
-Frontend SEM dispatch is map-driven:
-
-- `registerSem(type, handler)`
-- `handleSem(envelope, dispatch)`
-
-Reference: `pinocchio/cmd/web-chat/web/src/sem/registry.ts:36`
-
-Default handlers include both live event shapes and projection events:
-
-- live: `llm.*`, `tool.*`, `agent.mode`, `debugger.pause`, `thinking.mode.*`
-- projection: `timeline.upsert`
-
-Reference: `pinocchio/cmd/web-chat/web/src/sem/registry.ts:69`
-
-### 5.3 Important caveat: registry reset behavior
-
-`registerDefaultSemHandlers()` starts with `handlers.clear()`. Because `wsManager.connect()` calls it on every connect, ad-hoc custom registrations done earlier can be overwritten.
-
-References:
-
-- `pinocchio/cmd/web-chat/web/src/sem/registry.ts:70`
-- `pinocchio/cmd/web-chat/web/src/ws/wsManager.ts:74`
-
-For extension design, this means UI-only custom SEM handlers are possible in principle, but fragile in the stock app unless you control registration timing or wrapper lifecycle.
-
----
-
-## 6. Frontend Projection Mapping and State Semantics
-
-### 6.1 Timeline snapshot mapper
-
-`timelineEntityFromProto(...)` converts protobuf snapshot entities to Redux timeline entities.
-
-Reference: `pinocchio/cmd/web-chat/web/src/sem/timelineMapper.ts:91`
-
-For known kinds, props are normalized; for unknown/unhandled oneof cases, mapper falls back to raw `value`.
-
-Reference: `pinocchio/cmd/web-chat/web/src/sem/timelineMapper.ts:88`
-
-### 6.2 State shape and upsert policy
-
-Redux slice stores:
-
-- `byId: Record<string, TimelineEntity>`
-- `order: string[]`
-
-Reference: `pinocchio/cmd/web-chat/web/src/store/timelineSlice.ts:13`
-
-`upsertEntity` merges props and honors `version` monotonicity when present.
-
-Reference: `pinocchio/cmd/web-chat/web/src/store/timelineSlice.ts:59`
-
-This is why timeline-first flows are robust under reconnect/hydration: versioned snapshots win over stale updates.
-
----
-
-## 7. Renderer Dispatch and Widget Switching
-
-### 7.1 Primary switch: by `kind`
-
-`ChatTimeline` chooses renderer by exact entity `kind`:
+Rendering is by entity `kind`:
 
 ```ts
 const Renderer = renderers[e.kind] ?? renderers.default;
 ```
 
-Reference: `pinocchio/cmd/web-chat/web/src/webchat/components/Timeline.tsx:102`
+Default mapping in `ChatWidget` is:
 
-### 7.2 Default renderer map
+- `message -> MessageCard`
+- `tool_call -> ToolCallCard`
+- `tool_result -> ToolResultCard`
+- `thinking_mode -> ThinkingModeCard`
+- fallback `default -> GenericCard`
 
-`ChatWidget` composes built-in renderer map and merges caller overrides:
-
-- `message` -> `MessageCard`
-- `tool_call` -> `ToolCallCard`
-- `tool_result` -> `ToolResultCard`
-- `log` -> `LogCard`
-- `thinking_mode` -> `ThinkingModeCard`
-- fallback -> `GenericCard`
-
-Reference: `pinocchio/cmd/web-chat/web/src/webchat/ChatWidget.tsx:218`
-
-### 7.3 Secondary switch: subtype inside renderer
-
-Current default `ToolResultCard` does not switch component by `customKind`; it displays `customKind` as a label and raw result text.
-
-Reference: `pinocchio/cmd/web-chat/web/src/webchat/cards.tsx:65`
-
-Therefore, subtype-aware widget switching is expected to be implemented by host-provided custom renderer logic.
-
-### 7.4 Which middleware kinds are custom-rendered by default?
-
-Today, only `thinking_mode` has a dedicated middleware card. Other middleware-related kinds (`agent_mode`, `debugger_pause`, `disco_dialogue_*`, etc.) fall through to `GenericCard` unless custom renderers are supplied.
-
-References:
-
-- `pinocchio/cmd/web-chat/web/src/sem/registry.ts:183`
-- `pinocchio/cmd/web-chat/web/src/sem/timelineMapper.ts:39`
-- `pinocchio/cmd/web-chat/web/src/webchat/ChatWidget.tsx:225`
+Consumers can pass `renderers` prop to override or add kinds without editing core files.
 
 ---
 
-## 8. Extension Patterns Without Core Code Changes
+## 3. Extensibility Surfaces That Already Exist
 
-This section is the practical developer playbook.
+Pinocchio already has four real extension layers.
 
-## 8.1 Pattern A: Override renderer for an existing `kind`
+### 3.1 SEM translator extension (backend)
 
-If backend already emits a known `kind` (for example, `agent_mode` or `tool_result`), pass a renderer via `ChatWidgetProps.renderers`.
+Use `RegisterByType` to map new runtime events into SEM frames.
 
-Reference types:
+Where:
 
-- `ChatWidgetRenderers` in `pinocchio/cmd/web-chat/web/src/webchat/types.ts:74`
-- story example in `pinocchio/cmd/web-chat/web/src/webchat/ChatWidget.stories.tsx:52`
+- `pkg/sem/registry/registry.go`
+- usually invoked from init/bootstrap near `pkg/webchat/sem_translator.go`
 
-Pseudocode:
+What this gives you:
 
-```tsx
-<ChatWidget
-  renderers={{
-    agent_mode: AgentModeCard,
-    tool_result: ToolResultSwitchCard,
-  }}
-/>
+1. No core switch edit required for new event classes.
+2. Precise control over SEM event type names and payload schemas.
+
+### 3.2 Timeline projection extension (backend)
+
+Use `RegisterTimelineHandler(eventType, handler)`.
+
+Where:
+
+- `pkg/webchat/timeline_registry.go`
+- built-in example in `pkg/webchat/timeline_handlers_builtin.go`
+
+What this gives you:
+
+1. Custom mapping from SEM event to timeline kinds.
+2. Ability to upsert one or multiple entities per SEM event.
+3. Full access to projector upsert path with version sequencing.
+
+### 3.3 Frontend SEM dispatch extension
+
+Use `registerSem(type, handler)` in `cmd/web-chat/web/src/sem/registry.ts`.
+
+What this gives you:
+
+1. Add direct handling for SEM event types.
+2. Decode custom protobuf JSON via `fromJson`.
+3. Upsert entities into timeline slice.
+
+Current caveat: `registerDefaultSemHandlers()` clears the map, so extension handlers need deterministic registration ordering.
+
+### 3.4 Frontend rendering extension
+
+Use `ChatWidget` prop `renderers?: Partial<ChatWidgetRenderers>`.
+
+Where:
+
+- type in `cmd/web-chat/web/src/webchat/types.ts`
+- merge in `cmd/web-chat/web/src/webchat/ChatWidget.tsx`
+
+What this gives you:
+
+1. Override default renderer for any built-in kind.
+2. Add renderer for new kinds emitted by timeline projection.
+3. Keep core timeline component unchanged.
+
+---
+
+## 4. Core Issues Blocking "Easy Extensibility"
+
+The system is close to ideal, but several issues should be fixed to make extension easy and safe.
+
+### 4.1 Frontend handler registry lifecycle is implicit
+
+`wsManager.connect()` always calls `registerDefaultSemHandlers()`, which calls `handlers.clear()` and re-registers defaults. Any custom handler registered earlier can be dropped silently.
+
+Impact:
+
+1. Plugins depend on call order.
+2. Reconnect can unintentionally disable extension behavior.
+
+### 4.2 Frontend extension API is not first class
+
+Today developers can call `registerSem` manually, but there is no official "webchat plugin" contract that defines registration phases and ownership.
+
+Impact:
+
+1. Integration code repeats ad hoc bootstrap logic.
+2. Teams must read internal lifecycle details to avoid bugs.
+
+### 4.3 Canonical projection path is not strongly enforced
+
+Frontend still has handlers for non-`timeline.upsert` live SEM events (`llm.*`, `tool.*`, etc.). This is useful as fallback, but it can drift from backend projection semantics if not treated carefully.
+
+Impact:
+
+1. Potential double maintenance for mapping rules.
+2. More room for subtle shape differences between live and hydrated data.
+
+### 4.4 `tool_result.customKind` specialization is shallow by default
+
+`ToolResultCard` currently displays `customKind` as a label and raw result text. That is generic and safe, but not sufficient for rich custom UI.
+
+Impact:
+
+1. Teams often add custom logic outside a stable extension contract.
+2. Rich widget behavior becomes inconsistent across apps.
+
+### 4.5 Lack of one unified registration story across backend and frontend
+
+Backend has translator and projector registries; frontend has renderer overrides and SEM registry. They are powerful, but there is no single documented and typed contract that binds them.
+
+Impact:
+
+1. Onboarding friction.
+2. Increased risk of "works in one app, not in another".
+
+---
+
+## 5. Ground-Up Target Model for Pinocchio
+
+To make pinocchio easy to extend, define a single plugin contract with explicit lifecycle phases.
+
+### 5.1 Proposed plugin contract
+
+```text
+PinocchioWebchatPlugin
+  Backend phase:
+    - registerSemTranslators(registry)
+    - registerTimelineHandlers(registry)
+  Frontend phase:
+    - registerSemHandlers(frontendRegistry)
+    - registerTimelineMappers(optional)
+    - registerRenderers(rendererRegistry)
+  Metadata:
+    - name
+    - version
+    - supported kinds/types
 ```
 
-No framework modification is required.
+This contract can be implemented incrementally without breaking current code.
 
-## 8.2 Pattern B: Switch by `customKind` inside `tool_result`
+### 5.2 Canonical-first ingest policy
 
-Use one renderer for `tool_result`, then branch on `e.props.customKind`.
+Recommended policy:
 
-Pseudocode:
+1. `timeline.upsert` is primary for durable entities.
+2. Live `llm.*` and `tool.*` handlers remain as compatibility fallback only.
+3. New custom UI features should rely on projected timeline entities.
 
-```tsx
-function ToolResultSwitchCard({ e }) {
-  const customKind = String(e.props?.customKind ?? "");
+Why this matters:
 
-  if (customKind === "calc_result") {
-    return <CalcResultCard e={e} />;
-  }
-  if (customKind === "hypercard.widget.v1") {
-    return <HypercardWidgetCard e={e} />;
-  }
-  if (customKind === "hypercard.card.v2") {
-    return <HypercardCardCodeCard e={e} />;
-  }
+- Hydration and live path use the same entity shapes.
+- Replay determinism improves.
+- Frontend mapping logic shrinks.
 
-  return <DefaultToolResultCard e={e} />;
+### 5.3 Renderer registry policy
+
+Prefer `kind`-based renderer registration.
+
+For generic kinds with subtypes (for example `tool_result`), add a local dispatcher renderer that switches by `props.customKind`, but keep it inside plugin surface rather than core switch code.
+
+Example pattern:
+
+```ts
+function ToolResultDispatcher({ e }: { e: RenderEntity }) {
+  const ck = String(e.props?.customKind ?? '');
+  const R = toolResultRenderers[ck] ?? DefaultToolResultCard;
+  return <R e={e} />;
 }
 ```
 
-This is the lowest-friction “custom widget” strategy in current Pinocchio webchat.
+This preserves generic core while allowing rich subtype rendering.
 
-## 8.3 Pattern C: Add backend semantic mapping via translator registry
+---
 
-If you own backend event types, register a Go translator handler via `semregistry.RegisterByType` so your event emits a standard SEM type and payload.
+## 6. Concrete Registration Flows
+
+### 6.1 Backend: adding a custom semantic family
+
+#### Step A: Define protobuf payloads
+
+Add schema under `pinocchio/proto/sem/...` and generate Go/TS code.
+
+Rules:
+
+1. Version message names (`FooEventV1`, `FooEventV2`).
+2. Additive changes only for compatibility.
+3. Avoid opaque map payloads when fields are known.
+
+#### Step B: Register SEM translation
+
+Use `RegisterByType`.
 
 Pseudocode:
 
 ```go
-semregistry.RegisterByType[*events.EventMyToolResult](func(ev *events.EventMyToolResult) ([][]byte, error) {
-    data, _ := protoToRaw(&sempb.ToolResult{
-        Id:         ev.ID,
-        Result:     ev.Raw,
-        CustomKind: "my_widget.v1",
+semregistry.RegisterByType[*events.EventMyDomainReady](func(ev *events.EventMyDomainReady) ([][]byte, error) {
+    data, err := protoToRaw(&mypb.MyDomainReadyV1{
+        ItemId: ev.ItemID,
+        Title:  ev.Title,
+        State:  ev.State,
     })
+    if err != nil { return nil, err }
+
     return [][]byte{wrapSem(map[string]any{
-        "type": "tool.result",
-        "id":   ev.ID,
+        "type": "mydomain.ready",
+        "id":   ev.ItemID,
         "data": data,
     })}, nil
 })
 ```
 
-Reference: `pinocchio/pkg/webchat/sem_translator.go:243`
+#### Step C: Register timeline projection
 
-## 8.4 Pattern D: Add timeline projection handler without projector edits
-
-Register custom timeline handler for your SEM type and upsert a supported snapshot kind.
+Use `RegisterTimelineHandler`.
 
 Pseudocode:
 
 ```go
-func init() {
-    webchat.RegisterTimelineHandler("my.feature.status", func(ctx context.Context, p *webchat.TimelineProjector, ev webchat.TimelineSemEvent, now int64) error {
-        // decode ev.Data and map to existing snapshot kind, e.g. status
-        return p.Upsert(ctx, ev.Seq, &timelinepb.TimelineEntityV1{
-            Id:   ev.ID,
-            Kind: "status",
-            Snapshot: &timelinepb.TimelineEntityV1_Status{Status: &timelinepb.StatusSnapshotV1{
+webchat.RegisterTimelineHandler("mydomain.ready", func(ctx context.Context, p *webchat.TimelineProjector, ev webchat.TimelineSemEvent, now int64) error {
+    var pb mypb.MyDomainReadyV1
+    if err := protojson.Unmarshal(ev.Data, &pb); err != nil {
+        return nil
+    }
+
+    return p.Upsert(ctx, ev.Seq, &timelinepb.TimelineEntityV1{
+        Id:   pb.ItemId,
+        Kind: "my_domain",
+        Snapshot: &timelinepb.TimelineEntityV1_Status{
+            Status: &timelinepb.StatusSnapshotV1{
                 SchemaVersion: 1,
-                Text:          "Custom status text",
                 Type:          "info",
-            }},
-        })
+                Text:          pb.Title,
+            },
+        },
     })
-}
-```
-
-Reference: `pinocchio/pkg/webchat/timeline_registry.go:28`
-
-This preserves hydration/reconnect behavior because projected entities are persisted.
-
-## 8.5 Pattern E: Frontend custom SEM handlers (advanced caveat)
-
-`registerSem("my.event", handler)` exists, but stock `ChatWidget` connection flow calls `registerDefaultSemHandlers()` which clears all handlers.
-
-Reference:
-
-- `pinocchio/cmd/web-chat/web/src/sem/registry.ts:36`
-- `pinocchio/cmd/web-chat/web/src/sem/registry.ts:70`
-- `pinocchio/cmd/web-chat/web/src/ws/wsManager.ts:74`
-
-So this route is viable only when you control lifecycle timing or own a wrapper around connection setup.
-
----
-
-## 9. What You Can and Cannot Do Without Core Changes
-
-### 9.1 You can do without core changes
-
-- Replace any existing renderer by `kind` via `renderers` prop.
-- Add subtype switching via `tool_result.customKind`.
-- Add Go semantic mappings for custom event classes -> existing SEM types.
-- Add timeline projection handlers for new SEM event types -> existing timeline snapshot kinds.
-
-### 9.2 You cannot do without core changes
-
-- Introduce truly new timeline payload schemas that are not represented in `TimelineEntityV1.oneof snapshot`.
-- Persist/hydrate an entirely new `kind` with strongly typed payload unless proto + mapper are extended.
-- Reliably add frontend SEM handlers in stock flow without accounting for registry reset behavior.
-
----
-
-## 10. Practical Blueprint: Building a Custom Widget Stack
-
-The following blueprint gives a stable, non-invasive extension path.
-
-### Step 1: Emit custom hint from backend
-
-Emit `tool.result` with `custom_kind` set to your widget discriminator (`my_widget.v1`).
-
-Reference: `pinocchio/proto/sem/base/tool.proto:20`
-
-### Step 2: Keep projection compatible
-
-Ensure projector can preserve that result in `tool_result` snapshot (`custom_kind`, `result_raw`).
-
-Reference: `pinocchio/pkg/webchat/timeline_projector.go:327`
-
-### Step 3: Inject custom UI renderer
-
-Pass custom `tool_result` renderer that dispatches by `customKind`.
-
-Reference: `pinocchio/cmd/web-chat/web/src/webchat/types.ts:78`
-
-### Step 4: Validate both live and hydrated flows
-
-- Live: websocket frame path (`tool.result` event)
-- Hydrated: `/api/timeline` snapshot path (`tool_result` entity)
-
-References:
-
-- `pinocchio/cmd/web-chat/web/src/ws/wsManager.ts:115`
-- `pinocchio/cmd/web-chat/web/src/ws/wsManager.ts:171`
-
-### Step 5: Add tests where responsibility lives
-
-- Backend: translator test for `customKind`
-- Frontend: renderer test for subtype branch
-- Optional: timeline projector test for custom ID/result persistence
-
-Example backend test already present:
-
-- `pinocchio/pkg/webchat/sem_translator_test.go:81`
-
----
-
-## 11. Control-Flow Pseudocode (Condensed)
-
-### 11.1 Backend stream loop
-
-```text
-for each broker message:
-  seq = nextSeq(stream_id)
-  if payload already SEM:
-    patch seq + stream_id
-    onFrame(sem)
-  else:
-    event = decodeDomainEvent(payload)
-    semFrames = translate(event)
-    for semFrame in semFrames:
-      inject seq + stream_id
-      onFrame(semFrame)
-
-onFrame:
-  broadcast websocket frame
-  append sem buffer
-  timelineProjector.ApplySemFrame(frame)
-```
-
-### 11.2 Frontend runtime
-
-```text
-ChatWidget mounts
-  -> wsManager.connect(convId)
-       registerDefaultSemHandlers()
-       open ws
-       begin hydration GET /api/timeline
-       buffer ws frames until hydrated
-       apply snapshot entities to store
-       replay buffered sem frames by seq
-
-on each sem frame:
-  handleSem(envelope)
-    lookup handler by event.type
-    dispatch timelineSlice.add/upsert
-
-ChatTimeline render:
-  entities = selectTimelineEntities()
-  for e in entities:
-    Renderer = renderers[e.kind] || renderers.default
-    render <Renderer e={e}>
-```
-
----
-
-## 12. Architecture Notes for Teams Migrating from Hardcoded Widgets
-
-If your previous app had hand-built widget/card event types (for example, explicit hypercard widget events), Pinocchio webchat’s architecture encourages a different decomposition:
-
-- Keep transport generic.
-- Preserve stable `kind` boundaries.
-- Use subtype fields (`customKind`) for specialization.
-- Move rendering policy into host-supplied renderer functions.
-
-This typically reduces framework churn. New visual behaviors become application-level renderers, not framework-level switch cases.
-
-A useful mental split is:
-
-- Framework responsibilities:
-  - transport, sequencing, hydration, entity lifecycle, default cards.
-- Application responsibilities:
-  - domain-specific visual semantics and specialized card/widget rendering.
-
----
-
-## 13. Known Implementation Gaps and Design Implications
-
-1. Frontend custom SEM handler registration is not first-class in stock widget lifecycle due default handler reset on connect.
-2. Not every projected kind has a dedicated default renderer; many intentionally route to `GenericCard`.
-3. Timeline proto constrains which payload schemas can be persisted and hydrated without core changes.
-4. Some documentation pages describe renderer names that are not currently wired as defaults; always trust current code symbols.
-
-This is not a defect by itself; it is a tradeoff favoring a minimal core renderer surface.
-
----
-
-## 14. Developer Checklist (No-Core-Change Path)
-
-1. Choose a routing strategy:
-   - Existing `kind` override, or
-   - `tool_result` + `customKind` subtype.
-2. Emit SEM payload with stable IDs and deterministic `customKind` values.
-3. Ensure timeline projection preserves needed data for hydration.
-4. Inject `renderers` map in your ChatWidget host integration.
-5. Build subtype switch logic in your custom renderer.
-6. Test reconnect/hydration (`/api/timeline`) and live stream (`/ws`) parity.
-7. Keep fallback renderer behavior explicit for unknown subtype values.
-
----
-
-## 15. Reference Index
-
-Backend semantic translation and stream orchestration:
-
-- `pinocchio/pkg/webchat/sem_translator.go`
-- `pinocchio/pkg/sem/registry/registry.go`
-- `pinocchio/pkg/webchat/stream_coordinator.go`
-- `pinocchio/pkg/webchat/conversation.go`
-- `pinocchio/pkg/webchat/conversation_service.go`
-- `pinocchio/pkg/webchat/timeline_projector.go`
-- `pinocchio/pkg/webchat/timeline_registry.go`
-- `pinocchio/pkg/webchat/timeline_upsert.go`
-
-HTTP/websocket and timeline API:
-
-- `pinocchio/cmd/web-chat/main.go`
-- `pinocchio/pkg/webchat/http/api.go`
-- `pinocchio/pkg/webchat/router_timeline_api.go`
-
-Frontend ingestion and rendering:
-
-- `pinocchio/cmd/web-chat/web/src/ws/wsManager.ts`
-- `pinocchio/cmd/web-chat/web/src/sem/registry.ts`
-- `pinocchio/cmd/web-chat/web/src/sem/timelineMapper.ts`
-- `pinocchio/cmd/web-chat/web/src/store/timelineSlice.ts`
-- `pinocchio/cmd/web-chat/web/src/webchat/ChatWidget.tsx`
-- `pinocchio/cmd/web-chat/web/src/webchat/components/Timeline.tsx`
-- `pinocchio/cmd/web-chat/web/src/webchat/cards.tsx`
-- `pinocchio/cmd/web-chat/web/src/webchat/types.ts`
-
-Protocol schema:
-
-- `pinocchio/proto/sem/base/tool.proto`
-- `pinocchio/proto/sem/timeline/transport.proto`
-- `pinocchio/proto/sem/timeline/tool.proto`
-- `pinocchio/proto/sem/timeline/middleware.proto`
-
-Validation examples:
-
-- `pinocchio/pkg/webchat/sem_translator_test.go`
-- `pinocchio/pkg/webchat/timeline_projector_test.go`
-- `pinocchio/cmd/web-chat/web/src/webchat/ChatWidget.stories.tsx`
-
-
----
-
-## 16. Temporal Walkthrough (One Prompt, One Tool, One Custom Result)
-
-This section walks through a concrete timeline with sequencing semantics.
-
-Assume a user sends a prompt that triggers one tool call (`calc`) and returns a custom-tagged result.
-
-### 16.1 Sequence table
-
-```text
-T0  User POST /chat
-T1  Backend emits domain event: EventToolCall(id=tc-1,name=calc)
-T2  EventTranslator -> SEM tool.start(id=tc-1)
-T3  StreamCoordinator assigns seq S, broadcasts frame
-T4  TimelineProjector writes tool_call(tc-1, running), version S
-T5  Router emits timeline.upsert(seq=S)
-T6  Browser receives frame; registry upserts tool_call entity
-
-T7  Backend emits domain event: EventToolResult(id=tc-1,result=2)
-T8  EventTranslator -> SEM tool.result(customKind=calc_result) + tool.done
-T9  StreamCoordinator assigns seq S+1, S+2 and broadcasts
-T10 TimelineProjector writes tool_result(id=tc-1:custom, customKind=calc_result)
-T11 TimelineProjector writes tool_call(tc-1, done=true)
-T12 Browser upserts entities and rerenders
-```
-
-### 16.2 Why this matters for rendering
-
-The renderer never sees domain events directly. It sees timeline entities (`RenderEntity`) after projection/mapping. Therefore UI behavior should be authored against stable `kind` + `props` contracts, not backend event classes.
-
-This is exactly where Pinocchio is more generic than app-specific pipelines: semantic evolution happens in event and projection layers, while renderer switching remains simple and compositional.
-
----
-
-## 17. Widget Switching Algorithm, Precisely
-
-### 17.1 Primary dispatch function
-
-In `ChatTimeline`:
-
-1. Iterate entity list in store order.
-2. Select renderer by `renderers[e.kind]`.
-3. Fallback to `renderers.default`.
-4. Render card with role-aligned bubble container.
-
-Reference: `pinocchio/cmd/web-chat/web/src/webchat/components/Timeline.tsx:101`
-
-### 17.2 Role influences layout, not renderer identity
-
-`roleFromEntity` assigns visual role buckets:
-
-- `message` -> `user` or `assistant` or `thinking`
-- `tool_call`/`tool_result` -> `tool`
-- `thinking_mode` and `disco_dialogue_*` -> `system`
-
-Reference: `pinocchio/cmd/web-chat/web/src/webchat/components/Timeline.tsx:18`
-
-This role tagging affects bubble alignment and styling, but does not select which React component handles content. Content handler selection remains purely `kind`-based.
-
-### 17.3 `customKind` is payload-level polymorphism
-
-`customKind` is not a top-level renderer key. It is a field in `tool_result` props:
-
-- SEM: `sem.base.tool.ToolResult.custom_kind`
-- Timeline snapshot: `sem.timeline.ToolResultSnapshotV1.custom_kind`
-- Frontend props: `e.props.customKind`
-
-References:
-
-- `pinocchio/proto/sem/base/tool.proto:20`
-- `pinocchio/proto/sem/timeline/tool.proto:19`
-- `pinocchio/cmd/web-chat/web/src/sem/timelineMapper.ts:24`
-
-This layered subtype marker is the intended hook for custom visual branching inside a single `tool_result` renderer.
-
----
-
-## 18. Implementation Cookbook for Teams
-
-This section is a full, no-core-modification recipe for custom cards.
-
-### 18.1 Objective
-
-Create two specialized UI cards:
-
-- `hypercard.widget.v1`
-- `hypercard.card.v2`
-
-while keeping Pinocchio core untouched.
-
-### 18.2 Backend recipe
-
-1. Emit `tool.result` with `custom_kind` set to one of the two values.
-2. Keep data in `result` (string, optionally JSON).
-3. Emit `tool.done` as usual.
-
-If your event source is a custom geppetto event class, register semantic mapper:
-
-```go
-semregistry.RegisterByType[*events.EventHypercardResult](func(ev *events.EventHypercardResult) ([][]byte, error) {
-    tr := &sempb.ToolResult{Id: ev.CallID, Result: ev.RawPayload, CustomKind: ev.WidgetKind}
-    data, err := protoToRaw(tr)
-    if err != nil { return nil, err }
-
-    td, err := protoToRaw(&sempb.ToolDone{Id: ev.CallID})
-    if err != nil { return nil, err }
-
-    return [][]byte{
-      wrapSem(map[string]any{"type":"tool.result","id":ev.CallID,"data":data}),
-      wrapSem(map[string]any{"type":"tool.done","id":ev.CallID,"data":td}),
-    }, nil
 })
 ```
 
-### 18.3 Frontend recipe
+### 6.2 Frontend: adding custom projection and rendering
 
-Provide a custom `tool_result` renderer and route by `customKind`:
+#### Step D: Ensure entity mapping exists
+
+If new `kind` uses existing oneof mapping, use current `timelineEntityFromProto` behavior. If it introduces new snapshot cases, update `propsFromTimelineEntity` in `cmd/web-chat/web/src/sem/timelineMapper.ts`.
+
+#### Step E: Register renderer
+
+Supply `renderers` prop when mounting `ChatWidget`:
 
 ```tsx
-type CardProps = { e: RenderEntity };
-
-function HypercardWidgetCard({ e }: CardProps) {
-  const raw = String(e.props?.result ?? "");
-  return <div data-part="card">/* parse and render widget */{raw}</div>;
-}
-
-function HypercardCodeCard({ e }: CardProps) {
-  const raw = String(e.props?.result ?? "");
-  return <div data-part="card">/* parse and render card/code */{raw}</div>;
-}
-
-function RoutedToolResultCard({ e }: CardProps) {
-  const kind = String(e.props?.customKind ?? "");
-  if (kind === "hypercard.widget.v1") return <HypercardWidgetCard e={e} />;
-  if (kind === "hypercard.card.v2") return <HypercardCodeCard e={e} />;
-  return <ToolResultCard e={e} />;
-}
-
-<ChatWidget renderers={{ tool_result: RoutedToolResultCard }} />
+<ChatWidget
+  renderers={{
+    my_domain: MyDomainCard,
+  }}
+/>
 ```
 
-### 18.4 Hydration consistency check
+If using `tool_result` + `customKind` specialization, override `tool_result` with a dispatcher.
 
-Because projector persists `custom_kind` in `tool_result` snapshot, both live and rehydrated entities keep the subtype selector.
+#### Step F: Optional custom SEM handlers
 
-Reference: `pinocchio/pkg/webchat/timeline_projector.go:356`
+If you truly need non-projected live handling, register custom SEM handlers after default registration in a deterministic bootstrap phase.
 
-So subtype-specific widget routing survives reload.
-
----
-
-## 19. Debugging and Verification Strategy
-
-### 19.1 Backend checks
-
-- Confirm SEM output includes expected `type`, `id`, `seq`, `customKind`.
-- Confirm projector writes expected entity `kind` and ID form (`:custom` vs `:result`).
-- Confirm `/api/timeline` includes entity with `tool_result.customKind`.
-
-Useful references:
-
-- `pinocchio/pkg/webchat/sem_translator_test.go:81`
-- `pinocchio/pkg/webchat/timeline_projector.go:332`
-- `pinocchio/pkg/webchat/router_timeline_api.go:70`
-
-### 19.2 Frontend checks
-
-- Verify `timelineSlice.byId` has entity props with `customKind`.
-- Verify `renderers.tool_result` is injected (not shadowed).
-- Verify fallback renderer handles unknown subtypes safely.
-
-References:
-
-- `pinocchio/cmd/web-chat/web/src/store/timelineSlice.ts:18`
-- `pinocchio/cmd/web-chat/web/src/webchat/ChatWidget.tsx:218`
-
-### 19.3 Reconnect checks
-
-- Simulate full reload.
-- Observe hydration first, then buffered replay.
-- Confirm no duplicate cards and subtype preserved.
-
-Reference: `pinocchio/cmd/web-chat/web/src/ws/wsManager.ts:167`
+Long-term recommendation: expose `registerDefaultSemHandlers({ append })` style API so plugins can add handlers without race with `handlers.clear()`.
 
 ---
 
-## 20. Comparison: Generic Pinocchio Model vs Hypercard-Specific Model
+## 7. Widget Switching Model in Pinocchio
 
-Pinocchio’s webchat model is deliberately generic in three ways.
+Pinocchio has two layers of switching.
 
-### 20.1 Generic transport
+### 7.1 Primary switch: timeline `kind`
 
-SEM event types are typed but minimal; many UI distinctions are intentionally deferred to `kind`/`props` and optional subtype hints, rather than creating one event type per visual card.
+Implemented in `ChatTimeline`:
 
-### 20.2 Generic projection
+```ts
+const Renderer = renderers[e.kind] ?? renderers.default;
+```
 
-Timeline entities provide a stable, replayable state model independent of transient stream timing. UI consumes projected entities, not transient transport semantics.
+This is the stable and preferred switch boundary.
 
-### 20.3 Generic rendering contract
+### 7.2 Secondary switch: subtype inside renderer
 
-Renderer switching is a data-driven map (`kind` -> React component), with host overrides via props.
+For shared kinds like `tool_result`, subtype switching can happen inside a custom renderer using fields like `props.customKind`.
 
-In contrast, older hypercard-specific pipelines often bind semantic event names directly to bespoke components in core code. That can give quick feature delivery initially, but tends to increase coupling between backend event evolution and frontend component wiring.
+Benefits:
 
-Pinocchio’s approach lowers framework churn:
+1. Core timeline stays generic.
+2. Domain-specific variants are isolated.
+3. No edits to `ChatTimeline` for each new subtype.
 
-- new domain behavior often means new payload semantics, not new core switch cases;
-- application teams own specialized rendering policy by passing renderers.
+### 7.3 Recommended pattern
 
----
-
-## 21. Advanced Notes: Choosing the Right Extension Surface
-
-When adding a new visualization, choose extension surface by stability requirement.
-
-### 21.1 If you only need live session rendering
-
-You can rely on live SEM handler paths (`registerSem`) and ephemeral entities.
-
-Tradeoff:
-
-- fastest to prototype,
-- weakest reconnect guarantees,
-- easy to accidentally break with handler reset lifecycle.
-
-### 21.2 If you need durable/replayable rendering
-
-Prefer projection-first:
-
-- backend emits SEM -> projector writes timeline entities,
-- UI renders from hydrated timeline snapshots.
-
-Tradeoff:
-
-- requires payload to fit timeline schema,
-- but gives deterministic hydration and versioned reconciliation.
-
-### 21.3 If you need brand-new structured payload shapes
-
-You will eventually need core-level schema expansion:
-
-1. extend timeline proto oneof,
-2. regenerate pb code,
-3. extend projector mapping,
-4. extend frontend `timelineMapper`,
-5. add renderer override or default renderer.
-
-This is a conscious schema evolution path, not an anti-pattern.
+1. Use one top-level timeline kind per UI family whenever possible.
+2. Use subtype switching only when semantics truly share base kind behavior.
+3. Keep fallback renderer robust (`GenericCard` style) for unknown kinds.
 
 ---
 
-## 22. Final Mental Model for Developers
+## 8. Hydration and Replay Invariants
 
-When deciding where to implement custom widgets, use the following rule set:
+Extensibility is only safe if replay behavior is deterministic.
 
-1. Route first by entity `kind`.
-2. Sub-route by payload fields (`customKind`, `status`, etc.) only when needed.
-3. Keep backend semantic translation separate from renderer concerns.
-4. Preserve hydration by projecting durable entities whenever replay matters.
-5. Treat frontend SEM registry customization as an advanced lifecycle-managed option.
+### 8.1 Existing mechanism
 
-If you follow these constraints, you can build substantial custom widget systems on top of Pinocchio webchat while leaving core framework code untouched.
+`wsManager`:
 
+1. Clears state before hydration.
+2. Fetches `/api/timeline` snapshot.
+3. Applies snapshot entities.
+4. Replays buffered WS events sorted by `seq`.
+
+### 8.2 Required invariants for plugin features
+
+Any new plugin must preserve:
+
+1. Stable entity IDs across live and replay.
+2. Monotonic version handling (`timelineSlice` drops stale versions).
+3. Idempotent upserts.
+4. Tolerance to unknown fields during protobuf decode.
+
+### 8.3 Practical rule
+
+If a feature cannot be represented by `TimelineEntityV1`, it is not ready for production webchat state.
+
+---
+
+## 9. Testing Strategy for Extensible Pinocchio
+
+A plugin architecture fails without contract tests. Add tests at three levels.
+
+### 9.1 Backend unit tests
+
+- translator tests:
+  - given domain event -> expected SEM type/id/data
+- projector tests:
+  - given SEM frame -> expected timeline entity kind/snapshot/id
+
+Reference examples:
+
+- `pkg/webchat/sem_translator_test.go`
+- projector behavior in `pkg/webchat/timeline_projector.go`
+
+### 9.2 Backend integration tests
+
+Add app-owned integration tests similar to `cmd/web-chat/app_owned_chat_integration_test.go` that verify custom entities appear in `/api/timeline` and websocket `timeline.upsert` stream.
+
+### 9.3 Frontend tests
+
+1. `timelineMapper` snapshot-case mapping.
+2. renderer dispatch by kind.
+3. reconnect/hydration replay with buffered custom upserts.
+4. fallback behavior for unknown kinds/customKind values.
+
+---
+
+## 10. Reference Implementation Sketch (No Core Modification Path)
+
+This section shows how teams can extend with minimal core changes today, and where one small core enhancement would improve ergonomics.
+
+### 10.1 What is possible today without core edits
+
+1. Backend:
+- register new SEM translators via `RegisterByType`
+- register timeline handlers via `RegisterTimelineHandler`
+
+2. Frontend:
+- mount `ChatWidget` with `renderers` overrides
+- if needed, register extra SEM handlers in app bootstrap after defaults
+
+This already supports substantial extension.
+
+### 10.2 One recommended core enhancement
+
+Add explicit frontend plugin bootstrap API:
+
+```ts
+type WebchatFrontendPlugin = {
+  name: string;
+  registerSem?: (r: SemRegistry) => void;
+  registerRenderers?: (r: RendererRegistry) => void;
+};
+
+bootstrapWebchat({
+  base: registerDefaultSemHandlers,
+  plugins: [pluginA, pluginB],
+});
+```
+
+This removes lifecycle ambiguity and makes ordering explicit and testable.
+
+---
+
+## 11. Migration Plan to "Easy Extensible" Pinocchio
+
+### Phase 1: Documentation and contracts
+
+1. Freeze naming conventions for SEM event types and timeline kinds.
+2. Publish plugin registration order and invariants.
+3. Add examples for one custom family.
+
+### Phase 2: Frontend bootstrap API
+
+1. Introduce registry composition API.
+2. Ensure reconnect does not drop plugin registrations.
+3. Add tests for plugin ordering.
+
+### Phase 3: Canonical-first enforcement
+
+1. Prefer timeline-projected entity rendering.
+2. Keep direct `llm.*`/`tool.*` handlers as compatibility fallback.
+3. Add lint/docs rule for new features: projection required.
+
+### Phase 4: Hardening
+
+1. Contract tests across translation, projection, render.
+2. Replay equivalence tests (live stream vs hydrated snapshot).
+3. Unknown-kind observability metrics.
+
+---
+
+## 12. File-and-Symbol Map for Developers
+
+Backend translation:
+
+- `pinocchio/pkg/sem/registry/registry.go`
+  - `RegisterByType`, `Handle`, `Clear`
+- `pinocchio/pkg/webchat/sem_translator.go`
+  - `EventTranslator.Translate`, `RegisterDefaultHandlers`, `protoToRaw`
+
+Backend projection:
+
+- `pinocchio/pkg/webchat/timeline_registry.go`
+  - `RegisterTimelineHandler`, `ClearTimelineHandlers`
+- `pinocchio/pkg/webchat/timeline_projector.go`
+  - `ApplySemFrame`, `Upsert`
+- `pinocchio/pkg/webchat/timeline_handlers_builtin.go`
+  - built-in custom handler pattern (`chat.message`)
+- `pinocchio/proto/sem/timeline/transport.proto`
+  - `TimelineEntityV1`, `TimelineUpsertV1`, `TimelineSnapshotV1`
+
+Backend publication:
+
+- `pinocchio/pkg/webchat/timeline_upsert.go`
+  - `emitTimelineUpsert`
+- `pinocchio/pkg/webchat/conversation_service.go`
+  - service-level upsert emission
+
+Frontend ingestion and mapping:
+
+- `pinocchio/cmd/web-chat/web/src/ws/wsManager.ts`
+  - connect/hydrate/buffer/replay behavior
+- `pinocchio/cmd/web-chat/web/src/sem/registry.ts`
+  - `registerSem`, `registerDefaultSemHandlers`
+- `pinocchio/cmd/web-chat/web/src/sem/timelineMapper.ts`
+  - `timelineEntityFromProto`, `propsFromTimelineEntity`
+- `pinocchio/cmd/web-chat/web/src/store/timelineSlice.ts`
+  - upsert merge/version behavior
+
+Frontend rendering:
+
+- `pinocchio/cmd/web-chat/web/src/webchat/ChatWidget.tsx`
+  - default renderers + override merge
+- `pinocchio/cmd/web-chat/web/src/webchat/components/Timeline.tsx`
+  - renderer dispatch by `kind`
+- `pinocchio/cmd/web-chat/web/src/webchat/types.ts`
+  - `ChatWidgetRenderers`, `RenderEntity`
+- `pinocchio/cmd/web-chat/web/src/webchat/cards.tsx`
+  - built-in renderer implementations
+
+---
+
+## 13. Final Recommendations
+
+1. Keep backend extensibility as registry first architecture.
+2. Promote `timeline.upsert` to explicit canonical contract for UI state.
+3. Add a first-class frontend plugin bootstrap API to remove registration order ambiguity.
+4. Standardize renderer strategy as `kind` primary and subtype secondary.
+5. Enforce replay/hydration invariants in tests for every new custom timeline family.
+
+With these changes, pinocchio can be extended by adding plugin packs rather than editing core flow, which is the correct foundation for all downstream domain-specific chat experiences.

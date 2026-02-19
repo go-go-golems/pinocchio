@@ -1,10 +1,10 @@
 import { fromJson, type Message } from '@bufbuild/protobuf';
 import type { GenMessage } from '@bufbuild/protobuf/codegenv2';
 import {
-  type TimelineSnapshotV1,
-  TimelineSnapshotV1Schema,
-  type TimelineUpsertV1,
-  TimelineUpsertV1Schema,
+  type TimelineSnapshotV2,
+  TimelineSnapshotV2Schema,
+  type TimelineUpsertV2,
+  TimelineUpsertV2Schema,
 } from '../../sem/pb/proto/sem/timeline/transport_pb';
 import { timelineEntityFromProto } from '../../sem/timelineMapper';
 import { toNumber } from '../../utils/number';
@@ -44,7 +44,7 @@ function seqFromEnvelope(envelope: RawSemEnvelope): number | undefined {
   return toNumber(raw);
 }
 
-function toDebugTimelineEntity(raw: TimelineUpsertV1['entity'], version: unknown): TimelineEntity | null {
+function toDebugTimelineEntity(raw: TimelineUpsertV2['entity'], version: unknown): TimelineEntity | null {
   if (!raw) {
     return null;
   }
@@ -62,7 +62,7 @@ function toDebugTimelineEntity(raw: TimelineUpsertV1['entity'], version: unknown
   };
 }
 
-function toDebugTimelineSnapshot(snapshot: TimelineSnapshotV1): TimelineSnapshot {
+function toDebugTimelineSnapshot(snapshot: TimelineSnapshotV2): TimelineSnapshot {
   const entities: TimelineEntity[] = [];
   for (const entity of snapshot.entities ?? []) {
     const mapped = toDebugTimelineEntity(entity, snapshot.version);
@@ -272,7 +272,7 @@ export class DebugTimelineWsManager {
     if (!isRecord(payload)) {
       return { ok: false, error: 'timeline bootstrap payload invalid' };
     }
-    const proto = decodeProto<TimelineSnapshotV1>(TimelineSnapshotV1Schema, payload);
+    const proto = decodeProto<TimelineSnapshotV2>(TimelineSnapshotV2Schema, payload);
     if (!proto) {
       return { ok: false, error: 'timeline bootstrap proto decode failed' };
     }
@@ -298,7 +298,7 @@ export class DebugTimelineWsManager {
       return;
     }
 
-    const upsert = decodeProto<TimelineUpsertV1>(TimelineUpsertV1Schema, envelope.event.data);
+    const upsert = decodeProto<TimelineUpsertV2>(TimelineUpsertV2Schema, envelope.event.data);
     const version = toNumber(upsert?.version) ?? seq ?? 0;
     const entity = toDebugTimelineEntity(upsert?.entity, version);
     if (!entity) {

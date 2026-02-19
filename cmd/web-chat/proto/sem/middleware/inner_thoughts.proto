@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+package sem.middleware.inner_thoughts;
+
+option go_package = "github.com/go-go-golems/pinocchio/cmd/web-chat/thinkingmode/pb;thinkingmodepb";
+
+message InnerThoughtsPayload {
+  string text = 1;
+}
+
+message InnerThoughtsStarted {
+  string item_id = 1;
+  InnerThoughtsPayload data = 2;
+}
+
+message InnerThoughtsUpdate {
+  string item_id = 1;
+  InnerThoughtsPayload data = 2;
+}
+
+message InnerThoughtsCompleted {
+  string item_id = 1;
+  InnerThoughtsPayload data = 2;
+  bool success = 3;
+  string error = 4;
+}
+
+

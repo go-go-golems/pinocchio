@@ -73,7 +73,7 @@ type StreamService interface {
 
 // TimelineService describes timeline snapshot reads used by HTTP handlers.
 type TimelineService interface {
-	Snapshot(ctx context.Context, convID string, sinceVersion uint64, limit int) (*timelinepb.TimelineSnapshotV1, error)
+	Snapshot(ctx context.Context, convID string, sinceVersion uint64, limit int) (*timelinepb.TimelineSnapshotV2, error)
 }
 
 // IdempotencyKeyFromRequest resolves idempotency key from headers/body fallback.

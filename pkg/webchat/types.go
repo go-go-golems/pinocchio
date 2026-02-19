@@ -67,7 +67,7 @@ type Router struct {
 
 	// optional overrides for conv manager hooks
 	buildSubscriberOverride    func(convID string) (message.Subscriber, bool, error)
-	timelineUpsertHookOverride func(*Conversation) func(entity *timelinepb.TimelineEntityV1, version uint64)
+	timelineUpsertHookOverride func(*Conversation) func(entity *timelinepb.TimelineEntityV2, version uint64)
 
 	// optional event sink wrapper
 	eventSinkWrapper EventSinkWrapper

@@ -37,11 +37,10 @@ func TestStepTimelinePersistFunc_AssistantLifecycle(t *testing.T) {
 	require.Len(t, snap.Entities, 1)
 	require.Equal(t, md.ID.String(), snap.Entities[0].Id)
 
-	msg := snap.Entities[0].GetMessage()
-	require.NotNil(t, msg)
-	require.Equal(t, "assistant", msg.Role)
-	require.Equal(t, "hello", msg.Content)
-	require.False(t, msg.Streaming)
+	props := snap.Entities[0].GetProps().AsMap()
+	require.Equal(t, "assistant", props["role"])
+	require.Equal(t, "hello", props["content"])
+	require.Equal(t, false, props["streaming"])
 }
 
 func TestStepTimelinePersistFunc_ThinkingLifecycle(t *testing.T) {
@@ -59,11 +58,10 @@ func TestStepTimelinePersistFunc_ThinkingLifecycle(t *testing.T) {
 
 	entity := snap.Entities[0]
 	require.Equal(t, md.ID.String()+":thinking", entity.Id)
-	msg := entity.GetMessage()
-	require.NotNil(t, msg)
-	require.Equal(t, "thinking", msg.Role)
-	require.Equal(t, "reasoning text", msg.Content)
-	require.False(t, msg.Streaming)
+	props := entity.GetProps().AsMap()
+	require.Equal(t, "thinking", props["role"])
+	require.Equal(t, "reasoning text", props["content"])
+	require.Equal(t, false, props["streaming"])
 }
 
 func TestStepTimelinePersistFunc_DoesNotCreateEmptyAssistantOnStartOnly(t *testing.T) {
@@ -84,7 +82,7 @@ type recordingTimelineStore struct {
 	canceledCalls int
 }
 
-func (s *recordingTimelineStore) Upsert(ctx context.Context, convID string, version uint64, entity *timelinepb.TimelineEntityV1) error {
+func (s *recordingTimelineStore) Upsert(ctx context.Context, convID string, version uint64, entity *timelinepb.TimelineEntityV2) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if ctx.Err() != nil {
@@ -95,8 +93,8 @@ func (s *recordingTimelineStore) Upsert(ctx context.Context, convID string, vers
 	return nil
 }
 
-func (s *recordingTimelineStore) GetSnapshot(ctx context.Context, convID string, sinceVersion uint64, limit int) (*timelinepb.TimelineSnapshotV1, error) {
-	return &timelinepb.TimelineSnapshotV1{ConvId: convID}, nil
+func (s *recordingTimelineStore) GetSnapshot(ctx context.Context, convID string, sinceVersion uint64, limit int) (*timelinepb.TimelineSnapshotV2, error) {
+	return &timelinepb.TimelineSnapshotV2{ConvId: convID}, nil
 }
 
 func (s *recordingTimelineStore) UpsertConversation(context.Context, chatstore.ConversationRecord) error {

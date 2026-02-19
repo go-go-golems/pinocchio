@@ -7,9 +7,7 @@ import (
 	"sync"
 
 	"github.com/go-go-golems/geppetto/pkg/events"
-	pinevents "github.com/go-go-golems/pinocchio/pkg/inference/events"
 	sempb "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/base"
-	semMw "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/middleware"
 	semregistry "github.com/go-go-golems/pinocchio/pkg/sem/registry"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
@@ -519,69 +517,4 @@ func (et *EventTranslator) RegisterDefaultHandlers() {
 		}
 		return [][]byte{wrapSem(map[string]any{"type": "debugger.pause", "id": ev.PauseID, "data": data})}, nil
 	})
-
-	// Thinking mode typed events emitted by Pinocchio.
-	semregistry.RegisterByType[*pinevents.EventThinkingModeStarted](func(ev *pinevents.EventThinkingModeStarted) ([][]byte, error) {
-		var payload *semMw.ThinkingModePayload
-		if ev.Data != nil {
-			extra, err := mapToStruct(ev.Data.ExtraData)
-			if err != nil {
-				return nil, err
-			}
-			payload = &semMw.ThinkingModePayload{
-				Mode:      ev.Data.Mode,
-				Phase:     ev.Data.Phase,
-				Reasoning: ev.Data.Reasoning,
-				ExtraData: extra,
-			}
-		}
-		data, err := protoToRaw(&semMw.ThinkingModeStarted{ItemId: ev.ItemID, Data: payload})
-		if err != nil {
-			return nil, err
-		}
-		return [][]byte{wrapSem(map[string]any{"type": "thinking.mode.started", "id": ev.ItemID, "data": data})}, nil
-	})
-
-	semregistry.RegisterByType[*pinevents.EventThinkingModeUpdate](func(ev *pinevents.EventThinkingModeUpdate) ([][]byte, error) {
-		var payload *semMw.ThinkingModePayload
-		if ev.Data != nil {
-			extra, err := mapToStruct(ev.Data.ExtraData)
-			if err != nil {
-				return nil, err
-			}
-			payload = &semMw.ThinkingModePayload{
-				Mode:      ev.Data.Mode,
-				Phase:     ev.Data.Phase,
-				Reasoning: ev.Data.Reasoning,
-				ExtraData: extra,
-			}
-		}
-		data, err := protoToRaw(&semMw.ThinkingModeUpdate{ItemId: ev.ItemID, Data: payload})
-		if err != nil {
-			return nil, err
-		}
-		return [][]byte{wrapSem(map[string]any{"type": "thinking.mode.update", "id": ev.ItemID, "data": data})}, nil
-	})
-
-	semregistry.RegisterByType[*pinevents.EventThinkingModeCompleted](func(ev *pinevents.EventThinkingModeCompleted) ([][]byte, error) {
-		var payload *semMw.ThinkingModePayload
-		if ev.Data != nil {
-			extra, err := mapToStruct(ev.Data.ExtraData)
-			if err != nil {
-				return nil, err
-			}
-			payload = &semMw.ThinkingModePayload{
-				Mode:      ev.Data.Mode,
-				Phase:     ev.Data.Phase,
-				Reasoning: ev.Data.Reasoning,
-				ExtraData: extra,
-			}
-		}
-		data, err := protoToRaw(&semMw.ThinkingModeCompleted{ItemId: ev.ItemID, Data: payload, Success: ev.Success, Error: ev.Error})
-		if err != nil {
-			return nil, err
-		}
-		return [][]byte{wrapSem(map[string]any{"type": "thinking.mode.completed", "id": ev.ItemID, "data": data})}, nil
-	})
-
 }

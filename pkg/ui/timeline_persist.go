@@ -13,6 +13,7 @@ import (
 	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
 	timelinepb "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/timeline"
 	"github.com/rs/zerolog/log"
+	"google.golang.org/protobuf/types/known/structpb"
 )
 
 // StepTimelinePersistFunc stores timeline snapshots from the UI event topic into the configured TimelineStore.
@@ -31,17 +32,19 @@ func StepTimelinePersistFunc(store chatstore.TimelineStore, convID string) func(
 			return nil
 		}
 		seq := version.Add(1)
-		entity := &timelinepb.TimelineEntityV1{
-			Id:   entityID,
-			Kind: "message",
-			Snapshot: &timelinepb.TimelineEntityV1_Message{
-				Message: &timelinepb.MessageSnapshotV1{
-					SchemaVersion: 1,
-					Role:          role,
-					Content:       content,
-					Streaming:     streaming,
-				},
-			},
+		props, err := structpb.NewStruct(map[string]any{
+			"schemaVersion": 1,
+			"role":          role,
+			"content":       content,
+			"streaming":     streaming,
+		})
+		if err != nil {
+			return err
+		}
+		entity := &timelinepb.TimelineEntityV2{
+			Id:    entityID,
+			Kind:  "message",
+			Props: props,
 		}
 		return store.Upsert(ctx, convID, seq, entity)
 	}

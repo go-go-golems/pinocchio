@@ -16,6 +16,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	timelinepb "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/timeline"
+	"google.golang.org/protobuf/types/known/structpb"
 )
 
 type fakeResolver struct {
@@ -64,11 +65,11 @@ func (s *fakeStreamHTTPService) AttachWebSocket(_ context.Context, _ string, _ *
 }
 
 type fakeTimelineHTTPService struct {
-	snap *timelinepb.TimelineSnapshotV1
+	snap *timelinepb.TimelineSnapshotV2
 	err  error
 }
 
-func (s *fakeTimelineHTTPService) Snapshot(_ context.Context, _ string, _ uint64, _ int) (*timelinepb.TimelineSnapshotV1, error) {
+func (s *fakeTimelineHTTPService) Snapshot(_ context.Context, _ string, _ uint64, _ int) (*timelinepb.TimelineSnapshotV2, error) {
 	if s.err != nil {
 		return nil, s.err
 	}
@@ -144,16 +145,14 @@ func TestNewTimelineHTTPHandler_Contract(t *testing.T) {
 
 	t.Run("successful snapshot", func(t *testing.T) {
 		h := webhttp.NewTimelineHandler(&fakeTimelineHTTPService{
-			snap: &timelinepb.TimelineSnapshotV1{
+			snap: &timelinepb.TimelineSnapshotV2{
 				ConvId:  "c1",
 				Version: 1,
-				Entities: []*timelinepb.TimelineEntityV1{
+				Entities: []*timelinepb.TimelineEntityV2{
 					{
-						Id:   "m1",
-						Kind: "message",
-						Snapshot: &timelinepb.TimelineEntityV1_Message{
-							Message: &timelinepb.MessageSnapshotV1{Role: "assistant", Content: "ok"},
-						},
+						Id:    "m1",
+						Kind:  "message",
+						Props: mustStruct(t, map[string]any{"role": "assistant", "content": "ok"}),
 					},
 				},
 			},
@@ -166,4 +165,11 @@ func TestNewTimelineHTTPHandler_Contract(t *testing.T) {
 		require.Contains(t, rec.Body.String(), "\"convId\":\"c1\"")
 		require.Contains(t, rec.Body.String(), "\"id\":\"m1\"")
 	})
+}
+
+func mustStruct(t *testing.T, m map[string]any) *structpb.Struct {
+	t.Helper()
+	st, err := structpb.NewStruct(m)
+	require.NoError(t, err)
+	return st
 }

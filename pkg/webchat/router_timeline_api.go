@@ -35,7 +35,7 @@ func (r *Router) timelineSnapshotHandler(logger zerolog.Logger) func(http.Respon
 }
 
 type timelineSnapshotReader interface {
-	Snapshot(ctx context.Context, convID string, sinceVersion uint64, limit int) (*timelinepb.TimelineSnapshotV1, error)
+	Snapshot(ctx context.Context, convID string, sinceVersion uint64, limit int) (*timelinepb.TimelineSnapshotV2, error)
 }
 
 func timelineSnapshotHTTPHandler(svc timelineSnapshotReader, logger zerolog.Logger) http.HandlerFunc {

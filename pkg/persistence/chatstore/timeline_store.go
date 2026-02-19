@@ -25,8 +25,8 @@ type ConversationRecord struct {
 // It stores the canonical timeline entity set for a conversation and supports
 // snapshot retrieval by a per-conversation monotonic version.
 type TimelineStore interface {
-	Upsert(ctx context.Context, convID string, version uint64, entity *timelinepb.TimelineEntityV1) error
-	GetSnapshot(ctx context.Context, convID string, sinceVersion uint64, limit int) (*timelinepb.TimelineSnapshotV1, error)
+	Upsert(ctx context.Context, convID string, version uint64, entity *timelinepb.TimelineEntityV2) error
+	GetSnapshot(ctx context.Context, convID string, sinceVersion uint64, limit int) (*timelinepb.TimelineSnapshotV2, error)
 	UpsertConversation(ctx context.Context, record ConversationRecord) error
 	GetConversation(ctx context.Context, convID string) (ConversationRecord, bool, error)
 	ListConversations(ctx context.Context, limit int, sinceMs int64) ([]ConversationRecord, error)

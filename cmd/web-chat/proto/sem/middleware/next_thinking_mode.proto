@@ -1,0 +1,30 @@
+syntax = "proto3";
+
+package sem.middleware.next_thinking_mode;
+
+option go_package = "github.com/go-go-golems/pinocchio/cmd/web-chat/thinkingmode/pb;thinkingmodepb";
+
+message NextThinkingModePayload {
+  string mode = 1;
+  string reasoning = 2;
+  string confidence = 3;
+}
+
+message NextThinkingModeStarted {
+  string item_id = 1;
+  NextThinkingModePayload data = 2;
+}
+
+message NextThinkingModeUpdate {
+  string item_id = 1;
+  NextThinkingModePayload data = 2;
+}
+
+message NextThinkingModeCompleted {
+  string item_id = 1;
+  NextThinkingModePayload data = 2;
+  bool success = 3;
+  string error = 4;
+}
+
+

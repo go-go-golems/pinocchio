@@ -1,0 +1,31 @@
+syntax = "proto3";
+
+package sem.middleware.mode_evaluation;
+
+option go_package = "github.com/go-go-golems/pinocchio/cmd/web-chat/thinkingmode/pb;thinkingmodepb";
+
+message ModeEvaluationPayload {
+  string current_mode = 1;
+  string analysis = 2;
+  string decision = 3; // e.g., "continue" or "switch"
+  string recommended_mode = 4;
+}
+
+message ModeEvaluationStarted {
+  string item_id = 1;
+  ModeEvaluationPayload data = 2;
+}
+
+message ModeEvaluationUpdate {
+  string item_id = 1;
+  ModeEvaluationPayload data = 2;
+}
+
+message ModeEvaluationCompleted {
+  string item_id = 1;
+  ModeEvaluationPayload data = 2;
+  bool success = 3;
+  string error = 4;
+}
+
+

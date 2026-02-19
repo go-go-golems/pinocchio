@@ -4,49 +4,38 @@ package sem.timeline;
 
 option go_package = "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/timeline;timeline";
 
-import "proto/sem/timeline/message.proto";
-import "proto/sem/timeline/middleware.proto";
-import "proto/sem/timeline/status.proto";
-import "proto/sem/timeline/team_analysis.proto";
-import "proto/sem/timeline/tool.proto";
+import "google/protobuf/any.proto";
+import "google/protobuf/struct.proto";
 
-// TimelineEntityV1 represents one upsertable timeline entity.
-// It is the canonical "projection state" unit owned by the backend.
-message TimelineEntityV1 {
+// TimelineEntityV2 is an open payload transport model keyed by `kind`.
+// It avoids oneof growth for each new domain kind.
+message TimelineEntityV2 {
   string id = 1;       // stable entity ID for upsert
-  string kind = 2;     // message|tool_call|tool_result|status|thinking_mode|...
+  string kind = 2;     // renderer dispatch key (e.g. message, tool_call, hypercard_widget)
   int64 created_at_ms = 3;
   int64 updated_at_ms = 4;
 
-  // Exactly one payload should be set.
-  oneof snapshot {
-    sem.timeline.MessageSnapshotV1 message = 10;
-    sem.timeline.ToolCallSnapshotV1 tool_call = 11;
-    sem.timeline.ToolResultSnapshotV1 tool_result = 12;
-    sem.timeline.StatusSnapshotV1 status = 13;
-    sem.timeline.ThinkingModeSnapshotV1 thinking_mode = 14;
-    sem.timeline.ModeEvaluationSnapshotV1 mode_evaluation = 15;
-    sem.timeline.InnerThoughtsSnapshotV1 inner_thoughts = 16;
-    sem.timeline.TeamAnalysisSnapshotV1 team_analysis = 17;
-    sem.timeline.DiscoDialogueLineSnapshotV1 disco_dialogue_line = 19;
-    sem.timeline.DiscoDialogueCheckSnapshotV1 disco_dialogue_check = 20;
-    sem.timeline.DiscoDialogueStateSnapshotV1 disco_dialogue_state = 21;
-  }
+  // Canonical open payload used by frontend render mapping.
+  google.protobuf.Struct props = 10;
+
+  // Optional typed payload for advanced consumers.
+  google.protobuf.Any typed = 11;
+
+  // Optional transport metadata.
+  map<string, string> meta = 12;
 }
 
-// TimelineUpsertV1 is emitted when an entity is inserted/updated in the projection.
-message TimelineUpsertV1 {
+// TimelineUpsertV2 is emitted when a V2 entity is inserted/updated.
+message TimelineUpsertV2 {
   string conv_id = 1;
   uint64 version = 2; // monotonically increasing per conv_id
-  TimelineEntityV1 entity = 3;
+  TimelineEntityV2 entity = 3;
 }
 
-// TimelineSnapshotV1 is returned by GET /timeline.
-message TimelineSnapshotV1 {
+// TimelineSnapshotV2 is returned by GET /timeline for V2 payloads.
+message TimelineSnapshotV2 {
   string conv_id = 1;
   uint64 version = 2;     // current projection version for conv_id
   int64 server_time_ms = 3;
-
-  // Full snapshot or incremental updates (depending on since_version).
-  repeated TimelineEntityV1 entities = 10;
+  repeated TimelineEntityV2 entities = 10;
 }

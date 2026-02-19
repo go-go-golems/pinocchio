@@ -23,12 +23,12 @@ The full pipeline for a new event type:
 
 ```
 1. Define geppetto event type       (geppetto/pkg/events/)
-2. Define protobuf SEM message      (pinocchio/proto/sem/)
+2. Define protobuf contract         (shared: pinocchio/proto/sem/, app-owned: pinocchio/cmd/web-chat/proto/sem/)
 3. Register backend SEM handler     (pinocchio/pkg/webchat/sem_translator.go)
-4. Add timeline projector case      (pinocchio/pkg/webchat/timeline_projector.go)
-5. Create frontend SEM handler      (pinocchio/cmd/web-chat/web/src/sem/)
-6. Create React widget              (widget component + registerWidgetRenderer)
-7. Wire imports                     (ensure handler and widget are imported)
+4. Add timeline projection handler  (core or app-owned timeline handler registry)
+5. Create frontend SEM handler      (pinocchio/cmd/web-chat/web/src/sem/ or app feature module)
+6. Create React widget              (feature component + registerTimelineRenderer)
+7. Wire module bootstrap            (ensure handlers/renderers are explicitly registered)
 ```
 
 Each step is independent enough that you can skip steps that don't apply. For example, if you're adding a transient UI event that doesn't need persistence, skip step 4 (projector). If you're reusing an existing widget kind, skip step 6.
@@ -91,10 +91,10 @@ events.PublishEventToContext(ctx, events.NewMyFeatureProgressEvent(meta, "analyz
 
 ## Step 2: Define the Protobuf Message
 
-Protobuf messages define the contract between backend and frontend. There are two locations:
+Protobuf messages define the contract between backend and frontend. There are two ownership locations:
 
-- **SEM base messages** (`pinocchio/proto/sem/base/`) — for the SEM frame payload (what goes over WebSocket)
-- **Timeline snapshot messages** (`pinocchio/proto/sem/timeline/`) — for persistent timeline entities (what gets stored in the DB)
+- **Shared/core messages** (`pinocchio/proto/sem/...`) — used by reusable webchat core flows
+- **App-owned messages** (`pinocchio/cmd/web-chat/proto/sem/...`) — used by app feature modules such as thinking-mode
 
 You may need one or both depending on whether the event is transient or persistent.
 
@@ -128,14 +128,7 @@ message MyFeatureSnapshotV1 {
 }
 ```
 
-If adding a persistent entity, also add the snapshot to the `TimelineEntityV1` oneof in `pinocchio/proto/sem/timeline/transport/transport.proto`:
-
-```proto
-oneof snapshot {
-    // ... existing entries ...
-    myfeature.MyFeatureSnapshotV1 my_feature = N;  // next available number
-}
-```
+If adding a persistent entity, you do **not** need to edit transport oneofs. `TimelineEntityV2` is an open model (`kind + props`) so custom kinds are carried without transport schema edits.
 
 After editing protos, regenerate the Go and TypeScript code:
 
@@ -184,13 +177,13 @@ semregistry.RegisterByType[*events.EventMyFeatureProgress](func(ev *events.Event
 
 ## Step 4: Add the Timeline Projector Case
 
-If the event should be persisted as a timeline entity, add a case in `TimelineProjector.ApplySemFrame()` in `pinocchio/pkg/webchat/timeline_projector.go`.
+If the event should be persisted as a timeline entity, register a timeline handler that upserts `TimelineEntityV2` with your `kind` and `props`.
 
 ```go
-// Inside ApplySemFrame(), in the switch on env.Event.Type
-case "my-feature.progress":
+// Registered via webchat.RegisterTimelineHandler("my-feature.progress", handler)
+func myFeatureTimelineHandler(ctx context.Context, p *webchat.TimelineProjector, ev webchat.TimelineSemEvent, _ int64) error {
     var pb sempb.MyFeatureProgress
-    if err := protojson.Unmarshal(env.Event.Data, &pb); err != nil {
+    if err := protojson.Unmarshal(ev.Data, &pb); err != nil {
         return nil
     }
 
@@ -199,27 +192,30 @@ case "my-feature.progress":
         status = "completed"
     }
 
-    err := p.upsert(ctx, seq, &timelinepb.TimelineEntityV1{
-        Id:   env.Event.ID,
-        Kind: "my_feature",
-        Snapshot: &timelinepb.TimelineEntityV1_MyFeature{
-            MyFeature: &timelinepb.MyFeatureSnapshotV1{
-                SchemaVersion: 1,
-                Phase:         pb.Phase,
-                Progress:      pb.Progress,
-                Detail:        pb.Detail,
-                Status:        status,
-            },
-        },
+    props, err := structpb.NewStruct(map[string]any{
+        "schemaVersion": 1,
+        "phase":         pb.Phase,
+        "progress":      pb.Progress,
+        "detail":        pb.Detail,
+        "status":        status,
     })
-    return err
+    if err != nil {
+        return err
+    }
+
+    return p.Upsert(ctx, ev.Seq, &timelinepb.TimelineEntityV2{
+        Id:    ev.ID,
+        Kind:  "my_feature",
+        Props: props,
+    })
+}
 ```
 
 **Key behaviors to be aware of:**
 
 - The projector throttles `llm.delta` writes to 250ms minimum. If your event is high-frequency, consider similar throttling.
 - Entity IDs must be stable across updates — use the same ID for the same logical entity.
-- The `version` (passed via `seq`) is the SEM frame's monotonic sequence number.
+- The persisted `version` comes from `ev.Seq` (SEM frame monotonic sequence number).
 - For aggregation patterns (like planning events), see the `applyPlanning()` method as an example.
 
 **Skip this step** if the event is transient (only needs to appear in the live stream, not on page reload).
@@ -360,65 +356,42 @@ export function MyFeatureCard({ entity }: MyFeatureProps) {
 }
 ```
 
-**For the moments platform layer** (if using `registerWidgetRenderer`):
+Register the renderer from a feature module:
 
 ```typescript
-// widgets/MyFeatureWidget.tsx
-import { registerWidgetRenderer } from '../registry';
-import type { TimelineWidgetProps } from '../types';
+// features/myFeature/registerMyFeature.tsx
+import { registerTimelineRenderer } from '../../webchat/rendererRegistry';
+import { registerTimelinePropsNormalizer } from '../../sem/timelinePropsRegistry';
+import type { RenderEntity } from '../../webchat/types';
 
-// Define entity type
-interface MyFeatureEntity {
-  id: string;
-  kind: 'my_feature';
-  timestamp: number;
-  props: {
-    phase: string;
-    progress: number;
-    detail?: string;
-    status?: string;
-  };
-}
-
-function MyFeatureWidget({ entity }: TimelineWidgetProps<MyFeatureEntity>) {
-  const { phase, progress, detail, status } = entity.props;
+function MyFeatureCard({ e }: { e: RenderEntity }) {
+  const { phase, progress, detail, status } = e.props;
   // ... render logic
 }
 
-// Register at module level
-registerWidgetRenderer(
-  'my_feature',
-  ({ entity }) => <MyFeatureWidget key={entity.id} entity={entity as any} />,
-  { visibility: { normal: true, debug: true } }
-);
+export function registerMyFeatureModule() {
+  registerTimelinePropsNormalizer('my_feature', (props) => ({
+    ...props,
+    phase: typeof props.phase === 'string' ? props.phase : '',
+  }));
+  registerTimelineRenderer('my_feature', MyFeatureCard);
+}
 ```
-
-**Visibility options:**
-- `{ normal: true, debug: true }` — always visible (messages, tool calls)
-- `{ normal: false, debug: true }` — debug-only (logs, internal state)
-- `{ normal: true, debug: false }` — production-only (rare)
 
 ---
 
 ## Step 7: Wire the Imports
 
-Ensure your handler and widget are actually loaded by the application.
+Ensure your feature module is registered during app bootstrap.
 
-**Frontend SEM handler** — import in the SEM index or entry point:
-
-```typescript
-// sem/index.ts or wherever handlers are collected
-import './handlers/myFeature';
-```
-
-**Widget** (moments platform) — import in `registerAll.ts`:
+In `wsManager.ts`, call your feature registration after core SEM registration:
 
 ```typescript
-// registerAll.ts
-import './widgets/MyFeatureWidget';
+registerDefaultSemHandlers();
+registerMyFeatureModule();
 ```
 
-Without these imports, the modules never execute and the handlers/widgets never register.
+For Storybook/manual demos, call the same `registerMyFeatureModule()` in story setup.
 
 ---
 

@@ -1,2 +1,3 @@
 src/sem/pb/**
+src/features/thinkingMode/pb/**
 storybook-static/**

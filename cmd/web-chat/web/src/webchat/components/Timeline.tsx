@@ -18,12 +18,7 @@ type TimelineProps = {
 function roleFromEntity(e: RenderEntity): string | undefined {
   if (e.kind === 'message') return String(e.props?.role ?? 'assistant');
   if (e.kind === 'tool_call' || e.kind === 'tool_result') return 'tool';
-  if (
-    e.kind === 'thinking_mode' ||
-    e.kind === 'disco_dialogue_line' ||
-    e.kind === 'disco_dialogue_check' ||
-    e.kind === 'disco_dialogue_state'
-  ) {
+  if (e.kind !== 'log') {
     return 'system';
   }
   return undefined;

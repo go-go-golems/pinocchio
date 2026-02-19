@@ -92,7 +92,7 @@ describe('DebugTimelineWsManager', () => {
               kind: 'message',
               createdAtMs: '100',
               updatedAtMs: '100',
-              message: {
+              props: {
                 schemaVersion: 1,
                 role: 'assistant',
                 content: 'before',
@@ -129,7 +129,7 @@ describe('DebugTimelineWsManager', () => {
             kind: 'message',
             createdAtMs: '100',
             updatedAtMs: '120',
-            message: {
+            props: {
               schemaVersion: 1,
               role: 'assistant',
               content: 'after',

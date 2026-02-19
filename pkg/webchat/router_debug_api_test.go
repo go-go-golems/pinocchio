@@ -14,20 +14,21 @@ import (
 	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
 	timelinepb "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/timeline"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/types/known/structpb"
 )
 
 type stubTimelineStore struct {
-	snapshot      *timelinepb.TimelineSnapshotV1
+	snapshot      *timelinepb.TimelineSnapshotV2
 	conversations map[string]chatstore.ConversationRecord
 }
 
-func (s *stubTimelineStore) Upsert(context.Context, string, uint64, *timelinepb.TimelineEntityV1) error {
+func (s *stubTimelineStore) Upsert(context.Context, string, uint64, *timelinepb.TimelineEntityV2) error {
 	return nil
 }
 
-func (s *stubTimelineStore) GetSnapshot(context.Context, string, uint64, int) (*timelinepb.TimelineSnapshotV1, error) {
+func (s *stubTimelineStore) GetSnapshot(context.Context, string, uint64, int) (*timelinepb.TimelineSnapshotV2, error) {
 	if s.snapshot == nil {
-		return &timelinepb.TimelineSnapshotV1{}, nil
+		return &timelinepb.TimelineSnapshotV2{}, nil
 	}
 	return s.snapshot, nil
 }
@@ -474,26 +475,32 @@ func runRequest(t *testing.T, h http.Handler, method string, path string, payloa
 	return rec.Code, rec.Body.Bytes()
 }
 
-func sampleTimelineSnapshot() *timelinepb.TimelineSnapshotV1 {
-	return &timelinepb.TimelineSnapshotV1{
+func sampleTimelineSnapshot() *timelinepb.TimelineSnapshotV2 {
+	return &timelinepb.TimelineSnapshotV2{
 		ConvId:       "conv-1",
 		Version:      3,
 		ServerTimeMs: 1000,
-		Entities: []*timelinepb.TimelineEntityV1{
+		Entities: []*timelinepb.TimelineEntityV2{
 			{
 				Id:          "msg-1",
 				Kind:        "message",
 				CreatedAtMs: 900,
 				UpdatedAtMs: 1000,
-				Snapshot: &timelinepb.TimelineEntityV1_Message{
-					Message: &timelinepb.MessageSnapshotV1{
-						SchemaVersion: 1,
-						Role:          "assistant",
-						Content:       "hello",
-						Streaming:     false,
-					},
-				},
+				Props: mustStructDebug(map[string]any{
+					"schemaVersion": float64(1),
+					"role":          "assistant",
+					"content":       "hello",
+					"streaming":     false,
+				}),
 			},
 		},
 	}
+}
+
+func mustStructDebug(m map[string]any) *structpb.Struct {
+	st, err := structpb.NewStruct(m)
+	if err != nil {
+		return &structpb.Struct{Fields: map[string]*structpb.Value{}}
+	}
+	return st
 }

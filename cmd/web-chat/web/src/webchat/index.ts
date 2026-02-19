@@ -1,9 +1,21 @@
+export {
+  clearRegisteredTimelinePropsNormalizers,
+  normalizeTimelineProps,
+  registerTimelinePropsNormalizer,
+  unregisterTimelinePropsNormalizer,
+} from '../sem/timelinePropsRegistry';
 export { ChatWidget } from './ChatWidget';
 export * from './cards';
 export { DefaultComposer } from './components/Composer';
 export { DefaultHeader } from './components/Header';
 export { DefaultStatusbar } from './components/Statusbar';
 export { ChatTimeline } from './components/Timeline';
+export {
+  clearRegisteredTimelineRenderers,
+  registerTimelineRenderer,
+  resolveTimelineRenderers,
+  unregisterTimelineRenderer,
+} from './rendererRegistry';
 export type {
   ChatPart,
   ChatWidgetComponents,

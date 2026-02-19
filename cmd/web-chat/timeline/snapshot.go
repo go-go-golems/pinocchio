@@ -113,7 +113,7 @@ func (c *TimelineSnapshotCommand) RunIntoGlazeProcessor(
 		return errors.New("conv-id is required")
 	}
 
-	var snap *timelinepb.TimelineSnapshotV1
+	var snap *timelinepb.TimelineSnapshotV2
 	var raw []byte
 	var err error
 	if settings.BaseURL != "" {
@@ -149,7 +149,7 @@ func (c *TimelineSnapshotCommand) RunIntoGlazeProcessor(
 	return gp.AddRow(ctx, row)
 }
 
-func fetchSnapshotDB(ctx context.Context, settings *TimelineSnapshotSettings, convID string, sinceVersion uint64, limit int) (*timelinepb.TimelineSnapshotV1, []byte, error) {
+func fetchSnapshotDB(ctx context.Context, settings *TimelineSnapshotSettings, convID string, sinceVersion uint64, limit int) (*timelinepb.TimelineSnapshotV2, []byte, error) {
 	store, err := openTimelineStore(&StoreSettings{TimelineDSN: settings.TimelineDSN, TimelineDB: settings.TimelineDB})
 	if err != nil {
 		return nil, nil, err
@@ -167,7 +167,7 @@ func fetchSnapshotDB(ctx context.Context, settings *TimelineSnapshotSettings, co
 	return snap, raw, nil
 }
 
-func fetchSnapshotHTTP(ctx context.Context, baseURL, convID string, sinceVersion uint64, limit int) (*timelinepb.TimelineSnapshotV1, []byte, error) {
+func fetchSnapshotHTTP(ctx context.Context, baseURL, convID string, sinceVersion uint64, limit int) (*timelinepb.TimelineSnapshotV2, []byte, error) {
 	endpoint, err := timelineEndpoint(baseURL)
 	if err != nil {
 		return nil, nil, err
@@ -211,7 +211,7 @@ func fetchSnapshotHTTP(ctx context.Context, baseURL, convID string, sinceVersion
 	if err != nil {
 		return nil, nil, err
 	}
-	var snap timelinepb.TimelineSnapshotV1
+	var snap timelinepb.TimelineSnapshotV2
 	if err := (protojson.UnmarshalOptions{DiscardUnknown: true}).Unmarshal(body, &snap); err != nil {
 		return nil, nil, err
 	}
@@ -231,7 +231,7 @@ func timelineEndpoint(baseURL string) (string, error) {
 	return u.String(), nil
 }
 
-func marshalSnapshot(snap *timelinepb.TimelineSnapshotV1) ([]byte, error) {
+func marshalSnapshot(snap *timelinepb.TimelineSnapshotV2) ([]byte, error) {
 	return protojson.MarshalOptions{
 		EmitUnpopulated: false,
 		UseProtoNames:   false,

@@ -7,7 +7,7 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 )
 
-func init() {
+func registerBuiltinTimelineHandlers() {
 	RegisterTimelineHandler("chat.message", builtinChatMessageTimelineHandler)
 }
 
@@ -19,11 +19,5 @@ func builtinChatMessageTimelineHandler(ctx context.Context, p *TimelineProjector
 	if msg.SchemaVersion == 0 {
 		msg.SchemaVersion = 1
 	}
-	return p.Upsert(ctx, ev.Seq, &timelinepb.TimelineEntityV1{
-		Id:   ev.ID,
-		Kind: "message",
-		Snapshot: &timelinepb.TimelineEntityV1_Message{
-			Message: &msg,
-		},
-	})
+	return p.Upsert(ctx, ev.Seq, timelineEntityV2FromProtoMessage(ev.ID, "message", &msg))
 }
