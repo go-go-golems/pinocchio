@@ -176,8 +176,9 @@ To add a custom UI feature:
 
 Recommended references:
 
-- `web-agent-example/pkg/thinkingmode/*`
-- `web-agent-example/pkg/discodialogue/*`
+- `pinocchio/cmd/web-chat/thinkingmode/*`
+- `pinocchio/cmd/web-chat/proto/sem/middleware/*`
+- `pinocchio/cmd/web-chat/web/src/features/thinkingMode/*`
 
 ## 12. Root Prefix Mounting
 

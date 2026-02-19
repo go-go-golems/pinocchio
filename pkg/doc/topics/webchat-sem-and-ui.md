@@ -36,7 +36,12 @@ SEM events arrive as JSON frames:
 
 `event.seq` is always present and monotonic. When Redis stream metadata is present (`xid`/`redis_xid`), it is derived from that stream ID; otherwise the backend falls back to a time-based sequence. `event.stream_id` is optional.
 
-Pinocchio uses protobuf-backed payloads under the hood (see `sem/pb/` directory), but frames are transmitted as JSON for WebSocket compatibility.
+Pinocchio uses protobuf-authored contracts under the hood, but frames are transmitted as JSON for WebSocket compatibility.
+
+- Shared/core SEM contracts are generated under `pinocchio/pkg/sem/pb/`.
+- App-owned web-chat middleware contracts are generated under:
+  - `pinocchio/cmd/web-chat/thinkingmode/pb/` (Go)
+  - `pinocchio/cmd/web-chat/web/src/features/thinkingMode/pb/` (TS)
 
 ## Event Types
 
@@ -372,7 +377,7 @@ Entities come from two sources:
 1. **Design the entity shape** — decide what `props` your React component needs
 2. **Create the SEM handler** — register via `registerSem()` to emit `addEntity` or `upsertEntity`
 3. **Create the React widget** — component that renders the entity's props
-4. **Register the widget renderer** — use `registerWidgetRenderer(kind, renderer, options)` for the moments platform, or add a case in the card renderer for pinocchio's built-in webchat
+4. **Register the widget renderer** — use `registerTimelineRenderer(kind, component)` in a feature module
 5. **Wire the import** — ensure the handler and widget modules are imported at startup
 6. **Verify** — watch WS frames, check Redux state, confirm rendering
 
@@ -392,23 +397,14 @@ For a complete end-to-end tutorial with code examples for each layer, see [Addin
 - **Use protobuf decoding** for complex payloads (`fromJson` from `@bufbuild/protobuf`)
 - **Log unhandled events** for debugging (the registry silently drops unknown types by default)
 
-### Widget Visibility
-
-When using `registerWidgetRenderer` (moments platform layer), you control when widgets appear:
-
-| Visibility | Setting | Use For |
-|-----------|---------|---------|
-| Always visible | `{ normal: true, debug: true }` | Messages, tool calls, planning |
-| Debug only | `{ normal: false, debug: true }` | Logs, internal state, traces |
-| Production only | `{ normal: true, debug: false }` | Rare — polished-only views |
-
 ### Path Conventions
 
 Widget files follow these conventions:
 
-- Widgets live in the `timeline/` directory (e.g., `web/src/pages/Chat/timeline/MyWidget.tsx`)
-- File names match the component name in PascalCase
-- Each widget file should be self-contained with its own type definitions
+- Feature modules live under `pinocchio/cmd/web-chat/web/src/features/<feature>/`
+- Frontend registration for custom kinds should be colocated with the feature module (SEM handler + props normalizer + renderer)
+- Generated TS protobuf files for app-owned middleware live under `pinocchio/cmd/web-chat/web/src/features/<feature>/pb/`
+- File names should match the component name in PascalCase; keep each feature widget self-contained
 
 ## Debugging SEM Events
 
@@ -457,8 +453,12 @@ Event not appearing in UI?
 | File | Purpose |
 |------|---------|
 | `pinocchio/pkg/webchat/sem_translator.go` | Backend event translation |
+| `pinocchio/cmd/web-chat/thinkingmode/backend.go` | App-owned thinking-mode backend module (SEM + projection) |
 | `pinocchio/cmd/web-chat/web/src/sem/registry.ts` | Frontend SEM registry |
-| `pinocchio/cmd/web-chat/web/src/sem/pb/` | Protobuf definitions |
+| `pinocchio/cmd/web-chat/proto/` | App-owned middleware/timeline proto definitions |
+| `pinocchio/cmd/web-chat/web/src/features/thinkingMode/registerThinkingMode.tsx` | App-owned thinking-mode frontend registration |
+| `pinocchio/cmd/web-chat/web/src/features/thinkingMode/pb/` | App-owned TS protobuf bindings |
+| `pinocchio/cmd/web-chat/web/src/sem/pb/` | Shared/core TS protobuf bindings |
 | `pinocchio/cmd/web-chat/web/src/store/timelineSlice.ts` | Timeline state |
 | `pinocchio/cmd/web-chat/web/src/webchat/cards.tsx` | Default entity renderers |
 | `pinocchio/cmd/web-chat/web/src/webchat/ChatWidget.tsx` | Renderer wiring |

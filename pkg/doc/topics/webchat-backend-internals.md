@@ -202,7 +202,7 @@ TimelineProjector.ApplySemFrame()
     ├── Parse envelope (type, id, seq, stream_id, data)
     ├── Switch on event type
     ├── Unmarshal protobuf data payload
-    ├── Construct TimelineEntityV1 snapshot
+    ├── Construct TimelineEntityV2 (kind + props)
     └── Upsert to TimelineStore with seq as version
 ```
 
@@ -210,20 +210,20 @@ The projector is per-conversation: each `Conversation` creates its own projector
 
 ### SEM Frame to Entity Mapping
 
-| SEM Event Type | Entity Kind | Snapshot Proto | Notes |
-|---------------|-------------|---------------|-------|
-| `llm.start` | `message` | `MessageSnapshotV1` | Sets role, marks streaming=true |
-| `llm.delta` | `message` | `MessageSnapshotV1` | Cumulative content, throttled writes |
-| `llm.final` | `message` | `MessageSnapshotV1` | Final text, streaming=false |
-| `llm.thinking.start` | `message` | `MessageSnapshotV1` | role=thinking |
-| `llm.thinking.delta` | `message` | `MessageSnapshotV1` | Thinking content, throttled |
-| `llm.thinking.final` | `message` | `MessageSnapshotV1` | Thinking complete |
-| `tool.start` | `tool_call` | `ToolCallSnapshotV1` | name, input, status=running |
-| `tool.done` | `tool_call` | `ToolCallSnapshotV1` | status=completed, progress=1 |
-| `tool.result` | `tool_result` | `ToolResultSnapshotV1` | Result (structured or raw) |
-| `thinking.mode.*` | `thinking_mode` | `ThinkingModeSnapshotV1` | Status: active/completed/error |
-| `planning.*` | `planning` | `PlanningSnapshotV1` | Aggregated from multiple events |
-| `execution.*` | (updates planning) | `PlanningSnapshotV1` | Updates nested execution snapshot |
+| SEM Event Type | Entity Kind | Props Contract Source | Notes |
+|---------------|-------------|------------------------|-------|
+| `llm.start` | `message` | `pinocchio/proto/sem/timeline/message.proto` | Sets role, marks streaming=true |
+| `llm.delta` | `message` | `pinocchio/proto/sem/timeline/message.proto` | Cumulative content, throttled writes |
+| `llm.final` | `message` | `pinocchio/proto/sem/timeline/message.proto` | Final text, streaming=false |
+| `llm.thinking.start` | `message` | `pinocchio/proto/sem/timeline/message.proto` | role=thinking |
+| `llm.thinking.delta` | `message` | `pinocchio/proto/sem/timeline/message.proto` | Thinking content, throttled |
+| `llm.thinking.final` | `message` | `pinocchio/proto/sem/timeline/message.proto` | Thinking complete |
+| `tool.start` | `tool_call` | `pinocchio/proto/sem/timeline/tool.proto` | name, input, status=running |
+| `tool.done` | `tool_call` | `pinocchio/proto/sem/timeline/tool.proto` | status=completed, progress=1 |
+| `tool.result` | `tool_result` | `pinocchio/proto/sem/timeline/tool.proto` | Result (structured or raw) |
+| `thinking.mode.*` | `thinking_mode` | `pinocchio/cmd/web-chat/proto/sem/timeline/middleware.proto` | App-owned module projection |
+| `planning.*` | `planning` | `pinocchio/proto/sem/timeline/tool.proto` + planning aggregate schema | Aggregated from multiple events |
+| `execution.*` | (updates planning) | `pinocchio/proto/sem/timeline/tool.proto` + planning aggregate schema | Updates nested execution snapshot |
 
 ### Write Throttling
 
@@ -318,7 +318,9 @@ The projector supports an extension point via `handleTimelineHandlers()` which a
 | `pinocchio/pkg/webchat/sem_translator.go` | Event to SEM translation |
 | `pinocchio/pkg/webchat/timeline_projector.go` | Timeline hydration/projection |
 | `pinocchio/pkg/webchat/timeline_store.go` | TimelineStore interface |
-| `pinocchio/pkg/webchat/timeline_store_sqlite.go` | SQLite implementation |
+| `pinocchio/pkg/persistence/chatstore/timeline_store_sqlite.go` | SQLite implementation |
+| `pinocchio/cmd/web-chat/thinkingmode/backend.go` | App-owned `thinking.mode.*` SEM + projection handlers |
+| `pinocchio/cmd/web-chat/proto/` | App-owned middleware/timeline proto schemas + Buf module |
 
 ## See Also
 
