@@ -13,7 +13,6 @@ import (
 
 	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
 	sempb "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/base"
-	semMw "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/middleware"
 	timelinepb "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/timeline"
 )
 
@@ -308,73 +307,6 @@ func (p *TimelineProjector) ApplySemFrame(ctx context.Context, frame []byte) err
 			Result:        resultStruct,
 			ResultRaw:     pb.Result,
 			CustomKind:    pb.CustomKind,
-		}))
-		return err
-
-	case "thinking.mode.started", "thinking.mode.update", "thinking.mode.completed":
-		var (
-			itemID  string
-			mode    string
-			phase   string
-			reason  string
-			success bool
-			errStr  string
-		)
-		switch env.Event.Type {
-		case "thinking.mode.started":
-			var pb semMw.ThinkingModeStarted
-			if err := protojson.Unmarshal(env.Event.Data, &pb); err != nil {
-				return nil
-			}
-			itemID = pb.ItemId
-			if pb.Data != nil {
-				mode, phase, reason = pb.Data.Mode, pb.Data.Phase, pb.Data.Reasoning
-			}
-			success = true
-		case "thinking.mode.update":
-			var pb semMw.ThinkingModeUpdate
-			if err := protojson.Unmarshal(env.Event.Data, &pb); err != nil {
-				return nil
-			}
-			itemID = pb.ItemId
-			if pb.Data != nil {
-				mode, phase, reason = pb.Data.Mode, pb.Data.Phase, pb.Data.Reasoning
-			}
-			success = true
-		case "thinking.mode.completed":
-			var pb semMw.ThinkingModeCompleted
-			if err := protojson.Unmarshal(env.Event.Data, &pb); err != nil {
-				return nil
-			}
-			itemID = pb.ItemId
-			if pb.Data != nil {
-				mode, phase, reason = pb.Data.Mode, pb.Data.Phase, pb.Data.Reasoning
-			}
-			success = pb.Success
-			errStr = pb.Error
-		}
-		if strings.TrimSpace(itemID) == "" {
-			itemID = env.Event.ID
-		}
-		status := "active"
-		if env.Event.Type == "thinking.mode.completed" {
-			if success {
-				status = "completed"
-			} else {
-				status = "error"
-			}
-		}
-		if errStr != "" {
-			status = "error"
-		}
-		err := p.upsert(ctx, seq, timelineEntityV2FromProtoMessage(itemID, "thinking_mode", &timelinepb.ThinkingModeSnapshotV1{
-			SchemaVersion: 1,
-			Status:        status,
-			Mode:          mode,
-			Phase:         phase,
-			Reasoning:     reason,
-			Success:       success,
-			Error:         errStr,
 		}))
 		return err
 

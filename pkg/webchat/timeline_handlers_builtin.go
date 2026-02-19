@@ -7,7 +7,7 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 )
 
-func init() {
+func registerBuiltinTimelineHandlers() {
 	RegisterTimelineHandler("chat.message", builtinChatMessageTimelineHandler)
 }
 

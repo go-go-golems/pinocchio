@@ -98,6 +98,7 @@ func NewConvManager(opts ConvManagerOptions) *ConvManager {
 	if opts.BaseCtx == nil {
 		panic("webchat: NewConvManager requires non-nil BaseCtx")
 	}
+	RegisterDefaultTimelineHandlers()
 	return &ConvManager{
 		conns:              map[string]*Conversation{},
 		baseCtx:            opts.BaseCtx,
