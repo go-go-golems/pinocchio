@@ -147,3 +147,42 @@ func TestSQLiteTimelineStore_ConversationIndex(t *testing.T) {
 	require.Len(t, filtered, 1)
 	require.Equal(t, "conv-1", filtered[0].ConvID)
 }
+
+func TestSQLiteTimelineStore_UpsertAdvancesConversationProgress(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "timeline-upsert-conversation-progress.db")
+	dsn, err := SQLiteTimelineDSNForFile(dbPath)
+	require.NoError(t, err)
+
+	s, err := NewSQLiteTimelineStore(dsn)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = s.Close() })
+
+	ctx := context.Background()
+	convID := "conv-progress-1"
+
+	err = s.Upsert(ctx, convID, 7, &timelinepb.TimelineEntityV1{
+		Id:   "m1",
+		Kind: "message",
+		Snapshot: &timelinepb.TimelineEntityV1_Message{
+			Message: &timelinepb.MessageSnapshotV1{SchemaVersion: 1, Role: "assistant", Content: "hello", Streaming: true},
+		},
+	})
+	require.NoError(t, err)
+
+	err = s.Upsert(ctx, convID, 15, &timelinepb.TimelineEntityV1{
+		Id:   "m1",
+		Kind: "message",
+		Snapshot: &timelinepb.TimelineEntityV1_Message{
+			Message: &timelinepb.MessageSnapshotV1{SchemaVersion: 1, Role: "assistant", Content: "done", Streaming: false},
+		},
+	})
+	require.NoError(t, err)
+
+	rec, ok, err := s.GetConversation(ctx, convID)
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.True(t, rec.HasTimeline)
+	require.Equal(t, uint64(15), rec.LastSeenVersion)
+	require.NotZero(t, rec.LastActivityMs)
+}

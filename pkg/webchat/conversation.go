@@ -55,6 +55,8 @@ type Conversation struct {
 
 	// Durable "actual hydration" projection (optional; enabled when Router has a TimelineStore).
 	timelineProj *TimelineProjector
+	// Highest projected timeline version observed for this conversation.
+	lastSeenVersion uint64
 }
 
 // ConvManager stores all live conversations and centralizes lifecycle wiring.
@@ -206,14 +208,34 @@ func buildConversationRecord(conv *Conversation, status string, lastError string
 		status = "active"
 	}
 	return chatstore.ConversationRecord{
-		ConvID:         conv.ID,
-		SessionID:      conv.SessionID,
-		RuntimeKey:     conv.RuntimeKey,
-		CreatedAtMs:    createdAtMs,
-		LastActivityMs: lastActivityMs,
-		HasTimeline:    conv.timelineProj != nil,
-		Status:         strings.TrimSpace(status),
-		LastError:      strings.TrimSpace(lastError),
+		ConvID:          conv.ID,
+		SessionID:       conv.SessionID,
+		RuntimeKey:      conv.RuntimeKey,
+		CreatedAtMs:     createdAtMs,
+		LastActivityMs:  lastActivityMs,
+		LastSeenVersion: conv.lastSeenVersion,
+		HasTimeline:     conv.timelineProj != nil,
+		Status:          strings.TrimSpace(status),
+		LastError:       strings.TrimSpace(lastError),
+	}
+}
+
+func (cm *ConvManager) timelineProjectorUpsertHook(conv *Conversation) func(entity *timelinepb.TimelineEntityV1, version uint64) {
+	var downstream func(entity *timelinepb.TimelineEntityV1, version uint64)
+	if cm != nil && cm.timelineUpsertHook != nil {
+		downstream = cm.timelineUpsertHook(conv)
+	}
+	return func(entity *timelinepb.TimelineEntityV1, version uint64) {
+		if conv != nil {
+			conv.mu.Lock()
+			if version > conv.lastSeenVersion {
+				conv.lastSeenVersion = version
+			}
+			conv.mu.Unlock()
+		}
+		if downstream != nil {
+			downstream(entity, version)
+		}
 	}
 }
 
@@ -262,12 +284,7 @@ func (cm *ConvManager) GetOrCreate(convID, runtimeKey string, overrides map[stri
 			c.semBuf = newSemFrameBuffer(1000)
 		}
 		if c.timelineProj == nil && cm.timelineStore != nil {
-			hook := cm.timelineUpsertHook
-			if hook != nil {
-				c.timelineProj = NewTimelineProjector(c.ID, cm.timelineStore, hook(c))
-			} else {
-				c.timelineProj = NewTimelineProjector(c.ID, cm.timelineStore, nil)
-			}
+			c.timelineProj = NewTimelineProjector(c.ID, cm.timelineStore, cm.timelineProjectorUpsertHook(c))
 		}
 		c.mu.Unlock()
 		if c.RuntimeFingerprint != runtime.RuntimeFingerprint {
@@ -348,12 +365,7 @@ func (cm *ConvManager) GetOrCreate(convID, runtimeKey string, overrides map[stri
 		createdAt:          now,
 	}
 	if timelineStore != nil {
-		hook := cm.timelineUpsertHook
-		if hook != nil {
-			conv.timelineProj = NewTimelineProjector(conv.ID, timelineStore, hook(conv))
-		} else {
-			conv.timelineProj = NewTimelineProjector(conv.ID, timelineStore, nil)
-		}
+		conv.timelineProj = NewTimelineProjector(conv.ID, timelineStore, cm.timelineProjectorUpsertHook(conv))
 	}
 	sub, subClose, err := cm.buildSubscriber(convID)
 	if err != nil {

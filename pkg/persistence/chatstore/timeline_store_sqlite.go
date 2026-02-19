@@ -364,6 +364,30 @@ func (s *SQLiteTimelineStore) Upsert(ctx context.Context, convID string, version
 		return errors.Wrap(err, "sqlite timeline store: upsert version")
 	}
 
+	// Keep conversation index progression in sync with entity/version upserts.
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO timeline_conversations (
+			conv_id, session_id, runtime_key, created_at_ms, last_activity_ms,
+			last_seen_version, has_timeline, status, last_error
+		) VALUES (?, '', '', ?, ?, ?, 1, 'active', '')
+		ON CONFLICT(conv_id) DO UPDATE SET
+			created_at_ms = CASE
+				WHEN timeline_conversations.created_at_ms > 0 THEN timeline_conversations.created_at_ms
+				ELSE excluded.created_at_ms
+			END,
+			last_activity_ms = CASE
+				WHEN excluded.last_activity_ms > timeline_conversations.last_activity_ms THEN excluded.last_activity_ms
+				ELSE timeline_conversations.last_activity_ms
+			END,
+			last_seen_version = CASE
+				WHEN excluded.last_seen_version > timeline_conversations.last_seen_version THEN excluded.last_seen_version
+				ELSE timeline_conversations.last_seen_version
+			END,
+			has_timeline = 1
+	`, convID, now, now, newVersion); err != nil {
+		return errors.Wrap(err, "sqlite timeline store: upsert conversation progress")
+	}
+
 	if err := tx.Commit(); err != nil {
 		return err
 	}
