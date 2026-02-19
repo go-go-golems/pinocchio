@@ -21,9 +21,11 @@ type SQLiteTurnStore struct {
 
 var _ TurnStore = &SQLiteTurnStore{}
 
-const (
-	legacyTurnSnapshotsTable = "turn_snapshots_legacy"
-)
+var sqliteSchemaIntrospectionTables = map[string]struct{}{
+	"turns":                 {},
+	"blocks":                {},
+	"turn_block_membership": {},
+}
 
 type snapshotBackfillRow struct {
 	convID      string
@@ -31,7 +33,6 @@ type snapshotBackfillRow struct {
 	turnID      string
 	phase       string
 	createdAtMs int64
-	payload     string
 }
 
 func NewSQLiteTurnStore(dsn string) (*SQLiteTurnStore, error) {
@@ -60,16 +61,6 @@ func (s *SQLiteTurnStore) Close() error {
 func (s *SQLiteTurnStore) migrate() error {
 	if s == nil || s.db == nil {
 		return errors.New("sqlite turn store: db is nil")
-	}
-
-	legacyTable, err := s.prepareLegacySnapshotTable()
-	if err != nil {
-		return errors.Wrap(err, "sqlite turn store: prepare legacy snapshot table")
-	}
-	if legacyTable != "" {
-		if err := s.dropTurnBlockMembershipIfReferences(legacyTable); err != nil {
-			return errors.Wrap(err, "sqlite turn store: drop mismatched membership table")
-		}
 	}
 
 	createTableStmts := []string{
@@ -131,70 +122,7 @@ func (s *SQLiteTurnStore) migrate() error {
 		}
 	}
 
-	if legacyTable != "" {
-		if err := s.backfillLegacySnapshotTable(legacyTable); err != nil {
-			return errors.Wrap(err, "sqlite turn store: backfill legacy snapshots")
-		}
-		if _, err := s.db.Exec(`DROP TABLE IF EXISTS ` + legacyTable); err != nil {
-			return errors.Wrap(err, "sqlite turn store: drop legacy snapshot table")
-		}
-	}
-
 	return nil
-}
-
-func (s *SQLiteTurnStore) prepareLegacySnapshotTable() (string, error) {
-	if s == nil || s.db == nil {
-		return "", errors.New("sqlite turn store: db is nil")
-	}
-
-	turnsExists, err := s.tableExists("turns")
-	if err != nil {
-		return "", err
-	}
-	if turnsExists {
-		cols, err := s.tableColumns("turns")
-		if err != nil {
-			return "", err
-		}
-		if isLegacySnapshotSchema(cols) {
-			legacyExists, err := s.tableExists(legacyTurnSnapshotsTable)
-			if err != nil {
-				return "", err
-			}
-			if legacyExists {
-				return "", errors.New("legacy turns table and turn_snapshots_legacy both exist")
-			}
-			if _, err := s.db.Exec(`ALTER TABLE turns RENAME TO ` + legacyTurnSnapshotsTable); err != nil {
-				return "", err
-			}
-			// Drop legacy index names to avoid clashing with normalized index names.
-			for _, idx := range []string{"turns_by_conv", "turns_by_session", "turns_by_phase", "turns_by_run"} {
-				if _, err := s.db.Exec(`DROP INDEX IF EXISTS ` + idx); err != nil {
-					return "", err
-				}
-			}
-			return legacyTurnSnapshotsTable, nil
-		}
-	}
-
-	for _, table := range []string{legacyTurnSnapshotsTable, "turn_snapshots"} {
-		exists, err := s.tableExists(table)
-		if err != nil {
-			return "", err
-		}
-		if !exists {
-			continue
-		}
-		cols, err := s.tableColumns(table)
-		if err != nil {
-			return "", err
-		}
-		if isLegacySnapshotSchema(cols) {
-			return table, nil
-		}
-	}
-	return "", nil
 }
 
 func (s *SQLiteTurnStore) ensureTurnsTableColumns() error {
@@ -242,65 +170,15 @@ func (s *SQLiteTurnStore) ensureTurnsTableColumns() error {
 	return nil
 }
 
-func (s *SQLiteTurnStore) backfillLegacySnapshotTable(table string) error {
-	if strings.TrimSpace(table) == "" {
-		return nil
-	}
-
-	rows, err := s.db.Query(`
-		SELECT conv_id, session_id, turn_id, phase, created_at_ms, payload
-		FROM ` + table + `
-		ORDER BY created_at_ms ASC
-	`)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = rows.Close() }()
-
-	ctx := context.Background()
-	for rows.Next() {
-		var row snapshotBackfillRow
-		if err := rows.Scan(&row.convID, &row.sessionID, &row.turnID, &row.phase, &row.createdAtMs, &row.payload); err != nil {
-			return err
-		}
-		t, err := serde.FromYAML([]byte(row.payload))
-		if err != nil {
-			return errors.Wrap(err, "parse legacy turn payload")
-		}
-		if t == nil {
-			return errors.Errorf(
-				"parse legacy turn payload: decoded nil turn (conv_id=%s session_id=%s turn_id=%s phase=%s created_at_ms=%d)",
-				row.convID,
-				row.sessionID,
-				row.turnID,
-				row.phase,
-				row.createdAtMs,
-			)
-		}
-		if _, err := s.persistNormalizedSnapshot(ctx, row, t); err != nil {
-			return err
-		}
-	}
-	return rows.Err()
-}
-
-func (s *SQLiteTurnStore) tableExists(table string) (bool, error) {
-	if s == nil || s.db == nil {
-		return false, errors.New("sqlite turn store: db is nil")
-	}
-	var n int
-	err := s.db.QueryRow(`SELECT COUNT(1) FROM sqlite_master WHERE type = 'table' AND name = ?`, table).Scan(&n)
-	if err != nil {
-		return false, err
-	}
-	return n > 0, nil
-}
-
 func (s *SQLiteTurnStore) tableColumns(table string) (map[string]bool, error) {
 	if s == nil || s.db == nil {
 		return nil, errors.New("sqlite turn store: db is nil")
 	}
-	rows, err := s.db.Query(`PRAGMA table_info(` + table + `)`)
+	table, err := normalizeSQLiteIntrospectionTable(table)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := s.db.Query(`SELECT name FROM pragma_table_info(?)`, table)
 	if err != nil {
 		return nil, err
 	}
@@ -308,15 +186,8 @@ func (s *SQLiteTurnStore) tableColumns(table string) (map[string]bool, error) {
 
 	out := map[string]bool{}
 	for rows.Next() {
-		var (
-			cid       int
-			name      string
-			typeName  string
-			notNull   int
-			dfltValue any
-			pk        int
-		)
-		if err := rows.Scan(&cid, &name, &typeName, &notNull, &dfltValue, &pk); err != nil {
+		var name string
+		if err := rows.Scan(&name); err != nil {
 			return nil, err
 		}
 		out[strings.ToLower(strings.TrimSpace(name))] = true
@@ -327,43 +198,12 @@ func (s *SQLiteTurnStore) tableColumns(table string) (map[string]bool, error) {
 	return out, nil
 }
 
-func (s *SQLiteTurnStore) dropTurnBlockMembershipIfReferences(table string) error {
-	if strings.TrimSpace(table) == "" {
-		return nil
+func normalizeSQLiteIntrospectionTable(table string) (string, error) {
+	table = strings.ToLower(strings.TrimSpace(table))
+	if _, ok := sqliteSchemaIntrospectionTables[table]; !ok {
+		return "", errors.Errorf("sqlite turn store: unsupported table for schema introspection: %q", table)
 	}
-	exists, err := s.tableExists("turn_block_membership")
-	if err != nil {
-		return err
-	}
-	if !exists {
-		return nil
-	}
-
-	var schema sql.NullString
-	if err := s.db.QueryRow(`SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'turn_block_membership'`).Scan(&schema); err != nil {
-		return err
-	}
-	schemaText := strings.ToLower(schema.String)
-	target := strings.ToLower(strings.TrimSpace(table))
-	if strings.Contains(schemaText, `references "`+target+`"`) || strings.Contains(schemaText, `references `+target+`(`) {
-		if _, err := s.db.Exec(`DROP TABLE IF EXISTS turn_block_membership`); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func isLegacySnapshotSchema(cols map[string]bool) bool {
-	if cols == nil {
-		return false
-	}
-	required := []string{"conv_id", "session_id", "turn_id", "phase", "created_at_ms", "payload"}
-	for _, c := range required {
-		if !cols[c] {
-			return false
-		}
-	}
-	return !cols["updated_at_ms"]
+	return table, nil
 }
 
 func (s *SQLiteTurnStore) Save(ctx context.Context, convID, sessionID, turnID, phase string, createdAtMs int64, payload string) error {
@@ -403,7 +243,6 @@ func (s *SQLiteTurnStore) Save(ctx context.Context, convID, sessionID, turnID, p
 		turnID:      turnID,
 		phase:       phase,
 		createdAtMs: createdAtMs,
-		payload:     payload,
 	}
 	_, err = s.persistNormalizedSnapshot(ctx, row, t)
 	return err

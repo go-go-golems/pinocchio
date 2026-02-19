@@ -76,106 +76,6 @@ func TestSQLiteTurnStore_Validation(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestSQLiteTurnStore_MigrateLegacyTurnsPayloadTable(t *testing.T) {
-	dir := t.TempDir()
-	dbPath := filepath.Join(dir, "turns.db")
-	dsn, err := SQLiteTurnDSNForFile(dbPath)
-	require.NoError(t, err)
-
-	db, err := sql.Open("sqlite3", dsn)
-	require.NoError(t, err)
-	_, err = db.Exec(`
-		CREATE TABLE turns (
-			conv_id TEXT NOT NULL,
-			session_id TEXT NOT NULL,
-			turn_id TEXT NOT NULL,
-			phase TEXT NOT NULL,
-			created_at_ms INTEGER NOT NULL,
-			payload TEXT NOT NULL,
-			PRIMARY KEY (conv_id, session_id, turn_id, phase, created_at_ms)
-		);
-	`)
-	require.NoError(t, err)
-	_, err = db.Exec(`CREATE INDEX turns_by_conv ON turns(conv_id, created_at_ms DESC);`)
-	require.NoError(t, err)
-	_, err = db.Exec(`CREATE INDEX turns_by_session ON turns(session_id, created_at_ms DESC);`)
-	require.NoError(t, err)
-	_, err = db.Exec(`CREATE INDEX turns_by_phase ON turns(phase, created_at_ms DESC);`)
-	require.NoError(t, err)
-	_, err = db.Exec(
-		`INSERT INTO turns(conv_id, session_id, turn_id, phase, created_at_ms, payload) VALUES(?, ?, ?, ?, ?, ?)`,
-		"conv-legacy",
-		"sess-legacy",
-		"turn-legacy",
-		"final",
-		int64(111),
-		validTurnPayload("turn-legacy", "legacy"),
-	)
-	require.NoError(t, err)
-	require.NoError(t, db.Close())
-
-	s, err := NewSQLiteTurnStore(dsn)
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = s.Close() })
-
-	items, err := s.List(context.Background(), TurnQuery{ConvID: "conv-legacy", Limit: 10})
-	require.NoError(t, err)
-	require.Len(t, items, 1)
-	require.Equal(t, "turn-legacy", items[0].TurnID)
-	require.Contains(t, items[0].Payload, "text: legacy")
-	require.False(t, hasTable(t, s.db, "turn_snapshots_legacy"))
-}
-
-func TestSQLiteTurnStore_MigrateLegacyTurnsPayloadTable_ParseFailureKeepsLegacyTable(t *testing.T) {
-	dir := t.TempDir()
-	dbPath := filepath.Join(dir, "turns.db")
-	dsn, err := SQLiteTurnDSNForFile(dbPath)
-	require.NoError(t, err)
-
-	db, err := sql.Open("sqlite3", dsn)
-	require.NoError(t, err)
-	_, err = db.Exec(`
-		CREATE TABLE turns (
-			conv_id TEXT NOT NULL,
-			session_id TEXT NOT NULL,
-			turn_id TEXT NOT NULL,
-			phase TEXT NOT NULL,
-			created_at_ms INTEGER NOT NULL,
-			payload TEXT NOT NULL,
-			PRIMARY KEY (conv_id, session_id, turn_id, phase, created_at_ms)
-		);
-	`)
-	require.NoError(t, err)
-	_, err = db.Exec(`CREATE INDEX turns_by_conv ON turns(conv_id, created_at_ms DESC);`)
-	require.NoError(t, err)
-	_, err = db.Exec(`CREATE INDEX turns_by_session ON turns(session_id, created_at_ms DESC);`)
-	require.NoError(t, err)
-	_, err = db.Exec(`CREATE INDEX turns_by_phase ON turns(phase, created_at_ms DESC);`)
-	require.NoError(t, err)
-	_, err = db.Exec(
-		`INSERT INTO turns(conv_id, session_id, turn_id, phase, created_at_ms, payload) VALUES(?, ?, ?, ?, ?, ?)`,
-		"conv-legacy",
-		"sess-legacy",
-		"turn-legacy",
-		"final",
-		int64(111),
-		"not: [valid",
-	)
-	require.NoError(t, err)
-	require.NoError(t, db.Close())
-
-	s, err := NewSQLiteTurnStore(dsn)
-	require.Error(t, err)
-	require.Nil(t, s)
-	require.Contains(t, err.Error(), "sqlite turn store: backfill legacy snapshots")
-	require.Contains(t, err.Error(), "parse legacy turn payload")
-
-	checkDB, err := sql.Open("sqlite3", dsn)
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = checkDB.Close() })
-	require.True(t, hasTable(t, checkDB, "turn_snapshots_legacy"))
-}
-
 func TestSQLiteTurnStore_AddsMissingUpdatedAtColumn(t *testing.T) {
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "turns.db")
@@ -230,19 +130,14 @@ func hasTable(t *testing.T, db *sql.DB, name string) bool {
 
 func hasColumn(t *testing.T, db *sql.DB, table string, name string) bool {
 	t.Helper()
-	rows, err := db.Query(`PRAGMA table_info(` + table + `)`)
+	table, err := normalizeSQLiteIntrospectionTable(table)
+	require.NoError(t, err)
+	rows, err := db.Query(`SELECT name FROM pragma_table_info(?)`, table)
 	require.NoError(t, err)
 	defer func() { _ = rows.Close() }()
 	for rows.Next() {
-		var (
-			cid       int
-			colName   string
-			typeName  string
-			notNull   int
-			dfltValue any
-			pk        int
-		)
-		require.NoError(t, rows.Scan(&cid, &colName, &typeName, &notNull, &dfltValue, &pk))
+		var colName string
+		require.NoError(t, rows.Scan(&colName))
 		if colName == name {
 			return true
 		}
