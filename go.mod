@@ -11,8 +11,8 @@ require (
 	github.com/charmbracelet/log v0.4.1
 	github.com/go-go-golems/bobatea v0.1.1
 	github.com/go-go-golems/clay v0.4.0
-	github.com/go-go-golems/geppetto v0.8.0
-	github.com/go-go-golems/glazed v1.0.0
+	github.com/go-go-golems/geppetto v0.9.1
+	github.com/go-go-golems/glazed v1.0.1
 	github.com/go-go-golems/go-sqlite-regexp v0.0.1
 	github.com/go-go-golems/uhoh v0.0.5
 	github.com/google/uuid v1.6.0
@@ -104,9 +104,9 @@ require (
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.61.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.61.0 // indirect
-	go.opentelemetry.io/otel v1.39.0 // indirect
-	go.opentelemetry.io/otel/metric v1.39.0 // indirect
-	go.opentelemetry.io/otel/trace v1.39.0 // indirect
+	go.opentelemetry.io/otel v1.40.0 // indirect
+	go.opentelemetry.io/otel/metric v1.40.0 // indirect
+	go.opentelemetry.io/otel/trace v1.40.0 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	golang.org/x/oauth2 v0.35.0 // indirect
