@@ -414,22 +414,22 @@ func (s *SQLiteTimelineStore) GetSnapshot(ctx context.Context, convID string, si
 	var query string
 	var args []any
 	if sinceVersion == 0 {
-		// Full snapshot in stable projection order (version).
+		// Full snapshot in canonical first-seen order.
 		query = `
 			SELECT entity_json
 			FROM timeline_entities
 			WHERE conv_id = ?
-			ORDER BY version ASC, entity_id ASC
+			ORDER BY created_at_ms ASC, entity_id ASC
 			LIMIT ?
 		`
 		args = []any{convID, limit}
 	} else {
-		// Incremental updates ordered by projection version.
+		// Incremental updates keep first-seen order among the changed rows.
 		query = `
 			SELECT entity_json
 			FROM timeline_entities
 			WHERE conv_id = ? AND version > ?
-			ORDER BY version ASC
+			ORDER BY created_at_ms ASC, entity_id ASC
 			LIMIT ?
 		`
 		args = []any{convID, sinceVersion, limit}
