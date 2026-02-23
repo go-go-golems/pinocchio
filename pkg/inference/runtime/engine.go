@@ -13,25 +13,25 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 )
 
-// MiddlewareFactory creates a middleware instance from an arbitrary config object.
-type MiddlewareFactory func(cfg any) middleware.Middleware
+// MiddlewareBuilder creates a middleware instance from an arbitrary config object.
+type MiddlewareBuilder func(cfg any) middleware.Middleware
 
-// ToolFactory registers a tool into a registry.
-type ToolFactory func(reg geptools.ToolRegistry) error
+// ToolRegistrar registers a tool into a registry.
+type ToolRegistrar func(reg geptools.ToolRegistry) error
 
-// MiddlewareUse declares a middleware to attach and its config.
-type MiddlewareUse struct {
+// MiddlewareSpec declares a middleware to attach and its config.
+type MiddlewareSpec struct {
 	Name   string
 	Config any
 }
 
-// ComposeEngineFromSettings builds an engine from step settings then applies middlewares.
-func ComposeEngineFromSettings(
+// BuildEngineFromSettings builds an engine from step settings then applies middlewares.
+func BuildEngineFromSettings(
 	ctx context.Context,
 	stepSettings *settings.StepSettings,
 	sysPrompt string,
-	uses []MiddlewareUse,
-	mwFactories map[string]MiddlewareFactory,
+	uses []MiddlewareSpec,
+	mwFactories map[string]MiddlewareBuilder,
 ) (engine.Engine, error) {
 	if ctx == nil {
 		return nil, errors.New("ctx is nil")
@@ -68,3 +68,23 @@ func ComposeEngineFromSettings(
 
 	return runner, nil
 }
+
+// ComposeEngineFromSettings builds an engine from step settings then applies middlewares.
+func ComposeEngineFromSettings(
+	ctx context.Context,
+	stepSettings *settings.StepSettings,
+	sysPrompt string,
+	uses []MiddlewareUse,
+	mwFactories map[string]MiddlewareFactory,
+) (engine.Engine, error) {
+	return BuildEngineFromSettings(ctx, stepSettings, sysPrompt, uses, mwFactories)
+}
+
+// MiddlewareFactory is a compatibility alias for MiddlewareBuilder.
+type MiddlewareFactory = MiddlewareBuilder
+
+// ToolFactory is a compatibility alias for ToolRegistrar.
+type ToolFactory = ToolRegistrar
+
+// MiddlewareUse is a compatibility alias for MiddlewareSpec.
+type MiddlewareUse = MiddlewareSpec
