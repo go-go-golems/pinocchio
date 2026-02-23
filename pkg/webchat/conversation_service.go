@@ -49,6 +49,7 @@ type ConversationService struct {
 type AppConversationRequest struct {
 	ConvID          string
 	RuntimeKey      string
+	ProfileVersion  uint64
 	ResolvedRuntime *gepprofiles.RuntimeSpec
 	Overrides       map[string]any
 }
@@ -65,6 +66,7 @@ type ConversationHandle struct {
 type SubmitPromptInput struct {
 	ConvID          string
 	RuntimeKey      string
+	ProfileVersion  uint64
 	ResolvedRuntime *gepprofiles.RuntimeSpec
 	Overrides       map[string]any
 	Prompt          string
@@ -171,6 +173,7 @@ func (s *ConversationService) SubmitPrompt(ctx context.Context, in SubmitPromptI
 	handle, err := s.ResolveAndEnsureConversation(ctx, AppConversationRequest{
 		ConvID:          in.ConvID,
 		RuntimeKey:      in.RuntimeKey,
+		ProfileVersion:  in.ProfileVersion,
 		ResolvedRuntime: in.ResolvedRuntime,
 		Overrides:       in.Overrides,
 	})

@@ -88,7 +88,7 @@ func (c *webChatRuntimeComposer) Compose(ctx context.Context, req infruntime.Run
 	return infruntime.RuntimeArtifacts{
 		Engine:             eng,
 		RuntimeKey:         runtimeKey,
-		RuntimeFingerprint: runtimeFingerprint(runtimeKey, systemPrompt, middlewares, tools, stepSettings),
+		RuntimeFingerprint: runtimeFingerprint(runtimeKey, req.ProfileVersion, systemPrompt, middlewares, tools, stepSettings),
 		SeedSystemPrompt:   systemPrompt,
 		AllowedTools:       tools,
 	}, nil
@@ -134,15 +134,17 @@ func runtimeToolsFromProfile(spec *gepprofiles.RuntimeSpec) []string {
 }
 
 type runtimeFingerprintPayload struct {
-	RuntimeKey   string                     `json:"runtime_key"`
-	SystemPrompt string                     `json:"system_prompt"`
-	Middlewares  []infruntime.MiddlewareUse `json:"middlewares"`
-	Tools        []string                   `json:"tools"`
-	StepMetadata map[string]any             `json:"step_metadata,omitempty"`
+	ProfileVersion uint64                     `json:"profile_version,omitempty"`
+	RuntimeKey     string                     `json:"runtime_key"`
+	SystemPrompt   string                     `json:"system_prompt"`
+	Middlewares    []infruntime.MiddlewareUse `json:"middlewares"`
+	Tools          []string                   `json:"tools"`
+	StepMetadata   map[string]any             `json:"step_metadata,omitempty"`
 }
 
 func runtimeFingerprint(
 	runtimeKey string,
+	profileVersion uint64,
 	systemPrompt string,
 	middlewares []infruntime.MiddlewareUse,
 	tools []string,
@@ -153,11 +155,12 @@ func runtimeFingerprint(
 		metadata = stepSettings.GetMetadata()
 	}
 	payload := runtimeFingerprintPayload{
-		RuntimeKey:   runtimeKey,
-		SystemPrompt: systemPrompt,
-		Middlewares:  middlewares,
-		Tools:        tools,
-		StepMetadata: metadata,
+		ProfileVersion: profileVersion,
+		RuntimeKey:     runtimeKey,
+		SystemPrompt:   systemPrompt,
+		Middlewares:    middlewares,
+		Tools:          tools,
+		StepMetadata:   metadata,
 	}
 	b, err := json.Marshal(payload)
 	if err != nil {

@@ -12,6 +12,7 @@ import (
 type RuntimeComposeRequest struct {
 	ConvID          string
 	RuntimeKey      string
+	ProfileVersion  uint64
 	ResolvedRuntime *gepprofiles.RuntimeSpec
 	Overrides       map[string]any
 }

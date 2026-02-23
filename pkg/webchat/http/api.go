@@ -33,6 +33,7 @@ type ChatRequestBody struct {
 type ConversationRequestPlan struct {
 	ConvID          string
 	RuntimeKey      string
+	ProfileVersion  uint64
 	ResolvedRuntime *gepprofiles.RuntimeSpec
 	Overrides       map[string]any
 	Prompt          string
@@ -141,6 +142,7 @@ func NewChatHandler(svc ChatService, resolver ConversationRequestResolver) http.
 		resp, err := svc.SubmitPrompt(req.Context(), root.SubmitPromptInput{
 			ConvID:          plan.ConvID,
 			RuntimeKey:      plan.RuntimeKey,
+			ProfileVersion:  plan.ProfileVersion,
 			ResolvedRuntime: plan.ResolvedRuntime,
 			Overrides:       plan.Overrides,
 			Prompt:          plan.Prompt,
@@ -191,6 +193,7 @@ func NewWSHandler(svc StreamService, resolver ConversationRequestResolver, upgra
 		handle, err := svc.ResolveAndEnsureConversation(req.Context(), root.AppConversationRequest{
 			ConvID:          plan.ConvID,
 			RuntimeKey:      plan.RuntimeKey,
+			ProfileVersion:  plan.ProfileVersion,
 			ResolvedRuntime: plan.ResolvedRuntime,
 			Overrides:       plan.Overrides,
 		})

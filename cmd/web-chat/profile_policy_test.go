@@ -24,6 +24,9 @@ func newTestResolverWithMultipleRegistries(t *testing.T) *webChatProfileResolver
 			gepprofiles.MustProfileSlug("default"): {
 				Slug:    gepprofiles.MustProfileSlug("default"),
 				Runtime: gepprofiles.RuntimeSpec{SystemPrompt: "You are default"},
+				Metadata: gepprofiles.ProfileMetadata{
+					Version: 1,
+				},
 			},
 		},
 	}
@@ -37,6 +40,9 @@ func newTestResolverWithMultipleRegistries(t *testing.T) *webChatProfileResolver
 			gepprofiles.MustProfileSlug("analyst"): {
 				Slug:    gepprofiles.MustProfileSlug("analyst"),
 				Runtime: gepprofiles.RuntimeSpec{SystemPrompt: "You are analyst"},
+				Metadata: gepprofiles.ProfileMetadata{
+					Version: 7,
+				},
 			},
 		},
 	}
@@ -168,6 +174,7 @@ func TestWebChatProfileResolver_Chat_BodyProfileAndRegistry(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "conv-1", plan.ConvID)
 	require.Equal(t, "analyst", plan.RuntimeKey)
+	require.Equal(t, uint64(7), plan.ProfileVersion)
 	require.Equal(t, "You are analyst", plan.Overrides["system_prompt"])
 	require.NotNil(t, plan.ResolvedRuntime)
 	require.Equal(t, "You are analyst", plan.ResolvedRuntime.SystemPrompt)
@@ -181,6 +188,7 @@ func TestWebChatProfileResolver_WS_QueryProfileAndRegistry(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "conv-1", plan.ConvID)
 	require.Equal(t, "analyst", plan.RuntimeKey)
+	require.Equal(t, uint64(7), plan.ProfileVersion)
 	require.Equal(t, "You are analyst", plan.Overrides["system_prompt"])
 }
 

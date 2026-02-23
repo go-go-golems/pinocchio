@@ -61,7 +61,7 @@ func TestRuntimeFingerprint_DoesNotIncludeAPIKeys(t *testing.T) {
 	}
 	ss.API.APIKeys["openai"] = "sk-this-should-not-appear"
 
-	fp := runtimeFingerprint("default", "hi", nil, nil, ss)
+	fp := runtimeFingerprint("default", 0, "hi", nil, nil, ss)
 	if strings.Contains(fp, "sk-this-should-not-appear") {
 		t.Fatalf("fingerprint leaked api key: %q", fp)
 	}
@@ -127,5 +127,13 @@ func TestWebChatRuntimeComposer_OverridesResolvedRuntimeSpec(t *testing.T) {
 	}
 	if len(res.AllowedTools) != 1 || res.AllowedTools[0] != "tool-a" {
 		t.Fatalf("unexpected tools: %#v", res.AllowedTools)
+	}
+}
+
+func TestRuntimeFingerprint_ChangesOnProfileVersion(t *testing.T) {
+	fpV1 := runtimeFingerprint("default", 1, "prompt", nil, nil, nil)
+	fpV2 := runtimeFingerprint("default", 2, "prompt", nil, nil, nil)
+	if fpV1 == fpV2 {
+		t.Fatalf("expected fingerprint to change across profile versions")
 	}
 }

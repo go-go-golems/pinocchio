@@ -249,6 +249,7 @@ func (cm *ConvManager) GetOrCreate(
 	convID, runtimeKey string,
 	overrides map[string]any,
 	resolvedRuntime *gepprofiles.RuntimeSpec,
+	profileVersion uint64,
 ) (*Conversation, error) {
 	if cm == nil {
 		return nil, errors.New("conversation manager is nil")
@@ -259,6 +260,7 @@ func (cm *ConvManager) GetOrCreate(
 	req := infruntime.RuntimeComposeRequest{
 		ConvID:          convID,
 		RuntimeKey:      runtimeKey,
+		ProfileVersion:  profileVersion,
 		ResolvedRuntime: resolvedRuntime,
 		Overrides:       overrides,
 	}

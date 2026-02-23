@@ -116,10 +116,15 @@ func (r *webChatProfileResolver) resolveWS(req *http.Request) (webhttp.Conversat
 	}
 	overrides := baseOverridesForProfile(profile)
 	resolvedRuntime := profileRuntimeSpec(profile)
+	profileVersion := uint64(0)
+	if profile != nil {
+		profileVersion = profile.Metadata.Version
+	}
 
 	return webhttp.ConversationRequestPlan{
 		ConvID:          convID,
 		RuntimeKey:      slug.String(),
+		ProfileVersion:  profileVersion,
 		ResolvedRuntime: resolvedRuntime,
 		Overrides:       overrides,
 	}, nil
@@ -150,10 +155,15 @@ func (r *webChatProfileResolver) resolveChat(req *http.Request) (webhttp.Convers
 		return webhttp.ConversationRequestPlan{}, err
 	}
 	resolvedRuntime := profileRuntimeSpec(profile)
+	profileVersion := uint64(0)
+	if profile != nil {
+		profileVersion = profile.Metadata.Version
+	}
 
 	return webhttp.ConversationRequestPlan{
 		ConvID:          convID,
 		RuntimeKey:      slug.String(),
+		ProfileVersion:  profileVersion,
 		ResolvedRuntime: resolvedRuntime,
 		Overrides:       overrides,
 		Prompt:          body.Prompt,
