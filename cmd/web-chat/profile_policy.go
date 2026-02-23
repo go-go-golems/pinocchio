@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 
 	gepprofiles "github.com/go-go-golems/geppetto/pkg/profiles"
@@ -17,6 +19,9 @@ import (
 const (
 	defaultRegistrySlug      = "default"
 	currentProfileCookieName = "chat_profile"
+
+	profileWriteActor  = "web-chat"
+	profileWriteSource = "http-api"
 )
 
 func newInMemoryProfileService(defaultSlug string, profileDefs ...*gepprofiles.Profile) (gepprofiles.Registry, error) {
@@ -391,34 +396,393 @@ func profileSlugFromPath(req *http.Request) string {
 	return ""
 }
 
+type profileListItem struct {
+	Slug          string `json:"slug"`
+	DisplayName   string `json:"display_name,omitempty"`
+	Description   string `json:"description,omitempty"`
+	DefaultPrompt string `json:"default_prompt,omitempty"`
+	IsDefault     bool   `json:"is_default,omitempty"`
+	Version       uint64 `json:"version,omitempty"`
+}
+
+type profileDocument struct {
+	Registry    string                      `json:"registry"`
+	Slug        string                      `json:"slug"`
+	DisplayName string                      `json:"display_name,omitempty"`
+	Description string                      `json:"description,omitempty"`
+	Runtime     gepprofiles.RuntimeSpec     `json:"runtime,omitempty"`
+	Policy      gepprofiles.PolicySpec      `json:"policy,omitempty"`
+	Metadata    gepprofiles.ProfileMetadata `json:"metadata,omitempty"`
+	IsDefault   bool                        `json:"is_default"`
+}
+
+type createProfileRequest struct {
+	Registry        string                       `json:"registry,omitempty"`
+	Slug            string                       `json:"slug,omitempty"`
+	Profile         string                       `json:"profile,omitempty"`
+	DisplayName     string                       `json:"display_name,omitempty"`
+	Description     string                       `json:"description,omitempty"`
+	Runtime         *gepprofiles.RuntimeSpec     `json:"runtime,omitempty"`
+	Policy          *gepprofiles.PolicySpec      `json:"policy,omitempty"`
+	Metadata        *gepprofiles.ProfileMetadata `json:"metadata,omitempty"`
+	SetDefault      bool                         `json:"set_default,omitempty"`
+	ExpectedVersion uint64                       `json:"expected_version,omitempty"`
+}
+
+type patchProfileRequest struct {
+	Registry        string                       `json:"registry,omitempty"`
+	DisplayName     *string                      `json:"display_name,omitempty"`
+	Description     *string                      `json:"description,omitempty"`
+	Runtime         *gepprofiles.RuntimeSpec     `json:"runtime,omitempty"`
+	Policy          *gepprofiles.PolicySpec      `json:"policy,omitempty"`
+	Metadata        *gepprofiles.ProfileMetadata `json:"metadata,omitempty"`
+	SetDefault      bool                         `json:"set_default,omitempty"`
+	ExpectedVersion uint64                       `json:"expected_version,omitempty"`
+}
+
+type setDefaultProfileRequest struct {
+	Registry        string `json:"registry,omitempty"`
+	ExpectedVersion uint64 `json:"expected_version,omitempty"`
+}
+
+func parseProfilePath(path string) (string, string, bool) {
+	const prefix = "/api/chat/profiles/"
+	if !strings.HasPrefix(path, prefix) {
+		return "", "", false
+	}
+	rest := strings.TrimSpace(strings.TrimPrefix(path, prefix))
+	if rest == "" {
+		return "", "", false
+	}
+	parts := strings.Split(rest, "/")
+	if len(parts) > 2 {
+		return "", "", false
+	}
+	slug := strings.TrimSpace(parts[0])
+	if slug == "" {
+		return "", "", false
+	}
+	action := ""
+	if len(parts) == 2 {
+		action = strings.TrimSpace(parts[1])
+	}
+	return slug, action, true
+}
+
+func parseExpectedVersion(raw string) (uint64, error) {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return 0, nil
+	}
+	v, err := strconv.ParseUint(trimmed, 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("invalid expected_version: %w", err)
+	}
+	return v, nil
+}
+
+func resolveRegistrySlugForAPI(req *http.Request, defaultSlug gepprofiles.RegistrySlug, bodyRegistryRaw string) (gepprofiles.RegistrySlug, error) {
+	registryRaw := strings.TrimSpace(bodyRegistryRaw)
+	if registryRaw == "" && req != nil {
+		registryRaw = strings.TrimSpace(req.URL.Query().Get("registry"))
+	}
+	if registryRaw == "" {
+		return defaultSlug, nil
+	}
+	registrySlug, err := gepprofiles.ParseRegistrySlug(registryRaw)
+	if err != nil {
+		return "", err
+	}
+	return registrySlug, nil
+}
+
+func profileDocFromModel(registrySlug gepprofiles.RegistrySlug, registry *gepprofiles.ProfileRegistry, p *gepprofiles.Profile) profileDocument {
+	doc := profileDocument{
+		Registry: registrySlug.String(),
+	}
+	if p == nil {
+		return doc
+	}
+	doc.Slug = p.Slug.String()
+	doc.DisplayName = p.DisplayName
+	doc.Description = p.Description
+	doc.Runtime = p.Runtime
+	doc.Policy = p.Policy
+	doc.Metadata = p.Metadata
+	doc.IsDefault = registry != nil && registry.DefaultProfileSlug == p.Slug
+	return doc
+}
+
+func writeProfileRegistryError(w http.ResponseWriter, err error) {
+	switch {
+	case err == nil:
+		return
+	case errors.Is(err, gepprofiles.ErrProfileNotFound):
+		http.Error(w, "profile not found", http.StatusNotFound)
+	case errors.Is(err, gepprofiles.ErrRegistryNotFound):
+		http.Error(w, "registry not found", http.StatusNotFound)
+	case errors.Is(err, gepprofiles.ErrValidation):
+		http.Error(w, err.Error(), http.StatusBadRequest)
+	case errors.Is(err, gepprofiles.ErrPolicyViolation):
+		http.Error(w, err.Error(), http.StatusForbidden)
+	case errors.Is(err, gepprofiles.ErrVersionConflict):
+		http.Error(w, err.Error(), http.StatusConflict)
+	default:
+		http.Error(w, "profile registry unavailable", http.StatusInternalServerError)
+	}
+}
+
+func writeJSONResponse(w http.ResponseWriter, status int, payload any) {
+	w.Header().Set("Content-Type", "application/json")
+	if status > 0 {
+		w.WriteHeader(status)
+	}
+	_ = json.NewEncoder(w).Encode(payload)
+}
+
 func registerProfileAPIHandlers(mux *http.ServeMux, resolver *ProfileRequestResolver) {
 	if mux == nil || resolver == nil || resolver.profileRegistry == nil {
 		return
 	}
 
-	mux.HandleFunc("/api/chat/profiles", func(w http.ResponseWriter, _ *http.Request) {
-		type profileInfo struct {
-			Slug          string `json:"slug"`
-			DefaultPrompt string `json:"default_prompt"`
-		}
+	mux.HandleFunc("/api/chat/profiles", func(w http.ResponseWriter, req *http.Request) {
+		switch req.Method {
+		case http.MethodGet:
+			registrySlug, err := resolveRegistrySlugForAPI(req, resolver.registrySlug, "")
+			if err != nil {
+				http.Error(w, "invalid registry", http.StatusBadRequest)
+				return
+			}
+			registry, err := resolver.profileRegistry.GetRegistry(context.Background(), registrySlug)
+			if err != nil {
+				writeProfileRegistryError(w, err)
+				return
+			}
+			profiles_, err := resolver.profileRegistry.ListProfiles(context.Background(), registrySlug)
+			if err != nil {
+				writeProfileRegistryError(w, err)
+				return
+			}
+			items := make([]profileListItem, 0, len(profiles_))
+			for _, p := range profiles_ {
+				if p == nil {
+					continue
+				}
+				items = append(items, profileListItem{
+					Slug:          p.Slug.String(),
+					DisplayName:   p.DisplayName,
+					Description:   p.Description,
+					DefaultPrompt: p.Runtime.SystemPrompt,
+					IsDefault:     registry != nil && registry.DefaultProfileSlug == p.Slug,
+					Version:       p.Metadata.Version,
+				})
+			}
+			writeJSONResponse(w, http.StatusOK, items)
+		case http.MethodPost:
+			var body createProfileRequest
+			if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
+				http.Error(w, "bad request", http.StatusBadRequest)
+				return
+			}
+			registrySlug, err := resolveRegistrySlugForAPI(req, resolver.registrySlug, body.Registry)
+			if err != nil {
+				http.Error(w, "invalid registry", http.StatusBadRequest)
+				return
+			}
+			slugRaw := strings.TrimSpace(body.Slug)
+			if slugRaw == "" {
+				slugRaw = strings.TrimSpace(body.Profile)
+			}
+			slug, err := gepprofiles.ParseProfileSlug(slugRaw)
+			if err != nil {
+				http.Error(w, "invalid profile slug", http.StatusBadRequest)
+				return
+			}
+			profile := &gepprofiles.Profile{
+				Slug:        slug,
+				DisplayName: strings.TrimSpace(body.DisplayName),
+				Description: strings.TrimSpace(body.Description),
+			}
+			if body.Runtime != nil {
+				profile.Runtime = *body.Runtime
+			}
+			if body.Policy != nil {
+				profile.Policy = *body.Policy
+			}
+			if body.Metadata != nil {
+				profile.Metadata = *body.Metadata
+			}
 
-		profiles_, err := resolver.profileRegistry.ListProfiles(context.Background(), resolver.registrySlug)
-		if err != nil {
-			http.Error(w, "profile registry unavailable", http.StatusInternalServerError)
+			created, err := resolver.profileRegistry.CreateProfile(context.Background(), registrySlug, profile, gepprofiles.WriteOptions{
+				ExpectedVersion: body.ExpectedVersion,
+				Actor:           profileWriteActor,
+				Source:          profileWriteSource,
+			})
+			if err != nil {
+				writeProfileRegistryError(w, err)
+				return
+			}
+			if body.SetDefault {
+				if err := resolver.profileRegistry.SetDefaultProfile(context.Background(), registrySlug, created.Slug, gepprofiles.WriteOptions{
+					Actor:  profileWriteActor,
+					Source: profileWriteSource,
+				}); err != nil {
+					writeProfileRegistryError(w, err)
+					return
+				}
+			}
+			registry, err := resolver.profileRegistry.GetRegistry(context.Background(), registrySlug)
+			if err != nil {
+				writeProfileRegistryError(w, err)
+				return
+			}
+			writeJSONResponse(w, http.StatusCreated, profileDocFromModel(registrySlug, registry, created))
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	mux.HandleFunc("/api/chat/profiles/", func(w http.ResponseWriter, req *http.Request) {
+		slugRaw, action, ok := parseProfilePath(req.URL.Path)
+		if !ok {
+			http.NotFound(w, req)
 			return
 		}
-		items := make([]profileInfo, 0, len(profiles_))
-		for _, p := range profiles_ {
-			if p == nil {
-				continue
-			}
-			items = append(items, profileInfo{
-				Slug:          p.Slug.String(),
-				DefaultPrompt: p.Runtime.SystemPrompt,
-			})
+		slug, err := gepprofiles.ParseProfileSlug(slugRaw)
+		if err != nil {
+			http.Error(w, "invalid profile slug", http.StatusBadRequest)
+			return
 		}
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(items)
+
+		switch action {
+		case "":
+			switch req.Method {
+			case http.MethodGet:
+				registrySlug, err := resolveRegistrySlugForAPI(req, resolver.registrySlug, "")
+				if err != nil {
+					http.Error(w, "invalid registry", http.StatusBadRequest)
+					return
+				}
+				profile, err := resolver.profileRegistry.GetProfile(context.Background(), registrySlug, slug)
+				if err != nil {
+					writeProfileRegistryError(w, err)
+					return
+				}
+				registry, err := resolver.profileRegistry.GetRegistry(context.Background(), registrySlug)
+				if err != nil {
+					writeProfileRegistryError(w, err)
+					return
+				}
+				writeJSONResponse(w, http.StatusOK, profileDocFromModel(registrySlug, registry, profile))
+			case http.MethodPatch:
+				var body patchProfileRequest
+				if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
+					http.Error(w, "bad request", http.StatusBadRequest)
+					return
+				}
+				registrySlug, err := resolveRegistrySlugForAPI(req, resolver.registrySlug, body.Registry)
+				if err != nil {
+					http.Error(w, "invalid registry", http.StatusBadRequest)
+					return
+				}
+				patch := gepprofiles.ProfilePatch{
+					DisplayName: body.DisplayName,
+					Description: body.Description,
+					Runtime:     body.Runtime,
+					Policy:      body.Policy,
+					Metadata:    body.Metadata,
+				}
+				profile, err := resolver.profileRegistry.UpdateProfile(context.Background(), registrySlug, slug, patch, gepprofiles.WriteOptions{
+					ExpectedVersion: body.ExpectedVersion,
+					Actor:           profileWriteActor,
+					Source:          profileWriteSource,
+				})
+				if err != nil {
+					writeProfileRegistryError(w, err)
+					return
+				}
+				if body.SetDefault {
+					if err := resolver.profileRegistry.SetDefaultProfile(context.Background(), registrySlug, slug, gepprofiles.WriteOptions{
+						Actor:  profileWriteActor,
+						Source: profileWriteSource,
+					}); err != nil {
+						writeProfileRegistryError(w, err)
+						return
+					}
+				}
+				registry, err := resolver.profileRegistry.GetRegistry(context.Background(), registrySlug)
+				if err != nil {
+					writeProfileRegistryError(w, err)
+					return
+				}
+				writeJSONResponse(w, http.StatusOK, profileDocFromModel(registrySlug, registry, profile))
+			case http.MethodDelete:
+				registrySlug, err := resolveRegistrySlugForAPI(req, resolver.registrySlug, "")
+				if err != nil {
+					http.Error(w, "invalid registry", http.StatusBadRequest)
+					return
+				}
+				expectedVersion, err := parseExpectedVersion(req.URL.Query().Get("expected_version"))
+				if err != nil {
+					http.Error(w, "invalid expected_version", http.StatusBadRequest)
+					return
+				}
+				if err := resolver.profileRegistry.DeleteProfile(context.Background(), registrySlug, slug, gepprofiles.WriteOptions{
+					ExpectedVersion: expectedVersion,
+					Actor:           profileWriteActor,
+					Source:          profileWriteSource,
+				}); err != nil {
+					writeProfileRegistryError(w, err)
+					return
+				}
+				w.WriteHeader(http.StatusNoContent)
+			default:
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			}
+		case "default":
+			if req.Method != http.MethodPost {
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			var body setDefaultProfileRequest
+			if req.Body != nil {
+				_ = json.NewDecoder(req.Body).Decode(&body)
+			}
+			registrySlug, err := resolveRegistrySlugForAPI(req, resolver.registrySlug, body.Registry)
+			if err != nil {
+				http.Error(w, "invalid registry", http.StatusBadRequest)
+				return
+			}
+			expectedVersion := body.ExpectedVersion
+			if expectedVersion == 0 {
+				expectedVersion, err = parseExpectedVersion(req.URL.Query().Get("expected_version"))
+				if err != nil {
+					http.Error(w, "invalid expected_version", http.StatusBadRequest)
+					return
+				}
+			}
+			if err := resolver.profileRegistry.SetDefaultProfile(context.Background(), registrySlug, slug, gepprofiles.WriteOptions{
+				ExpectedVersion: expectedVersion,
+				Actor:           profileWriteActor,
+				Source:          profileWriteSource,
+			}); err != nil {
+				writeProfileRegistryError(w, err)
+				return
+			}
+			profile, err := resolver.profileRegistry.GetProfile(context.Background(), registrySlug, slug)
+			if err != nil {
+				writeProfileRegistryError(w, err)
+				return
+			}
+			registry, err := resolver.profileRegistry.GetRegistry(context.Background(), registrySlug)
+			if err != nil {
+				writeProfileRegistryError(w, err)
+				return
+			}
+			writeJSONResponse(w, http.StatusOK, profileDocFromModel(registrySlug, registry, profile))
+		default:
+			http.NotFound(w, req)
+		}
 	})
 
 	mux.HandleFunc("/api/chat/profile", func(w http.ResponseWriter, req *http.Request) {
@@ -426,11 +790,6 @@ func registerProfileAPIHandlers(mux *http.ServeMux, resolver *ProfileRequestReso
 			Slug    string `json:"slug"`
 			Profile string `json:"profile"`
 		}
-		writeJSON := func(payload any) {
-			w.Header().Set("Content-Type", "application/json")
-			_ = json.NewEncoder(w).Encode(payload)
-		}
-
 		switch req.Method {
 		case http.MethodGet:
 			slug := gepprofiles.ProfileSlug("")
@@ -447,7 +806,7 @@ func registerProfileAPIHandlers(mux *http.ServeMux, resolver *ProfileRequestReso
 				}
 				slug = defaultSlug
 			}
-			writeJSON(profilePayload{Slug: slug.String()})
+			writeJSONResponse(w, http.StatusOK, profilePayload{Slug: slug.String()})
 		case http.MethodPost:
 			var body profilePayload
 			if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
@@ -479,7 +838,7 @@ func registerProfileAPIHandlers(mux *http.ServeMux, resolver *ProfileRequestReso
 				Secure:   true,
 				HttpOnly: true,
 			})
-			writeJSON(profilePayload{Slug: slug.String()})
+			writeJSONResponse(w, http.StatusOK, profilePayload{Slug: slug.String()})
 		default:
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}

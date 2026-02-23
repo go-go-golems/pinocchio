@@ -12,6 +12,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func decodeJSON[T any](t *testing.T, rec *httptest.ResponseRecorder) T {
+	t.Helper()
+	var out T
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &out))
+	return out
+}
+
 func newTestResolverWithMultipleRegistries(t *testing.T) *ProfileRequestResolver {
 	t.Helper()
 
@@ -203,4 +210,208 @@ func TestWebChatProfileResolver_Chat_InvalidRegistryInBody(t *testing.T) {
 	_, err := resolver.Resolve(req)
 	require.Error(t, err)
 	require.ErrorContains(t, err, "invalid registry")
+}
+
+func TestProfileAPI_CRUDLifecycle(t *testing.T) {
+	profileRegistry, err := newInMemoryProfileService(
+		"default",
+		&gepprofiles.Profile{
+			Slug:    gepprofiles.MustProfileSlug("default"),
+			Runtime: gepprofiles.RuntimeSpec{SystemPrompt: "You are default"},
+		},
+	)
+	require.NoError(t, err)
+	resolver := newProfileRequestResolver(profileRegistry, gepprofiles.MustRegistrySlug(defaultRegistrySlug))
+
+	mux := http.NewServeMux()
+	registerProfileAPIHandlers(mux, resolver)
+
+	createReq := httptest.NewRequest(http.MethodPost, "/api/chat/profiles", bytes.NewBufferString(`{
+		"slug":"analyst",
+		"display_name":"Analyst",
+		"description":"Team analyst profile",
+		"runtime":{"system_prompt":"You are analyst"},
+		"policy":{"allow_overrides":true},
+		"set_default":true
+	}`))
+	createRec := httptest.NewRecorder()
+	mux.ServeHTTP(createRec, createReq)
+	require.Equal(t, http.StatusCreated, createRec.Code)
+	created := decodeJSON[profileDocument](t, createRec)
+	require.Equal(t, "default", created.Registry)
+	require.Equal(t, "analyst", created.Slug)
+	require.True(t, created.IsDefault)
+	require.Equal(t, uint64(1), created.Metadata.Version)
+
+	getReq := httptest.NewRequest(http.MethodGet, "/api/chat/profiles/analyst", nil)
+	getRec := httptest.NewRecorder()
+	mux.ServeHTTP(getRec, getReq)
+	require.Equal(t, http.StatusOK, getRec.Code)
+	got := decodeJSON[profileDocument](t, getRec)
+	require.Equal(t, "Analyst", got.DisplayName)
+	require.Equal(t, "You are analyst", got.Runtime.SystemPrompt)
+
+	patchReq := httptest.NewRequest(http.MethodPatch, "/api/chat/profiles/analyst", bytes.NewBufferString(`{
+		"display_name":"Analyst V2",
+		"runtime":{"system_prompt":"You are analyst v2"},
+		"expected_version":1
+	}`))
+	patchRec := httptest.NewRecorder()
+	mux.ServeHTTP(patchRec, patchReq)
+	require.Equal(t, http.StatusOK, patchRec.Code)
+	patched := decodeJSON[profileDocument](t, patchRec)
+	require.Equal(t, "Analyst V2", patched.DisplayName)
+	require.Equal(t, "You are analyst v2", patched.Runtime.SystemPrompt)
+	require.Equal(t, uint64(2), patched.Metadata.Version)
+
+	setDefaultReq := httptest.NewRequest(http.MethodPost, "/api/chat/profiles/default/default", nil)
+	setDefaultRec := httptest.NewRecorder()
+	mux.ServeHTTP(setDefaultRec, setDefaultReq)
+	require.Equal(t, http.StatusOK, setDefaultRec.Code)
+	setDefaultResp := decodeJSON[profileDocument](t, setDefaultRec)
+	require.Equal(t, "default", setDefaultResp.Slug)
+	require.True(t, setDefaultResp.IsDefault)
+
+	deleteReq := httptest.NewRequest(http.MethodDelete, "/api/chat/profiles/analyst?expected_version=2", nil)
+	deleteRec := httptest.NewRecorder()
+	mux.ServeHTTP(deleteRec, deleteReq)
+	require.Equal(t, http.StatusNoContent, deleteRec.Code)
+
+	getMissingReq := httptest.NewRequest(http.MethodGet, "/api/chat/profiles/analyst", nil)
+	getMissingRec := httptest.NewRecorder()
+	mux.ServeHTTP(getMissingRec, getMissingReq)
+	require.Equal(t, http.StatusNotFound, getMissingRec.Code)
+}
+
+func TestProfileAPI_ErrorMappings(t *testing.T) {
+	profileRegistry, err := newInMemoryProfileService(
+		"default",
+		&gepprofiles.Profile{
+			Slug:    gepprofiles.MustProfileSlug("default"),
+			Runtime: gepprofiles.RuntimeSpec{SystemPrompt: "You are default"},
+		},
+		&gepprofiles.Profile{
+			Slug:    gepprofiles.MustProfileSlug("readonly"),
+			Runtime: gepprofiles.RuntimeSpec{SystemPrompt: "You are readonly"},
+			Policy:  gepprofiles.PolicySpec{ReadOnly: true},
+		},
+	)
+	require.NoError(t, err)
+	resolver := newProfileRequestResolver(profileRegistry, gepprofiles.MustRegistrySlug(defaultRegistrySlug))
+
+	mux := http.NewServeMux()
+	registerProfileAPIHandlers(mux, resolver)
+
+	invalidSlugReq := httptest.NewRequest(http.MethodPost, "/api/chat/profiles", bytes.NewBufferString(`{"slug":"bad slug!"}`))
+	invalidSlugRec := httptest.NewRecorder()
+	mux.ServeHTTP(invalidSlugRec, invalidSlugReq)
+	require.Equal(t, http.StatusBadRequest, invalidSlugRec.Code)
+
+	readonlyPatchReq := httptest.NewRequest(http.MethodPatch, "/api/chat/profiles/readonly", bytes.NewBufferString(`{"display_name":"nope"}`))
+	readonlyPatchRec := httptest.NewRecorder()
+	mux.ServeHTTP(readonlyPatchRec, readonlyPatchReq)
+	require.Equal(t, http.StatusForbidden, readonlyPatchRec.Code)
+
+	conflictPatchReq := httptest.NewRequest(http.MethodPatch, "/api/chat/profiles/default", bytes.NewBufferString(`{
+		"display_name":"Default v2",
+		"expected_version":999
+	}`))
+	conflictPatchRec := httptest.NewRecorder()
+	mux.ServeHTTP(conflictPatchRec, conflictPatchReq)
+	require.Equal(t, http.StatusConflict, conflictPatchRec.Code)
+
+	invalidExpectedReq := httptest.NewRequest(http.MethodDelete, "/api/chat/profiles/default?expected_version=abc", nil)
+	invalidExpectedRec := httptest.NewRecorder()
+	mux.ServeHTTP(invalidExpectedRec, invalidExpectedReq)
+	require.Equal(t, http.StatusBadRequest, invalidExpectedRec.Code)
+}
+
+func TestWebChatProfileResolver_ProfilePrecedence(t *testing.T) {
+	profileRegistry, err := newInMemoryProfileService(
+		"default",
+		&gepprofiles.Profile{Slug: gepprofiles.MustProfileSlug("default"), Runtime: gepprofiles.RuntimeSpec{SystemPrompt: "default"}},
+		&gepprofiles.Profile{Slug: gepprofiles.MustProfileSlug("path"), Runtime: gepprofiles.RuntimeSpec{SystemPrompt: "path"}},
+		&gepprofiles.Profile{Slug: gepprofiles.MustProfileSlug("body"), Runtime: gepprofiles.RuntimeSpec{SystemPrompt: "body"}},
+		&gepprofiles.Profile{Slug: gepprofiles.MustProfileSlug("query"), Runtime: gepprofiles.RuntimeSpec{SystemPrompt: "query"}},
+		&gepprofiles.Profile{Slug: gepprofiles.MustProfileSlug("runtime"), Runtime: gepprofiles.RuntimeSpec{SystemPrompt: "runtime"}},
+		&gepprofiles.Profile{Slug: gepprofiles.MustProfileSlug("cookie"), Runtime: gepprofiles.RuntimeSpec{SystemPrompt: "cookie"}},
+	)
+	require.NoError(t, err)
+	resolver := newProfileRequestResolver(profileRegistry, gepprofiles.MustRegistrySlug(defaultRegistrySlug))
+
+	tests := []struct {
+		name   string
+		path   string
+		body   string
+		cookie string
+		want   string
+	}{
+		{
+			name:   "path wins",
+			path:   "/chat/path?profile=query&runtime=runtime",
+			body:   `{"prompt":"hi","conv_id":"conv-path","profile":"body"}`,
+			cookie: "cookie",
+			want:   "path",
+		},
+		{
+			name:   "body wins over query and cookie",
+			path:   "/chat?profile=query&runtime=runtime",
+			body:   `{"prompt":"hi","conv_id":"conv-body","profile":"body"}`,
+			cookie: "cookie",
+			want:   "body",
+		},
+		{
+			name:   "profile query wins over runtime query and cookie",
+			path:   "/chat?profile=query&runtime=runtime",
+			body:   `{"prompt":"hi","conv_id":"conv-query"}`,
+			cookie: "cookie",
+			want:   "query",
+		},
+		{
+			name:   "runtime query wins over cookie",
+			path:   "/chat?runtime=runtime",
+			body:   `{"prompt":"hi","conv_id":"conv-runtime"}`,
+			cookie: "cookie",
+			want:   "runtime",
+		},
+		{
+			name:   "cookie wins over default",
+			path:   "/chat",
+			body:   `{"prompt":"hi","conv_id":"conv-cookie"}`,
+			cookie: "cookie",
+			want:   "cookie",
+		},
+		{
+			name: "default fallback",
+			path: "/chat",
+			body: `{"prompt":"hi","conv_id":"conv-default"}`,
+			want: "default",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, tc.path, bytes.NewBufferString(tc.body))
+			if tc.cookie != "" {
+				req.AddCookie(&http.Cookie{Name: currentProfileCookieName, Value: tc.cookie})
+			}
+			plan, err := resolver.Resolve(req)
+			require.NoError(t, err)
+			require.Equal(t, tc.want, plan.RuntimeKey)
+		})
+	}
+}
+
+func TestWebChatProfileResolver_RegistryPrecedence_BodyOverQuery(t *testing.T) {
+	resolver := newTestResolverWithMultipleRegistries(t)
+
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"/chat?registry=default",
+		bytes.NewBufferString(`{"prompt":"hi","conv_id":"conv-1","registry":"team","profile":"analyst"}`),
+	)
+	plan, err := resolver.Resolve(req)
+	require.NoError(t, err)
+	require.Equal(t, "analyst", plan.RuntimeKey)
+	require.Equal(t, uint64(7), plan.ProfileVersion)
 }
