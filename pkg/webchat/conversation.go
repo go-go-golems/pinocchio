@@ -72,7 +72,7 @@ type ConvManager struct {
 	timelineStore      chatstore.TimelineStore
 	timelineUpsertHook func(*Conversation) func(entity *timelinepb.TimelineEntityV2, version uint64)
 
-	runtimeComposer infruntime.RuntimeComposer
+	runtimeComposer infruntime.RuntimeBuilder
 	buildSubscriber func(convID string) (message.Subscriber, bool, error)
 
 	evictIdle     time.Duration
@@ -91,7 +91,7 @@ type ConvManagerOptions struct {
 	TimelineStore      chatstore.TimelineStore
 	TimelineUpsertHook func(*Conversation) func(entity *timelinepb.TimelineEntityV2, version uint64)
 
-	RuntimeComposer infruntime.RuntimeComposer
+	RuntimeComposer infruntime.RuntimeBuilder
 	BuildSubscriber func(convID string) (message.Subscriber, bool, error)
 }
 
@@ -132,7 +132,7 @@ func (cm *ConvManager) SetIdleTimeoutSeconds(sec int) {
 	cm.mu.Unlock()
 }
 
-func (cm *ConvManager) SetRuntimeComposer(composer infruntime.RuntimeComposer) {
+func (cm *ConvManager) SetRuntimeComposer(composer infruntime.RuntimeBuilder) {
 	if cm == nil || composer == nil {
 		return
 	}
@@ -257,7 +257,7 @@ func (cm *ConvManager) GetOrCreate(
 	if cm.runtimeComposer == nil || cm.buildSubscriber == nil {
 		return nil, errors.New("conversation manager missing dependencies")
 	}
-	req := infruntime.RuntimeComposeRequest{
+	req := infruntime.ConversationRuntimeRequest{
 		ConvID:          convID,
 		RuntimeKey:      runtimeKey,
 		ProfileVersion:  profileVersion,

@@ -14,8 +14,8 @@ func TestNewChatServiceFromConversation_NilSafe(t *testing.T) {
 }
 
 func TestChatService_ResolveAndSubmitDelegateToConversationService(t *testing.T) {
-	runtimeComposer := infruntime.RuntimeComposerFunc(func(context.Context, infruntime.RuntimeComposeRequest) (infruntime.RuntimeArtifacts, error) {
-		return infruntime.RuntimeArtifacts{
+	runtimeComposer := infruntime.RuntimeBuilderFunc(func(context.Context, infruntime.ConversationRuntimeRequest) (infruntime.ComposedRuntime, error) {
+		return infruntime.ComposedRuntime{
 			Engine:             noopEngine{},
 			Sink:               noopSink{},
 			RuntimeKey:         "default",

@@ -160,7 +160,7 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 		return errors.Wrap(err, "initialize profile registry")
 	}
 
-	middlewareFactories := map[string]infruntime.MiddlewareFactory{
+	middlewareFactories := map[string]infruntime.MiddlewareBuilder{
 		"agentmode": func(cfg any) geppettomw.Middleware {
 			return agentmode.NewMiddleware(amSvc, cfg.(agentmode.Config))
 		},

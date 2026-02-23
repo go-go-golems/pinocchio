@@ -68,23 +68,3 @@ func BuildEngineFromSettings(
 
 	return runner, nil
 }
-
-// ComposeEngineFromSettings builds an engine from step settings then applies middlewares.
-func ComposeEngineFromSettings(
-	ctx context.Context,
-	stepSettings *settings.StepSettings,
-	sysPrompt string,
-	uses []MiddlewareUse,
-	mwFactories map[string]MiddlewareFactory,
-) (engine.Engine, error) {
-	return BuildEngineFromSettings(ctx, stepSettings, sysPrompt, uses, mwFactories)
-}
-
-// MiddlewareFactory is a compatibility alias for MiddlewareBuilder.
-type MiddlewareFactory = MiddlewareBuilder
-
-// ToolFactory is a compatibility alias for ToolRegistrar.
-type ToolFactory = ToolRegistrar
-
-// MiddlewareUse is a compatibility alias for MiddlewareSpec.
-type MiddlewareUse = MiddlewareSpec

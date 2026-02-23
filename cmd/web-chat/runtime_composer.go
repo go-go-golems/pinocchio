@@ -15,25 +15,25 @@ import (
 
 type webChatRuntimeComposer struct {
 	parsed      *values.Values
-	mwFactories map[string]infruntime.MiddlewareFactory
+	mwFactories map[string]infruntime.MiddlewareBuilder
 }
 
-func newWebChatRuntimeComposer(parsed *values.Values, mwFactories map[string]infruntime.MiddlewareFactory) *webChatRuntimeComposer {
+func newWebChatRuntimeComposer(parsed *values.Values, mwFactories map[string]infruntime.MiddlewareBuilder) *webChatRuntimeComposer {
 	return &webChatRuntimeComposer{
 		parsed:      parsed,
 		mwFactories: mwFactories,
 	}
 }
 
-func (c *webChatRuntimeComposer) Compose(ctx context.Context, req infruntime.RuntimeComposeRequest) (infruntime.RuntimeArtifacts, error) {
+func (c *webChatRuntimeComposer) Compose(ctx context.Context, req infruntime.ConversationRuntimeRequest) (infruntime.ComposedRuntime, error) {
 	if c == nil || c.parsed == nil {
-		return infruntime.RuntimeArtifacts{}, fmt.Errorf("runtime composer is not configured")
+		return infruntime.ComposedRuntime{}, fmt.Errorf("runtime composer is not configured")
 	}
 	if err := validateOverrides(req.Overrides); err != nil {
-		return infruntime.RuntimeArtifacts{}, err
+		return infruntime.ComposedRuntime{}, err
 	}
 	if ctx == nil {
-		return infruntime.RuntimeArtifacts{}, fmt.Errorf("compose context is nil")
+		return infruntime.ComposedRuntime{}, fmt.Errorf("compose context is nil")
 	}
 
 	runtimeKey := strings.TrimSpace(req.RuntimeKey)
@@ -54,14 +54,14 @@ func (c *webChatRuntimeComposer) Compose(ctx context.Context, req infruntime.Run
 		if arr, ok := req.Overrides["middlewares"].([]any); ok {
 			parsed, err := parseMiddlewareOverrides(arr)
 			if err != nil {
-				return infruntime.RuntimeArtifacts{}, err
+				return infruntime.ComposedRuntime{}, err
 			}
 			middlewares = parsed
 		}
 		if arr, ok := req.Overrides["tools"].([]any); ok {
 			parsed, err := parseToolOverrides(arr)
 			if err != nil {
-				return infruntime.RuntimeArtifacts{}, err
+				return infruntime.ComposedRuntime{}, err
 			}
 			tools = parsed
 		}
@@ -72,9 +72,9 @@ func (c *webChatRuntimeComposer) Compose(ctx context.Context, req infruntime.Run
 
 	stepSettings, err := settings.NewStepSettingsFromParsedValues(c.parsed)
 	if err != nil {
-		return infruntime.RuntimeArtifacts{}, err
+		return infruntime.ComposedRuntime{}, err
 	}
-	eng, err := infruntime.ComposeEngineFromSettings(
+	eng, err := infruntime.BuildEngineFromSettings(
 		ctx,
 		stepSettings.Clone(),
 		systemPrompt,
@@ -82,10 +82,10 @@ func (c *webChatRuntimeComposer) Compose(ctx context.Context, req infruntime.Run
 		c.mwFactories,
 	)
 	if err != nil {
-		return infruntime.RuntimeArtifacts{}, err
+		return infruntime.ComposedRuntime{}, err
 	}
 
-	return infruntime.RuntimeArtifacts{
+	return infruntime.ComposedRuntime{
 		Engine:             eng,
 		RuntimeKey:         runtimeKey,
 		RuntimeFingerprint: runtimeFingerprint(runtimeKey, req.ProfileVersion, systemPrompt, middlewares, tools, stepSettings),
@@ -94,17 +94,17 @@ func (c *webChatRuntimeComposer) Compose(ctx context.Context, req infruntime.Run
 	}, nil
 }
 
-func runtimeMiddlewaresFromProfile(spec *gepprofiles.RuntimeSpec) []infruntime.MiddlewareUse {
+func runtimeMiddlewaresFromProfile(spec *gepprofiles.RuntimeSpec) []infruntime.MiddlewareSpec {
 	if spec == nil || len(spec.Middlewares) == 0 {
 		return nil
 	}
-	middlewares := make([]infruntime.MiddlewareUse, 0, len(spec.Middlewares))
+	middlewares := make([]infruntime.MiddlewareSpec, 0, len(spec.Middlewares))
 	for _, mw := range spec.Middlewares {
 		name := strings.TrimSpace(mw.Name)
 		if name == "" {
 			continue
 		}
-		middlewares = append(middlewares, infruntime.MiddlewareUse{
+		middlewares = append(middlewares, infruntime.MiddlewareSpec{
 			Name:   name,
 			Config: mw.Config,
 		})
@@ -134,19 +134,19 @@ func runtimeToolsFromProfile(spec *gepprofiles.RuntimeSpec) []string {
 }
 
 type runtimeFingerprintPayload struct {
-	ProfileVersion uint64                     `json:"profile_version,omitempty"`
-	RuntimeKey     string                     `json:"runtime_key"`
-	SystemPrompt   string                     `json:"system_prompt"`
-	Middlewares    []infruntime.MiddlewareUse `json:"middlewares"`
-	Tools          []string                   `json:"tools"`
-	StepMetadata   map[string]any             `json:"step_metadata,omitempty"`
+	ProfileVersion uint64                      `json:"profile_version,omitempty"`
+	RuntimeKey     string                      `json:"runtime_key"`
+	SystemPrompt   string                      `json:"system_prompt"`
+	Middlewares    []infruntime.MiddlewareSpec `json:"middlewares"`
+	Tools          []string                    `json:"tools"`
+	StepMetadata   map[string]any              `json:"step_metadata,omitempty"`
 }
 
 func runtimeFingerprint(
 	runtimeKey string,
 	profileVersion uint64,
 	systemPrompt string,
-	middlewares []infruntime.MiddlewareUse,
+	middlewares []infruntime.MiddlewareSpec,
 	tools []string,
 	stepSettings *settings.StepSettings,
 ) string {
@@ -193,8 +193,8 @@ func validateOverrides(overrides map[string]any) error {
 	return nil
 }
 
-func parseMiddlewareOverrides(arr []any) ([]infruntime.MiddlewareUse, error) {
-	mws := make([]infruntime.MiddlewareUse, 0, len(arr))
+func parseMiddlewareOverrides(arr []any) ([]infruntime.MiddlewareSpec, error) {
+	mws := make([]infruntime.MiddlewareSpec, 0, len(arr))
 	for _, raw := range arr {
 		m, ok := raw.(map[string]any)
 		if !ok {
@@ -204,7 +204,7 @@ func parseMiddlewareOverrides(arr []any) ([]infruntime.MiddlewareUse, error) {
 		if strings.TrimSpace(name) == "" {
 			return nil, fmt.Errorf("middleware override missing name")
 		}
-		mws = append(mws, infruntime.MiddlewareUse{Name: strings.TrimSpace(name), Config: m["config"]})
+		mws = append(mws, infruntime.MiddlewareSpec{Name: strings.TrimSpace(name), Config: m["config"]})
 	}
 	return mws, nil
 }

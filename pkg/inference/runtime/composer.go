@@ -41,15 +41,3 @@ type RuntimeBuilderFunc func(ctx context.Context, req ConversationRuntimeRequest
 func (f RuntimeBuilderFunc) Compose(ctx context.Context, req ConversationRuntimeRequest) (ComposedRuntime, error) {
 	return f(ctx, req)
 }
-
-// RuntimeComposeRequest is a compatibility alias for ConversationRuntimeRequest.
-type RuntimeComposeRequest = ConversationRuntimeRequest
-
-// RuntimeArtifacts is a compatibility alias for ComposedRuntime.
-type RuntimeArtifacts = ComposedRuntime
-
-// RuntimeComposer is a compatibility alias for RuntimeBuilder.
-type RuntimeComposer = RuntimeBuilder
-
-// RuntimeComposerFunc is a compatibility alias for RuntimeBuilderFunc.
-type RuntimeComposerFunc = RuntimeBuilderFunc

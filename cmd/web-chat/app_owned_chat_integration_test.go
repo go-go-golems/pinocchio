@@ -41,12 +41,12 @@ func newAppOwnedIntegrationServer(t *testing.T) *httptest.Server {
 	staticFS := fstest.MapFS{
 		"static/index.html": {Data: []byte("<html><body>ok</body></html>")},
 	}
-	runtimeComposer := infruntime.RuntimeComposerFunc(func(_ context.Context, req infruntime.RuntimeComposeRequest) (infruntime.RuntimeArtifacts, error) {
+	runtimeComposer := infruntime.RuntimeBuilderFunc(func(_ context.Context, req infruntime.ConversationRuntimeRequest) (infruntime.ComposedRuntime, error) {
 		runtimeKey := strings.TrimSpace(req.RuntimeKey)
 		if runtimeKey == "" {
 			runtimeKey = "default"
 		}
-		return infruntime.RuntimeArtifacts{
+		return infruntime.ComposedRuntime{
 			Engine:             integrationNoopEngine{},
 			Sink:               integrationNoopSink{},
 			RuntimeKey:         runtimeKey,

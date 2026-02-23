@@ -22,7 +22,7 @@ import (
 type RunLoop func(ctx context.Context, eng engine.Engine, t *turns.Turn, reg geptools.ToolRegistry, opts map[string]any) (*turns.Turn, error)
 
 // EventSinkWrapper allows callers to wrap or replace the default event sink.
-type EventSinkWrapper func(convID string, req infruntime.RuntimeComposeRequest, sink events.EventSink) (events.EventSink, error)
+type EventSinkWrapper func(convID string, req infruntime.ConversationRuntimeRequest, sink events.EventSink) (events.EventSink, error)
 
 // Router wires HTTP endpoints, registries and conversation lifecycle.
 type Router struct {
@@ -37,8 +37,8 @@ type Router struct {
 	streamBackend StreamBackend
 
 	// registries
-	mwFactories   map[string]infruntime.MiddlewareFactory
-	toolFactories map[string]infruntime.ToolFactory
+	mwFactories   map[string]infruntime.MiddlewareBuilder
+	toolFactories map[string]infruntime.ToolRegistrar
 
 	// shared deps
 	db            *sql.DB
@@ -63,7 +63,7 @@ type Router struct {
 	stepCtrl *toolloop.StepController
 
 	// app-owned runtime wiring
-	runtimeComposer infruntime.RuntimeComposer
+	runtimeComposer infruntime.RuntimeBuilder
 
 	// optional overrides for conv manager hooks
 	buildSubscriberOverride    func(convID string) (message.Subscriber, bool, error)

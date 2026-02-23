@@ -30,7 +30,7 @@ type ConversationServiceConfig struct {
 	TurnStore          chatstore.TurnStore
 	SEMPublisher       message.Publisher
 	TimelineUpsertHook func(*Conversation) func(entity *timelinepb.TimelineEntityV2, version uint64)
-	ToolFactories      map[string]infruntime.ToolFactory
+	ToolFactories      map[string]infruntime.ToolRegistrar
 }
 
 type ConversationService struct {
@@ -43,7 +43,7 @@ type ConversationService struct {
 	turnStore      chatstore.TurnStore
 	semPublisher   message.Publisher
 	timelineUpsert func(*Conversation) func(entity *timelinepb.TimelineEntityV2, version uint64)
-	toolFactories  map[string]infruntime.ToolFactory
+	toolFactories  map[string]infruntime.ToolRegistrar
 }
 
 type AppConversationRequest struct {
@@ -99,7 +99,7 @@ func NewConversationService(cfg ConversationServiceConfig) (*ConversationService
 	}
 	toolFactories := cfg.ToolFactories
 	if toolFactories == nil {
-		toolFactories = map[string]infruntime.ToolFactory{}
+		toolFactories = map[string]infruntime.ToolRegistrar{}
 	}
 	return &ConversationService{
 		baseCtx:        cfg.BaseCtx,
@@ -142,12 +142,12 @@ func (s *ConversationService) SetStepController(sc *toolloop.StepController) {
 	s.stepCtrl = sc
 }
 
-func (s *ConversationService) RegisterTool(name string, f infruntime.ToolFactory) {
+func (s *ConversationService) RegisterTool(name string, f infruntime.ToolRegistrar) {
 	if s == nil || strings.TrimSpace(name) == "" || f == nil {
 		return
 	}
 	if s.toolFactories == nil {
-		s.toolFactories = map[string]infruntime.ToolFactory{}
+		s.toolFactories = map[string]infruntime.ToolRegistrar{}
 	}
 	s.toolFactories[strings.TrimSpace(name)] = f
 }

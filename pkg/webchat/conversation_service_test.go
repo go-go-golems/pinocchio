@@ -54,8 +54,8 @@ type noopSink struct{}
 func (noopSink) PublishEvent(events.Event) error { return nil }
 
 func TestConversationService_SubmitPromptQueuesWhenConversationBusy(t *testing.T) {
-	runtimeComposer := infruntime.RuntimeComposerFunc(func(context.Context, infruntime.RuntimeComposeRequest) (infruntime.RuntimeArtifacts, error) {
-		return infruntime.RuntimeArtifacts{
+	runtimeComposer := infruntime.RuntimeBuilderFunc(func(context.Context, infruntime.ConversationRuntimeRequest) (infruntime.ComposedRuntime, error) {
+		return infruntime.ComposedRuntime{
 			Engine:             noopEngine{},
 			Sink:               noopSink{},
 			RuntimeKey:         "default",
@@ -99,8 +99,8 @@ func TestConversationService_SubmitPromptQueuesWhenConversationBusy(t *testing.T
 }
 
 func TestConversationService_ResolveAndEnsureConversation_DefaultsAndLifecycle(t *testing.T) {
-	runtimeComposer := infruntime.RuntimeComposerFunc(func(context.Context, infruntime.RuntimeComposeRequest) (infruntime.RuntimeArtifacts, error) {
-		return infruntime.RuntimeArtifacts{
+	runtimeComposer := infruntime.RuntimeBuilderFunc(func(context.Context, infruntime.ConversationRuntimeRequest) (infruntime.ComposedRuntime, error) {
+		return infruntime.ComposedRuntime{
 			Engine:             noopEngine{},
 			Sink:               noopSink{},
 			RuntimeKey:         "default",
@@ -131,10 +131,10 @@ func TestConversationService_ResolveAndEnsureConversation_DefaultsAndLifecycle(t
 
 func TestConversationService_ResolveAndEnsureConversation_RebuildsOnProfileVersionChange(t *testing.T) {
 	callCount := 0
-	runtimeComposer := infruntime.RuntimeComposerFunc(func(_ context.Context, req infruntime.RuntimeComposeRequest) (infruntime.RuntimeArtifacts, error) {
+	runtimeComposer := infruntime.RuntimeBuilderFunc(func(_ context.Context, req infruntime.ConversationRuntimeRequest) (infruntime.ComposedRuntime, error) {
 		callCount++
 		engineID := fmt.Sprintf("eng-v%d-call-%d", req.ProfileVersion, callCount)
-		return infruntime.RuntimeArtifacts{
+		return infruntime.ComposedRuntime{
 			Engine:             &versionedEngine{id: engineID},
 			Sink:               noopSink{},
 			RuntimeKey:         "default",
@@ -190,8 +190,8 @@ func TestConversationService_ResolveAndEnsureConversation_RebuildsOnProfileVersi
 }
 
 func TestConversationService_SubmitPromptRejectsMissingPrompt(t *testing.T) {
-	runtimeComposer := infruntime.RuntimeComposerFunc(func(context.Context, infruntime.RuntimeComposeRequest) (infruntime.RuntimeArtifacts, error) {
-		return infruntime.RuntimeArtifacts{
+	runtimeComposer := infruntime.RuntimeBuilderFunc(func(context.Context, infruntime.ConversationRuntimeRequest) (infruntime.ComposedRuntime, error) {
+		return infruntime.ComposedRuntime{
 			Engine:             noopEngine{},
 			Sink:               noopSink{},
 			RuntimeKey:         "default",
@@ -221,8 +221,8 @@ func TestConversationService_SubmitPromptRejectsMissingPrompt(t *testing.T) {
 }
 
 func TestConversationService_AttachWebSocketValidatesArguments(t *testing.T) {
-	runtimeComposer := infruntime.RuntimeComposerFunc(func(context.Context, infruntime.RuntimeComposeRequest) (infruntime.RuntimeArtifacts, error) {
-		return infruntime.RuntimeArtifacts{
+	runtimeComposer := infruntime.RuntimeBuilderFunc(func(context.Context, infruntime.ConversationRuntimeRequest) (infruntime.ComposedRuntime, error) {
+		return infruntime.ComposedRuntime{
 			Engine:             noopEngine{},
 			Sink:               noopSink{},
 			RuntimeKey:         "default",

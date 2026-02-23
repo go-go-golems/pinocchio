@@ -15,7 +15,7 @@ import (
 // RouterOption configures optional dependencies for a Router.
 type RouterOption func(*Router) error
 
-func WithRuntimeComposer(composer infruntime.RuntimeComposer) RouterOption {
+func WithRuntimeComposer(composer infruntime.RuntimeBuilder) RouterOption {
 	return func(r *Router) error {
 		if composer == nil {
 			return errors.New("runtime composer is nil")

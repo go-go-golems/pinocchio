@@ -71,9 +71,9 @@ func TestRuntimeFingerprint_DoesNotIncludeAPIKeys(t *testing.T) {
 }
 
 func TestWebChatRuntimeComposer_RejectsInvalidOverrideTypes(t *testing.T) {
-	composer := newWebChatRuntimeComposer(values.New(), map[string]infruntime.MiddlewareFactory{})
+	composer := newWebChatRuntimeComposer(values.New(), map[string]infruntime.MiddlewareBuilder{})
 
-	_, err := composer.Compose(context.Background(), infruntime.RuntimeComposeRequest{
+	_, err := composer.Compose(context.Background(), infruntime.ConversationRuntimeRequest{
 		ConvID:     "c1",
 		RuntimeKey: "default",
 		Overrides:  map[string]any{"middlewares": "bad"},
@@ -84,9 +84,9 @@ func TestWebChatRuntimeComposer_RejectsInvalidOverrideTypes(t *testing.T) {
 }
 
 func TestWebChatRuntimeComposer_UsesResolvedRuntimeSpec(t *testing.T) {
-	composer := newWebChatRuntimeComposer(minimalRuntimeComposerValues(t), map[string]infruntime.MiddlewareFactory{})
+	composer := newWebChatRuntimeComposer(minimalRuntimeComposerValues(t), map[string]infruntime.MiddlewareBuilder{})
 
-	res, err := composer.Compose(context.Background(), infruntime.RuntimeComposeRequest{
+	res, err := composer.Compose(context.Background(), infruntime.ConversationRuntimeRequest{
 		ConvID:     "c1",
 		RuntimeKey: "analyst",
 		ResolvedRuntime: &gepprofiles.RuntimeSpec{
@@ -106,9 +106,9 @@ func TestWebChatRuntimeComposer_UsesResolvedRuntimeSpec(t *testing.T) {
 }
 
 func TestWebChatRuntimeComposer_OverridesResolvedRuntimeSpec(t *testing.T) {
-	composer := newWebChatRuntimeComposer(minimalRuntimeComposerValues(t), map[string]infruntime.MiddlewareFactory{})
+	composer := newWebChatRuntimeComposer(minimalRuntimeComposerValues(t), map[string]infruntime.MiddlewareBuilder{})
 
-	res, err := composer.Compose(context.Background(), infruntime.RuntimeComposeRequest{
+	res, err := composer.Compose(context.Background(), infruntime.ConversationRuntimeRequest{
 		ConvID:     "c1",
 		RuntimeKey: "analyst",
 		ResolvedRuntime: &gepprofiles.RuntimeSpec{
