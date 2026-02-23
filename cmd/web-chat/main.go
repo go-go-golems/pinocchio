@@ -98,6 +98,8 @@ func NewCommand() (*Command, error) {
 			fields.New("timeline-db", fields.TypeString, fields.WithDefault(""), fields.WithHelp("SQLite DB file path for durable timeline snapshots (enables GET /timeline); DSN is derived with WAL/busy_timeout")),
 			fields.New("turns-dsn", fields.TypeString, fields.WithDefault(""), fields.WithHelp("SQLite DSN for durable turn snapshots (enables GET /turns); preferred over turns-db")),
 			fields.New("turns-db", fields.TypeString, fields.WithDefault(""), fields.WithHelp("SQLite DB file path for durable turn snapshots (enables GET /turns); DSN is derived with WAL/busy_timeout")),
+			fields.New("profile-registry-dsn", fields.TypeString, fields.WithDefault(""), fields.WithHelp("SQLite DSN for durable profile registry storage (preferred over profile-registry-db)")),
+			fields.New("profile-registry-db", fields.TypeString, fields.WithDefault(""), fields.WithHelp("SQLite DB file path for durable profile registry storage (DSN derived with WAL/busy_timeout)")),
 		),
 		cmds.WithSections(append(geLayers, redisLayer)...),
 	)
@@ -106,8 +108,10 @@ func NewCommand() (*Command, error) {
 
 func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io.Writer) error {
 	type serverSettings struct {
-		Root     string `glazed:"root"`
-		DebugAPI bool   `glazed:"debug-api"`
+		Root               string `glazed:"root"`
+		DebugAPI           bool   `glazed:"debug-api"`
+		ProfileRegistryDSN string `glazed:"profile-registry-dsn"`
+		ProfileRegistryDB  string `glazed:"profile-registry-db"`
 	}
 	s := &serverSettings{}
 	if err := parsed.DecodeSectionInto(values.DefaultSlug, s); err != nil {
@@ -136,16 +140,15 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 	amCfg := agentmode.DefaultConfig()
 	amCfg.DefaultMode = "financial_analyst"
 
-	profileRegistry, err := newInMemoryProfileService(
-		"default",
-		&gepprofiles.Profile{
+	defaultProfiles := []*gepprofiles.Profile{
+		{
 			Slug: gepprofiles.MustProfileSlug("default"),
 			Runtime: gepprofiles.RuntimeSpec{
 				SystemPrompt: "You are an assistant",
 				Middlewares:  []gepprofiles.MiddlewareUse{},
 			},
 		},
-		&gepprofiles.Profile{
+		{
 			Slug: gepprofiles.MustProfileSlug("agent"),
 			Runtime: gepprofiles.RuntimeSpec{
 				SystemPrompt: "You are a helpful assistant. Be concise.",
@@ -155,10 +158,24 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 				AllowOverrides: true,
 			},
 		},
-	)
+	}
+
+	var profileRegistry gepprofiles.Registry
+	profileRegistryCleanup := func() {}
+	if strings.TrimSpace(s.ProfileRegistryDSN) != "" || strings.TrimSpace(s.ProfileRegistryDB) != "" {
+		profileRegistry, profileRegistryCleanup, err = newSQLiteProfileService(
+			s.ProfileRegistryDSN,
+			s.ProfileRegistryDB,
+			"default",
+			defaultProfiles...,
+		)
+	} else {
+		profileRegistry, err = newInMemoryProfileService("default", defaultProfiles...)
+	}
 	if err != nil {
 		return errors.Wrap(err, "initialize profile registry")
 	}
+	defer profileRegistryCleanup()
 
 	middlewareFactories := map[string]infruntime.MiddlewareBuilder{
 		"agentmode": func(cfg any) geppettomw.Middleware {

@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -24,7 +26,7 @@ const (
 	profileWriteSource = "http-api"
 )
 
-func newInMemoryProfileService(defaultSlug string, profileDefs ...*gepprofiles.Profile) (gepprofiles.Registry, error) {
+func buildBootstrapRegistry(defaultSlug string, profileDefs ...*gepprofiles.Profile) (*gepprofiles.ProfileRegistry, error) {
 	registrySlug := gepprofiles.MustRegistrySlug(defaultRegistrySlug)
 	registry := &gepprofiles.ProfileRegistry{
 		Slug:     registrySlug,
@@ -65,12 +67,81 @@ func newInMemoryProfileService(defaultSlug string, profileDefs ...*gepprofiles.P
 	if err := gepprofiles.ValidateRegistry(registry); err != nil {
 		return nil, err
 	}
+	return registry, nil
+}
+
+func newInMemoryProfileService(defaultSlug string, profileDefs ...*gepprofiles.Profile) (gepprofiles.Registry, error) {
+	registrySlug := gepprofiles.MustRegistrySlug(defaultRegistrySlug)
+	registry, err := buildBootstrapRegistry(defaultSlug, profileDefs...)
+	if err != nil {
+		return nil, err
+	}
 
 	store := gepprofiles.NewInMemoryProfileStore()
 	if err := store.UpsertRegistry(context.Background(), registry, gepprofiles.SaveOptions{Actor: "web-chat", Source: "builtin"}); err != nil {
 		return nil, err
 	}
 	return gepprofiles.NewStoreRegistry(store, registrySlug)
+}
+
+func newSQLiteProfileService(
+	dsn string,
+	dbPath string,
+	defaultSlug string,
+	profileDefs ...*gepprofiles.Profile,
+) (gepprofiles.Registry, func(), error) {
+	registrySlug := gepprofiles.MustRegistrySlug(defaultRegistrySlug)
+	dsn = strings.TrimSpace(dsn)
+	dbPath = strings.TrimSpace(dbPath)
+
+	if dsn == "" {
+		if dbPath == "" {
+			return nil, nil, fmt.Errorf("profile-registry-dsn or profile-registry-db is required")
+		}
+		if dir := filepath.Dir(dbPath); dir != "" && dir != "." {
+			if err := os.MkdirAll(dir, 0o755); err != nil {
+				return nil, nil, err
+			}
+		}
+		var err error
+		dsn, err = gepprofiles.SQLiteProfileDSNForFile(dbPath)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+
+	store, err := gepprofiles.NewSQLiteProfileStore(dsn, registrySlug)
+	if err != nil {
+		return nil, nil, err
+	}
+	cleanup := func() { _ = store.Close() }
+
+	existing, ok, err := store.GetRegistry(context.Background(), registrySlug)
+	if err != nil {
+		cleanup()
+		return nil, nil, err
+	}
+	if !ok || existing == nil || len(existing.Profiles) == 0 {
+		registry, err := buildBootstrapRegistry(defaultSlug, profileDefs...)
+		if err != nil {
+			cleanup()
+			return nil, nil, err
+		}
+		if err := store.UpsertRegistry(context.Background(), registry, gepprofiles.SaveOptions{
+			Actor:  profileWriteActor,
+			Source: "bootstrap",
+		}); err != nil {
+			cleanup()
+			return nil, nil, err
+		}
+	}
+
+	svc, err := gepprofiles.NewStoreRegistry(store, registrySlug)
+	if err != nil {
+		cleanup()
+		return nil, nil, err
+	}
+	return svc, cleanup, nil
 }
 
 func firstProfileSlug(profiles map[gepprofiles.ProfileSlug]*gepprofiles.Profile) gepprofiles.ProfileSlug {

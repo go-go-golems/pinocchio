@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"testing"
 
 	gepprofiles "github.com/go-go-golems/geppetto/pkg/profiles"
@@ -414,4 +415,48 @@ func TestWebChatProfileResolver_RegistryPrecedence_BodyOverQuery(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "analyst", plan.RuntimeKey)
 	require.Equal(t, uint64(7), plan.ProfileVersion)
+}
+
+func TestNewSQLiteProfileService_BootstrapAndReopen(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "profiles.db")
+
+	registry, cleanup, err := newSQLiteProfileService(
+		"",
+		dbPath,
+		"default",
+		&gepprofiles.Profile{
+			Slug:    gepprofiles.MustProfileSlug("default"),
+			Runtime: gepprofiles.RuntimeSpec{SystemPrompt: "You are default"},
+		},
+		&gepprofiles.Profile{
+			Slug:    gepprofiles.MustProfileSlug("agent"),
+			Runtime: gepprofiles.RuntimeSpec{SystemPrompt: "You are agent"},
+		},
+	)
+	require.NoError(t, err)
+	t.Cleanup(cleanup)
+
+	profiles_, err := registry.ListProfiles(context.Background(), gepprofiles.MustRegistrySlug(defaultRegistrySlug))
+	require.NoError(t, err)
+	require.Len(t, profiles_, 2)
+
+	registryAgain, cleanupAgain, err := newSQLiteProfileService(
+		"",
+		dbPath,
+		"default",
+		&gepprofiles.Profile{
+			Slug:    gepprofiles.MustProfileSlug("default"),
+			Runtime: gepprofiles.RuntimeSpec{SystemPrompt: "You are default"},
+		},
+		&gepprofiles.Profile{
+			Slug:    gepprofiles.MustProfileSlug("agent"),
+			Runtime: gepprofiles.RuntimeSpec{SystemPrompt: "You are agent"},
+		},
+	)
+	require.NoError(t, err)
+	t.Cleanup(cleanupAgain)
+
+	profilesAgain, err := registryAgain.ListProfiles(context.Background(), gepprofiles.MustRegistrySlug(defaultRegistrySlug))
+	require.NoError(t, err)
+	require.Len(t, profilesAgain, 2)
 }
