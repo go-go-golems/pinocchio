@@ -45,7 +45,7 @@ lintmax: build geppetto-lint-build
 
 gosec:
 	go install github.com/securego/gosec/v2/cmd/gosec@latest
-	gosec -exclude=G101,G203,G304,G301,G306,G204,G302 -exclude-dir=.history -exclude-dir=testdata -exclude-dir=pkg/sem/pb ./...
+	gosec -exclude=G101,G203,G304,G301,G306,G204,G302 -exclude-generated -exclude-dir=.history -exclude-dir=testdata -exclude-dir=pkg/sem/pb -exclude-dir=cmd/web-chat/thinkingmode/pb ./...
 
 govulncheck:
 	go install golang.org/x/vuln/cmd/govulncheck@latest

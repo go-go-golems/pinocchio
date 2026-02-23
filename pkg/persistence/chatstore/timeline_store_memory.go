@@ -220,8 +220,9 @@ func (s *InMemoryTimelineStore) GetSnapshot(ctx context.Context, convID string, 
 	}
 
 	type pair struct {
-		entity  *timelinepb.TimelineEntityV2
-		version uint64
+		entity      *timelinepb.TimelineEntityV2
+		version     uint64
+		createdAtMs int64
 	}
 	pairs := make([]pair, 0, len(conv.entities))
 	for id, e := range conv.entities {
@@ -229,16 +230,20 @@ func (s *InMemoryTimelineStore) GetSnapshot(ctx context.Context, convID string, 
 		if sinceVersion > 0 && v <= sinceVersion {
 			continue
 		}
-		pairs = append(pairs, pair{entity: e, version: v})
+		createdAtMs := int64(0)
+		if e != nil {
+			createdAtMs = e.CreatedAtMs
+		}
+		pairs = append(pairs, pair{entity: e, version: v, createdAtMs: createdAtMs})
 	}
 	sort.Slice(pairs, func(i, j int) bool {
-		if pairs[i].version == pairs[j].version {
+		if pairs[i].createdAtMs == pairs[j].createdAtMs {
 			if pairs[i].entity == nil || pairs[j].entity == nil {
 				return pairs[i].version < pairs[j].version
 			}
 			return pairs[i].entity.Id < pairs[j].entity.Id
 		}
-		return pairs[i].version < pairs[j].version
+		return pairs[i].createdAtMs < pairs[j].createdAtMs
 	})
 
 	if len(pairs) > limit {

@@ -43,8 +43,8 @@ func TestInMemoryTimelineStore_UpsertAndSnapshot(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, uint64(30), full.Version)
 	require.Len(t, full.Entities, 2)
-	require.Equal(t, "m1", full.Entities[0].Id)
-	require.Equal(t, "m2", full.Entities[1].Id)
+	require.Equal(t, "m2", full.Entities[0].Id)
+	require.Equal(t, "m1", full.Entities[1].Id)
 
 	// Evict oldest (m1) when exceeding limit
 	err = s.Upsert(ctx, convID, 40, &timelinepb.TimelineEntityV2{
