@@ -124,6 +124,8 @@ func run(ctx context.Context, parsed *values.Values) error {
 
 Use this to keep runtime/profile/cookie policy in app code instead of framework internals.
 
+For full profile registry selection and CRUD semantics, see [Webchat Profile Registry Guide](webchat-profile-registry.md).
+
 ## Root Prefix Mounting
 
 For `--root /chat`, mount your app mux under a parent with `StripPrefix` and keep handler internals unchanged.
@@ -179,5 +181,6 @@ Turn snapshots are debug-facing and served via `/api/debug/turns`.
 
 - [Webchat HTTP Chat Setup](webchat-http-chat-setup.md)
 - [Webchat User Guide](webchat-user-guide.md)
+- [Webchat Profile Registry Guide](webchat-profile-registry.md)
 - [Webchat Frontend Integration](webchat-frontend-integration.md)
 - [Webchat Debugging and Ops](webchat-debugging-and-ops.md)

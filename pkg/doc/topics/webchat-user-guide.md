@@ -95,6 +95,8 @@ Typical resolver behavior:
 - enforce override policy
 - return typed `RequestResolutionError` for client-visible errors
 
+For the full registry model (selection precedence, CRUD endpoints, and policy/version semantics), use [Webchat Profile Registry Guide](webchat-profile-registry.md) as the authoritative reference.
+
 ## Timeline Hydration
 
 Hydration should always call `/api/timeline`.
@@ -136,4 +138,5 @@ Frontend code should:
 
 - [Webchat HTTP Chat Setup](webchat-http-chat-setup.md)
 - [Webchat Framework Guide](webchat-framework-guide.md)
+- [Webchat Profile Registry Guide](webchat-profile-registry.md)
 - [Webchat Frontend Integration](webchat-frontend-integration.md)
