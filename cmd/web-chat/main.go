@@ -22,6 +22,7 @@ import (
 
 	geppettomw "github.com/go-go-golems/geppetto/pkg/inference/middleware"
 	geptools "github.com/go-go-golems/geppetto/pkg/inference/tools"
+	gepprofiles "github.com/go-go-golems/geppetto/pkg/profiles"
 	geppettosections "github.com/go-go-golems/geppetto/pkg/sections"
 	toolspkg "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/tools"
 	thinkingmode "github.com/go-go-golems/pinocchio/cmd/web-chat/thinkingmode"
@@ -135,16 +136,29 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 	amCfg := agentmode.DefaultConfig()
 	amCfg.DefaultMode = "financial_analyst"
 
-	profiles := newChatProfileRegistry(
+	profileRegistry, err := newInMemoryProfileRegistry(
 		"default",
-		&chatProfile{Slug: "default", DefaultPrompt: "You are an assistant", DefaultMws: []infruntime.MiddlewareUse{}},
-		&chatProfile{
-			Slug:           "agent",
-			DefaultPrompt:  "You are a helpful assistant. Be concise.",
-			DefaultMws:     []infruntime.MiddlewareUse{{Name: "agentmode", Config: amCfg}},
-			AllowOverrides: true,
+		&gepprofiles.Profile{
+			Slug: gepprofiles.MustProfileSlug("default"),
+			Runtime: gepprofiles.RuntimeSpec{
+				SystemPrompt: "You are an assistant",
+				Middlewares:  []gepprofiles.MiddlewareUse{},
+			},
+		},
+		&gepprofiles.Profile{
+			Slug: gepprofiles.MustProfileSlug("agent"),
+			Runtime: gepprofiles.RuntimeSpec{
+				SystemPrompt: "You are a helpful assistant. Be concise.",
+				Middlewares:  []gepprofiles.MiddlewareUse{{Name: "agentmode", Config: amCfg}},
+			},
+			Policy: gepprofiles.PolicySpec{
+				AllowOverrides: true,
+			},
 		},
 	)
+	if err != nil {
+		return errors.Wrap(err, "initialize profile registry")
+	}
 
 	middlewareFactories := map[string]infruntime.MiddlewareFactory{
 		"agentmode": func(cfg any) geppettomw.Middleware {
@@ -159,7 +173,7 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 		},
 	}
 	runtimeComposer := newWebChatRuntimeComposer(parsed, middlewareFactories)
-	requestResolver := newWebChatProfileResolver(profiles)
+	requestResolver := newWebChatProfileResolver(profileRegistry, gepprofiles.MustRegistrySlug(defaultWebChatRegistrySlug))
 
 	// Register app-owned thinking-mode SEM/timeline handlers.
 	thinkingmode.Register()
@@ -206,7 +220,7 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 	appMux.HandleFunc("/chat", chatHandler)
 	appMux.HandleFunc("/chat/", chatHandler)
 	appMux.HandleFunc("/ws", wsHandler)
-	registerProfileHandlers(appMux, profiles)
+	registerProfileHandlers(appMux, requestResolver)
 	timelineLogger := log.With().Str("component", "webchat").Str("route", "/api/timeline").Logger()
 	timelineHandler := webhttp.NewTimelineHandler(srv.TimelineService(), timelineLogger)
 	appMux.HandleFunc("/api/timeline", timelineHandler)

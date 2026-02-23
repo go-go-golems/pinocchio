@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/go-go-golems/geppetto/pkg/events"
+	gepprofiles "github.com/go-go-golems/geppetto/pkg/profiles"
 	"github.com/go-go-golems/geppetto/pkg/turns"
 	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
@@ -57,12 +58,17 @@ func newAppOwnedIntegrationServer(t *testing.T) *httptest.Server {
 	webchatSrv, err := webchat.NewServer(context.Background(), parsed, staticFS, webchat.WithRuntimeComposer(runtimeComposer))
 	require.NoError(t, err)
 
-	profiles := newChatProfileRegistry(
+	profileRegistry, err := newInMemoryProfileRegistry(
 		"default",
-		&chatProfile{Slug: "default", DefaultPrompt: "You are default"},
-		&chatProfile{Slug: "agent", DefaultPrompt: "You are agent", AllowOverrides: true},
+		&gepprofiles.Profile{Slug: gepprofiles.MustProfileSlug("default"), Runtime: gepprofiles.RuntimeSpec{SystemPrompt: "You are default"}},
+		&gepprofiles.Profile{
+			Slug:    gepprofiles.MustProfileSlug("agent"),
+			Runtime: gepprofiles.RuntimeSpec{SystemPrompt: "You are agent"},
+			Policy:  gepprofiles.PolicySpec{AllowOverrides: true},
+		},
 	)
-	requestResolver := newWebChatProfileResolver(profiles)
+	require.NoError(t, err)
+	requestResolver := newWebChatProfileResolver(profileRegistry, gepprofiles.MustRegistrySlug(defaultWebChatRegistrySlug))
 	chatHandler := webhttp.NewChatHandler(webchatSrv.ChatService(), requestResolver)
 	wsHandler := webhttp.NewWSHandler(
 		webchatSrv.StreamHub(),

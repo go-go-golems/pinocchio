@@ -1,100 +1,92 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
+	"sort"
 	"strings"
 
+	gepprofiles "github.com/go-go-golems/geppetto/pkg/profiles"
 	"github.com/google/uuid"
 
-	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 	webhttp "github.com/go-go-golems/pinocchio/pkg/webchat/http"
 )
 
-type chatProfile struct {
-	Slug           string
-	DefaultPrompt  string
-	DefaultTools   []string
-	DefaultMws     []infruntime.MiddlewareUse
-	AllowOverrides bool
-}
+const defaultWebChatRegistrySlug = "default"
 
-type chatProfileRegistry struct {
-	bySlug      map[string]*chatProfile
-	order       []string
-	defaultSlug string
-}
-
-func newChatProfileRegistry(defaultSlug string, profiles ...*chatProfile) *chatProfileRegistry {
-	reg := &chatProfileRegistry{
-		bySlug:      map[string]*chatProfile{},
-		order:       []string{},
-		defaultSlug: strings.TrimSpace(defaultSlug),
+func newInMemoryProfileRegistry(defaultSlug string, profileDefs ...*gepprofiles.Profile) (gepprofiles.Registry, error) {
+	registrySlug := gepprofiles.MustRegistrySlug(defaultWebChatRegistrySlug)
+	registry := &gepprofiles.ProfileRegistry{
+		Slug:     registrySlug,
+		Profiles: map[gepprofiles.ProfileSlug]*gepprofiles.Profile{},
 	}
-	for _, p := range profiles {
-		if p == nil || strings.TrimSpace(p.Slug) == "" {
+
+	for _, profile := range profileDefs {
+		if profile == nil {
 			continue
 		}
-		slug := strings.TrimSpace(p.Slug)
-		cp := *p
-		cp.Slug = slug
-		reg.bySlug[slug] = &cp
-		reg.order = append(reg.order, slug)
+		clone := profile.Clone()
+		if clone == nil {
+			continue
+		}
+		if err := gepprofiles.ValidateProfile(clone); err != nil {
+			return nil, err
+		}
+		registry.Profiles[clone.Slug] = clone
 	}
-	if reg.defaultSlug == "" || reg.bySlug[reg.defaultSlug] == nil {
-		if len(reg.order) > 0 {
-			reg.defaultSlug = reg.order[0]
-		} else {
-			reg.defaultSlug = "default"
+
+	if strings.TrimSpace(defaultSlug) != "" {
+		slug, err := gepprofiles.ParseProfileSlug(defaultSlug)
+		if err != nil {
+			return nil, err
+		}
+		registry.DefaultProfileSlug = slug
+	}
+
+	if len(registry.Profiles) > 0 {
+		if registry.DefaultProfileSlug.IsZero() {
+			registry.DefaultProfileSlug = firstProfileSlug(registry.Profiles)
+		}
+		if _, ok := registry.Profiles[registry.DefaultProfileSlug]; !ok {
+			registry.DefaultProfileSlug = firstProfileSlug(registry.Profiles)
 		}
 	}
-	return reg
+
+	if err := gepprofiles.ValidateRegistry(registry); err != nil {
+		return nil, err
+	}
+
+	store := gepprofiles.NewInMemoryProfileStore()
+	if err := store.UpsertRegistry(context.Background(), registry, gepprofiles.SaveOptions{Actor: "web-chat", Source: "builtin"}); err != nil {
+		return nil, err
+	}
+	return gepprofiles.NewStoreRegistry(store, registrySlug)
 }
 
-func (r *chatProfileRegistry) get(slug string) (*chatProfile, bool) {
-	if r == nil {
-		return nil, false
+func firstProfileSlug(profiles map[gepprofiles.ProfileSlug]*gepprofiles.Profile) gepprofiles.ProfileSlug {
+	slugs := make([]gepprofiles.ProfileSlug, 0, len(profiles))
+	for slug := range profiles {
+		slugs = append(slugs, slug)
 	}
-	s := strings.TrimSpace(slug)
-	if s == "" {
-		return nil, false
+	sort.Slice(slugs, func(i, j int) bool { return slugs[i] < slugs[j] })
+	if len(slugs) == 0 {
+		return ""
 	}
-	p, ok := r.bySlug[s]
-	return p, ok
-}
-
-func (r *chatProfileRegistry) list() []*chatProfile {
-	if r == nil {
-		return nil
-	}
-	out := make([]*chatProfile, 0, len(r.order))
-	for _, slug := range r.order {
-		if p := r.bySlug[slug]; p != nil {
-			out = append(out, p)
-		}
-	}
-	return out
-}
-
-func (r *chatProfileRegistry) resolveDefault() string {
-	if r == nil {
-		return "default"
-	}
-	if strings.TrimSpace(r.defaultSlug) != "" {
-		return r.defaultSlug
-	}
-	if len(r.order) > 0 {
-		return r.order[0]
-	}
-	return "default"
+	return slugs[0]
 }
 
 type webChatProfileResolver struct {
-	profiles *chatProfileRegistry
+	profileRegistry gepprofiles.Registry
+	registrySlug    gepprofiles.RegistrySlug
 }
 
-func newWebChatProfileResolver(profiles *chatProfileRegistry) *webChatProfileResolver {
-	return &webChatProfileResolver{profiles: profiles}
+func newWebChatProfileResolver(profileRegistry gepprofiles.Registry, registrySlug gepprofiles.RegistrySlug) *webChatProfileResolver {
+	if registrySlug.IsZero() {
+		registrySlug = gepprofiles.MustRegistrySlug(defaultWebChatRegistrySlug)
+	}
+	return &webChatProfileResolver{profileRegistry: profileRegistry, registrySlug: registrySlug}
 }
 
 func (r *webChatProfileResolver) Resolve(req *http.Request) (webhttp.ConversationRequestPlan, error) {
@@ -126,7 +118,7 @@ func (r *webChatProfileResolver) resolveWS(req *http.Request) (webhttp.Conversat
 
 	return webhttp.ConversationRequestPlan{
 		ConvID:     convID,
-		RuntimeKey: slug,
+		RuntimeKey: slug.String(),
 		Overrides:  overrides,
 	}, nil
 }
@@ -158,47 +150,95 @@ func (r *webChatProfileResolver) resolveChat(req *http.Request) (webhttp.Convers
 
 	return webhttp.ConversationRequestPlan{
 		ConvID:         convID,
-		RuntimeKey:     slug,
+		RuntimeKey:     slug.String(),
 		Overrides:      overrides,
 		Prompt:         body.Prompt,
 		IdempotencyKey: strings.TrimSpace(body.IdempotencyKey),
 	}, nil
 }
 
-func (r *webChatProfileResolver) resolveProfile(req *http.Request, pathSlug string) (string, *chatProfile, error) {
-	slug := strings.TrimSpace(pathSlug)
-	if slug == "" && req != nil {
-		slug = strings.TrimSpace(req.URL.Query().Get("profile"))
+func (r *webChatProfileResolver) resolveProfile(req *http.Request, pathSlug string) (gepprofiles.ProfileSlug, *gepprofiles.Profile, error) {
+	if r == nil || r.profileRegistry == nil {
+		return "", nil, &webhttp.RequestResolutionError{Status: http.StatusInternalServerError, ClientMsg: "profile resolver is not configured"}
 	}
-	if slug == "" && req != nil {
-		slug = strings.TrimSpace(req.URL.Query().Get("runtime"))
+
+	slugRaw := strings.TrimSpace(pathSlug)
+	if slugRaw == "" && req != nil {
+		slugRaw = strings.TrimSpace(req.URL.Query().Get("profile"))
 	}
-	if slug == "" && req != nil {
+	if slugRaw == "" && req != nil {
+		slugRaw = strings.TrimSpace(req.URL.Query().Get("runtime"))
+	}
+	if slugRaw == "" && req != nil {
 		if ck, err := req.Cookie("chat_profile"); err == nil && ck != nil {
-			slug = strings.TrimSpace(ck.Value)
+			slugRaw = strings.TrimSpace(ck.Value)
 		}
 	}
-	if slug == "" {
-		slug = r.profiles.resolveDefault()
+
+	ctx := context.Background()
+	if strings.TrimSpace(slugRaw) == "" {
+		s, err := r.resolveDefaultProfileSlug(ctx)
+		if err != nil {
+			return "", nil, r.toRequestResolutionError(err, "")
+		}
+		slugRaw = s.String()
 	}
-	p, ok := r.profiles.get(slug)
-	if !ok || p == nil {
-		return "", nil, &webhttp.RequestResolutionError{Status: http.StatusNotFound, ClientMsg: "profile not found: " + slug}
+
+	slug, err := gepprofiles.ParseProfileSlug(slugRaw)
+	if err != nil {
+		return "", nil, &webhttp.RequestResolutionError{Status: http.StatusBadRequest, ClientMsg: "invalid profile: " + slugRaw, Err: err}
 	}
-	return slug, p, nil
+
+	profile, err := r.profileRegistry.GetProfile(ctx, r.registrySlug, slug)
+	if err != nil {
+		return "", nil, r.toRequestResolutionError(err, slugRaw)
+	}
+	return slug, profile, nil
 }
 
-func baseOverridesForProfile(p *chatProfile) map[string]any {
+func (r *webChatProfileResolver) resolveDefaultProfileSlug(ctx context.Context) (gepprofiles.ProfileSlug, error) {
+	registry, err := r.profileRegistry.GetRegistry(ctx, r.registrySlug)
+	if err != nil {
+		return "", err
+	}
+	if registry != nil && !registry.DefaultProfileSlug.IsZero() {
+		return registry.DefaultProfileSlug, nil
+	}
+	return gepprofiles.MustProfileSlug("default"), nil
+}
+
+func (r *webChatProfileResolver) toRequestResolutionError(err error, slug string) error {
+	if err == nil {
+		return nil
+	}
+	if errors.Is(err, gepprofiles.ErrProfileNotFound) {
+		if strings.TrimSpace(slug) == "" {
+			return &webhttp.RequestResolutionError{Status: http.StatusNotFound, ClientMsg: "profile not found"}
+		}
+		return &webhttp.RequestResolutionError{Status: http.StatusNotFound, ClientMsg: "profile not found: " + slug}
+	}
+	if errors.Is(err, gepprofiles.ErrRegistryNotFound) {
+		return &webhttp.RequestResolutionError{Status: http.StatusInternalServerError, ClientMsg: "profile registry is not configured", Err: err}
+	}
+	return &webhttp.RequestResolutionError{Status: http.StatusInternalServerError, ClientMsg: "profile resolution failed", Err: err}
+}
+
+func (r *webChatProfileResolver) profileExists(ctx context.Context, slug gepprofiles.ProfileSlug) bool {
+	_, err := r.profileRegistry.GetProfile(ctx, r.registrySlug, slug)
+	return err == nil
+}
+
+func baseOverridesForProfile(p *gepprofiles.Profile) map[string]any {
 	if p == nil {
 		return nil
 	}
 	overrides := map[string]any{}
-	if strings.TrimSpace(p.DefaultPrompt) != "" {
-		overrides["system_prompt"] = p.DefaultPrompt
+	if strings.TrimSpace(p.Runtime.SystemPrompt) != "" {
+		overrides["system_prompt"] = p.Runtime.SystemPrompt
 	}
-	if len(p.DefaultMws) > 0 {
-		mws := make([]any, 0, len(p.DefaultMws))
-		for _, mw := range p.DefaultMws {
+	if len(p.Runtime.Middlewares) > 0 {
+		mws := make([]any, 0, len(p.Runtime.Middlewares))
+		for _, mw := range p.Runtime.Middlewares {
 			name := strings.TrimSpace(mw.Name)
 			if name == "" {
 				continue
@@ -212,9 +252,9 @@ func baseOverridesForProfile(p *chatProfile) map[string]any {
 			overrides["middlewares"] = mws
 		}
 	}
-	if len(p.DefaultTools) > 0 {
-		tools := make([]any, 0, len(p.DefaultTools))
-		for _, t := range p.DefaultTools {
+	if len(p.Runtime.Tools) > 0 {
+		tools := make([]any, 0, len(p.Runtime.Tools))
+		for _, t := range p.Runtime.Tools {
 			name := strings.TrimSpace(t)
 			if name == "" {
 				continue
@@ -231,7 +271,7 @@ func baseOverridesForProfile(p *chatProfile) map[string]any {
 	return overrides
 }
 
-func mergeOverrides(profile *chatProfile, requestOverrides map[string]any) (map[string]any, error) {
+func mergeOverrides(profile *gepprofiles.Profile, requestOverrides map[string]any) (map[string]any, error) {
 	merged := baseOverridesForProfile(profile)
 	if merged == nil {
 		merged = map[string]any{}
@@ -253,7 +293,7 @@ func mergeOverrides(profile *chatProfile, requestOverrides map[string]any) (map[
 	if _, ok := requestOverrides["tools"]; ok {
 		hasEngineOverride = true
 	}
-	if hasEngineOverride && profile != nil && !profile.AllowOverrides {
+	if hasEngineOverride && profile != nil && !profile.Policy.AllowOverrides {
 		return nil, &webhttp.RequestResolutionError{Status: http.StatusBadRequest, ClientMsg: "profile does not allow engine overrides"}
 	}
 
@@ -287,8 +327,8 @@ func runtimeKeyFromPath(req *http.Request) string {
 	return ""
 }
 
-func registerProfileHandlers(mux *http.ServeMux, profiles *chatProfileRegistry) {
-	if mux == nil || profiles == nil {
+func registerProfileHandlers(mux *http.ServeMux, resolver *webChatProfileResolver) {
+	if mux == nil || resolver == nil || resolver.profileRegistry == nil {
 		return
 	}
 
@@ -297,14 +337,20 @@ func registerProfileHandlers(mux *http.ServeMux, profiles *chatProfileRegistry) 
 			Slug          string `json:"slug"`
 			DefaultPrompt string `json:"default_prompt"`
 		}
-		items := make([]profileInfo, 0, len(profiles.order))
-		for _, p := range profiles.list() {
+
+		profiles_, err := resolver.profileRegistry.ListProfiles(context.Background(), resolver.registrySlug)
+		if err != nil {
+			http.Error(w, "profile registry unavailable", http.StatusInternalServerError)
+			return
+		}
+		items := make([]profileInfo, 0, len(profiles_))
+		for _, p := range profiles_ {
 			if p == nil {
 				continue
 			}
 			items = append(items, profileInfo{
-				Slug:          p.Slug,
-				DefaultPrompt: p.DefaultPrompt,
+				Slug:          p.Slug.String(),
+				DefaultPrompt: p.Runtime.SystemPrompt,
 			})
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -323,37 +369,53 @@ func registerProfileHandlers(mux *http.ServeMux, profiles *chatProfileRegistry) 
 
 		switch req.Method {
 		case http.MethodGet:
-			slug := ""
+			slug := gepprofiles.ProfileSlug("")
 			if ck, err := req.Cookie("chat_profile"); err == nil && ck != nil {
-				slug = strings.TrimSpace(ck.Value)
+				if parsed, err := gepprofiles.ParseProfileSlug(strings.TrimSpace(ck.Value)); err == nil && resolver.profileExists(context.Background(), parsed) {
+					slug = parsed
+				}
 			}
-			if _, ok := profiles.get(slug); !ok {
-				slug = profiles.resolveDefault()
+			if slug.IsZero() {
+				defaultSlug, err := resolver.resolveDefaultProfileSlug(context.Background())
+				if err != nil {
+					http.Error(w, "profile registry unavailable", http.StatusInternalServerError)
+					return
+				}
+				slug = defaultSlug
 			}
-			writeJSON(profilePayload{Slug: slug})
+			writeJSON(profilePayload{Slug: slug.String()})
 		case http.MethodPost:
 			var body profilePayload
 			if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
 				http.Error(w, "bad request", http.StatusBadRequest)
 				return
 			}
-			slug := strings.TrimSpace(body.Slug)
-			if slug == "" {
-				slug = strings.TrimSpace(body.Profile)
+			slugRaw := strings.TrimSpace(body.Slug)
+			if slugRaw == "" {
+				slugRaw = strings.TrimSpace(body.Profile)
 			}
-			if _, ok := profiles.get(slug); !ok {
-				http.Error(w, "profile not found", http.StatusNotFound)
+			slug, err := gepprofiles.ParseProfileSlug(slugRaw)
+			if err != nil {
+				http.Error(w, "bad request", http.StatusBadRequest)
+				return
+			}
+			if _, err := resolver.profileRegistry.GetProfile(context.Background(), resolver.registrySlug, slug); err != nil {
+				if errors.Is(err, gepprofiles.ErrProfileNotFound) {
+					http.Error(w, "profile not found", http.StatusNotFound)
+					return
+				}
+				http.Error(w, "profile registry unavailable", http.StatusInternalServerError)
 				return
 			}
 			http.SetCookie(w, &http.Cookie{
 				Name:     "chat_profile",
-				Value:    slug,
+				Value:    slug.String(),
 				Path:     "/",
 				SameSite: http.SameSiteLaxMode,
 				Secure:   true,
 				HttpOnly: true,
 			})
-			writeJSON(profilePayload{Slug: slug})
+			writeJSON(profilePayload{Slug: slug.String()})
 		default:
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}

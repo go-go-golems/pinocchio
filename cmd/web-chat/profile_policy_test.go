@@ -7,16 +7,18 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	gepprofiles "github.com/go-go-golems/geppetto/pkg/profiles"
 	"github.com/stretchr/testify/require"
 )
 
 func TestWebChatProfileResolver_WS_DefaultProfile(t *testing.T) {
-	profiles := newChatProfileRegistry(
+	profileRegistry, err := newInMemoryProfileRegistry(
 		"default",
-		&chatProfile{Slug: "default", DefaultPrompt: "You are default"},
-		&chatProfile{Slug: "agent", DefaultPrompt: "You are agent"},
+		&gepprofiles.Profile{Slug: gepprofiles.MustProfileSlug("default"), Runtime: gepprofiles.RuntimeSpec{SystemPrompt: "You are default"}},
+		&gepprofiles.Profile{Slug: gepprofiles.MustProfileSlug("agent"), Runtime: gepprofiles.RuntimeSpec{SystemPrompt: "You are agent"}},
 	)
-	resolver := newWebChatProfileResolver(profiles)
+	require.NoError(t, err)
+	resolver := newWebChatProfileResolver(profileRegistry, gepprofiles.MustRegistrySlug(defaultWebChatRegistrySlug))
 
 	req := httptest.NewRequest(http.MethodGet, "/ws?conv_id=conv-1", nil)
 	plan, err := resolver.Resolve(req)
@@ -27,19 +29,28 @@ func TestWebChatProfileResolver_WS_DefaultProfile(t *testing.T) {
 }
 
 func TestWebChatProfileResolver_Chat_OverridePolicy(t *testing.T) {
-	profiles := newChatProfileRegistry(
+	profileRegistry, err := newInMemoryProfileRegistry(
 		"default",
-		&chatProfile{Slug: "default", DefaultPrompt: "You are default", AllowOverrides: false},
-		&chatProfile{Slug: "agent", DefaultPrompt: "You are agent", AllowOverrides: true},
+		&gepprofiles.Profile{
+			Slug:    gepprofiles.MustProfileSlug("default"),
+			Runtime: gepprofiles.RuntimeSpec{SystemPrompt: "You are default"},
+			Policy:  gepprofiles.PolicySpec{AllowOverrides: false},
+		},
+		&gepprofiles.Profile{
+			Slug:    gepprofiles.MustProfileSlug("agent"),
+			Runtime: gepprofiles.RuntimeSpec{SystemPrompt: "You are agent"},
+			Policy:  gepprofiles.PolicySpec{AllowOverrides: true},
+		},
 	)
-	resolver := newWebChatProfileResolver(profiles)
+	require.NoError(t, err)
+	resolver := newWebChatProfileResolver(profileRegistry, gepprofiles.MustRegistrySlug(defaultWebChatRegistrySlug))
 
 	req := httptest.NewRequest(
 		http.MethodPost,
 		"/chat/default",
 		bytes.NewBufferString(`{"prompt":"hi","conv_id":"conv-1","overrides":{"system_prompt":"override"}}`),
 	)
-	_, err := resolver.Resolve(req)
+	_, err = resolver.Resolve(req)
 	require.Error(t, err)
 	require.ErrorContains(t, err, "does not allow engine overrides")
 
@@ -55,14 +66,16 @@ func TestWebChatProfileResolver_Chat_OverridePolicy(t *testing.T) {
 }
 
 func TestRegisterProfileHandlers_GetAndSetProfile(t *testing.T) {
-	profiles := newChatProfileRegistry(
+	profileRegistry, err := newInMemoryProfileRegistry(
 		"default",
-		&chatProfile{Slug: "default", DefaultPrompt: "You are default"},
-		&chatProfile{Slug: "agent", DefaultPrompt: "You are agent"},
+		&gepprofiles.Profile{Slug: gepprofiles.MustProfileSlug("default"), Runtime: gepprofiles.RuntimeSpec{SystemPrompt: "You are default"}},
+		&gepprofiles.Profile{Slug: gepprofiles.MustProfileSlug("agent"), Runtime: gepprofiles.RuntimeSpec{SystemPrompt: "You are agent"}},
 	)
+	require.NoError(t, err)
+	resolver := newWebChatProfileResolver(profileRegistry, gepprofiles.MustRegistrySlug(defaultWebChatRegistrySlug))
 
 	mux := http.NewServeMux()
-	registerProfileHandlers(mux, profiles)
+	registerProfileHandlers(mux, resolver)
 
 	reqList := httptest.NewRequest(http.MethodGet, "/api/chat/profiles", nil)
 	recList := httptest.NewRecorder()
@@ -72,8 +85,13 @@ func TestRegisterProfileHandlers_GetAndSetProfile(t *testing.T) {
 	var listed []map[string]any
 	require.NoError(t, json.Unmarshal(recList.Body.Bytes(), &listed))
 	require.Len(t, listed, 2)
-	require.Equal(t, "default", listed[0]["slug"])
-	require.Equal(t, "agent", listed[1]["slug"])
+	slugs := map[string]bool{}
+	for _, item := range listed {
+		slug, _ := item["slug"].(string)
+		slugs[slug] = true
+	}
+	require.True(t, slugs["default"])
+	require.True(t, slugs["agent"])
 
 	reqSet := httptest.NewRequest(http.MethodPost, "/api/chat/profile", bytes.NewBufferString(`{"slug":"agent"}`))
 	recSet := httptest.NewRecorder()
