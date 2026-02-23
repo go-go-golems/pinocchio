@@ -119,7 +119,7 @@ func TestConversationService_ResolveAndEnsureConversation_DefaultsAndLifecycle(t
 	})
 	require.NoError(t, err)
 
-	handle, err := svc.ResolveAndEnsureConversation(context.Background(), AppConversationRequest{})
+	handle, err := svc.ResolveAndEnsureConversation(context.Background(), ConversationRuntimeRequest{})
 	require.NoError(t, err)
 	require.NotEmpty(t, handle.ConvID)
 	_, parseErr := uuid.Parse(handle.ConvID)
@@ -152,7 +152,7 @@ func TestConversationService_ResolveAndEnsureConversation_RebuildsOnProfileVersi
 	})
 	require.NoError(t, err)
 
-	handleV1, err := svc.ResolveAndEnsureConversation(context.Background(), AppConversationRequest{
+	handleV1, err := svc.ResolveAndEnsureConversation(context.Background(), ConversationRuntimeRequest{
 		ConvID:          "conv-versioned",
 		RuntimeKey:      "default",
 		ProfileVersion:  1,
@@ -166,7 +166,7 @@ func TestConversationService_ResolveAndEnsureConversation_RebuildsOnProfileVersi
 	engineV1 := conv.Eng
 	require.NotNil(t, engineV1)
 
-	handleV1Repeat, err := svc.ResolveAndEnsureConversation(context.Background(), AppConversationRequest{
+	handleV1Repeat, err := svc.ResolveAndEnsureConversation(context.Background(), ConversationRuntimeRequest{
 		ConvID:         "conv-versioned",
 		RuntimeKey:     "default",
 		ProfileVersion: 1,
@@ -177,7 +177,7 @@ func TestConversationService_ResolveAndEnsureConversation_RebuildsOnProfileVersi
 	require.True(t, ok)
 	require.Same(t, engineV1, convRepeat.Eng, "same profile version should not rebuild engine")
 
-	handleV2, err := svc.ResolveAndEnsureConversation(context.Background(), AppConversationRequest{
+	handleV2, err := svc.ResolveAndEnsureConversation(context.Background(), ConversationRuntimeRequest{
 		ConvID:         "conv-versioned",
 		RuntimeKey:     "default",
 		ProfileVersion: 2,

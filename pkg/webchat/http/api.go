@@ -28,9 +28,9 @@ type ChatRequestBody struct {
 	IdempotencyKey string         `json:"idempotency_key,omitempty"`
 }
 
-// ConversationRequestPlan is the canonical output of request policy resolution.
+// ResolvedConversationRequest is the canonical output of request policy resolution.
 // It captures request data needed for both chat and websocket flows.
-type ConversationRequestPlan struct {
+type ResolvedConversationRequest struct {
 	ConvID          string
 	RuntimeKey      string
 	ProfileVersion  uint64
@@ -42,7 +42,7 @@ type ConversationRequestPlan struct {
 
 // ConversationRequestResolver resolves request policy (conv/runtime/overrides) for both HTTP and WS handlers.
 type ConversationRequestResolver interface {
-	Resolve(req *http.Request) (ConversationRequestPlan, error)
+	Resolve(req *http.Request) (ResolvedConversationRequest, error)
 }
 
 // RequestResolutionError is a typed error allowing handlers to choose an HTTP status code
@@ -72,7 +72,7 @@ type ChatService interface {
 
 // StreamService describes websocket attach lifecycle used by HTTP handlers.
 type StreamService interface {
-	ResolveAndEnsureConversation(ctx context.Context, req root.AppConversationRequest) (*root.ConversationHandle, error)
+	ResolveAndEnsureConversation(ctx context.Context, req root.ConversationRuntimeRequest) (*root.ConversationHandle, error)
 	AttachWebSocket(ctx context.Context, convID string, conn *websocket.Conn, opts root.WebSocketAttachOptions) error
 }
 
@@ -190,7 +190,7 @@ func NewWSHandler(svc StreamService, resolver ConversationRequestResolver, upgra
 		if err != nil {
 			return
 		}
-		handle, err := svc.ResolveAndEnsureConversation(req.Context(), root.AppConversationRequest{
+		handle, err := svc.ResolveAndEnsureConversation(req.Context(), root.ConversationRuntimeRequest{
 			ConvID:          plan.ConvID,
 			RuntimeKey:      plan.RuntimeKey,
 			ProfileVersion:  plan.ProfileVersion,

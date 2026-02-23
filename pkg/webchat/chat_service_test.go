@@ -37,7 +37,7 @@ func TestChatService_ResolveAndSubmitDelegateToConversationService(t *testing.T)
 	chat := NewChatServiceFromConversation(svc)
 	require.NotNil(t, chat)
 
-	handle, err := chat.ResolveAndEnsureConversation(context.Background(), AppConversationRequest{})
+	handle, err := chat.ResolveAndEnsureConversation(context.Background(), ConversationRuntimeRequest{})
 	require.NoError(t, err)
 	require.NotEmpty(t, handle.ConvID)
 

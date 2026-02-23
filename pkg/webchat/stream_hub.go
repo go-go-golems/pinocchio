@@ -40,7 +40,7 @@ func NewStreamHub(cfg StreamHubConfig) (*StreamHub, error) {
 	}, nil
 }
 
-func (h *StreamHub) ResolveAndEnsureConversation(ctx context.Context, req AppConversationRequest) (*ConversationHandle, error) {
+func (h *StreamHub) ResolveAndEnsureConversation(ctx context.Context, req ConversationRuntimeRequest) (*ConversationHandle, error) {
 	if h == nil || h.cm == nil {
 		return nil, errors.New("stream hub is not initialized")
 	}

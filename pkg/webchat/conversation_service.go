@@ -46,7 +46,7 @@ type ConversationService struct {
 	toolFactories  map[string]infruntime.ToolRegistrar
 }
 
-type AppConversationRequest struct {
+type ConversationRuntimeRequest struct {
 	ConvID          string
 	RuntimeKey      string
 	ProfileVersion  uint64
@@ -152,7 +152,7 @@ func (s *ConversationService) RegisterTool(name string, f infruntime.ToolRegistr
 	s.toolFactories[strings.TrimSpace(name)] = f
 }
 
-func (s *ConversationService) ResolveAndEnsureConversation(ctx context.Context, req AppConversationRequest) (*ConversationHandle, error) {
+func (s *ConversationService) ResolveAndEnsureConversation(ctx context.Context, req ConversationRuntimeRequest) (*ConversationHandle, error) {
 	if s == nil || s.streams == nil {
 		return nil, errors.New("conversation service is not initialized")
 	}
@@ -170,7 +170,7 @@ func (s *ConversationService) SubmitPrompt(ctx context.Context, in SubmitPromptI
 	if prompt == "" {
 		return SubmitPromptResult{HTTPStatus: 400, Response: map[string]any{"status": "error", "error": "missing prompt"}}, nil
 	}
-	handle, err := s.ResolveAndEnsureConversation(ctx, AppConversationRequest{
+	handle, err := s.ResolveAndEnsureConversation(ctx, ConversationRuntimeRequest{
 		ConvID:          in.ConvID,
 		RuntimeKey:      in.RuntimeKey,
 		ProfileVersion:  in.ProfileVersion,

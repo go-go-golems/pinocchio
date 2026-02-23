@@ -136,7 +136,7 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 	amCfg := agentmode.DefaultConfig()
 	amCfg.DefaultMode = "financial_analyst"
 
-	profileRegistry, err := newInMemoryProfileRegistry(
+	profileRegistry, err := newInMemoryProfileService(
 		"default",
 		&gepprofiles.Profile{
 			Slug: gepprofiles.MustProfileSlug("default"),
@@ -172,8 +172,8 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 			return sqlitetool.NewMiddleware(c)
 		},
 	}
-	runtimeComposer := newWebChatRuntimeComposer(parsed, middlewareFactories)
-	requestResolver := newWebChatProfileResolver(profileRegistry, gepprofiles.MustRegistrySlug(defaultWebChatRegistrySlug))
+	runtimeComposer := newProfileRuntimeComposer(parsed, middlewareFactories)
+	requestResolver := newProfileRequestResolver(profileRegistry, gepprofiles.MustRegistrySlug(defaultRegistrySlug))
 
 	// Register app-owned thinking-mode SEM/timeline handlers.
 	thinkingmode.Register()
@@ -220,7 +220,7 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 	appMux.HandleFunc("/chat", chatHandler)
 	appMux.HandleFunc("/chat/", chatHandler)
 	appMux.HandleFunc("/ws", wsHandler)
-	registerProfileHandlers(appMux, requestResolver)
+	registerProfileAPIHandlers(appMux, requestResolver)
 	timelineLogger := log.With().Str("component", "webchat").Str("route", "/api/timeline").Logger()
 	timelineHandler := webhttp.NewTimelineHandler(srv.TimelineService(), timelineLogger)
 	appMux.HandleFunc("/api/timeline", timelineHandler)

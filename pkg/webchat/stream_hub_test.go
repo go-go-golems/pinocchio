@@ -38,7 +38,7 @@ func TestStreamHub_ResolveAndEnsureConversation_Defaults(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	handle, err := hub.ResolveAndEnsureConversation(context.Background(), AppConversationRequest{})
+	handle, err := hub.ResolveAndEnsureConversation(context.Background(), ConversationRuntimeRequest{})
 	require.NoError(t, err)
 	require.NotEmpty(t, handle.ConvID)
 	require.Equal(t, "default", handle.RuntimeKey)

@@ -14,10 +14,13 @@ import (
 	webhttp "github.com/go-go-golems/pinocchio/pkg/webchat/http"
 )
 
-const defaultWebChatRegistrySlug = "default"
+const (
+	defaultRegistrySlug      = "default"
+	currentProfileCookieName = "chat_profile"
+)
 
-func newInMemoryProfileRegistry(defaultSlug string, profileDefs ...*gepprofiles.Profile) (gepprofiles.Registry, error) {
-	registrySlug := gepprofiles.MustRegistrySlug(defaultWebChatRegistrySlug)
+func newInMemoryProfileService(defaultSlug string, profileDefs ...*gepprofiles.Profile) (gepprofiles.Registry, error) {
+	registrySlug := gepprofiles.MustRegistrySlug(defaultRegistrySlug)
 	registry := &gepprofiles.ProfileRegistry{
 		Slug:     registrySlug,
 		Profiles: map[gepprofiles.ProfileSlug]*gepprofiles.Profile{},
@@ -77,21 +80,21 @@ func firstProfileSlug(profiles map[gepprofiles.ProfileSlug]*gepprofiles.Profile)
 	return slugs[0]
 }
 
-type webChatProfileResolver struct {
+type ProfileRequestResolver struct {
 	profileRegistry gepprofiles.Registry
 	registrySlug    gepprofiles.RegistrySlug
 }
 
-func newWebChatProfileResolver(profileRegistry gepprofiles.Registry, registrySlug gepprofiles.RegistrySlug) *webChatProfileResolver {
+func newProfileRequestResolver(profileRegistry gepprofiles.Registry, registrySlug gepprofiles.RegistrySlug) *ProfileRequestResolver {
 	if registrySlug.IsZero() {
-		registrySlug = gepprofiles.MustRegistrySlug(defaultWebChatRegistrySlug)
+		registrySlug = gepprofiles.MustRegistrySlug(defaultRegistrySlug)
 	}
-	return &webChatProfileResolver{profileRegistry: profileRegistry, registrySlug: registrySlug}
+	return &ProfileRequestResolver{profileRegistry: profileRegistry, registrySlug: registrySlug}
 }
 
-func (r *webChatProfileResolver) Resolve(req *http.Request) (webhttp.ConversationRequestPlan, error) {
+func (r *ProfileRequestResolver) Resolve(req *http.Request) (webhttp.ResolvedConversationRequest, error) {
 	if req == nil {
-		return webhttp.ConversationRequestPlan{}, &webhttp.RequestResolutionError{Status: http.StatusBadRequest, ClientMsg: "bad request"}
+		return webhttp.ResolvedConversationRequest{}, &webhttp.RequestResolutionError{Status: http.StatusBadRequest, ClientMsg: "bad request"}
 	}
 
 	switch req.Method {
@@ -100,28 +103,28 @@ func (r *webChatProfileResolver) Resolve(req *http.Request) (webhttp.Conversatio
 	case http.MethodPost:
 		return r.resolveChat(req)
 	default:
-		return webhttp.ConversationRequestPlan{}, &webhttp.RequestResolutionError{Status: http.StatusMethodNotAllowed, ClientMsg: "method not allowed"}
+		return webhttp.ResolvedConversationRequest{}, &webhttp.RequestResolutionError{Status: http.StatusMethodNotAllowed, ClientMsg: "method not allowed"}
 	}
 }
 
-func (r *webChatProfileResolver) resolveWS(req *http.Request) (webhttp.ConversationRequestPlan, error) {
+func (r *ProfileRequestResolver) resolveWS(req *http.Request) (webhttp.ResolvedConversationRequest, error) {
 	convID := strings.TrimSpace(req.URL.Query().Get("conv_id"))
 	if convID == "" {
-		return webhttp.ConversationRequestPlan{}, &webhttp.RequestResolutionError{Status: http.StatusBadRequest, ClientMsg: "missing conv_id"}
+		return webhttp.ResolvedConversationRequest{}, &webhttp.RequestResolutionError{Status: http.StatusBadRequest, ClientMsg: "missing conv_id"}
 	}
 
-	_, slug, profile, err := r.resolveProfile(req, "", "", "")
+	_, slug, profile, err := r.resolveProfileSelection(req, "", "", "")
 	if err != nil {
-		return webhttp.ConversationRequestPlan{}, err
+		return webhttp.ResolvedConversationRequest{}, err
 	}
-	overrides := baseOverridesForProfile(profile)
+	overrides := runtimeDefaultsFromProfile(profile)
 	resolvedRuntime := profileRuntimeSpec(profile)
 	profileVersion := uint64(0)
 	if profile != nil {
 		profileVersion = profile.Metadata.Version
 	}
 
-	return webhttp.ConversationRequestPlan{
+	return webhttp.ResolvedConversationRequest{
 		ConvID:          convID,
 		RuntimeKey:      slug.String(),
 		ProfileVersion:  profileVersion,
@@ -130,10 +133,10 @@ func (r *webChatProfileResolver) resolveWS(req *http.Request) (webhttp.Conversat
 	}, nil
 }
 
-func (r *webChatProfileResolver) resolveChat(req *http.Request) (webhttp.ConversationRequestPlan, error) {
+func (r *ProfileRequestResolver) resolveChat(req *http.Request) (webhttp.ResolvedConversationRequest, error) {
 	var body webhttp.ChatRequestBody
 	if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
-		return webhttp.ConversationRequestPlan{}, &webhttp.RequestResolutionError{Status: http.StatusBadRequest, ClientMsg: "bad request", Err: err}
+		return webhttp.ResolvedConversationRequest{}, &webhttp.RequestResolutionError{Status: http.StatusBadRequest, ClientMsg: "bad request", Err: err}
 	}
 	if body.Prompt == "" && body.Text != "" {
 		body.Prompt = body.Text
@@ -144,15 +147,15 @@ func (r *webChatProfileResolver) resolveChat(req *http.Request) (webhttp.Convers
 		convID = uuid.NewString()
 	}
 
-	pathSlug := runtimeKeyFromPath(req)
-	_, slug, profile, err := r.resolveProfile(req, pathSlug, body.Profile, body.Registry)
+	pathSlug := profileSlugFromPath(req)
+	_, slug, profile, err := r.resolveProfileSelection(req, pathSlug, body.Profile, body.Registry)
 	if err != nil {
-		return webhttp.ConversationRequestPlan{}, err
+		return webhttp.ResolvedConversationRequest{}, err
 	}
 
-	overrides, err := mergeOverrides(profile, body.Overrides)
+	overrides, err := mergeRuntimeOverrides(profile, body.Overrides)
 	if err != nil {
-		return webhttp.ConversationRequestPlan{}, err
+		return webhttp.ResolvedConversationRequest{}, err
 	}
 	resolvedRuntime := profileRuntimeSpec(profile)
 	profileVersion := uint64(0)
@@ -160,7 +163,7 @@ func (r *webChatProfileResolver) resolveChat(req *http.Request) (webhttp.Convers
 		profileVersion = profile.Metadata.Version
 	}
 
-	return webhttp.ConversationRequestPlan{
+	return webhttp.ResolvedConversationRequest{
 		ConvID:          convID,
 		RuntimeKey:      slug.String(),
 		ProfileVersion:  profileVersion,
@@ -171,7 +174,7 @@ func (r *webChatProfileResolver) resolveChat(req *http.Request) (webhttp.Convers
 	}, nil
 }
 
-func (r *webChatProfileResolver) resolveProfile(
+func (r *ProfileRequestResolver) resolveProfileSelection(
 	req *http.Request,
 	pathSlug string,
 	bodyProfileRaw string,
@@ -197,7 +200,7 @@ func (r *webChatProfileResolver) resolveProfile(
 		slugRaw = strings.TrimSpace(req.URL.Query().Get("runtime"))
 	}
 	if slugRaw == "" && req != nil {
-		if ck, err := req.Cookie("chat_profile"); err == nil && ck != nil {
+		if ck, err := req.Cookie(currentProfileCookieName); err == nil && ck != nil {
 			slugRaw = strings.TrimSpace(ck.Value)
 		}
 	}
@@ -223,7 +226,7 @@ func (r *webChatProfileResolver) resolveProfile(
 	return registrySlug, slug, profile, nil
 }
 
-func (r *webChatProfileResolver) resolveRegistrySlug(req *http.Request, bodyRegistryRaw string) (gepprofiles.RegistrySlug, error) {
+func (r *ProfileRequestResolver) resolveRegistrySlug(req *http.Request, bodyRegistryRaw string) (gepprofiles.RegistrySlug, error) {
 	registryRaw := strings.TrimSpace(bodyRegistryRaw)
 	if registryRaw == "" && req != nil {
 		registryRaw = strings.TrimSpace(req.URL.Query().Get("registry"))
@@ -238,7 +241,7 @@ func (r *webChatProfileResolver) resolveRegistrySlug(req *http.Request, bodyRegi
 	return registrySlug, nil
 }
 
-func (r *webChatProfileResolver) resolveDefaultProfileSlug(ctx context.Context, registrySlug gepprofiles.RegistrySlug) (gepprofiles.ProfileSlug, error) {
+func (r *ProfileRequestResolver) resolveDefaultProfileSlug(ctx context.Context, registrySlug gepprofiles.RegistrySlug) (gepprofiles.ProfileSlug, error) {
 	registry, err := r.profileRegistry.GetRegistry(ctx, registrySlug)
 	if err != nil {
 		return "", err
@@ -249,7 +252,7 @@ func (r *webChatProfileResolver) resolveDefaultProfileSlug(ctx context.Context, 
 	return gepprofiles.MustProfileSlug("default"), nil
 }
 
-func (r *webChatProfileResolver) toRequestResolutionError(err error, slug string) error {
+func (r *ProfileRequestResolver) toRequestResolutionError(err error, slug string) error {
 	if err == nil {
 		return nil
 	}
@@ -265,7 +268,7 @@ func (r *webChatProfileResolver) toRequestResolutionError(err error, slug string
 	return &webhttp.RequestResolutionError{Status: http.StatusInternalServerError, ClientMsg: "profile resolution failed", Err: err}
 }
 
-func (r *webChatProfileResolver) profileExists(ctx context.Context, slug gepprofiles.ProfileSlug) bool {
+func (r *ProfileRequestResolver) profileExists(ctx context.Context, slug gepprofiles.ProfileSlug) bool {
 	_, err := r.profileRegistry.GetProfile(ctx, r.registrySlug, slug)
 	return err == nil
 }
@@ -289,7 +292,7 @@ func profileRuntimeSpec(p *gepprofiles.Profile) *gepprofiles.RuntimeSpec {
 	return &spec
 }
 
-func baseOverridesForProfile(p *gepprofiles.Profile) map[string]any {
+func runtimeDefaultsFromProfile(p *gepprofiles.Profile) map[string]any {
 	if p == nil {
 		return nil
 	}
@@ -332,8 +335,8 @@ func baseOverridesForProfile(p *gepprofiles.Profile) map[string]any {
 	return overrides
 }
 
-func mergeOverrides(profile *gepprofiles.Profile, requestOverrides map[string]any) (map[string]any, error) {
-	merged := baseOverridesForProfile(profile)
+func mergeRuntimeOverrides(profile *gepprofiles.Profile, requestOverrides map[string]any) (map[string]any, error) {
+	merged := runtimeDefaultsFromProfile(profile)
 	if merged == nil {
 		merged = map[string]any{}
 	}
@@ -367,7 +370,7 @@ func mergeOverrides(profile *gepprofiles.Profile, requestOverrides map[string]an
 	return merged, nil
 }
 
-func runtimeKeyFromPath(req *http.Request) string {
+func profileSlugFromPath(req *http.Request) string {
 	if req == nil {
 		return ""
 	}
@@ -388,7 +391,7 @@ func runtimeKeyFromPath(req *http.Request) string {
 	return ""
 }
 
-func registerProfileHandlers(mux *http.ServeMux, resolver *webChatProfileResolver) {
+func registerProfileAPIHandlers(mux *http.ServeMux, resolver *ProfileRequestResolver) {
 	if mux == nil || resolver == nil || resolver.profileRegistry == nil {
 		return
 	}
@@ -431,7 +434,7 @@ func registerProfileHandlers(mux *http.ServeMux, resolver *webChatProfileResolve
 		switch req.Method {
 		case http.MethodGet:
 			slug := gepprofiles.ProfileSlug("")
-			if ck, err := req.Cookie("chat_profile"); err == nil && ck != nil {
+			if ck, err := req.Cookie(currentProfileCookieName); err == nil && ck != nil {
 				if parsed, err := gepprofiles.ParseProfileSlug(strings.TrimSpace(ck.Value)); err == nil && resolver.profileExists(context.Background(), parsed) {
 					slug = parsed
 				}
@@ -469,7 +472,7 @@ func registerProfileHandlers(mux *http.ServeMux, resolver *webChatProfileResolve
 				return
 			}
 			http.SetCookie(w, &http.Cookie{
-				Name:     "chat_profile",
+				Name:     currentProfileCookieName,
 				Value:    slug.String(),
 				Path:     "/",
 				SameSite: http.SameSiteLaxMode,

@@ -42,7 +42,7 @@ func newAppOwnedIntegrationServer(t *testing.T) *httptest.Server {
 		"static/index.html": {Data: []byte("<html><body>ok</body></html>")},
 	}
 	runtimeComposer := infruntime.RuntimeBuilderFunc(func(_ context.Context, req infruntime.ConversationRuntimeRequest) (infruntime.ComposedRuntime, error) {
-		runtimeKey := strings.TrimSpace(req.RuntimeKey)
+		runtimeKey := strings.TrimSpace(req.ProfileKey)
 		if runtimeKey == "" {
 			runtimeKey = "default"
 		}
@@ -58,7 +58,7 @@ func newAppOwnedIntegrationServer(t *testing.T) *httptest.Server {
 	webchatSrv, err := webchat.NewServer(context.Background(), parsed, staticFS, webchat.WithRuntimeComposer(runtimeComposer))
 	require.NoError(t, err)
 
-	profileRegistry, err := newInMemoryProfileRegistry(
+	profileRegistry, err := newInMemoryProfileService(
 		"default",
 		&gepprofiles.Profile{Slug: gepprofiles.MustProfileSlug("default"), Runtime: gepprofiles.RuntimeSpec{SystemPrompt: "You are default"}},
 		&gepprofiles.Profile{
@@ -68,7 +68,7 @@ func newAppOwnedIntegrationServer(t *testing.T) *httptest.Server {
 		},
 	)
 	require.NoError(t, err)
-	requestResolver := newWebChatProfileResolver(profileRegistry, gepprofiles.MustRegistrySlug(defaultWebChatRegistrySlug))
+	requestResolver := newProfileRequestResolver(profileRegistry, gepprofiles.MustRegistrySlug(defaultRegistrySlug))
 	chatHandler := webhttp.NewChatHandler(webchatSrv.ChatService(), requestResolver)
 	wsHandler := webhttp.NewWSHandler(
 		webchatSrv.StreamHub(),

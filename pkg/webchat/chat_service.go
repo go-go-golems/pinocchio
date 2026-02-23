@@ -63,7 +63,7 @@ func (s *ChatService) RegisterTool(name string, f infruntime.ToolRegistrar) {
 	s.svc.RegisterTool(name, f)
 }
 
-func (s *ChatService) ResolveAndEnsureConversation(ctx context.Context, req AppConversationRequest) (*ConversationHandle, error) {
+func (s *ChatService) ResolveAndEnsureConversation(ctx context.Context, req ConversationRuntimeRequest) (*ConversationHandle, error) {
 	if s == nil || s.svc == nil {
 		return nil, errors.New("chat service is not initialized")
 	}

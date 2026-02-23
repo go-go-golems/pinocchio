@@ -258,11 +258,11 @@ func (cm *ConvManager) GetOrCreate(
 		return nil, errors.New("conversation manager missing dependencies")
 	}
 	req := infruntime.ConversationRuntimeRequest{
-		ConvID:          convID,
-		RuntimeKey:      runtimeKey,
-		ProfileVersion:  profileVersion,
-		ResolvedRuntime: resolvedRuntime,
-		Overrides:       overrides,
+		ConvID:                 convID,
+		ProfileKey:             runtimeKey,
+		ProfileVersion:         profileVersion,
+		ResolvedProfileRuntime: resolvedRuntime,
+		RuntimeOverrides:       overrides,
 	}
 	runtime, err := cm.runtimeComposer.Compose(cm.baseCtx, req)
 	if err != nil {

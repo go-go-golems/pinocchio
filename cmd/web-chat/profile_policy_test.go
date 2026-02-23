@@ -12,13 +12,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func newTestResolverWithMultipleRegistries(t *testing.T) *webChatProfileResolver {
+func newTestResolverWithMultipleRegistries(t *testing.T) *ProfileRequestResolver {
 	t.Helper()
 
 	store := gepprofiles.NewInMemoryProfileStore()
 
 	defaultRegistry := &gepprofiles.ProfileRegistry{
-		Slug:               gepprofiles.MustRegistrySlug(defaultWebChatRegistrySlug),
+		Slug:               gepprofiles.MustRegistrySlug(defaultRegistrySlug),
 		DefaultProfileSlug: gepprofiles.MustProfileSlug("default"),
 		Profiles: map[gepprofiles.ProfileSlug]*gepprofiles.Profile{
 			gepprofiles.MustProfileSlug("default"): {
@@ -49,19 +49,19 @@ func newTestResolverWithMultipleRegistries(t *testing.T) *webChatProfileResolver
 	require.NoError(t, gepprofiles.ValidateRegistry(teamRegistry))
 	require.NoError(t, store.UpsertRegistry(context.Background(), teamRegistry, gepprofiles.SaveOptions{Actor: "tests", Source: "tests"}))
 
-	profileRegistry, err := gepprofiles.NewStoreRegistry(store, gepprofiles.MustRegistrySlug(defaultWebChatRegistrySlug))
+	profileRegistry, err := gepprofiles.NewStoreRegistry(store, gepprofiles.MustRegistrySlug(defaultRegistrySlug))
 	require.NoError(t, err)
-	return newWebChatProfileResolver(profileRegistry, gepprofiles.MustRegistrySlug(defaultWebChatRegistrySlug))
+	return newProfileRequestResolver(profileRegistry, gepprofiles.MustRegistrySlug(defaultRegistrySlug))
 }
 
 func TestWebChatProfileResolver_WS_DefaultProfile(t *testing.T) {
-	profileRegistry, err := newInMemoryProfileRegistry(
+	profileRegistry, err := newInMemoryProfileService(
 		"default",
 		&gepprofiles.Profile{Slug: gepprofiles.MustProfileSlug("default"), Runtime: gepprofiles.RuntimeSpec{SystemPrompt: "You are default"}},
 		&gepprofiles.Profile{Slug: gepprofiles.MustProfileSlug("agent"), Runtime: gepprofiles.RuntimeSpec{SystemPrompt: "You are agent"}},
 	)
 	require.NoError(t, err)
-	resolver := newWebChatProfileResolver(profileRegistry, gepprofiles.MustRegistrySlug(defaultWebChatRegistrySlug))
+	resolver := newProfileRequestResolver(profileRegistry, gepprofiles.MustRegistrySlug(defaultRegistrySlug))
 
 	req := httptest.NewRequest(http.MethodGet, "/ws?conv_id=conv-1", nil)
 	plan, err := resolver.Resolve(req)
@@ -74,7 +74,7 @@ func TestWebChatProfileResolver_WS_DefaultProfile(t *testing.T) {
 }
 
 func TestWebChatProfileResolver_Chat_OverridePolicy(t *testing.T) {
-	profileRegistry, err := newInMemoryProfileRegistry(
+	profileRegistry, err := newInMemoryProfileService(
 		"default",
 		&gepprofiles.Profile{
 			Slug:    gepprofiles.MustProfileSlug("default"),
@@ -88,7 +88,7 @@ func TestWebChatProfileResolver_Chat_OverridePolicy(t *testing.T) {
 		},
 	)
 	require.NoError(t, err)
-	resolver := newWebChatProfileResolver(profileRegistry, gepprofiles.MustRegistrySlug(defaultWebChatRegistrySlug))
+	resolver := newProfileRequestResolver(profileRegistry, gepprofiles.MustRegistrySlug(defaultRegistrySlug))
 
 	req := httptest.NewRequest(
 		http.MethodPost,
@@ -111,16 +111,16 @@ func TestWebChatProfileResolver_Chat_OverridePolicy(t *testing.T) {
 }
 
 func TestRegisterProfileHandlers_GetAndSetProfile(t *testing.T) {
-	profileRegistry, err := newInMemoryProfileRegistry(
+	profileRegistry, err := newInMemoryProfileService(
 		"default",
 		&gepprofiles.Profile{Slug: gepprofiles.MustProfileSlug("default"), Runtime: gepprofiles.RuntimeSpec{SystemPrompt: "You are default"}},
 		&gepprofiles.Profile{Slug: gepprofiles.MustProfileSlug("agent"), Runtime: gepprofiles.RuntimeSpec{SystemPrompt: "You are agent"}},
 	)
 	require.NoError(t, err)
-	resolver := newWebChatProfileResolver(profileRegistry, gepprofiles.MustRegistrySlug(defaultWebChatRegistrySlug))
+	resolver := newProfileRequestResolver(profileRegistry, gepprofiles.MustRegistrySlug(defaultRegistrySlug))
 
 	mux := http.NewServeMux()
-	registerProfileHandlers(mux, resolver)
+	registerProfileAPIHandlers(mux, resolver)
 
 	reqList := httptest.NewRequest(http.MethodGet, "/api/chat/profiles", nil)
 	recList := httptest.NewRecorder()

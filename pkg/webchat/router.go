@@ -382,7 +382,7 @@ func (r *Router) convRuntimeComposer() infruntime.RuntimeBuilder {
 			artifacts.Sink = wrapped
 		}
 		if strings.TrimSpace(artifacts.RuntimeKey) == "" {
-			artifacts.RuntimeKey = strings.TrimSpace(req.RuntimeKey)
+			artifacts.RuntimeKey = strings.TrimSpace(req.ProfileKey)
 		}
 		if strings.TrimSpace(artifacts.RuntimeFingerprint) == "" {
 			artifacts.RuntimeFingerprint = artifacts.RuntimeKey

@@ -13,53 +13,53 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-type webChatRuntimeComposer struct {
+type ProfileRuntimeComposer struct {
 	parsed      *values.Values
 	mwFactories map[string]infruntime.MiddlewareBuilder
 }
 
-func newWebChatRuntimeComposer(parsed *values.Values, mwFactories map[string]infruntime.MiddlewareBuilder) *webChatRuntimeComposer {
-	return &webChatRuntimeComposer{
+func newProfileRuntimeComposer(parsed *values.Values, mwFactories map[string]infruntime.MiddlewareBuilder) *ProfileRuntimeComposer {
+	return &ProfileRuntimeComposer{
 		parsed:      parsed,
 		mwFactories: mwFactories,
 	}
 }
 
-func (c *webChatRuntimeComposer) Compose(ctx context.Context, req infruntime.ConversationRuntimeRequest) (infruntime.ComposedRuntime, error) {
+func (c *ProfileRuntimeComposer) Compose(ctx context.Context, req infruntime.ConversationRuntimeRequest) (infruntime.ComposedRuntime, error) {
 	if c == nil || c.parsed == nil {
 		return infruntime.ComposedRuntime{}, fmt.Errorf("runtime composer is not configured")
 	}
-	if err := validateOverrides(req.Overrides); err != nil {
+	if err := validateRuntimeOverrides(req.RuntimeOverrides); err != nil {
 		return infruntime.ComposedRuntime{}, err
 	}
 	if ctx == nil {
 		return infruntime.ComposedRuntime{}, fmt.Errorf("compose context is nil")
 	}
 
-	runtimeKey := strings.TrimSpace(req.RuntimeKey)
+	runtimeKey := strings.TrimSpace(req.ProfileKey)
 	if runtimeKey == "" {
 		runtimeKey = "default"
 	}
 
 	systemPrompt := ""
-	if req.ResolvedRuntime != nil {
-		systemPrompt = strings.TrimSpace(req.ResolvedRuntime.SystemPrompt)
+	if req.ResolvedProfileRuntime != nil {
+		systemPrompt = strings.TrimSpace(req.ResolvedProfileRuntime.SystemPrompt)
 	}
-	middlewares := runtimeMiddlewaresFromProfile(req.ResolvedRuntime)
-	tools := runtimeToolsFromProfile(req.ResolvedRuntime)
-	if req.Overrides != nil {
-		if v, ok := req.Overrides["system_prompt"].(string); ok && strings.TrimSpace(v) != "" {
+	middlewares := runtimeMiddlewaresFromProfile(req.ResolvedProfileRuntime)
+	tools := runtimeToolsFromProfile(req.ResolvedProfileRuntime)
+	if req.RuntimeOverrides != nil {
+		if v, ok := req.RuntimeOverrides["system_prompt"].(string); ok && strings.TrimSpace(v) != "" {
 			systemPrompt = v
 		}
-		if arr, ok := req.Overrides["middlewares"].([]any); ok {
-			parsed, err := parseMiddlewareOverrides(arr)
+		if arr, ok := req.RuntimeOverrides["middlewares"].([]any); ok {
+			parsed, err := parseRuntimeMiddlewareOverrides(arr)
 			if err != nil {
 				return infruntime.ComposedRuntime{}, err
 			}
 			middlewares = parsed
 		}
-		if arr, ok := req.Overrides["tools"].([]any); ok {
-			parsed, err := parseToolOverrides(arr)
+		if arr, ok := req.RuntimeOverrides["tools"].([]any); ok {
+			parsed, err := parseRuntimeToolOverrides(arr)
 			if err != nil {
 				return infruntime.ComposedRuntime{}, err
 			}
@@ -88,7 +88,7 @@ func (c *webChatRuntimeComposer) Compose(ctx context.Context, req infruntime.Con
 	return infruntime.ComposedRuntime{
 		Engine:             eng,
 		RuntimeKey:         runtimeKey,
-		RuntimeFingerprint: runtimeFingerprint(runtimeKey, req.ProfileVersion, systemPrompt, middlewares, tools, stepSettings),
+		RuntimeFingerprint: buildRuntimeFingerprint(runtimeKey, req.ProfileVersion, systemPrompt, middlewares, tools, stepSettings),
 		SeedSystemPrompt:   systemPrompt,
 		AllowedTools:       tools,
 	}, nil
@@ -133,7 +133,7 @@ func runtimeToolsFromProfile(spec *gepprofiles.RuntimeSpec) []string {
 	return tools
 }
 
-type runtimeFingerprintPayload struct {
+type RuntimeFingerprintInput struct {
 	ProfileVersion uint64                      `json:"profile_version,omitempty"`
 	RuntimeKey     string                      `json:"runtime_key"`
 	SystemPrompt   string                      `json:"system_prompt"`
@@ -142,7 +142,7 @@ type runtimeFingerprintPayload struct {
 	StepMetadata   map[string]any              `json:"step_metadata,omitempty"`
 }
 
-func runtimeFingerprint(
+func buildRuntimeFingerprint(
 	runtimeKey string,
 	profileVersion uint64,
 	systemPrompt string,
@@ -154,7 +154,7 @@ func runtimeFingerprint(
 	if stepSettings != nil {
 		metadata = stepSettings.GetMetadata()
 	}
-	payload := runtimeFingerprintPayload{
+	payload := RuntimeFingerprintInput{
 		ProfileVersion: profileVersion,
 		RuntimeKey:     runtimeKey,
 		SystemPrompt:   systemPrompt,
@@ -170,7 +170,7 @@ func runtimeFingerprint(
 	return string(b)
 }
 
-func validateOverrides(overrides map[string]any) error {
+func validateRuntimeOverrides(overrides map[string]any) error {
 	if overrides == nil {
 		return nil
 	}
@@ -193,7 +193,7 @@ func validateOverrides(overrides map[string]any) error {
 	return nil
 }
 
-func parseMiddlewareOverrides(arr []any) ([]infruntime.MiddlewareSpec, error) {
+func parseRuntimeMiddlewareOverrides(arr []any) ([]infruntime.MiddlewareSpec, error) {
 	mws := make([]infruntime.MiddlewareSpec, 0, len(arr))
 	for _, raw := range arr {
 		m, ok := raw.(map[string]any)
@@ -209,7 +209,7 @@ func parseMiddlewareOverrides(arr []any) ([]infruntime.MiddlewareSpec, error) {
 	return mws, nil
 }
 
-func parseToolOverrides(arr []any) ([]string, error) {
+func parseRuntimeToolOverrides(arr []any) ([]string, error) {
 	tools := make([]string, 0, len(arr))
 	for _, raw := range arr {
 		switch v := raw.(type) {
