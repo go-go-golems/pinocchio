@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -10,6 +11,42 @@ import (
 	gepprofiles "github.com/go-go-golems/geppetto/pkg/profiles"
 	"github.com/stretchr/testify/require"
 )
+
+func newTestResolverWithMultipleRegistries(t *testing.T) *webChatProfileResolver {
+	t.Helper()
+
+	store := gepprofiles.NewInMemoryProfileStore()
+
+	defaultRegistry := &gepprofiles.ProfileRegistry{
+		Slug:               gepprofiles.MustRegistrySlug(defaultWebChatRegistrySlug),
+		DefaultProfileSlug: gepprofiles.MustProfileSlug("default"),
+		Profiles: map[gepprofiles.ProfileSlug]*gepprofiles.Profile{
+			gepprofiles.MustProfileSlug("default"): {
+				Slug:    gepprofiles.MustProfileSlug("default"),
+				Runtime: gepprofiles.RuntimeSpec{SystemPrompt: "You are default"},
+			},
+		},
+	}
+	require.NoError(t, gepprofiles.ValidateRegistry(defaultRegistry))
+	require.NoError(t, store.UpsertRegistry(context.Background(), defaultRegistry, gepprofiles.SaveOptions{Actor: "tests", Source: "tests"}))
+
+	teamRegistry := &gepprofiles.ProfileRegistry{
+		Slug:               gepprofiles.MustRegistrySlug("team"),
+		DefaultProfileSlug: gepprofiles.MustProfileSlug("analyst"),
+		Profiles: map[gepprofiles.ProfileSlug]*gepprofiles.Profile{
+			gepprofiles.MustProfileSlug("analyst"): {
+				Slug:    gepprofiles.MustProfileSlug("analyst"),
+				Runtime: gepprofiles.RuntimeSpec{SystemPrompt: "You are analyst"},
+			},
+		},
+	}
+	require.NoError(t, gepprofiles.ValidateRegistry(teamRegistry))
+	require.NoError(t, store.UpsertRegistry(context.Background(), teamRegistry, gepprofiles.SaveOptions{Actor: "tests", Source: "tests"}))
+
+	profileRegistry, err := gepprofiles.NewStoreRegistry(store, gepprofiles.MustRegistrySlug(defaultWebChatRegistrySlug))
+	require.NoError(t, err)
+	return newWebChatProfileResolver(profileRegistry, gepprofiles.MustRegistrySlug(defaultWebChatRegistrySlug))
+}
 
 func TestWebChatProfileResolver_WS_DefaultProfile(t *testing.T) {
 	profileRegistry, err := newInMemoryProfileRegistry(
@@ -115,4 +152,43 @@ func TestRegisterProfileHandlers_GetAndSetProfile(t *testing.T) {
 	var getResp map[string]any
 	require.NoError(t, json.Unmarshal(recGet.Body.Bytes(), &getResp))
 	require.Equal(t, "agent", getResp["slug"])
+}
+
+func TestWebChatProfileResolver_Chat_BodyProfileAndRegistry(t *testing.T) {
+	resolver := newTestResolverWithMultipleRegistries(t)
+
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"/chat",
+		bytes.NewBufferString(`{"prompt":"hi","conv_id":"conv-1","registry":"team","profile":"analyst"}`),
+	)
+	plan, err := resolver.Resolve(req)
+	require.NoError(t, err)
+	require.Equal(t, "conv-1", plan.ConvID)
+	require.Equal(t, "analyst", plan.RuntimeKey)
+	require.Equal(t, "You are analyst", plan.Overrides["system_prompt"])
+}
+
+func TestWebChatProfileResolver_WS_QueryProfileAndRegistry(t *testing.T) {
+	resolver := newTestResolverWithMultipleRegistries(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/ws?conv_id=conv-1&registry=team&profile=analyst", nil)
+	plan, err := resolver.Resolve(req)
+	require.NoError(t, err)
+	require.Equal(t, "conv-1", plan.ConvID)
+	require.Equal(t, "analyst", plan.RuntimeKey)
+	require.Equal(t, "You are analyst", plan.Overrides["system_prompt"])
+}
+
+func TestWebChatProfileResolver_Chat_InvalidRegistryInBody(t *testing.T) {
+	resolver := newTestResolverWithMultipleRegistries(t)
+
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"/chat",
+		bytes.NewBufferString(`{"prompt":"hi","conv_id":"conv-1","registry":"invalid registry!","profile":"default"}`),
+	)
+	_, err := resolver.Resolve(req)
+	require.Error(t, err)
+	require.ErrorContains(t, err, "invalid registry")
 }

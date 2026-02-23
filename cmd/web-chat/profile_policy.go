@@ -110,7 +110,7 @@ func (r *webChatProfileResolver) resolveWS(req *http.Request) (webhttp.Conversat
 		return webhttp.ConversationRequestPlan{}, &webhttp.RequestResolutionError{Status: http.StatusBadRequest, ClientMsg: "missing conv_id"}
 	}
 
-	slug, profile, err := r.resolveProfile(req, "")
+	_, slug, profile, err := r.resolveProfile(req, "", "", "")
 	if err != nil {
 		return webhttp.ConversationRequestPlan{}, err
 	}
@@ -138,7 +138,7 @@ func (r *webChatProfileResolver) resolveChat(req *http.Request) (webhttp.Convers
 	}
 
 	pathSlug := runtimeKeyFromPath(req)
-	slug, profile, err := r.resolveProfile(req, pathSlug)
+	_, slug, profile, err := r.resolveProfile(req, pathSlug, body.Profile, body.Registry)
 	if err != nil {
 		return webhttp.ConversationRequestPlan{}, err
 	}
@@ -157,12 +157,25 @@ func (r *webChatProfileResolver) resolveChat(req *http.Request) (webhttp.Convers
 	}, nil
 }
 
-func (r *webChatProfileResolver) resolveProfile(req *http.Request, pathSlug string) (gepprofiles.ProfileSlug, *gepprofiles.Profile, error) {
+func (r *webChatProfileResolver) resolveProfile(
+	req *http.Request,
+	pathSlug string,
+	bodyProfileRaw string,
+	bodyRegistryRaw string,
+) (gepprofiles.RegistrySlug, gepprofiles.ProfileSlug, *gepprofiles.Profile, error) {
 	if r == nil || r.profileRegistry == nil {
-		return "", nil, &webhttp.RequestResolutionError{Status: http.StatusInternalServerError, ClientMsg: "profile resolver is not configured"}
+		return "", "", nil, &webhttp.RequestResolutionError{Status: http.StatusInternalServerError, ClientMsg: "profile resolver is not configured"}
+	}
+
+	registrySlug, err := r.resolveRegistrySlug(req, bodyRegistryRaw)
+	if err != nil {
+		return "", "", nil, err
 	}
 
 	slugRaw := strings.TrimSpace(pathSlug)
+	if slugRaw == "" {
+		slugRaw = strings.TrimSpace(bodyProfileRaw)
+	}
 	if slugRaw == "" && req != nil {
 		slugRaw = strings.TrimSpace(req.URL.Query().Get("profile"))
 	}
@@ -177,27 +190,42 @@ func (r *webChatProfileResolver) resolveProfile(req *http.Request, pathSlug stri
 
 	ctx := context.Background()
 	if strings.TrimSpace(slugRaw) == "" {
-		s, err := r.resolveDefaultProfileSlug(ctx)
+		s, err := r.resolveDefaultProfileSlug(ctx, registrySlug)
 		if err != nil {
-			return "", nil, r.toRequestResolutionError(err, "")
+			return "", "", nil, r.toRequestResolutionError(err, "")
 		}
 		slugRaw = s.String()
 	}
 
 	slug, err := gepprofiles.ParseProfileSlug(slugRaw)
 	if err != nil {
-		return "", nil, &webhttp.RequestResolutionError{Status: http.StatusBadRequest, ClientMsg: "invalid profile: " + slugRaw, Err: err}
+		return "", "", nil, &webhttp.RequestResolutionError{Status: http.StatusBadRequest, ClientMsg: "invalid profile: " + slugRaw, Err: err}
 	}
 
-	profile, err := r.profileRegistry.GetProfile(ctx, r.registrySlug, slug)
+	profile, err := r.profileRegistry.GetProfile(ctx, registrySlug, slug)
 	if err != nil {
-		return "", nil, r.toRequestResolutionError(err, slugRaw)
+		return "", "", nil, r.toRequestResolutionError(err, slugRaw)
 	}
-	return slug, profile, nil
+	return registrySlug, slug, profile, nil
 }
 
-func (r *webChatProfileResolver) resolveDefaultProfileSlug(ctx context.Context) (gepprofiles.ProfileSlug, error) {
-	registry, err := r.profileRegistry.GetRegistry(ctx, r.registrySlug)
+func (r *webChatProfileResolver) resolveRegistrySlug(req *http.Request, bodyRegistryRaw string) (gepprofiles.RegistrySlug, error) {
+	registryRaw := strings.TrimSpace(bodyRegistryRaw)
+	if registryRaw == "" && req != nil {
+		registryRaw = strings.TrimSpace(req.URL.Query().Get("registry"))
+	}
+	if registryRaw == "" {
+		return r.registrySlug, nil
+	}
+	registrySlug, err := gepprofiles.ParseRegistrySlug(registryRaw)
+	if err != nil {
+		return "", &webhttp.RequestResolutionError{Status: http.StatusBadRequest, ClientMsg: "invalid registry: " + registryRaw, Err: err}
+	}
+	return registrySlug, nil
+}
+
+func (r *webChatProfileResolver) resolveDefaultProfileSlug(ctx context.Context, registrySlug gepprofiles.RegistrySlug) (gepprofiles.ProfileSlug, error) {
+	registry, err := r.profileRegistry.GetRegistry(ctx, registrySlug)
 	if err != nil {
 		return "", err
 	}
@@ -376,7 +404,7 @@ func registerProfileHandlers(mux *http.ServeMux, resolver *webChatProfileResolve
 				}
 			}
 			if slug.IsZero() {
-				defaultSlug, err := resolver.resolveDefaultProfileSlug(context.Background())
+				defaultSlug, err := resolver.resolveDefaultProfileSlug(context.Background(), resolver.registrySlug)
 				if err != nil {
 					http.Error(w, "profile registry unavailable", http.StatusInternalServerError)
 					return
