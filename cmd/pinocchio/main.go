@@ -274,6 +274,15 @@ func initAllCommands(helpSystem *help.HelpSystem) error {
 		// Use fmt.Errorf for consistent error handling
 		return fmt.Errorf("error initializing profiles command: %w", err)
 	}
+	migrateLegacyProfilesCmd, err := pinocchio_cmds.NewMigrateLegacyProfilesCommand()
+	if err != nil {
+		return fmt.Errorf("error initializing profiles migrate-legacy command: %w", err)
+	}
+	migrateLegacyProfilesCobraCmd, err := cli.BuildCobraCommandFromCommand(migrateLegacyProfilesCmd)
+	if err != nil {
+		return fmt.Errorf("error building profiles migrate-legacy cobra command: %w", err)
+	}
+	profilesCmd.AddCommand(migrateLegacyProfilesCobraCmd)
 	rootCmd.AddCommand(profilesCmd)
 
 	// Create and add the repositories command group

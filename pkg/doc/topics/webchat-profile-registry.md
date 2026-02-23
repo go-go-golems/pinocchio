@@ -229,6 +229,26 @@ Minimum integration coverage for profile-aware webchat:
 
 These tests should run against app-mounted handlers, not only isolated service functions.
 
+## Migrating Legacy profiles.yaml
+
+If you still have legacy profile-map files, migrate them with the Pinocchio verb:
+
+```bash
+pinocchio profiles migrate-legacy \
+  --input ~/.config/pinocchio/profiles.yaml \
+  --output ~/.config/pinocchio/profiles.registry.yaml
+```
+
+In-place migration with backup:
+
+```bash
+pinocchio profiles migrate-legacy --in-place --backup-in-place
+```
+
+For full migration workflow and validation steps, see the Geppetto playbook:
+
+- `geppetto/pkg/doc/playbooks/05-migrate-legacy-profiles-yaml-to-registry.md`
+
 ## Troubleshooting
 
 | Problem | Cause | Solution |
