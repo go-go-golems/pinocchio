@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	gepprofiles "github.com/go-go-golems/geppetto/pkg/profiles"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
@@ -40,9 +41,12 @@ func (c *webChatRuntimeComposer) Compose(ctx context.Context, req infruntime.Run
 		runtimeKey = "default"
 	}
 
-	systemPrompt := "You are an assistant"
-	middlewares := []infruntime.MiddlewareUse{}
-	tools := []string{}
+	systemPrompt := ""
+	if req.ResolvedRuntime != nil {
+		systemPrompt = strings.TrimSpace(req.ResolvedRuntime.SystemPrompt)
+	}
+	middlewares := runtimeMiddlewaresFromProfile(req.ResolvedRuntime)
+	tools := runtimeToolsFromProfile(req.ResolvedRuntime)
 	if req.Overrides != nil {
 		if v, ok := req.Overrides["system_prompt"].(string); ok && strings.TrimSpace(v) != "" {
 			systemPrompt = v
@@ -88,6 +92,45 @@ func (c *webChatRuntimeComposer) Compose(ctx context.Context, req infruntime.Run
 		SeedSystemPrompt:   systemPrompt,
 		AllowedTools:       tools,
 	}, nil
+}
+
+func runtimeMiddlewaresFromProfile(spec *gepprofiles.RuntimeSpec) []infruntime.MiddlewareUse {
+	if spec == nil || len(spec.Middlewares) == 0 {
+		return nil
+	}
+	middlewares := make([]infruntime.MiddlewareUse, 0, len(spec.Middlewares))
+	for _, mw := range spec.Middlewares {
+		name := strings.TrimSpace(mw.Name)
+		if name == "" {
+			continue
+		}
+		middlewares = append(middlewares, infruntime.MiddlewareUse{
+			Name:   name,
+			Config: mw.Config,
+		})
+	}
+	if len(middlewares) == 0 {
+		return nil
+	}
+	return middlewares
+}
+
+func runtimeToolsFromProfile(spec *gepprofiles.RuntimeSpec) []string {
+	if spec == nil || len(spec.Tools) == 0 {
+		return nil
+	}
+	tools := make([]string, 0, len(spec.Tools))
+	for _, tool := range spec.Tools {
+		name := strings.TrimSpace(tool)
+		if name == "" {
+			continue
+		}
+		tools = append(tools, name)
+	}
+	if len(tools) == 0 {
+		return nil
+	}
+	return tools
 }
 
 type runtimeFingerprintPayload struct {

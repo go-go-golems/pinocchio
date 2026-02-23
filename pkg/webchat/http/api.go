@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strings"
 
+	gepprofiles "github.com/go-go-golems/geppetto/pkg/profiles"
 	timelinepb "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/timeline"
 	root "github.com/go-go-golems/pinocchio/pkg/webchat"
 	"github.com/google/uuid"
@@ -30,11 +31,12 @@ type ChatRequestBody struct {
 // ConversationRequestPlan is the canonical output of request policy resolution.
 // It captures request data needed for both chat and websocket flows.
 type ConversationRequestPlan struct {
-	ConvID         string
-	RuntimeKey     string
-	Overrides      map[string]any
-	Prompt         string
-	IdempotencyKey string
+	ConvID          string
+	RuntimeKey      string
+	ResolvedRuntime *gepprofiles.RuntimeSpec
+	Overrides       map[string]any
+	Prompt          string
+	IdempotencyKey  string
 }
 
 // ConversationRequestResolver resolves request policy (conv/runtime/overrides) for both HTTP and WS handlers.
@@ -137,11 +139,12 @@ func NewChatHandler(svc ChatService, resolver ConversationRequestResolver) http.
 		}
 
 		resp, err := svc.SubmitPrompt(req.Context(), root.SubmitPromptInput{
-			ConvID:         plan.ConvID,
-			RuntimeKey:     plan.RuntimeKey,
-			Overrides:      plan.Overrides,
-			Prompt:         plan.Prompt,
-			IdempotencyKey: idempotencyKey,
+			ConvID:          plan.ConvID,
+			RuntimeKey:      plan.RuntimeKey,
+			ResolvedRuntime: plan.ResolvedRuntime,
+			Overrides:       plan.Overrides,
+			Prompt:          plan.Prompt,
+			IdempotencyKey:  idempotencyKey,
 		})
 		if err != nil {
 			http.Error(w, "start session inference failed", http.StatusInternalServerError)
@@ -186,9 +189,10 @@ func NewWSHandler(svc StreamService, resolver ConversationRequestResolver, upgra
 			return
 		}
 		handle, err := svc.ResolveAndEnsureConversation(req.Context(), root.AppConversationRequest{
-			ConvID:     plan.ConvID,
-			RuntimeKey: plan.RuntimeKey,
-			Overrides:  plan.Overrides,
+			ConvID:          plan.ConvID,
+			RuntimeKey:      plan.RuntimeKey,
+			ResolvedRuntime: plan.ResolvedRuntime,
+			Overrides:       plan.Overrides,
 		})
 		if err != nil {
 			_ = conn.WriteMessage(websocket.TextMessage, []byte(`{"error":"failed to join conversation"}`))

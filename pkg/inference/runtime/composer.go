@@ -5,13 +5,15 @@ import (
 
 	"github.com/go-go-golems/geppetto/pkg/events"
 	"github.com/go-go-golems/geppetto/pkg/inference/engine"
+	gepprofiles "github.com/go-go-golems/geppetto/pkg/profiles"
 )
 
 // RuntimeComposeRequest contains app-owned runtime policy inputs.
 type RuntimeComposeRequest struct {
-	ConvID     string
-	RuntimeKey string
-	Overrides  map[string]any
+	ConvID          string
+	RuntimeKey      string
+	ResolvedRuntime *gepprofiles.RuntimeSpec
+	Overrides       map[string]any
 }
 
 // RuntimeArtifacts are the composed runtime pieces consumed by conversation lifecycle code.

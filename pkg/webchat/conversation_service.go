@@ -16,6 +16,7 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/inference/toolloop"
 	"github.com/go-go-golems/geppetto/pkg/inference/toolloop/enginebuilder"
 	geptools "github.com/go-go-golems/geppetto/pkg/inference/tools"
+	gepprofiles "github.com/go-go-golems/geppetto/pkg/profiles"
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
 	timelinepb "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/timeline"
@@ -46,9 +47,10 @@ type ConversationService struct {
 }
 
 type AppConversationRequest struct {
-	ConvID     string
-	RuntimeKey string
-	Overrides  map[string]any
+	ConvID          string
+	RuntimeKey      string
+	ResolvedRuntime *gepprofiles.RuntimeSpec
+	Overrides       map[string]any
 }
 
 type ConversationHandle struct {
@@ -61,11 +63,12 @@ type ConversationHandle struct {
 }
 
 type SubmitPromptInput struct {
-	ConvID         string
-	RuntimeKey     string
-	Overrides      map[string]any
-	Prompt         string
-	IdempotencyKey string
+	ConvID          string
+	RuntimeKey      string
+	ResolvedRuntime *gepprofiles.RuntimeSpec
+	Overrides       map[string]any
+	Prompt          string
+	IdempotencyKey  string
 }
 
 type SubmitPromptResult struct {
@@ -166,9 +169,10 @@ func (s *ConversationService) SubmitPrompt(ctx context.Context, in SubmitPromptI
 		return SubmitPromptResult{HTTPStatus: 400, Response: map[string]any{"status": "error", "error": "missing prompt"}}, nil
 	}
 	handle, err := s.ResolveAndEnsureConversation(ctx, AppConversationRequest{
-		ConvID:     in.ConvID,
-		RuntimeKey: in.RuntimeKey,
-		Overrides:  in.Overrides,
+		ConvID:          in.ConvID,
+		RuntimeKey:      in.RuntimeKey,
+		ResolvedRuntime: in.ResolvedRuntime,
+		Overrides:       in.Overrides,
 	})
 	if err != nil {
 		return SubmitPromptResult{}, err

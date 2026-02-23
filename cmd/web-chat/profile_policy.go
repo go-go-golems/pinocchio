@@ -115,11 +115,13 @@ func (r *webChatProfileResolver) resolveWS(req *http.Request) (webhttp.Conversat
 		return webhttp.ConversationRequestPlan{}, err
 	}
 	overrides := baseOverridesForProfile(profile)
+	resolvedRuntime := profileRuntimeSpec(profile)
 
 	return webhttp.ConversationRequestPlan{
-		ConvID:     convID,
-		RuntimeKey: slug.String(),
-		Overrides:  overrides,
+		ConvID:          convID,
+		RuntimeKey:      slug.String(),
+		ResolvedRuntime: resolvedRuntime,
+		Overrides:       overrides,
 	}, nil
 }
 
@@ -147,13 +149,15 @@ func (r *webChatProfileResolver) resolveChat(req *http.Request) (webhttp.Convers
 	if err != nil {
 		return webhttp.ConversationRequestPlan{}, err
 	}
+	resolvedRuntime := profileRuntimeSpec(profile)
 
 	return webhttp.ConversationRequestPlan{
-		ConvID:         convID,
-		RuntimeKey:     slug.String(),
-		Overrides:      overrides,
-		Prompt:         body.Prompt,
-		IdempotencyKey: strings.TrimSpace(body.IdempotencyKey),
+		ConvID:          convID,
+		RuntimeKey:      slug.String(),
+		ResolvedRuntime: resolvedRuntime,
+		Overrides:       overrides,
+		Prompt:          body.Prompt,
+		IdempotencyKey:  strings.TrimSpace(body.IdempotencyKey),
 	}, nil
 }
 
@@ -254,6 +258,25 @@ func (r *webChatProfileResolver) toRequestResolutionError(err error, slug string
 func (r *webChatProfileResolver) profileExists(ctx context.Context, slug gepprofiles.ProfileSlug) bool {
 	_, err := r.profileRegistry.GetProfile(ctx, r.registrySlug, slug)
 	return err == nil
+}
+
+func profileRuntimeSpec(p *gepprofiles.Profile) *gepprofiles.RuntimeSpec {
+	if p == nil {
+		return nil
+	}
+	spec := gepprofiles.RuntimeSpec{
+		StepSettingsPatch: map[string]any{},
+		SystemPrompt:      strings.TrimSpace(p.Runtime.SystemPrompt),
+		Middlewares:       append([]gepprofiles.MiddlewareUse(nil), p.Runtime.Middlewares...),
+		Tools:             append([]string(nil), p.Runtime.Tools...),
+	}
+	for k, v := range p.Runtime.StepSettingsPatch {
+		spec.StepSettingsPatch[k] = v
+	}
+	if len(spec.StepSettingsPatch) == 0 {
+		spec.StepSettingsPatch = nil
+	}
+	return &spec
 }
 
 func baseOverridesForProfile(p *gepprofiles.Profile) map[string]any {

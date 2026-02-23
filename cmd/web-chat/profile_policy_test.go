@@ -63,6 +63,8 @@ func TestWebChatProfileResolver_WS_DefaultProfile(t *testing.T) {
 	require.Equal(t, "conv-1", plan.ConvID)
 	require.Equal(t, "default", plan.RuntimeKey)
 	require.Equal(t, "You are default", plan.Overrides["system_prompt"])
+	require.NotNil(t, plan.ResolvedRuntime)
+	require.Equal(t, "You are default", plan.ResolvedRuntime.SystemPrompt)
 }
 
 func TestWebChatProfileResolver_Chat_OverridePolicy(t *testing.T) {
@@ -167,6 +169,8 @@ func TestWebChatProfileResolver_Chat_BodyProfileAndRegistry(t *testing.T) {
 	require.Equal(t, "conv-1", plan.ConvID)
 	require.Equal(t, "analyst", plan.RuntimeKey)
 	require.Equal(t, "You are analyst", plan.Overrides["system_prompt"])
+	require.NotNil(t, plan.ResolvedRuntime)
+	require.Equal(t, "You are analyst", plan.ResolvedRuntime.SystemPrompt)
 }
 
 func TestWebChatProfileResolver_WS_QueryProfileAndRegistry(t *testing.T) {

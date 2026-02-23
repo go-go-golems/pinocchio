@@ -17,6 +17,7 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/inference/session"
 	"github.com/go-go-golems/geppetto/pkg/inference/toolloop"
 	"github.com/go-go-golems/geppetto/pkg/inference/toolloop/enginebuilder"
+	gepprofiles "github.com/go-go-golems/geppetto/pkg/profiles"
 	"github.com/go-go-golems/geppetto/pkg/turns"
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
@@ -244,7 +245,11 @@ func (cm *ConvManager) timelineProjectorUpsertHook(conv *Conversation) func(enti
 func topicForConv(convID string) string { return "chat:" + convID }
 
 // GetOrCreate creates or reuses a conversation based on runtime fingerprint changes.
-func (cm *ConvManager) GetOrCreate(convID, runtimeKey string, overrides map[string]any) (*Conversation, error) {
+func (cm *ConvManager) GetOrCreate(
+	convID, runtimeKey string,
+	overrides map[string]any,
+	resolvedRuntime *gepprofiles.RuntimeSpec,
+) (*Conversation, error) {
 	if cm == nil {
 		return nil, errors.New("conversation manager is nil")
 	}
@@ -252,9 +257,10 @@ func (cm *ConvManager) GetOrCreate(convID, runtimeKey string, overrides map[stri
 		return nil, errors.New("conversation manager missing dependencies")
 	}
 	req := infruntime.RuntimeComposeRequest{
-		ConvID:     convID,
-		RuntimeKey: runtimeKey,
-		Overrides:  overrides,
+		ConvID:          convID,
+		RuntimeKey:      runtimeKey,
+		ResolvedRuntime: resolvedRuntime,
+		Overrides:       overrides,
 	}
 	runtime, err := cm.runtimeComposer.Compose(cm.baseCtx, req)
 	if err != nil {
