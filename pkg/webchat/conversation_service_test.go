@@ -2,6 +2,7 @@ package webchat
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/ThreeDotsLabs/watermill/message"
@@ -40,13 +41,21 @@ type noopEngine struct{}
 
 func (noopEngine) RunInference(_ context.Context, t *turns.Turn) (*turns.Turn, error) { return t, nil }
 
+type versionedEngine struct {
+	id string
+}
+
+func (e *versionedEngine) RunInference(_ context.Context, t *turns.Turn) (*turns.Turn, error) {
+	return t, nil
+}
+
 type noopSink struct{}
 
 func (noopSink) PublishEvent(events.Event) error { return nil }
 
 func TestConversationService_SubmitPromptQueuesWhenConversationBusy(t *testing.T) {
-	runtimeComposer := infruntime.RuntimeComposerFunc(func(context.Context, infruntime.RuntimeComposeRequest) (infruntime.RuntimeArtifacts, error) {
-		return infruntime.RuntimeArtifacts{
+	runtimeComposer := infruntime.RuntimeBuilderFunc(func(context.Context, infruntime.ConversationRuntimeRequest) (infruntime.ComposedRuntime, error) {
+		return infruntime.ComposedRuntime{
 			Engine:             noopEngine{},
 			Sink:               noopSink{},
 			RuntimeKey:         "default",
@@ -90,8 +99,8 @@ func TestConversationService_SubmitPromptQueuesWhenConversationBusy(t *testing.T
 }
 
 func TestConversationService_ResolveAndEnsureConversation_DefaultsAndLifecycle(t *testing.T) {
-	runtimeComposer := infruntime.RuntimeComposerFunc(func(context.Context, infruntime.RuntimeComposeRequest) (infruntime.RuntimeArtifacts, error) {
-		return infruntime.RuntimeArtifacts{
+	runtimeComposer := infruntime.RuntimeBuilderFunc(func(context.Context, infruntime.ConversationRuntimeRequest) (infruntime.ComposedRuntime, error) {
+		return infruntime.ComposedRuntime{
 			Engine:             noopEngine{},
 			Sink:               noopSink{},
 			RuntimeKey:         "default",
@@ -110,7 +119,7 @@ func TestConversationService_ResolveAndEnsureConversation_DefaultsAndLifecycle(t
 	})
 	require.NoError(t, err)
 
-	handle, err := svc.ResolveAndEnsureConversation(context.Background(), AppConversationRequest{})
+	handle, err := svc.ResolveAndEnsureConversation(context.Background(), ConversationRuntimeRequest{})
 	require.NoError(t, err)
 	require.NotEmpty(t, handle.ConvID)
 	_, parseErr := uuid.Parse(handle.ConvID)
@@ -120,9 +129,69 @@ func TestConversationService_ResolveAndEnsureConversation_DefaultsAndLifecycle(t
 	require.Equal(t, "seed", handle.SeedSystemPrompt)
 }
 
+func TestConversationService_ResolveAndEnsureConversation_RebuildsOnProfileVersionChange(t *testing.T) {
+	callCount := 0
+	runtimeComposer := infruntime.RuntimeBuilderFunc(func(_ context.Context, req infruntime.ConversationRuntimeRequest) (infruntime.ComposedRuntime, error) {
+		callCount++
+		engineID := fmt.Sprintf("eng-v%d-call-%d", req.ProfileVersion, callCount)
+		return infruntime.ComposedRuntime{
+			Engine:             &versionedEngine{id: engineID},
+			Sink:               noopSink{},
+			RuntimeKey:         "default",
+			RuntimeFingerprint: fmt.Sprintf("fp-v%d", req.ProfileVersion),
+		}, nil
+	})
+	cm := NewConvManager(ConvManagerOptions{
+		BaseCtx:         context.Background(),
+		RuntimeComposer: runtimeComposer,
+		BuildSubscriber: func(string) (message.Subscriber, bool, error) { return nil, false, nil },
+	})
+	svc, err := NewConversationService(ConversationServiceConfig{
+		BaseCtx:     context.Background(),
+		ConvManager: cm,
+	})
+	require.NoError(t, err)
+
+	handleV1, err := svc.ResolveAndEnsureConversation(context.Background(), ConversationRuntimeRequest{
+		ConvID:          "conv-versioned",
+		RuntimeKey:      "default",
+		ProfileVersion:  1,
+		ResolvedRuntime: nil,
+	})
+	require.NoError(t, err)
+	require.Equal(t, "fp-v1", handleV1.RuntimeFingerprint)
+	conv, ok := cm.GetConversation("conv-versioned")
+	require.True(t, ok)
+	require.NotNil(t, conv)
+	engineV1 := conv.Eng
+	require.NotNil(t, engineV1)
+
+	handleV1Repeat, err := svc.ResolveAndEnsureConversation(context.Background(), ConversationRuntimeRequest{
+		ConvID:         "conv-versioned",
+		RuntimeKey:     "default",
+		ProfileVersion: 1,
+	})
+	require.NoError(t, err)
+	require.Equal(t, "fp-v1", handleV1Repeat.RuntimeFingerprint)
+	convRepeat, ok := cm.GetConversation("conv-versioned")
+	require.True(t, ok)
+	require.Same(t, engineV1, convRepeat.Eng, "same profile version should not rebuild engine")
+
+	handleV2, err := svc.ResolveAndEnsureConversation(context.Background(), ConversationRuntimeRequest{
+		ConvID:         "conv-versioned",
+		RuntimeKey:     "default",
+		ProfileVersion: 2,
+	})
+	require.NoError(t, err)
+	require.Equal(t, "fp-v2", handleV2.RuntimeFingerprint)
+	convV2, ok := cm.GetConversation("conv-versioned")
+	require.True(t, ok)
+	require.NotSame(t, engineV1, convV2.Eng, "new profile version should rebuild engine")
+}
+
 func TestConversationService_SubmitPromptRejectsMissingPrompt(t *testing.T) {
-	runtimeComposer := infruntime.RuntimeComposerFunc(func(context.Context, infruntime.RuntimeComposeRequest) (infruntime.RuntimeArtifacts, error) {
-		return infruntime.RuntimeArtifacts{
+	runtimeComposer := infruntime.RuntimeBuilderFunc(func(context.Context, infruntime.ConversationRuntimeRequest) (infruntime.ComposedRuntime, error) {
+		return infruntime.ComposedRuntime{
 			Engine:             noopEngine{},
 			Sink:               noopSink{},
 			RuntimeKey:         "default",
@@ -152,8 +221,8 @@ func TestConversationService_SubmitPromptRejectsMissingPrompt(t *testing.T) {
 }
 
 func TestConversationService_AttachWebSocketValidatesArguments(t *testing.T) {
-	runtimeComposer := infruntime.RuntimeComposerFunc(func(context.Context, infruntime.RuntimeComposeRequest) (infruntime.RuntimeArtifacts, error) {
-		return infruntime.RuntimeArtifacts{
+	runtimeComposer := infruntime.RuntimeBuilderFunc(func(context.Context, infruntime.ConversationRuntimeRequest) (infruntime.ComposedRuntime, error) {
+		return infruntime.ComposedRuntime{
 			Engine:             noopEngine{},
 			Sink:               noopSink{},
 			RuntimeKey:         "default",

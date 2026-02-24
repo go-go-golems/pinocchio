@@ -13,6 +13,7 @@ import { DefaultHeader } from './components/Header';
 import { DefaultStatusbar } from './components/Statusbar';
 import { ChatTimeline } from './components/Timeline';
 import { getPartProps, mergeClassName, mergeStyle } from './parts';
+import { resolveSelectedProfile } from './profileSelection';
 import { resolveTimelineRenderers } from './rendererRegistry';
 import type {
   ChatWidgetComponents,
@@ -86,15 +87,42 @@ export function ChatWidget({
   const [statusText, setStatusText] = useState('idle');
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  const { data: profileData } = useGetProfileQuery();
+  const { data: profileData, refetch: refetchProfile } = useGetProfileQuery();
   const { data: profilesData } = useGetProfilesQuery();
   const [setProfile] = useSetProfileMutation();
 
   const profileOptions = useMemo(() => {
-    const data = profilesData ?? [];
-    if (data.length) return data;
-    return [{ slug: 'default' }, { slug: 'agent' }];
-  }, [profilesData]);
+    const bySlug = new Map<string, ProfileInfo>();
+    for (const profile of profilesData ?? []) {
+      const slug = String(profile?.slug ?? '').trim();
+      if (!slug || bySlug.has(slug)) continue;
+      bySlug.set(slug, profile);
+    }
+    const serverSlug = String(profileData?.slug ?? '').trim();
+    if (serverSlug && !bySlug.has(serverSlug)) {
+      bySlug.set(serverSlug, { slug: serverSlug });
+    }
+    if (bySlug.size === 0) {
+      bySlug.set('default', { slug: 'default' });
+    }
+    return Array.from(bySlug.values());
+  }, [profileData?.slug, profilesData]);
+
+  const selectedProfile = useMemo(
+    () =>
+      resolveSelectedProfile({
+        appProfile: app.profile,
+        serverProfile: profileData?.slug,
+        profiles: profileOptions,
+      }),
+    [app.profile, profileData?.slug, profileOptions],
+  );
+
+  useEffect(() => {
+    if (selectedProfile !== app.profile) {
+      dispatch(appSlice.actions.setProfile(selectedProfile));
+    }
+  }, [app.profile, dispatch, selectedProfile]);
 
   useEffect(() => {
     const convId = convIdFromLocation();
@@ -177,15 +205,27 @@ export function ChatWidget({
   const onProfileChange = useCallback(
     async (nextProfile: string) => {
       const profile = nextProfile.trim();
-      if (!profile || profile === app.profile) return;
+      if (!profile || profile === selectedProfile) return;
       try {
         const res = await setProfile({ slug: profile }).unwrap();
-        dispatch(appSlice.actions.setProfile(res.slug));
+        const serverSlug = String(res.slug ?? res.profile ?? '').trim();
+        if (serverSlug) {
+          dispatch(appSlice.actions.setProfile(serverSlug));
+        }
       } catch (err) {
         logWarn('profile switch failed', { scope: 'profiles.switch', extra: { profile } }, err);
+        try {
+          const refreshed = await refetchProfile().unwrap();
+          const refreshedSlug = String(refreshed.slug ?? refreshed.profile ?? '').trim();
+          if (refreshedSlug) {
+            dispatch(appSlice.actions.setProfile(refreshedSlug));
+          }
+        } catch {
+          // Keep current selection if profile refresh fails.
+        }
       }
     },
-    [app.profile, dispatch, setProfile],
+    [dispatch, refetchProfile, selectedProfile, setProfile],
   );
 
   const toggleErrors = useCallback(() => {
@@ -237,7 +277,7 @@ export function ChatWidget({
       {HeaderOverride ? (
         <HeaderOverride
           title={headerTitle}
-          profile={app.profile || 'default'}
+          profile={selectedProfile}
           profiles={profileOptions as ProfileInfo[]}
           wsStatus={app.wsStatus}
           status={app.status || statusText}
@@ -252,7 +292,7 @@ export function ChatWidget({
       ) : (
         <DefaultHeader
           title={headerTitle}
-          profile={app.profile || 'default'}
+          profile={selectedProfile}
           profiles={profileOptions as ProfileInfo[]}
           wsStatus={app.wsStatus}
           status={app.status || statusText}

@@ -13,25 +13,15 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 )
 
-// MiddlewareFactory creates a middleware instance from an arbitrary config object.
-type MiddlewareFactory func(cfg any) middleware.Middleware
+// ToolRegistrar registers a tool into a registry.
+type ToolRegistrar func(reg geptools.ToolRegistry) error
 
-// ToolFactory registers a tool into a registry.
-type ToolFactory func(reg geptools.ToolRegistry) error
-
-// MiddlewareUse declares a middleware to attach and its config.
-type MiddlewareUse struct {
-	Name   string
-	Config any
-}
-
-// ComposeEngineFromSettings builds an engine from step settings then applies middlewares.
-func ComposeEngineFromSettings(
+// BuildEngineFromSettingsWithMiddlewares builds an engine from step settings and applies middleware chain.
+func BuildEngineFromSettingsWithMiddlewares(
 	ctx context.Context,
 	stepSettings *settings.StepSettings,
 	sysPrompt string,
-	uses []MiddlewareUse,
-	mwFactories map[string]MiddlewareFactory,
+	resolvedMiddlewares []middleware.Middleware,
 ) (engine.Engine, error) {
 	if ctx == nil {
 		return nil, errors.New("ctx is nil")
@@ -41,25 +31,12 @@ func ComposeEngineFromSettings(
 		return nil, errors.Wrap(err, "engine init failed")
 	}
 
-	mws := make([]middleware.Middleware, 0, 2+len(uses))
-
-	// Always append tool result reorder for UX (outermost).
+	mws := make([]middleware.Middleware, 0, 2+len(resolvedMiddlewares))
 	mws = append(mws, middleware.NewToolResultReorderMiddleware())
-
-	// Apply requested middlewares (first listed becomes outermost among requested).
-	for _, u := range uses {
-		f, ok := mwFactories[u.Name]
-		if !ok {
-			return nil, errors.Errorf("unknown middleware: %s", u.Name)
-		}
-		mws = append(mws, f(u.Config))
-	}
-
-	// System prompt is near-innermost so it stays close to provider inference.
+	mws = append(mws, resolvedMiddlewares...)
 	if sysPrompt != "" {
 		mws = append(mws, middleware.NewSystemPromptMiddleware(sysPrompt))
 	}
-
 	builder := &enginebuilder.Builder{Base: eng, Middlewares: mws}
 	runner, err := builder.Build(ctx, "")
 	if err != nil {

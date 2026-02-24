@@ -5,17 +5,20 @@ import (
 
 	"github.com/go-go-golems/geppetto/pkg/events"
 	"github.com/go-go-golems/geppetto/pkg/inference/engine"
+	gepprofiles "github.com/go-go-golems/geppetto/pkg/profiles"
 )
 
-// RuntimeComposeRequest contains app-owned runtime policy inputs.
-type RuntimeComposeRequest struct {
-	ConvID     string
-	RuntimeKey string
-	Overrides  map[string]any
+// ConversationRuntimeRequest contains app-owned runtime policy inputs.
+type ConversationRuntimeRequest struct {
+	ConvID                 string
+	ProfileKey             string
+	ProfileVersion         uint64
+	ResolvedProfileRuntime *gepprofiles.RuntimeSpec
+	RuntimeOverrides       map[string]any
 }
 
-// RuntimeArtifacts are the composed runtime pieces consumed by conversation lifecycle code.
-type RuntimeArtifacts struct {
+// ComposedRuntime are the composed runtime pieces consumed by conversation lifecycle code.
+type ComposedRuntime struct {
 	Engine             engine.Engine
 	Sink               events.EventSink
 	RuntimeFingerprint string
@@ -27,14 +30,14 @@ type RuntimeArtifacts struct {
 	AllowedTools []string
 }
 
-// RuntimeComposer composes an engine/sink runtime for a conversation request.
-type RuntimeComposer interface {
-	Compose(ctx context.Context, req RuntimeComposeRequest) (RuntimeArtifacts, error)
+// RuntimeBuilder composes an engine/sink runtime for a conversation request.
+type RuntimeBuilder interface {
+	Compose(ctx context.Context, req ConversationRuntimeRequest) (ComposedRuntime, error)
 }
 
-// RuntimeComposerFunc adapts a function to RuntimeComposer.
-type RuntimeComposerFunc func(ctx context.Context, req RuntimeComposeRequest) (RuntimeArtifacts, error)
+// RuntimeBuilderFunc adapts a function to RuntimeBuilder.
+type RuntimeBuilderFunc func(ctx context.Context, req ConversationRuntimeRequest) (ComposedRuntime, error)
 
-func (f RuntimeComposerFunc) Compose(ctx context.Context, req RuntimeComposeRequest) (RuntimeArtifacts, error) {
+func (f RuntimeBuilderFunc) Compose(ctx context.Context, req ConversationRuntimeRequest) (ComposedRuntime, error) {
 	return f(ctx, req)
 }

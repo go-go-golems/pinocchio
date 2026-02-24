@@ -26,7 +26,7 @@ func BenchmarkSQLiteTurnStore_ListByConversation(b *testing.B) {
 		turnID := fmt.Sprintf("turn-%d", i)
 		phase := "final"
 		payload := validTurnPayload(turnID, fmt.Sprintf("text-%d", i))
-		if err := store.Save(ctx, convID, sessionID, turnID, phase, int64(1_000+i), payload); err != nil {
+		if err := store.Save(ctx, convID, sessionID, turnID, phase, int64(1_000+i), payload, TurnSaveOptions{}); err != nil {
 			b.Fatal(err)
 		}
 	}

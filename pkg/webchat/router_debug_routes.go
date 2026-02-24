@@ -34,7 +34,7 @@ func (r *Router) registerDebugAPIHandlers(mux *http.ServeMux) {
 		type convSummary struct {
 			ConvID            string `json:"conv_id"`
 			SessionID         string `json:"session_id"`
-			RuntimeKey        string `json:"runtime_key"`
+			CurrentRuntimeKey string `json:"current_runtime_key"`
 			ActiveSockets     int    `json:"active_sockets"`
 			StreamRunning     bool   `json:"stream_running"`
 			QueueDepth        int    `json:"queue_depth"`
@@ -54,7 +54,7 @@ func (r *Router) registerDebugAPIHandlers(mux *http.ServeMux) {
 					itemsByConvID[rec.ConvID] = convSummary{
 						ConvID:            rec.ConvID,
 						SessionID:         rec.SessionID,
-						RuntimeKey:        rec.RuntimeKey,
+						CurrentRuntimeKey: rec.RuntimeKey,
 						LastActivityMs:    rec.LastActivityMs,
 						HasTimelineSource: rec.HasTimeline || rec.LastSeenVersion > 0,
 						Source:            "persisted",
@@ -106,7 +106,7 @@ func (r *Router) registerDebugAPIHandlers(mux *http.ServeMux) {
 					item.SessionID = sessionID
 				}
 				if runtimeKey != "" {
-					item.RuntimeKey = runtimeKey
+					item.CurrentRuntimeKey = runtimeKey
 				}
 				item.ActiveSockets = activeSockets
 				item.StreamRunning = streamRunning
@@ -238,7 +238,7 @@ func (r *Router) registerDebugAPIHandlers(mux *http.ServeMux) {
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"conv_id":             convID,
 			"session_id":          sessionID,
-			"runtime_key":         runtimeKey,
+			"current_runtime_key": runtimeKey,
 			"active_sockets":      activeSockets,
 			"stream_running":      streamRunning,
 			"queue_depth":         queueDepth,
@@ -579,6 +579,8 @@ func (r *Router) registerDebugAPIHandlers(mux *http.ServeMux) {
 		type phaseSnapshot struct {
 			Phase       string         `json:"phase"`
 			CreatedAtMs int64          `json:"created_at_ms"`
+			RuntimeKey  string         `json:"runtime_key,omitempty"`
+			InferenceID string         `json:"inference_id,omitempty"`
 			Payload     string         `json:"payload"`
 			Parsed      map[string]any `json:"parsed,omitempty"`
 			ParseError  string         `json:"parse_error,omitempty"`
@@ -591,6 +593,8 @@ func (r *Router) registerDebugAPIHandlers(mux *http.ServeMux) {
 			s := phaseSnapshot{
 				Phase:       item.Phase,
 				CreatedAtMs: item.CreatedAtMs,
+				RuntimeKey:  item.RuntimeKey,
+				InferenceID: item.InferenceID,
 				Payload:     item.Payload,
 			}
 			t, err := serde.FromYAML([]byte(item.Payload))

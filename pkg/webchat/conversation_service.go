@@ -16,6 +16,7 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/inference/toolloop"
 	"github.com/go-go-golems/geppetto/pkg/inference/toolloop/enginebuilder"
 	geptools "github.com/go-go-golems/geppetto/pkg/inference/tools"
+	gepprofiles "github.com/go-go-golems/geppetto/pkg/profiles"
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
 	timelinepb "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/timeline"
@@ -29,7 +30,7 @@ type ConversationServiceConfig struct {
 	TurnStore          chatstore.TurnStore
 	SEMPublisher       message.Publisher
 	TimelineUpsertHook func(*Conversation) func(entity *timelinepb.TimelineEntityV2, version uint64)
-	ToolFactories      map[string]infruntime.ToolFactory
+	ToolFactories      map[string]infruntime.ToolRegistrar
 }
 
 type ConversationService struct {
@@ -42,13 +43,15 @@ type ConversationService struct {
 	turnStore      chatstore.TurnStore
 	semPublisher   message.Publisher
 	timelineUpsert func(*Conversation) func(entity *timelinepb.TimelineEntityV2, version uint64)
-	toolFactories  map[string]infruntime.ToolFactory
+	toolFactories  map[string]infruntime.ToolRegistrar
 }
 
-type AppConversationRequest struct {
-	ConvID     string
-	RuntimeKey string
-	Overrides  map[string]any
+type ConversationRuntimeRequest struct {
+	ConvID          string
+	RuntimeKey      string
+	ProfileVersion  uint64
+	ResolvedRuntime *gepprofiles.RuntimeSpec
+	Overrides       map[string]any
 }
 
 type ConversationHandle struct {
@@ -61,11 +64,13 @@ type ConversationHandle struct {
 }
 
 type SubmitPromptInput struct {
-	ConvID         string
-	RuntimeKey     string
-	Overrides      map[string]any
-	Prompt         string
-	IdempotencyKey string
+	ConvID          string
+	RuntimeKey      string
+	ProfileVersion  uint64
+	ResolvedRuntime *gepprofiles.RuntimeSpec
+	Overrides       map[string]any
+	Prompt          string
+	IdempotencyKey  string
 }
 
 type SubmitPromptResult struct {
@@ -94,7 +99,7 @@ func NewConversationService(cfg ConversationServiceConfig) (*ConversationService
 	}
 	toolFactories := cfg.ToolFactories
 	if toolFactories == nil {
-		toolFactories = map[string]infruntime.ToolFactory{}
+		toolFactories = map[string]infruntime.ToolRegistrar{}
 	}
 	return &ConversationService{
 		baseCtx:        cfg.BaseCtx,
@@ -137,17 +142,17 @@ func (s *ConversationService) SetStepController(sc *toolloop.StepController) {
 	s.stepCtrl = sc
 }
 
-func (s *ConversationService) RegisterTool(name string, f infruntime.ToolFactory) {
+func (s *ConversationService) RegisterTool(name string, f infruntime.ToolRegistrar) {
 	if s == nil || strings.TrimSpace(name) == "" || f == nil {
 		return
 	}
 	if s.toolFactories == nil {
-		s.toolFactories = map[string]infruntime.ToolFactory{}
+		s.toolFactories = map[string]infruntime.ToolRegistrar{}
 	}
 	s.toolFactories[strings.TrimSpace(name)] = f
 }
 
-func (s *ConversationService) ResolveAndEnsureConversation(ctx context.Context, req AppConversationRequest) (*ConversationHandle, error) {
+func (s *ConversationService) ResolveAndEnsureConversation(ctx context.Context, req ConversationRuntimeRequest) (*ConversationHandle, error) {
 	if s == nil || s.streams == nil {
 		return nil, errors.New("conversation service is not initialized")
 	}
@@ -165,10 +170,12 @@ func (s *ConversationService) SubmitPrompt(ctx context.Context, in SubmitPromptI
 	if prompt == "" {
 		return SubmitPromptResult{HTTPStatus: 400, Response: map[string]any{"status": "error", "error": "missing prompt"}}, nil
 	}
-	handle, err := s.ResolveAndEnsureConversation(ctx, AppConversationRequest{
-		ConvID:     in.ConvID,
-		RuntimeKey: in.RuntimeKey,
-		Overrides:  in.Overrides,
+	handle, err := s.ResolveAndEnsureConversation(ctx, ConversationRuntimeRequest{
+		ConvID:          in.ConvID,
+		RuntimeKey:      in.RuntimeKey,
+		ProfileVersion:  in.ProfileVersion,
+		ResolvedRuntime: in.ResolvedRuntime,
+		Overrides:       in.Overrides,
 	})
 	if err != nil {
 		return SubmitPromptResult{}, err

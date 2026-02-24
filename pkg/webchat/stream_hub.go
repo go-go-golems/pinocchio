@@ -40,7 +40,7 @@ func NewStreamHub(cfg StreamHubConfig) (*StreamHub, error) {
 	}, nil
 }
 
-func (h *StreamHub) ResolveAndEnsureConversation(ctx context.Context, req AppConversationRequest) (*ConversationHandle, error) {
+func (h *StreamHub) ResolveAndEnsureConversation(ctx context.Context, req ConversationRuntimeRequest) (*ConversationHandle, error) {
 	if h == nil || h.cm == nil {
 		return nil, errors.New("stream hub is not initialized")
 	}
@@ -52,7 +52,7 @@ func (h *StreamHub) ResolveAndEnsureConversation(ctx context.Context, req AppCon
 	if runtimeKey == "" {
 		runtimeKey = "default"
 	}
-	conv, err := h.cm.GetOrCreate(convID, runtimeKey, req.Overrides)
+	conv, err := h.cm.GetOrCreate(convID, runtimeKey, req.Overrides, req.ResolvedRuntime, req.ProfileVersion)
 	if err != nil {
 		return nil, err
 	}
@@ -84,7 +84,7 @@ func (h *StreamHub) AttachWebSocket(ctx context.Context, convID string, conn *we
 	conv, ok := h.cm.GetConversation(convID)
 	if !ok || conv == nil {
 		var err error
-		conv, err = h.cm.GetOrCreate(convID, "default", nil)
+		conv, err = h.cm.GetOrCreate(convID, "default", nil, nil, 0)
 		if err != nil {
 			return err
 		}

@@ -22,8 +22,10 @@ export type SemEvent = {
 };
 
 type Handler = (ev: SemEvent, dispatch: AppDispatch) => void;
+type TimelineMessageState = { emitted: boolean };
 
 const handlers = new Map<string, Handler>();
+const timelineMessageStates = new Map<string, TimelineMessageState>();
 
 export function registerSem(type: string, handler: Handler) {
   handlers.set(type, handler);
@@ -58,8 +60,63 @@ function decodeProto<T extends Message>(schema: GenMessage<T>, raw: unknown): T 
   }
 }
 
+function asRecord(value: unknown): Record<string, unknown> {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  return {};
+}
+
+function toVisibleText(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  if (value.trim().length === 0) return null;
+  return value;
+}
+
+function pruneEmptyTimelineMessageUpsert(entity: TimelineEntity): TimelineEntity | null {
+  if (entity.kind !== 'message') return entity;
+  const props = asRecord(entity.props);
+  const text = toVisibleText(props.content);
+  const streaming = props.streaming === true;
+  const state = timelineMessageStates.get(entity.id);
+
+  if (text) {
+    if (streaming) {
+      timelineMessageStates.set(entity.id, { emitted: true });
+    } else {
+      timelineMessageStates.delete(entity.id);
+    }
+    return entity;
+  }
+
+  if (!state?.emitted) {
+    if (!streaming) {
+      timelineMessageStates.delete(entity.id);
+    }
+    return null;
+  }
+
+  const nextProps = { ...props };
+  delete nextProps.content;
+  if (!streaming) {
+    timelineMessageStates.delete(entity.id);
+  }
+
+  return {
+    ...entity,
+    props: nextProps,
+  };
+}
+
+function upsertTimelineEntity(dispatch: AppDispatch, entity: TimelineEntity) {
+  const normalized = pruneEmptyTimelineMessageUpsert(entity);
+  if (!normalized) return;
+  upsertEntity(dispatch, normalized);
+}
+
 export function registerDefaultSemHandlers() {
   handlers.clear();
+  timelineMessageStates.clear();
 
   registerSem('timeline.upsert', (ev, dispatch) => {
     const data = decodeProto<TimelineUpsertV2>(TimelineUpsertV2Schema, ev.data);
@@ -67,76 +124,74 @@ export function registerDefaultSemHandlers() {
     if (!entity) return;
     const mapped = timelineEntityFromProto(entity, data?.version);
     if (!mapped) return;
-    upsertEntity(dispatch, mapped);
+    upsertTimelineEntity(dispatch, mapped);
   });
 
   registerSem('llm.start', (ev, dispatch) => {
-    const data = decodeProto<LlmStart>(LlmStartSchema, ev.data);
-    const role = data?.role || 'assistant';
-    addEntity(dispatch, { id: ev.id, kind: 'message', createdAt: createdAtFromEvent(ev), props: { role, content: '', streaming: true } });
+    decodeProto<LlmStart>(LlmStartSchema, ev.data);
   });
 
   registerSem('llm.delta', (ev, dispatch) => {
     const data = decodeProto<LlmDelta>(LlmDeltaSchema, ev.data);
-    const cumulative = data?.cumulative;
     // Backend emits cumulative; prefer it to keep handlers idempotent.
-    upsertEntity(dispatch, {
+    const content = toVisibleText(data?.cumulative) ?? toVisibleText(data?.delta);
+    if (!content) return;
+    upsertTimelineEntity(dispatch, {
       id: ev.id,
       kind: 'message',
       createdAt: createdAtFromEvent(ev),
       updatedAt: Date.now(),
-      props: { content: typeof cumulative === 'string' ? cumulative : '', streaming: true },
+      props: { role: 'assistant', content, streaming: true },
     });
   });
 
   registerSem('llm.final', (ev, dispatch) => {
     const data = decodeProto<LlmFinal>(LlmFinalSchema, ev.data);
-    upsertEntity(dispatch, {
+    upsertTimelineEntity(dispatch, {
       id: ev.id,
       kind: 'message',
       createdAt: createdAtFromEvent(ev),
       updatedAt: Date.now(),
-      props: { content: data?.text ?? '', streaming: false },
+      props: { role: 'assistant', content: data?.text ?? '', streaming: false },
     });
   });
 
   registerSem('llm.thinking.start', (ev, dispatch) => {
-    const data = decodeProto<LlmStart>(LlmStartSchema, ev.data);
-    const role = data?.role || 'thinking';
-    addEntity(dispatch, { id: ev.id, kind: 'message', createdAt: createdAtFromEvent(ev), props: { role, content: '', streaming: true } });
+    decodeProto<LlmStart>(LlmStartSchema, ev.data);
   });
 
   registerSem('llm.thinking.delta', (ev, dispatch) => {
     const data = decodeProto<LlmDelta>(LlmDeltaSchema, ev.data);
-    const cumulative = data?.cumulative;
-    upsertEntity(dispatch, {
+    const content = toVisibleText(data?.cumulative) ?? toVisibleText(data?.delta);
+    if (!content) return;
+    upsertTimelineEntity(dispatch, {
       id: ev.id,
       kind: 'message',
       createdAt: createdAtFromEvent(ev),
       updatedAt: Date.now(),
-      props: { content: typeof cumulative === 'string' ? cumulative : '', streaming: true },
+      props: { role: 'thinking', content, streaming: true },
     });
   });
 
   registerSem('llm.thinking.final', (ev, dispatch) => {
     const _data = decodeProto(LlmDoneSchema, ev.data);
-    upsertEntity(dispatch, {
+    upsertTimelineEntity(dispatch, {
       id: ev.id,
       kind: 'message',
       createdAt: createdAtFromEvent(ev),
       updatedAt: Date.now(),
-      props: { streaming: false },
+      props: { role: 'thinking', streaming: false },
     });
   });
 
   registerSem('llm.thinking.summary', (ev, dispatch) => {
     const data = decodeProto<LlmFinal>(LlmFinalSchema, ev.data);
-    upsertEntity(dispatch, {
+    upsertTimelineEntity(dispatch, {
       id: ev.id,
       kind: 'message',
       createdAt: createdAtFromEvent(ev),
       updatedAt: Date.now(),
-      props: { content: data?.text ?? '', streaming: false },
+      props: { role: 'thinking', content: data?.text ?? '', streaming: false },
     });
   });
 

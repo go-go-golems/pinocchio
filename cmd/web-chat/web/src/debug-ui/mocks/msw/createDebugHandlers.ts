@@ -62,7 +62,7 @@ export function createDebugHandlers(options: CreateDebugHandlersOptions) {
         items: conversations.map((conversation) => ({
           conv_id: conversation.id,
           session_id: conversation.session_id,
-          runtime_key: conversation.profile_slug,
+          current_runtime_key: conversation.profile_slug,
           active_sockets: conversation.ws_connections,
           stream_running: conversation.is_running,
           queue_depth: 0,
@@ -86,7 +86,7 @@ export function createDebugHandlers(options: CreateDebugHandlersOptions) {
         {
           conv_id: summary.id,
           session_id: summary.session_id,
-          runtime_key: summary.profile_slug,
+          current_runtime_key: summary.profile_slug,
           active_sockets: summary.ws_connections,
           stream_running: summary.is_running,
           queue_depth: 0,

@@ -62,7 +62,7 @@ export interface RunDetailQuery {
 interface DebugConversationItem {
   conv_id: string;
   session_id: string;
-  runtime_key?: string;
+  current_runtime_key?: string;
   profile?: string;
   active_sockets: number;
   stream_running: boolean;
@@ -222,7 +222,7 @@ function toTimelineEntity(raw: unknown): TimelineEntity {
 }
 
 function mapConversation(item: DebugConversationItem): ConversationSummary {
-  const runtimeKey = (item.runtime_key ?? item.profile ?? '').trim();
+  const runtimeKey = (item.current_runtime_key ?? item.profile ?? '').trim();
   return {
     id: item.conv_id,
     profile_slug: runtimeKey,

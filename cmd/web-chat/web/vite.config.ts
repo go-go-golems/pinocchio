@@ -17,13 +17,6 @@ export default defineConfig({
       // Adjust backend port via VITE_BACKEND_ORIGIN if needed.
       // Note: Vite proxy contexts are prefix matches, not regex keys.
       '/chat': { target: process.env.VITE_BACKEND_ORIGIN ?? 'http://localhost:8080', changeOrigin: true },
-      // Compatibility: some backend builds still expose timeline under /api/debug/timeline.
-      '/api/timeline': {
-        target: process.env.VITE_BACKEND_ORIGIN ?? 'http://localhost:8080',
-        changeOrigin: true,
-        // Preserve query string (e.g. ?conv_id=...) while remapping path.
-        rewrite: (path) => path.replace(/^\/api\/timeline/, '/api/debug/timeline'),
-      },
       '/api': { target: process.env.VITE_BACKEND_ORIGIN ?? 'http://localhost:8080', changeOrigin: true },
       '/ws': { target: process.env.VITE_BACKEND_ORIGIN ?? 'http://localhost:8080', ws: true, changeOrigin: true },
       '/hydrate': { target: process.env.VITE_BACKEND_ORIGIN ?? 'http://localhost:8080', changeOrigin: true },

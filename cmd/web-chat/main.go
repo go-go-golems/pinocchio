@@ -20,15 +20,14 @@ import (
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 
-	geppettomw "github.com/go-go-golems/geppetto/pkg/inference/middleware"
+	"github.com/go-go-golems/geppetto/pkg/inference/middlewarecfg"
 	geptools "github.com/go-go-golems/geppetto/pkg/inference/tools"
+	gepprofiles "github.com/go-go-golems/geppetto/pkg/profiles"
 	geppettosections "github.com/go-go-golems/geppetto/pkg/sections"
 	toolspkg "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/tools"
 	thinkingmode "github.com/go-go-golems/pinocchio/cmd/web-chat/thinkingmode"
 	timelinecmd "github.com/go-go-golems/pinocchio/cmd/web-chat/timeline"
-	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 	agentmode "github.com/go-go-golems/pinocchio/pkg/middlewares/agentmode"
-	sqlitetool "github.com/go-go-golems/pinocchio/pkg/middlewares/sqlitetool"
 	rediscfg "github.com/go-go-golems/pinocchio/pkg/redisstream"
 	webchat "github.com/go-go-golems/pinocchio/pkg/webchat"
 	webhttp "github.com/go-go-golems/pinocchio/pkg/webchat/http"
@@ -97,6 +96,8 @@ func NewCommand() (*Command, error) {
 			fields.New("timeline-db", fields.TypeString, fields.WithDefault(""), fields.WithHelp("SQLite DB file path for durable timeline snapshots (enables GET /timeline); DSN is derived with WAL/busy_timeout")),
 			fields.New("turns-dsn", fields.TypeString, fields.WithDefault(""), fields.WithHelp("SQLite DSN for durable turn snapshots (enables GET /turns); preferred over turns-db")),
 			fields.New("turns-db", fields.TypeString, fields.WithDefault(""), fields.WithHelp("SQLite DB file path for durable turn snapshots (enables GET /turns); DSN is derived with WAL/busy_timeout")),
+			fields.New("profile-registry-dsn", fields.TypeString, fields.WithDefault(""), fields.WithHelp("SQLite DSN for durable profile registry storage (preferred over profile-registry-db)")),
+			fields.New("profile-registry-db", fields.TypeString, fields.WithDefault(""), fields.WithHelp("SQLite DB file path for durable profile registry storage (DSN derived with WAL/busy_timeout)")),
 		),
 		cmds.WithSections(append(geLayers, redisLayer)...),
 	)
@@ -105,8 +106,10 @@ func NewCommand() (*Command, error) {
 
 func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io.Writer) error {
 	type serverSettings struct {
-		Root     string `glazed:"root"`
-		DebugAPI bool   `glazed:"debug-api"`
+		Root               string `glazed:"root"`
+		DebugAPI           bool   `glazed:"debug-api"`
+		ProfileRegistryDSN string `glazed:"profile-registry-dsn"`
+		ProfileRegistryDB  string `glazed:"profile-registry-db"`
 	}
 	s := &serverSettings{}
 	if err := parsed.DecodeSectionInto(values.DefaultSlug, s); err != nil {
@@ -135,31 +138,60 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 	amCfg := agentmode.DefaultConfig()
 	amCfg.DefaultMode = "financial_analyst"
 
-	profiles := newChatProfileRegistry(
-		"default",
-		&chatProfile{Slug: "default", DefaultPrompt: "You are an assistant", DefaultMws: []infruntime.MiddlewareUse{}},
-		&chatProfile{
-			Slug:           "agent",
-			DefaultPrompt:  "You are a helpful assistant. Be concise.",
-			DefaultMws:     []infruntime.MiddlewareUse{{Name: "agentmode", Config: amCfg}},
-			AllowOverrides: true,
+	defaultProfiles := []*gepprofiles.Profile{
+		{
+			Slug: gepprofiles.MustProfileSlug("default"),
+			Runtime: gepprofiles.RuntimeSpec{
+				SystemPrompt: "You are an assistant",
+				Middlewares:  []gepprofiles.MiddlewareUse{},
+			},
 		},
-	)
-
-	middlewareFactories := map[string]infruntime.MiddlewareFactory{
-		"agentmode": func(cfg any) geppettomw.Middleware {
-			return agentmode.NewMiddleware(amSvc, cfg.(agentmode.Config))
-		},
-		"sqlite": func(cfg any) geppettomw.Middleware {
-			c := sqlitetool.Config{DB: dbWithRegexp}
-			if cfg_, ok := cfg.(sqlitetool.Config); ok {
-				c = cfg_
-			}
-			return sqlitetool.NewMiddleware(c)
+		{
+			Slug: gepprofiles.MustProfileSlug("agent"),
+			Runtime: gepprofiles.RuntimeSpec{
+				SystemPrompt: "You are a helpful assistant. Be concise.",
+				Middlewares: []gepprofiles.MiddlewareUse{{
+					Name: "agentmode",
+					ID:   "default",
+					Config: map[string]any{
+						"default_mode": amCfg.DefaultMode,
+					},
+				}},
+			},
+			Policy: gepprofiles.PolicySpec{
+				AllowOverrides: true,
+			},
 		},
 	}
-	runtimeComposer := newWebChatRuntimeComposer(parsed, middlewareFactories)
-	requestResolver := newWebChatProfileResolver(profiles)
+
+	var profileRegistry gepprofiles.Registry
+	profileRegistryCleanup := func() {}
+	if strings.TrimSpace(s.ProfileRegistryDSN) != "" || strings.TrimSpace(s.ProfileRegistryDB) != "" {
+		profileRegistry, profileRegistryCleanup, err = newSQLiteProfileService(
+			s.ProfileRegistryDSN,
+			s.ProfileRegistryDB,
+			"default",
+			defaultProfiles...,
+		)
+	} else {
+		profileRegistry, err = newInMemoryProfileService("default", defaultProfiles...)
+	}
+	if err != nil {
+		return errors.Wrap(err, "initialize profile registry")
+	}
+	defer profileRegistryCleanup()
+
+	middlewareRegistry, err := newWebChatMiddlewareDefinitionRegistry()
+	if err != nil {
+		return errors.Wrap(err, "create middleware definition registry")
+	}
+	runtimeComposer := newProfileRuntimeComposer(parsed, middlewareRegistry, middlewarecfg.BuildDeps{
+		Values: map[string]any{
+			dependencyAgentModeServiceKey: amSvc,
+			dependencySQLiteDBKey:         dbWithRegexp,
+		},
+	})
+	requestResolver := newProfileRequestResolver(profileRegistry, gepprofiles.MustRegistrySlug(defaultRegistrySlug))
 
 	// Register app-owned thinking-mode SEM/timeline handlers.
 	thinkingmode.Register()
@@ -174,11 +206,6 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 	)
 	if err != nil {
 		return errors.Wrap(err, "new webchat server")
-	}
-
-	// Register middlewares
-	for name, factory := range middlewareFactories {
-		srv.RegisterMiddleware(name, factory)
 	}
 
 	// Register calculator tool
@@ -206,7 +233,7 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 	appMux.HandleFunc("/chat", chatHandler)
 	appMux.HandleFunc("/chat/", chatHandler)
 	appMux.HandleFunc("/ws", wsHandler)
-	registerProfileHandlers(appMux, profiles)
+	registerProfileAPIHandlers(appMux, requestResolver)
 	timelineLogger := log.With().Str("component", "webchat").Str("route", "/api/timeline").Logger()
 	timelineHandler := webhttp.NewTimelineHandler(srv.TimelineService(), timelineLogger)
 	appMux.HandleFunc("/api/timeline", timelineHandler)

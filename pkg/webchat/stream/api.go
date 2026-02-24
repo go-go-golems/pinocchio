@@ -20,8 +20,8 @@ type WebSocketAttachOptions = root.WebSocketAttachOptions
 // ConversationHandle describes ensured conversation metadata.
 type ConversationHandle = root.ConversationHandle
 
-// AppConversationRequest carries conv/runtime resolution inputs.
-type AppConversationRequest = root.AppConversationRequest
+// ConversationRuntimeRequest carries conv/runtime resolution inputs.
+type ConversationRuntimeRequest = root.ConversationRuntimeRequest
 
 var (
 	NewHub               = root.NewStreamHub

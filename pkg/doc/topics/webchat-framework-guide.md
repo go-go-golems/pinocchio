@@ -32,6 +32,7 @@ Recommended baseline:
   - `webchat.NewChatHTTPHandler(srv.ChatService(), resolver)`
   - `webchat.NewWSHTTPHandler(srv.StreamHub(), resolver, upgrader)`
   - `webchat.NewTimelineHTTPHandler(srv.TimelineService(), logger)`
+- Mount shared profile APIs with `webhttp.RegisterProfileAPIHandlers(...)`.
 - Optionally mount `srv.APIHandler()` and `srv.UIHandler()`.
 
 ## Core Pieces
@@ -49,6 +50,8 @@ Routes below are the standard setup used by `cmd/web-chat` and `web-agent-exampl
 - `POST /chat` and `POST /chat/{runtime}`: submit prompt/run request.
 - `GET /ws?conv_id=<id>`: websocket streaming attach.
 - `GET /api/timeline?conv_id=<id>&since_version=<n>&limit=<n>`: timeline hydration.
+- `GET/POST/PATCH/DELETE /api/chat/profiles*`: reusable profile CRUD surface.
+- `GET /api/chat/schemas/middlewares` and `GET /api/chat/schemas/extensions`: schema discovery for profile editors.
 - `GET /api/debug/turns?...`: debug turn snapshots when turn store is configured.
 - `GET /api/debug/timeline?...`: debug alias for timeline snapshot inspection.
 
@@ -103,6 +106,14 @@ func run(ctx context.Context, parsed *values.Values) error {
   mux.HandleFunc("/ws", wsHandler)
   mux.HandleFunc("/api/timeline", timelineHandler)
   mux.HandleFunc("/api/timeline/", timelineHandler)
+  webhttp.RegisterProfileAPIHandlers(mux, profileRegistry, webhttp.ProfileAPIHandlerOptions{
+    DefaultRegistrySlug:             gepprofiles.MustRegistrySlug("default"),
+    EnableCurrentProfileCookieRoute: true,
+    MiddlewareDefinitions:           middlewareDefinitions,
+    ExtensionCodecRegistry:          extensionCodecs,
+    WriteActor:                      "my-app",
+    WriteSource:                     "http-api",
+  })
   mux.Handle("/api/", srv.APIHandler())
   mux.Handle("/", srv.UIHandler())
 
@@ -124,6 +135,8 @@ func run(ctx context.Context, parsed *values.Values) error {
 
 Use this to keep runtime/profile/cookie policy in app code instead of framework internals.
 
+For full profile registry selection and CRUD semantics, see [Webchat Profile Registry Guide](webchat-profile-registry.md).
+
 ## Root Prefix Mounting
 
 For `--root /chat`, mount your app mux under a parent with `StripPrefix` and keep handler internals unchanged.
@@ -140,6 +153,7 @@ Under a root prefix, effective endpoints become:
 - `/chat/chat`
 - `/chat/ws`
 - `/chat/api/timeline`
+- `/chat/api/chat/profiles`
 - `/chat/api/debug/turns`
 
 ## Timeline and Turns Persistence
@@ -179,5 +193,6 @@ Turn snapshots are debug-facing and served via `/api/debug/turns`.
 
 - [Webchat HTTP Chat Setup](webchat-http-chat-setup.md)
 - [Webchat User Guide](webchat-user-guide.md)
+- [Webchat Profile Registry Guide](webchat-profile-registry.md)
 - [Webchat Frontend Integration](webchat-frontend-integration.md)
 - [Webchat Debugging and Ops](webchat-debugging-and-ops.md)

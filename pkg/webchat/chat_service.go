@@ -56,14 +56,14 @@ func (s *ChatService) SetStepController(sc *toolloop.StepController) {
 	s.svc.SetStepController(sc)
 }
 
-func (s *ChatService) RegisterTool(name string, f infruntime.ToolFactory) {
+func (s *ChatService) RegisterTool(name string, f infruntime.ToolRegistrar) {
 	if s == nil || s.svc == nil {
 		return
 	}
 	s.svc.RegisterTool(name, f)
 }
 
-func (s *ChatService) ResolveAndEnsureConversation(ctx context.Context, req AppConversationRequest) (*ConversationHandle, error) {
+func (s *ChatService) ResolveAndEnsureConversation(ctx context.Context, req ConversationRuntimeRequest) (*ConversationHandle, error) {
 	if s == nil || s.svc == nil {
 		return nil, errors.New("chat service is not initialized")
 	}

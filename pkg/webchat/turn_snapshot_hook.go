@@ -2,6 +2,7 @@ package webchat
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/go-go-golems/geppetto/pkg/inference/toolloop"
@@ -37,12 +38,23 @@ func snapshotHookForConv(conv *Conversation, store chatstore.TurnStore) toolloop
 		if sessionID == "" {
 			return
 		}
+		runtimeKey := ""
+		conv.mu.Lock()
+		runtimeKey = strings.TrimSpace(conv.RuntimeKey)
+		conv.mu.Unlock()
+		inferenceID := ""
+		if v, ok, err := turns.KeyTurnMetaInferenceID.Get(t.Metadata); err == nil && ok {
+			inferenceID = strings.TrimSpace(v)
+		}
 		payload, err := serde.ToYAML(t, serde.Options{})
 		if err != nil {
 			snapLog.Warn().Err(err).Str("phase", phase).Msg("webchat snapshot: serialize failed (store)")
 			return
 		}
-		if err := store.Save(ctx, conv.ID, sessionID, turnID, phase, time.Now().UnixMilli(), string(payload)); err != nil {
+		if err := store.Save(ctx, conv.ID, sessionID, turnID, phase, time.Now().UnixMilli(), string(payload), chatstore.TurnSaveOptions{
+			RuntimeKey:  runtimeKey,
+			InferenceID: inferenceID,
+		}); err != nil {
 			snapLog.Warn().Err(err).Str("phase", phase).Msg("webchat snapshot: store save failed")
 		}
 	}

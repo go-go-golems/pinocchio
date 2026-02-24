@@ -20,13 +20,13 @@ import (
 )
 
 type fakeResolver struct {
-	plan webhttp.ConversationRequestPlan
+	plan webhttp.ResolvedConversationRequest
 	err  error
 }
 
-func (r fakeResolver) Resolve(_ *http.Request) (webhttp.ConversationRequestPlan, error) {
+func (r fakeResolver) Resolve(_ *http.Request) (webhttp.ResolvedConversationRequest, error) {
 	if r.err != nil {
-		return webhttp.ConversationRequestPlan{}, r.err
+		return webhttp.ResolvedConversationRequest{}, r.err
 	}
 	return r.plan, nil
 }
@@ -50,7 +50,7 @@ type fakeStreamHTTPService struct {
 	err    error
 }
 
-func (s *fakeStreamHTTPService) ResolveAndEnsureConversation(_ context.Context, _ webchat.AppConversationRequest) (*webchat.ConversationHandle, error) {
+func (s *fakeStreamHTTPService) ResolveAndEnsureConversation(_ context.Context, _ webchat.ConversationRuntimeRequest) (*webchat.ConversationHandle, error) {
 	if s.err != nil {
 		return nil, s.err
 	}
@@ -86,7 +86,7 @@ func TestNewChatHTTPHandler_SubmitPromptContract(t *testing.T) {
 		},
 	}
 	h := webhttp.NewChatHandler(svc, fakeResolver{
-		plan: webhttp.ConversationRequestPlan{
+		plan: webhttp.ResolvedConversationRequest{
 			ConvID:     "conv-1",
 			RuntimeKey: "default",
 			Prompt:     "hello",

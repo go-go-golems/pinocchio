@@ -75,7 +75,7 @@ describe('debugApi baseQuery prefix resolution', () => {
           JSON.stringify({
             conv_id: 'conv-1',
             session_id: 'session-1',
-            runtime_key: 'default',
+            current_runtime_key: 'default',
             active_sockets: 0,
             stream_running: false,
             queue_depth: 0,

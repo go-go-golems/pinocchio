@@ -18,8 +18,8 @@ func TestNewStreamHub_ValidatesRequiredDependencies(t *testing.T) {
 }
 
 func TestStreamHub_ResolveAndEnsureConversation_Defaults(t *testing.T) {
-	runtimeComposer := infruntime.RuntimeComposerFunc(func(context.Context, infruntime.RuntimeComposeRequest) (infruntime.RuntimeArtifacts, error) {
-		return infruntime.RuntimeArtifacts{
+	runtimeComposer := infruntime.RuntimeBuilderFunc(func(context.Context, infruntime.ConversationRuntimeRequest) (infruntime.ComposedRuntime, error) {
+		return infruntime.ComposedRuntime{
 			Engine:             noopEngine{},
 			Sink:               noopSink{},
 			RuntimeKey:         "default",
@@ -38,7 +38,7 @@ func TestStreamHub_ResolveAndEnsureConversation_Defaults(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	handle, err := hub.ResolveAndEnsureConversation(context.Background(), AppConversationRequest{})
+	handle, err := hub.ResolveAndEnsureConversation(context.Background(), ConversationRuntimeRequest{})
 	require.NoError(t, err)
 	require.NotEmpty(t, handle.ConvID)
 	require.Equal(t, "default", handle.RuntimeKey)
@@ -47,8 +47,8 @@ func TestStreamHub_ResolveAndEnsureConversation_Defaults(t *testing.T) {
 }
 
 func TestStreamHub_AttachWebSocketValidatesArguments(t *testing.T) {
-	runtimeComposer := infruntime.RuntimeComposerFunc(func(context.Context, infruntime.RuntimeComposeRequest) (infruntime.RuntimeArtifacts, error) {
-		return infruntime.RuntimeArtifacts{
+	runtimeComposer := infruntime.RuntimeBuilderFunc(func(context.Context, infruntime.ConversationRuntimeRequest) (infruntime.ComposedRuntime, error) {
+		return infruntime.ComposedRuntime{
 			Engine:             noopEngine{},
 			Sink:               noopSink{},
 			RuntimeKey:         "default",

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strings"
 
+	gepprofiles "github.com/go-go-golems/geppetto/pkg/profiles"
 	timelinepb "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/timeline"
 	root "github.com/go-go-golems/pinocchio/pkg/webchat"
 	"github.com/google/uuid"
@@ -21,23 +22,27 @@ type ChatRequestBody struct {
 	Prompt         string         `json:"prompt"`
 	Text           string         `json:"text,omitempty"`
 	ConvID         string         `json:"conv_id"`
+	Profile        string         `json:"profile,omitempty"`
+	Registry       string         `json:"registry,omitempty"`
 	Overrides      map[string]any `json:"overrides"`
 	IdempotencyKey string         `json:"idempotency_key,omitempty"`
 }
 
-// ConversationRequestPlan is the canonical output of request policy resolution.
+// ResolvedConversationRequest is the canonical output of request policy resolution.
 // It captures request data needed for both chat and websocket flows.
-type ConversationRequestPlan struct {
-	ConvID         string
-	RuntimeKey     string
-	Overrides      map[string]any
-	Prompt         string
-	IdempotencyKey string
+type ResolvedConversationRequest struct {
+	ConvID          string
+	RuntimeKey      string
+	ProfileVersion  uint64
+	ResolvedRuntime *gepprofiles.RuntimeSpec
+	Overrides       map[string]any
+	Prompt          string
+	IdempotencyKey  string
 }
 
 // ConversationRequestResolver resolves request policy (conv/runtime/overrides) for both HTTP and WS handlers.
 type ConversationRequestResolver interface {
-	Resolve(req *http.Request) (ConversationRequestPlan, error)
+	Resolve(req *http.Request) (ResolvedConversationRequest, error)
 }
 
 // RequestResolutionError is a typed error allowing handlers to choose an HTTP status code
@@ -67,7 +72,7 @@ type ChatService interface {
 
 // StreamService describes websocket attach lifecycle used by HTTP handlers.
 type StreamService interface {
-	ResolveAndEnsureConversation(ctx context.Context, req root.AppConversationRequest) (*root.ConversationHandle, error)
+	ResolveAndEnsureConversation(ctx context.Context, req root.ConversationRuntimeRequest) (*root.ConversationHandle, error)
 	AttachWebSocket(ctx context.Context, convID string, conn *websocket.Conn, opts root.WebSocketAttachOptions) error
 }
 
@@ -135,11 +140,13 @@ func NewChatHandler(svc ChatService, resolver ConversationRequestResolver) http.
 		}
 
 		resp, err := svc.SubmitPrompt(req.Context(), root.SubmitPromptInput{
-			ConvID:         plan.ConvID,
-			RuntimeKey:     plan.RuntimeKey,
-			Overrides:      plan.Overrides,
-			Prompt:         plan.Prompt,
-			IdempotencyKey: idempotencyKey,
+			ConvID:          plan.ConvID,
+			RuntimeKey:      plan.RuntimeKey,
+			ProfileVersion:  plan.ProfileVersion,
+			ResolvedRuntime: plan.ResolvedRuntime,
+			Overrides:       plan.Overrides,
+			Prompt:          plan.Prompt,
+			IdempotencyKey:  idempotencyKey,
 		})
 		if err != nil {
 			http.Error(w, "start session inference failed", http.StatusInternalServerError)
@@ -183,10 +190,12 @@ func NewWSHandler(svc StreamService, resolver ConversationRequestResolver, upgra
 		if err != nil {
 			return
 		}
-		handle, err := svc.ResolveAndEnsureConversation(req.Context(), root.AppConversationRequest{
-			ConvID:     plan.ConvID,
-			RuntimeKey: plan.RuntimeKey,
-			Overrides:  plan.Overrides,
+		handle, err := svc.ResolveAndEnsureConversation(req.Context(), root.ConversationRuntimeRequest{
+			ConvID:          plan.ConvID,
+			RuntimeKey:      plan.RuntimeKey,
+			ProfileVersion:  plan.ProfileVersion,
+			ResolvedRuntime: plan.ResolvedRuntime,
+			Overrides:       plan.Overrides,
 		})
 		if err != nil {
 			_ = conn.WriteMessage(websocket.TextMessage, []byte(`{"error":"failed to join conversation"}`))

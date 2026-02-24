@@ -32,6 +32,8 @@ type snapshotBackfillRow struct {
 	sessionID   string
 	turnID      string
 	phase       string
+	runtimeKey  string
+	inferenceID string
 	createdAtMs int64
 }
 
@@ -71,6 +73,8 @@ func (s *SQLiteTurnStore) migrate() error {
 			turn_created_at_ms INTEGER NOT NULL,
 			turn_metadata_json TEXT NOT NULL DEFAULT '{}',
 			turn_data_json TEXT NOT NULL DEFAULT '{}',
+			runtime_key TEXT NOT NULL DEFAULT '',
+			inference_id TEXT NOT NULL DEFAULT '',
 			updated_at_ms INTEGER NOT NULL,
 			PRIMARY KEY (conv_id, session_id, turn_id)
 		);`,
@@ -112,6 +116,8 @@ func (s *SQLiteTurnStore) migrate() error {
 	createIndexStmts := []string{
 		`CREATE INDEX IF NOT EXISTS turns_by_conv_session ON turns(conv_id, session_id, updated_at_ms DESC);`,
 		`CREATE INDEX IF NOT EXISTS turns_by_session ON turns(session_id, updated_at_ms DESC);`,
+		`CREATE INDEX IF NOT EXISTS turns_by_conv_runtime_updated ON turns(conv_id, runtime_key, updated_at_ms DESC);`,
+		`CREATE INDEX IF NOT EXISTS turns_by_conv_inference_updated ON turns(conv_id, inference_id, updated_at_ms DESC);`,
 		`CREATE INDEX IF NOT EXISTS blocks_by_kind_role ON blocks(kind, role);`,
 		`CREATE INDEX IF NOT EXISTS turn_block_membership_by_turn_phase ON turn_block_membership(conv_id, session_id, turn_id, phase, snapshot_created_at_ms DESC, ordinal);`,
 		`CREATE INDEX IF NOT EXISTS turn_block_membership_by_block ON turn_block_membership(block_id, content_hash);`,
@@ -157,6 +163,16 @@ func (s *SQLiteTurnStore) ensureTurnsTableColumns() error {
 			return err
 		}
 	}
+	if !cols["runtime_key"] {
+		if _, err := s.db.Exec(`ALTER TABLE turns ADD COLUMN runtime_key TEXT NOT NULL DEFAULT ''`); err != nil {
+			return err
+		}
+	}
+	if !cols["inference_id"] {
+		if _, err := s.db.Exec(`ALTER TABLE turns ADD COLUMN inference_id TEXT NOT NULL DEFAULT ''`); err != nil {
+			return err
+		}
+	}
 	if _, err := s.db.Exec(`
 		UPDATE turns
 		SET updated_at_ms = CASE
@@ -165,6 +181,9 @@ func (s *SQLiteTurnStore) ensureTurnsTableColumns() error {
 			ELSE CAST(strftime('%s','now') AS INTEGER) * 1000
 		END
 	`); err != nil {
+		return err
+	}
+	if err := s.backfillTurnRuntimeAndInferenceColumns(); err != nil {
 		return err
 	}
 	return nil
@@ -206,7 +225,7 @@ func normalizeSQLiteIntrospectionTable(table string) (string, error) {
 	return table, nil
 }
 
-func (s *SQLiteTurnStore) Save(ctx context.Context, convID, sessionID, turnID, phase string, createdAtMs int64, payload string) error {
+func (s *SQLiteTurnStore) Save(ctx context.Context, convID, sessionID, turnID, phase string, createdAtMs int64, payload string, opts TurnSaveOptions) error {
 	if s == nil || s.db == nil {
 		return errors.New("sqlite turn store: db is nil")
 	}
@@ -242,7 +261,15 @@ func (s *SQLiteTurnStore) Save(ctx context.Context, convID, sessionID, turnID, p
 		sessionID:   sessionID,
 		turnID:      turnID,
 		phase:       phase,
+		runtimeKey:  strings.TrimSpace(opts.RuntimeKey),
+		inferenceID: strings.TrimSpace(opts.InferenceID),
 		createdAtMs: createdAtMs,
+	}
+	if row.runtimeKey == "" {
+		row.runtimeKey = runtimeKeyFromTurnMetadata(t.Metadata)
+	}
+	if row.inferenceID == "" {
+		row.inferenceID = inferenceIDFromTurnMetadata(t.Metadata)
 	}
 	_, err = s.persistNormalizedSnapshot(ctx, row, t)
 	return err
@@ -279,15 +306,23 @@ func (s *SQLiteTurnStore) persistNormalizedSnapshot(ctx context.Context, row sna
 
 	if _, err := tx.ExecContext(ctx, `
 		INSERT INTO turns(
-			conv_id, session_id, turn_id, turn_created_at_ms, turn_metadata_json, turn_data_json, updated_at_ms
+			conv_id, session_id, turn_id, turn_created_at_ms, turn_metadata_json, turn_data_json, runtime_key, inference_id, updated_at_ms
 		)
-		VALUES(?, ?, ?, ?, ?, ?, ?)
+		VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(conv_id, session_id, turn_id) DO UPDATE SET
 			turn_created_at_ms = MIN(turns.turn_created_at_ms, excluded.turn_created_at_ms),
 			turn_metadata_json = excluded.turn_metadata_json,
 			turn_data_json = excluded.turn_data_json,
+			runtime_key = CASE
+				WHEN excluded.runtime_key <> '' THEN excluded.runtime_key
+				ELSE turns.runtime_key
+			END,
+			inference_id = CASE
+				WHEN excluded.inference_id <> '' THEN excluded.inference_id
+				ELSE turns.inference_id
+			END,
 			updated_at_ms = MAX(turns.updated_at_ms, excluded.updated_at_ms)
-	`, row.convID, row.sessionID, turnID, row.createdAtMs, turnMetadataJSON, turnDataJSON, row.createdAtMs); err != nil {
+	`, row.convID, row.sessionID, turnID, row.createdAtMs, turnMetadataJSON, turnDataJSON, row.runtimeKey, row.inferenceID, row.createdAtMs); err != nil {
 		return 0, errors.Wrap(err, "sqlite turn store: upsert turns row")
 	}
 
@@ -395,6 +430,8 @@ func (s *SQLiteTurnStore) List(ctx context.Context, q TurnQuery) ([]TurnSnapshot
 			m.turn_id,
 			m.phase,
 			m.snapshot_created_at_ms,
+			COALESCE(MAX(t.runtime_key), '') AS runtime_key,
+			COALESCE(MAX(t.inference_id), '') AS inference_id,
 			COALESCE(MAX(t.turn_metadata_json), '{}') AS turn_metadata_json,
 			COALESCE(MAX(t.turn_data_json), '{}') AS turn_data_json
 		FROM turn_block_membership m
@@ -433,6 +470,8 @@ func (s *SQLiteTurnStore) List(ctx context.Context, q TurnQuery) ([]TurnSnapshot
 			&item.TurnID,
 			&item.Phase,
 			&item.CreatedAtMs,
+			&item.RuntimeKey,
+			&item.InferenceID,
 			&turnMetadataJSON,
 			&turnDataJSON,
 		); err != nil {
@@ -624,4 +663,159 @@ func marshalJSONObject(v map[string]any) (string, error) {
 		return "", err
 	}
 	return string(b), nil
+}
+
+func (s *SQLiteTurnStore) backfillTurnRuntimeAndInferenceColumns() error {
+	if s == nil || s.db == nil {
+		return errors.New("sqlite turn store: db is nil")
+	}
+	rows, err := s.db.Query(`
+		SELECT conv_id, session_id, turn_id, turn_metadata_json, runtime_key, inference_id
+		FROM turns
+		WHERE COALESCE(runtime_key, '') = '' OR COALESCE(inference_id, '') = ''
+	`)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = rows.Close() }()
+
+	type backfillUpdate struct {
+		convID      string
+		sessionID   string
+		turnID      string
+		runtimeKey  string
+		inferenceID string
+	}
+	updates := make([]backfillUpdate, 0, 64)
+	for rows.Next() {
+		var (
+			convID        string
+			sessionID     string
+			turnID        string
+			turnMetadata  string
+			existingRT    string
+			existingInfer string
+		)
+		if err := rows.Scan(&convID, &sessionID, &turnID, &turnMetadata, &existingRT, &existingInfer); err != nil {
+			return err
+		}
+		meta, err := parseJSONObject(turnMetadata)
+		if err != nil {
+			continue
+		}
+		nextRuntime := strings.TrimSpace(existingRT)
+		if nextRuntime == "" {
+			nextRuntime = runtimeKeyFromTurnMetadataMap(meta)
+		}
+		nextInference := strings.TrimSpace(existingInfer)
+		if nextInference == "" {
+			nextInference = inferenceIDFromTurnMetadataMap(meta)
+		}
+		if nextRuntime == strings.TrimSpace(existingRT) && nextInference == strings.TrimSpace(existingInfer) {
+			continue
+		}
+		updates = append(updates, backfillUpdate{
+			convID:      convID,
+			sessionID:   sessionID,
+			turnID:      turnID,
+			runtimeKey:  nextRuntime,
+			inferenceID: nextInference,
+		})
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for _, u := range updates {
+		if _, err := s.db.Exec(`
+			UPDATE turns
+			SET runtime_key = ?, inference_id = ?
+			WHERE conv_id = ? AND session_id = ? AND turn_id = ?
+		`, u.runtimeKey, u.inferenceID, u.convID, u.sessionID, u.turnID); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func runtimeKeyFromTurnMetadata(metadata turns.Metadata) string {
+	out := ""
+	metadata.Range(func(key turns.TurnMetadataKey, value any) bool {
+		k := strings.TrimSpace(key.String())
+		if k != turns.KeyTurnMetaRuntime.String() && k != "runtime" && k != "runtime_key" {
+			return true
+		}
+		if s, ok := stringFromMaybeRuntimeValue(value); ok {
+			out = s
+			return false
+		}
+		return true
+	})
+	return strings.TrimSpace(out)
+}
+
+func runtimeKeyFromTurnMetadataMap(metadata map[string]any) string {
+	if len(metadata) == 0 {
+		return ""
+	}
+	for _, key := range []string{turns.KeyTurnMetaRuntime.String(), "runtime", "runtime_key"} {
+		if v, ok := metadata[key]; ok {
+			if s, ok := stringFromMaybeRuntimeValue(v); ok {
+				return s
+			}
+		}
+	}
+	return ""
+}
+
+func inferenceIDFromTurnMetadata(metadata turns.Metadata) string {
+	out := ""
+	metadata.Range(func(key turns.TurnMetadataKey, value any) bool {
+		k := strings.TrimSpace(key.String())
+		if k != turns.KeyTurnMetaInferenceID.String() && k != "inference_id" {
+			return true
+		}
+		if s, ok := stringFromMaybeRuntimeValue(value); ok {
+			out = s
+			return false
+		}
+		return true
+	})
+	return strings.TrimSpace(out)
+}
+
+func inferenceIDFromTurnMetadataMap(metadata map[string]any) string {
+	if len(metadata) == 0 {
+		return ""
+	}
+	for _, key := range []string{turns.KeyTurnMetaInferenceID.String(), "inference_id"} {
+		if v, ok := metadata[key]; ok {
+			if s, ok := stringFromMaybeRuntimeValue(v); ok {
+				return s
+			}
+		}
+	}
+	return ""
+}
+
+func stringFromMaybeRuntimeValue(v any) (string, bool) {
+	switch t := v.(type) {
+	case string:
+		s := strings.TrimSpace(t)
+		return s, s != ""
+	case fmt.Stringer:
+		s := strings.TrimSpace(t.String())
+		return s, s != ""
+	case map[string]any:
+		for _, key := range []string{"runtime_key", "key", "slug", "profile", "profile_key", "inference_id"} {
+			if raw, ok := t[key]; ok {
+				if s, ok := stringFromMaybeRuntimeValue(raw); ok {
+					return s, true
+				}
+			}
+		}
+		return "", false
+	default:
+		s := strings.TrimSpace(fmt.Sprint(v))
+		return s, s != "" && s != "<nil>"
+	}
 }

@@ -59,8 +59,8 @@ func NewRouter(ctx context.Context, parsed *values.Values, staticFS fs.FS, opts 
 		staticFS:      staticFS,
 		router:        streamBackend.EventRouter(),
 		streamBackend: streamBackend,
-		mwFactories:   map[string]infruntime.MiddlewareFactory{},
-		toolFactories: map[string]infruntime.ToolFactory{},
+		mwFactories:   map[string]MiddlewareBuilder{},
+		toolFactories: map[string]infruntime.ToolRegistrar{},
 	}
 
 	// Timeline store for hydration (SQLite when configured, in-memory otherwise).
@@ -177,12 +177,12 @@ func NewRouter(ctx context.Context, parsed *values.Values, staticFS fs.FS, opts 
 }
 
 // RegisterMiddleware adds a named middleware factory to the router.
-func (r *Router) RegisterMiddleware(name string, f infruntime.MiddlewareFactory) {
+func (r *Router) RegisterMiddleware(name string, f MiddlewareBuilder) {
 	r.mwFactories[name] = f
 }
 
 // RegisterTool adds a named tool factory to the router.
-func (r *Router) RegisterTool(name string, f infruntime.ToolFactory) {
+func (r *Router) RegisterTool(name string, f infruntime.ToolRegistrar) {
 	r.toolFactories[name] = f
 	if r.chatService != nil {
 		r.chatService.RegisterTool(name, f)
@@ -356,20 +356,20 @@ var (
 	_ http.Handler
 )
 
-func (r *Router) convRuntimeComposer() infruntime.RuntimeComposer {
-	return infruntime.RuntimeComposerFunc(func(ctx context.Context, req infruntime.RuntimeComposeRequest) (infruntime.RuntimeArtifacts, error) {
+func (r *Router) convRuntimeComposer() infruntime.RuntimeBuilder {
+	return infruntime.RuntimeBuilderFunc(func(ctx context.Context, req infruntime.ConversationRuntimeRequest) (infruntime.ComposedRuntime, error) {
 		if r == nil {
-			return infruntime.RuntimeArtifacts{}, errors.New("router is nil")
+			return infruntime.ComposedRuntime{}, errors.New("router is nil")
 		}
 		if r.runtimeComposer == nil {
-			return infruntime.RuntimeArtifacts{}, errors.New("runtime composer is not configured")
+			return infruntime.ComposedRuntime{}, errors.New("runtime composer is not configured")
 		}
 		artifacts, err := r.runtimeComposer.Compose(ctx, req)
 		if err != nil {
-			return infruntime.RuntimeArtifacts{}, err
+			return infruntime.ComposedRuntime{}, err
 		}
 		if artifacts.Engine == nil {
-			return infruntime.RuntimeArtifacts{}, errors.New("runtime composer returned nil engine")
+			return infruntime.ComposedRuntime{}, errors.New("runtime composer returned nil engine")
 		}
 		if artifacts.Sink == nil {
 			artifacts.Sink = middleware.NewWatermillSink(r.router.Publisher, topicForConv(req.ConvID))
@@ -377,12 +377,12 @@ func (r *Router) convRuntimeComposer() infruntime.RuntimeComposer {
 		if r.eventSinkWrapper != nil {
 			wrapped, err := r.eventSinkWrapper(req.ConvID, req, artifacts.Sink)
 			if err != nil {
-				return infruntime.RuntimeArtifacts{}, err
+				return infruntime.ComposedRuntime{}, err
 			}
 			artifacts.Sink = wrapped
 		}
 		if strings.TrimSpace(artifacts.RuntimeKey) == "" {
-			artifacts.RuntimeKey = strings.TrimSpace(req.RuntimeKey)
+			artifacts.RuntimeKey = strings.TrimSpace(req.ProfileKey)
 		}
 		if strings.TrimSpace(artifacts.RuntimeFingerprint) == "" {
 			artifacts.RuntimeFingerprint = artifacts.RuntimeKey
