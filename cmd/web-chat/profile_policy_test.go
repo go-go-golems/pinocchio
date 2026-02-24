@@ -138,6 +138,8 @@ func TestRegisterProfileHandlers_GetAndSetProfile(t *testing.T) {
 	var listed []map[string]any
 	require.NoError(t, json.Unmarshal(recList.Body.Bytes(), &listed))
 	require.Len(t, listed, 2)
+	require.Equal(t, "agent", listed[0]["slug"])
+	require.Equal(t, "default", listed[1]["slug"])
 	slugs := map[string]bool{}
 	for _, item := range listed {
 		slug, _ := item["slug"].(string)
@@ -233,6 +235,7 @@ func TestProfileAPI_CRUDLifecycle(t *testing.T) {
 		"description":"Team analyst profile",
 		"runtime":{"system_prompt":"You are analyst"},
 		"policy":{"allow_overrides":true},
+		"extensions":{"Vendor.Custom@V1":{"flags":[{"enabled":true}]}},
 		"set_default":true
 	}`))
 	createRec := httptest.NewRecorder()
@@ -243,6 +246,9 @@ func TestProfileAPI_CRUDLifecycle(t *testing.T) {
 	require.Equal(t, "analyst", created.Slug)
 	require.True(t, created.IsDefault)
 	require.Equal(t, uint64(1), created.Metadata.Version)
+	createdExt, ok := created.Extensions["vendor.custom@v1"].(map[string]any)
+	require.True(t, ok)
+	require.True(t, createdExt["flags"].([]any)[0].(map[string]any)["enabled"].(bool))
 
 	getReq := httptest.NewRequest(http.MethodGet, "/api/chat/profiles/analyst", nil)
 	getRec := httptest.NewRecorder()
@@ -251,10 +257,24 @@ func TestProfileAPI_CRUDLifecycle(t *testing.T) {
 	got := decodeJSON[profileDocument](t, getRec)
 	require.Equal(t, "Analyst", got.DisplayName)
 	require.Equal(t, "You are analyst", got.Runtime.SystemPrompt)
+	_, ok = got.Extensions["vendor.custom@v1"]
+	require.True(t, ok)
+
+	listReq := httptest.NewRequest(http.MethodGet, "/api/chat/profiles", nil)
+	listRec := httptest.NewRecorder()
+	mux.ServeHTTP(listRec, listReq)
+	require.Equal(t, http.StatusOK, listRec.Code)
+	var listItems []map[string]any
+	require.NoError(t, json.Unmarshal(listRec.Body.Bytes(), &listItems))
+	require.GreaterOrEqual(t, len(listItems), 2)
+	require.Equal(t, "analyst", listItems[0]["slug"])
+	_, hasListExtensions := listItems[0]["extensions"]
+	require.True(t, hasListExtensions)
 
 	patchReq := httptest.NewRequest(http.MethodPatch, "/api/chat/profiles/analyst", bytes.NewBufferString(`{
 		"display_name":"Analyst V2",
 		"runtime":{"system_prompt":"You are analyst v2"},
+		"extensions":{"webchat.starter_suggestions@v1":{"items":["hello","world"]}},
 		"expected_version":1
 	}`))
 	patchRec := httptest.NewRecorder()
@@ -264,6 +284,8 @@ func TestProfileAPI_CRUDLifecycle(t *testing.T) {
 	require.Equal(t, "Analyst V2", patched.DisplayName)
 	require.Equal(t, "You are analyst v2", patched.Runtime.SystemPrompt)
 	require.Equal(t, uint64(2), patched.Metadata.Version)
+	_, ok = patched.Extensions["webchat.starter_suggestions@v1"]
+	require.True(t, ok)
 
 	setDefaultReq := httptest.NewRequest(http.MethodPost, "/api/chat/profiles/default/default", nil)
 	setDefaultRec := httptest.NewRecorder()
@@ -320,6 +342,19 @@ func TestProfileAPI_ErrorMappings(t *testing.T) {
 	conflictPatchRec := httptest.NewRecorder()
 	mux.ServeHTTP(conflictPatchRec, conflictPatchReq)
 	require.Equal(t, http.StatusConflict, conflictPatchRec.Code)
+
+	invalidExtensionReq := httptest.NewRequest(http.MethodPost, "/api/chat/profiles", bytes.NewBufferString(`{
+		"slug":"badext",
+		"extensions":{"bad key":{"value":true}}
+	}`))
+	invalidExtensionRec := httptest.NewRecorder()
+	mux.ServeHTTP(invalidExtensionRec, invalidExtensionReq)
+	require.Equal(t, http.StatusBadRequest, invalidExtensionRec.Code)
+
+	missingRegistryReq := httptest.NewRequest(http.MethodGet, "/api/chat/profiles?registry=missing", nil)
+	missingRegistryRec := httptest.NewRecorder()
+	mux.ServeHTTP(missingRegistryRec, missingRegistryReq)
+	require.Equal(t, http.StatusNotFound, missingRegistryRec.Code)
 
 	invalidExpectedReq := httptest.NewRequest(http.MethodDelete, "/api/chat/profiles/default?expected_version=abc", nil)
 	invalidExpectedRec := httptest.NewRecorder()

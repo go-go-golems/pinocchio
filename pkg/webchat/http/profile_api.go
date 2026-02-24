@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -20,12 +21,13 @@ const (
 )
 
 type ProfileListItem struct {
-	Slug          string `json:"slug"`
-	DisplayName   string `json:"display_name,omitempty"`
-	Description   string `json:"description,omitempty"`
-	DefaultPrompt string `json:"default_prompt,omitempty"`
-	IsDefault     bool   `json:"is_default,omitempty"`
-	Version       uint64 `json:"version,omitempty"`
+	Slug          string         `json:"slug"`
+	DisplayName   string         `json:"display_name,omitempty"`
+	Description   string         `json:"description,omitempty"`
+	DefaultPrompt string         `json:"default_prompt,omitempty"`
+	Extensions    map[string]any `json:"extensions,omitempty"`
+	IsDefault     bool           `json:"is_default,omitempty"`
+	Version       uint64         `json:"version,omitempty"`
 }
 
 type ProfileDocument struct {
@@ -36,6 +38,7 @@ type ProfileDocument struct {
 	Runtime     gepprofiles.RuntimeSpec     `json:"runtime,omitempty"`
 	Policy      gepprofiles.PolicySpec      `json:"policy,omitempty"`
 	Metadata    gepprofiles.ProfileMetadata `json:"metadata,omitempty"`
+	Extensions  map[string]any              `json:"extensions,omitempty"`
 	IsDefault   bool                        `json:"is_default"`
 }
 
@@ -48,6 +51,7 @@ type CreateProfileRequest struct {
 	Runtime         *gepprofiles.RuntimeSpec     `json:"runtime,omitempty"`
 	Policy          *gepprofiles.PolicySpec      `json:"policy,omitempty"`
 	Metadata        *gepprofiles.ProfileMetadata `json:"metadata,omitempty"`
+	Extensions      map[string]any               `json:"extensions,omitempty"`
 	SetDefault      bool                         `json:"set_default,omitempty"`
 	ExpectedVersion uint64                       `json:"expected_version,omitempty"`
 }
@@ -59,6 +63,7 @@ type PatchProfileRequest struct {
 	Runtime         *gepprofiles.RuntimeSpec     `json:"runtime,omitempty"`
 	Policy          *gepprofiles.PolicySpec      `json:"policy,omitempty"`
 	Metadata        *gepprofiles.ProfileMetadata `json:"metadata,omitempty"`
+	Extensions      *map[string]any              `json:"extensions,omitempty"`
 	SetDefault      bool                         `json:"set_default,omitempty"`
 	ExpectedVersion uint64                       `json:"expected_version,omitempty"`
 }
@@ -120,6 +125,15 @@ func RegisterProfileAPIHandlers(mux *http.ServeMux, profileRegistry gepprofiles.
 				writeProfileRegistryError(w, err)
 				return
 			}
+			sort.Slice(profiles_, func(i, j int) bool {
+				if profiles_[i] == nil {
+					return false
+				}
+				if profiles_[j] == nil {
+					return true
+				}
+				return profiles_[i].Slug < profiles_[j].Slug
+			})
 			items := make([]ProfileListItem, 0, len(profiles_))
 			for _, p := range profiles_ {
 				if p == nil {
@@ -130,6 +144,7 @@ func RegisterProfileAPIHandlers(mux *http.ServeMux, profileRegistry gepprofiles.
 					DisplayName:   p.DisplayName,
 					Description:   p.Description,
 					DefaultPrompt: p.Runtime.SystemPrompt,
+					Extensions:    cloneExtensionMap(p.Extensions),
 					IsDefault:     registry != nil && registry.DefaultProfileSlug == p.Slug,
 					Version:       p.Metadata.Version,
 				})
@@ -168,6 +183,9 @@ func RegisterProfileAPIHandlers(mux *http.ServeMux, profileRegistry gepprofiles.
 			}
 			if body.Metadata != nil {
 				profile.Metadata = *body.Metadata
+			}
+			if len(body.Extensions) > 0 {
+				profile.Extensions = cloneExtensionMap(body.Extensions)
 			}
 
 			created, err := profileRegistry.CreateProfile(req.Context(), registrySlug, profile, gepprofiles.WriteOptions{
@@ -248,6 +266,7 @@ func RegisterProfileAPIHandlers(mux *http.ServeMux, profileRegistry gepprofiles.
 					Runtime:     body.Runtime,
 					Policy:      body.Policy,
 					Metadata:    body.Metadata,
+					Extensions:  body.Extensions,
 				}
 				profile, err := profileRegistry.UpdateProfile(req.Context(), registrySlug, slug, patch, gepprofiles.WriteOptions{
 					ExpectedVersion: body.ExpectedVersion,
@@ -464,8 +483,24 @@ func profileDocFromModel(registrySlug gepprofiles.RegistrySlug, registry *geppro
 	doc.Runtime = p.Runtime
 	doc.Policy = p.Policy
 	doc.Metadata = p.Metadata
+	doc.Extensions = cloneExtensionMap(p.Extensions)
 	doc.IsDefault = registry != nil && registry.DefaultProfileSlug == p.Slug
 	return doc
+}
+
+func cloneExtensionMap(in map[string]any) map[string]any {
+	if len(in) == 0 {
+		return nil
+	}
+	b, err := json.Marshal(in)
+	if err != nil {
+		return nil
+	}
+	var out map[string]any
+	if err := json.Unmarshal(b, &out); err != nil {
+		return nil
+	}
+	return out
 }
 
 func writeProfileRegistryError(w http.ResponseWriter, err error) {
