@@ -15,6 +15,7 @@ type turnStorePersister struct {
 	store     chatstore.TurnStore
 	convID    string
 	sessionID string
+	runtime   string
 	phase     string
 }
 
@@ -26,6 +27,7 @@ func newTurnStorePersister(store chatstore.TurnStore, conv *Conversation, phase 
 		store:     store,
 		convID:    conv.ID,
 		sessionID: conv.SessionID,
+		runtime:   strings.TrimSpace(conv.RuntimeKey),
 		phase:     phase,
 	}
 }
@@ -59,5 +61,12 @@ func (p *turnStorePersister) PersistTurn(ctx context.Context, t *turns.Turn) err
 	if err != nil {
 		return errors.Wrap(err, "turn persister: serialize")
 	}
-	return p.store.Save(ctx, convID, sessionID, turnID, phase, time.Now().UnixMilli(), string(payload))
+	inferenceID := ""
+	if v, ok, err := turns.KeyTurnMetaInferenceID.Get(t.Metadata); err == nil && ok {
+		inferenceID = strings.TrimSpace(v)
+	}
+	return p.store.Save(ctx, convID, sessionID, turnID, phase, time.Now().UnixMilli(), string(payload), chatstore.TurnSaveOptions{
+		RuntimeKey:  p.runtime,
+		InferenceID: inferenceID,
+	})
 }

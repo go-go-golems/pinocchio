@@ -61,7 +61,29 @@ func (p *cliTurnStorePersister) PersistTurn(ctx context.Context, t *turns.Turn) 
 	if err != nil {
 		return errors.Wrap(err, "cli turn persister: serialize")
 	}
-	return p.store.Save(ctx, p.convID, sessionID, turnID, phase, time.Now().UnixMilli(), string(payload))
+	runtimeKey := ""
+	if v, ok, err := turns.KeyTurnMetaRuntime.Get(t.Metadata); err == nil && ok {
+		runtimeKey = strings.TrimSpace(toString(v))
+	}
+	inferenceID := ""
+	if v, ok, err := turns.KeyTurnMetaInferenceID.Get(t.Metadata); err == nil && ok {
+		inferenceID = strings.TrimSpace(v)
+	}
+	return p.store.Save(ctx, p.convID, sessionID, turnID, phase, time.Now().UnixMilli(), string(payload), chatstore.TurnSaveOptions{
+		RuntimeKey:  runtimeKey,
+		InferenceID: inferenceID,
+	})
+}
+
+func toString(v any) string {
+	if v == nil {
+		return ""
+	}
+	s, ok := v.(string)
+	if ok {
+		return s
+	}
+	return ""
 }
 
 func openChatPersistenceStores(settings run.PersistenceSettings) (chatstore.TimelineStore, chatstore.TurnStore, func(), error) {
