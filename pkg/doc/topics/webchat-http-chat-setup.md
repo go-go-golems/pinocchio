@@ -30,6 +30,8 @@ Use this page as the source of truth when wiring server routes, frontend clients
   - `webchat.NewChatHTTPHandler(srv.ChatService(), resolver)`
   - `webchat.NewWSHTTPHandler(srv.StreamHub(), resolver, upgrader)`
   - `webchat.NewTimelineHTTPHandler(srv.TimelineService(), logger)`
+- Mount reusable profile API handlers:
+  - `webhttp.RegisterProfileAPIHandlers(...)`
 - Mount utility handlers:
   - `srv.APIHandler()` for core `/api/*` utilities
   - `srv.UIHandler()` for static UI
@@ -42,10 +44,33 @@ Use this page as the source of truth when wiring server routes, frontend clients
 | `/chat/{runtime}` | POST | App | Force runtime key from path |
 | `/ws?conv_id=<id>` | GET (upgrade) | App | Attach websocket stream |
 | `/api/timeline` | GET | App/Core | Hydration snapshot endpoint |
+| `/api/chat/profiles` | `GET`, `POST` | Shared (`pkg/webchat/http`) | List/create profiles |
+| `/api/chat/profiles/{slug}` | `GET`, `PATCH`, `DELETE` | Shared (`pkg/webchat/http`) | Read/update/delete profile |
+| `/api/chat/profiles/{slug}/default` | `POST` | Shared (`pkg/webchat/http`) | Set registry default profile |
+| `/api/chat/profile` | `GET`, `POST` | Shared (`pkg/webchat/http`) | Current-profile cookie route (optional) |
+| `/api/chat/schemas/middlewares` | `GET` | Shared (`pkg/webchat/http`) | Middleware schema catalog |
+| `/api/chat/schemas/extensions` | `GET` | Shared (`pkg/webchat/http`) | Extension schema catalog |
 | `/api/debug/timeline` | GET | Core debug | Debug alias for snapshot inspection |
 | `/api/debug/turns` | GET | Core debug | Requires turn store |
 | `/api/debug/turn/:conv/:session/:turn` | GET | Core debug | Per-turn detail endpoint |
 | `/` | GET | Core UI | Embedded UI index/assets |
+
+## Profile API Wiring
+
+Mount the shared CRUD/schema handlers once per app mux:
+
+```go
+webhttp.RegisterProfileAPIHandlers(mux, profileRegistry, webhttp.ProfileAPIHandlerOptions{
+  DefaultRegistrySlug:             gepprofiles.MustRegistrySlug("default"),
+  EnableCurrentProfileCookieRoute: true,
+  MiddlewareDefinitions:           middlewareDefinitions,
+  ExtensionCodecRegistry:          extensionCodecs,
+  WriteActor:                      "my-app",
+  WriteSource:                     "http-api",
+})
+```
+
+This route set is app-agnostic and reusable across pinocchio `cmd/web-chat` and go-go-os backend servers.
 
 ## Request Resolver Contract
 

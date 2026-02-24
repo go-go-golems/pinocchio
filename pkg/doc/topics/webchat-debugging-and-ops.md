@@ -24,6 +24,7 @@ This guide focuses on operational debugging for the current HTTP chat setup:
 - `GET /api/timeline`
 - `GET /api/debug/conversations` for current runtime pointer inspection
 - `GET /api/debug/turns` for turn inspection
+- `GET /api/chat/profiles` and schema endpoints for profile API health checks
 
 ## WebSocket Debugging
 
@@ -78,6 +79,7 @@ Backend checks:
 - Confirm HTTP server route mounts include `/chat`, `/ws`, `/api/timeline`, `/api/`.
 - Confirm timeline store configuration (`--timeline-db` or `--timeline-dsn`) when durability is expected.
 - Confirm turn store configuration for debug turn queries.
+- Confirm profile API mounts include `/api/chat/profiles`, `/api/chat/schemas/middlewares`, and `/api/chat/schemas/extensions`.
 
 Frontend checks:
 
@@ -97,6 +99,10 @@ curl -i 'http://localhost:8080/api/timeline?conv_id=conv-smoke'
 curl -i 'http://localhost:8080/api/debug/conversations/conv-smoke'
 
 curl -i 'http://localhost:8080/api/debug/turns?conv_id=conv-smoke&limit=5'
+
+curl -i 'http://localhost:8080/api/chat/profiles'
+
+curl -i 'http://localhost:8080/api/chat/schemas/middlewares'
 ```
 
 Example runtime history query:

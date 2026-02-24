@@ -113,6 +113,8 @@ webhttp.RegisterProfileAPIHandlers(mux, profileRegistry, webhttp.ProfileAPIHandl
   EnableCurrentProfileCookieRoute: true,
   WriteActor:                      "my-app",
   WriteSource:                     "http-api",
+  MiddlewareDefinitions:           middlewareDefinitions,
+  ExtensionCodecRegistry:          extensionCodecRegistry,
 })
 ```
 
@@ -142,6 +144,8 @@ webhttp.RegisterProfileAPIHandlers(mux, profileRegistry, webhttp.ProfileAPIHandl
   }
 ]
 ```
+
+List responses are always JSON arrays sorted by profile slug.
 
 `POST /api/chat/profiles` create payload:
 
@@ -220,6 +224,52 @@ Schema endpoints are intended for frontend form-generation and preflight validat
 
 - `GET /api/chat/schemas/middlewares`
 - `GET /api/chat/schemas/extensions`
+
+Middleware schema response example:
+
+```json
+[
+  {
+    "name": "agentmode",
+    "version": 1,
+    "display_name": "Agent Mode",
+    "description": "Injects mode guidance and parses mode switch markers.",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "default_mode": { "type": "string" }
+      }
+    }
+  }
+]
+```
+
+Extension schema response example:
+
+```json
+[
+  {
+    "key": "middleware.config.agentmode@v1",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "instances": {
+          "type": "object",
+          "additionalProperties": { "type": "object" }
+        }
+      },
+      "required": ["instances"],
+      "additionalProperties": false
+    }
+  }
+]
+```
+
+Extension schema merge precedence:
+
+1. explicit schemas passed in handler options (`ExtensionSchemas`),
+2. middleware-derived typed keys from middleware definitions,
+3. codec-derived schemas from codec registries that implement `ExtensionCodecLister` and codecs implementing `ExtensionSchemaCodec`.
 
 Use these schemas to build profile-editing UIs that avoid sending invalid payloads.
 
