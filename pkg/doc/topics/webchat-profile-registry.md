@@ -203,6 +203,11 @@ webhttp.RegisterProfileAPIHandlers(mux, profileRegistry, webhttp.ProfileAPIHandl
 
 When profile selection changes mid-conversation, subsequent turns use the new profile while prior turns remain attributable to their original runtime selection.
 
+Debug API interpretation:
+
+- `/api/debug/conversations/:conv_id` -> `current_runtime_key` (latest pointer),
+- `/api/debug/turns?conv_id=...` -> per-turn `runtime_key` and `inference_id`.
+
 ## Write-Time Validation and Schema APIs
 
 Profile create/update routes enforce middleware correctness before persistence:

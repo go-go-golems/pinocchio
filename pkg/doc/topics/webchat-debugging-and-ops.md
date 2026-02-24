@@ -22,6 +22,7 @@ This guide focuses on operational debugging for the current HTTP chat setup:
 - `POST /chat`
 - `GET /ws?conv_id=...`
 - `GET /api/timeline`
+- `GET /api/debug/conversations` for current runtime pointer inspection
 - `GET /api/debug/turns` for turn inspection
 
 ## WebSocket Debugging
@@ -64,6 +65,12 @@ Look for lifecycle logs:
 - `GET /api/debug/turns` returns 404 when turn store is disabled.
 - Enable with `--turns-db` or `--turns-dsn`.
 
+### Runtime history confusion
+
+- conversation debug payloads expose `current_runtime_key` (latest pointer only),
+- turn payloads expose per-turn `runtime_key` and `inference_id`,
+- for historical attribution, query `/api/debug/turns`, not only `/api/debug/conversations/:id`.
+
 ## Operational Checks
 
 Backend checks:
@@ -87,7 +94,16 @@ curl -i -X POST http://localhost:8080/chat \
 
 curl -i 'http://localhost:8080/api/timeline?conv_id=conv-smoke'
 
+curl -i 'http://localhost:8080/api/debug/conversations/conv-smoke'
+
 curl -i 'http://localhost:8080/api/debug/turns?conv_id=conv-smoke&limit=5'
+```
+
+Example runtime history query:
+
+```bash
+curl -s 'http://localhost:8080/api/debug/turns?conv_id=conv-smoke&limit=50' \
+  | jq '.items[] | {turn_id, phase, runtime_key, inference_id, created_at_ms}'
 ```
 
 ## Non-Canonical Paths
@@ -103,3 +119,4 @@ If operational runbooks still mention these, update them:
 - [Webchat HTTP Chat Setup](webchat-http-chat-setup.md)
 - [Webchat Frontend Integration](webchat-frontend-integration.md)
 - [Webchat Framework Guide](webchat-framework-guide.md)
+- [Webchat Runtime Truth Migration Playbook](webchat-runtime-truth-migration-playbook.md)
