@@ -249,7 +249,7 @@ Extension schema response example:
 ```json
 [
   {
-    "key": "middleware.config.agentmode@v1",
+    "key": "middleware.agentmode_config@v1",
     "schema": {
       "type": "object",
       "properties": {
