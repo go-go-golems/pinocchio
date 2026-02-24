@@ -59,7 +59,7 @@ func NewRouter(ctx context.Context, parsed *values.Values, staticFS fs.FS, opts 
 		staticFS:      staticFS,
 		router:        streamBackend.EventRouter(),
 		streamBackend: streamBackend,
-		mwFactories:   map[string]infruntime.MiddlewareBuilder{},
+		mwFactories:   map[string]MiddlewareBuilder{},
 		toolFactories: map[string]infruntime.ToolRegistrar{},
 	}
 
@@ -177,7 +177,7 @@ func NewRouter(ctx context.Context, parsed *values.Values, staticFS fs.FS, opts 
 }
 
 // RegisterMiddleware adds a named middleware factory to the router.
-func (r *Router) RegisterMiddleware(name string, f infruntime.MiddlewareBuilder) {
+func (r *Router) RegisterMiddleware(name string, f MiddlewareBuilder) {
 	r.mwFactories[name] = f
 }
 

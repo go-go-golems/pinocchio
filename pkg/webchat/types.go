@@ -9,6 +9,7 @@ import (
 	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/go-go-golems/geppetto/pkg/events"
 	"github.com/go-go-golems/geppetto/pkg/inference/engine"
+	"github.com/go-go-golems/geppetto/pkg/inference/middleware"
 	"github.com/go-go-golems/geppetto/pkg/inference/toolloop"
 	geptools "github.com/go-go-golems/geppetto/pkg/inference/tools"
 	"github.com/go-go-golems/geppetto/pkg/turns"
@@ -20,6 +21,9 @@ import (
 
 // RunLoop is a backend loop strategy for a conversation.
 type RunLoop func(ctx context.Context, eng engine.Engine, t *turns.Turn, reg geptools.ToolRegistry, opts map[string]any) (*turns.Turn, error)
+
+// MiddlewareBuilder creates a middleware instance from config.
+type MiddlewareBuilder func(cfg any) middleware.Middleware
 
 // EventSinkWrapper allows callers to wrap or replace the default event sink.
 type EventSinkWrapper func(convID string, req infruntime.ConversationRuntimeRequest, sink events.EventSink) (events.EventSink, error)
@@ -37,7 +41,7 @@ type Router struct {
 	streamBackend StreamBackend
 
 	// registries
-	mwFactories   map[string]infruntime.MiddlewareBuilder
+	mwFactories   map[string]MiddlewareBuilder
 	toolFactories map[string]infruntime.ToolRegistrar
 
 	// shared deps

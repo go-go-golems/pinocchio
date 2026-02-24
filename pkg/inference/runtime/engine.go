@@ -13,39 +13,8 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 )
 
-// MiddlewareBuilder creates a middleware instance from an arbitrary config object.
-type MiddlewareBuilder func(cfg any) middleware.Middleware
-
 // ToolRegistrar registers a tool into a registry.
 type ToolRegistrar func(reg geptools.ToolRegistry) error
-
-// MiddlewareSpec declares a middleware to attach and its config.
-type MiddlewareSpec struct {
-	Name   string
-	Config any
-}
-
-// BuildEngineFromSettings builds an engine from step settings then applies middlewares.
-func BuildEngineFromSettings(
-	ctx context.Context,
-	stepSettings *settings.StepSettings,
-	sysPrompt string,
-	uses []MiddlewareSpec,
-	mwFactories map[string]MiddlewareBuilder,
-) (engine.Engine, error) {
-	if ctx == nil {
-		return nil, errors.New("ctx is nil")
-	}
-	resolvedMiddlewares := make([]middleware.Middleware, 0, len(uses))
-	for _, u := range uses {
-		f, ok := mwFactories[u.Name]
-		if !ok {
-			return nil, errors.Errorf("unknown middleware: %s", u.Name)
-		}
-		resolvedMiddlewares = append(resolvedMiddlewares, f(u.Config))
-	}
-	return BuildEngineFromSettingsWithMiddlewares(ctx, stepSettings, sysPrompt, resolvedMiddlewares)
-}
 
 // BuildEngineFromSettingsWithMiddlewares builds an engine from step settings and applies middleware chain.
 func BuildEngineFromSettingsWithMiddlewares(
