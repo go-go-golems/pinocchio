@@ -124,6 +124,8 @@ webhttp.RegisterProfileAPIHandlers(mux, profileRegistry, webhttp.ProfileAPIHandl
 | `/api/chat/profiles/{slug}` | `GET`, `PATCH`, `DELETE` | read/update/delete a profile |
 | `/api/chat/profiles/{slug}/default` | `POST` | set default profile |
 | `/api/chat/profile` | `GET`, `POST` | current-profile cookie read/write (optional route) |
+| `/api/chat/schemas/middlewares` | `GET` | discover middleware JSON schema contracts |
+| `/api/chat/schemas/extensions` | `GET` | discover extension JSON schema contracts |
 
 ### Payload Reference
 
@@ -191,6 +193,31 @@ webhttp.RegisterProfileAPIHandlers(mux, profileRegistry, webhttp.ProfileAPIHandl
 }
 ```
 
+## Current Profile vs Conversation Runtime
+
+`/api/chat/profile` stores UI selection state (cookie), but runtime truth is per turn:
+
+- each chat/websocket request resolves profile at request time,
+- runtime key and resolved runtime are attached to the request plan,
+- conversation state alone is not sufficient to infer the runtime of every turn.
+
+When profile selection changes mid-conversation, subsequent turns use the new profile while prior turns remain attributable to their original runtime selection.
+
+## Write-Time Validation and Schema APIs
+
+Profile create/update routes enforce middleware correctness before persistence:
+
+- unknown middleware names return `400`,
+- middleware `config` payloads are validated/coerced against definition JSON schemas,
+- validation errors include field paths such as `runtime.middlewares[0].config`.
+
+Schema endpoints are intended for frontend form-generation and preflight validation:
+
+- `GET /api/chat/schemas/middlewares`
+- `GET /api/chat/schemas/extensions`
+
+Use these schemas to build profile-editing UIs that avoid sending invalid payloads.
+
 ## Error Semantics
 
 Profile API handlers map typed profile errors to stable HTTP status classes:
@@ -229,25 +256,16 @@ Minimum integration coverage for profile-aware webchat:
 
 These tests should run against app-mounted handlers, not only isolated service functions.
 
-## Migrating Legacy profiles.yaml
+## Hard-Cutover Notes
 
-If you still have legacy profile-map files, migrate them with the Pinocchio verb:
+Current rollout assumptions:
 
-```bash
-pinocchio profiles migrate-legacy \
-  --input ~/.config/pinocchio/profiles.yaml \
-  --output ~/.config/pinocchio/profiles.registry.yaml
-```
+- profile-registry middleware integration is always enabled,
+- `PINOCCHIO_ENABLE_PROFILE_REGISTRY_MIDDLEWARE` is removed,
+- compatibility aliases for renamed runtime/webchat symbols are removed,
+- profile CRUD + schema endpoints are the canonical integration surface.
 
-In-place migration with backup:
-
-```bash
-pinocchio profiles migrate-legacy --in-place --backup-in-place
-```
-
-For full migration workflow and validation steps, see the Geppetto playbook:
-
-- `geppetto/pkg/doc/playbooks/05-migrate-legacy-profiles-yaml-to-registry.md`
+Do not gate behavior with legacy env toggles. If a deployment needs rollback, use release rollback and profile DB snapshot restore.
 
 ## SQLite Operations and Rollout Notes
 
@@ -268,6 +286,16 @@ Migration/rollout posture:
 - registry middleware integration is always enabled,
 - rollback uses release rollback + profile DB snapshot restore, not runtime env toggles.
 
+## Go-Go-OS Integration Notes
+
+Go-go-os inventory chat reuses the same shared profile API handlers from `pinocchio/pkg/webchat/http`:
+
+- same CRUD endpoints and status/error model,
+- same current-profile route behavior,
+- same middleware/extension schema endpoint contracts.
+
+This keeps frontend profile editors portable across pinocchio web-chat and go-go-os app backends.
+
 ## Troubleshooting
 
 | Problem | Cause | Solution |
@@ -275,6 +303,8 @@ Migration/rollout posture:
 | `/chat` ignores selected profile | Resolver returns fixed runtime key | Ensure resolver reads body/query/cookie and resolves profile through registry |
 | profile updates do not trigger runtime change | Fingerprint missing profile version/effective runtime inputs | Add `ProfileVersion` and runtime inputs to fingerprint payload |
 | `/api/chat/profiles` returns empty list unexpectedly | Bootstrap registry did not upsert expected profiles | Validate bootstrap sequence and registry slug |
+| create/patch returns `validation error (runtime.middlewares[*].name)` | middleware not registered in runtime definition registry | inspect application middleware-definition wiring and middleware name |
+| create/patch returns `validation error (runtime.middlewares[*].config)` | payload does not satisfy middleware schema | fetch `/api/chat/schemas/middlewares` and fix payload |
 | mutation returns conflict | stale `expected_version` | read latest profile and retry with current version |
 | mutation unexpectedly forbidden | profile policy is read-only or denies operation | inspect profile policy and update intentionally |
 
