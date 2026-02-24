@@ -98,10 +98,17 @@ func (c *ProfileRuntimeComposer) Compose(ctx context.Context, req infruntime.Con
 	if err != nil {
 		return infruntime.ComposedRuntime{}, err
 	}
+	effectiveStepSettings := stepSettings.Clone()
+	if req.ResolvedProfileRuntime != nil && len(req.ResolvedProfileRuntime.StepSettingsPatch) > 0 {
+		effectiveStepSettings, err = gepprofiles.ApplyRuntimeStepSettingsPatch(stepSettings, req.ResolvedProfileRuntime.StepSettingsPatch)
+		if err != nil {
+			return infruntime.ComposedRuntime{}, fmt.Errorf("apply profile step_settings_patch: %w", err)
+		}
+	}
 
 	eng, err := infruntime.BuildEngineFromSettingsWithMiddlewares(
 		ctx,
-		stepSettings.Clone(),
+		effectiveStepSettings,
 		systemPrompt,
 		resolvedMiddlewares,
 	)
@@ -112,7 +119,7 @@ func (c *ProfileRuntimeComposer) Compose(ctx context.Context, req infruntime.Con
 	return infruntime.ComposedRuntime{
 		Engine:             eng,
 		RuntimeKey:         runtimeKey,
-		RuntimeFingerprint: buildRuntimeFingerprint(runtimeKey, req.ProfileVersion, systemPrompt, resolvedUses, tools, stepSettings),
+		RuntimeFingerprint: buildRuntimeFingerprint(runtimeKey, req.ProfileVersion, systemPrompt, resolvedUses, tools, effectiveStepSettings),
 		SeedSystemPrompt:   systemPrompt,
 		AllowedTools:       tools,
 	}, nil

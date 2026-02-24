@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	gepprofiles "github.com/go-go-golems/geppetto/pkg/profiles"
+	webhttp "github.com/go-go-golems/pinocchio/pkg/webchat/http"
 	"github.com/stretchr/testify/require"
 )
 
@@ -214,6 +215,21 @@ func TestWebChatProfileResolver_Chat_InvalidRegistryInBody(t *testing.T) {
 	_, err := resolver.Resolve(req)
 	require.Error(t, err)
 	require.ErrorContains(t, err, "invalid registry")
+}
+
+func TestWebChatProfileResolver_Chat_UnknownRegistryReturnsNotFound(t *testing.T) {
+	resolver := newTestResolverWithMultipleRegistries(t)
+
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"/chat?registry=missing",
+		bytes.NewBufferString(`{"prompt":"hi","conv_id":"conv-1"}`),
+	)
+	_, err := resolver.Resolve(req)
+	require.Error(t, err)
+	var re *webhttp.RequestResolutionError
+	require.ErrorAs(t, err, &re)
+	require.Equal(t, http.StatusNotFound, re.Status)
 }
 
 func TestProfileAPI_CRUDLifecycle(t *testing.T) {

@@ -338,7 +338,7 @@ func (r *ProfileRequestResolver) toRequestResolutionError(err error, slug string
 		return &webhttp.RequestResolutionError{Status: http.StatusNotFound, ClientMsg: "profile not found: " + slug}
 	}
 	if errors.Is(err, gepprofiles.ErrRegistryNotFound) {
-		return &webhttp.RequestResolutionError{Status: http.StatusInternalServerError, ClientMsg: "profile registry is not configured", Err: err}
+		return &webhttp.RequestResolutionError{Status: http.StatusNotFound, ClientMsg: "registry not found", Err: err}
 	}
 	return &webhttp.RequestResolutionError{Status: http.StatusInternalServerError, ClientMsg: "profile resolution failed", Err: err}
 }
