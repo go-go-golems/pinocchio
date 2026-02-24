@@ -392,6 +392,25 @@ func TestAppOwnedProfileSelection_AffectsNextConversationCreation(t *testing.T) 
 	_ = conn.Close()
 }
 
+func TestProfileAPI_InvalidSlugAndRegistry_ReturnBadRequest(t *testing.T) {
+	srv := newAppOwnedIntegrationServer(t)
+	defer srv.Close()
+
+	invalidRegistryResp, err := http.Get(srv.URL + "/api/chat/profiles?registry=invalid registry!")
+	require.NoError(t, err)
+	defer invalidRegistryResp.Body.Close()
+	require.Equal(t, http.StatusBadRequest, invalidRegistryResp.StatusCode)
+
+	invalidSlugResp, err := http.Post(
+		srv.URL+"/api/chat/profile",
+		"application/json",
+		strings.NewReader(`{"slug":"not a valid slug!"}`),
+	)
+	require.NoError(t, err)
+	defer invalidSlugResp.Body.Close()
+	require.Equal(t, http.StatusBadRequest, invalidSlugResp.StatusCode)
+}
+
 func assertProfileListItemContract(t *testing.T, item map[string]any) {
 	t.Helper()
 	require.NotEmpty(t, item["slug"])
