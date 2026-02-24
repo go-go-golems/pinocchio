@@ -149,13 +149,7 @@ func RegisterProfileAPIHandlers(mux *http.ServeMux, profileRegistry gepprofiles.
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		items := make([]ExtensionSchemaDocument, 0, len(opts.ExtensionSchemas))
-		for _, item := range opts.ExtensionSchemas {
-			items = append(items, ExtensionSchemaDocument{
-				Key:    item.Key,
-				Schema: cloneExtensionMap(item.Schema),
-			})
-		}
+		items := listExtensionSchemas(opts.ExtensionSchemas, opts.MiddlewareDefinitions)
 		writeJSONResponse(w, http.StatusOK, items)
 	})
 
@@ -208,11 +202,18 @@ func RegisterProfileAPIHandlers(mux *http.ServeMux, profileRegistry gepprofiles.
 				http.Error(w, "bad request", http.StatusBadRequest)
 				return
 			}
+			normalizedExtensions := cloneExtensionMap(body.Extensions)
 			if body.Runtime != nil {
-				if err := validateAndNormalizeRuntimeMiddlewaresForWrite(body.Runtime, opts.MiddlewareDefinitions); err != nil {
+				nextExtensions, err := validateNormalizeAndProjectRuntimeMiddlewaresForWrite(
+					body.Runtime,
+					normalizedExtensions,
+					opts.MiddlewareDefinitions,
+				)
+				if err != nil {
 					writeProfileRegistryError(w, err)
 					return
 				}
+				normalizedExtensions = nextExtensions
 			}
 			registrySlug, err := resolveRegistrySlugForAPI(req, opts.DefaultRegistrySlug, body.Registry)
 			if err != nil {
@@ -239,8 +240,8 @@ func RegisterProfileAPIHandlers(mux *http.ServeMux, profileRegistry gepprofiles.
 			if body.Metadata != nil {
 				profile.Metadata = *body.Metadata
 			}
-			if len(body.Extensions) > 0 {
-				profile.Extensions = cloneExtensionMap(body.Extensions)
+			if len(normalizedExtensions) > 0 {
+				profile.Extensions = normalizedExtensions
 			}
 
 			created, err := profileRegistry.CreateProfile(req.Context(), registrySlug, profile, gepprofiles.WriteOptions{
@@ -310,16 +311,44 @@ func RegisterProfileAPIHandlers(mux *http.ServeMux, profileRegistry gepprofiles.
 					http.Error(w, "bad request", http.StatusBadRequest)
 					return
 				}
-				if body.Runtime != nil {
-					if err := validateAndNormalizeRuntimeMiddlewaresForWrite(body.Runtime, opts.MiddlewareDefinitions); err != nil {
-						writeProfileRegistryError(w, err)
-						return
-					}
-				}
 				registrySlug, err := resolveRegistrySlugForAPI(req, opts.DefaultRegistrySlug, body.Registry)
 				if err != nil {
 					http.Error(w, "invalid registry", http.StatusBadRequest)
 					return
+				}
+				currentProfile, err := profileRegistry.GetProfile(req.Context(), registrySlug, slug)
+				if err != nil {
+					writeProfileRegistryError(w, err)
+					return
+				}
+				if body.Runtime != nil || body.Extensions != nil {
+					runtimeForValidation := gepprofiles.RuntimeSpec{}
+					if currentProfile != nil {
+						runtimeForValidation = cloneRuntimeSpec(currentProfile.Runtime)
+					}
+					if body.Runtime != nil {
+						runtimeForValidation = cloneRuntimeSpec(*body.Runtime)
+					}
+					extensionsForValidation := cloneExtensionMap(nil)
+					if currentProfile != nil {
+						extensionsForValidation = cloneExtensionMap(currentProfile.Extensions)
+					}
+					if body.Extensions != nil {
+						extensionsForValidation = cloneExtensionMap(*body.Extensions)
+					}
+					normalizedExtensions, err := validateNormalizeAndProjectRuntimeMiddlewaresForWrite(
+						&runtimeForValidation,
+						extensionsForValidation,
+						opts.MiddlewareDefinitions,
+					)
+					if err != nil {
+						writeProfileRegistryError(w, err)
+						return
+					}
+					if body.Runtime != nil {
+						body.Runtime = &runtimeForValidation
+					}
+					body.Extensions = &normalizedExtensions
 				}
 				patch := gepprofiles.ProfilePatch{
 					DisplayName: body.DisplayName,
@@ -586,9 +615,82 @@ func listMiddlewareSchemas(definitions middlewarecfg.DefinitionRegistry) []Middl
 	return items
 }
 
-func validateAndNormalizeRuntimeMiddlewaresForWrite(runtime *gepprofiles.RuntimeSpec, definitions middlewarecfg.DefinitionRegistry) error {
+func listExtensionSchemas(
+	explicit []ExtensionSchemaDocument,
+	definitions middlewarecfg.DefinitionRegistry,
+) []ExtensionSchemaDocument {
+	byKey := map[string]ExtensionSchemaDocument{}
+	for _, item := range explicit {
+		key, err := gepprofiles.ParseExtensionKey(item.Key)
+		if err != nil {
+			continue
+		}
+		byKey[key.String()] = ExtensionSchemaDocument{
+			Key:    key.String(),
+			Schema: cloneExtensionMap(item.Schema),
+		}
+	}
+	if definitions != nil {
+		for _, def := range definitions.ListDefinitions() {
+			if def == nil {
+				continue
+			}
+			key, err := gepprofiles.MiddlewareConfigExtensionKey(def.Name())
+			if err != nil {
+				continue
+			}
+			keyString := key.String()
+			if _, exists := byKey[keyString]; exists {
+				continue
+			}
+			byKey[keyString] = ExtensionSchemaDocument{
+				Key:    keyString,
+				Schema: middlewareConfigExtensionSchema(def.ConfigJSONSchema()),
+			}
+		}
+	}
+	items := make([]ExtensionSchemaDocument, 0, len(byKey))
+	for _, item := range byKey {
+		items = append(items, item)
+	}
+	sort.Slice(items, func(i, j int) bool {
+		return items[i].Key < items[j].Key
+	})
+	return items
+}
+
+func middlewareConfigExtensionSchema(configSchema map[string]any) map[string]any {
+	typedConfigSchema := cloneExtensionMap(configSchema)
+	if typedConfigSchema == nil {
+		typedConfigSchema = map[string]any{"type": "object"}
+	}
+	return map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"instances": map[string]any{
+				"type":                 "object",
+				"additionalProperties": typedConfigSchema,
+			},
+		},
+		"required":             []any{"instances"},
+		"additionalProperties": false,
+	}
+}
+
+func validateNormalizeAndProjectRuntimeMiddlewaresForWrite(
+	runtime *gepprofiles.RuntimeSpec,
+	extensions map[string]any,
+	definitions middlewarecfg.DefinitionRegistry,
+) (map[string]any, error) {
+	normalizedExtensions, err := gepprofiles.ProjectRuntimeMiddlewareConfigsToExtensions(runtime, extensions)
+	if err != nil {
+		return nil, &gepprofiles.ValidationError{
+			Field:  "runtime.middlewares.config",
+			Reason: err.Error(),
+		}
+	}
 	if runtime == nil || len(runtime.Middlewares) == 0 || definitions == nil {
-		return nil
+		return normalizedExtensions, nil
 	}
 	for i, middlewareUse := range runtime.Middlewares {
 		name := strings.TrimSpace(middlewareUse.Name)
@@ -599,15 +701,26 @@ func validateAndNormalizeRuntimeMiddlewaresForWrite(runtime *gepprofiles.Runtime
 
 		def, ok := definitions.GetDefinition(name)
 		if !ok {
-			return &gepprofiles.ValidationError{
+			return nil, &gepprofiles.ValidationError{
 				Field:  fieldPrefix + ".name",
 				Reason: fmt.Sprintf("unknown middleware %q", name),
 			}
 		}
 
-		payload, err := normalizeMiddlewareConfigObject(middlewareUse.Config, fieldPrefix+".config")
+		payload, _, err := gepprofiles.MiddlewareConfigFromExtensions(
+			normalizedExtensions,
+			gepprofiles.MiddlewareUse{
+				Name:    name,
+				ID:      strings.TrimSpace(middlewareUse.ID),
+				Enabled: cloneBoolPtr(middlewareUse.Enabled),
+			},
+			i,
+		)
 		if err != nil {
-			return err
+			return nil, &gepprofiles.ValidationError{
+				Field:  fieldPrefix + ".config",
+				Reason: err.Error(),
+			}
 		}
 		sources := make([]middlewarecfg.Source, 0, 1)
 		if len(payload) > 0 {
@@ -622,7 +735,23 @@ func validateAndNormalizeRuntimeMiddlewaresForWrite(runtime *gepprofiles.Runtime
 			Enabled: cloneBoolPtr(middlewareUse.Enabled),
 		})
 		if err != nil {
-			return &gepprofiles.ValidationError{
+			return nil, &gepprofiles.ValidationError{
+				Field:  fieldPrefix + ".config",
+				Reason: err.Error(),
+			}
+		}
+		normalizedExtensions, err = gepprofiles.SetMiddlewareConfigInExtensions(
+			normalizedExtensions,
+			gepprofiles.MiddlewareUse{
+				Name:    name,
+				ID:      strings.TrimSpace(middlewareUse.ID),
+				Enabled: cloneBoolPtr(middlewareUse.Enabled),
+			},
+			i,
+			cloneExtensionMap(resolvedConfig.Config),
+		)
+		if err != nil {
+			return nil, &gepprofiles.ValidationError{
 				Field:  fieldPrefix + ".config",
 				Reason: err.Error(),
 			}
@@ -631,30 +760,9 @@ func validateAndNormalizeRuntimeMiddlewaresForWrite(runtime *gepprofiles.Runtime
 		runtime.Middlewares[i].Name = name
 		runtime.Middlewares[i].ID = strings.TrimSpace(middlewareUse.ID)
 		runtime.Middlewares[i].Enabled = cloneBoolPtr(middlewareUse.Enabled)
-		runtime.Middlewares[i].Config = cloneExtensionMap(resolvedConfig.Config)
+		runtime.Middlewares[i].Config = nil
 	}
-	return nil
-}
-
-func normalizeMiddlewareConfigObject(raw any, field string) (map[string]any, error) {
-	if raw == nil {
-		return nil, nil
-	}
-	b, err := json.Marshal(raw)
-	if err != nil {
-		return nil, &gepprofiles.ValidationError{
-			Field:  field,
-			Reason: fmt.Sprintf("must be JSON-serializable: %v", err),
-		}
-	}
-	var out map[string]any
-	if err := json.Unmarshal(b, &out); err != nil {
-		return nil, &gepprofiles.ValidationError{
-			Field:  field,
-			Reason: fmt.Sprintf("must be an object: %v", err),
-		}
-	}
-	return out, nil
+	return normalizedExtensions, nil
 }
 
 type profileWritePayloadSource struct {
@@ -682,6 +790,37 @@ func cloneBoolPtr(in *bool) *bool {
 	}
 	value := *in
 	return &value
+}
+
+func cloneRuntimeSpec(in gepprofiles.RuntimeSpec) gepprofiles.RuntimeSpec {
+	out := gepprofiles.RuntimeSpec{
+		StepSettingsPatch: cloneExtensionMap(in.StepSettingsPatch),
+		SystemPrompt:      in.SystemPrompt,
+		Middlewares:       append([]gepprofiles.MiddlewareUse(nil), in.Middlewares...),
+		Tools:             append([]string(nil), in.Tools...),
+	}
+	for i := range out.Middlewares {
+		out.Middlewares[i].Name = strings.TrimSpace(out.Middlewares[i].Name)
+		out.Middlewares[i].ID = strings.TrimSpace(out.Middlewares[i].ID)
+		out.Middlewares[i].Enabled = cloneBoolPtr(out.Middlewares[i].Enabled)
+		out.Middlewares[i].Config = deepCopyAny(out.Middlewares[i].Config)
+	}
+	return out
+}
+
+func deepCopyAny(in any) any {
+	switch v := in.(type) {
+	case map[string]any:
+		return cloneExtensionMap(v)
+	case []any:
+		ret := make([]any, 0, len(v))
+		for _, item := range v {
+			ret = append(ret, deepCopyAny(item))
+		}
+		return ret
+	default:
+		return v
+	}
 }
 
 func writeProfileRegistryError(w http.ResponseWriter, err error) {

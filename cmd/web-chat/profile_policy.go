@@ -356,6 +356,16 @@ func profileRuntimeSpec(p *gepprofiles.Profile) *gepprofiles.RuntimeSpec {
 	for k, v := range p.Runtime.StepSettingsPatch {
 		spec.StepSettingsPatch[k] = v
 	}
+	for i := range spec.Middlewares {
+		mw := spec.Middlewares[i]
+		config := mw.Config
+		if config == nil {
+			if fromExt, ok, err := gepprofiles.MiddlewareConfigFromExtensions(p.Extensions, mw, i); err == nil && ok {
+				config = fromExt
+			}
+		}
+		spec.Middlewares[i].Config = config
+	}
 	if len(spec.StepSettingsPatch) == 0 {
 		spec.StepSettingsPatch = nil
 	}
@@ -372,14 +382,20 @@ func runtimeDefaultsFromProfile(p *gepprofiles.Profile) map[string]any {
 	}
 	if len(p.Runtime.Middlewares) > 0 {
 		mws := make([]any, 0, len(p.Runtime.Middlewares))
-		for _, mw := range p.Runtime.Middlewares {
+		for i, mw := range p.Runtime.Middlewares {
 			name := strings.TrimSpace(mw.Name)
 			if name == "" {
 				continue
 			}
+			config := mw.Config
+			if config == nil {
+				if fromExt, ok, err := gepprofiles.MiddlewareConfigFromExtensions(p.Extensions, mw, i); err == nil && ok {
+					config = fromExt
+				}
+			}
 			entry := map[string]any{
 				"name":   name,
-				"config": mw.Config,
+				"config": config,
 			}
 			if id := strings.TrimSpace(mw.ID); id != "" {
 				entry["id"] = id

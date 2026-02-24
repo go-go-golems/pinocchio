@@ -233,7 +233,10 @@ func TestProfileAPI_CRUDLifecycle(t *testing.T) {
 		"slug":"analyst",
 		"display_name":"Analyst",
 		"description":"Team analyst profile",
-		"runtime":{"system_prompt":"You are analyst"},
+		"runtime":{
+			"system_prompt":"You are analyst",
+			"middlewares":[{"name":"agentmode","id":"primary","config":{"default_mode":"chat"}}]
+		},
 		"policy":{"allow_overrides":true},
 		"extensions":{"Vendor.Custom@V1":{"flags":[{"enabled":true}]}},
 		"set_default":true
@@ -249,6 +252,13 @@ func TestProfileAPI_CRUDLifecycle(t *testing.T) {
 	createdExt, ok := created.Extensions["vendor.custom@v1"].(map[string]any)
 	require.True(t, ok)
 	require.True(t, createdExt["flags"].([]any)[0].(map[string]any)["enabled"].(bool))
+	middlewareExt, ok := created.Extensions["middleware.agentmode_config@v1"].(map[string]any)
+	require.True(t, ok)
+	instances, ok := middlewareExt["instances"].(map[string]any)
+	require.True(t, ok)
+	primaryCfg, ok := instances["id:primary"].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "chat", primaryCfg["default_mode"])
 
 	getReq := httptest.NewRequest(http.MethodGet, "/api/chat/profiles/analyst", nil)
 	getRec := httptest.NewRecorder()
@@ -418,10 +428,17 @@ func TestProfileAPI_SchemaEndpoints(t *testing.T) {
 	require.Equal(t, http.StatusOK, extensionRec.Code)
 	var extensionSchemas []map[string]any
 	require.NoError(t, json.Unmarshal(extensionRec.Body.Bytes(), &extensionSchemas))
-	require.Len(t, extensionSchemas, 1)
-	require.Equal(t, "webchat.starter_suggestions@v1", extensionSchemas[0]["key"])
-	_, hasSchema := extensionSchemas[0]["schema"]
-	require.True(t, hasSchema)
+	require.GreaterOrEqual(t, len(extensionSchemas), 3)
+	keys := map[string]bool{}
+	for _, item := range extensionSchemas {
+		key, _ := item["key"].(string)
+		keys[key] = true
+		_, hasSchema := item["schema"]
+		require.True(t, hasSchema)
+	}
+	require.True(t, keys["webchat.starter_suggestions@v1"])
+	require.True(t, keys["middleware.agentmode_config@v1"])
+	require.True(t, keys["middleware.sqlite_config@v1"])
 }
 
 func TestWebChatProfileResolver_ProfilePrecedence(t *testing.T) {
