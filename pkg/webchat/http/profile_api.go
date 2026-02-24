@@ -97,6 +97,7 @@ type ProfileAPIHandlerOptions struct {
 	WriteActor                      string
 	WriteSource                     string
 	MiddlewareDefinitions           middlewarecfg.DefinitionRegistry
+	ExtensionCodecRegistry          gepprofiles.ExtensionCodecRegistry
 	ExtensionSchemas                []ExtensionSchemaDocument
 }
 
@@ -152,7 +153,7 @@ func RegisterProfileAPIHandlers(mux *http.ServeMux, profileRegistry gepprofiles.
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		items := listExtensionSchemas(opts.ExtensionSchemas, opts.MiddlewareDefinitions)
+		items := listExtensionSchemas(opts.ExtensionSchemas, opts.MiddlewareDefinitions, opts.ExtensionCodecRegistry)
 		writeJSONResponse(w, http.StatusOK, items)
 	})
 
@@ -669,6 +670,7 @@ func middlewareSchemaMetadata(def middlewarecfg.Definition) (uint16, string, str
 func listExtensionSchemas(
 	explicit []ExtensionSchemaDocument,
 	definitions middlewarecfg.DefinitionRegistry,
+	codecRegistry gepprofiles.ExtensionCodecRegistry,
 ) []ExtensionSchemaDocument {
 	byKey := map[string]ExtensionSchemaDocument{}
 	for _, item := range explicit {
@@ -697,6 +699,33 @@ func listExtensionSchemas(
 			byKey[keyString] = ExtensionSchemaDocument{
 				Key:    keyString,
 				Schema: middlewareConfigExtensionSchema(def.ConfigJSONSchema()),
+			}
+		}
+	}
+	if lister, ok := codecRegistry.(gepprofiles.ExtensionCodecLister); ok {
+		for _, codec := range lister.ListCodecs() {
+			if codec == nil {
+				continue
+			}
+			key := codec.Key()
+			if key.IsZero() {
+				continue
+			}
+			keyString := key.String()
+			if _, exists := byKey[keyString]; exists {
+				continue
+			}
+			schemaCodec, ok := codec.(gepprofiles.ExtensionSchemaCodec)
+			if !ok {
+				continue
+			}
+			schema := cloneExtensionMap(schemaCodec.JSONSchema())
+			if len(schema) == 0 {
+				continue
+			}
+			byKey[keyString] = ExtensionSchemaDocument{
+				Key:    keyString,
+				Schema: schema,
 			}
 		}
 	}
