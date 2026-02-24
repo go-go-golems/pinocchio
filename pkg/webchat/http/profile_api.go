@@ -78,8 +78,11 @@ type CurrentProfilePayload struct {
 }
 
 type MiddlewareSchemaDocument struct {
-	Name   string         `json:"name"`
-	Schema map[string]any `json:"schema"`
+	Name        string         `json:"name"`
+	Version     uint16         `json:"version"`
+	DisplayName string         `json:"display_name,omitempty"`
+	Description string         `json:"description,omitempty"`
+	Schema      map[string]any `json:"schema"`
 }
 
 type ExtensionSchemaDocument struct {
@@ -604,15 +607,63 @@ func listMiddlewareSchemas(definitions middlewarecfg.DefinitionRegistry) []Middl
 		if name == "" {
 			continue
 		}
+		version, displayName, description := middlewareSchemaMetadata(def)
 		items = append(items, MiddlewareSchemaDocument{
-			Name:   name,
-			Schema: cloneExtensionMap(def.ConfigJSONSchema()),
+			Name:        name,
+			Version:     version,
+			DisplayName: displayName,
+			Description: description,
+			Schema:      cloneExtensionMap(def.ConfigJSONSchema()),
 		})
 	}
 	sort.Slice(items, func(i, j int) bool {
 		return items[i].Name < items[j].Name
 	})
 	return items
+}
+
+type middlewareVersionProvider interface {
+	MiddlewareVersion() uint16
+}
+
+type middlewareDisplayMetadataProvider interface {
+	MiddlewareDisplayName() string
+	MiddlewareDescription() string
+}
+
+func middlewareSchemaMetadata(def middlewarecfg.Definition) (uint16, string, string) {
+	if def == nil {
+		return 1, "", ""
+	}
+	version := uint16(1)
+	displayName := ""
+	description := ""
+
+	if provider, ok := def.(middlewareVersionProvider); ok {
+		if v := provider.MiddlewareVersion(); v > 0 {
+			version = v
+		}
+	}
+	if provider, ok := def.(middlewareDisplayMetadataProvider); ok {
+		displayName = strings.TrimSpace(provider.MiddlewareDisplayName())
+		description = strings.TrimSpace(provider.MiddlewareDescription())
+	}
+
+	schema := def.ConfigJSONSchema()
+	if displayName == "" {
+		if raw, ok := schema["title"].(string); ok {
+			displayName = strings.TrimSpace(raw)
+		}
+	}
+	if description == "" {
+		if raw, ok := schema["description"].(string); ok {
+			description = strings.TrimSpace(raw)
+		}
+	}
+	if displayName == "" {
+		displayName = strings.TrimSpace(def.Name())
+	}
+	return version, displayName, description
 }
 
 func listExtensionSchemas(

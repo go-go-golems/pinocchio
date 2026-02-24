@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	gepprofiles "github.com/go-go-golems/geppetto/pkg/profiles"
@@ -416,6 +417,12 @@ func TestProfileAPI_SchemaEndpoints(t *testing.T) {
 		if name, ok := item["name"].(string); ok {
 			names[name] = true
 		}
+		version, hasVersion := item["version"].(float64)
+		require.True(t, hasVersion)
+		require.Equal(t, float64(1), version)
+		displayName, hasDisplayName := item["display_name"].(string)
+		require.True(t, hasDisplayName)
+		require.NotEmpty(t, strings.TrimSpace(displayName))
 		_, hasSchema := item["schema"]
 		require.True(t, hasSchema)
 	}

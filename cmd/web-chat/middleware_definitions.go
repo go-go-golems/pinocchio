@@ -19,13 +19,31 @@ const (
 )
 
 type middlewareDefinition struct {
-	name   string
-	schema map[string]any
-	build  func(context.Context, middlewarecfg.BuildDeps, any) (gepmiddleware.Middleware, error)
+	name        string
+	version     uint16
+	displayName string
+	description string
+	schema      map[string]any
+	build       func(context.Context, middlewarecfg.BuildDeps, any) (gepmiddleware.Middleware, error)
 }
 
 func (d middlewareDefinition) Name() string {
 	return d.name
+}
+
+func (d middlewareDefinition) MiddlewareVersion() uint16 {
+	if d.version == 0 {
+		return 1
+	}
+	return d.version
+}
+
+func (d middlewareDefinition) MiddlewareDisplayName() string {
+	return strings.TrimSpace(d.displayName)
+}
+
+func (d middlewareDefinition) MiddlewareDescription() string {
+	return strings.TrimSpace(d.description)
 }
 
 func (d middlewareDefinition) ConfigJSONSchema() map[string]any {
@@ -59,7 +77,9 @@ func newWebChatMiddlewareDefinitionRegistry() (*middlewarecfg.InMemoryDefinition
 
 func newAgentModeMiddlewareDefinition() middlewarecfg.Definition {
 	schema := map[string]any{
-		"type": "object",
+		"title":       "Agent Mode Middleware",
+		"description": "Parses and applies agent-mode switches from model output.",
+		"type":        "object",
 		"properties": map[string]any{
 			"default_mode": map[string]any{
 				"type":    "string",
@@ -74,8 +94,11 @@ func newAgentModeMiddlewareDefinition() middlewarecfg.Definition {
 	}
 
 	return middlewareDefinition{
-		name:   "agentmode",
-		schema: schema,
+		name:        "agentmode",
+		version:     1,
+		displayName: "Agent Mode",
+		description: "Parses and applies agent-mode switches from model output.",
+		schema:      schema,
 		build: func(_ context.Context, deps middlewarecfg.BuildDeps, cfg any) (gepmiddleware.Middleware, error) {
 			svcRaw, ok := deps.Get(dependencyAgentModeServiceKey)
 			if !ok || svcRaw == nil {
@@ -102,7 +125,9 @@ func newAgentModeMiddlewareDefinition() middlewarecfg.Definition {
 
 func newSQLiteMiddlewareDefinition() middlewarecfg.Definition {
 	schema := map[string]any{
-		"type": "object",
+		"title":       "SQLite Tool Middleware",
+		"description": "Executes SQL tool calls against configured SQLite connection settings.",
+		"type":        "object",
 		"properties": map[string]any{
 			"dsn": map[string]any{
 				"type": "string",
@@ -136,8 +161,11 @@ func newSQLiteMiddlewareDefinition() middlewarecfg.Definition {
 	}
 
 	return middlewareDefinition{
-		name:   "sqlite",
-		schema: schema,
+		name:        "sqlite",
+		version:     1,
+		displayName: "SQLite Tool",
+		description: "Executes SQL tool calls against configured SQLite connection settings.",
+		schema:      schema,
 		build: func(_ context.Context, deps middlewarecfg.BuildDeps, cfg any) (gepmiddleware.Middleware, error) {
 			config := sqlitetool.DefaultConfig()
 			if dbRaw, ok := deps.Get(dependencySQLiteDBKey); ok && dbRaw != nil {
