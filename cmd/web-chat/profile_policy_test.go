@@ -351,6 +351,24 @@ func TestProfileAPI_ErrorMappings(t *testing.T) {
 	mux.ServeHTTP(invalidExtensionRec, invalidExtensionReq)
 	require.Equal(t, http.StatusBadRequest, invalidExtensionRec.Code)
 
+	unknownMiddlewareReq := httptest.NewRequest(http.MethodPost, "/api/chat/profiles", bytes.NewBufferString(`{
+		"slug":"badmw",
+		"runtime":{"middlewares":[{"name":"unknown_middleware"}]}
+	}`))
+	unknownMiddlewareRec := httptest.NewRecorder()
+	mux.ServeHTTP(unknownMiddlewareRec, unknownMiddlewareReq)
+	require.Equal(t, http.StatusBadRequest, unknownMiddlewareRec.Code)
+	require.Contains(t, unknownMiddlewareRec.Body.String(), "unknown middleware")
+
+	invalidMiddlewareConfigReq := httptest.NewRequest(http.MethodPost, "/api/chat/profiles", bytes.NewBufferString(`{
+		"slug":"badmwconfig",
+		"runtime":{"middlewares":[{"name":"agentmode","config":{"unknown":"x"}}]}
+	}`))
+	invalidMiddlewareConfigRec := httptest.NewRecorder()
+	mux.ServeHTTP(invalidMiddlewareConfigRec, invalidMiddlewareConfigReq)
+	require.Equal(t, http.StatusBadRequest, invalidMiddlewareConfigRec.Code)
+	require.Contains(t, invalidMiddlewareConfigRec.Body.String(), "runtime.middlewares[0].config")
+
 	missingRegistryReq := httptest.NewRequest(http.MethodGet, "/api/chat/profiles?registry=missing", nil)
 	missingRegistryRec := httptest.NewRecorder()
 	mux.ServeHTTP(missingRegistryRec, missingRegistryReq)
@@ -360,6 +378,50 @@ func TestProfileAPI_ErrorMappings(t *testing.T) {
 	invalidExpectedRec := httptest.NewRecorder()
 	mux.ServeHTTP(invalidExpectedRec, invalidExpectedReq)
 	require.Equal(t, http.StatusBadRequest, invalidExpectedRec.Code)
+}
+
+func TestProfileAPI_SchemaEndpoints(t *testing.T) {
+	profileRegistry, err := newInMemoryProfileService(
+		"default",
+		&gepprofiles.Profile{
+			Slug:    gepprofiles.MustProfileSlug("default"),
+			Runtime: gepprofiles.RuntimeSpec{SystemPrompt: "You are default"},
+		},
+	)
+	require.NoError(t, err)
+	resolver := newProfileRequestResolver(profileRegistry, gepprofiles.MustRegistrySlug(defaultRegistrySlug))
+
+	mux := http.NewServeMux()
+	registerProfileAPIHandlers(mux, resolver)
+
+	middlewareReq := httptest.NewRequest(http.MethodGet, "/api/chat/schemas/middlewares", nil)
+	middlewareRec := httptest.NewRecorder()
+	mux.ServeHTTP(middlewareRec, middlewareReq)
+	require.Equal(t, http.StatusOK, middlewareRec.Code)
+	var middlewareSchemas []map[string]any
+	require.NoError(t, json.Unmarshal(middlewareRec.Body.Bytes(), &middlewareSchemas))
+	require.GreaterOrEqual(t, len(middlewareSchemas), 2)
+	names := map[string]bool{}
+	for _, item := range middlewareSchemas {
+		if name, ok := item["name"].(string); ok {
+			names[name] = true
+		}
+		_, hasSchema := item["schema"]
+		require.True(t, hasSchema)
+	}
+	require.True(t, names["agentmode"])
+	require.True(t, names["sqlite"])
+
+	extensionReq := httptest.NewRequest(http.MethodGet, "/api/chat/schemas/extensions", nil)
+	extensionRec := httptest.NewRecorder()
+	mux.ServeHTTP(extensionRec, extensionReq)
+	require.Equal(t, http.StatusOK, extensionRec.Code)
+	var extensionSchemas []map[string]any
+	require.NoError(t, json.Unmarshal(extensionRec.Body.Bytes(), &extensionSchemas))
+	require.Len(t, extensionSchemas, 1)
+	require.Equal(t, "webchat.starter_suggestions@v1", extensionSchemas[0]["key"])
+	_, hasSchema := extensionSchemas[0]["schema"]
+	require.True(t, hasSchema)
 }
 
 func TestWebChatProfileResolver_ProfilePrecedence(t *testing.T) {

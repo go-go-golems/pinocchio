@@ -474,11 +474,35 @@ func registerProfileAPIHandlers(mux *http.ServeMux, resolver *ProfileRequestReso
 	if mux == nil || resolver == nil || resolver.profileRegistry == nil {
 		return
 	}
+	middlewareDefinitions, err := newWebChatMiddlewareDefinitionRegistry()
+	if err != nil {
+		middlewareDefinitions = nil
+	}
 	webhttp.RegisterProfileAPIHandlers(mux, resolver.profileRegistry, webhttp.ProfileAPIHandlerOptions{
 		DefaultRegistrySlug:             resolver.registrySlug,
 		EnableCurrentProfileCookieRoute: true,
 		CurrentProfileCookieName:        currentProfileCookieName,
 		WriteActor:                      profileWriteActor,
 		WriteSource:                     profileWriteSource,
+		MiddlewareDefinitions:           middlewareDefinitions,
+		ExtensionSchemas: []webhttp.ExtensionSchemaDocument{
+			{
+				Key: "webchat.starter_suggestions@v1",
+				Schema: map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"items": map[string]any{
+							"type": "array",
+							"items": map[string]any{
+								"type": "string",
+							},
+							"default": []any{},
+						},
+					},
+					"required":             []any{"items"},
+					"additionalProperties": false,
+				},
+			},
+		},
 	})
 }
