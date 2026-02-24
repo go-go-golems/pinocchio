@@ -45,7 +45,6 @@ type ProfileDocument struct {
 type CreateProfileRequest struct {
 	Registry        string                       `json:"registry,omitempty"`
 	Slug            string                       `json:"slug,omitempty"`
-	Profile         string                       `json:"profile,omitempty"`
 	DisplayName     string                       `json:"display_name,omitempty"`
 	Description     string                       `json:"description,omitempty"`
 	Runtime         *gepprofiles.RuntimeSpec     `json:"runtime,omitempty"`
@@ -74,8 +73,7 @@ type SetDefaultProfileRequest struct {
 }
 
 type CurrentProfilePayload struct {
-	Slug    string `json:"slug"`
-	Profile string `json:"profile,omitempty"`
+	Slug string `json:"slug"`
 }
 
 type ProfileAPIHandlerOptions struct {
@@ -162,9 +160,6 @@ func RegisterProfileAPIHandlers(mux *http.ServeMux, profileRegistry gepprofiles.
 				return
 			}
 			slugRaw := strings.TrimSpace(body.Slug)
-			if slugRaw == "" {
-				slugRaw = strings.TrimSpace(body.Profile)
-			}
 			slug, err := gepprofiles.ParseProfileSlug(slugRaw)
 			if err != nil {
 				http.Error(w, "invalid profile slug", http.StatusBadRequest)
@@ -390,9 +385,6 @@ func RegisterProfileAPIHandlers(mux *http.ServeMux, profileRegistry gepprofiles.
 				return
 			}
 			slugRaw := strings.TrimSpace(body.Slug)
-			if slugRaw == "" {
-				slugRaw = strings.TrimSpace(body.Profile)
-			}
 			slug, err := gepprofiles.ParseProfileSlug(slugRaw)
 			if err != nil {
 				http.Error(w, "bad request", http.StatusBadRequest)
