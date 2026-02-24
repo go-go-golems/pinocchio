@@ -36,30 +36,38 @@ func BuildEngineFromSettings(
 	if ctx == nil {
 		return nil, errors.New("ctx is nil")
 	}
-	eng, err := factory.NewEngineFromStepSettings(stepSettings)
-	if err != nil {
-		return nil, errors.Wrap(err, "engine init failed")
-	}
-
-	mws := make([]middleware.Middleware, 0, 2+len(uses))
-
-	// Always append tool result reorder for UX (outermost).
-	mws = append(mws, middleware.NewToolResultReorderMiddleware())
-
-	// Apply requested middlewares (first listed becomes outermost among requested).
+	resolvedMiddlewares := make([]middleware.Middleware, 0, len(uses))
 	for _, u := range uses {
 		f, ok := mwFactories[u.Name]
 		if !ok {
 			return nil, errors.Errorf("unknown middleware: %s", u.Name)
 		}
-		mws = append(mws, f(u.Config))
+		resolvedMiddlewares = append(resolvedMiddlewares, f(u.Config))
+	}
+	return BuildEngineFromSettingsWithMiddlewares(ctx, stepSettings, sysPrompt, resolvedMiddlewares)
+}
+
+// BuildEngineFromSettingsWithMiddlewares builds an engine from step settings and applies middleware chain.
+func BuildEngineFromSettingsWithMiddlewares(
+	ctx context.Context,
+	stepSettings *settings.StepSettings,
+	sysPrompt string,
+	resolvedMiddlewares []middleware.Middleware,
+) (engine.Engine, error) {
+	if ctx == nil {
+		return nil, errors.New("ctx is nil")
+	}
+	eng, err := factory.NewEngineFromStepSettings(stepSettings)
+	if err != nil {
+		return nil, errors.Wrap(err, "engine init failed")
 	}
 
-	// System prompt is near-innermost so it stays close to provider inference.
+	mws := make([]middleware.Middleware, 0, 2+len(resolvedMiddlewares))
+	mws = append(mws, middleware.NewToolResultReorderMiddleware())
+	mws = append(mws, resolvedMiddlewares...)
 	if sysPrompt != "" {
 		mws = append(mws, middleware.NewSystemPromptMiddleware(sysPrompt))
 	}
-
 	builder := &enginebuilder.Builder{Base: eng, Middlewares: mws}
 	runner, err := builder.Build(ctx, "")
 	if err != nil {

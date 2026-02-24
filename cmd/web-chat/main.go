@@ -20,16 +20,14 @@ import (
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 
-	geppettomw "github.com/go-go-golems/geppetto/pkg/inference/middleware"
+	"github.com/go-go-golems/geppetto/pkg/inference/middlewarecfg"
 	geptools "github.com/go-go-golems/geppetto/pkg/inference/tools"
 	gepprofiles "github.com/go-go-golems/geppetto/pkg/profiles"
 	geppettosections "github.com/go-go-golems/geppetto/pkg/sections"
 	toolspkg "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/tools"
 	thinkingmode "github.com/go-go-golems/pinocchio/cmd/web-chat/thinkingmode"
 	timelinecmd "github.com/go-go-golems/pinocchio/cmd/web-chat/timeline"
-	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 	agentmode "github.com/go-go-golems/pinocchio/pkg/middlewares/agentmode"
-	sqlitetool "github.com/go-go-golems/pinocchio/pkg/middlewares/sqlitetool"
 	rediscfg "github.com/go-go-golems/pinocchio/pkg/redisstream"
 	webchat "github.com/go-go-golems/pinocchio/pkg/webchat"
 	webhttp "github.com/go-go-golems/pinocchio/pkg/webchat/http"
@@ -152,7 +150,13 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 			Slug: gepprofiles.MustProfileSlug("agent"),
 			Runtime: gepprofiles.RuntimeSpec{
 				SystemPrompt: "You are a helpful assistant. Be concise.",
-				Middlewares:  []gepprofiles.MiddlewareUse{{Name: "agentmode", Config: amCfg}},
+				Middlewares: []gepprofiles.MiddlewareUse{{
+					Name: "agentmode",
+					ID:   "default",
+					Config: map[string]any{
+						"default_mode": amCfg.DefaultMode,
+					},
+				}},
 			},
 			Policy: gepprofiles.PolicySpec{
 				AllowOverrides: true,
@@ -177,19 +181,16 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 	}
 	defer profileRegistryCleanup()
 
-	middlewareFactories := map[string]infruntime.MiddlewareBuilder{
-		"agentmode": func(cfg any) geppettomw.Middleware {
-			return agentmode.NewMiddleware(amSvc, cfg.(agentmode.Config))
-		},
-		"sqlite": func(cfg any) geppettomw.Middleware {
-			c := sqlitetool.Config{DB: dbWithRegexp}
-			if cfg_, ok := cfg.(sqlitetool.Config); ok {
-				c = cfg_
-			}
-			return sqlitetool.NewMiddleware(c)
-		},
+	middlewareRegistry, err := newWebChatMiddlewareDefinitionRegistry()
+	if err != nil {
+		return errors.Wrap(err, "create middleware definition registry")
 	}
-	runtimeComposer := newProfileRuntimeComposer(parsed, middlewareFactories)
+	runtimeComposer := newProfileRuntimeComposer(parsed, middlewareRegistry, middlewarecfg.BuildDeps{
+		Values: map[string]any{
+			dependencyAgentModeServiceKey: amSvc,
+			dependencySQLiteDBKey:         dbWithRegexp,
+		},
+	})
 	requestResolver := newProfileRequestResolver(profileRegistry, gepprofiles.MustRegistrySlug(defaultRegistrySlug))
 
 	// Register app-owned thinking-mode SEM/timeline handlers.
@@ -205,11 +206,6 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 	)
 	if err != nil {
 		return errors.Wrap(err, "new webchat server")
-	}
-
-	// Register middlewares
-	for name, factory := range middlewareFactories {
-		srv.RegisterMiddleware(name, factory)
 	}
 
 	// Register calculator tool

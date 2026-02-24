@@ -377,10 +377,17 @@ func runtimeDefaultsFromProfile(p *gepprofiles.Profile) map[string]any {
 			if name == "" {
 				continue
 			}
-			mws = append(mws, map[string]any{
+			entry := map[string]any{
 				"name":   name,
 				"config": mw.Config,
-			})
+			}
+			if id := strings.TrimSpace(mw.ID); id != "" {
+				entry["id"] = id
+			}
+			if mw.Enabled != nil {
+				entry["enabled"] = *mw.Enabled
+			}
+			mws = append(mws, entry)
 		}
 		if len(mws) > 0 {
 			overrides["middlewares"] = mws
