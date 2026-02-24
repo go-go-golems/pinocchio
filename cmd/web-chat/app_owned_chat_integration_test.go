@@ -80,6 +80,7 @@ func newAppOwnedIntegrationServer(t *testing.T) *httptest.Server {
 	appMux.HandleFunc("/chat", chatHandler)
 	appMux.HandleFunc("/chat/", chatHandler)
 	appMux.HandleFunc("/ws", wsHandler)
+	registerProfileAPIHandlers(appMux, requestResolver)
 	timelineLogger := log.With().Str("component", "webchat-test").Str("route", "/api/timeline").Logger()
 	timelineHandler := webhttp.NewTimelineHandler(webchatSrv.TimelineService(), timelineLogger)
 	appMux.HandleFunc("/api/timeline", timelineHandler)
@@ -197,6 +198,144 @@ func TestAppOwnedChatHandler_Integration_UserMessageProjectedViaStream(t *testin
 		}
 	}
 	require.True(t, found, "expected user timeline entity projected from chat.message stream event")
+}
+
+func TestAppOwnedProfileAPI_CRUDLifecycle_ContractShape(t *testing.T) {
+	srv := newAppOwnedIntegrationServer(t)
+	defer srv.Close()
+
+	listResp, err := http.Get(srv.URL + "/api/chat/profiles")
+	require.NoError(t, err)
+	defer listResp.Body.Close()
+	require.Equal(t, http.StatusOK, listResp.StatusCode)
+
+	var listed []map[string]any
+	require.NoError(t, json.NewDecoder(listResp.Body).Decode(&listed))
+	require.GreaterOrEqual(t, len(listed), 2)
+	assertProfileListItemContract(t, listed[0])
+	assertProfileListItemContract(t, listed[1])
+	require.Equal(t, "agent", listed[0]["slug"])
+	require.Equal(t, "default", listed[1]["slug"])
+
+	createResp, err := http.Post(srv.URL+"/api/chat/profiles", "application/json", strings.NewReader(`{
+		"slug":"analyst",
+		"display_name":"Analyst",
+		"description":"Integration analyst profile",
+		"runtime":{"system_prompt":"You are analyst"},
+		"extensions":{"WebChat.Starter_Suggestions@V1":{"items":["hello"]}},
+		"set_default":true
+	}`))
+	require.NoError(t, err)
+	defer createResp.Body.Close()
+	require.Equal(t, http.StatusCreated, createResp.StatusCode)
+	var created map[string]any
+	require.NoError(t, json.NewDecoder(createResp.Body).Decode(&created))
+	assertProfileDocumentContract(t, created)
+	require.Equal(t, "analyst", created["slug"])
+	require.Equal(t, true, created["is_default"])
+
+	getResp, err := http.Get(srv.URL + "/api/chat/profiles/analyst")
+	require.NoError(t, err)
+	defer getResp.Body.Close()
+	require.Equal(t, http.StatusOK, getResp.StatusCode)
+	var got map[string]any
+	require.NoError(t, json.NewDecoder(getResp.Body).Decode(&got))
+	assertProfileDocumentContract(t, got)
+	require.Equal(t, "analyst", got["slug"])
+	extensions, ok := got["extensions"].(map[string]any)
+	require.True(t, ok)
+	_, ok = extensions["webchat.starter_suggestions@v1"]
+	require.True(t, ok)
+
+	patchReq, err := http.NewRequest(http.MethodPatch, srv.URL+"/api/chat/profiles/analyst", strings.NewReader(`{
+		"display_name":"Analyst V2",
+		"extensions":{"webchat.starter_suggestions@v1":{"items":["updated"]}},
+		"expected_version":1
+	}`))
+	require.NoError(t, err)
+	patchReq.Header.Set("Content-Type", "application/json")
+	patchResp, err := http.DefaultClient.Do(patchReq)
+	require.NoError(t, err)
+	defer patchResp.Body.Close()
+	require.Equal(t, http.StatusOK, patchResp.StatusCode)
+	var patched map[string]any
+	require.NoError(t, json.NewDecoder(patchResp.Body).Decode(&patched))
+	assertProfileDocumentContract(t, patched)
+	metadata, ok := patched["metadata"].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, float64(2), metadata["version"])
+
+	setDefaultResp, err := http.Post(srv.URL+"/api/chat/profiles/default/default", "application/json", strings.NewReader(`{}`))
+	require.NoError(t, err)
+	defer setDefaultResp.Body.Close()
+	require.Equal(t, http.StatusOK, setDefaultResp.StatusCode)
+	var defaultDoc map[string]any
+	require.NoError(t, json.NewDecoder(setDefaultResp.Body).Decode(&defaultDoc))
+	assertProfileDocumentContract(t, defaultDoc)
+	require.Equal(t, "default", defaultDoc["slug"])
+	require.Equal(t, true, defaultDoc["is_default"])
+
+	deleteReq, err := http.NewRequest(http.MethodDelete, srv.URL+"/api/chat/profiles/analyst?expected_version=2", nil)
+	require.NoError(t, err)
+	deleteResp, err := http.DefaultClient.Do(deleteReq)
+	require.NoError(t, err)
+	defer deleteResp.Body.Close()
+	require.Equal(t, http.StatusNoContent, deleteResp.StatusCode)
+
+	getDeletedResp, err := http.Get(srv.URL + "/api/chat/profiles/analyst")
+	require.NoError(t, err)
+	defer getDeletedResp.Body.Close()
+	require.Equal(t, http.StatusNotFound, getDeletedResp.StatusCode)
+}
+
+func assertProfileListItemContract(t *testing.T, item map[string]any) {
+	t.Helper()
+	require.NotEmpty(t, item["slug"])
+	assertAllowedContractKeys(
+		t,
+		item,
+		"slug",
+		"display_name",
+		"description",
+		"default_prompt",
+		"extensions",
+		"is_default",
+		"version",
+	)
+}
+
+func assertProfileDocumentContract(t *testing.T, doc map[string]any) {
+	t.Helper()
+	require.NotEmpty(t, doc["registry"])
+	require.NotEmpty(t, doc["slug"])
+	_, hasDefault := doc["is_default"]
+	require.True(t, hasDefault)
+	assertAllowedContractKeys(
+		t,
+		doc,
+		"registry",
+		"slug",
+		"display_name",
+		"description",
+		"runtime",
+		"policy",
+		"metadata",
+		"extensions",
+		"is_default",
+	)
+}
+
+func assertAllowedContractKeys(t *testing.T, payload map[string]any, allowed ...string) {
+	t.Helper()
+	allowedSet := map[string]struct{}{}
+	for _, key := range allowed {
+		allowedSet[key] = struct{}{}
+	}
+	for key := range payload {
+		if _, ok := allowedSet[key]; !ok {
+			t.Fatalf("unexpected profile API contract key: %s", key)
+		}
+	}
 }
 
 func integrationSemEventType(frame []byte) string {
