@@ -288,6 +288,110 @@ func TestAppOwnedProfileAPI_CRUDLifecycle_ContractShape(t *testing.T) {
 	require.Equal(t, http.StatusNotFound, getDeletedResp.StatusCode)
 }
 
+func TestAppOwnedProfileSelection_InFlightConversation_RebuildsRuntime(t *testing.T) {
+	srv := newAppOwnedIntegrationServer(t)
+	defer srv.Close()
+
+	selectDefaultResp, err := http.Post(srv.URL+"/api/chat/profile", "application/json", strings.NewReader(`{"slug":"default"}`))
+	require.NoError(t, err)
+	defer selectDefaultResp.Body.Close()
+	require.Equal(t, http.StatusOK, selectDefaultResp.StatusCode)
+	defaultCookie := mustProfileCookie(t, selectDefaultResp)
+
+	const convID = "conv-inflight-profile-switch-1"
+	chatReqDefault, err := http.NewRequest(
+		http.MethodPost,
+		srv.URL+"/chat",
+		strings.NewReader(`{"prompt":"start default","conv_id":"`+convID+`"}`),
+	)
+	require.NoError(t, err)
+	chatReqDefault.Header.Set("Content-Type", "application/json")
+	chatReqDefault.AddCookie(defaultCookie)
+	chatRespDefault, err := http.DefaultClient.Do(chatReqDefault)
+	require.NoError(t, err)
+	defer chatRespDefault.Body.Close()
+	require.Equal(t, http.StatusOK, chatRespDefault.StatusCode)
+
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/ws?conv_id=" + convID
+	defaultWSHeaders := http.Header{}
+	defaultWSHeaders.Add("Cookie", defaultCookie.String())
+	defaultConn, _, err := websocket.DefaultDialer.Dial(wsURL, defaultWSHeaders)
+	require.NoError(t, err)
+	require.NoError(t, defaultConn.SetReadDeadline(time.Now().Add(2*time.Second)))
+	_, defaultHelloFrame, err := defaultConn.ReadMessage()
+	require.NoError(t, err)
+	require.Equal(t, "ws.hello", integrationSemEventType(defaultHelloFrame))
+	require.Equal(t, "default", integrationSemRuntimeKey(defaultHelloFrame))
+	_ = defaultConn.Close()
+
+	selectAgentResp, err := http.Post(srv.URL+"/api/chat/profile", "application/json", strings.NewReader(`{"slug":"agent"}`))
+	require.NoError(t, err)
+	defer selectAgentResp.Body.Close()
+	require.Equal(t, http.StatusOK, selectAgentResp.StatusCode)
+	agentCookie := mustProfileCookie(t, selectAgentResp)
+
+	chatReqAgent, err := http.NewRequest(
+		http.MethodPost,
+		srv.URL+"/chat",
+		strings.NewReader(`{"prompt":"switch to agent","conv_id":"`+convID+`"}`),
+	)
+	require.NoError(t, err)
+	chatReqAgent.Header.Set("Content-Type", "application/json")
+	chatReqAgent.AddCookie(agentCookie)
+	chatRespAgent, err := http.DefaultClient.Do(chatReqAgent)
+	require.NoError(t, err)
+	defer chatRespAgent.Body.Close()
+	require.Equal(t, http.StatusOK, chatRespAgent.StatusCode)
+
+	agentWSHeaders := http.Header{}
+	agentWSHeaders.Add("Cookie", agentCookie.String())
+	agentConn, _, err := websocket.DefaultDialer.Dial(wsURL, agentWSHeaders)
+	require.NoError(t, err)
+	require.NoError(t, agentConn.SetReadDeadline(time.Now().Add(2*time.Second)))
+	_, agentHelloFrame, err := agentConn.ReadMessage()
+	require.NoError(t, err)
+	require.Equal(t, "ws.hello", integrationSemEventType(agentHelloFrame))
+	require.Equal(t, "agent", integrationSemRuntimeKey(agentHelloFrame))
+	_ = agentConn.Close()
+}
+
+func TestAppOwnedProfileSelection_AffectsNextConversationCreation(t *testing.T) {
+	srv := newAppOwnedIntegrationServer(t)
+	defer srv.Close()
+
+	selectResp, err := http.Post(srv.URL+"/api/chat/profile", "application/json", strings.NewReader(`{"slug":"agent"}`))
+	require.NoError(t, err)
+	defer selectResp.Body.Close()
+	require.Equal(t, http.StatusOK, selectResp.StatusCode)
+	agentCookie := mustProfileCookie(t, selectResp)
+
+	const convID = "conv-profile-select-next-1"
+	chatReq, err := http.NewRequest(
+		http.MethodPost,
+		srv.URL+"/chat",
+		strings.NewReader(`{"prompt":"hello agent","conv_id":"`+convID+`"}`),
+	)
+	require.NoError(t, err)
+	chatReq.Header.Set("Content-Type", "application/json")
+	chatReq.AddCookie(agentCookie)
+	chatResp, err := http.DefaultClient.Do(chatReq)
+	require.NoError(t, err)
+	defer chatResp.Body.Close()
+	require.Equal(t, http.StatusOK, chatResp.StatusCode)
+
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/ws?conv_id=" + convID
+	headers := http.Header{}
+	headers.Add("Cookie", agentCookie.String())
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, headers)
+	require.NoError(t, err)
+	require.NoError(t, conn.SetReadDeadline(time.Now().Add(2*time.Second)))
+	_, helloFrame, err := conn.ReadMessage()
+	require.NoError(t, err)
+	require.Equal(t, "ws.hello", integrationSemEventType(helloFrame))
+	require.Equal(t, "agent", integrationSemRuntimeKey(helloFrame))
+	_ = conn.Close()
+}
+
 func assertProfileListItemContract(t *testing.T, item map[string]any) {
 	t.Helper()
 	require.NotEmpty(t, item["slug"])
@@ -348,4 +452,34 @@ func integrationSemEventType(frame []byte) string {
 		return ""
 	}
 	return env.Event.Type
+}
+
+func integrationSemRuntimeKey(frame []byte) string {
+	var env struct {
+		Event struct {
+			Data struct {
+				RuntimeKey      string `json:"runtimeKey"`
+				RuntimeKeySnake string `json:"runtime_key"`
+			} `json:"data"`
+		} `json:"event"`
+	}
+	if err := json.Unmarshal(frame, &env); err != nil {
+		return ""
+	}
+	if env.Event.Data.RuntimeKey != "" {
+		return env.Event.Data.RuntimeKey
+	}
+	return env.Event.Data.RuntimeKeySnake
+}
+
+func mustProfileCookie(t *testing.T, resp *http.Response) *http.Cookie {
+	t.Helper()
+	require.NotNil(t, resp)
+	for _, ck := range resp.Cookies() {
+		if strings.TrimSpace(ck.Name) == "chat_profile" && strings.TrimSpace(ck.Value) != "" {
+			return ck
+		}
+	}
+	t.Fatalf("expected chat_profile cookie")
+	return nil
 }
