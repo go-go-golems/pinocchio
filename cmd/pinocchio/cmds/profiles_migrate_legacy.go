@@ -193,7 +193,7 @@ func MigrateLegacyProfilesFile(opts LegacyProfilesMigrationOptions) (*LegacyProf
 	}
 
 	inputFormat := detectProfilesYAMLFormat(raw)
-	if opts.SkipIfNotLegacy && inputFormat != "legacy-map" {
+	if opts.SkipIfNotLegacy && (inputFormat == "canonical-registries" || inputFormat == "single-registry") {
 		return &LegacyProfilesMigrationResult{
 			InputPath:   inputPath,
 			OutputPath:  "",
@@ -201,6 +201,9 @@ func MigrateLegacyProfilesFile(opts LegacyProfilesMigrationOptions) (*LegacyProf
 			WroteFile:   false,
 			OutputYAML:  nil,
 		}, nil
+	}
+	if inputFormat == "empty" {
+		return nil, fmt.Errorf("input profiles file %q is empty", inputPath)
 	}
 
 	registries, err := gepprofiles.DecodeYAMLRegistries(raw, registrySlug)

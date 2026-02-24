@@ -81,7 +81,11 @@ function pruneEmptyTimelineMessageUpsert(entity: TimelineEntity): TimelineEntity
   const state = timelineMessageStates.get(entity.id);
 
   if (text) {
-    timelineMessageStates.set(entity.id, { emitted: true });
+    if (streaming) {
+      timelineMessageStates.set(entity.id, { emitted: true });
+    } else {
+      timelineMessageStates.delete(entity.id);
+    }
     return entity;
   }
 

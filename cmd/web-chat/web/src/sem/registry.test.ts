@@ -105,4 +105,26 @@ describe('SEM registry llm message projection', () => {
     expect(msg.props.content).toBe('partial response');
     expect(msg.props.streaming).toBe(false);
   });
+
+  it('does not leak emitted state after terminal message updates with text', () => {
+    const store = dispatchThroughTimelineReducer();
+
+    emitSem(store.dispatch, {
+      type: 'llm.final',
+      id: 'msg-reuse',
+      data: { id: 'msg-reuse', text: 'done' },
+    });
+    expect(store.getState().order).toEqual(['msg-reuse']);
+
+    store.dispatch(timelineSlice.actions.clear());
+    expect(store.getState().order).toEqual([]);
+
+    emitSem(store.dispatch, {
+      type: 'llm.final',
+      id: 'msg-reuse',
+      data: { id: 'msg-reuse', text: '' },
+    });
+
+    expect(store.getState().order).toEqual([]);
+  });
 });

@@ -119,3 +119,33 @@ func TestMigrateLegacyProfilesFile_SkipIfNotLegacy(t *testing.T) {
 	require.False(t, result.WroteFile)
 	require.Empty(t, strings.TrimSpace(string(result.OutputYAML)))
 }
+
+func TestMigrateLegacyProfilesFile_SkipIfNotLegacy_InvalidInputErrors(t *testing.T) {
+	tmpDir := t.TempDir()
+	inputPath := filepath.Join(tmpDir, "profiles.yaml")
+	require.NoError(t, os.WriteFile(inputPath, []byte("registries: ["), 0o644))
+
+	result, err := MigrateLegacyProfilesFile(LegacyProfilesMigrationOptions{
+		InputPath:       inputPath,
+		RegistrySlugRaw: "default",
+		SkipIfNotLegacy: true,
+	})
+	require.Nil(t, result)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "decode profiles YAML")
+}
+
+func TestMigrateLegacyProfilesFile_SkipIfNotLegacy_EmptyInputErrors(t *testing.T) {
+	tmpDir := t.TempDir()
+	inputPath := filepath.Join(tmpDir, "profiles.yaml")
+	require.NoError(t, os.WriteFile(inputPath, []byte("   \n"), 0o644))
+
+	result, err := MigrateLegacyProfilesFile(LegacyProfilesMigrationOptions{
+		InputPath:       inputPath,
+		RegistrySlugRaw: "default",
+		SkipIfNotLegacy: true,
+	})
+	require.Nil(t, result)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "is empty")
+}
