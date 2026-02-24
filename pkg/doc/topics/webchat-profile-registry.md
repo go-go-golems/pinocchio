@@ -249,6 +249,25 @@ For full migration workflow and validation steps, see the Geppetto playbook:
 
 - `geppetto/pkg/doc/playbooks/05-migrate-legacy-profiles-yaml-to-registry.md`
 
+## SQLite Operations and Rollout Notes
+
+For durable multi-user profile editing, run web-chat with SQLite-backed registry storage:
+
+```bash
+pinocchio web-chat --profile-registry-db ./data/profiles.db
+```
+
+Operational recommendations:
+
+- keep timestamped DB backups before bulk profile edits,
+- restrict DB and backup file permissions to service operators,
+- validate restore drills with `GET /api/chat/profiles` and one explicit profile-selected chat request.
+
+Migration/rollout posture:
+
+- registry middleware integration is always enabled,
+- rollback uses release rollback + profile DB snapshot restore, not runtime env toggles.
+
 ## Troubleshooting
 
 | Problem | Cause | Solution |
@@ -265,3 +284,4 @@ For full migration workflow and validation steps, see the Geppetto playbook:
 - [Webchat User Guide](webchat-user-guide.md)
 - [Webchat HTTP Chat Setup](webchat-http-chat-setup.md)
 - [Webchat Symbol Migration Playbook](webchat-symbol-migration-playbook.md)
+- `geppetto/pkg/doc/playbooks/06-operate-sqlite-profile-registry.md`
