@@ -199,10 +199,11 @@ func (r *ProfileRequestResolver) resolveWS(req *http.Request) (webhttp.ResolvedC
 	resolvedRuntime := resolvedProfile.EffectiveRuntime
 
 	return webhttp.ResolvedConversationRequest{
-		ConvID:          convID,
-		RuntimeKey:      resolvedProfile.RuntimeKey.String(),
-		ProfileVersion:  profileVersionFromResolvedMetadata(resolvedProfile.Metadata),
-		ResolvedRuntime: &resolvedRuntime,
+		ConvID:             convID,
+		RuntimeKey:         resolvedProfile.RuntimeKey.String(),
+		RuntimeFingerprint: resolvedProfile.RuntimeFingerprint,
+		ProfileVersion:     profileVersionFromResolvedMetadata(resolvedProfile.Metadata),
+		ResolvedRuntime:    &resolvedRuntime,
 	}, nil
 }
 
@@ -232,12 +233,13 @@ func (r *ProfileRequestResolver) resolveChat(req *http.Request) (webhttp.Resolve
 	resolvedRuntime := resolvedProfile.EffectiveRuntime
 
 	return webhttp.ResolvedConversationRequest{
-		ConvID:          convID,
-		RuntimeKey:      resolvedProfile.RuntimeKey.String(),
-		ProfileVersion:  profileVersionFromResolvedMetadata(resolvedProfile.Metadata),
-		ResolvedRuntime: &resolvedRuntime,
-		Prompt:          body.Prompt,
-		IdempotencyKey:  strings.TrimSpace(body.IdempotencyKey),
+		ConvID:             convID,
+		RuntimeKey:         resolvedProfile.RuntimeKey.String(),
+		RuntimeFingerprint: resolvedProfile.RuntimeFingerprint,
+		ProfileVersion:     profileVersionFromResolvedMetadata(resolvedProfile.Metadata),
+		ResolvedRuntime:    &resolvedRuntime,
+		Prompt:             body.Prompt,
+		IdempotencyKey:     strings.TrimSpace(body.IdempotencyKey),
 	}, nil
 }
 

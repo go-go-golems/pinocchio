@@ -285,6 +285,29 @@ func TestRuntimeFingerprint_ChangesOnProfileVersion(t *testing.T) {
 	}
 }
 
+func TestWebChatRuntimeComposer_PrefersResolvedProfileFingerprint(t *testing.T) {
+	composer := newProfileRuntimeComposer(
+		minimalRuntimeComposerValues(t),
+		newRuntimeComposerRegistry(t),
+		middlewarecfg.BuildDeps{},
+	)
+
+	res, err := composer.Compose(context.Background(), infruntime.ConversationRuntimeRequest{
+		ConvID:                     "c1",
+		ProfileKey:                 "analyst",
+		ResolvedProfileFingerprint: "sha256:resolver-owned",
+		ResolvedProfileRuntime: &gepprofiles.RuntimeSpec{
+			SystemPrompt: "profile prompt",
+		},
+	})
+	if err != nil {
+		t.Fatalf("compose failed: %v", err)
+	}
+	if got, want := res.RuntimeFingerprint, "sha256:resolver-owned"; got != want {
+		t.Fatalf("runtime fingerprint mismatch: got=%q want=%q", got, want)
+	}
+}
+
 func TestWebChatRuntimeComposer_AppliesProfileStepSettingsPatch(t *testing.T) {
 	composer := newProfileRuntimeComposer(
 		minimalRuntimeComposerValues(t),

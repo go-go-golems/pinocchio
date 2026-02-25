@@ -247,6 +247,7 @@ func topicForConv(convID string) string { return "chat:" + convID }
 // GetOrCreate creates or reuses a conversation based on runtime fingerprint changes.
 func (cm *ConvManager) GetOrCreate(
 	convID, runtimeKey string,
+	runtimeFingerprint string,
 	overrides map[string]any,
 	resolvedRuntime *gepprofiles.RuntimeSpec,
 	profileVersion uint64,
@@ -258,11 +259,12 @@ func (cm *ConvManager) GetOrCreate(
 		return nil, errors.New("conversation manager missing dependencies")
 	}
 	req := infruntime.ConversationRuntimeRequest{
-		ConvID:                 convID,
-		ProfileKey:             runtimeKey,
-		ProfileVersion:         profileVersion,
-		ResolvedProfileRuntime: resolvedRuntime,
-		RuntimeOverrides:       overrides,
+		ConvID:                     convID,
+		ProfileKey:                 runtimeKey,
+		ProfileVersion:             profileVersion,
+		ResolvedProfileRuntime:     resolvedRuntime,
+		ResolvedProfileFingerprint: strings.TrimSpace(runtimeFingerprint),
+		RuntimeOverrides:           overrides,
 	}
 	runtime, err := cm.runtimeComposer.Compose(cm.baseCtx, req)
 	if err != nil {

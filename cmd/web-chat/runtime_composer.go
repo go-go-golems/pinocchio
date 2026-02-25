@@ -115,11 +115,15 @@ func (c *ProfileRuntimeComposer) Compose(ctx context.Context, req infruntime.Con
 	if err != nil {
 		return infruntime.ComposedRuntime{}, err
 	}
+	runtimeFingerprint := strings.TrimSpace(req.ResolvedProfileFingerprint)
+	if runtimeFingerprint == "" {
+		runtimeFingerprint = buildRuntimeFingerprint(runtimeKey, req.ProfileVersion, systemPrompt, resolvedUses, tools, effectiveStepSettings)
+	}
 
 	return infruntime.ComposedRuntime{
 		Engine:             eng,
 		RuntimeKey:         runtimeKey,
-		RuntimeFingerprint: buildRuntimeFingerprint(runtimeKey, req.ProfileVersion, systemPrompt, resolvedUses, tools, effectiveStepSettings),
+		RuntimeFingerprint: runtimeFingerprint,
 		SeedSystemPrompt:   systemPrompt,
 		AllowedTools:       tools,
 	}, nil

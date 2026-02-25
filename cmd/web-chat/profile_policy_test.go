@@ -78,6 +78,7 @@ func TestWebChatProfileResolver_WS_DefaultProfile(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "conv-1", plan.ConvID)
 	require.Equal(t, "default", plan.RuntimeKey)
+	require.True(t, strings.HasPrefix(plan.RuntimeFingerprint, "sha256:"))
 	require.Nil(t, plan.Overrides)
 	require.NotNil(t, plan.ResolvedRuntime)
 	require.Equal(t, "You are default", plan.ResolvedRuntime.SystemPrompt)
@@ -188,6 +189,7 @@ func TestWebChatProfileResolver_Chat_BodyProfileAndRegistry(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "conv-1", plan.ConvID)
 	require.Equal(t, "analyst", plan.RuntimeKey)
+	require.True(t, strings.HasPrefix(plan.RuntimeFingerprint, "sha256:"))
 	require.Equal(t, uint64(7), plan.ProfileVersion)
 	require.Nil(t, plan.Overrides)
 	require.NotNil(t, plan.ResolvedRuntime)
@@ -202,6 +204,7 @@ func TestWebChatProfileResolver_WS_QueryProfileAndRegistry(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "conv-1", plan.ConvID)
 	require.Equal(t, "analyst", plan.RuntimeKey)
+	require.True(t, strings.HasPrefix(plan.RuntimeFingerprint, "sha256:"))
 	require.Equal(t, uint64(7), plan.ProfileVersion)
 	require.Nil(t, plan.Overrides)
 }

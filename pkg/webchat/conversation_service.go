@@ -47,11 +47,12 @@ type ConversationService struct {
 }
 
 type ConversationRuntimeRequest struct {
-	ConvID          string
-	RuntimeKey      string
-	ProfileVersion  uint64
-	ResolvedRuntime *gepprofiles.RuntimeSpec
-	Overrides       map[string]any
+	ConvID             string
+	RuntimeKey         string
+	RuntimeFingerprint string
+	ProfileVersion     uint64
+	ResolvedRuntime    *gepprofiles.RuntimeSpec
+	Overrides          map[string]any
 }
 
 type ConversationHandle struct {
@@ -64,13 +65,14 @@ type ConversationHandle struct {
 }
 
 type SubmitPromptInput struct {
-	ConvID          string
-	RuntimeKey      string
-	ProfileVersion  uint64
-	ResolvedRuntime *gepprofiles.RuntimeSpec
-	Overrides       map[string]any
-	Prompt          string
-	IdempotencyKey  string
+	ConvID             string
+	RuntimeKey         string
+	RuntimeFingerprint string
+	ProfileVersion     uint64
+	ResolvedRuntime    *gepprofiles.RuntimeSpec
+	Overrides          map[string]any
+	Prompt             string
+	IdempotencyKey     string
 }
 
 type SubmitPromptResult struct {
@@ -171,11 +173,12 @@ func (s *ConversationService) SubmitPrompt(ctx context.Context, in SubmitPromptI
 		return SubmitPromptResult{HTTPStatus: 400, Response: map[string]any{"status": "error", "error": "missing prompt"}}, nil
 	}
 	handle, err := s.ResolveAndEnsureConversation(ctx, ConversationRuntimeRequest{
-		ConvID:          in.ConvID,
-		RuntimeKey:      in.RuntimeKey,
-		ProfileVersion:  in.ProfileVersion,
-		ResolvedRuntime: in.ResolvedRuntime,
-		Overrides:       in.Overrides,
+		ConvID:             in.ConvID,
+		RuntimeKey:         in.RuntimeKey,
+		RuntimeFingerprint: in.RuntimeFingerprint,
+		ProfileVersion:     in.ProfileVersion,
+		ResolvedRuntime:    in.ResolvedRuntime,
+		Overrides:          in.Overrides,
 	})
 	if err != nil {
 		return SubmitPromptResult{}, err
