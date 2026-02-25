@@ -38,10 +38,11 @@ type Conversation struct {
 	stream    *StreamCoordinator
 	baseCtx   context.Context
 
-	RuntimeKey         string
-	RuntimeFingerprint string
-	SeedSystemPrompt   string
-	AllowedTools       []string
+	RuntimeKey              string
+	RuntimeFingerprint      string
+	ResolvedProfileMetadata map[string]any
+	SeedSystemPrompt        string
+	AllowedTools            []string
 
 	// Server-side send serialization / queue semantics.
 	// All fields below are guarded by mu.
@@ -249,6 +250,7 @@ func (cm *ConvManager) GetOrCreate(
 	convID, runtimeKey string,
 	runtimeFingerprint string,
 	resolvedRuntime *gepprofiles.RuntimeSpec,
+	resolvedProfileMetadata map[string]any,
 	profileVersion uint64,
 ) (*Conversation, error) {
 	if cm == nil {
@@ -289,6 +291,9 @@ func (cm *ConvManager) GetOrCreate(
 		c.mu.Lock()
 		c.ensureQueueInitLocked()
 		c.touchLocked(now)
+		if len(resolvedProfileMetadata) > 0 {
+			c.ResolvedProfileMetadata = copyStringAnyMap(resolvedProfileMetadata)
+		}
 		if c.semBuf == nil {
 			c.semBuf = newSemFrameBuffer(1000)
 		}
@@ -324,6 +329,7 @@ func (cm *ConvManager) GetOrCreate(
 			c.subClose = subClose
 			c.RuntimeKey = runtime.RuntimeKey
 			c.RuntimeFingerprint = runtime.RuntimeFingerprint
+			c.ResolvedProfileMetadata = copyStringAnyMap(resolvedProfileMetadata)
 			c.SeedSystemPrompt = runtime.SeedSystemPrompt
 			c.AllowedTools = append([]string(nil), runtime.AllowedTools...)
 
@@ -361,17 +367,18 @@ func (cm *ConvManager) GetOrCreate(
 	}
 	sessionID := uuid.NewString()
 	conv := &Conversation{
-		ID:                 convID,
-		SessionID:          sessionID,
-		baseCtx:            cm.baseCtx,
-		RuntimeKey:         runtime.RuntimeKey,
-		RuntimeFingerprint: runtime.RuntimeFingerprint,
-		SeedSystemPrompt:   runtime.SeedSystemPrompt,
-		AllowedTools:       append([]string(nil), runtime.AllowedTools...),
-		requests:           map[string]*chatRequestRecord{},
-		semBuf:             newSemFrameBuffer(1000),
-		lastActivity:       now,
-		createdAt:          now,
+		ID:                      convID,
+		SessionID:               sessionID,
+		baseCtx:                 cm.baseCtx,
+		RuntimeKey:              runtime.RuntimeKey,
+		RuntimeFingerprint:      runtime.RuntimeFingerprint,
+		ResolvedProfileMetadata: copyStringAnyMap(resolvedProfileMetadata),
+		SeedSystemPrompt:        runtime.SeedSystemPrompt,
+		AllowedTools:            append([]string(nil), runtime.AllowedTools...),
+		requests:                map[string]*chatRequestRecord{},
+		semBuf:                  newSemFrameBuffer(1000),
+		lastActivity:            now,
+		createdAt:               now,
 	}
 	if timelineStore != nil {
 		conv.timelineProj = NewTimelineProjector(conv.ID, timelineStore, cm.timelineProjectorUpsertHook(conv))

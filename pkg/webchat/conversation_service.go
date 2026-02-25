@@ -47,32 +47,35 @@ type ConversationService struct {
 }
 
 type ConversationRuntimeRequest struct {
-	ConvID             string
-	RuntimeKey         string
-	RuntimeFingerprint string
-	ProfileVersion     uint64
-	ResolvedRuntime    *gepprofiles.RuntimeSpec
-	Overrides          map[string]any
+	ConvID                  string
+	RuntimeKey              string
+	RuntimeFingerprint      string
+	ProfileVersion          uint64
+	ResolvedRuntime         *gepprofiles.RuntimeSpec
+	ResolvedProfileMetadata map[string]any
+	Overrides               map[string]any
 }
 
 type ConversationHandle struct {
-	ConvID             string
-	SessionID          string
-	RuntimeKey         string
-	RuntimeFingerprint string
-	SeedSystemPrompt   string
-	AllowedTools       []string
+	ConvID                  string
+	SessionID               string
+	RuntimeKey              string
+	RuntimeFingerprint      string
+	ResolvedProfileMetadata map[string]any
+	SeedSystemPrompt        string
+	AllowedTools            []string
 }
 
 type SubmitPromptInput struct {
-	ConvID             string
-	RuntimeKey         string
-	RuntimeFingerprint string
-	ProfileVersion     uint64
-	ResolvedRuntime    *gepprofiles.RuntimeSpec
-	Overrides          map[string]any
-	Prompt             string
-	IdempotencyKey     string
+	ConvID                  string
+	RuntimeKey              string
+	RuntimeFingerprint      string
+	ProfileVersion          uint64
+	ResolvedRuntime         *gepprofiles.RuntimeSpec
+	ResolvedProfileMetadata map[string]any
+	Overrides               map[string]any
+	Prompt                  string
+	IdempotencyKey          string
 }
 
 type SubmitPromptResult struct {
@@ -173,12 +176,13 @@ func (s *ConversationService) SubmitPrompt(ctx context.Context, in SubmitPromptI
 		return SubmitPromptResult{HTTPStatus: 400, Response: map[string]any{"status": "error", "error": "missing prompt"}}, nil
 	}
 	handle, err := s.ResolveAndEnsureConversation(ctx, ConversationRuntimeRequest{
-		ConvID:             in.ConvID,
-		RuntimeKey:         in.RuntimeKey,
-		RuntimeFingerprint: in.RuntimeFingerprint,
-		ProfileVersion:     in.ProfileVersion,
-		ResolvedRuntime:    in.ResolvedRuntime,
-		Overrides:          in.Overrides,
+		ConvID:                  in.ConvID,
+		RuntimeKey:              in.RuntimeKey,
+		RuntimeFingerprint:      in.RuntimeFingerprint,
+		ProfileVersion:          in.ProfileVersion,
+		ResolvedRuntime:         in.ResolvedRuntime,
+		ResolvedProfileMetadata: in.ResolvedProfileMetadata,
+		Overrides:               in.Overrides,
 	})
 	if err != nil {
 		return SubmitPromptResult{}, err
@@ -206,7 +210,7 @@ func (s *ConversationService) SubmitPrompt(ctx context.Context, in SubmitPromptI
 		}
 		return SubmitPromptResult{
 			HTTPStatus: status,
-			Response:   prep.Response,
+			Response:   appendProfileMetadata(prep.Response, handle),
 		}, nil
 	}
 
@@ -214,7 +218,34 @@ func (s *ConversationService) SubmitPrompt(ctx context.Context, in SubmitPromptI
 	if err != nil {
 		return SubmitPromptResult{}, err
 	}
-	return SubmitPromptResult{HTTPStatus: 200, Response: resp}, nil
+	return SubmitPromptResult{HTTPStatus: 200, Response: appendProfileMetadata(resp, handle)}, nil
+}
+
+func appendProfileMetadata(resp map[string]any, handle *ConversationHandle) map[string]any {
+	if handle == nil {
+		return resp
+	}
+	if resp == nil {
+		resp = map[string]any{}
+	}
+	if runtimeFingerprint := strings.TrimSpace(handle.RuntimeFingerprint); runtimeFingerprint != "" {
+		resp["runtime_fingerprint"] = runtimeFingerprint
+	}
+	if len(handle.ResolvedProfileMetadata) > 0 {
+		resp["profile_metadata"] = copyStringAnyMap(handle.ResolvedProfileMetadata)
+	}
+	return resp
+}
+
+func copyStringAnyMap(in map[string]any) map[string]any {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make(map[string]any, len(in))
+	for key, value := range in {
+		out[key] = value
+	}
+	return out
 }
 
 func (s *ConversationService) AttachWebSocket(ctx context.Context, convID string, conn *websocket.Conn, opts WebSocketAttachOptions) error {

@@ -86,15 +86,21 @@ func TestConversationService_SubmitPromptQueuesWhenConversationBusy(t *testing.T
 	require.NoError(t, err)
 
 	resp, err := svc.SubmitPrompt(context.Background(), SubmitPromptInput{
-		ConvID:         "conv-1",
-		RuntimeKey:     "default",
-		Prompt:         "hello",
-		IdempotencyKey: "k-1",
+		ConvID:                  "conv-1",
+		RuntimeKey:              "default",
+		RuntimeFingerprint:      "fp-default",
+		ResolvedProfileMetadata: map[string]any{"profile.stack.lineage": []any{"default"}},
+		Prompt:                  "hello",
+		IdempotencyKey:          "k-1",
 	})
 	require.NoError(t, err)
 	require.Equal(t, 202, resp.HTTPStatus)
 	require.Equal(t, "queued", resp.Response["status"])
 	require.Equal(t, "k-1", resp.Response["idempotency_key"])
+	require.Equal(t, "fp-default", resp.Response["runtime_fingerprint"])
+	profileMetadata, ok := resp.Response["profile_metadata"].(map[string]any)
+	require.True(t, ok)
+	require.Contains(t, profileMetadata, "profile.stack.lineage")
 	require.Len(t, conv.queue, 1)
 }
 

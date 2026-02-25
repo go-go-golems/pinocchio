@@ -204,6 +204,7 @@ func (r *ProfileRequestResolver) resolveWS(req *http.Request) (webhttp.ResolvedC
 		RuntimeFingerprint: resolvedProfile.RuntimeFingerprint,
 		ProfileVersion:     profileVersionFromResolvedMetadata(resolvedProfile.Metadata),
 		ResolvedRuntime:    &resolvedRuntime,
+		ProfileMetadata:    copyMetadataMap(resolvedProfile.Metadata),
 	}, nil
 }
 
@@ -238,6 +239,7 @@ func (r *ProfileRequestResolver) resolveChat(req *http.Request) (webhttp.Resolve
 		RuntimeFingerprint: resolvedProfile.RuntimeFingerprint,
 		ProfileVersion:     profileVersionFromResolvedMetadata(resolvedProfile.Metadata),
 		ResolvedRuntime:    &resolvedRuntime,
+		ProfileMetadata:    copyMetadataMap(resolvedProfile.Metadata),
 		Prompt:             body.Prompt,
 		IdempotencyKey:     strings.TrimSpace(body.IdempotencyKey),
 	}, nil
@@ -343,6 +345,17 @@ func profileVersionFromResolvedMetadata(metadata map[string]any) uint64 {
 		}
 	}
 	return 0
+}
+
+func copyMetadataMap(in map[string]any) map[string]any {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make(map[string]any, len(in))
+	for key, value := range in {
+		out[key] = value
+	}
+	return out
 }
 
 func (r *ProfileRequestResolver) toRequestResolutionError(err error, slug string) error {

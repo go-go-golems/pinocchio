@@ -82,6 +82,11 @@ func TestWebChatProfileResolver_WS_DefaultProfile(t *testing.T) {
 	require.Nil(t, plan.Overrides)
 	require.NotNil(t, plan.ResolvedRuntime)
 	require.Equal(t, "You are default", plan.ResolvedRuntime.SystemPrompt)
+	require.NotNil(t, plan.ProfileMetadata)
+	_, hasLineage := plan.ProfileMetadata["profile.stack.lineage"]
+	require.True(t, hasLineage)
+	_, hasTrace := plan.ProfileMetadata["profile.stack.trace"]
+	require.True(t, hasTrace)
 }
 
 func TestWebChatProfileResolver_Chat_OverridePolicy(t *testing.T) {
@@ -194,6 +199,11 @@ func TestWebChatProfileResolver_Chat_BodyRuntimeKeyAndRegistrySlug(t *testing.T)
 	require.Nil(t, plan.Overrides)
 	require.NotNil(t, plan.ResolvedRuntime)
 	require.Equal(t, "You are analyst", plan.ResolvedRuntime.SystemPrompt)
+	require.NotNil(t, plan.ProfileMetadata)
+	_, hasLineage := plan.ProfileMetadata["profile.stack.lineage"]
+	require.True(t, hasLineage)
+	_, hasTrace := plan.ProfileMetadata["profile.stack.trace"]
+	require.True(t, hasTrace)
 }
 
 func TestWebChatProfileResolver_WS_QueryRuntimeKeyAndRegistrySlug(t *testing.T) {
