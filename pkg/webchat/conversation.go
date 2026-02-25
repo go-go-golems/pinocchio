@@ -248,7 +248,6 @@ func topicForConv(convID string) string { return "chat:" + convID }
 func (cm *ConvManager) GetOrCreate(
 	convID, runtimeKey string,
 	runtimeFingerprint string,
-	overrides map[string]any,
 	resolvedRuntime *gepprofiles.RuntimeSpec,
 	profileVersion uint64,
 ) (*Conversation, error) {
@@ -264,7 +263,6 @@ func (cm *ConvManager) GetOrCreate(
 		ProfileVersion:             profileVersion,
 		ResolvedProfileRuntime:     resolvedRuntime,
 		ResolvedProfileFingerprint: strings.TrimSpace(runtimeFingerprint),
-		RuntimeOverrides:           overrides,
 	}
 	runtime, err := cm.runtimeComposer.Compose(cm.baseCtx, req)
 	if err != nil {

@@ -15,7 +15,6 @@ type ConversationRuntimeRequest struct {
 	ProfileVersion             uint64
 	ResolvedProfileRuntime     *gepprofiles.RuntimeSpec
 	ResolvedProfileFingerprint string
-	RuntimeOverrides           map[string]any
 }
 
 // ComposedRuntime are the composed runtime pieces consumed by conversation lifecycle code.

@@ -52,7 +52,7 @@ func (h *StreamHub) ResolveAndEnsureConversation(ctx context.Context, req Conver
 	if runtimeKey == "" {
 		runtimeKey = "default"
 	}
-	conv, err := h.cm.GetOrCreate(convID, runtimeKey, req.RuntimeFingerprint, req.Overrides, req.ResolvedRuntime, req.ProfileVersion)
+	conv, err := h.cm.GetOrCreate(convID, runtimeKey, req.RuntimeFingerprint, req.ResolvedRuntime, req.ProfileVersion)
 	if err != nil {
 		return nil, err
 	}
@@ -84,7 +84,7 @@ func (h *StreamHub) AttachWebSocket(ctx context.Context, convID string, conn *we
 	conv, ok := h.cm.GetConversation(convID)
 	if !ok || conv == nil {
 		var err error
-		conv, err = h.cm.GetOrCreate(convID, "default", "", nil, nil, 0)
+		conv, err = h.cm.GetOrCreate(convID, "default", "", nil, 0)
 		if err != nil {
 			return err
 		}
