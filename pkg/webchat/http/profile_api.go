@@ -915,6 +915,8 @@ func writeProfileRegistryError(w http.ResponseWriter, err error) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 	case errors.Is(err, gepprofiles.ErrPolicyViolation):
 		http.Error(w, err.Error(), http.StatusForbidden)
+	case errors.Is(err, gepprofiles.ErrReadOnlyStore):
+		http.Error(w, err.Error(), http.StatusForbidden)
 	case errors.Is(err, gepprofiles.ErrVersionConflict):
 		http.Error(w, err.Error(), http.StatusConflict)
 	default:
