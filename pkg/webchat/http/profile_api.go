@@ -160,45 +160,52 @@ func RegisterProfileAPIHandlers(mux *http.ServeMux, profileRegistry gepprofiles.
 	mux.HandleFunc("/api/chat/profiles", func(w http.ResponseWriter, req *http.Request) {
 		switch req.Method {
 		case http.MethodGet:
-			registrySlug, err := resolveRegistrySlugForAPI(req, opts.DefaultRegistrySlug, "")
-			if err != nil {
-				http.Error(w, "invalid registry", http.StatusBadRequest)
-				return
+			registryRaw := ""
+			if req != nil {
+				registryRaw = strings.TrimSpace(req.URL.Query().Get("registry"))
 			}
-			registry, err := profileRegistry.GetRegistry(req.Context(), registrySlug)
-			if err != nil {
-				writeProfileRegistryError(w, err)
-				return
-			}
-			profiles_, err := profileRegistry.ListProfiles(req.Context(), registrySlug)
-			if err != nil {
-				writeProfileRegistryError(w, err)
-				return
-			}
-			sort.Slice(profiles_, func(i, j int) bool {
-				if profiles_[i] == nil {
-					return false
+			items := make([]ProfileListItem, 0)
+			if registryRaw != "" {
+				registrySlug, err := resolveRegistrySlugForAPI(req, opts.DefaultRegistrySlug, "")
+				if err != nil {
+					http.Error(w, "invalid registry", http.StatusBadRequest)
+					return
 				}
-				if profiles_[j] == nil {
-					return true
+				registry, err := profileRegistry.GetRegistry(req.Context(), registrySlug)
+				if err != nil {
+					writeProfileRegistryError(w, err)
+					return
 				}
-				return profiles_[i].Slug < profiles_[j].Slug
+				profiles_, err := profileRegistry.ListProfiles(req.Context(), registrySlug)
+				if err != nil {
+					writeProfileRegistryError(w, err)
+					return
+				}
+				items = append(items, profileListItemsFromRegistry(registrySlug, registry, profiles_)...)
+			} else {
+				registries, err := profileRegistry.ListRegistries(req.Context())
+				if err != nil {
+					writeProfileRegistryError(w, err)
+					return
+				}
+				for _, summary := range registries {
+					registrySlug := summary.Slug
+					registry, err := profileRegistry.GetRegistry(req.Context(), registrySlug)
+					if err != nil {
+						writeProfileRegistryError(w, err)
+						return
+					}
+					profiles_, err := profileRegistry.ListProfiles(req.Context(), registrySlug)
+					if err != nil {
+						writeProfileRegistryError(w, err)
+						return
+					}
+					items = append(items, profileListItemsFromRegistry(registrySlug, registry, profiles_)...)
+				}
+			}
+			sort.Slice(items, func(i, j int) bool {
+				return items[i].Slug < items[j].Slug
 			})
-			items := make([]ProfileListItem, 0, len(profiles_))
-			for _, p := range profiles_ {
-				if p == nil {
-					continue
-				}
-				items = append(items, ProfileListItem{
-					Slug:          p.Slug.String(),
-					DisplayName:   p.DisplayName,
-					Description:   p.Description,
-					DefaultPrompt: p.Runtime.SystemPrompt,
-					Extensions:    cloneExtensionMap(p.Extensions),
-					IsDefault:     registry != nil && registry.DefaultProfileSlug == p.Slug,
-					Version:       p.Metadata.Version,
-				})
-			}
 			writeJSONResponse(w, http.StatusOK, items)
 		case http.MethodPost:
 			var body CreateProfileRequest
@@ -293,22 +300,54 @@ func RegisterProfileAPIHandlers(mux *http.ServeMux, profileRegistry gepprofiles.
 		case "":
 			switch req.Method {
 			case http.MethodGet:
-				registrySlug, err := resolveRegistrySlugForAPI(req, opts.DefaultRegistrySlug, "")
-				if err != nil {
-					http.Error(w, "invalid registry", http.StatusBadRequest)
+				registryRaw := ""
+				if req != nil {
+					registryRaw = strings.TrimSpace(req.URL.Query().Get("registry"))
+				}
+				if registryRaw != "" {
+					registrySlug, err := resolveRegistrySlugForAPI(req, opts.DefaultRegistrySlug, "")
+					if err != nil {
+						http.Error(w, "invalid registry", http.StatusBadRequest)
+						return
+					}
+					profile, err := profileRegistry.GetProfile(req.Context(), registrySlug, slug)
+					if err != nil {
+						writeProfileRegistryError(w, err)
+						return
+					}
+					registry, err := profileRegistry.GetRegistry(req.Context(), registrySlug)
+					if err != nil {
+						writeProfileRegistryError(w, err)
+						return
+					}
+					writeJSONResponse(w, http.StatusOK, profileDocFromModel(registrySlug, registry, profile))
 					return
 				}
-				profile, err := profileRegistry.GetProfile(req.Context(), registrySlug, slug)
+
+				registries, err := profileRegistry.ListRegistries(req.Context())
 				if err != nil {
 					writeProfileRegistryError(w, err)
 					return
 				}
-				registry, err := profileRegistry.GetRegistry(req.Context(), registrySlug)
-				if err != nil {
-					writeProfileRegistryError(w, err)
+				for _, summary := range registries {
+					registrySlug := summary.Slug
+					profile, err := profileRegistry.GetProfile(req.Context(), registrySlug, slug)
+					if err != nil {
+						if errors.Is(err, gepprofiles.ErrProfileNotFound) {
+							continue
+						}
+						writeProfileRegistryError(w, err)
+						return
+					}
+					registry, err := profileRegistry.GetRegistry(req.Context(), registrySlug)
+					if err != nil {
+						writeProfileRegistryError(w, err)
+						return
+					}
+					writeJSONResponse(w, http.StatusOK, profileDocFromModel(registrySlug, registry, profile))
 					return
 				}
-				writeJSONResponse(w, http.StatusOK, profileDocFromModel(registrySlug, registry, profile))
+				writeProfileRegistryError(w, gepprofiles.ErrProfileNotFound)
 			case http.MethodPatch:
 				var body PatchProfileRequest
 				if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
@@ -577,6 +616,35 @@ func profileDocFromModel(registrySlug gepprofiles.RegistrySlug, registry *geppro
 	doc.Extensions = cloneExtensionMap(p.Extensions)
 	doc.IsDefault = registry != nil && registry.DefaultProfileSlug == p.Slug
 	return doc
+}
+
+func profileListItemsFromRegistry(registrySlug gepprofiles.RegistrySlug, registry *gepprofiles.ProfileRegistry, profiles_ []*gepprofiles.Profile) []ProfileListItem {
+	sort.Slice(profiles_, func(i, j int) bool {
+		if profiles_[i] == nil {
+			return false
+		}
+		if profiles_[j] == nil {
+			return true
+		}
+		return profiles_[i].Slug < profiles_[j].Slug
+	})
+
+	items := make([]ProfileListItem, 0, len(profiles_))
+	for _, p := range profiles_ {
+		if p == nil {
+			continue
+		}
+		items = append(items, ProfileListItem{
+			Slug:          p.Slug.String(),
+			DisplayName:   p.DisplayName,
+			Description:   p.Description,
+			DefaultPrompt: p.Runtime.SystemPrompt,
+			Extensions:    cloneExtensionMap(p.Extensions),
+			IsDefault:     registry != nil && registry.DefaultProfileSlug == p.Slug,
+			Version:       p.Metadata.Version,
+		})
+	}
+	return items
 }
 
 func cloneExtensionMap(in map[string]any) map[string]any {

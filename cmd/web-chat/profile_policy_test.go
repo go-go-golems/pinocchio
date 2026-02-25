@@ -176,6 +176,38 @@ func TestRegisterProfileHandlers_GetAndSetProfile(t *testing.T) {
 	require.Equal(t, "agent", getResp["slug"])
 }
 
+func TestProfileAPI_ListAndGetAcrossLoadedRegistriesWhenRegistryUnset(t *testing.T) {
+	resolver := newTestResolverWithMultipleRegistries(t)
+
+	mux := http.NewServeMux()
+	registerProfileAPIHandlers(mux, resolver)
+
+	reqList := httptest.NewRequest(http.MethodGet, "/api/chat/profiles", nil)
+	recList := httptest.NewRecorder()
+	mux.ServeHTTP(recList, reqList)
+	require.Equal(t, http.StatusOK, recList.Code)
+
+	var listed []map[string]any
+	require.NoError(t, json.Unmarshal(recList.Body.Bytes(), &listed))
+	require.Len(t, listed, 2)
+
+	seen := map[string]bool{}
+	for _, item := range listed {
+		slug, _ := item["slug"].(string)
+		seen[slug] = true
+	}
+	require.True(t, seen["default"])
+	require.True(t, seen["analyst"])
+
+	reqGet := httptest.NewRequest(http.MethodGet, "/api/chat/profiles/analyst", nil)
+	recGet := httptest.NewRecorder()
+	mux.ServeHTTP(recGet, reqGet)
+	require.Equal(t, http.StatusOK, recGet.Code)
+	doc := decodeJSON[profileDocument](t, recGet)
+	require.Equal(t, "team", doc.Registry)
+	require.Equal(t, "analyst", doc.Slug)
+}
+
 func TestWebChatProfileResolver_Chat_BodyRuntimeKeyAcrossStack(t *testing.T) {
 	resolver := newTestResolverWithMultipleRegistries(t)
 
