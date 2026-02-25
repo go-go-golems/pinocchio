@@ -222,11 +222,11 @@ func (r *ProfileRequestResolver) resolveChat(req *http.Request) (webhttp.Resolve
 	}
 
 	pathSlug := profileSlugFromPath(req)
-	registrySlug, profileSlug, err := r.resolveProfileSelection(req, pathSlug, body.Profile, body.Registry)
+	registrySlug, profileSlug, err := r.resolveProfileSelection(req, pathSlug, body.RuntimeKey, body.RegistrySlug)
 	if err != nil {
 		return webhttp.ResolvedConversationRequest{}, err
 	}
-	resolvedProfile, err := r.resolveEffectiveProfile(context.Background(), registrySlug, profileSlug, body.Overrides)
+	resolvedProfile, err := r.resolveEffectiveProfile(context.Background(), registrySlug, profileSlug, body.RequestOverrides)
 	if err != nil {
 		return webhttp.ResolvedConversationRequest{}, err
 	}
@@ -246,27 +246,24 @@ func (r *ProfileRequestResolver) resolveChat(req *http.Request) (webhttp.Resolve
 func (r *ProfileRequestResolver) resolveProfileSelection(
 	req *http.Request,
 	pathSlug string,
-	bodyProfileRaw string,
-	bodyRegistryRaw string,
+	bodyRuntimeKeyRaw string,
+	bodyRegistrySlugRaw string,
 ) (gepprofiles.RegistrySlug, gepprofiles.ProfileSlug, error) {
 	if r == nil || r.profileRegistry == nil {
 		return "", "", &webhttp.RequestResolutionError{Status: http.StatusInternalServerError, ClientMsg: "profile resolver is not configured"}
 	}
 
-	registrySlug, err := r.resolveRegistrySlug(req, bodyRegistryRaw)
+	registrySlug, err := r.resolveRegistrySlug(req, bodyRegistrySlugRaw)
 	if err != nil {
 		return "", "", err
 	}
 
 	slugRaw := strings.TrimSpace(pathSlug)
 	if slugRaw == "" {
-		slugRaw = strings.TrimSpace(bodyProfileRaw)
+		slugRaw = strings.TrimSpace(bodyRuntimeKeyRaw)
 	}
 	if slugRaw == "" && req != nil {
-		slugRaw = strings.TrimSpace(req.URL.Query().Get("profile"))
-	}
-	if slugRaw == "" && req != nil {
-		slugRaw = strings.TrimSpace(req.URL.Query().Get("runtime"))
+		slugRaw = strings.TrimSpace(req.URL.Query().Get("runtime_key"))
 	}
 	if slugRaw == "" && req != nil {
 		if ck, err := req.Cookie(currentProfileCookieName); err == nil && ck != nil {
@@ -280,15 +277,15 @@ func (r *ProfileRequestResolver) resolveProfileSelection(
 
 	slug, err := gepprofiles.ParseProfileSlug(slugRaw)
 	if err != nil {
-		return "", "", &webhttp.RequestResolutionError{Status: http.StatusBadRequest, ClientMsg: "invalid profile: " + slugRaw, Err: err}
+		return "", "", &webhttp.RequestResolutionError{Status: http.StatusBadRequest, ClientMsg: "invalid runtime_key: " + slugRaw, Err: err}
 	}
 	return registrySlug, slug, nil
 }
 
-func (r *ProfileRequestResolver) resolveRegistrySlug(req *http.Request, bodyRegistryRaw string) (gepprofiles.RegistrySlug, error) {
-	registryRaw := strings.TrimSpace(bodyRegistryRaw)
+func (r *ProfileRequestResolver) resolveRegistrySlug(req *http.Request, bodyRegistrySlugRaw string) (gepprofiles.RegistrySlug, error) {
+	registryRaw := strings.TrimSpace(bodyRegistrySlugRaw)
 	if registryRaw == "" && req != nil {
-		registryRaw = strings.TrimSpace(req.URL.Query().Get("registry"))
+		registryRaw = strings.TrimSpace(req.URL.Query().Get("registry_slug"))
 	}
 	if registryRaw == "" {
 		return r.registrySlug, nil

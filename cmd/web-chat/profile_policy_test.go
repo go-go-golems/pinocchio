@@ -104,7 +104,7 @@ func TestWebChatProfileResolver_Chat_OverridePolicy(t *testing.T) {
 	req := httptest.NewRequest(
 		http.MethodPost,
 		"/chat/default",
-		bytes.NewBufferString(`{"prompt":"hi","conv_id":"conv-1","overrides":{"system_prompt":"override"}}`),
+		bytes.NewBufferString(`{"prompt":"hi","conv_id":"conv-1","request_overrides":{"system_prompt":"override"}}`),
 	)
 	_, err = resolver.Resolve(req)
 	require.Error(t, err)
@@ -113,7 +113,7 @@ func TestWebChatProfileResolver_Chat_OverridePolicy(t *testing.T) {
 	reqAllowed := httptest.NewRequest(
 		http.MethodPost,
 		"/chat/agent",
-		bytes.NewBufferString(`{"prompt":"hi","conv_id":"conv-2","overrides":{"system_prompt":"override"}}`),
+		bytes.NewBufferString(`{"prompt":"hi","conv_id":"conv-2","request_overrides":{"system_prompt":"override"}}`),
 	)
 	plan, err := resolver.Resolve(reqAllowed)
 	require.NoError(t, err)
@@ -177,13 +177,13 @@ func TestRegisterProfileHandlers_GetAndSetProfile(t *testing.T) {
 	require.Equal(t, "agent", getResp["slug"])
 }
 
-func TestWebChatProfileResolver_Chat_BodyProfileAndRegistry(t *testing.T) {
+func TestWebChatProfileResolver_Chat_BodyRuntimeKeyAndRegistrySlug(t *testing.T) {
 	resolver := newTestResolverWithMultipleRegistries(t)
 
 	req := httptest.NewRequest(
 		http.MethodPost,
 		"/chat",
-		bytes.NewBufferString(`{"prompt":"hi","conv_id":"conv-1","registry":"team","profile":"analyst"}`),
+		bytes.NewBufferString(`{"prompt":"hi","conv_id":"conv-1","registry_slug":"team","runtime_key":"analyst"}`),
 	)
 	plan, err := resolver.Resolve(req)
 	require.NoError(t, err)
@@ -196,10 +196,10 @@ func TestWebChatProfileResolver_Chat_BodyProfileAndRegistry(t *testing.T) {
 	require.Equal(t, "You are analyst", plan.ResolvedRuntime.SystemPrompt)
 }
 
-func TestWebChatProfileResolver_WS_QueryProfileAndRegistry(t *testing.T) {
+func TestWebChatProfileResolver_WS_QueryRuntimeKeyAndRegistrySlug(t *testing.T) {
 	resolver := newTestResolverWithMultipleRegistries(t)
 
-	req := httptest.NewRequest(http.MethodGet, "/ws?conv_id=conv-1&registry=team&profile=analyst", nil)
+	req := httptest.NewRequest(http.MethodGet, "/ws?conv_id=conv-1&registry_slug=team&runtime_key=analyst", nil)
 	plan, err := resolver.Resolve(req)
 	require.NoError(t, err)
 	require.Equal(t, "conv-1", plan.ConvID)
@@ -215,7 +215,7 @@ func TestWebChatProfileResolver_Chat_InvalidRegistryInBody(t *testing.T) {
 	req := httptest.NewRequest(
 		http.MethodPost,
 		"/chat",
-		bytes.NewBufferString(`{"prompt":"hi","conv_id":"conv-1","registry":"invalid registry!","profile":"default"}`),
+		bytes.NewBufferString(`{"prompt":"hi","conv_id":"conv-1","registry_slug":"invalid registry!","runtime_key":"default"}`),
 	)
 	_, err := resolver.Resolve(req)
 	require.Error(t, err)
@@ -227,7 +227,7 @@ func TestWebChatProfileResolver_Chat_UnknownRegistryReturnsNotFound(t *testing.T
 
 	req := httptest.NewRequest(
 		http.MethodPost,
-		"/chat?registry=missing",
+		"/chat?registry_slug=missing",
 		bytes.NewBufferString(`{"prompt":"hi","conv_id":"conv-1"}`),
 	)
 	_, err := resolver.Resolve(req)
@@ -491,28 +491,28 @@ func TestWebChatProfileResolver_ProfilePrecedence(t *testing.T) {
 	}{
 		{
 			name:   "path wins",
-			path:   "/chat/path?profile=query&runtime=runtime",
-			body:   `{"prompt":"hi","conv_id":"conv-path","profile":"body"}`,
+			path:   "/chat/path?runtime_key=query",
+			body:   `{"prompt":"hi","conv_id":"conv-path","runtime_key":"body"}`,
 			cookie: "cookie",
 			want:   "path",
 		},
 		{
 			name:   "body wins over query and cookie",
-			path:   "/chat?profile=query&runtime=runtime",
-			body:   `{"prompt":"hi","conv_id":"conv-body","profile":"body"}`,
+			path:   "/chat?runtime_key=query",
+			body:   `{"prompt":"hi","conv_id":"conv-body","runtime_key":"body"}`,
 			cookie: "cookie",
 			want:   "body",
 		},
 		{
-			name:   "profile query wins over runtime query and cookie",
-			path:   "/chat?profile=query&runtime=runtime",
+			name:   "runtime_key query wins over cookie",
+			path:   "/chat?runtime_key=query",
 			body:   `{"prompt":"hi","conv_id":"conv-query"}`,
 			cookie: "cookie",
 			want:   "query",
 		},
 		{
-			name:   "runtime query wins over cookie",
-			path:   "/chat?runtime=runtime",
+			name:   "runtime_key query wins over cookie with runtime value",
+			path:   "/chat?runtime_key=runtime",
 			body:   `{"prompt":"hi","conv_id":"conv-runtime"}`,
 			cookie: "cookie",
 			want:   "runtime",
@@ -550,8 +550,8 @@ func TestWebChatProfileResolver_RegistryPrecedence_BodyOverQuery(t *testing.T) {
 
 	req := httptest.NewRequest(
 		http.MethodPost,
-		"/chat?registry=default",
-		bytes.NewBufferString(`{"prompt":"hi","conv_id":"conv-1","registry":"team","profile":"analyst"}`),
+		"/chat?registry_slug=default",
+		bytes.NewBufferString(`{"prompt":"hi","conv_id":"conv-1","registry_slug":"team","runtime_key":"analyst"}`),
 	)
 	plan, err := resolver.Resolve(req)
 	require.NoError(t, err)

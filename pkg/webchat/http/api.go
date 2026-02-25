@@ -19,13 +19,13 @@ import (
 
 // ChatRequestBody represents the expected JSON body for chat requests.
 type ChatRequestBody struct {
-	Prompt         string         `json:"prompt"`
-	Text           string         `json:"text,omitempty"`
-	ConvID         string         `json:"conv_id"`
-	Profile        string         `json:"profile,omitempty"`
-	Registry       string         `json:"registry,omitempty"`
-	Overrides      map[string]any `json:"overrides"`
-	IdempotencyKey string         `json:"idempotency_key,omitempty"`
+	Prompt           string         `json:"prompt"`
+	Text             string         `json:"text,omitempty"`
+	ConvID           string         `json:"conv_id"`
+	RuntimeKey       string         `json:"runtime_key,omitempty"`
+	RegistrySlug     string         `json:"registry_slug,omitempty"`
+	RequestOverrides map[string]any `json:"request_overrides"`
+	IdempotencyKey   string         `json:"idempotency_key,omitempty"`
 }
 
 // ResolvedConversationRequest is the canonical output of request policy resolution.
