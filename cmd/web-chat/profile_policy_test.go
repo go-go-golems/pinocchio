@@ -78,7 +78,7 @@ func TestWebChatProfileResolver_WS_DefaultProfile(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "conv-1", plan.ConvID)
 	require.Equal(t, "default", plan.RuntimeKey)
-	require.Equal(t, "You are default", plan.Overrides["system_prompt"])
+	require.Nil(t, plan.Overrides)
 	require.NotNil(t, plan.ResolvedRuntime)
 	require.Equal(t, "You are default", plan.ResolvedRuntime.SystemPrompt)
 }
@@ -107,7 +107,7 @@ func TestWebChatProfileResolver_Chat_OverridePolicy(t *testing.T) {
 	)
 	_, err = resolver.Resolve(req)
 	require.Error(t, err)
-	require.ErrorContains(t, err, "does not allow engine overrides")
+	require.ErrorContains(t, err, "request overrides are disabled for this profile")
 
 	reqAllowed := httptest.NewRequest(
 		http.MethodPost,
@@ -117,7 +117,9 @@ func TestWebChatProfileResolver_Chat_OverridePolicy(t *testing.T) {
 	plan, err := resolver.Resolve(reqAllowed)
 	require.NoError(t, err)
 	require.Equal(t, "agent", plan.RuntimeKey)
-	require.Equal(t, "override", plan.Overrides["system_prompt"])
+	require.Nil(t, plan.Overrides)
+	require.NotNil(t, plan.ResolvedRuntime)
+	require.Equal(t, "override", plan.ResolvedRuntime.SystemPrompt)
 }
 
 func TestRegisterProfileHandlers_GetAndSetProfile(t *testing.T) {
@@ -187,7 +189,7 @@ func TestWebChatProfileResolver_Chat_BodyProfileAndRegistry(t *testing.T) {
 	require.Equal(t, "conv-1", plan.ConvID)
 	require.Equal(t, "analyst", plan.RuntimeKey)
 	require.Equal(t, uint64(7), plan.ProfileVersion)
-	require.Equal(t, "You are analyst", plan.Overrides["system_prompt"])
+	require.Nil(t, plan.Overrides)
 	require.NotNil(t, plan.ResolvedRuntime)
 	require.Equal(t, "You are analyst", plan.ResolvedRuntime.SystemPrompt)
 }
@@ -201,7 +203,7 @@ func TestWebChatProfileResolver_WS_QueryProfileAndRegistry(t *testing.T) {
 	require.Equal(t, "conv-1", plan.ConvID)
 	require.Equal(t, "analyst", plan.RuntimeKey)
 	require.Equal(t, uint64(7), plan.ProfileVersion)
-	require.Equal(t, "You are analyst", plan.Overrides["system_prompt"])
+	require.Nil(t, plan.Overrides)
 }
 
 func TestWebChatProfileResolver_Chat_InvalidRegistryInBody(t *testing.T) {

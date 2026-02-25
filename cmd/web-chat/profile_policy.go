@@ -188,23 +188,21 @@ func (r *ProfileRequestResolver) resolveWS(req *http.Request) (webhttp.ResolvedC
 		return webhttp.ResolvedConversationRequest{}, &webhttp.RequestResolutionError{Status: http.StatusBadRequest, ClientMsg: "missing conv_id"}
 	}
 
-	_, slug, profile, err := r.resolveProfileSelection(req, "", "", "")
+	registrySlug, profileSlug, err := r.resolveProfileSelection(req, "", "", "")
 	if err != nil {
 		return webhttp.ResolvedConversationRequest{}, err
 	}
-	overrides := runtimeDefaultsFromProfile(profile)
-	resolvedRuntime := profileRuntimeSpec(profile)
-	profileVersion := uint64(0)
-	if profile != nil {
-		profileVersion = profile.Metadata.Version
+	resolvedProfile, err := r.resolveEffectiveProfile(context.Background(), registrySlug, profileSlug, nil)
+	if err != nil {
+		return webhttp.ResolvedConversationRequest{}, err
 	}
+	resolvedRuntime := resolvedProfile.EffectiveRuntime
 
 	return webhttp.ResolvedConversationRequest{
 		ConvID:          convID,
-		RuntimeKey:      slug.String(),
-		ProfileVersion:  profileVersion,
-		ResolvedRuntime: resolvedRuntime,
-		Overrides:       overrides,
+		RuntimeKey:      resolvedProfile.RuntimeKey.String(),
+		ProfileVersion:  profileVersionFromResolvedMetadata(resolvedProfile.Metadata),
+		ResolvedRuntime: &resolvedRuntime,
 	}, nil
 }
 
@@ -223,27 +221,21 @@ func (r *ProfileRequestResolver) resolveChat(req *http.Request) (webhttp.Resolve
 	}
 
 	pathSlug := profileSlugFromPath(req)
-	_, slug, profile, err := r.resolveProfileSelection(req, pathSlug, body.Profile, body.Registry)
+	registrySlug, profileSlug, err := r.resolveProfileSelection(req, pathSlug, body.Profile, body.Registry)
 	if err != nil {
 		return webhttp.ResolvedConversationRequest{}, err
 	}
-
-	overrides, err := mergeRuntimeOverrides(profile, body.Overrides)
+	resolvedProfile, err := r.resolveEffectiveProfile(context.Background(), registrySlug, profileSlug, body.Overrides)
 	if err != nil {
 		return webhttp.ResolvedConversationRequest{}, err
 	}
-	resolvedRuntime := profileRuntimeSpec(profile)
-	profileVersion := uint64(0)
-	if profile != nil {
-		profileVersion = profile.Metadata.Version
-	}
+	resolvedRuntime := resolvedProfile.EffectiveRuntime
 
 	return webhttp.ResolvedConversationRequest{
 		ConvID:          convID,
-		RuntimeKey:      slug.String(),
-		ProfileVersion:  profileVersion,
-		ResolvedRuntime: resolvedRuntime,
-		Overrides:       overrides,
+		RuntimeKey:      resolvedProfile.RuntimeKey.String(),
+		ProfileVersion:  profileVersionFromResolvedMetadata(resolvedProfile.Metadata),
+		ResolvedRuntime: &resolvedRuntime,
 		Prompt:          body.Prompt,
 		IdempotencyKey:  strings.TrimSpace(body.IdempotencyKey),
 	}, nil
@@ -254,14 +246,14 @@ func (r *ProfileRequestResolver) resolveProfileSelection(
 	pathSlug string,
 	bodyProfileRaw string,
 	bodyRegistryRaw string,
-) (gepprofiles.RegistrySlug, gepprofiles.ProfileSlug, *gepprofiles.Profile, error) {
+) (gepprofiles.RegistrySlug, gepprofiles.ProfileSlug, error) {
 	if r == nil || r.profileRegistry == nil {
-		return "", "", nil, &webhttp.RequestResolutionError{Status: http.StatusInternalServerError, ClientMsg: "profile resolver is not configured"}
+		return "", "", &webhttp.RequestResolutionError{Status: http.StatusInternalServerError, ClientMsg: "profile resolver is not configured"}
 	}
 
 	registrySlug, err := r.resolveRegistrySlug(req, bodyRegistryRaw)
 	if err != nil {
-		return "", "", nil, err
+		return "", "", err
 	}
 
 	slugRaw := strings.TrimSpace(pathSlug)
@@ -280,25 +272,15 @@ func (r *ProfileRequestResolver) resolveProfileSelection(
 		}
 	}
 
-	ctx := context.Background()
 	if strings.TrimSpace(slugRaw) == "" {
-		s, err := r.resolveDefaultProfileSlug(ctx, registrySlug)
-		if err != nil {
-			return "", "", nil, r.toRequestResolutionError(err, "")
-		}
-		slugRaw = s.String()
+		return registrySlug, "", nil
 	}
 
 	slug, err := gepprofiles.ParseProfileSlug(slugRaw)
 	if err != nil {
-		return "", "", nil, &webhttp.RequestResolutionError{Status: http.StatusBadRequest, ClientMsg: "invalid profile: " + slugRaw, Err: err}
+		return "", "", &webhttp.RequestResolutionError{Status: http.StatusBadRequest, ClientMsg: "invalid profile: " + slugRaw, Err: err}
 	}
-
-	profile, err := r.profileRegistry.GetProfile(ctx, registrySlug, slug)
-	if err != nil {
-		return "", "", nil, r.toRequestResolutionError(err, slugRaw)
-	}
-	return registrySlug, slug, profile, nil
+	return registrySlug, slug, nil
 }
 
 func (r *ProfileRequestResolver) resolveRegistrySlug(req *http.Request, bodyRegistryRaw string) (gepprofiles.RegistrySlug, error) {
@@ -316,15 +298,52 @@ func (r *ProfileRequestResolver) resolveRegistrySlug(req *http.Request, bodyRegi
 	return registrySlug, nil
 }
 
-func (r *ProfileRequestResolver) resolveDefaultProfileSlug(ctx context.Context, registrySlug gepprofiles.RegistrySlug) (gepprofiles.ProfileSlug, error) {
-	registry, err := r.profileRegistry.GetRegistry(ctx, registrySlug)
+func (r *ProfileRequestResolver) resolveEffectiveProfile(
+	ctx context.Context,
+	registrySlug gepprofiles.RegistrySlug,
+	profileSlug gepprofiles.ProfileSlug,
+	requestOverrides map[string]any,
+) (*gepprofiles.ResolvedProfile, error) {
+	in := gepprofiles.ResolveInput{
+		RegistrySlug:     registrySlug,
+		ProfileSlug:      profileSlug,
+		RequestOverrides: requestOverrides,
+	}
+	if !profileSlug.IsZero() {
+		if runtimeKey, err := gepprofiles.ParseRuntimeKey(profileSlug.String()); err == nil {
+			in.RuntimeKeyFallback = runtimeKey
+		}
+	}
+	resolved, err := r.profileRegistry.ResolveEffectiveProfile(ctx, in)
 	if err != nil {
-		return "", err
+		return nil, r.toRequestResolutionError(err, profileSlug.String())
 	}
-	if registry != nil && !registry.DefaultProfileSlug.IsZero() {
-		return registry.DefaultProfileSlug, nil
+	return resolved, nil
+}
+
+func profileVersionFromResolvedMetadata(metadata map[string]any) uint64 {
+	raw := metadata["profile.version"]
+	switch v := raw.(type) {
+	case uint64:
+		return v
+	case uint32:
+		return uint64(v)
+	case uint:
+		return uint64(v)
+	case int64:
+		if v >= 0 {
+			return uint64(v)
+		}
+	case int:
+		if v >= 0 {
+			return uint64(v)
+		}
+	case float64:
+		if v >= 0 {
+			return uint64(v)
+		}
 	}
-	return gepprofiles.MustProfileSlug("default"), nil
+	return 0
 }
 
 func (r *ProfileRequestResolver) toRequestResolutionError(err error, slug string) error {
@@ -340,127 +359,15 @@ func (r *ProfileRequestResolver) toRequestResolutionError(err error, slug string
 	if errors.Is(err, gepprofiles.ErrRegistryNotFound) {
 		return &webhttp.RequestResolutionError{Status: http.StatusNotFound, ClientMsg: "registry not found", Err: err}
 	}
+	var validationErr *gepprofiles.ValidationError
+	if errors.As(err, &validationErr) {
+		return &webhttp.RequestResolutionError{Status: http.StatusBadRequest, ClientMsg: validationErr.Error(), Err: err}
+	}
+	var policyErr *gepprofiles.PolicyViolationError
+	if errors.As(err, &policyErr) {
+		return &webhttp.RequestResolutionError{Status: http.StatusBadRequest, ClientMsg: policyErr.Error(), Err: err}
+	}
 	return &webhttp.RequestResolutionError{Status: http.StatusInternalServerError, ClientMsg: "profile resolution failed", Err: err}
-}
-
-func profileRuntimeSpec(p *gepprofiles.Profile) *gepprofiles.RuntimeSpec {
-	if p == nil {
-		return nil
-	}
-	spec := gepprofiles.RuntimeSpec{
-		StepSettingsPatch: map[string]any{},
-		SystemPrompt:      strings.TrimSpace(p.Runtime.SystemPrompt),
-		Middlewares:       append([]gepprofiles.MiddlewareUse(nil), p.Runtime.Middlewares...),
-		Tools:             append([]string(nil), p.Runtime.Tools...),
-	}
-	for k, v := range p.Runtime.StepSettingsPatch {
-		spec.StepSettingsPatch[k] = v
-	}
-	for i := range spec.Middlewares {
-		mw := spec.Middlewares[i]
-		config := mw.Config
-		if config == nil {
-			if fromExt, ok, err := gepprofiles.MiddlewareConfigFromExtensions(p.Extensions, mw, i); err == nil && ok {
-				config = fromExt
-			}
-		}
-		spec.Middlewares[i].Config = config
-	}
-	if len(spec.StepSettingsPatch) == 0 {
-		spec.StepSettingsPatch = nil
-	}
-	return &spec
-}
-
-func runtimeDefaultsFromProfile(p *gepprofiles.Profile) map[string]any {
-	if p == nil {
-		return nil
-	}
-	overrides := map[string]any{}
-	if strings.TrimSpace(p.Runtime.SystemPrompt) != "" {
-		overrides["system_prompt"] = p.Runtime.SystemPrompt
-	}
-	if len(p.Runtime.Middlewares) > 0 {
-		mws := make([]any, 0, len(p.Runtime.Middlewares))
-		for i, mw := range p.Runtime.Middlewares {
-			name := strings.TrimSpace(mw.Name)
-			if name == "" {
-				continue
-			}
-			config := mw.Config
-			if config == nil {
-				if fromExt, ok, err := gepprofiles.MiddlewareConfigFromExtensions(p.Extensions, mw, i); err == nil && ok {
-					config = fromExt
-				}
-			}
-			entry := map[string]any{
-				"name":   name,
-				"config": config,
-			}
-			if id := strings.TrimSpace(mw.ID); id != "" {
-				entry["id"] = id
-			}
-			if mw.Enabled != nil {
-				entry["enabled"] = *mw.Enabled
-			}
-			mws = append(mws, entry)
-		}
-		if len(mws) > 0 {
-			overrides["middlewares"] = mws
-		}
-	}
-	if len(p.Runtime.Tools) > 0 {
-		tools := make([]any, 0, len(p.Runtime.Tools))
-		for _, t := range p.Runtime.Tools {
-			name := strings.TrimSpace(t)
-			if name == "" {
-				continue
-			}
-			tools = append(tools, name)
-		}
-		if len(tools) > 0 {
-			overrides["tools"] = tools
-		}
-	}
-	if len(overrides) == 0 {
-		return nil
-	}
-	return overrides
-}
-
-func mergeRuntimeOverrides(profile *gepprofiles.Profile, requestOverrides map[string]any) (map[string]any, error) {
-	merged := runtimeDefaultsFromProfile(profile)
-	if merged == nil {
-		merged = map[string]any{}
-	}
-	if len(requestOverrides) == 0 {
-		if len(merged) == 0 {
-			return nil, nil
-		}
-		return merged, nil
-	}
-
-	hasEngineOverride := false
-	if _, ok := requestOverrides["system_prompt"]; ok {
-		hasEngineOverride = true
-	}
-	if _, ok := requestOverrides["middlewares"]; ok {
-		hasEngineOverride = true
-	}
-	if _, ok := requestOverrides["tools"]; ok {
-		hasEngineOverride = true
-	}
-	if hasEngineOverride && profile != nil && !profile.Policy.AllowOverrides {
-		return nil, &webhttp.RequestResolutionError{Status: http.StatusBadRequest, ClientMsg: "profile does not allow engine overrides"}
-	}
-
-	for k, v := range requestOverrides {
-		merged[k] = v
-	}
-	if len(merged) == 0 {
-		return nil, nil
-	}
-	return merged, nil
 }
 
 func profileSlugFromPath(req *http.Request) string {
