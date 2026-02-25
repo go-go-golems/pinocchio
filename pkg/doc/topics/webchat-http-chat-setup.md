@@ -105,7 +105,6 @@ Request body:
   "prompt": "Classify these transactions",
   "conv_id": "optional-conversation-id",
   "runtime_key": "optional-profile-slug-or-runtime-key",
-  "registry_slug": "optional-registry-slug",
   "idempotency_key": "optional-client-key",
   "request_overrides": {
     "system_prompt": "You are a financial analyst",
@@ -127,6 +126,7 @@ Legacy resolver payload aliases are removed:
 
 - `profile`
 - `registry`
+- `registry_slug`
 - `overrides`
 - `runtime` query alias
 

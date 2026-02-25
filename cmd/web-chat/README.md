@@ -75,7 +75,6 @@ Use canonical request keys:
   "prompt": "hello",
   "conv_id": "optional-conversation-id",
   "runtime_key": "optional-profile-slug-or-runtime-key",
-  "registry_slug": "optional-registry-slug",
   "request_overrides": {
     "system_prompt": "optional policy-gated override"
   },
@@ -87,6 +86,7 @@ Legacy aliases are removed from resolver handling:
 
 - `profile`
 - `registry`
+- `registry_slug`
 - `overrides`
 - `runtime` query alias
 
@@ -116,7 +116,7 @@ Turn store:
 
 ```bash
 go generate ./cmd/web-chat
-go run ./cmd/web-chat --addr :8080
+go run ./cmd/web-chat web-chat --addr :8080 --profile-registries ./profiles.db
 ```
 
 Open `http://localhost:8080/`.
@@ -124,14 +124,14 @@ Open `http://localhost:8080/`.
 Enable debug API routes:
 
 ```bash
-go run ./cmd/web-chat --addr :8080 --debug-api
+go run ./cmd/web-chat web-chat --addr :8080 --debug-api --profile-registries ./profiles.db
 ```
 
 Example with root mount and non-default dev ports:
 
 ```bash
 # backend
-go run ./cmd/web-chat --addr :8081 --root /chat --debug-api
+go run ./cmd/web-chat web-chat --addr :8081 --root /chat --debug-api --profile-registries ./profiles.db
 
 # frontend (from cmd/web-chat/web)
 VITE_BACKEND_ORIGIN=http://localhost:8081 \

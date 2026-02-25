@@ -12,7 +12,7 @@ Commands:
 - web-chat
 Flags:
 - profile
-- profile-file
+- profile-registries
 IsTemplate: false
 IsTopLevel: false
 ShowPerDefault: true
@@ -24,7 +24,7 @@ SectionType: GeneralTopic
 This page is the reference for profile registry behavior in pinocchio webchat applications. It explains:
 
 - how profile registries are bootstrapped and injected,
-- how profile/registry selection is resolved from request inputs,
+- how profile selection is resolved from request inputs,
 - how runtime composition uses resolved profile data,
 - how profile CRUD endpoints behave and what errors they return.
 
@@ -68,19 +68,15 @@ SQLite-backed stores follow the same service interface and are recommended when 
 
 ## Request Selection Precedence
 
-For chat/websocket requests, the typical profile selection order is:
+For chat/websocket requests, the profile selection order is:
 
-1. explicit body field (`profile`)
-2. query field (`profile`)
-3. query field (`runtime`) for backward client compatibility
+1. path slug (`POST /chat/{runtime}`)
+2. request body `runtime_key`
+3. query `runtime_key`
 4. `chat_profile` cookie
-5. registry default profile
+5. stack default profile (`default`, resolved top source -> bottom source)
 
-Registry selection commonly follows:
-
-1. explicit body field (`registry`)
-2. query field (`registry`)
-3. resolver default registry slug
+Runtime registry switching is not part of this flow. Registry lookup uses the loaded source stack (`--profile-registries`) and the first matching profile slug from top to bottom.
 
 If selection is invalid, resolvers should return `RequestResolutionError` with precise client status (`400`, `404`, or `500`).
 
@@ -318,16 +314,23 @@ Current rollout assumptions:
 - profile-registry middleware integration is always enabled,
 - `PINOCCHIO_ENABLE_PROFILE_REGISTRY_MIDDLEWARE` is removed,
 - compatibility aliases for renamed runtime/webchat symbols are removed,
+- runtime registry switching (`registry_slug` selector path) is removed,
 - profile CRUD + schema endpoints are the canonical integration surface.
 
 Do not gate behavior with legacy env toggles. If a deployment needs rollback, use release rollback and profile DB snapshot restore.
 
 ## SQLite Operations and Rollout Notes
 
-For durable multi-user profile editing, run web-chat with SQLite-backed registry storage:
+For durable multi-user profile editing, run web-chat with SQLite-backed registry storage as one source in the runtime stack:
 
 ```bash
-pinocchio web-chat --profile-registry-db ./data/profiles.db
+web-chat web-chat --profile-registries ./data/profiles.db
+```
+
+To layer a private file over a shared DB:
+
+```bash
+web-chat web-chat --profile-registries ./data/profiles.db,./profiles/private-top.yaml
 ```
 
 Operational recommendations:
@@ -340,6 +343,14 @@ Migration/rollout posture:
 
 - registry middleware integration is always enabled,
 - rollback uses release rollback + profile DB snapshot restore, not runtime env toggles.
+
+## CRUD Exposure Risk (Current Scope)
+
+Current GP-31 behavior intentionally exposes list/get across all loaded registries. This includes YAML-backed registries loaded through `--profile-registries`.
+
+Operational implication:
+
+- if a private YAML registry carries sensitive runtime defaults, profile CRUD/read APIs can expose them unless application-level redaction or route protection is added.
 
 ## Go-Go-OS Integration Notes
 
