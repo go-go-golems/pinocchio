@@ -66,6 +66,40 @@ Legacy route names are intentionally not documented here:
 - `/turns`
 - `/hydrate`
 
+### `POST /chat` Request (Hard-Cut Contract)
+
+Use canonical request keys:
+
+```json
+{
+  "prompt": "hello",
+  "conv_id": "optional-conversation-id",
+  "runtime_key": "optional-profile-slug-or-runtime-key",
+  "registry_slug": "optional-registry-slug",
+  "request_overrides": {
+    "system_prompt": "optional policy-gated override"
+  },
+  "idempotency_key": "optional-client-idempotency-key"
+}
+```
+
+Legacy aliases are removed from resolver handling:
+
+- `profile`
+- `registry`
+- `overrides`
+- `runtime` query alias
+
+### Runtime Metadata in Responses
+
+Chat responses now include resolver/runtime metadata fields:
+
+- `runtime_fingerprint`
+- `profile_metadata`
+  - includes resolver metadata keys such as:
+    - `profile.stack.lineage`
+    - `profile.stack.trace`
+
 ## Durable Stores
 
 Timeline store:

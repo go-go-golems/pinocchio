@@ -76,11 +76,14 @@ This route set is app-agnostic and reusable across pinocchio `cmd/web-chat` and 
 
 Handlers for `/chat` and `/ws` both depend on a `ConversationRequestResolver`.
 
-The resolver returns `ConversationRequestPlan` with:
+The resolver returns `ResolvedConversationRequest` with:
 
 - `ConvID`
 - `RuntimeKey`
-- `Overrides`
+- `RuntimeFingerprint`
+- `ProfileVersion`
+- `ResolvedRuntime`
+- `ProfileMetadata` (includes stack lineage/trace metadata)
 - `Prompt`
 - `IdempotencyKey`
 
@@ -88,7 +91,7 @@ Use resolver policy for:
 
 - profile/runtime selection
 - cookie or query-based defaults
-- override allow/deny logic
+- request override allow/deny logic
 - request validation and typed errors (`RequestResolutionError`)
 
 ## Request and Response Shapes
@@ -101,8 +104,10 @@ Request body:
 {
   "prompt": "Classify these transactions",
   "conv_id": "optional-conversation-id",
+  "runtime_key": "optional-profile-slug-or-runtime-key",
+  "registry_slug": "optional-registry-slug",
   "idempotency_key": "optional-client-key",
-  "overrides": {
+  "request_overrides": {
     "system_prompt": "You are a financial analyst",
     "middlewares": [
       { "name": "agentmode", "config": { "default_mode": "financial_analyst" } }
@@ -112,7 +117,18 @@ Request body:
 }
 ```
 
-Response shape is service-defined and may include queue metadata. Current reference apps return start/queued metadata plus conversation/session IDs.
+Response shape is service-defined and may include queue metadata.
+Current reference apps return start/queued metadata plus conversation/session IDs and runtime/profile metadata fields:
+
+- `runtime_fingerprint`
+- `profile_metadata` (including `profile.stack.lineage` and `profile.stack.trace`)
+
+Legacy resolver payload aliases are removed:
+
+- `profile`
+- `registry`
+- `overrides`
+- `runtime` query alias
 
 ### GET /api/timeline
 
