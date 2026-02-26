@@ -11,8 +11,8 @@ require (
 	github.com/charmbracelet/log v0.4.1
 	github.com/go-go-golems/bobatea v0.1.1
 	github.com/go-go-golems/clay v0.4.0
-	github.com/go-go-golems/geppetto v0.10.0
-	github.com/go-go-golems/glazed v1.0.1
+	github.com/go-go-golems/geppetto v0.10.1
+	github.com/go-go-golems/glazed v1.0.2
 	github.com/go-go-golems/go-sqlite-regexp v0.0.1
 	github.com/go-go-golems/uhoh v0.0.5
 	github.com/google/uuid v1.6.0
