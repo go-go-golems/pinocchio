@@ -10,8 +10,8 @@ Usage:
 
 End-to-end migration/smoke script:
 1) Backup existing legacy profiles YAML
-2) Convert legacy profiles YAML -> canonical registry bundle YAML (for import)
-3) Import canonical registry bundle YAML -> SQLite profile registry DB
+2) Convert legacy profiles YAML -> runtime single-registry YAML
+3) Import runtime single-registry YAML -> SQLite profile registry DB
 4) Build a top-of-stack runtime registry YAML that layers over imported DB profiles
 5) Start web-chat using --profile-registries <db>,<top-yaml>
 6) Smoke test web-chat profile selection/runtime metadata
@@ -122,7 +122,7 @@ mkdir -p "${WORK_DIR}"
 if [[ -z "${DB_PATH}" ]]; then
   DB_PATH="${WORK_DIR}/profiles.db"
 fi
-CANONICAL_BUNDLE_YAML="${WORK_DIR}/profiles.registry.bundle.yaml"
+RUNTIME_REGISTRY_YAML="${WORK_DIR}/profiles.runtime.yaml"
 TOP_RUNTIME_YAML="${WORK_DIR}/profiles.runtime.top.yaml"
 SUMMARY_JSON="${WORK_DIR}/import-summary.json"
 WEBCHAT_LOG="${WORK_DIR}/web-chat.log"
@@ -153,16 +153,16 @@ backup_file="${backup_dir}/profiles.yaml.${STAMP}.bak"
 cp "${LEGACY_PROFILE_FILE}" "${backup_file}"
 log "Backup created: ${backup_file}"
 
-log "Converting legacy profiles YAML to canonical registry bundle YAML"
+log "Converting legacy profiles YAML to runtime single-registry YAML"
 (
   cd "${ROOT_DIR}"
   go run ./cmd/pinocchio profiles migrate-legacy \
     --input "${LEGACY_PROFILE_FILE}" \
-    --output "${CANONICAL_BUNDLE_YAML}" \
+    --output "${RUNTIME_REGISTRY_YAML}" \
     --registry "${REGISTRY_SLUG}" \
     --force >/dev/null
 )
-log "Canonical registry bundle YAML: ${CANONICAL_BUNDLE_YAML}"
+log "Runtime registry YAML: ${RUNTIME_REGISTRY_YAML}"
 
 cat > "${IMPORT_HELPER}" <<'GOEOF'
 package main
@@ -193,7 +193,7 @@ func main() {
 	var inputPath string
 	var dbPath string
 	var defaultRegistryRaw string
-	flag.StringVar(&inputPath, "input", "", "canonical registry bundle YAML path")
+	flag.StringVar(&inputPath, "input", "", "runtime single-registry YAML path")
 	flag.StringVar(&dbPath, "db", "", "sqlite db path")
 	flag.StringVar(&defaultRegistryRaw, "default-registry", "default", "default registry slug for decoding legacy input")
 	flag.Parse()
@@ -213,12 +213,12 @@ func main() {
 	if err != nil {
 		fatalf("read %s: %v", inputPath, err)
 	}
-	registries, err := gepprofiles.DecodeYAMLRegistries(raw, defaultRegistry)
+	registry, err := gepprofiles.DecodeRuntimeYAMLSingleRegistry(raw)
 	if err != nil {
-		fatalf("decode registries: %v", err)
+		fatalf("decode runtime registry: %v", err)
 	}
-	if len(registries) == 0 {
-		fatalf("no registries decoded from %s", inputPath)
+	if registry == nil {
+		fatalf("no runtime registry decoded from %s", inputPath)
 	}
 
 	if err := os.Remove(dbPath); err != nil && !os.IsNotExist(err) {
@@ -235,41 +235,31 @@ func main() {
 	defer func() { _ = store.Close() }()
 
 	ctx := context.Background()
-	for _, registry := range registries {
-		if registry == nil {
-			continue
-		}
-		if err := store.UpsertRegistry(ctx, registry, gepprofiles.SaveOptions{
-			Actor:  "profile-registry-cutover-smoke",
-			Source: "migration-script",
-		}); err != nil {
-			fatalf("upsert registry %q: %v", registry.Slug, err)
-		}
+	if err := store.UpsertRegistry(ctx, registry, gepprofiles.SaveOptions{
+		Actor:  "profile-registry-cutover-smoke",
+		Source: "migration-script",
+	}); err != nil {
+		fatalf("upsert registry %q: %v", registry.Slug, err)
 	}
 
 	summary := importSummary{
-		ImportedCount: len(registries),
-		Registries:    make([]registrySummary, 0, len(registries)),
+		ImportedCount: 1,
+		Registries:    make([]registrySummary, 0, 1),
 	}
-	for _, registry := range registries {
-		if registry == nil {
-			continue
-		}
-		profiles := make([]string, 0, len(registry.Profiles))
-		for slug := range registry.Profiles {
-			profiles = append(profiles, slug.String())
-		}
-		sort.Strings(profiles)
-		defaultProfile := registry.DefaultProfileSlug.String()
-		if defaultProfile == "" && len(profiles) > 0 {
-			defaultProfile = profiles[0]
-		}
-		summary.Registries = append(summary.Registries, registrySummary{
-			Slug:           registry.Slug.String(),
-			DefaultProfile: defaultProfile,
-			Profiles:       profiles,
-		})
+	profiles := make([]string, 0, len(registry.Profiles))
+	for slug := range registry.Profiles {
+		profiles = append(profiles, slug.String())
 	}
+	sort.Strings(profiles)
+	defaultProfile := registry.DefaultProfileSlug.String()
+	if defaultProfile == "" && len(profiles) > 0 {
+		defaultProfile = profiles[0]
+	}
+	summary.Registries = append(summary.Registries, registrySummary{
+		Slug:           registry.Slug.String(),
+		DefaultProfile: defaultProfile,
+		Profiles:       profiles,
+	})
 	sort.Slice(summary.Registries, func(i, j int) bool {
 		return summary.Registries[i].Slug < summary.Registries[j].Slug
 	})
@@ -287,10 +277,10 @@ func fatalf(format string, args ...any) {
 }
 GOEOF
 
-log "Importing registry bundle YAML into SQLite profile DB"
+log "Importing runtime registry YAML into SQLite profile DB"
 (
   cd "${ROOT_DIR}"
-  go run "${IMPORT_HELPER}" --input "${CANONICAL_BUNDLE_YAML}" --db "${DB_PATH}" --default-registry "${REGISTRY_SLUG}" > "${SUMMARY_JSON}"
+  go run "${IMPORT_HELPER}" --input "${RUNTIME_REGISTRY_YAML}" --db "${DB_PATH}" --default-registry "${REGISTRY_SLUG}" > "${SUMMARY_JSON}"
 )
 log "SQLite profile DB: ${DB_PATH}"
 log "Import summary: ${SUMMARY_JSON}"
@@ -429,7 +419,7 @@ Smoke run completed successfully.
 
 Artifacts:
   backup legacy profile file: ${backup_file}
-  canonical registry bundle yaml: ${CANONICAL_BUNDLE_YAML}
+  runtime registry yaml: ${RUNTIME_REGISTRY_YAML}
   sqlite registry db: ${DB_PATH}
   top runtime registry yaml: ${TOP_RUNTIME_YAML}
   import summary: ${SUMMARY_JSON}
