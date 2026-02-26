@@ -413,10 +413,12 @@ func TestProfileAPI_InvalidSlugAndRegistry_ReturnBadRequest(t *testing.T) {
 
 func assertProfileListItemContract(t *testing.T, item map[string]any) {
 	t.Helper()
+	require.NotEmpty(t, item["registry"])
 	require.NotEmpty(t, item["slug"])
 	assertAllowedContractKeys(
 		t,
 		item,
+		"registry",
 		"slug",
 		"display_name",
 		"description",

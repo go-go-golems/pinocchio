@@ -22,6 +22,7 @@ const (
 )
 
 type ProfileListItem struct {
+	Registry      string         `json:"registry"`
 	Slug          string         `json:"slug"`
 	DisplayName   string         `json:"display_name,omitempty"`
 	Description   string         `json:"description,omitempty"`
@@ -203,7 +204,6 @@ func RegisterProfileAPIHandlers(mux *http.ServeMux, profileRegistry gepprofiles.
 					items = append(items, profileListItemsFromRegistry(registrySlug, registry, profiles_)...)
 				}
 			}
-			items = dedupeProfileListItemsBySlug(items)
 			sort.Slice(items, func(i, j int) bool {
 				return items[i].Slug < items[j].Slug
 			})
@@ -636,6 +636,7 @@ func profileListItemsFromRegistry(registrySlug gepprofiles.RegistrySlug, registr
 			continue
 		}
 		items = append(items, ProfileListItem{
+			Registry:      registrySlug.String(),
 			Slug:          p.Slug.String(),
 			DisplayName:   p.DisplayName,
 			Description:   p.Description,
@@ -646,26 +647,6 @@ func profileListItemsFromRegistry(registrySlug gepprofiles.RegistrySlug, registr
 		})
 	}
 	return items
-}
-
-func dedupeProfileListItemsBySlug(items []ProfileListItem) []ProfileListItem {
-	if len(items) <= 1 {
-		return items
-	}
-	seen := make(map[string]struct{}, len(items))
-	out := make([]ProfileListItem, 0, len(items))
-	for _, item := range items {
-		slug := strings.TrimSpace(item.Slug)
-		if slug == "" {
-			continue
-		}
-		if _, ok := seen[slug]; ok {
-			continue
-		}
-		seen[slug] = struct{}{}
-		out = append(out, item)
-	}
-	return out
 }
 
 func cloneExtensionMap(in map[string]any) map[string]any {

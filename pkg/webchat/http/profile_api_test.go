@@ -120,24 +120,27 @@ func TestListExtensionSchemas_GracefullyHandlesRegistryWithoutLister(t *testing.
 	}
 }
 
-func TestDedupeProfileListItemsBySlug_UsesFirstEntryPerSlug(t *testing.T) {
-	in := []ProfileListItem{
-		{Slug: "agent", DisplayName: "Agent from top"},
-		{Slug: "default", DisplayName: "Default"},
-		{Slug: "agent", DisplayName: "Agent from lower"},
+func TestProfileListItemsFromRegistry_IncludesRegistryIdentifier(t *testing.T) {
+	registrySlug := gepprofiles.MustRegistrySlug("team")
+	registry := &gepprofiles.ProfileRegistry{
+		Slug:               registrySlug,
+		DefaultProfileSlug: gepprofiles.MustProfileSlug("analyst"),
+	}
+	profiles_ := []*gepprofiles.Profile{
+		{
+			Slug:        gepprofiles.MustProfileSlug("analyst"),
+			DisplayName: "Analyst",
+		},
 	}
 
-	out := dedupeProfileListItemsBySlug(in)
-	if got, want := len(out), 2; got != want {
+	out := profileListItemsFromRegistry(registrySlug, registry, profiles_)
+	if got, want := len(out), 1; got != want {
 		t.Fatalf("item count mismatch: got=%d want=%d", got, want)
 	}
-	if got, want := out[0].Slug, "agent"; got != want {
-		t.Fatalf("slug[0] mismatch: got=%q want=%q", got, want)
+	if got, want := out[0].Registry, "team"; got != want {
+		t.Fatalf("registry mismatch: got=%q want=%q", got, want)
 	}
-	if got, want := out[0].DisplayName, "Agent from top"; got != want {
-		t.Fatalf("display_name[0] mismatch: got=%q want=%q", got, want)
-	}
-	if got, want := out[1].Slug, "default"; got != want {
-		t.Fatalf("slug[1] mismatch: got=%q want=%q", got, want)
+	if got, want := out[0].Slug, "analyst"; got != want {
+		t.Fatalf("slug mismatch: got=%q want=%q", got, want)
 	}
 }

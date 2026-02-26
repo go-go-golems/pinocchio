@@ -58,6 +58,42 @@ profiles:
 	return newProfileRequestResolver(chain, gepprofiles.MustRegistrySlug(defaultRegistrySlug))
 }
 
+func newTestResolverWithDuplicateSlugAcrossRegistries(t *testing.T) *ProfileRequestResolver {
+	t.Helper()
+
+	tmpDir := t.TempDir()
+	defaultPath := filepath.Join(tmpDir, "default.yaml")
+	teamPath := filepath.Join(tmpDir, "team.yaml")
+
+	require.NoError(t, os.WriteFile(defaultPath, []byte(`slug: default
+profiles:
+  analyst:
+    slug: analyst
+    runtime:
+      system_prompt: You are default analyst
+    metadata:
+      version: 1
+`), 0o644))
+	require.NoError(t, os.WriteFile(teamPath, []byte(`slug: team
+profiles:
+  analyst:
+    slug: analyst
+    runtime:
+      system_prompt: You are team analyst
+    metadata:
+      version: 7
+`), 0o644))
+
+	specs, err := gepprofiles.ParseRegistrySourceSpecs([]string{defaultPath, teamPath})
+	require.NoError(t, err)
+	chain, err := gepprofiles.NewChainedRegistryFromSourceSpecs(context.Background(), specs)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		_ = chain.Close()
+	})
+	return newProfileRequestResolver(chain, gepprofiles.MustRegistrySlug(defaultRegistrySlug))
+}
+
 func TestWebChatProfileResolver_WS_DefaultProfile(t *testing.T) {
 	profileRegistry, err := newInMemoryProfileService(
 		"default",
@@ -192,12 +228,17 @@ func TestProfileAPI_ListAndGetAcrossLoadedRegistriesWhenRegistryUnset(t *testing
 	require.Len(t, listed, 2)
 
 	seen := map[string]bool{}
+	seenRegistries := map[string]bool{}
 	for _, item := range listed {
 		slug, _ := item["slug"].(string)
+		registry, _ := item["registry"].(string)
 		seen[slug] = true
+		seenRegistries[registry] = true
 	}
 	require.True(t, seen["default"])
 	require.True(t, seen["analyst"])
+	require.True(t, seenRegistries["default"])
+	require.True(t, seenRegistries["team"])
 
 	reqGet := httptest.NewRequest(http.MethodGet, "/api/chat/profiles/analyst", nil)
 	recGet := httptest.NewRecorder()
@@ -206,6 +247,32 @@ func TestProfileAPI_ListAndGetAcrossLoadedRegistriesWhenRegistryUnset(t *testing
 	doc := decodeJSON[profileDocument](t, recGet)
 	require.Equal(t, "team", doc.Registry)
 	require.Equal(t, "analyst", doc.Slug)
+}
+
+func TestProfileAPI_ListAcrossRegistries_PreservesDuplicateSlugsWithRegistryIdentifier(t *testing.T) {
+	resolver := newTestResolverWithDuplicateSlugAcrossRegistries(t)
+
+	mux := http.NewServeMux()
+	registerProfileAPIHandlers(mux, resolver)
+
+	reqList := httptest.NewRequest(http.MethodGet, "/api/chat/profiles", nil)
+	recList := httptest.NewRecorder()
+	mux.ServeHTTP(recList, reqList)
+	require.Equal(t, http.StatusOK, recList.Code)
+
+	var listed []map[string]any
+	require.NoError(t, json.Unmarshal(recList.Body.Bytes(), &listed))
+	require.Len(t, listed, 2)
+
+	analystRegistries := map[string]bool{}
+	for _, item := range listed {
+		slug, _ := item["slug"].(string)
+		registry, _ := item["registry"].(string)
+		require.Equal(t, "analyst", slug)
+		analystRegistries[registry] = true
+	}
+	require.True(t, analystRegistries["default"])
+	require.True(t, analystRegistries["team"])
 }
 
 func TestWebChatProfileResolver_Chat_BodyRuntimeKeyAcrossStack(t *testing.T) {
