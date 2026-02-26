@@ -117,7 +117,7 @@ func TestWebChatProfileResolver_Chat_OverridePolicy(t *testing.T) {
 	plan, err := resolver.Resolve(reqAllowed)
 	require.NoError(t, err)
 	require.Equal(t, "agent", plan.RuntimeKey)
-	require.Nil(t, plan.Overrides)
+	require.Equal(t, map[string]any{"system_prompt": "override"}, plan.Overrides)
 	require.NotNil(t, plan.ResolvedRuntime)
 	require.Equal(t, "override", plan.ResolvedRuntime.SystemPrompt)
 }

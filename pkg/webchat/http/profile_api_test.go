@@ -119,3 +119,25 @@ func TestListExtensionSchemas_GracefullyHandlesRegistryWithoutLister(t *testing.
 		t.Fatalf("expected no schema items, got=%d", len(items))
 	}
 }
+
+func TestDedupeProfileListItemsBySlug_UsesFirstEntryPerSlug(t *testing.T) {
+	in := []ProfileListItem{
+		{Slug: "agent", DisplayName: "Agent from top"},
+		{Slug: "default", DisplayName: "Default"},
+		{Slug: "agent", DisplayName: "Agent from lower"},
+	}
+
+	out := dedupeProfileListItemsBySlug(in)
+	if got, want := len(out), 2; got != want {
+		t.Fatalf("item count mismatch: got=%d want=%d", got, want)
+	}
+	if got, want := out[0].Slug, "agent"; got != want {
+		t.Fatalf("slug[0] mismatch: got=%q want=%q", got, want)
+	}
+	if got, want := out[0].DisplayName, "Agent from top"; got != want {
+		t.Fatalf("display_name[0] mismatch: got=%q want=%q", got, want)
+	}
+	if got, want := out[1].Slug, "default"; got != want {
+		t.Fatalf("slug[1] mismatch: got=%q want=%q", got, want)
+	}
+}

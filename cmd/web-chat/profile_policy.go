@@ -240,6 +240,7 @@ func (r *ProfileRequestResolver) resolveChat(req *http.Request) (webhttp.Resolve
 		ProfileVersion:     profileVersionFromResolvedMetadata(resolvedProfile.Metadata),
 		ResolvedRuntime:    &resolvedRuntime,
 		ProfileMetadata:    copyMetadataMap(resolvedProfile.Metadata),
+		Overrides:          copyMetadataMap(body.RequestOverrides),
 		Prompt:             body.Prompt,
 		IdempotencyKey:     strings.TrimSpace(body.IdempotencyKey),
 	}, nil
