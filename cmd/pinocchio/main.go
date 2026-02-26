@@ -247,7 +247,6 @@ func initAllCommands(helpSystem *help.HelpSystem) error {
 		repositories_,
 		cli.WithCobraMiddlewaresFunc(sections2.GetCobraCommandGeppettoMiddlewares),
 		cli.WithCobraShortHelpSections(schema.DefaultSlug, cmdlayers.GeppettoHelpersSlug),
-		cli.WithProfileSettingsSection(),
 		cli.WithCreateCommandSettingsSection(),
 	)
 	if err != nil {

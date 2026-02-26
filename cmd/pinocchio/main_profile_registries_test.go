@@ -75,3 +75,29 @@ profiles:
 		t.Fatalf("expected ai-engine value from profile registry\noutput:\n%s", output)
 	}
 }
+
+func TestProfileFileFlagRemoved(t *testing.T) {
+	repoRoot := filepath.Clean(filepath.Join("..", ".."))
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx,
+		"go", "run", "./cmd/pinocchio",
+		"generate-prompt",
+		"--goal", "profile-file removal check",
+		"--profile-file", "/tmp/legacy.yaml",
+		"--print-parsed-fields",
+	)
+	cmd.Dir = repoRoot
+
+	var combined bytes.Buffer
+	cmd.Stdout = &combined
+	cmd.Stderr = &combined
+	err := cmd.Run()
+	if err == nil {
+		t.Fatalf("expected go run pinocchio to fail with unknown --profile-file flag")
+	}
+	if !strings.Contains(combined.String(), "unknown flag: --profile-file") {
+		t.Fatalf("expected unknown --profile-file flag error\noutput:\n%s", combined.String())
+	}
+}
