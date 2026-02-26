@@ -38,12 +38,17 @@ func TestStreamHub_ResolveAndEnsureConversation_Defaults(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	handle, err := hub.ResolveAndEnsureConversation(context.Background(), ConversationRuntimeRequest{})
+	handle, err := hub.ResolveAndEnsureConversation(context.Background(), ConversationRuntimeRequest{
+		ResolvedProfileMetadata: map[string]any{"profile.stack.trace": map[string]any{"layers": []any{}}},
+	})
 	require.NoError(t, err)
 	require.NotEmpty(t, handle.ConvID)
 	require.Equal(t, "default", handle.RuntimeKey)
 	require.Equal(t, "fp-default", handle.RuntimeFingerprint)
 	require.Equal(t, "seed", handle.SeedSystemPrompt)
+	require.NotNil(t, handle.ResolvedProfileMetadata)
+	_, hasTrace := handle.ResolvedProfileMetadata["profile.stack.trace"]
+	require.True(t, hasTrace)
 }
 
 func TestStreamHub_AttachWebSocketValidatesArguments(t *testing.T) {

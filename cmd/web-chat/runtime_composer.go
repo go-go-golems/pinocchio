@@ -37,9 +37,6 @@ func (c *ProfileRuntimeComposer) Compose(ctx context.Context, req infruntime.Con
 	if c == nil || c.parsed == nil {
 		return infruntime.ComposedRuntime{}, fmt.Errorf("runtime composer is not configured")
 	}
-	if err := validateRuntimeOverrides(req.RuntimeOverrides); err != nil {
-		return infruntime.ComposedRuntime{}, err
-	}
 	if ctx == nil {
 		return infruntime.ComposedRuntime{}, fmt.Errorf("compose context is nil")
 	}
@@ -60,31 +57,11 @@ func (c *ProfileRuntimeComposer) Compose(ctx context.Context, req infruntime.Con
 	}
 	tools := runtimeToolsFromProfile(req.ResolvedProfileRuntime)
 
-	var middlewareOverrides []runtimeMiddlewareOverride
-	if req.RuntimeOverrides != nil {
-		if v, ok := req.RuntimeOverrides["system_prompt"].(string); ok && strings.TrimSpace(v) != "" {
-			systemPrompt = v
-		}
-		if arr, ok := req.RuntimeOverrides["middlewares"].([]any); ok {
-			middlewareOverrides, err = parseRuntimeMiddlewareOverrides(arr)
-			if err != nil {
-				return infruntime.ComposedRuntime{}, err
-			}
-		}
-		if arr, ok := req.RuntimeOverrides["tools"].([]any); ok {
-			parsed, err := parseRuntimeToolOverrides(arr)
-			if err != nil {
-				return infruntime.ComposedRuntime{}, err
-			}
-			tools = parsed
-		}
-	}
-
 	if strings.TrimSpace(systemPrompt) == "" {
 		systemPrompt = "You are an assistant"
 	}
 
-	middlewareInputs, err := mergeRuntimeMiddlewareUses(profileMiddlewares, middlewareOverrides)
+	middlewareInputs, err := runtimeMiddlewareInputsFromProfile(profileMiddlewares)
 	if err != nil {
 		return infruntime.ComposedRuntime{}, err
 	}
@@ -115,11 +92,15 @@ func (c *ProfileRuntimeComposer) Compose(ctx context.Context, req infruntime.Con
 	if err != nil {
 		return infruntime.ComposedRuntime{}, err
 	}
+	runtimeFingerprint := strings.TrimSpace(req.ResolvedProfileFingerprint)
+	if runtimeFingerprint == "" {
+		runtimeFingerprint = buildRuntimeFingerprint(runtimeKey, req.ProfileVersion, systemPrompt, resolvedUses, tools, effectiveStepSettings)
+	}
 
 	return infruntime.ComposedRuntime{
 		Engine:             eng,
 		RuntimeKey:         runtimeKey,
-		RuntimeFingerprint: buildRuntimeFingerprint(runtimeKey, req.ProfileVersion, systemPrompt, resolvedUses, tools, effectiveStepSettings),
+		RuntimeFingerprint: runtimeFingerprint,
 		SeedSystemPrompt:   systemPrompt,
 		AllowedTools:       tools,
 	}, nil
@@ -128,7 +109,6 @@ func (c *ProfileRuntimeComposer) Compose(ctx context.Context, req infruntime.Con
 type middlewareResolveInput struct {
 	Use           gepprofiles.MiddlewareUse
 	ProfileConfig map[string]any
-	RequestConfig map[string]any
 }
 
 func (c *ProfileRuntimeComposer) resolveMiddlewares(
@@ -151,19 +131,12 @@ func (c *ProfileRuntimeComposer) resolveMiddlewares(
 			return nil, nil, fmt.Errorf("resolve middleware %s: unknown middleware %q", instanceKey, input.Use.Name)
 		}
 
-		sources := make([]middlewarecfg.Source, 0, 2)
+		sources := make([]middlewarecfg.Source, 0, 1)
 		if len(input.ProfileConfig) > 0 {
 			sources = append(sources, fixedPayloadSource{
 				name:    "profile",
 				layer:   middlewarecfg.SourceLayerProfile,
 				payload: input.ProfileConfig,
-			})
-		}
-		if len(input.RequestConfig) > 0 {
-			sources = append(sources, fixedPayloadSource{
-				name:    "request",
-				layer:   middlewarecfg.SourceLayerRequest,
-				payload: input.RequestConfig,
 			})
 		}
 
@@ -248,64 +221,8 @@ func runtimeMiddlewaresFromProfile(spec *gepprofiles.RuntimeSpec) ([]gepprofiles
 	}
 	return middlewares, nil
 }
-
-type runtimeMiddlewareOverride struct {
-	Name      string
-	ID        string
-	Enabled   *bool
-	Config    map[string]any
-	HasConfig bool
-}
-
-func parseRuntimeMiddlewareOverrides(arr []any) ([]runtimeMiddlewareOverride, error) {
-	overrides := make([]runtimeMiddlewareOverride, 0, len(arr))
-	for _, raw := range arr {
-		m, ok := raw.(map[string]any)
-		if !ok {
-			return nil, fmt.Errorf("middleware override entries must be objects")
-		}
-		nameRaw, _ := m["name"].(string)
-		name := strings.TrimSpace(nameRaw)
-		if name == "" {
-			return nil, fmt.Errorf("middleware override missing name")
-		}
-
-		override := runtimeMiddlewareOverride{Name: name}
-		if rawID, hasID := m["id"]; hasID {
-			id, ok := rawID.(string)
-			if !ok {
-				return nil, fmt.Errorf("middleware override id must be a string")
-			}
-			override.ID = strings.TrimSpace(id)
-			if id != "" && override.ID == "" {
-				return nil, fmt.Errorf("middleware override id must not be empty")
-			}
-		}
-		if rawEnabled, hasEnabled := m["enabled"]; hasEnabled {
-			enabled, ok := rawEnabled.(bool)
-			if !ok {
-				return nil, fmt.Errorf("middleware override enabled must be a boolean")
-			}
-			override.Enabled = &enabled
-		}
-		if rawConfig, hasConfig := m["config"]; hasConfig {
-			config, err := normalizeConfigObject(rawConfig, fmt.Sprintf("middleware override %s config", middlewarecfg.MiddlewareInstanceKey(gepprofiles.MiddlewareUse{Name: name, ID: override.ID}, len(overrides))))
-			if err != nil {
-				return nil, err
-			}
-			override.Config = config
-			override.HasConfig = true
-		}
-		overrides = append(overrides, override)
-	}
-	return overrides, nil
-}
-
-func mergeRuntimeMiddlewareUses(
-	profileMiddlewares []gepprofiles.MiddlewareUse,
-	overrides []runtimeMiddlewareOverride,
-) ([]middlewareResolveInput, error) {
-	inputs := make([]middlewareResolveInput, 0, len(profileMiddlewares)+len(overrides))
+func runtimeMiddlewareInputsFromProfile(profileMiddlewares []gepprofiles.MiddlewareUse) ([]middlewareResolveInput, error) {
+	inputs := make([]middlewareResolveInput, 0, len(profileMiddlewares))
 
 	for i, use := range profileMiddlewares {
 		name := strings.TrimSpace(use.Name)
@@ -325,73 +242,7 @@ func mergeRuntimeMiddlewareUses(
 			ProfileConfig: profileConfig,
 		})
 	}
-	if len(overrides) == 0 {
-		return inputs, nil
-	}
-
-	seen := map[string]struct{}{}
-	for i, override := range overrides {
-		targetIndex, err := findMergeTargetIndex(inputs, override)
-		if err != nil {
-			return nil, err
-		}
-		overrideKey := middlewarecfg.MiddlewareInstanceKey(
-			gepprofiles.MiddlewareUse{Name: override.Name, ID: override.ID},
-			i,
-		)
-		if _, ok := seen[overrideKey]; ok {
-			return nil, fmt.Errorf("duplicate middleware override for %s", overrideKey)
-		}
-		seen[overrideKey] = struct{}{}
-
-		if targetIndex < 0 {
-			use := gepprofiles.MiddlewareUse{
-				Name:    override.Name,
-				ID:      override.ID,
-				Enabled: cloneBoolPtr(override.Enabled),
-			}
-			input := middlewareResolveInput{Use: use}
-			if override.HasConfig {
-				input.RequestConfig = copyStringAnyMap(override.Config)
-			}
-			inputs = append(inputs, input)
-			continue
-		}
-
-		if override.Enabled != nil {
-			inputs[targetIndex].Use.Enabled = cloneBoolPtr(override.Enabled)
-		}
-		if override.HasConfig {
-			inputs[targetIndex].RequestConfig = copyStringAnyMap(override.Config)
-		}
-	}
 	return inputs, nil
-}
-
-func findMergeTargetIndex(inputs []middlewareResolveInput, override runtimeMiddlewareOverride) (int, error) {
-	if override.ID != "" {
-		for i, input := range inputs {
-			if input.Use.Name == override.Name && input.Use.ID == override.ID {
-				return i, nil
-			}
-		}
-		return -1, nil
-	}
-
-	candidates := make([]int, 0, 2)
-	for i, input := range inputs {
-		if input.Use.Name == override.Name && strings.TrimSpace(input.Use.ID) == "" {
-			candidates = append(candidates, i)
-		}
-	}
-	switch len(candidates) {
-	case 0:
-		return -1, nil
-	case 1:
-		return candidates[0], nil
-	default:
-		return -1, fmt.Errorf("middleware override %q is ambiguous; specify id", override.Name)
-	}
 }
 
 func runtimeToolsFromProfile(spec *gepprofiles.RuntimeSpec) []string {
@@ -447,45 +298,6 @@ func buildRuntimeFingerprint(
 		return runtimeKey
 	}
 	return string(b)
-}
-
-func validateRuntimeOverrides(overrides map[string]any) error {
-	if overrides == nil {
-		return nil
-	}
-
-	if v, ok := overrides["system_prompt"]; ok {
-		if _, ok2 := v.(string); !ok2 {
-			return fmt.Errorf("system_prompt override must be a string")
-		}
-	}
-	if v, ok := overrides["middlewares"]; ok {
-		if _, ok2 := v.([]any); !ok2 {
-			return fmt.Errorf("middlewares override must be an array")
-		}
-	}
-	if v, ok := overrides["tools"]; ok {
-		if _, ok2 := v.([]any); !ok2 {
-			return fmt.Errorf("tools override must be an array")
-		}
-	}
-	return nil
-}
-
-func parseRuntimeToolOverrides(arr []any) ([]string, error) {
-	tools := make([]string, 0, len(arr))
-	for _, raw := range arr {
-		switch v := raw.(type) {
-		case string:
-			if strings.TrimSpace(v) == "" {
-				return nil, fmt.Errorf("tool override contains empty name")
-			}
-			tools = append(tools, strings.TrimSpace(v))
-		default:
-			return nil, fmt.Errorf("tool override entries must be strings")
-		}
-	}
-	return tools, nil
 }
 
 func normalizeConfigObject(raw any, context string) (map[string]any, error) {

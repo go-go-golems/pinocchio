@@ -173,7 +173,7 @@ export function ChatWidget({
       prompt: text,
     };
     if (overrides && Object.keys(overrides).length > 0) {
-      payload.overrides = overrides;
+      payload.request_overrides = overrides;
     }
     setText('');
     void fetch(`${basePrefix}/chat`, {

@@ -156,15 +156,15 @@ func firstProfileSlug(profiles map[gepprofiles.ProfileSlug]*gepprofiles.Profile)
 }
 
 type ProfileRequestResolver struct {
-	profileRegistry gepprofiles.Registry
-	registrySlug    gepprofiles.RegistrySlug
+	profileRegistry     gepprofiles.Registry
+	defaultRegistrySlug gepprofiles.RegistrySlug
 }
 
-func newProfileRequestResolver(profileRegistry gepprofiles.Registry, registrySlug gepprofiles.RegistrySlug) *ProfileRequestResolver {
-	if registrySlug.IsZero() {
-		registrySlug = gepprofiles.MustRegistrySlug(defaultRegistrySlug)
+func newProfileRequestResolver(profileRegistry gepprofiles.Registry, defaultRegistry gepprofiles.RegistrySlug) *ProfileRequestResolver {
+	if defaultRegistry.IsZero() {
+		defaultRegistry = gepprofiles.MustRegistrySlug(defaultRegistrySlug)
 	}
-	return &ProfileRequestResolver{profileRegistry: profileRegistry, registrySlug: registrySlug}
+	return &ProfileRequestResolver{profileRegistry: profileRegistry, defaultRegistrySlug: defaultRegistry}
 }
 
 func (r *ProfileRequestResolver) Resolve(req *http.Request) (webhttp.ResolvedConversationRequest, error) {
@@ -188,23 +188,23 @@ func (r *ProfileRequestResolver) resolveWS(req *http.Request) (webhttp.ResolvedC
 		return webhttp.ResolvedConversationRequest{}, &webhttp.RequestResolutionError{Status: http.StatusBadRequest, ClientMsg: "missing conv_id"}
 	}
 
-	_, slug, profile, err := r.resolveProfileSelection(req, "", "", "")
+	profileSlug, err := r.resolveProfileSelection(req, "", "")
 	if err != nil {
 		return webhttp.ResolvedConversationRequest{}, err
 	}
-	overrides := runtimeDefaultsFromProfile(profile)
-	resolvedRuntime := profileRuntimeSpec(profile)
-	profileVersion := uint64(0)
-	if profile != nil {
-		profileVersion = profile.Metadata.Version
+	resolvedProfile, err := r.resolveEffectiveProfile(context.Background(), profileSlug, nil)
+	if err != nil {
+		return webhttp.ResolvedConversationRequest{}, err
 	}
+	resolvedRuntime := resolvedProfile.EffectiveRuntime
 
 	return webhttp.ResolvedConversationRequest{
-		ConvID:          convID,
-		RuntimeKey:      slug.String(),
-		ProfileVersion:  profileVersion,
-		ResolvedRuntime: resolvedRuntime,
-		Overrides:       overrides,
+		ConvID:             convID,
+		RuntimeKey:         resolvedProfile.RuntimeKey.String(),
+		RuntimeFingerprint: resolvedProfile.RuntimeFingerprint,
+		ProfileVersion:     profileVersionFromResolvedMetadata(resolvedProfile.Metadata),
+		ResolvedRuntime:    &resolvedRuntime,
+		ProfileMetadata:    copyMetadataMap(resolvedProfile.Metadata),
 	}, nil
 }
 
@@ -223,56 +223,44 @@ func (r *ProfileRequestResolver) resolveChat(req *http.Request) (webhttp.Resolve
 	}
 
 	pathSlug := profileSlugFromPath(req)
-	_, slug, profile, err := r.resolveProfileSelection(req, pathSlug, body.Profile, body.Registry)
+	profileSlug, err := r.resolveProfileSelection(req, pathSlug, body.RuntimeKey)
 	if err != nil {
 		return webhttp.ResolvedConversationRequest{}, err
 	}
-
-	overrides, err := mergeRuntimeOverrides(profile, body.Overrides)
+	resolvedProfile, err := r.resolveEffectiveProfile(context.Background(), profileSlug, body.RequestOverrides)
 	if err != nil {
 		return webhttp.ResolvedConversationRequest{}, err
 	}
-	resolvedRuntime := profileRuntimeSpec(profile)
-	profileVersion := uint64(0)
-	if profile != nil {
-		profileVersion = profile.Metadata.Version
-	}
+	resolvedRuntime := resolvedProfile.EffectiveRuntime
 
 	return webhttp.ResolvedConversationRequest{
-		ConvID:          convID,
-		RuntimeKey:      slug.String(),
-		ProfileVersion:  profileVersion,
-		ResolvedRuntime: resolvedRuntime,
-		Overrides:       overrides,
-		Prompt:          body.Prompt,
-		IdempotencyKey:  strings.TrimSpace(body.IdempotencyKey),
+		ConvID:             convID,
+		RuntimeKey:         resolvedProfile.RuntimeKey.String(),
+		RuntimeFingerprint: resolvedProfile.RuntimeFingerprint,
+		ProfileVersion:     profileVersionFromResolvedMetadata(resolvedProfile.Metadata),
+		ResolvedRuntime:    &resolvedRuntime,
+		ProfileMetadata:    copyMetadataMap(resolvedProfile.Metadata),
+		Overrides:          copyMetadataMap(body.RequestOverrides),
+		Prompt:             body.Prompt,
+		IdempotencyKey:     strings.TrimSpace(body.IdempotencyKey),
 	}, nil
 }
 
 func (r *ProfileRequestResolver) resolveProfileSelection(
 	req *http.Request,
 	pathSlug string,
-	bodyProfileRaw string,
-	bodyRegistryRaw string,
-) (gepprofiles.RegistrySlug, gepprofiles.ProfileSlug, *gepprofiles.Profile, error) {
+	bodyRuntimeKeyRaw string,
+) (gepprofiles.ProfileSlug, error) {
 	if r == nil || r.profileRegistry == nil {
-		return "", "", nil, &webhttp.RequestResolutionError{Status: http.StatusInternalServerError, ClientMsg: "profile resolver is not configured"}
-	}
-
-	registrySlug, err := r.resolveRegistrySlug(req, bodyRegistryRaw)
-	if err != nil {
-		return "", "", nil, err
+		return "", &webhttp.RequestResolutionError{Status: http.StatusInternalServerError, ClientMsg: "profile resolver is not configured"}
 	}
 
 	slugRaw := strings.TrimSpace(pathSlug)
 	if slugRaw == "" {
-		slugRaw = strings.TrimSpace(bodyProfileRaw)
+		slugRaw = strings.TrimSpace(bodyRuntimeKeyRaw)
 	}
 	if slugRaw == "" && req != nil {
-		slugRaw = strings.TrimSpace(req.URL.Query().Get("profile"))
-	}
-	if slugRaw == "" && req != nil {
-		slugRaw = strings.TrimSpace(req.URL.Query().Get("runtime"))
+		slugRaw = strings.TrimSpace(req.URL.Query().Get("runtime_key"))
 	}
 	if slugRaw == "" && req != nil {
 		if ck, err := req.Cookie(currentProfileCookieName); err == nil && ck != nil {
@@ -280,51 +268,72 @@ func (r *ProfileRequestResolver) resolveProfileSelection(
 		}
 	}
 
-	ctx := context.Background()
 	if strings.TrimSpace(slugRaw) == "" {
-		s, err := r.resolveDefaultProfileSlug(ctx, registrySlug)
-		if err != nil {
-			return "", "", nil, r.toRequestResolutionError(err, "")
-		}
-		slugRaw = s.String()
+		return "", nil
 	}
 
 	slug, err := gepprofiles.ParseProfileSlug(slugRaw)
 	if err != nil {
-		return "", "", nil, &webhttp.RequestResolutionError{Status: http.StatusBadRequest, ClientMsg: "invalid profile: " + slugRaw, Err: err}
+		return "", &webhttp.RequestResolutionError{Status: http.StatusBadRequest, ClientMsg: "invalid runtime_key: " + slugRaw, Err: err}
 	}
-
-	profile, err := r.profileRegistry.GetProfile(ctx, registrySlug, slug)
-	if err != nil {
-		return "", "", nil, r.toRequestResolutionError(err, slugRaw)
-	}
-	return registrySlug, slug, profile, nil
+	return slug, nil
 }
 
-func (r *ProfileRequestResolver) resolveRegistrySlug(req *http.Request, bodyRegistryRaw string) (gepprofiles.RegistrySlug, error) {
-	registryRaw := strings.TrimSpace(bodyRegistryRaw)
-	if registryRaw == "" && req != nil {
-		registryRaw = strings.TrimSpace(req.URL.Query().Get("registry"))
+func (r *ProfileRequestResolver) resolveEffectiveProfile(
+	ctx context.Context,
+	profileSlug gepprofiles.ProfileSlug,
+	requestOverrides map[string]any,
+) (*gepprofiles.ResolvedProfile, error) {
+	in := gepprofiles.ResolveInput{
+		ProfileSlug:      profileSlug,
+		RequestOverrides: requestOverrides,
 	}
-	if registryRaw == "" {
-		return r.registrySlug, nil
+	if !profileSlug.IsZero() {
+		if runtimeKey, err := gepprofiles.ParseRuntimeKey(profileSlug.String()); err == nil {
+			in.RuntimeKeyFallback = runtimeKey
+		}
 	}
-	registrySlug, err := gepprofiles.ParseRegistrySlug(registryRaw)
+	resolved, err := r.profileRegistry.ResolveEffectiveProfile(ctx, in)
 	if err != nil {
-		return "", &webhttp.RequestResolutionError{Status: http.StatusBadRequest, ClientMsg: "invalid registry: " + registryRaw, Err: err}
+		return nil, r.toRequestResolutionError(err, profileSlug.String())
 	}
-	return registrySlug, nil
+	return resolved, nil
 }
 
-func (r *ProfileRequestResolver) resolveDefaultProfileSlug(ctx context.Context, registrySlug gepprofiles.RegistrySlug) (gepprofiles.ProfileSlug, error) {
-	registry, err := r.profileRegistry.GetRegistry(ctx, registrySlug)
-	if err != nil {
-		return "", err
+func profileVersionFromResolvedMetadata(metadata map[string]any) uint64 {
+	raw := metadata["profile.version"]
+	switch v := raw.(type) {
+	case uint64:
+		return v
+	case uint32:
+		return uint64(v)
+	case uint:
+		return uint64(v)
+	case int64:
+		if v >= 0 {
+			return uint64(v)
+		}
+	case int:
+		if v >= 0 {
+			return uint64(v)
+		}
+	case float64:
+		if v >= 0 {
+			return uint64(v)
+		}
 	}
-	if registry != nil && !registry.DefaultProfileSlug.IsZero() {
-		return registry.DefaultProfileSlug, nil
+	return 0
+}
+
+func copyMetadataMap(in map[string]any) map[string]any {
+	if len(in) == 0 {
+		return nil
 	}
-	return gepprofiles.MustProfileSlug("default"), nil
+	out := make(map[string]any, len(in))
+	for key, value := range in {
+		out[key] = value
+	}
+	return out
 }
 
 func (r *ProfileRequestResolver) toRequestResolutionError(err error, slug string) error {
@@ -340,127 +349,15 @@ func (r *ProfileRequestResolver) toRequestResolutionError(err error, slug string
 	if errors.Is(err, gepprofiles.ErrRegistryNotFound) {
 		return &webhttp.RequestResolutionError{Status: http.StatusNotFound, ClientMsg: "registry not found", Err: err}
 	}
+	var validationErr *gepprofiles.ValidationError
+	if errors.As(err, &validationErr) {
+		return &webhttp.RequestResolutionError{Status: http.StatusBadRequest, ClientMsg: validationErr.Error(), Err: err}
+	}
+	var policyErr *gepprofiles.PolicyViolationError
+	if errors.As(err, &policyErr) {
+		return &webhttp.RequestResolutionError{Status: http.StatusBadRequest, ClientMsg: policyErr.Error(), Err: err}
+	}
 	return &webhttp.RequestResolutionError{Status: http.StatusInternalServerError, ClientMsg: "profile resolution failed", Err: err}
-}
-
-func profileRuntimeSpec(p *gepprofiles.Profile) *gepprofiles.RuntimeSpec {
-	if p == nil {
-		return nil
-	}
-	spec := gepprofiles.RuntimeSpec{
-		StepSettingsPatch: map[string]any{},
-		SystemPrompt:      strings.TrimSpace(p.Runtime.SystemPrompt),
-		Middlewares:       append([]gepprofiles.MiddlewareUse(nil), p.Runtime.Middlewares...),
-		Tools:             append([]string(nil), p.Runtime.Tools...),
-	}
-	for k, v := range p.Runtime.StepSettingsPatch {
-		spec.StepSettingsPatch[k] = v
-	}
-	for i := range spec.Middlewares {
-		mw := spec.Middlewares[i]
-		config := mw.Config
-		if config == nil {
-			if fromExt, ok, err := gepprofiles.MiddlewareConfigFromExtensions(p.Extensions, mw, i); err == nil && ok {
-				config = fromExt
-			}
-		}
-		spec.Middlewares[i].Config = config
-	}
-	if len(spec.StepSettingsPatch) == 0 {
-		spec.StepSettingsPatch = nil
-	}
-	return &spec
-}
-
-func runtimeDefaultsFromProfile(p *gepprofiles.Profile) map[string]any {
-	if p == nil {
-		return nil
-	}
-	overrides := map[string]any{}
-	if strings.TrimSpace(p.Runtime.SystemPrompt) != "" {
-		overrides["system_prompt"] = p.Runtime.SystemPrompt
-	}
-	if len(p.Runtime.Middlewares) > 0 {
-		mws := make([]any, 0, len(p.Runtime.Middlewares))
-		for i, mw := range p.Runtime.Middlewares {
-			name := strings.TrimSpace(mw.Name)
-			if name == "" {
-				continue
-			}
-			config := mw.Config
-			if config == nil {
-				if fromExt, ok, err := gepprofiles.MiddlewareConfigFromExtensions(p.Extensions, mw, i); err == nil && ok {
-					config = fromExt
-				}
-			}
-			entry := map[string]any{
-				"name":   name,
-				"config": config,
-			}
-			if id := strings.TrimSpace(mw.ID); id != "" {
-				entry["id"] = id
-			}
-			if mw.Enabled != nil {
-				entry["enabled"] = *mw.Enabled
-			}
-			mws = append(mws, entry)
-		}
-		if len(mws) > 0 {
-			overrides["middlewares"] = mws
-		}
-	}
-	if len(p.Runtime.Tools) > 0 {
-		tools := make([]any, 0, len(p.Runtime.Tools))
-		for _, t := range p.Runtime.Tools {
-			name := strings.TrimSpace(t)
-			if name == "" {
-				continue
-			}
-			tools = append(tools, name)
-		}
-		if len(tools) > 0 {
-			overrides["tools"] = tools
-		}
-	}
-	if len(overrides) == 0 {
-		return nil
-	}
-	return overrides
-}
-
-func mergeRuntimeOverrides(profile *gepprofiles.Profile, requestOverrides map[string]any) (map[string]any, error) {
-	merged := runtimeDefaultsFromProfile(profile)
-	if merged == nil {
-		merged = map[string]any{}
-	}
-	if len(requestOverrides) == 0 {
-		if len(merged) == 0 {
-			return nil, nil
-		}
-		return merged, nil
-	}
-
-	hasEngineOverride := false
-	if _, ok := requestOverrides["system_prompt"]; ok {
-		hasEngineOverride = true
-	}
-	if _, ok := requestOverrides["middlewares"]; ok {
-		hasEngineOverride = true
-	}
-	if _, ok := requestOverrides["tools"]; ok {
-		hasEngineOverride = true
-	}
-	if hasEngineOverride && profile != nil && !profile.Policy.AllowOverrides {
-		return nil, &webhttp.RequestResolutionError{Status: http.StatusBadRequest, ClientMsg: "profile does not allow engine overrides"}
-	}
-
-	for k, v := range requestOverrides {
-		merged[k] = v
-	}
-	if len(merged) == 0 {
-		return nil, nil
-	}
-	return merged, nil
 }
 
 func profileSlugFromPath(req *http.Request) string {
@@ -495,7 +392,7 @@ func registerProfileAPIHandlers(mux *http.ServeMux, resolver *ProfileRequestReso
 		middlewareDefinitions = nil
 	}
 	webhttp.RegisterProfileAPIHandlers(mux, resolver.profileRegistry, webhttp.ProfileAPIHandlerOptions{
-		DefaultRegistrySlug:             resolver.registrySlug,
+		DefaultRegistrySlug:             resolver.defaultRegistrySlug,
 		EnableCurrentProfileCookieRoute: true,
 		CurrentProfileCookieName:        currentProfileCookieName,
 		WriteActor:                      profileWriteActor,

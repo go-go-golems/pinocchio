@@ -75,6 +75,60 @@ I am 100 years old.
 Pinocchio comes with a selection of [demo prompts](https://github.com/go-go-golems/geppetto/tree/main/cmd/pinocchio/prompts/examples)
 as an inspiration.
 
+## Profile registry loading
+
+Pinocchio now resolves profiles from a profile-registry source stack.
+
+Selection knobs:
+
+- `--profile-registries` (comma-separated YAML/SQLite sources)
+- `PINOCCHIO_PROFILE_REGISTRIES`
+- `profile-settings.profile-registries` in config YAML
+
+When none of the above are set, pinocchio automatically uses:
+
+- `${XDG_CONFIG_HOME:-~/.config}/pinocchio/profiles.yaml` (if the file exists)
+
+Profile selection is still done with:
+
+- `--profile`
+- `PINOCCHIO_PROFILE`
+
+Example:
+
+```bash
+PINOCCHIO_PROFILE=gpt-5 pinocchio examples test
+```
+
+This works as long as `gpt-5` exists in the default runtime file (`~/.config/pinocchio/profiles.yaml`) or one of the configured profile-registry sources.
+
+Runtime YAML format is single-registry only:
+
+```yaml
+slug: default
+profiles:
+  gpt-5:
+    slug: gpt-5
+    runtime:
+      step_settings_patch:
+        ai-chat:
+          ai-engine: gpt-5
+```
+
+Do not use `registries:` or `default_profile_slug` in runtime YAML sources.
+
+## Migrating old profiles.yaml
+
+If your old file used the legacy map format, convert it with:
+
+```bash
+pinocchio profiles migrate-legacy \
+  --input ~/.config/pinocchio/profiles.yaml \
+  --output ~/.config/pinocchio/profiles.registry.yaml
+```
+
+Then rewrite/export the target runtime registry as a single-registry YAML (`slug` + `profiles`) and place it at `~/.config/pinocchio/profiles.yaml` (or wire it via `--profile-registries` / `PINOCCHIO_PROFILE_REGISTRIES`).
+
 ## Creating your own prompt
 
 Creating your own prompt is easy. Create a yaml file in one of the configure repositories.

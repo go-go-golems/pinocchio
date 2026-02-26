@@ -119,3 +119,28 @@ func TestListExtensionSchemas_GracefullyHandlesRegistryWithoutLister(t *testing.
 		t.Fatalf("expected no schema items, got=%d", len(items))
 	}
 }
+
+func TestProfileListItemsFromRegistry_IncludesRegistryIdentifier(t *testing.T) {
+	registrySlug := gepprofiles.MustRegistrySlug("team")
+	registry := &gepprofiles.ProfileRegistry{
+		Slug:               registrySlug,
+		DefaultProfileSlug: gepprofiles.MustProfileSlug("analyst"),
+	}
+	profiles_ := []*gepprofiles.Profile{
+		{
+			Slug:        gepprofiles.MustProfileSlug("analyst"),
+			DisplayName: "Analyst",
+		},
+	}
+
+	out := profileListItemsFromRegistry(registrySlug, registry, profiles_)
+	if got, want := len(out), 1; got != want {
+		t.Fatalf("item count mismatch: got=%d want=%d", got, want)
+	}
+	if got, want := out[0].Registry, "team"; got != want {
+		t.Fatalf("registry mismatch: got=%q want=%q", got, want)
+	}
+	if got, want := out[0].Slug, "analyst"; got != want {
+		t.Fatalf("slug mismatch: got=%q want=%q", got, want)
+	}
+}

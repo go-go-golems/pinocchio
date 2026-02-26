@@ -106,19 +106,6 @@ func TestRuntimeFingerprint_DoesNotIncludeAPIKeys(t *testing.T) {
 	}
 }
 
-func TestWebChatRuntimeComposer_RejectsInvalidOverrideTypes(t *testing.T) {
-	composer := newProfileRuntimeComposer(values.New(), newRuntimeComposerRegistry(t), middlewarecfg.BuildDeps{})
-
-	_, err := composer.Compose(context.Background(), infruntime.ConversationRuntimeRequest{
-		ConvID:           "c1",
-		ProfileKey:       "default",
-		RuntimeOverrides: map[string]any{"middlewares": "bad"},
-	})
-	if err == nil {
-		t.Fatalf("expected error for invalid middlewares override type")
-	}
-}
-
 func TestWebChatRuntimeComposer_UsesResolvedRuntimeSpec(t *testing.T) {
 	composer := newProfileRuntimeComposer(
 		minimalRuntimeComposerValues(t),
@@ -145,7 +132,7 @@ func TestWebChatRuntimeComposer_UsesResolvedRuntimeSpec(t *testing.T) {
 	}
 }
 
-func TestWebChatRuntimeComposer_OverridesResolvedRuntimeSpec(t *testing.T) {
+func TestWebChatRuntimeComposer_DefaultsWhenResolvedRuntimeIsEmpty(t *testing.T) {
 	composer := newProfileRuntimeComposer(
 		minimalRuntimeComposerValues(t),
 		newRuntimeComposerRegistry(t),
@@ -153,23 +140,17 @@ func TestWebChatRuntimeComposer_OverridesResolvedRuntimeSpec(t *testing.T) {
 	)
 
 	res, err := composer.Compose(context.Background(), infruntime.ConversationRuntimeRequest{
-		ConvID:     "c1",
-		ProfileKey: "analyst",
-		ResolvedProfileRuntime: &gepprofiles.RuntimeSpec{
-			SystemPrompt: "You are analyst",
-		},
-		RuntimeOverrides: map[string]any{
-			"system_prompt": "Override prompt",
-			"tools":         []any{"tool-a"},
-		},
+		ConvID:                 "c1",
+		ProfileKey:             "analyst",
+		ResolvedProfileRuntime: &gepprofiles.RuntimeSpec{},
 	})
 	if err != nil {
 		t.Fatalf("compose failed: %v", err)
 	}
-	if res.SeedSystemPrompt != "Override prompt" {
-		t.Fatalf("override not applied, got: %q", res.SeedSystemPrompt)
+	if res.SeedSystemPrompt != "You are an assistant" {
+		t.Fatalf("expected default prompt, got: %q", res.SeedSystemPrompt)
 	}
-	if len(res.AllowedTools) != 1 || res.AllowedTools[0] != "tool-a" {
+	if len(res.AllowedTools) != 0 {
 		t.Fatalf("unexpected tools: %#v", res.AllowedTools)
 	}
 }
@@ -211,15 +192,6 @@ func TestWebChatRuntimeComposer_UsesResolverPrecedenceForMiddlewareConfig(t *tes
 				},
 			},
 		},
-		RuntimeOverrides: map[string]any{
-			"middlewares": []any{
-				map[string]any{
-					"name":   "agentmode",
-					"id":     "primary",
-					"config": map[string]any{"threshold": "7"},
-				},
-			},
-		},
 	})
 	if err != nil {
 		t.Fatalf("compose failed: %v", err)
@@ -228,11 +200,11 @@ func TestWebChatRuntimeComposer_UsesResolverPrecedenceForMiddlewareConfig(t *tes
 	if builtConfig == nil {
 		t.Fatalf("expected middleware config to be built")
 	}
-	if got, want := builtConfig["threshold"], int64(7); got != want {
-		t.Fatalf("request override did not win: got=%#v want=%#v", got, want)
+	if got, want := builtConfig["threshold"], int64(2); got != want {
+		t.Fatalf("profile middleware config mismatch: got=%#v want=%#v", got, want)
 	}
 	if got, want := builtConfig["mode"], "safe"; got != want {
-		t.Fatalf("profile value should be retained when not overridden: got=%#v want=%#v", got, want)
+		t.Fatalf("profile value mismatch: got=%#v want=%#v", got, want)
 	}
 }
 
@@ -282,6 +254,29 @@ func TestRuntimeFingerprint_ChangesOnProfileVersion(t *testing.T) {
 	fpV2 := buildRuntimeFingerprint("default", 2, "prompt", nil, nil, nil)
 	if fpV1 == fpV2 {
 		t.Fatalf("expected fingerprint to change across profile versions")
+	}
+}
+
+func TestWebChatRuntimeComposer_PrefersResolvedProfileFingerprint(t *testing.T) {
+	composer := newProfileRuntimeComposer(
+		minimalRuntimeComposerValues(t),
+		newRuntimeComposerRegistry(t),
+		middlewarecfg.BuildDeps{},
+	)
+
+	res, err := composer.Compose(context.Background(), infruntime.ConversationRuntimeRequest{
+		ConvID:                     "c1",
+		ProfileKey:                 "analyst",
+		ResolvedProfileFingerprint: "sha256:resolver-owned",
+		ResolvedProfileRuntime: &gepprofiles.RuntimeSpec{
+			SystemPrompt: "profile prompt",
+		},
+	})
+	if err != nil {
+		t.Fatalf("compose failed: %v", err)
+	}
+	if got, want := res.RuntimeFingerprint, "sha256:resolver-owned"; got != want {
+		t.Fatalf("runtime fingerprint mismatch: got=%q want=%q", got, want)
 	}
 }
 

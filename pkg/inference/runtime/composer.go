@@ -10,11 +10,11 @@ import (
 
 // ConversationRuntimeRequest contains app-owned runtime policy inputs.
 type ConversationRuntimeRequest struct {
-	ConvID                 string
-	ProfileKey             string
-	ProfileVersion         uint64
-	ResolvedProfileRuntime *gepprofiles.RuntimeSpec
-	RuntimeOverrides       map[string]any
+	ConvID                     string
+	ProfileKey                 string
+	ProfileVersion             uint64
+	ResolvedProfileRuntime     *gepprofiles.RuntimeSpec
+	ResolvedProfileFingerprint string
 }
 
 // ComposedRuntime are the composed runtime pieces consumed by conversation lifecycle code.

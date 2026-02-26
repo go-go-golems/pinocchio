@@ -6,12 +6,12 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	gepprofiles "github.com/go-go-golems/geppetto/pkg/profiles"
-	webhttp "github.com/go-go-golems/pinocchio/pkg/webchat/http"
 	"github.com/stretchr/testify/require"
 )
 
@@ -25,43 +25,73 @@ func decodeJSON[T any](t *testing.T, rec *httptest.ResponseRecorder) T {
 func newTestResolverWithMultipleRegistries(t *testing.T) *ProfileRequestResolver {
 	t.Helper()
 
-	store := gepprofiles.NewInMemoryProfileStore()
+	tmpDir := t.TempDir()
+	defaultPath := filepath.Join(tmpDir, "default.yaml")
+	teamPath := filepath.Join(tmpDir, "team.yaml")
 
-	defaultRegistry := &gepprofiles.ProfileRegistry{
-		Slug:               gepprofiles.MustRegistrySlug(defaultRegistrySlug),
-		DefaultProfileSlug: gepprofiles.MustProfileSlug("default"),
-		Profiles: map[gepprofiles.ProfileSlug]*gepprofiles.Profile{
-			gepprofiles.MustProfileSlug("default"): {
-				Slug:    gepprofiles.MustProfileSlug("default"),
-				Runtime: gepprofiles.RuntimeSpec{SystemPrompt: "You are default"},
-				Metadata: gepprofiles.ProfileMetadata{
-					Version: 1,
-				},
-			},
-		},
-	}
-	require.NoError(t, gepprofiles.ValidateRegistry(defaultRegistry))
-	require.NoError(t, store.UpsertRegistry(context.Background(), defaultRegistry, gepprofiles.SaveOptions{Actor: "tests", Source: "tests"}))
+	require.NoError(t, os.WriteFile(defaultPath, []byte(`slug: default
+profiles:
+  default:
+    slug: default
+    runtime:
+      system_prompt: You are default
+    metadata:
+      version: 1
+`), 0o644))
+	require.NoError(t, os.WriteFile(teamPath, []byte(`slug: team
+profiles:
+  analyst:
+    slug: analyst
+    runtime:
+      system_prompt: You are analyst
+    metadata:
+      version: 7
+`), 0o644))
 
-	teamRegistry := &gepprofiles.ProfileRegistry{
-		Slug:               gepprofiles.MustRegistrySlug("team"),
-		DefaultProfileSlug: gepprofiles.MustProfileSlug("analyst"),
-		Profiles: map[gepprofiles.ProfileSlug]*gepprofiles.Profile{
-			gepprofiles.MustProfileSlug("analyst"): {
-				Slug:    gepprofiles.MustProfileSlug("analyst"),
-				Runtime: gepprofiles.RuntimeSpec{SystemPrompt: "You are analyst"},
-				Metadata: gepprofiles.ProfileMetadata{
-					Version: 7,
-				},
-			},
-		},
-	}
-	require.NoError(t, gepprofiles.ValidateRegistry(teamRegistry))
-	require.NoError(t, store.UpsertRegistry(context.Background(), teamRegistry, gepprofiles.SaveOptions{Actor: "tests", Source: "tests"}))
-
-	profileRegistry, err := gepprofiles.NewStoreRegistry(store, gepprofiles.MustRegistrySlug(defaultRegistrySlug))
+	specs, err := gepprofiles.ParseRegistrySourceSpecs([]string{defaultPath, teamPath})
 	require.NoError(t, err)
-	return newProfileRequestResolver(profileRegistry, gepprofiles.MustRegistrySlug(defaultRegistrySlug))
+	chain, err := gepprofiles.NewChainedRegistryFromSourceSpecs(context.Background(), specs)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		_ = chain.Close()
+	})
+	return newProfileRequestResolver(chain, gepprofiles.MustRegistrySlug(defaultRegistrySlug))
+}
+
+func newTestResolverWithDuplicateSlugAcrossRegistries(t *testing.T) *ProfileRequestResolver {
+	t.Helper()
+
+	tmpDir := t.TempDir()
+	defaultPath := filepath.Join(tmpDir, "default.yaml")
+	teamPath := filepath.Join(tmpDir, "team.yaml")
+
+	require.NoError(t, os.WriteFile(defaultPath, []byte(`slug: default
+profiles:
+  analyst:
+    slug: analyst
+    runtime:
+      system_prompt: You are default analyst
+    metadata:
+      version: 1
+`), 0o644))
+	require.NoError(t, os.WriteFile(teamPath, []byte(`slug: team
+profiles:
+  analyst:
+    slug: analyst
+    runtime:
+      system_prompt: You are team analyst
+    metadata:
+      version: 7
+`), 0o644))
+
+	specs, err := gepprofiles.ParseRegistrySourceSpecs([]string{defaultPath, teamPath})
+	require.NoError(t, err)
+	chain, err := gepprofiles.NewChainedRegistryFromSourceSpecs(context.Background(), specs)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		_ = chain.Close()
+	})
+	return newProfileRequestResolver(chain, gepprofiles.MustRegistrySlug(defaultRegistrySlug))
 }
 
 func TestWebChatProfileResolver_WS_DefaultProfile(t *testing.T) {
@@ -78,9 +108,15 @@ func TestWebChatProfileResolver_WS_DefaultProfile(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "conv-1", plan.ConvID)
 	require.Equal(t, "default", plan.RuntimeKey)
-	require.Equal(t, "You are default", plan.Overrides["system_prompt"])
+	require.True(t, strings.HasPrefix(plan.RuntimeFingerprint, "sha256:"))
+	require.Nil(t, plan.Overrides)
 	require.NotNil(t, plan.ResolvedRuntime)
 	require.Equal(t, "You are default", plan.ResolvedRuntime.SystemPrompt)
+	require.NotNil(t, plan.ProfileMetadata)
+	_, hasLineage := plan.ProfileMetadata["profile.stack.lineage"]
+	require.True(t, hasLineage)
+	_, hasTrace := plan.ProfileMetadata["profile.stack.trace"]
+	require.True(t, hasTrace)
 }
 
 func TestWebChatProfileResolver_Chat_OverridePolicy(t *testing.T) {
@@ -103,21 +139,23 @@ func TestWebChatProfileResolver_Chat_OverridePolicy(t *testing.T) {
 	req := httptest.NewRequest(
 		http.MethodPost,
 		"/chat/default",
-		bytes.NewBufferString(`{"prompt":"hi","conv_id":"conv-1","overrides":{"system_prompt":"override"}}`),
+		bytes.NewBufferString(`{"prompt":"hi","conv_id":"conv-1","request_overrides":{"system_prompt":"override"}}`),
 	)
 	_, err = resolver.Resolve(req)
 	require.Error(t, err)
-	require.ErrorContains(t, err, "does not allow engine overrides")
+	require.ErrorContains(t, err, "request overrides are disabled for this profile")
 
 	reqAllowed := httptest.NewRequest(
 		http.MethodPost,
 		"/chat/agent",
-		bytes.NewBufferString(`{"prompt":"hi","conv_id":"conv-2","overrides":{"system_prompt":"override"}}`),
+		bytes.NewBufferString(`{"prompt":"hi","conv_id":"conv-2","request_overrides":{"system_prompt":"override"}}`),
 	)
 	plan, err := resolver.Resolve(reqAllowed)
 	require.NoError(t, err)
 	require.Equal(t, "agent", plan.RuntimeKey)
-	require.Equal(t, "override", plan.Overrides["system_prompt"])
+	require.Equal(t, map[string]any{"system_prompt": "override"}, plan.Overrides)
+	require.NotNil(t, plan.ResolvedRuntime)
+	require.Equal(t, "override", plan.ResolvedRuntime.SystemPrompt)
 }
 
 func TestRegisterProfileHandlers_GetAndSetProfile(t *testing.T) {
@@ -174,62 +212,131 @@ func TestRegisterProfileHandlers_GetAndSetProfile(t *testing.T) {
 	require.Equal(t, "agent", getResp["slug"])
 }
 
-func TestWebChatProfileResolver_Chat_BodyProfileAndRegistry(t *testing.T) {
+func TestProfileAPI_ListAndGetAcrossLoadedRegistriesWhenRegistryUnset(t *testing.T) {
+	resolver := newTestResolverWithMultipleRegistries(t)
+
+	mux := http.NewServeMux()
+	registerProfileAPIHandlers(mux, resolver)
+
+	reqList := httptest.NewRequest(http.MethodGet, "/api/chat/profiles", nil)
+	recList := httptest.NewRecorder()
+	mux.ServeHTTP(recList, reqList)
+	require.Equal(t, http.StatusOK, recList.Code)
+
+	var listed []map[string]any
+	require.NoError(t, json.Unmarshal(recList.Body.Bytes(), &listed))
+	require.Len(t, listed, 2)
+
+	seen := map[string]bool{}
+	seenRegistries := map[string]bool{}
+	for _, item := range listed {
+		slug, _ := item["slug"].(string)
+		registry, _ := item["registry"].(string)
+		seen[slug] = true
+		seenRegistries[registry] = true
+	}
+	require.True(t, seen["default"])
+	require.True(t, seen["analyst"])
+	require.True(t, seenRegistries["default"])
+	require.True(t, seenRegistries["team"])
+
+	reqGet := httptest.NewRequest(http.MethodGet, "/api/chat/profiles/analyst", nil)
+	recGet := httptest.NewRecorder()
+	mux.ServeHTTP(recGet, reqGet)
+	require.Equal(t, http.StatusOK, recGet.Code)
+	doc := decodeJSON[profileDocument](t, recGet)
+	require.Equal(t, "team", doc.Registry)
+	require.Equal(t, "analyst", doc.Slug)
+}
+
+func TestProfileAPI_ListAcrossRegistries_PreservesDuplicateSlugsWithRegistryIdentifier(t *testing.T) {
+	resolver := newTestResolverWithDuplicateSlugAcrossRegistries(t)
+
+	mux := http.NewServeMux()
+	registerProfileAPIHandlers(mux, resolver)
+
+	reqList := httptest.NewRequest(http.MethodGet, "/api/chat/profiles", nil)
+	recList := httptest.NewRecorder()
+	mux.ServeHTTP(recList, reqList)
+	require.Equal(t, http.StatusOK, recList.Code)
+
+	var listed []map[string]any
+	require.NoError(t, json.Unmarshal(recList.Body.Bytes(), &listed))
+	require.Len(t, listed, 2)
+
+	analystRegistries := map[string]bool{}
+	for _, item := range listed {
+		slug, _ := item["slug"].(string)
+		registry, _ := item["registry"].(string)
+		require.Equal(t, "analyst", slug)
+		analystRegistries[registry] = true
+	}
+	require.True(t, analystRegistries["default"])
+	require.True(t, analystRegistries["team"])
+}
+
+func TestWebChatProfileResolver_Chat_BodyRuntimeKeyAcrossStack(t *testing.T) {
 	resolver := newTestResolverWithMultipleRegistries(t)
 
 	req := httptest.NewRequest(
 		http.MethodPost,
 		"/chat",
-		bytes.NewBufferString(`{"prompt":"hi","conv_id":"conv-1","registry":"team","profile":"analyst"}`),
+		bytes.NewBufferString(`{"prompt":"hi","conv_id":"conv-1","registry_slug":"team","runtime_key":"analyst"}`),
 	)
 	plan, err := resolver.Resolve(req)
 	require.NoError(t, err)
 	require.Equal(t, "conv-1", plan.ConvID)
 	require.Equal(t, "analyst", plan.RuntimeKey)
+	require.True(t, strings.HasPrefix(plan.RuntimeFingerprint, "sha256:"))
 	require.Equal(t, uint64(7), plan.ProfileVersion)
-	require.Equal(t, "You are analyst", plan.Overrides["system_prompt"])
+	require.Nil(t, plan.Overrides)
 	require.NotNil(t, plan.ResolvedRuntime)
 	require.Equal(t, "You are analyst", plan.ResolvedRuntime.SystemPrompt)
+	require.NotNil(t, plan.ProfileMetadata)
+	_, hasLineage := plan.ProfileMetadata["profile.stack.lineage"]
+	require.True(t, hasLineage)
+	_, hasTrace := plan.ProfileMetadata["profile.stack.trace"]
+	require.True(t, hasTrace)
 }
 
-func TestWebChatProfileResolver_WS_QueryProfileAndRegistry(t *testing.T) {
+func TestWebChatProfileResolver_WS_QueryRuntimeKeyAcrossStack(t *testing.T) {
 	resolver := newTestResolverWithMultipleRegistries(t)
 
-	req := httptest.NewRequest(http.MethodGet, "/ws?conv_id=conv-1&registry=team&profile=analyst", nil)
+	req := httptest.NewRequest(http.MethodGet, "/ws?conv_id=conv-1&registry_slug=team&runtime_key=analyst", nil)
 	plan, err := resolver.Resolve(req)
 	require.NoError(t, err)
 	require.Equal(t, "conv-1", plan.ConvID)
 	require.Equal(t, "analyst", plan.RuntimeKey)
+	require.True(t, strings.HasPrefix(plan.RuntimeFingerprint, "sha256:"))
 	require.Equal(t, uint64(7), plan.ProfileVersion)
-	require.Equal(t, "You are analyst", plan.Overrides["system_prompt"])
+	require.Nil(t, plan.Overrides)
 }
 
-func TestWebChatProfileResolver_Chat_InvalidRegistryInBody(t *testing.T) {
+func TestWebChatProfileResolver_Chat_InvalidRegistryInBodyIsIgnored(t *testing.T) {
 	resolver := newTestResolverWithMultipleRegistries(t)
 
 	req := httptest.NewRequest(
 		http.MethodPost,
 		"/chat",
-		bytes.NewBufferString(`{"prompt":"hi","conv_id":"conv-1","registry":"invalid registry!","profile":"default"}`),
+		bytes.NewBufferString(`{"prompt":"hi","conv_id":"conv-1","registry_slug":"invalid registry!","runtime_key":"default"}`),
 	)
-	_, err := resolver.Resolve(req)
-	require.Error(t, err)
-	require.ErrorContains(t, err, "invalid registry")
+	plan, err := resolver.Resolve(req)
+	require.NoError(t, err)
+	require.Equal(t, "default", plan.RuntimeKey)
 }
 
-func TestWebChatProfileResolver_Chat_UnknownRegistryReturnsNotFound(t *testing.T) {
+func TestWebChatProfileResolver_Chat_UnknownRegistryQueryIsIgnored(t *testing.T) {
 	resolver := newTestResolverWithMultipleRegistries(t)
 
 	req := httptest.NewRequest(
 		http.MethodPost,
-		"/chat?registry=missing",
+		"/chat?registry_slug=missing",
 		bytes.NewBufferString(`{"prompt":"hi","conv_id":"conv-1"}`),
 	)
-	_, err := resolver.Resolve(req)
-	require.Error(t, err)
-	var re *webhttp.RequestResolutionError
-	require.ErrorAs(t, err, &re)
-	require.Equal(t, http.StatusNotFound, re.Status)
+	plan, err := resolver.Resolve(req)
+	require.NoError(t, err)
+	// Unknown registry selector is ignored; resolver falls back to stack-default profile.
+	require.Equal(t, "analyst", plan.RuntimeKey)
 }
 
 func TestProfileAPI_CRUDLifecycle(t *testing.T) {
@@ -486,28 +593,28 @@ func TestWebChatProfileResolver_ProfilePrecedence(t *testing.T) {
 	}{
 		{
 			name:   "path wins",
-			path:   "/chat/path?profile=query&runtime=runtime",
-			body:   `{"prompt":"hi","conv_id":"conv-path","profile":"body"}`,
+			path:   "/chat/path?runtime_key=query",
+			body:   `{"prompt":"hi","conv_id":"conv-path","runtime_key":"body"}`,
 			cookie: "cookie",
 			want:   "path",
 		},
 		{
 			name:   "body wins over query and cookie",
-			path:   "/chat?profile=query&runtime=runtime",
-			body:   `{"prompt":"hi","conv_id":"conv-body","profile":"body"}`,
+			path:   "/chat?runtime_key=query",
+			body:   `{"prompt":"hi","conv_id":"conv-body","runtime_key":"body"}`,
 			cookie: "cookie",
 			want:   "body",
 		},
 		{
-			name:   "profile query wins over runtime query and cookie",
-			path:   "/chat?profile=query&runtime=runtime",
+			name:   "runtime_key query wins over cookie",
+			path:   "/chat?runtime_key=query",
 			body:   `{"prompt":"hi","conv_id":"conv-query"}`,
 			cookie: "cookie",
 			want:   "query",
 		},
 		{
-			name:   "runtime query wins over cookie",
-			path:   "/chat?runtime=runtime",
+			name:   "runtime_key query wins over cookie with runtime value",
+			path:   "/chat?runtime_key=runtime",
 			body:   `{"prompt":"hi","conv_id":"conv-runtime"}`,
 			cookie: "cookie",
 			want:   "runtime",
@@ -540,13 +647,13 @@ func TestWebChatProfileResolver_ProfilePrecedence(t *testing.T) {
 	}
 }
 
-func TestWebChatProfileResolver_RegistryPrecedence_BodyOverQuery(t *testing.T) {
+func TestWebChatProfileResolver_RegistrySlugInputsDoNotAffectResolution(t *testing.T) {
 	resolver := newTestResolverWithMultipleRegistries(t)
 
 	req := httptest.NewRequest(
 		http.MethodPost,
-		"/chat?registry=default",
-		bytes.NewBufferString(`{"prompt":"hi","conv_id":"conv-1","registry":"team","profile":"analyst"}`),
+		"/chat?registry_slug=default",
+		bytes.NewBufferString(`{"prompt":"hi","conv_id":"conv-1","registry_slug":"team","runtime_key":"analyst"}`),
 	)
 	plan, err := resolver.Resolve(req)
 	require.NoError(t, err)

@@ -96,8 +96,7 @@ func NewCommand() (*Command, error) {
 			fields.New("timeline-db", fields.TypeString, fields.WithDefault(""), fields.WithHelp("SQLite DB file path for durable timeline snapshots (enables GET /timeline); DSN is derived with WAL/busy_timeout")),
 			fields.New("turns-dsn", fields.TypeString, fields.WithDefault(""), fields.WithHelp("SQLite DSN for durable turn snapshots (enables GET /turns); preferred over turns-db")),
 			fields.New("turns-db", fields.TypeString, fields.WithDefault(""), fields.WithHelp("SQLite DB file path for durable turn snapshots (enables GET /turns); DSN is derived with WAL/busy_timeout")),
-			fields.New("profile-registry-dsn", fields.TypeString, fields.WithDefault(""), fields.WithHelp("SQLite DSN for durable profile registry storage (preferred over profile-registry-db)")),
-			fields.New("profile-registry-db", fields.TypeString, fields.WithDefault(""), fields.WithHelp("SQLite DB file path for durable profile registry storage (DSN derived with WAL/busy_timeout)")),
+			fields.New("profile-registries", fields.TypeString, fields.WithDefault(""), fields.WithHelp("Comma-separated profile registry sources (yaml/sqlite/sqlite-dsn)")),
 		),
 		cmds.WithSections(append(geLayers, redisLayer)...),
 	)
@@ -106,10 +105,9 @@ func NewCommand() (*Command, error) {
 
 func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io.Writer) error {
 	type serverSettings struct {
-		Root               string `glazed:"root"`
-		DebugAPI           bool   `glazed:"debug-api"`
-		ProfileRegistryDSN string `glazed:"profile-registry-dsn"`
-		ProfileRegistryDB  string `glazed:"profile-registry-db"`
+		Root              string `glazed:"root"`
+		DebugAPI          bool   `glazed:"debug-api"`
+		ProfileRegistries string `glazed:"profile-registries"`
 	}
 	s := &serverSettings{}
 	if err := parsed.DecodeSectionInto(values.DefaultSlug, s); err != nil {
@@ -135,51 +133,23 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 		{Name: "category_regexp_designer", Prompt: "Design regex patterns to categorize transactions. Verify with SQL counts before proposing changes."},
 		{Name: "category_regexp_reviewer", Prompt: "Review proposed regex patterns and assess over/under matching risks."},
 	})
-	amCfg := agentmode.DefaultConfig()
-	amCfg.DefaultMode = "financial_analyst"
 
-	defaultProfiles := []*gepprofiles.Profile{
-		{
-			Slug: gepprofiles.MustProfileSlug("default"),
-			Runtime: gepprofiles.RuntimeSpec{
-				SystemPrompt: "You are an assistant",
-				Middlewares:  []gepprofiles.MiddlewareUse{},
-			},
-		},
-		{
-			Slug: gepprofiles.MustProfileSlug("agent"),
-			Runtime: gepprofiles.RuntimeSpec{
-				SystemPrompt: "You are a helpful assistant. Be concise.",
-				Middlewares: []gepprofiles.MiddlewareUse{{
-					Name: "agentmode",
-					ID:   "default",
-					Config: map[string]any{
-						"default_mode": amCfg.DefaultMode,
-					},
-				}},
-			},
-			Policy: gepprofiles.PolicySpec{
-				AllowOverrides: true,
-			},
-		},
+	profileRegistryEntries, err := gepprofiles.ParseProfileRegistrySourceEntries(s.ProfileRegistries)
+	if err != nil {
+		return errors.Wrap(err, "parse profile registry sources")
 	}
-
-	var profileRegistry gepprofiles.Registry
-	profileRegistryCleanup := func() {}
-	if strings.TrimSpace(s.ProfileRegistryDSN) != "" || strings.TrimSpace(s.ProfileRegistryDB) != "" {
-		profileRegistry, profileRegistryCleanup, err = newSQLiteProfileService(
-			s.ProfileRegistryDSN,
-			s.ProfileRegistryDB,
-			"default",
-			defaultProfiles...,
-		)
-	} else {
-		profileRegistry, err = newInMemoryProfileService("default", defaultProfiles...)
+	profileRegistrySpecs, err := gepprofiles.ParseRegistrySourceSpecs(profileRegistryEntries)
+	if err != nil {
+		return errors.Wrap(err, "parse profile registry source specs")
 	}
+	profileRegistryChain, err := gepprofiles.NewChainedRegistryFromSourceSpecs(ctx, profileRegistrySpecs)
 	if err != nil {
 		return errors.Wrap(err, "initialize profile registry")
 	}
-	defer profileRegistryCleanup()
+	defer func() {
+		_ = profileRegistryChain.Close()
+	}()
+	var profileRegistry gepprofiles.Registry = profileRegistryChain
 
 	middlewareRegistry, err := newWebChatMiddlewareDefinitionRegistry()
 	if err != nil {
@@ -191,7 +161,7 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 			dependencySQLiteDBKey:         dbWithRegexp,
 		},
 	})
-	requestResolver := newProfileRequestResolver(profileRegistry, gepprofiles.MustRegistrySlug(defaultRegistrySlug))
+	requestResolver := newProfileRequestResolver(profileRegistry, profileRegistryChain.DefaultRegistrySlug())
 
 	// Register app-owned thinking-mode SEM/timeline handlers.
 	thinkingmode.Register()

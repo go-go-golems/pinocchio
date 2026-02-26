@@ -31,7 +31,6 @@ import (
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 
-	clay_profiles "github.com/go-go-golems/clay/pkg/cmds/profiles"
 	clay_repositories "github.com/go-go-golems/clay/pkg/cmds/repositories"
 	glazedConfig "github.com/go-go-golems/glazed/pkg/config"
 	"github.com/rs/zerolog/log"
@@ -161,6 +160,7 @@ func initRootCmd() (*help.HelpSystem, error) {
 
 	err = clay.InitGlazed("pinocchio", rootCmd)
 	cobra.CheckErr(err)
+	rootCmd.PersistentFlags().String("profile-registries", "", "Comma-separated profile registry sources (yaml/sqlite/sqlite-dsn)")
 
 	rootCmd.AddCommand(runCommandCmd)
 	rootCmd.AddCommand(pinocchio_cmds.NewCodegenCommand())
@@ -247,7 +247,6 @@ func initAllCommands(helpSystem *help.HelpSystem) error {
 		repositories_,
 		cli.WithCobraMiddlewaresFunc(sections2.GetCobraCommandGeppettoMiddlewares),
 		cli.WithCobraShortHelpSections(schema.DefaultSlug, cmdlayers.GeppettoHelpersSlug),
-		cli.WithProfileSettingsSection(),
 		cli.WithCreateCommandSettingsSection(),
 	)
 	if err != nil {
@@ -268,11 +267,10 @@ func initAllCommands(helpSystem *help.HelpSystem) error {
 	}
 	rootCmd.AddCommand(commandManagementCmd)
 
-	// Add profiles command from clay
-	profilesCmd, err := clay_profiles.NewProfilesCommand("pinocchio", pinocchioInitialProfilesContent)
-	if err != nil {
-		// Use fmt.Errorf for consistent error handling
-		return fmt.Errorf("error initializing profiles command: %w", err)
+	// Add profiles command group.
+	profilesCmd := &cobra.Command{
+		Use:   "profiles",
+		Short: "Profile registry utilities",
 	}
 	migrateLegacyProfilesCmd, err := pinocchio_cmds.NewMigrateLegacyProfilesCommand()
 	if err != nil {
@@ -313,48 +311,4 @@ func initAllCommands(helpSystem *help.HelpSystem) error {
 	}
 
 	return nil
-}
-
-// pinocchioInitialProfilesContent provides the default YAML content for a new pinocchio profiles file.
-func pinocchioInitialProfilesContent() string {
-	return `# Pinocchio Profiles Configuration
-#
-# This file contains profile configurations for Pinocchio.
-# Each profile can override layer parameters for different components (like AI models).
-# Profiles allow you to easily switch between different model providers, API keys,
-# or specific model settings.
-#
-# Profiles are selected using the --profile <profile-name> flag.
-#
-# Example:
-#
-# anyscale-mixtral:
-#   # Override settings for the 'openai-chat' layer (used by OpenAI compatible APIs)
-#   openai-chat:
-#     openai-base-url: https://api.endpoints.anyscale.com/v1
-#     openai-api-key: "YOUR_ANYSCALE_API_KEY" # Replace with your key or use environment variable
-#   # Override settings for the general 'ai-chat' layer
-#   ai-chat:
-#     ai-engine: mistralai/Mixtral-8x7B-Instruct-v0.1
-#     ai-api-type: openai
-#     # You could override temperature, max tokens etc. here too
-#     # temperature: 0.5
-#
-# openai-gpt4:
-#   openai-chat:
-#     # openai-base-url defaults to OpenAI, no need to set normally
-#     openai-api-key: "YOUR_OPENAI_API_KEY" # Replace with your key or use environment variable
-#   ai-chat:
-#     ai-engine: gpt-4-turbo
-#     ai-api-type: openai
-#
-# You can manage this file using the 'pinocchio profiles' commands:
-# - list: List all profiles
-# - get <profile> [layer] [key]: Get profile settings
-# - set <profile> <layer> <key> <value>: Set a profile setting
-# - delete <profile> [layer] [key]: Delete a profile, layer, or setting
-# - edit: Open this file in your editor
-# - init: Create this file if it doesn't exist
-# - duplicate <source> <new>: Copy an existing profile
-`
 }
