@@ -268,7 +268,8 @@ func TestWebChatProfileResolver_Chat_UnknownRegistryQueryIsIgnored(t *testing.T)
 	)
 	plan, err := resolver.Resolve(req)
 	require.NoError(t, err)
-	require.Equal(t, "default", plan.RuntimeKey)
+	// Unknown registry selector is ignored; resolver falls back to stack-default profile.
+	require.Equal(t, "analyst", plan.RuntimeKey)
 }
 
 func TestProfileAPI_CRUDLifecycle(t *testing.T) {
