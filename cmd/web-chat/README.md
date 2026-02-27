@@ -118,10 +118,12 @@ Turn store:
 
 - `--timeline-js-script <path>` (repeat flag or pass comma-separated list)
 
-Each script can register:
+Each script can register handlers via the `pinocchio` native module:
 
-- `registerSemReducer(eventType, fn)`
-- `onSem(eventType, fn)`
+- `const p = require("pinocchio")`
+- `p.timeline.registerSemReducer(eventType, fn)`
+- `p.timeline.onSem(eventType, fn)`
+- alias module name: `require("pnocchio")`
 
 Runtime contract:
 

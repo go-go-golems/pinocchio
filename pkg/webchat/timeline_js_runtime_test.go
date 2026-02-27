@@ -24,7 +24,8 @@ func TestJSTimelineRuntime_ReducerCreatesEntityAndConsumesEvent(t *testing.T) {
 
 	runtime := NewJSTimelineRuntime()
 	require.NoError(t, runtime.LoadScriptSource("reducers.js", `
-registerSemReducer("gepa.progress", function(ev, ctx) {
+const p = require("pinocchio");
+p.timeline.registerSemReducer("gepa.progress", function(ev, ctx) {
   return {
     consume: true,
     upserts: [
@@ -64,14 +65,15 @@ func TestJSTimelineRuntime_HandlerErrorIsContained(t *testing.T) {
 
 	runtime := NewJSTimelineRuntime()
 	require.NoError(t, runtime.LoadScriptSource("handlers.js", `
+const p = require("pnocchio");
 var seen = 0;
-onSem("*", function(ev) {
+p.timeline.onSem("*", function(ev) {
   seen = seen + 1;
   if (ev.type === "bad.throw") {
     throw new Error("boom");
   }
 });
-registerSemReducer("check.seen", function(ev) {
+p.timeline.registerSemReducer("check.seen", function(ev) {
   return {
     consume: true,
     upserts: [{
@@ -104,7 +106,8 @@ func TestJSTimelineRuntime_NonConsumingReducerAllowsBuiltinProjection(t *testing
 
 	runtime := NewJSTimelineRuntime()
 	require.NoError(t, runtime.LoadScriptSource("nonconsume.js", `
-registerSemReducer("llm.delta", function(ev) {
+const p = require("pinocchio");
+p.timeline.registerSemReducer("llm.delta", function(ev) {
   return {
     consume: false,
     upserts: [{

@@ -18,14 +18,21 @@ import (
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
+const (
+	TimelineJSModuleName  = "pinocchio"
+	TimelineJSModuleAlias = "pnocchio"
+)
+
 // JSTimelineRuntime executes JavaScript reducers and handlers for SEM events.
 //
-// Reducers register via registerSemReducer(eventType, fn) and may return:
+// Reducers register via require("pinocchio").timeline.registerSemReducer(eventType, fn)
+// and may return:
 // - a single timeline entity object
 // - an array of entity objects
 // - { upserts: <entity|array>, consume: boolean }
 //
-// Handlers register via onSem(eventType, fn) and are side-effect observers.
+// Handlers register via require("pinocchio").timeline.onSem(eventType, fn)
+// and are side-effect observers.
 // Use "*" to subscribe to all event types.
 type JSTimelineRuntime struct {
 	mu sync.RWMutex
@@ -53,11 +60,28 @@ func NewJSTimelineRuntime() *JSTimelineRuntime {
 }
 
 func NewJSTimelineRuntimeWithOptions(opts JSTimelineRuntimeOptions) (*JSTimelineRuntime, error) {
+	r := &JSTimelineRuntime{
+		reducers: map[string][]goja.Callable{},
+		handlers: map[string][]goja.Callable{},
+	}
+
 	builderOpts := make([]gojengine.Option, 0, 1)
 	if len(opts.RequireOptions) > 0 {
 		builderOpts = append(builderOpts, gojengine.WithRequireOptions(opts.RequireOptions...))
 	}
-	factory, err := gojengine.NewBuilder(builderOpts...).Build()
+	builder := gojengine.NewBuilder(builderOpts...).WithModules(
+		gojengine.NativeModuleSpec{
+			ModuleID:   "timeline-runtime.pinocchio",
+			ModuleName: TimelineJSModuleName,
+			Loader:     r.pinocchioModuleLoader,
+		},
+		gojengine.NativeModuleSpec{
+			ModuleID:   "timeline-runtime.pnocchio",
+			ModuleName: TimelineJSModuleAlias,
+			Loader:     r.pinocchioModuleLoader,
+		},
+	)
+	factory, err := builder.Build()
 	if err != nil {
 		return nil, errors.Wrap(err, "js timeline runtime: build go-go-goja runtime factory")
 	}
@@ -66,68 +90,94 @@ func NewJSTimelineRuntimeWithOptions(opts JSTimelineRuntimeOptions) (*JSTimeline
 		return nil, errors.Wrap(err, "js timeline runtime: create go-go-goja runtime")
 	}
 
-	r := &JSTimelineRuntime{
-		runtime:  ownedRuntime,
-		vm:       ownedRuntime.VM,
-		runner:   ownedRuntime.Owner,
-		reducers: map[string][]goja.Callable{},
-		handlers: map[string][]goja.Callable{},
-	}
-	if err := r.installHostAPIs(); err != nil {
-		_ = r.Close(context.Background())
-		return nil, err
-	}
+	r.runtime = ownedRuntime
+	r.vm = ownedRuntime.VM
+	r.runner = ownedRuntime.Owner
 	return r, nil
 }
 
-func (r *JSTimelineRuntime) installHostAPIs() error {
+func (r *JSTimelineRuntime) pinocchioModuleLoader(vm *goja.Runtime, moduleObj *goja.Object) {
+	if r == nil || vm == nil || moduleObj == nil {
+		return
+	}
+	exports := moduleObj.Get("exports")
+	exportsObj := exports.ToObject(vm)
+	timelineObj := vm.NewObject()
+	if err := timelineObj.Set("registerSemReducer", func(call goja.FunctionCall) goja.Value {
+		return r.registerSemReducerCall(vm, call)
+	}); err != nil {
+		panic(vm.NewGoError(err))
+	}
+	if err := timelineObj.Set("onSem", func(call goja.FunctionCall) goja.Value {
+		return r.onSemCall(vm, call)
+	}); err != nil {
+		panic(vm.NewGoError(err))
+	}
+	if err := exportsObj.Set("timeline", timelineObj); err != nil {
+		panic(vm.NewGoError(err))
+	}
+	// Top-level shortcuts keep script ergonomics flat while namespaced API remains canonical.
+	if err := exportsObj.Set("registerSemReducer", timelineObj.Get("registerSemReducer")); err != nil {
+		panic(vm.NewGoError(err))
+	}
+	if err := exportsObj.Set("onSem", timelineObj.Get("onSem")); err != nil {
+		panic(vm.NewGoError(err))
+	}
+}
+
+func (r *JSTimelineRuntime) registerSemReducerCall(vm *goja.Runtime, call goja.FunctionCall) goja.Value {
+	if len(call.Arguments) < 2 {
+		panic(vm.NewTypeError("registerSemReducer(eventType, fn) requires 2 arguments"))
+	}
+	eventType := strings.TrimSpace(call.Arguments[0].String())
+	if eventType == "" {
+		panic(vm.NewTypeError("registerSemReducer: eventType must be non-empty"))
+	}
+	fn, ok := goja.AssertFunction(call.Arguments[1])
+	if !ok {
+		panic(vm.NewTypeError("registerSemReducer: second argument must be a function"))
+	}
+	r.mu.Lock()
+	r.reducers[eventType] = append(r.reducers[eventType], fn)
+	r.mu.Unlock()
+	return goja.Undefined()
+}
+
+func (r *JSTimelineRuntime) onSemCall(vm *goja.Runtime, call goja.FunctionCall) goja.Value {
+	if len(call.Arguments) < 2 {
+		panic(vm.NewTypeError("onSem(eventType, fn) requires 2 arguments"))
+	}
+	eventType := strings.TrimSpace(call.Arguments[0].String())
+	if eventType == "" {
+		eventType = "*"
+	}
+	fn, ok := goja.AssertFunction(call.Arguments[1])
+	if !ok {
+		panic(vm.NewTypeError("onSem: second argument must be a function"))
+	}
+	r.mu.Lock()
+	r.handlers[eventType] = append(r.handlers[eventType], fn)
+	r.mu.Unlock()
+	return goja.Undefined()
+}
+
+func (r *JSTimelineRuntime) ensureRuntimeReady() error {
 	if r == nil || r.vm == nil || r.runner == nil {
 		return errors.New("js timeline runtime: runtime not initialized")
 	}
-	_, err := r.runner.Call(context.Background(), "timeline.installHostAPIs", func(_ context.Context, vm *goja.Runtime) (any, error) {
-		if err := vm.Set("registerSemReducer", func(call goja.FunctionCall) goja.Value {
-			if len(call.Arguments) < 2 {
-				panic(vm.NewTypeError("registerSemReducer(eventType, fn) requires 2 arguments"))
-			}
-			eventType := strings.TrimSpace(call.Arguments[0].String())
-			if eventType == "" {
-				panic(vm.NewTypeError("registerSemReducer: eventType must be non-empty"))
-			}
-			fn, ok := goja.AssertFunction(call.Arguments[1])
-			if !ok {
-				panic(vm.NewTypeError("registerSemReducer: second argument must be a function"))
-			}
-			r.mu.Lock()
-			r.reducers[eventType] = append(r.reducers[eventType], fn)
-			r.mu.Unlock()
-			return goja.Undefined()
-		}); err != nil {
-			return nil, err
-		}
+	return nil
+}
 
-		if err := vm.Set("onSem", func(call goja.FunctionCall) goja.Value {
-			if len(call.Arguments) < 2 {
-				panic(vm.NewTypeError("onSem(eventType, fn) requires 2 arguments"))
-			}
-			eventType := strings.TrimSpace(call.Arguments[0].String())
-			if eventType == "" {
-				eventType = "*"
-			}
-			fn, ok := goja.AssertFunction(call.Arguments[1])
-			if !ok {
-				panic(vm.NewTypeError("onSem: second argument must be a function"))
-			}
-			r.mu.Lock()
-			r.handlers[eventType] = append(r.handlers[eventType], fn)
-			r.mu.Unlock()
-			return goja.Undefined()
-		}); err != nil {
-			return nil, err
-		}
-		return nil, nil
+func (r *JSTimelineRuntime) ensurePinocchioModuleLoaded() error {
+	if err := r.ensureRuntimeReady(); err != nil {
+		return err
+	}
+	_, err := r.runner.Call(context.Background(), "timeline.ensurePinocchioModuleLoaded", func(_ context.Context, vm *goja.Runtime) (any, error) {
+		_, runErr := vm.RunString(`require("` + TimelineJSModuleName + `")`)
+		return nil, runErr
 	})
 	if err != nil {
-		return errors.Wrap(err, "js timeline runtime: install host APIs")
+		return errors.Wrap(err, "js timeline runtime: load pinocchio module")
 	}
 	return nil
 }
@@ -148,8 +198,11 @@ func (r *JSTimelineRuntime) LoadScriptFile(path string) error {
 }
 
 func (r *JSTimelineRuntime) LoadScriptSource(name string, source string) error {
-	if r == nil || r.vm == nil || r.runner == nil {
-		return errors.New("js timeline runtime: runtime not initialized")
+	if err := r.ensureRuntimeReady(); err != nil {
+		return err
+	}
+	if err := r.ensurePinocchioModuleLoaded(); err != nil {
+		return err
 	}
 	if strings.TrimSpace(name) == "" {
 		name = "timeline-runtime.js"

@@ -194,7 +194,8 @@ func findEntityByID(entities []map[string]any, id string) (map[string]any, bool)
 func TestLLMDeltaProjectionHarness_NonConsumingReducerAddsSideProjection(t *testing.T) {
 	messageID := uuid.New()
 	configureHarnessTimelineScript(t, `
-registerSemReducer("llm.delta", function(ev) {
+const p = require("pinocchio");
+p.timeline.registerSemReducer("llm.delta", function(ev) {
   return {
     consume: false,
     upserts: [{
@@ -234,7 +235,8 @@ registerSemReducer("llm.delta", function(ev) {
 func TestLLMDeltaProjectionHarness_ConsumingReducerSuppressesBuiltinDeltaProjection(t *testing.T) {
 	messageID := uuid.New()
 	configureHarnessTimelineScript(t, `
-registerSemReducer("llm.delta", function(ev) {
+const p = require("pinocchio");
+p.timeline.registerSemReducer("llm.delta", function(ev) {
   return {
     consume: true,
     upserts: [{
@@ -274,13 +276,14 @@ registerSemReducer("llm.delta", function(ev) {
 func TestLLMDeltaProjectionHarness_HandlerRunsBeforeReducer(t *testing.T) {
 	messageID := uuid.New()
 	configureHarnessTimelineScript(t, `
+const p = require("pinocchio");
 var deltaSeen = 0;
-onSem("llm.delta", function(ev) {
+p.timeline.onSem("llm.delta", function(ev) {
   if (ev && ev.type === "llm.delta") {
     deltaSeen = deltaSeen + 1;
   }
 });
-registerSemReducer("llm.delta", function(ev) {
+p.timeline.registerSemReducer("llm.delta", function(ev) {
   return {
     consume: false,
     upserts: [{

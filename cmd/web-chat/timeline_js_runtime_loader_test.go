@@ -51,7 +51,8 @@ func TestConfigureTimelineJSScripts_LoadsRuntimeAndProjectsEvents(t *testing.T) 
 	resetTimelineRuntimeLoaderState(t)
 
 	script := `
-registerSemReducer("llm.delta", function(ev) {
+const p = require("pinocchio");
+p.timeline.registerSemReducer("llm.delta", function(ev) {
   return {
     consume: true,
     upserts: [{
