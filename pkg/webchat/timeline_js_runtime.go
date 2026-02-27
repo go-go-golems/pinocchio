@@ -9,6 +9,9 @@ import (
 	"sync"
 
 	"github.com/dop251/goja"
+	"github.com/dop251/goja_nodejs/require"
+	gojengine "github.com/go-go-golems/go-go-goja/engine"
+	"github.com/go-go-golems/go-go-goja/pkg/runtimeowner"
 	timelinepb "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/timeline"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
@@ -25,64 +28,108 @@ import (
 // Handlers register via onSem(eventType, fn) and are side-effect observers.
 // Use "*" to subscribe to all event types.
 type JSTimelineRuntime struct {
-	mu sync.Mutex
+	mu sync.RWMutex
 
-	vm *goja.Runtime
+	runtime *gojengine.Runtime
+	vm      *goja.Runtime
+	runner  runtimeowner.Runner
+
+	closeOnce sync.Once
 
 	reducers map[string][]goja.Callable
 	handlers map[string][]goja.Callable
 }
 
+type JSTimelineRuntimeOptions struct {
+	RequireOptions []require.Option
+}
+
 func NewJSTimelineRuntime() *JSTimelineRuntime {
-	r := &JSTimelineRuntime{
-		vm:       goja.New(),
-		reducers: map[string][]goja.Callable{},
-		handlers: map[string][]goja.Callable{},
+	r, err := NewJSTimelineRuntimeWithOptions(JSTimelineRuntimeOptions{})
+	if err != nil {
+		panic(err)
 	}
-	r.installHostAPIs()
 	return r
 }
 
-func (r *JSTimelineRuntime) installHostAPIs() {
-	if r == nil || r.vm == nil {
-		return
+func NewJSTimelineRuntimeWithOptions(opts JSTimelineRuntimeOptions) (*JSTimelineRuntime, error) {
+	builderOpts := make([]gojengine.Option, 0, 1)
+	if len(opts.RequireOptions) > 0 {
+		builderOpts = append(builderOpts, gojengine.WithRequireOptions(opts.RequireOptions...))
+	}
+	factory, err := gojengine.NewBuilder(builderOpts...).Build()
+	if err != nil {
+		return nil, errors.Wrap(err, "js timeline runtime: build go-go-goja runtime factory")
+	}
+	ownedRuntime, err := factory.NewRuntime(context.Background())
+	if err != nil {
+		return nil, errors.Wrap(err, "js timeline runtime: create go-go-goja runtime")
 	}
 
-	if err := r.vm.Set("registerSemReducer", func(call goja.FunctionCall) goja.Value {
-		if len(call.Arguments) < 2 {
-			panic(r.vm.NewTypeError("registerSemReducer(eventType, fn) requires 2 arguments"))
-		}
-		eventType := strings.TrimSpace(call.Arguments[0].String())
-		if eventType == "" {
-			panic(r.vm.NewTypeError("registerSemReducer: eventType must be non-empty"))
-		}
-		fn, ok := goja.AssertFunction(call.Arguments[1])
-		if !ok {
-			panic(r.vm.NewTypeError("registerSemReducer: second argument must be a function"))
-		}
-		r.reducers[eventType] = append(r.reducers[eventType], fn)
-		return goja.Undefined()
-	}); err != nil {
-		panic(err)
+	r := &JSTimelineRuntime{
+		runtime:  ownedRuntime,
+		vm:       ownedRuntime.VM,
+		runner:   ownedRuntime.Owner,
+		reducers: map[string][]goja.Callable{},
+		handlers: map[string][]goja.Callable{},
 	}
+	if err := r.installHostAPIs(); err != nil {
+		_ = r.Close(context.Background())
+		return nil, err
+	}
+	return r, nil
+}
 
-	if err := r.vm.Set("onSem", func(call goja.FunctionCall) goja.Value {
-		if len(call.Arguments) < 2 {
-			panic(r.vm.NewTypeError("onSem(eventType, fn) requires 2 arguments"))
-		}
-		eventType := strings.TrimSpace(call.Arguments[0].String())
-		if eventType == "" {
-			eventType = "*"
-		}
-		fn, ok := goja.AssertFunction(call.Arguments[1])
-		if !ok {
-			panic(r.vm.NewTypeError("onSem: second argument must be a function"))
-		}
-		r.handlers[eventType] = append(r.handlers[eventType], fn)
-		return goja.Undefined()
-	}); err != nil {
-		panic(err)
+func (r *JSTimelineRuntime) installHostAPIs() error {
+	if r == nil || r.vm == nil || r.runner == nil {
+		return errors.New("js timeline runtime: runtime not initialized")
 	}
+	_, err := r.runner.Call(context.Background(), "timeline.installHostAPIs", func(_ context.Context, vm *goja.Runtime) (any, error) {
+		if err := vm.Set("registerSemReducer", func(call goja.FunctionCall) goja.Value {
+			if len(call.Arguments) < 2 {
+				panic(vm.NewTypeError("registerSemReducer(eventType, fn) requires 2 arguments"))
+			}
+			eventType := strings.TrimSpace(call.Arguments[0].String())
+			if eventType == "" {
+				panic(vm.NewTypeError("registerSemReducer: eventType must be non-empty"))
+			}
+			fn, ok := goja.AssertFunction(call.Arguments[1])
+			if !ok {
+				panic(vm.NewTypeError("registerSemReducer: second argument must be a function"))
+			}
+			r.mu.Lock()
+			r.reducers[eventType] = append(r.reducers[eventType], fn)
+			r.mu.Unlock()
+			return goja.Undefined()
+		}); err != nil {
+			return nil, err
+		}
+
+		if err := vm.Set("onSem", func(call goja.FunctionCall) goja.Value {
+			if len(call.Arguments) < 2 {
+				panic(vm.NewTypeError("onSem(eventType, fn) requires 2 arguments"))
+			}
+			eventType := strings.TrimSpace(call.Arguments[0].String())
+			if eventType == "" {
+				eventType = "*"
+			}
+			fn, ok := goja.AssertFunction(call.Arguments[1])
+			if !ok {
+				panic(vm.NewTypeError("onSem: second argument must be a function"))
+			}
+			r.mu.Lock()
+			r.handlers[eventType] = append(r.handlers[eventType], fn)
+			r.mu.Unlock()
+			return goja.Undefined()
+		}); err != nil {
+			return nil, err
+		}
+		return nil, nil
+	})
+	if err != nil {
+		return errors.Wrap(err, "js timeline runtime: install host APIs")
+	}
+	return nil
 }
 
 func (r *JSTimelineRuntime) LoadScriptFile(path string) error {
@@ -101,74 +148,120 @@ func (r *JSTimelineRuntime) LoadScriptFile(path string) error {
 }
 
 func (r *JSTimelineRuntime) LoadScriptSource(name string, source string) error {
-	if r == nil || r.vm == nil {
+	if r == nil || r.vm == nil || r.runner == nil {
 		return errors.New("js timeline runtime: runtime not initialized")
 	}
 	if strings.TrimSpace(name) == "" {
 		name = "timeline-runtime.js"
 	}
-
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if _, err := r.vm.RunScript(name, source); err != nil {
+	if _, err := r.runner.Call(context.Background(), "timeline.LoadScriptSource", func(_ context.Context, vm *goja.Runtime) (any, error) {
+		_, runErr := vm.RunScript(name, source)
+		return nil, runErr
+	}); err != nil {
 		return errors.Wrapf(err, "js timeline runtime: run script %q", name)
 	}
 	return nil
 }
 
 func (r *JSTimelineRuntime) HandleSemEvent(ctx context.Context, p *TimelineProjector, ev TimelineSemEvent, now int64) (bool, error) {
-	if r == nil || r.vm == nil || p == nil {
+	if r == nil || r.vm == nil || r.runner == nil || p == nil {
 		return false, nil
+	}
+	if ctx == nil {
+		ctx = context.Background()
 	}
 
 	eventPayload := r.buildEventPayload(ev, now)
 	ctxPayload := map[string]any{
 		"now_ms": now,
 	}
-
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	reducers := append([]goja.Callable{}, r.reducers[ev.Type]...)
-	reducers = append(reducers, r.reducers["*"]...)
-	handlers := append([]goja.Callable{}, r.handlers[ev.Type]...)
-	handlers = append(handlers, r.handlers["*"]...)
-
-	consume := false
-	for _, handler := range handlers {
-		if handler == nil {
-			continue
-		}
-		_, err := handler(goja.Undefined(), r.vm.ToValue(eventPayload), r.vm.ToValue(ctxPayload))
-		if err != nil {
-			log.Warn().Err(err).Str("event_type", ev.Type).Msg("js timeline handler threw; continuing")
-		}
+	type dispatchResult struct {
+		Consume  bool
+		Entities []*timelinepb.TimelineEntityV2
 	}
+	rawResult, err := r.runner.Call(ctx, "timeline.HandleSemEvent", func(_ context.Context, vm *goja.Runtime) (any, error) {
+		r.mu.RLock()
+		reducers := append([]goja.Callable{}, r.reducers[ev.Type]...)
+		reducers = append(reducers, r.reducers["*"]...)
+		handlers := append([]goja.Callable{}, r.handlers[ev.Type]...)
+		handlers = append(handlers, r.handlers["*"]...)
+		r.mu.RUnlock()
 
-	for _, reducer := range reducers {
-		if reducer == nil {
-			continue
-		}
-		ret, err := reducer(goja.Undefined(), r.vm.ToValue(eventPayload), r.vm.ToValue(ctxPayload))
-		if err != nil {
-			log.Warn().Err(err).Str("event_type", ev.Type).Msg("js timeline reducer threw; continuing")
-			continue
-		}
-		rc, entities := r.decodeReducerReturn(ret.Export(), ev, now)
-		if rc {
-			consume = true
-		}
-		for _, entity := range entities {
-			if entity == nil {
+		consume := false
+		entities := []*timelinepb.TimelineEntityV2{}
+		semEventValue := vm.ToValue(eventPayload)
+		semCtxValue := vm.ToValue(ctxPayload)
+
+		for _, handler := range handlers {
+			if handler == nil {
 				continue
 			}
-			if err := p.Upsert(ctx, ev.Seq, entity); err != nil {
-				log.Warn().Err(err).Str("event_type", ev.Type).Msg("js timeline reducer upsert failed; continuing")
+			_, runErr := handler(goja.Undefined(), semEventValue, semCtxValue)
+			if runErr != nil {
+				log.Warn().Err(runErr).Str("event_type", ev.Type).Msg("js timeline handler threw; continuing")
 			}
 		}
-	}
 
-	return consume, nil
+		for _, reducer := range reducers {
+			if reducer == nil {
+				continue
+			}
+			ret, runErr := reducer(goja.Undefined(), semEventValue, semCtxValue)
+			if runErr != nil {
+				log.Warn().Err(runErr).Str("event_type", ev.Type).Msg("js timeline reducer threw; continuing")
+				continue
+			}
+			rc, reducedEntities := r.decodeReducerReturn(ret.Export(), ev, now)
+			if rc {
+				consume = true
+			}
+			for _, entity := range reducedEntities {
+				if entity != nil {
+					entities = append(entities, entity)
+				}
+			}
+		}
+		return dispatchResult{
+			Consume:  consume,
+			Entities: entities,
+		}, nil
+	})
+	if err != nil {
+		return false, errors.Wrap(err, "js timeline runtime: execute handlers/reducers")
+	}
+	result, ok := rawResult.(dispatchResult)
+	if !ok {
+		return false, errors.Errorf("js timeline runtime: unexpected reducer dispatch result type %T", rawResult)
+	}
+	for _, entity := range result.Entities {
+		if entity == nil {
+			continue
+		}
+		if err := p.Upsert(ctx, ev.Seq, entity); err != nil {
+			log.Warn().Err(err).Str("event_type", ev.Type).Msg("js timeline reducer upsert failed; continuing")
+		}
+	}
+	return result.Consume, nil
+}
+
+func (r *JSTimelineRuntime) Close(ctx context.Context) error {
+	if r == nil {
+		return nil
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	var retErr error
+	r.closeOnce.Do(func() {
+		if r.runtime != nil {
+			retErr = r.runtime.Close(ctx)
+		}
+		r.mu.Lock()
+		r.reducers = map[string][]goja.Callable{}
+		r.handlers = map[string][]goja.Callable{}
+		r.mu.Unlock()
+	})
+	return retErr
 }
 
 func (r *JSTimelineRuntime) buildEventPayload(ev TimelineSemEvent, now int64) map[string]any {

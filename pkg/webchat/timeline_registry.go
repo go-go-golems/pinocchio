@@ -3,6 +3,7 @@ package webchat
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"strings"
 	"sync"
 )
@@ -45,15 +46,19 @@ func RegisterTimelineHandler(eventType string, handler TimelineSemHandler) {
 // SetTimelineRuntime installs an optional runtime bridge.
 func SetTimelineRuntime(runtime TimelineSemRuntime) {
 	timelineHandlersMu.Lock()
+	prev := timelineRuntime
 	timelineRuntime = runtime
 	timelineHandlersMu.Unlock()
+	closeTimelineRuntime(prev)
 }
 
 // ClearTimelineRuntime removes the runtime bridge.
 func ClearTimelineRuntime() {
 	timelineHandlersMu.Lock()
+	prev := timelineRuntime
 	timelineRuntime = nil
 	timelineHandlersMu.Unlock()
+	closeTimelineRuntime(prev)
 }
 
 func handleTimelineHandlers(ctx context.Context, p *TimelineProjector, ev TimelineSemEvent, now int64) (bool, error) {
@@ -92,7 +97,22 @@ func handleTimelineHandlers(ctx context.Context, p *TimelineProjector, ev Timeli
 // ClearTimelineHandlers removes all registered handlers (useful for tests).
 func ClearTimelineHandlers() {
 	timelineHandlersMu.Lock()
+	prev := timelineRuntime
 	timelineHandlers = map[string][]TimelineSemHandler{}
 	timelineRuntime = nil
 	timelineHandlersMu.Unlock()
+	closeTimelineRuntime(prev)
+}
+
+func closeTimelineRuntime(runtime TimelineSemRuntime) {
+	if runtime == nil {
+		return
+	}
+	if closer, ok := runtime.(interface{ Close(context.Context) error }); ok {
+		_ = closer.Close(context.Background())
+		return
+	}
+	if closer, ok := runtime.(io.Closer); ok {
+		_ = closer.Close()
+	}
 }
