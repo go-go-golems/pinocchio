@@ -3,10 +3,13 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
+	gepprofiles "github.com/go-go-golems/geppetto/pkg/profiles"
 	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
 	webchat "github.com/go-go-golems/pinocchio/pkg/webchat"
 	"github.com/stretchr/testify/require"
@@ -48,13 +51,13 @@ func TestConfigureTimelineJSScripts_LoadsRuntimeAndProjectsEvents(t *testing.T) 
 	resetTimelineRuntimeLoaderState(t)
 
 	script := `
-registerSemReducer("gepa.progress", function(ev) {
+registerSemReducer("llm.delta", function(ev) {
   return {
     consume: true,
     upserts: [{
       id: ev.id + "-loader",
       kind: "js.loader",
-      props: { label: ev.data && ev.data.label }
+      props: { cumulative: ev.data && ev.data.cumulative }
     }]
   };
 });
@@ -66,8 +69,9 @@ registerSemReducer("gepa.progress", function(ev) {
 
 	store := chatstore.NewInMemoryTimelineStore(100)
 	projector := webchat.NewTimelineProjector("conv-loader-test", store, nil)
-	require.NoError(t, projector.ApplySemFrame(context.Background(), semFrameForLoaderTest(t, "gepa.progress", "evt-1", 1, map[string]any{
-		"label": "ok",
+	require.NoError(t, projector.ApplySemFrame(context.Background(), semFrameForLoaderTest(t, "llm.delta", "evt-1", 1, map[string]any{
+		"delta":      "h",
+		"cumulative": "hello",
 	})))
 
 	snap, err := store.GetSnapshot(context.Background(), "conv-loader-test", 0, 100)
@@ -76,7 +80,7 @@ registerSemReducer("gepa.progress", function(ev) {
 	require.Equal(t, "evt-1-loader", snap.Entities[0].Id)
 	require.Equal(t, "js.loader", snap.Entities[0].Kind)
 	props := snap.Entities[0].GetProps().AsMap()
-	require.Equal(t, "ok", props["label"])
+	require.Equal(t, "hello", props["cumulative"])
 }
 
 func TestConfigureTimelineJSScripts_ReturnsHelpfulErrorForMissingScript(t *testing.T) {
@@ -85,4 +89,32 @@ func TestConfigureTimelineJSScripts_ReturnsHelpfulErrorForMissingScript(t *testi
 	err := configureTimelineJSScripts([]string{"/tmp/does-not-exist.js"})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "load timeline JS script")
+}
+
+func TestProfileResolver_GPT5NanoProfileIsResolvedForChatRequest(t *testing.T) {
+	profileRegistry, err := newInMemoryProfileService(
+		"default",
+		&gepprofiles.Profile{
+			Slug: gepprofiles.MustProfileSlug("gpt-5-nano"),
+			Runtime: gepprofiles.RuntimeSpec{
+				StepSettingsPatch: map[string]any{
+					"ai-chat": map[string]any{
+						"ai-api-type": "openai-responses",
+						"ai-engine":   "gpt-5-nano",
+					},
+				},
+			},
+		},
+	)
+	require.NoError(t, err)
+	resolver := newProfileRequestResolver(profileRegistry, gepprofiles.MustRegistrySlug(defaultRegistrySlug))
+
+	req := httptest.NewRequest("POST", "/chat/gpt-5-nano", strings.NewReader(`{"prompt":"hello","conv_id":"conv-gpt5nano"}`))
+	resolved, err := resolver.Resolve(req)
+	require.NoError(t, err)
+	require.Equal(t, "gpt-5-nano", resolved.RuntimeKey)
+	require.NotNil(t, resolved.ResolvedRuntime)
+	aiChat, ok := resolved.ResolvedRuntime.StepSettingsPatch["ai-chat"].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "gpt-5-nano", aiChat["ai-engine"])
 }
