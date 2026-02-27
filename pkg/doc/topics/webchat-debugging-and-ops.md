@@ -72,6 +72,18 @@ Look for lifecycle logs:
 - turn payloads expose per-turn `runtime_key` and `inference_id`,
 - for historical attribution, query `/api/debug/turns`, not only `/api/debug/conversations/:id`.
 
+### JS timeline runtime issues
+
+- If startup fails after adding `--timeline-js-script`, check script path and syntax first.
+- Startup loading is fail-fast: invalid script prevents server boot.
+- Runtime callback errors are non-fatal and logged as warnings:
+  - `js timeline handler threw; continuing`
+  - `js timeline reducer threw; continuing`
+  - `js timeline reducer upsert failed; continuing`
+- If builtin projection disappears for an event type (for example `llm.delta`), verify your reducer is not returning `consume: true`.
+- For additive projection, return `consume: false` and only emit `upserts`.
+- Wildcard hooks use `onSem("*", fn)` and run for all SEM event types.
+
 ## Operational Checks
 
 Backend checks:
@@ -80,6 +92,7 @@ Backend checks:
 - Confirm timeline store configuration (`--timeline-db` or `--timeline-dsn`) when durability is expected.
 - Confirm turn store configuration for debug turn queries.
 - Confirm profile API mounts include `/api/chat/profiles`, `/api/chat/schemas/middlewares`, and `/api/chat/schemas/extensions`.
+- Confirm JS runtime scripts are loaded via `--timeline-js-script` and inspect startup log for script list.
 
 Frontend checks:
 
