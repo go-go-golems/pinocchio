@@ -96,6 +96,7 @@ bump-glazed:
 	go get github.com/go-go-golems/parka@latest
 	go get github.com/go-go-golems/bobatea@latest
 	go get github.com/go-go-golems/geppetto@latest
+	go get github.com/go-go-golems/go-go-goja@latest
 	go mod tidy
 
 # Path to CodeQL CLI - adjust based on installation location

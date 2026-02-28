@@ -56,6 +56,8 @@ Webchat is pinocchio's real-time chat framework. It connects a geppetto inferenc
 | [Backend Reference](webchat-backend-reference.md) | API for StreamCoordinator and ConnectionPool |
 | [Backend Internals](webchat-backend-internals.md) | Implementation details, concurrency, performance |
 | [Profile Registry Guide](webchat-profile-registry.md) | Detailed profile registry behavior, resolver rules, and profile CRUD APIs |
+| [Pinocchio JS API Reference](13-js-api-reference.md) | Full contract for JavaScript SEM reducers and handlers |
+| [Pinocchio JS API User Guide](14-js-api-user-guide.md) | Step-by-step workflow for timeline script development |
 
 ### Frontend Developers
 
