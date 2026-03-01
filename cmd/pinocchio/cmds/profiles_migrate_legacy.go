@@ -262,6 +262,7 @@ func MigrateLegacyProfilesFile(opts LegacyProfilesMigrationOptions) (*LegacyProf
 
 	if opts.InPlace && opts.BackupInPlace {
 		backupPath := inputPath + ".bak"
+		// #nosec G703 -- backup path is intentionally derived from the user-selected input file path in this local CLI command.
 		if err := os.WriteFile(backupPath, raw, 0o644); err != nil {
 			return nil, fmt.Errorf("write backup file %q: %w", backupPath, err)
 		}
@@ -280,6 +281,7 @@ func writeFileAtomically(path string, data []byte, mode os.FileMode) error {
 		return fmt.Errorf("create output directory for %q: %w", path, err)
 	}
 	tmpPath := path + ".tmp"
+	// #nosec G703 -- temporary path is intentionally derived from the validated target output path for atomic replacement.
 	if err := os.WriteFile(tmpPath, data, mode); err != nil {
 		return fmt.Errorf("write temporary output file %q: %w", tmpPath, err)
 	}

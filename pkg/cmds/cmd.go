@@ -458,6 +458,7 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) (*tu
 	// Start router in a goroutine
 	eg := errgroup.Group{}
 	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 
 	f := func() {
 		cancel()
