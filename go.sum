@@ -193,8 +193,8 @@ github.com/go-go-golems/bobatea v0.1.1 h1:yZvNBBd7vV2NIyCF+0HjSwyd65flgxrR7wKg98
 github.com/go-go-golems/bobatea v0.1.1/go.mod h1:YOyr6o37FxChZdeVfYip9obm66SwOpl8/x/Y8U1/nBs=
 github.com/go-go-golems/clay v0.4.0 h1:8VeR+o3ah9P95TWLFtitSLabF567AzhjjoeYK87vEwM=
 github.com/go-go-golems/clay v0.4.0/go.mod h1:8wx9hz+dUN4jodWN4CzfMqjBfcXyZ4X6DaJfFFAI8eE=
-github.com/go-go-golems/geppetto v0.10.2 h1:470ZbrOdOQCEMX9KoNDUotsIKNKZFVPeQaYrlj3oIXE=
-github.com/go-go-golems/geppetto v0.10.2/go.mod h1:GPpKxCGbfJdq3S80OTi+/28i1yKZNEBVIKBoGHab4HY=
+github.com/go-go-golems/geppetto v0.10.3 h1:hU//mey/kg3Y5XIXdLVdW8vXKgAk1eEVerCLXQqHMdc=
+github.com/go-go-golems/geppetto v0.10.3/go.mod h1:fHVgksG/cfD8KsHYflyKLdyPCVfIWEzbvnkC1j+vZus=
 github.com/go-go-golems/glazed v1.0.4 h1:QOrPFq3RnL36I3yYkbc/frMsGDyWIZnwpQyNAQPGoyc=
 github.com/go-go-golems/glazed v1.0.4/go.mod h1:k+KwcIT68nAam+p1JTGbCtT4Pr20sCwYPKr1FFHIazo=
 github.com/go-go-golems/go-go-goja v0.4.0 h1:ZsryOWZR8pBsDjyh+lI6NPNtwafD3mrP0Ki/c2X3CWg=
@@ -501,8 +501,8 @@ golang.org/x/xerrors v0.0.0-20190717185122-a985d3407aa7/go.mod h1:I/5z698sn9Ka8T
 golang.org/x/xerrors v0.0.0-20191204190536-9bdfabe68543/go.mod h1:I/5z698sn9Ka8TeJc9MKroUUfqBBauWjQqLJ2OPfmY0=
 gonum.org/v1/gonum v0.16.0 h1:5+ul4Swaf3ESvrOnidPp4GZbzf0mxVQpDCYUQE7OJfk=
 gonum.org/v1/gonum v0.16.0/go.mod h1:fef3am4MQ93R2HHpKnLk4/Tbh/s0+wqD5nfa6Pnwy4E=
-google.golang.org/api v0.266.0 h1:hco+oNCf9y7DmLeAtHJi/uBAY7n/7XC9mZPxu1ROiyk=
-google.golang.org/api v0.266.0/go.mod h1:Jzc0+ZfLnyvXma3UtaTl023TdhZu6OMBP9tJ+0EmFD0=
+google.golang.org/api v0.268.0 h1:hgA3aS4lt9rpF5RCCkX0Q2l7DvHgvlb53y4T4u6iKkA=
+google.golang.org/api v0.268.0/go.mod h1:HXMyMH496wz+dAJwD/GkAPLd3ZL33Kh0zEG32eNvy9w=
 google.golang.org/appengine v1.6.8 h1:IhEN5q69dyKagZPYMSdIjS2HqprW324FRQZJcGqPAsM=
 google.golang.org/appengine v1.6.8/go.mod h1:1jJ3jBArFh5pcgW8gCtRJnepW8FzD1V44FJffLiz/Ds=
 google.golang.org/genproto v0.0.0-20260128011058-8636f8732409 h1:VQZ/yAbAtjkHgH80teYd2em3xtIkkHd7ZhqfH2N9CsM=
