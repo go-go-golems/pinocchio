@@ -373,3 +373,67 @@ The test uses a reducer that returns only `{ consume: true }` for a custom event
 - Updated files:
   - `pkg/webchat/timeline_js_runtime_test.go`
   - `2026/03/01/GEPA-07-TIMELINE-JS-CONSUME-CONTRACT--fix-timeline-js-consume-contract-mismatches-and-runtime-error-propagation/tasks.md`
+
+## Step 11: Tasks 3-5 Implementation - Runtime Ordering and Error Propagation
+
+I implemented the runtime pipeline fixes and immediately added behavior-level tests for both impacted contracts. Runtime is now evaluated before list handlers, which allows `consume:true` reducers to suppress handler-backed builtin projections such as `chat.message`.
+
+I also changed runtime error handling to force propagation by returning `handled=true` when runtime execution fails. This closes the path where `(handled=false, err!=nil)` was previously dropped by `ApplySemFrame`.
+
+### Prompt Context
+
+**User prompt (verbatim):** (see Step 8)
+
+**Assistant interpretation:** Continue through implementation tasks sequentially, committing after each completed block and recording diary context.
+
+**Inferred user intent:** Fix each contract mismatch with explicit regression protection and maintain auditability.
+
+### What I did
+- Updated `pkg/webchat/timeline_registry.go`:
+  - runtime executes before list handlers,
+  - runtime `handled=true` short-circuit preserved,
+  - runtime errors now return `handled=true, err`.
+- Added tests in `pkg/webchat/timeline_js_runtime_test.go`:
+  - `TestJSTimelineRuntime_ConsumeSuppressesBuiltinHandlerProjection`
+  - `TestTimelineProjector_RuntimeErrorIsPropagatedWhenRuntimeDoesNotConsume`
+- Ran targeted and package tests:
+  - `go test ./pkg/webchat -run 'TestJSTimelineRuntime_ConsumeSuppressesBuiltinHandlerProjection|TestTimelineProjector_RuntimeErrorIsPropagatedWhenRuntimeDoesNotConsume' -count=1`
+  - `go test ./pkg/webchat -count=1`
+- Marked Tasks 3, 4, and 5 complete in `tasks.md`.
+
+### Why
+- Ordering fix enforces documented consume semantics for handler-backed builtins.
+- Error propagation fix removes a silent failure branch.
+- Regression tests pin both contracts to prevent drift.
+
+### What worked
+- New tests passed with the code changes.
+- Existing package tests remained green after ordering change.
+
+### What didn't work
+- N/A
+
+### What I learned
+- Handler-backed builtins and switch-based builtins must share consistent consume semantics or user mental models break.
+
+### What was tricky to build
+- Changing ordering without altering the intended behavior for non-consuming runtime cases.
+- Ensuring runtime errors are surfaced without introducing noisy callback-level failures (which remain contained inside runtime handler/reducer loops).
+
+### What warrants a second pair of eyes
+- The semantic choice to map runtime host errors to `handled=true` should be reviewed for long-term API clarity.
+
+### What should be done in the future
+- Consider replacing `(handled bool, err error)` with explicit dispatch result semantics in a follow-up cleanup.
+
+### Code review instructions
+- Start with `pkg/webchat/timeline_registry.go`.
+- Verify runtime executes before handler list and runtime errors return handled.
+- Then review new tests in `pkg/webchat/timeline_js_runtime_test.go`.
+- Re-run commands listed above.
+
+### Technical details
+- Updated files:
+  - `pkg/webchat/timeline_registry.go`
+  - `pkg/webchat/timeline_js_runtime_test.go`
+  - `2026/03/01/GEPA-07-TIMELINE-JS-CONSUME-CONTRACT--fix-timeline-js-consume-contract-mismatches-and-runtime-error-propagation/tasks.md`

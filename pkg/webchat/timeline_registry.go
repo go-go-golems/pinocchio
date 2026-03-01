@@ -70,6 +70,18 @@ func handleTimelineHandlers(ctx context.Context, p *TimelineProjector, ev Timeli
 	runtime := timelineRuntime
 	timelineHandlersMu.RUnlock()
 
+	// Runtime runs before list handlers so consume=true can suppress handler-backed builtin projection.
+	if runtime != nil {
+		handled, err := runtime.HandleSemEvent(ctx, p, ev, now)
+		if err != nil {
+			// Treat runtime execution failures as handled to force propagation from ApplySemFrame.
+			return true, err
+		}
+		if handled {
+			return true, nil
+		}
+	}
+
 	handledByList := false
 	for _, h := range list {
 		if h == nil {
@@ -78,13 +90,6 @@ func handleTimelineHandlers(ctx context.Context, p *TimelineProjector, ev Timeli
 		handledByList = true
 		if err := h(ctx, p, ev, now); err != nil {
 			return true, err
-		}
-	}
-
-	if runtime != nil {
-		handled, err := runtime.HandleSemEvent(ctx, p, ev, now)
-		if handled || err != nil {
-			return handled, err
 		}
 	}
 
