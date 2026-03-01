@@ -145,3 +145,25 @@ p.timeline.registerSemReducer("llm.delta", function(ev) {
 	require.Equal(t, "message", byID[msgID])
 	require.Equal(t, "llm.side", byID[msgID+"-side"])
 }
+
+func TestJSTimelineRuntime_ConsumeOnlyReducerDoesNotCreateSyntheticEntity(t *testing.T) {
+	resetTimelineRuntimeForTest(t)
+
+	runtime := NewJSTimelineRuntime()
+	require.NoError(t, runtime.LoadScriptSource("consume-only.js", `
+const p = require("pinocchio");
+p.timeline.registerSemReducer("gepa.control", function() {
+  return { consume: true };
+});
+`))
+	SetTimelineRuntime(runtime)
+
+	store := chatstore.NewInMemoryTimelineStore(100)
+	p := NewTimelineProjector("conv-js-runtime-consume-only", store, nil)
+
+	require.NoError(t, p.ApplySemFrame(context.Background(), semFrame(t, "gepa.control", "evt-control", 1, map[string]any{})))
+
+	snap, err := store.GetSnapshot(context.Background(), "conv-js-runtime-consume-only", 0, 100)
+	require.NoError(t, err)
+	require.Len(t, snap.Entities, 0, "consume-only reducers must not synthesize timeline entities")
+}

@@ -319,3 +319,57 @@ The key implementation detail is that object returns with a `consume` key now sh
   - `pkg/webchat/timeline_js_runtime.go`
 - Validation command:
   - `go test ./pkg/webchat -run TestJSTimelineRuntime -count=1`
+
+## Step 10: Task 2 Implementation - Consume-Only Contract Test Coverage
+
+After implementing normalization behavior, I added a direct regression test that proves `{consume:true}` no longer creates a synthetic timeline upsert. This test captures the exact bug class that triggered the ticket.
+
+The test uses a reducer that returns only `{ consume: true }` for a custom event type and asserts that the timeline snapshot remains empty. That assertion fails on old behavior and passes with the Task 1 fix.
+
+### Prompt Context
+
+**User prompt (verbatim):** (see Step 8)
+
+**Assistant interpretation:** Continue executing tasks with commits and diary updates for each completed unit.
+
+**Inferred user intent:** Make each fix verifiable by dedicated tests, not only by manual reasoning.
+
+### What I did
+- Added test:
+  - `TestJSTimelineRuntime_ConsumeOnlyReducerDoesNotCreateSyntheticEntity`
+  - file: `pkg/webchat/timeline_js_runtime_test.go`
+- Ran:
+  - `go test ./pkg/webchat -run TestJSTimelineRuntime_ConsumeOnlyReducerDoesNotCreateSyntheticEntity -count=1`
+- Marked Task 2 complete in ticket `tasks.md`.
+
+### Why
+- The bug must remain fixed under future refactors of reducer normalization logic.
+
+### What worked
+- New test is deterministic and low-cost.
+- The assertion maps exactly to the contract statement.
+
+### What didn't work
+- N/A
+
+### What I learned
+- The most robust regression checks are contract-specific single-purpose tests.
+
+### What was tricky to build
+- Ensuring the test verifies only consume-only behavior and not unrelated builtin projection behavior.
+
+### What warrants a second pair of eyes
+- Confirm test naming and assertion language are clear enough for first-time contributors.
+
+### What should be done in the future
+- Extend matrix tests for other object return forms (`{consume:false}`, malformed `upserts`, mixed payloads).
+
+### Code review instructions
+- Start in `pkg/webchat/timeline_js_runtime_test.go` at the new consume-only test.
+- Validate expected pre-fix failure mode by reading assertion message.
+- Re-run the single test command listed above.
+
+### Technical details
+- Updated files:
+  - `pkg/webchat/timeline_js_runtime_test.go`
+  - `2026/03/01/GEPA-07-TIMELINE-JS-CONSUME-CONTRACT--fix-timeline-js-consume-contract-mismatches-and-runtime-error-propagation/tasks.md`
