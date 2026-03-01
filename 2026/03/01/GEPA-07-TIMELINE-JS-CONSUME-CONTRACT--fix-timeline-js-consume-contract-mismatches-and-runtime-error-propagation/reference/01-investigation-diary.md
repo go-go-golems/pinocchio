@@ -503,3 +503,61 @@ I also consolidated implementation commit hashes into the ticket changelog so a 
 - Ticket doc updates:
   - `2026/03/01/GEPA-07-TIMELINE-JS-CONSUME-CONTRACT--fix-timeline-js-consume-contract-mismatches-and-runtime-error-propagation/tasks.md`
   - `2026/03/01/GEPA-07-TIMELINE-JS-CONSUME-CONTRACT--fix-timeline-js-consume-contract-mismatches-and-runtime-error-propagation/changelog.md`
+
+## Step 13: Follow-up Fix - Restore Profile Registry Flag Wiring in web-chat
+
+I addressed a follow-up regression in `cmd/web-chat/main.go` where `RunIntoWriter` still read `profile-registries` from the default section even though geppetto now stores it in the `profile-settings` section. That mismatch caused startup failures when users passed `--profile-registries`.
+
+The fix adds a resolver that falls back to `profile-settings.profile-registries` when the default-section value is empty. I added targeted unit tests to lock this behavior and prevent another wiring regression.
+
+### Prompt Context
+
+**User prompt (verbatim):** "cmd/web-chat/main.go\n\t\t\tfields.New(\"debug-api\", fields.TypeBool, fields.WithDefault(false), fields.WithHelp(\"Enable debug API endpoints under /api/debug/*\")),\n\t\t\tfields.New(\"timeline-dsn\", fields.TypeString, fields.WithDefault(\"\"), fields.WithHelp(\"SQLite DSN for durable timeline snapshots (enables GET /timeline); preferred over timeline-db\")),\n\t\t\tfields.New(\"timeline-db\", fields.TypeString, fields.WithDefault(\"\"), fields.WithHelp(\"SQLite DB file path for durable timeline snapshots (enables GET /timeline); DSN is derived with WAL/busy_timeout\")),\n\t\t\tfields.New(\"timeline-js-script\", fields.TypeStringList, fields.WithHelp(\"Path to JavaScript SEM reducer/handler script (repeat flag or pass comma-separated list)\")),\n@chatgpt-codex-connector\nchatgpt-codex-connector bot\n4 minutes ago\n\nP1 Badge Restore profile registry flag wiring for web-chat\n\nRemoving profile-registries from the command-local flags breaks startup when users pass --profile-registries: RunIntoWriter still reads ProfileRegistries from the default section, so that value is no longer populated and NewChainedRegistryFromSourceSpecs receives an empty source list (profile-settings.profile-registries must not be empty). This makes web-chat fail to boot in the normal profile-registry workflow documented in this repo.\n\nUseful? React with 👍 / 👎.\n@wesen"
+
+**Assistant interpretation:** Fix the wiring regression so `--profile-registries` works again with current section layout.
+
+**Inferred user intent:** Keep normal web-chat startup flow working for documented profile-registry-based usage.
+
+### What I did
+- Added `resolveProfileRegistries(parsed, defaultSectionValue)` in `cmd/web-chat/main.go`.
+- Added fallback section slug constant: `profile-settings`.
+- Updated `RunIntoWriter` to resolve registries via fallback before parsing registry specs.
+- Added unit tests in `cmd/web-chat/main_profile_registries_test.go`:
+  - fallback from profile-settings when default is empty,
+  - default-section value precedence when both are present.
+- Ran:
+  - `go test ./cmd/web-chat -run TestResolveProfileRegistries -count=1`
+  - `go test ./cmd/web-chat -count=1`
+
+### Why
+- `profile-registries` is now sourced from geppetto profile settings section, not default command section.
+- Without fallback, startup can fail with empty source list despite valid CLI input.
+
+### What worked
+- Tests passed and codify the intended precedence rule.
+- Fix stayed localized to command-layer parsing behavior.
+
+### What didn't work
+- N/A
+
+### What I learned
+- Section migrations require explicit decode fallback when legacy command code still reads default section.
+
+### What was tricky to build
+- Avoiding command-level flag duplication while restoring behavior reliably.
+
+### What warrants a second pair of eyes
+- Validate this resolver approach remains compatible if geppetto changes section slug naming in future.
+
+### What should be done in the future
+- Consider centralizing profile registry resolution helper across commands that consume `profile-registries`.
+
+### Code review instructions
+- Start in `cmd/web-chat/main.go` at `resolveProfileRegistries`.
+- Review new tests in `cmd/web-chat/main_profile_registries_test.go`.
+- Re-run the two web-chat test commands listed above.
+
+### Technical details
+- Updated files:
+  - `cmd/web-chat/main.go`
+  - `cmd/web-chat/main_profile_registries_test.go`

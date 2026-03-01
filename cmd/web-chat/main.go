@@ -49,6 +49,8 @@ type webChatRuntimeConfig struct {
 	DebugAPIEnabled bool   `json:"debugApiEnabled"`
 }
 
+const webChatProfileSettingsSectionSlug = "profile-settings"
+
 func normalizeBasePrefix(prefix string) string {
 	p := strings.TrimSpace(prefix)
 	if p == "" || p == "/" {
@@ -69,6 +71,21 @@ func runtimeConfigScript(basePrefix string, debugAPI bool) (string, error) {
 		return "", err
 	}
 	return "window.__PINOCCHIO_WEBCHAT_CONFIG__ = " + string(payload) + ";\n", nil
+}
+
+func resolveProfileRegistries(parsed *values.Values, defaultSectionValue string) string {
+	resolved := strings.TrimSpace(defaultSectionValue)
+	if resolved != "" || parsed == nil {
+		return resolved
+	}
+
+	profileSettings := struct {
+		ProfileRegistries string `glazed:"profile-registries"`
+	}{}
+	if err := parsed.DecodeSectionInto(webChatProfileSettingsSectionSlug, &profileSettings); err != nil {
+		return resolved
+	}
+	return strings.TrimSpace(profileSettings.ProfileRegistries)
 }
 
 func NewCommand() (*Command, error) {
@@ -114,6 +131,8 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 	if err := parsed.DecodeSectionInto(values.DefaultSlug, s); err != nil {
 		return errors.Wrap(err, "decode server settings")
 	}
+	s.ProfileRegistries = resolveProfileRegistries(parsed, s.ProfileRegistries)
+
 	appConfigJS, err := runtimeConfigScript(s.Root, s.DebugAPI)
 	if err != nil {
 		return errors.Wrap(err, "build runtime config script")
