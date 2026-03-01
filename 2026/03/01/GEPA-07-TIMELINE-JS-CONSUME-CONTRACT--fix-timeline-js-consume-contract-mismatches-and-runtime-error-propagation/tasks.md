@@ -14,4 +14,4 @@
 - [x] Task 3: Reorder runtime execution before list handlers so `consume:true` can suppress handler-backed built-ins.
 - [x] Task 4: Fix runtime error propagation so runtime errors are not silently dropped when consume/handled is false.
 - [x] Task 5: Add/extend tests for handler-backed consume suppression and runtime error propagation.
-- [ ] Task 6: Run validation (`go test ./pkg/webchat`, targeted `cmd/web-chat` harness, `make build`) and update docs/diary/changelog.
+- [x] Task 6: Run validation (`go test ./pkg/webchat`, targeted `cmd/web-chat` harness, `make build`) and update docs/diary/changelog.
