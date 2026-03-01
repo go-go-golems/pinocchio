@@ -49,6 +49,8 @@ type webChatRuntimeConfig struct {
 	DebugAPIEnabled bool   `json:"debugApiEnabled"`
 }
 
+const webChatProfileSettingsSectionSlug = "profile-settings"
+
 func normalizeBasePrefix(prefix string) string {
 	p := strings.TrimSpace(prefix)
 	if p == "" || p == "/" {
@@ -69,6 +71,21 @@ func runtimeConfigScript(basePrefix string, debugAPI bool) (string, error) {
 		return "", err
 	}
 	return "window.__PINOCCHIO_WEBCHAT_CONFIG__ = " + string(payload) + ";\n", nil
+}
+
+func resolveProfileRegistries(parsed *values.Values, defaultSectionValue string) string {
+	resolved := strings.TrimSpace(defaultSectionValue)
+	if resolved != "" || parsed == nil {
+		return resolved
+	}
+
+	profileSettings := struct {
+		ProfileRegistries string `glazed:"profile-registries"`
+	}{}
+	if err := parsed.DecodeSectionInto(webChatProfileSettingsSectionSlug, &profileSettings); err != nil {
+		return resolved
+	}
+	return strings.TrimSpace(profileSettings.ProfileRegistries)
 }
 
 func NewCommand() (*Command, error) {
@@ -94,9 +111,9 @@ func NewCommand() (*Command, error) {
 			fields.New("debug-api", fields.TypeBool, fields.WithDefault(false), fields.WithHelp("Enable debug API endpoints under /api/debug/*")),
 			fields.New("timeline-dsn", fields.TypeString, fields.WithDefault(""), fields.WithHelp("SQLite DSN for durable timeline snapshots (enables GET /timeline); preferred over timeline-db")),
 			fields.New("timeline-db", fields.TypeString, fields.WithDefault(""), fields.WithHelp("SQLite DB file path for durable timeline snapshots (enables GET /timeline); DSN is derived with WAL/busy_timeout")),
+			fields.New("timeline-js-script", fields.TypeStringList, fields.WithHelp("Path to JavaScript SEM reducer/handler script (repeat flag or pass comma-separated list)")),
 			fields.New("turns-dsn", fields.TypeString, fields.WithDefault(""), fields.WithHelp("SQLite DSN for durable turn snapshots (enables GET /turns); preferred over turns-db")),
 			fields.New("turns-db", fields.TypeString, fields.WithDefault(""), fields.WithHelp("SQLite DB file path for durable turn snapshots (enables GET /turns); DSN is derived with WAL/busy_timeout")),
-			fields.New("profile-registries", fields.TypeString, fields.WithDefault(""), fields.WithHelp("Comma-separated profile registry sources (yaml/sqlite/sqlite-dsn)")),
 		),
 		cmds.WithSections(append(geLayers, redisLayer)...),
 	)
@@ -105,14 +122,17 @@ func NewCommand() (*Command, error) {
 
 func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io.Writer) error {
 	type serverSettings struct {
-		Root              string `glazed:"root"`
-		DebugAPI          bool   `glazed:"debug-api"`
-		ProfileRegistries string `glazed:"profile-registries"`
+		Root              string   `glazed:"root"`
+		DebugAPI          bool     `glazed:"debug-api"`
+		ProfileRegistries string   `glazed:"profile-registries"`
+		TimelineJSScripts []string `glazed:"timeline-js-script"`
 	}
 	s := &serverSettings{}
 	if err := parsed.DecodeSectionInto(values.DefaultSlug, s); err != nil {
 		return errors.Wrap(err, "decode server settings")
 	}
+	s.ProfileRegistries = resolveProfileRegistries(parsed, s.ProfileRegistries)
+
 	appConfigJS, err := runtimeConfigScript(s.Root, s.DebugAPI)
 	if err != nil {
 		return errors.Wrap(err, "build runtime config script")
@@ -162,6 +182,10 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 		},
 	})
 	requestResolver := newProfileRequestResolver(profileRegistry, profileRegistryChain.DefaultRegistrySlug())
+
+	if err := configureTimelineJSScripts(s.TimelineJSScripts); err != nil {
+		return err
+	}
 
 	// Register app-owned thinking-mode SEM/timeline handlers.
 	thinkingmode.Register()

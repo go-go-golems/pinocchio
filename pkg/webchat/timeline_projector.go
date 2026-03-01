@@ -148,9 +148,6 @@ func (p *TimelineProjector) ApplySemFrame(ctx context.Context, frame []byte) err
 			return nil
 		}
 		cum := pb.Cumulative
-		if cum == "" {
-			return nil
-		}
 
 		// Throttle writes: keep the DB churn bounded during token streaming.
 		p.mu.Lock()
@@ -158,6 +155,13 @@ func (p *TimelineProjector) ApplySemFrame(ctx context.Context, frame []byte) err
 		role := p.msgRoles[env.Event.ID]
 		if role == "" {
 			role = "assistant"
+		}
+		if cum == "" {
+			cum = p.msgContents[env.Event.ID] + pb.Delta
+		}
+		if cum == "" {
+			p.mu.Unlock()
+			return nil
 		}
 		p.msgContents[env.Event.ID] = cum
 		if now-last < 250 {

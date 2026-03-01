@@ -112,6 +112,39 @@ Turn store:
 - `--turns-dsn "<sqlite dsn>"`
 - `--turns-db "<path/to/turns.db>"`
 
+## JavaScript Timeline Runtime
+
+`web-chat` can load JavaScript SEM reducers/handlers at startup:
+
+- `--timeline-js-script <path>` (repeat flag or pass comma-separated list)
+
+Each script can register handlers via the `pinocchio` native module:
+
+- `const p = require("pinocchio")`
+- `p.timeline.registerSemReducer(eventType, fn)`
+- `p.timeline.onSem(eventType, fn)`
+- alias module name: `require("pnocchio")`
+
+Runtime contract:
+
+- reducer callback signature: `fn(event, ctx)`
+- handler callback signature: `fn(event, ctx)`
+- `event` fields: `type`, `id`, `seq`, `stream_id`, `data`, `now_ms`
+- `ctx` fields: `now_ms`
+- reducer may return:
+  - `true` / `{ consume: true }` to consume event and skip builtin projection
+  - entity object `{ id, kind, props, meta, created_at_ms, updated_at_ms }`
+  - array of entities
+  - `{ consume, upserts }` where `upserts` is entity or array
+
+Safety/behavior notes:
+
+- script load/parse failures are startup errors (server does not continue with bad script state)
+- runtime reducer/handler throw is logged and processing continues
+- reducer upsert failure is logged and processing continues
+- use `consume: false` to keep builtin projection active (recommended for additive projections)
+- use `consume: true` only when intentionally replacing builtin projection for that event
+
 ## Run
 
 ```bash
@@ -125,6 +158,15 @@ Enable debug API routes:
 
 ```bash
 go run ./cmd/web-chat web-chat --addr :8080 --debug-api --profile-registries ./profiles.db
+```
+
+Example with JS reducer runtime and `gpt-5-nano` profile registry:
+
+```bash
+go run ./cmd/web-chat web-chat \
+  --addr :8080 \
+  --profile-registries ./profiles.yaml \
+  --timeline-js-script ./scripts/timeline-llm-delta-reducer.js
 ```
 
 Example with root mount and non-default dev ports:
