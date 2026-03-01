@@ -351,6 +351,7 @@ func (r *JSTimelineRuntime) decodeReducerReturn(raw any, ev TimelineSemEvent, no
 	}
 
 	consume := toBool(m["consume"])
+	_, hasConsume := m["consume"]
 	if upsertsRaw, ok := m["upserts"]; ok {
 		if arr, ok := toAnySlice(upsertsRaw); ok {
 			return consume, r.decodeEntityArray(arr, ev, now)
@@ -360,6 +361,16 @@ func (r *JSTimelineRuntime) decodeReducerReturn(raw any, ev TimelineSemEvent, no
 				return consume, []*timelinepb.TimelineEntityV2{entity}
 			}
 			return consume, nil
+		}
+		return consume, nil
+	}
+
+	// Treat consume-only objects (for example {consume:true}) as control signals, not entity upserts.
+	if hasConsume {
+		if looksLikeTimelineEntityMap(m) {
+			if entity := decodeTimelineEntity(m, ev, now); entity != nil {
+				return consume, []*timelinepb.TimelineEntityV2{entity}
+			}
 		}
 		return consume, nil
 	}
@@ -459,6 +470,18 @@ func toAnySlice(v any) ([]any, bool) {
 func toBool(v any) bool {
 	if b, ok := v.(bool); ok {
 		return b
+	}
+	return false
+}
+
+func looksLikeTimelineEntityMap(m map[string]any) bool {
+	if m == nil {
+		return false
+	}
+	for _, key := range []string{"id", "kind", "props", "meta", "created_at_ms", "createdAtMs", "updated_at_ms", "updatedAtMs"} {
+		if _, ok := m[key]; ok {
+			return true
+		}
 	}
 	return false
 }

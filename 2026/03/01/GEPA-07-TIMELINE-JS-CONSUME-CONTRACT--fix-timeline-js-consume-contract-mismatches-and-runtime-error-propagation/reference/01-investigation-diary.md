@@ -263,3 +263,59 @@ I split the work so normalization, ordering, and error propagation are independe
 ### Technical details
 - Updated file:
   - `2026/03/01/GEPA-07-TIMELINE-JS-CONSUME-CONTRACT--fix-timeline-js-consume-contract-mismatches-and-runtime-error-propagation/tasks.md`
+
+## Step 9: Task 1 Implementation - Consume-Only Normalization Fix
+
+I implemented the first behavior fix in `timeline_js_runtime.go`: consume-only object returns are now treated as control-only outputs and no longer auto-upsert synthetic entities. This directly addresses the contract mismatch for `{consume:true}`.
+
+The key implementation detail is that object returns with a `consume` key now short-circuit as control returns unless the object explicitly looks like an entity payload. This preserves current flexibility for explicit entity objects while removing the accidental fallthrough path.
+
+### Prompt Context
+
+**User prompt (verbatim):** (see Step 8)
+
+**Assistant interpretation:** Start executing the implementation tasks with one commit per completed task and keep diary continuity.
+
+**Inferred user intent:** Resolve the runtime contract bugs incrementally and audibly.
+
+### What I did
+- Updated `pkg/webchat/timeline_js_runtime.go`:
+  - Added `hasConsume` handling in `decodeReducerReturn`.
+  - Added control-object short-circuit for consume-only returns.
+  - Added helper `looksLikeTimelineEntityMap` to allow explicit entity payloads with `consume`.
+- Ran targeted tests:
+  - `go test ./pkg/webchat -run TestJSTimelineRuntime -count=1`
+
+### Why
+- Prevent accidental synthetic upserts from control-only reducer outputs.
+- Keep backwards compatibility for explicit entity payloads.
+
+### What worked
+- Targeted JS runtime tests passed after change.
+- Change stayed localized to reducer return normalization path.
+
+### What didn't work
+- N/A
+
+### What I learned
+- Default `decodeTimelineEntity` fallback is safe only when the input map is known to be entity-like.
+
+### What was tricky to build
+- Preserving explicit entity-return flexibility without reintroducing control-object fallthrough.
+
+### What warrants a second pair of eyes
+- The `looksLikeTimelineEntityMap` key heuristic should be reviewed to ensure it matches intended reducer API flexibility.
+
+### What should be done in the future
+- Add explicit normalization matrix tests to prevent regressions in object-return interpretation.
+
+### Code review instructions
+- Start at `pkg/webchat/timeline_js_runtime.go` in `decodeReducerReturn`.
+- Validate that `{consume:true}` produces no upsert unless entity fields are explicitly present.
+- Re-run: `go test ./pkg/webchat -run TestJSTimelineRuntime -count=1`.
+
+### Technical details
+- Updated file:
+  - `pkg/webchat/timeline_js_runtime.go`
+- Validation command:
+  - `go test ./pkg/webchat -run TestJSTimelineRuntime -count=1`
