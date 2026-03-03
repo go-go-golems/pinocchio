@@ -1,4 +1,4 @@
-package backend
+package toolloop
 
 import (
 	"context"
@@ -13,7 +13,7 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/inference/engine"
 	"github.com/go-go-golems/geppetto/pkg/inference/middleware"
 	"github.com/go-go-golems/geppetto/pkg/inference/session"
-	"github.com/go-go-golems/geppetto/pkg/inference/toolloop"
+	geppettotoolloop "github.com/go-go-golems/geppetto/pkg/inference/toolloop"
 	"github.com/go-go-golems/geppetto/pkg/inference/toolloop/enginebuilder"
 	"github.com/go-go-golems/geppetto/pkg/inference/tools"
 	"github.com/go-go-golems/geppetto/pkg/turns"
@@ -21,17 +21,19 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+var _ boba_chat.Backend = (*ToolLoopBackend)(nil)
+
 // ToolLoopBackend runs the tool-calling loop across turns and emits BackendFinishedMsg when done.
 type ToolLoopBackend struct {
 	reg  *tools.InMemoryToolRegistry
 	sink events.EventSink
-	hook toolloop.SnapshotHook
+	hook geppettotoolloop.SnapshotHook
 
 	sess *session.Session
 }
 
-func NewToolLoopBackend(eng engine.Engine, mws []middleware.Middleware, reg *tools.InMemoryToolRegistry, sink events.EventSink, hook toolloop.SnapshotHook) *ToolLoopBackend {
-	loopCfg := toolloop.NewLoopConfig().WithMaxIterations(5)
+func NewToolLoopBackend(eng engine.Engine, mws []middleware.Middleware, reg *tools.InMemoryToolRegistry, sink events.EventSink, hook geppettotoolloop.SnapshotHook) *ToolLoopBackend {
+	loopCfg := geppettotoolloop.NewLoopConfig().WithMaxIterations(5)
 	toolCfg := tools.DefaultToolConfig().WithExecutionTimeout(60 * time.Second)
 	sess := session.NewSession()
 	sess.Builder = enginebuilder.New(

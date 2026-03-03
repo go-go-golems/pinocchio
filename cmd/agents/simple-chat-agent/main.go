@@ -25,7 +25,6 @@ import (
 	"github.com/go-go-golems/glazed/pkg/help"
 	help_cmd "github.com/go-go-golems/glazed/pkg/help/cmd"
 	sqlite_regexp "github.com/go-go-golems/go-sqlite-regexp"
-	backendpkg "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/backend"
 	storepkg "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/store"
 	toolspkg "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/tools"
 	uipkg "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/ui"
@@ -33,6 +32,7 @@ import (
 	agentmode "github.com/go-go-golems/pinocchio/pkg/middlewares/agentmode"
 	sqlitetool "github.com/go-go-golems/pinocchio/pkg/middlewares/sqlitetool"
 	rediscfg "github.com/go-go-golems/pinocchio/pkg/redisstream"
+	toolloopbackend "github.com/go-go-golems/pinocchio/pkg/ui/backends/toolloop"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -215,7 +215,7 @@ func (c *SimpleAgentCmd) RunIntoWriter(ctx context.Context, parsed *values.Value
 	}
 
 	// Backend that runs tool loop
-	backend := backendpkg.NewToolLoopBackend(eng, mws, registry, sink, hook)
+	backend := toolloopbackend.NewToolLoopBackend(eng, mws, registry, sink, hook)
 	// Glazed flag: --server-tools enables Responses builtin web_search on initial Turn
 	var agentSettings struct {
 		ServerTools bool `glazed:"server-tools"`
