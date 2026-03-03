@@ -429,6 +429,8 @@ After implementing all steps, verify the pipeline works:
 
 For reference, these are the currently registered event-to-entity mappings:
 
+**Guideline:** SEM/event streams are primarily a *UX timeline*. They may include transient or “work in progress” frames during streaming. Avoid committing durable application state based on partial events; prefer doing validation + persistence at a RunInference boundary (final completion / after RunInference returns), then emitting final events for the UI.
+
 | SEM Event Type | Entity Kind | Widget | Notes |
 |---------------|-------------|--------|-------|
 | `llm.start/delta/final` | `message` | MessageWidget | Streaming text with cumulative content |
