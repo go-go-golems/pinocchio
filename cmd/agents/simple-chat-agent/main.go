@@ -33,6 +33,7 @@ import (
 	sqlitetool "github.com/go-go-golems/pinocchio/pkg/middlewares/sqlitetool"
 	rediscfg "github.com/go-go-golems/pinocchio/pkg/redisstream"
 	toolloopbackend "github.com/go-go-golems/pinocchio/pkg/ui/backends/toolloop"
+	agentforwarder "github.com/go-go-golems/pinocchio/pkg/ui/forwarders/agent"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -283,12 +284,12 @@ func (c *SimpleAgentCmd) RunIntoWriter(ctx context.Context, parsed *values.Value
 	// Forward geppetto events to timeline UI (agent-specific forwarder, no premature finish)
 	if rs.Enabled {
 		if sub, err := rediscfg.BuildGroupSubscriber(rs.Addr, "ui", "ui-1"); err == nil {
-			router.AddHandlerWithOptions("ui-forward", "chat", backend.MakeUIForwarder(p), events.WithHandlerSubscriber(sub))
+			router.AddHandlerWithOptions("ui-forward", "chat", agentforwarder.MakeUIForwarder(p), events.WithHandlerSubscriber(sub))
 		} else {
-			router.AddHandler("ui-forward", "chat", backend.MakeUIForwarder(p))
+			router.AddHandler("ui-forward", "chat", agentforwarder.MakeUIForwarder(p))
 		}
 	} else {
-		router.AddHandler("ui-forward", "chat", backend.MakeUIForwarder(p))
+		router.AddHandler("ui-forward", "chat", agentforwarder.MakeUIForwarder(p))
 	}
 
 	eg.Go(func() error { return router.Run(groupCtx) })
