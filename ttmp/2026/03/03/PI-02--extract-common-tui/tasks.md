@@ -4,7 +4,7 @@
 
 - [x] Add tasks here
 
-- [ ] Extract agent event→timeline forwarder into pinocchio/pkg/ui/forwarders (no BackendFinished on provider events)
+- [x] Extract agent event→timeline forwarder into pinocchio/pkg/ui/forwarders (no BackendFinished on provider events)
 - [x] Extract tool-loop backend from cmd/ into pinocchio/pkg/ui/backends/toolloop
 - [x] Run gofmt + go test ./... (pinocchio module) and fix compile errors
 - [x] Update simple-chat-agent to use extracted pkg backend/forwarder (no cmd/ imports)

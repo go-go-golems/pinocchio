@@ -14,6 +14,8 @@ Owners: []
 RelatedFiles:
     - Path: pinocchio/pkg/ui/backends/toolloop/backend.go
       Note: Step 2 extraction target + forwarder refactor staging point
+    - Path: pinocchio/pkg/ui/forwarders/agent/forwarder.go
+      Note: Step 3 extraction target
     - Path: pinocchio/ttmp/2026/03/03/PI-02--extract-common-tui/design-doc/01-implementation-plan.md
       Note: Current ticket plan referenced by diary
     - Path: pinocchio/ttmp/2026/03/03/PI-02--extract-common-tui/tasks.md
@@ -24,6 +26,7 @@ LastUpdated: 2026-03-03T10:32:40.257126339-05:00
 WhatFor: ""
 WhenToUse: ""
 ---
+
 
 
 
@@ -156,3 +159,57 @@ I intentionally kept the forwarder implementation co-located with the backend fo
 ### Technical details
 - New package: `github.com/go-go-golems/pinocchio/pkg/ui/backends/toolloop`
 - Removed package: `github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/backend`
+
+## Step 3: Extract agent UI forwarder into pkg/ui/forwarders
+
+This step isolates the agent-specific “Geppetto event → Bobatea timeline entity” mapping logic into a dedicated package (`pinocchio/pkg/ui/forwarders/agent`). This makes the forwarder reusable independently of the backend implementation and clarifies the separation between “runs inference” (backend) and “projects events into UI entities” (forwarder).
+
+The behavior remains the same: the forwarder **does not** emit `boba_chat.BackendFinishedMsg{}` on provider final/error/interrupt events, because tool-loop runs can include multiple provider finals across iterations.
+
+### Prompt Context
+
+**User prompt (verbatim):** (see Step 1)
+
+**Assistant interpretation:** Move `MakeUIForwarder` mapping logic into a reusable `pkg/` forwarder package and update the `simple-chat-agent` wiring to call the new forwarder.
+
+**Inferred user intent:** Make the agent forwarder shareable and “library-shaped”, avoiding future duplication across backends/commands and making third-party reuse more straightforward.
+
+**Commit (code):** 3a224057b0a7011f5ee52050061941c6ca509ae6 — "Extract agent UI forwarder into pkg"
+
+### What I did
+- Added `pinocchio/pkg/ui/forwarders/agent/forwarder.go` containing `agent.MakeUIForwarder(p)`.
+- Removed the forwarder method from `pinocchio/pkg/ui/backends/toolloop/backend.go` so the backend no longer owns projection policy.
+- Updated `pinocchio/cmd/agents/simple-chat-agent/main.go` to register `agentforwarder.MakeUIForwarder(p)` instead of `backend.MakeUIForwarder(p)`.
+- Verified compilation and tests via `go test ./... -count=1` (also executed by repo hooks on commit).
+
+### Why
+- Forwarders are mapping/presentation policy and should be reusable without coupling to a specific backend type.
+- This separation is a prerequisite for any future “unified projector” or multiple forwarder variants (simple chat vs agent chat) without duplicating backend code.
+
+### What worked
+- The move is a pure refactor: `go test ./...` continued to pass.
+- `simple-chat-agent` now depends on explicit `pkg/ui/forwarders/...` instead of a backend method.
+
+### What didn't work
+- N/A.
+
+### What I learned
+- The forwarder extraction is most maintainable when it keeps the exact handler signature (`func(*message.Message) error`), so existing Watermill wiring stays unchanged.
+
+### What was tricky to build
+- Keeping the semantic “do not finish UI on provider final” intact required being careful not to accidentally share logic with `pinocchio/pkg/ui.StepChatForwardFunc` (which *does* send BackendFinishedMsg).
+
+### What warrants a second pair of eyes
+- Review whether `pinocchio/pkg/ui/forwarders/agent` should eventually be generalized (options-based forwarder) or remain explicitly “agent” to avoid over-abstraction.
+
+### What should be done in the future
+- Do a tmux-based smoke run of `simple-chat-agent` if we can run it in this environment (otherwise document why not).
+- Consider extracting shared helpers between this forwarder and `pinocchio/pkg/ui.StepChatForwardFunc` only if duplication becomes painful.
+
+### Code review instructions
+- Review `pinocchio/pkg/ui/forwarders/agent/forwarder.go` first (mapping code location).
+- Then review the wiring change in `pinocchio/cmd/agents/simple-chat-agent/main.go`.
+- Validate with `go test ./... -count=1` in `pinocchio/`.
+
+### Technical details
+- New package: `github.com/go-go-golems/pinocchio/pkg/ui/forwarders/agent`
