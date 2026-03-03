@@ -58,3 +58,13 @@ Step 5: add Glazed help pages for TUI integration (guide + playbook) and validat
 - /home/manuel/workspaces/2026-03-03/extract-tui-pinocchio/pinocchio/pkg/doc/topics/pinocchio-tui-integration-playbook.md — New TUI integration ops/debugging playbook
 - /home/manuel/workspaces/2026-03-03/extract-tui-pinocchio/pinocchio/pkg/doc/tutorials/06-tui-integration-guide.md — New intern-first TUI integration guide
 
+
+## 2026-03-03
+
+Step 6: upload bundled TUI integration guide + playbook to reMarkable under /ai/2026/03/03/PI-02--extract-common-tui
+
+### Related Files
+
+- /home/manuel/workspaces/2026-03-03/extract-tui-pinocchio/pinocchio/pkg/doc/topics/pinocchio-tui-integration-playbook.md — Included in reMarkable bundle
+- /home/manuel/workspaces/2026-03-03/extract-tui-pinocchio/pinocchio/pkg/doc/tutorials/06-tui-integration-guide.md — Included in reMarkable bundle
+

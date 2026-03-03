@@ -328,3 +328,54 @@ The key requirement here is that a new intern can read the docs and understand: 
 - Slugs:
   - `pinocchio-tui-integration-guide`
   - `pinocchio-tui-integration-playbook`
+
+## Step 6: Upload guide + playbook bundle to reMarkable
+
+This step publishes the new integration guide and playbook to the reMarkable device as a single bundled PDF with a table of contents. This makes the documentation easy to read and annotate away from the terminal.
+
+### Prompt Context
+
+**User prompt (verbatim):** (see Step 1)
+
+**Assistant interpretation:** Use `remarquee` to bundle and upload the new docs to reMarkable under a ticket-scoped directory.
+
+**Inferred user intent:** Make the PI-02 integration documentation accessible for review/annotation on reMarkable, not only inside the repo.
+
+**Commit (code):** N/A
+
+### What I did
+- Confirmed uploader availability: `remarquee status` (ok).
+- Dry-run bundle:
+  - `remarquee upload bundle --dry-run ... --name "PI-02 Pinocchio TUI Integration" --remote-dir "/ai/2026/03/03/PI-02--extract-common-tui" --toc-depth 2`
+- Uploaded bundle (no overwrite):
+  - `remarquee upload bundle ... --name "PI-02 Pinocchio TUI Integration" --remote-dir "/ai/2026/03/03/PI-02--extract-common-tui" --toc-depth 2`
+- Verified remote:
+  - `remarquee cloud ls /ai/2026/03/03/PI-02--extract-common-tui --long --non-interactive`
+
+### Why
+- Bundling keeps the guide + playbook together and provides a ToC, which is much nicer to navigate on reMarkable than multiple separate PDFs.
+
+### What worked
+- Upload succeeded and the remote directory contains `PI-02 Pinocchio TUI Integration`.
+
+### What didn't work
+- N/A.
+
+### What I learned
+- N/A.
+
+### What was tricky to build
+- N/A.
+
+### What warrants a second pair of eyes
+- N/A.
+
+### What should be done in the future
+- N/A.
+
+### Code review instructions
+- N/A (upload-only step).
+
+### Technical details
+- Remote dir: `/ai/2026/03/03/PI-02--extract-common-tui`
+- Uploaded bundle name: `PI-02 Pinocchio TUI Integration`
