@@ -1,7 +1,7 @@
 ---
 Title: Extract common TUI
 Ticket: PI-02
-Status: active
+Status: complete
 Topics:
     - pinocchio
     - tui
@@ -14,10 +14,11 @@ Owners: []
 RelatedFiles: []
 ExternalSources: []
 Summary: ""
-LastUpdated: 2026-03-03T10:32:32.729046648-05:00
+LastUpdated: 2026-03-03T10:48:52.266724994-05:00
 WhatFor: ""
 WhenToUse: ""
 ---
+
 
 # Extract common TUI
 

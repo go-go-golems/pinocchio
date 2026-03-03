@@ -43,3 +43,8 @@ Step 4: tmux smoke run of simple-chat-agent in help-mode (no DB/credentials side
 
 - /home/manuel/workspaces/2026-03-03/extract-tui-pinocchio/pinocchio/cmd/agents/simple-chat-agent/main.go — Smoke-verified command still starts post-refactor
 
+
+## 2026-03-03
+
+Ticket closed
+
