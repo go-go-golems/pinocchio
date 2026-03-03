@@ -45,21 +45,13 @@ Recommended baseline:
 
 ## Canonical HTTP Contract
 
-Routes below are the standard setup used by `cmd/web-chat` and `web-agent-example`.
+Treat [Webchat HTTP Chat Setup](webchat-http-chat-setup.md) as the **source of truth** for:
 
-- `POST /chat` and `POST /chat/{runtime}`: submit prompt/run request.
-- `GET /ws?conv_id=<id>`: websocket streaming attach.
-- `GET /api/timeline?conv_id=<id>&since_version=<n>&limit=<n>`: timeline hydration.
-- `GET/POST/PATCH/DELETE /api/chat/profiles*`: reusable profile CRUD surface.
-- `GET /api/chat/schemas/middlewares` and `GET /api/chat/schemas/extensions`: schema discovery for profile editors.
-- `GET /api/debug/turns?...`: debug turn snapshots when turn store is configured.
-- `GET /api/debug/timeline?...`: debug alias for timeline snapshot inspection.
+- route table (paths + methods),
+- request/response shapes,
+- deprecated/non-canonical paths to avoid.
 
-Not canonical anymore:
-
-- `/timeline` as a top-level default route.
-- `/turns` as a top-level default route.
-- `/hydrate` in webchat backend docs.
+This guide is intentionally narrative: it focuses on how to assemble an app (server, resolver, middleware/tools, UI mounting), not on repeating the full API contract.
 
 ## Quick Start
 
