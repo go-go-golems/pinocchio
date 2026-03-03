@@ -189,12 +189,6 @@ Do not document or depend on these paths in new integrations:
 | `turn store not enabled` | No turn store config | Start with `--turns-db` or `--turns-dsn` |
 | Policy errors from `/chat` | Resolver validation failure | Return `RequestResolutionError` with explicit status/client message |
 
-## See Also
-
-- [Webchat Framework Guide](webchat-framework-guide.md)
-- [Webchat User Guide](webchat-user-guide.md)
-- [Webchat Frontend Integration](webchat-frontend-integration.md)
-
 ## Sources of Truth (When Docs and Reality Disagree)
 
 If you suspect drift between docs and behavior, these tend to be the most reliable references:
@@ -202,3 +196,9 @@ If you suspect drift between docs and behavior, these tend to be the most reliab
 - Reference app wiring: `pinocchio/cmd/web-chat/main.go`
 - Frontend hydration gate implementation: `pinocchio/cmd/web-chat/web/src/ws/wsManager.ts`
 - HTTP helper contract tests: `pinocchio/pkg/webchat/http_helpers_contract_test.go`
+
+## See Also
+
+- [Webchat Framework Guide](webchat-framework-guide.md)
+- [Webchat User Guide](webchat-user-guide.md)
+- [Webchat Frontend Integration](webchat-frontend-integration.md)
