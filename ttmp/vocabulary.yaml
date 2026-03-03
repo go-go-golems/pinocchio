@@ -27,6 +27,12 @@ topics:
       description: Persistence and storage concerns
     - slug: refactor
       description: Codebase refactoring and package extraction work
+    - slug: tui
+      description: Terminal UI (Bubble Tea, Bobatea, etc.)
+    - slug: thirdparty
+      description: Third-party reuse/extraction
+    - slug: bobatea
+      description: Bobatea TUI library
 docTypes:
     - slug: index
       description: Ticket index / overall plan
