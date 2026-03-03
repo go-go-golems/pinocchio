@@ -59,6 +59,28 @@ func TestSemanticEventsFromEvent_UsesStableLLMIDs(t *testing.T) {
 	require.Equal(t, "Hello", finalData["text"])
 }
 
+func TestSemanticEventsFromEvent_DropsWhitespaceOnlyDeltas(t *testing.T) {
+	meta := events.EventMetadata{
+		SessionID:   "sess-ws",
+		InferenceID: "inf-ws",
+		TurnID:      "turn-ws",
+	}
+
+	startFrames := SemanticEventsFromEvent(events.NewStartEvent(meta))
+	require.Len(t, startFrames, 1)
+	start := decodeSemEvent(t, startFrames[0])
+	wantID := start["id"].(string)
+
+	frames := SemanticEventsFromEvent(events.NewPartialCompletionEvent(meta, " \n\t ", " \n\t "))
+	require.Len(t, frames, 0)
+
+	deltaFrames := SemanticEventsFromEvent(events.NewPartialCompletionEvent(meta, "Hello", "Hello"))
+	require.Len(t, deltaFrames, 1)
+	delta := decodeSemEvent(t, deltaFrames[0])
+	require.Equal(t, "llm.delta", delta["type"])
+	require.Equal(t, wantID, delta["id"])
+}
+
 func TestSemanticEventsFromEvent_PrefersExplicitUUIDMessageID(t *testing.T) {
 	msgID := uuid.New()
 	meta := events.EventMetadata{
