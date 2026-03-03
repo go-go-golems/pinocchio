@@ -138,7 +138,7 @@ Query params:
 - `since_version` (optional)
 - `limit` (optional)
 
-Response is a `TimelineSnapshotV1` JSON payload.
+Response is a `TimelineSnapshotV2` JSON payload.
 
 ## Persistence Flags
 
@@ -188,6 +188,14 @@ Do not document or depend on these paths in new integrations:
 | `timeline service not enabled` | Timeline service unavailable or route not mounted | Mount `/api/timeline` with `NewTimelineHTTPHandler` and confirm service non-nil |
 | `turn store not enabled` | No turn store config | Start with `--turns-db` or `--turns-dsn` |
 | Policy errors from `/chat` | Resolver validation failure | Return `RequestResolutionError` with explicit status/client message |
+
+## Sources of Truth (When Docs and Reality Disagree)
+
+If you suspect drift between docs and behavior, these tend to be the most reliable references:
+
+- Reference app wiring: `pinocchio/cmd/web-chat/main.go`
+- Frontend hydration gate implementation: `pinocchio/cmd/web-chat/web/src/ws/wsManager.ts`
+- HTTP helper contract tests: `pinocchio/pkg/webchat/http_helpers_contract_test.go`
 
 ## See Also
 

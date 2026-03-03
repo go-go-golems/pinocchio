@@ -38,13 +38,22 @@ Webchat is pinocchio's real-time chat framework. It connects a geppetto inferenc
 **New to webchat?** Start here:
 
 1. [Webchat Getting Started](../tutorials/02-webchat-getting-started.md) — Run the backend + UI locally
-2. [Webchat User Guide](webchat-user-guide.md) — Practical usage and customization
-3. [Webchat Framework Guide](webchat-framework-guide.md) — End-to-end usage, profiles, middlewares, and HTTP API
-4. [Webchat Profile Registry Guide](webchat-profile-registry.md) — Registry wiring, selection precedence, and CRUD semantics
+1. [Webchat User Guide](webchat-user-guide.md) — Practical usage and customization
+1. [Webchat HTTP Chat Setup](webchat-http-chat-setup.md) — Canonical route table + request/response shapes
+1. [Webchat Frontend Integration](webchat-frontend-integration.md) — WebSocket + hydration gate pattern
+1. [Webchat Framework Guide](webchat-framework-guide.md) — End-to-end app wiring (resolver, profiles, middleware/tools)
+1. [Webchat Profile Registry Guide](webchat-profile-registry.md) — Registry wiring, selection precedence, and CRUD semantics
 
 **Building the example app?**
 
 - [Web-Chat Example README](../../../cmd/web-chat/README.md) — Building and running the example
+
+## If You Only Need “WS + Timeline”
+
+If you are integrating Pinocchio webchat into an existing app and only need the **stream + hydration** contracts, start with:
+
+1) [Webchat HTTP Chat Setup](webchat-http-chat-setup.md) — canonical `/chat`, `/ws`, `/api/timeline` contract
+2) [Webchat Frontend Integration](webchat-frontend-integration.md) — hydration-gated buffering pattern
 
 ## Documentation by Audience
 

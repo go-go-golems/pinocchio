@@ -79,13 +79,15 @@ Common event types:
 {
   "prompt": "Hello assistant",
   "conv_id": "conv-123",
-  "overrides": {
+  "request_overrides": {
     "system_prompt": "Be concise"
   }
 }
 ```
 
 Use `/chat/{runtime}` when runtime should come from the path instead of resolver defaults.
+
+Note: use `request_overrides` in the request body (legacy `overrides` aliases are not part of the canonical contract; see [Webchat HTTP Chat Setup](webchat-http-chat-setup.md)).
 
 ## Hydration Request Example
 

@@ -58,7 +58,7 @@ Look for lifecycle logs:
 ### Chat request failures
 
 - Check resolver errors from `POST /chat`.
-- Validate JSON body keys: `prompt`, `conv_id`, `overrides`, `idempotency_key`.
+- Validate JSON body keys: `prompt`, `conv_id`, `request_overrides`, `idempotency_key`.
 - Confirm runtime/profile slug exists when calling `/chat/{runtime}`.
 
 ### Turns endpoint unavailable

@@ -72,16 +72,13 @@ func run(ctx context.Context, parsed *values.Values) error {
 
 ## Route Contract
 
-- `POST /chat` and `POST /chat/{runtime}`
-- `GET /ws?conv_id=<id>`
-- `GET /api/timeline?conv_id=<id>&since_version=<n>&limit=<n>`
-- `GET /api/debug/turns?...` (when turn store enabled)
+Use [Webchat HTTP Chat Setup](webchat-http-chat-setup.md) as the canonical route table and request/response shape reference.
 
-Legacy paths that should be removed from app docs and clients:
+At a high level, you will mount:
 
-- `/timeline`
-- `/turns`
-- `/hydrate`
+- `POST /chat` (and optionally `POST /chat/{runtime}`)
+- `GET /ws?conv_id=<id>` (WebSocket upgrade)
+- `GET /api/timeline?conv_id=<id>&since_version=<n>&limit=<n>` (hydration)
 
 ## Request Policy Ownership
 

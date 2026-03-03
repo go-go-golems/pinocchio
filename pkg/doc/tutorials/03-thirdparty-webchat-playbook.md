@@ -156,7 +156,7 @@ This ensures ordering consistency across reloads and reconnects.
 {
   "conv_id": "conv-123",
   "prompt": "hello",
-  "overrides": {
+  "request_overrides": {
     "middlewares": [
       { "name": "webagent-thinking-mode", "config": { "mode": "fast" } },
       { "name": "webagent-disco-dialogue", "config": { "tone": "noir" } }

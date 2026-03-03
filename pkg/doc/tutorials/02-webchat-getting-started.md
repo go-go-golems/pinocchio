@@ -75,7 +75,7 @@ ws://localhost:5173/ws?conv_id=<uuid>
 
 In dev, Vite proxies `/ws` to the Go backend.
 
-## 5) Profiles and overrides
+## 5) Profiles and request overrides
 
 Profiles control default prompts, tools, and middlewares. You can switch profiles:
 
@@ -94,13 +94,13 @@ curl -s -X POST http://localhost:5173/api/chat/profiles \
   -d '{"slug":"analyst","runtime":{"system_prompt":"You are an analyst."}}'
 ```
 
-If your selected profile policy allows overrides, runtime overrides can be passed in the chat payload:
+If your selected profile policy allows request overrides, runtime overrides can be passed in the chat payload:
 
 ```json
 {
   "conv_id": "<uuid>",
   "prompt": "use tools",
-  "overrides": {
+  "request_overrides": {
     "system_prompt": "You are an assistant",
     "tools": ["calculator"]
   }
