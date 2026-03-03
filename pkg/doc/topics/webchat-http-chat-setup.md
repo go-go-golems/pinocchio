@@ -138,7 +138,7 @@ Query params:
 - `since_version` (optional)
 - `limit` (optional)
 
-Response is a `TimelineSnapshotV1` JSON payload.
+Response is a `TimelineSnapshotV2` JSON payload.
 
 ## Persistence Flags
 
