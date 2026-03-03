@@ -68,3 +68,13 @@ Step 6: upload bundled TUI integration guide + playbook to reMarkable under /ai/
 - /home/manuel/workspaces/2026-03-03/extract-tui-pinocchio/pinocchio/pkg/doc/topics/pinocchio-tui-integration-playbook.md — Included in reMarkable bundle
 - /home/manuel/workspaces/2026-03-03/extract-tui-pinocchio/pinocchio/pkg/doc/tutorials/06-tui-integration-guide.md — Included in reMarkable bundle
 
+
+## 2026-03-03
+
+Docs follow-up: add explicit import-path hints to all TUI integration code snippets (commit e6a87ec3778039ed32e931182597b3f23bde86b6)
+
+### Related Files
+
+- /home/manuel/workspaces/2026-03-03/extract-tui-pinocchio/pinocchio/pkg/doc/topics/pinocchio-tui-integration-playbook.md — Now includes import-path hints above each snippet
+- /home/manuel/workspaces/2026-03-03/extract-tui-pinocchio/pinocchio/pkg/doc/tutorials/06-tui-integration-guide.md — Now includes import-path hints above each snippet
+
