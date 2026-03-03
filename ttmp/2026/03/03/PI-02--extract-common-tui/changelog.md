@@ -48,3 +48,13 @@ Step 4: tmux smoke run of simple-chat-agent in help-mode (no DB/credentials side
 
 Ticket closed
 
+
+## 2026-03-03
+
+Step 5: add Glazed help pages for TUI integration (guide + playbook) and validate via pinocchio help (commit dbbacec0daaf6db2be33f5798d59f8fcb72f65e6)
+
+### Related Files
+
+- /home/manuel/workspaces/2026-03-03/extract-tui-pinocchio/pinocchio/pkg/doc/topics/pinocchio-tui-integration-playbook.md — New TUI integration ops/debugging playbook
+- /home/manuel/workspaces/2026-03-03/extract-tui-pinocchio/pinocchio/pkg/doc/tutorials/06-tui-integration-guide.md — New intern-first TUI integration guide
+

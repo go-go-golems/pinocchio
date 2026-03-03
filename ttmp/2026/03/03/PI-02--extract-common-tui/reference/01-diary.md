@@ -262,3 +262,69 @@ I did a tmux-based smoke run to sanity-check that the `simple-chat-agent` comman
 
 ### Technical details
 - tmux session name used: `pi02-smoke`
+
+## Step 5: Add Glazed help user guide + playbook (pkg/doc)
+
+This step turns the PI-02 extraction work into a practical, intern-friendly “how to integrate this TUI” guide that is discoverable via the Glazed help system. The deliverable is two embedded help pages under `pinocchio/pkg/doc`: a step-by-step integration tutorial and an ops/debugging playbook.
+
+The key requirement here is that a new intern can read the docs and understand: (1) what components exist, (2) how data flows from inference to the terminal timeline UI, and (3) how to wire the extracted backend/forwarder into their own application without importing `cmd/` packages.
+
+### Prompt Context
+
+**User prompt (verbatim):** (see Step 1)
+
+**Assistant interpretation:** Write a very detailed intern-facing integration guide + playbook as Glazed help pages under `pinocchio/pkg/doc`, relate/store them in the PI-02 ticket, and then upload to reMarkable.
+
+**Inferred user intent:** Convert the refactor into an “operationally usable” outcome: documentation that is searchable from the CLI, and a playbook that reduces future debugging time.
+
+**Commit (code):** dbbacec0daaf6db2be33f5798d59f8fcb72f65e6 — "docs: add TUI integration guide and playbook"
+
+### What I did
+- Added Glazed help pages:
+  - `pinocchio/pkg/doc/tutorials/06-tui-integration-guide.md`
+  - `pinocchio/pkg/doc/topics/pinocchio-tui-integration-playbook.md`
+- Validated the slugs render correctly via:
+  - `go run ./cmd/pinocchio help pinocchio-tui-integration-guide`
+  - `go run ./cmd/pinocchio help pinocchio-tui-integration-playbook`
+- Added a ticket reference doc linking the help pages:
+  - `pinocchio/ttmp/2026/03/03/PI-02--extract-common-tui/reference/02-glazed-help-pages-tui-integration.md`
+
+### Why
+- These docs are the “integration surface” for humans; without them, the extracted packages are still hard to adopt correctly.
+- Glazed help pages make the content accessible from the same CLI an intern is already using.
+
+### What worked
+- Both help pages load and render through the Pinocchio help system.
+- The guide includes architecture, diagrams, pseudocode, API/file anchors, and a troubleshooting table.
+
+### What didn't work
+- N/A.
+
+### What I learned
+- The most important thing to teach is the separation of concerns:
+  - backend runs inference + publishes events,
+  - forwarder projects events into timeline entities,
+  - Bobatea renders entities via registered factories.
+
+### What was tricky to build
+- Keeping the content extremely detailed without turning it into an unstructured “wall of text” required strict sectioning: glossary → diagrams → wiring recipe → troubleshooting.
+
+### What warrants a second pair of eyes
+- Confirm the docs’ topic tagging and section type choices match how you want these pages to show up in top-level help listings.
+
+### What should be done in the future
+- N/A (unless you want to add a dedicated “third-party minimal example” module as a runnable sample).
+
+### Code review instructions
+- Read the guide first:
+  - `pinocchio/pkg/doc/tutorials/06-tui-integration-guide.md`
+- Then read the playbook:
+  - `pinocchio/pkg/doc/topics/pinocchio-tui-integration-playbook.md`
+- Validate locally:
+  - `go run ./cmd/pinocchio help pinocchio-tui-integration-guide`
+  - `go run ./cmd/pinocchio help pinocchio-tui-integration-playbook`
+
+### Technical details
+- Slugs:
+  - `pinocchio-tui-integration-guide`
+  - `pinocchio-tui-integration-playbook`
