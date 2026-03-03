@@ -194,3 +194,11 @@ Do not document or depend on these paths in new integrations:
 - [Webchat Framework Guide](webchat-framework-guide.md)
 - [Webchat User Guide](webchat-user-guide.md)
 - [Webchat Frontend Integration](webchat-frontend-integration.md)
+
+## Sources of Truth (When Docs and Reality Disagree)
+
+If you suspect drift between docs and behavior, these tend to be the most reliable references:
+
+- Reference app wiring: `pinocchio/cmd/web-chat/main.go`
+- Frontend hydration gate implementation: `pinocchio/cmd/web-chat/web/src/ws/wsManager.ts`
+- HTTP helper contract tests: `pinocchio/pkg/webchat/http_helpers_contract_test.go`
