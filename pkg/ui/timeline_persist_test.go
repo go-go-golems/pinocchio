@@ -76,6 +76,67 @@ func TestStepTimelinePersistFunc_DoesNotCreateEmptyAssistantOnStartOnly(t *testi
 	require.Len(t, snap.Entities, 0)
 }
 
+func TestStepTimelinePersistFunc_PersistsRuntimeAttributionFromMetadataExtra(t *testing.T) {
+	store := chatstore.NewInMemoryTimelineStore(100)
+	h := StepTimelinePersistFunc(store, "conv-attr")
+
+	md := events.EventMetadata{
+		ID:        uuid.New(),
+		SessionID: "session-attr",
+		TurnID:    "turn-attr",
+		Extra: map[string]any{
+			"runtime_key":         "mento-haiku-4.5",
+			"runtime_fingerprint": "fp-1",
+			"profile.slug":        "mento-haiku-4.5",
+			"profile.registry":    "mento",
+			"profile.version":     uint64(7),
+		},
+	}
+	emitPersistEvent(t, h, events.NewPartialCompletionEvent(md, "hi", "hi"))
+	emitPersistEvent(t, h, events.NewFinalEvent(md, "hello"))
+
+	snap, err := store.GetSnapshot(context.Background(), "conv-attr", 0, 100)
+	require.NoError(t, err)
+	require.Len(t, snap.Entities, 1)
+
+	props := snap.Entities[0].GetProps().AsMap()
+	require.Equal(t, "mento-haiku-4.5", props["runtime_key"])
+	require.Equal(t, "fp-1", props["runtime_fingerprint"])
+	require.Equal(t, "mento-haiku-4.5", props["profile.slug"])
+	require.Equal(t, "mento", props["profile.registry"])
+	require.Equal(t, float64(7), props["profile.version"])
+}
+
+func TestStepTimelinePersistFunc_PersistsProfileSwitchedInfoEvent(t *testing.T) {
+	store := chatstore.NewInMemoryTimelineStore(100)
+	h := StepTimelinePersistFunc(store, "conv-switch")
+
+	md := events.EventMetadata{
+		ID:        uuid.New(),
+		SessionID: "session-switch",
+		TurnID:    "turn-switch",
+		Extra: map[string]any{
+			"runtime_key":  "mento-sonnet-4.6",
+			"profile.slug": "mento-sonnet-4.6",
+		},
+	}
+	emitPersistEvent(t, h, events.NewInfoEvent(md, "profile-switched", map[string]any{
+		"from": "mento-haiku-4.5",
+		"to":   "mento-sonnet-4.6",
+	}))
+
+	snap, err := store.GetSnapshot(context.Background(), "conv-switch", 0, 100)
+	require.NoError(t, err)
+	require.Len(t, snap.Entities, 1)
+
+	entity := snap.Entities[0]
+	require.Equal(t, "profile_switch", entity.Kind)
+	props := entity.GetProps().AsMap()
+	require.Equal(t, "mento-haiku-4.5", props["from"])
+	require.Equal(t, "mento-sonnet-4.6", props["to"])
+	require.Equal(t, "mento-sonnet-4.6", props["runtime_key"])
+}
+
 type recordingTimelineStore struct {
 	mu            sync.Mutex
 	upsertCalls   int

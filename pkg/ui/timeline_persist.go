@@ -27,23 +27,59 @@ func StepTimelinePersistFunc(store chatstore.TimelineStore, convID string) func(
 	thinkingSeen := map[string]bool{}
 	thinkingContent := map[string]string{}
 
-	upsertMessage := func(ctx context.Context, entityID string, role string, content string, streaming bool) error {
+	attribFromExtra := func(extra map[string]interface{}) map[string]any {
+		if len(extra) == 0 {
+			return nil
+		}
+		out := map[string]any{}
+		if s, ok := extra["runtime_key"].(string); ok && strings.TrimSpace(s) != "" {
+			out["runtime_key"] = strings.TrimSpace(s)
+		}
+		if s, ok := extra["runtime_fingerprint"].(string); ok && strings.TrimSpace(s) != "" {
+			out["runtime_fingerprint"] = strings.TrimSpace(s)
+		}
+		if s, ok := extra["profile.slug"].(string); ok && strings.TrimSpace(s) != "" {
+			out["profile.slug"] = strings.TrimSpace(s)
+		}
+		if s, ok := extra["profile.registry"].(string); ok && strings.TrimSpace(s) != "" {
+			out["profile.registry"] = strings.TrimSpace(s)
+		}
+		switch v := extra["profile.version"].(type) {
+		case uint64:
+			if v > 0 {
+				out["profile.version"] = int64(v)
+			}
+		case int64:
+			if v > 0 {
+				out["profile.version"] = v
+			}
+		case int:
+			if v > 0 {
+				out["profile.version"] = int64(v)
+			}
+		case float64:
+			if v > 0 {
+				out["profile.version"] = v
+			}
+		}
+		if len(out) == 0 {
+			return nil
+		}
+		return out
+	}
+
+	upsertEntity := func(ctx context.Context, entityID string, kind string, propsMap map[string]any) error {
 		if store == nil || strings.TrimSpace(convID) == "" || strings.TrimSpace(entityID) == "" {
 			return nil
 		}
 		seq := version.Add(1)
-		props, err := structpb.NewStruct(map[string]any{
-			"schemaVersion": 1,
-			"role":          role,
-			"content":       content,
-			"streaming":     streaming,
-		})
+		props, err := structpb.NewStruct(propsMap)
 		if err != nil {
 			return err
 		}
 		entity := &timelinepb.TimelineEntityV2{
 			Id:    entityID,
-			Kind:  "message",
+			Kind:  strings.TrimSpace(kind),
 			Props: props,
 		}
 		return store.Upsert(ctx, convID, seq, entity)
@@ -69,7 +105,9 @@ func StepTimelinePersistFunc(store chatstore.TimelineStore, convID string) func(
 			ctx = context.Background()
 		}
 
-		persist := func(id string, role string, content string, streaming bool) {
+		attrib := attribFromExtra(md.Extra)
+
+		persistMessage := func(id string, role string, content string, streaming bool) {
 			persistCtx := ctx
 			cancel := func() {}
 			if persistCtx.Err() != nil {
@@ -79,7 +117,17 @@ func StepTimelinePersistFunc(store chatstore.TimelineStore, convID string) func(
 			}
 			defer cancel()
 
-			if err := upsertMessage(persistCtx, id, role, content, streaming); err != nil {
+			props := map[string]any{
+				"schemaVersion": 2,
+				"role":          role,
+				"content":       content,
+				"streaming":     streaming,
+			}
+			for k, v := range attrib {
+				props[k] = v
+			}
+
+			if err := upsertEntity(persistCtx, id, "message", props); err != nil {
 				if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 					return
 				}
@@ -104,7 +152,7 @@ func StepTimelinePersistFunc(store chatstore.TimelineStore, convID string) func(
 			assistantSeen[entityID] = true
 			assistantContent[entityID] = e.Completion
 			mu.Unlock()
-			persist(entityID, "assistant", e.Completion, true)
+			persistMessage(entityID, "assistant", e.Completion, true)
 		case *events.EventFinal:
 			mu.Lock()
 			seen := assistantSeen[entityID]
@@ -120,7 +168,7 @@ func StepTimelinePersistFunc(store chatstore.TimelineStore, convID string) func(
 			if strings.TrimSpace(content) == "" && !seen {
 				break
 			}
-			persist(entityID, "assistant", content, false)
+			persistMessage(entityID, "assistant", content, false)
 		case *events.EventInterrupt:
 			mu.Lock()
 			seen := assistantSeen[entityID]
@@ -136,15 +184,30 @@ func StepTimelinePersistFunc(store chatstore.TimelineStore, convID string) func(
 			if strings.TrimSpace(content) == "" && !seen {
 				break
 			}
-			persist(entityID, "assistant", content, false)
+			persistMessage(entityID, "assistant", content, false)
 		case *events.EventError:
 			errText := "**Error**\n\n" + e.ErrorString
 			mu.Lock()
 			assistantSeen[entityID] = true
 			assistantContent[entityID] = errText
 			mu.Unlock()
-			persist(entityID, "assistant", errText, false)
+			persistMessage(entityID, "assistant", errText, false)
 		case *events.EventInfo:
+			if strings.TrimSpace(e.Message) == "profile-switched" {
+				from, _ := e.Data["from"].(string)
+				to, _ := e.Data["to"].(string)
+				props := map[string]any{
+					"schemaVersion": 1,
+					"from":          strings.TrimSpace(from),
+					"to":            strings.TrimSpace(to),
+				}
+				for k, v := range attrib {
+					props[k] = v
+				}
+				// best-effort store as dedicated entity kind
+				_ = upsertEntity(ctx, entityID, "profile_switch", props)
+				break
+			}
 			thinkID := entityID + ":thinking"
 			switch strings.TrimSpace(e.Message) {
 			case "thinking-started":
@@ -152,7 +215,7 @@ func StepTimelinePersistFunc(store chatstore.TimelineStore, convID string) func(
 				thinkingSeen[thinkID] = true
 				content := thinkingContent[thinkID]
 				mu.Unlock()
-				persist(thinkID, "thinking", content, true)
+				persistMessage(thinkID, "thinking", content, true)
 			case "thinking-ended":
 				mu.Lock()
 				seen := thinkingSeen[thinkID]
@@ -161,7 +224,7 @@ func StepTimelinePersistFunc(store chatstore.TimelineStore, convID string) func(
 				if !seen && strings.TrimSpace(content) == "" {
 					break
 				}
-				persist(thinkID, "thinking", content, false)
+				persistMessage(thinkID, "thinking", content, false)
 			}
 		case *events.EventThinkingPartial:
 			thinkID := entityID + ":thinking"
@@ -172,7 +235,7 @@ func StepTimelinePersistFunc(store chatstore.TimelineStore, convID string) func(
 			thinkingSeen[thinkID] = true
 			thinkingContent[thinkID] = e.Completion
 			mu.Unlock()
-			persist(thinkID, "thinking", e.Completion, true)
+			persistMessage(thinkID, "thinking", e.Completion, true)
 		}
 
 		return nil
