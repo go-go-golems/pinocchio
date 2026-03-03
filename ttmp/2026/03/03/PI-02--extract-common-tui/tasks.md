@@ -9,4 +9,4 @@
 - [x] Run gofmt + go test ./... (pinocchio module) and fix compile errors
 - [x] Update simple-chat-agent to use extracted pkg backend/forwarder (no cmd/ imports)
 - [x] Update PI-02 diary + changelog and relate touched files
-- [ ] Smoke-run simple-chat-agent in tmux (non-interactive sanity)
+- [x] Smoke-run simple-chat-agent in tmux (non-interactive sanity)

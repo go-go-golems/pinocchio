@@ -34,3 +34,12 @@ Step 3: extract agent UI forwarder into pinocchio/pkg/ui/forwarders/agent and up
 - /home/manuel/workspaces/2026-03-03/extract-tui-pinocchio/pinocchio/pkg/ui/backends/toolloop/backend.go — Backend now only runs tool loop; projection moved out
 - /home/manuel/workspaces/2026-03-03/extract-tui-pinocchio/pinocchio/pkg/ui/forwarders/agent/forwarder.go — Agent event→timeline forwarder
 
+
+## 2026-03-03
+
+Step 4: tmux smoke run of simple-chat-agent in help-mode (no DB/credentials side effects)
+
+### Related Files
+
+- /home/manuel/workspaces/2026-03-03/extract-tui-pinocchio/pinocchio/cmd/agents/simple-chat-agent/main.go — Smoke-verified command still starts post-refactor
+

@@ -213,3 +213,52 @@ The behavior remains the same: the forwarder **does not** emit `boba_chat.Backen
 
 ### Technical details
 - New package: `github.com/go-go-golems/pinocchio/pkg/ui/forwarders/agent`
+
+## Step 4: tmux smoke run (help-mode)
+
+I did a tmux-based smoke run to sanity-check that the `simple-chat-agent` command still starts and renders its Cobra/Glazed help after the refactor. I did not attempt a full interactive Bubble Tea session here because the command creates local SQLite files by default (e.g. `simple-agent.db`, `anonymized-data.db`) and may require LLM credentials/profiles; those side effects aren’t appropriate for a quick automated smoke check.
+
+### Prompt Context
+
+**User prompt (verbatim):** (see Step 1)
+
+**Assistant interpretation:** Use tmux for any runtime verification; run a minimal non-interactive check to ensure the command launches after refactors.
+
+**Inferred user intent:** Avoid shipping refactors that only compile but fail immediately at runtime due to wiring/import issues.
+
+**Commit (code):** N/A
+
+### What I did
+- Ran in tmux (from repo root):
+  - `tmux new-session -d -s pi02-smoke -c pinocchio "sh -lc 'go run ./cmd/agents/simple-chat-agent --help; echo DONE; sleep 10'"`
+  - `tmux capture-pane -t pi02-smoke:0.0 -p`
+  - `tmux kill-session -t pi02-smoke`
+- Confirmed the captured output contained `simple-chat-agent` usage lines and `DONE`.
+
+### Why
+- A simple runtime launch check catches missing imports/init-time panics that compilation-only checks can miss.
+- Help-mode avoids creating local DB artifacts and avoids requiring provider credentials.
+
+### What worked
+- The command executed and printed help output in tmux, indicating the refactor didn’t break the CLI wiring.
+
+### What didn't work
+- N/A.
+
+### What I learned
+- If we want a “real” TUI smoke test in CI/dev workflows, we should consider adding flags/env to redirect the SQLite file paths into a temp dir (out of scope for this ticket).
+
+### What was tricky to build
+- Keeping the tmux session alive long enough to capture output required a trailing `sleep`, since a command-run session exits immediately once the command completes.
+
+### What warrants a second pair of eyes
+- N/A for this step.
+
+### What should be done in the future
+- Optional: add a `--db-path`/`--data-dir` style flag to `simple-chat-agent` to make full TUI smoke tests practical without repo pollution.
+
+### Code review instructions
+- N/A (no code change in this step).
+
+### Technical details
+- tmux session name used: `pi02-smoke`
