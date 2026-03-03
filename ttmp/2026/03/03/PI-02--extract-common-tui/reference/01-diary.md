@@ -12,6 +12,8 @@ DocType: reference
 Intent: long-term
 Owners: []
 RelatedFiles:
+    - Path: pinocchio/pkg/ui/backends/toolloop/backend.go
+      Note: Step 2 extraction target + forwarder refactor staging point
     - Path: pinocchio/ttmp/2026/03/03/PI-02--extract-common-tui/design-doc/01-implementation-plan.md
       Note: Current ticket plan referenced by diary
     - Path: pinocchio/ttmp/2026/03/03/PI-02--extract-common-tui/tasks.md
@@ -22,6 +24,7 @@ LastUpdated: 2026-03-03T10:32:40.257126339-05:00
 WhatFor: ""
 WhenToUse: ""
 ---
+
 
 
 # Diary
@@ -96,3 +99,60 @@ Read the implementation/design document, then create a set of tasks in the ticke
   - `docmgr doc add --ticket PI-02 --doc-type design-doc --title "Implementation plan"`
   - `docmgr doc add --ticket PI-02 --doc-type reference --title "Diary"`
   - `docmgr task add --ticket PI-02 --text "..."`
+
+## Step 2: Extract ToolLoopBackend out of cmd/ into pkg/
+
+This step moves the tool-loop backend used by the `simple-chat-agent` TUI from a `cmd/...` import path into a reusable `pinocchio/pkg/...` package. The goal is to remove the primary “cmd-only” blocker for third-party reuse while keeping behavior stable.
+
+I intentionally kept the forwarder implementation co-located with the backend for now (as `ToolLoopBackend.MakeUIForwarder`) so the command continues to work unchanged at runtime; the next step extracts the mapping logic into a dedicated `pinocchio/pkg/ui/forwarders/...` package.
+
+### Prompt Context
+
+**User prompt (verbatim):** (see Step 1)
+
+**Assistant interpretation:** Extract the agent/tool-loop backend out of `cmd/` into `pkg/` and update the `simple-chat-agent` command to use the new package, with tests proving it still compiles.
+
+**Inferred user intent:** Make the richer agent TUI backend reusable outside the `cmd/` tree, so downstream packages can build their own TUIs without copy/paste or cmd imports.
+
+**Commit (code):** 17b2100f9224add43db713d8033d2fec621109d0 — "Extract tool-loop backend into pkg"
+
+### What I did
+- Added `pinocchio/pkg/ui/backends/toolloop/backend.go` by moving the former `ToolLoopBackend` implementation out of `cmd/`.
+- Updated `pinocchio/cmd/agents/simple-chat-agent/main.go` to import `github.com/go-go-golems/pinocchio/pkg/ui/backends/toolloop` instead of `cmd/.../pkg/backend`.
+- Deleted `pinocchio/cmd/agents/simple-chat-agent/pkg/backend/tool_loop_backend.go`.
+- Ran:
+  - `gofmt -w cmd/agents/simple-chat-agent/main.go pkg/ui/backends/toolloop/backend.go`
+  - `go test ./... -count=1`
+
+### Why
+- `cmd/` packages are not intended to be imported by other modules; moving this backend to `pkg/` makes it a legitimate library surface.
+- Keeping behavior stable reduces the risk of UI regressions while we continue extracting the forwarder logic.
+
+### What worked
+- `go test ./...` in the `pinocchio` module passed after the move.
+- `simple-chat-agent` now consumes a `pkg/` backend implementation (no cmd-only backend import path).
+
+### What didn't work
+- N/A.
+
+### What I learned
+- The backend extraction is mechanically straightforward; the trickier part is isolating the forwarder mapping code so it can be shared without forcing the backend to “own” UI projection policies.
+
+### What was tricky to build
+- Avoiding a package-name collision with Geppetto’s `toolloop` import required aliasing it (`geppettotoolloop`) in the new `pinocchio/pkg/ui/backends/toolloop` package.
+
+### What warrants a second pair of eyes
+- The extracted package currently retains `MakeUIForwarder` as a method; we should review the next refactor to ensure the forwarder API stays coherent and doesn’t leak backend internals unnecessarily.
+
+### What should be done in the future
+- Extract the agent forwarder into `pinocchio/pkg/ui/forwarders/...` and have the backend (or command) use it.
+- Smoke-run the TUI in tmux if feasible (to catch any subtle runtime differences not covered by compilation/tests).
+
+### Code review instructions
+- Start with `pinocchio/pkg/ui/backends/toolloop/backend.go`.
+- Then review the import/wiring change in `pinocchio/cmd/agents/simple-chat-agent/main.go`.
+- Validate with `go test ./... -count=1` in `pinocchio/`.
+
+### Technical details
+- New package: `github.com/go-go-golems/pinocchio/pkg/ui/backends/toolloop`
+- Removed package: `github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/backend`

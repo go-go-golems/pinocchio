@@ -15,9 +15,13 @@ RelatedFiles:
     - Path: pinocchio/cmd/agents/simple-chat-agent/main.go
       Note: Call site to update to extracted pkg backend/forwarder
     - Path: pinocchio/cmd/agents/simple-chat-agent/pkg/backend/tool_loop_backend.go
-      Note: Source of ToolLoopBackend + agent forwarder to extract
+      Note: |-
+        Source of ToolLoopBackend + agent forwarder to extract
+        Former location of ToolLoopBackend (moved to pkg/
     - Path: pinocchio/pkg/ui/backend.go
       Note: Existing StepChatForwardFunc reference when designing agent forwarder semantics
+    - Path: pinocchio/pkg/ui/backends/toolloop/backend.go
+      Note: Extracted ToolLoopBackend (and current agent forwarder) now lives here
     - Path: pinocchio/ttmp/2026/03/03/PI-01-REUSABLE-PINOCCHIO-TUI--reusable-pinocchio-tui-third-party-package/design-doc/01-reusable-pinocchio-tui-analysis-extraction-guide.md
       Note: Primary extraction plan (Phase 1/2) used as spec
     - Path: pinocchio/ttmp/2026/03/03/PI-01-REUSABLE-PINOCCHIO-TUI--reusable-pinocchio-tui-third-party-package/design-doc/02-unified-pinocchio-tui-simple-chat-agent-tool-loop-as-reusable-primitives.md
@@ -28,6 +32,7 @@ LastUpdated: 2026-03-03T10:32:40.27306123-05:00
 WhatFor: ""
 WhenToUse: ""
 ---
+
 
 
 # Implementation plan
