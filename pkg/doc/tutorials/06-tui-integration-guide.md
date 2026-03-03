@@ -135,8 +135,15 @@ For a new integration, pick **one** (usually `"chat"` for agent/tool-loop) and w
 Pseudocode:
 
 ```go
+// Pseudocode imports:
+//
+//   "github.com/go-go-golems/geppetto/pkg/events"
+//   "github.com/go-go-golems/geppetto/pkg/inference/middleware"
+//
 router, err := events.NewEventRouter() // defaults to in-memory pub/sub
-if err != nil { return err }
+if err != nil {
+	return err
+}
 
 // All inference events published here:
 sink := middleware.NewWatermillSink(router.Publisher, "chat")
@@ -171,6 +178,10 @@ Tool-loop mode requires a tool registry. If you set `reg=nil`, you’re effectiv
 Pseudocode:
 
 ```go
+// Pseudocode imports:
+//
+//   "github.com/go-go-golems/geppetto/pkg/inference/tools"
+//
 registry := tools.NewInMemoryToolRegistry()
 // registry.Register(...)  // add tools you want
 ```
@@ -180,6 +191,15 @@ registry := tools.NewInMemoryToolRegistry()
 Use the extracted backend:
 
 ```go
+// Pseudocode imports:
+//
+//   "github.com/go-go-golems/geppetto/pkg/events"
+//   "github.com/go-go-golems/geppetto/pkg/inference/engine"
+//   "github.com/go-go-golems/geppetto/pkg/inference/middleware"
+//   geppettotoolloop "github.com/go-go-golems/geppetto/pkg/inference/toolloop"
+//   "github.com/go-go-golems/geppetto/pkg/inference/tools"
+//   toolloopbackend "github.com/go-go-golems/pinocchio/pkg/ui/backends/toolloop"
+//
 backend := toolloopbackend.NewToolLoopBackend(eng, mws, registry, sink, hook)
 ```
 
@@ -195,6 +215,14 @@ You need at least an LLM text renderer, and you probably want tool/log renderers
 Pseudocode (pattern):
 
 ```go
+// Pseudocode imports:
+//
+//   tea "github.com/charmbracelet/bubbletea"
+//   boba_chat "github.com/go-go-golems/bobatea/pkg/chat"
+//   "github.com/go-go-golems/bobatea/pkg/timeline"
+//   renderers "github.com/go-go-golems/bobatea/pkg/timeline/renderers"
+//   agentmode "github.com/go-go-golems/pinocchio/pkg/middlewares/agentmode"
+//
 chatModel := boba_chat.InitialModel(backend,
   boba_chat.WithTitle("My Agent Chat"),
   boba_chat.WithTimelineRegister(func(r *timeline.Registry) {
@@ -216,6 +244,10 @@ Anchors:
 ### 7) Create the Bubble Tea program
 
 ```go
+// Pseudocode imports:
+//
+//   tea "github.com/charmbracelet/bubbletea"
+//
 p := tea.NewProgram(chatModel, tea.WithAltScreen())
 ```
 
@@ -226,6 +258,10 @@ If you have your own layout (sidebar, overlays, etc.), wrap the chat model with 
 This is the “bridge” between inference events and UI updates.
 
 ```go
+// Pseudocode imports:
+//
+//   agentforwarder "github.com/go-go-golems/pinocchio/pkg/ui/forwarders/agent"
+//
 router.AddHandler("ui-forward", "chat", agentforwarder.MakeUIForwarder(p))
 ```
 
@@ -239,6 +275,13 @@ Important semantic detail:
 Pseudocode:
 
 ```go
+// Pseudocode imports:
+//
+//   "context"
+//   tea "github.com/charmbracelet/bubbletea"
+//   "github.com/go-go-golems/geppetto/pkg/events"
+//   "golang.org/x/sync/errgroup"
+//
 ctx2, cancel := context.WithCancel(ctx)
 defer cancel()
 eg, groupCtx := errgroup.WithContext(ctx2)

@@ -66,12 +66,22 @@ What to check:
 - Your sink topic, e.g.:
 
 ```go
+// Pseudocode imports:
+//
+//   "github.com/go-go-golems/geppetto/pkg/inference/middleware"
+//
 sink := middleware.NewWatermillSink(router.Publisher, "chat")
 ```
 
 - Your handler registration topic, e.g.:
 
 ```go
+// Pseudocode imports:
+//
+//   agentforwarder "github.com/go-go-golems/pinocchio/pkg/ui/forwarders/agent"
+//   "github.com/go-go-golems/geppetto/pkg/events"
+//   tea "github.com/charmbracelet/bubbletea"
+//
 router.AddHandler("ui-forward", "chat", agentforwarder.MakeUIForwarder(p))
 ```
 
@@ -86,6 +96,10 @@ What to look for:
 - In your forwarder, early in the handler:
 
 ```go
+// Pseudocode imports:
+//
+//   "github.com/ThreeDotsLabs/watermill/message"
+//
 msg.Ack()
 ```
 
@@ -147,18 +161,30 @@ Then:
 
 ## Pseudocode: “golden wiring” (copy this shape, not literal code)
 
-```
+```go
+// Pseudocode imports:
+//
+//   "context"
+//   tea "github.com/charmbracelet/bubbletea"
+//   boba_chat "github.com/go-go-golems/bobatea/pkg/chat"
+//   "github.com/go-go-golems/geppetto/pkg/events"
+//   "github.com/go-go-golems/geppetto/pkg/inference/middleware"
+//   toolloopbackend "github.com/go-go-golems/pinocchio/pkg/ui/backends/toolloop"
+//   agentforwarder "github.com/go-go-golems/pinocchio/pkg/ui/forwarders/agent"
+//   "golang.org/x/sync/errgroup"
+//
 router := events.NewEventRouter(...)
-sink   := middleware.NewWatermillSink(router.Publisher, topic)
+sink := middleware.NewWatermillSink(router.Publisher, topic)
 
 backend := toolloopbackend.NewToolLoopBackend(engine, middlewares, registry, sink, hook)
-model   := boba_chat.InitialModel(backend, WithTimelineRegister(...))
-program := tea.NewProgram(model, WithAltScreen())
+model := boba_chat.InitialModel(backend, WithTimelineRegister(...))
+program := tea.NewProgram(model, tea.WithAltScreen())
 
 router.AddHandler("ui-forward", topic, agentforwarder.MakeUIForwarder(program))
 
 run router + program concurrently (errgroup)
 cancel router when UI exits
+_ = context.Canceled // (placeholder so context import stays visible in pseudocode)
 ```
 
 ## Troubleshooting table
