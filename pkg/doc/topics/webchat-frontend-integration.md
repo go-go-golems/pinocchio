@@ -46,6 +46,36 @@ Go backend
 5. Replay buffered events.
 6. Switch to live stream dispatch.
 
+## Recommended Client Pattern: `wsManager` (Dedicated WebSocket Lifecycle Module)
+
+In practice, the simplest way to implement the lifecycle above is to centralize it into a dedicated `wsManager` module/class (see `pinocchio/cmd/web-chat/web/src/ws/wsManager.ts`) instead of spreading WebSocket logic across components.
+
+Key reasons:
+
+- **Deterministic lifecycle**: one place owns connect/disconnect, buffering, and hydration gating.
+- **Avoid “refetch resets”**: WebSocket streams are push-based. Modeling them as *pull-based query cache entries* (e.g., using RTK Query `queryFn` + invalidation/refetch) can lead to confusing edge cases where a refetch overwrites previously buffered stream frames.
+- **Simpler rehydration**: reconnect flows can always run “HTTP snapshot → buffered replay → live”.
+
+Minimal API sketch (frontend):
+
+```ts
+type WsStatus = 'disconnected' | 'connecting' | 'connected' | 'hydrating' | 'ready' | 'error';
+
+type SemEnvelope = { sem: true; event: { type: string; id: string; seq?: number; data?: unknown } };
+
+interface WsManager {
+  connect(args: { convId: string; basePrefix: string; hydrate?: boolean }): Promise<void>;
+  disconnect(): void;
+  subscribe(cb: () => void): () => void;
+  getState(): { status: WsStatus; convId: string; events: SemEnvelope[]; lastSeq?: number };
+}
+```
+
+State integration options:
+
+- Push events into a local store (React hook + `useSyncExternalStore`) for “monitor” views.
+- Dispatch into a Redux slice (as the web-chat example does) when you want global timeline/message state.
+
 ## SEM Frame Contract
 
 WebSocket payloads are semantic envelopes:
