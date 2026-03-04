@@ -20,6 +20,17 @@ import (
 // Persistence is best-effort: serialization/storage errors are logged but do not fail chat execution.
 func StepTimelinePersistFunc(store chatstore.TimelineStore, convID string) func(msg *message.Message) error {
 	var version atomic.Uint64
+	return StepTimelinePersistFuncWithVersion(store, convID, &version)
+}
+
+// StepTimelinePersistFuncWithVersion is like StepTimelinePersistFunc, but allows the caller to provide a shared
+// monotonic version counter (useful when multiple components need to upsert into the same conversation timeline).
+func StepTimelinePersistFuncWithVersion(store chatstore.TimelineStore, convID string, version *atomic.Uint64) func(msg *message.Message) error {
+	if version == nil {
+		version = &atomic.Uint64{}
+	}
+	// Serialize store writes to avoid SQLITE_BUSY under concurrent handler dispatch.
+	var storeMu sync.Mutex
 
 	var mu sync.Mutex
 	assistantSeen := map[string]bool{}
@@ -72,6 +83,8 @@ func StepTimelinePersistFunc(store chatstore.TimelineStore, convID string) func(
 		if store == nil || strings.TrimSpace(convID) == "" || strings.TrimSpace(entityID) == "" {
 			return nil
 		}
+		storeMu.Lock()
+		defer storeMu.Unlock()
 		seq := version.Add(1)
 		props, err := structpb.NewStruct(propsMap)
 		if err != nil {
@@ -108,13 +121,9 @@ func StepTimelinePersistFunc(store chatstore.TimelineStore, convID string) func(
 		attrib := attribFromExtra(md.Extra)
 
 		persistMessage := func(id string, role string, content string, streaming bool) {
-			persistCtx := ctx
-			cancel := func() {}
-			if persistCtx.Err() != nil {
-				// During shutdown, Watermill message contexts can be canceled before the queue drains.
-				// Use a short detached context so final timeline upserts can still land without log spam.
-				persistCtx, cancel = context.WithTimeout(context.Background(), 250*time.Millisecond)
-			}
+			// Watermill message contexts can be canceled unexpectedly (for example by ack/teardown ordering),
+			// which can cause best-effort persistence to flake. Persist with a detached, bounded context.
+			persistCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 			defer cancel()
 
 			props := map[string]any{
@@ -205,7 +214,13 @@ func StepTimelinePersistFunc(store chatstore.TimelineStore, convID string) func(
 					props[k] = v
 				}
 				// best-effort store as dedicated entity kind
-				_ = upsertEntity(ctx, entityID, "profile_switch", props)
+				if err := upsertEntity(ctx, entityID, "profile_switch", props); err != nil {
+					log.Warn().Err(err).
+						Str("component", "timeline_persist").
+						Str("conv_id", convID).
+						Str("entity_id", entityID).
+						Msg("timeline upsert failed (profile_switch)")
+				}
 				break
 			}
 			thinkID := entityID + ":thinking"

@@ -5,8 +5,13 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
+	"github.com/ThreeDotsLabs/watermill"
+	"github.com/ThreeDotsLabs/watermill/message"
+	"github.com/ThreeDotsLabs/watermill/pubsub/gochannel"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/huh"
 	"github.com/go-go-golems/bobatea/pkg/chat"
@@ -16,6 +21,7 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/inference/middleware"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
+	timelinepb "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/timeline"
 	"github.com/go-go-golems/pinocchio/pkg/ui"
 	"github.com/go-go-golems/pinocchio/pkg/ui/profileswitch"
 	"github.com/google/uuid"
@@ -24,6 +30,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
+	"google.golang.org/protobuf/types/known/structpb"
 )
 
 type openProfilePickerMsg struct{}
@@ -31,9 +38,10 @@ type openProfilePickerMsg struct{}
 type appModel struct {
 	inner tea.Model
 
-	backend *profileswitch.Backend
-	manager *profileswitch.Manager
-	sink    events.EventSink
+	backend       *profileswitch.Backend
+	manager       *profileswitch.Manager
+	sink          events.EventSink
+	persistSwitch func(from, to, runtimeKey, runtimeFingerprint string) error
 
 	active *huh.Form
 
@@ -44,13 +52,14 @@ type appModel struct {
 	convID string
 }
 
-func newAppModel(inner tea.Model, backend *profileswitch.Backend, manager *profileswitch.Manager, sink events.EventSink, convID string) appModel {
+func newAppModel(inner tea.Model, backend *profileswitch.Backend, manager *profileswitch.Manager, sink events.EventSink, persistSwitch func(from, to, runtimeKey, runtimeFingerprint string) error, convID string) appModel {
 	return appModel{
-		inner:   inner,
-		backend: backend,
-		manager: manager,
-		sink:    sink,
-		convID:  strings.TrimSpace(convID),
+		inner:         inner,
+		backend:       backend,
+		manager:       manager,
+		sink:          sink,
+		persistSwitch: persistSwitch,
+		convID:        strings.TrimSpace(convID),
 	}
 }
 
@@ -111,10 +120,21 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, tea.Batch(cmd, unblurCmd, localPlainEntityCmd("profile_error", map[string]any{"error": err.Error()}))
 				}
 
-				_ = publishProfileSwitchedInfo(m.sink, m.convID, from, res.ProfileSlug.String(), res.RuntimeKey.String(), res.RuntimeFingerprint)
+				publishCmd := func() tea.Msg {
+					if err := publishProfileSwitchedInfo(m.sink, m.convID, from, res.ProfileSlug.String(), res.RuntimeKey.String(), res.RuntimeFingerprint); err != nil {
+						log.Warn().Err(err).Msg("failed to publish profile-switched info event")
+					}
+					if m.persistSwitch != nil {
+						if err := m.persistSwitch(from, res.ProfileSlug.String(), res.RuntimeKey.String(), res.RuntimeFingerprint); err != nil {
+							log.Warn().Err(err).Msg("failed to persist profile switch marker")
+						}
+					}
+					return nil
+				}
 				return m, tea.Batch(
 					cmd,
 					unblurCmd,
+					publishCmd,
 					localPlainEntityCmd("profile_switched", map[string]any{
 						"from":        from,
 						"to":          res.ProfileSlug.String(),
@@ -185,6 +205,22 @@ func publishProfileSwitchedInfo(sink events.EventSink, convID, from, to, runtime
 	}))
 }
 
+type lockedTimelineStore struct {
+	chatstore.TimelineStore
+	mu *sync.Mutex
+}
+
+func (s *lockedTimelineStore) Upsert(ctx context.Context, convID string, version uint64, entity *timelinepb.TimelineEntityV2) error {
+	if s == nil || s.TimelineStore == nil {
+		return nil
+	}
+	if s.mu != nil {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+	}
+	return s.TimelineStore.Upsert(ctx, convID, version, entity)
+}
+
 func main() {
 	var (
 		profileRegistries string
@@ -243,13 +279,59 @@ func main() {
 			}
 			defer closeStores()
 
-			router, err := events.NewEventRouter()
+			// Shared timeline version counter across multiple persistence sources.
+			var timelineVersion atomic.Uint64
+			var timelineStoreMu sync.Mutex
+			if timelineStore != nil {
+				timelineStore = &lockedTimelineStore{TimelineStore: timelineStore, mu: &timelineStoreMu}
+			}
+
+			// Use a buffered in-memory pubsub for TUI runs.
+			//
+			// Watermill's gochannel defaults to an unbuffered output channel, which can
+			// deadlock streaming inference if a subscriber is registered but not yet
+			// actively consuming messages.
+			goPubSub := gochannel.NewGoChannel(gochannel.Config{
+				OutputChannelBuffer:            256,
+				BlockPublishUntilSubscriberAck: false,
+			}, watermill.NopLogger{})
+			router, err := events.NewEventRouter(
+				events.WithPublisher(goPubSub),
+				events.WithSubscriber(goPubSub),
+			)
 			if err != nil {
 				return err
 			}
 			defer func() { _ = router.Close() }()
 
 			sink := middleware.NewWatermillSink(router.Publisher, "chat")
+
+			persistSwitch := func(from, to, runtimeKey, runtimeFingerprint string) error {
+				if timelineStore == nil || strings.TrimSpace(convID) == "" {
+					return nil
+				}
+				seq := timelineVersion.Add(1)
+				propsMap := map[string]any{
+					"schemaVersion":       1,
+					"from":                strings.TrimSpace(from),
+					"to":                  strings.TrimSpace(to),
+					"runtime_key":         strings.TrimSpace(runtimeKey),
+					"runtime_fingerprint": strings.TrimSpace(runtimeFingerprint),
+					"profile.slug":        strings.TrimSpace(to),
+				}
+				props, err := structpb.NewStruct(propsMap)
+				if err != nil {
+					return err
+				}
+				entity := &timelinepb.TimelineEntityV2{
+					Id:    uuid.NewString(),
+					Kind:  "profile_switch",
+					Props: props,
+				}
+				persistCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+				defer cancel()
+				return timelineStore.Upsert(persistCtx, convID, seq, entity)
+			}
 
 			var persister *turnStorePersister
 			if turnStore != nil {
@@ -300,12 +382,23 @@ func main() {
 				if err != nil {
 					return true, localPlainEntityCmd("profile_error", map[string]any{"error": err.Error()})
 				}
-				_ = publishProfileSwitchedInfo(sink, convID, from, next.ProfileSlug.String(), next.RuntimeKey.String(), next.RuntimeFingerprint)
-				return true, localPlainEntityCmd("profile_switched", map[string]any{
-					"from":        from,
-					"to":          next.ProfileSlug.String(),
-					"runtime_key": next.RuntimeKey.String(),
-				})
+				publishCmd := func() tea.Msg {
+					if err := publishProfileSwitchedInfo(sink, convID, from, next.ProfileSlug.String(), next.RuntimeKey.String(), next.RuntimeFingerprint); err != nil {
+						log.Warn().Err(err).Msg("failed to publish profile-switched info event")
+					}
+					if err := persistSwitch(from, next.ProfileSlug.String(), next.RuntimeKey.String(), next.RuntimeFingerprint); err != nil {
+						log.Warn().Err(err).Msg("failed to persist profile switch marker")
+					}
+					return nil
+				}
+				return true, tea.Batch(
+					publishCmd,
+					localPlainEntityCmd("profile_switched", map[string]any{
+						"from":        from,
+						"to":          next.ProfileSlug.String(),
+						"runtime_key": next.RuntimeKey.String(),
+					}),
+				)
 			}
 
 			model := chat.InitialModel(backend,
@@ -319,7 +412,7 @@ func main() {
 			)
 
 			// Wrap in a modal overlay host
-			appModel := newAppModel(model, backend, mgr, sink, convID)
+			appModel := newAppModel(model, backend, mgr, sink, persistSwitch, convID)
 			app = &appModel
 
 			program := tea.NewProgram(appModel, tea.WithAltScreen(), tea.WithMouseCellMotion())
@@ -327,8 +420,24 @@ func main() {
 			// Forward events to UI timeline entities
 			router.AddHandler("ui-forward", "chat", ui.StepChatForwardFunc(program))
 			if timelineStore != nil {
-				router.AddHandler("timeline-persist", "chat", ui.StepTimelinePersistFunc(timelineStore, convID))
+				router.AddHandler("timeline-persist", "chat", ui.StepTimelinePersistFuncWithVersion(timelineStore, convID, &timelineVersion))
 			}
+			// Debug hook for local runs: log EventInfo frames when log-level is debug/trace.
+			router.AddHandler("debug-info-log", "chat", func(msg *message.Message) error {
+				msg.Ack()
+				ev, err := events.NewEventFromJson(msg.Payload)
+				if err != nil {
+					return nil
+				}
+				if info, ok := ev.(*events.EventInfo); ok {
+					log.Debug().
+						Str("conversation_id", convID).
+						Str("message", strings.TrimSpace(info.Message)).
+						Interface("data", info.Data).
+						Msg("EventInfo received")
+				}
+				return nil
+			})
 
 			log.Info().Str("conv_id", convID).Str("profile", res.ProfileSlug.String()).Str("runtime_key", res.RuntimeKey.String()).Msg("Starting TUI")
 
