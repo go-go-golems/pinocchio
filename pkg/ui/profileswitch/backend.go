@@ -58,6 +58,50 @@ func NewBackend(mgr *Manager, sink events.EventSink, persister enginebuilder.Tur
 	return b, nil
 }
 
+func (b *Backend) SessionID() string {
+	if b == nil || b.sess == nil {
+		return ""
+	}
+	return b.sess.SessionID
+}
+
+func (b *Backend) SetTurnPersister(p enginebuilder.TurnPersister) {
+	if b == nil {
+		return
+	}
+	b.persister = p
+	// The builder is recreated on each profile switch; applyResolved will pick up b.persister.
+	// If there's an active builder already, update it opportunistically.
+	if b.sess != nil && b.sess.Builder != nil {
+		if builder, ok := b.sess.Builder.(*enginebuilder.Builder); ok && builder != nil {
+			builder.Persister = p
+		}
+	}
+}
+
+func (b *Backend) SetSeedTurn(t *turns.Turn) error {
+	if b == nil || b.sess == nil || t == nil {
+		return nil
+	}
+	if b.sess.IsRunning() {
+		return errors.New("cannot seed while streaming")
+	}
+	seed := t.Clone()
+
+	sid, ok, err := turns.KeyTurnMetaSessionID.Get(seed.Metadata)
+	if err != nil || !ok || strings.TrimSpace(sid) == "" {
+		sid = session.NewSession().SessionID
+		_ = turns.KeyTurnMetaSessionID.Set(&seed.Metadata, sid)
+	}
+
+	// Replace the session while preserving the current builder.
+	sess := &session.Session{Builder: b.sess.Builder}
+	sess.SessionID = strings.TrimSpace(sid)
+	sess.Append(seed)
+	b.sess = sess
+	return nil
+}
+
 func (b *Backend) Current() Resolved {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
