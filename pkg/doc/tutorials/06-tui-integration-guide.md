@@ -149,6 +149,35 @@ if err != nil {
 sink := middleware.NewWatermillSink(router.Publisher, "chat")
 ```
 
+#### Important: in-memory router defaults can stall streaming
+
+`events.NewEventRouter()` defaults to Watermill’s in-memory `gochannel` with publish→ACK blocking and no output buffering. In a streaming UI, a single slow handler (UI rendering, disk/DB I/O) can stall inference.
+
+For TUI integrations, prefer explicitly configuring the in-memory pub/sub (or use Redis Streams):
+
+```go
+// Pseudocode imports:
+//
+//   "github.com/ThreeDotsLabs/watermill"
+//   "github.com/ThreeDotsLabs/watermill/pubsub/gochannel"
+//   "github.com/go-go-golems/geppetto/pkg/events"
+//   "github.com/go-go-golems/geppetto/pkg/inference/middleware"
+//
+goPubSub := gochannel.NewGoChannel(gochannel.Config{
+	OutputChannelBuffer:            256,
+	BlockPublishUntilSubscriberAck: false,
+}, watermill.NopLogger{})
+
+router, err := events.NewEventRouter(
+	events.WithPublisher(goPubSub),
+	events.WithSubscriber(goPubSub),
+)
+if err != nil {
+	return err
+}
+sink := middleware.NewWatermillSink(router.Publisher, "chat")
+```
+
 If you want Redis Streams (durable fan-out), use Pinocchio’s Redis helpers:
 
 - `pinocchio/pkg/redisstream` (see `pinocchio/cmd/agents/simple-chat-agent/main.go`)
@@ -301,6 +330,13 @@ This pattern avoids:
 - UI continuing to run after router dies,
 - hard-to-debug shutdown ordering.
 
+## Context + cancellation + persistence (important)
+
+This stack has multiple concurrent subsystems (Bubble Tea UI loop, inference goroutines, Watermill router handlers, SQLite writes). A few context-related rules prevent “it worked once but flakes in tmux/CI” failures:
+
+- Avoid binding SQLite writes to `msg.Context()` inside Watermill handlers. That context is scoped to message delivery and can be canceled unexpectedly. Use a detached bounded context (`context.WithTimeout(context.Background(), ...)`) for best-effort persistence.
+- Do not cancel the backend/inference context during “completion cleanup” unless the user explicitly requested interrupt/quit. Canceling too early can prevent persisters from flushing final turn snapshots.
+
 ## When to use ChatBuilder instead
 
 If you do **not** need tool-loop/agent entities, Pinocchio already has a “simple chat” reusable builder:
@@ -320,6 +356,8 @@ See: `glaze help pinocchio-chatbuilder-guide`
 | Tool calls never show up | Missing renderers or missing tool registry | Ensure tool renderer factories are registered; ensure `registry != nil` and tools are registered. |
 | Router handler seems stuck | Watermill messages not ack’d | Forwarder must call `msg.Ack()`; see `pinocchio/pkg/ui/forwarders/agent/forwarder.go`. |
 | Lots of “unknown event type” logs | Event decoding mismatch | Check `events.NewEventFromJson` and the event types your engine emits. |
+| Streaming stalls / UI freezes | In-memory pub/sub backpressure (publish blocks on handler ACK) | Configure `gochannel` buffering and disable publish→ACK blocking, or use Redis Streams. |
+| Persistence flakes with `context canceled` | Using Watermill message context for DB writes | Persist with a detached bounded context (and serialize SQLite writers). |
 
 ## See Also
 

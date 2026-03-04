@@ -195,6 +195,8 @@ _ = context.Canceled // (placeholder so context import stays visible in pseudoco
 | Assistant entity appears but never completes | Final event not handled or never emitted | Check provider events; inspect forwarder `EventFinal` handling. |
 | Tool calls don’t show up | No tools or no renderer | Register tools; register `tool_call` / `tool_call_result` renderers. |
 | UI “freezes” during inference | Watermill handler blocks, or messages not ack’d | Ensure `msg.Ack()` is called; avoid long blocking work in handler. |
+| Streaming stalls/hangs under load | In-memory pub/sub backpressure (publish blocks until handler ACK) | Configure `gochannel` buffering and disable publish→ACK blocking, or switch to Redis Streams transport. |
+| Timeline/turn persistence flakes | Context cancellation races | Avoid canceling inference during UI completion cleanup; for DB writes in handlers, use detached bounded contexts (not `msg.Context()`). |
 | You see duplicate entities for logs/modes | ID collisions | Ensure unique local IDs for non-message events (agent forwarder uses a timestamp suffix). |
 
 ## See Also
