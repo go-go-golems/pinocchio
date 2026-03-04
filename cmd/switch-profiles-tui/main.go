@@ -22,6 +22,8 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
 	timelinepb "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/timeline"
+	"github.com/go-go-golems/pinocchio/pkg/tui/overlay"
+	"github.com/go-go-golems/pinocchio/pkg/tui/widgets/formoverlay"
 	"github.com/go-go-golems/pinocchio/pkg/ui"
 	"github.com/go-go-golems/pinocchio/pkg/ui/profileswitch"
 	"github.com/google/uuid"
@@ -32,132 +34,6 @@ import (
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/protobuf/types/known/structpb"
 )
-
-type openProfilePickerMsg struct{}
-
-type appModel struct {
-	inner tea.Model
-
-	backend       *profileswitch.Backend
-	manager       *profileswitch.Manager
-	sink          events.EventSink
-	persistSwitch func(from, to, runtimeKey, runtimeFingerprint string) error
-
-	active *huh.Form
-
-	// picker state
-	selectedSlug string
-	options      []huh.Option[string]
-
-	convID string
-}
-
-func newAppModel(inner tea.Model, backend *profileswitch.Backend, manager *profileswitch.Manager, sink events.EventSink, persistSwitch func(from, to, runtimeKey, runtimeFingerprint string) error, convID string) appModel {
-	return appModel{
-		inner:         inner,
-		backend:       backend,
-		manager:       manager,
-		sink:          sink,
-		persistSwitch: persistSwitch,
-		convID:        strings.TrimSpace(convID),
-	}
-}
-
-func (m appModel) Init() tea.Cmd { return m.inner.Init() }
-
-func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch v := msg.(type) {
-	case openProfilePickerMsg:
-		items, err := m.manager.ListProfiles(context.Background())
-		if err != nil {
-			return m, localPlainEntityCmd("profile_error", map[string]any{"error": err.Error()})
-		}
-		if len(items) == 0 {
-			return m, localPlainEntityCmd("profile_error", map[string]any{"error": "no profiles loaded"})
-		}
-
-		opts := make([]huh.Option[string], 0, len(items))
-		for _, it := range items {
-			title := it.ProfileSlug.String()
-			if strings.TrimSpace(it.DisplayName) != "" {
-				title = fmt.Sprintf("%s — %s", it.ProfileSlug.String(), it.DisplayName)
-			}
-			opts = append(opts, huh.NewOption(title, it.ProfileSlug.String()))
-		}
-		m.options = opts
-		m.selectedSlug = m.backend.Current().ProfileSlug.String()
-
-		m.active = huh.NewForm(
-			huh.NewGroup(
-				huh.NewSelect[string]().
-					Title("Switch profile").
-					Options(opts...).
-					Value(&m.selectedSlug),
-			),
-		)
-		// blur input while modal is active
-		innerModel, cmd := m.inner.Update(chat.BlurInputMsg{})
-		m.inner = innerModel
-		return m, cmd
-
-	case tea.KeyMsg:
-		// While modal is active, route all keys to the form first.
-		if m.active != nil {
-			fm, cmd := m.active.Update(v)
-			if f, ok := fm.(*huh.Form); ok {
-				m.active = f
-			}
-			if m.active != nil && m.active.State == huh.StateCompleted {
-				target := strings.TrimSpace(m.selectedSlug)
-				from := m.backend.Current().ProfileSlug.String()
-				res, err := m.backend.SwitchProfile(context.Background(), target)
-				// unblur input either way
-				innerModel, unblurCmd := m.inner.Update(chat.UnblurInputMsg{})
-				m.inner = innerModel
-				m.active = nil
-
-				if err != nil {
-					return m, tea.Batch(cmd, unblurCmd, localPlainEntityCmd("profile_error", map[string]any{"error": err.Error()}))
-				}
-
-				publishCmd := func() tea.Msg {
-					if err := publishProfileSwitchedInfo(m.sink, m.convID, from, res.ProfileSlug.String(), res.RuntimeKey.String(), res.RuntimeFingerprint); err != nil {
-						log.Warn().Err(err).Msg("failed to publish profile-switched info event")
-					}
-					if m.persistSwitch != nil {
-						if err := m.persistSwitch(from, res.ProfileSlug.String(), res.RuntimeKey.String(), res.RuntimeFingerprint); err != nil {
-							log.Warn().Err(err).Msg("failed to persist profile switch marker")
-						}
-					}
-					return nil
-				}
-				return m, tea.Batch(
-					cmd,
-					unblurCmd,
-					publishCmd,
-					localPlainEntityCmd("profile_switched", map[string]any{
-						"from":        from,
-						"to":          res.ProfileSlug.String(),
-						"runtime_key": res.RuntimeKey.String(),
-					}),
-				)
-			}
-			return m, cmd
-		}
-	}
-
-	// Default: forward to inner model
-	innerModel, cmd := m.inner.Update(msg)
-	m.inner = innerModel
-	return m, cmd
-}
-
-func (m appModel) View() string {
-	if m.active != nil {
-		return m.active.View()
-	}
-	return m.inner.View()
-}
 
 func localPlainEntityCmd(kind string, props map[string]any) tea.Cmd {
 	id := uuid.NewString()
@@ -349,7 +225,6 @@ func main() {
 			}
 
 			// Chat model with submit interception
-			var app *appModel
 			header := func() string {
 				cur := backend.Current()
 				if cur.ProfileSlug.IsZero() {
@@ -363,9 +238,9 @@ func main() {
 					return false, nil
 				}
 
-				// /profile -> open picker
+				// /profile -> open picker overlay
 				if len(parts) == 1 {
-					return true, func() tea.Msg { return openProfilePickerMsg{} }
+					return true, func() tea.Msg { return overlay.OpenFormOverlayMsg{} }
 				}
 
 				// /profile help
@@ -401,7 +276,7 @@ func main() {
 				)
 			}
 
-			model := chat.InitialModel(backend,
+			chatModel := chat.InitialModel(backend,
 				chat.WithTitle("switch-profiles-tui"),
 				chat.WithTimelineRegister(func(r *timeline.Registry) {
 					r.RegisterModelFactory(renderers.NewLLMTextFactory())
@@ -411,11 +286,37 @@ func main() {
 				chat.WithHeaderView(header),
 			)
 
-			// Wrap in a modal overlay host
-			appModel := newAppModel(model, backend, mgr, sink, persistSwitch, convID)
-			app = &appModel
+			// Build profile picker overlay
+			var selectedSlug string
+			profileOverlay := formoverlay.New(formoverlay.Config{
+				Title:     "Switch Profile",
+				Factory:   profileswitch.PickerFormFactory(mgr, &selectedSlug),
+				Placement: formoverlay.PlacementCenter,
+				MaxWidth:  50,
+				MaxHeight: 20,
+				OnSubmit: func(form *huh.Form) {
+					target := strings.TrimSpace(selectedSlug)
+					from := backend.Current().ProfileSlug.String()
+					res, switchErr := backend.SwitchProfile(context.Background(), target)
+					if switchErr != nil {
+						log.Warn().Err(switchErr).Str("target", target).Msg("profile switch failed")
+						return
+					}
+					if err := publishProfileSwitchedInfo(sink, convID, from, res.ProfileSlug.String(), res.RuntimeKey.String(), res.RuntimeFingerprint); err != nil {
+						log.Warn().Err(err).Msg("failed to publish profile-switched info event")
+					}
+					if err := persistSwitch(from, res.ProfileSlug.String(), res.RuntimeKey.String(), res.RuntimeFingerprint); err != nil {
+						log.Warn().Err(err).Msg("failed to persist profile switch marker")
+					}
+				},
+			})
 
-			program := tea.NewProgram(appModel, tea.WithAltScreen(), tea.WithMouseCellMotion())
+			// Wrap chat model in overlay host
+			host := overlay.NewHost(chatModel, overlay.Config{
+				FormOverlay: profileOverlay,
+			})
+
+			program := tea.NewProgram(host, tea.WithAltScreen(), tea.WithMouseCellMotion())
 
 			// Forward events to UI timeline entities
 			router.AddHandler("ui-forward", "chat", ui.StepChatForwardFunc(program))
@@ -452,7 +353,6 @@ func main() {
 				return err
 			}
 
-			_ = app
 			return nil
 		},
 	}
