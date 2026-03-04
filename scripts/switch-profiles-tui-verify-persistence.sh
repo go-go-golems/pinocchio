@@ -21,7 +21,7 @@ TURNS_DB="${TURNS_DB:-/tmp/spt-1-smoke.turns.db}"
 
 echo "--- turns (runtime_key) ---"
 sqlite3 -json "${TURNS_DB}" \
-	"SELECT conv_id, session_id, turn_id, created_at_ms, runtime_key, inference_id FROM turns WHERE conv_id='${CONV_ID}' ORDER BY created_at_ms ASC" \
+	"SELECT conv_id, session_id, turn_id, turn_created_at_ms, runtime_key, inference_id FROM turns WHERE conv_id='${CONV_ID}' ORDER BY turn_created_at_ms ASC" \
 	| jq .
 
 TURN_COUNT="$(sqlite3 "${TURNS_DB}" "SELECT COUNT(*) FROM turns WHERE conv_id='${CONV_ID}'")"
@@ -31,8 +31,8 @@ if [[ "${TURN_COUNT}" -lt 2 ]]; then
 fi
 
 INFERENCE_WITH_ID="$(sqlite3 -json "${TURNS_DB}" \
-	"SELECT inference_id FROM turns WHERE conv_id='${CONV_ID}' ORDER BY created_at_ms ASC" \
-	| jq -r '[.[].inference_id | select(. != null and . != \"\")] | length')"
+	"SELECT inference_id FROM turns WHERE conv_id='${CONV_ID}' ORDER BY turn_created_at_ms ASC" \
+	| jq -r '[.[].inference_id | select(. != null and . != "")] | length')"
 if [[ "${INFERENCE_WITH_ID}" -lt 1 ]]; then
 	echo "FAIL: expected at least 1 turn with non-empty inference_id" >&2
 	exit 1
@@ -61,10 +61,18 @@ if [[ "${PROFILE_SWITCH_COUNT}" -lt 1 ]]; then
 	exit 1
 fi
 
+# Assert assistant messages are persisted as streaming=false (final)
+ASSISTANT_FINAL_COUNT="$(sqlite3 "${TIMELINE_DB}" \
+	"SELECT COUNT(*) FROM timeline_entities WHERE conv_id='${CONV_ID}' AND kind='message' AND json_extract(entity_json,'$.props.role')='assistant' AND json_extract(entity_json,'$.props.streaming')=0")"
+if [[ "${ASSISTANT_FINAL_COUNT}" -lt 2 ]]; then
+	echo "FAIL: expected at least 2 assistant message entities with props.streaming=false persisted" >&2
+	exit 1
+fi
+
 # Assert at least one assistant message has runtime attribution persisted
 ASSISTANT_WITH_ATTRIB="$(sqlite3 -json "${TIMELINE_DB}" \
 	"SELECT entity_json FROM timeline_entities WHERE conv_id='${CONV_ID}' AND kind='message' ORDER BY version ASC LIMIT 100" \
-	| jq -r '[.[].entity_json | fromjson | .props | select(.runtime_key != null and .\"profile.slug\" != null)] | length')"
+	| jq -r '[.[].entity_json | fromjson | .props | select(.runtime_key != null and .["profile.slug"] != null)] | length')"
 
 if [[ "${ASSISTANT_WITH_ATTRIB}" -lt 1 ]]; then
 	echo "FAIL: expected at least 1 message entity with props.runtime_key and props[\"profile.slug\"] persisted" >&2
@@ -72,4 +80,3 @@ if [[ "${ASSISTANT_WITH_ATTRIB}" -lt 1 ]]; then
 fi
 
 echo "OK: persistence checks passed"
-
