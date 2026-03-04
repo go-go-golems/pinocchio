@@ -419,3 +419,66 @@ groups:
 		t.Fatalf("expected 'Step 1 of 3' in title, got:\n%s", v)
 	}
 }
+
+func TestDoubleEscToClose(t *testing.T) {
+	cancelled := false
+	o := formoverlay.New(formoverlay.Config{
+		Title:            "Test",
+		Factory:          makeTestFactory(),
+		DoubleEscToClose: true,
+		OnCancel: func() {
+			cancelled = true
+		},
+	})
+
+	o.Show()
+
+	// First Esc: should NOT close (passes through to form).
+	o.Update(tea.KeyMsg{Type: tea.KeyEscape})
+	if !o.IsVisible() {
+		t.Fatal("first Esc should not close with DoubleEscToClose")
+	}
+	if cancelled {
+		t.Fatal("OnCancel should not fire on first Esc")
+	}
+
+	// Second Esc: should close.
+	o.Update(tea.KeyMsg{Type: tea.KeyEscape})
+	if o.IsVisible() {
+		t.Fatal("second Esc should close overlay")
+	}
+	if !cancelled {
+		t.Fatal("OnCancel should fire on second Esc")
+	}
+}
+
+func TestDoubleEscResetByOtherKey(t *testing.T) {
+	o := formoverlay.New(formoverlay.Config{
+		Title:            "Test",
+		Factory:          makeTestFactory(),
+		DoubleEscToClose: true,
+	})
+
+	o.Show()
+
+	// First Esc.
+	o.Update(tea.KeyMsg{Type: tea.KeyEscape})
+	if !o.IsVisible() {
+		t.Fatal("first Esc should not close")
+	}
+
+	// Regular key resets the pending state.
+	o.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}})
+
+	// Esc again: should be treated as first Esc (not second).
+	o.Update(tea.KeyMsg{Type: tea.KeyEscape})
+	if !o.IsVisible() {
+		t.Fatal("Esc after key reset should not close (back to first Esc)")
+	}
+
+	// Now second Esc closes.
+	o.Update(tea.KeyMsg{Type: tea.KeyEscape})
+	if o.IsVisible() {
+		t.Fatal("second consecutive Esc should close")
+	}
+}

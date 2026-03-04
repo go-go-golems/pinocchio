@@ -28,6 +28,9 @@ type FormOverlay struct {
 	onSubmit func(form *huh.Form)
 	onCancel func()
 
+	doubleEscToClose bool
+	escPending       bool // true after the first Esc in double-Esc mode
+
 	borderStyle lipgloss.Style
 	titleStyle  lipgloss.Style
 }
@@ -52,15 +55,16 @@ func New(cfg Config) *FormOverlay {
 	}
 
 	return &FormOverlay{
-		factory:     cfg.Factory,
-		title:       cfg.Title,
-		maxWidth:    maxW,
-		maxHeight:   maxH,
-		placement:   cfg.Placement,
-		onSubmit:    cfg.OnSubmit,
-		onCancel:    cfg.OnCancel,
-		borderStyle: border,
-		titleStyle:  title,
+		factory:          cfg.Factory,
+		title:            cfg.Title,
+		maxWidth:         maxW,
+		maxHeight:        maxH,
+		placement:        cfg.Placement,
+		onSubmit:         cfg.OnSubmit,
+		onCancel:         cfg.OnCancel,
+		doubleEscToClose: cfg.DoubleEscToClose,
+		borderStyle:      border,
+		titleStyle:       title,
 	}
 }
 
@@ -72,6 +76,7 @@ func (o *FormOverlay) Show() tea.Cmd {
 	}
 	o.form = o.factory()
 	o.visible = true
+	o.escPending = false
 
 	// Set the content width so huh knows how wide to render fields.
 	// Account for border padding so the form fits inside the modal.
@@ -114,12 +119,37 @@ func (o *FormOverlay) Update(msg tea.Msg) tea.Cmd {
 	// Intercept keys BEFORE the form sees them.
 	if k, ok := msg.(tea.KeyMsg); ok {
 		switch k.String() {
-		case "esc", "ctrl+c":
+		case "ctrl+c":
 			o.Hide()
 			if o.onCancel != nil {
 				o.onCancel()
 			}
 			return nil
+		case "esc":
+			if o.doubleEscToClose {
+				if o.escPending {
+					// Second Esc — close the overlay.
+					o.escPending = false
+					o.Hide()
+					if o.onCancel != nil {
+						o.onCancel()
+					}
+					return nil
+				}
+				// First Esc — pass through to form (for filter clear),
+				// but mark as pending so the next Esc closes.
+				o.escPending = true
+				// Fall through to let the form handle this Esc.
+			} else {
+				o.Hide()
+				if o.onCancel != nil {
+					o.onCancel()
+				}
+				return nil
+			}
+		default:
+			// Any non-Esc key resets the double-Esc state.
+			o.escPending = false
 		}
 	}
 

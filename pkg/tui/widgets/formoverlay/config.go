@@ -39,6 +39,11 @@ type Config struct {
 	// OnCancel is called when the overlay is dismissed (Esc/ctrl+c).
 	OnCancel func()
 
+	// DoubleEscToClose requires two consecutive Esc presses to close the
+	// overlay. This allows huh Select/MultiSelect fields to use the first
+	// Esc to clear their filter. When false (default), a single Esc closes.
+	DoubleEscToClose bool
+
 	// BorderStyle is the lipgloss style for the modal border.
 	// If zero value, DefaultBorderStyle() is used.
 	BorderStyle lipgloss.Style
