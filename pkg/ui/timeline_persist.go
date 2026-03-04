@@ -113,11 +113,6 @@ func StepTimelinePersistFuncWithVersion(store chatstore.TimelineStore, convID st
 			return nil
 		}
 
-		ctx := msg.Context()
-		if ctx == nil {
-			ctx = context.Background()
-		}
-
 		attrib := attribFromExtra(md.Extra)
 
 		persistMessage := func(id string, role string, content string, streaming bool) {
@@ -213,8 +208,12 @@ func StepTimelinePersistFuncWithVersion(store chatstore.TimelineStore, convID st
 				for k, v := range attrib {
 					props[k] = v
 				}
+				// Watermill message contexts can be canceled unexpectedly (ack/teardown ordering).
+				// Persist with a detached, bounded context to keep best-effort storage stable.
+				persistCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+				defer cancel()
 				// best-effort store as dedicated entity kind
-				if err := upsertEntity(ctx, entityID, "profile_switch", props); err != nil {
+				if err := upsertEntity(persistCtx, entityID, "profile_switch", props); err != nil {
 					log.Warn().Err(err).
 						Str("component", "timeline_persist").
 						Str("conv_id", convID).
