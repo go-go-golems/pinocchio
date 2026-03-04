@@ -5,6 +5,7 @@
 package formoverlay
 
 import (
+	"fmt"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -161,7 +162,12 @@ func (o *FormOverlay) View() string {
 
 	var frame strings.Builder
 	if o.title != "" {
-		frame.WriteString(o.titleStyle.Render(o.title))
+		title := o.title
+		// Show step progress for multi-group forms.
+		if o.form.GroupCount() > 1 {
+			title = fmt.Sprintf("%s (Step %d of %d)", o.title, o.form.GroupIndex()+1, o.form.GroupCount())
+		}
+		frame.WriteString(o.titleStyle.Render(title))
 		frame.WriteString("\n")
 	}
 	frame.WriteString(content)

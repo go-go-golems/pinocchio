@@ -1,6 +1,7 @@
 package formoverlay_test
 
 import (
+	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -224,5 +225,89 @@ func TestUpdateWhenHidden(t *testing.T) {
 	cmd := o.Update(tea.KeyMsg{Type: tea.KeyEscape})
 	if cmd != nil {
 		t.Fatal("updating hidden overlay should return nil cmd")
+	}
+}
+
+// --- Multi-group (wizard) tests ---
+
+func makeMultiGroupFactory() func() *huh.Form {
+	return func() *huh.Form {
+		var name, email, bio string
+		return huh.NewForm(
+			huh.NewGroup(
+				huh.NewInput().Title("Name").Value(&name),
+			),
+			huh.NewGroup(
+				huh.NewInput().Title("Email").Value(&email),
+			),
+			huh.NewGroup(
+				huh.NewText().Title("Bio").Value(&bio),
+			),
+		)
+	}
+}
+
+func TestMultiGroupTitleShowsStepProgress(t *testing.T) {
+	o := formoverlay.New(formoverlay.Config{
+		Title:   "Wizard",
+		Factory: makeMultiGroupFactory(),
+	})
+
+	o.Show()
+	v := o.View()
+	if !strings.Contains(v, "Step 1 of 3") {
+		t.Fatalf("expected title to contain 'Step 1 of 3', got:\n%s", v)
+	}
+}
+
+func TestSingleGroupTitleNoStepProgress(t *testing.T) {
+	o := formoverlay.New(formoverlay.Config{
+		Title:   "Simple",
+		Factory: makeTestFactory(),
+	})
+
+	o.Show()
+	v := o.View()
+	if strings.Contains(v, "Step") {
+		t.Fatalf("single-group form should not show step progress, got:\n%s", v)
+	}
+}
+
+func TestMultiGroupFormStaysVisibleAcrossGroups(t *testing.T) {
+	o := formoverlay.New(formoverlay.Config{
+		Title:   "Wizard",
+		Factory: makeMultiGroupFactory(),
+	})
+
+	o.Show()
+
+	// Simulate sending regular keys — overlay should stay visible.
+	for i := 0; i < 5; i++ {
+		o.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}})
+	}
+
+	if !o.IsVisible() {
+		t.Fatal("overlay should remain visible during multi-group form")
+	}
+}
+
+func TestMultiGroupEscStillCloses(t *testing.T) {
+	cancelled := false
+	o := formoverlay.New(formoverlay.Config{
+		Title:   "Wizard",
+		Factory: makeMultiGroupFactory(),
+		OnCancel: func() {
+			cancelled = true
+		},
+	})
+
+	o.Show()
+	o.Update(tea.KeyMsg{Type: tea.KeyEscape})
+
+	if o.IsVisible() {
+		t.Fatal("Esc should close multi-group overlay")
+	}
+	if !cancelled {
+		t.Fatal("OnCancel should fire on Esc in multi-group form")
 	}
 }
