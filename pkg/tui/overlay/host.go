@@ -39,11 +39,16 @@ func (h Host) Init() tea.Cmd {
 }
 
 // Update handles messages with overlay priority routing.
-// Form overlay gets first priority for key messages when visible.
+// When the form overlay is visible, it receives ALL messages (keys AND internal
+// huh messages from Init/Update) so the form can function properly.
 func (h Host) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch v := msg.(type) {
 	case tea.WindowSizeMsg:
 		h.width, h.height = v.Width, v.Height
+		// Pass window size to both overlay and inner model.
+		if h.formOverlay != nil && h.formOverlay.IsVisible() {
+			h.formOverlay.Update(msg)
+		}
 		innerModel, cmd := h.inner.Update(msg)
 		h.inner = innerModel
 		return h, cmd
@@ -64,6 +69,14 @@ func (h Host) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return h, cmd
 
 	default:
+		// When form overlay is visible, route non-key messages to it.
+		// This is critical: huh forms emit internal messages from Init()
+		// that must be processed for the form to work (focus, cursor, etc.).
+		if h.formOverlay != nil && h.formOverlay.IsVisible() {
+			cmd := h.formOverlay.Update(msg)
+			return h, cmd
+		}
+
 		innerModel, cmd := h.inner.Update(msg)
 		h.inner = innerModel
 		return h, cmd
