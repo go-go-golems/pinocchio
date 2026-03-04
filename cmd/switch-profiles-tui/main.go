@@ -230,7 +230,19 @@ func main() {
 				if cur.ProfileSlug.IsZero() {
 					return ""
 				}
-				return fmt.Sprintf("profile=%s  runtime=%s", cur.ProfileSlug.String(), cur.RuntimeKey.String())
+				parts := []string{
+					fmt.Sprintf("profile=%s", cur.ProfileSlug.String()),
+				}
+				if s := cur.EffectiveStepSettings; s != nil && s.Chat != nil {
+					if s.Chat.Engine != nil && *s.Chat.Engine != "" {
+						parts = append(parts, fmt.Sprintf("model=%s", *s.Chat.Engine))
+					}
+					if s.Chat.Temperature != nil {
+						parts = append(parts, fmt.Sprintf("temp=%.1f", *s.Chat.Temperature))
+					}
+				}
+				parts = append(parts, fmt.Sprintf("runtime=%s", cur.RuntimeKey.String()))
+				return strings.Join(parts, "  ")
 			}
 			interceptor := func(input string) (bool, tea.Cmd) {
 				parts := strings.Fields(strings.TrimSpace(input))
@@ -289,19 +301,23 @@ func main() {
 			// Build profile picker overlay
 			var selectedSlug string
 			profileOverlay := formoverlay.New(formoverlay.Config{
-				Title:     "Switch Profile",
-				Factory:   profileswitch.PickerFormFactory(mgr, &selectedSlug),
-				Placement: formoverlay.PlacementCenter,
-				MaxWidth:  50,
-				MaxHeight: 20,
+				Title:            "Switch Profile",
+				Factory:          profileswitch.PickerFormFactory(mgr, &selectedSlug),
+				Placement:        formoverlay.PlacementCenter,
+				MaxWidth:         60,
+				MaxHeight:        25,
+				DoubleEscToClose: true,
 				OnSubmit: func(form *huh.Form) {
 					target := strings.TrimSpace(selectedSlug)
-					from := backend.Current().ProfileSlug.String()
+					fromResolved := backend.Current()
+					from := fromResolved.ProfileSlug.String()
 					res, switchErr := backend.SwitchProfile(context.Background(), target)
 					if switchErr != nil {
 						log.Warn().Err(switchErr).Str("target", target).Msg("profile switch failed")
 						return
 					}
+					diff := profileswitch.ProfileDiff(fromResolved, res)
+					log.Info().Str("diff", diff.String()).Msg("Profile switch diff")
 					if err := publishProfileSwitchedInfo(sink, convID, from, res.ProfileSlug.String(), res.RuntimeKey.String(), res.RuntimeFingerprint); err != nil {
 						log.Warn().Err(err).Msg("failed to publish profile-switched info event")
 					}
