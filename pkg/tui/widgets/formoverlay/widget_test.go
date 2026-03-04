@@ -7,6 +7,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/huh"
 	"github.com/go-go-golems/pinocchio/pkg/tui/widgets/formoverlay"
+	uhoh "github.com/go-go-golems/uhoh/pkg"
 )
 
 func makeTestFactory() func() *huh.Form {
@@ -309,5 +310,112 @@ func TestMultiGroupEscStillCloses(t *testing.T) {
 	}
 	if !cancelled {
 		t.Fatal("OnCancel should fire on Esc in multi-group form")
+	}
+}
+
+// --- uhoh integration tests ---
+
+func TestUhohFormEmbedding(t *testing.T) {
+	yamlSrc := []byte(`
+name: Test Form
+groups:
+  - name: Demo
+    fields:
+      - type: input
+        key: name
+        title: Your Name
+        value: Claude
+      - type: confirm
+        key: ok
+        title: Continue?
+        value: true
+`)
+	var submitted bool
+	var formValues map[string]interface{}
+
+	factory := func() *huh.Form {
+		f, vals, err := uhoh.BuildBubbleTeaModelFromYAML(yamlSrc)
+		if err != nil {
+			t.Fatalf("BuildBubbleTeaModelFromYAML failed: %v", err)
+		}
+		formValues = vals
+		_ = formValues // values available for extraction after submit
+		return f
+	}
+
+	o := formoverlay.New(formoverlay.Config{
+		Title:   "uhoh Form",
+		Factory: factory,
+		OnSubmit: func(form *huh.Form) {
+			submitted = true
+		},
+	})
+
+	o.Show()
+
+	if !o.IsVisible() {
+		t.Fatal("overlay should be visible after Show with uhoh form")
+	}
+
+	v := o.View()
+	if v == "" {
+		t.Fatal("uhoh form overlay should render non-empty view")
+	}
+	if !strings.Contains(v, "uhoh Form") {
+		t.Fatalf("expected title 'uhoh Form' in view, got:\n%s", v)
+	}
+
+	// Esc should close it.
+	o.Update(tea.KeyMsg{Type: tea.KeyEscape})
+	if o.IsVisible() {
+		t.Fatal("Esc should close uhoh form overlay")
+	}
+
+	// Reopen to verify factory creates fresh form.
+	o.Show()
+	if !o.IsVisible() {
+		t.Fatal("second Show should reopen overlay with fresh form")
+	}
+
+	_ = submitted // not testing completion flow here, just embedding
+}
+
+func TestUhohMultiGroupFormEmbedding(t *testing.T) {
+	yamlSrc := []byte(`
+name: Multi-Group Form
+groups:
+  - name: Step 1
+    fields:
+      - type: input
+        key: first_name
+        title: First Name
+  - name: Step 2
+    fields:
+      - type: input
+        key: last_name
+        title: Last Name
+  - name: Step 3
+    fields:
+      - type: confirm
+        key: agree
+        title: Do you agree?
+`)
+	factory := func() *huh.Form {
+		f, _, err := uhoh.BuildBubbleTeaModelFromYAML(yamlSrc)
+		if err != nil {
+			t.Fatalf("BuildBubbleTeaModelFromYAML failed: %v", err)
+		}
+		return f
+	}
+
+	o := formoverlay.New(formoverlay.Config{
+		Title:   "Wizard",
+		Factory: factory,
+	})
+
+	o.Show()
+	v := o.View()
+	if !strings.Contains(v, "Step 1 of 3") {
+		t.Fatalf("expected 'Step 1 of 3' in title, got:\n%s", v)
 	}
 }
