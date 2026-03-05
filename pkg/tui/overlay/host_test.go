@@ -5,9 +5,8 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/huh"
 	"github.com/go-go-golems/pinocchio/pkg/tui/overlay"
-	"github.com/go-go-golems/pinocchio/pkg/tui/widgets/formoverlay"
+	overlaywidget "github.com/go-go-golems/pinocchio/pkg/tui/widgets/overlay"
 )
 
 // mockModel is a minimal tea.Model for testing the overlay host.
@@ -16,24 +15,44 @@ type mockModel struct {
 	viewText string
 }
 
-func (m mockModel) Init() tea.Cmd                           { return nil }
-func (m mockModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) { m.lastMsg = msg; return m, nil }
-func (m mockModel) View() string                            { return m.viewText }
+func (m mockModel) Init() tea.Cmd { return nil }
+func (m mockModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	m.lastMsg = msg
+	return m, nil
+}
+func (m mockModel) View() string { return m.viewText }
 
-func makeTestFormOverlay() *formoverlay.FormOverlay {
-	return formoverlay.New(formoverlay.Config{
-		Title: "Test Form",
-		Factory: func() *huh.Form {
-			var val string
-			return huh.NewForm(
-				huh.NewGroup(
-					huh.NewInput().Title("Name").Value(&val),
-				),
-			)
+// trackingModel tracks whether Update was called with non-key messages.
+type trackingModel struct {
+	viewText   string
+	updateMsgs []tea.Msg
+}
+
+func (m *trackingModel) Init() tea.Cmd { return nil }
+func (m *trackingModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	m.updateMsgs = append(m.updateMsgs, msg)
+	return m, nil
+}
+func (m *trackingModel) View() string { return m.viewText }
+
+// mockContent is a minimal tea.Model for overlay content.
+type mockContent struct {
+	viewText string
+}
+
+func (m mockContent) Init() tea.Cmd                           { return nil }
+func (m mockContent) Update(msg tea.Msg) (tea.Model, tea.Cmd) { return m, nil }
+func (m mockContent) View() string                            { return m.viewText }
+
+func makeTestOverlay() *overlaywidget.Overlay {
+	return overlaywidget.New(overlaywidget.Config{
+		Title: "Test",
+		Factory: func() tea.Model {
+			return mockContent{viewText: "overlay content"}
 		},
 		MaxWidth:  40,
 		MaxHeight: 10,
-		Placement: formoverlay.PlacementCenter,
+		Placement: overlaywidget.PlacementCenter,
 	})
 }
 
@@ -41,99 +60,86 @@ func TestHostDelegatesToInner(t *testing.T) {
 	inner := mockModel{viewText: "hello world"}
 	host := overlay.NewHost(inner, overlay.Config{})
 
-	// Init should delegate to inner.
 	cmd := host.Init()
 	if cmd != nil {
 		t.Fatal("init should return nil for mock model")
 	}
 
-	// View should return inner's view when no overlay is active.
 	v := host.View()
 	if v != "hello world" {
 		t.Fatalf("expected inner view, got %q", v)
 	}
 }
 
-func TestHostFormOverlayVisibility(t *testing.T) {
+func TestHostOverlayVisibility(t *testing.T) {
 	inner := mockModel{viewText: "base"}
-	fo := makeTestFormOverlay()
-	host := overlay.NewHost(inner, overlay.Config{FormOverlay: fo})
+	o := makeTestOverlay()
+	host := overlay.NewHost(inner, overlay.Config{Overlay: o})
 
-	if host.FormOverlayVisible() {
-		t.Fatal("form overlay should start hidden")
+	if host.OverlayVisible() {
+		t.Fatal("overlay should start hidden")
 	}
 
-	// Open via message.
-	model, _ := host.Update(overlay.OpenFormOverlayMsg{})
+	model, _ := host.Update(overlay.OpenOverlayMsg{})
 	host = model.(overlay.Host)
 
-	if !host.FormOverlayVisible() {
-		t.Fatal("form overlay should be visible after OpenFormOverlayMsg")
+	if !host.OverlayVisible() {
+		t.Fatal("overlay should be visible after OpenOverlayMsg")
 	}
 }
 
 func TestHostKeyRoutingToOverlay(t *testing.T) {
 	inner := &mockModel{viewText: "base"}
-	fo := makeTestFormOverlay()
-	host := overlay.NewHost(inner, overlay.Config{FormOverlay: fo})
+	o := makeTestOverlay()
+	host := overlay.NewHost(inner, overlay.Config{Overlay: o})
 
-	// Open overlay.
-	model, _ := host.Update(overlay.OpenFormOverlayMsg{})
+	model, _ := host.Update(overlay.OpenOverlayMsg{})
 	host = model.(overlay.Host)
 
-	// Send a key — should go to overlay, not inner.
 	model, _ = host.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}})
 	host = model.(overlay.Host)
 
-	// Overlay should still be visible (regular key doesn't close it).
-	if !host.FormOverlayVisible() {
+	if !host.OverlayVisible() {
 		t.Fatal("regular key should not close overlay")
 	}
 }
 
 func TestHostEscClosesOverlay(t *testing.T) {
 	inner := mockModel{viewText: "base"}
-	fo := makeTestFormOverlay()
-	host := overlay.NewHost(inner, overlay.Config{FormOverlay: fo})
+	o := makeTestOverlay()
+	host := overlay.NewHost(inner, overlay.Config{Overlay: o})
 
-	// Open overlay.
-	model, _ := host.Update(overlay.OpenFormOverlayMsg{})
+	model, _ := host.Update(overlay.OpenOverlayMsg{})
 	host = model.(overlay.Host)
 
-	// Esc should close overlay.
 	model, _ = host.Update(tea.KeyMsg{Type: tea.KeyEscape})
 	host = model.(overlay.Host)
 
-	if host.FormOverlayVisible() {
+	if host.OverlayVisible() {
 		t.Fatal("Esc should close overlay")
 	}
 }
 
 func TestHostViewComposesLayers(t *testing.T) {
 	inner := mockModel{viewText: "base content here"}
-	fo := makeTestFormOverlay()
-	host := overlay.NewHost(inner, overlay.Config{FormOverlay: fo})
+	o := makeTestOverlay()
+	host := overlay.NewHost(inner, overlay.Config{Overlay: o})
 
-	// Set terminal size so canvas works.
 	model, _ := host.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	host = model.(overlay.Host)
 
-	// Without overlay: should return base.
 	v := host.View()
 	if !strings.Contains(v, "base content") {
 		t.Fatal("view should contain base content when overlay is hidden")
 	}
 
-	// Open overlay.
-	model, _ = host.Update(overlay.OpenFormOverlayMsg{})
+	model, _ = host.Update(overlay.OpenOverlayMsg{})
 	host = model.(overlay.Host)
 
-	// With overlay: should contain both base layer and overlay content.
 	v = host.View()
 	if v == "" {
 		t.Fatal("view should not be empty with overlay open")
 	}
-	// The canvas render should produce non-empty output.
 	if len(v) < 10 {
 		t.Fatal("view with overlay should be substantial")
 	}
@@ -141,21 +147,18 @@ func TestHostViewComposesLayers(t *testing.T) {
 
 func TestHostKeyRoutingReturnsToInnerAfterClose(t *testing.T) {
 	inner := mockModel{viewText: "base"}
-	fo := makeTestFormOverlay()
-	host := overlay.NewHost(inner, overlay.Config{FormOverlay: fo})
+	o := makeTestOverlay()
+	host := overlay.NewHost(inner, overlay.Config{Overlay: o})
 
-	// Open, then close.
-	model, _ := host.Update(overlay.OpenFormOverlayMsg{})
+	model, _ := host.Update(overlay.OpenOverlayMsg{})
 	host = model.(overlay.Host)
 	model, _ = host.Update(tea.KeyMsg{Type: tea.KeyEscape})
 	host = model.(overlay.Host)
 
-	// Now keys should go to inner model.
-	if host.FormOverlayVisible() {
+	if host.OverlayVisible() {
 		t.Fatal("overlay should be closed")
 	}
 
-	// View should be base content again.
 	v := host.View()
 	if v != "base" {
 		t.Fatalf("expected base view after close, got %q", v)
@@ -169,80 +172,106 @@ func TestHostWindowSizeTracked(t *testing.T) {
 	model, _ := host.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	host = model.(overlay.Host)
 
-	// View should work (no panic with tracked dimensions).
 	v := host.View()
 	if v != "base" {
 		t.Fatalf("expected base view, got %q", v)
 	}
 }
 
-func TestHostSetFormOverlay(t *testing.T) {
+func TestHostSetOverlay(t *testing.T) {
 	inner := mockModel{viewText: "base"}
 	host := overlay.NewHost(inner, overlay.Config{})
 
-	if host.FormOverlayVisible() {
+	if host.OverlayVisible() {
 		t.Fatal("no overlay should be visible initially")
 	}
 
-	// Set overlay at runtime.
-	fo := makeTestFormOverlay()
-	host.SetFormOverlay(fo)
+	o := makeTestOverlay()
+	host.SetOverlay(o)
 
-	// Open it.
-	model, _ := host.Update(overlay.OpenFormOverlayMsg{})
+	model, _ := host.Update(overlay.OpenOverlayMsg{})
 	host = model.(overlay.Host)
 
-	if !host.FormOverlayVisible() {
+	if !host.OverlayVisible() {
 		t.Fatal("overlay should be visible after runtime registration + open")
 	}
 }
 
-func TestHostNoFormOverlay(t *testing.T) {
+func TestHostNoOverlay(t *testing.T) {
 	inner := mockModel{viewText: "base"}
 	host := overlay.NewHost(inner, overlay.Config{})
 
-	// OpenFormOverlayMsg with no overlay should be a no-op.
-	model, cmd := host.Update(overlay.OpenFormOverlayMsg{})
+	model, cmd := host.Update(overlay.OpenOverlayMsg{})
 	host = model.(overlay.Host)
 
 	if cmd != nil {
 		t.Fatal("open with no overlay should return nil cmd")
 	}
-	if host.FormOverlayVisible() {
+	if host.OverlayVisible() {
 		t.Fatal("should not be visible without an overlay configured")
 	}
 }
 
-func TestHostOnSubmitCallback(t *testing.T) {
-	submitted := false
+func TestHostOnCloseCallback(t *testing.T) {
+	closed := false
 	inner := mockModel{viewText: "base"}
-	fo := formoverlay.New(formoverlay.Config{
+	o := overlaywidget.New(overlaywidget.Config{
 		Title: "Test",
-		Factory: func() *huh.Form {
-			var val string
-			return huh.NewForm(
-				huh.NewGroup(
-					huh.NewInput().Title("Name").Value(&val),
-				),
-			)
+		Factory: func() tea.Model {
+			return mockContent{viewText: "content"}
 		},
-		OnSubmit: func(form *huh.Form) {
-			submitted = true
+		OnClose: func() {
+			closed = true
 		},
 		MaxWidth:  40,
 		MaxHeight: 10,
 	})
-	host := overlay.NewHost(inner, overlay.Config{FormOverlay: fo})
+	host := overlay.NewHost(inner, overlay.Config{Overlay: o})
 
-	// Open overlay.
-	model, _ := host.Update(overlay.OpenFormOverlayMsg{})
+	model, _ := host.Update(overlay.OpenOverlayMsg{})
 	host = model.(overlay.Host)
 
-	if !host.FormOverlayVisible() {
+	if !host.OverlayVisible() {
 		t.Fatal("overlay should be visible")
 	}
 
-	// The onSubmit callback is tested at the FormOverlay level.
-	// Here we just verify the host wiring doesn't interfere.
-	_ = submitted
+	_ = closed
+}
+
+// Test that non-key messages are forwarded to inner model while overlay is visible.
+func TestHostForwardsNonKeyMsgsToInnerWhileOverlayVisible(t *testing.T) {
+	inner := &trackingModel{viewText: "base"}
+	o := makeTestOverlay()
+	host := overlay.NewHost(inner, overlay.Config{Overlay: o})
+
+	// Set terminal size first.
+	model, _ := host.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	host = model.(overlay.Host)
+
+	// Open overlay.
+	model, _ = host.Update(overlay.OpenOverlayMsg{})
+	host = model.(overlay.Host)
+
+	if !host.OverlayVisible() {
+		t.Fatal("overlay should be visible")
+	}
+
+	// Clear tracking.
+	inner.updateMsgs = nil
+
+	// Send a custom non-key message.
+	type customMsg struct{ data string }
+	host.Update(customMsg{data: "hello"})
+
+	// Inner should have received the message.
+	found := false
+	for _, msg := range inner.updateMsgs {
+		if cm, ok := msg.(customMsg); ok && cm.data == "hello" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatal("inner model should receive non-key messages while overlay is visible")
+	}
 }

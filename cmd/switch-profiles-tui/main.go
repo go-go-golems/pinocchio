@@ -13,7 +13,6 @@ import (
 	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/ThreeDotsLabs/watermill/pubsub/gochannel"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/huh"
 	"github.com/go-go-golems/bobatea/pkg/chat"
 	"github.com/go-go-golems/bobatea/pkg/timeline"
 	renderers "github.com/go-go-golems/bobatea/pkg/timeline/renderers"
@@ -23,7 +22,7 @@ import (
 	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
 	timelinepb "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/timeline"
 	"github.com/go-go-golems/pinocchio/pkg/tui/overlay"
-	"github.com/go-go-golems/pinocchio/pkg/tui/widgets/formoverlay"
+	overlaywidget "github.com/go-go-golems/pinocchio/pkg/tui/widgets/overlay"
 	"github.com/go-go-golems/pinocchio/pkg/ui"
 	"github.com/go-go-golems/pinocchio/pkg/ui/profileswitch"
 	"github.com/google/uuid"
@@ -252,7 +251,7 @@ func main() {
 
 				// /profile -> open picker overlay
 				if len(parts) == 1 {
-					return true, func() tea.Msg { return overlay.OpenFormOverlayMsg{} }
+					return true, func() tea.Msg { return overlay.OpenOverlayMsg{} }
 				}
 
 				// /profile help
@@ -298,16 +297,15 @@ func main() {
 				chat.WithHeaderView(header),
 			)
 
-			// Build profile picker overlay
+			// Build profile picker overlay.
 			var selectedSlug string
-			profileOverlay := formoverlay.New(formoverlay.Config{
-				Title:            "Switch Profile",
-				Factory:          profileswitch.PickerFormFactory(mgr, &selectedSlug),
-				Placement:        formoverlay.PlacementCenter,
-				MaxWidth:         80,
-				MaxHeight:        30,
-				DoubleEscToClose: true,
-				OnSubmit: func(form *huh.Form) {
+			profileOverlay := overlaywidget.New(overlaywidget.Config{
+				Title:     "Switch Profile",
+				Factory:   profileswitch.PickerFactory(mgr, &selectedSlug),
+				Placement: overlaywidget.PlacementCenter,
+				MaxWidth:  80,
+				MaxHeight: 30,
+				OnClose: func() {
 					target := strings.TrimSpace(selectedSlug)
 					fromResolved := backend.Current()
 					from := fromResolved.ProfileSlug.String()
@@ -327,9 +325,9 @@ func main() {
 				},
 			})
 
-			// Wrap chat model in overlay host
+			// Wrap chat model in overlay host.
 			host := overlay.NewHost(chatModel, overlay.Config{
-				FormOverlay: profileOverlay,
+				Overlay: profileOverlay,
 			})
 
 			program := tea.NewProgram(host, tea.WithAltScreen(), tea.WithMouseCellMotion())

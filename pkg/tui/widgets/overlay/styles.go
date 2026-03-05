@@ -1,4 +1,4 @@
-package formoverlay
+package overlay
 
 import "github.com/charmbracelet/lipgloss"
 

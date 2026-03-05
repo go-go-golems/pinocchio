@@ -4,32 +4,29 @@ import (
 	lipglossv2 "charm.land/lipgloss/v2"
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/go-go-golems/pinocchio/pkg/tui/widgets/formoverlay"
+	overlaywidget "github.com/go-go-golems/pinocchio/pkg/tui/widgets/overlay"
 )
 
 // Host wraps an inner tea.Model and composes canvas layer overlays on top.
-// It follows the same pattern as bobatea's REPL overlay system (model.go:278-362)
-// but lives in pinocchio for domain-specific overlay use (profile switching, etc.).
 type Host struct {
 	inner tea.Model
 
-	formOverlay *formoverlay.FormOverlay
+	overlay *overlaywidget.Overlay
 
 	width, height int
 }
 
 // Config configures the overlay host.
 type Config struct {
-	// FormOverlay is the optional form overlay to manage.
-	// If nil, no form overlay is available.
-	FormOverlay *formoverlay.FormOverlay
+	// Overlay is the optional modal overlay to manage.
+	Overlay *overlaywidget.Overlay
 }
 
 // NewHost creates an overlay host wrapping the given inner model.
 func NewHost(inner tea.Model, cfg Config) Host {
 	return Host{
-		inner:       inner,
-		formOverlay: cfg.FormOverlay,
+		inner:   inner,
+		overlay: cfg.Overlay,
 	}
 }
 
@@ -39,51 +36,50 @@ func (h Host) Init() tea.Cmd {
 }
 
 // Update handles messages with overlay priority routing.
-// When the form overlay is visible, it receives ALL messages (keys AND internal
-// huh messages from Init/Update) so the form can function properly.
+// When the overlay is visible, key messages go to the overlay.
+// Non-key messages are forwarded to BOTH the overlay and the inner model.
 func (h Host) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch v := msg.(type) {
 	case tea.WindowSizeMsg:
 		h.width, h.height = v.Width, v.Height
-		// Keep the overlay informed of terminal size for dynamic sizing.
-		if h.formOverlay != nil {
-			h.formOverlay.SetTerminalSize(v.Width, v.Height)
+		if h.overlay != nil {
+			h.overlay.SetTerminalSize(v.Width, v.Height)
 		}
 		// Pass window size to both overlay and inner model.
-		if h.formOverlay != nil && h.formOverlay.IsVisible() {
-			h.formOverlay.Update(msg)
+		var cmds []tea.Cmd
+		if h.overlay != nil && h.overlay.IsVisible() {
+			cmds = append(cmds, h.overlay.Update(msg))
 		}
-		innerModel, cmd := h.inner.Update(msg)
+		innerModel, innerCmd := h.inner.Update(msg)
 		h.inner = innerModel
-		return h, cmd
+		cmds = append(cmds, innerCmd)
+		return h, tea.Batch(cmds...)
 
-	case OpenFormOverlayMsg:
-		cmd := h.openFormOverlay()
+	case OpenOverlayMsg:
+		cmd := h.openOverlay()
 		return h, cmd
 
 	case tea.KeyMsg:
-		// Form overlay has highest priority when visible.
-		if handled, cmd := h.handleFormOverlayInput(v); handled {
+		// Overlay has highest priority when visible.
+		if h.overlay != nil && h.overlay.IsVisible() {
+			cmd := h.overlay.Update(v)
 			return h, cmd
 		}
-
 		// Default: forward to inner model.
 		innerModel, cmd := h.inner.Update(msg)
 		h.inner = innerModel
 		return h, cmd
 
 	default:
-		// When form overlay is visible, route non-key messages to it.
-		// This is critical: huh forms emit internal messages from Init()
-		// that must be processed for the form to work (focus, cursor, etc.).
-		if h.formOverlay != nil && h.formOverlay.IsVisible() {
-			cmd := h.formOverlay.Update(msg)
-			return h, cmd
+		// Forward non-key messages to BOTH overlay and inner model.
+		var cmds []tea.Cmd
+		if h.overlay != nil && h.overlay.IsVisible() {
+			cmds = append(cmds, h.overlay.Update(msg))
 		}
-
-		innerModel, cmd := h.inner.Update(msg)
+		innerModel, innerCmd := h.inner.Update(msg)
 		h.inner = innerModel
-		return h, cmd
+		cmds = append(cmds, innerCmd)
+		return h, tea.Batch(cmds...)
 	}
 }
 
@@ -95,17 +91,20 @@ func (h Host) View() string {
 		return base
 	}
 
-	formLayout, formOK := h.computeFormOverlayLayout()
+	if h.overlay == nil || !h.overlay.IsVisible() {
+		return base
+	}
 
-	if !formOK {
+	overlayLayout, ok := h.overlay.ComputeLayout(h.width, h.height)
+	if !ok {
 		return base
 	}
 
 	layers := []*lipglossv2.Layer{
 		lipglossv2.NewLayer(base).X(0).Y(0).Z(0).ID("host-base"),
-		lipglossv2.NewLayer(formLayout.View).
-			X(formLayout.X).Y(formLayout.Y).Z(28).
-			ID("form-overlay"),
+		lipglossv2.NewLayer(overlayLayout.View).
+			X(overlayLayout.X).Y(overlayLayout.Y).Z(28).
+			ID("overlay"),
 	}
 
 	comp := lipglossv2.NewCompositor(layers...)
@@ -114,18 +113,25 @@ func (h Host) View() string {
 	return canvas.Render()
 }
 
-// SetFormOverlay sets the form overlay at runtime.
-// This allows registering overlays after host creation.
-func (h *Host) SetFormOverlay(fo *formoverlay.FormOverlay) {
-	h.formOverlay = fo
+// SetOverlay sets the overlay at runtime.
+func (h *Host) SetOverlay(o *overlaywidget.Overlay) {
+	h.overlay = o
 }
 
-// FormOverlayVisible returns whether the form overlay is currently shown.
-func (h Host) FormOverlayVisible() bool {
-	return h.formOverlay != nil && h.formOverlay.IsVisible()
+// OverlayVisible returns whether the overlay is currently shown.
+func (h Host) OverlayVisible() bool {
+	return h.overlay != nil && h.overlay.IsVisible()
 }
 
 // Inner returns the wrapped inner model.
 func (h Host) Inner() tea.Model {
 	return h.inner
+}
+
+// openOverlay shows the overlay.
+func (h *Host) openOverlay() tea.Cmd {
+	if h.overlay == nil {
+		return nil
+	}
+	return h.overlay.Show()
 }

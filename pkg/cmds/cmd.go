@@ -16,7 +16,6 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/events"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/huh"
 	bobatea_chat "github.com/go-go-golems/bobatea/pkg/chat"
 
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
@@ -28,7 +27,7 @@ import (
 	"github.com/go-go-golems/pinocchio/pkg/cmds/cmdlayers"
 	"github.com/go-go-golems/pinocchio/pkg/cmds/run"
 	"github.com/go-go-golems/pinocchio/pkg/tui/overlay"
-	"github.com/go-go-golems/pinocchio/pkg/tui/widgets/formoverlay"
+	overlaywidget "github.com/go-go-golems/pinocchio/pkg/tui/widgets/overlay"
 	pinui "github.com/go-go-golems/pinocchio/pkg/ui"
 	"github.com/go-go-golems/pinocchio/pkg/ui/profileswitch"
 	"github.com/go-go-golems/pinocchio/pkg/ui/runtime"
@@ -631,7 +630,7 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) (*tu
 					return false, nil
 				}
 				if len(parts) == 1 {
-					return true, func() tea.Msg { return overlay.OpenFormOverlayMsg{} }
+					return true, func() tea.Msg { return overlay.OpenOverlayMsg{} }
 				}
 				if len(parts) >= 2 && parts[1] == "help" {
 					return true, systemNoticeEntityCmd("usage: /profile [<slug>|help]")
@@ -657,16 +656,15 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) (*tu
 				bobatea_chat.WithHeaderView(header),
 			)
 
-			// Build profile picker overlay using FormOverlay + overlay.Host.
+			// Build profile picker overlay.
 			var selectedSlug string
-			profileOverlay := formoverlay.New(formoverlay.Config{
-				Title:            "Switch Profile",
-				Factory:          profileswitch.PickerFormFactory(mgr, &selectedSlug),
-				Placement:        formoverlay.PlacementCenter,
-				MaxWidth:         80,
-				MaxHeight:        30,
-				DoubleEscToClose: true,
-				OnSubmit: func(form *huh.Form) {
+			profileOverlay := overlaywidget.New(overlaywidget.Config{
+				Title:     "Switch Profile",
+				Factory:   profileswitch.PickerFactory(mgr, &selectedSlug),
+				Placement: overlaywidget.PlacementCenter,
+				MaxWidth:  80,
+				MaxHeight: 30,
+				OnClose: func() {
 					target := strings.TrimSpace(selectedSlug)
 					from := backend.Current().ProfileSlug.String()
 					res, switchErr := backend.SwitchProfile(context.Background(), target)
@@ -679,7 +677,7 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) (*tu
 			})
 
 			app := overlay.NewHost(model, overlay.Config{
-				FormOverlay: profileOverlay,
+				Overlay: profileOverlay,
 			})
 			p = tea.NewProgram(app, options...)
 			chatBackend = backend

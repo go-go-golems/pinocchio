@@ -1,5 +1,5 @@
-// Example demonstrating FormOverlay as a modal dialog in a Bubble Tea app.
-// Press 's' to open a select overlay, 'c' for confirm, 'i' for text input.
+// Example demonstrating Overlay as a modal dialog in a Bubble Tea app.
+// Press 's' to open a select overlay, 'q' to quit.
 package main
 
 import (
@@ -8,12 +8,53 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/huh"
-	"github.com/go-go-golems/pinocchio/pkg/tui/widgets/formoverlay"
+	overlaywidget "github.com/go-go-golems/pinocchio/pkg/tui/widgets/overlay"
 )
 
+// selectModel is a simple list selection model for the overlay.
+type selectModel struct {
+	items   []string
+	cursor  int
+	onClose func(string)
+}
+
+func (m selectModel) Init() tea.Cmd { return nil }
+
+func (m selectModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if k, ok := msg.(tea.KeyMsg); ok {
+		switch k.String() {
+		case "up", "k":
+			if m.cursor > 0 {
+				m.cursor--
+			}
+		case "down", "j":
+			if m.cursor < len(m.items)-1 {
+				m.cursor++
+			}
+		case "enter":
+			if m.onClose != nil {
+				m.onClose(m.items[m.cursor])
+			}
+			return m, func() tea.Msg { return overlaywidget.CloseOverlayMsg{} }
+		}
+	}
+	return m, nil
+}
+
+func (m selectModel) View() string {
+	var sb strings.Builder
+	for i, item := range m.items {
+		if i == m.cursor {
+			sb.WriteString(fmt.Sprintf("> %s\n", item))
+		} else {
+			sb.WriteString(fmt.Sprintf("  %s\n", item))
+		}
+	}
+	return sb.String()
+}
+
 type model struct {
-	overlay  *formoverlay.FormOverlay
+	overlay  *overlaywidget.Overlay
 	messages []string
 	width    int
 	height   int
@@ -21,7 +62,7 @@ type model struct {
 
 func newModel() model {
 	return model{
-		messages: []string{"Press s=select, c=confirm, i=input, q=quit"},
+		messages: []string{"Press s=select, q=quit"},
 	}
 }
 
@@ -48,35 +89,22 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 
 		case "s":
-			m.overlay = formoverlay.NewSelect(
-				"Pick a Color",
-				[]huh.Option[string]{
-					huh.NewOption("Red", "red"),
-					huh.NewOption("Green", "green"),
-					huh.NewOption("Blue", "blue"),
+			var selected string
+			m.overlay = overlaywidget.New(overlaywidget.Config{
+				Title: "Pick a Color",
+				Factory: func() tea.Model {
+					return selectModel{
+						items:  []string{"Red", "Green", "Blue"},
+						cursor: 0,
+						onClose: func(value string) {
+							selected = value
+						},
+					}
 				},
-				func(value string) {
-					m.messages = append(m.messages, fmt.Sprintf("Selected: %s", value))
+				OnClose: func() {
+					m.messages = append(m.messages, fmt.Sprintf("Selected: %s", selected))
 				},
-			)
-			return m, m.overlay.Show()
-
-		case "c":
-			m.overlay = formoverlay.NewConfirm(
-				"Delete everything?",
-				func(confirmed bool) {
-					m.messages = append(m.messages, fmt.Sprintf("Confirmed: %v", confirmed))
-				},
-			)
-			return m, m.overlay.Show()
-
-		case "i":
-			m.overlay = formoverlay.NewInput(
-				"Enter your name",
-				func(value string) {
-					m.messages = append(m.messages, fmt.Sprintf("Input: %q", value))
-				},
-			)
+			})
 			return m, m.overlay.Show()
 		}
 	}
@@ -87,9 +115,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m model) View() string {
 	var sb strings.Builder
 
-	sb.WriteString("=== FormOverlay Example ===\n\n")
+	sb.WriteString("=== Overlay Example ===\n\n")
 
-	// Show last 10 messages.
 	start := 0
 	if len(m.messages) > 10 {
 		start = len(m.messages) - 10
