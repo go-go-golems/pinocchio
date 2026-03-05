@@ -58,6 +58,7 @@ func StepTimelinePersistFuncWithVersion(store chatstore.TimelineStore, convID st
 		switch v := extra["profile.version"].(type) {
 		case uint64:
 			if v > 0 {
+				// #nosec G115
 				out["profile.version"] = int64(v)
 			}
 		case int64:
