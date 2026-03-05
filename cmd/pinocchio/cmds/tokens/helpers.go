@@ -2,6 +2,7 @@ package tokens
 
 import (
 	"github.com/go-go-golems/glazed/pkg/cli"
+	geppetto_cmds "github.com/go-go-golems/pinocchio/pkg/cmds"
 	"github.com/spf13/cobra"
 	"github.com/tiktoken-go/tokenizer"
 	"log"
@@ -26,7 +27,7 @@ func getCodec(model, encoding string) tokenizer.Codec {
 func RegisterTokenCommands(tokensCmd *cobra.Command) {
 	countCmdInstance, err := NewCountCommand()
 	cobra.CheckErr(err)
-	countCommand, err := cli.BuildCobraCommand(countCmdInstance)
+	countCommand, err := geppetto_cmds.BuildCobraCommandWithGeppettoMiddlewares(countCmdInstance)
 	cobra.CheckErr(err)
 	tokensCmd.AddCommand(countCommand)
 
