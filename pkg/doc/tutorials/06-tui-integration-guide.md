@@ -60,6 +60,8 @@ Geppetto engines emit structured events (partial tokens, final text, tool calls/
 
 - `middleware.NewWatermillSink(publisher, topic)` → `events.EventSink`
 
+**Guideline:** This event stream is primarily for *UX/telemetry*. Avoid committing durable application state from partial events; use a RunInference boundary (final completion / after `RunInference` returns) for validation + persistence, then emit final timeline updates for the UI.
+
 **API reference / anchor files**
 
 - Event router abstraction: `geppetto/pkg/events/event-router.go`

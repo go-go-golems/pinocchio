@@ -200,6 +200,21 @@ type RuntimeComposer interface {
 - Core creates the default `WatermillSink` if `RuntimeArtifacts.Sink` is nil, then applies `WithEventSinkWrapper(...)` if configured.
 - `AllowedTools` is consumed by the inference loop; empty means "all registered tools".
 
+### Critical Guideline: EventSinks are for UX/telemetry, not durable application logic
+
+`events.EventSink` receives **streaming** inference events (partials/deltas and final completions). These events are ideal for:
+
+- live UX timelines (WebSocket broadcast, TUI printers)
+- logging/tracing/metrics
+- transient previews of structured extraction
+
+They are *not* a safe boundary for committing durable domain state, because streaming output can be malformed, incomplete, or later superseded.
+
+Recommended pattern:
+
+- Treat EventSink output as **transient**.
+- Perform validation + persistence at a clear **RunInference boundary** (e.g. when final completion is known / after `RunInference` returns).
+
 ### Typical Flow
 
 ```

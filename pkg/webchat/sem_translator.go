@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"strings"
 	"sync"
 
 	"github.com/go-go-golems/geppetto/pkg/events"
@@ -281,6 +282,10 @@ func (et *EventTranslator) RegisterDefaultHandlers() {
 	})
 
 	semregistry.RegisterByType[*events.EventPartialCompletion](func(ev *events.EventPartialCompletion) ([][]byte, error) {
+		if strings.TrimSpace(ev.Delta) == "" {
+			// Avoid spamming the UI with whitespace-only delta frames.
+			return nil, nil
+		}
 		md := ev.Metadata()
 		id := et.resolveMessageID(md)
 		data, err := protoToRaw(&sempb.LlmDelta{Id: id, Delta: ev.Delta, Cumulative: ev.Completion})
