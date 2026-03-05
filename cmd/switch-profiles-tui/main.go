@@ -13,6 +13,7 @@ import (
 	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/ThreeDotsLabs/watermill/pubsub/gochannel"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/go-go-golems/bobatea/pkg/chat"
 	"github.com/go-go-golems/bobatea/pkg/timeline"
 	renderers "github.com/go-go-golems/bobatea/pkg/timeline/renderers"
@@ -224,24 +225,38 @@ func main() {
 			}
 
 			// Chat model with submit interception
-			header := func() string {
+			statusBarStyle := lipgloss.NewStyle().
+				Foreground(lipgloss.Color("252")).
+				Background(lipgloss.Color("236")).
+				Padding(0, 1)
+			statusBarKeyStyle := lipgloss.NewStyle().
+				Foreground(lipgloss.Color("241")).
+				Background(lipgloss.Color("236"))
+			statusBarValStyle := lipgloss.NewStyle().
+				Foreground(lipgloss.Color("230")).
+				Background(lipgloss.Color("236")).
+				Bold(true)
+			statusBarHintStyle := lipgloss.NewStyle().
+				Foreground(lipgloss.Color("241")).
+				Background(lipgloss.Color("236")).
+				Italic(true)
+			statusBar := func() string {
 				cur := backend.Current()
 				if cur.ProfileSlug.IsZero() {
 					return ""
 				}
-				parts := []string{
-					fmt.Sprintf("profile=%s", cur.ProfileSlug.String()),
-				}
+				var parts []string
+				parts = append(parts, statusBarKeyStyle.Render("profile: ")+statusBarValStyle.Render(cur.ProfileSlug.String()))
 				if s := cur.EffectiveStepSettings; s != nil && s.Chat != nil {
 					if s.Chat.Engine != nil && *s.Chat.Engine != "" {
-						parts = append(parts, fmt.Sprintf("model=%s", *s.Chat.Engine))
+						parts = append(parts, statusBarKeyStyle.Render("model: ")+statusBarValStyle.Render(*s.Chat.Engine))
 					}
 					if s.Chat.Temperature != nil {
-						parts = append(parts, fmt.Sprintf("temp=%.1f", *s.Chat.Temperature))
+						parts = append(parts, statusBarKeyStyle.Render("temp: ")+statusBarValStyle.Render(fmt.Sprintf("%.1f", *s.Chat.Temperature)))
 					}
 				}
-				parts = append(parts, fmt.Sprintf("runtime=%s", cur.RuntimeKey.String()))
-				return strings.Join(parts, "  ")
+				parts = append(parts, statusBarHintStyle.Render("ctrl+p to switch"))
+				return statusBarStyle.Render(strings.Join(parts, "  "))
 			}
 			interceptor := func(input string) (bool, tea.Cmd) {
 				parts := strings.Fields(strings.TrimSpace(input))
@@ -294,7 +309,7 @@ func main() {
 					r.RegisterModelFactory(renderers.PlainFactory{})
 				}),
 				chat.WithSubmitInterceptor(interceptor),
-				chat.WithHeaderView(header),
+				chat.WithStatusBarView(statusBar),
 			)
 
 			// Build profile picker overlay.

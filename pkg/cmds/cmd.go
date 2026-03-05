@@ -16,6 +16,7 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/events"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	bobatea_chat "github.com/go-go-golems/bobatea/pkg/chat"
 
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
@@ -616,12 +617,32 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) (*tu
 				return err
 			}
 
+			statusBarStyle := lipgloss.NewStyle().
+				Foreground(lipgloss.Color("252")).
+				Background(lipgloss.Color("236")).
+				Padding(0, 1)
+			statusBarKeyStyle := lipgloss.NewStyle().
+				Foreground(lipgloss.Color("241")).
+				Background(lipgloss.Color("236"))
+			statusBarValStyle := lipgloss.NewStyle().
+				Foreground(lipgloss.Color("230")).
+				Background(lipgloss.Color("236")).
+				Bold(true)
+			statusBarHintStyle := lipgloss.NewStyle().
+				Foreground(lipgloss.Color("241")).
+				Background(lipgloss.Color("236")).
+				Italic(true)
 			header := func() string {
 				cur := backend.Current()
 				if cur.ProfileSlug.IsZero() {
 					return ""
 				}
-				return fmt.Sprintf("profile=%s  runtime=%s", cur.ProfileSlug.String(), cur.RuntimeKey.String())
+				parts := []string{
+					statusBarKeyStyle.Render("profile: ") + statusBarValStyle.Render(cur.ProfileSlug.String()),
+					statusBarKeyStyle.Render("runtime: ") + statusBarValStyle.Render(cur.RuntimeKey.String()),
+				}
+				parts = append(parts, statusBarHintStyle.Render("ctrl+p to switch"))
+				return statusBarStyle.Render(strings.Join(parts, "  "))
 			}
 
 			interceptor := func(input string) (bool, tea.Cmd) {
@@ -653,7 +674,7 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) (*tu
 			model := bobatea_chat.InitialModel(backend,
 				bobatea_chat.WithTitle("pinocchio"),
 				bobatea_chat.WithSubmitInterceptor(interceptor),
-				bobatea_chat.WithHeaderView(header),
+				bobatea_chat.WithStatusBarView(header),
 			)
 
 			// Build profile picker overlay.
