@@ -275,3 +275,46 @@ func TestHostForwardsNonKeyMsgsToInnerWhileOverlayVisible(t *testing.T) {
 		t.Fatal("inner model should receive non-key messages while overlay is visible")
 	}
 }
+
+func TestHostOpenKeyBinding(t *testing.T) {
+	inner := mockModel{viewText: "base"}
+	o := makeTestOverlay()
+	host := overlay.NewHost(inner, overlay.Config{
+		Overlay: o,
+		OpenKey: "ctrl+p",
+	})
+
+	if host.OverlayVisible() {
+		t.Fatal("overlay should start hidden")
+	}
+
+	// ctrl+p should open the overlay.
+	model, _ := host.Update(tea.KeyMsg{Type: tea.KeyCtrlP})
+	host = model.(overlay.Host)
+
+	if !host.OverlayVisible() {
+		t.Fatal("ctrl+p should open overlay")
+	}
+}
+
+func TestHostOpenKeyIgnoredWhenOverlayVisible(t *testing.T) {
+	inner := mockModel{viewText: "base"}
+	o := makeTestOverlay()
+	host := overlay.NewHost(inner, overlay.Config{
+		Overlay: o,
+		OpenKey: "ctrl+p",
+	})
+
+	// Open overlay.
+	model, _ := host.Update(overlay.OpenOverlayMsg{})
+	host = model.(overlay.Host)
+
+	// ctrl+p while visible should go to overlay (not re-open).
+	model, _ = host.Update(tea.KeyMsg{Type: tea.KeyCtrlP})
+	host = model.(overlay.Host)
+
+	// Should still be visible (overlay handles the key, doesn't close).
+	if !host.OverlayVisible() {
+		t.Fatal("overlay should remain visible")
+	}
+}

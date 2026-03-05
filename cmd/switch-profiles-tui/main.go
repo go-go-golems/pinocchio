@@ -328,6 +328,7 @@ func main() {
 			// Wrap chat model in overlay host.
 			host := overlay.NewHost(chatModel, overlay.Config{
 				Overlay: profileOverlay,
+				OpenKey: "ctrl+p",
 			})
 
 			program := tea.NewProgram(host, tea.WithAltScreen(), tea.WithMouseCellMotion())

@@ -12,6 +12,7 @@ type Host struct {
 	inner tea.Model
 
 	overlay *overlaywidget.Overlay
+	openKey string
 
 	width, height int
 }
@@ -20,6 +21,10 @@ type Host struct {
 type Config struct {
 	// Overlay is the optional modal overlay to manage.
 	Overlay *overlaywidget.Overlay
+
+	// OpenKey is an optional key binding (e.g. "ctrl+p") that opens the overlay.
+	// When set, pressing this key while the overlay is hidden will open it.
+	OpenKey string
 }
 
 // NewHost creates an overlay host wrapping the given inner model.
@@ -27,6 +32,7 @@ func NewHost(inner tea.Model, cfg Config) Host {
 	return Host{
 		inner:   inner,
 		overlay: cfg.Overlay,
+		openKey: cfg.OpenKey,
 	}
 }
 
@@ -63,6 +69,11 @@ func (h Host) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Overlay has highest priority when visible.
 		if h.overlay != nil && h.overlay.IsVisible() {
 			cmd := h.overlay.Update(v)
+			return h, cmd
+		}
+		// Open overlay via configured key binding.
+		if h.openKey != "" && v.String() == h.openKey {
+			cmd := h.openOverlay()
 			return h, cmd
 		}
 		// Default: forward to inner model.

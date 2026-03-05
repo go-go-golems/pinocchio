@@ -678,6 +678,7 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) (*tu
 
 			app := overlay.NewHost(model, overlay.Config{
 				Overlay: profileOverlay,
+				OpenKey: "ctrl+p",
 			})
 			p = tea.NewProgram(app, options...)
 			chatBackend = backend
