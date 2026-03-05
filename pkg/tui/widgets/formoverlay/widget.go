@@ -24,6 +24,10 @@ type FormOverlay struct {
 	maxWidth  int
 	maxHeight int
 
+	// Terminal dimensions, set by SetTerminalSize.
+	// Used to compute effective overlay size (capped to fit screen).
+	termWidth, termHeight int
+
 	onSubmit func(form *huh.Form)
 	onCancel func()
 
@@ -64,6 +68,22 @@ func New(cfg Config) *FormOverlay {
 		doubleEscToClose: cfg.DoubleEscToClose,
 		borderStyle:      border,
 		titleStyle:       title,
+	}
+}
+
+// SetTerminalSize updates the known terminal dimensions.
+// The overlay host should call this on every WindowSizeMsg so the overlay
+// can size itself appropriately relative to the terminal.
+func (o *FormOverlay) SetTerminalSize(w, h int) {
+	o.termWidth = w
+	o.termHeight = h
+
+	// If visible, update the form's content width to match.
+	if o.visible && o.form != nil {
+		cw := o.contentWidth()
+		if cw > 0 {
+			o.form = o.form.WithWidth(cw)
+		}
 	}
 }
 
@@ -202,8 +222,8 @@ func (o *FormOverlay) View() string {
 	frame.WriteString(content)
 
 	rendered := o.borderStyle.
-		MaxWidth(o.maxWidth).
-		MaxHeight(o.maxHeight).
+		MaxWidth(o.effectiveMaxWidth()).
+		MaxHeight(o.effectiveMaxHeight()).
 		Render(frame.String())
 
 	return rendered
@@ -252,10 +272,42 @@ func (o *FormOverlay) ComputeLayout(termWidth, termHeight int) (OverlayLayout, b
 	return OverlayLayout{X: lx, Y: ly, View: rendered}, true
 }
 
+// effectiveMaxWidth returns the overlay max width, capped to fit the terminal.
+// Leaves a small margin (4 columns) so the overlay doesn't touch the edges.
+func (o *FormOverlay) effectiveMaxWidth() int {
+	w := o.maxWidth
+	if o.termWidth > 0 {
+		termCap := o.termWidth - 4
+		if termCap < w {
+			w = termCap
+		}
+	}
+	if w < 20 {
+		w = 20
+	}
+	return w
+}
+
+// effectiveMaxHeight returns the overlay max height, capped to fit the terminal.
+// Leaves a margin (4 rows) so the overlay doesn't touch top/bottom.
+func (o *FormOverlay) effectiveMaxHeight() int {
+	h := o.maxHeight
+	if o.termHeight > 0 {
+		termCap := o.termHeight - 4
+		if termCap < h {
+			h = termCap
+		}
+	}
+	if h < 10 {
+		h = 10
+	}
+	return h
+}
+
 // contentWidth returns the width available for form content inside the border.
 func (o *FormOverlay) contentWidth() int {
-	h := o.borderStyle.GetHorizontalFrameSize()
-	w := o.maxWidth - h
+	hFrame := o.borderStyle.GetHorizontalFrameSize()
+	w := o.effectiveMaxWidth() - hFrame
 	if w < 10 {
 		w = 10
 	}

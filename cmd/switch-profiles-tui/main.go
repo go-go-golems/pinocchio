@@ -304,8 +304,8 @@ func main() {
 				Title:            "Switch Profile",
 				Factory:          profileswitch.PickerFormFactory(mgr, &selectedSlug),
 				Placement:        formoverlay.PlacementCenter,
-				MaxWidth:         60,
-				MaxHeight:        25,
+				MaxWidth:         80,
+				MaxHeight:        30,
 				DoubleEscToClose: true,
 				OnSubmit: func(form *huh.Form) {
 					target := strings.TrimSpace(selectedSlug)

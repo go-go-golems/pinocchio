@@ -3,8 +3,8 @@ package formoverlay
 import "github.com/charmbracelet/lipgloss"
 
 const (
-	defaultMaxWidth  = 60
-	defaultMaxHeight = 20
+	defaultMaxWidth  = 80
+	defaultMaxHeight = 30
 )
 
 // DefaultBorderStyle returns the default modal border style.

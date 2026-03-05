@@ -45,6 +45,10 @@ func (h Host) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch v := msg.(type) {
 	case tea.WindowSizeMsg:
 		h.width, h.height = v.Width, v.Height
+		// Keep the overlay informed of terminal size for dynamic sizing.
+		if h.formOverlay != nil {
+			h.formOverlay.SetTerminalSize(v.Width, v.Height)
+		}
 		// Pass window size to both overlay and inner model.
 		if h.formOverlay != nil && h.formOverlay.IsVisible() {
 			h.formOverlay.Update(msg)
