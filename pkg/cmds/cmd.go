@@ -16,6 +16,7 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/events"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	bobatea_chat "github.com/go-go-golems/bobatea/pkg/chat"
 
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
@@ -26,7 +27,10 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	"github.com/go-go-golems/pinocchio/pkg/cmds/cmdlayers"
 	"github.com/go-go-golems/pinocchio/pkg/cmds/run"
+	"github.com/go-go-golems/pinocchio/pkg/tui/overlay"
+	overlaywidget "github.com/go-go-golems/pinocchio/pkg/tui/widgets/overlay"
 	pinui "github.com/go-go-golems/pinocchio/pkg/ui"
+	"github.com/go-go-golems/pinocchio/pkg/ui/profileswitch"
 	"github.com/go-go-golems/pinocchio/pkg/ui/runtime"
 	"github.com/google/uuid"
 	"github.com/mattn/go-isatty"
@@ -214,6 +218,41 @@ func (g *PinocchioCommand) RunIntoWriter(
 		return errors.Wrap(err, "failed to update step settings from parsed layers")
 	}
 
+	// Capture profile selection inputs and a baseline settings snapshot without any profile-derived values.
+	// This is used by chat mode to support runtime profile switching (/profile, ctrl+p).
+	type profileRegistrySettings struct {
+		Profile           string `glazed:"profile"`
+		ProfileRegistries string `glazed:"profile-registries"`
+	}
+	profileSettings := &profileRegistrySettings{}
+	_ = parsedValues.DecodeSectionInto("profile-settings", profileSettings)
+	// Back-compat: some entry points still populate --profile / --profile-registries in the default section.
+	// Also allow env vars to seed these when not present in parsed values (common in ad-hoc dev workflows).
+	if strings.TrimSpace(profileSettings.Profile) == "" || strings.TrimSpace(profileSettings.ProfileRegistries) == "" {
+		fallback := &profileRegistrySettings{}
+		_ = parsedValues.DecodeSectionInto(values.DefaultSlug, fallback)
+		if strings.TrimSpace(profileSettings.Profile) == "" {
+			profileSettings.Profile = fallback.Profile
+		}
+		if strings.TrimSpace(profileSettings.ProfileRegistries) == "" {
+			profileSettings.ProfileRegistries = fallback.ProfileRegistries
+		}
+	}
+	if strings.TrimSpace(profileSettings.Profile) == "" {
+		profileSettings.Profile = strings.TrimSpace(os.Getenv("PINOCCHIO_PROFILE"))
+	}
+	if strings.TrimSpace(profileSettings.ProfileRegistries) == "" {
+		profileSettings.ProfileRegistries = strings.TrimSpace(os.Getenv("PINOCCHIO_PROFILE_REGISTRIES"))
+	}
+
+	baseSettings, baseErr := baseSettingsFromParsedValues(parsedValues)
+	if baseErr == nil && baseSettings != nil {
+		// If the UI forces streaming, keep base settings aligned.
+		if baseSettings.Chat != nil {
+			baseSettings.Chat.Stream = stepSettings.Chat != nil && stepSettings.Chat.Stream
+		}
+	}
+
 	// Create image paths from helper settings
 	imagePaths := make([]string, len(helpersSettings.Images))
 	for i, img := range helpersSettings.Images {
@@ -260,6 +299,8 @@ func (g *PinocchioCommand) RunIntoWriter(
 	// Run with options
 	_, err = g.RunWithOptions(ctx,
 		run.WithStepSettings(stepSettings),
+		run.WithBaseSettings(baseSettings),
+		run.WithProfileSelection(profileSettings.Profile, profileSettings.ProfileRegistries),
 		run.WithWriter(w),
 		run.WithRunMode(runMode),
 		run.WithUISettings(uiSettings),
@@ -454,6 +495,9 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) (*tu
 
 	// Enable streaming for the UI
 	rc.StepSettings.Chat.Stream = true
+	if rc.BaseSettings != nil && rc.BaseSettings.Chat != nil {
+		rc.BaseSettings.Chat.Stream = true
+	}
 
 	// Start router in a goroutine
 	eg := errgroup.Group{}
@@ -534,58 +578,209 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) (*tu
 
 		startInChat := rc.UISettings != nil && rc.UISettings.StartInChat
 
-		// Build program and session via unified builder
-		sess, p, err := runtime.NewChatBuilder().
-			WithContext(ctx).
-			WithEngineFactory(rc.EngineFactory).
-			WithSettings(rc.StepSettings).
-			WithRouter(rc.Router).
-			WithProgramOptions(options...).
-			WithModelOptions(
+		var (
+			p           *tea.Program
+			seedGroup   errgroup.Group
+			chatBackend interface {
+				IsFinished() bool
+			}
+		)
+
+		// Prefer profile-switch-capable backend when profile registries are configured.
+		if strings.TrimSpace(rc.ProfileRegistries) != "" && rc.BaseSettings != nil {
+			mgr, err := profileswitch.NewManagerFromSources(ctx, rc.ProfileRegistries, rc.BaseSettings)
+			if err != nil {
+				return err
+			}
+			defer func() { _ = mgr.Close() }()
+
+			items, err := mgr.ListProfiles(ctx)
+			if err != nil {
+				return err
+			}
+			if len(items) == 0 {
+				return errors.New("no profiles loaded from --profile-registries (refusing to start chat)")
+			}
+
+			sink := middleware.NewWatermillSink(rc.Router.Publisher, "ui")
+			backend, err := profileswitch.NewBackend(mgr, sink, nil, nil)
+			if err != nil {
+				return err
+			}
+			if turnStore != nil {
+				backend.SetTurnPersister(
+					newCLITurnStorePersister(turnStore, chatConvID, backend.SessionID(), "final"),
+				)
+			}
+			_, err = backend.InitDefaultProfile(ctx, rc.Profile)
+			if err != nil {
+				return err
+			}
+
+			statusBarStyle := lipgloss.NewStyle().
+				Foreground(lipgloss.Color("252")).
+				Background(lipgloss.Color("236")).
+				Padding(0, 1)
+			statusBarKeyStyle := lipgloss.NewStyle().
+				Foreground(lipgloss.Color("241")).
+				Background(lipgloss.Color("236"))
+			statusBarValStyle := lipgloss.NewStyle().
+				Foreground(lipgloss.Color("230")).
+				Background(lipgloss.Color("236")).
+				Bold(true)
+			statusBarHintStyle := lipgloss.NewStyle().
+				Foreground(lipgloss.Color("241")).
+				Background(lipgloss.Color("236")).
+				Italic(true)
+			header := func() string {
+				cur := backend.Current()
+				if cur.ProfileSlug.IsZero() {
+					return ""
+				}
+				parts := []string{
+					statusBarKeyStyle.Render("profile: ") + statusBarValStyle.Render(cur.ProfileSlug.String()),
+					statusBarKeyStyle.Render("runtime: ") + statusBarValStyle.Render(cur.RuntimeKey.String()),
+				}
+				parts = append(parts, statusBarHintStyle.Render("ctrl+p to switch"))
+				return statusBarStyle.Render(strings.Join(parts, "  "))
+			}
+
+			interceptor := func(input string) (bool, tea.Cmd) {
+				parts := strings.Fields(strings.TrimSpace(input))
+				if len(parts) == 0 || parts[0] != "/profile" {
+					return false, nil
+				}
+				if len(parts) == 1 {
+					return true, func() tea.Msg { return overlay.OpenOverlayMsg{} }
+				}
+				if len(parts) >= 2 && parts[1] == "help" {
+					return true, systemNoticeEntityCmd("usage: /profile [<slug>|help]")
+				}
+				target := strings.TrimSpace(parts[1])
+				from := backend.Current().ProfileSlug.String()
+				res, err := backend.SwitchProfile(ctx, target)
+				if err != nil {
+					return true, systemNoticeEntityCmd(fmt.Sprintf("profile error: %s", err.Error()))
+				}
+				return true, tea.Batch(
+					func() tea.Msg {
+						_ = publishProfileSwitchedInfo(sink, chatConvID, from, res.ProfileSlug.String(), res.RuntimeKey.String(), res.RuntimeFingerprint)
+						return nil
+					},
+					systemNoticeEntityCmd(fmt.Sprintf("switched profile: %s → %s (runtime=%s)", from, res.ProfileSlug.String(), res.RuntimeKey.String())),
+				)
+			}
+
+			model := bobatea_chat.InitialModel(backend,
 				bobatea_chat.WithTitle("pinocchio"),
-			).
-			BuildProgram()
-		if err != nil {
-			return err
-		}
-
-		if turnStore != nil {
-			sess.Backend.SetTurnPersister(
-				newCLITurnStorePersister(turnStore, chatConvID, sess.Backend.SessionID(), "final"),
+				bobatea_chat.WithSubmitInterceptor(interceptor),
+				bobatea_chat.WithStatusBarView(header),
 			)
-		}
-		if timelineStore != nil {
-			rc.Router.AddHandler("ui-persist", "ui", pinui.StepTimelinePersistFunc(timelineStore, chatConvID))
-		}
 
-		// Register bound UI event handler and run handlers
-		rc.Router.AddHandler("ui", "ui", sess.EventHandler())
-		err = rc.Router.RunHandlers(ctx)
-		if err != nil {
-			return err
-		}
+			// Build profile picker overlay.
+			var selectedSlug string
+			profileOverlay := overlaywidget.New(overlaywidget.Config{
+				Title:     "Switch Profile",
+				Factory:   profileswitch.PickerFactory(mgr, &selectedSlug),
+				Placement: overlaywidget.PlacementCenter,
+				MaxWidth:  80,
+				MaxHeight: 30,
+				OnClose: func() {
+					target := strings.TrimSpace(selectedSlug)
+					from := backend.Current().ProfileSlug.String()
+					res, switchErr := backend.SwitchProfile(context.Background(), target)
+					if switchErr != nil {
+						log.Warn().Err(switchErr).Str("target", target).Msg("profile switch failed")
+						return
+					}
+					_ = publishProfileSwitchedInfo(sink, chatConvID, from, res.ProfileSlug.String(), res.RuntimeKey.String(), res.RuntimeFingerprint)
+				},
+			})
 
-		seedGroup := errgroup.Group{}
+			app := overlay.NewHost(model, overlay.Config{
+				Overlay: profileOverlay,
+				OpenKey: "ctrl+p",
+			})
+			p = tea.NewProgram(app, options...)
+			chatBackend = backend
 
-		// Seed backend Turn after router is running so the timeline shows prior context
-		seedGroup.Go(func() error {
-			<-rc.Router.Running()
-			// Prefer seeding with the existing first Q/A from a prior blocking run when present
-			if rc.ResultTurn != nil {
-				sess.Backend.SetSeedTurn(rc.ResultTurn)
-				return nil
+			rc.Router.AddHandler("ui", "ui", pinui.StepChatForwardFunc(p))
+			if timelineStore != nil {
+				rc.Router.AddHandler("ui-persist", "ui", pinui.StepTimelinePersistFunc(timelineStore, chatConvID))
 			}
-			// Otherwise seed from initial system/blocks to provide context in a fresh chat
-			seed, err := buildInitialTurnFromBlocksRendered(g.SystemPrompt, g.Blocks, "", rc.Variables, rc.ImagePaths)
-			if err == nil {
-				sess.Backend.SetSeedTurn(seed)
-				return nil
+			if err := rc.Router.RunHandlers(ctx); err != nil {
+				return err
 			}
-			// Fallback without rendering on error
-			fallbackSeed, _ := buildInitialTurnFromBlocks(g.SystemPrompt, g.Blocks, "", nil)
-			sess.Backend.SetSeedTurn(fallbackSeed)
-			return nil
-		})
+
+			seedGroup.Go(func() error {
+				<-rc.Router.Running()
+				if rc.ResultTurn != nil {
+					if err := backend.SetSeedTurn(rc.ResultTurn); err != nil {
+						return err
+					}
+					emitSeedTurnToProgram(p, rc.ResultTurn)
+					return nil
+				}
+				seed, err := buildInitialTurnFromBlocksRendered(g.SystemPrompt, g.Blocks, "", rc.Variables, rc.ImagePaths)
+				if err == nil {
+					_ = backend.SetSeedTurn(seed)
+					emitSeedTurnToProgram(p, seed)
+					return nil
+				}
+				fallbackSeed, _ := buildInitialTurnFromBlocks(g.SystemPrompt, g.Blocks, "", nil)
+				_ = backend.SetSeedTurn(fallbackSeed)
+				emitSeedTurnToProgram(p, fallbackSeed)
+				return nil
+			})
+		} else {
+			// Build program and session via unified builder (no /profile switching).
+			sess, p2, err := runtime.NewChatBuilder().
+				WithContext(ctx).
+				WithEngineFactory(rc.EngineFactory).
+				WithSettings(rc.StepSettings).
+				WithRouter(rc.Router).
+				WithProgramOptions(options...).
+				WithModelOptions(
+					bobatea_chat.WithTitle("pinocchio"),
+				).
+				BuildProgram()
+			if err != nil {
+				return err
+			}
+			p = p2
+			chatBackend = sess.Backend
+
+			if turnStore != nil {
+				sess.Backend.SetTurnPersister(
+					newCLITurnStorePersister(turnStore, chatConvID, sess.Backend.SessionID(), "final"),
+				)
+			}
+			if timelineStore != nil {
+				rc.Router.AddHandler("ui-persist", "ui", pinui.StepTimelinePersistFunc(timelineStore, chatConvID))
+			}
+
+			rc.Router.AddHandler("ui", "ui", sess.EventHandler())
+			err = rc.Router.RunHandlers(ctx)
+			if err != nil {
+				return err
+			}
+
+			seedGroup.Go(func() error {
+				<-rc.Router.Running()
+				if rc.ResultTurn != nil {
+					sess.Backend.SetSeedTurn(rc.ResultTurn)
+					return nil
+				}
+				seed, err := buildInitialTurnFromBlocksRendered(g.SystemPrompt, g.Blocks, "", rc.Variables, rc.ImagePaths)
+				if err == nil {
+					sess.Backend.SetSeedTurn(seed)
+					return nil
+				}
+				fallbackSeed, _ := buildInitialTurnFromBlocks(g.SystemPrompt, g.Blocks, "", nil)
+				sess.Backend.SetSeedTurn(fallbackSeed)
+				return nil
+			})
+		}
 
 		// If we're starting directly in chat mode, pre-fill the prompt text (if any), then submit.
 		if startInChat {
@@ -613,6 +808,7 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) (*tu
 		if seedErr := seedGroup.Wait(); seedErr != nil && err == nil {
 			err = seedErr
 		}
+		_ = chatBackend
 		return err
 	})
 

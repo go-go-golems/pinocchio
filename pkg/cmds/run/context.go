@@ -4,6 +4,7 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/inference/engine/factory"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/go-go-golems/geppetto/pkg/events"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
@@ -40,6 +41,11 @@ type PersistenceSettings struct {
 // RunContext encapsulates all the settings and state needed for a single command run
 type RunContext struct {
 	StepSettings *settings.StepSettings
+	BaseSettings *settings.StepSettings
+
+	// Profile selection inputs (used by interactive chat to support profile switching).
+	Profile           string
+	ProfileRegistries string
 
 	EngineFactory factory.EngineFactory
 	Router        *events.EventRouter
@@ -72,6 +78,21 @@ func WithStepSettings(settings *settings.StepSettings) RunOption {
 		if rc.EngineFactory == nil {
 			rc.EngineFactory = factory.NewStandardEngineFactory()
 		}
+		return nil
+	}
+}
+
+func WithBaseSettings(settings *settings.StepSettings) RunOption {
+	return func(rc *RunContext) error {
+		rc.BaseSettings = settings
+		return nil
+	}
+}
+
+func WithProfileSelection(profile, profileRegistries string) RunOption {
+	return func(rc *RunContext) error {
+		rc.Profile = strings.TrimSpace(profile)
+		rc.ProfileRegistries = strings.TrimSpace(profileRegistries)
 		return nil
 	}
 }

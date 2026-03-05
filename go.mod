@@ -3,6 +3,7 @@ module github.com/go-go-golems/pinocchio
 go 1.25.7
 
 require (
+	charm.land/lipgloss/v2 v2.0.0-beta.3.0.20260210014823-2f36a2f1ba17
 	github.com/ThreeDotsLabs/watermill v1.5.1
 	github.com/ThreeDotsLabs/watermill-redisstream v1.4.3
 	github.com/atotto/clipboard v0.1.4
@@ -11,11 +12,11 @@ require (
 	github.com/charmbracelet/log v0.4.1
 	github.com/dop251/goja v0.0.0-20251103141225-af2ceb9156d7
 	github.com/dop251/goja_nodejs v0.0.0-20240728170619-29b559befffc
-	github.com/go-go-golems/bobatea v0.1.1
+	github.com/go-go-golems/bobatea v0.1.2
 	github.com/go-go-golems/clay v0.4.0
-	github.com/go-go-golems/geppetto v0.10.3
+	github.com/go-go-golems/geppetto v0.10.8
 	github.com/go-go-golems/glazed v1.0.4
-	github.com/go-go-golems/go-go-goja v0.4.0
+	github.com/go-go-golems/go-go-goja v0.4.1
 	github.com/go-go-golems/go-sqlite-regexp v0.0.1
 	github.com/go-go-golems/uhoh v0.0.5
 	github.com/google/uuid v1.6.0
@@ -41,7 +42,6 @@ require (
 )
 
 require (
-	charm.land/lipgloss/v2 v2.0.0-beta.3.0.20260210014823-2f36a2f1ba17 // indirect
 	cloud.google.com/go v0.121.1 // indirect
 	cloud.google.com/go/ai v0.8.0 // indirect
 	cloud.google.com/go/auth v0.18.1 // indirect
