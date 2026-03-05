@@ -8,6 +8,7 @@ import (
 	gepprofiles "github.com/go-go-golems/geppetto/pkg/profiles"
 	overlaywidget "github.com/go-go-golems/pinocchio/pkg/tui/widgets/overlay"
 	"github.com/go-go-golems/pinocchio/pkg/ui/profileswitch"
+	"github.com/stretchr/testify/require"
 )
 
 func makeTestItems() []profileswitch.ProfileListItem {
@@ -21,31 +22,31 @@ func makeTestItems() []profileswitch.ProfileListItem {
 }
 
 func TestPickerShowsItems(t *testing.T) {
+	t.Parallel()
+
 	var selected string
 	m := profileswitch.NewPickerModel(makeTestItems(), "beta", &selected)
 	m.SetSize(60, 20)
 
 	v := m.View()
-	if !strings.Contains(v, "alpha") {
-		t.Fatal("view should contain 'alpha'")
-	}
-	if !strings.Contains(v, "beta") {
-		t.Fatal("view should contain 'beta'")
-	}
+	require.Contains(t, v, "alpha")
+	require.Contains(t, v, "beta")
 }
 
 func TestPickerCurrentMarker(t *testing.T) {
+	t.Parallel()
+
 	var selected string
 	m := profileswitch.NewPickerModel(makeTestItems(), "beta", &selected)
 	m.SetSize(60, 20)
 
 	v := m.View()
-	if !strings.Contains(v, "* beta") {
-		t.Fatalf("current profile should be marked with *, got:\n%s", v)
-	}
+	require.Contains(t, v, "* beta")
 }
 
 func TestPickerNavigation(t *testing.T) {
+	t.Parallel()
+
 	var selected string
 	m := profileswitch.NewPickerModel(makeTestItems(), "alpha", &selected)
 	m.SetSize(60, 20)
@@ -56,22 +57,16 @@ func TestPickerNavigation(t *testing.T) {
 
 	// Select with enter.
 	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	require.Equal(t, "beta", selected)
 
-	if selected != "beta" {
-		t.Fatalf("expected 'beta' selected, got %q", selected)
-	}
-
-	// Should produce a CloseOverlayMsg.
-	if cmd == nil {
-		t.Fatal("enter should produce a command")
-	}
+	require.NotNil(t, cmd)
 	msg := cmd()
-	if _, ok := msg.(overlaywidget.CloseOverlayMsg); !ok {
-		t.Fatalf("expected CloseOverlayMsg, got %T", msg)
-	}
+	require.IsType(t, overlaywidget.CloseOverlayMsg{}, msg)
 }
 
 func TestPickerFilter(t *testing.T) {
+	t.Parallel()
+
 	var selected string
 	m := profileswitch.NewPickerModel(makeTestItems(), "alpha", &selected)
 	m.SetSize(60, 20)
@@ -83,22 +78,17 @@ func TestPickerFilter(t *testing.T) {
 	}
 
 	v := m.View()
-	if !strings.Contains(v, "gamma") {
-		t.Fatal("filter should show gamma")
-	}
-	if strings.Contains(v, "alpha") {
-		t.Fatal("filter should hide non-matching items")
-	}
+	require.Contains(t, v, "gamma")
+	require.NotContains(t, v, "alpha")
 
 	// Enter should select the filtered item.
 	m.Update(tea.KeyMsg{Type: tea.KeyEnter})
-
-	if selected != "gamma" {
-		t.Fatalf("expected 'gamma' selected after filter, got %q", selected)
-	}
+	require.Equal(t, "gamma", selected)
 }
 
 func TestPickerFilterBackspace(t *testing.T) {
+	t.Parallel()
+
 	var selected string
 	m := profileswitch.NewPickerModel(makeTestItems(), "alpha", &selected)
 	m.SetSize(60, 20)
@@ -116,36 +106,64 @@ func TestPickerFilterBackspace(t *testing.T) {
 	}
 
 	v := m.View()
-	if !strings.Contains(v, "alpha") {
-		t.Fatal("clearing filter should restore all items")
-	}
+	require.Contains(t, v, "alpha")
 }
 
 func TestPickerCursorStartsOnCurrentProfile(t *testing.T) {
+	t.Parallel()
+
 	var selected string
 	m := profileswitch.NewPickerModel(makeTestItems(), "gamma", &selected)
 	m.SetSize(60, 20)
 
 	// Press enter immediately — should select the current profile (gamma), not the first item.
 	m.Update(tea.KeyMsg{Type: tea.KeyEnter})
-
-	if selected != "gamma" {
-		t.Fatalf("expected cursor to start on current profile 'gamma', got %q", selected)
-	}
+	require.Equal(t, "gamma", selected)
 }
 
 func TestPickerEmptyItems(t *testing.T) {
+	t.Parallel()
+
 	var selected string
 	m := profileswitch.NewPickerModel(nil, "", &selected)
 	m.SetSize(60, 20)
 
 	v := m.View()
-	if !strings.Contains(v, "No profiles") {
-		t.Fatal("empty items should show 'No profiles' message")
+	require.Contains(t, v, "No profiles")
+}
+
+func TestPickerEnterDoesNotCloseWhenNoItems(t *testing.T) {
+	t.Parallel()
+
+	var selected string
+	m := profileswitch.NewPickerModel(nil, "", &selected)
+
+	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	require.Nil(t, cmd)
+	require.Empty(t, selected)
+}
+
+func TestPickerEnterDoesNotCloseWhenFilterMatchesNone(t *testing.T) {
+	t.Parallel()
+
+	var selected string
+	m := profileswitch.NewPickerModel(makeTestItems(), "alpha", &selected)
+	m.SetSize(60, 20)
+
+	// Type "xyz" (no matches).
+	for _, ch := range "xyz" {
+		model, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{ch}})
+		m = model.(*profileswitch.PickerModel)
 	}
+
+	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	require.Nil(t, cmd)
+	require.Empty(t, selected)
 }
 
 func TestPickerHeightConstraint(t *testing.T) {
+	t.Parallel()
+
 	// Create many items.
 	items := make([]profileswitch.ProfileListItem, 30)
 	for i := range items {
@@ -159,12 +177,12 @@ func TestPickerHeightConstraint(t *testing.T) {
 
 	v := m.View()
 	lines := strings.Split(v, "\n")
-	if len(lines) > 12 {
-		t.Fatalf("view should respect height constraint, got %d lines", len(lines))
-	}
+	require.LessOrEqual(t, len(lines), 12)
 }
 
 func TestPickerDisplayNameInLabel(t *testing.T) {
+	t.Parallel()
+
 	var selected string
 	items := []profileswitch.ProfileListItem{
 		{ProfileSlug: gepprofiles.ProfileSlug("test"), DisplayName: "My Test Profile"},
@@ -173,7 +191,5 @@ func TestPickerDisplayNameInLabel(t *testing.T) {
 	m.SetSize(60, 20)
 
 	v := m.View()
-	if !strings.Contains(v, "My Test Profile") {
-		t.Fatalf("view should contain display name, got:\n%s", v)
-	}
+	require.Contains(t, v, "My Test Profile")
 }

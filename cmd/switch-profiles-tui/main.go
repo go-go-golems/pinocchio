@@ -32,7 +32,6 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
-	"google.golang.org/protobuf/types/known/structpb"
 )
 
 func localPlainEntityCmd(kind string, props map[string]any) tea.Cmd {
@@ -155,7 +154,7 @@ func main() {
 			}
 			defer closeStores()
 
-			// Shared timeline version counter across multiple persistence sources.
+			// Shared timeline version counter for best-effort persistence ordering.
 			var timelineVersion atomic.Uint64
 			var timelineStoreMu sync.Mutex
 			if timelineStore != nil {
@@ -181,33 +180,6 @@ func main() {
 			defer func() { _ = router.Close() }()
 
 			sink := middleware.NewWatermillSink(router.Publisher, "chat")
-
-			persistSwitch := func(from, to, runtimeKey, runtimeFingerprint string) error {
-				if timelineStore == nil || strings.TrimSpace(convID) == "" {
-					return nil
-				}
-				seq := timelineVersion.Add(1)
-				propsMap := map[string]any{
-					"schemaVersion":       1,
-					"from":                strings.TrimSpace(from),
-					"to":                  strings.TrimSpace(to),
-					"runtime_key":         strings.TrimSpace(runtimeKey),
-					"runtime_fingerprint": strings.TrimSpace(runtimeFingerprint),
-					"profile.slug":        strings.TrimSpace(to),
-				}
-				props, err := structpb.NewStruct(propsMap)
-				if err != nil {
-					return err
-				}
-				entity := &timelinepb.TimelineEntityV2{
-					Id:    uuid.NewString(),
-					Kind:  "profile_switch",
-					Props: props,
-				}
-				persistCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-				defer cancel()
-				return timelineStore.Upsert(persistCtx, convID, seq, entity)
-			}
 
 			var persister *turnStorePersister
 			if turnStore != nil {
@@ -287,9 +259,6 @@ func main() {
 					if err := publishProfileSwitchedInfo(sink, convID, from, next.ProfileSlug.String(), next.RuntimeKey.String(), next.RuntimeFingerprint); err != nil {
 						log.Warn().Err(err).Msg("failed to publish profile-switched info event")
 					}
-					if err := persistSwitch(from, next.ProfileSlug.String(), next.RuntimeKey.String(), next.RuntimeFingerprint); err != nil {
-						log.Warn().Err(err).Msg("failed to persist profile switch marker")
-					}
 					return nil
 				}
 				return true, tea.Batch(
@@ -333,9 +302,6 @@ func main() {
 					log.Info().Str("diff", diff.String()).Msg("Profile switch diff")
 					if err := publishProfileSwitchedInfo(sink, convID, from, res.ProfileSlug.String(), res.RuntimeKey.String(), res.RuntimeFingerprint); err != nil {
 						log.Warn().Err(err).Msg("failed to publish profile-switched info event")
-					}
-					if err := persistSwitch(from, res.ProfileSlug.String(), res.RuntimeKey.String(), res.RuntimeFingerprint); err != nil {
-						log.Warn().Err(err).Msg("failed to persist profile switch marker")
 					}
 				},
 			})

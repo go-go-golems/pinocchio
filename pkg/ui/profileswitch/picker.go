@@ -91,7 +91,10 @@ func (m *PickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "end":
 			m.cursor = len(m.filtered) - 1
 		case "enter":
-			if len(m.filtered) > 0 && m.selected != nil {
+			if len(m.filtered) == 0 {
+				return m, nil
+			}
+			if m.selected != nil {
 				idx := m.filtered[m.cursor]
 				*m.selected = m.items[idx].ProfileSlug.String()
 			}
