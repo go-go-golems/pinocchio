@@ -50,6 +50,13 @@ func NewPickerModel(items []ProfileListItem, currentSlug string, selected *strin
 			Foreground(lipgloss.Color("241")),
 	}
 	m.rebuildFiltered()
+	// Start cursor on the currently active profile.
+	for i, idx := range m.filtered {
+		if m.items[idx].ProfileSlug.String() == currentSlug {
+			m.cursor = i
+			break
+		}
+	}
 	return m
 }
 

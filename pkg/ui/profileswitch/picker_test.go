@@ -121,6 +121,19 @@ func TestPickerFilterBackspace(t *testing.T) {
 	}
 }
 
+func TestPickerCursorStartsOnCurrentProfile(t *testing.T) {
+	var selected string
+	m := profileswitch.NewPickerModel(makeTestItems(), "gamma", &selected)
+	m.SetSize(60, 20)
+
+	// Press enter immediately — should select the current profile (gamma), not the first item.
+	m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+
+	if selected != "gamma" {
+		t.Fatalf("expected cursor to start on current profile 'gamma', got %q", selected)
+	}
+}
+
 func TestPickerEmptyItems(t *testing.T) {
 	var selected string
 	m := profileswitch.NewPickerModel(nil, "", &selected)
