@@ -1,7 +1,7 @@
 ---
 Title: webchat values separation brief
 Ticket: GP-029
-Status: active
+Status: closed
 Topics:
     - webchat
     - backend
@@ -47,7 +47,7 @@ This ticket now tracks the implementation of the Pinocchio webchat Values-separa
 
 ## Status
 
-Current status: **active**
+Current status: **closed**
 
 ## Topics
 

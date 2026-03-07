@@ -70,6 +70,23 @@ func (s *ChatService) ResolveAndEnsureConversation(ctx context.Context, req Conv
 	return s.svc.ResolveAndEnsureConversation(ctx, req)
 }
 
+func (s *ChatService) PrepareRunnerStart(ctx context.Context, in PrepareRunnerStartInput) (*ConversationHandle, StartRequest, error) {
+	if s == nil || s.svc == nil {
+		return nil, StartRequest{}, errors.New("chat service is not initialized")
+	}
+	return s.svc.PrepareRunnerStart(ctx, in)
+}
+
+func (s *ChatService) NewLLMLoopRunner() *LLMLoopRunner {
+	if s == nil || s.svc == nil {
+		return nil
+	}
+	return s.svc.NewLLMLoopRunner()
+}
+
+// SubmitPrompt starts the legacy chat-oriented inference path.
+//
+// Deprecated: prefer PrepareRunnerStart(...) with LLMLoopRunner.Start(...) or another Runner.
 func (s *ChatService) SubmitPrompt(ctx context.Context, in SubmitPromptInput) (SubmitPromptResult, error) {
 	if s == nil || s.svc == nil {
 		return SubmitPromptResult{}, errors.New("chat service is not initialized")

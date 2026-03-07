@@ -17,11 +17,13 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/turns"
 	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
+	timelinepb "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/timeline"
 	webchat "github.com/go-go-golems/pinocchio/pkg/webchat"
 	webhttp "github.com/go-go-golems/pinocchio/pkg/webchat/http"
 	"github.com/gorilla/websocket"
 	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/types/known/structpb"
 )
 
 type integrationNoopEngine struct{}
@@ -33,6 +35,33 @@ func (integrationNoopEngine) RunInference(_ context.Context, t *turns.Turn) (*tu
 type integrationNoopSink struct{}
 
 func (integrationNoopSink) PublishEvent(events.Event) error { return nil }
+
+type integrationFakeRunner struct{}
+
+func (integrationFakeRunner) Start(ctx context.Context, req webchat.StartRequest) (webchat.StartResult, error) {
+	props, err := structpb.NewStruct(map[string]any{
+		"runner":  "fake",
+		"content": "fake runner emitted timeline entity",
+	})
+	if err != nil {
+		return webchat.StartResult{}, err
+	}
+	if err := req.Timeline.Upsert(ctx, &timelinepb.TimelineEntityV2{
+		Id:    "fake-" + req.ConvID,
+		Kind:  "runner.status",
+		Props: props,
+	}, 1); err != nil {
+		return webchat.StartResult{}, err
+	}
+	return webchat.StartResult{
+		Response: map[string]any{
+			"status":     "started",
+			"runner":     "fake",
+			"conv_id":    req.ConvID,
+			"session_id": req.SessionID,
+		},
+	}, nil
+}
 
 func newAppOwnedIntegrationServer(t *testing.T) *httptest.Server {
 	t.Helper()
@@ -69,7 +98,68 @@ func newAppOwnedIntegrationServer(t *testing.T) *httptest.Server {
 	)
 	require.NoError(t, err)
 	requestResolver := newProfileRequestResolver(profileRegistry, gepprofiles.MustRegistrySlug(defaultRegistrySlug))
+	//nolint:staticcheck // integration test coverage for the legacy convenience handler remains intentional
 	chatHandler := webhttp.NewChatHandler(webchatSrv.ChatService(), requestResolver)
+	runnerHandler := func(w http.ResponseWriter, req *http.Request) {
+		if req.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		plan, err := requestResolver.Resolve(req)
+		if err != nil {
+			http.Error(w, "failed to resolve request", http.StatusInternalServerError)
+			return
+		}
+		if strings.TrimSpace(plan.Prompt) == "" {
+			http.Error(w, "missing prompt", http.StatusBadRequest)
+			return
+		}
+		idempotencyKey := webhttp.IdempotencyKeyFromRequest(req, nil)
+		_, startReq, err := webchatSrv.ChatService().PrepareRunnerStart(req.Context(), webchat.PrepareRunnerStartInput{
+			Runtime: plan.RuntimeRequest(),
+			Payload: webchat.LLMLoopStartPayload{
+				Prompt:         plan.Prompt,
+				Overrides:      plan.Overrides,
+				IdempotencyKey: idempotencyKey,
+			},
+			Metadata: map[string]any{"route": "runner"},
+		})
+		if err != nil {
+			http.Error(w, "prepare runner start failed", http.StatusInternalServerError)
+			return
+		}
+		result, err := webchatSrv.ChatService().NewLLMLoopRunner().Start(req.Context(), startReq)
+		if err != nil {
+			http.Error(w, "runner start failed", http.StatusInternalServerError)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(result.Response)
+	}
+	fakeRunnerHandler := func(w http.ResponseWriter, req *http.Request) {
+		if req.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		plan, err := requestResolver.Resolve(req)
+		if err != nil {
+			http.Error(w, "failed to resolve request", http.StatusInternalServerError)
+			return
+		}
+		_, startReq, err := webchatSrv.ChatService().PrepareRunnerStart(req.Context(), webchat.PrepareRunnerStartInput{
+			Runtime:  plan.RuntimeRequest(),
+			Metadata: map[string]any{"route": "fake-runner"},
+		})
+		if err != nil {
+			http.Error(w, "prepare runner start failed", http.StatusInternalServerError)
+			return
+		}
+		result, err := integrationFakeRunner{}.Start(req.Context(), startReq)
+		if err != nil {
+			http.Error(w, "runner start failed", http.StatusInternalServerError)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(result.Response)
+	}
 	wsHandler := webhttp.NewWSHandler(
 		webchatSrv.StreamHub(),
 		requestResolver,
@@ -79,6 +169,10 @@ func newAppOwnedIntegrationServer(t *testing.T) *httptest.Server {
 	appMux := http.NewServeMux()
 	appMux.HandleFunc("/chat", chatHandler)
 	appMux.HandleFunc("/chat/", chatHandler)
+	appMux.HandleFunc("/chat-runner", runnerHandler)
+	appMux.HandleFunc("/chat-runner/", runnerHandler)
+	appMux.HandleFunc("/fake-runner", fakeRunnerHandler)
+	appMux.HandleFunc("/fake-runner/", fakeRunnerHandler)
 	appMux.HandleFunc("/ws", wsHandler)
 	registerProfileAPIHandlers(appMux, requestResolver)
 	timelineLogger := log.With().Str("component", "webchat-test").Str("route", "/api/timeline").Logger()
@@ -198,6 +292,152 @@ func TestAppOwnedChatHandler_Integration_UserMessageProjectedViaStream(t *testin
 		}
 	}
 	require.True(t, found, "expected user timeline entity projected from chat.message stream event")
+}
+
+func TestAppOwnedRunnerHandler_Integration_DirectLLMLoopStart(t *testing.T) {
+	srv := newAppOwnedIntegrationServer(t)
+	defer srv.Close()
+
+	reqBody := []byte(`{"prompt":"hello from direct runner path","conv_id":"conv-runner-1"}`)
+	resp, err := http.Post(srv.URL+"/chat-runner/default", "application/json", bytes.NewReader(reqBody))
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var payload map[string]any
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&payload))
+	require.Equal(t, "started", payload["status"])
+	require.Equal(t, "conv-runner-1", payload["conv_id"])
+	require.NotEmpty(t, payload["session_id"])
+	require.NotEmpty(t, payload["idempotency_key"])
+}
+
+func TestAppOwnedRunnerHandler_Integration_UsesGenericWSAndTimeline(t *testing.T) {
+	srv := newAppOwnedIntegrationServer(t)
+	defer srv.Close()
+
+	convID := "conv-runner-stream-1"
+	prompt := "hello from direct runner websocket path"
+
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/ws?conv_id=" + convID
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	require.NoError(t, err)
+	defer func() { _ = conn.Close() }()
+
+	require.NoError(t, conn.SetReadDeadline(time.Now().Add(2*time.Second)))
+	_, helloFrame, err := conn.ReadMessage()
+	require.NoError(t, err)
+	require.Equal(t, "ws.hello", integrationSemEventType(helloFrame))
+
+	resp, err := http.Post(
+		srv.URL+"/chat-runner/default",
+		"application/json",
+		bytes.NewReader([]byte(`{"prompt":"`+prompt+`","conv_id":"`+convID+`"}`)),
+	)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	seenChatMessage := false
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) && !seenChatMessage {
+		require.NoError(t, conn.SetReadDeadline(time.Now().Add(500*time.Millisecond)))
+		_, frame, readErr := conn.ReadMessage()
+		if readErr != nil {
+			if ne, ok := readErr.(net.Error); ok && ne.Timeout() {
+				continue
+			}
+			require.NoError(t, readErr)
+		}
+		if integrationSemEventType(frame) == "chat.message" {
+			seenChatMessage = true
+		}
+	}
+	require.True(t, seenChatMessage, "expected chat.message frame from direct runner path")
+
+	found := false
+	deadline = time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) && !found {
+		timelineResp, err := http.Get(srv.URL + "/api/timeline?conv_id=" + convID)
+		require.NoError(t, err)
+		var snap map[string]any
+		require.NoError(t, json.NewDecoder(timelineResp.Body).Decode(&snap))
+		_ = timelineResp.Body.Close()
+
+		entities, _ := snap["entities"].([]any)
+		for _, raw := range entities {
+			entity, ok := raw.(map[string]any)
+			if !ok {
+				continue
+			}
+			props, _ := entity["props"].(map[string]any)
+			if props == nil {
+				continue
+			}
+			role, _ := props["role"].(string)
+			content, _ := props["content"].(string)
+			if role == "user" && content == prompt {
+				found = true
+				break
+			}
+		}
+		if !found {
+			time.Sleep(50 * time.Millisecond)
+		}
+	}
+	require.True(t, found, "expected timeline hydration from direct runner path")
+}
+
+func TestAppOwnedFakeRunner_Integration_UsesGenericTimelineTransport(t *testing.T) {
+	srv := newAppOwnedIntegrationServer(t)
+	defer srv.Close()
+
+	convID := "conv-fake-runner-1"
+	resp, err := http.Post(srv.URL+"/fake-runner/default", "application/json", strings.NewReader(`{"conv_id":"`+convID+`"}`))
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var payload map[string]any
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&payload))
+	require.Equal(t, "started", payload["status"])
+	require.Equal(t, "fake", payload["runner"])
+
+	found := false
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) && !found {
+		timelineResp, err := http.Get(srv.URL + "/api/timeline?conv_id=" + convID)
+		require.NoError(t, err)
+		var snap map[string]any
+		require.NoError(t, json.NewDecoder(timelineResp.Body).Decode(&snap))
+		_ = timelineResp.Body.Close()
+
+		entities, _ := snap["entities"].([]any)
+		for _, raw := range entities {
+			entity, ok := raw.(map[string]any)
+			if !ok {
+				continue
+			}
+			id, _ := entity["id"].(string)
+			if id != "fake-"+convID {
+				continue
+			}
+			props, _ := entity["props"].(map[string]any)
+			if props == nil {
+				continue
+			}
+			runner, _ := props["runner"].(string)
+			content, _ := props["content"].(string)
+			if runner == "fake" && content == "fake runner emitted timeline entity" {
+				found = true
+				break
+			}
+		}
+		if !found {
+			time.Sleep(50 * time.Millisecond)
+		}
+	}
+	require.True(t, found, "expected fake runner timeline entity via generic hydration path")
 }
 
 func TestAppOwnedProfileAPI_CRUDLifecycle_ContractShape(t *testing.T) {

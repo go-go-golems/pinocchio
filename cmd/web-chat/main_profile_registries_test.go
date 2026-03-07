@@ -82,7 +82,7 @@ func TestWebChatCommand_DoesNotExposeDirectAIRuntimeFlags(t *testing.T) {
 	require.NoError(t, err)
 
 	cobraCmd, err := cli.BuildCobraCommand(cmdDef, cli.WithParserConfig(cli.CobraParserConfig{
-		AppName: "pinocchio",
+		AppName: webChatCLIAppName,
 	}))
 	require.NoError(t, err)
 
@@ -90,4 +90,9 @@ func TestWebChatCommand_DoesNotExposeDirectAIRuntimeFlags(t *testing.T) {
 	require.Nil(t, cobraCmd.Flags().Lookup("ai-api-type"))
 	require.NotNil(t, cobraCmd.Flags().Lookup("profile-registries"))
 	require.NotNil(t, cobraCmd.Flags().Lookup("profile"))
+}
+
+func TestWebChatCommand_UsesDedicatedConfigNamespace(t *testing.T) {
+	require.Equal(t, "webchat", webChatCLIAppName)
+	require.NotEqual(t, "pinocchio", webChatCLIAppName)
 }

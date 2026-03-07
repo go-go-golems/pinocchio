@@ -2,7 +2,6 @@ package webchat
 
 import (
 	"context"
-	"encoding/json"
 	"strings"
 	"time"
 
@@ -12,10 +11,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 
-	"github.com/go-go-golems/geppetto/pkg/events"
 	"github.com/go-go-golems/geppetto/pkg/inference/toolloop"
-	"github.com/go-go-golems/geppetto/pkg/inference/toolloop/enginebuilder"
-	geptools "github.com/go-go-golems/geppetto/pkg/inference/tools"
 	gepprofiles "github.com/go-go-golems/geppetto/pkg/profiles"
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
@@ -66,6 +62,9 @@ type ConversationHandle struct {
 	AllowedTools            []string
 }
 
+// SubmitPromptInput carries the legacy chat-oriented startup request.
+//
+// Deprecated: prefer PrepareRunnerStartInput plus PrepareRunnerStart(...) and Runner.Start(...).
 type SubmitPromptInput struct {
 	ConvID                  string
 	RuntimeKey              string
@@ -78,6 +77,9 @@ type SubmitPromptInput struct {
 	IdempotencyKey          string
 }
 
+// SubmitPromptResult carries the legacy chat-oriented startup response.
+//
+// Deprecated: prefer StartResult returned from Runner.Start(...).
 type SubmitPromptResult struct {
 	HTTPStatus int
 	Response   map[string]any
@@ -164,6 +166,9 @@ func (s *ConversationService) ResolveAndEnsureConversation(ctx context.Context, 
 	return s.streams.ResolveAndEnsureConversation(ctx, req)
 }
 
+// SubmitPrompt starts the legacy chat-oriented inference path.
+//
+// Deprecated: prefer PrepareRunnerStart(...) with LLMLoopRunner.Start(...) or another Runner.
 func (s *ConversationService) SubmitPrompt(ctx context.Context, in SubmitPromptInput) (SubmitPromptResult, error) {
 	if s == nil || s.cm == nil {
 		return SubmitPromptResult{}, errors.New("conversation service is not initialized")
@@ -248,6 +253,68 @@ func copyStringAnyMap(in map[string]any) map[string]any {
 	return out
 }
 
+func (s *ConversationService) PrepareRunnerStart(ctx context.Context, in PrepareRunnerStartInput) (*ConversationHandle, StartRequest, error) {
+	if s == nil || s.cm == nil {
+		return nil, StartRequest{}, errors.New("conversation service is not initialized")
+	}
+	if ctx == nil {
+		ctx = s.baseCtx
+	}
+	handle, err := s.ResolveAndEnsureConversation(ctx, in.Runtime)
+	if err != nil {
+		return nil, StartRequest{}, err
+	}
+	conv, ok := s.cm.GetConversation(handle.ConvID)
+	if !ok || conv == nil {
+		return nil, StartRequest{}, errors.New("conversation not found after resolve")
+	}
+	return handle, s.startRequestForConversation(conv, in.Payload, in.Metadata), nil
+}
+
+func (s *ConversationService) NewLLMLoopRunner() *LLMLoopRunner {
+	if s == nil {
+		return nil
+	}
+	return NewLLMLoopRunner(LLMLoopRunnerConfig{
+		BaseCtx:        s.baseCtx,
+		StepController: s.stepCtrl,
+		TurnStore:      s.turnStore,
+		SEMPublisher:   s.semPublisher,
+		ToolFactories:  s.toolFactories,
+	})
+}
+
+func (s *ConversationService) startRequestForConversation(conv *Conversation, payload any, metadata map[string]any) StartRequest {
+	var timeline TimelineEmitter
+	if hook := s.TimelineUpsertHook(conv); hook != nil || s.timelineStore != nil {
+		timeline = TimelineEmitterFunc(func(ctx context.Context, entity *timelinepb.TimelineEntityV2, version uint64) error {
+			if ctx == nil {
+				ctx = s.baseCtx
+			}
+			if s.timelineStore != nil {
+				if err := s.timelineStore.Upsert(ctx, conv.ID, version, entity); err != nil {
+					return err
+				}
+			}
+			if hook != nil {
+				hook(entity, version)
+			}
+			return nil
+		})
+	}
+	return StartRequest{
+		Conversation:       conv,
+		ConvID:             conv.ID,
+		SessionID:          conv.SessionID,
+		RuntimeKey:         conv.RuntimeKey,
+		RuntimeFingerprint: conv.RuntimeFingerprint,
+		Sink:               conv.Sink,
+		Timeline:           timeline,
+		Payload:            payload,
+		Metadata:           copyStringAnyMap(metadata),
+	}
+}
+
 func (s *ConversationService) AttachWebSocket(ctx context.Context, convID string, conn *websocket.Conn, opts WebSocketAttachOptions) error {
 	if s == nil || s.streams == nil {
 		return errors.New("conversation service is not initialized")
@@ -301,111 +368,19 @@ func (s *ConversationService) startInferenceForPrompt(conv *Conversation, overri
 	if s == nil || conv == nil || conv.Sess == nil {
 		return nil, errors.New("invalid conversation")
 	}
-
-	sessionLog := log.With().Str("component", "webchat").Str("conv_id", conv.ID).Str("session_id", conv.SessionID).Logger()
-
-	conv.mu.Lock()
-	stream := conv.stream
-	baseCtx := conv.baseCtx
-	allowedTools := append([]string(nil), conv.AllowedTools...)
-	conv.mu.Unlock()
-	if baseCtx == nil {
-		baseCtx = s.baseCtx
-	}
-	if baseCtx == nil {
-		return nil, errors.New("conversation context is nil")
-	}
-	if stream != nil && !stream.IsRunning() {
-		_ = stream.Start(baseCtx)
-	}
-
-	tmpReg := geptools.NewInMemoryToolRegistry()
-	for _, tf := range s.toolFactories {
-		_ = tf(tmpReg)
-	}
-	registry := geptools.NewInMemoryToolRegistry()
-	if len(allowedTools) == 0 {
-		for _, td := range tmpReg.ListTools() {
-			_ = registry.RegisterTool(td.Name, td)
-		}
-	} else {
-		allowed := map[string]struct{}{}
-		for _, n := range allowedTools {
-			if t := strings.TrimSpace(n); t != "" {
-				allowed[t] = struct{}{}
-			}
-		}
-		for _, td := range tmpReg.ListTools() {
-			if _, ok := allowed[td.Name]; ok {
-				_ = registry.RegisterTool(td.Name, td)
-			}
-		}
-	}
-
-	hook := snapshotHookForConv(conv, s.turnStore)
-
-	seed, err := conv.Sess.AppendNewTurnFromUserPrompt(prompt)
+	runner := s.NewLLMLoopRunner()
+	result, err := runner.Start(s.baseCtx, s.startRequestForConversation(conv, LLMLoopStartPayload{
+		Prompt:         prompt,
+		Overrides:      overrides,
+		IdempotencyKey: idempotencyKey,
+	}, nil))
 	if err != nil {
 		s.finishSessionInference(conv, idempotencyKey, "", "", err)
 		return nil, err
 	}
-	turnID := ""
-	if seed != nil && seed.ID != "" {
-		turnID = seed.ID
-	}
-	if turnID != "" && strings.TrimSpace(prompt) != "" {
-		if err := s.publishUserChatMessageEvent(baseCtx, conv.ID, "user-"+turnID, prompt); err != nil {
-			return nil, errors.Wrap(err, "publish user chat.message event")
-		}
-	}
-
-	if stepModeFromOverrides(overrides) && s.stepCtrl != nil {
-		s.stepCtrl.Enable(toolloop.StepScope{SessionID: conv.SessionID, ConversationID: conv.ID})
-	}
-
-	loopCfg := toolloop.NewLoopConfig().WithMaxIterations(5)
-	toolCfg := geptools.DefaultToolConfig().WithExecutionTimeout(60 * time.Second)
-	conv.Sess.Builder = &enginebuilder.Builder{
-		Base:             conv.Eng,
-		Registry:         registry,
-		LoopConfig:       &loopCfg,
-		ToolConfig:       &toolCfg,
-		EventSinks:       []events.EventSink{conv.Sink},
-		SnapshotHook:     hook,
-		StepController:   s.stepCtrl,
-		StepPauseTimeout: 30 * time.Second,
-		Persister:        newTurnStorePersister(s.turnStore, conv, "final"),
-	}
-
-	sessionLog.Info().Str("idempotency_key", idempotencyKey).Msg("starting inference loop")
-	if s.baseCtx == nil {
-		return nil, errors.New("service context is nil")
-	}
-	handle, err := conv.Sess.StartInference(s.baseCtx)
-	if err != nil {
-		s.finishSessionInference(conv, idempotencyKey, "", turnID, err)
-		return nil, err
-	}
-	if handle == nil {
-		err := errors.New("start inference returned nil handle")
-		s.finishSessionInference(conv, idempotencyKey, "", turnID, err)
-		return nil, err
-	}
-
-	resp := map[string]any{
-		"status":          "started",
-		"idempotency_key": idempotencyKey,
-		"conv_id":         conv.ID,
-		"session_id":      conv.SessionID,
-	}
-	if turnID != "" {
-		resp["turn_id"] = turnID
-	}
-	if handle.InferenceID != "" {
-		resp["inference_id"] = handle.InferenceID
-	}
-	if handle.Input != nil && handle.Input.ID != "" {
-		resp["turn_id"] = handle.Input.ID
+	resp := result.Response
+	if resp == nil {
+		resp = map[string]any{}
 	}
 
 	conv.mu.Lock()
@@ -420,44 +395,21 @@ func (s *ConversationService) startInferenceForPrompt(conv *Conversation, overri
 	conv.mu.Unlock()
 
 	go func() {
-		_, waitErr := handle.Wait()
-		s.finishSessionInference(conv, idempotencyKey, handle.InferenceID, turnID, waitErr)
-		if waitErr != nil {
-			sessionLog.Error().Err(waitErr).Str("inference_id", handle.InferenceID).Msg("inference loop error")
+		handle := result.Handle
+		if handle == nil {
+			err := errors.New("inference handle missing after runner start")
+			s.finishSessionInference(conv, idempotencyKey, "", result.TurnID, err)
+			return
 		}
-		sessionLog.Info().Str("inference_id", handle.InferenceID).Msg("inference loop finished")
+		_, waitErr := handle.Wait()
+		s.finishSessionInference(conv, idempotencyKey, handle.InferenceID, result.TurnID, waitErr)
+		if waitErr != nil {
+			log.Error().Err(waitErr).Str("component", "webchat").Str("conv_id", conv.ID).Str("session_id", conv.SessionID).Str("inference_id", handle.InferenceID).Msg("inference loop error")
+		}
+		log.Info().Str("component", "webchat").Str("conv_id", conv.ID).Str("session_id", conv.SessionID).Str("inference_id", handle.InferenceID).Msg("inference loop finished")
 		s.tryDrainQueue(conv)
 	}()
 	return resp, nil
-}
-
-func (s *ConversationService) publishUserChatMessageEvent(ctx context.Context, convID string, eventID string, prompt string) error {
-	if s == nil || s.semPublisher == nil {
-		return errors.New("sem publisher not configured")
-	}
-	payload, err := protoToRaw(&timelinepb.MessageSnapshotV1{
-		SchemaVersion: 1,
-		Role:          "user",
-		Content:       prompt,
-		Streaming:     false,
-	})
-	if err != nil {
-		return err
-	}
-	env := map[string]any{
-		"sem": true,
-		"event": map[string]any{
-			"type": "chat.message",
-			"id":   eventID,
-			"data": payload,
-		},
-	}
-	b, err := json.Marshal(env)
-	if err != nil {
-		return err
-	}
-	msg := message.NewMessage(uuid.NewString(), b)
-	return s.semPublisher.Publish(topicForConv(convID), msg)
 }
 
 func (s *ConversationService) finishSessionInference(conv *Conversation, idempotencyKey string, inferenceID string, turnID string, err error) {

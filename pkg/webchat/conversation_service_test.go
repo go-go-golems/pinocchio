@@ -195,6 +195,52 @@ func TestConversationService_ResolveAndEnsureConversation_RebuildsOnProfileVersi
 	require.NotSame(t, engineV1, convV2.Eng, "new profile version should rebuild engine")
 }
 
+func TestConversationService_PrepareRunnerStart_ProvidesConversationSurfaces(t *testing.T) {
+	runtimeComposer := infruntime.RuntimeBuilderFunc(func(context.Context, infruntime.ConversationRuntimeRequest) (infruntime.ComposedRuntime, error) {
+		return infruntime.ComposedRuntime{
+			Engine:             noopEngine{},
+			Sink:               noopSink{},
+			RuntimeKey:         "default",
+			RuntimeFingerprint: "fp-default",
+			SeedSystemPrompt:   "seed",
+			AllowedTools:       []string{"calculator"},
+		}, nil
+	})
+	cm := NewConvManager(ConvManagerOptions{
+		BaseCtx:         context.Background(),
+		RuntimeComposer: runtimeComposer,
+		BuildSubscriber: func(string) (message.Subscriber, bool, error) { return nil, false, nil },
+	})
+	svc, err := NewConversationService(ConversationServiceConfig{
+		BaseCtx:     context.Background(),
+		ConvManager: cm,
+	})
+	require.NoError(t, err)
+
+	handle, req, err := svc.PrepareRunnerStart(context.Background(), PrepareRunnerStartInput{
+		Runtime: ConversationRuntimeRequest{
+			ConvID:             "conv-runner",
+			RuntimeKey:         "default",
+			RuntimeFingerprint: "fp-default",
+		},
+		Payload: LLMLoopStartPayload{
+			Prompt:         "hello",
+			IdempotencyKey: "k1",
+		},
+		Metadata: map[string]any{"source": "test"},
+	})
+	require.NoError(t, err)
+	require.Equal(t, "conv-runner", handle.ConvID)
+	require.Equal(t, "conv-runner", req.ConvID)
+	require.Equal(t, handle.SessionID, req.SessionID)
+	require.Equal(t, "default", req.RuntimeKey)
+	require.Equal(t, "fp-default", req.RuntimeFingerprint)
+	require.NotNil(t, req.Conversation)
+	require.NotNil(t, req.Sink)
+	require.NotNil(t, req.Timeline)
+	require.Equal(t, "test", req.Metadata["source"])
+}
+
 func TestConversationService_SubmitPromptRejectsMissingPrompt(t *testing.T) {
 	runtimeComposer := infruntime.RuntimeBuilderFunc(func(context.Context, infruntime.ConversationRuntimeRequest) (infruntime.ComposedRuntime, error) {
 		return infruntime.ComposedRuntime{

@@ -47,6 +47,14 @@ SectionType: GeneralTopic
 4. Backend emits SEM frames over websocket.
 5. Frontend hydrates and reconciles with `GET /api/timeline`.
 
+The reference app still uses `NewChatHTTPHandler(...)` for its main `/chat` route, but the codebase now also supports a runner-first composition shape:
+
+1. app handler resolves request policy
+2. app handler calls `PrepareRunnerStart(...)`
+3. app handler chooses a `Runner`
+4. app handler calls `Runner.Start(...)`
+5. frontend still uses the same `/ws` and `/api/timeline`
+
 ## HTTP API
 
 - `POST /chat`
