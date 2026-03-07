@@ -23,6 +23,7 @@ This guide shows the current production pattern for integrating `pinocchio/pkg/w
 - canonical timeline hydration path `/api/timeline`
 - debug endpoints under `/api/debug/*`
 - profile/runtime policy via app-owned request resolver
+- explicit dependency-injected server construction as the preferred embedding API
 
 ## Minimal Backend Wiring
 
@@ -34,10 +35,14 @@ func run(ctx context.Context, parsed *values.Values) error {
   runtimeComposer := newRuntimeComposer(parsed)
   resolver := newRequestResolver()
 
-  srv, err := webchat.NewServer(
+  deps, err := webchat.BuildRouterDepsFromValues(ctx, parsed, staticFS)
+  if err != nil {
+    return err
+  }
+
+  srv, err := webchat.NewServerFromDeps(
     ctx,
-    parsed,
-    staticFS,
+    deps,
     webchat.WithRuntimeComposer(runtimeComposer),
   )
   if err != nil {
@@ -69,6 +74,14 @@ func run(ctx context.Context, parsed *values.Values) error {
   return srv.Run(ctx)
 }
 ```
+
+Compatibility wrapper:
+
+```go
+srv, err := webchat.NewServer(ctx, parsed, staticFS, webchat.WithRuntimeComposer(runtimeComposer))
+```
+
+That remains supported, but it now acts as a parsed-values adapter around the dependency-injected constructor path.
 
 ## Route Contract
 
@@ -131,9 +144,18 @@ Frontend code should:
 - hydrate from `/api/timeline`
 - treat `/api/debug/*` as diagnostics-only
 
+## Constructor Choice
+
+Use these rules when embedding:
+
+- if your app already has explicit infrastructure objects, call `webchat.NewServerFromDeps(...)` or `webchat.NewRouterFromDeps(...)`;
+- if your app still begins from `*values.Values`, call `webchat.BuildRouterDepsFromValues(...)` and then the explicit constructor;
+- keep `webchat.NewServer(...)` and `webchat.NewRouter(...)` only as convenience wrappers or migration bridges.
+
 ## See Also
 
 - [Webchat HTTP Chat Setup](webchat-http-chat-setup.md)
 - [Webchat Framework Guide](webchat-framework-guide.md)
+- [Webchat Values Separation Migration Guide](webchat-values-separation-migration-guide.md)
 - [Webchat Profile Registry Guide](webchat-profile-registry.md)
 - [Webchat Frontend Integration](webchat-frontend-integration.md)

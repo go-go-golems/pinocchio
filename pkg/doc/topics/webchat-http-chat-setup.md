@@ -24,7 +24,9 @@ Use this page as the source of truth when wiring server routes, frontend clients
 
 ## Canonical Setup Pattern
 
-- Build server core with `webchat.NewServer(...)`.
+- Build server core with `webchat.NewServerFromDeps(...)` when possible.
+- Use `webchat.BuildRouterDepsFromValues(...)` if you start from parsed Glazed values.
+- Keep `webchat.NewServer(...)` as the compatibility wrapper.
 - Register middleware/tool factories on the returned server.
 - Mount app-owned handlers:
   - `webchat.NewChatHTTPHandler(srv.ChatService(), resolver)`
@@ -179,6 +181,7 @@ Do not document or depend on these paths in new integrations:
 - Update debug tooling to `/api/debug/turns`.
 - Remove any `/hydrate` endpoint assumptions.
 - Replace router-era setup examples (`NewRouter + NewFromRouter`) with `NewServer + handler constructors` in onboarding docs.
+- Prefer `BuildRouterDepsFromValues(...) + NewServerFromDeps(...)` when migrating existing parsed-values integrations.
 
 ## Troubleshooting
 
@@ -200,5 +203,6 @@ If you suspect drift between docs and behavior, these tend to be the most reliab
 ## See Also
 
 - [Webchat Framework Guide](webchat-framework-guide.md)
+- [Webchat Values Separation Migration Guide](webchat-values-separation-migration-guide.md)
 - [Webchat User Guide](webchat-user-guide.md)
 - [Webchat Frontend Integration](webchat-frontend-integration.md)

@@ -11,6 +11,8 @@ DocType: index
 Intent: long-term
 Owners: []
 RelatedFiles:
+    - Path: pinocchio/pkg/doc/topics/webchat-values-separation-migration-guide.md
+      Note: Dedicated migration guide for moving embeddings from parsed-values constructors to explicit dependency-injected constructors
     - Path: pinocchio/pkg/webchat/router.go
       Note: Primary code surface for the Values separation refactor
     - Path: pinocchio/pkg/webchat/stream_backend.go
@@ -23,6 +25,7 @@ LastUpdated: 2026-03-07T14:53:59-05:00
 WhatFor: Use this ticket as the handoff package for separating Glazed values parsing from Pinocchio webchat router construction.
 WhenToUse: Use when implementing or reviewing the Router API cleanup and the dependency-injected embedding boundary for webchat.
 ---
+
 
 
 # webchat values separation brief
