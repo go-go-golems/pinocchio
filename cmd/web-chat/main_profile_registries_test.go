@@ -41,6 +41,10 @@ func TestResolveProfileRegistries_FallsBackToProfileSettingsSection(t *testing.T
 
 	got := resolveProfileRegistries(parsed, "")
 	require.Equal(t, "./profiles.yaml", got)
+
+	gotValue, gotSource := resolveProfileRegistriesWithSource(parsed, "")
+	require.Equal(t, "./profiles.yaml", gotValue)
+	require.Equal(t, webChatProfileSettingsSectionSlug, gotSource)
 }
 
 func TestResolveProfileRegistries_PrefersDefaultSectionValue(t *testing.T) {
@@ -48,6 +52,10 @@ func TestResolveProfileRegistries_PrefersDefaultSectionValue(t *testing.T) {
 
 	got := resolveProfileRegistries(parsed, "./profiles-from-default.yaml")
 	require.Equal(t, "./profiles-from-default.yaml", got)
+
+	gotValue, gotSource := resolveProfileRegistriesWithSource(parsed, "./profiles-from-default.yaml")
+	require.Equal(t, "./profiles-from-default.yaml", gotValue)
+	require.Equal(t, "default-section", gotSource)
 }
 
 func TestResolveProfileRegistries_FallsBackToDefaultXDGProfilesPath(t *testing.T) {
@@ -62,4 +70,8 @@ func TestResolveProfileRegistries_FallsBackToDefaultXDGProfilesPath(t *testing.T
 
 	got := resolveProfileRegistries(values.New(), "")
 	require.Equal(t, profilesPath, got)
+
+	gotValue, gotSource := resolveProfileRegistriesWithSource(values.New(), "")
+	require.Equal(t, profilesPath, gotValue)
+	require.Equal(t, "xdg-default", gotSource)
 }

@@ -76,9 +76,14 @@ func runtimeConfigScript(basePrefix string, debugAPI bool) (string, error) {
 }
 
 func resolveProfileRegistries(parsed *values.Values, defaultSectionValue string) string {
+	resolved, _ := resolveProfileRegistriesWithSource(parsed, defaultSectionValue)
+	return resolved
+}
+
+func resolveProfileRegistriesWithSource(parsed *values.Values, defaultSectionValue string) (string, string) {
 	resolved := strings.TrimSpace(defaultSectionValue)
 	if resolved != "" {
-		return resolved
+		return resolved, "default-section"
 	}
 
 	if parsed != nil {
@@ -88,12 +93,16 @@ func resolveProfileRegistries(parsed *values.Values, defaultSectionValue string)
 		if err := parsed.DecodeSectionInto(webChatProfileSettingsSectionSlug, &profileSettings); err == nil {
 			resolved = strings.TrimSpace(profileSettings.ProfileRegistries)
 			if resolved != "" {
-				return resolved
+				return resolved, webChatProfileSettingsSectionSlug
 			}
 		}
 	}
 
-	return defaultPinocchioProfileRegistriesIfPresent()
+	resolved = defaultPinocchioProfileRegistriesIfPresent()
+	if resolved != "" {
+		return resolved, "xdg-default"
+	}
+	return "", ""
 }
 
 func defaultPinocchioProfileRegistriesIfPresent() string {
@@ -152,7 +161,14 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 	if err := parsed.DecodeSectionInto(values.DefaultSlug, s); err != nil {
 		return errors.Wrap(err, "decode server settings")
 	}
-	s.ProfileRegistries = resolveProfileRegistries(parsed, s.ProfileRegistries)
+	var profileRegistriesSource string
+	s.ProfileRegistries, profileRegistriesSource = resolveProfileRegistriesWithSource(parsed, s.ProfileRegistries)
+	if strings.TrimSpace(s.ProfileRegistries) != "" {
+		log.Info().
+			Str("source", profileRegistriesSource).
+			Str("profile_registries", s.ProfileRegistries).
+			Msg("resolved profile registry sources")
+	}
 
 	appConfigJS, err := runtimeConfigScript(s.Root, s.DebugAPI)
 	if err != nil {
