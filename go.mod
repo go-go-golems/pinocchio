@@ -1,6 +1,6 @@
 module github.com/go-go-golems/pinocchio
 
-go 1.25.7
+go 1.25.8
 
 require (
 	charm.land/lipgloss/v2 v2.0.0-beta.3.0.20260210014823-2f36a2f1ba17
