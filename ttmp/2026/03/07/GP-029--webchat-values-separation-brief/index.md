@@ -13,6 +13,10 @@ Owners: []
 RelatedFiles:
     - Path: pinocchio/pkg/doc/topics/webchat-values-separation-migration-guide.md
       Note: Dedicated migration guide for moving embeddings from parsed-values constructors to explicit dependency-injected constructors
+    - Path: pinocchio/cmd/web-chat/main.go
+      Note: Command wiring now also needs to move to strict profile-registry-driven runtime configuration
+    - Path: pinocchio/cmd/web-chat/runtime_composer.go
+      Note: Web-chat runtime composer should stop taking AI step settings from parsed values
     - Path: pinocchio/pkg/webchat/router.go
       Note: Primary code surface for the Values separation refactor
     - Path: pinocchio/pkg/webchat/stream_backend.go

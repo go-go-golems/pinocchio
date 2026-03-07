@@ -14,6 +14,7 @@
 - [x] Update tests to cover both dependency-injected and parsed-values construction
 - [x] Write a migration guide in `pkg/doc` for embedders moving to the new constructor layering
 - [x] Validate with focused `go test` coverage and ticket hygiene checks
+- [x] Tighten `cmd/web-chat` so runtime step settings come exclusively from the resolved profile registry runtime
 
 ## Task Breakdown
 
@@ -56,3 +57,12 @@
 - [x] Run any doc or embedding tests affected by the API changes
 - [x] Run `docmgr doctor` for `GP-029`
 - [x] Commit in logical increments with diary updates after each completed step
+
+### 7. Strict profile-driven web-chat runtime
+
+- [x] Remove direct Geppetto AI runtime sections from `cmd/web-chat` command registration so engine/provider flags are no longer part of the CLI surface
+- [x] Replace the Geppetto-specific Cobra middleware stack in `cmd/web-chat` with a command-local env/config/default parsing path that still supports `profile-settings.profile-registries`
+- [x] Refactor `ProfileRuntimeComposer` so its base `StepSettings` come from `settings.NewStepSettings()` rather than `settings.NewStepSettingsFromParsedValues(...)`
+- [x] Remove `*values.Values` from `ProfileRuntimeComposer` state and constructor inputs if it is no longer used for runtime composition
+- [x] Add regression tests proving direct parsed AI settings no longer influence composed runtimes and that profile step-setting patches remain authoritative
+- [x] Update `cmd/web-chat` docs to state that runtime selection now comes exclusively from the profile registry stack
