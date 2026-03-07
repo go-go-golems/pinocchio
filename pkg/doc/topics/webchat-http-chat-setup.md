@@ -22,6 +22,8 @@ This page defines the canonical public HTTP contract for new webchat integration
 
 Use this page as the source of truth when wiring server routes, frontend clients, and API docs.
 
+For the reference `cmd/web-chat` application, runtime engine/provider settings now come exclusively from the resolved profile registry runtime. Direct `--ai-*` CLI overrides are no longer part of that command surface.
+
 ## Canonical Setup Pattern
 
 - Build server core with `webchat.NewServerFromDeps(...)` when possible.

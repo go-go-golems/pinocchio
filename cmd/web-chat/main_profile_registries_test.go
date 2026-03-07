@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/go-go-golems/glazed/pkg/cli"
 	"github.com/go-go-golems/glazed/pkg/cmds/fields"
 	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	"github.com/stretchr/testify/require"
@@ -74,4 +75,19 @@ func TestResolveProfileRegistries_FallsBackToDefaultXDGProfilesPath(t *testing.T
 	gotValue, gotSource := resolveProfileRegistriesWithSource(values.New(), "")
 	require.Equal(t, profilesPath, gotValue)
 	require.Equal(t, "xdg-default", gotSource)
+}
+
+func TestWebChatCommand_DoesNotExposeDirectAIRuntimeFlags(t *testing.T) {
+	cmdDef, err := NewCommand()
+	require.NoError(t, err)
+
+	cobraCmd, err := cli.BuildCobraCommand(cmdDef, cli.WithParserConfig(cli.CobraParserConfig{
+		AppName: "pinocchio",
+	}))
+	require.NoError(t, err)
+
+	require.Nil(t, cobraCmd.Flags().Lookup("ai-engine"))
+	require.Nil(t, cobraCmd.Flags().Lookup("ai-api-type"))
+	require.NotNil(t, cobraCmd.Flags().Lookup("profile-registries"))
+	require.NotNil(t, cobraCmd.Flags().Lookup("profile"))
 }

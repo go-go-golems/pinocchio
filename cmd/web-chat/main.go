@@ -16,6 +16,7 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/cmds/fields"
 	"github.com/go-go-golems/glazed/pkg/cmds/logging"
+	"github.com/go-go-golems/glazed/pkg/cmds/schema"
 	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	"github.com/go-go-golems/glazed/pkg/help"
 	help_cmd "github.com/go-go-golems/glazed/pkg/help/cmd"
@@ -25,7 +26,6 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/inference/middlewarecfg"
 	geptools "github.com/go-go-golems/geppetto/pkg/inference/tools"
 	gepprofiles "github.com/go-go-golems/geppetto/pkg/profiles"
-	geppettosections "github.com/go-go-golems/geppetto/pkg/sections"
 	toolspkg "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/tools"
 	thinkingmode "github.com/go-go-golems/pinocchio/cmd/web-chat/thinkingmode"
 	timelinecmd "github.com/go-go-golems/pinocchio/cmd/web-chat/timeline"
@@ -118,10 +118,29 @@ func defaultPinocchioProfileRegistriesIfPresent() string {
 	return path
 }
 
+func newWebChatProfileSettingsSection() (schema.Section, error) {
+	return schema.NewSection(
+		webChatProfileSettingsSectionSlug,
+		"Profile settings",
+		schema.WithFields(
+			fields.New(
+				"profile",
+				fields.TypeString,
+				fields.WithHelp("Load the profile"),
+			),
+			fields.New(
+				"profile-registries",
+				fields.TypeString,
+				fields.WithHelp("Comma-separated profile registry sources (yaml/sqlite/sqlite-dsn)"),
+			),
+		),
+	)
+}
+
 func NewCommand() (*Command, error) {
-	geLayers, err := geppettosections.CreateGeppettoSections()
+	profileSettingsSection, err := newWebChatProfileSettingsSection()
 	if err != nil {
-		return nil, errors.Wrap(err, "create geppetto layers")
+		return nil, errors.Wrap(err, "create web-chat profile settings section")
 	}
 	redisLayer, err := rediscfg.NewParameterLayer()
 	if err != nil {
@@ -145,7 +164,7 @@ func NewCommand() (*Command, error) {
 			fields.New("turns-dsn", fields.TypeString, fields.WithDefault(""), fields.WithHelp("SQLite DSN for durable turn snapshots (enables GET /turns); preferred over turns-db")),
 			fields.New("turns-db", fields.TypeString, fields.WithDefault(""), fields.WithHelp("SQLite DB file path for durable turn snapshots (enables GET /turns); DSN is derived with WAL/busy_timeout")),
 		),
-		cmds.WithSections(append(geLayers, redisLayer)...),
+		cmds.WithSections(profileSettingsSection, redisLayer),
 	)
 	return &Command{CommandDescription: desc}, nil
 }
@@ -212,7 +231,7 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 	if err != nil {
 		return errors.Wrap(err, "create middleware definition registry")
 	}
-	runtimeComposer := newProfileRuntimeComposer(parsed, middlewareRegistry, middlewarecfg.BuildDeps{
+	runtimeComposer := newProfileRuntimeComposer(middlewareRegistry, middlewarecfg.BuildDeps{
 		Values: map[string]any{
 			dependencyAgentModeServiceKey: amSvc,
 			dependencySQLiteDBKey:         dbWithRegexp,
@@ -329,7 +348,9 @@ func main() {
 
 	c, err := NewCommand()
 	cobra.CheckErr(err)
-	command, err := cli.BuildCobraCommand(c, cli.WithCobraMiddlewaresFunc(geppettosections.GetCobraCommandGeppettoMiddlewares))
+	command, err := cli.BuildCobraCommand(c, cli.WithParserConfig(cli.CobraParserConfig{
+		AppName: "pinocchio",
+	}))
 	cobra.CheckErr(err)
 	root.AddCommand(command)
 	cobra.CheckErr(root.Execute())
