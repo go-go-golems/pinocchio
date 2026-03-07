@@ -274,6 +274,7 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 		return nil
 	})
 
+	//nolint:staticcheck // cmd/web-chat still exposes the legacy convenience route while migrating embedders
 	chatHandler := webhttp.NewChatHandler(srv.ChatService(), requestResolver)
 	wsHandler := webhttp.NewWSHandler(
 		srv.StreamHub(),

@@ -102,6 +102,7 @@ func newLLMDeltaProjectionHarnessServer(t *testing.T, eng engine.Engine) *httpte
 	)
 	require.NoError(t, err)
 	requestResolver := newProfileRequestResolver(profileRegistry, gepprofiles.MustRegistrySlug(defaultRegistrySlug))
+	//nolint:staticcheck // harness still validates the deprecated convenience route during migration
 	chatHandler := webhttp.NewChatHandler(webchatSrv.ChatService(), requestResolver)
 	wsHandler := webhttp.NewWSHandler(
 		webchatSrv.StreamHub(),

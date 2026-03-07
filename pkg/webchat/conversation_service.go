@@ -62,6 +62,9 @@ type ConversationHandle struct {
 	AllowedTools            []string
 }
 
+// SubmitPromptInput carries the legacy chat-oriented startup request.
+//
+// Deprecated: prefer PrepareRunnerStartInput plus PrepareRunnerStart(...) and Runner.Start(...).
 type SubmitPromptInput struct {
 	ConvID                  string
 	RuntimeKey              string
@@ -74,6 +77,9 @@ type SubmitPromptInput struct {
 	IdempotencyKey          string
 }
 
+// SubmitPromptResult carries the legacy chat-oriented startup response.
+//
+// Deprecated: prefer StartResult returned from Runner.Start(...).
 type SubmitPromptResult struct {
 	HTTPStatus int
 	Response   map[string]any
@@ -160,6 +166,9 @@ func (s *ConversationService) ResolveAndEnsureConversation(ctx context.Context, 
 	return s.streams.ResolveAndEnsureConversation(ctx, req)
 }
 
+// SubmitPrompt starts the legacy chat-oriented inference path.
+//
+// Deprecated: prefer PrepareRunnerStart(...) with LLMLoopRunner.Start(...) or another Runner.
 func (s *ConversationService) SubmitPrompt(ctx context.Context, in SubmitPromptInput) (SubmitPromptResult, error) {
 	if s == nil || s.cm == nil {
 		return SubmitPromptResult{}, errors.New("conversation service is not initialized")

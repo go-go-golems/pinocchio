@@ -85,6 +85,7 @@ func TestNewChatHTTPHandler_SubmitPromptContract(t *testing.T) {
 			},
 		},
 	}
+	//nolint:staticcheck // contract test intentionally covers the deprecated convenience handler
 	h := webhttp.NewChatHandler(svc, fakeResolver{
 		plan: webhttp.ResolvedConversationRequest{
 			ConvID:     "conv-1",

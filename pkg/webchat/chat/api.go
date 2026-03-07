@@ -21,9 +21,13 @@ type PrepareRunnerStartInput = root.PrepareRunnerStartInput
 type StartRequest = root.StartRequest
 
 // SubmitPromptInput defines queue/idempotency chat submission input.
+//
+//nolint:staticcheck // compatibility alias for the deprecated legacy chat startup path
 type SubmitPromptInput = root.SubmitPromptInput
 
 // SubmitPromptResult is the response contract for chat submission.
+//
+//nolint:staticcheck // compatibility alias for the deprecated legacy chat startup path
 type SubmitPromptResult = root.SubmitPromptResult
 
 var (
