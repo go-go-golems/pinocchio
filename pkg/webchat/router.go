@@ -58,12 +58,16 @@ func NewRouterFromDeps(ctx context.Context, deps RouterDeps, opts ...RouterOptio
 	if deps.StreamBackend == nil {
 		return nil, errors.New("stream backend is nil")
 	}
+	eventRouter := deps.StreamBackend.EventRouter()
+	if eventRouter == nil {
+		return nil, errors.New("stream backend event router is nil")
+	}
 	r := &Router{
 		baseCtx:       ctx,
 		mux:           http.NewServeMux(),
 		staticFS:      deps.StaticFS,
 		settings:      deps.Settings,
-		router:        deps.StreamBackend.EventRouter(),
+		router:        eventRouter,
 		streamBackend: deps.StreamBackend,
 		timelineStore: deps.TimelineStore,
 		turnStore:     deps.TurnStore,
