@@ -1,6 +1,8 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/go-go-golems/glazed/pkg/cmds/fields"
@@ -46,4 +48,18 @@ func TestResolveProfileRegistries_PrefersDefaultSectionValue(t *testing.T) {
 
 	got := resolveProfileRegistries(parsed, "./profiles-from-default.yaml")
 	require.Equal(t, "./profiles-from-default.yaml", got)
+}
+
+func TestResolveProfileRegistries_FallsBackToDefaultXDGProfilesPath(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+	t.Setenv("HOME", tmpDir)
+
+	profilesDir := filepath.Join(tmpDir, "pinocchio")
+	require.NoError(t, os.MkdirAll(profilesDir, 0o755))
+	profilesPath := filepath.Join(profilesDir, "profiles.yaml")
+	require.NoError(t, os.WriteFile(profilesPath, []byte("slug: default\nprofiles: {}\n"), 0o644))
+
+	got := resolveProfileRegistries(values.New(), "")
+	require.Equal(t, profilesPath, got)
 }

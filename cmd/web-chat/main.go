@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 
 	clay "github.com/go-go-golems/clay/pkg"
@@ -75,17 +77,36 @@ func runtimeConfigScript(basePrefix string, debugAPI bool) (string, error) {
 
 func resolveProfileRegistries(parsed *values.Values, defaultSectionValue string) string {
 	resolved := strings.TrimSpace(defaultSectionValue)
-	if resolved != "" || parsed == nil {
+	if resolved != "" {
 		return resolved
 	}
 
-	profileSettings := struct {
-		ProfileRegistries string `glazed:"profile-registries"`
-	}{}
-	if err := parsed.DecodeSectionInto(webChatProfileSettingsSectionSlug, &profileSettings); err != nil {
-		return resolved
+	if parsed != nil {
+		profileSettings := struct {
+			ProfileRegistries string `glazed:"profile-registries"`
+		}{}
+		if err := parsed.DecodeSectionInto(webChatProfileSettingsSectionSlug, &profileSettings); err == nil {
+			resolved = strings.TrimSpace(profileSettings.ProfileRegistries)
+			if resolved != "" {
+				return resolved
+			}
+		}
 	}
-	return strings.TrimSpace(profileSettings.ProfileRegistries)
+
+	return defaultPinocchioProfileRegistriesIfPresent()
+}
+
+func defaultPinocchioProfileRegistriesIfPresent() string {
+	configDir, err := os.UserConfigDir()
+	if err != nil || strings.TrimSpace(configDir) == "" {
+		return ""
+	}
+	path := filepath.Join(configDir, "pinocchio", "profiles.yaml")
+	info, err := os.Stat(path)
+	if err != nil || info.IsDir() {
+		return ""
+	}
+	return path
 }
 
 func NewCommand() (*Command, error) {
