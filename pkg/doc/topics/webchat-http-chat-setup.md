@@ -40,12 +40,6 @@ For the reference `cmd/web-chat` application, runtime engine/provider settings n
   - `srv.APIHandler()` for core `/api/*` utilities
   - `srv.UIHandler()` for static UI
 
-`NewChatHTTPHandler(...)` is the convenience adapter for the built-in LLM chat path. If your app wants to instantiate a runner directly, keep the route app-owned and use:
-
-- `resolver.Resolve(req)`
-- `srv.ChatService().PrepareRunnerStart(...)`
-- `srv.ChatService().NewLLMLoopRunner().Start(...)` for the standard LLM path, or your own `Runner`
-
 ## Route Table
 
 | Route | Method | Ownership | Notes |
@@ -105,40 +99,6 @@ Use resolver policy for:
 - request validation and typed errors (`RequestResolutionError`)
 
 ## Request and Response Shapes
-
-### Direct runner-owned start path
-
-For feature-specific routes, keep `/chat` semantics app-owned and use the runner path explicitly:
-
-```go
-plan, err := resolver.Resolve(req)
-if err != nil {
-  // map to HTTP status
-}
-
-_, startReq, err := srv.ChatService().PrepareRunnerStart(req.Context(), webchat.PrepareRunnerStartInput{
-  Runtime: plan.RuntimeRequest(),
-  Payload: webchat.LLMLoopStartPayload{
-    Prompt:         plan.Prompt,
-    Overrides:      plan.Overrides,
-    IdempotencyKey: webhttp.IdempotencyKeyFromRequest(req, nil),
-  },
-  Metadata: map[string]any{"route": "feature-chat"},
-})
-if err != nil {
-  // handle error
-}
-
-runner := srv.ChatService().NewLLMLoopRunner()
-result, err := runner.Start(req.Context(), startReq)
-if err != nil {
-  // handle error
-}
-
-_ = json.NewEncoder(w).Encode(result.Response)
-```
-
-This is the preferred composition shape when your application wants one start endpoint per feature but still wants to reuse generic `/ws` and `/api/timeline`.
 
 ### POST /chat
 

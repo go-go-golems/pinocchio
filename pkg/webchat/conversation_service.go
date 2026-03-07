@@ -262,34 +262,11 @@ func (s *ConversationService) PrepareRunnerStart(ctx context.Context, in Prepare
 	return handle, s.startRequestForConversation(conv, in.Payload, in.Metadata), nil
 }
 
-func (s *ConversationService) NewLLMLoopRunner() *LLMLoopRunner {
-	if s == nil {
-		return nil
-	}
-	return NewLLMLoopRunner(LLMLoopRunnerConfig{
-		BaseCtx:        s.baseCtx,
-		StepController: s.stepCtrl,
-		TurnStore:      s.turnStore,
-		SEMPublisher:   s.semPublisher,
-		ToolFactories:  s.toolFactories,
-	})
-}
-
 func (s *ConversationService) startRequestForConversation(conv *Conversation, payload any, metadata map[string]any) StartRequest {
 	var timeline TimelineEmitter
-	if hook := s.TimelineUpsertHook(conv); hook != nil || s.timelineStore != nil {
-		timeline = TimelineEmitterFunc(func(ctx context.Context, entity *timelinepb.TimelineEntityV2, version uint64) error {
-			if ctx == nil {
-				ctx = s.baseCtx
-			}
-			if s.timelineStore != nil {
-				if err := s.timelineStore.Upsert(ctx, conv.ID, version, entity); err != nil {
-					return err
-				}
-			}
-			if hook != nil {
-				hook(entity, version)
-			}
+	if hook := s.TimelineUpsertHook(conv); hook != nil {
+		timeline = TimelineEmitterFunc(func(_ context.Context, entity *timelinepb.TimelineEntityV2, version uint64) error {
+			hook(entity, version)
 			return nil
 		})
 	}
@@ -359,7 +336,13 @@ func (s *ConversationService) startInferenceForPrompt(conv *Conversation, overri
 	if s == nil || conv == nil || conv.Sess == nil {
 		return nil, errors.New("invalid conversation")
 	}
-	runner := s.NewLLMLoopRunner()
+	runner := NewLLMLoopRunner(LLMLoopRunnerConfig{
+		BaseCtx:        s.baseCtx,
+		StepController: s.stepCtrl,
+		TurnStore:      s.turnStore,
+		SEMPublisher:   s.semPublisher,
+		ToolFactories:  s.toolFactories,
+	})
 	result, err := runner.Start(s.baseCtx, s.startRequestForConversation(conv, LLMLoopStartPayload{
 		Prompt:         prompt,
 		Overrides:      overrides,

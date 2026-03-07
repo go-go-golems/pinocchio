@@ -14,12 +14,6 @@ type ConversationHandle = root.ConversationHandle
 // ConversationRuntimeRequest carries conv/runtime resolution inputs.
 type ConversationRuntimeRequest = root.ConversationRuntimeRequest
 
-// PrepareRunnerStartInput defines the ensured-conversation inputs used before a Runner starts.
-type PrepareRunnerStartInput = root.PrepareRunnerStartInput
-
-// StartRequest contains the per-conversation surfaces supplied to a Runner.
-type StartRequest = root.StartRequest
-
 // SubmitPromptInput defines queue/idempotency chat submission input.
 type SubmitPromptInput = root.SubmitPromptInput
 
