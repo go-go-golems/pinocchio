@@ -8,7 +8,6 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
-	"time"
 
 	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/rs/zerolog/log"
@@ -206,11 +205,7 @@ func (sc *StreamCoordinator) nextSeq(streamID string) uint64 {
 	}
 	for {
 		current := sc.seq.Load()
-		now := uint64(time.Now().UnixMilli()) * 1_000_000
-		next := now
-		if next <= current {
-			next = current + 1
-		}
+		next := current + 1
 		if sc.seq.CompareAndSwap(current, next) {
 			return next
 		}

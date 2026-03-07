@@ -423,6 +423,7 @@ func (s *SQLiteTurnStore) List(ctx context.Context, q TurnQuery) ([]TurnSnapshot
 		where = "WHERE " + strings.Join(clauses, " AND ")
 	}
 
+	// #nosec G201 -- where only interpolates constant clause fragments; values remain parameterized in args.
 	query := fmt.Sprintf(`
 		SELECT
 			m.conv_id,

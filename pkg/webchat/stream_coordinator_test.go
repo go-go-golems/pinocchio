@@ -73,7 +73,6 @@ func TestStreamCoordinator_FallsBackToLocalSeq(t *testing.T) {
 	defer cancel()
 	require.NoError(t, sc.Start(ctx))
 
-	minBase := uint64(time.Now().UnixMilli()) * 1_000_000
 	msg := message.NewMessage("1", []byte(`{"type":"log","level":"info","message":"hi"}`))
 	msg.Metadata.Set("xid", "bad")
 	ch <- msg
@@ -81,7 +80,7 @@ func TestStreamCoordinator_FallsBackToLocalSeq(t *testing.T) {
 
 	select {
 	case got := <-seqCh:
-		require.GreaterOrEqual(t, got, minBase)
+		require.Equal(t, uint64(1), got)
 	case <-time.After(2 * time.Second):
 		t.Fatal("timeout waiting for stream coordinator")
 	}
