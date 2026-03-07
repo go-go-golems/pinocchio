@@ -36,10 +36,10 @@ jobs:
           GEPPETTO_VERSION=$(go list -m -f '{{.Version}}' github.com/go-go-golems/geppetto)
           echo "Installing geppetto-lint @ ${GEPPETTO_VERSION}"
           GOBIN=/tmp go install github.com/go-go-golems/geppetto/cmd/geppetto-lint@${GEPPETTO_VERSION}
+      - name: Install golangci-lint with workflow Go toolchain
+        run: |
+          GOBIN=/tmp go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.4.0
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v9
-        with:
-          version: v2.4.0
-          args: --timeout=5m
+        run: /tmp/golangci-lint run -v --timeout=5m
       - name: Run geppetto custom linters
         run: go vet -vettool=/tmp/geppetto-lint ./...
