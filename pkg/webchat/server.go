@@ -27,6 +27,7 @@ type Server struct {
 
 // NewServer builds a Router and http.Server pair for app-composed webchat services.
 // The returned server runs event routing plus whichever HTTP handlers the caller mounted.
+// Deprecated: use BuildRouterDepsFromValues plus NewServerFromDeps, or call NewServerFromDeps directly with explicit dependencies.
 func NewServer(ctx context.Context, parsed *values.Values, staticFS fs.FS, opts ...RouterOption) (*Server, error) {
 	deps, err := BuildRouterDepsFromValues(ctx, parsed, staticFS)
 	if err != nil {

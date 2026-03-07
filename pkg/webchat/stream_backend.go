@@ -41,6 +41,7 @@ func NewStreamBackend(ctx context.Context, settings rediscfg.Settings) (StreamBa
 	}, nil
 }
 
+// Deprecated: use NewStreamBackend with already-decoded redis settings.
 func NewStreamBackendFromValues(ctx context.Context, parsed *values.Values) (StreamBackend, error) {
 	if ctx == nil {
 		return nil, errors.New("ctx is nil")

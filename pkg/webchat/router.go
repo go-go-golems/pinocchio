@@ -40,6 +40,7 @@ type RouterSettings struct {
 
 // NewRouter creates webchat core plus optional HTTP utility handlers (UI + core API).
 // It does not register app-owned transport routes such as /chat or /ws.
+// Deprecated: use BuildRouterDepsFromValues plus NewRouterFromDeps, or call NewRouterFromDeps directly with explicit dependencies.
 func NewRouter(ctx context.Context, parsed ParsedRouterInputs, staticFS fs.FS, opts ...RouterOption) (*Router, error) {
 	deps, err := BuildRouterDepsFromValues(ctx, parsed, staticFS)
 	if err != nil {

@@ -24,7 +24,8 @@ type ConversationHandle = root.ConversationHandle
 type ConversationRuntimeRequest = root.ConversationRuntimeRequest
 
 var (
-	NewBackend           = root.NewStreamBackend
-	NewHub               = root.NewStreamHub
+	NewBackend = root.NewStreamBackend
+	NewHub     = root.NewStreamHub
+	// Deprecated: use NewBackend or root.NewStreamBackend with already-decoded redis settings.
 	NewBackendFromValues = root.NewStreamBackendFromValues
 )
