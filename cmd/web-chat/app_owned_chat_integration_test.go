@@ -98,7 +98,6 @@ func newAppOwnedIntegrationServer(t *testing.T) *httptest.Server {
 	)
 	require.NoError(t, err)
 	requestResolver := newProfileRequestResolver(profileRegistry, gepprofiles.MustRegistrySlug(defaultRegistrySlug))
-	//nolint:staticcheck // integration test coverage for the legacy convenience handler remains intentional
 	chatHandler := webhttp.NewChatHandler(webchatSrv.ChatService(), requestResolver)
 	runnerHandler := func(w http.ResponseWriter, req *http.Request) {
 		if req.Method != http.MethodPost {

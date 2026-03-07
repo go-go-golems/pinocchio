@@ -83,7 +83,6 @@ func (e *RequestResolutionError) Unwrap() error { return e.Err }
 
 // ChatService describes the chat submission surface used by HTTP handlers.
 type ChatService interface {
-	//nolint:staticcheck // compatibility surface for the deprecated legacy chat startup path
 	SubmitPrompt(ctx context.Context, in root.SubmitPromptInput) (root.SubmitPromptResult, error)
 }
 
@@ -117,9 +116,8 @@ func IdempotencyKeyFromRequest(r *http.Request, body *ChatRequestBody) string {
 }
 
 // NewChatHandler adapts the chat-oriented SubmitPrompt path to HTTP.
-//
-// Deprecated: prefer an app-owned handler that resolves the request, calls
-// PrepareRunnerStart(...), chooses a Runner, and then calls Runner.Start(...).
+// It remains as a convenience layer over the runner architecture; embedding
+// applications can also resolve requests and call PrepareRunnerStart plus Runner.Start directly.
 func NewChatHandler(svc ChatService, resolver ConversationRequestResolver) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
 		if req.Method != http.MethodPost {

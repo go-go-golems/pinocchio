@@ -84,9 +84,6 @@ func (s *ChatService) NewLLMLoopRunner() *LLMLoopRunner {
 	return s.svc.NewLLMLoopRunner()
 }
 
-// SubmitPrompt starts the legacy chat-oriented inference path.
-//
-// Deprecated: prefer PrepareRunnerStart(...) with LLMLoopRunner.Start(...) or another Runner.
 func (s *ChatService) SubmitPrompt(ctx context.Context, in SubmitPromptInput) (SubmitPromptResult, error) {
 	if s == nil || s.svc == nil {
 		return SubmitPromptResult{}, errors.New("chat service is not initialized")
