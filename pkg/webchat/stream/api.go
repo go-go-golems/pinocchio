@@ -24,6 +24,7 @@ type ConversationHandle = root.ConversationHandle
 type ConversationRuntimeRequest = root.ConversationRuntimeRequest
 
 var (
+	NewBackend           = root.NewStreamBackend
 	NewHub               = root.NewStreamHub
 	NewBackendFromValues = root.NewStreamBackendFromValues
 )

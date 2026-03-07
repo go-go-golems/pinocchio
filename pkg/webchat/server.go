@@ -28,10 +28,20 @@ type Server struct {
 // NewServer builds a Router and http.Server pair for app-composed webchat services.
 // The returned server runs event routing plus whichever HTTP handlers the caller mounted.
 func NewServer(ctx context.Context, parsed *values.Values, staticFS fs.FS, opts ...RouterOption) (*Server, error) {
+	deps, err := BuildRouterDepsFromValues(ctx, parsed, staticFS)
+	if err != nil {
+		return nil, err
+	}
+	return NewServerFromDeps(ctx, deps, opts...)
+}
+
+// NewServerFromDeps builds a Router and http.Server pair from explicit infrastructure dependencies.
+// The returned server runs event routing plus whichever HTTP handlers the caller mounted.
+func NewServerFromDeps(ctx context.Context, deps RouterDeps, opts ...RouterOption) (*Server, error) {
 	if ctx == nil {
 		return nil, errors.New("ctx is nil")
 	}
-	r, err := NewRouter(ctx, parsed, staticFS, opts...)
+	r, err := NewRouterFromDeps(ctx, deps, opts...)
 	if err != nil {
 		return nil, err
 	}

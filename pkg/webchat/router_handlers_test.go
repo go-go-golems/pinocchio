@@ -2,13 +2,11 @@ package webchat
 
 import (
 	"context"
+	"github.com/stretchr/testify/require"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"testing/fstest"
-
-	"github.com/go-go-golems/glazed/pkg/cmds/values"
-	"github.com/stretchr/testify/require"
 )
 
 func TestUIHandler_ServesIndexFromStaticFS(t *testing.T) {
@@ -56,7 +54,10 @@ func TestAPIHandler_DoesNotOwnChatOrWSRoutes(t *testing.T) {
 	require.Equal(t, http.StatusNotFound, wsRec.Code)
 }
 
-func TestNewRouter_RequiresRuntimeComposer(t *testing.T) {
-	_, err := NewRouter(context.Background(), values.New(), fstest.MapFS{})
+func TestNewRouterFromDeps_RequiresRuntimeComposer(t *testing.T) {
+	_, err := NewRouterFromDeps(context.Background(), RouterDeps{
+		StaticFS:      fstest.MapFS{},
+		StreamBackend: mustNewInMemoryStreamBackend(t),
+	})
 	require.ErrorContains(t, err, "runtime composer is not configured")
 }

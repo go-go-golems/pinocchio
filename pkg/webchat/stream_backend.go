@@ -26,6 +26,21 @@ type eventRouterStreamBackend struct {
 	redisAddr    string
 }
 
+func NewStreamBackend(ctx context.Context, settings rediscfg.Settings) (StreamBackend, error) {
+	if ctx == nil {
+		return nil, errors.New("ctx is nil")
+	}
+	router, err := rediscfg.BuildRouter(settings, true)
+	if err != nil {
+		return nil, errors.Wrap(err, "build event router")
+	}
+	return &eventRouterStreamBackend{
+		router:       router,
+		redisEnabled: settings.Enabled,
+		redisAddr:    settings.Addr,
+	}, nil
+}
+
 func NewStreamBackendFromValues(ctx context.Context, parsed *values.Values) (StreamBackend, error) {
 	if ctx == nil {
 		return nil, errors.New("ctx is nil")
@@ -35,15 +50,7 @@ func NewStreamBackendFromValues(ctx context.Context, parsed *values.Values) (Str
 	}
 	rs := rediscfg.Settings{}
 	_ = parsed.DecodeSectionInto("redis", &rs)
-	router, err := rediscfg.BuildRouter(rs, true)
-	if err != nil {
-		return nil, errors.Wrap(err, "build event router")
-	}
-	return &eventRouterStreamBackend{
-		router:       router,
-		redisEnabled: rs.Enabled,
-		redisAddr:    rs.Addr,
-	}, nil
+	return NewStreamBackend(ctx, rs)
 }
 
 func (b *eventRouterStreamBackend) EventRouter() *events.EventRouter {
