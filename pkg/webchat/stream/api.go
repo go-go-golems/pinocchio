@@ -1,6 +1,13 @@
 package stream
 
-import root "github.com/go-go-golems/pinocchio/pkg/webchat"
+import (
+	"context"
+	"errors"
+
+	"github.com/go-go-golems/glazed/pkg/cmds/values"
+	rediscfg "github.com/go-go-golems/pinocchio/pkg/redisstream"
+	root "github.com/go-go-golems/pinocchio/pkg/webchat"
+)
 
 // Hub owns per-conversation streaming lifecycle.
 type Hub = root.StreamHub
@@ -24,6 +31,20 @@ type ConversationHandle = root.ConversationHandle
 type ConversationRuntimeRequest = root.ConversationRuntimeRequest
 
 var (
-	NewHub               = root.NewStreamHub
-	NewBackendFromValues = root.NewStreamBackendFromValues
+	NewBackend = root.NewStreamBackend
+	NewHub     = root.NewStreamHub
 )
+
+// NewBackendFromValues decodes redis settings from parsed values and builds a stream backend.
+// Deprecated: use NewBackend or root.NewStreamBackend with already-decoded redis settings.
+func NewBackendFromValues(ctx context.Context, parsed *values.Values) (Backend, error) {
+	if ctx == nil {
+		return nil, errors.New("ctx is nil")
+	}
+	if parsed == nil {
+		return nil, errors.New("parsed values are nil")
+	}
+	settings := rediscfg.Settings{}
+	_ = parsed.DecodeSectionInto("redis", &settings)
+	return root.NewStreamBackend(ctx, settings)
+}

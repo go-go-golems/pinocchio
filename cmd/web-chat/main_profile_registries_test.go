@@ -1,8 +1,11 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
+	"github.com/go-go-golems/glazed/pkg/cli"
 	"github.com/go-go-golems/glazed/pkg/cmds/fields"
 	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	"github.com/stretchr/testify/require"
@@ -39,6 +42,10 @@ func TestResolveProfileRegistries_FallsBackToProfileSettingsSection(t *testing.T
 
 	got := resolveProfileRegistries(parsed, "")
 	require.Equal(t, "./profiles.yaml", got)
+
+	gotValue, gotSource := resolveProfileRegistriesWithSource(parsed, "")
+	require.Equal(t, "./profiles.yaml", gotValue)
+	require.Equal(t, webChatProfileSettingsSectionSlug, gotSource)
 }
 
 func TestResolveProfileRegistries_PrefersDefaultSectionValue(t *testing.T) {
@@ -46,4 +53,41 @@ func TestResolveProfileRegistries_PrefersDefaultSectionValue(t *testing.T) {
 
 	got := resolveProfileRegistries(parsed, "./profiles-from-default.yaml")
 	require.Equal(t, "./profiles-from-default.yaml", got)
+
+	gotValue, gotSource := resolveProfileRegistriesWithSource(parsed, "./profiles-from-default.yaml")
+	require.Equal(t, "./profiles-from-default.yaml", gotValue)
+	require.Equal(t, "default-section", gotSource)
+}
+
+func TestResolveProfileRegistries_FallsBackToDefaultXDGProfilesPath(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+	t.Setenv("HOME", tmpDir)
+
+	profilesDir := filepath.Join(tmpDir, "pinocchio")
+	require.NoError(t, os.MkdirAll(profilesDir, 0o755))
+	profilesPath := filepath.Join(profilesDir, "profiles.yaml")
+	require.NoError(t, os.WriteFile(profilesPath, []byte("slug: default\nprofiles: {}\n"), 0o644))
+
+	got := resolveProfileRegistries(values.New(), "")
+	require.Equal(t, profilesPath, got)
+
+	gotValue, gotSource := resolveProfileRegistriesWithSource(values.New(), "")
+	require.Equal(t, profilesPath, gotValue)
+	require.Equal(t, "xdg-default", gotSource)
+}
+
+func TestWebChatCommand_DoesNotExposeDirectAIRuntimeFlags(t *testing.T) {
+	cmdDef, err := NewCommand()
+	require.NoError(t, err)
+
+	cobraCmd, err := cli.BuildCobraCommand(cmdDef, cli.WithParserConfig(cli.CobraParserConfig{
+		AppName: "pinocchio",
+	}))
+	require.NoError(t, err)
+
+	require.Nil(t, cobraCmd.Flags().Lookup("ai-engine"))
+	require.Nil(t, cobraCmd.Flags().Lookup("ai-api-type"))
+	require.NotNil(t, cobraCmd.Flags().Lookup("profile-registries"))
+	require.NotNil(t, cobraCmd.Flags().Lookup("profile"))
 }

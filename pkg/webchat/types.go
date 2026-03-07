@@ -13,7 +13,6 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/inference/toolloop"
 	geptools "github.com/go-go-golems/geppetto/pkg/inference/tools"
 	"github.com/go-go-golems/geppetto/pkg/turns"
-	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
 	timelinepb "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/timeline"
@@ -31,9 +30,9 @@ type EventSinkWrapper func(convID string, req infruntime.ConversationRuntimeRequ
 // Router wires HTTP endpoints, registries and conversation lifecycle.
 type Router struct {
 	baseCtx  context.Context
-	parsed   *values.Values
 	mux      *http.ServeMux
 	staticFS fs.FS
+	settings RouterSettings
 
 	// event router (in-memory or Redis)
 	router *events.EventRouter

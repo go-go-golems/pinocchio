@@ -10,31 +10,27 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/inference/middlewarecfg"
 	gepprofiles "github.com/go-go-golems/geppetto/pkg/profiles"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
-	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 	"github.com/rs/zerolog/log"
 )
 
 type ProfileRuntimeComposer struct {
-	parsed      *values.Values
 	definitions middlewarecfg.DefinitionRegistry
 	buildDeps   middlewarecfg.BuildDeps
 }
 
 func newProfileRuntimeComposer(
-	parsed *values.Values,
 	definitions middlewarecfg.DefinitionRegistry,
 	buildDeps middlewarecfg.BuildDeps,
 ) *ProfileRuntimeComposer {
 	return &ProfileRuntimeComposer{
-		parsed:      parsed,
 		definitions: definitions,
 		buildDeps:   buildDeps,
 	}
 }
 
 func (c *ProfileRuntimeComposer) Compose(ctx context.Context, req infruntime.ConversationRuntimeRequest) (infruntime.ComposedRuntime, error) {
-	if c == nil || c.parsed == nil {
+	if c == nil {
 		return infruntime.ComposedRuntime{}, fmt.Errorf("runtime composer is not configured")
 	}
 	if ctx == nil {
@@ -71,7 +67,7 @@ func (c *ProfileRuntimeComposer) Compose(ctx context.Context, req infruntime.Con
 		return infruntime.ComposedRuntime{}, err
 	}
 
-	stepSettings, err := settings.NewStepSettingsFromParsedValues(c.parsed)
+	stepSettings, err := settings.NewStepSettings()
 	if err != nil {
 		return infruntime.ComposedRuntime{}, err
 	}

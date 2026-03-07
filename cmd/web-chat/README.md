@@ -24,6 +24,7 @@ SectionType: GeneralTopic
 - `pkg/webchat` provides service surfaces and helper handlers.
 - Timeline hydration is served at `/api/timeline`.
 - Debug endpoints live under `/api/debug/*` when `--debug-api` is enabled.
+- Runtime engine/provider selection comes from the resolved profile registry runtime, not direct `--ai-*` command flags.
 
 ## Directory Structure
 
@@ -168,6 +169,12 @@ go run ./cmd/web-chat web-chat \
   --profile-registries ./profiles.yaml \
   --timeline-js-script ./scripts/timeline-llm-delta-reducer.js
 ```
+
+Runtime configuration note:
+
+- `web-chat` no longer exposes direct AI runtime flags such as `--ai-engine` or `--ai-api-type`.
+- Model/provider settings, API keys, and related step settings must come from the selected profile stack in `--profile-registries`.
+- Command parsing is now limited to server/profile/transport settings plus standard command/config handling.
 
 Example with root mount and non-default dev ports:
 

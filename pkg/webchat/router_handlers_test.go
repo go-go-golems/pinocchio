@@ -2,14 +2,34 @@ package webchat
 
 import (
 	"context"
+	"errors"
+	"github.com/stretchr/testify/require"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"testing/fstest"
 
-	"github.com/go-go-golems/glazed/pkg/cmds/values"
-	"github.com/stretchr/testify/require"
+	"github.com/ThreeDotsLabs/watermill/message"
+	"github.com/go-go-golems/geppetto/pkg/events"
 )
+
+type nilEventRouterStreamBackend struct{}
+
+func (nilEventRouterStreamBackend) EventRouter() *events.EventRouter {
+	return nil
+}
+
+func (nilEventRouterStreamBackend) Publisher() message.Publisher {
+	return nil
+}
+
+func (nilEventRouterStreamBackend) BuildSubscriber(context.Context, string) (message.Subscriber, bool, error) {
+	return nil, false, errors.New("not implemented")
+}
+
+func (nilEventRouterStreamBackend) Close() error {
+	return nil
+}
 
 func TestUIHandler_ServesIndexFromStaticFS(t *testing.T) {
 	staticFS := fstest.MapFS{
@@ -56,7 +76,18 @@ func TestAPIHandler_DoesNotOwnChatOrWSRoutes(t *testing.T) {
 	require.Equal(t, http.StatusNotFound, wsRec.Code)
 }
 
-func TestNewRouter_RequiresRuntimeComposer(t *testing.T) {
-	_, err := NewRouter(context.Background(), values.New(), fstest.MapFS{})
+func TestNewRouterFromDeps_RequiresRuntimeComposer(t *testing.T) {
+	_, err := NewRouterFromDeps(context.Background(), RouterDeps{
+		StaticFS:      fstest.MapFS{},
+		StreamBackend: mustNewInMemoryStreamBackend(t),
+	})
 	require.ErrorContains(t, err, "runtime composer is not configured")
+}
+
+func TestNewRouterFromDeps_RejectsNilEventRouter(t *testing.T) {
+	_, err := NewRouterFromDeps(context.Background(), RouterDeps{
+		StaticFS:      fstest.MapFS{},
+		StreamBackend: nilEventRouterStreamBackend{},
+	}, WithRuntimeComposer(stubRuntimeComposer()))
+	require.ErrorContains(t, err, "stream backend event router is nil")
 }

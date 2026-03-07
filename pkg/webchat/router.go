@@ -4,8 +4,6 @@ import (
 	"context"
 	"io/fs"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -15,9 +13,7 @@ import (
 
 	"github.com/go-go-golems/geppetto/pkg/inference/middleware"
 	"github.com/go-go-golems/geppetto/pkg/inference/toolloop"
-	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
-	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
 )
 
 // RouterSettings are exposed via parameter layers (addr, agent, idle timeout, etc.).
@@ -44,78 +40,47 @@ type RouterSettings struct {
 
 // NewRouter creates webchat core plus optional HTTP utility handlers (UI + core API).
 // It does not register app-owned transport routes such as /chat or /ws.
-func NewRouter(ctx context.Context, parsed *values.Values, staticFS fs.FS, opts ...RouterOption) (*Router, error) {
-	if ctx == nil {
-		return nil, errors.New("ctx is nil")
-	}
-	streamBackend, err := NewStreamBackendFromValues(ctx, parsed)
+// Deprecated: use BuildRouterDepsFromValues plus NewRouterFromDeps, or call NewRouterFromDeps directly with explicit dependencies.
+func NewRouter(ctx context.Context, parsed ParsedRouterInputs, staticFS fs.FS, opts ...RouterOption) (*Router, error) {
+	deps, err := BuildRouterDepsFromValues(ctx, parsed, staticFS)
 	if err != nil {
 		return nil, err
 	}
+	return NewRouterFromDeps(ctx, deps, opts...)
+}
+
+// NewRouterFromDeps creates webchat core from already resolved infrastructure inputs.
+// It does not register app-owned transport routes such as /chat or /ws.
+func NewRouterFromDeps(ctx context.Context, deps RouterDeps, opts ...RouterOption) (*Router, error) {
+	if ctx == nil {
+		return nil, errors.New("ctx is nil")
+	}
+	if deps.StreamBackend == nil {
+		return nil, errors.New("stream backend is nil")
+	}
+	eventRouter := deps.StreamBackend.EventRouter()
+	if eventRouter == nil {
+		return nil, errors.New("stream backend event router is nil")
+	}
 	r := &Router{
 		baseCtx:       ctx,
-		parsed:        parsed,
 		mux:           http.NewServeMux(),
-		staticFS:      staticFS,
-		router:        streamBackend.EventRouter(),
-		streamBackend: streamBackend,
+		staticFS:      deps.StaticFS,
+		settings:      deps.Settings,
+		router:        eventRouter,
+		streamBackend: deps.StreamBackend,
+		timelineStore: deps.TimelineStore,
+		turnStore:     deps.TurnStore,
 		mwFactories:   map[string]MiddlewareBuilder{},
 		toolFactories: map[string]infruntime.ToolRegistrar{},
 	}
-
-	// Timeline store for hydration (SQLite when configured, in-memory otherwise).
-	s := &RouterSettings{}
-	if err := parsed.DecodeSectionInto(values.DefaultSlug, s); err != nil {
-		return nil, errors.Wrap(err, "parse router settings")
-	}
-	if dsn := strings.TrimSpace(s.TimelineDSN); dsn != "" {
-		store, err := chatstore.NewSQLiteTimelineStore(dsn)
-		if err != nil {
-			return nil, errors.Wrap(err, "open timeline store (dsn)")
-		}
-		r.timelineStore = store
-	} else if p := strings.TrimSpace(s.TimelineDB); p != "" {
-		if dir := filepath.Dir(p); dir != "" && dir != "." {
-			_ = os.MkdirAll(dir, 0755)
-		}
-		dsn, err := chatstore.SQLiteTimelineDSNForFile(p)
-		if err != nil {
-			return nil, errors.Wrap(err, "build timeline DSN")
-		}
-		store, err := chatstore.NewSQLiteTimelineStore(dsn)
-		if err != nil {
-			return nil, errors.Wrap(err, "open timeline store (file)")
-		}
-		r.timelineStore = store
-	} else {
-		r.timelineStore = chatstore.NewInMemoryTimelineStore(s.TimelineInMemoryMaxEntities)
+	if r.timelineStore == nil {
+		r.timelineStore = NewDefaultTimelineStore(deps.Settings)
 	}
 	if r.cm != nil {
 		r.cm.SetTimelineStore(r.timelineStore)
 	}
 	r.timelineService = NewTimelineService(r.timelineStore)
-
-	// Optional turn snapshot store (SQLite when configured).
-	if dsn := strings.TrimSpace(s.TurnsDSN); dsn != "" {
-		store, err := chatstore.NewSQLiteTurnStore(dsn)
-		if err != nil {
-			return nil, errors.Wrap(err, "open turn store (dsn)")
-		}
-		r.turnStore = store
-	} else if p := strings.TrimSpace(s.TurnsDB); p != "" {
-		if dir := filepath.Dir(p); dir != "" && dir != "." {
-			_ = os.MkdirAll(dir, 0755)
-		}
-		dsn, err := chatstore.SQLiteTurnDSNForFile(p)
-		if err != nil {
-			return nil, errors.Wrap(err, "build turn DSN")
-		}
-		store, err := chatstore.NewSQLiteTurnStore(dsn)
-		if err != nil {
-			return nil, errors.Wrap(err, "open turn store (file)")
-		}
-		r.turnStore = store
-	}
 
 	for _, opt := range opts {
 		if opt == nil {
@@ -148,13 +113,13 @@ func NewRouter(ctx context.Context, parsed *values.Values, staticFS fs.FS, opts 
 	}
 	if r.cm != nil {
 		r.cm.SetTimelineStore(r.timelineStore)
-		r.cm.SetIdleTimeoutSeconds(s.IdleTimeoutSeconds)
+		r.cm.SetIdleTimeoutSeconds(r.settings.IdleTimeoutSeconds)
 		r.cm.SetEvictionConfig(
-			time.Duration(s.EvictIdleSeconds)*time.Second,
-			time.Duration(s.EvictIntervalSeconds)*time.Second,
+			time.Duration(r.settings.EvictIdleSeconds)*time.Second,
+			time.Duration(r.settings.EvictIntervalSeconds)*time.Second,
 		)
 	}
-	r.idleTimeoutSec = s.IdleTimeoutSeconds
+	r.idleTimeoutSec = r.settings.IdleTimeoutSeconds
 
 	svc, err := NewConversationService(ConversationServiceConfig{
 		BaseCtx:            ctx,
@@ -238,10 +203,7 @@ func (r *Router) TimelineService() *TimelineService {
 
 // BuildHTTPServer constructs an http.Server using settings from layers.
 func (r *Router) BuildHTTPServer() (*http.Server, error) {
-	s := &RouterSettings{}
-	if err := r.parsed.DecodeSectionInto(values.DefaultSlug, s); err != nil {
-		return nil, err
-	}
+	s := r.settings
 	r.idleTimeoutSec = s.IdleTimeoutSeconds
 	if r.cm != nil {
 		r.cm.SetIdleTimeoutSeconds(s.IdleTimeoutSeconds)

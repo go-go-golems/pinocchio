@@ -26,7 +26,9 @@ The current webchat integration model is handler-first and app-owned:
 
 Recommended baseline:
 
-- Build `webchat.Server` with `webchat.NewServer(...)`.
+- Prefer building `webchat.Server` from explicit dependencies with `webchat.NewServerFromDeps(...)`.
+- Use `webchat.BuildRouterDepsFromValues(...)` when your app still starts from Glazed-parsed values and you want a thin adapter layer.
+- Keep `webchat.NewServer(...)` for compatibility with existing parsed-values callers.
 - Register middleware and tool factories on the server.
 - Mount app-owned handlers with:
   - `webchat.NewChatHTTPHandler(srv.ChatService(), resolver)`
@@ -63,10 +65,14 @@ func run(ctx context.Context, parsed *values.Values) error {
   runtimeComposer := newWebChatRuntimeComposer(parsed, middlewareFactories)
   resolver := newWebChatProfileResolver(profiles)
 
-  srv, err := webchat.NewServer(
+  deps, err := webchat.BuildRouterDepsFromValues(ctx, parsed, staticFS)
+  if err != nil {
+    return err
+  }
+
+  srv, err := webchat.NewServerFromDeps(
     ctx,
-    parsed,
-    staticFS,
+    deps,
     webchat.WithRuntimeComposer(runtimeComposer),
   )
   if err != nil {
@@ -114,6 +120,19 @@ func run(ctx context.Context, parsed *values.Values) error {
   return srv.Run(ctx)
 }
 ```
+
+Compatibility path:
+
+```go
+srv, err := webchat.NewServer(
+  ctx,
+  parsed,
+  staticFS,
+  webchat.WithRuntimeComposer(runtimeComposer),
+)
+```
+
+Use this when you do not yet need explicit dependency control. Internally, it now delegates through `BuildRouterDepsFromValues(...)` and `NewServerFromDeps(...)`.
 
 ## Request Resolver Contract
 
@@ -172,6 +191,25 @@ Turn snapshots are debug-facing and served via `/api/debug/turns`.
 
 `Router` is no longer the primary route owner for `/chat` and `/ws` in top-level docs.
 
+## Constructor Layering
+
+The preferred layering after the Values separation refactor is:
+
+```text
+parsed values (optional)
+  -> BuildRouterDepsFromValues(...)
+  -> NewServerFromDeps(...) or NewRouterFromDeps(...)
+
+explicit infrastructure
+  -> NewServerFromDeps(...) or NewRouterFromDeps(...)
+```
+
+Core rules:
+
+- `NewServerFromDeps(...)` and `NewRouterFromDeps(...)` are the explicit constructor surfaces.
+- `NewServer(...)` and `NewRouter(...)` are compatibility adapters for parsed-values callers.
+- `BuildHTTPServer()` now reads retained `RouterSettings` rather than reaching back into parsed values.
+
 ## Troubleshooting
 
 | Problem | Cause | Solution |
@@ -184,6 +222,7 @@ Turn snapshots are debug-facing and served via `/api/debug/turns`.
 ## See Also
 
 - [Webchat HTTP Chat Setup](webchat-http-chat-setup.md)
+- [Webchat Values Separation Migration Guide](webchat-values-separation-migration-guide.md)
 - [Webchat User Guide](webchat-user-guide.md)
 - [Webchat Profile Registry Guide](webchat-profile-registry.md)
 - [Webchat Frontend Integration](webchat-frontend-integration.md)
