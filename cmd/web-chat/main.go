@@ -52,6 +52,7 @@ type webChatRuntimeConfig struct {
 }
 
 const webChatProfileSettingsSectionSlug = "profile-settings"
+const webChatCLIAppName = "webchat"
 
 func normalizeBasePrefix(prefix string) string {
 	p := strings.TrimSpace(prefix)
@@ -349,7 +350,10 @@ func main() {
 	c, err := NewCommand()
 	cobra.CheckErr(err)
 	command, err := cli.BuildCobraCommand(c, cli.WithParserConfig(cli.CobraParserConfig{
-		AppName: "pinocchio",
+		// Keep web-chat on its own config namespace. The full pinocchio app config
+		// carries top-level keys such as repositories: [] that are valid there but
+		// not shaped like Glazed section maps for this standalone command.
+		AppName: webChatCLIAppName,
 	}))
 	cobra.CheckErr(err)
 	root.AddCommand(command)
