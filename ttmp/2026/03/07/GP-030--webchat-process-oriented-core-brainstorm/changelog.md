@@ -9,3 +9,6 @@
 - Updated the ticket index and task list to reflect the new design work
 - Expanded the task list with detailed phase 2 and phase 3 implementation tasks covering runner extraction, service boundaries, HTTP helper adaptation, examples, and regression coverage
 - Converted GP-030 from design-only notes into an implementation ticket with a diary, explicit phase ordering, and the standing decisions to keep `Conversation`, keep runner instantiation app-owned, and extract the current LLM startup path first
+- Extracted the current LLM startup sequence behind `pkg/webchat.LLMLoopRunner`, added core runner types, and introduced `ConversationService.PrepareRunnerStart(...)` as the first embedding-oriented helper
+- Added the runner-first embedding path through `PrepareRunnerStart(...) + NewLLMLoopRunner(...)`, clarified the HTTP helper layer as convenience over the runner path, and fixed `TimelineEmitter` so runner-owned upserts persist to the timeline store before fanout
+- Closed the first GP-030 implementation slice after passing focused Go validation and `docmgr doctor`

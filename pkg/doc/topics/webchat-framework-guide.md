@@ -37,6 +37,11 @@ Recommended baseline:
 - Mount shared profile APIs with `webhttp.RegisterProfileAPIHandlers(...)`.
 - Optionally mount `srv.APIHandler()` and `srv.UIHandler()`.
 
+There are now two valid start paths:
+
+- convenience path: `webchat.NewChatHTTPHandler(...)` delegates to `SubmitPrompt(...)`
+- runner-first path: app handler resolves request policy, calls `PrepareRunnerStart(...)`, instantiates a runner, and calls `Runner.Start(...)`
+
 ## Core Pieces
 
 - `Server`: lifecycle wrapper for event routing plus `http.Server` runtime.
@@ -145,6 +150,8 @@ Use this when you do not yet need explicit dependency control. Internally, it no
 - `IdempotencyKey`
 
 Use this to keep runtime/profile/cookie policy in app code instead of framework internals.
+
+For runner-first handlers, convert the resolver output with `plan.RuntimeRequest()` and pass that into `PrepareRunnerStart(...)`.
 
 For full profile registry selection and CRUD semantics, see [Webchat Profile Registry Guide](webchat-profile-registry.md).
 
