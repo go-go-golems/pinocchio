@@ -548,6 +548,117 @@ ok  	github.com/go-go-golems/pinocchio/pkg/webchat	(cached)
 ok  	github.com/go-go-golems/pinocchio/cmd/web-chat	(cached)
 ```
 
+### Step 17. Assess the `os-openai-app-server` workspace before switching it to the pushed branch
+
+The follow-up question was not about `pinocchio` in isolation anymore. The real issue was whether pushing `task/unify-chat-backend` would destabilize the separate `/home/manuel/workspaces/2026-03-02/os-openai-app-server` workspace, especially because that workspace contains its own nested `pinocchio` checkout on `task/simplify-webchat` and other repos that may already depend on simplify-specific behavior.
+
+I treated this as a consumer-impact audit rather than a merge exercise. The main goal was to separate three things cleanly: what a `git push` changes, what a later workspace branch switch would change, and which simplify-only local edits would have to be backed out if that workspace adopts the pushed branch.
+
+### Prompt Context
+
+**User prompt (verbatim):** "Can you make an assessment of the state of /home/manuel/workspaces/2026-03-02/os-openai-app-server (and the checkout out git worktrees) to see what is goign to be impacted by pushing our current branch? We would have to undo some of the changes.
+
+Rwrite a detailed assessment document in the ticket and upload to remarkable."
+
+**Assistant interpretation:** Audit the multi-repo workspace that consumes `pinocchio`, identify the practical impact of adopting the current branch there, document what must be reverted or updated, and publish that assessment to both GP-031 and reMarkable.
+
+**Inferred user intent:** Avoid breaking a downstream workspace when the current `pinocchio` branch is pushed and later adopted, while preserving a written record of what would need to change in that workspace.
+
+### What I did
+
+- Confirmed that `/home/manuel/workspaces/2026-03-02/os-openai-app-server` is not itself a git repository and instead contains nested repos.
+- Enumerated nested repo roots and branch state, including the important fact that:
+  - `os-openai-app-server/pinocchio` is on `task/simplify-webchat`
+  - `deliver-mento-1/pinocchio` is on `task/unify-chat-backend`
+- Verified that `wesen-os/go.work` overlays the local `../pinocchio` checkout, making the workspace sensitive to branch changes in that nested repo.
+- Inspected the key consumer code paths in:
+  - `go-go-os-chat`
+  - `wesen-os`
+  - `web-agent-example`
+- Compared the simplify-branch unique commits to the current branch and identified which simplify outcomes are already preserved and which would have to be undone locally.
+- Wrote the assessment doc:
+  - `design/02-os-openai-app-server-workspace-impact-assessment-for-adopting-task-unify-chat-backend.md`
+
+### Why
+
+- A push alone does not mutate the downstream workspace; a local branch switch does.
+- Without separating contract compatibility from branch drift, it would be easy to overestimate the downstream risk.
+- The workspace contains ticket docs from simplify-webchat-era work that will become historically misleading if the local `pinocchio` checkout is switched.
+
+### What worked
+
+- The code evidence converged quickly: consumers already depend on the replayed request/debug contract cleanup, not on the simplify-only structural removals.
+- `wesen-os/go.work` provided the key explanation for why the local nested `pinocchio` checkout matters more than the tagged `go.mod` versions.
+- The assessment ended up being mostly about local worktree realignment and doc drift, not app-level source rewrites.
+
+### What didn't work
+
+- The initial `git -C /home/manuel/workspaces/2026-03-02/os-openai-app-server ...` commands failed with:
+
+```text
+fatal: not a git repository (or any of the parent directories): .git
+```
+
+- That forced a correction in approach: inspect the nested repos individually instead of treating the workspace folder as a single repo root.
+
+### What I learned
+
+- The `os-openai-app-server` workspace is already aligned with the `profile` / `registry` and `resolved_runtime_key` cutover in the places that matter most.
+- The local `pinocchio` simplify branch still carries extra structural deletions that downstream code does not appear to rely on.
+- The main rollback burden is therefore inside the nested `pinocchio` worktree and in simplify-era ticket docs, not in `go-go-os-chat` or `wesen-os` source code.
+
+### What was tricky to build
+
+- The tricky part was distinguishing "impact of push" from "impact of workspace adoption." Those are not the same event. A push changes the remote branch state, but the downstream workspace only feels it once `/home/manuel/workspaces/2026-03-02/os-openai-app-server/pinocchio` is switched away from `task/simplify-webchat` or updated in a way that makes `wesen-os/go.work` resolve against the new checkout contents.
+
+### What warrants a second pair of eyes
+
+- Whether there are any out-of-tree consumers of the simplify-only removed APIs that are not present in this workspace.
+- Whether the `geppetto` PI-021 docs should be amended immediately after the workspace branch switch or preserved as historical records with an explicit superseded note.
+
+### What should be done in the future
+
+- When the workspace is ready, switch the nested `pinocchio` checkout deliberately and treat that as the validation event.
+- Re-run the main consumer verification in `go-go-os-chat`, `wesen-os`, and `web-agent-example`.
+- Follow with doc cleanup for simplify-era tickets that currently describe the reverted structural removals as final.
+
+### Code review instructions
+
+- Start with:
+  - `design/02-os-openai-app-server-workspace-impact-assessment-for-adopting-task-unify-chat-backend.md`
+  - `wesen-os/go.work`
+  - `go-go-os-chat/pkg/profilechat/request_resolver.go`
+  - `wesen-os/pkg/assistantbackendmodule/module.go`
+- Verify the main claims by checking:
+
+```bash
+git -C /home/manuel/workspaces/2026-03-02/os-openai-app-server/pinocchio worktree list --porcelain
+git -C /home/manuel/workspaces/2026-03-02/os-openai-app-server/pinocchio log --oneline --reverse c97af5b6642cd0bdc823d6ba1e84175f8004bed7..task/simplify-webchat
+git -C /home/manuel/workspaces/2026-03-02/os-openai-app-server/pinocchio diff --name-status task/simplify-webchat...task/unify-chat-backend -- cmd/web-chat pkg/webchat
+rg -n "runtime_key|registry_slug|resolved_runtime_key|RegisterMiddleware|NewFromRouter" /home/manuel/workspaces/2026-03-02/os-openai-app-server/go-go-os-chat /home/manuel/workspaces/2026-03-02/os-openai-app-server/wesen-os /home/manuel/workspaces/2026-03-02/os-openai-app-server/web-agent-example -S
+```
+
+### Technical details
+
+- Workspace-sensitive module overlay:
+
+```text
+/home/manuel/workspaces/2026-03-02/os-openai-app-server/wesen-os/go.work
+use (
+  .
+  ../geppetto
+  ../go-go-os-chat
+  ../pinocchio
+  ...
+)
+```
+
+- Current branch/worktree split:
+  - `os-openai-app-server/pinocchio` -> `task/simplify-webchat` (`e93c449`)
+  - `deliver-mento-1/pinocchio` -> `task/unify-chat-backend` (`8a594b8`)
+- New assessment doc:
+  - `design/02-os-openai-app-server-workspace-impact-assessment-for-adopting-task-unify-chat-backend.md`
+
 ## Related
 
 - `design/01-merge-assessment.md`

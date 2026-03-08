@@ -9,3 +9,4 @@
 - [x] Remove unused alias webchat API subpackages after compatibility verification
 - [ ] Use the upstream-adaptation playbook when rebasing simplify-webchat follow-ups onto the current branch
 - [ ] Evaluate router/server compatibility-surface removal separately after external call-site inventory
+- [x] Assess os-openai-app-server workspace impact and rollback needs before switching its pinocchio checkout from task/simplify-webchat to task/unify-chat-backend
