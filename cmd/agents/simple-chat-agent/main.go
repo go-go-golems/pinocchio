@@ -15,7 +15,6 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/inference/engine/factory"
 	"github.com/go-go-golems/geppetto/pkg/inference/middleware"
 	"github.com/go-go-golems/geppetto/pkg/inference/tools"
-	geppettosections "github.com/go-go-golems/geppetto/pkg/sections"
 	"github.com/go-go-golems/geppetto/pkg/turns"
 	"github.com/go-go-golems/glazed/pkg/cli"
 	"github.com/go-go-golems/glazed/pkg/cmds"
@@ -29,6 +28,7 @@ import (
 	toolspkg "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/tools"
 	uipkg "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/ui"
 	eventspkg "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/xevents"
+	pinhelpers "github.com/go-go-golems/pinocchio/pkg/cmds/helpers"
 	agentmode "github.com/go-go-golems/pinocchio/pkg/middlewares/agentmode"
 	sqlitetool "github.com/go-go-golems/pinocchio/pkg/middlewares/sqlitetool"
 	rediscfg "github.com/go-go-golems/pinocchio/pkg/redisstream"
@@ -45,7 +45,7 @@ import (
 type SimpleAgentCmd struct{ *cmds.CommandDescription }
 
 func NewSimpleAgentCmd() (*SimpleAgentCmd, error) {
-	geLayers, err := geppettosections.CreateGeppettoSections()
+	profileSettingsSection, err := pinhelpers.NewProfileSettingsSection()
 	if err != nil {
 		return nil, err
 	}
@@ -68,7 +68,7 @@ func NewSimpleAgentCmd() (*SimpleAgentCmd, error) {
 				fields.WithHelp("Enable server-side tools (Responses builtin web_search)"),
 			),
 		),
-		cmds.WithSections(append(geLayers, redisLayer)...),
+		cmds.WithSections(profileSettingsSection, redisLayer),
 	)
 	return &SimpleAgentCmd{CommandDescription: desc}, nil
 }
@@ -131,8 +131,16 @@ func (c *SimpleAgentCmd) RunIntoWriter(ctx context.Context, parsed *values.Value
 	}
 	sink := middleware.NewWatermillSink(router.Publisher, "chat")
 
+	stepSettings, _, closeRuntime, err := pinhelpers.ResolveEffectiveStepSettings(ctx, parsed)
+	if err != nil {
+		return errors.Wrap(err, "resolve step settings")
+	}
+	if closeRuntime != nil {
+		defer closeRuntime()
+	}
+
 	// Engine
-	eng, err := factory.NewEngineFromParsedValues(parsed)
+	eng, err := factory.NewEngineFromStepSettings(stepSettings)
 	if err != nil {
 		return errors.Wrap(err, "engine")
 	}
@@ -319,8 +327,18 @@ func main() {
 
 	c, err := NewSimpleAgentCmd()
 	cobra.CheckErr(err)
-	command, err := cli.BuildCobraCommand(c, cli.WithCobraMiddlewaresFunc(geppettosections.GetCobraCommandGeppettoMiddlewares))
+	command, err := cli.BuildCobraCommand(c, cli.WithParserConfig(cli.CobraParserConfig{
+		AppName: "pinocchio",
+		ConfigFilesFunc: func(_ *values.Values, _ *cobra.Command, _ []string) ([]string, error) {
+			return nil, nil
+		},
+	}))
 	cobra.CheckErr(err)
+	for _, name := range []string{"print-yaml", "print-parsed-fields", "print-schema"} {
+		if flag := command.Flags().Lookup(name); flag != nil {
+			flag.Hidden = true
+		}
+	}
 	root.AddCommand(command)
 	cobra.CheckErr(root.Execute())
 }

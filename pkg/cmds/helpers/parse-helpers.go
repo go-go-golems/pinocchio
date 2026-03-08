@@ -15,7 +15,6 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cmds/fields"
 	"github.com/go-go-golems/glazed/pkg/cmds/sources"
 	"github.com/go-go-golems/glazed/pkg/cmds/values"
-	appconfig "github.com/go-go-golems/glazed/pkg/config"
 	"github.com/go-go-golems/pinocchio/pkg/cmds"
 	"github.com/go-go-golems/pinocchio/pkg/cmds/cmdlayers"
 )
@@ -23,6 +22,7 @@ import (
 type GeppettoLayersHelper struct {
 	Profile           string
 	ProfileRegistries string
+	ConfigFile        string
 	UseViper          bool
 }
 
@@ -43,6 +43,12 @@ func WithProfile(profile string) GeppettoLayersHelperOption {
 func WithUseViper(useViper bool) GeppettoLayersHelperOption {
 	return func(h *GeppettoLayersHelper) {
 		h.UseViper = useViper
+	}
+}
+
+func WithConfigFile(configFile string) GeppettoLayersHelperOption {
+	return func(h *GeppettoLayersHelper) {
+		h.ConfigFile = configFile
 	}
 }
 
@@ -93,12 +99,22 @@ func ParseGeppettoLayers(c *cmds.PinocchioCommand, options ...GeppettoLayersHelp
 	}
 
 	if helper.UseViper {
-		// Discover config file using ResolveAppConfigPath
 		configMiddlewares := []sources.Middleware{}
-		configPath, err := appconfig.ResolveAppConfigPath("pinocchio", "")
-		if err == nil && configPath != "" {
+		configFiles, err := resolveConfigFiles(nil)
+		if err != nil {
+			return nil, err
+		}
+		if explicit := strings.TrimSpace(helper.ConfigFile); explicit != "" {
+			explicitFiles, err := resolveConfigFilesForExplicit(explicit)
+			if err != nil {
+				return nil, err
+			}
+			configFiles = explicitFiles
+		}
+		for _, configPath := range configFiles {
 			configMiddlewares = append(configMiddlewares,
 				sources.FromFile(configPath,
+					sources.WithConfigFileMapper(configFileMapper),
 					sources.WithParseOptions(fields.WithSource("config")),
 				),
 			)
