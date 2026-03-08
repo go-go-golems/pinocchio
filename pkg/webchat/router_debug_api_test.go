@@ -120,7 +120,7 @@ func TestAPIHandler_DebugTurnsCanonicalRouteOnly(t *testing.T) {
 	status, body := runRequest(t, h, http.MethodGet, query, nil)
 	require.Equal(t, http.StatusOK, status)
 	require.Contains(t, string(body), `"turn_id":"turn-1"`)
-	require.Contains(t, string(body), `"runtime_key":"inventory"`)
+	require.Contains(t, string(body), `"resolved_runtime_key":"inventory"`)
 	require.Contains(t, string(body), `"inference_id":"inf-1"`)
 
 	legacyStatus, _ := runRequest(t, h, http.MethodGet, "/turns?conv_id=conv-1", nil)
@@ -249,7 +249,7 @@ func TestAPIHandler_DebugConversationsAndDetail(t *testing.T) {
 	require.NoError(t, json.Unmarshal(detailBody, &detail))
 	require.Equal(t, "conv-b", detail["conv_id"])
 	require.Equal(t, "session-b", detail["session_id"])
-	require.Equal(t, "agent", detail["current_runtime_key"])
+	require.Equal(t, "agent", detail["resolved_runtime_key"])
 	require.Equal(t, float64(2), detail["buffered_events"])
 	require.Equal(t, "req-1", detail["active_request_key"])
 	require.Equal(t, true, detail["has_timeline_source"])
@@ -288,7 +288,7 @@ func TestAPIHandler_DebugConversations_PersistedOnly(t *testing.T) {
 	require.Equal(t, "conv-past", item["conv_id"])
 	require.Equal(t, "persisted", item["source"])
 	require.Equal(t, "session-past", item["session_id"])
-	require.Equal(t, "default", item["current_runtime_key"])
+	require.Equal(t, "default", item["resolved_runtime_key"])
 	require.Equal(t, true, item["has_timeline_source"])
 
 	detailStatus, detailBody := runRequest(t, h, http.MethodGet, "/api/debug/conversations/conv-past", nil)
@@ -298,7 +298,7 @@ func TestAPIHandler_DebugConversations_PersistedOnly(t *testing.T) {
 	require.Equal(t, "conv-past", detail["conv_id"])
 	require.Equal(t, "persisted", detail["source"])
 	require.Equal(t, "session-past", detail["session_id"])
-	require.Equal(t, "default", detail["current_runtime_key"])
+	require.Equal(t, "default", detail["resolved_runtime_key"])
 	require.Equal(t, true, detail["has_timeline_source"])
 }
 
@@ -348,7 +348,7 @@ func TestAPIHandler_DebugConversations_MergedLiveAndPersisted(t *testing.T) {
 	require.Equal(t, "conv-merge", item["conv_id"])
 	require.Equal(t, "merged", item["source"])
 	require.Equal(t, "session-live", item["session_id"])
-	require.Equal(t, "agent", item["current_runtime_key"])
+	require.Equal(t, "agent", item["resolved_runtime_key"])
 	require.Equal(t, true, item["has_timeline_source"])
 	// Merged output should keep the most recent activity from either source.
 	require.Equal(t, float64(7000), item["last_activity_ms"])
@@ -359,7 +359,7 @@ func TestAPIHandler_DebugConversations_MergedLiveAndPersisted(t *testing.T) {
 	require.NoError(t, json.Unmarshal(detailBody, &detail))
 	require.Equal(t, "merged", detail["source"])
 	require.Equal(t, "session-live", detail["session_id"])
-	require.Equal(t, "agent", detail["current_runtime_key"])
+	require.Equal(t, "agent", detail["resolved_runtime_key"])
 	require.Equal(t, true, detail["has_timeline_source"])
 	require.Equal(t, float64(7000), detail["last_activity_ms"])
 }
@@ -431,7 +431,7 @@ func TestAPIHandler_DebugTurnDetail(t *testing.T) {
 	require.Len(t, items, 2)
 	first := items[0].(map[string]any)
 	require.Equal(t, "final", first["phase"])
-	require.Equal(t, "inventory", first["runtime_key"])
+	require.Equal(t, "inventory", first["resolved_runtime_key"])
 	require.Equal(t, "inf-1", first["inference_id"])
 	_, hasParsed := first["parsed"]
 	require.True(t, hasParsed)

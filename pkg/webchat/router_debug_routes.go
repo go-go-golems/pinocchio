@@ -32,16 +32,16 @@ func (r *Router) registerDebugAPIHandlers(mux *http.ServeMux) {
 		}
 
 		type convSummary struct {
-			ConvID            string `json:"conv_id"`
-			SessionID         string `json:"session_id"`
-			CurrentRuntimeKey string `json:"current_runtime_key"`
-			ActiveSockets     int    `json:"active_sockets"`
-			StreamRunning     bool   `json:"stream_running"`
-			QueueDepth        int    `json:"queue_depth"`
-			BufferedEvents    int    `json:"buffered_events"`
-			LastActivityMs    int64  `json:"last_activity_ms"`
-			HasTimelineSource bool   `json:"has_timeline_source"`
-			Source            string `json:"source,omitempty"`
+			ConvID             string `json:"conv_id"`
+			SessionID          string `json:"session_id"`
+			ResolvedRuntimeKey string `json:"resolved_runtime_key"`
+			ActiveSockets      int    `json:"active_sockets"`
+			StreamRunning      bool   `json:"stream_running"`
+			QueueDepth         int    `json:"queue_depth"`
+			BufferedEvents     int    `json:"buffered_events"`
+			LastActivityMs     int64  `json:"last_activity_ms"`
+			HasTimelineSource  bool   `json:"has_timeline_source"`
+			Source             string `json:"source,omitempty"`
 		}
 
 		itemsByConvID := map[string]convSummary{}
@@ -52,12 +52,12 @@ func (r *Router) registerDebugAPIHandlers(mux *http.ServeMux) {
 			} else {
 				for _, rec := range persisted {
 					itemsByConvID[rec.ConvID] = convSummary{
-						ConvID:            rec.ConvID,
-						SessionID:         rec.SessionID,
-						CurrentRuntimeKey: rec.RuntimeKey,
-						LastActivityMs:    rec.LastActivityMs,
-						HasTimelineSource: rec.HasTimeline || rec.LastSeenVersion > 0,
-						Source:            "persisted",
+						ConvID:             rec.ConvID,
+						SessionID:          rec.SessionID,
+						ResolvedRuntimeKey: rec.RuntimeKey,
+						LastActivityMs:     rec.LastActivityMs,
+						HasTimelineSource:  rec.HasTimeline || rec.LastSeenVersion > 0,
+						Source:             "persisted",
 					}
 				}
 			}
@@ -106,7 +106,7 @@ func (r *Router) registerDebugAPIHandlers(mux *http.ServeMux) {
 					item.SessionID = sessionID
 				}
 				if runtimeKey != "" {
-					item.CurrentRuntimeKey = runtimeKey
+					item.ResolvedRuntimeKey = runtimeKey
 				}
 				item.ActiveSockets = activeSockets
 				item.StreamRunning = streamRunning
@@ -236,17 +236,17 @@ func (r *Router) registerDebugAPIHandlers(mux *http.ServeMux) {
 
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{
-			"conv_id":             convID,
-			"session_id":          sessionID,
-			"current_runtime_key": runtimeKey,
-			"active_sockets":      activeSockets,
-			"stream_running":      streamRunning,
-			"queue_depth":         queueDepth,
-			"buffered_events":     bufferedEvents,
-			"last_activity_ms":    lastActivityMs,
-			"active_request_key":  activeRequestKey,
-			"has_timeline_source": hasTimelineSrc,
-			"source":              source,
+			"conv_id":              convID,
+			"session_id":           sessionID,
+			"resolved_runtime_key": runtimeKey,
+			"active_sockets":       activeSockets,
+			"stream_running":       streamRunning,
+			"queue_depth":          queueDepth,
+			"buffered_events":      bufferedEvents,
+			"last_activity_ms":     lastActivityMs,
+			"active_request_key":   activeRequestKey,
+			"has_timeline_source":  hasTimelineSrc,
+			"source":               source,
 		})
 	})
 
@@ -519,12 +519,36 @@ func (r *Router) registerDebugAPIHandlers(mux *http.ServeMux) {
 			return
 		}
 
+		type turnListItem struct {
+			ConvID             string `json:"conv_id"`
+			SessionID          string `json:"session_id"`
+			TurnID             string `json:"turn_id"`
+			Phase              string `json:"phase"`
+			ResolvedRuntimeKey string `json:"resolved_runtime_key,omitempty"`
+			InferenceID        string `json:"inference_id,omitempty"`
+			CreatedAtMs        int64  `json:"created_at_ms"`
+			Payload            string `json:"payload"`
+		}
+		outItems := make([]turnListItem, 0, len(items))
+		for _, item := range items {
+			outItems = append(outItems, turnListItem{
+				ConvID:             item.ConvID,
+				SessionID:          item.SessionID,
+				TurnID:             item.TurnID,
+				Phase:              item.Phase,
+				ResolvedRuntimeKey: item.RuntimeKey,
+				InferenceID:        item.InferenceID,
+				CreatedAtMs:        item.CreatedAtMs,
+				Payload:            item.Payload,
+			})
+		}
+
 		resp := map[string]any{
 			"conv_id":    convID,
 			"session_id": sessionID,
 			"phase":      phase,
 			"since_ms":   sinceMs,
-			"items":      items,
+			"items":      outItems,
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(resp)
@@ -577,13 +601,13 @@ func (r *Router) registerDebugAPIHandlers(mux *http.ServeMux) {
 		}
 
 		type phaseSnapshot struct {
-			Phase       string         `json:"phase"`
-			CreatedAtMs int64          `json:"created_at_ms"`
-			RuntimeKey  string         `json:"runtime_key,omitempty"`
-			InferenceID string         `json:"inference_id,omitempty"`
-			Payload     string         `json:"payload"`
-			Parsed      map[string]any `json:"parsed,omitempty"`
-			ParseError  string         `json:"parse_error,omitempty"`
+			Phase              string         `json:"phase"`
+			CreatedAtMs        int64          `json:"created_at_ms"`
+			ResolvedRuntimeKey string         `json:"resolved_runtime_key,omitempty"`
+			InferenceID        string         `json:"inference_id,omitempty"`
+			Payload            string         `json:"payload"`
+			Parsed             map[string]any `json:"parsed,omitempty"`
+			ParseError         string         `json:"parse_error,omitempty"`
 		}
 		phases := make([]phaseSnapshot, 0, 4)
 		for _, item := range items {
@@ -591,11 +615,11 @@ func (r *Router) registerDebugAPIHandlers(mux *http.ServeMux) {
 				continue
 			}
 			s := phaseSnapshot{
-				Phase:       item.Phase,
-				CreatedAtMs: item.CreatedAtMs,
-				RuntimeKey:  item.RuntimeKey,
-				InferenceID: item.InferenceID,
-				Payload:     item.Payload,
+				Phase:              item.Phase,
+				CreatedAtMs:        item.CreatedAtMs,
+				ResolvedRuntimeKey: item.RuntimeKey,
+				InferenceID:        item.InferenceID,
+				Payload:            item.Payload,
 			}
 			t, err := serde.FromYAML([]byte(item.Payload))
 			if err != nil {
