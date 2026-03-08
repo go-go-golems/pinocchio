@@ -17,6 +17,7 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cmds/fields"
 	"github.com/go-go-golems/glazed/pkg/cmds/logging"
 	"github.com/go-go-golems/glazed/pkg/cmds/schema"
+	cmdsources "github.com/go-go-golems/glazed/pkg/cmds/sources"
 	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	"github.com/go-go-golems/glazed/pkg/help"
 	help_cmd "github.com/go-go-golems/glazed/pkg/help/cmd"
@@ -26,6 +27,8 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/inference/middlewarecfg"
 	geptools "github.com/go-go-golems/geppetto/pkg/inference/tools"
 	gepprofiles "github.com/go-go-golems/geppetto/pkg/profiles"
+	geppettosections "github.com/go-go-golems/geppetto/pkg/sections"
+	aiconfig "github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 	toolspkg "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/tools"
 	thinkingmode "github.com/go-go-golems/pinocchio/cmd/web-chat/thinkingmode"
 	timelinecmd "github.com/go-go-golems/pinocchio/cmd/web-chat/timeline"
@@ -52,6 +55,7 @@ type webChatRuntimeConfig struct {
 }
 
 const webChatProfileSettingsSectionSlug = "profile-settings"
+const webChatCLIAppName = "pinocchio"
 
 func normalizeBasePrefix(prefix string) string {
 	p := strings.TrimSpace(prefix)
@@ -116,6 +120,96 @@ func defaultPinocchioProfileRegistriesIfPresent() string {
 		return ""
 	}
 	return path
+}
+
+func defaultPinocchioConfigFileIfPresent() string {
+	homeDir, err := os.UserHomeDir()
+	if err != nil || strings.TrimSpace(homeDir) == "" {
+		return ""
+	}
+	path := filepath.Join(homeDir, ".pinocchio", "config.yaml")
+	info, err := os.Stat(path)
+	if err != nil || info.IsDir() {
+		return ""
+	}
+	return path
+}
+
+func webChatConfigFileMapper(rawConfig interface{}) (map[string]map[string]interface{}, error) {
+	configMap, ok := rawConfig.(map[string]interface{})
+	if !ok {
+		return nil, errors.Errorf("expected map[string]interface{}, got %T", rawConfig)
+	}
+
+	result := make(map[string]map[string]interface{})
+	excludedKeys := map[string]bool{
+		"repositories": true,
+	}
+	for key, value := range configMap {
+		if excludedKeys[key] {
+			continue
+		}
+		layerParams, ok := value.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		result[key] = layerParams
+	}
+	return result, nil
+}
+
+func resolveWebChatConfigFiles(parsed *values.Values) []string {
+	files := make([]string, 0, 2)
+	if defaultFile := defaultPinocchioConfigFileIfPresent(); defaultFile != "" {
+		files = append(files, defaultFile)
+	}
+	if parsed != nil {
+		commandSettings := &cli.CommandSettings{}
+		if err := parsed.DecodeSectionInto(cli.CommandSettingsSlug, commandSettings); err == nil {
+			explicit := strings.TrimSpace(commandSettings.ConfigFile)
+			if explicit != "" {
+				duplicate := false
+				for _, f := range files {
+					if f == explicit {
+						duplicate = true
+						break
+					}
+				}
+				if !duplicate {
+					files = append(files, explicit)
+				}
+			}
+		}
+	}
+	return files
+}
+
+func resolveWebChatBaseStepSettings(parsed *values.Values) (*aiconfig.StepSettings, []string, error) {
+	sections_, err := geppettosections.CreateGeppettoSections()
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "create hidden geppetto sections")
+	}
+	schema_ := schema.NewSchema(schema.WithSections(sections_...))
+	parsedValues := values.New()
+	configFiles := resolveWebChatConfigFiles(parsed)
+	if err := cmdsources.Execute(
+		schema_,
+		parsedValues,
+		cmdsources.FromEnv("PINOCCHIO", fields.WithSource("env")),
+		cmdsources.FromFiles(
+			configFiles,
+			cmdsources.WithConfigFileMapper(webChatConfigFileMapper),
+			cmdsources.WithParseOptions(fields.WithSource("config")),
+		),
+		cmdsources.FromDefaults(fields.WithSource(fields.SourceDefaults)),
+	); err != nil {
+		return nil, configFiles, errors.Wrap(err, "resolve hidden web-chat base step settings")
+	}
+	stepSettings, err := aiconfig.NewStepSettingsFromParsedValues(parsedValues)
+	if err != nil {
+		return nil, configFiles, errors.Wrap(err, "build step settings from hidden parsed values")
+	}
+	return stepSettings, configFiles, nil
 }
 
 func newWebChatProfileSettingsSection() (schema.Section, error) {
@@ -231,12 +325,20 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 	if err != nil {
 		return errors.Wrap(err, "create middleware definition registry")
 	}
+	baseStepSettings, configFiles, err := resolveWebChatBaseStepSettings(parsed)
+	if err != nil {
+		return err
+	}
+	log.Debug().
+		Strs("config_files", configFiles).
+		Interface("step_metadata", baseStepSettings.GetMetadata()).
+		Msg("resolved hidden web-chat base step settings")
 	runtimeComposer := newProfileRuntimeComposer(middlewareRegistry, middlewarecfg.BuildDeps{
 		Values: map[string]any{
 			dependencyAgentModeServiceKey: amSvc,
 			dependencySQLiteDBKey:         dbWithRegexp,
 		},
-	})
+	}, baseStepSettings)
 	requestResolver := newProfileRequestResolver(profileRegistry, profileRegistryChain.DefaultRegistrySlug())
 
 	if err := configureTimelineJSScripts(s.TimelineJSScripts); err != nil {
@@ -349,9 +451,19 @@ func main() {
 	c, err := NewCommand()
 	cobra.CheckErr(err)
 	command, err := cli.BuildCobraCommand(c, cli.WithParserConfig(cli.CobraParserConfig{
-		AppName: "pinocchio",
+		AppName: webChatCLIAppName,
+		ConfigFilesFunc: func(_ *values.Values, _ *cobra.Command, _ []string) ([]string, error) {
+			// Hidden base-settings parsing owns config-file loading so we can
+			// reuse pinocchio config conventions without exposing AI flags.
+			return nil, nil
+		},
 	}))
 	cobra.CheckErr(err)
+	for _, name := range []string{"print-yaml", "print-parsed-fields", "print-schema"} {
+		if flag := command.Flags().Lookup(name); flag != nil {
+			flag.Hidden = true
+		}
+	}
 	root.AddCommand(command)
 	cobra.CheckErr(root.Execute())
 }

@@ -44,15 +44,21 @@ Finally, install by downloading the binaries straight from [github](https://gith
 
 ## Usage
 
-Configure pinocchio by storing your OpenAI API key in ~/.pinocchio/config.yaml. Furthermore,
-you can configure one or more locations for geppetto commands.
+Configure pinocchio through layered config plus a profile-registry stack.
+Use `~/.pinocchio/config.yaml` for app config and optional provider defaults, and use
+profile registries to select the active model/provider runtime.
 
 ```yaml
-openai-api-key: XXXX
 repositories:
   - /Users/manuel/code/pinocchio
   - /Users/manuel/.pinocchio/repository
+profile-settings:
+  profile-registries: ~/.config/pinocchio/profiles.yaml
+openai-chat:
+  openai-api-key: XXXX
 ```
+
+Do not use the legacy flat `openai-api-key: ...` top-level shape for new config files.
 
 You can then start using `pinocchio`:
 
@@ -112,10 +118,13 @@ profiles:
     runtime:
       step_settings_patch:
         ai-chat:
+          ai-api-type: openai-responses
           ai-engine: gpt-5
 ```
 
 Do not use `registries:` or `default_profile_slug` in runtime YAML sources.
+Keep provider credentials and other base defaults either in layered app config or in the
+profile runtime patch, but be deliberate about which layer owns them.
 
 ## Migrating old profiles.yaml
 

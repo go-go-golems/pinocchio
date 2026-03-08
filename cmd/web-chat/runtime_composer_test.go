@@ -10,6 +10,7 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/inference/middlewarecfg"
 	gepprofiles "github.com/go-go-golems/geppetto/pkg/profiles"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
+	aitypes "github.com/go-go-golems/geppetto/pkg/steps/ai/types"
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 )
 
@@ -25,8 +26,13 @@ func runtimeSpecWithTestAPIKey(spec *gepprofiles.RuntimeSpec) *gepprofiles.Runti
 	}
 	patch, err := gepprofiles.MergeRuntimeStepSettingsPatches(
 		map[string]any{
+			"ai-chat": map[string]any{
+				"ai-engine":   "test-engine",
+				"ai-api-type": "openai",
+			},
 			"openai-chat": map[string]any{
-				"openai-api-key": "test-api-key",
+				"openai-api-key":  "test-api-key",
+				"openai-base-url": "https://api.openai.com/v1",
 			},
 		},
 		clone.StepSettingsPatch,
@@ -71,11 +77,22 @@ func newRuntimeComposerRegistry(t *testing.T, defs ...middlewarecfg.Definition) 
 	return registry
 }
 
-func TestRuntimeFingerprint_DoesNotIncludeAPIKeys(t *testing.T) {
+func testBaseStepSettings(t *testing.T) *settings.StepSettings {
+	t.Helper()
+
 	ss, err := settings.NewStepSettings()
 	if err != nil {
 		t.Fatalf("NewStepSettings: %v", err)
 	}
+	ss.Chat.Engine = ptr("base-engine")
+	ss.Chat.ApiType = apiTypePtr(aitypes.ApiTypeOpenAI)
+	ss.API.APIKeys["openai-api-key"] = "base-api-key"
+	ss.API.BaseUrls["openai-base-url"] = "https://api.openai.com/v1"
+	return ss
+}
+
+func TestRuntimeFingerprint_DoesNotIncludeAPIKeys(t *testing.T) {
+	ss := testBaseStepSettings(t)
 	ss.API.APIKeys["openai"] = "sk-this-should-not-appear"
 
 	fp := buildRuntimeFingerprint("default", 0, "hi", nil, nil, ss)
@@ -91,6 +108,7 @@ func TestWebChatRuntimeComposer_UsesResolvedRuntimeSpec(t *testing.T) {
 	composer := newProfileRuntimeComposer(
 		newRuntimeComposerRegistry(t),
 		middlewarecfg.BuildDeps{},
+		nil,
 	)
 
 	res, err := composer.Compose(context.Background(), infruntime.ConversationRuntimeRequest{
@@ -112,25 +130,32 @@ func TestWebChatRuntimeComposer_UsesResolvedRuntimeSpec(t *testing.T) {
 	}
 }
 
-func TestWebChatRuntimeComposer_DefaultsWhenResolvedRuntimeIsEmpty(t *testing.T) {
+func TestWebChatRuntimeComposer_UsesBaseStepSettingsWhenResolvedRuntimeIsEmpty(t *testing.T) {
 	composer := newProfileRuntimeComposer(
 		newRuntimeComposerRegistry(t),
 		middlewarecfg.BuildDeps{},
+		testBaseStepSettings(t),
 	)
 
 	res, err := composer.Compose(context.Background(), infruntime.ConversationRuntimeRequest{
 		ConvID:                 "c1",
 		ProfileKey:             "analyst",
-		ResolvedProfileRuntime: runtimeSpecWithTestAPIKey(&gepprofiles.RuntimeSpec{}),
+		ResolvedProfileRuntime: &gepprofiles.RuntimeSpec{},
 	})
 	if err != nil {
 		t.Fatalf("compose failed: %v", err)
 	}
-	if res.SeedSystemPrompt != "You are an assistant" {
-		t.Fatalf("expected default prompt, got: %q", res.SeedSystemPrompt)
+
+	var payload map[string]any
+	if err := json.Unmarshal([]byte(res.RuntimeFingerprint), &payload); err != nil {
+		t.Fatalf("unmarshal runtime fingerprint: %v", err)
 	}
-	if len(res.AllowedTools) != 0 {
-		t.Fatalf("unexpected tools: %#v", res.AllowedTools)
+	stepMeta, ok := payload["step_metadata"].(map[string]any)
+	if !ok {
+		t.Fatalf("missing step_metadata in runtime fingerprint: %#v", payload)
+	}
+	if got, want := stepMeta["ai-engine"], "base-engine"; got != want {
+		t.Fatalf("base step settings were not used: got=%#v want=%#v", got, want)
 	}
 }
 
@@ -153,6 +178,7 @@ func TestWebChatRuntimeComposer_UsesResolverPrecedenceForMiddlewareConfig(t *tes
 	composer := newProfileRuntimeComposer(
 		newRuntimeComposerRegistry(t, def),
 		middlewarecfg.BuildDeps{},
+		nil,
 	)
 
 	_, err := composer.Compose(context.Background(), infruntime.ConversationRuntimeRequest{
@@ -199,6 +225,7 @@ func TestWebChatRuntimeComposer_RejectsInvalidMiddlewareSchemaPayload(t *testing
 	composer := newProfileRuntimeComposer(
 		newRuntimeComposerRegistry(t, def),
 		middlewarecfg.BuildDeps{},
+		nil,
 	)
 
 	_, err := composer.Compose(context.Background(), infruntime.ConversationRuntimeRequest{
@@ -238,6 +265,7 @@ func TestWebChatRuntimeComposer_PrefersResolvedProfileFingerprint(t *testing.T) 
 	composer := newProfileRuntimeComposer(
 		newRuntimeComposerRegistry(t),
 		middlewarecfg.BuildDeps{},
+		nil,
 	)
 
 	res, err := composer.Compose(context.Background(), infruntime.ConversationRuntimeRequest{
@@ -260,6 +288,7 @@ func TestWebChatRuntimeComposer_AppliesProfileStepSettingsPatch(t *testing.T) {
 	composer := newProfileRuntimeComposer(
 		newRuntimeComposerRegistry(t),
 		middlewarecfg.BuildDeps{},
+		nil,
 	)
 
 	res, err := composer.Compose(context.Background(), infruntime.ConversationRuntimeRequest{
@@ -290,10 +319,11 @@ func TestWebChatRuntimeComposer_AppliesProfileStepSettingsPatch(t *testing.T) {
 	}
 }
 
-func TestWebChatRuntimeComposer_UsesProfilePatchWithoutParsedStepSettings(t *testing.T) {
+func TestWebChatRuntimeComposer_UsesProfilePatchOnTopOfBaseStepSettings(t *testing.T) {
 	composer := newProfileRuntimeComposer(
 		newRuntimeComposerRegistry(t),
 		middlewarecfg.BuildDeps{},
+		testBaseStepSettings(t),
 	)
 
 	res, err := composer.Compose(context.Background(), infruntime.ConversationRuntimeRequest{
@@ -304,9 +334,6 @@ func TestWebChatRuntimeComposer_UsesProfilePatchWithoutParsedStepSettings(t *tes
 				"ai-chat": map[string]any{
 					"ai-engine":   "gpt-5-nano",
 					"ai-api-type": "openai-responses",
-				},
-				"openai-chat": map[string]any{
-					"openai-api-key": "test-api-key",
 				},
 			},
 		},
@@ -329,4 +356,12 @@ func TestWebChatRuntimeComposer_UsesProfilePatchWithoutParsedStepSettings(t *tes
 	if got, want := stepMeta["ai-api-type"], "openai-responses"; got != want {
 		t.Fatalf("profile patch did not drive ai-api-type: got=%#v want=%#v", got, want)
 	}
+}
+
+func ptr[T any](v T) *T {
+	return &v
+}
+
+func apiTypePtr(v aitypes.ApiType) *aitypes.ApiType {
+	return &v
 }

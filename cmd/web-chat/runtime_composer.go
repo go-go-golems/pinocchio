@@ -17,15 +17,18 @@ import (
 type ProfileRuntimeComposer struct {
 	definitions middlewarecfg.DefinitionRegistry
 	buildDeps   middlewarecfg.BuildDeps
+	base        *settings.StepSettings
 }
 
 func newProfileRuntimeComposer(
 	definitions middlewarecfg.DefinitionRegistry,
 	buildDeps middlewarecfg.BuildDeps,
+	base *settings.StepSettings,
 ) *ProfileRuntimeComposer {
 	return &ProfileRuntimeComposer{
 		definitions: definitions,
 		buildDeps:   buildDeps,
+		base:        base,
 	}
 }
 
@@ -67,13 +70,17 @@ func (c *ProfileRuntimeComposer) Compose(ctx context.Context, req infruntime.Con
 		return infruntime.ComposedRuntime{}, err
 	}
 
-	stepSettings, err := settings.NewStepSettings()
-	if err != nil {
-		return infruntime.ComposedRuntime{}, err
+	var effectiveStepSettings *settings.StepSettings
+	if c.base != nil {
+		effectiveStepSettings = c.base.Clone()
+	} else {
+		effectiveStepSettings, err = settings.NewStepSettings()
+		if err != nil {
+			return infruntime.ComposedRuntime{}, err
+		}
 	}
-	effectiveStepSettings := stepSettings.Clone()
 	if req.ResolvedProfileRuntime != nil && len(req.ResolvedProfileRuntime.StepSettingsPatch) > 0 {
-		effectiveStepSettings, err = gepprofiles.ApplyRuntimeStepSettingsPatch(stepSettings, req.ResolvedProfileRuntime.StepSettingsPatch)
+		effectiveStepSettings, err = gepprofiles.ApplyRuntimeStepSettingsPatch(effectiveStepSettings, req.ResolvedProfileRuntime.StepSettingsPatch)
 		if err != nil {
 			return infruntime.ComposedRuntime{}, fmt.Errorf("apply profile step_settings_patch: %w", err)
 		}

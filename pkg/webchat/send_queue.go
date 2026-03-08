@@ -9,9 +9,8 @@ import (
 
 type queuedChat struct {
 	IdempotencyKey string
-	RuntimeKey     string
-	Overrides      map[string]any
-	Prompt         string
+	Payload        any
+	Metadata       map[string]any
 	EnqueuedAt     time.Time
 }
 
@@ -34,26 +33,23 @@ type SessionPreparation struct {
 	Response   map[string]any
 }
 
-func (c *Conversation) ensureQueueInitLocked() {
+func ensurePromptQueueInitLocked(c *Conversation) {
 	if c.requests == nil {
 		c.requests = map[string]*chatRequestRecord{}
 	}
 }
 
-func (c *Conversation) isBusyLocked() bool {
+func isPromptBusyLocked(c *Conversation) bool {
 	if c == nil {
 		return false
 	}
 	if c.activeRequestKey != "" {
 		return true
 	}
-	if c.Sess != nil && c.Sess.IsRunning() {
-		return true
-	}
 	return false
 }
 
-func (c *Conversation) getRecordLocked(idempotencyKey string) (*chatRequestRecord, bool) {
+func getPromptRecordLocked(c *Conversation, idempotencyKey string) (*chatRequestRecord, bool) {
 	if c == nil || idempotencyKey == "" || c.requests == nil {
 		return nil, false
 	}
@@ -61,15 +57,15 @@ func (c *Conversation) getRecordLocked(idempotencyKey string) (*chatRequestRecor
 	return rec, ok
 }
 
-func (c *Conversation) upsertRecordLocked(rec *chatRequestRecord) {
+func upsertPromptRecordLocked(c *Conversation, rec *chatRequestRecord) {
 	if c == nil || rec == nil || rec.IdempotencyKey == "" {
 		return
 	}
-	c.ensureQueueInitLocked()
+	ensurePromptQueueInitLocked(c)
 	c.requests[rec.IdempotencyKey] = rec
 }
 
-func (c *Conversation) enqueueLocked(q queuedChat) int {
+func enqueuePromptLocked(c *Conversation, q queuedChat) int {
 	if c == nil {
 		return -1
 	}
@@ -77,7 +73,7 @@ func (c *Conversation) enqueueLocked(q queuedChat) int {
 	return len(c.queue)
 }
 
-func (c *Conversation) dequeueLocked() (queuedChat, bool) {
+func dequeuePromptLocked(c *Conversation) (queuedChat, bool) {
 	if c == nil || len(c.queue) == 0 {
 		return queuedChat{}, false
 	}
@@ -86,8 +82,8 @@ func (c *Conversation) dequeueLocked() (queuedChat, bool) {
 	return q, true
 }
 
-// PrepareSessionInference applies idempotency + queue logic and indicates whether inference should start now.
-func (c *Conversation) PrepareSessionInference(idempotencyKey, runtimeKey string, overrides map[string]any, prompt string) (SessionPreparation, error) {
+// preparePromptSubmission applies idempotency + queue logic and indicates whether the next runner should start now.
+func preparePromptSubmission(c *Conversation, idempotencyKey string, payload any, metadata map[string]any) (SessionPreparation, error) {
 	if c == nil {
 		return SessionPreparation{}, errors.New("conversation is nil")
 	}
@@ -99,8 +95,8 @@ func (c *Conversation) PrepareSessionInference(idempotencyKey, runtimeKey string
 	defer c.mu.Unlock()
 
 	c.touchLocked(time.Now())
-	c.ensureQueueInitLocked()
-	if rec, ok := c.getRecordLocked(idempotencyKey); ok && rec != nil && rec.Response != nil {
+	ensurePromptQueueInitLocked(c)
+	if rec, ok := getPromptRecordLocked(c, idempotencyKey); ok && rec != nil && rec.Response != nil {
 		status := strings.ToLower(strings.TrimSpace(rec.Status))
 		resp := cloneResponse(rec.Response)
 		httpStatus := http.StatusOK
@@ -110,12 +106,11 @@ func (c *Conversation) PrepareSessionInference(idempotencyKey, runtimeKey string
 		return SessionPreparation{Start: false, HTTPStatus: httpStatus, Response: resp}, nil
 	}
 
-	if c.isBusyLocked() {
-		pos := c.enqueueLocked(queuedChat{
+	if isPromptBusyLocked(c) {
+		pos := enqueuePromptLocked(c, queuedChat{
 			IdempotencyKey: idempotencyKey,
-			RuntimeKey:     runtimeKey,
-			Overrides:      overrides,
-			Prompt:         prompt,
+			Payload:        payload,
+			Metadata:       cloneResponse(metadata),
 			EnqueuedAt:     time.Now(),
 		})
 		resp := map[string]any{
@@ -126,7 +121,7 @@ func (c *Conversation) PrepareSessionInference(idempotencyKey, runtimeKey string
 			"conv_id":         c.ID,
 			"session_id":      c.SessionID,
 		}
-		c.upsertRecordLocked(&chatRequestRecord{
+		upsertPromptRecordLocked(c, &chatRequestRecord{
 			IdempotencyKey: idempotencyKey,
 			Status:         "queued",
 			EnqueuedAt:     time.Now(),
@@ -142,7 +137,7 @@ func (c *Conversation) PrepareSessionInference(idempotencyKey, runtimeKey string
 		"conv_id":         c.ID,
 		"session_id":      c.SessionID,
 	}
-	c.upsertRecordLocked(&chatRequestRecord{
+	upsertPromptRecordLocked(c, &chatRequestRecord{
 		IdempotencyKey: idempotencyKey,
 		Status:         "running",
 		StartedAt:      time.Now(),
@@ -151,8 +146,8 @@ func (c *Conversation) PrepareSessionInference(idempotencyKey, runtimeKey string
 	return SessionPreparation{Start: true, HTTPStatus: http.StatusOK, Response: resp}, nil
 }
 
-// ClaimNextQueued pops the next queued request and marks it running.
-func (c *Conversation) ClaimNextQueued() (queuedChat, bool) {
+// claimNextQueuedPrompt pops the next queued request and marks it running.
+func claimNextQueuedPrompt(c *Conversation) (queuedChat, bool) {
 	if c == nil {
 		return queuedChat{}, false
 	}
@@ -160,31 +155,66 @@ func (c *Conversation) ClaimNextQueued() (queuedChat, bool) {
 	defer c.mu.Unlock()
 
 	c.touchLocked(time.Now())
-	if c.isBusyLocked() {
+	if isPromptBusyLocked(c) {
 		return queuedChat{}, false
 	}
-	q, ok := c.dequeueLocked()
+	q, ok := dequeuePromptLocked(c)
 	if !ok {
 		return queuedChat{}, false
 	}
 	c.activeRequestKey = q.IdempotencyKey
-	c.ensureQueueInitLocked()
-	if rec, ok := c.getRecordLocked(q.IdempotencyKey); ok && rec != nil {
+	ensurePromptQueueInitLocked(c)
+	if rec, ok := getPromptRecordLocked(c, q.IdempotencyKey); ok && rec != nil {
 		rec.Status = "running"
 		rec.StartedAt = time.Now()
 	} else {
-		c.upsertRecordLocked(&chatRequestRecord{IdempotencyKey: q.IdempotencyKey, Status: "running", StartedAt: time.Now()})
+		upsertPromptRecordLocked(c, &chatRequestRecord{IdempotencyKey: q.IdempotencyKey, Status: "running", StartedAt: time.Now()})
 	}
 	return q, true
 }
 
-func cloneResponse(resp map[string]any) map[string]any {
-	if resp == nil {
+func persistPromptStartResult(c *Conversation, idempotencyKey string, resp map[string]any, runID string, turnID string) {
+	if c == nil || idempotencyKey == "" {
+		return
+	}
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	c.touchLocked(time.Now())
+	ensurePromptQueueInitLocked(c)
+	rec, ok := getPromptRecordLocked(c, idempotencyKey)
+	if !ok || rec == nil {
+		rec = &chatRequestRecord{IdempotencyKey: idempotencyKey}
+		upsertPromptRecordLocked(c, rec)
+	}
+	rec.Status = "running"
+	if rec.StartedAt.IsZero() {
+		rec.StartedAt = time.Now()
+	}
+	rec.Response = cloneResponse(resp)
+	if rec.Response == nil {
+		rec.Response = map[string]any{}
+	}
+	if runID != "" {
+		rec.Response["inference_id"] = runID
+	}
+	if turnID != "" {
+		rec.Response["turn_id"] = turnID
+	}
+}
+
+func cloneStringAnyMap(in map[string]any) map[string]any {
+	if in == nil {
 		return nil
 	}
-	out := make(map[string]any, len(resp))
-	for k, v := range resp {
+	out := make(map[string]any, len(in))
+	for k, v := range in {
 		out[k] = v
 	}
 	return out
+}
+
+func cloneResponse(resp map[string]any) map[string]any {
+	return cloneStringAnyMap(resp)
 }

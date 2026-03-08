@@ -421,6 +421,402 @@ Exact failures:
   - generic command/env/config handling
   It no longer influences runtime engine/provider selection.
 
+## Step 5: Debug the post-cutover webchat regression and restore provider defaults
+
+This step investigated the live `/chat` failures reported immediately after the GP-029/GP-030 work and traced them back to a subtle defaulting regression introduced by the registry-only runtime change. The key finding was that `settings.NewStepSettings()` preserved provider-specific struct defaults, but it did not seed the shared `API.BaseUrls` map with provider base URL defaults that previously arrived through parsed Glazed values.
+
+I reproduced the issue against the running `http://localhost:8082` server with Playwright and the live `/tmp/webchat.log`, then patched the settings bootstrap path so profile-driven runtime composition still inherits provider base URL defaults. I also added request-level `/chat` error logging so immediate startup failures stop disappearing behind a bare `500`.
+
+### Prompt Context
+
+**User prompt (verbatim):** "So we've been working on pinocchio/ttmp (docmgr --root pinocchio/ttmp) on ticket GP-030 and GP-029, and it seems we actually broke webchat. I get a 500 on
+
+await fetch(\"http://localhost:8082/chat\", {
+    \"credentials\": \"include\",
+    \"headers\": {
+        \"User-Agent\": \"Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:148.0) Gecko/20100101 Firefox/148.0\",
+        \"Accept\": \"*/*\",
+        \"Accept-Language\": \"en-US,en;q=0.9\",
+        \"Content-Type\": \"application/json\",
+        \"Sec-Fetch-Dest\": \"empty\",
+        \"Sec-Fetch-Mode\": \"cors\",
+        \"Sec-Fetch-Site\": \"same-origin\",
+        \"Priority\": \"u=0\"
+    },
+    \"referrer\": \"http://localhost:8082/?conv_id=3542c2a3-841f-4850-9bbf-624a3e18f179\",
+    \"body\": \"{\\\"conv_id\\\":\\\"3542c2a3-841f-4850-9bbf-624a3e18f179\\\",\\\"prompt\\\":\\\"hello\\\"}\",
+    \"method\": \"POST\",
+    \"mode\": \"cors\"
+});
+
+start session inference failed
+
+
+----
+
+But no logs, and it seemed also that I got one conversation going earlier, but it was not streaming I think.
+
+Please look at what is going on. It's in /tmp/webchat.log 
+
+❯ go run ./cmd/web-chat web-chat --timeline-db /tmp/timeline5.db --turns-db /tmp/turns5.db --log-level debug --with-caller --log-file /tmp/webchat.log --log-to-stdout --addr :8082
+{\"level\":\"info\",\"file\":\"/tmp/webchat.log\",\"time\":\"2026-03-08T12:23:32.734463088-04:00\",\"caller\":\"/home/manuel/workspaces/2026-03-02/deliver-mento-1/glazed/pkg/cmds/logging/init.go:50\",\"message\":\"Logging to file\"}
+
+etc..."
+
+**Assistant interpretation:** Reproduce the live webchat regression, determine whether it is an immediate `/chat` startup failure or a later streaming/runtime failure, and keep the ticket diary updated while fixing the underlying regression.
+
+**Inferred user intent:** Restore working webchat behavior after the profile/runtime cutover and make future failures diagnosable from logs instead of opaque browser errors.
+
+**Commit (code):** uncommitted workspace changes
+
+### What I did
+
+- Read `/tmp/webchat.log` and confirmed it contained startup lines only, with no request-level diagnostics for failing `/chat` calls.
+- Traced the `start session inference failed` response text to `pinocchio/pkg/webchat/http/api.go`, then followed the submission path through `ChatService`, `ConversationService`, `StreamHub`, `ConvManager`, and `LLMLoopRunner`.
+- Used Playwright against `http://localhost:8082` to inspect the live app state:
+  - confirmed the default browser context loaded with profile `default`,
+  - confirmed websocket attachment succeeded,
+  - submitted a prompt on `default` and observed `POST /chat => 200` while the background run failed with `error="no base URL for openai"`,
+  - switched the live UI profile to `gpt-5` and reproduced `POST /chat => 500`, which matches the user’s `credentials: "include"` fetch path where the `chat_profile` cookie controls runtime selection.
+- Inspected `geppetto/pkg/steps/ai/settings/settings-step.go`, `geppetto/pkg/steps/ai/settings/openai/chat.yaml`, and `geppetto/pkg/steps/ai/openai/helpers.go` to verify that:
+  - provider base URL defaults still exist in the section YAML,
+  - `settings.NewStepSettings()` was no longer seeding them into `API.BaseUrls`,
+  - `MakeClient(...)` hard-fails if `API.BaseUrls["openai-base-url"]` is absent.
+- Patched `settings.NewStepSettings()` to initialize `APISettings` with provider default base URLs from the OpenAI, Claude, and Gemini section definitions.
+- Added `geppetto/pkg/steps/ai/settings/settings-step_test.go` to lock the provider base URL defaults in place.
+- Added structured `/chat` request logging in `pinocchio/pkg/webchat/http/api.go` for both request-resolution failures and prompt-submission failures.
+- Ran:
+  - `gofmt -w geppetto/pkg/steps/ai/settings/settings-step.go geppetto/pkg/steps/ai/settings/settings-step_test.go pinocchio/pkg/webchat/http/api.go`
+  - `go test ./geppetto/pkg/steps/ai/settings -count=1`
+  - `go test ./pinocchio/cmd/web-chat ./pinocchio/pkg/webchat/... -count=1`
+
+### Why
+
+- The runtime-only profile cutover was correct in principle, but it accidentally removed a second responsibility from parsed values: seeding provider base URL defaults into the shared API settings map.
+- Fixing the default source in `settings.NewStepSettings()` preserves the registry-first runtime contract while restoring the provider defaults that engines still expect.
+- Adding request logging is necessary because profile-driven runtime failures can now happen at request time based on cookies and selected profiles, and the previous handler provided no diagnostic evidence when startup failed before background execution.
+
+### What worked
+
+- Playwright was the fastest way to separate the two observed behaviors:
+  - `default` profile: `/chat` returned `200`, then inference failed asynchronously.
+  - `gpt-5` profile: `/chat` returned `500` immediately.
+- The live `default` profile reproduced the core regression without needing to guess from code alone; the log line `error="no base URL for openai"` was decisive.
+- The fix belongs in shared settings bootstrap, not in `cmd/web-chat` only, because the missing defaults were introduced at `settings.NewStepSettings()` construction time.
+- The new settings test passed and the existing `cmd/web-chat` / `pkg/webchat` suites stayed green after the change.
+
+### What didn't work
+
+- The original `/tmp/webchat.log` gave no visibility into the failing `/chat` request path, which made the first pass mostly a code trace instead of evidence-driven debugging.
+- The initial live run on the `default` profile did not reproduce the user’s reported `500`; it returned `200` and only later exposed the underlying regression:
+  - `2026-03-08T12:29:10.82313257-04:00 ERR pkg/webchat/chat_service.go:199 > runner completed with error error="no base URL for openai" component=webchat conv_id=3542c2a3-841f-4850-9bbf-624a3e18f179 run_id=5cb0357f-f268-4609-bcde-047ad55ee8c6`
+- The user’s exact `500` path only became reproducible after switching the live UI profile to `gpt-5`, which confirmed that cookie-selected profiles can fail immediately while the `default` profile failed later:
+  - `POST http://localhost:8082/chat => [500] Internal Server Error`
+
+### What I learned
+
+- GP-029 removed more than CLI/runtime authority overlap; it also removed an implicit defaulting path that engines were still depending on.
+- There are currently two classes of failures in webchat:
+  - immediate startup failures that surface as `500` from `/chat`,
+  - asynchronous run failures that still return `200` to `/chat` but leave the UI with a stuck user message and no assistant output.
+- The `chat_profile` cookie is operationally important for debugging because the browser can reproduce a failure mode that a hand-written JSON request body does not make obvious.
+
+### What was tricky to build
+
+- The tricky part was not locating the `/chat` handler; it was separating “request start failed” from “request started but the run died immediately afterward.” The HTTP layer hides that distinction unless you inspect network traffic, websocket state, and server logs together.
+- The other subtlety was that the missing default lived in `APISettings`, not in the provider-specific `OpenAI` struct. That meant `openai.NewSettings()` still looked healthy while `MakeClient(...)` later failed because `API.BaseUrls` had been left empty.
+
+### What warrants a second pair of eyes
+
+- Whether `gpt-5`, `gpt-5-mini`, and `gpt-5-nano` should carry explicit API key/base URL profile data, or whether webchat should validate and reject profile selection earlier with a clearer UI/API error.
+- Whether asynchronous run failures should also emit a visible SEM/timeline/UI error state so a `200` followed by immediate backend failure does not look like a hung chat.
+- Whether other call sites that rely on `settings.NewStepSettings()` were implicitly depending on parsed-value default seeding in the same way.
+
+### What should be done in the future
+
+- Add validation or readiness checks for selected profiles so obviously incomplete runtimes fail with an actionable error before the user presses Send.
+- Consider logging successful `/chat` submission context at debug level as well, including resolved runtime key and profile version, so cookie-driven profile mismatches are easier to spot.
+- Consider adding an integration regression test that exercises a real composed OpenAI runtime far enough to prove `API.BaseUrls` are present before network I/O begins.
+
+### Code review instructions
+
+- Start with:
+  - `geppetto/pkg/steps/ai/settings/settings-step.go`
+  - `pinocchio/pkg/webchat/http/api.go`
+- Then inspect the new regression coverage in:
+  - `geppetto/pkg/steps/ai/settings/settings-step_test.go`
+- Re-read the GP-029 Step 4 entry immediately above this step to see how the regression was introduced by the runtime-composer cutover.
+- Validation:
+  - `go test ./geppetto/pkg/steps/ai/settings -count=1`
+  - `go test ./pinocchio/cmd/web-chat ./pinocchio/pkg/webchat/... -count=1`
+  - Live repro:
+    - load `http://localhost:8082/?conv_id=...`
+    - send a prompt on `default`
+    - inspect `/tmp/webchat.log`
+    - switch profile to `gpt-5`
+    - send again and confirm the current server returns `500`
+
+### Technical details
+
+- `settings.NewStepSettings()` now calls a helper that initializes `APISettings` defaults from the OpenAI, Claude, and Gemini section definitions.
+- The regression existed because `settings.NewStepSettings()` previously created an empty `APISettings` map and GP-029 stopped using `NewStepSettingsFromParsedValues(...)`, which had been backfilling those defaults through section decoding.
+- `MakeClient(...)` in `geppetto/pkg/steps/ai/openai/helpers.go` requires:
+  - `APIKeys["<api-type>-api-key"]`
+  - `BaseUrls["<api-type>-base-url"]`
+  so missing base URL defaults are fatal even when the profile carries a valid API key.
+- `pinocchio/pkg/webchat/http/api.go` now logs:
+  - request resolution failures,
+  - prompt submission failures with `conv_id`, `runtime_key`, `runtime_fingerprint`, `profile_version`, `idempotency_key`, and prompt length.
+
+## Step 6: Remove the default backfill and enforce registry-owned runtime fields
+
+After the first regression fix, the user clarified the intended contract: `web-chat` should not reintroduce provider URL defaults or any other hidden runtime defaults once the profile-registry cutover is in place. The registry has to own the runtime values, and incomplete profiles should fail early instead of inheriting defaults from section schemas or provider engines.
+
+I responded by backing out the API base URL default backfill and moving the strictness into `cmd/web-chat` runtime composition itself. The composer now strips the relevant AI/provider fallback fields from `settings.NewStepSettings()` before applying the resolved profile patch, then validates that the selected profile supplied the provider type, model, and required URL/auth fields.
+
+### Prompt Context
+
+**User prompt (verbatim):** "The settings should be built from the profile registry, which itself contains all the uis. don't do the defaults thing. If the profile is not available in the registry, it needs to fail. 
+
+2026-03-08T12:35:40.765828536-04:00 DBG ../geppetto/pkg/inference/middleware/systemprompt_middleware.go:91 > systemprompt: middleware end block_count=2 inference_id=ec99bbc9-551b-4119-bd3c-643c22213138 session_id=4dfa0075-c05f-428a-98e4-43fa0f96afd2 turn_id=25538212-25dc-4be8-8472-78375c12e553
+2026-03-08T12:35:40.76589234-04:00 DBG ../geppetto/pkg/steps/ai/openai_responses/engine.go:975 > Responses: tools attached to request tool_choice=null tool_count=1
+2026-03-08T12:35:40.765935257-04:00 DBG ../geppetto/pkg/steps/ai/openai_responses/engine.go:78 > Responses: Turn tool blocks present tool_call_blocks=0 tool_use_blocks=0
+2026-03-08T12:35:40.765991936-04:00 DBG ../geppetto/pkg/steps/ai/openai_responses/engine.go:93 > Responses: request input summary input_items=2 input_preview=[{\"parts\":[{\"len\":20,\"text\":\"You are an assistant\",\"type\":\"input_text\"}],\"role\":\"system\"},{\"parts\":[{\"len\":5,\"text\":\"hello\",\"type\":\"input_text\"}],\"role\":\"user\"}]
+2026-03-08T12:35:40.766339763-04:00 DBG ../geppetto/pkg/steps/ai/openai_responses/engine.go:106 > Responses: built request include_len=1 input_items=2 model=gpt-5-mini stream=true
+2026-03-08T12:35:40.766424973-04:00 DBG ../geppetto/pkg/steps/ai/openai_responses/engine.go:156 > Responses: sending request body_len=911 stream=true url=https://api.openai.com/v1/responses
+2026-03-08T12:35:40.766639523-04:00 DBG pkg/webchat/sem_translator.go:152 > received event (SEM) component=web_forwarder event_id=c94e37e6-8cb5-4939-ac1b-96f5f44d6c67 event_type=*events.EventPartialCompletionStart inference_id=ec99bbc9-551b-4119-bd3c-643c22213138 session_id=4dfa0075-c05f-428a-98e4-43fa0f96afd2 turn_id=25538212-25dc-4be8-8472-78375c12e553
+2026-03-08T12:35:41.062322717-04:00 DBG ../geppetto/pkg/steps/ai/openai_responses/engine.go:191 > Responses: HTTP response received content_type=application/json status=401
+2026-03-08T12:35:41.062694985-04:00 DBG ../geppetto/pkg/steps/ai/openai_responses/engine.go:195 > Responses: HTTP error error_body={\"error\":{\"code\":null,\"message\":\"Missing bearer or basic authentication in header\",\"param\":null,\"type\":\"invalid_request_error\"}} status=401
+2026-03-08T12:35:41.062808346-04:00 ERR pkg/webchat/chat_service.go:199 > runner completed with error error=\"responses api error: status=401 body=map[error:map[code:<nil> message:Missing bearer or basic authentication in header param:<nil> type:invalid_request_error]]\" component=webchat conv_id=8f03d5d3-63c5-438b-8b6f-b3396ccff5ff run_id=ec99bbc9-551b-4119-bd3c-643c22213138"
+
+**Assistant interpretation:** Remove the temporary default-backfill fix, make runtime composition depend only on registry-resolved profile data, and fail fast when a selected profile is incomplete.
+
+**Inferred user intent:** Preserve the architectural contract from GP-029: profile registry data is authoritative, and missing provider config should be treated as a profile error rather than patched over by defaults.
+
+**Commit (code):** uncommitted workspace changes
+
+### What I did
+
+- Reverted the temporary `APISettings` default backfill in `geppetto/pkg/steps/ai/settings/settings-step.go`.
+- Left the `/chat` request logging in place from Step 5 because it is still useful independent of the defaulting strategy.
+- Updated `cmd/web-chat/runtime_composer.go` to:
+  - construct `StepSettings`,
+  - strip the fallback AI/provider fields that would otherwise come from section defaults (`ai-engine`, `ai-api-type`, token/temperature defaults, API key map, base URL map),
+  - apply only the registry-resolved `runtime.step_settings_patch`,
+  - validate that the resulting runtime contains the required provider fields before engine construction.
+- Added validation for profile-owned runtime completeness:
+  - all profiles must provide `ai-api-type` and `ai-engine`,
+  - OpenAI/OpenAI Responses profiles must provide URL + auth fields from the registry patch,
+  - Claude profiles must provide `claude-api-key` + `claude-base-url`,
+  - Gemini profiles must provide `gemini-api-key` + `gemini-base-url`.
+- Updated `cmd/web-chat/runtime_composer_test.go` to reflect the new contract:
+  - empty resolved runtime now fails,
+  - missing provider base URL now fails,
+  - successful test fixtures explicitly supply the provider URL in the profile patch.
+- Ran:
+  - `gofmt -w geppetto/pkg/steps/ai/settings/settings-step.go pinocchio/cmd/web-chat/runtime_composer.go pinocchio/cmd/web-chat/runtime_composer_test.go pinocchio/pkg/webchat/http/api.go`
+  - `go test ./pinocchio/cmd/web-chat ./pinocchio/pkg/webchat/... -count=1`
+
+### Why
+
+- The user explicitly rejected the backfill approach because it hid incomplete profile data behind schema defaults.
+- The runtime composer is the right place to enforce the contract because it is where profile resolution turns into concrete engine settings for `web-chat`.
+- Scrubbing the fallback fields before patch application removes the accidental `gpt-4/openai` escape hatch while preserving the rest of the object initialization code.
+
+### What worked
+
+- The log snippet the user provided confirmed that OpenAI Responses still had its own default URL path (`https://api.openai.com/v1/responses`) and therefore could still mask missing registry data unless `web-chat` rejected the profile first.
+- Localizing the strict validation to `cmd/web-chat` avoided changing global Geppetto engine semantics while still enforcing the registry-only contract for this app.
+- The updated runtime composer tests passed after shifting expectations from “fallback succeeds” to “incomplete profile fails”.
+
+### What didn't work
+
+- The first attempt at fixing the regression by restoring API base URL defaults directly contradicted the intended design once the user clarified that the registry must own those values.
+- OpenAI Responses currently still has its own engine-level base URL fallback, which means the engine alone cannot be trusted to enforce the registry-only contract. That is why validation had to move earlier into `cmd/web-chat`.
+
+### What I learned
+
+- There were actually two different default channels to worry about:
+  - section-schema defaults in `settings.NewStepSettings()`,
+  - provider-engine defaults inside the concrete engine implementations.
+- Enforcing registry ownership requires stripping the former and validating before the latter can run.
+- The “profile not available in registry” case was already handled by the request resolver; the missing piece was “profile exists but is incomplete”.
+
+### What was tricky to build
+
+- The tricky part was preserving enough initialized structure for the engine factory to work while removing only the fields that violate the registry-only contract. Replacing `NewStepSettings()` entirely would have been more invasive and riskier; clearing the fallback fields was the smaller, targeted change.
+- Another subtlety was `openai-responses`: it can currently reuse `openai-api-key`, so the validation has to be strict about profile ownership without assuming a brand-new key namespace that existing profiles do not use.
+
+### What warrants a second pair of eyes
+
+- Whether `cmd/web-chat` should also reject an empty/default system prompt if the team wants *all* prompt/runtime semantics to be registry-owned rather than just engine/provider selection.
+- Whether the Geppetto engine layer should eventually remove or gate its own provider URL fallbacks, now that higher-level apps are moving toward registry-owned runtime policy.
+
+### What should be done in the future
+
+- Add or update the affected profiles in `~/.config/pinocchio/profiles.yaml` so profiles like `gpt-5-mini` include the required URL/auth fields explicitly.
+- Consider adding an integration test that exercises the full request path and asserts `/chat` fails immediately with a descriptive error when the selected profile is incomplete.
+
+### Code review instructions
+
+- Start with:
+  - `cmd/web-chat/runtime_composer.go`
+- Then inspect the regression contract coverage in:
+  - `cmd/web-chat/runtime_composer_test.go`
+- Confirm the diagnostic surface is still present in:
+  - `pkg/webchat/http/api.go`
+- Validation:
+  - `go test ./pinocchio/cmd/web-chat ./pinocchio/pkg/webchat/... -count=1`
+
+### Technical details
+
+- `stripStepSettingsDefaultsForProfileRuntime(...)` clears the AI/provider fallback fields before `ApplyRuntimeStepSettingsPatch(...)` runs.
+- `validateProfileOwnedRuntimeSettings(...)` enforces provider-specific required fields on the resolved runtime before `BuildEngineFromSettingsWithMiddlewares(...)`.
+- The temporary `NewAPISettingsWithDefaults()` helper from Step 5 was removed, restoring `settings.NewStepSettings()` to its prior behavior.
+
+## Step 7: Restore hidden section-default/config parsing under the profile overlay
+
+After the registry-only validation pass, the user clarified the actual target design: `web-chat` should still get Geppetto section defaults and layered config/env values, but it should do so through an internal parsed-values pass rather than by exposing the full AI flag surface on the public CLI. The profile registry remains authoritative for profile selection and runtime patching, but it now patches over a hidden base `StepSettings` instead of an empty object.
+
+This step keeps the public command surface small while restoring the lost defaults channel that GP-029 accidentally removed. The important distinction is that `web-chat` no longer depends on public AI flags, but it still deliberately reuses the same Glazed section schemas, config mapping, and env parsing rules as the rest of Pinocchio/Geppetto.
+
+### Prompt Context
+
+**User prompt (verbatim):** "yes, do that. also allow loading a config file like ~/.pinocchio/config.yaml as a second section of \"defaults\", exposing the config-file flag. Maybe we can still do that through parsed values but without exposing the command line flags. (except --config-file and the profile flags).
+
+How would that work, mae me a diagram"
+
+**Assistant interpretation:** Reintroduce schema/config/env-derived runtime defaults for `web-chat`, keep the public CLI limited to profile and config-file flags, and document the precedence model clearly.
+
+**Inferred user intent:** Preserve the benefits of the unified Glazed configuration system without reopening `web-chat` as a direct AI-settings command surface.
+
+**Commit (code):** pending
+
+### What I did
+
+- Kept `cmd/web-chat/runtime_composer.go` on the base-plus-profile-overlay model:
+  - the composer now clones a caller-supplied base `StepSettings`,
+  - then applies `ResolvedProfileRuntime.StepSettingsPatch`.
+- Finished the hidden base-settings loader in `cmd/web-chat/main.go`:
+  - builds hidden Geppetto sections via `geppetto/pkg/sections.CreateGeppettoSections()`,
+  - parses `PINOCCHIO_*` env,
+  - parses `~/.pinocchio/config.yaml` if present,
+  - parses explicit `--config-file` as a higher-precedence config layer,
+  - parses section defaults,
+  - converts the result into `settings.StepSettings`.
+- Left the public command surface narrow:
+  - `--config-file` remains exposed,
+  - `--profile` and `--profile-registries` remain exposed,
+  - direct AI flags such as `--ai-engine` and `--ai-api-type` remain absent,
+  - `--print-yaml`, `--print-parsed-fields`, and `--print-schema` are hidden.
+- Added debug logging in `cmd/web-chat/main.go` for the hidden base-settings resolution so `/tmp/webchat.log` shows which config files were used and what non-secret step metadata was derived.
+- Rewrote `cmd/web-chat/runtime_composer_test.go` to verify the current contract:
+  - base settings are used when the resolved profile runtime is empty,
+  - profile patches override the base settings,
+  - middleware config resolution still behaves as before.
+- Added `cmd/web-chat/main_profile_registries_test.go` coverage for:
+  - `resolveWebChatConfigFiles(...)`,
+  - `resolveWebChatBaseStepSettings(...)` precedence across defaults/config/env,
+  - the minimal public flag surface.
+- Ran:
+  - `gofmt -w pinocchio/cmd/web-chat/main.go pinocchio/cmd/web-chat/runtime_composer.go pinocchio/cmd/web-chat/runtime_composer_test.go pinocchio/cmd/web-chat/main_profile_registries_test.go pinocchio/pkg/webchat/http/api.go geppetto/pkg/steps/ai/settings/settings-step.go`
+  - `go test ./pinocchio/cmd/web-chat ./pinocchio/pkg/webchat/... -count=1`
+
+### Why
+
+- The regression showed that `web-chat` still needs the section-schema defaults path, especially for provider URL defaults and other non-profile runtime settings.
+- The user explicitly wanted those defaults without re-exposing the AI CLI flags that GP-029 removed.
+- A hidden parsed-values pass is the cleanest way to preserve one configuration system instead of inventing a special-case `web-chat` bootstrap format.
+
+### What worked
+
+- Reusing `CreateGeppettoSections()` means the hidden defaults/config/env layer uses the same schema source of truth as other Pinocchio/Geppetto commands.
+- The resolved config precedence now has direct test coverage instead of being an emergent side effect of the old parsed-flag path.
+- The debug log added in `main.go` provides the missing runtime trail for future config regressions.
+
+### What didn't work
+
+- The first test rewrite failed to compile because `Chat.ApiType` is `*types.ApiType`, not `*string`.
+
+Exact failure:
+
+- `pinocchio/cmd/web-chat/runtime_composer_test.go:87:20: cannot use ptr("openai") (value of type *string) as *"github.com/go-go-golems/geppetto/pkg/steps/ai/types".ApiType value in assignment`
+
+### What I learned
+
+- The right abstraction is not “bring back AI flags”; it is “run the same section parser internally and keep the resulting values private.”
+- `web-chat` needs two separate layers now:
+  - public command selection/config wiring,
+  - hidden AI/runtime base settings resolution.
+- The profile overlay story becomes much easier to reason about when the precedence is explicit and tested.
+
+### What was tricky to build
+
+- The tricky part was preserving the minimal public CLI while still letting `--config-file` influence the hidden base settings. That required disabling the normal builder-owned config loading path and then reusing only the `command-settings.config-file` field as an input into the hidden parse.
+- Another subtlety is precedence: the config files need to be ordered low-to-high (`~/.pinocchio/config.yaml`, then explicit `--config-file`), while env must still override both. That is easy to get wrong if the middleware execution order is not checked carefully.
+
+### What warrants a second pair of eyes
+
+- Whether `~/.pinocchio/config.yaml` should stay the only implicit config location for `web-chat`, or whether it should eventually share the broader XDG resolution behavior used elsewhere.
+- Whether the hidden base-settings debug log should include the selected config source labels in addition to the file list.
+
+### What should be done in the future
+
+- Restart the running `go run ./cmd/web-chat ...` process and verify `/chat` again with a layered config present in `~/.pinocchio/config.yaml` or via `--config-file`.
+- Consider adding an end-to-end test that boots `web-chat` with a temp config file and asserts that request-time profile patching preserves the hidden base URL/auth defaults.
+
+### Code review instructions
+
+- Start with:
+  - `cmd/web-chat/main.go`
+  - `cmd/web-chat/runtime_composer.go`
+- Then inspect:
+  - `cmd/web-chat/main_profile_registries_test.go`
+  - `cmd/web-chat/runtime_composer_test.go`
+- Confirm the request-path diagnostics still exist in:
+  - `pkg/webchat/http/api.go`
+- Validation:
+  - `go test ./pinocchio/cmd/web-chat ./pinocchio/pkg/webchat/... -count=1`
+
+### Technical details
+
+- Effective runtime precedence now works like this:
+
+```text
+Geppetto section defaults
+        ->
+~/.pinocchio/config.yaml
+        ->
+--config-file
+        ->
+PINOCCHIO_* env
+        ->
+base StepSettings
+        ->
+resolved profile runtime.step_settings_patch
+        ->
+effective StepSettings
+        ->
+BuildEngineFromSettingsWithMiddlewares(...)
+```
+
+- Public CLI surface:
+
+```text
+web-chat flags
+  - server/runtime flags (addr, db paths, root, debug-api, ...)
+  - --config-file
+  - --profile
+  - --profile-registries
+  - hidden: --print-yaml, --print-parsed-fields, --print-schema
+  - not exposed: direct AI/provider flags
+```
+
+- The hidden parse in `cmd/web-chat/main.go` is intentionally separate from `cli.BuildCobraCommand(...)` config loading:
+  - `BuildCobraCommand` still exposes `command-settings.config-file`,
+  - `ConfigFilesFunc` is disabled for the public parse,
+  - `resolveWebChatBaseStepSettings(...)` performs the internal Geppetto parse and returns both the derived `StepSettings` and the config file list used.
+
 ## Usage Examples
 
 - Use this diary to reconstruct the exact order of implementation steps and commits.

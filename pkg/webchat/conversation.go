@@ -13,12 +13,8 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/go-go-golems/geppetto/pkg/events"
-	"github.com/go-go-golems/geppetto/pkg/inference/engine"
-	"github.com/go-go-golems/geppetto/pkg/inference/session"
 	"github.com/go-go-golems/geppetto/pkg/inference/toolloop"
-	"github.com/go-go-golems/geppetto/pkg/inference/toolloop/enginebuilder"
 	gepprofiles "github.com/go-go-golems/geppetto/pkg/profiles"
-	"github.com/go-go-golems/geppetto/pkg/turns"
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
 	timelinepb "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/timeline"
@@ -28,8 +24,6 @@ import (
 type Conversation struct {
 	ID        string
 	SessionID string
-	Sess      *session.Session
-	Eng       engine.Engine
 	Sink      events.EventSink
 	mu        sync.Mutex
 	sub       message.Subscriber
@@ -41,10 +35,11 @@ type Conversation struct {
 	RuntimeKey              string
 	RuntimeFingerprint      string
 	ResolvedProfileMetadata map[string]any
-	SeedSystemPrompt        string
-	AllowedTools            []string
+	resolvedRuntime         *gepprofiles.RuntimeSpec
+	profileVersion          uint64
+	llm                     *llmConversationState
 
-	// Server-side send serialization / queue semantics.
+	// Chat-specific prompt submission state.
 	// All fields below are guarded by mu.
 	activeRequestKey string
 	queue            []queuedChat
@@ -270,9 +265,6 @@ func (cm *ConvManager) GetOrCreate(
 	if err != nil {
 		return nil, err
 	}
-	if runtime.Engine == nil {
-		return nil, errors.New("runtime composer returned nil engine")
-	}
 	if runtime.Sink == nil {
 		return nil, errors.New("runtime composer returned nil sink")
 	}
@@ -289,11 +281,13 @@ func (cm *ConvManager) GetOrCreate(
 	timelineStore := cm.timelineStore
 	if c, ok := cm.conns[convID]; ok {
 		c.mu.Lock()
-		c.ensureQueueInitLocked()
+		ensurePromptQueueInitLocked(c)
 		c.touchLocked(now)
 		if len(resolvedProfileMetadata) > 0 {
 			c.ResolvedProfileMetadata = copyStringAnyMap(resolvedProfileMetadata)
 		}
+		c.resolvedRuntime = resolvedRuntime
+		c.profileVersion = profileVersion
 		if c.semBuf == nil {
 			c.semBuf = newSemFrameBuffer(1000)
 		}
@@ -323,15 +317,15 @@ func (cm *ConvManager) GetOrCreate(
 				}
 			}
 
-			c.Eng = runtime.Engine
 			c.Sink = runtime.Sink
 			c.sub = sub
 			c.subClose = subClose
 			c.RuntimeKey = runtime.RuntimeKey
 			c.RuntimeFingerprint = runtime.RuntimeFingerprint
 			c.ResolvedProfileMetadata = copyStringAnyMap(resolvedProfileMetadata)
-			c.SeedSystemPrompt = runtime.SeedSystemPrompt
-			c.AllowedTools = append([]string(nil), runtime.AllowedTools...)
+			c.resolvedRuntime = resolvedRuntime
+			c.profileVersion = profileVersion
+			c.llm = nil
 
 			c.stream = NewStreamCoordinator(
 				c.ID,
@@ -373,8 +367,8 @@ func (cm *ConvManager) GetOrCreate(
 		RuntimeKey:              runtime.RuntimeKey,
 		RuntimeFingerprint:      runtime.RuntimeFingerprint,
 		ResolvedProfileMetadata: copyStringAnyMap(resolvedProfileMetadata),
-		SeedSystemPrompt:        runtime.SeedSystemPrompt,
-		AllowedTools:            append([]string(nil), runtime.AllowedTools...),
+		resolvedRuntime:         resolvedRuntime,
+		profileVersion:          profileVersion,
 		requests:                map[string]*chatRequestRecord{},
 		semBuf:                  newSemFrameBuffer(1000),
 		lastActivity:            now,
@@ -387,7 +381,6 @@ func (cm *ConvManager) GetOrCreate(
 	if err != nil {
 		return nil, err
 	}
-	conv.Eng = runtime.Engine
 	conv.Sink = runtime.Sink
 	conv.sub = sub
 	conv.subClose = subClose
@@ -423,19 +416,6 @@ func (cm *ConvManager) GetOrCreate(
 		},
 	)
 
-	conv.Sess = &session.Session{
-		SessionID: sessionID,
-		Builder: &enginebuilder.Builder{
-			Base:             runtime.Engine,
-			EventSinks:       []events.EventSink{runtime.Sink},
-			StepController:   cm.stepCtrl,
-			StepPauseTimeout: 30 * time.Second,
-		},
-		Turns: func() []*turns.Turn {
-			return []*turns.Turn{buildSeedTurn(sessionID, runtime.SeedSystemPrompt)}
-		}(),
-	}
-
 	// Start streaming immediately; ConnectionPool idle logic will stop it when no clients are connected.
 	if conv.stream != nil {
 		if err := conv.stream.Start(conv.baseCtx); err != nil {
@@ -446,15 +426,6 @@ func (cm *ConvManager) GetOrCreate(
 	cm.conns[convID] = conv
 	cm.persistConversationIndexToStore(timelineStore, conv, "active", "")
 	return conv, nil
-}
-
-func buildSeedTurn(sessionID string, systemPrompt string) *turns.Turn {
-	seed := &turns.Turn{}
-	if strings.TrimSpace(systemPrompt) != "" {
-		turns.AppendBlock(seed, turns.NewSystemTextBlock(systemPrompt))
-	}
-	_ = turns.KeyTurnMetaSessionID.Set(&seed.Metadata, sessionID)
-	return seed
 }
 
 func (cm *ConvManager) AddConn(conv *Conversation, c *websocket.Conn) {

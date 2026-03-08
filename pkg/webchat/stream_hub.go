@@ -65,8 +65,6 @@ func (h *StreamHub) ResolveAndEnsureConversation(ctx context.Context, req Conver
 		RuntimeKey:              conv.RuntimeKey,
 		RuntimeFingerprint:      conv.RuntimeFingerprint,
 		ResolvedProfileMetadata: copyStringAnyMap(conv.ResolvedProfileMetadata),
-		SeedSystemPrompt:        conv.SeedSystemPrompt,
-		AllowedTools:            append([]string(nil), conv.AllowedTools...),
 	}, nil
 }
 

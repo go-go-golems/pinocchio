@@ -7,8 +7,6 @@ import (
 	"io"
 	"strings"
 
-	sections2 "github.com/go-go-golems/geppetto/pkg/sections"
-
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 
 	clay "github.com/go-go-golems/clay/pkg"
@@ -45,15 +43,14 @@ type TestCommand struct {
 }
 
 type ChatCommandSettings struct {
-	PinocchioProfile string `glazed:"pinocchio-profile"`
-	Debug            bool   `glazed:"debug"`
-	ServerTools      bool   `glazed:"server-tools"`
+	Debug       bool `glazed:"debug"`
+	ServerTools bool `glazed:"server-tools"`
 }
 
 // NewChatCommand wraps the GepettoCommand which was loaded from the yaml file,
 // and manually loads the profile to configure it.
 func NewChatCommand(cmd *pinocchio_cmds.PinocchioCommand) (*TestCommand, error) {
-	geppettoLayers, err := sections2.CreateGeppettoSections()
+	profileSettingsSection, err := helpers.NewProfileSettingsSection()
 	if err != nil {
 		return nil, err
 	}
@@ -61,11 +58,6 @@ func NewChatCommand(cmd *pinocchio_cmds.PinocchioCommand) (*TestCommand, error) 
 		CommandDescription: cmds.NewCommandDescription("chat",
 			cmds.WithShort("Run chat with simple streaming printer"),
 			cmds.WithFlags(
-				fields.New("pinocchio-profile",
-					fields.TypeString,
-					fields.WithHelp("Pinocchio profile"),
-					fields.WithDefault("default"),
-				),
 				fields.New("debug",
 					fields.TypeBool,
 					fields.WithHelp("Debug mode"),
@@ -77,9 +69,7 @@ func NewChatCommand(cmd *pinocchio_cmds.PinocchioCommand) (*TestCommand, error) 
 					fields.WithDefault(false),
 				),
 			),
-			cmds.WithSections(
-				geppettoLayers...,
-			),
+			cmds.WithSections(profileSettingsSection),
 		),
 		pinocchioCmd: cmd,
 	}, nil
@@ -91,8 +81,19 @@ func (c *TestCommand) RunIntoWriter(ctx context.Context, parsedLayers *values.Va
 	if err != nil {
 		return errors.Wrap(err, "failed to initialize settings")
 	}
+	commandSettings := &cli.CommandSettings{}
+	_ = parsedLayers.DecodeSectionInto(cli.CommandSettingsSlug, commandSettings)
+	profileSettings := helpers.ResolveProfileSettings(parsedLayers)
+	if profileSettings.Profile == "" {
+		profileSettings.Profile = "default"
+	}
 
-	geppettoParsedLayers, err := helpers.ParseGeppettoLayers(c.pinocchioCmd, helpers.WithProfile(s.PinocchioProfile))
+	geppettoParsedLayers, err := helpers.ParseGeppettoLayers(
+		c.pinocchioCmd,
+		helpers.WithProfile(profileSettings.Profile),
+		helpers.WithProfileRegistries(profileSettings.ProfileRegistries),
+		helpers.WithConfigFile(commandSettings.ConfigFile),
+	)
 	if err != nil {
 		return err
 	}
@@ -175,21 +176,23 @@ func main() {
 	commands, err := pinocchio_cmds.LoadFromYAML(testYaml)
 	cobra.CheckErr(err)
 
-	// Register the command as a normal cobra command and let it parse its step settings by itself
-	err = cli.AddCommandsToRootCommand(
-		rootCmd, commands, nil,
-		cli.WithCobraMiddlewaresFunc(sections2.GetCobraCommandGeppettoMiddlewares),
-		cli.WithCobraShortHelpSections(values.DefaultSlug, cmdlayers.GeppettoHelpersSlug),
-	)
-	cobra.CheckErr(err)
-
 	// Add a clearer chat command wrapper with geppetto layers
 	if len(commands) == 1 {
 		cmd := commands[0].(*pinocchio_cmds.PinocchioCommand)
 		chatCmd, err := NewChatCommand(cmd)
 		cobra.CheckErr(err)
-		command, err := cli.BuildCobraCommand(chatCmd)
+		command, err := cli.BuildCobraCommand(chatCmd, cli.WithParserConfig(cli.CobraParserConfig{
+			AppName: "pinocchio",
+			ConfigFilesFunc: func(_ *values.Values, _ *cobra.Command, _ []string) ([]string, error) {
+				return nil, nil
+			},
+		}))
 		cobra.CheckErr(err)
+		for _, name := range []string{"print-yaml", "print-parsed-fields", "print-schema"} {
+			if flag := command.Flags().Lookup(name); flag != nil {
+				flag.Hidden = true
+			}
+		}
 		rootCmd.AddCommand(command)
 	}
 
