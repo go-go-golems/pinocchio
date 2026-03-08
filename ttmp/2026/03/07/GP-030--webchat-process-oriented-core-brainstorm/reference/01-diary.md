@@ -327,7 +327,13 @@ This final step is small in terms of code, but important for handoff quality. Th
 
 ### Prompt Context
 
-**User prompt (verbatim):** "don't forget to commit as you go and keep a frequent detailed diary.\n\nthen continue"
+**User prompt (verbatim):**
+
+```text
+don't forget to commit as you go and keep a frequent detailed diary.
+
+then continue
+```
 
 **Assistant interpretation:** Finish the remaining GP-030 bookkeeping, keep the diary current, validate the ticket state, and deliver the finished document bundle instead of stopping at code and tests.
 
@@ -337,7 +343,7 @@ This final step is small in terms of code, but important for handoff quality. Th
 
 ### What I did
 - Marked the remaining GP-030 checklist items complete where the code and docs already satisfied them
-- Updated the ticket index to closed status
+- Updated the ticket index and task state to reflect the finished implementation slice while keeping the formal doc status compatible with the shared vocabulary
 - Updated the ticket changelog and this diary with the final closeout step
 - Prepared the ticket bundle for a final `docmgr doctor` pass and reMarkable upload
 
