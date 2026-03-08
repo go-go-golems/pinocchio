@@ -134,6 +134,19 @@ srv, err := webchat.NewServer(
 
 Use this when you do not yet need explicit dependency control. Internally, it now delegates through `BuildRouterDepsFromValues(...)` and `NewServerFromDeps(...)`.
 
+## Preferred Startup Path
+
+For new prompt-driven integrations, prefer an app-owned `POST /...` handler that chooses a runner and calls:
+
+- `ChatService.StartPromptWithRunner(...)` for prompt-driven chat
+- `ConversationService.PrepareRunnerStart(...)` plus `Runner.Start(...)` for non-chat SEM producers
+
+This keeps:
+
+- queue/idempotency inside `ChatService`
+- runner selection in app code
+- websocket and timeline routes generic
+
 ## Request Resolver Contract
 
 `ConversationRequestResolver` is shared by both chat and websocket handlers. It produces `ConversationRequestPlan`:

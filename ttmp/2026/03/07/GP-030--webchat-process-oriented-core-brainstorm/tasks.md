@@ -18,7 +18,9 @@
 - [x] Move prompt queue/idempotency back behind `ChatService` while keeping `ConversationService` transport-oriented
 - [x] Rebuild the LLM path with lazy execution-state creation instead of eager session creation during conversation ensure
 - [x] Adapt app-owned start surfaces while preserving current chat behavior
-- [ ] Validate, document, and close the first GP-030 implementation slice
+- [x] Write a migration guide for embedders moving from legacy chat startup to the runner path
+- [x] Write a detailed postmortem explaining the rollback and rebuild
+- [ ] Validate, document, upload, and close the first GP-030 implementation slice
 
 ## Key Decisions
 
@@ -135,6 +137,7 @@ Acceptance criteria:
 - [x] Show how a feature-specific endpoint can start an LLM-backed runner while still using generic `/ws` and `/api/timeline`
 - [x] Add one documented example of a non-LLM or fake runner emitting SEM over the same transport path
 - [ ] Ensure example docs explain why one websocket per active conversation remains the default recommendation
+- [x] Publish a dedicated migration guide in `pkg/doc/topics`
 
 Acceptance criteria:
 
@@ -144,9 +147,9 @@ Acceptance criteria:
 ### 3.4 Add end-to-end regression coverage
 
 - [x] Add integration coverage for an LLM-backed feature start through the new runner path
-- [ ] Verify websocket attachment still receives SEM frames for the started conversation
+- [x] Verify websocket attachment still receives SEM frames for the started conversation
 - [x] Verify `/api/timeline` hydrates the same conversation after startup
-- [ ] Verify turn snapshots or existing turn persistence behavior still works for the LLM path
+- [x] Verify turn snapshots or existing turn persistence behavior still works for the LLM path
 - [x] Add a smoke test for a fake runner that emits SEM without relying on the full LLM loop
 
 Acceptance criteria:

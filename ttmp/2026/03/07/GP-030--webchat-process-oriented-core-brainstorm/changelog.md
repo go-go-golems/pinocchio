@@ -12,3 +12,4 @@
 - Rewound the first incorrect runner implementation slice with explicit `git revert` commits after review found that generic transport code still leaked LLM session and prompt-submission concerns
 - Rebuilt the runner seam around a transport-safe `StartRequest`, a generic `RunHandle`, chat-owned queue/idempotency orchestration, and lazy LLM execution-state creation
 - Added app-owned integration coverage for the corrected runner path plus a fake SEM-emitting runner
+- Added a public migration guide in `pkg/doc/topics` plus a detailed GP-030 postmortem in the ticket workspace

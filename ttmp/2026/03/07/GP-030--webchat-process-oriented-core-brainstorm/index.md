@@ -41,6 +41,7 @@ This ticket stores the current brainstorm and follow-up design work around a pos
 - **Brainstorm**: [reference/01-webchat-process-core-brainstorm.md](./reference/01-webchat-process-core-brainstorm.md)
 - **Design Guide**: [design-doc/01-webchat-runner-architecture-and-process-oriented-startup-refactor-plan.md](./design-doc/01-webchat-runner-architecture-and-process-oriented-startup-refactor-plan.md)
 - **Diary**: [reference/01-diary.md](./reference/01-diary.md)
+- **Postmortem**: [reference/02-runner-rebuild-postmortem.md](./reference/02-runner-rebuild-postmortem.md)
 
 ## Status
 

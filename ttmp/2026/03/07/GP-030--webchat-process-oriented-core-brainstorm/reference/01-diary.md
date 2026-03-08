@@ -116,7 +116,7 @@ The key implementation decision in this step was not to abandon the `Runner` ide
 
 **Inferred user intent:** Recover from the first incorrect implementation quickly, keep the repo history explicit, and continue toward a cleaner GP-030 implementation without carrying forward the architectural mistakes.
 
-**Commit (code):** pending
+**Commit (code):** `812b964` — "refactor: rebuild webchat runner boundary"
 
 ### What I did
 - Reverted `f0505a9`, `be3fca8`, and `eed8f09` with `git revert --no-edit ...`
@@ -184,4 +184,71 @@ The key implementation decision in this step was not to abandon the `Runner` ide
   - `pkg/webchat/llm_loop_runner.go`
   - `pkg/webchat/chat_service.go`
   - `pkg/webchat/conversation_service.go`
+  - `cmd/web-chat/app_owned_chat_integration_test.go`
+
+## Step 3: Close the coverage gaps on the rebuilt runner path
+
+Once the rebuilt boundary was stable, I added the remaining coverage that mattered for trusting it. The important missing assertions were allowed-tool filtering on the rebuilt `LLMLoopRunner`, turn persistence still firing on the runner path, and websocket delivery for an app-owned runner endpoint instead of only the legacy `/chat` helper.
+
+This step matters because the first rebuild commit proved the new boundary compiled and kept the package tests green, but it still left open whether the LLM-specific behavior had actually survived the refactor. These tests close that gap.
+
+### Prompt Context
+
+**User prompt (verbatim):** (same as Step 2)
+
+**Assistant interpretation:** Continue the GP-030 rebuild work and finish the remaining verification instead of stopping at the first passing compile/test state.
+
+**Inferred user intent:** Ensure the refactor is defended by behavior-level tests, not just by cleaner types.
+
+**Commit (code):** `22bbd31` — "test: extend webchat runner coverage"
+
+### What I did
+- Added `pkg/webchat/llm_loop_runner_test.go` to assert:
+  - allowed-tool filtering still works
+  - turn-store persistence still fires on the runner path
+- Extended `cmd/web-chat/app_owned_chat_integration_test.go` with:
+  - app-owned `POST /chat-runner`
+  - fake runner timeline hydration
+  - websocket `chat.message` delivery on the runner-owned route
+- Re-ran:
+  - `go test ./pkg/webchat/... ./cmd/web-chat -count=1`
+  - `go test ./... -count=1`
+  - `make lintmax`
+
+### Why
+- The migration is only credible if the rebuilt runner path preserves the old LLM behavior where it is supposed to
+- App-owned routes needed their own coverage instead of relying on the legacy helper path
+
+### What worked
+- The runner-path websocket test passed without more production changes
+- The LLM runner still filtered tools correctly after the lazy-state refactor
+- Turn-store persistence still triggered on the rebuilt path
+
+### What didn't work
+- N/A
+
+### What I learned
+- The new boundary is strong enough that most of the remaining confidence work could be done with tests rather than more production refactors
+- The fake-runner plus timeline test is a good proof that the generic transport story is now real
+
+### What was tricky to build
+- The subtle part was asserting turn persistence without reintroducing Geppetto-specific handles into the public runner API. The solution was to use a recording turn store and validate the side effect after `RunHandle.Wait()` rather than trying to inspect internal execution handles.
+
+### What warrants a second pair of eyes
+- Whether the current turn-persistence assertion is the right long-term check, or whether a higher-level persisted-turn readback test should eventually replace it
+
+### What should be done in the future
+- Finish the migration and postmortem docs for embedders and reviewers
+
+### Code review instructions
+- Start with `pkg/webchat/llm_loop_runner_test.go`
+- Then review the new runner-route tests in `cmd/web-chat/app_owned_chat_integration_test.go`
+- Validate with:
+  - `go test ./pkg/webchat/... ./cmd/web-chat -count=1`
+  - `go test ./... -count=1`
+  - `make lintmax`
+
+### Technical details
+- New code review entry points:
+  - `pkg/webchat/llm_loop_runner_test.go`
   - `cmd/web-chat/app_owned_chat_integration_test.go`
