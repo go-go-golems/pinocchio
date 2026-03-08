@@ -17,6 +17,7 @@ Flags:
 - codec
 - ai-api-type
 - profile
+- profile-registries
 IsTopLevel: true
 IsTemplate: false
 ShowPerDefault: true
@@ -39,7 +40,17 @@ Local estimate:
 pinocchio tokens count --count-mode estimate --model gpt-4o-mini prompt.txt
 ```
 
-OpenAI Responses API count:
+Profile-first provider count:
+
+```bash
+pinocchio tokens count \
+  --count-mode api \
+  --profile gpt-4o-mini \
+  --profile-registries ~/.config/pinocchio/profiles.yaml \
+  prompt.txt
+```
+
+OpenAI Responses API count with explicit flags:
 
 ```bash
 pinocchio tokens count \
@@ -50,7 +61,7 @@ pinocchio tokens count \
   prompt.txt
 ```
 
-Anthropic count with profile or explicit flags:
+Anthropic count with explicit flags:
 
 ```bash
 pinocchio tokens count \
@@ -70,8 +81,9 @@ pinocchio tokens count --count-mode auto --model gpt-4o-mini prompt.txt
 ## How To Choose
 
 - Use `estimate` when you want a fast local answer and do not need provider-exact counts.
-- Use `api` when the exact provider accounting matters.
+- Use `api` when the exact provider accounting matters. Prefer `--profile` plus `--profile-registries` for normal operator workflows.
 - Use `auto` when you prefer provider-exact counts but still want the command to work without credentials or when provider-native counting is unavailable.
+- Keep the explicit provider flags for ad-hoc debugging and CLI testing.
 
 ## Output Shape
 
