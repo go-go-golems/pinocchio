@@ -14,6 +14,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"google.golang.org/protobuf/encoding/protojson"
 )
 
@@ -117,6 +118,13 @@ func IdempotencyKeyFromRequest(r *http.Request, body *ChatRequestBody) string {
 
 func NewChatHandler(svc ChatService, resolver ConversationRequestResolver) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
+		reqLog := log.With().
+			Str("component", "webchat").
+			Str("route", "/chat").
+			Str("method", req.Method).
+			Str("path", req.URL.Path).
+			Str("remote", req.RemoteAddr).
+			Logger()
 		if req.Method != http.MethodPost {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
@@ -143,6 +151,7 @@ func NewChatHandler(svc ChatService, resolver ConversationRequestResolver) http.
 					msg = rbe.ClientMsg
 				}
 			}
+			reqLog.Error().Err(err).Int("status", status).Msg("chat request resolution failed")
 			http.Error(w, msg, status)
 			return
 		}
@@ -167,6 +176,15 @@ func NewChatHandler(svc ChatService, resolver ConversationRequestResolver) http.
 			IdempotencyKey:          idempotencyKey,
 		})
 		if err != nil {
+			reqLog.Error().
+				Err(err).
+				Str("conv_id", plan.ConvID).
+				Str("runtime_key", plan.RuntimeKey).
+				Str("runtime_fingerprint", plan.RuntimeFingerprint).
+				Uint64("profile_version", plan.ProfileVersion).
+				Str("idempotency_key", idempotencyKey).
+				Int("prompt_len", len(plan.Prompt)).
+				Msg("chat submit failed")
 			http.Error(w, "start session inference failed", http.StatusInternalServerError)
 			return
 		}
