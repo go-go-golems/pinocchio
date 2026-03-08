@@ -42,6 +42,20 @@ type ResolvedConversationRequest struct {
 	IdempotencyKey     string
 }
 
+// RuntimeRequest converts resolved HTTP request policy into the runtime request used by
+// conversation resolution helpers such as PrepareRunnerStart.
+func (r ResolvedConversationRequest) RuntimeRequest() root.ConversationRuntimeRequest {
+	return root.ConversationRuntimeRequest{
+		ConvID:                  r.ConvID,
+		RuntimeKey:              r.RuntimeKey,
+		RuntimeFingerprint:      r.RuntimeFingerprint,
+		ProfileVersion:          r.ProfileVersion,
+		ResolvedRuntime:         r.ResolvedRuntime,
+		ResolvedProfileMetadata: r.ProfileMetadata,
+		Overrides:               r.Overrides,
+	}
+}
+
 // ConversationRequestResolver resolves request policy (conv/runtime/overrides) for both HTTP and WS handlers.
 type ConversationRequestResolver interface {
 	Resolve(req *http.Request) (ResolvedConversationRequest, error)

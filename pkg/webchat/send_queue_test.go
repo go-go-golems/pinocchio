@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestConversationPrepareSessionInference_Idempotent(t *testing.T) {
+func TestPreparePromptSubmission_Idempotent(t *testing.T) {
 	conv := &Conversation{
 		ID:        "c1",
 		SessionID: "s1",
@@ -23,17 +23,17 @@ func TestConversationPrepareSessionInference_Idempotent(t *testing.T) {
 		},
 	}
 
-	prep, err := conv.PrepareSessionInference("k1", "default", nil, "hi")
+	prep, err := preparePromptSubmission(conv, "k1", nil, nil)
 	require.NoError(t, err)
 	require.False(t, prep.Start)
 	require.Equal(t, http.StatusAccepted, prep.HTTPStatus)
 	require.Equal(t, "queued", prep.Response["status"])
 }
 
-func TestConversationPrepareSessionInference_QueuesWhenBusy(t *testing.T) {
+func TestPreparePromptSubmission_QueuesWhenBusy(t *testing.T) {
 	conv := &Conversation{ID: "c1", SessionID: "s1", activeRequestKey: "busy"}
 
-	prep, err := conv.PrepareSessionInference("k2", "default", map[string]any{"x": "y"}, "hi")
+	prep, err := preparePromptSubmission(conv, "k2", map[string]any{"prompt": "hi"}, map[string]any{"x": "y"})
 	require.NoError(t, err)
 	require.False(t, prep.Start)
 	require.Equal(t, http.StatusAccepted, prep.HTTPStatus)
@@ -42,10 +42,10 @@ func TestConversationPrepareSessionInference_QueuesWhenBusy(t *testing.T) {
 	require.Len(t, conv.queue, 1)
 }
 
-func TestConversationPrepareSessionInference_StartsWhenIdle(t *testing.T) {
+func TestPreparePromptSubmission_StartsWhenIdle(t *testing.T) {
 	conv := &Conversation{ID: "c1", SessionID: "s1"}
 
-	prep, err := conv.PrepareSessionInference("k3", "default", nil, "hi")
+	prep, err := preparePromptSubmission(conv, "k3", nil, nil)
 	require.NoError(t, err)
 	require.True(t, prep.Start)
 	require.Equal(t, "k3", conv.activeRequestKey)
@@ -53,7 +53,7 @@ func TestConversationPrepareSessionInference_StartsWhenIdle(t *testing.T) {
 	require.Equal(t, "running", conv.requests["k3"].Status)
 }
 
-func TestConversationClaimNextQueued(t *testing.T) {
+func TestClaimNextQueuedPrompt(t *testing.T) {
 	conv := &Conversation{
 		ID:        "c1",
 		SessionID: "s1",
@@ -63,7 +63,7 @@ func TestConversationClaimNextQueued(t *testing.T) {
 		},
 	}
 
-	q, ok := conv.ClaimNextQueued()
+	q, ok := claimNextQueuedPrompt(conv)
 	require.True(t, ok)
 	require.Equal(t, "k1", q.IdempotencyKey)
 	require.Equal(t, "k1", conv.activeRequestKey)

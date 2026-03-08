@@ -2,20 +2,13 @@ package webchat
 
 import (
 	"context"
-	"encoding/json"
 	"strings"
-	"time"
 
 	"github.com/ThreeDotsLabs/watermill/message"
-	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"github.com/pkg/errors"
-	"github.com/rs/zerolog/log"
 
-	"github.com/go-go-golems/geppetto/pkg/events"
 	"github.com/go-go-golems/geppetto/pkg/inference/toolloop"
-	"github.com/go-go-golems/geppetto/pkg/inference/toolloop/enginebuilder"
-	geptools "github.com/go-go-golems/geppetto/pkg/inference/tools"
 	gepprofiles "github.com/go-go-golems/geppetto/pkg/profiles"
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
@@ -62,8 +55,6 @@ type ConversationHandle struct {
 	RuntimeKey              string
 	RuntimeFingerprint      string
 	ResolvedProfileMetadata map[string]any
-	SeedSystemPrompt        string
-	AllowedTools            []string
 }
 
 type SubmitPromptInput struct {
@@ -165,60 +156,7 @@ func (s *ConversationService) ResolveAndEnsureConversation(ctx context.Context, 
 }
 
 func (s *ConversationService) SubmitPrompt(ctx context.Context, in SubmitPromptInput) (SubmitPromptResult, error) {
-	if s == nil || s.cm == nil {
-		return SubmitPromptResult{}, errors.New("conversation service is not initialized")
-	}
-	if ctx == nil {
-		ctx = s.baseCtx
-	}
-	prompt := strings.TrimSpace(in.Prompt)
-	if prompt == "" {
-		return SubmitPromptResult{HTTPStatus: 400, Response: map[string]any{"status": "error", "error": "missing prompt"}}, nil
-	}
-	handle, err := s.ResolveAndEnsureConversation(ctx, ConversationRuntimeRequest{
-		ConvID:                  in.ConvID,
-		RuntimeKey:              in.RuntimeKey,
-		RuntimeFingerprint:      in.RuntimeFingerprint,
-		ProfileVersion:          in.ProfileVersion,
-		ResolvedRuntime:         in.ResolvedRuntime,
-		ResolvedProfileMetadata: in.ResolvedProfileMetadata,
-		Overrides:               in.Overrides,
-	})
-	if err != nil {
-		return SubmitPromptResult{}, err
-	}
-	conv, ok := s.cm.GetConversation(handle.ConvID)
-	if !ok || conv == nil {
-		return SubmitPromptResult{}, errors.New("conversation not found after resolve")
-	}
-	if conv.Sess == nil {
-		return SubmitPromptResult{}, errors.New("conversation session not initialized")
-	}
-	idempotencyKey := strings.TrimSpace(in.IdempotencyKey)
-	if idempotencyKey == "" {
-		idempotencyKey = uuid.NewString()
-	}
-
-	prep, err := conv.PrepareSessionInference(idempotencyKey, handle.RuntimeKey, in.Overrides, prompt)
-	if err != nil {
-		return SubmitPromptResult{}, err
-	}
-	if !prep.Start {
-		status := prep.HTTPStatus
-		if status <= 0 {
-			status = 200
-		}
-		return SubmitPromptResult{
-			HTTPStatus: status,
-			Response:   appendProfileMetadata(prep.Response, handle),
-		}, nil
-	}
-
-	resp, err := s.startInferenceForPrompt(conv, in.Overrides, prompt, idempotencyKey)
-	if err != nil {
-		return SubmitPromptResult{}, err
-	}
-	return SubmitPromptResult{HTTPStatus: 200, Response: appendProfileMetadata(resp, handle)}, nil
+	return NewChatServiceFromConversation(s).SubmitPrompt(ctx, in)
 }
 
 func appendProfileMetadata(resp map[string]any, handle *ConversationHandle) map[string]any {
@@ -246,6 +184,65 @@ func copyStringAnyMap(in map[string]any) map[string]any {
 		out[key] = value
 	}
 	return out
+}
+
+func (s *ConversationService) PrepareRunnerStart(ctx context.Context, in PrepareRunnerStartInput) (*ConversationHandle, StartRequest, error) {
+	if s == nil || s.cm == nil {
+		return nil, StartRequest{}, errors.New("conversation service is not initialized")
+	}
+	if ctx == nil {
+		ctx = s.baseCtx
+	}
+	handle, err := s.ResolveAndEnsureConversation(ctx, in.Runtime)
+	if err != nil {
+		return nil, StartRequest{}, err
+	}
+	req, err := s.PrepareRunnerStartForConvID(handle.ConvID, in.Payload, in.Metadata)
+	if err != nil {
+		return nil, StartRequest{}, err
+	}
+	return handle, req, nil
+}
+
+func (s *ConversationService) PrepareRunnerStartForConvID(convID string, payload any, metadata map[string]any) (StartRequest, error) {
+	if s == nil || s.cm == nil {
+		return StartRequest{}, errors.New("conversation service is not initialized")
+	}
+	conv, ok := s.cm.GetConversation(convID)
+	if !ok || conv == nil {
+		return StartRequest{}, errors.New("conversation not found")
+	}
+	return s.startRequestForConversation(conv, payload, metadata), nil
+}
+
+func (s *ConversationService) startRequestForConversation(conv *Conversation, payload any, metadata map[string]any) StartRequest {
+	var timeline TimelineEmitter
+	if hook := s.TimelineUpsertHook(conv); hook != nil || s.timelineStore != nil {
+		timeline = TimelineEmitterFunc(func(ctx context.Context, entity *timelinepb.TimelineEntityV2, version uint64) error {
+			if ctx == nil {
+				ctx = s.baseCtx
+			}
+			if s.timelineStore != nil {
+				if err := s.timelineStore.Upsert(ctx, conv.ID, version, entity); err != nil {
+					return err
+				}
+			}
+			if hook != nil {
+				hook(entity, version)
+			}
+			return nil
+		})
+	}
+	return StartRequest{
+		ConvID:             conv.ID,
+		SessionID:          conv.SessionID,
+		RuntimeKey:         conv.RuntimeKey,
+		RuntimeFingerprint: conv.RuntimeFingerprint,
+		Sink:               conv.Sink,
+		Timeline:           timeline,
+		Payload:            payload,
+		Metadata:           copyStringAnyMap(metadata),
+	}
 }
 
 func (s *ConversationService) AttachWebSocket(ctx context.Context, convID string, conn *websocket.Conn, opts WebSocketAttachOptions) error {
@@ -294,219 +291,5 @@ func (s *ConversationService) emitTimelineUpsert(conv *Conversation, entity *tim
 	}
 	if s.cm != nil {
 		_ = NewWSPublisher(s.cm).PublishJSON(s.baseCtx, conv.ID, env)
-	}
-}
-
-func (s *ConversationService) startInferenceForPrompt(conv *Conversation, overrides map[string]any, prompt string, idempotencyKey string) (map[string]any, error) {
-	if s == nil || conv == nil || conv.Sess == nil {
-		return nil, errors.New("invalid conversation")
-	}
-
-	sessionLog := log.With().Str("component", "webchat").Str("conv_id", conv.ID).Str("session_id", conv.SessionID).Logger()
-
-	conv.mu.Lock()
-	stream := conv.stream
-	baseCtx := conv.baseCtx
-	allowedTools := append([]string(nil), conv.AllowedTools...)
-	conv.mu.Unlock()
-	if baseCtx == nil {
-		baseCtx = s.baseCtx
-	}
-	if baseCtx == nil {
-		return nil, errors.New("conversation context is nil")
-	}
-	if stream != nil && !stream.IsRunning() {
-		_ = stream.Start(baseCtx)
-	}
-
-	tmpReg := geptools.NewInMemoryToolRegistry()
-	for _, tf := range s.toolFactories {
-		_ = tf(tmpReg)
-	}
-	registry := geptools.NewInMemoryToolRegistry()
-	if len(allowedTools) == 0 {
-		for _, td := range tmpReg.ListTools() {
-			_ = registry.RegisterTool(td.Name, td)
-		}
-	} else {
-		allowed := map[string]struct{}{}
-		for _, n := range allowedTools {
-			if t := strings.TrimSpace(n); t != "" {
-				allowed[t] = struct{}{}
-			}
-		}
-		for _, td := range tmpReg.ListTools() {
-			if _, ok := allowed[td.Name]; ok {
-				_ = registry.RegisterTool(td.Name, td)
-			}
-		}
-	}
-
-	hook := snapshotHookForConv(conv, s.turnStore)
-
-	seed, err := conv.Sess.AppendNewTurnFromUserPrompt(prompt)
-	if err != nil {
-		s.finishSessionInference(conv, idempotencyKey, "", "", err)
-		return nil, err
-	}
-	turnID := ""
-	if seed != nil && seed.ID != "" {
-		turnID = seed.ID
-	}
-	if turnID != "" && strings.TrimSpace(prompt) != "" {
-		if err := s.publishUserChatMessageEvent(baseCtx, conv.ID, "user-"+turnID, prompt); err != nil {
-			return nil, errors.Wrap(err, "publish user chat.message event")
-		}
-	}
-
-	if stepModeFromOverrides(overrides) && s.stepCtrl != nil {
-		s.stepCtrl.Enable(toolloop.StepScope{SessionID: conv.SessionID, ConversationID: conv.ID})
-	}
-
-	loopCfg := toolloop.NewLoopConfig().WithMaxIterations(5)
-	toolCfg := geptools.DefaultToolConfig().WithExecutionTimeout(60 * time.Second)
-	conv.Sess.Builder = &enginebuilder.Builder{
-		Base:             conv.Eng,
-		Registry:         registry,
-		LoopConfig:       &loopCfg,
-		ToolConfig:       &toolCfg,
-		EventSinks:       []events.EventSink{conv.Sink},
-		SnapshotHook:     hook,
-		StepController:   s.stepCtrl,
-		StepPauseTimeout: 30 * time.Second,
-		Persister:        newTurnStorePersister(s.turnStore, conv, "final"),
-	}
-
-	sessionLog.Info().Str("idempotency_key", idempotencyKey).Msg("starting inference loop")
-	if s.baseCtx == nil {
-		return nil, errors.New("service context is nil")
-	}
-	handle, err := conv.Sess.StartInference(s.baseCtx)
-	if err != nil {
-		s.finishSessionInference(conv, idempotencyKey, "", turnID, err)
-		return nil, err
-	}
-	if handle == nil {
-		err := errors.New("start inference returned nil handle")
-		s.finishSessionInference(conv, idempotencyKey, "", turnID, err)
-		return nil, err
-	}
-
-	resp := map[string]any{
-		"status":          "started",
-		"idempotency_key": idempotencyKey,
-		"conv_id":         conv.ID,
-		"session_id":      conv.SessionID,
-	}
-	if turnID != "" {
-		resp["turn_id"] = turnID
-	}
-	if handle.InferenceID != "" {
-		resp["inference_id"] = handle.InferenceID
-	}
-	if handle.Input != nil && handle.Input.ID != "" {
-		resp["turn_id"] = handle.Input.ID
-	}
-
-	conv.mu.Lock()
-	conv.ensureQueueInitLocked()
-	if rec, ok := conv.getRecordLocked(idempotencyKey); ok && rec != nil {
-		rec.Status = "running"
-		rec.StartedAt = time.Now()
-		rec.Response = resp
-	} else {
-		conv.upsertRecordLocked(&chatRequestRecord{IdempotencyKey: idempotencyKey, Status: "running", StartedAt: time.Now(), Response: resp})
-	}
-	conv.mu.Unlock()
-
-	go func() {
-		_, waitErr := handle.Wait()
-		s.finishSessionInference(conv, idempotencyKey, handle.InferenceID, turnID, waitErr)
-		if waitErr != nil {
-			sessionLog.Error().Err(waitErr).Str("inference_id", handle.InferenceID).Msg("inference loop error")
-		}
-		sessionLog.Info().Str("inference_id", handle.InferenceID).Msg("inference loop finished")
-		s.tryDrainQueue(conv)
-	}()
-	return resp, nil
-}
-
-func (s *ConversationService) publishUserChatMessageEvent(ctx context.Context, convID string, eventID string, prompt string) error {
-	if s == nil || s.semPublisher == nil {
-		return errors.New("sem publisher not configured")
-	}
-	payload, err := protoToRaw(&timelinepb.MessageSnapshotV1{
-		SchemaVersion: 1,
-		Role:          "user",
-		Content:       prompt,
-		Streaming:     false,
-	})
-	if err != nil {
-		return err
-	}
-	env := map[string]any{
-		"sem": true,
-		"event": map[string]any{
-			"type": "chat.message",
-			"id":   eventID,
-			"data": payload,
-		},
-	}
-	b, err := json.Marshal(env)
-	if err != nil {
-		return err
-	}
-	msg := message.NewMessage(uuid.NewString(), b)
-	return s.semPublisher.Publish(topicForConv(convID), msg)
-}
-
-func (s *ConversationService) finishSessionInference(conv *Conversation, idempotencyKey string, inferenceID string, turnID string, err error) {
-	if conv == nil {
-		return
-	}
-	conv.mu.Lock()
-	defer conv.mu.Unlock()
-
-	if conv.activeRequestKey == idempotencyKey {
-		conv.activeRequestKey = ""
-	}
-	conv.touchLocked(time.Now())
-	conv.ensureQueueInitLocked()
-	if rec, ok := conv.getRecordLocked(idempotencyKey); ok && rec != nil {
-		if err != nil {
-			rec.Status = "error"
-			rec.Error = err.Error()
-		} else if rec.Status == "running" {
-			rec.Status = "completed"
-		}
-		rec.CompletedAt = time.Now()
-		if rec.Response == nil {
-			rec.Response = map[string]any{}
-		}
-		if inferenceID != "" {
-			rec.Response["inference_id"] = inferenceID
-		}
-		if turnID != "" {
-			rec.Response["turn_id"] = turnID
-		}
-		rec.Response["status"] = rec.Status
-	}
-}
-
-func (s *ConversationService) tryDrainQueue(conv *Conversation) {
-	if s == nil || conv == nil {
-		return
-	}
-	for {
-		q, ok := conv.ClaimNextQueued()
-		if !ok {
-			return
-		}
-		_, err := s.startInferenceForPrompt(conv, q.Overrides, q.Prompt, q.IdempotencyKey)
-		if err != nil {
-			s.finishSessionInference(conv, q.IdempotencyKey, "", "", err)
-			continue
-		}
-		return
 	}
 }

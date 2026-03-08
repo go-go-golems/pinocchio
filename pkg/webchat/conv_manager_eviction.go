@@ -109,7 +109,7 @@ func (cm *ConvManager) shouldEvictConversation(now time.Time, idle time.Duration
 		return false
 	}
 	conv.mu.Lock()
-	busy := conv.isBusyLocked()
+	busy := isPromptBusyLocked(conv)
 	queueLen := len(conv.queue)
 	last := conv.lastActivity
 	conv.mu.Unlock()

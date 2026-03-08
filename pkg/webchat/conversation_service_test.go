@@ -7,7 +7,6 @@ import (
 
 	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/go-go-golems/geppetto/pkg/events"
-	"github.com/go-go-golems/geppetto/pkg/inference/session"
 	"github.com/go-go-golems/geppetto/pkg/turns"
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 	"github.com/google/uuid"
@@ -70,7 +69,6 @@ func TestConversationService_SubmitPromptQueuesWhenConversationBusy(t *testing.T
 	conv := &Conversation{
 		ID:                 "conv-1",
 		SessionID:          "session-1",
-		Sess:               &session.Session{SessionID: "session-1"},
 		baseCtx:            context.Background(),
 		RuntimeKey:         "default",
 		RuntimeFingerprint: "fp-default",
@@ -132,7 +130,11 @@ func TestConversationService_ResolveAndEnsureConversation_DefaultsAndLifecycle(t
 	require.NoError(t, parseErr)
 	require.Equal(t, "default", handle.RuntimeKey)
 	require.Equal(t, "fp-default", handle.RuntimeFingerprint)
-	require.Equal(t, "seed", handle.SeedSystemPrompt)
+
+	conv, ok := cm.GetConversation(handle.ConvID)
+	require.True(t, ok)
+	require.NotNil(t, conv)
+	require.Nil(t, conv.llm, "resolve should not eagerly create LLM execution state")
 }
 
 func TestConversationService_ResolveAndEnsureConversation_RebuildsOnProfileVersionChange(t *testing.T) {
@@ -169,7 +171,9 @@ func TestConversationService_ResolveAndEnsureConversation_RebuildsOnProfileVersi
 	conv, ok := cm.GetConversation("conv-versioned")
 	require.True(t, ok)
 	require.NotNil(t, conv)
-	engineV1 := conv.Eng
+	stateV1, err := cm.ensureLLMState(conv)
+	require.NoError(t, err)
+	engineV1 := stateV1.engine
 	require.NotNil(t, engineV1)
 
 	handleV1Repeat, err := svc.ResolveAndEnsureConversation(context.Background(), ConversationRuntimeRequest{
@@ -181,7 +185,9 @@ func TestConversationService_ResolveAndEnsureConversation_RebuildsOnProfileVersi
 	require.Equal(t, "fp-v1", handleV1Repeat.RuntimeFingerprint)
 	convRepeat, ok := cm.GetConversation("conv-versioned")
 	require.True(t, ok)
-	require.Same(t, engineV1, convRepeat.Eng, "same profile version should not rebuild engine")
+	stateV1Repeat, err := cm.ensureLLMState(convRepeat)
+	require.NoError(t, err)
+	require.Same(t, engineV1, stateV1Repeat.engine, "same profile version should not rebuild engine")
 
 	handleV2, err := svc.ResolveAndEnsureConversation(context.Background(), ConversationRuntimeRequest{
 		ConvID:         "conv-versioned",
@@ -192,7 +198,9 @@ func TestConversationService_ResolveAndEnsureConversation_RebuildsOnProfileVersi
 	require.Equal(t, "fp-v2", handleV2.RuntimeFingerprint)
 	convV2, ok := cm.GetConversation("conv-versioned")
 	require.True(t, ok)
-	require.NotSame(t, engineV1, convV2.Eng, "new profile version should rebuild engine")
+	stateV2, err := cm.ensureLLMState(convV2)
+	require.NoError(t, err)
+	require.NotSame(t, engineV1, stateV2.engine, "new profile version should rebuild engine")
 }
 
 func TestConversationService_SubmitPromptRejectsMissingPrompt(t *testing.T) {
@@ -224,6 +232,42 @@ func TestConversationService_SubmitPromptRejectsMissingPrompt(t *testing.T) {
 	require.Equal(t, 400, resp.HTTPStatus)
 	require.Equal(t, "error", resp.Response["status"])
 	require.Equal(t, "missing prompt", resp.Response["error"])
+}
+
+func TestConversationService_PrepareRunnerStart_ProvidesTransportEnvelopeWithoutLLMState(t *testing.T) {
+	runtimeComposer := infruntime.RuntimeBuilderFunc(func(context.Context, infruntime.ConversationRuntimeRequest) (infruntime.ComposedRuntime, error) {
+		return infruntime.ComposedRuntime{
+			Engine:             noopEngine{},
+			Sink:               noopSink{},
+			RuntimeKey:         "default",
+			RuntimeFingerprint: "fp-default",
+			SeedSystemPrompt:   "seed",
+		}, nil
+	})
+	cm := NewConvManager(ConvManagerOptions{
+		BaseCtx:         context.Background(),
+		RuntimeComposer: runtimeComposer,
+		BuildSubscriber: func(string) (message.Subscriber, bool, error) { return nil, false, nil },
+	})
+	svc, err := NewConversationService(ConversationServiceConfig{
+		BaseCtx:     context.Background(),
+		ConvManager: cm,
+	})
+	require.NoError(t, err)
+
+	handle, req, err := svc.PrepareRunnerStart(context.Background(), PrepareRunnerStartInput{
+		Runtime: ConversationRuntimeRequest{ConvID: "conv-runner", RuntimeKey: "default"},
+		Payload: map[string]any{"kind": "fake"},
+	})
+	require.NoError(t, err)
+	require.Equal(t, "conv-runner", handle.ConvID)
+	require.Equal(t, handle.ConvID, req.ConvID)
+	require.Equal(t, handle.SessionID, req.SessionID)
+	require.Equal(t, "default", req.RuntimeKey)
+
+	conv, ok := cm.GetConversation(handle.ConvID)
+	require.True(t, ok)
+	require.Nil(t, conv.llm, "prepare should not eagerly create LLM execution state")
 }
 
 func TestConversationService_AttachWebSocketValidatesArguments(t *testing.T) {

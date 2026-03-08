@@ -45,7 +45,6 @@ func TestStreamHub_ResolveAndEnsureConversation_Defaults(t *testing.T) {
 	require.NotEmpty(t, handle.ConvID)
 	require.Equal(t, "default", handle.RuntimeKey)
 	require.Equal(t, "fp-default", handle.RuntimeFingerprint)
-	require.Equal(t, "seed", handle.SeedSystemPrompt)
 	require.NotNil(t, handle.ResolvedProfileMetadata)
 	_, hasTrace := handle.ResolvedProfileMetadata["profile.stack.trace"]
 	require.True(t, hasTrace)
