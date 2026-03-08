@@ -1,7 +1,7 @@
 ---
 Title: webchat process-oriented core brainstorm
 Ticket: GP-030
-Status: closed
+Status: active
 Topics:
     - webchat
     - backend
@@ -21,7 +21,7 @@ RelatedFiles:
       Note: Main record of the current architecture discussion
 ExternalSources: []
 Summary: ""
-LastUpdated: 2026-03-07T18:20:00-05:00
+LastUpdated: 2026-03-07T19:45:00-05:00
 WhatFor: Use this ticket to capture and continue the discussion about evolving Pinocchio webchat toward a more generic process-oriented core.
 WhenToUse: Use when reviewing or extending the brainstorm around Conversation vs Process abstractions, runner ownership, and generic SEM transport boundaries.
 ---
@@ -45,7 +45,7 @@ This ticket stores the current brainstorm and follow-up design work around a pos
 
 ## Status
 
-Current status: **closed**
+Current status: **active**
 
 ## Topics
 

@@ -14,3 +14,4 @@
 - Added app-owned integration coverage for the corrected runner path plus a fake SEM-emitting runner
 - Added a public migration guide in `pkg/doc/topics` plus a detailed GP-030 postmortem in the ticket workspace
 - Finalized the ticket diary and task state, revalidated the finished ticket, and prepared the completed GP-030 bundle for reMarkable delivery
+- Expanded the GP-030 postmortem into a deeper intern-facing failure analysis covering the first attempt, the rebuild strategy, and the reasoning/process mistakes behind the original boundary leak

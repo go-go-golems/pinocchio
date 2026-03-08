@@ -21,7 +21,7 @@ RelatedFiles:
       Note: Existing runtime composition contract informs the first Runner API shape
 ExternalSources: []
 Summary: Implementation diary for GP-030: introducing a Runner abstraction into Pinocchio webchat while preserving Conversation as the transport identity.
-LastUpdated: 2026-03-07T18:20:00-05:00
+LastUpdated: 2026-03-07T19:45:00-05:00
 WhatFor: Use this diary to capture the implementation steps, commits, validation, and design decisions for GP-030.
 WhenToUse: Use when reviewing or continuing the runner extraction work in Pinocchio webchat.
 ---
@@ -378,3 +378,68 @@ This final step is small in terms of code, but important for handoff quality. Th
   - `ttmp/2026/03/07/GP-030--webchat-process-oriented-core-brainstorm/tasks.md`
   - `ttmp/2026/03/07/GP-030--webchat-process-oriented-core-brainstorm/changelog.md`
   - `ttmp/2026/03/07/GP-030--webchat-process-oriented-core-brainstorm/reference/01-diary.md`
+
+## Step 6: Deepen the postmortem for intern handoff
+
+After the first postmortem draft, the user asked for a more explicit analysis of what I did differently, what was structurally wrong with the previous version, and why the earlier implementation process likely went off course. I expanded the postmortem from a concise rebuild summary into a fuller intern-facing analysis that explains the subsystem, the failure mode, the rollback decision, the corrected approach, and the process mistakes that caused the first abstraction to leak LLM concerns.
+
+This step is documentation-heavy, but it matters because the difference between the failed and corrected versions is mostly architectural. If that reasoning is not written down clearly, a later engineer could repeat the same mistake while believing they are “just extracting another generic interface.”
+
+### Prompt Context
+
+**User prompt (verbatim):** "what did you do differently, write a detailed postmortem that explains what was wrong with the previous version, and how you approached the problem, and why the first attempt by your little brother might have gone wrong (analyze their process and thinking).\n\nCreate a detailed analysis / postmortem that is very detailed for a new intern, explaining all the parts of the system needed to understand what it is, with prose paragraphs and bullet point sand pseudocode and diagrams and api references and file\n  references.\n  It should be very clear and detailed. Store in the ticket and the nupload to remarkable."
+
+**Assistant interpretation:** Expand the existing GP-030 postmortem into a more explicit architecture/failure analysis for a new contributor, including the reasoning errors in the first attempt and the concrete differences in the rebuild, then publish that updated bundle.
+
+**Inferred user intent:** Preserve the architectural lesson, not just the final code, so future contributors understand how to avoid repeating the same boundary mistake.
+
+**Commit (code):** pending docs/publication commit
+
+### What I did
+- Restored the ticket index status to the shared-vocabulary-compatible `active` value after confirming that the repository-level `.ttmp.yaml` validates Pinocchio tickets against the shared `temporal-relationships/ttmp/vocabulary.yaml`
+- Removed an accidental unrelated vocabulary edit from `temporal-relationships/ttmp`
+- Rewrote `02-runner-rebuild-postmortem.md` into a detailed intern-facing analysis with:
+  - subsystem primer
+  - first-attempt failure analysis
+  - process/thinking analysis of why the earlier implementation leaked
+  - before/after architecture diagrams
+  - pseudocode for the final patterns
+  - review guidance and validation commands
+- Updated the ticket changelog and this diary to reflect the deeper postmortem pass
+
+### Why
+- The user explicitly asked for a more detailed explanation of both the code changes and the reasoning/process behind them
+- The earlier shorter postmortem was accurate but not yet detailed enough to serve as an onboarding document
+
+### What worked
+- The deeper structure made it easier to explain not just “what changed” but “why the first abstraction was not real”
+- Writing the process analysis exposed the main failure mode very clearly: changing the call graph before shrinking the dependency graph
+
+### What didn't work
+- I initially tried to mark the ticket as `closed`, which triggered a `docmgr doctor` warning because the `pinocchio/ttmp` vocabulary uses `complete` instead
+- My first attempt to add a new vocabulary value accidentally targeted the default docs root and modified `temporal-relationships/ttmp/vocabulary.yaml`; I corrected that by removing the unrelated change and using the existing `complete` status in the Pinocchio ticket instead
+
+### What I learned
+- A good postmortem for architecture work needs to explain the engineering process failure, not just list the code-level symptoms
+- The most concise statement of the original mistake is: the first implementation changed the call graph before changing the ownership graph
+
+### What was tricky to build
+- The subtle part was analyzing the earlier implementation process fairly. The useful version is not “the previous coder was sloppy”; it is “they followed a common refactor pattern that optimizes for local extraction speed, and that pattern preserved too much of the old dependency surface.”
+
+### What warrants a second pair of eyes
+- Whether the postmortem is the right length and level of detail for future onboarding versus whether it should eventually be split into a shorter executive summary plus an appendix
+
+### What should be done in the future
+- Upload the refreshed GP-030 bundle to reMarkable
+- If we later open a resolver cleanup follow-up, reference this postmortem directly rather than rewriting the same architectural background
+
+### Code review instructions
+- Start with:
+  - `ttmp/.../reference/02-runner-rebuild-postmortem.md`
+  - `ttmp/.../reference/01-diary.md`
+- Then confirm ticket hygiene with:
+  - `docmgr doctor --root /home/manuel/workspaces/2026-03-02/deliver-mento-1/pinocchio/ttmp --ticket GP-030 --stale-after 30`
+
+### Technical details
+- Main updated artifact:
+  - `ttmp/2026/03/07/GP-030--webchat-process-oriented-core-brainstorm/reference/02-runner-rebuild-postmortem.md`

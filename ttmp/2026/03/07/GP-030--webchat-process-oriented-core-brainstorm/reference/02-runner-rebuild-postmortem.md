@@ -1,7 +1,7 @@
 ---
 Title: GP-030 Runner Rebuild Postmortem
 Ticket: GP-030
-Status: active
+Status: complete
 Topics:
     - webchat
     - backend
@@ -23,7 +23,7 @@ RelatedFiles:
       Note: Final generic conversation transport service after chat startup was moved out
 ExternalSources: []
 Summary: Detailed postmortem of the first GP-030 runner refactor, why it was rolled back, and how the corrected architecture works.
-LastUpdated: 2026-03-07T19:10:00-05:00
+LastUpdated: 2026-03-07T19:45:00-05:00
 WhatFor: Use this postmortem to understand the failed first GP-030 attempt, the corrected implementation, and the reasoning behind the final code boundaries.
 WhenToUse: Use when reviewing the runner refactor, onboarding a new contributor, or planning the next cleanup steps in Pinocchio webchat.
 ---
@@ -32,136 +32,221 @@ WhenToUse: Use when reviewing the runner refactor, onboarding a new contributor,
 
 ## Executive Summary
 
-The first GP-030 implementation introduced a `Runner` API, but it did not actually separate generic transport from LLM-specific execution. The public runner path still carried raw `*Conversation` state, generic conversation ensure still created LLM session state eagerly, and the new app-owned start path bypassed the queue/idempotency behavior that the old `SubmitPrompt(...)` path preserved.
+GP-030 was supposed to make Pinocchio webchat more generic by introducing a `Runner` abstraction while keeping the existing websocket, SEM, timeline, and conversation machinery reusable. The first implementation did introduce `Runner`, but it did not move the actual ownership boundaries. It mostly renamed the problem instead of separating it.
 
-That implementation was rolled back with explicit `git revert` commits and rebuilt from the pre-runner baseline. The corrected version keeps the useful part of the original idea, which is the `Runner` seam, but fixes the boundary:
+The failure mode was specific:
+
+- generic runner startup still exposed raw `*Conversation`
+- generic conversation creation still eagerly created LLM state
+- the new runner-first app path skipped the existing prompt queue/idempotency contract
+- several public types still leaked LLM-specific data
+
+So the first version compiled, tested, and looked plausible at a glance, but the abstraction line was wrong. The right response was to rewind those commits and rebuild from the pre-runner baseline with stricter rules.
+
+The corrected implementation keeps the good part of the original idea:
 
 - `Conversation` remains the transport identity
+- `Runner` is the process-execution seam
 - `StartRequest` is transport-safe
-- `StartResult` uses a generic completion handle
-- prompt queue/idempotency stays in `ChatService`
-- LLM execution state is created lazily in `llm_state.go`
+- `RunHandle` is generic
+- prompt queue/idempotency remains owned by `ChatService`
+- LLM session state is created lazily in [llm_state.go](/home/manuel/workspaces/2026-03-02/deliver-mento-1/pinocchio/pkg/webchat/llm_state.go)
 
-This document explains what went wrong, what was rebuilt, why the new version is better, and how to review it.
+This document explains:
 
-## The Original Problem
+- what the webchat subsystem is
+- what GP-030 was trying to accomplish
+- what was wrong with the first attempt
+- how I approached the rebuild
+- why the first attempt likely went wrong from a process and reasoning perspective
+- what the final design now looks like
 
-The product need was valid. We wanted:
+## Audience
 
-- app-owned feature start endpoints
-- generic websocket attach and timeline hydration
-- a way to start an LLM loop or another SEM-emitting process without hard-wiring everything to `SubmitPrompt(...)`
+This document is written for:
 
-The first implementation moved quickly toward a `Runner` abstraction, but it accidentally preserved the wrong dependencies:
+- a new intern trying to understand the subsystem
+- a reviewer trying to understand why the first version was rejected
+- a future maintainer deciding how to extend webchat beyond LLM chat
 
-- generic runner start still exposed `*Conversation`
-- runner results still exposed Geppetto execution handles
-- queue/idempotency stayed only on the old legacy path
-- generic conversation ensure still built chat-oriented session state
+## System Primer
 
-So the first version had a `Runner` type, but not a genuinely generic runner boundary.
+Before the postmortem makes sense, it helps to understand the relevant parts of Pinocchio webchat.
 
-## What Was Wrong With The First Attempt
+### What the subsystem does
 
-### 1. The public runner API was not actually generic
+Pinocchio webchat provides a generic realtime transport surface around a conversation-like identity:
 
-The first version of `StartRequest` carried a raw `*Conversation`. That meant any runner could reach into conversation internals:
+- a `conv_id`
+- websocket attachment
+- timeline hydration
+- SEM fanout
+- turn persistence
+
+In practical terms, it lets a frontend:
+
+1. create or resolve a conversation
+2. connect to `GET /ws?conv_id=...`
+3. fetch `GET /api/timeline?conv_id=...`
+4. watch a backend process emit SEM and timeline entities into that conversation
+
+### Core concepts
+
+#### `Conversation`
+
+`Conversation` is the transport identity. It should answer questions like:
+
+- what is the `conv_id`?
+- what session is attached?
+- what stream buffer belongs to this conversation?
+- what metadata/timeline state is associated with it?
+
+It should not be the public API for “how to start any arbitrary backend process.”
+
+Primary file:
+- [conversation.go](/home/manuel/workspaces/2026-03-02/deliver-mento-1/pinocchio/pkg/webchat/conversation.go)
+
+#### `ConversationService`
+
+`ConversationService` is the generic service boundary around conversation transport operations:
+
+- ensure conversation exists
+- prepare transport-safe start inputs
+- attach websocket
+- emit timeline entities
+
+Primary file:
+- [conversation_service.go](/home/manuel/workspaces/2026-03-02/deliver-mento-1/pinocchio/pkg/webchat/conversation_service.go)
+
+#### `ChatService`
+
+`ChatService` owns prompt-driven chat semantics:
+
+- queueing
+- idempotency
+- prompt submission
+- completion bookkeeping
+- queue drain
+
+Primary file:
+- [chat_service.go](/home/manuel/workspaces/2026-03-02/deliver-mento-1/pinocchio/pkg/webchat/chat_service.go)
+
+#### `Runner`
+
+`Runner` is the execution seam. It should answer:
+
+- what process am I starting?
+- what does it emit?
+- when is it done?
+
+It should not own generic websocket transport or conversation identity.
+
+Primary file:
+- [runner.go](/home/manuel/workspaces/2026-03-02/deliver-mento-1/pinocchio/pkg/webchat/runner.go)
+
+#### `LLMLoopRunner`
+
+`LLMLoopRunner` is one implementation of `Runner`. It wraps the current LLM loop behavior:
+
+- decode payload
+- ensure lazy LLM state
+- filter tools
+- append user prompt
+- emit SEM
+- start inference
+
+Primary file:
+- [llm_loop_runner.go](/home/manuel/workspaces/2026-03-02/deliver-mento-1/pinocchio/pkg/webchat/llm_loop_runner.go)
+
+### Before GP-030
+
+Before GP-030, the easiest way to start chat was effectively:
+
+```text
+HTTP /chat
+  -> ConversationService.SubmitPrompt(...)
+     -> ensure conversation
+     -> queue/idempotency
+     -> build runtime/session/tool state
+     -> start inference
+```
+
+That worked for chat, but it tied too many responsibilities together.
+
+### What GP-030 was trying to achieve
+
+The goal was to support this architecture:
+
+```text
+feature-specific POST /...
+  -> app resolves domain/runtime policy
+  -> app chooses runner
+  -> app starts runner for a conversation
+
+generic GET /ws
+generic GET /api/timeline
+```
+
+That is the right direction. The first implementation failed because it changed the API before changing the ownership model.
+
+## What The First Attempt Changed
+
+The earlier implementation made these moves:
+
+- added `Runner`
+- added `StartRequest`
+- added `StartResult`
+- added a new app-owned startup path
+- added `LLMLoopRunner`
+
+Those changes sounded correct, but the internal structure still looked like this:
+
+```text
+generic runner API
+  -> raw Conversation
+  -> raw Geppetto execution handle
+  -> eager LLM setup hidden in generic ensure
+  -> old queue/idempotency bypassed
+```
+
+That is not a true separation. It is a relabeling of an LLM chat startup path as if it were generic.
+
+## What Was Wrong With The Previous Version
+
+### Problem 1: The public abstraction was wider than the actual boundary
+
+The first `StartRequest` exposed raw `*Conversation`. That meant any new runner could reach into:
 
 - session state
 - engine state
-- stream lifecycle
-- tool exposure
+- stream fields
+- internal queue state
+- tool metadata
 
-The first version of `StartResult` also exposed Geppetto execution handles directly. That made the "generic" API implicitly LLM-loop-shaped.
+That is a design smell because a “generic” abstraction should not give callers more power than they need.
 
-### 2. Generic conversation ensure still created LLM state eagerly
-
-The old `ConvManager.GetOrCreate(...)` path did too much:
-
-- composed runtime
-- created engine
-- created `session.Session`
-- seeded the first system turn
-
-That meant websocket-first attachment could create full LLM runtime/session state before anything had actually started.
-
-### 3. The new runner path lost queue/idempotency behavior
-
-The old `SubmitPrompt(...)` path did this:
-
-1. ensure conversation
-2. apply queue/idempotency
-3. start inference
-
-The first runner path did this:
-
-1. ensure conversation
-2. return a runnable request
-3. start immediately
-
-That sounds cleaner, but it broke an important behavior contract. Two fast prompt submissions for the same `conv_id` no longer naturally shared the old `202 queued` / replay behavior.
-
-### 4. Generic transport response types still carried LLM details
-
-The old `ConversationHandle` exposed LLM-specific fields like seed prompt and allowed tools. Those are useful to the LLM runner, but not to generic transport attach or timeline hydration.
-
-## Why Rollback Was Better Than Patching
-
-Once the review findings were clear, patching the first version would have meant:
-
-- special-casing `LLMLoopStartPayload` inside a supposedly generic helper
-- preserving a bad public API because tests were already written against it
-- adding more compatibility glue on top of the wrong seam
-
-At that point, the cheapest correct move was:
-
-1. revert the first runner slice
-2. keep GP-029 intact
-3. rebuild the runner seam from the old baseline
-
-That is exactly what happened.
-
-## What The Corrected Design Looks Like
-
-## 1. Conversation still exists
-
-`Conversation` still means:
-
-- `conv_id`
-- `session_id`
-- websocket attach state
-- stream buffering
-- timeline projection
-- runtime metadata
-
-That part was never the problem.
-
-## 2. StartRequest is now transport-safe
-
-The new public runner input is in [runner.go](/home/manuel/workspaces/2026-03-02/deliver-mento-1/pinocchio/pkg/webchat/runner.go).
-
-It contains:
+What the runner actually needed was much smaller:
 
 - `ConvID`
 - `SessionID`
-- `RuntimeKey`
-- `RuntimeFingerprint`
-- `Sink`
-- `Timeline`
-- `Payload`
-- `Metadata`
+- a sink for SEM
+- a timeline emitter
+- runtime metadata
+- payload
 
-It does not expose:
+That smaller shape is what the corrected `StartRequest` now provides in [runner.go](/home/manuel/workspaces/2026-03-02/deliver-mento-1/pinocchio/pkg/webchat/runner.go).
 
-- raw `*Conversation`
-- raw Geppetto session state
-- websocket objects
+### Problem 2: `StartResult` leaked Geppetto-specific execution details
 
-That is the correct public boundary.
+The first version returned a Geppetto execution handle. That meant the generic API already assumed the process behind the runner was:
 
-## 3. StartResult uses a generic completion handle
+- an LLM loop
+- backed by a Geppetto session
+- using the same execution/control model
 
-The new runner result returns a generic `RunHandle`:
+That breaks the whole point of the runner seam. A fake runner, extractor, or other SEM producer should not have to pretend to be a Geppetto execution.
+
+The corrected shape is:
 
 ```go
 type RunHandle interface {
@@ -169,190 +254,512 @@ type RunHandle interface {
 }
 ```
 
-This was the key move for preserving queue draining without leaking Geppetto-specific types. `ChatService` only needs to know when the run is done. It does not need a raw execution handle.
+That is intentionally small. It gives queue-drain logic what it needs without hard-coding the backend model.
 
-## 4. ChatService owns prompt queue/idempotency again
+### Problem 3: Generic conversation ensuring still eagerly created LLM state
 
-The corrected `ChatService` now owns:
+This was one of the biggest architectural leaks.
 
-- `SubmitPrompt(...)`
-- `StartPromptWithRunner(...)`
-- queue preparation
-- queue drain
-- prompt completion bookkeeping
+The generic conversation-creation path still did LLM-specific work:
 
-That fixes the regression from the first runner attempt. Prompt-submission policy is chat-owned again, but runner selection is now app-owned.
+- compose runtime
+- create engine
+- create `session.Session`
+- seed the system turn
 
-## 5. LLM state is lazy
+That created a subtle but serious bug in the architecture:
 
-The new [llm_state.go](/home/manuel/workspaces/2026-03-02/deliver-mento-1/pinocchio/pkg/webchat/llm_state.go) creates LLM execution state only when the LLM runner needs it:
+```text
+frontend just attaches websocket
+  -> generic get-or-create
+  -> hidden LLM session creation
+  -> hidden engine setup
+```
 
-- runtime compose
-- engine creation
-- `session.Session`
-- seed turn
+The transport layer was still starting to behave like execution setup.
 
-Generic conversation ensure no longer does that work eagerly.
+That is why lazy LLM state in [llm_state.go](/home/manuel/workspaces/2026-03-02/deliver-mento-1/pinocchio/pkg/webchat/llm_state.go) was not just an optimization. It was the main structural fix.
 
-## 6. The LLM runner is now a proper implementation detail
+### Problem 4: The new app-owned path lost queue/idempotency
 
-The new [llm_loop_runner.go](/home/manuel/workspaces/2026-03-02/deliver-mento-1/pinocchio/pkg/webchat/llm_loop_runner.go) is where the LLM-specific logic belongs:
+This was the behavioral regression that made the design bug obvious.
 
-- payload decoding
-- tool filtering
-- prompt append
-- user `chat.message` SEM event
-- builder setup
-- inference start
-- generic run-handle wrapping
+The old path:
 
-That logic is no longer pretending to be generic transport code.
+```text
+SubmitPrompt
+  -> ensure conversation
+  -> prepare session inference
+  -> maybe queue / maybe replay / maybe run now
+  -> start inference
+```
 
-## File-By-File Walkthrough
+The first runner path:
+
+```text
+PrepareRunnerStart
+  -> ensure conversation
+  -> return runnable StartRequest
+
+runner.Start
+  -> run now
+```
+
+That skipped the existing contract for prompt-driven chat:
+
+- same prompt/request can be replayed idempotently
+- concurrent prompt submissions can queue
+- the client gets the established `202 queued` / replay semantics
+
+This is why the correct fix was not “teach `PrepareRunnerStart(...)` about `LLMLoopStartPayload`.” That would have moved chat policy into a generic service and made the boundary even worse.
+
+The real fix was:
+
+- keep `ConversationService.PrepareRunnerStart(...)` generic
+- move prompt-specific queue/idempotency into `ChatService.StartPromptWithRunner(...)`
+
+### Problem 5: Generic helper types still leaked LLM details
+
+The first runner iteration still had generic handles carrying things like:
+
+- seed prompt
+- allowed tools
+- prompt/idempotency fields on shared resolver types
+
+Those are not transport facts. They are runtime or prompt-submission facts.
+
+That kind of leakage usually means the system is still organized around the old use case, even if the new types have more generic names.
+
+## Why The First Attempt Likely Went Wrong
+
+This part matters because the mistake was not random. It followed a recognizable engineering pattern.
+
+### Short version
+
+The first implementation optimized for visible forward motion:
+
+- define the new type
+- route the current code through it
+- keep everything working
+
+That is a reasonable instinct, but it tends to produce abstraction-first refactors where the naming changes faster than the ownership boundaries.
+
+### More detailed process analysis
+
+I think the earlier implementation likely followed this mental model:
+
+1. “We need a generic process starter.”
+2. “The existing chat startup logic already works.”
+3. “Let’s extract that logic behind `Runner`.”
+4. “To keep the diff small, pass through the existing objects.”
+
+That usually leads to a first version like:
+
+```go
+type StartRequest struct {
+    Conversation *Conversation
+    Payload      any
+}
+```
+
+and:
+
+```go
+type StartResult struct {
+    Exec *session.ExecutionHandle
+}
+```
+
+This is tempting because:
+
+- it compiles quickly
+- existing logic moves with fewer edits
+- tests are easier to preserve initially
+
+But it quietly bakes old assumptions into the new API.
+
+### The likely reasoning error
+
+The key reasoning mistake was probably:
+
+“If the old code path is now called from `Runner.Start(...)`, then the abstraction exists.”
+
+That is not enough.
+
+An abstraction is only real if:
+
+- it reduces the dependency surface
+- it removes the old assumptions from the public boundary
+- it preserves the behavioral contract that still matters
+
+The first attempt changed the call graph without first reducing the dependency graph.
+
+### Why this happens in real refactors
+
+This kind of mistake is common when:
+
+- the current behavior is complicated and working
+- there is pressure to show the new seam quickly
+- the first implementation starts in the middle of the stack instead of at the ownership boundary
+
+In this case, the “middle of the stack” was `startInferenceForPrompt(...)`.
+
+That was the wrong first incision point by itself because the real missing design question was:
+
+“Which layer owns prompt submission policy, and which layer owns generic conversation transport?”
+
+Until that question was answered explicitly, extracting a `Runner` was too early.
+
+### The specific trap around tests
+
+The first implementation also had a natural testing trap:
+
+- if the tests still prove an LLM prompt can start
+- and the websocket still gets events
+- and the new route compiles
+
+it can look “done enough”
+
+But those tests do not prove the boundary is right. They only prove the happy path still runs.
+
+That is why the rebuild added tests for:
+
+- prompt queue/idempotency preservation
+- allowed-tools filtering on the rebuilt runner path
+- fake non-LLM runners emitting SEM
+- generic prepare paths not eagerly creating LLM state
+
+Those tests are much closer to the architecture claim.
+
+## Why Reverting Was The Right Call
+
+After the review findings, there were two choices:
+
+### Option A: Patch the first version
+
+That would have meant:
+
+- adding LLM-specific special cases to generic helpers
+- preserving public types that were already wrong
+- adding more adapter code around a bad seam
+
+### Option B: Rewind and replay carefully
+
+That meant:
+
+1. revert the first runner commits
+2. go back to the last known-good chat behavior
+3. redraw the seam from the ownership model outward
+
+Option B was cheaper and safer.
+
+That is what I did with explicit revert commits:
+
+- `e367174`
+- `51d7c29`
+- `71ff299`
+
+## How I Approached The Rebuild
+
+The rebuild followed a different sequence than the first attempt.
+
+### Step 1: Keep `Conversation`
+
+I did not try to rename the system to `Process`.
+
+Reason:
+
+- `Conversation` is still the right identity for transport
+- the actual missing abstraction was execution startup, not conversation storage
+
+### Step 2: Minimize the runner contract
+
+Before re-extracting any LLM logic, I reduced the runner surface to what a runner genuinely needs:
+
+- IDs
+- sink
+- timeline emitter
+- runtime metadata
+- payload
+- generic completion handle
+
+That produced the current design in [runner.go](/home/manuel/workspaces/2026-03-02/deliver-mento-1/pinocchio/pkg/webchat/runner.go).
+
+### Step 3: Put prompt semantics back in `ChatService`
+
+Instead of making `PrepareRunnerStart(...)` smarter, I restored the correct ownership boundary:
+
+- `ConversationService` is generic
+- `ChatService` owns prompt queue/idempotency
+- app code chooses the runner
+
+That led to [chat_service.go](/home/manuel/workspaces/2026-03-02/deliver-mento-1/pinocchio/pkg/webchat/chat_service.go) gaining `StartPromptWithRunner(...)`.
+
+### Step 4: Delay LLM state creation
+
+This was the structural fix that makes generic transport believable.
+
+Instead of creating LLM state during generic conversation ensure, the rebuilt code does:
+
+```text
+ensure conversation transport
+  -> only transport/conversation state
+
+runner.Start
+  -> ensure LLM state lazily if this runner is LLM-backed
+```
+
+That logic now lives in [llm_state.go](/home/manuel/workspaces/2026-03-02/deliver-mento-1/pinocchio/pkg/webchat/llm_state.go).
+
+### Step 5: Re-add the LLM runner as an implementation, not as the architecture
+
+Only after the boundaries were fixed did I add `LLMLoopRunner` back as a concrete runner.
+
+This is why the current LLM runner is much cleaner:
+
+- it decodes its payload
+- it fetches its LLM state lazily
+- it filters tools
+- it emits user-message SEM
+- it starts inference
+- it returns a generic `RunHandle`
+
+## Before And After
+
+### Before the rebuild
+
+```text
+HTTP /chat-runner
+  -> PrepareRunnerStart
+      -> ensure conversation
+      -> still coupled to eager LLM state
+  -> runner.Start
+      -> gets raw Conversation
+      -> returns Geppetto execution handle
+
+Problems:
+  - generic API not generic
+  - queue/idempotency bypassed
+  - attach path still creates LLM state
+```
+
+### After the rebuild
+
+```text
+Prompt-driven path
+
+HTTP /chat-runner
+  -> resolver.Resolve
+  -> choose LLMLoopRunner
+  -> ChatService.StartPromptWithRunner
+      -> ensure conversation
+      -> apply queue/idempotency
+      -> build StartRequest
+      -> runner.Start
+      -> wait/drain queue
+
+Generic non-chat path
+
+HTTP /feature-run
+  -> resolver.Resolve
+  -> choose runner
+  -> ConversationService.PrepareRunnerStart
+  -> runner.Start
+```
+
+### Architectural diagram
+
+```text
+                    +-------------------------+
+                    |  App-Owned HTTP Layer   |
+                    |  feature POST /...      |
+                    +-----------+-------------+
+                                |
+                    chooses runner / runtime
+                                |
+         +----------------------+----------------------+
+         |                                             |
+         v                                             v
++-------------------------+               +---------------------------+
+| ChatService             |               | ConversationService       |
+| prompt queue/idempotency|               | generic prepare / attach  |
++------------+------------+               +-------------+-------------+
+             |                                            |
+             +-------------------+------------------------+
+                                 |
+                                 v
+                        +------------------+
+                        | Runner.Start(...)|
+                        +---------+--------+
+                                  |
+                    +-------------+--------------+
+                    | concrete implementation    |
+                    | LLMLoopRunner / fake runner|
+                    +-------------+--------------+
+                                  |
+                                  v
+                   SEM sink / timeline emitter / turn store
+                                  |
+                                  v
+                         websocket + /api/timeline
+```
+
+## File-By-File Guide
 
 ### [runner.go](/home/manuel/workspaces/2026-03-02/deliver-mento-1/pinocchio/pkg/webchat/runner.go)
 
-This is the public generic runner seam.
+Start here.
 
-Read this file first when reviewing the rebuild.
-
-It defines:
+This file defines the stable runner contract:
 
 - `TimelineEmitter`
 - `RunHandle`
 - `StartRequest`
 - `StartResult`
 - `Runner`
-- `PrepareRunnerStartInput`
+
+Read this file to understand the final public execution seam.
 
 ### [conversation_service.go](/home/manuel/workspaces/2026-03-02/deliver-mento-1/pinocchio/pkg/webchat/conversation_service.go)
 
-This file is generic again.
-
-It now focuses on:
+This file defines the generic conversation transport boundary:
 
 - ensure conversation
 - attach websocket
-- build a transport-safe `StartRequest`
-- emit timeline upserts
+- prepare `StartRequest`
+- emit timeline entities
 
-It no longer owns the core prompt-start logic.
+If you are asking “what is generic?” this file is the answer.
 
 ### [chat_service.go](/home/manuel/workspaces/2026-03-02/deliver-mento-1/pinocchio/pkg/webchat/chat_service.go)
 
-This file now clearly owns prompt-driven behavior:
+This file defines the prompt-specific policy boundary.
 
-- prompt queue/idempotency
-- legacy `SubmitPrompt(...)`
-- new `StartPromptWithRunner(...)`
-- prompt completion bookkeeping
-- queue drain
+Read this file if you are asking:
 
-This is the correct home for prompt-specific semantics.
-
-### [conversation.go](/home/manuel/workspaces/2026-03-02/deliver-mento-1/pinocchio/pkg/webchat/conversation.go)
-
-This file no longer creates `session.Session` eagerly in `GetOrCreate(...)`.
-
-It still stores private prompt queue fields to avoid collateral breakage in debug and eviction code. That is a compromise, not the final ideal, but the orchestration logic is no longer exposed as generic `Conversation` methods.
+- where does idempotency live?
+- where does prompt queueing live?
+- how does prompt-driven runner startup preserve old behavior?
 
 ### [llm_state.go](/home/manuel/workspaces/2026-03-02/deliver-mento-1/pinocchio/pkg/webchat/llm_state.go)
 
-This file is the new internal bridge between generic conversation transport and LLM-specific execution state.
+This file is the bridge from generic conversation transport to LLM execution state.
 
-Its job is:
-
-- look at conversation/runtime metadata
-- compose runtime lazily
-- construct the internal LLM state only when needed
+It exists because the transport layer should not eagerly create engines or sessions.
 
 ### [llm_loop_runner.go](/home/manuel/workspaces/2026-03-02/deliver-mento-1/pinocchio/pkg/webchat/llm_loop_runner.go)
 
-This is the first concrete runner implementation.
+This is the first concrete runner.
 
-The main review points are:
+It is intentionally specific. That is a feature, not a flaw.
 
-- payload decoding
-- allowed-tool filtering
-- prompt append and user-message emission
-- builder setup
-- wrapping the underlying execution with `RunHandle`
+### [http/api.go](/home/manuel/workspaces/2026-03-02/deliver-mento-1/pinocchio/pkg/webchat/http/api.go)
+
+This file still contains a small amount of remaining cleanup debt. It supports the new split, but some resolver types still carry prompt-oriented fields.
+
+That is documented as a follow-up, not part of the GP-030 acceptance boundary.
 
 ### [app_owned_chat_integration_test.go](/home/manuel/workspaces/2026-03-02/deliver-mento-1/pinocchio/cmd/web-chat/app_owned_chat_integration_test.go)
 
-This is the easiest place to see the intended external usage.
+This is the easiest end-to-end review entry point.
 
-It now covers:
+It shows:
 
-- legacy `POST /chat`
-- app-owned `POST /chat-runner`
-- app-owned fake runner path
+- legacy chat path
+- app-owned LLM runner path
+- fake non-LLM runner path
 - websocket attach
 - timeline hydration
 
-## The New Control Flow
+## Pseudocode: Final Recommended Patterns
 
-### Prompt-driven app-owned handler
+### Prompt-driven app-owned start
 
-```text
-HTTP handler
-  -> resolver.Resolve(...)
-  -> choose runner
-  -> ChatService.StartPromptWithRunner(...)
-       -> ensure conversation transport
-       -> apply queue/idempotency
-       -> build StartRequest
-       -> runner.Start(...)
-       -> wait for completion
-       -> drain queued prompt if needed
+```go
+func handleChatRunner(w http.ResponseWriter, r *http.Request) {
+    resolved := resolver.Resolve(r)
+    runner := webchat.NewLLMLoopRunner(...)
+
+    result, err := chatService.StartPromptWithRunner(ctx, runner, webchat.StartPromptWithRunnerInput{
+        Runtime:        resolved.RuntimeRequest(),
+        Prompt:         resolved.Prompt,
+        IdempotencyKey: resolved.IdempotencyKey,
+        Metadata:       resolved.Metadata,
+    })
+
+    writeJSON(w, result)
+}
 ```
 
-### Non-chat runner path
+### Non-chat runner start
 
-```text
-HTTP handler
-  -> resolver.Resolve(...)
-  -> choose runner
-  -> ConversationService.PrepareRunnerStart(...)
-  -> runner.Start(...)
+```go
+func handleFeatureRun(w http.ResponseWriter, r *http.Request) {
+    resolved := resolver.Resolve(r)
+    runner := newFeatureRunner(...)
+
+    handle, startReq, err := conversationService.PrepareRunnerStart(ctx, webchat.PrepareRunnerStartInput{
+        Runtime:  resolved.RuntimeRequest(),
+        Payload:  featurePayload,
+        Metadata: featureMetadata,
+    })
+    if err != nil { ... }
+
+    _, err = runner.Start(ctx, startReq)
+    if err != nil { ... }
+
+    writeJSON(w, map[string]any{
+        "conv_id": handle.ConvID,
+    })
+}
 ```
 
-### LLM runner internals
+### Lazy LLM state
 
-```text
-LLMLoopRunner.Start(...)
-  -> resolve conversation by conv_id
-  -> ensure lazy LLM state
-  -> filter allowed tools
-  -> append user turn
-  -> emit chat.message SEM
-  -> start inference
-  -> return StartResult + RunHandle
+```go
+func ensureLLMState(conv *Conversation) (*llmState, error) {
+    if conv.llmState != nil {
+        return conv.llmState, nil
+    }
+
+    runtime := composeRuntime(conv.runtimeRequest)
+    engine := buildEngine(runtime)
+    sess := session.New(...)
+    seedSystemTurn(sess, runtime)
+
+    conv.llmState = &llmState{...}
+    return conv.llmState, nil
+}
 ```
 
-## What Was Intentionally Not Solved Yet
+## What I Intentionally Did Not “Fix” In GP-030
 
-This rebuild fixed the most important architectural mistakes, but it deliberately did not try to finish every cleanup in one step.
+A common refactor failure mode is trying to solve the entire next six months of cleanup in one ticket. I did not do that here.
 
-Still-open cleanup areas:
+I intentionally left these as follow-ups:
 
-- `ResolvedConversationRequest` in `pkg/webchat/http/api.go` still carries prompt/idempotency fields shared with websocket resolution
-- private prompt queue storage is still on `Conversation`, even though the orchestration moved into `ChatService`
-- some docs still describe the old convenience path as if it were the only path
+- split prompt/idempotency fields out of shared resolver request types in [http/api.go](/home/manuel/workspaces/2026-03-02/deliver-mento-1/pinocchio/pkg/webchat/http/api.go)
+- move private prompt queue storage off `Conversation` entirely if that later proves worth the churn
+- further demote older convenience helpers in docs once embedders have migrated
 
-These are follow-up cleanups, not reasons to reject the rebuilt boundary.
+Those are real cleanup opportunities. They are not blockers for the corrected runner boundary.
 
-## How To Review The Result
+## Validation Strategy
 
-Start here:
+The rebuild was validated with tests that align to the architectural claims rather than only the happy-path behavior:
 
-1. [runner.go](/home/manuel/workspaces/2026-03-02/deliver-mento-1/pinocchio/pkg/webchat/runner.go)
-2. [conversation_service.go](/home/manuel/workspaces/2026-03-02/deliver-mento-1/pinocchio/pkg/webchat/conversation_service.go)
-3. [chat_service.go](/home/manuel/workspaces/2026-03-02/deliver-mento-1/pinocchio/pkg/webchat/chat_service.go)
-4. [llm_state.go](/home/manuel/workspaces/2026-03-02/deliver-mento-1/pinocchio/pkg/webchat/llm_state.go)
-5. [llm_loop_runner.go](/home/manuel/workspaces/2026-03-02/deliver-mento-1/pinocchio/pkg/webchat/llm_loop_runner.go)
+- allowed-tool filtering still works on the rebuilt LLM runner path
+- turn persistence still works on the rebuilt LLM runner path
+- app-owned runner routes still drive websocket and timeline behavior
+- fake non-LLM runners can emit SEM through the same transport path
+- generic prepare paths do not eagerly create LLM state
 
-Then validate with:
+Primary review/test files:
+
+- [llm_loop_runner_test.go](/home/manuel/workspaces/2026-03-02/deliver-mento-1/pinocchio/pkg/webchat/llm_loop_runner_test.go)
+- [app_owned_chat_integration_test.go](/home/manuel/workspaces/2026-03-02/deliver-mento-1/pinocchio/cmd/web-chat/app_owned_chat_integration_test.go)
+
+Validation commands:
 
 ```bash
 go test ./pkg/webchat/... ./cmd/web-chat -count=1
@@ -361,15 +768,42 @@ make lintmax
 docmgr doctor --root /home/manuel/workspaces/2026-03-02/deliver-mento-1/pinocchio/ttmp --ticket GP-030 --stale-after 30
 ```
 
+## Lessons For A New Intern
+
+If you take one lesson from this postmortem, it should be this:
+
+Do not mistake “I introduced a new interface” for “I created a clean abstraction.”
+
+When refactoring:
+
+- start from ownership boundaries, not naming
+- preserve behavior contracts before generalizing APIs
+- shrink dependency surfaces before moving logic behind new types
+- do not let the old dominant use case leak through a supposedly generic public API
+
+In this ticket, the successful version came from asking:
+
+1. What is transport?
+2. What is prompt policy?
+3. What is execution?
+4. What must remain generic?
+5. What can stay specific?
+
+The failed version started instead from:
+
+1. What new interface name do we want?
+2. How can we quickly route old code through it?
+
+That difference in order is the entire story.
+
 ## Final Assessment
 
-The rebuilt GP-030 slice is materially better than the first attempt because it fixed the actual boundary instead of layering compatibility code over the wrong abstraction.
+The rebuilt GP-030 implementation is better not because it is more abstract, but because it is more honest about the system:
 
-The new result is:
+- `Conversation` is still transport identity
+- `ChatService` still owns prompt semantics
+- `Runner` owns execution startup
+- `LLMLoopRunner` is specific
+- generic transport does not eagerly become LLM runtime state
 
-- generic enough for non-LLM runners
-- specific enough to preserve chat queue semantics
-- safer for websocket-first transport attachment
-- easier to extend because the public seam now matches the real ownership boundaries
-
-That is why the rollback was the right call.
+That is why the rollback was justified, and that is why the rebuilt version is the one we should extend from.
