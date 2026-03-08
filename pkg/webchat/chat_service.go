@@ -153,7 +153,14 @@ func (s *ChatService) StartPromptWithRunner(ctx context.Context, runner Runner, 
 		s.finishPromptSubmission(conv, idempotencyKey, "", "", err)
 		return SubmitPromptResult{}, err
 	}
+	persistPromptStartResult(conv, idempotencyKey, startResult.Response, startResult.RunID, startResult.TurnID)
 	resp := appendProfileMetadata(cloneResponse(startResult.Response), handle)
+	if startResult.RunID != "" {
+		resp["inference_id"] = startResult.RunID
+	}
+	if startResult.TurnID != "" {
+		resp["turn_id"] = startResult.TurnID
+	}
 	go s.waitForPromptCompletion(conv, runner, idempotencyKey, startResult)
 	return SubmitPromptResult{HTTPStatus: 200, Response: resp}, nil
 }
@@ -253,6 +260,7 @@ func (s *ChatService) tryDrainQueue(conv *Conversation, runner Runner) {
 			s.finishPromptSubmission(conv, q.IdempotencyKey, "", "", err)
 			continue
 		}
+		persistPromptStartResult(conv, q.IdempotencyKey, result.Response, result.RunID, result.TurnID)
 		go s.waitForPromptCompletion(conv, runner, q.IdempotencyKey, result)
 		return
 	}

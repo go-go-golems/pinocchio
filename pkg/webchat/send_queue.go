@@ -173,6 +173,37 @@ func claimNextQueuedPrompt(c *Conversation) (queuedChat, bool) {
 	return q, true
 }
 
+func persistPromptStartResult(c *Conversation, idempotencyKey string, resp map[string]any, runID string, turnID string) {
+	if c == nil || idempotencyKey == "" {
+		return
+	}
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	c.touchLocked(time.Now())
+	ensurePromptQueueInitLocked(c)
+	rec, ok := getPromptRecordLocked(c, idempotencyKey)
+	if !ok || rec == nil {
+		rec = &chatRequestRecord{IdempotencyKey: idempotencyKey}
+		upsertPromptRecordLocked(c, rec)
+	}
+	rec.Status = "running"
+	if rec.StartedAt.IsZero() {
+		rec.StartedAt = time.Now()
+	}
+	rec.Response = cloneResponse(resp)
+	if rec.Response == nil {
+		rec.Response = map[string]any{}
+	}
+	if runID != "" {
+		rec.Response["inference_id"] = runID
+	}
+	if turnID != "" {
+		rec.Response["turn_id"] = turnID
+	}
+}
+
 func cloneStringAnyMap(in map[string]any) map[string]any {
 	if in == nil {
 		return nil

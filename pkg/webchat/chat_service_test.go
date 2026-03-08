@@ -2,6 +2,7 @@ package webchat
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -75,6 +76,7 @@ func (r *blockingRunner) Start(_ context.Context, req StartRequest) (StartResult
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.starts = append(r.starts, req)
+	startNo := len(r.starts)
 	return StartResult{
 		Response: map[string]any{
 			"status":          "started",
@@ -83,7 +85,8 @@ func (r *blockingRunner) Start(_ context.Context, req StartRequest) (StartResult
 			"session_id":      req.SessionID,
 		},
 		Handle: testRunHandle{done: r.done},
-		RunID:  "run-" + req.ConvID,
+		RunID:  fmt.Sprintf("run-%s-%d", req.ConvID, startNo),
+		TurnID: fmt.Sprintf("turn-%s-%d", req.ConvID, startNo),
 	}, nil
 }
 
@@ -132,4 +135,109 @@ func TestChatService_StartPromptWithRunner_PreservesQueueing(t *testing.T) {
 		defer runner.mu.Unlock()
 		return len(runner.starts) == 2
 	}, 2*time.Second, 20*time.Millisecond)
+}
+
+func TestChatService_StartPromptWithRunner_IdempotentReplayUsesStartedResponse(t *testing.T) {
+	runtimeComposer := infruntime.RuntimeBuilderFunc(func(context.Context, infruntime.ConversationRuntimeRequest) (infruntime.ComposedRuntime, error) {
+		return infruntime.ComposedRuntime{
+			Engine:             noopEngine{},
+			Sink:               noopSink{},
+			RuntimeKey:         "default",
+			RuntimeFingerprint: "fp-default",
+		}, nil
+	})
+	cm := NewConvManager(ConvManagerOptions{
+		BaseCtx:         context.Background(),
+		RuntimeComposer: runtimeComposer,
+		BuildSubscriber: func(string) (message.Subscriber, bool, error) { return nil, false, nil },
+	})
+	svc, err := NewConversationService(ConversationServiceConfig{
+		BaseCtx:     context.Background(),
+		ConvManager: cm,
+	})
+	require.NoError(t, err)
+	chat := NewChatServiceFromConversation(svc)
+	runner := &blockingRunner{done: make(chan error, 2)}
+
+	first, err := chat.StartPromptWithRunner(context.Background(), runner, StartPromptWithRunnerInput{
+		Runtime:        ConversationRuntimeRequest{ConvID: "conv-replay", RuntimeKey: "default"},
+		IdempotencyKey: "k-replay",
+		Payload:        LLMLoopStartPayload{Prompt: "one"},
+	})
+	require.NoError(t, err)
+	require.Equal(t, 200, first.HTTPStatus)
+	require.Equal(t, "started", first.Response["status"])
+	require.Equal(t, "run-conv-replay-1", first.Response["inference_id"])
+
+	retry, err := chat.StartPromptWithRunner(context.Background(), runner, StartPromptWithRunnerInput{
+		Runtime:        ConversationRuntimeRequest{ConvID: "conv-replay", RuntimeKey: "default"},
+		IdempotencyKey: "k-replay",
+		Payload:        LLMLoopStartPayload{Prompt: "one"},
+	})
+	require.NoError(t, err)
+	require.Equal(t, 200, retry.HTTPStatus)
+	require.Equal(t, "started", retry.Response["status"])
+	require.Equal(t, "run-conv-replay-1", retry.Response["inference_id"])
+	require.Equal(t, "turn-conv-replay-1", retry.Response["turn_id"])
+	runner.mu.Lock()
+	require.Len(t, runner.starts, 1)
+	runner.mu.Unlock()
+}
+
+func TestChatService_StartPromptWithRunner_QueuedReplayUsesPromotedStartedResponse(t *testing.T) {
+	runtimeComposer := infruntime.RuntimeBuilderFunc(func(context.Context, infruntime.ConversationRuntimeRequest) (infruntime.ComposedRuntime, error) {
+		return infruntime.ComposedRuntime{
+			Engine:             noopEngine{},
+			Sink:               noopSink{},
+			RuntimeKey:         "default",
+			RuntimeFingerprint: "fp-default",
+		}, nil
+	})
+	cm := NewConvManager(ConvManagerOptions{
+		BaseCtx:         context.Background(),
+		RuntimeComposer: runtimeComposer,
+		BuildSubscriber: func(string) (message.Subscriber, bool, error) { return nil, false, nil },
+	})
+	svc, err := NewConversationService(ConversationServiceConfig{
+		BaseCtx:     context.Background(),
+		ConvManager: cm,
+	})
+	require.NoError(t, err)
+	chat := NewChatServiceFromConversation(svc)
+	runner := &blockingRunner{done: make(chan error, 3)}
+
+	first, err := chat.StartPromptWithRunner(context.Background(), runner, StartPromptWithRunnerInput{
+		Runtime:        ConversationRuntimeRequest{ConvID: "conv-queued-replay", RuntimeKey: "default"},
+		IdempotencyKey: "k-first",
+		Payload:        LLMLoopStartPayload{Prompt: "one"},
+	})
+	require.NoError(t, err)
+	require.Equal(t, "started", first.Response["status"])
+
+	second, err := chat.StartPromptWithRunner(context.Background(), runner, StartPromptWithRunnerInput{
+		Runtime:        ConversationRuntimeRequest{ConvID: "conv-queued-replay", RuntimeKey: "default"},
+		IdempotencyKey: "k-second",
+		Payload:        LLMLoopStartPayload{Prompt: "two"},
+	})
+	require.NoError(t, err)
+	require.Equal(t, 202, second.HTTPStatus)
+	require.Equal(t, "queued", second.Response["status"])
+
+	runner.done <- nil
+	require.Eventually(t, func() bool {
+		runner.mu.Lock()
+		defer runner.mu.Unlock()
+		return len(runner.starts) == 2
+	}, 2*time.Second, 20*time.Millisecond)
+
+	retry, err := chat.StartPromptWithRunner(context.Background(), runner, StartPromptWithRunnerInput{
+		Runtime:        ConversationRuntimeRequest{ConvID: "conv-queued-replay", RuntimeKey: "default"},
+		IdempotencyKey: "k-second",
+		Payload:        LLMLoopStartPayload{Prompt: "two"},
+	})
+	require.NoError(t, err)
+	require.Equal(t, 200, retry.HTTPStatus)
+	require.Equal(t, "started", retry.Response["status"])
+	require.Equal(t, "run-conv-queued-replay-2", retry.Response["inference_id"])
+	require.Equal(t, "turn-conv-queued-replay-2", retry.Response["turn_id"])
 }
