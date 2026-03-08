@@ -10,7 +10,7 @@
 - [x] Refresh the ticket index to point at the new design guide
 - [x] Decide the standing direction for implementation: keep `Conversation`, keep runner instantiation app-owned, and extract the current LLM startup path first
 
-## In Progress
+## Completed
 
 - [x] Create an implementation diary and turn the design guide into an executable backlog
 - [x] Rewind the first `Runner` implementation slice after review found that generic transport code still leaked LLM session and prompt-submission concerns
@@ -20,7 +20,7 @@
 - [x] Adapt app-owned start surfaces while preserving current chat behavior
 - [x] Write a migration guide for embedders moving from legacy chat startup to the runner path
 - [x] Write a detailed postmortem explaining the rollback and rebuild
-- [ ] Validate, document, upload, and close the first GP-030 implementation slice
+- [x] Validate, document, upload, and close the first GP-030 implementation slice
 
 ## Key Decisions
 
@@ -87,7 +87,7 @@ Acceptance criteria:
 - [x] Add tests that verify `ConvID`, `SessionID`, and runtime metadata are correctly propagated to the runner
 - [x] Add tests that preserve idempotency behavior for repeated prompt submissions
 - [x] Add tests that preserve queue behavior while a previous request is running
-- [ ] Add tests that preserve allowed-tools filtering and tool registration behavior
+- [x] Add tests that preserve allowed-tools filtering and tool registration behavior
 - [x] Add tests that generic resolve/prepare paths do not eagerly create LLM execution state
 
 Acceptance criteria:
@@ -100,15 +100,15 @@ Acceptance criteria:
 ### 3.1 Define embedding pattern for app-owned handlers
 
 - [x] Write down the canonical composition sequence for an embedding application:
-- [ ] parse request
-- [ ] resolve domain/runtime policy
-- [ ] instantiate or choose runner
-- [ ] ensure conversation
-- [ ] build `StartRequest`
-- [ ] call `Runner.Start(...)`
-- [ ] return `conv_id` and related metadata to the client
-- [ ] Clarify which steps are Pinocchio responsibilities versus embedding-app responsibilities
-- [ ] Document the minimal interface an embedding app needs from Pinocchio to follow this pattern
+- [x] parse request
+- [x] resolve domain/runtime policy
+- [x] instantiate or choose runner
+- [x] ensure conversation
+- [x] build `StartRequest`
+- [x] call `Runner.Start(...)`
+- [x] return `conv_id` and related metadata to the client
+- [x] Clarify which steps are Pinocchio responsibilities versus embedding-app responsibilities
+- [x] Document the minimal interface an embedding app needs from Pinocchio to follow this pattern
 
 Acceptance criteria:
 
@@ -118,13 +118,13 @@ Acceptance criteria:
 ### 3.2 Refactor HTTP helper expectations
 
 - [x] Review [http/api.go](/home/manuel/workspaces/2026-03-02/deliver-mento-1/pinocchio/pkg/webchat/http/api.go) and decide which pieces remain generic helper code versus chat-specific convenience
-- [ ] Decide whether `NewChatHandler(...)` remains as an LLM convenience adapter over the new runner path
-- [ ] Ensure websocket attach and timeline hydration handlers remain generic and unchanged in contract
-- [ ] Ensure the request resolver contract still works when the app owns more of the start semantics
+- [x] Decide whether `NewChatHandler(...)` remains as an LLM convenience adapter over the new runner path
+- [x] Ensure websocket attach and timeline hydration handlers remain generic and unchanged in contract
+- [x] Ensure the request resolver contract still works when the app owns more of the start semantics
 - [x] Document the intended route split in tests/examples:
-- [ ] feature-owned `POST /...`
-- [ ] generic `GET /ws`
-- [ ] generic `GET /api/timeline`
+- [x] feature-owned `POST /...`
+- [x] generic `GET /ws`
+- [x] generic `GET /api/timeline`
 
 Acceptance criteria:
 
@@ -136,7 +136,7 @@ Acceptance criteria:
 - [x] Update at least one example embedding to demonstrate app-owned runner instantiation
 - [x] Show how a feature-specific endpoint can start an LLM-backed runner while still using generic `/ws` and `/api/timeline`
 - [x] Add one documented example of a non-LLM or fake runner emitting SEM over the same transport path
-- [ ] Ensure example docs explain why one websocket per active conversation remains the default recommendation
+- [x] Ensure example docs explain why one websocket per active conversation remains the default recommendation
 - [x] Publish a dedicated migration guide in `pkg/doc/topics`
 
 Acceptance criteria:
