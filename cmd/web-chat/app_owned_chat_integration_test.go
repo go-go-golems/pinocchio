@@ -239,6 +239,45 @@ func TestAppOwnedFakeRunner_Integration_TimelineHydrates(t *testing.T) {
 	require.True(t, found, "expected fake runner timeline entity")
 }
 
+func TestAppOwnedChatRunner_Integration_WebSocketReceivesChatMessage(t *testing.T) {
+	srv := newAppOwnedIntegrationServer(t)
+	defer srv.Close()
+
+	convID := "conv-chat-runner-ws-1"
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/ws?conv_id=" + convID
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	require.NoError(t, err)
+	defer func() { _ = conn.Close() }()
+
+	require.NoError(t, conn.SetReadDeadline(time.Now().Add(2*time.Second)))
+	_, helloFrame, err := conn.ReadMessage()
+	require.NoError(t, err)
+	require.Equal(t, "ws.hello", integrationSemEventType(helloFrame))
+
+	reqBody := []byte(`{"prompt":"hello over runner websocket","conv_id":"` + convID + `"}`)
+	resp, err := http.Post(srv.URL+"/chat-runner/default", "application/json", bytes.NewReader(reqBody))
+	require.NoError(t, err)
+	_ = resp.Body.Close()
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	found := false
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) && !found {
+		require.NoError(t, conn.SetReadDeadline(time.Now().Add(500*time.Millisecond)))
+		_, frame, readErr := conn.ReadMessage()
+		if readErr != nil {
+			if ne, ok := readErr.(net.Error); ok && ne.Timeout() {
+				continue
+			}
+			require.NoError(t, readErr)
+		}
+		if integrationSemEventType(frame) == "chat.message" {
+			found = true
+		}
+	}
+	require.True(t, found, "expected chat.message frame on websocket")
+}
+
 func TestAppOwnedChatHandler_Integration_DefaultProfilePath(t *testing.T) {
 	srv := newAppOwnedIntegrationServer(t)
 	defer srv.Close()
