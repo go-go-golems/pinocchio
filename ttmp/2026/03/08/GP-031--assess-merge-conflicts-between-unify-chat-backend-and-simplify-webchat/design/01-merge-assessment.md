@@ -52,6 +52,16 @@ The simplify branch is not a simple cleanup branch anymore. It contains:
 
 Recommendation: do not merge the branch wholesale. Replay the safe simplifications manually on top of the current architecture, then resolve the remaining structural debt as follow-up refactors on the current branch.
 
+## Replay Status
+
+The low-risk simplify-webchat improvements have now been replayed on the current branch in focused commits:
+
+- `e847f19` `feat(webchat): adopt profile and registry selectors`
+- `7458428` `feat(webchat): expose resolved runtime keys in debug api`
+- `2755362` `refactor(webchat): drop unused alias api shims`
+
+What remains from the simplify branch is no longer "safe replay" work. The unresolved differences are structural and should be treated as current-branch refactors with explicit review, not as merge conflict cleanup.
+
 ## Divergence Snapshot
 
 - merge base: `c97af5b6642cd0bdc823d6ba1e84175f8004bed7`
@@ -216,8 +226,8 @@ Do not merge `wesen/task/simplify-webchat` directly into the current branch.
 Instead:
 
 1. keep the current branch architecture for `ChatService`, `Router`, `Server`, and deps-first construction
-2. manually replay the request/debug contract cleanups from `simplify-webchat`
-3. remove alias subpackages in a dedicated follow-up once tests are green
+2. keep the replayed request/debug contract cleanups already landed from `simplify-webchat`
+3. keep the alias-subpackage deletion already landed in a dedicated cleanup commit
 4. separately evaluate whether router utility mux helpers and `RegisterMiddleware` are still externally needed before deleting them
 
 ### Why this is safer
@@ -237,6 +247,11 @@ That makes it too easy to accidentally preserve the wrong side of a conflict.
 2. replay `resolved_runtime_key` debug contract updates
 3. delete unused alias subpackages
 4. open a dedicated refactor ticket for router/server compatibility surface removal
+
+Status:
+
+- steps 1-3 are complete on the current branch
+- step 4 remains open and should not be bundled into a future simplify-webchat merge
 
 ## Risk Notes
 

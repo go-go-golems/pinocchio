@@ -45,6 +45,13 @@ Use it when:
 - reviewing future simplify-webchat follow-up PRs
 - explaining to upstream why certain structural deletions should not be merged as-is
 
+Current status on `task/unify-chat-backend`:
+
+- request/profile contract cleanup has been replayed
+- debug payload cleanup has been replayed
+- alias API shims have been removed
+- router/server compatibility-surface cleanup remains deferred
+
 ## Keep These Current-Branch Architectural Decisions
 
 Do not replace these with the simplify branch versions:
@@ -137,7 +144,7 @@ Those changes were reasonable when `ChatService` was a thin wrapper, but that is
 - legacy `runtime_key` and `registry_slug` selectors fail with `400`.
 - `/api/chat/profile` reads and writes `profile` and `registry`.
 - debug payloads expose `resolved_runtime_key`.
-- no imports remain for the alias `pkg/webchat/*/api.go` shims before deleting them.
+- alias `pkg/webchat/*/api.go` shims remain deleted and are not reintroduced.
 
 ## Suggested Commit Slicing
 
