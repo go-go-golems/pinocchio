@@ -278,7 +278,7 @@ func (r *ProfileRequestResolver) resolveProfileSelection(
 	}
 	if slugRaw == "" && req != nil {
 		if ck, err := req.Cookie(currentProfileCookieName); err == nil && ck != nil {
-			if _, cookieProfile, ok := parseCurrentProfileCookieValue(strings.TrimSpace(ck.Value)); ok {
+			if cookieProfile, ok := r.resolveProfileSlugFromCookie(req.Context(), strings.TrimSpace(ck.Value)); ok {
 				slugRaw = cookieProfile.String()
 			}
 		}
@@ -342,6 +342,27 @@ func (r *ProfileRequestResolver) resolveRegistrySelection(req *http.Request, bod
 		return "", &webhttp.RequestResolutionError{Status: http.StatusBadRequest, ClientMsg: "invalid registry: " + registryRaw, Err: err}
 	}
 	return registrySlug, nil
+}
+
+func (r *ProfileRequestResolver) resolveProfileSlugFromCookie(ctx context.Context, raw string) (gepprofiles.ProfileSlug, bool) {
+	if r == nil || r.profileRegistry == nil {
+		return "", false
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if _, cookieProfile, ok := parseCurrentProfileCookieValue(raw); ok {
+		return cookieProfile, true
+	}
+
+	legacyProfile, err := gepprofiles.ParseProfileSlug(strings.TrimSpace(raw))
+	if err != nil {
+		return "", false
+	}
+	if _, err := r.profileRegistry.GetProfile(ctx, r.defaultRegistrySlug, legacyProfile); err != nil {
+		return "", false
+	}
+	return legacyProfile, true
 }
 
 func rejectLegacyProfileSelectors(req *http.Request, legacyRuntimeKey string, legacyRegistry string) error {

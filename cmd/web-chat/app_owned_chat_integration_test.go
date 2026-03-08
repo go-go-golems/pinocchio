@@ -578,6 +578,39 @@ func TestAppOwnedProfileSelection_AffectsNextConversationCreation(t *testing.T) 
 	_ = conn.Close()
 }
 
+func TestAppOwnedProfileSelection_LegacyCookie_AffectsNextConversationCreation(t *testing.T) {
+	srv := newAppOwnedIntegrationServer(t)
+	defer srv.Close()
+
+	legacyCookie := &http.Cookie{Name: currentProfileCookieName, Value: "agent"}
+
+	const convID = "conv-profile-select-legacy-cookie-1"
+	chatReq, err := http.NewRequest(
+		http.MethodPost,
+		srv.URL+"/chat",
+		strings.NewReader(`{"prompt":"hello legacy agent","conv_id":"`+convID+`"}`),
+	)
+	require.NoError(t, err)
+	chatReq.Header.Set("Content-Type", "application/json")
+	chatReq.AddCookie(legacyCookie)
+	chatResp, err := http.DefaultClient.Do(chatReq)
+	require.NoError(t, err)
+	defer chatResp.Body.Close()
+	require.Equal(t, http.StatusOK, chatResp.StatusCode)
+
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/ws?conv_id=" + convID
+	headers := http.Header{}
+	headers.Add("Cookie", legacyCookie.String())
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, headers)
+	require.NoError(t, err)
+	require.NoError(t, conn.SetReadDeadline(time.Now().Add(2*time.Second)))
+	_, helloFrame, err := conn.ReadMessage()
+	require.NoError(t, err)
+	require.Equal(t, "ws.hello", integrationSemEventType(helloFrame))
+	require.Equal(t, "agent", integrationSemRuntimeKey(helloFrame))
+	_ = conn.Close()
+}
+
 func TestProfileAPI_InvalidSlugAndRegistry_ReturnBadRequest(t *testing.T) {
 	srv := newAppOwnedIntegrationServer(t)
 	defer srv.Close()

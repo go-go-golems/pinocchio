@@ -633,6 +633,20 @@ func TestWebChatProfileResolver_ProfilePrecedence(t *testing.T) {
 			want:   "cookie",
 		},
 		{
+			name:   "legacy cookie wins over default",
+			path:   "/chat",
+			body:   `{"prompt":"hi","conv_id":"conv-legacy-cookie"}`,
+			cookie: "cookie",
+			want:   "cookie",
+		},
+		{
+			name:   "missing legacy cookie falls back to default",
+			path:   "/chat",
+			body:   `{"prompt":"hi","conv_id":"conv-missing-legacy-cookie"}`,
+			cookie: "missing",
+			want:   "default",
+		},
+		{
 			name: "default fallback",
 			path: "/chat",
 			body: `{"prompt":"hi","conv_id":"conv-default"}`,
