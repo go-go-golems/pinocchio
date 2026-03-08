@@ -12,9 +12,12 @@
 
 ## In Progress
 
-- [ ] Create an implementation diary and turn the design guide into an executable backlog
-- [ ] Implement the core `Runner` API and extract the current LLM loop behind it
-- [ ] Adapt service and HTTP surfaces while preserving current chat behavior
+- [x] Create an implementation diary and turn the design guide into an executable backlog
+- [x] Rewind the first `Runner` implementation slice after review found that generic transport code still leaked LLM session and prompt-submission concerns
+- [x] Rebuild the core `Runner` API around a transport-safe start envelope and a generic completion handle
+- [x] Move prompt queue/idempotency back behind `ChatService` while keeping `ConversationService` transport-oriented
+- [x] Rebuild the LLM path with lazy execution-state creation instead of eager session creation during conversation ensure
+- [x] Adapt app-owned start surfaces while preserving current chat behavior
 - [ ] Validate, document, and close the first GP-030 implementation slice
 
 ## Key Decisions
@@ -27,60 +30,63 @@
 
 ## Phase 1: Ticket and diary setup
 
-- [ ] Add a diary reference document for step-by-step implementation notes
-- [ ] Update the ticket index to link the diary and implementation status
-- [ ] Refine the phase ordering so code tasks can be completed and committed incrementally
+- [x] Add a diary reference document for step-by-step implementation notes
+- [x] Update the ticket index to link the diary and implementation status
+- [x] Refine the phase ordering so code tasks can be completed and committed incrementally
 
 ## Phase 2: Introduce Runner
 
 ### 2.1 Core runner API
 
-- [ ] Define `Runner` interface shape and document its contract
-- [ ] Define `StartRequest` fields, including which fields are mandatory and which are optional
-- [ ] Define `StartResult` fields and intended usage by HTTP handlers
-- [ ] Add `TimelineEmitter` and its first concrete adapter over the existing timeline-upsert hook
-- [ ] Add an LLM-specific typed payload struct for the first runner extraction
+- [x] Define `Runner` interface shape and document its contract
+- [x] Define `StartRequest` as a transport-safe envelope without raw `*Conversation` access
+- [x] Define `StartResult` around a generic completion handle rather than a Geppetto execution handle
+- [x] Add `TimelineEmitter` and its first concrete adapter over the existing timeline-upsert hook
+- [x] Add an LLM-specific typed payload struct for the first runner extraction
 
 Acceptance criteria:
 
 - there is one documented API shape for `Runner`, `StartRequest`, and `StartResult`
 - the API makes the constructor-vs-request-vs-context split explicit
-- the design does not require raw websocket objects or hidden `context.Context` dependencies
+- the design does not require raw websocket objects, generic `*Conversation` access, or hidden `context.Context` dependencies
 
 ### 2.2 Extract the current LLM startup seam
 
-- [ ] Identify the exact logic in `ConversationService.startInferenceForPrompt(...)` that belongs in an `LLMLoopRunner`
-- [ ] Separate generic conversation resolution from LLM-loop-specific startup
-- [ ] Preserve current idempotency and queue semantics around `PrepareSessionInference(...)`
-- [ ] Preserve current allowed-tool filtering behavior from composed runtime state
-- [ ] Preserve current runtime fingerprint and runtime-key handling in responses and internal state
+- [x] Identify the exact logic in `ConversationService.startInferenceForPrompt(...)` that belongs in an `LLMLoopRunner`
+- [x] Separate generic conversation resolution from LLM-loop-specific startup
+- [x] Preserve current idempotency and queue semantics around prompt submission
+- [x] Preserve current allowed-tool filtering behavior from composed runtime state
+- [x] Preserve current runtime fingerprint and runtime-key handling in responses and internal state
+- [x] Move LLM session construction behind lazy execution-state creation instead of generic conversation ensure
 
 Acceptance criteria:
 
 - there is a clear code path where conversation ensuring happens before runner execution
+- there is no eager LLM session creation during generic conversation ensuring
 - LLM-loop startup is implemented behind a runner-shaped boundary
 - no transport behavior regresses while extracting the startup logic
 
 ### 2.3 Add runner-aware service wiring
 
-- [ ] Keep runner startup app-composed in the public recommendation, but add the minimum service helper needed to build a `StartRequest` from an ensured conversation
-- [ ] Implement the helper that resolves `ConvID`/`SessionID`, looks up the ensured `Conversation`, and provides `Sink` plus `TimelineEmitter`
-- [ ] Keep prompt queue and idempotency semantics in the existing chat submission path rather than pushing them into generic runner startup
-- [ ] Ensure runner startup can reuse the existing `Conversation`, `ConvManager`, and `StreamHub` lifecycle without duplicating ownership logic
+- [x] Keep runner startup app-composed in the public recommendation, but add the minimum service helper needed to build a `StartRequest` from an ensured conversation
+- [x] Implement the helper that resolves `ConvID`/`SessionID`, looks up the ensured `Conversation`, and provides `Sink` plus `TimelineEmitter`
+- [x] Keep prompt queue and idempotency semantics in the chat submission path rather than generic runner startup
+- [x] Ensure runner startup can reuse the existing `Conversation`, `ConvManager`, and `StreamHub` lifecycle without duplicating ownership logic
 
 Acceptance criteria:
 
 - there is exactly one recommended startup path for embeddings
-- the service boundary makes it obvious who owns conversation resolution and who owns runner execution
+- the service boundary makes it obvious who owns conversation resolution, prompt submission policy, and runner execution
 - the runner can receive all required per-conversation IO surfaces without reaching into internal globals
 
 ### 2.4 Add tests for runner extraction
 
-- [ ] Add unit tests covering `Runner` startup with ensured conversation identity
-- [ ] Add tests that verify `ConvID`, `SessionID`, and runtime metadata are correctly propagated to the runner
-- [ ] Add tests that preserve idempotency behavior for repeated prompt submissions
-- [ ] Add tests that preserve queue behavior while a previous request is running
+- [x] Add unit tests covering `Runner` startup with ensured conversation identity
+- [x] Add tests that verify `ConvID`, `SessionID`, and runtime metadata are correctly propagated to the runner
+- [x] Add tests that preserve idempotency behavior for repeated prompt submissions
+- [x] Add tests that preserve queue behavior while a previous request is running
 - [ ] Add tests that preserve allowed-tools filtering and tool registration behavior
+- [x] Add tests that generic resolve/prepare paths do not eagerly create LLM execution state
 
 Acceptance criteria:
 
@@ -91,7 +97,7 @@ Acceptance criteria:
 
 ### 3.1 Define embedding pattern for app-owned handlers
 
-- [ ] Write down the canonical composition sequence for an embedding application:
+- [x] Write down the canonical composition sequence for an embedding application:
 - [ ] parse request
 - [ ] resolve domain/runtime policy
 - [ ] instantiate or choose runner
@@ -109,11 +115,11 @@ Acceptance criteria:
 
 ### 3.2 Refactor HTTP helper expectations
 
-- [ ] Review [http/api.go](/home/manuel/workspaces/2026-03-02/deliver-mento-1/pinocchio/pkg/webchat/http/api.go) and decide which pieces remain generic helper code versus chat-specific convenience
+- [x] Review [http/api.go](/home/manuel/workspaces/2026-03-02/deliver-mento-1/pinocchio/pkg/webchat/http/api.go) and decide which pieces remain generic helper code versus chat-specific convenience
 - [ ] Decide whether `NewChatHandler(...)` remains as an LLM convenience adapter over the new runner path
 - [ ] Ensure websocket attach and timeline hydration handlers remain generic and unchanged in contract
 - [ ] Ensure the request resolver contract still works when the app owns more of the start semantics
-- [ ] Document the intended route split:
+- [x] Document the intended route split in tests/examples:
 - [ ] feature-owned `POST /...`
 - [ ] generic `GET /ws`
 - [ ] generic `GET /api/timeline`
@@ -125,9 +131,9 @@ Acceptance criteria:
 
 ### 3.3 Update examples and embedding guidance
 
-- [ ] Update at least one example embedding to demonstrate app-owned runner instantiation
-- [ ] Show how a feature-specific endpoint can start an LLM-backed runner while still using generic `/ws` and `/api/timeline`
-- [ ] Add one documented example of a non-LLM or fake runner emitting SEM over the same transport path
+- [x] Update at least one example embedding to demonstrate app-owned runner instantiation
+- [x] Show how a feature-specific endpoint can start an LLM-backed runner while still using generic `/ws` and `/api/timeline`
+- [x] Add one documented example of a non-LLM or fake runner emitting SEM over the same transport path
 - [ ] Ensure example docs explain why one websocket per active conversation remains the default recommendation
 
 Acceptance criteria:
@@ -137,11 +143,11 @@ Acceptance criteria:
 
 ### 3.4 Add end-to-end regression coverage
 
-- [ ] Add integration coverage for an LLM-backed feature start through the new runner path
+- [x] Add integration coverage for an LLM-backed feature start through the new runner path
 - [ ] Verify websocket attachment still receives SEM frames for the started conversation
-- [ ] Verify `/api/timeline` hydrates the same conversation after startup
+- [x] Verify `/api/timeline` hydrates the same conversation after startup
 - [ ] Verify turn snapshots or existing turn persistence behavior still works for the LLM path
-- [ ] Add a smoke test for a fake runner that emits SEM without relying on the full LLM loop
+- [x] Add a smoke test for a fake runner that emits SEM without relying on the full LLM loop
 
 Acceptance criteria:
 

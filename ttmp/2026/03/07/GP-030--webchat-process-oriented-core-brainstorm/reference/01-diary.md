@@ -50,7 +50,7 @@ This matters because the code work depends on a few architectural choices alread
 
 **Inferred user intent:** Move from design to execution in a disciplined way, with ticket state, diary history, and code changes staying synchronized throughout the refactor.
 
-**Commit (code):** pending
+**Commit (code):** `812b964` — "refactor: rebuild webchat runner boundary"
 
 ### What I did
 
@@ -101,3 +101,87 @@ This matters because the code work depends on a few architectural choices alread
 
 - GP-029 closure is ticket-only state.
 - GP-030 now has a dedicated diary and explicit phase tasks for runner extraction, service wiring, and HTTP adaptation.
+
+## Step 2: Rewind the first runner attempt and rebuild the seam
+
+I rewound the first GP-030 code slice after reviewing the boundary problems. The rollback was targeted: revert the three runner-path commits, keep GP-029 intact, then rebuild from the pre-runner baseline with a stricter split between generic conversation transport, chat-owned queueing, and lazy LLM execution state.
+
+The key implementation decision in this step was not to abandon the `Runner` idea, but to stop letting the generic runner API expose raw `*Conversation` state or Geppetto-specific execution handles. Instead, the rebuild uses a transport-safe `StartRequest`, a generic `RunHandle`, and a chat-specific `StartPromptWithRunner(...)` path that preserves queue/idempotency behavior.
+
+### Prompt Context
+
+**User prompt (verbatim):** "alright, rewind with git then and address things."
+
+**Assistant interpretation:** Revert the problematic GP-030 runner refactor commits, then rebuild the runner architecture with the cleaner boundaries we discussed instead of patching the bad version in place.
+
+**Inferred user intent:** Recover from the first incorrect implementation quickly, keep the repo history explicit, and continue toward a cleaner GP-030 implementation without carrying forward the architectural mistakes.
+
+**Commit (code):** pending
+
+### What I did
+- Reverted `f0505a9`, `be3fca8`, and `eed8f09` with `git revert --no-edit ...`
+- Updated the GP-030 task list to reflect rollback + rebuild work instead of pretending the first slice was done
+- Reintroduced `Runner` with a transport-safe `StartRequest` and a generic `RunHandle`
+- Added lazy LLM execution state in `pkg/webchat/llm_state.go` so generic conversation ensure no longer creates a `session.Session`
+- Moved runner-preparation back behind `ConversationService.PrepareRunnerStart(...)`
+- Moved prompt queue/idempotency orchestration into `ChatService.StartPromptWithRunner(...)`
+- Reintroduced `LLMLoopRunner`, but made it resolve its execution state by `conv_id` instead of receiving a raw `*Conversation`
+- Added tests for lazy LLM state creation, prompt queue preservation on the new path, and app-owned integration routes
+
+### Why
+- The first runner attempt leaked LLM-specific state through generic APIs and bypassed queue/idempotency on the new app-owned path
+- Reverting was cheaper than untangling the bad boundary in place
+- The corrected design keeps generic transport reusable while preserving current prompt-submission behavior
+
+### What worked
+- `git revert` cleanly removed the first runner-path slice without disturbing GP-029
+- Rebuilding from the old baseline made the new seam much easier to reason about
+- The new queue-preserving path fits naturally in `ChatService`
+- The revised runner API compiled and passed targeted package tests once the old queue helpers and tests were updated
+
+### What didn't work
+- The first compile pass after the refactor failed because old tests and helper code still referenced removed fields/methods:
+  `pkg/webchat/chat_service.go:12:2: toolloop redeclared in this block`
+  `pkg/webchat/conv_manager_eviction.go:112:15: conv.isBusyLocked undefined`
+  `pkg/webchat/conversation.go:284:5: c.ensureQueueInitLocked undefined`
+- After fixing those, the next pass failed because tests still expected eager LLM state on `Conversation`:
+  `pkg/webchat/conversation_service_test.go:73:3: unknown field Sess in struct literal of type Conversation`
+  `pkg/webchat/conversation_service_test.go:135:34: handle.SeedSystemPrompt undefined`
+  `pkg/webchat/send_queue_test.go:26:20: conv.PrepareSessionInference undefined`
+
+### What I learned
+- The real issue was not “how to keep idempotency” but “which layer owns prompt submission policy”
+- A generic `RunHandle` is enough for queue-drain orchestration; exposing Geppetto handles was unnecessary
+- Lazy LLM state creation is the key move that keeps websocket-first conversation attachment generic
+
+### What was tricky to build
+- The sharp edge was queue draining: the new app-owned path still needed a way to wait for completion and start the next queued prompt without reintroducing Geppetto types into the generic runner API. The fix was to add a generic `RunHandle` with `Wait() error` and let `ChatService` own the drain loop.
+- The second sharp edge was deciding how far to move prompt state out of `Conversation`. I kept the storage private on `Conversation` for now to avoid collateral breakage in eviction/debug code, but moved the orchestration functions into chat-owned code so the public boundary is cleaner.
+
+### What warrants a second pair of eyes
+- Whether `Conversation` should keep the private prompt queue fields long-term or whether those should move into a dedicated chat submission store
+- Whether `ResolvedConversationRequest` in `pkg/webchat/http/api.go` should be split next so websocket/runtime resolution stops carrying prompt fields
+- Whether current coverage is enough for allowed-tool filtering on the rebuilt runner path
+
+### What should be done in the future
+- Finish the remaining documentation/migration work for the corrected runner path
+- Decide whether to fully split runtime-resolution request types in `pkg/webchat/http`
+
+### Code review instructions
+- Start with `pkg/webchat/runner.go`, `pkg/webchat/chat_service.go`, `pkg/webchat/llm_state.go`, and `pkg/webchat/llm_loop_runner.go`
+- Then review the state changes in `pkg/webchat/conversation.go` and the generic helper changes in `pkg/webchat/conversation_service.go`
+- Validate with:
+  `go test ./pkg/webchat/... ./cmd/web-chat -count=1`
+
+### Technical details
+- Revert commits:
+  - `e367174` `Revert "chore: deprecate legacy webchat chat startup path"`
+  - `51d7c29` `Revert "refactor: add runner-first webchat embedding path"`
+  - `71ff299` `Revert "refactor: extract webchat llm loop runner"`
+- New/updated code paths:
+  - `pkg/webchat/runner.go`
+  - `pkg/webchat/llm_state.go`
+  - `pkg/webchat/llm_loop_runner.go`
+  - `pkg/webchat/chat_service.go`
+  - `pkg/webchat/conversation_service.go`
+  - `cmd/web-chat/app_owned_chat_integration_test.go`
