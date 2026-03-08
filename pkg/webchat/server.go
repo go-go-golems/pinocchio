@@ -55,13 +55,6 @@ func NewServerFromDeps(ctx context.Context, deps RouterDeps, opts ...RouterOptio
 
 func (s *Server) Router() *Router { return s.router }
 
-func (s *Server) RegisterMiddleware(name string, f MiddlewareBuilder) {
-	if s == nil || s.router == nil {
-		return
-	}
-	s.router.RegisterMiddleware(name, f)
-}
-
 func (s *Server) RegisterTool(name string, f infruntime.ToolRegistrar) {
 	if s == nil || s.router == nil {
 		return
@@ -109,20 +102,6 @@ func (s *Server) HTTPServer() *http.Server {
 		return nil
 	}
 	return s.httpSrv
-}
-
-// NewFromRouter constructs a server from an existing Router and http.Server.
-func NewFromRouter(ctx context.Context, r *Router, httpSrv *http.Server) *Server {
-	if ctx == nil {
-		panic("webchat: NewFromRouter requires non-nil ctx")
-	}
-	if r == nil {
-		panic("webchat: NewFromRouter requires non-nil router")
-	}
-	if httpSrv == nil {
-		panic("webchat: NewFromRouter requires non-nil http server")
-	}
-	return &Server{baseCtx: ctx, router: r, httpSrv: httpSrv}
 }
 
 func (s *Server) Run(ctx context.Context) error {

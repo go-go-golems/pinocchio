@@ -2,12 +2,12 @@
 //
 // Ownership model:
 //   - Applications own transport routes such as /chat and /ws.
-//   - Package helpers (UIHandler/APIHandler/Mount/Handler) are optional utilities for embedding static UI
-//     and core APIs (timeline/debug), not the canonical transport composition layer.
+//   - Package helpers (UIHandler/APIHandler) expose the embedded UI and core APIs (timeline/debug),
+//     but applications still own HTTP route composition.
 //
 // Recommended setup:
 //   - Build a Server with NewServer and a RuntimeBuilder.
-//   - Create app-owned /chat and /ws handlers via NewChatHTTPHandler/NewWSHTTPHandler with ChatService/StreamHub.
-//   - Mount NewTimelineHTTPHandler at /api/timeline.
-//   - Mount Router/API/UI helpers where needed (for example under /api/ and /).
+//   - Create app-owned /chat and /ws handlers via webhttp.NewChatHandler/webhttp.NewWSHandler with ChatService/StreamHub.
+//   - Mount webhttp.NewTimelineHandler at /api/timeline.
+//   - Mount APIHandler/UIHandler where needed (for example under /api/ and /).
 package webchat
