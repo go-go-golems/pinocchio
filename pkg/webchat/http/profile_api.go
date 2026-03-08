@@ -75,7 +75,8 @@ type SetDefaultProfileRequest struct {
 }
 
 type CurrentProfilePayload struct {
-	Slug string `json:"slug"`
+	Profile  string `json:"profile"`
+	Registry string `json:"registry,omitempty"`
 }
 
 type MiddlewareSchemaDocument struct {
@@ -503,33 +504,45 @@ func RegisterProfileAPIHandlers(mux *http.ServeMux, profileRegistry gepprofiles.
 		switch req.Method {
 		case http.MethodGet:
 			slug := gepprofiles.ProfileSlug("")
+			registrySlug := opts.DefaultRegistrySlug
 			if ck, err := req.Cookie(opts.CurrentProfileCookieName); err == nil && ck != nil {
-				if parsed, err := gepprofiles.ParseProfileSlug(strings.TrimSpace(ck.Value)); err == nil && profileExists(req.Context(), profileRegistry, opts.DefaultRegistrySlug, parsed) {
+				if parsedRegistry, parsedProfile, ok := parseCurrentProfileCookieValue(strings.TrimSpace(ck.Value)); ok && profileExists(req.Context(), profileRegistry, parsedRegistry, parsedProfile) {
+					registrySlug = parsedRegistry
+					slug = parsedProfile
+				} else if parsed, err := gepprofiles.ParseProfileSlug(strings.TrimSpace(ck.Value)); err == nil && profileExists(req.Context(), profileRegistry, opts.DefaultRegistrySlug, parsed) {
 					slug = parsed
 				}
 			}
 			if slug.IsZero() {
-				defaultSlug, err := resolveDefaultProfileSlug(req.Context(), profileRegistry, opts.DefaultRegistrySlug)
+				defaultSlug, err := resolveDefaultProfileSlug(req.Context(), profileRegistry, registrySlug)
 				if err != nil {
 					http.Error(w, "profile registry unavailable", http.StatusInternalServerError)
 					return
 				}
 				slug = defaultSlug
 			}
-			writeJSONResponse(w, http.StatusOK, CurrentProfilePayload{Slug: slug.String()})
+			writeJSONResponse(w, http.StatusOK, CurrentProfilePayload{
+				Profile:  slug.String(),
+				Registry: registrySlug.String(),
+			})
 		case http.MethodPost:
 			var body CurrentProfilePayload
 			if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
 				http.Error(w, "bad request", http.StatusBadRequest)
 				return
 			}
-			slugRaw := strings.TrimSpace(body.Slug)
+			slugRaw := strings.TrimSpace(body.Profile)
 			slug, err := gepprofiles.ParseProfileSlug(slugRaw)
 			if err != nil {
 				http.Error(w, "bad request", http.StatusBadRequest)
 				return
 			}
-			if _, err := profileRegistry.GetProfile(req.Context(), opts.DefaultRegistrySlug, slug); err != nil {
+			registrySlug, err := resolveRegistrySlugForAPI(req, opts.DefaultRegistrySlug, body.Registry)
+			if err != nil {
+				http.Error(w, "invalid registry", http.StatusBadRequest)
+				return
+			}
+			if _, err := profileRegistry.GetProfile(req.Context(), registrySlug, slug); err != nil {
 				if errors.Is(err, gepprofiles.ErrProfileNotFound) {
 					http.Error(w, "profile not found", http.StatusNotFound)
 					return
@@ -539,17 +552,40 @@ func RegisterProfileAPIHandlers(mux *http.ServeMux, profileRegistry gepprofiles.
 			}
 			http.SetCookie(w, &http.Cookie{
 				Name:     opts.CurrentProfileCookieName,
-				Value:    slug.String(),
+				Value:    formatCurrentProfileCookieValue(registrySlug, slug),
 				Path:     "/",
 				SameSite: http.SameSiteLaxMode,
 				Secure:   true,
 				HttpOnly: true,
 			})
-			writeJSONResponse(w, http.StatusOK, CurrentProfilePayload{Slug: slug.String()})
+			writeJSONResponse(w, http.StatusOK, CurrentProfilePayload{
+				Profile:  slug.String(),
+				Registry: registrySlug.String(),
+			})
 		default:
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
 	})
+}
+
+func formatCurrentProfileCookieValue(registrySlug gepprofiles.RegistrySlug, profileSlug gepprofiles.ProfileSlug) string {
+	return registrySlug.String() + "/" + profileSlug.String()
+}
+
+func parseCurrentProfileCookieValue(raw string) (gepprofiles.RegistrySlug, gepprofiles.ProfileSlug, bool) {
+	parts := strings.SplitN(strings.TrimSpace(raw), "/", 2)
+	if len(parts) != 2 {
+		return "", "", false
+	}
+	registrySlug, err := gepprofiles.ParseRegistrySlug(parts[0])
+	if err != nil {
+		return "", "", false
+	}
+	profileSlug, err := gepprofiles.ParseProfileSlug(parts[1])
+	if err != nil {
+		return "", "", false
+	}
+	return registrySlug, profileSlug, true
 }
 
 func parseProfilePath(path string) (string, string, bool) {

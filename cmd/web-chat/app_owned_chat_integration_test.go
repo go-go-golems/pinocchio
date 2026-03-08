@@ -478,7 +478,7 @@ func TestAppOwnedProfileSelection_InFlightConversation_RebuildsRuntime(t *testin
 	srv := newAppOwnedIntegrationServer(t)
 	defer srv.Close()
 
-	selectDefaultResp, err := http.Post(srv.URL+"/api/chat/profile", "application/json", strings.NewReader(`{"slug":"default"}`))
+	selectDefaultResp, err := http.Post(srv.URL+"/api/chat/profile", "application/json", strings.NewReader(`{"profile":"default","registry":"default"}`))
 	require.NoError(t, err)
 	defer selectDefaultResp.Body.Close()
 	require.Equal(t, http.StatusOK, selectDefaultResp.StatusCode)
@@ -510,7 +510,7 @@ func TestAppOwnedProfileSelection_InFlightConversation_RebuildsRuntime(t *testin
 	require.Equal(t, "default", integrationSemRuntimeKey(defaultHelloFrame))
 	_ = defaultConn.Close()
 
-	selectAgentResp, err := http.Post(srv.URL+"/api/chat/profile", "application/json", strings.NewReader(`{"slug":"agent"}`))
+	selectAgentResp, err := http.Post(srv.URL+"/api/chat/profile", "application/json", strings.NewReader(`{"profile":"agent","registry":"default"}`))
 	require.NoError(t, err)
 	defer selectAgentResp.Body.Close()
 	require.Equal(t, http.StatusOK, selectAgentResp.StatusCode)
@@ -545,7 +545,7 @@ func TestAppOwnedProfileSelection_AffectsNextConversationCreation(t *testing.T) 
 	srv := newAppOwnedIntegrationServer(t)
 	defer srv.Close()
 
-	selectResp, err := http.Post(srv.URL+"/api/chat/profile", "application/json", strings.NewReader(`{"slug":"agent"}`))
+	selectResp, err := http.Post(srv.URL+"/api/chat/profile", "application/json", strings.NewReader(`{"profile":"agent","registry":"default"}`))
 	require.NoError(t, err)
 	defer selectResp.Body.Close()
 	require.Equal(t, http.StatusOK, selectResp.StatusCode)
@@ -590,7 +590,7 @@ func TestProfileAPI_InvalidSlugAndRegistry_ReturnBadRequest(t *testing.T) {
 	invalidSlugResp, err := http.Post(
 		srv.URL+"/api/chat/profile",
 		"application/json",
-		strings.NewReader(`{"slug":"not a valid slug!"}`),
+		strings.NewReader(`{"profile":"not a valid slug!","registry":"default"}`),
 	)
 	require.NoError(t, err)
 	defer invalidSlugResp.Body.Close()

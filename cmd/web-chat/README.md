@@ -75,7 +75,8 @@ Use canonical request keys:
 {
   "prompt": "hello",
   "conv_id": "optional-conversation-id",
-  "runtime_key": "optional-profile-slug-or-runtime-key",
+  "profile": "optional-profile-slug-or-runtime-key",
+  "registry": "optional-registry-slug",
   "request_overrides": {
     "system_prompt": "optional policy-gated override"
   },
@@ -85,8 +86,7 @@ Use canonical request keys:
 
 Legacy aliases are removed from resolver handling:
 
-- `profile`
-- `registry`
+- `runtime_key`
 - `registry_slug`
 - `overrides`
 - `runtime` query alias
