@@ -44,6 +44,7 @@ func (cm *ConvManager) ensureLLMState(conv *Conversation) (*llmConversationState
 	}
 	sessionID := conv.SessionID
 	sink := conv.Sink
+	runtimeFingerprint := strings.TrimSpace(conv.RuntimeFingerprint)
 	conv.mu.Unlock()
 
 	runtime, err := cm.runtimeComposer.Compose(cm.baseCtx, req)
@@ -57,7 +58,7 @@ func (cm *ConvManager) ensureLLMState(conv *Conversation) (*llmConversationState
 		return nil, errors.New("conversation sink is nil")
 	}
 	if strings.TrimSpace(runtime.RuntimeFingerprint) == "" {
-		runtime.RuntimeFingerprint = strings.TrimSpace(conv.RuntimeFingerprint)
+		runtime.RuntimeFingerprint = runtimeFingerprint
 	}
 
 	state := &llmConversationState{

@@ -102,6 +102,40 @@ func TestConversationService_SubmitPromptQueuesWhenConversationBusy(t *testing.T
 	require.Len(t, conv.queue, 1)
 }
 
+func TestEnsureLLMStateUsesLockedRuntimeFingerprintSnapshotForFallback(t *testing.T) {
+	var conv *Conversation
+	runtimeComposer := infruntime.RuntimeBuilderFunc(func(context.Context, infruntime.ConversationRuntimeRequest) (infruntime.ComposedRuntime, error) {
+		conv.mu.Lock()
+		conv.RuntimeFingerprint = "fp-updated-during-compose"
+		conv.mu.Unlock()
+		return infruntime.ComposedRuntime{
+			Engine:             noopEngine{},
+			Sink:               noopSink{},
+			RuntimeKey:         "default",
+			RuntimeFingerprint: "",
+			SeedSystemPrompt:   "seed",
+		}, nil
+	})
+	cm := NewConvManager(ConvManagerOptions{
+		BaseCtx:         context.Background(),
+		RuntimeComposer: runtimeComposer,
+		BuildSubscriber: func(string) (message.Subscriber, bool, error) { return nil, false, nil },
+	})
+	conv = &Conversation{
+		ID:                 "conv-fallback-fingerprint",
+		SessionID:          "session-fallback-fingerprint",
+		baseCtx:            context.Background(),
+		RuntimeKey:         "default",
+		RuntimeFingerprint: "fp-original",
+		Sink:               noopSink{},
+		requests:           map[string]*chatRequestRecord{},
+	}
+
+	state, err := cm.ensureLLMState(conv)
+	require.NoError(t, err)
+	require.Equal(t, "fp-original", state.runtimeFingerprint)
+}
+
 func TestConversationService_ResolveAndEnsureConversation_DefaultsAndLifecycle(t *testing.T) {
 	runtimeComposer := infruntime.RuntimeBuilderFunc(func(context.Context, infruntime.ConversationRuntimeRequest) (infruntime.ComposedRuntime, error) {
 		return infruntime.ComposedRuntime{
