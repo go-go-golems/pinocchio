@@ -84,7 +84,7 @@ A standalone UI only works reliably if the backend exposes the canonical endpoin
 
 `pkg/webchat/http/api.go` provides three handler builders:
 
-- `NewChatHandler(...)` for `POST /chat` (and optional `/chat/{runtime}` path conventions in app resolvers),
+- `NewChatHandler(...)` for `POST /chat` (and optional `/chat/{profile}` path conventions in app resolvers),
 - `NewWSHandler(...)` for websocket attach at `/ws`,
 - `NewTimelineHandler(...)` for timeline hydration at `/api/timeline`.
 

@@ -22,18 +22,19 @@ The current webchat integration model is handler-first and app-owned:
 
 - Your app owns transport routes like `/chat` and `/ws`.
 - `pkg/webchat` provides services and helper handlers for those routes.
-- `Router` remains useful for UI/core API helper mounting, but it is not the canonical owner of `/chat` and `/ws`.
+- `Router` remains useful internally for UI/core API helper mounting, but applications should embed through `Server` plus app-owned handlers.
 
 Recommended baseline:
 
 - Prefer building `webchat.Server` from explicit dependencies with `webchat.NewServerFromDeps(...)`.
 - Use `webchat.BuildRouterDepsFromValues(...)` when your app still starts from Glazed-parsed values and you want a thin adapter layer.
 - Keep `webchat.NewServer(...)` for compatibility with existing parsed-values callers.
-- Register middleware and tool factories on the server.
+- Register tools on the server.
+- Wire middleware definitions into the runtime composer and shared profile API.
 - Mount app-owned handlers with:
-  - `webchat.NewChatHTTPHandler(srv.ChatService(), resolver)`
-  - `webchat.NewWSHTTPHandler(srv.StreamHub(), resolver, upgrader)`
-  - `webchat.NewTimelineHTTPHandler(srv.TimelineService(), logger)`
+  - `webhttp.NewChatHandler(srv.ChatService(), resolver)`
+  - `webhttp.NewWSHandler(srv.StreamHub(), resolver, upgrader)`
+  - `webhttp.NewTimelineHandler(srv.TimelineService(), logger)`
 - Mount shared profile APIs with `webhttp.RegisterProfileAPIHandlers(...)`.
 - Optionally mount `srv.APIHandler()` and `srv.UIHandler()`.
 
@@ -62,7 +63,8 @@ This guide is intentionally narrative: it focuses on how to assemble an app (ser
 var staticFS embed.FS
 
 func run(ctx context.Context, parsed *values.Values) error {
-  runtimeComposer := newWebChatRuntimeComposer(parsed, middlewareFactories)
+  middlewareDefinitions := newWebChatMiddlewareDefinitionRegistry()
+  runtimeComposer := newWebChatRuntimeComposer(parsed, middlewareDefinitions)
   resolver := newWebChatProfileResolver(profiles)
 
   deps, err := webchat.BuildRouterDepsFromValues(ctx, parsed, staticFS)
@@ -79,21 +81,17 @@ func run(ctx context.Context, parsed *values.Values) error {
     return err
   }
 
-  srv.RegisterMiddleware("agentmode", func(cfg any) geppettomw.Middleware {
-    return agentmode.NewMiddleware(amSvc, cfg.(agentmode.Config))
-  })
-
   srv.RegisterTool("calculator", func(reg geptools.ToolRegistry) error {
     return toolspkg.RegisterCalculatorTool(reg.(*geptools.InMemoryToolRegistry))
   })
 
-  chatHandler := webchat.NewChatHTTPHandler(srv.ChatService(), resolver)
-  wsHandler := webchat.NewWSHTTPHandler(
+  chatHandler := webhttp.NewChatHandler(srv.ChatService(), resolver)
+  wsHandler := webhttp.NewWSHandler(
     srv.StreamHub(),
     resolver,
     websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }},
   )
-  timelineHandler := webchat.NewTimelineHTTPHandler(
+  timelineHandler := webhttp.NewTimelineHandler(
     srv.TimelineService(),
     log.With().Str("component", "webchat").Str("route", "/api/timeline").Logger(),
   )
@@ -108,9 +106,6 @@ func run(ctx context.Context, parsed *values.Values) error {
     DefaultRegistrySlug:             gepprofiles.MustRegistrySlug("default"),
     EnableCurrentProfileCookieRoute: true,
     MiddlewareDefinitions:           middlewareDefinitions,
-    ExtensionCodecRegistry:          extensionCodecs,
-    WriteActor:                      "my-app",
-    WriteSource:                     "http-api",
   })
   mux.Handle("/api/", srv.APIHandler())
   mux.Handle("/", srv.UIHandler())
@@ -146,6 +141,18 @@ This keeps:
 - queue/idempotency inside `ChatService`
 - runner selection in app code
 - websocket and timeline routes generic
+
+## Middleware Ownership
+
+There is no longer a server-level `RegisterMiddleware(...)` API in `pkg/webchat`.
+
+The replacement model is:
+
+- declare middleware schemas/builders in an app-owned `middlewarecfg.DefinitionRegistry`
+- resolve enabled middleware inside your runtime composer
+- pass the same definition registry to `webhttp.RegisterProfileAPIHandlers(...)`
+
+That keeps middleware availability, validation, and runtime construction in one app-owned place instead of hiding it in a server shim.
 
 ## Request Resolver Contract
 
@@ -194,15 +201,17 @@ Enable durable turn snapshots:
 
 Turn snapshots are debug-facing and served via `/api/debug/turns`.
 
-## Router Usage in 2026
+## Embedding Rule In 2026
 
-`Router` still matters for:
+Applications should compose their own mux and mount:
 
-- `UIHandler()` static UI assets.
-- `APIHandler()` core `/api/timeline` and `/api/debug/*` utilities.
-- `Mount()` convenience when embedding helper mux behavior.
+- `webhttp.NewChatHandler(...)`
+- `webhttp.NewWSHandler(...)`
+- `webhttp.NewTimelineHandler(...)`
+- `srv.APIHandler()`
+- `srv.UIHandler()`
 
-`Router` is no longer the primary route owner for `/chat` and `/ws` in top-level docs.
+Compatibility router helpers such as `Mount()` and `Handler()` are no longer part of the supported embedding guidance.
 
 ## Constructor Layering
 
@@ -235,6 +244,7 @@ Core rules:
 ## See Also
 
 - [Webchat HTTP Chat Setup](webchat-http-chat-setup.md)
+- [Webchat Compatibility Surface Migration Guide](webchat-compatibility-surface-migration-guide.md)
 - [Webchat Values Separation Migration Guide](webchat-values-separation-migration-guide.md)
 - [Webchat User Guide](webchat-user-guide.md)
 - [Webchat Profile Registry Guide](webchat-profile-registry.md)

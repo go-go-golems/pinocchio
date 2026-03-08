@@ -29,11 +29,12 @@ For the reference `cmd/web-chat` application, runtime engine/provider settings n
 - Build server core with `webchat.NewServerFromDeps(...)` when possible.
 - Use `webchat.BuildRouterDepsFromValues(...)` if you start from parsed Glazed values.
 - Keep `webchat.NewServer(...)` as the compatibility wrapper.
-- Register middleware/tool factories on the returned server.
+- Register tools on the returned server.
+- Resolve middleware through app-owned runtime/profile composition.
 - Mount app-owned handlers:
-  - `webchat.NewChatHTTPHandler(srv.ChatService(), resolver)`
-  - `webchat.NewWSHTTPHandler(srv.StreamHub(), resolver, upgrader)`
-  - `webchat.NewTimelineHTTPHandler(srv.TimelineService(), logger)`
+  - `webhttp.NewChatHandler(srv.ChatService(), resolver)`
+  - `webhttp.NewWSHandler(srv.StreamHub(), resolver, upgrader)`
+  - `webhttp.NewTimelineHandler(srv.TimelineService(), logger)`
 - Mount reusable profile API handlers:
   - `webhttp.RegisterProfileAPIHandlers(...)`
 - Mount utility handlers:
@@ -45,7 +46,7 @@ For the reference `cmd/web-chat` application, runtime engine/provider settings n
 | Route | Method | Ownership | Notes |
 |---|---|---|---|
 | `/chat` | POST | App | Submit prompt |
-| `/chat/{runtime}` | POST | App | Force runtime key from path |
+| `/chat/{profile}` | POST | App | Force profile/runtime selection from path |
 | `/ws?conv_id=<id>` | GET (upgrade) | App | Attach websocket stream |
 | `/api/timeline` | GET | App/Core | Hydration snapshot endpoint |
 | `/api/chat/profiles` | `GET`, `POST` | Shared (`pkg/webchat/http`) | List/create profiles |
@@ -108,14 +109,11 @@ Request body:
 {
   "prompt": "Classify these transactions",
   "conv_id": "optional-conversation-id",
-  "runtime_key": "optional-profile-slug-or-runtime-key",
+  "profile": "optional-profile-slug",
+  "registry": "optional-registry-slug",
   "idempotency_key": "optional-client-key",
   "request_overrides": {
-    "system_prompt": "You are a financial analyst",
-    "middlewares": [
-      { "name": "agentmode", "config": { "default_mode": "financial_analyst" } }
-    ],
-    "tools": ["calculator"]
+    "system_prompt": "You are a financial analyst"
   }
 }
 ```
@@ -126,13 +124,30 @@ Current reference apps return start/queued metadata plus conversation/session ID
 - `runtime_fingerprint`
 - `profile_metadata` (including `profile.stack.lineage` and `profile.stack.trace`)
 
-Legacy resolver payload aliases are removed:
+Legacy selector aliases are removed:
 
-- `profile`
-- `registry`
+- `runtime_key`
 - `registry_slug`
-- `overrides`
-- `runtime` query alias
+
+Middleware and tool activation are profile/runtime-composer concerns. The request payload may still carry `request_overrides`, but the app owns which override keys are accepted and how they feed runtime composition.
+
+## Middleware Definition Wiring
+
+Expose middleware catalogs through the shared profile API and resolve them in your app-owned runtime composer.
+
+```go
+middlewareDefinitions := newMiddlewareDefinitionRegistry()
+
+runtimeComposer := newRuntimeComposer(parsed, middlewareDefinitions)
+
+webhttp.RegisterProfileAPIHandlers(mux, profileRegistry, webhttp.ProfileAPIHandlerOptions{
+  DefaultRegistrySlug:             gepprofiles.MustRegistrySlug("default"),
+  EnableCurrentProfileCookieRoute: true,
+  MiddlewareDefinitions:           middlewareDefinitions,
+})
+```
+
+There is no longer a server-level middleware registration API in `pkg/webchat`.
 
 ### GET /api/timeline
 
@@ -182,15 +197,17 @@ Do not document or depend on these paths in new integrations:
 - Update frontend hydration fetches to `/api/timeline`.
 - Update debug tooling to `/api/debug/turns`.
 - Remove any `/hydrate` endpoint assumptions.
-- Replace router-era setup examples (`NewRouter + NewFromRouter`) with `NewServer + handler constructors` in onboarding docs.
+- Replace router-era setup examples (`NewRouter + NewFromRouter`) with `NewServer + webhttp handler constructors` in onboarding docs.
 - Prefer `BuildRouterDepsFromValues(...) + NewServerFromDeps(...)` when migrating existing parsed-values integrations.
+- Move any `srv.RegisterMiddleware(...)` usage into app-owned middleware definition registries plus runtime-composer wiring.
 
 ## Troubleshooting
 
 | Problem | Cause | Solution |
 |---|---|---|
 | `missing conv_id` on websocket | Client omitted query param | Ensure `conv_id` is always included in websocket URL |
-| `timeline service not enabled` | Timeline service unavailable or route not mounted | Mount `/api/timeline` with `NewTimelineHTTPHandler` and confirm service non-nil |
+| `timeline service not enabled` | Timeline service unavailable or route not mounted | Mount `/api/timeline` with `webhttp.NewTimelineHandler` and confirm service non-nil |
+| middleware schema endpoint is empty | No definition registry passed to profile API handlers | Pass `MiddlewareDefinitions` into `webhttp.RegisterProfileAPIHandlers(...)` |
 | `turn store not enabled` | No turn store config | Start with `--turns-db` or `--turns-dsn` |
 | Policy errors from `/chat` | Resolver validation failure | Return `RequestResolutionError` with explicit status/client message |
 
@@ -205,6 +222,7 @@ If you suspect drift between docs and behavior, these tend to be the most reliab
 ## See Also
 
 - [Webchat Framework Guide](webchat-framework-guide.md)
+- [Webchat Compatibility Surface Migration Guide](webchat-compatibility-surface-migration-guide.md)
 - [Webchat Values Separation Migration Guide](webchat-values-separation-migration-guide.md)
 - [Webchat User Guide](webchat-user-guide.md)
 - [Webchat Frontend Integration](webchat-frontend-integration.md)

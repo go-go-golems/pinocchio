@@ -70,9 +70,9 @@ SQLite-backed stores follow the same service interface and are recommended when 
 
 For chat/websocket requests, the profile selection order is:
 
-1. path slug (`POST /chat/{runtime}`)
-2. request body `runtime_key`
-3. query `runtime_key`
+1. path slug (`POST /chat/{profile}`)
+2. request body `profile`
+3. query `profile`
 4. `chat_profile` cookie
 5. stack default profile (`default`, resolved top source -> bottom source)
 
@@ -205,7 +205,7 @@ When profile selection changes mid-conversation, subsequent turns use the new pr
 
 Debug API interpretation:
 
-- `/api/debug/conversations/:conv_id` -> `current_runtime_key` (latest pointer),
+- `/api/debug/conversations/:conv_id` -> `resolved_runtime_key` (latest pointer),
 - `/api/debug/turns?conv_id=...` -> per-turn `runtime_key` and `inference_id`.
 
 ## Write-Time Validation and Schema APIs

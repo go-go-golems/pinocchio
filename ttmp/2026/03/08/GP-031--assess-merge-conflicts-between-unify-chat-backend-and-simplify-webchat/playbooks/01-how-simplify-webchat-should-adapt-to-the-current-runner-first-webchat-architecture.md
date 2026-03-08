@@ -50,7 +50,8 @@ Current status on `task/unify-chat-backend`:
 - request/profile contract cleanup has been replayed
 - debug payload cleanup has been replayed
 - alias API shims have been removed
-- router/server compatibility-surface cleanup remains deferred
+- router/server compatibility-surface cleanup has been completed
+- migration help now lives in `pkg/doc/topics/webchat-compatibility-surface-migration-guide.md`
 
 ## Keep These Current-Branch Architectural Decisions
 
@@ -134,7 +135,7 @@ Those changes were reasonable when `ChatService` was a thin wrapper, but that is
 2. Port request/profile contract cleanups first.
 3. Port debug payload renames second.
 4. Delete alias packages third.
-5. Open a separate discussion for any remaining router/server compatibility-surface removals.
+5. If future cleanup ideas touch public helpers again, update the migration guide instead of resurrecting the deleted APIs.
 
 ## Review Checklist
 
@@ -145,6 +146,7 @@ Those changes were reasonable when `ChatService` was a thin wrapper, but that is
 - `/api/chat/profile` reads and writes `profile` and `registry`.
 - debug payloads expose `resolved_runtime_key`.
 - alias `pkg/webchat/*/api.go` shims remain deleted and are not reintroduced.
+- router/server compatibility helpers remain deleted and embedders use explicit mux registration plus app-owned middleware-definition registries.
 
 ## Suggested Commit Slicing
 
@@ -153,6 +155,7 @@ Use separate commits for:
 1. request/profile contract cleanup
 2. debug contract cleanup
 3. alias-package deletion
-4. documentation/playbook/diary updates
+4. router/server compatibility-surface removal
+5. documentation/playbook/diary/help updates
 
 That keeps future cherry-picking and blame much cleaner than one combined merge-resolution commit.

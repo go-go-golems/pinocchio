@@ -216,17 +216,32 @@ on completion:
   publish EventMyFeatureCompleted(success,error)
 ```
 
-### Example command-side registration
+### Example command-side wiring
 
-In app startup, middleware factory registration remains in `cmd/web-chat/main.go`:
+In app startup, define the middleware in an app-owned `middlewarecfg.DefinitionRegistry`
+and let the runtime composer build it from profile/runtime inputs:
 
 ```go
-srv.RegisterMiddleware("myfeature", func(cfg any) geppettomw.Middleware {
-  return myfeature.NewMiddleware(myfeature.ConfigFromAny(cfg))
+middlewareDefinitions := middlewarecfg.NewInMemoryDefinitionRegistry()
+
+_ = middlewareDefinitions.RegisterDefinition(middlewarecfg.Definition{
+  Name: "myfeature",
+  Build: func(ctx context.Context, deps middlewarecfg.BuildDeps, cfg middlewarecfg.Config) (geppettomw.Middleware, error) {
+    return myfeature.NewMiddleware(myfeature.ConfigFromAny(cfg.Config))
+  },
+})
+
+runtimeComposer := newProfileRuntimeComposer(middlewareDefinitions, buildDeps, baseStepSettings)
+
+webhttp.RegisterProfileAPIHandlers(mux, profileRegistry, webhttp.ProfileAPIHandlerOptions{
+  DefaultRegistrySlug:             gepprofiles.MustRegistrySlug("default"),
+  EnableCurrentProfileCookieRoute: true,
+  MiddlewareDefinitions:           middlewareDefinitions,
 })
 ```
 
-Keep middleware type/config close to module unless intentionally shared.
+Keep middleware type/config close to the module unless intentionally shared, but keep
+the registry and runtime-composer wiring app-owned under `cmd/web-chat`.
 
 ## Step 3: Register SEM translation handlers (backend)
 

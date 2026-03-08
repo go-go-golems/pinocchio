@@ -662,3 +662,115 @@ use (
 ## Related
 
 - `design/01-merge-assessment.md`
+
+### Step 18. Remove the remaining compatibility surface and publish the migration guide
+
+After confirming that `temporal-relationships` and the main `os-openai-app-server` consumers were not using the legacy router/server helpers, I converted the deferred cleanup into an actual code change. The goal was to stop carrying compatibility APIs that no longer matched the supported embedding model, and to replace them with explicit guidance in Glazed help topics rather than leaving downstream users to infer the migration from diffs.
+
+### Prompt Context
+
+**User prompt (verbatim):** "yes, add tasks, do the cleanup, add a migration playbook if it doesn't already exist in pinocchio/pkg/doc using glazed help write entries."
+
+**Assistant interpretation:** Finish the remaining simplify-webchat reconciliation by removing the stale compatibility APIs, record the work in GP-031, and add a canonical `pkg/doc` migration guide that explains how embedders should migrate to the app-owned handler-first architecture.
+
+**Inferred user intent:** Land the cleanup before opening a PR so the branch no longer carries dead public surface, and leave behind enough documentation that downstream consumers can adapt without re-reading the full ticket history.
+
+### What I did
+
+- Added two explicit GP-031 tasks:
+  - remove the remaining webchat compatibility surface
+  - publish a Glazed help migration guide and update existing webchat help topics
+- Removed these APIs from `pkg/webchat`:
+  - `webchat.NewFromRouter(...)`
+  - `(*Server).RegisterMiddleware(...)`
+  - `(*Router).RegisterMiddleware(...)`
+  - `(*Router).Mount(...)`
+  - `(*Router).Handle(...)`
+  - `(*Router).HandleFunc(...)`
+  - `(*Router).Handler()`
+- Removed the now-obsolete `MiddlewareBuilder` type and router middleware-factory state from `pkg/webchat/types.go`.
+- Deleted the old `pkg/webchat/router_mount_test.go` because it only covered the removed compatibility-mount helpers.
+- Updated `pkg/webchat/doc.go` so the package-level embedding guidance now points directly at:
+  - `webhttp.NewChatHandler(...)`
+  - `webhttp.NewWSHandler(...)`
+  - `webhttp.NewTimelineHandler(...)`
+- Added a new Glazed help topic:
+  - `pkg/doc/topics/webchat-compatibility-surface-migration-guide.md`
+- Updated the relevant help pages and tutorials to align with the removal and with the previously replayed selector/debug contract changes.
+- Committed the code cleanup as:
+  - `19269a2` `refactor(webchat): remove compatibility router helpers`
+
+### Commands used
+
+```bash
+rg -n "RegisterMiddleware\\(|NewFromRouter\\(|\\.Mount\\(|\\.Handle\\(|\\.HandleFunc\\(|\\.Handler\\(" pinocchio
+gofmt -w pkg/webchat/types.go pkg/webchat/router.go pkg/webchat/server.go pkg/webchat/doc.go
+go test ./pkg/webchat ./cmd/web-chat
+go run ./cmd/pinocchio help webchat-compatibility-surface-migration-guide
+git add pkg/webchat/router.go pkg/webchat/server.go pkg/webchat/types.go pkg/webchat/doc.go pkg/webchat/router_mount_test.go
+git commit -m "refactor(webchat): remove compatibility router helpers"
+```
+
+### What worked
+
+- The local inventory matched the earlier broader assessment: live in-repo consumers already use the app-owned handler-first path and did not rely on the compatibility helpers.
+- The new migration guide rendered correctly through the Glazed help system, which is the right validation for these docs.
+- The focused webchat tests passed before the commit, and the repository pre-commit also completed successfully with full `go test ./...` plus lint/build steps.
+
+### What didn't work
+
+- The first focused test run failed because I had removed the `strings` import from `pkg/webchat/router.go` too aggressively. The file still uses `strings.TrimSpace` and `strings.ToLower` in runtime fallback logic, so I restored the import and reran the tests.
+- The first commit attempt failed with:
+
+```text
+fatal: Unable to create '/home/manuel/code/wesen/corporate-headquarters/.git/modules/pinocchio/worktrees/pinocchio8/index.lock': File exists.
+```
+
+The lock was stale by the time I checked it again, so I simply retried the commit and let the hook run to completion.
+
+### What I learned
+
+- The old compatibility helpers were no longer protecting any real in-repo consumer. They were mostly preserving ambiguity about the supported embedding model.
+- Writing the migration as a Glazed help topic is materially better than leaving the instructions buried in GP-031, because `pinocchio help webchat-compatibility-surface-migration-guide` is now a discoverable operator-facing entry point.
+- Removing the helpers forced a broader documentation sweep, which also flushed out stale `/chat/{runtime}` and `current_runtime_key` references in existing help topics.
+
+### What was tricky to build
+
+- The only subtle technical issue was not the API deletion itself; it was keeping the docs coherent across several already-evolving topics: request selectors, debug payload naming, and middleware ownership had all changed recently, so the migration guide had to line up with those newer cuts rather than describing the compatibility removal in isolation.
+
+### Code review instructions
+
+- Review the code commit `19269a2` first:
+  - `pkg/webchat/router.go`
+  - `pkg/webchat/server.go`
+  - `pkg/webchat/types.go`
+  - `pkg/webchat/doc.go`
+  - deleted `pkg/webchat/router_mount_test.go`
+- Then review the migration/help updates:
+  - `pkg/doc/topics/webchat-compatibility-surface-migration-guide.md`
+  - `pkg/doc/topics/webchat-framework-guide.md`
+  - `pkg/doc/topics/webchat-http-chat-setup.md`
+  - `pkg/doc/tutorials/03-thirdparty-webchat-playbook.md`
+  - `pkg/doc/tutorials/04-intern-app-owned-middleware-events-timeline-widgets.md`
+
+### Verification
+
+Focused verification before the code commit:
+
+```text
+ok  	github.com/go-go-golems/pinocchio/pkg/webchat	0.270s
+ok  	github.com/go-go-golems/pinocchio/cmd/web-chat	0.410s
+```
+
+Help-topic verification:
+
+```bash
+go run ./cmd/pinocchio help webchat-compatibility-surface-migration-guide
+```
+
+Commit-hook verification during the actual commit:
+
+```text
+✔️ test (9.99 seconds)
+✔️ lint (95.98 seconds)
+```

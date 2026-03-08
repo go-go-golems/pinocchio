@@ -23,6 +23,7 @@ This guide shows the current production pattern for integrating `pinocchio/pkg/w
 - canonical timeline hydration path `/api/timeline`
 - debug endpoints under `/api/debug/*`
 - profile/runtime policy via app-owned request resolver
+- middleware resolved through app-owned runtime/profile composition
 - explicit dependency-injected server construction as the preferred embedding API
 
 ## Minimal Backend Wiring
@@ -32,7 +33,8 @@ This guide shows the current production pattern for integrating `pinocchio/pkg/w
 var staticFS embed.FS
 
 func run(ctx context.Context, parsed *values.Values) error {
-  runtimeComposer := newRuntimeComposer(parsed)
+  middlewareDefinitions := newMiddlewareDefinitionRegistry()
+  runtimeComposer := newRuntimeComposer(parsed, middlewareDefinitions)
   resolver := newRequestResolver()
 
   deps, err := webchat.BuildRouterDepsFromValues(ctx, parsed, staticFS)
@@ -49,13 +51,13 @@ func run(ctx context.Context, parsed *values.Values) error {
     return err
   }
 
-  chatHandler := webchat.NewChatHTTPHandler(srv.ChatService(), resolver)
-  wsHandler := webchat.NewWSHTTPHandler(
+  chatHandler := webhttp.NewChatHandler(srv.ChatService(), resolver)
+  wsHandler := webhttp.NewWSHandler(
     srv.StreamHub(),
     resolver,
     websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }},
   )
-  timelineHandler := webchat.NewTimelineHTTPHandler(
+  timelineHandler := webhttp.NewTimelineHandler(
     srv.TimelineService(),
     log.With().Str("component", "webchat").Str("route", "/api/timeline").Logger(),
   )
@@ -66,6 +68,11 @@ func run(ctx context.Context, parsed *values.Values) error {
   mux.HandleFunc("/ws", wsHandler)
   mux.HandleFunc("/api/timeline", timelineHandler)
   mux.HandleFunc("/api/timeline/", timelineHandler)
+  webhttp.RegisterProfileAPIHandlers(mux, profileRegistry, webhttp.ProfileAPIHandlerOptions{
+    DefaultRegistrySlug:             gepprofiles.MustRegistrySlug("default"),
+    EnableCurrentProfileCookieRoute: true,
+    MiddlewareDefinitions:           middlewareDefinitions,
+  })
   mux.Handle("/api/", srv.APIHandler())
   mux.Handle("/", srv.UIHandler())
 
@@ -89,7 +96,7 @@ Use [Webchat HTTP Chat Setup](webchat-http-chat-setup.md) as the canonical route
 
 At a high level, you will mount:
 
-- `POST /chat` (and optionally `POST /chat/{runtime}`)
+- `POST /chat` (and optionally `POST /chat/{profile}`)
 - `GET /ws?conv_id=<id>` (WebSocket upgrade)
 - `GET /api/timeline?conv_id=<id>&since_version=<n>&limit=<n>` (hydration)
 
@@ -106,6 +113,18 @@ Typical resolver behavior:
 - return typed `RequestResolutionError` for client-visible errors
 
 For the full registry model (selection precedence, CRUD endpoints, and policy/version semantics), use [Webchat Profile Registry Guide](webchat-profile-registry.md) as the authoritative reference.
+
+## Middleware Ownership
+
+Middleware registration is no longer a server-level `pkg/webchat` API.
+
+Use this split instead:
+
+- declare middleware schemas/builders in an app-owned `middlewarecfg.DefinitionRegistry`
+- resolve enabled middleware in your runtime composer
+- expose the same definition registry through `webhttp.RegisterProfileAPIHandlers(...)` so profile CRUD and schema routes stay aligned
+
+For the migration details, see [Webchat Compatibility Surface Migration Guide](webchat-compatibility-surface-migration-guide.md).
 
 ## Timeline Hydration
 
@@ -155,6 +174,7 @@ Use these rules when embedding:
 ## See Also
 
 - [Webchat HTTP Chat Setup](webchat-http-chat-setup.md)
+- [Webchat Compatibility Surface Migration Guide](webchat-compatibility-surface-migration-guide.md)
 - [Webchat Framework Guide](webchat-framework-guide.md)
 - [Webchat Values Separation Migration Guide](webchat-values-separation-migration-guide.md)
 - [Webchat Profile Registry Guide](webchat-profile-registry.md)

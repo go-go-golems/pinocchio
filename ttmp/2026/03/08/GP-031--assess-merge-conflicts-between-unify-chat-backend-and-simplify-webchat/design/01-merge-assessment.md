@@ -59,8 +59,13 @@ The low-risk simplify-webchat improvements have now been replayed on the current
 - `e847f19` `feat(webchat): adopt profile and registry selectors`
 - `7458428` `feat(webchat): expose resolved runtime keys in debug api`
 - `2755362` `refactor(webchat): drop unused alias api shims`
+- `19269a2` `refactor(webchat): remove compatibility router helpers`
 
-What remains from the simplify branch is no longer "safe replay" work. The unresolved differences are structural and should be treated as current-branch refactors with explicit review, not as merge conflict cleanup.
+The compatibility-surface cleanup has now also been completed on the current branch, with the migration documented in:
+
+- `pkg/doc/topics/webchat-compatibility-surface-migration-guide.md`
+
+At this point, there is no meaningful merge value left in `simplify-webchat` beyond future small cleanups that already fit the current architecture.
 
 ## Divergence Snapshot
 
@@ -124,7 +129,7 @@ Simplify branch removes:
 - middleware registration surface
 - `ChatService` wrapper usage in favor of `*ConversationService`
 
-Assessment: the current branch's dependency-injection work should win. The simplify branch's router deletions should be replayed selectively after checking which surfaces are still needed by callers and tests.
+Assessment: the current branch's dependency-injection work won. The compatibility router helpers have now been removed on the current branch after the local/external inventory confirmed they were not needed in live in-repo consumers.
 
 ### 3. `pkg/webchat/server.go`
 
@@ -141,7 +146,7 @@ Simplify branch removes or simplifies:
 - `NewFromRouter`
 - `ChatService()` return type becomes `*ConversationService`
 
-Assessment: the deps-first server constructor should stay. The compatibility helpers can be retired later, but removing them inside the merge will tangle API cleanup with architecture reconciliation.
+Assessment: the deps-first server constructor stayed, and the compatibility helpers have now been retired in a focused current-branch refactor. The `ChatService()` return type did not change because the current branch still needs the higher-level service boundary.
 
 ### 4. `pkg/webchat/types.go`
 
@@ -150,7 +155,7 @@ This conflict is downstream from router/service decisions:
 - current branch keeps `MiddlewareBuilder`, `RouterSettings`, and `chatService *ChatService`
 - simplify branch deletes middleware builder support and changes the router field to `*ConversationService`
 
-Assessment: resolve this only after deciding whether the compatibility APIs are still exported intentionally or only accidentally.
+Assessment: this is now resolved. `MiddlewareBuilder` and router middleware factory state were removed together with the retired compatibility APIs, while `ChatService` remains distinct from `ConversationService`.
 
 ### 5. `cmd/web-chat/main.go` and integration tests
 
@@ -228,7 +233,7 @@ Instead:
 1. keep the current branch architecture for `ChatService`, `Router`, `Server`, and deps-first construction
 2. keep the replayed request/debug contract cleanups already landed from `simplify-webchat`
 3. keep the alias-subpackage deletion already landed in a dedicated cleanup commit
-4. separately evaluate whether router utility mux helpers and `RegisterMiddleware` are still externally needed before deleting them
+4. remove router utility mux helpers and `RegisterMiddleware` on the current branch once the inventory confirms live consumers no longer depend on them
 
 ### Why this is safer
 
@@ -246,18 +251,18 @@ That makes it too easy to accidentally preserve the wrong side of a conflict.
 1. replay `profile` / `registry` request contract updates
 2. replay `resolved_runtime_key` debug contract updates
 3. delete unused alias subpackages
-4. open a dedicated refactor ticket for router/server compatibility surface removal
+4. remove router/server compatibility surface in a focused current-branch refactor
 
 Status:
 
-- steps 1-3 are complete on the current branch
-- step 4 remains open and should not be bundled into a future simplify-webchat merge
+- steps 1-4 are complete on the current branch
+- future simplify-webchat follow-ups should be treated as small replay candidates, not as a merge target
 
 ## Risk Notes
 
 - The highest-risk mistake is accepting the simplify branch's `ChatService` aliasing, which would silently drop current queue/idempotency/runner behavior.
-- The second highest-risk mistake is deleting router/server compatibility helpers without first checking external call sites outside `cmd/web-chat`.
-- The safe wins are the request/debug contract cleanup and alias-package deletion.
+- The second highest-risk mistake was deleting router/server compatibility helpers without first checking external call sites outside `cmd/web-chat`; that inventory has now been completed and the cleanup landed in `19269a2`.
+- The safe wins turned out to be the request/debug contract cleanup, alias-package deletion, and the compatibility-surface removal once it was separated from the original merge discussion.
 
 ## Bottom Line
 
