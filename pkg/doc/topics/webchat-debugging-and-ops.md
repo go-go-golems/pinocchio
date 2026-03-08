@@ -59,7 +59,7 @@ Look for lifecycle logs:
 
 - Check resolver errors from `POST /chat`.
 - Validate JSON body keys: `prompt`, `conv_id`, `request_overrides`, `idempotency_key`.
-- Confirm runtime/profile slug exists when calling `/chat/{runtime}`.
+- Confirm profile slug exists when calling `/chat/{profile}`.
 
 ### Turns endpoint unavailable
 
@@ -68,7 +68,7 @@ Look for lifecycle logs:
 
 ### Runtime history confusion
 
-- conversation debug payloads expose `current_runtime_key` (latest pointer only),
+- conversation debug payloads expose `resolved_runtime_key` (latest pointer only),
 - turn payloads expose per-turn `runtime_key` and `inference_id`,
 - for historical attribution, query `/api/debug/turns`, not only `/api/debug/conversations/:id`.
 

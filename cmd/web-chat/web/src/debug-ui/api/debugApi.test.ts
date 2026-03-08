@@ -72,11 +72,11 @@ describe('debugApi baseQuery prefix resolution', () => {
       }
       if (url === '/chat/api/debug/conversations/conv-1') {
         return new Response(
-          JSON.stringify({
-            conv_id: 'conv-1',
-            session_id: 'session-1',
-            current_runtime_key: 'default',
-            active_sockets: 0,
+            JSON.stringify({
+              conv_id: 'conv-1',
+              session_id: 'session-1',
+              resolved_runtime_key: 'default',
+              active_sockets: 0,
             stream_running: false,
             queue_depth: 0,
             buffered_events: 0,

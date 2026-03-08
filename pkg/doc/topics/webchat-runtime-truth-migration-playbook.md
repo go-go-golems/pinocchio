@@ -21,7 +21,7 @@ SectionType: GeneralTopic
 This playbook explains the runtime-semantics cutover:
 
 - turn rows are authoritative (`turns.runtime_key`, `turns.inference_id`),
-- conversation rows expose only current pointer semantics (`current_runtime_key` in debug APIs).
+- conversation rows expose only current pointer semantics (`resolved_runtime_key` in debug APIs).
 
 Use this when upgrading existing SQLite stores or validating runtime-switch correctness.
 
@@ -30,7 +30,7 @@ Use this when upgrading existing SQLite stores or validating runtime-switch corr
 Two fields now represent different truths:
 
 - per-turn truth: `turns.runtime_key` and `turns.inference_id`.
-- conversation pointer: `/api/debug/conversations` and `/api/debug/conversations/:id` return `current_runtime_key`.
+- conversation pointer: `/api/debug/conversations` and `/api/debug/conversations/:id` return `resolved_runtime_key`.
 
 Do not treat conversation current runtime as full turn history.
 
@@ -38,8 +38,8 @@ Do not treat conversation current runtime as full turn history.
 
 Conversation debug payloads:
 
-- old key: `runtime_key`
-- new key: `current_runtime_key`
+- old key: `current_runtime_key`
+- new key: `resolved_runtime_key`
 
 Turn debug payloads:
 
@@ -114,7 +114,7 @@ Use this snippet in release notes:
 ```text
 Runtime persistence semantics changed:
 - per-turn runtime/inference are now first-class and queryable in turns.db,
-- conversation debug APIs now expose current_runtime_key (latest pointer only),
+- conversation debug APIs now expose resolved_runtime_key (latest pointer only),
 - consumers must not infer historical runtime from conversation-level fields.
 ```
 

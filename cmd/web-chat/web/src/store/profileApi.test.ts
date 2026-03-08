@@ -100,13 +100,13 @@ describe('profileApi', () => {
       seen.push({ url, method, body });
 
       if (url === '/chat/api/chat/profile' && method === 'GET') {
-        return new Response(JSON.stringify({ profile: 'inventory' }), {
+        return new Response(JSON.stringify({ profile: 'inventory', registry: 'default' }), {
           status: 200,
           headers: { 'content-type': 'application/json' },
         });
       }
       if (url === '/chat/api/chat/profile' && method === 'POST') {
-        return new Response(JSON.stringify({ profile: 'planner' }), {
+        return new Response(JSON.stringify({ profile: 'planner', registry: 'default' }), {
           status: 200,
           headers: { 'content-type': 'application/json' },
         });
@@ -116,14 +116,16 @@ describe('profileApi', () => {
 
     const current = await store.dispatch(profileApi.endpoints.getProfile.initiate()).unwrap();
     expect(current.slug).toBe('inventory');
+    expect(current.registry).toBe('default');
 
-    const updated = await store.dispatch(profileApi.endpoints.setProfile.initiate({ slug: 'planner' })).unwrap();
+    const updated = await store.dispatch(profileApi.endpoints.setProfile.initiate({ profile: 'planner', registry: 'default' })).unwrap();
     expect(updated.slug).toBe('planner');
+    expect(updated.registry).toBe('default');
 
     expect(seen[0].url).toBe('/chat/api/chat/profile');
     expect(seen[0].method).toBe('GET');
     expect(seen[1].url).toBe('/chat/api/chat/profile');
     expect(seen[1].method).toBe('POST');
-    expect(JSON.parse(seen[1].body)).toEqual({ slug: 'planner' });
+    expect(JSON.parse(seen[1].body)).toEqual({ profile: 'planner', registry: 'default' });
   });
 });

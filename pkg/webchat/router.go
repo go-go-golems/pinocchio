@@ -71,7 +71,6 @@ func NewRouterFromDeps(ctx context.Context, deps RouterDeps, opts ...RouterOptio
 		streamBackend: deps.StreamBackend,
 		timelineStore: deps.TimelineStore,
 		turnStore:     deps.TurnStore,
-		mwFactories:   map[string]MiddlewareBuilder{},
 		toolFactories: map[string]infruntime.ToolRegistrar{},
 	}
 	if r.timelineStore == nil {
@@ -141,11 +140,6 @@ func NewRouterFromDeps(ctx context.Context, deps RouterDeps, opts ...RouterOptio
 	return r, nil
 }
 
-// RegisterMiddleware adds a named middleware factory to the router.
-func (r *Router) RegisterMiddleware(name string, f MiddlewareBuilder) {
-	r.mwFactories[name] = f
-}
-
 // RegisterTool adds a named tool factory to the router.
 func (r *Router) RegisterTool(name string, f infruntime.ToolRegistrar) {
 	r.toolFactories[name] = f
@@ -153,34 +147,6 @@ func (r *Router) RegisterTool(name string, f infruntime.ToolRegistrar) {
 		r.chatService.RegisterTool(name, f)
 	}
 }
-
-// Mount attaches all handlers to a parent mux with the given prefix.
-// http.ServeMux does not strip prefixes, so we must use StripPrefix explicitly.
-func (r *Router) Mount(mux *http.ServeMux, prefix string) {
-	if prefix == "" || prefix == "/" {
-		mux.Handle("/", r.mux)
-		return
-	}
-	prefix = strings.TrimRight(prefix, "/")
-	mux.Handle(prefix+"/", http.StripPrefix(prefix, r.mux))
-	mux.HandleFunc(prefix, func(w http.ResponseWriter, r0 *http.Request) {
-		http.Redirect(w, r0, prefix+"/", http.StatusPermanentRedirect)
-	})
-}
-
-// Handle attaches an extra handler to the router utility mux.
-// This is optional convenience for app composition, not a central route-ownership mechanism.
-func (r *Router) Handle(pattern string, h http.Handler) { r.mux.Handle(pattern, h) }
-
-// HandleFunc attaches an extra handler to the router utility mux.
-// This is optional convenience for app composition, not a central route-ownership mechanism.
-func (r *Router) HandleFunc(pattern string, handler func(http.ResponseWriter, *http.Request)) {
-	r.mux.HandleFunc(pattern, handler)
-}
-
-// Handler returns the router utility mux (UI + core API + any explicitly attached extras).
-// Applications should still own and mount /chat and /ws themselves.
-func (r *Router) Handler() http.Handler { return r.mux }
 
 // ChatService returns the chat-focused service surface (queue/idempotency/inference).
 func (r *Router) ChatService() *ChatService { return r.chatService }

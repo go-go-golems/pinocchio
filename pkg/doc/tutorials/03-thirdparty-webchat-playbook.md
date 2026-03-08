@@ -29,9 +29,9 @@ This playbook walks through building a third-party webchat app that:
 Use handler-first setup as default.
 
 - Build server with `webchat.NewServer(...)`.
-- Mount `/chat` with `webchat.NewChatHTTPHandler`.
-- Mount `/ws` with `webchat.NewWSHTTPHandler`.
-- Mount `/api/timeline` with `webchat.NewTimelineHTTPHandler`.
+- Mount `/chat` with `webhttp.NewChatHandler`.
+- Mount `/ws` with `webhttp.NewWSHandler`.
+- Mount `/api/timeline` with `webhttp.NewTimelineHandler`.
 - Optionally mount `srv.APIHandler()` and `srv.UIHandler()`.
 
 Do not start from router-era examples that center `NewRouter + NewFromRouter`.
@@ -39,6 +39,8 @@ Do not start from router-era examples that center `NewRouter + NewFromRouter`.
 ## 3. Backend Skeleton
 
 ```go
+middlewareDefinitions := newMiddlewareDefinitionRegistry()
+
 srv, err := webchat.NewServer(ctx, parsed, staticFS,
   webchat.WithRuntimeComposer(runtimeComposer),
 )
@@ -48,13 +50,13 @@ if err != nil {
 
 resolver := newRequestResolver()
 
-chatHandler := webchat.NewChatHTTPHandler(srv.ChatService(), resolver)
-wsHandler := webchat.NewWSHTTPHandler(
+chatHandler := webhttp.NewChatHandler(srv.ChatService(), resolver)
+wsHandler := webhttp.NewWSHandler(
   srv.StreamHub(),
   resolver,
   websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }},
 )
-timelineHandler := webchat.NewTimelineHTTPHandler(
+timelineHandler := webhttp.NewTimelineHandler(
   srv.TimelineService(),
   log.With().Str("component", "my-webchat").Str("route", "/api/timeline").Logger(),
 )
@@ -65,6 +67,11 @@ mux.HandleFunc("/chat/", chatHandler)
 mux.HandleFunc("/ws", wsHandler)
 mux.HandleFunc("/api/timeline", timelineHandler)
 mux.HandleFunc("/api/timeline/", timelineHandler)
+webhttp.RegisterProfileAPIHandlers(mux, profileRegistry, webhttp.ProfileAPIHandlerOptions{
+  DefaultRegistrySlug:             gepprofiles.MustRegistrySlug("default"),
+  EnableCurrentProfileCookieRoute: true,
+  MiddlewareDefinitions:           middlewareDefinitions,
+})
 mux.Handle("/api/", srv.APIHandler())
 mux.Handle("/", srv.UIHandler())
 
@@ -91,7 +98,7 @@ The same resolver is used for chat and websocket flows.
 Canonical routes:
 
 - `POST /chat`
-- `POST /chat/{runtime}`
+- `POST /chat/{profile}`
 - `GET /ws?conv_id=<id>`
 - `GET /api/timeline?conv_id=<id>&since_version=<n>&limit=<n>`
 - `GET /api/debug/turns?...` (optional)
@@ -116,13 +123,27 @@ Turn snapshot durability:
 
 Turn snapshots are for debugging model input/output details and should be consumed from `/api/debug/turns`.
 
-## 7. Middleware Registration
+## 7. Middleware Definition Wiring
 
-Register middleware factories on the server:
+There is no longer a `srv.RegisterMiddleware(...)` hook in `pkg/webchat`.
+
+Instead:
+
+- declare middleware schemas/builders in an app-owned `middlewarecfg.DefinitionRegistry`
+- resolve active middleware in your runtime composer
+- pass the same registry into `webhttp.RegisterProfileAPIHandlers(...)`
+
+Example:
 
 ```go
-srv.RegisterMiddleware("webagent-thinking-mode", func(cfg any) geppettomw.Middleware {
-  return thinkingmode.NewMiddleware(thinkingmode.ConfigFromAny(cfg))
+middlewareDefinitions := newMiddlewareDefinitionRegistry()
+
+runtimeComposer := newRuntimeComposer(parsed, middlewareDefinitions)
+
+webhttp.RegisterProfileAPIHandlers(mux, profileRegistry, webhttp.ProfileAPIHandlerOptions{
+  DefaultRegistrySlug:             gepprofiles.MustRegistrySlug("default"),
+  EnableCurrentProfileCookieRoute: true,
+  MiddlewareDefinitions:           middlewareDefinitions,
 })
 ```
 
@@ -218,6 +239,13 @@ proxy: {
 | No streaming events | Wrong websocket URL or missing `conv_id` | Verify `/ws?conv_id=<id>` |
 | Timeline empty after refresh | Hydration still using `/timeline` | Update frontend to `/api/timeline` |
 | 404 on turns endpoint | Turn store disabled | Start with `--turns-db` or `--turns-dsn` |
+| middleware schemas endpoint empty | Middleware definitions were not passed to the profile API handlers | Pass `MiddlewareDefinitions` into `webhttp.RegisterProfileAPIHandlers(...)` |
+
+## 16. See Also
+
+- [Webchat HTTP Chat Setup](webchat-http-chat-setup.md)
+- [Webchat Compatibility Surface Migration Guide](webchat-compatibility-surface-migration-guide.md)
+- [Webchat Framework Guide](webchat-framework-guide.md)
 | Unexpected runtime/profile | Resolver policy mismatch | Log and validate resolved `ConversationRequestPlan` |
 
 ## 16. Migration Notes for Older Integrations

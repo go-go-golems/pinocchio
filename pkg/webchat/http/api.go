@@ -23,8 +23,10 @@ type ChatRequestBody struct {
 	Prompt           string         `json:"prompt"`
 	Text             string         `json:"text,omitempty"`
 	ConvID           string         `json:"conv_id"`
-	RuntimeKey       string         `json:"runtime_key,omitempty"`
-	RegistrySlug     string         `json:"registry_slug,omitempty"`
+	Profile          string         `json:"profile,omitempty"`
+	Registry         string         `json:"registry,omitempty"`
+	LegacyRuntimeKey string         `json:"runtime_key,omitempty"`
+	LegacyRegistry   string         `json:"registry_slug,omitempty"`
 	RequestOverrides map[string]any `json:"request_overrides"`
 	IdempotencyKey   string         `json:"idempotency_key,omitempty"`
 }

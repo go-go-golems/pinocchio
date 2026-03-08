@@ -188,11 +188,18 @@ func (r *ProfileRequestResolver) resolveWS(req *http.Request) (webhttp.ResolvedC
 		return webhttp.ResolvedConversationRequest{}, &webhttp.RequestResolutionError{Status: http.StatusBadRequest, ClientMsg: "missing conv_id"}
 	}
 
+	if err := rejectLegacyProfileSelectors(req, "", ""); err != nil {
+		return webhttp.ResolvedConversationRequest{}, err
+	}
 	profileSlug, err := r.resolveProfileSelection(req, "", "")
 	if err != nil {
 		return webhttp.ResolvedConversationRequest{}, err
 	}
-	resolvedProfile, err := r.resolveEffectiveProfile(context.Background(), profileSlug, nil)
+	registrySlug, err := r.resolveRegistrySelection(req, "")
+	if err != nil {
+		return webhttp.ResolvedConversationRequest{}, err
+	}
+	resolvedProfile, err := r.resolveEffectiveProfile(context.Background(), registrySlug, profileSlug, nil)
 	if err != nil {
 		return webhttp.ResolvedConversationRequest{}, err
 	}
@@ -216,6 +223,9 @@ func (r *ProfileRequestResolver) resolveChat(req *http.Request) (webhttp.Resolve
 	if body.Prompt == "" && body.Text != "" {
 		body.Prompt = body.Text
 	}
+	if err := rejectLegacyProfileSelectors(req, body.LegacyRuntimeKey, body.LegacyRegistry); err != nil {
+		return webhttp.ResolvedConversationRequest{}, err
+	}
 
 	convID := strings.TrimSpace(body.ConvID)
 	if convID == "" {
@@ -223,11 +233,15 @@ func (r *ProfileRequestResolver) resolveChat(req *http.Request) (webhttp.Resolve
 	}
 
 	pathSlug := profileSlugFromPath(req)
-	profileSlug, err := r.resolveProfileSelection(req, pathSlug, body.RuntimeKey)
+	profileSlug, err := r.resolveProfileSelection(req, pathSlug, body.Profile)
 	if err != nil {
 		return webhttp.ResolvedConversationRequest{}, err
 	}
-	resolvedProfile, err := r.resolveEffectiveProfile(context.Background(), profileSlug, body.RequestOverrides)
+	registrySlug, err := r.resolveRegistrySelection(req, body.Registry)
+	if err != nil {
+		return webhttp.ResolvedConversationRequest{}, err
+	}
+	resolvedProfile, err := r.resolveEffectiveProfile(context.Background(), registrySlug, profileSlug, body.RequestOverrides)
 	if err != nil {
 		return webhttp.ResolvedConversationRequest{}, err
 	}
@@ -249,7 +263,7 @@ func (r *ProfileRequestResolver) resolveChat(req *http.Request) (webhttp.Resolve
 func (r *ProfileRequestResolver) resolveProfileSelection(
 	req *http.Request,
 	pathSlug string,
-	bodyRuntimeKeyRaw string,
+	bodyProfileRaw string,
 ) (gepprofiles.ProfileSlug, error) {
 	if r == nil || r.profileRegistry == nil {
 		return "", &webhttp.RequestResolutionError{Status: http.StatusInternalServerError, ClientMsg: "profile resolver is not configured"}
@@ -257,14 +271,16 @@ func (r *ProfileRequestResolver) resolveProfileSelection(
 
 	slugRaw := strings.TrimSpace(pathSlug)
 	if slugRaw == "" {
-		slugRaw = strings.TrimSpace(bodyRuntimeKeyRaw)
+		slugRaw = strings.TrimSpace(bodyProfileRaw)
 	}
 	if slugRaw == "" && req != nil {
-		slugRaw = strings.TrimSpace(req.URL.Query().Get("runtime_key"))
+		slugRaw = strings.TrimSpace(req.URL.Query().Get("profile"))
 	}
 	if slugRaw == "" && req != nil {
 		if ck, err := req.Cookie(currentProfileCookieName); err == nil && ck != nil {
-			slugRaw = strings.TrimSpace(ck.Value)
+			if cookieProfile, ok := r.resolveProfileSlugFromCookie(req.Context(), strings.TrimSpace(ck.Value)); ok {
+				slugRaw = cookieProfile.String()
+			}
 		}
 	}
 
@@ -274,17 +290,19 @@ func (r *ProfileRequestResolver) resolveProfileSelection(
 
 	slug, err := gepprofiles.ParseProfileSlug(slugRaw)
 	if err != nil {
-		return "", &webhttp.RequestResolutionError{Status: http.StatusBadRequest, ClientMsg: "invalid runtime_key: " + slugRaw, Err: err}
+		return "", &webhttp.RequestResolutionError{Status: http.StatusBadRequest, ClientMsg: "invalid profile: " + slugRaw, Err: err}
 	}
 	return slug, nil
 }
 
 func (r *ProfileRequestResolver) resolveEffectiveProfile(
 	ctx context.Context,
+	registrySlug gepprofiles.RegistrySlug,
 	profileSlug gepprofiles.ProfileSlug,
 	requestOverrides map[string]any,
 ) (*gepprofiles.ResolvedProfile, error) {
 	in := gepprofiles.ResolveInput{
+		RegistrySlug:     registrySlug,
 		ProfileSlug:      profileSlug,
 		RequestOverrides: requestOverrides,
 	}
@@ -298,6 +316,88 @@ func (r *ProfileRequestResolver) resolveEffectiveProfile(
 		return nil, r.toRequestResolutionError(err, profileSlug.String())
 	}
 	return resolved, nil
+}
+
+func (r *ProfileRequestResolver) resolveRegistrySelection(req *http.Request, bodyRegistryRaw string) (gepprofiles.RegistrySlug, error) {
+	if r == nil || r.profileRegistry == nil {
+		return "", &webhttp.RequestResolutionError{Status: http.StatusInternalServerError, ClientMsg: "profile resolver is not configured"}
+	}
+
+	registryRaw := strings.TrimSpace(bodyRegistryRaw)
+	if registryRaw == "" && req != nil {
+		registryRaw = strings.TrimSpace(req.URL.Query().Get("registry"))
+	}
+	if registryRaw == "" && req != nil {
+		if ck, err := req.Cookie(currentProfileCookieName); err == nil && ck != nil {
+			if cookieRegistry, _, ok := parseCurrentProfileCookieValue(strings.TrimSpace(ck.Value)); ok {
+				registryRaw = cookieRegistry.String()
+			}
+		}
+	}
+	if registryRaw == "" {
+		return r.defaultRegistrySlug, nil
+	}
+	registrySlug, err := gepprofiles.ParseRegistrySlug(registryRaw)
+	if err != nil {
+		return "", &webhttp.RequestResolutionError{Status: http.StatusBadRequest, ClientMsg: "invalid registry: " + registryRaw, Err: err}
+	}
+	return registrySlug, nil
+}
+
+func (r *ProfileRequestResolver) resolveProfileSlugFromCookie(ctx context.Context, raw string) (gepprofiles.ProfileSlug, bool) {
+	if r == nil || r.profileRegistry == nil {
+		return "", false
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if _, cookieProfile, ok := parseCurrentProfileCookieValue(raw); ok {
+		return cookieProfile, true
+	}
+
+	legacyProfile, err := gepprofiles.ParseProfileSlug(strings.TrimSpace(raw))
+	if err != nil {
+		return "", false
+	}
+	if _, err := r.profileRegistry.GetProfile(ctx, r.defaultRegistrySlug, legacyProfile); err != nil {
+		return "", false
+	}
+	return legacyProfile, true
+}
+
+func rejectLegacyProfileSelectors(req *http.Request, legacyRuntimeKey string, legacyRegistry string) error {
+	if req != nil {
+		query := req.URL.Query()
+		if _, ok := query["runtime_key"]; ok {
+			return &webhttp.RequestResolutionError{Status: http.StatusBadRequest, ClientMsg: "unsupported legacy selector: runtime_key"}
+		}
+		if _, ok := query["registry_slug"]; ok {
+			return &webhttp.RequestResolutionError{Status: http.StatusBadRequest, ClientMsg: "unsupported legacy selector: registry_slug"}
+		}
+	}
+	if strings.TrimSpace(legacyRuntimeKey) != "" {
+		return &webhttp.RequestResolutionError{Status: http.StatusBadRequest, ClientMsg: "unsupported legacy selector: runtime_key"}
+	}
+	if strings.TrimSpace(legacyRegistry) != "" {
+		return &webhttp.RequestResolutionError{Status: http.StatusBadRequest, ClientMsg: "unsupported legacy selector: registry_slug"}
+	}
+	return nil
+}
+
+func parseCurrentProfileCookieValue(raw string) (gepprofiles.RegistrySlug, gepprofiles.ProfileSlug, bool) {
+	parts := strings.SplitN(strings.TrimSpace(raw), "/", 2)
+	if len(parts) != 2 {
+		return "", "", false
+	}
+	registrySlug, err := gepprofiles.ParseRegistrySlug(parts[0])
+	if err != nil {
+		return "", "", false
+	}
+	profileSlug, err := gepprofiles.ParseProfileSlug(parts[1])
+	if err != nil {
+		return "", "", false
+	}
+	return registrySlug, profileSlug, true
 }
 
 func profileVersionFromResolvedMetadata(metadata map[string]any) uint64 {

@@ -206,8 +206,10 @@ export function ChatWidget({
     async (nextProfile: string) => {
       const profile = nextProfile.trim();
       if (!profile || profile === selectedProfile) return;
+      const selectedOption = profileOptions.find((candidate) => String(candidate?.slug ?? '').trim() === profile);
+      const registry = String(selectedOption?.registry ?? profileData?.registry ?? 'default').trim() || 'default';
       try {
-        const res = await setProfile({ slug: profile }).unwrap();
+        const res = await setProfile({ profile, registry }).unwrap();
         const serverSlug = String(res.slug ?? res.profile ?? '').trim();
         if (serverSlug) {
           dispatch(appSlice.actions.setProfile(serverSlug));
@@ -225,7 +227,7 @@ export function ChatWidget({
         }
       }
     },
-    [dispatch, refetchProfile, selectedProfile, setProfile],
+    [dispatch, profileData?.registry, profileOptions, refetchProfile, selectedProfile, setProfile],
   );
 
   const toggleErrors = useCallback(() => {

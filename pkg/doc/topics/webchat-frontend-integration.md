@@ -115,7 +115,7 @@ Common event types:
 }
 ```
 
-Use `/chat/{runtime}` when runtime should come from the path instead of resolver defaults.
+Use `/chat/{profile}` when profile selection should come from the path instead of resolver defaults.
 
 Note: use `request_overrides` in the request body (legacy `overrides` aliases are not part of the canonical contract; see [Webchat HTTP Chat Setup](webchat-http-chat-setup.md)).
 
@@ -160,3 +160,4 @@ Do not call these in new frontend code:
 - [Webchat HTTP Chat Setup](webchat-http-chat-setup.md)
 - [Webchat Frontend Architecture](webchat-frontend-architecture.md)
 - [Webchat Debugging and Ops](webchat-debugging-and-ops.md)
+- [Webchat Compatibility Surface Migration Guide](webchat-compatibility-surface-migration-guide.md)
