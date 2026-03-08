@@ -387,7 +387,15 @@ This step is documentation-heavy, but it matters because the difference between 
 
 ### Prompt Context
 
-**User prompt (verbatim):** "what did you do differently, write a detailed postmortem that explains what was wrong with the previous version, and how you approached the problem, and why the first attempt by your little brother might have gone wrong (analyze their process and thinking).\n\nCreate a detailed analysis / postmortem that is very detailed for a new intern, explaining all the parts of the system needed to understand what it is, with prose paragraphs and bullet point sand pseudocode and diagrams and api references and file\n  references.\n  It should be very clear and detailed. Store in the ticket and the nupload to remarkable."
+**User prompt (verbatim):**
+
+```text
+what did you do differently, write a detailed postmortem that explains what was wrong with the previous version, and how you approached the problem, and why the first attempt by your little brother might have gone wrong (analyze their process and thinking).
+
+Create a detailed analysis / postmortem that is very detailed for a new intern, explaining all the parts of the system needed to understand what it is, with prose paragraphs and bullet point sand pseudocode and diagrams and api references and file
+  references.
+  It should be very clear and detailed. Store in the ticket and the nupload to remarkable.
+```
 
 **Assistant interpretation:** Expand the existing GP-030 postmortem into a more explicit architecture/failure analysis for a new contributor, including the reasoning errors in the first attempt and the concrete differences in the rebuild, then publish that updated bundle.
 
