@@ -193,8 +193,8 @@ github.com/go-go-golems/bobatea v0.1.2 h1:0ZaoDiglrp1ZlRnE2zxX6cbavs3Olv+RragOVs
 github.com/go-go-golems/bobatea v0.1.2/go.mod h1:YOyr6o37FxChZdeVfYip9obm66SwOpl8/x/Y8U1/nBs=
 github.com/go-go-golems/clay v0.4.0 h1:8VeR+o3ah9P95TWLFtitSLabF567AzhjjoeYK87vEwM=
 github.com/go-go-golems/clay v0.4.0/go.mod h1:8wx9hz+dUN4jodWN4CzfMqjBfcXyZ4X6DaJfFFAI8eE=
-github.com/go-go-golems/geppetto v0.10.10 h1:C73bqTnco4YyX++NPZrq13JND6Zy3KwlU1iqSjRxlug=
-github.com/go-go-golems/geppetto v0.10.10/go.mod h1:fHVgksG/cfD8KsHYflyKLdyPCVfIWEzbvnkC1j+vZus=
+github.com/go-go-golems/geppetto v0.10.11 h1:06UGGaJ7lCnbozuPzcTsqXtHcAPbtfMA4Njp5TcRPkw=
+github.com/go-go-golems/geppetto v0.10.11/go.mod h1:Pa8R0u2dUBC8rLH3B7a05TxBXGlnITaQZoNSoLjF9CE=
 github.com/go-go-golems/glazed v1.0.4 h1:QOrPFq3RnL36I3yYkbc/frMsGDyWIZnwpQyNAQPGoyc=
 github.com/go-go-golems/glazed v1.0.4/go.mod h1:k+KwcIT68nAam+p1JTGbCtT4Pr20sCwYPKr1FFHIazo=
 github.com/go-go-golems/go-go-goja v0.4.2 h1:5KX8+Hh2swTq1ToP1ynf8n6TGngfmLaVRVJ99rDo3Nc=
