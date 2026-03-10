@@ -60,8 +60,8 @@ func (c Credential) Compare(other Credential) bool {
 // Format returns formatted credential information for the side panel
 func (c Credential) Format() string {
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("Credential: %s\n", c.name))
-	sb.WriteString(fmt.Sprintf("Value: %s\n", maskValue(c.value)))
+	fmt.Fprintf(&sb, "Credential: %s\n", c.name)
+	fmt.Fprintf(&sb, "Value: %s\n", maskValue(c.value))
 	sb.WriteString("Press Enter to edit, 'v' to view")
 	return sb.String()
 }
@@ -69,8 +69,8 @@ func (c Credential) Format() string {
 // FormatDetailed returns the credential with the actual value visible
 func (c Credential) FormatDetailed() string {
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("Credential: %s\n\n", c.name))
-	sb.WriteString(fmt.Sprintf("Value: %s\n\n", c.value))
+	fmt.Fprintf(&sb, "Credential: %s\n\n", c.name)
+	fmt.Fprintf(&sb, "Value: %s\n\n", c.value)
 	sb.WriteString("Press Esc to go back\n")
 	return sb.String()
 }

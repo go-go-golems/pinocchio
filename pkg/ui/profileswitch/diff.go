@@ -51,9 +51,9 @@ func ProfileDiff(from, to Resolved) DiffSummary {
 // String returns a formatted multi-line summary.
 func (d DiffSummary) String() string {
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("%s → %s\n", d.From, d.To))
+	fmt.Fprintf(&sb, "%s → %s\n", d.From, d.To)
 	for _, c := range d.Changes {
-		sb.WriteString(fmt.Sprintf("  • %s\n", c))
+		fmt.Fprintf(&sb, "  • %s\n", c)
 	}
 	return sb.String()
 }

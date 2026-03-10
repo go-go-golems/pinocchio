@@ -210,7 +210,7 @@ func listSessions(n int) (string, error) {
 			return "", err
 		}
 		count++
-		sb.WriteString(fmt.Sprintf("%s  %s\n", id, createdAt))
+		fmt.Fprintf(&sb, "%s  %s\n", id, createdAt)
 	}
 	if count == 0 {
 		return "No records found", nil
@@ -255,7 +255,7 @@ func listTurns(sessionID string, n int) (string, error) {
 			return "", err
 		}
 		count++
-		sb.WriteString(fmt.Sprintf("%s  %s\n", id, createdAt))
+		fmt.Fprintf(&sb, "%s  %s\n", id, createdAt)
 	}
 	if count == 0 {
 		return "No records found", nil
@@ -384,10 +384,10 @@ func showBlocks(turnID string, phase string, verbose bool, head, tail int) (stri
 		sb.WriteString("\n")
 		sb.WriteString("ARGS: ")
 		if phase != "" {
-			sb.WriteString(fmt.Sprintf("turnID=%s, phase=%s", turnID, phase))
+			fmt.Fprintf(&sb, "turnID=%s, phase=%s", turnID, phase)
 		} else {
 			// phase defaults to post_tools when empty
-			sb.WriteString(fmt.Sprintf("turnID=%s, phase=%s", turnID, "post_inference"))
+			fmt.Fprintf(&sb, "turnID=%s, phase=%s", turnID, "post_inference")
 		}
 		sb.WriteString("\n\n")
 	}
@@ -572,7 +572,7 @@ func showToolCalls(turnID string) (string, error) {
 			return "", err
 		}
 		count++
-		sb.WriteString(fmt.Sprintf("%02d  %s  name=%s id=%s\n", count, blockID, truncateString(name.String, 40), truncateString(id.String, 24)))
+		fmt.Fprintf(&sb, "%02d  %s  name=%s id=%s\n", count, blockID, truncateString(name.String, 40), truncateString(id.String, 24))
 		if args.Valid {
 			sb.WriteString("    args:   ")
 			sb.WriteString(oneLineJSON(args.String))
@@ -612,9 +612,9 @@ func listEvents(n int) (string, error) {
 		count++
 		msg := truncateString(message.String, 120)
 		if toolID.Valid || toolName.Valid {
-			sb.WriteString(fmt.Sprintf("%d  %s  %-24s  %s#%s  %s\n", id, createdAt.String, typ.String, truncateString(toolName.String, 24), truncateString(toolID.String, 16), msg))
+			fmt.Fprintf(&sb, "%d  %s  %-24s  %s#%s  %s\n", id, createdAt.String, typ.String, truncateString(toolName.String, 24), truncateString(toolID.String, 16), msg)
 		} else {
-			sb.WriteString(fmt.Sprintf("%d  %s  %-24s  %s\n", id, createdAt.String, typ.String, msg))
+			fmt.Fprintf(&sb, "%d  %s  %-24s  %s\n", id, createdAt.String, typ.String, msg)
 		}
 	}
 	if count == 0 {
@@ -844,7 +844,7 @@ func listInjectedPrompts(n int) (string, error) {
 			return "", err
 		}
 		count++
-		sb.WriteString(fmt.Sprintf("%s  %s\n", tid.String, truncateString(text.String, 160)))
+		fmt.Fprintf(&sb, "%s  %s\n", tid.String, truncateString(text.String, 160))
 	}
 	if count == 0 {
 		return "No records found", nil

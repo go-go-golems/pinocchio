@@ -45,9 +45,9 @@ func (m selectModel) View() string {
 	var sb strings.Builder
 	for i, item := range m.items {
 		if i == m.cursor {
-			sb.WriteString(fmt.Sprintf("> %s\n", item))
+			fmt.Fprintf(&sb, "> %s\n", item)
 		} else {
-			sb.WriteString(fmt.Sprintf("  %s\n", item))
+			fmt.Fprintf(&sb, "  %s\n", item)
 		}
 	}
 	return sb.String()
