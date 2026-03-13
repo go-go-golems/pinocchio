@@ -118,13 +118,21 @@ func (e *EngineBackend) Start(ctx context.Context, prompt string) (tea.Cmd, erro
 		if err != nil {
 			log.Error().Err(err).Msg("Engine inference failed")
 			log.Error().Err(err).Str("component", "engine_backend").Msg("RunInference failed")
+			return backendWaitResultMsg(err)
 		}
 		if updated != nil {
 			log.Debug().Str("component", "engine_backend").Int("turn_blocks", len(updated.Blocks)).Msg("Updated conversation state from inference")
 		}
 		log.Debug().Str("component", "engine_backend").Msg("Returning BackendFinishedMsg")
-		return boba_chat.BackendFinishedMsg{}
+		return backendWaitResultMsg(nil)
 	}, nil
+}
+
+func backendWaitResultMsg(err error) tea.Msg {
+	if err != nil {
+		return boba_chat.ErrorMsg(err)
+	}
+	return boba_chat.BackendFinishedMsg{}
 }
 
 // SetSeedTurn sets the seed Turn directly
