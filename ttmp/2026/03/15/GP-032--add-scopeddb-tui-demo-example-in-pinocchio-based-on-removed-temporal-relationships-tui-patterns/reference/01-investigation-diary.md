@@ -222,7 +222,7 @@ I also expanded the ticket task list into smaller items and marked the dataset-l
 
 **Inferred user intent:** The user wants a disciplined implementation process with visible progress, reviewable commits, and continuation-friendly documentation.
 
-**Commit (code):** pending
+**Commit (code):** `8b5e2f0` — "Add scopeddb TUI demo example" (bundled with Step 3 after the pre-commit hook blocked the earlier partial boundary)
 
 ### What I did
 
@@ -310,7 +310,7 @@ There was one important failure in the middle of this step. I tried to commit to
 
 **Inferred user intent:** The user wants the demo to be implemented end to end, but with visible discipline around task tracking and commit boundaries.
 
-**Commit (code):** pending
+**Commit (code):** `8b5e2f0` — "Add scopeddb TUI demo example"
 
 ### What I did
 

@@ -42,10 +42,18 @@ RelatedFiles:
       Note: |-
         Current reusable session-backed tool-loop backend for Bobatea chat UIs.
         Reusable backend recommended for the demo
+    - Path: pinocchio/cmd/examples/scopeddb-tui-demo/main.go
+      Note: Implemented example runtime entrypoint.
+    - Path: pinocchio/cmd/examples/scopeddb-tui-demo/dataset.go
+      Note: Implemented scoped dataset spec, materializer, and registry helper.
+    - Path: pinocchio/cmd/examples/scopeddb-tui-demo/renderers.go
+      Note: Implemented demo-local SQL and result renderers.
+    - Path: pinocchio/cmd/examples/scopeddb-tui-demo/README.md
+      Note: Implemented example usage documentation.
     - Path: temporal-relationships/ttmp/2026/03/11/MEN-TR-055--remove-tui-surfaces-and-review-simplification-opportunities/design-doc/02-tui-removal-and-post-removal-simplification-analysis-and-intern-implementation-guide.md
       Note: Existing investigation explaining why temporal-relationships removed its old TUI surfaces.
 ExternalSources: []
-Summary: Recommends a new `pinocchio/cmd/examples/scopeddb-tui-demo` Bubble Tea example that reuses Pinocchio's current TUI primitives and Geppetto's new `scopeddb` package, while borrowing only the good ideas from the removed temporal-relationships TUIs.
+Summary: Documents and now references the implemented `pinocchio/cmd/examples/scopeddb-tui-demo` Bubble Tea example that reuses Pinocchio's current TUI primitives and Geppetto's `scopeddb` package, while borrowing only the good ideas from the removed temporal-relationships TUIs.
 LastUpdated: 2026-03-15T18:00:00-04:00
 WhatFor: Give a new intern enough architectural context and concrete implementation guidance to add a fake-data scopeddb demo to Pinocchio without reviving old temporal-relationships product debt or inventing a one-off TUI stack.
 WhenToUse: Use when deciding where and how to demonstrate `geppetto/pkg/inference/tools/scopeddb` in a terminal UI, especially if you want to learn from the removed temporal-relationships TUIs and keep the result small, teachable, and reusable.
@@ -65,6 +73,8 @@ The best place to add a scoped database demo is a new example binary in Pinocchi
 The removed temporal-relationships TUIs are still valuable, but as design input rather than code to resurrect. They prove two things. First, a Bubble Tea chat UI is a good fit for inspecting query tool calls and tool results. Second, command-local registry bootstrapping and renderer hacks can become product-surface debt if they live in a production application for too long. Pinocchio should keep the good part, which is the demo ergonomics, and avoid the bad part, which is command-specific, app-specific plumbing.
 
 The proposed demo should use fake data, a tiny in-memory dataset, and one or two narrow tools. It should teach a reader how a scoped database tool works, what `Meta` is for, how tool registration happens, and how a TUI can make the SQL interaction legible. The demo should be intentionally small enough that an intern can read the whole thing in one sitting.
+
+Implementation note: this example now exists at `pinocchio/cmd/examples/scopeddb-tui-demo/`. The remaining validation gap is one manual interactive run against a real configured provider profile.
 
 ## Problem Statement And Scope
 

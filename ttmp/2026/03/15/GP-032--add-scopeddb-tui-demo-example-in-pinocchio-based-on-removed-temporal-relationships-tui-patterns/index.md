@@ -17,7 +17,7 @@ RelatedFiles:
     - Path: /home/manuel/workspaces/2026-03-02/deliver-mento-1/geppetto/pkg/inference/tools/scopeddb/schema.go
       Note: Scopeddb dataset builder API that the demo should teach.
 ExternalSources: []
-Summary: Research ticket recommending a new dedicated Pinocchio Bubble Tea example for demonstrating Geppetto scopeddb tools with fake data.
+Summary: Implementation ticket for a dedicated Pinocchio Bubble Tea example that demonstrates Geppetto scopeddb tools with fake data.
 LastUpdated: 2026-03-15T18:00:00-04:00
 WhatFor: Capture the analysis, implementation plan, and supporting diary for adding a scopeddb TUI demo to Pinocchio.
 WhenToUse: Use when implementing or reviewing a future `scopeddb-tui-demo` example in Pinocchio.
@@ -27,7 +27,7 @@ WhenToUse: Use when implementing or reviewing a future `scopeddb-tui-demo` examp
 
 ## Overview
 
-This ticket recommends adding a new dedicated example binary in Pinocchio for demonstrating `geppetto/pkg/inference/tools/scopeddb` inside a Bubble Tea interface. The guide in this ticket explains why the removed temporal-relationships TUIs are still useful reference material, why the modern implementation should instead build on current Pinocchio TUI primitives, and how an intern should implement the example.
+This ticket now contains both the design work and the initial implementation of a dedicated Pinocchio Bubble Tea example for demonstrating `geppetto/pkg/inference/tools/scopeddb`. The guide explains why the removed temporal-relationships TUIs were useful reference material, why the modern implementation builds on current Pinocchio TUI primitives instead, and what still needs manual validation.
 
 ## Key Links
 
@@ -40,7 +40,7 @@ This ticket recommends adding a new dedicated example binary in Pinocchio for de
 
 Current status: **active**
 
-Analysis and ticket authoring are complete. Implementation is intentionally left as future work.
+The example has been implemented at `pinocchio/cmd/examples/scopeddb-tui-demo/`. Remaining work is limited to an interactive manual run against a real configured engine/profile.
 
 ## Topics
 
@@ -50,7 +50,7 @@ Analysis and ticket authoring are complete. Implementation is intentionally left
 
 ## Recommendation Summary
 
-Create:
+Implemented:
 
 ```text
 pinocchio/cmd/examples/scopeddb-tui-demo/main.go
