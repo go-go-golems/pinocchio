@@ -17,3 +17,12 @@
 - Committed the command-wiring checkpoint as `7313e2b` (`feat(scopedjs-demo): wire pinocchio command shell`).
 - Replaced the no-op renderer registration with scopedjs-specific tool-call and tool-result renderers that show JavaScript source, optional eval input payloads, console output, structured result summaries, and fallback YAML for unexpected result shapes.
 - Added focused renderer tests and re-verified the package with `go test ./cmd/examples/scopedjs-tui-demo` plus `go run ./cmd/examples/scopedjs-tui-demo --list-workspaces`.
+- Committed the renderer checkpoint as `2f7be40` (`feat(scopedjs-demo): render eval calls and results`).
+- Polished the demo runtime after an interactive TUI pass by pre-creating the `dashboard/` directory in temp workspaces and sanitizing fake route payloads so callback-style route registrations render as stable structured output instead of leaking raw function values into the result.
+- Expanded the example README with run instructions, fixture descriptions, and prompt suggestions aimed at composed runtime usage.
+- Added direct tests for callback-style route registration and non-empty JavaScript error reporting from the scoped eval path.
+- Manually validated the demo with `go run ./cmd/examples/scopedjs-tui-demo --workspace apollo`, including:
+  - a successful note-plus-route flow driven by the prompt `Use the JavaScript tool to create a dashboard note with require("obsidian").createNote from the open tasks, and register a /tasks route using the open task list as plain JSON data, not a callback. Return the note path and routes.`
+  - a missing-file/error flow driven by the prompt `Try to read dashboard/missing.md, explain the failure cleanly, and do not invent a successful write if it fails.`
+- Re-verified the final slice with `go test ./cmd/examples/scopedjs-tui-demo` and `go run ./cmd/examples/scopedjs-tui-demo --list-workspaces`.
+- Committed the final polish slice as `e65d08f` (`feat(scopedjs-demo): polish runtime behavior and demo guide`).

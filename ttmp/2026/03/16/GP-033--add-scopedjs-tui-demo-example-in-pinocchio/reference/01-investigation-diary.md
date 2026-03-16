@@ -26,7 +26,7 @@ RelatedFiles:
       Note: Small composed scopedjs example used as the closest non-TUI seed
 ExternalSources: []
 Summary: Short diary of the initial GP-033 investigation and why the recommended demo is a fake but concrete project-ops runtime rather than a real webserver or pure filesystem example.
-LastUpdated: 2026-03-16T15:18:00-04:00
+LastUpdated: 2026-03-16T16:40:00-04:00
 WhatFor: Preserve the concrete file reads and design decisions that shaped the scopedjs TUI demo recommendation.
 WhenToUse: Use when continuing GP-033 implementation or reviewing why this demo was scoped the way it was.
 ---
@@ -231,3 +231,84 @@ which confirms the renderer additions did not regress the command shell or packa
 ### Outcome
 
 The next remaining work is demo polish and a true manual run against a configured engine/profile so the rendered timeline can be validated interactively.
+
+### Commit checkpoint
+
+- `2f7be40` — `feat(scopedjs-demo): render eval calls and results`
+
+## 2026-03-16 Slice 5 Checkpoint
+
+### Goal
+
+Finish the demo as something a reviewer can actually run and trust. That meant tightening the fake runtime behavior discovered during the live TUI pass, expanding the README from a placeholder into a runnable guide, and then validating one successful composed flow plus one error-oriented flow against a real configured engine.
+
+### What changed
+
+- `pinocchio/cmd/examples/scopedjs-tui-demo/fake_data.go`
+  - pre-creates `dashboard/` in the temp workspace so prompts that write dashboard notes do not fail on a missing directory.
+- `pinocchio/cmd/examples/scopedjs-tui-demo/environment.go`
+  - sanitizes fake `webserver` payloads recursively so callback-style registrations become stable serializable placeholders such as `"[function]"`.
+- `pinocchio/cmd/examples/scopedjs-tui-demo/environment_test.go`
+  - adds a direct callback-style route test,
+  - adds a direct non-empty error-path test for JavaScript eval failures.
+- `pinocchio/cmd/examples/scopedjs-tui-demo/README.md`
+  - now documents the actual runtime shape, run commands, fixture workspaces, and concrete prompts that trigger composed behavior.
+
+### Validation commands
+
+Package and command checks:
+
+```bash
+go test ./cmd/examples/scopedjs-tui-demo
+go run ./cmd/examples/scopedjs-tui-demo --list-workspaces
+```
+
+Interactive TUI validation:
+
+```bash
+go run ./cmd/examples/scopedjs-tui-demo --workspace apollo
+```
+
+### Manual prompt validation
+
+Successful composed flow:
+
+```text
+Use the JavaScript tool to create a dashboard note with require("obsidian").createNote from the open tasks, and register a /tasks route using the open task list as plain JSON data, not a callback. Return the note path and routes.
+```
+
+Observed outcome:
+
+- the timeline rendered the tool call as formatted JavaScript,
+- the tool result rendered structured note/route output,
+- the assistant answered with a note path and the registered `/tasks` route.
+
+Error/fallback-oriented flow:
+
+```text
+Try to read dashboard/missing.md, explain the failure cleanly, and do not invent a successful write if it fails.
+```
+
+Observed outcome:
+
+- the model used the JavaScript tool,
+- the timeline showed a structured error section,
+- the assistant explained that `dashboard/missing.md` did not exist instead of inventing a successful file read.
+
+### Important behavior note
+
+The direct eval error-path test exposed one sharp edge in the lower-level `scopedjs` stack: raw JavaScript exceptions currently collapse into a generic string such as `Promise rejected: map[]` rather than preserving the original error message. That does not block the Pinocchio demo, because the demo still surfaces an error state and the assistant can explain the failure, but it is worth a second look in Geppetto if better JS exception fidelity matters.
+
+### Outcome
+
+At this point the demo is in the state the ticket originally asked for:
+
+- runnable from `go run ./cmd/examples/scopedjs-tui-demo`,
+- visible JavaScript in the timeline,
+- structured result rendering instead of raw tool JSON,
+- composed workspace behavior across `db`, `fs`, `obsidian`, and `webserver`,
+- and enough README guidance that a reviewer can reproduce the good paths quickly.
+
+### Commit checkpoint
+
+- `e65d08f` — `feat(scopedjs-demo): polish runtime behavior and demo guide`

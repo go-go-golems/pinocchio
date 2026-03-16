@@ -58,22 +58,22 @@
 - [x] Keep a safe YAML or text fallback for unexpected result shapes.
 - [x] Add focused tests for any pure result-formatting helper functions.
 - [x] Record the Slice 4 work in the diary.
-- [ ] Commit Slice 4 when the timeline output is readable.
+- [x] Commit Slice 4 when the timeline output is readable.
 
 #### Slice 5: README, prompts, and manual validation
 
-- [ ] Write the README run instructions and the "what it shows" section.
-- [ ] Add at least four suggested prompts that should trigger meaningful composed runtime usage.
-- [ ] Manually run the demo against a configured engine/profile.
-- [ ] Verify one successful file-writing flow, one route-registration flow, and one error or fallback path.
-- [ ] Update the changelog and diary with the exact commands used for validation.
-- [ ] Mark the acceptance criteria complete.
-- [ ] Commit the final polish slice after manual validation.
+- [x] Write the README run instructions and the "what it shows" section.
+- [x] Add at least four suggested prompts that should trigger meaningful composed runtime usage.
+- [x] Manually run the demo against a configured engine/profile.
+- [x] Verify one successful file-writing flow, one route-registration flow, and one error or fallback path.
+- [x] Update the changelog and diary with the exact commands used for validation.
+- [x] Mark the acceptance criteria complete.
+- [x] Commit the final polish slice after manual validation.
 
 ### Acceptance criteria
 
-- [ ] The demo is runnable with `go run ./cmd/examples/scopedjs-tui-demo`.
-- [ ] The tool call appears as formatted JavaScript in the timeline.
-- [ ] The tool result is rendered as structured output, not raw JSON noise.
-- [ ] The demo visibly shows at least three capability classes in one eval run: file I/O, scoped data access, and route/note composition.
-- [ ] The README includes prompts that reliably trigger the composed runtime.
+- [x] The demo is runnable with `go run ./cmd/examples/scopedjs-tui-demo`.
+- [x] The tool call appears as formatted JavaScript in the timeline.
+- [x] The tool result is rendered as structured output, not raw JSON noise.
+- [x] The demo visibly shows at least three capability classes in one eval run: file I/O, scoped data access, and route/note composition.
+- [x] The README includes prompts that reliably trigger the composed runtime.
