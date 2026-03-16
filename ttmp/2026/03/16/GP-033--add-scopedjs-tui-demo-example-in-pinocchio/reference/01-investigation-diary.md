@@ -177,3 +177,57 @@ That was the safest non-engine path to confirm the command surface and fixture s
 ### Outcome
 
 The example is no longer a placeholder binary. It now has the real outer Pinocchio shell. The next slice should make the timeline useful by replacing the no-op renderer registration with scopedjs-specific tool-call and tool-result renderers.
+
+### Commit checkpoint
+
+- `7313e2b` — `feat(scopedjs-demo): wire pinocchio command shell`
+
+## 2026-03-16 Slice 4 Checkpoint
+
+### Goal
+
+Replace the no-op renderer registration with useful scopedjs-specific timeline renderers so the demo shows JavaScript and structured eval output instead of raw JSON noise.
+
+### What changed
+
+- `pinocchio/cmd/examples/scopedjs-tui-demo/renderers.go` now registers:
+  - base LLM text rendering,
+  - plain fallback rendering,
+  - a scopedjs tool-call renderer,
+  - a scopedjs tool-result renderer,
+  - and the existing log event renderer.
+- The tool-call renderer parses `scopedjs.EvalInput` and renders:
+  - JavaScript as fenced `js`,
+  - and any auxiliary `input` payload as YAML.
+- The tool-result renderer parses `scopedjs.EvalOutput` and renders:
+  - errors,
+  - console output,
+  - summary paths,
+  - note metadata,
+  - routes,
+  - row summaries,
+  - and remaining payloads through a YAML fallback.
+- `pinocchio/cmd/examples/scopedjs-tui-demo/renderers_test.go` adds focused tests for:
+  - JS tool-call formatting,
+  - structured result formatting,
+  - and error rendering.
+
+### Verification
+
+I verified the renderer slice with:
+
+```bash
+go test ./cmd/examples/scopedjs-tui-demo
+go run ./cmd/examples/scopedjs-tui-demo --list-workspaces
+```
+
+The command still reports:
+
+- `apollo`
+- `mercury`
+
+which confirms the renderer additions did not regress the command shell or package build.
+
+### Outcome
+
+The next remaining work is demo polish and a true manual run against a configured engine/profile so the rendered timeline can be validated interactively.

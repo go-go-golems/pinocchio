@@ -46,18 +46,18 @@
 - [x] Add a status bar showing workspace/project counts and a prompt hint.
 - [x] Verify the command compiles and starts.
 - [x] Record the Slice 3 work in the diary.
-- [ ] Commit Slice 3 after the command wiring compiles cleanly.
+- [x] Commit Slice 3 after the command wiring compiles cleanly.
 
 #### Slice 4: custom renderers and result formatting
 
-- [ ] Add a tool-call renderer that parses `scopedjs.EvalInput`.
-- [ ] Render JavaScript code as fenced JS and any tool `input` payload as YAML or JSON.
-- [ ] Add a tool-result renderer that parses `scopedjs.EvalOutput`.
-- [ ] Render console output lines distinctly from the final returned result.
-- [ ] Render common structured result shapes such as routes, notes, file paths, and task lists.
-- [ ] Keep a safe YAML or text fallback for unexpected result shapes.
-- [ ] Add focused tests for any pure result-formatting helper functions.
-- [ ] Record the Slice 4 work in the diary.
+- [x] Add a tool-call renderer that parses `scopedjs.EvalInput`.
+- [x] Render JavaScript code as fenced JS and any tool `input` payload as YAML or JSON.
+- [x] Add a tool-result renderer that parses `scopedjs.EvalOutput`.
+- [x] Render console output lines distinctly from the final returned result.
+- [x] Render common structured result shapes such as routes, notes, file paths, and task lists.
+- [x] Keep a safe YAML or text fallback for unexpected result shapes.
+- [x] Add focused tests for any pure result-formatting helper functions.
+- [x] Record the Slice 4 work in the diary.
 - [ ] Commit Slice 4 when the timeline output is readable.
 
 #### Slice 5: README, prompts, and manual validation

@@ -14,3 +14,6 @@
 - Committed the initial scaffold and runtime checkpoint as `61a1b61` (`feat(scopedjs-demo): scaffold runtime fixtures and smoke tests`) after the repo pre-commit hook passed full test and lint checks.
 - Replaced the placeholder demo entry point with the real Pinocchio command shell, including profile resolution, registry/bootstrap wiring, the event router, the Bubble Tea model, a demo-specific system prompt, and a workspace-oriented status bar.
 - Verified the command wiring with `go test ./cmd/examples/scopedjs-tui-demo` and `go run ./cmd/examples/scopedjs-tui-demo --list-workspaces`.
+- Committed the command-wiring checkpoint as `7313e2b` (`feat(scopedjs-demo): wire pinocchio command shell`).
+- Replaced the no-op renderer registration with scopedjs-specific tool-call and tool-result renderers that show JavaScript source, optional eval input payloads, console output, structured result summaries, and fallback YAML for unexpected result shapes.
+- Added focused renderer tests and re-verified the package with `go test ./cmd/examples/scopedjs-tui-demo` plus `go run ./cmd/examples/scopedjs-tui-demo --list-workspaces`.
