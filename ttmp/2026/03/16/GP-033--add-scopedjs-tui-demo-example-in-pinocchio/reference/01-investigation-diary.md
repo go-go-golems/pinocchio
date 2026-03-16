@@ -1,0 +1,136 @@
+---
+Title: Investigation diary
+Ticket: GP-033
+Status: active
+Topics:
+    - pinocchio
+    - ui
+    - js-bindings
+    - tools
+    - architecture
+DocType: reference
+Intent: long-term
+Owners: []
+RelatedFiles:
+    - Path: /home/manuel/workspaces/2026-03-15/add-scoped-js/pinocchio/cmd/examples/scopeddb-tui-demo/README.md
+      Note: First concrete reference for the shape and teaching goals of the new demo
+    - Path: /home/manuel/workspaces/2026-03-15/add-scoped-js/pinocchio/cmd/examples/scopeddb-tui-demo/main.go
+      Note: Main Bubble Tea wiring precedent
+    - Path: /home/manuel/workspaces/2026-03-15/add-scoped-js/pinocchio/cmd/examples/scopeddb-tui-demo/renderers.go
+      Note: Timeline renderer precedent for custom tool visualization
+    - Path: /home/manuel/workspaces/2026-03-15/add-scoped-js/geppetto/pkg/inference/tools/scopedjs/tool.go
+      Note: Primary reusable registration surface the demo should exercise
+    - Path: /home/manuel/workspaces/2026-03-15/add-scoped-js/geppetto/pkg/inference/tools/scopedjs/eval.go
+      Note: Eval contract and console-capture behavior that the demo renderer should surface
+    - Path: /home/manuel/workspaces/2026-03-15/add-scoped-js/geppetto/cmd/examples/scopedjs-dbserver/main.go
+      Note: Small composed scopedjs example used as the closest non-TUI seed
+ExternalSources: []
+Summary: Short diary of the initial GP-033 investigation and why the recommended demo is a fake but concrete project-ops runtime rather than a real webserver or pure filesystem example.
+LastUpdated: 2026-03-16T15:18:00-04:00
+WhatFor: Preserve the concrete file reads and design decisions that shaped the scopedjs TUI demo recommendation.
+WhenToUse: Use when continuing GP-033 implementation or reviewing why this demo was scoped the way it was.
+---
+
+# Investigation diary
+
+## Goal
+
+Create a new Pinocchio ticket for a `scopedjs` TUI demo, analyze the existing demo precedent, and write enough design material that a new intern can implement it without re-discovering the architecture from scratch.
+
+## What I inspected first
+
+- `pinocchio/cmd/examples/scopeddb-tui-demo/README.md`
+- `pinocchio/cmd/examples/scopeddb-tui-demo/main.go`
+- `pinocchio/cmd/examples/scopeddb-tui-demo/dataset.go`
+- `pinocchio/cmd/examples/scopeddb-tui-demo/renderers.go`
+- `pinocchio/pkg/ui/backends/toolloop/backend.go`
+- `pinocchio/pkg/ui/forwarders/agent/forwarder.go`
+- `geppetto/pkg/inference/tools/scopedjs/schema.go`
+- `geppetto/pkg/inference/tools/scopedjs/tool.go`
+- `geppetto/pkg/inference/tools/scopedjs/eval.go`
+- `geppetto/cmd/examples/scopedjs-dbserver/main.go`
+- `geppetto/ttmp/2026/03/15/GP-34--create-reusable-scoped-javascript-tool-runtime-for-llm-eval/index.md`
+
+## Main findings
+
+- The existing `scopeddb` demo is valuable because it is not only a package example. It is also a UI teaching tool. The new `scopedjs` demo should serve the same purpose.
+- The right mental model is not "show raw eval JSON." The right mental model is "show a composed runtime in action," which means the timeline needs custom renderers for JavaScript input and structured eval output.
+- A real server or a real Obsidian process would make the first demo noisy and brittle. Fake or test-double modules are the correct choice for a teaching demo.
+- A pure `fs` demo would undersell `scopedjs`. The demo should visibly combine multiple capability classes in one tool call.
+
+## Recommendation that came out of the read
+
+Use a scoped "project workspace ops" demo:
+
+- fake workspace files on disk,
+- a scoped `db` global with notes/tasks,
+- fake `obsidian` and `webserver` modules,
+- `fs` for file reads and writes,
+- bootstrap helpers such as `joinPath(...)`,
+- one tool such as `eval_project_ops`.
+
+That demo is realistic enough for prompt design and UI rendering, while still being deterministic and safe to run locally.
+
+## Tooling note
+
+The first attempt to create the ticket with `docmgr ticket create-ticket --root ttmp` followed the workspace-level default and created the ticket under `geppetto/ttmp`. Re-running the command with an absolute `--root /home/manuel/workspaces/2026-03-15/add-scoped-js/pinocchio/ttmp` created the correct ticket in the `pinocchio` repo.
+
+## 2026-03-16 Slice 1 and Slice 2 Start
+
+### Goal
+
+Land the first executable checkpoint for the new demo without yet copying the full Bubble Tea shell. The first code slice should prove that:
+
+- the new example directory exists,
+- fake workspaces are deterministic,
+- a scopedjs environment can be built in Pinocchio,
+- and one direct tool execution works end to end.
+
+### What was added
+
+- `pinocchio/cmd/examples/scopedjs-tui-demo/fake_data.go`
+- `pinocchio/cmd/examples/scopedjs-tui-demo/environment.go`
+- `pinocchio/cmd/examples/scopedjs-tui-demo/environment_test.go`
+- `pinocchio/cmd/examples/scopedjs-tui-demo/main.go`
+- `pinocchio/cmd/examples/scopedjs-tui-demo/renderers.go`
+- `pinocchio/cmd/examples/scopedjs-tui-demo/README.md`
+
+### Main implementation decisions
+
+- I kept the first checkpoint non-UI-heavy and focused on the runtime-building path first.
+- The demo uses a scoped project-workspace fixture model instead of account-scoped SQL fixtures.
+- `fs` is the real native module; `obsidian` and `webserver` are fake native modules; `db` is a scoped global.
+- The workspace is materialized into a temp directory so file writes are real and visible.
+- `main.go` and `renderers.go` are thin placeholders in this checkpoint so the example directory is structurally complete before full TUI wiring.
+
+### Tooling fix discovered during implementation
+
+The earlier `go.work` mismatch was blocking local sibling-module resolution. Running:
+
+```bash
+go work use .
+```
+
+from the shared workspace root updated `go.work` from `go 1.26` to `go 1.26.1`, which removed the workspace-level blocker and let `pinocchio` resolve the local `geppetto` checkout containing `pkg/inference/tools/scopedjs`.
+
+### Verification
+
+I verified the first code slice with:
+
+```bash
+go test ./cmd/examples/scopedjs-tui-demo
+go run ./cmd/examples/scopedjs-tui-demo
+```
+
+The first test run also exposed one real behavior bug: the smoke test wrote to `artifacts/summary.json`, but the seeded workspace did not create the `artifacts/` directory yet. I fixed that by materializing the directory up front in `fake_data.go`.
+
+### Outcome
+
+The new example now has:
+
+- deterministic demo workspaces,
+- a working `eval_project_ops` scopedjs environment,
+- direct smoke tests for runtime composition,
+- and a runnable placeholder command entry point.
+
+The next slice should replace the placeholder `main.go` with the actual Bubble Tea shell and then make the timeline useful with scopedjs-specific renderers.
