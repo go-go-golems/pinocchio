@@ -23,7 +23,7 @@
 - [x] Define deterministic fake workspace fixtures, task rows, and note rows.
 - [x] Add helpers for listing available workspaces and loading fixtures by workspace id.
 - [x] Record the Slice 1 start and finish in the diary.
-- [ ] Commit Slice 1 as the initial example scaffold checkpoint.
+- [x] Commit Slice 1 as the initial example scaffold checkpoint.
 
 #### Slice 2: runtime environment and tool registration
 
@@ -35,17 +35,17 @@
 - [x] Build the prebuilt runtime and register it into an in-memory tool registry.
 - [x] Add at least one direct runtime/tool smoke test that executes the tool without the TUI.
 - [x] Record the Slice 2 work in the diary.
-- [ ] Commit Slice 2 once the environment builds and tests pass.
+- [x] Commit Slice 2 once the environment builds and tests pass.
 
 #### Slice 3: Pinocchio command wiring
 
-- [ ] Adapt the `scopeddb-tui-demo` command shell to the new `scopedjs` demo.
-- [ ] Add flags for workspace selection, profile resolution, and listing available fixture workspaces.
-- [ ] Build the event router, Watermill sink, backend, and Bubble Tea model.
-- [ ] Add a demo-specific system prompt that explicitly teaches the LLM when to use `eval_project_ops`.
-- [ ] Add a status bar showing workspace/project counts and a prompt hint.
-- [ ] Verify the command compiles and starts.
-- [ ] Record the Slice 3 work in the diary.
+- [x] Adapt the `scopeddb-tui-demo` command shell to the new `scopedjs` demo.
+- [x] Add flags for workspace selection, profile resolution, and listing available fixture workspaces.
+- [x] Build the event router, Watermill sink, backend, and Bubble Tea model.
+- [x] Add a demo-specific system prompt that explicitly teaches the LLM when to use `eval_project_ops`.
+- [x] Add a status bar showing workspace/project counts and a prompt hint.
+- [x] Verify the command compiles and starts.
+- [x] Record the Slice 3 work in the diary.
 - [ ] Commit Slice 3 after the command wiring compiles cleanly.
 
 #### Slice 4: custom renderers and result formatting

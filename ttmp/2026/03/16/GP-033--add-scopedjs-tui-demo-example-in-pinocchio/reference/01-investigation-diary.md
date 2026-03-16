@@ -134,3 +134,46 @@ The new example now has:
 - and a runnable placeholder command entry point.
 
 The next slice should replace the placeholder `main.go` with the actual Bubble Tea shell and then make the timeline useful with scopedjs-specific renderers.
+
+### Commit checkpoint
+
+- `61a1b61` — `feat(scopedjs-demo): scaffold runtime fixtures and smoke tests`
+
+## 2026-03-16 Slice 3 Checkpoint
+
+### Goal
+
+Replace the placeholder command entry point with the real Pinocchio Bubble Tea shell so the demo is structurally aligned with `scopeddb-tui-demo` before custom renderers are added.
+
+### What changed
+
+- `pinocchio/cmd/examples/scopedjs-tui-demo/main.go` now mirrors the existing scopeddb demo's outer shape:
+  - Cobra flags,
+  - profile resolution,
+  - engine creation,
+  - registry/bootstrap wiring,
+  - Watermill event router setup,
+  - `toolloopbackend.NewToolLoopBackend(...)`,
+  - Bubble Tea chat model initialization,
+  - status bar setup,
+  - and `agentforwarder.MakeUIForwarder(program)`.
+
+### Verification
+
+I verified this command-wiring slice with:
+
+```bash
+go test ./cmd/examples/scopedjs-tui-demo
+go run ./cmd/examples/scopedjs-tui-demo --list-workspaces
+```
+
+The `--list-workspaces` path returned:
+
+- `apollo`
+- `mercury`
+
+That was the safest non-engine path to confirm the command surface and fixture selection logic before moving on to timeline renderer work.
+
+### Outcome
+
+The example is no longer a placeholder binary. It now has the real outer Pinocchio shell. The next slice should make the timeline useful by replacing the no-op renderer registration with scopedjs-specific tool-call and tool-result renderers.
