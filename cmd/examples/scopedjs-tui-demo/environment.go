@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strings"
 	"time"
@@ -20,8 +21,6 @@ import (
 )
 
 const demoToolName = "eval_project_ops"
-
-var _ = systemPrompt
 
 type demoScope struct {
 	WorkspaceID   string
@@ -53,7 +52,7 @@ func (m *webserverModule) Loader(_ *goja.Runtime, moduleObj *goja.Object) {
 		route := map[string]any{
 			"method":  "GET",
 			"path":    path,
-			"payload": payload,
+			"payload": sanitizeDemoValue(payload),
 		}
 		routes = append(routes, route)
 		return route
@@ -321,4 +320,46 @@ func slugify(s string) string {
 		return "note"
 	}
 	return s
+}
+
+func sanitizeDemoValue(v any) any {
+	if v == nil {
+		return nil
+	}
+	rv := reflect.ValueOf(v)
+	switch rv.Kind() {
+	case reflect.Invalid:
+		return nil
+	case reflect.Bool,
+		reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr,
+		reflect.Float32, reflect.Float64,
+		reflect.Complex64, reflect.Complex128,
+		reflect.Chan,
+		reflect.String,
+		reflect.Struct,
+		reflect.UnsafePointer:
+		return v
+	case reflect.Func:
+		return "[function]"
+	case reflect.Map:
+		ret := map[string]any{}
+		iter := rv.MapRange()
+		for iter.Next() {
+			ret[fmt.Sprint(iter.Key().Interface())] = sanitizeDemoValue(iter.Value().Interface())
+		}
+		return ret
+	case reflect.Slice, reflect.Array:
+		ret := make([]any, 0, rv.Len())
+		for i := 0; i < rv.Len(); i++ {
+			ret = append(ret, sanitizeDemoValue(rv.Index(i).Interface()))
+		}
+		return ret
+	case reflect.Pointer, reflect.Interface:
+		if rv.IsNil() {
+			return nil
+		}
+		return sanitizeDemoValue(rv.Elem().Interface())
+	}
+	return v
 }

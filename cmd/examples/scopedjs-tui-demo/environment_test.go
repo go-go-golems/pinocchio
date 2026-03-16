@@ -92,6 +92,65 @@ return {
 	}
 }
 
+func TestExecuteDemoEvalAllowsCallbackStyleRoutes(t *testing.T) {
+	t.Parallel()
+
+	registry, _, cleanup, err := buildDemoRegistry(context.Background(), "apollo")
+	if cleanup != nil {
+		defer func() { _ = cleanup() }()
+	}
+	if err != nil {
+		t.Fatalf("buildDemoRegistry returned error: %v", err)
+	}
+
+	out, err := executeDemoEval(context.Background(), registry, scopedjs.EvalInput{
+		Code: `
+const webserver = require("webserver");
+const tasks = db.openTasks();
+webserver.get("/tasks", () => tasks);
+return webserver.routes();
+`,
+	})
+	if err != nil {
+		t.Fatalf("executeDemoEval returned error: %v", err)
+	}
+	if out.Error != "" {
+		t.Fatalf("expected no eval error, got %q", out.Error)
+	}
+	routes, ok := out.Result.([]map[string]any)
+	if !ok || len(routes) != 1 {
+		t.Fatalf("unexpected routes result: %#v", out.Result)
+	}
+	if routes[0]["path"] != "/tasks" {
+		t.Fatalf("unexpected route path: %v", routes[0]["path"])
+	}
+	if routes[0]["payload"] != "[function]" {
+		t.Fatalf("unexpected route payload: %#v", routes[0]["payload"])
+	}
+}
+
+func TestExecuteDemoEvalReportsJavaScriptErrors(t *testing.T) {
+	t.Parallel()
+
+	registry, _, cleanup, err := buildDemoRegistry(context.Background(), "apollo")
+	if cleanup != nil {
+		defer func() { _ = cleanup() }()
+	}
+	if err != nil {
+		t.Fatalf("buildDemoRegistry returned error: %v", err)
+	}
+
+	out, err := executeDemoEval(context.Background(), registry, scopedjs.EvalInput{
+		Code: `throw new Error("demo failure");`,
+	})
+	if err != nil {
+		t.Fatalf("executeDemoEval returned error: %v", err)
+	}
+	if strings.TrimSpace(out.Error) == "" {
+		t.Fatalf("expected non-empty eval error, got %#v", out.Error)
+	}
+}
+
 func TestDemoFixturesForUnknownWorkspace(t *testing.T) {
 	t.Parallel()
 

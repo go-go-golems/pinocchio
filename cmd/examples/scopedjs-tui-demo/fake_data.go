@@ -124,6 +124,10 @@ func materializeDemoWorkspace(fixtures demoFixtureSet) (*materializedWorkspace, 
 		_ = os.RemoveAll(root)
 		return nil, fmt.Errorf("create artifacts dir: %w", err)
 	}
+	if err := os.MkdirAll(filepath.Join(root, "dashboard"), 0o755); err != nil {
+		_ = os.RemoveAll(root)
+		return nil, fmt.Errorf("create dashboard dir: %w", err)
+	}
 	return &materializedWorkspace{Root: root}, nil
 }
 
