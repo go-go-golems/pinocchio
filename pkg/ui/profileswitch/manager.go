@@ -136,7 +136,6 @@ func (m *Manager) Resolve(ctx context.Context, profileSlug string) (Resolved, er
 	}
 
 	var in gepprofiles.ResolveInput
-	in.BaseStepSettings = m.base
 
 	if strings.TrimSpace(profileSlug) != "" {
 		ps, err := gepprofiles.ParseProfileSlug(profileSlug)
@@ -169,7 +168,7 @@ func (m *Manager) Resolve(ctx context.Context, profileSlug string) (Resolved, er
 		RuntimeKey:         resolved.RuntimeKey,
 		RuntimeFingerprint: strings.TrimSpace(resolved.RuntimeFingerprint),
 		SystemPrompt:       sysPrompt,
-		StepSettings:       cloneStepSettings(resolved.EffectiveStepSettings),
+		StepSettings:       cloneStepSettings(m.base),
 		ProfileVersion:     version,
 		Metadata:           resolved.Metadata,
 	}
