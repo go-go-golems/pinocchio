@@ -10,6 +10,7 @@ import (
 
 	"github.com/go-go-golems/geppetto/pkg/inference/toolloop"
 	gepprofiles "github.com/go-go-golems/geppetto/pkg/profiles"
+	aisettings "github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
 	timelinepb "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/timeline"
@@ -44,6 +45,7 @@ type ConversationRuntimeRequest struct {
 	RuntimeKey              string
 	RuntimeFingerprint      string
 	ProfileVersion          uint64
+	ResolvedStepSettings    *aisettings.StepSettings
 	ResolvedRuntime         *gepprofiles.RuntimeSpec
 	ResolvedProfileMetadata map[string]any
 }
@@ -61,6 +63,7 @@ type SubmitPromptInput struct {
 	RuntimeKey              string
 	RuntimeFingerprint      string
 	ProfileVersion          uint64
+	ResolvedStepSettings    *aisettings.StepSettings
 	ResolvedRuntime         *gepprofiles.RuntimeSpec
 	ResolvedProfileMetadata map[string]any
 	Prompt                  string
@@ -182,6 +185,13 @@ func copyStringAnyMap(in map[string]any) map[string]any {
 		out[key] = value
 	}
 	return out
+}
+
+func cloneStepSettings(in *aisettings.StepSettings) *aisettings.StepSettings {
+	if in == nil {
+		return nil
+	}
+	return in.Clone()
 }
 
 func (s *ConversationService) PrepareRunnerStart(ctx context.Context, in PrepareRunnerStartInput) (*ConversationHandle, StartRequest, error) {

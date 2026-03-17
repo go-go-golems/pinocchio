@@ -108,7 +108,7 @@ func TestProfileResolver_GPT5NanoProfileIsResolvedForChatRequest(t *testing.T) {
 		},
 	)
 	require.NoError(t, err)
-	resolver := newProfileRequestResolver(profileRegistry, gepprofiles.MustRegistrySlug(defaultRegistrySlug))
+	resolver := newProfileRequestResolver(profileRegistry, gepprofiles.MustRegistrySlug(defaultRegistrySlug), nil)
 
 	req := httptest.NewRequest("POST", "/chat/gpt-5-nano", strings.NewReader(`{"prompt":"hello","conv_id":"conv-gpt5nano"}`))
 	resolved, err := resolver.Resolve(req)

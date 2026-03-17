@@ -71,18 +71,14 @@ func (c *ProfileRuntimeComposer) Compose(ctx context.Context, req infruntime.Con
 	}
 
 	var effectiveStepSettings *settings.StepSettings
-	if c.base != nil {
+	if req.ResolvedStepSettings != nil {
+		effectiveStepSettings = req.ResolvedStepSettings.Clone()
+	} else if c.base != nil {
 		effectiveStepSettings = c.base.Clone()
 	} else {
 		effectiveStepSettings, err = settings.NewStepSettings()
 		if err != nil {
 			return infruntime.ComposedRuntime{}, err
-		}
-	}
-	if req.ResolvedProfileRuntime != nil && len(req.ResolvedProfileRuntime.StepSettingsPatch) > 0 {
-		effectiveStepSettings, err = gepprofiles.ApplyRuntimeStepSettingsPatch(effectiveStepSettings, req.ResolvedProfileRuntime.StepSettingsPatch)
-		if err != nil {
-			return infruntime.ComposedRuntime{}, fmt.Errorf("apply profile step_settings_patch: %w", err)
 		}
 	}
 

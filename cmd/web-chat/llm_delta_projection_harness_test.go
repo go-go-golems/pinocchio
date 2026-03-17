@@ -101,7 +101,7 @@ func newLLMDeltaProjectionHarnessServer(t *testing.T, eng engine.Engine) *httpte
 		&gepprofiles.Profile{Slug: gepprofiles.MustProfileSlug("default"), Runtime: gepprofiles.RuntimeSpec{SystemPrompt: "You are default"}},
 	)
 	require.NoError(t, err)
-	requestResolver := newProfileRequestResolver(profileRegistry, gepprofiles.MustRegistrySlug(defaultRegistrySlug))
+	requestResolver := newProfileRequestResolver(profileRegistry, gepprofiles.MustRegistrySlug(defaultRegistrySlug), nil)
 	chatHandler := webhttp.NewChatHandler(webchatSrv.ChatService(), requestResolver)
 	wsHandler := webhttp.NewWSHandler(
 		webchatSrv.StreamHub(),
