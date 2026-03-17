@@ -46,7 +46,6 @@ type ConversationRuntimeRequest struct {
 	ProfileVersion          uint64
 	ResolvedRuntime         *gepprofiles.RuntimeSpec
 	ResolvedProfileMetadata map[string]any
-	Overrides               map[string]any
 }
 
 type ConversationHandle struct {
@@ -64,7 +63,6 @@ type SubmitPromptInput struct {
 	ProfileVersion          uint64
 	ResolvedRuntime         *gepprofiles.RuntimeSpec
 	ResolvedProfileMetadata map[string]any
-	Overrides               map[string]any
 	Prompt                  string
 	IdempotencyKey          string
 }

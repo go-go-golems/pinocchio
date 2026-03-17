@@ -22,7 +22,6 @@ import (
 
 type LLMLoopStartPayload struct {
 	Prompt         string
-	Overrides      map[string]any
 	IdempotencyKey string
 }
 
@@ -143,10 +142,6 @@ func (r *LLMLoopRunner) Start(ctx context.Context, req StartRequest) (StartResul
 		if err := r.publishUserChatMessageEvent(baseCtx, req.ConvID, "user-"+turnID, payload.Prompt); err != nil {
 			return StartResult{}, errors.Wrap(err, "publish user chat.message event")
 		}
-	}
-
-	if stepModeFromOverrides(payload.Overrides) && r.stepCtrl != nil {
-		r.stepCtrl.Enable(toolloop.StepScope{SessionID: req.SessionID, ConversationID: req.ConvID})
 	}
 
 	loopCfg := toolloop.NewLoopConfig().WithMaxIterations(5)

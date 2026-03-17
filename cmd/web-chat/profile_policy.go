@@ -20,9 +20,6 @@ import (
 const (
 	defaultRegistrySlug      = "default"
 	currentProfileCookieName = "chat_profile"
-
-	profileWriteActor  = "web-chat"
-	profileWriteSource = "http-api"
 )
 
 func buildBootstrapRegistry(defaultSlug string, profileDefs ...*gepprofiles.Profile) (*gepprofiles.ProfileRegistry, error) {
@@ -127,7 +124,7 @@ func newSQLiteProfileService(
 			return nil, nil, err
 		}
 		if err := store.UpsertRegistry(context.Background(), registry, gepprofiles.SaveOptions{
-			Actor:  profileWriteActor,
+			Actor:  "web-chat",
 			Source: "bootstrap",
 		}); err != nil {
 			cleanup()
@@ -199,7 +196,7 @@ func (r *ProfileRequestResolver) resolveWS(req *http.Request) (webhttp.ResolvedC
 	if err != nil {
 		return webhttp.ResolvedConversationRequest{}, err
 	}
-	resolvedProfile, err := r.resolveEffectiveProfile(context.Background(), registrySlug, profileSlug, nil)
+	resolvedProfile, err := r.resolveEffectiveProfile(context.Background(), registrySlug, profileSlug)
 	if err != nil {
 		return webhttp.ResolvedConversationRequest{}, err
 	}
@@ -241,7 +238,7 @@ func (r *ProfileRequestResolver) resolveChat(req *http.Request) (webhttp.Resolve
 	if err != nil {
 		return webhttp.ResolvedConversationRequest{}, err
 	}
-	resolvedProfile, err := r.resolveEffectiveProfile(context.Background(), registrySlug, profileSlug, body.RequestOverrides)
+	resolvedProfile, err := r.resolveEffectiveProfile(context.Background(), registrySlug, profileSlug)
 	if err != nil {
 		return webhttp.ResolvedConversationRequest{}, err
 	}
@@ -254,7 +251,6 @@ func (r *ProfileRequestResolver) resolveChat(req *http.Request) (webhttp.Resolve
 		ProfileVersion:     profileVersionFromResolvedMetadata(resolvedProfile.Metadata),
 		ResolvedRuntime:    &resolvedRuntime,
 		ProfileMetadata:    copyMetadataMap(resolvedProfile.Metadata),
-		Overrides:          copyMetadataMap(body.RequestOverrides),
 		Prompt:             body.Prompt,
 		IdempotencyKey:     strings.TrimSpace(body.IdempotencyKey),
 	}, nil
@@ -299,12 +295,10 @@ func (r *ProfileRequestResolver) resolveEffectiveProfile(
 	ctx context.Context,
 	registrySlug gepprofiles.RegistrySlug,
 	profileSlug gepprofiles.ProfileSlug,
-	requestOverrides map[string]any,
 ) (*gepprofiles.ResolvedProfile, error) {
 	in := gepprofiles.ResolveInput{
-		RegistrySlug:     registrySlug,
-		ProfileSlug:      profileSlug,
-		RequestOverrides: requestOverrides,
+		RegistrySlug: registrySlug,
+		ProfileSlug:  profileSlug,
 	}
 	if !profileSlug.IsZero() {
 		if runtimeKey, err := gepprofiles.ParseRuntimeKey(profileSlug.String()); err == nil {
@@ -453,10 +447,6 @@ func (r *ProfileRequestResolver) toRequestResolutionError(err error, slug string
 	if errors.As(err, &validationErr) {
 		return &webhttp.RequestResolutionError{Status: http.StatusBadRequest, ClientMsg: validationErr.Error(), Err: err}
 	}
-	var policyErr *gepprofiles.PolicyViolationError
-	if errors.As(err, &policyErr) {
-		return &webhttp.RequestResolutionError{Status: http.StatusBadRequest, ClientMsg: policyErr.Error(), Err: err}
-	}
 	return &webhttp.RequestResolutionError{Status: http.StatusInternalServerError, ClientMsg: "profile resolution failed", Err: err}
 }
 
@@ -495,8 +485,6 @@ func registerProfileAPIHandlers(mux *http.ServeMux, resolver *ProfileRequestReso
 		DefaultRegistrySlug:             resolver.defaultRegistrySlug,
 		EnableCurrentProfileCookieRoute: true,
 		CurrentProfileCookieName:        currentProfileCookieName,
-		WriteActor:                      profileWriteActor,
-		WriteSource:                     profileWriteSource,
 		MiddlewareDefinitions:           middlewareDefinitions,
 		ExtensionSchemas: []webhttp.ExtensionSchemaDocument{
 			{

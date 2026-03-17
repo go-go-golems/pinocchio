@@ -27,7 +27,6 @@ type ChatRequestBody struct {
 	Registry         string         `json:"registry,omitempty"`
 	LegacyRuntimeKey string         `json:"runtime_key,omitempty"`
 	LegacyRegistry   string         `json:"registry_slug,omitempty"`
-	RequestOverrides map[string]any `json:"request_overrides"`
 	IdempotencyKey   string         `json:"idempotency_key,omitempty"`
 }
 
@@ -40,7 +39,6 @@ type ResolvedConversationRequest struct {
 	ProfileVersion     uint64
 	ResolvedRuntime    *gepprofiles.RuntimeSpec
 	ProfileMetadata    map[string]any
-	Overrides          map[string]any
 	Prompt             string
 	IdempotencyKey     string
 }
@@ -55,7 +53,6 @@ func (r ResolvedConversationRequest) RuntimeRequest() root.ConversationRuntimeRe
 		ProfileVersion:          r.ProfileVersion,
 		ResolvedRuntime:         r.ResolvedRuntime,
 		ResolvedProfileMetadata: r.ProfileMetadata,
-		Overrides:               r.Overrides,
 	}
 }
 
@@ -173,7 +170,6 @@ func NewChatHandler(svc ChatService, resolver ConversationRequestResolver) http.
 			ProfileVersion:          plan.ProfileVersion,
 			ResolvedRuntime:         plan.ResolvedRuntime,
 			ResolvedProfileMetadata: plan.ProfileMetadata,
-			Overrides:               plan.Overrides,
 			Prompt:                  plan.Prompt,
 			IdempotencyKey:          idempotencyKey,
 		})
@@ -235,7 +231,6 @@ func NewWSHandler(svc StreamService, resolver ConversationRequestResolver, upgra
 			ProfileVersion:          plan.ProfileVersion,
 			ResolvedRuntime:         plan.ResolvedRuntime,
 			ResolvedProfileMetadata: plan.ProfileMetadata,
-			Overrides:               plan.Overrides,
 		})
 		if err != nil {
 			_ = conn.WriteMessage(websocket.TextMessage, []byte(`{"error":"failed to join conversation"}`))

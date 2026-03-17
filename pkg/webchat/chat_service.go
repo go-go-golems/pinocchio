@@ -182,12 +182,10 @@ func (s *ChatService) SubmitPrompt(ctx context.Context, in SubmitPromptInput) (S
 			ProfileVersion:          in.ProfileVersion,
 			ResolvedRuntime:         in.ResolvedRuntime,
 			ResolvedProfileMetadata: in.ResolvedProfileMetadata,
-			Overrides:               in.Overrides,
 		},
 		IdempotencyKey: in.IdempotencyKey,
 		Payload: LLMLoopStartPayload{
 			Prompt:         prompt,
-			Overrides:      copyStringAnyMap(in.Overrides),
 			IdempotencyKey: strings.TrimSpace(in.IdempotencyKey),
 		},
 	})

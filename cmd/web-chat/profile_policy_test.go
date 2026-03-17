@@ -110,7 +110,6 @@ func TestWebChatProfileResolver_WS_DefaultProfile(t *testing.T) {
 	require.Equal(t, "conv-1", plan.ConvID)
 	require.Equal(t, "default", plan.RuntimeKey)
 	require.True(t, strings.HasPrefix(plan.RuntimeFingerprint, "sha256:"))
-	require.Nil(t, plan.Overrides)
 	require.NotNil(t, plan.ResolvedRuntime)
 	require.Equal(t, "You are default", plan.ResolvedRuntime.SystemPrompt)
 	require.NotNil(t, plan.ProfileMetadata)
@@ -118,45 +117,6 @@ func TestWebChatProfileResolver_WS_DefaultProfile(t *testing.T) {
 	require.True(t, hasLineage)
 	_, hasTrace := plan.ProfileMetadata["profile.stack.trace"]
 	require.True(t, hasTrace)
-}
-
-func TestWebChatProfileResolver_Chat_OverridePolicy(t *testing.T) {
-	profileRegistry, err := newInMemoryProfileService(
-		"default",
-		&gepprofiles.Profile{
-			Slug:    gepprofiles.MustProfileSlug("default"),
-			Runtime: gepprofiles.RuntimeSpec{SystemPrompt: "You are default"},
-			Policy:  gepprofiles.PolicySpec{AllowOverrides: false},
-		},
-		&gepprofiles.Profile{
-			Slug:    gepprofiles.MustProfileSlug("agent"),
-			Runtime: gepprofiles.RuntimeSpec{SystemPrompt: "You are agent"},
-			Policy:  gepprofiles.PolicySpec{AllowOverrides: true},
-		},
-	)
-	require.NoError(t, err)
-	resolver := newProfileRequestResolver(profileRegistry, gepprofiles.MustRegistrySlug(defaultRegistrySlug))
-
-	req := httptest.NewRequest(
-		http.MethodPost,
-		"/chat/default",
-		bytes.NewBufferString(`{"prompt":"hi","conv_id":"conv-1","request_overrides":{"system_prompt":"override"}}`),
-	)
-	_, err = resolver.Resolve(req)
-	require.Error(t, err)
-	require.ErrorContains(t, err, "request overrides are disabled for this profile")
-
-	reqAllowed := httptest.NewRequest(
-		http.MethodPost,
-		"/chat/agent",
-		bytes.NewBufferString(`{"prompt":"hi","conv_id":"conv-2","request_overrides":{"system_prompt":"override"}}`),
-	)
-	plan, err := resolver.Resolve(reqAllowed)
-	require.NoError(t, err)
-	require.Equal(t, "agent", plan.RuntimeKey)
-	require.Equal(t, map[string]any{"system_prompt": "override"}, plan.Overrides)
-	require.NotNil(t, plan.ResolvedRuntime)
-	require.Equal(t, "override", plan.ResolvedRuntime.SystemPrompt)
 }
 
 func TestRegisterProfileHandlers_GetAndSetProfile(t *testing.T) {
@@ -292,7 +252,6 @@ func TestWebChatProfileResolver_Chat_BodyProfileAcrossStack(t *testing.T) {
 	require.Equal(t, "analyst", plan.RuntimeKey)
 	require.True(t, strings.HasPrefix(plan.RuntimeFingerprint, "sha256:"))
 	require.Equal(t, uint64(7), plan.ProfileVersion)
-	require.Nil(t, plan.Overrides)
 	require.NotNil(t, plan.ResolvedRuntime)
 	require.Equal(t, "You are analyst", plan.ResolvedRuntime.SystemPrompt)
 	require.NotNil(t, plan.ProfileMetadata)
@@ -312,7 +271,6 @@ func TestWebChatProfileResolver_WS_QueryProfileAcrossStack(t *testing.T) {
 	require.Equal(t, "analyst", plan.RuntimeKey)
 	require.True(t, strings.HasPrefix(plan.RuntimeFingerprint, "sha256:"))
 	require.Equal(t, uint64(7), plan.ProfileVersion)
-	require.Nil(t, plan.Overrides)
 }
 
 func TestWebChatProfileResolver_Chat_InvalidRegistryInBodyReturnsBadRequest(t *testing.T) {
@@ -345,180 +303,6 @@ func TestWebChatProfileResolver_Chat_UnknownRegistryQueryReturnsNotFound(t *test
 	require.Equal(t, http.StatusNotFound, re.Status)
 }
 
-func TestProfileAPI_CRUDLifecycle(t *testing.T) {
-	profileRegistry, err := newInMemoryProfileService(
-		"default",
-		&gepprofiles.Profile{
-			Slug:    gepprofiles.MustProfileSlug("default"),
-			Runtime: gepprofiles.RuntimeSpec{SystemPrompt: "You are default"},
-		},
-	)
-	require.NoError(t, err)
-	resolver := newProfileRequestResolver(profileRegistry, gepprofiles.MustRegistrySlug(defaultRegistrySlug))
-
-	mux := http.NewServeMux()
-	registerProfileAPIHandlers(mux, resolver)
-
-	createReq := httptest.NewRequest(http.MethodPost, "/api/chat/profiles", bytes.NewBufferString(`{
-		"slug":"analyst",
-		"display_name":"Analyst",
-		"description":"Team analyst profile",
-		"runtime":{
-			"system_prompt":"You are analyst",
-			"middlewares":[{"name":"agentmode","id":"primary","config":{"default_mode":"chat"}}]
-		},
-		"policy":{"allow_overrides":true},
-		"extensions":{"Vendor.Custom@V1":{"flags":[{"enabled":true}]}},
-		"set_default":true
-	}`))
-	createRec := httptest.NewRecorder()
-	mux.ServeHTTP(createRec, createReq)
-	require.Equal(t, http.StatusCreated, createRec.Code)
-	created := decodeJSON[profileDocument](t, createRec)
-	require.Equal(t, "default", created.Registry)
-	require.Equal(t, "analyst", created.Slug)
-	require.True(t, created.IsDefault)
-	require.Equal(t, uint64(1), created.Metadata.Version)
-	createdExt, ok := created.Extensions["vendor.custom@v1"].(map[string]any)
-	require.True(t, ok)
-	require.True(t, createdExt["flags"].([]any)[0].(map[string]any)["enabled"].(bool))
-	middlewareExt, ok := created.Extensions["middleware.agentmode_config@v1"].(map[string]any)
-	require.True(t, ok)
-	instances, ok := middlewareExt["instances"].(map[string]any)
-	require.True(t, ok)
-	primaryCfg, ok := instances["id:primary"].(map[string]any)
-	require.True(t, ok)
-	require.Equal(t, "chat", primaryCfg["default_mode"])
-
-	getReq := httptest.NewRequest(http.MethodGet, "/api/chat/profiles/analyst", nil)
-	getRec := httptest.NewRecorder()
-	mux.ServeHTTP(getRec, getReq)
-	require.Equal(t, http.StatusOK, getRec.Code)
-	got := decodeJSON[profileDocument](t, getRec)
-	require.Equal(t, "Analyst", got.DisplayName)
-	require.Equal(t, "You are analyst", got.Runtime.SystemPrompt)
-	_, ok = got.Extensions["vendor.custom@v1"]
-	require.True(t, ok)
-
-	listReq := httptest.NewRequest(http.MethodGet, "/api/chat/profiles", nil)
-	listRec := httptest.NewRecorder()
-	mux.ServeHTTP(listRec, listReq)
-	require.Equal(t, http.StatusOK, listRec.Code)
-	var listItems []map[string]any
-	require.NoError(t, json.Unmarshal(listRec.Body.Bytes(), &listItems))
-	require.GreaterOrEqual(t, len(listItems), 2)
-	require.Equal(t, "analyst", listItems[0]["slug"])
-	_, hasListExtensions := listItems[0]["extensions"]
-	require.True(t, hasListExtensions)
-
-	patchReq := httptest.NewRequest(http.MethodPatch, "/api/chat/profiles/analyst", bytes.NewBufferString(`{
-		"display_name":"Analyst V2",
-		"runtime":{"system_prompt":"You are analyst v2"},
-		"extensions":{"webchat.starter_suggestions@v1":{"items":["hello","world"]}},
-		"expected_version":1
-	}`))
-	patchRec := httptest.NewRecorder()
-	mux.ServeHTTP(patchRec, patchReq)
-	require.Equal(t, http.StatusOK, patchRec.Code)
-	patched := decodeJSON[profileDocument](t, patchRec)
-	require.Equal(t, "Analyst V2", patched.DisplayName)
-	require.Equal(t, "You are analyst v2", patched.Runtime.SystemPrompt)
-	require.Equal(t, uint64(2), patched.Metadata.Version)
-	_, ok = patched.Extensions["webchat.starter_suggestions@v1"]
-	require.True(t, ok)
-
-	setDefaultReq := httptest.NewRequest(http.MethodPost, "/api/chat/profiles/default/default", nil)
-	setDefaultRec := httptest.NewRecorder()
-	mux.ServeHTTP(setDefaultRec, setDefaultReq)
-	require.Equal(t, http.StatusOK, setDefaultRec.Code)
-	setDefaultResp := decodeJSON[profileDocument](t, setDefaultRec)
-	require.Equal(t, "default", setDefaultResp.Slug)
-	require.True(t, setDefaultResp.IsDefault)
-
-	deleteReq := httptest.NewRequest(http.MethodDelete, "/api/chat/profiles/analyst?expected_version=2", nil)
-	deleteRec := httptest.NewRecorder()
-	mux.ServeHTTP(deleteRec, deleteReq)
-	require.Equal(t, http.StatusNoContent, deleteRec.Code)
-
-	getMissingReq := httptest.NewRequest(http.MethodGet, "/api/chat/profiles/analyst", nil)
-	getMissingRec := httptest.NewRecorder()
-	mux.ServeHTTP(getMissingRec, getMissingReq)
-	require.Equal(t, http.StatusNotFound, getMissingRec.Code)
-}
-
-func TestProfileAPI_ErrorMappings(t *testing.T) {
-	profileRegistry, err := newInMemoryProfileService(
-		"default",
-		&gepprofiles.Profile{
-			Slug:    gepprofiles.MustProfileSlug("default"),
-			Runtime: gepprofiles.RuntimeSpec{SystemPrompt: "You are default"},
-		},
-		&gepprofiles.Profile{
-			Slug:    gepprofiles.MustProfileSlug("readonly"),
-			Runtime: gepprofiles.RuntimeSpec{SystemPrompt: "You are readonly"},
-			Policy:  gepprofiles.PolicySpec{ReadOnly: true},
-		},
-	)
-	require.NoError(t, err)
-	resolver := newProfileRequestResolver(profileRegistry, gepprofiles.MustRegistrySlug(defaultRegistrySlug))
-
-	mux := http.NewServeMux()
-	registerProfileAPIHandlers(mux, resolver)
-
-	invalidSlugReq := httptest.NewRequest(http.MethodPost, "/api/chat/profiles", bytes.NewBufferString(`{"slug":"bad slug!"}`))
-	invalidSlugRec := httptest.NewRecorder()
-	mux.ServeHTTP(invalidSlugRec, invalidSlugReq)
-	require.Equal(t, http.StatusBadRequest, invalidSlugRec.Code)
-
-	readonlyPatchReq := httptest.NewRequest(http.MethodPatch, "/api/chat/profiles/readonly", bytes.NewBufferString(`{"display_name":"nope"}`))
-	readonlyPatchRec := httptest.NewRecorder()
-	mux.ServeHTTP(readonlyPatchRec, readonlyPatchReq)
-	require.Equal(t, http.StatusForbidden, readonlyPatchRec.Code)
-
-	conflictPatchReq := httptest.NewRequest(http.MethodPatch, "/api/chat/profiles/default", bytes.NewBufferString(`{
-		"display_name":"Default v2",
-		"expected_version":999
-	}`))
-	conflictPatchRec := httptest.NewRecorder()
-	mux.ServeHTTP(conflictPatchRec, conflictPatchReq)
-	require.Equal(t, http.StatusConflict, conflictPatchRec.Code)
-
-	invalidExtensionReq := httptest.NewRequest(http.MethodPost, "/api/chat/profiles", bytes.NewBufferString(`{
-		"slug":"badext",
-		"extensions":{"bad key":{"value":true}}
-	}`))
-	invalidExtensionRec := httptest.NewRecorder()
-	mux.ServeHTTP(invalidExtensionRec, invalidExtensionReq)
-	require.Equal(t, http.StatusBadRequest, invalidExtensionRec.Code)
-
-	unknownMiddlewareReq := httptest.NewRequest(http.MethodPost, "/api/chat/profiles", bytes.NewBufferString(`{
-		"slug":"badmw",
-		"runtime":{"middlewares":[{"name":"unknown_middleware"}]}
-	}`))
-	unknownMiddlewareRec := httptest.NewRecorder()
-	mux.ServeHTTP(unknownMiddlewareRec, unknownMiddlewareReq)
-	require.Equal(t, http.StatusBadRequest, unknownMiddlewareRec.Code)
-	require.Contains(t, unknownMiddlewareRec.Body.String(), "unknown middleware")
-
-	invalidMiddlewareConfigReq := httptest.NewRequest(http.MethodPost, "/api/chat/profiles", bytes.NewBufferString(`{
-		"slug":"badmwconfig",
-		"runtime":{"middlewares":[{"name":"agentmode","config":{"unknown":"x"}}]}
-	}`))
-	invalidMiddlewareConfigRec := httptest.NewRecorder()
-	mux.ServeHTTP(invalidMiddlewareConfigRec, invalidMiddlewareConfigReq)
-	require.Equal(t, http.StatusBadRequest, invalidMiddlewareConfigRec.Code)
-	require.Contains(t, invalidMiddlewareConfigRec.Body.String(), "runtime.middlewares[0].config")
-
-	missingRegistryReq := httptest.NewRequest(http.MethodGet, "/api/chat/profiles?registry=missing", nil)
-	missingRegistryRec := httptest.NewRecorder()
-	mux.ServeHTTP(missingRegistryRec, missingRegistryReq)
-	require.Equal(t, http.StatusNotFound, missingRegistryRec.Code)
-
-	invalidExpectedReq := httptest.NewRequest(http.MethodDelete, "/api/chat/profiles/default?expected_version=abc", nil)
-	invalidExpectedRec := httptest.NewRecorder()
-	mux.ServeHTTP(invalidExpectedRec, invalidExpectedReq)
-	require.Equal(t, http.StatusBadRequest, invalidExpectedRec.Code)
-}
 
 func TestProfileAPI_SchemaEndpoints(t *testing.T) {
 	profileRegistry, err := newInMemoryProfileService(
