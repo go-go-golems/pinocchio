@@ -26,8 +26,6 @@ type ComposedRuntime struct {
 
 	// SeedSystemPrompt is used to initialize the first seed turn for a new conversation.
 	SeedSystemPrompt string
-	// AllowedTools controls runtime tool exposure in the inference loop; empty means "all registered tools".
-	AllowedTools []string
 }
 
 // RuntimeBuilder composes an engine/sink runtime for a conversation request.

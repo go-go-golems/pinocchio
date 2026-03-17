@@ -125,9 +125,6 @@ func TestWebChatRuntimeComposer_UsesResolvedRuntimeSpec(t *testing.T) {
 	if res.SeedSystemPrompt != "You are analyst" {
 		t.Fatalf("unexpected seed prompt: %q", res.SeedSystemPrompt)
 	}
-	if len(res.AllowedTools) != 1 || res.AllowedTools[0] != "calculator" {
-		t.Fatalf("unexpected tools: %#v", res.AllowedTools)
-	}
 }
 
 func TestWebChatRuntimeComposer_UsesBaseStepSettingsWhenResolvedRuntimeIsEmpty(t *testing.T) {
