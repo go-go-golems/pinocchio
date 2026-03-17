@@ -98,12 +98,7 @@ func TestProfileResolver_GPT5NanoProfileIsResolvedForChatRequest(t *testing.T) {
 		&gepprofiles.Profile{
 			Slug: gepprofiles.MustProfileSlug("gpt-5-nano"),
 			Runtime: gepprofiles.RuntimeSpec{
-				StepSettingsPatch: map[string]any{
-					"ai-chat": map[string]any{
-						"ai-api-type": "openai-responses",
-						"ai-engine":   "gpt-5-nano",
-					},
-				},
+				SystemPrompt: "You are gpt-5-nano.",
 			},
 		},
 	)
@@ -115,7 +110,5 @@ func TestProfileResolver_GPT5NanoProfileIsResolvedForChatRequest(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "gpt-5-nano", resolved.RuntimeKey)
 	require.NotNil(t, resolved.ResolvedRuntime)
-	aiChat, ok := resolved.ResolvedRuntime.StepSettingsPatch["ai-chat"].(map[string]any)
-	require.True(t, ok)
-	require.Equal(t, "gpt-5-nano", aiChat["ai-engine"])
+	require.Equal(t, "You are gpt-5-nano.", resolved.ResolvedRuntime.SystemPrompt)
 }

@@ -116,27 +116,17 @@ profiles:
   gpt-5:
     slug: gpt-5
     runtime:
-      step_settings_patch:
-        ai-chat:
-          ai-api-type: openai-responses
-          ai-engine: gpt-5
+      system_prompt: You are the GPT-5 assistant profile.
+      tools:
+        - calculator
 ```
 
 Do not use `registries:` or `default_profile_slug` in runtime YAML sources.
-Keep provider credentials and other base defaults either in layered app config or in the
-profile runtime patch, but be deliberate about which layer owns them.
+Keep provider credentials and other base defaults in layered app config, and use profiles for prompt/tool/middleware metadata only.
 
 ## Migrating old profiles.yaml
 
-If your old file used the legacy map format, convert it with:
-
-```bash
-pinocchio profiles migrate-legacy \
-  --input ~/.config/pinocchio/profiles.yaml \
-  --output ~/.config/pinocchio/profiles.registry.yaml
-```
-
-Then rewrite/export the target runtime registry as a single-registry YAML (`slug` + `profiles`) and place it at `~/.config/pinocchio/profiles.yaml` (or wire it via `--profile-registries` / `PINOCCHIO_PROFILE_REGISTRIES`).
+If your old file used the legacy map format, automatic migration is no longer available. Rebuild the registry manually with `runtime.system_prompt`, `runtime.tools`, and `runtime.middlewares`, and move engine/provider settings into app config.
 
 ## Creating your own prompt
 
