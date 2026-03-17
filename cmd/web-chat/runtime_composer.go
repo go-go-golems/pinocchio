@@ -105,7 +105,6 @@ func (c *ProfileRuntimeComposer) Compose(ctx context.Context, req infruntime.Con
 		RuntimeKey:         runtimeKey,
 		RuntimeFingerprint: runtimeFingerprint,
 		SeedSystemPrompt:   systemPrompt,
-		AllowedTools:       tools,
 	}, nil
 }
 

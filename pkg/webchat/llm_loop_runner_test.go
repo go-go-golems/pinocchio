@@ -8,6 +8,7 @@ import (
 	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/go-go-golems/geppetto/pkg/inference/toolloop/enginebuilder"
 	geptools "github.com/go-go-golems/geppetto/pkg/inference/tools"
+	gepprofiles "github.com/go-go-golems/geppetto/pkg/profiles"
 	"github.com/stretchr/testify/require"
 
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
@@ -54,7 +55,6 @@ func TestLLMLoopRunner_StartFiltersRegisteredToolsAndPersistsTurns(t *testing.T)
 			RuntimeKey:         req.ProfileKey,
 			RuntimeFingerprint: "fp-tools",
 			SeedSystemPrompt:   "seed",
-			AllowedTools:       []string{"allowed_tool"},
 		}, nil
 	})
 	cm := NewConvManager(ConvManagerOptions{
@@ -68,7 +68,13 @@ func TestLLMLoopRunner_StartFiltersRegisteredToolsAndPersistsTurns(t *testing.T)
 	})
 	require.NoError(t, err)
 	_, startReq, err := svc.PrepareRunnerStart(context.Background(), PrepareRunnerStartInput{
-		Runtime: ConversationRuntimeRequest{ConvID: "conv-tools", RuntimeKey: "default"},
+		Runtime: ConversationRuntimeRequest{
+			ConvID:     "conv-tools",
+			RuntimeKey: "default",
+			ResolvedRuntime: &gepprofiles.RuntimeSpec{
+				Tools: []string{"allowed_tool"},
+			},
+		},
 		Payload: LLMLoopStartPayload{
 			Prompt:         "hello",
 			IdempotencyKey: "k-tools",
