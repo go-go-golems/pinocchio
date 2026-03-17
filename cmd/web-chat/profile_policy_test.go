@@ -56,7 +56,7 @@ profiles:
 	t.Cleanup(func() {
 		_ = chain.Close()
 	})
-	return newProfileRequestResolver(chain, gepprofiles.MustRegistrySlug(defaultRegistrySlug))
+	return newProfileRequestResolver(chain, gepprofiles.MustRegistrySlug(defaultRegistrySlug), nil)
 }
 
 func newTestResolverWithDuplicateSlugAcrossRegistries(t *testing.T) *ProfileRequestResolver {
@@ -92,7 +92,7 @@ profiles:
 	t.Cleanup(func() {
 		_ = chain.Close()
 	})
-	return newProfileRequestResolver(chain, gepprofiles.MustRegistrySlug(defaultRegistrySlug))
+	return newProfileRequestResolver(chain, gepprofiles.MustRegistrySlug(defaultRegistrySlug), nil)
 }
 
 func TestWebChatProfileResolver_WS_DefaultProfile(t *testing.T) {
@@ -102,7 +102,7 @@ func TestWebChatProfileResolver_WS_DefaultProfile(t *testing.T) {
 		&gepprofiles.Profile{Slug: gepprofiles.MustProfileSlug("agent"), Runtime: gepprofiles.RuntimeSpec{SystemPrompt: "You are agent"}},
 	)
 	require.NoError(t, err)
-	resolver := newProfileRequestResolver(profileRegistry, gepprofiles.MustRegistrySlug(defaultRegistrySlug))
+	resolver := newProfileRequestResolver(profileRegistry, gepprofiles.MustRegistrySlug(defaultRegistrySlug), nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/ws?conv_id=conv-1", nil)
 	plan, err := resolver.Resolve(req)
@@ -126,7 +126,7 @@ func TestRegisterProfileHandlers_GetAndSetProfile(t *testing.T) {
 		&gepprofiles.Profile{Slug: gepprofiles.MustProfileSlug("agent"), Runtime: gepprofiles.RuntimeSpec{SystemPrompt: "You are agent"}},
 	)
 	require.NoError(t, err)
-	resolver := newProfileRequestResolver(profileRegistry, gepprofiles.MustRegistrySlug(defaultRegistrySlug))
+	resolver := newProfileRequestResolver(profileRegistry, gepprofiles.MustRegistrySlug(defaultRegistrySlug), nil)
 
 	mux := http.NewServeMux()
 	registerProfileAPIHandlers(mux, resolver)
@@ -312,7 +312,7 @@ func TestProfileAPI_SchemaEndpoints(t *testing.T) {
 		},
 	)
 	require.NoError(t, err)
-	resolver := newProfileRequestResolver(profileRegistry, gepprofiles.MustRegistrySlug(defaultRegistrySlug))
+	resolver := newProfileRequestResolver(profileRegistry, gepprofiles.MustRegistrySlug(defaultRegistrySlug), nil)
 
 	mux := http.NewServeMux()
 	registerProfileAPIHandlers(mux, resolver)
@@ -371,7 +371,7 @@ func TestWebChatProfileResolver_ProfilePrecedence(t *testing.T) {
 		&gepprofiles.Profile{Slug: gepprofiles.MustProfileSlug("cookie"), Runtime: gepprofiles.RuntimeSpec{SystemPrompt: "cookie"}},
 	)
 	require.NoError(t, err)
-	resolver := newProfileRequestResolver(profileRegistry, gepprofiles.MustRegistrySlug(defaultRegistrySlug))
+	resolver := newProfileRequestResolver(profileRegistry, gepprofiles.MustRegistrySlug(defaultRegistrySlug), nil)
 
 	tests := []struct {
 		name   string

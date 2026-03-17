@@ -15,6 +15,7 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/events"
 	"github.com/go-go-golems/geppetto/pkg/inference/toolloop"
 	gepprofiles "github.com/go-go-golems/geppetto/pkg/profiles"
+	aisettings "github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
 	timelinepb "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/timeline"
@@ -35,6 +36,7 @@ type Conversation struct {
 	RuntimeKey              string
 	RuntimeFingerprint      string
 	ResolvedProfileMetadata map[string]any
+	resolvedStepSettings    *aisettings.StepSettings
 	resolvedRuntime         *gepprofiles.RuntimeSpec
 	profileVersion          uint64
 	llm                     *llmConversationState
@@ -244,6 +246,7 @@ func topicForConv(convID string) string { return "chat:" + convID }
 func (cm *ConvManager) GetOrCreate(
 	convID, runtimeKey string,
 	runtimeFingerprint string,
+	resolvedStepSettings *aisettings.StepSettings,
 	resolvedRuntime *gepprofiles.RuntimeSpec,
 	resolvedProfileMetadata map[string]any,
 	profileVersion uint64,
@@ -258,6 +261,7 @@ func (cm *ConvManager) GetOrCreate(
 		ConvID:                     convID,
 		ProfileKey:                 runtimeKey,
 		ProfileVersion:             profileVersion,
+		ResolvedStepSettings:       cloneStepSettings(resolvedStepSettings),
 		ResolvedProfileRuntime:     resolvedRuntime,
 		ResolvedProfileFingerprint: strings.TrimSpace(runtimeFingerprint),
 	}
@@ -286,6 +290,7 @@ func (cm *ConvManager) GetOrCreate(
 		if len(resolvedProfileMetadata) > 0 {
 			c.ResolvedProfileMetadata = copyStringAnyMap(resolvedProfileMetadata)
 		}
+		c.resolvedStepSettings = cloneStepSettings(resolvedStepSettings)
 		c.resolvedRuntime = resolvedRuntime
 		c.profileVersion = profileVersion
 		if c.semBuf == nil {
@@ -323,6 +328,7 @@ func (cm *ConvManager) GetOrCreate(
 			c.RuntimeKey = runtime.RuntimeKey
 			c.RuntimeFingerprint = runtime.RuntimeFingerprint
 			c.ResolvedProfileMetadata = copyStringAnyMap(resolvedProfileMetadata)
+			c.resolvedStepSettings = cloneStepSettings(resolvedStepSettings)
 			c.resolvedRuntime = resolvedRuntime
 			c.profileVersion = profileVersion
 			c.llm = nil
@@ -367,6 +373,7 @@ func (cm *ConvManager) GetOrCreate(
 		RuntimeKey:              runtime.RuntimeKey,
 		RuntimeFingerprint:      runtime.RuntimeFingerprint,
 		ResolvedProfileMetadata: copyStringAnyMap(resolvedProfileMetadata),
+		resolvedStepSettings:    cloneStepSettings(resolvedStepSettings),
 		resolvedRuntime:         resolvedRuntime,
 		profileVersion:          profileVersion,
 		requests:                map[string]*chatRequestRecord{},

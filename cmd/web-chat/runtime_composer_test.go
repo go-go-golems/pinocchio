@@ -18,30 +18,11 @@ func runtimeSpecWithTestAPIKey(spec *gepprofiles.RuntimeSpec) *gepprofiles.Runti
 	if spec == nil {
 		spec = &gepprofiles.RuntimeSpec{}
 	}
-	clone := &gepprofiles.RuntimeSpec{
-		StepSettingsPatch: copyStringAnyMap(spec.StepSettingsPatch),
-		SystemPrompt:      spec.SystemPrompt,
-		Middlewares:       append([]gepprofiles.MiddlewareUse(nil), spec.Middlewares...),
-		Tools:             append([]string(nil), spec.Tools...),
+	return &gepprofiles.RuntimeSpec{
+		SystemPrompt: spec.SystemPrompt,
+		Middlewares:  append([]gepprofiles.MiddlewareUse(nil), spec.Middlewares...),
+		Tools:        append([]string(nil), spec.Tools...),
 	}
-	patch, err := gepprofiles.MergeRuntimeStepSettingsPatches(
-		map[string]any{
-			"ai-chat": map[string]any{
-				"ai-engine":   "test-engine",
-				"ai-api-type": "openai",
-			},
-			"openai-chat": map[string]any{
-				"openai-api-key":  "test-api-key",
-				"openai-base-url": "https://api.openai.com/v1",
-			},
-		},
-		clone.StepSettingsPatch,
-	)
-	if err != nil {
-		panic(err)
-	}
-	clone.StepSettingsPatch = patch
-	return clone
 }
 
 type runtimeComposerDefinition struct {
@@ -91,6 +72,16 @@ func testBaseStepSettings(t *testing.T) *settings.StepSettings {
 	return ss
 }
 
+func testResolvedStepSettings(t *testing.T, mutate func(*settings.StepSettings)) *settings.StepSettings {
+	t.Helper()
+
+	ss := testBaseStepSettings(t)
+	if mutate != nil {
+		mutate(ss)
+	}
+	return ss
+}
+
 func TestRuntimeFingerprint_DoesNotIncludeAPIKeys(t *testing.T) {
 	ss := testBaseStepSettings(t)
 	ss.API.APIKeys["openai"] = "sk-this-should-not-appear"
@@ -112,8 +103,9 @@ func TestWebChatRuntimeComposer_UsesResolvedRuntimeSpec(t *testing.T) {
 	)
 
 	res, err := composer.Compose(context.Background(), infruntime.ConversationRuntimeRequest{
-		ConvID:     "c1",
-		ProfileKey: "analyst",
+		ConvID:               "c1",
+		ProfileKey:           "analyst",
+		ResolvedStepSettings: testResolvedStepSettings(t, nil),
 		ResolvedProfileRuntime: runtimeSpecWithTestAPIKey(&gepprofiles.RuntimeSpec{
 			SystemPrompt: "You are analyst",
 			Tools:        []string{"calculator", "  "},
@@ -137,6 +129,7 @@ func TestWebChatRuntimeComposer_UsesBaseStepSettingsWhenResolvedRuntimeIsEmpty(t
 	res, err := composer.Compose(context.Background(), infruntime.ConversationRuntimeRequest{
 		ConvID:                 "c1",
 		ProfileKey:             "analyst",
+		ResolvedStepSettings:   testResolvedStepSettings(t, nil),
 		ResolvedProfileRuntime: &gepprofiles.RuntimeSpec{},
 	})
 	if err != nil {
@@ -179,8 +172,9 @@ func TestWebChatRuntimeComposer_UsesResolverPrecedenceForMiddlewareConfig(t *tes
 	)
 
 	_, err := composer.Compose(context.Background(), infruntime.ConversationRuntimeRequest{
-		ConvID:     "c1",
-		ProfileKey: "analyst",
+		ConvID:               "c1",
+		ProfileKey:           "analyst",
+		ResolvedStepSettings: testResolvedStepSettings(t, nil),
 		ResolvedProfileRuntime: runtimeSpecWithTestAPIKey(&gepprofiles.RuntimeSpec{
 			Middlewares: []gepprofiles.MiddlewareUse{
 				{
@@ -226,8 +220,9 @@ func TestWebChatRuntimeComposer_RejectsInvalidMiddlewareSchemaPayload(t *testing
 	)
 
 	_, err := composer.Compose(context.Background(), infruntime.ConversationRuntimeRequest{
-		ConvID:     "c1",
-		ProfileKey: "analyst",
+		ConvID:               "c1",
+		ProfileKey:           "analyst",
+		ResolvedStepSettings: testResolvedStepSettings(t, nil),
 		ResolvedProfileRuntime: runtimeSpecWithTestAPIKey(&gepprofiles.RuntimeSpec{
 			Middlewares: []gepprofiles.MiddlewareUse{
 				{
@@ -268,6 +263,7 @@ func TestWebChatRuntimeComposer_PrefersResolvedProfileFingerprint(t *testing.T) 
 	res, err := composer.Compose(context.Background(), infruntime.ConversationRuntimeRequest{
 		ConvID:                     "c1",
 		ProfileKey:                 "analyst",
+		ResolvedStepSettings:       testResolvedStepSettings(t, nil),
 		ResolvedProfileFingerprint: "sha256:resolver-owned",
 		ResolvedProfileRuntime: runtimeSpecWithTestAPIKey(&gepprofiles.RuntimeSpec{
 			SystemPrompt: "profile prompt",
@@ -281,7 +277,7 @@ func TestWebChatRuntimeComposer_PrefersResolvedProfileFingerprint(t *testing.T) 
 	}
 }
 
-func TestWebChatRuntimeComposer_AppliesProfileStepSettingsPatch(t *testing.T) {
+func TestWebChatRuntimeComposer_UsesResolvedStepSettings(t *testing.T) {
 	composer := newProfileRuntimeComposer(
 		newRuntimeComposerRegistry(t),
 		middlewarecfg.BuildDeps{},
@@ -289,15 +285,10 @@ func TestWebChatRuntimeComposer_AppliesProfileStepSettingsPatch(t *testing.T) {
 	)
 
 	res, err := composer.Compose(context.Background(), infruntime.ConversationRuntimeRequest{
-		ConvID:     "c1",
-		ProfileKey: "analyst",
-		ResolvedProfileRuntime: runtimeSpecWithTestAPIKey(&gepprofiles.RuntimeSpec{
-			StepSettingsPatch: map[string]any{
-				"ai-chat": map[string]any{
-					"ai-engine": "patched-engine",
-				},
-			},
-		}),
+		ConvID:                 "c1",
+		ProfileKey:             "analyst",
+		ResolvedStepSettings:   testResolvedStepSettings(t, func(ss *settings.StepSettings) { ss.Chat.Engine = ptr("patched-engine") }),
+		ResolvedProfileRuntime: runtimeSpecWithTestAPIKey(&gepprofiles.RuntimeSpec{}),
 	})
 	if err != nil {
 		t.Fatalf("compose failed: %v", err)
@@ -312,11 +303,11 @@ func TestWebChatRuntimeComposer_AppliesProfileStepSettingsPatch(t *testing.T) {
 		t.Fatalf("missing step_metadata in runtime fingerprint: %#v", payload)
 	}
 	if got, want := stepMeta["ai-engine"], "patched-engine"; got != want {
-		t.Fatalf("step_settings_patch not applied: got=%#v want=%#v", got, want)
+		t.Fatalf("resolved step settings not used: got=%#v want=%#v", got, want)
 	}
 }
 
-func TestWebChatRuntimeComposer_UsesProfilePatchOnTopOfBaseStepSettings(t *testing.T) {
+func TestWebChatRuntimeComposer_ResolvedStepSettingsOverrideBase(t *testing.T) {
 	composer := newProfileRuntimeComposer(
 		newRuntimeComposerRegistry(t),
 		middlewarecfg.BuildDeps{},
@@ -326,14 +317,11 @@ func TestWebChatRuntimeComposer_UsesProfilePatchOnTopOfBaseStepSettings(t *testi
 	res, err := composer.Compose(context.Background(), infruntime.ConversationRuntimeRequest{
 		ConvID:     "c1",
 		ProfileKey: "analyst",
-		ResolvedProfileRuntime: &gepprofiles.RuntimeSpec{
-			StepSettingsPatch: map[string]any{
-				"ai-chat": map[string]any{
-					"ai-engine":   "gpt-5-nano",
-					"ai-api-type": "openai-responses",
-				},
-			},
-		},
+		ResolvedStepSettings: testResolvedStepSettings(t, func(ss *settings.StepSettings) {
+			ss.Chat.Engine = ptr("gpt-5-nano")
+			ss.Chat.ApiType = apiTypePtr(aitypes.ApiTypeOpenAIResponses)
+		}),
+		ResolvedProfileRuntime: &gepprofiles.RuntimeSpec{},
 	})
 	if err != nil {
 		t.Fatalf("compose failed: %v", err)
@@ -348,10 +336,10 @@ func TestWebChatRuntimeComposer_UsesProfilePatchOnTopOfBaseStepSettings(t *testi
 		t.Fatalf("missing step_metadata in runtime fingerprint: %#v", payload)
 	}
 	if got, want := stepMeta["ai-engine"], "gpt-5-nano"; got != want {
-		t.Fatalf("profile patch did not drive ai-engine: got=%#v want=%#v", got, want)
+		t.Fatalf("resolved step settings did not drive ai-engine: got=%#v want=%#v", got, want)
 	}
 	if got, want := stepMeta["ai-api-type"], "openai-responses"; got != want {
-		t.Fatalf("profile patch did not drive ai-api-type: got=%#v want=%#v", got, want)
+		t.Fatalf("resolved step settings did not drive ai-api-type: got=%#v want=%#v", got, want)
 	}
 }
 

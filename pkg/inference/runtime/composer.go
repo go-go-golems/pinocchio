@@ -6,6 +6,7 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/events"
 	"github.com/go-go-golems/geppetto/pkg/inference/engine"
 	gepprofiles "github.com/go-go-golems/geppetto/pkg/profiles"
+	aisettings "github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 )
 
 // ConversationRuntimeRequest contains app-owned runtime policy inputs.
@@ -13,6 +14,7 @@ type ConversationRuntimeRequest struct {
 	ConvID                     string
 	ProfileKey                 string
 	ProfileVersion             uint64
+	ResolvedStepSettings       *aisettings.StepSettings
 	ResolvedProfileRuntime     *gepprofiles.RuntimeSpec
 	ResolvedProfileFingerprint string
 }

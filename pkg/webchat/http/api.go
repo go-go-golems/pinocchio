@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	gepprofiles "github.com/go-go-golems/geppetto/pkg/profiles"
+	aisettings "github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 	timelinepb "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/timeline"
 	root "github.com/go-go-golems/pinocchio/pkg/webchat"
 	"github.com/google/uuid"
@@ -33,14 +34,15 @@ type ChatRequestBody struct {
 // ResolvedConversationRequest is the canonical output of request policy resolution.
 // It captures request data needed for both chat and websocket flows.
 type ResolvedConversationRequest struct {
-	ConvID             string
-	RuntimeKey         string
-	RuntimeFingerprint string
-	ProfileVersion     uint64
-	ResolvedRuntime    *gepprofiles.RuntimeSpec
-	ProfileMetadata    map[string]any
-	Prompt             string
-	IdempotencyKey     string
+	ConvID               string
+	RuntimeKey           string
+	RuntimeFingerprint   string
+	ProfileVersion       uint64
+	ResolvedStepSettings *aisettings.StepSettings
+	ResolvedRuntime      *gepprofiles.RuntimeSpec
+	ProfileMetadata      map[string]any
+	Prompt               string
+	IdempotencyKey       string
 }
 
 // RuntimeRequest converts resolved HTTP request policy into the runtime request used by
@@ -51,6 +53,7 @@ func (r ResolvedConversationRequest) RuntimeRequest() root.ConversationRuntimeRe
 		RuntimeKey:              r.RuntimeKey,
 		RuntimeFingerprint:      r.RuntimeFingerprint,
 		ProfileVersion:          r.ProfileVersion,
+		ResolvedStepSettings:    cloneStepSettings(r.ResolvedStepSettings),
 		ResolvedRuntime:         r.ResolvedRuntime,
 		ResolvedProfileMetadata: r.ProfileMetadata,
 	}
@@ -113,6 +116,13 @@ func IdempotencyKeyFromRequest(r *http.Request, body *ChatRequestBody) string {
 		key = uuid.NewString()
 	}
 	return key
+}
+
+func cloneStepSettings(in *aisettings.StepSettings) *aisettings.StepSettings {
+	if in == nil {
+		return nil
+	}
+	return in.Clone()
 }
 
 func NewChatHandler(svc ChatService, resolver ConversationRequestResolver) http.HandlerFunc {

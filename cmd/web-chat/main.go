@@ -339,7 +339,7 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 			dependencySQLiteDBKey:         dbWithRegexp,
 		},
 	}, baseStepSettings)
-	requestResolver := newProfileRequestResolver(profileRegistry, profileRegistryChain.DefaultRegistrySlug())
+	requestResolver := newProfileRequestResolver(profileRegistry, profileRegistryChain.DefaultRegistrySlug(), baseStepSettings)
 
 	if err := configureTimelineJSScripts(s.TimelineJSScripts); err != nil {
 		return err
