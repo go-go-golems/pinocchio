@@ -540,57 +540,6 @@ func TestProfileAPI_InvalidSlugAndRegistry_ReturnBadRequest(t *testing.T) {
 	require.Equal(t, http.StatusBadRequest, invalidSlugResp.StatusCode)
 }
 
-func assertProfileListItemContract(t *testing.T, item map[string]any) {
-	t.Helper()
-	require.NotEmpty(t, item["registry"])
-	require.NotEmpty(t, item["slug"])
-	assertAllowedContractKeys(
-		t,
-		item,
-		"registry",
-		"slug",
-		"display_name",
-		"description",
-		"default_prompt",
-		"extensions",
-		"is_default",
-		"version",
-	)
-}
-
-func assertProfileDocumentContract(t *testing.T, doc map[string]any) {
-	t.Helper()
-	require.NotEmpty(t, doc["registry"])
-	require.NotEmpty(t, doc["slug"])
-	_, hasDefault := doc["is_default"]
-	require.True(t, hasDefault)
-	assertAllowedContractKeys(
-		t,
-		doc,
-		"registry",
-		"slug",
-		"display_name",
-		"description",
-		"runtime",
-		"metadata",
-		"extensions",
-		"is_default",
-	)
-}
-
-func assertAllowedContractKeys(t *testing.T, payload map[string]any, allowed ...string) {
-	t.Helper()
-	allowedSet := map[string]struct{}{}
-	for _, key := range allowed {
-		allowedSet[key] = struct{}{}
-	}
-	for key := range payload {
-		if _, ok := allowedSet[key]; !ok {
-			t.Fatalf("unexpected profile API contract key: %s", key)
-		}
-	}
-}
-
 func integrationSemEventType(frame []byte) string {
 	var env struct {
 		Event struct {
