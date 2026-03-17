@@ -303,7 +303,6 @@ func TestWebChatProfileResolver_Chat_UnknownRegistryQueryReturnsNotFound(t *test
 	require.Equal(t, http.StatusNotFound, re.Status)
 }
 
-
 func TestProfileAPI_SchemaEndpoints(t *testing.T) {
 	profileRegistry, err := newInMemoryProfileService(
 		"default",
