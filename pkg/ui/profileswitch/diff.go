@@ -59,14 +59,14 @@ func (d DiffSummary) String() string {
 }
 
 func effectiveModel(r Resolved) string {
-	if s := r.EffectiveStepSettings; s != nil && s.Chat != nil && s.Chat.Engine != nil {
+	if s := r.StepSettings; s != nil && s.Chat != nil && s.Chat.Engine != nil {
 		return *s.Chat.Engine
 	}
 	return "(default)"
 }
 
 func effectiveTemp(r Resolved) string {
-	if s := r.EffectiveStepSettings; s != nil && s.Chat != nil && s.Chat.Temperature != nil {
+	if s := r.StepSettings; s != nil && s.Chat != nil && s.Chat.Temperature != nil {
 		return fmt.Sprintf("%.1f", *s.Chat.Temperature)
 	}
 	return "(default)"

@@ -155,12 +155,8 @@ func (m *Manager) Resolve(ctx context.Context, profileSlug string) (Resolved, er
 	}
 
 	sysPrompt := ""
-	patch := map[string]any(nil)
 	version := uint64(0)
 	sysPrompt = strings.TrimSpace(resolved.EffectiveRuntime.SystemPrompt)
-	if len(resolved.EffectiveRuntime.StepSettingsPatch) > 0 {
-		patch = resolved.EffectiveRuntime.StepSettingsPatch
-	}
 	if resolved.Metadata != nil {
 		if v, ok := resolved.Metadata["profile.version"].(uint64); ok {
 			version = v
@@ -168,18 +164,17 @@ func (m *Manager) Resolve(ctx context.Context, profileSlug string) (Resolved, er
 	}
 
 	out := Resolved{
-		RegistrySlug:          resolved.RegistrySlug,
-		ProfileSlug:           resolved.ProfileSlug,
-		RuntimeKey:            resolved.RuntimeKey,
-		RuntimeFingerprint:    strings.TrimSpace(resolved.RuntimeFingerprint),
-		SystemPrompt:          sysPrompt,
-		StepSettingsPatch:     patch,
-		EffectiveStepSettings: resolved.EffectiveStepSettings,
-		ProfileVersion:        version,
-		Metadata:              resolved.Metadata,
+		RegistrySlug:       resolved.RegistrySlug,
+		ProfileSlug:        resolved.ProfileSlug,
+		RuntimeKey:         resolved.RuntimeKey,
+		RuntimeFingerprint: strings.TrimSpace(resolved.RuntimeFingerprint),
+		SystemPrompt:       sysPrompt,
+		StepSettings:       cloneStepSettings(resolved.EffectiveStepSettings),
+		ProfileVersion:     version,
+		Metadata:           resolved.Metadata,
 	}
-	if out.EffectiveStepSettings == nil {
-		return Resolved{}, errors.New("profile manager: resolved effective step settings is nil")
+	if out.StepSettings == nil {
+		return Resolved{}, errors.New("profile manager: resolved step settings is nil")
 	}
 	return out, nil
 }
@@ -192,4 +187,11 @@ func (m *Manager) Switch(ctx context.Context, profileSlug string) (Resolved, err
 
 	m.resolved = res
 	return res, nil
+}
+
+func cloneStepSettings(in *settings.StepSettings) *settings.StepSettings {
+	if in == nil {
+		return nil
+	}
+	return in.Clone()
 }

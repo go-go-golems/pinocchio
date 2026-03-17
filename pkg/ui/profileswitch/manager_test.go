@@ -58,8 +58,8 @@ func TestManagerResolveDefaultProfile(t *testing.T) {
 	if res.RegistrySlug.String() != "default" {
 		t.Fatalf("RegistrySlug=%q, want %q", res.RegistrySlug.String(), "default")
 	}
-	if res.EffectiveStepSettings == nil {
-		t.Fatalf("EffectiveStepSettings is nil")
+	if res.StepSettings == nil {
+		t.Fatalf("StepSettings is nil")
 	}
 	if res.ProfileVersion != 3 {
 		t.Fatalf("ProfileVersion=%d, want 3", res.ProfileVersion)
