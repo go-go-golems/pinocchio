@@ -204,7 +204,7 @@ func (r *ProfileRequestResolver) resolveWS(req *http.Request) (webhttp.ResolvedC
 
 	return webhttp.ResolvedConversationRequest{
 		ConvID:             convID,
-		RuntimeKey:         resolvedProfile.RuntimeKey.String(),
+		RuntimeKey:         runtimeKeyFromResolvedProfile(resolvedProfile),
 		RuntimeFingerprint: resolvedProfile.RuntimeFingerprint,
 		ProfileVersion:     profileVersionFromResolvedMetadata(resolvedProfile.Metadata),
 		ResolvedRuntime:    &resolvedRuntime,
@@ -246,7 +246,7 @@ func (r *ProfileRequestResolver) resolveChat(req *http.Request) (webhttp.Resolve
 
 	return webhttp.ResolvedConversationRequest{
 		ConvID:             convID,
-		RuntimeKey:         resolvedProfile.RuntimeKey.String(),
+		RuntimeKey:         runtimeKeyFromResolvedProfile(resolvedProfile),
 		RuntimeFingerprint: resolvedProfile.RuntimeFingerprint,
 		ProfileVersion:     profileVersionFromResolvedMetadata(resolvedProfile.Metadata),
 		ResolvedRuntime:    &resolvedRuntime,
@@ -300,16 +300,21 @@ func (r *ProfileRequestResolver) resolveEffectiveProfile(
 		RegistrySlug: registrySlug,
 		ProfileSlug:  profileSlug,
 	}
-	if !profileSlug.IsZero() {
-		if runtimeKey, err := gepprofiles.ParseRuntimeKey(profileSlug.String()); err == nil {
-			in.RuntimeKeyFallback = runtimeKey
-		}
-	}
 	resolved, err := r.profileRegistry.ResolveEffectiveProfile(ctx, in)
 	if err != nil {
 		return nil, r.toRequestResolutionError(err, profileSlug.String())
 	}
 	return resolved, nil
+}
+
+func runtimeKeyFromResolvedProfile(resolved *gepprofiles.ResolvedProfile) string {
+	if resolved == nil {
+		return ""
+	}
+	if slug := strings.TrimSpace(resolved.ProfileSlug.String()); slug != "" {
+		return slug
+	}
+	return "default"
 }
 
 func (r *ProfileRequestResolver) resolveRegistrySelection(req *http.Request, bodyRegistryRaw string) (gepprofiles.RegistrySlug, error) {
