@@ -21,9 +21,7 @@ profiles:
   analyst:
     slug: analyst
     runtime:
-      step_settings_patch:
-        ai-chat:
-          ai-engine: team-analyst
+      system_prompt: Team analyst
 `
 	if err := os.WriteFile(registryPath, []byte(registryYAML), 0o644); err != nil {
 		t.Fatalf("write registry yaml: %v", err)
@@ -62,17 +60,8 @@ profiles:
 	if !strings.Contains(output, "profile-settings:") {
 		t.Fatalf("expected print-parsed-fields output to include profile-settings section\noutput:\n%s", output)
 	}
-	if !strings.Contains(output, "mode: profile-registry-stack") {
-		t.Fatalf("expected print-parsed-fields output to include profile-registry-stack marker\noutput:\n%s", output)
-	}
-	if !strings.Contains(output, "profileRegistries:") {
-		t.Fatalf("expected print-parsed-fields output to include profileRegistries metadata\noutput:\n%s", output)
-	}
 	if !strings.Contains(output, registryPath) {
 		t.Fatalf("expected print-parsed-fields output to include profile registry path %q\noutput:\n%s", registryPath, output)
-	}
-	if !strings.Contains(output, "value: team-analyst") {
-		t.Fatalf("expected ai-engine value from profile registry\noutput:\n%s", output)
 	}
 }
 

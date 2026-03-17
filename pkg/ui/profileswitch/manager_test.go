@@ -19,12 +19,7 @@ func TestManagerResolveDefaultProfile(t *testing.T) {
 			gepprofiles.MustProfileSlug("default"): {
 				Slug: gepprofiles.MustProfileSlug("default"),
 				Runtime: gepprofiles.RuntimeSpec{
-					StepSettingsPatch: map[string]any{
-						"ai-chat": map[string]any{
-							"ai-api-type": "claude",
-							"ai-engine":   "test-model",
-						},
-					},
+					SystemPrompt: "hello",
 				},
 				Metadata: gepprofiles.ProfileMetadata{Version: 3},
 			},

@@ -309,9 +309,7 @@ profiles:
       - registry_slug: ${BASE_REGISTRY}
         profile_slug: ${BASE_PROFILE}
     runtime:
-      step_settings_patch:
-        ai-chat:
-          ai-engine: smoke-top-${STAMP}
+      system_prompt: smoke-top-${STAMP}
 EOF2
 
 PROFILE_REGISTRIES_STACK="${DB_PATH},${TOP_RUNTIME_YAML}"

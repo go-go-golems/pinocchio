@@ -345,12 +345,10 @@ func convertLegacyProfilesMapToRuntimeRegistry(data []byte, registrySlug gepprof
 		if !ok {
 			return nil, fmt.Errorf("legacy profile %q must map to section settings object", profileKey)
 		}
-		profiles[profileSlug] = &gepprofiles.Profile{
-			Slug: profileSlug,
-			Runtime: gepprofiles.RuntimeSpec{
-				StepSettingsPatch: cloneStringAnyMap(sectionPatch),
-			},
+		if len(sectionPatch) > 0 {
+			return nil, fmt.Errorf("legacy profile %q cannot be migrated: runtime.step_settings_patch has been removed; rebuild this profile with runtime system_prompt/tools/middlewares and move engine settings to app config", profileKey)
 		}
+		profiles[profileSlug] = &gepprofiles.Profile{Slug: profileSlug}
 	}
 
 	defaultProfile := gepprofiles.ProfileSlug("")
@@ -406,30 +404,4 @@ func encodeRuntimeRegistryYAML(registry *gepprofiles.ProfileRegistry) ([]byte, e
 		Metadata:    clone.Metadata,
 	}
 	return yaml.Marshal(out)
-}
-
-func cloneStringAnyMap(in map[string]any) map[string]any {
-	if len(in) == 0 {
-		return nil
-	}
-	out := make(map[string]any, len(in))
-	for k, v := range in {
-		out[k] = cloneAny(v)
-	}
-	return out
-}
-
-func cloneAny(in any) any {
-	switch v := in.(type) {
-	case map[string]any:
-		return cloneStringAnyMap(v)
-	case []any:
-		out := make([]any, 0, len(v))
-		for _, item := range v {
-			out = append(out, cloneAny(item))
-		}
-		return out
-	default:
-		return in
-	}
 }
