@@ -108,16 +108,13 @@ Common event types:
 ```json
 {
   "prompt": "Hello assistant",
-  "conv_id": "conv-123",
-  "request_overrides": {
-    "system_prompt": "Be concise"
-  }
+  "conv_id": "conv-123"
 }
 ```
 
 Use `/chat/{profile}` when profile selection should come from the path instead of resolver defaults.
 
-Note: use `request_overrides` in the request body (legacy `overrides` aliases are not part of the canonical contract; see [Webchat HTTP Chat Setup](webchat-http-chat-setup.md)).
+Use `/chat/{profile}` or the `profile` request field when selection should be explicit instead of relying on resolver defaults.
 
 ## Hydration Request Example
 

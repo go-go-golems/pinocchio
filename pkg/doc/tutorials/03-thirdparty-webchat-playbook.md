@@ -171,18 +171,13 @@ The frontend should do this sequence:
 
 This ensures ordering consistency across reloads and reconnects.
 
-## 10. Frontend Override Payload
+## 10. Frontend Chat Payload
 
 ```json
 {
   "conv_id": "conv-123",
   "prompt": "hello",
-  "request_overrides": {
-    "middlewares": [
-      { "name": "webagent-thinking-mode", "config": { "mode": "fast" } },
-      { "name": "webagent-disco-dialogue", "config": { "tone": "noir" } }
-    ]
-  }
+  "profile": "assistant"
 }
 ```
 

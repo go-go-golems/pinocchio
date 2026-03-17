@@ -156,7 +156,7 @@ on send(prompt):
   if no conv_id:
     conv_id = uuid
     push to URL
-  POST /chat { conv_id, prompt, request_overrides? }
+  POST /chat { conv_id, prompt, profile? }
 ```
 
 ## 7. WebSocket Manager Design (Connection + Hydration + Replay)
@@ -334,7 +334,7 @@ This avoids mismatched requests when app is mounted under `/chat`, `/ai`, or ano
 ```text
 User types prompt
   -> ChatWidget.send()
-     -> POST /chat { conv_id, prompt, request_overrides }
+     -> POST /chat { conv_id, prompt, profile? }
 
 ChatWidget useEffect(conv_id)
   -> wsManager.connect()
