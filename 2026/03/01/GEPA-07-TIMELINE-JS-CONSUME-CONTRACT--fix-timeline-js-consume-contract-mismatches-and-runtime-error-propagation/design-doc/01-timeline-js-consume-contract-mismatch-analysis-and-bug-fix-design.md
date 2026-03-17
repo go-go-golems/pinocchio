@@ -27,9 +27,9 @@ RelatedFiles:
       Note: Projection gate that currently drops runtime errors when handled=false
     - Path: pkg/webchat/timeline_registry.go
       Note: Handler/runtime ordering and handled-error semantics
-    - Path: ttmp/2026/02/26/GEPA-03-EVENT-STREAMING--investigate-js-vm-event-streaming-to-web-frontend-and-sem/design-doc/01-gepa-event-streaming-architecture-investigation.md
+    - Path: /home/manuel/workspaces/2026-03-15/add-scoped-js/geppetto/ttmp/2026/02/26/GEPA-03-EVENT-STREAMING--investigate-js-vm-event-streaming-to-web-frontend-and-sem/design-doc/01-gepa-event-streaming-architecture-investigation.md
       Note: Background architecture and module-based runtime context
-    - Path: ttmp/2026/02/26/GEPA-06-JS-SEM-REDUCERS-HANDLERS--investigate-javascript-registered-sem-reducers-and-event-handlers/design-doc/02-cross-repo-js-sem-runtime-implementation-design.md
+    - Path: /home/manuel/workspaces/2026-03-15/add-scoped-js/geppetto/ttmp/2026/02/26/GEPA-06-JS-SEM-REDUCERS-HANDLERS--investigate-javascript-registered-sem-reducers-and-event-handlers/design-doc/02-cross-repo-js-sem-runtime-implementation-design.md
       Note: Baseline contract and normalization semantics from GEPA-06
 ExternalSources: []
 Summary: 'Detailed root-cause analysis and implementation design for three contract mismatches in the timeline JS runtime: consume-only reducer output normalization, runtime-vs-builtin ordering, and runtime error propagation semantics.'
@@ -634,5 +634,5 @@ Code review checklist:
 1. `pkg/doc/topics/13-js-api-reference.md:119-139`
 2. `pkg/doc/topics/14-js-api-user-guide.md:100-130`
 3. `cmd/web-chat/README.md:124-146`
-4. `ttmp/2026/02/26/GEPA-06-JS-SEM-REDUCERS-HANDLERS--investigate-javascript-registered-sem-reducers-and-event-handlers/design-doc/02-cross-repo-js-sem-runtime-implementation-design.md:120-129`
+4. `/home/manuel/workspaces/2026-03-15/add-scoped-js/geppetto/ttmp/2026/02/26/GEPA-06-JS-SEM-REDUCERS-HANDLERS--investigate-javascript-registered-sem-reducers-and-event-handlers/design-doc/02-cross-repo-js-sem-runtime-implementation-design.md:120-129`
 5. `.../design-doc/02-...md:340-418`
