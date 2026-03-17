@@ -1,7 +1,7 @@
 ---
 Title: Webchat Profile Registry Guide
 Slug: webchat-profile-registry
-Short: Detailed guide to profile registry wiring, selection precedence, and CRUD APIs for pinocchio webchat apps.
+Short: Detailed guide to profile registry wiring, selection precedence, and read-only profile APIs for pinocchio webchat apps.
 Topics:
 - webchat
 - profiles
@@ -26,7 +26,7 @@ This page is the reference for profile registry behavior in pinocchio webchat ap
 - how profile registries are bootstrapped and injected,
 - how profile selection is resolved from request inputs,
 - how runtime composition uses resolved profile data,
-- how profile CRUD endpoints behave and what errors they return.
+- how the shared read-only profile endpoints behave.
 
 Use this page when building app-owned chat backends that mount `pkg/webchat/http` handlers.
 
@@ -35,8 +35,8 @@ Use this page when building app-owned chat backends that mount `pkg/webchat/http
 Profile registry support spans three layers:
 
 1. **Geppetto profile domain** (`geppetto/pkg/profiles`)
-2. **Request policy resolver** (app-owned, maps HTTP request to profile/runtime selection)
-3. **Runtime composer** (app-owned, composes engine from resolved profile runtime + policy output)
+2. **Request resolver** (app-owned, maps HTTP request to profile/runtime selection)
+3. **Runtime composer** (app-owned, composes engine from resolved profile runtime)
 
 In handler-first webchat integration, `/chat` and `/ws` always flow through your resolver before runtime composition.
 
@@ -64,7 +64,7 @@ _ = store.UpsertRegistry(ctx, registry, gepprofiles.SaveOptions{Actor: "app", So
 profileRegistry, _ := gepprofiles.NewStoreRegistry(store, gepprofiles.MustRegistrySlug("default"))
 ```
 
-SQLite-backed stores follow the same service interface and are recommended when profiles are edited at runtime.
+SQLite-backed stores follow the same service interface and are useful when apps want durable profile storage.
 
 ## Request Selection Precedence
 
@@ -87,7 +87,6 @@ Resolvers should populate:
 - `RuntimeKey`
 - `ProfileVersion`
 - `ResolvedRuntime`
-- `Overrides` (if allowed by policy)
 
 Runtime composers should consume these fields to produce:
 
@@ -95,11 +94,11 @@ Runtime composers should consume these fields to produce:
 - runtime key
 - runtime fingerprint
 - seed system prompt
-- allowed tools
+- app-owned tool filtering inputs
 
 To guarantee rebuild on profile updates, include version-sensitive data (`ProfileVersion` and effective runtime inputs) in the fingerprint payload.
 
-## CRUD HTTP APIs
+## Read-Only HTTP APIs
 
 Mount reusable handlers with:
 
@@ -107,8 +106,6 @@ Mount reusable handlers with:
 webhttp.RegisterProfileAPIHandlers(mux, profileRegistry, webhttp.ProfileAPIHandlerOptions{
   DefaultRegistrySlug:             gepprofiles.MustRegistrySlug("default"),
   EnableCurrentProfileCookieRoute: true,
-  WriteActor:                      "my-app",
-  WriteSource:                     "http-api",
   MiddlewareDefinitions:           middlewareDefinitions,
   ExtensionCodecRegistry:          extensionCodecRegistry,
 })
@@ -118,9 +115,8 @@ webhttp.RegisterProfileAPIHandlers(mux, profileRegistry, webhttp.ProfileAPIHandl
 
 | Endpoint | Methods | Purpose |
 |---|---|---|
-| `/api/chat/profiles` | `GET`, `POST` | list/create profiles |
-| `/api/chat/profiles/{slug}` | `GET`, `PATCH`, `DELETE` | read/update/delete a profile |
-| `/api/chat/profiles/{slug}/default` | `POST` | set default profile |
+| `/api/chat/profiles` | `GET` | list profiles |
+| `/api/chat/profiles/{slug}` | `GET` | read a profile |
 | `/api/chat/profile` | `GET`, `POST` | current-profile cookie read/write (optional route) |
 | `/api/chat/schemas/middlewares` | `GET` | discover middleware JSON schema contracts |
 | `/api/chat/schemas/extensions` | `GET` | discover extension JSON schema contracts |
@@ -142,48 +138,6 @@ webhttp.RegisterProfileAPIHandlers(mux, profileRegistry, webhttp.ProfileAPIHandl
 ```
 
 List responses are always JSON arrays sorted by profile slug.
-
-`POST /api/chat/profiles` create payload:
-
-```json
-{
-  "registry": "default",
-  "slug": "analyst",
-  "display_name": "Analyst",
-  "description": "Data analysis profile",
-  "runtime": {
-    "system_prompt": "You are an analyst.",
-    "tools": ["inventory.list"]
-  },
-  "policy": {
-    "allow_overrides": true,
-    "read_only": false
-  },
-  "set_default": false,
-  "expected_version": 0
-}
-```
-
-`PATCH /api/chat/profiles/{slug}` patch payload:
-
-```json
-{
-  "display_name": "Analyst v2",
-  "runtime": {
-    "system_prompt": "You are an analyst. Be concise."
-  },
-  "expected_version": 1
-}
-```
-
-`POST /api/chat/profiles/{slug}/default` payload:
-
-```json
-{
-  "registry": "default",
-  "expected_version": 7
-}
-```
 
 `POST /api/chat/profile` cookie-selection payload:
 
@@ -208,13 +162,7 @@ Debug API interpretation:
 - `/api/debug/conversations/:conv_id` -> `resolved_runtime_key` (latest pointer),
 - `/api/debug/turns?conv_id=...` -> per-turn `runtime_key` and `inference_id`.
 
-## Write-Time Validation and Schema APIs
-
-Profile create/update routes enforce middleware correctness before persistence:
-
-- unknown middleware names return `400`,
-- middleware `config` payloads are validated/coerced against definition JSON schemas,
-- validation errors include field paths such as `runtime.middlewares[0].config`.
+## Schema APIs
 
 Schema endpoints are intended for frontend form-generation and preflight validation:
 
@@ -275,35 +223,25 @@ Profile API handlers map typed profile errors to stable HTTP status classes:
 
 - not found -> `404`
 - validation failure -> `400`
-- policy violation -> `403`
-- optimistic concurrency conflict -> `409`
 - unhandled/store failures -> `500`
 
 When writing clients, key behavior primarily from status codes and error class, not only exact text.
 
-## Resolver and Policy Guidance
+## Resolver Guidance
 
 Recommended resolver behavior:
 
 - reject malformed JSON as `400`,
-- reject disallowed runtime overrides early,
 - keep conv-id generation deterministic (body `conv_id` or generated UUID),
 - map profile and registry failures to typed `RequestResolutionError`.
-
-Recommended policy behavior:
-
-- keep override policy in profile definitions (`allow_overrides`, denied keys),
-- use read-only profiles for protected runtime presets,
-- enforce expected-version for mutable APIs to avoid last-write-wins races.
 
 ## Testing Recommendations
 
 Minimum integration coverage for profile-aware webchat:
 
 - list -> select -> chat request uses selected runtime key,
-- create profile -> appears in list -> usable immediately,
-- patch profile increments version and drives runtime rebuild behavior,
-- read-only profile mutation is rejected.
+- selected profile appears in list and is resolvable by slug,
+- switching current-profile cookie changes later request selection.
 
 These tests should run against app-mounted handlers, not only isolated service functions.
 
@@ -315,13 +253,13 @@ Current rollout assumptions:
 - `PINOCCHIO_ENABLE_PROFILE_REGISTRY_MIDDLEWARE` is removed,
 - compatibility aliases for renamed runtime/webchat symbols are removed,
 - runtime registry switching (`registry_slug` selector path) is removed,
-- profile CRUD + schema endpoints are the canonical integration surface.
+- read-only profile + schema endpoints are the canonical shared integration surface.
 
 Do not gate behavior with legacy env toggles. If a deployment needs rollback, use release rollback and profile DB snapshot restore.
 
 ## SQLite Operations and Rollout Notes
 
-For durable multi-user profile editing, run web-chat with SQLite-backed registry storage as one source in the runtime stack:
+For durable multi-user profile storage, run web-chat with SQLite-backed registry storage as one source in the runtime stack:
 
 ```bash
 web-chat web-chat --profile-registries ./data/profiles.db
@@ -335,7 +273,7 @@ web-chat web-chat --profile-registries ./data/profiles.db,./profiles/private-top
 
 Operational recommendations:
 
-- keep timestamped DB backups before bulk profile edits,
+- keep timestamped DB backups before bulk profile migrations or external edits,
 - restrict DB and backup file permissions to service operators,
 - validate restore drills with `GET /api/chat/profiles` and one explicit profile-selected chat request.
 
@@ -344,9 +282,9 @@ Migration/rollout posture:
 - registry middleware integration is always enabled,
 - rollback uses release rollback + profile DB snapshot restore, not runtime env toggles.
 
-## CRUD Exposure Risk (Current Scope)
+## Read Exposure Risk (Current Scope)
 
-Current GP-31 behavior intentionally exposes list/get across all loaded registries. This includes YAML-backed registries loaded through `--profile-registries`.
+Current behavior intentionally exposes list/get across all loaded registries. This includes YAML-backed registries loaded through `--profile-registries`.
 
 Operational implication:
 
@@ -356,7 +294,7 @@ Operational implication:
 
 Go-go-os inventory chat reuses the same shared profile API handlers from `pinocchio/pkg/webchat/http`:
 
-- same CRUD endpoints and status/error model,
+- same read-only endpoints and status/error model,
 - same current-profile route behavior,
 - same middleware/extension schema endpoint contracts.
 
@@ -369,10 +307,7 @@ This keeps frontend profile editors portable across pinocchio web-chat and go-go
 | `/chat` ignores selected profile | Resolver returns fixed runtime key | Ensure resolver reads body/query/cookie and resolves profile through registry |
 | profile updates do not trigger runtime change | Fingerprint missing profile version/effective runtime inputs | Add `ProfileVersion` and runtime inputs to fingerprint payload |
 | `/api/chat/profiles` returns empty list unexpectedly | Bootstrap registry did not upsert expected profiles | Validate bootstrap sequence and registry slug |
-| create/patch returns `validation error (runtime.middlewares[*].name)` | middleware not registered in runtime definition registry | inspect application middleware-definition wiring and middleware name |
-| create/patch returns `validation error (runtime.middlewares[*].config)` | payload does not satisfy middleware schema | fetch `/api/chat/schemas/middlewares` and fix payload |
-| mutation returns conflict | stale `expected_version` | read latest profile and retry with current version |
-| mutation unexpectedly forbidden | profile policy is read-only or denies operation | inspect profile policy and update intentionally |
+| profile JSON does not include expected middleware shape | app persisted malformed profile data externally | fetch `/api/chat/schemas/middlewares` and compare stored runtime payload |
 
 ## See Also
 

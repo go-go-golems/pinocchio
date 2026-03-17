@@ -100,16 +100,15 @@ At a high level, you will mount:
 - `GET /ws?conv_id=<id>` (WebSocket upgrade)
 - `GET /api/timeline?conv_id=<id>&since_version=<n>&limit=<n>` (hydration)
 
-## Request Policy Ownership
+## Request Resolution Ownership
 
-Runtime and profile policy is app-owned through `ConversationRequestResolver`.
+Runtime and profile selection is app-owned through `ConversationRequestResolver`.
 
 Typical resolver behavior:
 
 - parse body/query/path/cookies
 - select runtime/profile key
-- merge default overrides and request overrides
-- enforce override policy
+- resolve the selected profile runtime
 - return typed `RequestResolutionError` for client-visible errors
 
 For the full registry model (selection precedence, CRUD endpoints, and policy/version semantics), use [Webchat Profile Registry Guide](webchat-profile-registry.md) as the authoritative reference.

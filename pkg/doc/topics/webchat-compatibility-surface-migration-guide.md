@@ -47,7 +47,7 @@ That no longer matches the current architecture. `pkg/webchat` now owns the reus
 services and shared `/api/*` utilities, while the embedding application owns:
 
 - request resolution,
-- runtime/profile policy,
+- runtime/profile selection,
 - `/chat` and `/ws` route registration,
 - timeline route mounting,
 - middleware-definition wiring.

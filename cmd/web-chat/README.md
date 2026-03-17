@@ -77,9 +77,6 @@ Use canonical request keys:
   "conv_id": "optional-conversation-id",
   "profile": "optional-profile-slug-or-runtime-key",
   "registry": "optional-registry-slug",
-  "request_overrides": {
-    "system_prompt": "optional policy-gated override"
-  },
   "idempotency_key": "optional-client-idempotency-key"
 }
 ```
