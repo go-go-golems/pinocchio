@@ -23,10 +23,8 @@ type Resolved struct {
 
 	RuntimeFingerprint string
 
-	SystemPrompt      string
-	StepSettingsPatch map[string]any
-
-	EffectiveStepSettings *settings.StepSettings
+	SystemPrompt string
+	StepSettings *settings.StepSettings
 
 	ProfileVersion uint64
 	Metadata       map[string]any

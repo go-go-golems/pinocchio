@@ -219,7 +219,7 @@ func main() {
 				}
 				var parts []string
 				parts = append(parts, statusBarKeyStyle.Render("profile: ")+statusBarValStyle.Render(cur.ProfileSlug.String()))
-				if s := cur.EffectiveStepSettings; s != nil && s.Chat != nil {
+				if s := cur.StepSettings; s != nil && s.Chat != nil {
 					if s.Chat.Engine != nil && *s.Chat.Engine != "" {
 						parts = append(parts, statusBarKeyStyle.Render("model: ")+statusBarValStyle.Render(*s.Chat.Engine))
 					}

@@ -76,7 +76,7 @@ func main() {
 	fmt.Fprintf(os.Stderr, "runtime_key=%s\n", resolved.RuntimeKey.String())
 	fmt.Fprintf(os.Stderr, "runtime_fingerprint=%s\n", resolved.RuntimeFingerprint)
 
-	eng, err := factory.NewEngineFromStepSettings(resolved.EffectiveStepSettings)
+	eng, err := factory.NewEngineFromStepSettings(resolved.StepSettings)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "ERROR:", err)
 		os.Exit(1)
