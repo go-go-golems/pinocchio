@@ -131,7 +131,7 @@ func (c *SimpleAgentCmd) RunIntoWriter(ctx context.Context, parsed *values.Value
 	}
 	sink := middleware.NewWatermillSink(router.Publisher, "chat")
 
-	stepSettings, _, closeRuntime, err := pinhelpers.ResolveEffectiveStepSettings(ctx, parsed)
+	stepSettings, _, closeRuntime, err := pinhelpers.ResolveStepSettings(ctx, parsed)
 	if err != nil {
 		return errors.Wrap(err, "resolve step settings")
 	}

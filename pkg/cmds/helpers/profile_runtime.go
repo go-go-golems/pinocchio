@@ -86,7 +86,7 @@ func ResolveProfileSettings(parsed *values.Values) ProfileSettings {
 	return ret
 }
 
-func ResolveEffectiveStepSettings(
+func ResolveStepSettings(
 	ctx context.Context,
 	parsed *values.Values,
 ) (*aisettings.StepSettings, *gepprofiles.ResolvedProfile, func(), error) {
@@ -112,9 +112,7 @@ func ResolveEffectiveStepSettings(
 		return nil, nil, nil, errors.Wrap(err, "initialize profile registry")
 	}
 
-	in := gepprofiles.ResolveInput{
-		BaseStepSettings: base,
-	}
+	in := gepprofiles.ResolveInput{}
 	if profileSettings.Profile != "" {
 		profileSlug, err := gepprofiles.ParseProfileSlug(profileSettings.Profile)
 		if err != nil {
@@ -128,7 +126,7 @@ func ResolveEffectiveStepSettings(
 		_ = chain.Close()
 		return nil, nil, nil, err
 	}
-	return resolved.EffectiveStepSettings, resolved, func() {
+	return base.Clone(), resolved, func() {
 		_ = chain.Close()
 	}, nil
 }

@@ -213,7 +213,7 @@ func (r *ProfileRequestResolver) resolveWS(req *http.Request) (webhttp.ResolvedC
 		RuntimeKey:           runtimeKeyFromResolvedProfile(resolvedProfile),
 		RuntimeFingerprint:   resolvedProfile.RuntimeFingerprint,
 		ProfileVersion:       profileVersionFromResolvedMetadata(resolvedProfile.Metadata),
-		ResolvedStepSettings: cloneResolvedStepSettings(resolvedProfile.EffectiveStepSettings),
+		ResolvedStepSettings: cloneResolvedStepSettings(r.baseStepSettings),
 		ResolvedRuntime:      &resolvedRuntime,
 		ProfileMetadata:      copyMetadataMap(resolvedProfile.Metadata),
 	}, nil
@@ -256,7 +256,7 @@ func (r *ProfileRequestResolver) resolveChat(req *http.Request) (webhttp.Resolve
 		RuntimeKey:           runtimeKeyFromResolvedProfile(resolvedProfile),
 		RuntimeFingerprint:   resolvedProfile.RuntimeFingerprint,
 		ProfileVersion:       profileVersionFromResolvedMetadata(resolvedProfile.Metadata),
-		ResolvedStepSettings: cloneResolvedStepSettings(resolvedProfile.EffectiveStepSettings),
+		ResolvedStepSettings: cloneResolvedStepSettings(r.baseStepSettings),
 		ResolvedRuntime:      &resolvedRuntime,
 		ProfileMetadata:      copyMetadataMap(resolvedProfile.Metadata),
 		Prompt:               body.Prompt,
@@ -305,9 +305,8 @@ func (r *ProfileRequestResolver) resolveEffectiveProfile(
 	profileSlug gepprofiles.ProfileSlug,
 ) (*gepprofiles.ResolvedProfile, error) {
 	in := gepprofiles.ResolveInput{
-		RegistrySlug:     registrySlug,
-		ProfileSlug:      profileSlug,
-		BaseStepSettings: cloneResolvedStepSettings(r.baseStepSettings),
+		RegistrySlug: registrySlug,
+		ProfileSlug:  profileSlug,
 	}
 	resolved, err := r.profileRegistry.ResolveEffectiveProfile(ctx, in)
 	if err != nil {
