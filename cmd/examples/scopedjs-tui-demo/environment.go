@@ -118,10 +118,28 @@ func demoEnvironmentSpec() scopedjs.EnvironmentSpec[demoScope, demoMeta] {
 			Timeout:        5 * time.Second,
 			MaxOutputChars: 16_000,
 			CaptureConsole: true,
-			StateMode:      scopedjs.StatePerCall,
 		},
+		Describe:  describeDemoRuntime,
 		Configure: configureDemoRuntime,
 	}
+}
+
+func describeDemoRuntime() (scopedjs.EnvironmentManifest, error) {
+	return scopedjs.EnvironmentManifest{
+		Modules: []scopedjs.ModuleDoc{
+			{Name: "fs"},
+			{Name: "webserver", Exports: []string{"get", "routes"}},
+			{Name: "obsidian", Exports: []string{"createNote", "link"}},
+		},
+		Globals: []scopedjs.GlobalDoc{
+			{Name: "workspaceRoot", Type: "string"},
+			{Name: "db", Type: "object"},
+		},
+		Helpers: []scopedjs.HelperDoc{
+			{Name: "joinPath", Signature: "joinPath(a, b)"},
+		},
+		BootstrapFiles: []string{"helpers.js"},
+	}, nil
 }
 
 func configureDemoRuntime(ctx context.Context, b *scopedjs.Builder, scope demoScope) (demoMeta, error) {
@@ -240,7 +258,7 @@ func buildDemoRegistry(ctx context.Context, workspaceID string) (*tools.InMemory
 	}
 
 	registry := tools.NewInMemoryToolRegistry()
-	if err := scopedjs.RegisterPrebuilt(registry, spec, handle, scopedjs.EvalOptions{}); err != nil {
+	if err := scopedjs.RegisterPrebuilt(registry, spec, handle, scopedjs.EvalOptionOverrides{}); err != nil {
 		if handle.Cleanup != nil {
 			_ = handle.Cleanup()
 		}

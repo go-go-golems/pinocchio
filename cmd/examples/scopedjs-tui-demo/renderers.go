@@ -3,171 +3,20 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"math"
-	"os"
 	"sort"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/glamour"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/go-go-golems/bobatea/pkg/timeline"
-	chatstyle "github.com/go-go-golems/bobatea/pkg/timeline/chatstyle"
-	base_renderers "github.com/go-go-golems/bobatea/pkg/timeline/renderers"
 	"github.com/go-go-golems/geppetto/pkg/inference/tools/scopedjs"
-	"github.com/muesli/termenv"
-	"github.com/rs/zerolog/log"
-	"golang.org/x/term"
+	"github.com/go-go-golems/pinocchio/cmd/examples/internal/demorender"
 	"gopkg.in/yaml.v3"
 )
 
 func registerDemoRenderers(r *timeline.Registry) {
-	r.RegisterModelFactory(base_renderers.NewLLMTextFactory())
-	r.RegisterModelFactory(base_renderers.PlainFactory{})
-	r.RegisterModelFactory(newEvalToolCallFactory(demoToolName))
-	r.RegisterModelFactory(newEvalResultFactory())
-	r.RegisterModelFactory(base_renderers.LogEventFactory{})
-}
-
-type evalToolCallModel struct {
-	toolName string
-	name     string
-	inputRaw string
-	width    int
-	selected bool
-	focused  bool
-	style    *chatstyle.Style
-	renderer *glamour.TermRenderer
-}
-
-func (m *evalToolCallModel) Init() tea.Cmd { return nil }
-
-func (m *evalToolCallModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch v := msg.(type) {
-	case timeline.EntitySelectedMsg:
-		m.selected = true
-	case timeline.EntityUnselectedMsg:
-		m.selected = false
-		m.focused = false
-	case timeline.EntityPropsUpdatedMsg:
-		if v.Patch != nil {
-			m.onProps(v.Patch)
-		}
-	case timeline.EntitySetSizeMsg:
-		m.width = v.Width
-		return m, nil
-	case timeline.EntityFocusMsg:
-		m.focused = true
-	case timeline.EntityBlurMsg:
-		m.focused = false
-	}
-	return m, nil
-}
-
-func (m *evalToolCallModel) View() string {
-	sty := demoChatStyle(m.style, m.selected, m.focused)
-	body := "-> " + strings.TrimSpace(m.name)
-	mdBody := buildEvalToolCallMarkdown(m.toolName, m.name, m.inputRaw)
-	if mdBody != "" {
-		body += "\n\n" + mdBody
-	}
-	return renderMarkdownBody(sty, m.width, m.renderer, body)
-}
-
-func (m *evalToolCallModel) onProps(patch map[string]any) {
-	if v, ok := patch["name"].(string); ok {
-		m.name = v
-	}
-	if v, ok := patch["input"].(string); ok {
-		m.inputRaw = strings.TrimSpace(v)
-	}
-}
-
-type evalToolCallFactory struct {
-	toolName string
-	renderer *glamour.TermRenderer
-}
-
-func newEvalToolCallFactory(toolName string) *evalToolCallFactory {
-	return &evalToolCallFactory{
-		toolName: toolName,
-		renderer: newGlamourRenderer(),
-	}
-}
-
-func (f *evalToolCallFactory) Key() string  { return "renderer.tool_call.scopedjs_eval.v1" }
-func (f *evalToolCallFactory) Kind() string { return "tool_call" }
-func (f *evalToolCallFactory) NewEntityModel(initialProps map[string]any) timeline.EntityModel {
-	m := &evalToolCallModel{toolName: f.toolName, renderer: f.renderer}
-	m.onProps(initialProps)
-	return m
-}
-
-type evalResultModel struct {
-	rawResult string
-	md        string
-	width     int
-	selected  bool
-	focused   bool
-	style     *chatstyle.Style
-	renderer  *glamour.TermRenderer
-}
-
-func (m *evalResultModel) Init() tea.Cmd { return nil }
-
-func (m *evalResultModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch v := msg.(type) {
-	case timeline.EntitySelectedMsg:
-		m.selected = true
-	case timeline.EntityUnselectedMsg:
-		m.selected = false
-		m.focused = false
-	case timeline.EntityPropsUpdatedMsg:
-		if v.Patch != nil {
-			m.onProps(v.Patch)
-		}
-	case timeline.EntitySetSizeMsg:
-		m.width = v.Width
-		if strings.TrimSpace(m.rawResult) != "" {
-			m.md = formatEvalResultMarkdown(m.rawResult)
-		}
-		return m, nil
-	case timeline.EntityFocusMsg:
-		m.focused = true
-	case timeline.EntityBlurMsg:
-		m.focused = false
-	}
-	return m, nil
-}
-
-func (m *evalResultModel) View() string {
-	sty := demoChatStyle(m.style, m.selected, m.focused)
-	body := strings.TrimSpace(m.md)
-	if body == "" {
-		body = strings.TrimSpace(m.rawResult)
-	}
-	return renderMarkdownBody(sty, m.width, m.renderer, body)
-}
-
-func (m *evalResultModel) onProps(patch map[string]any) {
-	if v, ok := patch["result"].(string); ok {
-		m.rawResult = strings.TrimSpace(v)
-		m.md = formatEvalResultMarkdown(m.rawResult)
-	}
-}
-
-type evalResultFactory struct{ renderer *glamour.TermRenderer }
-
-func newEvalResultFactory() *evalResultFactory {
-	return &evalResultFactory{renderer: newGlamourRenderer()}
-}
-
-func (f *evalResultFactory) Key() string  { return "renderer.tool_call_result.scopedjs_eval.v1" }
-func (f *evalResultFactory) Kind() string { return "tool_call_result" }
-func (f *evalResultFactory) NewEntityModel(initialProps map[string]any) timeline.EntityModel {
-	m := &evalResultModel{renderer: f.renderer}
-	m.onProps(initialProps)
-	return m
+	demorender.RegisterBaseRenderers(r,
+		demorender.NewToolCallFactory("renderer.tool_call.scopedjs_eval.v1", demoToolName, buildEvalToolCallMarkdown),
+		demorender.NewResultFactory("renderer.tool_call_result.scopedjs_eval.v1", formatEvalResultMarkdownWithWidth),
+	)
 }
 
 func buildEvalToolCallMarkdown(expectedToolName, actualToolName, inputRaw string) string {
@@ -193,10 +42,14 @@ func buildEvalToolCallMarkdown(expectedToolName, actualToolName, inputRaw string
 			return b.String()
 		}
 	}
-	return fencedAny(inputRaw)
+	return demorender.FencedAny(inputRaw)
 }
 
 func formatEvalResultMarkdown(raw string) string {
+	return formatEvalResultMarkdownWithWidth(raw, 0)
+}
+
+func formatEvalResultMarkdownWithWidth(raw string, _ int) string {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
 		return ""
@@ -234,7 +87,7 @@ func formatEvalResultValue(v any) string {
 		if y, err := yaml.Marshal(typed); err == nil {
 			return "result:\n```yaml\n" + strings.TrimSpace(string(y)) + "\n```"
 		}
-		return "result:\n" + fencedAny(v)
+		return "result:\n" + demorender.FencedAny(v)
 	}
 }
 
@@ -365,81 +218,4 @@ func copyMap(m map[string]any) map[string]any {
 		ret[k] = v
 	}
 	return ret
-}
-
-func fencedAny(v any) string {
-	switch typed := v.(type) {
-	case string:
-		if parsed := strings.TrimSpace(typed); parsed != "" && (strings.HasPrefix(parsed, "{") || strings.HasPrefix(parsed, "[")) {
-			var anyv any
-			if json.Unmarshal([]byte(parsed), &anyv) == nil {
-				if y, err := yaml.Marshal(anyv); err == nil {
-					return "```yaml\n" + strings.TrimSpace(string(y)) + "\n```"
-				}
-			}
-		}
-		return "```text\n" + strings.TrimSpace(typed) + "\n```"
-	default:
-		if y, err := yaml.Marshal(typed); err == nil {
-			return "```yaml\n" + strings.TrimSpace(string(y)) + "\n```"
-		}
-		return fmt.Sprintf("```text\n%v\n```", typed)
-	}
-}
-
-func renderMarkdownBody(sty lipgloss.Style, width int, renderer *glamour.TermRenderer, body string) string {
-	rendered := strings.TrimSpace(body)
-	if renderer != nil && rendered != "" {
-		if out, err := renderer.Render(rendered + "\n"); err == nil {
-			rendered = strings.TrimSpace(out)
-		}
-	}
-	return sty.Width(maxInt(1, width-sty.GetHorizontalPadding())).Render(rendered)
-}
-
-func demoChatStyle(style *chatstyle.Style, selected bool, focused bool) lipgloss.Style {
-	if style == nil {
-		style = chatstyle.DefaultStyles()
-	}
-	sty := style.UnselectedMessage
-	if selected {
-		sty = style.SelectedMessage
-	}
-	if focused && !selected {
-		sty = style.FocusedMessage
-	}
-	return sty
-}
-
-func newGlamourRenderer() *glamour.TermRenderer {
-	style := "light"
-	if !stdoutIsTerminal() {
-		style = "notty"
-	} else if termenv.HasDarkBackground() {
-		style = "dark"
-	}
-	r, err := glamour.NewTermRenderer(
-		glamour.WithStandardStyle(style),
-		glamour.WithWordWrap(80),
-	)
-	if err != nil {
-		log.Error().Err(err).Msg("failed to create glamour renderer")
-		return nil
-	}
-	return r
-}
-
-func stdoutIsTerminal() bool {
-	fd := os.Stdout.Fd()
-	if fd > uintptr(math.MaxInt) {
-		return false
-	}
-	return term.IsTerminal(int(fd))
-}
-
-func maxInt(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
 }
