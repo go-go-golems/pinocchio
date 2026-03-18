@@ -34,7 +34,7 @@ Use this page when building app-owned chat backends that mount `pkg/webchat/http
 
 Profile registry support spans three layers:
 
-1. **Geppetto profile domain** (`geppetto/pkg/profiles`)
+1. **Geppetto profile domain** (`geppetto/pkg/engineprofiles`)
 2. **Request resolver** (app-owned, maps HTTP request to profile/runtime selection)
 3. **Runtime composer** (app-owned, composes engine from resolved profile runtime)
 

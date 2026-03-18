@@ -8,8 +8,8 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/pkg/errors"
 
+	gepprofiles "github.com/go-go-golems/geppetto/pkg/engineprofiles"
 	"github.com/go-go-golems/geppetto/pkg/inference/toolloop"
-	gepprofiles "github.com/go-go-golems/geppetto/pkg/profiles"
 	aisettings "github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"

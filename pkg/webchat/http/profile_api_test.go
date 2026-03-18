@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	gepprofiles "github.com/go-go-golems/geppetto/pkg/profiles"
+	gepprofiles "github.com/go-go-golems/geppetto/pkg/engineprofiles"
 )
 
 type testExtensionSchemaCodec struct {

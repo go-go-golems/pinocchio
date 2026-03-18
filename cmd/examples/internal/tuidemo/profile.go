@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	gepprofiles "github.com/go-go-golems/geppetto/pkg/profiles"
+	gepprofiles "github.com/go-go-golems/geppetto/pkg/engineprofiles"
 	aisettings "github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 	pinhelpers "github.com/go-go-golems/pinocchio/pkg/cmds/helpers"
 	"github.com/pkg/errors"

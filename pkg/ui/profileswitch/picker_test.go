@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
-	gepprofiles "github.com/go-go-golems/geppetto/pkg/profiles"
+	gepprofiles "github.com/go-go-golems/geppetto/pkg/engineprofiles"
 	overlaywidget "github.com/go-go-golems/pinocchio/pkg/tui/widgets/overlay"
 	"github.com/go-go-golems/pinocchio/pkg/ui/profileswitch"
 	"github.com/stretchr/testify/require"
