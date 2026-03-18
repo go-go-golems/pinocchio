@@ -58,4 +58,4 @@
 
 - [x] Keep the diary updated after each implementation slice.
 - [x] Update `changelog.md` after each code commit.
-- [ ] Run `docmgr doctor` before closeout.
+- [x] Run `docmgr doctor` before closeout.
