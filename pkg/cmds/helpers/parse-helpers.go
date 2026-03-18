@@ -7,7 +7,6 @@ import (
 
 	embeddings_config "github.com/go-go-golems/geppetto/pkg/embeddings/config"
 	gepprofiles "github.com/go-go-golems/geppetto/pkg/profiles"
-	geppetto_sections "github.com/go-go-golems/geppetto/pkg/sections"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings/claude"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings/gemini"
@@ -84,18 +83,6 @@ func ParseGeppettoLayers(c *cmds.PinocchioCommand, options ...GeppettoLayersHelp
 				Reason: "must be configured (hard cutover: no profile-file fallback)",
 			}
 		}
-		middlewares_ = append(middlewares_,
-			geppetto_sections.GatherFlagsFromProfileRegistry(
-				profileRegistrySources,
-				helper.Profile,
-				fields.WithSource("profiles"),
-				fields.WithMetadata(map[string]interface{}{
-					"profileRegistries": profileRegistrySources,
-					"profile":           helper.Profile,
-					"mode":              "profile-registry-stack",
-				}),
-			),
-		)
 	}
 
 	if helper.UseViper {
