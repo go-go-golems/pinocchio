@@ -129,14 +129,15 @@ const out = gp.runner.run({
 console.log(out.blocks[0].payload.text);
 ```
 
-## Running The Local Demo
+## Running The Example Scripts
 
-The repo includes a local runnable example:
+The repo includes two example scripts:
 
 - `examples/js/runner-profile-demo.js`
+- `examples/js/runner-profile-smoke.js`
 - `examples/js/profiles/basic.yaml`
 
-Run it from the repo root:
+Run the real inference example from the repo root:
 
 ```bash
 pinocchio js \
@@ -153,7 +154,19 @@ pinocchio js \
   --profile-registries examples/js/profiles/basic.yaml
 ```
 
-This is a good first smoke test because it proves all of the following in one run:
+This is the example to use when you want an actual LLM response.
+
+It uses explicit engine overrides inside the script (`model: "gpt-4o-mini"`, `apiType: "openai"`) so it can run even when your base Pinocchio config does not already set a provider.
+
+Use the smoke script when you want deterministic local output without calling a live model:
+
+```bash
+pinocchio js \
+  --script examples/js/runner-profile-smoke.js \
+  --profile-registries examples/js/profiles/basic.yaml
+```
+
+The smoke script is a good first bootstrap test because it proves all of the following in one run:
 
 - the command can execute a script
 - the profile registry is loaded
@@ -243,6 +256,13 @@ This is the recommended path when:
 
 - you want the same provider credentials and timeout defaults the rest of Pinocchio uses
 - you want script setup to stay small
+
+You can call it in two styles:
+
+- `pinocchio.engines.fromDefaults({})`
+  when your base Pinocchio config already defines provider/model defaults
+- `pinocchio.engines.fromDefaults({ model: "...", apiType: "..." })`
+  when you want the script to force a concrete live engine regardless of the base config
 
 ### Profile runtime resolution
 

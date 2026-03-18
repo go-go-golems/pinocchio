@@ -3,13 +3,13 @@ const pinocchio = require("pinocchio");
 
 const runtime = gp.runner.resolveRuntime({});
 
-const engine = pinocchio.engines.fromDefaults({
+const defaultsEngine = pinocchio.engines.fromDefaults({
   model: "gpt-4o-mini",
   apiType: "openai",
 });
 
 const prepared = gp.runner.prepare({
-  engine,
+  engine: defaultsEngine,
   runtime,
   prompt: "Prepare a turn with runtime metadata only.",
 });
@@ -17,16 +17,19 @@ const prepared = gp.runner.prepare({
 assert(prepared.turn.metadata.runtime.runtime_key === runtime.runtimeKey, "expected stamped runtime key");
 assert(prepared.turn.metadata.runtime["profile.slug"] === runtime.runtimeKey, "expected stamped profile slug");
 
-console.log("running live inference");
-
-const out = gp.runner.run({
-  engine,
-  runtime,
-  prompt: "Say hello in one short sentence and mention the active profile if you know it.",
+const localEngine = gp.engines.fromFunction((turn) => {
+  const promptBlock = turn.blocks[turn.blocks.length - 1];
+  return gp.turns.newTurn({
+    blocks: [
+      gp.turns.newAssistantBlock(`profile=${runtime.runtimeKey} prompt=${promptBlock.payload.text}`),
+    ],
+  });
 });
 
-console.log("finished run");
+const out = gp.runner.run({
+  engine: localEngine,
+  runtime,
+  prompt: "hello from pinocchio js",
+});
 
-const last = out.blocks[out.blocks.length - 1];
-assert(last && typeof last.payload?.text === "string", "expected final assistant text block");
-console.log(last.payload.text);
+console.log(out.blocks[0].payload.text);
