@@ -561,8 +561,8 @@ func listExtensionSchemas(
 			}
 		}
 	}
-	if lister, ok := codecRegistry.(gepprofiles.ExtensionCodecLister); ok {
-		for _, codec := range lister.ListCodecs() {
+	if codecRegistry != nil {
+		for _, codec := range codecRegistry.ListCodecs() {
 			if codec == nil {
 				continue
 			}

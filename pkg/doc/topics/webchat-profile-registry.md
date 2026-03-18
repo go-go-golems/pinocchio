@@ -213,7 +213,7 @@ Extension schema merge precedence:
 
 1. explicit schemas passed in handler options (`ExtensionSchemas`),
 2. middleware-derived typed keys from middleware definitions,
-3. codec-derived schemas from codec registries that implement `ExtensionCodecLister` and codecs implementing `ExtensionSchemaCodec`.
+3. codec-derived schemas from `ExtensionCodecRegistry` entries whose codecs implement `ExtensionSchemaCodec`.
 
 Use these schemas to build profile-editing UIs that avoid sending invalid payloads.
 
