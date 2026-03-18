@@ -6,9 +6,9 @@ import (
 	"testing"
 
 	"github.com/ThreeDotsLabs/watermill/message"
+	gepprofiles "github.com/go-go-golems/geppetto/pkg/engineprofiles"
 	"github.com/go-go-golems/geppetto/pkg/inference/toolloop/enginebuilder"
 	geptools "github.com/go-go-golems/geppetto/pkg/inference/tools"
-	gepprofiles "github.com/go-go-golems/geppetto/pkg/profiles"
 	"github.com/stretchr/testify/require"
 
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"

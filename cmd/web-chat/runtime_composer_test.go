@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
+	gepprofiles "github.com/go-go-golems/geppetto/pkg/engineprofiles"
 	gepmiddleware "github.com/go-go-golems/geppetto/pkg/inference/middleware"
 	"github.com/go-go-golems/geppetto/pkg/inference/middlewarecfg"
-	gepprofiles "github.com/go-go-golems/geppetto/pkg/profiles"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 	aitypes "github.com/go-go-golems/geppetto/pkg/steps/ai/types"
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"

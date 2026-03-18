@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	gepprofiles "github.com/go-go-golems/geppetto/pkg/profiles"
+	gepprofiles "github.com/go-go-golems/geppetto/pkg/engineprofiles"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 )
 

@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"strings"
 
-	gepprofiles "github.com/go-go-golems/geppetto/pkg/profiles"
+	gepprofiles "github.com/go-go-golems/geppetto/pkg/engineprofiles"
 	aisettings "github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 	timelinepb "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/timeline"
 	root "github.com/go-go-golems/pinocchio/pkg/webchat"

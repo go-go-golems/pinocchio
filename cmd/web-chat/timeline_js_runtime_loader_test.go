@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	gepprofiles "github.com/go-go-golems/geppetto/pkg/profiles"
+	gepprofiles "github.com/go-go-golems/geppetto/pkg/engineprofiles"
 	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
 	webchat "github.com/go-go-golems/pinocchio/pkg/webchat"
 	"github.com/stretchr/testify/require"

@@ -11,7 +11,7 @@ import (
 	"sort"
 	"strings"
 
-	gepprofiles "github.com/go-go-golems/geppetto/pkg/profiles"
+	gepprofiles "github.com/go-go-golems/geppetto/pkg/engineprofiles"
 	aisettings "github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 	"github.com/google/uuid"
 

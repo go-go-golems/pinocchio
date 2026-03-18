@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	gepprofiles "github.com/go-go-golems/geppetto/pkg/profiles"
+	gepprofiles "github.com/go-go-golems/geppetto/pkg/engineprofiles"
 	webhttp "github.com/go-go-golems/pinocchio/pkg/webchat/http"
 	"github.com/stretchr/testify/require"
 )

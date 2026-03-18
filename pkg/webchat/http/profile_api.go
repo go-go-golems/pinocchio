@@ -8,8 +8,8 @@ import (
 	"sort"
 	"strings"
 
+	gepprofiles "github.com/go-go-golems/geppetto/pkg/engineprofiles"
 	"github.com/go-go-golems/geppetto/pkg/inference/middlewarecfg"
-	gepprofiles "github.com/go-go-golems/geppetto/pkg/profiles"
 )
 
 const (

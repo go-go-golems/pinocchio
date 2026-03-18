@@ -3,9 +3,9 @@ package runtime
 import (
 	"context"
 
+	gepprofiles "github.com/go-go-golems/geppetto/pkg/engineprofiles"
 	"github.com/go-go-golems/geppetto/pkg/events"
 	"github.com/go-go-golems/geppetto/pkg/inference/engine"
-	gepprofiles "github.com/go-go-golems/geppetto/pkg/profiles"
 	aisettings "github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 )
 
