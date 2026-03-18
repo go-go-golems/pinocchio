@@ -176,3 +176,58 @@ profiles:
 		}
 	})
 }
+
+func TestPinocchioJSUsesDefaultProfilesYAMLWhenPresent(t *testing.T) {
+	tmpDir := t.TempDir()
+	xdgHome := filepath.Join(tmpDir, "xdg")
+	profilesDir := filepath.Join(xdgHome, "pinocchio")
+	if err := os.MkdirAll(profilesDir, 0o755); err != nil {
+		t.Fatalf("mkdir profiles dir: %v", err)
+	}
+	registryPath := filepath.Join(profilesDir, "profiles.yaml")
+	registryYAML := `slug: workspace
+profiles:
+  default:
+    slug: default
+    inference_settings:
+      chat:
+        api_type: openai
+        engine: default-model
+  gpt-5-mini:
+    slug: gpt-5-mini
+    stack:
+      - profile_slug: default
+    inference_settings:
+      chat:
+        engine: gpt-5-mini
+`
+	if err := os.WriteFile(registryPath, []byte(registryYAML), 0o644); err != nil {
+		t.Fatalf("write registry yaml: %v", err)
+	}
+
+	repoRoot := filepath.Clean(filepath.Join("..", ".."))
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx,
+		"go", "run", "./cmd/pinocchio",
+		"js",
+		"./examples/js/runner-profile-smoke.js",
+		"--profile", "gpt-5-mini",
+	)
+	cmd.Dir = repoRoot
+	cmd.Env = append(os.Environ(),
+		"XDG_CONFIG_HOME="+xdgHome,
+		"HOME="+tmpDir,
+	)
+
+	var combined bytes.Buffer
+	cmd.Stdout = &combined
+	cmd.Stderr = &combined
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("go run pinocchio js failed: %v\noutput:\n%s", err, combined.String())
+	}
+	if !strings.Contains(combined.String(), "profile=gpt-5-mini model=gpt-5-mini prompt=hello from pinocchio js") {
+		t.Fatalf("expected gpt-5-mini profile output\noutput:\n%s", combined.String())
+	}
+}

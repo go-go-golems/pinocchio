@@ -365,3 +365,105 @@ And the regression test proves that a loaded YAML command now hands `profiled-mo
 - [index.md](../index.md)
 - [01-pinocchio-engine-profile-migration-analysis-and-implementation-plan.md](../design-doc/01-pinocchio-engine-profile-migration-analysis-and-implementation-plan.md)
 - [tasks.md](../tasks.md)
+
+## Step 4: Add a real migration path for `~/.config/pinocchio/profiles.yaml`
+
+This step tackled the last missing piece for the CLI/JS migration boundary: the file format that Pinocchio auto-discovers at `${XDG_CONFIG_HOME:-~/.config}/pinocchio/profiles.yaml`. The runtime semantics had already been hard-cut, but users still needed a concrete way to convert older mixed files into the new engine-only registry shape, and the public docs still described the old format too loosely.
+
+### Prompt Context
+
+**User prompt (verbatim):** The user asked to continue the Pinocchio downstream migration task by task and explicitly wanted the default `~/.config/pinocchio/profiles.yaml` path to keep working once reformatted with a script.
+
+**Assistant interpretation:** Finish Slice 5 by adding a standalone migration script, document the exact profile-registry resolution order, and add focused validation for the default auto-discovered profile file path.
+
+**Inferred user intent:** Make the CLI migration practical for a real existing Pinocchio installation, not just for checked-in repo fixtures.
+
+### What I did
+
+- Added a new migration helper in [`pkg/cmds/helpers/engine_profile_migration.go`](../../../../../../pinocchio/pkg/cmds/helpers/engine_profile_migration.go).
+- Added focused tests in [`pkg/cmds/helpers/engine_profile_migration_test.go`](../../../../../../pinocchio/pkg/cmds/helpers/engine_profile_migration_test.go).
+- Added a standalone script wrapper at [`scripts/migrate_engine_profiles_yaml.go`](../../../../../../pinocchio/scripts/migrate_engine_profiles_yaml.go).
+- Added a new command-level regression test in [`main_profile_registries_test.go`](../../../../../../pinocchio/cmd/pinocchio/main_profile_registries_test.go) for the default `${XDG_CONFIG_HOME}/pinocchio/profiles.yaml` fallback path.
+- Updated public docs to teach:
+  - the engine-only `profiles.<slug>.inference_settings` shape
+  - the exact precedence for `--profile-registries`, `PINOCCHIO_PROFILE_REGISTRIES`, config, and default `profiles.yaml`
+  - the migration-script workflow
+  - the fact that `pinocchio.engines.fromDefaults(...)` stays base-config-only
+
+### Why
+
+- Auto-discovery of `~/.config/pinocchio/profiles.yaml` is still useful, but it only helps users if the expected file format is explicit and easy to migrate.
+- The deleted legacy migration command should not come back as a public command surface, but its useful conversion logic was still worth salvaging in a smaller, cleaner form.
+- The docs needed to stop mixing old "runtime profile" language with the new engine-only model.
+
+### What worked
+
+- The new helper cleanly converts three useful cases:
+  - already-canonical engine-profile YAML
+  - mixed runtime profiles with `runtime.step_settings_patch`
+  - older flat profile maps where each profile directly held Geppetto section patches
+- It drops old application-level runtime fields like `runtime.system_prompt`, `runtime.middlewares`, and `runtime.tools` with explicit warnings instead of silently pretending those fields still belong here.
+- Focused helper tests passed:
+
+```bash
+go test ./pkg/cmds/helpers -count=1
+```
+
+- The migration script dry run worked on the checked-in example registry:
+
+```bash
+go run ./scripts/migrate_engine_profiles_yaml.go --dry-run --input ./examples/js/profiles/basic.yaml
+```
+
+### What didn't work
+
+- My first build used the pre-rename Geppetto codec helper names `DecodeRuntimeYAMLSingleRegistry` and `EncodeRuntimeYAMLSingleRegistry`. Those are now `DecodeEngineProfileYAMLSingleRegistry` and `EncodeEngineProfileYAMLSingleRegistry`.
+- My first patch-to-settings conversion skipped the parsed section precreation step, which caused Glazed to fail with `section ai-client not found` when converting old section-patch maps. Precreating the sections fixed it.
+- The broader `go test ./cmd/pinocchio` path was slower than expected because it shells through `go run` and had to pay a fresh toolchain/dependency download cost. That is validation noise, not a logic problem in the migration helper itself.
+
+### What I learned
+
+- The useful migration target is not just the old flat legacy map; it is the more recent mixed runtime file that still carries `runtime.step_settings_patch`. That data can be converted directly into `inference_settings`.
+- It is safer to keep the migration entry point as a script than to reintroduce a CLI subcommand that implies the mixed runtime format is still part of the main command surface.
+
+### What was tricky to build
+
+- The old patch data is stored as Geppetto section maps, not as `InferenceSettings` YAML, so the migration helper needed a local schema-backed adapter that reconstructs `InferenceSettings` from section patches.
+- The new engine-profile codec omits `default_profile_slug` on write even though the in-memory type still carries it. That is acceptable for current Pinocchio flows because slug `default` is the practical default-profile convention.
+
+### What warrants a second pair of eyes
+
+- The exact migration warnings for dropped app-level runtime fields. The current wording is direct and accurate, but it is user-facing and worth a final read.
+- Whether the default `profiles.yaml` fallback should also surface an explicit "run the migration script" hint when the file decode fails. That would be a user-experience improvement, but I left it out of this slice to keep the hard cut small.
+
+### What should be done in the future
+
+- Finish the focused validation note for the default auto-discovered `profiles.yaml` path and then commit Slice 5.
+- After that, move to the web-chat-specific follow-up, which is where the real multi-profile app-runtime concerns still live.
+
+### Code review instructions
+
+- Start with [`engine_profile_migration.go`](../../../../../../pinocchio/pkg/cmds/helpers/engine_profile_migration.go) and verify the three supported input shapes.
+- Then read [`engine_profile_migration_test.go`](../../../../../../pinocchio/pkg/cmds/helpers/engine_profile_migration_test.go).
+- Finally check the public docs in [`README.md`](../../../../../../pinocchio/README.md), [`examples/js/README.md`](../../../../../../pinocchio/examples/js/README.md), and [`05-js-runner-scripts.md`](../../../../../../pinocchio/cmd/pinocchio/doc/general/05-js-runner-scripts.md).
+
+### Technical details
+
+The key conversion path for a mixed profile now looks like:
+
+```go
+if len(raw.Runtime.StepSettingsPatch) > 0 {
+    patchSettings, err := inferenceSettingsFromSectionPatch(raw.Runtime.StepSettingsPatch)
+    ...
+    finalSettings, err = gepprofiles.MergeInferenceSettings(finalSettings, patchSettings)
+}
+```
+
+and the script entry point is intentionally tiny:
+
+```go
+result, err := cmdhelpers.MigrateEngineProfilesFile(...)
+for _, warning := range result.Warnings {
+    fmt.Fprintf(os.Stderr, "WARNING: %s\n", warning)
+}
+```

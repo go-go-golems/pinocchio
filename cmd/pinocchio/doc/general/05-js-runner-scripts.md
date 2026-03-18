@@ -198,6 +198,7 @@ pinocchio js \
 If you do not pass the flag, Pinocchio still follows its normal discovery rules:
 
 - `PINOCCHIO_PROFILE_REGISTRIES`
+- `profile-settings.profile-registries` from `--config-file`
 - `${XDG_CONFIG_HOME:-~/.config}/pinocchio/profiles.yaml` when present
 
 ### `--config-file`
@@ -211,6 +212,12 @@ pinocchio js \
 ```
 
 The command reads `profile-settings.profile-registries` and `profile-settings.profile` from that config file before applying explicit CLI overrides.
+
+If the default or configured `profiles.yaml` still uses the old mixed-runtime format, rewrite it first:
+
+```bash
+go run ./scripts/migrate_engine_profiles_yaml.go --in-place
+```
 
 ### `--profile`
 
@@ -246,6 +253,8 @@ pinocchio js --list-go-tools
 ### Engine configuration
 
 `pinocchio.engines.fromDefaults()` is the app-owned helper. It starts from Pinocchio defaults, not from a blank Geppetto config object.
+
+It intentionally stays base-config-only. It does not consult the engine-profile registry stack.
 
 `pinocchio.engines.inspectDefaults()` exposes the same bootstrap path without constructing a live engine, which is useful when debugging:
 
