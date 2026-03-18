@@ -61,3 +61,10 @@ The right architecture is:
 ### Known follow-up from this slice
 
 - `pinocchio.engines.fromDefaults({ model: ... })` still appears to need an explicit `apiType` when base Pinocchio config does not already set a provider. The command works, but the model-only fallback is not yet trustworthy enough to document as the primary path.
+
+### Discoverability slice
+
+- Updated [README.md](/home/manuel/workspaces/2026-03-17/add-opinionated-apis/pinocchio/README.md) with a dedicated `pinocchio js` section and runnable example.
+- Added [examples/js/README.md](/home/manuel/workspaces/2026-03-17/add-opinionated-apis/pinocchio/examples/js/README.md) so the example directory explains the intended script model.
+- Added a Glazed help page at [05-js-runner-scripts.md](/home/manuel/workspaces/2026-03-17/add-opinionated-apis/pinocchio/cmd/pinocchio/doc/general/05-js-runner-scripts.md).
+- Verified the help page renders correctly with `pinocchio help js-runner-scripts`.

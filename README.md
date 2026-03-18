@@ -124,6 +124,65 @@ profiles:
 Do not use `registries:` or `default_profile_slug` in runtime YAML sources.
 Keep provider credentials and other base defaults in layered app config, and use profiles for prompt/tool/middleware metadata only.
 
+## Running JavaScript scripts
+
+Pinocchio can now run JavaScript directly:
+
+```bash
+pinocchio js --script script.js
+```
+
+This command bootstraps a JS runtime with two important modules:
+
+- `require("geppetto")`
+  - the Geppetto JS API, including `gp.engines.*`, `gp.profiles.*`, and `gp.runner.*`
+- `require("pinocchio")`
+  - Pinocchio-specific helpers, starting with `pinocchio.engines.fromDefaults()`
+
+The intended model is:
+
+- Pinocchio owns config/env/default resolution for hidden base `StepSettings`
+- Pinocchio owns profile-registry discovery
+- Geppetto still owns the generic JS inference and runner API
+
+That means a script can resolve runtime from profile registries and build an engine from the same layered Pinocchio config the CLI already uses.
+
+Example:
+
+```javascript
+const gp = require("geppetto");
+const pinocchio = require("pinocchio");
+
+const engine = pinocchio.engines.fromDefaults({
+  model: "gpt-4o-mini",
+  apiType: "openai",
+});
+
+const runtime = gp.runner.resolveRuntime({
+  profile: { profileSlug: "assistant" },
+});
+
+const out = gp.runner.run({
+  engine,
+  runtime,
+  prompt: "Summarize the repo in one line.",
+});
+
+console.log(out.blocks[0].payload.text);
+```
+
+There is a runnable local example in:
+
+- [examples/js/runner-profile-demo.js](./examples/js/runner-profile-demo.js)
+
+Run it with:
+
+```bash
+pinocchio js \
+  --script examples/js/runner-profile-demo.js \
+  --profile-registries examples/js/profiles/basic.yaml
+```
+
 ## Migrating old profiles.yaml
 
 If your old file used the legacy map format, automatic migration is no longer available. Rebuild the registry manually with `runtime.system_prompt`, `runtime.tools`, and `runtime.middlewares`, and move engine/provider settings into app config.

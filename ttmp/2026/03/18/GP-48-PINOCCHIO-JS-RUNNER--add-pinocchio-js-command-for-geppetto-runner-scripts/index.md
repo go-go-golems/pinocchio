@@ -4,7 +4,7 @@ Ticket: GP-48-PINOCCHIO-JS-RUNNER
 Status: active
 Topics:
     - javascript
-    - cli
+    - config
     - pinocchio
     - geppetto
 DocType: index
@@ -44,17 +44,17 @@ The important architectural constraint is that this command should not fork a pa
 
 Current status: **active**
 
-Implementation has started. The first working slice is landed locally:
+Implementation is complete for the first product cut:
 
 - `pinocchio js` exists and is wired into the root CLI
 - `require("pinocchio").engines.fromDefaults()` exists
 - local smoke coverage works for profile-backed `gp.runner` scripts
-- docs/help cleanup is still pending
+- docs/help coverage is in place for README, example README, and `pinocchio help js-runner-scripts`
 
 ## Topics
 
 - javascript
-- cli
+- config
 - pinocchio
 - geppetto
 

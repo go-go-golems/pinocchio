@@ -18,3 +18,11 @@
   - small real Go tool registry
   - middleware factories for Pinocchio profile runtime metadata
   - smoke script under `examples/js`
+- Added discoverability and operator docs:
+  - README section for `pinocchio js`
+  - example-directory README
+  - Glazed help page `js-runner-scripts`
+- Validated:
+  - `go test ./cmd/pinocchio/... ./pkg/doc/... -count=1`
+  - `go run ./cmd/pinocchio help js-runner-scripts`
+  - `docmgr doctor --ticket GP-48-PINOCCHIO-JS-RUNNER --stale-after 30`
