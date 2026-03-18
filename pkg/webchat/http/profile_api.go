@@ -29,14 +29,14 @@ type ProfileListItem struct {
 }
 
 type ProfileDocument struct {
-	Registry    string                      `json:"registry"`
-	Slug        string                      `json:"slug"`
-	DisplayName string                      `json:"display_name,omitempty"`
-	Description string                      `json:"description,omitempty"`
-	Runtime     gepprofiles.RuntimeSpec     `json:"runtime,omitempty"`
-	Metadata    gepprofiles.ProfileMetadata `json:"metadata,omitempty"`
-	Extensions  map[string]any              `json:"extensions,omitempty"`
-	IsDefault   bool                        `json:"is_default"`
+	Registry    string                            `json:"registry"`
+	Slug        string                            `json:"slug"`
+	DisplayName string                            `json:"display_name,omitempty"`
+	Description string                            `json:"description,omitempty"`
+	Runtime     gepprofiles.RuntimeSpec           `json:"runtime,omitempty"`
+	Metadata    gepprofiles.EngineProfileMetadata `json:"metadata,omitempty"`
+	Extensions  map[string]any                    `json:"extensions,omitempty"`
+	IsDefault   bool                              `json:"is_default"`
 }
 
 type CurrentProfilePayload struct {
@@ -137,7 +137,7 @@ func RegisterProfileAPIHandlers(mux *http.ServeMux, profileRegistry gepprofiles.
 				writeProfileRegistryError(w, err)
 				return
 			}
-			profiles_, err := profileRegistry.ListProfiles(req.Context(), registrySlug)
+			profiles_, err := profileRegistry.ListEngineProfiles(req.Context(), registrySlug)
 			if err != nil {
 				writeProfileRegistryError(w, err)
 				return
@@ -156,7 +156,7 @@ func RegisterProfileAPIHandlers(mux *http.ServeMux, profileRegistry gepprofiles.
 					writeProfileRegistryError(w, err)
 					return
 				}
-				profiles_, err := profileRegistry.ListProfiles(req.Context(), registrySlug)
+				profiles_, err := profileRegistry.ListEngineProfiles(req.Context(), registrySlug)
 				if err != nil {
 					writeProfileRegistryError(w, err)
 					return
@@ -176,7 +176,7 @@ func RegisterProfileAPIHandlers(mux *http.ServeMux, profileRegistry gepprofiles.
 			http.NotFound(w, req)
 			return
 		}
-		slug, err := gepprofiles.ParseProfileSlug(slugRaw)
+		slug, err := gepprofiles.ParseEngineProfileSlug(slugRaw)
 		if err != nil {
 			http.Error(w, "invalid profile slug", http.StatusBadRequest)
 			return
@@ -198,7 +198,7 @@ func RegisterProfileAPIHandlers(mux *http.ServeMux, profileRegistry gepprofiles.
 					http.Error(w, "invalid registry", http.StatusBadRequest)
 					return
 				}
-				profile, err := profileRegistry.GetProfile(req.Context(), registrySlug, slug)
+				profile, err := profileRegistry.GetEngineProfile(req.Context(), registrySlug, slug)
 				if err != nil {
 					writeProfileRegistryError(w, err)
 					return
@@ -219,7 +219,7 @@ func RegisterProfileAPIHandlers(mux *http.ServeMux, profileRegistry gepprofiles.
 			}
 			for _, summary := range registries {
 				registrySlug := summary.Slug
-				profile, err := profileRegistry.GetProfile(req.Context(), registrySlug, slug)
+				profile, err := profileRegistry.GetEngineProfile(req.Context(), registrySlug, slug)
 				if err != nil {
 					if errors.Is(err, gepprofiles.ErrProfileNotFound) {
 						continue
@@ -246,7 +246,7 @@ func RegisterProfileAPIHandlers(mux *http.ServeMux, profileRegistry gepprofiles.
 				http.Error(w, "invalid registry", http.StatusBadRequest)
 				return
 			}
-			profile, err := profileRegistry.GetProfile(req.Context(), registrySlug, slug)
+			profile, err := profileRegistry.GetEngineProfile(req.Context(), registrySlug, slug)
 			if err != nil {
 				writeProfileRegistryError(w, err)
 				return
@@ -269,18 +269,18 @@ func RegisterProfileAPIHandlers(mux *http.ServeMux, profileRegistry gepprofiles.
 	mux.HandleFunc("/api/chat/profile", func(w http.ResponseWriter, req *http.Request) {
 		switch req.Method {
 		case http.MethodGet:
-			slug := gepprofiles.ProfileSlug("")
+			slug := gepprofiles.EngineProfileSlug("")
 			registrySlug := opts.DefaultRegistrySlug
 			if ck, err := req.Cookie(opts.CurrentProfileCookieName); err == nil && ck != nil {
 				if parsedRegistry, parsedProfile, ok := parseCurrentProfileCookieValue(strings.TrimSpace(ck.Value)); ok && profileExists(req.Context(), profileRegistry, parsedRegistry, parsedProfile) {
 					registrySlug = parsedRegistry
 					slug = parsedProfile
-				} else if parsed, err := gepprofiles.ParseProfileSlug(strings.TrimSpace(ck.Value)); err == nil && profileExists(req.Context(), profileRegistry, opts.DefaultRegistrySlug, parsed) {
+				} else if parsed, err := gepprofiles.ParseEngineProfileSlug(strings.TrimSpace(ck.Value)); err == nil && profileExists(req.Context(), profileRegistry, opts.DefaultRegistrySlug, parsed) {
 					slug = parsed
 				}
 			}
 			if slug.IsZero() {
-				defaultSlug, err := resolveDefaultProfileSlug(req.Context(), profileRegistry, registrySlug)
+				defaultSlug, err := resolveDefaultEngineProfileSlug(req.Context(), profileRegistry, registrySlug)
 				if err != nil {
 					http.Error(w, "profile registry unavailable", http.StatusInternalServerError)
 					return
@@ -298,7 +298,7 @@ func RegisterProfileAPIHandlers(mux *http.ServeMux, profileRegistry gepprofiles.
 				return
 			}
 			slugRaw := strings.TrimSpace(body.Profile)
-			slug, err := gepprofiles.ParseProfileSlug(slugRaw)
+			slug, err := gepprofiles.ParseEngineProfileSlug(slugRaw)
 			if err != nil {
 				http.Error(w, "bad request", http.StatusBadRequest)
 				return
@@ -308,7 +308,7 @@ func RegisterProfileAPIHandlers(mux *http.ServeMux, profileRegistry gepprofiles.
 				http.Error(w, "invalid registry", http.StatusBadRequest)
 				return
 			}
-			if _, err := profileRegistry.GetProfile(req.Context(), registrySlug, slug); err != nil {
+			if _, err := profileRegistry.GetEngineProfile(req.Context(), registrySlug, slug); err != nil {
 				if errors.Is(err, gepprofiles.ErrProfileNotFound) {
 					http.Error(w, "profile not found", http.StatusNotFound)
 					return
@@ -334,11 +334,11 @@ func RegisterProfileAPIHandlers(mux *http.ServeMux, profileRegistry gepprofiles.
 	})
 }
 
-func formatCurrentProfileCookieValue(registrySlug gepprofiles.RegistrySlug, profileSlug gepprofiles.ProfileSlug) string {
+func formatCurrentProfileCookieValue(registrySlug gepprofiles.RegistrySlug, profileSlug gepprofiles.EngineProfileSlug) string {
 	return registrySlug.String() + "/" + profileSlug.String()
 }
 
-func parseCurrentProfileCookieValue(raw string) (gepprofiles.RegistrySlug, gepprofiles.ProfileSlug, bool) {
+func parseCurrentProfileCookieValue(raw string) (gepprofiles.RegistrySlug, gepprofiles.EngineProfileSlug, bool) {
 	parts := strings.SplitN(strings.TrimSpace(raw), "/", 2)
 	if len(parts) != 2 {
 		return "", "", false
@@ -347,7 +347,7 @@ func parseCurrentProfileCookieValue(raw string) (gepprofiles.RegistrySlug, geppr
 	if err != nil {
 		return "", "", false
 	}
-	profileSlug, err := gepprofiles.ParseProfileSlug(parts[1])
+	profileSlug, err := gepprofiles.ParseEngineProfileSlug(parts[1])
 	if err != nil {
 		return "", "", false
 	}
@@ -393,7 +393,7 @@ func resolveRegistrySlugForAPI(req *http.Request, defaultSlug gepprofiles.Regist
 	return registrySlug, nil
 }
 
-func profileDocFromModel(registrySlug gepprofiles.RegistrySlug, registry *gepprofiles.ProfileRegistry, p *gepprofiles.Profile) ProfileDocument {
+func profileDocFromModel(registrySlug gepprofiles.RegistrySlug, registry *gepprofiles.EngineProfileRegistry, p *gepprofiles.EngineProfile) ProfileDocument {
 	doc := ProfileDocument{Registry: registrySlug.String()}
 	if p == nil {
 		return doc
@@ -404,11 +404,11 @@ func profileDocFromModel(registrySlug gepprofiles.RegistrySlug, registry *geppro
 	doc.Runtime = p.Runtime
 	doc.Metadata = p.Metadata
 	doc.Extensions = cloneExtensionMap(p.Extensions)
-	doc.IsDefault = registry != nil && registry.DefaultProfileSlug == p.Slug
+	doc.IsDefault = registry != nil && registry.DefaultEngineProfileSlug == p.Slug
 	return doc
 }
 
-func profileListItemsFromRegistry(registrySlug gepprofiles.RegistrySlug, registry *gepprofiles.ProfileRegistry, profiles_ []*gepprofiles.Profile) []ProfileListItem {
+func profileListItemsFromRegistry(registrySlug gepprofiles.RegistrySlug, registry *gepprofiles.EngineProfileRegistry, profiles_ []*gepprofiles.EngineProfile) []ProfileListItem {
 	sort.Slice(profiles_, func(i, j int) bool {
 		if profiles_[i] == nil {
 			return false
@@ -431,7 +431,7 @@ func profileListItemsFromRegistry(registrySlug gepprofiles.RegistrySlug, registr
 			Description:   p.Description,
 			DefaultPrompt: p.Runtime.SystemPrompt,
 			Extensions:    cloneExtensionMap(p.Extensions),
-			IsDefault:     registry != nil && registry.DefaultProfileSlug == p.Slug,
+			IsDefault:     registry != nil && registry.DefaultEngineProfileSlug == p.Slug,
 			Version:       p.Metadata.Version,
 		})
 	}
@@ -641,18 +641,18 @@ func writeJSONResponse(w http.ResponseWriter, status int, payload any) {
 	_ = json.NewEncoder(w).Encode(payload)
 }
 
-func resolveDefaultProfileSlug(ctx context.Context, profileRegistry gepprofiles.Registry, registrySlug gepprofiles.RegistrySlug) (gepprofiles.ProfileSlug, error) {
+func resolveDefaultEngineProfileSlug(ctx context.Context, profileRegistry gepprofiles.Registry, registrySlug gepprofiles.RegistrySlug) (gepprofiles.EngineProfileSlug, error) {
 	registry, err := profileRegistry.GetRegistry(ctx, registrySlug)
 	if err != nil {
 		return "", err
 	}
-	if registry != nil && !registry.DefaultProfileSlug.IsZero() {
-		return registry.DefaultProfileSlug, nil
+	if registry != nil && !registry.DefaultEngineProfileSlug.IsZero() {
+		return registry.DefaultEngineProfileSlug, nil
 	}
-	return gepprofiles.MustProfileSlug("default"), nil
+	return gepprofiles.MustEngineProfileSlug("default"), nil
 }
 
-func profileExists(ctx context.Context, profileRegistry gepprofiles.Registry, registrySlug gepprofiles.RegistrySlug, slug gepprofiles.ProfileSlug) bool {
-	_, err := profileRegistry.GetProfile(ctx, registrySlug, slug)
+func profileExists(ctx context.Context, profileRegistry gepprofiles.Registry, registrySlug gepprofiles.RegistrySlug, slug gepprofiles.EngineProfileSlug) bool {
+	_, err := profileRegistry.GetEngineProfile(ctx, registrySlug, slug)
 	return err == nil
 }

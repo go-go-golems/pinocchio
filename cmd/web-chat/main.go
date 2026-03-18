@@ -304,7 +304,7 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 		{Name: "category_regexp_reviewer", Prompt: "Review proposed regex patterns and assess over/under matching risks."},
 	})
 
-	profileRegistryEntries, err := gepprofiles.ParseProfileRegistrySourceEntries(s.ProfileRegistries)
+	profileRegistryEntries, err := gepprofiles.ParseEngineProfileRegistrySourceEntries(s.ProfileRegistries)
 	if err != nil {
 		return errors.Wrap(err, "parse profile registry sources")
 	}

@@ -11,17 +11,17 @@ import (
 func TestManagerResolveDefaultProfile(t *testing.T) {
 	ctx := context.Background()
 
-	store := gepprofiles.NewInMemoryProfileStore()
-	reg := &gepprofiles.ProfileRegistry{
-		Slug:               gepprofiles.MustRegistrySlug("default"),
-		DefaultProfileSlug: gepprofiles.MustProfileSlug("default"),
-		Profiles: map[gepprofiles.ProfileSlug]*gepprofiles.Profile{
-			gepprofiles.MustProfileSlug("default"): {
-				Slug: gepprofiles.MustProfileSlug("default"),
+	store := gepprofiles.NewInMemoryEngineProfileStore()
+	reg := &gepprofiles.EngineProfileRegistry{
+		Slug:                     gepprofiles.MustRegistrySlug("default"),
+		DefaultEngineProfileSlug: gepprofiles.MustEngineProfileSlug("default"),
+		Profiles: map[gepprofiles.EngineProfileSlug]*gepprofiles.EngineProfile{
+			gepprofiles.MustEngineProfileSlug("default"): {
+				Slug: gepprofiles.MustEngineProfileSlug("default"),
 				Runtime: gepprofiles.RuntimeSpec{
 					SystemPrompt: "hello",
 				},
-				Metadata: gepprofiles.ProfileMetadata{Version: 3},
+				Metadata: gepprofiles.EngineProfileMetadata{Version: 3},
 			},
 		},
 	}

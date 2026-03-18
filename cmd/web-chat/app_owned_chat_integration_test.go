@@ -89,9 +89,9 @@ func newAppOwnedIntegrationServer(t *testing.T) *httptest.Server {
 
 	profileRegistry, err := newInMemoryProfileService(
 		"default",
-		&gepprofiles.Profile{Slug: gepprofiles.MustProfileSlug("default"), Runtime: gepprofiles.RuntimeSpec{SystemPrompt: "You are default"}},
-		&gepprofiles.Profile{
-			Slug:    gepprofiles.MustProfileSlug("agent"),
+		&gepprofiles.EngineProfile{Slug: gepprofiles.MustEngineProfileSlug("default"), Runtime: gepprofiles.RuntimeSpec{SystemPrompt: "You are default"}},
+		&gepprofiles.EngineProfile{
+			Slug:    gepprofiles.MustEngineProfileSlug("agent"),
 			Runtime: gepprofiles.RuntimeSpec{SystemPrompt: "You are agent"},
 		},
 	)

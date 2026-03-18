@@ -594,7 +594,7 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) (*tu
 			}
 			defer func() { _ = mgr.Close() }()
 
-			items, err := mgr.ListProfiles(ctx)
+			items, err := mgr.ListEngineProfiles(ctx)
 			if err != nil {
 				return err
 			}

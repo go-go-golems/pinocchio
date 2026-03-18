@@ -10,7 +10,6 @@ import (
 	"sort"
 	"strings"
 
-	clay_profiles "github.com/go-go-golems/clay/pkg/cmds/profiles"
 	gepprofiles "github.com/go-go-golems/geppetto/pkg/engineprofiles"
 	"github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/cmds/fields"
@@ -171,11 +170,11 @@ func (c *MigrateLegacyProfilesCommand) RunIntoWriter(
 func MigrateLegacyProfilesFile(opts LegacyProfilesMigrationOptions) (*LegacyProfilesMigrationResult, error) {
 	inputPath := strings.TrimSpace(opts.InputPath)
 	if inputPath == "" {
-		var err error
-		inputPath, err = clay_profiles.GetProfilesPathForApp("pinocchio")
+		configDir, err := os.UserConfigDir()
 		if err != nil {
-			return nil, fmt.Errorf("resolve default pinocchio profiles path: %w", err)
+			return nil, fmt.Errorf("resolve user config dir: %w", err)
 		}
+		inputPath = filepath.Join(configDir, "pinocchio", "profiles.yaml")
 	}
 	inputPath = filepath.Clean(inputPath)
 
@@ -207,7 +206,7 @@ func MigrateLegacyProfilesFile(opts LegacyProfilesMigrationOptions) (*LegacyProf
 		return nil, fmt.Errorf("input profiles file %q is empty", inputPath)
 	}
 
-	var runtimeRegistry *gepprofiles.ProfileRegistry
+	var runtimeRegistry *gepprofiles.EngineProfileRegistry
 	switch inputFormat {
 	case "legacy-map":
 		runtimeRegistry, err = convertLegacyProfilesMapToRuntimeRegistry(raw, registrySlug)
@@ -317,7 +316,7 @@ func detectProfilesYAMLFormat(data []byte) string {
 	return "legacy-map"
 }
 
-func convertLegacyProfilesMapToRuntimeRegistry(data []byte, registrySlug gepprofiles.RegistrySlug) (*gepprofiles.ProfileRegistry, error) {
+func convertLegacyProfilesMapToRuntimeRegistry(data []byte, registrySlug gepprofiles.RegistrySlug) (*gepprofiles.EngineProfileRegistry, error) {
 	var raw map[string]any
 	if err := yaml.Unmarshal(data, &raw); err != nil {
 		return nil, err
@@ -335,9 +334,9 @@ func convertLegacyProfilesMapToRuntimeRegistry(data []byte, registrySlug gepprof
 	}
 	sort.Strings(profileKeyOrder)
 
-	profiles := map[gepprofiles.ProfileSlug]*gepprofiles.Profile{}
+	profiles := map[gepprofiles.EngineProfileSlug]*gepprofiles.EngineProfile{}
 	for _, profileKey := range profileKeyOrder {
-		profileSlug, err := gepprofiles.ParseProfileSlug(profileKey)
+		profileSlug, err := gepprofiles.ParseEngineProfileSlug(profileKey)
 		if err != nil {
 			return nil, err
 		}
@@ -348,20 +347,20 @@ func convertLegacyProfilesMapToRuntimeRegistry(data []byte, registrySlug gepprof
 		if len(sectionPatch) > 0 {
 			return nil, fmt.Errorf("legacy profile %q cannot be migrated: runtime.step_settings_patch has been removed; rebuild this profile with runtime system_prompt/tools/middlewares and move engine settings to app config", profileKey)
 		}
-		profiles[profileSlug] = &gepprofiles.Profile{Slug: profileSlug}
+		profiles[profileSlug] = &gepprofiles.EngineProfile{Slug: profileSlug}
 	}
 
-	defaultProfile := gepprofiles.ProfileSlug("")
-	if _, ok := profiles[gepprofiles.MustProfileSlug("default")]; ok {
-		defaultProfile = gepprofiles.MustProfileSlug("default")
+	defaultProfile := gepprofiles.EngineProfileSlug("")
+	if _, ok := profiles[gepprofiles.MustEngineProfileSlug("default")]; ok {
+		defaultProfile = gepprofiles.MustEngineProfileSlug("default")
 	} else if len(profileKeyOrder) > 0 {
-		defaultProfile = gepprofiles.MustProfileSlug(profileKeyOrder[0])
+		defaultProfile = gepprofiles.MustEngineProfileSlug(profileKeyOrder[0])
 	}
 
-	registry := &gepprofiles.ProfileRegistry{
-		Slug:               registrySlug,
-		DefaultProfileSlug: defaultProfile,
-		Profiles:           profiles,
+	registry := &gepprofiles.EngineProfileRegistry{
+		Slug:                     registrySlug,
+		DefaultEngineProfileSlug: defaultProfile,
+		Profiles:                 profiles,
 	}
 	if err := gepprofiles.ValidateRegistry(registry); err != nil {
 		return nil, err
@@ -370,14 +369,14 @@ func convertLegacyProfilesMapToRuntimeRegistry(data []byte, registrySlug gepprof
 }
 
 type runtimeRegistryYAML struct {
-	Slug        gepprofiles.RegistrySlug                         `yaml:"slug"`
-	DisplayName string                                           `yaml:"display_name,omitempty"`
-	Description string                                           `yaml:"description,omitempty"`
-	Profiles    map[gepprofiles.ProfileSlug]*gepprofiles.Profile `yaml:"profiles,omitempty"`
-	Metadata    gepprofiles.RegistryMetadata                     `yaml:"metadata,omitempty"`
+	Slug        gepprofiles.RegistrySlug                                     `yaml:"slug"`
+	DisplayName string                                                       `yaml:"display_name,omitempty"`
+	Description string                                                       `yaml:"description,omitempty"`
+	Profiles    map[gepprofiles.EngineProfileSlug]*gepprofiles.EngineProfile `yaml:"profiles,omitempty"`
+	Metadata    gepprofiles.RegistryMetadata                                 `yaml:"metadata,omitempty"`
 }
 
-func encodeRuntimeRegistryYAML(registry *gepprofiles.ProfileRegistry) ([]byte, error) {
+func encodeRuntimeRegistryYAML(registry *gepprofiles.EngineProfileRegistry) ([]byte, error) {
 	if registry == nil {
 		return nil, fmt.Errorf("runtime registry is nil")
 	}

@@ -98,8 +98,8 @@ profiles:
 func TestWebChatProfileResolver_WS_DefaultProfile(t *testing.T) {
 	profileRegistry, err := newInMemoryProfileService(
 		"default",
-		&gepprofiles.Profile{Slug: gepprofiles.MustProfileSlug("default"), Runtime: gepprofiles.RuntimeSpec{SystemPrompt: "You are default"}},
-		&gepprofiles.Profile{Slug: gepprofiles.MustProfileSlug("agent"), Runtime: gepprofiles.RuntimeSpec{SystemPrompt: "You are agent"}},
+		&gepprofiles.EngineProfile{Slug: gepprofiles.MustEngineProfileSlug("default"), Runtime: gepprofiles.RuntimeSpec{SystemPrompt: "You are default"}},
+		&gepprofiles.EngineProfile{Slug: gepprofiles.MustEngineProfileSlug("agent"), Runtime: gepprofiles.RuntimeSpec{SystemPrompt: "You are agent"}},
 	)
 	require.NoError(t, err)
 	resolver := newProfileRequestResolver(profileRegistry, gepprofiles.MustRegistrySlug(defaultRegistrySlug), nil)
@@ -122,8 +122,8 @@ func TestWebChatProfileResolver_WS_DefaultProfile(t *testing.T) {
 func TestRegisterProfileHandlers_GetAndSetProfile(t *testing.T) {
 	profileRegistry, err := newInMemoryProfileService(
 		"default",
-		&gepprofiles.Profile{Slug: gepprofiles.MustProfileSlug("default"), Runtime: gepprofiles.RuntimeSpec{SystemPrompt: "You are default"}},
-		&gepprofiles.Profile{Slug: gepprofiles.MustProfileSlug("agent"), Runtime: gepprofiles.RuntimeSpec{SystemPrompt: "You are agent"}},
+		&gepprofiles.EngineProfile{Slug: gepprofiles.MustEngineProfileSlug("default"), Runtime: gepprofiles.RuntimeSpec{SystemPrompt: "You are default"}},
+		&gepprofiles.EngineProfile{Slug: gepprofiles.MustEngineProfileSlug("agent"), Runtime: gepprofiles.RuntimeSpec{SystemPrompt: "You are agent"}},
 	)
 	require.NoError(t, err)
 	resolver := newProfileRequestResolver(profileRegistry, gepprofiles.MustRegistrySlug(defaultRegistrySlug), nil)
@@ -306,8 +306,8 @@ func TestWebChatProfileResolver_Chat_UnknownRegistryQueryReturnsNotFound(t *test
 func TestProfileAPI_SchemaEndpoints(t *testing.T) {
 	profileRegistry, err := newInMemoryProfileService(
 		"default",
-		&gepprofiles.Profile{
-			Slug:    gepprofiles.MustProfileSlug("default"),
+		&gepprofiles.EngineProfile{
+			Slug:    gepprofiles.MustEngineProfileSlug("default"),
 			Runtime: gepprofiles.RuntimeSpec{SystemPrompt: "You are default"},
 		},
 	)
@@ -363,12 +363,12 @@ func TestProfileAPI_SchemaEndpoints(t *testing.T) {
 func TestWebChatProfileResolver_ProfilePrecedence(t *testing.T) {
 	profileRegistry, err := newInMemoryProfileService(
 		"default",
-		&gepprofiles.Profile{Slug: gepprofiles.MustProfileSlug("default"), Runtime: gepprofiles.RuntimeSpec{SystemPrompt: "default"}},
-		&gepprofiles.Profile{Slug: gepprofiles.MustProfileSlug("path"), Runtime: gepprofiles.RuntimeSpec{SystemPrompt: "path"}},
-		&gepprofiles.Profile{Slug: gepprofiles.MustProfileSlug("body"), Runtime: gepprofiles.RuntimeSpec{SystemPrompt: "body"}},
-		&gepprofiles.Profile{Slug: gepprofiles.MustProfileSlug("query"), Runtime: gepprofiles.RuntimeSpec{SystemPrompt: "query"}},
-		&gepprofiles.Profile{Slug: gepprofiles.MustProfileSlug("runtime"), Runtime: gepprofiles.RuntimeSpec{SystemPrompt: "runtime"}},
-		&gepprofiles.Profile{Slug: gepprofiles.MustProfileSlug("cookie"), Runtime: gepprofiles.RuntimeSpec{SystemPrompt: "cookie"}},
+		&gepprofiles.EngineProfile{Slug: gepprofiles.MustEngineProfileSlug("default"), Runtime: gepprofiles.RuntimeSpec{SystemPrompt: "default"}},
+		&gepprofiles.EngineProfile{Slug: gepprofiles.MustEngineProfileSlug("path"), Runtime: gepprofiles.RuntimeSpec{SystemPrompt: "path"}},
+		&gepprofiles.EngineProfile{Slug: gepprofiles.MustEngineProfileSlug("body"), Runtime: gepprofiles.RuntimeSpec{SystemPrompt: "body"}},
+		&gepprofiles.EngineProfile{Slug: gepprofiles.MustEngineProfileSlug("query"), Runtime: gepprofiles.RuntimeSpec{SystemPrompt: "query"}},
+		&gepprofiles.EngineProfile{Slug: gepprofiles.MustEngineProfileSlug("runtime"), Runtime: gepprofiles.RuntimeSpec{SystemPrompt: "runtime"}},
+		&gepprofiles.EngineProfile{Slug: gepprofiles.MustEngineProfileSlug("cookie"), Runtime: gepprofiles.RuntimeSpec{SystemPrompt: "cookie"}},
 	)
 	require.NoError(t, err)
 	resolver := newProfileRequestResolver(profileRegistry, gepprofiles.MustRegistrySlug(defaultRegistrySlug), nil)
@@ -474,19 +474,19 @@ func TestNewSQLiteProfileService_BootstrapAndReopen(t *testing.T) {
 		"",
 		dbPath,
 		"default",
-		&gepprofiles.Profile{
-			Slug:    gepprofiles.MustProfileSlug("default"),
+		&gepprofiles.EngineProfile{
+			Slug:    gepprofiles.MustEngineProfileSlug("default"),
 			Runtime: gepprofiles.RuntimeSpec{SystemPrompt: "You are default"},
 		},
-		&gepprofiles.Profile{
-			Slug:    gepprofiles.MustProfileSlug("agent"),
+		&gepprofiles.EngineProfile{
+			Slug:    gepprofiles.MustEngineProfileSlug("agent"),
 			Runtime: gepprofiles.RuntimeSpec{SystemPrompt: "You are agent"},
 		},
 	)
 	require.NoError(t, err)
 	t.Cleanup(cleanup)
 
-	profiles_, err := registry.ListProfiles(context.Background(), gepprofiles.MustRegistrySlug(defaultRegistrySlug))
+	profiles_, err := registry.ListEngineProfiles(context.Background(), gepprofiles.MustRegistrySlug(defaultRegistrySlug))
 	require.NoError(t, err)
 	require.Len(t, profiles_, 2)
 
@@ -494,19 +494,19 @@ func TestNewSQLiteProfileService_BootstrapAndReopen(t *testing.T) {
 		"",
 		dbPath,
 		"default",
-		&gepprofiles.Profile{
-			Slug:    gepprofiles.MustProfileSlug("default"),
+		&gepprofiles.EngineProfile{
+			Slug:    gepprofiles.MustEngineProfileSlug("default"),
 			Runtime: gepprofiles.RuntimeSpec{SystemPrompt: "You are default"},
 		},
-		&gepprofiles.Profile{
-			Slug:    gepprofiles.MustProfileSlug("agent"),
+		&gepprofiles.EngineProfile{
+			Slug:    gepprofiles.MustEngineProfileSlug("agent"),
 			Runtime: gepprofiles.RuntimeSpec{SystemPrompt: "You are agent"},
 		},
 	)
 	require.NoError(t, err)
 	t.Cleanup(cleanupAgain)
 
-	profilesAgain, err := registryAgain.ListProfiles(context.Background(), gepprofiles.MustRegistrySlug(defaultRegistrySlug))
+	profilesAgain, err := registryAgain.ListEngineProfiles(context.Background(), gepprofiles.MustRegistrySlug(defaultRegistrySlug))
 	require.NoError(t, err)
 	require.Len(t, profilesAgain, 2)
 }

@@ -23,11 +23,11 @@ const (
 	currentProfileCookieName = "chat_profile"
 )
 
-func buildBootstrapRegistry(defaultSlug string, profileDefs ...*gepprofiles.Profile) (*gepprofiles.ProfileRegistry, error) {
+func buildBootstrapRegistry(defaultSlug string, profileDefs ...*gepprofiles.EngineProfile) (*gepprofiles.EngineProfileRegistry, error) {
 	registrySlug := gepprofiles.MustRegistrySlug(defaultRegistrySlug)
-	registry := &gepprofiles.ProfileRegistry{
+	registry := &gepprofiles.EngineProfileRegistry{
 		Slug:     registrySlug,
-		Profiles: map[gepprofiles.ProfileSlug]*gepprofiles.Profile{},
+		Profiles: map[gepprofiles.EngineProfileSlug]*gepprofiles.EngineProfile{},
 	}
 
 	for _, profile := range profileDefs {
@@ -38,26 +38,26 @@ func buildBootstrapRegistry(defaultSlug string, profileDefs ...*gepprofiles.Prof
 		if clone == nil {
 			continue
 		}
-		if err := gepprofiles.ValidateProfile(clone); err != nil {
+		if err := gepprofiles.ValidateEngineProfile(clone); err != nil {
 			return nil, err
 		}
 		registry.Profiles[clone.Slug] = clone
 	}
 
 	if strings.TrimSpace(defaultSlug) != "" {
-		slug, err := gepprofiles.ParseProfileSlug(defaultSlug)
+		slug, err := gepprofiles.ParseEngineProfileSlug(defaultSlug)
 		if err != nil {
 			return nil, err
 		}
-		registry.DefaultProfileSlug = slug
+		registry.DefaultEngineProfileSlug = slug
 	}
 
 	if len(registry.Profiles) > 0 {
-		if registry.DefaultProfileSlug.IsZero() {
-			registry.DefaultProfileSlug = firstProfileSlug(registry.Profiles)
+		if registry.DefaultEngineProfileSlug.IsZero() {
+			registry.DefaultEngineProfileSlug = firstProfileSlug(registry.Profiles)
 		}
-		if _, ok := registry.Profiles[registry.DefaultProfileSlug]; !ok {
-			registry.DefaultProfileSlug = firstProfileSlug(registry.Profiles)
+		if _, ok := registry.Profiles[registry.DefaultEngineProfileSlug]; !ok {
+			registry.DefaultEngineProfileSlug = firstProfileSlug(registry.Profiles)
 		}
 	}
 
@@ -67,14 +67,14 @@ func buildBootstrapRegistry(defaultSlug string, profileDefs ...*gepprofiles.Prof
 	return registry, nil
 }
 
-func newInMemoryProfileService(defaultSlug string, profileDefs ...*gepprofiles.Profile) (gepprofiles.Registry, error) {
+func newInMemoryProfileService(defaultSlug string, profileDefs ...*gepprofiles.EngineProfile) (gepprofiles.Registry, error) {
 	registrySlug := gepprofiles.MustRegistrySlug(defaultRegistrySlug)
 	registry, err := buildBootstrapRegistry(defaultSlug, profileDefs...)
 	if err != nil {
 		return nil, err
 	}
 
-	store := gepprofiles.NewInMemoryProfileStore()
+	store := gepprofiles.NewInMemoryEngineProfileStore()
 	if err := store.UpsertRegistry(context.Background(), registry, gepprofiles.SaveOptions{Actor: "web-chat", Source: "builtin"}); err != nil {
 		return nil, err
 	}
@@ -85,7 +85,7 @@ func newSQLiteProfileService(
 	dsn string,
 	dbPath string,
 	defaultSlug string,
-	profileDefs ...*gepprofiles.Profile,
+	profileDefs ...*gepprofiles.EngineProfile,
 ) (gepprofiles.Registry, func(), error) {
 	registrySlug := gepprofiles.MustRegistrySlug(defaultRegistrySlug)
 	dsn = strings.TrimSpace(dsn)
@@ -107,7 +107,7 @@ func newSQLiteProfileService(
 		}
 	}
 
-	store, err := gepprofiles.NewSQLiteProfileStore(dsn, registrySlug)
+	store, err := gepprofiles.NewSQLiteEngineProfileStore(dsn, registrySlug)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -141,8 +141,8 @@ func newSQLiteProfileService(
 	return svc, cleanup, nil
 }
 
-func firstProfileSlug(profiles map[gepprofiles.ProfileSlug]*gepprofiles.Profile) gepprofiles.ProfileSlug {
-	slugs := make([]gepprofiles.ProfileSlug, 0, len(profiles))
+func firstProfileSlug(profiles map[gepprofiles.EngineProfileSlug]*gepprofiles.EngineProfile) gepprofiles.EngineProfileSlug {
+	slugs := make([]gepprofiles.EngineProfileSlug, 0, len(profiles))
 	for slug := range profiles {
 		slugs = append(slugs, slug)
 	}
@@ -268,7 +268,7 @@ func (r *ProfileRequestResolver) resolveProfileSelection(
 	req *http.Request,
 	pathSlug string,
 	bodyProfileRaw string,
-) (gepprofiles.ProfileSlug, error) {
+) (gepprofiles.EngineProfileSlug, error) {
 	if r == nil || r.profileRegistry == nil {
 		return "", &webhttp.RequestResolutionError{Status: http.StatusInternalServerError, ClientMsg: "profile resolver is not configured"}
 	}
@@ -292,7 +292,7 @@ func (r *ProfileRequestResolver) resolveProfileSelection(
 		return "", nil
 	}
 
-	slug, err := gepprofiles.ParseProfileSlug(slugRaw)
+	slug, err := gepprofiles.ParseEngineProfileSlug(slugRaw)
 	if err != nil {
 		return "", &webhttp.RequestResolutionError{Status: http.StatusBadRequest, ClientMsg: "invalid profile: " + slugRaw, Err: err}
 	}
@@ -302,24 +302,24 @@ func (r *ProfileRequestResolver) resolveProfileSelection(
 func (r *ProfileRequestResolver) resolveEffectiveProfile(
 	ctx context.Context,
 	registrySlug gepprofiles.RegistrySlug,
-	profileSlug gepprofiles.ProfileSlug,
-) (*gepprofiles.ResolvedProfile, error) {
+	profileSlug gepprofiles.EngineProfileSlug,
+) (*gepprofiles.ResolvedEngineProfile, error) {
 	in := gepprofiles.ResolveInput{
-		RegistrySlug: registrySlug,
-		ProfileSlug:  profileSlug,
+		RegistrySlug:      registrySlug,
+		EngineProfileSlug: profileSlug,
 	}
-	resolved, err := r.profileRegistry.ResolveEffectiveProfile(ctx, in)
+	resolved, err := r.profileRegistry.ResolveEngineProfile(ctx, in)
 	if err != nil {
 		return nil, r.toRequestResolutionError(err, profileSlug.String())
 	}
 	return resolved, nil
 }
 
-func runtimeKeyFromResolvedProfile(resolved *gepprofiles.ResolvedProfile) string {
+func runtimeKeyFromResolvedProfile(resolved *gepprofiles.ResolvedEngineProfile) string {
 	if resolved == nil {
 		return ""
 	}
-	if slug := strings.TrimSpace(resolved.ProfileSlug.String()); slug != "" {
+	if slug := strings.TrimSpace(resolved.EngineProfileSlug.String()); slug != "" {
 		return slug
 	}
 	return "default"
@@ -358,7 +358,7 @@ func (r *ProfileRequestResolver) resolveRegistrySelection(req *http.Request, bod
 	return registrySlug, nil
 }
 
-func (r *ProfileRequestResolver) resolveProfileSlugFromCookie(ctx context.Context, raw string) (gepprofiles.ProfileSlug, bool) {
+func (r *ProfileRequestResolver) resolveProfileSlugFromCookie(ctx context.Context, raw string) (gepprofiles.EngineProfileSlug, bool) {
 	if r == nil || r.profileRegistry == nil {
 		return "", false
 	}
@@ -369,11 +369,11 @@ func (r *ProfileRequestResolver) resolveProfileSlugFromCookie(ctx context.Contex
 		return cookieProfile, true
 	}
 
-	legacyProfile, err := gepprofiles.ParseProfileSlug(strings.TrimSpace(raw))
+	legacyProfile, err := gepprofiles.ParseEngineProfileSlug(strings.TrimSpace(raw))
 	if err != nil {
 		return "", false
 	}
-	if _, err := r.profileRegistry.GetProfile(ctx, r.defaultRegistrySlug, legacyProfile); err != nil {
+	if _, err := r.profileRegistry.GetEngineProfile(ctx, r.defaultRegistrySlug, legacyProfile); err != nil {
 		return "", false
 	}
 	return legacyProfile, true
@@ -398,7 +398,7 @@ func rejectLegacyProfileSelectors(req *http.Request, legacyRuntimeKey string, le
 	return nil
 }
 
-func parseCurrentProfileCookieValue(raw string) (gepprofiles.RegistrySlug, gepprofiles.ProfileSlug, bool) {
+func parseCurrentProfileCookieValue(raw string) (gepprofiles.RegistrySlug, gepprofiles.EngineProfileSlug, bool) {
 	parts := strings.SplitN(strings.TrimSpace(raw), "/", 2)
 	if len(parts) != 2 {
 		return "", "", false
@@ -407,7 +407,7 @@ func parseCurrentProfileCookieValue(raw string) (gepprofiles.RegistrySlug, geppr
 	if err != nil {
 		return "", "", false
 	}
-	profileSlug, err := gepprofiles.ParseProfileSlug(parts[1])
+	profileSlug, err := gepprofiles.ParseEngineProfileSlug(parts[1])
 	if err != nil {
 		return "", "", false
 	}

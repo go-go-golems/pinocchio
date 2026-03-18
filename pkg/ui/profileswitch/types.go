@@ -7,7 +7,7 @@ import (
 
 type ProfileListItem struct {
 	RegistrySlug gepprofiles.RegistrySlug
-	ProfileSlug  gepprofiles.ProfileSlug
+	ProfileSlug  gepprofiles.EngineProfileSlug
 	DisplayName  string
 	Description  string
 	IsDefault    bool
@@ -18,7 +18,7 @@ type ProfileListItem struct {
 // by the UI and persistence layers.
 type Resolved struct {
 	RegistrySlug gepprofiles.RegistrySlug
-	ProfileSlug  gepprofiles.ProfileSlug
+	ProfileSlug  gepprofiles.EngineProfileSlug
 	RuntimeKey   gepprofiles.RuntimeKey
 
 	RuntimeFingerprint string

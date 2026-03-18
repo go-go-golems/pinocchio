@@ -25,7 +25,7 @@ func NewManagerFromSources(ctx context.Context, sources string, base *settings.I
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	entries, err := gepprofiles.ParseProfileRegistrySourceEntries(sources)
+	entries, err := gepprofiles.ParseEngineProfileRegistrySourceEntries(sources)
 	if err != nil {
 		return nil, err
 	}
@@ -79,7 +79,7 @@ func (m *Manager) Current() Resolved {
 	return m.resolved
 }
 
-func (m *Manager) ListProfiles(ctx context.Context) ([]ProfileListItem, error) {
+func (m *Manager) ListEngineProfiles(ctx context.Context) ([]ProfileListItem, error) {
 	if m == nil || m.reg == nil {
 		return nil, errors.New("profile manager: not initialized")
 	}
@@ -97,7 +97,7 @@ func (m *Manager) ListProfiles(ctx context.Context) ([]ProfileListItem, error) {
 	items := make([]ProfileListItem, 0, 32)
 	for _, rs := range regs {
 		regSlug := rs.Slug
-		profiles, err := m.reg.ListProfiles(ctx, regSlug)
+		profiles, err := m.reg.ListEngineProfiles(ctx, regSlug)
 		if err != nil {
 			return nil, err
 		}
@@ -110,7 +110,7 @@ func (m *Manager) ListProfiles(ctx context.Context) ([]ProfileListItem, error) {
 				ProfileSlug:  p.Slug,
 				DisplayName:  strings.TrimSpace(p.DisplayName),
 				Description:  strings.TrimSpace(p.Description),
-				IsDefault:    rs.DefaultProfileSlug == p.Slug,
+				IsDefault:    rs.DefaultEngineProfileSlug == p.Slug,
 				Version:      p.Metadata.Version,
 			})
 		}
@@ -138,14 +138,14 @@ func (m *Manager) Resolve(ctx context.Context, profileSlug string) (Resolved, er
 	var in gepprofiles.ResolveInput
 
 	if strings.TrimSpace(profileSlug) != "" {
-		ps, err := gepprofiles.ParseProfileSlug(profileSlug)
+		ps, err := gepprofiles.ParseEngineProfileSlug(profileSlug)
 		if err != nil {
 			return Resolved{}, err
 		}
-		in.ProfileSlug = ps
+		in.EngineProfileSlug = ps
 	}
 
-	resolved, err := m.reg.ResolveEffectiveProfile(ctx, in)
+	resolved, err := m.reg.ResolveEngineProfile(ctx, in)
 	if err != nil {
 		return Resolved{}, err
 	}
@@ -164,7 +164,7 @@ func (m *Manager) Resolve(ctx context.Context, profileSlug string) (Resolved, er
 
 	out := Resolved{
 		RegistrySlug:       resolved.RegistrySlug,
-		ProfileSlug:        resolved.ProfileSlug,
+		ProfileSlug:        resolved.EngineProfileSlug,
 		RuntimeKey:         resolved.RuntimeKey,
 		RuntimeFingerprint: strings.TrimSpace(resolved.RuntimeFingerprint),
 		SystemPrompt:       sysPrompt,
