@@ -15,6 +15,7 @@ import (
 	aisettings "github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 	"github.com/google/uuid"
 
+	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 	webhttp "github.com/go-go-golems/pinocchio/pkg/webchat/http"
 )
 
@@ -206,15 +207,18 @@ func (r *ProfileRequestResolver) resolveWS(req *http.Request) (webhttp.ResolvedC
 	if err != nil {
 		return webhttp.ResolvedConversationRequest{}, err
 	}
-	resolvedRuntime := resolvedProfile.EffectiveRuntime
+	resolvedRuntime, err := r.resolveProfileRuntime(context.Background(), resolvedProfile)
+	if err != nil {
+		return webhttp.ResolvedConversationRequest{}, err
+	}
 
 	return webhttp.ResolvedConversationRequest{
 		ConvID:                    convID,
 		RuntimeKey:                runtimeKeyFromResolvedProfile(resolvedProfile),
-		RuntimeFingerprint:        resolvedProfile.RuntimeFingerprint,
+		RuntimeFingerprint:        buildResolvedRuntimeFingerprint(runtimeKeyFromResolvedProfile(resolvedProfile), profileVersionFromResolvedMetadata(resolvedProfile.Metadata), resolvedRuntime, resolvedInferenceSettingsForRequest(resolvedProfile, r.baseInferenceSettings)),
 		ProfileVersion:            profileVersionFromResolvedMetadata(resolvedProfile.Metadata),
-		ResolvedInferenceSettings: cloneResolvedInferenceSettings(r.baseInferenceSettings),
-		ResolvedRuntime:           &resolvedRuntime,
+		ResolvedInferenceSettings: resolvedInferenceSettingsForRequest(resolvedProfile, r.baseInferenceSettings),
+		ResolvedRuntime:           resolvedRuntime,
 		ProfileMetadata:           copyMetadataMap(resolvedProfile.Metadata),
 	}, nil
 }
@@ -249,15 +253,18 @@ func (r *ProfileRequestResolver) resolveChat(req *http.Request) (webhttp.Resolve
 	if err != nil {
 		return webhttp.ResolvedConversationRequest{}, err
 	}
-	resolvedRuntime := resolvedProfile.EffectiveRuntime
+	resolvedRuntime, err := r.resolveProfileRuntime(context.Background(), resolvedProfile)
+	if err != nil {
+		return webhttp.ResolvedConversationRequest{}, err
+	}
 
 	return webhttp.ResolvedConversationRequest{
 		ConvID:                    convID,
 		RuntimeKey:                runtimeKeyFromResolvedProfile(resolvedProfile),
-		RuntimeFingerprint:        resolvedProfile.RuntimeFingerprint,
+		RuntimeFingerprint:        buildResolvedRuntimeFingerprint(runtimeKeyFromResolvedProfile(resolvedProfile), profileVersionFromResolvedMetadata(resolvedProfile.Metadata), resolvedRuntime, resolvedInferenceSettingsForRequest(resolvedProfile, r.baseInferenceSettings)),
 		ProfileVersion:            profileVersionFromResolvedMetadata(resolvedProfile.Metadata),
-		ResolvedInferenceSettings: cloneResolvedInferenceSettings(r.baseInferenceSettings),
-		ResolvedRuntime:           &resolvedRuntime,
+		ResolvedInferenceSettings: resolvedInferenceSettingsForRequest(resolvedProfile, r.baseInferenceSettings),
+		ResolvedRuntime:           resolvedRuntime,
 		ProfileMetadata:           copyMetadataMap(resolvedProfile.Metadata),
 		Prompt:                    body.Prompt,
 		IdempotencyKey:            strings.TrimSpace(body.IdempotencyKey),
@@ -330,6 +337,48 @@ func cloneResolvedInferenceSettings(in *aisettings.InferenceSettings) *aisetting
 		return nil
 	}
 	return in.Clone()
+}
+
+func resolvedInferenceSettingsForRequest(resolved *gepprofiles.ResolvedEngineProfile, base *aisettings.InferenceSettings) *aisettings.InferenceSettings {
+	if resolved != nil && resolved.InferenceSettings != nil {
+		return resolved.InferenceSettings.Clone()
+	}
+	return cloneResolvedInferenceSettings(base)
+}
+
+func (r *ProfileRequestResolver) resolveProfileRuntime(
+	ctx context.Context,
+	resolved *gepprofiles.ResolvedEngineProfile,
+) (*infruntime.ProfileRuntime, error) {
+	if r == nil || r.profileRegistry == nil || resolved == nil {
+		return nil, nil
+	}
+	profile, err := r.profileRegistry.GetEngineProfile(ctx, resolved.RegistrySlug, resolved.EngineProfileSlug)
+	if err != nil {
+		return nil, r.toRequestResolutionError(err, resolved.EngineProfileSlug.String())
+	}
+	runtime, _, err := infruntime.ProfileRuntimeFromEngineProfile(profile)
+	if err != nil {
+		return nil, &webhttp.RequestResolutionError{Status: http.StatusBadRequest, ClientMsg: "invalid pinocchio runtime extension", Err: err}
+	}
+	return runtime, nil
+}
+
+func buildResolvedRuntimeFingerprint(
+	runtimeKey string,
+	profileVersion uint64,
+	runtime *infruntime.ProfileRuntime,
+	inferenceSettings *aisettings.InferenceSettings,
+) string {
+	if strings.TrimSpace(runtimeKey) == "" {
+		runtimeKey = "default"
+	}
+	if runtime == nil {
+		return buildRuntimeFingerprint(runtimeKey, profileVersion, "", nil, nil, inferenceSettings)
+	}
+	middlewares := append([]infruntime.MiddlewareUse(nil), runtime.Middlewares...)
+	tools := append([]string(nil), runtime.Tools...)
+	return buildRuntimeFingerprint(runtimeKey, profileVersion, strings.TrimSpace(runtime.SystemPrompt), middlewares, tools, inferenceSettings)
 }
 
 func (r *ProfileRequestResolver) resolveRegistrySelection(req *http.Request, bodyRegistryRaw string) (gepprofiles.RegistrySlug, error) {

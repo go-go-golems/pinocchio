@@ -98,7 +98,7 @@ func newLLMDeltaProjectionHarnessServer(t *testing.T, eng engine.Engine) *httpte
 
 	profileRegistry, err := newInMemoryProfileService(
 		"default",
-		&gepprofiles.EngineProfile{Slug: gepprofiles.MustEngineProfileSlug("default"), Runtime: gepprofiles.RuntimeSpec{SystemPrompt: "You are default"}},
+		testEngineProfileWithRuntime(t, "default", &infruntime.ProfileRuntime{SystemPrompt: "You are default"}),
 	)
 	require.NoError(t, err)
 	requestResolver := newProfileRequestResolver(profileRegistry, gepprofiles.MustRegistrySlug(defaultRegistrySlug), nil)

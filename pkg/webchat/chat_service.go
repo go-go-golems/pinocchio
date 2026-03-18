@@ -176,12 +176,13 @@ func (s *ChatService) SubmitPrompt(ctx context.Context, in SubmitPromptInput) (S
 	runner := s.NewLLMLoopRunner()
 	return s.StartPromptWithRunner(ctx, runner, StartPromptWithRunnerInput{
 		Runtime: ConversationRuntimeRequest{
-			ConvID:                  in.ConvID,
-			RuntimeKey:              in.RuntimeKey,
-			RuntimeFingerprint:      in.RuntimeFingerprint,
-			ProfileVersion:          in.ProfileVersion,
-			ResolvedRuntime:         in.ResolvedRuntime,
-			ResolvedProfileMetadata: in.ResolvedProfileMetadata,
+			ConvID:                    in.ConvID,
+			RuntimeKey:                in.RuntimeKey,
+			RuntimeFingerprint:        in.RuntimeFingerprint,
+			ProfileVersion:            in.ProfileVersion,
+			ResolvedInferenceSettings: cloneInferenceSettings(in.ResolvedInferenceSettings),
+			ResolvedRuntime:           in.ResolvedRuntime,
+			ResolvedProfileMetadata:   in.ResolvedProfileMetadata,
 		},
 		IdempotencyKey: in.IdempotencyKey,
 		Payload: LLMLoopStartPayload{

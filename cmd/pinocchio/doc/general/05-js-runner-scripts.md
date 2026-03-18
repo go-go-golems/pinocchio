@@ -216,7 +216,7 @@ The command reads `profile-settings.profile-registries` and `profile-settings.pr
 If the default or configured `profiles.yaml` still uses the old mixed-runtime format, rewrite it first:
 
 ```bash
-go run ./scripts/migrate_engine_profiles_yaml.go --in-place
+go run ./scripts/migrate-engine-profiles-yaml --in-place
 ```
 
 ### `--profile`

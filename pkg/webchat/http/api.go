@@ -8,8 +8,8 @@ import (
 	"net/http"
 	"strings"
 
-	gepprofiles "github.com/go-go-golems/geppetto/pkg/engineprofiles"
 	aisettings "github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
+	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 	timelinepb "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/timeline"
 	root "github.com/go-go-golems/pinocchio/pkg/webchat"
 	"github.com/google/uuid"
@@ -39,7 +39,7 @@ type ResolvedConversationRequest struct {
 	RuntimeFingerprint        string
 	ProfileVersion            uint64
 	ResolvedInferenceSettings *aisettings.InferenceSettings
-	ResolvedRuntime           *gepprofiles.RuntimeSpec
+	ResolvedRuntime           *infruntime.ProfileRuntime
 	ProfileMetadata           map[string]any
 	Prompt                    string
 	IdempotencyKey            string
@@ -174,14 +174,15 @@ func NewChatHandler(svc ChatService, resolver ConversationRequestResolver) http.
 		}
 
 		resp, err := svc.SubmitPrompt(req.Context(), root.SubmitPromptInput{
-			ConvID:                  plan.ConvID,
-			RuntimeKey:              plan.RuntimeKey,
-			RuntimeFingerprint:      plan.RuntimeFingerprint,
-			ProfileVersion:          plan.ProfileVersion,
-			ResolvedRuntime:         plan.ResolvedRuntime,
-			ResolvedProfileMetadata: plan.ProfileMetadata,
-			Prompt:                  plan.Prompt,
-			IdempotencyKey:          idempotencyKey,
+			ConvID:                    plan.ConvID,
+			RuntimeKey:                plan.RuntimeKey,
+			RuntimeFingerprint:        plan.RuntimeFingerprint,
+			ProfileVersion:            plan.ProfileVersion,
+			ResolvedInferenceSettings: cloneInferenceSettings(plan.ResolvedInferenceSettings),
+			ResolvedRuntime:           plan.ResolvedRuntime,
+			ResolvedProfileMetadata:   plan.ProfileMetadata,
+			Prompt:                    plan.Prompt,
+			IdempotencyKey:            idempotencyKey,
 		})
 		if err != nil {
 			reqLog.Error().

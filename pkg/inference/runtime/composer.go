@@ -3,7 +3,6 @@ package runtime
 import (
 	"context"
 
-	gepprofiles "github.com/go-go-golems/geppetto/pkg/engineprofiles"
 	"github.com/go-go-golems/geppetto/pkg/events"
 	"github.com/go-go-golems/geppetto/pkg/inference/engine"
 	aisettings "github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
@@ -15,7 +14,7 @@ type ConversationRuntimeRequest struct {
 	ProfileKey                 string
 	ProfileVersion             uint64
 	ResolvedInferenceSettings  *aisettings.InferenceSettings
-	ResolvedProfileRuntime     *gepprofiles.RuntimeSpec
+	ResolvedProfileRuntime     *ProfileRuntime
 	ResolvedProfileFingerprint string
 }
 

@@ -6,7 +6,6 @@ import (
 	"strings"
 	"testing"
 
-	gepprofiles "github.com/go-go-golems/geppetto/pkg/engineprofiles"
 	gepmiddleware "github.com/go-go-golems/geppetto/pkg/inference/middleware"
 	"github.com/go-go-golems/geppetto/pkg/inference/middlewarecfg"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
@@ -14,13 +13,13 @@ import (
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 )
 
-func runtimeSpecWithTestAPIKey(spec *gepprofiles.RuntimeSpec) *gepprofiles.RuntimeSpec {
+func runtimeSpecWithTestAPIKey(spec *infruntime.ProfileRuntime) *infruntime.ProfileRuntime {
 	if spec == nil {
-		spec = &gepprofiles.RuntimeSpec{}
+		spec = &infruntime.ProfileRuntime{}
 	}
-	return &gepprofiles.RuntimeSpec{
+	return &infruntime.ProfileRuntime{
 		SystemPrompt: spec.SystemPrompt,
-		Middlewares:  append([]gepprofiles.MiddlewareUse(nil), spec.Middlewares...),
+		Middlewares:  append([]infruntime.MiddlewareUse(nil), spec.Middlewares...),
 		Tools:        append([]string(nil), spec.Tools...),
 	}
 }
@@ -106,7 +105,7 @@ func TestWebChatRuntimeComposer_UsesResolvedRuntimeSpec(t *testing.T) {
 		ConvID:                    "c1",
 		ProfileKey:                "analyst",
 		ResolvedInferenceSettings: testResolvedInferenceSettings(t, nil),
-		ResolvedProfileRuntime: runtimeSpecWithTestAPIKey(&gepprofiles.RuntimeSpec{
+		ResolvedProfileRuntime: runtimeSpecWithTestAPIKey(&infruntime.ProfileRuntime{
 			SystemPrompt: "You are analyst",
 			Tools:        []string{"calculator", "  "},
 		}),
@@ -130,7 +129,7 @@ func TestWebChatRuntimeComposer_UsesBaseInferenceSettingsWhenResolvedRuntimeIsEm
 		ConvID:                    "c1",
 		ProfileKey:                "analyst",
 		ResolvedInferenceSettings: testResolvedInferenceSettings(t, nil),
-		ResolvedProfileRuntime:    &gepprofiles.RuntimeSpec{},
+		ResolvedProfileRuntime:    &infruntime.ProfileRuntime{},
 	})
 	if err != nil {
 		t.Fatalf("compose failed: %v", err)
@@ -175,8 +174,8 @@ func TestWebChatRuntimeComposer_UsesResolverPrecedenceForMiddlewareConfig(t *tes
 		ConvID:                    "c1",
 		ProfileKey:                "analyst",
 		ResolvedInferenceSettings: testResolvedInferenceSettings(t, nil),
-		ResolvedProfileRuntime: runtimeSpecWithTestAPIKey(&gepprofiles.RuntimeSpec{
-			Middlewares: []gepprofiles.MiddlewareUse{
+		ResolvedProfileRuntime: runtimeSpecWithTestAPIKey(&infruntime.ProfileRuntime{
+			Middlewares: []infruntime.MiddlewareUse{
 				{
 					Name: "agentmode",
 					ID:   "primary",
@@ -223,8 +222,8 @@ func TestWebChatRuntimeComposer_RejectsInvalidMiddlewareSchemaPayload(t *testing
 		ConvID:                    "c1",
 		ProfileKey:                "analyst",
 		ResolvedInferenceSettings: testResolvedInferenceSettings(t, nil),
-		ResolvedProfileRuntime: runtimeSpecWithTestAPIKey(&gepprofiles.RuntimeSpec{
-			Middlewares: []gepprofiles.MiddlewareUse{
+		ResolvedProfileRuntime: runtimeSpecWithTestAPIKey(&infruntime.ProfileRuntime{
+			Middlewares: []infruntime.MiddlewareUse{
 				{
 					Name: "agentmode",
 					Config: map[string]any{
@@ -265,7 +264,7 @@ func TestWebChatRuntimeComposer_PrefersResolvedProfileFingerprint(t *testing.T) 
 		ProfileKey:                 "analyst",
 		ResolvedInferenceSettings:  testResolvedInferenceSettings(t, nil),
 		ResolvedProfileFingerprint: "sha256:resolver-owned",
-		ResolvedProfileRuntime: runtimeSpecWithTestAPIKey(&gepprofiles.RuntimeSpec{
+		ResolvedProfileRuntime: runtimeSpecWithTestAPIKey(&infruntime.ProfileRuntime{
 			SystemPrompt: "profile prompt",
 		}),
 	})
@@ -288,7 +287,7 @@ func TestWebChatRuntimeComposer_UsesResolvedInferenceSettings(t *testing.T) {
 		ConvID:                    "c1",
 		ProfileKey:                "analyst",
 		ResolvedInferenceSettings: testResolvedInferenceSettings(t, func(ss *settings.InferenceSettings) { ss.Chat.Engine = ptr("patched-engine") }),
-		ResolvedProfileRuntime:    runtimeSpecWithTestAPIKey(&gepprofiles.RuntimeSpec{}),
+		ResolvedProfileRuntime:    runtimeSpecWithTestAPIKey(&infruntime.ProfileRuntime{}),
 	})
 	if err != nil {
 		t.Fatalf("compose failed: %v", err)
@@ -321,7 +320,7 @@ func TestWebChatRuntimeComposer_ResolvedInferenceSettingsOverrideBase(t *testing
 			ss.Chat.Engine = ptr("gpt-5-nano")
 			ss.Chat.ApiType = apiTypePtr(aitypes.ApiTypeOpenAIResponses)
 		}),
-		ResolvedProfileRuntime: &gepprofiles.RuntimeSpec{},
+		ResolvedProfileRuntime: &infruntime.ProfileRuntime{},
 	})
 	if err != nil {
 		t.Fatalf("compose failed: %v", err)

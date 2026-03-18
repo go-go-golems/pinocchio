@@ -186,10 +186,3 @@ func (m *Manager) Switch(ctx context.Context, profileSlug string) (Resolved, err
 	m.resolved = res
 	return res, nil
 }
-
-func cloneInferenceSettings(in *settings.InferenceSettings) *settings.InferenceSettings {
-	if in == nil {
-		return nil
-	}
-	return in.Clone()
-}

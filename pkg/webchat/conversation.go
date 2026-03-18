@@ -12,7 +12,6 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/rs/zerolog/log"
 
-	gepprofiles "github.com/go-go-golems/geppetto/pkg/engineprofiles"
 	"github.com/go-go-golems/geppetto/pkg/events"
 	"github.com/go-go-golems/geppetto/pkg/inference/toolloop"
 	aisettings "github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
@@ -37,7 +36,7 @@ type Conversation struct {
 	RuntimeFingerprint        string
 	ResolvedProfileMetadata   map[string]any
 	resolvedInferenceSettings *aisettings.InferenceSettings
-	resolvedRuntime           *gepprofiles.RuntimeSpec
+	resolvedRuntime           *infruntime.ProfileRuntime
 	profileVersion            uint64
 	llm                       *llmConversationState
 
@@ -247,7 +246,7 @@ func (cm *ConvManager) GetOrCreate(
 	convID, runtimeKey string,
 	runtimeFingerprint string,
 	resolvedInferenceSettings *aisettings.InferenceSettings,
-	resolvedRuntime *gepprofiles.RuntimeSpec,
+	resolvedRuntime *infruntime.ProfileRuntime,
 	resolvedProfileMetadata map[string]any,
 	profileVersion uint64,
 ) (*Conversation, error) {

@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/ThreeDotsLabs/watermill/message"
-	gepprofiles "github.com/go-go-golems/geppetto/pkg/engineprofiles"
 	"github.com/go-go-golems/geppetto/pkg/inference/toolloop/enginebuilder"
 	geptools "github.com/go-go-golems/geppetto/pkg/inference/tools"
 	"github.com/stretchr/testify/require"
@@ -71,7 +70,7 @@ func TestLLMLoopRunner_StartFiltersRegisteredToolsAndPersistsTurns(t *testing.T)
 		Runtime: ConversationRuntimeRequest{
 			ConvID:     "conv-tools",
 			RuntimeKey: "default",
-			ResolvedRuntime: &gepprofiles.RuntimeSpec{
+			ResolvedRuntime: &infruntime.ProfileRuntime{
 				Tools: []string{"allowed_tool"},
 			},
 		},
