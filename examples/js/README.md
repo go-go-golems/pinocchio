@@ -17,6 +17,8 @@ That means:
 
 - hidden base `StepSettings` come from Pinocchio config, env, and defaults
 - profile registries come from `--profile-registries`, `PINOCCHIO_PROFILE_REGISTRIES`, or the default config path
+- profile selection comes from `--profile`, `PINOCCHIO_PROFILE`, config, or the registry default profile
+- `--config-file` can supply the same `profile-settings.*` values used by the rest of the CLI
 - scripts can call `pinocchio.engines.fromDefaults()` instead of reconstructing provider config manually
 
 ## Files
@@ -33,5 +35,14 @@ That means:
 ```bash
 pinocchio js \
   --script examples/js/runner-profile-demo.js \
+  --profile-registries examples/js/profiles/basic.yaml
+```
+
+Or pick the explicit assistant profile:
+
+```bash
+pinocchio js \
+  examples/js/runner-profile-demo.js \
+  --profile assistant \
   --profile-registries examples/js/profiles/basic.yaml
 ```

@@ -3,7 +3,7 @@ Title: Manuel Investigation Diary
 Ticket: GP-48-PINOCCHIO-JS-RUNNER
 DocType: reference
 Summary: "Chronological implementation diary for the Pinocchio JS command work."
-LastUpdated: 2026-03-18T11:55:00-04:00
+LastUpdated: 2026-03-18T15:05:00-04:00
 ---
 
 # Manuel Investigation Diary
@@ -68,3 +68,27 @@ The right architecture is:
 - Added [examples/js/README.md](/home/manuel/workspaces/2026-03-17/add-opinionated-apis/pinocchio/examples/js/README.md) so the example directory explains the intended script model.
 - Added a Glazed help page at [05-js-runner-scripts.md](/home/manuel/workspaces/2026-03-17/add-opinionated-apis/pinocchio/cmd/pinocchio/doc/general/05-js-runner-scripts.md).
 - Verified the help page renders correctly with `pinocchio help js-runner-scripts`.
+
+### Follow-up: native profile/config behavior for `pinocchio js`
+
+- Reproduced the reported failure: `pinocchio js ./examples/js/runner-profile-demo.js --profile gpt-5-mini` failed because the first cut of the command did not expose `--profile`/default profile handling the same way as the rest of Pinocchio.
+- Confirmed a second mismatch at the same time: the command also did not expose `--config-file`, so it could not inherit `profile-settings.profile-registries` from the normal Pinocchio config path.
+- Added app-owned default profile resolution plumbing to the Geppetto JS module so hosts can tell `gp.profiles.resolve({})` and `gp.runner.resolveRuntime({})` to use:
+  - an explicitly selected profile when one is configured
+  - otherwise the registry stack default profile
+- Updated [cmd/pinocchio/cmds/js.go](/home/manuel/workspaces/2026-03-17/add-opinionated-apis/pinocchio/cmd/pinocchio/cmds/js.go) so `pinocchio js` now accepts:
+  - `--profile`
+  - `--config-file`
+  - `--profile-registries`
+  and resolves them through the same config/env/default profile settings helper used by the rest of Pinocchio.
+- Updated the local demo script and docs so the recommended script pattern is now:
+  - `const runtime = gp.runner.resolveRuntime({});`
+  instead of hard-coding a profile slug inside the script.
+
+### Follow-up validation
+
+- `go test ./pkg/js/modules/geppetto -count=1`
+- `go test ./cmd/pinocchio/... ./pkg/cmds/helpers -count=1`
+- `go run ./cmd/pinocchio js ./examples/js/runner-profile-demo.js --profile assistant --profile-registries examples/js/profiles/basic.yaml`
+- `go run ./cmd/pinocchio js ./examples/js/runner-profile-demo.js --config-file <tmp-config>`
+- `go run ./cmd/pinocchio js ./examples/js/runner-profile-demo.js --config-file <tmp-config> --profile assistant`
