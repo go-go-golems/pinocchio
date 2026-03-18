@@ -154,9 +154,6 @@ func (b *Backend) applyResolved(res Resolved) error {
 
 	mws := make([]middleware.Middleware, 0, 2+len(b.alwaysMiddlewares))
 	mws = append(mws, b.alwaysMiddlewares...)
-	if strings.TrimSpace(res.SystemPrompt) != "" {
-		mws = append(mws, middleware.NewSystemPromptMiddleware(res.SystemPrompt))
-	}
 
 	builder := &enginebuilder.Builder{
 		Base:        eng,
@@ -195,11 +192,10 @@ func (b *Backend) Start(ctx context.Context, prompt string) (tea.Cmd, error) {
 	// Persist profile/runtime attribution on the turn itself (canonical source of truth).
 	res := b.Current()
 	attrib := map[string]any{
-		"runtime_key":         res.RuntimeKey.String(),
-		"profile.slug":        res.ProfileSlug.String(),
-		"profile.registry":    res.RegistrySlug.String(),
-		"profile.version":     res.ProfileVersion,
-		"runtime_fingerprint": res.RuntimeFingerprint,
+		"runtime_key":      res.ProfileSlug.String(),
+		"profile.slug":     res.ProfileSlug.String(),
+		"profile.registry": res.RegistrySlug.String(),
+		"profile.version":  res.ProfileVersion,
 	}
 	_ = turns.KeyTurnMetaRuntime.Set(&t.Metadata, attrib)
 

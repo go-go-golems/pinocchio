@@ -20,8 +20,10 @@ func TestPrintParsedFields_ProfileRegistriesMetadata(t *testing.T) {
 profiles:
   analyst:
     slug: analyst
-    runtime:
-      system_prompt: Team analyst
+    inference_settings:
+      chat:
+        api_type: openai
+        engine: analyst-model
 `
 	if err := os.WriteFile(registryPath, []byte(registryYAML), 0o644); err != nil {
 		t.Fatalf("write registry yaml: %v", err)
@@ -100,12 +102,16 @@ func TestPinocchioJSInheritsProfileRegistryConfigAndProfileSelection(t *testing.
 profiles:
   default:
     slug: default
-    runtime:
-      system_prompt: Team default
+    inference_settings:
+      chat:
+        api_type: openai
+        engine: default-model
   analyst:
     slug: analyst
-    runtime:
-      system_prompt: Team analyst
+    inference_settings:
+      chat:
+        api_type: openai
+        engine: analyst-model
 `
 	if err := os.WriteFile(registryPath, []byte(registryYAML), 0o644); err != nil {
 		t.Fatalf("write registry yaml: %v", err)
@@ -139,7 +145,7 @@ profiles:
 		if err := cmd.Run(); err != nil {
 			t.Fatalf("go run pinocchio js failed: %v\noutput:\n%s", err, combined.String())
 		}
-		if !strings.Contains(combined.String(), "profile=analyst prompt=hello from pinocchio js") {
+		if !strings.Contains(combined.String(), "profile=analyst model=analyst-model prompt=hello from pinocchio js") {
 			t.Fatalf("expected analyst profile output\noutput:\n%s", combined.String())
 		}
 	})
@@ -165,7 +171,7 @@ profiles:
 		if err := cmd.Run(); err != nil {
 			t.Fatalf("go run pinocchio js failed: %v\noutput:\n%s", err, combined.String())
 		}
-		if !strings.Contains(combined.String(), "profile=default prompt=hello from pinocchio js") {
+		if !strings.Contains(combined.String(), "profile=default model=default-model prompt=hello from pinocchio js") {
 			t.Fatalf("expected default profile output\noutput:\n%s", combined.String())
 		}
 	})

@@ -61,17 +61,16 @@ func mergeStringAnyMap(base map[string]any, extra map[string]any) map[string]any
 	return out
 }
 
-func publishProfileSwitchedInfo(sink events.EventSink, convID, from, to, runtimeKey, runtimeFingerprint string) error {
+func publishProfileSwitchedInfo(sink events.EventSink, convID, from, to string) error {
 	if sink == nil {
 		return nil
 	}
 	md := events.EventMetadata{
 		ID: uuid.New(),
 		Extra: map[string]any{
-			"conversation_id":     strings.TrimSpace(convID),
-			"runtime_key":         strings.TrimSpace(runtimeKey),
-			"runtime_fingerprint": strings.TrimSpace(runtimeFingerprint),
-			"profile.slug":        strings.TrimSpace(to),
+			"conversation_id": strings.TrimSpace(convID),
+			"runtime_key":     strings.TrimSpace(to),
+			"profile.slug":    strings.TrimSpace(to),
 		},
 	}
 	return sink.PublishEvent(events.NewInfoEvent(md, "profile-switched", map[string]any{
@@ -256,7 +255,7 @@ func main() {
 					return true, localPlainEntityCmd("profile_error", map[string]any{"error": err.Error()})
 				}
 				publishCmd := func() tea.Msg {
-					if err := publishProfileSwitchedInfo(sink, convID, from, next.ProfileSlug.String(), next.RuntimeKey.String(), next.RuntimeFingerprint); err != nil {
+					if err := publishProfileSwitchedInfo(sink, convID, from, next.ProfileSlug.String()); err != nil {
 						log.Warn().Err(err).Msg("failed to publish profile-switched info event")
 					}
 					return nil
@@ -266,7 +265,7 @@ func main() {
 					localPlainEntityCmd("profile_switched", map[string]any{
 						"from":        from,
 						"to":          next.ProfileSlug.String(),
-						"runtime_key": next.RuntimeKey.String(),
+						"runtime_key": next.ProfileSlug.String(),
 					}),
 				)
 			}
@@ -300,7 +299,7 @@ func main() {
 					}
 					diff := profileswitch.ProfileDiff(fromResolved, res)
 					log.Info().Str("diff", diff.String()).Msg("Profile switch diff")
-					if err := publishProfileSwitchedInfo(sink, convID, from, res.ProfileSlug.String(), res.RuntimeKey.String(), res.RuntimeFingerprint); err != nil {
+					if err := publishProfileSwitchedInfo(sink, convID, from, res.ProfileSlug.String()); err != nil {
 						log.Warn().Err(err).Msg("failed to publish profile-switched info event")
 					}
 				},
@@ -336,7 +335,7 @@ func main() {
 				return nil
 			})
 
-			log.Info().Str("conv_id", convID).Str("profile", res.ProfileSlug.String()).Str("runtime_key", res.RuntimeKey.String()).Msg("Starting TUI")
+			log.Info().Str("conv_id", convID).Str("profile", res.ProfileSlug.String()).Msg("Starting TUI")
 
 			eg, groupCtx := errgroup.WithContext(ctx)
 			eg.Go(func() error { return router.Run(groupCtx) })

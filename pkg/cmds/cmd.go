@@ -639,7 +639,7 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) (*tu
 				}
 				parts := []string{
 					statusBarKeyStyle.Render("profile: ") + statusBarValStyle.Render(cur.ProfileSlug.String()),
-					statusBarKeyStyle.Render("runtime: ") + statusBarValStyle.Render(cur.RuntimeKey.String()),
+					statusBarKeyStyle.Render("engine profile: ") + statusBarValStyle.Render(cur.ProfileSlug.String()),
 				}
 				parts = append(parts, statusBarHintStyle.Render("ctrl+p to switch"))
 				return statusBarStyle.Render(strings.Join(parts, "  "))
@@ -664,10 +664,10 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) (*tu
 				}
 				return true, tea.Batch(
 					func() tea.Msg {
-						_ = publishProfileSwitchedInfo(sink, chatConvID, from, res.ProfileSlug.String(), res.RuntimeKey.String(), res.RuntimeFingerprint)
+						_ = publishProfileSwitchedInfo(sink, chatConvID, from, res.ProfileSlug.String())
 						return nil
 					},
-					systemNoticeEntityCmd(fmt.Sprintf("switched profile: %s → %s (runtime=%s)", from, res.ProfileSlug.String(), res.RuntimeKey.String())),
+					systemNoticeEntityCmd(fmt.Sprintf("switched profile: %s → %s", from, res.ProfileSlug.String())),
 				)
 			}
 
@@ -693,7 +693,7 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) (*tu
 						log.Warn().Err(switchErr).Str("target", target).Msg("profile switch failed")
 						return
 					}
-					_ = publishProfileSwitchedInfo(sink, chatConvID, from, res.ProfileSlug.String(), res.RuntimeKey.String(), res.RuntimeFingerprint)
+					_ = publishProfileSwitchedInfo(sink, chatConvID, from, res.ProfileSlug.String())
 				},
 			})
 

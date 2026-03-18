@@ -73,8 +73,6 @@ func main() {
 	}
 
 	fmt.Fprintf(os.Stderr, "profile=%s\n", resolved.ProfileSlug.String())
-	fmt.Fprintf(os.Stderr, "runtime_key=%s\n", resolved.RuntimeKey.String())
-	fmt.Fprintf(os.Stderr, "runtime_fingerprint=%s\n", resolved.RuntimeFingerprint)
 
 	eng, err := factory.NewEngineFromSettings(resolved.InferenceSettings)
 	if err != nil {
@@ -96,14 +94,8 @@ func main() {
 
 	sink := middleware.NewWatermillSink(router.Publisher, "chat")
 
-	mws := []middleware.Middleware{}
-	if strings.TrimSpace(resolved.SystemPrompt) != "" {
-		mws = append(mws, middleware.NewSystemPromptMiddleware(resolved.SystemPrompt))
-	}
-
 	builder := &enginebuilder.Builder{
 		Base:        eng,
-		Middlewares: mws,
 		EventSinks:  []events.EventSink{sink},
 	}
 
@@ -117,11 +109,10 @@ func main() {
 	}
 
 	_ = turns.KeyTurnMetaRuntime.Set(&t.Metadata, map[string]any{
-		"runtime_key":         resolved.RuntimeKey.String(),
-		"profile.slug":        resolved.ProfileSlug.String(),
-		"profile.registry":    resolved.RegistrySlug.String(),
-		"profile.version":     resolved.ProfileVersion,
-		"runtime_fingerprint": resolved.RuntimeFingerprint,
+		"runtime_key":      resolved.ProfileSlug.String(),
+		"profile.slug":     resolved.ProfileSlug.String(),
+		"profile.registry": resolved.RegistrySlug.String(),
+		"profile.version":  resolved.ProfileVersion,
 	})
 
 	handle, err := sess.StartInference(ctx)

@@ -23,12 +23,12 @@ SectionType: Tutorial
 
 ## Overview
 
-This page explains how to use `pinocchio js` to run JavaScript scripts against the Geppetto JS API while keeping Pinocchio's own config and profile-registry behavior.
+This page explains how to use `pinocchio js` to run JavaScript scripts against the Geppetto JS API while keeping Pinocchio's own config and engine-profile behavior.
 
 This matters because there are two separate concerns:
 
 - Geppetto provides the generic JavaScript inference API and runner API.
-- Pinocchio provides the application bootstrap: config files, env defaults, and profile-registry loading.
+- Pinocchio provides the application bootstrap: config files, env defaults, and engine-profile registry loading.
 
 `pinocchio js` is the glue between those two layers.
 
@@ -73,31 +73,31 @@ Right now the main helper is:
 pinocchio.engines.fromDefaults(options?)
 ```
 
-This builds an engine starting from Pinocchio's hidden base `StepSettings`, which come from:
+This builds an engine starting from Pinocchio's hidden base `InferenceSettings`, which come from:
 
 - config files
 - `PINOCCHIO_*` environment variables
 - built-in defaults
 
-That means your script does not need to manually reconstruct provider settings from scratch.
+That helper is intentionally base-config-only. It does not resolve engine profiles. For profile-driven engine selection, use `gp.profiles.resolve({})` and `gp.engines.fromResolvedProfile(...)`.
 
 ## Basic Workflow
 
 The most common workflow looks like this:
 
-1. Build an engine from Pinocchio defaults.
-2. Resolve runtime metadata from a profile registry.
+1. Resolve an engine profile from the configured registry stack.
+2. Build an engine from that resolved profile.
 3. Run inference through `gp.runner`.
 
 In pseudocode:
 
 ```text
 pinocchio js
-  -> resolve base StepSettings from Pinocchio config
-  -> resolve profile registry stack
+  -> resolve base InferenceSettings from Pinocchio config
+  -> resolve engine profile registry stack
   -> load JS runtime
-  -> script calls pinocchio.engines.fromDefaults()
-  -> script calls gp.runner.resolveRuntime()
+  -> script calls gp.profiles.resolve()
+  -> script calls gp.engines.fromResolvedProfile()
   -> script calls gp.runner.run() or gp.runner.start()
 ```
 
@@ -105,35 +105,22 @@ pinocchio js
 
 This example uses:
 
-- `require("pinocchio").engines.fromDefaults(...)`
-- `require("pinocchio").engines.inspectDefaults(...)`
-- `gp.runner.resolveRuntime(...)`
+- `gp.profiles.resolve(...)`
+- `gp.engines.fromResolvedProfile(...)`
 - `gp.runner.run(...)`
 
 ```javascript
 const gp = require("geppetto");
-const pinocchio = require("pinocchio");
-
-const engine = pinocchio.engines.fromDefaults({
-  model: "gpt-4o-mini",
-  apiType: "openai",
-});
-
-const runtime = gp.runner.resolveRuntime({});
+const resolved = gp.profiles.resolve({});
 console.log(JSON.stringify({
-  runtimeKey: runtime.runtimeKey,
-  runtimeFingerprint: runtime.runtimeFingerprint,
+  profileSlug: resolved.profileSlug,
+  model: resolved.inferenceSettings?.chat?.engine,
 }, null, 2));
 
-const engineInfo = pinocchio.engines.inspectDefaults({
-  model: "gpt-4o-mini",
-  apiType: "openai",
-});
-console.log(JSON.stringify(engineInfo, null, 2));
+const engine = gp.engines.fromResolvedProfile(resolved);
 
 const out = gp.runner.run({
   engine,
-  runtime,
   prompt: "Say hello in one line.",
 });
 
@@ -167,8 +154,6 @@ pinocchio js \
 
 This is the example to use when you want an actual LLM response.
 
-It uses explicit engine overrides inside the script (`model: "gpt-4o-mini"`, `apiType: "openai"`) so it can run even when your base Pinocchio config does not already set a provider.
-
 Use the smoke script when you want deterministic local output without calling a live model:
 
 ```bash
@@ -180,10 +165,8 @@ pinocchio js \
 The smoke script is a good first bootstrap test because it proves all of the following in one run:
 
 - the command can execute a script
-- the profile registry is loaded
-- runtime metadata is resolved and stamped
-- `pinocchio.engines.fromDefaults(...)` works
-- `pinocchio.engines.inspectDefaults(...)` shows the effective engine bootstrap settings
+- the engine profile registry is loaded
+- the selected engine profile changes the resolved model
 - `gp.runner.run(...)` works
 
 ## Flags
@@ -204,7 +187,7 @@ pinocchio js examples/js/runner-profile-demo.js
 
 ### `--profile-registries`
 
-Use this when your script resolves runtime from profiles.
+Use this when your script resolves engine profiles from registries.
 
 ```bash
 pinocchio js \
@@ -240,7 +223,7 @@ pinocchio js \
   --profile-registries examples/js/profiles/basic.yaml
 ```
 
-If you do not pass `--profile`, the script can still resolve runtime from the registry stack default profile.
+If you do not pass `--profile`, the script can still resolve the registry stack default engine profile.
 
 ### `--print-result`
 
@@ -284,40 +267,35 @@ You can call it in two styles:
 - `pinocchio.engines.fromDefaults({ model: "...", apiType: "..." })`
   when you want the script to force a concrete live engine regardless of the base config
 
-### Profile runtime resolution
+### Engine profile resolution
 
-`gp.runner.resolveRuntime(...)` is still the right place to resolve:
-
-- system prompt
-- middleware uses
-- allowed tool names
-- runtime metadata
+`gp.profiles.resolve({})` is the profile-aware path for `pinocchio js`.
 
 For `pinocchio js`, the command provides both the registry stack and the active/default profile context. That means a script can usually just do:
 
 ```javascript
-const runtime = gp.runner.resolveRuntime({});
+const resolved = gp.profiles.resolve({});
+const engine = gp.engines.fromResolvedProfile(resolved);
 ```
 
 and let the command apply:
 
 - `--profile` when provided
 - config-driven profile selection
-- registry-default profile selection when no explicit profile is set
+- registry-default engine profile selection when no explicit profile is set
 
 That separation is intentional:
 
-- Pinocchio owns engine bootstrap.
-- Geppetto owns generic runtime resolution and runner execution.
+- Pinocchio owns base config and registry discovery.
+- Geppetto owns engine-profile resolution and runner execution.
 
 ## Troubleshooting
 
 | Problem | Cause | Solution |
 | --- | --- | --- |
 | `--script is required` | No script path was given | Pass `--script path.js` or a positional file path |
-| `profile registry ...` validation errors | The YAML registry format is wrong | Use single-registry runtime YAML, not legacy `registries:` or `default_profile_slug` |
-| `unknown provider <nil>` from `pinocchio.engines.fromDefaults()` | Base config does not specify a provider and the script did not override it | Pass both `model` and `apiType` explicitly |
-| `unknown go middleware` | Profile runtime references middleware not registered by the command | Check the profile middleware names and the Pinocchio JS bootstrap surface |
+| `profile registry ...` validation errors | The YAML engine-profile registry format is wrong | Use `profiles:` with `inference_settings`, not legacy mixed `runtime:` fields |
+| `unknown provider <nil>` from `pinocchio.engines.fromDefaults()` | Base config does not specify a provider and the script did not override it | Pass both `model` and `apiType` explicitly, or use `gp.engines.fromResolvedProfile(...)` |
 | `Cannot find module` | The script or its local `node_modules` directory is not reachable | Run with the correct script path so the command can add the script directory to require search paths |
 
 ## See Also

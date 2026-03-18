@@ -54,11 +54,17 @@ func ResolveInferenceSettings(ctx context.Context, profileSlug string, profileRe
 		input.EngineProfileSlug = slug
 	}
 
-	if _, err := chain.ResolveEngineProfile(ctx, input); err != nil {
+	resolved, err := chain.ResolveEngineProfile(ctx, input)
+	if err != nil {
 		_ = chain.Close()
 		return nil, nil, err
 	}
-	return base.Clone(), func() {
+	finalSettings, err := gepprofiles.MergeInferenceSettings(base, resolved.InferenceSettings)
+	if err != nil {
+		_ = chain.Close()
+		return nil, nil, errors.Wrap(err, "merge base inference settings with engine profile")
+	}
+	return finalSettings, func() {
 		_ = chain.Close()
 	}, nil
 }

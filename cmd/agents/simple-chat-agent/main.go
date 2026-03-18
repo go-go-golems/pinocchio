@@ -131,16 +131,16 @@ func (c *SimpleAgentCmd) RunIntoWriter(ctx context.Context, parsed *values.Value
 	}
 	sink := middleware.NewWatermillSink(router.Publisher, "chat")
 
-	stepSettings, _, closeRuntime, err := pinhelpers.ResolveInferenceSettings(ctx, parsed)
+	resolvedSettings, err := pinhelpers.ResolveFinalInferenceSettings(ctx, parsed)
 	if err != nil {
 		return errors.Wrap(err, "resolve inference settings")
 	}
-	if closeRuntime != nil {
-		defer closeRuntime()
+	if resolvedSettings.Close != nil {
+		defer resolvedSettings.Close()
 	}
 
 	// Engine
-	eng, err := factory.NewEngineFromSettings(stepSettings)
+	eng, err := factory.NewEngineFromSettings(resolvedSettings.InferenceSettings)
 	if err != nil {
 		return errors.Wrap(err, "engine")
 	}

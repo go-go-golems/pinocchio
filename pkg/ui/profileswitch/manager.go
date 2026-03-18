@@ -153,24 +153,23 @@ func (m *Manager) Resolve(ctx context.Context, profileSlug string) (Resolved, er
 		return Resolved{}, errors.New("profile manager: resolved profile is nil")
 	}
 
-	sysPrompt := ""
 	version := uint64(0)
-	sysPrompt = strings.TrimSpace(resolved.EffectiveRuntime.SystemPrompt)
 	if resolved.Metadata != nil {
 		if v, ok := resolved.Metadata["profile.version"].(uint64); ok {
 			version = v
 		}
 	}
+	finalSettings, err := gepprofiles.MergeInferenceSettings(m.base, resolved.InferenceSettings)
+	if err != nil {
+		return Resolved{}, errors.Wrap(err, "merge base inference settings with resolved engine profile")
+	}
 
 	out := Resolved{
-		RegistrySlug:       resolved.RegistrySlug,
-		ProfileSlug:        resolved.EngineProfileSlug,
-		RuntimeKey:         resolved.RuntimeKey,
-		RuntimeFingerprint: strings.TrimSpace(resolved.RuntimeFingerprint),
-		SystemPrompt:       sysPrompt,
-		InferenceSettings:  cloneInferenceSettings(m.base),
-		ProfileVersion:     version,
-		Metadata:           resolved.Metadata,
+		RegistrySlug:      resolved.RegistrySlug,
+		ProfileSlug:       resolved.EngineProfileSlug,
+		InferenceSettings: finalSettings,
+		ProfileVersion:    version,
+		Metadata:          resolved.Metadata,
 	}
 	if out.InferenceSettings == nil {
 		return Resolved{}, errors.New("profile manager: resolved inference settings are nil")
