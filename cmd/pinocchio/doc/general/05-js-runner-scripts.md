@@ -118,9 +118,7 @@ const engine = pinocchio.engines.fromDefaults({
   apiType: "openai",
 });
 
-const runtime = gp.runner.resolveRuntime({
-  profile: { profileSlug: "assistant" },
-});
+const runtime = gp.runner.resolveRuntime({});
 
 const out = gp.runner.run({
   engine,
@@ -143,6 +141,15 @@ Run it from the repo root:
 ```bash
 pinocchio js \
   --script examples/js/runner-profile-demo.js \
+  --profile-registries examples/js/profiles/basic.yaml
+```
+
+Pick an explicit profile from that registry:
+
+```bash
+pinocchio js \
+  examples/js/runner-profile-demo.js \
+  --profile assistant \
   --profile-registries examples/js/profiles/basic.yaml
 ```
 
@@ -185,6 +192,31 @@ If you do not pass the flag, Pinocchio still follows its normal discovery rules:
 - `PINOCCHIO_PROFILE_REGISTRIES`
 - `${XDG_CONFIG_HOME:-~/.config}/pinocchio/profiles.yaml` when present
 
+### `--config-file`
+
+Use this when the profile registry stack should come from the same Pinocchio config file that other commands use.
+
+```bash
+pinocchio js \
+  examples/js/runner-profile-demo.js \
+  --config-file ~/.config/pinocchio/config.yaml
+```
+
+The command reads `profile-settings.profile-registries` and `profile-settings.profile` from that config file before applying explicit CLI overrides.
+
+### `--profile`
+
+Use this when the script should follow the same selected-profile behavior as the rest of Pinocchio.
+
+```bash
+pinocchio js \
+  examples/js/runner-profile-demo.js \
+  --profile assistant \
+  --profile-registries examples/js/profiles/basic.yaml
+```
+
+If you do not pass `--profile`, the script can still resolve runtime from the registry stack default profile.
+
 ### `--print-result`
 
 Use this when you want the top-level JS return value printed as JSON.
@@ -220,6 +252,18 @@ This is the recommended path when:
 - middleware uses
 - allowed tool names
 - runtime metadata
+
+For `pinocchio js`, the command provides both the registry stack and the active/default profile context. That means a script can usually just do:
+
+```javascript
+const runtime = gp.runner.resolveRuntime({});
+```
+
+and let the command apply:
+
+- `--profile` when provided
+- config-driven profile selection
+- registry-default profile selection when no explicit profile is set
 
 That separation is intentional:
 

@@ -33,6 +33,7 @@ import (
 func NewJSCommand() *cobra.Command {
 	var (
 		scriptPath  string
+		profile     string
 		printResult bool
 		listGoTools bool
 	)
@@ -62,6 +63,8 @@ func NewJSCommand() *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&scriptPath, "script", "", "Path to JavaScript file to execute")
+	cmd.Flags().String("config-file", "", "Path to Pinocchio config file")
+	cmd.Flags().StringVar(&profile, "profile", "", "Load this profile from the configured profile registries")
 	cmd.Flags().BoolVar(&printResult, "print-result", false, "Print top-level JS return value as JSON")
 	cmd.Flags().BoolVar(&listGoTools, "list-go-tools", false, "List built-in Go tools exposed to JS and exit")
 	return cmd
@@ -102,7 +105,7 @@ func runJSCommand(ctx context.Context, cmd *cobra.Command, settings jsCommandSet
 	if err != nil {
 		return err
 	}
-	profileRegistry, closer, err := loadPinocchioProfileRegistryStack(parsed)
+	profileRegistry, defaultProfileResolve, closer, err := loadPinocchioProfileRegistryStack(parsed)
 	if err != nil {
 		return err
 	}
@@ -119,12 +122,14 @@ func runJSCommand(ctx context.Context, cmd *cobra.Command, settings jsCommandSet
 
 	scriptDir := filepath.Dir(scriptPath)
 	rt, err := newPinocchioJSRuntime(ctx, pinocchioJSRuntimeOptions{
-		ScriptDir:             scriptDir,
-		BaseStepSettings:      baseStepSettings,
-		GoToolRegistry:        goRegistry,
-		ProfileRegistry:       profileRegistry,
-		GoMiddlewareFactories: middlewareFactories,
-		MiddlewareDefinitions: middlewareDefs,
+		ScriptDir:                scriptDir,
+		BaseStepSettings:         baseStepSettings,
+		GoToolRegistry:           goRegistry,
+		ProfileRegistry:          profileRegistry,
+		UseDefaultProfileResolve: profileRegistry != nil,
+		DefaultProfileResolve:    defaultProfileResolve,
+		GoMiddlewareFactories:    middlewareFactories,
+		MiddlewareDefinitions:    middlewareDefs,
 	})
 	if err != nil {
 		return err
@@ -162,7 +167,11 @@ func buildJSParsedValues(cmd *cobra.Command) (*values.Values, error) {
 	if err != nil {
 		return nil, err
 	}
-	if configFile := strings.TrimSpace(inheritedStringFlag(cmd, "config-file")); configFile != "" {
+	configFile := strings.TrimSpace(inheritedStringFlag(cmd, "config-file"))
+	if configFile == "" {
+		configFile = strings.TrimSpace(localStringFlag(cmd, "config-file"))
+	}
+	if configFile != "" {
 		if err := values.WithFieldValue("config-file", configFile)(commandValues); err != nil {
 			return nil, err
 		}
@@ -175,6 +184,11 @@ func buildJSParsedValues(cmd *cobra.Command) (*values.Values, error) {
 	}
 	if raw := strings.TrimSpace(inheritedStringFlag(cmd, "profile-registries")); raw != "" {
 		if err := values.WithFieldValue("profile-registries", raw, fields.WithSource("cli"))(profileValues); err != nil {
+			return nil, err
+		}
+	}
+	if raw := strings.TrimSpace(localStringFlag(cmd, "profile")); raw != "" {
+		if err := values.WithFieldValue("profile", raw, fields.WithSource("cli"))(profileValues); err != nil {
 			return nil, err
 		}
 	}
@@ -195,33 +209,90 @@ func inheritedStringFlag(cmd *cobra.Command, name string) string {
 	return ""
 }
 
-func loadPinocchioProfileRegistryStack(parsed *values.Values) (gepprofiles.RegistryReader, io.Closer, error) {
-	profileSettings := cmdhelpers.ResolveProfileSettings(parsed)
+func localStringFlag(cmd *cobra.Command, name string) string {
+	if cmd == nil {
+		return ""
+	}
+	if f := cmd.Flags().Lookup(name); f != nil {
+		return strings.TrimSpace(f.Value.String())
+	}
+	return ""
+}
+
+func loadPinocchioProfileRegistryStack(parsed *values.Values) (gepprofiles.RegistryReader, gepprofiles.ResolveInput, io.Closer, error) {
+	profileSettings, _, err := cmdhelpers.ResolveEffectiveProfileSettings(parsed)
+	if err != nil {
+		return nil, gepprofiles.ResolveInput{}, nil, err
+	}
 	if profileSettings.ProfileRegistries == "" {
-		return nil, nil, nil
+		return nil, gepprofiles.ResolveInput{}, nil, nil
 	}
 	entries, err := gepprofiles.ParseProfileRegistrySourceEntries(profileSettings.ProfileRegistries)
 	if err != nil {
-		return nil, nil, err
+		return nil, gepprofiles.ResolveInput{}, nil, err
 	}
 	specs, err := gepprofiles.ParseRegistrySourceSpecs(entries)
 	if err != nil {
-		return nil, nil, err
+		return nil, gepprofiles.ResolveInput{}, nil, err
 	}
 	chain, err := gepprofiles.NewChainedRegistryFromSourceSpecs(context.Background(), specs)
 	if err != nil {
-		return nil, nil, err
+		return nil, gepprofiles.ResolveInput{}, nil, err
 	}
-	return chain, chain, nil
+	defaultResolve := gepprofiles.ResolveInput{}
+	var reader gepprofiles.RegistryReader = chain
+	if profileSettings.Profile != "" {
+		profileSlug, err := gepprofiles.ParseProfileSlug(profileSettings.Profile)
+		if err != nil {
+			_ = chain.Close()
+			return nil, gepprofiles.ResolveInput{}, nil, err
+		}
+		defaultResolve.ProfileSlug = profileSlug
+		reader = selectedProfileRegistryReader{
+			base:            chain,
+			selectedProfile: profileSlug,
+		}
+	}
+	return reader, defaultResolve, chain, nil
+}
+
+type selectedProfileRegistryReader struct {
+	base            gepprofiles.RegistryReader
+	selectedProfile gepprofiles.ProfileSlug
+}
+
+func (r selectedProfileRegistryReader) ListRegistries(ctx context.Context) ([]gepprofiles.RegistrySummary, error) {
+	return r.base.ListRegistries(ctx)
+}
+
+func (r selectedProfileRegistryReader) GetRegistry(ctx context.Context, registrySlug gepprofiles.RegistrySlug) (*gepprofiles.ProfileRegistry, error) {
+	return r.base.GetRegistry(ctx, registrySlug)
+}
+
+func (r selectedProfileRegistryReader) ListProfiles(ctx context.Context, registrySlug gepprofiles.RegistrySlug) ([]*gepprofiles.Profile, error) {
+	return r.base.ListProfiles(ctx, registrySlug)
+}
+
+func (r selectedProfileRegistryReader) GetProfile(ctx context.Context, registrySlug gepprofiles.RegistrySlug, profileSlug gepprofiles.ProfileSlug) (*gepprofiles.Profile, error) {
+	return r.base.GetProfile(ctx, registrySlug, profileSlug)
+}
+
+func (r selectedProfileRegistryReader) ResolveEffectiveProfile(ctx context.Context, in gepprofiles.ResolveInput) (*gepprofiles.ResolvedProfile, error) {
+	if in.ProfileSlug == "" && r.selectedProfile != "" {
+		in.ProfileSlug = r.selectedProfile
+	}
+	return r.base.ResolveEffectiveProfile(ctx, in)
 }
 
 type pinocchioJSRuntimeOptions struct {
-	ScriptDir             string
-	BaseStepSettings      *aisettings.StepSettings
-	GoToolRegistry        geptools.ToolRegistry
-	ProfileRegistry       gepprofiles.RegistryReader
-	GoMiddlewareFactories map[string]gp.MiddlewareFactory
-	MiddlewareDefinitions middlewarecfg.DefinitionRegistry
+	ScriptDir                string
+	BaseStepSettings         *aisettings.StepSettings
+	GoToolRegistry           geptools.ToolRegistry
+	ProfileRegistry          gepprofiles.RegistryReader
+	UseDefaultProfileResolve bool
+	DefaultProfileResolve    gepprofiles.ResolveInput
+	GoMiddlewareFactories    map[string]gp.MiddlewareFactory
+	MiddlewareDefinitions    middlewarecfg.DefinitionRegistry
 }
 
 func newPinocchioJSRuntime(ctx context.Context, opts pinocchioJSRuntimeOptions) (*gojengine.Runtime, error) {
@@ -243,11 +314,13 @@ func newPinocchioJSRuntime(ctx context.Context, opts pinocchioJSRuntimeOptions) 
 
 	reg := require.NewRegistry(requireOpts...)
 	gp.Register(reg, gp.Options{
-		Runner:                rt.Owner,
-		GoToolRegistry:        opts.GoToolRegistry,
-		GoMiddlewareFactories: opts.GoMiddlewareFactories,
-		ProfileRegistry:       opts.ProfileRegistry,
-		MiddlewareSchemas:     opts.MiddlewareDefinitions,
+		Runner:                   rt.Owner,
+		GoToolRegistry:           opts.GoToolRegistry,
+		GoMiddlewareFactories:    opts.GoMiddlewareFactories,
+		ProfileRegistry:          opts.ProfileRegistry,
+		UseDefaultProfileResolve: opts.UseDefaultProfileResolve,
+		DefaultProfileResolve:    opts.DefaultProfileResolve,
+		MiddlewareSchemas:        opts.MiddlewareDefinitions,
 	})
 	pjs.Register(reg, pjs.Options{
 		BaseStepSettings: opts.BaseStepSettings,

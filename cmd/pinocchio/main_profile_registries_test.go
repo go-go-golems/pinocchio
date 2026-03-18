@@ -90,3 +90,83 @@ func TestProfileFileFlagRemoved(t *testing.T) {
 		t.Fatalf("expected unknown --profile-file flag error\noutput:\n%s", combined.String())
 	}
 }
+
+func TestPinocchioJSInheritsProfileRegistryConfigAndProfileSelection(t *testing.T) {
+	tmpDir := t.TempDir()
+	registryPath := filepath.Join(tmpDir, "registry.yaml")
+	configPath := filepath.Join(tmpDir, "config.yaml")
+
+	registryYAML := `slug: team
+profiles:
+  default:
+    slug: default
+    runtime:
+      system_prompt: Team default
+  analyst:
+    slug: analyst
+    runtime:
+      system_prompt: Team analyst
+`
+	if err := os.WriteFile(registryPath, []byte(registryYAML), 0o644); err != nil {
+		t.Fatalf("write registry yaml: %v", err)
+	}
+	configYAML := "profile-settings:\n  profile-registries: " + registryPath + "\n"
+	if err := os.WriteFile(configPath, []byte(configYAML), 0o644); err != nil {
+		t.Fatalf("write config yaml: %v", err)
+	}
+
+	repoRoot := filepath.Clean(filepath.Join("..", ".."))
+
+	t.Run("explicit profile flag after positional script", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+
+		cmd := exec.CommandContext(ctx,
+			"go", "run", "./cmd/pinocchio",
+			"js",
+			"./examples/js/runner-profile-demo.js",
+			"--profile", "analyst",
+			"--config-file", configPath,
+		)
+		cmd.Dir = repoRoot
+		cmd.Env = append(os.Environ(),
+			"XDG_CONFIG_HOME="+filepath.Join(tmpDir, "xdg"),
+		)
+
+		var combined bytes.Buffer
+		cmd.Stdout = &combined
+		cmd.Stderr = &combined
+		if err := cmd.Run(); err != nil {
+			t.Fatalf("go run pinocchio js failed: %v\noutput:\n%s", err, combined.String())
+		}
+		if !strings.Contains(combined.String(), "profile=analyst prompt=hello from pinocchio js") {
+			t.Fatalf("expected analyst profile output\noutput:\n%s", combined.String())
+		}
+	})
+
+	t.Run("config-backed registry default profile", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+
+		cmd := exec.CommandContext(ctx,
+			"go", "run", "./cmd/pinocchio",
+			"js",
+			"./examples/js/runner-profile-demo.js",
+			"--config-file", configPath,
+		)
+		cmd.Dir = repoRoot
+		cmd.Env = append(os.Environ(),
+			"XDG_CONFIG_HOME="+filepath.Join(tmpDir, "xdg"),
+		)
+
+		var combined bytes.Buffer
+		cmd.Stdout = &combined
+		cmd.Stderr = &combined
+		if err := cmd.Run(); err != nil {
+			t.Fatalf("go run pinocchio js failed: %v\noutput:\n%s", err, combined.String())
+		}
+		if !strings.Contains(combined.String(), "profile=default prompt=hello from pinocchio js") {
+			t.Fatalf("expected default profile output\noutput:\n%s", combined.String())
+		}
+	})
+}

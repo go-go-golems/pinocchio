@@ -147,6 +147,8 @@ The intended model is:
 
 That means a script can resolve runtime from profile registries and build an engine from the same layered Pinocchio config the CLI already uses.
 
+`pinocchio js` also accepts `--config-file`, so the script can inherit `profile-settings.profile-registries` and `profile-settings.profile` from the same config file used by the other Pinocchio commands.
+
 Example:
 
 ```javascript
@@ -158,9 +160,7 @@ const engine = pinocchio.engines.fromDefaults({
   apiType: "openai",
 });
 
-const runtime = gp.runner.resolveRuntime({
-  profile: { profileSlug: "assistant" },
-});
+const runtime = gp.runner.resolveRuntime({});
 
 const out = gp.runner.run({
   engine,
@@ -180,6 +180,15 @@ Run it with:
 ```bash
 pinocchio js \
   --script examples/js/runner-profile-demo.js \
+  --profile-registries examples/js/profiles/basic.yaml
+```
+
+Or select a specific profile from that registry:
+
+```bash
+pinocchio js \
+  examples/js/runner-profile-demo.js \
+  --profile assistant \
   --profile-registries examples/js/profiles/basic.yaml
 ```
 

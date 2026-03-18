@@ -26,3 +26,8 @@
   - `go test ./cmd/pinocchio/... ./pkg/doc/... -count=1`
   - `go run ./cmd/pinocchio help js-runner-scripts`
   - `docmgr doctor --ticket GP-48-PINOCCHIO-JS-RUNNER --stale-after 30`
+- Follow-up hardening:
+  - `pinocchio js` now exposes `--profile` and `--config-file`
+  - the command resolves profile settings through the same config/env/default path as other Pinocchio commands
+  - the Geppetto JS module now supports host-provided default profile resolution so scripts can call `gp.runner.resolveRuntime({})` and inherit the active/default Pinocchio profile
+  - added regression tests for the host-default JS resolution path and for the `pinocchio js` config/profile flow

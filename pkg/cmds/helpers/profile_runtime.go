@@ -86,6 +86,38 @@ func ResolveProfileSettings(parsed *values.Values) ProfileSettings {
 	return ret
 }
 
+func ResolveEffectiveProfileSettings(parsed *values.Values) (ProfileSettings, []string, error) {
+	profileSection, err := NewProfileSettingsSection()
+	if err != nil {
+		return ProfileSettings{}, nil, errors.Wrap(err, "create profile settings section")
+	}
+	schema_ := schema.NewSchema(schema.WithSections(profileSection))
+	resolvedValues := values.New()
+	configFiles, err := resolveConfigFiles(parsed)
+	if err != nil {
+		return ProfileSettings{}, nil, err
+	}
+	if err := sources.Execute(
+		schema_,
+		resolvedValues,
+		sources.FromEnv("PINOCCHIO", fields.WithSource("env")),
+		sources.FromFiles(
+			configFiles,
+			sources.WithConfigFileMapper(configFileMapper),
+			sources.WithParseOptions(fields.WithSource("config")),
+		),
+		sources.FromDefaults(fields.WithSource(fields.SourceDefaults)),
+	); err != nil {
+		return ProfileSettings{}, configFiles, errors.Wrap(err, "resolve profile settings from config/env/defaults")
+	}
+	if parsed != nil {
+		if err := resolvedValues.Merge(parsed); err != nil {
+			return ProfileSettings{}, configFiles, errors.Wrap(err, "merge explicit profile settings")
+		}
+	}
+	return ResolveProfileSettings(resolvedValues), configFiles, nil
+}
+
 func ResolveStepSettings(
 	ctx context.Context,
 	parsed *values.Values,
@@ -94,7 +126,10 @@ func ResolveStepSettings(
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	profileSettings := ResolveProfileSettings(parsed)
+	profileSettings, _, err := ResolveEffectiveProfileSettings(parsed)
+	if err != nil {
+		return nil, nil, nil, err
+	}
 	if profileSettings.ProfileRegistries == "" {
 		return base, nil, nil, nil
 	}

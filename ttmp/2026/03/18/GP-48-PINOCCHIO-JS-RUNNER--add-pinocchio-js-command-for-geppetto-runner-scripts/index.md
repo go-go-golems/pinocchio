@@ -13,7 +13,7 @@ Owners: []
 RelatedFiles: []
 ExternalSources: []
 Summary: "Add a first-class `pinocchio js` command that runs Geppetto JavaScript runner scripts with Pinocchio config defaults, profile registry resolution, and a small Pinocchio-owned helper surface."
-LastUpdated: 2026-03-18T11:49:35.402459603-04:00
+LastUpdated: 2026-03-18T15:05:00-04:00
 WhatFor: "Use this ticket when implementing or reviewing the Pinocchio CLI entrypoint for JavaScript runner scripts, especially where Pinocchio config defaults and profile registries should feel native."
 WhenToUse: "Use when adding the `pinocchio js` command, clarifying the JS runtime bootstrap boundary, or validating the supported script authoring model."
 ---
@@ -49,6 +49,7 @@ Implementation is complete for the first product cut:
 - `pinocchio js` exists and is wired into the root CLI
 - `require("pinocchio").engines.fromDefaults()` exists
 - local smoke coverage works for profile-backed `gp.runner` scripts
+- scripts can inherit `--profile`, `--config-file`, and registry-default profile selection without hard-coding a profile slug
 - docs/help coverage is in place for README, example README, and `pinocchio help js-runner-scripts`
 
 ## Topics
