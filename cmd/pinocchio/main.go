@@ -164,6 +164,7 @@ func initRootCmd() (*help.HelpSystem, error) {
 
 	rootCmd.AddCommand(runCommandCmd)
 	rootCmd.AddCommand(pinocchio_cmds.NewCodegenCommand())
+	rootCmd.AddCommand(pinocchio_cmds.NewJSCommand())
 	return helpSystem, nil
 }
 
