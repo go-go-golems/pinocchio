@@ -50,3 +50,14 @@ Implemented the profile-registry migration slice. Added a standalone migration s
 - /home/manuel/workspaces/2026-03-17/add-opinionated-apis/pinocchio/README.md — updated engine-profile docs and migration instructions
 - /home/manuel/workspaces/2026-03-17/add-opinionated-apis/pinocchio/examples/js/README.md — updated JS example docs
 - /home/manuel/workspaces/2026-03-17/add-opinionated-apis/pinocchio/cmd/pinocchio/doc/general/05-js-runner-scripts.md — updated help page
+
+## 2026-03-18
+
+Finished the web-chat follow-up planning slice inside GP-50. Documented the remaining app-owned runtime concerns in web chat, recommended a separate narrow Pinocchio-local app-profile format instead of reusing Geppetto engine profiles, and recorded the future migration steps needed after the CLI/JS cutover.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-03-17/add-opinionated-apis/pinocchio/ttmp/2026/03/18/GP-50-PINOCCHIO-ENGINE-PROFILE-MIGRATION--migrate-pinocchio-cli-and-js-to-engine-only-profiles/design-doc/02-web-chat-follow-up-plan.md — explicit web-chat migration handoff plan
+- /home/manuel/workspaces/2026-03-17/add-opinionated-apis/pinocchio/cmd/web-chat/profile_policy.go — mixed app/runtime concerns inventoried
+- /home/manuel/workspaces/2026-03-17/add-opinionated-apis/pinocchio/cmd/web-chat/runtime_composer.go — mixed app/runtime concerns inventoried
+- /home/manuel/workspaces/2026-03-17/add-opinionated-apis/pinocchio/pkg/inference/runtime/composer.go — shared runtime contract that still needs a follow-up hard cut

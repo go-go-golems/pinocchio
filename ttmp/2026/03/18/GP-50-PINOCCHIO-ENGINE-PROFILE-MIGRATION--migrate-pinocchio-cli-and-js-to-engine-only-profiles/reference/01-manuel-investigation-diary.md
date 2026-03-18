@@ -467,3 +467,72 @@ for _, warning := range result.Warnings {
     fmt.Fprintf(os.Stderr, "WARNING: %s\n", warning)
 }
 ```
+
+## Step 5: Separate web chat from the CLI/JS migration
+
+This step closes the loop on GP-50’s original scope. The CLI and `pinocchio js` migration now have a coherent engine-profile story, so the remaining work is not “more of the same.” The remaining work is web chat’s own app-runtime migration, and that needed to be documented explicitly instead of being left as an implied mess.
+
+### Prompt Context
+
+**User prompt (verbatim):** Continue working the GP-50 tasks off one by one.
+
+**Assistant interpretation:** Finish the remaining planning slice by inventorying what still blocks web chat and decide whether web chat should keep its own local profile/runtime format.
+
+**Inferred user intent:** End GP-50 with a clean handoff instead of letting web chat ambiguities bleed back into the CLI/JS migration.
+
+### What I did
+
+- Searched the web-chat packages and shared runtime packages for remaining references to:
+  - `RuntimeSpec`
+  - runtime fingerprints
+  - system prompt / middleware / tool selection coming from resolved profiles
+- Confirmed the key leftovers are concentrated in:
+  - [`pkg/inference/runtime/composer.go`](../../../../../../pinocchio/pkg/inference/runtime/composer.go)
+  - [`cmd/web-chat/runtime_composer.go`](../../../../../../pinocchio/cmd/web-chat/runtime_composer.go)
+  - [`cmd/web-chat/profile_policy.go`](../../../../../../pinocchio/cmd/web-chat/profile_policy.go)
+  - [`pkg/webchat/conversation.go`](../../../../../../pinocchio/pkg/webchat/conversation.go)
+- Added a dedicated follow-up doc:
+  - [02-web-chat-follow-up-plan.md](../design-doc/02-web-chat-follow-up-plan.md)
+- Marked the Slice 7 planning tasks complete in [tasks.md](../tasks.md).
+
+### Why
+
+- Web chat genuinely still needs an app-owned runtime layer. That is not a regression; it is a product-specific requirement.
+- Trying to force that requirement back into Geppetto engine profiles would recreate the same mixed-runtime problem we just removed.
+- GP-50 needed a clear stopping point so the CLI/JS migration could be treated as complete enough to build on.
+
+### What worked
+
+- The inventory made the boundary obvious: web chat still depends on app-owned prompt, middleware, tool, and runtime identity concerns, while the CLI/JS path no longer does.
+- The follow-up doc now gives a concrete target model:
+
+```text
+Engine profile layer (Geppetto)
+  -> InferenceSettings
+
+Web-chat app profile layer (Pinocchio)
+  -> system prompt
+  -> middleware uses
+  -> tool names
+  -> runtime key / fingerprint
+```
+
+### What didn't work
+
+- Nothing failed technically here; this was a planning/documentation slice.
+- The only friction was that the current web-chat code still has many tests and structs using the old mixed runtime naming, which makes the inventory noisy.
+
+### What I learned
+
+- The right future shape is not “web chat keeps using Geppetto profiles differently.”
+- The right future shape is “web chat gets its own narrow local app-profile format that references an engine profile.”
+
+### What warrants a second pair of eyes
+
+- The exact YAML shape for the future web-chat app profile file.
+- Whether the follow-up should remain inside GP-50 as a final cleanup or be split into a new dedicated ticket.
+
+### What should be done in the future
+
+- Use [02-web-chat-follow-up-plan.md](../design-doc/02-web-chat-follow-up-plan.md) as the starting point for the next ticket.
+- Keep GP-50 focused on the now-working CLI and JS migration path.
