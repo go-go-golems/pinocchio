@@ -176,7 +176,7 @@ This step implemented the first real GP-50 migration slice. The goal was to make
   - [`cmd/pinocchio/main_profile_registries_test.go`](../../../../../../pinocchio/cmd/pinocchio/main_profile_registries_test.go)
 - Cleaned remaining CLI-side stale runtime key/fingerprint usage in:
   - [`cmd/switch-profiles-tui/main.go`](../../../../../../pinocchio/cmd/switch-profiles-tui/main.go)
-  - [`scripts/profile-infer-once.go`](../../../../../../pinocchio/scripts/profile-infer-once.go)
+  - [`scripts/profile-infer-once/main.go`](../../../../../../pinocchio/scripts/profile-infer-once/main.go)
 - Updated the public docs/help:
   - [`examples/js/README.md`](../../../../../../pinocchio/examples/js/README.md)
   - [`README.md`](../../../../../../pinocchio/README.md)
@@ -382,7 +382,7 @@ This step tackled the last missing piece for the CLI/JS migration boundary: the 
 
 - Added a new migration helper in [`pkg/cmds/helpers/engine_profile_migration.go`](../../../../../../pinocchio/pkg/cmds/helpers/engine_profile_migration.go).
 - Added focused tests in [`pkg/cmds/helpers/engine_profile_migration_test.go`](../../../../../../pinocchio/pkg/cmds/helpers/engine_profile_migration_test.go).
-- Added a standalone script wrapper at [`scripts/migrate_engine_profiles_yaml.go`](../../../../../../pinocchio/scripts/migrate_engine_profiles_yaml.go).
+- Added a standalone script wrapper at [`scripts/migrate-engine-profiles-yaml/main.go`](../../../../../../pinocchio/scripts/migrate-engine-profiles-yaml/main.go).
 - Added a new command-level regression test in [`main_profile_registries_test.go`](../../../../../../pinocchio/cmd/pinocchio/main_profile_registries_test.go) for the default `${XDG_CONFIG_HOME}/pinocchio/profiles.yaml` fallback path.
 - Updated public docs to teach:
   - the engine-only `profiles.<slug>.inference_settings` shape
@@ -412,7 +412,7 @@ go test ./pkg/cmds/helpers -count=1
 - The migration script dry run worked on the checked-in example registry:
 
 ```bash
-go run ./scripts/migrate_engine_profiles_yaml.go --dry-run --input ./examples/js/profiles/basic.yaml
+go run ./scripts/migrate-engine-profiles-yaml --dry-run --input ./examples/js/profiles/basic.yaml
 ```
 
 ### What didn't work
@@ -590,3 +590,56 @@ That proves the default auto-discovered `profiles.yaml` path now works in the ne
 
 - Using a built binary is the right validation tool here. The earlier `go run` path kept paying toolchain and dependency download costs in this environment, which obscured the actual functional result.
 - With that one last smoke check done, the Pinocchio CLI/JS migration is complete enough to hand off web chat separately.
+
+## Step 7: Hard-cut shared web-chat/runtime to a Pinocchio-owned runtime payload
+
+After closing the CLI/JS portion, the next blocker showed up immediately in both CoinVault and Temporal: they still compiled through shared Pinocchio web-chat/runtime packages that referenced the deleted Geppetto mixed runtime type. The real break was in the shared seam, not in their local code first.
+
+### What I did
+
+- Added a Pinocchio-owned runtime payload in [`pkg/inference/runtime/profile_runtime.go`](../../../../../../pinocchio/pkg/inference/runtime/profile_runtime.go):
+  - `ProfileRuntime`
+  - `MiddlewareUse`
+  - `WebChatProfileRuntimeExtension`
+  - `ProfileRuntimeFromEngineProfile(...)`
+  - `SetProfileRuntime(...)`
+- Replaced all shared `*gepprofiles.RuntimeSpec` references in:
+  - [`pkg/inference/runtime/composer.go`](../../../../../../pinocchio/pkg/inference/runtime/composer.go)
+  - [`pkg/webchat/conversation.go`](../../../../../../pinocchio/pkg/webchat/conversation.go)
+  - [`pkg/webchat/conversation_service.go`](../../../../../../pinocchio/pkg/webchat/conversation_service.go)
+  - [`pkg/webchat/http/api.go`](../../../../../../pinocchio/pkg/webchat/http/api.go)
+  - [`pkg/webchat/chat_service.go`](../../../../../../pinocchio/pkg/webchat/chat_service.go)
+  - [`pkg/webchat/llm_state.go`](../../../../../../pinocchio/pkg/webchat/llm_state.go)
+- Updated [`cmd/web-chat/profile_policy.go`](../../../../../../pinocchio/cmd/web-chat/profile_policy.go) so resolved engine profiles now contribute final merged `InferenceSettings` while Pinocchio app runtime is loaded from the local `pinocchio.webchat_runtime@v1` extension on the selected engine profile.
+- Updated [`cmd/web-chat/runtime_composer.go`](../../../../../../pinocchio/cmd/web-chat/runtime_composer.go) to use the new local runtime type and current `middlewarecfg.Use`.
+- Updated [`pkg/webchat/http/profile_api.go`](../../../../../../pinocchio/pkg/webchat/http/profile_api.go) to surface the Pinocchio runtime extension instead of the removed Geppetto runtime field.
+- Added test helpers and migrated the affected test suites in `cmd/web-chat` and `pkg/webchat`.
+
+### What worked
+
+- The shared packages now compile cleanly against the engine-only Geppetto contract.
+- Focused validation passed:
+  - `go test ./pinocchio/pkg/webchat ./pinocchio/pkg/webchat/http -count=1`
+  - `go test ./pinocchio/cmd/web-chat -count=1`
+
+### What didn't work
+
+- The first pass at `runtime_composer.go` assumed `middlewarecfg.MiddlewareUse` still existed. The actual type is `middlewarecfg.Use`, so the adapter layer had to be corrected after the first focused build failed.
+- Some older tests still expected `RuntimeFingerprint` to look like `sha256:...`, but the current composer format is a JSON payload string. Those assertions had to be updated to check for a non-empty computed fingerprint instead of a legacy prefix.
+- The old `profile.stack.trace` expectation in request-resolution tests no longer held. `profile.stack.lineage` was the stable assertion that still mattered.
+
+### What I learned
+
+- The clean boundary here is workable:
+
+```text
+Geppetto engine profiles
+  -> final InferenceSettings
+
+Pinocchio runtime extension
+  -> system prompt
+  -> middleware uses
+  -> tool names
+```
+
+- A local runtime extension is enough to unblock the downstreams without deciding the full long-term web-chat app-profile format today.

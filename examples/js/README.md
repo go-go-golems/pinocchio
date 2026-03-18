@@ -24,7 +24,7 @@ That means:
 If your default `profiles.yaml` is still in the old mixed-runtime format, rewrite it first:
 
 ```bash
-go run ./scripts/migrate_engine_profiles_yaml.go --in-place
+go run ./scripts/migrate-engine-profiles-yaml --in-place
 ```
 
 ## Files

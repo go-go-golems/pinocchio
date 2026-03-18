@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	gepprofiles "github.com/go-go-golems/geppetto/pkg/engineprofiles"
+	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
 	webchat "github.com/go-go-golems/pinocchio/pkg/webchat"
 	"github.com/stretchr/testify/require"
@@ -95,12 +96,7 @@ func TestConfigureTimelineJSScripts_ReturnsHelpfulErrorForMissingScript(t *testi
 func TestProfileResolver_GPT5NanoProfileIsResolvedForChatRequest(t *testing.T) {
 	profileRegistry, err := newInMemoryProfileService(
 		"default",
-		&gepprofiles.EngineProfile{
-			Slug: gepprofiles.MustEngineProfileSlug("gpt-5-nano"),
-			Runtime: gepprofiles.RuntimeSpec{
-				SystemPrompt: "You are gpt-5-nano.",
-			},
-		},
+		testEngineProfileWithRuntime(t, "gpt-5-nano", &infruntime.ProfileRuntime{SystemPrompt: "You are gpt-5-nano."}),
 	)
 	require.NoError(t, err)
 	resolver := newProfileRequestResolver(profileRegistry, gepprofiles.MustRegistrySlug(defaultRegistrySlug), nil)

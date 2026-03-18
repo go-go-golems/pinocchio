@@ -8,7 +8,6 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/pkg/errors"
 
-	gepprofiles "github.com/go-go-golems/geppetto/pkg/engineprofiles"
 	"github.com/go-go-golems/geppetto/pkg/inference/toolloop"
 	aisettings "github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
@@ -46,7 +45,7 @@ type ConversationRuntimeRequest struct {
 	RuntimeFingerprint        string
 	ProfileVersion            uint64
 	ResolvedInferenceSettings *aisettings.InferenceSettings
-	ResolvedRuntime           *gepprofiles.RuntimeSpec
+	ResolvedRuntime           *infruntime.ProfileRuntime
 	ResolvedProfileMetadata   map[string]any
 }
 
@@ -64,7 +63,7 @@ type SubmitPromptInput struct {
 	RuntimeFingerprint        string
 	ProfileVersion            uint64
 	ResolvedInferenceSettings *aisettings.InferenceSettings
-	ResolvedRuntime           *gepprofiles.RuntimeSpec
+	ResolvedRuntime           *infruntime.ProfileRuntime
 	ResolvedProfileMetadata   map[string]any
 	Prompt                    string
 	IdempotencyKey            string

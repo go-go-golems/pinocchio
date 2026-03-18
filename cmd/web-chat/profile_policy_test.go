@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	gepprofiles "github.com/go-go-golems/geppetto/pkg/engineprofiles"
+	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 	webhttp "github.com/go-go-golems/pinocchio/pkg/webchat/http"
 	"github.com/stretchr/testify/require"
 )
@@ -30,24 +31,8 @@ func newTestResolverWithMultipleRegistries(t *testing.T) *ProfileRequestResolver
 	defaultPath := filepath.Join(tmpDir, "default.yaml")
 	teamPath := filepath.Join(tmpDir, "team.yaml")
 
-	require.NoError(t, os.WriteFile(defaultPath, []byte(`slug: default
-profiles:
-  default:
-    slug: default
-    runtime:
-      system_prompt: You are default
-    metadata:
-      version: 1
-`), 0o644))
-	require.NoError(t, os.WriteFile(teamPath, []byte(`slug: team
-profiles:
-  analyst:
-    slug: analyst
-    runtime:
-      system_prompt: You are analyst
-    metadata:
-      version: 7
-`), 0o644))
+	require.NoError(t, os.WriteFile(defaultPath, []byte(testRegistryYAMLWithRuntime("default", "default", "You are default", 1)), 0o644))
+	require.NoError(t, os.WriteFile(teamPath, []byte(testRegistryYAMLWithRuntime("team", "analyst", "You are analyst", 7)), 0o644))
 
 	specs, err := gepprofiles.ParseRegistrySourceSpecs([]string{defaultPath, teamPath})
 	require.NoError(t, err)
@@ -66,24 +51,8 @@ func newTestResolverWithDuplicateSlugAcrossRegistries(t *testing.T) *ProfileRequ
 	defaultPath := filepath.Join(tmpDir, "default.yaml")
 	teamPath := filepath.Join(tmpDir, "team.yaml")
 
-	require.NoError(t, os.WriteFile(defaultPath, []byte(`slug: default
-profiles:
-  analyst:
-    slug: analyst
-    runtime:
-      system_prompt: You are default analyst
-    metadata:
-      version: 1
-`), 0o644))
-	require.NoError(t, os.WriteFile(teamPath, []byte(`slug: team
-profiles:
-  analyst:
-    slug: analyst
-    runtime:
-      system_prompt: You are team analyst
-    metadata:
-      version: 7
-`), 0o644))
+	require.NoError(t, os.WriteFile(defaultPath, []byte(testRegistryYAMLWithRuntime("default", "analyst", "You are default analyst", 1)), 0o644))
+	require.NoError(t, os.WriteFile(teamPath, []byte(testRegistryYAMLWithRuntime("team", "analyst", "You are team analyst", 7)), 0o644))
 
 	specs, err := gepprofiles.ParseRegistrySourceSpecs([]string{defaultPath, teamPath})
 	require.NoError(t, err)
@@ -98,8 +67,8 @@ profiles:
 func TestWebChatProfileResolver_WS_DefaultProfile(t *testing.T) {
 	profileRegistry, err := newInMemoryProfileService(
 		"default",
-		&gepprofiles.EngineProfile{Slug: gepprofiles.MustEngineProfileSlug("default"), Runtime: gepprofiles.RuntimeSpec{SystemPrompt: "You are default"}},
-		&gepprofiles.EngineProfile{Slug: gepprofiles.MustEngineProfileSlug("agent"), Runtime: gepprofiles.RuntimeSpec{SystemPrompt: "You are agent"}},
+		testEngineProfileWithRuntime(t, "default", &infruntime.ProfileRuntime{SystemPrompt: "You are default"}),
+		testEngineProfileWithRuntime(t, "agent", &infruntime.ProfileRuntime{SystemPrompt: "You are agent"}),
 	)
 	require.NoError(t, err)
 	resolver := newProfileRequestResolver(profileRegistry, gepprofiles.MustRegistrySlug(defaultRegistrySlug), nil)
@@ -109,21 +78,19 @@ func TestWebChatProfileResolver_WS_DefaultProfile(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "conv-1", plan.ConvID)
 	require.Equal(t, "default", plan.RuntimeKey)
-	require.True(t, strings.HasPrefix(plan.RuntimeFingerprint, "sha256:"))
+	require.NotEmpty(t, strings.TrimSpace(plan.RuntimeFingerprint))
 	require.NotNil(t, plan.ResolvedRuntime)
 	require.Equal(t, "You are default", plan.ResolvedRuntime.SystemPrompt)
 	require.NotNil(t, plan.ProfileMetadata)
 	_, hasLineage := plan.ProfileMetadata["profile.stack.lineage"]
 	require.True(t, hasLineage)
-	_, hasTrace := plan.ProfileMetadata["profile.stack.trace"]
-	require.True(t, hasTrace)
 }
 
 func TestRegisterProfileHandlers_GetAndSetProfile(t *testing.T) {
 	profileRegistry, err := newInMemoryProfileService(
 		"default",
-		&gepprofiles.EngineProfile{Slug: gepprofiles.MustEngineProfileSlug("default"), Runtime: gepprofiles.RuntimeSpec{SystemPrompt: "You are default"}},
-		&gepprofiles.EngineProfile{Slug: gepprofiles.MustEngineProfileSlug("agent"), Runtime: gepprofiles.RuntimeSpec{SystemPrompt: "You are agent"}},
+		testEngineProfileWithRuntime(t, "default", &infruntime.ProfileRuntime{SystemPrompt: "You are default"}),
+		testEngineProfileWithRuntime(t, "agent", &infruntime.ProfileRuntime{SystemPrompt: "You are agent"}),
 	)
 	require.NoError(t, err)
 	resolver := newProfileRequestResolver(profileRegistry, gepprofiles.MustRegistrySlug(defaultRegistrySlug), nil)
@@ -250,15 +217,13 @@ func TestWebChatProfileResolver_Chat_BodyProfileAcrossStack(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "conv-1", plan.ConvID)
 	require.Equal(t, "analyst", plan.RuntimeKey)
-	require.True(t, strings.HasPrefix(plan.RuntimeFingerprint, "sha256:"))
+	require.NotEmpty(t, strings.TrimSpace(plan.RuntimeFingerprint))
 	require.Equal(t, uint64(7), plan.ProfileVersion)
 	require.NotNil(t, plan.ResolvedRuntime)
 	require.Equal(t, "You are analyst", plan.ResolvedRuntime.SystemPrompt)
 	require.NotNil(t, plan.ProfileMetadata)
 	_, hasLineage := plan.ProfileMetadata["profile.stack.lineage"]
 	require.True(t, hasLineage)
-	_, hasTrace := plan.ProfileMetadata["profile.stack.trace"]
-	require.True(t, hasTrace)
 }
 
 func TestWebChatProfileResolver_WS_QueryProfileAcrossStack(t *testing.T) {
@@ -269,7 +234,7 @@ func TestWebChatProfileResolver_WS_QueryProfileAcrossStack(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "conv-1", plan.ConvID)
 	require.Equal(t, "analyst", plan.RuntimeKey)
-	require.True(t, strings.HasPrefix(plan.RuntimeFingerprint, "sha256:"))
+	require.NotEmpty(t, strings.TrimSpace(plan.RuntimeFingerprint))
 	require.Equal(t, uint64(7), plan.ProfileVersion)
 }
 
@@ -306,10 +271,7 @@ func TestWebChatProfileResolver_Chat_UnknownRegistryQueryReturnsNotFound(t *test
 func TestProfileAPI_SchemaEndpoints(t *testing.T) {
 	profileRegistry, err := newInMemoryProfileService(
 		"default",
-		&gepprofiles.EngineProfile{
-			Slug:    gepprofiles.MustEngineProfileSlug("default"),
-			Runtime: gepprofiles.RuntimeSpec{SystemPrompt: "You are default"},
-		},
+		testEngineProfileWithRuntime(t, "default", &infruntime.ProfileRuntime{SystemPrompt: "You are default"}),
 	)
 	require.NoError(t, err)
 	resolver := newProfileRequestResolver(profileRegistry, gepprofiles.MustRegistrySlug(defaultRegistrySlug), nil)
@@ -347,7 +309,7 @@ func TestProfileAPI_SchemaEndpoints(t *testing.T) {
 	require.Equal(t, http.StatusOK, extensionRec.Code)
 	var extensionSchemas []map[string]any
 	require.NoError(t, json.Unmarshal(extensionRec.Body.Bytes(), &extensionSchemas))
-	require.GreaterOrEqual(t, len(extensionSchemas), 3)
+	require.GreaterOrEqual(t, len(extensionSchemas), 1)
 	keys := map[string]bool{}
 	for _, item := range extensionSchemas {
 		key, _ := item["key"].(string)
@@ -356,19 +318,17 @@ func TestProfileAPI_SchemaEndpoints(t *testing.T) {
 		require.True(t, hasSchema)
 	}
 	require.True(t, keys["webchat.starter_suggestions@v1"])
-	require.True(t, keys["middleware.agentmode_config@v1"])
-	require.True(t, keys["middleware.sqlite_config@v1"])
 }
 
 func TestWebChatProfileResolver_ProfilePrecedence(t *testing.T) {
 	profileRegistry, err := newInMemoryProfileService(
 		"default",
-		&gepprofiles.EngineProfile{Slug: gepprofiles.MustEngineProfileSlug("default"), Runtime: gepprofiles.RuntimeSpec{SystemPrompt: "default"}},
-		&gepprofiles.EngineProfile{Slug: gepprofiles.MustEngineProfileSlug("path"), Runtime: gepprofiles.RuntimeSpec{SystemPrompt: "path"}},
-		&gepprofiles.EngineProfile{Slug: gepprofiles.MustEngineProfileSlug("body"), Runtime: gepprofiles.RuntimeSpec{SystemPrompt: "body"}},
-		&gepprofiles.EngineProfile{Slug: gepprofiles.MustEngineProfileSlug("query"), Runtime: gepprofiles.RuntimeSpec{SystemPrompt: "query"}},
-		&gepprofiles.EngineProfile{Slug: gepprofiles.MustEngineProfileSlug("runtime"), Runtime: gepprofiles.RuntimeSpec{SystemPrompt: "runtime"}},
-		&gepprofiles.EngineProfile{Slug: gepprofiles.MustEngineProfileSlug("cookie"), Runtime: gepprofiles.RuntimeSpec{SystemPrompt: "cookie"}},
+		testEngineProfileWithRuntime(t, "default", &infruntime.ProfileRuntime{SystemPrompt: "default"}),
+		testEngineProfileWithRuntime(t, "path", &infruntime.ProfileRuntime{SystemPrompt: "path"}),
+		testEngineProfileWithRuntime(t, "body", &infruntime.ProfileRuntime{SystemPrompt: "body"}),
+		testEngineProfileWithRuntime(t, "query", &infruntime.ProfileRuntime{SystemPrompt: "query"}),
+		testEngineProfileWithRuntime(t, "runtime", &infruntime.ProfileRuntime{SystemPrompt: "runtime"}),
+		testEngineProfileWithRuntime(t, "cookie", &infruntime.ProfileRuntime{SystemPrompt: "cookie"}),
 	)
 	require.NoError(t, err)
 	resolver := newProfileRequestResolver(profileRegistry, gepprofiles.MustRegistrySlug(defaultRegistrySlug), nil)
@@ -474,14 +434,8 @@ func TestNewSQLiteProfileService_BootstrapAndReopen(t *testing.T) {
 		"",
 		dbPath,
 		"default",
-		&gepprofiles.EngineProfile{
-			Slug:    gepprofiles.MustEngineProfileSlug("default"),
-			Runtime: gepprofiles.RuntimeSpec{SystemPrompt: "You are default"},
-		},
-		&gepprofiles.EngineProfile{
-			Slug:    gepprofiles.MustEngineProfileSlug("agent"),
-			Runtime: gepprofiles.RuntimeSpec{SystemPrompt: "You are agent"},
-		},
+		testEngineProfileWithRuntime(t, "default", &infruntime.ProfileRuntime{SystemPrompt: "You are default"}),
+		testEngineProfileWithRuntime(t, "agent", &infruntime.ProfileRuntime{SystemPrompt: "You are agent"}),
 	)
 	require.NoError(t, err)
 	t.Cleanup(cleanup)
@@ -494,14 +448,8 @@ func TestNewSQLiteProfileService_BootstrapAndReopen(t *testing.T) {
 		"",
 		dbPath,
 		"default",
-		&gepprofiles.EngineProfile{
-			Slug:    gepprofiles.MustEngineProfileSlug("default"),
-			Runtime: gepprofiles.RuntimeSpec{SystemPrompt: "You are default"},
-		},
-		&gepprofiles.EngineProfile{
-			Slug:    gepprofiles.MustEngineProfileSlug("agent"),
-			Runtime: gepprofiles.RuntimeSpec{SystemPrompt: "You are agent"},
-		},
+		testEngineProfileWithRuntime(t, "default", &infruntime.ProfileRuntime{SystemPrompt: "You are default"}),
+		testEngineProfileWithRuntime(t, "agent", &infruntime.ProfileRuntime{SystemPrompt: "You are agent"}),
 	)
 	require.NoError(t, err)
 	t.Cleanup(cleanupAgain)

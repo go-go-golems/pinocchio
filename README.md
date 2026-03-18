@@ -210,13 +210,13 @@ pinocchio js \
 If your old file still uses the mixed runtime format, migrate it once and keep the result at the same default location:
 
 ```bash
-go run ./scripts/migrate_engine_profiles_yaml.go --in-place
+go run ./scripts/migrate-engine-profiles-yaml --in-place
 ```
 
 Use `--dry-run` first if you want to inspect the rewritten YAML:
 
 ```bash
-go run ./scripts/migrate_engine_profiles_yaml.go --dry-run
+go run ./scripts/migrate-engine-profiles-yaml --dry-run
 ```
 
 The migration script converts:

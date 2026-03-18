@@ -95,8 +95,8 @@ func main() {
 	sink := middleware.NewWatermillSink(router.Publisher, "chat")
 
 	builder := &enginebuilder.Builder{
-		Base:        eng,
-		EventSinks:  []events.EventSink{sink},
+		Base:       eng,
+		EventSinks: []events.EventSink{sink},
 	}
 
 	sess := session.NewSession()

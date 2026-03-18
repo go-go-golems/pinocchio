@@ -61,11 +61,3 @@ func effectiveTemp(r Resolved) string {
 	}
 	return "(default)"
 }
-
-func truncate(s string, maxLen int) string {
-	s = strings.TrimSpace(s)
-	if len(s) > maxLen {
-		return s[:maxLen-3] + "..."
-	}
-	return s
-}

@@ -10,6 +10,7 @@ import (
 
 	gepprofiles "github.com/go-go-golems/geppetto/pkg/engineprofiles"
 	"github.com/go-go-golems/geppetto/pkg/inference/middlewarecfg"
+	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 )
 
 const (
@@ -33,7 +34,7 @@ type ProfileDocument struct {
 	Slug        string                            `json:"slug"`
 	DisplayName string                            `json:"display_name,omitempty"`
 	Description string                            `json:"description,omitempty"`
-	Runtime     gepprofiles.RuntimeSpec           `json:"runtime,omitempty"`
+	Runtime     *infruntime.ProfileRuntime        `json:"runtime,omitempty"`
 	Metadata    gepprofiles.EngineProfileMetadata `json:"metadata,omitempty"`
 	Extensions  map[string]any                    `json:"extensions,omitempty"`
 	IsDefault   bool                              `json:"is_default"`
@@ -401,7 +402,9 @@ func profileDocFromModel(registrySlug gepprofiles.RegistrySlug, registry *geppro
 	doc.Slug = p.Slug.String()
 	doc.DisplayName = p.DisplayName
 	doc.Description = p.Description
-	doc.Runtime = p.Runtime
+	if runtime, _, err := infruntime.ProfileRuntimeFromEngineProfile(p); err == nil {
+		doc.Runtime = runtime
+	}
 	doc.Metadata = p.Metadata
 	doc.Extensions = cloneExtensionMap(p.Extensions)
 	doc.IsDefault = registry != nil && registry.DefaultEngineProfileSlug == p.Slug
@@ -424,12 +427,16 @@ func profileListItemsFromRegistry(registrySlug gepprofiles.RegistrySlug, registr
 		if p == nil {
 			continue
 		}
+		defaultPrompt := ""
+		if runtime, _, err := infruntime.ProfileRuntimeFromEngineProfile(p); err == nil && runtime != nil {
+			defaultPrompt = runtime.SystemPrompt
+		}
 		items = append(items, ProfileListItem{
 			Registry:      registrySlug.String(),
 			Slug:          p.Slug.String(),
 			DisplayName:   p.DisplayName,
 			Description:   p.Description,
-			DefaultPrompt: p.Runtime.SystemPrompt,
+			DefaultPrompt: defaultPrompt,
 			Extensions:    cloneExtensionMap(p.Extensions),
 			IsDefault:     registry != nil && registry.DefaultEngineProfileSlug == p.Slug,
 			Version:       p.Metadata.Version,
@@ -542,25 +549,7 @@ func listExtensionSchemas(
 			Schema: cloneExtensionMap(item.Schema),
 		}
 	}
-	if definitions != nil {
-		for _, def := range definitions.ListDefinitions() {
-			if def == nil {
-				continue
-			}
-			key, err := gepprofiles.MiddlewareConfigExtensionKey(def.Name())
-			if err != nil {
-				continue
-			}
-			keyString := key.String()
-			if _, exists := byKey[keyString]; exists {
-				continue
-			}
-			byKey[keyString] = ExtensionSchemaDocument{
-				Key:    keyString,
-				Schema: middlewareConfigExtensionSchema(def.ConfigJSONSchema()),
-			}
-		}
-	}
+	_ = definitions
 	if codecRegistry != nil {
 		for _, codec := range codecRegistry.ListCodecs() {
 			if codec == nil {
@@ -596,24 +585,6 @@ func listExtensionSchemas(
 		return items[i].Key < items[j].Key
 	})
 	return items
-}
-
-func middlewareConfigExtensionSchema(configSchema map[string]any) map[string]any {
-	typedConfigSchema := cloneExtensionMap(configSchema)
-	if typedConfigSchema == nil {
-		typedConfigSchema = map[string]any{"type": "object"}
-	}
-	return map[string]any{
-		"type": "object",
-		"properties": map[string]any{
-			"instances": map[string]any{
-				"type":                 "object",
-				"additionalProperties": typedConfigSchema,
-			},
-		},
-		"required":             []any{"instances"},
-		"additionalProperties": false,
-	}
 }
 
 func writeProfileRegistryError(w http.ResponseWriter, err error) {

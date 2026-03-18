@@ -11,6 +11,22 @@ import (
 	"time"
 )
 
+func makeWritableRecursive(root string) {
+	_ = filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		if err != nil || info == nil {
+			return nil
+		}
+		mode := os.FileMode(0o644)
+		if info.IsDir() {
+			mode = 0o755
+		} else if info.Mode()&0o111 != 0 {
+			mode = 0o755
+		}
+		_ = os.Chmod(path, mode)
+		return nil
+	})
+}
+
 func TestPrintParsedFields_ProfileRegistriesMetadata(t *testing.T) {
 	tmpDir := t.TempDir()
 	registryPath := filepath.Join(tmpDir, "registry.yaml")
@@ -179,6 +195,7 @@ profiles:
 
 func TestPinocchioJSUsesDefaultProfilesYAMLWhenPresent(t *testing.T) {
 	tmpDir := t.TempDir()
+	t.Cleanup(func() { makeWritableRecursive(tmpDir) })
 	xdgHome := filepath.Join(tmpDir, "xdg")
 	profilesDir := filepath.Join(xdgHome, "pinocchio")
 	if err := os.MkdirAll(profilesDir, 0o755); err != nil {

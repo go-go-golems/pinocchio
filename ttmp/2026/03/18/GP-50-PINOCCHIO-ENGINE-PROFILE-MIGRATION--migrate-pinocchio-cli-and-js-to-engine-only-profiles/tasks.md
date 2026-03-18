@@ -59,3 +59,11 @@
 - [x] Keep the diary updated after each implementation slice.
 - [x] Update `changelog.md` after each code commit.
 - [x] Run `docmgr doctor` before closeout.
+
+## Slice 8: Shared web-chat hard cut to Pinocchio-owned runtime payload
+
+- [x] Replace the deleted `gepprofiles.RuntimeSpec` dependency in shared Pinocchio web-chat/runtime contracts with a Pinocchio-owned runtime type.
+- [x] Move prompt/tool/middleware runtime policy onto a Pinocchio-owned extension payload instead of Geppetto mixed profiles.
+- [x] Update `cmd/web-chat` request resolution so engine profiles contribute `InferenceSettings` while Pinocchio app runtime comes from the local extension.
+- [x] Update shared `pkg/webchat`, `pkg/webchat/http`, and `cmd/web-chat` tests to the new runtime payload.
+- [x] Commit the shared web-chat cut that unblocks CoinVault and Temporal.

@@ -45,7 +45,7 @@ Implemented the profile-registry migration slice. Added a standalone migration s
 
 - /home/manuel/workspaces/2026-03-17/add-opinionated-apis/pinocchio/pkg/cmds/helpers/engine_profile_migration.go — core migration helper for mixed and legacy profile YAML
 - /home/manuel/workspaces/2026-03-17/add-opinionated-apis/pinocchio/pkg/cmds/helpers/engine_profile_migration_test.go — focused conversion tests
-- /home/manuel/workspaces/2026-03-17/add-opinionated-apis/pinocchio/scripts/migrate_engine_profiles_yaml.go — standalone user-facing migration script
+- /home/manuel/workspaces/2026-03-17/add-opinionated-apis/pinocchio/scripts/migrate-engine-profiles-yaml/main.go — standalone user-facing migration script
 - /home/manuel/workspaces/2026-03-17/add-opinionated-apis/pinocchio/cmd/pinocchio/main_profile_registries_test.go — default `~/.config/pinocchio/profiles.yaml` regression test
 - /home/manuel/workspaces/2026-03-17/add-opinionated-apis/pinocchio/README.md — updated engine-profile docs and migration instructions
 - /home/manuel/workspaces/2026-03-17/add-opinionated-apis/pinocchio/examples/js/README.md — updated JS example docs
@@ -77,3 +77,16 @@ produced:
 ```
 
 This completes the user-facing Pinocchio CLI and JS migration to engine-only profiles. Web chat remains explicitly deferred to the follow-up plan.
+
+## 2026-03-18
+
+Implemented the shared Pinocchio web-chat hard cut that both CoinVault and Temporal were blocked on. Pinocchio now owns its app runtime payload in `pkg/inference/runtime/profile_runtime.go`, shared web-chat/runtime contracts no longer reference the deleted Geppetto mixed runtime type, and `cmd/web-chat` now reads prompt/tool/middleware policy from the `pinocchio.webchat_runtime@v1` profile extension while engine profiles continue to provide only final `InferenceSettings`.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-03-17/add-opinionated-apis/pinocchio/pkg/inference/runtime/profile_runtime.go — new Pinocchio-owned runtime payload and extension helper
+- /home/manuel/workspaces/2026-03-17/add-opinionated-apis/pinocchio/pkg/webchat/conversation.go — shared conversation state now stores Pinocchio runtime payload, not Geppetto runtime spec
+- /home/manuel/workspaces/2026-03-17/add-opinionated-apis/pinocchio/pkg/webchat/http/api.go — HTTP resolution/request types now carry local runtime payload plus resolved inference settings
+- /home/manuel/workspaces/2026-03-17/add-opinionated-apis/pinocchio/cmd/web-chat/profile_policy.go — request resolver now merges engine profiles with Pinocchio runtime extensions
+- /home/manuel/workspaces/2026-03-17/add-opinionated-apis/pinocchio/cmd/web-chat/runtime_composer.go — runtime composer now resolves Pinocchio middleware/tool/runtime policy without Geppetto runtime types
+- /home/manuel/workspaces/2026-03-17/add-opinionated-apis/pinocchio/pkg/webchat/http/profile_api.go — profile API now surfaces Pinocchio runtime extension data instead of deleted Geppetto runtime fields
