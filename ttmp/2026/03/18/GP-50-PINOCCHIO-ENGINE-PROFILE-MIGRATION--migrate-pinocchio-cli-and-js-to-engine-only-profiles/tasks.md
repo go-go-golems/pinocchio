@@ -50,9 +50,9 @@
 
 ## Slice 7: Web chat follow-up planning
 
-- [ ] Inventory the app-owned multi-profile/runtime concerns that remain in web chat.
-- [ ] Decide whether web chat should keep its own app profile YAML or move to a narrower local format.
-- [ ] Add a follow-up plan section or separate ticket link for web-chat migration.
+- [x] Inventory the app-owned multi-profile/runtime concerns that remain in web chat.
+- [x] Decide whether web chat should keep its own app profile YAML or move to a narrower local format.
+- [x] Add a follow-up plan section or separate ticket link for web-chat migration.
 
 ## Ticket bookkeeping
 

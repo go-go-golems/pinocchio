@@ -51,7 +51,7 @@ The current implementation order is:
 1. Fix shared CLI inference-settings bootstrap so engine profiles actually affect command execution.
 2. Migrate `pinocchio js` to the new engine-profile model and restore a real inference example.
 3. Add or update a profile-registry conversion script for old mixed-runtime YAML.
-4. Only then begin the separate web-chat migration.
+4. Hand web chat off to a separate app-runtime migration plan rather than forcing it into the CLI/JS cutover.
 
 ## Changelog
 
