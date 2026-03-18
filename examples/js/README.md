@@ -16,10 +16,16 @@ The important difference from the Geppetto example shell is that `pinocchio js` 
 That means:
 
 - hidden base `InferenceSettings` come from Pinocchio config, env, and defaults
-- engine profile registries come from `--profile-registries`, `PINOCCHIO_PROFILE_REGISTRIES`, or the default config path
+- engine profile registries come from `--profile-registries`, `PINOCCHIO_PROFILE_REGISTRIES`, config, or the default `${XDG_CONFIG_HOME:-~/.config}/pinocchio/profiles.yaml`
 - engine profile selection comes from `--profile`, `PINOCCHIO_PROFILE`, config, or the registry default profile
 - `--config-file` can supply the same `profile-settings.*` values used by the rest of the CLI
 - scripts can either resolve an engine profile with `gp.profiles.resolve({})` and build with `gp.engines.fromResolvedProfile(...)`, or build directly from hidden base config with `pinocchio.engines.fromDefaults()`
+
+If your default `profiles.yaml` is still in the old mixed-runtime format, rewrite it first:
+
+```bash
+go run ./scripts/migrate_engine_profiles_yaml.go --in-place
+```
 
 ## Files
 

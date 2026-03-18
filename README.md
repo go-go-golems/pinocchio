@@ -44,9 +44,9 @@ Finally, install by downloading the binaries straight from [github](https://gith
 
 ## Usage
 
-Configure pinocchio through layered config plus a profile-registry stack.
+Configure pinocchio through layered config plus an engine-profile registry stack.
 Use `~/.pinocchio/config.yaml` for app config and optional provider defaults, and use
-profile registries to select the active model/provider runtime.
+engine profiles to select the active model/provider settings.
 
 ```yaml
 repositories:
@@ -81,48 +81,53 @@ I am 100 years old.
 Pinocchio comes with a selection of [demo prompts](https://github.com/go-go-golems/geppetto/tree/main/cmd/pinocchio/prompts/examples)
 as an inspiration.
 
-## Profile registry loading
+## Engine profile loading
 
-Pinocchio now resolves profiles from a profile-registry source stack.
+Pinocchio resolves engine profiles from a registry source stack.
 
-Selection knobs:
+Registry-source precedence:
 
-- `--profile-registries` (comma-separated YAML/SQLite sources)
-- `PINOCCHIO_PROFILE_REGISTRIES`
-- `profile-settings.profile-registries` in config YAML
+1. `--profile-registries` (comma-separated YAML/SQLite sources)
+2. `PINOCCHIO_PROFILE_REGISTRIES`
+3. `profile-settings.profile-registries` in the selected config file
+4. `${XDG_CONFIG_HOME:-~/.config}/pinocchio/profiles.yaml` when the file exists
 
-When none of the above are set, pinocchio automatically uses:
+Profile-selection precedence:
 
-- `${XDG_CONFIG_HOME:-~/.config}/pinocchio/profiles.yaml` (if the file exists)
-
-Profile selection is still done with:
-
-- `--profile`
-- `PINOCCHIO_PROFILE`
+1. `--profile`
+2. `PINOCCHIO_PROFILE`
+3. `profile-settings.profile` in the selected config file
+4. the registry default profile (`default_profile_slug` or slug `default`)
 
 Example:
 
 ```bash
-PINOCCHIO_PROFILE=gpt-5 pinocchio examples test
+PINOCCHIO_PROFILE=gpt-5-mini pinocchio examples test
 ```
 
-This works as long as `gpt-5` exists in the default runtime file (`~/.config/pinocchio/profiles.yaml`) or one of the configured profile-registry sources.
+This works as long as `gpt-5-mini` exists in the default engine-profile file (`~/.config/pinocchio/profiles.yaml`) or one of the configured registry sources.
 
-Runtime YAML format is single-registry only:
+Engine-profile YAML format is single-registry only:
 
 ```yaml
-slug: default
+slug: workspace
 profiles:
-  gpt-5:
-    slug: gpt-5
-    runtime:
-      system_prompt: You are the GPT-5 assistant profile.
-      tools:
-        - calculator
+  default:
+    slug: default
+    inference_settings:
+      chat:
+        api_type: openai
+        engine: gpt-4o-mini
+  gpt-5-mini:
+    slug: gpt-5-mini
+    stack:
+      - profile_slug: default
+    inference_settings:
+      chat:
+        engine: gpt-5-mini
 ```
 
-Do not use `registries:` or `default_profile_slug` in runtime YAML sources.
-Keep provider credentials and other base defaults in layered app config, and use profiles for prompt/tool/middleware metadata only.
+Keep prompts, middlewares, and tool selection out of this file. Those are application-level concerns now.
 
 ## Running JavaScript scripts
 
@@ -173,7 +178,7 @@ There is a runnable real-inference example in:
 
 - [examples/js/runner-profile-demo.js](./examples/js/runner-profile-demo.js)
 
-It uses explicit engine overrides (`model: "gpt-4o-mini"`, `apiType: "openai"`) so the example does a real model call even when your base Pinocchio config does not already define a provider.
+It builds the engine directly from the resolved engine profile, so the selected profile controls the model/provider settings used for the actual inference.
 
 Run it with:
 
@@ -202,7 +207,28 @@ pinocchio js \
 
 ## Migrating old profiles.yaml
 
-If your old file used the mixed runtime profile format, automatic migration is no longer available. Rebuild it as an engine-profile registry with `inference_settings` entries, for example:
+If your old file still uses the mixed runtime format, migrate it once and keep the result at the same default location:
+
+```bash
+go run ./scripts/migrate_engine_profiles_yaml.go --in-place
+```
+
+Use `--dry-run` first if you want to inspect the rewritten YAML:
+
+```bash
+go run ./scripts/migrate_engine_profiles_yaml.go --dry-run
+```
+
+The migration script converts:
+
+- old mixed `profiles.<slug>.runtime.step_settings_patch`
+- older flat profile maps like `default: { ai-chat: ... }`
+
+into engine-only `profiles.<slug>.inference_settings`.
+
+It also prints warnings when it drops old application-level fields such as `runtime.system_prompt`, `runtime.middlewares`, or `runtime.tools`.
+
+The target shape looks like this:
 
 ```yaml
 slug: workspace

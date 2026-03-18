@@ -21,22 +21,23 @@
 - [x] Reproduce or simulate the `pinocchio code unix hello` path with a minimal fixture.
 - [x] Update the command-loading path or helper wiring so repository-loaded commands pick up engine profile settings from config and default profile registries.
 - [x] Add a regression test or smoke example for the repository-loaded command path.
-- [ ] Commit the repository-loaded command slice.
+- [x] Commit the repository-loaded command slice.
 
 ## Slice 4: `pinocchio js` migration
 
 - [x] Remove remaining reliance on `gp.runner.resolveRuntime({ profile: ... })` style behavior from the Pinocchio JS command.
-- [ ] Decide whether `pinocchio.engines.fromDefaults(...)` stays "base config only" or whether Pinocchio adds a separate engine-profile-aware helper.
+- [x] Decide whether `pinocchio.engines.fromDefaults(...)` stays "base config only" or whether Pinocchio adds a separate engine-profile-aware helper.
 - [x] Update `cmd/pinocchio/cmds/js.go` so the default profile/config path uses engine profiles cleanly.
 - [x] Update the Pinocchio JS module as needed to expose the right engine inspection/build helpers.
 - [x] Commit the `pinocchio js` migration slice.
 
 ## Slice 5: Profile registry format migration
 
-- [ ] Define the Pinocchio-facing engine-profile YAML shape to replace the old mixed runtime profile files.
+- [x] Define the Pinocchio-facing engine-profile YAML shape to replace the old mixed runtime profile files.
 - [x] Reformat `examples/js/profiles/basic.yaml` and any other checked-in fixtures.
-- [ ] Add a migration script for old `~/.config/pinocchio/profiles.yaml` files if the format change is not trivial.
-- [ ] Document how the command resolves `--config-file`, `PINOCCHIO_PROFILE_REGISTRIES`, and default `~/.config/pinocchio/profiles.yaml`.
+- [x] Add a migration script for old `~/.config/pinocchio/profiles.yaml` files if the format change is not trivial.
+- [x] Document how the command resolves `--config-file`, `PINOCCHIO_PROFILE_REGISTRIES`, and default `~/.config/pinocchio/profiles.yaml`.
+- [ ] Add a focused validation note for the default `~/.config/pinocchio/profiles.yaml` fallback path.
 - [ ] Commit the profile-registry migration slice.
 
 ## Slice 6: Real inference example and docs

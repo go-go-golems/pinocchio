@@ -36,3 +36,17 @@ Implemented the repository-loaded command follow-up slice. `PinocchioCommand.Run
 
 - /home/manuel/workspaces/2026-03-17/add-opinionated-apis/pinocchio/pkg/cmds/cmd.go — blocking command path now resolves engine-profile-selected settings
 - /home/manuel/workspaces/2026-03-17/add-opinionated-apis/pinocchio/pkg/cmds/cmd_profile_registry_test.go — regression test for loaded YAML commands
+
+## 2026-03-18
+
+Implemented the profile-registry migration slice. Added a standalone migration script for old `~/.config/pinocchio/profiles.yaml`, added helper tests that convert mixed runtime profiles and older flat profile maps into engine-only `inference_settings`, added a regression test for the default auto-discovered profiles file path, and rewrote the public docs to describe the real engine-profile shape and precedence order.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-03-17/add-opinionated-apis/pinocchio/pkg/cmds/helpers/engine_profile_migration.go — core migration helper for mixed and legacy profile YAML
+- /home/manuel/workspaces/2026-03-17/add-opinionated-apis/pinocchio/pkg/cmds/helpers/engine_profile_migration_test.go — focused conversion tests
+- /home/manuel/workspaces/2026-03-17/add-opinionated-apis/pinocchio/scripts/migrate_engine_profiles_yaml.go — standalone user-facing migration script
+- /home/manuel/workspaces/2026-03-17/add-opinionated-apis/pinocchio/cmd/pinocchio/main_profile_registries_test.go — default `~/.config/pinocchio/profiles.yaml` regression test
+- /home/manuel/workspaces/2026-03-17/add-opinionated-apis/pinocchio/README.md — updated engine-profile docs and migration instructions
+- /home/manuel/workspaces/2026-03-17/add-opinionated-apis/pinocchio/examples/js/README.md — updated JS example docs
+- /home/manuel/workspaces/2026-03-17/add-opinionated-apis/pinocchio/cmd/pinocchio/doc/general/05-js-runner-scripts.md — updated help page
