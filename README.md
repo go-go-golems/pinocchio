@@ -141,11 +141,11 @@ This command bootstraps a JS runtime with two important modules:
 
 The intended model is:
 
-- Pinocchio owns config/env/default resolution for hidden base `StepSettings`
-- Pinocchio owns profile-registry discovery
-- Geppetto still owns the generic JS inference and runner API
+- Pinocchio owns config/env/default resolution for hidden base `InferenceSettings`
+- Pinocchio owns engine-profile registry discovery
+- Geppetto owns engine-profile resolution plus the generic JS inference and runner API
 
-That means a script can resolve runtime from profile registries and build an engine from the same layered Pinocchio config the CLI already uses.
+That means a script can resolve an engine profile from the same registry/config path the CLI already uses and then build an engine directly from that resolved profile.
 
 `pinocchio js` also accepts `--config-file`, so the script can inherit `profile-settings.profile-registries` and `profile-settings.profile` from the same config file used by the other Pinocchio commands.
 
@@ -153,28 +153,16 @@ Example:
 
 ```javascript
 const gp = require("geppetto");
-const pinocchio = require("pinocchio");
-
-const engine = pinocchio.engines.fromDefaults({
-  model: "gpt-4o-mini",
-  apiType: "openai",
-});
-
-const runtime = gp.runner.resolveRuntime({});
+const resolved = gp.profiles.resolve({});
 console.log(JSON.stringify({
-  runtimeKey: runtime.runtimeKey,
-  runtimeFingerprint: runtime.runtimeFingerprint,
+  profileSlug: resolved.profileSlug,
+  model: resolved.inferenceSettings?.chat?.engine,
 }, null, 2));
 
-const engineInfo = pinocchio.engines.inspectDefaults({
-  model: "gpt-4o-mini",
-  apiType: "openai",
-});
-console.log(JSON.stringify(engineInfo, null, 2));
+const engine = gp.engines.fromResolvedProfile(resolved);
 
 const out = gp.runner.run({
   engine,
-  runtime,
   prompt: "Summarize the repo in one line.",
 });
 
@@ -214,7 +202,18 @@ pinocchio js \
 
 ## Migrating old profiles.yaml
 
-If your old file used the legacy map format, automatic migration is no longer available. Rebuild the registry manually with `runtime.system_prompt`, `runtime.tools`, and `runtime.middlewares`, and move engine/provider settings into app config.
+If your old file used the mixed runtime profile format, automatic migration is no longer available. Rebuild it as an engine-profile registry with `inference_settings` entries, for example:
+
+```yaml
+slug: workspace
+profiles:
+  default:
+    slug: default
+    inference_settings:
+      chat:
+        api_type: openai
+        engine: gpt-4o-mini
+```
 
 ## Creating your own prompt
 

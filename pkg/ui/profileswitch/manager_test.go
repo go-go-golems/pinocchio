@@ -6,6 +6,7 @@ import (
 
 	gepprofiles "github.com/go-go-golems/geppetto/pkg/engineprofiles"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
+	aitypes "github.com/go-go-golems/geppetto/pkg/steps/ai/types"
 )
 
 func TestManagerResolveDefaultProfile(t *testing.T) {
@@ -17,11 +18,9 @@ func TestManagerResolveDefaultProfile(t *testing.T) {
 		DefaultEngineProfileSlug: gepprofiles.MustEngineProfileSlug("default"),
 		Profiles: map[gepprofiles.EngineProfileSlug]*gepprofiles.EngineProfile{
 			gepprofiles.MustEngineProfileSlug("default"): {
-				Slug: gepprofiles.MustEngineProfileSlug("default"),
-				Runtime: gepprofiles.RuntimeSpec{
-					SystemPrompt: "hello",
-				},
-				Metadata: gepprofiles.EngineProfileMetadata{Version: 3},
+				Slug:              gepprofiles.MustEngineProfileSlug("default"),
+				InferenceSettings: mustTestInferenceSettings(t, aitypes.ApiTypeOpenAIResponses, "gpt-5-mini"),
+				Metadata:          gepprofiles.EngineProfileMetadata{Version: 3},
 			},
 		},
 	}
@@ -56,7 +55,21 @@ func TestManagerResolveDefaultProfile(t *testing.T) {
 	if res.InferenceSettings == nil {
 		t.Fatalf("InferenceSettings is nil")
 	}
+	if res.InferenceSettings.Chat == nil || res.InferenceSettings.Chat.Engine == nil || *res.InferenceSettings.Chat.Engine != "gpt-5-mini" {
+		t.Fatalf("expected merged model gpt-5-mini, got %#v", res.InferenceSettings.Chat)
+	}
 	if res.ProfileVersion != 3 {
 		t.Fatalf("ProfileVersion=%d, want 3", res.ProfileVersion)
 	}
+}
+
+func mustTestInferenceSettings(t *testing.T, apiType aitypes.ApiType, model string) *settings.InferenceSettings {
+	t.Helper()
+	ss, err := settings.NewInferenceSettings()
+	if err != nil {
+		t.Fatalf("NewInferenceSettings failed: %v", err)
+	}
+	ss.Chat.ApiType = &apiType
+	ss.Chat.Engine = &model
+	return ss
 }

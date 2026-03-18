@@ -268,22 +268,6 @@ func initAllCommands(helpSystem *help.HelpSystem) error {
 	}
 	rootCmd.AddCommand(commandManagementCmd)
 
-	// Add profiles command group.
-	profilesCmd := &cobra.Command{
-		Use:   "profiles",
-		Short: "Profile registry utilities",
-	}
-	migrateLegacyProfilesCmd, err := pinocchio_cmds.NewMigrateLegacyProfilesCommand()
-	if err != nil {
-		return fmt.Errorf("error initializing profiles migrate-legacy command: %w", err)
-	}
-	migrateLegacyProfilesCobraCmd, err := cli.BuildCobraCommandFromCommand(migrateLegacyProfilesCmd)
-	if err != nil {
-		return fmt.Errorf("error building profiles migrate-legacy cobra command: %w", err)
-	}
-	profilesCmd.AddCommand(migrateLegacyProfilesCobraCmd)
-	rootCmd.AddCommand(profilesCmd)
-
 	// Create and add the repositories command group
 	rootCmd.AddCommand(clay_repositories.NewRepositoriesGroupCommand())
 

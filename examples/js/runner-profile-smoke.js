@@ -1,41 +1,25 @@
 const gp = require("geppetto");
-const pinocchio = require("pinocchio");
 
-const runtime = gp.runner.resolveRuntime({});
-const engineInfo = pinocchio.engines.inspectDefaults({
-  model: "gpt-4o-mini",
-  apiType: "openai",
-});
+const resolved = gp.profiles.resolve({});
 
-assert(engineInfo.apiType === "openai", "expected openai apiType in inspected defaults");
-assert(engineInfo.model === "gpt-4o-mini", "expected overridden model in inspected defaults");
-
-const defaultsEngine = pinocchio.engines.fromDefaults({
-  model: "gpt-4o-mini",
-  apiType: "openai",
-});
-
-const prepared = gp.runner.prepare({
-  engine: defaultsEngine,
-  runtime,
-  prompt: "Prepare a turn with runtime metadata only.",
-});
-
-assert(prepared.turn.metadata.runtime.runtime_key === runtime.runtimeKey, "expected stamped runtime key");
-assert(prepared.turn.metadata.runtime["profile.slug"] === runtime.runtimeKey, "expected stamped profile slug");
+assert(resolved.profileSlug !== "", "expected resolved engine profile slug");
+assert(
+  typeof resolved.inferenceSettings?.chat?.engine === "string" && resolved.inferenceSettings.chat.engine !== "",
+  "expected resolved engine profile to include an engine",
+);
 
 const localEngine = gp.engines.fromFunction((turn) => {
   const promptBlock = turn.blocks[turn.blocks.length - 1];
+  const model = resolved.inferenceSettings?.chat?.engine || "<missing>";
   return gp.turns.newTurn({
     blocks: [
-      gp.turns.newAssistantBlock(`profile=${runtime.runtimeKey} prompt=${promptBlock.payload.text}`),
+      gp.turns.newAssistantBlock(`profile=${resolved.profileSlug} model=${model} prompt=${promptBlock.payload.text}`),
     ],
   });
 });
 
 const out = gp.runner.run({
   engine: localEngine,
-  runtime,
   prompt: "hello from pinocchio js",
 });
 

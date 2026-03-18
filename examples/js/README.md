@@ -15,26 +15,24 @@ The important difference from the Geppetto example shell is that `pinocchio js` 
 
 That means:
 
-- hidden base `StepSettings` come from Pinocchio config, env, and defaults
-- profile registries come from `--profile-registries`, `PINOCCHIO_PROFILE_REGISTRIES`, or the default config path
-- profile selection comes from `--profile`, `PINOCCHIO_PROFILE`, config, or the registry default profile
+- hidden base `InferenceSettings` come from Pinocchio config, env, and defaults
+- engine profile registries come from `--profile-registries`, `PINOCCHIO_PROFILE_REGISTRIES`, or the default config path
+- engine profile selection comes from `--profile`, `PINOCCHIO_PROFILE`, config, or the registry default profile
 - `--config-file` can supply the same `profile-settings.*` values used by the rest of the CLI
-- scripts can call `pinocchio.engines.fromDefaults()` instead of reconstructing provider config manually
+- scripts can either resolve an engine profile with `gp.profiles.resolve({})` and build with `gp.engines.fromResolvedProfile(...)`, or build directly from hidden base config with `pinocchio.engines.fromDefaults()`
 
 ## Files
 
 - `runner-profile-demo.js`
   - real profile-driven inference example
-  - demonstrates `gp.runner.resolveRuntime(...)`
-  - demonstrates `pinocchio.engines.inspectDefaults(...)`
-  - demonstrates `pinocchio.engines.fromDefaults(...)`
+  - demonstrates `gp.profiles.resolve({})`
+  - demonstrates `gp.engines.fromResolvedProfile(...)`
   - demonstrates a real `gp.runner.run(...)`
-  - uses explicit `model` and `apiType` overrides so it does not depend on base config already defining a provider
 - `runner-profile-smoke.js`
   - deterministic local smoke script used by tests
-  - keeps the profile-resolution path easy to validate without calling a live model
+  - proves that profile selection changes the resolved engine settings without calling a live model
 - `profiles/basic.yaml`
-  - small local profile registry used by the demo
+  - small local engine-profile registry used by the demo
 
 ## Run
 
