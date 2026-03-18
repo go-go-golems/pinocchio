@@ -68,19 +68,10 @@ func (p *turnStorePersister) PersistTurn(ctx context.Context, t *turns.Turn) err
 }
 
 func runtimeKeyFromMetaValue(v any) string {
-	switch t := v.(type) {
-	case string:
-		return t
-	case map[string]any:
-		for _, key := range []string{"runtime_key", "key", "slug", "profile", "profile_key"} {
-			if raw, ok := t[key]; ok {
-				if s, ok := raw.(string); ok {
-					return s
-				}
-			}
-		}
-		return ""
-	default:
+	t, ok := v.(map[string]any)
+	if !ok {
 		return ""
 	}
+	s, _ := t["runtime_key"].(string)
+	return s
 }
