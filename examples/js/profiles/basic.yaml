@@ -1,0 +1,14 @@
+slug: workspace
+profiles:
+  default:
+    slug: default
+    display_name: Workspace Default
+    runtime:
+      system_prompt: You are the default assistant for Pinocchio JS examples.
+  assistant:
+    slug: assistant
+    display_name: Assistant
+    stack:
+      - profile_slug: default
+    runtime:
+      system_prompt: You are the assistant profile for Pinocchio JS examples.
