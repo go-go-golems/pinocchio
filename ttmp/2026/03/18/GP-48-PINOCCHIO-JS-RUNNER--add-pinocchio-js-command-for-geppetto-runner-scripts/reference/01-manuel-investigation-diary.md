@@ -3,7 +3,7 @@ Title: Manuel Investigation Diary
 Ticket: GP-48-PINOCCHIO-JS-RUNNER
 DocType: reference
 Summary: "Chronological implementation diary for the Pinocchio JS command work."
-LastUpdated: 2026-03-18T15:05:00-04:00
+LastUpdated: 2026-03-18T16:15:00-04:00
 ---
 
 # Manuel Investigation Diary
@@ -92,3 +92,20 @@ The right architecture is:
 - `go run ./cmd/pinocchio js ./examples/js/runner-profile-demo.js --profile assistant --profile-registries examples/js/profiles/basic.yaml`
 - `go run ./cmd/pinocchio js ./examples/js/runner-profile-demo.js --config-file <tmp-config>`
 - `go run ./cmd/pinocchio js ./examples/js/runner-profile-demo.js --config-file <tmp-config> --profile assistant`
+
+### Follow-up: split smoke example from real inference example
+
+- Confirmed a usability bug in the first example layout: [runner-profile-demo.js](/home/manuel/workspaces/2026-03-17/add-opinionated-apis/pinocchio/examples/js/runner-profile-demo.js) still used a local `gp.engines.fromFunction(...)` engine for the final run, so the visible output looked like a model reply even though no live inference happened.
+- Split the examples into two clear roles:
+  - [runner-profile-demo.js](/home/manuel/workspaces/2026-03-17/add-opinionated-apis/pinocchio/examples/js/runner-profile-demo.js): real inference example
+  - [runner-profile-smoke.js](/home/manuel/workspaces/2026-03-17/add-opinionated-apis/pinocchio/examples/js/runner-profile-smoke.js): deterministic local smoke script
+- Moved the command-level regression coverage to the smoke script so tests stay fast and deterministic.
+- Updated the docs to state explicitly that:
+  - the smoke script is for local validation
+  - the demo script is for real LLM calls
+  - the demo script passes explicit `model` and `apiType` overrides so it can run even if base Pinocchio config does not already define a provider
+
+### Smoke validation after example split
+
+- `go test ./cmd/pinocchio/... ./pkg/cmds/helpers -count=1`
+- `go run ./cmd/pinocchio js ./examples/js/runner-profile-smoke.js --profile assistant --profile-registries examples/js/profiles/basic.yaml`

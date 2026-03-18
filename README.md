@@ -171,9 +171,11 @@ const out = gp.runner.run({
 console.log(out.blocks[0].payload.text);
 ```
 
-There is a runnable local example in:
+There is a runnable real-inference example in:
 
 - [examples/js/runner-profile-demo.js](./examples/js/runner-profile-demo.js)
+
+It uses explicit engine overrides (`model: "gpt-4o-mini"`, `apiType: "openai"`) so the example does a real model call even when your base Pinocchio config does not already define a provider.
 
 Run it with:
 
@@ -189,6 +191,14 @@ Or select a specific profile from that registry:
 pinocchio js \
   examples/js/runner-profile-demo.js \
   --profile assistant \
+  --profile-registries examples/js/profiles/basic.yaml
+```
+
+If you want a deterministic local smoke run instead of a live model call, use:
+
+```bash
+pinocchio js \
+  --script examples/js/runner-profile-smoke.js \
   --profile-registries examples/js/profiles/basic.yaml
 ```
 

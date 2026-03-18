@@ -24,9 +24,14 @@ That means:
 ## Files
 
 - `runner-profile-demo.js`
+  - real profile-driven inference example
   - demonstrates `gp.runner.resolveRuntime(...)`
   - demonstrates `pinocchio.engines.fromDefaults(...)`
-  - demonstrates a local synchronous `gp.runner.run(...)`
+  - demonstrates a real `gp.runner.run(...)`
+  - uses explicit `model` and `apiType` overrides so it does not depend on base config already defining a provider
+- `runner-profile-smoke.js`
+  - deterministic local smoke script used by tests
+  - keeps the profile-resolution path easy to validate without calling a live model
 - `profiles/basic.yaml`
   - small local profile registry used by the demo
 
@@ -44,5 +49,13 @@ Or pick the explicit assistant profile:
 pinocchio js \
   examples/js/runner-profile-demo.js \
   --profile assistant \
+  --profile-registries examples/js/profiles/basic.yaml
+```
+
+Use the smoke script if you want deterministic local output:
+
+```bash
+pinocchio js \
+  --script examples/js/runner-profile-smoke.js \
   --profile-registries examples/js/profiles/basic.yaml
 ```

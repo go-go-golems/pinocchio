@@ -124,7 +124,7 @@ profiles:
 		cmd := exec.CommandContext(ctx,
 			"go", "run", "./cmd/pinocchio",
 			"js",
-			"./examples/js/runner-profile-demo.js",
+			"./examples/js/runner-profile-smoke.js",
 			"--profile", "analyst",
 			"--config-file", configPath,
 		)
@@ -151,7 +151,7 @@ profiles:
 		cmd := exec.CommandContext(ctx,
 			"go", "run", "./cmd/pinocchio",
 			"js",
-			"./examples/js/runner-profile-demo.js",
+			"./examples/js/runner-profile-smoke.js",
 			"--config-file", configPath,
 		)
 		cmd.Dir = repoRoot

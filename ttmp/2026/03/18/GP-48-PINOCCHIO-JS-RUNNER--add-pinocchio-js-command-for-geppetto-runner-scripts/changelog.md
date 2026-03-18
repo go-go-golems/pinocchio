@@ -31,3 +31,9 @@
   - the command resolves profile settings through the same config/env/default path as other Pinocchio commands
   - the Geppetto JS module now supports host-provided default profile resolution so scripts can call `gp.runner.resolveRuntime({})` and inherit the active/default Pinocchio profile
   - added regression tests for the host-default JS resolution path and for the `pinocchio js` config/profile flow
+- Example cleanup:
+  - split the old misleading local-engine script into:
+    - `runner-profile-demo.js` for real inference
+    - `runner-profile-smoke.js` for deterministic smoke coverage
+  - moved automated command checks to the smoke script
+  - clarified the README and help docs so operators know which script is live and which is local
