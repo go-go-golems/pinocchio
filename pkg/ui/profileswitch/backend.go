@@ -143,11 +143,11 @@ func (b *Backend) applyResolved(res Resolved) error {
 	if b == nil || b.sess == nil {
 		return errors.New("profileswitch backend: not initialized")
 	}
-	if res.StepSettings == nil {
-		return errors.New("profileswitch backend: resolved step settings is nil")
+	if res.InferenceSettings == nil {
+		return errors.New("profileswitch backend: resolved inference settings are nil")
 	}
 
-	eng, err := factory.NewEngineFromStepSettings(res.StepSettings)
+	eng, err := factory.NewEngineFromSettings(res.InferenceSettings)
 	if err != nil {
 		return err
 	}

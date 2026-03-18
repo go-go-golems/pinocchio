@@ -23,8 +23,8 @@ type Resolved struct {
 
 	RuntimeFingerprint string
 
-	SystemPrompt string
-	StepSettings *settings.StepSettings
+	SystemPrompt      string
+	InferenceSettings *settings.InferenceSettings
 
 	ProfileVersion uint64
 	Metadata       map[string]any

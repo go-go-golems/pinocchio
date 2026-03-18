@@ -208,14 +208,14 @@ func (g *PinocchioCommand) RunIntoWriter(
 		return errors.Wrap(err, "failed to initialize helpers settings")
 	}
 
-	// Update step settings from parsed layers
-	stepSettings, err := settings.NewStepSettings()
+	// Update inference settings from parsed layers
+	stepSettings, err := settings.NewInferenceSettings()
 	if err != nil {
-		return errors.Wrap(err, "failed to create step settings")
+		return errors.Wrap(err, "failed to create inference settings")
 	}
 	err = stepSettings.UpdateFromParsedValues(parsedValues)
 	if err != nil {
-		return errors.Wrap(err, "failed to update step settings from parsed layers")
+		return errors.Wrap(err, "failed to update inference settings from parsed layers")
 	}
 
 	// Capture profile selection inputs and a baseline settings snapshot without any profile-derived values.
@@ -298,7 +298,7 @@ func (g *PinocchioCommand) RunIntoWriter(
 
 	// Run with options
 	_, err = g.RunWithOptions(ctx,
-		run.WithStepSettings(stepSettings),
+		run.WithInferenceSettings(stepSettings),
 		run.WithBaseSettings(baseSettings),
 		run.WithProfileSelection(profileSettings.Profile, profileSettings.ProfileRegistries),
 		run.WithWriter(w),
@@ -434,7 +434,7 @@ func (g *PinocchioCommand) runBlocking(ctx context.Context, rc *run.RunContext) 
 // runEngineAndCollectMessages handles the actual engine execution and message collection
 func (g *PinocchioCommand) runEngineAndCollectMessages(ctx context.Context, rc *run.RunContext, sinks []events.EventSink) error {
 	// Create engine
-	engine, err := rc.EngineFactory.CreateEngine(rc.StepSettings)
+	engine, err := rc.EngineFactory.CreateEngine(rc.InferenceSettings)
 	if err != nil {
 		return fmt.Errorf("failed to create engine: %w", err)
 	}
@@ -494,7 +494,7 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) (*tu
 	}
 
 	// Enable streaming for the UI
-	rc.StepSettings.Chat.Stream = true
+	rc.InferenceSettings.Chat.Stream = true
 	if rc.BaseSettings != nil && rc.BaseSettings.Chat != nil {
 		rc.BaseSettings.Chat.Stream = true
 	}
@@ -737,7 +737,7 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) (*tu
 			sess, p2, err := runtime.NewChatBuilder().
 				WithContext(ctx).
 				WithEngineFactory(rc.EngineFactory).
-				WithSettings(rc.StepSettings).
+				WithSettings(rc.InferenceSettings).
 				WithRouter(rc.Router).
 				WithProgramOptions(options...).
 				WithModelOptions(

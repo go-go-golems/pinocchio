@@ -33,13 +33,13 @@ type Conversation struct {
 	stream    *StreamCoordinator
 	baseCtx   context.Context
 
-	RuntimeKey              string
-	RuntimeFingerprint      string
-	ResolvedProfileMetadata map[string]any
-	resolvedStepSettings    *aisettings.StepSettings
-	resolvedRuntime         *gepprofiles.RuntimeSpec
-	profileVersion          uint64
-	llm                     *llmConversationState
+	RuntimeKey                string
+	RuntimeFingerprint        string
+	ResolvedProfileMetadata   map[string]any
+	resolvedInferenceSettings *aisettings.InferenceSettings
+	resolvedRuntime           *gepprofiles.RuntimeSpec
+	profileVersion            uint64
+	llm                       *llmConversationState
 
 	// Chat-specific prompt submission state.
 	// All fields below are guarded by mu.
@@ -246,7 +246,7 @@ func topicForConv(convID string) string { return "chat:" + convID }
 func (cm *ConvManager) GetOrCreate(
 	convID, runtimeKey string,
 	runtimeFingerprint string,
-	resolvedStepSettings *aisettings.StepSettings,
+	resolvedInferenceSettings *aisettings.InferenceSettings,
 	resolvedRuntime *gepprofiles.RuntimeSpec,
 	resolvedProfileMetadata map[string]any,
 	profileVersion uint64,
@@ -261,7 +261,7 @@ func (cm *ConvManager) GetOrCreate(
 		ConvID:                     convID,
 		ProfileKey:                 runtimeKey,
 		ProfileVersion:             profileVersion,
-		ResolvedStepSettings:       cloneStepSettings(resolvedStepSettings),
+		ResolvedInferenceSettings:  cloneInferenceSettings(resolvedInferenceSettings),
 		ResolvedProfileRuntime:     resolvedRuntime,
 		ResolvedProfileFingerprint: strings.TrimSpace(runtimeFingerprint),
 	}
@@ -290,7 +290,7 @@ func (cm *ConvManager) GetOrCreate(
 		if len(resolvedProfileMetadata) > 0 {
 			c.ResolvedProfileMetadata = copyStringAnyMap(resolvedProfileMetadata)
 		}
-		c.resolvedStepSettings = cloneStepSettings(resolvedStepSettings)
+		c.resolvedInferenceSettings = cloneInferenceSettings(resolvedInferenceSettings)
 		c.resolvedRuntime = resolvedRuntime
 		c.profileVersion = profileVersion
 		if c.semBuf == nil {
@@ -328,7 +328,7 @@ func (cm *ConvManager) GetOrCreate(
 			c.RuntimeKey = runtime.RuntimeKey
 			c.RuntimeFingerprint = runtime.RuntimeFingerprint
 			c.ResolvedProfileMetadata = copyStringAnyMap(resolvedProfileMetadata)
-			c.resolvedStepSettings = cloneStepSettings(resolvedStepSettings)
+			c.resolvedInferenceSettings = cloneInferenceSettings(resolvedInferenceSettings)
 			c.resolvedRuntime = resolvedRuntime
 			c.profileVersion = profileVersion
 			c.llm = nil
@@ -367,19 +367,19 @@ func (cm *ConvManager) GetOrCreate(
 	}
 	sessionID := uuid.NewString()
 	conv := &Conversation{
-		ID:                      convID,
-		SessionID:               sessionID,
-		baseCtx:                 cm.baseCtx,
-		RuntimeKey:              runtime.RuntimeKey,
-		RuntimeFingerprint:      runtime.RuntimeFingerprint,
-		ResolvedProfileMetadata: copyStringAnyMap(resolvedProfileMetadata),
-		resolvedStepSettings:    cloneStepSettings(resolvedStepSettings),
-		resolvedRuntime:         resolvedRuntime,
-		profileVersion:          profileVersion,
-		requests:                map[string]*chatRequestRecord{},
-		semBuf:                  newSemFrameBuffer(1000),
-		lastActivity:            now,
-		createdAt:               now,
+		ID:                        convID,
+		SessionID:                 sessionID,
+		baseCtx:                   cm.baseCtx,
+		RuntimeKey:                runtime.RuntimeKey,
+		RuntimeFingerprint:        runtime.RuntimeFingerprint,
+		ResolvedProfileMetadata:   copyStringAnyMap(resolvedProfileMetadata),
+		resolvedInferenceSettings: cloneInferenceSettings(resolvedInferenceSettings),
+		resolvedRuntime:           resolvedRuntime,
+		profileVersion:            profileVersion,
+		requests:                  map[string]*chatRequestRecord{},
+		semBuf:                    newSemFrameBuffer(1000),
+		lastActivity:              now,
+		createdAt:                 now,
 	}
 	if timelineStore != nil {
 		conv.timelineProj = NewTimelineProjector(conv.ID, timelineStore, cm.timelineProjectorUpsertHook(conv))

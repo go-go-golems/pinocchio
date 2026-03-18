@@ -61,7 +61,7 @@ func (cm *ConvManager) ensureLLMState(conv *Conversation) (*llmConversationState
 		ConvID:                     conv.ID,
 		ProfileKey:                 conv.RuntimeKey,
 		ProfileVersion:             conv.profileVersion,
-		ResolvedStepSettings:       cloneStepSettings(conv.resolvedStepSettings),
+		ResolvedInferenceSettings:  cloneInferenceSettings(conv.resolvedInferenceSettings),
 		ResolvedProfileRuntime:     conv.resolvedRuntime,
 		ResolvedProfileFingerprint: strings.TrimSpace(conv.RuntimeFingerprint),
 	}

@@ -115,14 +115,14 @@ func (c *TestCommand) RunIntoWriter(ctx context.Context, parsedLayers *values.Va
 		return errors.Wrap(err, "failed to initialize helpers settings")
 	}
 
-	// Update step settings from parsed layers
-	stepSettings, err := settings.NewStepSettings()
+	// Update inference settings from parsed layers
+	stepSettings, err := settings.NewInferenceSettings()
 	if err != nil {
-		return errors.Wrap(err, "failed to create step settings")
+		return errors.Wrap(err, "failed to create inference settings")
 	}
 	err = stepSettings.UpdateFromParsedValues(geppettoParsedLayers)
 	if err != nil {
-		return errors.Wrap(err, "failed to update step settings from parsed layers")
+		return errors.Wrap(err, "failed to update inference settings from parsed layers")
 	}
 
 	// Build seed Turn from helpers settings (system prompt and optional user prompt)
@@ -147,7 +147,7 @@ func (c *TestCommand) RunIntoWriter(ctx context.Context, parsedLayers *values.Va
 
 	// Run with options (Turn-first)
 	updatedTurn, err := c.pinocchioCmd.RunWithOptions(ctx,
-		run.WithStepSettings(stepSettings),
+		run.WithInferenceSettings(stepSettings),
 		run.WithWriter(w),
 		run.WithRunMode(run.RunModeBlocking),
 		run.WithUISettings(&run.UISettings{

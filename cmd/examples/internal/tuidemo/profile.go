@@ -11,8 +11,8 @@ import (
 	"github.com/pkg/errors"
 )
 
-func ResolveStepSettings(ctx context.Context, profileSlug string, profileRegistries string) (*aisettings.StepSettings, func(), error) {
-	base, _, err := pinhelpers.ResolveBaseStepSettings(nil)
+func ResolveInferenceSettings(ctx context.Context, profileSlug string, profileRegistries string) (*aisettings.InferenceSettings, func(), error) {
+	base, _, err := pinhelpers.ResolveBaseInferenceSettings(nil)
 	if err != nil {
 		return nil, nil, err
 	}

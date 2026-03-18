@@ -15,7 +15,7 @@ import (
 const ModuleName = "pinocchio"
 
 type Options struct {
-	BaseStepSettings *aisettings.StepSettings
+	BaseInferenceSettings *aisettings.InferenceSettings
 }
 
 func Register(reg *require.Registry, opts Options) {
@@ -56,11 +56,11 @@ func (m *module) Loader(vm *goja.Runtime, moduleObj *goja.Object) {
 }
 
 func (m *module) engineFromDefaults(call goja.FunctionCall) (any, error) {
-	ss, err := m.cloneStepSettingsWithOverrides(call)
+	ss, err := m.cloneInferenceSettingsWithOverrides(call)
 	if err != nil {
 		return nil, err
 	}
-	eng, err := factory.NewEngineFromStepSettings(ss)
+	eng, err := factory.NewEngineFromSettings(ss)
 	if err != nil {
 		return nil, err
 	}
@@ -68,20 +68,20 @@ func (m *module) engineFromDefaults(call goja.FunctionCall) (any, error) {
 }
 
 func (m *module) inspectEngineDefaults(call goja.FunctionCall) (map[string]any, error) {
-	ss, err := m.cloneStepSettingsWithOverrides(call)
+	ss, err := m.cloneInferenceSettingsWithOverrides(call)
 	if err != nil {
 		return nil, err
 	}
-	return describeStepSettings(ss), nil
+	return describeInferenceSettings(ss), nil
 }
 
-func (m *module) cloneStepSettingsWithOverrides(call goja.FunctionCall) (*aisettings.StepSettings, error) {
-	if m.opts.BaseStepSettings == nil {
-		return nil, fmt.Errorf("pinocchio base step settings are not configured")
+func (m *module) cloneInferenceSettingsWithOverrides(call goja.FunctionCall) (*aisettings.InferenceSettings, error) {
+	if m.opts.BaseInferenceSettings == nil {
+		return nil, fmt.Errorf("pinocchio base inference settings are not configured")
 	}
-	ss := m.opts.BaseStepSettings.Clone()
+	ss := m.opts.BaseInferenceSettings.Clone()
 	if ss == nil {
-		return nil, fmt.Errorf("pinocchio base step settings are not available")
+		return nil, fmt.Errorf("pinocchio base inference settings are not available")
 	}
 	if len(call.Arguments) > 0 && call.Arguments[0] != nil && !goja.IsUndefined(call.Arguments[0]) && !goja.IsNull(call.Arguments[0]) {
 		opts, ok := call.Arguments[0].Export().(map[string]any)
@@ -93,7 +93,7 @@ func (m *module) cloneStepSettingsWithOverrides(call goja.FunctionCall) (*aisett
 	return ss, nil
 }
 
-func applyEngineOverrides(ss *aisettings.StepSettings, opts map[string]any) {
+func applyEngineOverrides(ss *aisettings.InferenceSettings, opts map[string]any) {
 	if ss == nil || opts == nil {
 		return
 	}
@@ -155,7 +155,7 @@ func inferAPIType(model string) aitypes.ApiType {
 	}
 }
 
-func describeStepSettings(ss *aisettings.StepSettings) map[string]any {
+func describeInferenceSettings(ss *aisettings.InferenceSettings) map[string]any {
 	out := map[string]any{}
 	if ss == nil {
 		return out
@@ -180,7 +180,7 @@ func describeStepSettings(ss *aisettings.StepSettings) map[string]any {
 	return out
 }
 
-func resolveBaseURL(ss *aisettings.StepSettings, apiType string) string {
+func resolveBaseURL(ss *aisettings.InferenceSettings, apiType string) string {
 	if ss == nil || ss.API.BaseUrls == nil || apiType == "" {
 		return ""
 	}
@@ -196,7 +196,7 @@ func resolveBaseURL(ss *aisettings.StepSettings, apiType string) string {
 	return ""
 }
 
-func resolveHasAPIKey(ss *aisettings.StepSettings, apiType string) bool {
+func resolveHasAPIKey(ss *aisettings.InferenceSettings, apiType string) bool {
 	if ss == nil || ss.API.APIKeys == nil || apiType == "" {
 		return false
 	}

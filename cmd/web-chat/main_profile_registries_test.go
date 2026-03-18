@@ -108,7 +108,7 @@ func TestResolveWebChatConfigFiles_LoadsDefaultAndExplicitConfig(t *testing.T) {
 	require.Equal(t, []string{defaultConfig, explicitConfig}, got)
 }
 
-func TestResolveWebChatBaseStepSettings_UsesDefaultsConfigAndEnv(t *testing.T) {
+func TestResolveWebChatBaseInferenceSettings_UsesDefaultsConfigAndEnv(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 	t.Setenv("PINOCCHIO_AI_ENGINE", "env-engine")
@@ -125,7 +125,7 @@ func TestResolveWebChatBaseStepSettings_UsesDefaultsConfigAndEnv(t *testing.T) {
 		"openai-chat:\n  openai-api-key: explicit-key\n",
 	), 0o644))
 
-	stepSettings, configFiles, err := resolveWebChatBaseStepSettings(testValuesWithConfigFile(t, explicitConfig))
+	stepSettings, configFiles, err := resolveWebChatBaseInferenceSettings(testValuesWithConfigFile(t, explicitConfig))
 	require.NoError(t, err)
 	require.Equal(t, []string{defaultConfig, explicitConfig}, configFiles)
 	require.NotNil(t, stepSettings.Chat.Engine)

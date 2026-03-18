@@ -42,7 +42,7 @@ func NewProfileSettingsSection() (schema.Section, error) {
 	)
 }
 
-func ResolveBaseStepSettings(parsed *values.Values) (*aisettings.StepSettings, []string, error) {
+func ResolveBaseInferenceSettings(parsed *values.Values) (*aisettings.InferenceSettings, []string, error) {
 	sections_, err := geppettosections.CreateGeppettoSections()
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "create hidden geppetto sections")
@@ -64,11 +64,11 @@ func ResolveBaseStepSettings(parsed *values.Values) (*aisettings.StepSettings, [
 		),
 		sources.FromDefaults(fields.WithSource(fields.SourceDefaults)),
 	); err != nil {
-		return nil, configFiles, errors.Wrap(err, "resolve hidden pinocchio base step settings")
+		return nil, configFiles, errors.Wrap(err, "resolve hidden pinocchio base inference settings")
 	}
-	stepSettings, err := aisettings.NewStepSettingsFromParsedValues(parsedValues)
+	stepSettings, err := aisettings.NewInferenceSettingsFromParsedValues(parsedValues)
 	if err != nil {
-		return nil, configFiles, errors.Wrap(err, "build step settings from hidden parsed values")
+		return nil, configFiles, errors.Wrap(err, "build inference settings from hidden parsed values")
 	}
 	return stepSettings, configFiles, nil
 }
@@ -118,11 +118,11 @@ func ResolveEffectiveProfileSettings(parsed *values.Values) (ProfileSettings, []
 	return ResolveProfileSettings(resolvedValues), configFiles, nil
 }
 
-func ResolveStepSettings(
+func ResolveInferenceSettings(
 	ctx context.Context,
 	parsed *values.Values,
-) (*aisettings.StepSettings, *gepprofiles.ResolvedProfile, func(), error) {
-	base, _, err := ResolveBaseStepSettings(parsed)
+) (*aisettings.InferenceSettings, *gepprofiles.ResolvedProfile, func(), error) {
+	base, _, err := ResolveBaseInferenceSettings(parsed)
 	if err != nil {
 		return nil, nil, nil, err
 	}

@@ -62,11 +62,11 @@ func (g *PinocchioCommandLoader) loadPinocchioCommandFromReader(
 	// maybe the easiest is just going to be to make them a separate file in the bundle format, really
 	// rewind to read the factories...
 	buf = strings.NewReader(string(yamlContent))
-	stepSettings, err := settings.NewStepSettingsFromYAML(buf)
+	stepSettings, err := settings.NewInferenceSettingsFromYAML(buf)
 	if err != nil {
 		return nil, err
 	}
-	ls, err := geppettosections.CreateGeppettoSections(geppettosections.WithDefaultsFromStepSettings(stepSettings))
+	ls, err := geppettosections.CreateGeppettoSections(geppettosections.WithDefaultsFromInferenceSettings(stepSettings))
 	if err != nil {
 		return nil, err
 	}

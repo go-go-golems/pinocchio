@@ -34,28 +34,28 @@ type ChatRequestBody struct {
 // ResolvedConversationRequest is the canonical output of request policy resolution.
 // It captures request data needed for both chat and websocket flows.
 type ResolvedConversationRequest struct {
-	ConvID               string
-	RuntimeKey           string
-	RuntimeFingerprint   string
-	ProfileVersion       uint64
-	ResolvedStepSettings *aisettings.StepSettings
-	ResolvedRuntime      *gepprofiles.RuntimeSpec
-	ProfileMetadata      map[string]any
-	Prompt               string
-	IdempotencyKey       string
+	ConvID                    string
+	RuntimeKey                string
+	RuntimeFingerprint        string
+	ProfileVersion            uint64
+	ResolvedInferenceSettings *aisettings.InferenceSettings
+	ResolvedRuntime           *gepprofiles.RuntimeSpec
+	ProfileMetadata           map[string]any
+	Prompt                    string
+	IdempotencyKey            string
 }
 
 // RuntimeRequest converts resolved HTTP request policy into the runtime request used by
 // conversation resolution helpers such as PrepareRunnerStart.
 func (r ResolvedConversationRequest) RuntimeRequest() root.ConversationRuntimeRequest {
 	return root.ConversationRuntimeRequest{
-		ConvID:                  r.ConvID,
-		RuntimeKey:              r.RuntimeKey,
-		RuntimeFingerprint:      r.RuntimeFingerprint,
-		ProfileVersion:          r.ProfileVersion,
-		ResolvedStepSettings:    cloneStepSettings(r.ResolvedStepSettings),
-		ResolvedRuntime:         r.ResolvedRuntime,
-		ResolvedProfileMetadata: r.ProfileMetadata,
+		ConvID:                    r.ConvID,
+		RuntimeKey:                r.RuntimeKey,
+		RuntimeFingerprint:        r.RuntimeFingerprint,
+		ProfileVersion:            r.ProfileVersion,
+		ResolvedInferenceSettings: cloneInferenceSettings(r.ResolvedInferenceSettings),
+		ResolvedRuntime:           r.ResolvedRuntime,
+		ResolvedProfileMetadata:   r.ProfileMetadata,
 	}
 }
 
@@ -118,7 +118,7 @@ func IdempotencyKeyFromRequest(r *http.Request, body *ChatRequestBody) string {
 	return key
 }
 
-func cloneStepSettings(in *aisettings.StepSettings) *aisettings.StepSettings {
+func cloneInferenceSettings(in *aisettings.InferenceSettings) *aisettings.InferenceSettings {
 	if in == nil {
 		return nil
 	}
