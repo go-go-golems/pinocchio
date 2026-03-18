@@ -36,12 +36,6 @@ func (c decodeOnlyCodec) Decode(raw any) (any, error) {
 	return raw, nil
 }
 
-type lookupOnlyCodecRegistry struct{}
-
-func (lookupOnlyCodecRegistry) Lookup(gepprofiles.ExtensionKey) (gepprofiles.ExtensionCodec, bool) {
-	return nil, false
-}
-
 func mustCodec(t *testing.T, rawKey string, schema map[string]any) testExtensionSchemaCodec {
 	t.Helper()
 	key, err := gepprofiles.ParseExtensionKey(rawKey)
@@ -113,8 +107,8 @@ func TestListExtensionSchemas_SkipsCodecWithoutSchemaInterface(t *testing.T) {
 	}
 }
 
-func TestListExtensionSchemas_GracefullyHandlesRegistryWithoutLister(t *testing.T) {
-	items := listExtensionSchemas(nil, nil, lookupOnlyCodecRegistry{})
+func TestListExtensionSchemas_GracefullyHandlesNilRegistry(t *testing.T) {
+	items := listExtensionSchemas(nil, nil, nil)
 	if len(items) != 0 {
 		t.Fatalf("expected no schema items, got=%d", len(items))
 	}
