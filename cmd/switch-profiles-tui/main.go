@@ -129,7 +129,7 @@ func main() {
 				convID = "tui-" + uuid.NewString()
 			}
 
-			base, err := settings.NewStepSettings()
+			base, err := settings.NewInferenceSettings()
 			if err != nil {
 				return err
 			}
@@ -219,7 +219,7 @@ func main() {
 				}
 				var parts []string
 				parts = append(parts, statusBarKeyStyle.Render("profile: ")+statusBarValStyle.Render(cur.ProfileSlug.String()))
-				if s := cur.StepSettings; s != nil && s.Chat != nil {
+				if s := cur.InferenceSettings; s != nil && s.Chat != nil {
 					if s.Chat.Engine != nil && *s.Chat.Engine != "" {
 						parts = append(parts, statusBarKeyStyle.Render("model: ")+statusBarValStyle.Render(*s.Chat.Engine))
 					}

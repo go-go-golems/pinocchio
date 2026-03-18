@@ -53,7 +53,7 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	base, err := settings.NewStepSettings()
+	base, err := settings.NewInferenceSettings()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "ERROR:", err)
 		os.Exit(1)
@@ -76,7 +76,7 @@ func main() {
 	fmt.Fprintf(os.Stderr, "runtime_key=%s\n", resolved.RuntimeKey.String())
 	fmt.Fprintf(os.Stderr, "runtime_fingerprint=%s\n", resolved.RuntimeFingerprint)
 
-	eng, err := factory.NewEngineFromStepSettings(resolved.StepSettings)
+	eng, err := factory.NewEngineFromSettings(resolved.InferenceSettings)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "ERROR:", err)
 		os.Exit(1)

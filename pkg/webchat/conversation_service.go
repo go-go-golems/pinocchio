@@ -41,13 +41,13 @@ type ConversationService struct {
 }
 
 type ConversationRuntimeRequest struct {
-	ConvID                  string
-	RuntimeKey              string
-	RuntimeFingerprint      string
-	ProfileVersion          uint64
-	ResolvedStepSettings    *aisettings.StepSettings
-	ResolvedRuntime         *gepprofiles.RuntimeSpec
-	ResolvedProfileMetadata map[string]any
+	ConvID                    string
+	RuntimeKey                string
+	RuntimeFingerprint        string
+	ProfileVersion            uint64
+	ResolvedInferenceSettings *aisettings.InferenceSettings
+	ResolvedRuntime           *gepprofiles.RuntimeSpec
+	ResolvedProfileMetadata   map[string]any
 }
 
 type ConversationHandle struct {
@@ -59,15 +59,15 @@ type ConversationHandle struct {
 }
 
 type SubmitPromptInput struct {
-	ConvID                  string
-	RuntimeKey              string
-	RuntimeFingerprint      string
-	ProfileVersion          uint64
-	ResolvedStepSettings    *aisettings.StepSettings
-	ResolvedRuntime         *gepprofiles.RuntimeSpec
-	ResolvedProfileMetadata map[string]any
-	Prompt                  string
-	IdempotencyKey          string
+	ConvID                    string
+	RuntimeKey                string
+	RuntimeFingerprint        string
+	ProfileVersion            uint64
+	ResolvedInferenceSettings *aisettings.InferenceSettings
+	ResolvedRuntime           *gepprofiles.RuntimeSpec
+	ResolvedProfileMetadata   map[string]any
+	Prompt                    string
+	IdempotencyKey            string
 }
 
 type SubmitPromptResult struct {
@@ -187,7 +187,7 @@ func copyStringAnyMap(in map[string]any) map[string]any {
 	return out
 }
 
-func cloneStepSettings(in *aisettings.StepSettings) *aisettings.StepSettings {
+func cloneInferenceSettings(in *aisettings.InferenceSettings) *aisettings.InferenceSettings {
 	if in == nil {
 		return nil
 	}

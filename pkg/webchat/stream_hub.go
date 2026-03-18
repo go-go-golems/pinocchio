@@ -52,7 +52,7 @@ func (h *StreamHub) ResolveAndEnsureConversation(ctx context.Context, req Conver
 	if runtimeKey == "" {
 		runtimeKey = "default"
 	}
-	conv, err := h.cm.GetOrCreate(convID, runtimeKey, req.RuntimeFingerprint, req.ResolvedStepSettings, req.ResolvedRuntime, req.ResolvedProfileMetadata, req.ProfileVersion)
+	conv, err := h.cm.GetOrCreate(convID, runtimeKey, req.RuntimeFingerprint, req.ResolvedInferenceSettings, req.ResolvedRuntime, req.ResolvedProfileMetadata, req.ProfileVersion)
 	if err != nil {
 		return nil, err
 	}

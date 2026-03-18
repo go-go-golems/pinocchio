@@ -17,13 +17,13 @@ import (
 type ProfileRuntimeComposer struct {
 	definitions middlewarecfg.DefinitionRegistry
 	buildDeps   middlewarecfg.BuildDeps
-	base        *settings.StepSettings
+	base        *settings.InferenceSettings
 }
 
 func newProfileRuntimeComposer(
 	definitions middlewarecfg.DefinitionRegistry,
 	buildDeps middlewarecfg.BuildDeps,
-	base *settings.StepSettings,
+	base *settings.InferenceSettings,
 ) *ProfileRuntimeComposer {
 	return &ProfileRuntimeComposer{
 		definitions: definitions,
@@ -70,13 +70,13 @@ func (c *ProfileRuntimeComposer) Compose(ctx context.Context, req infruntime.Con
 		return infruntime.ComposedRuntime{}, err
 	}
 
-	var effectiveStepSettings *settings.StepSettings
-	if req.ResolvedStepSettings != nil {
-		effectiveStepSettings = req.ResolvedStepSettings.Clone()
+	var effectiveInferenceSettings *settings.InferenceSettings
+	if req.ResolvedInferenceSettings != nil {
+		effectiveInferenceSettings = req.ResolvedInferenceSettings.Clone()
 	} else if c.base != nil {
-		effectiveStepSettings = c.base.Clone()
+		effectiveInferenceSettings = c.base.Clone()
 	} else {
-		effectiveStepSettings, err = settings.NewStepSettings()
+		effectiveInferenceSettings, err = settings.NewInferenceSettings()
 		if err != nil {
 			return infruntime.ComposedRuntime{}, err
 		}
@@ -84,7 +84,7 @@ func (c *ProfileRuntimeComposer) Compose(ctx context.Context, req infruntime.Con
 
 	eng, err := infruntime.BuildEngineFromSettingsWithMiddlewares(
 		ctx,
-		effectiveStepSettings,
+		effectiveInferenceSettings,
 		systemPrompt,
 		resolvedMiddlewares,
 	)
@@ -93,7 +93,7 @@ func (c *ProfileRuntimeComposer) Compose(ctx context.Context, req infruntime.Con
 	}
 	runtimeFingerprint := strings.TrimSpace(req.ResolvedProfileFingerprint)
 	if runtimeFingerprint == "" {
-		runtimeFingerprint = buildRuntimeFingerprint(runtimeKey, req.ProfileVersion, systemPrompt, resolvedUses, tools, effectiveStepSettings)
+		runtimeFingerprint = buildRuntimeFingerprint(runtimeKey, req.ProfileVersion, systemPrompt, resolvedUses, tools, effectiveInferenceSettings)
 	}
 
 	return infruntime.ComposedRuntime{
@@ -276,7 +276,7 @@ func buildRuntimeFingerprint(
 	systemPrompt string,
 	middlewares []gepprofiles.MiddlewareUse,
 	tools []string,
-	stepSettings *settings.StepSettings,
+	stepSettings *settings.InferenceSettings,
 ) string {
 	var metadata map[string]any
 	if stepSettings != nil {

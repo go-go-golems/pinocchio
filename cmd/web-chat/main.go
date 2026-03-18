@@ -184,7 +184,7 @@ func resolveWebChatConfigFiles(parsed *values.Values) []string {
 	return files
 }
 
-func resolveWebChatBaseStepSettings(parsed *values.Values) (*aiconfig.StepSettings, []string, error) {
+func resolveWebChatBaseInferenceSettings(parsed *values.Values) (*aiconfig.InferenceSettings, []string, error) {
 	sections_, err := geppettosections.CreateGeppettoSections()
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "create hidden geppetto sections")
@@ -203,11 +203,11 @@ func resolveWebChatBaseStepSettings(parsed *values.Values) (*aiconfig.StepSettin
 		),
 		cmdsources.FromDefaults(fields.WithSource(fields.SourceDefaults)),
 	); err != nil {
-		return nil, configFiles, errors.Wrap(err, "resolve hidden web-chat base step settings")
+		return nil, configFiles, errors.Wrap(err, "resolve hidden web-chat base inference settings")
 	}
-	stepSettings, err := aiconfig.NewStepSettingsFromParsedValues(parsedValues)
+	stepSettings, err := aiconfig.NewInferenceSettingsFromParsedValues(parsedValues)
 	if err != nil {
-		return nil, configFiles, errors.Wrap(err, "build step settings from hidden parsed values")
+		return nil, configFiles, errors.Wrap(err, "build inference settings from hidden parsed values")
 	}
 	return stepSettings, configFiles, nil
 }
@@ -325,21 +325,21 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 	if err != nil {
 		return errors.Wrap(err, "create middleware definition registry")
 	}
-	baseStepSettings, configFiles, err := resolveWebChatBaseStepSettings(parsed)
+	baseInferenceSettings, configFiles, err := resolveWebChatBaseInferenceSettings(parsed)
 	if err != nil {
 		return err
 	}
 	log.Debug().
 		Strs("config_files", configFiles).
-		Interface("step_metadata", baseStepSettings.GetMetadata()).
-		Msg("resolved hidden web-chat base step settings")
+		Interface("step_metadata", baseInferenceSettings.GetMetadata()).
+		Msg("resolved hidden web-chat base inference settings")
 	runtimeComposer := newProfileRuntimeComposer(middlewareRegistry, middlewarecfg.BuildDeps{
 		Values: map[string]any{
 			dependencyAgentModeServiceKey: amSvc,
 			dependencySQLiteDBKey:         dbWithRegexp,
 		},
-	}, baseStepSettings)
-	requestResolver := newProfileRequestResolver(profileRegistry, profileRegistryChain.DefaultRegistrySlug(), baseStepSettings)
+	}, baseInferenceSettings)
+	requestResolver := newProfileRequestResolver(profileRegistry, profileRegistryChain.DefaultRegistrySlug(), baseInferenceSettings)
 
 	if err := configureTimelineJSScripts(s.TimelineJSScripts); err != nil {
 		return err

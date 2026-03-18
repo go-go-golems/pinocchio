@@ -30,7 +30,7 @@ type HandlerFactory func(HandlerContext) func(*message.Message) error
 type ChatBuilder struct {
 	ctx            context.Context
 	engineFactory  factory.EngineFactory
-	settings       *settings.StepSettings
+	settings       *settings.InferenceSettings
 	router         *events.EventRouter
 	programOptions []tea.ProgramOption
 	modelOptions   []boba_chat.ModelOption
@@ -59,7 +59,7 @@ func (b *ChatBuilder) WithEngineFactory(f factory.EngineFactory) *ChatBuilder {
 	return b
 }
 
-func (b *ChatBuilder) WithSettings(s *settings.StepSettings) *ChatBuilder {
+func (b *ChatBuilder) WithSettings(s *settings.InferenceSettings) *ChatBuilder {
 	b.settings = s
 	return b
 }

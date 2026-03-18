@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestMigrateLegacyProfilesFile_RejectsLegacyStepSettingsProfiles(t *testing.T) {
+func TestMigrateLegacyProfilesFile_RejectsLegacyInferenceSettingsProfiles(t *testing.T) {
 	tmpDir := t.TempDir()
 	inputPath := filepath.Join(tmpDir, "profiles.yaml")
 	require.NoError(t, os.WriteFile(inputPath, []byte(`default:

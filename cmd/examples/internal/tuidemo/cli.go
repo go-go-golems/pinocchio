@@ -53,15 +53,15 @@ func ExecuteCLI(spec CLISpec) error {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
-			stepSettings, closeRuntime, err := ResolveStepSettings(ctx, profileSlug, profileRegistries)
+			stepSettings, closeRuntime, err := ResolveInferenceSettings(ctx, profileSlug, profileRegistries)
 			if err != nil {
-				return errors.Wrap(err, "resolve step settings")
+				return errors.Wrap(err, "resolve inference settings")
 			}
 			if closeRuntime != nil {
 				defer closeRuntime()
 			}
 
-			engineInstance, err := enginefactory.NewEngineFromStepSettings(stepSettings)
+			engineInstance, err := enginefactory.NewEngineFromSettings(stepSettings)
 			if err != nil {
 				return errors.Wrap(err, "create engine")
 			}

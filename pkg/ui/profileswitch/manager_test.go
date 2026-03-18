@@ -33,9 +33,9 @@ func TestManagerResolveDefaultProfile(t *testing.T) {
 		t.Fatalf("NewStoreRegistry failed: %v", err)
 	}
 
-	base, err := settings.NewStepSettings()
+	base, err := settings.NewInferenceSettings()
 	if err != nil {
-		t.Fatalf("NewStepSettings failed: %v", err)
+		t.Fatalf("NewInferenceSettings failed: %v", err)
 	}
 
 	mgr, err := NewManager(service, "", base)
@@ -53,8 +53,8 @@ func TestManagerResolveDefaultProfile(t *testing.T) {
 	if res.RegistrySlug.String() != "default" {
 		t.Fatalf("RegistrySlug=%q, want %q", res.RegistrySlug.String(), "default")
 	}
-	if res.StepSettings == nil {
-		t.Fatalf("StepSettings is nil")
+	if res.InferenceSettings == nil {
+		t.Fatalf("InferenceSettings is nil")
 	}
 	if res.ProfileVersion != 3 {
 		t.Fatalf("ProfileVersion=%d, want 3", res.ProfileVersion)

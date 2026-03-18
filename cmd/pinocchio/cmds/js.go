@@ -101,7 +101,7 @@ func runJSCommand(ctx context.Context, cmd *cobra.Command, settings jsCommandSet
 	if err != nil {
 		return err
 	}
-	baseStepSettings, _, err := cmdhelpers.ResolveBaseStepSettings(parsed)
+	baseInferenceSettings, _, err := cmdhelpers.ResolveBaseInferenceSettings(parsed)
 	if err != nil {
 		return err
 	}
@@ -123,7 +123,7 @@ func runJSCommand(ctx context.Context, cmd *cobra.Command, settings jsCommandSet
 	scriptDir := filepath.Dir(scriptPath)
 	rt, err := newPinocchioJSRuntime(ctx, pinocchioJSRuntimeOptions{
 		ScriptDir:                scriptDir,
-		BaseStepSettings:         baseStepSettings,
+		BaseInferenceSettings:    baseInferenceSettings,
 		GoToolRegistry:           goRegistry,
 		ProfileRegistry:          profileRegistry,
 		UseDefaultProfileResolve: profileRegistry != nil,
@@ -286,7 +286,7 @@ func (r selectedProfileRegistryReader) ResolveEffectiveProfile(ctx context.Conte
 
 type pinocchioJSRuntimeOptions struct {
 	ScriptDir                string
-	BaseStepSettings         *aisettings.StepSettings
+	BaseInferenceSettings    *aisettings.InferenceSettings
 	GoToolRegistry           geptools.ToolRegistry
 	ProfileRegistry          gepprofiles.RegistryReader
 	UseDefaultProfileResolve bool
@@ -323,7 +323,7 @@ func newPinocchioJSRuntime(ctx context.Context, opts pinocchioJSRuntimeOptions) 
 		MiddlewareSchemas:        opts.MiddlewareDefinitions,
 	})
 	pjs.Register(reg, pjs.Options{
-		BaseStepSettings: opts.BaseStepSettings,
+		BaseInferenceSettings: opts.BaseInferenceSettings,
 	})
 	req := reg.Enable(rt.VM)
 	rt.Require = req

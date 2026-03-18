@@ -154,19 +154,19 @@ func firstProfileSlug(profiles map[gepprofiles.ProfileSlug]*gepprofiles.Profile)
 }
 
 type ProfileRequestResolver struct {
-	profileRegistry     gepprofiles.Registry
-	defaultRegistrySlug gepprofiles.RegistrySlug
-	baseStepSettings    *aisettings.StepSettings
+	profileRegistry       gepprofiles.Registry
+	defaultRegistrySlug   gepprofiles.RegistrySlug
+	baseInferenceSettings *aisettings.InferenceSettings
 }
 
-func newProfileRequestResolver(profileRegistry gepprofiles.Registry, defaultRegistry gepprofiles.RegistrySlug, baseStepSettings *aisettings.StepSettings) *ProfileRequestResolver {
+func newProfileRequestResolver(profileRegistry gepprofiles.Registry, defaultRegistry gepprofiles.RegistrySlug, baseInferenceSettings *aisettings.InferenceSettings) *ProfileRequestResolver {
 	if defaultRegistry.IsZero() {
 		defaultRegistry = gepprofiles.MustRegistrySlug(defaultRegistrySlug)
 	}
 	return &ProfileRequestResolver{
-		profileRegistry:     profileRegistry,
-		defaultRegistrySlug: defaultRegistry,
-		baseStepSettings:    cloneResolvedStepSettings(baseStepSettings),
+		profileRegistry:       profileRegistry,
+		defaultRegistrySlug:   defaultRegistry,
+		baseInferenceSettings: cloneResolvedInferenceSettings(baseInferenceSettings),
 	}
 }
 
@@ -209,13 +209,13 @@ func (r *ProfileRequestResolver) resolveWS(req *http.Request) (webhttp.ResolvedC
 	resolvedRuntime := resolvedProfile.EffectiveRuntime
 
 	return webhttp.ResolvedConversationRequest{
-		ConvID:               convID,
-		RuntimeKey:           runtimeKeyFromResolvedProfile(resolvedProfile),
-		RuntimeFingerprint:   resolvedProfile.RuntimeFingerprint,
-		ProfileVersion:       profileVersionFromResolvedMetadata(resolvedProfile.Metadata),
-		ResolvedStepSettings: cloneResolvedStepSettings(r.baseStepSettings),
-		ResolvedRuntime:      &resolvedRuntime,
-		ProfileMetadata:      copyMetadataMap(resolvedProfile.Metadata),
+		ConvID:                    convID,
+		RuntimeKey:                runtimeKeyFromResolvedProfile(resolvedProfile),
+		RuntimeFingerprint:        resolvedProfile.RuntimeFingerprint,
+		ProfileVersion:            profileVersionFromResolvedMetadata(resolvedProfile.Metadata),
+		ResolvedInferenceSettings: cloneResolvedInferenceSettings(r.baseInferenceSettings),
+		ResolvedRuntime:           &resolvedRuntime,
+		ProfileMetadata:           copyMetadataMap(resolvedProfile.Metadata),
 	}, nil
 }
 
@@ -252,15 +252,15 @@ func (r *ProfileRequestResolver) resolveChat(req *http.Request) (webhttp.Resolve
 	resolvedRuntime := resolvedProfile.EffectiveRuntime
 
 	return webhttp.ResolvedConversationRequest{
-		ConvID:               convID,
-		RuntimeKey:           runtimeKeyFromResolvedProfile(resolvedProfile),
-		RuntimeFingerprint:   resolvedProfile.RuntimeFingerprint,
-		ProfileVersion:       profileVersionFromResolvedMetadata(resolvedProfile.Metadata),
-		ResolvedStepSettings: cloneResolvedStepSettings(r.baseStepSettings),
-		ResolvedRuntime:      &resolvedRuntime,
-		ProfileMetadata:      copyMetadataMap(resolvedProfile.Metadata),
-		Prompt:               body.Prompt,
-		IdempotencyKey:       strings.TrimSpace(body.IdempotencyKey),
+		ConvID:                    convID,
+		RuntimeKey:                runtimeKeyFromResolvedProfile(resolvedProfile),
+		RuntimeFingerprint:        resolvedProfile.RuntimeFingerprint,
+		ProfileVersion:            profileVersionFromResolvedMetadata(resolvedProfile.Metadata),
+		ResolvedInferenceSettings: cloneResolvedInferenceSettings(r.baseInferenceSettings),
+		ResolvedRuntime:           &resolvedRuntime,
+		ProfileMetadata:           copyMetadataMap(resolvedProfile.Metadata),
+		Prompt:                    body.Prompt,
+		IdempotencyKey:            strings.TrimSpace(body.IdempotencyKey),
 	}, nil
 }
 
@@ -325,7 +325,7 @@ func runtimeKeyFromResolvedProfile(resolved *gepprofiles.ResolvedProfile) string
 	return "default"
 }
 
-func cloneResolvedStepSettings(in *aisettings.StepSettings) *aisettings.StepSettings {
+func cloneResolvedInferenceSettings(in *aisettings.InferenceSettings) *aisettings.InferenceSettings {
 	if in == nil {
 		return nil
 	}

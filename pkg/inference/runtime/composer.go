@@ -14,7 +14,7 @@ type ConversationRuntimeRequest struct {
 	ConvID                     string
 	ProfileKey                 string
 	ProfileVersion             uint64
-	ResolvedStepSettings       *aisettings.StepSettings
+	ResolvedInferenceSettings  *aisettings.InferenceSettings
 	ResolvedProfileRuntime     *gepprofiles.RuntimeSpec
 	ResolvedProfileFingerprint string
 }

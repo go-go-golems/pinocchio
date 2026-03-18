@@ -14,11 +14,11 @@ import (
 type Manager struct {
 	reg      gepprofiles.Registry
 	sources  string
-	base     *settings.StepSettings
+	base     *settings.InferenceSettings
 	resolved Resolved
 }
 
-func NewManagerFromSources(ctx context.Context, sources string, base *settings.StepSettings) (*Manager, error) {
+func NewManagerFromSources(ctx context.Context, sources string, base *settings.InferenceSettings) (*Manager, error) {
 	if strings.TrimSpace(sources) == "" {
 		return nil, &gepprofiles.ValidationError{Field: "profile-settings.profile-registries", Reason: "must not be empty"}
 	}
@@ -45,12 +45,12 @@ func NewManagerFromSources(ctx context.Context, sources string, base *settings.S
 	return m, nil
 }
 
-func NewManager(reg gepprofiles.Registry, sources string, base *settings.StepSettings) (*Manager, error) {
+func NewManager(reg gepprofiles.Registry, sources string, base *settings.InferenceSettings) (*Manager, error) {
 	if reg == nil {
 		return nil, errors.New("profile manager: registry is nil")
 	}
 	if base == nil {
-		return nil, errors.New("profile manager: base step settings is nil")
+		return nil, errors.New("profile manager: base inference settings are nil")
 	}
 	return &Manager{reg: reg, sources: strings.TrimSpace(sources), base: base}, nil
 }
@@ -168,12 +168,12 @@ func (m *Manager) Resolve(ctx context.Context, profileSlug string) (Resolved, er
 		RuntimeKey:         resolved.RuntimeKey,
 		RuntimeFingerprint: strings.TrimSpace(resolved.RuntimeFingerprint),
 		SystemPrompt:       sysPrompt,
-		StepSettings:       cloneStepSettings(m.base),
+		InferenceSettings:  cloneInferenceSettings(m.base),
 		ProfileVersion:     version,
 		Metadata:           resolved.Metadata,
 	}
-	if out.StepSettings == nil {
-		return Resolved{}, errors.New("profile manager: resolved step settings is nil")
+	if out.InferenceSettings == nil {
+		return Resolved{}, errors.New("profile manager: resolved inference settings are nil")
 	}
 	return out, nil
 }
@@ -188,7 +188,7 @@ func (m *Manager) Switch(ctx context.Context, profileSlug string) (Resolved, err
 	return res, nil
 }
 
-func cloneStepSettings(in *settings.StepSettings) *settings.StepSettings {
+func cloneInferenceSettings(in *settings.InferenceSettings) *settings.InferenceSettings {
 	if in == nil {
 		return nil
 	}
