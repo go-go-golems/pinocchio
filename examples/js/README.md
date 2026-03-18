@@ -26,6 +26,7 @@ That means:
 - `runner-profile-demo.js`
   - real profile-driven inference example
   - demonstrates `gp.runner.resolveRuntime(...)`
+  - demonstrates `pinocchio.engines.inspectDefaults(...)`
   - demonstrates `pinocchio.engines.fromDefaults(...)`
   - demonstrates a real `gp.runner.run(...)`
   - uses explicit `model` and `apiType` overrides so it does not depend on base config already defining a provider

@@ -2,6 +2,13 @@ const gp = require("geppetto");
 const pinocchio = require("pinocchio");
 
 const runtime = gp.runner.resolveRuntime({});
+const engineInfo = pinocchio.engines.inspectDefaults({
+  model: "gpt-4o-mini",
+  apiType: "openai",
+});
+
+assert(engineInfo.apiType === "openai", "expected openai apiType in inspected defaults");
+assert(engineInfo.model === "gpt-4o-mini", "expected overridden model in inspected defaults");
 
 const defaultsEngine = pinocchio.engines.fromDefaults({
   model: "gpt-4o-mini",

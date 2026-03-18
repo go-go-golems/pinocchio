@@ -161,6 +161,16 @@ const engine = pinocchio.engines.fromDefaults({
 });
 
 const runtime = gp.runner.resolveRuntime({});
+console.log(JSON.stringify({
+  runtimeKey: runtime.runtimeKey,
+  runtimeFingerprint: runtime.runtimeFingerprint,
+}, null, 2));
+
+const engineInfo = pinocchio.engines.inspectDefaults({
+  model: "gpt-4o-mini",
+  apiType: "openai",
+});
+console.log(JSON.stringify(engineInfo, null, 2));
 
 const out = gp.runner.run({
   engine,

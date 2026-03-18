@@ -37,3 +37,6 @@
     - `runner-profile-smoke.js` for deterministic smoke coverage
   - moved automated command checks to the smoke script
   - clarified the README and help docs so operators know which script is live and which is local
+- Debuggability cleanup:
+  - added `pinocchio.engines.inspectDefaults(...)` so JS scripts can print the effective engine bootstrap configuration before running inference
+  - updated the real demo script to print resolved runtime metadata and inspected engine settings before the live call

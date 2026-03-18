@@ -106,6 +106,7 @@ pinocchio js
 This example uses:
 
 - `require("pinocchio").engines.fromDefaults(...)`
+- `require("pinocchio").engines.inspectDefaults(...)`
 - `gp.runner.resolveRuntime(...)`
 - `gp.runner.run(...)`
 
@@ -119,6 +120,16 @@ const engine = pinocchio.engines.fromDefaults({
 });
 
 const runtime = gp.runner.resolveRuntime({});
+console.log(JSON.stringify({
+  runtimeKey: runtime.runtimeKey,
+  runtimeFingerprint: runtime.runtimeFingerprint,
+}, null, 2));
+
+const engineInfo = pinocchio.engines.inspectDefaults({
+  model: "gpt-4o-mini",
+  apiType: "openai",
+});
+console.log(JSON.stringify(engineInfo, null, 2));
 
 const out = gp.runner.run({
   engine,
@@ -172,6 +183,7 @@ The smoke script is a good first bootstrap test because it proves all of the fol
 - the profile registry is loaded
 - runtime metadata is resolved and stamped
 - `pinocchio.engines.fromDefaults(...)` works
+- `pinocchio.engines.inspectDefaults(...)` shows the effective engine bootstrap settings
 - `gp.runner.run(...)` works
 
 ## Flags
@@ -251,6 +263,14 @@ pinocchio js --list-go-tools
 ### Engine configuration
 
 `pinocchio.engines.fromDefaults()` is the app-owned helper. It starts from Pinocchio defaults, not from a blank Geppetto config object.
+
+`pinocchio.engines.inspectDefaults()` exposes the same bootstrap path without constructing a live engine, which is useful when debugging:
+
+- selected `apiType`
+- selected `model`
+- resolved `baseURL`
+- whether an API key is configured
+- timeout in milliseconds
 
 This is the recommended path when:
 

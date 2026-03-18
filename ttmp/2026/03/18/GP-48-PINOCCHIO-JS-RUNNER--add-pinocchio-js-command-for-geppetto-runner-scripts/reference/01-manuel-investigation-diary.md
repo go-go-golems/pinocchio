@@ -3,7 +3,7 @@ Title: Manuel Investigation Diary
 Ticket: GP-48-PINOCCHIO-JS-RUNNER
 DocType: reference
 Summary: "Chronological implementation diary for the Pinocchio JS command work."
-LastUpdated: 2026-03-18T16:15:00-04:00
+LastUpdated: 2026-03-18T16:32:00-04:00
 ---
 
 # Manuel Investigation Diary
@@ -106,6 +106,27 @@ The right architecture is:
   - the demo script passes explicit `model` and `apiType` overrides so it can run even if base Pinocchio config does not already define a provider
 
 ### Smoke validation after example split
+
+- `go test ./cmd/pinocchio/... ./pkg/cmds/helpers -count=1`
+- `go run ./cmd/pinocchio js ./examples/js/runner-profile-smoke.js --profile assistant --profile-registries examples/js/profiles/basic.yaml`
+
+### Follow-up: expose engine bootstrap inspection
+
+- The live example still left one important debugging gap: the engine object itself is opaque in JS, so when inference failed there was no obvious way to see the selected provider/model/base URL without dropping into Go.
+- Added [pinocchio.engines.inspectDefaults(...)](/home/manuel/workspaces/2026-03-17/add-opinionated-apis/pinocchio/pkg/js/modules/pinocchio/module.go) as a JS-facing inspection helper.
+- The helper follows the same base-settings-plus-overrides path as `pinocchio.engines.fromDefaults(...)`, but returns a plain object instead of constructing a live engine.
+- Current fields exposed by the helper:
+  - `apiType`
+  - `model`
+  - `baseURL`
+  - `hasAPIKey`
+  - `timeoutMs`
+- Updated the live demo to print:
+  - resolved runtime metadata (`runtimeKey`, `runtimeFingerprint`, `profileVersion`, `toolNames`)
+  - inspected engine bootstrap settings
+  before running live inference.
+
+### Validation after inspection helper
 
 - `go test ./cmd/pinocchio/... ./pkg/cmds/helpers -count=1`
 - `go run ./cmd/pinocchio js ./examples/js/runner-profile-smoke.js --profile assistant --profile-registries examples/js/profiles/basic.yaml`
