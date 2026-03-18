@@ -41,12 +41,41 @@ func (m *module) Loader(vm *goja.Runtime, moduleObj *goja.Object) {
 	}); err != nil {
 		panic(vm.NewGoError(err))
 	}
+	if err := enginesObj.Set("inspectDefaults", func(call goja.FunctionCall) goja.Value {
+		info, err := m.inspectEngineDefaults(call)
+		if err != nil {
+			panic(vm.NewGoError(err))
+		}
+		return vm.ToValue(info)
+	}); err != nil {
+		panic(vm.NewGoError(err))
+	}
 	if err := exports.Set("engines", enginesObj); err != nil {
 		panic(vm.NewGoError(err))
 	}
 }
 
 func (m *module) engineFromDefaults(call goja.FunctionCall) (any, error) {
+	ss, err := m.cloneStepSettingsWithOverrides(call)
+	if err != nil {
+		return nil, err
+	}
+	eng, err := factory.NewEngineFromStepSettings(ss)
+	if err != nil {
+		return nil, err
+	}
+	return eng, nil
+}
+
+func (m *module) inspectEngineDefaults(call goja.FunctionCall) (map[string]any, error) {
+	ss, err := m.cloneStepSettingsWithOverrides(call)
+	if err != nil {
+		return nil, err
+	}
+	return describeStepSettings(ss), nil
+}
+
+func (m *module) cloneStepSettingsWithOverrides(call goja.FunctionCall) (*aisettings.StepSettings, error) {
 	if m.opts.BaseStepSettings == nil {
 		return nil, fmt.Errorf("pinocchio base step settings are not configured")
 	}
@@ -61,11 +90,7 @@ func (m *module) engineFromDefaults(call goja.FunctionCall) (any, error) {
 		}
 		applyEngineOverrides(ss, opts)
 	}
-	eng, err := factory.NewEngineFromStepSettings(ss)
-	if err != nil {
-		return nil, err
-	}
-	return eng, nil
+	return ss, nil
 }
 
 func applyEngineOverrides(ss *aisettings.StepSettings, opts map[string]any) {
@@ -128,6 +153,66 @@ func inferAPIType(model string) aitypes.ApiType {
 	default:
 		return aitypes.ApiTypeOpenAI
 	}
+}
+
+func describeStepSettings(ss *aisettings.StepSettings) map[string]any {
+	out := map[string]any{}
+	if ss == nil {
+		return out
+	}
+	apiType := ""
+	if ss.Chat.ApiType != nil {
+		apiType = strings.TrimSpace(string(*ss.Chat.ApiType))
+	}
+	model := ""
+	if ss.Chat.Engine != nil {
+		model = strings.TrimSpace(*ss.Chat.Engine)
+	}
+	out["apiType"] = apiType
+	out["model"] = model
+	out["baseURL"] = resolveBaseURL(ss, apiType)
+	out["hasAPIKey"] = resolveHasAPIKey(ss, apiType)
+	if ss.Client.Timeout != nil {
+		out["timeoutMs"] = ss.Client.Timeout.Milliseconds()
+	} else if ss.Client.TimeoutSeconds != nil {
+		out["timeoutMs"] = int64(*ss.Client.TimeoutSeconds) * 1000
+	}
+	return out
+}
+
+func resolveBaseURL(ss *aisettings.StepSettings, apiType string) string {
+	if ss == nil || ss.API.BaseUrls == nil || apiType == "" {
+		return ""
+	}
+	keys := []string{apiType + "-base-url"}
+	if apiType == string(aitypes.ApiTypeOpenAIResponses) {
+		keys = append(keys, "openai-base-url")
+	}
+	for _, key := range keys {
+		if v := strings.TrimSpace(ss.API.BaseUrls[key]); v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+func resolveHasAPIKey(ss *aisettings.StepSettings, apiType string) bool {
+	if ss == nil || ss.API.APIKeys == nil || apiType == "" {
+		return false
+	}
+	keys := []string{apiType + "-api-key"}
+	switch apiType {
+	case string(aitypes.ApiTypeOpenAI):
+		keys = append(keys, "openai-api-key")
+	case string(aitypes.ApiTypeOpenAIResponses):
+		keys = append(keys, "openai-api-key", "openai-responses-api-key")
+	}
+	for _, key := range keys {
+		if strings.TrimSpace(ss.API.APIKeys[key]) != "" {
+			return true
+		}
+	}
+	return false
 }
 
 func asString(v any) string {

@@ -3,6 +3,22 @@ const pinocchio = require("pinocchio");
 
 const runtime = gp.runner.resolveRuntime({});
 
+console.log("resolved runtime");
+console.log(JSON.stringify({
+  runtimeKey: runtime.runtimeKey,
+  runtimeFingerprint: runtime.runtimeFingerprint,
+  profileVersion: runtime.profileVersion,
+  toolNames: runtime.toolNames || [],
+}, null, 2));
+
+const engineInfo = pinocchio.engines.inspectDefaults({
+  model: "gpt-4o-mini",
+  apiType: "openai",
+});
+
+console.log("engine bootstrap");
+console.log(JSON.stringify(engineInfo, null, 2));
+
 const engine = pinocchio.engines.fromDefaults({
   model: "gpt-4o-mini",
   apiType: "openai",
