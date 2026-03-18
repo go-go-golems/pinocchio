@@ -27,3 +27,12 @@ Implemented the first downstream migration slice for the Pinocchio CLI and JS co
 - /home/manuel/workspaces/2026-03-17/add-opinionated-apis/pinocchio/examples/js/runner-profile-smoke.js — deterministic smoke script now validates profile-selected engine settings
 - /home/manuel/workspaces/2026-03-17/add-opinionated-apis/pinocchio/examples/js/profiles/basic.yaml — fixture rewritten to engine-profile YAML
 - /home/manuel/workspaces/2026-03-17/add-opinionated-apis/pinocchio/cmd/pinocchio/doc/general/05-js-runner-scripts.md — help page updated to the new split
+
+## 2026-03-18
+
+Implemented the repository-loaded command follow-up slice. `PinocchioCommand.RunIntoWriter(...)` now resolves the selected engine profile for blocking runs as well, so YAML-loaded commands no longer ignore profile-selected engine settings. Added a fake-factory regression test that loads a command from YAML and proves the merged engine-profile settings reach `CreateEngine(...)`.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-03-17/add-opinionated-apis/pinocchio/pkg/cmds/cmd.go — blocking command path now resolves engine-profile-selected settings
+- /home/manuel/workspaces/2026-03-17/add-opinionated-apis/pinocchio/pkg/cmds/cmd_profile_registry_test.go — regression test for loaded YAML commands
