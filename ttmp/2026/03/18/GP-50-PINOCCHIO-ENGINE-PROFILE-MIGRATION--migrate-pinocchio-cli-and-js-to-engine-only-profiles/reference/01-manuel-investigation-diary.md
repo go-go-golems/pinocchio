@@ -536,3 +536,57 @@ Web-chat app profile layer (Pinocchio)
 
 - Use [02-web-chat-follow-up-plan.md](../design-doc/02-web-chat-follow-up-plan.md) as the starting point for the next ticket.
 - Keep GP-50 focused on the now-working CLI and JS migration path.
+
+## Step 6: Verify the default auto-discovered profiles file and close the ticket scope
+
+This final step closed the one remaining open GP-50 task: prove that the default `${XDG_CONFIG_HOME:-~/.config}/pinocchio/profiles.yaml` fallback actually works in the migrated CLI/JS path.
+
+### What I did
+
+- Built a local binary:
+
+```bash
+go build -o /tmp/pinocchio-gp50 ./cmd/pinocchio
+```
+
+- Ran the default-path smoke flow against a temporary XDG config directory containing only `pinocchio/profiles.yaml`:
+
+```bash
+tmpdir=$(mktemp -d)
+mkdir -p "$tmpdir/xdg/pinocchio"
+cat > "$tmpdir/xdg/pinocchio/profiles.yaml" <<'YAML'
+slug: workspace
+profiles:
+  default:
+    slug: default
+    inference_settings:
+      chat:
+        api_type: openai
+        engine: default-model
+  gpt-5-mini:
+    slug: gpt-5-mini
+    stack:
+      - profile_slug: default
+    inference_settings:
+      chat:
+        engine: gpt-5-mini
+YAML
+
+XDG_CONFIG_HOME="$tmpdir/xdg" HOME="$tmpdir" \
+  /tmp/pinocchio-gp50 js ./examples/js/runner-profile-smoke.js --profile gpt-5-mini
+```
+
+### What worked
+
+The command produced:
+
+```text
+"profile=gpt-5-mini model=gpt-5-mini prompt=hello from pinocchio js"
+```
+
+That proves the default auto-discovered `profiles.yaml` path now works in the new engine-profile world without requiring `--profile-registries`.
+
+### What I learned
+
+- Using a built binary is the right validation tool here. The earlier `go run` path kept paying toolchain and dependency download costs in this environment, which obscured the actual functional result.
+- With that one last smoke check done, the Pinocchio CLI/JS migration is complete enough to hand off web chat separately.

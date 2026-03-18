@@ -1,7 +1,7 @@
 ---
 Title: Migrate Pinocchio CLI and JS to engine-only profiles
 Ticket: GP-50-PINOCCHIO-ENGINE-PROFILE-MIGRATION
-Status: active
+Status: done
 Topics:
     - pinocchio
     - migration
@@ -33,7 +33,7 @@ The migration goal is to make Pinocchio resolve engine profiles into final `Infe
 
 ## Status
 
-Current status: **active**
+Current status: **done**
 
 ## Topics
 
