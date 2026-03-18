@@ -147,6 +147,7 @@ type PinocchioCommand struct {
 	Prompt                         string        `yaml:"prompt,omitempty"`
 	Blocks                         []turns.Block `yaml:"-"`
 	SystemPrompt                   string        `yaml:"system-prompt,omitempty"`
+	EngineFactory                  factory.EngineFactory
 }
 
 var _ glazedcmds.WriterCommand = &PinocchioCommand{}
@@ -252,6 +253,20 @@ func (g *PinocchioCommand) RunIntoWriter(
 			baseSettings.Chat.Stream = stepSettings.Chat != nil && stepSettings.Chat.Stream
 		}
 	}
+	if strings.TrimSpace(profileSettings.ProfileRegistries) != "" && baseSettings != nil {
+		mgr, err := profileswitch.NewManagerFromSources(ctx, profileSettings.ProfileRegistries, baseSettings)
+		if err != nil {
+			return errors.Wrap(err, "resolve engine profile settings for command run")
+		}
+		defer func() { _ = mgr.Close() }()
+		resolved, err := mgr.Resolve(ctx, profileSettings.Profile)
+		if err != nil {
+			return errors.Wrap(err, "resolve selected engine profile for command run")
+		}
+		if resolved.InferenceSettings != nil {
+			stepSettings = resolved.InferenceSettings
+		}
+	}
 
 	// Create image paths from helper settings
 	imagePaths := make([]string, len(helpersSettings.Images))
@@ -301,6 +316,7 @@ func (g *PinocchioCommand) RunIntoWriter(
 		run.WithInferenceSettings(stepSettings),
 		run.WithBaseSettings(baseSettings),
 		run.WithProfileSelection(profileSettings.Profile, profileSettings.ProfileRegistries),
+		run.WithEngineFactory(g.EngineFactory),
 		run.WithWriter(w),
 		run.WithRunMode(runMode),
 		run.WithUISettings(uiSettings),
