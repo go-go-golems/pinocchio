@@ -61,3 +61,19 @@ Finished the web-chat follow-up planning slice inside GP-50. Documented the rema
 - /home/manuel/workspaces/2026-03-17/add-opinionated-apis/pinocchio/cmd/web-chat/profile_policy.go — mixed app/runtime concerns inventoried
 - /home/manuel/workspaces/2026-03-17/add-opinionated-apis/pinocchio/cmd/web-chat/runtime_composer.go — mixed app/runtime concerns inventoried
 - /home/manuel/workspaces/2026-03-17/add-opinionated-apis/pinocchio/pkg/inference/runtime/composer.go — shared runtime contract that still needs a follow-up hard cut
+
+## 2026-03-18
+
+Closed the CLI/JS portion of GP-50 after verifying the default `${XDG_CONFIG_HOME:-~/.config}/pinocchio/profiles.yaml` fallback with a built binary. The command:
+
+```bash
+XDG_CONFIG_HOME=<tmp> HOME=<tmp> /tmp/pinocchio-gp50 js ./examples/js/runner-profile-smoke.js --profile gpt-5-mini
+```
+
+produced:
+
+```text
+"profile=gpt-5-mini model=gpt-5-mini prompt=hello from pinocchio js"
+```
+
+This completes the user-facing Pinocchio CLI and JS migration to engine-only profiles. Web chat remains explicitly deferred to the follow-up plan.

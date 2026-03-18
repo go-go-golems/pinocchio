@@ -37,8 +37,8 @@
 - [x] Reformat `examples/js/profiles/basic.yaml` and any other checked-in fixtures.
 - [x] Add a migration script for old `~/.config/pinocchio/profiles.yaml` files if the format change is not trivial.
 - [x] Document how the command resolves `--config-file`, `PINOCCHIO_PROFILE_REGISTRIES`, and default `~/.config/pinocchio/profiles.yaml`.
-- [ ] Add a focused validation note for the default `~/.config/pinocchio/profiles.yaml` fallback path.
-- [ ] Commit the profile-registry migration slice.
+- [x] Add a focused validation note for the default `~/.config/pinocchio/profiles.yaml` fallback path.
+- [x] Commit the profile-registry migration slice.
 
 ## Slice 6: Real inference example and docs
 
