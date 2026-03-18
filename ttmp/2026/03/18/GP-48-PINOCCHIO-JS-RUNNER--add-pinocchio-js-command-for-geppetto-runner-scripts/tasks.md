@@ -10,5 +10,5 @@
 - [x] Expose at least one real Go tool registry to scripts and wire it into the runtime.
 - [x] Decide and implement middleware-definition support for Pinocchio profile middleware usage in JS scripts.
 - [x] Add smoke-test scripts or command-level execution coverage for local runner and profile-backed runner flows.
-- [ ] Update Pinocchio docs/help text so the command is discoverable and the intended script authoring model is clear.
-- [ ] Update diary, changelog, and ticket index as each slice lands.
+- [x] Update Pinocchio docs/help text so the command is discoverable and the intended script authoring model is clear.
+- [x] Update diary, changelog, and ticket index as each slice lands.
