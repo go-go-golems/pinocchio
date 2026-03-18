@@ -118,9 +118,9 @@ func main() {
 
 	_ = turns.KeyTurnMetaRuntime.Set(&t.Metadata, map[string]any{
 		"runtime_key":         resolved.RuntimeKey.String(),
-		"profile_slug":        resolved.ProfileSlug.String(),
-		"registry_slug":       resolved.RegistrySlug.String(),
-		"profile_version":     resolved.ProfileVersion,
+		"profile.slug":        resolved.ProfileSlug.String(),
+		"profile.registry":    resolved.RegistrySlug.String(),
+		"profile.version":     resolved.ProfileVersion,
 		"runtime_fingerprint": resolved.RuntimeFingerprint,
 	})
 

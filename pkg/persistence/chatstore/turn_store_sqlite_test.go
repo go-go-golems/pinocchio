@@ -151,7 +151,7 @@ func TestSQLiteTurnStore_BackfillRuntimeAndInferenceFromMetadata(t *testing.T) {
 		);
 	`)
 	require.NoError(t, err)
-	metadata := fmt.Sprintf(`{"%s":"planner","%s":"inf-42"}`, turns.KeyTurnMetaRuntime.String(), turns.KeyTurnMetaInferenceID.String())
+	metadata := fmt.Sprintf(`{"%s":{"runtime_key":"planner"},"%s":"inf-42"}`, turns.KeyTurnMetaRuntime.String(), turns.KeyTurnMetaInferenceID.String())
 	_, err = db.Exec(
 		`INSERT INTO turns(conv_id, session_id, turn_id, turn_created_at_ms, turn_metadata_json, turn_data_json, updated_at_ms) VALUES(?, ?, ?, ?, ?, '{}', ?)`,
 		"conv-1",

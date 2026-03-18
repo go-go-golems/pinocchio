@@ -196,9 +196,9 @@ func (b *Backend) Start(ctx context.Context, prompt string) (tea.Cmd, error) {
 	res := b.Current()
 	attrib := map[string]any{
 		"runtime_key":         res.RuntimeKey.String(),
-		"profile_slug":        res.ProfileSlug.String(),
-		"registry_slug":       res.RegistrySlug.String(),
-		"profile_version":     res.ProfileVersion,
+		"profile.slug":        res.ProfileSlug.String(),
+		"profile.registry":    res.RegistrySlug.String(),
+		"profile.version":     res.ProfileVersion,
 		"runtime_fingerprint": res.RuntimeFingerprint,
 	}
 	_ = turns.KeyTurnMetaRuntime.Set(&t.Metadata, attrib)
