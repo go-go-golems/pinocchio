@@ -272,6 +272,94 @@ const engine = gp.engines.fromResolvedProfile(resolved);
 const out = gp.runner.run({ engine, prompt: "..." });
 ```
 
+## Step 3: Fix the repository-loaded blocking command path
+
+This step addressed the remaining command-line gap after the first CLI/JS slice. The user’s example `pinocchio code unix hello` is ultimately a repository-loaded YAML command path, not a dedicated Cobra subtree. After the earlier helper cutover, chat mode already had an engine-profile-aware path through `profileswitch`, but blocking command runs still used the parsed `InferenceSettings` directly and therefore ignored the selected engine profile.
+
+### Prompt Context
+
+**User prompt (verbatim):** "ok, clean this up too" followed by an explicit direction to keep moving task by task through the downstream migration.
+
+**Assistant interpretation:** Continue GP-50 past the shared helper and JS shell, and make sure the repository-loaded command execution path actually picks up selected engine profiles as well.
+
+**Inferred user intent:** Make the main `pinocchio` command path trustworthy, not just the JS shell and helper binaries.
+
+### What I did
+
+- Traced the loaded-command path through:
+  - [`cmd/pinocchio/main.go`](../../../../../../pinocchio/cmd/pinocchio/main.go)
+  - [`pkg/cmds/loader.go`](../../../../../../pinocchio/pkg/cmds/loader.go)
+  - [`pkg/cmds/cmd.go`](../../../../../../pinocchio/pkg/cmds/cmd.go)
+- Confirmed the actual bug: blocking mode created `InferenceSettings` from parsed values only, while profile-selected settings were only used later in chat/profile-switch code.
+- Updated [`PinocchioCommand.RunIntoWriter`](../../../../../../pinocchio/pkg/cmds/cmd.go) so that when profile registries are configured it resolves the selected engine profile against the base settings and replaces the blocking-run `InferenceSettings` with the merged result before calling `RunWithOptions(...)`.
+- Added an optional `EngineFactory` field on [`PinocchioCommand`](../../../../../../pinocchio/pkg/cmds/cmd.go) so tests can inject a fake engine factory without changing production behavior.
+- Added [`cmd_profile_registry_test.go`](../../../../../../pinocchio/pkg/cmds/cmd_profile_registry_test.go), which:
+  - loads a command from YAML via `LoadFromYAML(...)`
+  - provides parsed `ai-chat` and `profile-settings` values
+  - injects a fake engine factory
+  - asserts that the loaded-command path passes the profile-selected model into `CreateEngine(...)`
+
+### Why
+
+- Without this fix, the repository-loaded commands would still silently ignore the selected engine profile in blocking mode.
+- A direct unit/integration-style test around `LoadFromYAML(...)` and `RunIntoWriter(...)` is the cleanest way to simulate the user-visible `pinocchio code ...` path without requiring a live provider or a whole command-repository checkout.
+
+### What worked
+
+- The new regression test passed after the blocking-path fix:
+
+```bash
+go test ./pkg/cmds ./cmd/pinocchio -count=1
+```
+
+- `go build ./cmd/pinocchio` also passed after the patch.
+
+### What didn't work
+
+- The first version of the test imported `pkg/cmds/helpers`, which created an import cycle from the `cmds` package test back into itself. I removed that dependency and defined the tiny `profile-settings` section inline in the test.
+- The next two failures were setup issues rather than logic bugs:
+  - I keyed parsed sections by `GetName()` instead of `GetSlug()`
+  - I initially assumed `RunIntoWriter(...)` would print the assistant output in this no-router test path, but the important assertion is the captured `InferenceSettings`, not stdout
+
+### What I learned
+
+- The loaded-command path already had almost all the information it needed. The missing piece was simply resolving the selected engine profile before the blocking run starts.
+- A test-only factory injection point on `PinocchioCommand` is enough to prove this path without changing the production CLI contract.
+
+### What was tricky to build
+
+- The parsed-values setup for `RunIntoWriter(...)` has to look like real Glazed input. It needs the full Geppetto section scaffold plus the helper section, not just the specific fields the test cares about.
+
+### What warrants a second pair of eyes
+
+- Precedence between explicit Geppetto inference flags and selected engine profiles. The current patch aligns the blocking path with the existing chat/profile-switch manager flow, but that precedence should be reviewed explicitly later.
+
+### What should be done in the future
+
+- Commit this Slice 3 code.
+- Then move to the remaining profile-registry file migration work, especially `~/.config/pinocchio/profiles.yaml`.
+
+### Code review instructions
+
+- Review [`pkg/cmds/cmd.go`](../../../../../../pinocchio/pkg/cmds/cmd.go) around `RunIntoWriter(...)`.
+- Then read [`pkg/cmds/cmd_profile_registry_test.go`](../../../../../../pinocchio/pkg/cmds/cmd_profile_registry_test.go) end to end; it is the best compact expression of the intended loaded-command behavior.
+
+### Technical details
+
+The new blocking-path logic is:
+
+```go
+if profileRegistries != "" && baseSettings != nil {
+    mgr, err := profileswitch.NewManagerFromSources(ctx, profileRegistries, baseSettings)
+    ...
+    resolved, err := mgr.Resolve(ctx, profile)
+    ...
+    stepSettings = resolved.InferenceSettings
+}
+```
+
+And the regression test proves that a loaded YAML command now hands `profiled-model` into the fake engine factory instead of the old `base-model`.
+
 ## Related
 
 - [index.md](../index.md)
