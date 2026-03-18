@@ -116,13 +116,13 @@ func TestListExtensionSchemas_GracefullyHandlesNilRegistry(t *testing.T) {
 
 func TestProfileListItemsFromRegistry_IncludesRegistryIdentifier(t *testing.T) {
 	registrySlug := gepprofiles.MustRegistrySlug("team")
-	registry := &gepprofiles.ProfileRegistry{
-		Slug:               registrySlug,
-		DefaultProfileSlug: gepprofiles.MustProfileSlug("analyst"),
+	registry := &gepprofiles.EngineProfileRegistry{
+		Slug:                     registrySlug,
+		DefaultEngineProfileSlug: gepprofiles.MustEngineProfileSlug("analyst"),
 	}
-	profiles_ := []*gepprofiles.Profile{
+	profiles_ := []*gepprofiles.EngineProfile{
 		{
-			Slug:        gepprofiles.MustProfileSlug("analyst"),
+			Slug:        gepprofiles.MustEngineProfileSlug("analyst"),
 			DisplayName: "Analyst",
 		},
 	}

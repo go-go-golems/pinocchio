@@ -73,7 +73,7 @@ func ParseGeppettoLayers(c *cmds.PinocchioCommand, options ...GeppettoLayersHelp
 	}
 	middlewares_ := []sources.Middleware{}
 	if helper.Profile != "" {
-		profileRegistrySources, err := gepprofiles.ParseProfileRegistrySourceEntries(helper.ProfileRegistries)
+		profileRegistrySources, err := gepprofiles.ParseEngineProfileRegistrySourceEntries(helper.ProfileRegistries)
 		if err != nil {
 			return nil, err
 		}

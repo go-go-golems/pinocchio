@@ -13,11 +13,11 @@ import (
 
 func makeTestItems() []profileswitch.ProfileListItem {
 	return []profileswitch.ProfileListItem{
-		{ProfileSlug: gepprofiles.ProfileSlug("alpha"), DisplayName: "Alpha Model"},
-		{ProfileSlug: gepprofiles.ProfileSlug("beta"), DisplayName: "Beta Model"},
-		{ProfileSlug: gepprofiles.ProfileSlug("gamma"), DisplayName: "Gamma Model"},
-		{ProfileSlug: gepprofiles.ProfileSlug("delta"), DisplayName: "Delta Model"},
-		{ProfileSlug: gepprofiles.ProfileSlug("epsilon"), DisplayName: "Epsilon Model"},
+		{ProfileSlug: gepprofiles.EngineProfileSlug("alpha"), DisplayName: "Alpha Model"},
+		{ProfileSlug: gepprofiles.EngineProfileSlug("beta"), DisplayName: "Beta Model"},
+		{ProfileSlug: gepprofiles.EngineProfileSlug("gamma"), DisplayName: "Gamma Model"},
+		{ProfileSlug: gepprofiles.EngineProfileSlug("delta"), DisplayName: "Delta Model"},
+		{ProfileSlug: gepprofiles.EngineProfileSlug("epsilon"), DisplayName: "Epsilon Model"},
 	}
 }
 
@@ -167,7 +167,7 @@ func TestPickerHeightConstraint(t *testing.T) {
 	// Create many items.
 	items := make([]profileswitch.ProfileListItem, 30)
 	for i := range items {
-		slug := gepprofiles.ProfileSlug(strings.Repeat("x", 5))
+		slug := gepprofiles.EngineProfileSlug(strings.Repeat("x", 5))
 		items[i] = profileswitch.ProfileListItem{ProfileSlug: slug}
 	}
 
@@ -185,7 +185,7 @@ func TestPickerDisplayNameInLabel(t *testing.T) {
 
 	var selected string
 	items := []profileswitch.ProfileListItem{
-		{ProfileSlug: gepprofiles.ProfileSlug("test"), DisplayName: "My Test Profile"},
+		{ProfileSlug: gepprofiles.EngineProfileSlug("test"), DisplayName: "My Test Profile"},
 	}
 	m := profileswitch.NewPickerModel(items, "", &selected)
 	m.SetSize(60, 20)

@@ -31,7 +31,7 @@ func ResolveInferenceSettings(ctx context.Context, profileSlug string, profileRe
 		return base, nil, nil
 	}
 
-	specEntries, err := gepprofiles.ParseProfileRegistrySourceEntries(profileSettings.ProfileRegistries)
+	specEntries, err := gepprofiles.ParseEngineProfileRegistrySourceEntries(profileSettings.ProfileRegistries)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "parse profile registry sources")
 	}
@@ -46,15 +46,15 @@ func ResolveInferenceSettings(ctx context.Context, profileSlug string, profileRe
 
 	input := gepprofiles.ResolveInput{}
 	if profileSettings.Profile != "" {
-		slug, err := gepprofiles.ParseProfileSlug(profileSettings.Profile)
+		slug, err := gepprofiles.ParseEngineProfileSlug(profileSettings.Profile)
 		if err != nil {
 			_ = chain.Close()
 			return nil, nil, err
 		}
-		input.ProfileSlug = slug
+		input.EngineProfileSlug = slug
 	}
 
-	if _, err := chain.ResolveEffectiveProfile(ctx, input); err != nil {
+	if _, err := chain.ResolveEngineProfile(ctx, input); err != nil {
 		_ = chain.Close()
 		return nil, nil, err
 	}

@@ -86,7 +86,7 @@ func ResolveProfileSettings(parsed *values.Values) ProfileSettings {
 	return ret
 }
 
-func ResolveEffectiveProfileSettings(parsed *values.Values) (ProfileSettings, []string, error) {
+func ResolveEngineProfileSettings(parsed *values.Values) (ProfileSettings, []string, error) {
 	profileSection, err := NewProfileSettingsSection()
 	if err != nil {
 		return ProfileSettings{}, nil, errors.Wrap(err, "create profile settings section")
@@ -121,12 +121,12 @@ func ResolveEffectiveProfileSettings(parsed *values.Values) (ProfileSettings, []
 func ResolveInferenceSettings(
 	ctx context.Context,
 	parsed *values.Values,
-) (*aisettings.InferenceSettings, *gepprofiles.ResolvedProfile, func(), error) {
+) (*aisettings.InferenceSettings, *gepprofiles.ResolvedEngineProfile, func(), error) {
 	base, _, err := ResolveBaseInferenceSettings(parsed)
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	profileSettings, _, err := ResolveEffectiveProfileSettings(parsed)
+	profileSettings, _, err := ResolveEngineProfileSettings(parsed)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -134,7 +134,7 @@ func ResolveInferenceSettings(
 		return base, nil, nil, nil
 	}
 
-	specEntries, err := gepprofiles.ParseProfileRegistrySourceEntries(profileSettings.ProfileRegistries)
+	specEntries, err := gepprofiles.ParseEngineProfileRegistrySourceEntries(profileSettings.ProfileRegistries)
 	if err != nil {
 		return nil, nil, nil, errors.Wrap(err, "parse profile registry sources")
 	}
@@ -149,14 +149,14 @@ func ResolveInferenceSettings(
 
 	in := gepprofiles.ResolveInput{}
 	if profileSettings.Profile != "" {
-		profileSlug, err := gepprofiles.ParseProfileSlug(profileSettings.Profile)
+		profileSlug, err := gepprofiles.ParseEngineProfileSlug(profileSettings.Profile)
 		if err != nil {
 			_ = chain.Close()
 			return nil, nil, nil, err
 		}
-		in.ProfileSlug = profileSlug
+		in.EngineProfileSlug = profileSlug
 	}
-	resolved, err := chain.ResolveEffectiveProfile(ctx, in)
+	resolved, err := chain.ResolveEngineProfile(ctx, in)
 	if err != nil {
 		_ = chain.Close()
 		return nil, nil, nil, err

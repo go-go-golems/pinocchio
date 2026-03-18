@@ -220,14 +220,14 @@ func localStringFlag(cmd *cobra.Command, name string) string {
 }
 
 func loadPinocchioProfileRegistryStack(parsed *values.Values) (gepprofiles.RegistryReader, gepprofiles.ResolveInput, io.Closer, error) {
-	profileSettings, _, err := cmdhelpers.ResolveEffectiveProfileSettings(parsed)
+	profileSettings, _, err := cmdhelpers.ResolveEngineProfileSettings(parsed)
 	if err != nil {
 		return nil, gepprofiles.ResolveInput{}, nil, err
 	}
 	if profileSettings.ProfileRegistries == "" {
 		return nil, gepprofiles.ResolveInput{}, nil, nil
 	}
-	entries, err := gepprofiles.ParseProfileRegistrySourceEntries(profileSettings.ProfileRegistries)
+	entries, err := gepprofiles.ParseEngineProfileRegistrySourceEntries(profileSettings.ProfileRegistries)
 	if err != nil {
 		return nil, gepprofiles.ResolveInput{}, nil, err
 	}
@@ -242,12 +242,12 @@ func loadPinocchioProfileRegistryStack(parsed *values.Values) (gepprofiles.Regis
 	defaultResolve := gepprofiles.ResolveInput{}
 	var reader gepprofiles.RegistryReader = chain
 	if profileSettings.Profile != "" {
-		profileSlug, err := gepprofiles.ParseProfileSlug(profileSettings.Profile)
+		profileSlug, err := gepprofiles.ParseEngineProfileSlug(profileSettings.Profile)
 		if err != nil {
 			_ = chain.Close()
 			return nil, gepprofiles.ResolveInput{}, nil, err
 		}
-		defaultResolve.ProfileSlug = profileSlug
+		defaultResolve.EngineProfileSlug = profileSlug
 		reader = selectedProfileRegistryReader{
 			base:            chain,
 			selectedProfile: profileSlug,
@@ -258,30 +258,30 @@ func loadPinocchioProfileRegistryStack(parsed *values.Values) (gepprofiles.Regis
 
 type selectedProfileRegistryReader struct {
 	base            gepprofiles.RegistryReader
-	selectedProfile gepprofiles.ProfileSlug
+	selectedProfile gepprofiles.EngineProfileSlug
 }
 
 func (r selectedProfileRegistryReader) ListRegistries(ctx context.Context) ([]gepprofiles.RegistrySummary, error) {
 	return r.base.ListRegistries(ctx)
 }
 
-func (r selectedProfileRegistryReader) GetRegistry(ctx context.Context, registrySlug gepprofiles.RegistrySlug) (*gepprofiles.ProfileRegistry, error) {
+func (r selectedProfileRegistryReader) GetRegistry(ctx context.Context, registrySlug gepprofiles.RegistrySlug) (*gepprofiles.EngineProfileRegistry, error) {
 	return r.base.GetRegistry(ctx, registrySlug)
 }
 
-func (r selectedProfileRegistryReader) ListProfiles(ctx context.Context, registrySlug gepprofiles.RegistrySlug) ([]*gepprofiles.Profile, error) {
-	return r.base.ListProfiles(ctx, registrySlug)
+func (r selectedProfileRegistryReader) ListEngineProfiles(ctx context.Context, registrySlug gepprofiles.RegistrySlug) ([]*gepprofiles.EngineProfile, error) {
+	return r.base.ListEngineProfiles(ctx, registrySlug)
 }
 
-func (r selectedProfileRegistryReader) GetProfile(ctx context.Context, registrySlug gepprofiles.RegistrySlug, profileSlug gepprofiles.ProfileSlug) (*gepprofiles.Profile, error) {
-	return r.base.GetProfile(ctx, registrySlug, profileSlug)
+func (r selectedProfileRegistryReader) GetEngineProfile(ctx context.Context, registrySlug gepprofiles.RegistrySlug, profileSlug gepprofiles.EngineProfileSlug) (*gepprofiles.EngineProfile, error) {
+	return r.base.GetEngineProfile(ctx, registrySlug, profileSlug)
 }
 
-func (r selectedProfileRegistryReader) ResolveEffectiveProfile(ctx context.Context, in gepprofiles.ResolveInput) (*gepprofiles.ResolvedProfile, error) {
-	if in.ProfileSlug == "" && r.selectedProfile != "" {
-		in.ProfileSlug = r.selectedProfile
+func (r selectedProfileRegistryReader) ResolveEngineProfile(ctx context.Context, in gepprofiles.ResolveInput) (*gepprofiles.ResolvedEngineProfile, error) {
+	if in.EngineProfileSlug == "" && r.selectedProfile != "" {
+		in.EngineProfileSlug = r.selectedProfile
 	}
-	return r.base.ResolveEffectiveProfile(ctx, in)
+	return r.base.ResolveEngineProfile(ctx, in)
 }
 
 type pinocchioJSRuntimeOptions struct {
@@ -317,7 +317,7 @@ func newPinocchioJSRuntime(ctx context.Context, opts pinocchioJSRuntimeOptions) 
 		Runner:                   rt.Owner,
 		GoToolRegistry:           opts.GoToolRegistry,
 		GoMiddlewareFactories:    opts.GoMiddlewareFactories,
-		ProfileRegistry:          opts.ProfileRegistry,
+		EngineProfileRegistry:    opts.ProfileRegistry,
 		UseDefaultProfileResolve: opts.UseDefaultProfileResolve,
 		DefaultProfileResolve:    opts.DefaultProfileResolve,
 		MiddlewareSchemas:        opts.MiddlewareDefinitions,

@@ -140,7 +140,7 @@ func main() {
 			}
 			defer func() { _ = mgr.Close() }()
 
-			profiles, err := mgr.ListProfiles(ctx)
+			profiles, err := mgr.ListEngineProfiles(ctx)
 			if err != nil {
 				return err
 			}

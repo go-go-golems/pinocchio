@@ -95,8 +95,8 @@ func TestConfigureTimelineJSScripts_ReturnsHelpfulErrorForMissingScript(t *testi
 func TestProfileResolver_GPT5NanoProfileIsResolvedForChatRequest(t *testing.T) {
 	profileRegistry, err := newInMemoryProfileService(
 		"default",
-		&gepprofiles.Profile{
-			Slug: gepprofiles.MustProfileSlug("gpt-5-nano"),
+		&gepprofiles.EngineProfile{
+			Slug: gepprofiles.MustEngineProfileSlug("gpt-5-nano"),
 			Runtime: gepprofiles.RuntimeSpec{
 				SystemPrompt: "You are gpt-5-nano.",
 			},
