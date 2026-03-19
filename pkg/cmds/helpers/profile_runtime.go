@@ -5,12 +5,8 @@ import (
 	"strings"
 
 	gepprofiles "github.com/go-go-golems/geppetto/pkg/engineprofiles"
-	geppettosections "github.com/go-go-golems/geppetto/pkg/sections"
 	aisettings "github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 	"github.com/go-go-golems/glazed/pkg/cli"
-	"github.com/go-go-golems/glazed/pkg/cmds/fields"
-	"github.com/go-go-golems/glazed/pkg/cmds/schema"
-	"github.com/go-go-golems/glazed/pkg/cmds/sources"
 	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	appconfig "github.com/go-go-golems/glazed/pkg/config"
 	"github.com/pkg/errors"
@@ -21,37 +17,6 @@ type ResolvedInferenceSettings struct {
 	ResolvedEngineProfile *gepprofiles.ResolvedEngineProfile
 	ConfigFiles           []string
 	Close                 func()
-}
-
-func ResolveBaseInferenceSettings(parsed *values.Values) (*aisettings.InferenceSettings, []string, error) {
-	sections_, err := geppettosections.CreateGeppettoSections()
-	if err != nil {
-		return nil, nil, errors.Wrap(err, "create hidden geppetto sections")
-	}
-	schema_ := schema.NewSchema(schema.WithSections(sections_...))
-	parsedValues := values.New()
-	configFiles, err := resolveConfigFiles(parsed)
-	if err != nil {
-		return nil, nil, err
-	}
-	if err := sources.Execute(
-		schema_,
-		parsedValues,
-		sources.FromEnv("PINOCCHIO", fields.WithSource("env")),
-		sources.FromFiles(
-			configFiles,
-			sources.WithConfigFileMapper(configFileMapper),
-			sources.WithParseOptions(fields.WithSource("config")),
-		),
-		sources.FromDefaults(fields.WithSource(fields.SourceDefaults)),
-	); err != nil {
-		return nil, configFiles, errors.Wrap(err, "resolve hidden pinocchio base inference settings")
-	}
-	stepSettings, err := aisettings.NewInferenceSettingsFromParsedValues(parsedValues)
-	if err != nil {
-		return nil, configFiles, errors.Wrap(err, "build inference settings from hidden parsed values")
-	}
-	return stepSettings, configFiles, nil
 }
 
 func ResolveFinalInferenceSettings(
