@@ -143,17 +143,20 @@ func (b *Backend) applyResolved(res Resolved) error {
 	if b == nil || b.sess == nil {
 		return errors.New("profileswitch backend: not initialized")
 	}
-	if res.InferenceSettings == nil {
-		return errors.New("profileswitch backend: resolved inference settings are nil")
+	if res.EffectiveStepSettings == nil {
+		return errors.New("profileswitch backend: resolved effective settings is nil")
 	}
 
-	eng, err := factory.NewEngineFromSettings(res.InferenceSettings)
+	eng, err := factory.NewEngineFromStepSettings(res.EffectiveStepSettings)
 	if err != nil {
 		return err
 	}
 
 	mws := make([]middleware.Middleware, 0, 2+len(b.alwaysMiddlewares))
 	mws = append(mws, b.alwaysMiddlewares...)
+	if strings.TrimSpace(res.SystemPrompt) != "" {
+		mws = append(mws, middleware.NewSystemPromptMiddleware(res.SystemPrompt))
+	}
 
 	builder := &enginebuilder.Builder{
 		Base:        eng,
@@ -192,10 +195,11 @@ func (b *Backend) Start(ctx context.Context, prompt string) (tea.Cmd, error) {
 	// Persist profile/runtime attribution on the turn itself (canonical source of truth).
 	res := b.Current()
 	attrib := map[string]any{
-		"runtime_key":      res.ProfileSlug.String(),
-		"profile.slug":     res.ProfileSlug.String(),
-		"profile.registry": res.RegistrySlug.String(),
-		"profile.version":  res.ProfileVersion,
+		"runtime_key":         res.RuntimeKey.String(),
+		"profile_slug":        res.ProfileSlug.String(),
+		"registry_slug":       res.RegistrySlug.String(),
+		"profile_version":     res.ProfileVersion,
+		"runtime_fingerprint": res.RuntimeFingerprint,
 	}
 	_ = turns.KeyTurnMetaRuntime.Set(&t.Metadata, attrib)
 

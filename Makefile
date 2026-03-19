@@ -15,7 +15,7 @@ gifs:
 # Build geppetto-lint vettool from geppetto module
 # Uses the version specified in go.mod
 GEPPETTO_LINT_BIN ?= /tmp/geppetto-lint
-GEPPETTO_LINT_PKG ?= github.com/go-go-golems/geppetto/cmd/tools/geppetto-lint
+GEPPETTO_LINT_PKG ?= github.com/go-go-golems/geppetto/cmd/geppetto-lint
 GEPPETTO_VERSION ?= $(shell go list -m -f '{{.Version}}' github.com/go-go-golems/geppetto 2>/dev/null)
 
 geppetto-lint-build:

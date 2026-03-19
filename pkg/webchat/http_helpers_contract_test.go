@@ -9,7 +9,6 @@ import (
 	"strings"
 	"testing"
 
-	aisettings "github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 	webchat "github.com/go-go-golems/pinocchio/pkg/webchat"
 	webhttp "github.com/go-go-golems/pinocchio/pkg/webchat/http"
 	"github.com/gorilla/websocket"
@@ -47,13 +46,11 @@ func (s *fakeChatHTTPService) SubmitPrompt(_ context.Context, in webchat.SubmitP
 }
 
 type fakeStreamHTTPService struct {
-	handle  *webchat.ConversationHandle
-	err     error
-	lastReq webchat.ConversationRuntimeRequest
+	handle *webchat.ConversationHandle
+	err    error
 }
 
-func (s *fakeStreamHTTPService) ResolveAndEnsureConversation(_ context.Context, in webchat.ConversationRuntimeRequest) (*webchat.ConversationHandle, error) {
-	s.lastReq = in
+func (s *fakeStreamHTTPService) ResolveAndEnsureConversation(_ context.Context, _ webchat.ConversationRuntimeRequest) (*webchat.ConversationHandle, error) {
 	if s.err != nil {
 		return nil, s.err
 	}
@@ -127,40 +124,6 @@ func TestNewWSHTTPHandler_ResolverErrorContract(t *testing.T) {
 	require.Contains(t, rec.Body.String(), "missing conv_id")
 }
 
-func TestNewWSHTTPHandler_PassesResolvedInferenceSettingsToConversationService(t *testing.T) {
-	svc := &fakeStreamHTTPService{}
-	h := webhttp.NewWSHandler(svc, fakeResolver{
-		plan: webhttp.ResolvedConversationRequest{
-			ConvID:             "conv-1",
-			RuntimeKey:         "chat",
-			RuntimeFingerprint: "fp-1",
-			ProfileVersion:     7,
-			ResolvedInferenceSettings: &aisettings.InferenceSettings{
-				Chat: &aisettings.ChatSettings{
-					Engine: stringPtr("gpt-5-mini"),
-				},
-			},
-		},
-	}, websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }})
-
-	s := httptest.NewServer(h)
-	defer s.Close()
-	wsURL := "ws" + strings.TrimPrefix(s.URL, "http")
-
-	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
-	require.NoError(t, err)
-	_ = conn.Close()
-
-	require.NotNil(t, svc.lastReq.ResolvedInferenceSettings)
-	require.NotNil(t, svc.lastReq.ResolvedInferenceSettings.Chat)
-	require.NotNil(t, svc.lastReq.ResolvedInferenceSettings.Chat.Engine)
-	require.Equal(t, "gpt-5-mini", *svc.lastReq.ResolvedInferenceSettings.Chat.Engine)
-	require.Equal(t, "conv-1", svc.lastReq.ConvID)
-	require.Equal(t, "chat", svc.lastReq.RuntimeKey)
-	require.Equal(t, "fp-1", svc.lastReq.RuntimeFingerprint)
-	require.Equal(t, uint64(7), svc.lastReq.ProfileVersion)
-}
-
 func TestNewTimelineHTTPHandler_Contract(t *testing.T) {
 	logger := zerolog.Nop()
 
@@ -209,8 +172,4 @@ func mustStruct(t *testing.T, m map[string]any) *structpb.Struct {
 	st, err := structpb.NewStruct(m)
 	require.NoError(t, err)
 	return st
-}
-
-func stringPtr(s string) *string {
-	return &s
 }

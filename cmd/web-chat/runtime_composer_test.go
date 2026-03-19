@@ -8,20 +8,40 @@ import (
 
 	gepmiddleware "github.com/go-go-golems/geppetto/pkg/inference/middleware"
 	"github.com/go-go-golems/geppetto/pkg/inference/middlewarecfg"
+	gepprofiles "github.com/go-go-golems/geppetto/pkg/profiles"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 	aitypes "github.com/go-go-golems/geppetto/pkg/steps/ai/types"
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 )
 
-func runtimeSpecWithTestAPIKey(spec *infruntime.ProfileRuntime) *infruntime.ProfileRuntime {
+func runtimeSpecWithTestAPIKey(spec *gepprofiles.RuntimeSpec) *gepprofiles.RuntimeSpec {
 	if spec == nil {
-		spec = &infruntime.ProfileRuntime{}
+		spec = &gepprofiles.RuntimeSpec{}
 	}
-	return &infruntime.ProfileRuntime{
-		SystemPrompt: spec.SystemPrompt,
-		Middlewares:  append([]infruntime.MiddlewareUse(nil), spec.Middlewares...),
-		Tools:        append([]string(nil), spec.Tools...),
+	clone := &gepprofiles.RuntimeSpec{
+		StepSettingsPatch: copyStringAnyMap(spec.StepSettingsPatch),
+		SystemPrompt:      spec.SystemPrompt,
+		Middlewares:       append([]gepprofiles.MiddlewareUse(nil), spec.Middlewares...),
+		Tools:             append([]string(nil), spec.Tools...),
 	}
+	patch, err := gepprofiles.MergeRuntimeStepSettingsPatches(
+		map[string]any{
+			"ai-chat": map[string]any{
+				"ai-engine":   "test-engine",
+				"ai-api-type": "openai",
+			},
+			"openai-chat": map[string]any{
+				"openai-api-key":  "test-api-key",
+				"openai-base-url": "https://api.openai.com/v1",
+			},
+		},
+		clone.StepSettingsPatch,
+	)
+	if err != nil {
+		panic(err)
+	}
+	clone.StepSettingsPatch = patch
+	return clone
 }
 
 type runtimeComposerDefinition struct {
@@ -57,12 +77,12 @@ func newRuntimeComposerRegistry(t *testing.T, defs ...middlewarecfg.Definition) 
 	return registry
 }
 
-func testBaseInferenceSettings(t *testing.T) *settings.InferenceSettings {
+func testBaseStepSettings(t *testing.T) *settings.StepSettings {
 	t.Helper()
 
-	ss, err := settings.NewInferenceSettings()
+	ss, err := settings.NewStepSettings()
 	if err != nil {
-		t.Fatalf("NewInferenceSettings: %v", err)
+		t.Fatalf("NewStepSettings: %v", err)
 	}
 	ss.Chat.Engine = ptr("base-engine")
 	ss.Chat.ApiType = apiTypePtr(aitypes.ApiTypeOpenAI)
@@ -71,18 +91,8 @@ func testBaseInferenceSettings(t *testing.T) *settings.InferenceSettings {
 	return ss
 }
 
-func testResolvedInferenceSettings(t *testing.T, mutate func(*settings.InferenceSettings)) *settings.InferenceSettings {
-	t.Helper()
-
-	ss := testBaseInferenceSettings(t)
-	if mutate != nil {
-		mutate(ss)
-	}
-	return ss
-}
-
 func TestRuntimeFingerprint_DoesNotIncludeAPIKeys(t *testing.T) {
-	ss := testBaseInferenceSettings(t)
+	ss := testBaseStepSettings(t)
 	ss.API.APIKeys["openai"] = "sk-this-should-not-appear"
 
 	fp := buildRuntimeFingerprint("default", 0, "hi", nil, nil, ss)
@@ -102,10 +112,9 @@ func TestWebChatRuntimeComposer_UsesResolvedRuntimeSpec(t *testing.T) {
 	)
 
 	res, err := composer.Compose(context.Background(), infruntime.ConversationRuntimeRequest{
-		ConvID:                    "c1",
-		ProfileKey:                "analyst",
-		ResolvedInferenceSettings: testResolvedInferenceSettings(t, nil),
-		ResolvedProfileRuntime: runtimeSpecWithTestAPIKey(&infruntime.ProfileRuntime{
+		ConvID:     "c1",
+		ProfileKey: "analyst",
+		ResolvedProfileRuntime: runtimeSpecWithTestAPIKey(&gepprofiles.RuntimeSpec{
 			SystemPrompt: "You are analyst",
 			Tools:        []string{"calculator", "  "},
 		}),
@@ -116,20 +125,22 @@ func TestWebChatRuntimeComposer_UsesResolvedRuntimeSpec(t *testing.T) {
 	if res.SeedSystemPrompt != "You are analyst" {
 		t.Fatalf("unexpected seed prompt: %q", res.SeedSystemPrompt)
 	}
+	if len(res.AllowedTools) != 1 || res.AllowedTools[0] != "calculator" {
+		t.Fatalf("unexpected tools: %#v", res.AllowedTools)
+	}
 }
 
-func TestWebChatRuntimeComposer_UsesBaseInferenceSettingsWhenResolvedRuntimeIsEmpty(t *testing.T) {
+func TestWebChatRuntimeComposer_UsesBaseStepSettingsWhenResolvedRuntimeIsEmpty(t *testing.T) {
 	composer := newProfileRuntimeComposer(
 		newRuntimeComposerRegistry(t),
 		middlewarecfg.BuildDeps{},
-		testBaseInferenceSettings(t),
+		testBaseStepSettings(t),
 	)
 
 	res, err := composer.Compose(context.Background(), infruntime.ConversationRuntimeRequest{
-		ConvID:                    "c1",
-		ProfileKey:                "analyst",
-		ResolvedInferenceSettings: testResolvedInferenceSettings(t, nil),
-		ResolvedProfileRuntime:    &infruntime.ProfileRuntime{},
+		ConvID:                 "c1",
+		ProfileKey:             "analyst",
+		ResolvedProfileRuntime: &gepprofiles.RuntimeSpec{},
 	})
 	if err != nil {
 		t.Fatalf("compose failed: %v", err)
@@ -144,7 +155,7 @@ func TestWebChatRuntimeComposer_UsesBaseInferenceSettingsWhenResolvedRuntimeIsEm
 		t.Fatalf("missing step_metadata in runtime fingerprint: %#v", payload)
 	}
 	if got, want := stepMeta["ai-engine"], "base-engine"; got != want {
-		t.Fatalf("base inference settings were not used: got=%#v want=%#v", got, want)
+		t.Fatalf("base step settings were not used: got=%#v want=%#v", got, want)
 	}
 }
 
@@ -171,11 +182,10 @@ func TestWebChatRuntimeComposer_UsesResolverPrecedenceForMiddlewareConfig(t *tes
 	)
 
 	_, err := composer.Compose(context.Background(), infruntime.ConversationRuntimeRequest{
-		ConvID:                    "c1",
-		ProfileKey:                "analyst",
-		ResolvedInferenceSettings: testResolvedInferenceSettings(t, nil),
-		ResolvedProfileRuntime: runtimeSpecWithTestAPIKey(&infruntime.ProfileRuntime{
-			Middlewares: []infruntime.MiddlewareUse{
+		ConvID:     "c1",
+		ProfileKey: "analyst",
+		ResolvedProfileRuntime: runtimeSpecWithTestAPIKey(&gepprofiles.RuntimeSpec{
+			Middlewares: []gepprofiles.MiddlewareUse{
 				{
 					Name: "agentmode",
 					ID:   "primary",
@@ -219,11 +229,10 @@ func TestWebChatRuntimeComposer_RejectsInvalidMiddlewareSchemaPayload(t *testing
 	)
 
 	_, err := composer.Compose(context.Background(), infruntime.ConversationRuntimeRequest{
-		ConvID:                    "c1",
-		ProfileKey:                "analyst",
-		ResolvedInferenceSettings: testResolvedInferenceSettings(t, nil),
-		ResolvedProfileRuntime: runtimeSpecWithTestAPIKey(&infruntime.ProfileRuntime{
-			Middlewares: []infruntime.MiddlewareUse{
+		ConvID:     "c1",
+		ProfileKey: "analyst",
+		ResolvedProfileRuntime: runtimeSpecWithTestAPIKey(&gepprofiles.RuntimeSpec{
+			Middlewares: []gepprofiles.MiddlewareUse{
 				{
 					Name: "agentmode",
 					Config: map[string]any{
@@ -262,9 +271,8 @@ func TestWebChatRuntimeComposer_PrefersResolvedProfileFingerprint(t *testing.T) 
 	res, err := composer.Compose(context.Background(), infruntime.ConversationRuntimeRequest{
 		ConvID:                     "c1",
 		ProfileKey:                 "analyst",
-		ResolvedInferenceSettings:  testResolvedInferenceSettings(t, nil),
 		ResolvedProfileFingerprint: "sha256:resolver-owned",
-		ResolvedProfileRuntime: runtimeSpecWithTestAPIKey(&infruntime.ProfileRuntime{
+		ResolvedProfileRuntime: runtimeSpecWithTestAPIKey(&gepprofiles.RuntimeSpec{
 			SystemPrompt: "profile prompt",
 		}),
 	})
@@ -276,7 +284,7 @@ func TestWebChatRuntimeComposer_PrefersResolvedProfileFingerprint(t *testing.T) 
 	}
 }
 
-func TestWebChatRuntimeComposer_UsesResolvedInferenceSettings(t *testing.T) {
+func TestWebChatRuntimeComposer_AppliesProfileStepSettingsPatch(t *testing.T) {
 	composer := newProfileRuntimeComposer(
 		newRuntimeComposerRegistry(t),
 		middlewarecfg.BuildDeps{},
@@ -284,10 +292,15 @@ func TestWebChatRuntimeComposer_UsesResolvedInferenceSettings(t *testing.T) {
 	)
 
 	res, err := composer.Compose(context.Background(), infruntime.ConversationRuntimeRequest{
-		ConvID:                    "c1",
-		ProfileKey:                "analyst",
-		ResolvedInferenceSettings: testResolvedInferenceSettings(t, func(ss *settings.InferenceSettings) { ss.Chat.Engine = ptr("patched-engine") }),
-		ResolvedProfileRuntime:    runtimeSpecWithTestAPIKey(&infruntime.ProfileRuntime{}),
+		ConvID:     "c1",
+		ProfileKey: "analyst",
+		ResolvedProfileRuntime: runtimeSpecWithTestAPIKey(&gepprofiles.RuntimeSpec{
+			StepSettingsPatch: map[string]any{
+				"ai-chat": map[string]any{
+					"ai-engine": "patched-engine",
+				},
+			},
+		}),
 	})
 	if err != nil {
 		t.Fatalf("compose failed: %v", err)
@@ -302,25 +315,28 @@ func TestWebChatRuntimeComposer_UsesResolvedInferenceSettings(t *testing.T) {
 		t.Fatalf("missing step_metadata in runtime fingerprint: %#v", payload)
 	}
 	if got, want := stepMeta["ai-engine"], "patched-engine"; got != want {
-		t.Fatalf("resolved inference settings not used: got=%#v want=%#v", got, want)
+		t.Fatalf("step_settings_patch not applied: got=%#v want=%#v", got, want)
 	}
 }
 
-func TestWebChatRuntimeComposer_ResolvedInferenceSettingsOverrideBase(t *testing.T) {
+func TestWebChatRuntimeComposer_UsesProfilePatchOnTopOfBaseStepSettings(t *testing.T) {
 	composer := newProfileRuntimeComposer(
 		newRuntimeComposerRegistry(t),
 		middlewarecfg.BuildDeps{},
-		testBaseInferenceSettings(t),
+		testBaseStepSettings(t),
 	)
 
 	res, err := composer.Compose(context.Background(), infruntime.ConversationRuntimeRequest{
 		ConvID:     "c1",
 		ProfileKey: "analyst",
-		ResolvedInferenceSettings: testResolvedInferenceSettings(t, func(ss *settings.InferenceSettings) {
-			ss.Chat.Engine = ptr("gpt-5-nano")
-			ss.Chat.ApiType = apiTypePtr(aitypes.ApiTypeOpenAIResponses)
-		}),
-		ResolvedProfileRuntime: &infruntime.ProfileRuntime{},
+		ResolvedProfileRuntime: &gepprofiles.RuntimeSpec{
+			StepSettingsPatch: map[string]any{
+				"ai-chat": map[string]any{
+					"ai-engine":   "gpt-5-nano",
+					"ai-api-type": "openai-responses",
+				},
+			},
+		},
 	})
 	if err != nil {
 		t.Fatalf("compose failed: %v", err)
@@ -335,10 +351,10 @@ func TestWebChatRuntimeComposer_ResolvedInferenceSettingsOverrideBase(t *testing
 		t.Fatalf("missing step_metadata in runtime fingerprint: %#v", payload)
 	}
 	if got, want := stepMeta["ai-engine"], "gpt-5-nano"; got != want {
-		t.Fatalf("resolved inference settings did not drive ai-engine: got=%#v want=%#v", got, want)
+		t.Fatalf("profile patch did not drive ai-engine: got=%#v want=%#v", got, want)
 	}
 	if got, want := stepMeta["ai-api-type"], "openai-responses"; got != want {
-		t.Fatalf("resolved inference settings did not drive ai-api-type: got=%#v want=%#v", got, want)
+		t.Fatalf("profile patch did not drive ai-api-type: got=%#v want=%#v", got, want)
 	}
 }
 

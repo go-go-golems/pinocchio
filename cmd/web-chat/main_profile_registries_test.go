@@ -8,50 +8,73 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cli"
 	"github.com/go-go-golems/glazed/pkg/cmds/fields"
 	"github.com/go-go-golems/glazed/pkg/cmds/values"
-	profilebootstrap "github.com/go-go-golems/pinocchio/pkg/cmds/profilebootstrap"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 )
 
-func testValuesWithProfileSettings(t *testing.T, profile string, profileRegistries []string) *values.Values {
+type webChatResolverTestSection struct {
+	slug string
+}
+
+func (s webChatResolverTestSection) GetDefinitions() *fields.Definitions {
+	return fields.NewDefinitions()
+}
+func (s webChatResolverTestSection) GetName() string        { return s.slug }
+func (s webChatResolverTestSection) GetDescription() string { return "" }
+func (s webChatResolverTestSection) GetPrefix() string      { return "" }
+func (s webChatResolverTestSection) GetSlug() string        { return s.slug }
+
+func testValuesWithProfileRegistries(t *testing.T, profileRegistries string) *values.Values {
 	t.Helper()
 
-	profileSettingsSection, err := profilebootstrap.NewProfileSettingsSection()
+	sectionValues, err := values.NewSectionValues(webChatResolverTestSection{
+		slug: webChatProfileSettingsSectionSlug,
+	})
 	require.NoError(t, err)
-	sectionValues, err := values.NewSectionValues(profileSettingsSection)
-	require.NoError(t, err)
-	if profile != "" {
-		require.NoError(t, values.WithFieldValue("profile", profile)(sectionValues))
-	}
-	if len(profileRegistries) > 0 {
-		require.NoError(t, values.WithFieldValue("profile-registries", profileRegistries)(sectionValues))
-	}
+	sectionValues.Fields.Update("profile-registries", &fields.FieldValue{
+		Value: profileRegistries,
+	})
 
-	return values.New(values.WithSectionValues(profilebootstrap.ProfileSettingsSectionSlug, sectionValues))
+	return values.New(values.WithSectionValues(webChatProfileSettingsSectionSlug, sectionValues))
 }
 
 func testValuesWithConfigFile(t *testing.T, configFile string) *values.Values {
 	t.Helper()
 
-	commandSection, err := cli.NewCommandSettingsSection()
+	sectionValues, err := values.NewSectionValues(webChatResolverTestSection{
+		slug: cli.CommandSettingsSlug,
+	})
 	require.NoError(t, err)
-	sectionValues, err := values.NewSectionValues(commandSection)
-	require.NoError(t, err)
-	require.NoError(t, values.WithFieldValue("config-file", configFile, fields.WithSource("cli"))(sectionValues))
+	sectionValues.Fields.Update("config-file", &fields.FieldValue{
+		Value: configFile,
+	})
 
 	return values.New(values.WithSectionValues(cli.CommandSettingsSlug, sectionValues))
 }
 
-func TestWebChatProfileSelection_UsesSharedProfileSettingsSection(t *testing.T) {
-	parsed := testValuesWithProfileSettings(t, "analyst", []string{"./profiles.yaml"})
+func TestResolveProfileRegistries_FallsBackToProfileSettingsSection(t *testing.T) {
+	parsed := testValuesWithProfileRegistries(t, "./profiles.yaml")
 
-	resolved, err := profilebootstrap.ResolveCLIProfileSelection(parsed)
-	require.NoError(t, err)
-	require.Equal(t, "analyst", resolved.Profile)
-	require.Equal(t, []string{"./profiles.yaml"}, resolved.ProfileRegistries)
+	got := resolveProfileRegistries(parsed, "")
+	require.Equal(t, "./profiles.yaml", got)
+
+	gotValue, gotSource := resolveProfileRegistriesWithSource(parsed, "")
+	require.Equal(t, "./profiles.yaml", gotValue)
+	require.Equal(t, webChatProfileSettingsSectionSlug, gotSource)
 }
 
-func TestWebChatProfileSelection_DoesNotFallbackToDefaultRegistryFile(t *testing.T) {
+func TestResolveProfileRegistries_PrefersDefaultSectionValue(t *testing.T) {
+	parsed := testValuesWithProfileRegistries(t, "./profiles-from-profile-settings.yaml")
+
+	got := resolveProfileRegistries(parsed, "./profiles-from-default.yaml")
+	require.Equal(t, "./profiles-from-default.yaml", got)
+
+	gotValue, gotSource := resolveProfileRegistriesWithSource(parsed, "./profiles-from-default.yaml")
+	require.Equal(t, "./profiles-from-default.yaml", gotValue)
+	require.Equal(t, "default-section", gotSource)
+}
+
+func TestResolveProfileRegistries_FallsBackToDefaultXDGProfilesPath(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)
 	t.Setenv("HOME", tmpDir)
@@ -61,12 +84,31 @@ func TestWebChatProfileSelection_DoesNotFallbackToDefaultRegistryFile(t *testing
 	profilesPath := filepath.Join(profilesDir, "profiles.yaml")
 	require.NoError(t, os.WriteFile(profilesPath, []byte("slug: default\nprofiles: {}\n"), 0o644))
 
-	resolved, err := profilebootstrap.ResolveCLIProfileSelection(values.New())
-	require.NoError(t, err)
-	require.Empty(t, resolved.ProfileRegistries)
+	got := resolveProfileRegistries(values.New(), "")
+	require.Equal(t, profilesPath, got)
+
+	gotValue, gotSource := resolveProfileRegistriesWithSource(values.New(), "")
+	require.Equal(t, profilesPath, gotValue)
+	require.Equal(t, "xdg-default", gotSource)
 }
 
-func TestResolveBaseInferenceSettings_UsesDefaultsConfigAndEnv(t *testing.T) {
+func TestResolveWebChatConfigFiles_LoadsDefaultAndExplicitConfig(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
+	defaultDir := filepath.Join(tmpDir, ".pinocchio")
+	require.NoError(t, os.MkdirAll(defaultDir, 0o755))
+	defaultConfig := filepath.Join(defaultDir, "config.yaml")
+	require.NoError(t, os.WriteFile(defaultConfig, []byte("{}\n"), 0o644))
+
+	explicitConfig := filepath.Join(tmpDir, "override.yaml")
+	require.NoError(t, os.WriteFile(explicitConfig, []byte("{}\n"), 0o644))
+
+	got := resolveWebChatConfigFiles(testValuesWithConfigFile(t, explicitConfig))
+	require.Equal(t, []string{defaultConfig, explicitConfig}, got)
+}
+
+func TestResolveWebChatBaseStepSettings_UsesDefaultsConfigAndEnv(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 	t.Setenv("PINOCCHIO_AI_ENGINE", "env-engine")
@@ -83,7 +125,7 @@ func TestResolveBaseInferenceSettings_UsesDefaultsConfigAndEnv(t *testing.T) {
 		"openai-chat:\n  openai-api-key: explicit-key\n",
 	), 0o644))
 
-	stepSettings, configFiles, err := profilebootstrap.ResolveBaseInferenceSettings(testValuesWithConfigFile(t, explicitConfig))
+	stepSettings, configFiles, err := resolveWebChatBaseStepSettings(testValuesWithConfigFile(t, explicitConfig))
 	require.NoError(t, err)
 	require.Equal(t, []string{defaultConfig, explicitConfig}, configFiles)
 	require.NotNil(t, stepSettings.Chat.Engine)

@@ -19,6 +19,10 @@ func ProfileDiff(from, to Resolved) DiffSummary {
 		To:   to.ProfileSlug.String(),
 	}
 
+	if from.RuntimeKey != to.RuntimeKey {
+		d.Changes = append(d.Changes, fmt.Sprintf("runtime: %s → %s", from.RuntimeKey, to.RuntimeKey))
+	}
+
 	fromModel := effectiveModel(from)
 	toModel := effectiveModel(to)
 	if fromModel != toModel {
@@ -29,6 +33,12 @@ func ProfileDiff(from, to Resolved) DiffSummary {
 	toTemp := effectiveTemp(to)
 	if fromTemp != toTemp {
 		d.Changes = append(d.Changes, fmt.Sprintf("temperature: %s → %s", fromTemp, toTemp))
+	}
+
+	fromPrompt := truncate(from.SystemPrompt, 80)
+	toPrompt := truncate(to.SystemPrompt, 80)
+	if fromPrompt != toPrompt {
+		d.Changes = append(d.Changes, "system prompt changed")
 	}
 
 	if len(d.Changes) == 0 {
@@ -49,15 +59,23 @@ func (d DiffSummary) String() string {
 }
 
 func effectiveModel(r Resolved) string {
-	if s := r.InferenceSettings; s != nil && s.Chat != nil && s.Chat.Engine != nil {
+	if s := r.EffectiveStepSettings; s != nil && s.Chat != nil && s.Chat.Engine != nil {
 		return *s.Chat.Engine
 	}
 	return "(default)"
 }
 
 func effectiveTemp(r Resolved) string {
-	if s := r.InferenceSettings; s != nil && s.Chat != nil && s.Chat.Temperature != nil {
+	if s := r.EffectiveStepSettings; s != nil && s.Chat != nil && s.Chat.Temperature != nil {
 		return fmt.Sprintf("%.1f", *s.Chat.Temperature)
 	}
 	return "(default)"
+}
+
+func truncate(s string, maxLen int) string {
+	s = strings.TrimSpace(s)
+	if len(s) > maxLen {
+		return s[:maxLen-3] + "..."
+	}
+	return s
 }

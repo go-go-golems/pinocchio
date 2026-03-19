@@ -26,7 +26,6 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cmds/schema"
 	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	"github.com/go-go-golems/pinocchio/pkg/cmds/cmdlayers"
-	profilebootstrap "github.com/go-go-golems/pinocchio/pkg/cmds/profilebootstrap"
 	"github.com/go-go-golems/pinocchio/pkg/cmds/run"
 	"github.com/go-go-golems/pinocchio/pkg/tui/overlay"
 	overlaywidget "github.com/go-go-golems/pinocchio/pkg/tui/widgets/overlay"
@@ -39,7 +38,6 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/tcnksm/go-input"
 	"golang.org/x/sync/errgroup"
-	"gopkg.in/yaml.v3"
 )
 
 func renderTemplateString(name, text string, vars map[string]interface{}) (string, error) {
@@ -149,8 +147,6 @@ type PinocchioCommand struct {
 	Prompt                         string        `yaml:"prompt,omitempty"`
 	Blocks                         []turns.Block `yaml:"-"`
 	SystemPrompt                   string        `yaml:"system-prompt,omitempty"`
-	EngineFactory                  factory.EngineFactory
-	BaseInferenceSettings          *settings.InferenceSettings
 }
 
 var _ glazedcmds.WriterCommand = &PinocchioCommand{}
@@ -172,16 +168,6 @@ func WithBlocks(blocks []turns.Block) PinocchioCommandOption {
 func WithSystemPrompt(systemPrompt string) PinocchioCommandOption {
 	return func(g *PinocchioCommand) {
 		g.SystemPrompt = systemPrompt
-	}
-}
-
-func WithBaseInferenceSettings(base *settings.InferenceSettings) PinocchioCommandOption {
-	return func(g *PinocchioCommand) {
-		if base == nil {
-			g.BaseInferenceSettings = nil
-			return
-		}
-		g.BaseInferenceSettings = base.Clone()
 	}
 }
 
@@ -222,54 +208,48 @@ func (g *PinocchioCommand) RunIntoWriter(
 		return errors.Wrap(err, "failed to initialize helpers settings")
 	}
 
-	// Update inference settings from parsed layers
-	stepSettings, err := settings.NewInferenceSettings()
+	// Update step settings from parsed layers
+	stepSettings, err := settings.NewStepSettings()
 	if err != nil {
-		return errors.Wrap(err, "failed to create inference settings")
+		return errors.Wrap(err, "failed to create step settings")
 	}
 	err = stepSettings.UpdateFromParsedValues(parsedValues)
 	if err != nil {
-		return errors.Wrap(err, "failed to update inference settings from parsed layers")
+		return errors.Wrap(err, "failed to update step settings from parsed layers")
 	}
 
-	profileSelection := &profilebootstrap.ResolvedCLIProfileSelection{}
-	var resolvedEngineSettings *profilebootstrap.ResolvedCLIEngineSettings
-
-	var baseSettings *settings.InferenceSettings
-	var baseErr error
-	if g.BaseInferenceSettings != nil {
-		baseSettings, baseErr = baseSettingsFromParsedValuesWithBase(parsedValues, g.BaseInferenceSettings)
-	} else {
-		baseSettings, baseErr = baseSettingsFromParsedValues(parsedValues)
+	// Capture profile selection inputs and a baseline settings snapshot without any profile-derived values.
+	// This is used by chat mode to support runtime profile switching (/profile, ctrl+p).
+	type profileRegistrySettings struct {
+		Profile           string `glazed:"profile"`
+		ProfileRegistries string `glazed:"profile-registries"`
 	}
+	profileSettings := &profileRegistrySettings{}
+	_ = parsedValues.DecodeSectionInto("profile-settings", profileSettings)
+	// Back-compat: some entry points still populate --profile / --profile-registries in the default section.
+	// Also allow env vars to seed these when not present in parsed values (common in ad-hoc dev workflows).
+	if strings.TrimSpace(profileSettings.Profile) == "" || strings.TrimSpace(profileSettings.ProfileRegistries) == "" {
+		fallback := &profileRegistrySettings{}
+		_ = parsedValues.DecodeSectionInto(values.DefaultSlug, fallback)
+		if strings.TrimSpace(profileSettings.Profile) == "" {
+			profileSettings.Profile = fallback.Profile
+		}
+		if strings.TrimSpace(profileSettings.ProfileRegistries) == "" {
+			profileSettings.ProfileRegistries = fallback.ProfileRegistries
+		}
+	}
+	if strings.TrimSpace(profileSettings.Profile) == "" {
+		profileSettings.Profile = strings.TrimSpace(os.Getenv("PINOCCHIO_PROFILE"))
+	}
+	if strings.TrimSpace(profileSettings.ProfileRegistries) == "" {
+		profileSettings.ProfileRegistries = strings.TrimSpace(os.Getenv("PINOCCHIO_PROFILE_REGISTRIES"))
+	}
+
+	baseSettings, baseErr := baseSettingsFromParsedValues(parsedValues)
 	if baseErr == nil && baseSettings != nil {
 		// If the UI forces streaming, keep base settings aligned.
 		if baseSettings.Chat != nil {
 			baseSettings.Chat.Stream = stepSettings.Chat != nil && stepSettings.Chat.Stream
-		}
-		resolvedEngineSettings, err = profilebootstrap.ResolveCLIEngineSettingsFromBase(ctx, baseSettings, parsedValues, nil)
-		if err != nil {
-			return errors.Wrap(err, "resolve engine profile settings for command run")
-		}
-		if resolvedEngineSettings.Close != nil {
-			defer resolvedEngineSettings.Close()
-		}
-		if resolvedEngineSettings.ProfileSelection != nil {
-			profileSelection = resolvedEngineSettings.ProfileSelection
-		}
-		if resolvedEngineSettings.BaseInferenceSettings != nil {
-			baseSettings = resolvedEngineSettings.BaseInferenceSettings
-		}
-		if resolvedEngineSettings.FinalInferenceSettings != nil {
-			stepSettings = resolvedEngineSettings.FinalInferenceSettings
-		}
-	} else {
-		resolvedProfileSelection, err := profilebootstrap.ResolveCLIProfileSelection(parsedValues)
-		if err != nil {
-			return errors.Wrap(err, "resolve profile selection for command run")
-		}
-		if resolvedProfileSelection != nil {
-			profileSelection = resolvedProfileSelection
 		}
 	}
 
@@ -315,38 +295,12 @@ func (g *PinocchioCommand) RunIntoWriter(
 		turns.FprintTurn(w, seed)
 		return nil
 	}
-	if helpersSettings.PrintInferenceSources {
-		if resolvedEngineSettings == nil {
-			resolvedEngineSettings = &profilebootstrap.ResolvedCLIEngineSettings{
-				BaseInferenceSettings:  baseSettings,
-				FinalInferenceSettings: stepSettings,
-				ProfileSelection:       profileSelection,
-			}
-		}
-		trace, err := profilebootstrap.BuildInferenceSettingsSourceTrace(g.BaseInferenceSettings, parsedValues, resolvedEngineSettings)
-		if err != nil {
-			return err
-		}
-		encoder := yaml.NewEncoder(w)
-		defer func() {
-			_ = encoder.Close()
-		}()
-		return encoder.Encode(trace)
-	}
-	if helpersSettings.PrintInferenceSettings {
-		encoder := yaml.NewEncoder(w)
-		defer func() {
-			_ = encoder.Close()
-		}()
-		return encoder.Encode(stepSettings)
-	}
 
 	// Run with options
 	_, err = g.RunWithOptions(ctx,
-		run.WithInferenceSettings(stepSettings),
+		run.WithStepSettings(stepSettings),
 		run.WithBaseSettings(baseSettings),
-		run.WithProfileSelection(profileSelection.Profile, strings.Join(profileSelection.ProfileRegistries, ",")),
-		run.WithEngineFactory(g.EngineFactory),
+		run.WithProfileSelection(profileSettings.Profile, profileSettings.ProfileRegistries),
 		run.WithWriter(w),
 		run.WithRunMode(runMode),
 		run.WithUISettings(uiSettings),
@@ -480,7 +434,7 @@ func (g *PinocchioCommand) runBlocking(ctx context.Context, rc *run.RunContext) 
 // runEngineAndCollectMessages handles the actual engine execution and message collection
 func (g *PinocchioCommand) runEngineAndCollectMessages(ctx context.Context, rc *run.RunContext, sinks []events.EventSink) error {
 	// Create engine
-	engine, err := rc.EngineFactory.CreateEngine(rc.InferenceSettings)
+	engine, err := rc.EngineFactory.CreateEngine(rc.StepSettings)
 	if err != nil {
 		return fmt.Errorf("failed to create engine: %w", err)
 	}
@@ -540,7 +494,7 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) (*tu
 	}
 
 	// Enable streaming for the UI
-	rc.InferenceSettings.Chat.Stream = true
+	rc.StepSettings.Chat.Stream = true
 	if rc.BaseSettings != nil && rc.BaseSettings.Chat != nil {
 		rc.BaseSettings.Chat.Stream = true
 	}
@@ -640,7 +594,7 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) (*tu
 			}
 			defer func() { _ = mgr.Close() }()
 
-			items, err := mgr.ListEngineProfiles(ctx)
+			items, err := mgr.ListProfiles(ctx)
 			if err != nil {
 				return err
 			}
@@ -685,7 +639,7 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) (*tu
 				}
 				parts := []string{
 					statusBarKeyStyle.Render("profile: ") + statusBarValStyle.Render(cur.ProfileSlug.String()),
-					statusBarKeyStyle.Render("engine profile: ") + statusBarValStyle.Render(cur.ProfileSlug.String()),
+					statusBarKeyStyle.Render("runtime: ") + statusBarValStyle.Render(cur.RuntimeKey.String()),
 				}
 				parts = append(parts, statusBarHintStyle.Render("ctrl+p to switch"))
 				return statusBarStyle.Render(strings.Join(parts, "  "))
@@ -710,10 +664,10 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) (*tu
 				}
 				return true, tea.Batch(
 					func() tea.Msg {
-						_ = publishProfileSwitchedInfo(sink, chatConvID, from, res.ProfileSlug.String())
+						_ = publishProfileSwitchedInfo(sink, chatConvID, from, res.ProfileSlug.String(), res.RuntimeKey.String(), res.RuntimeFingerprint)
 						return nil
 					},
-					systemNoticeEntityCmd(fmt.Sprintf("switched profile: %s → %s", from, res.ProfileSlug.String())),
+					systemNoticeEntityCmd(fmt.Sprintf("switched profile: %s → %s (runtime=%s)", from, res.ProfileSlug.String(), res.RuntimeKey.String())),
 				)
 			}
 
@@ -739,7 +693,7 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) (*tu
 						log.Warn().Err(switchErr).Str("target", target).Msg("profile switch failed")
 						return
 					}
-					_ = publishProfileSwitchedInfo(sink, chatConvID, from, res.ProfileSlug.String())
+					_ = publishProfileSwitchedInfo(sink, chatConvID, from, res.ProfileSlug.String(), res.RuntimeKey.String(), res.RuntimeFingerprint)
 				},
 			})
 
@@ -783,7 +737,7 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) (*tu
 			sess, p2, err := runtime.NewChatBuilder().
 				WithContext(ctx).
 				WithEngineFactory(rc.EngineFactory).
-				WithSettings(rc.InferenceSettings).
+				WithSettings(rc.StepSettings).
 				WithRouter(rc.Router).
 				WithProgramOptions(options...).
 				WithModelOptions(

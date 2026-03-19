@@ -49,8 +49,9 @@ For the reference `cmd/web-chat` application, runtime engine/provider settings n
 | `/chat/{profile}` | POST | App | Force profile/runtime selection from path |
 | `/ws?conv_id=<id>` | GET (upgrade) | App | Attach websocket stream |
 | `/api/timeline` | GET | App/Core | Hydration snapshot endpoint |
-| `/api/chat/profiles` | `GET` | Shared (`pkg/webchat/http`) | List profiles |
-| `/api/chat/profiles/{slug}` | `GET` | Shared (`pkg/webchat/http`) | Read one profile |
+| `/api/chat/profiles` | `GET`, `POST` | Shared (`pkg/webchat/http`) | List/create profiles |
+| `/api/chat/profiles/{slug}` | `GET`, `PATCH`, `DELETE` | Shared (`pkg/webchat/http`) | Read/update/delete profile |
+| `/api/chat/profiles/{slug}/default` | `POST` | Shared (`pkg/webchat/http`) | Set registry default profile |
 | `/api/chat/profile` | `GET`, `POST` | Shared (`pkg/webchat/http`) | Current-profile cookie route (optional) |
 | `/api/chat/schemas/middlewares` | `GET` | Shared (`pkg/webchat/http`) | Middleware schema catalog |
 | `/api/chat/schemas/extensions` | `GET` | Shared (`pkg/webchat/http`) | Extension schema catalog |
@@ -61,7 +62,7 @@ For the reference `cmd/web-chat` application, runtime engine/provider settings n
 
 ## Profile API Wiring
 
-Mount the shared read-only profile/schema handlers once per app mux:
+Mount the shared CRUD/schema handlers once per app mux:
 
 ```go
 webhttp.RegisterProfileAPIHandlers(mux, profileRegistry, webhttp.ProfileAPIHandlerOptions{
@@ -69,6 +70,8 @@ webhttp.RegisterProfileAPIHandlers(mux, profileRegistry, webhttp.ProfileAPIHandl
   EnableCurrentProfileCookieRoute: true,
   MiddlewareDefinitions:           middlewareDefinitions,
   ExtensionCodecRegistry:          extensionCodecs,
+  WriteActor:                      "my-app",
+  WriteSource:                     "http-api",
 })
 ```
 
@@ -93,6 +96,7 @@ Use resolver policy for:
 
 - profile/runtime selection
 - cookie or query-based defaults
+- request override allow/deny logic
 - request validation and typed errors (`RequestResolutionError`)
 
 ## Request and Response Shapes
@@ -107,7 +111,10 @@ Request body:
   "conv_id": "optional-conversation-id",
   "profile": "optional-profile-slug",
   "registry": "optional-registry-slug",
-  "idempotency_key": "optional-client-key"
+  "idempotency_key": "optional-client-key",
+  "request_overrides": {
+    "system_prompt": "You are a financial analyst"
+  }
 }
 ```
 
@@ -122,7 +129,7 @@ Legacy selector aliases are removed:
 - `runtime_key`
 - `registry_slug`
 
-Middleware and tool activation are profile/runtime-composer concerns resolved before the run starts.
+Middleware and tool activation are profile/runtime-composer concerns. The request payload may still carry `request_overrides`, but the app owns which override keys are accepted and how they feed runtime composition.
 
 ## Middleware Definition Wiring
 
@@ -202,7 +209,7 @@ Do not document or depend on these paths in new integrations:
 | `timeline service not enabled` | Timeline service unavailable or route not mounted | Mount `/api/timeline` with `webhttp.NewTimelineHandler` and confirm service non-nil |
 | middleware schema endpoint is empty | No definition registry passed to profile API handlers | Pass `MiddlewareDefinitions` into `webhttp.RegisterProfileAPIHandlers(...)` |
 | `turn store not enabled` | No turn store config | Start with `--turns-db` or `--turns-dsn` |
-| Resolver returns `400` from `/chat` | Request selection or validation failed | Return `RequestResolutionError` with explicit status/client message |
+| Policy errors from `/chat` | Resolver validation failure | Return `RequestResolutionError` with explicit status/client message |
 
 ## Sources of Truth (When Docs and Reality Disagree)
 

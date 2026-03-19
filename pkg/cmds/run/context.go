@@ -40,8 +40,8 @@ type PersistenceSettings struct {
 
 // RunContext encapsulates all the settings and state needed for a single command run
 type RunContext struct {
-	InferenceSettings *settings.InferenceSettings
-	BaseSettings      *settings.InferenceSettings
+	StepSettings *settings.StepSettings
+	BaseSettings *settings.StepSettings
 
 	// Profile selection inputs (used by interactive chat to support profile switching).
 	Profile           string
@@ -72,9 +72,9 @@ type RunOption func(*RunContext) error
 
 // Core options
 
-func WithInferenceSettings(settings *settings.InferenceSettings) RunOption {
+func WithStepSettings(settings *settings.StepSettings) RunOption {
 	return func(rc *RunContext) error {
-		rc.InferenceSettings = settings
+		rc.StepSettings = settings
 		if rc.EngineFactory == nil {
 			rc.EngineFactory = factory.NewStandardEngineFactory()
 		}
@@ -82,7 +82,7 @@ func WithInferenceSettings(settings *settings.InferenceSettings) RunOption {
 	}
 }
 
-func WithBaseSettings(settings *settings.InferenceSettings) RunOption {
+func WithBaseSettings(settings *settings.StepSettings) RunOption {
 	return func(rc *RunContext) error {
 		rc.BaseSettings = settings
 		return nil

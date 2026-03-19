@@ -1,7 +1,7 @@
 ---
-Title: Webchat Engine Profile Guide
+Title: Webchat Profile Registry Guide
 Slug: webchat-profile-registry
-Short: Reference for engine-profile registry wiring, selection precedence, and the split between Geppetto engine profiles and app-owned webchat runtime policy.
+Short: Detailed guide to profile registry wiring, selection precedence, and CRUD APIs for pinocchio webchat apps.
 Topics:
 - webchat
 - profiles
@@ -21,173 +21,96 @@ SectionType: GeneralTopic
 
 ## What This Page Covers
 
-This page explains the current profile model for Pinocchio webchat applications.
+This page is the reference for profile registry behavior in pinocchio webchat applications. It explains:
 
-The important rule is simple:
+- how profile registries are bootstrapped and injected,
+- how profile selection is resolved from request inputs,
+- how runtime composition uses resolved profile data,
+- how profile CRUD endpoints behave and what errors they return.
 
-- Geppetto engine profiles choose engine settings
-- the webchat app chooses prompt, middlewares, tools, runtime key, and runtime fingerprint
-
-Use this page when you need to understand:
-
-- how engine-profile registries are loaded
-- how profile selection is resolved from requests
-- how the resolver splits engine settings from app runtime policy
-- what the shared read-only profile endpoints expose
+Use this page when building app-owned chat backends that mount `pkg/webchat/http` handlers.
 
 ## Architecture at a Glance
 
-There are three different layers, and they should stay separate.
+Profile registry support spans three layers:
 
-### 1. Engine profile registry
+1. **Geppetto profile domain** (`geppetto/pkg/profiles`)
+2. **Request policy resolver** (app-owned, maps HTTP request to profile/runtime selection)
+3. **Runtime composer** (app-owned, composes engine from resolved profile runtime + policy output)
 
-This is Geppetto-owned. It lives in [`geppetto/pkg/engineprofiles`](../../../../geppetto/pkg/engineprofiles) and resolves final [`InferenceSettings`](../../../../geppetto/pkg/steps/ai/settings/settings-inference.go).
-
-### 2. App runtime policy
-
-This is Pinocchio- or app-owned. It covers:
-
-- `system_prompt`
-- runtime middlewares
-- tool exposure
-- runtime identity and fingerprints
-
-Pinocchio’s shared runtime payload is defined in [`pkg/inference/runtime/profile_runtime.go`](../../inference/runtime/profile_runtime.go).
-
-### 3. Shared webchat transport
-
-This is the boundary between app resolution and shared webchat execution. The app should build its own local plan first, then convert into the shared request transport once.
+In handler-first webchat integration, `/chat` and `/ws` always flow through your resolver before runtime composition.
 
 ## Registry Bootstrap
-
-The engine-profile registry stack usually comes from:
-
-1. explicit CLI flags
-2. app config
-3. environment variables
-4. `${XDG_CONFIG_HOME:-~/.config}/pinocchio/profiles.yaml` when present
 
 Common bootstrap pattern:
 
 ```go
-entries, err := gepprofiles.ParseEngineProfileRegistrySourceEntries(rawSources)
-if err != nil { ... }
+store := gepprofiles.NewInMemoryProfileStore()
 
-chain, err := gepprofiles.NewChainedRegistryFromSourceSpecs(ctx, specs)
-if err != nil { ... }
-defer chain.Close()
+registry := &gepprofiles.ProfileRegistry{
+  Slug:               gepprofiles.MustRegistrySlug("default"),
+  DefaultProfileSlug: gepprofiles.MustProfileSlug("default"),
+  Profiles: map[gepprofiles.ProfileSlug]*gepprofiles.Profile{
+    gepprofiles.MustProfileSlug("default"): {
+      Slug: gepprofiles.MustProfileSlug("default"),
+      Runtime: gepprofiles.RuntimeSpec{
+        SystemPrompt: "You are an assistant.",
+      },
+    },
+  },
+}
 
-resolved, err := chain.ResolveEngineProfile(ctx, gepprofiles.ResolveInput{
-    RegistrySlug:      selectedRegistry,
-    EngineProfileSlug: selectedProfile,
-})
-if err != nil { ... }
-
-finalSettings, err := gepprofiles.MergeInferenceSettings(baseInferenceSettings, resolved.InferenceSettings)
-if err != nil { ... }
+_ = store.UpsertRegistry(ctx, registry, gepprofiles.SaveOptions{Actor: "app", Source: "bootstrap"})
+profileRegistry, _ := gepprofiles.NewStoreRegistry(store, gepprofiles.MustRegistrySlug("default"))
 ```
 
-That is the engine half of the story only.
+SQLite-backed stores follow the same service interface and are recommended when profiles are edited at runtime.
 
 ## Request Selection Precedence
 
-For chat and websocket requests, the typical webchat selection order is:
+For chat/websocket requests, the profile selection order is:
 
 1. path slug (`POST /chat/{profile}`)
 2. request body `profile`
 3. query `profile`
-4. current-profile cookie
-5. registry default profile
+4. `chat_profile` cookie
+5. stack default profile (`default`, resolved top source -> bottom source)
 
-Registry selection usually comes from:
+Runtime registry switching is not part of this flow. Registry lookup uses the loaded source stack (`--profile-registries`) and the first matching profile slug from top to bottom.
 
-1. request body `registry`
-2. query `registry`
-3. app-configured default registry
+If selection is invalid, resolvers should return `RequestResolutionError` with precise client status (`400`, `404`, or `500`).
 
-Resolvers should return typed `RequestResolutionError` values for invalid selections so handlers can map them to `400`, `404`, or `500`.
+## Runtime Composition Contract
 
-## What the Resolver Should Return
+Resolvers should populate:
 
-Do not let the resolver think in terms of a monolithic “resolved profile runtime.” The resolver should compute two things separately:
+- `RuntimeKey`
+- `ProfileVersion`
+- `ResolvedRuntime`
+- `Overrides` (if allowed by policy)
 
-- final `InferenceSettings`
-- app-owned runtime policy
+Runtime composers should consume these fields to produce:
 
-Good local-first pseudocode:
+- engine + sink
+- runtime key
+- runtime fingerprint
+- seed system prompt
+- allowed tools
 
-```go
-type resolvedRuntime struct {
-    RuntimeKey         string
-    RuntimeFingerprint string
-    ProfileVersion     uint64
+To guarantee rebuild on profile updates, include version-sensitive data (`ProfileVersion` and effective runtime inputs) in the fingerprint payload.
 
-    InferenceSettings *aisettings.InferenceSettings
-    SystemPrompt      string
-    Middlewares       []runtime.MiddlewareUse
-    ToolNames         []string
-    ProfileMetadata   map[string]any
-}
-
-type resolvedConversationPlan struct {
-    ConvID         string
-    Prompt         string
-    IdempotencyKey string
-    Runtime        *resolvedRuntime
-}
-```
-
-The shared transport conversion should happen after this local plan exists.
-
-## App Runtime Policy
-
-Pinocchio webchat uses an app-owned profile extension for its runtime policy:
-
-- `pinocchio.webchat_runtime@v1`
-
-This extension stores values like:
-
-```yaml
-extensions:
-  pinocchio.webchat_runtime@v1:
-    system_prompt: You are a careful analyst.
-    middlewares:
-      - name: agentmode
-        id: analyst
-        config:
-          default_mode: analyst
-    tools:
-      - search
-      - summarize
-```
-
-Those fields are not engine settings. They should not move back into Geppetto engine profiles.
-
-## Runtime Composer Contract
-
-By the time runtime composition runs, the split should already be resolved:
-
-- `ResolvedInferenceSettings` contains final engine settings
-- `ResolvedRuntime` contains app-owned prompt/tool/middleware policy
-
-The composer should:
-
-1. build the engine from `ResolvedInferenceSettings`
-2. apply system prompt and middlewares
-3. expose tool names for upstream registry filtering
-
-It should not try to re-resolve engine profiles.
-
-## Read-Only HTTP APIs
+## CRUD HTTP APIs
 
 Mount reusable handlers with:
 
 ```go
 webhttp.RegisterProfileAPIHandlers(mux, profileRegistry, webhttp.ProfileAPIHandlerOptions{
-    DefaultRegistrySlug:             gepprofiles.MustRegistrySlug("default"),
-    EnableCurrentProfileCookieRoute: true,
-    MiddlewareDefinitions:           middlewareDefinitions,
-    ExtensionCodecRegistry:          extensionCodecRegistry,
+  DefaultRegistrySlug:             gepprofiles.MustRegistrySlug("default"),
+  EnableCurrentProfileCookieRoute: true,
+  WriteActor:                      "my-app",
+  WriteSource:                     "http-api",
+  MiddlewareDefinitions:           middlewareDefinitions,
+  ExtensionCodecRegistry:          extensionCodecRegistry,
 })
 ```
 
@@ -195,49 +118,266 @@ webhttp.RegisterProfileAPIHandlers(mux, profileRegistry, webhttp.ProfileAPIHandl
 
 | Endpoint | Methods | Purpose |
 |---|---|---|
-| `/api/chat/profiles` | `GET` | list engine profiles |
-| `/api/chat/profiles/{slug}` | `GET` | read one engine profile |
-| `/api/chat/profile` | `GET`, `POST` | current-profile cookie read/write |
-| `/api/chat/schemas/middlewares` | `GET` | discover middleware config schemas |
-| `/api/chat/schemas/extensions` | `GET` | discover extension schemas |
+| `/api/chat/profiles` | `GET`, `POST` | list/create profiles |
+| `/api/chat/profiles/{slug}` | `GET`, `PATCH`, `DELETE` | read/update/delete a profile |
+| `/api/chat/profiles/{slug}/default` | `POST` | set default profile |
+| `/api/chat/profile` | `GET`, `POST` | current-profile cookie read/write (optional route) |
+| `/api/chat/schemas/middlewares` | `GET` | discover middleware JSON schema contracts |
+| `/api/chat/schemas/extensions` | `GET` | discover extension JSON schema contracts |
 
-These are read-only shared APIs. They are not profile CRUD endpoints.
+### Payload Reference
 
-## Current Profile vs Runtime Truth
+`GET /api/chat/profiles` returns lightweight list items:
 
-`/api/chat/profile` stores UI selection state. It does not define runtime truth for all turns.
+```json
+[
+  {
+    "slug": "default",
+    "display_name": "Default",
+    "description": "General assistant profile",
+    "is_default": true,
+    "version": 4
+  }
+]
+```
 
-Runtime truth is per request and per turn:
+List responses are always JSON arrays sorted by profile slug.
 
-- each incoming chat or websocket request resolves engine profile selection
-- the app computes runtime key and fingerprint
-- conversation state records which runtime was active for a given turn
+`POST /api/chat/profiles` create payload:
 
-This matters when a user changes profile mid-conversation. Old turns keep their original runtime attribution.
+```json
+{
+  "registry": "default",
+  "slug": "analyst",
+  "display_name": "Analyst",
+  "description": "Data analysis profile",
+  "runtime": {
+    "system_prompt": "You are an analyst.",
+    "tools": ["inventory.list"]
+  },
+  "policy": {
+    "allow_overrides": true,
+    "read_only": false
+  },
+  "set_default": false,
+  "expected_version": 0
+}
+```
+
+`PATCH /api/chat/profiles/{slug}` patch payload:
+
+```json
+{
+  "display_name": "Analyst v2",
+  "runtime": {
+    "system_prompt": "You are an analyst. Be concise."
+  },
+  "expected_version": 1
+}
+```
+
+`POST /api/chat/profiles/{slug}/default` payload:
+
+```json
+{
+  "registry": "default",
+  "expected_version": 7
+}
+```
+
+`POST /api/chat/profile` cookie-selection payload:
+
+```json
+{
+  "slug": "analyst"
+}
+```
+
+## Current Profile vs Conversation Runtime
+
+`/api/chat/profile` stores UI selection state (cookie), but runtime truth is per turn:
+
+- each chat/websocket request resolves profile at request time,
+- runtime key and resolved runtime are attached to the request plan,
+- conversation state alone is not sufficient to infer the runtime of every turn.
+
+When profile selection changes mid-conversation, subsequent turns use the new profile while prior turns remain attributable to their original runtime selection.
+
+Debug API interpretation:
+
+- `/api/debug/conversations/:conv_id` -> `resolved_runtime_key` (latest pointer),
+- `/api/debug/turns?conv_id=...` -> per-turn `runtime_key` and `inference_id`.
+
+## Write-Time Validation and Schema APIs
+
+Profile create/update routes enforce middleware correctness before persistence:
+
+- unknown middleware names return `400`,
+- middleware `config` payloads are validated/coerced against definition JSON schemas,
+- validation errors include field paths such as `runtime.middlewares[0].config`.
+
+Schema endpoints are intended for frontend form-generation and preflight validation:
+
+- `GET /api/chat/schemas/middlewares`
+- `GET /api/chat/schemas/extensions`
+
+Middleware schema response example:
+
+```json
+[
+  {
+    "name": "agentmode",
+    "version": 1,
+    "display_name": "Agent Mode",
+    "description": "Injects mode guidance and parses mode switch markers.",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "default_mode": { "type": "string" }
+      }
+    }
+  }
+]
+```
+
+Extension schema response example:
+
+```json
+[
+  {
+    "key": "middleware.agentmode_config@v1",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "instances": {
+          "type": "object",
+          "additionalProperties": { "type": "object" }
+        }
+      },
+      "required": ["instances"],
+      "additionalProperties": false
+    }
+  }
+]
+```
+
+Extension schema merge precedence:
+
+1. explicit schemas passed in handler options (`ExtensionSchemas`),
+2. middleware-derived typed keys from middleware definitions,
+3. codec-derived schemas from codec registries that implement `ExtensionCodecLister` and codecs implementing `ExtensionSchemaCodec`.
+
+Use these schemas to build profile-editing UIs that avoid sending invalid payloads.
+
+## Error Semantics
+
+Profile API handlers map typed profile errors to stable HTTP status classes:
+
+- not found -> `404`
+- validation failure -> `400`
+- policy violation -> `403`
+- optimistic concurrency conflict -> `409`
+- unhandled/store failures -> `500`
+
+When writing clients, key behavior primarily from status codes and error class, not only exact text.
+
+## Resolver and Policy Guidance
+
+Recommended resolver behavior:
+
+- reject malformed JSON as `400`,
+- reject disallowed runtime overrides early,
+- keep conv-id generation deterministic (body `conv_id` or generated UUID),
+- map profile and registry failures to typed `RequestResolutionError`.
+
+Recommended policy behavior:
+
+- keep override policy in profile definitions (`allow_overrides`, denied keys),
+- use read-only profiles for protected runtime presets,
+- enforce expected-version for mutable APIs to avoid last-write-wins races.
 
 ## Testing Recommendations
 
-Minimum coverage for a profile-aware webchat app:
+Minimum integration coverage for profile-aware webchat:
 
-- list -> select -> chat request uses selected engine profile slug
-- resolved engine profile changes final `InferenceSettings`
-- local resolved plan captures app-owned prompt/tools/middlewares
-- conversion to shared transport preserves those fields
+- list -> select -> chat request uses selected runtime key,
+- create profile -> appears in list -> usable immediately,
+- patch profile increments version and drives runtime rebuild behavior,
+- read-only profile mutation is rejected.
 
-These tests should live at the app layer, not only in the Geppetto engine-profile package.
+These tests should run against app-mounted handlers, not only isolated service functions.
+
+## Hard-Cutover Notes
+
+Current rollout assumptions:
+
+- profile-registry middleware integration is always enabled,
+- `PINOCCHIO_ENABLE_PROFILE_REGISTRY_MIDDLEWARE` is removed,
+- compatibility aliases for renamed runtime/webchat symbols are removed,
+- runtime registry switching (`registry_slug` selector path) is removed,
+- profile CRUD + schema endpoints are the canonical integration surface.
+
+Do not gate behavior with legacy env toggles. If a deployment needs rollback, use release rollback and profile DB snapshot restore.
+
+## SQLite Operations and Rollout Notes
+
+For durable multi-user profile editing, run web-chat with SQLite-backed registry storage as one source in the runtime stack:
+
+```bash
+web-chat web-chat --profile-registries ./data/profiles.db
+```
+
+To layer a private file over a shared DB:
+
+```bash
+web-chat web-chat --profile-registries ./data/profiles.db,./profiles/private-top.yaml
+```
+
+Operational recommendations:
+
+- keep timestamped DB backups before bulk profile edits,
+- restrict DB and backup file permissions to service operators,
+- validate restore drills with `GET /api/chat/profiles` and one explicit profile-selected chat request.
+
+Migration/rollout posture:
+
+- registry middleware integration is always enabled,
+- rollback uses release rollback + profile DB snapshot restore, not runtime env toggles.
+
+## CRUD Exposure Risk (Current Scope)
+
+Current GP-31 behavior intentionally exposes list/get across all loaded registries. This includes YAML-backed registries loaded through `--profile-registries`.
+
+Operational implication:
+
+- if a private YAML registry carries sensitive runtime defaults, profile CRUD/read APIs can expose them unless application-level redaction or route protection is added.
+
+## Go-Go-OS Integration Notes
+
+Go-go-os inventory chat reuses the same shared profile API handlers from `pinocchio/pkg/webchat/http`:
+
+- same CRUD endpoints and status/error model,
+- same current-profile route behavior,
+- same middleware/extension schema endpoint contracts.
+
+This keeps frontend profile editors portable across pinocchio web-chat and go-go-os app backends.
 
 ## Troubleshooting
 
 | Problem | Cause | Solution |
 |---|---|---|
-| Profile selection changes but the model does not change | Resolver never merged `resolved.InferenceSettings` onto base settings | Call `MergeInferenceSettings(...)` before runtime composition |
-| Engine profile docs show prompt/middleware fields | You are still using legacy mixed-profile YAML | Migrate to engine-only `inference_settings` and move runtime policy to app config or extensions |
-| Frontend schema pages are empty | Middleware definitions or extension codecs were not passed to the profile API handler | Wire `MiddlewareDefinitions` and `ExtensionCodecRegistry` into `RegisterProfileAPIHandlers(...)` |
-| Runtime fingerprint does not rebuild when prompt/tools change | Fingerprint is computed from engine settings only | Include app runtime policy in the app-owned fingerprint payload |
+| `/chat` ignores selected profile | Resolver returns fixed runtime key | Ensure resolver reads body/query/cookie and resolves profile through registry |
+| profile updates do not trigger runtime change | Fingerprint missing profile version/effective runtime inputs | Add `ProfileVersion` and runtime inputs to fingerprint payload |
+| `/api/chat/profiles` returns empty list unexpectedly | Bootstrap registry did not upsert expected profiles | Validate bootstrap sequence and registry slug |
+| create/patch returns `validation error (runtime.middlewares[*].name)` | middleware not registered in runtime definition registry | inspect application middleware-definition wiring and middleware name |
+| create/patch returns `validation error (runtime.middlewares[*].config)` | payload does not satisfy middleware schema | fetch `/api/chat/schemas/middlewares` and fix payload |
+| mutation returns conflict | stale `expected_version` | read latest profile and retry with current version |
+| mutation unexpectedly forbidden | profile policy is read-only or denies operation | inspect profile policy and update intentionally |
 
 ## See Also
 
-- [Webchat Engine Profile Migration Playbook](webchat-engine-profile-migration-playbook.md) — full migration from the older mixed model to the current split
-- [Webchat Framework Guide](webchat-framework-guide.md) — handler-first backend integration and resolver/composer wiring
-- [Webchat HTTP Chat Setup](webchat-http-chat-setup.md) — canonical route table and request contract
-- [Third-Party Webchat Playbook](../tutorials/03-thirdparty-webchat-playbook.md) — build a webchat-style app from scratch with the current model
+- [Webchat Framework Guide](webchat-framework-guide.md)
+- [Webchat User Guide](webchat-user-guide.md)
+- [Webchat HTTP Chat Setup](webchat-http-chat-setup.md)
+- [Webchat Symbol Migration Playbook](webchat-symbol-migration-playbook.md)
+- `geppetto/pkg/doc/playbooks/06-operate-sqlite-profile-registry.md`

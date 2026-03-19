@@ -8,8 +8,7 @@ import (
 	"net/http"
 	"strings"
 
-	aisettings "github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
-	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
+	gepprofiles "github.com/go-go-golems/geppetto/pkg/profiles"
 	timelinepb "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/timeline"
 	root "github.com/go-go-golems/pinocchio/pkg/webchat"
 	"github.com/google/uuid"
@@ -21,41 +20,42 @@ import (
 
 // ChatRequestBody represents the expected JSON body for chat requests.
 type ChatRequestBody struct {
-	Prompt           string `json:"prompt"`
-	Text             string `json:"text,omitempty"`
-	ConvID           string `json:"conv_id"`
-	Profile          string `json:"profile,omitempty"`
-	Registry         string `json:"registry,omitempty"`
-	LegacyRuntimeKey string `json:"runtime_key,omitempty"`
-	LegacyRegistry   string `json:"registry_slug,omitempty"`
-	IdempotencyKey   string `json:"idempotency_key,omitempty"`
+	Prompt           string         `json:"prompt"`
+	Text             string         `json:"text,omitempty"`
+	ConvID           string         `json:"conv_id"`
+	Profile          string         `json:"profile,omitempty"`
+	Registry         string         `json:"registry,omitempty"`
+	LegacyRuntimeKey string         `json:"runtime_key,omitempty"`
+	LegacyRegistry   string         `json:"registry_slug,omitempty"`
+	RequestOverrides map[string]any `json:"request_overrides"`
+	IdempotencyKey   string         `json:"idempotency_key,omitempty"`
 }
 
 // ResolvedConversationRequest is the canonical output of request policy resolution.
 // It captures request data needed for both chat and websocket flows.
 type ResolvedConversationRequest struct {
-	ConvID                    string
-	RuntimeKey                string
-	RuntimeFingerprint        string
-	ProfileVersion            uint64
-	ResolvedInferenceSettings *aisettings.InferenceSettings
-	ResolvedRuntime           *infruntime.ProfileRuntime
-	ProfileMetadata           map[string]any
-	Prompt                    string
-	IdempotencyKey            string
+	ConvID             string
+	RuntimeKey         string
+	RuntimeFingerprint string
+	ProfileVersion     uint64
+	ResolvedRuntime    *gepprofiles.RuntimeSpec
+	ProfileMetadata    map[string]any
+	Overrides          map[string]any
+	Prompt             string
+	IdempotencyKey     string
 }
 
 // RuntimeRequest converts resolved HTTP request policy into the runtime request used by
 // conversation resolution helpers such as PrepareRunnerStart.
 func (r ResolvedConversationRequest) RuntimeRequest() root.ConversationRuntimeRequest {
 	return root.ConversationRuntimeRequest{
-		ConvID:                    r.ConvID,
-		RuntimeKey:                r.RuntimeKey,
-		RuntimeFingerprint:        r.RuntimeFingerprint,
-		ProfileVersion:            r.ProfileVersion,
-		ResolvedInferenceSettings: cloneInferenceSettings(r.ResolvedInferenceSettings),
-		ResolvedRuntime:           r.ResolvedRuntime,
-		ResolvedProfileMetadata:   r.ProfileMetadata,
+		ConvID:                  r.ConvID,
+		RuntimeKey:              r.RuntimeKey,
+		RuntimeFingerprint:      r.RuntimeFingerprint,
+		ProfileVersion:          r.ProfileVersion,
+		ResolvedRuntime:         r.ResolvedRuntime,
+		ResolvedProfileMetadata: r.ProfileMetadata,
+		Overrides:               r.Overrides,
 	}
 }
 
@@ -118,13 +118,6 @@ func IdempotencyKeyFromRequest(r *http.Request, body *ChatRequestBody) string {
 	return key
 }
 
-func cloneInferenceSettings(in *aisettings.InferenceSettings) *aisettings.InferenceSettings {
-	if in == nil {
-		return nil
-	}
-	return in.Clone()
-}
-
 func NewChatHandler(svc ChatService, resolver ConversationRequestResolver) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
 		reqLog := log.With().
@@ -174,15 +167,15 @@ func NewChatHandler(svc ChatService, resolver ConversationRequestResolver) http.
 		}
 
 		resp, err := svc.SubmitPrompt(req.Context(), root.SubmitPromptInput{
-			ConvID:                    plan.ConvID,
-			RuntimeKey:                plan.RuntimeKey,
-			RuntimeFingerprint:        plan.RuntimeFingerprint,
-			ProfileVersion:            plan.ProfileVersion,
-			ResolvedInferenceSettings: cloneInferenceSettings(plan.ResolvedInferenceSettings),
-			ResolvedRuntime:           plan.ResolvedRuntime,
-			ResolvedProfileMetadata:   plan.ProfileMetadata,
-			Prompt:                    plan.Prompt,
-			IdempotencyKey:            idempotencyKey,
+			ConvID:                  plan.ConvID,
+			RuntimeKey:              plan.RuntimeKey,
+			RuntimeFingerprint:      plan.RuntimeFingerprint,
+			ProfileVersion:          plan.ProfileVersion,
+			ResolvedRuntime:         plan.ResolvedRuntime,
+			ResolvedProfileMetadata: plan.ProfileMetadata,
+			Overrides:               plan.Overrides,
+			Prompt:                  plan.Prompt,
+			IdempotencyKey:          idempotencyKey,
 		})
 		if err != nil {
 			reqLog.Error().
@@ -235,7 +228,15 @@ func NewWSHandler(svc StreamService, resolver ConversationRequestResolver, upgra
 		if err != nil {
 			return
 		}
-		handle, err := svc.ResolveAndEnsureConversation(req.Context(), plan.RuntimeRequest())
+		handle, err := svc.ResolveAndEnsureConversation(req.Context(), root.ConversationRuntimeRequest{
+			ConvID:                  plan.ConvID,
+			RuntimeKey:              plan.RuntimeKey,
+			RuntimeFingerprint:      plan.RuntimeFingerprint,
+			ProfileVersion:          plan.ProfileVersion,
+			ResolvedRuntime:         plan.ResolvedRuntime,
+			ResolvedProfileMetadata: plan.ProfileMetadata,
+			Overrides:               plan.Overrides,
+		})
 		if err != nil {
 			_ = conn.WriteMessage(websocket.TextMessage, []byte(`{"error":"failed to join conversation"}`))
 			_ = conn.Close()

@@ -98,13 +98,13 @@ func (cc *CountCommand) RunIntoWriter(
 		return errors.Errorf("invalid count mode %q", s.CountMode)
 	}
 
-	stepSettings, err := aisettings.NewInferenceSettingsFromParsedValues(parsedLayers)
+	stepSettings, err := aisettings.NewStepSettingsFromParsedValues(parsedLayers)
 	if err != nil {
 		return err
 	}
-	ensureInferenceSettingsModel(stepSettings, s.Model)
+	ensureStepSettingsModel(stepSettings, s.Model)
 
-	counter, err := tokencountfactory.NewFromSettings(stepSettings)
+	counter, err := tokencountfactory.NewFromStepSettings(stepSettings)
 	if err != nil {
 		if s.CountMode == countModeAuto {
 			return cc.runLocalEstimate(s, w, err)
@@ -133,7 +133,7 @@ func normalizeCountMode(mode string) string {
 	return mode
 }
 
-func ensureInferenceSettingsModel(stepSettings *aisettings.InferenceSettings, model string) {
+func ensureStepSettingsModel(stepSettings *aisettings.StepSettings, model string) {
 	if stepSettings == nil || stepSettings.Chat == nil {
 		return
 	}

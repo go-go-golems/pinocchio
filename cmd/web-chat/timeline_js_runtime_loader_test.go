@@ -9,8 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	gepprofiles "github.com/go-go-golems/geppetto/pkg/engineprofiles"
-	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
+	gepprofiles "github.com/go-go-golems/geppetto/pkg/profiles"
 	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
 	webchat "github.com/go-go-golems/pinocchio/pkg/webchat"
 	"github.com/stretchr/testify/require"
@@ -96,15 +95,27 @@ func TestConfigureTimelineJSScripts_ReturnsHelpfulErrorForMissingScript(t *testi
 func TestProfileResolver_GPT5NanoProfileIsResolvedForChatRequest(t *testing.T) {
 	profileRegistry, err := newInMemoryProfileService(
 		"default",
-		testEngineProfileWithRuntime(t, "gpt-5-nano", &infruntime.ProfileRuntime{SystemPrompt: "You are gpt-5-nano."}),
+		&gepprofiles.Profile{
+			Slug: gepprofiles.MustProfileSlug("gpt-5-nano"),
+			Runtime: gepprofiles.RuntimeSpec{
+				StepSettingsPatch: map[string]any{
+					"ai-chat": map[string]any{
+						"ai-api-type": "openai-responses",
+						"ai-engine":   "gpt-5-nano",
+					},
+				},
+			},
+		},
 	)
 	require.NoError(t, err)
-	resolver := newProfileRequestResolver(profileRegistry, gepprofiles.MustRegistrySlug(defaultRegistrySlug), nil)
+	resolver := newProfileRequestResolver(profileRegistry, gepprofiles.MustRegistrySlug(defaultRegistrySlug))
 
 	req := httptest.NewRequest("POST", "/chat/gpt-5-nano", strings.NewReader(`{"prompt":"hello","conv_id":"conv-gpt5nano"}`))
 	resolved, err := resolver.Resolve(req)
 	require.NoError(t, err)
 	require.Equal(t, "gpt-5-nano", resolved.RuntimeKey)
 	require.NotNil(t, resolved.ResolvedRuntime)
-	require.Equal(t, "You are gpt-5-nano.", resolved.ResolvedRuntime.SystemPrompt)
+	aiChat, ok := resolved.ResolvedRuntime.StepSettingsPatch["ai-chat"].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "gpt-5-nano", aiChat["ai-engine"])
 }

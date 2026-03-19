@@ -84,4 +84,5 @@ export type ChatWidgetProps = {
   partProps?: PartProps;
   components?: Partial<ChatWidgetComponents>;
   renderers?: Partial<ChatWidgetRenderers>;
+  buildOverrides?: () => Record<string, any> | undefined;
 };

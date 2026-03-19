@@ -12,6 +12,7 @@ import (
 	renderers "github.com/go-go-golems/bobatea/pkg/timeline/renderers"
 	clay "github.com/go-go-golems/clay/pkg"
 	"github.com/go-go-golems/geppetto/pkg/events"
+	"github.com/go-go-golems/geppetto/pkg/inference/engine/factory"
 	"github.com/go-go-golems/geppetto/pkg/inference/middleware"
 	"github.com/go-go-golems/geppetto/pkg/inference/tools"
 	"github.com/go-go-golems/geppetto/pkg/turns"
@@ -22,12 +23,14 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	"github.com/go-go-golems/glazed/pkg/help"
 	help_cmd "github.com/go-go-golems/glazed/pkg/help/cmd"
+	sqlite_regexp "github.com/go-go-golems/go-sqlite-regexp"
 	storepkg "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/store"
 	toolspkg "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/tools"
 	uipkg "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/ui"
 	eventspkg "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/xevents"
-	profilebootstrap "github.com/go-go-golems/pinocchio/pkg/cmds/profilebootstrap"
+	pinhelpers "github.com/go-go-golems/pinocchio/pkg/cmds/helpers"
 	agentmode "github.com/go-go-golems/pinocchio/pkg/middlewares/agentmode"
+	sqlitetool "github.com/go-go-golems/pinocchio/pkg/middlewares/sqlitetool"
 	rediscfg "github.com/go-go-golems/pinocchio/pkg/redisstream"
 	toolloopbackend "github.com/go-go-golems/pinocchio/pkg/ui/backends/toolloop"
 	agentforwarder "github.com/go-go-golems/pinocchio/pkg/ui/forwarders/agent"
@@ -42,7 +45,7 @@ import (
 type SimpleAgentCmd struct{ *cmds.CommandDescription }
 
 func NewSimpleAgentCmd() (*SimpleAgentCmd, error) {
-	profileSettingsSection, err := profilebootstrap.NewProfileSettingsSection()
+	profileSettingsSection, err := pinhelpers.NewProfileSettingsSection()
 	if err != nil {
 		return nil, err
 	}
@@ -128,16 +131,16 @@ func (c *SimpleAgentCmd) RunIntoWriter(ctx context.Context, parsed *values.Value
 	}
 	sink := middleware.NewWatermillSink(router.Publisher, "chat")
 
-	resolvedSettings, err := profilebootstrap.ResolveCLIEngineSettings(ctx, parsed)
+	stepSettings, _, closeRuntime, err := pinhelpers.ResolveEffectiveStepSettings(ctx, parsed)
 	if err != nil {
-		return errors.Wrap(err, "resolve inference settings")
+		return errors.Wrap(err, "resolve step settings")
 	}
-	if resolvedSettings.Close != nil {
-		defer resolvedSettings.Close()
+	if closeRuntime != nil {
+		defer closeRuntime()
 	}
 
 	// Engine
-	eng, err := profilebootstrap.NewEngineFromResolvedCLIEngineSettings(resolvedSettings)
+	eng, err := factory.NewEngineFromStepSettings(stepSettings)
 	if err != nil {
 		return errors.Wrap(err, "engine")
 	}
@@ -175,6 +178,9 @@ func (c *SimpleAgentCmd) RunIntoWriter(ctx context.Context, parsed *values.Value
 	}
 	sessionID := uuid.NewString()
 
+	// Add RW SQLite tool middleware with REGEXP
+	dbWithRegexp, _ := sqlite_regexp.OpenWithRegexp("anonymized-data.db")
+
 	mws := []middleware.Middleware{
 		// Stable IDs
 		func(next middleware.HandlerFunc) middleware.HandlerFunc {
@@ -202,6 +208,8 @@ func (c *SimpleAgentCmd) RunIntoWriter(ctx context.Context, parsed *values.Value
 				return res, err
 			}
 		},
+		// SQLite tool
+		sqlitetool.NewMiddleware(sqlitetool.Config{DB: dbWithRegexp, MaxRows: 500}),
 		// System prompt should run close to provider inference.
 		middleware.NewSystemPromptMiddleware("You are a financial transaction analysis assistant. Your primary role is to analyze bank transactions and extract spending categories by examining transaction descriptions and developing regular expression patterns to automatically categorize future transactions. You can use various tools to help with data analysis and pattern development."),
 		// Agent mode switching

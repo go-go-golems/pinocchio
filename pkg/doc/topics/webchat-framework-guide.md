@@ -44,7 +44,7 @@ Recommended baseline:
 - `ChatService`: submit prompt, queueing, idempotency, run start.
 - `StreamHub`: conversation resolution and websocket attach lifecycle.
 - `TimelineService`: hydration snapshots for timeline entities.
-- `ConversationRequestResolver`: app policy for parsing request inputs into a resolved conversation plan.
+- `ConversationRequestResolver`: app policy for parsing request inputs into a `ConversationRequestPlan`.
 
 ## Canonical HTTP Contract
 
@@ -116,8 +116,6 @@ func run(ctx context.Context, parsed *values.Values) error {
 }
 ```
 
-That quick start leaves out one architectural detail that matters in real apps: the resolver should not build the shared webchat transport object directly. Build a local resolved runtime plan first, then convert once at the boundary. That keeps engine settings, app runtime policy, and transport wiring separate.
-
 Compatibility path:
 
 ```go
@@ -158,36 +156,17 @@ That keeps middleware availability, validation, and runtime construction in one 
 
 ## Request Resolver Contract
 
-`ConversationRequestResolver` is shared by both chat and websocket handlers. In the current architecture, the resolver should own three responsibilities:
+`ConversationRequestResolver` is shared by both chat and websocket handlers. It produces `ConversationRequestPlan`:
 
-1. choose the engine profile
-2. merge final `InferenceSettings`
-3. resolve app runtime policy such as prompt, middleware, and tool exposure
+- `ConvID`
+- `RuntimeKey`
+- `Overrides`
+- `Prompt` (chat path)
+- `IdempotencyKey`
 
-The recommended internal shape is:
+Use this to keep runtime/profile/cookie policy in app code instead of framework internals.
 
-```go
-type resolvedConversationPlan struct {
-    ConvID         string
-    Prompt         string
-    IdempotencyKey string
-    Runtime        *resolvedRuntime
-}
-
-type resolvedRuntime struct {
-    RuntimeKey         string
-    RuntimeFingerprint string
-    ProfileVersion     uint64
-    InferenceSettings  *aisettings.InferenceSettings
-    SystemPrompt       string
-    Middlewares        []runtime.MiddlewareUse
-    ToolNames          []string
-}
-```
-
-Only after the plan exists should you convert into `webhttp.ResolvedConversationRequest`.
-
-For the current engine-profile and app-runtime split, see [Webchat Engine Profile Guide](webchat-profile-registry.md).
+For full profile registry selection and CRUD semantics, see [Webchat Profile Registry Guide](webchat-profile-registry.md).
 
 ## Root Prefix Mounting
 
@@ -265,10 +244,9 @@ Core rules:
 ## See Also
 
 - [Webchat HTTP Chat Setup](webchat-http-chat-setup.md)
-- [Webchat Engine Profile Migration Playbook](webchat-engine-profile-migration-playbook.md)
 - [Webchat Compatibility Surface Migration Guide](webchat-compatibility-surface-migration-guide.md)
 - [Webchat Values Separation Migration Guide](webchat-values-separation-migration-guide.md)
 - [Webchat User Guide](webchat-user-guide.md)
-- [Webchat Engine Profile Guide](webchat-profile-registry.md)
+- [Webchat Profile Registry Guide](webchat-profile-registry.md)
 - [Webchat Frontend Integration](webchat-frontend-integration.md)
 - [Webchat Debugging and Ops](webchat-debugging-and-ops.md)

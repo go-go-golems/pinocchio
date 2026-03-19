@@ -63,7 +63,7 @@ func NewPickerModel(items []ProfileListItem, currentSlug string, selected *strin
 // PickerFactory returns a factory function for use with overlay.Config.Factory.
 func PickerFactory(mgr *Manager, selected *string) func() tea.Model {
 	return func() tea.Model {
-		items, err := mgr.ListEngineProfiles(context.Background())
+		items, err := mgr.ListProfiles(context.Background())
 		if err != nil || len(items) == 0 {
 			return NewPickerModel(nil, "", selected)
 		}

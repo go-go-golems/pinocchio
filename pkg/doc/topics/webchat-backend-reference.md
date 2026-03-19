@@ -185,6 +185,7 @@ type RuntimeArtifacts struct {
     RuntimeFingerprint string
     RuntimeKey         string
     SeedSystemPrompt   string
+    AllowedTools       []string
 }
 
 type RuntimeComposer interface {
@@ -197,7 +198,7 @@ type RuntimeComposer interface {
 - Applications implement `Compose(...)` in app code (for example `cmd/web-chat/runtime_composer.go`).
 - Core compares `RuntimeFingerprint` to `Conversation.RuntimeFingerprint` and only rebuilds when changed.
 - Core creates the default `WatermillSink` if `RuntimeArtifacts.Sink` is nil, then applies `WithEventSinkWrapper(...)` if configured.
-- Tool filtering belongs to app-owned resolved runtime data, not `ComposedRuntime`.
+- `AllowedTools` is consumed by the inference loop; empty means "all registered tools".
 
 ### Critical Guideline: EventSinks are for UX/telemetry, not durable application logic
 

@@ -16,17 +16,17 @@ import (
 // ToolRegistrar registers a tool into a registry.
 type ToolRegistrar func(reg geptools.ToolRegistry) error
 
-// BuildEngineFromSettingsWithMiddlewares builds an engine from inference settings and applies middleware chain.
+// BuildEngineFromSettingsWithMiddlewares builds an engine from step settings and applies middleware chain.
 func BuildEngineFromSettingsWithMiddlewares(
 	ctx context.Context,
-	stepSettings *settings.InferenceSettings,
+	stepSettings *settings.StepSettings,
 	sysPrompt string,
 	resolvedMiddlewares []middleware.Middleware,
 ) (engine.Engine, error) {
 	if ctx == nil {
 		return nil, errors.New("ctx is nil")
 	}
-	eng, err := factory.NewEngineFromSettings(stepSettings)
+	eng, err := factory.NewEngineFromStepSettings(stepSettings)
 	if err != nil {
 		return nil, errors.Wrap(err, "engine init failed")
 	}

@@ -54,6 +54,7 @@ func TestLLMLoopRunner_StartFiltersRegisteredToolsAndPersistsTurns(t *testing.T)
 			RuntimeKey:         req.ProfileKey,
 			RuntimeFingerprint: "fp-tools",
 			SeedSystemPrompt:   "seed",
+			AllowedTools:       []string{"allowed_tool"},
 		}, nil
 	})
 	cm := NewConvManager(ConvManagerOptions{
@@ -67,13 +68,7 @@ func TestLLMLoopRunner_StartFiltersRegisteredToolsAndPersistsTurns(t *testing.T)
 	})
 	require.NoError(t, err)
 	_, startReq, err := svc.PrepareRunnerStart(context.Background(), PrepareRunnerStartInput{
-		Runtime: ConversationRuntimeRequest{
-			ConvID:     "conv-tools",
-			RuntimeKey: "default",
-			ResolvedRuntime: &infruntime.ProfileRuntime{
-				Tools: []string{"allowed_tool"},
-			},
-		},
+		Runtime: ConversationRuntimeRequest{ConvID: "conv-tools", RuntimeKey: "default"},
 		Payload: LLMLoopStartPayload{
 			Prompt:         "hello",
 			IdempotencyKey: "k-tools",

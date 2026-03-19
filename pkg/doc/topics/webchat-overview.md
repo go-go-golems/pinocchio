@@ -15,11 +15,7 @@ SectionType: GeneralTopic
 
 ## What Is Webchat?
 
-Webchat is Pinocchio's real-time chat framework. It connects a Geppetto engine to a browser UI through WebSocket streaming and timeline hydration. The current architecture is explicitly split:
-
-- Geppetto owns engine profiles and engine construction
-- your app owns prompt, middleware, tool exposure, and runtime identity
-- `pkg/webchat` owns shared conversation lifecycle and streaming transport
+Webchat is pinocchio's real-time chat framework. It connects a geppetto inference engine to a browser UI through WebSocket streaming, giving you a working chat application with tool execution, timeline persistence, and hot-swappable middleware — out of the box.
 
 **What it handles for you:**
 
@@ -27,7 +23,7 @@ Webchat is Pinocchio's real-time chat framework. It connects a Geppetto engine t
 - **Tool execution UI** — Tool calls, progress, and results rendered as timeline cards
 - **Session persistence** — Timeline entities stored in SQLite, restored on page reload
 - **Connection management** — WebSocket lifecycle, idle cleanup, reconnection with hydration
-- **Shared transport and lifecycle** — Reuse chat/websocket/timeline infrastructure while keeping runtime policy app-owned
+- **Middleware composition** — Swap prompting strategies, add safety layers, or inject custom behaviors via profiles
 
 **What it does NOT do:**
 
@@ -35,7 +31,7 @@ Webchat is Pinocchio's real-time chat framework. It connects a Geppetto engine t
 - Multi-tenant routing (one conversation = one engine instance)
 - Custom model hosting (relies on geppetto's provider abstraction)
 
-**In one sentence:** Webchat gives you the reusable transport and lifecycle pieces for a production-ready chat UI while your app owns the runtime policy.
+**In one sentence:** Webchat turns a geppetto engine into a production-ready chat UI with streaming, tools, and persistence.
 
 ## Quick Start
 
@@ -45,9 +41,8 @@ Webchat is Pinocchio's real-time chat framework. It connects a Geppetto engine t
 1. [Webchat User Guide](webchat-user-guide.md) — Practical usage and customization
 1. [Webchat HTTP Chat Setup](webchat-http-chat-setup.md) — Canonical route table + request/response shapes
 1. [Webchat Frontend Integration](webchat-frontend-integration.md) — WebSocket + hydration gate pattern
-1. [Webchat Framework Guide](webchat-framework-guide.md) — End-to-end app wiring (resolver, engine profiles, middleware/tools)
-1. [Webchat Engine Profile Guide](webchat-profile-registry.md) — Registry wiring, selection precedence, and app-runtime split
-1. [Webchat Engine Profile Migration Playbook](webchat-engine-profile-migration-playbook.md) — How to migrate older mixed-profile apps
+1. [Webchat Framework Guide](webchat-framework-guide.md) — End-to-end app wiring (resolver, profiles, middleware/tools)
+1. [Webchat Profile Registry Guide](webchat-profile-registry.md) — Registry wiring, selection precedence, and CRUD semantics
 
 **Building the example app?**
 
@@ -69,8 +64,7 @@ If you are integrating Pinocchio webchat into an existing app and only need the 
 | [User Guide](webchat-user-guide.md) | Practical backend usage and customization |
 | [Backend Reference](webchat-backend-reference.md) | API for StreamCoordinator and ConnectionPool |
 | [Backend Internals](webchat-backend-internals.md) | Implementation details, concurrency, performance |
-| [Engine Profile Guide](webchat-profile-registry.md) | Engine-profile registry behavior, resolver rules, and app-runtime split |
-| [Engine Profile Migration Playbook](webchat-engine-profile-migration-playbook.md) | Migrate older mixed-profile webchat apps |
+| [Profile Registry Guide](webchat-profile-registry.md) | Detailed profile registry behavior, resolver rules, and profile CRUD APIs |
 | [Pinocchio JS API Reference](13-js-api-reference.md) | Full contract for JavaScript SEM reducers and handlers |
 | [Pinocchio JS API User Guide](14-js-api-user-guide.md) | Step-by-step workflow for timeline script development |
 
@@ -119,8 +113,7 @@ Browser                          Backend (pinocchio)
 - **StreamCoordinator**: Bridges event source to WebSocket via callbacks; stamps `event.seq` for ordering
 - **ConnectionPool**: Manages WebSocket connections, idle timers, broadcast
 - **TimelineStore**: Durable projection store keyed by `event.seq`
-- **Engine profile**: Named engine preset that resolves final `InferenceSettings`
-- **App runtime**: Prompt, middlewares, tools, runtime key, and fingerprint owned by the app
+- **Profile**: Named configuration with default prompt and middlewares
 
 ## Key Files
 

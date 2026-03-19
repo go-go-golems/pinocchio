@@ -9,16 +9,12 @@ import (
 	"github.com/pkg/errors"
 )
 
-// baseSettingsFromParsedValues computes a InferenceSettings that does not include any parsed field values
+// baseSettingsFromParsedValues computes a StepSettings that does not include any parsed field values
 // that originated from the profile registry middleware (source == "profiles").
 //
 // This allows interactive chat to switch profiles by re-applying a new profile patch onto the same
 // underlying config/env/flag baseline.
-func baseSettingsFromParsedValues(parsed *values.Values) (*settings.InferenceSettings, error) {
-	return baseSettingsFromParsedValuesWithBase(parsed, nil)
-}
-
-func baseSettingsFromParsedValuesWithBase(parsed *values.Values, initial *settings.InferenceSettings) (*settings.InferenceSettings, error) {
+func baseSettingsFromParsedValues(parsed *values.Values) (*settings.StepSettings, error) {
 	if parsed == nil {
 		return nil, errors.New("base settings: parsed values is nil")
 	}
@@ -49,7 +45,7 @@ func baseSettingsFromParsedValuesWithBase(parsed *values.Values, initial *settin
 			}
 
 			if lastIdx < 0 {
-				// Only profile-derived value existed -> unset and let InferenceSettings defaults apply.
+				// Only profile-derived value existed -> unset and let StepSettings defaults apply.
 				toDelete = append(toDelete, k)
 				return
 			}
@@ -71,17 +67,9 @@ func baseSettingsFromParsedValuesWithBase(parsed *values.Values, initial *settin
 		}
 	})
 
-	var (
-		ss  *settings.InferenceSettings
-		err error
-	)
-	if initial != nil {
-		ss = initial.Clone()
-	} else {
-		ss, err = settings.NewInferenceSettings()
-		if err != nil {
-			return nil, err
-		}
+	ss, err := settings.NewStepSettings()
+	if err != nil {
+		return nil, err
 	}
 	if err := ss.UpdateFromParsedValues(base); err != nil {
 		return nil, err

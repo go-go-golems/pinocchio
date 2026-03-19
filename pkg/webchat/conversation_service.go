@@ -9,7 +9,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/go-go-golems/geppetto/pkg/inference/toolloop"
-	aisettings "github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
+	gepprofiles "github.com/go-go-golems/geppetto/pkg/profiles"
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
 	timelinepb "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/timeline"
@@ -40,13 +40,13 @@ type ConversationService struct {
 }
 
 type ConversationRuntimeRequest struct {
-	ConvID                    string
-	RuntimeKey                string
-	RuntimeFingerprint        string
-	ProfileVersion            uint64
-	ResolvedInferenceSettings *aisettings.InferenceSettings
-	ResolvedRuntime           *infruntime.ProfileRuntime
-	ResolvedProfileMetadata   map[string]any
+	ConvID                  string
+	RuntimeKey              string
+	RuntimeFingerprint      string
+	ProfileVersion          uint64
+	ResolvedRuntime         *gepprofiles.RuntimeSpec
+	ResolvedProfileMetadata map[string]any
+	Overrides               map[string]any
 }
 
 type ConversationHandle struct {
@@ -58,15 +58,15 @@ type ConversationHandle struct {
 }
 
 type SubmitPromptInput struct {
-	ConvID                    string
-	RuntimeKey                string
-	RuntimeFingerprint        string
-	ProfileVersion            uint64
-	ResolvedInferenceSettings *aisettings.InferenceSettings
-	ResolvedRuntime           *infruntime.ProfileRuntime
-	ResolvedProfileMetadata   map[string]any
-	Prompt                    string
-	IdempotencyKey            string
+	ConvID                  string
+	RuntimeKey              string
+	RuntimeFingerprint      string
+	ProfileVersion          uint64
+	ResolvedRuntime         *gepprofiles.RuntimeSpec
+	ResolvedProfileMetadata map[string]any
+	Overrides               map[string]any
+	Prompt                  string
+	IdempotencyKey          string
 }
 
 type SubmitPromptResult struct {
@@ -184,13 +184,6 @@ func copyStringAnyMap(in map[string]any) map[string]any {
 		out[key] = value
 	}
 	return out
-}
-
-func cloneInferenceSettings(in *aisettings.InferenceSettings) *aisettings.InferenceSettings {
-	if in == nil {
-		return nil
-	}
-	return in.Clone()
 }
 
 func (s *ConversationService) PrepareRunnerStart(ctx context.Context, in PrepareRunnerStartInput) (*ConversationHandle, StartRequest, error) {

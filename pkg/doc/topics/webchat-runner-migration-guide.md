@@ -82,7 +82,7 @@ This is the recommended migration for new work.
 Your app:
 
 1. parses the HTTP request
-2. resolves runtime/profile selection
+2. resolves runtime/profile policy
 3. selects a runner, usually `LLMLoopRunner`
 4. calls `ChatService.StartPromptWithRunner(...)`
 5. keeps using generic `/ws` and `/api/timeline`

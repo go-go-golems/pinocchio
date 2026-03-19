@@ -1,7 +1,4 @@
 pre-commit:
-  # Several commands below invoke build/generate paths that touch the web frontend
-  # workspace. Running them concurrently leads to intermittent node_modules races.
-  parallel: false
   commands:
     lint:
       glob: '*.go'
@@ -12,12 +9,10 @@ pre-commit:
     web-check:
       glob: 'cmd/web-chat/web/**'
       run: cd cmd/web-chat/web && npm run check
+  parallel: true
 
 pre-push:
-  # `make goreleaser` runs `go generate ./...`, which can reinstall/rebuild the
-  # frontend while lint/test are traversing `./...`. Keep this hook serial so
-  # pushes are deterministic.
-  parallel: false
+  parallel: true
   commands:
     release:
       run: make goreleaser

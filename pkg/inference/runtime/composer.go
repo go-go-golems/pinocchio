@@ -5,7 +5,7 @@ import (
 
 	"github.com/go-go-golems/geppetto/pkg/events"
 	"github.com/go-go-golems/geppetto/pkg/inference/engine"
-	aisettings "github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
+	gepprofiles "github.com/go-go-golems/geppetto/pkg/profiles"
 )
 
 // ConversationRuntimeRequest contains app-owned runtime policy inputs.
@@ -13,8 +13,7 @@ type ConversationRuntimeRequest struct {
 	ConvID                     string
 	ProfileKey                 string
 	ProfileVersion             uint64
-	ResolvedInferenceSettings  *aisettings.InferenceSettings
-	ResolvedProfileRuntime     *ProfileRuntime
+	ResolvedProfileRuntime     *gepprofiles.RuntimeSpec
 	ResolvedProfileFingerprint string
 }
 
@@ -27,6 +26,8 @@ type ComposedRuntime struct {
 
 	// SeedSystemPrompt is used to initialize the first seed turn for a new conversation.
 	SeedSystemPrompt string
+	// AllowedTools controls runtime tool exposure in the inference loop; empty means "all registered tools".
+	AllowedTools []string
 }
 
 // RuntimeBuilder composes an engine/sink runtime for a conversation request.

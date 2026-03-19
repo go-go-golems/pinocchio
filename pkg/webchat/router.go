@@ -319,6 +319,24 @@ func (r *Router) convRuntimeComposer() infruntime.RuntimeBuilder {
 	})
 }
 
+func stepModeFromOverrides(overrides map[string]any) bool {
+	if overrides == nil {
+		return false
+	}
+	if v, ok := overrides["step_mode"].(bool); ok {
+		return v
+	}
+	if v, ok := overrides["step_mode"].(string); ok {
+		switch strings.ToLower(strings.TrimSpace(v)) {
+		case "1", "true", "yes", "y", "on":
+			return true
+		default:
+			return false
+		}
+	}
+	return false
+}
+
 // BuildSubscriber exposes the subscriber builder for external use.
 func (r *Router) BuildSubscriber(convID string) (message.Subscriber, bool, error) {
 	if r != nil && r.buildSubscriberOverride != nil {

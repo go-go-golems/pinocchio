@@ -71,6 +71,7 @@ export function ChatWidget({
   partProps,
   components,
   renderers,
+  buildOverrides,
 }: ChatWidgetProps) {
   const dispatch = useAppDispatch();
   const app = useAppSelector((s) => s.app);
@@ -160,47 +161,36 @@ export function ChatWidget({
 
   const send = useCallback(() => {
     if (!text.trim()) return;
-    const prompt = text;
-    const convId = app.convId || convIdFromLocation() || crypto.randomUUID();
-    const basePrefix = basePrefixFromLocation();
-
-    if (convId !== app.convId) {
-      dispatch(appSlice.actions.setConvId(convId));
-      setConvIdInLocation(convId);
+    if (!app.convId) {
+      const next = crypto.randomUUID();
+      dispatch(appSlice.actions.setConvId(next));
+      setConvIdInLocation(next);
     }
-
+    const basePrefix = basePrefixFromLocation();
+    const overrides = buildOverrides?.();
+    const payload: Record<string, any> = {
+      conv_id: app.convId || convIdFromLocation(),
+      prompt: text,
+    };
+    if (overrides && Object.keys(overrides).length > 0) {
+      payload.request_overrides = overrides;
+    }
     setText('');
-    void (async () => {
-      try {
-        await wsManager.connect({
-          convId,
-          basePrefix,
-          dispatch,
-          onStatus: (s) => setStatusText(s),
-          hydrate: false,
-        });
-      } catch (err) {
-        dispatch(errorsSlice.actions.reportError(makeAppError('ws connect failed', 'send.ws', err, { convId })));
-      }
-
-      try {
-        const res = await fetch(`${basePrefix}/chat`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            conv_id: convId,
-            prompt,
-          }),
-        });
+    void fetch(`${basePrefix}/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+      .then(async (res) => {
         if (!res.ok) {
           const msg = await res.text();
           dispatch(errorsSlice.actions.reportError(makeAppError(msg, 'send', undefined, { status: res.status })));
         }
-      } catch (err) {
+      })
+      .catch((err) => {
         dispatch(errorsSlice.actions.reportError(makeAppError('send failed', 'send', err)));
-      }
-    })();
-  }, [app.convId, dispatch, text]);
+      });
+  }, [app.convId, buildOverrides, dispatch, text]);
 
   const onKeyDown = useCallback(
     (e: KeyboardEvent<HTMLTextAreaElement>) => {

@@ -2,10 +2,12 @@ package helpers
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 
 	embeddings_config "github.com/go-go-golems/geppetto/pkg/embeddings/config"
-	gepprofiles "github.com/go-go-golems/geppetto/pkg/engineprofiles"
+	gepprofiles "github.com/go-go-golems/geppetto/pkg/profiles"
+	geppetto_sections "github.com/go-go-golems/geppetto/pkg/sections"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings/claude"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings/gemini"
@@ -15,21 +17,20 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	"github.com/go-go-golems/pinocchio/pkg/cmds"
 	"github.com/go-go-golems/pinocchio/pkg/cmds/cmdlayers"
-	profilebootstrap "github.com/go-go-golems/pinocchio/pkg/cmds/profilebootstrap"
 )
 
 type GeppettoLayersHelper struct {
 	Profile           string
-	ProfileRegistries []string
+	ProfileRegistries string
 	ConfigFile        string
 	UseViper          bool
 }
 
 type GeppettoLayersHelperOption func(*GeppettoLayersHelper)
 
-func WithProfileRegistries(profileRegistries []string) GeppettoLayersHelperOption {
+func WithProfileRegistries(profileRegistries string) GeppettoLayersHelperOption {
 	return func(h *GeppettoLayersHelper) {
-		h.ProfileRegistries = append([]string(nil), profileRegistries...)
+		h.ProfileRegistries = profileRegistries
 	}
 }
 
@@ -54,8 +55,15 @@ func WithConfigFile(configFile string) GeppettoLayersHelperOption {
 // ParseGeppettoLayers parses the Geppetto layers from the command and returns them, this is a way to parse
 // profiles and config file without using the GetGeppettoMiddlewares function which also parses from cobra.
 func ParseGeppettoLayers(c *cmds.PinocchioCommand, options ...GeppettoLayersHelperOption) (*values.Values, error) {
+	defaultProfileRegistries := defaultPinocchioProfileRegistriesIfPresent()
 	profile := strings.TrimSpace(os.Getenv("PINOCCHIO_PROFILE"))
-	profileRegistries := normalizeRegistryList(strings.Split(strings.TrimSpace(os.Getenv("PINOCCHIO_PROFILE_REGISTRIES")), ","))
+	if profile == "" {
+		profile = "default"
+	}
+	profileRegistries := strings.TrimSpace(os.Getenv("PINOCCHIO_PROFILE_REGISTRIES"))
+	if profileRegistries == "" {
+		profileRegistries = defaultProfileRegistries
+	}
 	helper := &GeppettoLayersHelper{
 		Profile:           profile,
 		ProfileRegistries: profileRegistries,
@@ -66,23 +74,38 @@ func ParseGeppettoLayers(c *cmds.PinocchioCommand, options ...GeppettoLayersHelp
 	}
 	middlewares_ := []sources.Middleware{}
 	if helper.Profile != "" {
-		helper.ProfileRegistries = normalizeRegistryList(helper.ProfileRegistries)
-		if len(helper.ProfileRegistries) == 0 {
+		profileRegistrySources, err := gepprofiles.ParseProfileRegistrySourceEntries(helper.ProfileRegistries)
+		if err != nil {
+			return nil, err
+		}
+		if len(profileRegistrySources) == 0 {
 			return nil, &gepprofiles.ValidationError{
 				Field:  "profile-settings.profile-registries",
-				Reason: "must be configured when profile-settings.profile is set",
+				Reason: "must be configured (hard cutover: no profile-file fallback)",
 			}
 		}
+		middlewares_ = append(middlewares_,
+			geppetto_sections.GatherFlagsFromProfileRegistry(
+				profileRegistrySources,
+				helper.Profile,
+				fields.WithSource("profiles"),
+				fields.WithMetadata(map[string]interface{}{
+					"profileRegistries": profileRegistrySources,
+					"profile":           helper.Profile,
+					"mode":              "profile-registry-stack",
+				}),
+			),
+		)
 	}
 
 	if helper.UseViper {
 		configMiddlewares := []sources.Middleware{}
-		configFiles, err := profilebootstrap.ResolveCLIConfigFiles(nil)
+		configFiles, err := resolveConfigFiles(nil)
 		if err != nil {
 			return nil, err
 		}
 		if explicit := strings.TrimSpace(helper.ConfigFile); explicit != "" {
-			explicitFiles, err := profilebootstrap.ResolveCLIConfigFilesForExplicit(explicit)
+			explicitFiles, err := resolveConfigFilesForExplicit(explicit)
 			if err != nil {
 				return nil, err
 			}
@@ -91,7 +114,7 @@ func ParseGeppettoLayers(c *cmds.PinocchioCommand, options ...GeppettoLayersHelp
 		for _, configPath := range configFiles {
 			configMiddlewares = append(configMiddlewares,
 				sources.FromFile(configPath,
-					sources.WithConfigFileMapper(profilebootstrap.MapPinocchioConfigFile),
+					sources.WithConfigFileMapper(configFileMapper),
 					sources.WithParseOptions(fields.WithSource("config")),
 				),
 			)
@@ -128,12 +151,15 @@ func ParseGeppettoLayers(c *cmds.PinocchioCommand, options ...GeppettoLayersHelp
 	return geppettoParsedValues, nil
 }
 
-func normalizeRegistryList(entries []string) []string {
-	ret := make([]string, 0, len(entries))
-	for _, entry := range entries {
-		if trimmed := strings.TrimSpace(entry); trimmed != "" {
-			ret = append(ret, trimmed)
-		}
+func defaultPinocchioProfileRegistriesIfPresent() string {
+	configDir, err := os.UserConfigDir()
+	if err != nil || strings.TrimSpace(configDir) == "" {
+		return ""
 	}
-	return ret
+	path := filepath.Join(configDir, "pinocchio", "profiles.yaml")
+	info, err := os.Stat(path)
+	if err != nil || info.IsDir() {
+		return ""
+	}
+	return path
 }

@@ -30,16 +30,17 @@ func systemNoticeEntityCmd(text string) tea.Cmd {
 	return tea.Batch(created, completed)
 }
 
-func publishProfileSwitchedInfo(sink events.EventSink, convID, from, to string) error {
+func publishProfileSwitchedInfo(sink events.EventSink, convID, from, to, runtimeKey, runtimeFingerprint string) error {
 	if sink == nil {
 		return nil
 	}
 	md := events.EventMetadata{
 		ID: uuid.New(),
 		Extra: map[string]any{
-			"conversation_id": strings.TrimSpace(convID),
-			"runtime_key":     strings.TrimSpace(to),
-			"profile.slug":    strings.TrimSpace(to),
+			"conversation_id":     strings.TrimSpace(convID),
+			"runtime_key":         strings.TrimSpace(runtimeKey),
+			"runtime_fingerprint": strings.TrimSpace(runtimeFingerprint),
+			"profile.slug":        strings.TrimSpace(to),
 		},
 	}
 	return sink.PublishEvent(events.NewInfoEvent(md, "profile-switched", map[string]any{
