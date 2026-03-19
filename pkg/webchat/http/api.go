@@ -235,14 +235,7 @@ func NewWSHandler(svc StreamService, resolver ConversationRequestResolver, upgra
 		if err != nil {
 			return
 		}
-		handle, err := svc.ResolveAndEnsureConversation(req.Context(), root.ConversationRuntimeRequest{
-			ConvID:                  plan.ConvID,
-			RuntimeKey:              plan.RuntimeKey,
-			RuntimeFingerprint:      plan.RuntimeFingerprint,
-			ProfileVersion:          plan.ProfileVersion,
-			ResolvedRuntime:         plan.ResolvedRuntime,
-			ResolvedProfileMetadata: plan.ProfileMetadata,
-		})
+		handle, err := svc.ResolveAndEnsureConversation(req.Context(), plan.RuntimeRequest())
 		if err != nil {
 			_ = conn.WriteMessage(websocket.TextMessage, []byte(`{"error":"failed to join conversation"}`))
 			_ = conn.Close()
