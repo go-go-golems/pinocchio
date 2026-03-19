@@ -22,8 +22,9 @@ This guide shows the current production pattern for integrating `pinocchio/pkg/w
 - app-owned `/chat` and `/ws` handlers
 - canonical timeline hydration path `/api/timeline`
 - debug endpoints under `/api/debug/*`
+- engine-profile selection through Geppetto engine registries
 - profile/runtime policy via app-owned request resolver
-- middleware resolved through app-owned runtime/profile composition
+- middleware resolved through app-owned runtime composition
 - explicit dependency-injected server construction as the preferred embedding API
 
 ## Minimal Backend Wiring
@@ -102,16 +103,23 @@ At a high level, you will mount:
 
 ## Request Resolution Ownership
 
-Runtime and profile selection is app-owned through `ConversationRequestResolver`.
+Request resolution is app-owned through `ConversationRequestResolver`.
 
-Typical resolver behavior:
+Typical resolver behavior is now split in two:
 
-- parse body/query/path/cookies
-- select runtime/profile key
-- resolve the selected profile runtime
-- return typed `RequestResolutionError` for client-visible errors
+- resolve the selected Geppetto engine profile and merge final `InferenceSettings`
+- resolve app-owned runtime policy such as prompt, middlewares, tools, runtime key, and fingerprint
 
-For the full registry model (selection precedence, CRUD endpoints, and policy/version semantics), use [Webchat Profile Registry Guide](webchat-profile-registry.md) as the authoritative reference.
+Recommended resolver steps:
+
+1. parse body, query, path, and cookies
+2. choose registry/profile selection
+3. call `ResolveEngineProfile(...)`
+4. call `MergeInferenceSettings(...)`
+5. build a local resolved runtime plan
+6. convert once into the shared `webhttp.ResolvedConversationRequest`
+
+For the authoritative reference on that split and the shared read-only endpoints, use [Webchat Engine Profile Guide](webchat-profile-registry.md).
 
 ## Middleware Ownership
 
@@ -121,7 +129,7 @@ Use this split instead:
 
 - declare middleware schemas/builders in an app-owned `middlewarecfg.DefinitionRegistry`
 - resolve enabled middleware in your runtime composer
-- expose the same definition registry through `webhttp.RegisterProfileAPIHandlers(...)` so profile CRUD and schema routes stay aligned
+- expose the same definition registry through `webhttp.RegisterProfileAPIHandlers(...)` so selection and schema routes stay aligned
 
 For the migration details, see [Webchat Compatibility Surface Migration Guide](webchat-compatibility-surface-migration-guide.md).
 
@@ -173,8 +181,9 @@ Use these rules when embedding:
 ## See Also
 
 - [Webchat HTTP Chat Setup](webchat-http-chat-setup.md)
+- [Webchat Engine Profile Migration Playbook](webchat-engine-profile-migration-playbook.md)
 - [Webchat Compatibility Surface Migration Guide](webchat-compatibility-surface-migration-guide.md)
 - [Webchat Framework Guide](webchat-framework-guide.md)
 - [Webchat Values Separation Migration Guide](webchat-values-separation-migration-guide.md)
-- [Webchat Profile Registry Guide](webchat-profile-registry.md)
+- [Webchat Engine Profile Guide](webchat-profile-registry.md)
 - [Webchat Frontend Integration](webchat-frontend-integration.md)

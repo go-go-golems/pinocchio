@@ -1,7 +1,7 @@
 ---
 Title: Third-Party Webchat Playbook
 Slug: thirdparty-webchat-playbook
-Short: End-to-end tutorial for embedding Pinocchio webchat with the handler-first HTTP API.
+Short: End-to-end tutorial for building a webchat-style app from scratch with Pinocchio's handler-first backend and local-first runtime planning.
 Topics:
 - webchat
 - middleware
@@ -15,255 +15,355 @@ ShowPerDefault: true
 SectionType: Tutorial
 ---
 
-## 1. What You Build
+## What You Will Build
 
-This playbook walks through building a third-party webchat app that:
+This tutorial shows how to build a webchat-style application from scratch on top of Pinocchio. The result is an app that:
 
-- uses app-owned `POST /chat` and `GET /ws`
-- hydrates with `GET /api/timeline`
-- persists optional debug turn snapshots via `/api/debug/turns`
-- adds custom middleware and custom timeline widgets
+- exposes app-owned `POST /chat` and `GET /ws`
+- hydrates the frontend through `GET /api/timeline`
+- resolves engine settings from Geppetto engine profiles
+- keeps prompt, middleware, and tool policy in app-owned runtime code
+- converts into the shared Pinocchio transport only at the final boundary
 
-## 2. Current Integration Rule
+This is the current architecture. Do not start from older mixed-profile examples that expect Geppetto to carry prompt and middleware policy for the app.
 
-Use handler-first setup as default.
+## Architecture First
 
-- Build server with `webchat.NewServer(...)`.
-- Mount `/chat` with `webhttp.NewChatHandler`.
-- Mount `/ws` with `webhttp.NewWSHandler`.
-- Mount `/api/timeline` with `webhttp.NewTimelineHandler`.
-- Optionally mount `srv.APIHandler()` and `srv.UIHandler()`.
+Before you write code, lock in the separation of concerns:
 
-Do not start from router-era examples that center `NewRouter + NewFromRouter`.
+```text
+request
+  -> app resolver
+  -> resolve engine profile
+  -> merge final InferenceSettings
+  -> resolve app runtime policy
+  -> local resolved conversation plan
+  -> convert to shared webchat request
+  -> ChatService / StreamHub / TimelineService
+```
 
-## 3. Backend Skeleton
+The rest of the tutorial follows that exact flow.
+
+## Step 1: Build the server skeleton
+
+Start with the shared webchat server plus app-owned handlers.
 
 ```go
-middlewareDefinitions := newMiddlewareDefinitionRegistry()
+//go:embed static
+var staticFS embed.FS
 
-srv, err := webchat.NewServer(ctx, parsed, staticFS,
-  webchat.WithRuntimeComposer(runtimeComposer),
-)
-if err != nil {
-  return err
+func run(ctx context.Context, parsed *values.Values) error {
+    middlewareDefinitions := newMiddlewareDefinitionRegistry()
+    runtimeComposer := newRuntimeComposer(parsed, middlewareDefinitions)
+
+    deps, err := webchat.BuildRouterDepsFromValues(ctx, parsed, staticFS)
+    if err != nil {
+        return err
+    }
+
+    srv, err := webchat.NewServerFromDeps(
+        ctx,
+        deps,
+        webchat.WithRuntimeComposer(runtimeComposer),
+    )
+    if err != nil {
+        return err
+    }
+
+    resolver := newRequestResolver()
+
+    mux := http.NewServeMux()
+    mux.HandleFunc("/chat", webhttp.NewChatHandler(srv.ChatService(), resolver))
+    mux.HandleFunc("/chat/", webhttp.NewChatHandler(srv.ChatService(), resolver))
+    mux.HandleFunc("/ws", webhttp.NewWSHandler(
+        srv.StreamHub(),
+        resolver,
+        websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }},
+    ))
+    mux.HandleFunc("/api/timeline", webhttp.NewTimelineHandler(
+        srv.TimelineService(),
+        log.With().Str("component", "my-webchat").Str("route", "/api/timeline").Logger(),
+    ))
+    mux.HandleFunc("/api/timeline/", webhttp.NewTimelineHandler(
+        srv.TimelineService(),
+        log.With().Str("component", "my-webchat").Str("route", "/api/timeline").Logger(),
+    ))
+
+    mux.Handle("/api/", srv.APIHandler())
+    mux.Handle("/", srv.UIHandler())
+
+    srv.HTTPServer().Handler = mux
+    return srv.Run(ctx)
+}
+```
+
+This gives you the reusable infrastructure. It does not yet define engine selection or runtime policy.
+
+## Step 2: Load engine profiles
+
+Load Geppetto engine-profile registries from flags, config, or a default `profiles.yaml`.
+
+```go
+type requestResolver struct {
+    registry              gepprofiles.Registry
+    defaultRegistrySlug   gepprofiles.RegistrySlug
+    baseInferenceSettings *aisettings.InferenceSettings
 }
 
-resolver := newRequestResolver()
+func newRequestResolver() *requestResolver {
+    return &requestResolver{
+        registry:              mustBuildRegistryChain(),
+        defaultRegistrySlug:   gepprofiles.MustRegistrySlug("default"),
+        baseInferenceSettings: mustBaseInferenceSettings(),
+    }
+}
+```
 
-chatHandler := webhttp.NewChatHandler(srv.ChatService(), resolver)
-wsHandler := webhttp.NewWSHandler(
-  srv.StreamHub(),
-  resolver,
-  websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }},
-)
-timelineHandler := webhttp.NewTimelineHandler(
-  srv.TimelineService(),
-  log.With().Str("component", "my-webchat").Str("route", "/api/timeline").Logger(),
-)
+At this point you have only the engine half of the system.
 
-mux := http.NewServeMux()
-mux.HandleFunc("/chat", chatHandler)
-mux.HandleFunc("/chat/", chatHandler)
-mux.HandleFunc("/ws", wsHandler)
-mux.HandleFunc("/api/timeline", timelineHandler)
-mux.HandleFunc("/api/timeline/", timelineHandler)
+## Step 3: Define your app-owned runtime type
+
+Do not push prompt, middleware, or tools back into engine profiles. Keep them local.
+
+```go
+type appRuntime struct {
+    SystemPrompt string
+    Middlewares  []runtime.MiddlewareUse
+    ToolNames    []string
+}
+```
+
+You can source this from:
+
+- a small app-owned YAML file
+- an app-owned profile extension
+- code defaults
+- request-specific selectors
+
+The source does not matter as much as keeping it app-owned.
+
+## Step 4: Build a local-first resolved plan
+
+This is the core pattern. Your resolver should build a local plan first.
+
+```go
+type resolvedRuntime struct {
+    RuntimeKey         string
+    RuntimeFingerprint string
+    ProfileVersion     uint64
+
+    InferenceSettings *aisettings.InferenceSettings
+    SystemPrompt      string
+    Middlewares       []runtime.MiddlewareUse
+    ToolNames         []string
+    ProfileMetadata   map[string]any
+}
+
+type resolvedConversationPlan struct {
+    ConvID         string
+    Prompt         string
+    IdempotencyKey string
+    Runtime        *resolvedRuntime
+}
+```
+
+This plan is the thing your tests should assert against. It reflects your app’s actual domain model.
+
+## Step 5: Resolve engine settings and app runtime separately
+
+Inside the resolver, do the split explicitly.
+
+```go
+func (r *requestResolver) buildPlan(ctx context.Context, req *http.Request, prompt string) (*resolvedConversationPlan, error) {
+    selectedRegistry := resolveRegistrySelection(req)
+    selectedProfile := resolveProfileSelection(req)
+
+    resolvedProfile, err := r.registry.ResolveEngineProfile(ctx, gepprofiles.ResolveInput{
+        RegistrySlug:      selectedRegistry,
+        EngineProfileSlug: selectedProfile,
+    })
+    if err != nil {
+        return nil, err
+    }
+
+    finalSettings, err := gepprofiles.MergeInferenceSettings(r.baseInferenceSettings, resolvedProfile.InferenceSettings)
+    if err != nil {
+        return nil, err
+    }
+
+    runtimePolicy := resolveAppRuntimePolicy(req, resolvedProfile)
+
+    runtime := &resolvedRuntime{
+        RuntimeKey:         computeRuntimeKey(selectedRegistry, selectedProfile),
+        RuntimeFingerprint: computeRuntimeFingerprint(finalSettings, runtimePolicy),
+        ProfileVersion:     profileVersionFromMetadata(resolvedProfile.Metadata),
+        InferenceSettings:  finalSettings,
+        SystemPrompt:       runtimePolicy.SystemPrompt,
+        Middlewares:        runtimePolicy.Middlewares,
+        ToolNames:          runtimePolicy.ToolNames,
+        ProfileMetadata:    cloneStringAnyMap(resolvedProfile.Metadata),
+    }
+
+    return &resolvedConversationPlan{
+        ConvID:         convIDFromRequest(req),
+        Prompt:         prompt,
+        IdempotencyKey: idempotencyKeyFromRequest(req),
+        Runtime:        runtime,
+    }, nil
+}
+```
+
+Notice what is missing:
+
+- no `EffectiveRuntime`
+- no Geppetto-owned system prompt
+- no mixed profile mutation
+
+That is the point of the new architecture.
+
+## Step 6: Convert into the shared transport once
+
+Only when calling the shared webchat path should you convert into `webhttp.ResolvedConversationRequest`.
+
+```go
+func toResolvedConversationRequest(plan *resolvedConversationPlan) webhttp.ResolvedConversationRequest {
+    return webhttp.ResolvedConversationRequest{
+        ConvID:                    plan.ConvID,
+        RuntimeKey:                plan.Runtime.RuntimeKey,
+        RuntimeFingerprint:        plan.Runtime.RuntimeFingerprint,
+        ProfileVersion:            plan.Runtime.ProfileVersion,
+        ResolvedInferenceSettings: plan.Runtime.InferenceSettings.Clone(),
+        ResolvedRuntime: &runtime.ProfileRuntime{
+            SystemPrompt: plan.Runtime.SystemPrompt,
+            Middlewares:  append([]runtime.MiddlewareUse(nil), plan.Runtime.Middlewares...),
+            Tools:        append([]string(nil), plan.Runtime.ToolNames...),
+        },
+        ProfileMetadata: cloneStringAnyMap(plan.Runtime.ProfileMetadata),
+        Prompt:          plan.Prompt,
+        IdempotencyKey:  plan.IdempotencyKey,
+    }
+}
+```
+
+This explicit conversion is what keeps the app local-first instead of transport-first.
+
+## Step 7: Register read-only profile and schema APIs
+
+Mount the shared helpers for profile inspection and schema discovery.
+
+```go
 webhttp.RegisterProfileAPIHandlers(mux, profileRegistry, webhttp.ProfileAPIHandlerOptions{
-  DefaultRegistrySlug:             gepprofiles.MustRegistrySlug("default"),
-  EnableCurrentProfileCookieRoute: true,
-  MiddlewareDefinitions:           middlewareDefinitions,
+    DefaultRegistrySlug:             gepprofiles.MustRegistrySlug("default"),
+    EnableCurrentProfileCookieRoute: true,
+    MiddlewareDefinitions:           middlewareDefinitions,
+    ExtensionCodecRegistry:          extensionCodecRegistry,
 })
-mux.Handle("/api/", srv.APIHandler())
-mux.Handle("/", srv.UIHandler())
-
-srv.HTTPServer().Handler = mux
-return srv.Run(ctx)
 ```
 
-## 4. Request Policy
+These endpoints are useful for UI selection and schema inspection. They are not CRUD APIs.
 
-Create an app resolver implementing `ConversationRequestResolver`.
+## Step 8: Build the runtime composer
 
-Resolver should:
-
-- parse request body/query/path/cookies
-- resolve `RuntimeKey`
-- set/generate `ConvID`
-- merge default and request overrides
-- return typed validation errors (`RequestResolutionError`)
-
-The same resolver is used for chat and websocket flows.
-
-## 5. Endpoint Contract
-
-Canonical routes:
-
-- `POST /chat`
-- `POST /chat/{profile}`
-- `GET /ws?conv_id=<id>`
-- `GET /api/timeline?conv_id=<id>&since_version=<n>&limit=<n>`
-- `GET /api/debug/turns?...` (optional)
-
-Non-canonical routes to avoid in client code:
-
-- `/timeline`
-- `/turns`
-- `/hydrate`
-
-## 6. Timeline and Turn Storage
-
-Timeline durability:
-
-- `--timeline-dsn`
-- `--timeline-db`
-
-Turn snapshot durability:
-
-- `--turns-dsn`
-- `--turns-db`
-
-Turn snapshots are for debugging model input/output details and should be consumed from `/api/debug/turns`.
-
-## 7. Middleware Definition Wiring
-
-There is no longer a `srv.RegisterMiddleware(...)` hook in `pkg/webchat`.
-
-Instead:
-
-- declare middleware schemas/builders in an app-owned `middlewarecfg.DefinitionRegistry`
-- resolve active middleware in your runtime composer
-- pass the same registry into `webhttp.RegisterProfileAPIHandlers(...)`
-
-Example:
+Your runtime composer should assume the resolver already did the hard selection work.
 
 ```go
-middlewareDefinitions := newMiddlewareDefinitionRegistry()
+func (c *runtimeComposer) Compose(ctx context.Context, req runtime.ConversationRuntimeRequest) (runtime.ComposedRuntime, error) {
+    eng, err := runtime.BuildEngineFromSettingsWithMiddlewares(
+        ctx,
+        req.ResolvedInferenceSettings,
+        req.ResolvedProfileRuntime.SystemPrompt,
+        resolveMiddlewares(req.ResolvedProfileRuntime.Middlewares),
+    )
+    if err != nil {
+        return runtime.ComposedRuntime{}, err
+    }
 
-runtimeComposer := newRuntimeComposer(parsed, middlewareDefinitions)
-
-webhttp.RegisterProfileAPIHandlers(mux, profileRegistry, webhttp.ProfileAPIHandlerOptions{
-  DefaultRegistrySlug:             gepprofiles.MustRegistrySlug("default"),
-  EnableCurrentProfileCookieRoute: true,
-  MiddlewareDefinitions:           middlewareDefinitions,
-})
-```
-
-Use resolver defaults or request overrides to activate middleware per run.
-
-## 8. Tool Registration
-
-Register tools globally:
-
-```go
-srv.RegisterTool("calculator", func(reg geptools.ToolRegistry) error {
-  return toolspkg.RegisterCalculatorTool(reg.(*geptools.InMemoryToolRegistry))
-})
-```
-
-## 9. Frontend Transport Pattern
-
-The frontend should do this sequence:
-
-1. Determine `conv_id`.
-2. Open websocket on `/ws?conv_id=...`.
-3. Run hydration fetch from `/api/timeline`.
-4. Replay buffered websocket frames.
-5. Send prompts via `POST /chat`.
-
-This ensures ordering consistency across reloads and reconnects.
-
-## 10. Frontend Chat Payload
-
-```json
-{
-  "conv_id": "conv-123",
-  "prompt": "hello",
-  "profile": "assistant"
+    return runtime.ComposedRuntime{
+        Engine:             eng,
+        RuntimeKey:         req.ProfileKey,
+        RuntimeFingerprint: req.ResolvedProfileFingerprint,
+        SeedSystemPrompt:   req.ResolvedProfileRuntime.SystemPrompt,
+    }, nil
 }
 ```
 
-## 11. Custom Middleware Event Flow
+The composer builds and wraps the engine. It does not choose the engine profile.
 
-To add a custom UI feature:
+## Step 9: Add tools and frontend hydration
 
-1. middleware emits typed events
-2. SEM mapping translates events to stream frames
-3. timeline projection maps events to snapshot entities
-4. frontend renderer displays entity kind
+Register tools on the server and let the frontend follow the standard transport pattern:
 
-Recommended references:
+1. determine `conv_id`
+2. open `/ws?conv_id=...`
+3. fetch `/api/timeline`
+4. replay buffered frames
+5. send prompts through `POST /chat`
 
-- `pinocchio/cmd/web-chat/thinkingmode/*`
-- `pinocchio/cmd/web-chat/proto/sem/middleware/*`
-- `pinocchio/cmd/web-chat/web/src/features/thinkingMode/*`
+That is unchanged by the profile split.
 
-## 12. Root Prefix Mounting
+## Step 10: Validate the migration
 
-With `--root /chat`, all endpoints are served under `/chat`.
+Add tests at three layers:
 
-Examples:
+### Resolver tests
 
-- `/chat/chat`
-- `/chat/ws`
-- `/chat/api/timeline`
+- selected engine profile changes final `InferenceSettings`
+- local resolved plan carries prompt/tools/middlewares
+- runtime key and fingerprint are computed from app policy
 
-Frontend should compute and apply this base prefix automatically.
+### Transport tests
 
-## 13. Vite Proxy Setup
+- `toResolvedConversationRequest(...)` preserves runtime values
+- nil settings/runtime behavior is explicit
 
-For frontend dev mode, proxy backend routes:
+### End-to-end tests
 
-```ts
-proxy: {
-  '/chat': { target: 'http://localhost:8080', changeOrigin: true },
-  '/ws': { target: 'ws://localhost:8080', ws: true, changeOrigin: true },
-  '/api': { target: 'http://localhost:8080', changeOrigin: true },
-}
+- `POST /chat` and `GET /ws` use the same selection rules
+- `/api/chat/profiles` reflects the engine-profile registry
+- `/api/timeline` hydrates the same conversation seen over WebSocket
+
+Recommended commands:
+
+```bash
+go test ./cmd/web-chat ./pkg/webchat/... -count=1
+go test ./cmd/pinocchio/... -count=1
 ```
 
-## 14. Smoke Test Script
+## Complete Mental Model
 
-1. Open UI and start a conversation.
-2. Send a prompt and verify streaming text.
-3. Refresh page and verify timeline hydration from `/api/timeline`.
-4. If turn store enabled, query `/api/debug/turns` for the same conversation.
+If you remember only one diagram, use this one:
 
-## 15. Troubleshooting
+```text
+engine profile registry (Geppetto)
+  -> ResolveEngineProfile
+  -> MergeInferenceSettings
+  -> final engine settings
+
+app runtime policy (your app)
+  -> prompt
+  -> middlewares
+  -> tools
+  -> runtime key/fingerprint
+
+local resolved conversation plan
+  -> convert once to shared transport
+  -> webchat server + stream hub + chat service
+```
+
+That is the stable design.
+
+## Troubleshooting
 
 | Problem | Cause | Solution |
 |---|---|---|
-| No streaming events | Wrong websocket URL or missing `conv_id` | Verify `/ws?conv_id=<id>` |
-| Timeline empty after refresh | Hydration still using `/timeline` | Update frontend to `/api/timeline` |
-| 404 on turns endpoint | Turn store disabled | Start with `--turns-db` or `--turns-dsn` |
-| middleware schemas endpoint empty | Middleware definitions were not passed to the profile API handlers | Pass `MiddlewareDefinitions` into `webhttp.RegisterProfileAPIHandlers(...)` |
+| The selected profile slug changes but the model does not | Resolver still uses base settings only | Merge `resolvedProfile.InferenceSettings` into the base settings |
+| Prompt/middlewares/tools still feel “magical” | They are still being read from the wrong layer | Move them into app runtime policy |
+| Runtime transport leaks everywhere | App code is still building `webhttp.ResolvedConversationRequest` directly | Introduce a local plan type and convert once |
+| `/api/chat/profiles` seems incomplete | The API only exposes engine profiles and current-profile selection | Keep app runtime docs and config in your app layer |
 
-## 16. See Also
+## See Also
 
-- [Webchat HTTP Chat Setup](webchat-http-chat-setup.md)
-- [Webchat Compatibility Surface Migration Guide](webchat-compatibility-surface-migration-guide.md)
-- [Webchat Framework Guide](webchat-framework-guide.md)
-| Unexpected runtime/profile | Resolver policy mismatch | Log and validate resolved `ConversationRequestPlan` |
-
-## 16. Migration Notes for Older Integrations
-
-If migrating from old docs:
-
-- replace all top-level `/timeline` calls with `/api/timeline`
-- replace `/turns` references with `/api/debug/turns`
-- remove `/hydrate` assumptions
-- replace router-centric startup snippets with handler-centric snippets
-
-## 17. Production Checklist
-
-- resolver returns explicit typed policy errors
-- websocket and chat endpoints share the same resolver rules
-- timeline store persistence configured
-- turn debug persistence gated and access-controlled
-- frontend hydration gate enabled
-- stale path aliases removed from clients and docs
-
-## 18. See Also
-
-- [Webchat HTTP Chat Setup](../topics/webchat-http-chat-setup.md)
-- [Webchat Framework Guide](../topics/webchat-framework-guide.md)
-- [Webchat Frontend Integration](../topics/webchat-frontend-integration.md)
-- [Webchat Debugging and Ops](../topics/webchat-debugging-and-ops.md)
+- [Webchat Engine Profile Guide](../topics/webchat-profile-registry.md) — current engine-profile and app-runtime split
+- [Webchat Engine Profile Migration Playbook](../topics/webchat-engine-profile-migration-playbook.md) — migration path from older mixed-profile apps
+- [Webchat Framework Guide](../topics/webchat-framework-guide.md) — backend architecture and constructor choices
+- [Webchat HTTP Chat Setup](../topics/webchat-http-chat-setup.md) — canonical route contract
