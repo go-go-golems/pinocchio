@@ -233,6 +233,7 @@ func (g *PinocchioCommand) RunIntoWriter(
 	}
 
 	profileSelection := &profilebootstrap.ResolvedCLIProfileSelection{}
+	var resolvedEngineSettings *profilebootstrap.ResolvedCLIEngineSettings
 
 	var baseSettings *settings.InferenceSettings
 	var baseErr error
@@ -246,7 +247,7 @@ func (g *PinocchioCommand) RunIntoWriter(
 		if baseSettings.Chat != nil {
 			baseSettings.Chat.Stream = stepSettings.Chat != nil && stepSettings.Chat.Stream
 		}
-		resolvedEngineSettings, err := profilebootstrap.ResolveCLIEngineSettingsFromBase(ctx, baseSettings, parsedValues, nil)
+		resolvedEngineSettings, err = profilebootstrap.ResolveCLIEngineSettingsFromBase(ctx, baseSettings, parsedValues, nil)
 		if err != nil {
 			return errors.Wrap(err, "resolve engine profile settings for command run")
 		}
@@ -313,6 +314,24 @@ func (g *PinocchioCommand) RunIntoWriter(
 		}
 		turns.FprintTurn(w, seed)
 		return nil
+	}
+	if helpersSettings.PrintInferenceSources {
+		if resolvedEngineSettings == nil {
+			resolvedEngineSettings = &profilebootstrap.ResolvedCLIEngineSettings{
+				BaseInferenceSettings:  baseSettings,
+				FinalInferenceSettings: stepSettings,
+				ProfileSelection:       profileSelection,
+			}
+		}
+		trace, err := profilebootstrap.BuildInferenceSettingsSourceTrace(g.BaseInferenceSettings, parsedValues, resolvedEngineSettings)
+		if err != nil {
+			return err
+		}
+		encoder := yaml.NewEncoder(w)
+		defer func() {
+			_ = encoder.Close()
+		}()
+		return encoder.Encode(trace)
 	}
 	if helpersSettings.PrintInferenceSettings {
 		encoder := yaml.NewEncoder(w)
