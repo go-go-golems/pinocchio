@@ -15,6 +15,10 @@ import (
 // This allows interactive chat to switch profiles by re-applying a new profile patch onto the same
 // underlying config/env/flag baseline.
 func baseSettingsFromParsedValues(parsed *values.Values) (*settings.InferenceSettings, error) {
+	return baseSettingsFromParsedValuesWithBase(parsed, nil)
+}
+
+func baseSettingsFromParsedValuesWithBase(parsed *values.Values, initial *settings.InferenceSettings) (*settings.InferenceSettings, error) {
 	if parsed == nil {
 		return nil, errors.New("base settings: parsed values is nil")
 	}
@@ -67,9 +71,17 @@ func baseSettingsFromParsedValues(parsed *values.Values) (*settings.InferenceSet
 		}
 	})
 
-	ss, err := settings.NewInferenceSettings()
-	if err != nil {
-		return nil, err
+	var (
+		ss  *settings.InferenceSettings
+		err error
+	)
+	if initial != nil {
+		ss = initial.Clone()
+	} else {
+		ss, err = settings.NewInferenceSettings()
+		if err != nil {
+			return nil, err
+		}
 	}
 	if err := ss.UpdateFromParsedValues(base); err != nil {
 		return nil, err

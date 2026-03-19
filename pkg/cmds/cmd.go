@@ -236,7 +236,7 @@ func (g *PinocchioCommand) RunIntoWriter(
 	var baseSettings *settings.InferenceSettings
 	var baseErr error
 	if g.BaseInferenceSettings != nil {
-		baseSettings = g.BaseInferenceSettings.Clone()
+		baseSettings, baseErr = baseSettingsFromParsedValuesWithBase(parsedValues, g.BaseInferenceSettings)
 	} else {
 		baseSettings, baseErr = baseSettingsFromParsedValues(parsedValues)
 	}

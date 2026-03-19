@@ -227,6 +227,11 @@ prompt: |
 			t.Fatalf("new section values for %s: %v", section.GetSlug(), err)
 		}
 		parsed.Set(section.GetSlug(), sv)
+		if section.GetSlug() == "openai-chat" {
+			if err := values.WithFieldValue("openai-api-key", "config-key")(sv); err != nil {
+				t.Fatalf("set openai-api-key: %v", err)
+			}
+		}
 	}
 
 	profileSection, err := geppettosections.NewProfileSettingsSection()
@@ -258,5 +263,8 @@ prompt: |
 	}
 	if got := strings.TrimSpace(string(*recorder.last.Chat.ApiType)); got != "openai" {
 		t.Fatalf("expected openai api type from loader baseline, got %q", got)
+	}
+	if got := strings.TrimSpace(recorder.last.API.APIKeys["openai-api-key"]); got != "config-key" {
+		t.Fatalf("expected config openai api key to survive loader baseline merge, got %q", got)
 	}
 }
