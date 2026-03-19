@@ -21,6 +21,7 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/inference/middleware"
 	geppettosections "github.com/go-go-golems/geppetto/pkg/sections"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
+	"github.com/go-go-golems/glazed/pkg/cmds/fields"
 	"github.com/go-go-golems/glazed/pkg/cmds/schema"
 	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
 	timelinepb "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/timeline"
@@ -86,6 +87,13 @@ type lockedTimelineStore struct {
 	mu *sync.Mutex
 }
 
+type cliSettings struct {
+	ConversationID string `glazed:"conv-id"`
+	TimelineDB     string `glazed:"timeline-db"`
+	TurnsDB        string `glazed:"turns-db"`
+	LogLevel       string `glazed:"log-level"`
+}
+
 func (s *lockedTimelineStore) Upsert(ctx context.Context, convID string, version uint64, entity *timelinepb.TimelineEntityV2) error {
 	if s == nil || s.TimelineStore == nil {
 		return nil
@@ -98,30 +106,71 @@ func (s *lockedTimelineStore) Upsert(ctx context.Context, convID string, version
 }
 
 func main() {
-	var (
-		profileRegistries string
-		profileSlug       string
-		convID            string
-
-		timelineDB string
-		turnsDB    string
-
-		logLevel string
+	var err error
+	var cliSection schema.Section
+	cliSection, err = schema.NewSection(schema.DefaultSlug, "Flags",
+		schema.WithFields(
+			fields.New(
+				"conv-id",
+				fields.TypeString,
+				fields.WithHelp("Conversation ID for persistence (default: generated)"),
+			),
+			fields.New(
+				"timeline-db",
+				fields.TypeString,
+				fields.WithDefault("/tmp/switch-profiles-tui.timeline.db"),
+				fields.WithHelp("SQLite DB file for timeline projection persistence"),
+			),
+			fields.New(
+				"turns-db",
+				fields.TypeString,
+				fields.WithDefault("/tmp/switch-profiles-tui.turns.db"),
+				fields.WithHelp("SQLite DB file for turn snapshot persistence"),
+			),
+			fields.New(
+				"log-level",
+				fields.TypeString,
+				fields.WithDefault("info"),
+				fields.WithHelp("Log level (trace|debug|info|warn|error)"),
+			),
+		),
 	)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	profileSettingsSection, err := geppettosections.NewProfileSettingsSection()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
 
 	root := &cobra.Command{
 		Use:   "switch-profiles-tui",
 		Short: "Bubble Tea chat TUI with /profile switching via Geppetto profile registries",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			profileSlug = strings.TrimSpace(cmd.Flags().Lookup("profile").Value.String())
-			profileRegistriesEntries, err := cmd.Flags().GetStringSlice("profile-registries")
+			cliValues, err := cliSection.(schema.CobraSection).ParseSectionFromCobraCommand(cmd)
 			if err != nil {
-				return errors.Wrap(err, "read profile registry flags")
+				return err
 			}
-			profileRegistries = strings.Join(profileRegistriesEntries, ",")
+			settings_ := &cliSettings{}
+			if err := cliValues.DecodeInto(settings_); err != nil {
+				return err
+			}
+
+			profileValues, err := profileSettingsSection.(schema.CobraSection).ParseSectionFromCobraCommand(cmd)
+			if err != nil {
+				return err
+			}
+			profileSettings := &geppettosections.ProfileSettings{}
+			if err := profileValues.DecodeInto(profileSettings); err != nil {
+				return err
+			}
+			profileSlug := strings.TrimSpace(profileSettings.Profile)
+			profileRegistries := strings.Join(profileSettings.ProfileRegistries, ",")
 
 			zerolog.TimeFieldFormat = time.StampMilli
-			if lvl := strings.TrimSpace(logLevel); lvl != "" {
+			if lvl := strings.TrimSpace(settings_.LogLevel); lvl != "" {
 				if parsed, err := zerolog.ParseLevel(lvl); err == nil {
 					zerolog.SetGlobalLevel(parsed)
 				}
@@ -133,6 +182,7 @@ func main() {
 			if strings.TrimSpace(profileRegistries) == "" {
 				return errors.New("--profile-registries is required and must not be empty")
 			}
+			convID := strings.TrimSpace(settings_.ConversationID)
 			if convID == "" {
 				convID = "tui-" + uuid.NewString()
 			}
@@ -156,7 +206,7 @@ func main() {
 				return errors.New("no profiles loaded from --profile-registries (refusing to start)")
 			}
 
-			timelineStore, turnStore, closeStores, err := openStores(timelineDB, turnsDB)
+			timelineStore, turnStore, closeStores, err := openStores(settings_.TimelineDB, settings_.TurnsDB)
 			if err != nil {
 				return err
 			}
@@ -361,12 +411,7 @@ func main() {
 		},
 	}
 
-	root.Flags().StringVar(&convID, "conv-id", "", "Conversation ID for persistence (default: generated)")
-	root.Flags().StringVar(&timelineDB, "timeline-db", "/tmp/switch-profiles-tui.timeline.db", "SQLite DB file for timeline projection persistence")
-	root.Flags().StringVar(&turnsDB, "turns-db", "/tmp/switch-profiles-tui.turns.db", "SQLite DB file for turn snapshot persistence")
-	root.Flags().StringVar(&logLevel, "log-level", "info", "Log level (trace|debug|info|warn|error)")
-	profileSettingsSection, err := geppettosections.NewProfileSettingsSection()
-	if err != nil {
+	if err := cliSection.(schema.CobraSection).AddSectionToCobraCommand(root); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
