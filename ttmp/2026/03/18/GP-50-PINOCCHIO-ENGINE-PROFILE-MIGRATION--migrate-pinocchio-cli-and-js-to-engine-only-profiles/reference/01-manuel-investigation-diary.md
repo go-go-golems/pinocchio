@@ -258,6 +258,119 @@ finalSettings, err := gepprofiles.MergeInferenceSettings(base, resolved.Inferenc
 if err != nil { ... }
 
 return &ResolvedInferenceSettings{
+
+## Step 8: Make `cmd/web-chat` local-first before the shared transport boundary
+
+This step finishes the same cleanup pattern already applied in CoinVault and Temporal. The important point is not to rewrite shared `pkg/webchat`, but to stop using the shared `webhttp.ResolvedConversationRequest` transport object as the primary local model inside `cmd/web-chat` request resolution. The resolver should build a Pinocchio-local plan first, then convert once at the boundary.
+
+### Prompt Context
+
+**User prompt (verbatim):** "go ahead"
+
+**Assistant interpretation:** Continue with the next cleanup step identified earlier: make Pinocchio web-chat local-first too.
+
+**Inferred user intent:** Align Pinocchio web-chat with the same local-runtime-plan pattern already used in the other downstream apps, so the shared transport type stops leaking inward as the app’s main model.
+
+### What I did
+
+- Added a local plan type in [`cmd/web-chat/profile_policy.go`](../../../../../../pinocchio/cmd/web-chat/profile_policy.go):
+  - `resolvedWebChatConversationPlan`
+  - `resolvedWebChatRuntime`
+- Changed `resolveWS(...)` and `resolveChat(...)` to:
+  1. resolve the engine profile
+  2. build the local plan with `buildConversationPlan(...)`
+  3. convert once through `toResolvedConversationRequest(...)`
+- Added `toRuntimeTransport(...)` so the shared [`infruntime.ProfileRuntime`](../../../../../../pinocchio/pkg/inference/runtime/profile_runtime.go) payload is treated explicitly as a transport envelope rather than as the local domain type.
+- Updated [`cmd/web-chat/profile_policy_test.go`](../../../../../../pinocchio/cmd/web-chat/profile_policy_test.go) with a focused regression test that asserts the local plan shape before transport conversion.
+- Validated with:
+  - `go test ./cmd/web-chat ./pkg/webchat/... -count=1`
+  - `go test ./cmd/pinocchio/... -count=1`
+
+### Why
+
+- The shared transport object is acceptable at the boundary, but it is the wrong primary type for app-owned request resolution.
+- A local plan makes CoinVault, Temporal, and Pinocchio consistent.
+- It also makes the remaining dependency surface on shared Pinocchio runtime contracts explicit and narrow.
+
+### What worked
+
+- The code change stayed isolated to `cmd/web-chat`.
+- The broader web-chat suite passed unchanged once the focused test assertion was relaxed to allow `InferenceSettings` to be nil in the fixture.
+- The wide `cmd/pinocchio` suite still passed, which confirms the local-first change did not disturb CLI-side behavior.
+
+### What didn't work
+
+- The first version of the new test assumed `plan.Runtime.InferenceSettings` would always be non-nil. In the current multi-registry fixture, the resolver is constructed with `baseInferenceSettings == nil`, so that assumption was too strong.
+
+The failing assertion was:
+
+```go
+require.NotNil(t, plan.Runtime.InferenceSettings)
+```
+
+I replaced it with a transport-shape assertion that allows nil on both sides:
+
+```go
+require.Equal(t, plan.Runtime.InferenceSettings == nil, transport.ResolvedInferenceSettings == nil)
+```
+
+### What I learned
+
+- The real cleanup seam is exactly where expected: `cmd/web-chat` can own a local resolved-runtime plan without needing to rewrite shared `pkg/webchat`.
+- The shared transport remains useful, but only as a final handoff object.
+
+### What was tricky to build
+
+- The test fixture still uses engine-profile-only registries and no base inference settings, so assertions need to validate the shape and conversion semantics rather than assume a fully bootstrapped engine config exists in every test.
+
+### What warrants a second pair of eyes
+
+- Whether `cmd/web-chat` should eventually keep even less state on the transport object and instead pass the local plan further down before a later conversion point.
+- Whether the shared request type in `pkg/webchat/http` should eventually become even smaller now that each app is local-first.
+
+### Code review instructions
+
+- Start with [`profile_policy.go`](../../../../../../pinocchio/cmd/web-chat/profile_policy.go), specifically:
+  - `buildConversationPlan(...)`
+  - `toResolvedConversationRequest(...)`
+  - `toRuntimeTransport(...)`
+- Then read the regression test in [`profile_policy_test.go`](../../../../../../pinocchio/cmd/web-chat/profile_policy_test.go).
+- Reproduce with:
+  - `go test ./cmd/web-chat ./pkg/webchat/... -count=1`
+  - `go test ./cmd/pinocchio/... -count=1`
+
+### Technical details
+
+The new local-first shape is:
+
+```go
+type resolvedWebChatConversationPlan struct {
+    ConvID         string
+    Prompt         string
+    IdempotencyKey string
+    Runtime        *resolvedWebChatRuntime
+}
+
+type resolvedWebChatRuntime struct {
+    SystemPrompt       string
+    Middlewares        []infruntime.MiddlewareUse
+    ToolNames          []string
+    RuntimeKey         string
+    RuntimeFingerprint string
+    ProfileVersion     uint64
+    InferenceSettings  *aisettings.InferenceSettings
+    ProfileMetadata    map[string]any
+}
+```
+
+And the boundary conversion is explicit:
+
+```go
+plan, err := r.buildConversationPlan(...)
+if err != nil { ... }
+
+return toResolvedConversationRequest(plan), nil
+```
     InferenceSettings: finalSettings,
     ResolvedEngineProfile: resolved,
     ...

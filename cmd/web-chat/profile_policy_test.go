@@ -226,6 +226,31 @@ func TestWebChatProfileResolver_Chat_BodyProfileAcrossStack(t *testing.T) {
 	require.True(t, hasLineage)
 }
 
+func TestBuildConversationPlan_BuildsLocalRuntimeBeforeTransportConversion(t *testing.T) {
+	resolver := newTestResolverWithMultipleRegistries(t)
+	resolvedProfile, err := resolver.resolveEffectiveProfile(context.Background(), gepprofiles.MustRegistrySlug("team"), gepprofiles.MustEngineProfileSlug("analyst"))
+	require.NoError(t, err)
+
+	plan, err := resolver.buildConversationPlan(context.Background(), "conv-1", "hi", "idem-1", resolvedProfile)
+	require.NoError(t, err)
+	require.NotNil(t, plan)
+	require.Equal(t, "conv-1", plan.ConvID)
+	require.NotNil(t, plan.Runtime)
+	require.Equal(t, "analyst", plan.Runtime.RuntimeKey)
+	require.NotEmpty(t, strings.TrimSpace(plan.Runtime.RuntimeFingerprint))
+	require.Equal(t, uint64(7), plan.Runtime.ProfileVersion)
+	require.Equal(t, "You are analyst", plan.Runtime.SystemPrompt)
+	require.NotNil(t, plan.Runtime.ProfileMetadata)
+	_, hasLineage := plan.Runtime.ProfileMetadata["profile.stack.lineage"]
+	require.True(t, hasLineage)
+
+	transport := toResolvedConversationRequest(plan)
+	require.Equal(t, "analyst", transport.RuntimeKey)
+	require.NotNil(t, transport.ResolvedRuntime)
+	require.Equal(t, "You are analyst", transport.ResolvedRuntime.SystemPrompt)
+	require.Equal(t, plan.Runtime.InferenceSettings == nil, transport.ResolvedInferenceSettings == nil)
+}
+
 func TestWebChatProfileResolver_WS_QueryProfileAcrossStack(t *testing.T) {
 	resolver := newTestResolverWithMultipleRegistries(t)
 
