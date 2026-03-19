@@ -81,7 +81,7 @@ profile-settings:
 	}
 }
 
-func TestResolveCLIProfileSelection_UsesDefaultRegistryFallbackWhenUnset(t *testing.T) {
+func TestResolveCLIProfileSelection_DoesNotUseLegacyRegistryFallbackWhenUnset(t *testing.T) {
 	tmpDir := t.TempDir()
 	xdgConfig := filepath.Join(tmpDir, "xdg")
 	t.Setenv("XDG_CONFIG_HOME", xdgConfig)
@@ -112,7 +112,7 @@ func TestResolveCLIProfileSelection_UsesDefaultRegistryFallbackWhenUnset(t *test
 		t.Fatalf("ResolveCLIProfileSelection failed: %v", err)
 	}
 
-	if len(resolved.ProfileRegistries) != 1 || resolved.ProfileRegistries[0] != registryPath {
-		t.Fatalf("expected XDG registry fallback, got %#v", resolved.ProfileRegistries)
+	if len(resolved.ProfileRegistries) != 0 {
+		t.Fatalf("expected no implicit registry fallback, got %#v", resolved.ProfileRegistries)
 	}
 }
