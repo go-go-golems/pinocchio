@@ -94,18 +94,12 @@ func runJSCommand(ctx context.Context, cmd *cobra.Command, settings jsCommandSet
 	if err != nil {
 		return err
 	}
-	baseInferenceSettings, _, err := profilebootstrap.ResolveBaseInferenceSettings(parsed)
+	runtimeBootstrap, err := resolvePinocchioJSRuntimeBootstrap(ctx, parsed)
 	if err != nil {
 		return err
 	}
-	profileRegistry, defaultProfileResolve, closer, err := loadPinocchioProfileRegistryStack(parsed)
-	if err != nil {
-		return err
-	}
-	if closer != nil {
-		defer func() {
-			_ = closer.Close()
-		}()
+	if runtimeBootstrap.Close != nil {
+		defer runtimeBootstrap.Close()
 	}
 	middlewareDefs, buildDeps, err := buildPinocchioJSMiddlewareRegistry()
 	if err != nil {
@@ -116,11 +110,11 @@ func runJSCommand(ctx context.Context, cmd *cobra.Command, settings jsCommandSet
 	scriptDir := filepath.Dir(scriptPath)
 	rt, err := newPinocchioJSRuntime(ctx, pinocchioJSRuntimeOptions{
 		ScriptDir:                scriptDir,
-		BaseInferenceSettings:    baseInferenceSettings,
+		DefaultInferenceSettings: runtimeBootstrap.DefaultInferenceSettings,
 		GoToolRegistry:           goRegistry,
-		ProfileRegistry:          profileRegistry,
-		UseDefaultProfileResolve: profileRegistry != nil,
-		DefaultProfileResolve:    defaultProfileResolve,
+		ProfileRegistry:          runtimeBootstrap.ProfileRegistry,
+		UseDefaultProfileResolve: runtimeBootstrap.UseDefaultProfileResolve,
+		DefaultProfileResolve:    runtimeBootstrap.DefaultProfileResolve,
 		GoMiddlewareFactories:    middlewareFactories,
 		MiddlewareDefinitions:    middlewareDefs,
 	})
@@ -203,6 +197,10 @@ func loadPinocchioProfileRegistryStack(parsed *values.Values) (gepprofiles.Regis
 	if err != nil {
 		return nil, gepprofiles.ResolveInput{}, nil, err
 	}
+	return loadPinocchioProfileRegistryStackFromSettings(profileSettings)
+}
+
+func loadPinocchioProfileRegistryStackFromSettings(profileSettings profilebootstrap.ProfileSettings) (gepprofiles.RegistryReader, gepprofiles.ResolveInput, io.Closer, error) {
 	if len(profileSettings.ProfileRegistries) == 0 {
 		if profileSettings.Profile != "" {
 			return nil, gepprofiles.ResolveInput{}, nil, &gepprofiles.ValidationError{
@@ -237,6 +235,47 @@ func loadPinocchioProfileRegistryStack(parsed *values.Values) (gepprofiles.Regis
 	return reader, defaultResolve, chain, nil
 }
 
+type pinocchioJSRuntimeBootstrap struct {
+	DefaultInferenceSettings *aisettings.InferenceSettings
+	ProfileRegistry          gepprofiles.RegistryReader
+	UseDefaultProfileResolve bool
+	DefaultProfileResolve    gepprofiles.ResolveInput
+	Close                    func()
+}
+
+func resolvePinocchioJSRuntimeBootstrap(ctx context.Context, parsed *values.Values) (*pinocchioJSRuntimeBootstrap, error) {
+	resolved, err := profilebootstrap.ResolveCLIEngineSettings(ctx, parsed)
+	if err != nil {
+		return nil, err
+	}
+
+	profileRegistry, defaultResolve, registryCloser, err := loadPinocchioProfileRegistryStackFromSettings(profilebootstrap.ProfileSettings{
+		Profile:           resolved.ProfileSelection.Profile,
+		ProfileRegistries: append([]string(nil), resolved.ProfileSelection.ProfileRegistries...),
+	})
+	if err != nil {
+		if resolved.Close != nil {
+			resolved.Close()
+		}
+		return nil, err
+	}
+
+	return &pinocchioJSRuntimeBootstrap{
+		DefaultInferenceSettings: resolved.FinalInferenceSettings,
+		ProfileRegistry:          profileRegistry,
+		UseDefaultProfileResolve: profileRegistry != nil,
+		DefaultProfileResolve:    defaultResolve,
+		Close: func() {
+			if registryCloser != nil {
+				_ = registryCloser.Close()
+			}
+			if resolved.Close != nil {
+				resolved.Close()
+			}
+		},
+	}, nil
+}
+
 type selectedProfileRegistryReader struct {
 	base            gepprofiles.RegistryReader
 	selectedProfile gepprofiles.EngineProfileSlug
@@ -267,7 +306,7 @@ func (r selectedProfileRegistryReader) ResolveEngineProfile(ctx context.Context,
 
 type pinocchioJSRuntimeOptions struct {
 	ScriptDir                string
-	BaseInferenceSettings    *aisettings.InferenceSettings
+	DefaultInferenceSettings *aisettings.InferenceSettings
 	GoToolRegistry           geptools.ToolRegistry
 	ProfileRegistry          gepprofiles.RegistryReader
 	UseDefaultProfileResolve bool
@@ -304,7 +343,7 @@ func newPinocchioJSRuntime(ctx context.Context, opts pinocchioJSRuntimeOptions) 
 		MiddlewareSchemas:        opts.MiddlewareDefinitions,
 	})
 	pjs.Register(reg, pjs.Options{
-		BaseInferenceSettings: opts.BaseInferenceSettings,
+		DefaultInferenceSettings: opts.DefaultInferenceSettings,
 	})
 	req := reg.Enable(rt.VM)
 	rt.Require = req

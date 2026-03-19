@@ -15,7 +15,7 @@ import (
 const ModuleName = "pinocchio"
 
 type Options struct {
-	BaseInferenceSettings *aisettings.InferenceSettings
+	DefaultInferenceSettings *aisettings.InferenceSettings
 }
 
 func Register(reg *require.Registry, opts Options) {
@@ -76,12 +76,12 @@ func (m *module) inspectEngineDefaults(call goja.FunctionCall) (map[string]any, 
 }
 
 func (m *module) cloneInferenceSettingsWithOverrides(call goja.FunctionCall) (*aisettings.InferenceSettings, error) {
-	if m.opts.BaseInferenceSettings == nil {
-		return nil, fmt.Errorf("pinocchio base inference settings are not configured")
+	if m.opts.DefaultInferenceSettings == nil {
+		return nil, fmt.Errorf("pinocchio default inference settings are not configured")
 	}
-	ss := m.opts.BaseInferenceSettings.Clone()
+	ss := m.opts.DefaultInferenceSettings.Clone()
 	if ss == nil {
-		return nil, fmt.Errorf("pinocchio base inference settings are not available")
+		return nil, fmt.Errorf("pinocchio default inference settings are not available")
 	}
 	if len(call.Arguments) > 0 && call.Arguments[0] != nil && !goja.IsUndefined(call.Arguments[0]) && !goja.IsNull(call.Arguments[0]) {
 		opts, ok := call.Arguments[0].Export().(map[string]any)

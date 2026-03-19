@@ -1,6 +1,8 @@
 package cmds
 
 import (
+	"context"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -34,5 +36,63 @@ func TestLoadPinocchioProfileRegistryStackRejectsProfileWithoutRegistries(t *tes
 	}
 	if got := err.Error(); got == "" || got == "analyst" {
 		t.Fatalf("expected validation error, got %q", got)
+	}
+}
+
+func TestResolvePinocchioJSRuntimeBootstrap_UsesFinalInferenceSettingsFromSelectedProfile(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(tmpDir, "xdg"))
+	t.Setenv("HOME", tmpDir)
+
+	configPath := filepath.Join(tmpDir, "pinocchio-config.yaml")
+	configYAML := `
+ai-chat:
+  ai-api-type: openai
+  ai-engine: base-model
+`
+	if err := os.WriteFile(configPath, []byte(configYAML), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	registryPath := filepath.Join(tmpDir, "profiles.yaml")
+	registryYAML := `
+slug: workspace
+profiles:
+  default:
+    slug: default
+    inference_settings:
+      chat:
+        api_type: openai-responses
+        engine: gpt-5-mini
+`
+	if err := os.WriteFile(registryPath, []byte(registryYAML), 0o644); err != nil {
+		t.Fatalf("write registry: %v", err)
+	}
+
+	parsed, err := profilebootstrap.NewCLISelectionValues(profilebootstrap.CLISelectionInput{
+		ConfigFile:        configPath,
+		Profile:           "default",
+		ProfileRegistries: []string{registryPath},
+	})
+	if err != nil {
+		t.Fatalf("NewCLISelectionValues failed: %v", err)
+	}
+
+	resolved, err := resolvePinocchioJSRuntimeBootstrap(context.Background(), parsed)
+	if err != nil {
+		t.Fatalf("resolvePinocchioJSRuntimeBootstrap failed: %v", err)
+	}
+	if resolved.Close != nil {
+		defer resolved.Close()
+	}
+
+	if resolved.DefaultInferenceSettings == nil || resolved.DefaultInferenceSettings.Chat == nil || resolved.DefaultInferenceSettings.Chat.Engine == nil {
+		t.Fatal("expected resolved default inference settings with chat engine")
+	}
+	if got := *resolved.DefaultInferenceSettings.Chat.Engine; got != "gpt-5-mini" {
+		t.Fatalf("expected selected profile engine in JS defaults, got %q", got)
+	}
+	if !resolved.UseDefaultProfileResolve {
+		t.Fatal("expected JS runtime bootstrap to enable default profile resolution")
 	}
 }
