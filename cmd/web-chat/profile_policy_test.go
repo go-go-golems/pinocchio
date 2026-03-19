@@ -346,7 +346,7 @@ func TestProfileAPI_SchemaEndpoints(t *testing.T) {
 	require.Equal(t, http.StatusOK, middlewareRec.Code)
 	var middlewareSchemas []map[string]any
 	require.NoError(t, json.Unmarshal(middlewareRec.Body.Bytes(), &middlewareSchemas))
-	require.GreaterOrEqual(t, len(middlewareSchemas), 2)
+	require.GreaterOrEqual(t, len(middlewareSchemas), 1)
 	names := map[string]bool{}
 	for _, item := range middlewareSchemas {
 		if name, ok := item["name"].(string); ok {
@@ -362,7 +362,6 @@ func TestProfileAPI_SchemaEndpoints(t *testing.T) {
 		require.True(t, hasSchema)
 	}
 	require.True(t, names["agentmode"])
-	require.True(t, names["sqlite"])
 
 	extensionReq := httptest.NewRequest(http.MethodGet, "/api/chat/schemas/extensions", nil)
 	extensionRec := httptest.NewRecorder()

@@ -2,16 +2,14 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"embed"
 	"encoding/json"
 	"io"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strings"
 
 	clay "github.com/go-go-golems/clay/pkg"
+	"github.com/go-go-golems/glazed/pkg/cli"
 	"github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/cmds/fields"
 	"github.com/go-go-golems/glazed/pkg/cmds/logging"
@@ -137,15 +135,6 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 		return errors.Wrap(err, "build runtime config script")
 	}
 
-	// Optional SQLite DB (best-effort)
-	var dbWithRegexp *sql.DB
-	if db, err := sql.Open("sqlite3", "anonymized-data.db"); err == nil {
-		dbWithRegexp = db
-		log.Info().Str("dsn", "anonymized-data.db").Msg("opened sqlite database")
-	} else {
-		log.Warn().Err(err).Msg("could not open sqlite DB; SQL tool middleware disabled")
-	}
-
 	// Agent mode configuration (optional)
 	amSvc := agentmode.NewStaticService([]*agentmode.AgentMode{
 		{Name: "financial_analyst", Prompt: "You are a financial transaction analyst. Analyze transactions and propose categories."},
@@ -192,7 +181,6 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 	runtimeComposer := newProfileRuntimeComposer(middlewareRegistry, middlewarecfg.BuildDeps{
 		Values: map[string]any{
 			dependencyAgentModeServiceKey: amSvc,
-			dependencySQLiteDBKey:         dbWithRegexp,
 		},
 	}, baseInferenceSettings)
 	requestResolver := newProfileRequestResolver(profileRegistry, defaultRegistrySlug, baseInferenceSettings)

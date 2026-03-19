@@ -21,10 +21,10 @@ func testValuesWithProfileSettings(t *testing.T, profile string, profileRegistri
 	sectionValues, err := values.NewSectionValues(profileSettingsSection)
 	require.NoError(t, err)
 	if profile != "" {
-		sectionValues.Fields.Update("profile", &fields.FieldValue{Value: profile})
+		require.NoError(t, values.WithFieldValue("profile", profile)(sectionValues))
 	}
 	if len(profileRegistries) > 0 {
-		sectionValues.Fields.Update("profile-registries", &fields.FieldValue{Value: profileRegistries})
+		require.NoError(t, values.WithFieldValue("profile-registries", profileRegistries)(sectionValues))
 	}
 
 	return values.New(values.WithSectionValues(profilebootstrap.ProfileSettingsSectionSlug, sectionValues))
@@ -37,9 +37,7 @@ func testValuesWithConfigFile(t *testing.T, configFile string) *values.Values {
 	require.NoError(t, err)
 	sectionValues, err := values.NewSectionValues(commandSection)
 	require.NoError(t, err)
-	sectionValues.Fields.Update("config-file", &fields.FieldValue{
-		Value: configFile,
-	})
+	require.NoError(t, values.WithFieldValue("config-file", configFile, fields.WithSource("cli"))(sectionValues))
 
 	return values.New(values.WithSectionValues(cli.CommandSettingsSlug, sectionValues))
 }
