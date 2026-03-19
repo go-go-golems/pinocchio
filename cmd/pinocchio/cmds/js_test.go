@@ -47,6 +47,15 @@ func TestNewJSCommand_ExposesProfileFlags(t *testing.T) {
 	if cmd.Flags().Lookup("profile-registries") == nil {
 		t.Fatal("expected --profile-registries flag on js command")
 	}
+	if cmd.Flags().Lookup("print-parsed-fields") == nil {
+		t.Fatal("expected --print-parsed-fields flag on js command")
+	}
+	if cmd.Flags().Lookup("print-inference-settings") == nil {
+		t.Fatal("expected --print-inference-settings flag on js command")
+	}
+	if cmd.Flags().Lookup("print-inference-settings-sources") == nil {
+		t.Fatal("expected --print-inference-settings-sources flag on js command")
+	}
 }
 
 func TestResolvePinocchioJSRuntimeBootstrap_UsesFinalInferenceSettingsFromSelectedProfile(t *testing.T) {

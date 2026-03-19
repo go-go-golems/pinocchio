@@ -161,3 +161,22 @@ func NewHelpersParameterLayer() (schema.Section, error) {
 		),
 	)
 }
+
+func NewInferenceDebugParameterLayer() (schema.Section, error) {
+	return schema.NewSection(GeppettoHelpersSlug, "Geppetto helpers",
+		schema.WithFields(
+			fields.New(
+				"print-inference-settings",
+				fields.TypeBool,
+				fields.WithDefault(false),
+				fields.WithHelp("Print the final resolved inference settings and exit"),
+			),
+			fields.New(
+				"print-inference-settings-sources",
+				fields.TypeBool,
+				fields.WithDefault(false),
+				fields.WithHelp("Print the final resolved inference settings together with source logs and exit"),
+			),
+		),
+	)
+}

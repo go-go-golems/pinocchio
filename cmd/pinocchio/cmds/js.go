@@ -16,89 +16,136 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/inference/middlewarecfg"
 	geptools "github.com/go-go-golems/geppetto/pkg/inference/tools"
 	gp "github.com/go-go-golems/geppetto/pkg/js/modules/geppetto"
+	geppettosections "github.com/go-go-golems/geppetto/pkg/sections"
 	aisettings "github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
-	"github.com/go-go-golems/glazed/pkg/cmds/schema"
+	"github.com/go-go-golems/glazed/pkg/cli"
+	"github.com/go-go-golems/glazed/pkg/cmds"
+	"github.com/go-go-golems/glazed/pkg/cmds/fields"
+	cmd_sources "github.com/go-go-golems/glazed/pkg/cmds/sources"
 	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	gojengine "github.com/go-go-golems/go-go-goja/engine"
 	agenttools "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/tools"
+	"github.com/go-go-golems/pinocchio/pkg/cmds/cmdlayers"
 	profilebootstrap "github.com/go-go-golems/pinocchio/pkg/cmds/profilebootstrap"
 	pjs "github.com/go-go-golems/pinocchio/pkg/js/modules/pinocchio"
 	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v3"
 )
 
 func NewJSCommand() *cobra.Command {
-	var (
-		scriptPath  string
-		printResult bool
-		listGoTools bool
-	)
-	profileSettingsSection, err := profilebootstrap.NewProfileSettingsSection()
+	command, err := newJSCommand()
 	if err != nil {
 		panic(err)
 	}
-
-	cmd := &cobra.Command{
-		Use:   "js [script.js]",
-		Short: "Run JavaScript against Pinocchio's Geppetto runtime",
-		Args: func(cmd *cobra.Command, args []string) error {
-			if strings.TrimSpace(scriptPath) != "" && len(args) > 0 {
-				return fmt.Errorf("provide either --script or a positional script path, not both")
-			}
-			if len(args) > 1 {
-				return fmt.Errorf("expected at most one positional script path")
-			}
-			return nil
-		},
-		RunE: func(cmd *cobra.Command, args []string) error {
-			if strings.TrimSpace(scriptPath) == "" && len(args) == 1 {
-				scriptPath = args[0]
-			}
-			return runJSCommand(cmd.Context(), cmd, jsCommandSettings{
-				ScriptPath:  scriptPath,
-				PrintResult: printResult,
-				ListGoTools: listGoTools,
-			})
-		},
-	}
-
-	cmd.Flags().StringVar(&scriptPath, "script", "", "Path to JavaScript file to execute")
-	cmd.Flags().String("config-file", "", "Path to Pinocchio config file")
-	cmd.Flags().BoolVar(&printResult, "print-result", false, "Print top-level JS return value as JSON")
-	cmd.Flags().BoolVar(&listGoTools, "list-go-tools", false, "List built-in Go tools exposed to JS and exit")
-	if err := profileSettingsSection.(schema.CobraSection).AddSectionToCobraCommand(cmd); err != nil {
+	cobraCommand, err := cli.BuildCobraCommand(command, cli.WithParserConfig(cli.CobraParserConfig{
+		MiddlewaresFunc: jsCobraMiddlewares,
+	}))
+	if err != nil {
 		panic(err)
 	}
-	return cmd
+	return cobraCommand
 }
 
-type jsCommandSettings struct {
-	ScriptPath  string
-	PrintResult bool
-	ListGoTools bool
+type JSSettings struct {
+	ScriptPath  string `glazed:"script"`
+	ScriptArg   string `glazed:"script_path"`
+	PrintResult bool   `glazed:"print-result"`
+	ListGoTools bool   `glazed:"list-go-tools"`
 }
 
-func runJSCommand(ctx context.Context, cmd *cobra.Command, settings jsCommandSettings) error {
+type JSCommand struct {
+	*cmds.CommandDescription
+}
+
+var _ cmds.WriterCommand = &JSCommand{}
+
+func newJSCommand() (*JSCommand, error) {
+	baseSections, err := geppettosections.CreateGeppettoSections()
+	if err != nil {
+		return nil, err
+	}
+	inferenceDebugSection, err := cmdlayers.NewInferenceDebugParameterLayer()
+	if err != nil {
+		return nil, err
+	}
+	commandOptions := []cmds.CommandDescriptionOption{
+		cmds.WithShort("Run JavaScript against Pinocchio's Geppetto runtime"),
+		cmds.WithLong("Run JavaScript against Pinocchio's Geppetto runtime"),
+		cmds.WithFlags(
+			fields.New(
+				"script",
+				fields.TypeString,
+				fields.WithHelp("Path to JavaScript file to execute"),
+			),
+			fields.New(
+				"print-result",
+				fields.TypeBool,
+				fields.WithDefault(false),
+				fields.WithHelp("Print top-level JS return value as JSON"),
+			),
+			fields.New(
+				"list-go-tools",
+				fields.TypeBool,
+				fields.WithDefault(false),
+				fields.WithHelp("List built-in Go tools exposed to JS and exit"),
+			),
+		),
+		cmds.WithArguments(
+			fields.New(
+				"script_path",
+				fields.TypeString,
+				fields.WithHelp("Path to JavaScript file to execute"),
+			),
+		),
+		cmds.WithSections(inferenceDebugSection),
+	}
+	commandOptions = append(commandOptions, cmds.WithSections(baseSections...))
+
+	return &JSCommand{
+		CommandDescription: cmds.NewCommandDescription("js", commandOptions...),
+	}, nil
+}
+
+func jsCobraMiddlewares(parsedCommandSections *values.Values, cmd *cobra.Command, args []string) ([]cmd_sources.Middleware, error) {
+	configFiles, err := profilebootstrap.ResolveCLIConfigFiles(parsedCommandSections)
+	if err != nil {
+		return nil, err
+	}
+
+	return []cmd_sources.Middleware{
+		cmd_sources.FromCobra(cmd, fields.WithSource("cobra")),
+		cmd_sources.FromArgs(args, fields.WithSource("arguments")),
+		cmd_sources.FromEnv("PINOCCHIO", fields.WithSource("env")),
+		cmd_sources.FromFiles(
+			configFiles,
+			cmd_sources.WithConfigFileMapper(profilebootstrap.MapPinocchioConfigFile),
+			cmd_sources.WithParseOptions(fields.WithSource("config")),
+		),
+		cmd_sources.FromDefaults(fields.WithSource(fields.SourceDefaults)),
+	}, nil
+}
+
+func (c *JSCommand) RunIntoWriter(ctx context.Context, parsed *values.Values, w io.Writer) error {
+	settings := &JSSettings{}
+	if err := parsed.DecodeSectionInto(values.DefaultSlug, settings); err != nil {
+		return err
+	}
+	scriptPath, err := resolveJSScriptPath(settings)
+	if err != nil {
+		return err
+	}
+
 	goRegistry, err := buildPinocchioJSToolRegistry()
 	if err != nil {
 		return err
 	}
 	if settings.ListGoTools {
 		for _, td := range goRegistry.ListTools() {
-			fmt.Fprintln(cmd.OutOrStdout(), td.Name)
+			fmt.Fprintln(w, td.Name)
 		}
 		return nil
 	}
-
-	scriptPath := strings.TrimSpace(settings.ScriptPath)
-	if scriptPath == "" {
-		return fmt.Errorf("--script is required")
-	}
 	scriptBytes, err := os.ReadFile(scriptPath)
-	if err != nil {
-		return err
-	}
-
-	parsed, err := buildJSParsedValues(cmd)
 	if err != nil {
 		return err
 	}
@@ -108,6 +155,30 @@ func runJSCommand(ctx context.Context, cmd *cobra.Command, settings jsCommandSet
 	}
 	if runtimeBootstrap.Close != nil {
 		defer runtimeBootstrap.Close()
+	}
+	if runtimeBootstrap.ResolvedEngineSettings != nil {
+		debugSettings := &cmdlayers.HelpersSettings{}
+		if err := parsed.DecodeSectionInto(cmdlayers.GeppettoHelpersSlug, debugSettings); err != nil {
+			return err
+		}
+		if debugSettings.PrintInferenceSources {
+			trace, err := profilebootstrap.BuildInferenceSettingsSourceTrace(nil, parsed, runtimeBootstrap.ResolvedEngineSettings)
+			if err != nil {
+				return err
+			}
+			encoder := yaml.NewEncoder(w)
+			defer func() {
+				_ = encoder.Close()
+			}()
+			return encoder.Encode(trace)
+		}
+		if debugSettings.PrintInferenceSettings {
+			encoder := yaml.NewEncoder(w)
+			defer func() {
+				_ = encoder.Close()
+			}()
+			return encoder.Encode(runtimeBootstrap.ResolvedEngineSettings.FinalInferenceSettings)
+		}
 	}
 	middlewareDefs, buildDeps, err := buildPinocchioJSMiddlewareRegistry()
 	if err != nil {
@@ -125,6 +196,8 @@ func runJSCommand(ctx context.Context, cmd *cobra.Command, settings jsCommandSet
 		DefaultProfileResolve:    runtimeBootstrap.DefaultProfileResolve,
 		GoMiddlewareFactories:    middlewareFactories,
 		MiddlewareDefinitions:    middlewareDefs,
+		Stdout:                   w,
+		Stderr:                   os.Stderr,
 	})
 	if err != nil {
 		return err
@@ -142,62 +215,24 @@ func runJSCommand(ctx context.Context, cmd *cobra.Command, settings jsCommandSet
 		if err != nil {
 			return err
 		}
-		fmt.Fprintln(cmd.OutOrStdout(), string(b))
+		fmt.Fprintln(w, string(b))
 	}
 	return nil
 }
 
-func buildJSParsedValues(cmd *cobra.Command) (*values.Values, error) {
-	configFile := strings.TrimSpace(inheritedStringFlag(cmd, "config-file"))
-	if configFile == "" {
-		configFile = strings.TrimSpace(localStringFlag(cmd, "config-file"))
+func resolveJSScriptPath(settings *JSSettings) (string, error) {
+	flagPath := strings.TrimSpace(settings.ScriptPath)
+	argPath := strings.TrimSpace(settings.ScriptArg)
+	if flagPath != "" && argPath != "" {
+		return "", fmt.Errorf("provide either --script or a positional script path, not both")
 	}
-
-	return profilebootstrap.NewCLISelectionValues(profilebootstrap.CLISelectionInput{
-		ConfigFile:        configFile,
-		Profile:           inheritedStringFlag(cmd, "profile"),
-		ProfileRegistries: inheritedStringSliceFlag(cmd, "profile-registries"),
-	})
-}
-
-func inheritedStringFlag(cmd *cobra.Command, name string) string {
-	if cmd == nil {
-		return ""
+	if flagPath != "" {
+		return flagPath, nil
 	}
-	if f := cmd.Flags().Lookup(name); f != nil {
-		return strings.TrimSpace(f.Value.String())
+	if argPath != "" {
+		return argPath, nil
 	}
-	if f := cmd.InheritedFlags().Lookup(name); f != nil {
-		return strings.TrimSpace(f.Value.String())
-	}
-	return ""
-}
-
-func localStringFlag(cmd *cobra.Command, name string) string {
-	if cmd == nil {
-		return ""
-	}
-	if f := cmd.Flags().Lookup(name); f != nil {
-		return strings.TrimSpace(f.Value.String())
-	}
-	return ""
-}
-
-func inheritedStringSliceFlag(cmd *cobra.Command, name string) []string {
-	if cmd == nil {
-		return nil
-	}
-	if f := cmd.Flags().Lookup(name); f != nil {
-		if values_, err := cmd.Flags().GetStringSlice(name); err == nil {
-			return values_
-		}
-	}
-	if f := cmd.InheritedFlags().Lookup(name); f != nil {
-		if values_, err := cmd.InheritedFlags().GetStringSlice(name); err == nil {
-			return values_
-		}
-	}
-	return nil
+	return "", fmt.Errorf("--script is required")
 }
 
 func loadPinocchioProfileRegistryStack(parsed *values.Values) (gepprofiles.RegistryReader, gepprofiles.ResolveInput, io.Closer, error) {
@@ -245,6 +280,7 @@ func loadPinocchioProfileRegistryStackFromSettings(profileSettings profilebootst
 
 type pinocchioJSRuntimeBootstrap struct {
 	DefaultInferenceSettings *aisettings.InferenceSettings
+	ResolvedEngineSettings   *profilebootstrap.ResolvedCLIEngineSettings
 	ProfileRegistry          gepprofiles.RegistryReader
 	UseDefaultProfileResolve bool
 	DefaultProfileResolve    gepprofiles.ResolveInput
@@ -270,6 +306,7 @@ func resolvePinocchioJSRuntimeBootstrap(ctx context.Context, parsed *values.Valu
 
 	return &pinocchioJSRuntimeBootstrap{
 		DefaultInferenceSettings: resolved.FinalInferenceSettings,
+		ResolvedEngineSettings:   resolved,
 		ProfileRegistry:          profileRegistry,
 		UseDefaultProfileResolve: profileRegistry != nil,
 		DefaultProfileResolve:    defaultResolve,
@@ -321,6 +358,8 @@ type pinocchioJSRuntimeOptions struct {
 	DefaultProfileResolve    gepprofiles.ResolveInput
 	GoMiddlewareFactories    map[string]gp.MiddlewareFactory
 	MiddlewareDefinitions    middlewarecfg.DefinitionRegistry
+	Stdout                   io.Writer
+	Stderr                   io.Writer
 }
 
 func newPinocchioJSRuntime(ctx context.Context, opts pinocchioJSRuntimeOptions) (*gojengine.Runtime, error) {
@@ -346,6 +385,7 @@ func newPinocchioJSRuntime(ctx context.Context, opts pinocchioJSRuntimeOptions) 
 		GoToolRegistry:           opts.GoToolRegistry,
 		GoMiddlewareFactories:    opts.GoMiddlewareFactories,
 		EngineProfileRegistry:    opts.ProfileRegistry,
+		DefaultInferenceSettings: opts.DefaultInferenceSettings,
 		UseDefaultProfileResolve: opts.UseDefaultProfileResolve,
 		DefaultProfileResolve:    opts.DefaultProfileResolve,
 		MiddlewareSchemas:        opts.MiddlewareDefinitions,
@@ -365,7 +405,7 @@ func newPinocchioJSRuntime(ctx context.Context, opts pinocchioJSRuntimeOptions) 
 	if err := (runtimeInitializerFunc{
 		id: "pinocchio-js-helpers",
 		fn: func(_ *gojengine.RuntimeContext) error {
-			installConsole(rt.VM)
+			installConsole(rt.VM, opts.Stdout, opts.Stderr)
 			installHelpers(rt.VM)
 			return nil
 		},
@@ -410,14 +450,20 @@ globalThis.assert = function assert(cond, msg) {
 	}
 }
 
-func installConsole(vm *goja.Runtime) {
+func installConsole(vm *goja.Runtime, stdout io.Writer, stderr io.Writer) {
+	if stdout == nil {
+		stdout = os.Stdout
+	}
+	if stderr == nil {
+		stderr = os.Stderr
+	}
 	console := vm.NewObject()
 	_ = console.Set("log", func(call goja.FunctionCall) goja.Value {
-		fmt.Fprintln(os.Stdout, joinArgs(call.Arguments))
+		fmt.Fprintln(stdout, joinArgs(call.Arguments))
 		return goja.Undefined()
 	})
 	_ = console.Set("error", func(call goja.FunctionCall) goja.Value {
-		fmt.Fprintln(os.Stderr, joinArgs(call.Arguments))
+		fmt.Fprintln(stderr, joinArgs(call.Arguments))
 		return goja.Undefined()
 	})
 	_ = vm.Set("console", console)
