@@ -16,22 +16,11 @@ import (
 	"github.com/pkg/errors"
 )
 
-const ProfileSettingsSectionSlug = geppettosections.ProfileSettingsSectionSlug
-
-type ProfileSettings struct {
-	Profile           string   `glazed:"profile"`
-	ProfileRegistries []string `glazed:"profile-registries"`
-}
-
 type ResolvedInferenceSettings struct {
 	InferenceSettings     *aisettings.InferenceSettings
 	ResolvedEngineProfile *gepprofiles.ResolvedEngineProfile
 	ConfigFiles           []string
 	Close                 func()
-}
-
-func NewProfileSettingsSection() (schema.Section, error) {
-	return geppettosections.NewProfileSettingsSection()
 }
 
 func ResolveBaseInferenceSettings(parsed *values.Values) (*aisettings.InferenceSettings, []string, error) {
@@ -63,53 +52,6 @@ func ResolveBaseInferenceSettings(parsed *values.Values) (*aisettings.InferenceS
 		return nil, configFiles, errors.Wrap(err, "build inference settings from hidden parsed values")
 	}
 	return stepSettings, configFiles, nil
-}
-
-func ResolveProfileSettings(parsed *values.Values) ProfileSettings {
-	ret := ProfileSettings{}
-	if parsed != nil {
-		_ = parsed.DecodeSectionInto(ProfileSettingsSectionSlug, &ret)
-	}
-	ret.Profile = strings.TrimSpace(ret.Profile)
-	ret.ProfileRegistries = normalizeProfileRegistries(ret.ProfileRegistries)
-	if len(ret.ProfileRegistries) == 0 {
-		if defaultPath := defaultPinocchioProfileRegistriesIfPresent(); defaultPath != "" {
-			ret.ProfileRegistries = []string{defaultPath}
-		}
-	}
-	return ret
-}
-
-func ResolveEngineProfileSettings(parsed *values.Values) (ProfileSettings, []string, error) {
-	profileSection, err := NewProfileSettingsSection()
-	if err != nil {
-		return ProfileSettings{}, nil, errors.Wrap(err, "create profile settings section")
-	}
-	schema_ := schema.NewSchema(schema.WithSections(profileSection))
-	resolvedValues := values.New()
-	configFiles, err := resolveConfigFiles(parsed)
-	if err != nil {
-		return ProfileSettings{}, nil, err
-	}
-	if err := sources.Execute(
-		schema_,
-		resolvedValues,
-		sources.FromEnv("PINOCCHIO", fields.WithSource("env")),
-		sources.FromFiles(
-			configFiles,
-			sources.WithConfigFileMapper(configFileMapper),
-			sources.WithParseOptions(fields.WithSource("config")),
-		),
-		sources.FromDefaults(fields.WithSource(fields.SourceDefaults)),
-	); err != nil {
-		return ProfileSettings{}, configFiles, errors.Wrap(err, "resolve profile settings from config/env/defaults")
-	}
-	if parsed != nil {
-		if err := resolvedValues.Merge(parsed); err != nil {
-			return ProfileSettings{}, configFiles, errors.Wrap(err, "merge explicit profile settings")
-		}
-	}
-	return ResolveProfileSettings(resolvedValues), configFiles, nil
 }
 
 func ResolveFinalInferenceSettings(
@@ -167,16 +109,6 @@ func ResolveFinalInferenceSettings(
 			_ = chain.Close()
 		},
 	}, nil
-}
-
-func normalizeProfileRegistries(entries []string) []string {
-	ret := make([]string, 0, len(entries))
-	for _, entry := range entries {
-		if trimmed := strings.TrimSpace(entry); trimmed != "" {
-			ret = append(ret, trimmed)
-		}
-	}
-	return ret
 }
 
 func resolveConfigFiles(parsed *values.Values) ([]string, error) {
