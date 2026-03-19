@@ -39,6 +39,16 @@ func TestLoadPinocchioProfileRegistryStackRejectsProfileWithoutRegistries(t *tes
 	}
 }
 
+func TestNewJSCommand_ExposesProfileFlags(t *testing.T) {
+	cmd := NewJSCommand()
+	if cmd.Flags().Lookup("profile") == nil {
+		t.Fatal("expected --profile flag on js command")
+	}
+	if cmd.Flags().Lookup("profile-registries") == nil {
+		t.Fatal("expected --profile-registries flag on js command")
+	}
+}
+
 func TestResolvePinocchioJSRuntimeBootstrap_UsesFinalInferenceSettingsFromSelectedProfile(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(tmpDir, "xdg"))

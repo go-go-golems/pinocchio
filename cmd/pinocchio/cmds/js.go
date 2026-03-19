@@ -17,6 +17,7 @@ import (
 	geptools "github.com/go-go-golems/geppetto/pkg/inference/tools"
 	gp "github.com/go-go-golems/geppetto/pkg/js/modules/geppetto"
 	aisettings "github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
+	"github.com/go-go-golems/glazed/pkg/cmds/schema"
 	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	gojengine "github.com/go-go-golems/go-go-goja/engine"
 	agenttools "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/tools"
@@ -31,6 +32,10 @@ func NewJSCommand() *cobra.Command {
 		printResult bool
 		listGoTools bool
 	)
+	profileSettingsSection, err := profilebootstrap.NewProfileSettingsSection()
+	if err != nil {
+		panic(err)
+	}
 
 	cmd := &cobra.Command{
 		Use:   "js [script.js]",
@@ -60,6 +65,9 @@ func NewJSCommand() *cobra.Command {
 	cmd.Flags().String("config-file", "", "Path to Pinocchio config file")
 	cmd.Flags().BoolVar(&printResult, "print-result", false, "Print top-level JS return value as JSON")
 	cmd.Flags().BoolVar(&listGoTools, "list-go-tools", false, "List built-in Go tools exposed to JS and exit")
+	if err := profileSettingsSection.(schema.CobraSection).AddSectionToCobraCommand(cmd); err != nil {
+		panic(err)
+	}
 	return cmd
 }
 
