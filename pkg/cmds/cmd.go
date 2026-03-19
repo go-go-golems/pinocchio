@@ -11,6 +11,7 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/inference/engine/factory"
 	"github.com/go-go-golems/geppetto/pkg/inference/middleware"
 	"github.com/go-go-golems/geppetto/pkg/inference/toolloop/enginebuilder"
+	geppettosections "github.com/go-go-golems/geppetto/pkg/sections"
 	"github.com/go-go-golems/glazed/pkg/helpers/templating"
 
 	"github.com/go-go-golems/geppetto/pkg/events"
@@ -222,28 +223,30 @@ func (g *PinocchioCommand) RunIntoWriter(
 	// Capture profile selection inputs and a baseline settings snapshot without any profile-derived values.
 	// This is used by chat mode to support runtime profile switching (/profile, ctrl+p).
 	type profileRegistrySettings struct {
-		Profile           string `glazed:"profile"`
-		ProfileRegistries string `glazed:"profile-registries"`
+		Profile           string   `glazed:"profile"`
+		ProfileRegistries []string `glazed:"profile-registries"`
 	}
 	profileSettings := &profileRegistrySettings{}
-	_ = parsedValues.DecodeSectionInto("profile-settings", profileSettings)
+	_ = parsedValues.DecodeSectionInto(geppettosections.ProfileSettingsSectionSlug, profileSettings)
 	// Back-compat: some entry points still populate --profile / --profile-registries in the default section.
 	// Also allow env vars to seed these when not present in parsed values (common in ad-hoc dev workflows).
-	if strings.TrimSpace(profileSettings.Profile) == "" || strings.TrimSpace(profileSettings.ProfileRegistries) == "" {
+	if strings.TrimSpace(profileSettings.Profile) == "" || len(profileSettings.ProfileRegistries) == 0 {
 		fallback := &profileRegistrySettings{}
 		_ = parsedValues.DecodeSectionInto(values.DefaultSlug, fallback)
 		if strings.TrimSpace(profileSettings.Profile) == "" {
 			profileSettings.Profile = fallback.Profile
 		}
-		if strings.TrimSpace(profileSettings.ProfileRegistries) == "" {
+		if len(profileSettings.ProfileRegistries) == 0 {
 			profileSettings.ProfileRegistries = fallback.ProfileRegistries
 		}
 	}
 	if strings.TrimSpace(profileSettings.Profile) == "" {
 		profileSettings.Profile = strings.TrimSpace(os.Getenv("PINOCCHIO_PROFILE"))
 	}
-	if strings.TrimSpace(profileSettings.ProfileRegistries) == "" {
-		profileSettings.ProfileRegistries = strings.TrimSpace(os.Getenv("PINOCCHIO_PROFILE_REGISTRIES"))
+	if len(profileSettings.ProfileRegistries) == 0 {
+		if raw := strings.TrimSpace(os.Getenv("PINOCCHIO_PROFILE_REGISTRIES")); raw != "" {
+			profileSettings.ProfileRegistries = strings.Split(raw, ",")
+		}
 	}
 
 	baseSettings, baseErr := baseSettingsFromParsedValues(parsedValues)
@@ -253,8 +256,8 @@ func (g *PinocchioCommand) RunIntoWriter(
 			baseSettings.Chat.Stream = stepSettings.Chat != nil && stepSettings.Chat.Stream
 		}
 	}
-	if strings.TrimSpace(profileSettings.ProfileRegistries) != "" && baseSettings != nil {
-		mgr, err := profileswitch.NewManagerFromSources(ctx, profileSettings.ProfileRegistries, baseSettings)
+	if len(profileSettings.ProfileRegistries) > 0 && baseSettings != nil {
+		mgr, err := profileswitch.NewManagerFromSources(ctx, strings.Join(profileSettings.ProfileRegistries, ","), baseSettings)
 		if err != nil {
 			return errors.Wrap(err, "resolve engine profile settings for command run")
 		}
@@ -315,7 +318,7 @@ func (g *PinocchioCommand) RunIntoWriter(
 	_, err = g.RunWithOptions(ctx,
 		run.WithInferenceSettings(stepSettings),
 		run.WithBaseSettings(baseSettings),
-		run.WithProfileSelection(profileSettings.Profile, profileSettings.ProfileRegistries),
+		run.WithProfileSelection(profileSettings.Profile, strings.Join(profileSettings.ProfileRegistries, ",")),
 		run.WithEngineFactory(g.EngineFactory),
 		run.WithWriter(w),
 		run.WithRunMode(runMode),

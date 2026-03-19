@@ -19,7 +19,9 @@ import (
 	renderers "github.com/go-go-golems/bobatea/pkg/timeline/renderers"
 	"github.com/go-go-golems/geppetto/pkg/events"
 	"github.com/go-go-golems/geppetto/pkg/inference/middleware"
+	geppettosections "github.com/go-go-golems/geppetto/pkg/sections"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
+	"github.com/go-go-golems/glazed/pkg/cmds/schema"
 	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
 	timelinepb "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/timeline"
 	"github.com/go-go-golems/pinocchio/pkg/tui/overlay"
@@ -111,6 +113,13 @@ func main() {
 		Use:   "switch-profiles-tui",
 		Short: "Bubble Tea chat TUI with /profile switching via Geppetto profile registries",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			profileSlug = strings.TrimSpace(cmd.Flags().Lookup("profile").Value.String())
+			profileRegistriesEntries, err := cmd.Flags().GetStringSlice("profile-registries")
+			if err != nil {
+				return errors.Wrap(err, "read profile registry flags")
+			}
+			profileRegistries = strings.Join(profileRegistriesEntries, ",")
+
 			zerolog.TimeFieldFormat = time.StampMilli
 			if lvl := strings.TrimSpace(logLevel); lvl != "" {
 				if parsed, err := zerolog.ParseLevel(lvl); err == nil {
@@ -352,12 +361,19 @@ func main() {
 		},
 	}
 
-	root.Flags().StringVar(&profileRegistries, "profile-registries", "", "Comma-separated profile registry sources (yaml/sqlite/sqlite-dsn). REQUIRED.")
-	root.Flags().StringVar(&profileSlug, "profile", "", "Initial profile slug (default: registry default profile)")
 	root.Flags().StringVar(&convID, "conv-id", "", "Conversation ID for persistence (default: generated)")
 	root.Flags().StringVar(&timelineDB, "timeline-db", "/tmp/switch-profiles-tui.timeline.db", "SQLite DB file for timeline projection persistence")
 	root.Flags().StringVar(&turnsDB, "turns-db", "/tmp/switch-profiles-tui.turns.db", "SQLite DB file for turn snapshot persistence")
 	root.Flags().StringVar(&logLevel, "log-level", "info", "Log level (trace|debug|info|warn|error)")
+	profileSettingsSection, err := geppettosections.NewProfileSettingsSection()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	if err := profileSettingsSection.(schema.CobraSection).AddSectionToCobraCommand(root); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
 
 	if err := root.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)

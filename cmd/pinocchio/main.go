@@ -160,7 +160,11 @@ func initRootCmd() (*help.HelpSystem, error) {
 
 	err = clay.InitGlazed("pinocchio", rootCmd)
 	cobra.CheckErr(err)
-	rootCmd.PersistentFlags().String("profile-registries", "", "Comma-separated profile registry sources (yaml/sqlite/sqlite-dsn)")
+
+	profileSettingsSection, err := sections2.NewProfileSettingsSection()
+	cobra.CheckErr(err)
+	err = profileSettingsSection.(schema.CobraSection).AddSectionToCobraCommand(rootCmd)
+	cobra.CheckErr(err)
 
 	rootCmd.AddCommand(runCommandCmd)
 	rootCmd.AddCommand(pinocchio_cmds.NewCodegenCommand())

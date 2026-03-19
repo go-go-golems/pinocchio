@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	geppettosections "github.com/go-go-golems/geppetto/pkg/sections"
 	"github.com/go-go-golems/glazed/pkg/cli"
 	"github.com/go-go-golems/glazed/pkg/cmds/fields"
 	"github.com/go-go-golems/glazed/pkg/cmds/values"
@@ -12,38 +13,26 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-type webChatResolverTestSection struct {
-	slug string
-}
-
-func (s webChatResolverTestSection) GetDefinitions() *fields.Definitions {
-	return fields.NewDefinitions()
-}
-func (s webChatResolverTestSection) GetName() string        { return s.slug }
-func (s webChatResolverTestSection) GetDescription() string { return "" }
-func (s webChatResolverTestSection) GetPrefix() string      { return "" }
-func (s webChatResolverTestSection) GetSlug() string        { return s.slug }
-
 func testValuesWithProfileRegistries(t *testing.T, profileRegistries string) *values.Values {
 	t.Helper()
 
-	sectionValues, err := values.NewSectionValues(webChatResolverTestSection{
-		slug: webChatProfileSettingsSectionSlug,
-	})
+	profileSettingsSection, err := geppettosections.NewProfileSettingsSection()
+	require.NoError(t, err)
+	sectionValues, err := values.NewSectionValues(profileSettingsSection)
 	require.NoError(t, err)
 	sectionValues.Fields.Update("profile-registries", &fields.FieldValue{
-		Value: profileRegistries,
+		Value: []string{profileRegistries},
 	})
 
-	return values.New(values.WithSectionValues(webChatProfileSettingsSectionSlug, sectionValues))
+	return values.New(values.WithSectionValues(geppettosections.ProfileSettingsSectionSlug, sectionValues))
 }
 
 func testValuesWithConfigFile(t *testing.T, configFile string) *values.Values {
 	t.Helper()
 
-	sectionValues, err := values.NewSectionValues(webChatResolverTestSection{
-		slug: cli.CommandSettingsSlug,
-	})
+	commandSection, err := cli.NewCommandSettingsSection()
+	require.NoError(t, err)
+	sectionValues, err := values.NewSectionValues(commandSection)
 	require.NoError(t, err)
 	sectionValues.Fields.Update("config-file", &fields.FieldValue{
 		Value: configFile,
@@ -55,22 +44,22 @@ func testValuesWithConfigFile(t *testing.T, configFile string) *values.Values {
 func TestResolveProfileRegistries_FallsBackToProfileSettingsSection(t *testing.T) {
 	parsed := testValuesWithProfileRegistries(t, "./profiles.yaml")
 
-	got := resolveProfileRegistries(parsed, "")
-	require.Equal(t, "./profiles.yaml", got)
+	got := resolveProfileRegistries(parsed, nil)
+	require.Equal(t, []string{"./profiles.yaml"}, got)
 
-	gotValue, gotSource := resolveProfileRegistriesWithSource(parsed, "")
-	require.Equal(t, "./profiles.yaml", gotValue)
-	require.Equal(t, webChatProfileSettingsSectionSlug, gotSource)
+	gotValue, gotSource := resolveProfileRegistriesWithSource(parsed, nil)
+	require.Equal(t, []string{"./profiles.yaml"}, gotValue)
+	require.Equal(t, geppettosections.ProfileSettingsSectionSlug, gotSource)
 }
 
 func TestResolveProfileRegistries_PrefersDefaultSectionValue(t *testing.T) {
 	parsed := testValuesWithProfileRegistries(t, "./profiles-from-profile-settings.yaml")
 
-	got := resolveProfileRegistries(parsed, "./profiles-from-default.yaml")
-	require.Equal(t, "./profiles-from-default.yaml", got)
+	got := resolveProfileRegistries(parsed, []string{"./profiles-from-default.yaml"})
+	require.Equal(t, []string{"./profiles-from-default.yaml"}, got)
 
-	gotValue, gotSource := resolveProfileRegistriesWithSource(parsed, "./profiles-from-default.yaml")
-	require.Equal(t, "./profiles-from-default.yaml", gotValue)
+	gotValue, gotSource := resolveProfileRegistriesWithSource(parsed, []string{"./profiles-from-default.yaml"})
+	require.Equal(t, []string{"./profiles-from-default.yaml"}, gotValue)
 	require.Equal(t, "default-section", gotSource)
 }
 
@@ -84,11 +73,11 @@ func TestResolveProfileRegistries_FallsBackToDefaultXDGProfilesPath(t *testing.T
 	profilesPath := filepath.Join(profilesDir, "profiles.yaml")
 	require.NoError(t, os.WriteFile(profilesPath, []byte("slug: default\nprofiles: {}\n"), 0o644))
 
-	got := resolveProfileRegistries(values.New(), "")
-	require.Equal(t, profilesPath, got)
+	got := resolveProfileRegistries(values.New(), nil)
+	require.Equal(t, []string{profilesPath}, got)
 
-	gotValue, gotSource := resolveProfileRegistriesWithSource(values.New(), "")
-	require.Equal(t, profilesPath, gotValue)
+	gotValue, gotSource := resolveProfileRegistriesWithSource(values.New(), nil)
+	require.Equal(t, []string{profilesPath}, gotValue)
 	require.Equal(t, "xdg-default", gotSource)
 }
 

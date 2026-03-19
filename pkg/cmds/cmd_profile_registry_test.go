@@ -12,7 +12,6 @@ import (
 	geppettosections "github.com/go-go-golems/geppetto/pkg/sections"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 	"github.com/go-go-golems/geppetto/pkg/turns"
-	"github.com/go-go-golems/glazed/pkg/cmds/fields"
 	"github.com/go-go-golems/glazed/pkg/cmds/schema"
 	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	"github.com/go-go-golems/pinocchio/pkg/cmds/cmdlayers"
@@ -128,14 +127,7 @@ prompt: |
 	}
 	parsed.Set(cmdlayers.GeppettoHelpersSlug, helpersValues)
 
-	profileSection, err := schema.NewSection(
-		"profile-settings",
-		"Profile settings",
-		schema.WithFields(
-			fields.New("profile", fields.TypeString),
-			fields.New("profile-registries", fields.TypeString),
-		),
-	)
+	profileSection, err := geppettosections.NewProfileSettingsSection()
 	if err != nil {
 		t.Fatalf("profile section: %v", err)
 	}
@@ -143,13 +135,13 @@ prompt: |
 	if err != nil {
 		t.Fatalf("profile section values: %v", err)
 	}
-	if err := values.WithFieldValue("profile-registries", registryPath)(profileValues); err != nil {
+	if err := values.WithFieldValue("profile-registries", []string{registryPath})(profileValues); err != nil {
 		t.Fatalf("set profile-registries: %v", err)
 	}
 	if err := values.WithFieldValue("profile", "default")(profileValues); err != nil {
 		t.Fatalf("set profile: %v", err)
 	}
-	parsed.Set("profile-settings", profileValues)
+	parsed.Set(geppettosections.ProfileSettingsSectionSlug, profileValues)
 
 	var out bytes.Buffer
 	if err := cmd.RunIntoWriter(context.Background(), parsed, &out); err != nil {

@@ -11,7 +11,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-func ResolveInferenceSettings(ctx context.Context, profileSlug string, profileRegistries string) (*aisettings.InferenceSettings, func(), error) {
+func ResolveInferenceSettings(ctx context.Context, profileSlug string, profileRegistries []string) (*aisettings.InferenceSettings, func(), error) {
 	base, _, err := pinhelpers.ResolveBaseInferenceSettings(nil)
 	if err != nil {
 		return nil, nil, err
@@ -21,21 +21,17 @@ func ResolveInferenceSettings(ctx context.Context, profileSlug string, profileRe
 	if v := strings.TrimSpace(profileSlug); v != "" {
 		profileSettings.Profile = v
 	}
-	if v := strings.TrimSpace(profileRegistries); v != "" {
-		profileSettings.ProfileRegistries = v
+	if len(profileRegistries) > 0 {
+		profileSettings.ProfileRegistries = normalizeProfileRegistries(profileRegistries)
 	}
-	if profileSettings.ProfileRegistries == "" {
+	if len(profileSettings.ProfileRegistries) == 0 {
 		if base.Chat == nil || base.Chat.Engine == nil || strings.TrimSpace(*base.Chat.Engine) == "" {
 			return nil, nil, fmt.Errorf("no engine configured; set PINOCCHIO_* base settings or provide --profile-registries/--profile")
 		}
 		return base, nil, nil
 	}
 
-	specEntries, err := gepprofiles.ParseEngineProfileRegistrySourceEntries(profileSettings.ProfileRegistries)
-	if err != nil {
-		return nil, nil, errors.Wrap(err, "parse profile registry sources")
-	}
-	specs, err := gepprofiles.ParseRegistrySourceSpecs(specEntries)
+	specs, err := gepprofiles.ParseRegistrySourceSpecs(profileSettings.ProfileRegistries)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "parse profile registry specs")
 	}
@@ -67,4 +63,14 @@ func ResolveInferenceSettings(ctx context.Context, profileSlug string, profileRe
 	return finalSettings, func() {
 		_ = chain.Close()
 	}, nil
+}
+
+func normalizeProfileRegistries(entries []string) []string {
+	ret := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		if trimmed := strings.TrimSpace(entry); trimmed != "" {
+			ret = append(ret, trimmed)
+		}
+	}
+	return ret
 }

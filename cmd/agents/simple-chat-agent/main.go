@@ -15,6 +15,7 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/inference/engine/factory"
 	"github.com/go-go-golems/geppetto/pkg/inference/middleware"
 	"github.com/go-go-golems/geppetto/pkg/inference/tools"
+	geppettosections "github.com/go-go-golems/geppetto/pkg/sections"
 	"github.com/go-go-golems/geppetto/pkg/turns"
 	"github.com/go-go-golems/glazed/pkg/cli"
 	"github.com/go-go-golems/glazed/pkg/cmds"
@@ -45,7 +46,7 @@ import (
 type SimpleAgentCmd struct{ *cmds.CommandDescription }
 
 func NewSimpleAgentCmd() (*SimpleAgentCmd, error) {
-	profileSettingsSection, err := pinhelpers.NewProfileSettingsSection()
+	profileSettingsSection, err := geppettosections.NewProfileSettingsSection()
 	if err != nil {
 		return nil, err
 	}

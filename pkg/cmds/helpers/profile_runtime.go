@@ -16,11 +16,11 @@ import (
 	"github.com/pkg/errors"
 )
 
-const ProfileSettingsSectionSlug = "profile-settings"
+const ProfileSettingsSectionSlug = geppettosections.ProfileSettingsSectionSlug
 
 type ProfileSettings struct {
-	Profile           string `glazed:"profile"`
-	ProfileRegistries string `glazed:"profile-registries"`
+	Profile           string   `glazed:"profile"`
+	ProfileRegistries []string `glazed:"profile-registries"`
 }
 
 type ResolvedInferenceSettings struct {
@@ -31,22 +31,7 @@ type ResolvedInferenceSettings struct {
 }
 
 func NewProfileSettingsSection() (schema.Section, error) {
-	return schema.NewSection(
-		ProfileSettingsSectionSlug,
-		"Profile settings",
-		schema.WithFields(
-			fields.New(
-				"profile",
-				fields.TypeString,
-				fields.WithHelp("Load the profile"),
-			),
-			fields.New(
-				"profile-registries",
-				fields.TypeString,
-				fields.WithHelp("Comma-separated profile registry sources (yaml/sqlite/sqlite-dsn)"),
-			),
-		),
-	)
+	return geppettosections.NewProfileSettingsSection()
 }
 
 func ResolveBaseInferenceSettings(parsed *values.Values) (*aisettings.InferenceSettings, []string, error) {
@@ -86,9 +71,11 @@ func ResolveProfileSettings(parsed *values.Values) ProfileSettings {
 		_ = parsed.DecodeSectionInto(ProfileSettingsSectionSlug, &ret)
 	}
 	ret.Profile = strings.TrimSpace(ret.Profile)
-	ret.ProfileRegistries = strings.TrimSpace(ret.ProfileRegistries)
-	if ret.ProfileRegistries == "" {
-		ret.ProfileRegistries = defaultPinocchioProfileRegistriesIfPresent()
+	ret.ProfileRegistries = normalizeProfileRegistries(ret.ProfileRegistries)
+	if len(ret.ProfileRegistries) == 0 {
+		if defaultPath := defaultPinocchioProfileRegistriesIfPresent(); defaultPath != "" {
+			ret.ProfileRegistries = []string{defaultPath}
+		}
 	}
 	return ret
 }
@@ -137,18 +124,14 @@ func ResolveFinalInferenceSettings(
 	if err != nil {
 		return nil, err
 	}
-	if profileSettings.ProfileRegistries == "" {
+	if len(profileSettings.ProfileRegistries) == 0 {
 		return &ResolvedInferenceSettings{
 			InferenceSettings: base,
 			ConfigFiles:       append([]string(nil), configFiles...),
 		}, nil
 	}
 
-	specEntries, err := gepprofiles.ParseEngineProfileRegistrySourceEntries(profileSettings.ProfileRegistries)
-	if err != nil {
-		return nil, errors.Wrap(err, "parse profile registry sources")
-	}
-	specs, err := gepprofiles.ParseRegistrySourceSpecs(specEntries)
+	specs, err := gepprofiles.ParseRegistrySourceSpecs(profileSettings.ProfileRegistries)
 	if err != nil {
 		return nil, errors.Wrap(err, "parse profile registry source specs")
 	}
@@ -184,6 +167,16 @@ func ResolveFinalInferenceSettings(
 			_ = chain.Close()
 		},
 	}, nil
+}
+
+func normalizeProfileRegistries(entries []string) []string {
+	ret := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		if trimmed := strings.TrimSpace(entry); trimmed != "" {
+			ret = append(ret, trimmed)
+		}
+	}
+	return ret
 }
 
 func resolveConfigFiles(parsed *values.Values) ([]string, error) {

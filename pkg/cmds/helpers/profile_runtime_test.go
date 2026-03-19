@@ -137,7 +137,7 @@ func buildTestParsedValues(configPath string, profile string, profileRegistries 
 		}
 	}
 	if profileRegistries != "" {
-		if err := values.WithFieldValue("profile-registries", profileRegistries)(profileValues); err != nil {
+		if err := values.WithFieldValue("profile-registries", []string{profileRegistries})(profileValues); err != nil {
 			return nil, err
 		}
 	}

@@ -54,7 +54,6 @@ type webChatRuntimeConfig struct {
 	DebugAPIEnabled bool   `json:"debugApiEnabled"`
 }
 
-const webChatProfileSettingsSectionSlug = "profile-settings"
 const webChatCLIAppName = "pinocchio"
 
 func normalizeBasePrefix(prefix string) string {
@@ -79,34 +78,41 @@ func runtimeConfigScript(basePrefix string, debugAPI bool) (string, error) {
 	return "window.__PINOCCHIO_WEBCHAT_CONFIG__ = " + string(payload) + ";\n", nil
 }
 
-func resolveProfileRegistries(parsed *values.Values, defaultSectionValue string) string {
+func resolveProfileRegistries(parsed *values.Values, defaultSectionValue []string) []string {
 	resolved, _ := resolveProfileRegistriesWithSource(parsed, defaultSectionValue)
 	return resolved
 }
 
-func resolveProfileRegistriesWithSource(parsed *values.Values, defaultSectionValue string) (string, string) {
-	resolved := strings.TrimSpace(defaultSectionValue)
-	if resolved != "" {
+func resolveProfileRegistriesWithSource(parsed *values.Values, defaultSectionValue []string) ([]string, string) {
+	resolved := normalizeProfileRegistries(defaultSectionValue)
+	if len(resolved) > 0 {
 		return resolved, "default-section"
 	}
 
 	if parsed != nil {
-		profileSettings := struct {
-			ProfileRegistries string `glazed:"profile-registries"`
-		}{}
-		if err := parsed.DecodeSectionInto(webChatProfileSettingsSectionSlug, &profileSettings); err == nil {
-			resolved = strings.TrimSpace(profileSettings.ProfileRegistries)
-			if resolved != "" {
-				return resolved, webChatProfileSettingsSectionSlug
+		profileSettings := &geppettosections.ProfileSettings{}
+		if err := parsed.DecodeSectionInto(geppettosections.ProfileSettingsSectionSlug, profileSettings); err == nil {
+			resolved = normalizeProfileRegistries(profileSettings.ProfileRegistries)
+			if len(resolved) > 0 {
+				return resolved, geppettosections.ProfileSettingsSectionSlug
 			}
 		}
 	}
 
-	resolved = defaultPinocchioProfileRegistriesIfPresent()
-	if resolved != "" {
-		return resolved, "xdg-default"
+	if resolved := strings.TrimSpace(defaultPinocchioProfileRegistriesIfPresent()); resolved != "" {
+		return []string{resolved}, "xdg-default"
 	}
-	return "", ""
+	return nil, ""
+}
+
+func normalizeProfileRegistries(entries []string) []string {
+	ret := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		if trimmed := strings.TrimSpace(entry); trimmed != "" {
+			ret = append(ret, trimmed)
+		}
+	}
+	return ret
 }
 
 func defaultPinocchioProfileRegistriesIfPresent() string {
@@ -212,27 +218,8 @@ func resolveWebChatBaseInferenceSettings(parsed *values.Values) (*aiconfig.Infer
 	return stepSettings, configFiles, nil
 }
 
-func newWebChatProfileSettingsSection() (schema.Section, error) {
-	return schema.NewSection(
-		webChatProfileSettingsSectionSlug,
-		"Profile settings",
-		schema.WithFields(
-			fields.New(
-				"profile",
-				fields.TypeString,
-				fields.WithHelp("Load the profile"),
-			),
-			fields.New(
-				"profile-registries",
-				fields.TypeString,
-				fields.WithHelp("Comma-separated profile registry sources (yaml/sqlite/sqlite-dsn)"),
-			),
-		),
-	)
-}
-
 func NewCommand() (*Command, error) {
-	profileSettingsSection, err := newWebChatProfileSettingsSection()
+	profileSettingsSection, err := geppettosections.NewProfileSettingsSection()
 	if err != nil {
 		return nil, errors.Wrap(err, "create web-chat profile settings section")
 	}
@@ -267,7 +254,7 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 	type serverSettings struct {
 		Root              string   `glazed:"root"`
 		DebugAPI          bool     `glazed:"debug-api"`
-		ProfileRegistries string   `glazed:"profile-registries"`
+		ProfileRegistries []string `glazed:"profile-registries"`
 		TimelineJSScripts []string `glazed:"timeline-js-script"`
 	}
 	s := &serverSettings{}
@@ -276,10 +263,10 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 	}
 	var profileRegistriesSource string
 	s.ProfileRegistries, profileRegistriesSource = resolveProfileRegistriesWithSource(parsed, s.ProfileRegistries)
-	if strings.TrimSpace(s.ProfileRegistries) != "" {
+	if len(s.ProfileRegistries) > 0 {
 		log.Info().
 			Str("source", profileRegistriesSource).
-			Str("profile_registries", s.ProfileRegistries).
+			Strs("profile_registries", s.ProfileRegistries).
 			Msg("resolved profile registry sources")
 	}
 
@@ -304,11 +291,7 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 		{Name: "category_regexp_reviewer", Prompt: "Review proposed regex patterns and assess over/under matching risks."},
 	})
 
-	profileRegistryEntries, err := gepprofiles.ParseEngineProfileRegistrySourceEntries(s.ProfileRegistries)
-	if err != nil {
-		return errors.Wrap(err, "parse profile registry sources")
-	}
-	profileRegistrySpecs, err := gepprofiles.ParseRegistrySourceSpecs(profileRegistryEntries)
+	profileRegistrySpecs, err := gepprofiles.ParseRegistrySourceSpecs(s.ProfileRegistries)
 	if err != nil {
 		return errors.Wrap(err, "parse profile registry source specs")
 	}

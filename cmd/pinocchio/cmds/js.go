@@ -17,6 +17,7 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/inference/middlewarecfg"
 	geptools "github.com/go-go-golems/geppetto/pkg/inference/tools"
 	gp "github.com/go-go-golems/geppetto/pkg/js/modules/geppetto"
+	geppettosections "github.com/go-go-golems/geppetto/pkg/sections"
 	aisettings "github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 	"github.com/go-go-golems/glazed/pkg/cli"
 	"github.com/go-go-golems/glazed/pkg/cmds/fields"
@@ -33,7 +34,6 @@ import (
 func NewJSCommand() *cobra.Command {
 	var (
 		scriptPath  string
-		profile     string
 		printResult bool
 		listGoTools bool
 	)
@@ -64,7 +64,6 @@ func NewJSCommand() *cobra.Command {
 
 	cmd.Flags().StringVar(&scriptPath, "script", "", "Path to JavaScript file to execute")
 	cmd.Flags().String("config-file", "", "Path to Pinocchio config file")
-	cmd.Flags().StringVar(&profile, "profile", "", "Load this profile from the configured profile registries")
 	cmd.Flags().BoolVar(&printResult, "print-result", false, "Print top-level JS return value as JSON")
 	cmd.Flags().BoolVar(&listGoTools, "list-go-tools", false, "List built-in Go tools exposed to JS and exit")
 	return cmd
@@ -158,7 +157,7 @@ func buildJSParsedValues(cmd *cobra.Command) (*values.Values, error) {
 	if err != nil {
 		return nil, err
 	}
-	profileSection, err := cmdhelpers.NewProfileSettingsSection()
+	profileSection, err := geppettosections.NewProfileSettingsSection()
 	if err != nil {
 		return nil, err
 	}
@@ -182,12 +181,12 @@ func buildJSParsedValues(cmd *cobra.Command) (*values.Values, error) {
 	if err != nil {
 		return nil, err
 	}
-	if raw := strings.TrimSpace(inheritedStringFlag(cmd, "profile-registries")); raw != "" {
+	if raw := inheritedStringSliceFlag(cmd, "profile-registries"); len(raw) > 0 {
 		if err := values.WithFieldValue("profile-registries", raw, fields.WithSource("cli"))(profileValues); err != nil {
 			return nil, err
 		}
 	}
-	if raw := strings.TrimSpace(localStringFlag(cmd, "profile")); raw != "" {
+	if raw := strings.TrimSpace(inheritedStringFlag(cmd, "profile")); raw != "" {
 		if err := values.WithFieldValue("profile", raw, fields.WithSource("cli"))(profileValues); err != nil {
 			return nil, err
 		}
@@ -219,12 +218,29 @@ func localStringFlag(cmd *cobra.Command, name string) string {
 	return ""
 }
 
+func inheritedStringSliceFlag(cmd *cobra.Command, name string) []string {
+	if cmd == nil {
+		return nil
+	}
+	if f := cmd.Flags().Lookup(name); f != nil {
+		if values_, err := cmd.Flags().GetStringSlice(name); err == nil {
+			return values_
+		}
+	}
+	if f := cmd.InheritedFlags().Lookup(name); f != nil {
+		if values_, err := cmd.InheritedFlags().GetStringSlice(name); err == nil {
+			return values_
+		}
+	}
+	return nil
+}
+
 func loadPinocchioProfileRegistryStack(parsed *values.Values) (gepprofiles.RegistryReader, gepprofiles.ResolveInput, io.Closer, error) {
 	profileSettings, _, err := cmdhelpers.ResolveEngineProfileSettings(parsed)
 	if err != nil {
 		return nil, gepprofiles.ResolveInput{}, nil, err
 	}
-	if profileSettings.ProfileRegistries == "" {
+	if len(profileSettings.ProfileRegistries) == 0 {
 		if profileSettings.Profile != "" {
 			return nil, gepprofiles.ResolveInput{}, nil, &gepprofiles.ValidationError{
 				Field:  "profile-settings.profile-registries",
@@ -233,11 +249,7 @@ func loadPinocchioProfileRegistryStack(parsed *values.Values) (gepprofiles.Regis
 		}
 		return nil, gepprofiles.ResolveInput{}, nil, nil
 	}
-	entries, err := gepprofiles.ParseEngineProfileRegistrySourceEntries(profileSettings.ProfileRegistries)
-	if err != nil {
-		return nil, gepprofiles.ResolveInput{}, nil, err
-	}
-	specs, err := gepprofiles.ParseRegistrySourceSpecs(entries)
+	specs, err := gepprofiles.ParseRegistrySourceSpecs(profileSettings.ProfileRegistries)
 	if err != nil {
 		return nil, gepprofiles.ResolveInput{}, nil, err
 	}

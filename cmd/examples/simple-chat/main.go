@@ -7,6 +7,7 @@ import (
 	"io"
 	"strings"
 
+	geppettosections "github.com/go-go-golems/geppetto/pkg/sections"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 
 	clay "github.com/go-go-golems/clay/pkg"
@@ -50,7 +51,7 @@ type ChatCommandSettings struct {
 // NewChatCommand wraps the GepettoCommand which was loaded from the yaml file,
 // and manually loads the profile to configure it.
 func NewChatCommand(cmd *pinocchio_cmds.PinocchioCommand) (*TestCommand, error) {
-	profileSettingsSection, err := helpers.NewProfileSettingsSection()
+	profileSettingsSection, err := geppettosections.NewProfileSettingsSection()
 	if err != nil {
 		return nil, err
 	}
@@ -91,7 +92,7 @@ func (c *TestCommand) RunIntoWriter(ctx context.Context, parsedLayers *values.Va
 	geppettoParsedLayers, err := helpers.ParseGeppettoLayers(
 		c.pinocchioCmd,
 		helpers.WithProfile(profileSettings.Profile),
-		helpers.WithProfileRegistries(profileSettings.ProfileRegistries),
+		helpers.WithProfileRegistries(strings.Join(profileSettings.ProfileRegistries, ",")),
 		helpers.WithConfigFile(commandSettings.ConfigFile),
 	)
 	if err != nil {

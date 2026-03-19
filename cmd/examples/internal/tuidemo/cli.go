@@ -8,6 +8,8 @@ import (
 
 	"github.com/go-go-golems/geppetto/pkg/inference/engine"
 	enginefactory "github.com/go-go-golems/geppetto/pkg/inference/engine/factory"
+	geppettosections "github.com/go-go-golems/geppetto/pkg/sections"
+	"github.com/go-go-golems/glazed/pkg/cmds/schema"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
@@ -27,11 +29,9 @@ type CLISpec struct {
 
 func ExecuteCLI(spec CLISpec) error {
 	var (
-		fixtureID         string
-		profileSlug       string
-		profileRegistries string
-		logLevel          string
-		listFixtures      bool
+		fixtureID    string
+		logLevel     string
+		listFixtures bool
 	)
 
 	root := &cobra.Command{
@@ -52,6 +52,12 @@ func ExecuteCLI(spec CLISpec) error {
 
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
+
+			profileSlug := strings.TrimSpace(cmd.Flags().Lookup("profile").Value.String())
+			profileRegistries, err := cmd.Flags().GetStringSlice("profile-registries")
+			if err != nil {
+				return errors.Wrap(err, "read profile registry flags")
+			}
 
 			stepSettings, closeRuntime, err := ResolveInferenceSettings(ctx, profileSlug, profileRegistries)
 			if err != nil {
@@ -74,10 +80,15 @@ func ExecuteCLI(spec CLISpec) error {
 	}
 
 	root.Flags().StringVar(&fixtureID, strings.TrimSpace(spec.FixtureFlag), spec.FixtureDefault, strings.TrimSpace(spec.FixtureUsage))
-	root.Flags().StringVar(&profileSlug, "profile", "", "Optional profile slug to resolve from profile registries")
-	root.Flags().StringVar(&profileRegistries, "profile-registries", "", "Optional comma-separated profile registry sources (yaml/sqlite/sqlite-dsn)")
 	root.Flags().StringVar(&logLevel, "log-level", "info", "Log level (trace|debug|info|warn|error)")
 	root.Flags().BoolVar(&listFixtures, strings.TrimSpace(spec.ListFlag), false, strings.TrimSpace(spec.ListUsage))
+	profileSettingsSection, err := geppettosections.NewProfileSettingsSection()
+	if err != nil {
+		return err
+	}
+	if err := profileSettingsSection.(schema.CobraSection).AddSectionToCobraCommand(root); err != nil {
+		return err
+	}
 
 	return root.Execute()
 }
