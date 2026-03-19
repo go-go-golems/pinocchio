@@ -225,6 +225,12 @@ func loadPinocchioProfileRegistryStack(parsed *values.Values) (gepprofiles.Regis
 		return nil, gepprofiles.ResolveInput{}, nil, err
 	}
 	if profileSettings.ProfileRegistries == "" {
+		if profileSettings.Profile != "" {
+			return nil, gepprofiles.ResolveInput{}, nil, &gepprofiles.ValidationError{
+				Field:  "profile-settings.profile-registries",
+				Reason: "must be configured (hard cutover: no profile-file fallback)",
+			}
+		}
 		return nil, gepprofiles.ResolveInput{}, nil, nil
 	}
 	entries, err := gepprofiles.ParseEngineProfileRegistrySourceEntries(profileSettings.ProfileRegistries)

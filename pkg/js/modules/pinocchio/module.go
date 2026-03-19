@@ -216,6 +216,9 @@ func resolveHasAPIKey(ss *aisettings.InferenceSettings, apiType string) bool {
 }
 
 func asString(v any) string {
+	if v == nil {
+		return ""
+	}
 	switch x := v.(type) {
 	case string:
 		return x

@@ -337,11 +337,15 @@ func cloneResolvedInferenceSettings(in *aisettings.InferenceSettings) *aisetting
 	return in.Clone()
 }
 
-func resolvedInferenceSettingsForRequest(resolved *gepprofiles.ResolvedEngineProfile, base *aisettings.InferenceSettings) *aisettings.InferenceSettings {
-	if resolved != nil && resolved.InferenceSettings != nil {
-		return resolved.InferenceSettings.Clone()
+func resolvedInferenceSettingsForRequest(resolved *gepprofiles.ResolvedEngineProfile, base *aisettings.InferenceSettings) (*aisettings.InferenceSettings, error) {
+	if resolved == nil || resolved.InferenceSettings == nil {
+		return cloneResolvedInferenceSettings(base), nil
 	}
-	return cloneResolvedInferenceSettings(base)
+	merged, err := gepprofiles.MergeInferenceSettings(base, resolved.InferenceSettings)
+	if err != nil {
+		return nil, err
+	}
+	return merged, nil
 }
 
 func (r *ProfileRequestResolver) buildConversationPlan(
@@ -357,7 +361,10 @@ func (r *ProfileRequestResolver) buildConversationPlan(
 	}
 	runtimeKey := runtimeKeyFromResolvedProfile(resolvedProfile)
 	profileVersion := profileVersionFromResolvedMetadata(resolvedProfile.Metadata)
-	inferenceSettings := resolvedInferenceSettingsForRequest(resolvedProfile, r.baseInferenceSettings)
+	inferenceSettings, err := resolvedInferenceSettingsForRequest(resolvedProfile, r.baseInferenceSettings)
+	if err != nil {
+		return nil, &webhttp.RequestResolutionError{Status: http.StatusInternalServerError, ClientMsg: "failed to merge inference settings", Err: err}
+	}
 	profileMetadata := copyMetadataMap(resolvedProfile.Metadata)
 
 	runtime := &resolvedWebChatRuntime{
