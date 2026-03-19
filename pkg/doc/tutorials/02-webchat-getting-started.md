@@ -85,29 +85,24 @@ curl -s http://localhost:5173/api/chat/profile \
   -d '{"slug":"agent"}'
 ```
 
-You can also inspect/create profiles with the registry CRUD endpoints:
+You can also inspect profiles with the shared read-only profile endpoints:
 
 ```bash
 curl -s http://localhost:5173/api/chat/profiles
-curl -s -X POST http://localhost:5173/api/chat/profiles \
-  -H "Content-Type: application/json" \
-  -d '{"slug":"analyst","runtime":{"system_prompt":"You are an analyst."}}'
+curl -s http://localhost:5173/api/chat/profiles/analyst
 ```
 
-If your selected profile policy allows request overrides, runtime overrides can be passed in the chat payload:
+Chat payloads stay small and selection-oriented:
 
 ```json
 {
   "conv_id": "<uuid>",
   "prompt": "use tools",
-  "request_overrides": {
-    "system_prompt": "You are an assistant",
-    "tools": ["calculator"]
-  }
+  "profile": "analyst"
 }
 ```
 
-For full endpoint semantics and policy/version behavior, see:
+For full endpoint semantics and selection behavior, see:
 
 - `pinocchio/pkg/doc/topics/webchat-profile-registry.md`
 

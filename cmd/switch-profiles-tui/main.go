@@ -19,7 +19,9 @@ import (
 	renderers "github.com/go-go-golems/bobatea/pkg/timeline/renderers"
 	"github.com/go-go-golems/geppetto/pkg/events"
 	"github.com/go-go-golems/geppetto/pkg/inference/middleware"
+	geppettosections "github.com/go-go-golems/geppetto/pkg/sections"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
+	"github.com/go-go-golems/glazed/pkg/cmds/schema"
 	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
 	timelinepb "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/timeline"
 	"github.com/go-go-golems/pinocchio/pkg/tui/overlay"
@@ -61,17 +63,16 @@ func mergeStringAnyMap(base map[string]any, extra map[string]any) map[string]any
 	return out
 }
 
-func publishProfileSwitchedInfo(sink events.EventSink, convID, from, to, runtimeKey, runtimeFingerprint string) error {
+func publishProfileSwitchedInfo(sink events.EventSink, convID, from, to string) error {
 	if sink == nil {
 		return nil
 	}
 	md := events.EventMetadata{
 		ID: uuid.New(),
 		Extra: map[string]any{
-			"conversation_id":     strings.TrimSpace(convID),
-			"runtime_key":         strings.TrimSpace(runtimeKey),
-			"runtime_fingerprint": strings.TrimSpace(runtimeFingerprint),
-			"profile.slug":        strings.TrimSpace(to),
+			"conversation_id": strings.TrimSpace(convID),
+			"runtime_key":     strings.TrimSpace(to),
+			"profile.slug":    strings.TrimSpace(to),
 		},
 	}
 	return sink.PublishEvent(events.NewInfoEvent(md, "profile-switched", map[string]any{
@@ -112,6 +113,13 @@ func main() {
 		Use:   "switch-profiles-tui",
 		Short: "Bubble Tea chat TUI with /profile switching via Geppetto profile registries",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			profileSlug = strings.TrimSpace(cmd.Flags().Lookup("profile").Value.String())
+			profileRegistriesEntries, err := cmd.Flags().GetStringSlice("profile-registries")
+			if err != nil {
+				return errors.Wrap(err, "read profile registry flags")
+			}
+			profileRegistries = strings.Join(profileRegistriesEntries, ",")
+
 			zerolog.TimeFieldFormat = time.StampMilli
 			if lvl := strings.TrimSpace(logLevel); lvl != "" {
 				if parsed, err := zerolog.ParseLevel(lvl); err == nil {
@@ -129,7 +137,7 @@ func main() {
 				convID = "tui-" + uuid.NewString()
 			}
 
-			base, err := settings.NewStepSettings()
+			base, err := settings.NewInferenceSettings()
 			if err != nil {
 				return err
 			}
@@ -140,7 +148,7 @@ func main() {
 			}
 			defer func() { _ = mgr.Close() }()
 
-			profiles, err := mgr.ListProfiles(ctx)
+			profiles, err := mgr.ListEngineProfiles(ctx)
 			if err != nil {
 				return err
 			}
@@ -219,7 +227,7 @@ func main() {
 				}
 				var parts []string
 				parts = append(parts, statusBarKeyStyle.Render("profile: ")+statusBarValStyle.Render(cur.ProfileSlug.String()))
-				if s := cur.EffectiveStepSettings; s != nil && s.Chat != nil {
+				if s := cur.InferenceSettings; s != nil && s.Chat != nil {
 					if s.Chat.Engine != nil && *s.Chat.Engine != "" {
 						parts = append(parts, statusBarKeyStyle.Render("model: ")+statusBarValStyle.Render(*s.Chat.Engine))
 					}
@@ -256,7 +264,7 @@ func main() {
 					return true, localPlainEntityCmd("profile_error", map[string]any{"error": err.Error()})
 				}
 				publishCmd := func() tea.Msg {
-					if err := publishProfileSwitchedInfo(sink, convID, from, next.ProfileSlug.String(), next.RuntimeKey.String(), next.RuntimeFingerprint); err != nil {
+					if err := publishProfileSwitchedInfo(sink, convID, from, next.ProfileSlug.String()); err != nil {
 						log.Warn().Err(err).Msg("failed to publish profile-switched info event")
 					}
 					return nil
@@ -266,7 +274,7 @@ func main() {
 					localPlainEntityCmd("profile_switched", map[string]any{
 						"from":        from,
 						"to":          next.ProfileSlug.String(),
-						"runtime_key": next.RuntimeKey.String(),
+						"runtime_key": next.ProfileSlug.String(),
 					}),
 				)
 			}
@@ -300,7 +308,7 @@ func main() {
 					}
 					diff := profileswitch.ProfileDiff(fromResolved, res)
 					log.Info().Str("diff", diff.String()).Msg("Profile switch diff")
-					if err := publishProfileSwitchedInfo(sink, convID, from, res.ProfileSlug.String(), res.RuntimeKey.String(), res.RuntimeFingerprint); err != nil {
+					if err := publishProfileSwitchedInfo(sink, convID, from, res.ProfileSlug.String()); err != nil {
 						log.Warn().Err(err).Msg("failed to publish profile-switched info event")
 					}
 				},
@@ -336,7 +344,7 @@ func main() {
 				return nil
 			})
 
-			log.Info().Str("conv_id", convID).Str("profile", res.ProfileSlug.String()).Str("runtime_key", res.RuntimeKey.String()).Msg("Starting TUI")
+			log.Info().Str("conv_id", convID).Str("profile", res.ProfileSlug.String()).Msg("Starting TUI")
 
 			eg, groupCtx := errgroup.WithContext(ctx)
 			eg.Go(func() error { return router.Run(groupCtx) })
@@ -353,12 +361,19 @@ func main() {
 		},
 	}
 
-	root.Flags().StringVar(&profileRegistries, "profile-registries", "", "Comma-separated profile registry sources (yaml/sqlite/sqlite-dsn). REQUIRED.")
-	root.Flags().StringVar(&profileSlug, "profile", "", "Initial profile slug (default: registry default profile)")
 	root.Flags().StringVar(&convID, "conv-id", "", "Conversation ID for persistence (default: generated)")
 	root.Flags().StringVar(&timelineDB, "timeline-db", "/tmp/switch-profiles-tui.timeline.db", "SQLite DB file for timeline projection persistence")
 	root.Flags().StringVar(&turnsDB, "turns-db", "/tmp/switch-profiles-tui.turns.db", "SQLite DB file for turn snapshot persistence")
 	root.Flags().StringVar(&logLevel, "log-level", "info", "Log level (trace|debug|info|warn|error)")
+	profileSettingsSection, err := geppettosections.NewProfileSettingsSection()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	if err := profileSettingsSection.(schema.CobraSection).AddSectionToCobraCommand(root); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
 
 	if err := root.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)

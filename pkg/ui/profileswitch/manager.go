@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	gepprofiles "github.com/go-go-golems/geppetto/pkg/profiles"
+	gepprofiles "github.com/go-go-golems/geppetto/pkg/engineprofiles"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 	"github.com/pkg/errors"
 )
@@ -14,18 +14,18 @@ import (
 type Manager struct {
 	reg      gepprofiles.Registry
 	sources  string
-	base     *settings.StepSettings
+	base     *settings.InferenceSettings
 	resolved Resolved
 }
 
-func NewManagerFromSources(ctx context.Context, sources string, base *settings.StepSettings) (*Manager, error) {
+func NewManagerFromSources(ctx context.Context, sources string, base *settings.InferenceSettings) (*Manager, error) {
 	if strings.TrimSpace(sources) == "" {
 		return nil, &gepprofiles.ValidationError{Field: "profile-settings.profile-registries", Reason: "must not be empty"}
 	}
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	entries, err := gepprofiles.ParseProfileRegistrySourceEntries(sources)
+	entries, err := gepprofiles.ParseEngineProfileRegistrySourceEntries(sources)
 	if err != nil {
 		return nil, err
 	}
@@ -45,12 +45,12 @@ func NewManagerFromSources(ctx context.Context, sources string, base *settings.S
 	return m, nil
 }
 
-func NewManager(reg gepprofiles.Registry, sources string, base *settings.StepSettings) (*Manager, error) {
+func NewManager(reg gepprofiles.Registry, sources string, base *settings.InferenceSettings) (*Manager, error) {
 	if reg == nil {
 		return nil, errors.New("profile manager: registry is nil")
 	}
 	if base == nil {
-		return nil, errors.New("profile manager: base step settings is nil")
+		return nil, errors.New("profile manager: base inference settings are nil")
 	}
 	return &Manager{reg: reg, sources: strings.TrimSpace(sources), base: base}, nil
 }
@@ -79,7 +79,7 @@ func (m *Manager) Current() Resolved {
 	return m.resolved
 }
 
-func (m *Manager) ListProfiles(ctx context.Context) ([]ProfileListItem, error) {
+func (m *Manager) ListEngineProfiles(ctx context.Context) ([]ProfileListItem, error) {
 	if m == nil || m.reg == nil {
 		return nil, errors.New("profile manager: not initialized")
 	}
@@ -97,7 +97,7 @@ func (m *Manager) ListProfiles(ctx context.Context) ([]ProfileListItem, error) {
 	items := make([]ProfileListItem, 0, 32)
 	for _, rs := range regs {
 		regSlug := rs.Slug
-		profiles, err := m.reg.ListProfiles(ctx, regSlug)
+		profiles, err := m.reg.ListEngineProfiles(ctx, regSlug)
 		if err != nil {
 			return nil, err
 		}
@@ -110,7 +110,7 @@ func (m *Manager) ListProfiles(ctx context.Context) ([]ProfileListItem, error) {
 				ProfileSlug:  p.Slug,
 				DisplayName:  strings.TrimSpace(p.DisplayName),
 				Description:  strings.TrimSpace(p.Description),
-				IsDefault:    rs.DefaultProfileSlug == p.Slug,
+				IsDefault:    rs.DefaultEngineProfileSlug == p.Slug,
 				Version:      p.Metadata.Version,
 			})
 		}
@@ -136,17 +136,16 @@ func (m *Manager) Resolve(ctx context.Context, profileSlug string) (Resolved, er
 	}
 
 	var in gepprofiles.ResolveInput
-	in.BaseStepSettings = m.base
 
 	if strings.TrimSpace(profileSlug) != "" {
-		ps, err := gepprofiles.ParseProfileSlug(profileSlug)
+		ps, err := gepprofiles.ParseEngineProfileSlug(profileSlug)
 		if err != nil {
 			return Resolved{}, err
 		}
-		in.ProfileSlug = ps
+		in.EngineProfileSlug = ps
 	}
 
-	resolved, err := m.reg.ResolveEffectiveProfile(ctx, in)
+	resolved, err := m.reg.ResolveEngineProfile(ctx, in)
 	if err != nil {
 		return Resolved{}, err
 	}
@@ -154,32 +153,26 @@ func (m *Manager) Resolve(ctx context.Context, profileSlug string) (Resolved, er
 		return Resolved{}, errors.New("profile manager: resolved profile is nil")
 	}
 
-	sysPrompt := ""
-	patch := map[string]any(nil)
 	version := uint64(0)
-	sysPrompt = strings.TrimSpace(resolved.EffectiveRuntime.SystemPrompt)
-	if len(resolved.EffectiveRuntime.StepSettingsPatch) > 0 {
-		patch = resolved.EffectiveRuntime.StepSettingsPatch
-	}
 	if resolved.Metadata != nil {
 		if v, ok := resolved.Metadata["profile.version"].(uint64); ok {
 			version = v
 		}
 	}
+	finalSettings, err := gepprofiles.MergeInferenceSettings(m.base, resolved.InferenceSettings)
+	if err != nil {
+		return Resolved{}, errors.Wrap(err, "merge base inference settings with resolved engine profile")
+	}
 
 	out := Resolved{
-		RegistrySlug:          resolved.RegistrySlug,
-		ProfileSlug:           resolved.ProfileSlug,
-		RuntimeKey:            resolved.RuntimeKey,
-		RuntimeFingerprint:    strings.TrimSpace(resolved.RuntimeFingerprint),
-		SystemPrompt:          sysPrompt,
-		StepSettingsPatch:     patch,
-		EffectiveStepSettings: resolved.EffectiveStepSettings,
-		ProfileVersion:        version,
-		Metadata:              resolved.Metadata,
+		RegistrySlug:      resolved.RegistrySlug,
+		ProfileSlug:       resolved.EngineProfileSlug,
+		InferenceSettings: finalSettings,
+		ProfileVersion:    version,
+		Metadata:          resolved.Metadata,
 	}
-	if out.EffectiveStepSettings == nil {
-		return Resolved{}, errors.New("profile manager: resolved effective step settings is nil")
+	if out.InferenceSettings == nil {
+		return Resolved{}, errors.New("profile manager: resolved inference settings are nil")
 	}
 	return out, nil
 }

@@ -47,7 +47,7 @@ That no longer matches the current architecture. `pkg/webchat` now owns the reus
 services and shared `/api/*` utilities, while the embedding application owns:
 
 - request resolution,
-- runtime/profile policy,
+- runtime/profile selection,
 - `/chat` and `/ws` route registration,
 - timeline route mounting,
 - middleware-definition wiring.
@@ -138,8 +138,8 @@ Then:
 
 - inject `defs` into your runtime composer,
 - use the runtime composer to resolve profile/runtime middleware inputs,
-- pass `defs` to `webhttp.RegisterProfileAPIHandlers(...)` so schema and CRUD
-  validation uses the same source of truth.
+- pass `defs` to `webhttp.RegisterProfileAPIHandlers(...)` so schema and
+  selection-time validation use the same source of truth.
 
 ## Route Migration Checklist
 
@@ -161,7 +161,7 @@ Then:
 
 | Problem | Cause | Fix |
 |---|---|---|
-| profile CRUD accepts middleware names but schema endpoint is empty | definition registry not passed to profile API handlers | pass `MiddlewareDefinitions` to `webhttp.RegisterProfileAPIHandlers(...)` |
+| profile selection accepts middleware names but schema endpoint is empty | definition registry not passed to profile API handlers | pass `MiddlewareDefinitions` to `webhttp.RegisterProfileAPIHandlers(...)` |
 | `/chat` works but websocket/timeline feel detached | app only mounted the chat handler | mount `/ws` and `/api/timeline` explicitly on the same mux |
 | old embedding expected one `router.Handler()` | combined compatibility handler no longer exists | mount `srv.APIHandler()`, `srv.UIHandler()`, and app-owned handlers separately |
 | clients still send `runtime_key` or `registry_slug` | old request contract not updated | switch clients to `profile` and `registry` |
@@ -182,5 +182,5 @@ After migrating:
 
 - [Webchat Framework Guide](webchat-framework-guide.md)
 - [Webchat HTTP Chat Setup](webchat-http-chat-setup.md)
-- [Webchat Profile Registry Guide](webchat-profile-registry.md)
+- [Webchat Engine Profile Guide](webchat-profile-registry.md)
 - [Webchat Values Separation Migration Guide](webchat-values-separation-migration-guide.md)

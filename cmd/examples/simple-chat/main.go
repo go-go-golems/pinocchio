@@ -18,6 +18,7 @@ import (
 	pinocchio_cmds "github.com/go-go-golems/pinocchio/pkg/cmds"
 	"github.com/go-go-golems/pinocchio/pkg/cmds/cmdlayers"
 	"github.com/go-go-golems/pinocchio/pkg/cmds/helpers"
+	profilebootstrap "github.com/go-go-golems/pinocchio/pkg/cmds/profilebootstrap"
 	"github.com/go-go-golems/pinocchio/pkg/cmds/run"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
@@ -50,7 +51,7 @@ type ChatCommandSettings struct {
 // NewChatCommand wraps the GepettoCommand which was loaded from the yaml file,
 // and manually loads the profile to configure it.
 func NewChatCommand(cmd *pinocchio_cmds.PinocchioCommand) (*TestCommand, error) {
-	profileSettingsSection, err := helpers.NewProfileSettingsSection()
+	profileSettingsSection, err := profilebootstrap.NewProfileSettingsSection()
 	if err != nil {
 		return nil, err
 	}
@@ -84,9 +85,6 @@ func (c *TestCommand) RunIntoWriter(ctx context.Context, parsedLayers *values.Va
 	commandSettings := &cli.CommandSettings{}
 	_ = parsedLayers.DecodeSectionInto(cli.CommandSettingsSlug, commandSettings)
 	profileSettings := helpers.ResolveProfileSettings(parsedLayers)
-	if profileSettings.Profile == "" {
-		profileSettings.Profile = "default"
-	}
 
 	geppettoParsedLayers, err := helpers.ParseGeppettoLayers(
 		c.pinocchioCmd,
@@ -115,14 +113,14 @@ func (c *TestCommand) RunIntoWriter(ctx context.Context, parsedLayers *values.Va
 		return errors.Wrap(err, "failed to initialize helpers settings")
 	}
 
-	// Update step settings from parsed layers
-	stepSettings, err := settings.NewStepSettings()
+	// Update inference settings from parsed layers
+	stepSettings, err := settings.NewInferenceSettings()
 	if err != nil {
-		return errors.Wrap(err, "failed to create step settings")
+		return errors.Wrap(err, "failed to create inference settings")
 	}
 	err = stepSettings.UpdateFromParsedValues(geppettoParsedLayers)
 	if err != nil {
-		return errors.Wrap(err, "failed to update step settings from parsed layers")
+		return errors.Wrap(err, "failed to update inference settings from parsed layers")
 	}
 
 	// Build seed Turn from helpers settings (system prompt and optional user prompt)
@@ -147,7 +145,7 @@ func (c *TestCommand) RunIntoWriter(ctx context.Context, parsedLayers *values.Va
 
 	// Run with options (Turn-first)
 	updatedTurn, err := c.pinocchioCmd.RunWithOptions(ctx,
-		run.WithStepSettings(stepSettings),
+		run.WithInferenceSettings(stepSettings),
 		run.WithWriter(w),
 		run.WithRunMode(run.RunModeBlocking),
 		run.WithUISettings(&run.UISettings{

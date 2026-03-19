@@ -15,7 +15,29 @@ type llmConversationState struct {
 	engine             engine.Engine
 	session            *session.Session
 	seedSystemPrompt   string
-	allowedTools       []string
+	toolNames          []string
+}
+
+func toolNamesFromResolvedRuntime(runtime *infruntime.ConversationRuntimeRequest) []string {
+	if runtime == nil || runtime.ResolvedProfileRuntime == nil {
+		return nil
+	}
+	tools := runtime.ResolvedProfileRuntime.Tools
+	if len(tools) == 0 {
+		return nil
+	}
+	ret := make([]string, 0, len(tools))
+	for _, name := range tools {
+		name = strings.TrimSpace(name)
+		if name == "" {
+			continue
+		}
+		ret = append(ret, name)
+	}
+	if len(ret) == 0 {
+		return nil
+	}
+	return ret
 }
 
 func (cm *ConvManager) ensureLLMState(conv *Conversation) (*llmConversationState, error) {
@@ -39,6 +61,7 @@ func (cm *ConvManager) ensureLLMState(conv *Conversation) (*llmConversationState
 		ConvID:                     conv.ID,
 		ProfileKey:                 conv.RuntimeKey,
 		ProfileVersion:             conv.profileVersion,
+		ResolvedInferenceSettings:  cloneInferenceSettings(conv.resolvedInferenceSettings),
 		ResolvedProfileRuntime:     conv.resolvedRuntime,
 		ResolvedProfileFingerprint: strings.TrimSpace(conv.RuntimeFingerprint),
 	}
@@ -65,7 +88,7 @@ func (cm *ConvManager) ensureLLMState(conv *Conversation) (*llmConversationState
 		runtimeFingerprint: strings.TrimSpace(runtime.RuntimeFingerprint),
 		engine:             runtime.Engine,
 		seedSystemPrompt:   runtime.SeedSystemPrompt,
-		allowedTools:       append([]string(nil), runtime.AllowedTools...),
+		toolNames:          toolNamesFromResolvedRuntime(&req),
 	}
 	state.session = &session.Session{
 		SessionID: sessionID,

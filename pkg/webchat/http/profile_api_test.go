@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	gepprofiles "github.com/go-go-golems/geppetto/pkg/profiles"
+	gepprofiles "github.com/go-go-golems/geppetto/pkg/engineprofiles"
 )
 
 type testExtensionSchemaCodec struct {
@@ -34,12 +34,6 @@ func (c decodeOnlyCodec) Key() gepprofiles.ExtensionKey {
 
 func (c decodeOnlyCodec) Decode(raw any) (any, error) {
 	return raw, nil
-}
-
-type lookupOnlyCodecRegistry struct{}
-
-func (lookupOnlyCodecRegistry) Lookup(gepprofiles.ExtensionKey) (gepprofiles.ExtensionCodec, bool) {
-	return nil, false
 }
 
 func mustCodec(t *testing.T, rawKey string, schema map[string]any) testExtensionSchemaCodec {
@@ -113,8 +107,8 @@ func TestListExtensionSchemas_SkipsCodecWithoutSchemaInterface(t *testing.T) {
 	}
 }
 
-func TestListExtensionSchemas_GracefullyHandlesRegistryWithoutLister(t *testing.T) {
-	items := listExtensionSchemas(nil, nil, lookupOnlyCodecRegistry{})
+func TestListExtensionSchemas_GracefullyHandlesNilRegistry(t *testing.T) {
+	items := listExtensionSchemas(nil, nil, nil)
 	if len(items) != 0 {
 		t.Fatalf("expected no schema items, got=%d", len(items))
 	}
@@ -122,13 +116,13 @@ func TestListExtensionSchemas_GracefullyHandlesRegistryWithoutLister(t *testing.
 
 func TestProfileListItemsFromRegistry_IncludesRegistryIdentifier(t *testing.T) {
 	registrySlug := gepprofiles.MustRegistrySlug("team")
-	registry := &gepprofiles.ProfileRegistry{
-		Slug:               registrySlug,
-		DefaultProfileSlug: gepprofiles.MustProfileSlug("analyst"),
+	registry := &gepprofiles.EngineProfileRegistry{
+		Slug:                     registrySlug,
+		DefaultEngineProfileSlug: gepprofiles.MustEngineProfileSlug("analyst"),
 	}
-	profiles_ := []*gepprofiles.Profile{
+	profiles_ := []*gepprofiles.EngineProfile{
 		{
-			Slug:        gepprofiles.MustProfileSlug("analyst"),
+			Slug:        gepprofiles.MustEngineProfileSlug("analyst"),
 			DisplayName: "Analyst",
 		},
 	}

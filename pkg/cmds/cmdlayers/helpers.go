@@ -15,23 +15,25 @@ type AutosaveSettings struct {
 }
 
 type HelpersSettings struct {
-	PrintPrompt       bool               `glazed:"print-prompt"`
-	System            string             `glazed:"system"`
-	AppendMessageFile string             `glazed:"append-message-file"`
-	MessageFile       string             `glazed:"message-file"`
-	StartInChat       bool               `glazed:"chat"`
-	Interactive       bool               `glazed:"interactive"`
-	ForceInteractive  bool               `glazed:"force-interactive"`
-	TimelineDSN       string             `glazed:"timeline-dsn"`
-	TimelineDB        string             `glazed:"timeline-db"`
-	TurnsDSN          string             `glazed:"turns-dsn"`
-	TurnsDB           string             `glazed:"turns-db"`
-	Images            []*fields.FileData `glazed:"images"`
-	Autosave          *AutosaveSettings  `glazed:"autosave,from_json"`
-	NonInteractive    bool               `glazed:"non-interactive"`
-	Output            string             `glazed:"output"`
-	WithMetadata      bool               `glazed:"with-metadata"`
-	FullOutput        bool               `glazed:"full-output"`
+	PrintPrompt            bool               `glazed:"print-prompt"`
+	PrintInferenceSettings bool               `glazed:"print-inference-settings"`
+	PrintInferenceSources  bool               `glazed:"print-inference-settings-sources"`
+	System                 string             `glazed:"system"`
+	AppendMessageFile      string             `glazed:"append-message-file"`
+	MessageFile            string             `glazed:"message-file"`
+	StartInChat            bool               `glazed:"chat"`
+	Interactive            bool               `glazed:"interactive"`
+	ForceInteractive       bool               `glazed:"force-interactive"`
+	TimelineDSN            string             `glazed:"timeline-dsn"`
+	TimelineDB             string             `glazed:"timeline-db"`
+	TurnsDSN               string             `glazed:"turns-dsn"`
+	TurnsDB                string             `glazed:"turns-db"`
+	Images                 []*fields.FileData `glazed:"images"`
+	Autosave               *AutosaveSettings  `glazed:"autosave,from_json"`
+	NonInteractive         bool               `glazed:"non-interactive"`
+	Output                 string             `glazed:"output"`
+	WithMetadata           bool               `glazed:"with-metadata"`
+	FullOutput             bool               `glazed:"full-output"`
 }
 
 const GeppettoHelpersSlug = "geppetto-helpers"
@@ -46,6 +48,18 @@ func NewHelpersParameterLayer() (schema.Section, error) {
 				fields.TypeBool,
 				fields.WithDefault(false),
 				fields.WithHelp("Print the prompt"),
+			),
+			fields.New(
+				"print-inference-settings",
+				fields.TypeBool,
+				fields.WithDefault(false),
+				fields.WithHelp("Print the final resolved inference settings and exit"),
+			),
+			fields.New(
+				"print-inference-settings-sources",
+				fields.TypeBool,
+				fields.WithDefault(false),
+				fields.WithHelp("Print the final resolved inference settings together with source logs and exit"),
 			),
 			fields.New(
 				"system",

@@ -44,9 +44,9 @@ Finally, install by downloading the binaries straight from [github](https://gith
 
 ## Usage
 
-Configure pinocchio through layered config plus a profile-registry stack.
+Configure pinocchio through layered config plus an engine-profile registry stack.
 Use `~/.pinocchio/config.yaml` for app config and optional provider defaults, and use
-profile registries to select the active model/provider runtime.
+engine profiles to select the active model/provider settings.
 
 ```yaml
 repositories:
@@ -81,62 +81,150 @@ I am 100 years old.
 Pinocchio comes with a selection of [demo prompts](https://github.com/go-go-golems/geppetto/tree/main/cmd/pinocchio/prompts/examples)
 as an inspiration.
 
-## Profile registry loading
+## Engine profile loading
 
-Pinocchio now resolves profiles from a profile-registry source stack.
+Pinocchio resolves engine profiles from a registry source stack.
 
-Selection knobs:
+Registry-source precedence:
 
-- `--profile-registries` (comma-separated YAML/SQLite sources)
-- `PINOCCHIO_PROFILE_REGISTRIES`
-- `profile-settings.profile-registries` in config YAML
+1. `--profile-registries` (comma-separated YAML/SQLite sources)
+2. `PINOCCHIO_PROFILE_REGISTRIES`
+3. `profile-settings.profile-registries` in the selected config file
+4. `${XDG_CONFIG_HOME:-~/.config}/pinocchio/profiles.yaml` when the file exists
 
-When none of the above are set, pinocchio automatically uses:
+Profile-selection precedence:
 
-- `${XDG_CONFIG_HOME:-~/.config}/pinocchio/profiles.yaml` (if the file exists)
-
-Profile selection is still done with:
-
-- `--profile`
-- `PINOCCHIO_PROFILE`
+1. `--profile`
+2. `PINOCCHIO_PROFILE`
+3. `profile-settings.profile` in the selected config file
+4. the registry default profile (`default_profile_slug` or slug `default`)
 
 Example:
 
 ```bash
-PINOCCHIO_PROFILE=gpt-5 pinocchio examples test
+PINOCCHIO_PROFILE=gpt-5-mini pinocchio examples test
 ```
 
-This works as long as `gpt-5` exists in the default runtime file (`~/.config/pinocchio/profiles.yaml`) or one of the configured profile-registry sources.
+This works as long as `gpt-5-mini` exists in the default engine-profile file (`~/.config/pinocchio/profiles.yaml`) or one of the configured registry sources.
 
-Runtime YAML format is single-registry only:
+Engine-profile YAML format is single-registry only:
 
 ```yaml
-slug: default
+slug: workspace
 profiles:
-  gpt-5:
-    slug: gpt-5
-    runtime:
-      step_settings_patch:
-        ai-chat:
-          ai-api-type: openai-responses
-          ai-engine: gpt-5
+  default:
+    slug: default
+    inference_settings:
+      chat:
+        api_type: openai
+        engine: gpt-4o-mini
+  gpt-5-mini:
+    slug: gpt-5-mini
+    stack:
+      - profile_slug: default
+    inference_settings:
+      chat:
+        engine: gpt-5-mini
 ```
 
-Do not use `registries:` or `default_profile_slug` in runtime YAML sources.
-Keep provider credentials and other base defaults either in layered app config or in the
-profile runtime patch, but be deliberate about which layer owns them.
+Keep prompts, middlewares, and tool selection out of this file. Those are application-level concerns now.
 
-## Migrating old profiles.yaml
+## Running JavaScript scripts
 
-If your old file used the legacy map format, convert it with:
+Pinocchio can now run JavaScript directly:
 
 ```bash
-pinocchio profiles migrate-legacy \
-  --input ~/.config/pinocchio/profiles.yaml \
-  --output ~/.config/pinocchio/profiles.registry.yaml
+pinocchio js --script script.js
 ```
 
-Then rewrite/export the target runtime registry as a single-registry YAML (`slug` + `profiles`) and place it at `~/.config/pinocchio/profiles.yaml` (or wire it via `--profile-registries` / `PINOCCHIO_PROFILE_REGISTRIES`).
+This command bootstraps a JS runtime with two important modules:
+
+- `require("geppetto")`
+  - the Geppetto JS API, including `gp.engines.*`, `gp.profiles.*`, and `gp.runner.*`
+- `require("pinocchio")`
+  - Pinocchio-specific helpers, starting with `pinocchio.engines.fromDefaults()`
+
+The intended model is:
+
+- Pinocchio owns config/env/default resolution for hidden base `InferenceSettings`
+- Pinocchio owns engine-profile registry discovery
+- Geppetto owns engine-profile resolution plus the generic JS inference and runner API
+
+That means a script can resolve an engine profile from the same registry/config path the CLI already uses and then build an engine directly from that resolved profile.
+
+`pinocchio js` also accepts `--config-file`, so the script can inherit `profile-settings.profile-registries` and `profile-settings.profile` from the same config file used by the other Pinocchio commands.
+
+Example:
+
+```javascript
+const gp = require("geppetto");
+const resolved = gp.profiles.resolve({});
+console.log(JSON.stringify({
+  profileSlug: resolved.profileSlug,
+  model: resolved.inferenceSettings?.chat?.engine,
+}, null, 2));
+
+const engine = gp.engines.fromResolvedProfile(resolved);
+
+const out = gp.runner.run({
+  engine,
+  prompt: "Summarize the repo in one line.",
+});
+
+console.log(out.blocks[0].payload.text);
+```
+
+There is a runnable real-inference example in:
+
+- [examples/js/runner-profile-demo.js](./examples/js/runner-profile-demo.js)
+
+It builds the engine directly from the resolved engine profile, so the selected profile controls the model/provider settings used for the actual inference.
+
+Run it with:
+
+```bash
+pinocchio js \
+  --script examples/js/runner-profile-demo.js \
+  --profile-registries examples/js/profiles/basic.yaml
+```
+
+Or select a specific profile from that registry:
+
+```bash
+pinocchio js \
+  examples/js/runner-profile-demo.js \
+  --profile assistant \
+  --profile-registries examples/js/profiles/basic.yaml
+```
+
+If you want a deterministic local smoke run instead of a live model call, use:
+
+```bash
+pinocchio js \
+  --script examples/js/runner-profile-smoke.js \
+  --profile-registries examples/js/profiles/basic.yaml
+```
+
+## profiles.yaml format
+
+`pinocchio` now expects engine-only profiles in `${XDG_CONFIG_HOME:-~/.config}/pinocchio/profiles.yaml`.
+
+Old mixed-runtime profile files should be rewritten directly to the engine-only `inference_settings` shape. Prompt, middleware, and tool policy no longer belong in this file.
+
+The target shape looks like this:
+
+```yaml
+slug: workspace
+profiles:
+  default:
+    slug: default
+    inference_settings:
+      chat:
+        api_type: openai
+        engine: gpt-4o-mini
+```
+
+Use [examples/js/profiles/basic.yaml](/home/manuel/workspaces/2026-03-17/add-opinionated-apis/pinocchio/examples/js/profiles/basic.yaml) as the smallest concrete reference.
 
 ## Creating your own prompt
 

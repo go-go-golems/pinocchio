@@ -22,7 +22,6 @@ import (
 
 type LLMLoopStartPayload struct {
 	Prompt         string
-	Overrides      map[string]any
 	IdempotencyKey string
 }
 
@@ -111,13 +110,13 @@ func (r *LLMLoopRunner) Start(ctx context.Context, req StartRequest) (StartResul
 		_ = tf(tmpReg)
 	}
 	registry := geptools.NewInMemoryToolRegistry()
-	if len(state.allowedTools) == 0 {
+	if len(state.toolNames) == 0 {
 		for _, td := range tmpReg.ListTools() {
 			_ = registry.RegisterTool(td.Name, td)
 		}
 	} else {
 		allowed := map[string]struct{}{}
-		for _, n := range state.allowedTools {
+		for _, n := range state.toolNames {
 			if t := strings.TrimSpace(n); t != "" {
 				allowed[t] = struct{}{}
 			}
@@ -143,10 +142,6 @@ func (r *LLMLoopRunner) Start(ctx context.Context, req StartRequest) (StartResul
 		if err := r.publishUserChatMessageEvent(baseCtx, req.ConvID, "user-"+turnID, payload.Prompt); err != nil {
 			return StartResult{}, errors.Wrap(err, "publish user chat.message event")
 		}
-	}
-
-	if stepModeFromOverrides(payload.Overrides) && r.stepCtrl != nil {
-		r.stepCtrl.Enable(toolloop.StepScope{SessionID: req.SessionID, ConversationID: req.ConvID})
 	}
 
 	loopCfg := toolloop.NewLoopConfig().WithMaxIterations(5)

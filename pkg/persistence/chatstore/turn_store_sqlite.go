@@ -742,10 +742,10 @@ func runtimeKeyFromTurnMetadata(metadata turns.Metadata) string {
 	out := ""
 	metadata.Range(func(key turns.TurnMetadataKey, value any) bool {
 		k := strings.TrimSpace(key.String())
-		if k != turns.KeyTurnMetaRuntime.String() && k != "runtime" && k != "runtime_key" {
+		if k != turns.KeyTurnMetaRuntime.String() {
 			return true
 		}
-		if s, ok := stringFromMaybeRuntimeValue(value); ok {
+		if s, ok := runtimeKeyFromRuntimeValue(value); ok {
 			out = s
 			return false
 		}
@@ -758,11 +758,9 @@ func runtimeKeyFromTurnMetadataMap(metadata map[string]any) string {
 	if len(metadata) == 0 {
 		return ""
 	}
-	for _, key := range []string{turns.KeyTurnMetaRuntime.String(), "runtime", "runtime_key"} {
-		if v, ok := metadata[key]; ok {
-			if s, ok := stringFromMaybeRuntimeValue(v); ok {
-				return s
-			}
+	if v, ok := metadata[turns.KeyTurnMetaRuntime.String()]; ok {
+		if s, ok := runtimeKeyFromRuntimeValue(v); ok {
+			return s
 		}
 	}
 	return ""
@@ -775,7 +773,7 @@ func inferenceIDFromTurnMetadata(metadata turns.Metadata) string {
 		if k != turns.KeyTurnMetaInferenceID.String() && k != "inference_id" {
 			return true
 		}
-		if s, ok := stringFromMaybeRuntimeValue(value); ok {
+		if s, ok := stringFromValue(value); ok {
 			out = s
 			return false
 		}
@@ -790,7 +788,7 @@ func inferenceIDFromTurnMetadataMap(metadata map[string]any) string {
 	}
 	for _, key := range []string{turns.KeyTurnMetaInferenceID.String(), "inference_id"} {
 		if v, ok := metadata[key]; ok {
-			if s, ok := stringFromMaybeRuntimeValue(v); ok {
+			if s, ok := stringFromValue(v); ok {
 				return s
 			}
 		}
@@ -798,7 +796,19 @@ func inferenceIDFromTurnMetadataMap(metadata map[string]any) string {
 	return ""
 }
 
-func stringFromMaybeRuntimeValue(v any) (string, bool) {
+func runtimeKeyFromRuntimeValue(v any) (string, bool) {
+	t, ok := v.(map[string]any)
+	if !ok {
+		return "", false
+	}
+	raw, ok := t["runtime_key"]
+	if !ok {
+		return "", false
+	}
+	return stringFromValue(raw)
+}
+
+func stringFromValue(v any) (string, bool) {
 	switch t := v.(type) {
 	case string:
 		s := strings.TrimSpace(t)
@@ -806,15 +816,6 @@ func stringFromMaybeRuntimeValue(v any) (string, bool) {
 	case fmt.Stringer:
 		s := strings.TrimSpace(t.String())
 		return s, s != ""
-	case map[string]any:
-		for _, key := range []string{"runtime_key", "key", "slug", "profile", "profile_key", "inference_id"} {
-			if raw, ok := t[key]; ok {
-				if s, ok := stringFromMaybeRuntimeValue(raw); ok {
-					return s, true
-				}
-			}
-		}
-		return "", false
 	default:
 		s := strings.TrimSpace(fmt.Sprint(v))
 		return s, s != "" && s != "<nil>"
