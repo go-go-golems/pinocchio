@@ -39,6 +39,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/tcnksm/go-input"
 	"golang.org/x/sync/errgroup"
+	"gopkg.in/yaml.v3"
 )
 
 func renderTemplateString(name, text string, vars map[string]interface{}) (string, error) {
@@ -312,6 +313,13 @@ func (g *PinocchioCommand) RunIntoWriter(
 		}
 		turns.FprintTurn(w, seed)
 		return nil
+	}
+	if helpersSettings.PrintInferenceSettings {
+		encoder := yaml.NewEncoder(w)
+		defer func() {
+			_ = encoder.Close()
+		}()
+		return encoder.Encode(stepSettings)
 	}
 
 	// Run with options
