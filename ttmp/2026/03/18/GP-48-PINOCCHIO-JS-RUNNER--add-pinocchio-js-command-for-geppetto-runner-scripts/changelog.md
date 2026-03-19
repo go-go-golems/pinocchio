@@ -40,3 +40,4 @@
 - Debuggability cleanup:
   - added `pinocchio.engines.inspectDefaults(...)` so JS scripts can print the effective engine bootstrap configuration before running inference
   - updated the real demo script to print resolved runtime metadata and inspected engine settings before the live call
+- Closed the ticket after the command, docs, config/profile inheritance path, smoke coverage, and live example flow were all in place.

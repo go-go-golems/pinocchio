@@ -1,9 +1,9 @@
 ---
 Title: add pinocchio js command for geppetto runner scripts
 Ticket: GP-48-PINOCCHIO-JS-RUNNER
-Status: active
+Status: complete
 Topics:
-    - javascript
+    - js-bindings
     - config
     - pinocchio
     - geppetto
@@ -42,9 +42,9 @@ The important architectural constraint is that this command should not fork a pa
 
 ## Status
 
-Current status: **active**
+Current status: **complete**
 
-Implementation is complete for the first product cut:
+Implementation is complete:
 
 - `pinocchio js` exists and is wired into the root CLI
 - `require("pinocchio").engines.fromDefaults()` exists
@@ -52,9 +52,11 @@ Implementation is complete for the first product cut:
 - scripts can inherit `--profile`, `--config-file`, and registry-default profile selection without hard-coding a profile slug
 - docs/help coverage is in place for README, example README, and `pinocchio help js-runner-scripts`
 
+This ticket is closed.
+
 ## Topics
 
-- javascript
+- js-bindings
 - config
 - pinocchio
 - geppetto
