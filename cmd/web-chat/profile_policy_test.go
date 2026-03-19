@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	gepprofiles "github.com/go-go-golems/geppetto/pkg/engineprofiles"
+	aitypes "github.com/go-go-golems/geppetto/pkg/steps/ai/types"
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 	webhttp "github.com/go-go-golems/pinocchio/pkg/webchat/http"
 	"github.com/stretchr/testify/require"
@@ -249,6 +250,41 @@ func TestBuildConversationPlan_BuildsLocalRuntimeBeforeTransportConversion(t *te
 	require.NotNil(t, transport.ResolvedRuntime)
 	require.Equal(t, "You are analyst", transport.ResolvedRuntime.SystemPrompt)
 	require.Equal(t, plan.Runtime.InferenceSettings == nil, transport.ResolvedInferenceSettings == nil)
+}
+
+func TestBuildConversationPlan_MergesBaseInferenceSettingsWithProfileOverrides(t *testing.T) {
+	profileRegistry, err := newInMemoryProfileService(
+		"default",
+		testEngineProfileWithRuntimeAndInferenceSettings(
+			t,
+			"analyst",
+			&infruntime.ProfileRuntime{SystemPrompt: "You are analyst"},
+			testInferenceSettings(t, aitypes.ApiTypeOpenAIResponses, "gpt-5-mini"),
+		),
+	)
+	require.NoError(t, err)
+
+	base := testInferenceSettings(t, aitypes.ApiTypeOpenAI, "base-model")
+	base.API.APIKeys["openai-api-key"] = "base-key"
+
+	timeoutSeconds := 42
+	base.Client.TimeoutSeconds = &timeoutSeconds
+
+	resolver := newProfileRequestResolver(profileRegistry, gepprofiles.MustRegistrySlug(defaultRegistrySlug), base)
+	resolvedProfile, err := resolver.resolveEffectiveProfile(context.Background(), gepprofiles.MustRegistrySlug(defaultRegistrySlug), gepprofiles.MustEngineProfileSlug("analyst"))
+	require.NoError(t, err)
+
+	plan, err := resolver.buildConversationPlan(context.Background(), "conv-1", "hi", "idem-1", resolvedProfile)
+	require.NoError(t, err)
+	require.NotNil(t, plan)
+	require.NotNil(t, plan.Runtime)
+	require.NotNil(t, plan.Runtime.InferenceSettings)
+	require.NotNil(t, plan.Runtime.InferenceSettings.Chat)
+	require.NotNil(t, plan.Runtime.InferenceSettings.Chat.Engine)
+	require.Equal(t, "gpt-5-mini", *plan.Runtime.InferenceSettings.Chat.Engine)
+	require.NotNil(t, plan.Runtime.InferenceSettings.Chat.ApiType)
+	require.Equal(t, aitypes.ApiTypeOpenAIResponses, *plan.Runtime.InferenceSettings.Chat.ApiType)
+	require.Equal(t, "base-key", plan.Runtime.InferenceSettings.API.APIKeys["openai-api-key"])
 }
 
 func TestWebChatProfileResolver_WS_QueryProfileAcrossStack(t *testing.T) {
