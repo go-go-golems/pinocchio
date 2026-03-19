@@ -228,14 +228,12 @@ Do not rebuild CRUD around the old mixed-profile model.
 
 ### 8. Update examples and local config
 
-If your app ships a `profiles.yaml`, migrate it to engine-only YAML. If your app also needs prompt/tools/middlewares, put that in:
+If your app ships a `profiles.yaml`, rewrite it to engine-only YAML. If your app also needs prompt/tools/middlewares, put that in:
 
 - a separate app config file, or
 - app-owned extensions on top of engine profiles
 
-Pinocchio’s migration script for older mixed `profiles.yaml` files is in:
-
-- [`scripts/migrate-engine-profiles-yaml/main.go`](../../../scripts/migrate-engine-profiles-yaml/main.go)
+Use [examples/js/profiles/basic.yaml](/home/manuel/workspaces/2026-03-17/add-opinionated-apis/pinocchio/examples/js/profiles/basic.yaml) as the minimal reference shape.
 
 ### 9. Validate the new boundary explicitly
 

@@ -213,11 +213,7 @@ pinocchio js \
 
 The command reads `profile-settings.profile-registries` and `profile-settings.profile` from that config file before applying explicit CLI overrides.
 
-If the default or configured `profiles.yaml` still uses the old mixed-runtime format, rewrite it first:
-
-```bash
-go run ./scripts/migrate-engine-profiles-yaml --in-place
-```
+If the default or configured `profiles.yaml` still uses the old mixed-runtime format, rewrite it first to the engine-only `inference_settings` format. Use [examples/js/profiles/basic.yaml](/home/manuel/workspaces/2026-03-17/add-opinionated-apis/pinocchio/examples/js/profiles/basic.yaml) as the reference shape.
 
 ### `--profile`
 

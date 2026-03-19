@@ -21,11 +21,7 @@ That means:
 - `--config-file` can supply the same `profile-settings.*` values used by the rest of the CLI
 - scripts can either resolve an engine profile with `gp.profiles.resolve({})` and build with `gp.engines.fromResolvedProfile(...)`, or build directly from hidden base config with `pinocchio.engines.fromDefaults()`
 
-If your default `profiles.yaml` is still in the old mixed-runtime format, rewrite it first:
-
-```bash
-go run ./scripts/migrate-engine-profiles-yaml --in-place
-```
+If your default `profiles.yaml` is still in the old mixed-runtime format, rewrite it first to the engine-only `inference_settings` shape. Use [profiles/basic.yaml](/home/manuel/workspaces/2026-03-17/add-opinionated-apis/pinocchio/examples/js/profiles/basic.yaml) as the reference.
 
 ## Files
 

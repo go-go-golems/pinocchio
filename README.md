@@ -205,28 +205,11 @@ pinocchio js \
   --profile-registries examples/js/profiles/basic.yaml
 ```
 
-## Migrating old profiles.yaml
+## profiles.yaml format
 
-If your old file still uses the mixed runtime format, migrate it once and keep the result at the same default location:
+`pinocchio` now expects engine-only profiles in `${XDG_CONFIG_HOME:-~/.config}/pinocchio/profiles.yaml`.
 
-```bash
-go run ./scripts/migrate-engine-profiles-yaml --in-place
-```
-
-Use `--dry-run` first if you want to inspect the rewritten YAML:
-
-```bash
-go run ./scripts/migrate-engine-profiles-yaml --dry-run
-```
-
-The migration script converts:
-
-- old mixed `profiles.<slug>.runtime.step_settings_patch`
-- older flat profile maps like `default: { ai-chat: ... }`
-
-into engine-only `profiles.<slug>.inference_settings`.
-
-It also prints warnings when it drops old application-level fields such as `runtime.system_prompt`, `runtime.middlewares`, or `runtime.tools`.
+Old mixed-runtime profile files should be rewritten directly to the engine-only `inference_settings` shape. Prompt, middleware, and tool policy no longer belong in this file.
 
 The target shape looks like this:
 
@@ -240,6 +223,8 @@ profiles:
         api_type: openai
         engine: gpt-4o-mini
 ```
+
+Use [examples/js/profiles/basic.yaml](/home/manuel/workspaces/2026-03-17/add-opinionated-apis/pinocchio/examples/js/profiles/basic.yaml) as the smallest concrete reference.
 
 ## Creating your own prompt
 
