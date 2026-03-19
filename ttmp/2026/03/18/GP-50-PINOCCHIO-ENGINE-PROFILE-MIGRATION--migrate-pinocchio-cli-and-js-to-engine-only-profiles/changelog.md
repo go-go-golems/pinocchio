@@ -90,3 +90,12 @@ Implemented the shared Pinocchio web-chat hard cut that both CoinVault and Tempo
 - /home/manuel/workspaces/2026-03-17/add-opinionated-apis/pinocchio/cmd/web-chat/profile_policy.go — request resolver now merges engine profiles with Pinocchio runtime extensions
 - /home/manuel/workspaces/2026-03-17/add-opinionated-apis/pinocchio/cmd/web-chat/runtime_composer.go — runtime composer now resolves Pinocchio middleware/tool/runtime policy without Geppetto runtime types
 - /home/manuel/workspaces/2026-03-17/add-opinionated-apis/pinocchio/pkg/webchat/http/profile_api.go — profile API now surfaces Pinocchio runtime extension data instead of deleted Geppetto runtime fields
+
+## 2026-03-18
+
+Made `cmd/web-chat` local-first like CoinVault and Temporal. The resolver now builds a Pinocchio-local conversation/runtime plan first and only converts into `webhttp.ResolvedConversationRequest` at the final transport boundary. This removes the remaining place where the shared transport object doubled as the primary local domain model in the request-resolution path.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-03-17/add-opinionated-apis/pinocchio/cmd/web-chat/profile_policy.go — local-first resolved plan and explicit transport conversion
+- /home/manuel/workspaces/2026-03-17/add-opinionated-apis/pinocchio/cmd/web-chat/profile_policy_test.go — focused local-plan regression coverage

@@ -67,3 +67,12 @@
 - [x] Update `cmd/web-chat` request resolution so engine profiles contribute `InferenceSettings` while Pinocchio app runtime comes from the local extension.
 - [x] Update shared `pkg/webchat`, `pkg/webchat/http`, and `cmd/web-chat` tests to the new runtime payload.
 - [x] Commit the shared web-chat cut that unblocks CoinVault and Temporal.
+
+## Slice 9: `cmd/web-chat` local-first resolved runtime plan
+
+- [x] Stop using `webhttp.ResolvedConversationRequest` as the primary local model inside `cmd/web-chat` profile resolution.
+- [x] Introduce a Pinocchio-local resolved conversation/runtime plan type and build it first in `profile_policy.go`.
+- [x] Add an explicit conversion step from the local plan into the shared `webhttp.ResolvedConversationRequest` transport.
+- [x] Add a focused test that asserts the local plan shape before transport conversion.
+- [x] Validate the `cmd/web-chat` and `cmd/pinocchio` suites after the local-first cut.
+- [x] Commit the local-first `cmd/web-chat` cleanup slice.
