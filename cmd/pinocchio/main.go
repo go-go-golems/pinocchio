@@ -3,9 +3,10 @@ package main
 import (
 	"embed"
 	"fmt"
-	sections2 "github.com/go-go-golems/geppetto/pkg/sections"
 	"os"
 	"path/filepath"
+
+	sections2 "github.com/go-go-golems/geppetto/pkg/sections"
 
 	clay "github.com/go-go-golems/clay/pkg"
 	"github.com/go-go-golems/clay/pkg/repositories"
@@ -18,10 +19,6 @@ import (
 	pinocchio_cmds "github.com/go-go-golems/pinocchio/cmd/pinocchio/cmds"
 	"github.com/go-go-golems/pinocchio/cmd/pinocchio/cmds/catter"
 	catter_doc "github.com/go-go-golems/pinocchio/cmd/pinocchio/cmds/catter/pkg/doc"
-	"github.com/go-go-golems/pinocchio/cmd/pinocchio/cmds/helpers"
-	"github.com/go-go-golems/pinocchio/cmd/pinocchio/cmds/kagi"
-	"github.com/go-go-golems/pinocchio/cmd/pinocchio/cmds/openai"
-	"github.com/go-go-golems/pinocchio/cmd/pinocchio/cmds/temporizer"
 	"github.com/go-go-golems/pinocchio/cmd/pinocchio/cmds/tokens"
 	pinocchio_docs "github.com/go-go-golems/pinocchio/cmd/pinocchio/doc"
 	"github.com/go-go-golems/pinocchio/pkg/cmds"
@@ -167,7 +164,6 @@ func initRootCmd() (*help.HelpSystem, error) {
 	cobra.CheckErr(err)
 
 	rootCmd.AddCommand(runCommandCmd)
-	rootCmd.AddCommand(pinocchio_cmds.NewCodegenCommand())
 	rootCmd.AddCommand(pinocchio_cmds.NewJSCommand())
 	return helpSystem, nil
 }
@@ -258,12 +254,7 @@ func initAllCommands(helpSystem *help.HelpSystem) error {
 		return err
 	}
 
-	rootCmd.AddCommand(openai.OpenaiCmd)
-
 	tokens.RegisterCommands(rootCmd)
-
-	kagiCmd := kagi.RegisterKagiCommands()
-	rootCmd.AddCommand(kagiCmd)
 
 	// Create and add the unified command management group
 	commandManagementCmd, err := clay_commandmeta.NewCommandManagementCommandGroup(allCommands)
@@ -288,16 +279,6 @@ func initAllCommands(helpSystem *help.HelpSystem) error {
 		return err
 	}
 	rootCmd.AddCommand(cobraClipCommand)
-
-	// Add temporizer command
-	temporizerCmd := temporizer.NewTemporizerCommand()
-	rootCmd.AddCommand(temporizerCmd)
-
-	// Add helper commands
-	err = helpers.RegisterHelperCommands(rootCmd)
-	if err != nil {
-		return err
-	}
 
 	return nil
 }

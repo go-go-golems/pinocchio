@@ -13,7 +13,6 @@ import (
 	"github.com/dop251/goja"
 	"github.com/dop251/goja_nodejs/require"
 	gepprofiles "github.com/go-go-golems/geppetto/pkg/engineprofiles"
-	"github.com/go-go-golems/geppetto/pkg/inference/middleware"
 	"github.com/go-go-golems/geppetto/pkg/inference/middlewarecfg"
 	geptools "github.com/go-go-golems/geppetto/pkg/inference/tools"
 	gp "github.com/go-go-golems/geppetto/pkg/js/modules/geppetto"
@@ -23,8 +22,6 @@ import (
 	agenttools "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/tools"
 	profilebootstrap "github.com/go-go-golems/pinocchio/pkg/cmds/profilebootstrap"
 	pjs "github.com/go-go-golems/pinocchio/pkg/js/modules/pinocchio"
-	agentmode "github.com/go-go-golems/pinocchio/pkg/middlewares/agentmode"
-	sqlitetool "github.com/go-go-golems/pinocchio/pkg/middlewares/sqlitetool"
 	"github.com/spf13/cobra"
 )
 
@@ -424,157 +421,17 @@ func buildPinocchioJSToolRegistry() (*geptools.InMemoryToolRegistry, error) {
 
 func buildPinocchioJSMiddlewareRegistry() (*middlewarecfg.InMemoryDefinitionRegistry, middlewarecfg.BuildDeps, error) {
 	registry := middlewarecfg.NewInMemoryDefinitionRegistry()
-	defs := []middlewarecfg.Definition{
-		jsAgentModeMiddlewareDefinition(),
-		jsSQLiteMiddlewareDefinition(),
-	}
+	defs := []middlewarecfg.Definition{}
 	for _, def := range defs {
 		if err := registry.RegisterDefinition(def); err != nil {
 			return nil, middlewarecfg.BuildDeps{}, err
 		}
 	}
 	return registry, middlewarecfg.BuildDeps{
-		Values: map[string]any{
-			"agentmode.service": agentmode.NewStaticService(nil),
-		},
+		Values: map[string]any{},
 	}, nil
 }
 
 func buildPinocchioJSMiddlewareFactories(deps middlewarecfg.BuildDeps) map[string]gp.MiddlewareFactory {
-	return map[string]gp.MiddlewareFactory{
-		"agentmode": func(options map[string]any) (middleware.Middleware, error) {
-			return jsAgentModeMiddlewareDefinition().Build(context.Background(), deps.Clone(), options)
-		},
-		"sqlite": func(options map[string]any) (middleware.Middleware, error) {
-			return jsSQLiteMiddlewareDefinition().Build(context.Background(), deps.Clone(), options)
-		},
-	}
-}
-
-type jsMiddlewareDefinition struct {
-	name        string
-	schema      map[string]any
-	build       func(context.Context, middlewarecfg.BuildDeps, any) (middleware.Middleware, error)
-	description string
-}
-
-func (d jsMiddlewareDefinition) Name() string { return d.name }
-func (d jsMiddlewareDefinition) ConfigJSONSchema() map[string]any {
-	return cloneStringAnyMap(d.schema)
-}
-func (d jsMiddlewareDefinition) Build(ctx context.Context, deps middlewarecfg.BuildDeps, cfg any) (middleware.Middleware, error) {
-	return d.build(ctx, deps, cfg)
-}
-
-func jsAgentModeMiddlewareDefinition() middlewarecfg.Definition {
-	type configInput struct {
-		DefaultMode string `json:"default_mode,omitempty"`
-	}
-	return jsMiddlewareDefinition{
-		name:        "agentmode",
-		description: "Parses and applies agent-mode switches from model output.",
-		schema: map[string]any{
-			"type": "object",
-			"properties": map[string]any{
-				"default_mode": map[string]any{"type": "string", "default": agentmode.DefaultConfig().DefaultMode},
-			},
-			"additionalProperties": false,
-		},
-		build: func(_ context.Context, deps middlewarecfg.BuildDeps, cfg any) (middleware.Middleware, error) {
-			svcRaw, ok := deps.Get("agentmode.service")
-			if !ok || svcRaw == nil {
-				return nil, fmt.Errorf("missing dependency %q", "agentmode.service")
-			}
-			svc, ok := svcRaw.(agentmode.Service)
-			if !ok {
-				return nil, fmt.Errorf("dependency %q has unexpected type %T", "agentmode.service", svcRaw)
-			}
-			input := configInput{DefaultMode: agentmode.DefaultConfig().DefaultMode}
-			if err := decodeResolvedMiddlewareConfig(cfg, &input); err != nil {
-				return nil, err
-			}
-			config := agentmode.DefaultConfig()
-			if s := strings.TrimSpace(input.DefaultMode); s != "" {
-				config.DefaultMode = s
-			}
-			return agentmode.NewMiddleware(svc, config), nil
-		},
-	}
-}
-
-func jsSQLiteMiddlewareDefinition() middlewarecfg.Definition {
-	type configInput struct {
-		DSN                *string `json:"dsn,omitempty"`
-		MaxRows            *int    `json:"max_rows,omitempty"`
-		ExecutionTimeoutMs *int64  `json:"execution_timeout_ms,omitempty"`
-		MaxOutputLines     *int    `json:"max_output_lines,omitempty"`
-		MaxOutputBytes     *int    `json:"max_output_bytes,omitempty"`
-	}
-	return jsMiddlewareDefinition{
-		name:        "sqlite",
-		description: "Executes SQL tool calls against configured SQLite connection settings.",
-		schema: map[string]any{
-			"type": "object",
-			"properties": map[string]any{
-				"dsn":                  map[string]any{"type": "string"},
-				"max_rows":             map[string]any{"type": "integer", "minimum": 1},
-				"execution_timeout_ms": map[string]any{"type": "integer", "minimum": 1},
-				"max_output_lines":     map[string]any{"type": "integer", "minimum": 1},
-				"max_output_bytes":     map[string]any{"type": "integer", "minimum": 1},
-			},
-			"additionalProperties": false,
-		},
-		build: func(_ context.Context, _ middlewarecfg.BuildDeps, cfg any) (middleware.Middleware, error) {
-			config := sqlitetool.DefaultConfig()
-			var input configInput
-			if err := decodeResolvedMiddlewareConfig(cfg, &input); err != nil {
-				return nil, err
-			}
-			if input.DSN != nil {
-				config.DSN = strings.TrimSpace(*input.DSN)
-			}
-			if input.MaxRows != nil {
-				config.MaxRows = *input.MaxRows
-			}
-			if input.ExecutionTimeoutMs != nil {
-				config.ExecutionTimeout = time.Duration(*input.ExecutionTimeoutMs) * time.Millisecond
-			}
-			if input.MaxOutputLines != nil {
-				config.MaxOutputLines = *input.MaxOutputLines
-			}
-			if input.MaxOutputBytes != nil {
-				config.MaxOutputBytes = *input.MaxOutputBytes
-			}
-			return sqlitetool.NewMiddleware(config), nil
-		},
-	}
-}
-
-func decodeResolvedMiddlewareConfig(cfg any, out any) error {
-	if cfg == nil || out == nil {
-		return nil
-	}
-	b, err := json.Marshal(cfg)
-	if err != nil {
-		return fmt.Errorf("serialize resolved middleware config: %w", err)
-	}
-	if err := json.Unmarshal(b, out); err != nil {
-		return fmt.Errorf("decode resolved middleware config: %w", err)
-	}
-	return nil
-}
-
-func cloneStringAnyMap(in map[string]any) map[string]any {
-	if len(in) == 0 {
-		return nil
-	}
-	out := make(map[string]any, len(in))
-	for key, value := range in {
-		if nested, ok := value.(map[string]any); ok {
-			out[key] = cloneStringAnyMap(nested)
-			continue
-		}
-		out[key] = value
-	}
-	return out
+	return map[string]gp.MiddlewareFactory{}
 }
