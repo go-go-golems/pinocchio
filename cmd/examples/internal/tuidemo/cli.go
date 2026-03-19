@@ -8,8 +8,6 @@ import (
 
 	"github.com/go-go-golems/geppetto/pkg/inference/engine"
 	enginefactory "github.com/go-go-golems/geppetto/pkg/inference/engine/factory"
-	"github.com/go-go-golems/glazed/pkg/cli"
-	"github.com/go-go-golems/glazed/pkg/cmds/fields"
 	"github.com/go-go-golems/glazed/pkg/cmds/schema"
 	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	profilebootstrap "github.com/go-go-golems/pinocchio/pkg/cmds/profilebootstrap"
@@ -98,46 +96,17 @@ func ExecuteCLI(spec CLISpec) error {
 }
 
 func buildParsedCLIValues(cmd *cobra.Command, configFile string) (*values.Values, error) {
-	ret := values.New()
-
-	commandSection, err := cli.NewCommandSettingsSection()
-	if err != nil {
-		return nil, err
-	}
-	commandValues, err := values.NewSectionValues(commandSection)
-	if err != nil {
-		return nil, err
-	}
-	if trimmed := strings.TrimSpace(configFile); trimmed != "" {
-		if err := values.WithFieldValue("config-file", trimmed, fields.WithSource("cli"))(commandValues); err != nil {
-			return nil, err
-		}
-	}
-	ret.Set(cli.CommandSettingsSlug, commandValues)
-
-	profileSection, err := profilebootstrap.NewProfileSettingsSection()
-	if err != nil {
-		return nil, err
-	}
-	profileValues, err := values.NewSectionValues(profileSection)
-	if err != nil {
-		return nil, err
-	}
+	profile := ""
 	if profileFlag := cmd.Flags().Lookup("profile"); profileFlag != nil {
-		if profile := strings.TrimSpace(profileFlag.Value.String()); profile != "" {
-			if err := values.WithFieldValue("profile", profile, fields.WithSource("cli"))(profileValues); err != nil {
-				return nil, err
-			}
-		}
+		profile = strings.TrimSpace(profileFlag.Value.String())
 	}
-	if registries, err := cmd.Flags().GetStringSlice("profile-registries"); err == nil && len(registries) > 0 {
-		if err := values.WithFieldValue("profile-registries", registries, fields.WithSource("cli"))(profileValues); err != nil {
-			return nil, err
-		}
-	}
-	ret.Set(profilebootstrap.ProfileSettingsSectionSlug, profileValues)
+	registries, _ := cmd.Flags().GetStringSlice("profile-registries")
 
-	return ret, nil
+	return profilebootstrap.NewCLISelectionValues(profilebootstrap.CLISelectionInput{
+		ConfigFile:        configFile,
+		Profile:           profile,
+		ProfileRegistries: registries,
+	})
 }
 
 func (s CLISpec) listValues() []string {

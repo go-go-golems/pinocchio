@@ -25,6 +25,12 @@ type ResolvedCLIProfileSelection struct {
 	ConfigFiles []string
 }
 
+type CLISelectionInput struct {
+	ConfigFile        string
+	Profile           string
+	ProfileRegistries []string
+}
+
 func NewProfileSettingsSection() (schema.Section, error) {
 	return geppettosections.NewProfileSettingsSection()
 }
@@ -83,6 +89,47 @@ func ResolveEngineProfileSettings(parsed *values.Values) (ProfileSettings, []str
 		return ProfileSettings{}, nil, err
 	}
 	return resolved.ProfileSettings, resolved.ConfigFiles, nil
+}
+
+func NewCLISelectionValues(input CLISelectionInput) (*values.Values, error) {
+	ret := values.New()
+
+	commandSection, err := cli.NewCommandSettingsSection()
+	if err != nil {
+		return nil, err
+	}
+	commandValues, err := values.NewSectionValues(commandSection)
+	if err != nil {
+		return nil, err
+	}
+	if configFile := strings.TrimSpace(input.ConfigFile); configFile != "" {
+		if err := values.WithFieldValue("config-file", configFile, fields.WithSource("cli"))(commandValues); err != nil {
+			return nil, err
+		}
+	}
+	ret.Set(cli.CommandSettingsSlug, commandValues)
+
+	profileSection, err := NewProfileSettingsSection()
+	if err != nil {
+		return nil, err
+	}
+	profileValues, err := values.NewSectionValues(profileSection)
+	if err != nil {
+		return nil, err
+	}
+	if profile := strings.TrimSpace(input.Profile); profile != "" {
+		if err := values.WithFieldValue("profile", profile, fields.WithSource("cli"))(profileValues); err != nil {
+			return nil, err
+		}
+	}
+	if registries := normalizeProfileRegistries(input.ProfileRegistries); len(registries) > 0 {
+		if err := values.WithFieldValue("profile-registries", registries, fields.WithSource("cli"))(profileValues); err != nil {
+			return nil, err
+		}
+	}
+	ret.Set(ProfileSettingsSectionSlug, profileValues)
+
+	return ret, nil
 }
 
 func ResolveCLIConfigFiles(parsed *values.Values) ([]string, error) {

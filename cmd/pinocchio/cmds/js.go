@@ -18,8 +18,6 @@ import (
 	geptools "github.com/go-go-golems/geppetto/pkg/inference/tools"
 	gp "github.com/go-go-golems/geppetto/pkg/js/modules/geppetto"
 	aisettings "github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
-	"github.com/go-go-golems/glazed/pkg/cli"
-	"github.com/go-go-golems/glazed/pkg/cmds/fields"
 	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	gojengine "github.com/go-go-golems/go-go-goja/engine"
 	agenttools "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/tools"
@@ -151,47 +149,16 @@ func runJSCommand(ctx context.Context, cmd *cobra.Command, settings jsCommandSet
 }
 
 func buildJSParsedValues(cmd *cobra.Command) (*values.Values, error) {
-	ret := values.New()
-	commandSection, err := cli.NewCommandSettingsSection()
-	if err != nil {
-		return nil, err
-	}
-	profileSection, err := profilebootstrap.NewProfileSettingsSection()
-	if err != nil {
-		return nil, err
-	}
-
-	commandValues, err := values.NewSectionValues(commandSection)
-	if err != nil {
-		return nil, err
-	}
 	configFile := strings.TrimSpace(inheritedStringFlag(cmd, "config-file"))
 	if configFile == "" {
 		configFile = strings.TrimSpace(localStringFlag(cmd, "config-file"))
 	}
-	if configFile != "" {
-		if err := values.WithFieldValue("config-file", configFile)(commandValues); err != nil {
-			return nil, err
-		}
-	}
-	ret.Set(cli.CommandSettingsSlug, commandValues)
 
-	profileValues, err := values.NewSectionValues(profileSection)
-	if err != nil {
-		return nil, err
-	}
-	if raw := inheritedStringSliceFlag(cmd, "profile-registries"); len(raw) > 0 {
-		if err := values.WithFieldValue("profile-registries", raw, fields.WithSource("cli"))(profileValues); err != nil {
-			return nil, err
-		}
-	}
-	if raw := strings.TrimSpace(inheritedStringFlag(cmd, "profile")); raw != "" {
-		if err := values.WithFieldValue("profile", raw, fields.WithSource("cli"))(profileValues); err != nil {
-			return nil, err
-		}
-	}
-	ret.Set(profilebootstrap.ProfileSettingsSectionSlug, profileValues)
-	return ret, nil
+	return profilebootstrap.NewCLISelectionValues(profilebootstrap.CLISelectionInput{
+		ConfigFile:        configFile,
+		Profile:           inheritedStringFlag(cmd, "profile"),
+		ProfileRegistries: inheritedStringSliceFlag(cmd, "profile-registries"),
+	})
 }
 
 func inheritedStringFlag(cmd *cobra.Command, name string) string {
