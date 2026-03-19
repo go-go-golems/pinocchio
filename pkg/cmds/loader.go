@@ -110,6 +110,7 @@ func (g *PinocchioCommandLoader) loadPinocchioCommandFromReader(
 		WithPrompt(scd.Prompt),
 		WithBlocks(blocks),
 		WithSystemPrompt(scd.SystemPrompt),
+		WithBaseInferenceSettings(stepSettings),
 	)
 	if err != nil {
 		return nil, err

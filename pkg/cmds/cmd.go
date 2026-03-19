@@ -149,6 +149,7 @@ type PinocchioCommand struct {
 	Blocks                         []turns.Block `yaml:"-"`
 	SystemPrompt                   string        `yaml:"system-prompt,omitempty"`
 	EngineFactory                  factory.EngineFactory
+	BaseInferenceSettings          *settings.InferenceSettings
 }
 
 var _ glazedcmds.WriterCommand = &PinocchioCommand{}
@@ -170,6 +171,16 @@ func WithBlocks(blocks []turns.Block) PinocchioCommandOption {
 func WithSystemPrompt(systemPrompt string) PinocchioCommandOption {
 	return func(g *PinocchioCommand) {
 		g.SystemPrompt = systemPrompt
+	}
+}
+
+func WithBaseInferenceSettings(base *settings.InferenceSettings) PinocchioCommandOption {
+	return func(g *PinocchioCommand) {
+		if base == nil {
+			g.BaseInferenceSettings = nil
+			return
+		}
+		g.BaseInferenceSettings = base.Clone()
 	}
 }
 
@@ -222,7 +233,13 @@ func (g *PinocchioCommand) RunIntoWriter(
 
 	profileSelection := &profilebootstrap.ResolvedCLIProfileSelection{}
 
-	baseSettings, baseErr := baseSettingsFromParsedValues(parsedValues)
+	var baseSettings *settings.InferenceSettings
+	var baseErr error
+	if g.BaseInferenceSettings != nil {
+		baseSettings = g.BaseInferenceSettings.Clone()
+	} else {
+		baseSettings, baseErr = baseSettingsFromParsedValues(parsedValues)
+	}
 	if baseErr == nil && baseSettings != nil {
 		// If the UI forces streaming, keep base settings aligned.
 		if baseSettings.Chat != nil {
