@@ -1,213 +1,64 @@
 package profilebootstrap
 
 import (
-	"strings"
-
+	"github.com/go-go-golems/geppetto/pkg/cli/bootstrap"
 	geppettosections "github.com/go-go-golems/geppetto/pkg/sections"
-	"github.com/go-go-golems/glazed/pkg/cli"
-	"github.com/go-go-golems/glazed/pkg/cmds/fields"
 	"github.com/go-go-golems/glazed/pkg/cmds/schema"
 	"github.com/go-go-golems/glazed/pkg/cmds/sources"
 	"github.com/go-go-golems/glazed/pkg/cmds/values"
-	appconfig "github.com/go-go-golems/glazed/pkg/config"
 	"github.com/pkg/errors"
 )
 
-const ProfileSettingsSectionSlug = geppettosections.ProfileSettingsSectionSlug
+const ProfileSettingsSectionSlug = bootstrap.ProfileSettingsSectionSlug
 
-type ProfileSettings struct {
-	Profile           string   `glazed:"profile"`
-	ProfileRegistries []string `glazed:"profile-registries"`
-}
+type ProfileSettings = bootstrap.ProfileSettings
+type ResolvedCLIProfileSelection = bootstrap.ResolvedCLIProfileSelection
+type CLISelectionInput = bootstrap.CLISelectionInput
 
-type ResolvedCLIProfileSelection struct {
-	ProfileSettings
-	ConfigFiles []string
-}
-
-type CLISelectionInput struct {
-	ConfigFile        string
-	Profile           string
-	ProfileRegistries []string
+func pinocchioBootstrapConfig() bootstrap.AppBootstrapConfig {
+	return bootstrap.AppBootstrapConfig{
+		AppName:          "pinocchio",
+		EnvPrefix:        "PINOCCHIO",
+		ConfigFileMapper: configFileMapper,
+		NewProfileSection: func() (schema.Section, error) {
+			return geppettosections.NewProfileSettingsSection()
+		},
+		BuildBaseSections: func() ([]schema.Section, error) {
+			return geppettosections.CreateGeppettoSections()
+		},
+	}
 }
 
 func NewProfileSettingsSection() (schema.Section, error) {
-	return geppettosections.NewProfileSettingsSection()
+	return bootstrap.NewProfileSettingsSection(pinocchioBootstrapConfig())
 }
 
 func ResolveProfileSettings(parsed *values.Values) ProfileSettings {
-	ret := ProfileSettings{}
-	if parsed != nil {
-		_ = parsed.DecodeSectionInto(ProfileSettingsSectionSlug, &ret)
-	}
-	ret.Profile = strings.TrimSpace(ret.Profile)
-	ret.ProfileRegistries = normalizeProfileRegistries(ret.ProfileRegistries)
-	return ret
+	return bootstrap.ResolveProfileSettings(parsed)
 }
 
 func ResolveCLIProfileSelection(parsed *values.Values) (*ResolvedCLIProfileSelection, error) {
-	profileSection, err := NewProfileSettingsSection()
-	if err != nil {
-		return nil, errors.Wrap(err, "create profile settings section")
-	}
-
-	schema_ := schema.NewSchema(schema.WithSections(profileSection))
-	resolvedValues := values.New()
-	configFiles, err := resolveConfigFiles(parsed)
-	if err != nil {
-		return nil, err
-	}
-	if err := sources.Execute(
-		schema_,
-		resolvedValues,
-		sources.FromEnv("PINOCCHIO", fields.WithSource("env")),
-		sources.FromFiles(
-			configFiles,
-			sources.WithConfigFileMapper(configFileMapper),
-			sources.WithParseOptions(fields.WithSource("config")),
-		),
-		sources.FromDefaults(fields.WithSource(fields.SourceDefaults)),
-	); err != nil {
-		return nil, errors.Wrap(err, "resolve profile settings from config/env/defaults")
-	}
-	if parsed != nil {
-		if err := resolvedValues.Merge(parsed); err != nil {
-			return nil, errors.Wrap(err, "merge explicit profile settings")
-		}
-	}
-
-	profileSettings := ResolveProfileSettings(resolvedValues)
-	return &ResolvedCLIProfileSelection{
-		ProfileSettings: profileSettings,
-		ConfigFiles:     append([]string(nil), configFiles...),
-	}, nil
+	return bootstrap.ResolveCLIProfileSelection(pinocchioBootstrapConfig(), parsed)
 }
 
 func ResolveEngineProfileSettings(parsed *values.Values) (ProfileSettings, []string, error) {
-	resolved, err := ResolveCLIProfileSelection(parsed)
-	if err != nil {
-		return ProfileSettings{}, nil, err
-	}
-	return resolved.ProfileSettings, resolved.ConfigFiles, nil
+	return bootstrap.ResolveEngineProfileSettings(pinocchioBootstrapConfig(), parsed)
 }
 
 func NewCLISelectionValues(input CLISelectionInput) (*values.Values, error) {
-	ret := values.New()
-
-	commandSection, err := cli.NewCommandSettingsSection()
-	if err != nil {
-		return nil, err
-	}
-	commandValues, err := values.NewSectionValues(commandSection)
-	if err != nil {
-		return nil, err
-	}
-	if configFile := strings.TrimSpace(input.ConfigFile); configFile != "" {
-		if err := values.WithFieldValue("config-file", configFile, fields.WithSource("cli"))(commandValues); err != nil {
-			return nil, err
-		}
-	}
-	ret.Set(cli.CommandSettingsSlug, commandValues)
-
-	profileSection, err := NewProfileSettingsSection()
-	if err != nil {
-		return nil, err
-	}
-	profileValues, err := values.NewSectionValues(profileSection)
-	if err != nil {
-		return nil, err
-	}
-	if profile := strings.TrimSpace(input.Profile); profile != "" {
-		if err := values.WithFieldValue("profile", profile, fields.WithSource("cli"))(profileValues); err != nil {
-			return nil, err
-		}
-	}
-	if registries := normalizeProfileRegistries(input.ProfileRegistries); len(registries) > 0 {
-		if err := values.WithFieldValue("profile-registries", registries, fields.WithSource("cli"))(profileValues); err != nil {
-			return nil, err
-		}
-	}
-	ret.Set(ProfileSettingsSectionSlug, profileValues)
-
-	return ret, nil
+	return bootstrap.NewCLISelectionValues(pinocchioBootstrapConfig(), input)
 }
 
 func ResolveCLIConfigFiles(parsed *values.Values) ([]string, error) {
-	return resolveConfigFiles(parsed)
+	return bootstrap.ResolveCLIConfigFiles(pinocchioBootstrapConfig(), parsed)
 }
 
 func ResolveCLIConfigFilesForExplicit(explicit string) ([]string, error) {
-	return resolveConfigFilesForExplicit(explicit)
+	return bootstrap.ResolveCLIConfigFilesForExplicit(pinocchioBootstrapConfig(), explicit)
 }
 
 func MapPinocchioConfigFile(rawConfig interface{}) (map[string]map[string]interface{}, error) {
 	return configFileMapper(rawConfig)
-}
-
-func normalizeProfileRegistries(entries []string) []string {
-	ret := make([]string, 0, len(entries))
-	for _, entry := range entries {
-		if trimmed := strings.TrimSpace(entry); trimmed != "" {
-			ret = append(ret, trimmed)
-		}
-	}
-	return ret
-}
-
-func resolveConfigFiles(parsed *values.Values) ([]string, error) {
-	files := make([]string, 0, 2)
-	defaultFile, err := appconfig.ResolveAppConfigPath("pinocchio", "")
-	if err != nil {
-		return nil, errors.Wrap(err, "resolve pinocchio default config path")
-	}
-	if defaultFile != "" {
-		files = append(files, defaultFile)
-	}
-	if parsed != nil {
-		commandSettings := &cli.CommandSettings{}
-		if err := parsed.DecodeSectionInto(cli.CommandSettingsSlug, commandSettings); err == nil {
-			explicit := strings.TrimSpace(commandSettings.ConfigFile)
-			if explicit != "" {
-				explicitPath, err := appconfig.ResolveAppConfigPath("pinocchio", explicit)
-				if err != nil {
-					return nil, err
-				}
-				if explicitPath != "" && (len(files) == 0 || files[len(files)-1] != explicitPath) {
-					duplicate := false
-					for _, f := range files {
-						if f == explicitPath {
-							duplicate = true
-							break
-						}
-					}
-					if !duplicate {
-						files = append(files, explicitPath)
-					}
-				}
-			}
-		}
-	}
-	return files, nil
-}
-
-func resolveConfigFilesForExplicit(explicit string) ([]string, error) {
-	files, err := resolveConfigFiles(nil)
-	if err != nil {
-		return nil, err
-	}
-	explicitPath, err := appconfig.ResolveAppConfigPath("pinocchio", explicit)
-	if err != nil {
-		return nil, err
-	}
-	if explicitPath == "" {
-		return files, nil
-	}
-	for _, f := range files {
-		if f == explicitPath {
-			return files, nil
-		}
-	}
-	return append(files, explicitPath), nil
 }
 
 func configFileMapper(rawConfig interface{}) (map[string]map[string]interface{}, error) {
@@ -232,3 +83,5 @@ func configFileMapper(rawConfig interface{}) (map[string]map[string]interface{},
 	}
 	return result, nil
 }
+
+var _ sources.ConfigFileMapper = configFileMapper
