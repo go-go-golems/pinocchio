@@ -274,10 +274,6 @@ func (r *ProfileRequestResolver) resolveProfileSelection(
 	pathSlug string,
 	bodyProfileRaw string,
 ) (gepprofiles.EngineProfileSlug, error) {
-	if r == nil || r.profileRegistry == nil {
-		return "", &webhttp.RequestResolutionError{Status: http.StatusInternalServerError, ClientMsg: "profile resolver is not configured"}
-	}
-
 	slugRaw := strings.TrimSpace(pathSlug)
 	if slugRaw == "" {
 		slugRaw = strings.TrimSpace(bodyProfileRaw)
@@ -296,6 +292,12 @@ func (r *ProfileRequestResolver) resolveProfileSelection(
 	if strings.TrimSpace(slugRaw) == "" {
 		return "", nil
 	}
+	if r == nil || r.profileRegistry == nil {
+		return "", &webhttp.RequestResolutionError{
+			Status:    http.StatusBadRequest,
+			ClientMsg: "profile selection requires configured profile registries",
+		}
+	}
 
 	slug, err := gepprofiles.ParseEngineProfileSlug(slugRaw)
 	if err != nil {
@@ -309,6 +311,9 @@ func (r *ProfileRequestResolver) resolveEffectiveProfile(
 	registrySlug gepprofiles.RegistrySlug,
 	profileSlug gepprofiles.EngineProfileSlug,
 ) (*gepprofiles.ResolvedEngineProfile, error) {
+	if r == nil || r.profileRegistry == nil {
+		return nil, nil
+	}
 	in := gepprofiles.ResolveInput{
 		RegistrySlug:      registrySlug,
 		EngineProfileSlug: profileSlug,
@@ -456,15 +461,11 @@ func toRuntimeTransport(runtime *resolvedWebChatRuntime) *infruntime.ProfileRunt
 }
 
 func (r *ProfileRequestResolver) resolveRegistrySelection(req *http.Request, bodyRegistryRaw string) (gepprofiles.RegistrySlug, error) {
-	if r == nil || r.profileRegistry == nil {
-		return "", &webhttp.RequestResolutionError{Status: http.StatusInternalServerError, ClientMsg: "profile resolver is not configured"}
-	}
-
 	registryRaw := strings.TrimSpace(bodyRegistryRaw)
 	if registryRaw == "" && req != nil {
 		registryRaw = strings.TrimSpace(req.URL.Query().Get("registry"))
 	}
-	if registryRaw == "" && req != nil {
+	if registryRaw == "" && req != nil && r != nil && r.profileRegistry != nil {
 		if ck, err := req.Cookie(currentProfileCookieName); err == nil && ck != nil {
 			if cookieRegistry, _, ok := parseCurrentProfileCookieValue(strings.TrimSpace(ck.Value)); ok {
 				registryRaw = cookieRegistry.String()
@@ -472,7 +473,16 @@ func (r *ProfileRequestResolver) resolveRegistrySelection(req *http.Request, bod
 		}
 	}
 	if registryRaw == "" {
+		if r == nil {
+			return "", nil
+		}
 		return r.defaultRegistrySlug, nil
+	}
+	if r == nil || r.profileRegistry == nil {
+		return "", &webhttp.RequestResolutionError{
+			Status:    http.StatusBadRequest,
+			ClientMsg: "registry selection requires configured profile registries",
+		}
 	}
 	registrySlug, err := gepprofiles.ParseRegistrySlug(registryRaw)
 	if err != nil {

@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/go-go-golems/glazed/pkg/cmds/values"
-	cmdhelpers "github.com/go-go-golems/pinocchio/pkg/cmds/helpers"
+	profilebootstrap "github.com/go-go-golems/pinocchio/pkg/cmds/profilebootstrap"
 )
 
 func TestLoadPinocchioProfileRegistryStackRejectsProfileWithoutRegistries(t *testing.T) {
@@ -13,7 +13,7 @@ func TestLoadPinocchioProfileRegistryStackRejectsProfileWithoutRegistries(t *tes
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(tmpDir, "xdg"))
 	t.Setenv("HOME", tmpDir)
 
-	profileSection, err := cmdhelpers.NewProfileSettingsSection()
+	profileSection, err := profilebootstrap.NewProfileSettingsSection()
 	if err != nil {
 		t.Fatalf("NewProfileSettingsSection failed: %v", err)
 	}
@@ -26,7 +26,7 @@ func TestLoadPinocchioProfileRegistryStackRejectsProfileWithoutRegistries(t *tes
 	}
 
 	parsed := values.New()
-	parsed.Set(cmdhelpers.ProfileSettingsSectionSlug, profileValues)
+	parsed.Set(profilebootstrap.ProfileSettingsSectionSlug, profileValues)
 
 	_, _, _, err = loadPinocchioProfileRegistryStack(parsed)
 	if err == nil {

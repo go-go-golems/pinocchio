@@ -12,12 +12,9 @@ import (
 	"strings"
 
 	clay "github.com/go-go-golems/clay/pkg"
-	"github.com/go-go-golems/glazed/pkg/cli"
 	"github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/cmds/fields"
 	"github.com/go-go-golems/glazed/pkg/cmds/logging"
-	"github.com/go-go-golems/glazed/pkg/cmds/schema"
-	cmdsources "github.com/go-go-golems/glazed/pkg/cmds/sources"
 	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	"github.com/go-go-golems/glazed/pkg/help"
 	help_cmd "github.com/go-go-golems/glazed/pkg/help/cmd"
@@ -27,11 +24,10 @@ import (
 	gepprofiles "github.com/go-go-golems/geppetto/pkg/engineprofiles"
 	"github.com/go-go-golems/geppetto/pkg/inference/middlewarecfg"
 	geptools "github.com/go-go-golems/geppetto/pkg/inference/tools"
-	geppettosections "github.com/go-go-golems/geppetto/pkg/sections"
-	aiconfig "github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 	toolspkg "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/tools"
 	thinkingmode "github.com/go-go-golems/pinocchio/cmd/web-chat/thinkingmode"
 	timelinecmd "github.com/go-go-golems/pinocchio/cmd/web-chat/timeline"
+	profilebootstrap "github.com/go-go-golems/pinocchio/pkg/cmds/profilebootstrap"
 	agentmode "github.com/go-go-golems/pinocchio/pkg/middlewares/agentmode"
 	rediscfg "github.com/go-go-golems/pinocchio/pkg/redisstream"
 	webchat "github.com/go-go-golems/pinocchio/pkg/webchat"
@@ -78,148 +74,8 @@ func runtimeConfigScript(basePrefix string, debugAPI bool) (string, error) {
 	return "window.__PINOCCHIO_WEBCHAT_CONFIG__ = " + string(payload) + ";\n", nil
 }
 
-func resolveProfileRegistries(parsed *values.Values, defaultSectionValue []string) []string {
-	resolved, _ := resolveProfileRegistriesWithSource(parsed, defaultSectionValue)
-	return resolved
-}
-
-func resolveProfileRegistriesWithSource(parsed *values.Values, defaultSectionValue []string) ([]string, string) {
-	resolved := normalizeProfileRegistries(defaultSectionValue)
-	if len(resolved) > 0 {
-		return resolved, "default-section"
-	}
-
-	if parsed != nil {
-		profileSettings := &geppettosections.ProfileSettings{}
-		if err := parsed.DecodeSectionInto(geppettosections.ProfileSettingsSectionSlug, profileSettings); err == nil {
-			resolved = normalizeProfileRegistries(profileSettings.ProfileRegistries)
-			if len(resolved) > 0 {
-				return resolved, geppettosections.ProfileSettingsSectionSlug
-			}
-		}
-	}
-
-	if resolved := strings.TrimSpace(defaultPinocchioProfileRegistriesIfPresent()); resolved != "" {
-		return []string{resolved}, "xdg-default"
-	}
-	return nil, ""
-}
-
-func normalizeProfileRegistries(entries []string) []string {
-	ret := make([]string, 0, len(entries))
-	for _, entry := range entries {
-		if trimmed := strings.TrimSpace(entry); trimmed != "" {
-			ret = append(ret, trimmed)
-		}
-	}
-	return ret
-}
-
-func defaultPinocchioProfileRegistriesIfPresent() string {
-	configDir, err := os.UserConfigDir()
-	if err != nil || strings.TrimSpace(configDir) == "" {
-		return ""
-	}
-	path := filepath.Join(configDir, "pinocchio", "profiles.yaml")
-	info, err := os.Stat(path)
-	if err != nil || info.IsDir() {
-		return ""
-	}
-	return path
-}
-
-func defaultPinocchioConfigFileIfPresent() string {
-	homeDir, err := os.UserHomeDir()
-	if err != nil || strings.TrimSpace(homeDir) == "" {
-		return ""
-	}
-	path := filepath.Join(homeDir, ".pinocchio", "config.yaml")
-	info, err := os.Stat(path)
-	if err != nil || info.IsDir() {
-		return ""
-	}
-	return path
-}
-
-func webChatConfigFileMapper(rawConfig interface{}) (map[string]map[string]interface{}, error) {
-	configMap, ok := rawConfig.(map[string]interface{})
-	if !ok {
-		return nil, errors.Errorf("expected map[string]interface{}, got %T", rawConfig)
-	}
-
-	result := make(map[string]map[string]interface{})
-	excludedKeys := map[string]bool{
-		"repositories": true,
-	}
-	for key, value := range configMap {
-		if excludedKeys[key] {
-			continue
-		}
-		layerParams, ok := value.(map[string]interface{})
-		if !ok {
-			continue
-		}
-		result[key] = layerParams
-	}
-	return result, nil
-}
-
-func resolveWebChatConfigFiles(parsed *values.Values) []string {
-	files := make([]string, 0, 2)
-	if defaultFile := defaultPinocchioConfigFileIfPresent(); defaultFile != "" {
-		files = append(files, defaultFile)
-	}
-	if parsed != nil {
-		commandSettings := &cli.CommandSettings{}
-		if err := parsed.DecodeSectionInto(cli.CommandSettingsSlug, commandSettings); err == nil {
-			explicit := strings.TrimSpace(commandSettings.ConfigFile)
-			if explicit != "" {
-				duplicate := false
-				for _, f := range files {
-					if f == explicit {
-						duplicate = true
-						break
-					}
-				}
-				if !duplicate {
-					files = append(files, explicit)
-				}
-			}
-		}
-	}
-	return files
-}
-
-func resolveWebChatBaseInferenceSettings(parsed *values.Values) (*aiconfig.InferenceSettings, []string, error) {
-	sections_, err := geppettosections.CreateGeppettoSections()
-	if err != nil {
-		return nil, nil, errors.Wrap(err, "create hidden geppetto sections")
-	}
-	schema_ := schema.NewSchema(schema.WithSections(sections_...))
-	parsedValues := values.New()
-	configFiles := resolveWebChatConfigFiles(parsed)
-	if err := cmdsources.Execute(
-		schema_,
-		parsedValues,
-		cmdsources.FromEnv("PINOCCHIO", fields.WithSource("env")),
-		cmdsources.FromFiles(
-			configFiles,
-			cmdsources.WithConfigFileMapper(webChatConfigFileMapper),
-			cmdsources.WithParseOptions(fields.WithSource("config")),
-		),
-		cmdsources.FromDefaults(fields.WithSource(fields.SourceDefaults)),
-	); err != nil {
-		return nil, configFiles, errors.Wrap(err, "resolve hidden web-chat base inference settings")
-	}
-	stepSettings, err := aiconfig.NewInferenceSettingsFromParsedValues(parsedValues)
-	if err != nil {
-		return nil, configFiles, errors.Wrap(err, "build inference settings from hidden parsed values")
-	}
-	return stepSettings, configFiles, nil
-}
-
 func NewCommand() (*Command, error) {
-	profileSettingsSection, err := geppettosections.NewProfileSettingsSection()
+	profileSettingsSection, err := profilebootstrap.NewProfileSettingsSection()
 	if err != nil {
 		return nil, errors.Wrap(err, "create web-chat profile settings section")
 	}
@@ -254,19 +110,25 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 	type serverSettings struct {
 		Root              string   `glazed:"root"`
 		DebugAPI          bool     `glazed:"debug-api"`
-		ProfileRegistries []string `glazed:"profile-registries"`
 		TimelineJSScripts []string `glazed:"timeline-js-script"`
 	}
 	s := &serverSettings{}
 	if err := parsed.DecodeSectionInto(values.DefaultSlug, s); err != nil {
 		return errors.Wrap(err, "decode server settings")
 	}
-	var profileRegistriesSource string
-	s.ProfileRegistries, profileRegistriesSource = resolveProfileRegistriesWithSource(parsed, s.ProfileRegistries)
-	if len(s.ProfileRegistries) > 0 {
+	profileSelection, err := profilebootstrap.ResolveCLIProfileSelection(parsed)
+	if err != nil {
+		return errors.Wrap(err, "resolve profile selection")
+	}
+	if profileSelection.Profile != "" && len(profileSelection.ProfileRegistries) == 0 {
+		return &gepprofiles.ValidationError{
+			Field:  "profile-settings.profile-registries",
+			Reason: "must be configured when profile-settings.profile is set",
+		}
+	}
+	if len(profileSelection.ProfileRegistries) > 0 {
 		log.Info().
-			Str("source", profileRegistriesSource).
-			Strs("profile_registries", s.ProfileRegistries).
+			Strs("profile_registries", profileSelection.ProfileRegistries).
 			Msg("resolved profile registry sources")
 	}
 
@@ -291,24 +153,35 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 		{Name: "category_regexp_reviewer", Prompt: "Review proposed regex patterns and assess over/under matching risks."},
 	})
 
-	profileRegistrySpecs, err := gepprofiles.ParseRegistrySourceSpecs(s.ProfileRegistries)
-	if err != nil {
-		return errors.Wrap(err, "parse profile registry source specs")
+	var (
+		profileRegistry        gepprofiles.Registry
+		defaultRegistrySlug    gepprofiles.RegistrySlug
+		profileRegistryCleanup func()
+	)
+	if len(profileSelection.ProfileRegistries) > 0 {
+		profileRegistrySpecs, err := gepprofiles.ParseRegistrySourceSpecs(profileSelection.ProfileRegistries)
+		if err != nil {
+			return errors.Wrap(err, "parse profile registry source specs")
+		}
+		profileRegistryChain, err := gepprofiles.NewChainedRegistryFromSourceSpecs(ctx, profileRegistrySpecs)
+		if err != nil {
+			return errors.Wrap(err, "initialize profile registry")
+		}
+		profileRegistry = profileRegistryChain
+		defaultRegistrySlug = profileRegistryChain.DefaultRegistrySlug()
+		profileRegistryCleanup = func() {
+			_ = profileRegistryChain.Close()
+		}
 	}
-	profileRegistryChain, err := gepprofiles.NewChainedRegistryFromSourceSpecs(ctx, profileRegistrySpecs)
-	if err != nil {
-		return errors.Wrap(err, "initialize profile registry")
+	if profileRegistryCleanup != nil {
+		defer profileRegistryCleanup()
 	}
-	defer func() {
-		_ = profileRegistryChain.Close()
-	}()
-	var profileRegistry gepprofiles.Registry = profileRegistryChain
 
 	middlewareRegistry, err := newWebChatMiddlewareDefinitionRegistry()
 	if err != nil {
 		return errors.Wrap(err, "create middleware definition registry")
 	}
-	baseInferenceSettings, configFiles, err := resolveWebChatBaseInferenceSettings(parsed)
+	baseInferenceSettings, configFiles, err := profilebootstrap.ResolveBaseInferenceSettings(parsed)
 	if err != nil {
 		return err
 	}
@@ -322,7 +195,7 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 			dependencySQLiteDBKey:         dbWithRegexp,
 		},
 	}, baseInferenceSettings)
-	requestResolver := newProfileRequestResolver(profileRegistry, profileRegistryChain.DefaultRegistrySlug(), baseInferenceSettings)
+	requestResolver := newProfileRequestResolver(profileRegistry, defaultRegistrySlug, baseInferenceSettings)
 
 	if err := configureTimelineJSScripts(s.TimelineJSScripts); err != nil {
 		return err

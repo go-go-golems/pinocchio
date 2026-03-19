@@ -1,8 +1,6 @@
 package profilebootstrap
 
 import (
-	"os"
-	"path/filepath"
 	"strings"
 
 	geppettosections "github.com/go-go-golems/geppetto/pkg/sections"
@@ -38,11 +36,6 @@ func ResolveProfileSettings(parsed *values.Values) ProfileSettings {
 	}
 	ret.Profile = strings.TrimSpace(ret.Profile)
 	ret.ProfileRegistries = normalizeProfileRegistries(ret.ProfileRegistries)
-	if len(ret.ProfileRegistries) == 0 {
-		if defaultPath := defaultPinocchioProfileRegistriesIfPresent(); defaultPath != "" {
-			ret.ProfileRegistries = []string{defaultPath}
-		}
-	}
 	return ret
 }
 
@@ -92,6 +85,18 @@ func ResolveEngineProfileSettings(parsed *values.Values) (ProfileSettings, []str
 	return resolved.ProfileSettings, resolved.ConfigFiles, nil
 }
 
+func ResolveCLIConfigFiles(parsed *values.Values) ([]string, error) {
+	return resolveConfigFiles(parsed)
+}
+
+func ResolveCLIConfigFilesForExplicit(explicit string) ([]string, error) {
+	return resolveConfigFilesForExplicit(explicit)
+}
+
+func MapPinocchioConfigFile(rawConfig interface{}) (map[string]map[string]interface{}, error) {
+	return configFileMapper(rawConfig)
+}
+
 func normalizeProfileRegistries(entries []string) []string {
 	ret := make([]string, 0, len(entries))
 	for _, entry := range entries {
@@ -100,19 +105,6 @@ func normalizeProfileRegistries(entries []string) []string {
 		}
 	}
 	return ret
-}
-
-func defaultPinocchioProfileRegistriesIfPresent() string {
-	configDir, err := os.UserConfigDir()
-	if err != nil || strings.TrimSpace(configDir) == "" {
-		return ""
-	}
-	path := filepath.Join(configDir, "pinocchio", "profiles.yaml")
-	info, err := os.Stat(path)
-	if err != nil || info.IsDir() {
-		return ""
-	}
-	return path
 }
 
 func resolveConfigFiles(parsed *values.Values) ([]string, error) {

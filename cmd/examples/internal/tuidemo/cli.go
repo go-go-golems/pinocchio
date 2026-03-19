@@ -8,8 +8,11 @@ import (
 
 	"github.com/go-go-golems/geppetto/pkg/inference/engine"
 	enginefactory "github.com/go-go-golems/geppetto/pkg/inference/engine/factory"
-	geppettosections "github.com/go-go-golems/geppetto/pkg/sections"
+	"github.com/go-go-golems/glazed/pkg/cli"
+	"github.com/go-go-golems/glazed/pkg/cmds/fields"
 	"github.com/go-go-golems/glazed/pkg/cmds/schema"
+	"github.com/go-go-golems/glazed/pkg/cmds/values"
+	profilebootstrap "github.com/go-go-golems/pinocchio/pkg/cmds/profilebootstrap"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
@@ -30,6 +33,7 @@ type CLISpec struct {
 func ExecuteCLI(spec CLISpec) error {
 	var (
 		fixtureID    string
+		configFile   string
 		logLevel     string
 		listFixtures bool
 	)
@@ -53,13 +57,12 @@ func ExecuteCLI(spec CLISpec) error {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
-			profileSlug := strings.TrimSpace(cmd.Flags().Lookup("profile").Value.String())
-			profileRegistries, err := cmd.Flags().GetStringSlice("profile-registries")
+			parsed, err := buildParsedCLIValues(cmd, strings.TrimSpace(configFile))
 			if err != nil {
-				return errors.Wrap(err, "read profile registry flags")
+				return errors.Wrap(err, "build parsed CLI values")
 			}
 
-			stepSettings, closeRuntime, err := ResolveInferenceSettings(ctx, profileSlug, profileRegistries)
+			stepSettings, closeRuntime, err := ResolveInferenceSettings(ctx, parsed)
 			if err != nil {
 				return errors.Wrap(err, "resolve inference settings")
 			}
@@ -80,9 +83,10 @@ func ExecuteCLI(spec CLISpec) error {
 	}
 
 	root.Flags().StringVar(&fixtureID, strings.TrimSpace(spec.FixtureFlag), spec.FixtureDefault, strings.TrimSpace(spec.FixtureUsage))
+	root.Flags().StringVar(&configFile, "config-file", "", "Path to Pinocchio config file")
 	root.Flags().StringVar(&logLevel, "log-level", "info", "Log level (trace|debug|info|warn|error)")
 	root.Flags().BoolVar(&listFixtures, strings.TrimSpace(spec.ListFlag), false, strings.TrimSpace(spec.ListUsage))
-	profileSettingsSection, err := geppettosections.NewProfileSettingsSection()
+	profileSettingsSection, err := profilebootstrap.NewProfileSettingsSection()
 	if err != nil {
 		return err
 	}
@@ -91,6 +95,49 @@ func ExecuteCLI(spec CLISpec) error {
 	}
 
 	return root.Execute()
+}
+
+func buildParsedCLIValues(cmd *cobra.Command, configFile string) (*values.Values, error) {
+	ret := values.New()
+
+	commandSection, err := cli.NewCommandSettingsSection()
+	if err != nil {
+		return nil, err
+	}
+	commandValues, err := values.NewSectionValues(commandSection)
+	if err != nil {
+		return nil, err
+	}
+	if trimmed := strings.TrimSpace(configFile); trimmed != "" {
+		if err := values.WithFieldValue("config-file", trimmed, fields.WithSource("cli"))(commandValues); err != nil {
+			return nil, err
+		}
+	}
+	ret.Set(cli.CommandSettingsSlug, commandValues)
+
+	profileSection, err := profilebootstrap.NewProfileSettingsSection()
+	if err != nil {
+		return nil, err
+	}
+	profileValues, err := values.NewSectionValues(profileSection)
+	if err != nil {
+		return nil, err
+	}
+	if profileFlag := cmd.Flags().Lookup("profile"); profileFlag != nil {
+		if profile := strings.TrimSpace(profileFlag.Value.String()); profile != "" {
+			if err := values.WithFieldValue("profile", profile, fields.WithSource("cli"))(profileValues); err != nil {
+				return nil, err
+			}
+		}
+	}
+	if registries, err := cmd.Flags().GetStringSlice("profile-registries"); err == nil && len(registries) > 0 {
+		if err := values.WithFieldValue("profile-registries", registries, fields.WithSource("cli"))(profileValues); err != nil {
+			return nil, err
+		}
+	}
+	ret.Set(profilebootstrap.ProfileSettingsSectionSlug, profileValues)
+
+	return ret, nil
 }
 
 func (s CLISpec) listValues() []string {

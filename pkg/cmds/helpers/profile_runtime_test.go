@@ -221,6 +221,32 @@ ai-chat:
 	}
 }
 
+func TestResolveFinalInferenceSettings_RejectsProfileWithoutRegistries(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(tmpDir, "xdg"))
+	t.Setenv("HOME", tmpDir)
+
+	configPath := filepath.Join(tmpDir, "pinocchio-config.yaml")
+	configYAML := `
+ai-chat:
+  ai-api-type: openai
+  ai-engine: base-model
+`
+	if err := os.WriteFile(configPath, []byte(configYAML), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	parsed, err := buildTestParsedValues(configPath, "analyst", "")
+	if err != nil {
+		t.Fatalf("build parsed values: %v", err)
+	}
+
+	_, err = ResolveFinalInferenceSettings(context.Background(), parsed)
+	if err == nil {
+		t.Fatal("expected profile selection without registries to fail")
+	}
+}
+
 func buildTestParsedValues(configPath string, profile string, profileRegistries string) (*values.Values, error) {
 	ret := values.New()
 

@@ -17,14 +17,13 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/inference/middlewarecfg"
 	geptools "github.com/go-go-golems/geppetto/pkg/inference/tools"
 	gp "github.com/go-go-golems/geppetto/pkg/js/modules/geppetto"
-	geppettosections "github.com/go-go-golems/geppetto/pkg/sections"
 	aisettings "github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 	"github.com/go-go-golems/glazed/pkg/cli"
 	"github.com/go-go-golems/glazed/pkg/cmds/fields"
 	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	gojengine "github.com/go-go-golems/go-go-goja/engine"
 	agenttools "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/tools"
-	cmdhelpers "github.com/go-go-golems/pinocchio/pkg/cmds/helpers"
+	profilebootstrap "github.com/go-go-golems/pinocchio/pkg/cmds/profilebootstrap"
 	pjs "github.com/go-go-golems/pinocchio/pkg/js/modules/pinocchio"
 	agentmode "github.com/go-go-golems/pinocchio/pkg/middlewares/agentmode"
 	sqlitetool "github.com/go-go-golems/pinocchio/pkg/middlewares/sqlitetool"
@@ -100,7 +99,7 @@ func runJSCommand(ctx context.Context, cmd *cobra.Command, settings jsCommandSet
 	if err != nil {
 		return err
 	}
-	baseInferenceSettings, _, err := cmdhelpers.ResolveBaseInferenceSettings(parsed)
+	baseInferenceSettings, _, err := profilebootstrap.ResolveBaseInferenceSettings(parsed)
 	if err != nil {
 		return err
 	}
@@ -157,7 +156,7 @@ func buildJSParsedValues(cmd *cobra.Command) (*values.Values, error) {
 	if err != nil {
 		return nil, err
 	}
-	profileSection, err := geppettosections.NewProfileSettingsSection()
+	profileSection, err := profilebootstrap.NewProfileSettingsSection()
 	if err != nil {
 		return nil, err
 	}
@@ -191,7 +190,7 @@ func buildJSParsedValues(cmd *cobra.Command) (*values.Values, error) {
 			return nil, err
 		}
 	}
-	ret.Set(cmdhelpers.ProfileSettingsSectionSlug, profileValues)
+	ret.Set(profilebootstrap.ProfileSettingsSectionSlug, profileValues)
 	return ret, nil
 }
 
@@ -236,7 +235,7 @@ func inheritedStringSliceFlag(cmd *cobra.Command, name string) []string {
 }
 
 func loadPinocchioProfileRegistryStack(parsed *values.Values) (gepprofiles.RegistryReader, gepprofiles.ResolveInput, io.Closer, error) {
-	profileSettings, _, err := cmdhelpers.ResolveEngineProfileSettings(parsed)
+	profileSettings, _, err := profilebootstrap.ResolveEngineProfileSettings(parsed)
 	if err != nil {
 		return nil, gepprofiles.ResolveInput{}, nil, err
 	}
@@ -244,7 +243,7 @@ func loadPinocchioProfileRegistryStack(parsed *values.Values) (gepprofiles.Regis
 		if profileSettings.Profile != "" {
 			return nil, gepprofiles.ResolveInput{}, nil, &gepprofiles.ValidationError{
 				Field:  "profile-settings.profile-registries",
-				Reason: "must be configured (hard cutover: no profile-file fallback)",
+				Reason: "must be configured when profile-settings.profile is set",
 			}
 		}
 		return nil, gepprofiles.ResolveInput{}, nil, nil

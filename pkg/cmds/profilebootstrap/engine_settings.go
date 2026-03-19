@@ -88,6 +88,12 @@ func ResolveCLIEngineSettingsFromBase(
 	// Precedence is:
 	// command defaults -> config files -> environment -> explicit parsed values -> profile overlay.
 	if len(selection.ProfileRegistries) == 0 {
+		if selection.Profile != "" {
+			return nil, &gepprofiles.ValidationError{
+				Field:  "profile-settings.profile-registries",
+				Reason: "must be configured when profile-settings.profile is set",
+			}
+		}
 		return &ResolvedCLIEngineSettings{
 			BaseInferenceSettings:  base,
 			FinalInferenceSettings: base,
