@@ -58,56 +58,15 @@ func ResolveFinalInferenceSettings(
 	ctx context.Context,
 	parsed *values.Values,
 ) (*ResolvedInferenceSettings, error) {
-	base, configFiles, err := ResolveBaseInferenceSettings(parsed)
+	resolved, err := ResolveCLIEngineSettings(ctx, parsed)
 	if err != nil {
 		return nil, err
-	}
-	profileSettings, _, err := ResolveEngineProfileSettings(parsed)
-	if err != nil {
-		return nil, err
-	}
-	if len(profileSettings.ProfileRegistries) == 0 {
-		return &ResolvedInferenceSettings{
-			InferenceSettings: base,
-			ConfigFiles:       append([]string(nil), configFiles...),
-		}, nil
-	}
-
-	specs, err := gepprofiles.ParseRegistrySourceSpecs(profileSettings.ProfileRegistries)
-	if err != nil {
-		return nil, errors.Wrap(err, "parse profile registry source specs")
-	}
-	chain, err := gepprofiles.NewChainedRegistryFromSourceSpecs(ctx, specs)
-	if err != nil {
-		return nil, errors.Wrap(err, "initialize profile registry")
-	}
-
-	in := gepprofiles.ResolveInput{}
-	if profileSettings.Profile != "" {
-		profileSlug, err := gepprofiles.ParseEngineProfileSlug(profileSettings.Profile)
-		if err != nil {
-			_ = chain.Close()
-			return nil, err
-		}
-		in.EngineProfileSlug = profileSlug
-	}
-	resolved, err := chain.ResolveEngineProfile(ctx, in)
-	if err != nil {
-		_ = chain.Close()
-		return nil, err
-	}
-	finalSettings, err := gepprofiles.MergeInferenceSettings(base, resolved.InferenceSettings)
-	if err != nil {
-		_ = chain.Close()
-		return nil, errors.Wrap(err, "merge base inference settings with engine profile")
 	}
 	return &ResolvedInferenceSettings{
-		InferenceSettings:     finalSettings,
-		ResolvedEngineProfile: resolved,
-		ConfigFiles:           append([]string(nil), configFiles...),
-		Close: func() {
-			_ = chain.Close()
-		},
+		InferenceSettings:     resolved.FinalInferenceSettings,
+		ResolvedEngineProfile: resolved.ResolvedEngineProfile,
+		ConfigFiles:           append([]string(nil), resolved.ConfigFiles...),
+		Close:                 resolved.Close,
 	}, nil
 }
 
