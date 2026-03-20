@@ -1,7 +1,7 @@
 ---
-Title: Pinocchio CLI Verb Migration Guide (Glazed + Profiles + Config)
+Title: Pinocchio Companion: Migrating CLI Verbs to the Geppetto Bootstrap Path
 Slug: pinocchio-cli-profile-bootstrap-migration
-Short: Step-by-step guide to build a Pinocchio verb with Glazed flags, profile selection, config loading, and resolved inference settings like pinocchio js.
+Short: Pinocchio-specific companion to the generic Geppetto CLI bootstrap migration tutorial.
 Topics:
 - pinocchio
 - cli
@@ -19,202 +19,46 @@ Flags:
 - profile-registries
 - print-parsed-fields
 - print-inference-settings
-- print-inference-settings-sources
 IsTopLevel: true
 IsTemplate: false
 ShowPerDefault: true
 SectionType: Tutorial
 ---
 
-This tutorial shows how to migrate a Pinocchio CLI verb from raw Cobra flags to the standard Glazed + profile bootstrap path. The concrete reference is the current `pinocchio js` command in `pinocchio/cmd/pinocchio/cmds/js.go`.
+The generic migration guide now lives in Geppetto at `geppetto/pkg/doc/tutorials/09-migrating-cli-commands-to-glazed-bootstrap-profile-resolution.md`. Read that first.
 
-The target is not just “support `--profile`.” The target is a verb that behaves like the rest of modern Pinocchio:
+This companion page covers only the Pinocchio-specific deltas you still need when the target command lives in the Pinocchio repo.
 
-- it parses flags and positional arguments through Glazed,
-- it loads config through the Pinocchio config-file mapper,
-- it supports `--profile` and `--profile-registries`,
-- it resolves the final merged `InferenceSettings`,
-- and it can print parsed fields and inference-setting provenance for debugging.
+## What Is Pinocchio-Specific
 
-## What You Are Building
+Pinocchio should now contribute only application wiring:
 
-This section explains the end state before you start editing code.
+- its bootstrap config wrapper, `profilebootstrap.BootstrapConfig()`
+- its config-file mapper, `profilebootstrap.MapPinocchioConfigFile(...)`
+- its convenience wrappers like `profilebootstrap.ResolveCLIEngineSettings(...)`
+- any Pinocchio runtime details, such as the JS runtime default settings path
 
-A migrated verb has four layers:
+The generic bootstrap and inference-debug behavior is Geppetto-owned.
 
-1. A **Glazed command description** that defines the verb’s own flags and arguments.
-2. The shared **Geppetto sections** that expose inference flags and profile settings.
-3. A **Pinocchio-aware middleware chain** that merges Cobra, arguments, environment, config files, and defaults.
-4. A final call to `profilebootstrap.ResolveCLIEngineSettings(...)` so engine creation happens from the fully resolved settings.
+## Step 1: Use the Pinocchio Bootstrap Config
 
-The most useful reference files are:
+When a Pinocchio command needs to call Geppetto bootstrap helpers directly, pass:
 
-- `pinocchio/cmd/pinocchio/cmds/js.go`
-- `pinocchio/pkg/cmds/profilebootstrap`
-- `pinocchio/pkg/cmds/cmdlayers/helpers.go`
-- `geppetto/pkg/sections`
+- `profilebootstrap.BootstrapConfig()`
 
-## Why This Migration Matters
+That wraps the Pinocchio app name, env prefix, config-file mapper, and shared section builders without re-exporting any debug helper behavior.
 
-This section explains why the old raw-Cobra style becomes expensive over time.
+## Step 2: Keep the Pinocchio Config Mapper in the Middleware Chain
 
-When each verb parses flags by hand, three bugs show up repeatedly:
+Pinocchio config files contain top-level keys like `repositories`, so the middleware chain still needs:
 
-- config loading differs from one verb to another,
-- profile selection and profile registry handling drift apart,
-- and debugging becomes hard because `--print-parsed-fields` and provenance output do not exist.
+- `profilebootstrap.MapPinocchioConfigFile(...)`
 
-The shared bootstrap path fixes that. It gives every verb the same answers to the same questions:
+If you omit that mapper, config parsing can fail or silently drift.
 
-- Which config file was loaded?
-- Which profile registries were used?
-- Which profile actually resolved?
-- What are the final `InferenceSettings`?
-- Why does a specific field have its current value?
+## Step 3: Resolve Final Settings Through the Pinocchio Wrapper
 
-## Step 1: Replace Local Cobra Flags with a Glazed Command Description
-
-This section covers the first structural change: stop declaring the normal flags with `cmd.Flags().StringVar(...)`.
-
-For `pinocchio js`, the local command flags now live in a `CommandDescription`:
-
-```go
-type JSCommand struct {
-	*cmds.CommandDescription
-}
-
-func newJSCommand() (*JSCommand, error) {
-	baseSections, err := geppettosections.CreateGeppettoSections()
-	if err != nil {
-		return nil, err
-	}
-	inferenceDebugSection, err := cmdlayers.NewInferenceDebugParameterLayer()
-	if err != nil {
-		return nil, err
-	}
-
-	options := []cmds.CommandDescriptionOption{
-		cmds.WithShort("Run JavaScript against Pinocchio's Geppetto runtime"),
-		cmds.WithFlags(
-			fields.New("script", fields.TypeString, fields.WithHelp("Path to JavaScript file to execute")),
-			fields.New("print-result", fields.TypeBool, fields.WithDefault(false)),
-			fields.New("list-go-tools", fields.TypeBool, fields.WithDefault(false)),
-		),
-		cmds.WithArguments(
-			fields.New("script_path", fields.TypeString, fields.WithHelp("Path to JavaScript file to execute")),
-		),
-		cmds.WithSections(inferenceDebugSection),
-	}
-	options = append(options, cmds.WithSections(baseSections...))
-
-	return &JSCommand{
-		CommandDescription: cmds.NewCommandDescription("js", options...),
-	}, nil
-}
-```
-
-That does two things:
-
-- the verb-specific flags are now declarative and Glazed-owned,
-- and the command becomes compatible with `cli.BuildCobraCommand(...)`.
-
-## Step 2: Reuse the Shared Geppetto Sections
-
-This section explains which section helpers to mount instead of inventing your own profile/config flags.
-
-For a verb that needs engine/profile resolution, start with:
-
-- `geppetto/pkg/sections.CreateGeppettoSections()`
-
-That gives you:
-
-- `ai-chat`
-- provider sections like `openai-chat`
-- `ai-inference`
-- `profile-settings`
-
-If you also want the Pinocchio inference debug flags, add:
-
-- `pinocchio/pkg/cmds/cmdlayers.NewInferenceDebugParameterLayer()`
-
-That gives you:
-
-- `--print-inference-settings`
-- `--print-inference-settings-sources`
-
-Because `CreateGeppettoSections()` already includes `profile-settings`, you do not need to define your own `--profile` or `--profile-registries` flags.
-
-## Step 3: Build Cobra Through Glazed
-
-This section explains the point where `--print-parsed-fields` starts working.
-
-Once the command implements `cmds.BareCommand` or `cmds.WriterCommand`, build the Cobra command through Glazed:
-
-```go
-func NewJSCommand() *cobra.Command {
-	command, err := newJSCommand()
-	if err != nil {
-		panic(err)
-	}
-	cobraCommand, err := cli.BuildCobraCommand(command, cli.WithParserConfig(cli.CobraParserConfig{
-		MiddlewaresFunc: jsCobraMiddlewares,
-	}))
-	if err != nil {
-		panic(err)
-	}
-	return cobraCommand
-}
-```
-
-This is what enables:
-
-- `--print-parsed-fields`
-- `--print-schema`
-- `--print-yaml`
-- normal Glazed command settings parsing
-
-If the verb still bypasses `cli.BuildCobraCommand(...)`, it will keep behaving like a special-case Cobra command.
-
-## Step 4: Use a Pinocchio-Aware Config Middleware
-
-This section covers the most common migration mistake.
-
-Pinocchio config files are not a pure Glazed section map. They contain extra top-level keys like `repositories`. If you use the default config loader directly, those keys can break parsing.
-
-The `pinocchio js` fix was to use `profilebootstrap.MapPinocchioConfigFile(...)` inside the middleware chain:
-
-```go
-func jsCobraMiddlewares(parsedCommandSections *values.Values, cmd *cobra.Command, args []string) ([]cmd_sources.Middleware, error) {
-	configFiles, err := profilebootstrap.ResolveCLIConfigFiles(parsedCommandSections)
-	if err != nil {
-		return nil, err
-	}
-
-	return []cmd_sources.Middleware{
-		cmd_sources.FromCobra(cmd, fields.WithSource("cobra")),
-		cmd_sources.FromArgs(args, fields.WithSource("arguments")),
-		cmd_sources.FromEnv("PINOCCHIO", fields.WithSource("env")),
-		cmd_sources.FromFiles(
-			configFiles,
-			cmd_sources.WithConfigFileMapper(profilebootstrap.MapPinocchioConfigFile),
-			cmd_sources.WithParseOptions(fields.WithSource("config")),
-		),
-		cmd_sources.FromDefaults(fields.WithSource(fields.SourceDefaults)),
-	}, nil
-}
-```
-
-Why this matters:
-
-- `ResolveCLIConfigFiles(...)` respects `--config-file`,
-- `MapPinocchioConfigFile(...)` ignores non-section keys like `repositories`,
-- and config-derived fields show up in the parsed-field log with file metadata.
-
-## Step 5: Resolve Final Engine Settings Once
-
-This section is the core simplification. Do not reimplement profile merging inside the verb.
-
-After parsing, call:
+In Pinocchio commands, the simplest path is still:
 
 ```go
 resolved, err := profilebootstrap.ResolveCLIEngineSettings(ctx, parsed)
@@ -226,143 +70,40 @@ if resolved.Close != nil {
 }
 ```
 
-The result gives you:
+That keeps the command code concise while still using the Geppetto-owned bootstrap system under the hood.
 
-- `resolved.ProfileSelection`
-- `resolved.BaseInferenceSettings`
-- `resolved.FinalInferenceSettings`
-- `resolved.ResolvedEngineProfile`
+## Step 4: Use the Geppetto Debug Helper Directly
 
-For a normal engine-backed verb, the standard path is:
+Pinocchio should no longer define its own debug helper path. The command should mount:
 
-```go
-engineInstance, err := enginefactory.NewEngineFromSettings(resolved.FinalInferenceSettings)
-```
+- `geppettobootstrap.NewInferenceDebugSection()`
 
-For a JS runtime verb, pass `resolved.FinalInferenceSettings` into the runtime as the default engine settings so later JS-created engines inherit the resolved config/profile state.
+and should execute:
 
-## Step 6: Add the Debug/Provenance Exits
+- `geppettobootstrap.HandleInferenceDebugOutput(...)`
 
-This section explains how to make future debugging cheap.
+The current debug surface is one flag:
 
-Once the verb resolves engine settings, support these exits:
-
-- `--print-parsed-fields`
 - `--print-inference-settings`
-- `--print-inference-settings-sources`
 
-The `pinocchio js` pattern is:
+That output now includes both `settings` and `sources`, with sensitive values masked as `***`.
 
-```go
-debugSettings := &cmdlayers.HelpersSettings{}
-if err := parsed.DecodeSectionInto(cmdlayers.GeppettoHelpersSlug, debugSettings); err != nil {
-	return err
-}
+## Step 5: Preserve the JS Runtime Defaults Rule
 
-if debugSettings.PrintInferenceSources {
-	trace, err := profilebootstrap.BuildInferenceSettingsSourceTrace(nil, parsed, resolved)
-	if err != nil {
-		return err
-	}
-	return yaml.NewEncoder(w).Encode(trace)
-}
+The Pinocchio JS command still has one subtle runtime rule that matters:
 
-if debugSettings.PrintInferenceSettings {
-	return yaml.NewEncoder(w).Encode(resolved.FinalInferenceSettings)
-}
-```
+- pass the resolved final inference settings into the JS runtime as defaults
 
-Use a non-nil command baseline if your verb injects extra app-specific base settings before profile overlay. Use `nil` if the Geppetto sections and config are the whole baseline.
-
-## Step 7: If the Verb Exposes JS Profile APIs, Pass the Defaults Through
-
-This section explains the subtle runtime bug that affected `pinocchio js`.
-
-`gp.engines.fromResolvedProfile(...)` used to build engines from raw profile data only. That meant config-derived values like `openai-api-key` and `openai-base-url` could disappear even though the CLI had already resolved them.
-
-The fix was:
-
-- pass the CLI’s final merged settings into the JS runtime as default inference settings,
-- and merge those defaults with the resolved profile before engine creation.
-
-The rule to keep is simple:
-
-- **build engines from the final merged settings, not from raw profile payload alone.**
-
-## Minimal Template
-
-This section gives you a compact recipe for a new verb.
-
-```go
-type MyCommand struct {
-	*cmds.CommandDescription
-}
-
-func newMyCommand() (*MyCommand, error) {
-	sections, err := geppettosections.CreateGeppettoSections()
-	if err != nil {
-		return nil, err
-	}
-	debugSection, err := cmdlayers.NewInferenceDebugParameterLayer()
-	if err != nil {
-		return nil, err
-	}
-
-	options := []cmds.CommandDescriptionOption{
-		cmds.WithShort("..."),
-		cmds.WithFlags(
-			fields.New("my-flag", fields.TypeString),
-		),
-		cmds.WithSections(debugSection),
-	}
-	options = append(options, cmds.WithSections(sections...))
-
-	return &MyCommand{
-		CommandDescription: cmds.NewCommandDescription("my-verb", options...),
-	}, nil
-}
-
-func NewMyCommand() *cobra.Command {
-	command, err := newMyCommand()
-	if err != nil {
-		panic(err)
-	}
-	cobraCommand, err := cli.BuildCobraCommand(command, cli.WithParserConfig(cli.CobraParserConfig{
-		MiddlewaresFunc: myMiddlewares,
-	}))
-	if err != nil {
-		panic(err)
-	}
-	return cobraCommand
-}
-
-func (c *MyCommand) RunIntoWriter(ctx context.Context, parsed *values.Values, w io.Writer) error {
-	resolved, err := profilebootstrap.ResolveCLIEngineSettings(ctx, parsed)
-	if err != nil {
-		return err
-	}
-	if resolved.Close != nil {
-		defer resolved.Close()
-	}
-
-	engineInstance, err := enginefactory.NewEngineFromSettings(resolved.FinalInferenceSettings)
-	if err != nil {
-		return err
-	}
-
-	_ = engineInstance
-	return nil
-}
-```
+That prevents later JS-created engines from dropping config-derived values like API keys or base URLs.
 
 ## Validation Checklist
 
-Run these after the migration:
+Run these after migrating a Pinocchio verb:
 
 1. `go run ./cmd/pinocchio <verb> --help --long-help`
 2. `go run ./cmd/pinocchio <verb> --print-parsed-fields`
 3. `go run ./cmd/pinocchio <verb> --print-inference-settings`
-4. `go run ./cmd/pinocchio <verb> --print-inference-settings-sources`
+4. Confirm the debug output includes both `settings:` and `sources:`
 5. `go test ./cmd/pinocchio/... -count=1`
 6. `go test ./pkg/cmds/profilebootstrap -count=1`
 
@@ -370,16 +111,12 @@ Run these after the migration:
 
 | Problem | Cause | Solution |
 |---|---|---|
-| `unknown flag: --print-parsed-fields` | The verb still bypasses `cli.BuildCobraCommand(...)` | Convert it to a Glazed command and build Cobra through `cli.BuildCobraCommand(...)` |
-| `expected map[string]interface{} for section repositories` | The default config middleware is trying to parse non-section keys from `config.yaml` | Use `profilebootstrap.MapPinocchioConfigFile(...)` when loading config files |
-| `must be configured when profile-settings.profile is set` | A profile was selected without any registry sources | Mount `profile-settings` and configure `profile-registries` via config or flags |
-| Final engine misses API key or base URL | The verb built from raw profile data instead of merged settings | Create engines from `resolved.FinalInferenceSettings` |
-| The provenance output is too thin | The verb mounted only local flags and not the Geppetto sections | Mount `CreateGeppettoSections()` and parse config/env/defaults through the Pinocchio-aware middleware chain |
+| Config parsing chokes on `repositories` | The command skipped the Pinocchio config-file mapper | Use `profilebootstrap.MapPinocchioConfigFile(...)` |
+| The command still has `--print-inference-settings-sources` docs or flags | The migration copied older Pinocchio patterns | Replace them with `geppettobootstrap.NewInferenceDebugSection()` and the single `--print-inference-settings` path |
+| JS-created engines miss API keys or base URLs | The runtime used raw profile data instead of merged defaults | Pass `resolved.FinalInferenceSettings` into the JS runtime as default settings |
 
 ## See Also
 
-- `pinocchio/cmd/pinocchio/cmds/js.go`
-- `pinocchio/pkg/cmds/profilebootstrap`
-- `pinocchio/pkg/cmds/cmdlayers/helpers.go`
-- `pinocchio/pkg/doc/topics/13-js-api-reference.md`
-- `pinocchio/pkg/doc/topics/14-js-api-user-guide.md`
+- `geppetto/pkg/doc/tutorials/09-migrating-cli-commands-to-glazed-bootstrap-profile-resolution.md`
+- [cmd/pinocchio/cmds/js.go](../../../cmd/pinocchio/cmds/js.go)
+- [pkg/cmds/profilebootstrap/profile_selection.go](../../cmds/profilebootstrap/profile_selection.go)

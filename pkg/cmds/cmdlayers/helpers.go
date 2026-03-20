@@ -17,7 +17,6 @@ type AutosaveSettings struct {
 type HelpersSettings struct {
 	PrintPrompt            bool               `glazed:"print-prompt"`
 	PrintInferenceSettings bool               `glazed:"print-inference-settings"`
-	PrintInferenceSources  bool               `glazed:"print-inference-settings-sources"`
 	System                 string             `glazed:"system"`
 	AppendMessageFile      string             `glazed:"append-message-file"`
 	MessageFile            string             `glazed:"message-file"`
@@ -51,12 +50,6 @@ func NewHelpersParameterLayer() (schema.Section, error) {
 			),
 			fields.New(
 				"print-inference-settings",
-				fields.TypeBool,
-				fields.WithDefault(false),
-				fields.WithHelp("Print the final resolved inference settings and exit"),
-			),
-			fields.New(
-				"print-inference-settings-sources",
 				fields.TypeBool,
 				fields.WithDefault(false),
 				fields.WithHelp("Print the final resolved inference settings together with source logs and exit"),
@@ -157,25 +150,6 @@ func NewHelpersParameterLayer() (schema.Section, error) {
 				fields.TypeBool,
 				fields.WithHelp("Print all available metadata in output"),
 				fields.WithDefault(false),
-			),
-		),
-	)
-}
-
-func NewInferenceDebugParameterLayer() (schema.Section, error) {
-	return schema.NewSection(GeppettoHelpersSlug, "Geppetto helpers",
-		schema.WithFields(
-			fields.New(
-				"print-inference-settings",
-				fields.TypeBool,
-				fields.WithDefault(false),
-				fields.WithHelp("Print the final resolved inference settings and exit"),
-			),
-			fields.New(
-				"print-inference-settings-sources",
-				fields.TypeBool,
-				fields.WithDefault(false),
-				fields.WithHelp("Print the final resolved inference settings together with source logs and exit"),
 			),
 		),
 	)
