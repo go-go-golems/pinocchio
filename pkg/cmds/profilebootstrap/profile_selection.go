@@ -29,6 +29,10 @@ func pinocchioBootstrapConfig() bootstrap.AppBootstrapConfig {
 	}
 }
 
+func BootstrapConfig() bootstrap.AppBootstrapConfig {
+	return pinocchioBootstrapConfig()
+}
+
 func NewProfileSettingsSection() (schema.Section, error) {
 	return bootstrap.NewProfileSettingsSection(pinocchioBootstrapConfig())
 }
