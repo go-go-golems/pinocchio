@@ -25,7 +25,7 @@ ShowPerDefault: true
 SectionType: Tutorial
 ---
 
-The generic migration guide now lives in Geppetto at [09-migrating-cli-commands-to-glazed-bootstrap-profile-resolution.md](/home/manuel/workspaces/2026-03-17/add-opinionated-apis/geppetto/pkg/doc/tutorials/09-migrating-cli-commands-to-glazed-bootstrap-profile-resolution.md). Read that first.
+The generic migration guide now lives in Geppetto at `geppetto/pkg/doc/tutorials/09-migrating-cli-commands-to-glazed-bootstrap-profile-resolution.md`. Read that first.
 ## Conceptual Companion
 
 If you are new to the settings lifecycle, read `pinocchio/pkg/doc/topics/pinocchio-profile-resolution-and-runtime-switching.md` alongside this tutorial.
@@ -131,6 +131,6 @@ Run these after migrating a Pinocchio verb:
 
 ## See Also
 
-- [09-migrating-cli-commands-to-glazed-bootstrap-profile-resolution.md](/home/manuel/workspaces/2026-03-17/add-opinionated-apis/geppetto/pkg/doc/tutorials/09-migrating-cli-commands-to-glazed-bootstrap-profile-resolution.md)
-- [pinocchio/cmd/pinocchio/cmds/js.go](/home/manuel/workspaces/2026-03-17/add-opinionated-apis/pinocchio/cmd/pinocchio/cmds/js.go)
-- [pinocchio/pkg/cmds/profilebootstrap/profile_selection.go](/home/manuel/workspaces/2026-03-17/add-opinionated-apis/pinocchio/pkg/cmds/profilebootstrap/profile_selection.go)
+- `geppetto/pkg/doc/tutorials/09-migrating-cli-commands-to-glazed-bootstrap-profile-resolution.md`
+- [cmd/pinocchio/cmds/js.go](../../../cmd/pinocchio/cmds/js.go)
+- [pkg/cmds/profilebootstrap/profile_selection.go](../../cmds/profilebootstrap/profile_selection.go)
