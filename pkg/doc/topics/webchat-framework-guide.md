@@ -38,6 +38,33 @@ Recommended baseline:
 - Mount shared profile APIs with `webhttp.RegisterProfileAPIHandlers(...)`.
 - Optionally mount `srv.APIHandler()` and `srv.UIHandler()`.
 
+## Read This First
+
+Before copying pieces out of this guide, read the reference app overview in
+[`cmd/web-chat/README.md`](../../../cmd/web-chat/README.md). It shows the full
+application shape and the route contract used by Pinocchio's maintained
+reference app.
+
+If you want the shortest buildable starting point, use the validated minimal
+example at:
+
+- [`pkg/doc/examples/minimal-webchat-server/main.go`](../examples/minimal-webchat-server/main.go)
+
+That example demonstrates all of the wiring most new applications need:
+
+- Glazed root command setup
+- early logging and `PersistentPreRunE` logger initialization
+- Pinocchio config/bootstrap middleware chain
+- per-request profile resolution and settings merge
+- `webchat.NewServer(...)`
+- app-owned `/chat`, `/ws`, and `/api/timeline` route mounting
+
+Build it directly to verify the example against the current repository state:
+
+```bash
+go build ./pkg/doc/examples/minimal-webchat-server
+```
+
 ## Core Pieces
 
 - `Server`: lifecycle wrapper for event routing plus `http.Server` runtime.
@@ -57,6 +84,10 @@ Treat [Webchat HTTP Chat Setup](webchat-http-chat-setup.md) as the **source of t
 This guide is intentionally narrative: it focuses on how to assemble an app (server, resolver, middleware/tools, UI mounting), not on repeating the full API contract.
 
 ## Quick Start
+
+Start with the validated example above when you need a copy/paste baseline. The
+snippet below is still useful for understanding the composition model, but the
+example program is the canonical "this compiles today" entry point.
 
 ```go
 //go:embed static
