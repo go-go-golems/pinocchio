@@ -83,6 +83,108 @@ Treat [Webchat HTTP Chat Setup](webchat-http-chat-setup.md) as the **source of t
 
 This guide is intentionally narrative: it focuses on how to assemble an app (server, resolver, middleware/tools, UI mounting), not on repeating the full API contract.
 
+## App-Facing Import Reference
+
+These are the packages most custom webchat apps actually import. The minimal
+example in `pkg/doc/examples/minimal-webchat-server/main.go` uses this shape.
+
+| Package | Why you import it |
+|---|---|
+| `github.com/go-go-golems/clay/pkg` | initialize Glazed/Cobra root command defaults |
+| `github.com/go-go-golems/glazed/pkg/cli` | build the Cobra command from your command description |
+| `github.com/go-go-golems/glazed/pkg/cmds` | define the command description and `RunIntoWriter` command |
+| `github.com/go-go-golems/glazed/pkg/cmds/fields` | declare app flags and middleware source labels |
+| `github.com/go-go-golems/glazed/pkg/cmds/logging` | early logging and Cobra logger setup |
+| `github.com/go-go-golems/glazed/pkg/cmds/schema` | section typing when assembling config/profile sections |
+| `github.com/go-go-golems/glazed/pkg/cmds/sources` | compose the config/env/Cobra/default middleware chain |
+| `github.com/go-go-golems/glazed/pkg/cmds/values` | decode parsed values into app structs |
+| `github.com/go-go-golems/glazed/pkg/help` and `github.com/go-go-golems/glazed/pkg/help/cmd` | mount the built-in help system on your root command |
+| `github.com/go-go-golems/geppetto/pkg/engineprofiles` | load profile registries and merge selected profile settings |
+| `github.com/go-go-golems/geppetto/pkg/sections` | add the hidden base inference sections to your command |
+| `github.com/go-go-golems/geppetto/pkg/steps/ai/settings` | hold the resolved `InferenceSettings` used to create engines |
+| `github.com/go-go-golems/pinocchio/pkg/cmds/profilebootstrap` | Pinocchio-specific config loading, profile selection, and base settings helpers |
+| `github.com/go-go-golems/pinocchio/pkg/inference/runtime` | runtime builder contract and engine construction helpers |
+| `github.com/go-go-golems/pinocchio/pkg/webchat` | create the webchat server |
+| `github.com/go-go-golems/pinocchio/pkg/webchat/http` | mount the chat, websocket, and timeline handlers |
+| `github.com/gorilla/websocket` | provide the upgrader for `webhttp.NewWSHandler(...)` |
+
+If you cannot find a type in the webchat docs, check this table before falling
+back to source search.
+
+## Required Startup Sequence
+
+For a new application, the startup order matters more than the individual APIs.
+The smallest stable pattern is:
+
+1. initialize early logging before Cobra parses flags,
+2. create the root Cobra command and mount help,
+3. call `clay.InitGlazed(...)`,
+4. build the webchat command with a custom middleware chain,
+5. resolve profile registries and base inference settings,
+6. merge selected profile settings into base settings inside the request
+   resolver,
+7. build `webchat.Server`, then mount `/chat`, `/ws`, and `/api/timeline`.
+
+### Logging and Help Skeleton
+
+```go
+_ = logging.InitEarlyLoggingFromArgs(os.Args[1:], "my-webchat-app")
+
+rootCmd := &cobra.Command{
+  Use: "my-webchat-app",
+  PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+    return logging.InitLoggerFromCobra(cmd)
+  },
+}
+
+helpSystem := help.NewHelpSystem()
+help_cmd.SetupCobraRootCommand(helpSystem, rootCmd)
+
+if err := clay.InitGlazed("my-webchat-app", rootCmd); err != nil {
+  cobra.CheckErr(err)
+}
+```
+
+### Pinocchio Config Middleware Chain
+
+Do not rely on the default `cli.BuildCobraCommand(...)` middleware set if you
+expect Pinocchio config files, environment variables, and profile registries to
+work the same way as the reference app. Use an explicit middleware function:
+
+```go
+func pinocchioMiddlewares(parsed *values.Values, cmd *cobra.Command, args []string) ([]cmdsources.Middleware, error) {
+  configFiles, err := profilebootstrap.ResolveCLIConfigFiles(parsed)
+  if err != nil {
+    return nil, err
+  }
+
+  return []cmdsources.Middleware{
+    cmdsources.FromCobra(cmd, fields.WithSource("cobra")),
+    cmdsources.FromArgs(args, fields.WithSource("arguments")),
+    cmdsources.FromEnv("PINOCCHIO", fields.WithSource("env")),
+    cmdsources.FromFiles(
+      configFiles,
+      cmdsources.WithConfigFileMapper(profilebootstrap.MapPinocchioConfigFile),
+      cmdsources.WithParseOptions(fields.WithSource("config")),
+    ),
+    cmdsources.FromDefaults(fields.WithSource(fields.SourceDefaults)),
+  }, nil
+}
+```
+
+Then pass it explicitly:
+
+```go
+cobraCmd, err := cli.BuildCobraCommand(
+  cmd,
+  cli.WithCobraMiddlewaresFunc(pinocchioMiddlewares),
+)
+```
+
+Without this middleware chain, config-backed API keys, profile registries, and
+hidden Geppetto inference sections will not resolve the way the rest of this
+guide assumes.
+
 ## Quick Start
 
 Start with the validated example above when you need a copy/paste baseline. The
