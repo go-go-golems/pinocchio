@@ -106,6 +106,37 @@ if err != nil { ... }
 
 That is the engine half of the story only.
 
+## Critical Warning: Merge Base Settings with Selected Profile Settings
+
+Do not pass raw registry-resolved profile settings directly into runtime
+composition unless you are absolutely sure they already include provider
+credentials.
+
+In the normal Pinocchio setup:
+
+- base inference settings carry credentials, API base URLs, and other shared
+  provider-level defaults loaded from config, env, and CLI middleware,
+- engine profiles carry model/provider selection and profile-specific inference
+  overrides,
+- the resolver must merge those two layers before runtime composition.
+
+The practical rule is:
+
+```go
+resolvedProfile, err := profileRegistry.ResolveEngineProfile(ctx, gepprofiles.ResolveInput{
+  RegistrySlug:      selectedRegistry,
+  EngineProfileSlug: selectedProfile,
+})
+if err != nil { ... }
+
+finalSettings, err := gepprofiles.MergeInferenceSettings(baseInferenceSettings, resolvedProfile.InferenceSettings)
+if err != nil { ... }
+```
+
+If you skip this merge, the most common failure mode is "profile selection
+appears to work, but the runtime later fails because provider credentials or
+base URLs are missing."
+
 ## Request Selection Precedence
 
 For chat and websocket requests, the typical webchat selection order is:
@@ -156,6 +187,21 @@ type resolvedConversationPlan struct {
 
 The shared transport conversion should happen after this local plan exists.
 
+### Resolver Checklist
+
+For a typical webchat app, the resolver should do this in order:
+
+1. read `conv_id`, `profile`, `registry`, and idempotency inputs from the
+   request,
+2. resolve the selected engine profile from the registry stack,
+3. merge the selected profile settings onto the base inference settings,
+4. derive app-owned runtime policy such as system prompt, middlewares, and tool
+   names,
+5. convert the local plan into `webhttp.ResolvedConversationRequest` once.
+
+The runtime builder should not repeat steps 2 or 3. By the time composition
+runs, `ResolvedInferenceSettings` should already be final.
+
 ## App Runtime Policy
 
 Pinocchio webchat uses an app-owned profile extension for its runtime policy:
@@ -194,6 +240,19 @@ The composer should:
 3. expose tool names for upstream registry filtering
 
 It should not try to re-resolve engine profiles.
+
+In practice, this means the runtime builder should behave like:
+
+- take `ResolvedInferenceSettings` as input,
+- build the engine from those settings,
+- apply prompt and middleware policy from the resolved runtime,
+- return `ComposedRuntime`.
+
+It should not:
+
+- load registries,
+- inspect config files directly,
+- merge engine profiles again.
 
 ## Read-Only HTTP APIs
 

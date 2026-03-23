@@ -37,6 +37,72 @@ Go backend
   -> TimelineService returns snapshot entities
 ```
 
+## Minimum Third-Party Frontend Contract
+
+This page describes the contract a custom frontend must implement. It does not
+require you to copy Pinocchio's full reference React architecture.
+
+For a non-reference frontend, the minimum requirements are:
+
+1. generate or persist a `conv_id`,
+2. `POST /chat` with `prompt` and `conv_id`,
+3. open `GET /ws?conv_id=<id>` and consume SEM envelopes,
+4. optionally hydrate from `GET /api/timeline`,
+5. render assistant/tool/log events in whatever local state model your app uses.
+
+You do **not** need to copy all of these reference-app internals unless they
+match your app architecture:
+
+- Redux slices
+- timeline property registries
+- widget registry composition
+- the exact `wsManager` class design
+
+What you do need is the HTTP/WS contract and the event ordering model.
+
+### TypeScript-Friendly Contract
+
+```ts
+type ChatRequestBody = {
+  prompt: string;
+  conv_id?: string;
+  profile?: string;
+  registry?: string;
+  idempotency_key?: string;
+};
+
+type SemEnvelope = {
+  sem: true;
+  event: {
+    type: string;
+    id: string;
+    seq?: number;
+    stream_id?: string;
+    data?: Record<string, unknown>;
+  };
+};
+```
+
+### Minimum Client Lifecycle
+
+```text
+choose conv_id
+  -> connect websocket
+  -> optionally buffer events
+  -> POST /chat
+  -> optionally fetch /api/timeline
+  -> replay buffered events
+  -> switch to live event dispatch
+```
+
+The buffering/hydration steps are strongly recommended when page reload
+correctness matters, but the absolute minimum demo integration can still work
+with:
+
+- one websocket connection per active conversation,
+- one POST per user prompt,
+- no timeline hydration on first pass.
+
 ## WebSocket Lifecycle
 
 1. Determine `conv_id` from URL or state.
@@ -75,6 +141,17 @@ State integration options:
 
 - Push events into a local store (React hook + `useSyncExternalStore`) for “monitor” views.
 - Dispatch into a Redux slice (as the web-chat example does) when you want global timeline/message state.
+
+This is a recommended implementation pattern, not part of the wire contract.
+A custom frontend can use:
+
+- React local state,
+- Redux,
+- Zustand,
+- RxJS,
+- any other state container,
+
+as long as it preserves the request ordering and hydration semantics above.
 
 ## SEM Frame Contract
 
