@@ -36,6 +36,17 @@ The target is not just “support `--profile`.” The target is a verb that beha
 - it resolves the final merged `InferenceSettings`,
 - and it can print parsed fields and inference-setting provenance for debugging.
 
+## Conceptual Companion
+
+If you are new to the settings lifecycle, read `pinocchio/pkg/doc/topics/pinocchio-profile-resolution-and-runtime-switching.md` alongside this tutorial.
+
+That companion topic explains:
+
+- hidden base settings
+- stripped parsed-values base settings
+- `BaseInferenceSettings` vs `FinalInferenceSettings`
+- runtime profile switching without losing the baseline
+
 ## What You Are Building
 
 This section explains the end state before you start editing code.
@@ -129,6 +140,7 @@ For a verb that needs engine/profile resolution, start with:
 That gives you:
 
 - `ai-chat`
+- `ai-client`
 - provider sections like `openai-chat`
 - `ai-inference`
 - `profile-settings`
@@ -143,6 +155,8 @@ That gives you:
 - `--print-inference-settings-sources`
 
 Because `CreateGeppettoSections()` already includes `profile-settings`, you do not need to define your own `--profile` or `--profile-registries` flags.
+
+It also means cross-profile client settings such as `ai-client.*` are part of the same shared baseline surface when the verb mounts the full Geppetto sections.
 
 ## Step 3: Build Cobra Through Glazed
 

@@ -22,6 +22,7 @@ import (
 	gepprofiles "github.com/go-go-golems/geppetto/pkg/engineprofiles"
 	"github.com/go-go-golems/geppetto/pkg/inference/middlewarecfg"
 	geptools "github.com/go-go-golems/geppetto/pkg/inference/tools"
+	aisettings "github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 	toolspkg "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/tools"
 	thinkingmode "github.com/go-go-golems/pinocchio/cmd/web-chat/thinkingmode"
 	timelinecmd "github.com/go-go-golems/pinocchio/cmd/web-chat/timeline"
@@ -77,6 +78,10 @@ func NewCommand() (*Command, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "create web-chat profile settings section")
 	}
+	clientSection, err := aisettings.NewClientValueSection()
+	if err != nil {
+		return nil, errors.Wrap(err, "create web-chat ai-client section")
+	}
 	redisLayer, err := rediscfg.NewParameterLayer()
 	if err != nil {
 		return nil, err
@@ -99,7 +104,7 @@ func NewCommand() (*Command, error) {
 			fields.New("turns-dsn", fields.TypeString, fields.WithDefault(""), fields.WithHelp("SQLite DSN for durable turn snapshots (enables GET /turns); preferred over turns-db")),
 			fields.New("turns-db", fields.TypeString, fields.WithDefault(""), fields.WithHelp("SQLite DB file path for durable turn snapshots (enables GET /turns); DSN is derived with WAL/busy_timeout")),
 		),
-		cmds.WithSections(profileSettingsSection, redisLayer),
+		cmds.WithSections(profileSettingsSection, clientSection, redisLayer),
 	)
 	return &Command{CommandDescription: desc}, nil
 }
@@ -170,14 +175,18 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 	if err != nil {
 		return errors.Wrap(err, "create middleware definition registry")
 	}
-	baseInferenceSettings, configFiles, err := profilebootstrap.ResolveBaseInferenceSettings(parsed)
+	hiddenBaseInferenceSettings, configFiles, err := profilebootstrap.ResolveBaseInferenceSettings(parsed)
 	if err != nil {
 		return err
+	}
+	baseInferenceSettings, err := profilebootstrap.ResolveParsedBaseInferenceSettingsWithBase(parsed, hiddenBaseInferenceSettings)
+	if err != nil {
+		return errors.Wrap(err, "resolve web-chat base inference settings from hidden base and parsed values")
 	}
 	log.Debug().
 		Strs("config_files", configFiles).
 		Interface("step_metadata", baseInferenceSettings.GetMetadata()).
-		Msg("resolved hidden web-chat base inference settings")
+		Msg("resolved web-chat base inference settings")
 	runtimeComposer := newProfileRuntimeComposer(middlewareRegistry, middlewarecfg.BuildDeps{
 		Values: map[string]any{
 			dependencyAgentModeServiceKey: amSvc,
