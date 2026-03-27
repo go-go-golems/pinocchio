@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	aisettings "github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 	"github.com/go-go-golems/glazed/pkg/cli"
 	"github.com/go-go-golems/glazed/pkg/cmds/fields"
 	"github.com/go-go-golems/glazed/pkg/cmds/values"
@@ -40,6 +41,24 @@ func testValuesWithConfigFile(t *testing.T, configFile string) *values.Values {
 	require.NoError(t, values.WithFieldValue("config-file", configFile, fields.WithSource("cli"))(sectionValues))
 
 	return values.New(values.WithSectionValues(cli.CommandSettingsSlug, sectionValues))
+}
+
+func testValuesWithConfigFileClientSettings(t *testing.T, configFile string, timeout int, proxyURL string) *values.Values {
+	t.Helper()
+
+	parsed := testValuesWithConfigFile(t, configFile)
+	clientSection, err := aisettings.NewClientValueSection()
+	require.NoError(t, err)
+	options := []values.SectionValuesOption{
+		values.WithFieldValue("timeout", timeout, fields.WithSource("cobra")),
+	}
+	if proxyURL != "" {
+		options = append(options, values.WithFieldValue("proxy-url", proxyURL, fields.WithSource("cobra")))
+	}
+	clientValues, err := values.NewSectionValues(clientSection, options...)
+	require.NoError(t, err)
+	parsed.Set(aisettings.AiClientSlug, clientValues)
+	return parsed
 }
 
 func TestWebChatProfileSelection_UsesSharedProfileSettingsSection(t *testing.T) {
@@ -92,7 +111,7 @@ func TestResolveBaseInferenceSettings_UsesDefaultsConfigAndEnv(t *testing.T) {
 	require.Equal(t, "https://api.openai.com/v1", stepSettings.API.BaseUrls["openai-base-url"])
 }
 
-func TestWebChatCommand_UsesPinocchioConfigNamespaceAndExposesOnlyProfileConfigFlags(t *testing.T) {
+func TestWebChatCommand_UsesPinocchioConfigNamespaceAndExposesProfileAndAIClientFlags(t *testing.T) {
 	cmdDef, err := NewCommand()
 	require.NoError(t, err)
 
@@ -113,6 +132,11 @@ func TestWebChatCommand_UsesPinocchioConfigNamespaceAndExposesOnlyProfileConfigF
 	require.Equal(t, "pinocchio", webChatCLIAppName)
 	require.Nil(t, cobraCmd.Flags().Lookup("ai-engine"))
 	require.Nil(t, cobraCmd.Flags().Lookup("ai-api-type"))
+	require.NotNil(t, cobraCmd.Flags().Lookup("timeout"))
+	require.NotNil(t, cobraCmd.Flags().Lookup("organization"))
+	require.NotNil(t, cobraCmd.Flags().Lookup("user-agent"))
+	require.NotNil(t, cobraCmd.Flags().Lookup("proxy-url"))
+	require.NotNil(t, cobraCmd.Flags().Lookup("proxy-from-environment"))
 	require.NotNil(t, cobraCmd.Flags().Lookup("profile-registries"))
 	require.NotNil(t, cobraCmd.Flags().Lookup("profile"))
 	configFlag := cobraCmd.Flags().Lookup("config-file")
@@ -121,4 +145,34 @@ func TestWebChatCommand_UsesPinocchioConfigNamespaceAndExposesOnlyProfileConfigF
 	require.True(t, cobraCmd.Flags().Lookup("print-yaml").Hidden)
 	require.True(t, cobraCmd.Flags().Lookup("print-parsed-fields").Hidden)
 	require.True(t, cobraCmd.Flags().Lookup("print-schema").Hidden)
+}
+
+func TestResolveParsedBaseInferenceSettingsWithBase_AppliesWebChatClientCLIFlags(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
+	defaultDir := filepath.Join(tmpDir, ".pinocchio")
+	require.NoError(t, os.MkdirAll(defaultDir, 0o755))
+	defaultConfig := filepath.Join(defaultDir, "config.yaml")
+	require.NoError(t, os.WriteFile(defaultConfig, []byte(
+		"ai-chat:\n  ai-engine: home-engine\nai-client:\n  timeout: 30\n  proxy-url: http://config-proxy.internal:8080\n",
+	), 0o644))
+
+	parsed := testValuesWithConfigFileClientSettings(t, defaultConfig, 123, "http://cli-proxy.internal:8080")
+
+	hiddenBase, _, err := profilebootstrap.ResolveBaseInferenceSettings(parsed)
+	require.NoError(t, err)
+	require.NotNil(t, hiddenBase.Client)
+	require.NotNil(t, hiddenBase.Client.TimeoutSeconds)
+	require.Equal(t, 30, *hiddenBase.Client.TimeoutSeconds)
+	require.NotNil(t, hiddenBase.Client.ProxyURL)
+	require.Equal(t, "http://config-proxy.internal:8080", *hiddenBase.Client.ProxyURL)
+
+	baseWithCLI, err := profilebootstrap.ResolveParsedBaseInferenceSettingsWithBase(parsed, hiddenBase)
+	require.NoError(t, err)
+	require.NotNil(t, baseWithCLI.Client)
+	require.NotNil(t, baseWithCLI.Client.TimeoutSeconds)
+	require.Equal(t, 123, *baseWithCLI.Client.TimeoutSeconds)
+	require.NotNil(t, baseWithCLI.Client.ProxyURL)
+	require.Equal(t, "http://cli-proxy.internal:8080", *baseWithCLI.Client.ProxyURL)
 }

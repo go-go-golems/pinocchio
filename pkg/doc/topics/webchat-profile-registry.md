@@ -58,6 +58,23 @@ Pinocchio’s shared runtime payload is defined in [`pkg/inference/runtime/profi
 
 This is the boundary between app resolution and shared webchat execution. The app should build its own local plan first, then convert into the shared request transport once.
 
+## Base Settings Source
+
+The `web-chat` command uses a hidden base inference-settings path rather than exposing the full Geppetto AI surface on its public CLI.
+
+That base currently comes from:
+
+- shared Geppetto sections
+- config files
+- environment variables
+- defaults
+
+via `profilebootstrap.ResolveBaseInferenceSettings(...)` in `pinocchio/cmd/web-chat/main.go`.
+
+That means shared baseline fields such as `ai-client.*` can already matter for webchat through config and environment even though the `web-chat` command does not currently expose those flags directly.
+
+It also means widening `web-chat` to expose `ai-client` flags would require more than just mounting another section. The runtime baseline path would also need to preserve those parsed CLI values.
+
 ## Registry Bootstrap
 
 The engine-profile registry stack usually comes from:
@@ -241,3 +258,4 @@ These tests should live at the app layer, not only in the Geppetto engine-profil
 - [Webchat Framework Guide](webchat-framework-guide.md) — handler-first backend integration and resolver/composer wiring
 - [Webchat HTTP Chat Setup](webchat-http-chat-setup.md) — canonical route table and request contract
 - [Third-Party Webchat Playbook](../tutorials/03-thirdparty-webchat-playbook.md) — build a webchat-style app from scratch with the current model
+- [Pinocchio Profile Resolution and Runtime Switching](pinocchio-profile-resolution-and-runtime-switching.md) — explains hidden base settings, baseline ownership, and why webchat CLI widening needs a parsed-values-aware base path
