@@ -43,16 +43,19 @@ func testValuesWithConfigFile(t *testing.T, configFile string) *values.Values {
 	return values.New(values.WithSectionValues(cli.CommandSettingsSlug, sectionValues))
 }
 
-func testValuesWithConfigFileAndClientTimeout(t *testing.T, configFile string, timeout int) *values.Values {
+func testValuesWithConfigFileClientSettings(t *testing.T, configFile string, timeout int, proxyURL string) *values.Values {
 	t.Helper()
 
 	parsed := testValuesWithConfigFile(t, configFile)
 	clientSection, err := aisettings.NewClientValueSection()
 	require.NoError(t, err)
-	clientValues, err := values.NewSectionValues(
-		clientSection,
+	options := []values.SectionValuesOption{
 		values.WithFieldValue("timeout", timeout, fields.WithSource("cobra")),
-	)
+	}
+	if proxyURL != "" {
+		options = append(options, values.WithFieldValue("proxy-url", proxyURL, fields.WithSource("cobra")))
+	}
+	clientValues, err := values.NewSectionValues(clientSection, options...)
 	require.NoError(t, err)
 	parsed.Set(aisettings.AiClientSlug, clientValues)
 	return parsed
@@ -132,6 +135,8 @@ func TestWebChatCommand_UsesPinocchioConfigNamespaceAndExposesProfileAndAIClient
 	require.NotNil(t, cobraCmd.Flags().Lookup("timeout"))
 	require.NotNil(t, cobraCmd.Flags().Lookup("organization"))
 	require.NotNil(t, cobraCmd.Flags().Lookup("user-agent"))
+	require.NotNil(t, cobraCmd.Flags().Lookup("proxy-url"))
+	require.NotNil(t, cobraCmd.Flags().Lookup("proxy-from-environment"))
 	require.NotNil(t, cobraCmd.Flags().Lookup("profile-registries"))
 	require.NotNil(t, cobraCmd.Flags().Lookup("profile"))
 	configFlag := cobraCmd.Flags().Lookup("config-file")
@@ -150,20 +155,24 @@ func TestResolveParsedBaseInferenceSettingsWithBase_AppliesWebChatClientCLIFlags
 	require.NoError(t, os.MkdirAll(defaultDir, 0o755))
 	defaultConfig := filepath.Join(defaultDir, "config.yaml")
 	require.NoError(t, os.WriteFile(defaultConfig, []byte(
-		"ai-chat:\n  ai-engine: home-engine\nai-client:\n  timeout: 30\n",
+		"ai-chat:\n  ai-engine: home-engine\nai-client:\n  timeout: 30\n  proxy-url: http://config-proxy.internal:8080\n",
 	), 0o644))
 
-	parsed := testValuesWithConfigFileAndClientTimeout(t, defaultConfig, 123)
+	parsed := testValuesWithConfigFileClientSettings(t, defaultConfig, 123, "http://cli-proxy.internal:8080")
 
 	hiddenBase, _, err := profilebootstrap.ResolveBaseInferenceSettings(parsed)
 	require.NoError(t, err)
 	require.NotNil(t, hiddenBase.Client)
 	require.NotNil(t, hiddenBase.Client.TimeoutSeconds)
 	require.Equal(t, 30, *hiddenBase.Client.TimeoutSeconds)
+	require.NotNil(t, hiddenBase.Client.ProxyURL)
+	require.Equal(t, "http://config-proxy.internal:8080", *hiddenBase.Client.ProxyURL)
 
 	baseWithCLI, err := profilebootstrap.ResolveParsedBaseInferenceSettingsWithBase(parsed, hiddenBase)
 	require.NoError(t, err)
 	require.NotNil(t, baseWithCLI.Client)
 	require.NotNil(t, baseWithCLI.Client.TimeoutSeconds)
 	require.Equal(t, 123, *baseWithCLI.Client.TimeoutSeconds)
+	require.NotNil(t, baseWithCLI.Client.ProxyURL)
+	require.Equal(t, "http://cli-proxy.internal:8080", *baseWithCLI.Client.ProxyURL)
 }
