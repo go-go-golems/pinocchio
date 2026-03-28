@@ -132,7 +132,7 @@ func TestCountCommandAPIModeOpenAI(t *testing.T) {
 	if !strings.Contains(out, "Count source: provider_api") {
 		t.Fatalf("missing provider source output: %s", out)
 	}
-	if !strings.Contains(out, "Provider: openai-responses") {
+	if !strings.Contains(out, "Provider: open-responses") {
 		t.Fatalf("missing provider output: %s", out)
 	}
 	if !strings.Contains(out, "Total tokens: 42") {
