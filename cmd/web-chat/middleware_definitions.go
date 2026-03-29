@@ -81,12 +81,17 @@ func newAgentModeMiddlewareDefinition() middlewarecfg.Definition {
 				"type":    "string",
 				"default": agentmode.DefaultConfig().DefaultMode,
 			},
+			"sanitize_yaml": map[string]any{
+				"type":    "boolean",
+				"default": agentmode.DefaultConfig().ParseOptions.SanitizeEnabled(),
+			},
 		},
 		"additionalProperties": false,
 	}
 
 	type configInput struct {
-		DefaultMode string `json:"default_mode,omitempty"`
+		DefaultMode  string `json:"default_mode,omitempty"`
+		SanitizeYAML *bool  `json:"sanitize_yaml,omitempty"`
 	}
 
 	return middlewareDefinition{
@@ -113,6 +118,9 @@ func newAgentModeMiddlewareDefinition() middlewarecfg.Definition {
 			config := agentmode.DefaultConfig()
 			if strings.TrimSpace(input.DefaultMode) != "" {
 				config.DefaultMode = strings.TrimSpace(input.DefaultMode)
+			}
+			if input.SanitizeYAML != nil {
+				config.ParseOptions = config.ParseOptions.WithSanitizeYAML(*input.SanitizeYAML)
 			}
 			return agentmode.NewMiddleware(svc, config), nil
 		},

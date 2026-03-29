@@ -142,7 +142,7 @@ func (et *EventTranslator) Translate(e events.Event) [][]byte {
 		return nil
 	}
 	md := e.Metadata()
-	log.Debug().
+	log.Trace().
 		Str("component", "web_forwarder").
 		Str("event_type", fmt.Sprintf("%T", e)).
 		Str("event_id", md.ID.String()).

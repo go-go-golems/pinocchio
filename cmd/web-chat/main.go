@@ -207,6 +207,7 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 		parsed,
 		staticFS,
 		webchat.WithRuntimeComposer(runtimeComposer),
+		webchat.WithEventSinkWrapper(newAgentModeStructuredSinkWrapper()),
 		webchat.WithDebugRoutesEnabled(s.DebugAPI),
 	)
 	if err != nil {
