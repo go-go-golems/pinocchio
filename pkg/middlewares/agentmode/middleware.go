@@ -9,12 +9,10 @@ import (
 
 	"github.com/go-go-golems/geppetto/pkg/events"
 	rootmw "github.com/go-go-golems/geppetto/pkg/inference/middleware"
-	"github.com/go-go-golems/geppetto/pkg/steps/parse"
 	"github.com/go-go-golems/geppetto/pkg/turns"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
-	"gopkg.in/yaml.v3"
 )
 
 // AgentMode describes a mode name with allowed tools and an optional system prompt snippet.
@@ -46,13 +44,24 @@ type ModeChange struct {
 
 // Config configures the behavior of the middleware.
 type Config struct {
-	DefaultMode string
+	DefaultMode  string
+	ParseOptions ParseOptions
 }
 
 func DefaultConfig() Config {
 	return Config{
-		DefaultMode: "default",
+		DefaultMode:  "default",
+		ParseOptions: DefaultParseOptions(),
 	}
+}
+
+func (c Config) withDefaults() Config {
+	ret := c
+	if strings.TrimSpace(ret.DefaultMode) == "" {
+		ret.DefaultMode = DefaultConfig().DefaultMode
+	}
+	ret.ParseOptions = ret.ParseOptions.withDefaults()
+	return ret
 }
 
 func publishAgentModeSwitchEvent(ctx context.Context, meta events.EventMetadata, from string, to string, analysis string) {
@@ -71,6 +80,7 @@ func sessionIDFromTurn(t *turns.Turn) string {
 
 // NewMiddleware returns a middleware.Middleware compatible handler.
 func NewMiddleware(svc Service, cfg Config) rootmw.Middleware {
+	cfg = cfg.withDefaults()
 	return func(next rootmw.HandlerFunc) rootmw.HandlerFunc {
 		return func(ctx context.Context, t *turns.Turn) (*turns.Turn, error) {
 			if t == nil {
@@ -137,7 +147,7 @@ func NewMiddleware(svc Service, cfg Config) rootmw.Middleware {
 				if bldr.Len() > 0 {
 					bldr.WriteString("\n\n")
 				}
-				bldr.WriteString(BuildYamlModeSwitchInstructions(mode.Name, listModeNames(svc)))
+				bldr.WriteString(BuildModeSwitchInstructions(mode.Name, listModeNames(svc)))
 				if bldr.Len() > 0 {
 					text := bldr.String()
 					prev := text
@@ -192,16 +202,20 @@ func NewMiddleware(svc Service, cfg Config) rootmw.Middleware {
 				resSessionID = sessionID
 			}
 
-			// Parse assistant response to detect YAML mode switch only in newly added blocks (by ID)
+			// Parse assistant response to detect a structured mode-switch payload only in newly added blocks (by ID)
 			addedBlocks := rootmw.NewBlocksNotIn(res, baselineIDs)
-			newMode, analysis := DetectYamlModeSwitchInBlocks(addedBlocks)
-			log.Debug().Str("new_mode", newMode).Str("analysis", analysis).Msg("agentmode: detected mode switch via YAML")
+			newMode, analysis := "", ""
+			if parsed, ok := DetectModeSwitchInBlocks(addedBlocks, cfg.ParseOptions); ok {
+				newMode = parsed.NewMode
+				analysis = parsed.Analysis
+			}
+			log.Debug().Str("new_mode", newMode).Str("analysis", analysis).Msg("agentmode: detected mode switch via structured payload")
 			// Emit analysis event even when not switching (allocate a message_id)
 			if strings.TrimSpace(analysis) != "" && newMode == "" {
 				publishAgentModeSwitchEvent(ctx, events.EventMetadata{ID: uuid.New(), SessionID: resSessionID, TurnID: res.ID}, modeName, modeName, analysis)
 			}
 			if newMode != "" && newMode != modeName {
-				log.Debug().Str("from", modeName).Str("to", newMode).Msg("agentmode: detected mode switch via YAML")
+				log.Debug().Str("from", modeName).Str("to", newMode).Msg("agentmode: detected mode switch via structured payload")
 				// Apply to turn for next call
 				if err := turns.KeyAgentMode.Set(&res.Data, newMode); err != nil {
 					return nil, errors.Wrap(err, "set agent mode")
@@ -218,112 +232,6 @@ func NewMiddleware(svc Service, cfg Config) rootmw.Middleware {
 			return res, nil
 		}
 	}
-}
-
-// BuildYamlModeSwitchInstructions returns instructions for the model to propose a mode switch using YAML.
-func BuildYamlModeSwitchInstructions(current string, available []string) string {
-	var b strings.Builder
-	b.WriteString("<modeSwitchGuidelines>")
-	b.WriteString("Analyze the current conversation and determine if a mode switch would be beneficial. ")
-	b.WriteString("Consider the user's request, the context, and the available capabilities in different modes. ")
-	b.WriteString("If a mode switch would improve your ability to help the user, propose it using the following YAML format. ")
-	b.WriteString("If the current mode is appropriate, do not include the new_mode field.")
-	b.WriteString("</modeSwitchGuidelines>\n\n")
-	b.WriteString("```yaml\n")
-	b.WriteString("mode_switch:\n")
-	b.WriteString("  analysis: |\n")
-	b.WriteString("    • What is the user trying to accomplish?\n")
-	b.WriteString("    • What capabilities are needed?\n")
-	b.WriteString("    • Is the current mode optimal for this task?\n")
-	b.WriteString("    • If switching, what specific benefits would the new mode provide?\n")
-	b.WriteString("  new_mode: MODE_NAME  # Only include this if you recommend switching modes\n")
-	b.WriteString("```\n\n")
-	b.WriteString("Current mode: ")
-	b.WriteString(current)
-	if len(available) > 0 {
-		b.WriteString("\nAvailable modes: ")
-		b.WriteString(strings.Join(available, ", "))
-	}
-	b.WriteString("\n\nRemember: Only propose a mode switch if it would genuinely improve your ability to assist the user. ")
-	b.WriteString("Staying in the current mode is often the right choice.")
-	return b.String()
-}
-
-// DetectYamlModeSwitch scans assistant LLM text blocks for a YAML code fence containing mode_switch.
-func DetectYamlModeSwitch(t *turns.Turn) (string, string) {
-	if t == nil {
-		return "", ""
-	}
-	for _, b := range t.Blocks {
-		if b.Kind != turns.BlockKindLLMText {
-			continue
-		}
-		txt, _ := b.Payload[turns.PayloadKeyText].(string)
-		if txt == "" {
-			continue
-		}
-		blocks, err := parse.ExtractYAMLBlocks(txt)
-		if err != nil {
-			continue
-		}
-		for _, body := range blocks {
-			body = strings.TrimSpace(body)
-			var data struct {
-				ModeSwitch struct {
-					Analysis string `yaml:"analysis"`
-					NewMode  string `yaml:"new_mode,omitempty"`
-				} `yaml:"mode_switch"`
-			}
-			if err := yaml.Unmarshal([]byte(body), &data); err != nil {
-				continue
-			}
-			analysis := strings.TrimSpace(data.ModeSwitch.Analysis)
-			if analysis == "" {
-				continue
-			}
-			nm := strings.TrimSpace(data.ModeSwitch.NewMode)
-			return nm, strings.TrimSpace(data.ModeSwitch.Analysis)
-		}
-	}
-	return "", ""
-}
-
-// DetectYamlModeSwitchInBlocks scans the provided blocks from the back and
-// returns the first detected (nearest to the end) YAML mode switch.
-func DetectYamlModeSwitchInBlocks(blocks []turns.Block) (string, string) {
-	for i := len(blocks) - 1; i >= 0; i-- {
-		b := blocks[i]
-		if b.Kind != turns.BlockKindLLMText {
-			continue
-		}
-		txt, _ := b.Payload[turns.PayloadKeyText].(string)
-		if strings.TrimSpace(txt) == "" {
-			continue
-		}
-		yblocks, err := parse.ExtractYAMLBlocks(txt)
-		if err != nil {
-			continue
-		}
-		for _, body := range yblocks {
-			body = strings.TrimSpace(body)
-			var data struct {
-				ModeSwitch struct {
-					Analysis string `yaml:"analysis"`
-					NewMode  string `yaml:"new_mode,omitempty"`
-				} `yaml:"mode_switch"`
-			}
-			if err := yaml.Unmarshal([]byte(body), &data); err != nil {
-				continue
-			}
-			analysis := strings.TrimSpace(data.ModeSwitch.Analysis)
-			if analysis == "" {
-				continue
-			}
-			nm := strings.TrimSpace(data.ModeSwitch.NewMode)
-			return nm, analysis
-		}
-	}
-	return "", ""
 }
 
 // listModeNames extracts available mode names from the provided Service, if it is a known implementation.
