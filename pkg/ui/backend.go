@@ -2,7 +2,6 @@ package ui
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"sync"
 	"time"
@@ -311,7 +310,6 @@ func StepChatForwardFunc(p *tea.Program) func(msg *message.Message) error {
 
 		md := e.Metadata()
 		entityID := md.ID.String()
-		log.Debug().Interface("event", e).Str("event_type", fmt.Sprintf("%T", e)).Str("entity_id", entityID).Msg("Dispatching event to UI")
 
 		switch e_ := e.(type) {
 		case *events.EventPartialCompletionStart:
@@ -325,7 +323,6 @@ func StepChatForwardFunc(p *tea.Program) func(msg *message.Message) error {
 			if !hasAssistantEntity(entityID) {
 				break
 			}
-			log.Debug().Str("component", "step_forward").Str("entity_id", entityID).Int("delta_len", len(e_.Delta)).Int("completion_len", len(e_.Completion)).Msg("UIEntityUpdated (llm_text)")
 			p.Send(timeline.UIEntityUpdated{
 				ID:        timeline.EntityID{LocalID: entityID, Kind: "llm_text"},
 				Patch:     map[string]any{"text": e_.Completion, "metadata": md.LLMInferenceData, "streaming": true},
@@ -341,7 +338,6 @@ func StepChatForwardFunc(p *tea.Program) func(msg *message.Message) error {
 				p.Send(boba_chat.BackendFinishedMsg{})
 				break
 			}
-			log.Debug().Str("component", "step_forward").Str("entity_id", entityID).Int("text_len", len(e_.Text)).Msg("UIEntityCompleted (final)")
 			p.Send(timeline.UIEntityCompleted{
 				ID:     timeline.EntityID{LocalID: entityID, Kind: "llm_text"},
 				Result: map[string]any{"text": e_.Text, "metadata": md.LLMInferenceData},
@@ -369,7 +365,6 @@ func StepChatForwardFunc(p *tea.Program) func(msg *message.Message) error {
 				p.Send(boba_chat.BackendFinishedMsg{})
 				break
 			}
-			log.Debug().Str("component", "step_forward").Str("entity_id", entityID).Int("text_len", len(intr.Text)).Msg("UIEntityCompleted (interrupt)")
 			p.Send(timeline.UIEntityCompleted{
 				ID:     timeline.EntityID{LocalID: entityID, Kind: "llm_text"},
 				Result: map[string]any{"text": intr.Text},
@@ -385,7 +380,6 @@ func StepChatForwardFunc(p *tea.Program) func(msg *message.Message) error {
 				p.Send(boba_chat.BackendFinishedMsg{})
 				break
 			}
-			log.Debug().Str("component", "step_forward").Str("entity_id", entityID).Msg("UIEntityCompleted (error)")
 			p.Send(timeline.UIEntityCompleted{
 				ID:     timeline.EntityID{LocalID: entityID, Kind: "llm_text"},
 				Result: map[string]any{"text": errText},
@@ -397,7 +391,6 @@ func StepChatForwardFunc(p *tea.Program) func(msg *message.Message) error {
 		case *events.EventInfo:
 			if e_.Message == "thinking-started" {
 				thinkID := timeline.EntityID{LocalID: entityID + ":thinking", Kind: "llm_text"}
-				log.Debug().Str("component", "step_forward").Str("entity_id", thinkID.LocalID).Msg("UIEntityCreated (thinking)")
 				p.Send(timeline.UIEntityCreated{
 					ID:        thinkID,
 					Renderer:  timeline.RendererDescriptor{Kind: "llm_text"},
@@ -407,7 +400,6 @@ func StepChatForwardFunc(p *tea.Program) func(msg *message.Message) error {
 			}
 			if e_.Message == "thinking-ended" {
 				thinkID := timeline.EntityID{LocalID: entityID + ":thinking", Kind: "llm_text"}
-				log.Debug().Str("component", "step_forward").Str("entity_id", thinkID.LocalID).Msg("UIEntityCompleted (thinking)")
 				p.Send(timeline.UIEntityUpdated{
 					ID:        thinkID,
 					Patch:     map[string]any{"streaming": false},
@@ -418,7 +410,6 @@ func StepChatForwardFunc(p *tea.Program) func(msg *message.Message) error {
 			}
 		case *events.EventThinkingPartial:
 			thinkID := timeline.EntityID{LocalID: entityID + ":thinking", Kind: "llm_text"}
-			log.Debug().Str("component", "step_forward").Str("entity_id", thinkID.LocalID).Int("completion_len", len(e_.Completion)).Msg("UIEntityUpdated (thinking)")
 			p.Send(timeline.UIEntityUpdated{
 				ID:        thinkID,
 				Patch:     map[string]any{"text": e_.Completion, "streaming": true},
