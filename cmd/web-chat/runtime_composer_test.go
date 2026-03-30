@@ -85,7 +85,7 @@ func TestRuntimeFingerprint_DoesNotIncludeAPIKeys(t *testing.T) {
 	ss := testBaseInferenceSettings(t)
 	ss.API.APIKeys["openai"] = "sk-this-should-not-appear"
 
-	fp := buildRuntimeFingerprint("default", 0, "hi", nil, nil, ss)
+	fp := infruntime.BuildRuntimeFingerprintFromSettings("default", 0, &infruntime.ProfileRuntime{SystemPrompt: "hi"}, ss)
 	if strings.Contains(fp, "sk-this-should-not-appear") {
 		t.Fatalf("fingerprint leaked api key: %q", fp)
 	}
@@ -245,8 +245,9 @@ func TestWebChatRuntimeComposer_RejectsInvalidMiddlewareSchemaPayload(t *testing
 }
 
 func TestRuntimeFingerprint_ChangesOnProfileVersion(t *testing.T) {
-	fpV1 := buildRuntimeFingerprint("default", 1, "prompt", nil, nil, nil)
-	fpV2 := buildRuntimeFingerprint("default", 2, "prompt", nil, nil, nil)
+	runtime := &infruntime.ProfileRuntime{SystemPrompt: "prompt"}
+	fpV1 := infruntime.BuildRuntimeFingerprintFromSettings("default", 1, runtime, nil)
+	fpV2 := infruntime.BuildRuntimeFingerprintFromSettings("default", 2, runtime, nil)
 	if fpV1 == fpV2 {
 		t.Fatalf("expected fingerprint to change across profile versions")
 	}

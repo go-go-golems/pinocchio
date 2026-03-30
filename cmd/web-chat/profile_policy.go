@@ -342,17 +342,6 @@ func cloneResolvedInferenceSettings(in *aisettings.InferenceSettings) *aisetting
 	return in.Clone()
 }
 
-func resolvedInferenceSettingsForRequest(resolved *gepprofiles.ResolvedEngineProfile, base *aisettings.InferenceSettings) (*aisettings.InferenceSettings, error) {
-	if resolved == nil || resolved.InferenceSettings == nil {
-		return cloneResolvedInferenceSettings(base), nil
-	}
-	merged, err := gepprofiles.MergeInferenceSettings(base, resolved.InferenceSettings)
-	if err != nil {
-		return nil, err
-	}
-	return merged, nil
-}
-
 func (r *ProfileRequestResolver) buildConversationPlan(
 	ctx context.Context,
 	convID string,
@@ -360,23 +349,11 @@ func (r *ProfileRequestResolver) buildConversationPlan(
 	idempotencyKey string,
 	resolvedProfile *gepprofiles.ResolvedEngineProfile,
 ) (*resolvedWebChatConversationPlan, error) {
-	resolvedRuntime, err := r.resolveProfileRuntime(ctx, resolvedProfile)
+	resolvedPlan, err := r.resolveRuntimePlan(ctx, resolvedProfile)
 	if err != nil {
 		return nil, err
 	}
 	runtimeKey := runtimeKeyFromResolvedProfile(resolvedProfile)
-	var (
-		profileVersion  uint64
-		profileMetadata map[string]any
-	)
-	if resolvedProfile != nil {
-		profileVersion = profileVersionFromResolvedMetadata(resolvedProfile.Metadata)
-		profileMetadata = copyMetadataMap(resolvedProfile.Metadata)
-	}
-	inferenceSettings, err := resolvedInferenceSettingsForRequest(resolvedProfile, r.baseInferenceSettings)
-	if err != nil {
-		return nil, &webhttp.RequestResolutionError{Status: http.StatusInternalServerError, ClientMsg: "failed to merge inference settings", Err: err}
-	}
 
 	runtime := &resolvedWebChatRuntime{
 		SystemPrompt:       "",
@@ -384,16 +361,21 @@ func (r *ProfileRequestResolver) buildConversationPlan(
 		ToolNames:          nil,
 		RuntimeKey:         runtimeKey,
 		RuntimeFingerprint: "",
-		ProfileVersion:     profileVersion,
-		InferenceSettings:  inferenceSettings,
-		ProfileMetadata:    profileMetadata,
+		ProfileVersion:     0,
+		InferenceSettings:  nil,
+		ProfileMetadata:    nil,
 	}
-	if resolvedRuntime != nil {
-		runtime.SystemPrompt = strings.TrimSpace(resolvedRuntime.SystemPrompt)
-		runtime.Middlewares = append([]infruntime.MiddlewareUse(nil), resolvedRuntime.Middlewares...)
-		runtime.ToolNames = append([]string(nil), resolvedRuntime.Tools...)
+	if resolvedPlan != nil {
+		runtime.ProfileVersion = resolvedPlan.ProfileVersion
+		runtime.InferenceSettings = cloneResolvedInferenceSettings(resolvedPlan.InferenceSettings)
+		runtime.ProfileMetadata = copyMetadataMap(resolvedPlan.ProfileMetadata)
+		if resolvedPlan.Runtime != nil {
+			runtime.SystemPrompt = strings.TrimSpace(resolvedPlan.Runtime.SystemPrompt)
+			runtime.Middlewares = append([]infruntime.MiddlewareUse(nil), resolvedPlan.Runtime.Middlewares...)
+			runtime.ToolNames = append([]string(nil), resolvedPlan.Runtime.Tools...)
+		}
 	}
-	runtime.RuntimeFingerprint = buildResolvedRuntimeFingerprint(runtime.RuntimeKey, runtime.ProfileVersion, runtime, runtime.InferenceSettings)
+	runtime.RuntimeFingerprint = infruntime.BuildRuntimeFingerprintFromSettings(runtime.RuntimeKey, runtime.ProfileVersion, toRuntimeTransport(runtime), runtime.InferenceSettings)
 
 	return &resolvedWebChatConversationPlan{
 		ConvID:         convID,
@@ -403,26 +385,42 @@ func (r *ProfileRequestResolver) buildConversationPlan(
 	}, nil
 }
 
+func (r *ProfileRequestResolver) resolveRuntimePlan(
+	ctx context.Context,
+	resolved *gepprofiles.ResolvedEngineProfile,
+) (*infruntime.ResolvedRuntimePlan, error) {
+	plan, err := infruntime.ResolveRuntimePlan(ctx, r.profileRegistry, resolved, infruntime.ResolveRuntimePlanOptions{
+		BaseInferenceSettings: r.baseInferenceSettings,
+		BaseRuntime:           defaultWebChatProfileRuntime(),
+	})
+	if err == nil {
+		return plan, nil
+	}
+	if errors.Is(err, gepprofiles.ErrProfileNotFound) {
+		slug := ""
+		if resolved != nil {
+			slug = resolved.EngineProfileSlug.String()
+		}
+		return nil, r.toRequestResolutionError(err, slug)
+	}
+	if resolved != nil && r.profileRegistry != nil {
+		return nil, &webhttp.RequestResolutionError{Status: http.StatusBadRequest, ClientMsg: "invalid pinocchio runtime extension", Err: err}
+	}
+	return nil, err
+}
+
 func (r *ProfileRequestResolver) resolveProfileRuntime(
 	ctx context.Context,
 	resolved *gepprofiles.ResolvedEngineProfile,
 ) (*infruntime.ProfileRuntime, error) {
-	runtime := defaultWebChatProfileRuntime()
-	if r == nil || r.profileRegistry == nil || resolved == nil {
-		return runtime, nil
+	plan, err := r.resolveRuntimePlan(ctx, resolved)
+	if err != nil {
+		return nil, err
 	}
-	for _, ref := range runtimeStackRefsFromResolvedProfile(resolved) {
-		profile, err := r.profileRegistry.GetEngineProfile(ctx, ref.registrySlug, ref.profileSlug)
-		if err != nil {
-			return nil, r.toRequestResolutionError(err, ref.profileSlug.String())
-		}
-		profileRuntime, _, err := infruntime.ProfileRuntimeFromEngineProfile(profile)
-		if err != nil {
-			return nil, &webhttp.RequestResolutionError{Status: http.StatusBadRequest, ClientMsg: "invalid pinocchio runtime extension", Err: err}
-		}
-		runtime = mergeWebChatProfileRuntime(runtime, profileRuntime)
+	if plan == nil {
+		return nil, nil
 	}
-	return runtime, nil
+	return plan.Runtime, nil
 }
 
 func defaultWebChatProfileRuntime() *infruntime.ProfileRuntime {
@@ -431,195 +429,6 @@ func defaultWebChatProfileRuntime() *infruntime.ProfileRuntime {
 			{Name: "agentmode"},
 		},
 	}
-}
-
-type runtimeStackRef struct {
-	registrySlug gepprofiles.RegistrySlug
-	profileSlug  gepprofiles.EngineProfileSlug
-}
-
-func runtimeStackRefsFromResolvedProfile(resolved *gepprofiles.ResolvedEngineProfile) []runtimeStackRef {
-	if resolved == nil {
-		return nil
-	}
-
-	refs := parseRuntimeStackRefsFromMetadata(resolved.Metadata)
-	if len(refs) > 0 {
-		return refs
-	}
-
-	return []runtimeStackRef{{
-		registrySlug: resolved.RegistrySlug,
-		profileSlug:  resolved.EngineProfileSlug,
-	}}
-}
-
-func parseRuntimeStackRefsFromMetadata(metadata map[string]any) []runtimeStackRef {
-	rawLineage, ok := metadata["profile.stack.lineage"]
-	if !ok {
-		return nil
-	}
-
-	items, ok := rawLineage.([]map[string]any)
-	if ok {
-		refs := make([]runtimeStackRef, 0, len(items))
-		for _, item := range items {
-			ref, ok := runtimeStackRefFromMetadataItem(item)
-			if ok {
-				refs = append(refs, ref)
-			}
-		}
-		return refs
-	}
-
-	rawItems, ok := rawLineage.([]any)
-	if !ok {
-		return nil
-	}
-
-	refs := make([]runtimeStackRef, 0, len(rawItems))
-	for _, rawItem := range rawItems {
-		item, ok := rawItem.(map[string]any)
-		if !ok {
-			continue
-		}
-		ref, ok := runtimeStackRefFromMetadataItem(item)
-		if ok {
-			refs = append(refs, ref)
-		}
-	}
-	return refs
-}
-
-func runtimeStackRefFromMetadataItem(item map[string]any) (runtimeStackRef, bool) {
-	registryRaw, _ := item["registry_slug"].(string)
-	profileRaw, _ := item["profile_slug"].(string)
-	if strings.TrimSpace(registryRaw) == "" || strings.TrimSpace(profileRaw) == "" {
-		return runtimeStackRef{}, false
-	}
-
-	registrySlug, err := gepprofiles.ParseRegistrySlug(registryRaw)
-	if err != nil {
-		return runtimeStackRef{}, false
-	}
-	profileSlug, err := gepprofiles.ParseEngineProfileSlug(profileRaw)
-	if err != nil {
-		return runtimeStackRef{}, false
-	}
-
-	return runtimeStackRef{
-		registrySlug: registrySlug,
-		profileSlug:  profileSlug,
-	}, true
-}
-
-func mergeWebChatProfileRuntime(base *infruntime.ProfileRuntime, overlay *infruntime.ProfileRuntime) *infruntime.ProfileRuntime {
-	if base == nil && overlay == nil {
-		return nil
-	}
-	if base == nil {
-		return overlay.Clone()
-	}
-	if overlay == nil {
-		return base.Clone()
-	}
-
-	merged := base.Clone()
-	if prompt := strings.TrimSpace(overlay.SystemPrompt); prompt != "" {
-		merged.SystemPrompt = prompt
-	}
-	merged.Middlewares = mergeRuntimeMiddlewares(merged.Middlewares, overlay.Middlewares)
-	merged.Tools = mergeRuntimeTools(merged.Tools, overlay.Tools)
-	return merged
-}
-
-func mergeRuntimeMiddlewares(base []infruntime.MiddlewareUse, overlay []infruntime.MiddlewareUse) []infruntime.MiddlewareUse {
-	if len(base) == 0 && len(overlay) == 0 {
-		return nil
-	}
-
-	out := make([]infruntime.MiddlewareUse, 0, len(base)+len(overlay))
-	positions := map[string]int{}
-
-	appendUse := func(use infruntime.MiddlewareUse) {
-		key := runtimeMiddlewareKey(use)
-		clone := infruntime.MiddlewareUse{
-			Name:    strings.TrimSpace(use.Name),
-			ID:      strings.TrimSpace(use.ID),
-			Enabled: cloneBoolPtr(use.Enabled),
-			Config:  cloneStringAnyMap(use.Config),
-		}
-		if idx, ok := positions[key]; ok {
-			out[idx] = clone
-			return
-		}
-		positions[key] = len(out)
-		out = append(out, clone)
-	}
-
-	for _, use := range base {
-		appendUse(use)
-	}
-	for _, use := range overlay {
-		appendUse(use)
-	}
-
-	return out
-}
-
-func runtimeMiddlewareKey(use infruntime.MiddlewareUse) string {
-	name := strings.TrimSpace(use.Name)
-	id := strings.TrimSpace(use.ID)
-	if id == "" {
-		return name
-	}
-	return name + "\x00" + id
-}
-
-func mergeRuntimeTools(base []string, overlay []string) []string {
-	if len(base) == 0 && len(overlay) == 0 {
-		return nil
-	}
-
-	out := make([]string, 0, len(base)+len(overlay))
-	seen := map[string]struct{}{}
-	appendTool := func(tool string) {
-		name := strings.TrimSpace(tool)
-		if name == "" {
-			return
-		}
-		if _, ok := seen[name]; ok {
-			return
-		}
-		seen[name] = struct{}{}
-		out = append(out, name)
-	}
-
-	for _, tool := range base {
-		appendTool(tool)
-	}
-	for _, tool := range overlay {
-		appendTool(tool)
-	}
-
-	return out
-}
-
-func buildResolvedRuntimeFingerprint(
-	runtimeKey string,
-	profileVersion uint64,
-	runtime *resolvedWebChatRuntime,
-	inferenceSettings *aisettings.InferenceSettings,
-) string {
-	if strings.TrimSpace(runtimeKey) == "" {
-		runtimeKey = "default"
-	}
-	if runtime == nil {
-		return buildRuntimeFingerprint(runtimeKey, profileVersion, "", nil, nil, inferenceSettings)
-	}
-	middlewares := append([]infruntime.MiddlewareUse(nil), runtime.Middlewares...)
-	tools := append([]string(nil), runtime.ToolNames...)
-	return buildRuntimeFingerprint(runtimeKey, profileVersion, strings.TrimSpace(runtime.SystemPrompt), middlewares, tools, inferenceSettings)
 }
 
 func toResolvedConversationRequest(plan *resolvedWebChatConversationPlan) webhttp.ResolvedConversationRequest {
@@ -735,31 +544,6 @@ func parseCurrentProfileCookieValue(raw string) (gepprofiles.RegistrySlug, geppr
 		return "", "", false
 	}
 	return registrySlug, profileSlug, true
-}
-
-func profileVersionFromResolvedMetadata(metadata map[string]any) uint64 {
-	raw := metadata["profile.version"]
-	switch v := raw.(type) {
-	case uint64:
-		return v
-	case uint32:
-		return uint64(v)
-	case uint:
-		return uint64(v)
-	case int64:
-		if v >= 0 {
-			return uint64(v)
-		}
-	case int:
-		if v >= 0 {
-			return uint64(v)
-		}
-	case float64:
-		if v >= 0 {
-			return uint64(v)
-		}
-	}
-	return 0
 }
 
 func copyMetadataMap(in map[string]any) map[string]any {

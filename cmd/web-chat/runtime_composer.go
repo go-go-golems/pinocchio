@@ -10,7 +10,6 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/inference/middlewarecfg"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
-	"github.com/rs/zerolog/log"
 )
 
 type ProfileRuntimeComposer struct {
@@ -92,7 +91,11 @@ func (c *ProfileRuntimeComposer) Compose(ctx context.Context, req infruntime.Con
 	}
 	runtimeFingerprint := strings.TrimSpace(req.ResolvedProfileFingerprint)
 	if runtimeFingerprint == "" {
-		runtimeFingerprint = buildRuntimeFingerprint(runtimeKey, req.ProfileVersion, systemPrompt, resolvedUses, tools, effectiveInferenceSettings)
+		runtimeFingerprint = infruntime.BuildRuntimeFingerprintFromSettings(runtimeKey, req.ProfileVersion, &infruntime.ProfileRuntime{
+			SystemPrompt: systemPrompt,
+			Middlewares:  resolvedUses,
+			Tools:        tools,
+		}, effectiveInferenceSettings)
 	}
 
 	return infruntime.ComposedRuntime{
@@ -267,43 +270,6 @@ func runtimeToolsFromProfile(spec *infruntime.ProfileRuntime) []string {
 		return nil
 	}
 	return tools
-}
-
-type RuntimeFingerprintInput struct {
-	ProfileVersion uint64                     `json:"profile_version,omitempty"`
-	RuntimeKey     string                     `json:"runtime_key"`
-	SystemPrompt   string                     `json:"system_prompt"`
-	Middlewares    []infruntime.MiddlewareUse `json:"middlewares"`
-	Tools          []string                   `json:"tools"`
-	StepMetadata   map[string]any             `json:"step_metadata,omitempty"`
-}
-
-func buildRuntimeFingerprint(
-	runtimeKey string,
-	profileVersion uint64,
-	systemPrompt string,
-	middlewares []infruntime.MiddlewareUse,
-	tools []string,
-	stepSettings *settings.InferenceSettings,
-) string {
-	var metadata map[string]any
-	if stepSettings != nil {
-		metadata = stepSettings.GetMetadata()
-	}
-	payload := RuntimeFingerprintInput{
-		ProfileVersion: profileVersion,
-		RuntimeKey:     runtimeKey,
-		SystemPrompt:   systemPrompt,
-		Middlewares:    middlewares,
-		Tools:          tools,
-		StepMetadata:   metadata,
-	}
-	b, err := json.Marshal(payload)
-	if err != nil {
-		log.Warn().Err(err).Msg("runtime fingerprint fallback")
-		return runtimeKey
-	}
-	return string(b)
 }
 
 func normalizeConfigObject(raw any, context string) (map[string]any, error) {
