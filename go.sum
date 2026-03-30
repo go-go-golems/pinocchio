@@ -195,6 +195,8 @@ github.com/go-go-golems/glazed v1.0.6 h1:TpMrjo73fGYzXmpyce5wKO0AXnYcyuugPVGdbx0
 github.com/go-go-golems/glazed v1.0.6/go.mod h1:bZfc0SiVzOAHPOmAkWHLNjckeIK0fOgffjny2ZOUwSQ=
 github.com/go-go-golems/go-go-goja v0.4.6 h1:3qgyjc7RZuMTpDo3C06xDamLMCl0F6hCr6H3fEkjmmI=
 github.com/go-go-golems/go-go-goja v0.4.6/go.mod h1:faPIPsCwPhpc1CXOlLZDZS/kRHM8xY9wiTZov7nBi0E=
+github.com/go-go-golems/sanitize v0.0.1 h1:Kdi7QC5pNtc7H9BsskQQiuhXnly9lMei+LhXf1AtUiQ=
+github.com/go-go-golems/sanitize v0.0.1/go.mod h1:ahtFsvUHMZC+/CIRxbrC5RKEqgCcyDyd6fSns+zWEN0=
 github.com/go-go-golems/uhoh v0.0.5 h1:udrvNPiRNulREtZMCRPWe7rnRWxB5P3NwTIXmXF8Ye4=
 github.com/go-go-golems/uhoh v0.0.5/go.mod h1:6/1kZngxZc6eX3egmZyeFeq3c9FsteBQyWD4T/in9SU=
 github.com/go-logr/logr v1.2.2/go.mod h1:jdQByPbusPIv2/zmleS9BjJVeZ6kBagPoEUsqbVz/1A=
