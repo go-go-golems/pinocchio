@@ -1,4 +1,5 @@
 import { logWarn } from '../utils/logger';
+import { normalizeAgentModeAnalysis } from './agentModeMarkdown';
 import { Markdown } from './Markdown';
 import type { RenderEntity } from './types';
 import { fmtSentAt } from './utils';
@@ -125,7 +126,7 @@ export function AgentModeCard({ e }: { e: RenderEntity }) {
   const data = asRecord(e.props?.data);
   const from = typeof data.from === 'string' ? data.from : '';
   const to = typeof data.to === 'string' ? data.to : '';
-  const analysis = typeof data.analysis === 'string' ? data.analysis : '';
+  const analysis = typeof data.analysis === 'string' ? normalizeAgentModeAnalysis(data.analysis) : '';
   const extraData: Record<string, unknown> = { ...data };
   delete extraData.from;
   delete extraData.to;
