@@ -327,7 +327,7 @@ func (r *ProfileRequestResolver) resolveEffectiveProfile(
 
 func runtimeKeyFromResolvedProfile(resolved *gepprofiles.ResolvedEngineProfile) string {
 	if resolved == nil {
-		return ""
+		return "default"
 	}
 	if slug := strings.TrimSpace(resolved.EngineProfileSlug.String()); slug != "" {
 		return slug
@@ -365,12 +365,18 @@ func (r *ProfileRequestResolver) buildConversationPlan(
 		return nil, err
 	}
 	runtimeKey := runtimeKeyFromResolvedProfile(resolvedProfile)
-	profileVersion := profileVersionFromResolvedMetadata(resolvedProfile.Metadata)
+	var (
+		profileVersion  uint64
+		profileMetadata map[string]any
+	)
+	if resolvedProfile != nil {
+		profileVersion = profileVersionFromResolvedMetadata(resolvedProfile.Metadata)
+		profileMetadata = copyMetadataMap(resolvedProfile.Metadata)
+	}
 	inferenceSettings, err := resolvedInferenceSettingsForRequest(resolvedProfile, r.baseInferenceSettings)
 	if err != nil {
 		return nil, &webhttp.RequestResolutionError{Status: http.StatusInternalServerError, ClientMsg: "failed to merge inference settings", Err: err}
 	}
-	profileMetadata := copyMetadataMap(resolvedProfile.Metadata)
 
 	runtime := &resolvedWebChatRuntime{
 		SystemPrompt:       "",
@@ -401,18 +407,202 @@ func (r *ProfileRequestResolver) resolveProfileRuntime(
 	ctx context.Context,
 	resolved *gepprofiles.ResolvedEngineProfile,
 ) (*infruntime.ProfileRuntime, error) {
+	runtime := defaultWebChatProfileRuntime()
 	if r == nil || r.profileRegistry == nil || resolved == nil {
-		return nil, nil
+		return runtime, nil
 	}
-	profile, err := r.profileRegistry.GetEngineProfile(ctx, resolved.RegistrySlug, resolved.EngineProfileSlug)
-	if err != nil {
-		return nil, r.toRequestResolutionError(err, resolved.EngineProfileSlug.String())
-	}
-	runtime, _, err := infruntime.ProfileRuntimeFromEngineProfile(profile)
-	if err != nil {
-		return nil, &webhttp.RequestResolutionError{Status: http.StatusBadRequest, ClientMsg: "invalid pinocchio runtime extension", Err: err}
+	for _, ref := range runtimeStackRefsFromResolvedProfile(resolved) {
+		profile, err := r.profileRegistry.GetEngineProfile(ctx, ref.registrySlug, ref.profileSlug)
+		if err != nil {
+			return nil, r.toRequestResolutionError(err, ref.profileSlug.String())
+		}
+		profileRuntime, _, err := infruntime.ProfileRuntimeFromEngineProfile(profile)
+		if err != nil {
+			return nil, &webhttp.RequestResolutionError{Status: http.StatusBadRequest, ClientMsg: "invalid pinocchio runtime extension", Err: err}
+		}
+		runtime = mergeWebChatProfileRuntime(runtime, profileRuntime)
 	}
 	return runtime, nil
+}
+
+func defaultWebChatProfileRuntime() *infruntime.ProfileRuntime {
+	return &infruntime.ProfileRuntime{
+		Middlewares: []infruntime.MiddlewareUse{
+			{Name: "agentmode"},
+		},
+	}
+}
+
+type runtimeStackRef struct {
+	registrySlug gepprofiles.RegistrySlug
+	profileSlug  gepprofiles.EngineProfileSlug
+}
+
+func runtimeStackRefsFromResolvedProfile(resolved *gepprofiles.ResolvedEngineProfile) []runtimeStackRef {
+	if resolved == nil {
+		return nil
+	}
+
+	refs := parseRuntimeStackRefsFromMetadata(resolved.Metadata)
+	if len(refs) > 0 {
+		return refs
+	}
+
+	return []runtimeStackRef{{
+		registrySlug: resolved.RegistrySlug,
+		profileSlug:  resolved.EngineProfileSlug,
+	}}
+}
+
+func parseRuntimeStackRefsFromMetadata(metadata map[string]any) []runtimeStackRef {
+	rawLineage, ok := metadata["profile.stack.lineage"]
+	if !ok {
+		return nil
+	}
+
+	items, ok := rawLineage.([]map[string]any)
+	if ok {
+		refs := make([]runtimeStackRef, 0, len(items))
+		for _, item := range items {
+			ref, ok := runtimeStackRefFromMetadataItem(item)
+			if ok {
+				refs = append(refs, ref)
+			}
+		}
+		return refs
+	}
+
+	rawItems, ok := rawLineage.([]any)
+	if !ok {
+		return nil
+	}
+
+	refs := make([]runtimeStackRef, 0, len(rawItems))
+	for _, rawItem := range rawItems {
+		item, ok := rawItem.(map[string]any)
+		if !ok {
+			continue
+		}
+		ref, ok := runtimeStackRefFromMetadataItem(item)
+		if ok {
+			refs = append(refs, ref)
+		}
+	}
+	return refs
+}
+
+func runtimeStackRefFromMetadataItem(item map[string]any) (runtimeStackRef, bool) {
+	registryRaw, _ := item["registry_slug"].(string)
+	profileRaw, _ := item["profile_slug"].(string)
+	if strings.TrimSpace(registryRaw) == "" || strings.TrimSpace(profileRaw) == "" {
+		return runtimeStackRef{}, false
+	}
+
+	registrySlug, err := gepprofiles.ParseRegistrySlug(registryRaw)
+	if err != nil {
+		return runtimeStackRef{}, false
+	}
+	profileSlug, err := gepprofiles.ParseEngineProfileSlug(profileRaw)
+	if err != nil {
+		return runtimeStackRef{}, false
+	}
+
+	return runtimeStackRef{
+		registrySlug: registrySlug,
+		profileSlug:  profileSlug,
+	}, true
+}
+
+func mergeWebChatProfileRuntime(base *infruntime.ProfileRuntime, overlay *infruntime.ProfileRuntime) *infruntime.ProfileRuntime {
+	if base == nil && overlay == nil {
+		return nil
+	}
+	if base == nil {
+		return overlay.Clone()
+	}
+	if overlay == nil {
+		return base.Clone()
+	}
+
+	merged := base.Clone()
+	if prompt := strings.TrimSpace(overlay.SystemPrompt); prompt != "" {
+		merged.SystemPrompt = prompt
+	}
+	merged.Middlewares = mergeRuntimeMiddlewares(merged.Middlewares, overlay.Middlewares)
+	merged.Tools = mergeRuntimeTools(merged.Tools, overlay.Tools)
+	return merged
+}
+
+func mergeRuntimeMiddlewares(base []infruntime.MiddlewareUse, overlay []infruntime.MiddlewareUse) []infruntime.MiddlewareUse {
+	if len(base) == 0 && len(overlay) == 0 {
+		return nil
+	}
+
+	out := make([]infruntime.MiddlewareUse, 0, len(base)+len(overlay))
+	positions := map[string]int{}
+
+	appendUse := func(use infruntime.MiddlewareUse) {
+		key := runtimeMiddlewareKey(use)
+		clone := infruntime.MiddlewareUse{
+			Name:    strings.TrimSpace(use.Name),
+			ID:      strings.TrimSpace(use.ID),
+			Enabled: cloneBoolPtr(use.Enabled),
+			Config:  cloneStringAnyMap(use.Config),
+		}
+		if idx, ok := positions[key]; ok {
+			out[idx] = clone
+			return
+		}
+		positions[key] = len(out)
+		out = append(out, clone)
+	}
+
+	for _, use := range base {
+		appendUse(use)
+	}
+	for _, use := range overlay {
+		appendUse(use)
+	}
+
+	return out
+}
+
+func runtimeMiddlewareKey(use infruntime.MiddlewareUse) string {
+	name := strings.TrimSpace(use.Name)
+	id := strings.TrimSpace(use.ID)
+	if id == "" {
+		return name
+	}
+	return name + "\x00" + id
+}
+
+func mergeRuntimeTools(base []string, overlay []string) []string {
+	if len(base) == 0 && len(overlay) == 0 {
+		return nil
+	}
+
+	out := make([]string, 0, len(base)+len(overlay))
+	seen := map[string]struct{}{}
+	appendTool := func(tool string) {
+		name := strings.TrimSpace(tool)
+		if name == "" {
+			return
+		}
+		if _, ok := seen[name]; ok {
+			return
+		}
+		seen[name] = struct{}{}
+		out = append(out, name)
+	}
+
+	for _, tool := range base {
+		appendTool(tool)
+	}
+	for _, tool := range overlay {
+		appendTool(tool)
+	}
+
+	return out
 }
 
 func buildResolvedRuntimeFingerprint(

@@ -92,7 +92,6 @@ func NewCommand() (*Command, error) {
 		cmds.WithShort("Serve a minimal WebSocket web UI that streams chat events"),
 		cmds.WithFlags(
 			fields.New("addr", fields.TypeString, fields.WithDefault(":8080"), fields.WithHelp("HTTP listen address")),
-			fields.New("enable-agentmode", fields.TypeBool, fields.WithDefault(false), fields.WithHelp("Enable agent mode middleware")),
 			fields.New("idle-timeout-seconds", fields.TypeInteger, fields.WithDefault(60), fields.WithHelp("Stop per-conversation reader after N seconds with no sockets (0=disabled)")),
 			fields.New("evict-idle-seconds", fields.TypeInteger, fields.WithDefault(300), fields.WithHelp("Evict conversations after N seconds idle (0=disabled)")),
 			fields.New("evict-interval-seconds", fields.TypeInteger, fields.WithDefault(60), fields.WithHelp("Sweep idle conversations every N seconds (0=disabled)")),

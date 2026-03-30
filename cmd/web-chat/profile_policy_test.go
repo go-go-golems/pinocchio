@@ -287,6 +287,68 @@ func TestBuildConversationPlan_MergesBaseInferenceSettingsWithProfileOverrides(t
 	require.Equal(t, "base-key", plan.Runtime.InferenceSettings.API.APIKeys["openai-api-key"])
 }
 
+func TestBuildConversationPlan_DefaultRuntimeOverlayAppliesWithoutProfiles(t *testing.T) {
+	resolver := newProfileRequestResolver(nil, gepprofiles.MustRegistrySlug(defaultRegistrySlug), nil)
+
+	plan, err := resolver.buildConversationPlan(context.Background(), "conv-1", "hi", "idem-1", nil)
+	require.NoError(t, err)
+	require.NotNil(t, plan)
+	require.NotNil(t, plan.Runtime)
+	require.Equal(t, "default", plan.Runtime.RuntimeKey)
+	require.Len(t, plan.Runtime.Middlewares, 1)
+	require.Equal(t, "agentmode", plan.Runtime.Middlewares[0].Name)
+
+	req := toResolvedConversationRequest(plan)
+	require.NotNil(t, req.ResolvedRuntime)
+	require.Len(t, req.ResolvedRuntime.Middlewares, 1)
+	require.Equal(t, "agentmode", req.ResolvedRuntime.Middlewares[0].Name)
+}
+
+func TestResolveProfileRuntime_MergesDefaultOverlayAndProfileRuntimeStack(t *testing.T) {
+	disabled := false
+	profileRegistry, err := newInMemoryProfileService(
+		"default",
+		testEngineProfileWithRuntime(t, "base", &infruntime.ProfileRuntime{
+			SystemPrompt: "Base prompt",
+			Middlewares: []infruntime.MiddlewareUse{
+				{Name: "review", ID: "primary", Config: map[string]any{"phase": "base"}},
+			},
+			Tools: []string{"search"},
+		}),
+		func() *gepprofiles.EngineProfile {
+			profile := testEngineProfileWithRuntime(t, "analyst", &infruntime.ProfileRuntime{
+				SystemPrompt: "Leaf prompt",
+				Middlewares: []infruntime.MiddlewareUse{
+					{Name: "agentmode", Enabled: &disabled, Config: map[string]any{"sanitize_yaml": false}},
+					{Name: "review", ID: "primary", Config: map[string]any{"phase": "leaf"}},
+				},
+				Tools: []string{"summarize"},
+			})
+			profile.Stack = []gepprofiles.EngineProfileRef{{EngineProfileSlug: gepprofiles.MustEngineProfileSlug("base")}}
+			return profile
+		}(),
+	)
+	require.NoError(t, err)
+
+	resolver := newProfileRequestResolver(profileRegistry, gepprofiles.MustRegistrySlug(defaultRegistrySlug), nil)
+	resolvedProfile, err := resolver.resolveEffectiveProfile(context.Background(), gepprofiles.MustRegistrySlug(defaultRegistrySlug), gepprofiles.MustEngineProfileSlug("analyst"))
+	require.NoError(t, err)
+
+	runtime, err := resolver.resolveProfileRuntime(context.Background(), resolvedProfile)
+	require.NoError(t, err)
+	require.NotNil(t, runtime)
+	require.Equal(t, "Leaf prompt", runtime.SystemPrompt)
+	require.Equal(t, []string{"search", "summarize"}, runtime.Tools)
+	require.Len(t, runtime.Middlewares, 2)
+	require.Equal(t, "agentmode", runtime.Middlewares[0].Name)
+	require.NotNil(t, runtime.Middlewares[0].Enabled)
+	require.False(t, *runtime.Middlewares[0].Enabled)
+	require.Equal(t, false, runtime.Middlewares[0].Config["sanitize_yaml"])
+	require.Equal(t, "review", runtime.Middlewares[1].Name)
+	require.Equal(t, "primary", runtime.Middlewares[1].ID)
+	require.Equal(t, "leaf", runtime.Middlewares[1].Config["phase"])
+}
+
 func TestWebChatProfileResolver_WS_QueryProfileAcrossStack(t *testing.T) {
 	resolver := newTestResolverWithMultipleRegistries(t)
 
