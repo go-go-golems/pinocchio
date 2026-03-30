@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { logWarn } from '../utils/logger';
 
 type MarkdownProps = {
@@ -58,7 +59,9 @@ export function Markdown({ text, className }: MarkdownProps) {
 
   return (
     <div data-part="markdown" className={className}>
-      <ReactMarkdown components={components as any}>{text}</ReactMarkdown>
+      <ReactMarkdown remarkPlugins={[remarkGfm]} components={components as any}>
+        {text}
+      </ReactMarkdown>
     </div>
   );
 }
