@@ -13,6 +13,7 @@ import (
 
 const (
 	dependencyAgentModeServiceKey = "agentmode.service"
+	defaultWebChatAgentMode       = "financial_analyst"
 )
 
 type middlewareDefinition struct {
@@ -79,7 +80,7 @@ func newAgentModeMiddlewareDefinition() middlewarecfg.Definition {
 		"properties": map[string]any{
 			"default_mode": map[string]any{
 				"type":    "string",
-				"default": agentmode.DefaultConfig().DefaultMode,
+				"default": defaultWebChatAgentMode,
 			},
 			"sanitize_yaml": map[string]any{
 				"type":    "boolean",
@@ -110,7 +111,7 @@ func newAgentModeMiddlewareDefinition() middlewarecfg.Definition {
 				return nil, fmt.Errorf("dependency %q has unexpected type %T", dependencyAgentModeServiceKey, svcRaw)
 			}
 
-			input := configInput{DefaultMode: agentmode.DefaultConfig().DefaultMode}
+			input := configInput{DefaultMode: defaultWebChatAgentMode}
 			if err := decodeResolvedMiddlewareConfig(cfg, &input); err != nil {
 				return nil, err
 			}
