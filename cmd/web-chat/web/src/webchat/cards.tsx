@@ -3,6 +3,13 @@ import { Markdown } from './Markdown';
 import type { RenderEntity } from './types';
 import { fmtSentAt } from './utils';
 
+function asRecord(value: unknown): Record<string, unknown> {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  return {};
+}
+
 export function MessageCard({ e }: { e: RenderEntity }) {
   const role = String(e.props?.role ?? 'assistant');
   const content = String(e.props?.content ?? '');
@@ -108,6 +115,46 @@ export function LogCard({ e }: { e: RenderEntity }) {
           <div data-part="card-header-meta">{fmtSentAt(e.createdAt)}</div>
         </div>
         <div style={{ marginTop: 8, color: 'var(--pwchat-muted)', fontSize: 13 }}>{message}</div>
+      </div>
+    </div>
+  );
+}
+
+export function AgentModeCard({ e }: { e: RenderEntity }) {
+  const title = String(e.props?.title ?? 'Agent mode switch');
+  const data = asRecord(e.props?.data);
+  const from = typeof data.from === 'string' ? data.from : '';
+  const to = typeof data.to === 'string' ? data.to : '';
+  const analysis = typeof data.analysis === 'string' ? data.analysis : '';
+  const extraData: Record<string, unknown> = { ...data };
+  delete extraData.from;
+  delete extraData.to;
+  delete extraData.analysis;
+  const hasExtraData = Object.keys(extraData).length > 0;
+
+  return (
+    <div data-part="card">
+      <div data-part="card-header">
+        <div data-part="card-header-title">{title}</div>
+        {from ? (
+          <div data-part="pill" data-mono="true">
+            from {from}
+          </div>
+        ) : null}
+        {to ? (
+          <div data-part="pill" data-variant="accent" data-mono="true">
+            to {to}
+          </div>
+        ) : null}
+        <div data-part="card-header-meta">{fmtSentAt(e.createdAt)}</div>
+      </div>
+      <div data-part="card-body">
+        {analysis ? <Markdown text={analysis} /> : <div data-part="pill">No analysis</div>}
+        {hasExtraData ? (
+          <pre data-part="mono" style={{ margin: '10px 0 0', whiteSpace: 'pre-wrap' }}>
+            {JSON.stringify(extraData, null, 2)}
+          </pre>
+        ) : null}
       </div>
     </div>
   );

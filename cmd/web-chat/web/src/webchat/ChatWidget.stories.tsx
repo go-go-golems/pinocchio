@@ -194,7 +194,20 @@ export const WidgetOnlyAgentMode: Story = {
       frames={[
         {
           sem: true,
-          event: { type: 'agent.mode', id: 'agent-1', seq: 1, data: { id: 'agent-1', title: 'Research mode', data: { depth: 'high' } } },
+          event: {
+            type: 'agent.mode',
+            id: 'agent-1',
+            seq: 1,
+            data: {
+              id: 'agent-1',
+              title: 'agentmode: mode switched',
+              data: {
+                from: 'financial_analyst',
+                to: 'category_regexp_reviewer',
+                analysis: 'The draft patterns are ready for a dedicated review pass.',
+              },
+            },
+          },
         },
       ]}
     />

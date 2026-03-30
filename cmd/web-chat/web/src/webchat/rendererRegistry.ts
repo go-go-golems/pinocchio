@@ -1,5 +1,6 @@
 import type React from 'react';
 import {
+  AgentModeCard,
   GenericCard,
   LogCard,
   MessageCard,
@@ -15,6 +16,7 @@ const builtinRenderers: Record<string, Renderer> = {
   tool_call: ToolCallCard,
   tool_result: ToolResultCard,
   log: LogCard,
+  agent_mode: AgentModeCard,
 };
 
 const extensionRenderers = new Map<string, Renderer>();
