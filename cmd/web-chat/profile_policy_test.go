@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -17,6 +18,30 @@ import (
 	webhttp "github.com/go-go-golems/pinocchio/pkg/webchat/http"
 	"github.com/stretchr/testify/require"
 )
+
+type stubProfileRegistry struct {
+	getEngineProfileErr error
+}
+
+func (r stubProfileRegistry) ListRegistries(context.Context) ([]gepprofiles.RegistrySummary, error) {
+	return nil, nil
+}
+
+func (r stubProfileRegistry) GetRegistry(context.Context, gepprofiles.RegistrySlug) (*gepprofiles.EngineProfileRegistry, error) {
+	return nil, nil
+}
+
+func (r stubProfileRegistry) ListEngineProfiles(context.Context, gepprofiles.RegistrySlug) ([]*gepprofiles.EngineProfile, error) {
+	return nil, nil
+}
+
+func (r stubProfileRegistry) GetEngineProfile(context.Context, gepprofiles.RegistrySlug, gepprofiles.EngineProfileSlug) (*gepprofiles.EngineProfile, error) {
+	return nil, r.getEngineProfileErr
+}
+
+func (r stubProfileRegistry) ResolveEngineProfile(context.Context, gepprofiles.ResolveInput) (*gepprofiles.ResolvedEngineProfile, error) {
+	return nil, nil
+}
 
 func decodeJSON[T any](t *testing.T, rec *httptest.ResponseRecorder) T {
 	t.Helper()
@@ -287,6 +312,68 @@ func TestBuildConversationPlan_MergesBaseInferenceSettingsWithProfileOverrides(t
 	require.Equal(t, "base-key", plan.Runtime.InferenceSettings.API.APIKeys["openai-api-key"])
 }
 
+func TestBuildConversationPlan_DefaultRuntimeOverlayAppliesWithoutProfiles(t *testing.T) {
+	resolver := newProfileRequestResolver(nil, gepprofiles.MustRegistrySlug(defaultRegistrySlug), nil)
+
+	plan, err := resolver.buildConversationPlan(context.Background(), "conv-1", "hi", "idem-1", nil)
+	require.NoError(t, err)
+	require.NotNil(t, plan)
+	require.NotNil(t, plan.Runtime)
+	require.Equal(t, "default", plan.Runtime.RuntimeKey)
+	require.Len(t, plan.Runtime.Middlewares, 1)
+	require.Equal(t, "agentmode", plan.Runtime.Middlewares[0].Name)
+
+	req := toResolvedConversationRequest(plan)
+	require.NotNil(t, req.ResolvedRuntime)
+	require.Len(t, req.ResolvedRuntime.Middlewares, 1)
+	require.Equal(t, "agentmode", req.ResolvedRuntime.Middlewares[0].Name)
+}
+
+func TestResolveProfileRuntime_MergesDefaultOverlayAndProfileRuntimeStack(t *testing.T) {
+	disabled := false
+	profileRegistry, err := newInMemoryProfileService(
+		"default",
+		testEngineProfileWithRuntime(t, "base", &infruntime.ProfileRuntime{
+			SystemPrompt: "Base prompt",
+			Middlewares: []infruntime.MiddlewareUse{
+				{Name: "review", ID: "primary", Config: map[string]any{"phase": "base"}},
+			},
+			Tools: []string{"search"},
+		}),
+		func() *gepprofiles.EngineProfile {
+			profile := testEngineProfileWithRuntime(t, "analyst", &infruntime.ProfileRuntime{
+				SystemPrompt: "Leaf prompt",
+				Middlewares: []infruntime.MiddlewareUse{
+					{Name: "agentmode", Enabled: &disabled, Config: map[string]any{"sanitize_yaml": false}},
+					{Name: "review", ID: "primary", Config: map[string]any{"phase": "leaf"}},
+				},
+				Tools: []string{"summarize"},
+			})
+			profile.Stack = []gepprofiles.EngineProfileRef{{EngineProfileSlug: gepprofiles.MustEngineProfileSlug("base")}}
+			return profile
+		}(),
+	)
+	require.NoError(t, err)
+
+	resolver := newProfileRequestResolver(profileRegistry, gepprofiles.MustRegistrySlug(defaultRegistrySlug), nil)
+	resolvedProfile, err := resolver.resolveEffectiveProfile(context.Background(), gepprofiles.MustRegistrySlug(defaultRegistrySlug), gepprofiles.MustEngineProfileSlug("analyst"))
+	require.NoError(t, err)
+
+	runtime, err := resolver.resolveProfileRuntime(context.Background(), resolvedProfile)
+	require.NoError(t, err)
+	require.NotNil(t, runtime)
+	require.Equal(t, "Leaf prompt", runtime.SystemPrompt)
+	require.Equal(t, []string{"search", "summarize"}, runtime.Tools)
+	require.Len(t, runtime.Middlewares, 2)
+	require.Equal(t, "agentmode", runtime.Middlewares[0].Name)
+	require.NotNil(t, runtime.Middlewares[0].Enabled)
+	require.False(t, *runtime.Middlewares[0].Enabled)
+	require.Equal(t, false, runtime.Middlewares[0].Config["sanitize_yaml"])
+	require.Equal(t, "review", runtime.Middlewares[1].Name)
+	require.Equal(t, "primary", runtime.Middlewares[1].ID)
+	require.Equal(t, "leaf", runtime.Middlewares[1].Config["phase"])
+}
+
 func TestWebChatProfileResolver_WS_QueryProfileAcrossStack(t *testing.T) {
 	resolver := newTestResolverWithMultipleRegistries(t)
 
@@ -517,4 +604,51 @@ func TestNewSQLiteProfileService_BootstrapAndReopen(t *testing.T) {
 	profilesAgain, err := registryAgain.ListEngineProfiles(context.Background(), gepprofiles.MustRegistrySlug(defaultRegistrySlug))
 	require.NoError(t, err)
 	require.Len(t, profilesAgain, 2)
+}
+
+func TestProfileRequestResolver_ResolveRuntimePlan_ReturnsValidationFailuresAsBadRequest(t *testing.T) {
+	resolver := newProfileRequestResolver(stubProfileRegistry{
+		getEngineProfileErr: &gepprofiles.ValidationError{Field: "extensions.pinocchio.webchat_runtime", Reason: "bad middleware config"},
+	}, gepprofiles.MustRegistrySlug(defaultRegistrySlug), nil)
+
+	resolved := &gepprofiles.ResolvedEngineProfile{
+		RegistrySlug:      gepprofiles.MustRegistrySlug("default"),
+		EngineProfileSlug: gepprofiles.MustEngineProfileSlug("analyst"),
+		StackLineage: []gepprofiles.ResolvedProfileStackEntry{{
+			RegistrySlug:      gepprofiles.MustRegistrySlug("default"),
+			EngineProfileSlug: gepprofiles.MustEngineProfileSlug("analyst"),
+		}},
+	}
+
+	plan, err := resolver.resolveRuntimePlan(context.Background(), resolved)
+	require.Nil(t, plan)
+	require.Error(t, err)
+
+	var reqErr *webhttp.RequestResolutionError
+	require.ErrorAs(t, err, &reqErr)
+	require.Equal(t, http.StatusBadRequest, reqErr.Status)
+	require.Equal(t, "invalid pinocchio runtime extension", reqErr.ClientMsg)
+}
+
+func TestProfileRequestResolver_ResolveRuntimePlan_LeavesOperationalFailuresAsServerErrors(t *testing.T) {
+	boom := errors.New("registry read failed")
+	resolver := newProfileRequestResolver(stubProfileRegistry{
+		getEngineProfileErr: boom,
+	}, gepprofiles.MustRegistrySlug(defaultRegistrySlug), nil)
+
+	resolved := &gepprofiles.ResolvedEngineProfile{
+		RegistrySlug:      gepprofiles.MustRegistrySlug("default"),
+		EngineProfileSlug: gepprofiles.MustEngineProfileSlug("analyst"),
+		StackLineage: []gepprofiles.ResolvedProfileStackEntry{{
+			RegistrySlug:      gepprofiles.MustRegistrySlug("default"),
+			EngineProfileSlug: gepprofiles.MustEngineProfileSlug("analyst"),
+		}},
+	}
+
+	plan, err := resolver.resolveRuntimePlan(context.Background(), resolved)
+	require.Nil(t, plan)
+	require.ErrorIs(t, err, boom)
+
+	var reqErr *webhttp.RequestResolutionError
+	require.False(t, errors.As(err, &reqErr))
 }

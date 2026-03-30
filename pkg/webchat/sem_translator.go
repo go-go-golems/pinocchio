@@ -142,7 +142,7 @@ func (et *EventTranslator) Translate(e events.Event) [][]byte {
 		return nil
 	}
 	md := e.Metadata()
-	log.Debug().
+	log.Trace().
 		Str("component", "web_forwarder").
 		Str("event_type", fmt.Sprintf("%T", e)).
 		Str("event_id", md.ID.String()).
@@ -153,7 +153,11 @@ func (et *EventTranslator) Translate(e events.Event) [][]byte {
 
 	frames, found, err := semregistry.Handle(e)
 	if !found {
-		log.Debug().
+		logger := log.Debug()
+		if isKnownRedundantSemDrop(e) {
+			logger = log.Trace()
+		}
+		logger.
 			Str("component", "web_forwarder").
 			Str("event_type", fmt.Sprintf("%T", e)).
 			Msg("no semantic mapping for event; dropping")
@@ -228,6 +232,15 @@ func (et *EventTranslator) resolveMessageID(md events.EventMetadata) string {
 		et.messageIDs.Store(key, fallback)
 	}
 	return fallback
+}
+
+func isKnownRedundantSemDrop(e events.Event) bool {
+	switch e.(type) {
+	case *events.EventReasoningTextDelta, *events.EventReasoningTextDone:
+		return true
+	default:
+		return false
+	}
 }
 
 func (et *EventTranslator) clearMessageID(md events.EventMetadata) {

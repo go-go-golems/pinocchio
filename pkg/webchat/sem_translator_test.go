@@ -144,3 +144,15 @@ func TestSemanticEventsFromEvent_ReasoningSummaryMapsToThinkingSummary(t *testin
 	require.True(t, ok)
 	require.Equal(t, "final reasoning summary", data["text"])
 }
+
+func TestIsKnownRedundantSemDrop_ReasoningTextEvents(t *testing.T) {
+	meta := events.EventMetadata{
+		SessionID:   "sess-reasoning",
+		InferenceID: "inf-reasoning",
+		TurnID:      "turn-reasoning",
+	}
+
+	require.True(t, isKnownRedundantSemDrop(events.NewReasoningTextDelta(meta, "delta")))
+	require.True(t, isKnownRedundantSemDrop(events.NewReasoningTextDone(meta, "done")))
+	require.False(t, isKnownRedundantSemDrop(events.NewThinkingPartialEvent(meta, "delta", "cumulative")))
+}

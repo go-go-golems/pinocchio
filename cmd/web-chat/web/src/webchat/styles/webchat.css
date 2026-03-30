@@ -270,11 +270,89 @@
 
 :where([data-pwchat] [data-part="markdown"]) {
   font-size: 14px;
-  line-height: 1.45;
+  line-height: 1.55;
+}
+
+:where([data-pwchat] [data-part="markdown"] > :first-child) {
+  margin-top: 0;
+}
+
+:where([data-pwchat] [data-part="markdown"] > :last-child) {
+  margin-bottom: 0;
 }
 
 :where([data-pwchat] [data-part="markdown"] p) {
+  margin: 0.75rem 0;
+}
+
+:where([data-pwchat] [data-part="markdown"] h1),
+:where([data-pwchat] [data-part="markdown"] h2),
+:where([data-pwchat] [data-part="markdown"] h3),
+:where([data-pwchat] [data-part="markdown"] h4),
+:where([data-pwchat] [data-part="markdown"] h5),
+:where([data-pwchat] [data-part="markdown"] h6) {
+  margin: 1rem 0 0.55rem;
+  line-height: 1.25;
+  font-weight: 650;
+}
+
+:where([data-pwchat] [data-part="markdown"] h1) {
+  font-size: 1.35em;
+}
+
+:where([data-pwchat] [data-part="markdown"] h2) {
+  font-size: 1.22em;
+}
+
+:where([data-pwchat] [data-part="markdown"] h3) {
+  font-size: 1.12em;
+}
+
+:where([data-pwchat] [data-part="markdown"] ul),
+:where([data-pwchat] [data-part="markdown"] ol) {
+  margin: 0.8rem 0;
+  padding-left: 1.35rem;
+}
+
+:where([data-pwchat] [data-part="markdown"] li) {
+  margin: 0.28rem 0;
+  padding-left: 0.15rem;
+}
+
+:where([data-pwchat] [data-part="markdown"] li > p) {
   margin: 0.35rem 0;
+}
+
+:where([data-pwchat] [data-part="markdown"] hr) {
+  margin: 1rem 0;
+  border: 0;
+  border-top: 1px solid var(--pwchat-border);
+}
+
+:where([data-pwchat] [data-part="markdown"] blockquote) {
+  margin: 0.9rem 0;
+  padding: 0.1rem 0 0.1rem 0.85rem;
+  border-left: 3px solid color-mix(in srgb, var(--pwchat-accent) 45%, var(--pwchat-border));
+  color: var(--pwchat-muted);
+}
+
+:where([data-pwchat] [data-part="markdown"] table) {
+  width: 100%;
+  margin: 0.85rem 0;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+:where([data-pwchat] [data-part="markdown"] th),
+:where([data-pwchat] [data-part="markdown"] td) {
+  padding: 8px 10px;
+  border: 1px solid var(--pwchat-border);
+  text-align: left;
+  vertical-align: top;
+}
+
+:where([data-pwchat] [data-part="markdown"] th) {
+  background: color-mix(in srgb, var(--pwchat-surface-2) 82%, transparent);
 }
 
 :where([data-pwchat] [data-part="markdown"] pre) {
@@ -289,6 +367,12 @@
 :where([data-pwchat] [data-part="markdown"] code) {
   font-family: var(--pwchat-font-mono);
   font-size: 12.5px;
+}
+
+:where([data-pwchat] [data-part="markdown"] :not(pre) > code) {
+  padding: 0.12rem 0.35rem;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--pwchat-surface-2) 72%, transparent);
 }
 
 :where([data-pwchat] [data-part="toolbar"]) {

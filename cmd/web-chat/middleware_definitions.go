@@ -13,6 +13,7 @@ import (
 
 const (
 	dependencyAgentModeServiceKey = "agentmode.service"
+	defaultWebChatAgentMode       = "financial_analyst"
 )
 
 type middlewareDefinition struct {
@@ -79,14 +80,19 @@ func newAgentModeMiddlewareDefinition() middlewarecfg.Definition {
 		"properties": map[string]any{
 			"default_mode": map[string]any{
 				"type":    "string",
-				"default": agentmode.DefaultConfig().DefaultMode,
+				"default": defaultWebChatAgentMode,
+			},
+			"sanitize_yaml": map[string]any{
+				"type":    "boolean",
+				"default": agentmode.DefaultConfig().ParseOptions.SanitizeEnabled(),
 			},
 		},
 		"additionalProperties": false,
 	}
 
 	type configInput struct {
-		DefaultMode string `json:"default_mode,omitempty"`
+		DefaultMode  string `json:"default_mode,omitempty"`
+		SanitizeYAML *bool  `json:"sanitize_yaml,omitempty"`
 	}
 
 	return middlewareDefinition{
@@ -105,14 +111,18 @@ func newAgentModeMiddlewareDefinition() middlewarecfg.Definition {
 				return nil, fmt.Errorf("dependency %q has unexpected type %T", dependencyAgentModeServiceKey, svcRaw)
 			}
 
-			input := configInput{DefaultMode: agentmode.DefaultConfig().DefaultMode}
+			input := configInput{DefaultMode: defaultWebChatAgentMode}
 			if err := decodeResolvedMiddlewareConfig(cfg, &input); err != nil {
 				return nil, err
 			}
 
 			config := agentmode.DefaultConfig()
-			if strings.TrimSpace(input.DefaultMode) != "" {
-				config.DefaultMode = strings.TrimSpace(input.DefaultMode)
+			config.DefaultMode = defaultWebChatAgentMode
+			if defaultMode := strings.TrimSpace(input.DefaultMode); defaultMode != "" {
+				config.DefaultMode = defaultMode
+			}
+			if input.SanitizeYAML != nil {
+				config.ParseOptions = config.ParseOptions.WithSanitizeYAML(*input.SanitizeYAML)
 			}
 			return agentmode.NewMiddleware(svc, config), nil
 		},

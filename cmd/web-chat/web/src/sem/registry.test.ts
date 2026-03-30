@@ -127,4 +127,28 @@ describe('SEM registry llm message projection', () => {
 
     expect(store.getState().order).toEqual([]);
   });
+
+  it('projects agent.mode into an agent_mode timeline entity', () => {
+    const store = dispatchThroughTimelineReducer();
+
+    emitSem(store.dispatch, {
+      type: 'agent.mode',
+      id: 'agent-mode-1',
+      data: {
+        id: 'agent-mode-1',
+        title: 'agentmode: mode switched',
+        data: {
+          from: 'analyst',
+          to: 'reviewer',
+          analysis: 'Escalated to review after the proposal was drafted.',
+        },
+      },
+    });
+
+    const entity = store.getState().byId['agent-mode-1'];
+    expect(entity).toBeTruthy();
+    expect(entity.kind).toBe('agent_mode');
+    expect(entity.props.title).toBe('agentmode: mode switched');
+    expect(entity.props.data.to).toBe('reviewer');
+  });
 });
