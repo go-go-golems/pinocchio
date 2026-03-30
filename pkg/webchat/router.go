@@ -2,6 +2,7 @@ package webchat
 
 import (
 	"context"
+	stdErrors "errors"
 	"io/fs"
 	"net/http"
 	"strings"
@@ -225,6 +226,38 @@ func (r *Router) UIHandler() http.Handler {
 	mux := http.NewServeMux()
 	r.registerUIHandlers(mux)
 	return mux
+}
+
+func (r *Router) Close() error {
+	if r == nil {
+		return nil
+	}
+
+	var closeErr error
+	if r.cm != nil {
+		r.cm.Close()
+	}
+	if r.turnStore != nil {
+		if err := r.turnStore.Close(); err != nil {
+			closeErr = stdErrors.Join(closeErr, err)
+		}
+	}
+	if r.timelineStore != nil {
+		if err := r.timelineStore.Close(); err != nil {
+			closeErr = stdErrors.Join(closeErr, err)
+		}
+	}
+	if r.streamBackend != nil {
+		if err := r.streamBackend.Close(); err != nil {
+			closeErr = stdErrors.Join(closeErr, err)
+		}
+	} else if r.router != nil {
+		if err := r.router.Close(); err != nil {
+			closeErr = stdErrors.Join(closeErr, err)
+		}
+	}
+
+	return closeErr
 }
 
 func (r *Router) registerUIHandlers(mux *http.ServeMux) {

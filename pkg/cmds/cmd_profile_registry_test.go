@@ -229,7 +229,12 @@ prompt: |
 		}
 		parsed.Set(section.GetSlug(), sv)
 		if section.GetSlug() == "openai-chat" {
-			if err := values.WithFieldValue("openai-api-key", "config-key")(sv); err != nil {
+			if err := values.WithFieldValue(
+				"openai-api-key",
+				"config-key",
+				fields.WithSource("config"),
+				fields.WithMetadata(map[string]any{"config_file": "/tmp/config.yaml"}),
+			)(sv); err != nil {
 				t.Fatalf("set openai-api-key: %v", err)
 			}
 		}
@@ -338,7 +343,12 @@ prompt: |
 		}
 		parsed.Set(section.GetSlug(), sv)
 		if section.GetSlug() == "openai-chat" {
-			if err := values.WithFieldValue("openai-api-key", "config-key")(sv); err != nil {
+			if err := values.WithFieldValue(
+				"openai-api-key",
+				"config-key",
+				fields.WithSource("config"),
+				fields.WithMetadata(map[string]any{"config_file": "/tmp/config.yaml"}),
+			)(sv); err != nil {
 				t.Fatalf("set openai-api-key: %v", err)
 			}
 		}
@@ -366,18 +376,24 @@ prompt: |
 	}
 
 	output := out.String()
+	if !strings.Contains(output, "settings:") || !strings.Contains(output, "sources:") {
+		t.Fatalf("expected combined debug output, got %q", output)
+	}
 	if !strings.Contains(output, "engine: profiled-model") {
 		t.Fatalf("expected profiled engine in printed settings, got %q", output)
 	}
-	if !strings.Contains(output, "openai-api-key: config-key") {
-		t.Fatalf("expected config api key in printed settings, got %q", output)
+	if !strings.Contains(output, "openai-api-key: '***'") && !strings.Contains(output, "openai-api-key: \"***\"") && !strings.Contains(output, "openai-api-key: ***") {
+		t.Fatalf("expected masked api key in printed settings, got %q", output)
+	}
+	if !strings.Contains(output, "source: config") {
+		t.Fatalf("expected config source trace for api key, got %q", output)
 	}
 	if recorder.last != nil {
 		t.Fatalf("expected print-inference-settings to exit before engine creation")
 	}
 }
 
-func TestLoadedCommandRunIntoWriterPrintsInferenceSettingSources(t *testing.T) {
+func TestLoadedCommandRunIntoWriterPrintsInferenceSettingsWithSources(t *testing.T) {
 	tmpDir := t.TempDir()
 	registryPath := filepath.Join(tmpDir, "profiles.yaml")
 	registryYAML := `slug: workspace
@@ -429,8 +445,8 @@ prompt: |
 	if err != nil {
 		t.Fatalf("helpers section values: %v", err)
 	}
-	if err := values.WithFieldValue("print-inference-settings-sources", true)(helpersValues); err != nil {
-		t.Fatalf("set print-inference-settings-sources: %v", err)
+	if err := values.WithFieldValue("print-inference-settings", true)(helpersValues); err != nil {
+		t.Fatalf("set print-inference-settings: %v", err)
 	}
 	parsed.Set(cmdlayers.GeppettoHelpersSlug, helpersValues)
 
@@ -481,16 +497,16 @@ prompt: |
 	if !strings.Contains(output, "engine:") || !strings.Contains(output, "value: profiled-model") {
 		t.Fatalf("expected profiled engine source trace, got %q", output)
 	}
-	if !strings.Contains(output, "- source: command") {
+	if !strings.Contains(output, "source: command") {
 		t.Fatalf("expected command baseline in trace, got %q", output)
 	}
-	if !strings.Contains(output, "- source: profile") {
+	if !strings.Contains(output, "source: profile") {
 		t.Fatalf("expected profile source in trace, got %q", output)
 	}
-	if !strings.Contains(output, "openai-api-key:") || !strings.Contains(output, "- source: config") {
+	if !strings.Contains(output, "openai-api-key:") || !strings.Contains(output, "source: config") {
 		t.Fatalf("expected config source trace for api key, got %q", output)
 	}
 	if recorder.last != nil {
-		t.Fatalf("expected print-inference-settings-sources to exit before engine creation")
+		t.Fatalf("expected print-inference-settings to exit before engine creation")
 	}
 }

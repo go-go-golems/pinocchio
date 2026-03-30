@@ -12,6 +12,7 @@ import (
 
 	"github.com/dop251/goja"
 	"github.com/dop251/goja_nodejs/require"
+	geppettobootstrap "github.com/go-go-golems/geppetto/pkg/cli/bootstrap"
 	gepprofiles "github.com/go-go-golems/geppetto/pkg/engineprofiles"
 	"github.com/go-go-golems/geppetto/pkg/inference/middlewarecfg"
 	geptools "github.com/go-go-golems/geppetto/pkg/inference/tools"
@@ -25,11 +26,9 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	gojengine "github.com/go-go-golems/go-go-goja/engine"
 	agenttools "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/tools"
-	"github.com/go-go-golems/pinocchio/pkg/cmds/cmdlayers"
 	profilebootstrap "github.com/go-go-golems/pinocchio/pkg/cmds/profilebootstrap"
 	pjs "github.com/go-go-golems/pinocchio/pkg/js/modules/pinocchio"
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
 )
 
 func NewJSCommand() *cobra.Command {
@@ -64,7 +63,7 @@ func newJSCommand() (*JSCommand, error) {
 	if err != nil {
 		return nil, err
 	}
-	inferenceDebugSection, err := cmdlayers.NewInferenceDebugParameterLayer()
+	inferenceDebugSection, err := geppettobootstrap.NewInferenceDebugSection()
 	if err != nil {
 		return nil, err
 	}
@@ -157,27 +156,20 @@ func (c *JSCommand) RunIntoWriter(ctx context.Context, parsed *values.Values, w 
 		defer runtimeBootstrap.Close()
 	}
 	if runtimeBootstrap.ResolvedEngineSettings != nil {
-		debugSettings := &cmdlayers.HelpersSettings{}
-		if err := parsed.DecodeSectionInto(cmdlayers.GeppettoHelpersSlug, debugSettings); err != nil {
+		debugSettings := &geppettobootstrap.InferenceDebugSettings{}
+		if err := parsed.DecodeSectionInto(geppettobootstrap.InferenceDebugSectionSlug, debugSettings); err != nil {
 			return err
 		}
-		if debugSettings.PrintInferenceSources {
-			trace, err := profilebootstrap.BuildInferenceSettingsSourceTrace(nil, parsed, runtimeBootstrap.ResolvedEngineSettings)
-			if err != nil {
-				return err
-			}
-			encoder := yaml.NewEncoder(w)
-			defer func() {
-				_ = encoder.Close()
-			}()
-			return encoder.Encode(trace)
-		}
 		if debugSettings.PrintInferenceSettings {
-			encoder := yaml.NewEncoder(w)
-			defer func() {
-				_ = encoder.Close()
-			}()
-			return encoder.Encode(runtimeBootstrap.ResolvedEngineSettings.FinalInferenceSettings)
+			_, err := geppettobootstrap.HandleInferenceDebugOutput(
+				w,
+				profilebootstrap.BootstrapConfig(),
+				parsed,
+				*debugSettings,
+				runtimeBootstrap.ResolvedEngineSettings,
+				geppettobootstrap.InferenceDebugOutputOptions{},
+			)
+			return err
 		}
 	}
 	middlewareDefs, buildDeps, err := buildPinocchioJSMiddlewareRegistry()

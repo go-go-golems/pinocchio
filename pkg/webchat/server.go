@@ -104,6 +104,16 @@ func (s *Server) HTTPServer() *http.Server {
 	return s.httpSrv
 }
 
+func (s *Server) Close() error {
+	if s == nil {
+		return nil
+	}
+	if s.router != nil {
+		return s.router.Close()
+	}
+	return nil
+}
+
 func (s *Server) Run(ctx context.Context) error {
 	if ctx == nil {
 		return errors.New("ctx is nil")
@@ -134,12 +144,7 @@ func (s *Server) Run(ctx context.Context) error {
 			log.Error().Err(err).Msg("server shutdown error")
 			return err
 		}
-		if s.router != nil && s.router.timelineStore != nil {
-			if err := s.router.timelineStore.Close(); err != nil {
-				log.Error().Err(err).Msg("timeline store close error")
-			}
-		}
-		if err := s.router.router.Close(); err != nil {
+		if err := s.Close(); err != nil {
 			log.Error().Err(err).Msg("router close error")
 		} else {
 			log.Info().Msg("router closed")

@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 
+	geppettobootstrap "github.com/go-go-golems/geppetto/pkg/cli/bootstrap"
 	"github.com/go-go-golems/geppetto/pkg/inference/engine/factory"
 	"github.com/go-go-golems/geppetto/pkg/inference/middleware"
 	"github.com/go-go-golems/geppetto/pkg/inference/toolloop/enginebuilder"
@@ -39,7 +40,6 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/tcnksm/go-input"
 	"golang.org/x/sync/errgroup"
-	"gopkg.in/yaml.v3"
 )
 
 func renderTemplateString(name, text string, vars map[string]interface{}) (string, error) {
@@ -315,7 +315,7 @@ func (g *PinocchioCommand) RunIntoWriter(
 		turns.FprintTurn(w, seed)
 		return nil
 	}
-	if helpersSettings.PrintInferenceSources {
+	if helpersSettings.PrintInferenceSettings {
 		if resolvedEngineSettings == nil {
 			resolvedEngineSettings = &profilebootstrap.ResolvedCLIEngineSettings{
 				BaseInferenceSettings:  baseSettings,
@@ -323,22 +323,19 @@ func (g *PinocchioCommand) RunIntoWriter(
 				ProfileSelection:       profileSelection,
 			}
 		}
-		trace, err := profilebootstrap.BuildInferenceSettingsSourceTrace(g.BaseInferenceSettings, parsedValues, resolvedEngineSettings)
-		if err != nil {
-			return err
-		}
-		encoder := yaml.NewEncoder(w)
-		defer func() {
-			_ = encoder.Close()
-		}()
-		return encoder.Encode(trace)
-	}
-	if helpersSettings.PrintInferenceSettings {
-		encoder := yaml.NewEncoder(w)
-		defer func() {
-			_ = encoder.Close()
-		}()
-		return encoder.Encode(stepSettings)
+		_, err := geppettobootstrap.HandleInferenceDebugOutput(
+			w,
+			profilebootstrap.BootstrapConfig(),
+			parsedValues,
+			geppettobootstrap.InferenceDebugSettings{
+				PrintInferenceSettings: true,
+			},
+			resolvedEngineSettings,
+			geppettobootstrap.InferenceDebugOutputOptions{
+				CommandBase: g.BaseInferenceSettings,
+			},
+		)
+		return err
 	}
 
 	// Run with options
