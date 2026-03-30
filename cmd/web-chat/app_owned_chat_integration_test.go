@@ -174,6 +174,10 @@ func newAppOwnedIntegrationServer(t *testing.T) *httptest.Server {
 	appMux.Handle("/", webchatSrv.UIHandler())
 
 	httpSrv := httptest.NewServer(appMux)
+	t.Cleanup(func() {
+		httpSrv.Close()
+		require.NoError(t, webchatSrv.Close())
+	})
 	return httpSrv
 }
 

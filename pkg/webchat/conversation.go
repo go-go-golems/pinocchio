@@ -149,6 +149,24 @@ func (cm *ConvManager) GetConversation(convID string) (*Conversation, bool) {
 	return conv, ok
 }
 
+func (cm *ConvManager) Close() {
+	if cm == nil {
+		return
+	}
+	cm.mu.Lock()
+	convs := make([]*Conversation, 0, len(cm.conns))
+	for id, conv := range cm.conns {
+		convs = append(convs, conv)
+		delete(cm.conns, id)
+	}
+	cm.mu.Unlock()
+
+	for _, conv := range convs {
+		cm.persistConversationIndex(conv, "closed", "")
+		cm.cleanupConversation(conv)
+	}
+}
+
 func (c *Conversation) touchLocked(now time.Time) {
 	if c == nil {
 		return

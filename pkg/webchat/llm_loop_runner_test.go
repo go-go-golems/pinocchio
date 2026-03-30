@@ -12,6 +12,7 @@ import (
 
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
+	timelinepb "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/timeline"
 )
 
 type recordingTurnStore struct {
@@ -36,6 +37,20 @@ type stubMessagePublisher struct{}
 
 func (stubMessagePublisher) Publish(topic string, messages ...*message.Message) error { return nil }
 func (stubMessagePublisher) Close() error                                             { return nil }
+
+type recordingTimelineEmitter struct {
+	mu      sync.Mutex
+	entity  *timelinepb.TimelineEntityV2
+	version uint64
+}
+
+func (e *recordingTimelineEmitter) Upsert(_ context.Context, entity *timelinepb.TimelineEntityV2, version uint64) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.entity = entity
+	e.version = version
+	return nil
+}
 
 func TestLLMLoopRunner_StartFiltersRegisteredToolsAndPersistsTurns(t *testing.T) {
 	allowedTool, err := geptools.NewToolFromFunc("allowed_tool", "allowed", func() (string, error) {
@@ -116,4 +131,24 @@ func TestLLMLoopRunner_StartFiltersRegisteredToolsAndPersistsTurns(t *testing.T)
 	saveCount := turnStore.saveCount
 	turnStore.mu.Unlock()
 	require.Greater(t, saveCount, 0)
+}
+
+func TestLLMLoopRunner_ProjectUserChatMessageTimelineUsesNextConversationVersion(t *testing.T) {
+	runner := NewLLMLoopRunner(LLMLoopRunnerConfig{})
+	emitter := &recordingTimelineEmitter{}
+	conv := &Conversation{lastSeenVersion: 7}
+
+	err := runner.projectUserChatMessageTimeline(context.Background(), conv, emitter, "user-turn-1", "hello")
+	require.NoError(t, err)
+
+	emitter.mu.Lock()
+	defer emitter.mu.Unlock()
+	require.Equal(t, uint64(8), emitter.version)
+	require.NotNil(t, emitter.entity)
+	require.Equal(t, "user-turn-1", emitter.entity.Id)
+	require.Equal(t, "message", emitter.entity.Kind)
+	props := emitter.entity.Props.AsMap()
+	require.Equal(t, "user", props["role"])
+	require.Equal(t, "hello", props["content"])
+	require.Equal(t, false, props["streaming"])
 }

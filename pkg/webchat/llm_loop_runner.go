@@ -142,6 +142,9 @@ func (r *LLMLoopRunner) Start(ctx context.Context, req StartRequest) (StartResul
 		if err := r.publishUserChatMessageEvent(baseCtx, req.ConvID, "user-"+turnID, payload.Prompt); err != nil {
 			return StartResult{}, errors.Wrap(err, "publish user chat.message event")
 		}
+		if err := r.projectUserChatMessageTimeline(baseCtx, conv, req.Timeline, "user-"+turnID, payload.Prompt); err != nil {
+			return StartResult{}, errors.Wrap(err, "project user chat.message timeline entity")
+		}
 	}
 
 	loopCfg := toolloop.NewLoopConfig().WithMaxIterations(5)
@@ -224,4 +227,30 @@ func (r *LLMLoopRunner) publishUserChatMessageEvent(ctx context.Context, convID 
 	}
 	msg := message.NewMessage(uuid.NewString(), b)
 	return r.semPublisher.Publish(topicForConv(convID), msg)
+}
+
+func (r *LLMLoopRunner) projectUserChatMessageTimeline(
+	ctx context.Context,
+	conv *Conversation,
+	timeline TimelineEmitter,
+	eventID string,
+	prompt string,
+) error {
+	if timeline == nil || strings.TrimSpace(eventID) == "" || strings.TrimSpace(prompt) == "" {
+		return nil
+	}
+	version := uint64(1)
+	if conv != nil {
+		conv.mu.Lock()
+		if conv.lastSeenVersion > 0 {
+			version = conv.lastSeenVersion + 1
+		}
+		conv.mu.Unlock()
+	}
+	return timeline.Upsert(ctx, timelineEntityV2FromProtoMessage(eventID, "message", &timelinepb.MessageSnapshotV1{
+		SchemaVersion: 1,
+		Role:          "user",
+		Content:       prompt,
+		Streaming:     false,
+	}), version)
 }
