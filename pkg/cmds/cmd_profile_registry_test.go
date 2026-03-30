@@ -343,7 +343,12 @@ prompt: |
 		}
 		parsed.Set(section.GetSlug(), sv)
 		if section.GetSlug() == "openai-chat" {
-			if err := values.WithFieldValue("openai-api-key", "config-key")(sv); err != nil {
+			if err := values.WithFieldValue(
+				"openai-api-key",
+				"config-key",
+				fields.WithSource("config"),
+				fields.WithMetadata(map[string]any{"config_file": "/tmp/config.yaml"}),
+			)(sv); err != nil {
 				t.Fatalf("set openai-api-key: %v", err)
 			}
 		}
