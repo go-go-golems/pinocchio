@@ -117,8 +117,9 @@ func newAgentModeMiddlewareDefinition() middlewarecfg.Definition {
 			}
 
 			config := agentmode.DefaultConfig()
-			if strings.TrimSpace(input.DefaultMode) != "" {
-				config.DefaultMode = strings.TrimSpace(input.DefaultMode)
+			config.DefaultMode = defaultWebChatAgentMode
+			if defaultMode := strings.TrimSpace(input.DefaultMode); defaultMode != "" {
+				config.DefaultMode = defaultMode
 			}
 			if input.SanitizeYAML != nil {
 				config.ParseOptions = config.ParseOptions.WithSanitizeYAML(*input.SanitizeYAML)

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -17,6 +18,30 @@ import (
 	webhttp "github.com/go-go-golems/pinocchio/pkg/webchat/http"
 	"github.com/stretchr/testify/require"
 )
+
+type stubProfileRegistry struct {
+	getEngineProfileErr error
+}
+
+func (r stubProfileRegistry) ListRegistries(context.Context) ([]gepprofiles.RegistrySummary, error) {
+	return nil, nil
+}
+
+func (r stubProfileRegistry) GetRegistry(context.Context, gepprofiles.RegistrySlug) (*gepprofiles.EngineProfileRegistry, error) {
+	return nil, nil
+}
+
+func (r stubProfileRegistry) ListEngineProfiles(context.Context, gepprofiles.RegistrySlug) ([]*gepprofiles.EngineProfile, error) {
+	return nil, nil
+}
+
+func (r stubProfileRegistry) GetEngineProfile(context.Context, gepprofiles.RegistrySlug, gepprofiles.EngineProfileSlug) (*gepprofiles.EngineProfile, error) {
+	return nil, r.getEngineProfileErr
+}
+
+func (r stubProfileRegistry) ResolveEngineProfile(context.Context, gepprofiles.ResolveInput) (*gepprofiles.ResolvedEngineProfile, error) {
+	return nil, nil
+}
 
 func decodeJSON[T any](t *testing.T, rec *httptest.ResponseRecorder) T {
 	t.Helper()
@@ -579,4 +604,51 @@ func TestNewSQLiteProfileService_BootstrapAndReopen(t *testing.T) {
 	profilesAgain, err := registryAgain.ListEngineProfiles(context.Background(), gepprofiles.MustRegistrySlug(defaultRegistrySlug))
 	require.NoError(t, err)
 	require.Len(t, profilesAgain, 2)
+}
+
+func TestProfileRequestResolver_ResolveRuntimePlan_ReturnsValidationFailuresAsBadRequest(t *testing.T) {
+	resolver := newProfileRequestResolver(stubProfileRegistry{
+		getEngineProfileErr: &gepprofiles.ValidationError{Field: "extensions.pinocchio.webchat_runtime", Reason: "bad middleware config"},
+	}, gepprofiles.MustRegistrySlug(defaultRegistrySlug), nil)
+
+	resolved := &gepprofiles.ResolvedEngineProfile{
+		RegistrySlug:      gepprofiles.MustRegistrySlug("default"),
+		EngineProfileSlug: gepprofiles.MustEngineProfileSlug("analyst"),
+		StackLineage: []gepprofiles.ResolvedProfileStackEntry{{
+			RegistrySlug:      gepprofiles.MustRegistrySlug("default"),
+			EngineProfileSlug: gepprofiles.MustEngineProfileSlug("analyst"),
+		}},
+	}
+
+	plan, err := resolver.resolveRuntimePlan(context.Background(), resolved)
+	require.Nil(t, plan)
+	require.Error(t, err)
+
+	var reqErr *webhttp.RequestResolutionError
+	require.ErrorAs(t, err, &reqErr)
+	require.Equal(t, http.StatusBadRequest, reqErr.Status)
+	require.Equal(t, "invalid pinocchio runtime extension", reqErr.ClientMsg)
+}
+
+func TestProfileRequestResolver_ResolveRuntimePlan_LeavesOperationalFailuresAsServerErrors(t *testing.T) {
+	boom := errors.New("registry read failed")
+	resolver := newProfileRequestResolver(stubProfileRegistry{
+		getEngineProfileErr: boom,
+	}, gepprofiles.MustRegistrySlug(defaultRegistrySlug), nil)
+
+	resolved := &gepprofiles.ResolvedEngineProfile{
+		RegistrySlug:      gepprofiles.MustRegistrySlug("default"),
+		EngineProfileSlug: gepprofiles.MustEngineProfileSlug("analyst"),
+		StackLineage: []gepprofiles.ResolvedProfileStackEntry{{
+			RegistrySlug:      gepprofiles.MustRegistrySlug("default"),
+			EngineProfileSlug: gepprofiles.MustEngineProfileSlug("analyst"),
+		}},
+	}
+
+	plan, err := resolver.resolveRuntimePlan(context.Background(), resolved)
+	require.Nil(t, plan)
+	require.ErrorIs(t, err, boom)
+
+	var reqErr *webhttp.RequestResolutionError
+	require.False(t, errors.As(err, &reqErr))
 }
