@@ -57,6 +57,14 @@ func protoToRaw(m proto.Message) (json.RawMessage, error) {
 	return json.RawMessage(b), nil
 }
 
+func toolResultRaw(ev events.ToolResult, customKind string, fallbackName string) (json.RawMessage, error) {
+	name := strings.TrimSpace(ev.Name)
+	if name == "" {
+		name = strings.TrimSpace(fallbackName)
+	}
+	return protoToRaw(&sempb.ToolResult{Id: ev.ID, Result: ev.Result, CustomKind: customKind, Name: name})
+}
+
 func mapToStruct(m map[string]any) (*structpb.Struct, error) {
 	if len(m) == 0 {
 		return nil, nil
@@ -443,7 +451,7 @@ func (et *EventTranslator) RegisterDefaultHandlers() {
 		var frames [][]byte
 		if v, ok := et.toolCallCache.Load(ev.ToolResult.ID); ok {
 			if ctc, ok2 := v.(cachedToolCall); ok2 && ctc.Name == "calc" {
-				resultData, err := protoToRaw(&sempb.ToolResult{Id: ev.ToolResult.ID, Result: ev.ToolResult.Result, CustomKind: "calc_result"})
+				resultData, err := toolResultRaw(ev.ToolResult, "calc_result", ctc.Name)
 				if err != nil {
 					return nil, err
 				}
@@ -456,7 +464,13 @@ func (et *EventTranslator) RegisterDefaultHandlers() {
 				return frames, nil
 			}
 		}
-		resultData, err := protoToRaw(&sempb.ToolResult{Id: ev.ToolResult.ID, Result: ev.ToolResult.Result})
+		var fallbackName string
+		if v, ok := et.toolCallCache.Load(ev.ToolResult.ID); ok {
+			if ctc, ok2 := v.(cachedToolCall); ok2 {
+				fallbackName = ctc.Name
+			}
+		}
+		resultData, err := toolResultRaw(ev.ToolResult, "", fallbackName)
 		if err != nil {
 			return nil, err
 		}
@@ -473,7 +487,7 @@ func (et *EventTranslator) RegisterDefaultHandlers() {
 		var frames [][]byte
 		if v, ok := et.toolCallCache.Load(ev.ToolResult.ID); ok {
 			if ctc, ok2 := v.(cachedToolCall); ok2 && ctc.Name == "calc" {
-				resultData, err := protoToRaw(&sempb.ToolResult{Id: ev.ToolResult.ID, Result: ev.ToolResult.Result, CustomKind: "calc_result"})
+				resultData, err := toolResultRaw(ev.ToolResult, "calc_result", ctc.Name)
 				if err != nil {
 					return nil, err
 				}
@@ -486,7 +500,13 @@ func (et *EventTranslator) RegisterDefaultHandlers() {
 				return frames, nil
 			}
 		}
-		resultData, err := protoToRaw(&sempb.ToolResult{Id: ev.ToolResult.ID, Result: ev.ToolResult.Result})
+		var fallbackName string
+		if v, ok := et.toolCallCache.Load(ev.ToolResult.ID); ok {
+			if ctc, ok2 := v.(cachedToolCall); ok2 {
+				fallbackName = ctc.Name
+			}
+		}
+		resultData, err := toolResultRaw(ev.ToolResult, "", fallbackName)
 		if err != nil {
 			return nil, err
 		}

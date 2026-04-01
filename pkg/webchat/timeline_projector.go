@@ -311,6 +311,7 @@ func (p *TimelineProjector) ApplySemFrame(ctx context.Context, frame []byte) err
 			Result:        resultStruct,
 			ResultRaw:     pb.Result,
 			CustomKind:    pb.CustomKind,
+			Name:          pb.Name,
 		}))
 		return err
 

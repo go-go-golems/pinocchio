@@ -120,8 +120,28 @@ func TestSemanticEventsFromEvent_CalcToolResultGetsCustomKind(t *testing.T) {
 	require.Equal(t, "tool.result", resEv["type"])
 	resData, ok := resEv["data"].(map[string]any)
 	require.True(t, ok)
+	require.Equal(t, "calc", resData["name"])
 	require.Equal(t, "calc_result", resData["customKind"])
 	require.Equal(t, "tool.done", doneEv["type"])
+}
+
+func TestSemanticEventsFromEvent_ToolResultIncludesName(t *testing.T) {
+	meta := events.EventMetadata{SessionID: "sess-4", InferenceID: "inf-4", TurnID: "turn-4"}
+
+	toolCall := events.ToolCall{ID: "tc-2", Name: "sql_query", Input: `{"sql":"SELECT 1"}`}
+	callFrames := SemanticEventsFromEvent(events.NewToolCallEvent(meta, toolCall))
+	require.Len(t, callFrames, 1)
+	callEv := decodeSemEvent(t, callFrames[0])
+	require.Equal(t, "tool.start", callEv["type"])
+
+	toolResult := events.ToolResult{ID: "tc-2", Name: "sql_query", Result: `{"ok":true}`}
+	resultFrames := SemanticEventsFromEvent(events.NewToolResultEvent(meta, toolResult))
+	require.Len(t, resultFrames, 2)
+	resEv := decodeSemEvent(t, resultFrames[0])
+	require.Equal(t, "tool.result", resEv["type"])
+	resData, ok := resEv["data"].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "sql_query", resData["name"])
 }
 
 func TestSemanticEventsFromEvent_ReasoningSummaryMapsToThinkingSummary(t *testing.T) {

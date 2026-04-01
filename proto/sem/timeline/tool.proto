@@ -26,4 +26,6 @@ message ToolResultSnapshotV1 {
   string result_raw = 5;
   // Optional: renderer hint (e.g. "calc_result") carried through from SEM tool.result.
   string custom_kind = 6;
+  // Optional: tool name for cleaner downstream projection/rendering.
+  string name = 7;
 }

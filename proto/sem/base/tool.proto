@@ -21,9 +21,9 @@ message ToolResult {
   string id = 1;
   string result = 2; // raw string; may contain JSON
   string custom_kind = 3; // optional: custom renderer hint (e.g. "calc_result")
+  string name = 4; // optional: tool name for cleaner downstream projection/rendering
 }
 
 message ToolDone {
   string id = 1;
 }
-

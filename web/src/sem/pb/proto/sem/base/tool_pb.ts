@@ -11,7 +11,7 @@ import type { JsonObject, Message } from "@bufbuild/protobuf";
  * Describes the file proto/sem/base/tool.proto.
  */
 export const file_proto_sem_base_tool: GenFile = /*@__PURE__*/
-  fileDesc("Chlwcm90by9zZW0vYmFzZS90b29sLnByb3RvEg1zZW0uYmFzZS50b29sIk0KCVRvb2xTdGFydBIKCgJpZBgBIAEoCRIMCgRuYW1lGAIgASgJEiYKBWlucHV0GAMgASgLMhcuZ29vZ2xlLnByb3RvYnVmLlN0cnVjdCI/CglUb29sRGVsdGESCgoCaWQYASABKAkSJgoFcGF0Y2gYAiABKAsyFy5nb29nbGUucHJvdG9idWYuU3RydWN0Ij0KClRvb2xSZXN1bHQSCgoCaWQYASABKAkSDgoGcmVzdWx0GAIgASgJEhMKC2N1c3RvbV9raW5kGAMgASgJIhYKCFRvb2xEb25lEgoKAmlkGAEgASgJQkJaQGdpdGh1Yi5jb20vZ28tZ28tZ29sZW1zL3Bpbm9jY2hpby9wa2cvc2VtL3BiL3Byb3RvL3NlbS9iYXNlO2Jhc2ViBnByb3RvMw", [file_google_protobuf_struct]);
+  fileDesc("Chlwcm90by9zZW0vYmFzZS90b29sLnByb3RvEg1zZW0uYmFzZS50b29sIk0KCVRvb2xTdGFydBIKCgJpZBgBIAEoCRIMCgRuYW1lGAIgASgJEiYKBWlucHV0GAMgASgLMhcuZ29vZ2xlLnByb3RvYnVmLlN0cnVjdCI/CglUb29sRGVsdGESCgoCaWQYASABKAkSJgoFcGF0Y2gYAiABKAsyFy5nb29nbGUucHJvdG9idWYuU3RydWN0IksKClRvb2xSZXN1bHQSCgoCaWQYASABKAkSDgoGcmVzdWx0GAIgASgJEhMKC2N1c3RvbV9raW5kGAMgASgJEgwKBG5hbWUYBCABKAkiFgoIVG9vbERvbmUSCgoCaWQYASABKAlCQlpAZ2l0aHViLmNvbS9nby1nby1nb2xlbXMvcGlub2NjaGlvL3BrZy9zZW0vcGIvcHJvdG8vc2VtL2Jhc2U7YmFzZWIGcHJvdG8z", [file_google_protobuf_struct]);
 
 /**
  * @generated from message sem.base.tool.ToolStart
@@ -84,6 +84,13 @@ export type ToolResult = Message<"sem.base.tool.ToolResult"> & {
    * @generated from field: string custom_kind = 3;
    */
   customKind: string;
+
+  /**
+   * optional: tool name for cleaner downstream projection/rendering
+   *
+   * @generated from field: string name = 4;
+   */
+  name: string;
 };
 
 /**
