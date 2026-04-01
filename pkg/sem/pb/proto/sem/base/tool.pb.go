@@ -139,6 +139,7 @@ type ToolResult struct {
 	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 	Result        string                 `protobuf:"bytes,2,opt,name=result,proto3" json:"result,omitempty"`                           // raw string; may contain JSON
 	CustomKind    string                 `protobuf:"bytes,3,opt,name=custom_kind,json=customKind,proto3" json:"custom_kind,omitempty"` // optional: custom renderer hint (e.g. "calc_result")
+	Name          string                 `protobuf:"bytes,4,opt,name=name,proto3" json:"name,omitempty"`                               // optional: tool name for cleaner downstream projection/rendering
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -190,6 +191,13 @@ func (x *ToolResult) GetResult() string {
 func (x *ToolResult) GetCustomKind() string {
 	if x != nil {
 		return x.CustomKind
+	}
+	return ""
+}
+
+func (x *ToolResult) GetName() string {
+	if x != nil {
+		return x.Name
 	}
 	return ""
 }
@@ -249,13 +257,14 @@ const file_proto_sem_base_tool_proto_rawDesc = "" +
 	"\x05input\x18\x03 \x01(\v2\x17.google.protobuf.StructR\x05input\"J\n" +
 	"\tToolDelta\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12-\n" +
-	"\x05patch\x18\x02 \x01(\v2\x17.google.protobuf.StructR\x05patch\"U\n" +
+	"\x05patch\x18\x02 \x01(\v2\x17.google.protobuf.StructR\x05patch\"i\n" +
 	"\n" +
 	"ToolResult\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x16\n" +
 	"\x06result\x18\x02 \x01(\tR\x06result\x12\x1f\n" +
 	"\vcustom_kind\x18\x03 \x01(\tR\n" +
-	"customKind\"\x1a\n" +
+	"customKind\x12\x12\n" +
+	"\x04name\x18\x04 \x01(\tR\x04name\"\x1a\n" +
 	"\bToolDone\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02idBBZ@github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/base;baseb\x06proto3"
 

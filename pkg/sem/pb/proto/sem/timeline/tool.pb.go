@@ -117,7 +117,9 @@ type ToolResultSnapshotV1 struct {
 	// Optional: raw result text when the tool result is not structured JSON.
 	ResultRaw string `protobuf:"bytes,5,opt,name=result_raw,json=resultRaw,proto3" json:"result_raw,omitempty"`
 	// Optional: renderer hint (e.g. "calc_result") carried through from SEM tool.result.
-	CustomKind    string `protobuf:"bytes,6,opt,name=custom_kind,json=customKind,proto3" json:"custom_kind,omitempty"`
+	CustomKind string `protobuf:"bytes,6,opt,name=custom_kind,json=customKind,proto3" json:"custom_kind,omitempty"`
+	// Optional: tool name for cleaner downstream projection/rendering.
+	Name          string `protobuf:"bytes,7,opt,name=name,proto3" json:"name,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -194,6 +196,13 @@ func (x *ToolResultSnapshotV1) GetCustomKind() string {
 	return ""
 }
 
+func (x *ToolResultSnapshotV1) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
 var File_proto_sem_timeline_tool_proto protoreflect.FileDescriptor
 
 const file_proto_sem_timeline_tool_proto_rawDesc = "" +
@@ -205,7 +214,7 @@ const file_proto_sem_timeline_tool_proto_rawDesc = "" +
 	"\x05input\x18\x03 \x01(\v2\x17.google.protobuf.StructR\x05input\x12\x16\n" +
 	"\x06status\x18\x04 \x01(\tR\x06status\x12\x1a\n" +
 	"\bprogress\x18\x05 \x01(\x01R\bprogress\x12\x12\n" +
-	"\x04done\x18\x06 \x01(\bR\x04done\"\xe6\x01\n" +
+	"\x04done\x18\x06 \x01(\bR\x04done\"\xfa\x01\n" +
 	"\x14ToolResultSnapshotV1\x12%\n" +
 	"\x0eschema_version\x18\x01 \x01(\rR\rschemaVersion\x12 \n" +
 	"\ftool_call_id\x18\x02 \x01(\tR\n" +
@@ -215,7 +224,8 @@ const file_proto_sem_timeline_tool_proto_rawDesc = "" +
 	"\n" +
 	"result_raw\x18\x05 \x01(\tR\tresultRaw\x12\x1f\n" +
 	"\vcustom_kind\x18\x06 \x01(\tR\n" +
-	"customKindBJZHgithub.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/timeline;timelineb\x06proto3"
+	"customKind\x12\x12\n" +
+	"\x04name\x18\a \x01(\tR\x04nameBJZHgithub.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/timeline;timelineb\x06proto3"
 
 var (
 	file_proto_sem_timeline_tool_proto_rawDescOnce sync.Once

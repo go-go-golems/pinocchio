@@ -11,7 +11,7 @@ import type { JsonObject, Message } from "@bufbuild/protobuf";
  * Describes the file proto/sem/timeline/tool.proto.
  */
 export const file_proto_sem_timeline_tool: GenFile = /*@__PURE__*/
-  fileDesc("Ch1wcm90by9zZW0vdGltZWxpbmUvdG9vbC5wcm90bxIMc2VtLnRpbWVsaW5lIpIBChJUb29sQ2FsbFNuYXBzaG90VjESFgoOc2NoZW1hX3ZlcnNpb24YASABKA0SDAoEbmFtZRgCIAEoCRImCgVpbnB1dBgDIAEoCzIXLmdvb2dsZS5wcm90b2J1Zi5TdHJ1Y3QSDgoGc3RhdHVzGAQgASgJEhAKCHByb2dyZXNzGAUgASgBEgwKBGRvbmUYBiABKAgipQEKFFRvb2xSZXN1bHRTbmFwc2hvdFYxEhYKDnNjaGVtYV92ZXJzaW9uGAEgASgNEhQKDHRvb2xfY2FsbF9pZBgCIAEoCRInCgZyZXN1bHQYAyABKAsyFy5nb29nbGUucHJvdG9idWYuU3RydWN0Eg0KBWVycm9yGAQgASgJEhIKCnJlc3VsdF9yYXcYBSABKAkSEwoLY3VzdG9tX2tpbmQYBiABKAlCSlpIZ2l0aHViLmNvbS9nby1nby1nb2xlbXMvcGlub2NjaGlvL3BrZy9zZW0vcGIvcHJvdG8vc2VtL3RpbWVsaW5lO3RpbWVsaW5lYgZwcm90bzM", [file_google_protobuf_struct]);
+  fileDesc("Ch1wcm90by9zZW0vdGltZWxpbmUvdG9vbC5wcm90bxIMc2VtLnRpbWVsaW5lIpIBChJUb29sQ2FsbFNuYXBzaG90VjESFgoOc2NoZW1hX3ZlcnNpb24YASABKA0SDAoEbmFtZRgCIAEoCRImCgVpbnB1dBgDIAEoCzIXLmdvb2dsZS5wcm90b2J1Zi5TdHJ1Y3QSDgoGc3RhdHVzGAQgASgJEhAKCHByb2dyZXNzGAUgASgBEgwKBGRvbmUYBiABKAgiswEKFFRvb2xSZXN1bHRTbmFwc2hvdFYxEhYKDnNjaGVtYV92ZXJzaW9uGAEgASgNEhQKDHRvb2xfY2FsbF9pZBgCIAEoCRInCgZyZXN1bHQYAyABKAsyFy5nb29nbGUucHJvdG9idWYuU3RydWN0Eg0KBWVycm9yGAQgASgJEhIKCnJlc3VsdF9yYXcYBSABKAkSEwoLY3VzdG9tX2tpbmQYBiABKAkSDAoEbmFtZRgHIAEoCUJKWkhnaXRodWIuY29tL2dvLWdvLWdvbGVtcy9waW5vY2NoaW8vcGtnL3NlbS9wYi9wcm90by9zZW0vdGltZWxpbmU7dGltZWxpbmViBnByb3RvMw", [file_google_protobuf_struct]);
 
 /**
  * ToolCallSnapshotV1 defines the payload for a 'tool_call' entity.
@@ -112,6 +112,13 @@ export type ToolResultSnapshotV1 = Message<"sem.timeline.ToolResultSnapshotV1"> 
    * @generated from field: string custom_kind = 6;
    */
   customKind: string;
+
+  /**
+   * Optional: tool name for cleaner downstream projection/rendering.
+   *
+   * @generated from field: string name = 7;
+   */
+  name: string;
 };
 
 /**
