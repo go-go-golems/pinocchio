@@ -1011,6 +1011,105 @@ go test ./pkg/config/... ./pkg/cli/... ./pkg/cmds/... -count=1
 
 ---
 
+## Step 11: Remove deprecated Viper config-loading paths and deprecate the old single-path resolver
+
+After removing the dead Viper-based config editor/command, the next cleanup was to remove the remaining **deprecated** Viper-based config-loading APIs. These were no longer part of the supported config story and only added conceptual overlap with the new declarative plan system.
+
+I removed the deprecated Viper-based field-loading helper, removed the deprecated Viper-based source middlewares, removed the deprecated Viper-based logging bootstrap functions, and removed the last live Viper fallback in logging initialization. I also marked `glazed/pkg/config/resolve.go` as deprecated rather than deleting it, because that helper is still an active compatibility layer for simpler callers.
+
+### Prompt Context
+
+**User prompt (verbatim):** "remove the deprecated viper paths. mark the resolve.go thing as deprecated. remove the viper fallback in the logging initialization. let me know what's left after that."
+
+**Assistant interpretation:** Remove the still-exported deprecated Viper integration surfaces, keep `ResolveAppConfigPath(...)` for compatibility but formally deprecate it, and clean out the remaining Viper dependency from active logging initialization.
+
+**Inferred user intent:** Finish the major config cleanup in a way that leaves the new config-plan path as the clear primary direction, without breaking still-legitimate compatibility helpers unnecessarily.
+
+**Commit (code):** `ef3fdf7ec29f2d0805799e2d1f85100f0409fe35` — `config: remove deprecated viper paths`
+
+### What I did
+- Deleted:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/cmds/fields/viper.go`
+- Removed deprecated Viper-based source middlewares from:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/cmds/sources/cobra.go`
+- Removed deprecated Viper-based logging bootstrap functions from:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/cmds/logging/init-logging.go`
+- Removed the last active logging Viper fallback from:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/cmds/logging/init.go`
+- Marked the old single-path config helper as deprecated in:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/config/resolve.go`
+- Updated public docs wording in:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/doc/topics/24-config-files.md`
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/doc/tutorials/config-files-quickstart.md`
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/doc/tutorials/migrating-from-viper-to-config-files.md`
+
+### Why
+- These APIs were already deprecated and no longer matched the supported config architecture.
+- Leaving them around would keep Viper-shaped concepts alive right next to the new config-plan path.
+- `ResolveAppConfigPath(...)` is different: it is old, but still genuinely used as a compatibility helper, so it should be deprecated before eventual replacement, not hard-deleted today.
+
+### What worked
+- The code-side Viper cleanup was clean and did not break the focused config/cli/cmds test set.
+- After the change, the targeted packages no longer reference the removed deprecated Viper APIs.
+- Logging no longer depends on `viper.GetEnvPrefix()` in its active initialization path.
+
+### What didn't work
+- I briefly passed Markdown files to `gofmt` by mistake while formatting the changes. That produced parser errors, but it did not change the files and was just a command mistake rather than a code issue.
+
+### What I learned
+- The remaining meaningful cleanup line is now much sharper. Once the deprecated Viper helpers are removed, the things still left are mostly either:
+  - active compatibility layers, or
+  - active higher-level subsystems that would need intentional redesign rather than deletion.
+
+### What remains after this step
+
+#### Still present and reasonable to keep for now
+- `/home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/config/resolve.go`
+  - now deprecated, but still used by compatibility/simple flows
+- `/home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/appconfig/*`
+  - still active and used by parser/examples
+- `/home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/cli/cobra-parser.go` `ConfigFilesFunc`
+  - still a valid simple integration point
+- `/home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/cmds/logging/*`
+  - still active, but now without the deprecated Viper bootstrap path
+
+#### Best future cleanup / modernization candidates
+- integrate `pkg/appconfig` with `config.Plan` / `ResolvedConfigFile`
+- add a richer resolved-config variant to `ConfigFilesFunc` if desired
+- eventually make `ResolveAppConfigPath(...)` a thin wrapper over plan primitives or remove it after callers migrate
+
+### What was tricky to build
+- The key judgment call was distinguishing between “deprecated and safe to remove now” versus “old but still a legitimate compatibility layer.” Removing the Viper helpers was straightforward. Deprecating `ResolveAppConfigPath(...)` instead of deleting it was the more careful choice.
+
+### What warrants a second pair of eyes
+- Whether the migration tutorial should be shortened now that the deprecated APIs are gone, since it still discusses them as historical examples.
+- Whether `pkg/appconfig` should be the next modernization target if you want the whole config story to converge further.
+
+### What should be done in the future
+- If you want more consolidation, the next real target is `pkg/appconfig`, not more deletion for deletion’s sake.
+- If you want to keep trimming public API surface, the eventual next step is to migrate remaining `ResolveAppConfigPath(...)` callers and then remove that helper later.
+
+### Code review instructions
+- Review:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/cmds/sources/cobra.go`
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/cmds/logging/init-logging.go`
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/cmds/logging/init.go`
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/config/resolve.go`
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/doc/topics/24-config-files.md`
+- Validate with:
+
+```bash
+cd /home/manuel/workspaces/2026-04-10/pinocchiorc/glazed
+gofmt -w pkg/cmds/sources/cobra.go pkg/cmds/logging/init-logging.go pkg/cmds/logging/init.go pkg/config/resolve.go
+go test ./pkg/config/... ./pkg/cmds/logging/... ./pkg/cmds/sources/... ./pkg/cli/... ./pkg/cmds/... -count=1
+```
+
+### Technical details
+- The active logging path now falls back to `"app"` if `LogstashAppName` is empty, instead of consulting Viper.
+- `ResolveAppConfigPath(...)` remains in place but is now explicitly deprecated in its doc comment.
+
+---
+
 ## Appendix: Commands Used During Analysis
 
 ```bash

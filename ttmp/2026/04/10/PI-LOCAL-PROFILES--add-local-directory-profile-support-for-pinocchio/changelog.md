@@ -124,3 +124,17 @@ Step 10: removed the dead Viper-based config editor/command from glazed (commit 
 - /home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/config/editor.go — Deleted in commit 5c04291
 - /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/10/PI-LOCAL-PROFILES--add-local-directory-profile-support-for-pinocchio/reference/01-diary.md — Recorded cleanup rationale and remaining candidate assessment
 
+
+## 2026-04-14
+
+Step 11: removed deprecated Viper config-loading paths from glazed (commit ef3fdf7), removed the last active logging Viper fallback, and marked ResolveAppConfigPath as deprecated instead of deleting it because it is still a live compatibility helper.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/cmds/fields/viper.go — Deleted deprecated Viper field-loading helper in commit ef3fdf7
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/cmds/logging/init-logging.go — Removed deprecated logging Viper bootstrap functions in commit ef3fdf7
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/cmds/logging/init.go — Removed the active Viper fallback in commit ef3fdf7
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/cmds/sources/cobra.go — Removed deprecated Viper source middleware exports in commit ef3fdf7
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/config/resolve.go — Marked ResolveAppConfigPath deprecated in commit ef3fdf7
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/10/PI-LOCAL-PROFILES--add-local-directory-profile-support-for-pinocchio/reference/01-diary.md — Recorded Step 11 cleanup details and remaining-state assessment
+
