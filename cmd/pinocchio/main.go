@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"embed"
 	"fmt"
 	"os"
@@ -168,35 +169,48 @@ func initRootCmd() (*help.HelpSystem, error) {
 	return helpSystem, nil
 }
 
-// loadRepositoriesFromConfig reads repository paths from the config file
+// loadRepositoriesFromConfig reads repository paths from layered pinocchio app config.
 func loadRepositoriesFromConfig() []string {
-	configPath, err := glazedConfig.ResolveAppConfigPath("pinocchio", "")
-	if err != nil || configPath == "" {
-		return []string{}
-	}
-
-	data, err := os.ReadFile(configPath)
+	plan := glazedConfig.NewPlan(
+		glazedConfig.WithLayerOrder(glazedConfig.LayerSystem, glazedConfig.LayerUser),
+		glazedConfig.WithDedupePaths(),
+	).Add(
+		glazedConfig.SystemAppConfig("pinocchio").Named("system-app-config").Kind("app-config"),
+		glazedConfig.HomeAppConfig("pinocchio").Named("home-app-config").Kind("app-config"),
+		glazedConfig.XDGAppConfig("pinocchio").Named("xdg-app-config").Kind("app-config"),
+	)
+	files, _, err := plan.Resolve(context.Background())
 	if err != nil {
-		log.Debug().Err(err).Str("config", configPath).Msg("Could not read config file for repositories")
+		log.Debug().Err(err).Msg("Could not resolve config plan for repositories")
 		return []string{}
 	}
 
-	var config map[string]interface{}
-	if err := yaml.Unmarshal(data, &config); err != nil {
-		log.Debug().Err(err).Str("config", configPath).Msg("Could not parse config file")
-		return []string{}
-	}
-
-	repos, ok := config["repositories"].([]interface{})
-	if !ok {
-		return []string{}
-	}
-
-	repositoryPaths := make([]string, 0, len(repos))
-	for _, repo := range repos {
-		if repoStr, ok := repo.(string); ok {
-			repositoryPaths = append(repositoryPaths, repoStr)
+	var repositoryPaths []string
+	for _, file := range files {
+		data, err := os.ReadFile(file.Path)
+		if err != nil {
+			log.Debug().Err(err).Str("config", file.Path).Msg("Could not read config file for repositories")
+			continue
 		}
+
+		var config map[string]interface{}
+		if err := yaml.Unmarshal(data, &config); err != nil {
+			log.Debug().Err(err).Str("config", file.Path).Msg("Could not parse config file")
+			continue
+		}
+
+		repos, ok := config["repositories"].([]interface{})
+		if !ok {
+			continue
+		}
+
+		next := make([]string, 0, len(repos))
+		for _, repo := range repos {
+			if repoStr, ok := repo.(string); ok {
+				next = append(next, repoStr)
+			}
+		}
+		repositoryPaths = next
 	}
 
 	return repositoryPaths
