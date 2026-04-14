@@ -28,3 +28,17 @@ Implemented the cleanup requested by the ticket/user: removed CobraParserConfig.
 - /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/cmd/web-chat/main.go — Removed no-op parser shim in commit 8765765
 - /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/14/PI-CONFIGFILESFUNC-REMOVAL--remove-configfilesfunc-and-migrate-cli-config-resolution-to-declarative-plans/reference/01-diary.md — Recorded implementation steps
 
+
+## 2026-04-14
+
+Completed the final cleanup step: removed glazed/pkg/config/ResolveAppConfigPath (commit a94d873), removed Geppetto's legacy non-plan fallback and made ConfigPlanBuilder mandatory for bootstrap config (commit 8ef6188), and migrated Pinocchio's repository config loading to a declarative plan (commit 3118d0c). Focused Geppetto and Glazed validation passed; Pinocchio top-level command-package validation remains blocked by the external clay dependency still importing logging.InitLoggerFromViper. Also added a follow-up task to introduce FromConfigPlan/FromConfigPlanBuilder middleware wrappers over FromResolvedFiles.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/geppetto/pkg/cli/bootstrap/profile_selection.go — Removed legacy config-file fallback and now requires plan-based resolution in commit 8ef6188
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/geppetto/pkg/sections/sections.go — Legacy Geppetto section helper now resolves pinocchio config through a plan in commit 8ef6188
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/config/resolve.go — Deleted the last compatibility app-config resolver in commit a94d873
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/cmd/pinocchio/main.go — Repository-loading now uses layered config plans in commit 3118d0c
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/14/PI-CONFIGFILESFUNC-REMOVAL--remove-configfilesfunc-and-migrate-cli-config-resolution-to-declarative-plans/reference/01-diary.md — Recorded Step 4 removing ResolveAppConfigPath and the remaining validation caveats
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/14/PI-CONFIGFILESFUNC-REMOVAL--remove-configfilesfunc-and-migrate-cli-config-resolution-to-declarative-plans/tasks.md — Added a follow-up task for FromConfigPlan middleware wrappers
+

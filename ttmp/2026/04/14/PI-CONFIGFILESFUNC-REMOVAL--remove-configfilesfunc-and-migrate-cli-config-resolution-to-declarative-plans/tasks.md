@@ -12,3 +12,8 @@
 - [x] Update current docs/examples that still presented the old path-list config-loading API
 - [x] Audit `pkg/appconfig` usage and choose deletion over modernization for this workspace cleanup
 - [x] Remove `pkg/appconfig` and its Glazed examples in the same change instead of preserving a compatibility facade
+- [x] Remove `glazed/pkg/config/ResolveAppConfigPath(...)` and migrate remaining workspace callers to explicit plans
+
+## FOLLOW-UPS
+
+- [ ] Add `sources.FromConfigPlan(...)` / `sources.FromConfigPlanBuilder(...)` as high-level middleware wrappers over `FromResolvedFiles(...)`, then update CobraParser to use that middleware internally instead of resolving plans directly in `pkg/cli/cobra-parser.go`

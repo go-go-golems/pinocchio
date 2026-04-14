@@ -296,6 +296,119 @@ FAIL
 ### Technical details
 - `web-chat` still loads hidden base settings through `profilebootstrap`; removing the no-op parser shim does not change that path.
 
+## Step 4: Remove `ResolveAppConfigPath(...)` entirely and require plans everywhere in the workspace path
+
+After the earlier cleanup passes, one old compatibility seam still remained: `glazed/pkg/config/ResolveAppConfigPath(...)`. Once the user explicitly asked to remove it too, the right move was to finish the cutover all the way through current workspace code. That meant deleting the helper, deleting the last bootstrap legacy fallback in Geppetto, and replacing the remaining direct app-config-path lookups with small explicit plans.
+
+This step tightened the architecture further than the earlier plan-based parser cleanup. At this point, the workspace no longer has two competing config-discovery stories for current code. The active path is declarative plans.
+
+### Prompt Context
+
+**User prompt (verbatim):** "remove it."
+
+**Assistant interpretation:** Remove `ResolveAppConfigPath(...)` as well, not just the Cobra parser path APIs, and migrate the remaining workspace callers to plan-based discovery.
+
+**Inferred user intent:** Finish the cleanup completely instead of leaving the old resolver behind as a compatibility helper.
+
+**Commit (code):** `a94d87327e2cb0d68bd0d5fdd26dfde272d4f484` — `config: remove legacy app config resolver`
+
+**Commit (code):** `8ef6188460a144f31b3c0c8b23119eeb1e125d42` — `bootstrap: require config plans`
+
+**Commit (code):** `3118d0c4050fc7be6e2b83a78f8cd558729664b7` — `pinocchio: resolve repositories with config plans`
+
+### What I did
+- Deleted:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/config/resolve.go`
+- Moved the shared `fileExists(...)` helper into:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/config/plan_sources.go`
+- Updated current docs to stop describing `ResolveAppConfigPath(...)` as an active helper:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/doc/topics/24-config-files.md`
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/doc/tutorials/migrating-from-viper-to-config-files.md`
+- Removed the legacy bootstrap fallback in:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/geppetto/pkg/cli/bootstrap/profile_selection.go`
+- Made plan builders mandatory in:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/geppetto/pkg/cli/bootstrap/config.go`
+- Updated Geppetto bootstrap tests to use explicit plans for default discovery:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/geppetto/pkg/cli/bootstrap/bootstrap_test.go`
+- Replaced Geppetto legacy section-helper config discovery with explicit plans + `FromResolvedFiles(...)` in:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/geppetto/pkg/sections/sections.go`
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/geppetto/pkg/sections/profile_sections.go`
+- Replaced Pinocchio repository-config loading with a small declarative plan in:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/cmd/pinocchio/main.go`
+
+### Why
+- Leaving `ResolveAppConfigPath(...)` in place would have kept an old non-provenance-aware config discovery path alive next to the new plan system.
+- Geppetto bootstrap still had a legacy fallback branch that bypassed plans; removing it makes the current bootstrap contract simpler and more honest.
+- Pinocchio’s repository-loading code was one of the last direct app-config-path call sites, so it needed to move too.
+
+### What worked
+- After the change, there were no remaining live `ResolveAppConfigPath(...)` call sites in `glazed`, `geppetto`, or `pinocchio` current source.
+- Focused validation passed for:
+
+```bash
+cd /home/manuel/workspaces/2026-04-10/pinocchiorc/geppetto
+go test ./pkg/cli/bootstrap/... ./pkg/sections/... -count=1
+
+cd /home/manuel/workspaces/2026-04-10/pinocchiorc/glazed
+go test ./pkg/config/... -count=1
+```
+
+### What didn't work
+- Pinocchio top-level command-package validation is still blocked by the same external `clay` dependency importing the removed Viper logging symbol.
+
+Exact error:
+
+```text
+# github.com/go-go-golems/clay/pkg
+../../../../go/pkg/mod/github.com/go-go-golems/clay@v0.4.0/pkg/init.go:78:16: undefined: logging.InitLoggerFromViper
+```
+
+- I also repeated an earlier command mistake by accidentally passing Markdown files to `gofmt` again while validating the Glazed side. That produced parser errors but did not change the files.
+
+### What I learned
+- Once `ResolveAppConfigPath(...)` was removed, the architecture became noticeably more consistent: config discovery for current code is either a declarative plan or historical code that still needs migration outside this workspace.
+- The Geppetto bootstrap API is cleaner when `ConfigPlanBuilder` is required rather than optional-with-legacy-fallback.
+
+### What was tricky to build
+- The legacy Geppetto section helpers were the trickiest part because they were not on the newer bootstrap path, but they still needed equivalent behavior for default app config + explicit `--config-file`. The clean way to preserve behavior was to build a tiny plan inside the helper and load through `FromResolvedFiles(...)`.
+- For Pinocchio repository loading, the subtle point was preserving low→high layer semantics when reading `repositories` from multiple files. I kept the behavior by iterating resolved files in order and letting later files replace the accumulated repository list.
+
+### What warrants a second pair of eyes
+- Whether the Geppetto legacy section helpers (`pkg/sections/*`) should eventually be retired in favor of the newer bootstrap package now that they also carry plan logic.
+- Whether we want a shared helper/middleware for “resolve plan + load plan” so plan resolution is not performed early in `cobra-parser.go`.
+
+### What should be done in the future
+- Follow-up task added: introduce `sources.FromConfigPlan(...)` / `sources.FromConfigPlanBuilder(...)` as middleware wrappers over `FromResolvedFiles(...)`, then simplify `cobra-parser.go` to use that middleware instead of resolving plans directly.
+
+### Code review instructions
+- Start with:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/config/plan_sources.go`
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/config/resolve.go` (deleted)
+- Then review:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/geppetto/pkg/cli/bootstrap/profile_selection.go`
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/geppetto/pkg/sections/sections.go`
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/geppetto/pkg/sections/profile_sections.go`
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/cmd/pinocchio/main.go`
+- Validate with:
+
+```bash
+cd /home/manuel/workspaces/2026-04-10/pinocchiorc/geppetto
+gofmt -w pkg/cli/bootstrap/config.go pkg/cli/bootstrap/profile_selection.go \
+  pkg/cli/bootstrap/bootstrap_test.go pkg/sections/sections.go pkg/sections/profile_sections.go
+
+go test ./pkg/cli/bootstrap/... ./pkg/sections/... -count=1
+
+cd /home/manuel/workspaces/2026-04-10/pinocchiorc/glazed
+gofmt -w pkg/config/plan_sources.go
+
+go test ./pkg/config/... -count=1
+```
+
+### Technical details
+- `AppBootstrapConfig.Validate()` now requires `ConfigPlanBuilder`.
+- The old `resolveCLIConfigFilesLegacy(...)` branch was removed from Geppetto bootstrap.
+- Current source search after the change showed no remaining live `ResolveAppConfigPath(...)` references in the three workspace repos.
+
 ## Appendix: Commands Used During Implementation
 
 ```bash
