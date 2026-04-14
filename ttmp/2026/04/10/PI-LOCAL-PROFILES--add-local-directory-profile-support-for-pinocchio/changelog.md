@@ -88,3 +88,13 @@ Step 6: integrated declarative config plans into geppetto bootstrap (commit ce7f
 - /home/manuel/workspaces/2026-04-10/pinocchiorc/geppetto/pkg/cli/bootstrap/profile_selection.go — Plan-aware config-file resolution and loading in commit ce7f03d
 - /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/10/PI-LOCAL-PROFILES--add-local-directory-profile-support-for-pinocchio/reference/01-diary.md — Recorded Step 6 implementation details
 
+
+## 2026-04-14
+
+Step 8: completed focused final validation across glazed, geppetto, and pinocchio. Passed: glazed ./pkg/config/... ./pkg/cmds/sources/...; geppetto ./pkg/cli/bootstrap/...; pinocchio ./pkg/cmds/profilebootstrap/... ./cmd/web-chat/...
+
+### Related Files
+
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/10/PI-LOCAL-PROFILES--add-local-directory-profile-support-for-pinocchio/reference/01-diary.md — Recorded final validation commands and outcomes
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/10/PI-LOCAL-PROFILES--add-local-directory-profile-support-for-pinocchio/tasks.md — Marked final validation task complete
+

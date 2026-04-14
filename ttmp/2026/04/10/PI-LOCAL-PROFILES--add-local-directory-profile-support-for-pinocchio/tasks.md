@@ -9,7 +9,7 @@
 - [x] Integrate the declarative config plan into `geppetto/pkg/cli/bootstrap` via `AppBootstrapConfig` (for example a `ConfigPlanBuilder`) instead of hardcoded config path resolution
 - [x] Update geppetto bootstrap flows (`ResolveCLIProfileSelection`, hidden base inference settings, inference debug trace) to consume resolved config files with layer/source provenance
 - [x] Add geppetto tests proving layered config precedence and verifying that config-layer metadata survives into parsed-field history and inference trace output
-- [ ] Wire pinocchio to the new geppetto/glazed API using a pinocchio-specific plan that includes `.pinocchio-profile.yml` from git root and cwd
-- [ ] Add pinocchio tests for repo-local and cwd-local profile/config loading, including precedence between repo, cwd, and explicit config files
-- [ ] Update Pinocchio docs to explain the new declarative layering model, local file discovery behavior, and how to inspect parsed field history for config provenance
-- [ ] Do a final validation pass across glazed, geppetto, and pinocchio and record the rollout/testing results in the diary and changelog
+- [x] Wire pinocchio to the new geppetto/glazed API using a pinocchio-specific plan that includes `.pinocchio-profile.yml` from git root and cwd
+- [x] Add pinocchio tests for repo-local and cwd-local profile/config loading, including precedence between repo, cwd, and explicit config files
+- [x] Update Pinocchio docs to explain the new declarative layering model, local file discovery behavior, and how to inspect parsed field history for config provenance
+- [x] Do a final validation pass across glazed, geppetto, and pinocchio and record the rollout/testing results in the diary and changelog
