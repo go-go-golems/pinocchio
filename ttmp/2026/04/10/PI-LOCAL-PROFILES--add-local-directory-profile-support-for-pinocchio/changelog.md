@@ -138,3 +138,14 @@ Step 11: removed deprecated Viper config-loading paths from glazed (commit ef3fd
 - /home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/config/resolve.go — Marked ResolveAppConfigPath deprecated in commit ef3fdf7
 - /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/10/PI-LOCAL-PROFILES--add-local-directory-profile-support-for-pinocchio/reference/01-diary.md — Recorded Step 11 cleanup details and remaining-state assessment
 
+
+## 2026-04-14
+
+Step 12: fixed a config-plan review issue in glazed (commit 3392768) so ExplicitFile now fails loudly for non-empty missing paths instead of being silently skipped as an optional source; added regression tests for missing and empty explicit-file semantics.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/config/plan_sources.go — Changed ExplicitFile semantics in commit 3392768 so missing explicit paths return errors instead of being skipped
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/config/plan_test.go — Added regression tests for missing and empty explicit-file behavior in commit 3392768
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/10/PI-LOCAL-PROFILES--add-local-directory-profile-support-for-pinocchio/reference/01-diary.md — Recorded Step 12 review-follow-up and validation
+

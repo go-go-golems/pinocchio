@@ -1110,6 +1110,64 @@ go test ./pkg/config/... ./pkg/cmds/logging/... ./pkg/cmds/sources/... ./pkg/cli
 
 ---
 
+## Step 12: Fix explicit-file plan semantics so missing user-provided paths fail loudly
+
+A code review comment pointed out an important semantic bug in the first version of `config.Plan`: optional discover errors were skipped globally, and `ExplicitFile(...)` had been marked `Optional: true`. That meant a typo in a user-provided `--config-file` path could be silently ignored, allowing the command to continue with defaults or lower-precedence config layers. That is the wrong behavior for an explicitly requested file.
+
+The right model is more precise:
+- an **empty** explicit path means “no explicit file configured” and should be skipped without error
+- a **non-empty missing** explicit path means “the user asked for this file and it is missing” and should fail resolution immediately
+
+### Prompt Context
+
+**User prompt (verbatim):** "pkg/config/plan.go Comment on lines +187 to +191 ... Handle this."
+
+**Assistant interpretation:** Apply the review feedback by changing the explicit-file source semantics so missing explicit paths are hard errors, and add a regression test so the bug cannot slip back in later.
+
+**Inferred user intent:** Make the declarative config-plan API safe for user-facing explicit config flags, especially around typo handling.
+
+**Commit (code):** `33927682c643f22c38b3541ffac83213ffa38066` — `config: fail on missing explicit plan file`
+
+### What I did
+- Updated:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/config/plan_sources.go`
+- Added regression coverage in:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/config/plan_test.go`
+
+### Why
+- `ExplicitFile(...)` is not just another opportunistic discovery source. It represents a user’s direct instruction.
+- Silent skipping for a missing explicit file is dangerous because it can make the app run with the wrong effective settings while looking superficially successful.
+
+### The fix
+- Removed `Optional: true` from `ExplicitFile(...)`
+- Kept the existing behavior that `ExplicitFile("")` returns no paths and no error
+- Kept the existing behavior that a non-empty missing path returns `os.ErrNotExist`
+- This now bubbles out of `Plan.Resolve(...)` as an error instead of being swallowed by the optional-source path
+
+### Tests added
+- `TestExplicitFileMissingPathErrorsDuringResolve`
+  - proves a non-empty missing explicit file now returns `os.ErrNotExist`
+- `TestExplicitFileEmptyPathSkipsWithoutError`
+  - proves an empty explicit file still behaves like “not configured” rather than an error
+
+### Validation
+
+```bash
+cd /home/manuel/workspaces/2026-04-10/pinocchiorc/glazed
+gofmt -w pkg/config/plan_sources.go pkg/config/plan_test.go
+go test ./pkg/config/... -count=1
+```
+
+### What I learned
+- The generic `Optional` source concept is still useful, but explicit user intent needs to be modeled carefully. Not every “sometimes absent” source should be optional in the same way.
+- In this case, source construction (`ExplicitFile(...)`) was the right place to encode the semantic distinction instead of adding special cases to `Plan.Resolve(...)`.
+
+### What warrants a second pair of eyes
+- Whether `Plan.Resolve(...)` should eventually record failing sources in the report before returning errors. Right now it returns the report accumulated so far.
+- Whether future source constructors might need a more explicit notion of “empty input means disabled, missing resolved target means error.”
+
+---
+
 ## Appendix: Commands Used During Analysis
 
 ```bash
