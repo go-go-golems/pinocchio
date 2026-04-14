@@ -26,6 +26,10 @@ RelatedFiles:
         Inference trace path now preserves config metadata in commit ce7f03d
     - Path: ../../../../../../../geppetto/pkg/cli/bootstrap/profile_selection.go
       Note: Added ResolveCLIConfigFilesResolved and plan-aware bootstrap loading in commit ce7f03d
+    - Path: ../../../../../../../glazed/cmd/examples/config-plan/README.md
+      Note: Usage guide for the new glazed config-plan example added in commit 2088c59
+    - Path: ../../../../../../../glazed/cmd/examples/config-plan/main.go
+      Note: Runnable glazed example for config plans added in commit 2088c59
     - Path: ../../../../../../../glazed/pkg/cmds/fields/parse.go
       Note: ParseStep metadata is the key hook for config-layer provenance
     - Path: ../../../../../../../glazed/pkg/cmds/sources/config_files_test.go
@@ -42,6 +46,12 @@ RelatedFiles:
       Note: Plan/source/report tests added in commit b9628f7
     - Path: ../../../../../../../glazed/pkg/config/resolve.go
       Note: Core config resolution
+    - Path: ../../../../../../../glazed/pkg/doc/examples/config/01-declarative-config-plan.md
+      Note: New glazed help example page added in commit 2088c59
+    - Path: ../../../../../../../glazed/pkg/doc/topics/24-config-files.md
+      Note: Updated existing config-files topic to reference declarative config plans in commit 2088c59
+    - Path: ../../../../../../../glazed/pkg/doc/topics/27-declarative-config-plans.md
+      Note: New reusable glazed API topic added in commit 2088c59
     - Path: pkg/cmds/profilebootstrap/local_profile_plan_test.go
       Note: Pinocchio precedence tests for repo/cwd/explicit configs added in commit 56bb1f6
     - Path: pkg/cmds/profilebootstrap/profile_selection.go
@@ -65,6 +75,7 @@ LastUpdated: 0001-01-01T00:00:00Z
 WhatFor: ""
 WhenToUse: ""
 ---
+
 
 
 
@@ -792,6 +803,99 @@ cd /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio && \
   - glazed: declarative plan + resolved-file provenance
   - geppetto: bootstrap integration + trace propagation
   - pinocchio: app-specific plan with `.pinocchio-profile.yml` in repo/cwd
+
+---
+
+## Step 9: Add reusable glazed docs and a runnable config-plan example
+
+After the implementation landed, you asked specifically for the Glazed side to be documented because the API is meant to be reused beyond Pinocchio. I treated this as more than a brief note update: I added both conceptual docs and a runnable example so future Glazed users can learn the API from both directions.
+
+The documentation work now covers the generic config-plan API in `glazed/pkg/config`, how it relates to `sources.FromResolvedFiles(...)`, what provenance metadata is preserved in parsed field history, and how to try the pattern locally in a small example project. This is important because the API is new enough that examples and docs will likely determine whether it actually gets reused.
+
+### Prompt Context
+
+**User prompt (verbatim):** "yes, do the glazed docs, it's meant ot be reused. In fact, create a ne xample in glazed to showcase how it is used."
+
+**Assistant interpretation:** The user wants the new declarative config-plan API to be documented as a first-class reusable Glazed feature, not just as Pinocchio-specific ticket work, and wants a concrete runnable example in the Glazed repo.
+
+**Inferred user intent:** Make the new API discoverable and teachable for other Glazed-based tools so the architecture work pays off across the ecosystem.
+
+**Commit (code):** `2088c590e11c28f8a8d739a8fc71acf0ba746f53` — `doc: add declarative config plan docs and example`
+
+### What I did
+- Added a new Glazed topic page:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/doc/topics/27-declarative-config-plans.md`
+- Added a new Glazed example help page:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/doc/examples/config/01-declarative-config-plan.md`
+- Updated the existing config-files topic:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/doc/topics/24-config-files.md`
+- Added a new runnable example project:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/cmd/examples/config-plan/main.go`
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/cmd/examples/config-plan/repo.yaml`
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/cmd/examples/config-plan/local.yaml`
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/cmd/examples/config-plan/explicit.yaml`
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/cmd/examples/config-plan/README.md`
+- Validated the example by compiling and running it.
+
+### Why
+- The API is intended for reuse across Glazed-based tools, so Pinocchio-only docs would leave the most reusable part under-documented.
+- A runnable example makes the abstract API much easier to understand than prose alone.
+- Updating the existing config-files topic helps users find the new API from the most obvious existing documentation entry point.
+
+### What worked
+- The example cleanly demonstrates the core pattern:
+  - build a plan
+  - resolve it
+  - print a plan report
+  - load through `sources.FromResolvedFiles(...)`
+  - inspect parsed field provenance
+- The help docs and the example complement each other well.
+- The example output now clearly shows the intended provenance metadata, including `config_layer` and `config_source_name`.
+
+### What didn't work
+- No major issues here. The main design choice was deciding whether the example should demonstrate true git-root/cwd sources or only explicit files. I chose to demonstrate both git-root and cwd behavior because that is the more compelling and reusable pattern.
+
+### What I learned
+- The example becomes much more convincing when it prints both the plan report and the parsed field history, not just the final settings.
+- The `GitRootFile(...)` helper is flexible enough to demonstrate repo-root discovery even when the example files live inside the example directory, by using a repo-relative path.
+
+### What was tricky to build
+- The tricky part was making the example easy to run while still showcasing real built-in source constructors. To do that, the example assumes you run it from `cmd/examples/config-plan`, uses `WorkingDirFile("local.yaml")` for the cwd layer, and uses `GitRootFile("cmd/examples/config-plan/repo.yaml")` for the repo layer. That preserves realism without requiring users to create extra files manually.
+
+### What warrants a second pair of eyes
+- Whether the new help topic should also be linked from additional existing docs besides `24-config-files.md`.
+- Whether the example should eventually grow a CLI flag for toggling provenance output or become part of a broader config tutorial.
+
+### What should be done in the future
+- Optional: upload the updated bundle to reMarkable again if you want the latest diary/docs reflected there.
+- Optional: add a Glazed tutorial page later if the API grows more features such as richer conditions or more source constructors.
+
+### Code review instructions
+- Start with the docs:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/doc/topics/27-declarative-config-plans.md`
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/doc/examples/config/01-declarative-config-plan.md`
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/doc/topics/24-config-files.md`
+- Then inspect the runnable example:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/cmd/examples/config-plan/main.go`
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/cmd/examples/config-plan/README.md`
+- Validate with:
+
+```bash
+cd /home/manuel/workspaces/2026-04-10/pinocchiorc/glazed
+gofmt -w cmd/examples/config-plan/main.go
+go test ./pkg/config/... ./pkg/cmds/sources/... ./cmd/examples/config-plan -count=1
+
+cd cmd/examples/config-plan
+go run . show --explicit explicit.yaml
+```
+
+### Technical details
+- The example demonstrates three layers:
+  - repo
+  - cwd
+  - explicit
+- It shows the intended handoff from `config.Plan.Resolve(...)` to `sources.FromResolvedFiles(...)`.
+- The docs position this as the generic Glazed API, with higher-level bootstraps as optional consumers rather than required architecture.
 
 ---
 

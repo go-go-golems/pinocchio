@@ -98,3 +98,17 @@ Step 8: completed focused final validation across glazed, geppetto, and pinocchi
 - /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/10/PI-LOCAL-PROFILES--add-local-directory-profile-support-for-pinocchio/reference/01-diary.md — Recorded final validation commands and outcomes
 - /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/10/PI-LOCAL-PROFILES--add-local-directory-profile-support-for-pinocchio/tasks.md — Marked final validation task complete
 
+
+## 2026-04-14
+
+Step 9: added reusable glazed documentation and a runnable example for declarative config plans (commit 2088c59), including a new topic page, a new help example page, an update to the config-files topic, and cmd/examples/config-plan to demonstrate plan resolution plus provenance-aware loading.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/cmd/examples/config-plan/README.md — Example usage guide in commit 2088c59
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/cmd/examples/config-plan/main.go — Runnable glazed config-plan example in commit 2088c59
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/doc/examples/config/01-declarative-config-plan.md — New glazed help example page in commit 2088c59
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/doc/topics/24-config-files.md — Updated config-files topic in commit 2088c59
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/doc/topics/27-declarative-config-plans.md — New glazed topic page in commit 2088c59
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/10/PI-LOCAL-PROFILES--add-local-directory-profile-support-for-pinocchio/reference/01-diary.md — Recorded Step 9 documentation and example work
+
