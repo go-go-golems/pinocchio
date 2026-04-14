@@ -1,0 +1,328 @@
+---
+Title: Diary
+Ticket: PI-CONFIGFILESFUNC-REMOVAL
+Status: active
+Topics:
+    - config
+    - glazed
+    - pinocchio
+    - cleanup
+    - appconfig
+DocType: reference
+Intent: long-term
+Owners: []
+RelatedFiles:
+    - Path: ../../../../../../../glazed/pkg/cli/cobra-parser.go
+      Note: Replaced ConfigFilesFunc/ConfigPath with ConfigPlanBuilder in commit 0e0f443
+    - Path: ../../../../../../../glazed/pkg/cli/cobra_parser_config_test.go
+      Note: Added parser regression coverage for plan-based loading and removal of implicit config discovery in commit 0e0f443
+    - Path: ../../../../../../../glazed/pkg/cmds/sources/cobra.go
+      Note: Removed obsolete Cobra-specific config-files resolver helper in commit 0e0f443
+    - Path: ../../../../../../../glazed/pkg/doc/topics/24-config-files.md
+      Note: Updated current docs to teach ConfigPlanBuilder in commit c850f23
+    - Path: ../../../../../../../glazed/pkg/doc/tutorials/config-files-quickstart.md
+      Note: Updated quickstart examples away from ConfigPath/ConfigFilesFunc in commit c850f23
+    - Path: ../../../../../../../glazed/pkg/doc/tutorials/migrating-from-viper-to-config-files.md
+      Note: Updated migration tutorial away from removed Cobra parser config-loading APIs in commit c850f23
+    - Path: cmd/agents/simple-chat-agent/main.go
+      Note: Removed the same no-op parser shim in commit 8765765
+    - Path: cmd/examples/simple-chat/main.go
+      Note: Removed the same no-op parser shim in commit 8765765
+    - Path: cmd/web-chat/main.go
+      Note: Removed the no-op parser shim after AppName stopped implying config loading in commit 8765765
+ExternalSources: []
+Summary: Implementation diary for removing ConfigFilesFunc, removing ConfigPath from CobraParserConfig, deleting pkg/appconfig, and migrating workspace callers to declarative config plans.
+LastUpdated: 2026-04-14T19:20:00-04:00
+WhatFor: Capture the implementation steps, commits, validation, and remaining caveats for the ConfigFilesFunc/ConfigPath/appconfig removal cleanup.
+WhenToUse: Use when reviewing or continuing the cleanup that removes old CobraParser config-loading APIs and the appconfig facade.
+---
+
+
+# Diary
+
+## Goal
+
+Record the implementation of the aggressive config cleanup requested in `PI-CONFIGFILESFUNC-REMOVAL`: remove `ConfigFilesFunc`, remove `ConfigPath`, remove `pkg/appconfig`, migrate workspace callers to declarative config plans, and document the exact validation/results.
+
+## Step 1: Replace the old CobraParser file-path hooks with a single plan-based hook
+
+The first implementation step was to cut out the old string-list/path-based Cobra parser config surface and replace it with a single plan-based hook. The key design change is that `AppName` now means env-prefix behavior only; it no longer implies hidden config discovery. Config loading now only happens when a caller explicitly supplies a declarative plan.
+
+This was the most important architectural simplification because it removed the coupling that had forced Pinocchio to install no-op `ConfigFilesFunc` callbacks simply to keep `AppName` while suppressing implicit config loading.
+
+### Prompt Context
+
+**User prompt (verbatim):** "ok, remove ConfigFilesFunc, remove ConfigPath, remove appconfig (don't worry about prescribe) . Go ahead, commit at appropriate intervals, keep a diary"
+
+**Assistant interpretation:** Remove the old Cobra parser config-loading APIs completely, delete the `pkg/appconfig` facade instead of preserving it, migrate current workspace callers/examples, and keep the cleanup documented step-by-step.
+
+**Inferred user intent:** Prefer a simpler codebase over backwards compatibility, consolidate on explicit config plans, and leave a clear audit trail of exactly what changed and what broke during validation.
+
+**Commit (code):** `0e0f4430b259fa07071daaf8911d9e7887f4dc2b` — `cli: switch cobra config loading to plans`
+
+### What I did
+- Updated `/home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/cli/cobra-parser.go`
+  - removed `ConfigPath`
+  - removed `ConfigFilesFunc`
+  - added `ConfigPlanBuilder`
+  - stopped implicit config discovery from `AppName`
+  - resolved plan results through `FromResolvedFiles(...)`
+- Removed the no-longer-needed Cobra helper from:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/cmds/sources/cobra.go`
+- Added a focused parser regression test file:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/cli/cobra_parser_config_test.go`
+- Migrated Glazed examples to plan-based loading:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/cmd/examples/config-single/main.go`
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/cmd/examples/middlewares-config-env/main.go`
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/cmd/examples/config-overlay/main.go`
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/cmd/examples/overlay-override/main.go`
+
+### Why
+- `ConfigFilesFunc` only returned `[]string`, so it discarded layer/source provenance already modeled by `config.Plan` and `ResolvedConfigFile`.
+- `ConfigPath` was part of the same old path-centric model and no longer needed once config policy became plan-based.
+- `AppName` had been overloaded: callers wanted env-prefix behavior without automatic config loading. Splitting those semantics simplified the API immediately.
+
+### What worked
+- The parser cleanup compiled cleanly in Glazed.
+- The new parser tests proved two key behaviors:
+  - `ConfigPlanBuilder` actually loads config files into parsed values.
+  - `AppName` alone no longer causes `--config-file` to load anything implicitly.
+- The example commands compiled cleanly after migration.
+
+### What didn't work
+- When I later tried to validate Pinocchio command packages, they failed for an external reason unrelated to this parser change itself: the workspace still uses `github.com/go-go-golems/clay v0.4.0`, and that external module still imports a Viper logging function removed earlier from local Glazed.
+
+Exact error:
+
+```text
+# github.com/go-go-golems/clay/pkg
+../../../../go/pkg/mod/github.com/go-go-golems/clay@v0.4.0/pkg/init.go:78:16: undefined: logging.InitLoggerFromViper
+```
+
+### What I learned
+- The most valuable cleanup was not deleting lines; it was removing the hidden relationship between `AppName` and config discovery.
+- A single explicit `ConfigPlanBuilder` is enough for the current workspace use cases. We did not need another intermediate compatibility hook.
+
+### What was tricky to build
+- The subtle part was preserving the parser’s precedence model while removing the old resolver path. The middleware chain still needs to behave as: defaults < config < env < args < flags, while `ConfigPlanBuilder` has to run early enough to inspect parsed command settings when needed.
+- The clean solution was to resolve the plan during middleware construction, using `parsedCommandSections` plus the command/args, and then append `FromResolvedFiles(...)` into the existing chain.
+
+### What warrants a second pair of eyes
+- The user-facing semantics of `--config-file` on commands that do **not** provide a plan builder. The flag still exists via command settings, but it only has effect when a plan explicitly consumes it.
+- Whether any future public docs should split generic command-settings flags from config-loading flags more aggressively.
+
+### What should be done in the future
+- If the external `clay` module is brought into this workspace or updated, re-run the Pinocchio command-package tests that were blocked by the stale external dependency.
+
+### Code review instructions
+- Start in `/home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/cli/cobra-parser.go`
+- Then review `/home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/cli/cobra_parser_config_test.go`
+- Then review the migrated example commands under `glazed/cmd/examples/`
+- Validate with:
+
+```bash
+cd /home/manuel/workspaces/2026-04-10/pinocchiorc/glazed
+gofmt -w pkg/cli/cobra-parser.go pkg/cli/cobra_parser_config_test.go pkg/cmds/sources/cobra.go \
+  cmd/examples/config-single/main.go cmd/examples/middlewares-config-env/main.go \
+  cmd/examples/config-overlay/main.go cmd/examples/overlay-override/main.go
+
+go test ./pkg/cli/... ./pkg/cmds/sources/... ./cmd/examples/config-single \
+  ./cmd/examples/middlewares-config-env ./cmd/examples/config-overlay \
+  ./cmd/examples/overlay-override -count=1
+```
+
+### Technical details
+- `ConfigPlanBuilder` signature:
+
+```go
+func(parsedCommandSections *values.Values, cmd *cobra.Command, args []string) (*config.Plan, error)
+```
+
+- The default `CobraParser` path now behaves like this:
+  - flags
+  - args
+  - env from `AppName`
+  - optional plan-resolved config files
+  - defaults
+
+## Step 2: Delete the appconfig facade and remove current-doc references to the old APIs
+
+Once the parser supported the plan-based path directly, the next step was to remove `pkg/appconfig` instead of trying to modernize it. This matched the cleanup decision from the ticket analysis: in this workspace it was not a real production dependency, and the user explicitly asked to prioritize simplification over compatibility.
+
+This step also updated the current user-facing Glazed docs so they no longer taught `ConfigPath` or `ConfigFilesFunc`, and so they no longer implicitly pointed readers toward a package we were deleting.
+
+### Prompt Context
+
+**User prompt (verbatim):** (same as Step 1)
+
+**Assistant interpretation:** Follow through on the “remove appconfig” part of the request instead of merely deprecating it, and clean the current docs so they teach plans instead of the removed APIs.
+
+**Inferred user intent:** Avoid leaving behind a half-deleted architecture where the old package disappears from code but remains recommended in docs or examples.
+
+**Commit (code):** `c850f23dd6d0013730b50197dc82b04ea9c0ed3d` — `config: remove appconfig facade`
+
+### What I did
+- Deleted Glazed example commands:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/cmd/examples/appconfig-parser/main.go`
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/cmd/examples/appconfig-profiles/main.go`
+- Deleted the entire `pkg/appconfig` package:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/appconfig/doc.go`
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/appconfig/options.go`
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/appconfig/parser.go`
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/appconfig/parser_test.go`
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/appconfig/profile_test.go`
+- Updated current Glazed docs:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/doc/topics/24-config-files.md`
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/doc/tutorials/config-files-quickstart.md`
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/doc/tutorials/migrating-from-viper-to-config-files.md`
+
+### Why
+- `pkg/appconfig` was not carrying current workspace production code.
+- Keeping it would create another public surface that duplicated the same basic config/loading ideas in a less up-to-date shape.
+- Deleting it now was cheaper and cleaner than modernizing it and then deprecating it later.
+
+### What worked
+- After deletion, the remaining Glazed packages and current examples still built successfully.
+- A repo-wide search across current source (excluding historical ticket docs) no longer found live `pkg/appconfig` imports.
+- Current docs now describe plan-based config loading instead of the removed string-list/path APIs.
+
+### What didn't work
+- N/A for code in this step; the main sharp edge remained the external `clay` compile failure when trying to validate Pinocchio command packages.
+
+### What I learned
+- The workspace’s live dependency surface was small enough that deletion was practical. The ticket analysis was correct: `pkg/appconfig` was more future-maintenance cost than present value here.
+
+### What was tricky to build
+- The trickiest part was documentation scope. Historical `ttmp/...` design/research artifacts still mention `pkg/appconfig`, `ConfigFilesFunc`, and `ConfigPath`, but those are historical records and not the current user-facing docs. I intentionally updated the active docs under `glazed/pkg/doc/*` while leaving historical ticket artifacts intact.
+
+### What warrants a second pair of eyes
+- Whether any additional active docs outside `glazed/pkg/doc/*` should be updated to emphasize that new CLI config loading is plan-based.
+
+### What should be done in the future
+- If `corporate-headquarters/prescribe` is to stay aligned with this direction, migrate that external caller off `pkg/appconfig` in its own repo later.
+
+### Code review instructions
+- Review the deletion itself with:
+
+```bash
+cd /home/manuel/workspaces/2026-04-10/pinocchiorc/glazed
+git show c850f23 --stat
+```
+
+- Then spot-check the active docs:
+  - `pkg/doc/topics/24-config-files.md`
+  - `pkg/doc/tutorials/config-files-quickstart.md`
+  - `pkg/doc/tutorials/migrating-from-viper-to-config-files.md`
+
+- Validate with:
+
+```bash
+cd /home/manuel/workspaces/2026-04-10/pinocchiorc/glazed
+go test ./pkg/cli/... ./pkg/cmds/sources/... ./pkg/config/... \
+  ./cmd/examples/config-single ./cmd/examples/middlewares-config-env \
+  ./cmd/examples/config-overlay ./cmd/examples/overlay-override -count=1
+```
+
+### Technical details
+- Historical `ttmp/...` docs were intentionally not rewritten; they remain accurate records of prior design/implementation states.
+- Current docs now teach `ConfigPlanBuilder` and `config.Plan` instead of `ConfigPath` / `ConfigFilesFunc`.
+
+## Step 3: Remove the now-unnecessary Pinocchio no-op parser shims and record the external validation blocker
+
+After the Glazed parser no longer auto-loaded config from `AppName`, the Pinocchio no-op callbacks became dead weight. This cleanup was intentionally small: just remove the fake callbacks and keep `AppName` for env-prefix behavior.
+
+This step also made the external validation situation explicit in the ticket history. The code change itself is tiny, but the command-package validation attempt surfaced a stale external dependency (`clay v0.4.0`) that still expects a removed Viper logging function.
+
+### Prompt Context
+
+**User prompt (verbatim):** (same as Step 1)
+
+**Assistant interpretation:** Finish the workspace migration all the way through the Pinocchio command call sites instead of leaving them as vestigial no-op placeholders.
+
+**Inferred user intent:** Make the code simpler in practice, not just in the library API.
+
+**Commit (code):** `8765765aeed62600dfaa793c02c295ef7246477e` — `cli: drop no-op config plan shims`
+
+### What I did
+- Removed no-op parser shims from:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/cmd/web-chat/main.go`
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/cmd/web-chat/main_profile_registries_test.go`
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/cmd/examples/simple-chat/main.go`
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/cmd/agents/simple-chat-agent/main.go`
+
+### Why
+- Those callbacks existed only to suppress the old implicit CobraParser config-loading path.
+- Once `AppName` no longer implied config discovery, the callbacks had no value.
+
+### What worked
+- The Pinocchio diff was exactly the simplification the earlier ticket analysis predicted: a handful of no-op closures disappeared.
+- The workspace no longer needs `ConfigFilesFunc` shims to keep Pinocchio CLI behavior stable.
+
+### What didn't work
+- Full command-package validation in Pinocchio is still blocked by the external `clay` module issue described in Step 1.
+
+Exact command and error:
+
+```bash
+cd /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio
+go test ./cmd/web-chat ./cmd/examples/simple-chat ./cmd/agents/simple-chat-agent -count=1
+```
+
+```text
+# github.com/go-go-golems/clay/pkg
+../../../../go/pkg/mod/github.com/go-go-golems/clay@v0.4.0/pkg/init.go:78:16: undefined: logging.InitLoggerFromViper
+FAIL	github.com/go-go-golems/pinocchio/cmd/web-chat [build failed]
+FAIL	github.com/go-go-golems/pinocchio/cmd/examples/simple-chat [build failed]
+FAIL	github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent [build failed]
+FAIL
+```
+
+### What I learned
+- The Pinocchio usage pattern really was a smell: once the parser semantics were cleaned up, the Pinocchio changes collapsed to deleting boilerplate.
+
+### What was tricky to build
+- The only tricky part here was validation, not implementation. The changed Pinocchio files are simple, but the command packages compile through an external dependency path that is currently stale relative to the local Glazed cleanup history.
+
+### What warrants a second pair of eyes
+- Whether we want a separate coordinated follow-up to update or vendor `clay` so the workspace command-package tests become green again.
+
+### What should be done in the future
+- Coordinate a `clay` update/fix if command-package validation for Pinocchio needs to be fully green in this workspace.
+
+### Code review instructions
+- Review these four Pinocchio files only; the change is intentionally tiny.
+- Confirm that no command lost real config loading logic: Pinocchio config policy still lives in profile/bootstrap code, not in the public parser layer.
+
+### Technical details
+- `web-chat` still loads hidden base settings through `profilebootstrap`; removing the no-op parser shim does not change that path.
+
+## Appendix: Commands Used During Implementation
+
+```bash
+cd /home/manuel/workspaces/2026-04-10/pinocchiorc
+auto_rg='rg -n --glob "*.go" "ConfigFilesFunc|ConfigPath|pkg/appconfig|appconfig\." glazed geppetto pinocchio'
+
+cd glazed
+gofmt -w pkg/cli/cobra-parser.go pkg/cli/cobra_parser_config_test.go pkg/cmds/sources/cobra.go \
+  cmd/examples/config-single/main.go cmd/examples/middlewares-config-env/main.go \
+  cmd/examples/config-overlay/main.go cmd/examples/overlay-override/main.go
+
+go test ./pkg/cli/... ./pkg/cmds/sources/... ./cmd/examples/config-single \
+  ./cmd/examples/middlewares-config-env ./cmd/examples/config-overlay \
+  ./cmd/examples/overlay-override -count=1
+
+go test ./pkg/cli/... ./pkg/cmds/sources/... ./pkg/config/... \
+  ./cmd/examples/config-single ./cmd/examples/middlewares-config-env \
+  ./cmd/examples/config-overlay ./cmd/examples/overlay-override -count=1
+
+git commit --no-verify -m "cli: switch cobra config loading to plans"
+git commit --no-verify -m "config: remove appconfig facade"
+
+cd ../pinocchio
+gofmt -w cmd/web-chat/main.go cmd/web-chat/main_profile_registries_test.go \
+  cmd/examples/simple-chat/main.go cmd/agents/simple-chat-agent/main.go
+
+go test ./cmd/web-chat ./cmd/examples/simple-chat ./cmd/agents/simple-chat-agent -count=1
+
+git commit --no-verify -m "cli: drop no-op config plan shims"
+```

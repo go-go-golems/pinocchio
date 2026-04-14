@@ -26,12 +26,15 @@ RelatedFiles:
       Note: Pinocchio caller using the same no-op suppression pattern as web-chat
     - Path: cmd/web-chat/main.go
       Note: Pinocchio production caller currently using a no-op ConfigFilesFunc to suppress implicit CobraParser config loading
+    - Path: ttmp/2026/04/14/PI-CONFIGFILESFUNC-REMOVAL--remove-configfilesfunc-and-migrate-cli-config-resolution-to-declarative-plans/reference/01-diary.md
+      Note: Implementation diary for the ConfigFilesFunc/ConfigPath/appconfig removal work
 ExternalSources: []
 Summary: Analysis of removing glazed/pkg/cli.CobraParserConfig.ConfigFilesFunc, migrating current callers to declarative config plans, and deciding whether pkg/appconfig should be modernized or removed instead of preserved.
 LastUpdated: 2026-04-14T18:25:00-04:00
 WhatFor: Plan a focused cleanup that removes the legacy string-list config-files hook from CobraParser, reduces implicit config-loading behavior, and assesses whether pkg/appconfig should be modernized or retired.
 WhenToUse: Use when migrating CLI commands away from ConfigFilesFunc/ConfigPath-style config discovery and when deciding whether appconfig is worth preserving as a public compatibility layer.
 ---
+
 
 
 # ConfigFilesFunc removal analysis and appconfig cleanup plan
