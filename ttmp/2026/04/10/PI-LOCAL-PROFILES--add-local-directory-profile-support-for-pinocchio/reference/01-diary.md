@@ -30,14 +30,28 @@ RelatedFiles:
       Note: Usage guide for the new glazed config-plan example added in commit 2088c59
     - Path: ../../../../../../../glazed/cmd/examples/config-plan/main.go
       Note: Runnable glazed example for config plans added in commit 2088c59
+    - Path: ../../../../../../../glazed/cmd/examples/help-system/docs/configuration-topic.md
+      Note: Stale config-command guidance removed in commit 5c04291
+    - Path: ../../../../../../../glazed/pkg/appconfig/options.go
+      Note: Still active and should be integrated with config plans later rather than removed
     - Path: ../../../../../../../glazed/pkg/cmds/fields/parse.go
       Note: ParseStep metadata is the key hook for config-layer provenance
+    - Path: ../../../../../../../glazed/pkg/cmds/fields/viper.go
+      Note: Deprecated Viper field-loading path identified as a future cleanup candidate
+    - Path: ../../../../../../../glazed/pkg/cmds/logging/init-logging.go
+      Note: Still uses Viper and may warrant future modernization
+    - Path: ../../../../../../../glazed/pkg/cmds/sources/cobra.go
+      Note: Deprecated GatherFlagsFromViper middleware identified as a future cleanup candidate
     - Path: ../../../../../../../glazed/pkg/cmds/sources/config_files_test.go
       Note: Added parse-history metadata coverage for FromFiles and FromResolvedFiles in commit 0bf7314
     - Path: ../../../../../../../glazed/pkg/cmds/sources/load-fields-from-config.go
       Note: |-
         Existing config metadata recording informed the trace design
         Added FromResolvedFiles and richer config provenance metadata in commit 0bf7314
+    - Path: ../../../../../../../glazed/pkg/config/cobra-config-command.go
+      Note: Removed dead Viper-based config command wrapper in commit 5c04291
+    - Path: ../../../../../../../glazed/pkg/config/editor.go
+      Note: Removed dead Viper-based config editor in commit 5c04291
     - Path: ../../../../../../../glazed/pkg/config/plan.go
       Note: Initial declarative config plan primitives implemented in commit b9628f7
     - Path: ../../../../../../../glazed/pkg/config/plan_sources.go
@@ -45,7 +59,9 @@ RelatedFiles:
     - Path: ../../../../../../../glazed/pkg/config/plan_test.go
       Note: Plan/source/report tests added in commit b9628f7
     - Path: ../../../../../../../glazed/pkg/config/resolve.go
-      Note: Core config resolution
+      Note: |-
+        Core config resolution
+        Still an active compatibility helper and not a removal candidate today
     - Path: ../../../../../../../glazed/pkg/doc/examples/config/01-declarative-config-plan.md
       Note: New glazed help example page added in commit 2088c59
     - Path: ../../../../../../../glazed/pkg/doc/topics/24-config-files.md
@@ -75,6 +91,7 @@ LastUpdated: 0001-01-01T00:00:00Z
 WhatFor: ""
 WhenToUse: ""
 ---
+
 
 
 

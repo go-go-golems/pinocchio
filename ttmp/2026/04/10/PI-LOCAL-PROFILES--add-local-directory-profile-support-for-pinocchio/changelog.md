@@ -112,3 +112,15 @@ Step 9: added reusable glazed documentation and a runnable example for declarati
 - /home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/doc/topics/27-declarative-config-plans.md — New glazed topic page in commit 2088c59
 - /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/10/PI-LOCAL-PROFILES--add-local-directory-profile-support-for-pinocchio/reference/01-diary.md — Recorded Step 9 documentation and example work
 
+
+## 2026-04-14
+
+Step 10: removed the dead Viper-based config editor/command from glazed (commit 5c04291) after confirming it was unused, and cleaned up a stale example-doc reference. Also audited remaining config-related surfaces and identified deprecated Viper field-loading helpers as the strongest future cleanup candidate.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/cmd/examples/help-system/docs/configuration-topic.md — Removed stale config-command guidance in commit 5c04291
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/config/cobra-config-command.go — Deleted in commit 5c04291
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/config/editor.go — Deleted in commit 5c04291
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/10/PI-LOCAL-PROFILES--add-local-directory-profile-support-for-pinocchio/reference/01-diary.md — Recorded cleanup rationale and remaining candidate assessment
+
