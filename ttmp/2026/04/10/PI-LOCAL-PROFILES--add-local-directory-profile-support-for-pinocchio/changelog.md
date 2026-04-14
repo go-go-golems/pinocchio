@@ -63,3 +63,14 @@ Step 4: implemented initial declarative config-plan primitives in glazed (commit
 - /home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/config/plan_test.go — New tests added in commit b9628f7
 - /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/10/PI-LOCAL-PROFILES--add-local-directory-profile-support-for-pinocchio/reference/01-diary.md — Recorded Step 4 implementation details and hook failure context
 
+
+## 2026-04-14
+
+Step 5: added provenance-aware config loading in glazed (commit 0bf7314), including FromResolvedFiles, standardized config metadata keys, and tests proving parse history now records config layer/source information in the richer path.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/cmds/sources/config_files_test.go — Added provenance metadata tests in commit 0bf7314
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/cmds/sources/load-fields-from-config.go — Added FromResolvedFiles and metadata propagation in commit 0bf7314
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/10/PI-LOCAL-PROFILES--add-local-directory-profile-support-for-pinocchio/reference/01-diary.md — Recorded Step 5 implementation details
+

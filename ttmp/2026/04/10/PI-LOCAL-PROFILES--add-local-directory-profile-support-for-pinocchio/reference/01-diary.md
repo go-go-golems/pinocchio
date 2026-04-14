@@ -18,8 +18,12 @@ RelatedFiles:
       Note: Trace output path reviewed for config-layer propagation
     - Path: ../../../../../../../glazed/pkg/cmds/fields/parse.go
       Note: ParseStep metadata is the key hook for config-layer provenance
+    - Path: ../../../../../../../glazed/pkg/cmds/sources/config_files_test.go
+      Note: Added parse-history metadata coverage for FromFiles and FromResolvedFiles in commit 0bf7314
     - Path: ../../../../../../../glazed/pkg/cmds/sources/load-fields-from-config.go
-      Note: Existing config metadata recording informed the trace design
+      Note: |-
+        Existing config metadata recording informed the trace design
+        Added FromResolvedFiles and richer config provenance metadata in commit 0bf7314
     - Path: ../../../../../../../glazed/pkg/config/plan.go
       Note: Initial declarative config plan primitives implemented in commit b9628f7
     - Path: ../../../../../../../glazed/pkg/config/plan_sources.go
@@ -35,13 +39,16 @@ RelatedFiles:
     - Path: ttmp/2026/04/10/PI-LOCAL-PROFILES--add-local-directory-profile-support-for-pinocchio/design-doc/01-declarative-config-resolution-plan-and-trace-guide.md
       Note: Detailed design guide authored in Step 3
     - Path: ttmp/2026/04/10/PI-LOCAL-PROFILES--add-local-directory-profile-support-for-pinocchio/tasks.md
-      Note: Marked first glazed plan/design tasks complete after commit b9628f7
+      Note: |-
+        Marked first glazed plan/design tasks complete after commit b9628f7
+        Marked richer source-loading and metadata tasks complete after commit 0bf7314
 ExternalSources: []
 Summary: ""
 LastUpdated: 0001-01-01T00:00:00Z
 WhatFor: ""
 WhenToUse: ""
 ---
+
 
 
 
@@ -417,6 +424,96 @@ go test ./pkg/config/... -count=1
   - optional dedupe by normalized absolute path
   - human-readable explain output
 - This step does **not** yet propagate layer/source metadata into parsed field history. That is the next task.
+
+---
+
+## Step 5: Add resolved-file loading and config provenance metadata in glazed
+
+After the plan primitives existed, the next missing piece was the bridge into parsed field history. A declarative config plan is only half useful if the metadata stops at discovery time. To make the feature debuggable, the config loader itself has to understand resolved config files with layer/source provenance and write that information into parse-step logs.
+
+This step implemented that bridge in `glazed/pkg/cmds/sources`. The existing `FromFiles(...)` middleware was kept, but it was enriched to emit more explicit config metadata. I also added a new `FromResolvedFiles(...)` path that accepts `glazed/pkg/config.ResolvedConfigFile` entries directly, which is what geppetto bootstrap can consume later.
+
+### Prompt Context
+
+**User prompt (verbatim):** (same as Step 4)
+
+**Assistant interpretation:** Continue the implementation in reviewable slices, keeping the new declarative config-plan direction and making sure traceability is not postponed.
+
+**Inferred user intent:** Build the system in the right architectural order: generic discovery first, then provenance-aware loading, then higher-level bootstrap integration.
+
+**Commit (code):** `0bf7314d356b5cbde057bd131bbd913b85f73b3f` — `sources: add resolved config file metadata`
+
+### What I did
+- Modified:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/cmds/sources/load-fields-from-config.go`
+- Added:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/cmds/sources/config_files_test.go`
+- Kept `FromFiles(...)` but enriched its metadata emission to include:
+  - `config_file`
+  - `index`
+  - `config_index`
+  - `config_source_name`
+  - `config_source_kind`
+- Added new middleware:
+  - `FromResolvedFiles([]config.ResolvedConfigFile, ...)`
+- Made `FromResolvedFiles(...)` write the full richer provenance into parse metadata, including:
+  - `config_layer`
+  - `config_source_name`
+  - `config_source_kind`
+- Added focused tests showing that parse-step history contains the expected metadata for both:
+  - plain `FromFiles(...)`
+  - richer `FromResolvedFiles(...)`
+
+### Why
+- This is the first step that makes the user’s traceability requirement real in code.
+- Geppetto bootstrap will need a provenance-preserving loading path once it starts consuming resolved config plans.
+- Adding `FromResolvedFiles(...)` now avoids overloading `[]string` with metadata it cannot carry.
+
+### What worked
+- The change was smaller than expected because the existing source loading path already attached metadata per file.
+- The new API fit naturally next to `FromFiles(...)` without disrupting old callers.
+- The tests clearly demonstrate the parse history shape we want higher layers to preserve.
+
+### What didn't work
+- Nothing failed in the focused source tests after the implementation, but the glazed repo still has the same broader pre-commit limitation from Step 4: repo-wide `govulncheck` findings unrelated to this ticket still block normal verified commits.
+
+### What I learned
+- The separation between discovery and loading is paying off: `ResolvedConfigFile` is the right handoff object between the config-plan layer and the config-loader layer.
+- We do not need a new provenance type yet; `fields.ParseStep.Metadata` is sufficient as long as the metadata keys are standardized.
+
+### What was tricky to build
+- The subtle design choice was how much to retrofit into `FromFiles(...)` versus reserving richer metadata for `FromResolvedFiles(...)`. The compromise I used was: keep `FromFiles(...)` backward-compatible but enrich it modestly, and make `FromResolvedFiles(...)` the canonical richer path for layered config plans.
+
+### What warrants a second pair of eyes
+- Whether keeping both `index` and `config_index` is the right compatibility choice.
+- Whether `config_source_name: files` is the right generic name for the legacy `FromFiles(...)` path.
+- Whether `FromResolvedFiles(...)` should become the preferred API in more of glazed’s own appconfig helpers later.
+
+### What should be done in the future
+- Integrate the new resolved-file path into geppetto bootstrap so profile selection and hidden base settings consume plan output rather than hardcoded config-path lists.
+- Add geppetto trace tests that assert `config_layer` survives into inference debug output.
+
+### Code review instructions
+- Start with:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/cmds/sources/load-fields-from-config.go`
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/cmds/sources/config_files_test.go`
+- Validate with:
+
+```bash
+cd /home/manuel/workspaces/2026-04-10/pinocchiorc/glazed
+gofmt -w pkg/cmds/sources/load-fields-from-config.go pkg/cmds/sources/config_files_test.go
+go test ./pkg/config/... ./pkg/cmds/sources/... -count=1
+```
+
+### Technical details
+- New standardized metadata keys now used in the richer path:
+  - `config_file`
+  - `index`
+  - `config_index`
+  - `config_layer`
+  - `config_source_name`
+  - `config_source_kind`
+- This step still does not wire geppetto or pinocchio to use the new path yet; it prepares the reusable glazed side first.
 
 ---
 
