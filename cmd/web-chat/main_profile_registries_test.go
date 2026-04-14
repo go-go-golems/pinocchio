@@ -117,9 +117,6 @@ func TestWebChatCommand_UsesPinocchioConfigNamespaceAndExposesProfileAndAIClient
 
 	cobraCmd, err := cli.BuildCobraCommand(cmdDef, cli.WithParserConfig(cli.CobraParserConfig{
 		AppName: webChatCLIAppName,
-		ConfigFilesFunc: func(_ *values.Values, _ *cobra.Command, _ []string) ([]string, error) {
-			return nil, nil
-		},
 	}))
 	require.NoError(t, err)
 

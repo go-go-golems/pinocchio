@@ -304,12 +304,9 @@ func main() {
 	c, err := NewCommand()
 	cobra.CheckErr(err)
 	command, err := cli.BuildCobraCommand(c, cli.WithParserConfig(cli.CobraParserConfig{
+		// Hidden base-settings parsing owns config-file loading so we can
+		// reuse pinocchio config conventions without exposing AI flags.
 		AppName: webChatCLIAppName,
-		ConfigFilesFunc: func(_ *values.Values, _ *cobra.Command, _ []string) ([]string, error) {
-			// Hidden base-settings parsing owns config-file loading so we can
-			// reuse pinocchio config conventions without exposing AI flags.
-			return nil, nil
-		},
 	}))
 	cobra.CheckErr(err)
 	for _, name := range []string{"print-yaml", "print-parsed-fields", "print-schema"} {

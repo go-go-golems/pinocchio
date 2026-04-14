@@ -181,9 +181,6 @@ func main() {
 		cobra.CheckErr(err)
 		command, err := cli.BuildCobraCommand(chatCmd, cli.WithParserConfig(cli.CobraParserConfig{
 			AppName: "pinocchio",
-			ConfigFilesFunc: func(_ *values.Values, _ *cobra.Command, _ []string) ([]string, error) {
-				return nil, nil
-			},
 		}))
 		cobra.CheckErr(err)
 		for _, name := range []string{"print-yaml", "print-parsed-fields", "print-schema"} {
