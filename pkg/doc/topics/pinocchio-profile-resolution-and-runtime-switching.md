@@ -40,6 +40,8 @@ You need this page when you are trying to understand:
 - why `FinalInferenceSettings` is separate
 - how runtime profile switching avoids contaminating the baseline
 - why cross-profile settings such as `ai-client.*` belong in the baseline rather than in profiles
+- how local project config files such as `.pinocchio-profile.yml` participate in bootstrap
+- how to inspect parsed field history to see which config layer won
 
 ## Mental Model
 
@@ -71,6 +73,35 @@ It comes from:
 - config files
 - environment variables
 - defaults
+
+### Hidden base config layers
+
+Pinocchio now supports a layered config plan instead of only a single implicitly discovered config file.
+
+The standard low-to-high precedence order is:
+
+```text
+system -> user -> repo -> cwd -> explicit
+```
+
+In concrete terms, Pinocchio can load from:
+
+1. `/etc/pinocchio/config.yaml`
+2. `$HOME/.pinocchio/config.yaml`
+3. `${XDG_CONFIG_HOME}/pinocchio/config.yaml`
+4. `.pinocchio-profile.yml` at the git repository root
+5. `.pinocchio-profile.yml` in the current working directory
+6. `--config-file <path>`
+
+Later layers win.
+
+That means:
+
+- repo-local config can override user config
+- cwd-local config can override repo-local config
+- explicit `--config-file` can override everything else
+
+This layered path is implemented through Glazed config-plan primitives and consumed by Geppetto bootstrap.
 
 See:
 
@@ -169,6 +200,50 @@ parsed values
 ```
 
 That is the key trick that lets Pinocchio rebase runtime profile changes onto the original launch-time settings instead of onto whatever profile happened to be active last.
+
+## Config Provenance In Parsed Field History
+
+The parsed field history is now also the main debugging surface for layered config resolution.
+
+Config-derived parse steps carry metadata such as:
+
+- `config_file`
+- `config_index`
+- `config_layer`
+- `config_source_name`
+- `config_source_kind`
+
+That means you can inspect parsed fields or inference debug output and answer questions like:
+
+- did this value come from user config or repo config?
+- did cwd-local config override the git-root file?
+- did an explicit `--config-file` win last?
+
+A simplified example looks like this:
+
+```yaml
+profile-settings:
+  profile:
+    value: explicit-profile
+    log:
+      - source: config
+        value: repo-profile
+        metadata:
+          config_layer: repo
+          config_source_name: git-root-local-profile
+      - source: config
+        value: cwd-profile
+        metadata:
+          config_layer: cwd
+          config_source_name: cwd-local-profile
+      - source: config
+        value: explicit-profile
+        metadata:
+          config_layer: explicit
+          config_source_name: explicit-config-file
+```
+
+This provenance is especially useful when reviewing bug reports or unexpected profile selection in nested repositories.
 
 ## Runtime Profile Switching
 

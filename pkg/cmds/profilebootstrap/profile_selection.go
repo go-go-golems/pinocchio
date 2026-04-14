@@ -1,11 +1,15 @@
 package profilebootstrap
 
 import (
+	"strings"
+
 	"github.com/go-go-golems/geppetto/pkg/cli/bootstrap"
 	geppettosections "github.com/go-go-golems/geppetto/pkg/sections"
+	"github.com/go-go-golems/glazed/pkg/cli"
 	"github.com/go-go-golems/glazed/pkg/cmds/schema"
 	"github.com/go-go-golems/glazed/pkg/cmds/sources"
 	"github.com/go-go-golems/glazed/pkg/cmds/values"
+	glazedconfig "github.com/go-go-golems/glazed/pkg/config"
 	"github.com/pkg/errors"
 )
 
@@ -26,6 +30,7 @@ func pinocchioBootstrapConfig() bootstrap.AppBootstrapConfig {
 		BuildBaseSections: func() ([]schema.Section, error) {
 			return geppettosections.CreateGeppettoSections()
 		},
+		ConfigPlanBuilder: pinocchioConfigPlanBuilder,
 	}
 }
 
@@ -63,6 +68,34 @@ func ResolveCLIConfigFilesForExplicit(explicit string) ([]string, error) {
 
 func MapPinocchioConfigFile(rawConfig interface{}) (map[string]map[string]interface{}, error) {
 	return configFileMapper(rawConfig)
+}
+
+func pinocchioConfigPlanBuilder(parsed *values.Values) (*glazedconfig.Plan, error) {
+	explicit := ""
+	if parsed != nil {
+		commandSettings := &cli.CommandSettings{}
+		if err := parsed.DecodeSectionInto(cli.CommandSettingsSlug, commandSettings); err == nil {
+			explicit = strings.TrimSpace(commandSettings.ConfigFile)
+		}
+	}
+
+	return glazedconfig.NewPlan(
+		glazedconfig.WithLayerOrder(
+			glazedconfig.LayerSystem,
+			glazedconfig.LayerUser,
+			glazedconfig.LayerRepo,
+			glazedconfig.LayerCWD,
+			glazedconfig.LayerExplicit,
+		),
+		glazedconfig.WithDedupePaths(),
+	).Add(
+		glazedconfig.SystemAppConfig("pinocchio").Named("system-app-config").Kind("app-config"),
+		glazedconfig.HomeAppConfig("pinocchio").Named("home-app-config").Kind("app-config"),
+		glazedconfig.XDGAppConfig("pinocchio").Named("xdg-app-config").Kind("app-config"),
+		glazedconfig.GitRootFile(".pinocchio-profile.yml").Named("git-root-local-profile").Kind("profile-overlay"),
+		glazedconfig.WorkingDirFile(".pinocchio-profile.yml").Named("cwd-local-profile").Kind("profile-overlay"),
+		glazedconfig.ExplicitFile(explicit).Named("explicit-config-file").Kind("explicit-file"),
+	), nil
 }
 
 func configFileMapper(rawConfig interface{}) (map[string]map[string]interface{}, error) {
