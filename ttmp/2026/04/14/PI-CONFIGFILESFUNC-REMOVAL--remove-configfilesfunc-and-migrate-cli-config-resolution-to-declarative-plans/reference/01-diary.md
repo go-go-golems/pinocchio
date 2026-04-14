@@ -527,6 +527,79 @@ go test ./cmd/web-chat ./cmd/examples/simple-chat ./cmd/agents/simple-chat-agent
 - `cobra-parser.go` still keeps `ConfigPlanBuilder` as the ergonomic public CLI hook; only the internal implementation changed.
 - Clay’s deprecated `InitViper(...)` path now initializes early logging from args instead of using the removed Viper-based Glazed logger path.
 
+## Step 6: Refresh the active Glazed docs so the new plan middleware is actually discoverable
+
+After landing `FromConfigPlan(...)` and `FromConfigPlanBuilder(...)`, the codebase was internally cleaner but the user-facing docs still mostly taught the older two-step story: build a plan, call `plan.Resolve(...)`, then pass the result to `FromResolvedFiles(...)`. That is still valid, but it no longer tells the full story now that Glazed has first-class middleware wrappers for plans.
+
+So this pass focused on documentation only: update the active help pages and tutorials so they clearly explain when to use each layer of the API.
+
+### Prompt Context
+
+**User prompt (verbatim):** "continue"
+
+**Assistant interpretation:** Keep going with the next useful cleanup pass without stopping for clarification.
+
+**Inferred user intent:** Finish the obvious follow-up work from the prior step, especially the docs cleanup I had just proposed.
+
+### What I did
+- Updated Glazed docs in:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/doc/topics/24-config-files.md`
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/doc/topics/27-declarative-config-plans.md`
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/doc/examples/config/01-declarative-config-plan.md`
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/doc/tutorials/config-files-quickstart.md`
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/doc/tutorials/migrating-from-viper-to-config-files.md`
+- Added a DONE task to this ticket noting that active docs now teach `FromConfigPlan(...)` / `FromConfigPlanBuilder(...)` explicitly.
+
+### Why
+- The code had moved ahead of the docs.
+- Without this pass, readers would still discover the low-level `FromResolvedFiles(...)` path but miss the higher-level direct middleware API.
+- The whole point of the previous refactor was not only internal cleanliness but a better API shape for callers. The docs should reflect that.
+
+### What worked
+- `git diff --check` in Glazed passed cleanly after the doc edits:
+
+```bash
+cd /home/manuel/workspaces/2026-04-10/pinocchiorc/glazed
+git diff --check
+```
+
+### What didn't work
+- Nothing functionally broke here; this was a doc-only pass.
+
+### What I learned
+- The current plan-loading API now has a clean three-level explanation that is worth teaching explicitly:
+  - `FromFiles(...)` for simple ordered file lists
+  - `FromResolvedFiles(...)` when you want explicit resolved inputs + provenance
+  - `FromConfigPlan(...)` / `FromConfigPlanBuilder(...)` when you want the middleware pipeline to own resolution
+
+### What was tricky to write down
+- The subtle part is explaining that `FromConfigPlan(...)` is not a replacement for `FromResolvedFiles(...)`; it is a higher-level convenience over it. The docs need to preserve that layering instead of flattening everything into “just use plans.”
+
+### What warrants a second pair of eyes
+- Whether the current doc examples should also add a fully runnable direct-`FromConfigPlan(...)` example in code, instead of only describing it in the help pages.
+
+### What should be done in the future
+- Optional: add a second runnable example (or extend `cmd/examples/config-plan`) that shows `sources.FromConfigPlanBuilder(...)` choosing a config file based on already-parsed lower-precedence selector values.
+
+### Code review instructions
+- Review in this order:
+  1. `/home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/doc/topics/24-config-files.md`
+  2. `/home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/doc/topics/27-declarative-config-plans.md`
+  3. `/home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/doc/examples/config/01-declarative-config-plan.md`
+  4. `/home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/doc/tutorials/config-files-quickstart.md`
+  5. `/home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/doc/tutorials/migrating-from-viper-to-config-files.md`
+- Validate with:
+
+```bash
+cd /home/manuel/workspaces/2026-04-10/pinocchiorc/glazed
+git diff --check
+```
+
+### Technical details
+- `24-config-files.md` now teaches direct plan middleware loading in addition to explicit `plan.Resolve(...) + FromResolvedFiles(...)`.
+- `27-declarative-config-plans.md` now distinguishes between manual resolution and direct middleware loading, and documents when to use each.
+- The example/tutorial pages now mention why an example may intentionally keep the explicit resolved-file path even though `FromConfigPlan(...)` exists.
+
 ## Appendix: Commands Used During Implementation
 
 ```bash

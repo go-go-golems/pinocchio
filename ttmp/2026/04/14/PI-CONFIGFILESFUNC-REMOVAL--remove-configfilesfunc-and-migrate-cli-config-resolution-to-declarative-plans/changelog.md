@@ -56,3 +56,18 @@ Added high-level plan middleware wrappers in glazed (commit f13b8df) so ConfigPl
 - /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/14/PI-CONFIGFILESFUNC-REMOVAL--remove-configfilesfunc-and-migrate-cli-config-resolution-to-declarative-plans/reference/01-diary.md — Recorded Step 5 implementing FromConfigPlan middleware and the Clay fix
 - /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/14/PI-CONFIGFILESFUNC-REMOVAL--remove-configfilesfunc-and-migrate-cli-config-resolution-to-declarative-plans/tasks.md — Marked the FromConfigPlan middleware follow-up done
 
+
+## 2026-04-14
+
+Updated the active Glazed config docs so the new direct plan-loading middleware APIs are discoverable: 24-config-files, 27-declarative-config-plans, the declarative-config-plan example page, the config-files quickstart, and the Viper migration guide now explain when to use FromConfigPlan/FromConfigPlanBuilder versus FromResolvedFiles. Also marked the docs follow-up done in the ticket tasks.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/doc/examples/config/01-declarative-config-plan.md — Explained why the example uses FromResolvedFiles and when FromConfigPlan is appropriate
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/doc/topics/24-config-files.md — Added direct FromConfigPlan guidance alongside manual plan.Resolve plus FromResolvedFiles
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/doc/topics/27-declarative-config-plans.md — Documented both manual resolution and direct FromConfigPlan/FromConfigPlanBuilder loading styles
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/doc/tutorials/config-files-quickstart.md — Added direct middleware framing for ConfigPlanBuilder users
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/doc/tutorials/migrating-from-viper-to-config-files.md — Added explicit note that a plan can be loaded directly through FromConfigPlan
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/14/PI-CONFIGFILESFUNC-REMOVAL--remove-configfilesfunc-and-migrate-cli-config-resolution-to-declarative-plans/reference/01-diary.md — Recorded Step 6 for the documentation refresh
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/14/PI-CONFIGFILESFUNC-REMOVAL--remove-configfilesfunc-and-migrate-cli-config-resolution-to-declarative-plans/tasks.md — Marked the docs follow-up done
+

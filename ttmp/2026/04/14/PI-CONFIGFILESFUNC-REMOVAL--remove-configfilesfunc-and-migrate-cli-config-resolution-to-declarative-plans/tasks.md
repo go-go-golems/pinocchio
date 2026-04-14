@@ -13,6 +13,7 @@
 - [x] Audit `pkg/appconfig` usage and choose deletion over modernization for this workspace cleanup
 - [x] Remove `pkg/appconfig` and its Glazed examples in the same change instead of preserving a compatibility facade
 - [x] Remove `glazed/pkg/config/ResolveAppConfigPath(...)` and migrate remaining workspace callers to explicit plans
+- [x] Update active Glazed docs to teach `sources.FromConfigPlan(...)` / `sources.FromConfigPlanBuilder(...)` as direct plan-loading middlewares alongside `ConfigPlanBuilder` and `FromResolvedFiles(...)`
 
 ## FOLLOW-UPS
 
