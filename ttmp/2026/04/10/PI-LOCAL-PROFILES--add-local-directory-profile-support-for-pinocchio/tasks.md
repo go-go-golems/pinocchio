@@ -1,0 +1,15 @@
+- [x] Review and confirm the declarative config-plan API direction (glazed owns generic config resolution; geppetto consumes it; pinocchio wires a pinocchio-specific plan)
+- [x] Design `glazed/pkg/config` plan primitives: `ConfigLayer`, `SourceSpec`, `ResolvedConfigFile`, `Plan`, and plan/report types
+- [x] Implement built-in glazed source constructors for standard app config locations (`system`, `xdg`, `home`, `explicit`) and local project sources (`git-root`, `cwd`)
+- [x] Implement plan resolution behavior in glazed: ordered layer application, conditional sources, path normalization, and dedupe of identical discovered files
+- [x] Add explain/debug support in glazed so a resolved config plan can report which sources were found, skipped, deduped, or disabled
+- [ ] Extend glazed config loading middleware with a richer resolved-file path (for example `FromResolvedFiles(...)`) so source metadata can flow into parse history
+- [ ] Standardize config provenance metadata in parse-step history: `config_file`, `config_index`, `config_layer`, `config_source_name`, and `config_source_kind`
+- [ ] Add glazed tests covering plan resolution, source ordering, dedupe, git-root/cwd discovery, and parse-history metadata preservation
+- [ ] Integrate the declarative config plan into `geppetto/pkg/cli/bootstrap` via `AppBootstrapConfig` (for example a `ConfigPlanBuilder`) instead of hardcoded config path resolution
+- [ ] Update geppetto bootstrap flows (`ResolveCLIProfileSelection`, hidden base inference settings, inference debug trace) to consume resolved config files with layer/source provenance
+- [ ] Add geppetto tests proving layered config precedence and verifying that config-layer metadata survives into parsed-field history and inference trace output
+- [ ] Wire pinocchio to the new geppetto/glazed API using a pinocchio-specific plan that includes `.pinocchio-profile.yml` from git root and cwd
+- [ ] Add pinocchio tests for repo-local and cwd-local profile/config loading, including precedence between repo, cwd, and explicit config files
+- [ ] Update Pinocchio docs to explain the new declarative layering model, local file discovery behavior, and how to inspect parsed field history for config provenance
+- [ ] Do a final validation pass across glazed, geppetto, and pinocchio and record the rollout/testing results in the diary and changelog
