@@ -899,6 +899,101 @@ go run . show --explicit explicit.yaml
 
 ---
 
+## Step 10: Remove the dead Viper-based config editor/command and assess remaining cleanup targets
+
+After you asked about `pkg/config/editor.go`, I traced its actual usage. The result was clear: the Viper-based config editor and its Cobra wrapper were not part of the new config-plan path and, more importantly, were not used anywhere else in the Glazed/Geppetto/Pinocchio code we have here. That made them good cleanup candidates rather than compatibility layers.
+
+I removed both files and cleaned up one stale example-doc reference that still described a `config get/set` workflow. I also reviewed the remaining config-related surfaces to distinguish between code that still serves a purpose and code that is a likely future cleanup candidate.
+
+### Prompt Context
+
+**User prompt (verbatim):** "kill it. Also, is there any other config files related code that would warrant removal or cleanup, in light of the new consolidated plan functionality"
+
+**Assistant interpretation:** Remove the now-dead Viper-based config editor/command, then audit the remaining config-related code for overlap, dead weight, or legacy layers that may deserve future cleanup.
+
+**Inferred user intent:** Reduce obsolete config machinery now that the new declarative plan path exists, but avoid deleting legitimate compatibility layers without evidence.
+
+**Commit (code):** `5c0429101f2b09818e24512a89b00a20370a13fa` — `config: remove unused viper editor command`
+
+### What I did
+- Deleted:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/config/editor.go`
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/config/cobra-config-command.go`
+- Updated a stale example help doc:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/cmd/examples/help-system/docs/configuration-topic.md`
+- Re-ran focused Glazed tests covering the relevant config/CLI/cmds packages.
+- Scanned the remaining config-related code to identify what should stay versus what is a future cleanup candidate.
+
+### Why
+- The removed files were not used anywhere.
+- They were Viper-specific and unrelated to the new declarative config-plan architecture.
+- Keeping dead config mutation code around would only increase confusion, especially now that the config story is being consolidated around plans + resolved-file loading.
+
+### What worked
+- The deletion was clean and did not break the focused test set.
+- There was only one stale documentation reference to the old config command.
+
+### What didn't work
+- N/A for the removal itself.
+
+### What I learned
+- The Viper-based editor/command was truly dead weight, not a hidden compatibility dependency.
+- Not all old config-related code should be removed, though. Some of it is still either actively used or a legitimate compatibility layer while the new plan path coexists with older APIs.
+
+### Remaining cleanup assessment
+
+#### Good to keep for now
+- `glazed/pkg/config/resolve.go`
+  - still used by legacy/simple callers and fallback paths
+  - could eventually be reimplemented on top of `config.Plan`, but should not be deleted yet
+- `pkg/appconfig/*`
+  - still actively used by examples and parser flows
+  - deserves future integration with config plans, but not removal
+- `pkg/cli/cobra-parser.go` `ConfigFilesFunc`
+  - still a valid simple integration point
+  - could later grow a richer resolved-file variant, but still useful
+
+#### Good future cleanup candidates
+- `glazed/pkg/cmds/fields/viper.go`
+- deprecated Viper-based middlewares in `glazed/pkg/cmds/sources/cobra.go`
+  - these are explicitly deprecated already
+  - they are much stronger cleanup candidates than `ResolveAppConfigPath(...)`
+- Viper-based logging bootstrap code in `glazed/pkg/cmds/logging/*`
+  - still used, so not removable now
+  - but architecturally it is separate from the new config-plan approach and may be worth modernizing later
+
+### What was tricky to build
+- The tricky part here was distinguishing “old” from “safe to remove.” Some config-related APIs are old but still real compatibility layers, while the Viper editor/command was both old and unreferenced. The search pass made that distinction much easier.
+
+### What warrants a second pair of eyes
+- Whether we want a follow-up cleanup ticket specifically for deprecated Viper-based field/middleware loading.
+- Whether `ResolveAppConfigPath(...)` should eventually become a thin wrapper around a one-source `config.Plan` implementation for conceptual consistency.
+
+### What should be done in the future
+- If you want more cleanup, the next strongest candidate is the deprecated Viper-based field-loading path.
+- If you want modernization rather than deletion, the next candidate is integrating `pkg/appconfig` with the declarative config-plan API.
+
+### Code review instructions
+- Review:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/config/editor.go` (deleted)
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/config/cobra-config-command.go` (deleted)
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/cmd/examples/help-system/docs/configuration-topic.md`
+- Validate with:
+
+```bash
+cd /home/manuel/workspaces/2026-04-10/pinocchiorc/glazed
+go test ./pkg/config/... ./pkg/cli/... ./pkg/cmds/... -count=1
+```
+
+### Technical details
+- The removal does **not** eliminate Viper from Glazed entirely.
+- Viper still remains in:
+  - deprecated Viper-based field loading helpers
+  - logging initialization/config binding
+- The removed code was only the dead config editor/command path.
+
+---
+
 ## Appendix: Commands Used During Analysis
 
 ```bash
