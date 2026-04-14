@@ -10,7 +10,6 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cmds/fields"
 	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	profilebootstrap "github.com/go-go-golems/pinocchio/pkg/cmds/profilebootstrap"
-	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 )
 
