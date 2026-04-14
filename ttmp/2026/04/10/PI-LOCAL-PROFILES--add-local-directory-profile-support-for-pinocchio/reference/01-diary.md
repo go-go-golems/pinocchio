@@ -12,10 +12,20 @@ DocType: reference
 Intent: long-term
 Owners: []
 RelatedFiles:
+    - Path: ../../../../../../../geppetto/pkg/cli/bootstrap/bootstrap_test.go
+      Note: Added layered precedence and inference-trace provenance tests in commit ce7f03d
     - Path: ../../../../../../../geppetto/pkg/cli/bootstrap/config.go
-      Note: Bootstrap configuration
+      Note: |-
+        Bootstrap configuration
+        Added ConfigPlanBuilder in commit ce7f03d
+    - Path: ../../../../../../../geppetto/pkg/cli/bootstrap/engine_settings.go
+      Note: Hidden base settings now consume resolved config files in commit ce7f03d
     - Path: ../../../../../../../geppetto/pkg/cli/bootstrap/inference_debug.go
-      Note: Trace output path reviewed for config-layer propagation
+      Note: |-
+        Trace output path reviewed for config-layer propagation
+        Inference trace path now preserves config metadata in commit ce7f03d
+    - Path: ../../../../../../../geppetto/pkg/cli/bootstrap/profile_selection.go
+      Note: Added ResolveCLIConfigFilesResolved and plan-aware bootstrap loading in commit ce7f03d
     - Path: ../../../../../../../glazed/pkg/cmds/fields/parse.go
       Note: ParseStep metadata is the key hook for config-layer provenance
     - Path: ../../../../../../../glazed/pkg/cmds/sources/config_files_test.go
@@ -42,12 +52,14 @@ RelatedFiles:
       Note: |-
         Marked first glazed plan/design tasks complete after commit b9628f7
         Marked richer source-loading and metadata tasks complete after commit 0bf7314
+        Marked geppetto integration tasks complete after commit ce7f03d
 ExternalSources: []
 Summary: ""
 LastUpdated: 0001-01-01T00:00:00Z
 WhatFor: ""
 WhenToUse: ""
 ---
+
 
 
 
@@ -514,6 +526,96 @@ go test ./pkg/config/... ./pkg/cmds/sources/... -count=1
   - `config_source_name`
   - `config_source_kind`
 - This step still does not wire geppetto or pinocchio to use the new path yet; it prepares the reusable glazed side first.
+
+---
+
+## Step 6: Integrate declarative config plans into geppetto bootstrap
+
+With the glazed side ready, I moved one layer up into geppetto bootstrap. The goal here was to thread the new plan model into profile selection, hidden base inference settings, and inference tracing without forcing an all-at-once migration for existing callers. That meant adding a new path for plan-aware apps while preserving the old hardcoded path behavior as the fallback when no config plan builder is configured.
+
+This step was the architectural hinge point of the whole ticket. Before it, the new config-plan API existed but nothing in the profile/bootstrap path used it. After it, geppetto bootstrap can now consume resolved config files with provenance, and tests prove that config-layer metadata survives both into parsed field history and into inference debug output.
+
+### Prompt Context
+
+**User prompt (verbatim):** (same as Step 4)
+
+**Assistant interpretation:** Keep moving down the task list in implementation order and create meaningful checkpoints rather than mixing all layers together.
+
+**Inferred user intent:** Build the reusable shared layers first, then connect them into the real bootstrap path before touching pinocchio-specific wiring.
+
+**Commit (code):** `ce7f03d52131578db59bdc72375b363d22bdd597` — `bootstrap: integrate declarative config plans`
+
+### What I did
+- Modified geppetto bootstrap files:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/geppetto/pkg/cli/bootstrap/config.go`
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/geppetto/pkg/cli/bootstrap/profile_selection.go`
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/geppetto/pkg/cli/bootstrap/engine_settings.go`
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/geppetto/pkg/cli/bootstrap/inference_debug.go`
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/geppetto/pkg/cli/bootstrap/bootstrap_test.go`
+- Added `ConfigPlanBuilder` to `AppBootstrapConfig`.
+- Added `ResolvedCLIConfigFiles` to carry:
+  - ordered string paths
+  - richer resolved config file metadata
+  - optional plan report
+- Added `ResolveCLIConfigFilesResolved(...)` as the richer resolution path.
+- Kept `ResolveCLIConfigFiles(...)` as the compatibility wrapper returning only `[]string`.
+- Updated bootstrap flows to use `sources.FromResolvedFiles(...)` when a config plan builder is configured, and to fall back to the old `FromFiles(...)` path otherwise.
+- Updated `ResolveCLIConfigFilesForExplicit(...)` to route explicit files through the same config-plan-aware path.
+- Added tests proving:
+  - config plan layering works for profile selection precedence
+  - `BuildInferenceTraceParsedValues(...)` preserves `config_layer`
+  - inference debug YAML contains the richer config provenance metadata
+
+### Why
+- This is the point where the new glazed API becomes useful to real callers.
+- Keeping the compatibility fallback reduces migration risk and lets pinocchio adopt the new path deliberately.
+- It also means other geppetto users are not forced into layered config behavior just because the new API exists.
+
+### What worked
+- The fallback-vs-plan split kept the changes conceptually clean.
+- Adding `ResolveCLIConfigFilesResolved(...)` avoided breaking code that still expects `[]string`.
+- The new tests give strong evidence that provenance is preserved all the way into the debug output path.
+
+### What didn't work
+- Nothing major failed once the code compiled, but this step needed careful handling to avoid accidentally changing legacy bootstrap behavior for apps that do not provide a config plan builder.
+
+### What I learned
+- The right migration strategy is not to replace `ResolveCLIConfigFiles(...)` outright, but to introduce a richer parallel path and then adapt call sites.
+- The inference debug path is a very good end-to-end test target because it verifies that the provenance survives multiple transformation layers.
+
+### What was tricky to build
+- The tricky part was threading richer config metadata through the existing bootstrap flow without creating a breaking API explosion. The compromise that worked was adding one richer type (`ResolvedCLIConfigFiles`) and one richer function (`ResolveCLIConfigFilesResolved(...)`) while leaving the old string-slice helper in place as a wrapper.
+- Another subtle part was `ResolveCLIConfigFilesForExplicit(...)`: it now needs to support both legacy path resolution and the plan-builder path. I solved that by constructing command-settings parsed values and routing them back through the same resolution flow.
+
+### What warrants a second pair of eyes
+- Whether `ResolveCLIConfigFilesResolved(...)` should eventually become the primary public helper and the string-slice version be demoted.
+- Whether `AppBootstrapConfig.ConfigPlanBuilder` is the right abstraction boundary, or whether geppetto should expose a small higher-level builder helper too.
+- Whether the legacy fallback should eventually synthesize richer metadata as well, or whether that would be misleading without a true layered plan.
+
+### What should be done in the future
+- Wire pinocchio to provide a pinocchio-specific config plan builder using git-root and cwd `.pinocchio-profile.yml` files.
+- Add pinocchio integration tests that verify repo/cwd/explicit precedence in the actual app wrapper.
+
+### Code review instructions
+- Start with:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/geppetto/pkg/cli/bootstrap/config.go`
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/geppetto/pkg/cli/bootstrap/profile_selection.go`
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/geppetto/pkg/cli/bootstrap/engine_settings.go`
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/geppetto/pkg/cli/bootstrap/inference_debug.go`
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/geppetto/pkg/cli/bootstrap/bootstrap_test.go`
+- Validate with:
+
+```bash
+cd /home/manuel/workspaces/2026-04-10/pinocchiorc/geppetto
+gofmt -w pkg/cli/bootstrap/config.go pkg/cli/bootstrap/profile_selection.go pkg/cli/bootstrap/engine_settings.go pkg/cli/bootstrap/inference_debug.go pkg/cli/bootstrap/bootstrap_test.go
+go test ./pkg/cli/bootstrap/... -count=1
+```
+
+### Technical details
+- The new geppetto bootstrap path now has two modes:
+  - legacy path mode when `ConfigPlanBuilder == nil`
+  - declarative plan mode when `ConfigPlanBuilder != nil`
+- In declarative plan mode, `BuildInferenceTraceParsedValues(...)` and `WriteInferenceSettingsDebugYAML(...)` now preserve the richer config metadata carried from `glazed/pkg/config.ResolvedConfigFile`.
 
 ---
 

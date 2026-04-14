@@ -74,3 +74,17 @@ Step 5: added provenance-aware config loading in glazed (commit 0bf7314), includ
 - /home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/cmds/sources/load-fields-from-config.go — Added FromResolvedFiles and metadata propagation in commit 0bf7314
 - /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/10/PI-LOCAL-PROFILES--add-local-directory-profile-support-for-pinocchio/reference/01-diary.md — Recorded Step 5 implementation details
 
+
+## 2026-04-14
+
+Step 6: integrated declarative config plans into geppetto bootstrap (commit ce7f03d), added ConfigPlanBuilder, wired plan-aware loading into profile/base/debug flows, and added tests proving layered precedence plus config-layer propagation into inference debug output.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/geppetto/pkg/cli/bootstrap/bootstrap_test.go — Added layered config and metadata tests in commit ce7f03d
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/geppetto/pkg/cli/bootstrap/config.go — Bootstrap config extended in commit ce7f03d
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/geppetto/pkg/cli/bootstrap/engine_settings.go — Base settings path updated in commit ce7f03d
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/geppetto/pkg/cli/bootstrap/inference_debug.go — Inference trace path updated in commit ce7f03d
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/geppetto/pkg/cli/bootstrap/profile_selection.go — Plan-aware config-file resolution and loading in commit ce7f03d
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/10/PI-LOCAL-PROFILES--add-local-directory-profile-support-for-pinocchio/reference/01-diary.md — Recorded Step 6 implementation details
+

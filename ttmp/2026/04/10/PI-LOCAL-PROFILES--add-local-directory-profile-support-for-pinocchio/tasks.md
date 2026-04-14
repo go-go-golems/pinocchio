@@ -6,9 +6,9 @@
 - [x] Extend glazed config loading middleware with a richer resolved-file path (for example `FromResolvedFiles(...)`) so source metadata can flow into parse history
 - [x] Standardize config provenance metadata in parse-step history: `config_file`, `config_index`, `config_layer`, `config_source_name`, and `config_source_kind`
 - [x] Add glazed tests covering plan resolution, source ordering, dedupe, git-root/cwd discovery, and parse-history metadata preservation
-- [ ] Integrate the declarative config plan into `geppetto/pkg/cli/bootstrap` via `AppBootstrapConfig` (for example a `ConfigPlanBuilder`) instead of hardcoded config path resolution
-- [ ] Update geppetto bootstrap flows (`ResolveCLIProfileSelection`, hidden base inference settings, inference debug trace) to consume resolved config files with layer/source provenance
-- [ ] Add geppetto tests proving layered config precedence and verifying that config-layer metadata survives into parsed-field history and inference trace output
+- [x] Integrate the declarative config plan into `geppetto/pkg/cli/bootstrap` via `AppBootstrapConfig` (for example a `ConfigPlanBuilder`) instead of hardcoded config path resolution
+- [x] Update geppetto bootstrap flows (`ResolveCLIProfileSelection`, hidden base inference settings, inference debug trace) to consume resolved config files with layer/source provenance
+- [x] Add geppetto tests proving layered config precedence and verifying that config-layer metadata survives into parsed-field history and inference trace output
 - [ ] Wire pinocchio to the new geppetto/glazed API using a pinocchio-specific plan that includes `.pinocchio-profile.yml` from git root and cwd
 - [ ] Add pinocchio tests for repo-local and cwd-local profile/config loading, including precedence between repo, cwd, and explicit config files
 - [ ] Update Pinocchio docs to explain the new declarative layering model, local file discovery behavior, and how to inspect parsed field history for config provenance
