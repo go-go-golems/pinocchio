@@ -42,3 +42,17 @@ Completed the final cleanup step: removed glazed/pkg/config/ResolveAppConfigPath
 - /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/14/PI-CONFIGFILESFUNC-REMOVAL--remove-configfilesfunc-and-migrate-cli-config-resolution-to-declarative-plans/reference/01-diary.md — Recorded Step 4 removing ResolveAppConfigPath and the remaining validation caveats
 - /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/14/PI-CONFIGFILESFUNC-REMOVAL--remove-configfilesfunc-and-migrate-cli-config-resolution-to-declarative-plans/tasks.md — Added a follow-up task for FromConfigPlan middleware wrappers
 
+
+## 2026-04-14
+
+Added high-level plan middleware wrappers in glazed (commit f13b8df) so ConfigPlanBuilder now delegates through sources.FromConfigPlanBuilder over FromResolvedFiles, and fixed the local clay module's deprecated InitViper path (commit 20a8a9d) so workspace command-package validation no longer fails on the removed Glazed Viper logger symbol. Also cleaned a stale unused import in a Pinocchio test (commit 68994cc).
+
+### Related Files
+
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/clay/pkg/init.go — Removed the stale dependency on logging.InitLoggerFromViper in commit 20a8a9d
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/cli/cobra-parser.go — Cobra parser now uses FromConfigPlanBuilder internally in commit f13b8df
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/cmds/sources/load-fields-from-config.go — Added FromConfigPlan and FromConfigPlanBuilder in commit f13b8df
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/cmd/web-chat/main_profile_registries_test.go — Cleaned unused import after validation unblocked in commit 68994cc
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/14/PI-CONFIGFILESFUNC-REMOVAL--remove-configfilesfunc-and-migrate-cli-config-resolution-to-declarative-plans/reference/01-diary.md — Recorded Step 5 implementing FromConfigPlan middleware and the Clay fix
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/14/PI-CONFIGFILESFUNC-REMOVAL--remove-configfilesfunc-and-migrate-cli-config-resolution-to-declarative-plans/tasks.md — Marked the FromConfigPlan middleware follow-up done
+

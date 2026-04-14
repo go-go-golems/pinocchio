@@ -409,6 +409,124 @@ go test ./pkg/config/... -count=1
 - The old `resolveCLIConfigFilesLegacy(...)` branch was removed from Geppetto bootstrap.
 - Current source search after the change showed no remaining live `ResolveAppConfigPath(...)` references in the three workspace repos.
 
+## Step 5: Add `FromConfigPlan*` middleware wrappers and clean up Clay so full workspace validation passes again
+
+After discussing the API shape further, we decided the cleaner layering is to keep `FromResolvedFiles(...)` as the core provenance-aware loading primitive and add higher-level `FromConfigPlan(...)` / `FromConfigPlanBuilder(...)` wrappers on top. That allows the CLI layer to stay ergonomic while moving the actual “plan → resolved files → field updates” logic into the `sources` package where it belongs.
+
+At the same time, the workspace still had a practical validation issue: the local `clay` module was calling the removed Glazed Viper logger API. That had been the reason top-level Pinocchio command-package tests were still failing. I fixed that in Clay as part of this pass so the workspace goes green again.
+
+### Prompt Context
+
+**User prompt (verbatim):** "ok, add that as a task, and continue"
+
+**Assistant interpretation:** Record the middleware follow-up explicitly in the ticket, then implement it and continue cleaning up the remaining practical validation issue in Clay.
+
+**Inferred user intent:** Make the layering cleaner, not just functionally correct, and remove the last external blocker to validating the workspace.
+
+**Commit (code):** `f13b8df640be1b41cf7aedd7e01c6dbd3e92b245` — `sources: add config plan middleware`
+
+**Commit (code):** `20a8a9d4831cd56f61a149c8d64ebec620f98108` — `logging: remove viper logger dependency`
+
+**Commit (code):** `68994cc71f19f5b783854ecc5d0ebccb66d96b8a` — `test: clean web-chat imports`
+
+### What I did
+- Added to Glazed:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/cmds/sources/load-fields-from-config.go`
+    - `ConfigPlanResolver`
+    - `FromConfigPlan(...)`
+    - `FromConfigPlanBuilder(...)`
+- Updated `/home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/cli/cobra-parser.go`
+  - `CobraParserConfig.ConfigPlanBuilder` is now implemented through `sources.FromConfigPlanBuilder(...)`
+  - `cobra-parser.go` no longer resolves plans directly itself
+- Added Glazed test coverage in:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/cmds/sources/config_files_test.go`
+    - plan middleware metadata propagation
+    - builder middleware using already-parsed values to choose a file
+- Updated Clay in:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/clay/pkg/init.go`
+  - replaced the stale `logging.InitLoggerFromViper()` call with `logging.InitEarlyLoggingFromArgs(...)`
+- Cleaned one now-unused test import in:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/cmd/web-chat/main_profile_registries_test.go`
+
+### Why
+- `FromResolvedFiles(...)` remains the right low-level primitive because it cleanly separates discovery from loading.
+- `FromConfigPlan*` gives a nicer high-level API for callers that want plans directly.
+- Moving the plan resolution into `sources` is a cleaner layering than leaving it embedded in `cobra-parser.go`.
+- Fixing Clay was necessary to make the workspace validate again after the earlier Glazed logging cleanup.
+
+### What worked
+- Glazed plan middleware tests passed:
+
+```bash
+cd /home/manuel/workspaces/2026-04-10/pinocchiorc/glazed
+go test ./pkg/cmds/sources/... ./pkg/cli/... -count=1
+```
+
+- Clay package tests passed:
+
+```bash
+cd /home/manuel/workspaces/2026-04-10/pinocchiorc/clay
+go test ./pkg/... -count=1
+```
+
+- The previously blocked Pinocchio command-package validation now passes:
+
+```bash
+cd /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio
+go test ./cmd/web-chat ./cmd/examples/simple-chat ./cmd/agents/simple-chat-agent ./cmd/pinocchio/... -count=1
+```
+
+### What didn't work
+- While implementing `FromConfigPlanBuilder(...)`, my first edit accidentally left behind a broken copied block from `FromResolvedFiles(...)` and referenced an undefined `files` variable. That was caught immediately by compilation/test runs and then replaced with the intended wrapper implementation.
+
+### What I learned
+- The API stack is now much cleaner:
+  - `FromFiles(...)` for raw paths
+  - `FromResolvedFiles(...)` for provenance-aware resolved inputs
+  - `FromConfigPlan(...)` / `FromConfigPlanBuilder(...)` as high-level plan wrappers
+- That is a better long-term shape than forcing everything to go through plans or forcing the CLI layer to resolve plans itself.
+
+### What was tricky to build
+- The subtle design point was preserving the separation between discovery and loading while still letting the middleware variant inspect already-parsed lower-precedence values. The clean way to do that was to make the builder accept current parsed values and then delegate back down to `FromResolvedFiles(...)` after `plan.Resolve(...)`.
+- The Clay change was conceptually simple but operationally important because it was the last blocker to full validation of the command packages in this workspace.
+
+### What warrants a second pair of eyes
+- Whether we want to expose `context.Context` more explicitly through plan middleware builder call sites beyond the current closure-based approach.
+- Whether any current docs should mention `FromConfigPlan*` explicitly now that the middleware exists.
+
+### What should be done in the future
+- Optional: update user-facing docs/examples to mention `FromConfigPlan(...)` as the direct middleware-level API, not only `ConfigPlanBuilder` and `FromResolvedFiles(...)`.
+
+### Code review instructions
+- Review in this order:
+  1. `/home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/cmds/sources/load-fields-from-config.go`
+  2. `/home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/cmds/sources/config_files_test.go`
+  3. `/home/manuel/workspaces/2026-04-10/pinocchiorc/glazed/pkg/cli/cobra-parser.go`
+  4. `/home/manuel/workspaces/2026-04-10/pinocchiorc/clay/pkg/init.go`
+- Validate with:
+
+```bash
+cd /home/manuel/workspaces/2026-04-10/pinocchiorc/glazed
+gofmt -w pkg/cmds/sources/load-fields-from-config.go pkg/cmds/sources/config_files_test.go pkg/cli/cobra-parser.go
+
+go test ./pkg/cmds/sources/... ./pkg/cli/... -count=1
+
+cd /home/manuel/workspaces/2026-04-10/pinocchiorc/clay
+gofmt -w pkg/init.go
+
+go test ./pkg/... -count=1
+
+cd /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio
+gofmt -w cmd/web-chat/main_profile_registries_test.go
+
+go test ./cmd/web-chat ./cmd/examples/simple-chat ./cmd/agents/simple-chat-agent ./cmd/pinocchio/... -count=1
+```
+
+### Technical details
+- `FromConfigPlanBuilder(...)` delegates to `FromResolvedFiles(...)` after resolving the plan.
+- `cobra-parser.go` still keeps `ConfigPlanBuilder` as the ergonomic public CLI hook; only the internal implementation changed.
+- Clay’s deprecated `InitViper(...)` path now initializes early logging from args instead of using the removed Viper-based Glazed logger path.
+
 ## Appendix: Commands Used During Implementation
 
 ```bash
