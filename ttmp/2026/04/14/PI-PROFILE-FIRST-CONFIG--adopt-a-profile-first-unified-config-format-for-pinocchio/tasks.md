@@ -28,7 +28,14 @@
 - [x] Define scalar merge rules (`profile.active` last-writer-wins, `profile.registries` last-writer-wins)
 - [x] Implement `app.repositories` merge semantics: append in layer order, dedupe, preserve stable order
 - [x] Implement same-slug inline profile merges across layers, including explicit rules for `stack`, `inference_settings`, and `extensions`
-- [ ] Add provenance/explain data for merged app/profile/profile entries so later debug output can still explain which layer won
+- [x] Add provenance/explain data for merged app/profile/profile entries so later debug output can still explain which layer won
+  - [x] Add `configdoc` provenance/explain types for document-merge events with a shared path/operation vocabulary
+  - [x] Extend `ResolvedDocuments` so resolved unified config loads can return both the effective document and structured merge explanations
+  - [x] Record explain/provenance entries for `profile.active` and `profile.registries` replacement semantics across layers
+  - [x] Record explain/provenance entries for `app.repositories` append+dedupe semantics across layers, including dedupe-skipped entries
+  - [x] Record explain/provenance entries for same-slug inline profile field contributions (`display_name`, `description`, `stack`, `inference_settings`, `extensions`)
+  - [x] Add focused tests proving explain output for user/repo/cwd/explicit layering and same-slug inline profile merges
+  - [x] Expose the resolved explain/provenance data through `ResolveUnifiedConfig(...)` for later debug/runtime consumers
 - [x] Add merge tests for user/repo/cwd/explicit layering, including repository accumulation and same-slug profile overrides
 
 ### Phase 3 — inline profiles as registry input

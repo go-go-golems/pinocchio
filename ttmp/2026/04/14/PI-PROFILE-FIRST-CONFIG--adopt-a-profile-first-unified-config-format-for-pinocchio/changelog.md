@@ -128,3 +128,16 @@ Step 10 (commit 6cf9b41): migrated cmd/web-chat/main.go to initialize profile st
 - /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/14/PI-PROFILE-FIRST-CONFIG--adopt-a-profile-first-unified-config-format-for-pinocchio/reference/02-investigation-diary.md — Records Step 10 for the web-chat migration tranche
 - /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/14/PI-PROFILE-FIRST-CONFIG--adopt-a-profile-first-unified-config-format-for-pinocchio/tasks.md — Marks the remaining web-chat runtime migration task complete
 
+
+## 2026-04-15
+
+Step 11 (commit ad1df70): added structured document-merge provenance to configdoc, exposing path-keyed explain data for app/profile/profile merges through ResolvedDocuments and ResolveUnifiedConfig(...), with focused tests for replacement, append+dedupe, and same-slug inline profile merge provenance.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/configdoc/explain.go — Introduces the path-keyed document explain model and provenance entry vocabulary
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/configdoc/resolved.go — Carries and records explain data while loading resolved unified config documents
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/configdoc/resolved_test.go — Adds focused provenance assertions for replacement
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/14/PI-PROFILE-FIRST-CONFIG--adopt-a-profile-first-unified-config-format-for-pinocchio/reference/02-investigation-diary.md — Records Step 11 for the provenance tranche
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/14/PI-PROFILE-FIRST-CONFIG--adopt-a-profile-first-unified-config-format-for-pinocchio/tasks.md — Marks the provenance/explain backlog item and all of its sub-tasks complete
+

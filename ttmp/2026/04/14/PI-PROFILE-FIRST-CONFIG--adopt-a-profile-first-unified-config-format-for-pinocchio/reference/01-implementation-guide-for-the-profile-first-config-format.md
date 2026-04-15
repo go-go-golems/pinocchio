@@ -34,9 +34,13 @@ RelatedFiles:
     - Path: pkg/cmds/profilebootstrap/engine_settings.go
       Note: Step 9 switches base and final engine-settings resolution onto the unified document bootstrap path while preserving hidden-base semantics
     - Path: pkg/cmds/profilebootstrap/local_profile_plan_test.go
-      Note: Step 9 adds focused tests for repo/cwd/explicit unified config resolution and inline profile selection
+      Note: |-
+        Step 9 adds focused tests for repo/cwd/explicit unified config resolution and inline profile selection
+        Step 11 proves ResolveUnifiedConfig exposes the new document explain data to consumers
     - Path: pkg/cmds/profilebootstrap/profile_selection.go
       Note: Step 9 adds unified document loading
+    - Path: pkg/configdoc/explain.go
+      Note: Step 11 adds document-merge provenance types and path-keyed explain recording for unified config merges
     - Path: pkg/configdoc/load.go
       Note: First implementation tranche adds strict YAML decode with KnownFields and document validation
     - Path: pkg/configdoc/load_test.go
@@ -54,9 +58,13 @@ RelatedFiles:
         Third implementation tranche proves inline-only registry construction and stacked inline profile resolution
         Fourth implementation tranche proves inline-first same-slug precedence and imported fallback
     - Path: pkg/configdoc/resolved.go
-      Note: Fifth implementation tranche adds the resolved-files loading seam that future bootstrap integration can consume directly
+      Note: |-
+        Fifth implementation tranche adds the resolved-files loading seam that future bootstrap integration can consume directly
+        Step 11 extends ResolvedDocuments with Explain and records provenance as resolved files are merged
     - Path: pkg/configdoc/resolved_test.go
-      Note: Fifth implementation tranche proves user/repo/cwd/explicit file ordering with real temp-file fixtures
+      Note: |-
+        Fifth implementation tranche proves user/repo/cwd/explicit file ordering with real temp-file fixtures
+        Step 11 proves explain output for replacement
     - Path: pkg/configdoc/types.go
       Note: First implementation tranche adds the typed unified config document structs and local filename policy
 ExternalSources: []
@@ -67,6 +75,7 @@ WhatFor: |
     Provide a concrete coding guide for a future implementation pass, with enough orientation that a new contributor can work safely without rediscovering the current architecture from scratch.
 WhenToUse: Use this document when implementing the new config format or reviewing PRs that introduce the unified document loader, inline profile catalog, or breaking-change migration tooling.
 ---
+
 
 
 

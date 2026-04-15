@@ -21,8 +21,12 @@ RelatedFiles:
       Note: Diary Step 9 records the hidden-base preservation and unified engine-settings path
     - Path: pkg/cmds/profilebootstrap/engine_settings_test.go
       Note: Diary Step 9 records focused bootstrap regression coverage
+    - Path: pkg/cmds/profilebootstrap/local_profile_plan_test.go
+      Note: Diary Step 11 records consumer-side exposure coverage for ResolveUnifiedConfig
     - Path: pkg/cmds/profilebootstrap/profile_selection.go
       Note: Diary Step 9 records the document-first selection and registry-chain integration
+    - Path: pkg/configdoc/explain.go
+      Note: Diary Step 11 records the new document-merge provenance model
     - Path: pkg/configdoc/load.go
       Note: Diary Step 4 records strict decoding and old-format rejection in the new configdoc package
     - Path: pkg/configdoc/load_test.go
@@ -40,9 +44,13 @@ RelatedFiles:
         Diary Step 6 records the new tests for inline-only registry resolution
         Diary Step 7 records the mixed inline/imported precedence tests
     - Path: pkg/configdoc/resolved.go
-      Note: Diary Step 8 records the resolved-files loader over ordered ResolvedConfigFile inputs
+      Note: |-
+        Diary Step 8 records the resolved-files loader over ordered ResolvedConfigFile inputs
+        Diary Step 11 records explain data flowing through ResolvedDocuments
     - Path: pkg/configdoc/resolved_test.go
-      Note: Diary Step 8 records the file-backed layering test across user/repo/cwd/explicit docs
+      Note: |-
+        Diary Step 8 records the file-backed layering test across user/repo/cwd/explicit docs
+        Diary Step 11 records focused explain-coverage tests
     - Path: pkg/configdoc/types.go
       Note: Diary Step 4 records the first code tranche that introduced the typed config document model
     - Path: ttmp/2026/04/14/PI-PROFILE-FIRST-CONFIG--adopt-a-profile-first-unified-config-format-for-pinocchio/analysis/01-current-profile-config-and-registry-architecture-analysis.md
@@ -59,6 +67,7 @@ WhatFor: |
     Preserve the reasoning, commands, and decisions behind the creation of the ticket deliverables so later implementation work can continue without losing context.
 WhenToUse: Use when continuing this ticket, reviewing how the docs were assembled, or checking which evidence and commands shaped the current recommendation.
 ---
+
 
 
 
@@ -1153,4 +1162,125 @@ go test ./cmd/web-chat ./pkg/cmds/profilebootstrap -count=1
 golangci-lint run ./cmd/web-chat ./pkg/cmds/profilebootstrap/...
 
 go test ./pkg/cmds/profilebootstrap ./cmd/web-chat ./cmd/pinocchio ./cmd/pinocchio/cmds/... -count=1
+```
+
+## Step 11: Add structured merge provenance/explain data to `configdoc`
+
+With the main runtime consumers now on the unified document path, the next highest-value missing piece was explainability. The config system could merge documents correctly, but the merged result itself still could not answer “why did this value win?” in a structured way. This tranche adds that missing layer directly to `configdoc` instead of trying to force all document-level provenance through Glazed field logs.
+
+The implementation stays aligned with the design decision from the discussion: provenance should live at the layer where the transformation happens. For the unified config document, that means `configdoc` owns the merge explanation, and consumers like `ResolveUnifiedConfig(...)` simply expose it.
+
+### Prompt Context
+
+**User prompt (verbatim):** “alright, perfect, Add tasks to implement it , and then work on it task by task, committing at appropriate intervals and keeping a detailed diary”
+
+**Assistant interpretation:** Turn the open provenance idea into a concrete backlog item, implement it in focused slices, and record the results in the ticket as each slice lands.
+
+**Inferred user intent:** Keep the implementation disciplined and reviewable; do not just talk about provenance, actually wire it into the current unified config path.
+
+**Commit (code):** pending at diary-writing time
+
+### What I did
+- Expanded the open provenance task in `tasks.md` into concrete sub-tasks before writing code.
+- Added `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/configdoc/explain.go` with:
+  - `ProvenanceOperation`
+  - `ProvenanceEntry`
+  - `DocumentExplain`
+  - recording helpers keyed by document paths such as:
+    - `profile.active`
+    - `profile.registries`
+    - `app.repositories`
+    - `profiles.<slug>.display_name`
+    - `profiles.<slug>.stack`
+    - `profiles.<slug>.inference_settings`
+    - `profiles.<slug>.extensions`
+- Extended `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/configdoc/resolved.go` so `ResolvedDocuments` now carries `Explain`, and `LoadResolvedDocuments(...)` records merge provenance as each resolved file is applied.
+- Extended `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/configdoc/resolved_test.go` with focused assertions for:
+  - replacement provenance for `profile.active`
+  - replacement provenance for `profile.registries`
+  - append+dedupe provenance for `app.repositories`
+  - same-slug inline profile field contributions
+  - explicit dedupe-skipped repository entries
+- Added a consumer-side regression test in:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/cmds/profilebootstrap/local_profile_plan_test.go`
+  - proving `ResolveUnifiedConfig(...)` exposes the new explain data to runtime consumers.
+
+### Why
+- The document-first path is now the real source of truth for `app`, `profile`, and inline `profiles`, so it needs its own first-class provenance model.
+- Keeping document provenance in `configdoc` is cleaner than flattening the whole merged document into fake field logs.
+- Once this data exists, later debug surfaces can project it however they want without losing the original merge story.
+
+### What worked
+- The chosen model was small but expressive enough: `ByPath map[string][]ProvenanceEntry` plus a shared operation vocabulary.
+- It was straightforward to record useful metadata during merge, especially for:
+  - repository additions
+  - repository dedupe skips
+  - previous values for replacement fields
+  - whether an inline profile field was creating a new profile or merging into an existing one
+- The new consumer-side test confirmed the explain data is not trapped inside `configdoc`; it is already reachable through `ResolveUnifiedConfig(...)`.
+
+### What didn't work
+- The first test pass had a small Go scoping mistake in `resolved_test.go` where I declared `got` inside an `if` and then referenced it afterward.
+- Exact compiler error:
+
+```text
+pkg/configdoc/resolved_test.go:190:20: undefined: got
+pkg/configdoc/resolved_test.go:194:27: undefined: got
+pkg/configdoc/resolved_test.go:199:56: undefined: got
+```
+
+- The fix was just to bind `got` outside the conditional before checking its concrete type.
+
+### What I learned
+- A path-keyed explain structure is a good fit for this codebase: it is light enough to add now, but structured enough to grow into richer debug surfaces later.
+- The earlier concern was correct: trying to keep all provenance only in field logs would have been awkward for inline profile catalog merges. Keeping the explanation in `configdoc` feels much cleaner.
+
+### What was tricky to build
+- The subtle part was deciding how much detail to record immediately. I intentionally stopped at field/block-level merge provenance rather than trying to deep-diff every nested inference-settings scalar. That keeps the implementation useful now without turning it into a giant explain engine in one pass.
+
+### What warrants a second pair of eyes
+- Whether the current operation vocabulary is the right long-term naming (`replace`, `merge`, `append-dedupe`) or whether later UI/debug consumers will want even more explicit terms.
+- Whether repository explain metadata should eventually record the exact layer ordering as a first-class field instead of inferring it from the ordered entries.
+
+### What should be done in the future
+- Project selected document provenance into runtime debug output (for example, active profile selection or future config-explain commands).
+- Decide whether nested inference-settings explanations should stay field-block-level or become more granular later.
+
+### Code review instructions
+- Start with:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/configdoc/explain.go`
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/configdoc/resolved.go`
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/configdoc/resolved_test.go`
+- Then confirm the consumer exposure path in:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/cmds/profilebootstrap/local_profile_plan_test.go`
+- Validate with:
+
+```bash
+cd /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio
+go test ./pkg/configdoc -count=1
+golangci-lint run ./pkg/configdoc/...
+go test ./pkg/cmds/profilebootstrap -count=1
+golangci-lint run ./pkg/cmds/profilebootstrap/...
+```
+
+### Technical details
+
+Commands run for this tranche:
+
+```bash
+cd /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio
+
+gofmt -w \
+  pkg/configdoc/explain.go \
+  pkg/configdoc/resolved.go \
+  pkg/configdoc/resolved_test.go \
+  pkg/cmds/profilebootstrap/local_profile_plan_test.go
+
+go test ./pkg/configdoc -count=1
+
+golangci-lint run ./pkg/configdoc/...
+
+go test ./pkg/cmds/profilebootstrap -count=1
+
+golangci-lint run ./pkg/cmds/profilebootstrap/...
 ```
