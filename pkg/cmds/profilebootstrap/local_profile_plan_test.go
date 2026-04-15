@@ -10,7 +10,7 @@ import (
 	"testing"
 )
 
-func TestResolveCLIConfigFiles_UsesRepoCWDAndExplicitOrder(t *testing.T) {
+func TestResolveCLIConfigFilesResolved_UsesRepoCWDAndExplicitOrder(t *testing.T) {
 	repoDir, cwdDir, restore := setupGitWorkspace(t)
 	defer restore()
 
@@ -39,17 +39,17 @@ func TestResolveCLIConfigFiles_UsesRepoCWDAndExplicitOrder(t *testing.T) {
 		t.Fatalf("NewCLISelectionValues failed: %v", err)
 	}
 
-	files, err := ResolveCLIConfigFiles(parsed)
+	resolved, err := ResolveCLIConfigFilesResolved(parsed)
 	if err != nil {
-		t.Fatalf("ResolveCLIConfigFiles failed: %v", err)
+		t.Fatalf("ResolveCLIConfigFilesResolved failed: %v", err)
 	}
 	want := []string{repoFile, cwdFile, explicitFile}
-	if len(files) != len(want) {
-		t.Fatalf("config file count mismatch: got=%#v want=%#v", files, want)
+	if len(resolved.Files) != len(want) {
+		t.Fatalf("config file count mismatch: got=%#v want=%#v", resolved.Files, want)
 	}
 	for i := range want {
-		if files[i] != want[i] {
-			t.Fatalf("config file[%d] mismatch: got=%q want=%q", i, files[i], want[i])
+		if resolved.Files[i].Path != want[i] {
+			t.Fatalf("config file[%d] mismatch: got=%q want=%q", i, resolved.Files[i].Path, want[i])
 		}
 	}
 }

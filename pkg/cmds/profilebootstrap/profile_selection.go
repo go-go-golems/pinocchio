@@ -59,16 +59,8 @@ func NewCLISelectionValues(input CLISelectionInput) (*values.Values, error) {
 	return bootstrap.NewCLISelectionValues(pinocchioBootstrapConfig(), input)
 }
 
-func ResolveCLIConfigFiles(parsed *values.Values) ([]string, error) {
-	return bootstrap.ResolveCLIConfigFiles(pinocchioBootstrapConfig(), parsed)
-}
-
 func ResolveCLIConfigFilesResolved(parsed *values.Values) (*ResolvedCLIConfigFiles, error) {
 	return bootstrap.ResolveCLIConfigFilesResolved(pinocchioBootstrapConfig(), parsed)
-}
-
-func ResolveCLIConfigFilesForExplicit(explicit string) ([]string, error) {
-	return bootstrap.ResolveCLIConfigFilesForExplicit(pinocchioBootstrapConfig(), explicit)
 }
 
 func MapPinocchioConfigFile(rawConfig interface{}) (map[string]map[string]interface{}, error) {
