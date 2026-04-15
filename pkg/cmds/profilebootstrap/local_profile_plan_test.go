@@ -18,16 +18,16 @@ func TestResolveCLIConfigFilesResolved_UsesRepoCWDAndExplicitOrder(t *testing.T)
 	t.Setenv("HOME", filepath.Join(tmpHome, "home"))
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(tmpHome, "xdg"))
 
-	repoFile := filepath.Join(repoDir, ".pinocchio-profile.yml")
-	cwdFile := filepath.Join(cwdDir, ".pinocchio-profile.yml")
+	repoFile := filepath.Join(repoDir, ".pinocchio.yml")
+	cwdFile := filepath.Join(cwdDir, ".pinocchio.yml")
 	explicitFile := filepath.Join(repoDir, "explicit.yaml")
 	for _, entry := range []struct {
 		path    string
 		content string
 	}{
-		{repoFile, "profile-settings:\n  profile: repo-profile\n"},
-		{cwdFile, "profile-settings:\n  profile: cwd-profile\n"},
-		{explicitFile, "profile-settings:\n  profile: explicit-profile\n"},
+		{repoFile, "profile:\n  active: repo-profile\n"},
+		{cwdFile, "profile:\n  active: cwd-profile\n"},
+		{explicitFile, "profile:\n  active: explicit-profile\n"},
 	} {
 		if err := os.WriteFile(entry.path, []byte(entry.content), 0o644); err != nil {
 			t.Fatalf("write %s: %v", entry.path, err)
@@ -62,16 +62,16 @@ func TestResolveCLIProfileSelection_CWDOverridesRepoAndExplicitWins(t *testing.T
 	t.Setenv("HOME", filepath.Join(tmpHome, "home"))
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(tmpHome, "xdg"))
 
-	repoFile := filepath.Join(repoDir, ".pinocchio-profile.yml")
-	cwdFile := filepath.Join(cwdDir, ".pinocchio-profile.yml")
+	repoFile := filepath.Join(repoDir, ".pinocchio.yml")
+	cwdFile := filepath.Join(cwdDir, ".pinocchio.yml")
 	explicitFile := filepath.Join(repoDir, "explicit.yaml")
 	for _, entry := range []struct {
 		path    string
 		content string
 	}{
-		{repoFile, "profile-settings:\n  profile: repo-profile\n"},
-		{cwdFile, "profile-settings:\n  profile: cwd-profile\n"},
-		{explicitFile, "profile-settings:\n  profile: explicit-profile\n"},
+		{repoFile, "profile:\n  active: repo-profile\n"},
+		{cwdFile, "profile:\n  active: cwd-profile\n"},
+		{explicitFile, "profile:\n  active: explicit-profile\n"},
 	} {
 		if err := os.WriteFile(entry.path, []byte(entry.content), 0o644); err != nil {
 			t.Fatalf("write %s: %v", entry.path, err)
@@ -99,24 +99,25 @@ func TestResolveCLIProfileSelection_CWDOverridesRepoAndExplicitWins(t *testing.T
 	}
 }
 
-func TestResolveBaseInferenceSettings_UsesRepoCWDAndExplicitConfigPrecedence(t *testing.T) {
+func TestResolveBaseInferenceSettings_IgnoresUnifiedConfigRuntimeFieldsAndKeepsConfigFiles(t *testing.T) {
 	repoDir, cwdDir, restore := setupGitWorkspace(t)
 	defer restore()
 
 	tmpHome := t.TempDir()
 	t.Setenv("HOME", filepath.Join(tmpHome, "home"))
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(tmpHome, "xdg"))
+	t.Setenv("PINOCCHIO_AI_ENGINE", "env-model")
 
-	repoFile := filepath.Join(repoDir, ".pinocchio-profile.yml")
-	cwdFile := filepath.Join(cwdDir, ".pinocchio-profile.yml")
+	repoFile := filepath.Join(repoDir, ".pinocchio.yml")
+	cwdFile := filepath.Join(cwdDir, ".pinocchio.yml")
 	explicitFile := filepath.Join(repoDir, "explicit.yaml")
 	for _, entry := range []struct {
 		path    string
 		content string
 	}{
-		{repoFile, "ai-chat:\n  ai-api-type: openai\n  ai-engine: repo-model\n"},
-		{cwdFile, "ai-chat:\n  ai-engine: cwd-model\n"},
-		{explicitFile, "ai-chat:\n  ai-engine: explicit-model\n"},
+		{repoFile, "profile:\n  active: repo-profile\nprofiles:\n  repo-profile:\n    inference_settings:\n      chat:\n        api_type: openai\n        engine: repo-model\n"},
+		{cwdFile, "profile:\n  active: cwd-profile\nprofiles:\n  cwd-profile:\n    inference_settings:\n      chat:\n        engine: cwd-model\n"},
+		{explicitFile, "profile:\n  active: explicit-profile\nprofiles:\n  explicit-profile:\n    inference_settings:\n      chat:\n        engine: explicit-model\n"},
 	} {
 		if err := os.WriteFile(entry.path, []byte(entry.content), 0o644); err != nil {
 			t.Fatalf("write %s: %v", entry.path, err)
@@ -135,8 +136,8 @@ func TestResolveBaseInferenceSettings_UsesRepoCWDAndExplicitConfigPrecedence(t *
 	if settings.Chat == nil || settings.Chat.Engine == nil {
 		t.Fatal("expected resolved chat engine")
 	}
-	if got := *settings.Chat.Engine; got != "explicit-model" {
-		t.Fatalf("expected explicit engine to win, got %q", got)
+	if got := *settings.Chat.Engine; got != "env-model" {
+		t.Fatalf("expected env engine to remain base, got %q", got)
 	}
 	wantFiles := []string{repoFile, cwdFile, explicitFile}
 	if len(files) != len(wantFiles) {
@@ -149,19 +150,69 @@ func TestResolveBaseInferenceSettings_UsesRepoCWDAndExplicitConfigPrecedence(t *
 	}
 }
 
-func setupGitWorkspace(t *testing.T) (repoDir string, cwdDir string, restore func()) {
+func TestResolveCLIEngineSettings_UsesMergedDocumentSelectionAndInlineProfiles(t *testing.T) {
+	repoDir, cwdDir, restore := setupGitWorkspace(t)
+	defer restore()
+
+	tmpHome := t.TempDir()
+	t.Setenv("HOME", filepath.Join(tmpHome, "home"))
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(tmpHome, "xdg"))
+	t.Setenv("PINOCCHIO_AI_ENGINE", "env-model")
+
+	repoFile := filepath.Join(repoDir, ".pinocchio.yml")
+	cwdFile := filepath.Join(cwdDir, ".pinocchio.yml")
+	for _, entry := range []struct {
+		path    string
+		content string
+	}{
+		{repoFile, "profile:\n  active: assistant\nprofiles:\n  default:\n    inference_settings:\n      chat:\n        api_type: openai-responses\n        engine: gpt-5\n"},
+		{cwdFile, "profiles:\n  assistant:\n    stack:\n      - profile_slug: default\n    inference_settings:\n      chat:\n        engine: gpt-5-mini\n"},
+	} {
+		if err := os.WriteFile(entry.path, []byte(entry.content), 0o644); err != nil {
+			t.Fatalf("write %s: %v", entry.path, err)
+		}
+	}
+
+	resolved, err := ResolveCLIEngineSettings(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("ResolveCLIEngineSettings failed: %v", err)
+	}
+	if resolved.Close != nil {
+		defer resolved.Close()
+	}
+	if resolved.ProfileSelection == nil || resolved.ProfileSelection.Profile != "assistant" {
+		t.Fatalf("expected assistant profile selection, got %#v", resolved.ProfileSelection)
+	}
+	if resolved.BaseInferenceSettings == nil || resolved.BaseInferenceSettings.Chat == nil || resolved.BaseInferenceSettings.Chat.Engine == nil {
+		t.Fatal("expected base inference settings")
+	}
+	if got := *resolved.BaseInferenceSettings.Chat.Engine; got != "env-model" {
+		t.Fatalf("expected env-model base engine, got %q", got)
+	}
+	if resolved.FinalInferenceSettings == nil || resolved.FinalInferenceSettings.Chat == nil || resolved.FinalInferenceSettings.Chat.Engine == nil {
+		t.Fatal("expected final inference settings")
+	}
+	if got := *resolved.FinalInferenceSettings.Chat.Engine; got != "gpt-5-mini" {
+		t.Fatalf("expected inline profile engine, got %q", got)
+	}
+	if resolved.FinalInferenceSettings.Chat.ApiType == nil || string(*resolved.FinalInferenceSettings.Chat.ApiType) != "openai-responses" {
+		t.Fatalf("expected stacked api_type to be preserved, got %#v", resolved.FinalInferenceSettings.Chat.ApiType)
+	}
+}
+
+func setupGitWorkspace(t *testing.T) (string, string, func()) {
 	t.Helper()
 	oldWD, err := os.Getwd()
 	if err != nil {
 		t.Fatalf("getwd: %v", err)
 	}
-	restore = func() { _ = os.Chdir(oldWD) }
+	restore := func() { _ = os.Chdir(oldWD) }
 
-	repoDir = t.TempDir()
+	repoDir := t.TempDir()
 	if err := runGit(repoDir, "init"); err != nil {
 		t.Fatalf("git init: %v", err)
 	}
-	cwdDir = filepath.Join(repoDir, "sub", "dir")
+	cwdDir := filepath.Join(repoDir, "sub", "dir")
 	if err := os.MkdirAll(cwdDir, 0o755); err != nil {
 		t.Fatalf("mkdir cwd: %v", err)
 	}

@@ -242,7 +242,14 @@ func resolvePinocchioJSRuntimeBootstrap(ctx context.Context, parsed *values.Valu
 		return nil, err
 	}
 
-	registryChain, err := geppettobootstrap.ResolveProfileRegistryChain(ctx, resolved.ProfileSelection.ProfileSettings)
+	unifiedConfig, err := profilebootstrap.ResolveUnifiedConfig(parsed)
+	if err != nil {
+		if resolved.Close != nil {
+			resolved.Close()
+		}
+		return nil, err
+	}
+	registryChain, err := profilebootstrap.ResolveUnifiedProfileRegistryChain(ctx, unifiedConfig)
 	if err != nil {
 		if resolved.Close != nil {
 			resolved.Close()
@@ -250,12 +257,21 @@ func resolvePinocchioJSRuntimeBootstrap(ctx context.Context, parsed *values.Valu
 		return nil, err
 	}
 
+	var profileRegistry gepprofiles.RegistryReader
+	var useDefaultProfileResolve bool
+	var defaultProfileResolve gepprofiles.ResolveInput
+	if registryChain != nil {
+		profileRegistry = registryChain.Reader
+		useDefaultProfileResolve = registryChain.DefaultProfileResolve.EngineProfileSlug != ""
+		defaultProfileResolve = registryChain.DefaultProfileResolve
+	}
+
 	return &pinocchioJSRuntimeBootstrap{
 		DefaultInferenceSettings: resolved.FinalInferenceSettings,
 		ResolvedEngineSettings:   resolved,
-		ProfileRegistry:          registryChain.Reader,
-		UseDefaultProfileResolve: registryChain != nil && registryChain.DefaultProfileResolve.EngineProfileSlug != "",
-		DefaultProfileResolve:    registryChain.DefaultProfileResolve,
+		ProfileRegistry:          profileRegistry,
+		UseDefaultProfileResolve: useDefaultProfileResolve,
+		DefaultProfileResolve:    defaultProfileResolve,
 		Close: func() {
 			if registryChain != nil && registryChain.Close != nil {
 				registryChain.Close()

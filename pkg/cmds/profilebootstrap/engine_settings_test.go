@@ -11,36 +11,25 @@ func TestResolveCLIEngineSettingsFromBase_MatchesResolvedPath(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(tmpDir, "xdg"))
 	t.Setenv("HOME", tmpDir)
+	t.Setenv("PINOCCHIO_AI_ENGINE", "env-model")
 
 	configPath := filepath.Join(tmpDir, "pinocchio-config.yaml")
 	configYAML := `
-ai-chat:
-  ai-api-type: openai
-  ai-engine: base-model
-`
-	if err := os.WriteFile(configPath, []byte(configYAML), 0o644); err != nil {
-		t.Fatalf("write config: %v", err)
-	}
-
-	registryPath := filepath.Join(tmpDir, "profiles.yaml")
-	registryYAML := `
-slug: workspace
+profile:
+  active: default
 profiles:
   default:
-    slug: default
     inference_settings:
       chat:
         api_type: openai-responses
         engine: gpt-5-mini
 `
-	if err := os.WriteFile(registryPath, []byte(registryYAML), 0o644); err != nil {
-		t.Fatalf("write registry: %v", err)
+	if err := os.WriteFile(configPath, []byte(configYAML), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
 	}
 
 	parsed, err := NewCLISelectionValues(CLISelectionInput{
-		ConfigFile:        configPath,
-		Profile:           "default",
-		ProfileRegistries: []string{registryPath},
+		ConfigFile: configPath,
 	})
 	if err != nil {
 		t.Fatalf("NewCLISelectionValues failed: %v", err)
@@ -75,6 +64,9 @@ profiles:
 	}
 	if got, want := *resolvedFromBase.BaseInferenceSettings.Chat.Engine, *resolvedDirect.BaseInferenceSettings.Chat.Engine; got != want {
 		t.Fatalf("base engine mismatch: got %q want %q", got, want)
+	}
+	if got := *resolvedDirect.BaseInferenceSettings.Chat.Engine; got != "env-model" {
+		t.Fatalf("expected env-model base engine, got %q", got)
 	}
 
 	if resolvedDirect.FinalInferenceSettings == nil || resolvedDirect.FinalInferenceSettings.Chat == nil || resolvedDirect.FinalInferenceSettings.Chat.Engine == nil || resolvedDirect.FinalInferenceSettings.Chat.ApiType == nil {
