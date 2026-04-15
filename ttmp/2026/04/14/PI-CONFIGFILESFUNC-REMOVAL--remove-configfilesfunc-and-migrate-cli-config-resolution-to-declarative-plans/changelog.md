@@ -104,3 +104,19 @@ Copied the declarative-config-plan project report into the ticket stream and add
 - /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/14/PI-CONFIGFILESFUNC-REMOVAL--remove-configfilesfunc-and-migrate-cli-config-resolution-to-declarative-plans/analysis/02-project-report-and-remaining-geppetto-pinocchio-legacy-cleanup-audit.md — New combined project report and cleanup audit document
 - /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/14/PI-CONFIGFILESFUNC-REMOVAL--remove-configfilesfunc-and-migrate-cli-config-resolution-to-declarative-plans/tasks.md — Added open follow-up tasks for the remaining Geppetto/Pinocchio cleanup surface
 
+
+## 2026-04-14
+
+Executed the first destructive Geppetto/Pinocchio cleanup tranche from the audit: removed the legacy Geppetto Cobra middleware builders and the remaining pinocchio UseViper-shaped helper parser, migrated the simple-chat example to the current resolved-files/bootstrap path, and replaced the deleted Geppetto helper dependency in pinocchio/pkg/cmds/cobra.go with a local middleware builder over profilebootstrap.BootstrapConfig().
+
+### Related Files
+
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/geppetto/pkg/sections/profile_sections.go — Deleted defaultPinocchioProfileRegistriesIfPresent and GetProfileSettingsMiddleware
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/geppetto/pkg/sections/sections.go — Deleted resolvePinocchioConfigFiles and GetCobraCommandGeppettoMiddlewares
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/cmd/examples/simple-chat/main.go — Migrated the example off ParseGeppettoLayers to resolved-files plus profilebootstrap
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/cmds/cobra.go — Replaced deleted Geppetto middleware helper dependency with a local plan-based middleware builder
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/cmds/helpers/parse-helpers.go — Deleted the old GeppettoLayersHelper and ParseGeppettoLayers compatibility path
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/cmds/profilebootstrap/profile_selection.go — Added ResolveCLIConfigFilesResolved wrapper for callers that need resolved files instead of raw paths
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/14/PI-CONFIGFILESFUNC-REMOVAL--remove-configfilesfunc-and-migrate-cli-config-resolution-to-declarative-plans/reference/01-diary.md — Recorded Step 9 deleting the legacy middleware builders and helper parser
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/14/PI-CONFIGFILESFUNC-REMOVAL--remove-configfilesfunc-and-migrate-cli-config-resolution-to-declarative-plans/tasks.md — Marked the first three Geppetto/Pinocchio cleanup follow-ups done
+

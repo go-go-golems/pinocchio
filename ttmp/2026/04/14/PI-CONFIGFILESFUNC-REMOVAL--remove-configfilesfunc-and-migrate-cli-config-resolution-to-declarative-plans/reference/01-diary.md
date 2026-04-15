@@ -824,6 +824,109 @@ rg -n 'InitViper\(|InitLoggerFromViper\(' . --glob '*.go' -g '!**/ttmp/**' -g '!
 
 Expected remaining hits are only the corp-local Clay helper definition and the backup/orig workspace-manager copies.
 
+## Step 9: Delete the remaining Geppetto legacy middleware builders and the Pinocchio `UseViper` helper parser
+
+The next cleanup pass targeted the highest-value compatibility surfaces identified in the audit: the large duplicated Geppetto section middleware builders and Pinocchio’s own manual helper parser that still carried a `UseViper`-shaped API. The goal was not to redesign the active bootstrap path again, but to remove the remaining alternate paths that kept old architecture ideas alive.
+
+### Prompt Context
+
+**User prompt (verbatim):** "go ahead."
+
+**Assistant interpretation:** Start executing the recommended deletion sequence from the cleanup audit instead of stopping at documentation.
+
+**Inferred user intent:** Remove the most obvious remaining legacy surfaces now that the new config-plan/bootstrap path is stable.
+
+### What I did
+- Deleted Geppetto legacy middleware builders from:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/geppetto/pkg/sections/sections.go`
+    - removed `resolvePinocchioConfigFiles(...)`
+    - removed `GetCobraCommandGeppettoMiddlewares(...)`
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/geppetto/pkg/sections/profile_sections.go`
+    - removed `defaultPinocchioProfileRegistriesIfPresent()`
+    - removed `GetProfileSettingsMiddleware(...)`
+- Deleted Pinocchio’s compatibility parser helper:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/cmds/helpers/parse-helpers.go`
+- Migrated the active `simple-chat` example away from that helper:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/cmd/examples/simple-chat/main.go`
+  - it now resolves helper-layer config with `ResolveCLIConfigFilesResolved(...) + FromResolvedFiles(...) + Merge(parsed)` and resolves inference settings through `profilebootstrap.ResolveCLIEngineSettings(...)`
+- Added a resolved-files wrapper in:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/cmds/profilebootstrap/profile_selection.go`
+    - `ResolveCLIConfigFilesResolved(...)`
+- Replaced the deleted Geppetto middleware helper in Pinocchio command wiring with a current plan-based path in:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/cmds/cobra.go`
+  - `BuildCobraCommandWithGeppettoMiddlewares(...)` now uses a local middleware builder over `profilebootstrap.BootstrapConfig()` and `sources.FromConfigPlanBuilder(...)`
+
+### Why
+- The Geppetto middleware builders were large duplicated compatibility surfaces that no longer matched the active bootstrap architecture.
+- `parse-helpers.go` was the clearest remaining Pinocchio file still shaped around a Viper-era mental model, including a `UseViper` field name and manual reconstruction of env/config/default parsing.
+- Keeping those files around made the codebase look like it still supported multiple equally valid configuration architectures, even though the project had already standardized on bootstrap + plans.
+
+### What worked
+- Focused Geppetto validation still passed after deleting the legacy helpers:
+
+```bash
+cd /home/manuel/workspaces/2026-04-10/pinocchiorc/geppetto
+gofmt -w pkg/sections/sections.go pkg/sections/profile_sections.go
+
+go test ./pkg/sections ./pkg/cli/bootstrap/... -count=1
+```
+
+- Focused Pinocchio validation passed after migrating the caller and deleting `parse-helpers.go`:
+
+```bash
+cd /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio
+gofmt -w pkg/cmds/cobra.go cmd/examples/simple-chat/main.go pkg/cmds/profilebootstrap/profile_selection.go
+
+go test ./pkg/cmds/profilebootstrap ./pkg/cmds/helpers ./pkg/cmds ./cmd/examples/simple-chat -count=1
+```
+
+- A follow-up grep over current source no longer finds:
+  - `GetCobraCommandGeppettoMiddlewares(...)`
+  - `GetProfileSettingsMiddleware(...)`
+  - `ParseGeppettoLayers(...)`
+  - `WithUseViper(...)`
+  - `GeppettoLayersHelper`
+
+### What didn't work
+- My earlier audit grep missed one real active caller of the deleted Geppetto helper:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/cmds/cobra.go`
+- That showed up immediately as a compile error:
+
+```text
+pkg/cmds/cobra.go:17:32: undefined: sections2.GetCobraCommandGeppettoMiddlewares
+```
+
+- The fix was not to restore the old helper, but to replace that caller with a local plan-based middleware builder that uses `profilebootstrap.BootstrapConfig()` directly.
+
+### What I learned
+- The deleted Geppetto helpers were not just stale; they had already stopped being a useful abstraction. Removing them actually clarified the active ownership split.
+- The Pinocchio command-layer caller in `pkg/cmds/cobra.go` was the real bridge that needed to survive, but it did not need the old Geppetto helper to do so.
+
+### What was tricky
+- The `simple-chat` example still wanted two different things from parsing:
+  1. helper-layer values such as `cmdlayers.HelpersSettings`
+  2. final resolved inference settings with profile overlay applied
+- The clean answer was to split those responsibilities explicitly instead of continuing to funnel everything through `ParseGeppettoLayers(...)`.
+
+### What warrants a second pair of eyes
+- Whether `BuildCobraCommandWithGeppettoMiddlewares(...)` should keep that name now that it no longer uses the old Geppetto helper function, or whether it should eventually be renamed to reflect that it is really a Pinocchio-specific plan/bootstrap parser path.
+- Whether the resolved-files wrapper added to `profilebootstrap` should remain public or be folded into a more direct caller path in the next cleanup step.
+
+### What should be done in the future
+- Continue with the next cleanup tranche identified in the audit:
+  - collapse duplicated bootstrap config middleware assembly in Geppetto
+  - migrate `cmd/pinocchio/cmds/js.go` off path-list config loading
+  - then evaluate whether the remaining thin helper re-export layer in `pkg/cmds/helpers/*` still buys anything
+
+### Code review instructions
+- Review in this order:
+  1. `/home/manuel/workspaces/2026-04-10/pinocchiorc/geppetto/pkg/sections/sections.go`
+  2. `/home/manuel/workspaces/2026-04-10/pinocchiorc/geppetto/pkg/sections/profile_sections.go`
+  3. `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/cmds/helpers/parse-helpers.go` (deleted)
+  4. `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/cmd/examples/simple-chat/main.go`
+  5. `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/cmds/cobra.go`
+  6. `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/cmds/profilebootstrap/profile_selection.go`
+
 ## Appendix: Commands Used During Implementation
 
 ```bash
