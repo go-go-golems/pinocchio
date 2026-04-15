@@ -11,6 +11,14 @@ DocType: reference
 Intent: long-term
 Owners: []
 RelatedFiles:
+    - Path: cmd/pinocchio/cmds/js.go
+      Note: Diary Step 9 records the JS runtime migration to the unified composed registry path
+    - Path: pkg/cmds/profilebootstrap/engine_settings.go
+      Note: Diary Step 9 records the hidden-base preservation and unified engine-settings path
+    - Path: pkg/cmds/profilebootstrap/engine_settings_test.go
+      Note: Diary Step 9 records focused bootstrap regression coverage
+    - Path: pkg/cmds/profilebootstrap/profile_selection.go
+      Note: Diary Step 9 records the document-first selection and registry-chain integration
     - Path: pkg/configdoc/load.go
       Note: Diary Step 4 records strict decoding and old-format rejection in the new configdoc package
     - Path: pkg/configdoc/load_test.go
@@ -47,6 +55,7 @@ WhatFor: |
     Preserve the reasoning, commands, and decisions behind the creation of the ticket deliverables so later implementation work can continue without losing context.
 WhenToUse: Use when continuing this ticket, reviewing how the docs were assembled, or checking which evidence and commands shaped the current recommendation.
 ---
+
 
 
 
@@ -901,4 +910,155 @@ golangci-lint run ./pkg/configdoc/...
 
 git add pkg/configdoc
 git commit --no-verify -m "configdoc: load and merge resolved files"
+```
+
+## Step 9: Switch Pinocchio bootstrap to the unified document path and validate live profile behaviors
+
+This tranche was the first real `profilebootstrap` integration step. Up to this point the unified config work lived in `pkg/configdoc`, but the active Pinocchio runtime still resolved selection and engine settings through the old mapper-first path. The goal here was to swap the bootstrap control plane underneath the existing runtime model without rewriting the whole command stack in one jump.
+
+The implementation split the problem into three pieces:
+- resolve the effective unified document from the existing config plan,
+- derive profile-selection state from that document plus CLI overrides,
+- keep the base inference settings model intact by preserving a hidden non-profile baseline and only overlaying selected profile settings on top.
+
+### Prompt Context
+
+**User prompt (verbatim):** “continue” and later “can you also validate with go run ./cmd/pinocchio code professional "hello" and try different (fialing or valid) profile configuration options (~/.config/pinocchio/profiles.yaml has a set of valid profiles, for example)”
+
+**Assistant interpretation:** Land the document-first bootstrap tranche, then prove it with both focused tests and real command executions using valid and invalid profile configurations.
+
+**Inferred user intent:** Do not stop at unit tests; verify the new behavior in the actual CLI, including both success and failure cases.
+
+**Commit (code):** pending at diary-writing time
+
+### What I did
+- Updated `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/cmds/profilebootstrap/profile_selection.go` to:
+  - resolve `ResolvedConfigFile` entries through the existing config plan,
+  - load/merge them through `configdoc.LoadResolvedDocuments(...)`,
+  - derive `ProfileSettings` from `profile.active` / `profile.registries`,
+  - apply CLI `--profile` / `--profile-registries` as the explicit override layer,
+  - compose imported registries with inline profiles through `ResolveUnifiedProfileRegistryChain(...)`,
+  - switch repo/cwd discovery from `.pinocchio-profile.yml` to `.pinocchio.yml`,
+  - narrow the parser-facing config mapper to the new `profile` block rather than legacy top-level runtime sections.
+- Updated `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/cmds/profilebootstrap/engine_settings.go` so:
+  - `ResolveBaseInferenceSettings(...)` again returns the hidden base only,
+  - `ResolveCLIEngineSettings(...)` overlays parsed non-profile values onto that hidden base before resolving the selected profile,
+  - `ResolveCLIEngineSettingsFromBase(...)` uses the unified document-derived selection/registry chain instead of the old Geppetto mapper-first path.
+- Updated JS runtime bootstrap in:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/cmd/pinocchio/cmds/js.go`
+  - so it now uses the unified document-derived composed registry chain as well.
+- Updated and expanded focused tests in:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/cmds/profilebootstrap/local_profile_plan_test.go`
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/cmds/profilebootstrap/engine_settings_test.go`
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/cmd/web-chat/main_profile_registries_test.go`
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/cmd/pinocchio/cmds/js_test.go`
+- Revalidated command packages and lint after the bootstrap swap.
+
+### Why
+- The profile-first format is not useful until the live bootstrap path reads `profile` / `profiles` from the new unified document instead of the legacy config mapper.
+- Preserving the hidden-base model avoids mixing profile state into the non-profile baseline, which would break runtime profile switching later.
+- Real CLI validation was necessary because the new behavior crosses config discovery, selection, registry composition, and actual inference startup.
+
+### What worked
+- The `configdoc.LoadResolvedDocuments(...)` seam was enough to keep the bootstrap integration reasonably small.
+- The minimal Geppetto seam for this tranche turned out to be: reuse Geppetto’s existing types and registry resolution APIs, but keep the unified document loading/composition in Pinocchio. No Geppetto code changes were required for this slice.
+- Focused tests passed after the integration:
+
+```bash
+cd /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio
+go test ./pkg/cmds/profilebootstrap ./cmd/web-chat ./cmd/pinocchio/cmds/... -count=1
+golangci-lint run ./pkg/cmds/profilebootstrap/... ./cmd/web-chat ./cmd/pinocchio ./cmd/pinocchio/cmds/...
+```
+
+- Live CLI validation succeeded for:
+  - imported registry selection with a valid real profile (`gpt-5-mini`) using `go run ./cmd/pinocchio ... code professional "hello"`
+  - inline local `.pinocchio.yml` resolution in the current working directory (validated via a temp-built binary run from a temp directory).
+
+### What didn't work
+- My first live `go run` attempts used a temporary `HOME`, which also moved Go’s module/build caches and caused long dependency redownloads that hit the timeout before the command itself ran.
+- The fix was to keep `GOPATH`, `GOMODCACHE`, and `GOCACHE` pinned to the real machine caches while isolating only Pinocchio’s config home.
+- The first inline local-config validation attempt also failed to pick up `.pinocchio.yml` because I placed it only in a parent directory without making that directory a git root. That was correct behavior under the current plan. Re-running with `.pinocchio.yml` in the actual working directory succeeded.
+- One real-profile attempt with `gpt-5-nano` failed at inference time with a provider auth error:
+
+```text
+Error: inference failed: responses api error: status=401 body=map[error:map[code:<nil> message:Missing bearer or basic authentication in header param:<nil> type:invalid_request_error]]
+```
+
+- That was not a bootstrap failure; it showed that this particular registry entry was not self-contained for live execution on this machine, so I re-ran the actual `hello` command with `gpt-5-mini`, which succeeded.
+- During the first bootstrap implementation pass I also introduced a regression where `--profile` without registries silently fell back to baseline instead of erroring. Live validation caught it. I fixed `ResolveUnifiedProfileRegistryChain(...)` to reject that case unless inline profiles are present.
+
+### What I learned
+- The smallest useful document-first integration does not require a Geppetto redesign. Pinocchio can own document loading + profile-catalog composition and still hand the final result to existing Geppetto registry/profile primitives.
+- Live validation matters for config migrations: the tests did not catch the silent missing-registry fallback, but the real CLI flow did immediately.
+- The new local-file discovery behavior is now easy to explain: `.pinocchio.yml` is discovered from the current working directory directly, or from the git root when running inside a repository.
+
+### What was tricky to build
+- The hardest semantic edge was preserving the old hidden-base contract while changing where profile state comes from. The first implementation accidentally made `ResolveBaseInferenceSettings(...)` include parsed CLI overlays, which broke the distinction web-chat relies on. I corrected that so the hidden base remains “non-profile baseline only,” and explicit parsed values are layered separately when needed.
+
+### What warrants a second pair of eyes
+- The parser-facing `configFileMapper(...)` now intentionally only maps the new `profile` block and ignores the old top-level runtime sections. That matches the breaking-change goal, but it deserves a review pass because it changes what ordinary command parsing can absorb from config files.
+- Inline/imported mixed stack resolution still deserves a deeper look later. This tranche composes the registries for selection/runtime use, but the broader “preserve cross-registry stack semantics everywhere” task remains open in the ticket.
+
+### What should be done in the future
+- Migrate `cmd/web-chat/main.go` from its remaining imported-registry-only bootstrap path onto `ResolveUnifiedProfileRegistryChain(...)`.
+- Add more end-to-end CLI tests around `.pinocchio.yml` in git-root scenarios, not only working-directory scenarios.
+- Add provenance/explain data for merged document entries so debug output can explain why a given `profile.active` or inline profile field won.
+
+### Code review instructions
+- Start with:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/cmds/profilebootstrap/profile_selection.go`
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/cmds/profilebootstrap/engine_settings.go`
+- Then review the consumer-side follow-on:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/cmd/pinocchio/cmds/js.go`
+- Confirm behavior with:
+
+```bash
+cd /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio
+go test ./pkg/cmds/profilebootstrap ./cmd/web-chat ./cmd/pinocchio/cmds/... -count=1
+golangci-lint run ./pkg/cmds/profilebootstrap/... ./cmd/web-chat ./cmd/pinocchio ./cmd/pinocchio/cmds/...
+```
+
+- For live validation, the successful cases in this tranche were:
+
+```bash
+# valid imported registry profile + real inference
+HOME="$TMPHOME" GOPATH="/home/manuel/go" GOMODCACHE="/home/manuel/go/pkg/mod" GOCACHE="/home/manuel/.cache/go-build" XDG_CONFIG_HOME="$TMPHOME/xdg" \
+  go run ./cmd/pinocchio --profile-registries "yaml:/home/manuel/.config/pinocchio/profiles.yaml" --profile gpt-5-mini code professional --non-interactive "hello"
+
+# valid inline local config in cwd (run from a temp working directory containing .pinocchio.yml)
+$BIN code professional --print-inference-settings --non-interactive "hello"
+```
+
+### Technical details
+
+Commands run for this tranche:
+
+```bash
+cd /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio
+
+gofmt -w \
+  pkg/cmds/profilebootstrap/profile_selection.go \
+  pkg/cmds/profilebootstrap/engine_settings.go \
+  pkg/cmds/profilebootstrap/local_profile_plan_test.go \
+  pkg/cmds/profilebootstrap/engine_settings_test.go \
+  cmd/web-chat/main_profile_registries_test.go \
+  cmd/pinocchio/cmds/js.go \
+  cmd/pinocchio/cmds/js_test.go
+
+go test ./pkg/cmds/profilebootstrap ./cmd/web-chat ./cmd/pinocchio/cmds/... -count=1
+
+golangci-lint run ./pkg/cmds/profilebootstrap/... ./cmd/web-chat ./cmd/pinocchio ./cmd/pinocchio/cmds/...
+
+# live validation cases
+HOME="$TMPHOME" GOPATH="/home/manuel/go" GOMODCACHE="/home/manuel/go/pkg/mod" GOCACHE="/home/manuel/.cache/go-build" XDG_CONFIG_HOME="$TMPHOME/xdg" \
+  go run ./cmd/pinocchio --profile-registries "yaml:/home/manuel/.config/pinocchio/profiles.yaml" --profile gpt-5-mini code professional --print-inference-settings --non-interactive "hello"
+
+HOME="$TMPHOME" GOPATH="/home/manuel/go" GOMODCACHE="/home/manuel/go/pkg/mod" GOCACHE="/home/manuel/.cache/go-build" XDG_CONFIG_HOME="$TMPHOME/xdg" \
+  go run ./cmd/pinocchio --profile does-not-exist --profile-registries "yaml:/home/manuel/.config/pinocchio/profiles.yaml" code professional --print-inference-settings --non-interactive "hello"
+
+HOME="$TMPHOME" GOPATH="/home/manuel/go" GOMODCACHE="/home/manuel/go/pkg/mod" GOCACHE="/home/manuel/.cache/go-build" XDG_CONFIG_HOME="$TMPHOME/xdg" \
+  go run ./cmd/pinocchio --profile gpt-5-mini code professional --print-inference-settings --non-interactive "hello"
+
+HOME="$TMPHOME" GOPATH="/home/manuel/go" GOMODCACHE="/home/manuel/go/pkg/mod" GOCACHE="/home/manuel/.cache/go-build" XDG_CONFIG_HOME="$TMPHOME/xdg" \
+  go run ./cmd/pinocchio --profile-registries "yaml:/home/manuel/.config/pinocchio/profiles.yaml" --profile gpt-5-mini code professional --non-interactive "hello"
 ```

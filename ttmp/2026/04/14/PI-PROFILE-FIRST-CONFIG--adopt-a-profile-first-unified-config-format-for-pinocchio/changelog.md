@@ -103,3 +103,16 @@ Step 8 (commit 07edc1c): added LoadResolvedDocuments(...) under pinocchio/pkg/co
 - /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/14/PI-PROFILE-FIRST-CONFIG--adopt-a-profile-first-unified-config-format-for-pinocchio/reference/02-investigation-diary.md — Records Step 8 for the resolved-files loader tranche
 - /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/14/PI-PROFILE-FIRST-CONFIG--adopt-a-profile-first-unified-config-format-for-pinocchio/tasks.md — Marks the real layering-merge test task complete
 
+
+## 2026-04-15
+
+Step 9 (commit c6afd24): switched Pinocchio profile selection and engine-settings bootstrap to the unified config document path, composed inline and imported profile registries at runtime, migrated JS runtime bootstrap to the same path, and validated the CLI live with valid and failing profile configurations.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/cmd/pinocchio/cmds/js.go — Uses the unified profile registry chain for JS runtime bootstrap
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/cmds/profilebootstrap/engine_settings.go — Preserves the hidden-base contract while resolving final engine settings from the unified document path
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/cmds/profilebootstrap/profile_selection.go — Loads and merges unified config documents
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/14/PI-PROFILE-FIRST-CONFIG--adopt-a-profile-first-unified-config-format-for-pinocchio/reference/02-investigation-diary.md — Records Step 9 including the live go run validation matrix and caught regression
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/14/PI-PROFILE-FIRST-CONFIG--adopt-a-profile-first-unified-config-format-for-pinocchio/tasks.md — Marks the Phase 4 bootstrap tranche and JS migration task complete
+

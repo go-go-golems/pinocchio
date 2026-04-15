@@ -19,10 +19,20 @@ RelatedFiles:
       Note: Implementation guide reuses the current imported-registry chain instead of inventing another resolution engine
     - Path: ../../../../../../../glazed/pkg/config/plan.go
       Note: Implementation guide references the current resolved-file and plan APIs that should remain unchanged
+    - Path: cmd/pinocchio/cmds/js.go
+      Note: Step 9 migrates the JS runtime bootstrap to the unified config + composed registry path
     - Path: cmd/web-chat/main.go
       Note: Implementation guide highlights web-chat as a sensitive consumer of profile selection and registry access
+    - Path: cmd/web-chat/main_profile_registries_test.go
+      Note: Step 9 updates web-chat bootstrap tests to the hidden-base + unified config semantics
     - Path: pkg/cmds/cmd.go
       Note: Implementation guide calls out runtime-switching and command bootstrap behaviors that must not regress during migration
+    - Path: pkg/cmds/profilebootstrap/engine_settings.go
+      Note: Step 9 switches base and final engine-settings resolution onto the unified document bootstrap path while preserving hidden-base semantics
+    - Path: pkg/cmds/profilebootstrap/local_profile_plan_test.go
+      Note: Step 9 adds focused tests for repo/cwd/explicit unified config resolution and inline profile selection
+    - Path: pkg/cmds/profilebootstrap/profile_selection.go
+      Note: Step 9 adds unified document loading
     - Path: pkg/configdoc/load.go
       Note: First implementation tranche adds strict YAML decode with KnownFields and document validation
     - Path: pkg/configdoc/load_test.go
@@ -53,6 +63,7 @@ WhatFor: |
     Provide a concrete coding guide for a future implementation pass, with enough orientation that a new contributor can work safely without rediscovering the current architecture from scratch.
 WhenToUse: Use this document when implementing the new config format or reviewing PRs that introduce the unified document loader, inline profile catalog, or breaking-change migration tooling.
 ---
+
 
 
 

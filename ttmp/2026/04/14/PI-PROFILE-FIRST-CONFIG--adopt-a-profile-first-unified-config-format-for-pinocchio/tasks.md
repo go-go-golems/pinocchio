@@ -41,11 +41,11 @@
 
 ### Phase 4 — document-first bootstrap
 
-- [ ] Add unified config resolution helpers in Pinocchio that resolve files, load/merge the effective document, and expose app/profile/profile-catalog results
-- [ ] Replace the current mapper-first runtime-config path with a document-first bootstrap path for profile selection and engine settings
-- [ ] Determine the minimal Geppetto bootstrap seam needed to consume document-derived profile state without reintroducing path-centric helpers
-- [ ] Preserve the current base-plus-selected-profile runtime model while switching the config source model underneath it
-- [ ] Add focused bootstrap tests for resolved files + unified document + selected profile behavior
+- [x] Add unified config resolution helpers in Pinocchio that resolve files, load/merge the effective document, and expose app/profile/profile-catalog results
+- [x] Replace the current mapper-first runtime-config path with a document-first bootstrap path for profile selection and engine settings
+- [x] Determine the minimal Geppetto bootstrap seam needed to consume document-derived profile state without reintroducing path-centric helpers
+- [x] Preserve the current base-plus-selected-profile runtime model while switching the config source model underneath it
+- [x] Add focused bootstrap tests for resolved files + unified document + selected profile behavior
 
 ### Phase 5 — fold app settings into the unified document
 
@@ -56,8 +56,8 @@
 
 ### Phase 6 — runtime consumer migration
 
-- [ ] Update `pinocchio/pkg/cmds/profilebootstrap/*` to consume the unified document path
-- [ ] Update `pinocchio/cmd/pinocchio/cmds/js.go` to use unified config + inline/imported profile resolution
+- [x] Update `pinocchio/pkg/cmds/profilebootstrap/*` to consume the unified document path
+- [x] Update `pinocchio/cmd/pinocchio/cmds/js.go` to use unified config + inline/imported profile resolution
 - [ ] Update `pinocchio/cmd/web-chat/main.go` to use unified config + composed registry resolution
 - [ ] Verify runtime profile switching still preserves a non-profile baseline and rebuilds from base rather than prior merged state
 - [ ] Revalidate any remaining Pinocchio command/example paths that currently assume top-level runtime sections in config files
