@@ -22,11 +22,16 @@ type Document struct {
 
 type AppBlock struct {
 	Repositories []string `yaml:"repositories,omitempty"`
+
+	hasRepositories bool `yaml:"-"`
 }
 
 type ProfileBlock struct {
 	Active     string   `yaml:"active,omitempty"`
 	Registries []string `yaml:"registries,omitempty"`
+
+	hasActive     bool `yaml:"-"`
+	hasRegistries bool `yaml:"-"`
 }
 
 type InlineProfile struct {
@@ -35,6 +40,12 @@ type InlineProfile struct {
 	Stack             []gepprofiles.EngineProfileRef `yaml:"stack,omitempty"`
 	InferenceSettings *aisettings.InferenceSettings  `yaml:"inference_settings,omitempty"`
 	Extensions        map[string]any                 `yaml:"extensions,omitempty"`
+
+	hasDisplayName       bool `yaml:"-"`
+	hasDescription       bool `yaml:"-"`
+	hasStack             bool `yaml:"-"`
+	hasInferenceSettings bool `yaml:"-"`
+	hasExtensions        bool `yaml:"-"`
 }
 
 func ValidateLocalOverrideFileName(name string) error {
@@ -110,4 +121,77 @@ func (d *Document) NormalizeAndValidate() error {
 	}
 	d.Profiles = normalizedProfiles
 	return nil
+}
+
+func cloneDocument(in *Document) *Document {
+	if in == nil {
+		return nil
+	}
+	ret := &Document{
+		App: AppBlock{
+			Repositories:    append([]string(nil), in.App.Repositories...),
+			hasRepositories: in.App.hasRepositories,
+		},
+		Profile: ProfileBlock{
+			Active:        in.Profile.Active,
+			Registries:    append([]string(nil), in.Profile.Registries...),
+			hasActive:     in.Profile.hasActive,
+			hasRegistries: in.Profile.hasRegistries,
+		},
+	}
+	if len(in.Profiles) > 0 {
+		ret.Profiles = make(map[string]*InlineProfile, len(in.Profiles))
+		for slug, profile := range in.Profiles {
+			ret.Profiles[slug] = cloneInlineProfile(profile)
+		}
+	}
+	return ret
+}
+
+func cloneInlineProfile(in *InlineProfile) *InlineProfile {
+	if in == nil {
+		return nil
+	}
+	var clonedInferenceSettings *aisettings.InferenceSettings
+	if in.InferenceSettings != nil {
+		clonedInferenceSettings = in.InferenceSettings.Clone()
+	}
+	return &InlineProfile{
+		DisplayName:          in.DisplayName,
+		Description:          in.Description,
+		Stack:                append([]gepprofiles.EngineProfileRef(nil), in.Stack...),
+		InferenceSettings:    clonedInferenceSettings,
+		Extensions:           deepCopyStringAnyMap(in.Extensions),
+		hasDisplayName:       in.hasDisplayName,
+		hasDescription:       in.hasDescription,
+		hasStack:             in.hasStack,
+		hasInferenceSettings: in.hasInferenceSettings,
+		hasExtensions:        in.hasExtensions,
+	}
+}
+
+func deepCopyStringAnyMap(in map[string]any) map[string]any {
+	if len(in) == 0 {
+		return nil
+	}
+	ret := make(map[string]any, len(in))
+	for k, v := range in {
+		ret[k] = deepCopyAny(v)
+	}
+	return ret
+}
+
+func deepCopyAny(in any) any {
+	switch v := in.(type) {
+	case map[string]any:
+		return deepCopyStringAnyMap(v)
+	case []any:
+		ret := make([]any, 0, len(v))
+		for _, item := range v {
+			ret = append(ret, deepCopyAny(item))
+		}
+		return ret
+	default:
+		return in
+	}
 }
