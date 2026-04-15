@@ -40,3 +40,16 @@ Refined the ticket into a detailed execution backlog and updated the design/impl
 - /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/14/PI-PROFILE-FIRST-CONFIG--adopt-a-profile-first-unified-config-format-for-pinocchio/reference/02-investigation-diary.md — Recorded the implementation-kickoff planning step
 - /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/14/PI-PROFILE-FIRST-CONFIG--adopt-a-profile-first-unified-config-format-for-pinocchio/tasks.md — Expanded the high-level future-work list into a phased implementation backlog
 
+
+## 2026-04-15
+
+Step 4 (commit 322e375): added the first code tranche under pinocchio/pkg/configdoc with typed Document/App/Profile/InlineProfile structs, strict YAML decoding for the new format only, slug normalization/validation, explicit rejection of old top-level config shapes, and the new local override filename policy (.pinocchio.yml with legacy .pinocchio-profile.yml rejected).
+
+### Related Files
+
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/configdoc/load.go — Introduces strict YAML decode with KnownFields and NormalizeAndValidate integration
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/configdoc/load_test.go — Introduces focused tests for valid decode and explicit rejection of old format inputs
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/configdoc/types.go — Introduces the typed unified config document and local filename policy
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/14/PI-PROFILE-FIRST-CONFIG--adopt-a-profile-first-unified-config-format-for-pinocchio/reference/02-investigation-diary.md — Records Step 4 for the first configdoc implementation tranche
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/14/PI-PROFILE-FIRST-CONFIG--adopt-a-profile-first-unified-config-format-for-pinocchio/tasks.md — Marks the first phase-1 configdoc tasks complete
+

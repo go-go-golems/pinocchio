@@ -23,6 +23,12 @@ RelatedFiles:
       Note: Implementation guide highlights web-chat as a sensitive consumer of profile selection and registry access
     - Path: pkg/cmds/cmd.go
       Note: Implementation guide calls out runtime-switching and command bootstrap behaviors that must not regress during migration
+    - Path: pkg/configdoc/load.go
+      Note: First implementation tranche adds strict YAML decode with KnownFields and document validation
+    - Path: pkg/configdoc/load_test.go
+      Note: First implementation tranche adds focused decode and old-format rejection tests
+    - Path: pkg/configdoc/types.go
+      Note: First implementation tranche adds the typed unified config document structs and local filename policy
 ExternalSources: []
 Summary: |
     Step-by-step implementation guide for adding the new profile-first unified config format, written for an unfamiliar intern and organized by responsibility, phases, key APIs, merge rules, file targets, testing, and review strategy.
@@ -31,6 +37,7 @@ WhatFor: |
     Provide a concrete coding guide for a future implementation pass, with enough orientation that a new contributor can work safely without rediscovering the current architecture from scratch.
 WhenToUse: Use this document when implementing the new config format or reviewing PRs that introduce the unified document loader, inline profile catalog, or breaking-change migration tooling.
 ---
+
 
 
 # Implementation guide for the profile-first config format

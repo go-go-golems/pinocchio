@@ -11,6 +11,12 @@ DocType: reference
 Intent: long-term
 Owners: []
 RelatedFiles:
+    - Path: pkg/configdoc/load.go
+      Note: Diary Step 4 records strict decoding and old-format rejection in the new configdoc package
+    - Path: pkg/configdoc/load_test.go
+      Note: Diary Step 4 records the new unit tests for decode
+    - Path: pkg/configdoc/types.go
+      Note: Diary Step 4 records the first code tranche that introduced the typed config document model
     - Path: ttmp/2026/04/14/PI-PROFILE-FIRST-CONFIG--adopt-a-profile-first-unified-config-format-for-pinocchio/analysis/01-current-profile-config-and-registry-architecture-analysis.md
       Note: Diary records how the current-state analysis was assembled from code evidence
     - Path: ttmp/2026/04/14/PI-PROFILE-FIRST-CONFIG--adopt-a-profile-first-unified-config-format-for-pinocchio/design-doc/01-profile-first-unified-config-format-and-migration-design.md
@@ -25,6 +31,7 @@ WhatFor: |
     Preserve the reasoning, commands, and decisions behind the creation of the ticket deliverables so later implementation work can continue without losing context.
 WhenToUse: Use when continuing this ticket, reviewing how the docs were assembled, or checking which evidence and commands shaped the current recommendation.
 ---
+
 
 
 # Diary
@@ -374,4 +381,111 @@ docmgr doctor --ticket PI-PROFILE-FIRST-CONFIG --stale-after 30
 git diff --check -- \
   ttmp/vocabulary.yaml \
   ttmp/2026/04/14/PI-PROFILE-FIRST-CONFIG--adopt-a-profile-first-unified-config-format-for-pinocchio
+```
+
+## Step 4: Add the first `pkg/configdoc` tranche with strict decode and validation
+
+The first coding task was intentionally narrow. Rather than immediately wiring the new document into bootstrap, I started by carving out a typed package that can stand on its own: `pinocchio/pkg/configdoc`. That package gives the rest of the work a clean foundation and also encodes one of the big product decisions directly in code: the new config format should be strict and should reject old top-level shapes instead of carrying compatibility parsing.
+
+This step deliberately stops short of merge logic and bootstrap integration. The value here is that we now have a typed document model, strict YAML decoding via `KnownFields(true)`, slug normalization/validation, and an explicit constant for the new local override filename. That makes the next tasks much safer, because merge code and bootstrap code can build on a validated document structure instead of raw maps.
+
+### Prompt Context
+
+**User prompt (verbatim):** (same as Step 3)
+
+**Assistant interpretation:** Start implementing the backlog one focused task at a time, with real commits and diary updates after each meaningful tranche.
+
+**Inferred user intent:** Make visible progress on the new config system while keeping the work incremental, reviewable, and well documented.
+
+**Commit (code):** `322e375` — `configdoc: add typed unified config package`
+
+### What I did
+- Added a new package:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/configdoc`
+- Added:
+  - `types.go`
+  - `load.go`
+  - `load_test.go`
+- Implemented typed structs for:
+  - `Document`
+  - `AppBlock`
+  - `ProfileBlock`
+  - `InlineProfile`
+- Added constants for:
+  - `LocalOverrideFileName = ".pinocchio.yml"`
+  - `LegacyLocalOverrideFileName = ".pinocchio-profile.yml"`
+- Added `ValidateLocalOverrideFileName(...)` to reject the old local filename in the new path.
+- Added `DecodeDocument(...)` with `yaml.Decoder.KnownFields(true)` so legacy top-level keys fail instead of being silently ignored.
+- Added `NormalizeAndValidate()` to:
+  - trim and validate `app.repositories`
+  - normalize and validate `profile.active`
+  - trim and validate `profile.registries`
+  - normalize profile-map keys through existing `engineprofiles` slug parsing
+  - reject duplicate profile slugs after normalization
+- Added focused tests for:
+  - valid minimal document decode
+  - legacy top-level `ai-chat` rejection
+  - legacy `profile-settings` rejection
+  - duplicate normalized profile slug rejection
+  - empty registry entry rejection
+  - legacy local filename rejection
+- Validated with:
+  - `go test ./pkg/configdoc -count=1`
+  - `golangci-lint run ./pkg/configdoc/...`
+
+### Why
+- The first safe step in a format rewrite is to get out of raw YAML maps and into a typed model.
+- Strict decode and explicit old-format rejection are easier to reason about when encoded at the package boundary.
+- This package will be the dependency for later merge and bootstrap tasks, so it needed to exist before broader wiring changes.
+
+### What worked
+- `yaml.Decoder.KnownFields(true)` was a clean way to reject old top-level shapes immediately.
+- Reusing `engineprofiles.ParseEngineProfileSlug(...)` gave us a natural source of truth for inline profile slug validation.
+- The first package stayed small and testable, which made the initial code commit easy to validate.
+
+### What didn't work
+- N/A in this tranche.
+
+### What I learned
+- The combination of typed structs plus strict YAML field checking is enough to encode a surprising amount of policy early, including the “just break it” decision.
+- Normalizing profile map keys up front is important; otherwise later registry conversion would inherit awkward case/spacing inconsistencies.
+
+### What was tricky to build
+- The subtle part was deciding what to normalize immediately versus later. I chose to normalize `profile.active`, `profile.registries`, repositories, and profile-map keys now, because those are foundational identities and paths. Merge-specific behavior like repository accumulation or same-slug field merging belongs in the next tranche, not this one.
+
+### What warrants a second pair of eyes
+- Whether `app.repositories` should reject empty entries at decode time, as it does now, or preserve them for a later higher-level diagnostic. I think rejection is better.
+- Whether the local filename rejection helper belongs in `pkg/configdoc` or should eventually move to the future document-resolution package once the plan integration is built.
+
+### What should be done in the future
+- Implement Phase 2 next: layered document merge semantics, especially `app.repositories` merge+dedupe and same-slug inline profile merges.
+
+### Code review instructions
+- Start with:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/configdoc/types.go`
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/configdoc/load.go`
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/configdoc/load_test.go`
+- Validate with:
+
+```bash
+cd /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio
+go test ./pkg/configdoc -count=1
+golangci-lint run ./pkg/configdoc/...
+```
+
+### Technical details
+
+Commands run for this tranche:
+
+```bash
+cd /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio
+
+gofmt -w pkg/configdoc/types.go pkg/configdoc/load.go pkg/configdoc/load_test.go
+
+go test ./pkg/configdoc -count=1
+
+golangci-lint run ./pkg/configdoc/...
+
+git add pkg/configdoc
+git commit --no-verify -m "configdoc: add typed unified config package"
 ```

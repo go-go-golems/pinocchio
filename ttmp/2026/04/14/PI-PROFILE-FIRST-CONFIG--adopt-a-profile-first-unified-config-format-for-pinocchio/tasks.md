@@ -16,11 +16,11 @@
 
 ### Phase 1 — typed document foundation
 
-- [ ] Add `pinocchio/pkg/configdoc` with typed structs for `Document`, `AppBlock`, `ProfileBlock`, and `InlineProfile`
-- [ ] Add strict YAML decoding for the new format only; reject unknown top-level legacy keys such as `ai-chat` and `profile-settings`
-- [ ] Validate config-document slugs and profile stack references using existing `engineprofiles` slug rules
-- [ ] Decide and encode the canonical new local filename policy (recommended: `.pinocchio.yml`) with no runtime compatibility alias for `.pinocchio-profile.yml`
-- [ ] Add focused unit tests for decode/validation failures and valid minimal documents
+- [x] Add `pinocchio/pkg/configdoc` with typed structs for `Document`, `AppBlock`, `ProfileBlock`, and `InlineProfile`
+- [x] Add strict YAML decoding for the new format only; reject unknown top-level legacy keys such as `ai-chat` and `profile-settings`
+- [x] Validate config-document slugs and profile stack references using existing `engineprofiles` slug rules
+- [x] Decide and encode the canonical new local filename policy (recommended: `.pinocchio.yml`) with no runtime compatibility alias for `.pinocchio-profile.yml`
+- [x] Add focused unit tests for decode/validation failures and valid minimal documents
 
 ### Phase 2 — layered document merge
 
