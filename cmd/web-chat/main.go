@@ -19,7 +19,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 
-	geppettobootstrap "github.com/go-go-golems/geppetto/pkg/cli/bootstrap"
 	gepprofiles "github.com/go-go-golems/geppetto/pkg/engineprofiles"
 	"github.com/go-go-golems/geppetto/pkg/inference/middlewarecfg"
 	geptools "github.com/go-go-golems/geppetto/pkg/inference/tools"
@@ -119,16 +118,11 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 	if err := parsed.DecodeSectionInto(values.DefaultSlug, s); err != nil {
 		return errors.Wrap(err, "decode server settings")
 	}
-	profileSelection, err := profilebootstrap.ResolveCLIProfileSelection(parsed)
+	resolvedConfig, err := profilebootstrap.ResolveUnifiedConfig(parsed)
 	if err != nil {
-		return errors.Wrap(err, "resolve profile selection")
+		return errors.Wrap(err, "resolve unified profile config")
 	}
-	if profileSelection.Profile != "" && len(profileSelection.ProfileRegistries) == 0 {
-		return &gepprofiles.ValidationError{
-			Field:  "profile-settings.profile-registries",
-			Reason: "must be configured when profile-settings.profile is set",
-		}
-	}
+	profileSelection := resolvedConfig.ProfileSettings
 	if len(profileSelection.ProfileRegistries) > 0 {
 		log.Info().
 			Strs("profile_registries", profileSelection.ProfileRegistries).
@@ -147,7 +141,7 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 		{Name: "category_regexp_reviewer", Prompt: "Review proposed regex patterns and assess over/under matching risks."},
 	})
 
-	registryChain, err := geppettobootstrap.ResolveProfileRegistryChain(ctx, profileSelection.ProfileSettings)
+	registryChain, err := profilebootstrap.ResolveUnifiedProfileRegistryChain(ctx, resolvedConfig)
 	if err != nil {
 		return errors.Wrap(err, "initialize profile registry")
 	}

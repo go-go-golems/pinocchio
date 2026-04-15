@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -86,6 +87,36 @@ func TestWebChatProfileSelection_DoesNotFallbackToDefaultRegistryFile(t *testing
 	resolved, err := profilebootstrap.ResolveCLIProfileSelection(values.New())
 	require.NoError(t, err)
 	require.Empty(t, resolved.ProfileRegistries)
+}
+
+func TestWebChatUnifiedProfileConfig_AllowsInlineProfilesWithoutExternalRegistries(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(tmpDir, "xdg"))
+	cwd, err := os.Getwd()
+	require.NoError(t, err)
+	defer func() { _ = os.Chdir(cwd) }()
+	require.NoError(t, os.Chdir(tmpDir))
+
+	configPath := filepath.Join(tmpDir, ".pinocchio.yml")
+	require.NoError(t, os.WriteFile(configPath, []byte(
+		"profile:\n  active: analyst\nprofiles:\n  analyst:\n    inference_settings:\n      chat:\n        api_type: openai-responses\n        engine: gpt-5-mini\n",
+	), 0o644))
+
+	resolvedConfig, err := profilebootstrap.ResolveUnifiedConfig(values.New())
+	require.NoError(t, err)
+	require.Equal(t, "analyst", resolvedConfig.ProfileSettings.Profile)
+	require.Empty(t, resolvedConfig.ProfileSettings.ProfileRegistries)
+
+	chain, err := profilebootstrap.ResolveUnifiedProfileRegistryChain(context.Background(), resolvedConfig)
+	require.NoError(t, err)
+	require.NotNil(t, chain)
+	require.NotNil(t, chain.Registry)
+	require.NotNil(t, chain.Reader)
+	require.Equal(t, "config-inline", chain.DefaultRegistrySlug.String())
+	if chain.Close != nil {
+		defer chain.Close()
+	}
 }
 
 func TestResolveBaseInferenceSettings_UsesEnvAndReturnsResolvedUnifiedConfigFiles(t *testing.T) {
