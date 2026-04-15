@@ -120,3 +120,20 @@ Executed the first destructive Geppetto/Pinocchio cleanup tranche from the audit
 - /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/14/PI-CONFIGFILESFUNC-REMOVAL--remove-configfilesfunc-and-migrate-cli-config-resolution-to-declarative-plans/reference/01-diary.md — Recorded Step 9 deleting the legacy middleware builders and helper parser
 - /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/14/PI-CONFIGFILESFUNC-REMOVAL--remove-configfilesfunc-and-migrate-cli-config-resolution-to-declarative-plans/tasks.md — Marked the first three Geppetto/Pinocchio cleanup follow-ups done
 
+
+## 2026-04-14
+
+Executed the second Geppetto/Pinocchio cleanup tranche: extracted a shared bootstrap resolved-files helper and shared profile-registry-chain helper in geppetto/pkg/cli/bootstrap, migrated the Pinocchio JS command off path-list config loading, switched web-chat to the shared registry-chain helper, replaced cmd/pinocchio/main.go manual YAML repository extraction with a typed profilebootstrap helper, and deleted the now-unused pinocchio/pkg/cmds/helpers package.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/geppetto/pkg/cli/bootstrap/config_loading.go — New shared resolved-files middleware helper for bootstrap paths
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/geppetto/pkg/cli/bootstrap/profile_registry.go — New shared profile-registry-chain helper used by bootstrap
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/cmd/pinocchio/cmds/js.go — JS command now uses resolved files and the shared profile-registry-chain helper
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/cmd/pinocchio/main.go — Repository loading now uses profilebootstrap.ResolveRepositoryPaths and the local Pinocchio middleware builder
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/cmd/web-chat/main.go — Web-chat now uses the shared profile-registry-chain helper
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/cmds/helpers — Deleted the no-longer-used thin helper re-export package
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/cmds/profilebootstrap/repositories.go — Typed repository-config resolution helper over the plan path
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/14/PI-CONFIGFILESFUNC-REMOVAL--remove-configfilesfunc-and-migrate-cli-config-resolution-to-declarative-plans/reference/01-diary.md — Recorded Step 10 for the shared bootstrap helper extraction and helper-package deletion
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/14/PI-CONFIGFILESFUNC-REMOVAL--remove-configfilesfunc-and-migrate-cli-config-resolution-to-declarative-plans/tasks.md — Marked the remaining Geppetto/Pinocchio cleanup follow-ups done
+

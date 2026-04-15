@@ -927,6 +927,129 @@ pkg/cmds/cobra.go:17:32: undefined: sections2.GetCobraCommandGeppettoMiddlewares
   5. `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/cmds/cobra.go`
   6. `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/cmds/profilebootstrap/profile_selection.go`
 
+## Step 10: Collapse the remaining bootstrap duplication, migrate the JS command to resolved files, and delete the thin helper package entirely
+
+After Step 9, the obvious legacy middleware builders were gone, but there were still a few structural leftovers:
+
+- Geppetto bootstrap still repeated the same config-middleware assembly in multiple files.
+- The Pinocchio JS command still used `ResolveCLIConfigFiles(...) + FromFiles(...)`, which kept the path-list model alive.
+- JS and web-chat both rebuilt profile registry chains manually.
+- `cmd/pinocchio/main.go` still manually decoded YAML just to read `repositories`.
+- The thin `pinocchio/pkg/cmds/helpers` re-export package no longer had any active callers.
+
+This step cleaned all of those up in one pass.
+
+### Prompt Context
+
+**User prompt (verbatim):** still within the same "go ahead" cleanup continuation.
+
+**Assistant interpretation:** Continue removing the remaining active legacy or compatibility-shaped surfaces instead of stopping after the first deletion tranche.
+
+**Inferred user intent:** Finish the cleanup as far as it can reasonably go while the architecture is fresh and the tests are green.
+
+### What I did
+- Added a shared resolved-files middleware helper in:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/geppetto/pkg/cli/bootstrap/config_loading.go`
+- Updated Geppetto bootstrap to use that helper in:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/geppetto/pkg/cli/bootstrap/profile_selection.go`
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/geppetto/pkg/cli/bootstrap/engine_settings.go`
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/geppetto/pkg/cli/bootstrap/inference_debug.go`
+- Added a shared profile-registry-chain builder in:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/geppetto/pkg/cli/bootstrap/profile_registry.go`
+- Updated Pinocchio JS command to use resolved files and the shared registry-chain helper:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/cmd/pinocchio/cmds/js.go`
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/cmd/pinocchio/cmds/js_test.go`
+- Updated web-chat to use the shared registry-chain helper:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/cmd/web-chat/main.go`
+- Added typed repository-config loading helpers in:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/cmds/profilebootstrap/repositories.go`
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/cmds/profilebootstrap/repositories_test.go`
+- Updated main command repository loading to use the typed helper instead of manual YAML parsing:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/cmd/pinocchio/main.go`
+- Exported the local Pinocchio middleware builder and reused it from `cmd/pinocchio/main.go`:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/cmds/cobra.go`
+- Deleted the no-longer-used thin helper package entirely:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/cmds/helpers/`
+
+### Why
+- The config middleware duplication in bootstrap was now pure maintenance overhead.
+- The JS command still represented one of the last path-centric holdouts in active Pinocchio code.
+- The duplicated registry-chain setup in bootstrap/JS/web-chat was unnecessary once the current profile-selection model stabilized.
+- The main command’s repository loading should follow the same typed/config-plan-based approach as the rest of the refactor instead of manually unmarshalling YAML.
+- The thin helper re-export package no longer bought anything once its only active caller had been migrated away.
+
+### What worked
+- Geppetto bootstrap validation passed after the shared helper extraction:
+
+```bash
+cd /home/manuel/workspaces/2026-04-10/pinocchiorc/geppetto
+gofmt -w pkg/cli/bootstrap/config_loading.go pkg/cli/bootstrap/profile_selection.go \
+  pkg/cli/bootstrap/engine_settings.go pkg/cli/bootstrap/inference_debug.go \
+  pkg/cli/bootstrap/profile_registry.go
+
+go test ./pkg/cli/bootstrap/... -count=1
+```
+
+- Pinocchio validation passed after the JS/web-chat/main-command refactor:
+
+```bash
+cd /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio
+gofmt -w pkg/cmds/cobra.go cmd/pinocchio/main.go \
+  cmd/pinocchio/cmds/js.go cmd/pinocchio/cmds/js_test.go \
+  cmd/web-chat/main.go pkg/cmds/profilebootstrap/repositories.go \
+  pkg/cmds/profilebootstrap/repositories_test.go
+
+go test ./pkg/cmds/profilebootstrap ./pkg/cmds ./cmd/pinocchio \
+  ./cmd/pinocchio/cmds/... ./cmd/web-chat -count=1
+```
+
+- A grep over current source no longer finds:
+  - `GetCobraCommandGeppettoMiddlewares(...)`
+  - `GetProfileSettingsMiddleware(...)`
+  - `ParseGeppettoLayers(...)`
+  - `WithUseViper(...)`
+  - `GeppettoLayersHelper`
+
+### What didn't work
+- While replacing manual repository loading in `cmd/pinocchio/main.go`, two more direct references to the deleted Geppetto middleware helper surfaced in repository/clip command wiring.
+- Exact compile failure:
+
+```text
+cmd/pinocchio/main.go:224:42: undefined: sections2.GetCobraCommandGeppettoMiddlewares
+cmd/pinocchio/main.go:251:42: undefined: sections2.GetCobraCommandGeppettoMiddlewares
+```
+
+- The fix was to export the local Pinocchio middleware builder from `pkg/cmds/cobra.go` as `GetPinocchioCommandMiddlewares(...)` and use that from `cmd/pinocchio/main.go`.
+- After extracting the shared registry-chain helper, the JS test and web-chat import list also needed small follow-up fixes.
+
+### What I learned
+- Once the first destructive pass removed the biggest compatibility surfaces, the remaining cleanup became easier because the code started to point more obviously toward the single intended architecture.
+- The active workspace no longer really needs a separate `pinocchio/pkg/cmds/helpers` compatibility package.
+- The `cmd/pinocchio/main.go` wiring had quietly carried a couple more deleted-helper dependencies than the initial grep suggested, so compile/test runs were still the best way to flush out stragglers.
+
+### What was tricky
+- The repository loading change looked local at first, but it indirectly forced the last `cmd/pinocchio/main.go` callers of the deleted Geppetto middleware builder into the open.
+- The shared registry-chain helper also touched three different flows at once: bootstrap engine settings, JS runtime bootstrap, and web-chat startup.
+
+### What warrants a second pair of eyes
+- Whether `ResolveCLIConfigFiles(...)` / `ResolveCLIConfigFilesForExplicit(...)` are still worth keeping as public wrappers now that current active callers use resolved files instead.
+- Whether `GetPinocchioCommandMiddlewares(...)` should remain exported or be folded into a more clearly named command/parser helper surface.
+
+### What should be done in the future
+- Optional: prune or internalize the remaining path-centric `ResolveCLIConfigFiles*` wrappers if no meaningful active callers still need them.
+- Optional: decide whether the now-shared registry-chain helper should eventually be used by any remaining Geppetto example/internal packages that still construct chains manually.
+
+### Code review instructions
+- Review in this order:
+  1. `/home/manuel/workspaces/2026-04-10/pinocchiorc/geppetto/pkg/cli/bootstrap/config_loading.go`
+  2. `/home/manuel/workspaces/2026-04-10/pinocchiorc/geppetto/pkg/cli/bootstrap/profile_registry.go`
+  3. `/home/manuel/workspaces/2026-04-10/pinocchiorc/geppetto/pkg/cli/bootstrap/{profile_selection,engine_settings,inference_debug}.go`
+  4. `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/cmd/pinocchio/cmds/js.go`
+  5. `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/cmd/web-chat/main.go`
+  6. `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/cmds/profilebootstrap/repositories.go`
+  7. `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/cmd/pinocchio/main.go`
+  8. `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/cmds/helpers/` (deleted)
+
 ## Appendix: Commands Used During Implementation
 
 ```bash

@@ -23,7 +23,7 @@
 - [x] Delete the duplicated legacy Geppetto Cobra middleware builders in `geppetto/pkg/sections/sections.go` and `geppetto/pkg/sections/profile_sections.go` after migrating any remaining callers to `geppetto/pkg/cli/bootstrap`
 - [x] Remove pinocchio-specific config/profile policy helpers from Geppetto `pkg/sections` so that package only owns section construction, not app policy
 - [x] Delete `pinocchio/pkg/cmds/helpers/parse-helpers.go` and migrate `cmd/examples/simple-chat` off the `GeppettoLayersHelper` / `UseViper` compatibility path
-- [ ] Collapse duplicated config middleware assembly in `geppetto/pkg/cli/bootstrap/{profile_selection,engine_settings,inference_debug}.go` into one shared resolved-files helper and remove the dead `FromFiles(...)` fallback branch
-- [ ] Migrate `pinocchio/cmd/pinocchio/cmds/js.go` off `ResolveCLIConfigFiles(...) + FromFiles(...)` to a resolved-files or direct plan-middleware path, and extract the profile-registry-chain builder if that logic still needs to be shared
-- [ ] Evaluate whether `pinocchio/cmd/pinocchio/main.go` repository-loading should stop manually parsing YAML and instead use a typed helper over the same plan-based config path
-- [ ] Shrink or delete thin Pinocchio helper re-export layers in `pkg/cmds/helpers/*` once callers use `profilebootstrap` directly
+- [x] Collapse duplicated config middleware assembly in `geppetto/pkg/cli/bootstrap/{profile_selection,engine_settings,inference_debug}.go` into one shared resolved-files helper and remove the dead `FromFiles(...)` fallback branch
+- [x] Migrate `pinocchio/cmd/pinocchio/cmds/js.go` off `ResolveCLIConfigFiles(...) + FromFiles(...)` to a resolved-files or direct plan-middleware path, and extract the profile-registry-chain builder if that logic still needs to be shared
+- [x] Evaluate whether `pinocchio/cmd/pinocchio/main.go` repository-loading should stop manually parsing YAML and instead use a typed helper over the same plan-based config path
+- [x] Shrink or delete thin Pinocchio helper re-export layers in `pkg/cmds/helpers/*` once callers use `profilebootstrap` directly
