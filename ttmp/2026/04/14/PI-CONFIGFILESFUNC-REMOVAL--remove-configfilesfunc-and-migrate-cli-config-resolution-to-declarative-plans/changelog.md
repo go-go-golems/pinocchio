@@ -94,3 +94,13 @@ Performed a pragmatic legacy-app sweep in corporate-headquarters: active corp Go
 - /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/14/PI-CONFIGFILESFUNC-REMOVAL--remove-configfilesfunc-and-migrate-cli-config-resolution-to-declarative-plans/reference/01-diary.md — Recorded Step 8 explaining the pragmatic corp legacy-app cleanup
 - /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/14/PI-CONFIGFILESFUNC-REMOVAL--remove-configfilesfunc-and-migrate-cli-config-resolution-to-declarative-plans/tasks.md — Marked the corp legacy-app startup sweep done
 
+
+## 2026-04-14
+
+Copied the declarative-config-plan project report into the ticket stream and added a new analysis document that audits the remaining Geppetto/Pinocchio legacy cleanup surface. The audit identifies the highest-value next deletions: the duplicated legacy Geppetto Cobra middleware builders, pinocchio-specific policy leakage in geppetto/pkg/sections, the old Pinocchio helper parser with its UseViper-shaped compatibility API, duplicated bootstrap config middleware assembly, and path-centric holdouts such as the JS command config loader and manual repository YAML parsing in cmd/pinocchio/main.go.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/14/PI-CONFIGFILESFUNC-REMOVAL--remove-configfilesfunc-and-migrate-cli-config-resolution-to-declarative-plans/analysis/02-project-report-and-remaining-geppetto-pinocchio-legacy-cleanup-audit.md — New combined project report and cleanup audit document
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/14/PI-CONFIGFILESFUNC-REMOVAL--remove-configfilesfunc-and-migrate-cli-config-resolution-to-declarative-plans/tasks.md — Added open follow-up tasks for the remaining Geppetto/Pinocchio cleanup surface
+
