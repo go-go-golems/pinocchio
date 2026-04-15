@@ -67,3 +67,27 @@ Step 5 (commit c0c9604): added presence-aware layered merge semantics to pinocch
 - /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/14/PI-PROFILE-FIRST-CONFIG--adopt-a-profile-first-unified-config-format-for-pinocchio/reference/02-investigation-diary.md — Records Step 5 for the merge-semantics tranche
 - /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/14/PI-PROFILE-FIRST-CONFIG--adopt-a-profile-first-unified-config-format-for-pinocchio/tasks.md — Marks the core merge-rule tasks complete
 
+
+## 2026-04-15
+
+Step 6 (commit 40299c6): added the synthetic inline-registry adapter under pinocchio/pkg/configdoc so merged inline profiles can be converted into an EngineProfileRegistry and resolved through Geppetto's existing StoreRegistry path.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/configdoc/profiles.go — Introduces InlineProfilesToRegistry and NewInlineStoreRegistry for the new inline profile catalog path
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/configdoc/profiles_test.go — Adds focused tests for default profile selection and stacked inline profile resolution
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/14/PI-PROFILE-FIRST-CONFIG--adopt-a-profile-first-unified-config-format-for-pinocchio/reference/02-investigation-diary.md — Records Step 6 for the inline registry bridge tranche
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/14/PI-PROFILE-FIRST-CONFIG--adopt-a-profile-first-unified-config-format-for-pinocchio/tasks.md — Marks the inline-profile-to-registry adapter task complete
+
+
+## 2026-04-15
+
+Step 7 (commit ef664c1): added imported-plus-inline registry composition under pinocchio/pkg/configdoc so inline profiles win on same slug by default while imported registries remain available as fallback catalogs.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/configdoc/profiles.go — Introduces ComposeRegistry and the composed inline+imported registry wrapper
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/configdoc/profiles_test.go — Adds focused tests for inline-first same-slug precedence and imported fallback behavior
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/14/PI-PROFILE-FIRST-CONFIG--adopt-a-profile-first-unified-config-format-for-pinocchio/reference/02-investigation-diary.md — Records Step 7 for the composition tranche
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/14/PI-PROFILE-FIRST-CONFIG--adopt-a-profile-first-unified-config-format-for-pinocchio/tasks.md — Marks imported-plus-inline composition and precedence tasks complete
+

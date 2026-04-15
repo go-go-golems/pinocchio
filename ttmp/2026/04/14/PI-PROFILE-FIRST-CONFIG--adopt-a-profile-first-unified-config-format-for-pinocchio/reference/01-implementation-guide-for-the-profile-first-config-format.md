@@ -31,6 +31,14 @@ RelatedFiles:
       Note: Second implementation tranche adds the first real layered merge semantics for app/profile/profiles
     - Path: pkg/configdoc/merge_test.go
       Note: Second implementation tranche proves repositories merge semantics and same-slug inline profile overlay behavior
+    - Path: pkg/configdoc/profiles.go
+      Note: |-
+        Third implementation tranche adds the synthetic inline-registry adapter and store-registry bridge
+        Fourth implementation tranche adds imported-plus-inline registry composition with inline-first same-slug precedence
+    - Path: pkg/configdoc/profiles_test.go
+      Note: |-
+        Third implementation tranche proves inline-only registry construction and stacked inline profile resolution
+        Fourth implementation tranche proves inline-first same-slug precedence and imported fallback
     - Path: pkg/configdoc/types.go
       Note: First implementation tranche adds the typed unified config document structs and local filename policy
 ExternalSources: []
@@ -41,6 +49,8 @@ WhatFor: |
     Provide a concrete coding guide for a future implementation pass, with enough orientation that a new contributor can work safely without rediscovering the current architecture from scratch.
 WhenToUse: Use this document when implementing the new config format or reviewing PRs that introduce the unified document loader, inline profile catalog, or breaking-change migration tooling.
 ---
+
+
 
 
 

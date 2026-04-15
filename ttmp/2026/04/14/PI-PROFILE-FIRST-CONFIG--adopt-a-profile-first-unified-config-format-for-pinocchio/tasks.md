@@ -33,9 +33,9 @@
 
 ### Phase 3 — inline profiles as registry input
 
-- [ ] Add an inline-profile-to-registry adapter that converts merged `profiles` into a synthetic `engineprofiles.EngineProfileRegistry`
-- [ ] Compose imported registries from `profile.registries` with the synthetic inline registry into one final registry view
-- [ ] Define and test same-slug precedence between imported and inline profiles (recommended: inline wins)
+- [x] Add an inline-profile-to-registry adapter that converts merged `profiles` into a synthetic `engineprofiles.EngineProfileRegistry`
+- [x] Compose imported registries from `profile.registries` with the synthetic inline registry into one final registry view
+- [x] Define and test same-slug precedence between imported and inline profiles (recommended: inline wins)
 - [ ] Preserve existing `stack` resolution semantics across inline and imported profiles
 - [ ] Add focused tests for inline-only, imported-only, and mixed inline/imported resolution paths
 

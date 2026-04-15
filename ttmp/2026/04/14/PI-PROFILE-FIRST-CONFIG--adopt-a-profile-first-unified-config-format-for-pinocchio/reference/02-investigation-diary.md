@@ -19,6 +19,14 @@ RelatedFiles:
       Note: Diary Step 5 records the merge semantics tranche for repositories
     - Path: pkg/configdoc/merge_test.go
       Note: Diary Step 5 records the focused tests for merge behavior and the ApiType field-name correction
+    - Path: pkg/configdoc/profiles.go
+      Note: |-
+        Diary Step 6 records the synthetic inline registry bridge into Geppetto registry types
+        Diary Step 7 records the composed-registry wrapper and inline-first fallback logic
+    - Path: pkg/configdoc/profiles_test.go
+      Note: |-
+        Diary Step 6 records the new tests for inline-only registry resolution
+        Diary Step 7 records the mixed inline/imported precedence tests
     - Path: pkg/configdoc/types.go
       Note: Diary Step 4 records the first code tranche that introduced the typed config document model
     - Path: ttmp/2026/04/14/PI-PROFILE-FIRST-CONFIG--adopt-a-profile-first-unified-config-format-for-pinocchio/analysis/01-current-profile-config-and-registry-architecture-analysis.md
@@ -35,6 +43,8 @@ WhatFor: |
     Preserve the reasoning, commands, and decisions behind the creation of the ticket deliverables so later implementation work can continue without losing context.
 WhenToUse: Use when continuing this ticket, reviewing how the docs were assembled, or checking which evidence and commands shaped the current recommendation.
 ---
+
+
 
 
 
@@ -597,4 +607,196 @@ golangci-lint run ./pkg/configdoc/...
 
 git add pkg/configdoc
 git commit --no-verify -m "configdoc: add layered merge semantics"
+```
+
+## Step 6: Bridge inline profiles into Geppetto registry types
+
+With decode and merge logic in place, the next useful seam was the inline-profile bridge. The design depends on the idea that inline `profiles` should not create a second independent runtime-resolution system. Instead, they should be converted into something Geppetto already understands: an `EngineProfileRegistry`. This step proved that idea in code.
+
+The implementation stays intentionally modest. It does not yet compose imported registries with inline ones. It simply converts the merged inline profile map into a synthetic registry and then exposes a `StoreRegistry` wrapper so tests can resolve inline profiles through the same engine-profile stack machinery that external registries already use. That is enough to confirm the core architectural bet: inline profiles can reuse Geppetto’s existing resolver instead of bypassing it.
+
+### Prompt Context
+
+**User prompt (verbatim):** (same as Step 3)
+
+**Assistant interpretation:** Continue the next focused backlog item after merge semantics by implementing the inline-profile-to-registry bridge.
+
+**Inferred user intent:** Keep turning the design into working code while preserving the architectural boundary that Geppetto should still own profile resolution.
+
+**Commit (code):** `40299c6` — `configdoc: bridge inline profiles to registries`
+
+### What I did
+- Added:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/configdoc/profiles.go`
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/configdoc/profiles_test.go`
+- Implemented:
+  - `InlineProfilesToRegistry(...)`
+  - `NewInlineStoreRegistry(...)`
+- Chose a default synthetic registry slug:
+  - `config-inline`
+- Added deterministic default-profile selection for inline registries:
+  - prefer `default` if present
+  - otherwise choose the lexicographically first profile slug
+- Reused Geppetto’s in-memory store + `StoreRegistry` path so inline profiles can resolve through normal `ResolveEngineProfile(...)`
+- Added tests for:
+  - inline-only registry construction
+  - stacked inline profile resolution through the existing registry stack resolver
+
+### Why
+- The proposed design is much safer if inline profiles are just another source of `EngineProfile` data instead of a completely different runtime-resolution mechanism.
+- This bridge is the minimum proof that the future system can reuse Geppetto’s stack and merge semantics for inline profiles too.
+
+### What worked
+- Building a synthetic `EngineProfileRegistry` was straightforward because the proposed inline profile shape was already intentionally close to `engineprofiles.EngineProfile`.
+- Resolving the resulting registry through `StoreRegistry` worked immediately once the synthetic registry was inserted into an in-memory store.
+- The tests now prove inline profiles can already resolve stacked profile inheritance without any imported registry support yet.
+
+### What didn't work
+- I briefly wrote a wrong helper signature while sketching the inference-settings clone path in `profiles.go`. I corrected it before the test run, so it did not surface as a recorded test failure.
+- While updating the ticket bookkeeping, I also hit a shell quoting mistake in one `docmgr changelog update` command. Exact error:
+
+```text
+/bin/bash: -c: line 8: unexpected EOF while looking for matching `''
+```
+
+- The fix was to rerun the `doc relate` and `changelog update` commands separately with safer quoting.
+
+### What I learned
+- The design choice to keep inline profile entries structurally close to `engineprofiles.EngineProfile` pays off quickly. The adapter is thin instead of requiring complicated translation logic.
+- A synthetic inline registry plus `StoreRegistry` is a strong intermediate seam: later composition with imported registries can build on it naturally.
+
+### What was tricky to build
+- The non-obvious part was choosing what “default profile” should mean for an inline registry. I chose a deterministic policy that prefers a `default` slug and otherwise falls back to lexicographic order. That keeps behavior predictable even before the higher-level `profile.active` selection path is wired in.
+
+### What warrants a second pair of eyes
+- Whether the synthetic inline registry’s fallback default-profile behavior should remain lexicographic or be reconsidered once the final document-first bootstrap path always has an explicit `profile.active` decision available.
+- Whether the synthetic registry slug should stay `config-inline` or be promoted to a more explicitly Pinocchio-scoped internal slug.
+
+### What should be done in the future
+- Compose imported registries from `profile.registries` with this synthetic inline registry.
+- Add mixed inline/imported precedence tests.
+
+### Code review instructions
+- Start with:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/configdoc/profiles.go`
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/configdoc/profiles_test.go`
+- Then confirm the adapter still matches the design assumptions in:
+  - `reference/01-implementation-guide-for-the-profile-first-config-format.md`
+  - `design-doc/01-profile-first-unified-config-format-and-migration-design.md`
+- Validate with:
+
+```bash
+cd /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio
+go test ./pkg/configdoc -count=1
+golangci-lint run ./pkg/configdoc/...
+```
+
+### Technical details
+
+Commands run for this tranche:
+
+```bash
+cd /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio
+
+gofmt -w pkg/configdoc/profiles.go pkg/configdoc/profiles_test.go
+
+go test ./pkg/configdoc -count=1
+
+golangci-lint run ./pkg/configdoc/...
+
+git add pkg/configdoc
+git commit --no-verify -m "configdoc: bridge inline profiles to registries"
+```
+
+## Step 7: Compose imported registries with the synthetic inline registry and lock inline-first precedence
+
+After the synthetic inline registry existed, the next missing behavior was composition. The design only becomes useful if inline profiles and imported registries can coexist in one registry view. This tranche adds that composition seam without changing Geppetto internals: a small wrapper registry that checks inline profiles first and falls back to imported registries when the profile is not available inline.
+
+This keeps the code intentionally conservative. Rather than reaching into `ChainedRegistry` internals or reimplementing stack resolution, the new wrapper just orchestrates existing registry implementations. The important product rule is now encoded and tested: when the same profile slug exists both inline and in an imported registry, inline wins by default unless the caller explicitly asks for a different registry slug.
+
+### Prompt Context
+
+**User prompt (verbatim):** (same as Step 3)
+
+**Assistant interpretation:** Continue the next focused task by adding imported-plus-inline registry composition and proving the intended precedence rules in tests.
+
+**Inferred user intent:** Keep building toward the final profile-first system while preserving the boundary that Geppetto still owns profile-resolution behavior and Pinocchio just composes sources.
+
+**Commit (code):** `ef664c1` — `configdoc: compose inline and imported registries`
+
+### What I did
+- Extended `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/configdoc/profiles.go` with:
+  - `ComposeRegistry(...)`
+  - a private `composedRegistry` wrapper implementing `engineprofiles.Registry`
+- Implemented behavior for:
+  - inline-only registry use
+  - imported-only fallback
+  - inline-first same-slug resolution when no explicit registry slug is given
+  - explicit registry-slug pass-through
+- Extended `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/configdoc/profiles_test.go` with a mixed inline/imported precedence test.
+- Revalidated:
+  - `go test ./pkg/configdoc -count=1`
+  - `golangci-lint run ./pkg/configdoc/...`
+
+### Why
+- A profile-first config document is only compelling if local inline overrides can coexist with imported team/shared catalogs.
+- The key user expectation is that local inline definitions should win over imported same-slug definitions unless the caller explicitly selects a different registry.
+- This wrapper lets us encode that rule without prematurely refactoring Geppetto’s own registry implementations.
+
+### What worked
+- The wrapper approach was enough to express the intended precedence rule cleanly.
+- The new tests now prove two important behaviors:
+  - inline `assistant` overrides imported `assistant`
+  - imported `analyst` still resolves when no inline profile with that slug exists
+- Keeping the composition logic in `pkg/configdoc` preserved the current boundary between app-owned document composition and Geppetto-owned registry resolution.
+
+### What didn't work
+- N/A in this tranche.
+
+### What I learned
+- There is a useful architectural seam between “build one effective catalog” and “resolve a profile from that catalog.” The first can stay app-owned for now, while the second remains Geppetto-owned.
+- Inline-first precedence is easy to explain once encoded as “check inline first only when no explicit registry slug was requested.”
+
+### What was tricky to build
+- The subtle design choice was how to treat the no-selection case (`registry slug == empty`, `profile slug == empty`). I kept inline first there too, which is consistent with the idea that local config should dominate generic imported defaults. That choice may still want a second look once `profile.active` is wired end-to-end.
+
+### What warrants a second pair of eyes
+- Whether the composed registry should keep inline-first behavior even for the “no registry slug, no profile slug” default-resolution case.
+- Whether later bootstrap code should expose the inline registry slug as a user-visible detail or keep it purely internal.
+
+### What should be done in the future
+- Add document-first resolver code that feeds `profile.registries` into this composed registry path.
+- Add tests that exercise imported-only and inline+imported composition through the future high-level resolver, not just through the low-level `ComposeRegistry(...)` helper.
+
+### Code review instructions
+- Start with:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/configdoc/profiles.go`
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/configdoc/profiles_test.go`
+- Focus on:
+  - same-slug precedence without explicit registry slug
+  - fallback to imported registries for non-inline slugs
+  - avoiding unnecessary changes to Geppetto internals
+- Validate with:
+
+```bash
+cd /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio
+go test ./pkg/configdoc -count=1
+golangci-lint run ./pkg/configdoc/...
+```
+
+### Technical details
+
+Commands run for this tranche:
+
+```bash
+cd /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio
+
+gofmt -w pkg/configdoc/profiles.go pkg/configdoc/profiles_test.go
+
+go test ./pkg/configdoc -count=1
+
+golangci-lint run ./pkg/configdoc/...
+
+git add pkg/configdoc
+git commit --no-verify -m "configdoc: compose inline and imported registries"
 ```
