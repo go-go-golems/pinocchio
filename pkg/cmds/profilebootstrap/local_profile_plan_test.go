@@ -150,6 +150,44 @@ func TestResolveBaseInferenceSettings_IgnoresUnifiedConfigRuntimeFieldsAndKeepsC
 	}
 }
 
+func TestResolveUnifiedConfig_ExposesExplainData(t *testing.T) {
+	repoDir, cwdDir, restore := setupGitWorkspace(t)
+	defer restore()
+
+	tmpHome := t.TempDir()
+	t.Setenv("HOME", filepath.Join(tmpHome, "home"))
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(tmpHome, "xdg"))
+
+	repoFile := filepath.Join(repoDir, ".pinocchio.yml")
+	cwdFile := filepath.Join(cwdDir, ".pinocchio.yml")
+	for _, entry := range []struct {
+		path    string
+		content string
+	}{
+		{repoFile, "profile:\n  active: repo-profile\napp:\n  repositories:\n    - ./repo-prompts\n"},
+		{cwdFile, "profile:\n  active: cwd-profile\napp:\n  repositories:\n    - ./cwd-prompts\n"},
+	} {
+		if err := os.WriteFile(entry.path, []byte(entry.content), 0o644); err != nil {
+			t.Fatalf("write %s: %v", entry.path, err)
+		}
+	}
+
+	resolved, err := ResolveUnifiedConfig(nil)
+	if err != nil {
+		t.Fatalf("ResolveUnifiedConfig failed: %v", err)
+	}
+	if resolved.Documents == nil || resolved.Documents.Explain == nil {
+		t.Fatal("expected resolved explain data")
+	}
+	activeEntries := resolved.Documents.Explain.Entries("profile.active")
+	if len(activeEntries) != 2 {
+		t.Fatalf("expected two profile.active explain entries, got %#v", activeEntries)
+	}
+	if activeEntries[1].File.Path != cwdFile {
+		t.Fatalf("expected cwd active override provenance, got %#v", activeEntries[1])
+	}
+}
+
 func TestResolveCLIEngineSettings_UsesMergedDocumentSelectionAndInlineProfiles(t *testing.T) {
 	repoDir, cwdDir, restore := setupGitWorkspace(t)
 	defer restore()
