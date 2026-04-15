@@ -733,6 +733,97 @@ go test ./cmd/web-chat ./cmd/examples/simple-chat ./cmd/agents/simple-chat-agent
 - Local Clay now still exposes the narrower deprecated helpers `InitViperWithAppName(...)` and `InitViperInstanceWithAppName(...)`, but not the root-command bootstrap shortcut `InitViper(...)`.
 - The local active workspace no longer has any live code that depends on the removed Clay helper.
 
+## Step 8: Pragmatically kill the removed Viper startup path across the remaining legacy `corporate-headquarters` programs
+
+After the audit, the user explicitly said not to spend effort modernizing the old apps fully and not to worry about whether most of them still compile, especially in `go-go-labs`. The goal was simpler: stop the active legacy programs from referencing the removed worktree startup APIs.
+
+So this pass was intentionally blunt and pragmatic:
+- replace `clay.InitViper(...)` with `clay.InitGlazed(...)`
+- replace `pkg.InitViper(...)` with `pkg.InitGlazed(...)`
+- replace active `logging.InitLoggerFromViper()` usage with `logging.InitLoggerFromCobra(...)`
+- replace the one active `logging.InitViper(...)` user in `go-go-labs/cmd/github-projects/main.go`
+- do **not** try to fully modernize command parsing, config loading, or make every legacy program compile cleanly
+
+### Prompt Context
+
+**User prompt (verbatim):** "ok, just kill it. these are all legacy programs. no need to update glazed/clay in corp headquarters, we have a worktree right here"
+
+**Follow-up clarification (verbatim):** "most of these project s don't compile anymore anyway, especially in go-go-labs"
+
+**Assistant interpretation:** Remove references to the deleted/deprecated startup helpers from the active legacy corp programs, but do not turn this into a broader modernization or validation project.
+
+**Inferred user intent:** Make the worktree-compatible API sweep quickly and stop.
+
+### What I changed
+Active corp code was updated in these areas:
+
+- `cliopatra/cmd/cliopatra/main.go`
+- `ecrivain/cmd/ecrivain/main.go`
+- `escuse-me/cmd/escuse-me/main.go`
+- `facture/cmd/facture/main.go`
+- `go-go-agent/cmd/simple/main.go`
+- `go-go-agent/cmd/file-extraction/main.go`
+- `go-go-agent/cmd/agent/main.go`
+- `go-go-labs/cmd/apps/datadog-cli/main.go`
+- `go-go-labs/cmd/apps/maps/main.go`
+- `go-go-labs/cmd/apps/reggie/main.go`
+- `go-go-labs/cmd/apps/create-pr/main.go`
+- `go-go-labs/cmd/apps/embeddings/main.go`
+- `go-go-labs/cmd/apps/test-html-selector/main.go`
+- `go-go-labs/cmd/apps/note-linker/main.go`
+- `go-go-labs/cmd/apps/capture/main.go`
+- `go-go-labs/cmd/apps/cloudwatch-access-log/main.go`
+- `go-go-labs/cmd/apps/poll-modem/cmd/root.go`
+- `go-go-labs/cmd/apps/simplify-html/main.go`
+- `go-go-labs/cmd/github-projects/main.go`
+- `go-go-labs/cmd/n8n-cli/main.go`
+- `mastoid/cmd/mastoid/main.go`
+- `oak/cmd/oak/commands/root.go`
+- `openai-app-server/cmd/openai-app-server/root.go`
+- `openai-mock-server/cmd/openai-mock-server/main.go`
+- `plunger/cmd/plunger/main.go`
+- `prompto/cmd/prompto/main.go`
+- `uhoh/cmd/uhoh/main.go`
+- `zine-layout/cmd/zine-layout/main.go`
+
+### What worked
+A focused active-code grep now shows the removed/deprecated startup path is gone from current corp Go code and only remains in:
+- `corporate-headquarters/clay/pkg/init.go` (the corp-local legacy helper definition we intentionally did **not** edit)
+- `workspace-manager.orig/...`
+- `workspace-manager.backup/...`
+
+Command used:
+
+```bash
+cd /home/manuel/code/wesen/corporate-headquarters
+rg -n 'InitViper\(|InitLoggerFromViper\(' . --glob '*.go' -g '!**/ttmp/**' -g '!vibes/**'
+```
+
+### What didn’t work / what I explicitly did not do
+- I did **not** try to make the touched legacy programs compile or pass tests.
+- I briefly widened the scope to rename a few unrelated `AddLoggingLayerToRootCommand(...)` call sites, then stopped and reverted that expansion when the user said not to bother.
+- I did **not** update `corporate-headquarters/clay` or `corporate-headquarters/glazed` themselves; the user specifically said that was unnecessary because the worktree modules are here already.
+
+### What I learned
+- The useful stopping condition for this pass was not “all legacy corp programs build” but “active corp code no longer references removed worktree startup helpers.”
+- That condition is now satisfied.
+
+### What warrants a second pair of eyes
+- Only if someone later decides these legacy programs are worth reviving. At that point they should get proper parser/config modernization rather than more search-and-replace cleanup.
+
+### What should be done in the future
+- Optional: none, unless one of these legacy programs is revived and deserves a real Glazed parser/config migration.
+
+### Review instructions
+- Sanity check with:
+
+```bash
+cd /home/manuel/code/wesen/corporate-headquarters
+rg -n 'InitViper\(|InitLoggerFromViper\(' . --glob '*.go' -g '!**/ttmp/**' -g '!vibes/**'
+```
+
+Expected remaining hits are only the corp-local Clay helper definition and the backup/orig workspace-manager copies.
+
 ## Appendix: Commands Used During Implementation
 
 ```bash

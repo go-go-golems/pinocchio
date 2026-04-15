@@ -84,3 +84,13 @@ Removed the local clay.InitViper symbol entirely from the workspace Clay module,
 - /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/14/PI-CONFIGFILESFUNC-REMOVAL--remove-configfilesfunc-and-migrate-cli-config-resolution-to-declarative-plans/reference/01-diary.md — Recorded Step 7 removing local clay.InitViper and auditing corporate-headquarters consumers
 - /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/14/PI-CONFIGFILESFUNC-REMOVAL--remove-configfilesfunc-and-migrate-cli-config-resolution-to-declarative-plans/tasks.md — Marked the Clay InitViper removal and audit follow-up done
 
+
+## 2026-04-14
+
+Performed a pragmatic legacy-app sweep in corporate-headquarters: active corp Go programs were moved off removed worktree startup APIs (`clay.InitViper`, `logging.InitLoggerFromViper`, and the one active `logging.InitViper` use) without trying to fully modernize or revalidate those legacy programs. A final grep now leaves only the corp-local Clay helper definition plus workspace-manager backup/orig copies as remaining hits.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/14/PI-CONFIGFILESFUNC-REMOVAL--remove-configfilesfunc-and-migrate-cli-config-resolution-to-declarative-plans/reference/01-diary.md — Recorded Step 8 explaining the pragmatic corp legacy-app cleanup
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/14/PI-CONFIGFILESFUNC-REMOVAL--remove-configfilesfunc-and-migrate-cli-config-resolution-to-declarative-plans/tasks.md — Marked the corp legacy-app startup sweep done
+
