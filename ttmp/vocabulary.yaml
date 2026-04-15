@@ -33,6 +33,8 @@ topics:
       description: Third-party reuse/extraction
     - slug: bobatea
       description: Bobatea TUI library
+    - slug: design
+      description: Architecture and design work, especially forward-looking format or API proposals
 docTypes:
     - slug: index
       description: Ticket index / overall plan
