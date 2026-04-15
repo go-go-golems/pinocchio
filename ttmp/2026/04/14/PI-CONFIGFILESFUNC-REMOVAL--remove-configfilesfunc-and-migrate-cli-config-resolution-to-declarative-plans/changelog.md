@@ -137,3 +137,18 @@ Executed the second Geppetto/Pinocchio cleanup tranche: extracted a shared boots
 - /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/14/PI-CONFIGFILESFUNC-REMOVAL--remove-configfilesfunc-and-migrate-cli-config-resolution-to-declarative-plans/reference/01-diary.md — Recorded Step 10 for the shared bootstrap helper extraction and helper-package deletion
 - /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/14/PI-CONFIGFILESFUNC-REMOVAL--remove-configfilesfunc-and-migrate-cli-config-resolution-to-declarative-plans/tasks.md — Marked the remaining Geppetto/Pinocchio cleanup follow-ups done
 
+
+## 2026-04-14
+
+Removed the last path-list config wrapper APIs from Geppetto and Pinocchio, converted the remaining bootstrap/profile-plan tests to assert on ResolvedCLIConfigFiles directly, and updated the Geppetto migration tutorial to use sources.FromConfigPlanBuilder(...) instead of ResolveCLIConfigFiles(...) + FromFiles(...).
+
+### Related Files
+
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/geppetto/pkg/cli/bootstrap/bootstrap_test.go — Updated tests to assert on ResolvedCLIConfigFiles
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/geppetto/pkg/cli/bootstrap/profile_selection.go — Deleted ResolveCLIConfigFiles and ResolveCLIConfigFilesForExplicit so bootstrap now exposes resolved-file loading only
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/geppetto/pkg/doc/tutorials/09-migrating-cli-commands-to-glazed-bootstrap-profile-resolution.md — Tutorial now teaches plan-builder middleware instead of the removed path-list API
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/cmds/profilebootstrap/local_profile_plan_test.go — Updated local profile precedence test to assert on resolved files
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/cmds/profilebootstrap/profile_selection.go — Removed matching Pinocchio wrapper exports for the deleted path-list APIs
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/14/PI-CONFIGFILESFUNC-REMOVAL--remove-configfilesfunc-and-migrate-cli-config-resolution-to-declarative-plans/reference/01-diary.md — Recorded Step 11 including the repeated gofmt-on-Markdown failure and corrected validation flow
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/14/PI-CONFIGFILESFUNC-REMOVAL--remove-configfilesfunc-and-migrate-cli-config-resolution-to-declarative-plans/tasks.md — Marked final wrapper-removal follow-up complete
+

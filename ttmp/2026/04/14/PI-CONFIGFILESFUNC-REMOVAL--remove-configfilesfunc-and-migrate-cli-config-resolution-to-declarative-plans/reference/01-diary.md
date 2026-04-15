@@ -12,6 +12,12 @@ DocType: reference
 Intent: long-term
 Owners: []
 RelatedFiles:
+    - Path: ../../../../../../../geppetto/pkg/cli/bootstrap/bootstrap_test.go
+      Note: Updated bootstrap tests to assert on ResolvedCLIConfigFiles instead of removed string-list helpers
+    - Path: ../../../../../../../geppetto/pkg/cli/bootstrap/profile_selection.go
+      Note: Removed the last path-list config wrapper APIs so bootstrap only exposes resolved-file loading
+    - Path: ../../../../../../../geppetto/pkg/doc/tutorials/09-migrating-cli-commands-to-glazed-bootstrap-profile-resolution.md
+      Note: Updated the remaining tutorial snippet to use FromConfigPlanBuilder instead of ResolveCLIConfigFiles + FromFiles
     - Path: ../../../../../../../glazed/pkg/cli/cobra-parser.go
       Note: Replaced ConfigFilesFunc/ConfigPath with ConfigPlanBuilder in commit 0e0f443
     - Path: ../../../../../../../glazed/pkg/cli/cobra_parser_config_test.go
@@ -30,12 +36,17 @@ RelatedFiles:
       Note: Removed the same no-op parser shim in commit 8765765
     - Path: cmd/web-chat/main.go
       Note: Removed the no-op parser shim after AppName stopped implying config loading in commit 8765765
+    - Path: pkg/cmds/profilebootstrap/local_profile_plan_test.go
+      Note: Updated local-profile precedence tests to assert on resolved files directly
+    - Path: pkg/cmds/profilebootstrap/profile_selection.go
+      Note: Removed the matching Pinocchio wrapper exports for the deleted path-list APIs
 ExternalSources: []
 Summary: Implementation diary for removing ConfigFilesFunc, removing ConfigPath from CobraParserConfig, deleting pkg/appconfig, and migrating workspace callers to declarative config plans.
 LastUpdated: 2026-04-14T19:20:00-04:00
 WhatFor: Capture the implementation steps, commits, validation, and remaining caveats for the ConfigFilesFunc/ConfigPath/appconfig removal cleanup.
 WhenToUse: Use when reviewing or continuing the cleanup that removes old CobraParser config-loading APIs and the appconfig facade.
 ---
+
 
 
 # Diary
@@ -1049,6 +1060,102 @@ cmd/pinocchio/main.go:251:42: undefined: sections2.GetCobraCommandGeppettoMiddle
   6. `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/cmds/profilebootstrap/repositories.go`
   7. `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/cmd/pinocchio/main.go`
   8. `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/cmds/helpers/` (deleted)
+
+## Step 11: Delete the last path-list config wrappers and teach the docs the final resolved-files shape
+
+After Step 10, the active runtime paths were already clean, but two small API leftovers remained: `ResolveCLIConfigFiles(...)` and `ResolveCLIConfigFilesForExplicit(...)`. They no longer had meaningful active callers in current code; they only survived as thin compatibility wrappers around `ResolveCLIConfigFilesResolved(...)`.
+
+This step removed those last path-list wrappers from Geppetto and Pinocchio, converted the remaining tests to assert on resolved files directly, and updated the remaining Geppetto tutorial snippet to use `sources.FromConfigPlanBuilder(...)` instead of teaching the deprecated string-slice pattern.
+
+### Prompt Context
+
+**User prompt (verbatim):** "continue"
+
+**Assistant interpretation:** Keep going with the destructive cleanup and prune the last obsolete compatibility surface.
+
+**Inferred user intent:** Finish the cleanup thoroughly, not just enough to make the main commands work.
+
+### What I did
+- Removed these wrappers from Geppetto bootstrap:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/geppetto/pkg/cli/bootstrap/profile_selection.go`
+    - `ResolveCLIConfigFiles(...)`
+    - `ResolveCLIConfigFilesForExplicit(...)`
+    - the now-unused helper that built command settings only for the explicit-path wrapper
+- Removed the matching Pinocchio wrapper exports from:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/cmds/profilebootstrap/profile_selection.go`
+- Updated Geppetto bootstrap tests to validate `ResolvedCLIConfigFiles` instead of the removed string slice:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/geppetto/pkg/cli/bootstrap/bootstrap_test.go`
+- Updated Pinocchio local-profile precedence tests to validate `resolved.Files[i].Path` instead of the removed wrapper:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/cmds/profilebootstrap/local_profile_plan_test.go`
+- Updated the remaining Geppetto tutorial example still showing the path-list API:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/geppetto/pkg/doc/tutorials/09-migrating-cli-commands-to-glazed-bootstrap-profile-resolution.md`
+  - the snippet now uses `cmd_sources.FromConfigPlanBuilder(...)`
+
+### Why
+- The string-list wrappers no longer reflected the intended architecture.
+- They encouraged callers to think in terms of bare file paths instead of resolved config files with provenance.
+- Leaving them in place would preserve dead compatibility surface for no real benefit.
+- The docs should teach either direct plan middleware or resolved-file loading, not the older string-slice handoff.
+
+### What worked
+- A workspace grep after the edits showed no remaining current-source references to:
+  - `ResolveCLIConfigFiles(...)`
+  - `ResolveCLIConfigFilesForExplicit(...)`
+- Focused validation passed:
+
+```bash
+cd /home/manuel/workspaces/2026-04-10/pinocchiorc/geppetto
+gofmt -w pkg/cli/bootstrap/profile_selection.go pkg/cli/bootstrap/bootstrap_test.go
+
+git diff --check -- pkg/doc/tutorials/09-migrating-cli-commands-to-glazed-bootstrap-profile-resolution.md
+
+go test ./pkg/cli/bootstrap/... -count=1
+```
+
+```bash
+cd /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio
+gofmt -w pkg/cmds/profilebootstrap/profile_selection.go pkg/cmds/profilebootstrap/local_profile_plan_test.go
+
+go test ./pkg/cmds/profilebootstrap ./pkg/cmds ./cmd/pinocchio ./cmd/pinocchio/cmds/... ./cmd/examples/simple-chat ./cmd/web-chat -count=1
+```
+
+### What didn't work
+- I repeated the earlier formatting mistake and accidentally passed a Markdown file to `gofmt`.
+- Exact error output:
+
+```text
+pkg/doc/tutorials/09-migrating-cli-commands-to-glazed-bootstrap-profile-resolution.md:1:1: expected 'package', found '--'
+pkg/doc/tutorials/09-migrating-cli-commands-to-glazed-bootstrap-profile-resolution.md:2:1: expected ';', found Title
+pkg/doc/tutorials/09-migrating-cli-commands-to-glazed-bootstrap-profile-resolution.md:30:24: curly quotation mark '“' (use neutral '"')
+pkg/doc/tutorials/09-migrating-cli-commands-to-glazed-bootstrap-profile-resolution.md:30:47: curly quotation mark '”' (use neutral '"')
+```
+
+- The fix was simply to rerun formatting only on the Go files and use `git diff --check` for the Markdown doc instead.
+
+### What I learned
+- By this point in the cleanup, the remaining simplifications were mostly about deleting APIs that no longer matched the mental model, not fixing broken behavior.
+- `ResolvedCLIConfigFiles` is now the right seam to assert against in tests because it preserves both the path list and the richer per-file metadata.
+
+### What was tricky to build
+- The code change itself was small, but it was important to make sure the removal did not leave outdated tutorial guidance behind. Otherwise the codebase would say one thing while the docs still taught another.
+- The recurring `gofmt`-on-Markdown mistake is easy to make in mixed code/doc cleanup passes, so the safer split is: `gofmt` for `.go`, `git diff --check` for docs.
+
+### What warrants a second pair of eyes
+- Whether any external, out-of-workspace consumers depended on the deleted Geppetto wrappers. Inside this workspace there were no active callers left.
+- Whether the tutorial now points to the best level of abstraction for application authors (`FromConfigPlanBuilder(...)` vs. direct resolved-file handling). I believe it does, but it is the main wording choice worth a glance.
+
+### What should be done in the future
+- N/A
+
+### Code review instructions
+- Start with:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/geppetto/pkg/cli/bootstrap/profile_selection.go`
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/cmds/profilebootstrap/profile_selection.go`
+- Then review the test/doc alignment:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/geppetto/pkg/cli/bootstrap/bootstrap_test.go`
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/cmds/profilebootstrap/local_profile_plan_test.go`
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/geppetto/pkg/doc/tutorials/09-migrating-cli-commands-to-glazed-bootstrap-profile-resolution.md`
+- Validate with the focused test commands above.
 
 ## Appendix: Commands Used During Implementation
 

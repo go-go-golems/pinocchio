@@ -27,3 +27,4 @@
 - [x] Migrate `pinocchio/cmd/pinocchio/cmds/js.go` off `ResolveCLIConfigFiles(...) + FromFiles(...)` to a resolved-files or direct plan-middleware path, and extract the profile-registry-chain builder if that logic still needs to be shared
 - [x] Evaluate whether `pinocchio/cmd/pinocchio/main.go` repository-loading should stop manually parsing YAML and instead use a typed helper over the same plan-based config path
 - [x] Shrink or delete thin Pinocchio helper re-export layers in `pkg/cmds/helpers/*` once callers use `profilebootstrap` directly
+- [x] Delete the remaining path-list `ResolveCLIConfigFiles(...)` / `ResolveCLIConfigFilesForExplicit(...)` wrappers once active callers use resolved files everywhere, and update bootstrap tests/docs to assert on `ResolvedCLIConfigFiles` / plan-builder middleware instead
