@@ -27,6 +27,10 @@ RelatedFiles:
       Note: |-
         Diary Step 6 records the new tests for inline-only registry resolution
         Diary Step 7 records the mixed inline/imported precedence tests
+    - Path: pkg/configdoc/resolved.go
+      Note: Diary Step 8 records the resolved-files loader over ordered ResolvedConfigFile inputs
+    - Path: pkg/configdoc/resolved_test.go
+      Note: Diary Step 8 records the file-backed layering test across user/repo/cwd/explicit docs
     - Path: pkg/configdoc/types.go
       Note: Diary Step 4 records the first code tranche that introduced the typed config document model
     - Path: ttmp/2026/04/14/PI-PROFILE-FIRST-CONFIG--adopt-a-profile-first-unified-config-format-for-pinocchio/analysis/01-current-profile-config-and-registry-architecture-analysis.md
@@ -43,6 +47,7 @@ WhatFor: |
     Preserve the reasoning, commands, and decisions behind the creation of the ticket deliverables so later implementation work can continue without losing context.
 WhenToUse: Use when continuing this ticket, reviewing how the docs were assembled, or checking which evidence and commands shaped the current recommendation.
 ---
+
 
 
 
@@ -799,4 +804,101 @@ golangci-lint run ./pkg/configdoc/...
 
 git add pkg/configdoc
 git commit --no-verify -m "configdoc: compose inline and imported registries"
+```
+
+## Step 8: Add a resolved-files loader and prove real layer ordering with file-backed tests
+
+At this point the package could decode documents, merge them, and build registries from the result, but it still lacked one practical bridge: taking the already-resolved `[]ResolvedConfigFile` list from the config-plan system and turning it into one effective document. That bridge matters because later bootstrap integration should not have to manually reopen and merge files itself. It should ask the config-document layer to do that in one place.
+
+This tranche added that small but important convenience layer: `LoadResolvedDocuments(...)`. The function is intentionally simple—load each file in order, keep the per-file decoded documents, and merge them to an effective document. The accompanying test finally exercises the real user/repo/cwd/explicit layering story with actual temp files instead of pairwise synthetic docs.
+
+### Prompt Context
+
+**User prompt (verbatim):** (same as Step 3)
+
+**Assistant interpretation:** Continue to the next implementation slice by bridging the new configdoc package to the existing resolved-file output of the config-plan system.
+
+**Inferred user intent:** Keep the implementation moving toward practical bootstrap integration while still landing small, reviewable units.
+
+**Commit (code):** `07edc1c` — `configdoc: load and merge resolved files`
+
+### What I did
+- Added:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/configdoc/resolved.go`
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/configdoc/resolved_test.go`
+- Implemented:
+  - `ResolvedDocuments`
+  - `LoadResolvedDocuments(...)`
+- Made the loader:
+  - accept ordered `[]glazedconfig.ResolvedConfigFile`
+  - decode each file through `LoadDocument(...)`
+  - keep the per-file decoded documents
+  - merge them to one effective document
+- Added a file-backed test proving layer order across:
+  - user
+  - repo
+  - cwd
+  - explicit
+- Verified behaviors in that test for:
+  - repository accumulation
+  - `profile.active` override
+  - `profile.registries` replacement
+  - same-slug profile merge behavior across files
+
+### Why
+- This is the natural bridge between the Glazed config-plan world and the future document-first bootstrap world.
+- It also closes the remaining open merge-test task in the ticket with a real multi-file layering scenario.
+
+### What worked
+- The existing `LoadDocument(...)` + `MergeDocuments(...)` split made the resolved-files loader almost trivial to implement.
+- The temp-file layering test gives much stronger confidence than purely synthetic merge-unit tests because it follows the same shape future bootstrap code will follow.
+
+### What didn't work
+- N/A in this tranche.
+
+### What I learned
+- The current package seams are holding up well: strict decode, merge, inline-registry bridge, and resolved-files loading all compose naturally.
+- The next architectural jump is now clearly the document-first bootstrap integration, not more configdoc plumbing.
+
+### What was tricky to build
+- The main decision was scope control: it would have been easy to jump straight into `profilebootstrap` integration here, but keeping this tranche focused on `pkg/configdoc` made the review surface much cleaner and also completed the missing layering-test coverage first.
+
+### What warrants a second pair of eyes
+- Whether `ResolvedDocuments` should eventually grow provenance/explain fields directly, or whether provenance should live in a separate structure layered on top of it.
+- Whether later high-level resolvers should expose both `Documents` and `Effective`, or only `Effective` plus provenance summaries.
+
+### What should be done in the future
+- Add provenance/explain data for merged entries.
+- Start the document-first bootstrap integration in `profilebootstrap` using `LoadResolvedDocuments(...)` as the input seam.
+
+### Code review instructions
+- Start with:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/configdoc/resolved.go`
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/configdoc/resolved_test.go`
+- Then read upward one layer if needed:
+  - `pkg/configdoc/load.go`
+  - `pkg/configdoc/merge.go`
+- Validate with:
+
+```bash
+cd /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio
+go test ./pkg/configdoc -count=1
+golangci-lint run ./pkg/configdoc/...
+```
+
+### Technical details
+
+Commands run for this tranche:
+
+```bash
+cd /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio
+
+gofmt -w pkg/configdoc/resolved.go pkg/configdoc/resolved_test.go
+
+go test ./pkg/configdoc -count=1
+
+golangci-lint run ./pkg/configdoc/...
+
+git add pkg/configdoc
+git commit --no-verify -m "configdoc: load and merge resolved files"
 ```

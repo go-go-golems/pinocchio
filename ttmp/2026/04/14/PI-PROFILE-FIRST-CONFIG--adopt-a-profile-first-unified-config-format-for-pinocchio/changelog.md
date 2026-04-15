@@ -91,3 +91,15 @@ Step 7 (commit ef664c1): added imported-plus-inline registry composition under p
 - /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/14/PI-PROFILE-FIRST-CONFIG--adopt-a-profile-first-unified-config-format-for-pinocchio/reference/02-investigation-diary.md — Records Step 7 for the composition tranche
 - /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/14/PI-PROFILE-FIRST-CONFIG--adopt-a-profile-first-unified-config-format-for-pinocchio/tasks.md — Marks imported-plus-inline composition and precedence tasks complete
 
+
+## 2026-04-15
+
+Step 8 (commit 07edc1c): added LoadResolvedDocuments(...) under pinocchio/pkg/configdoc so ordered ResolvedConfigFile inputs can be decoded and merged into one effective document, with a file-backed test covering user/repo/cwd/explicit layering.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/configdoc/resolved.go — Introduces the resolved-files loading seam for future document-first bootstrap integration
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/configdoc/resolved_test.go — Adds file-backed tests for real multi-layer document ordering and merge behavior
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/14/PI-PROFILE-FIRST-CONFIG--adopt-a-profile-first-unified-config-format-for-pinocchio/reference/02-investigation-diary.md — Records Step 8 for the resolved-files loader tranche
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/14/PI-PROFILE-FIRST-CONFIG--adopt-a-profile-first-unified-config-format-for-pinocchio/tasks.md — Marks the real layering-merge test task complete
+

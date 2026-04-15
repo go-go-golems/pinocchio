@@ -29,7 +29,7 @@
 - [x] Implement `app.repositories` merge semantics: append in layer order, dedupe, preserve stable order
 - [x] Implement same-slug inline profile merges across layers, including explicit rules for `stack`, `inference_settings`, and `extensions`
 - [ ] Add provenance/explain data for merged app/profile/profile entries so later debug output can still explain which layer won
-- [ ] Add merge tests for user/repo/cwd/explicit layering, including repository accumulation and same-slug profile overrides
+- [x] Add merge tests for user/repo/cwd/explicit layering, including repository accumulation and same-slug profile overrides
 
 ### Phase 3 — inline profiles as registry input
 

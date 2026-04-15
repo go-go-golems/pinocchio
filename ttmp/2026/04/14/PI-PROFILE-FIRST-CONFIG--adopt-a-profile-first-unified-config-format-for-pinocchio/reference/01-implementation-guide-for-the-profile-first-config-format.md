@@ -39,6 +39,10 @@ RelatedFiles:
       Note: |-
         Third implementation tranche proves inline-only registry construction and stacked inline profile resolution
         Fourth implementation tranche proves inline-first same-slug precedence and imported fallback
+    - Path: pkg/configdoc/resolved.go
+      Note: Fifth implementation tranche adds the resolved-files loading seam that future bootstrap integration can consume directly
+    - Path: pkg/configdoc/resolved_test.go
+      Note: Fifth implementation tranche proves user/repo/cwd/explicit file ordering with real temp-file fixtures
     - Path: pkg/configdoc/types.go
       Note: First implementation tranche adds the typed unified config document structs and local filename policy
 ExternalSources: []
@@ -49,6 +53,7 @@ WhatFor: |
     Provide a concrete coding guide for a future implementation pass, with enough orientation that a new contributor can work safely without rediscovering the current architecture from scratch.
 WhenToUse: Use this document when implementing the new config format or reviewing PRs that introduce the unified document loader, inline profile catalog, or breaking-change migration tooling.
 ---
+
 
 
 
