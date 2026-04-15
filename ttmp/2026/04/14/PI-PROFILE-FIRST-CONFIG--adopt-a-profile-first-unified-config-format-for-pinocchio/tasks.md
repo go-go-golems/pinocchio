@@ -24,10 +24,10 @@
 
 ### Phase 2 — layered document merge
 
-- [ ] Implement merge logic for layered unified config documents loaded from the existing config-plan path
-- [ ] Define scalar merge rules (`profile.active` last-writer-wins, `profile.registries` last-writer-wins)
-- [ ] Implement `app.repositories` merge semantics: append in layer order, dedupe, preserve stable order
-- [ ] Implement same-slug inline profile merges across layers, including explicit rules for `stack`, `inference_settings`, and `extensions`
+- [x] Implement merge logic for layered unified config documents loaded from the existing config-plan path
+- [x] Define scalar merge rules (`profile.active` last-writer-wins, `profile.registries` last-writer-wins)
+- [x] Implement `app.repositories` merge semantics: append in layer order, dedupe, preserve stable order
+- [x] Implement same-slug inline profile merges across layers, including explicit rules for `stack`, `inference_settings`, and `extensions`
 - [ ] Add provenance/explain data for merged app/profile/profile entries so later debug output can still explain which layer won
 - [ ] Add merge tests for user/repo/cwd/explicit layering, including repository accumulation and same-slug profile overrides
 

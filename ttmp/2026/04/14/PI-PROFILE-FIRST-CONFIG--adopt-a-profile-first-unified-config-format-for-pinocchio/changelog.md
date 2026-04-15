@@ -53,3 +53,17 @@ Step 4 (commit 322e375): added the first code tranche under pinocchio/pkg/config
 - /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/14/PI-PROFILE-FIRST-CONFIG--adopt-a-profile-first-unified-config-format-for-pinocchio/reference/02-investigation-diary.md — Records Step 4 for the first configdoc implementation tranche
 - /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/14/PI-PROFILE-FIRST-CONFIG--adopt-a-profile-first-unified-config-format-for-pinocchio/tasks.md — Marks the first phase-1 configdoc tasks complete
 
+
+## 2026-04-15
+
+Step 5 (commit c0c9604): added presence-aware layered merge semantics to pinocchio/pkg/configdoc, including app.repositories merge+dedupe, profile.active and profile.registries replacement when explicitly present, same-slug inline profile overlay behavior, and focused tests for the new merge rules.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/configdoc/load.go — Annotates field presence from YAML node structure after strict decode
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/configdoc/merge.go — Implements the first layered merge semantics for the new config format
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/configdoc/merge_test.go — Adds focused tests for repository accumulation
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/configdoc/types.go — Extended the typed document model with internal field-presence tracking for correct merge semantics
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/14/PI-PROFILE-FIRST-CONFIG--adopt-a-profile-first-unified-config-format-for-pinocchio/reference/02-investigation-diary.md — Records Step 5 for the merge-semantics tranche
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/14/PI-PROFILE-FIRST-CONFIG--adopt-a-profile-first-unified-config-format-for-pinocchio/tasks.md — Marks the core merge-rule tasks complete
+

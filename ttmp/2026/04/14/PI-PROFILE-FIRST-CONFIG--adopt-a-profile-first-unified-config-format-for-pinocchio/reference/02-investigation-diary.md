@@ -15,6 +15,10 @@ RelatedFiles:
       Note: Diary Step 4 records strict decoding and old-format rejection in the new configdoc package
     - Path: pkg/configdoc/load_test.go
       Note: Diary Step 4 records the new unit tests for decode
+    - Path: pkg/configdoc/merge.go
+      Note: Diary Step 5 records the merge semantics tranche for repositories
+    - Path: pkg/configdoc/merge_test.go
+      Note: Diary Step 5 records the focused tests for merge behavior and the ApiType field-name correction
     - Path: pkg/configdoc/types.go
       Note: Diary Step 4 records the first code tranche that introduced the typed config document model
     - Path: ttmp/2026/04/14/PI-PROFILE-FIRST-CONFIG--adopt-a-profile-first-unified-config-format-for-pinocchio/analysis/01-current-profile-config-and-registry-architecture-analysis.md
@@ -31,6 +35,7 @@ WhatFor: |
     Preserve the reasoning, commands, and decisions behind the creation of the ticket deliverables so later implementation work can continue without losing context.
 WhenToUse: Use when continuing this ticket, reviewing how the docs were assembled, or checking which evidence and commands shaped the current recommendation.
 ---
+
 
 
 
@@ -488,4 +493,108 @@ golangci-lint run ./pkg/configdoc/...
 
 git add pkg/configdoc
 git commit --no-verify -m "configdoc: add typed unified config package"
+```
+
+## Step 5: Add layered merge semantics to `pkg/configdoc`
+
+Once the typed document existed, the next most important task was merge behavior. This is where the format starts becoming real rather than just syntactic. The tricky part is that merge semantics need to distinguish between “field absent in the higher layer” and “field present in the higher layer with an empty or replacement value.” Without that distinction, `profile.active`, `profile.registries`, and same-slug profile overlays would all behave ambiguously.
+
+This tranche therefore added presence tracking and merge logic together. The resulting package can now express the first meaningful semantics of the new format: repositories accumulate across layers with dedupe, profile control-plane scalars replace when explicitly present, and same-slug inline profiles merge field-by-field with stack replacement and inference-settings merge reuse from Geppetto.
+
+### Prompt Context
+
+**User prompt (verbatim):** (same as Step 3)
+
+**Assistant interpretation:** Continue the backlog with the next focused implementation task after the typed document package is in place.
+
+**Inferred user intent:** Build the system in reviewable slices, proving each semantic step with tests before moving on to bootstrap integration.
+
+**Commit (code):** `c0c9604` — `configdoc: add layered merge semantics`
+
+### What I did
+- Extended `pkg/configdoc/types.go` with internal presence flags so later merge code can distinguish absent fields from explicitly present ones.
+- Updated `pkg/configdoc/load.go` to annotate field presence from the parsed YAML node tree after strict decode.
+- Added `pkg/configdoc/merge.go` with:
+  - `MergeDocuments(...)`
+  - repository merge+dedupe logic
+  - profile control-plane replacement logic
+  - same-slug inline profile merge logic
+  - deep merge for `extensions`
+- Added `pkg/configdoc/merge_test.go` with coverage for:
+  - repository merge order + dedupe
+  - absent-vs-present profile control-plane behavior
+  - same-slug inline profile merging for display name, stack, inference settings, and extensions
+- Reused `geppetto/pkg/engineprofiles.MergeInferenceSettings(...)` for merging inline profile inference settings instead of inventing another merge implementation.
+- Fixed one test-field-name mistake during validation (`ChatSettings.ApiType`, not `APIType`).
+
+### Why
+- Merge rules are the heart of layered config. Without them, the new format is only a typed parser.
+- Presence tracking is required to make replacement semantics correct for `profile.active` and `profile.registries`.
+- Reusing `MergeInferenceSettings(...)` keeps inline-profile behavior aligned with the existing registry/profile-stack behavior.
+
+### What worked
+- Presence tracking via YAML-node inspection was enough to preserve strict decode while still recording whether a field was present in the higher layer.
+- The merge tests made it straightforward to encode the product decision that `app.repositories` should merge rather than replace.
+- Reusing Geppetto’s inference-settings merge logic reduced risk and avoided duplicate merge semantics.
+
+### What didn't work
+- The first test pass failed because I used the wrong field name on the Geppetto chat settings struct.
+- Exact error:
+
+```text
+pkg/configdoc/merge_test.go:141:38: assistant.InferenceSettings.Chat.APIType undefined (type *settings.ChatSettings has no field or method APIType, but does have field ApiType)
+pkg/configdoc/merge_test.go:142:91: assistant.InferenceSettings.Chat.APIType undefined (type *settings.ChatSettings has no field or method APIType, but does have field ApiType)
+```
+
+- The fix was to use `ApiType`.
+
+### What I learned
+- Presence tracking belongs very close to decode. If it is deferred too long, merge code either becomes lossy or accumulates awkward “zero value means absent?” assumptions.
+- `app.repositories` merge semantics feel natural once encoded: low-layer entries first, high-layer additions appended, duplicates removed.
+
+### What was tricky to build
+- The hardest design edge was deciding how much explicit clearing semantics to support in this tranche. The current code now cleanly supports replacement behavior for the control-plane fields and merge behavior for repositories, but full “clear this specific inline profile field with explicit empty value” semantics would require more invasive field-presence handling on every nested field. That can wait until it is actually needed.
+
+### What warrants a second pair of eyes
+- Whether same-slug inline profile fields like `display_name` and `description` should eventually support explicit clearing semantics, not just replacement when present and non-empty.
+- Whether the current absence/presence model is enough for all future merge rules or whether provenance work in the next tranche should carry a richer per-field source model.
+
+### What should be done in the future
+- Add provenance/explain metadata to merged app/profile/profile entries.
+- Add tests that run the merge logic across actual user/repo/cwd/explicit file sequences rather than only pairwise merge inputs.
+
+### Code review instructions
+- Start with:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/configdoc/load.go`
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/configdoc/types.go`
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/configdoc/merge.go`
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/configdoc/merge_test.go`
+- Validate with:
+
+```bash
+cd /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio
+go test ./pkg/configdoc -count=1
+golangci-lint run ./pkg/configdoc/...
+```
+
+### Technical details
+
+Commands run for this tranche:
+
+```bash
+cd /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio
+
+gofmt -w \
+  pkg/configdoc/types.go \
+  pkg/configdoc/load.go \
+  pkg/configdoc/merge.go \
+  pkg/configdoc/load_test.go \
+  pkg/configdoc/merge_test.go
+
+go test ./pkg/configdoc -count=1
+
+golangci-lint run ./pkg/configdoc/...
+
+git add pkg/configdoc
+git commit --no-verify -m "configdoc: add layered merge semantics"
 ```

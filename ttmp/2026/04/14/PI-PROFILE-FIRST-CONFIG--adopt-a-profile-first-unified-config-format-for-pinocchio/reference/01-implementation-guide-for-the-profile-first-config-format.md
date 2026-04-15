@@ -27,6 +27,10 @@ RelatedFiles:
       Note: First implementation tranche adds strict YAML decode with KnownFields and document validation
     - Path: pkg/configdoc/load_test.go
       Note: First implementation tranche adds focused decode and old-format rejection tests
+    - Path: pkg/configdoc/merge.go
+      Note: Second implementation tranche adds the first real layered merge semantics for app/profile/profiles
+    - Path: pkg/configdoc/merge_test.go
+      Note: Second implementation tranche proves repositories merge semantics and same-slug inline profile overlay behavior
     - Path: pkg/configdoc/types.go
       Note: First implementation tranche adds the typed unified config document structs and local filename policy
 ExternalSources: []
@@ -37,6 +41,7 @@ WhatFor: |
     Provide a concrete coding guide for a future implementation pass, with enough orientation that a new contributor can work safely without rediscovering the current architecture from scratch.
 WhenToUse: Use this document when implementing the new config format or reviewing PRs that introduce the unified document loader, inline profile catalog, or breaking-change migration tooling.
 ---
+
 
 
 
