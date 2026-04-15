@@ -58,7 +58,7 @@
 
 - [x] Update `pinocchio/pkg/cmds/profilebootstrap/*` to consume the unified document path
 - [x] Update `pinocchio/cmd/pinocchio/cmds/js.go` to use unified config + inline/imported profile resolution
-- [ ] Update `pinocchio/cmd/web-chat/main.go` to use unified config + composed registry resolution
+- [x] Update `pinocchio/cmd/web-chat/main.go` to use unified config + composed registry resolution
 - [ ] Verify runtime profile switching still preserves a non-profile baseline and rebuilds from base rather than prior merged state
 - [ ] Revalidate any remaining Pinocchio command/example paths that currently assume top-level runtime sections in config files
 

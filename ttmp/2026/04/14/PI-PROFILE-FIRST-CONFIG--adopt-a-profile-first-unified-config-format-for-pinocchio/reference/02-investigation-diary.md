@@ -13,6 +13,10 @@ Owners: []
 RelatedFiles:
     - Path: cmd/pinocchio/cmds/js.go
       Note: Diary Step 9 records the JS runtime migration to the unified composed registry path
+    - Path: cmd/web-chat/main.go
+      Note: Diary Step 10 records the top-level web-chat migration to unified bootstrap initialization
+    - Path: cmd/web-chat/main_profile_registries_test.go
+      Note: Diary Step 10 records the inline-profile web-chat bootstrap test
     - Path: pkg/cmds/profilebootstrap/engine_settings.go
       Note: Diary Step 9 records the hidden-base preservation and unified engine-settings path
     - Path: pkg/cmds/profilebootstrap/engine_settings_test.go
@@ -55,6 +59,7 @@ WhatFor: |
     Preserve the reasoning, commands, and decisions behind the creation of the ticket deliverables so later implementation work can continue without losing context.
 WhenToUse: Use when continuing this ticket, reviewing how the docs were assembled, or checking which evidence and commands shaped the current recommendation.
 ---
+
 
 
 
@@ -1061,4 +1066,91 @@ HOME="$TMPHOME" GOPATH="/home/manuel/go" GOMODCACHE="/home/manuel/go/pkg/mod" GO
 
 HOME="$TMPHOME" GOPATH="/home/manuel/go" GOMODCACHE="/home/manuel/go/pkg/mod" GOCACHE="/home/manuel/.cache/go-build" XDG_CONFIG_HOME="$TMPHOME/xdg" \
   go run ./cmd/pinocchio --profile-registries "yaml:/home/manuel/.config/pinocchio/profiles.yaml" --profile gpt-5-mini code professional --non-interactive "hello"
+```
+
+## Step 10: Move web-chat main onto the unified composed registry path
+
+After the previous tranche, the remaining obvious runtime holdout was `cmd/web-chat/main.go`. The lower-level request resolver and runtime composition code were already capable of working with any `gepprofiles.Registry`; the issue was simply that web-chat was still initializing that registry through the old imported-registry-only bootstrap path. This step removes that mismatch and puts web-chat on the same unified-config/composed-registry initialization path as the rest of the active Pinocchio runtime.
+
+### Prompt Context
+
+**User prompt (verbatim):** “continue”
+
+**Assistant interpretation:** Finish the next high-value runtime consumer migration by switching web-chat’s top-level runtime bootstrap to use the unified config result already provided by `profilebootstrap`.
+
+**Inferred user intent:** Keep landing small destructive simplification passes until all main runtime consumers are on the new document-first path.
+
+**Commit (code):** pending at diary-writing time
+
+### What I did
+- Updated `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/cmd/web-chat/main.go` to:
+  - replace `ResolveCLIProfileSelection(...)` with `ResolveUnifiedConfig(...)`
+  - replace direct `geppettobootstrap.ResolveProfileRegistryChain(...)` usage with `profilebootstrap.ResolveUnifiedProfileRegistryChain(...)`
+  - keep logging resolved external registry sources when present
+  - pass the composed registry and default registry slug into the existing request resolver path
+- Added a focused test in:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/cmd/web-chat/main_profile_registries_test.go`
+  - proving web-chat bootstrap accepts inline `.pinocchio.yml` profiles without requiring external registry files.
+- Revalidated focused and broader command packages.
+
+### Why
+- Leaving web-chat on the old registry bootstrap path would have created a confusing split where the main CLI and JS respected inline profiles, but web-chat only saw external registries.
+- This change completes the main runtime-consumer migration item for web-chat without touching the lower-level request/policy code.
+
+### What worked
+- The migration was smaller than the previous tranche because the request resolver already depended only on the abstract registry interface.
+- The new inline-profile acceptance test makes the change concrete: web-chat can now initialize from a local `.pinocchio.yml` with no external registry list.
+
+### What didn't work
+- I missed one `context` import in the new inline-profile test on the first pass.
+- Exact build error:
+
+```text
+cmd/web-chat/main_profile_registries_test.go:110:68: undefined: context
+```
+
+- The fix was just to add the import and rerun the focused validation.
+
+### What I learned
+- The earlier separation was the right one: once the registry composition lives in `profilebootstrap`, each runtime consumer migration becomes a small initialization change rather than another round of bespoke profile logic.
+- Web-chat’s top-level bootstrap no longer needs to care whether profile data came from inline config or imported registries; it only needs a resolved registry interface.
+
+### What was tricky to build
+- The main care point was not to over-edit web-chat. The request resolver, runtime composer, and HTTP handlers did not need design changes here; only the top-level source of profile state needed to change.
+
+### What warrants a second pair of eyes
+- Whether any remaining debug/logging output in web-chat should explicitly mention when the active profile registry is `config-inline` versus an imported registry slug.
+- Whether future UI/API behavior should expose inline-vs-imported provenance more directly when listing available profiles.
+
+### What should be done in the future
+- Add end-to-end web-chat tests that drive actual request resolution from a temp `.pinocchio.yml`, not only bootstrap initialization.
+- Continue with provenance/explain data so runtime debug surfaces can explain why a profile came from cwd, repo, or explicit config.
+
+### Code review instructions
+- Start with:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/cmd/web-chat/main.go`
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/cmd/web-chat/main_profile_registries_test.go`
+- Validate with:
+
+```bash
+cd /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio
+go test ./cmd/web-chat ./pkg/cmds/profilebootstrap -count=1
+golangci-lint run ./cmd/web-chat ./pkg/cmds/profilebootstrap/...
+go test ./pkg/cmds/profilebootstrap ./cmd/web-chat ./cmd/pinocchio ./cmd/pinocchio/cmds/... -count=1
+```
+
+### Technical details
+
+Commands run for this tranche:
+
+```bash
+cd /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio
+
+gofmt -w cmd/web-chat/main.go cmd/web-chat/main_profile_registries_test.go
+
+go test ./cmd/web-chat ./pkg/cmds/profilebootstrap -count=1
+
+golangci-lint run ./cmd/web-chat ./pkg/cmds/profilebootstrap/...
+
+go test ./pkg/cmds/profilebootstrap ./cmd/web-chat ./cmd/pinocchio ./cmd/pinocchio/cmds/... -count=1
 ```

@@ -22,9 +22,13 @@ RelatedFiles:
     - Path: cmd/pinocchio/cmds/js.go
       Note: Step 9 migrates the JS runtime bootstrap to the unified config + composed registry path
     - Path: cmd/web-chat/main.go
-      Note: Implementation guide highlights web-chat as a sensitive consumer of profile selection and registry access
+      Note: |-
+        Implementation guide highlights web-chat as a sensitive consumer of profile selection and registry access
+        Step 10 switches web-chat top-level bootstrap to the unified config and composed registry chain
     - Path: cmd/web-chat/main_profile_registries_test.go
-      Note: Step 9 updates web-chat bootstrap tests to the hidden-base + unified config semantics
+      Note: |-
+        Step 9 updates web-chat bootstrap tests to the hidden-base + unified config semantics
+        Step 10 proves web-chat bootstrap accepts inline .pinocchio.yml profiles without external registries
     - Path: pkg/cmds/cmd.go
       Note: Implementation guide calls out runtime-switching and command bootstrap behaviors that must not regress during migration
     - Path: pkg/cmds/profilebootstrap/engine_settings.go
@@ -63,6 +67,7 @@ WhatFor: |
     Provide a concrete coding guide for a future implementation pass, with enough orientation that a new contributor can work safely without rediscovering the current architecture from scratch.
 WhenToUse: Use this document when implementing the new config format or reviewing PRs that introduce the unified document loader, inline profile catalog, or breaking-change migration tooling.
 ---
+
 
 
 

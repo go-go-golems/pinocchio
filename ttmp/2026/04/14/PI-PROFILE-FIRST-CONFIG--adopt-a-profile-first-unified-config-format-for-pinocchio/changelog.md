@@ -116,3 +116,15 @@ Step 9 (commit c6afd24): switched Pinocchio profile selection and engine-setting
 - /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/14/PI-PROFILE-FIRST-CONFIG--adopt-a-profile-first-unified-config-format-for-pinocchio/reference/02-investigation-diary.md — Records Step 9 including the live go run validation matrix and caught regression
 - /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/14/PI-PROFILE-FIRST-CONFIG--adopt-a-profile-first-unified-config-format-for-pinocchio/tasks.md — Marks the Phase 4 bootstrap tranche and JS migration task complete
 
+
+## 2026-04-15
+
+Step 10 (commit 6cf9b41): migrated cmd/web-chat/main.go to initialize profile state through ResolveUnifiedConfig(...) and ResolveUnifiedProfileRegistryChain(...), finishing the main web-chat runtime migration to the unified composed profile bootstrap path.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/cmd/web-chat/main.go — Uses unified config resolution and the composed inline/imported registry chain for web-chat startup
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/cmd/web-chat/main_profile_registries_test.go — Adds focused coverage for inline-profile bootstrap without external registries
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/14/PI-PROFILE-FIRST-CONFIG--adopt-a-profile-first-unified-config-format-for-pinocchio/reference/02-investigation-diary.md — Records Step 10 for the web-chat migration tranche
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/14/PI-PROFILE-FIRST-CONFIG--adopt-a-profile-first-unified-config-format-for-pinocchio/tasks.md — Marks the remaining web-chat runtime migration task complete
+
