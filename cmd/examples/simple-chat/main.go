@@ -7,17 +7,15 @@ import (
 	"io"
 	"strings"
 
-	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
-
 	clay "github.com/go-go-golems/clay/pkg"
 	"github.com/go-go-golems/glazed/pkg/cli"
 	"github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/cmds/fields"
 	"github.com/go-go-golems/glazed/pkg/cmds/logging"
+	"github.com/go-go-golems/glazed/pkg/cmds/sources"
 	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	pinocchio_cmds "github.com/go-go-golems/pinocchio/pkg/cmds"
 	"github.com/go-go-golems/pinocchio/pkg/cmds/cmdlayers"
-	"github.com/go-go-golems/pinocchio/pkg/cmds/helpers"
 	profilebootstrap "github.com/go-go-golems/pinocchio/pkg/cmds/profilebootstrap"
 	"github.com/go-go-golems/pinocchio/pkg/cmds/run"
 	"github.com/pkg/errors"
@@ -46,6 +44,34 @@ type TestCommand struct {
 type ChatCommandSettings struct {
 	Debug       bool `glazed:"debug"`
 	ServerTools bool `glazed:"server-tools"`
+}
+
+func resolveCommandLayers(cmd *pinocchio_cmds.PinocchioCommand, parsed *values.Values) (*values.Values, error) {
+	configFiles, err := profilebootstrap.ResolveCLIConfigFilesResolved(parsed)
+	if err != nil {
+		return nil, err
+	}
+
+	resolved := values.New()
+	if err := sources.Execute(
+		cmd.Description().Schema,
+		resolved,
+		sources.FromEnv("PINOCCHIO", fields.WithSource("env")),
+		sources.FromResolvedFiles(
+			configFiles.Files,
+			sources.WithConfigFileMapper(profilebootstrap.MapPinocchioConfigFile),
+			sources.WithParseOptions(fields.WithSource("config")),
+		),
+		sources.FromDefaults(fields.WithSource(fields.SourceDefaults)),
+	); err != nil {
+		return nil, err
+	}
+	if parsed != nil {
+		if err := resolved.Merge(parsed); err != nil {
+			return nil, err
+		}
+	}
+	return resolved, nil
 }
 
 // NewChatCommand wraps the GepettoCommand which was loaded from the yaml file,
@@ -82,23 +108,14 @@ func (c *TestCommand) RunIntoWriter(ctx context.Context, parsedLayers *values.Va
 	if err != nil {
 		return errors.Wrap(err, "failed to initialize settings")
 	}
-	commandSettings := &cli.CommandSettings{}
-	_ = parsedLayers.DecodeSectionInto(cli.CommandSettingsSlug, commandSettings)
-	profileSettings := helpers.ResolveProfileSettings(parsedLayers)
 
-	geppettoParsedLayers, err := helpers.ParseGeppettoLayers(
-		c.pinocchioCmd,
-		helpers.WithProfile(profileSettings.Profile),
-		helpers.WithProfileRegistries(profileSettings.ProfileRegistries),
-		helpers.WithConfigFile(commandSettings.ConfigFile),
-	)
+	resolvedLayers, err := resolveCommandLayers(c.pinocchioCmd, parsedLayers)
 	if err != nil {
 		return err
 	}
 
 	if s.Debug {
-		// marshal geppettoParsedLayer to yaml and print it
-		b_, err := yaml.Marshal(geppettoParsedLayers)
+		b_, err := yaml.Marshal(resolvedLayers)
 		if err != nil {
 			return err
 		}
@@ -106,21 +123,22 @@ func (c *TestCommand) RunIntoWriter(ctx context.Context, parsedLayers *values.Va
 		return nil
 	}
 
-	// Get helpers settings from parsed layers
 	helpersSettings := &cmdlayers.HelpersSettings{}
-	err = geppettoParsedLayers.DecodeSectionInto(cmdlayers.GeppettoHelpersSlug, helpersSettings)
+	err = resolvedLayers.DecodeSectionInto(cmdlayers.GeppettoHelpersSlug, helpersSettings)
 	if err != nil {
 		return errors.Wrap(err, "failed to initialize helpers settings")
 	}
 
-	// Update inference settings from parsed layers
-	stepSettings, err := settings.NewInferenceSettings()
+	resolvedSettings, err := profilebootstrap.ResolveCLIEngineSettings(ctx, parsedLayers)
 	if err != nil {
-		return errors.Wrap(err, "failed to create inference settings")
+		return errors.Wrap(err, "failed to resolve inference settings")
 	}
-	err = stepSettings.UpdateFromParsedValues(geppettoParsedLayers)
-	if err != nil {
-		return errors.Wrap(err, "failed to update inference settings from parsed layers")
+	if resolvedSettings.Close != nil {
+		defer resolvedSettings.Close()
+	}
+	stepSettings := resolvedSettings.FinalInferenceSettings
+	if stepSettings == nil {
+		return errors.New("resolved inference settings are nil")
 	}
 
 	// Build seed Turn from helpers settings (system prompt and optional user prompt)

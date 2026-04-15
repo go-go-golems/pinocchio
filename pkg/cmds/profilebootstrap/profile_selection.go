@@ -17,6 +17,7 @@ const ProfileSettingsSectionSlug = bootstrap.ProfileSettingsSectionSlug
 
 type ProfileSettings = bootstrap.ProfileSettings
 type ResolvedCLIProfileSelection = bootstrap.ResolvedCLIProfileSelection
+type ResolvedCLIConfigFiles = bootstrap.ResolvedCLIConfigFiles
 type CLISelectionInput = bootstrap.CLISelectionInput
 
 func pinocchioBootstrapConfig() bootstrap.AppBootstrapConfig {
@@ -60,6 +61,10 @@ func NewCLISelectionValues(input CLISelectionInput) (*values.Values, error) {
 
 func ResolveCLIConfigFiles(parsed *values.Values) ([]string, error) {
 	return bootstrap.ResolveCLIConfigFiles(pinocchioBootstrapConfig(), parsed)
+}
+
+func ResolveCLIConfigFilesResolved(parsed *values.Values) (*ResolvedCLIConfigFiles, error) {
+	return bootstrap.ResolveCLIConfigFilesResolved(pinocchioBootstrapConfig(), parsed)
 }
 
 func ResolveCLIConfigFilesForExplicit(explicit string) ([]string, error) {
