@@ -15,7 +15,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func buildPinocchioCommandMiddlewares(parsedCommandSections *values.Values, cmd *cobra.Command, args []string) ([]sources.Middleware, error) {
+func GetPinocchioCommandMiddlewares(parsedCommandSections *values.Values, cmd *cobra.Command, args []string) ([]sources.Middleware, error) {
 	cfg := profilebootstrap.BootstrapConfig()
 	return []sources.Middleware{
 		sources.FromCobra(cmd, fields.WithSource("cobra")),
@@ -37,7 +37,7 @@ func BuildCobraCommandWithGeppettoMiddlewares(
 	options ...cli.CobraOption,
 ) (*cobra.Command, error) {
 	config := cli.CobraParserConfig{
-		MiddlewaresFunc:   buildPinocchioCommandMiddlewares,
+		MiddlewaresFunc:   GetPinocchioCommandMiddlewares,
 		ShortHelpSections: []string{schema.DefaultSlug, cmdlayers.GeppettoHelpersSlug},
 	}
 

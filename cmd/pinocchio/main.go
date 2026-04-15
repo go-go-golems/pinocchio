@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"embed"
 	"fmt"
 	"os"
@@ -24,14 +23,13 @@ import (
 	pinocchio_docs "github.com/go-go-golems/pinocchio/cmd/pinocchio/doc"
 	"github.com/go-go-golems/pinocchio/pkg/cmds"
 	"github.com/go-go-golems/pinocchio/pkg/cmds/cmdlayers"
+	profilebootstrap "github.com/go-go-golems/pinocchio/pkg/cmds/profilebootstrap"
 	pkg_doc "github.com/go-go-golems/pinocchio/pkg/doc"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
 
 	clay_repositories "github.com/go-go-golems/clay/pkg/cmds/repositories"
-	glazedConfig "github.com/go-go-golems/glazed/pkg/config"
-	"github.com/rs/zerolog/log"
 
 	// New command management import
 	clay_commandmeta "github.com/go-go-golems/clay/pkg/cmds/commandmeta"
@@ -171,48 +169,11 @@ func initRootCmd() (*help.HelpSystem, error) {
 
 // loadRepositoriesFromConfig reads repository paths from layered pinocchio app config.
 func loadRepositoriesFromConfig() []string {
-	plan := glazedConfig.NewPlan(
-		glazedConfig.WithLayerOrder(glazedConfig.LayerSystem, glazedConfig.LayerUser),
-		glazedConfig.WithDedupePaths(),
-	).Add(
-		glazedConfig.SystemAppConfig("pinocchio").Named("system-app-config").Kind("app-config"),
-		glazedConfig.HomeAppConfig("pinocchio").Named("home-app-config").Kind("app-config"),
-		glazedConfig.XDGAppConfig("pinocchio").Named("xdg-app-config").Kind("app-config"),
-	)
-	files, _, err := plan.Resolve(context.Background())
+	repositoryPaths, err := profilebootstrap.ResolveRepositoryPaths()
 	if err != nil {
-		log.Debug().Err(err).Msg("Could not resolve config plan for repositories")
+		log.Debug().Err(err).Msg("Could not resolve repository paths from layered config")
 		return []string{}
 	}
-
-	var repositoryPaths []string
-	for _, file := range files {
-		data, err := os.ReadFile(file.Path)
-		if err != nil {
-			log.Debug().Err(err).Str("config", file.Path).Msg("Could not read config file for repositories")
-			continue
-		}
-
-		var config map[string]interface{}
-		if err := yaml.Unmarshal(data, &config); err != nil {
-			log.Debug().Err(err).Str("config", file.Path).Msg("Could not parse config file")
-			continue
-		}
-
-		repos, ok := config["repositories"].([]interface{})
-		if !ok {
-			continue
-		}
-
-		next := make([]string, 0, len(repos))
-		for _, repo := range repos {
-			if repoStr, ok := repo.(string); ok {
-				next = append(next, repoStr)
-			}
-		}
-		repositoryPaths = next
-	}
-
 	return repositoryPaths
 }
 
@@ -260,7 +221,7 @@ func initAllCommands(helpSystem *help.HelpSystem) error {
 		helpSystem,
 		rootCmd,
 		repositories_,
-		cli.WithCobraMiddlewaresFunc(sections2.GetCobraCommandGeppettoMiddlewares),
+		cli.WithCobraMiddlewaresFunc(cmds.GetPinocchioCommandMiddlewares),
 		cli.WithCobraShortHelpSections(schema.DefaultSlug, cmdlayers.GeppettoHelpersSlug),
 		cli.WithCreateCommandSettingsSection(),
 	)
@@ -287,7 +248,7 @@ func initAllCommands(helpSystem *help.HelpSystem) error {
 		return err
 	}
 	cobraClipCommand, err := cli.BuildCobraCommandFromCommand(clipCommand,
-		cli.WithCobraMiddlewaresFunc(sections2.GetCobraCommandGeppettoMiddlewares),
+		cli.WithCobraMiddlewaresFunc(cmds.GetPinocchioCommandMiddlewares),
 	)
 	if err != nil {
 		return err

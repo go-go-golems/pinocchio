@@ -19,6 +19,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 
+	geppettobootstrap "github.com/go-go-golems/geppetto/pkg/cli/bootstrap"
 	gepprofiles "github.com/go-go-golems/geppetto/pkg/engineprofiles"
 	"github.com/go-go-golems/geppetto/pkg/inference/middlewarecfg"
 	geptools "github.com/go-go-golems/geppetto/pkg/inference/tools"
@@ -146,28 +147,21 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 		{Name: "category_regexp_reviewer", Prompt: "Review proposed regex patterns and assess over/under matching risks."},
 	})
 
-	var (
-		profileRegistry        gepprofiles.Registry
-		defaultRegistrySlug    gepprofiles.RegistrySlug
-		profileRegistryCleanup func()
-	)
-	if len(profileSelection.ProfileRegistries) > 0 {
-		profileRegistrySpecs, err := gepprofiles.ParseRegistrySourceSpecs(profileSelection.ProfileRegistries)
-		if err != nil {
-			return errors.Wrap(err, "parse profile registry source specs")
-		}
-		profileRegistryChain, err := gepprofiles.NewChainedRegistryFromSourceSpecs(ctx, profileRegistrySpecs)
-		if err != nil {
-			return errors.Wrap(err, "initialize profile registry")
-		}
-		profileRegistry = profileRegistryChain
-		defaultRegistrySlug = profileRegistryChain.DefaultRegistrySlug()
-		profileRegistryCleanup = func() {
-			_ = profileRegistryChain.Close()
-		}
+	registryChain, err := geppettobootstrap.ResolveProfileRegistryChain(ctx, profileSelection.ProfileSettings)
+	if err != nil {
+		return errors.Wrap(err, "initialize profile registry")
 	}
-	if profileRegistryCleanup != nil {
-		defer profileRegistryCleanup()
+	if registryChain != nil && registryChain.Close != nil {
+		defer registryChain.Close()
+	}
+
+	var (
+		profileRegistry     gepprofiles.Registry
+		defaultRegistrySlug gepprofiles.RegistrySlug
+	)
+	if registryChain != nil {
+		profileRegistry = registryChain.Registry
+		defaultRegistrySlug = registryChain.DefaultRegistrySlug
 	}
 
 	middlewareRegistry, err := newWebChatMiddlewareDefinitionRegistry()
