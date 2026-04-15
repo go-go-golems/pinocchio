@@ -71,3 +71,16 @@ Updated the active Glazed config docs so the new direct plan-loading middleware 
 - /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/14/PI-CONFIGFILESFUNC-REMOVAL--remove-configfilesfunc-and-migrate-cli-config-resolution-to-declarative-plans/reference/01-diary.md — Recorded Step 6 for the documentation refresh
 - /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/14/PI-CONFIGFILESFUNC-REMOVAL--remove-configfilesfunc-and-migrate-cli-config-resolution-to-declarative-plans/tasks.md — Marked the docs follow-up done
 
+
+## 2026-04-14
+
+Removed the local clay.InitViper symbol entirely from the workspace Clay module, updated Clay/Geppetto active docs to stop referencing it, and audited active corporate-headquarters Go call sites still using clay.InitViper or the sibling deprecated logging.InitViper path. The heaviest remaining external surface is in go-go-labs, with additional callers in cliopatra, ecrivain, escuse-me, facture, go-go-agent, mastoid, oak, plunger, prompto, and uhoh.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/clay/README.md — Removed the README example that referenced pkg.InitViper
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/clay/pkg/init.go — Removed InitViper entirely from the local Clay module
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/geppetto/pkg/doc/topics/06-embeddings.md — Updated active example snippet to use clay.InitGlazed instead of clay.InitViper
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/14/PI-CONFIGFILESFUNC-REMOVAL--remove-configfilesfunc-and-migrate-cli-config-resolution-to-declarative-plans/reference/01-diary.md — Recorded Step 7 removing local clay.InitViper and auditing corporate-headquarters consumers
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/14/PI-CONFIGFILESFUNC-REMOVAL--remove-configfilesfunc-and-migrate-cli-config-resolution-to-declarative-plans/tasks.md — Marked the Clay InitViper removal and audit follow-up done
+

@@ -600,6 +600,139 @@ git diff --check
 - `27-declarative-config-plans.md` now distinguishes between manual resolution and direct middleware loading, and documents when to use each.
 - The example/tutorial pages now mention why an example may intentionally keep the explicit resolved-file path even though `FromConfigPlan(...)` exists.
 
+## Step 7: Remove `InitViper(...)` from local Clay and audit remaining active consumers in `corporate-headquarters`
+
+After removing the Viper-based logging path and then cleaning up `FromConfigPlan(...)` middleware, the local Clay module still had one leftover convenience function: `InitViper(appName, rootCmd)`. It was no longer used anywhere in the active workspace code, and keeping the symbol around only encouraged exactly the deprecated runtime path we are trying to eliminate.
+
+The user explicitly asked to remove that symbol entirely and to check what still depends on it in `corporate-headquarters`.
+
+### Prompt Context
+
+**User prompt (verbatim):** "Remove the InitViper entirely from clay, and check what still uses it in corporate-headquarters"
+
+**Assistant interpretation:** Delete the local Clay `InitViper(...)` helper instead of leaving it deprecated, then audit `corporate-headquarters` for live Go call sites so the remaining migration surface is clear.
+
+**Inferred user intent:** Finish the cleanup decisively and identify the next external migration targets instead of leaving another deprecated escape hatch in place.
+
+### What I did
+- Removed `InitViper(...)` completely from:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/clay/pkg/init.go`
+- Updated Clay README references in:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/clay/README.md`
+  - removed the example mention of `pkg.InitViper(...)`
+- Updated one active workspace doc snippet in:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/geppetto/pkg/doc/topics/06-embeddings.md`
+  - changed the sample root initialization from `clay.InitViper(...)` to `clay.InitGlazed(...)`
+- Audited active `corporate-headquarters` Go files (excluding `ttmp`, old vibe snapshots, and similar historical noise) for remaining `InitViper(...)` call sites.
+
+### Why
+- Local Clay no longer needs to preserve a deprecated one-shot Viper/bootstrap helper.
+- The workspace already uses explicit Glazed parser config and source middleware patterns.
+- Removing the symbol now prevents new callers from reintroducing the deprecated path.
+- The external `corporate-headquarters` audit provides the concrete follow-up list for any broader migration work.
+
+### What worked
+- Clay still validated after the removal:
+
+```bash
+cd /home/manuel/workspaces/2026-04-10/pinocchiorc/clay
+gofmt -w pkg/init.go
+go test ./pkg/... -count=1
+```
+
+- The previously validated Pinocchio command-package tests still pass after the Clay symbol removal:
+
+```bash
+cd /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio
+go test ./cmd/web-chat ./cmd/examples/simple-chat ./cmd/agents/simple-chat-agent ./cmd/pinocchio/... -count=1
+```
+
+### What didn't work
+- A first quick `rg` over `corporate-headquarters` mixed together active code, local definitions, backups, and historical `ttmp` notes. I reran the search with tighter filters so the audit result reflects active Go call sites instead of every historical mention.
+
+### Corporate-headquarters audit results
+
+Active remaining Go call sites using `clay.InitViper(...)` or the sibling deprecated `logging.InitViper(...)`:
+
+- `cliopatra`
+  - `cliopatra/cmd/cliopatra/main.go:46`
+- `ecrivain`
+  - `ecrivain/cmd/ecrivain/main.go:228`
+- `escuse-me`
+  - `escuse-me/cmd/escuse-me/main.go:164`
+- `facture`
+  - `facture/cmd/facture/main.go:53`
+- `go-go-agent`
+  - `go-go-agent/cmd/simple/main.go:197`
+  - `go-go-agent/cmd/file-extraction/main.go:204`
+  - `go-go-agent/cmd/file-extraction/main.go:215`
+  - `go-go-agent/cmd/agent/main.go:32`
+- `go-go-labs`
+  - `go-go-labs/cmd/apps/datadog-cli/main.go:148`
+  - `go-go-labs/cmd/apps/maps/main.go:42`
+  - `go-go-labs/cmd/apps/reggie/main.go:18`
+  - `go-go-labs/cmd/apps/create-pr/main.go:223`
+  - `go-go-labs/cmd/apps/embeddings/main.go:50`
+  - `go-go-labs/cmd/apps/test-html-selector/main.go:599`
+  - `go-go-labs/cmd/apps/note-linker/main.go:188`
+  - `go-go-labs/cmd/apps/capture/main.go:239`
+  - `go-go-labs/cmd/apps/cloudwatch-access-log/main.go:20`
+  - `go-go-labs/cmd/apps/poll-modem/cmd/root.go:49`
+  - `go-go-labs/cmd/apps/simplify-html/main.go:270`
+  - `go-go-labs/cmd/github-projects/main.go:63` (`logging.InitViper(...)`, same deprecated family)
+- `mastoid`
+  - `mastoid/cmd/mastoid/main.go:27`
+- `oak`
+  - `oak/cmd/oak/commands/root.go:39`
+- `plunger`
+  - `plunger/cmd/plunger/main.go:50`
+- `prompto`
+  - `prompto/cmd/prompto/main.go:39`
+- `uhoh`
+  - `uhoh/cmd/uhoh/main.go:69`
+
+I also saw backup/original copies still containing the old call in:
+- `workspace-manager.backup/cmd/root.go:49`
+- `workspace-manager.orig/cmd/root.go:49`
+
+And `corporate-headquarters` still has its own local definitions of the deprecated helpers in:
+- `clay/pkg/init.go`
+- `glazed/pkg/cmds/logging/init-logging.go`
+
+### What I learned
+- The remaining migration surface in `corporate-headquarters` is still fairly broad, especially in `go-go-labs`.
+- The workspace cleanup here is now stricter than the external monorepo state: the local Clay module no longer exports `InitViper(...)` at all.
+
+### What was tricky
+- The main subtlety was distinguishing live code from historical notes and copies. `ttmp`, `.orig`, `.backup`, and vibe snapshots contain many references that are useful historically but should not be treated as current migration blockers.
+
+### What warrants a second pair of eyes
+- Which of the `corporate-headquarters` consumers should be migrated first versus deleted/archived, especially under `go-go-labs` where several apps may be inactive.
+
+### What should be done in the future
+- Optional external follow-up: migrate `corporate-headquarters/clay` to remove its own `InitViper(...)` symbol and then port the remaining active consumers to `InitGlazed(...)` plus explicit parser config / config-plan wiring.
+
+### Code review instructions
+- Review in this order:
+  1. `/home/manuel/workspaces/2026-04-10/pinocchiorc/clay/pkg/init.go`
+  2. `/home/manuel/workspaces/2026-04-10/pinocchiorc/clay/README.md`
+  3. `/home/manuel/workspaces/2026-04-10/pinocchiorc/geppetto/pkg/doc/topics/06-embeddings.md`
+- Validate with:
+
+```bash
+cd /home/manuel/workspaces/2026-04-10/pinocchiorc/clay
+gofmt -w pkg/init.go
+
+go test ./pkg/... -count=1
+
+cd /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio
+go test ./cmd/web-chat ./cmd/examples/simple-chat ./cmd/agents/simple-chat-agent ./cmd/pinocchio/... -count=1
+```
+
+### Technical details
+- Local Clay now still exposes the narrower deprecated helpers `InitViperWithAppName(...)` and `InitViperInstanceWithAppName(...)`, but not the root-command bootstrap shortcut `InitViper(...)`.
+- The local active workspace no longer has any live code that depends on the removed Clay helper.
+
 ## Appendix: Commands Used During Implementation
 
 ```bash

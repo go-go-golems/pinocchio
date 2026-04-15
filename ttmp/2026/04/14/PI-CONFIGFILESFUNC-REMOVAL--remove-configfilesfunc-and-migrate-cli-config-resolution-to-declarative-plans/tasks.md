@@ -14,6 +14,7 @@
 - [x] Remove `pkg/appconfig` and its Glazed examples in the same change instead of preserving a compatibility facade
 - [x] Remove `glazed/pkg/config/ResolveAppConfigPath(...)` and migrate remaining workspace callers to explicit plans
 - [x] Update active Glazed docs to teach `sources.FromConfigPlan(...)` / `sources.FromConfigPlanBuilder(...)` as direct plan-loading middlewares alongside `ConfigPlanBuilder` and `FromResolvedFiles(...)`
+- [x] Remove `InitViper(...)` from the local Clay module and audit remaining active `corporate-headquarters` Go call sites that still depend on it
 
 ## FOLLOW-UPS
 
