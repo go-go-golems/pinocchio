@@ -114,6 +114,8 @@ func TestWebChatUnifiedProfileConfig_AllowsInlineProfilesWithoutExternalRegistri
 	require.NotNil(t, chain.Registry)
 	require.NotNil(t, chain.Reader)
 	require.Equal(t, "config-inline", chain.DefaultRegistrySlug.String())
+	require.Equal(t, "config-inline", chain.DefaultProfileResolve.RegistrySlug.String())
+	require.Equal(t, "analyst", chain.DefaultProfileResolve.EngineProfileSlug.String())
 	if chain.Close != nil {
 		defer chain.Close()
 	}

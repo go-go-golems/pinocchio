@@ -170,8 +170,6 @@ func (c *composedRegistry) ResolveEngineProfile(ctx context.Context, in gepprofi
 			switch {
 			case !in.RegistrySlug.IsZero() && in.RegistrySlug == inlineRegistrySlug:
 				return c.inline.ResolveEngineProfile(ctx, in)
-			case in.RegistrySlug.IsZero() && in.EngineProfileSlug.IsZero():
-				return c.inline.ResolveEngineProfile(ctx, in)
 			case in.RegistrySlug.IsZero() && !in.EngineProfileSlug.IsZero():
 				resolved, err := c.inline.ResolveEngineProfile(ctx, gepprofiles.ResolveInput{
 					RegistrySlug:      inlineRegistrySlug,

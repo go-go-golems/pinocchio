@@ -149,3 +149,41 @@ profiles:
 		t.Fatalf("expected imported registry slug, got %q", got)
 	}
 }
+
+func TestComposeRegistry_EmptyResolveInputFallsBackToImportedDefault(t *testing.T) {
+	inlineDoc := mustDecodeDocument(t, `
+profiles:
+  assistant:
+    inference_settings:
+      chat:
+        engine: gpt-5-mini
+`)
+	inlineRegistry, err := NewInlineStoreRegistry(inlineDoc, gepprofiles.MustRegistrySlug("config-inline"))
+	if err != nil {
+		t.Fatalf("NewInlineStoreRegistry(inline) failed: %v", err)
+	}
+
+	importedDoc := mustDecodeDocument(t, `
+profiles:
+  default:
+    inference_settings:
+      chat:
+        engine: imported-default
+`)
+	importedRegistry, err := NewInlineStoreRegistry(importedDoc, gepprofiles.MustRegistrySlug("team-profiles"))
+	if err != nil {
+		t.Fatalf("NewInlineStoreRegistry(imported) failed: %v", err)
+	}
+
+	composed := ComposeRegistry(importedRegistry, inlineRegistry)
+	resolved, err := composed.ResolveEngineProfile(context.Background(), gepprofiles.ResolveInput{})
+	if err != nil {
+		t.Fatalf("ResolveEngineProfile(empty) failed: %v", err)
+	}
+	if got := resolved.RegistrySlug.String(); got != "team-profiles" {
+		t.Fatalf("expected imported default registry to handle empty input, got %q", got)
+	}
+	if got := resolved.EngineProfileSlug.String(); got != "default" {
+		t.Fatalf("expected imported default profile to handle empty input, got %q", got)
+	}
+}

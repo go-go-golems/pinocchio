@@ -165,6 +165,9 @@ func ResolveUnifiedProfileRegistryChain(ctx context.Context, resolved *ResolvedU
 	}
 
 	defaultResolve := gepprofiles.ResolveInput{}
+	if !defaultRegistrySlug.IsZero() {
+		defaultResolve.RegistrySlug = defaultRegistrySlug
+	}
 	if selection.Profile != "" {
 		profileSlug, err := gepprofiles.ParseEngineProfileSlug(selection.Profile)
 		if err != nil {
