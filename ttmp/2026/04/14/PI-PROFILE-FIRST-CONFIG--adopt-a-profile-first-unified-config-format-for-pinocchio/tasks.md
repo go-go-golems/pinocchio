@@ -56,10 +56,10 @@
 
 ### Phase 5 — fold app settings into the unified document
 
-- [ ] Move repository loading fully into `app.repositories` in the unified config document
-- [ ] Remove or collapse the separate repository-only loader path in `pinocchio/pkg/cmds/profilebootstrap/repositories.go`
-- [ ] Update `cmd/pinocchio/main.go` and any other repository consumers to read from the unified document path
-- [ ] Add tests proving repository lists merge across config layers as designed
+- [x] Move repository loading fully into `app.repositories` in the unified config document
+- [x] Remove or collapse the separate repository-only loader path in `pinocchio/pkg/cmds/profilebootstrap/repositories.go`
+- [x] Update `cmd/pinocchio/main.go` and any other repository consumers to read from the unified document path
+- [x] Add tests proving repository lists merge across config layers as designed
 
 ### Phase 6 — runtime consumer migration
 

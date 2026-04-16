@@ -141,3 +141,16 @@ Step 11 (commit ad1df70): added structured document-merge provenance to configdo
 - /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/14/PI-PROFILE-FIRST-CONFIG--adopt-a-profile-first-unified-config-format-for-pinocchio/reference/02-investigation-diary.md — Records Step 11 for the provenance tranche
 - /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/14/PI-PROFILE-FIRST-CONFIG--adopt-a-profile-first-unified-config-format-for-pinocchio/tasks.md — Marks the provenance/explain backlog item and all of its sub-tasks complete
 
+
+## 2026-04-15
+
+Step 12 (commit 020e6de): folded repository loading fully into app.repositories in the unified config document, collapsed the old repository-only loader path, updated the top-level pinocchio consumer, and added tests proving repository merge+dedupe behavior across unified config layers.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/cmd/pinocchio/main.go — Top-level command discovery now relies on unified app config repositories
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/cmds/profilebootstrap/repositories.go — Repository loading now reuses ResolveUnifiedConfig(nil) rather than a custom section-mapper path
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/cmds/profilebootstrap/repositories_test.go — Adds focused coverage for merged app.repositories across home/XDG/repo/cwd layers
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/14/PI-PROFILE-FIRST-CONFIG--adopt-a-profile-first-unified-config-format-for-pinocchio/reference/02-investigation-diary.md — Records Step 12 for the app-settings consolidation tranche
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/14/PI-PROFILE-FIRST-CONFIG--adopt-a-profile-first-unified-config-format-for-pinocchio/tasks.md — Marks Phase 5 complete
+

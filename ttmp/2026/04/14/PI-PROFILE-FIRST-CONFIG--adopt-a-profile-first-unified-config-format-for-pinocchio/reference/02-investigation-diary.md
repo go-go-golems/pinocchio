@@ -13,6 +13,8 @@ Owners: []
 RelatedFiles:
     - Path: cmd/pinocchio/cmds/js.go
       Note: Diary Step 9 records the JS runtime migration to the unified composed registry path
+    - Path: cmd/pinocchio/main.go
+      Note: Diary Step 12 records the top-level consumer staying on the unified app config path
     - Path: cmd/web-chat/main.go
       Note: Diary Step 10 records the top-level web-chat migration to unified bootstrap initialization
     - Path: cmd/web-chat/main_profile_registries_test.go
@@ -25,6 +27,10 @@ RelatedFiles:
       Note: Diary Step 11 records consumer-side exposure coverage for ResolveUnifiedConfig
     - Path: pkg/cmds/profilebootstrap/profile_selection.go
       Note: Diary Step 9 records the document-first selection and registry-chain integration
+    - Path: pkg/cmds/profilebootstrap/repositories.go
+      Note: Diary Step 12 records the collapse of the separate repository loader path
+    - Path: pkg/cmds/profilebootstrap/repositories_test.go
+      Note: Diary Step 12 records the merged app.repositories test coverage
     - Path: pkg/configdoc/explain.go
       Note: Diary Step 11 records the new document-merge provenance model
     - Path: pkg/configdoc/load.go
@@ -67,6 +73,7 @@ WhatFor: |
     Preserve the reasoning, commands, and decisions behind the creation of the ticket deliverables so later implementation work can continue without losing context.
 WhenToUse: Use when continuing this ticket, reviewing how the docs were assembled, or checking which evidence and commands shaped the current recommendation.
 ---
+
 
 
 
@@ -1283,4 +1290,97 @@ golangci-lint run ./pkg/configdoc/...
 go test ./pkg/cmds/profilebootstrap -count=1
 
 golangci-lint run ./pkg/cmds/profilebootstrap/...
+```
+
+## Step 12: Fold repository loading fully into `app.repositories` and collapse the old repository-only loader path
+
+With the unified document and provenance work in place, the next cleanup target was the remaining app-setting holdout: repository loading. The code still had a separate mini-loader in `pkg/cmds/profilebootstrap/repositories.go` that decoded repository paths through a custom section mapper instead of reading them from the same merged unified document used everywhere else. This step removes that split-brain setup.
+
+The implementation is intentionally simple: repository loading now just reuses `ResolveUnifiedConfig(nil)` and returns `resolved.Effective.App.Repositories`. That means repository discovery now follows the exact same file discovery and merge behavior as the rest of the unified config model, including repo/cwd `.pinocchio.yml` layers and the `app.repositories` append+dedupe semantics already defined in `configdoc`.
+
+### Prompt Context
+
+**User prompt (verbatim):** “go ahead”
+
+**Assistant interpretation:** Continue into Phase 5 by moving the remaining app-owned repository settings off the separate loader path and onto the unified config document.
+
+**Inferred user intent:** Finish the app-settings consolidation rather than leaving one last special-case config path alive.
+
+**Commit (code):** pending at diary-writing time
+
+### What I did
+- Rewrote `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/cmds/profilebootstrap/repositories.go` so `ResolveRepositoryPaths()` is now just a thin wrapper over `ResolveUnifiedConfig(nil)`.
+- Deleted the old repository-specific parsing machinery from that file:
+  - `RepositorySettingsSectionSlug`
+  - `RepositorySettings`
+  - `NewRepositorySettingsSection()`
+  - `MapPinocchioRepositoriesConfig(...)`
+- Rewrote `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/cmds/profilebootstrap/repositories_test.go` to prove repository lists merge across:
+  - home config
+  - XDG config
+  - repo `.pinocchio.yml`
+  - cwd `.pinocchio.yml`
+  - including dedupe behavior
+- Updated `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/cmd/pinocchio/main.go` comments/logging to reflect that repository loading now comes from the unified layered config document.
+
+### Why
+- `app.repositories` belongs in the unified config model, not in a side channel.
+- Keeping repository loading separate would preserve unnecessary duplicate discovery/merge logic and weaken the “one document is the source of truth” design.
+- This change completes the intended distinction discussed earlier: repositories are app-owned settings, so they should live in `app`, not in another loader or in the profile/runtime machinery.
+
+### What worked
+- The collapse was smaller than it looked because the earlier `ResolveUnifiedConfig(...)` work already did the hard part.
+- The rewritten repository test now proves the desired semantics much better than the old test, because it exercises the real multi-layer unified config path instead of the old replacement-based custom mapper path.
+- Broader command-package validation stayed green after the change, so top-level command discovery still works.
+
+### What didn't work
+- N/A in this tranche.
+
+### What I learned
+- The earlier architecture work paid off again: once the unified document path existed, removing the special-case repository loader was almost entirely a deletion/refactor task.
+- `app.repositories` now really behaves like the rest of the unified document, which makes the mental model much cleaner.
+
+### What was tricky to build
+- The only subtle part was making sure the rewritten test reflected the new intended semantics: the old test asserted “highest precedence wins,” but Phase 5 should assert merge+dedupe across user/repo/cwd layers instead.
+
+### What warrants a second pair of eyes
+- Whether repository loading should eventually accept explicit `--config-file` at top-level command discovery time. Right now `ResolveRepositoryPaths()` intentionally uses `ResolveUnifiedConfig(nil)`, which is consistent with the current startup flow but does not parse root flags before command loading.
+- Whether any future repository-related debug output should expose `ResolvedDocuments.Explain` entries for `app.repositories` directly.
+
+### What should be done in the future
+- Verify runtime profile switching still preserves a non-profile baseline and rebuilds from base rather than prior merged state.
+- Revalidate any remaining command/example paths that still assume old top-level runtime config shapes.
+- Later, consider a user-facing config explain/debug surface that shows `app.repositories` provenance.
+
+### Code review instructions
+- Start with:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/cmds/profilebootstrap/repositories.go`
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/cmds/profilebootstrap/repositories_test.go`
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/cmd/pinocchio/main.go`
+- Validate with:
+
+```bash
+cd /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio
+go test ./pkg/cmds/profilebootstrap ./cmd/pinocchio -count=1
+golangci-lint run ./pkg/cmds/profilebootstrap/... ./cmd/pinocchio
+go test ./pkg/cmds/profilebootstrap ./cmd/pinocchio ./cmd/pinocchio/cmds/... ./cmd/web-chat -count=1
+```
+
+### Technical details
+
+Commands run for this tranche:
+
+```bash
+cd /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio
+
+gofmt -w \
+  pkg/cmds/profilebootstrap/repositories.go \
+  pkg/cmds/profilebootstrap/repositories_test.go \
+  cmd/pinocchio/main.go
+
+go test ./pkg/cmds/profilebootstrap ./cmd/pinocchio -count=1
+
+golangci-lint run ./pkg/cmds/profilebootstrap/... ./cmd/pinocchio
+
+go test ./pkg/cmds/profilebootstrap ./cmd/pinocchio ./cmd/pinocchio/cmds/... ./cmd/web-chat -count=1
 ```

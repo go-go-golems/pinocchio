@@ -21,6 +21,8 @@ RelatedFiles:
       Note: Implementation guide references the current resolved-file and plan APIs that should remain unchanged
     - Path: cmd/pinocchio/cmds/js.go
       Note: Step 9 migrates the JS runtime bootstrap to the unified config + composed registry path
+    - Path: cmd/pinocchio/main.go
+      Note: Step 12 updates top-level repository-loading comments/logging to reflect unified app config loading
     - Path: cmd/web-chat/main.go
       Note: |-
         Implementation guide highlights web-chat as a sensitive consumer of profile selection and registry access
@@ -39,6 +41,10 @@ RelatedFiles:
         Step 11 proves ResolveUnifiedConfig exposes the new document explain data to consumers
     - Path: pkg/cmds/profilebootstrap/profile_selection.go
       Note: Step 9 adds unified document loading
+    - Path: pkg/cmds/profilebootstrap/repositories.go
+      Note: Step 12 collapses repository loading to ResolveUnifiedConfig(nil) so app.repositories comes from the unified config document
+    - Path: pkg/cmds/profilebootstrap/repositories_test.go
+      Note: Step 12 proves app.repositories merge and dedupe behavior across home/XDG/repo/cwd unified config layers
     - Path: pkg/configdoc/explain.go
       Note: Step 11 adds document-merge provenance types and path-keyed explain recording for unified config merges
     - Path: pkg/configdoc/load.go
@@ -75,6 +81,7 @@ WhatFor: |
     Provide a concrete coding guide for a future implementation pass, with enough orientation that a new contributor can work safely without rediscovering the current architecture from scratch.
 WhenToUse: Use this document when implementing the new config format or reviewing PRs that introduce the unified document loader, inline profile catalog, or breaking-change migration tooling.
 ---
+
 
 
 
