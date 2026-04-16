@@ -180,3 +180,14 @@ Step 14: rewrote the user-facing Pinocchio docs and examples to teach only the u
 - /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/14/PI-PROFILE-FIRST-CONFIG--adopt-a-profile-first-unified-config-format-for-pinocchio/reference/02-investigation-diary.md — Records Step 14 and the post-rewrite grep result
 - /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/14/PI-PROFILE-FIRST-CONFIG--adopt-a-profile-first-unified-config-format-for-pinocchio/tasks.md — Marks the Pinocchio docs/examples rollout task complete
 
+
+## 2026-04-16
+
+Step 15 (commit 70a3f62): fixed full-repo validation fallout by migrating the remaining stale example off the removed Geppetto middleware helper and making loaded-command profile tests hermetic so make test lint no longer picks up ambient legacy config.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/cmd/examples/simple-redis-streaming-inference/main.go — Uses GetPinocchioCommandMiddlewares instead of the deleted Geppetto helper
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/cmds/cmd_profile_registry_test.go — Sandboxes config discovery for loaded-command tests under full repo validation
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/14/PI-PROFILE-FIRST-CONFIG--adopt-a-profile-first-unified-config-format-for-pinocchio/reference/02-investigation-diary.md — Records the make test lint fallout and the hermetic test fix
+

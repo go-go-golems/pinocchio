@@ -13,6 +13,8 @@ Owners: []
 RelatedFiles:
     - Path: README.md
       Note: Step 14 rewrites the main user-facing config guidance around unified app/profile/profiles documents
+    - Path: cmd/examples/simple-redis-streaming-inference/main.go
+      Note: Step 15 moves the stale example to Pinocchio middleware wiring so full repo builds succeed again
     - Path: cmd/pinocchio/cmds/js.go
       Note: Diary Step 9 records the JS runtime migration to the unified composed registry path
     - Path: cmd/pinocchio/doc/general/05-js-runner-scripts.md
@@ -25,6 +27,8 @@ RelatedFiles:
       Note: Diary Step 10 records the inline-profile web-chat bootstrap test
     - Path: examples/js/README.md
       Note: Step 14 aligns the JS example README with unified profile.* config terminology
+    - Path: pkg/cmds/cmd_profile_registry_test.go
+      Note: Step 15 isolates HOME/XDG/cwd so loaded-command tests stop ingesting ambient legacy config during make test lint
     - Path: pkg/cmds/profilebootstrap/engine_settings.go
       Note: Diary Step 9 records the hidden-base preservation and unified engine-settings path
     - Path: pkg/cmds/profilebootstrap/engine_settings_test.go
@@ -85,6 +89,7 @@ WhatFor: |
     Preserve the reasoning, commands, and decisions behind the creation of the ticket deliverables so later implementation work can continue without losing context.
 WhenToUse: Use when continuing this ticket, reviewing how the docs were assembled, or checking which evidence and commands shaped the current recommendation.
 ---
+
 
 
 
@@ -1627,4 +1632,108 @@ rg -n 'profile-settings|\.pinocchio-profile\.yml|openai-chat:|ai-chat:' \
 git diff --check
 
 docmgr doctor --ticket PI-PROFILE-FIRST-CONFIG --stale-after 30
+```
+
+## Step 15: Fix full-repo validation fallout after the unified-config rollout
+
+After the doc cleanup tranche, a full `make test lint` run exposed two pieces of fallout that were not covered by the narrower package-level validations. One stale example still referenced the deleted Geppetto Cobra middleware helper, and one set of loaded-command tests was accidentally ingesting ambient user config during full-repo execution. This step fixes both so the repo validates cleanly under the real top-level workflow.
+
+The fixes were intentionally small and surgical. I replaced the stale example wiring with Pinocchio's current middleware helper and made the loaded-command tests hermetic by sandboxing `HOME`, `XDG_CONFIG_HOME`, and the working directory before the runtime config resolver runs.
+
+### Prompt Context
+
+**User prompt (verbatim):** "make test lint is how i found it, btw"
+
+**Assistant interpretation:** Use the full repository validation target as the source of truth, fix the regressions it exposed, and make sure the final validation uses that same top-level command.
+
+**Inferred user intent:** Do not stop at focused tests; make the whole repository pass the real developer workflow.
+
+**Commit (code):** `70a3f62` — `test: fix profile first fallout in full repo validation`
+
+### What I did
+- Updated `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/cmd/examples/simple-redis-streaming-inference/main.go` to use:
+  - `pinocchiocmds.GetPinocchioCommandMiddlewares`
+  - instead of the deleted `geppettosections.GetCobraCommandGeppettoMiddlewares`
+- Updated `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/cmds/cmd_profile_registry_test.go` with `isolateConfigDiscovery(t)` so the loaded-command tests now:
+  - set `HOME` to a temp dir
+  - set `XDG_CONFIG_HOME` to a temp dir
+  - `Chdir` into a temp directory
+- Revalidated with:
+  - focused `go test` on the affected packages
+  - focused `golangci-lint`
+  - full `make test lint`
+
+### Why
+- `make test lint` is the real integration gate for this repo, and it exercises more surface area than the narrower package tests.
+- The profile-first rollout changed config discovery semantics, so tests that were previously tolerant of ambient user config needed to become explicit and hermetic.
+- The stale example call site was just leftover fallout from the earlier deletion of the legacy Geppetto middleware helper.
+
+### What worked
+- The example built cleanly as soon as it switched to Pinocchio's shared middleware helper.
+- Sandboxing config discovery fixed the loaded-command tests without needing to reintroduce compatibility behavior.
+- The full top-level validation succeeded after those two fixes.
+
+### What didn't work
+- The initial top-level failure surfaced exactly these errors:
+
+```text
+cmd/examples/simple-redis-streaming-inference/main.go:239:89: undefined: geppettosections.GetCobraCommandGeppettoMiddlewares
+```
+
+and then loaded-command tests failed by decoding an old-shape config document from ambient config discovery:
+
+```text
+RunIntoWriter: resolve engine profile settings for command run: decode config document: yaml: unmarshal errors:
+  line 7: field profile-settings not found in type configdoc.Document
+  line 12: field ai-chat not found in type configdoc.Document
+  line 18: field openai-chat not found in type configdoc.Document
+  line 22: field claude-chat not found in type configdoc.Document
+  line 27: field repositories not found in type configdoc.Document
+```
+
+### What I learned
+- Full-repo validation is still valuable even after good focused-package coverage, because it catches stale example binaries and tests that accidentally depend on the local machine environment.
+- The unified-config rollout makes hermetic config-discovery tests more important than before.
+
+### What was tricky to build
+- The non-obvious part was that `pkg/cmds/cmd_profile_registry_test.go` did not itself write a legacy config file. The failure came from ambient config discovery through the user's real environment, so the right fix was hermetic isolation rather than changing the runtime back toward compatibility.
+
+### What warrants a second pair of eyes
+- Whether there are any other older loaded-command tests elsewhere in the repo that should adopt the same config-discovery sandbox helper.
+- Whether `make test lint` should eventually include a guard that enforces a hermetic config environment by default.
+
+### What should be done in the future
+- Continue with the remaining Phase 7 / Phase 8 rollout work.
+- Consider a small shared test helper for config-discovery isolation if more packages need the same pattern.
+
+### Code review instructions
+- Start with:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/cmd/examples/simple-redis-streaming-inference/main.go`
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/cmds/cmd_profile_registry_test.go`
+- Validate with:
+
+```bash
+cd /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio
+
+go test ./cmd/examples/simple-redis-streaming-inference ./pkg/cmds -count=1
+
+golangci-lint run ./cmd/examples/simple-redis-streaming-inference ./pkg/cmds/...
+
+make test lint
+```
+
+### Technical details
+
+Commands run for this tranche:
+
+```bash
+cd /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio
+
+gofmt -w cmd/examples/simple-redis-streaming-inference/main.go pkg/cmds/cmd_profile_registry_test.go
+
+go test ./cmd/examples/simple-redis-streaming-inference ./pkg/cmds -count=1
+
+golangci-lint run ./cmd/examples/simple-redis-streaming-inference ./pkg/cmds/...
+
+make test lint
 ```
