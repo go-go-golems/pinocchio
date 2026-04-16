@@ -24,7 +24,9 @@ RelatedFiles:
     - Path: pkg/cmds/profilebootstrap/engine_settings_test.go
       Note: Diary Step 9 records focused bootstrap regression coverage
     - Path: pkg/cmds/profilebootstrap/local_profile_plan_test.go
-      Note: Diary Step 11 records consumer-side exposure coverage for ResolveUnifiedConfig
+      Note: |-
+        Diary Step 11 records consumer-side exposure coverage for ResolveUnifiedConfig
+        Diary Step 13 records the matching inline-profile base-preservation invariant test
     - Path: pkg/cmds/profilebootstrap/profile_selection.go
       Note: Diary Step 9 records the document-first selection and registry-chain integration
     - Path: pkg/cmds/profilebootstrap/repositories.go
@@ -59,6 +61,8 @@ RelatedFiles:
         Diary Step 11 records focused explain-coverage tests
     - Path: pkg/configdoc/types.go
       Note: Diary Step 4 records the first code tranche that introduced the typed config document model
+    - Path: pkg/ui/profileswitch/manager_test.go
+      Note: Diary Step 13 records runtime-switching invariant coverage and the sparse-overlay test correction
     - Path: ttmp/2026/04/14/PI-PROFILE-FIRST-CONFIG--adopt-a-profile-first-unified-config-format-for-pinocchio/analysis/01-current-profile-config-and-registry-architecture-analysis.md
       Note: Diary records how the current-state analysis was assembled from code evidence
     - Path: ttmp/2026/04/14/PI-PROFILE-FIRST-CONFIG--adopt-a-profile-first-unified-config-format-for-pinocchio/design-doc/01-profile-first-unified-config-format-and-migration-design.md
@@ -73,6 +77,7 @@ WhatFor: |
     Preserve the reasoning, commands, and decisions behind the creation of the ticket deliverables so later implementation work can continue without losing context.
 WhenToUse: Use when continuing this ticket, reviewing how the docs were assembled, or checking which evidence and commands shaped the current recommendation.
 ---
+
 
 
 
@@ -1383,4 +1388,125 @@ go test ./pkg/cmds/profilebootstrap ./cmd/pinocchio -count=1
 golangci-lint run ./pkg/cmds/profilebootstrap/... ./cmd/pinocchio
 
 go test ./pkg/cmds/profilebootstrap ./cmd/pinocchio ./cmd/pinocchio/cmds/... ./cmd/web-chat -count=1
+```
+
+## Step 13: Lock in the rebuilt-from-base invariant for profile switching and sweep remaining active old-shape assumptions
+
+This tranche closes the remaining Option A work. The key goal was to prove the runtime invariant, not just assume it: switching from one profile to another must rebuild from the original non-profile base rather than inheriting overrides from the previously selected profile. The most important place to prove that is the interactive profile-switch manager, because that is where a persistent session can change profiles repeatedly over time.
+
+I added focused tests in `pkg/ui/profileswitch/manager_test.go` for both flavors of runtime overlay behavior we care about now:
+- imported-registry-style switching via the `profileswitch.Manager`
+- inline unified-config overlays via `ResolveCLIEngineSettings(...)`
+
+I also swept the active `cmd/`, `pkg/`, and `examples/` current-source tree for old top-level runtime config assumptions. The only remaining current-source occurrence was the intentional `LegacyLocalOverrideFileName` constant used to reject `.pinocchio-profile.yml`; there were no remaining active command/example code paths depending on old `ai-chat` / `profile-settings` config shape.
+
+### Prompt Context
+
+**User prompt (verbatim):** after discussing Option A, the user agreed to proceed.
+
+**Assistant interpretation:** Finish the remaining runtime migration hardening work by proving the base-rebuild invariant in tests and verifying that no active command/example paths still depend on old config shape.
+
+**Inferred user intent:** Move beyond architectural claims and make the runtime semantics explicit, while also confirming that the migration is truly complete for active code paths.
+
+**Commit (code):** pending at diary-writing time
+
+### What I did
+- Expanded the remaining Phase 6 tasks in `tasks.md` into concrete sub-items before implementing them.
+- Added focused tests in:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/ui/profileswitch/manager_test.go`
+- Those tests prove:
+  - switching from profile `alpha` to sparse profile `beta` rebuilds from the original base instead of keeping `alpha`'s engine override
+  - sparse profile overlays leave unspecified values at the base setting while still applying the fields they do specify
+- Added a matching inline-config test in:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/cmds/profilebootstrap/local_profile_plan_test.go`
+- That test proves an inline profile in `.pinocchio.yml` that only overrides API credentials keeps the base engine value intact.
+- Swept active code/example paths with ripgrep across `cmd/`, `pkg/`, and `examples/` for:
+  - `ai-chat:`
+  - `profile-settings:`
+  - `.pinocchio-profile.yml`
+- Revalidated the active runtime-switching consumers and command/example packages.
+
+### Why
+- This invariant is one of the most important semantics in the whole migration: profile changes must not accumulate stale overrides from prior profiles.
+- Without explicit tests, it would be easy for a future refactor to accidentally switch from “rebuild from base” to “mutate the previous final settings.”
+- The active-code sweep was necessary to support the claim that the migration is complete for current runtime consumers, not only for tests and docs.
+
+### What worked
+- The new manager tests directly exercised the correct seam: `Manager.Resolve()` and `Manager.Switch()` are where imported-registry profile switching actually merges `base + resolved profile`.
+- The matching inline-profile test showed the same invariant holds on the unified config path too.
+- The active-code sweep came back clean apart from the deliberate legacy filename rejection constant, which is expected and desirable.
+
+### What didn't work
+- My first version of the manager tests mistakenly built “sparse” profile overlays with `settings.NewInferenceSettings()`. That constructor applies defaults, so the test profiles unintentionally carried a default engine (`gpt-4`) and failed the invariant test for the wrong reason.
+- The initial failing output was:
+
+```text
+--- FAIL: TestManagerSwitch_RebuildsFromBaseInsteadOfKeepingPriorProfileOverrides
+    manager_test.go:133: expected switch to rebuild from base engine, got "gpt-4"
+--- FAIL: TestManagerResolve_LeavesBaseValuesWhenProfileOmitsThem
+    manager_test.go:195: expected omitted engine to stay at base value, got "gpt-4"
+```
+
+- The fix was to construct truly sparse profile overlays with partial `InferenceSettings` structs instead of `NewInferenceSettings()`.
+- I also hit one tiny compile issue in the inline-profile test from an unused `repoDir` binding; that was fixed by discarding the value.
+
+### What I learned
+- `settings.NewInferenceSettings()` is the wrong tool for representing a sparse profile patch in tests because it materializes defaults.
+- The imported-registry switching invariant and the inline unified-config invariant are conceptually the same, but they are best proven at different seams:
+  - manager tests for imported profile switching
+  - `ResolveCLIEngineSettings(...)` tests for inline unified config
+
+### What was tricky to build
+- The tricky part was making the test overlays genuinely sparse. Once I stopped using constructors that inject defaults, the tests became a faithful check of the real invariant instead of an artifact of the settings defaults layer.
+
+### What warrants a second pair of eyes
+- Whether the runtime-switching tests should eventually be extended all the way up into an interactive UI/backend test, not just the manager and profilebootstrap seams.
+- Whether the active-code sweep logic should later become a scripted validation target instead of a one-off grep in the diary.
+
+### What should be done in the future
+- Move into the remaining rollout work: failure tests for old config shape and docs/examples cleanup.
+- Update user-facing docs that still mention `.pinocchio-profile.yml`; those remaining references are now documentation debt, not active runtime behavior.
+
+### Code review instructions
+- Start with:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/ui/profileswitch/manager_test.go`
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/cmds/profilebootstrap/local_profile_plan_test.go`
+- Then confirm the broader sweep/validation results with:
+
+```bash
+cd /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio
+
+go test ./pkg/ui/profileswitch ./pkg/cmds/profilebootstrap -count=1
+
+golangci-lint run ./pkg/ui/profileswitch/... ./pkg/cmds/profilebootstrap/...
+
+rg -n 'ai-chat:|profile-settings:|\.pinocchio-profile\.yml' cmd pkg examples \
+  --glob '!**/*_test.go' --glob '!**/*.md' --glob '!**/*test*.yaml' --glob '!**/*test*.yml'
+
+go test ./pkg/cmds/profilebootstrap ./pkg/ui/profileswitch ./cmd/pinocchio ./cmd/pinocchio/cmds/... ./cmd/web-chat ./cmd/examples/simple-chat ./cmd/agents/simple-chat-agent -count=1
+
+golangci-lint run ./pkg/cmds/profilebootstrap/... ./pkg/ui/profileswitch/... ./cmd/pinocchio ./cmd/pinocchio/cmds/... ./cmd/web-chat
+```
+
+### Technical details
+
+Commands run for this tranche:
+
+```bash
+cd /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio
+
+gofmt -w \
+  pkg/ui/profileswitch/manager_test.go \
+  pkg/cmds/profilebootstrap/local_profile_plan_test.go
+
+go test ./pkg/ui/profileswitch ./pkg/cmds/profilebootstrap -count=1
+
+golangci-lint run ./pkg/ui/profileswitch/... ./pkg/cmds/profilebootstrap/...
+
+rg -n 'ai-chat:|profile-settings:|\.pinocchio-profile\.yml' cmd pkg examples \
+  --glob '!**/*_test.go' --glob '!**/*.md' --glob '!**/*test*.yaml' --glob '!**/*test*.yml'
+
+go test ./pkg/cmds/profilebootstrap ./pkg/ui/profileswitch ./cmd/pinocchio ./cmd/pinocchio/cmds/... ./cmd/web-chat ./cmd/examples/simple-chat ./cmd/agents/simple-chat-agent -count=1
+
+golangci-lint run ./pkg/cmds/profilebootstrap/... ./pkg/ui/profileswitch/... ./cmd/pinocchio ./cmd/pinocchio/cmds/... ./cmd/web-chat
 ```

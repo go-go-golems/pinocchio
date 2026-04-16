@@ -154,3 +154,15 @@ Step 12 (commit 020e6de): folded repository loading fully into app.repositories 
 - /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/14/PI-PROFILE-FIRST-CONFIG--adopt-a-profile-first-unified-config-format-for-pinocchio/reference/02-investigation-diary.md — Records Step 12 for the app-settings consolidation tranche
 - /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/14/PI-PROFILE-FIRST-CONFIG--adopt-a-profile-first-unified-config-format-for-pinocchio/tasks.md — Marks Phase 5 complete
 
+
+## 2026-04-16
+
+Step 13 (commit 1f6843c): added focused tests that lock in the rebuild-from-base invariant for runtime profile switching across imported-registry and inline unified-config paths, and revalidated active command/example code for lingering old-shape config assumptions.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/cmds/profilebootstrap/local_profile_plan_test.go — Adds inline unified-config regression coverage for omitted fields staying at the base value
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/ui/profileswitch/manager_test.go — Adds manager tests proving profile switching rebuilds from the original base rather than retaining prior profile overrides
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/14/PI-PROFILE-FIRST-CONFIG--adopt-a-profile-first-unified-config-format-for-pinocchio/reference/02-investigation-diary.md — Records Step 13 including the initial sparse-overlay testing mistake and the active-code sweep result
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/14/PI-PROFILE-FIRST-CONFIG--adopt-a-profile-first-unified-config-format-for-pinocchio/tasks.md — Marks the remaining Phase 6 runtime migration hardening and active-path sweep complete
+

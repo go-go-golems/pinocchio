@@ -39,6 +39,7 @@ RelatedFiles:
       Note: |-
         Step 9 adds focused tests for repo/cwd/explicit unified config resolution and inline profile selection
         Step 11 proves ResolveUnifiedConfig exposes the new document explain data to consumers
+        Step 13 proves sparse inline profiles keep unspecified values at the base setting
     - Path: pkg/cmds/profilebootstrap/profile_selection.go
       Note: Step 9 adds unified document loading
     - Path: pkg/cmds/profilebootstrap/repositories.go
@@ -73,6 +74,8 @@ RelatedFiles:
         Step 11 proves explain output for replacement
     - Path: pkg/configdoc/types.go
       Note: First implementation tranche adds the typed unified config document structs and local filename policy
+    - Path: pkg/ui/profileswitch/manager_test.go
+      Note: Step 13 locks in the rebuild-from-base invariant for imported-registry profile switching
 ExternalSources: []
 Summary: |
     Step-by-step implementation guide for adding the new profile-first unified config format, written for an unfamiliar intern and organized by responsibility, phases, key APIs, merge rules, file targets, testing, and review strategy.
@@ -81,6 +84,7 @@ WhatFor: |
     Provide a concrete coding guide for a future implementation pass, with enough orientation that a new contributor can work safely without rediscovering the current architecture from scratch.
 WhenToUse: Use this document when implementing the new config format or reviewing PRs that introduce the unified document loader, inline profile catalog, or breaking-change migration tooling.
 ---
+
 
 
 

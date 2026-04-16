@@ -66,8 +66,13 @@
 - [x] Update `pinocchio/pkg/cmds/profilebootstrap/*` to consume the unified document path
 - [x] Update `pinocchio/cmd/pinocchio/cmds/js.go` to use unified config + inline/imported profile resolution
 - [x] Update `pinocchio/cmd/web-chat/main.go` to use unified config + composed registry resolution
-- [ ] Verify runtime profile switching still preserves a non-profile baseline and rebuilds from base rather than prior merged state
-- [ ] Revalidate any remaining Pinocchio command/example paths that currently assume top-level runtime sections in config files
+- [x] Verify runtime profile switching still preserves a non-profile baseline and rebuilds from base rather than prior merged state
+  - [x] Add focused `profileswitch.Manager` tests proving switching from profile A to profile B rebuilds from the original base instead of retaining A-only overrides
+  - [x] Add focused tests covering both inline-style and imported-registry-style runtime profile overlays that leave unspecified values at the base setting
+  - [x] Revalidate active runtime-switching consumers (`cmd/web-chat`, interactive CLI profile switching) against the rebuilt-from-base invariant
+- [x] Revalidate any remaining Pinocchio command/example paths that currently assume top-level runtime sections in config files
+  - [x] Sweep active `cmd/`, `pkg/`, and `examples/` current-source paths for old top-level runtime config assumptions (`ai-chat`, `profile-settings`, legacy local filename)
+  - [x] Migrate or explicitly classify any remaining active code/example paths still depending on old config shape
 
 ### Phase 7 — breaking-change handling and migration tooling
 
