@@ -86,6 +86,6 @@
 - [ ] Add end-to-end tests for repo/cwd/explicit precedence under the new format
 - [ ] Add tests for inline profile selection, imported registry selection, and inline override of imported same-slug profiles
 - [ ] Add failure tests for old-format config files and old local filenames
-- [ ] Update Pinocchio docs and examples to teach only the unified `app` / `profile` / `profiles` model
+- [x] Update Pinocchio docs and examples to teach only the unified `app` / `profile` / `profiles` model
 - [ ] Update Geppetto migration/help docs where they still implicitly assume top-level runtime config in app config files
 - [ ] Upload refreshed implementation docs / migration docs to reMarkable once the first implementation tranche lands

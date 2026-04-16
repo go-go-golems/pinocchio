@@ -40,7 +40,7 @@ You need this page when you are trying to understand:
 - why `FinalInferenceSettings` is separate
 - how runtime profile switching avoids contaminating the baseline
 - why cross-profile settings such as `ai-client.*` belong in the baseline rather than in profiles
-- how local project config files such as `.pinocchio-profile.yml` participate in bootstrap
+- how local project config files such as `.pinocchio.yml` participate in bootstrap
 - how to inspect parsed field history to see which config layer won
 
 ## Mental Model
@@ -89,8 +89,8 @@ In concrete terms, Pinocchio can load from:
 1. `/etc/pinocchio/config.yaml`
 2. `$HOME/.pinocchio/config.yaml`
 3. `${XDG_CONFIG_HOME}/pinocchio/config.yaml`
-4. `.pinocchio-profile.yml` at the git repository root
-5. `.pinocchio-profile.yml` in the current working directory
+4. `.pinocchio.yml` at the git repository root
+5. `.pinocchio.yml` in the current working directory
 6. `--config-file <path>`
 
 Later layers win.
@@ -222,25 +222,24 @@ That means you can inspect parsed fields or inference debug output and answer qu
 A simplified example looks like this:
 
 ```yaml
-profile-settings:
-  profile:
-    value: explicit-profile
-    log:
-      - source: config
-        value: repo-profile
-        metadata:
-          config_layer: repo
-          config_source_name: git-root-local-profile
-      - source: config
-        value: cwd-profile
-        metadata:
-          config_layer: cwd
-          config_source_name: cwd-local-profile
-      - source: config
-        value: explicit-profile
-        metadata:
-          config_layer: explicit
-          config_source_name: explicit-config-file
+profile.active:
+  value: explicit-profile
+  log:
+    - source: config
+      value: repo-profile
+      metadata:
+        config_layer: repo
+        config_source_name: git-root-local-profile
+    - source: config
+      value: cwd-profile
+      metadata:
+        config_layer: cwd
+        config_source_name: cwd-local-profile
+    - source: config
+      value: explicit-profile
+      metadata:
+        config_layer: explicit
+        config_source_name: explicit-config-file
 ```
 
 This provenance is especially useful when reviewing bug reports or unexpected profile selection in nested repositories.
@@ -288,10 +287,7 @@ If you put these settings in engine profiles, you are mixing operator/app infras
 
 ## `web-chat` Specific Caveat
 
-`web-chat` intentionally does not mount the full Geppetto sections on its public CLI. Its command surface currently mounts:
-
-- `profile-settings`
-- `redis`
+`web-chat` intentionally does not mount the full Geppetto sections on its public CLI. Its command surface currently exposes profile-selection controls plus `redis`, rather than the entire shared runtime flag surface.
 
 See:
 

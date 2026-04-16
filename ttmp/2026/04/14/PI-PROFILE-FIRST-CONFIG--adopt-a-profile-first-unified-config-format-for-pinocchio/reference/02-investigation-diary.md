@@ -11,14 +11,20 @@ DocType: reference
 Intent: long-term
 Owners: []
 RelatedFiles:
+    - Path: README.md
+      Note: Step 14 rewrites the main user-facing config guidance around unified app/profile/profiles documents
     - Path: cmd/pinocchio/cmds/js.go
       Note: Diary Step 9 records the JS runtime migration to the unified composed registry path
+    - Path: cmd/pinocchio/doc/general/05-js-runner-scripts.md
+      Note: Step 14 updates JS help to inherit profile.active and profile.registries from unified config
     - Path: cmd/pinocchio/main.go
       Note: Diary Step 12 records the top-level consumer staying on the unified app config path
     - Path: cmd/web-chat/main.go
       Note: Diary Step 10 records the top-level web-chat migration to unified bootstrap initialization
     - Path: cmd/web-chat/main_profile_registries_test.go
       Note: Diary Step 10 records the inline-profile web-chat bootstrap test
+    - Path: examples/js/README.md
+      Note: Step 14 aligns the JS example README with unified profile.* config terminology
     - Path: pkg/cmds/profilebootstrap/engine_settings.go
       Note: Diary Step 9 records the hidden-base preservation and unified engine-settings path
     - Path: pkg/cmds/profilebootstrap/engine_settings_test.go
@@ -61,6 +67,8 @@ RelatedFiles:
         Diary Step 11 records focused explain-coverage tests
     - Path: pkg/configdoc/types.go
       Note: Diary Step 4 records the first code tranche that introduced the typed config document model
+    - Path: pkg/doc/topics/pinocchio-profile-resolution-and-runtime-switching.md
+      Note: Step 14 updates the primary profile-resolution help topic to use .pinocchio.yml and profile.* terminology
     - Path: pkg/ui/profileswitch/manager_test.go
       Note: Diary Step 13 records runtime-switching invariant coverage and the sparse-overlay test correction
     - Path: ttmp/2026/04/14/PI-PROFILE-FIRST-CONFIG--adopt-a-profile-first-unified-config-format-for-pinocchio/analysis/01-current-profile-config-and-registry-architecture-analysis.md
@@ -77,6 +85,7 @@ WhatFor: |
     Preserve the reasoning, commands, and decisions behind the creation of the ticket deliverables so later implementation work can continue without losing context.
 WhenToUse: Use when continuing this ticket, reviewing how the docs were assembled, or checking which evidence and commands shaped the current recommendation.
 ---
+
 
 
 
@@ -1509,4 +1518,113 @@ rg -n 'ai-chat:|profile-settings:|\.pinocchio-profile\.yml' cmd pkg examples \
 go test ./pkg/cmds/profilebootstrap ./pkg/ui/profileswitch ./cmd/pinocchio ./cmd/pinocchio/cmds/... ./cmd/web-chat ./cmd/examples/simple-chat ./cmd/agents/simple-chat-agent -count=1
 
 golangci-lint run ./pkg/cmds/profilebootstrap/... ./pkg/ui/profileswitch/... ./cmd/pinocchio ./cmd/pinocchio/cmds/... ./cmd/web-chat
+```
+
+## Step 14: Rewrite user-facing Pinocchio docs to teach only the unified `app / profile / profiles` model
+
+With the runtime migration and invariant hardening in place, the next important rollout step was documentation cleanup. The code now treats the unified config document as the real source of truth, but several user-facing docs still taught legacy config keys such as `profile-settings` and old local filenames like `.pinocchio-profile.yml`. This step makes the published Pinocchio story match the implemented system.
+
+The scope for this tranche was deliberately the user-facing Pinocchio surface, not the whole migration package. I updated the top-level README, the main profile-resolution topic, the JS runner help page, and the JS examples README so they now describe unified config documents, `.pinocchio.yml` local overrides, and `profile.active` / `profile.registries` rather than the removed top-level config shape.
+
+### Prompt Context
+
+**User prompt (verbatim):** "3. add/update docs to teach only app / profile / profiles"
+
+**Assistant interpretation:** Update the active Pinocchio user-facing documentation so it consistently teaches the unified config document model and no longer instructs users to rely on legacy config keys or local filenames.
+
+**Inferred user intent:** Make the docs match the implementation before doing further rollout work, so new users learn only the new config model.
+
+**Commit (code):** pending at diary-writing time
+
+### What I did
+- Updated `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/README.md` to:
+  - teach unified config documents with `app`, `profile`, and `profiles`
+  - switch profile precedence explanations from `profile-settings.*` to `profile.*`
+  - describe local project overrides as `.pinocchio.yml`
+  - fix the JS example link to a relative repository link
+- Updated `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/doc/topics/pinocchio-profile-resolution-and-runtime-switching.md` to:
+  - replace `.pinocchio-profile.yml` with `.pinocchio.yml`
+  - update the provenance example from `profile-settings.profile` to `profile.active`
+  - remove the user-facing mention that `web-chat` mounts a `profile-settings` section
+- Updated `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/cmd/pinocchio/doc/general/05-js-runner-scripts.md` so JS help now describes inheritance from `profile.registries` and `profile.active`
+- Updated `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/examples/js/README.md` to describe unified `profile.*` config inheritance and fixed its example link
+- Re-swept the user-facing doc/example surface for:
+  - `profile-settings`
+  - `.pinocchio-profile.yml`
+  - `ai-chat:`
+  - `openai-chat:`
+
+### Why
+- The implementation is now intentionally breaking old config shape. The docs must reinforce the new model rather than implicitly advertise removed behavior.
+- If the docs keep teaching `profile-settings` or `.pinocchio-profile.yml`, users will keep creating config that the runtime now rejects.
+- The README and help topics are the highest-leverage places to make the rollout coherent.
+
+### What worked
+- The main remaining drift was concentrated in a small set of obvious docs, so the cleanup was straightforward once the grep surface was narrowed.
+- After the rewrite, the only remaining user-facing grep hit was an intentional warning in `README.md` telling readers not to use legacy shapes.
+- The JS docs and example README now tell the same story as the main README.
+
+### What didn't work
+- My first grep used a bad relative ticket-doc path and produced an avoidable shell error while searching:
+
+```text
+rg: ttmp/2026/04/14/PI-PROFILE-FIRST-CONFIG: No such file or directory (os error 2)
+```
+
+- The fix was simply to rerun the search with the correct paths and focus it on the actual user-facing doc directories.
+
+### What I learned
+- The remaining documentation drift was mostly not in code comments or tests, but in the highest-visibility user docs: the README and primary help topics.
+- The new unified model is much easier to explain once the docs stop interleaving two generations of terminology.
+
+### What was tricky to build
+- The subtle part was deciding what to do with legacy terminology in the docs. I kept one explicit warning in `README.md` so readers know what *not* to use, but otherwise removed legacy config-shape teaching from the user-facing flow. That balances clarity with migration safety.
+
+### What warrants a second pair of eyes
+- Whether we should also add a dedicated migration page immediately, since the README now points people away from legacy shapes but does not yet provide a step-by-step rewrite recipe.
+- Whether any remaining Geppetto-facing migration docs should be updated in the next tranche so the broader workspace tells one consistent story.
+
+### What should be done in the future
+- Write the explicit user-facing migration guide from old top-level runtime config to the unified `app / profile / profiles` format.
+- Add failure tests for old-format config files and legacy local filenames.
+- Update the remaining Geppetto migration/help docs that still imply old app-config shape assumptions.
+
+### Code review instructions
+- Start with:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/README.md`
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/doc/topics/pinocchio-profile-resolution-and-runtime-switching.md`
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/cmd/pinocchio/doc/general/05-js-runner-scripts.md`
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/examples/js/README.md`
+- Validate with:
+
+```bash
+cd /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio
+
+rg -n 'profile-settings|\.pinocchio-profile\.yml|openai-chat:|ai-chat:' \
+  examples README.md pkg/doc cmd/pinocchio/doc \
+  --glob '*.md' --glob '*.yaml' --glob '*.yml' --glob '*.js'
+
+git diff --check
+
+docmgr doctor --ticket PI-PROFILE-FIRST-CONFIG --stale-after 30
+```
+
+### Technical details
+
+Commands run for this tranche:
+
+```bash
+cd /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio
+
+rg -n 'profile-settings|\.pinocchio-profile\.yml|openai-chat:|ai-chat:' \
+  README.md pkg/doc cmd/pinocchio/doc \
+  --glob '*.md'
+
+rg -n 'profile-settings|\.pinocchio-profile\.yml|openai-chat:|ai-chat:' \
+  examples README.md pkg/doc cmd/pinocchio/doc \
+  --glob '*.md' --glob '*.yaml' --glob '*.yml' --glob '*.js'
+
+git diff --check
+
+docmgr doctor --ticket PI-PROFILE-FIRST-CONFIG --stale-after 30
 ```

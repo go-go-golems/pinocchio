@@ -166,3 +166,17 @@ Step 13 (commit 1f6843c): added focused tests that lock in the rebuild-from-base
 - /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/14/PI-PROFILE-FIRST-CONFIG--adopt-a-profile-first-unified-config-format-for-pinocchio/reference/02-investigation-diary.md — Records Step 13 including the initial sparse-overlay testing mistake and the active-code sweep result
 - /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/14/PI-PROFILE-FIRST-CONFIG--adopt-a-profile-first-unified-config-format-for-pinocchio/tasks.md — Marks the remaining Phase 6 runtime migration hardening and active-path sweep complete
 
+
+## 2026-04-16
+
+Step 14: rewrote the user-facing Pinocchio docs and examples to teach only the unified app/profile/profiles config model, updated .pinocchio.yml local override guidance, and removed legacy profile-settings-based instructions from the main README and JS/profile help docs.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/README.md — Main README now teaches unified config documents and profile.* precedence
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/cmd/pinocchio/doc/general/05-js-runner-scripts.md — JS runner help now documents unified profile.active/profile.registries inheritance
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/examples/js/README.md — JS examples README now matches the unified config rollout
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/doc/topics/pinocchio-profile-resolution-and-runtime-switching.md — Primary profile-resolution topic now describes .pinocchio.yml and profile.active provenance examples
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/14/PI-PROFILE-FIRST-CONFIG--adopt-a-profile-first-unified-config-format-for-pinocchio/reference/02-investigation-diary.md — Records Step 14 and the post-rewrite grep result
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/14/PI-PROFILE-FIRST-CONFIG--adopt-a-profile-first-unified-config-format-for-pinocchio/tasks.md — Marks the Pinocchio docs/examples rollout task complete
+
