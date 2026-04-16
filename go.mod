@@ -2,6 +2,8 @@ module github.com/go-go-golems/pinocchio
 
 go 1.26.1
 
+toolchain go1.26.2
+
 require (
 	charm.land/lipgloss/v2 v2.0.0
 	github.com/ThreeDotsLabs/watermill v1.5.1
