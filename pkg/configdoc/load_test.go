@@ -1,6 +1,7 @@
 package configdoc
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -48,8 +49,14 @@ ai-chat:
 	if err == nil {
 		t.Fatal("expected old top-level runtime section to fail")
 	}
-	if !strings.Contains(err.Error(), "field ai-chat not found") {
-		t.Fatalf("expected unknown-field error, got %v", err)
+	if !strings.Contains(err.Error(), "unsupported legacy top-level keys") {
+		t.Fatalf("expected top-level-key guidance, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "ai-chat") {
+		t.Fatalf("expected legacy key name in error, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "profiles.<slug>.inference_settings") {
+		t.Fatalf("expected migration hint in error, got %v", err)
 	}
 }
 
@@ -61,8 +68,44 @@ profile-settings:
 	if err == nil {
 		t.Fatal("expected legacy profile-settings to fail")
 	}
-	if !strings.Contains(err.Error(), "field profile-settings not found") {
-		t.Fatalf("expected unknown-field error, got %v", err)
+	if !strings.Contains(err.Error(), "profile-settings") {
+		t.Fatalf("expected legacy key in error, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "profile.active") {
+		t.Fatalf("expected migration target in error, got %v", err)
+	}
+}
+
+func TestLoadDocument_RejectsLegacyKeysWithFilePathAndStrictDecodeExplanation(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.yaml")
+	err := os.WriteFile(configPath, []byte(`profile-settings:
+  profile: analyst
+ai-chat:
+  ai-engine: gpt-5-mini
+repositories:
+  - ~/prompts
+`), 0o644)
+	if err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	_, err = LoadDocument(configPath)
+	if err == nil {
+		t.Fatal("expected LoadDocument to fail on legacy keys")
+	}
+	for _, needle := range []string{
+		configPath,
+		"profile-settings",
+		"ai-chat",
+		"repositories",
+		"app.repositories",
+		"supported top-level keys are: app, profile, profiles",
+		"not treated as optional or ignored",
+	} {
+		if !strings.Contains(err.Error(), needle) {
+			t.Fatalf("expected %q in error, got %v", needle, err)
+		}
 	}
 }
 
