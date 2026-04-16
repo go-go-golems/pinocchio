@@ -305,6 +305,7 @@ That separation is intentional:
 
 ## See Also
 
+- `pinocchio help pinocchio-config-migration-guide`
 - `pinocchio help profiles`
 - `pinocchio help webchat-profile-registry`
 - `pinocchio help webchat-runner-migration-guide`

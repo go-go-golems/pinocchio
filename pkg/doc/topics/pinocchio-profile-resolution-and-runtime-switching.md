@@ -315,6 +315,7 @@ If `web-chat` ever wants explicit cross-profile `ai-client` CLI flags, it will n
 
 ## See Also
 
+- [Migrating Legacy Pinocchio Config to Unified Profile Documents](../tutorials/08-migrating-legacy-pinocchio-config-to-unified-profile-documents.md)
 - [Pinocchio CLI Verb Migration Guide](../tutorials/07-migrating-cli-verbs-to-glazed-profile-bootstrap.md)
 - [Webchat Engine Profile Guide](webchat-profile-registry.md)
 - `geppetto/pkg/doc/topics/01-profiles.md`

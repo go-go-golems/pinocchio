@@ -78,6 +78,8 @@ profiles:
 
 Do not use legacy config shapes such as `profile-settings`, `ai-chat`, `openai-chat`, or the old local filename `.pinocchio-profile.yml`.
 
+For a step-by-step rewrite from the old format, see [Migrating Legacy Pinocchio Config to Unified Profile Documents](./pkg/doc/tutorials/08-migrating-legacy-pinocchio-config-to-unified-profile-documents.md).
+
 You can then start using `pinocchio`:
 
 ```bash
