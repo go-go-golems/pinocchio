@@ -22,6 +22,7 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	"github.com/go-go-golems/glazed/pkg/help"
 	help_cmd "github.com/go-go-golems/glazed/pkg/help/cmd"
+	pinocchiocmds "github.com/go-go-golems/pinocchio/pkg/cmds"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -236,7 +237,7 @@ func main() {
 	c, err := NewSimpleRedisStreamingInferenceCommand()
 	cobra.CheckErr(err)
 
-	command, err := cli.BuildCobraCommand(c, cli.WithCobraMiddlewaresFunc(geppettosections.GetCobraCommandGeppettoMiddlewares))
+	command, err := cli.BuildCobraCommand(c, cli.WithCobraMiddlewaresFunc(pinocchiocmds.GetPinocchioCommandMiddlewares))
 	cobra.CheckErr(err)
 	rootCmd.AddCommand(command)
 
