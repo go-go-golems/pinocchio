@@ -188,6 +188,38 @@ func TestResolveUnifiedConfig_ExposesExplainData(t *testing.T) {
 	}
 }
 
+func TestResolveCLIEngineSettings_InlineProfileKeepsBaseValuesWhenOmittingFields(t *testing.T) {
+	_, cwdDir, restore := setupGitWorkspace(t)
+	defer restore()
+
+	tmpHome := t.TempDir()
+	t.Setenv("HOME", filepath.Join(tmpHome, "home"))
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(tmpHome, "xdg"))
+	t.Setenv("PINOCCHIO_AI_ENGINE", "env-model")
+
+	cwdFile := filepath.Join(cwdDir, ".pinocchio.yml")
+	if err := os.WriteFile(cwdFile, []byte("profile:\n  active: analyst\nprofiles:\n  analyst:\n    inference_settings:\n      api_keys:\n        api_keys:\n          openai-api-key: inline-key\n"), 0o644); err != nil {
+		t.Fatalf("write %s: %v", cwdFile, err)
+	}
+
+	resolved, err := ResolveCLIEngineSettings(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("ResolveCLIEngineSettings failed: %v", err)
+	}
+	if resolved.Close != nil {
+		defer resolved.Close()
+	}
+	if resolved.FinalInferenceSettings == nil || resolved.FinalInferenceSettings.Chat == nil || resolved.FinalInferenceSettings.Chat.Engine == nil {
+		t.Fatal("expected final inference settings")
+	}
+	if got := *resolved.FinalInferenceSettings.Chat.Engine; got != "env-model" {
+		t.Fatalf("expected omitted inline engine to stay at base env-model, got %q", got)
+	}
+	if got := resolved.FinalInferenceSettings.API.APIKeys["openai-api-key"]; got != "inline-key" {
+		t.Fatalf("expected inline api key override, got %q", got)
+	}
+}
+
 func TestResolveCLIEngineSettings_UsesMergedDocumentSelectionAndInlineProfiles(t *testing.T) {
 	repoDir, cwdDir, restore := setupGitWorkspace(t)
 	defer restore()
