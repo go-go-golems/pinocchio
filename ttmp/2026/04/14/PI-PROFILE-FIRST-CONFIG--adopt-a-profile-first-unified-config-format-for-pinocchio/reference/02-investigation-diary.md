@@ -12,13 +12,17 @@ Intent: long-term
 Owners: []
 RelatedFiles:
     - Path: README.md
-      Note: Step 14 rewrites the main user-facing config guidance around unified app/profile/profiles documents
+      Note: |-
+        Step 14 rewrites the main user-facing config guidance around unified app/profile/profiles documents
+        Step 16 links the main config warning to the new migration guide
     - Path: cmd/examples/simple-redis-streaming-inference/main.go
       Note: Step 15 moves the stale example to Pinocchio middleware wiring so full repo builds succeed again
     - Path: cmd/pinocchio/cmds/js.go
       Note: Diary Step 9 records the JS runtime migration to the unified composed registry path
     - Path: cmd/pinocchio/doc/general/05-js-runner-scripts.md
-      Note: Step 14 updates JS help to inherit profile.active and profile.registries from unified config
+      Note: |-
+        Step 14 updates JS help to inherit profile.active and profile.registries from unified config
+        Step 16 points JS users at the new config migration help page
     - Path: cmd/pinocchio/main.go
       Note: Diary Step 12 records the top-level consumer staying on the unified app config path
     - Path: cmd/web-chat/main.go
@@ -72,7 +76,11 @@ RelatedFiles:
     - Path: pkg/configdoc/types.go
       Note: Diary Step 4 records the first code tranche that introduced the typed config document model
     - Path: pkg/doc/topics/pinocchio-profile-resolution-and-runtime-switching.md
-      Note: Step 14 updates the primary profile-resolution help topic to use .pinocchio.yml and profile.* terminology
+      Note: |-
+        Step 14 updates the primary profile-resolution help topic to use .pinocchio.yml and profile.* terminology
+        Step 16 links the conceptual profile-resolution topic to the new migration guide
+    - Path: pkg/doc/tutorials/08-migrating-legacy-pinocchio-config-to-unified-profile-documents.md
+      Note: Step 16 adds the explicit user-facing migration playbook from legacy config to unified app/profile/profiles documents
     - Path: pkg/ui/profileswitch/manager_test.go
       Note: Diary Step 13 records runtime-switching invariant coverage and the sparse-overlay test correction
     - Path: ttmp/2026/04/14/PI-PROFILE-FIRST-CONFIG--adopt-a-profile-first-unified-config-format-for-pinocchio/analysis/01-current-profile-config-and-registry-architecture-analysis.md
@@ -89,6 +97,7 @@ WhatFor: |
     Preserve the reasoning, commands, and decisions behind the creation of the ticket deliverables so later implementation work can continue without losing context.
 WhenToUse: Use when continuing this ticket, reviewing how the docs were assembled, or checking which evidence and commands shaped the current recommendation.
 ---
+
 
 
 
@@ -1736,4 +1745,105 @@ go test ./cmd/examples/simple-redis-streaming-inference ./pkg/cmds -count=1
 golangci-lint run ./cmd/examples/simple-redis-streaming-inference ./pkg/cmds/...
 
 make test lint
+```
+
+## Step 16: Add the explicit user-facing migration guide for unified config documents
+
+With the main docs already teaching the new shape, the remaining gap was an explicit rewrite playbook. Users could now see the target model, but they still lacked a step-by-step answer to the practical question: “what do I do with my old `profile-settings`, `ai-chat`, `openai-chat`, `repositories`, and `.pinocchio-profile.yml` files?” This step fills that gap with one dedicated tutorial page.
+
+The key design decision in the guide is to document only the implemented migration target. That means the guide does not invent a new top-level replacement for old runtime sections. Instead, it tells users to move old runtime defaults into `profiles.<slug>.inference_settings` or an imported engine-only `profiles.yaml`, while moving repositories into `app` and profile selection into `profile`.
+
+### Prompt Context
+
+**User prompt (verbatim):** "go ahead"
+
+**Assistant interpretation:** Proceed with the next identified rollout item: write the explicit user-facing migration guide from legacy Pinocchio config to the unified `app / profile / profiles` model.
+
+**Inferred user intent:** Close the migration-story gap so users have a concrete, supported rewrite path instead of only conceptual documentation.
+
+**Commit (code):** `0c958fb` — `docs: add unified config migration guide`
+
+### What I did
+- Added a new top-level help/tutorial page:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/doc/tutorials/08-migrating-legacy-pinocchio-config-to-unified-profile-documents.md`
+- The new guide covers:
+  - old-to-new key mapping
+  - `.pinocchio-profile.yml` → `.pinocchio.yml`
+  - `repositories` → `app.repositories`
+  - `profile-settings.profile` → `profile.active`
+  - `profile-settings.profile-registries` → `profile.registries`
+  - moving old runtime defaults into `profiles.<slug>.inference_settings` or external engine-only `profiles.yaml`
+  - why shared credentials should usually move to environment variables
+  - before/after config examples
+  - migration troubleshooting with the exact new failure messages users will see
+- Updated `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/README.md` to link directly to the new migration guide from the main config warning.
+- Updated `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/doc/topics/pinocchio-profile-resolution-and-runtime-switching.md` to include the new migration guide in `See Also`.
+- Updated `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/cmd/pinocchio/doc/general/05-js-runner-scripts.md` to point readers at `pinocchio help pinocchio-config-migration-guide`.
+- Validated that the new help slug is actually discoverable through the CLI.
+
+### Why
+- The repo now intentionally rejects legacy config shape, so users need an explicit rewrite guide rather than only a warning that the old shape is unsupported.
+- A dedicated help page is more discoverable and maintainable than burying migration instructions inside the README.
+- The migration guide had to match the real implementation, especially the fact that there is no supported new top-level runtime section.
+
+### What worked
+- The guide fit naturally as a top-level tutorial/help page and loaded correctly through `pinocchio help pinocchio-config-migration-guide`.
+- The old-to-new mapping table made it easy to explain the breaking-change boundary without a compatibility shim.
+- Linking the guide from the README, profile-resolution topic, and JS help page makes it much easier to discover from multiple user entry points.
+
+### What didn't work
+- The CLI help validation emitted unrelated alias warnings from embedded prompts before rendering the new help page:
+
+```text
+WRN alias concise-doc (prefix: [code go], source embed:pinocchio/prompts/prompts/code/go/concise-doc.yaml) for go not found
+```
+
+- Those warnings did not block the new help topic; the migration guide rendered correctly afterward.
+
+### What I learned
+- The guide needed to be more explicit than the README because the hardest migration question is not “what is the new model?” but “where do the old runtime defaults go now?”
+- A dedicated tutorial page is the right place to document the breaking-change stance clearly without bloating the conceptual docs.
+
+### What was tricky to build
+- The subtle part was avoiding undocumented promises. The current implementation does not support a new top-level replacement for `ai-chat` or provider sections, so the guide had to say that directly and route users toward inline profiles, imported engine-only registries, or environment variables instead of implying more baseline-config support than the code actually has.
+
+### What warrants a second pair of eyes
+- Whether the migration guide should eventually include a short “credentials mapping” appendix if users struggle with moving provider keys out of old top-level provider blocks.
+- Whether the README should later inline a much smaller migration example now that the full guide exists.
+
+### What should be done in the future
+- Add the remaining failure-coverage tests for old-format config files and legacy local filenames.
+- Update any remaining Geppetto-facing migration docs that still imply the older app-config shape.
+- Decide whether a one-shot `pinocchio config migrate` command is still worth adding now that the manual migration guide exists.
+
+### Code review instructions
+- Start with:
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/doc/tutorials/08-migrating-legacy-pinocchio-config-to-unified-profile-documents.md`
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/README.md`
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/doc/topics/pinocchio-profile-resolution-and-runtime-switching.md`
+  - `/home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/cmd/pinocchio/doc/general/05-js-runner-scripts.md`
+- Validate with:
+
+```bash
+cd /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio
+
+docmgr doctor --ticket PI-PROFILE-FIRST-CONFIG --stale-after 30
+
+git diff --check
+
+go run ./cmd/pinocchio help pinocchio-config-migration-guide
+```
+
+### Technical details
+
+Commands run for this tranche:
+
+```bash
+cd /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio
+
+docmgr doctor --ticket PI-PROFILE-FIRST-CONFIG --stale-after 30
+
+git diff --check
+
+go run ./cmd/pinocchio help pinocchio-config-migration-guide
 ```

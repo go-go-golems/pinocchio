@@ -77,7 +77,7 @@
 ### Phase 7 — breaking-change handling and migration tooling
 
 - [ ] Fail loudly on old config shape (`ai-chat`, `profile-settings`, legacy local filename) instead of supporting compatibility parsing
-- [ ] Write a user-facing migration guide from old top-level runtime config to the new `app` / `profile` / `profiles` format
+- [x] Write a user-facing migration guide from old top-level runtime config to the new `app` / `profile` / `profiles` format
 - [ ] Investigate whether Pinocchio should add a dedicated migration verb such as `pinocchio config migrate`
 - [ ] If worthwhile, implement a one-shot migration command that rewrites old config into the new format without keeping runtime compatibility code
 

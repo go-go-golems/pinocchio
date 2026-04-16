@@ -191,3 +191,17 @@ Step 15 (commit 70a3f62): fixed full-repo validation fallout by migrating the re
 - /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/cmds/cmd_profile_registry_test.go — Sandboxes config discovery for loaded-command tests under full repo validation
 - /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/14/PI-PROFILE-FIRST-CONFIG--adopt-a-profile-first-unified-config-format-for-pinocchio/reference/02-investigation-diary.md — Records the make test lint fallout and the hermetic test fix
 
+
+## 2026-04-16
+
+Step 16 (commit 0c958fb): added a dedicated user-facing migration guide from legacy Pinocchio config to the unified app/profile/profiles model, linked it from the README and main help topics, and marked the migration-guide task complete.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/README.md — Main README now links readers directly to the migration guide
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/cmd/pinocchio/doc/general/05-js-runner-scripts.md — JS help now references the migration guide slug
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/doc/topics/pinocchio-profile-resolution-and-runtime-switching.md — Conceptual runtime page now points to the explicit migration tutorial
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/pkg/doc/tutorials/08-migrating-legacy-pinocchio-config-to-unified-profile-documents.md — New top-level migration tutorial covering legacy-key mapping
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/14/PI-PROFILE-FIRST-CONFIG--adopt-a-profile-first-unified-config-format-for-pinocchio/reference/02-investigation-diary.md — Records Step 16 including help-slug validation and the no-new-top-level-runtime-block decision
+- /home/manuel/workspaces/2026-04-10/pinocchiorc/pinocchio/ttmp/2026/04/14/PI-PROFILE-FIRST-CONFIG--adopt-a-profile-first-unified-config-format-for-pinocchio/tasks.md — Marks the user-facing migration guide task complete
+
