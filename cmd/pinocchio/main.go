@@ -167,11 +167,11 @@ func initRootCmd() (*help.HelpSystem, error) {
 	return helpSystem, nil
 }
 
-// loadRepositoriesFromConfig reads repository paths from layered pinocchio app config.
+// loadRepositoriesFromConfig reads repository paths from the unified layered pinocchio config document.
 func loadRepositoriesFromConfig() []string {
 	repositoryPaths, err := profilebootstrap.ResolveRepositoryPaths()
 	if err != nil {
-		log.Debug().Err(err).Msg("Could not resolve repository paths from layered config")
+		log.Debug().Err(err).Msg("Could not resolve repository paths from unified layered config")
 		return []string{}
 	}
 	return repositoryPaths
