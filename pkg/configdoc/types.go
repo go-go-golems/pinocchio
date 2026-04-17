@@ -10,8 +10,9 @@ import (
 )
 
 const (
-	LocalOverrideFileName       = ".pinocchio.yml"
-	LegacyLocalOverrideFileName = ".pinocchio-profile.yml"
+	LocalOverrideFileName        = ".pinocchio.yml"
+	LocalProjectOverrideFileName = ".pinocchio.override.yml"
+	LegacyLocalOverrideFileName  = ".pinocchio-profile.yml"
 )
 
 type Document struct {

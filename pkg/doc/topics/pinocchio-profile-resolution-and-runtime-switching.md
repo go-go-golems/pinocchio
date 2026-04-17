@@ -90,15 +90,19 @@ In concrete terms, Pinocchio can load from:
 2. `$HOME/.pinocchio/config.yaml`
 3. `${XDG_CONFIG_HOME}/pinocchio/config.yaml`
 4. `.pinocchio.yml` at the git repository root
-5. `.pinocchio.yml` in the current working directory
-6. `--config-file <path>`
+5. `.pinocchio.override.yml` at the git repository root
+6. `.pinocchio.yml` in the current working directory
+7. `.pinocchio.override.yml` in the current working directory
+8. `--config-file <path>`
 
 Later layers win.
 
 That means:
 
 - repo-local config can override user config
+- repo-local `.pinocchio.override.yml` can override committed repo `.pinocchio.yml`
 - cwd-local config can override repo-local config
+- cwd-local `.pinocchio.override.yml` can override committed cwd `.pinocchio.yml`
 - explicit `--config-file` can override everything else
 
 This layered path is implemented through Glazed config-plan primitives and consumed by Geppetto bootstrap.

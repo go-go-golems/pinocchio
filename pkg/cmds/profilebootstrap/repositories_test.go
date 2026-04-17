@@ -23,12 +23,16 @@ func TestResolveRepositoryPaths_MergesUserRepoAndCWDUnifiedConfigRepositories(t 
 	homeConfig := filepath.Join(homeDir, ".pinocchio", "config.yaml")
 	xdgConfig := filepath.Join(xdgDir, "pinocchio", "config.yaml")
 	repoConfig := filepath.Join(repoDir, ".pinocchio.yml")
+	repoOverrideConfig := filepath.Join(repoDir, ".pinocchio.override.yml")
 	cwdConfig := filepath.Join(cwdDir, ".pinocchio.yml")
+	cwdOverrideConfig := filepath.Join(cwdDir, ".pinocchio.override.yml")
 	for path, body := range map[string]string{
-		homeConfig: "app:\n  repositories:\n    - /home/base\n    - /shared\n",
-		xdgConfig:  "app:\n  repositories:\n    - /xdg/extra\n",
-		repoConfig: "app:\n  repositories:\n    - /repo/prompts\n    - /shared\n",
-		cwdConfig:  "app:\n  repositories:\n    - /cwd/prompts\n",
+		homeConfig:         "app:\n  repositories:\n    - /home/base\n    - /shared\n",
+		xdgConfig:          "app:\n  repositories:\n    - /xdg/extra\n",
+		repoConfig:         "app:\n  repositories:\n    - /repo/prompts\n    - /shared\n",
+		repoOverrideConfig: "app:\n  repositories:\n    - /repo/private\n",
+		cwdConfig:          "app:\n  repositories:\n    - /cwd/prompts\n",
+		cwdOverrideConfig:  "app:\n  repositories:\n    - /cwd/private\n",
 	} {
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 			t.Fatalf("mkdir %s: %v", path, err)
@@ -42,7 +46,7 @@ func TestResolveRepositoryPaths_MergesUserRepoAndCWDUnifiedConfigRepositories(t 
 	if err != nil {
 		t.Fatalf("ResolveRepositoryPaths failed: %v", err)
 	}
-	want := []string{"/home/base", "/shared", "/xdg/extra", "/repo/prompts", "/cwd/prompts"}
+	want := []string{"/home/base", "/shared", "/xdg/extra", "/repo/prompts", "/repo/private", "/cwd/prompts", "/cwd/private"}
 	if len(repositories) != len(want) {
 		t.Fatalf("unexpected repositories length: got=%#v want=%#v", repositories, want)
 	}

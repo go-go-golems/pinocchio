@@ -19,14 +19,18 @@ func TestResolveCLIConfigFilesResolved_UsesRepoCWDAndExplicitOrder(t *testing.T)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(tmpHome, "xdg"))
 
 	repoFile := filepath.Join(repoDir, ".pinocchio.yml")
+	repoOverrideFile := filepath.Join(repoDir, ".pinocchio.override.yml")
 	cwdFile := filepath.Join(cwdDir, ".pinocchio.yml")
+	cwdOverrideFile := filepath.Join(cwdDir, ".pinocchio.override.yml")
 	explicitFile := filepath.Join(repoDir, "explicit.yaml")
 	for _, entry := range []struct {
 		path    string
 		content string
 	}{
 		{repoFile, "profile:\n  active: repo-profile\n"},
+		{repoOverrideFile, "profile:\n  active: repo-override-profile\n"},
 		{cwdFile, "profile:\n  active: cwd-profile\n"},
+		{cwdOverrideFile, "profile:\n  active: cwd-override-profile\n"},
 		{explicitFile, "profile:\n  active: explicit-profile\n"},
 	} {
 		if err := os.WriteFile(entry.path, []byte(entry.content), 0o644); err != nil {
@@ -43,7 +47,7 @@ func TestResolveCLIConfigFilesResolved_UsesRepoCWDAndExplicitOrder(t *testing.T)
 	if err != nil {
 		t.Fatalf("ResolveCLIConfigFilesResolved failed: %v", err)
 	}
-	want := []string{repoFile, cwdFile, explicitFile}
+	want := []string{repoFile, repoOverrideFile, cwdFile, cwdOverrideFile, explicitFile}
 	if len(resolved.Files) != len(want) {
 		t.Fatalf("config file count mismatch: got=%#v want=%#v", resolved.Files, want)
 	}
@@ -63,14 +67,18 @@ func TestResolveCLIProfileSelection_CWDOverridesRepoAndExplicitWins(t *testing.T
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(tmpHome, "xdg"))
 
 	repoFile := filepath.Join(repoDir, ".pinocchio.yml")
+	repoOverrideFile := filepath.Join(repoDir, ".pinocchio.override.yml")
 	cwdFile := filepath.Join(cwdDir, ".pinocchio.yml")
+	cwdOverrideFile := filepath.Join(cwdDir, ".pinocchio.override.yml")
 	explicitFile := filepath.Join(repoDir, "explicit.yaml")
 	for _, entry := range []struct {
 		path    string
 		content string
 	}{
 		{repoFile, "profile:\n  active: repo-profile\n"},
+		{repoOverrideFile, "profile:\n  active: repo-override-profile\n"},
 		{cwdFile, "profile:\n  active: cwd-profile\n"},
+		{cwdOverrideFile, "profile:\n  active: cwd-override-profile\n"},
 		{explicitFile, "profile:\n  active: explicit-profile\n"},
 	} {
 		if err := os.WriteFile(entry.path, []byte(entry.content), 0o644); err != nil {
@@ -82,8 +90,8 @@ func TestResolveCLIProfileSelection_CWDOverridesRepoAndExplicitWins(t *testing.T
 	if err != nil {
 		t.Fatalf("ResolveCLIProfileSelection(nil) failed: %v", err)
 	}
-	if got := resolved.Profile; got != "cwd-profile" {
-		t.Fatalf("expected cwd profile to override repo profile, got %q", got)
+	if got := resolved.Profile; got != "cwd-override-profile" {
+		t.Fatalf("expected cwd override profile to override repo and cwd base profiles, got %q", got)
 	}
 
 	parsed, err := NewCLISelectionValues(CLISelectionInput{ConfigFile: explicitFile})

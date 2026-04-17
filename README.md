@@ -52,7 +52,7 @@ The unified config shape is:
 - `profile`: the selected/default profile plus optional imported registry sources
 - `profiles`: inline profile definitions stored directly in the same config document
 
-Pinocchio reads the standard global config files (`/etc/pinocchio/config.yaml`, `$HOME/.pinocchio/config.yaml`, `${XDG_CONFIG_HOME}/pinocchio/config.yaml`) and local project overrides from `.pinocchio.yml` at the git root and current working directory.
+Pinocchio reads the standard global config files (`/etc/pinocchio/config.yaml`, `$HOME/.pinocchio/config.yaml`, `${XDG_CONFIG_HOME}/pinocchio/config.yaml`) plus local project config from `.pinocchio.yml` and optional uncommitted override layers from `.pinocchio.override.yml` at the git root and current working directory.
 
 Example:
 

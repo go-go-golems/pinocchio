@@ -244,7 +244,9 @@ func pinocchioConfigPlanBuilder(parsed *values.Values) (*glazedconfig.Plan, erro
 		glazedconfig.HomeAppConfig("pinocchio").Named("home-app-config").Kind("app-config"),
 		glazedconfig.XDGAppConfig("pinocchio").Named("xdg-app-config").Kind("app-config"),
 		glazedconfig.GitRootFile(configdoc.LocalOverrideFileName).Named("git-root-local-profile").Kind("profile-overlay"),
+		glazedconfig.GitRootFile(configdoc.LocalProjectOverrideFileName).Named("git-root-local-profile-override").Kind("profile-overlay"),
 		glazedconfig.WorkingDirFile(configdoc.LocalOverrideFileName).Named("cwd-local-profile").Kind("profile-overlay"),
+		glazedconfig.WorkingDirFile(configdoc.LocalProjectOverrideFileName).Named("cwd-local-profile-override").Kind("profile-overlay"),
 		glazedconfig.ExplicitFile(explicit).Named("explicit-config-file").Kind("explicit-file"),
 	), nil
 }
