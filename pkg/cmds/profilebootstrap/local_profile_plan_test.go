@@ -303,10 +303,22 @@ func setupGitWorkspace(t *testing.T) (string, string, func()) {
 func runGit(dir string, args ...string) error {
 	cmd := exec.CommandContext(context.Background(), "git", args...)
 	cmd.Dir = dir
-	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+	cmd.Env = append(scrubGitEnv(os.Environ()), "GIT_TERMINAL_PROMPT=0")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("git %s failed: %w\n%s", strings.Join(args, " "), err, string(out))
 	}
 	return nil
+}
+
+func scrubGitEnv(env []string) []string {
+	ret := make([]string, 0, len(env))
+	for _, entry := range env {
+		key, _, ok := strings.Cut(entry, "=")
+		if ok && strings.HasPrefix(key, "GIT_") {
+			continue
+		}
+		ret = append(ret, entry)
+	}
+	return ret
 }

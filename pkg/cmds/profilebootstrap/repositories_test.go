@@ -82,7 +82,7 @@ func setupRepositoryGitWorkspace(t *testing.T) (string, string, func()) {
 func runRepositoryGit(dir string, args ...string) error {
 	cmd := exec.CommandContext(context.Background(), "git", args...)
 	cmd.Dir = dir
-	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+	cmd.Env = append(scrubGitEnv(os.Environ()), "GIT_TERMINAL_PROMPT=0")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("git %s failed: %w\n%s", strings.Join(args, " "), err, string(out))
