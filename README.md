@@ -44,21 +44,41 @@ Finally, install by downloading the binaries straight from [github](https://gith
 
 ## Usage
 
-Configure pinocchio through layered config plus an engine-profile registry stack.
-Use `~/.pinocchio/config.yaml` for app config and optional provider defaults, and use
-engine profiles to select the active model/provider settings.
+Configure Pinocchio through layered unified config documents plus an optional engine-profile registry stack.
+
+The unified config shape is:
+
+- `app`: application-level settings such as prompt repositories
+- `profile`: the selected/default profile plus optional imported registry sources
+- `profiles`: inline profile definitions stored directly in the same config document
+
+Pinocchio reads the standard global config files (`/etc/pinocchio/config.yaml`, `$HOME/.pinocchio/config.yaml`, `${XDG_CONFIG_HOME}/pinocchio/config.yaml`) plus local project config from `.pinocchio.yml` and optional uncommitted override layers from `.pinocchio.override.yml` at the git root and current working directory.
+
+Example:
 
 ```yaml
-repositories:
-  - /Users/manuel/code/pinocchio
-  - /Users/manuel/.pinocchio/repository
-profile-settings:
-  profile-registries: ~/.config/pinocchio/profiles.yaml
-openai-chat:
-  openai-api-key: XXXX
+app:
+  repositories:
+    - /Users/manuel/code/pinocchio
+    - /Users/manuel/.pinocchio/repository
+
+profile:
+  active: default
+  registries:
+    - ~/.config/pinocchio/profiles.yaml
+
+profiles:
+  default:
+    display_name: Default
+    inference_settings:
+      chat:
+        api_type: openai
+        engine: gpt-5-mini
 ```
 
-Do not use the legacy flat `openai-api-key: ...` top-level shape for new config files.
+Do not use legacy config shapes such as `profile-settings`, `ai-chat`, `openai-chat`, or the old local filename `.pinocchio-profile.yml`.
+
+For a step-by-step rewrite from the old format, see [Migrating Legacy Pinocchio Config to Unified Profile Documents](./pkg/doc/tutorials/08-migrating-legacy-pinocchio-config-to-unified-profile-documents.md).
 
 You can then start using `pinocchio`:
 
@@ -89,14 +109,14 @@ Registry-source precedence:
 
 1. `--profile-registries` (comma-separated YAML/SQLite sources)
 2. `PINOCCHIO_PROFILE_REGISTRIES`
-3. `profile-settings.profile-registries` in the selected config file
+3. `profile.registries` from the merged unified config document
 4. `${XDG_CONFIG_HOME:-~/.config}/pinocchio/profiles.yaml` when the file exists
 
 Profile-selection precedence:
 
 1. `--profile`
 2. `PINOCCHIO_PROFILE`
-3. `profile-settings.profile` in the selected config file
+3. `profile.active` from the merged unified config document
 4. the registry default profile (`default_profile_slug` or slug `default`)
 
 Example:
@@ -152,7 +172,7 @@ The intended model is:
 
 That means a script can resolve an engine profile from the same registry/config path the CLI already uses and then build an engine directly from that resolved profile.
 
-`pinocchio js` also accepts `--config-file`, so the script can inherit `profile-settings.profile-registries` and `profile-settings.profile` from the same config file used by the other Pinocchio commands.
+`pinocchio js` also accepts `--config-file`, so the script can inherit `profile.registries` and `profile.active` from the same unified config document used by the other Pinocchio commands.
 
 Example:
 
@@ -224,7 +244,7 @@ profiles:
         engine: gpt-4o-mini
 ```
 
-Use [examples/js/profiles/basic.yaml](/home/manuel/workspaces/2026-03-17/add-opinionated-apis/pinocchio/examples/js/profiles/basic.yaml) as the smallest concrete reference.
+Use [examples/js/profiles/basic.yaml](./examples/js/profiles/basic.yaml) as the smallest concrete reference.
 
 ## Creating your own prompt
 

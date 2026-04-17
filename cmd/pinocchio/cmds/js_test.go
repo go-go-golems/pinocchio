@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	geppettobootstrap "github.com/go-go-golems/geppetto/pkg/cli/bootstrap"
 	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	profilebootstrap "github.com/go-go-golems/pinocchio/pkg/cmds/profilebootstrap"
 )
@@ -30,7 +31,11 @@ func TestLoadPinocchioProfileRegistryStackRejectsProfileWithoutRegistries(t *tes
 	parsed := values.New()
 	parsed.Set(profilebootstrap.ProfileSettingsSectionSlug, profileValues)
 
-	_, _, _, err = loadPinocchioProfileRegistryStack(parsed)
+	profileSettings, _, err := profilebootstrap.ResolveEngineProfileSettings(parsed)
+	if err != nil {
+		t.Fatalf("ResolveEngineProfileSettings failed: %v", err)
+	}
+	_, err = geppettobootstrap.ResolveProfileRegistryChain(context.Background(), profileSettings)
 	if err == nil {
 		t.Fatal("expected profile selection without registries to fail")
 	}
@@ -62,33 +67,21 @@ func TestResolvePinocchioJSRuntimeBootstrap_UsesFinalInferenceSettingsFromSelect
 
 	configPath := filepath.Join(tmpDir, "pinocchio-config.yaml")
 	configYAML := `
-ai-chat:
-  ai-api-type: openai
-  ai-engine: base-model
-`
-	if err := os.WriteFile(configPath, []byte(configYAML), 0o644); err != nil {
-		t.Fatalf("write config: %v", err)
-	}
-
-	registryPath := filepath.Join(tmpDir, "profiles.yaml")
-	registryYAML := `
-slug: workspace
+profile:
+  active: default
 profiles:
   default:
-    slug: default
     inference_settings:
       chat:
         api_type: openai-responses
         engine: gpt-5-mini
 `
-	if err := os.WriteFile(registryPath, []byte(registryYAML), 0o644); err != nil {
-		t.Fatalf("write registry: %v", err)
+	if err := os.WriteFile(configPath, []byte(configYAML), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
 	}
 
 	parsed, err := profilebootstrap.NewCLISelectionValues(profilebootstrap.CLISelectionInput{
-		ConfigFile:        configPath,
-		Profile:           "default",
-		ProfileRegistries: []string{registryPath},
+		ConfigFile: configPath,
 	})
 	if err != nil {
 		t.Fatalf("NewCLISelectionValues failed: %v", err)

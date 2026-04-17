@@ -45,8 +45,17 @@ func (recordingEngine) RunInference(_ context.Context, t *turns.Turn) (*turns.Tu
 	return out, nil
 }
 
-func TestLoadedCommandRunIntoWriterUsesSelectedEngineProfile(t *testing.T) {
+func isolateConfigDiscovery(t *testing.T) string {
+	t.Helper()
 	tmpDir := t.TempDir()
+	t.Setenv("HOME", filepath.Join(tmpDir, "home"))
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(tmpDir, "xdg"))
+	t.Chdir(tmpDir)
+	return tmpDir
+}
+
+func TestLoadedCommandRunIntoWriterUsesSelectedEngineProfile(t *testing.T) {
+	tmpDir := isolateConfigDiscovery(t)
 	registryPath := filepath.Join(tmpDir, "profiles.yaml")
 	registryYAML := `slug: workspace
 profiles:
@@ -158,7 +167,7 @@ prompt: |
 }
 
 func TestLoadedCommandRunIntoWriterUsesLoaderBaselineInferenceSettings(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := isolateConfigDiscovery(t)
 	registryPath := filepath.Join(tmpDir, "profiles.yaml")
 	registryYAML := `slug: workspace
 profiles:
@@ -276,7 +285,7 @@ prompt: |
 }
 
 func TestLoadedCommandRunIntoWriterPrintsFinalInferenceSettings(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := isolateConfigDiscovery(t)
 	registryPath := filepath.Join(tmpDir, "profiles.yaml")
 	registryYAML := `slug: workspace
 profiles:
@@ -394,7 +403,7 @@ prompt: |
 }
 
 func TestLoadedCommandRunIntoWriterPrintsInferenceSettingsWithSources(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := isolateConfigDiscovery(t)
 	registryPath := filepath.Join(tmpDir, "profiles.yaml")
 	registryYAML := `slug: workspace
 profiles:

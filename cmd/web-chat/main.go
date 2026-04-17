@@ -118,16 +118,11 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 	if err := parsed.DecodeSectionInto(values.DefaultSlug, s); err != nil {
 		return errors.Wrap(err, "decode server settings")
 	}
-	profileSelection, err := profilebootstrap.ResolveCLIProfileSelection(parsed)
+	resolvedConfig, err := profilebootstrap.ResolveUnifiedConfig(parsed)
 	if err != nil {
-		return errors.Wrap(err, "resolve profile selection")
+		return errors.Wrap(err, "resolve unified profile config")
 	}
-	if profileSelection.Profile != "" && len(profileSelection.ProfileRegistries) == 0 {
-		return &gepprofiles.ValidationError{
-			Field:  "profile-settings.profile-registries",
-			Reason: "must be configured when profile-settings.profile is set",
-		}
-	}
+	profileSelection := resolvedConfig.ProfileSettings
 	if len(profileSelection.ProfileRegistries) > 0 {
 		log.Info().
 			Strs("profile_registries", profileSelection.ProfileRegistries).
@@ -146,28 +141,21 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 		{Name: "category_regexp_reviewer", Prompt: "Review proposed regex patterns and assess over/under matching risks."},
 	})
 
-	var (
-		profileRegistry        gepprofiles.Registry
-		defaultRegistrySlug    gepprofiles.RegistrySlug
-		profileRegistryCleanup func()
-	)
-	if len(profileSelection.ProfileRegistries) > 0 {
-		profileRegistrySpecs, err := gepprofiles.ParseRegistrySourceSpecs(profileSelection.ProfileRegistries)
-		if err != nil {
-			return errors.Wrap(err, "parse profile registry source specs")
-		}
-		profileRegistryChain, err := gepprofiles.NewChainedRegistryFromSourceSpecs(ctx, profileRegistrySpecs)
-		if err != nil {
-			return errors.Wrap(err, "initialize profile registry")
-		}
-		profileRegistry = profileRegistryChain
-		defaultRegistrySlug = profileRegistryChain.DefaultRegistrySlug()
-		profileRegistryCleanup = func() {
-			_ = profileRegistryChain.Close()
-		}
+	registryChain, err := profilebootstrap.ResolveUnifiedProfileRegistryChain(ctx, resolvedConfig)
+	if err != nil {
+		return errors.Wrap(err, "initialize profile registry")
 	}
-	if profileRegistryCleanup != nil {
-		defer profileRegistryCleanup()
+	if registryChain != nil && registryChain.Close != nil {
+		defer registryChain.Close()
+	}
+
+	var (
+		profileRegistry     gepprofiles.Registry
+		defaultRegistrySlug gepprofiles.RegistrySlug
+	)
+	if registryChain != nil {
+		profileRegistry = registryChain.Registry
+		defaultRegistrySlug = registryChain.DefaultRegistrySlug
 	}
 
 	middlewareRegistry, err := newWebChatMiddlewareDefinitionRegistry()
@@ -304,12 +292,9 @@ func main() {
 	c, err := NewCommand()
 	cobra.CheckErr(err)
 	command, err := cli.BuildCobraCommand(c, cli.WithParserConfig(cli.CobraParserConfig{
+		// Hidden base-settings parsing owns config-file loading so we can
+		// reuse pinocchio config conventions without exposing AI flags.
 		AppName: webChatCLIAppName,
-		ConfigFilesFunc: func(_ *values.Values, _ *cobra.Command, _ []string) ([]string, error) {
-			// Hidden base-settings parsing owns config-file loading so we can
-			// reuse pinocchio config conventions without exposing AI flags.
-			return nil, nil
-		},
 	}))
 	cobra.CheckErr(err)
 	for _, name := range []string{"print-yaml", "print-parsed-fields", "print-schema"} {

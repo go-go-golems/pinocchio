@@ -30,6 +30,28 @@ func TestRegisterDefaultTimelineHandlers_IsIdempotent(t *testing.T) {
 	require.Len(t, timelineHandlers["chat.message"], 1)
 }
 
+func TestClearTimelineHandlers_AllowsDefaultHandlersToBeReRegistered(t *testing.T) {
+	resetTimelineHandlerRegistryForTest(t)
+
+	RegisterDefaultTimelineHandlers()
+
+	timelineHandlersMu.RLock()
+	require.Len(t, timelineHandlers["chat.message"], 1)
+	timelineHandlersMu.RUnlock()
+
+	ClearTimelineHandlers()
+
+	timelineHandlersMu.RLock()
+	require.Len(t, timelineHandlers["chat.message"], 0)
+	timelineHandlersMu.RUnlock()
+
+	RegisterDefaultTimelineHandlers()
+
+	timelineHandlersMu.RLock()
+	defer timelineHandlersMu.RUnlock()
+	require.Len(t, timelineHandlers["chat.message"], 1)
+}
+
 func TestTimelineProjector_ChatMessageHandlerRequiresBootstrap(t *testing.T) {
 	resetTimelineHandlerRegistryForTest(t)
 

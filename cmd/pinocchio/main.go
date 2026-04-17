@@ -23,14 +23,13 @@ import (
 	pinocchio_docs "github.com/go-go-golems/pinocchio/cmd/pinocchio/doc"
 	"github.com/go-go-golems/pinocchio/pkg/cmds"
 	"github.com/go-go-golems/pinocchio/pkg/cmds/cmdlayers"
+	profilebootstrap "github.com/go-go-golems/pinocchio/pkg/cmds/profilebootstrap"
 	pkg_doc "github.com/go-go-golems/pinocchio/pkg/doc"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
 
 	clay_repositories "github.com/go-go-golems/clay/pkg/cmds/repositories"
-	glazedConfig "github.com/go-go-golems/glazed/pkg/config"
-	"github.com/rs/zerolog/log"
 
 	// New command management import
 	clay_commandmeta "github.com/go-go-golems/clay/pkg/cmds/commandmeta"
@@ -168,37 +167,13 @@ func initRootCmd() (*help.HelpSystem, error) {
 	return helpSystem, nil
 }
 
-// loadRepositoriesFromConfig reads repository paths from the config file
+// loadRepositoriesFromConfig reads repository paths from the unified layered pinocchio config document.
 func loadRepositoriesFromConfig() []string {
-	configPath, err := glazedConfig.ResolveAppConfigPath("pinocchio", "")
-	if err != nil || configPath == "" {
-		return []string{}
-	}
-
-	data, err := os.ReadFile(configPath)
+	repositoryPaths, err := profilebootstrap.ResolveRepositoryPaths()
 	if err != nil {
-		log.Debug().Err(err).Str("config", configPath).Msg("Could not read config file for repositories")
+		log.Debug().Err(err).Msg("Could not resolve repository paths from unified layered config")
 		return []string{}
 	}
-
-	var config map[string]interface{}
-	if err := yaml.Unmarshal(data, &config); err != nil {
-		log.Debug().Err(err).Str("config", configPath).Msg("Could not parse config file")
-		return []string{}
-	}
-
-	repos, ok := config["repositories"].([]interface{})
-	if !ok {
-		return []string{}
-	}
-
-	repositoryPaths := make([]string, 0, len(repos))
-	for _, repo := range repos {
-		if repoStr, ok := repo.(string); ok {
-			repositoryPaths = append(repositoryPaths, repoStr)
-		}
-	}
-
 	return repositoryPaths
 }
 
@@ -246,7 +221,7 @@ func initAllCommands(helpSystem *help.HelpSystem) error {
 		helpSystem,
 		rootCmd,
 		repositories_,
-		cli.WithCobraMiddlewaresFunc(sections2.GetCobraCommandGeppettoMiddlewares),
+		cli.WithCobraMiddlewaresFunc(cmds.GetPinocchioCommandMiddlewares),
 		cli.WithCobraShortHelpSections(schema.DefaultSlug, cmdlayers.GeppettoHelpersSlug),
 		cli.WithCreateCommandSettingsSection(),
 	)
@@ -273,7 +248,7 @@ func initAllCommands(helpSystem *help.HelpSystem) error {
 		return err
 	}
 	cobraClipCommand, err := cli.BuildCobraCommandFromCommand(clipCommand,
-		cli.WithCobraMiddlewaresFunc(sections2.GetCobraCommandGeppettoMiddlewares),
+		cli.WithCobraMiddlewaresFunc(cmds.GetPinocchioCommandMiddlewares),
 	)
 	if err != nil {
 		return err

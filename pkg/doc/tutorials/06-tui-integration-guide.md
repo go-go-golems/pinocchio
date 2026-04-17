@@ -1,6 +1,6 @@
 ---
 Title: Pinocchio TUI Integration Guide (Tool-Loop / Agent Mode)
-Slug: pinocchio-tui-integration-guide
+Slug: tui-integration-guide
 Short: Step-by-step guide to embed Pinocchio’s Bubble Tea + Bobatea terminal chat UI with the extracted tool-loop backend and agent forwarder.
 Topics:
 - pinocchio
@@ -347,7 +347,7 @@ If you do **not** need tool-loop/agent entities, Pinocchio already has a “simp
 - Backend: `pinocchio/pkg/ui/backend.go` (`EngineBackend`)
 - Forwarder: `pinocchio/pkg/ui/backend.go` (`StepChatForwardFunc`)
 
-See: `glaze help pinocchio-chatbuilder-guide`
+See: `pinocchio help chatbuilder-guide`
 
 ## Troubleshooting
 
@@ -363,6 +363,6 @@ See: `glaze help pinocchio-chatbuilder-guide`
 
 ## See Also
 
-- `glaze help pinocchio-chatbuilder-guide` (simple chat integration)
-- `glaze help webchat-debugging-and-ops` (debugging patterns that translate well to TUI event flows)
+- `pinocchio help chatbuilder-guide` (simple chat integration)
+- `pinocchio help webchat-debugging-and-ops` (debugging patterns that translate well to TUI event flows)
 - Agent forwarder implementation: `pinocchio/pkg/ui/forwarders/agent/forwarder.go`

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -10,7 +11,6 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cmds/fields"
 	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	profilebootstrap "github.com/go-go-golems/pinocchio/pkg/cmds/profilebootstrap"
-	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 )
 
@@ -62,6 +62,10 @@ func testValuesWithConfigFileClientSettings(t *testing.T, configFile string, tim
 }
 
 func TestWebChatProfileSelection_UsesSharedProfileSettingsSection(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+
 	parsed := testValuesWithProfileSettings(t, "analyst", []string{"./profiles.yaml"})
 
 	resolved, err := profilebootstrap.ResolveCLIProfileSelection(parsed)
@@ -85,7 +89,39 @@ func TestWebChatProfileSelection_DoesNotFallbackToDefaultRegistryFile(t *testing
 	require.Empty(t, resolved.ProfileRegistries)
 }
 
-func TestResolveBaseInferenceSettings_UsesDefaultsConfigAndEnv(t *testing.T) {
+func TestWebChatUnifiedProfileConfig_AllowsInlineProfilesWithoutExternalRegistries(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(tmpDir, "xdg"))
+	cwd, err := os.Getwd()
+	require.NoError(t, err)
+	defer func() { _ = os.Chdir(cwd) }()
+	require.NoError(t, os.Chdir(tmpDir))
+
+	configPath := filepath.Join(tmpDir, ".pinocchio.yml")
+	require.NoError(t, os.WriteFile(configPath, []byte(
+		"profile:\n  active: analyst\nprofiles:\n  analyst:\n    inference_settings:\n      chat:\n        api_type: openai-responses\n        engine: gpt-5-mini\n",
+	), 0o644))
+
+	resolvedConfig, err := profilebootstrap.ResolveUnifiedConfig(values.New())
+	require.NoError(t, err)
+	require.Equal(t, "analyst", resolvedConfig.ProfileSettings.Profile)
+	require.Empty(t, resolvedConfig.ProfileSettings.ProfileRegistries)
+
+	chain, err := profilebootstrap.ResolveUnifiedProfileRegistryChain(context.Background(), resolvedConfig)
+	require.NoError(t, err)
+	require.NotNil(t, chain)
+	require.NotNil(t, chain.Registry)
+	require.NotNil(t, chain.Reader)
+	require.Equal(t, "config-inline", chain.DefaultRegistrySlug.String())
+	require.Equal(t, "config-inline", chain.DefaultProfileResolve.RegistrySlug.String())
+	require.Equal(t, "analyst", chain.DefaultProfileResolve.EngineProfileSlug.String())
+	if chain.Close != nil {
+		defer chain.Close()
+	}
+}
+
+func TestResolveBaseInferenceSettings_UsesEnvAndReturnsResolvedUnifiedConfigFiles(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 	t.Setenv("PINOCCHIO_AI_ENGINE", "env-engine")
@@ -94,12 +130,12 @@ func TestResolveBaseInferenceSettings_UsesDefaultsConfigAndEnv(t *testing.T) {
 	require.NoError(t, os.MkdirAll(defaultDir, 0o755))
 	defaultConfig := filepath.Join(defaultDir, "config.yaml")
 	require.NoError(t, os.WriteFile(defaultConfig, []byte(
-		"ai-chat:\n  ai-engine: home-engine\nopenai-chat:\n  openai-api-key: home-key\n",
+		"profile:\n  active: default\nprofiles:\n  default:\n    inference_settings:\n      chat:\n        api_type: openai-responses\n        engine: gpt-5-mini\n",
 	), 0o644))
 
 	explicitConfig := filepath.Join(tmpDir, "override.yaml")
 	require.NoError(t, os.WriteFile(explicitConfig, []byte(
-		"openai-chat:\n  openai-api-key: explicit-key\n",
+		"profile:\n  active: other\n",
 	), 0o644))
 
 	stepSettings, configFiles, err := profilebootstrap.ResolveBaseInferenceSettings(testValuesWithConfigFile(t, explicitConfig))
@@ -107,7 +143,6 @@ func TestResolveBaseInferenceSettings_UsesDefaultsConfigAndEnv(t *testing.T) {
 	require.Equal(t, []string{defaultConfig, explicitConfig}, configFiles)
 	require.NotNil(t, stepSettings.Chat.Engine)
 	require.Equal(t, "env-engine", *stepSettings.Chat.Engine)
-	require.Equal(t, "explicit-key", stepSettings.API.APIKeys["openai-api-key"])
 	require.Equal(t, "https://api.openai.com/v1", stepSettings.API.BaseUrls["openai-base-url"])
 }
 
@@ -117,9 +152,6 @@ func TestWebChatCommand_UsesPinocchioConfigNamespaceAndExposesProfileAndAIClient
 
 	cobraCmd, err := cli.BuildCobraCommand(cmdDef, cli.WithParserConfig(cli.CobraParserConfig{
 		AppName: webChatCLIAppName,
-		ConfigFilesFunc: func(_ *values.Values, _ *cobra.Command, _ []string) ([]string, error) {
-			return nil, nil
-		},
 	}))
 	require.NoError(t, err)
 
@@ -150,12 +182,11 @@ func TestWebChatCommand_UsesPinocchioConfigNamespaceAndExposesProfileAndAIClient
 func TestResolveParsedBaseInferenceSettingsWithBase_AppliesWebChatClientCLIFlags(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
-
 	defaultDir := filepath.Join(tmpDir, ".pinocchio")
 	require.NoError(t, os.MkdirAll(defaultDir, 0o755))
 	defaultConfig := filepath.Join(defaultDir, "config.yaml")
 	require.NoError(t, os.WriteFile(defaultConfig, []byte(
-		"ai-chat:\n  ai-engine: home-engine\nai-client:\n  timeout: 30\n  proxy-url: http://config-proxy.internal:8080\n",
+		"profile:\n  active: default\n",
 	), 0o644))
 
 	parsed := testValuesWithConfigFileClientSettings(t, defaultConfig, 123, "http://cli-proxy.internal:8080")
@@ -163,10 +194,12 @@ func TestResolveParsedBaseInferenceSettingsWithBase_AppliesWebChatClientCLIFlags
 	hiddenBase, _, err := profilebootstrap.ResolveBaseInferenceSettings(parsed)
 	require.NoError(t, err)
 	require.NotNil(t, hiddenBase.Client)
-	require.NotNil(t, hiddenBase.Client.TimeoutSeconds)
-	require.Equal(t, 30, *hiddenBase.Client.TimeoutSeconds)
-	require.NotNil(t, hiddenBase.Client.ProxyURL)
-	require.Equal(t, "http://config-proxy.internal:8080", *hiddenBase.Client.ProxyURL)
+	if hiddenBase.Client.TimeoutSeconds != nil {
+		require.NotEqual(t, 123, *hiddenBase.Client.TimeoutSeconds)
+	}
+	if hiddenBase.Client.ProxyURL != nil {
+		require.NotEqual(t, "http://cli-proxy.internal:8080", *hiddenBase.Client.ProxyURL)
+	}
 
 	baseWithCLI, err := profilebootstrap.ResolveParsedBaseInferenceSettingsWithBase(parsed, hiddenBase)
 	require.NoError(t, err)

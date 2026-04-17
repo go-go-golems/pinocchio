@@ -1,6 +1,6 @@
 ---
 Title: Pinocchio JavaScript API User Guide
-Slug: pinocchio-js-api-user-guide
+Slug: js-api-user-guide
 Short: Practical guide for building timeline projections with Pinocchio JavaScript SEM scripts.
 Topics:
 - pinocchio

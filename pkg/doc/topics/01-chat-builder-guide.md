@@ -1,6 +1,6 @@
 ---
 Title: Pinocchio ChatBuilder Guide
-Slug: pinocchio-chatbuilder-guide
+Slug: chatbuilder-guide
 Short: Build terminal chat UIs with the unified ChatBuilder/ChatSession API and Watermill event routing.
 Topics:
 - pinocchio
