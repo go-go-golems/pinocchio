@@ -106,6 +106,7 @@ func ClearTimelineHandlers() {
 	timelineHandlers = map[string][]TimelineSemHandler{}
 	timelineRuntime = nil
 	timelineHandlersMu.Unlock()
+	resetTimelineHandlerBootstrapForTests()
 	closeTimelineRuntime(prev)
 }
 
