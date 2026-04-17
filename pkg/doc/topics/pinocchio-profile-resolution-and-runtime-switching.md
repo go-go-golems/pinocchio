@@ -1,6 +1,6 @@
 ---
 Title: Pinocchio Profile Resolution and Runtime Switching
-Slug: pinocchio-profile-resolution-runtime-switching
+Slug: profile-resolution-runtime-switching
 Short: How Pinocchio builds hidden base settings, merges engine profiles, and switches profiles at runtime without losing the underlying baseline.
 Topics:
 - pinocchio

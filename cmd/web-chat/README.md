@@ -1,6 +1,6 @@
 ---
 Title: Pinocchio Web-Chat Example
-Slug: pinocchio-web-chat
+Slug: web-chat
 Short: Handler-first webchat example with app-owned HTTP routes and SEM streaming.
 Topics:
 - webchat

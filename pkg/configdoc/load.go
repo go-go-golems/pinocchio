@@ -119,17 +119,17 @@ func validateTopLevelKeys(source string, root *yaml.Node) error {
 	})
 
 	var b strings.Builder
-	b.WriteString("this file was discovered by Pinocchio config resolution and is being decoded as a unified config document (standard config location, local .pinocchio.yml, or --config-file), but it contains unsupported legacy top-level keys:\n")
+	b.WriteString("unsupported legacy top-level keys in unified config:\n")
 	for _, finding := range findings {
-		if finding.legacy {
-			fmt.Fprintf(&b, "  - line %d: %s (legacy key; %s)\n", finding.line, finding.key, finding.reason)
-		} else {
-			fmt.Fprintf(&b, "  - line %d: %s (%s)\n", finding.line, finding.key, finding.reason)
+		fmt.Fprintf(&b, "  line %d: %s", finding.line, finding.key)
+		if finding.reason != "" {
+			fmt.Fprintf(&b, " -> %s", finding.reason)
 		}
+		b.WriteString("\n")
 	}
-	b.WriteString("supported top-level keys are: app, profile, profiles\n")
-	b.WriteString("Pinocchio is not trying to find or require these legacy keys; it is rejecting them because they belong to the removed pre-unified config shape\n")
-	b.WriteString("these keys are not treated as optional or ignored: Pinocchio decodes this document strictly so stale config files fail loudly instead of being partially ignored")
+	b.WriteString("supported top-level keys: app, profile, profiles\n")
+	b.WriteString("legacy keys are errors; they are not ignored\n")
+	b.WriteString("see: pinocchio help config-migration-guide")
 	return wrapConfigDocumentError(source, errors.New(strings.TrimSpace(b.String())))
 }
 

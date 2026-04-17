@@ -1,6 +1,6 @@
 ---
 Title: Pinocchio JavaScript API Reference
-Slug: pinocchio-js-api-reference
+Slug: js-api-reference
 Short: Contract reference for JavaScript SEM handlers and reducers loaded by web-chat.
 Topics:
 - pinocchio

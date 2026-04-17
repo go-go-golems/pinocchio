@@ -1,6 +1,6 @@
 ---
 Title: Migrating Legacy Pinocchio Config to Unified Profile Documents
-Slug: pinocchio-config-migration-guide
+Slug: config-migration-guide
 Short: Step-by-step migration guide from legacy Pinocchio config keys to the unified app/profile/profiles document model.
 Topics:
 - pinocchio

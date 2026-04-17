@@ -1,6 +1,6 @@
 ---
 Title: Pinocchio TUI Integration Playbook (Debugging + Ops)
-Slug: pinocchio-tui-integration-playbook
+Slug: tui-integration-playbook
 Short: Operational checklist and debugging playbook for Pinocchio terminal TUI integrations using Bobatea timeline entities and Watermill event routing.
 Topics:
 - pinocchio
@@ -23,7 +23,7 @@ This playbook is for when you already understand the architecture and you need t
 
 If you want the “intern-first” explanation of the whole system, start with:
 
-- `glaze help pinocchio-tui-integration-guide`
+- `pinocchio help tui-integration-guide`
 
 ## Quick Checklist: “Does my integration look correct?”
 
@@ -201,6 +201,6 @@ _ = context.Canceled // (placeholder so context import stays visible in pseudoco
 
 ## See Also
 
-- `glaze help pinocchio-chatbuilder-guide` (simple chat wiring via `ChatBuilder`)
-- `glaze help pinocchio-tui-integration-guide` (full intern-first integration tutorial)
-- `glaze help webchat-debugging-and-ops` (observability and debugging patterns)
+- `pinocchio help chatbuilder-guide` (simple chat wiring via `ChatBuilder`)
+- `pinocchio help tui-integration-guide` (full intern-first integration tutorial)
+- `pinocchio help webchat-debugging-and-ops` (observability and debugging patterns)

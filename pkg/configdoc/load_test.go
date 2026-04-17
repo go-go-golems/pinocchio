@@ -49,7 +49,7 @@ ai-chat:
 	if err == nil {
 		t.Fatal("expected old top-level runtime section to fail")
 	}
-	if !strings.Contains(err.Error(), "unsupported legacy top-level keys") {
+	if !strings.Contains(err.Error(), "unsupported legacy top-level keys in unified config") {
 		t.Fatalf("expected top-level-key guidance, got %v", err)
 	}
 	if !strings.Contains(err.Error(), "ai-chat") {
@@ -100,8 +100,9 @@ repositories:
 		"ai-chat",
 		"repositories",
 		"app.repositories",
-		"supported top-level keys are: app, profile, profiles",
-		"not treated as optional or ignored",
+		"supported top-level keys: app, profile, profiles",
+		"legacy keys are errors; they are not ignored",
+		"pinocchio help config-migration-guide",
 	} {
 		if !strings.Contains(err.Error(), needle) {
 			t.Fatalf("expected %q in error, got %v", needle, err)
