@@ -93,3 +93,16 @@ Fixed Gemini custom-http-client auth propagation, hard-cut the outer profile API
 - /home/manuel/workspaces/2026-04-18/fix-piniocchio-profile-env/pinocchio/README.md — Updated operator-facing profile YAML example to the new `inference_settings.api` layout
 - /home/manuel/.config/pinocchio/profiles.yaml — Local operator profiles migrated in place to the hard-cut schema
 
+
+## 2026-04-18
+
+Added explicit HTTP-client decision tracing to `--print-inference-settings`, verified it reports the exact branch reason, and confirmed the current machine is taking the custom-client path because final client settings resolve to an effective timeout of `0s`.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-04-18/fix-piniocchio-profile-env/geppetto/pkg/steps/ai/settings/http_client.go — Added structured HTTP-client decision explanation for default/custom/injected client paths
+- /home/manuel/workspaces/2026-04-18/fix-piniocchio-profile-env/geppetto/pkg/steps/ai/settings/http_client_test.go — Added coverage for the new HTTP-client decision helper
+- /home/manuel/workspaces/2026-04-18/fix-piniocchio-profile-env/geppetto/pkg/cli/bootstrap/inference_debug.go — `--print-inference-settings` now prints the HTTP-client decision block
+- /home/manuel/workspaces/2026-04-18/fix-piniocchio-profile-env/geppetto/pkg/cli/bootstrap/bootstrap_test.go — Debug-output test now asserts the HTTP-client block is present
+- /home/manuel/workspaces/2026-04-18/fix-piniocchio-profile-env/pinocchio/ttmp/2026/04/18/PIN-20260418-PROFILE-ENV-RESOLUTION--fix-pinocchio-profile-env-and-explicit-selection-resolution/reference/01-investigation-diary.md — Diary updated with the live trace results and next follow-up question about the `0s` timeout source
+

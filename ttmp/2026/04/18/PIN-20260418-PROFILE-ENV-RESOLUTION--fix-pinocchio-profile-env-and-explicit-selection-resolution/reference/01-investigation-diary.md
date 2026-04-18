@@ -640,6 +640,83 @@ At the same time, I hard-cut the awkward `inference_settings.api_keys.api_keys` 
 - Local operator migration backup:
   - `~/.config/pinocchio/profiles.yaml.bak-2026-04-18-api-hard-cut`
 
+## Step 9: Add explicit HTTP-client decision tracing and use it to explain the custom-client branch
+
+The user then asked the natural follow-up question: how can an operator tell why Geppetto created a custom HTTP client in the first place? I implemented a dedicated decision trace and wired it into `--print-inference-settings` so the answer is visible without adding ad hoc logging or recompiling with printf statements.
+
+The new trace immediately surfaced the current reason on this machine: the resolved `ClientSettings` reach `EnsureHTTPClient(...)` with an effective timeout of `0s`, so the helper treats that as a non-default timeout and builds a custom client. That means the new debug output is not just hypothetical plumbing; it already explains the exact branch that triggered the earlier Gemini issue.
+
+### What I did
+
+- Added `ExplainHTTPClientDecision(...)` to `geppetto/pkg/steps/ai/settings/http_client.go`.
+- Defined a structured debug payload containing:
+  - `mode` (`default-client`, `custom-client`, or `injected-client`)
+  - `effective_timeout`
+  - `proxy_from_environment`
+  - `proxy_mode`
+  - `reasons[]`
+- Wired that payload into `WriteInferenceSettingsDebugYAML(...)` so `--print-inference-settings` now prints an `http_client:` block above the resolved settings.
+- Added tests for default, timeout-driven custom, and injected-client cases.
+- Extended the bootstrap debug-output test to assert the new block is present.
+- Re-ran the real Pinocchio smoke command and confirmed the printed explanation on this machine is:
+  - `mode: custom-client`
+  - `effective_timeout: 0s`
+  - `reason: effective timeout is 0s instead of the default 1m0s`
+
+### Why
+
+- Operators need a stable answer to “why did this path stop reusing `http.DefaultClient`?” without patching code locally.
+- The Gemini incident showed that this branching matters operationally, because provider SDK behavior can differ once we leave the default-client path.
+
+### What worked
+
+- `go test ./pkg/steps/ai/settings ./pkg/cli/bootstrap -count=1` passed after the trace addition.
+- `PINOCCHIO_PROFILE=gemini-2.5-pro /tmp/pinocchio-smoke code professional hello --print-inference-settings` now prints a top-level `http_client:` block before the `settings:` block.
+- The live trace gave a concrete answer instead of a theory: on this machine the branch is caused by `effective_timeout: 0s`.
+
+### What didn't work
+
+- The trace does not yet fix the underlying `0s` timeout source by itself; it only makes the cause explicit.
+
+### What I learned
+
+- The debug trace confirmed that the current machine is not taking the custom-client path because of proxies. It is taking it because the effective timeout has collapsed to zero by the time final inference settings are built.
+- That explains why the earlier Gemini bug was reproducible even without obvious proxy or env configuration.
+
+### What was tricky to build
+
+- The tricky part was making the trace useful enough to explain real behavior without duplicating too much logic from `EnsureHTTPClient(...)`.
+
+### What warrants a second pair of eyes
+
+- Whether `effective_timeout == 0s` should remain a legitimate way to force a dedicated client, or whether final settings should normalize back to the default 60s timeout unless an operator explicitly requests something else.
+
+### What should be done in the future
+
+- Investigate where final `ClientSettings` lose the seeded 60s timeout, and decide whether that should be normalized during merge/bootstrap.
+- If we do normalize it, keep the new trace anyway; it is still useful for explicit proxy and injected-client debugging.
+
+### Code review instructions
+
+- Review:
+  - `geppetto/pkg/steps/ai/settings/http_client.go`
+  - `geppetto/pkg/steps/ai/settings/http_client_test.go`
+  - `geppetto/pkg/cli/bootstrap/inference_debug.go`
+  - `geppetto/pkg/cli/bootstrap/bootstrap_test.go`
+- Re-run:
+  - `cd geppetto && go test ./pkg/steps/ai/settings ./pkg/cli/bootstrap -count=1`
+  - `PINOCCHIO_PROFILE=gemini-2.5-pro /tmp/pinocchio-smoke code professional hello --print-inference-settings`
+
+### Technical details
+- New decision helper:
+  - `geppetto/pkg/steps/ai/settings/http_client.go`
+- New printed debug block:
+  - `geppetto/pkg/cli/bootstrap/inference_debug.go`
+- Observed live output on this machine:
+  - `http_client.mode: custom-client`
+  - `http_client.effective_timeout: 0s`
+  - `http_client.reasons[0]: effective timeout is 0s instead of the default 1m0s`
+
 ## Related
 
 - Design doc 1: `../design-doc/01-pinocchio-profile-env-and-explicit-profile-resolution-design.md`
