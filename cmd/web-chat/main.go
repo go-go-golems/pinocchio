@@ -14,7 +14,6 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cmds/fields"
 	"github.com/go-go-golems/glazed/pkg/cmds/logging"
 	"github.com/go-go-golems/glazed/pkg/cmds/values"
-	glazedconfig "github.com/go-go-golems/glazed/pkg/config"
 	"github.com/go-go-golems/glazed/pkg/help"
 	help_cmd "github.com/go-go-golems/glazed/pkg/help/cmd"
 	"github.com/pkg/errors"
@@ -119,17 +118,11 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 	if err := parsed.DecodeSectionInto(values.DefaultSlug, s); err != nil {
 		return errors.Wrap(err, "decode server settings")
 	}
-	profileRuntime, err := profilebootstrap.ResolveCLIProfileRuntime(ctx, parsed)
+	resolvedConfig, err := profilebootstrap.ResolveUnifiedConfig(parsed)
 	if err != nil {
-		return errors.Wrap(err, "resolve profile runtime")
+		return errors.Wrap(err, "resolve unified profile config")
 	}
-	if profileRuntime != nil && profileRuntime.Close != nil {
-		defer profileRuntime.Close()
-	}
-	profileSelection := &profilebootstrap.ResolvedCLIProfileSelection{}
-	if profileRuntime != nil && profileRuntime.ProfileSelection != nil {
-		profileSelection = profileRuntime.ProfileSelection
-	}
+	profileSelection := resolvedConfig.ProfileSettings
 	if len(profileSelection.ProfileRegistries) > 0 {
 		log.Info().
 			Strs("profile_registries", profileSelection.ProfileRegistries).
@@ -148,13 +141,21 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 		{Name: "category_regexp_reviewer", Prompt: "Review proposed regex patterns and assess over/under matching risks."},
 	})
 
+	registryChain, err := profilebootstrap.ResolveUnifiedProfileRegistryChain(ctx, resolvedConfig)
+	if err != nil {
+		return errors.Wrap(err, "initialize profile registry")
+	}
+	if registryChain != nil && registryChain.Close != nil {
+		defer registryChain.Close()
+	}
+
 	var (
 		profileRegistry     gepprofiles.Registry
 		defaultRegistrySlug gepprofiles.RegistrySlug
 	)
-	if profileRuntime != nil && profileRuntime.ProfileRegistryChain != nil {
-		profileRegistry = profileRuntime.ProfileRegistryChain.Registry
-		defaultRegistrySlug = profileRuntime.ProfileRegistryChain.DefaultRegistrySlug
+	if registryChain != nil {
+		profileRegistry = registryChain.Registry
+		defaultRegistrySlug = registryChain.DefaultRegistrySlug
 	}
 
 	middlewareRegistry, err := newWebChatMiddlewareDefinitionRegistry()
@@ -291,12 +292,9 @@ func main() {
 	c, err := NewCommand()
 	cobra.CheckErr(err)
 	command, err := cli.BuildCobraCommand(c, cli.WithParserConfig(cli.CobraParserConfig{
+		// Hidden base-settings parsing owns config-file loading so we can
+		// reuse pinocchio config conventions without exposing AI flags.
 		AppName: webChatCLIAppName,
-		ConfigPlanBuilder: func(_ *values.Values, _ *cobra.Command, _ []string) (*glazedconfig.Plan, error) {
-			// Hidden base-settings parsing owns config-file loading so we can
-			// reuse pinocchio config conventions without exposing AI flags.
-			return nil, nil
-		},
 	}))
 	cobra.CheckErr(err)
 	for _, name := range []string{"print-yaml", "print-parsed-fields", "print-schema"} {

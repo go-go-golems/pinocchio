@@ -20,7 +20,6 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cmds/fields"
 	"github.com/go-go-golems/glazed/pkg/cmds/logging"
 	"github.com/go-go-golems/glazed/pkg/cmds/values"
-	glazedconfig "github.com/go-go-golems/glazed/pkg/config"
 	"github.com/go-go-golems/glazed/pkg/help"
 	help_cmd "github.com/go-go-golems/glazed/pkg/help/cmd"
 	storepkg "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/store"
@@ -322,9 +321,6 @@ func main() {
 	cobra.CheckErr(err)
 	command, err := cli.BuildCobraCommand(c, cli.WithParserConfig(cli.CobraParserConfig{
 		AppName: "pinocchio",
-		ConfigPlanBuilder: func(_ *values.Values, _ *cobra.Command, _ []string) (*glazedconfig.Plan, error) {
-			return nil, nil
-		},
 	}))
 	cobra.CheckErr(err)
 	for _, name := range []string{"print-yaml", "print-parsed-fields", "print-schema"} {

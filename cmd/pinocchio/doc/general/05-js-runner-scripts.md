@@ -198,7 +198,7 @@ pinocchio js \
 If you do not pass the flag, Pinocchio still follows its normal discovery rules:
 
 - `PINOCCHIO_PROFILE_REGISTRIES`
-- `profile-settings.profile-registries` from `--config-file`
+- `profile.registries` from the merged unified config document (`--config-file` participates in that merge)
 - `${XDG_CONFIG_HOME:-~/.config}/pinocchio/profiles.yaml` when present
 
 ### `--config-file`
@@ -211,9 +211,9 @@ pinocchio js \
   --config-file ~/.config/pinocchio/config.yaml
 ```
 
-The command reads `profile-settings.profile-registries` and `profile-settings.profile` from that config file before applying explicit CLI overrides.
+The command reads `profile.registries` and `profile.active` from that unified config document before applying explicit CLI overrides.
 
-If the default or configured `profiles.yaml` still uses the old mixed-runtime format, rewrite it first to the engine-only `inference_settings` format. Use [examples/js/profiles/basic.yaml](/home/manuel/workspaces/2026-03-17/add-opinionated-apis/pinocchio/examples/js/profiles/basic.yaml) as the reference shape.
+If the default or configured `profiles.yaml` still uses the old mixed-runtime format, rewrite it first to the engine-only `inference_settings` format. Use [examples/js/profiles/basic.yaml](../../../examples/js/profiles/basic.yaml) as the reference shape.
 
 ### `--profile`
 
@@ -305,6 +305,7 @@ That separation is intentional:
 
 ## See Also
 
+- `pinocchio help config-migration-guide`
 - `pinocchio help profiles`
 - `pinocchio help webchat-profile-registry`
 - `pinocchio help webchat-runner-migration-guide`

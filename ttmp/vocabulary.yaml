@@ -43,6 +43,16 @@ topics:
       description: Command-line interface behavior and parsing
     - slug: aliases
       description: Command/prompt alias definitions and resolution behavior
+    - slug: design
+      description: Architecture and design work, especially forward-looking format or API proposals
+    - slug: sqleton
+      description: Sqleton CLI architecture, commands, and supporting systems
+    - slug: migration
+      description: Migration planning and execution for APIs, config, and architecture changes
+    - slug: cleanup
+      description: Cleanup, simplification, and removal of deprecated code paths
+    - slug: merge
+      description: Merge conflict analysis and resolution work
 docTypes:
     - slug: index
       description: Ticket index / overall plan

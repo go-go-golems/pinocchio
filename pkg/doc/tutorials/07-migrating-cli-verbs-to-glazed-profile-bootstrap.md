@@ -1,6 +1,6 @@
 ---
-Title: Pinocchio Companion: Migrating CLI Verbs to the Geppetto Bootstrap Path
-Slug: pinocchio-cli-profile-bootstrap-migration
+Title: "Pinocchio Companion: Migrating CLI Verbs to the Geppetto Bootstrap Path"
+Slug: cli-profile-bootstrap-migration
 Short: Pinocchio-specific companion to the generic Geppetto CLI bootstrap migration tutorial.
 Topics:
 - pinocchio

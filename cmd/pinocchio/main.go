@@ -6,14 +6,14 @@ import (
 	"os"
 	"path/filepath"
 
+	sections2 "github.com/go-go-golems/geppetto/pkg/sections"
+
 	clay "github.com/go-go-golems/clay/pkg"
 	"github.com/go-go-golems/clay/pkg/repositories"
 	"github.com/go-go-golems/geppetto/pkg/doc"
 	"github.com/go-go-golems/glazed/pkg/cli"
 	"github.com/go-go-golems/glazed/pkg/cmds/logging"
 	"github.com/go-go-golems/glazed/pkg/cmds/schema"
-	"github.com/go-go-golems/glazed/pkg/cmds/values"
-	glazedconfig "github.com/go-go-golems/glazed/pkg/config"
 	"github.com/go-go-golems/glazed/pkg/help"
 	help_cmd "github.com/go-go-golems/glazed/pkg/help/cmd"
 	pinocchio_cmds "github.com/go-go-golems/pinocchio/cmd/pinocchio/cmds"
@@ -26,11 +26,10 @@ import (
 	profilebootstrap "github.com/go-go-golems/pinocchio/pkg/cmds/profilebootstrap"
 	pkg_doc "github.com/go-go-golems/pinocchio/pkg/doc"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
 
 	clay_repositories "github.com/go-go-golems/clay/pkg/cmds/repositories"
-	"github.com/rs/zerolog/log"
 
 	// New command management import
 	clay_commandmeta "github.com/go-go-golems/clay/pkg/cmds/commandmeta"
@@ -158,7 +157,7 @@ func initRootCmd() (*help.HelpSystem, error) {
 	err = clay.InitGlazed("pinocchio", rootCmd)
 	cobra.CheckErr(err)
 
-	profileSettingsSection, err := profilebootstrap.NewProfileSettingsSection()
+	profileSettingsSection, err := sections2.NewProfileSettingsSection()
 	cobra.CheckErr(err)
 	err = profileSettingsSection.(schema.CobraSection).AddSectionToCobraCommand(rootCmd)
 	cobra.CheckErr(err)
@@ -168,58 +167,13 @@ func initRootCmd() (*help.HelpSystem, error) {
 	return helpSystem, nil
 }
 
-func pinocchioParserConfig() cli.CobraParserConfig {
-	bootstrapCfg := profilebootstrap.BootstrapConfig()
-	return cli.CobraParserConfig{
-		AppName: bootstrapCfg.AppName,
-		ConfigPlanBuilder: func(parsed *values.Values, _ *cobra.Command, _ []string) (*glazedconfig.Plan, error) {
-			return bootstrapCfg.ConfigPlanBuilder(parsed)
-		},
-		ShortHelpSections: []string{schema.DefaultSlug, cmdlayers.GeppettoHelpersSlug},
-	}
-}
-
-// loadRepositoriesFromConfig reads repository paths from the resolved config files.
+// loadRepositoriesFromConfig reads repository paths from the unified layered pinocchio config document.
 func loadRepositoriesFromConfig() []string {
-	configFiles, err := profilebootstrap.ResolveCLIConfigFiles(nil)
+	repositoryPaths, err := profilebootstrap.ResolveRepositoryPaths()
 	if err != nil {
-		log.Debug().Err(err).Msg("Could not resolve config files for repositories")
+		log.Debug().Err(err).Msg("Could not resolve repository paths from unified layered config")
 		return []string{}
 	}
-
-	repositoryPaths := []string{}
-	seen := map[string]struct{}{}
-	for _, configPath := range configFiles {
-		data, err := os.ReadFile(configPath)
-		if err != nil {
-			log.Debug().Err(err).Str("config", configPath).Msg("Could not read config file for repositories")
-			continue
-		}
-
-		var config map[string]interface{}
-		if err := yaml.Unmarshal(data, &config); err != nil {
-			log.Debug().Err(err).Str("config", configPath).Msg("Could not parse config file")
-			continue
-		}
-
-		repos, ok := config["repositories"].([]interface{})
-		if !ok {
-			continue
-		}
-
-		for _, repo := range repos {
-			repoStr, ok := repo.(string)
-			if !ok {
-				continue
-			}
-			if _, found := seen[repoStr]; found {
-				continue
-			}
-			seen[repoStr] = struct{}{}
-			repositoryPaths = append(repositoryPaths, repoStr)
-		}
-	}
-
 	return repositoryPaths
 }
 
@@ -267,7 +221,8 @@ func initAllCommands(helpSystem *help.HelpSystem) error {
 		helpSystem,
 		rootCmd,
 		repositories_,
-		cli.WithParserConfig(pinocchioParserConfig()),
+		cli.WithCobraMiddlewaresFunc(cmds.GetPinocchioCommandMiddlewares),
+		cli.WithCobraShortHelpSections(schema.DefaultSlug, cmdlayers.GeppettoHelpersSlug),
 		cli.WithCreateCommandSettingsSection(),
 	)
 	if err != nil {
@@ -292,7 +247,9 @@ func initAllCommands(helpSystem *help.HelpSystem) error {
 	if err != nil {
 		return err
 	}
-	cobraClipCommand, err := cmds.BuildCobraCommandWithGeppettoMiddlewares(clipCommand)
+	cobraClipCommand, err := cli.BuildCobraCommandFromCommand(clipCommand,
+		cli.WithCobraMiddlewaresFunc(cmds.GetPinocchioCommandMiddlewares),
+	)
 	if err != nil {
 		return err
 	}

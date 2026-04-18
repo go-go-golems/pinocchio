@@ -15,13 +15,14 @@ import (
 
 	clay "github.com/go-go-golems/clay/pkg"
 	geppettosections "github.com/go-go-golems/geppetto/pkg/sections"
+	"github.com/go-go-golems/glazed/pkg/cli"
 	"github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/cmds/fields"
 	"github.com/go-go-golems/glazed/pkg/cmds/logging"
 	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	"github.com/go-go-golems/glazed/pkg/help"
 	help_cmd "github.com/go-go-golems/glazed/pkg/help/cmd"
-	pinocchio_cmds "github.com/go-go-golems/pinocchio/pkg/cmds"
+	pinocchiocmds "github.com/go-go-golems/pinocchio/pkg/cmds"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -236,7 +237,7 @@ func main() {
 	c, err := NewSimpleRedisStreamingInferenceCommand()
 	cobra.CheckErr(err)
 
-	command, err := pinocchio_cmds.BuildCobraCommandWithGeppettoMiddlewares(c)
+	command, err := cli.BuildCobraCommand(c, cli.WithCobraMiddlewaresFunc(pinocchiocmds.GetPinocchioCommandMiddlewares))
 	cobra.CheckErr(err)
 	rootCmd.AddCommand(command)
 
