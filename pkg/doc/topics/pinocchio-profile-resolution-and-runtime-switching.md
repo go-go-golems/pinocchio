@@ -233,6 +233,49 @@ If `web-chat` ever wants explicit cross-profile `ai-client` CLI flags, it will n
 1. a public `ai-client` section on the command
 2. a base-resolution path that preserves those parsed CLI values when constructing the runtime baseline
 
+## App-Local Repository Config Is A Separate Path
+
+One subtlety that often confuses contributors is that Pinocchio's command repositories are **not** part of the shared Geppetto bootstrap sections.
+
+The top-level config key:
+
+- `repositories`
+
+is intentionally excluded by `pinocchio/pkg/cmds/profilebootstrap/configFileMapper(...)` before the shared bootstrap middleware sees the config file.
+
+That means there are two startup flows running side by side:
+
+```text
+shared bootstrap path
+  config/env/defaults -> section values -> profile selection -> registry chain -> inference settings
+
+root CLI repository path
+  resolved config files -> top-level repositories[] -> prompt directories -> command discovery
+```
+
+The repository path currently lives in:
+
+- `pinocchio/cmd/pinocchio/main.go`
+
+More specifically, `loadRepositoriesFromConfig()` does the following:
+
+1. calls `profilebootstrap.ResolveCLIConfigFiles(nil)` so repository discovery uses the same config-file plan as the shared bootstrap path
+2. reads every resolved config file in that returned order
+3. extracts the raw top-level `repositories` list from each file
+4. de-duplicates exact repeated repository strings
+5. appends `$HOME/.pinocchio/prompts`
+6. mounts only directories that exist
+
+This is important for architecture discussions because it explains why `repositories` should not be treated like a normal shared section:
+
+- it is Pinocchio application metadata, not Geppetto runtime/profile data
+- but it still follows the same config-file discovery stack so operator expectations stay consistent
+
+So the clean split is:
+
+- Geppetto/shared bootstrap owns profile/config/runtime resolution
+- Pinocchio root startup owns repository harvesting and command discovery
+
 ## Troubleshooting
 
 | Problem | Cause | Solution |
@@ -241,6 +284,7 @@ If `web-chat` ever wants explicit cross-profile `ai-client` CLI flags, it will n
 | A shared setting disappears after profile changes | The setting was treated like profile data instead of baseline data | Move it into the shared baseline section and preserve it in base reconstruction |
 | `web-chat` sees config/env settings but not equivalent CLI settings | Hidden base reconstruction currently rebuilds from env/config/defaults, not full parsed CLI values | Add a parsed-values-aware base path if widening `web-chat` CLI surface |
 | A contributor puts transport config into engine profiles | Ownership boundary between baseline and overlay is unclear | Treat `ai-client.*` and similar operator settings as baseline-only |
+| Repository changes in one config file do not behave like profile overrides | `repositories` is loaded as Pinocchio-local top-level app metadata across all resolved config files, not as a shared section merge | Inspect `cmd/pinocchio/main.go` and the resolved config-file stack, not just profile bootstrap |
 
 ## See Also
 

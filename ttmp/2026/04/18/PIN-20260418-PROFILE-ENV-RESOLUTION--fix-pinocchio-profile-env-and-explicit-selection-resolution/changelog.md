@@ -66,3 +66,15 @@ Implemented the shared fix in sequence: restored implicit app-owned XDG  fallbac
 - /home/manuel/workspaces/2026-04-18/fix-piniocchio-profile-env/pinocchio/cmd/web-chat/main.go — Web-chat now consumes shared profile-runtime resolution instead of local validation/loading
 - /home/manuel/workspaces/2026-04-18/fix-piniocchio-profile-env/pinocchio/pkg/cmds/helpers/parse-helpers.go — Helper path now uses shared profile selection instead of manually re-reading env state
 
+
+## 2026-04-18
+
+Re-ran the original PINOCCHIO_PROFILE smoke path safely with a built binary plus temporary XDG-only profiles.yaml, confirmed the selected profile overlay reaches final inference settings, and clarified repository/config merge semantics in the Pinocchio docs.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-04-18/fix-piniocchio-profile-env/pinocchio/README.md — README now documents the separate repositories loading path and exact merge behavior
+- /home/manuel/workspaces/2026-04-18/fix-piniocchio-profile-env/pinocchio/pkg/doc/topics/pinocchio-profile-resolution-and-runtime-switching.md — Topic doc now explains why repositories are Pinocchio-local app metadata outside shared bootstrap sections
+- /home/manuel/workspaces/2026-04-18/fix-piniocchio-profile-env/pinocchio/cmd/pinocchio/main.go — Runtime source of repository harvesting semantics described in the docs
+- /home/manuel/workspaces/2026-04-18/fix-piniocchio-profile-env/pinocchio/ttmp/2026/04/18/PIN-20260418-PROFILE-ENV-RESOLUTION--fix-pinocchio-profile-env-and-explicit-selection-resolution/reference/01-investigation-diary.md — Diary updated with the safe smoke validation details and the aborted unsafe JS-path attempt
+

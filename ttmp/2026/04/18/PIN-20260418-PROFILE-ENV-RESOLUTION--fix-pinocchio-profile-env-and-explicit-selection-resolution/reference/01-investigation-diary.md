@@ -466,6 +466,99 @@ After the code phases were committed, I updated the current shared tutorial docs
   - `remarquee upload bundle --force ...`
   - `remarquee cloud ls /ai/2026/04/18/PIN-20260418-PROFILE-ENV-RESOLUTION --long --non-interactive`
 
+## Step 6: Re-run the original smoke path safely and clarify repository/config merge semantics in docs
+
+After the implementation was committed, the user asked for two follow-up checks:
+
+1. a real smoke-style repro of the original `PINOCCHIO_PROFILE=... pinocchio ...` path
+2. a documentation pass around the repository/config merge behavior in `cmd/pinocchio/main.go`
+
+I first tried an unsafe smoke path (`go run ./cmd/pinocchio js --print-inference-settings`) and aborted it after it appeared to stall. That was a tooling mistake on my side: `go run` on a cold environment can spend a long time compiling/downloading, and the JS command is a worse smoke target than the ordinary prompt command path because it may initialize extra runtime behavior.
+
+I then switched to a bounded, non-interactive approach: build the CLI once, create a temporary XDG-only `profiles.yaml`, and run the original command family with `--print-inference-settings` so the process exits before real inference/network work.
+
+### Prompt Context
+
+**User prompt (verbatim):** "1. 2." followed by "why is this hanging??" and then "oh ok, do it again then, i can wait"
+
+**Assistant interpretation:** Perform the requested smoke validation and docs pass, but do it safely with timeouts and a command path that cannot block on interactive JS/runtime behavior.
+
+**Inferred user intent:** Prove that the original bug is gone in a realistic CLI path, then leave the repository/config interaction documented clearly enough that future contributors do not reintroduce ambiguity.
+
+**Commit (code):** pending for this follow-up docs-only pass
+
+### What I did
+- Built the CLI binary once:
+  - `cd pinocchio && go build -o /tmp/pinocchio-smoke ./cmd/pinocchio`
+- Created a temporary XDG-only profile registry at:
+  - `${TMPDIR}/pinocchio/profiles.yaml`
+- Ran the real command family with only `PINOCCHIO_PROFILE` set and no explicit `--profile-registries`:
+  - `XDG_CONFIG_HOME=$tmp HOME=$tmp PINOCCHIO_PROFILE=gemini-2.5-pro /tmp/pinocchio-smoke code professional hello --print-inference-settings`
+- Confirmed the process exited successfully and the debug output contained:
+  - `engine: smoke-engine-from-profile`
+  - `profile_slug: gemini-2.5-pro`
+  - `source: profile`
+- Updated docs to explain that Pinocchio repository loading is intentionally separate from shared bootstrap section mapping:
+  - `pinocchio/README.md`
+  - `pinocchio/pkg/doc/topics/pinocchio-profile-resolution-and-runtime-switching.md`
+
+### Why
+- `--print-inference-settings` is the safest smoke target because it exercises config/profile/bootstrap resolution but exits before real provider calls.
+- Building once avoids repeated `go run` compile/download overhead and makes the smoke command deterministic.
+- The repository/config docs were worth clarifying because `repositories` is intentionally stripped by the Pinocchio config mapper and then re-read separately in `cmd/pinocchio/main.go`, which is easy to misread as a bug if undocumented.
+
+### What worked
+- The safe smoke command returned `STATUS=0`.
+- The debug output proved that implicit XDG registry discovery worked and that the selected profile overlay was actually applied:
+  - `engine: smoke-engine-from-profile`
+  - `profile_slug: gemini-2.5-pro`
+  - `source: profile`
+- The doc updates now explicitly describe how `loadRepositoriesFromConfig()`:
+  - uses the same resolved config-file stack as bootstrap,
+  - reads top-level `repositories` from all resolved config files,
+  - de-dupes exact repeated repository strings,
+  - appends `$HOME/.pinocchio/prompts`,
+  - and mounts only existing directories.
+
+### What didn't work
+- The first attempt used:
+  - `go run ./cmd/pinocchio js --print-inference-settings`
+- That path was a poor choice for smoke validation and was aborted after appearing to hang.
+- The problem was not the profile fix itself; it was my choice of command path plus `go run` cold-start overhead.
+
+### What I learned
+- The original regression is fixed in the real CLI path the user reported, not just in unit tests.
+- `--print-inference-settings` is the right smoke harness for profile/bootstrap debugging because it proves overlay application without requiring credentials.
+- The repository/config split is architectural, not accidental: shared bootstrap owns runtime/profile/config sections, while the Pinocchio root command owns repository harvesting.
+
+### What was tricky to build
+- The main tricky part was choosing a smoke command that was realistic enough to prove the fix while still guaranteed to terminate quickly.
+- Another subtlety is that `--print-parsed-fields` is not enough to prove profile overlay application; it shows parsed values, not necessarily the final merged inference settings. `--print-inference-settings` was the correct validation surface.
+
+### What warrants a second pair of eyes
+- Whether we also want a committed Go integration test that shells out to the built Pinocchio binary with only XDG `profiles.yaml` present, matching this manual smoke flow.
+- Whether the repository loading order across multiple resolved config files should eventually be documented in a dedicated repository/discovery topic rather than only in the README and profile/runtime topic.
+
+### What should be done in the future
+- Add an automated shell-out smoke/integration test for the exact `PINOCCHIO_PROFILE=... code professional hello --print-inference-settings` scenario.
+- If repository-discovery semantics become more complex, extract them into a dedicated user-facing topic instead of leaving them as a subsection in broader docs.
+
+### Code review instructions
+- Re-run the smoke command with a temporary XDG directory and confirm the final debug output shows the profile-applied engine.
+- Review:
+  - `pinocchio/README.md`
+  - `pinocchio/pkg/doc/topics/pinocchio-profile-resolution-and-runtime-switching.md`
+  - `pinocchio/cmd/pinocchio/main.go`
+
+### Technical details
+- Safe smoke commands run:
+  - `cd pinocchio && go build -o /tmp/pinocchio-smoke ./cmd/pinocchio`
+  - `XDG_CONFIG_HOME=$tmp HOME=$tmp PINOCCHIO_PROFILE=gemini-2.5-pro /tmp/pinocchio-smoke code professional hello --print-inference-settings`
+- Output evidence captured from the debug output:
+  - `engine: smoke-engine-from-profile`
+  - `profile_slug: gemini-2.5-pro`
+  - `source: profile`
+
 ## Related
 
 - Design doc 1: `../design-doc/01-pinocchio-profile-env-and-explicit-profile-resolution-design.md`

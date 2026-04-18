@@ -97,6 +97,37 @@ Profile-selection precedence:
 1. `--profile`
 2. `PINOCCHIO_PROFILE`
 3. `profile-settings.profile` in the selected config file
+
+## Repository loading from layered config
+
+Pinocchio command repositories are **not** part of the shared Geppetto section model.
+They stay as a Pinocchio-local top-level config key:
+
+- `repositories`
+
+That means two related but different config passes happen at startup:
+
+1. shared Geppetto/Pinocchio bootstrap loads section-shaped config such as `profile-settings`, `ai-chat`, and `ai-client`
+2. the root CLI then separately reads `repositories` from the resolved Pinocchio config files in `cmd/pinocchio/main.go`
+
+Current behavior in `loadRepositoriesFromConfig()` is:
+
+1. resolve the config-file stack through the same Pinocchio config plan used by bootstrap
+2. read the top-level `repositories` list from **every** resolved config file, not just the highest-precedence one
+3. append repository entries in resolved-config order
+4. de-duplicate exact repeated repository strings
+5. append the default local prompt directory `$HOME/.pinocchio/prompts`
+6. mount only directories that actually exist on disk
+
+This split is intentional:
+
+- shared bootstrap should not try to interpret Pinocchio-specific repository metadata
+- Pinocchio still needs repository loading to follow the same config-file discovery rules as profile/config resolution
+
+If you are debugging command discovery, inspect both:
+
+- `pinocchio/pkg/cmds/profilebootstrap/profile_selection.go`
+- `pinocchio/cmd/pinocchio/main.go`
 4. the registry default profile (`default_profile_slug` or slug `default`)
 
 Example:
