@@ -41,6 +41,8 @@ topics:
       description: Runtime execution, engine construction, and profile switching
     - slug: cli
       description: Command-line interface behavior and parsing
+    - slug: aliases
+      description: Command/prompt alias definitions and resolution behavior
 docTypes:
     - slug: index
       description: Ticket index / overall plan
