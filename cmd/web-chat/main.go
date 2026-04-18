@@ -14,6 +14,7 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cmds/fields"
 	"github.com/go-go-golems/glazed/pkg/cmds/logging"
 	"github.com/go-go-golems/glazed/pkg/cmds/values"
+	glazedconfig "github.com/go-go-golems/glazed/pkg/config"
 	"github.com/go-go-golems/glazed/pkg/help"
 	help_cmd "github.com/go-go-golems/glazed/pkg/help/cmd"
 	"github.com/pkg/errors"
@@ -118,15 +119,16 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 	if err := parsed.DecodeSectionInto(values.DefaultSlug, s); err != nil {
 		return errors.Wrap(err, "decode server settings")
 	}
-	profileSelection, err := profilebootstrap.ResolveCLIProfileSelection(parsed)
+	profileRuntime, err := profilebootstrap.ResolveCLIProfileRuntime(ctx, parsed)
 	if err != nil {
-		return errors.Wrap(err, "resolve profile selection")
+		return errors.Wrap(err, "resolve profile runtime")
 	}
-	if profileSelection.Profile != "" && len(profileSelection.ProfileRegistries) == 0 {
-		return &gepprofiles.ValidationError{
-			Field:  "profile-settings.profile-registries",
-			Reason: "must be configured when profile-settings.profile is set",
-		}
+	if profileRuntime != nil && profileRuntime.Close != nil {
+		defer profileRuntime.Close()
+	}
+	profileSelection := &profilebootstrap.ResolvedCLIProfileSelection{}
+	if profileRuntime != nil && profileRuntime.ProfileSelection != nil {
+		profileSelection = profileRuntime.ProfileSelection
 	}
 	if len(profileSelection.ProfileRegistries) > 0 {
 		log.Info().
@@ -147,27 +149,12 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 	})
 
 	var (
-		profileRegistry        gepprofiles.Registry
-		defaultRegistrySlug    gepprofiles.RegistrySlug
-		profileRegistryCleanup func()
+		profileRegistry     gepprofiles.Registry
+		defaultRegistrySlug gepprofiles.RegistrySlug
 	)
-	if len(profileSelection.ProfileRegistries) > 0 {
-		profileRegistrySpecs, err := gepprofiles.ParseRegistrySourceSpecs(profileSelection.ProfileRegistries)
-		if err != nil {
-			return errors.Wrap(err, "parse profile registry source specs")
-		}
-		profileRegistryChain, err := gepprofiles.NewChainedRegistryFromSourceSpecs(ctx, profileRegistrySpecs)
-		if err != nil {
-			return errors.Wrap(err, "initialize profile registry")
-		}
-		profileRegistry = profileRegistryChain
-		defaultRegistrySlug = profileRegistryChain.DefaultRegistrySlug()
-		profileRegistryCleanup = func() {
-			_ = profileRegistryChain.Close()
-		}
-	}
-	if profileRegistryCleanup != nil {
-		defer profileRegistryCleanup()
+	if profileRuntime != nil && profileRuntime.ProfileRegistryChain != nil {
+		profileRegistry = profileRuntime.ProfileRegistryChain.Registry
+		defaultRegistrySlug = profileRuntime.ProfileRegistryChain.DefaultRegistrySlug
 	}
 
 	middlewareRegistry, err := newWebChatMiddlewareDefinitionRegistry()
@@ -305,7 +292,7 @@ func main() {
 	cobra.CheckErr(err)
 	command, err := cli.BuildCobraCommand(c, cli.WithParserConfig(cli.CobraParserConfig{
 		AppName: webChatCLIAppName,
-		ConfigFilesFunc: func(_ *values.Values, _ *cobra.Command, _ []string) ([]string, error) {
+		ConfigPlanBuilder: func(_ *values.Values, _ *cobra.Command, _ []string) (*glazedconfig.Plan, error) {
 			// Hidden base-settings parsing owns config-file loading so we can
 			// reuse pinocchio config conventions without exposing AI flags.
 			return nil, nil

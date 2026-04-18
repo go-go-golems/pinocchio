@@ -10,10 +10,35 @@ import (
 	profilebootstrap "github.com/go-go-golems/pinocchio/pkg/cmds/profilebootstrap"
 )
 
-func TestLoadPinocchioProfileRegistryStackRejectsProfileWithoutRegistries(t *testing.T) {
+func TestLoadPinocchioProfileRegistryStackUsesImplicitDefaultRegistryFallback(t *testing.T) {
 	tmpDir := t.TempDir()
-	t.Setenv("XDG_CONFIG_HOME", filepath.Join(tmpDir, "xdg"))
+	xdgDir := filepath.Join(tmpDir, "xdg")
+	t.Setenv("XDG_CONFIG_HOME", xdgDir)
 	t.Setenv("HOME", tmpDir)
+
+	registryPath := filepath.Join(xdgDir, "pinocchio", "profiles.yaml")
+	if err := os.MkdirAll(filepath.Dir(registryPath), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	registryYAML := `
+slug: workspace
+profiles:
+  default:
+    slug: default
+    inference_settings:
+      chat:
+        api_type: openai
+        engine: default-model
+  analyst:
+    slug: analyst
+    inference_settings:
+      chat:
+        api_type: openai
+        engine: analyst-model
+`
+	if err := os.WriteFile(registryPath, []byte(registryYAML), 0o644); err != nil {
+		t.Fatalf("write registry: %v", err)
+	}
 
 	profileSection, err := profilebootstrap.NewProfileSettingsSection()
 	if err != nil {
@@ -30,12 +55,22 @@ func TestLoadPinocchioProfileRegistryStackRejectsProfileWithoutRegistries(t *tes
 	parsed := values.New()
 	parsed.Set(profilebootstrap.ProfileSettingsSectionSlug, profileValues)
 
-	_, _, _, err = loadPinocchioProfileRegistryStack(parsed)
-	if err == nil {
-		t.Fatal("expected profile selection without registries to fail")
+	reader, defaultResolve, closer, err := loadPinocchioProfileRegistryStack(parsed)
+	if err != nil {
+		t.Fatalf("loadPinocchioProfileRegistryStack failed: %v", err)
 	}
-	if got := err.Error(); got == "" || got == "analyst" {
-		t.Fatalf("expected validation error, got %q", got)
+	if closer != nil {
+		defer func() { _ = closer.Close() }()
+	}
+	if reader == nil {
+		t.Fatal("expected registry reader")
+	}
+	resolved, err := reader.ResolveEngineProfile(context.Background(), defaultResolve)
+	if err != nil {
+		t.Fatalf("ResolveEngineProfile failed: %v", err)
+	}
+	if got := resolved.EngineProfileSlug.String(); got != "analyst" {
+		t.Fatalf("expected analyst profile, got %q", got)
 	}
 }
 

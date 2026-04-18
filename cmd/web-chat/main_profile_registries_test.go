@@ -9,6 +9,7 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cli"
 	"github.com/go-go-golems/glazed/pkg/cmds/fields"
 	"github.com/go-go-golems/glazed/pkg/cmds/values"
+	glazedconfig "github.com/go-go-golems/glazed/pkg/config"
 	profilebootstrap "github.com/go-go-golems/pinocchio/pkg/cmds/profilebootstrap"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
@@ -70,7 +71,7 @@ func TestWebChatProfileSelection_UsesSharedProfileSettingsSection(t *testing.T) 
 	require.Equal(t, []string{"./profiles.yaml"}, resolved.ProfileRegistries)
 }
 
-func TestWebChatProfileSelection_DoesNotFallbackToDefaultRegistryFile(t *testing.T) {
+func TestWebChatProfileSelection_UsesImplicitDefaultRegistryFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)
 	t.Setenv("HOME", tmpDir)
@@ -82,7 +83,7 @@ func TestWebChatProfileSelection_DoesNotFallbackToDefaultRegistryFile(t *testing
 
 	resolved, err := profilebootstrap.ResolveCLIProfileSelection(values.New())
 	require.NoError(t, err)
-	require.Empty(t, resolved.ProfileRegistries)
+	require.Equal(t, []string{profilesPath}, resolved.ProfileRegistries)
 }
 
 func TestResolveBaseInferenceSettings_UsesDefaultsConfigAndEnv(t *testing.T) {
@@ -117,7 +118,7 @@ func TestWebChatCommand_UsesPinocchioConfigNamespaceAndExposesProfileAndAIClient
 
 	cobraCmd, err := cli.BuildCobraCommand(cmdDef, cli.WithParserConfig(cli.CobraParserConfig{
 		AppName: webChatCLIAppName,
-		ConfigFilesFunc: func(_ *values.Values, _ *cobra.Command, _ []string) ([]string, error) {
+		ConfigPlanBuilder: func(_ *values.Values, _ *cobra.Command, _ []string) (*glazedconfig.Plan, error) {
 			return nil, nil
 		},
 	}))

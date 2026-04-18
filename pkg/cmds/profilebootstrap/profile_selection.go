@@ -1,11 +1,16 @@
 package profilebootstrap
 
 import (
+	"context"
+	"strings"
+
 	"github.com/go-go-golems/geppetto/pkg/cli/bootstrap"
 	geppettosections "github.com/go-go-golems/geppetto/pkg/sections"
+	"github.com/go-go-golems/glazed/pkg/cli"
 	"github.com/go-go-golems/glazed/pkg/cmds/schema"
 	"github.com/go-go-golems/glazed/pkg/cmds/sources"
 	"github.com/go-go-golems/glazed/pkg/cmds/values"
+	glazedconfig "github.com/go-go-golems/glazed/pkg/config"
 	"github.com/pkg/errors"
 )
 
@@ -13,10 +18,11 @@ const ProfileSettingsSectionSlug = bootstrap.ProfileSettingsSectionSlug
 
 type ProfileSettings = bootstrap.ProfileSettings
 type ResolvedCLIProfileSelection = bootstrap.ResolvedCLIProfileSelection
+type ResolvedCLIProfileRuntime = bootstrap.ResolvedCLIProfileRuntime
 type CLISelectionInput = bootstrap.CLISelectionInput
 
 func pinocchioBootstrapConfig() bootstrap.AppBootstrapConfig {
-	return bootstrap.AppBootstrapConfig{
+	cfg := bootstrap.AppBootstrapConfig{
 		AppName:          "pinocchio",
 		EnvPrefix:        "PINOCCHIO",
 		ConfigFileMapper: configFileMapper,
@@ -27,6 +33,25 @@ func pinocchioBootstrapConfig() bootstrap.AppBootstrapConfig {
 			return geppettosections.CreateGeppettoSections()
 		},
 	}
+	cfg.ConfigPlanBuilder = func(parsed *values.Values) (*glazedconfig.Plan, error) {
+		explicit := ""
+		if parsed != nil {
+			commandSettings := &cli.CommandSettings{}
+			if err := parsed.DecodeSectionInto(cli.CommandSettingsSlug, commandSettings); err == nil {
+				explicit = strings.TrimSpace(commandSettings.ConfigFile)
+			}
+		}
+		return glazedconfig.NewPlan(
+			glazedconfig.WithLayerOrder(glazedconfig.LayerSystem, glazedconfig.LayerUser, glazedconfig.LayerExplicit),
+			glazedconfig.WithDedupePaths(),
+		).Add(
+			glazedconfig.SystemAppConfig(cfg.AppName).Named("system-app-config").Kind("app-config"),
+			glazedconfig.XDGAppConfig(cfg.AppName).Named("xdg-app-config").Kind("app-config"),
+			glazedconfig.HomeAppConfig(cfg.AppName).Named("home-app-config").Kind("app-config"),
+			glazedconfig.ExplicitFile(explicit).Named("explicit-config").Kind("explicit-file"),
+		), nil
+	}
+	return cfg
 }
 
 func BootstrapConfig() bootstrap.AppBootstrapConfig {
@@ -47,6 +72,10 @@ func ResolveCLIProfileSelection(parsed *values.Values) (*ResolvedCLIProfileSelec
 
 func ResolveEngineProfileSettings(parsed *values.Values) (ProfileSettings, []string, error) {
 	return bootstrap.ResolveEngineProfileSettings(pinocchioBootstrapConfig(), parsed)
+}
+
+func ResolveCLIProfileRuntime(ctx context.Context, parsed *values.Values) (*ResolvedCLIProfileRuntime, error) {
+	return bootstrap.ResolveCLIProfileRuntime(ctx, pinocchioBootstrapConfig(), parsed)
 }
 
 func NewCLISelectionValues(input CLISelectionInput) (*values.Values, error) {

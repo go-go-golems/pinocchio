@@ -228,46 +228,43 @@ func resolveJSScriptPath(settings *JSSettings) (string, error) {
 }
 
 func loadPinocchioProfileRegistryStack(parsed *values.Values) (gepprofiles.RegistryReader, gepprofiles.ResolveInput, io.Closer, error) {
-	profileSettings, _, err := profilebootstrap.ResolveEngineProfileSettings(parsed)
+	profileRuntime, err := profilebootstrap.ResolveCLIProfileRuntime(context.Background(), parsed)
 	if err != nil {
 		return nil, gepprofiles.ResolveInput{}, nil, err
 	}
-	return loadPinocchioProfileRegistryStackFromSettings(profileSettings)
+	reader, defaultResolve, err := loadPinocchioProfileRegistryStackFromRuntime(profileRuntime)
+	if err != nil {
+		if profileRuntime != nil && profileRuntime.Close != nil {
+			profileRuntime.Close()
+		}
+		return nil, gepprofiles.ResolveInput{}, nil, err
+	}
+	var closer io.Closer
+	if profileRuntime != nil && profileRuntime.Close != nil {
+		closer = closeFuncCloser(profileRuntime.Close)
+	}
+	return reader, defaultResolve, closer, nil
 }
 
-func loadPinocchioProfileRegistryStackFromSettings(profileSettings profilebootstrap.ProfileSettings) (gepprofiles.RegistryReader, gepprofiles.ResolveInput, io.Closer, error) {
-	if len(profileSettings.ProfileRegistries) == 0 {
-		if profileSettings.Profile != "" {
-			return nil, gepprofiles.ResolveInput{}, nil, &gepprofiles.ValidationError{
-				Field:  "profile-settings.profile-registries",
-				Reason: "must be configured when profile-settings.profile is set",
-			}
-		}
-		return nil, gepprofiles.ResolveInput{}, nil, nil
+func loadPinocchioProfileRegistryStackFromRuntime(profileRuntime *profilebootstrap.ResolvedCLIProfileRuntime) (gepprofiles.RegistryReader, gepprofiles.ResolveInput, error) {
+	if profileRuntime == nil || profileRuntime.ProfileRegistryChain == nil || profileRuntime.ProfileRegistryChain.Reader == nil {
+		return nil, gepprofiles.ResolveInput{}, nil
 	}
-	specs, err := gepprofiles.ParseRegistrySourceSpecs(profileSettings.ProfileRegistries)
-	if err != nil {
-		return nil, gepprofiles.ResolveInput{}, nil, err
-	}
-	chain, err := gepprofiles.NewChainedRegistryFromSourceSpecs(context.Background(), specs)
-	if err != nil {
-		return nil, gepprofiles.ResolveInput{}, nil, err
-	}
-	defaultResolve := gepprofiles.ResolveInput{}
-	var reader gepprofiles.RegistryReader = chain
-	if profileSettings.Profile != "" {
-		profileSlug, err := gepprofiles.ParseEngineProfileSlug(profileSettings.Profile)
+
+	defaultResolve := profileRuntime.ProfileRegistryChain.DefaultProfileResolve
+	reader := profileRuntime.ProfileRegistryChain.Reader
+	if profileRuntime.ProfileSelection != nil && profileRuntime.ProfileSelection.Profile != "" {
+		profileSlug, err := gepprofiles.ParseEngineProfileSlug(profileRuntime.ProfileSelection.Profile)
 		if err != nil {
-			_ = chain.Close()
-			return nil, gepprofiles.ResolveInput{}, nil, err
+			return nil, gepprofiles.ResolveInput{}, err
 		}
 		defaultResolve.EngineProfileSlug = profileSlug
 		reader = selectedProfileRegistryReader{
-			base:            chain,
+			base:            reader,
 			selectedProfile: profileSlug,
 		}
 	}
-	return reader, defaultResolve, chain, nil
+	return reader, defaultResolve, nil
 }
 
 type pinocchioJSRuntimeBootstrap struct {
@@ -285,10 +282,7 @@ func resolvePinocchioJSRuntimeBootstrap(ctx context.Context, parsed *values.Valu
 		return nil, err
 	}
 
-	profileRegistry, defaultResolve, registryCloser, err := loadPinocchioProfileRegistryStackFromSettings(profilebootstrap.ProfileSettings{
-		Profile:           resolved.ProfileSelection.Profile,
-		ProfileRegistries: append([]string(nil), resolved.ProfileSelection.ProfileRegistries...),
-	})
+	profileRegistry, defaultResolve, err := loadPinocchioProfileRegistryStackFromRuntime(resolved.ProfileRuntime)
 	if err != nil {
 		if resolved.Close != nil {
 			resolved.Close()
@@ -303,14 +297,20 @@ func resolvePinocchioJSRuntimeBootstrap(ctx context.Context, parsed *values.Valu
 		UseDefaultProfileResolve: profileRegistry != nil,
 		DefaultProfileResolve:    defaultResolve,
 		Close: func() {
-			if registryCloser != nil {
-				_ = registryCloser.Close()
-			}
 			if resolved.Close != nil {
 				resolved.Close()
 			}
 		},
 	}, nil
+}
+
+type closeFuncCloser func()
+
+func (c closeFuncCloser) Close() error {
+	if c != nil {
+		c()
+	}
+	return nil
 }
 
 type selectedProfileRegistryReader struct {
