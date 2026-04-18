@@ -38,33 +38,33 @@
 
 ## Phase 4 — Focused validation after conflict resolution
 
-- [ ] Confirm the working tree has no unresolved conflicts and no accidental resurrected helper files.
+- [x] Confirm the working tree has no unresolved conflicts and no accidental resurrected helper files.
 - [x] Run focused Pinocchio package validation in the workspace:
   - `cd pinocchio && go test ./pkg/cmds/... ./cmd/pinocchio/... ./cmd/web-chat -count=1`
 - [x] Run focused unified-config/bootstrap tests in the workspace:
   - `cd pinocchio && go test ./pkg/cmds/profilebootstrap ./pkg/configdoc -count=1`
 - [x] Rebuild the CLI with the workspace modules in effect:
   - `cd pinocchio && go build -o /tmp/pinocchio-merge-check ./cmd/pinocchio`
-- [ ] Re-run the original safe profile-selection smoke path:
+- [x] Re-run the original safe profile-selection smoke path:
   - `PINOCCHIO_PROFILE=gemini-2.5-pro /tmp/pinocchio-merge-check code professional hello --print-inference-settings`
-- [ ] Inspect the debug output for the expected profile-selection evidence:
+- [x] Inspect the debug output for the expected profile-selection evidence:
   - selected profile slug
   - final engine from the selected profile
   - source/provenance showing profile application
   - `http_client:` decision block still present if using the local Geppetto workspace
-- [ ] Re-run a real non-debug runtime smoke path if provider credentials/config are available:
+- [x] Re-run a real non-debug runtime smoke path if provider credentials/config are available:
   - `PINOCCHIO_PROFILE=gemini-2.5-pro /tmp/pinocchio-merge-check code professional hello`
-- [ ] Re-run a command-discovery smoke path to ensure startup/repository loading still works:
+- [x] Re-run a command-discovery smoke path to ensure startup/repository loading still works:
   - `/tmp/pinocchio-merge-check --help`
-- [ ] Re-run a JS/bootstrap smoke path if that conflict required manual resolution:
+- [x] Re-run a JS/bootstrap smoke path if that conflict required manual resolution:
   - `/tmp/pinocchio-merge-check js --help`
   - optional focused script smoke if needed
 
 ## Phase 5 — Broader validation and bookkeeping
 
-- [ ] Run broader repo validation only after focused bootstrap tests pass:
+- [x] Run broader repo validation only after focused bootstrap tests pass:
   - `cd pinocchio && go test ./... -count=1`
-- [ ] Recheck `git status` to ensure only intentional merge-resolution results remain.
-- [ ] Update this ticket docs with the final resolution decision, what was kept from upstream, and what was replayed from the branch.
-- [ ] Run `docmgr doctor --ticket PIN-20260418-MERGE-BOOTSTRAP-CONFLICT --stale-after 30`.
+- [x] Recheck `git status` to ensure only intentional merge-resolution results remain.
+- [x] Update this ticket docs with the final resolution decision, what was kept from upstream, and what was replayed from the branch.
+- [x] Run `docmgr doctor --ticket PIN-20260418-MERGE-BOOTSTRAP-CONFLICT --stale-after 30`.
 

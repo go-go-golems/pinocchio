@@ -51,3 +51,13 @@ Resolved the remaining Stage B conflicts to the upstream unified-config baseline
 - /home/manuel/workspaces/2026-04-18/fix-piniocchio-profile-env/pinocchio/README.md — Kept the newer operator-facing `inference_settings.api` hard-cut note while resolving the docs conflict
 - /home/manuel/workspaces/2026-04-18/fix-piniocchio-profile-env/pinocchio/cmd/examples/simple-chat/main.go — Example command resolved to the upstream parser/config baseline
 
+## 2026-04-18
+
+Validated the merged baseline end-to-end, confirmed the original `PINOCCHIO_PROFILE=... --print-inference-settings` smoke path still works after the merge checkpoint, ran the full Pinocchio test suite, and recorded one remaining semantic follow-up around selection-layer fallback visibility versus successful runtime resolution.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-04-18/fix-piniocchio-profile-env/pinocchio/ttmp/2026/04/18/PIN-20260418-MERGE-BOOTSTRAP-CONFLICT--analyze-pinocchio-merge-conflict-between-profile-env-fix-branch-and-unified-config-bootstrap-refactor/reference/01-diary.md — Diary updated with post-merge validation commands, smoke results, and the merge checkpoint commit
+- /home/manuel/workspaces/2026-04-18/fix-piniocchio-profile-env/pinocchio/ttmp/2026/04/18/PIN-20260418-MERGE-BOOTSTRAP-CONFLICT--analyze-pinocchio-merge-conflict-between-profile-env-fix-branch-and-unified-config-bootstrap-refactor/tasks.md — Validation tasks marked done after full test/build/help/smoke coverage
+- /home/manuel/workspaces/2026-04-18/fix-piniocchio-profile-env/pinocchio/README.md — User-facing profile-loading docs kept in sync with the merged baseline and current profile YAML hard cut
+

@@ -360,6 +360,100 @@ The most notable judgment call in this tranche was `cmd/web-chat/main_profile_re
   - no files remain in `git diff --name-only --diff-filter=U`
   - merge checkpoint commit is now possible
 
+## Step 5: Validate the merged baseline end-to-end and record the remaining semantic follow-up
+
+Once the first merge checkpoint existed, I ran the validation sequence from the runbook rather than assuming that green focused package tests were enough. The good news is that the merged baseline is healthy: the full Pinocchio test suite passed, the CLI rebuilt cleanly, `--help` and `js --help` both worked, and the original `PINOCCHIO_PROFILE=gemini-2.5-pro ... --print-inference-settings` smoke path still showed profile application with the expected selected engine and provenance.
+
+The interesting nuance is that not every API surface exposes the same fallback semantics in the same way. Earlier, the upstream baseline web-chat test showed that `ResolveCLIProfileSelection(values.New())` itself still returns an empty `ProfileRegistries` list in that path. But the real CLI engine-settings smoke run still succeeds with `PINOCCHIO_PROFILE=gemini-2.5-pro`, and the debug output proves the selected profile reaches final inference settings. So the merge is validated, but there is still a conceptual follow-up question about where profile fallback and profile-selection semantics should be visible in the new unified-config architecture.
+
+I also ran a real non-debug runtime smoke command. It succeeded, but it surfaced alias warnings from prompt repositories outside the current repo (`corporate-headquarters`, `ttc`, `wesen-misc`). That means the merged baseline did not break the main runtime path, but external prompt repositories still carry nested alias definitions that are outside this repo’s tracked merge work.
+
+### Prompt Context
+
+**User prompt (verbatim):** "You can use LEFTHOOK=0 to do intermediate commits. History checkpoints matter more than passing precommit hooks right now."
+
+**Assistant interpretation:** Prefer preserving meaningful history checkpoints during the merge resolution work, even if that means using `LEFTHOOK=0` for interim commits.
+
+**Inferred user intent:** Keep the merge work recoverable and reviewable instead of waiting for one giant fully-polished final commit.
+
+**Commit (code):** `f892b4d` — `merge: resolve unified bootstrap conflict baseline`
+
+### What I did
+- Rebuilt the merged CLI:
+  - `go build -o /tmp/pinocchio-merge-check ./cmd/pinocchio`
+- Re-ran the safe original smoke path:
+  - `PINOCCHIO_PROFILE=gemini-2.5-pro /tmp/pinocchio-merge-check code professional hello --print-inference-settings`
+- Verified the debug output contains:
+  - `engine: gemini-2.5-pro`
+  - `profile_slug: gemini-2.5-pro`
+  - `source: profile`
+  - `http_client:` decision block
+- Re-ran a real runtime smoke path:
+  - `PINOCCHIO_PROFILE=gemini-2.5-pro /tmp/pinocchio-merge-check code professional hello`
+- Re-ran startup/bootstrap help paths:
+  - `/tmp/pinocchio-merge-check --help`
+  - `/tmp/pinocchio-merge-check js --help`
+- Ran broader validation:
+  - `go test ./... -count=1`
+- Ran `docmgr doctor` for the merge-conflict ticket after the earlier vocabulary fix.
+- Created the first real merge checkpoint commit with:
+  - `LEFTHOOK=0 git commit -m "merge: resolve unified bootstrap conflict baseline"`
+
+### Why
+- The merge needed a real history checkpoint before any semantic replay work.
+- Focused tests alone would not prove that the original user-reported smoke path or command discovery still worked.
+- The user explicitly preferred preserving checkpoints over waiting for perfectly polished pre-commit hook conditions.
+
+### What worked
+- The full Pinocchio test suite passed.
+- The CLI rebuild passed.
+- The original profile-selection smoke path still works after the merge checkpoint.
+- The live runtime path also worked.
+- The merge ticket passes `docmgr doctor`.
+
+### What didn't work
+- The real runtime smoke surfaced alias warnings from external prompt repositories:
+  - `corporate-headquarters`
+  - `ttc`
+  - `wesen-misc`
+- Those warnings are outside the files resolved in this merge checkpoint and point to un-migrated nested alias YAMLs in external repositories.
+
+### What I learned
+- The merged baseline is not just buildable; it already preserves the main CLI profile-selection behavior we cared about most.
+- There is still a semantic distinction between low-level selection helpers and full engine-settings resolution that deserves future cleanup or clearer docs.
+- External prompt repository aliases can still produce warnings even when the current repo’s baseline is healthy.
+
+### What was tricky to build
+- The tricky part was interpreting the earlier web-chat selection test versus the real smoke result. At first glance they look contradictory. In practice they are exercising different layers of the control plane, so the next follow-up should tighten that conceptual contract instead of treating one of them as automatically wrong.
+
+### What warrants a second pair of eyes
+- Whether `ResolveCLIProfileSelection(...)` should be tightened so it reflects the same visible fallback behavior as the successful engine-settings smoke path.
+- Whether the README now needs wording that distinguishes selection-layer state from final runtime/engine-resolution behavior.
+- Whether the external alias warnings deserve a separate follow-up outside this merge ticket.
+
+### What should be done in the future
+- Optional: add a targeted follow-up ticket if we want to unify `ResolveCLIProfileSelection(...)` semantics with the observed successful CLI smoke path.
+- Optional: audit external prompt repositories for the same nested alias warnings that still appear during live command execution.
+
+### Code review instructions
+- Review the merge checkpoint commit first:
+  - `f892b4d`
+- Then validate with:
+  - `cd pinocchio && go test ./... -count=1`
+  - `cd pinocchio && go build -o /tmp/pinocchio-merge-check ./cmd/pinocchio`
+  - `PINOCCHIO_PROFILE=gemini-2.5-pro /tmp/pinocchio-merge-check code professional hello --print-inference-settings`
+  - `/tmp/pinocchio-merge-check --help`
+  - `/tmp/pinocchio-merge-check js --help`
+
+### Technical details
+- Smoke evidence extracted from `/tmp/pinocchio-merge-smoke.txt`:
+  - `http_client:` at the top of the debug output
+  - `engine: gemini-2.5-pro`
+  - `profile_slug: gemini-2.5-pro`
+  - `source: profile`
+- Live runtime smoke exited `0` and produced a normal assistant response.
+- External alias warnings still mention command paths like `code go go` from repositories outside this repo.
+
 ## Related
 
 - Assessment: `../analysis/01-merge-conflict-assessment-profile-env-fix-branch-versus-unified-config-bootstrap-refactor.md`
