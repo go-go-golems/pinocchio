@@ -250,10 +250,15 @@ profiles:
   default:
     slug: default
     inference_settings:
+      api:
+        api_keys:
+          openai-api-key: your-api-key
       chat:
         api_type: openai
         engine: gpt-4o-mini
 ```
+
+The old outer wrapper key `inference_settings.api_keys` is no longer supported. Use `inference_settings.api` instead.
 
 Use [examples/js/profiles/basic.yaml](/home/manuel/workspaces/2026-03-17/add-opinionated-apis/pinocchio/examples/js/profiles/basic.yaml) as the smallest concrete reference.
 

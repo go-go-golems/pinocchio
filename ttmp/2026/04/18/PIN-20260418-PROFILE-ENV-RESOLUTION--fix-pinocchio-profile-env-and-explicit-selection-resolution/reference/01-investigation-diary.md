@@ -559,6 +559,87 @@ I then switched to a bounded, non-interactive approach: build the CLI once, crea
   - `profile_slug: gemini-2.5-pro`
   - `source: profile`
 
+## Step 8: Fix Gemini custom-http-client auth propagation and hard-cut the profile API YAML shape
+
+I then investigated the user’s follow-up report that real Gemini execution still failed even though `--print-inference-settings` showed the API key. This turned out to be a second bug that only appears after profile resolution succeeds: the Gemini engine was passing `option.WithAPIKey(...)` only on the default-client path, but switching to a custom HTTP client dropped that explicit API-key option. The upstream Google SDK strips `WithHTTPClient` when creating its cache client, so the cache-client constructor then fell back to ADC and emitted the misleading `could not find default credentials` error.
+
+At the same time, I hard-cut the awkward `inference_settings.api_keys.api_keys` YAML shape. The outer wrapper now serializes as `inference_settings.api`, and legacy `inference_settings.api_keys` now fails loudly with an explicit migration error instead of silently dropping keys.
+
+### What I did
+
+- Changed `geppetto/pkg/steps/ai/gemini/engine_gemini.go` so Gemini always includes `option.WithAPIKey(apiKey)`, even when it also needs a custom HTTP client.
+- Added Gemini tests proving the client options keep `WithAPIKey` on both default and custom-client paths.
+- Changed `geppetto/pkg/steps/ai/settings/settings-inference.go` so the outer YAML field is `api`, not `api_keys`.
+- Added a custom `UnmarshalYAML` guard that rejects the legacy outer `api_keys` wrapper with a migration-focused error.
+- Updated the inference debug path mapper to report `api.api_keys.*` and `api.base_urls.*` instead of the old double-nested paths.
+- Updated the Pinocchio README example to show the new profile shape.
+- Migrated the local operator file `~/.config/pinocchio/profiles.yaml` in place from `inference_settings.api_keys` to `inference_settings.api`, with a backup at `~/.config/pinocchio/profiles.yaml.bak-2026-04-18-api-hard-cut`.
+
+### Why
+
+- The original profile-selection fix only got the CLI far enough to expose the next bug in the Gemini provider path.
+- Without this auth propagation fix, any non-default `ClientSettings` path can make a valid Gemini API key look broken by triggering ADC instead.
+- Since the user explicitly requested no backward compatibility for the schema cleanup, the safest hard cut is to fail loudly on the legacy wrapper rather than silently ignoring it.
+
+### What worked
+
+- `go test ./pkg/steps/ai/gemini ./pkg/steps/ai/settings ./pkg/engineprofiles ./pkg/cli/bootstrap -count=1` passed in Geppetto after the changes.
+- `go test ./pkg/cmds/... ./cmd/pinocchio/... -count=1` passed in Pinocchio against the updated local Geppetto workspace.
+- `PINOCCHIO_PROFILE=gemini-2.5-pro /tmp/pinocchio-smoke code professional hello --print-inference-settings` still exited `0` after the YAML hard cut.
+- A real runtime smoke run using the built binary and the migrated local profiles file returned a normal assistant response instead of the old ADC failure:
+  - command: `PINOCCHIO_PROFILE=gemini-2.5-pro /tmp/pinocchio-smoke code professional hello`
+  - output tail: `Hello. What can I help you with?`
+
+### What didn't work
+
+- The old `inference_settings.api_keys` wrapper is now intentionally rejected.
+- Existing local profiles had to be migrated before the built Pinocchio binary could continue using them.
+
+### What I learned
+
+- The Gemini provider bug was a consequence of the newer shared HTTP-client plumbing, not a profile-resolution problem.
+- The Google Gemini Go SDK’s cache-client construction makes `WithAPIKey` non-optional whenever a custom HTTP client is also in play.
+- If we hard-cut schema shapes, explicit migration errors are much easier to understand than silent fallback behavior.
+
+### What was tricky to build
+
+- The tricky part was distinguishing “a valid key is present in final settings” from “the upstream SDK actually received an auth option on every internal subclient path.”
+- Another subtle part was performing the local profile migration without exposing or rewriting the secrets content manually.
+
+### What warrants a second pair of eyes
+
+- Whether we want a small dedicated debug surface that explains why `EnsureHTTPClient(...)` chose a custom client (timeout override, env proxy toggle, explicit proxy URL, or injected client).
+- Whether more user-facing docs should call out the hard-cut `inference_settings.api` schema, since old `api_keys` files now fail fast.
+
+### What should be done in the future
+
+- Consider adding a targeted debug output line or trace metadata that explains why `EnsureHTTPClient(...)` built a custom client.
+- Consider a small migration helper for operator profile files if we do more hard-cut schema cleanup in the future.
+
+### Code review instructions
+
+- Review:
+  - `geppetto/pkg/steps/ai/gemini/engine_gemini.go`
+  - `geppetto/pkg/steps/ai/gemini/engine_gemini_test.go`
+  - `geppetto/pkg/steps/ai/settings/settings-inference.go`
+  - `geppetto/pkg/steps/ai/settings/settings-inference_test.go`
+  - `geppetto/pkg/cli/bootstrap/inference_debug.go`
+  - `pinocchio/README.md`
+- Re-run:
+  - `cd geppetto && go test ./pkg/steps/ai/gemini ./pkg/steps/ai/settings ./pkg/engineprofiles ./pkg/cli/bootstrap -count=1`
+  - `cd pinocchio && go test ./pkg/cmds/... ./cmd/pinocchio/... -count=1`
+  - `PINOCCHIO_PROFILE=gemini-2.5-pro /tmp/pinocchio-smoke code professional hello`
+
+### Technical details
+- Gemini auth fix site:
+  - `geppetto/pkg/steps/ai/gemini/engine_gemini.go`
+- Schema hard-cut site:
+  - `geppetto/pkg/steps/ai/settings/settings-inference.go`
+- Debug path rename:
+  - `geppetto/pkg/cli/bootstrap/inference_debug.go`
+- Local operator migration backup:
+  - `~/.config/pinocchio/profiles.yaml.bak-2026-04-18-api-hard-cut`
+
 ## Related
 
 - Design doc 1: `../design-doc/01-pinocchio-profile-env-and-explicit-profile-resolution-design.md`
