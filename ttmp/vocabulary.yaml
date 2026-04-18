@@ -33,6 +33,14 @@ topics:
       description: Third-party reuse/extraction
     - slug: bobatea
       description: Bobatea TUI library
+    - slug: bootstrap
+      description: CLI bootstrap and layered profile/config resolution
+    - slug: configuration
+      description: Config files, env vars, and runtime configuration
+    - slug: runtime
+      description: Runtime execution, engine construction, and profile switching
+    - slug: cli
+      description: Command-line interface behavior and parsing
 docTypes:
     - slug: index
       description: Ticket index / overall plan
