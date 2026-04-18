@@ -118,11 +118,14 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 	if err := parsed.DecodeSectionInto(values.DefaultSlug, s); err != nil {
 		return errors.Wrap(err, "decode server settings")
 	}
-	resolvedConfig, err := profilebootstrap.ResolveUnifiedConfig(parsed)
+	profileRuntime, err := profilebootstrap.ResolveCLIProfileRuntime(ctx, parsed)
 	if err != nil {
-		return errors.Wrap(err, "resolve unified profile config")
+		return errors.Wrap(err, "resolve profile runtime")
 	}
-	profileSelection := resolvedConfig.ProfileSettings
+	if profileRuntime != nil && profileRuntime.Close != nil {
+		defer profileRuntime.Close()
+	}
+	profileSelection := profileRuntime.ProfileSettings
 	if len(profileSelection.ProfileRegistries) > 0 {
 		log.Info().
 			Strs("profile_registries", profileSelection.ProfileRegistries).
@@ -141,18 +144,11 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 		{Name: "category_regexp_reviewer", Prompt: "Review proposed regex patterns and assess over/under matching risks."},
 	})
 
-	registryChain, err := profilebootstrap.ResolveUnifiedProfileRegistryChain(ctx, resolvedConfig)
-	if err != nil {
-		return errors.Wrap(err, "initialize profile registry")
-	}
-	if registryChain != nil && registryChain.Close != nil {
-		defer registryChain.Close()
-	}
-
 	var (
 		profileRegistry     gepprofiles.Registry
 		defaultRegistrySlug gepprofiles.RegistrySlug
 	)
+	registryChain := profileRuntime.ProfileRegistryChain
 	if registryChain != nil {
 		profileRegistry = registryChain.Registry
 		defaultRegistrySlug = registryChain.DefaultRegistrySlug

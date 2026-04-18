@@ -61,20 +61,26 @@ func testValuesWithConfigFileClientSettings(t *testing.T, configFile string, tim
 	return parsed
 }
 
-func TestWebChatProfileSelection_UsesSharedProfileSettingsSection(t *testing.T) {
+func TestWebChatProfileRuntime_UsesSharedProfileSettingsSection(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)
 
-	parsed := testValuesWithProfileSettings(t, "analyst", []string{"./profiles.yaml"})
+	registryPath := filepath.Join(tmpDir, "profiles.yaml")
+	require.NoError(t, os.WriteFile(registryPath, []byte("slug: workspace\nprofiles: {}\n"), 0o644))
 
-	resolved, err := profilebootstrap.ResolveCLIProfileSelection(parsed)
+	parsed := testValuesWithProfileSettings(t, "analyst", []string{registryPath})
+
+	runtime, err := profilebootstrap.ResolveCLIProfileRuntime(context.Background(), parsed)
 	require.NoError(t, err)
-	require.Equal(t, "analyst", resolved.Profile)
-	require.Equal(t, []string{"./profiles.yaml"}, resolved.ProfileRegistries)
+	if runtime.Close != nil {
+		defer runtime.Close()
+	}
+	require.Equal(t, "analyst", runtime.ProfileSettings.Profile)
+	require.Equal(t, []string{registryPath}, runtime.ProfileSettings.ProfileRegistries)
 }
 
-func TestWebChatProfileSelection_DoesNotFallbackToDefaultRegistryFile(t *testing.T) {
+func TestWebChatProfileRuntime_UsesDefaultRegistryFallbackFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)
 	t.Setenv("HOME", tmpDir)
@@ -84,9 +90,12 @@ func TestWebChatProfileSelection_DoesNotFallbackToDefaultRegistryFile(t *testing
 	profilesPath := filepath.Join(profilesDir, "profiles.yaml")
 	require.NoError(t, os.WriteFile(profilesPath, []byte("slug: default\nprofiles: {}\n"), 0o644))
 
-	resolved, err := profilebootstrap.ResolveCLIProfileSelection(values.New())
+	runtime, err := profilebootstrap.ResolveCLIProfileRuntime(context.Background(), values.New())
 	require.NoError(t, err)
-	require.Empty(t, resolved.ProfileRegistries)
+	if runtime.Close != nil {
+		defer runtime.Close()
+	}
+	require.Equal(t, []string{profilesPath}, runtime.ProfileSettings.ProfileRegistries)
 }
 
 func TestWebChatUnifiedProfileConfig_AllowsInlineProfilesWithoutExternalRegistries(t *testing.T) {
@@ -103,21 +112,18 @@ func TestWebChatUnifiedProfileConfig_AllowsInlineProfilesWithoutExternalRegistri
 		"profile:\n  active: analyst\nprofiles:\n  analyst:\n    inference_settings:\n      chat:\n        api_type: openai-responses\n        engine: gpt-5-mini\n",
 	), 0o644))
 
-	resolvedConfig, err := profilebootstrap.ResolveUnifiedConfig(values.New())
+	runtime, err := profilebootstrap.ResolveCLIProfileRuntime(context.Background(), values.New())
 	require.NoError(t, err)
-	require.Equal(t, "analyst", resolvedConfig.ProfileSettings.Profile)
-	require.Empty(t, resolvedConfig.ProfileSettings.ProfileRegistries)
-
-	chain, err := profilebootstrap.ResolveUnifiedProfileRegistryChain(context.Background(), resolvedConfig)
-	require.NoError(t, err)
-	require.NotNil(t, chain)
-	require.NotNil(t, chain.Registry)
-	require.NotNil(t, chain.Reader)
-	require.Equal(t, "config-inline", chain.DefaultRegistrySlug.String())
-	require.Equal(t, "config-inline", chain.DefaultProfileResolve.RegistrySlug.String())
-	require.Equal(t, "analyst", chain.DefaultProfileResolve.EngineProfileSlug.String())
-	if chain.Close != nil {
-		defer chain.Close()
+	require.Equal(t, "analyst", runtime.ProfileSettings.Profile)
+	require.Empty(t, runtime.ProfileSettings.ProfileRegistries)
+	require.NotNil(t, runtime.ProfileRegistryChain)
+	require.NotNil(t, runtime.ProfileRegistryChain.Registry)
+	require.NotNil(t, runtime.ProfileRegistryChain.Reader)
+	require.Equal(t, "config-inline", runtime.ProfileRegistryChain.DefaultRegistrySlug.String())
+	require.Equal(t, "config-inline", runtime.ProfileRegistryChain.DefaultProfileResolve.RegistrySlug.String())
+	require.Equal(t, "analyst", runtime.ProfileRegistryChain.DefaultProfileResolve.EngineProfileSlug.String())
+	if runtime.Close != nil {
+		defer runtime.Close()
 	}
 }
 

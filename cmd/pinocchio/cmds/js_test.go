@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	geppettobootstrap "github.com/go-go-golems/geppetto/pkg/cli/bootstrap"
 	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	profilebootstrap "github.com/go-go-golems/pinocchio/pkg/cmds/profilebootstrap"
 )
@@ -31,11 +30,7 @@ func TestLoadPinocchioProfileRegistryStackRejectsProfileWithoutRegistries(t *tes
 	parsed := values.New()
 	parsed.Set(profilebootstrap.ProfileSettingsSectionSlug, profileValues)
 
-	profileSettings, _, err := profilebootstrap.ResolveEngineProfileSettings(parsed)
-	if err != nil {
-		t.Fatalf("ResolveEngineProfileSettings failed: %v", err)
-	}
-	_, err = geppettobootstrap.ResolveProfileRegistryChain(context.Background(), profileSettings)
+	_, err = profilebootstrap.ResolveCLIProfileRuntime(context.Background(), parsed)
 	if err == nil {
 		t.Fatal("expected profile selection without registries to fail")
 	}

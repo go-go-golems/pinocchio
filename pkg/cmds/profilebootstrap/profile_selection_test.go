@@ -3,6 +3,7 @@ package profilebootstrap
 import (
 	"testing"
 
+	"github.com/go-go-golems/geppetto/pkg/cli/bootstrap"
 	"github.com/go-go-golems/glazed/pkg/cli"
 )
 
@@ -24,7 +25,7 @@ func TestNewCLISelectionValuesBuildsCommandAndProfileSections(t *testing.T) {
 		t.Fatalf("expected config file custom.yaml, got %q", got)
 	}
 
-	profileSettings := ResolveProfileSettings(parsed)
+	profileSettings := bootstrap.ResolveProfileSettings(parsed)
 	if got := profileSettings.Profile; got != "analyst" {
 		t.Fatalf("expected trimmed profile analyst, got %q", got)
 	}

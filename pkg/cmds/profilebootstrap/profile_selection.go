@@ -19,11 +19,19 @@ import (
 const ProfileSettingsSectionSlug = bootstrap.ProfileSettingsSectionSlug
 
 type ProfileSettings = bootstrap.ProfileSettings
-type ResolvedCLIProfileSelection = bootstrap.ResolvedCLIProfileSelection
 type ResolvedCLIConfigFiles = bootstrap.ResolvedCLIConfigFiles
 type CLISelectionInput = bootstrap.CLISelectionInput
 
-type ResolvedUnifiedConfig struct {
+type ResolvedCLIProfileRuntime struct {
+	ProfileSettings      ProfileSettings
+	ConfigFiles          *ResolvedCLIConfigFiles
+	Documents            *configdoc.ResolvedDocuments
+	Effective            *configdoc.Document
+	ProfileRegistryChain *bootstrap.ResolvedProfileRegistryChain
+	Close                func()
+}
+
+type resolvedConfigRuntime struct {
 	ConfigFiles     *ResolvedCLIConfigFiles
 	Documents       *configdoc.ResolvedDocuments
 	Effective       *configdoc.Document
@@ -53,29 +61,6 @@ func NewProfileSettingsSection() (schema.Section, error) {
 	return bootstrap.NewProfileSettingsSection(pinocchioBootstrapConfig())
 }
 
-func ResolveProfileSettings(parsed *values.Values) ProfileSettings {
-	return bootstrap.ResolveProfileSettings(parsed)
-}
-
-func ResolveCLIProfileSelection(parsed *values.Values) (*ResolvedCLIProfileSelection, error) {
-	resolved, err := ResolveUnifiedConfig(parsed)
-	if err != nil {
-		return nil, err
-	}
-	configFiles := []string{}
-	if resolved.ConfigFiles != nil {
-		configFiles = append(configFiles, resolved.ConfigFiles.Paths...)
-	}
-	return &ResolvedCLIProfileSelection{
-		ProfileSettings: resolved.ProfileSettings,
-		ConfigFiles:     configFiles,
-	}, nil
-}
-
-func ResolveEngineProfileSettings(parsed *values.Values) (ProfileSettings, []string, error) {
-	return bootstrap.ResolveEngineProfileSettings(pinocchioBootstrapConfig(), parsed)
-}
-
 func NewCLISelectionValues(input CLISelectionInput) (*values.Values, error) {
 	return bootstrap.NewCLISelectionValues(pinocchioBootstrapConfig(), input)
 }
@@ -84,48 +69,14 @@ func ResolveCLIConfigFilesResolved(parsed *values.Values) (*ResolvedCLIConfigFil
 	return bootstrap.ResolveCLIConfigFilesResolved(pinocchioBootstrapConfig(), parsed)
 }
 
-func ResolveUnifiedConfig(parsed *values.Values) (*ResolvedUnifiedConfig, error) {
-	configFiles, err := ResolveCLIConfigFilesResolved(parsed)
+func ResolveCLIProfileRuntime(ctx context.Context, parsed *values.Values) (*ResolvedCLIProfileRuntime, error) {
+	resolvedConfig, err := resolveConfigRuntime(parsed)
 	if err != nil {
 		return nil, err
 	}
 
-	documents, err := configdoc.LoadResolvedDocuments(configFiles.Files)
-	if err != nil {
-		return nil, err
-	}
-	effective := documents.Effective
-	selection := ProfileSettings{}
-	if effective != nil {
-		selection.Profile = strings.TrimSpace(effective.Profile.Active)
-		selection.ProfileRegistries = append([]string(nil), effective.Profile.Registries...)
-	}
-
-	explicitSelection := bootstrap.ResolveProfileSettings(parsed)
-	if explicitSelection.Profile != "" {
-		selection.Profile = explicitSelection.Profile
-	}
-	if len(explicitSelection.ProfileRegistries) > 0 {
-		selection.ProfileRegistries = append([]string(nil), explicitSelection.ProfileRegistries...)
-	}
-	selection.Profile = strings.TrimSpace(selection.Profile)
-	selection.ProfileRegistries = normalizeProfileRegistryEntries(selection.ProfileRegistries)
-
-	return &ResolvedUnifiedConfig{
-		ConfigFiles:     configFiles,
-		Documents:       documents,
-		Effective:       effective,
-		ProfileSettings: selection,
-	}, nil
-}
-
-func ResolveUnifiedProfileRegistryChain(ctx context.Context, resolved *ResolvedUnifiedConfig) (*bootstrap.ResolvedProfileRegistryChain, error) {
-	if resolved == nil {
-		return &bootstrap.ResolvedProfileRegistryChain{}, nil
-	}
-
-	selection := resolved.ProfileSettings
-	hasInlineProfiles := resolved.Effective != nil && len(resolved.Effective.Profiles) > 0
+	selection := bootstrap.PrepareProfileSettingsForRuntime(pinocchioBootstrapConfig(), resolvedConfig.ProfileSettings)
+	hasInlineProfiles := resolvedConfig.Effective != nil && len(resolvedConfig.Effective.Profiles) > 0
 	if selection.Profile != "" && len(selection.ProfileRegistries) == 0 && !hasInlineProfiles {
 		return nil, &gepprofiles.ValidationError{
 			Field:  "profile-settings.profile",
@@ -134,7 +85,6 @@ func ResolveUnifiedProfileRegistryChain(ctx context.Context, resolved *ResolvedU
 	}
 
 	var imported *bootstrap.ResolvedProfileRegistryChain
-	var err error
 	if len(selection.ProfileRegistries) > 0 {
 		imported, err = bootstrap.ResolveProfileRegistryChain(ctx, ProfileSettings{
 			ProfileRegistries: selection.ProfileRegistries,
@@ -146,8 +96,8 @@ func ResolveUnifiedProfileRegistryChain(ctx context.Context, resolved *ResolvedU
 
 	var inlineRegistry gepprofiles.Registry
 	var inlineDefaultRegistry gepprofiles.RegistrySlug
-	if resolved.Effective != nil && len(resolved.Effective.Profiles) > 0 {
-		storeRegistry, err := configdoc.NewInlineStoreRegistry(resolved.Effective, gepprofiles.MustRegistrySlug(configdoc.DefaultInlineRegistrySlug))
+	if hasInlineProfiles {
+		storeRegistry, err := configdoc.NewInlineStoreRegistry(resolvedConfig.Effective, gepprofiles.MustRegistrySlug(configdoc.DefaultInlineRegistrySlug))
 		if err != nil {
 			if imported != nil && imported.Close != nil {
 				imported.Close()
@@ -179,16 +129,74 @@ func ResolveUnifiedProfileRegistryChain(ctx context.Context, resolved *ResolvedU
 		defaultResolve.EngineProfileSlug = profileSlug
 	}
 
-	return &bootstrap.ResolvedProfileRegistryChain{
+	registryChain := &bootstrap.ResolvedProfileRegistryChain{
 		Registry:              composed,
 		Reader:                composed,
 		DefaultRegistrySlug:   defaultRegistrySlug,
 		DefaultProfileResolve: defaultResolve,
-		Close: func() {
-			if imported != nil && imported.Close != nil {
-				imported.Close()
-			}
-		},
+	}
+	if imported != nil && imported.Close != nil {
+		registryChain.Close = func() {
+			imported.Close()
+		}
+	}
+
+	return &ResolvedCLIProfileRuntime{
+		ProfileSettings:      selection,
+		ConfigFiles:          resolvedConfig.ConfigFiles,
+		Documents:            resolvedConfig.Documents,
+		Effective:            resolvedConfig.Effective,
+		ProfileRegistryChain: registryChain,
+		Close:                registryChain.Close,
+	}, nil
+}
+
+func (r *ResolvedCLIProfileRuntime) Registry() gepprofiles.Registry {
+	if r == nil || r.ProfileRegistryChain == nil {
+		return nil
+	}
+	return r.ProfileRegistryChain.Registry
+}
+
+func (r *ResolvedCLIProfileRuntime) Reader() gepprofiles.RegistryReader {
+	if r == nil || r.ProfileRegistryChain == nil {
+		return nil
+	}
+	return r.ProfileRegistryChain.Reader
+}
+
+func resolveConfigRuntime(parsed *values.Values) (*resolvedConfigRuntime, error) {
+	configFiles, err := ResolveCLIConfigFilesResolved(parsed)
+	if err != nil {
+		return nil, err
+	}
+
+	documents, err := configdoc.LoadResolvedDocuments(configFiles.Files)
+	if err != nil {
+		return nil, err
+	}
+	effective := documents.Effective
+	selection := ProfileSettings{}
+	if effective != nil {
+		selection.Profile = strings.TrimSpace(effective.Profile.Active)
+		selection.ProfileRegistries = append([]string(nil), effective.Profile.Registries...)
+	}
+
+	explicitSelection := bootstrap.ResolveProfileSettings(parsed)
+	if explicitSelection.Profile != "" {
+		selection.Profile = explicitSelection.Profile
+	}
+	if len(explicitSelection.ProfileRegistries) > 0 {
+		selection.ProfileRegistries = append([]string(nil), explicitSelection.ProfileRegistries...)
+	}
+	selection.Profile = strings.TrimSpace(selection.Profile)
+	selection.ProfileRegistries = normalizeProfileRegistryEntries(selection.ProfileRegistries)
+
+	return &resolvedConfigRuntime{
+		ConfigFiles:     configFiles,
+		Documents:       documents,
+		Effective:       effective,
+		ProfileSettings: selection,
 	}, nil
 }
 
@@ -258,6 +266,13 @@ func configFileMapper(rawConfig interface{}) (map[string]map[string]interface{},
 	}
 
 	result := make(map[string]map[string]interface{})
+
+	for section, value := range configMap {
+		if sectionMap, ok := value.(map[string]interface{}); ok {
+			result[section] = sectionMap
+		}
+	}
+
 	if profileBlock, ok := configMap["profile"].(map[string]interface{}); ok {
 		mapped := map[string]interface{}{}
 		if active, ok := profileBlock["active"].(string); ok && strings.TrimSpace(active) != "" {
