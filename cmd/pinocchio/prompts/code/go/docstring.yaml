@@ -1,5 +1,5 @@
 name: docstring
-aliasFor: go
+aliasFor: [code, go]
 arguments:
   - |
     Write multiple versions of docstrings for the given functions. Start with a                                                                                 │

@@ -1,5 +1,5 @@
 name: concise-doc
-aliasFor: typescript
+aliasFor: [code, typescript]
 flags:
   context-in-front: "true"
   question: "false"

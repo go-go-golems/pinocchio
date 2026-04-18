@@ -1,5 +1,5 @@
 name: docstring
-aliasFor: php
+aliasFor: [code, php]
 arguments:
   - |
     Write multiple versions of docstrings for the given functions.

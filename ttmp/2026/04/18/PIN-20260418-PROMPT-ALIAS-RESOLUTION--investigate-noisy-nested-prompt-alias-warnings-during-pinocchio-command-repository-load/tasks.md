@@ -7,11 +7,20 @@
 - [x] Determine whether commands are inserted before aliases
 - [x] Write up the initial root-cause note
 
-## Follow-up implementation planning
+## Analysis / design
 
-- [ ] Decide the intended contract for nested alias files (`same-prefix` vs `parent-relative` aliasing)
-- [ ] Add a focused regression test covering `code/go.yaml` + `code/go/concise-doc.yaml`
-- [ ] Choose between fixing prompt layout, shared alias resolution semantics, or both
-- [ ] Implement the chosen fix in the appropriate repo(s)
-- [ ] Re-run `pinocchio --help` / startup smoke and confirm the warnings are gone or intentionally preserved
+- [x] Decide the intended contract for nested alias files
+- [x] Write a detailed implementation plan for explicit alias paths
+- [x] Expand the ticket docs to explain why load order is not the bug
+
+## Implementation
+
+- [x] Add shared Glazed alias-target parsing that accepts scalar and path-form `aliasFor`
+- [x] Add helper methods so alias resolvers can distinguish legacy relative targets from explicit full paths
+- [x] Update Glazed Cobra alias resolution to use the shared helper
+- [x] Update Clay repository alias resolution to use the shared helper
+- [x] Add focused regression tests for nested aliases targeting explicit full command paths
+- [x] Migrate Pinocchio nested prompt alias fixtures to explicit path-form `aliasFor`
+- [x] Re-run Pinocchio startup/help smoke and confirm the warnings are gone
+- [x] Update ticket docs/tasks/changelog with the landed implementation details
 

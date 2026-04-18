@@ -335,6 +335,15 @@ flags:
 I am 100 years old.
 ```
 
+For aliases stored in nested directories, `aliasFor` can also point to an explicit full command path:
+
+```yaml
+name: concise-doc
+aliasFor: [code, go]
+```
+
+This is useful when the alias file lives under a subdirectory like `prompts/code/go/` but the target command is the full path `code go`.
+
 ## Contributing
 
 This is GO GO GOLEMS playground, and GO GO GOLEMS don't accept contributions.

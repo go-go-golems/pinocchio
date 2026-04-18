@@ -29,13 +29,18 @@ This ticket tracks the noisy startup warnings emitted while Pinocchio loads nest
 
 Initial investigation shows this is **not** a command-loading-order problem. Commands are inserted before aliases. The current failure comes from how nested alias files inherit their directory path as parents, while alias resolution then looks up `alias.Parents + aliasFor`, producing paths like `code go go` instead of the real target path `code go`.
 
-The main goal of this ticket is to decide and enforce the intended contract for nested aliases:
+The main goal of this ticket was to decide and enforce the intended contract for nested aliases.
 
-- should alias files only target commands under the same prefix, or
-- should nested alias files be allowed to refer to the parent command one level up?
+That contract is now implemented:
+
+- scalar `aliasFor` keeps its legacy same-prefix meaning
+- path-form `aliasFor` (for example `[code, go]`) resolves as an explicit full command path
+- the currently noisy nested Pinocchio prompt aliases were migrated to the explicit path form
 
 ## Key Links
 
+- Analysis: `analysis/01-nested-prompt-alias-warnings-are-caused-by-alias-path-resolution-not-command-load-order.md`
+- Design / implementation plan: `design/01-explicit-alias-paths-for-nested-prompt-aliases-implementation-plan.md`
 - **Related Files**: See frontmatter RelatedFiles field
 - **External Sources**: See frontmatter ExternalSources field
 
