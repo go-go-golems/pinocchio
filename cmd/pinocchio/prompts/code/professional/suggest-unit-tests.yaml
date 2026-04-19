@@ -1,5 +1,5 @@
 name: suggest-unit-tests
-aliasFor: professional
+aliasFor: [code, professional]
 flags:
   use-bullets: "true"
 arguments:

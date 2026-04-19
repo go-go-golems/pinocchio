@@ -232,7 +232,7 @@ func (g *PinocchioCommand) RunIntoWriter(
 		return errors.Wrap(err, "failed to update inference settings from parsed layers")
 	}
 
-	profileSelection := &profilebootstrap.ResolvedCLIProfileSelection{}
+	profileSettings := profilebootstrap.ProfileSettings{}
 	var resolvedEngineSettings *profilebootstrap.ResolvedCLIEngineSettings
 
 	var baseSettings *settings.InferenceSettings
@@ -254,8 +254,8 @@ func (g *PinocchioCommand) RunIntoWriter(
 		if resolvedEngineSettings.Close != nil {
 			defer resolvedEngineSettings.Close()
 		}
-		if resolvedEngineSettings.ProfileSelection != nil {
-			profileSelection = resolvedEngineSettings.ProfileSelection
+		if resolvedEngineSettings.ProfileRuntime != nil {
+			profileSettings = resolvedEngineSettings.ProfileRuntime.ProfileSettings
 		}
 		if resolvedEngineSettings.BaseInferenceSettings != nil {
 			baseSettings = resolvedEngineSettings.BaseInferenceSettings
@@ -264,12 +264,15 @@ func (g *PinocchioCommand) RunIntoWriter(
 			stepSettings = resolvedEngineSettings.FinalInferenceSettings
 		}
 	} else {
-		resolvedProfileSelection, err := profilebootstrap.ResolveCLIProfileSelection(parsedValues)
+		resolvedProfileRuntime, err := profilebootstrap.ResolveCLIProfileRuntime(ctx, parsedValues)
 		if err != nil {
-			return errors.Wrap(err, "resolve profile selection for command run")
+			return errors.Wrap(err, "resolve profile runtime for command run")
 		}
-		if resolvedProfileSelection != nil {
-			profileSelection = resolvedProfileSelection
+		if resolvedProfileRuntime != nil {
+			if resolvedProfileRuntime.Close != nil {
+				defer resolvedProfileRuntime.Close()
+			}
+			profileSettings = resolvedProfileRuntime.ProfileSettings
 		}
 	}
 
@@ -320,7 +323,6 @@ func (g *PinocchioCommand) RunIntoWriter(
 			resolvedEngineSettings = &profilebootstrap.ResolvedCLIEngineSettings{
 				BaseInferenceSettings:  baseSettings,
 				FinalInferenceSettings: stepSettings,
-				ProfileSelection:       profileSelection,
 			}
 		}
 		_, err := geppettobootstrap.HandleInferenceDebugOutput(
@@ -330,7 +332,10 @@ func (g *PinocchioCommand) RunIntoWriter(
 			geppettobootstrap.InferenceDebugSettings{
 				PrintInferenceSettings: true,
 			},
-			resolvedEngineSettings,
+			&geppettobootstrap.ResolvedInferenceTrace{
+				FinalInferenceSettings: resolvedEngineSettings.FinalInferenceSettings,
+				ResolvedEngineProfile:  resolvedEngineSettings.ResolvedEngineProfile,
+			},
 			geppettobootstrap.InferenceDebugOutputOptions{
 				CommandBase: g.BaseInferenceSettings,
 			},
@@ -342,7 +347,7 @@ func (g *PinocchioCommand) RunIntoWriter(
 	_, err = g.RunWithOptions(ctx,
 		run.WithInferenceSettings(stepSettings),
 		run.WithBaseSettings(baseSettings),
-		run.WithProfileSelection(profileSelection.Profile, strings.Join(profileSelection.ProfileRegistries, ",")),
+		run.WithProfileSelection(profileSettings.Profile, strings.Join(profileSettings.ProfileRegistries, ",")),
 		run.WithEngineFactory(g.EngineFactory),
 		run.WithWriter(w),
 		run.WithRunMode(runMode),

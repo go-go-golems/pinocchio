@@ -58,7 +58,7 @@ func TestResolveCLIConfigFilesResolved_UsesRepoCWDAndExplicitOrder(t *testing.T)
 	}
 }
 
-func TestResolveCLIProfileSelection_CWDOverridesRepoAndExplicitWins(t *testing.T) {
+func TestResolveCLIProfileRuntime_CWDOverridesRepoAndExplicitWins(t *testing.T) {
 	repoDir, cwdDir, restore := setupGitWorkspace(t)
 	defer restore()
 
@@ -75,22 +75,25 @@ func TestResolveCLIProfileSelection_CWDOverridesRepoAndExplicitWins(t *testing.T
 		path    string
 		content string
 	}{
-		{repoFile, "profile:\n  active: repo-profile\n"},
-		{repoOverrideFile, "profile:\n  active: repo-override-profile\n"},
-		{cwdFile, "profile:\n  active: cwd-profile\n"},
-		{cwdOverrideFile, "profile:\n  active: cwd-override-profile\n"},
-		{explicitFile, "profile:\n  active: explicit-profile\n"},
+		{repoFile, "profile:\n  active: repo-profile\nprofiles:\n  repo-profile:\n    inference_settings:\n      chat:\n        engine: repo-model\n"},
+		{repoOverrideFile, "profile:\n  active: repo-override-profile\nprofiles:\n  repo-override-profile:\n    inference_settings:\n      chat:\n        engine: repo-override-model\n"},
+		{cwdFile, "profile:\n  active: cwd-profile\nprofiles:\n  cwd-profile:\n    inference_settings:\n      chat:\n        engine: cwd-model\n"},
+		{cwdOverrideFile, "profile:\n  active: cwd-override-profile\nprofiles:\n  cwd-override-profile:\n    inference_settings:\n      chat:\n        engine: cwd-override-model\n"},
+		{explicitFile, "profile:\n  active: explicit-profile\nprofiles:\n  explicit-profile:\n    inference_settings:\n      chat:\n        engine: explicit-model\n"},
 	} {
 		if err := os.WriteFile(entry.path, []byte(entry.content), 0o644); err != nil {
 			t.Fatalf("write %s: %v", entry.path, err)
 		}
 	}
 
-	resolved, err := ResolveCLIProfileSelection(nil)
+	runtime, err := ResolveCLIProfileRuntime(context.Background(), nil)
 	if err != nil {
-		t.Fatalf("ResolveCLIProfileSelection(nil) failed: %v", err)
+		t.Fatalf("ResolveCLIProfileRuntime(nil) failed: %v", err)
 	}
-	if got := resolved.Profile; got != "cwd-override-profile" {
+	if runtime.Close != nil {
+		defer runtime.Close()
+	}
+	if got := runtime.ProfileSettings.Profile; got != "cwd-override-profile" {
 		t.Fatalf("expected cwd override profile to override repo and cwd base profiles, got %q", got)
 	}
 
@@ -98,11 +101,11 @@ func TestResolveCLIProfileSelection_CWDOverridesRepoAndExplicitWins(t *testing.T
 	if err != nil {
 		t.Fatalf("NewCLISelectionValues failed: %v", err)
 	}
-	resolved, err = ResolveCLIProfileSelection(parsed)
+	runtime, err = ResolveCLIProfileRuntime(context.Background(), parsed)
 	if err != nil {
-		t.Fatalf("ResolveCLIProfileSelection(parsed) failed: %v", err)
+		t.Fatalf("ResolveCLIProfileRuntime(parsed) failed: %v", err)
 	}
-	if got := resolved.Profile; got != "explicit-profile" {
+	if got := runtime.ProfileSettings.Profile; got != "explicit-profile" {
 		t.Fatalf("expected explicit profile to override cwd/repo profiles, got %q", got)
 	}
 }
@@ -158,7 +161,7 @@ func TestResolveBaseInferenceSettings_IgnoresUnifiedConfigRuntimeFieldsAndKeepsC
 	}
 }
 
-func TestResolveUnifiedConfig_ExposesExplainData(t *testing.T) {
+func TestResolveConfigRuntime_ExposesExplainData(t *testing.T) {
 	repoDir, cwdDir, restore := setupGitWorkspace(t)
 	defer restore()
 
@@ -180,9 +183,9 @@ func TestResolveUnifiedConfig_ExposesExplainData(t *testing.T) {
 		}
 	}
 
-	resolved, err := ResolveUnifiedConfig(nil)
+	resolved, err := resolveConfigRuntime(nil)
 	if err != nil {
-		t.Fatalf("ResolveUnifiedConfig failed: %v", err)
+		t.Fatalf("resolveConfigRuntime failed: %v", err)
 	}
 	if resolved.Documents == nil || resolved.Documents.Explain == nil {
 		t.Fatal("expected resolved explain data")
@@ -206,7 +209,7 @@ func TestResolveCLIEngineSettings_InlineProfileKeepsBaseValuesWhenOmittingFields
 	t.Setenv("PINOCCHIO_AI_ENGINE", "env-model")
 
 	cwdFile := filepath.Join(cwdDir, ".pinocchio.yml")
-	if err := os.WriteFile(cwdFile, []byte("profile:\n  active: analyst\nprofiles:\n  analyst:\n    inference_settings:\n      api_keys:\n        api_keys:\n          openai-api-key: inline-key\n"), 0o644); err != nil {
+	if err := os.WriteFile(cwdFile, []byte("profile:\n  active: analyst\nprofiles:\n  analyst:\n    inference_settings:\n      api:\n        api_keys:\n          openai-api-key: inline-key\n"), 0o644); err != nil {
 		t.Fatalf("write %s: %v", cwdFile, err)
 	}
 
@@ -258,8 +261,8 @@ func TestResolveCLIEngineSettings_UsesMergedDocumentSelectionAndInlineProfiles(t
 	if resolved.Close != nil {
 		defer resolved.Close()
 	}
-	if resolved.ProfileSelection == nil || resolved.ProfileSelection.Profile != "assistant" {
-		t.Fatalf("expected assistant profile selection, got %#v", resolved.ProfileSelection)
+	if resolved.ProfileRuntime == nil || resolved.ProfileRuntime.ProfileSettings.Profile != "assistant" {
+		t.Fatalf("expected assistant profile runtime, got %#v", resolved.ProfileRuntime)
 	}
 	if resolved.BaseInferenceSettings == nil || resolved.BaseInferenceSettings.Chat == nil || resolved.BaseInferenceSettings.Chat.Engine == nil {
 		t.Fatal("expected base inference settings")

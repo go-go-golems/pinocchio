@@ -1,7 +1,7 @@
 package profilebootstrap
 
 func ResolveRepositoryPaths() ([]string, error) {
-	resolved, err := ResolveUnifiedConfig(nil)
+	resolved, err := resolveConfigRuntime(nil)
 	if err != nil {
 		return nil, err
 	}

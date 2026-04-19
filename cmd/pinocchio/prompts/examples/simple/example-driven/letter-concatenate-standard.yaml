@@ -1,4 +1,4 @@
 name: letter-concatenate-standard
-aliasFor: example-driven
+aliasFor: [examples, simple, example-driven]
 flags:
   examples: ./examples/letter-concatenation/standard-prompting.yaml

@@ -1,4 +1,4 @@
 name: letter-concatenate-least-to-most
-aliasFor: example-driven
+aliasFor: [examples, simple, example-driven]
 flags:
   examples: ./examples/letter-concatenation/least-to-most.yaml

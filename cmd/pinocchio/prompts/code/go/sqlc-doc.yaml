@@ -1,5 +1,5 @@
 name: sqlc-doc
-aliasFor: go
+aliasFor: [code, go]
 flags:
   context-in-front: "true"
   question: "false"

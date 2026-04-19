@@ -166,7 +166,10 @@ func (c *JSCommand) RunIntoWriter(ctx context.Context, parsed *values.Values, w 
 				profilebootstrap.BootstrapConfig(),
 				parsed,
 				*debugSettings,
-				runtimeBootstrap.ResolvedEngineSettings,
+				&geppettobootstrap.ResolvedInferenceTrace{
+					FinalInferenceSettings: runtimeBootstrap.ResolvedEngineSettings.FinalInferenceSettings,
+					ResolvedEngineProfile:  runtimeBootstrap.ResolvedEngineSettings.ResolvedEngineProfile,
+				},
 				geppettobootstrap.InferenceDebugOutputOptions{},
 			)
 			return err
@@ -242,24 +245,13 @@ func resolvePinocchioJSRuntimeBootstrap(ctx context.Context, parsed *values.Valu
 		return nil, err
 	}
 
-	unifiedConfig, err := profilebootstrap.ResolveUnifiedConfig(parsed)
-	if err != nil {
-		if resolved.Close != nil {
-			resolved.Close()
-		}
-		return nil, err
-	}
-	registryChain, err := profilebootstrap.ResolveUnifiedProfileRegistryChain(ctx, unifiedConfig)
-	if err != nil {
-		if resolved.Close != nil {
-			resolved.Close()
-		}
-		return nil, err
-	}
-
 	var profileRegistry gepprofiles.RegistryReader
 	var useDefaultProfileResolve bool
 	var defaultProfileResolve gepprofiles.ResolveInput
+	var registryChain *geppettobootstrap.ResolvedProfileRegistryChain
+	if resolved.ProfileRuntime != nil {
+		registryChain = resolved.ProfileRuntime.ProfileRegistryChain
+	}
 	if registryChain != nil {
 		profileRegistry = registryChain.Reader
 		useDefaultProfileResolve = registryChain.DefaultProfileResolve.EngineProfileSlug != ""
@@ -272,14 +264,7 @@ func resolvePinocchioJSRuntimeBootstrap(ctx context.Context, parsed *values.Valu
 		ProfileRegistry:          profileRegistry,
 		UseDefaultProfileResolve: useDefaultProfileResolve,
 		DefaultProfileResolve:    defaultProfileResolve,
-		Close: func() {
-			if registryChain != nil && registryChain.Close != nil {
-				registryChain.Close()
-			}
-			if resolved.Close != nil {
-				resolved.Close()
-			}
-		},
+		Close:                    resolved.Close,
 	}, nil
 }
 

@@ -1,5 +1,5 @@
 name: docstring
-aliasFor: typescript
+aliasFor: [code, typescript]
 flags:
   bracket: true
 arguments:

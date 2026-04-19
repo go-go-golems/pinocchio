@@ -81,7 +81,10 @@ profiles:
 	if got, want := string(*resolvedFromBase.FinalInferenceSettings.Chat.ApiType), string(*resolvedDirect.FinalInferenceSettings.Chat.ApiType); got != want {
 		t.Fatalf("final api type mismatch: got %q want %q", got, want)
 	}
-	if got, want := resolvedFromBase.ProfileSelection.Profile, resolvedDirect.ProfileSelection.Profile; got != want {
+	if resolvedFromBase.ProfileRuntime == nil || resolvedDirect.ProfileRuntime == nil {
+		t.Fatalf("expected profile runtime on both resolved paths: fromBase=%#v direct=%#v", resolvedFromBase.ProfileRuntime, resolvedDirect.ProfileRuntime)
+	}
+	if got, want := resolvedFromBase.ProfileRuntime.ProfileSettings.Profile, resolvedDirect.ProfileRuntime.ProfileSettings.Profile; got != want {
 		t.Fatalf("profile mismatch: got %q want %q", got, want)
 	}
 }

@@ -33,6 +33,16 @@ topics:
       description: Third-party reuse/extraction
     - slug: bobatea
       description: Bobatea TUI library
+    - slug: bootstrap
+      description: CLI bootstrap and layered profile/config resolution
+    - slug: configuration
+      description: Config files, env vars, and runtime configuration
+    - slug: runtime
+      description: Runtime execution, engine construction, and profile switching
+    - slug: cli
+      description: Command-line interface behavior and parsing
+    - slug: aliases
+      description: Command/prompt alias definitions and resolution behavior
     - slug: design
       description: Architecture and design work, especially forward-looking format or API proposals
     - slug: sqleton
@@ -41,6 +51,8 @@ topics:
       description: Migration planning and execution for APIs, config, and architecture changes
     - slug: cleanup
       description: Cleanup, simplification, and removal of deprecated code paths
+    - slug: merge
+      description: Merge conflict analysis and resolution work
 docTypes:
     - slug: index
       description: Ticket index / overall plan

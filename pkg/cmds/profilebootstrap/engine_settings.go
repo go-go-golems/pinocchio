@@ -15,7 +15,14 @@ import (
 	"github.com/pkg/errors"
 )
 
-type ResolvedCLIEngineSettings = bootstrap.ResolvedCLIEngineSettings
+type ResolvedCLIEngineSettings struct {
+	BaseInferenceSettings  *aisettings.InferenceSettings
+	FinalInferenceSettings *aisettings.InferenceSettings
+	ProfileRuntime         *ResolvedCLIProfileRuntime
+	ResolvedEngineProfile  *gepprofiles.ResolvedEngineProfile
+	ConfigFiles            []string
+	Close                  func()
+}
 
 func ResolveBaseInferenceSettings(parsed *values.Values) (*aisettings.InferenceSettings, []string, error) {
 	cfg := pinocchioBootstrapConfig()
@@ -23,7 +30,7 @@ func ResolveBaseInferenceSettings(parsed *values.Values) (*aisettings.InferenceS
 		return nil, nil, err
 	}
 
-	resolved, err := ResolveUnifiedConfig(parsed)
+	resolved, err := resolveConfigRuntime(parsed)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -68,46 +75,38 @@ func ResolveCLIEngineSettingsFromBase(
 		return nil, errors.New("base inference settings cannot be nil")
 	}
 
-	resolvedConfig, err := ResolveUnifiedConfig(parsed)
+	profileRuntime, err := ResolveCLIProfileRuntime(ctx, parsed)
 	if err != nil {
 		return nil, err
-	}
-	selection := &ResolvedCLIProfileSelection{
-		ProfileSettings: resolvedConfig.ProfileSettings,
-	}
-	if resolvedConfig.ConfigFiles != nil {
-		selection.ConfigFiles = append([]string(nil), resolvedConfig.ConfigFiles.Paths...)
 	}
 
 	configFiles := append([]string(nil), baseConfigFiles...)
-	if len(selection.ConfigFiles) > 0 {
-		configFiles = append([]string(nil), selection.ConfigFiles...)
+	if profileRuntime != nil && profileRuntime.ConfigFiles != nil && len(profileRuntime.ConfigFiles.Paths) > 0 {
+		configFiles = append([]string(nil), profileRuntime.ConfigFiles.Paths...)
 	}
 
-	registryChain, err := ResolveUnifiedProfileRegistryChain(ctx, resolvedConfig)
-	if err != nil {
-		return nil, err
-	}
+	registryChain := profileRuntime.ProfileRegistryChain
 	if registryChain == nil || registryChain.Registry == nil {
 		return &ResolvedCLIEngineSettings{
 			BaseInferenceSettings:  base,
 			FinalInferenceSettings: base,
-			ProfileSelection:       selection,
+			ProfileRuntime:         profileRuntime,
 			ConfigFiles:            configFiles,
+			Close:                  profileRuntime.Close,
 		}, nil
 	}
 
 	resolved, err := registryChain.Registry.ResolveEngineProfile(ctx, registryChain.DefaultProfileResolve)
 	if err != nil {
-		if registryChain.Close != nil {
-			registryChain.Close()
+		if profileRuntime.Close != nil {
+			profileRuntime.Close()
 		}
 		return nil, err
 	}
 	finalSettings, err := gepprofiles.MergeInferenceSettings(base, resolved.InferenceSettings)
 	if err != nil {
-		if registryChain.Close != nil {
-			registryChain.Close()
+		if profileRuntime.Close != nil {
+			profileRuntime.Close()
 		}
 		return nil, errors.Wrap(err, "merge base inference settings with engine profile")
 	}
@@ -115,10 +114,10 @@ func ResolveCLIEngineSettingsFromBase(
 	return &ResolvedCLIEngineSettings{
 		BaseInferenceSettings:  base,
 		FinalInferenceSettings: finalSettings,
-		ProfileSelection:       selection,
+		ProfileRuntime:         profileRuntime,
 		ResolvedEngineProfile:  resolved,
 		ConfigFiles:            configFiles,
-		Close:                  registryChain.Close,
+		Close:                  profileRuntime.Close,
 	}, nil
 }
 
@@ -147,12 +146,21 @@ func resolveHiddenBaseInferenceSettings(cfg bootstrap.AppBootstrapConfig) (*aise
 func NewEngineFromResolvedCLIEngineSettings(
 	resolved *ResolvedCLIEngineSettings,
 ) (engine.Engine, error) {
-	return bootstrap.NewEngineFromResolvedCLIEngineSettings(resolved)
+	return NewEngineFromResolvedCLIEngineSettingsWithFactory(nil, resolved)
 }
 
 func NewEngineFromResolvedCLIEngineSettingsWithFactory(
 	engineFactory factory.EngineFactory,
 	resolved *ResolvedCLIEngineSettings,
 ) (engine.Engine, error) {
-	return bootstrap.NewEngineFromResolvedCLIEngineSettingsWithFactory(engineFactory, resolved)
+	if resolved == nil {
+		return nil, errors.New("resolved engine settings cannot be nil")
+	}
+	if resolved.FinalInferenceSettings == nil {
+		return nil, errors.New("resolved final inference settings cannot be nil")
+	}
+	if engineFactory == nil {
+		engineFactory = factory.NewStandardEngineFactory()
+	}
+	return engineFactory.CreateEngine(resolved.FinalInferenceSettings)
 }
