@@ -1,0 +1,30 @@
+<div class="panel">
+  <h2>Phase 4 — Chat Example</h2>
+  <p>This page explains how the first real example backend should sit on top of <code>evtstream</code> without leaking chat-specific behavior back into the substrate. Use the chapter below as a guided walkthrough of the intended chat flow.</p>
+</div>
+<div class="panel">
+  <h3>Phase 4 Chapter</h3>
+  <p><a class="chapter-link" href="/chapters/phase-4-chat-example.md" target="_blank" rel="noopener noreferrer">Open raw markdown</a></p>
+  <div id="phase4-chapter" class="chapter-viewer">Loading chapter…</div>
+</div>
+<div class="grid">
+  <div class="panel">
+    <h3>Planned Controls</h3>
+    <ul>
+      <li>Prompt input and session selection</li>
+      <li>Send / Stop inference controls</li>
+      <li>Presets for happy path, streaming, and cancel</li>
+      <li>Backend event, UI event, and timeline panels</li>
+      <li>Transcript export</li>
+    </ul>
+    <p><strong>Status:</strong> Chapter and page scaffold ready. Interactive chat example integration still pending.</p>
+  </div>
+  <div class="panel">
+    <h3>What to focus on now</h3>
+    <ul>
+      <li>Why the chat example must remain a consumer of <code>evtstream</code>, not part of the core package.</li>
+      <li>How token-like backend events become both live UI updates and a final timeline entity.</li>
+      <li>Why stop/cancel behavior is one of the most revealing test cases in the phase.</li>
+    </ul>
+  </div>
+</div>

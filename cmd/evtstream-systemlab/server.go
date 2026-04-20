@@ -44,10 +44,12 @@ func (s *systemlabServer) handleStatus(w http.ResponseWriter, _ *http.Request) {
 		"app":    "evtstream-systemlab",
 		"phases": []string{"phase0", "phase1", "phase2", "phase3", "phase4", "phase5", "phase6"},
 		"labs": []map[string]any{
-			{"id": "phase0", "title": "Foundations", "implemented": true},
-			{"id": "phase1", "title": "Command → Event → Projection", "implemented": true},
-			{"id": "phase2", "title": "Ordering and Ordinals", "implemented": true},
-			{"id": "phase3", "title": "Hydration and Reconnect", "implemented": false},
+			{"id": "phase0", "title": "Foundations", "implemented": true, "chapter": true},
+			{"id": "phase1", "title": "Command → Event → Projection", "implemented": true, "chapter": true},
+			{"id": "phase2", "title": "Ordering and Ordinals", "implemented": true, "chapter": true},
+			{"id": "phase3", "title": "Hydration and Reconnect", "implemented": false, "chapter": true},
+			{"id": "phase4", "title": "Chat Example", "implemented": false, "chapter": true},
+			{"id": "phase5", "title": "Persistence and Restart", "implemented": false, "chapter": true},
 		},
 		"boundary": map[string]any{
 			"systemlabCalls":  []string{"public evtstream package APIs", "its own HTTP endpoints"},

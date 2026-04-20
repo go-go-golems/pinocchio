@@ -1,7 +1,15 @@
-import { phase2ExportURL, runPhase2 } from "../api.js";
-import { byId, renderChecks, setJSON } from "../dom.js";
+import { fetchChapterHTML, phase2ExportURL, runPhase2 } from "../api.js";
+import { byId, renderChecks, setHTML, setJSON } from "../dom.js";
 
-export function initPhase2Page() {
+export async function initPhase2Page() {
+  const chapter = byId("phase2-chapter");
+  if (chapter) {
+    try {
+      setHTML(chapter, await fetchChapterHTML("phase-2-ordering-and-ordinals"));
+    } catch (error) {
+      chapter.textContent = error.message;
+    }
+  }
   const sessionAInput = byId("phase2-session-a");
   const sessionBInput = byId("phase2-session-b");
   const burstCountInput = byId("phase2-burst-count");

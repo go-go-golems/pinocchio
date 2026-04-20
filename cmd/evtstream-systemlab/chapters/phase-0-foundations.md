@@ -1,101 +1,102 @@
 # Phase 0 — Foundations, API Skeleton, and Systemlab Shell
 
-## Who this chapter is for
+## Welcome
 
-This chapter is written for a new intern joining the `evtstream` work for the first time. You should be able to read this chapter before touching the code and come away understanding:
+If you are a new intern on this project, Phase 0 is where you should slow down, breathe, and orient yourself. It is tempting to look at the later phases—live event streams, websocket transport, reconnect logic, durable state—and assume that the exciting work must start there. But in systems like this, the quality of the later phases depends almost entirely on whether the early foundations were laid with discipline.
 
-- what the framework is trying to become,
+That is what Phase 0 is about. It is the phase where we decide what kind of system we are building before we fill it with behavior. It is where we make the package boundaries real, where we decide what belongs to the reusable framework and what belongs to the teaching app around it, and where we deliberately choose a shape that a new engineer can still understand several phases later.
+
+In other words: Phase 0 is not "just scaffolding." It is the part of the build where we try to prevent the future system from collapsing under its own convenience.
+
+This chapter is written as a careful walkthrough for someone who is still getting their bearings. By the end, you should understand:
+
+- what `evtstream` is trying to become,
 - why it lives in `pkg/evtstream`,
-- why Systemlab is a separate application,
-- what Phase 0 is supposed to prove,
+- why Systemlab is a separate app,
+- what this phase proves and what it intentionally does *not* prove,
 - which files matter first,
-- which boundaries are architectural rules rather than temporary preferences.
-
-This is a **textbook-style explanation chapter**, not just a changelog. It mixes prose, diagrams, pseudocode, file references, and API references so you can use it both as onboarding material and as a review checklist.
+- which ideas are merely implementation details, and which are architectural rules.
 
 ---
 
-## 1. The big picture
+## 1. The story this framework is trying to tell
 
-The long-term goal of `evtstream` is to become a reusable substrate for realtime, event-streaming applications such as chat systems, agent systems, and other live UIs that need:
+At a high level, `evtstream` is trying to become a reusable substrate for realtime, event-streaming applications. The phrase "event-streaming substrate" can sound abstract at first, so it helps to translate it into the kind of user experience we actually care about.
 
-- typed commands coming in,
-- typed backend events flowing through a canonical stream,
-- projection into live UI updates,
-- projection into durable hydration state,
-- reconnect behavior that can replay current state and then continue live.
+Imagine a client sends a command—perhaps a prompt, perhaps a start action, perhaps a control signal. That command should trigger work on the backend. While the backend is doing that work, it should publish canonical backend events that describe what is happening. Those events should be usable for at least two different purposes at the same time: they should drive live UI updates, and they should also build durable state that can later be used for hydration, reconnect, and recovery.
 
-In plain English, the framework is trying to answer this question:
+The framework is trying to make that pattern reusable.
 
-> How do we build systems where a command starts work, backend events stream out of that work, the UI updates live, durable state stays coherent, and clients can reconnect without confusion?
+That means it is trying to answer a question like this:
 
-Phase 0 does **not** implement all of that behavior. Phase 0 instead creates the **shape** that future phases need so the implementation can grow without becoming tangled.
+> How do we build systems where commands start work, backend events become the canonical internal stream, UI updates remain derived rather than primary, and reconnecting clients can recover cleanly without the entire application becoming tangled?
 
-If you remember only one sentence from this chapter, remember this one:
-
-> Phase 0 is about making the architecture real in code before the behavior becomes complex.
+That is a lot to ask from a framework. Which is why Phase 0 is so careful. We are not trying to implement the whole dream here. We are trying to create a structure that can support the dream without turning into a pile of accidental product code.
 
 ---
 
-## 2. What Phase 0 is trying to prove
+## 2. What Phase 0 is really proving
 
-Phase 0 is intentionally modest. It proves that the codebase is arranged correctly before we add more runtime behavior.
+Phase 0 exists to prove that we can start from the right architecture instead of backing into it later. A lot of systems begin with a quick prototype, then keep adding behavior until the prototype quietly becomes production code. That path is fast in the short term and expensive forever afterward.
 
-### Phase 0 goals
+This phase chooses the slower, healthier path. It says: before we add more runtime behavior, let's make sure the package tree, the seams, the terminology, and the consumer app all line up with the long-term plan.
+
+### What Phase 0 gives us
 
 Phase 0 establishes:
 
-- a dedicated framework package home,
-- stable substrate vocabulary,
-- public seams for later implementations,
-- a separate Systemlab app shell,
-- a clear rule that Systemlab may consume public APIs but not framework internals,
-- validation commands that make those boundaries reviewable.
+- a dedicated package home for the substrate,
+- stable vocabulary for the core concepts,
+- public interfaces that later phases can implement more deeply,
+- a separate teaching/debugging app called Systemlab,
+- explicit rules about what the lab is allowed to touch,
+- repeatable validation commands that let reviewers verify the boundary.
 
-### Phase 0 non-goals
+### What Phase 0 does *not* try to do yet
 
-Phase 0 does **not** yet promise:
+It does **not** yet promise:
 
-- real distributed event delivery,
-- websocket subscriptions,
-- durable SQL hydration,
+- a real distributed bus,
+- websocket connections,
+- reconnect semantics,
+- SQL durability,
 - chat-specific behavior,
-- webchat compatibility.
+- compatibility with legacy webchat.
 
-That distinction matters because interns often read scaffolding code and assume it is incomplete production logic. In this phase, some pieces are intentionally minimal because the primary deliverable is **structure**, not runtime sophistication.
+This matters because when you first open the code, you may notice that some pieces feel intentionally small. That is not because the phase is unfinished in a sloppy way. It is because the phase is focused. The point here is not to impress you with runtime complexity. The point is to create a codebase you can still reason about once the complexity arrives.
 
 ---
 
-## 3. Why `pkg/evtstream` exists
+## 3. Why `pkg/evtstream` had to be created
 
-Before this work, `pinocchio/pkg/webchat` already contained strong event-streaming donor ideas. But it is not the right generic substrate as-is.
+One of the most important design decisions in this project is that we did **not** simply rename `pkg/webchat` and call it the framework.
 
-Why not?
+That older package contains valuable donor logic. It has good ideas. It has examples of real streaming behavior. It has code that is worth studying carefully. But it is not the same thing as a reusable clean-room substrate.
 
-- It carries chat-specific assumptions.
-- It includes legacy shapes tied to SEM/webchat behavior.
-- It mixes transport, business semantics, and product-specific details.
-- It has identity and routing concerns that do not match the clean-room target.
+There are several reasons for that.
 
-So instead of renaming `pkg/webchat`, the project created a new package:
+First, `pkg/webchat` is still shaped by the needs of webchat itself. It carries assumptions that make perfect sense inside that product context but would become baggage in a generic substrate. Second, it includes product-specific transport and message-shape concerns that we explicitly do not want to make canonical in the new framework. Third, using donor code directly as the substrate would blur a line that we want to keep very sharp: donor code is where we learn from prior work, but the substrate is where we define the cleaner abstraction.
+
+So the project created a new package home:
 
 - `pinocchio/pkg/evtstream`
 
-That is where the generic substrate lives.
+That package is where the reusable framework vocabulary and seams live.
 
-### Mental model
+### The healthy mental model
 
-Think of the relationship this way:
+When you think about the relationship between the old code and the new code, use this model:
 
 ```text
-webchat is a donor and later a consumer/example
-
-evtstream is the reusable substrate
+pkg/webchat  -> donor and later consumer/example
+pkg/evtstream -> reusable substrate
 ```
 
-### File references
+That distinction will help you make better decisions when you later wonder where a helper, projection, or transport concept belongs.
 
-Start here:
+### The first files to read
+
+Start with:
 
 - `pinocchio/pkg/evtstream/doc.go`
 - `pinocchio/pkg/evtstream/types.go`
@@ -105,52 +106,51 @@ Start here:
 - `pinocchio/pkg/evtstream/hub.go`
 - `pinocchio/pkg/evtstream/transport/transport.go`
 
-These files define the vocabulary and seams that later phases plug real behavior into.
+These are the files where the framework begins by naming the things it cares about.
 
 ---
 
-## 4. Why Systemlab is a separate app
+## 4. Why Systemlab is separate, and why that matters so much
 
-One of the most important architectural decisions is that **Systemlab is not the framework**.
+A new intern often notices Systemlab and thinks of it as a fancy demo shell. That is not quite right. It is more important than that.
 
-Systemlab is a separate app under:
+Systemlab exists as a **separate app** because a framework boundary is not really proven until something outside the framework uses it honestly. If the framework and the lab were blended together, we would always be at risk of subtle cheating. The lab would call helpers that no real consumer could call. It would reach into private internals just because that was convenient. It would accidentally turn teaching code into framework dependency.
+
+Keeping Systemlab separate prevents that kind of drift.
+
+Systemlab lives here:
 
 - `pinocchio/cmd/evtstream-systemlab`
 
-That decision is not cosmetic. It is what makes API boundaries testable.
+### What Systemlab is trying to be
 
-If the framework and the lab were the same app, it would become too easy to:
+Systemlab is all of these at once:
 
-- call internal helpers directly,
-- bypass public seams,
-- leak example-specific concepts into the substrate,
-- build demos that only work because they cheat.
-
-### What Systemlab is for
-
-Systemlab is meant to be all of these at once:
-
-- an onboarding artifact,
-- an interactive explainer,
-- a debugging surface,
-- a regression tool,
+- a guided explainer,
+- a debugging environment,
+- a regression surface,
+- an onboarding tool,
 - a public-API exerciser.
 
-### Boundary rule
+That means it must be capable enough to be useful, but disciplined enough not to distort the architecture.
+
+### The rule you should remember
 
 Systemlab may:
 
 - import public `evtstream` APIs,
 - expose its own HTTP endpoints,
-- present views and labs that explain framework behavior,
-- simulate transport and application use.
+- render labs and explanations,
+- simulate consumers of the framework.
 
 Systemlab may not:
 
 - import `pkg/webchat` internals,
-- mutate framework internals by private access,
-- redefine substrate concepts in a lab-specific way,
-- turn phase demos into hidden framework dependencies.
+- bypass public seams just because the code lives in the same repo,
+- redefine framework ideas in lab-specific ways,
+- smuggle product logic into the substrate.
+
+If you ever feel tempted to make Systemlab "just a little more convenient" by reaching into framework internals, that is usually a sign you are about to damage exactly the thing Systemlab is meant to protect.
 
 ### File references
 
@@ -162,94 +162,53 @@ Read:
 
 ---
 
-## 5. The Phase 0 architectural vocabulary
+## 5. The vocabulary Phase 0 teaches you
 
-A new intern should become comfortable with a handful of core terms immediately.
+This phase is the first place where the project teaches you its core nouns. These words are not decorative. They are the language the framework will use for every later phase.
 
-### 5.1 `SessionId`
+### `SessionId`
 
 `SessionId` is the universal routing key.
 
-This is one of the most important clean-room decisions.
+This is one of the most important clean-room choices. Instead of scattering identity and routing across multiple overlapping notions, the framework makes one session identifier the center of gravity for:
 
-Instead of splitting routing between multiple overlapping identity concepts, the framework centers on:
+- command routing,
+- event ordering,
+- hydration state,
+- reconnect semantics,
+- later subscription behavior.
 
-- one session,
-- one routing identity,
-- one place where ordered state and subscriptions accumulate.
+That clarity becomes more valuable, not less, as the system grows.
 
-You will see `SessionId` referenced repeatedly in:
+### `ConnectionId`
 
-- `types.go`
-- `hub.go`
-- hydration store APIs
-- bus/topic/partitioning rules
-- future websocket subscriptions
+`ConnectionId` identifies one transport-level connection. It is deliberately not the same thing as a session. A session may later have multiple connections attached to it, and a transport must be free to manage that without changing the business-level concept of a session.
 
-### 5.2 `ConnectionId`
+### `Command`
 
-`ConnectionId` identifies one transport connection.
+A command is the typed request entering the framework. It is what a caller wants to do.
 
-It is not the same thing as a session.
+### `Event`
 
-A session may later have:
+An event is the canonical backend event moving through the substrate. This is critical. The framework does not treat UI output as its primary internal form. It treats backend events as the truth and derives UI and hydration state from them.
 
-- zero connections,
-- one connection,
-- multiple simultaneous connections.
+### `UIProjection`
 
-That separation matters because the framework routes business state by `SessionId`, while transport-specific routing later happens by `ConnectionId`.
+A `UIProjection` turns canonical backend events into client-facing UI events.
 
-### 5.3 `Command`
+### `TimelineProjection`
 
-A `Command` is the typed request entering the substrate.
+A `TimelineProjection` turns those same canonical backend events into timeline entities that the hydration store can retain.
 
-Examples in later phases might include:
+### `HydrationStore`
 
-- `StartInference`
-- `StopInference`
-- `LabStart`
-
-A command is not a UI event, not a websocket envelope, and not durable state. It is simply the typed request shape entering dispatch.
-
-### 5.4 `Event`
-
-An `Event` is the canonical backend event carried through the substrate.
-
-This is a central concept.
-
-The framework does **not** treat UI events as the primary internal currency. Backend events are the canonical internal stream. Projections then derive:
-
-- UI events for live clients,
-- timeline entities for hydration state.
-
-### 5.5 `UIProjection`
-
-A `UIProjection` transforms one backend event into zero or more UI events.
-
-That is how live client updates are derived.
-
-### 5.6 `TimelineProjection`
-
-A `TimelineProjection` transforms one backend event into zero or more timeline entities.
-
-That is how durable hydration state is built.
-
-### 5.7 `HydrationStore`
-
-A `HydrationStore` is the persistence seam behind snapshots, views, and cursors.
-
-It is intentionally abstract because later phases need multiple implementations:
-
-- in-memory store,
-- SQL store,
-- possibly others later.
+A `HydrationStore` is the persistence seam. In later phases it will matter for reconnect, snapshotting, and durable restart behavior. In Phase 0, it matters because we need the interface shape right before we need the implementation depth.
 
 ---
 
-## 6. Phase 0 directory map
+## 6. The Phase 0 directory map
 
-This is the Phase 0 mental map of the important code.
+It helps to look at the codebase as a map rather than as a pile of files.
 
 ```text
 pinocchio/
@@ -271,6 +230,7 @@ pinocchio/
 │       ├── README.md
 │       ├── main.go
 │       ├── server.go
+│       ├── chapters/
 │       └── static/
 │           ├── index.html
 │           ├── app.css
@@ -280,26 +240,25 @@ pinocchio/
 └── Makefile
 ```
 
-### What each area means
+When you read that tree slowly, you can already see the intended ownership model.
 
-#### `pkg/evtstream/*`
-This is the substrate itself.
+- `pkg/evtstream` owns the substrate.
+- `cmd/evtstream-systemlab` owns the teaching app.
+- `Makefile` owns the repeatable validation entrypoints.
 
-#### `cmd/evtstream-systemlab/*`
-This is the separate lab app that explains and exercises the substrate.
-
-#### `Makefile`
-This contains executable validation hooks for the boundary and build shape.
+That separation is not just tidy—it is a statement of design.
 
 ---
 
-## 7. The public API skeleton in Phase 0
+## 7. The API skeleton and why it is intentionally boring
 
-Phase 0 does not try to finish all runtime behavior. Instead, it establishes stable names and seams.
+New engineers often underestimate how valuable a boring API skeleton can be. They want more runtime behavior, more features, more proof that the thing is alive. But stable names and stable seams are one of the best gifts you can give a growing system.
+
+Phase 0 establishes those names early.
 
 ### API references
 
-The main public types and interfaces appear in these files:
+The primary API surfaces are defined in:
 
 - `pinocchio/pkg/evtstream/types.go`
 - `pinocchio/pkg/evtstream/handler.go`
@@ -307,7 +266,7 @@ The main public types and interfaces appear in these files:
 - `pinocchio/pkg/evtstream/hydration.go`
 - `pinocchio/pkg/evtstream/transport/transport.go`
 
-### Example mental sketch
+### Conceptual sketch
 
 ```go
 type SessionId string
@@ -337,29 +296,13 @@ type TimelineProjection interface {
 }
 ```
 
-### Why this matters
-
-The value of this skeleton is that later phases can add real behavior without renaming fundamental concepts every day.
-
-That stability is extremely important for:
-
-- tests,
-- examples,
-- docs,
-- onboarding,
-- future external consumers.
+It is okay if this feels abstract the first time through. Phase 0 is where you learn the nouns. Phase 1 and later phases make those nouns feel alive.
 
 ---
 
-## 8. The import-cycle lesson from Phase 0
+## 8. The import-cycle lesson: architecture shows up in errors
 
-One of the most important technical lessons of Phase 0 came from a failure.
-
-### The problem
-
-A naive version of `Hub` tried to default directly to the in-memory hydration store implementation.
-
-That creates this dependency chain:
+One of the most useful lessons of Phase 0 came from an actual failure. At one point, the core package tried to default directly to the in-memory store implementation. That seems harmless at first glance. It even sounds convenient. But it produces a dependency graph like this:
 
 ```text
 evtstream -> hydration/memory -> evtstream
@@ -367,30 +310,25 @@ evtstream -> hydration/memory -> evtstream
 
 That is an import cycle.
 
-### Why it is wrong architecturally
+More importantly, it is a sign of architectural confusion.
 
-The core package should define interfaces and types.
-Concrete implementations should depend on the core, not the other way around.
+The core package should own interfaces and shared types. Concrete implementations should depend on the core—not the reverse. So the fix here was not some clever Go trick. The fix was to return to the architecture and make the dependency direction honest.
 
-### The fix
+The result was:
 
-The fix used in Phase 0 is dependency inversion:
-
-- `evtstream` owns the `HydrationStore` interface,
+- `evtstream` defines the `HydrationStore` interface,
 - `evtstream/hydration/memory` implements it,
-- callers inject that implementation,
-- the core package uses a root-local noop fallback when no store is supplied.
+- callers inject implementations with options,
+- the core keeps a root-local noop fallback rather than depending on the memory implementation.
 
-### File references
-
-Read these together:
+### Read these files together
 
 - `pinocchio/pkg/evtstream/hydration.go`
 - `pinocchio/pkg/evtstream/noop_store.go`
 - `pinocchio/pkg/evtstream/hydration/memory/store.go`
 - `pinocchio/pkg/evtstream/hub.go`
 
-### Pseudocode for the right pattern
+### Pseudocode for the right dependency shape
 
 ```go
 store := memory.New()
@@ -400,79 +338,110 @@ hub, err := evtstream.NewHub(
 )
 ```
 
-and **not** this:
+and *not*:
 
 ```go
 func NewHub(...) {
-    store := memory.New() // wrong place, causes core -> implementation dependency
+    store := memory.New() // wrong place: core depending on concrete implementation
 }
 ```
 
+This is a beautiful example of why early phases matter. If you solve a problem like this cleanly in Phase 0, the later phases inherit that clarity automatically.
+
 ---
 
-## 9. Why Phase 0 also includes a shell app
+## 9. Why the shell app matters even before the framework does much
 
-A common intern mistake is to think that because Phase 0 is a foundation phase, it should only produce library code. That is not enough.
+Phase 0 could have stopped with `pkg/evtstream` and claimed success. But that would not have been enough. The whole point of a public API is that something outside the core should be able to consume it.
 
-The shell app matters because a framework boundary is not proven until something outside the framework uses it.
+That is why the shell app exists even this early.
 
-### What the shell app proves
+The shell page is intentionally simple. It is not trying to fake a full product. It is not trying to wow you with visuals. Instead, it is doing something much more important: it is proving that the separate app can exist, can compile, can mount pages, can show framework status, and can become the place where each future phase is explained and exercised.
 
-The shell app proves that:
-
-- the package tree compiles coherently,
-- the framework can be consumed by another app,
-- the public names are good enough to build against,
-- the system can have a separate explainer surface.
-
-### What the shell page shows
-
-The early shell page is intentionally simple:
-
-- navigation,
-- overview text,
-- framework status,
-- placeholder pages for future labs.
-
-That simplicity is not a weakness. It is exactly the right amount of behavior for a foundation phase.
+A young framework needs a public face, even before it needs a fancy one.
 
 ---
 
 ## 10. The frontend shape of Systemlab
 
-Even though Systemlab is a Go app, the browser-facing UI still needs structure.
+Because Systemlab is browser-facing, there is also a frontend structure to understand. That structure is deliberately modular even though the UI is still relatively small.
 
-### Why the frontend is split into multiple files
+Why? Because the team already knows that each future phase will add another lab page, another set of controls, another explanatory surface, and another set of debugging views. If all of that lived in one HTML file, the shell would quickly become harder to maintain than the framework it is trying to explain.
 
-Systemlab is expected to grow phase by phase. If everything stayed in one HTML file, future labs would quickly become hard to read and hard to review.
-
-So the UI is intentionally split into:
+So the frontend is split into:
 
 - `static/index.html` — shell only,
-- `static/app.css` — shared styles,
-- `static/partials/*.html` — page-level HTML fragments,
+- `static/app.css` — shared styling,
+- `static/partials/*.html` — page-level fragments,
 - `static/js/main.js` — bootstrap and navigation,
 - `static/js/pages/*.js` — per-page behavior,
-- `static/js/api.js` and `static/js/dom.js` — shared helpers.
+- `static/js/api.js` and `static/js/dom.js` — shared helpers,
+- `chapters/*.md` — long-form prose chapters like the one you are reading now.
 
-### Intern rule
-
-When you add a new lab page:
-
-- add a new partial,
-- add a new page module,
-- keep `index.html` as a shell,
-- avoid dumping unrelated logic into `main.js`.
-
-That rule keeps the browser UI aligned with the phase-by-phase architecture of the framework.
+This is one of those design choices that seems small until you try to extend the system. Then it becomes obvious why it was worth doing early.
 
 ---
 
-## 11. Validation commands you should know in Phase 0
+## 11. How to use the Phase 0 page as a learning tool
 
-These commands are part of the architecture, not just convenience helpers.
+Phase 0 does not have rich runtime controls the way later phases do, but the page is still meant to be used actively.
 
-### Main commands
+### Try 1: read the introductory prose, then inspect the status block
+
+Start on the Overview / Phase 0 page. Read the short explanation text at the top, then scroll through the framework status panel.
+
+What you are doing here is learning to connect prose and machine-readable state. The prose tells you what Systemlab is trying to be. The status panel tells you which phases currently exist, which ones are placeholders, and which boundary rules are being surfaced by the app.
+
+Pay attention to the relationship between the two. Does the UI feel like it is explaining a real architecture? Does it feel like a separate consumer app rather than framework internals in disguise? Those are the right questions at this stage.
+
+### Try 2: navigate between available phase pages
+
+Click between:
+
+- Overview / Phase 0
+- Phase 1
+- Phase 2
+
+Even if you do not yet understand the later phases in detail, notice what the shell is already doing. It is making room for later learning without pretending that all later behavior is already built. That is a subtle but healthy design move.
+
+### Try 3: compare the page with the source files
+
+Leave the page open and read these files side by side:
+
+- `pinocchio/cmd/evtstream-systemlab/server.go`
+- `pinocchio/cmd/evtstream-systemlab/static/index.html`
+- `pinocchio/cmd/evtstream-systemlab/static/partials/overview.html`
+- `pinocchio/cmd/evtstream-systemlab/static/js/pages/overview.js`
+
+As you do that, ask yourself: how much logic is the shell really owning? Ideally, the answer is "just enough to explain and present the system, but not so much that it becomes the system."
+
+---
+
+## 12. What to pay attention to when reading Phase 0 code
+
+There are several patterns worth noticing because they teach you how this codebase wants to be extended.
+
+### Pay attention to ownership
+
+Whenever you open a file, ask: is this file describing a substrate concept, an implementation concept, or a consumer concept? If you build that instinct early, you will make cleaner changes later.
+
+### Pay attention to dependency direction
+
+The import-cycle story is not just a Go quirk. It is an early warning system for muddled boundaries.
+
+### Pay attention to naming
+
+Phase 0 is when naming is cheapest to stabilize. If a name is awkward now, it will be expensive later.
+
+### Pay attention to what is *missing*
+
+Sometimes the absence of something is deliberate. If the phase does not yet contain complex runtime logic, that might be because the team is preserving room for a cleaner implementation later.
+
+---
+
+## 13. Validation commands you should know immediately
+
+These commands are part of how the architecture stays honest.
 
 ```bash
 cd /home/manuel/workspaces/2026-04-07/extract-webchat/pinocchio
@@ -484,30 +453,21 @@ make evtstream-boundary-check
 make evtstream-check
 ```
 
-### What each one means
+### Why they matter
 
-#### `make systemlab-run`
-Runs the Systemlab app locally.
+A framework is much easier to trust when its key design rules can be validated mechanically.
 
-#### `make evtstream-test`
-Runs the targeted framework and Systemlab test set.
+- `make systemlab-run` proves the shell app works as a separate app.
+- `make evtstream-test` checks the targeted framework and Systemlab tests.
+- `make systemlab-build` ensures the app builds cleanly.
+- `make evtstream-boundary-check` helps catch boundary violations.
+- `make evtstream-check` bundles the main targeted validation path.
 
-#### `make systemlab-build`
-Builds the shell app without polluting the repo root.
-
-#### `make evtstream-boundary-check`
-Checks that Systemlab does not import forbidden legacy internals.
-
-#### `make evtstream-check`
-Runs the combined targeted validation flow for the current work.
-
-### Why these commands matter
-
-A good architecture is one that can be mechanically checked. These commands turn design rules into reviewable behavior.
+The important thing to understand is that these are not afterthoughts. They are part of the architecture's defense system.
 
 ---
 
-## 12. How a reviewer should read Phase 0 code
+## 14. How a reviewer should read Phase 0
 
 If you are reviewing Phase 0 for the first time, read in this order:
 
@@ -522,82 +482,57 @@ If you are reviewing Phase 0 for the first time, read in this order:
 9. `pinocchio/cmd/evtstream-systemlab/static/index.html`
 10. `pinocchio/Makefile`
 
-This order moves from vocabulary -> orchestration -> app boundary -> validation.
+That order walks you from vocabulary, to orchestration, to app boundary, to validation. It is the same path your mental model should follow.
 
 ---
 
-## 13. The most important architectural invariants from Phase 0
+## 15. The invariants you should remember after reading this chapter
 
-You should be able to state these invariants from memory.
+If you walk away remembering only a handful of things, let them be these:
 
-### Invariant 1: the substrate is centered on `SessionId`
+### Invariant 1: `SessionId` is the center of routing
 
-No alternative routing identity should quietly become the real one.
+The framework wants one canonical routing identity for stateful work.
 
 ### Invariant 2: backend events are canonical
 
-UI messages are derived projections, not the main internal stream.
+UI-facing shapes are derived, not primary.
 
-### Invariant 3: Systemlab is a consumer, not part of the substrate
+### Invariant 3: Systemlab is a consumer of the framework
 
-It should exercise public APIs, not become an excuse to bypass them.
+It is not part of the substrate and should not quietly act like it is.
 
-### Invariant 4: implementations depend on interfaces, not the reverse
+### Invariant 4: concrete implementations depend on interfaces
 
-The import-cycle fix is not a workaround; it is the intended architecture.
+The core package should not point downward at implementations.
 
-### Invariant 5: file layout is part of maintainability
+### Invariant 5: maintainability is part of the design
 
-Small, clearly-owned files matter because the system is expected to grow by phase.
-
----
-
-## 14. Phase 0 runtime flow, conceptually
-
-Even with minimal behavior, you should understand the conceptual runtime shape.
-
-```text
-Systemlab shell app
-    |
-    | consumes public evtstream package APIs
-    v
-Hub / registries / store seams
-    |
-    | later phases will add real command dispatch, bus consumption,
-    | projections, hydration, and transport
-    v
-Future event-streaming substrate
-```
-
-This is the key idea:
-
-- Phase 0 does not finish the runtime,
-- but it ensures there is a coherent place for the runtime to arrive.
+File layout, naming, and validation are not secondary concerns. They are how the system stays understandable.
 
 ---
 
-## 15. What changes in later phases
+## 16. Where later phases go from here
 
-A new intern should know what Phase 0 hands to later work.
+Phase 0 is the map. Later phases start traveling.
 
 ### Phase 1 will add
 
 - real in-memory command dispatch,
-- session creation,
 - event publication,
-- projections,
-- hydration snapshot behavior.
+- projection execution,
+- hydration snapshots.
 
 ### Phase 2 will add
 
-- Watermill-backed publish/consume,
-- consumption-time ordinal assignment,
-- ordering lab behavior.
+- a real Watermill-backed bus boundary,
+- consumer-side ordinal assignment,
+- ordering experiments.
 
 ### Phase 3 will add
 
 - websocket transport,
-- subscription sets,
+- subscriptions,
 - snapshot-before-live reconnect behavior.
 
 ### Phase 4 will add
@@ -606,93 +541,55 @@ A new intern should know what Phase 0 hands to later work.
 
 ### Phase 5 will add
 
-- durable SQL hydration store,
+- durable SQL hydration,
 - restart correctness.
 
-This is why Phase 0 must stay generic and clean. Every later phase depends on it.
+This is why it matters that Phase 0 stays generic and disciplined. Every later phase stands on it.
 
 ---
 
-## 16. Common mistakes for new interns in this area
+## 17. Common intern mistakes in this area
+
+A few mistakes show up again and again when engineers are new to this code.
 
 ### Mistake 1: treating donor code as the substrate
 
-Do not assume that because `pkg/webchat` has working logic, its structure is the right generic structure.
+Study donor code closely. Do not confuse it with the clean-room abstraction.
 
-### Mistake 2: adding app-specific helpers to `pkg/evtstream`
+### Mistake 2: adding example-specific helpers to `pkg/evtstream`
 
-If a helper only makes sense for one example or one lab, it probably belongs outside the substrate.
+If a helper only makes sense for one lab or one application, it probably belongs outside the substrate.
 
 ### Mistake 3: collapsing session and connection concepts
 
-That will make later transport and reconnect behavior much harder.
+That makes future transport and reconnect logic much harder.
 
 ### Mistake 4: letting the lab cheat
 
-If Systemlab calls internal logic that a real consumer could not call, the lab is undermining the architecture instead of validating it.
+If Systemlab can only work by calling non-public logic, then it is no longer validating the architecture.
 
-### Mistake 5: ignoring validation commands
+### Mistake 5: underestimating validation tooling
 
-A reviewer needs more than prose. Always keep the build and boundary checks healthy.
-
----
-
-## 17. Suggested pseudocode for explaining Phase 0 to someone else
-
-If you had to explain Phase 0 on a whiteboard, you could use this simplified pseudocode:
-
-```go
-// 1. Create the substrate home.
-package evtstream
-
-// 2. Define stable nouns.
-type SessionId string
-type Command struct { ... }
-type Event struct { ... }
-
-// 3. Define stable seams.
-type CommandHandler func(...)
-type UIProjection interface { ... }
-type TimelineProjection interface { ... }
-type HydrationStore interface { ... }
-
-// 4. Create the top-level orchestration object.
-func NewHub(opts ...HubOption) (*Hub, error)
-
-// 5. Build a separate shell app against public APIs.
-func main() {
-    app := systemlab.New()
-    http.ListenAndServe(":8091", app.Routes())
-}
-```
-
-This is intentionally boring pseudocode. That is good. Foundation code should be boring in the sense that the names, seams, and ownership are clear.
+If the build and boundary checks go stale, the architecture will eventually drift away from its documented shape.
 
 ---
 
-## 18. Review checklist for Phase 0
+## 18. Final summary
 
-Use this checklist when reviewing or extending the phase.
+Phase 0 is the phase where the project decides to be legible.
 
-### Architecture checklist
+It gives the system:
 
-- [ ] Is the code in `pkg/evtstream` generic rather than chat-specific?
-- [ ] Is `SessionId` still the central routing key?
-- [ ] Do concrete store implementations depend on the core, not vice versa?
-- [ ] Is Systemlab still a separate consumer app?
+- a dedicated package home,
+- stable core vocabulary,
+- public seams,
+- honest dependency direction,
+- a separate consumer app,
+- executable checks for the architecture.
 
-### Systemlab checklist
+It also gives a new intern something deeply valuable: a way to understand the project before they are asked to accelerate it.
 
-- [ ] Does the shell use public APIs only?
-- [ ] Is the frontend still split into shell/partials/page modules?
-- [ ] Are new pages added as separate partial + JS module pairs?
-
-### Validation checklist
-
-- [ ] Does `make evtstream-test` pass?
-- [ ] Does `make systemlab-build` pass?
-- [ ] Does `make evtstream-boundary-check` pass?
-- [ ] Does `make evtstream-check` pass?
+That is what a good foundation phase should do. It should not only make future implementation possible. It should make future implementation teachable.
 
 ---
 
@@ -745,6 +642,8 @@ Keep the page open and read these files side by side:
 
 Notice how little product logic is required for the shell. That is a sign that the page is doing the right job: it is exposing architecture and status, not inventing fake runtime behavior.
 
+---
+
 ## 20. Short glossary
 
 ### Substrate
@@ -764,28 +663,7 @@ The separate explainer/testing/debugging app that consumes public framework seam
 
 ---
 
-## 21. Final summary
-
-Phase 0 is the phase where the project stops being an idea and starts being a real architecture.
-
-It gives the framework:
-
-- a dedicated package home,
-- stable vocabulary,
-- public seams,
-- clean dependency direction,
-- a separate consumer app,
-- executable validation commands.
-
-It gives a new intern something even more important:
-
-- a reliable map.
-
-Once you understand Phase 0, the later phases make sense as additions to a stable structure instead of a pile of unrelated features.
-
----
-
-## 22. API references and file references at a glance
+## 21. File references at a glance
 
 ### Key API files
 
@@ -805,6 +683,7 @@ Once you understand Phase 0, the later phases make sense as additions to a stabl
 - `pinocchio/cmd/evtstream-systemlab/static/app.css`
 - `pinocchio/cmd/evtstream-systemlab/static/partials/overview.html`
 - `pinocchio/cmd/evtstream-systemlab/static/js/main.js`
+- `pinocchio/cmd/evtstream-systemlab/chapters/phase-0-foundations.md`
 
 ### Key validation file
 

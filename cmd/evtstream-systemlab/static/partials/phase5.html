@@ -1,0 +1,30 @@
+<div class="panel">
+  <h2>Phase 5 — Persistence and Restart Correctness</h2>
+  <p>This page is the teaching surface for the durable hydration-store phase. It explains why cursor state and timeline state must survive restart together, and what the future memory-vs-SQL lab should help you compare.</p>
+</div>
+<div class="panel">
+  <h3>Phase 5 Chapter</h3>
+  <p><a class="chapter-link" href="/chapters/phase-5-persistence-and-restart.md" target="_blank" rel="noopener noreferrer">Open raw markdown</a></p>
+  <div id="phase5-chapter" class="chapter-viewer">Loading chapter…</div>
+</div>
+<div class="grid">
+  <div class="panel">
+    <h3>Planned Controls</h3>
+    <ul>
+      <li>Storage mode toggle: memory vs SQL</li>
+      <li>Seed session</li>
+      <li>Restart backend</li>
+      <li>Reconnect client</li>
+      <li>Compare pre/post restart snapshots</li>
+    </ul>
+    <p><strong>Status:</strong> Chapter and page scaffold ready. Durable SQL lab still pending.</p>
+  </div>
+  <div class="panel">
+    <h3>What to focus on now</h3>
+    <ul>
+      <li>Why atomic <code>Apply + cursor advance</code> semantics matter.</li>
+      <li>How restart correctness depends on durable cursor preservation.</li>
+      <li>Why memory and SQL modes should preserve the same framework semantics where their contracts overlap.</li>
+    </ul>
+  </div>
+</div>

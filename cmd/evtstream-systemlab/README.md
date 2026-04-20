@@ -27,6 +27,13 @@ Current phases implemented:
 
 - Phase 0 shell / status page
 - Phase 1 command -> event -> projection lab
+- Phase 2 ordering / ordinals lab
+
+Current chapter coverage in Systemlab:
+
+- Phase 0 through Phase 5 have long-form markdown chapters served by the app
+- Phase 0, Phase 1, and Phase 2 also have working interactive pages
+- Phase 3, Phase 4, and Phase 5 currently expose chapter-first scaffolds while their full interactive labs are still being built
 
 ## Frontend and chapter file layout
 

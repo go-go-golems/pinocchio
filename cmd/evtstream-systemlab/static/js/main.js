@@ -2,13 +2,19 @@ import { loadPagePartials, showPage } from "./dom.js";
 import { initOverviewPage } from "./pages/overview.js";
 import { initPhase1Page } from "./pages/phase1.js";
 import { initPhase2Page } from "./pages/phase2.js";
+import { initPhase3Page } from "./pages/phase3.js";
+import { initPhase4Page } from "./pages/phase4.js";
+import { initPhase5Page } from "./pages/phase5.js";
 
 async function main() {
   await loadPagePartials();
   bindNavigation();
   await initOverviewPage();
   await initPhase1Page();
-  initPhase2Page();
+  await initPhase2Page();
+  await initPhase3Page();
+  await initPhase4Page();
+  await initPhase5Page();
   showPage(initialPage());
 }
 

@@ -1,39 +1,38 @@
 # Phase 1 — Command to Event to Projection
 
-## Who this chapter is for
+## Welcome
 
-This chapter is for a new intern who has already understood the Phase 0 shape and is now ready to understand the **first real executable path** in `evtstream`.
+Phase 1 is the first point where the framework starts to *feel alive*. Up to this point, you have seen the architecture laid out, the vocabulary stabilized, the shell app separated from the framework, and the boundaries made explicit. All of that matters. But if you are a new intern, there is a good chance that part of you is still asking a very reasonable question:
 
-By the end of this chapter, you should understand:
+> Yes, but what actually happens when I do something?
 
-- what `Hub.Submit(...)` actually does,
-- how commands differ from backend events,
-- why projections exist as a pair,
+That is exactly what Phase 1 answers.
+
+This is the phase where a command enters the substrate, a handler responds to it, backend events are published, projections derive multiple views from those backend events, and a hydration snapshot emerges as the accumulated result. It is the first time the system demonstrates the full internal story that later phases will preserve while making it more distributed, more durable, and more product-like.
+
+This chapter is meant to be read while the Phase 1 page is open in another tab. Read a section, then try the matching control, then come back and connect what you saw in the UI with what the framework is actually doing. If you use it that way, the chapter will feel less like documentation and more like guided lab work.
+
+By the end, you should understand:
+
+- what `Hub.Submit(...)` really means,
+- why handlers publish backend events instead of touching UI state directly,
+- why there are two projections rather than one,
 - how hydration state is built,
-- how the Phase 1 Systemlab controls map to framework behavior,
-- what you should expect to see when the lab is working correctly,
-- what mistakes to avoid when extending this phase.
-
-This chapter is intentionally practical. It includes:
-
-- prose explanations,
-- diagrams,
-- bullet-point walkthroughs,
-- pseudocode,
-- API references,
-- file references,
-- a list of things to try in the controls,
-- and guidance on what to pay attention to while using the page.
+- what the controls are exercising,
+- what outputs are expected on a healthy run,
+- what details deserve your attention when debugging.
 
 ---
 
-## 1. What Phase 1 adds on top of Phase 0
+## 1. What changes when Phase 1 arrives
 
-Phase 0 gave us the architecture skeleton.
+Phase 0 gave us a map. Phase 1 gives us a working path through that map.
 
-Phase 1 gives us the **first real end-to-end path**.
+Before Phase 1, the architecture existed in shape and in naming. After Phase 1, the framework can actually perform its first real job. It can accept a typed command, route it to a handler, let that handler publish canonical backend events, and then use projections to build both live-facing and durable-ish views of the resulting activity.
 
-That path is:
+That shift is subtle but profound. Once this phase works, you no longer have to imagine how the architecture is supposed to feel. You can submit a command and watch the pieces move.
+
+### The full conceptual path
 
 ```text
 Command
@@ -44,84 +43,39 @@ Command
   -> hydration store snapshot/view/cursor
 ```
 
-This is the moment where `evtstream` stops being just a shape and becomes an executable framework.
-
-### What makes Phase 1 important
-
-Phase 1 proves all of the following at once:
-
-- a command can be registered and dispatched,
-- a session can be created lazily,
-- a handler can publish canonical backend events,
-- UI events can be derived from those backend events,
-- timeline entities can also be derived from the same backend events,
-- the hydration store can accumulate durable-ish state,
-- the lab can inspect the whole path without cheating.
-
-### What Phase 1 still does not do
-
-Phase 1 is still intentionally local and synchronous.
-
-It does **not** yet prove:
-
-- real bus-based consumption,
-- websocket subscriptions,
-- reconnect sequencing,
-- SQL durability,
-- real application behavior such as chat.
-
-That is okay. The goal of Phase 1 is to prove the event model clearly before the architecture becomes distributed.
+If you can understand that sentence deeply, you can understand most of the framework's later phases.
 
 ---
 
-## 2. The core mental model
+## 2. The central idea of the framework becomes real here
 
-The most important Phase 1 idea is this:
+The most important idea in the framework is not "commands exist" or "snapshots exist" or even "projections exist." The most important idea is that **canonical backend events sit in the middle of the architecture**.
 
-> handlers publish backend events, and projections turn those backend events into views.
+That means handlers are not supposed to directly paint UI output. They are not supposed to directly mutate hydration state either. Instead, handlers publish canonical backend events that describe what happened. Then the framework uses projections to derive different views from those events.
 
-That separation is the heart of the system.
+This is easy to say in theory, but Phase 1 is where you get to see why it matters in practice.
 
-### Why this matters
+Once backend events are the truth in the middle, the framework gains several benefits:
 
-If handlers directly wrote UI output or directly mutated timeline state, we would lose the framework's central design benefit:
+- the internal model becomes easier to reason about,
+- multiple consumers can derive different views from the same source,
+- state becomes easier to inspect,
+- reconnect and hydration have a consistent conceptual basis,
+- examples and tests become more teachable.
 
-- one canonical backend stream,
-- multiple derived consumers of that stream,
-- inspectable and testable behavior.
-
-### The canonical flow
-
-```text
-[Command]
-   |
-   v
-[CommandHandler]
-   |
-   | publishes canonical backend events
-   v
-[Backend Event Stream]
-   |                   \
-   |                    \
-   v                     v
-[UIProjection]      [TimelineProjection]
-   |                     |
-   v                     v
-[UI Events]         [Timeline Entities]
-                           |
-                           v
-                    [HydrationStore.Apply]
-```
-
-A new intern should be able to explain this diagram without looking at the code.
+If instead handlers skipped that event layer and directly mutated everything they needed, the system might still *work*, but it would stop being the framework we are trying to build.
 
 ---
 
-## 3. The Phase 1 lab scenario
+## 3. The Phase 1 lab is intentionally synthetic
 
-The current Systemlab Phase 1 lab is intentionally simple. It uses a tiny synthetic application flow rather than a real chat backend.
+The current Phase 1 Systemlab page does not try to be a real product backend. It is deliberately synthetic. That is a good thing.
 
-### Lab vocabulary
+New engineers sometimes feel disappointed when the first working example is not a real chat system or a production-like workflow. But that disappointment usually fades once they realize what the synthetic lab is buying us: clarity.
+
+The lab flow is intentionally small enough that you can keep the whole thing in your head.
+
+### Lab-specific vocabulary
 
 #### Command
 - `LabStart`
@@ -139,24 +93,17 @@ The current Systemlab Phase 1 lab is intentionally simple. It uses a tiny synthe
 #### Timeline entity
 - `LabMessage`
 
-### Why the lab is synthetic
-
-This lab is not trying to be product behavior. It is trying to teach the framework model.
-
-The synthetic flow makes the following points very visible:
-
-- the handler does not directly emit UI output,
-- one command may yield multiple backend events,
-- the same backend events drive both UI and timeline projections,
-- the hydration store accumulates a final entity that matches the visible UI history.
+This synthetic naming helps isolate the framework pattern from product semantics. Instead of immediately mixing in inference engines, models, tokens, cancellation semantics, and product rules, the lab teaches the event path itself.
 
 ---
 
-## 4. The main files you need to read
+## 4. The files that matter most in this phase
 
-Read these files in order if you want to understand the Phase 1 implementation.
+If you want to understand Phase 1 from the code, there is a reading order that works much better than randomly hopping around the repo.
 
 ### Framework files
+
+Start with:
 
 - `pinocchio/pkg/evtstream/command_registry.go`
 - `pinocchio/pkg/evtstream/session_registry.go`
@@ -165,268 +112,236 @@ Read these files in order if you want to understand the Phase 1 implementation.
 - `pinocchio/pkg/evtstream/projection.go`
 - `pinocchio/pkg/evtstream/schema.go`
 
-### Test files
+### Systemlab files
+
+Then read:
+
+- `pinocchio/cmd/evtstream-systemlab/lab_environment.go`
+- `pinocchio/cmd/evtstream-systemlab/static/partials/phase1.html`
+- `pinocchio/cmd/evtstream-systemlab/static/js/pages/phase1.js`
+
+### Tests
+
+Then use the tests as a second explanation layer:
 
 - `pinocchio/pkg/evtstream/command_registry_test.go`
 - `pinocchio/pkg/evtstream/session_registry_test.go`
 - `pinocchio/pkg/evtstream/hub_test.go`
 - `pinocchio/pkg/evtstream/hydration/memory/store_test.go`
-- `pinocchio/pkg/evtstream/schema_test.go`
-
-### Systemlab files
-
-- `pinocchio/cmd/evtstream-systemlab/lab_environment.go`
 - `pinocchio/cmd/evtstream-systemlab/lab_environment_test.go`
-- `pinocchio/cmd/evtstream-systemlab/static/partials/phase1.html`
-- `pinocchio/cmd/evtstream-systemlab/static/js/pages/phase1.js`
+
+This order matters because the tests make more sense once you have seen the intended runtime path, and the lab code makes more sense once you understand the substrate pieces it is exercising.
 
 ---
 
-## 5. The internal building blocks of Phase 1
+## 5. The command path, explained like a story
 
-### 5.1 Command registry
+Let us walk through the story that begins when you click `Submit` on the Phase 1 page.
 
-The command registry maps a command name to a `CommandHandler`.
+You type a `Session ID` and a `Prompt`. The browser sends a request to the Systemlab backend. That backend takes your request and calls `Hub.Submit(...)` with a typed payload representing the command.
 
-### What it is responsible for
+At that point, the framework starts doing the work it was designed for.
 
-- registration of handlers,
-- duplicate-registration protection,
-- lookup by name.
+First, the hub validates that the command name is registered and that the payload type matches the schema the registry expects. Next, it looks up or lazily creates the session associated with that `SessionId`. Once it has both the handler and the session, it invokes the handler and gives it an `EventPublisher`.
 
-### What it is not responsible for
+The important part comes next. The handler does *not* return a final UI object. It does *not* directly insert a final entity into the store. Instead, it publishes backend events describing the unfolding activity.
+
+That is the moment where the framework's architecture starts to make sense. The handler says, in effect: "Here is what happened." The rest of the framework then asks: "How should that be projected for live clients?" and "How should that be represented in durable state?"
+
+That is the core separation of concerns in a single paragraph.
+
+---
+
+## 6. The command registry: simple on purpose
+
+The command registry is one of those pieces that is easy to overlook because it feels so modest. But its modesty is a feature, not a flaw.
+
+A command registry should not try to be clever. It should register handlers, protect against duplicate names, and return the right handler for a command name. That is all.
+
+Why is it useful to keep it that small? Because the moment the registry starts owning more policy than lookup, the orchestration logic becomes harder to reason about. You want the registry to stay boring so the hub can stay readable.
+
+### Responsibilities
+
+- register a handler by command name,
+- reject duplicate registration,
+- return a handler by lookup.
+
+### Non-responsibilities
 
 - session creation,
-- projection behavior,
 - store mutation,
-- transport concerns.
+- UI projection,
+- hydration behavior,
+- transport logic.
 
-### Why the split matters
-
-A registry should be boring. Its job is lookup, not orchestration.
-
----
-
-### 5.2 Session registry
-
-The session registry owns lazy session creation.
-
-### Key idea
-
-A session comes into existence on first reference.
-
-That means there is no separate "create session" product action in this phase. Instead, the system creates a session when a command references a `SessionId` for the first time.
-
-### Important behavior
-
-- sessions are cached in memory,
-- metadata is created by `SessionMetadataFactory`,
-- the same session should not be rebuilt repeatedly.
-
-### Why this matters
-
-Later phases will depend on this lazy creation behavior for:
-
-- command paths,
-- subscription paths,
-- reconnect and hydration.
+When you review code in this repo, learning to love these small, well-owned pieces will help you avoid creating giant “god objects” later.
 
 ---
 
-### 5.3 Hydration store
+## 7. Lazy session creation and why it feels subtle at first
 
-In Phase 1 the hydration store is in-memory.
+The session registry is another important Phase 1 building block. It creates sessions lazily. That means there is no special product-level "create session" flow in this phase. A session simply comes into existence when it is first referenced.
 
-### Key responsibilities
+That may seem unremarkable, but it is actually laying the foundation for much later behavior. Commands, subscriptions, reconnects, and hydration all become simpler if a session can be created on first contact rather than requiring a separate lifecycle dance first.
+
+The session registry also owns the use of `SessionMetadataFactory`. In practice, that means the framework can attach session metadata on first reference and keep it cached for later use.
+
+You should pay attention to this because it is one of those patterns that seems almost too small to notice when it works well. But if it were missing, many later features would feel awkward and over-engineered.
+
+---
+
+## 8. The in-memory hydration store is already teaching future durability
+
+Even though Phase 1 only uses an in-memory hydration store, it is already teaching the system a durable-state shape.
+
+That store exposes the following semantics:
 
 - `Apply(...)`
 - `Snapshot(...)`
 - `View(...)`
 - `Cursor(...)`
 
-### What each one means
+Those names matter because they are exactly the kind of semantics later persistent stores will need to preserve.
+
+### How to think about each one
 
 #### `Apply(...)`
-Apply timeline entities at a given ordinal and advance the cursor.
+This says: given timeline entities and an ordinal, update the store and advance the cursor.
 
 #### `Snapshot(...)`
-Return a serialized view of current session state.
+This says: show me current session state in a serialized, inspectable form.
 
 #### `View(...)`
-Return a read-only timeline view used by projections.
+This says: give projections a read-only view of current state so they can compute the next result.
 
 #### `Cursor(...)`
-Return the latest applied ordinal for that session.
+This says: tell me the latest applied ordinal for that session.
 
-### Important property
-
-The store makes defensive copies of payloads so callers cannot mutate stored state accidentally through shared references.
-
-That sounds like a small implementation detail, but it is actually a correctness property.
+Even in Phase 1, these operations are already nudging your mental model toward reconnect and restart behavior. That is why it is a mistake to think of the snapshot panel as "just debugging output." It is the earliest visible form of the hydration story.
 
 ---
 
-### 5.4 Hub
+## 9. The hub is where the framework's personality emerges
 
-The `Hub` is the orchestration entrypoint.
+The `Hub` is the orchestration entrypoint, and in Phase 1 it is where the framework's personality really starts to become visible.
 
-In Phase 1 it is where the command path comes together.
+If you want to understand the architecture emotionally rather than just mechanically, `Hub.Submit(...)` is a very good place to focus. It is where the command path becomes a disciplined internal workflow.
 
-### What `Hub.Submit(...)` does conceptually
+### Conceptual pseudocode
 
 ```go
 func Submit(ctx, sid, name, payload) {
-    validate command payload type
-    build Command
-    lookup handler
-    get or create Session
-    call handler with publisher
+    validate payload type
+    cmd := Command{...}
+    handler := commands.Lookup(cmd.Name)
+    session := sessions.GetOrCreate(cmd.SessionId)
+    handler(ctx, cmd, session, publisher)
 }
 ```
 
-### What the Phase 1 publisher does
+In Phase 1, the publisher is still local rather than bus-backed. So when the handler publishes an event, the hub assigns a local ordinal, runs both projections, applies timeline entities to the store, and returns.
 
-In Phase 1, the publisher is still local rather than bus-backed.
-
-That means:
-
-- the handler publishes an `Event`,
-- the Hub assigns a local ordinal,
-- the Hub runs both projections,
-- the Hub applies timeline entities to the store,
-- the Hub returns control.
-
-That local shortcut is acceptable in Phase 1 because the goal is to prove the event model, not distribution.
+That is still simpler than the later bus-backed path, but it already proves the core conceptual shape. And that is why this phase matters so much.
 
 ---
 
-## 6. Why there are two projections
+## 10. Why there are two projections, not one
 
-A new intern often asks:
+This is one of the most important architectural conversations in the whole framework.
 
-> Why not just have one projection that updates everything?
+A new engineer often wonders whether it would not be simpler to just have one projection that updates everything. And yes, it would be simpler in the short term. It would also be much harder to teach, test, and extend.
 
-Because the system has two different view targets with different jobs.
+The framework separates projection responsibilities because they answer different questions.
 
-### UI projection
+### The UI projection asks:
 
-The UI projection answers:
+> What should a live client see right now?
 
-- what should the live client see right now?
+Its outputs are UI events. These are transient, client-facing, and optimized for live delivery.
 
-Its output is transient, client-facing, and optimized for live updates.
+### The timeline projection asks:
 
-### Timeline projection
+> What entity state should the hydration store remember?
 
-The timeline projection answers:
+Its outputs are timeline entities. These are store-facing, stateful, and designed to support later hydration and reconnect behavior.
 
-- what entity state should the hydration store remember?
-
-Its output is store-facing and optimized for reconstructing session state later.
-
-### Important rule
-
-Both projections consume the **same backend event**.
-
-That is the key architectural idea.
+What makes this elegant is that both of those answers come from the same backend event stream. That is the whole point.
 
 ---
 
-## 7. The actual Phase 1 lab flow
+## 11. The actual synthetic flow in the lab
 
-Here is the simplified flow the current lab runs.
+The current Phase 1 lab behavior is small enough to keep in your head, which makes it perfect for learning.
 
-### User input
+### What the handler does
 
-The user enters:
+When you submit `LabStart`, the handler:
 
-- Session ID
-- Prompt
-
-and presses:
-
-- `Submit`
-
-### Command created
-
-The page sends `LabStart` with payload:
-
-```json
-{
-  "prompt": "hello from systemlab"
-}
-```
-
-### Handler behavior
-
-The handler:
-
-1. creates a message id,
-2. emits `LabStarted`,
+1. allocates a message id,
+2. publishes `LabStarted`,
 3. splits the prompt into chunks,
-4. emits `LabChunk` for each chunk,
-5. emits `LabFinished`.
+4. publishes one `LabChunk` event per chunk,
+5. publishes `LabFinished`.
 
-### Resulting projections
+That means one command produces multiple backend events.
 
-For each backend event:
+This is exactly the kind of thing the framework needs to handle well. Real application flows rarely map one command to one final result. The intermediate stream is often the interesting part.
 
-- the UI projection emits a client-facing UI event,
-- the timeline projection updates the synthetic `LabMessage` entity.
+### What the UI projection does
 
-### Final state
+It translates:
 
-The final store snapshot contains one `LabMessage` with:
+- `LabStarted` -> `LabMessageStarted`
+- `LabChunk` -> `LabMessageAppended`
+- `LabFinished` -> `LabMessageFinished`
 
-- `messageId`
-- `text`
-- `status=finished`
+### What the timeline projection does
+
+It reduces the same backend events into one synthetic timeline entity, `LabMessage`, whose content evolves as chunks arrive and is finally marked `finished`.
+
+This is the first place in the project where you can feel the difference between stream and state.
 
 ---
 
-## 8. Phase 1 page anatomy
+## 12. How to read the page itself
 
-The Systemlab page is intentionally arranged to teach the event path.
+The Phase 1 page is not arranged randomly. Its layout is trying to teach you a way of debugging.
 
 ### Controls panel
 
-This is where you submit the command.
+This is where you create the input stimulus.
 
 ### Checks panel
 
-This shows whether the key invariants passed.
+This answers: did the main invariants hold?
 
 ### Trace panel
 
-This shows the chronological internal story.
+This answers: what happened internally, in order?
 
 ### Session + UI Events panel
 
-This shows:
-
-- session metadata,
-- emitted UI events.
+This answers: what session metadata exists, and what would a live client have seen?
 
 ### Hydration Snapshot panel
 
-This shows the current durable-ish store result.
+This answers: what does the store now believe is true for this session?
 
-### Why this arrangement works
+When you use the page properly, you should mentally travel from left to right and from top to bottom:
 
-A good debugging page should let you answer four questions quickly:
+- input,
+- checks,
+- internal story,
+- live-facing output,
+- durable-ish state.
 
-1. what did I send?
-2. what happened internally?
-3. what did the client-facing layer emit?
-4. what state ended up persisted?
-
-The Phase 1 layout is built around exactly those questions.
+That is a very good way to debug event-streaming systems generally.
 
 ---
 
-## 9. Things to try in the controls
+## 13. Things to try in the controls
 
-This section is the most practical part of the chapter. Use it while you are on the Phase 1 page.
+This section is where the chapter becomes a real lab companion. Keep the Phase 1 page open while you try these.
 
 ### Try 1: the default happy path
 
@@ -442,41 +357,35 @@ You should see:
 
 - a session created,
 - one handler invocation,
-- multiple backend events represented in the trace,
-- UI events for start, append, append, finish,
-- a final snapshot with a finished `LabMessage`.
+- multiple trace entries corresponding to the backend event path,
+- multiple UI events,
+- a final hydration snapshot with a finished `LabMessage`.
 
 ### What to pay attention to
 
-Pay attention to the fact that:
+Do not just look for success. Look for *shape*.
 
-- the handler is invoked once,
-- but multiple events are published,
-- and those multiple events drive both the UI and timeline sides.
+Pay attention to the fact that the command is singular but the resulting event story is plural. That is one of the first truly important lessons in the framework.
 
 ---
 
-### Try 2: reuse the same session id
+### Try 2: run again with the same session id
 
-Use the same Session ID again and change the prompt.
+Keep the same Session ID and change the prompt.
 
 ### What should happen
 
-You should still get a coherent run, but you should notice:
-
-- the session already exists conceptually,
-- the message sequence continues,
-- the store snapshot reflects the latest entities for that session.
+You should get another coherent run associated with the same conceptual session.
 
 ### What to pay attention to
 
-Look at whether the session metadata remains stable while the actual event stream changes.
+Watch whether the session metadata remains stable while the event and timeline outputs evolve. This helps you internalize that session identity is a routing/stability concept, not just a label pasted into output.
 
 ---
 
-### Try 3: use a different session id
+### Try 3: change the session id
 
-Change Session ID to something like:
+Set Session ID to something like:
 
 - `lab-session-2`
 
@@ -484,27 +393,27 @@ and click `Submit`.
 
 ### What should happen
 
-You should get a fresh session and a fresh timeline state for that session.
+A fresh session path should be created.
 
 ### What to pay attention to
 
-This is the easiest way to understand that routing is by `SessionId`, not by prompt text or browser tab.
+This is one of the easiest ways to feel the role of `SessionId`. It is not decoration. It is what tells the framework where the work belongs.
 
 ---
 
-### Try 4: use a longer prompt
+### Try 4: use a longer, more expressive prompt
 
-Try:
+Try something like:
 
 - `explain why projections should consume canonical backend events`
 
 ### What should happen
 
-You should see more meaningful chunked text in the trace and final entity.
+You should see longer accumulated text and more meaningful chunk progression.
 
 ### What to pay attention to
 
-Look at how intermediate chunk events build toward the final timeline entity.
+Observe how the final snapshot reflects the accumulated result of a sequence of backend events. That is exactly the pattern later chat and agent examples will rely on.
 
 ---
 
@@ -514,11 +423,11 @@ After a run, click `Reset`.
 
 ### What should happen
 
-The page outputs should clear and the lab environment should return to a clean state.
+The page outputs should clear, and the environment should return to a fresh state.
 
 ### What to pay attention to
 
-Reset is useful for separating one scenario from another when debugging or demonstrating.
+Reset is especially useful when you are trying to understand the difference between one scenario and another. It removes the noise of prior state so you can isolate the current run.
 
 ---
 
@@ -531,23 +440,19 @@ After a successful run, click:
 
 ### What should happen
 
-You should get a saved artifact representing the run.
+You should get a portable artifact describing the run.
 
 ### What to pay attention to
 
-The export artifacts are not just convenience output. They are intended as:
-
-- review artifacts,
-- onboarding material,
-- regression fixtures.
+These exports are not merely nice-to-have buttons. They are part of how the lab becomes teaching material and review material. The system is designed to make its own behavior portable and inspectable.
 
 ---
 
-## 10. What to expect in the trace
+## 14. What the trace is really showing you
 
-The trace is one of the best teaching tools in the whole lab.
+The trace panel is one of the most valuable parts of the page, and it is worth reading slowly.
 
-For a successful run, you should expect a sequence like this:
+In a healthy run, you will see a story something like this:
 
 1. command submitted,
 2. session created,
@@ -556,112 +461,90 @@ For a successful run, you should expect a sequence like this:
 5. timeline projection updated entity,
 6. UI projection emitted next event,
 7. timeline projection updated entity,
-8. ...,
-9. final UI event,
-10. final timeline update.
+8. final UI event,
+9. final timeline update.
 
-### What this means conceptually
+That sequence is showing you that the framework is not a glorified reducer that jumps straight from command to final snapshot. It is showing you the *path* from command to event stream to views.
 
-The trace is showing that the framework path is not:
-
-```text
-command -> final state directly
-```
-
-It is instead:
-
-```text
-command -> handler -> event stream -> projections -> state/views
-```
-
-That difference is the whole point of the framework.
+The trace is where the architecture becomes visible.
 
 ---
 
-## 11. What to expect in the checks
+## 15. What the checks are trying to summarize
 
-The Phase 1 page currently tracks whether key invariants are true.
+The checks panel compresses the health of the run into a few focused statements.
 
-### Important checks
+### The key checks
 
 #### `sessionExists`
-A session was created or found.
+A session was found or created.
 
 #### `cursorAdvanced`
-The store cursor moved forward.
+The hydration store cursor moved forward.
 
 #### `timelineProduced`
 The timeline projection emitted durable-ish state.
 
 #### `uiEventsProduced`
-The UI projection emitted client-facing events.
+The UI projection emitted live-facing events.
 
-### Why these checks matter
+### Why these matter
 
-They are a compact summary that the whole command-to-projection path worked.
+These checks are useful because each one points at a different part of the architecture. If one goes red later, you immediately know which subsystem to investigate first.
 
-If any one of them fails, you know which stage to investigate first.
+That is why even a simple Phase 1 page benefits from explicit invariant badges.
 
 ---
 
-## 12. What to expect in the hydration snapshot
+## 16. How to read the snapshot panel correctly
 
-The hydration snapshot is the current store view for the session.
+The hydration snapshot panel is easy to underappreciate if you are focused only on the event trace. But the snapshot is where the framework starts teaching you about eventual reconnect and state recovery.
 
-### In the default scenario
-
-You should end up with one `LabMessage` entity containing something like:
+In the default scenario, you should end with one `LabMessage` entity containing something like:
 
 - `messageId: msg-1`
 - `text: hello from systemlab`
 - `status: finished`
 
-### Why this matters
+The important thing is not just the final text. The important thing is that the snapshot looks like the accumulated result of the earlier stream.
 
-The snapshot is the first hint of how reconnect and hydration will work later.
-
-Even though Phase 1 is local and in-memory, the snapshot teaches you that the system is already building state intended for reuse beyond the immediate event moment.
+When the event trace, the UI events, and the snapshot all tell the same story, the framework is healthy.
 
 ---
 
-## 13. The relationship between trace, UI events, and snapshot
+## 17. The three-panel comparison skill you should develop
 
-A very important review skill is learning to compare these three panels together.
+One of the best habits you can build as an intern is learning to compare three kinds of output at once:
 
-### Trace
-Tells you the chronological internal story.
+- the trace,
+- the UI events,
+- the final snapshot.
 
-### UI events
-Tells you what a live client would receive.
+### Ask yourself these questions
 
-### Snapshot
-Tells you what state the store believes is current.
+- Does the UI event history make sense given the trace?
+- Does the snapshot look like the accumulated result of those UI-visible updates?
+- Does the trace explain why the snapshot became what it became?
 
-### Healthy Phase 1 mental check
-
-Ask yourself:
-
-- does the UI event history tell the same story as the final snapshot?
-- does the final snapshot look like the accumulated result of the streamed UI data?
-- does the trace explain why both of those are true?
-
-If the answer is yes, the phase is doing its job.
+If you can answer yes to all three, then you are no longer just reading output—you are understanding the architecture.
 
 ---
 
-## 14. Important API references
+## 18. Important API references
+
+The most important Phase 1 APIs to understand are:
 
 ### `Hub.Submit(...)`
-Public programmatic command entrypoint.
+The public programmatic command entrypoint.
 
 ### `RegisterCommand(...)`
-Registers a command handler.
+Registers a handler for a command name.
 
 ### `RegisterUIProjection(...)`
-Registers the one UI projection for the hub.
+Registers the UI projection.
 
 ### `RegisterTimelineProjection(...)`
-Registers the one timeline projection for the hub.
+Registers the timeline projection.
 
 ### `HydrationStore.Apply(...)`
 Applies timeline entities and advances cursor.
@@ -670,16 +553,18 @@ Applies timeline entities and advances cursor.
 Returns current state for a session.
 
 ### `HydrationStore.View(...)`
-Returns the read-only view used by projections.
+Returns a read-only view used by projections.
 
 ### `HydrationStore.Cursor(...)`
 Returns the latest applied ordinal.
 
+You do not need to memorize their signatures immediately. You *do* need to understand their roles.
+
 ---
 
-## 15. Suggested pseudocode for Phase 1
+## 19. Suggested pseudocode for Phase 1
 
-Here is the simplest possible conceptual pseudocode for the full path:
+This pseudocode is not meant to be production-accurate in every line. It is meant to capture the mental shape of the framework.
 
 ```go
 func Submit(ctx, sid, cmdName, payload) {
@@ -699,37 +584,37 @@ func publisher.Publish(ev Event) {
 }
 ```
 
-This is intentionally simplified, but it captures the shape you need to keep in your head.
+What matters here is not the specific syntax. What matters is seeing the architecture as a chain of responsibilities rather than a black box.
 
 ---
 
-## 16. Common mistakes to avoid in Phase 1
+## 20. Common mistakes to avoid in this phase
 
 ### Mistake 1: letting handlers write UI output directly
 
-Handlers should publish canonical backend events, not directly author UI state.
+That would collapse the event model and make later transport logic much messier.
 
 ### Mistake 2: letting handlers mutate the store directly
 
-That would bypass the projection model and collapse the architecture.
+That would bypass the projection discipline that the framework is trying to establish.
 
-### Mistake 3: confusing UI events with backend events
+### Mistake 3: confusing backend events with UI events
 
-They are related but not interchangeable.
+They are related, but they do different jobs.
 
-### Mistake 4: treating the snapshot as just debugging output
+### Mistake 4: treating the snapshot as unimportant
 
-The snapshot is an early version of the durable state story.
+The snapshot is the early form of a much larger hydration and reconnect story.
 
-### Mistake 5: forgetting that tests are part of the architecture
+### Mistake 5: ignoring the tests because the page seems to work
 
-The focused tests in this phase are teaching tools as much as correctness checks.
+The tests are not just correctness checks. They are another teaching surface for the intended architecture.
 
 ---
 
-## 17. How a reviewer should read Phase 1 code
+## 21. How a reviewer should read Phase 1
 
-Use this reading order:
+A good reading order for the code is:
 
 1. `pinocchio/pkg/evtstream/hub.go`
 2. `pinocchio/pkg/evtstream/command_registry.go`
@@ -741,26 +626,26 @@ Use this reading order:
 8. `pinocchio/cmd/evtstream-systemlab/lab_environment_test.go`
 9. `pinocchio/pkg/evtstream/hub_test.go`
 
-That order moves from core orchestration -> state -> lab usage -> test evidence.
+That reading order mirrors the architecture itself: core orchestration first, then lab usage, then evidence.
 
 ---
 
-## 18. Review checklist for Phase 1
+## 22. Review checklist for yourself
 
 ### Framework checklist
 
 - [ ] Does `Submit(...)` route through a real registry/handler path?
 - [ ] Is session creation lazy and stable?
-- [ ] Do handlers publish events instead of writing UI/store state directly?
-- [ ] Are UI and timeline projections separate consumers of the same backend event?
+- [ ] Do handlers publish backend events instead of mutating UI/store output directly?
+- [ ] Are both projections consuming the same canonical backend event?
 - [ ] Does the store cursor advance coherently?
 
 ### Systemlab checklist
 
 - [ ] Do the controls exercise the real command path?
-- [ ] Does the trace tell a believable story?
-- [ ] Do exported transcripts match what the page shows?
-- [ ] Does the snapshot match the final accumulated message state?
+- [ ] Does the trace tell a believable internal story?
+- [ ] Does the final snapshot match the accumulated event history?
+- [ ] Do the exported transcripts match what the page shows?
 
 ### Validation checklist
 
@@ -769,40 +654,21 @@ That order moves from core orchestration -> state -> lab usage -> test evidence.
 
 ---
 
-## 19. Short glossary for Phase 1
+## 23. Final summary
 
-### Command
-A typed request entering the substrate.
+Phase 1 is the first time the framework truly demonstrates its central promise.
 
-### Backend event
-The canonical event shape emitted by handlers and consumed by projections.
+A command enters. A handler responds. Backend events become the canonical internal stream. UI and timeline projections each derive their own view from that stream. A hydration snapshot emerges that tells the same story in persistent form.
 
-### UI event
-A client-facing event derived from the canonical backend event stream.
+That is the conceptual engine of the framework.
 
-### Timeline entity
-A durable-ish entity derived from backend events and stored for hydration.
+Once you understand this phase, the later phases become much easier to reason about. Watermill changes *where* events are consumed. Websockets change *how* live updates are delivered. SQL changes *how durable state is kept*. But the core idea—canonical backend events projecting into multiple views—has already been taught here.
 
-### Cursor
-The latest applied ordinal for a session's timeline state.
+That is why this phase is such an important one to read carefully and to use hands-on.
 
 ---
 
-## 20. Final summary
-
-Phase 1 is where the framework first proves its central promise:
-
-- a command can create backend events,
-- those backend events can drive both live UI and durable state,
-- and the entire path can be inspected in one place.
-
-If Phase 0 gave the project a map, Phase 1 gives it a working engine.
-
-And just as importantly for a new intern, Phase 1 gives you a page where you can see the engine operate.
-
----
-
-## File references at a glance
+## 24. File references at a glance
 
 ### Core framework files
 
@@ -820,6 +686,7 @@ And just as importantly for a new intern, Phase 1 gives you a page where you can
 - `pinocchio/cmd/evtstream-systemlab/static/partials/phase1.html`
 - `pinocchio/cmd/evtstream-systemlab/static/js/pages/phase1.js`
 - `pinocchio/cmd/evtstream-systemlab/static/js/api.js`
+- `pinocchio/cmd/evtstream-systemlab/chapters/phase-1-command-to-projection.md`
 
 ### Validation commands
 
