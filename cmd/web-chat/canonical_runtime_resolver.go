@@ -4,18 +4,18 @@ import (
 	"context"
 	"net/http"
 
-	gepprofiles "github.com/go-go-golems/geppetto/pkg/engineprofiles"
 	appserver "github.com/go-go-golems/pinocchio/cmd/web-chat/app"
+	"github.com/go-go-golems/pinocchio/cmd/web-chat/profiles"
 	chatapp "github.com/go-go-golems/pinocchio/pkg/evtstream/apps/chat"
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 )
 
 type canonicalRuntimeResolver struct {
-	requestResolver *ProfileRequestResolver
+	requestResolver *profiles.RequestResolver
 	runtimeComposer infruntime.RuntimeBuilder
 }
 
-func newCanonicalRuntimeResolver(requestResolver *ProfileRequestResolver, runtimeComposer infruntime.RuntimeBuilder) appserver.RuntimeResolver {
+func newCanonicalRuntimeResolver(requestResolver *profiles.RequestResolver, runtimeComposer infruntime.RuntimeBuilder) appserver.RuntimeResolver {
 	if requestResolver == nil || runtimeComposer == nil {
 		return nil
 	}
@@ -32,19 +32,19 @@ func (r *canonicalRuntimeResolver) Resolve(ctx context.Context, req *http.Reques
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	profileSlug, err := r.requestResolver.resolveProfileSelection(req, "", profile)
+	profileSlug, err := r.requestResolver.ResolveProfileSelection(ctx, "", profile, "", "")
 	if err != nil {
 		return nil, err
 	}
-	registrySlug, err := r.requestResolver.resolveRegistrySelection(req, registry)
+	registrySlug, err := r.requestResolver.ResolveRegistrySelection(registry, "", "")
 	if err != nil {
 		return nil, err
 	}
-	resolvedProfile, err := r.resolveEffectiveProfile(ctx, registrySlug, profileSlug)
+	resolvedProfile, err := r.requestResolver.ResolveEffectiveProfile(ctx, registrySlug, profileSlug)
 	if err != nil {
 		return nil, err
 	}
-	plan, err := r.requestResolver.buildConversationPlan(ctx, "", "", "", resolvedProfile)
+	plan, err := r.requestResolver.BuildConversationPlan(ctx, "", "", "", resolvedProfile)
 	if err != nil {
 		return nil, err
 	}
@@ -55,23 +55,12 @@ func (r *canonicalRuntimeResolver) Resolve(ctx context.Context, req *http.Reques
 		ConvID:                     "",
 		ProfileKey:                 plan.Runtime.RuntimeKey,
 		ProfileVersion:             plan.Runtime.ProfileVersion,
-		ResolvedInferenceSettings:  cloneResolvedInferenceSettings(plan.Runtime.InferenceSettings),
-		ResolvedProfileRuntime:     toRuntimeTransport(plan.Runtime),
+		ResolvedInferenceSettings:  profiles.CloneResolvedInferenceSettings(plan.Runtime.InferenceSettings),
+		ResolvedProfileRuntime:     profiles.ToRuntimeTransport(plan.Runtime),
 		ResolvedProfileFingerprint: plan.Runtime.RuntimeFingerprint,
 	})
 	if err != nil {
 		return nil, err
 	}
 	return &chatapp.ResolvedRuntime{ComposedRuntime: composed}, nil
-}
-
-func (r *canonicalRuntimeResolver) resolveEffectiveProfile(
-	ctx context.Context,
-	registrySlug gepprofiles.RegistrySlug,
-	profileSlug gepprofiles.EngineProfileSlug,
-) (*gepprofiles.ResolvedEngineProfile, error) {
-	if r == nil || r.requestResolver == nil {
-		return nil, nil
-	}
-	return r.requestResolver.resolveEffectiveProfile(ctx, registrySlug, profileSlug)
 }

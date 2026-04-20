@@ -22,6 +22,7 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/turns"
 	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	appserver "github.com/go-go-golems/pinocchio/cmd/web-chat/app"
+	"github.com/go-go-golems/pinocchio/cmd/web-chat/profiles"
 	chatapp "github.com/go-go-golems/pinocchio/pkg/evtstream/apps/chat"
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 	timelinepb "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/timeline"
@@ -189,16 +190,16 @@ func newLegacyHarnessServer(t *testing.T, eng engine.Engine) *httptest.Server {
 	})
 	webchatSrv, err := webchat.NewServer(context.Background(), parsed, staticFS, webchat.WithRuntimeComposer(runtimeComposer))
 	require.NoError(t, err)
-	profileRegistry, err := newInMemoryProfileService("default", testEngineProfileWithRuntime(t, "default", &infruntime.ProfileRuntime{SystemPrompt: "You are default"}))
+	profileRegistry, err := profiles.NewInMemoryProfileService("default", testEngineProfileWithRuntime(t, "default", &infruntime.ProfileRuntime{SystemPrompt: "You are default"}))
 	require.NoError(t, err)
-	requestResolver := newProfileRequestResolver(profileRegistry, gepprofiles.MustRegistrySlug(defaultRegistrySlug), nil)
+	requestResolver := newProfileRequestResolver(profileRegistry, gepprofiles.MustRegistrySlug(profiles.DefaultRegistrySlug), nil)
 	chatHandler := webhttp.NewChatHandler(webchatSrv.ChatService(), requestResolver)
 	wsHandler := webhttp.NewWSHandler(webchatSrv.StreamHub(), requestResolver, websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }})
 	appMux := http.NewServeMux()
 	appMux.HandleFunc("/chat", chatHandler)
 	appMux.HandleFunc("/chat/", chatHandler)
 	appMux.HandleFunc("/ws", wsHandler)
-	registerProfileAPIHandlers(appMux, requestResolver)
+	registerProfileAPIHandlers(appMux, requestResolver.RequestResolver)
 	timelineLogger := log.With().Str("component", "webchat-legacy-test").Str("route", "/api/timeline").Logger()
 	timelineHandler := webhttp.NewTimelineHandler(webchatSrv.TimelineService(), timelineLogger)
 	appMux.HandleFunc("/api/timeline", timelineHandler)
@@ -342,12 +343,12 @@ func captureCanonicalFlow(t *testing.T, prompt string) canonicalFlowCapture {
 	canonicalApp, err := appserver.NewServer(appserver.WithRuntimeResolver(comparisonRuntimeResolver{completion: "Answer: " + prompt}))
 	require.NoError(t, err)
 	defer func() { _ = canonicalApp.Close() }()
-	profileRegistry, err := newInMemoryProfileService(
+	profileRegistry, err := profiles.NewInMemoryProfileService(
 		"default",
 		testEngineProfileWithRuntime(t, "default", &infruntime.ProfileRuntime{SystemPrompt: "You are default"}),
 	)
 	require.NoError(t, err)
-	resolver := newProfileRequestResolver(profileRegistry, gepprofiles.MustRegistrySlug(defaultRegistrySlug), nil)
+	resolver := profiles.NewRequestResolver(profileRegistry, gepprofiles.MustRegistrySlug(profiles.DefaultRegistrySlug), nil)
 	appConfigJS, err := runtimeConfigScript("", false)
 	require.NoError(t, err)
 	appFS := fstest.MapFS{"static/index.html": {Data: []byte("<html><body>canonical comparison</body></html>")}}

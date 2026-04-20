@@ -29,6 +29,7 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/inference/middlewarecfg"
 	aisettings "github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 	appserver "github.com/go-go-golems/pinocchio/cmd/web-chat/app"
+	"github.com/go-go-golems/pinocchio/cmd/web-chat/profiles"
 	timelinecmd "github.com/go-go-golems/pinocchio/cmd/web-chat/timeline"
 	profilebootstrap "github.com/go-go-golems/pinocchio/pkg/cmds/profilebootstrap"
 	agentmode "github.com/go-go-golems/pinocchio/pkg/middlewares/agentmode"
@@ -130,9 +131,36 @@ func registerStaticUIHandlers(mux *http.ServeMux, staticFS fs.FS) {
 	})
 }
 
-func buildAppMux(staticFS fs.FS, appConfigJS string, requestResolver *ProfileRequestResolver, canonicalApp *appserver.Server) *http.ServeMux {
+func buildAppMux(staticFS fs.FS, appConfigJS string, requestResolver *profiles.RequestResolver, canonicalApp *appserver.Server) *http.ServeMux {
 	mux := http.NewServeMux()
-	registerProfileAPIHandlers(mux, requestResolver)
+	if requestResolver != nil && requestResolver.Registry() != nil {
+		middlewareRegistry, _ := newWebChatMiddlewareDefinitionRegistry()
+		profiles.RegisterAPIHandlers(mux, requestResolver.Registry(), profiles.APIOptions{
+			DefaultRegistrySlug:             requestResolver.DefaultRegistrySlug(),
+			EnableCurrentProfileCookieRoute: true,
+			CurrentProfileCookieName:        "chat_profile",
+			MiddlewareDefinitions:           middlewareRegistry,
+			ExtensionSchemas: []profiles.ExtensionSchemaDocument{
+				{
+					Key: "webchat.starter_suggestions@v1",
+					Schema: map[string]any{
+						"type": "object",
+						"properties": map[string]any{
+							"items": map[string]any{
+								"type": "array",
+								"items": map[string]any{
+									"type": "string",
+								},
+								"default": []any{},
+							},
+						},
+						"required":             []any{"items"},
+						"additionalProperties": false,
+					},
+				},
+			},
+		})
+	}
 	if canonicalApp != nil {
 		mux.HandleFunc("/api/chat/sessions", canonicalApp.HandleCreateSession)
 		mux.HandleFunc("/api/chat/sessions/", canonicalApp.HandleSessionRoutes)
@@ -292,7 +320,7 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 		profileRegistry = profileRuntime.ProfileRegistryChain.Registry
 		defaultRegistrySlug = profileRuntime.ProfileRegistryChain.DefaultRegistrySlug
 	}
-	requestResolver := newProfileRequestResolver(profileRegistry, defaultRegistrySlug, baseInferenceSettings)
+	requestResolver := profiles.NewRequestResolver(profileRegistry, defaultRegistrySlug, baseInferenceSettings)
 	canonicalRuntimeResolver := newCanonicalRuntimeResolver(requestResolver, runtimeComposer)
 
 	canonicalApp, err := appserver.NewServer(

@@ -10,6 +10,7 @@ import (
 
 	gepprofiles "github.com/go-go-golems/geppetto/pkg/engineprofiles"
 	appserver "github.com/go-go-golems/pinocchio/cmd/web-chat/app"
+	"github.com/go-go-golems/pinocchio/cmd/web-chat/profiles"
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 	"github.com/stretchr/testify/require"
 )
@@ -23,12 +24,12 @@ func readBody(t *testing.T, resp *http.Response) string {
 
 func newMigratedRuntimeTestServer(t *testing.T) (*appserver.Server, *httptest.Server) {
 	t.Helper()
-	profileRegistry, err := newInMemoryProfileService(
+	profileRegistry, err := profiles.NewInMemoryProfileService(
 		"default",
 		testEngineProfileWithRuntime(t, "default", &infruntime.ProfileRuntime{SystemPrompt: "You are default"}),
 	)
 	require.NoError(t, err)
-	resolver := newProfileRequestResolver(profileRegistry, gepprofiles.MustRegistrySlug(defaultRegistrySlug), nil)
+	resolver := profiles.NewRequestResolver(profileRegistry, gepprofiles.MustRegistrySlug(profiles.DefaultRegistrySlug), nil)
 	canonicalApp, err := appserver.NewServer()
 	require.NoError(t, err)
 	appConfigJS, err := runtimeConfigScript("", false)
@@ -94,12 +95,12 @@ func TestBuildAppMux_ServesCanonicalRoutesAndRemovesLegacyRoute(t *testing.T) {
 }
 
 func TestBuildRootHandler_MountsCanonicalAppUnderCustomRoot(t *testing.T) {
-	profileRegistry, err := newInMemoryProfileService(
+	profileRegistry, err := profiles.NewInMemoryProfileService(
 		"default",
 		testEngineProfileWithRuntime(t, "default", &infruntime.ProfileRuntime{SystemPrompt: "You are default"}),
 	)
 	require.NoError(t, err)
-	resolver := newProfileRequestResolver(profileRegistry, gepprofiles.MustRegistrySlug(defaultRegistrySlug), nil)
+	resolver := profiles.NewRequestResolver(profileRegistry, gepprofiles.MustRegistrySlug(profiles.DefaultRegistrySlug), nil)
 	canonicalApp, err := appserver.NewServer()
 	require.NoError(t, err)
 	defer func() { _ = canonicalApp.Close() }()
