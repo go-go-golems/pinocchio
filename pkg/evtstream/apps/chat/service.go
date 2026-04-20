@@ -6,8 +6,23 @@ import (
 	"strings"
 
 	"github.com/go-go-golems/pinocchio/pkg/evtstream"
+	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 	"google.golang.org/protobuf/types/known/structpb"
 )
+
+// ResolvedRuntime carries an already-composed runtime for one prompt submission.
+// It is intentionally app-grade and in-memory: the web app resolves runtime policy
+// at the application edge, then hands the composed runtime to the evtstream chat engine.
+type ResolvedRuntime struct {
+	ComposedRuntime infruntime.ComposedRuntime
+}
+
+// PromptRequest is the app-facing prompt submission input.
+type PromptRequest struct {
+	Prompt         string
+	IdempotencyKey string
+	Runtime        *ResolvedRuntime
+}
 
 // Service is an app-facing chat service surface suitable for consumer apps such as cmd/web-chat.
 // It wraps command submission and snapshot access behind domain methods rather than exposing raw
@@ -28,17 +43,24 @@ func NewService(hub *evtstream.Hub, engine *Engine) (*Service, error) {
 }
 
 func (s *Service) SubmitPrompt(ctx context.Context, sid evtstream.SessionId, prompt string) error {
+	return s.SubmitPromptRequest(ctx, sid, PromptRequest{Prompt: prompt})
+}
+
+func (s *Service) SubmitPromptRequest(ctx context.Context, sid evtstream.SessionId, req PromptRequest) error {
 	if s == nil || s.hub == nil {
 		return fmt.Errorf("chat service is not initialized")
 	}
 	if sid == "" {
 		return fmt.Errorf("session id is empty")
 	}
-	prompt = strings.TrimSpace(prompt)
-	if prompt == "" {
+	req.Prompt = strings.TrimSpace(req.Prompt)
+	if req.Prompt == "" {
 		return fmt.Errorf("prompt is empty")
 	}
-	payload, err := structpb.NewStruct(map[string]any{"prompt": prompt})
+	if s.engine != nil {
+		s.engine.setPendingRequest(sid, req)
+	}
+	payload, err := structpb.NewStruct(map[string]any{"prompt": req.Prompt})
 	if err != nil {
 		return err
 	}

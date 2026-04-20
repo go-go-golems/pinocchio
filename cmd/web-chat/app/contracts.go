@@ -1,7 +1,8 @@
 package app
 
 type CreateSessionRequest struct {
-	Profile string `json:"profile,omitempty"`
+	Profile  string `json:"profile,omitempty"`
+	Registry string `json:"registry,omitempty"`
 }
 
 type CreateSessionResponse struct {
@@ -12,6 +13,7 @@ type CreateSessionResponse struct {
 type SubmitMessageRequest struct {
 	Prompt         string `json:"prompt"`
 	Profile        string `json:"profile,omitempty"`
+	Registry       string `json:"registry,omitempty"`
 	IdempotencyKey string `json:"idempotencyKey,omitempty"`
 }
 

@@ -21,11 +21,22 @@ func TestChatExampleHappyPath(t *testing.T) {
 
 	snap, err := hub.Snapshot(context.Background(), evtstream.SessionId("chat-1"))
 	require.NoError(t, err)
-	require.Equal(t, uint64(5), snap.Ordinal)
-	require.Len(t, snap.Entities, 1)
-	payloadMap := snap.Entities[0].Payload.(*structpb.Struct).AsMap()
-	require.Equal(t, "finished", payloadMap["status"])
-	require.Equal(t, "Answer: Explain ordinals", payloadMap["text"])
+	require.Equal(t, uint64(6), snap.Ordinal)
+	require.Len(t, snap.Entities, 2)
+	var assistant map[string]any
+	var user map[string]any
+	for _, entity := range snap.Entities {
+		payloadMap := entity.Payload.(*structpb.Struct).AsMap()
+		switch payloadMap["role"] {
+		case "assistant":
+			assistant = payloadMap
+		case "user":
+			user = payloadMap
+		}
+	}
+	require.Equal(t, "Explain ordinals", user["content"])
+	require.Equal(t, "finished", assistant["status"])
+	require.Equal(t, "Answer: Explain ordinals", assistant["text"])
 }
 
 func TestChatExampleStopPath(t *testing.T) {
@@ -42,10 +53,16 @@ func TestChatExampleStopPath(t *testing.T) {
 
 	snap, err := hub.Snapshot(context.Background(), evtstream.SessionId("chat-2"))
 	require.NoError(t, err)
-	require.Len(t, snap.Entities, 1)
-	payloadMap := snap.Entities[0].Payload.(*structpb.Struct).AsMap()
-	require.Equal(t, "stopped", payloadMap["status"])
-	require.Equal(t, false, payloadMap["streaming"])
+	require.Len(t, snap.Entities, 2)
+	var assistant map[string]any
+	for _, entity := range snap.Entities {
+		payloadMap := entity.Payload.(*structpb.Struct).AsMap()
+		if payloadMap["role"] == "assistant" {
+			assistant = payloadMap
+		}
+	}
+	require.Equal(t, "stopped", assistant["status"])
+	require.Equal(t, false, assistant["streaming"])
 }
 
 func newTestHub(t *testing.T, engine *Engine) *evtstream.Hub {

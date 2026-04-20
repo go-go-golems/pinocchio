@@ -24,13 +24,14 @@ import (
 type Option func(*Server)
 
 type Server struct {
-	service        *chatapp.Service
-	ws             *wstransport.Server
-	defaultProfile string
-	chunkDelay     time.Duration
-	sqliteDSN      string
-	sqliteDBPath   string
-	closeFn        func() error
+	service         *chatapp.Service
+	ws              *wstransport.Server
+	defaultProfile  string
+	chunkDelay      time.Duration
+	sqliteDSN       string
+	sqliteDBPath    string
+	runtimeResolver RuntimeResolver
+	closeFn         func() error
 }
 
 func WithDefaultProfile(profile string) Option {
@@ -63,6 +64,15 @@ func WithSQLiteDBPath(path string) Option {
 			return
 		}
 		s.sqliteDBPath = strings.TrimSpace(path)
+	}
+}
+
+func WithRuntimeResolver(resolver RuntimeResolver) Option {
+	return func(s *Server) {
+		if s == nil {
+			return
+		}
+		s.runtimeResolver = resolver
 	}
 }
 
@@ -223,7 +233,20 @@ func (s *Server) handleSubmitMessage(w http.ResponseWriter, r *http.Request, sid
 		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "missing prompt"})
 		return
 	}
-	if err := s.service.SubmitPrompt(r.Context(), sid, in.Prompt); err != nil {
+	var runtime *chatapp.ResolvedRuntime
+	if s.runtimeResolver != nil {
+		resolved, err := s.runtimeResolver.Resolve(r.Context(), r, in.Profile, in.Registry)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, errorResponse{Error: err.Error()})
+			return
+		}
+		runtime = resolved
+	}
+	if err := s.service.SubmitPromptRequest(r.Context(), sid, chatapp.PromptRequest{
+		Prompt:         in.Prompt,
+		IdempotencyKey: in.IdempotencyKey,
+		Runtime:        runtime,
+	}); err != nil {
 		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: err.Error()})
 		return
 	}

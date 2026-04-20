@@ -59,10 +59,7 @@ function messageEntity(id: string, props: Record<string, unknown>): TimelineEnti
     kind: 'message',
     createdAt: Date.now(),
     updatedAt: Date.now(),
-    props: {
-      role: 'assistant',
-      ...props,
-    },
+    props,
   };
 }
 
@@ -75,10 +72,12 @@ function timelineEntityFromSnapshotEntity(entity: SnapshotEntityFrame): Timeline
   if (kind === 'ChatMessage') {
     const messageId = asString(payload.messageId) || id;
     return messageEntity(messageId, {
+      role: asString(payload.role) || 'assistant',
       prompt: asString(payload.prompt),
-      content: asString(payload.text),
+      content: asString(payload.content) || asString(payload.text),
       status: asString(payload.status) || 'idle',
       streaming: payload.streaming === true,
+      error: asString(payload.error),
     });
   }
 
@@ -113,36 +112,49 @@ function applyUIEvent(frame: CanonicalFrame, dispatch: AppDispatch) {
   if (!messageId) return;
 
   switch (asString(frame.name)) {
+    case 'ChatMessageAccepted':
+      dispatch(timelineSlice.actions.upsertEntity(messageEntity(messageId, {
+        role: asString(payload.role) || 'user',
+        content: asString(payload.content) || asString(payload.text),
+        status: asString(payload.status) || 'submitted',
+        streaming: payload.streaming === true,
+      })));
+      return;
     case 'ChatMessageStarted':
       dispatch(timelineSlice.actions.upsertEntity(messageEntity(messageId, {
+        role: asString(payload.role) || 'assistant',
         prompt: asString(payload.prompt),
-        content: '',
-        status: 'streaming',
+        content: asString(payload.content) || '',
+        status: asString(payload.status) || 'streaming',
         streaming: true,
       })));
       dispatch(appSlice.actions.setStatus('streaming'));
       return;
     case 'ChatMessageAppended':
       dispatch(timelineSlice.actions.upsertEntity(messageEntity(messageId, {
-        content: asString(payload.text) || asString(payload.chunk),
-        status: 'streaming',
+        role: asString(payload.role) || 'assistant',
+        content: asString(payload.content) || asString(payload.text) || asString(payload.chunk),
+        status: asString(payload.status) || 'streaming',
         streaming: true,
       })));
       dispatch(appSlice.actions.setStatus('streaming'));
       return;
     case 'ChatMessageFinished':
       dispatch(timelineSlice.actions.upsertEntity(messageEntity(messageId, {
-        content: asString(payload.text),
-        status: 'finished',
+        role: asString(payload.role) || 'assistant',
+        content: asString(payload.content) || asString(payload.text),
+        status: asString(payload.status) || 'finished',
         streaming: false,
       })));
       dispatch(appSlice.actions.setStatus('finished'));
       return;
     case 'ChatMessageStopped':
       dispatch(timelineSlice.actions.upsertEntity(messageEntity(messageId, {
-        content: asString(payload.text),
-        status: 'stopped',
+        role: asString(payload.role) || 'assistant',
+        content: asString(payload.content) || asString(payload.text),
+        status: asString(payload.status) || 'stopped',
         streaming: false,
+        error: asString(payload.error),
       })));
       dispatch(appSlice.actions.setStatus('stopped'));
       return;

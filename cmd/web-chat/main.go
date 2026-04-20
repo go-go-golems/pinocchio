@@ -26,10 +26,12 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	gepprofiles "github.com/go-go-golems/geppetto/pkg/engineprofiles"
+	"github.com/go-go-golems/geppetto/pkg/inference/middlewarecfg"
 	aisettings "github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 	appserver "github.com/go-go-golems/pinocchio/cmd/web-chat/app"
 	timelinecmd "github.com/go-go-golems/pinocchio/cmd/web-chat/timeline"
 	profilebootstrap "github.com/go-go-golems/pinocchio/pkg/cmds/profilebootstrap"
+	agentmode "github.com/go-go-golems/pinocchio/pkg/middlewares/agentmode"
 	rediscfg "github.com/go-go-golems/pinocchio/pkg/redisstream"
 )
 
@@ -259,6 +261,30 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 		return errors.Wrap(err, "build runtime config script")
 	}
 
+	amSvc := agentmode.NewStaticService([]*agentmode.AgentMode{
+		{Name: "financial_analyst", Prompt: "You are a financial transaction analyst. Analyze transactions and propose categories."},
+		{Name: "category_regexp_designer", Prompt: "Design regex patterns to categorize transactions. Verify with SQL counts before proposing changes."},
+		{Name: "category_regexp_reviewer", Prompt: "Review proposed regex patterns and assess over/under matching risks."},
+	})
+
+	middlewareRegistry, err := newWebChatMiddlewareDefinitionRegistry()
+	if err != nil {
+		return errors.Wrap(err, "create middleware definition registry")
+	}
+	hiddenBaseInferenceSettings, _, err := profilebootstrap.ResolveBaseInferenceSettings(parsed)
+	if err != nil {
+		return err
+	}
+	baseInferenceSettings, err := profilebootstrap.ResolveParsedBaseInferenceSettingsWithBase(parsed, hiddenBaseInferenceSettings)
+	if err != nil {
+		return errors.Wrap(err, "resolve web-chat base inference settings from hidden base and parsed values")
+	}
+	runtimeComposer := newProfileRuntimeComposer(middlewareRegistry, middlewarecfg.BuildDeps{
+		Values: map[string]any{
+			dependencyAgentModeServiceKey: amSvc,
+		},
+	}, baseInferenceSettings)
+
 	var (
 		profileRegistry     gepprofiles.Registry
 		defaultRegistrySlug gepprofiles.RegistrySlug
@@ -267,11 +293,13 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 		profileRegistry = profileRuntime.ProfileRegistryChain.Registry
 		defaultRegistrySlug = profileRuntime.ProfileRegistryChain.DefaultRegistrySlug
 	}
-	requestResolver := newProfileRequestResolver(profileRegistry, defaultRegistrySlug, nil)
+	requestResolver := newProfileRequestResolver(profileRegistry, defaultRegistrySlug, baseInferenceSettings)
+	canonicalRuntimeResolver := newCanonicalRuntimeResolver(requestResolver, runtimeComposer)
 
 	canonicalApp, err := appserver.NewServer(
 		appserver.WithSQLiteDSN(s.TimelineDSN),
 		appserver.WithSQLiteDBPath(s.TimelineDB),
+		appserver.WithRuntimeResolver(canonicalRuntimeResolver),
 	)
 	if err != nil {
 		return errors.Wrap(err, "build canonical evtstream-backed app")

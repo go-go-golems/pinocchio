@@ -2,6 +2,7 @@ package app
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -10,9 +11,36 @@ import (
 	"testing"
 	"time"
 
+	gepevents "github.com/go-go-golems/geppetto/pkg/events"
+	"github.com/go-go-golems/geppetto/pkg/turns"
+	chatapp "github.com/go-go-golems/pinocchio/pkg/evtstream/apps/chat"
+	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/require"
 )
+
+type runtimeBackedTestEngine struct {
+	completion string
+}
+
+func (e runtimeBackedTestEngine) RunInference(ctx context.Context, t *turns.Turn) (*turns.Turn, error) {
+	completion := strings.TrimSpace(e.completion)
+	if completion == "" {
+		completion = "runtime-backed response"
+	}
+	meta := gepevents.EventMetadata{}
+	gepevents.PublishEventToContext(ctx, gepevents.NewStartEvent(meta))
+	gepevents.PublishEventToContext(ctx, gepevents.NewPartialCompletionEvent(meta, completion, completion))
+	return t, nil
+}
+
+type staticRuntimeResolver struct {
+	completion string
+}
+
+func (r staticRuntimeResolver) Resolve(context.Context, *http.Request, string, string) (*chatapp.ResolvedRuntime, error) {
+	return &chatapp.ResolvedRuntime{ComposedRuntime: infruntime.ComposedRuntime{Engine: runtimeBackedTestEngine{completion: r.completion}}}, nil
+}
 
 func newTestMux(t *testing.T, opts ...Option) (*Server, *httptest.Server) {
 	t.Helper()
@@ -70,10 +98,21 @@ func TestSubmitAndSnapshot(t *testing.T) {
 		if snap.Status == "finished" {
 			require.Equal(t, "sess-1", snap.SessionID)
 			require.NotEmpty(t, snap.Ordinal)
-			require.Len(t, snap.Entities, 1)
-			payload, ok := snap.Entities[0].Payload.(map[string]any)
-			require.True(t, ok)
-			require.Equal(t, "Answer: Explain ordinals in plain language", payload["text"])
+			require.Len(t, snap.Entities, 2)
+			foundAssistant := false
+			foundUser := false
+			for _, entity := range snap.Entities {
+				payload, ok := entity.Payload.(map[string]any)
+				require.True(t, ok)
+				switch payload["role"] {
+				case "assistant":
+					foundAssistant = payload["text"] == "Answer: Explain ordinals in plain language"
+				case "user":
+					foundUser = payload["content"] == "Explain ordinals in plain language"
+				}
+			}
+			require.True(t, foundAssistant)
+			require.True(t, foundUser)
 			return
 		}
 		if time.Now().After(deadline) {
@@ -138,6 +177,42 @@ func TestWebSocketSnapshotAndLiveEvent(t *testing.T) {
 	require.True(t, seenUIEvent, "expected at least one ui-event frame")
 }
 
+func TestSubmitAndSnapshot_UsesResolvedRuntimeWhenConfigured(t *testing.T) {
+	_, httpSrv := newTestMux(t, WithRuntimeResolver(staticRuntimeResolver{completion: "hello from runtime"}))
+
+	body := []byte(`{"prompt":"ignored by fake runtime","profile":"gpt-5-nano-low"}`)
+	resp, err := http.Post(httpSrv.URL+"/api/chat/sessions/sess-runtime-1/messages", "application/json", bytes.NewReader(body))
+	require.NoError(t, err)
+	defer func() { _ = resp.Body.Close() }()
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		snapResp, err := http.Get(httpSrv.URL + "/api/chat/sessions/sess-runtime-1")
+		require.NoError(t, err)
+		var snap SessionSnapshotResponse
+		require.NoError(t, json.NewDecoder(snapResp.Body).Decode(&snap))
+		_ = snapResp.Body.Close()
+		if snap.Status == "finished" {
+			require.Len(t, snap.Entities, 2)
+			foundAssistant := false
+			for _, entity := range snap.Entities {
+				payload, ok := entity.Payload.(map[string]any)
+				require.True(t, ok)
+				if payload["role"] == "assistant" && payload["text"] == "hello from runtime" {
+					foundAssistant = true
+				}
+			}
+			require.True(t, foundAssistant)
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("timed out waiting for finished runtime-backed snapshot; last status=%q", snap.Status)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
 func TestSQLiteSnapshotPersistsAcrossRestart(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "evtstream-web-chat.db")
 	serverA, httpSrvA := newTestMux(t, WithSQLiteDBPath(dbPath))
@@ -179,8 +254,19 @@ func TestSQLiteSnapshotPersistsAcrossRestart(t *testing.T) {
 	require.NoError(t, json.NewDecoder(snapResp.Body).Decode(&snap))
 	_ = snapResp.Body.Close()
 	require.Equal(t, "finished", snap.Status)
-	require.Len(t, snap.Entities, 1)
-	payload, ok := snap.Entities[0].Payload.(map[string]any)
-	require.True(t, ok)
-	require.Equal(t, "Answer: persist across restart", payload["text"])
+	require.Len(t, snap.Entities, 2)
+	foundAssistant := false
+	foundUser := false
+	for _, entity := range snap.Entities {
+		payload, ok := entity.Payload.(map[string]any)
+		require.True(t, ok)
+		switch payload["role"] {
+		case "assistant":
+			foundAssistant = payload["text"] == "Answer: persist across restart"
+		case "user":
+			foundUser = payload["content"] == "persist across restart"
+		}
+	}
+	require.True(t, foundAssistant)
+	require.True(t, foundUser)
 }
