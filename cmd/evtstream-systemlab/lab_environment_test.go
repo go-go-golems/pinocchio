@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -63,4 +64,71 @@ func TestLabEnvironmentRunAndExportPhase2(t *testing.T) {
 	require.Equal(t, "text/markdown; charset=utf-8", contentType)
 	require.Contains(t, string(body), "# Phase 2 Transcript")
 	require.Contains(t, string(body), "burst-a")
+}
+
+func TestLabEnvironmentRunPhase3(t *testing.T) {
+	env, err := newLabEnvironment()
+	require.NoError(t, err)
+
+	resp, err := env.RunPhase3(context.Background(), phase3RunRequest{
+		Action:    "seed-session",
+		SessionID: "reconnect-demo",
+		Prompt:    "watch reconnect preserve a coherent snapshot",
+	})
+	require.NoError(t, err)
+	require.True(t, resp.Checks["snapshotBeforeLive"])
+	require.True(t, resp.Checks["sessionHydrated"])
+	require.Equal(t, "4", resp.Snapshot["ordinal"])
+}
+
+func TestLabEnvironmentRunPhase4(t *testing.T) {
+	env, err := newLabEnvironment()
+	require.NoError(t, err)
+
+	_, err = env.RunPhase4(context.Background(), phase4RunRequest{
+		Action:    "send",
+		SessionID: "chat-demo",
+		Prompt:    "Explain ordinals in plain language",
+	})
+	require.NoError(t, err)
+
+	time.Sleep(80 * time.Millisecond)
+	resp, err := env.RunPhase4(context.Background(), phase4RunRequest{
+		Action:    "await-idle",
+		SessionID: "chat-demo",
+	})
+	require.NoError(t, err)
+	require.True(t, resp.Checks["hasChatEntity"])
+	require.True(t, resp.Checks["timelineMatchesUI"])
+}
+
+func TestLabEnvironmentRunPhase5SQLRestart(t *testing.T) {
+	env, err := newLabEnvironment()
+	require.NoError(t, err)
+
+	_, err = env.RunPhase5(context.Background(), phase5RunRequest{
+		Action:    "seed-session",
+		Mode:      "sql",
+		SessionID: "persist-demo",
+		Text:      "persist this record",
+	})
+	require.NoError(t, err)
+
+	resp, err := env.RunPhase5(context.Background(), phase5RunRequest{
+		Action:    "restart-backend",
+		Mode:      "sql",
+		SessionID: "persist-demo",
+	})
+	require.NoError(t, err)
+	require.True(t, resp.Checks["cursorPreserved"])
+	require.True(t, resp.Checks["entitiesPreserved"])
+
+	resp, err = env.RunPhase5(context.Background(), phase5RunRequest{
+		Action:    "seed-session",
+		Mode:      "sql",
+		SessionID: "persist-demo",
+		Text:      "persist this record again",
+	})
+	require.NoError(t, err)
+	require.True(t, resp.Checks["resumeWithoutGaps"])
 }

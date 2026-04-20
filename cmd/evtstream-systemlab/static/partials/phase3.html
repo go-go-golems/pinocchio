@@ -1,6 +1,6 @@
 <div class="panel">
   <h2>Phase 3 — Hydration and Reconnect</h2>
-  <p>Study how websocket clients, session subscriptions, snapshots, and live UI events are supposed to fit together. This page currently serves as an intern chapter and implementation guide while the fully interactive lab is still being built.</p>
+  <p>Open two websocket clients against the public Phase 3 transport, subscribe them to the same session, seed activity, disconnect one client, then reconnect and watch the snapshot-before-live rule show up in both the client frames and the backend trace.</p>
 </div>
 <div class="panel">
   <h3>Phase 3 Chapter</h3>
@@ -9,22 +9,57 @@
 </div>
 <div class="grid">
   <div class="panel">
-    <h3>Planned Controls</h3>
-    <ul>
-      <li>Connect / Disconnect Client A</li>
-      <li>Connect / Disconnect Client B</li>
-      <li>Subscribe to a Session ID</li>
-      <li>Reconnect with a since-ordinal</li>
-      <li>Seed activity and compare snapshot-before-live behavior</li>
-    </ul>
-    <p><strong>Status:</strong> Chapter and page scaffold ready. Full interactive transport lab still pending.</p>
+    <h3>Scenario Controls</h3>
+    <label>Session ID
+      <input id="phase3-session-id" value="reconnect-demo" />
+    </label>
+    <label>Seed Prompt
+      <input id="phase3-prompt" value="watch reconnect preserve a coherent snapshot" />
+    </label>
+    <div class="actions">
+      <button data-action="phase3-seed">Seed Session</button>
+      <button class="secondary" data-action="phase3-refresh">Refresh State</button>
+      <button class="secondary" data-action="phase3-reset">Reset Phase 3</button>
+    </div>
   </div>
   <div class="panel">
-    <h3>What to focus on now</h3>
-    <ul>
-      <li>Why <em>snapshot before live</em> is the crucial transport invariant.</li>
-      <li>Why <code>ConnectionId</code> and <code>SessionId</code> are distinct concepts.</li>
-      <li>How websocket delivery should stay downstream of the consumer and UI projection.</li>
-    </ul>
+    <h3>Checks</h3>
+    <div id="phase3-checks"></div>
+  </div>
+</div>
+<div class="grid">
+  <div class="panel">
+    <h3>Client A</h3>
+    <label>sinceOrdinal
+      <input id="phase3-client-a-since" value="0" />
+    </label>
+    <div class="actions">
+      <button data-action="phase3-connect-a">Connect</button>
+      <button class="secondary" data-action="phase3-subscribe-a">Subscribe</button>
+      <button class="secondary" data-action="phase3-disconnect-a">Disconnect</button>
+    </div>
+    <pre id="phase3-client-a-output">Client A idle.</pre>
+  </div>
+  <div class="panel">
+    <h3>Client B</h3>
+    <label>sinceOrdinal
+      <input id="phase3-client-b-since" value="0" />
+    </label>
+    <div class="actions">
+      <button data-action="phase3-connect-b">Connect</button>
+      <button class="secondary" data-action="phase3-subscribe-b">Subscribe</button>
+      <button class="secondary" data-action="phase3-disconnect-b">Disconnect</button>
+    </div>
+    <pre id="phase3-client-b-output">Client B idle.</pre>
+  </div>
+</div>
+<div class="grid">
+  <div class="panel">
+    <h3>Backend Trace</h3>
+    <pre id="phase3-trace-output">Run a scenario.</pre>
+  </div>
+  <div class="panel">
+    <h3>Connections / Snapshot</h3>
+    <pre id="phase3-state-output">Run a scenario.</pre>
   </div>
 </div>

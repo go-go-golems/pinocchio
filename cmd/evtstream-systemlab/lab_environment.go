@@ -62,6 +62,9 @@ type labEnvironment struct {
 	lastRuns    map[string]phase1RunResponse
 	messageSeq  int
 	phase2      *phase2State
+	phase3      *phase3State
+	phase4      *phase4State
+	phase5      *phase5State
 }
 
 func newLabEnvironment() (*labEnvironment, error) {
@@ -74,6 +77,9 @@ func newLabEnvironment() (*labEnvironment, error) {
 
 func (e *labEnvironment) Reset() error {
 	if err := e.shutdownPhase2(); err != nil {
+		return err
+	}
+	if err := e.shutdownPhase5(); err != nil {
 		return err
 	}
 
@@ -127,6 +133,18 @@ func (e *labEnvironment) Reset() error {
 	if err != nil {
 		return err
 	}
+	phase3, err := e.newPhase3State()
+	if err != nil {
+		return err
+	}
+	phase4, err := e.newPhase4State()
+	if err != nil {
+		return err
+	}
+	phase5, err := e.newPhase5State("memory", "")
+	if err != nil {
+		return err
+	}
 
 	e.mu.Lock()
 	e.sessionMeta = map[string]map[string]any{}
@@ -138,6 +156,9 @@ func (e *labEnvironment) Reset() error {
 	e.store = store
 	e.reg = reg
 	e.phase2 = phase2
+	e.phase3 = phase3
+	e.phase4 = phase4
+	e.phase5 = phase5
 	e.mu.Unlock()
 
 	return e.startPhase2()

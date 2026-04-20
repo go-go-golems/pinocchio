@@ -1,6 +1,6 @@
 <div class="panel">
   <h2>Phase 5 — Persistence and Restart Correctness</h2>
-  <p>This page is the teaching surface for the durable hydration-store phase. It explains why cursor state and timeline state must survive restart together, and what the future memory-vs-SQL lab should help you compare.</p>
+  <p>Switch between memory and SQL hydration stores, seed a session, restart the backend runtime, reconnect the websocket client, and compare pre/post restart snapshots. The memory mode should forget state; the SQL mode should preserve cursor and entities and continue ordinals without gaps.</p>
 </div>
 <div class="panel">
   <h3>Phase 5 Chapter</h3>
@@ -9,22 +9,47 @@
 </div>
 <div class="grid">
   <div class="panel">
-    <h3>Planned Controls</h3>
-    <ul>
-      <li>Storage mode toggle: memory vs SQL</li>
-      <li>Seed session</li>
-      <li>Restart backend</li>
-      <li>Reconnect client</li>
-      <li>Compare pre/post restart snapshots</li>
-    </ul>
-    <p><strong>Status:</strong> Chapter and page scaffold ready. Durable SQL lab still pending.</p>
+    <h3>Scenario Controls</h3>
+    <label>Mode
+      <select id="phase5-mode">
+        <option value="memory">Memory</option>
+        <option value="sql">SQL</option>
+      </select>
+    </label>
+    <label>Session ID
+      <input id="phase5-session-id" value="persist-demo" />
+    </label>
+    <label>Text
+      <input id="phase5-text" value="persist this record" />
+    </label>
+    <div class="actions">
+      <button data-action="phase5-connect">Connect</button>
+      <button class="secondary" data-action="phase5-subscribe">Subscribe</button>
+      <button data-action="phase5-seed">Seed Session</button>
+      <button class="secondary" data-action="phase5-restart">Restart Backend</button>
+      <button class="secondary" data-action="phase5-reconnect">Reconnect Client</button>
+      <button class="secondary" data-action="phase5-refresh">Refresh</button>
+      <button class="secondary" data-action="phase5-reset">Reset Phase 5</button>
+    </div>
   </div>
   <div class="panel">
-    <h3>What to focus on now</h3>
-    <ul>
-      <li>Why atomic <code>Apply + cursor advance</code> semantics matter.</li>
-      <li>How restart correctness depends on durable cursor preservation.</li>
-      <li>Why memory and SQL modes should preserve the same framework semantics where their contracts overlap.</li>
-    </ul>
+    <h3>Checks</h3>
+    <div id="phase5-checks"></div>
+  </div>
+</div>
+<div class="grid">
+  <div class="panel">
+    <h3>Client Frames</h3>
+    <pre id="phase5-client-output">Client idle.</pre>
+  </div>
+  <div class="panel">
+    <h3>Backend Trace</h3>
+    <pre id="phase5-trace-output">Run a scenario.</pre>
+  </div>
+</div>
+<div class="grid">
+  <div class="panel">
+    <h3>Pre / Post Restart Comparison</h3>
+    <pre id="phase5-state-output">Run a scenario.</pre>
   </div>
 </div>
