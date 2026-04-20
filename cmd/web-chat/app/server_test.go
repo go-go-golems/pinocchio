@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -13,10 +14,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func newTestMux(t *testing.T) (*Server, *httptest.Server) {
+func newTestMux(t *testing.T, opts ...Option) (*Server, *httptest.Server) {
 	t.Helper()
-	srv, err := NewServer(WithDefaultProfile("gpt-5-nano-low"), WithChunkDelay(time.Millisecond))
+	baseOpts := []Option{WithDefaultProfile("gpt-5-nano-low"), WithChunkDelay(time.Millisecond)}
+	baseOpts = append(baseOpts, opts...)
+	srv, err := NewServer(baseOpts...)
 	require.NoError(t, err)
+	t.Cleanup(func() { _ = srv.Close() })
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/chat/sessions", srv.HandleCreateSession)
@@ -132,4 +136,51 @@ func TestWebSocketSnapshotAndLiveEvent(t *testing.T) {
 		}
 	}
 	require.True(t, seenUIEvent, "expected at least one ui-event frame")
+}
+
+func TestSQLiteSnapshotPersistsAcrossRestart(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "evtstream-web-chat.db")
+	serverA, httpSrvA := newTestMux(t, WithSQLiteDBPath(dbPath))
+
+	body := []byte(`{"prompt":"persist across restart","profile":"gpt-5-nano-low"}`)
+	resp, err := http.Post(httpSrvA.URL+"/api/chat/sessions/sess-sql-1/messages", "application/json", bytes.NewReader(body))
+	require.NoError(t, err)
+	_ = resp.Body.Close()
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		snapResp, err := http.Get(httpSrvA.URL + "/api/chat/sessions/sess-sql-1")
+		require.NoError(t, err)
+		var snap SessionSnapshotResponse
+		require.NoError(t, json.NewDecoder(snapResp.Body).Decode(&snap))
+		_ = snapResp.Body.Close()
+		if snap.Status == "finished" {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("timed out waiting for sqlite snapshot before restart")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	httpSrvA.Close()
+	require.NoError(t, serverA.Close())
+
+	serverB, httpSrvB := newTestMux(t, WithSQLiteDBPath(dbPath))
+	defer func() {
+		httpSrvB.Close()
+		_ = serverB.Close()
+	}()
+
+	snapResp, err := http.Get(httpSrvB.URL + "/api/chat/sessions/sess-sql-1")
+	require.NoError(t, err)
+	var snap SessionSnapshotResponse
+	require.NoError(t, json.NewDecoder(snapResp.Body).Decode(&snap))
+	_ = snapResp.Body.Close()
+	require.Equal(t, "finished", snap.Status)
+	require.Len(t, snap.Entities, 1)
+	payload, ok := snap.Entities[0].Payload.(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "Answer: persist across restart", payload["text"])
 }

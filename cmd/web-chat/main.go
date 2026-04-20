@@ -114,6 +114,8 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 		Root              string   `glazed:"root"`
 		DebugAPI          bool     `glazed:"debug-api"`
 		TimelineJSScripts []string `glazed:"timeline-js-script"`
+		TimelineDSN       string   `glazed:"timeline-dsn"`
+		TimelineDB        string   `glazed:"timeline-db"`
 	}
 	s := &serverSettings{}
 	if err := parsed.DecodeSectionInto(values.DefaultSlug, s); err != nil {
@@ -177,10 +179,16 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 		},
 	}, baseInferenceSettings)
 	requestResolver := newProfileRequestResolver(profileRegistry, defaultRegistrySlug, baseInferenceSettings)
-	canonicalApp, err := appserver.NewServer()
+	canonicalApp, err := appserver.NewServer(
+		appserver.WithSQLiteDSN(s.TimelineDSN),
+		appserver.WithSQLiteDBPath(s.TimelineDB),
+	)
 	if err != nil {
 		return errors.Wrap(err, "build canonical evtstream-backed app")
 	}
+	defer func() {
+		_ = canonicalApp.Close()
+	}()
 
 	if err := configureTimelineJSScripts(s.TimelineJSScripts); err != nil {
 		return err

@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -13,6 +15,7 @@ import (
 	"github.com/go-go-golems/pinocchio/pkg/evtstream"
 	chatapp "github.com/go-go-golems/pinocchio/pkg/evtstream/apps/chat"
 	storememory "github.com/go-go-golems/pinocchio/pkg/evtstream/hydration/memory"
+	storesqlite "github.com/go-go-golems/pinocchio/pkg/evtstream/hydration/sqlite"
 	wstransport "github.com/go-go-golems/pinocchio/pkg/evtstream/transport/ws"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
@@ -25,6 +28,9 @@ type Server struct {
 	ws             *wstransport.Server
 	defaultProfile string
 	chunkDelay     time.Duration
+	sqliteDSN      string
+	sqliteDBPath   string
+	closeFn        func() error
 }
 
 func WithDefaultProfile(profile string) Option {
@@ -42,6 +48,24 @@ func WithChunkDelay(delay time.Duration) Option {
 	}
 }
 
+func WithSQLiteDSN(dsn string) Option {
+	return func(s *Server) {
+		if s == nil {
+			return
+		}
+		s.sqliteDSN = strings.TrimSpace(dsn)
+	}
+}
+
+func WithSQLiteDBPath(path string) Option {
+	return func(s *Server) {
+		if s == nil {
+			return
+		}
+		s.sqliteDBPath = strings.TrimSpace(path)
+	}
+}
+
 func NewServer(opts ...Option) (*Server, error) {
 	s := &Server{chunkDelay: 20 * time.Millisecond}
 	for _, opt := range opts {
@@ -50,9 +74,12 @@ func NewServer(opts ...Option) (*Server, error) {
 		}
 	}
 
-	store := storememory.New()
 	reg := evtstream.NewSchemaRegistry()
 	if err := chatapp.RegisterSchemas(reg); err != nil {
+		return nil, err
+	}
+	store, cleanup, err := newHydrationStore(s, reg)
+	if err != nil {
 		return nil, err
 	}
 	provider := &hydrationSnapshotProvider{server: s}
@@ -79,7 +106,42 @@ func NewServer(opts ...Option) (*Server, error) {
 
 	s.service = service
 	s.ws = ws
+	s.closeFn = cleanup
 	return s, nil
+}
+
+func newHydrationStore(s *Server, reg *evtstream.SchemaRegistry) (evtstream.HydrationStore, func() error, error) {
+	if s == nil || reg == nil {
+		return nil, nil, fmt.Errorf("app server or schema registry is nil")
+	}
+	if s.sqliteDSN == "" && s.sqliteDBPath == "" {
+		return storememory.New(), nil, nil
+	}
+	dsn := s.sqliteDSN
+	if dsn == "" {
+		if dir := filepath.Dir(s.sqliteDBPath); dir != "" && dir != "." {
+			if err := os.MkdirAll(dir, 0o755); err != nil {
+				return nil, nil, err
+			}
+		}
+		var err error
+		dsn, err = storesqlite.FileDSN(s.sqliteDBPath)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+	store, err := storesqlite.New(dsn, reg)
+	if err != nil {
+		return nil, nil, err
+	}
+	return store, store.Close, nil
+}
+
+func (s *Server) Close() error {
+	if s == nil || s.closeFn == nil {
+		return nil
+	}
+	return s.closeFn()
 }
 
 type hydrationSnapshotProvider struct {
