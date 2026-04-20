@@ -17,9 +17,22 @@ export async function resetLab() {
   return parseJSON(resp, "reset lab");
 }
 
+export async function runPhase2(input) {
+  const resp = await fetch("/api/phase2/run", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  return parseJSON(resp, "run phase 2 lab");
+}
+
 export function phase1ExportURL(sessionId, format) {
   const sid = encodeURIComponent(sessionId || "lab-session-1");
   return `/api/phase1/export?sessionId=${sid}&format=${encodeURIComponent(format)}`;
+}
+
+export function phase2ExportURL(format) {
+  return `/api/phase2/export?format=${encodeURIComponent(format)}`;
 }
 
 async function parseJSON(resp, action) {

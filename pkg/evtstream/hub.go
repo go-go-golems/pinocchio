@@ -8,7 +8,7 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// ProjectionErrorPolicy controls how local in-memory event processing reacts to projection failures.
+// ProjectionErrorPolicy controls how event processing reacts to projection failures.
 type ProjectionErrorPolicy int
 
 const (
@@ -18,7 +18,7 @@ const (
 	ProjectionErrorPolicyFail
 )
 
-// Hub is the phase-0/1 substrate entrypoint.
+// Hub is the substrate entrypoint.
 type Hub struct {
 	reg      *SchemaRegistry
 	store    HydrationStore
@@ -27,11 +27,17 @@ type Hub struct {
 
 	uiProjection       UIProjection
 	timelineProjection TimelineProjection
+	fanout             UIFanout
+	bus                *busConfig
 
 	projectionPolicy ProjectionErrorPolicy
 
 	mu           sync.Mutex
 	localOrdinal map[SessionId]uint64
+
+	runMu     sync.Mutex
+	runCancel context.CancelFunc
+	consumer  *eventConsumer
 }
 
 // HubOption configures a Hub.
@@ -67,6 +73,16 @@ func WithSessionMetadataFactory(f SessionMetadataFactory) HubOption {
 func WithProjectionErrorPolicy(policy ProjectionErrorPolicy) HubOption {
 	return func(h *Hub) error {
 		h.projectionPolicy = policy
+		return nil
+	}
+}
+
+func WithUIFanout(f UIFanout) HubOption {
+	return func(h *Hub) error {
+		if f == nil {
+			return fmt.Errorf("ui fanout is nil")
+		}
+		h.fanout = f
 		return nil
 	}
 }
@@ -126,7 +142,7 @@ func (h *Hub) RegisterTimelineProjection(p TimelineProjection) error {
 	return nil
 }
 
-// Submit executes a command through the in-memory phase-1 path.
+// Submit executes a command through the configured publisher path.
 func (h *Hub) Submit(ctx context.Context, sid SessionId, name string, payload proto.Message) error {
 	if h == nil {
 		return fmt.Errorf("hub is nil")
@@ -165,6 +181,52 @@ func (h *Hub) Cursor(ctx context.Context, sid SessionId) (uint64, error) {
 	return h.store.Cursor(ctx, sid)
 }
 
+// Run starts the configured bus consumer if an event bus is present.
+func (h *Hub) Run(ctx context.Context) error {
+	if h == nil {
+		return fmt.Errorf("hub is nil")
+	}
+	if h.bus == nil {
+		return nil
+	}
+	if ctx == nil {
+		return fmt.Errorf("ctx is nil")
+	}
+
+	h.runMu.Lock()
+	defer h.runMu.Unlock()
+	if h.runCancel != nil {
+		return nil
+	}
+	runCtx, cancel := context.WithCancel(ctx)
+	consumer := newEventConsumer(h)
+	if err := consumer.start(runCtx); err != nil {
+		cancel()
+		return err
+	}
+	h.runCancel = cancel
+	h.consumer = consumer
+	return nil
+}
+
+// Shutdown stops the active bus consumer.
+func (h *Hub) Shutdown(ctx context.Context) error {
+	if h == nil {
+		return fmt.Errorf("hub is nil")
+	}
+	h.runMu.Lock()
+	cancel := h.runCancel
+	consumer := h.consumer
+	h.runCancel = nil
+	h.consumer = nil
+	h.runMu.Unlock()
+	if cancel == nil || consumer == nil {
+		return nil
+	}
+	cancel()
+	return consumer.wait(ctx)
+}
+
 func (h *Hub) dispatch(ctx context.Context, cmd Command) error {
 	handler, ok := h.commands.Lookup(cmd.Name)
 	if !ok {
@@ -174,8 +236,14 @@ func (h *Hub) dispatch(ctx context.Context, cmd Command) error {
 	if err != nil {
 		return err
 	}
-	pub := localEventPublisher{hub: h}
-	return handler(ctx, cmd, sess, pub)
+	return handler(ctx, cmd, sess, h.publisher())
+}
+
+func (h *Hub) publisher() EventPublisher {
+	if h.bus != nil {
+		return watermillEventPublisher{hub: h}
+	}
+	return localEventPublisher{hub: h}
 }
 
 type localEventPublisher struct {
@@ -195,28 +263,30 @@ func (p localEventPublisher) Publish(ctx context.Context, ev Event) error {
 	if err := p.hub.validatePayloadType(p.hub.reg.events, "event", ev.Name, ev.Payload); err != nil {
 		return err
 	}
-	return p.hub.processEvent(ctx, ev)
+	ord := p.hub.nextLocalOrdinal(ev.SessionId)
+	ev.Ordinal = ord
+	_, err := p.hub.projectAndApply(ctx, ev)
+	return err
 }
 
-func (h *Hub) processEvent(ctx context.Context, ev Event) error {
-	ord := h.nextLocalOrdinal(ev.SessionId)
-	ev.Ordinal = ord
+func (h *Hub) projectAndApply(ctx context.Context, ev Event) ([]UIEvent, error) {
 	sess, err := h.sessions.GetOrCreate(ctx, ev.SessionId)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	view, err := h.store.View(ctx, ev.SessionId)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	var (
+		uiEvents []UIEvent
 		entities []TimelineEntity
 		uiErr    error
 		tlErr    error
 	)
 	if h.uiProjection != nil {
-		_, uiErr = h.uiProjection.Project(ctx, ev, sess, view)
+		uiEvents, uiErr = h.uiProjection.Project(ctx, ev, sess, view)
 	}
 	if h.timelineProjection != nil {
 		entities, tlErr = h.timelineProjection.Project(ctx, ev, sess, view)
@@ -224,17 +294,41 @@ func (h *Hub) processEvent(ctx context.Context, ev Event) error {
 
 	if h.projectionPolicy == ProjectionErrorPolicyFail {
 		if uiErr != nil {
-			return uiErr
+			return nil, uiErr
 		}
 		if tlErr != nil {
-			return tlErr
+			return nil, tlErr
 		}
 	}
 
-	if err := h.store.Apply(ctx, ev.SessionId, ord, entities); err != nil {
-		return err
+	entitiesToApply := entities
+	if tlErr != nil {
+		entitiesToApply = nil
 	}
-	return nil
+	if err := h.store.Apply(ctx, ev.SessionId, ev.Ordinal, entitiesToApply); err != nil {
+		return nil, err
+	}
+	if uiErr == nil && h.fanout != nil && len(uiEvents) > 0 {
+		if err := h.fanout.PublishUI(ctx, ev.SessionId, ev.Ordinal, cloneUIEvents(uiEvents)); err != nil {
+			return nil, err
+		}
+	}
+	return uiEvents, nil
+}
+
+func cloneUIEvents(in []UIEvent) []UIEvent {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]UIEvent, 0, len(in))
+	for _, event := range in {
+		clonedEvent := event
+		if event.Payload != nil {
+			clonedEvent.Payload = proto.Clone(event.Payload)
+		}
+		out = append(out, clonedEvent)
+	}
+	return out
 }
 
 func (h *Hub) nextLocalOrdinal(sid SessionId) uint64 {

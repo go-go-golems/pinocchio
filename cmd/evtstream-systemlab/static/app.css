@@ -57,7 +57,8 @@ main {
 }
 
 input,
-textarea {
+textarea,
+select {
   width: 100%;
   box-sizing: border-box;
   background: #0b1220;

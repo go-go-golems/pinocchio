@@ -61,6 +61,7 @@ type labEnvironment struct {
 	uiEvents    map[string][]namedPayload
 	lastRuns    map[string]phase1RunResponse
 	messageSeq  int
+	phase2      *phase2State
 }
 
 func newLabEnvironment() (*labEnvironment, error) {
@@ -72,14 +73,9 @@ func newLabEnvironment() (*labEnvironment, error) {
 }
 
 func (e *labEnvironment) Reset() error {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-
-	e.sessionMeta = map[string]map[string]any{}
-	e.traces = map[string][]traceEntry{}
-	e.uiEvents = map[string][]namedPayload{}
-	e.lastRuns = map[string]phase1RunResponse{}
-	e.messageSeq = 0
+	if err := e.shutdownPhase2(); err != nil {
+		return err
+	}
 
 	store := storememory.New()
 	reg := evtstream.NewSchemaRegistry()
@@ -127,10 +123,24 @@ func (e *labEnvironment) Reset() error {
 		return err
 	}
 
+	phase2, err := e.newPhase2State()
+	if err != nil {
+		return err
+	}
+
+	e.mu.Lock()
+	e.sessionMeta = map[string]map[string]any{}
+	e.traces = map[string][]traceEntry{}
+	e.uiEvents = map[string][]namedPayload{}
+	e.lastRuns = map[string]phase1RunResponse{}
+	e.messageSeq = 0
 	e.hub = hub
 	e.store = store
 	e.reg = reg
-	return nil
+	e.phase2 = phase2
+	e.mu.Unlock()
+
+	return e.startPhase2()
 }
 
 func (e *labEnvironment) RunPhase1(ctx context.Context, in phase1RunRequest) (phase1RunResponse, error) {

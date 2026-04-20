@@ -1,0 +1,58 @@
+<div class="panel">
+  <h2>Phase 2 — Ordering and Ordinals</h2>
+  <p>Publish canonical backend events through a real Watermill <code>gochannel</code> bus, then inspect publish metadata, consume metadata, and consumer-side ordinal assignment.</p>
+</div>
+<div class="grid">
+  <div class="panel">
+    <h3>Scenario Controls</h3>
+    <label>Session A
+      <input id="phase2-session-a" value="s-a" />
+    </label>
+    <label>Session B
+      <input id="phase2-session-b" value="s-b" />
+    </label>
+    <label>Burst Count
+      <input id="phase2-burst-count" type="number" value="4" min="1" />
+    </label>
+    <label>Stream Mode
+      <select id="phase2-stream-mode">
+        <option value="derived">Derived stream id</option>
+        <option value="missing">Missing stream id</option>
+        <option value="invalid">Invalid stream id</option>
+      </select>
+    </label>
+    <div class="actions">
+      <button data-action="phase2-publish-a">Publish A</button>
+      <button data-action="phase2-publish-b">Publish B</button>
+      <button class="secondary" data-action="phase2-burst-a">Burst A</button>
+      <button class="secondary" data-action="phase2-restart-consumer">Restart Consumer</button>
+      <button class="secondary" data-action="phase2-reset">Reset Phase 2</button>
+      <button class="secondary" data-action="phase2-export-json">Export JSON</button>
+      <button class="secondary" data-action="phase2-export-markdown">Export Markdown</button>
+    </div>
+  </div>
+  <div class="panel">
+    <h3>Invariant Checks</h3>
+    <div id="phase2-checks"></div>
+  </div>
+</div>
+<div class="grid">
+  <div class="panel">
+    <h3>Bus / Consumer Trace</h3>
+    <pre id="phase2-trace-output">No run yet.</pre>
+  </div>
+  <div class="panel">
+    <h3>Message History</h3>
+    <pre id="phase2-messages-output">No run yet.</pre>
+  </div>
+</div>
+<div class="grid">
+  <div class="panel">
+    <h3>Per-Session Ordinals</h3>
+    <pre id="phase2-ordinals-output">No run yet.</pre>
+  </div>
+  <div class="panel">
+    <h3>Snapshots</h3>
+    <pre id="phase2-snapshots-output">No run yet.</pre>
+  </div>
+</div>

@@ -1,12 +1,14 @@
 import { loadPagePartials, showPage } from "./dom.js";
 import { initOverviewPage } from "./pages/overview.js";
 import { initPhase1Page } from "./pages/phase1.js";
+import { initPhase2Page } from "./pages/phase2.js";
 
 async function main() {
   await loadPagePartials();
   bindNavigation();
   await initOverviewPage();
   initPhase1Page();
+  initPhase2Page();
   showPage(initialPage());
 }
 

@@ -28,3 +28,39 @@ func TestLabEnvironmentRunAndExportPhase1(t *testing.T) {
 	require.Contains(t, string(body), "# Phase 1 Transcript")
 	require.Contains(t, string(body), "hello from systemlab")
 }
+
+func TestLabEnvironmentRunAndExportPhase2(t *testing.T) {
+	env, err := newLabEnvironment()
+	require.NoError(t, err)
+
+	resp, err := env.RunPhase2(context.Background(), phase2RunRequest{
+		Action:     "publish-a",
+		SessionA:   "s-a",
+		SessionB:   "s-b",
+		BurstCount: 3,
+		StreamMode: "derived",
+	})
+	require.NoError(t, err)
+	require.True(t, resp.Checks["publishOrdinalZero"])
+	require.True(t, resp.Checks["monotonicPerSession"])
+	require.Len(t, resp.MessageHistory, 1)
+	require.NotEmpty(t, resp.PerSessionOrdinals["s-a"])
+
+	resp, err = env.RunPhase2(context.Background(), phase2RunRequest{
+		Action:     "burst-a",
+		SessionA:   "s-a",
+		SessionB:   "s-b",
+		BurstCount: 3,
+		StreamMode: "missing",
+	})
+	require.NoError(t, err)
+	require.True(t, resp.Checks["monotonicPerSession"])
+	require.Len(t, resp.PerSessionOrdinals["s-a"], 4)
+
+	filename, contentType, body, err := env.ExportPhase2("markdown")
+	require.NoError(t, err)
+	require.Equal(t, "phase2-transcript.md", filename)
+	require.Equal(t, "text/markdown; charset=utf-8", contentType)
+	require.Contains(t, string(body), "# Phase 2 Transcript")
+	require.Contains(t, string(body), "burst-a")
+}

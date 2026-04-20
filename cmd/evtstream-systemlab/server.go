@@ -29,6 +29,8 @@ func (s *systemlabServer) routes() http.Handler {
 	mux.HandleFunc("/api/reset", s.handleReset)
 	mux.HandleFunc("/api/phase1/run", s.handlePhase1Run)
 	mux.HandleFunc("/api/phase1/export", s.handlePhase1Export)
+	mux.HandleFunc("/api/phase2/run", s.handlePhase2Run)
+	mux.HandleFunc("/api/phase2/export", s.handlePhase2Export)
 	staticSub, _ := fs.Sub(staticFS, "static")
 	mux.Handle("/", http.FileServer(http.FS(staticSub)))
 	return mux
@@ -41,7 +43,7 @@ func (s *systemlabServer) handleStatus(w http.ResponseWriter, _ *http.Request) {
 		"labs": []map[string]any{
 			{"id": "phase0", "title": "Foundations", "implemented": true},
 			{"id": "phase1", "title": "Command → Event → Projection", "implemented": true},
-			{"id": "phase2", "title": "Ordering and Ordinals", "implemented": false},
+			{"id": "phase2", "title": "Ordering and Ordinals", "implemented": true},
 			{"id": "phase3", "title": "Hydration and Reconnect", "implemented": false},
 		},
 		"boundary": map[string]any{
@@ -89,6 +91,41 @@ func (s *systemlabServer) handlePhase1Export(w http.ResponseWriter, req *http.Re
 	sessionID := req.URL.Query().Get("sessionId")
 	format := req.URL.Query().Get("format")
 	filename, contentType, body, err := s.env.ExportPhase1(sessionID, format)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
+		return
+	}
+	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", filename))
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(body)
+}
+
+func (s *systemlabServer) handlePhase2Run(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]any{"error": "method not allowed"})
+		return
+	}
+	var in phase2RunRequest
+	if err := json.NewDecoder(req.Body).Decode(&in); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": fmt.Sprintf("decode request: %v", err)})
+		return
+	}
+	resp, err := s.env.RunPhase2(req.Context(), in)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
+func (s *systemlabServer) handlePhase2Export(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]any{"error": "method not allowed"})
+		return
+	}
+	format := req.URL.Query().Get("format")
+	filename, contentType, body, err := s.env.ExportPhase2(format)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
 		return
