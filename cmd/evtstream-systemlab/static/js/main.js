@@ -5,6 +5,7 @@ import { initPhase2Page } from "./pages/phase2.js";
 import { initPhase3Page } from "./pages/phase3.js";
 import { initPhase4Page } from "./pages/phase4.js";
 import { initPhase5Page } from "./pages/phase5.js";
+import { initPhase6Page } from "./pages/phase6.js";
 
 async function main() {
   await loadPagePartials();
@@ -15,6 +16,7 @@ async function main() {
   await initPhase3Page();
   await initPhase4Page();
   await initPhase5Page();
+  await initPhase6Page();
   showPage(initialPage());
 }
 

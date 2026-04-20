@@ -41,6 +41,8 @@ func (s *systemlabServer) routes() http.Handler {
 	mux.HandleFunc("/api/phase5/run", s.handlePhase5Run)
 	mux.HandleFunc("/api/phase5/state", s.handlePhase5State)
 	mux.HandleFunc("/api/phase5/ws", s.handlePhase5WS)
+	mux.HandleFunc("/api/phase6/run", s.handlePhase6Run)
+	mux.HandleFunc("/api/phase6/state", s.handlePhase6State)
 	chaptersSub, _ := fs.Sub(appFS, "chapters")
 	mux.Handle("/chapters/", http.StripPrefix("/chapters/", http.FileServer(http.FS(chaptersSub))))
 	staticSub, _ := fs.Sub(appFS, "static")
@@ -59,6 +61,7 @@ func (s *systemlabServer) handleStatus(w http.ResponseWriter, _ *http.Request) {
 			{"id": "phase3", "title": "Hydration and Reconnect", "implemented": true, "chapter": true},
 			{"id": "phase4", "title": "Chat Example", "implemented": true, "chapter": true},
 			{"id": "phase5", "title": "Persistence and Restart", "implemented": true, "chapter": true},
+			{"id": "phase6", "title": "Migration and Regression", "implemented": true, "chapter": true},
 		},
 		"boundary": map[string]any{
 			"systemlabCalls":  []string{"public evtstream package APIs", "its own HTTP endpoints"},
@@ -287,6 +290,43 @@ func (s *systemlabServer) handlePhase5WS(w http.ResponseWriter, req *http.Reques
 		return
 	}
 	state.runtime.ws.ServeHTTP(w, req)
+}
+
+func (s *systemlabServer) handlePhase6Run(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]any{"error": "method not allowed"})
+		return
+	}
+	var in phase6RunRequest
+	if err := json.NewDecoder(req.Body).Decode(&in); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": fmt.Sprintf("decode request: %v", err)})
+		return
+	}
+	resp, err := s.env.RunPhase6(req.Context(), in)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
+func (s *systemlabServer) handlePhase6State(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]any{"error": "method not allowed"})
+		return
+	}
+	resp, err := s.env.RunPhase6(req.Context(), phase6RunRequest{
+		Action:         "state",
+		BaseURL:        req.URL.Query().Get("baseUrl"),
+		Profile:        req.URL.Query().Get("profile"),
+		Prompt:         req.URL.Query().Get("prompt"),
+		TimeoutSeconds: 45,
+	})
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, resp)
 }
 
 func writeJSON(w http.ResponseWriter, status int, value any) {

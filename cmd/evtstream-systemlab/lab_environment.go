@@ -65,6 +65,7 @@ type labEnvironment struct {
 	phase3      *phase3State
 	phase4      *phase4State
 	phase5      *phase5State
+	phase6      *phase6State
 }
 
 func newLabEnvironment() (*labEnvironment, error) {
@@ -159,6 +160,7 @@ func (e *labEnvironment) Reset() error {
 	e.phase3 = phase3
 	e.phase4 = phase4
 	e.phase5 = phase5
+	e.phase6 = &phase6State{}
 	e.mu.Unlock()
 
 	return e.startPhase2()

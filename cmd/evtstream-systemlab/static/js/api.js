@@ -119,6 +119,24 @@ export async function resetPhase5(mode) {
   return parseJSON(resp, "reset phase 5 lab");
 }
 
+export async function runPhase6(input) {
+  const resp = await fetch("/api/phase6/run", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  return parseJSON(resp, "run phase 6 lab");
+}
+
+export async function fetchPhase6State(baseUrl, profile, prompt) {
+  const params = new URLSearchParams();
+  if (baseUrl) params.set("baseUrl", baseUrl);
+  if (profile) params.set("profile", profile);
+  if (prompt) params.set("prompt", prompt);
+  const resp = await fetch(`/api/phase6/state?${params.toString()}`);
+  return parseJSON(resp, "load phase 6 state");
+}
+
 async function parseJSON(resp, action) {
   const data = await resp.json();
   if (!resp.ok) {
