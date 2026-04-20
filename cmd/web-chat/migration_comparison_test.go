@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -17,12 +18,18 @@ import (
 
 	gepprofiles "github.com/go-go-golems/geppetto/pkg/engineprofiles"
 	gepevents "github.com/go-go-golems/geppetto/pkg/events"
+	"github.com/go-go-golems/geppetto/pkg/inference/engine"
 	"github.com/go-go-golems/geppetto/pkg/turns"
+	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	appserver "github.com/go-go-golems/pinocchio/cmd/web-chat/app"
 	chatapp "github.com/go-go-golems/pinocchio/pkg/evtstream/apps/chat"
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
+	timelinepb "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/timeline"
+	webchat "github.com/go-go-golems/pinocchio/pkg/webchat"
+	webhttp "github.com/go-go-golems/pinocchio/pkg/webchat/http"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
+	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/require"
 )
 
@@ -140,10 +147,150 @@ func waitForCanonicalUIEvents(t *testing.T, conn *websocket.Conn, limit int, sto
 	return names
 }
 
+type legacyHarnessEngine struct {
+	messageID  uuid.UUID
+	cumulative string
+}
+
+func (e legacyHarnessEngine) RunInference(ctx context.Context, t *turns.Turn) (*turns.Turn, error) {
+	messageID := e.messageID
+	if messageID == uuid.Nil {
+		messageID = uuid.New()
+	}
+	cumulative := strings.TrimSpace(e.cumulative)
+	if cumulative == "" {
+		cumulative = "hello"
+	}
+	meta := gepevents.EventMetadata{ID: messageID}
+	gepevents.PublishEventToContext(ctx, gepevents.NewStartEvent(meta))
+	gepevents.PublishEventToContext(ctx, gepevents.NewPartialCompletionEvent(meta, cumulative, cumulative))
+	return t, nil
+}
+
+type legacyHarnessTimelineService struct{}
+
+func (legacyHarnessTimelineService) Snapshot(ctx context.Context, convID string, sinceVersion uint64, limit int) (*timelinepb.TimelineSnapshotV2, error) {
+	return &timelinepb.TimelineSnapshotV2{ConvId: convID, Version: 1}, nil
+}
+
+func newLegacyHarnessServer(t *testing.T, eng engine.Engine) *httptest.Server {
+	t.Helper()
+	if eng == nil {
+		eng = legacyHarnessEngine{}
+	}
+	parsed := values.New()
+	staticFS := fstest.MapFS{"static/index.html": {Data: []byte("<html><body>legacy</body></html>")}}
+	runtimeComposer := infruntime.RuntimeBuilderFunc(func(_ context.Context, req infruntime.ConversationRuntimeRequest) (infruntime.ComposedRuntime, error) {
+		runtimeKey := strings.TrimSpace(req.ProfileKey)
+		if runtimeKey == "" {
+			runtimeKey = "default"
+		}
+		return infruntime.ComposedRuntime{Engine: eng, RuntimeKey: runtimeKey, RuntimeFingerprint: "fp-" + runtimeKey, SeedSystemPrompt: "seed"}, nil
+	})
+	webchatSrv, err := webchat.NewServer(context.Background(), parsed, staticFS, webchat.WithRuntimeComposer(runtimeComposer))
+	require.NoError(t, err)
+	profileRegistry, err := newInMemoryProfileService("default", testEngineProfileWithRuntime(t, "default", &infruntime.ProfileRuntime{SystemPrompt: "You are default"}))
+	require.NoError(t, err)
+	requestResolver := newProfileRequestResolver(profileRegistry, gepprofiles.MustRegistrySlug(defaultRegistrySlug), nil)
+	chatHandler := webhttp.NewChatHandler(webchatSrv.ChatService(), requestResolver)
+	wsHandler := webhttp.NewWSHandler(webchatSrv.StreamHub(), requestResolver, websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }})
+	appMux := http.NewServeMux()
+	appMux.HandleFunc("/chat", chatHandler)
+	appMux.HandleFunc("/chat/", chatHandler)
+	appMux.HandleFunc("/ws", wsHandler)
+	registerProfileAPIHandlers(appMux, requestResolver)
+	timelineLogger := log.With().Str("component", "webchat-legacy-test").Str("route", "/api/timeline").Logger()
+	timelineHandler := webhttp.NewTimelineHandler(webchatSrv.TimelineService(), timelineLogger)
+	appMux.HandleFunc("/api/timeline", timelineHandler)
+	appMux.HandleFunc("/api/timeline/", timelineHandler)
+	appMux.Handle("/api/", webchatSrv.APIHandler())
+	appMux.Handle("/", webchatSrv.UIHandler())
+	srv := httptest.NewServer(appMux)
+	t.Cleanup(func() {
+		srv.Close()
+		require.NoError(t, webchatSrv.Close())
+	})
+	return srv
+}
+
+func integrationSemEventType(frame []byte) string {
+	var env struct {
+		Event struct {
+			Type string `json:"type"`
+		} `json:"event"`
+	}
+	if err := json.Unmarshal(frame, &env); err != nil {
+		return ""
+	}
+	return env.Event.Type
+}
+
+func integrationSemRuntimeKey(frame []byte) string {
+	var env struct {
+		Event struct {
+			Data struct {
+				RuntimeKey      string `json:"runtimeKey"`
+				RuntimeKeySnake string `json:"runtime_key"`
+			} `json:"data"`
+		} `json:"event"`
+	}
+	if err := json.Unmarshal(frame, &env); err != nil {
+		return ""
+	}
+	if env.Event.Data.RuntimeKey != "" {
+		return env.Event.Data.RuntimeKey
+	}
+	return env.Event.Data.RuntimeKeySnake
+}
+
+func decodeSnapshotEntities(raw any) []map[string]any {
+	items, _ := raw.([]any)
+	entities := make([]map[string]any, 0, len(items))
+	for _, item := range items {
+		entity, _ := item.(map[string]any)
+		if len(entity) > 0 {
+			entities = append(entities, entity)
+		}
+	}
+	return entities
+}
+
+func waitForHarnessEntities(t *testing.T, baseURL string, convID string, predicate func([]map[string]any) bool) []map[string]any {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	var last []map[string]any
+	for time.Now().Before(deadline) {
+		endpoint := baseURL + "/api/timeline?conv_id=" + url.QueryEscape(convID)
+		resp, err := http.Get(endpoint)
+		require.NoError(t, err)
+		var snap map[string]any
+		require.NoError(t, json.NewDecoder(resp.Body).Decode(&snap))
+		_ = resp.Body.Close()
+		entities := decodeSnapshotEntities(snap["entities"])
+		last = entities
+		if predicate(entities) {
+			return entities
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	t.Fatalf("timed out waiting for timeline entities (last=%v)", last)
+	return nil
+}
+
+func findEntityByID(entities []map[string]any, id string) (map[string]any, bool) {
+	for _, entity := range entities {
+		eid, _ := entity["id"].(string)
+		if eid == id {
+			return entity, true
+		}
+	}
+	return nil, false
+}
+
 func captureLegacyFlow(t *testing.T, prompt string) legacyFlowCapture {
 	t.Helper()
 	messageID := uuid.New()
-	srv := newLLMDeltaProjectionHarnessServer(t, harnessLLMDeltaEngine{
+	srv := newLegacyHarnessServer(t, legacyHarnessEngine{
 		messageID:  messageID,
 		cumulative: "Answer: " + prompt,
 	})
