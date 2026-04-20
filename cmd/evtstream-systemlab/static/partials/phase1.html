@@ -1,0 +1,39 @@
+<div class="panel">
+  <h2>Phase 1 — Command → Event → Projection</h2>
+  <p>Submit a real command through the in-memory Hub path. The lab shows the trace, emitted UI events, and resulting hydration snapshot.</p>
+</div>
+<div class="grid">
+  <div class="panel">
+    <h3>Controls</h3>
+    <label>Session ID
+      <input id="session-id" value="lab-session-1" />
+    </label>
+    <label>Prompt
+      <textarea id="prompt">hello from systemlab</textarea>
+    </label>
+    <div class="actions">
+      <button data-action="run-phase1">Submit</button>
+      <button class="secondary" data-action="reset-lab">Reset</button>
+      <button class="secondary" data-action="export-phase1-json">Export JSON</button>
+      <button class="secondary" data-action="export-phase1-markdown">Export Markdown</button>
+    </div>
+  </div>
+  <div class="panel">
+    <h3>Checks</h3>
+    <div id="checks"></div>
+  </div>
+</div>
+<div class="grid">
+  <div class="panel">
+    <h3>Trace</h3>
+    <pre id="trace-output">No run yet.</pre>
+  </div>
+  <div class="panel">
+    <h3>Session + UI Events</h3>
+    <pre id="session-output">No run yet.</pre>
+  </div>
+</div>
+<div class="panel">
+  <h3>Hydration Snapshot</h3>
+  <pre id="snapshot-output">No run yet.</pre>
+</div>

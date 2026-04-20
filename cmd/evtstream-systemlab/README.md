@@ -28,6 +28,19 @@ Current phases implemented:
 - Phase 0 shell / status page
 - Phase 1 command -> event -> projection lab
 
+## Frontend file layout
+
+The Systemlab browser UI is intentionally split so future labs do not accumulate into one large inline HTML file:
+
+- `static/index.html` — app shell only
+- `static/app.css` — shared styling
+- `static/partials/*.html` — page-level markup fragments
+- `static/js/main.js` — bootstrap + navigation
+- `static/js/pages/*.js` — per-page behavior
+- `static/js/api.js` / `static/js/dom.js` — shared helpers
+
+When adding a new lab, prefer adding a new partial plus a page module instead of growing `index.html` or one global script.
+
 Run locally:
 
 ```bash
