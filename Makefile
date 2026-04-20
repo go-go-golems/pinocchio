@@ -1,4 +1,4 @@
-.PHONY: all test build lint lintmax docker-lint golangci-lint-install gosec govulncheck goreleaser tag-major tag-minor tag-patch release bump-glazed install codeql-local geppetto-lint-build geppetto-lint web-typecheck web-lint web-check proto-gen proto-gen-core proto-gen-web-chat
+.PHONY: all test build lint lintmax docker-lint golangci-lint-install gosec govulncheck goreleaser tag-major tag-minor tag-patch release bump-glazed install codeql-local geppetto-lint-build geppetto-lint web-typecheck web-lint web-check proto-gen proto-gen-core proto-gen-web-chat evtstream-test systemlab-build systemlab-run evtstream-boundary-check evtstream-check
 
 all: test build
 
@@ -71,6 +71,20 @@ web-lint:
 	cd cmd/web-chat/web && npm run lint
 
 web-check: web-typecheck web-lint
+
+evtstream-test:
+	go test ./pkg/evtstream/... ./cmd/evtstream-systemlab/...
+
+systemlab-build:
+	go build -o /tmp/evtstream-systemlab ./cmd/evtstream-systemlab
+
+systemlab-run:
+	go run ./cmd/evtstream-systemlab --addr :8091
+
+evtstream-boundary-check:
+	@! rg -n --glob '*.go' 'pkg/webchat' cmd/evtstream-systemlab >/dev/null || (echo 'Systemlab must not import legacy webchat internals' && exit 1)
+
+evtstream-check: evtstream-test systemlab-build evtstream-boundary-check
 
 proto-gen-core:
 	buf generate --path proto/sem

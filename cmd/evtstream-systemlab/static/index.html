@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>evtstream-systemlab</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 0; background: #0f172a; color: #e2e8f0; }
+    .layout { display: grid; grid-template-columns: 260px 1fr; min-height: 100vh; }
+    nav { background: #111827; padding: 20px; border-right: 1px solid #1f2937; }
+    nav h1 { font-size: 18px; margin-top: 0; }
+    nav button { width: 100%; margin-bottom: 10px; padding: 10px; border-radius: 8px; border: 1px solid #334155; background: #1e293b; color: #e2e8f0; cursor: pointer; text-align: left; }
+    main { padding: 24px; }
+    .panel { background: #111827; border: 1px solid #334155; border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    input, textarea { width: 100%; box-sizing: border-box; background: #0b1220; color: #e2e8f0; border: 1px solid #334155; border-radius: 8px; padding: 10px; margin-top: 6px; }
+    textarea { min-height: 100px; }
+    .actions { display: flex; gap: 8px; margin-top: 12px; }
+    .actions button { padding: 10px 14px; border-radius: 8px; border: 1px solid #475569; background: #2563eb; color: white; cursor: pointer; }
+    .actions button.secondary { background: #1f2937; }
+    pre { white-space: pre-wrap; word-break: break-word; background: #020617; border-radius: 8px; padding: 12px; overflow: auto; }
+    .badge { display: inline-block; margin-right: 8px; margin-bottom: 8px; padding: 6px 10px; border-radius: 999px; background: #1e293b; border: 1px solid #334155; }
+    h2, h3 { margin-top: 0; }
+  </style>
+</head>
+<body>
+<div class="layout">
+  <nav>
+    <h1>evtstream-systemlab</h1>
+    <p>Separate lab app consuming public <code>evtstream</code> APIs.</p>
+    <button onclick="showPage('overview')">Overview / Phase 0</button>
+    <button onclick="showPage('phase1')">Phase 1 — Command → Event → Projection</button>
+    <button disabled>Phase 2 — Ordering and Ordinals</button>
+    <button disabled>Phase 3 — Hydration and Reconnect</button>
+    <button disabled>Phase 4 — Chat Example</button>
+    <button disabled>Phase 5 — SQL / Restart</button>
+    <button disabled>Phase 6 — Migration / Regression</button>
+  </nav>
+  <main>
+    <section id="page-overview" class="page">
+      <div class="panel">
+        <h2>Phase 0 — Foundations</h2>
+        <p>This separate app exists to explain, exercise, and validate the <code>evtstream</code> substrate without mixing Systemlab logic into the framework package itself.</p>
+        <p><strong>Boundary rule:</strong> the lab app may consume public <code>evtstream</code> APIs, but it should not reach into legacy webchat internals.</p>
+      </div>
+      <div class="panel">
+        <h3>Framework status</h3>
+        <pre id="status-output">Loading…</pre>
+      </div>
+    </section>
+
+    <section id="page-phase1" class="page" style="display:none">
+      <div class="panel">
+        <h2>Phase 1 — Command → Event → Projection</h2>
+        <p>Submit a real command through the in-memory Hub path. The lab shows the trace, emitted UI events, and resulting hydration snapshot.</p>
+      </div>
+      <div class="grid">
+        <div class="panel">
+          <h3>Controls</h3>
+          <label>Session ID
+            <input id="session-id" value="lab-session-1" />
+          </label>
+          <label>Prompt
+            <textarea id="prompt">hello from systemlab</textarea>
+          </label>
+          <div class="actions">
+            <button onclick="runPhase1()">Submit</button>
+            <button class="secondary" onclick="resetLab()">Reset</button>
+            <button class="secondary" onclick="exportPhase1('json')">Export JSON</button>
+            <button class="secondary" onclick="exportPhase1('markdown')">Export Markdown</button>
+          </div>
+        </div>
+        <div class="panel">
+          <h3>Checks</h3>
+          <div id="checks"></div>
+        </div>
+      </div>
+      <div class="grid">
+        <div class="panel">
+          <h3>Trace</h3>
+          <pre id="trace-output">No run yet.</pre>
+        </div>
+        <div class="panel">
+          <h3>Session + UI Events</h3>
+          <pre id="session-output">No run yet.</pre>
+        </div>
+      </div>
+      <div class="panel">
+        <h3>Hydration Snapshot</h3>
+        <pre id="snapshot-output">No run yet.</pre>
+      </div>
+    </section>
+  </main>
+</div>
+<script>
+async function fetchStatus() {
+  const resp = await fetch('/api/status');
+  const data = await resp.json();
+  document.getElementById('status-output').textContent = JSON.stringify(data, null, 2);
+}
+function showPage(name) {
+  document.querySelectorAll('.page').forEach(el => el.style.display = 'none');
+  document.getElementById(`page-${name}`).style.display = 'block';
+}
+async function runPhase1() {
+  const resp = await fetch('/api/phase1/run', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      sessionId: document.getElementById('session-id').value,
+      prompt: document.getElementById('prompt').value,
+      commandName: 'LabStart'
+    })
+  });
+  const data = await resp.json();
+  document.getElementById('trace-output').textContent = JSON.stringify(data.trace || data, null, 2);
+  document.getElementById('session-output').textContent = JSON.stringify({session: data.session, uiEvents: data.uiEvents}, null, 2);
+  document.getElementById('snapshot-output').textContent = JSON.stringify(data.snapshot || data, null, 2);
+  const checks = document.getElementById('checks');
+  checks.innerHTML = '';
+  const entries = Object.entries(data.checks || {});
+  if (!entries.length) {
+    checks.textContent = 'No checks.';
+  }
+  for (const [name, ok] of entries) {
+    const badge = document.createElement('span');
+    badge.className = 'badge';
+    badge.textContent = `${ok ? '✓' : '✗'} ${name}`;
+    checks.appendChild(badge);
+  }
+}
+async function resetLab() {
+  await fetch('/api/reset', { method: 'POST' });
+  document.getElementById('trace-output').textContent = 'Lab reset.';
+  document.getElementById('session-output').textContent = 'Lab reset.';
+  document.getElementById('snapshot-output').textContent = 'Lab reset.';
+  document.getElementById('checks').innerHTML = '';
+  await fetchStatus();
+}
+function exportPhase1(format) {
+  const sessionId = encodeURIComponent(document.getElementById('session-id').value || 'lab-session-1');
+  window.open(`/api/phase1/export?sessionId=${sessionId}&format=${encodeURIComponent(format)}`, '_blank');
+}
+fetchStatus();
+</script>
+</body>
+</html>
