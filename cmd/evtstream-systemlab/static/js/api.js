@@ -3,6 +3,11 @@ export async function fetchStatus() {
   return parseJSON(resp, "load status");
 }
 
+export async function fetchChapterHTML(name) {
+  const resp = await fetch(`/api/chapters/${encodeURIComponent(name)}`);
+  return parseText(resp, `load chapter ${name}`);
+}
+
 export async function runPhase1(input) {
   const resp = await fetch("/api/phase1/run", {
     method: "POST",
@@ -40,6 +45,14 @@ async function parseJSON(resp, action) {
   if (!resp.ok) {
     const message = data?.error || `${action} failed with status ${resp.status}`;
     throw new Error(message);
+  }
+  return data;
+}
+
+async function parseText(resp, action) {
+  const data = await resp.text();
+  if (!resp.ok) {
+    throw new Error(`${action} failed with status ${resp.status}`);
   }
   return data;
 }

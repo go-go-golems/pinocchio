@@ -10,6 +10,10 @@ export function setJSON(element, value) {
   element.textContent = JSON.stringify(value, null, 2);
 }
 
+export function setHTML(element, value) {
+  element.innerHTML = value;
+}
+
 export function renderChecks(container, checks) {
   container.innerHTML = "";
   const entries = Object.entries(checks || {});

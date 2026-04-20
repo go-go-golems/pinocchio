@@ -28,9 +28,9 @@ Current phases implemented:
 - Phase 0 shell / status page
 - Phase 1 command -> event -> projection lab
 
-## Frontend file layout
+## Frontend and chapter file layout
 
-The Systemlab browser UI is intentionally split so future labs do not accumulate into one large inline HTML file:
+The Systemlab browser UI is intentionally split so future labs do not accumulate into one large inline HTML file, and the long-form intern chapters live as editable markdown beside the app:
 
 - `static/index.html` — app shell only
 - `static/app.css` — shared styling
@@ -38,8 +38,15 @@ The Systemlab browser UI is intentionally split so future labs do not accumulate
 - `static/js/main.js` — bootstrap + navigation
 - `static/js/pages/*.js` — per-page behavior
 - `static/js/api.js` / `static/js/dom.js` — shared helpers
+- `chapters/*.md` — long-form textbook chapters served by the app and rendered onto the matching phase pages
 
-When adding a new lab, prefer adding a new partial plus a page module instead of growing `index.html` or one global script.
+When adding a new lab, prefer adding:
+
+- a new partial,
+- a new page module,
+- and, when needed, a matching markdown chapter in `chapters/`
+
+instead of growing `index.html` or one global script.
 
 Run locally:
 

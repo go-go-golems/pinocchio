@@ -117,6 +117,67 @@ h3 {
   margin-top: 0;
 }
 
+.chapter-link {
+  color: #93c5fd;
+}
+
+.chapter-viewer {
+  line-height: 1.65;
+}
+
+.chapter-viewer h1,
+.chapter-viewer h2,
+.chapter-viewer h3,
+.chapter-viewer h4 {
+  margin-top: 1.4em;
+  margin-bottom: 0.5em;
+}
+
+.chapter-viewer h1 {
+  font-size: 1.9rem;
+}
+
+.chapter-viewer h2 {
+  font-size: 1.45rem;
+}
+
+.chapter-viewer h3 {
+  font-size: 1.15rem;
+}
+
+.chapter-viewer p,
+.chapter-viewer ul,
+.chapter-viewer ol,
+.chapter-viewer blockquote {
+  margin-top: 0.85em;
+  margin-bottom: 0.85em;
+}
+
+.chapter-viewer ul,
+.chapter-viewer ol {
+  padding-left: 1.5rem;
+}
+
+.chapter-viewer li + li {
+  margin-top: 0.35em;
+}
+
+.chapter-viewer code {
+  background: #0b1220;
+  padding: 0.15rem 0.3rem;
+  border-radius: 4px;
+}
+
+.chapter-viewer pre code {
+  display: block;
+  padding: 0;
+  background: transparent;
+}
+
+.chapter-viewer a {
+  color: #93c5fd;
+}
+
 @media (max-width: 960px) {
   .layout {
     grid-template-columns: 1fr;

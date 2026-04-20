@@ -7,7 +7,7 @@ async function main() {
   await loadPagePartials();
   bindNavigation();
   await initOverviewPage();
-  initPhase1Page();
+  await initPhase1Page();
   initPhase2Page();
   showPage(initialPage());
 }

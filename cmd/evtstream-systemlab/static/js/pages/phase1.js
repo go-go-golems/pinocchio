@@ -1,7 +1,15 @@
-import { phase1ExportURL, resetLab, runPhase1 } from "../api.js";
-import { byId, renderChecks, setJSON } from "../dom.js";
+import { fetchChapterHTML, phase1ExportURL, resetLab, runPhase1 } from "../api.js";
+import { byId, renderChecks, setHTML, setJSON } from "../dom.js";
 
-export function initPhase1Page() {
+export async function initPhase1Page() {
+  const chapter = byId("phase1-chapter");
+  if (chapter) {
+    try {
+      setHTML(chapter, await fetchChapterHTML("phase-1-command-to-projection"));
+    } catch (error) {
+      chapter.textContent = error.message;
+    }
+  }
   const sessionInput = byId("session-id");
   const promptInput = byId("prompt");
   const traceOutput = byId("trace-output");

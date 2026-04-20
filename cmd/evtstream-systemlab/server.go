@@ -8,8 +8,8 @@ import (
 	"net/http"
 )
 
-//go:embed static
-var staticFS embed.FS
+//go:embed static chapters
+var appFS embed.FS
 
 type systemlabServer struct {
 	env *labEnvironment
@@ -27,11 +27,14 @@ func (s *systemlabServer) routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/status", s.handleStatus)
 	mux.HandleFunc("/api/reset", s.handleReset)
+	mux.HandleFunc("/api/chapters/", s.handleChapterHTML)
 	mux.HandleFunc("/api/phase1/run", s.handlePhase1Run)
 	mux.HandleFunc("/api/phase1/export", s.handlePhase1Export)
 	mux.HandleFunc("/api/phase2/run", s.handlePhase2Run)
 	mux.HandleFunc("/api/phase2/export", s.handlePhase2Export)
-	staticSub, _ := fs.Sub(staticFS, "static")
+	chaptersSub, _ := fs.Sub(appFS, "chapters")
+	mux.Handle("/chapters/", http.StripPrefix("/chapters/", http.FileServer(http.FS(chaptersSub))))
+	staticSub, _ := fs.Sub(appFS, "static")
 	mux.Handle("/", http.FileServer(http.FS(staticSub)))
 	return mux
 }
