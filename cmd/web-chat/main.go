@@ -24,6 +24,7 @@ import (
 	geptools "github.com/go-go-golems/geppetto/pkg/inference/tools"
 	aisettings "github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 	toolspkg "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/tools"
+	appserver "github.com/go-go-golems/pinocchio/cmd/web-chat/app"
 	thinkingmode "github.com/go-go-golems/pinocchio/cmd/web-chat/thinkingmode"
 	timelinecmd "github.com/go-go-golems/pinocchio/cmd/web-chat/timeline"
 	profilebootstrap "github.com/go-go-golems/pinocchio/pkg/cmds/profilebootstrap"
@@ -176,6 +177,10 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 		},
 	}, baseInferenceSettings)
 	requestResolver := newProfileRequestResolver(profileRegistry, defaultRegistrySlug, baseInferenceSettings)
+	canonicalApp, err := appserver.NewServer()
+	if err != nil {
+		return errors.Wrap(err, "build canonical evtstream-backed app")
+	}
 
 	if err := configureTimelineJSScripts(s.TimelineJSScripts); err != nil {
 		return err
@@ -227,6 +232,9 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 	timelineHandler := webhttp.NewTimelineHandler(srv.TimelineService(), timelineLogger)
 	appMux.HandleFunc("/api/timeline", timelineHandler)
 	appMux.HandleFunc("/api/timeline/", timelineHandler)
+	appMux.HandleFunc("/api/chat/sessions", canonicalApp.HandleCreateSession)
+	appMux.HandleFunc("/api/chat/sessions/", canonicalApp.HandleSessionRoutes)
+	appMux.HandleFunc("/api/chat/ws", canonicalApp.HandleWS)
 	serveAppConfigJS := func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
