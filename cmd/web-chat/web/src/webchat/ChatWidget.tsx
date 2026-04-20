@@ -24,30 +24,28 @@ import type {
 import './styles/theme-default.css';
 import './styles/webchat.css';
 
-function convIdFromLocation(): string {
+function sessionIdFromLocation(): string {
   try {
     const u = new URL(window.location.href);
-    const q = u.searchParams.get('conv_id') || u.searchParams.get('convId') || '';
+    const q = u.searchParams.get('sessionId') || '';
     return q.trim();
   } catch (err) {
-    logWarn('convIdFromLocation failed', { scope: 'convIdFromLocation' }, err);
+    logWarn('sessionIdFromLocation failed', { scope: 'sessionIdFromLocation' }, err);
     return '';
   }
 }
 
-function setConvIdInLocation(convId: string | null) {
+function setSessionIdInLocation(sessionId: string | null) {
   try {
     const u = new URL(window.location.href);
-    if (!convId) {
-      u.searchParams.delete('conv_id');
-      u.searchParams.delete('convId');
+    if (!sessionId) {
+      u.searchParams.delete('sessionId');
     } else {
-      u.searchParams.set('conv_id', convId);
-      u.searchParams.delete('convId');
+      u.searchParams.set('sessionId', sessionId);
     }
     window.history.replaceState({}, '', u.toString());
   } catch (err) {
-    logWarn('setConvIdInLocation failed', { scope: 'setConvIdInLocation' }, err);
+    logWarn('setSessionIdInLocation failed', { scope: 'setSessionIdInLocation' }, err);
   }
 }
 
@@ -124,23 +122,23 @@ export function ChatWidget({
   }, [app.profile, dispatch, selectedProfile]);
 
   useEffect(() => {
-    const convId = convIdFromLocation();
-    if (convId && convId !== app.convId) {
-      dispatch(appSlice.actions.setConvId(convId));
+    const sessionId = sessionIdFromLocation();
+    if (sessionId && sessionId !== app.convId) {
+      dispatch(appSlice.actions.setConvId(sessionId));
     }
   }, [app.convId, dispatch]);
 
   useEffect(() => {
-    const convId = app.convId || convIdFromLocation();
-    if (!convId) return;
-    if (convId !== app.convId) {
-      dispatch(appSlice.actions.setConvId(convId));
+    const sessionId = app.convId || sessionIdFromLocation();
+    if (!sessionId) return;
+    if (sessionId !== app.convId) {
+      dispatch(appSlice.actions.setConvId(sessionId));
       return;
     }
 
     const basePrefix = basePrefixFromLocation();
     void wsManager.connect({
-      convId,
+      sessionId,
       basePrefix,
       dispatch,
       onStatus: (s) => setStatusText(s),
@@ -161,46 +159,74 @@ export function ChatWidget({
   const send = useCallback(() => {
     if (!text.trim()) return;
     const prompt = text;
-    const convId = app.convId || convIdFromLocation() || crypto.randomUUID();
     const basePrefix = basePrefixFromLocation();
-
-    if (convId !== app.convId) {
-      dispatch(appSlice.actions.setConvId(convId));
-      setConvIdInLocation(convId);
-    }
 
     setText('');
     void (async () => {
-      try {
-        await wsManager.connect({
-          convId,
-          basePrefix,
-          dispatch,
-          onStatus: (s) => setStatusText(s),
-          hydrate: false,
-        });
-      } catch (err) {
-        dispatch(errorsSlice.actions.reportError(makeAppError('ws connect failed', 'send.ws', err, { convId })));
+      let sessionId = app.convId || sessionIdFromLocation();
+      if (!sessionId) {
+        try {
+          const createRes = await fetch(`${basePrefix}/api/chat/sessions`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ profile: selectedProfile }),
+          });
+          if (!createRes.ok) {
+            const msg = await createRes.text();
+            dispatch(errorsSlice.actions.reportError(makeAppError(msg, 'session.create', undefined, { status: createRes.status })));
+            return;
+          }
+          const created = await createRes.json() as { sessionId?: string };
+          sessionId = String(created?.sessionId ?? '').trim();
+          if (!sessionId) {
+            dispatch(errorsSlice.actions.reportError(makeAppError('session create failed', 'session.create')));
+            return;
+          }
+          dispatch(appSlice.actions.setConvId(sessionId));
+          setSessionIdInLocation(sessionId);
+        } catch (err) {
+          dispatch(errorsSlice.actions.reportError(makeAppError('session create failed', 'session.create', err)));
+          return;
+        }
       }
 
       try {
-        const res = await fetch(`${basePrefix}/chat`, {
+        await wsManager.connect({
+          sessionId,
+          basePrefix,
+          dispatch,
+          onStatus: (s) => setStatusText(s),
+          hydrate: true,
+        });
+      } catch (err) {
+        dispatch(errorsSlice.actions.reportError(makeAppError('ws connect failed', 'send.ws', err, { sessionId })));
+        return;
+      }
+
+      try {
+        const res = await fetch(`${basePrefix}/api/chat/sessions/${encodeURIComponent(sessionId)}/messages`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            conv_id: convId,
             prompt,
+            profile: selectedProfile,
           }),
         });
         if (!res.ok) {
           const msg = await res.text();
           dispatch(errorsSlice.actions.reportError(makeAppError(msg, 'send', undefined, { status: res.status })));
+          return;
+        }
+        const body = await res.json() as { status?: string };
+        const status = String(body?.status ?? '').trim();
+        if (status) {
+          dispatch(appSlice.actions.setStatus(status));
         }
       } catch (err) {
         dispatch(errorsSlice.actions.reportError(makeAppError('send failed', 'send', err)));
       }
     })();
-  }, [app.convId, dispatch, text]);
+  }, [app.convId, dispatch, selectedProfile, text]);
 
   const onKeyDown = useCallback(
     (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -257,7 +283,7 @@ export function ChatWidget({
     dispatch(appSlice.actions.setLastSeq(0));
     dispatch(appSlice.actions.setQueueDepth(0));
     dispatch(timelineSlice.actions.clear());
-    setConvIdInLocation(null);
+    setSessionIdInLocation(null);
   }, [dispatch]);
 
   const mergedRenderers: ChatWidgetRenderers = useMemo(

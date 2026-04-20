@@ -160,7 +160,7 @@ func (e *Engine) runInference(ctx context.Context, sid evtstream.SessionId, mess
 		case <-time.After(e.chunkDelay):
 		}
 		accumulated += chunk
-		if err := e.publish(context.Background(), sid, pub, EventTokensDelta, map[string]any{"messageId": messageID, "chunk": chunk}); err != nil {
+		if err := e.publish(context.Background(), sid, pub, EventTokensDelta, map[string]any{"messageId": messageID, "chunk": chunk, "text": accumulated}); err != nil {
 			return
 		}
 	}
