@@ -7,10 +7,9 @@ import (
 	"time"
 
 	"github.com/go-go-golems/pinocchio/pkg/evtstream"
-	chatexample "github.com/go-go-golems/pinocchio/pkg/evtstream/examples/chat"
+	chatapp "github.com/go-go-golems/pinocchio/pkg/evtstream/apps/chat"
 	storememory "github.com/go-go-golems/pinocchio/pkg/evtstream/hydration/memory"
 	wstransport "github.com/go-go-golems/pinocchio/pkg/evtstream/transport/ws"
-	"google.golang.org/protobuf/types/known/structpb"
 )
 
 type phase4RunRequest struct {
@@ -34,7 +33,8 @@ type phase4State struct {
 	hub     *evtstream.Hub
 	store   *storememory.Store
 	ws      *wstransport.Server
-	engine  *chatexample.Engine
+	engine  *chatapp.Engine
+	service *chatapp.Service
 	trace   []traceEntry
 	lastRun phase4RunResponse
 }
@@ -43,7 +43,7 @@ func (e *labEnvironment) newPhase4State() (*phase4State, error) {
 	state := &phase4State{}
 	store := storememory.New()
 	reg := evtstream.NewSchemaRegistry()
-	if err := chatexample.RegisterSchemas(reg); err != nil {
+	if err := chatapp.RegisterSchemas(reg); err != nil {
 		return nil, err
 	}
 	wsServer, err := wstransport.NewServer(hydrationSnapshotProvider{store: store}, wstransport.WithHooks(wstransport.Hooks{
@@ -71,9 +71,9 @@ func (e *labEnvironment) newPhase4State() (*phase4State, error) {
 	if err != nil {
 		return nil, err
 	}
-	engine := chatexample.NewEngine(
-		chatexample.WithChunkDelay(15*time.Millisecond),
-		chatexample.WithHooks(chatexample.Hooks{
+	engine := chatapp.NewEngine(
+		chatapp.WithChunkDelay(15*time.Millisecond),
+		chatapp.WithHooks(chatapp.Hooks{
 			OnBackendEvent: func(sessionID, eventName string, payload map[string]any) {
 				details := cloneMap(payload)
 				details["sessionId"] = sessionID
@@ -91,13 +91,18 @@ func (e *labEnvironment) newPhase4State() (*phase4State, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := chatexample.Install(hub, engine); err != nil {
+	if err := chatapp.Install(hub, engine); err != nil {
+		return nil, err
+	}
+	service, err := chatapp.NewService(hub, engine)
+	if err != nil {
 		return nil, err
 	}
 	state.hub = hub
 	state.store = store
 	state.ws = wsServer
 	state.engine = engine
+	state.service = service
 	return state, nil
 }
 
@@ -137,20 +142,12 @@ func (e *labEnvironment) RunPhase4(ctx context.Context, in phase4RunRequest) (ph
 	switch action {
 	case "send":
 		e.appendPhase4Trace("control", "phase 4 send requested", map[string]any{"sessionId": sessionID, "prompt": prompt})
-		payload, buildErr := structpb.NewStruct(map[string]any{"prompt": prompt})
-		if buildErr != nil {
-			return phase4RunResponse{}, buildErr
-		}
-		err = state.hub.Submit(ctx, evtstream.SessionId(sessionID), chatexample.CommandStartInference, payload)
+		err = state.service.SubmitPrompt(ctx, evtstream.SessionId(sessionID), prompt)
 	case "stop":
 		e.appendPhase4Trace("control", "phase 4 stop requested", map[string]any{"sessionId": sessionID})
-		payload, buildErr := structpb.NewStruct(map[string]any{})
-		if buildErr != nil {
-			return phase4RunResponse{}, buildErr
-		}
-		err = state.hub.Submit(ctx, evtstream.SessionId(sessionID), chatexample.CommandStopInference, payload)
+		err = state.service.Stop(ctx, evtstream.SessionId(sessionID))
 	case "await-idle":
-		err = state.engine.WaitIdle(ctx, evtstream.SessionId(sessionID))
+		err = state.service.WaitIdle(ctx, evtstream.SessionId(sessionID))
 	case "reset-phase4":
 		err = e.resetPhase4Only()
 	case "state":
@@ -182,9 +179,9 @@ func (e *labEnvironment) buildPhase4Response(action, sessionID, prompt string) (
 	}
 	trace := append([]traceEntry(nil), state.trace...)
 	wsServer := state.ws
-	hub := state.hub
+	service := state.service
 	e.mu.Unlock()
-	snap, err := hub.Snapshot(context.Background(), evtstream.SessionId(sessionID))
+	snap, err := service.Snapshot(context.Background(), evtstream.SessionId(sessionID))
 	if err != nil {
 		return phase4RunResponse{}, err
 	}
