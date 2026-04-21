@@ -50,3 +50,18 @@ func TestModeSwitchExtractorOnRaw_DeduplicatesEquivalentPreview(t *testing.T) {
 	second := session.OnRaw(context.Background(), []byte("\n"))
 	require.Nil(t, second)
 }
+
+func TestModeSwitchExtractorOnRaw_ToleratesIncompleteIntermediateYAML(t *testing.T) {
+	extractor := NewModeSwitchExtractor(DefaultExtractorConfig())
+	session := extractor.NewSession(context.Background(), gepevents.EventMetadata{SessionID: "sess-4"}, "item-4")
+
+	incomplete := session.OnRaw(context.Background(), []byte("```yaml\nmode_switch:\n  analysis: |\n"))
+	require.Nil(t, incomplete)
+
+	recovered := session.OnRaw(context.Background(), []byte("    hello\n  new_mode: reviewer\n"))
+	require.Len(t, recovered, 1)
+	preview, ok := recovered[0].(*EventModeSwitchPreview)
+	require.True(t, ok)
+	require.Equal(t, "reviewer", preview.CandidateMode)
+	require.Equal(t, "candidate", preview.ParseState)
+}
