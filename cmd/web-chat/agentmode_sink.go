@@ -14,7 +14,7 @@ type agentModeSinkConfigInput struct {
 
 // runtimeSinkWrapperFromProfile builds a runtime-owned event sink wrapper that injects
 // the agentmode structured-output parser when the profile runtime has agentmode configured.
-// It is cmd/web-chat specific and stays out of pkg/evtstream core.
+// It is cmd/web-chat specific and stays out of the shared sessionstream core.
 func runtimeSinkWrapperFromProfile(runtime *infruntime.ProfileRuntime) infruntime.EventSinkWrapper {
 	if runtime == nil {
 		return nil
