@@ -47,6 +47,130 @@ type comparisonRuntimeEngine struct {
 	completion string
 }
 
+type legacyProfileRequestResolver struct {
+	*profiles.RequestResolver
+}
+
+func newLegacyProfileRequestResolver(profileRegistry gepprofiles.Registry, defaultRegistry gepprofiles.RegistrySlug) *legacyProfileRequestResolver {
+	return &legacyProfileRequestResolver{
+		RequestResolver: profiles.NewRequestResolver(profileRegistry, defaultRegistry, nil),
+	}
+}
+
+func (r *legacyProfileRequestResolver) Resolve(req *http.Request) (webhttp.ResolvedConversationRequest, error) {
+	if req == nil {
+		return webhttp.ResolvedConversationRequest{}, &webhttp.RequestResolutionError{Status: http.StatusBadRequest, ClientMsg: "bad request"}
+	}
+	switch req.Method {
+	case http.MethodGet:
+		return r.resolveWS(req)
+	case http.MethodPost:
+		return r.resolveChat(req)
+	default:
+		return webhttp.ResolvedConversationRequest{}, &webhttp.RequestResolutionError{Status: http.StatusMethodNotAllowed, ClientMsg: "method not allowed"}
+	}
+}
+
+func (r *legacyProfileRequestResolver) resolveWS(req *http.Request) (webhttp.ResolvedConversationRequest, error) {
+	convID := strings.TrimSpace(req.URL.Query().Get("conv_id"))
+	if convID == "" {
+		return webhttp.ResolvedConversationRequest{}, &webhttp.RequestResolutionError{Status: http.StatusBadRequest, ClientMsg: "missing conv_id"}
+	}
+	profileSlug, err := r.ResolveProfileSelection(req.Context(), "", "", "", "")
+	if err != nil {
+		return webhttp.ResolvedConversationRequest{}, err
+	}
+	registrySlug, err := r.ResolveRegistrySelection("", "", "")
+	if err != nil {
+		return webhttp.ResolvedConversationRequest{}, err
+	}
+	resolvedProfile, err := r.ResolveEffectiveProfile(req.Context(), registrySlug, profileSlug)
+	if err != nil {
+		return webhttp.ResolvedConversationRequest{}, err
+	}
+	plan, err := r.BuildConversationPlan(req.Context(), convID, "", "", resolvedProfile)
+	if err != nil {
+		return webhttp.ResolvedConversationRequest{}, err
+	}
+	return resolvedConversationRequestFromPlan(plan), nil
+}
+
+func (r *legacyProfileRequestResolver) resolveChat(req *http.Request) (webhttp.ResolvedConversationRequest, error) {
+	var body webhttp.ChatRequestBody
+	if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
+		return webhttp.ResolvedConversationRequest{}, &webhttp.RequestResolutionError{Status: http.StatusBadRequest, ClientMsg: "bad request", Err: err}
+	}
+	if body.Prompt == "" && body.Text != "" {
+		body.Prompt = body.Text
+	}
+	convID := strings.TrimSpace(body.ConvID)
+	if convID == "" {
+		convID = uuid.NewString()
+	}
+	profileSlug, err := r.ResolveProfileSelection(req.Context(), "", body.Profile, "", "")
+	if err != nil {
+		return webhttp.ResolvedConversationRequest{}, err
+	}
+	registrySlug, err := r.ResolveRegistrySelection(body.Registry, "", "")
+	if err != nil {
+		return webhttp.ResolvedConversationRequest{}, err
+	}
+	resolvedProfile, err := r.ResolveEffectiveProfile(req.Context(), registrySlug, profileSlug)
+	if err != nil {
+		return webhttp.ResolvedConversationRequest{}, err
+	}
+	plan, err := r.BuildConversationPlan(req.Context(), convID, body.Prompt, strings.TrimSpace(body.IdempotencyKey), resolvedProfile)
+	if err != nil {
+		return webhttp.ResolvedConversationRequest{}, err
+	}
+	return resolvedConversationRequestFromPlan(plan), nil
+}
+
+func resolvedConversationRequestFromPlan(plan *profiles.ConversationPlan) webhttp.ResolvedConversationRequest {
+	if plan == nil || plan.Runtime == nil {
+		return webhttp.ResolvedConversationRequest{}
+	}
+	return webhttp.ResolvedConversationRequest{
+		ConvID:                    plan.ConvID,
+		RuntimeKey:                plan.Runtime.RuntimeKey,
+		RuntimeFingerprint:        plan.Runtime.RuntimeFingerprint,
+		ProfileVersion:            plan.Runtime.ProfileVersion,
+		ResolvedInferenceSettings: profiles.CloneResolvedInferenceSettings(plan.Runtime.InferenceSettings),
+		ResolvedRuntime:           profiles.ToRuntimeTransport(plan.Runtime),
+		ProfileMetadata:           profiles.CopyMetadataMap(plan.Runtime.ProfileMetadata),
+		Prompt:                    plan.Prompt,
+		IdempotencyKey:            plan.IdempotencyKey,
+	}
+}
+
+func registerLegacyProfileAPIHandlers(mux *http.ServeMux, resolver *profiles.RequestResolver) {
+	if mux == nil || resolver == nil || resolver.Registry() == nil {
+		return
+	}
+	profiles.RegisterAPIHandlers(mux, resolver.Registry(), profiles.APIOptions{
+		DefaultRegistrySlug:             resolver.DefaultRegistrySlug(),
+		EnableCurrentProfileCookieRoute: true,
+		CurrentProfileCookieName:        "chat_profile",
+		ExtensionSchemas: []profiles.ExtensionSchemaDocument{{
+			Key: "webchat.starter_suggestions@v1",
+			Schema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"items": map[string]any{
+						"type": "array",
+						"items": map[string]any{
+							"type": "string",
+						},
+						"default": []any{},
+					},
+				},
+				"required":             []any{"items"},
+				"additionalProperties": false,
+			},
+		}},
+	})
+}
+
 func (e comparisonRuntimeEngine) RunInference(ctx context.Context, t *turns.Turn) (*turns.Turn, error) {
 	completion := strings.TrimSpace(e.completion)
 	if completion == "" {
@@ -191,14 +315,14 @@ func newLegacyHarnessServer(t *testing.T, eng engine.Engine) *httptest.Server {
 	require.NoError(t, err)
 	profileRegistry, err := profiles.NewInMemoryProfileService("default", testEngineProfileWithRuntime(t, "default", &infruntime.ProfileRuntime{SystemPrompt: "You are default"}))
 	require.NoError(t, err)
-	requestResolver := newProfileRequestResolver(profileRegistry, gepprofiles.MustRegistrySlug(profiles.DefaultRegistrySlug), nil)
+	requestResolver := newLegacyProfileRequestResolver(profileRegistry, gepprofiles.MustRegistrySlug(profiles.DefaultRegistrySlug))
 	chatHandler := webhttp.NewChatHandler(webchatSrv.ChatService(), requestResolver)
 	wsHandler := webhttp.NewWSHandler(webchatSrv.StreamHub(), requestResolver, websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }})
 	appMux := http.NewServeMux()
 	appMux.HandleFunc("/chat", chatHandler)
 	appMux.HandleFunc("/chat/", chatHandler)
 	appMux.HandleFunc("/ws", wsHandler)
-	registerProfileAPIHandlers(appMux, requestResolver.RequestResolver)
+	registerLegacyProfileAPIHandlers(appMux, requestResolver.RequestResolver)
 	timelineLogger := log.With().Str("component", "webchat-legacy-test").Str("route", "/api/timeline").Logger()
 	timelineHandler := webhttp.NewTimelineHandler(webchatSrv.TimelineService(), timelineLogger)
 	appMux.HandleFunc("/api/timeline", timelineHandler)
