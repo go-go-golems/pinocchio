@@ -77,7 +77,7 @@ function agentModePreviewEntityId(messageId: string): string {
   return `agent-mode-preview:${messageId}`;
 }
 
-function timelineEntityFromSnapshotEntity(entity: SnapshotEntityFrame): TimelineEntity | null {
+export function timelineEntityFromSnapshotEntity(entity: SnapshotEntityFrame): TimelineEntity | null {
   const kind = asString(entity?.kind);
   const id = asString(entity?.id);
   const payload = asRecord(entity?.payload);
@@ -129,88 +129,114 @@ function applySnapshot(frame: CanonicalFrame, dispatch: AppDispatch) {
   dispatch(appSlice.actions.setStatus(status));
 }
 
-function applyUIEvent(frame: CanonicalFrame, dispatch: AppDispatch) {
+type TimelineMutation = {
+  upsert?: TimelineEntity;
+  deleteId?: string;
+  status?: string;
+};
+
+export function timelineMutationFromUIEvent(frame: CanonicalFrame): TimelineMutation | null {
   const payload = asRecord(frame.payload);
   const messageId = asString(payload.messageId);
-  if (!messageId) return;
+  if (!messageId) return null;
 
   switch (asString(frame.name)) {
     case 'ChatMessageAccepted':
-      dispatch(timelineSlice.actions.upsertEntity(messageEntity(messageId, {
-        role: asString(payload.role) || 'user',
-        content: asString(payload.content) || asString(payload.text),
-        status: asString(payload.status) || 'submitted',
-        streaming: payload.streaming === true,
-      })));
-      return;
+      return {
+        upsert: messageEntity(messageId, {
+          role: asString(payload.role) || 'user',
+          content: asString(payload.content) || asString(payload.text),
+          status: asString(payload.status) || 'submitted',
+          streaming: payload.streaming === true,
+        }),
+      };
     case 'ChatMessageStarted':
-      dispatch(timelineSlice.actions.upsertEntity(messageEntity(messageId, {
-        role: asString(payload.role) || 'assistant',
-        prompt: asString(payload.prompt),
-        content: asString(payload.content) || '',
-        status: asString(payload.status) || 'streaming',
-        streaming: true,
-      })));
-      dispatch(appSlice.actions.setStatus('streaming'));
-      return;
+      return {
+        upsert: messageEntity(messageId, {
+          role: asString(payload.role) || 'assistant',
+          prompt: asString(payload.prompt),
+          content: asString(payload.content) || '',
+          status: asString(payload.status) || 'streaming',
+          streaming: true,
+        }),
+        status: 'streaming',
+      };
     case 'ChatMessageAppended':
-      dispatch(timelineSlice.actions.upsertEntity(messageEntity(messageId, {
-        role: asString(payload.role) || 'assistant',
-        content: asString(payload.content) || asString(payload.text) || asString(payload.chunk),
-        status: asString(payload.status) || 'streaming',
-        streaming: true,
-      })));
-      dispatch(appSlice.actions.setStatus('streaming'));
-      return;
+      return {
+        upsert: messageEntity(messageId, {
+          role: asString(payload.role) || 'assistant',
+          content: asString(payload.content) || asString(payload.text) || asString(payload.chunk),
+          status: asString(payload.status) || 'streaming',
+          streaming: true,
+        }),
+        status: 'streaming',
+      };
     case 'ChatMessageFinished':
-      dispatch(timelineSlice.actions.upsertEntity(messageEntity(messageId, {
-        role: asString(payload.role) || 'assistant',
-        content: asString(payload.content) || asString(payload.text),
-        status: asString(payload.status) || 'finished',
-        streaming: false,
-      })));
-      dispatch(appSlice.actions.setStatus('finished'));
-      return;
+      return {
+        upsert: messageEntity(messageId, {
+          role: asString(payload.role) || 'assistant',
+          content: asString(payload.content) || asString(payload.text),
+          status: asString(payload.status) || 'finished',
+          streaming: false,
+        }),
+        status: 'finished',
+      };
     case 'ChatMessageStopped':
-      dispatch(timelineSlice.actions.upsertEntity(messageEntity(messageId, {
-        role: asString(payload.role) || 'assistant',
-        content: asString(payload.content) || asString(payload.text),
-        status: asString(payload.status) || 'stopped',
-        streaming: false,
-        error: asString(payload.error),
-      })));
-      dispatch(appSlice.actions.setStatus('stopped'));
-      return;
+      return {
+        upsert: messageEntity(messageId, {
+          role: asString(payload.role) || 'assistant',
+          content: asString(payload.content) || asString(payload.text),
+          status: asString(payload.status) || 'stopped',
+          streaming: false,
+          error: asString(payload.error),
+        }),
+        status: 'stopped',
+      };
     case 'ChatAgentModePreviewUpdated':
-      dispatch(timelineSlice.actions.upsertEntity(agentModeEntity(agentModePreviewEntityId(messageId), 'agent_mode_preview', {
-        title: 'Agent mode preview',
-        data: {
-          from: '',
-          to: asString(payload.candidateMode),
-          analysis: asString(payload.analysis),
-          parseState: asString(payload.parseState),
-        },
-        preview: true,
-        messageId,
-      })));
-      return;
+      return {
+        upsert: agentModeEntity(agentModePreviewEntityId(messageId), 'agent_mode_preview', {
+          title: 'Agent mode preview',
+          data: {
+            from: '',
+            to: asString(payload.candidateMode),
+            analysis: asString(payload.analysis),
+            parseState: asString(payload.parseState),
+          },
+          preview: true,
+          messageId,
+        }),
+      };
     case 'ChatAgentModeCommitted':
-      dispatch(timelineSlice.actions.upsertEntity(agentModeEntity('agent-mode', 'agent_mode', {
-        title: asString(payload.title) || 'Agent mode switch',
-        data: {
-          from: asString(payload.from),
-          to: asString(payload.to),
-          analysis: asString(payload.analysis),
-        },
-        preview: false,
-        messageId,
-      })));
-      return;
+      return {
+        upsert: agentModeEntity('agent-mode', 'agent_mode', {
+          title: asString(payload.title) || 'Agent mode switch',
+          data: {
+            from: asString(payload.from),
+            to: asString(payload.to),
+            analysis: asString(payload.analysis),
+          },
+          preview: false,
+          messageId,
+        }),
+      };
     case 'ChatAgentModePreviewCleared':
-      dispatch(timelineSlice.actions.deleteEntity(agentModePreviewEntityId(messageId)));
-      return;
+      return { deleteId: agentModePreviewEntityId(messageId) };
     default:
-      return;
+      return null;
+  }
+}
+
+function applyUIEvent(frame: CanonicalFrame, dispatch: AppDispatch) {
+  const mutation = timelineMutationFromUIEvent(frame);
+  if (!mutation) return;
+  if (mutation.deleteId) {
+    dispatch(timelineSlice.actions.deleteEntity(mutation.deleteId));
+  }
+  if (mutation.upsert) {
+    dispatch(timelineSlice.actions.upsertEntity(mutation.upsert));
+  }
+  if (mutation.status) {
+    dispatch(appSlice.actions.setStatus(mutation.status));
   }
 }
 
