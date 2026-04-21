@@ -12,6 +12,7 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/inference/toolloop/enginebuilder"
 	"github.com/go-go-golems/geppetto/pkg/turns"
 	"github.com/go-go-golems/pinocchio/pkg/evtstream"
+	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
@@ -176,7 +177,7 @@ func (e *Engine) handleStopInference(_ context.Context, cmd evtstream.Command, _
 func (e *Engine) runPrompt(ctx context.Context, sid evtstream.SessionId, messageID string, pending PromptRequest, prompt string, pub evtstream.EventPublisher, done chan struct{}) {
 	defer close(done)
 	defer e.clearRun(sid, messageID)
-	if pending.Runtime != nil && pending.Runtime.ComposedRuntime.Engine != nil {
+	if pending.Runtime != nil && pending.Runtime.Engine != nil {
 		e.runRuntimeInference(ctx, sid, messageID, prompt, pending.Runtime, pub)
 		return
 	}
@@ -207,8 +208,8 @@ func (e *Engine) runDemoInference(ctx context.Context, sid evtstream.SessionId, 
 	_ = e.publish(context.Background(), sid, pub, EventInferenceFinished, map[string]any{"messageId": messageID, "role": "assistant", "text": accumulated, "content": accumulated, "status": "finished", "streaming": false})
 }
 
-func (e *Engine) runRuntimeInference(ctx context.Context, sid evtstream.SessionId, messageID, prompt string, runtime *ResolvedRuntime, pub evtstream.EventPublisher) {
-	if runtime == nil || runtime.ComposedRuntime.Engine == nil {
+func (e *Engine) runRuntimeInference(ctx context.Context, sid evtstream.SessionId, messageID, prompt string, runtime *infruntime.ComposedRuntime, pub evtstream.EventPublisher) {
+	if runtime == nil || runtime.Engine == nil {
 		e.runDemoInference(ctx, sid, messageID, prompt, pub)
 		return
 	}
@@ -217,15 +218,25 @@ func (e *Engine) runRuntimeInference(ctx context.Context, sid evtstream.SessionI
 		return
 	}
 
-	sink := &runtimeEventSink{sessionID: sid, messageID: messageID, pub: pub, engine: e}
-	eventSinks := []gepevents.EventSink{sink}
-	if runtime.ComposedRuntime.Sink != nil {
-		eventSinks = append(eventSinks, runtime.ComposedRuntime.Sink)
+	baseSink := gepevents.EventSink(&runtimeEventSink{sessionID: sid, messageID: messageID, pub: pub, engine: e})
+	eventSink := baseSink
+	if runtime.WrapSink != nil {
+		wrapped, err := runtime.WrapSink(baseSink)
+		if err != nil {
+			_ = e.publish(context.Background(), sid, pub, EventInferenceStopped, map[string]any{"messageId": messageID, "role": "assistant", "text": "", "content": "", "status": "stopped", "streaming": false, "error": err.Error()})
+			return
+		}
+		eventSink = wrapped
+	}
+	sink, ok := baseSink.(*runtimeEventSink)
+	if !ok {
+		_ = e.publish(context.Background(), sid, pub, EventInferenceStopped, map[string]any{"messageId": messageID, "role": "assistant", "text": "", "content": "", "status": "stopped", "streaming": false, "error": "internal runtime sink type assertion failed"})
+		return
 	}
 	sess := gepsession.NewSession()
 	sess.Builder = &enginebuilder.Builder{
-		Base:       runtime.ComposedRuntime.Engine,
-		EventSinks: eventSinks,
+		Base:       runtime.Engine,
+		EventSinks: []gepevents.EventSink{eventSink},
 	}
 	_, err := sess.AppendNewTurnFromUserPrompt(prompt)
 	if err != nil {

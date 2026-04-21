@@ -13,7 +13,6 @@ import (
 
 	gepevents "github.com/go-go-golems/geppetto/pkg/events"
 	"github.com/go-go-golems/geppetto/pkg/turns"
-	chatapp "github.com/go-go-golems/pinocchio/pkg/evtstream/apps/chat"
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/require"
@@ -38,8 +37,8 @@ type staticRuntimeResolver struct {
 	completion string
 }
 
-func (r staticRuntimeResolver) Resolve(context.Context, *http.Request, string, string) (*chatapp.ResolvedRuntime, error) {
-	return &chatapp.ResolvedRuntime{ComposedRuntime: infruntime.ComposedRuntime{Engine: runtimeBackedTestEngine{completion: r.completion}}}, nil
+func (r staticRuntimeResolver) Resolve(context.Context, *http.Request, string, string) (*infruntime.ComposedRuntime, error) {
+	return &infruntime.ComposedRuntime{Engine: runtimeBackedTestEngine(r)}, nil
 }
 
 func newTestMux(t *testing.T, opts ...Option) (*Server, *httptest.Server) {

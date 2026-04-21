@@ -100,6 +100,7 @@ func (c *ProfileRuntimeComposer) Compose(ctx context.Context, req infruntime.Con
 
 	return infruntime.ComposedRuntime{
 		Engine:             eng,
+		WrapSink:           runtimeSinkWrapperFromProfile(req.ResolvedProfileRuntime),
 		RuntimeKey:         runtimeKey,
 		RuntimeFingerprint: runtimeFingerprint,
 		SeedSystemPrompt:   systemPrompt,

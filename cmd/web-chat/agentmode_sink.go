@@ -6,20 +6,21 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/events"
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 	agentmode "github.com/go-go-golems/pinocchio/pkg/middlewares/agentmode"
-	webchat "github.com/go-go-golems/pinocchio/pkg/webchat"
 )
 
 type agentModeSinkConfigInput struct {
 	SanitizeYAML *bool `json:"sanitize_yaml,omitempty"`
 }
 
-func agentModeStructuredSinkConfigFromRuntime(runtime *infruntime.ProfileRuntime) (agentmode.StructuredSinkConfig, bool) {
-	cfg := agentmode.DefaultStructuredSinkConfig()
+// runtimeSinkWrapperFromProfile builds a runtime-owned event sink wrapper that injects
+// the agentmode structured-output parser when the profile runtime has agentmode configured.
+// It is cmd/web-chat specific and stays out of pkg/evtstream core.
+func runtimeSinkWrapperFromProfile(runtime *infruntime.ProfileRuntime) infruntime.EventSinkWrapper {
 	if runtime == nil {
-		return cfg, false
+		return nil
 	}
-
 	found := false
+	cfg := agentmode.DefaultStructuredSinkConfig()
 	for _, mw := range runtime.Middlewares {
 		if !strings.EqualFold(strings.TrimSpace(mw.Name), "agentmode") {
 			continue
@@ -27,22 +28,16 @@ func agentModeStructuredSinkConfigFromRuntime(runtime *infruntime.ProfileRuntime
 		if mw.Enabled != nil && !*mw.Enabled {
 			continue
 		}
-
 		found = true
 		input := agentModeSinkConfigInput{}
 		if err := decodeResolvedMiddlewareConfig(mw.Config, &input); err == nil && input.SanitizeYAML != nil {
 			cfg.ParseOptions = cfg.ParseOptions.WithSanitizeYAML(*input.SanitizeYAML)
 		}
 	}
-	return cfg, found
-}
-
-func newAgentModeStructuredSinkWrapper() webchat.EventSinkWrapper {
-	return func(_ string, req infruntime.ConversationRuntimeRequest, sink events.EventSink) (events.EventSink, error) {
-		cfg, ok := agentModeStructuredSinkConfigFromRuntime(req.ResolvedProfileRuntime)
-		if !ok {
-			return sink, nil
-		}
-		return agentmode.WrapStructuredSink(sink, cfg), nil
+	if !found {
+		return nil
+	}
+	return func(next events.EventSink) (events.EventSink, error) {
+		return agentmode.WrapStructuredSink(next, cfg), nil
 	}
 }

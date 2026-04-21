@@ -23,7 +23,6 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	appserver "github.com/go-go-golems/pinocchio/cmd/web-chat/app"
 	"github.com/go-go-golems/pinocchio/cmd/web-chat/profiles"
-	chatapp "github.com/go-go-golems/pinocchio/pkg/evtstream/apps/chat"
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 	timelinepb "github.com/go-go-golems/pinocchio/pkg/sem/pb/proto/sem/timeline"
 	webchat "github.com/go-go-golems/pinocchio/pkg/webchat"
@@ -40,8 +39,8 @@ type comparisonRuntimeResolver struct {
 	completion string
 }
 
-func (r comparisonRuntimeResolver) Resolve(context.Context, *http.Request, string, string) (*chatapp.ResolvedRuntime, error) {
-	return &chatapp.ResolvedRuntime{ComposedRuntime: infruntime.ComposedRuntime{Engine: comparisonRuntimeEngine{completion: r.completion}}}, nil
+func (r comparisonRuntimeResolver) Resolve(context.Context, *http.Request, string, string) (*infruntime.ComposedRuntime, error) {
+	return &infruntime.ComposedRuntime{Engine: comparisonRuntimeEngine(r)}, nil
 }
 
 type comparisonRuntimeEngine struct {

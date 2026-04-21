@@ -10,18 +10,11 @@ import (
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
-// ResolvedRuntime carries an already-composed runtime for one prompt submission.
-// It is intentionally app-grade and in-memory: the web app resolves runtime policy
-// at the application edge, then hands the composed runtime to the evtstream chat engine.
-type ResolvedRuntime struct {
-	ComposedRuntime infruntime.ComposedRuntime
-}
-
 // PromptRequest is the app-facing prompt submission input.
 type PromptRequest struct {
 	Prompt         string
 	IdempotencyKey string
-	Runtime        *ResolvedRuntime
+	Runtime        *infruntime.ComposedRuntime
 }
 
 // Service is an app-facing chat service surface suitable for consumer apps such as cmd/web-chat.

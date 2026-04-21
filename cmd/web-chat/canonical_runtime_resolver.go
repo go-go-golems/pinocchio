@@ -6,7 +6,6 @@ import (
 
 	appserver "github.com/go-go-golems/pinocchio/cmd/web-chat/app"
 	"github.com/go-go-golems/pinocchio/cmd/web-chat/profiles"
-	chatapp "github.com/go-go-golems/pinocchio/pkg/evtstream/apps/chat"
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 )
 
@@ -25,7 +24,7 @@ func newCanonicalRuntimeResolver(requestResolver *profiles.RequestResolver, runt
 	}
 }
 
-func (r *canonicalRuntimeResolver) Resolve(ctx context.Context, req *http.Request, profile string, registry string) (*chatapp.ResolvedRuntime, error) {
+func (r *canonicalRuntimeResolver) Resolve(ctx context.Context, req *http.Request, profile string, registry string) (*infruntime.ComposedRuntime, error) {
 	if r == nil || r.requestResolver == nil || r.runtimeComposer == nil {
 		return nil, nil
 	}
@@ -62,5 +61,5 @@ func (r *canonicalRuntimeResolver) Resolve(ctx context.Context, req *http.Reques
 	if err != nil {
 		return nil, err
 	}
-	return &chatapp.ResolvedRuntime{ComposedRuntime: composed}, nil
+	return &composed, nil
 }

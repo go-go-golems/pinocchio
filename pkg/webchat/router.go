@@ -335,6 +335,13 @@ func (r *Router) convRuntimeComposer() infruntime.RuntimeBuilder {
 		if artifacts.Sink == nil {
 			artifacts.Sink = middleware.NewWatermillSink(r.router.Publisher, topicForConv(req.ConvID))
 		}
+		if artifacts.WrapSink != nil {
+			wrapped, err := artifacts.WrapSink(artifacts.Sink)
+			if err != nil {
+				return infruntime.ComposedRuntime{}, err
+			}
+			artifacts.Sink = wrapped
+		}
 		if r.eventSinkWrapper != nil {
 			wrapped, err := r.eventSinkWrapper(req.ConvID, req, artifacts.Sink)
 			if err != nil {

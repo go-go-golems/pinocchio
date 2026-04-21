@@ -17,6 +17,7 @@ import (
 	storememory "github.com/go-go-golems/pinocchio/pkg/evtstream/hydration/memory"
 	storesqlite "github.com/go-go-golems/pinocchio/pkg/evtstream/hydration/sqlite"
 	wstransport "github.com/go-go-golems/pinocchio/pkg/evtstream/transport/ws"
+	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )
@@ -233,7 +234,7 @@ func (s *Server) handleSubmitMessage(w http.ResponseWriter, r *http.Request, sid
 		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "missing prompt"})
 		return
 	}
-	var runtime *chatapp.ResolvedRuntime
+	var runtime *infruntime.ComposedRuntime
 	if s.runtimeResolver != nil {
 		resolved, err := s.runtimeResolver.Resolve(r.Context(), r, in.Profile, in.Registry)
 		if err != nil {

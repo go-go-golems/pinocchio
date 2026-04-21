@@ -18,9 +18,19 @@ type ConversationRuntimeRequest struct {
 	ResolvedProfileFingerprint string
 }
 
+// EventSinkWrapper decorates a base event sink with runtime-owned behavior.
+// Use this when runtime composition needs to wrap an application-provided sink,
+// for example to inject structured-output filtering that belongs to a middleware.
+type EventSinkWrapper func(events.EventSink) (events.EventSink, error)
+
 // ComposedRuntime are the composed runtime pieces consumed by conversation lifecycle code.
 type ComposedRuntime struct {
-	Engine             engine.Engine
+	Engine engine.Engine
+	// WrapSink decorates an application-provided base sink with runtime-owned behavior.
+	// Canonical evtstream chat uses this to wrap its chat-owned runtime sink.
+	WrapSink EventSinkWrapper
+	// Sink is the concrete event sink used by legacy webchat conversation wiring after
+	// router-level sink assembly. New canonical code should prefer WrapSink.
 	Sink               events.EventSink
 	RuntimeFingerprint string
 	RuntimeKey         string
