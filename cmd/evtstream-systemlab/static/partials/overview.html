@@ -1,7 +1,6 @@
 <div class="panel">
   <h2>Phase 0 — Foundations</h2>
-  <p>This separate app exists to explain, exercise, and validate the <code>evtstream</code> substrate without mixing Systemlab logic into the framework package itself.</p>
-  <p><strong>Boundary rule:</strong> the lab app may consume public <code>evtstream</code> APIs, but it should not reach into legacy webchat internals.</p>
+  <p>When you finish Phase 0, you should understand what <code>evtstream</code> is trying to become, why it lives in its own package, why Systemlab is a separate app, and what invariants the rest of the framework will build on.</p>
 </div>
 <div class="panel">
   <h3>Phase 0 Chapter</h3>
@@ -9,6 +8,12 @@
   <div id="phase0-chapter" class="chapter-viewer">Loading chapter…</div>
 </div>
 <div class="panel">
-  <h3>Framework status</h3>
+  <h3>Phase Status</h3>
+  <div id="phase0-status" class="status-indicator">
+    <!-- Will be populated by JS with phase progress -->
+  </div>
+</div>
+<div class="panel">
+  <h3>Framework Status</h3>
   <pre id="status-output">Loading…</pre>
 </div>

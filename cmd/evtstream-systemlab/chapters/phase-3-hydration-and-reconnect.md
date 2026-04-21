@@ -1,152 +1,92 @@
 # Phase 3 — Hydration and Reconnect
 
-## Welcome
+## What this chapter is about
 
-Phase 3 is where the framework begins to feel like a realtime substrate instead of a beautifully structured backend engine. Up to this point, you have seen commands, backend events, projections, hydration state, and bus-backed ordering. But there is still a crucial piece missing from the user-facing story: what happens when a live client shows up, leaves, and comes back?
+Phase 2 showed you how the consumer assigns ordinals and how the framework establishes consumed order. Phase 1 showed you how commands become events and how projections derive state. But neither phase answered a practical question: what happens when a client connects, leaves, and comes back?
 
-That is the question Phase 3 is built to answer.
-
-A realtime system is not really trustworthy until it can handle the basic messiness of actual clients. Clients connect late. Clients disconnect unexpectedly. Clients reconnect after the system has already accumulated meaningful state. And when they return, they do not want a philosophical explanation of event ordering—they want a coherent view of the current world, followed by live updates that continue naturally from there.
-
-This phase therefore introduces the first real live-client transport concept: websocket-based delivery, connection tracking, subscriptions by `SessionId`, and the all-important rule of **snapshot before live**.
-
-At the time of writing, this chapter is intentionally ahead of the full interactive implementation in Systemlab. That is still valuable. You should read it as the conceptual foundation for what the Phase 3 page is trying to become, and as the preparation you need before the transport becomes more fully interactive.
-
-By the end of this chapter, you should understand:
-
-- why a live transport belongs after ordering and hydration basics,
-- why `ConnectionId` exists separately from `SessionId`,
-- what snapshot-before-live means and why it is non-negotiable,
-- what the planned Phase 3 controls are designed to teach,
-- what kinds of bugs this phase is meant to prevent,
-- and what to watch closely once the phase becomes fully interactive.
+This chapter answers that question. By the end, you should understand why snapshot-before-live is non-negotiable, how ConnectionId and SessionId work together, and what the framework guarantees when a client reconnects.
 
 ---
 
-## 1. Why reconnect is a framework problem, not just a UI problem
+## 1. Why reconnect is a framework problem
 
-Many systems treat reconnect as a frontend concern. The browser dropped, so the frontend reconnects. The socket reopened, so the UI asks for state again. At a superficial level that is true. But a reconnect-safe system cannot be built only from frontend good intentions.
+Many systems treat reconnect as a frontend concern. The browser dropped, so the frontend reconnects. The socket reopened, so the UI asks for state.
 
-Reconnect is fundamentally a framework problem because the framework owns the relationship between:
+That is not wrong, but it is incomplete.
 
-- current durable state,
-- live event delivery,
-- session routing,
-- and transport identity.
+Reconnect is a framework problem because the framework owns:
 
-If the framework has no coherent answer to those relationships, the frontend can reconnect all it wants and still end up with duplicated updates, missing updates, inconsistent state, or live events arriving before the client has been rehydrated.
+- current durable state (the hydration store)
+- live event delivery (the UIFanout)
+- session routing (by SessionId)
+- transport identity (by ConnectionId)
 
-That is why Phase 3 sits where it does. It comes *after* hydration concepts and *after* consumer-side ordering, because reconnect only makes sense when the system already knows what state is current and how event order is defined.
+If the framework has no coherent answer to reconnect, the frontend can reconnect all it wants and still end up with duplicated updates, missing updates, or inconsistent state.
+
+Phase 3 comes after hydration and ordering because reconnect only makes sense when the system already knows what state is current and how event order is defined.
 
 ---
 
-## 2. The central lesson of Phase 3
-
-The most important sentence in this phase is this one:
+## 2. The central rule: snapshot before live
 
 > A reconnecting client should receive a coherent snapshot first, and only then continue with live UI events.
 
-This sounds simple, but it is one of the most delicate sequencing rules in the whole architecture.
+This is the most important sentence in Phase 3.
 
-If live events arrive before the client has been hydrated, the client can momentarily observe a world that does not line up with the snapshot it later receives. That leads to duplicated state, visual jumps, confusing debugging, and loss of trust in the system.
+Consider what happens if this rule is violated. A client reconnects. It receives live events. Then it receives a snapshot. The snapshot contradicts the live events. The client must reconcile them, or it ends up wrong.
 
-If, on the other hand, the framework ensures snapshot-before-live, then the reconnect story becomes much easier to reason about:
+Now consider what happens when the rule holds. A client reconnects. It receives a snapshot. That snapshot represents the current state. Then it receives live events that continue from that state. No reconciliation needed. The client just continues.
 
-1. client subscribes,
-2. framework loads snapshot,
-3. client receives current state,
-4. client then receives live UI events that continue from that state.
-
-That is the narrative the transport must preserve.
+The framework prevents an entire category of bugs by sequencing correctly.
 
 ---
 
-## 3. Why `ConnectionId` matters more here than it did before
+## 3. What a subscribe looks like
 
-In earlier phases, `ConnectionId` was mostly a vocabulary concept. In Phase 3 it becomes operational.
-
-This is where you really feel why the framework separated `ConnectionId` from `SessionId`.
-
-### `SessionId`
-Represents the business-level routing identity.
-
-### `ConnectionId`
-Represents one transport-level connection.
-
-That distinction matters because a single session may later have:
-
-- multiple browser tabs,
-- a reconnecting tab replacing an older one,
-- several observers attached to the same session,
-- one client disconnecting while another remains subscribed.
-
-If the framework had collapsed these concepts together, transport logic would quickly become awkward and brittle. But because the distinction was introduced early, Phase 3 gets to use it naturally instead of retrofitting it under pressure.
-
----
-
-## 4. What websocket transport is supposed to do in this framework
-
-The websocket transport is not supposed to become a second framework inside the framework. It has a focused role.
-
-It should:
-
-- accept live connections,
-- assign `ConnectionId`s,
-- track subscriptions by session,
-- deliver snapshots on subscribe,
-- deliver live UI events after that,
-- accept unsubscribe or disconnect behavior cleanly,
-- stay unaware of application-specific business logic.
-
-It should **not**:
-
-- invent application semantics,
-- assign ordinals,
-- decide what the canonical event model means,
-- become the place where commands are secretly interpreted in app-specific ways.
-
-This distinction is important because transport code is one of the easiest places for architectural leakage to happen.
-
----
-
-## 5. The key design rule: snapshot before live
-
-If you only remember one technical phrase from this chapter, let it be "snapshot before live."
-
-The reason it matters is that reconnect is fundamentally a race between:
-
-- the current store state,
-- and the future live stream.
-
-The framework must ensure the client receives those in the right order.
-
-### Conceptual sequence
+Here is the sequence when a client subscribes to a session:
 
 ```text
 Client connects
     -> receives ConnectionId
+    ->
 Client subscribes to SessionId
-    -> framework loads snapshot from HydrationStore
-    -> framework sends snapshot message first
-    -> framework begins sending live UI events after snapshot
+    ->
+Framework loads snapshot from HydrationStore
+    ->
+Framework sends snapshot message (first)
+    ->
+Framework sends live UI events (after snapshot)
 ```
 
-### Why the order matters
-
-If the framework reversed that order, a client might:
-
-- see live append events,
-- then receive a stale snapshot,
-- then need complex client logic to reconcile them,
-- or simply end up wrong.
-
-The framework is trying to avoid that entire category of complexity by sequencing the transport correctly.
+The snapshot arrives before any live events. That is the rule.
 
 ---
 
-## 6. How the transport fits into the wider architecture
+## 4. ConnectionId vs SessionId
 
-It helps to visualize where the websocket transport sits relative to the rest of the system.
+Phase 0 introduced these concepts. Phase 3 makes them operational.
+
+**SessionId** is the business-level routing key. It identifies the unit of work. All events for a session share the same SessionId. The hydration store tracks state per SessionId.
+
+**ConnectionId** is the transport-level identity. It identifies one socket connection. One session can have multiple connections over time (reconnect), or multiple simultaneous connections (multiple tabs watching the same session).
+
+```text
+SessionId: "session-abc"     <- business identity, stable
+ConnectionId: "conn-123"     <- transport identity, changes on reconnect
+ConnectionId: "conn-456"     <- different connection, same session
+```
+
+This distinction matters because:
+
+- A client disconnects and reconnects. The SessionId stays the same. The ConnectionId changes.
+- Multiple tabs can watch the same session. Each has its own ConnectionId.
+- The framework tracks subscriptions by SessionId. It tracks presence by ConnectionId.
+
+---
+
+## 5. The transport architecture
+
+The websocket transport sits downstream of the consumer:
 
 ```text
 Commands
@@ -159,252 +99,139 @@ Canonical backend events
    |
    v
 Consumer
-   |---------------------> TimelineProjection -> HydrationStore
+   |------------------> TimelineProjection -> HydrationStore
    |
-   +---------------------> UIProjection -> UIFanout -> Websocket transport
+   +------------------> UIProjection -> UIFanout -> Websocket transport
                                                    |
                                                    v
-                                              ConnectionId / Session subscriptions
+                                              Client connections
 ```
-
-This diagram is a reminder that the websocket transport is *downstream* of the consumer and the UI projection. That is exactly where it belongs.
 
 The transport is not the source of truth. It is the live-delivery mechanism for one derived view of the truth.
 
----
+The transport should:
+- accept connections and assign ConnectionIds
+- track subscriptions by SessionId
+- deliver snapshots on subscribe
+- deliver live UI events after snapshots
+- stay unaware of application semantics
 
-## 7. What the planned Phase 3 page is trying to teach
-
-The Systemlab Phase 3 page is meant to be more than a transport demo. It is meant to make reconnect semantics understandable.
-
-### The page is supposed to show
-
-- Client A state,
-- Client B state,
-- connect/disconnect transitions,
-- subscribe actions,
-- snapshot payloads,
-- live UI events,
-- the current store snapshot,
-- invariant checks for sequencing and convergence.
-
-### Why two clients matter
-
-Using two simulated clients prevents you from thinking about reconnect as a single-tab toy problem. It forces you to think about:
-
-- independent connection lifecycle,
-- shared session state,
-- different subscribe timings,
-- reconvergence toward the same final session view.
-
-That is exactly the right kind of teaching surface for this phase.
+The transport should not:
+- invent application semantics
+- assign ordinals
+- interpret command meanings
+- become the place where business logic lives
 
 ---
 
-## 8. The controls this page is meant to exercise
+## 6. Why this matters for correctness
 
-At the time of this chapter, some of these controls may still be placeholder controls rather than fully live ones. That is okay. The important thing is to understand what they are *for*.
+Here is what the framework guarantees when a client subscribes:
 
-### Planned controls
+1. The snapshot reflects the current hydration store state.
+2. The snapshot arrives before any live events.
+3. Live events continue from where the snapshot left off.
+4. Events arrive in ordinal order.
 
-- `Connect` / `Disconnect`
-- `Subscribe` with a `SessionId`
-- optional `sinceOrdinal`
-- a way to seed or trigger session activity,
-- reconnect controls,
-- possibly a reset control.
+Here is what the framework does not guarantee:
 
-These are not random buttons. Each one exists to teach a different part of the transport story.
+- That multiple connections see identical delivery timing.
+- That the client never misses an event (the client must handle that).
 
----
-
-## 9. Things to try once the controls are live
-
-This section is written so that you already know what to look for when the Phase 3 page is fully interactive.
-
-### Try 1: connect Client A and subscribe to an empty session
-
-### What should happen
-
-- the client should connect successfully,
-- a subscription should be established,
-- the snapshot should be empty or minimal,
-- live state should begin from a coherent baseline.
-
-### What to pay attention to
-
-This is a subtle scenario. Even an empty session is teaching you whether the snapshot-before-live rule is being followed. The absence of state should still arrive in the correct shape and sequence.
+The framework establishes the correct sequence. The transport delivers it. The client handles delivery confirmation.
 
 ---
 
-### Try 2: generate activity, then connect Client B later
+## 7. The Phase 3 page
 
-### What should happen
+The Phase 3 page simulates two clients to make reconnect semantics visible.
 
-Client B should receive:
+**Client A** and **Client B** each have their own connection lifecycle. They can subscribe to the same session or different sessions. They can disconnect and reconnect independently.
 
-- a snapshot representing current state,
-- then only the subsequent live UI events.
-
-### What to pay attention to
-
-The important question is not whether Client B eventually looks correct. The important question is whether Client B got there *cleanly*, without duplicated or out-of-order reasoning required in the browser.
-
----
-
-### Try 3: disconnect Client A, keep activity going, then reconnect
-
-### What should happen
-
-On reconnect, Client A should:
-
-- reconnect as a new or renewed `ConnectionId`,
-- resubscribe to the same `SessionId`,
-- receive a current snapshot,
-- then receive live events after that snapshot.
-
-### What to pay attention to
-
-This is the real heart of the phase. Watch for whether the live stream continues naturally from the snapshot rather than racing ahead of it.
+This forces you to think about:
+- independent connection lifecycle
+- shared session state
+- different subscribe timings
+- reconvergence toward the same final session view
 
 ---
 
-### Try 4: compare Client A and Client B final state
+## 8. Things to try
 
-### What should happen
+**Connect Client A, subscribe to a session.** The client connects. A snapshot arrives. Live events continue from there.
 
-Even if they connected at different times and disconnected differently, the clients should converge to the same final understanding of the session.
+**Generate activity while Client A is connected.** Client A receives live events as they happen.
 
-### What to pay attention to
+**Disconnect Client A.** The connection closes. The framework stops sending to that ConnectionId.
 
-This is one of the strongest transport invariants in the whole framework: clients with different live histories should still end at the same session truth if the framework is sequencing hydration and live delivery correctly.
+**Reconnect Client A.** The client reconnects. It subscribes. It receives a snapshot of current state. Then it receives live events. Notice: the live events continue naturally from where the snapshot left off.
 
----
+**Connect Client B to the same session while activity is ongoing.** Client B subscribes. It receives a snapshot of current state. Then it receives live events. Notice: both clients converge to the same final session view.
 
-## 10. Why `sinceOrdinal` is interesting but dangerous
+**Disconnect Client A, keep Client B connected, generate more activity.** Client A misses the activity. Client B receives it.
 
-The moment you introduce a `sinceOrdinal` concept, you open the door to a more complicated story. It can be useful because it allows a client to describe what point in the stream it believes it has already seen. But it is also dangerous because it tempts the system to overcomplicate reconnect logic before its basic snapshot model is stable.
-
-That is why this phase should stay conservative.
-
-If `sinceOrdinal` exists, it should support understanding and optimization—not replace the core snapshot-before-live discipline.
-
-A new engineer should be cautious here. Fancy reconnection logic often looks efficient before it becomes impossible to explain.
+**Reconnect Client A.** Client A receives a new snapshot (current state). Then it receives live events. Notice: Client A and Client B are back in sync.
 
 ---
 
-## 11. The kinds of bugs this phase is designed to prevent
+## 9. What the checks prove
 
-Phase 3 is not just adding transport. It is preventing several classes of failure.
-
-### Bug class 1: live before snapshot
-
-This is the classic reconnect bug. The client receives live data before it has a coherent base state.
-
-### Bug class 2: transport owning business semantics
-
-If websocket code starts interpreting application meaning directly, the framework boundary gets polluted.
-
-### Bug class 3: confusing connections with sessions
-
-That leads to brittle subscription and reconnect behavior.
-
-### Bug class 4: duplicated or skipped visible state after reconnect
-
-Even if the store is correct, a bad subscribe sequence can make the client wrong.
-
-### Bug class 5: hidden coupling between transport and one example app
-
-If the transport only works because it secretly knows chat-specific message shapes, the framework has already drifted off course.
+| Check | What it proves |
+|-------|----------------|
+| `snapshotBeforeLive` | The snapshot arrived before any live events |
+| `convergence` | Multiple clients converged to the same session state |
+| `connectionIsolation` | Connection lifecycle does not affect session state |
+| `ordinalOrder` | Events arrived in correct ordinal order |
 
 ---
 
-## 12. What a good Phase 3 implementation should feel like
+## 10. Common mistakes
 
-A good Phase 3 implementation should feel almost calm. That is a strange word for a live transport phase, but it is the right one.
+**Mistake: live before snapshot.** A client receives live events before it has a coherent base state. The framework must sequence snapshot before live.
 
-When you connect and subscribe, the system should feel unsurprising. The snapshot should arrive first. Live updates should feel like a continuation, not a correction. Disconnect and reconnect should not feel magical; they should feel understandable.
+**Mistake: transport owning business semantics.** If websocket code interprets application event meanings, the framework boundary is polluted. The transport should only deliver what the UIProjection produces.
 
-That is what you want in a framework like this. Not flashy behavior. Trustworthy behavior.
-
----
-
-## 13. Important API references and files to study
-
-### Phase 3 framework areas
-
-- `pinocchio/pkg/evtstream/transport/transport.go`
-- `pinocchio/pkg/evtstream/fanout.go`
-- `pinocchio/pkg/evtstream/hydration.go`
-- later websocket transport package under `evtstream/transport/ws`
-
-### Systemlab files you should expect to matter
-
-- future Phase 3 backend lab file in `cmd/evtstream-systemlab/`
-- future partial under `static/partials/phase3.html`
-- future page behavior module under `static/js/pages/phase3.js`
-- this chapter file:
-  - `pinocchio/cmd/evtstream-systemlab/chapters/phase-3-hydration-and-reconnect.md`
+**Mistake: one connection equals one session.** One session can have multiple connections over time (reconnect) or simultaneously (multiple tabs). The framework must handle this.
 
 ---
 
-## 14. Common mistakes for new engineers in this phase
+## Key Points
 
-### Mistake 1: thinking websocket transport is the "main system"
-
-It is not. It is one downstream transport for UI events.
-
-### Mistake 2: treating reconnect as frontend-only
-
-Reconnect correctness depends on framework sequencing and store semantics.
-
-### Mistake 3: skipping snapshot-before-live because it seems simpler
-
-That shortcut often creates a much bigger mess later.
-
-### Mistake 4: letting transport logic know too much about app-specific event meanings
-
-That will trap the framework inside its first example.
-
-### Mistake 5: assuming one connection equals one session
-
-That assumption breaks the moment you have multiple tabs or reconnecting clients.
+- Reconnect is a framework problem, not just a frontend concern. The framework owns the relationship between durable state and live delivery.
+- Snapshot before live is non-negotiable. The framework must establish the correct state before delivering live events.
+- SessionId is the business routing key. ConnectionId is the transport identity.
+- One session can have multiple connections over time (reconnect) or simultaneously (multiple tabs).
+- The transport sits downstream of the consumer. It delivers UI events; it does not interpret them.
+- Clients with different live histories should converge to the same session truth.
 
 ---
 
-## 15. Final summary
+## API Reference
 
-Phase 3 is where the framework learns how to meet real clients without losing its architectural discipline.
-
-The essential lesson is simple to say and difficult to preserve:
-
-- sessions own state,
-- connections own transport presence,
-- snapshots establish the current truth,
-- live UI events continue from that truth,
-- and reconnect correctness depends on the framework sequencing those things properly.
-
-If Phase 2 taught the system to be honest about consumed order, Phase 3 teaches it to be honest about what a reconnecting client is allowed to see and when.
+- **`Subscribe(sessionId, connectionId)`**: Subscribe a connection to a session.
+- **`Unsubscribe(sessionId, connectionId)`**: Remove a subscription.
+- **`DeliverSnapshot(connectionId, snapshot)`**: Deliver the current state to a reconnecting client.
+- **`DeliverEvent(connectionId, event)`**: Deliver a live UI event.
+- **`HydrationStore.Snapshot(sessionId)`**: Load current state for a session.
 
 ---
 
-## 16. File references at a glance
+## File References
 
-### Framework references
+### Framework files
 
-- `pinocchio/pkg/evtstream/transport/transport.go`
-- `pinocchio/pkg/evtstream/fanout.go`
-- `pinocchio/pkg/evtstream/hydration.go`
+- `pkg/evtstream/transport/transport.go` — transport interface
+- `pkg/evtstream/fanout.go` — UI event fanout
+- `pkg/evtstream/hydration.go` — hydration store interface
+- `pkg/evtstream/hydration/memory/store.go` — in-memory store
 
-### Systemlab references
+### Systemlab files
 
-- `pinocchio/cmd/evtstream-systemlab/chapters/phase-3-hydration-and-reconnect.md`
-- planned future page partial and JS module for Phase 3
+- `cmd/evtstream-systemlab/phase3_lab.go` — Phase 3 lab setup
+- `cmd/evtstream-systemlab/static/partials/phase3.html` — page layout
+- `cmd/evtstream-systemlab/static/js/pages/phase3.js` — page behavior
 
-### Suggested validation mindset
+### Tests
 
-When Phase 3 is live, your first validation questions should be:
-
-- Did snapshot arrive before live?
-- Did multiple clients converge to the same final state?
-- Did the transport remain transport-only rather than turning into hidden business logic?
+- `pkg/evtstream/transport/transport_test.go`
+- `pkg/evtstream/hydration/memory/store_test.go`

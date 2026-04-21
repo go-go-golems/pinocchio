@@ -192,3 +192,277 @@ h3 {
     grid-template-columns: 1fr;
   }
 }
+
+/* StatusIndicator Widget */
+.phase-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.phase-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: #0b1220;
+  border: 1px solid #1f2937;
+}
+
+.phase-item.status-active {
+  border-color: #2563eb;
+  background: #1e3a5f;
+}
+
+.phase-item.status-complete {
+  border-color: #059669;
+  background: #0b1220;
+}
+
+.phase-item.status-pending {
+  opacity: 0.5;
+  border-color: #334155;
+  background: #0b1220;
+}
+
+.phase-icon {
+  font-size: 14px;
+  width: 20px;
+  text-align: center;
+}
+
+.status-active .phase-icon {
+  color: #2563eb;
+}
+
+.status-complete .phase-icon {
+  color: #059669;
+}
+
+.status-pending .phase-icon {
+  color: #64748b;
+}
+
+.phase-name {
+  font-size: 14px;
+  color: #e2e8f0;
+}
+
+/* Evidence Panels with View Toggle */
+.evidence-panels {
+  margin-top: 0;
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.panel-header h3 {
+  margin: 0;
+  flex: 1;
+}
+
+.view-toggle {
+  display: flex;
+  gap: 4px;
+}
+
+.toggle-btn {
+  padding: 4px 8px;
+  font-size: 12px;
+  border: 1px solid #334155;
+  border-radius: 4px;
+  background: #1e293b;
+  color: #94a3b8;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.toggle-btn:hover {
+  background: #334155;
+  color: #e2e8f0;
+}
+
+.toggle-btn.active {
+  background: #2563eb;
+  color: white;
+  border-color: #2563eb;
+}
+
+/* Rendered trace styling */
+.trace-rendered {
+  font-family: system-ui, sans-serif;
+}
+
+.trace-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 6px 0;
+  border-bottom: 1px solid #1f2937;
+}
+
+.trace-step:last-child {
+  border-bottom: none;
+}
+
+.trace-step-num {
+  font-size: 12px;
+  font-weight: bold;
+  color: #64748b;
+  min-width: 24px;
+}
+
+.trace-step-kind {
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: #1e293b;
+  color: #94a3b8;
+}
+
+.trace-step-kind.command { background: #1e3a5f; color: #60a5fa; }
+.trace-step-kind.session { background: #1f2937; color: #94a3b8; }
+.trace-step-kind.handler { background: #1c2f1c; color: #86efac; }
+.trace-step-kind.publish { background: #2f1c1c; color: #fca5a5; }
+.trace-step-kind.projection { background: #1c2f3f; color: #7dd3fc; }
+.trace-step-kind.store { background: #2f2f1c; color: #fcd34d; }
+
+.trace-step-message {
+  flex: 1;
+  font-size: 13px;
+  color: #e2e8f0;
+}
+
+/* Session/UI Events rendered styling */
+.session-rendered {
+  font-family: system-ui, sans-serif;
+}
+
+.session-header {
+  background: #1e293b;
+  padding: 12px;
+  border-radius: 8px;
+  margin-bottom: 12px;
+}
+
+.session-header-label {
+  font-size: 11px;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 4px;
+}
+
+.session-header-value {
+  font-size: 14px;
+  color: #e2e8f0;
+}
+
+.ui-events-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ui-event-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 12px;
+  background: #0b1220;
+  border-radius: 8px;
+  border: 1px solid #1f2937;
+}
+
+.ui-event-icon {
+  font-size: 14px;
+  width: 20px;
+  text-align: center;
+}
+
+.ui-event-icon.started { color: #60a5fa; }
+.ui-event-icon.appended { color: #fbbf24; }
+.ui-event-icon.finished { color: #34d399; }
+
+.ui-event-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: #e2e8f0;
+}
+
+.ui-event-detail {
+  font-size: 12px;
+  color: #64748b;
+  margin-top: 2px;
+}
+
+/* Snapshot rendered styling */
+.snapshot-rendered {
+  font-family: system-ui, sans-serif;
+}
+
+.snapshot-session {
+  background: #1e293b;
+  padding: 12px;
+  border-radius: 8px;
+  margin-bottom: 12px;
+}
+
+.snapshot-entity {
+  background: #0b1220;
+  border: 1px solid #1f2937;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.snapshot-entity-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.snapshot-entity-icon {
+  font-size: 16px;
+}
+
+.snapshot-entity-icon.finished { color: #34d399; }
+
+.snapshot-entity-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #e2e8f0;
+}
+
+.snapshot-entity-props {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-left: 26px;
+}
+
+.snapshot-prop {
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.snapshot-prop-label {
+  color: #64748b;
+}
+
+.snapshot-prop-value {
+  color: #e2e8f0;
+  font-family: monospace;
+}
+
+/* StatusIndicator - rendered JSON alternative */
+.status-indicator .raw-json {
+  font-size: 12px;
+  color: #94a3b8;
+  margin-top: 8px;
+}
