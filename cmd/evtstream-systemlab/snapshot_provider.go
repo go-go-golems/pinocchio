@@ -3,13 +3,13 @@ package main
 import (
 	"context"
 
-	"github.com/go-go-golems/pinocchio/pkg/evtstream"
+	sessionstream "github.com/go-go-golems/sessionstream"
 )
 
 type hydrationSnapshotProvider struct {
-	store evtstream.HydrationStore
+	store sessionstream.HydrationStore
 }
 
-func (p hydrationSnapshotProvider) Snapshot(ctx context.Context, sid evtstream.SessionId) (evtstream.Snapshot, error) {
+func (p hydrationSnapshotProvider) Snapshot(ctx context.Context, sid sessionstream.SessionId) (sessionstream.Snapshot, error) {
 	return p.store.Snapshot(ctx, sid, 0)
 }

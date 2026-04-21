@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/go-go-golems/pinocchio/pkg/evtstream"
-	storememory "github.com/go-go-golems/pinocchio/pkg/evtstream/hydration/memory"
-	wstransport "github.com/go-go-golems/pinocchio/pkg/evtstream/transport/ws"
+	sessionstream "github.com/go-go-golems/sessionstream"
+	storememory "github.com/go-go-golems/sessionstream/hydration/memory"
+	wstransport "github.com/go-go-golems/sessionstream/transport/ws"
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
@@ -41,7 +41,7 @@ type phase3RunResponse struct {
 }
 
 type phase3State struct {
-	hub         *evtstream.Hub
+	hub         *sessionstream.Hub
 	store       *storememory.Store
 	ws          *wstransport.Server
 	trace       []traceEntry
@@ -53,7 +53,7 @@ type phase3State struct {
 func (e *labEnvironment) newPhase3State() (*phase3State, error) {
 	state := &phase3State{sessionMeta: map[string]map[string]any{}}
 	store := storememory.New()
-	reg := evtstream.NewSchemaRegistry()
+	reg := sessionstream.NewSchemaRegistry()
 	for _, err := range []error{
 		reg.RegisterCommand(phase3CommandName, &structpb.Struct{}),
 		reg.RegisterEvent(phase3EventStarted, &structpb.Struct{}),
@@ -70,25 +70,25 @@ func (e *labEnvironment) newPhase3State() (*phase3State, error) {
 	}
 
 	wsServer, err := wstransport.NewServer(hydrationSnapshotProvider{store: store}, wstransport.WithHooks(wstransport.Hooks{
-		OnConnect: func(cid evtstream.ConnectionId) {
+		OnConnect: func(cid sessionstream.ConnectionId) {
 			e.appendPhase3Trace("transport", "phase 3 websocket connected", map[string]any{"connectionId": string(cid)})
 		},
-		OnDisconnect: func(cid evtstream.ConnectionId) {
+		OnDisconnect: func(cid sessionstream.ConnectionId) {
 			e.appendPhase3Trace("transport", "phase 3 websocket disconnected", map[string]any{"connectionId": string(cid)})
 		},
-		OnSubscribe: func(cid evtstream.ConnectionId, sid evtstream.SessionId, since uint64) {
+		OnSubscribe: func(cid sessionstream.ConnectionId, sid sessionstream.SessionId, since uint64) {
 			e.appendPhase3Trace("transport", "phase 3 subscribed", map[string]any{"connectionId": string(cid), "sessionId": string(sid), "sinceOrdinal": fmt.Sprintf("%d", since)})
 		},
-		OnUnsubscribe: func(cid evtstream.ConnectionId, sid evtstream.SessionId) {
+		OnUnsubscribe: func(cid sessionstream.ConnectionId, sid sessionstream.SessionId) {
 			e.appendPhase3Trace("transport", "phase 3 unsubscribed", map[string]any{"connectionId": string(cid), "sessionId": string(sid)})
 		},
-		OnSnapshotSent: func(cid evtstream.ConnectionId, sid evtstream.SessionId, snap evtstream.Snapshot) {
+		OnSnapshotSent: func(cid sessionstream.ConnectionId, sid sessionstream.SessionId, snap sessionstream.Snapshot) {
 			e.appendPhase3Trace("transport", "phase 3 snapshot sent", map[string]any{"connectionId": string(cid), "sessionId": string(sid), "ordinal": fmt.Sprintf("%d", snap.Ordinal), "entityCount": len(snap.Entities)})
 		},
-		OnUIEventSent: func(cid evtstream.ConnectionId, sid evtstream.SessionId, ord uint64, event evtstream.UIEvent) {
+		OnUIEventSent: func(cid sessionstream.ConnectionId, sid sessionstream.SessionId, ord uint64, event sessionstream.UIEvent) {
 			e.appendPhase3Trace("transport", "phase 3 ui event sent", map[string]any{"connectionId": string(cid), "sessionId": string(sid), "ordinal": fmt.Sprintf("%d", ord), "uiEvent": event.Name})
 		},
-		OnClientFrame: func(cid evtstream.ConnectionId, frame map[string]any) {
+		OnClientFrame: func(cid sessionstream.ConnectionId, frame map[string]any) {
 			frame["connectionId"] = string(cid)
 			e.appendPhase3Trace("client-frame", "phase 3 client frame received", frame)
 		},
@@ -97,11 +97,11 @@ func (e *labEnvironment) newPhase3State() (*phase3State, error) {
 		return nil, err
 	}
 
-	hub, err := evtstream.NewHub(
-		evtstream.WithSchemaRegistry(reg),
-		evtstream.WithHydrationStore(store),
-		evtstream.WithUIFanout(wsServer),
-		evtstream.WithSessionMetadataFactory(func(_ context.Context, sid evtstream.SessionId) (any, error) {
+	hub, err := sessionstream.NewHub(
+		sessionstream.WithSchemaRegistry(reg),
+		sessionstream.WithHydrationStore(store),
+		sessionstream.WithUIFanout(wsServer),
+		sessionstream.WithSessionMetadataFactory(func(_ context.Context, sid sessionstream.SessionId) (any, error) {
 			meta := map[string]any{"sessionId": string(sid), "createdBy": "evtstream-systemlab", "lab": "phase3"}
 			e.mu.Lock()
 			defer e.mu.Unlock()
@@ -118,10 +118,10 @@ func (e *labEnvironment) newPhase3State() (*phase3State, error) {
 	if err := hub.RegisterCommand(phase3CommandName, e.handlePhase3Command); err != nil {
 		return nil, err
 	}
-	if err := hub.RegisterUIProjection(evtstream.UIProjectionFunc(e.phase3UIProjection)); err != nil {
+	if err := hub.RegisterUIProjection(sessionstream.UIProjectionFunc(e.phase3UIProjection)); err != nil {
 		return nil, err
 	}
-	if err := hub.RegisterTimelineProjection(evtstream.TimelineProjectionFunc(e.phase3TimelineProjection)); err != nil {
+	if err := hub.RegisterTimelineProjection(sessionstream.TimelineProjectionFunc(e.phase3TimelineProjection)); err != nil {
 		return nil, err
 	}
 
@@ -170,7 +170,7 @@ func (e *labEnvironment) RunPhase3(ctx context.Context, in phase3RunRequest) (ph
 		if state == nil {
 			return phase3RunResponse{}, fmt.Errorf("phase 3 state is not initialized")
 		}
-		err = state.hub.Submit(ctx, evtstream.SessionId(sessionID), phase3CommandName, payload)
+		err = state.hub.Submit(ctx, sessionstream.SessionId(sessionID), phase3CommandName, payload)
 	case "reset-phase3":
 		err = e.resetPhase3Only()
 	case "state":
@@ -206,7 +206,7 @@ func (e *labEnvironment) buildPhase3Response(action, sessionID, prompt string) (
 	hub := state.hub
 	e.mu.Unlock()
 
-	snap, err := hub.Snapshot(context.Background(), evtstream.SessionId(sessionID))
+	snap, err := hub.Snapshot(context.Background(), sessionstream.SessionId(sessionID))
 	if err != nil {
 		return phase3RunResponse{}, err
 	}
@@ -230,7 +230,7 @@ func (e *labEnvironment) buildPhase3Response(action, sessionID, prompt string) (
 	return resp, nil
 }
 
-func (e *labEnvironment) handlePhase3Command(ctx context.Context, cmd evtstream.Command, sess *evtstream.Session, pub evtstream.EventPublisher) error {
+func (e *labEnvironment) handlePhase3Command(ctx context.Context, cmd sessionstream.Command, sess *sessionstream.Session, pub sessionstream.EventPublisher) error {
 	sid := string(cmd.SessionId)
 	payload := protoStructMap(cmd.Payload)
 	prompt := strings.TrimSpace(toString(payload["prompt"]))
@@ -240,20 +240,20 @@ func (e *labEnvironment) handlePhase3Command(ctx context.Context, cmd evtstream.
 	messageID := e.nextPhase3MessageID()
 	e.appendPhase3Trace("handler", "phase 3 handler invoked", map[string]any{"sessionId": sid, "messageId": messageID, "hasSession": sess != nil})
 	started, _ := structpb.NewStruct(map[string]any{"messageId": messageID, "prompt": prompt})
-	if err := pub.Publish(ctx, evtstream.Event{Name: phase3EventStarted, SessionId: cmd.SessionId, Payload: started}); err != nil {
+	if err := pub.Publish(ctx, sessionstream.Event{Name: phase3EventStarted, SessionId: cmd.SessionId, Payload: started}); err != nil {
 		return err
 	}
 	for _, chunk := range splitPrompt(prompt) {
 		chunkPayload, _ := structpb.NewStruct(map[string]any{"messageId": messageID, "chunk": chunk})
-		if err := pub.Publish(ctx, evtstream.Event{Name: phase3EventChunk, SessionId: cmd.SessionId, Payload: chunkPayload}); err != nil {
+		if err := pub.Publish(ctx, sessionstream.Event{Name: phase3EventChunk, SessionId: cmd.SessionId, Payload: chunkPayload}); err != nil {
 			return err
 		}
 	}
 	finished, _ := structpb.NewStruct(map[string]any{"messageId": messageID, "text": prompt})
-	return pub.Publish(ctx, evtstream.Event{Name: phase3EventFinished, SessionId: cmd.SessionId, Payload: finished})
+	return pub.Publish(ctx, sessionstream.Event{Name: phase3EventFinished, SessionId: cmd.SessionId, Payload: finished})
 }
 
-func (e *labEnvironment) phase3UIProjection(_ context.Context, ev evtstream.Event, _ *evtstream.Session, _ evtstream.TimelineView) ([]evtstream.UIEvent, error) {
+func (e *labEnvironment) phase3UIProjection(_ context.Context, ev sessionstream.Event, _ *sessionstream.Session, _ sessionstream.TimelineView) ([]sessionstream.UIEvent, error) {
 	payload := protoStructMap(ev.Payload)
 	payload["ordinal"] = fmt.Sprintf("%d", ev.Ordinal)
 	pb, err := structpb.NewStruct(payload)
@@ -272,10 +272,10 @@ func (e *labEnvironment) phase3UIProjection(_ context.Context, ev evtstream.Even
 		return nil, nil
 	}
 	e.appendPhase3Trace("ui-projection", "phase 3 ui projection emitted event", map[string]any{"sessionId": string(ev.SessionId), "ordinal": fmt.Sprintf("%d", ev.Ordinal), "uiEvent": name, "sourceEvent": ev.Name})
-	return []evtstream.UIEvent{{Name: name, Payload: pb}}, nil
+	return []sessionstream.UIEvent{{Name: name, Payload: pb}}, nil
 }
 
-func (e *labEnvironment) phase3TimelineProjection(_ context.Context, ev evtstream.Event, _ *evtstream.Session, view evtstream.TimelineView) ([]evtstream.TimelineEntity, error) {
+func (e *labEnvironment) phase3TimelineProjection(_ context.Context, ev sessionstream.Event, _ *sessionstream.Session, view sessionstream.TimelineView) ([]sessionstream.TimelineEntity, error) {
 	payload := protoStructMap(ev.Payload)
 	messageID := toString(payload["messageId"])
 	if messageID == "" {
@@ -303,7 +303,7 @@ func (e *labEnvironment) phase3TimelineProjection(_ context.Context, ev evtstrea
 		return nil, err
 	}
 	e.appendPhase3Trace("timeline-projection", "phase 3 timeline projection upserted entity", map[string]any{"sessionId": string(ev.SessionId), "entityId": messageID, "ordinal": fmt.Sprintf("%d", ev.Ordinal), "sourceEvent": ev.Name})
-	return []evtstream.TimelineEntity{{Kind: phase3TimelineEntity, Id: messageID, Payload: pb}}, nil
+	return []sessionstream.TimelineEntity{{Kind: phase3TimelineEntity, Id: messageID, Payload: pb}}, nil
 }
 
 func (e *labEnvironment) appendPhase3Trace(kind, message string, details map[string]any) {
@@ -411,7 +411,7 @@ func renderPhase3Markdown(resp phase3RunResponse) string {
 	return "# Phase 3 Transcript\n\n```json\n" + string(body) + "\n```\n"
 }
 
-func currentEntityMapForKind(view evtstream.TimelineView, kind, id string) map[string]any {
+func currentEntityMapForKind(view sessionstream.TimelineView, kind, id string) map[string]any {
 	entity, ok := view.Get(kind, id)
 	if !ok || entity.Payload == nil {
 		return map[string]any{}

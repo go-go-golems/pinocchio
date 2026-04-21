@@ -6,10 +6,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-go-golems/pinocchio/pkg/evtstream"
-	chatapp "github.com/go-go-golems/pinocchio/pkg/evtstream/apps/chat"
-	storememory "github.com/go-go-golems/pinocchio/pkg/evtstream/hydration/memory"
-	wstransport "github.com/go-go-golems/pinocchio/pkg/evtstream/transport/ws"
+	chatapp "github.com/go-go-golems/pinocchio/pkg/chatapp"
+	sessionstream "github.com/go-go-golems/sessionstream"
+	storememory "github.com/go-go-golems/sessionstream/hydration/memory"
+	wstransport "github.com/go-go-golems/sessionstream/transport/ws"
 )
 
 type phase4RunRequest struct {
@@ -30,7 +30,7 @@ type phase4RunResponse struct {
 }
 
 type phase4State struct {
-	hub     *evtstream.Hub
+	hub     *sessionstream.Hub
 	store   *storememory.Store
 	ws      *wstransport.Server
 	engine  *chatapp.Engine
@@ -42,24 +42,24 @@ type phase4State struct {
 func (e *labEnvironment) newPhase4State() (*phase4State, error) {
 	state := &phase4State{}
 	store := storememory.New()
-	reg := evtstream.NewSchemaRegistry()
+	reg := sessionstream.NewSchemaRegistry()
 	if err := chatapp.RegisterSchemas(reg); err != nil {
 		return nil, err
 	}
 	wsServer, err := wstransport.NewServer(hydrationSnapshotProvider{store: store}, wstransport.WithHooks(wstransport.Hooks{
-		OnConnect: func(cid evtstream.ConnectionId) {
+		OnConnect: func(cid sessionstream.ConnectionId) {
 			e.appendPhase4Trace("transport", "phase 4 websocket connected", map[string]any{"connectionId": string(cid)})
 		},
-		OnDisconnect: func(cid evtstream.ConnectionId) {
+		OnDisconnect: func(cid sessionstream.ConnectionId) {
 			e.appendPhase4Trace("transport", "phase 4 websocket disconnected", map[string]any{"connectionId": string(cid)})
 		},
-		OnSubscribe: func(cid evtstream.ConnectionId, sid evtstream.SessionId, since uint64) {
+		OnSubscribe: func(cid sessionstream.ConnectionId, sid sessionstream.SessionId, since uint64) {
 			e.appendPhase4Trace("transport", "phase 4 subscribed", map[string]any{"connectionId": string(cid), "sessionId": string(sid), "sinceOrdinal": fmt.Sprintf("%d", since)})
 		},
-		OnSnapshotSent: func(cid evtstream.ConnectionId, sid evtstream.SessionId, snap evtstream.Snapshot) {
+		OnSnapshotSent: func(cid sessionstream.ConnectionId, sid sessionstream.SessionId, snap sessionstream.Snapshot) {
 			e.appendPhase4Trace("transport", "phase 4 snapshot sent", map[string]any{"connectionId": string(cid), "sessionId": string(sid), "ordinal": fmt.Sprintf("%d", snap.Ordinal), "entityCount": len(snap.Entities)})
 		},
-		OnUIEventSent: func(cid evtstream.ConnectionId, sid evtstream.SessionId, ord uint64, event evtstream.UIEvent) {
+		OnUIEventSent: func(cid sessionstream.ConnectionId, sid sessionstream.SessionId, ord uint64, event sessionstream.UIEvent) {
 			details := protoStructMap(event.Payload)
 			details["connectionId"] = string(cid)
 			details["sessionId"] = string(sid)
@@ -83,10 +83,10 @@ func (e *labEnvironment) newPhase4State() (*phase4State, error) {
 		}),
 	)
 
-	hub, err := evtstream.NewHub(
-		evtstream.WithSchemaRegistry(reg),
-		evtstream.WithHydrationStore(store),
-		evtstream.WithUIFanout(wsServer),
+	hub, err := sessionstream.NewHub(
+		sessionstream.WithSchemaRegistry(reg),
+		sessionstream.WithHydrationStore(store),
+		sessionstream.WithUIFanout(wsServer),
 	)
 	if err != nil {
 		return nil, err
@@ -142,12 +142,12 @@ func (e *labEnvironment) RunPhase4(ctx context.Context, in phase4RunRequest) (ph
 	switch action {
 	case "send":
 		e.appendPhase4Trace("control", "phase 4 send requested", map[string]any{"sessionId": sessionID, "prompt": prompt})
-		err = state.service.SubmitPrompt(ctx, evtstream.SessionId(sessionID), prompt)
+		err = state.service.SubmitPrompt(ctx, sessionstream.SessionId(sessionID), prompt)
 	case "stop":
 		e.appendPhase4Trace("control", "phase 4 stop requested", map[string]any{"sessionId": sessionID})
-		err = state.service.Stop(ctx, evtstream.SessionId(sessionID))
+		err = state.service.Stop(ctx, sessionstream.SessionId(sessionID))
 	case "await-idle":
-		err = state.service.WaitIdle(ctx, evtstream.SessionId(sessionID))
+		err = state.service.WaitIdle(ctx, sessionstream.SessionId(sessionID))
 	case "reset-phase4":
 		err = e.resetPhase4Only()
 	case "state":
@@ -181,7 +181,7 @@ func (e *labEnvironment) buildPhase4Response(action, sessionID, prompt string) (
 	wsServer := state.ws
 	service := state.service
 	e.mu.Unlock()
-	snap, err := service.Snapshot(context.Background(), evtstream.SessionId(sessionID))
+	snap, err := service.Snapshot(context.Background(), sessionstream.SessionId(sessionID))
 	if err != nil {
 		return phase4RunResponse{}, err
 	}

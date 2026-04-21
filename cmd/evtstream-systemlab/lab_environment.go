@@ -7,8 +7,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/go-go-golems/pinocchio/pkg/evtstream"
-	storememory "github.com/go-go-golems/pinocchio/pkg/evtstream/hydration/memory"
+	sessionstream "github.com/go-go-golems/sessionstream"
+	storememory "github.com/go-go-golems/sessionstream/hydration/memory"
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
@@ -53,9 +53,9 @@ type traceEntry struct {
 
 type labEnvironment struct {
 	mu          sync.Mutex
-	hub         *evtstream.Hub
+	hub         *sessionstream.Hub
 	store       *storememory.Store
-	reg         *evtstream.SchemaRegistry
+	reg         *sessionstream.SchemaRegistry
 	sessionMeta map[string]map[string]any
 	traces      map[string][]traceEntry
 	uiEvents    map[string][]namedPayload
@@ -85,7 +85,7 @@ func (e *labEnvironment) Reset() error {
 	}
 
 	store := storememory.New()
-	reg := evtstream.NewSchemaRegistry()
+	reg := sessionstream.NewSchemaRegistry()
 	for _, err := range []error{
 		reg.RegisterCommand(phase1CommandName, &structpb.Struct{}),
 		reg.RegisterEvent(phase1EventStarted, &structpb.Struct{}),
@@ -101,10 +101,10 @@ func (e *labEnvironment) Reset() error {
 		}
 	}
 
-	hub, err := evtstream.NewHub(
-		evtstream.WithSchemaRegistry(reg),
-		evtstream.WithHydrationStore(store),
-		evtstream.WithSessionMetadataFactory(func(_ context.Context, sid evtstream.SessionId) (any, error) {
+	hub, err := sessionstream.NewHub(
+		sessionstream.WithSchemaRegistry(reg),
+		sessionstream.WithHydrationStore(store),
+		sessionstream.WithSessionMetadataFactory(func(_ context.Context, sid sessionstream.SessionId) (any, error) {
 			meta := map[string]any{
 				"sessionId": string(sid),
 				"createdBy": "evtstream-systemlab",
@@ -123,10 +123,10 @@ func (e *labEnvironment) Reset() error {
 	if err := hub.RegisterCommand(phase1CommandName, e.handlePhase1Command); err != nil {
 		return err
 	}
-	if err := hub.RegisterUIProjection(evtstream.UIProjectionFunc(e.phase1UIProjection)); err != nil {
+	if err := hub.RegisterUIProjection(sessionstream.UIProjectionFunc(e.phase1UIProjection)); err != nil {
 		return err
 	}
-	if err := hub.RegisterTimelineProjection(evtstream.TimelineProjectionFunc(e.phase1TimelineProjection)); err != nil {
+	if err := hub.RegisterTimelineProjection(sessionstream.TimelineProjectionFunc(e.phase1TimelineProjection)); err != nil {
 		return err
 	}
 
@@ -189,7 +189,7 @@ func (e *labEnvironment) RunPhase1(ctx context.Context, in phase1RunRequest) (ph
 	if err != nil {
 		return phase1RunResponse{}, err
 	}
-	err = e.hub.Submit(ctx, evtstream.SessionId(sessionID), commandName, payload)
+	err = e.hub.Submit(ctx, sessionstream.SessionId(sessionID), commandName, payload)
 
 	e.mu.Lock()
 	trace := append([]traceEntry(nil), e.traces[sessionID]...)
@@ -197,7 +197,7 @@ func (e *labEnvironment) RunPhase1(ctx context.Context, in phase1RunRequest) (ph
 	metadata := cloneMap(e.sessionMeta[sessionID])
 	e.mu.Unlock()
 
-	snap, snapErr := e.hub.Snapshot(ctx, evtstream.SessionId(sessionID))
+	snap, snapErr := e.hub.Snapshot(ctx, sessionstream.SessionId(sessionID))
 	if snapErr != nil {
 		return phase1RunResponse{}, snapErr
 	}
@@ -261,7 +261,7 @@ func (e *labEnvironment) ExportPhase1(sessionID, format string) (string, string,
 	}
 }
 
-func (e *labEnvironment) handlePhase1Command(ctx context.Context, cmd evtstream.Command, sess *evtstream.Session, pub evtstream.EventPublisher) error {
+func (e *labEnvironment) handlePhase1Command(ctx context.Context, cmd sessionstream.Command, sess *sessionstream.Session, pub sessionstream.EventPublisher) error {
 	sid := string(cmd.SessionId)
 	payload := cmd.Payload.(*structpb.Struct).AsMap()
 	prompt, _ := payload["prompt"].(string)
@@ -277,23 +277,23 @@ func (e *labEnvironment) handlePhase1Command(ctx context.Context, cmd evtstream.
 	})
 
 	started, _ := structpb.NewStruct(map[string]any{"messageId": messageID, "prompt": prompt})
-	if err := pub.Publish(ctx, evtstream.Event{Name: phase1EventStarted, SessionId: cmd.SessionId, Payload: started}); err != nil {
+	if err := pub.Publish(ctx, sessionstream.Event{Name: phase1EventStarted, SessionId: cmd.SessionId, Payload: started}); err != nil {
 		return err
 	}
 	for _, chunk := range splitPrompt(prompt) {
 		chunkPayload, _ := structpb.NewStruct(map[string]any{"messageId": messageID, "chunk": chunk})
-		if err := pub.Publish(ctx, evtstream.Event{Name: phase1EventChunk, SessionId: cmd.SessionId, Payload: chunkPayload}); err != nil {
+		if err := pub.Publish(ctx, sessionstream.Event{Name: phase1EventChunk, SessionId: cmd.SessionId, Payload: chunkPayload}); err != nil {
 			return err
 		}
 	}
 	finished, _ := structpb.NewStruct(map[string]any{"messageId": messageID, "text": prompt})
-	if err := pub.Publish(ctx, evtstream.Event{Name: phase1EventFinished, SessionId: cmd.SessionId, Payload: finished}); err != nil {
+	if err := pub.Publish(ctx, sessionstream.Event{Name: phase1EventFinished, SessionId: cmd.SessionId, Payload: finished}); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (e *labEnvironment) phase1UIProjection(_ context.Context, ev evtstream.Event, _ *evtstream.Session, _ evtstream.TimelineView) ([]evtstream.UIEvent, error) {
+func (e *labEnvironment) phase1UIProjection(_ context.Context, ev sessionstream.Event, _ *sessionstream.Session, _ sessionstream.TimelineView) ([]sessionstream.UIEvent, error) {
 	payload := ev.Payload.(*structpb.Struct)
 	var name string
 	switch ev.Name {
@@ -312,10 +312,10 @@ func (e *labEnvironment) phase1UIProjection(_ context.Context, ev evtstream.Even
 		"uiEvent":     name,
 		"ordinal":     ev.Ordinal,
 	})
-	return []evtstream.UIEvent{{Name: name, Payload: payload}}, nil
+	return []sessionstream.UIEvent{{Name: name, Payload: payload}}, nil
 }
 
-func (e *labEnvironment) phase1TimelineProjection(_ context.Context, ev evtstream.Event, _ *evtstream.Session, view evtstream.TimelineView) ([]evtstream.TimelineEntity, error) {
+func (e *labEnvironment) phase1TimelineProjection(_ context.Context, ev sessionstream.Event, _ *sessionstream.Session, view sessionstream.TimelineView) ([]sessionstream.TimelineEntity, error) {
 	payload := ev.Payload.(*structpb.Struct).AsMap()
 	messageID, _ := payload["messageId"].(string)
 	if messageID == "" {
@@ -350,7 +350,7 @@ func (e *labEnvironment) phase1TimelineProjection(_ context.Context, ev evtstrea
 		"entityId":    messageID,
 		"ordinal":     ev.Ordinal,
 	})
-	return []evtstream.TimelineEntity{{Kind: phase1TimelineEntity, Id: messageID, Payload: pb}}, nil
+	return []sessionstream.TimelineEntity{{Kind: phase1TimelineEntity, Id: messageID, Payload: pb}}, nil
 }
 
 func (e *labEnvironment) nextMessageID() string {
@@ -385,7 +385,7 @@ func splitPrompt(prompt string) []string {
 	return []string{prompt[:mid], prompt[mid:]}
 }
 
-func currentEntityMap(view evtstream.TimelineView, id string) map[string]any {
+func currentEntityMap(view sessionstream.TimelineView, id string) map[string]any {
 	entity, ok := view.Get(phase1TimelineEntity, id)
 	if !ok || entity.Payload == nil {
 		return map[string]any{}
@@ -396,7 +396,7 @@ func currentEntityMap(view evtstream.TimelineView, id string) map[string]any {
 	return map[string]any{}
 }
 
-func encodeSnapshot(snap evtstream.Snapshot) map[string]any {
+func encodeSnapshot(snap sessionstream.Snapshot) map[string]any {
 	entities := make([]map[string]any, 0, len(snap.Entities))
 	for _, entity := range snap.Entities {
 		payload := map[string]any{}

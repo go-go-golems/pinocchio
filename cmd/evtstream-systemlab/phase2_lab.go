@@ -11,8 +11,8 @@ import (
 	"github.com/ThreeDotsLabs/watermill"
 	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/ThreeDotsLabs/watermill/pubsub/gochannel"
-	"github.com/go-go-golems/pinocchio/pkg/evtstream"
-	storememory "github.com/go-go-golems/pinocchio/pkg/evtstream/hydration/memory"
+	sessionstream "github.com/go-go-golems/sessionstream"
+	storememory "github.com/go-go-golems/sessionstream/hydration/memory"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/structpb"
 )
@@ -60,7 +60,7 @@ type phase2MessageRecord struct {
 }
 
 type phase2State struct {
-	hub               *evtstream.Hub
+	hub               *sessionstream.Hub
 	store             *storememory.Store
 	cancel            context.CancelFunc
 	streamMode        string
@@ -86,7 +86,7 @@ func (e *labEnvironment) newPhase2State() (*phase2State, error) {
 		fanout:          map[string][]namedPayload{},
 	}
 	store := storememory.New()
-	reg := evtstream.NewSchemaRegistry()
+	reg := sessionstream.NewSchemaRegistry()
 	for _, err := range []error{
 		reg.RegisterCommand(phase2CommandName, &structpb.Struct{}),
 		reg.RegisterEvent(phase2EventName, &structpb.Struct{}),
@@ -99,10 +99,10 @@ func (e *labEnvironment) newPhase2State() (*phase2State, error) {
 	}
 
 	pubsub := gochannel.NewGoChannel(gochannel.Config{OutputChannelBuffer: 256}, watermill.NopLogger{})
-	hub, err := evtstream.NewHub(
-		evtstream.WithSchemaRegistry(reg),
-		evtstream.WithHydrationStore(store),
-		evtstream.WithSessionMetadataFactory(func(_ context.Context, sid evtstream.SessionId) (any, error) {
+	hub, err := sessionstream.NewHub(
+		sessionstream.WithSchemaRegistry(reg),
+		sessionstream.WithHydrationStore(store),
+		sessionstream.WithSessionMetadataFactory(func(_ context.Context, sid sessionstream.SessionId) (any, error) {
 			meta := map[string]any{
 				"sessionId": string(sid),
 				"createdBy": "evtstream-systemlab",
@@ -116,7 +116,7 @@ func (e *labEnvironment) newPhase2State() (*phase2State, error) {
 			}
 			return cloneMap(meta), nil
 		}),
-		evtstream.WithUIFanout(evtstream.UIFanoutFunc(func(_ context.Context, sid evtstream.SessionId, ord uint64, events []evtstream.UIEvent) error {
+		sessionstream.WithUIFanout(sessionstream.UIFanoutFunc(func(_ context.Context, sid sessionstream.SessionId, ord uint64, events []sessionstream.UIEvent) error {
 			e.mu.Lock()
 			defer e.mu.Unlock()
 			if e.phase2 == nil {
@@ -129,10 +129,10 @@ func (e *labEnvironment) newPhase2State() (*phase2State, error) {
 			}
 			return nil
 		})),
-		evtstream.WithEventBus(pubsub, pubsub,
-			evtstream.WithBusTopic("evtstream.phase2"),
-			evtstream.WithBusMessageMutator(e.phase2MessageMutator),
-			evtstream.WithBusObserver(evtstream.BusObserverHooks{
+		sessionstream.WithEventBus(pubsub, pubsub,
+			sessionstream.WithBusTopic("sessionstream.phase2"),
+			sessionstream.WithBusMessageMutator(e.phase2MessageMutator),
+			sessionstream.WithBusObserver(sessionstream.BusObserverHooks{
 				OnPublished: e.phase2Published,
 				OnConsumed:  e.phase2Consumed,
 			}),
@@ -144,10 +144,10 @@ func (e *labEnvironment) newPhase2State() (*phase2State, error) {
 	if err := hub.RegisterCommand(phase2CommandName, e.handlePhase2Command); err != nil {
 		return nil, err
 	}
-	if err := hub.RegisterUIProjection(evtstream.UIProjectionFunc(e.phase2UIProjection)); err != nil {
+	if err := hub.RegisterUIProjection(sessionstream.UIProjectionFunc(e.phase2UIProjection)); err != nil {
 		return nil, err
 	}
-	if err := hub.RegisterTimelineProjection(evtstream.TimelineProjectionFunc(e.phase2TimelineProjection)); err != nil {
+	if err := hub.RegisterTimelineProjection(sessionstream.TimelineProjectionFunc(e.phase2TimelineProjection)); err != nil {
 		return nil, err
 	}
 
@@ -183,7 +183,7 @@ func (e *labEnvironment) startPhase2() error {
 	state.publishCounters = map[string]int{}
 	state.syntheticSequence = 0
 	state.sessionMeta = map[string]map[string]any{}
-	e.phase2AppendTraceLocked("consumer", "phase 2 consumer started", map[string]any{"topic": "evtstream.phase2"})
+	e.phase2AppendTraceLocked("consumer", "phase 2 consumer started", map[string]any{"topic": "sessionstream.phase2"})
 	return nil
 }
 
@@ -270,18 +270,18 @@ func (e *labEnvironment) RunPhase2(ctx context.Context, in phase2RunRequest) (ph
 	var err error
 	switch action {
 	case "publish-a":
-		err = e.submitPhase2Command(ctx, hub, evtstream.SessionId(sessionA), e.nextPhase2Label(sessionA))
+		err = e.submitPhase2Command(ctx, hub, sessionstream.SessionId(sessionA), e.nextPhase2Label(sessionA))
 		if err == nil {
 			err = e.waitForPhase2Consumed(sessionA, beforeA+1)
 		}
 	case "publish-b":
-		err = e.submitPhase2Command(ctx, hub, evtstream.SessionId(sessionB), e.nextPhase2Label(sessionB))
+		err = e.submitPhase2Command(ctx, hub, sessionstream.SessionId(sessionB), e.nextPhase2Label(sessionB))
 		if err == nil {
 			err = e.waitForPhase2Consumed(sessionB, beforeB+1)
 		}
 	case "burst-a":
 		for i := 0; i < burstCount; i++ {
-			if err = e.submitPhase2Command(ctx, hub, evtstream.SessionId(sessionA), e.nextPhase2Label(sessionA)); err != nil {
+			if err = e.submitPhase2Command(ctx, hub, sessionstream.SessionId(sessionA), e.nextPhase2Label(sessionA)); err != nil {
 				break
 			}
 		}
@@ -335,7 +335,7 @@ func (e *labEnvironment) resetPhase2Only() error {
 	return e.startPhase2()
 }
 
-func (e *labEnvironment) submitPhase2Command(ctx context.Context, hub *evtstream.Hub, sid evtstream.SessionId, label string) error {
+func (e *labEnvironment) submitPhase2Command(ctx context.Context, hub *sessionstream.Hub, sid sessionstream.SessionId, label string) error {
 	payload, err := structpb.NewStruct(map[string]any{"label": label})
 	if err != nil {
 		return err
@@ -391,7 +391,7 @@ func (e *labEnvironment) buildPhase2Response(action, sessionA, sessionB string, 
 
 	snapshots := map[string]map[string]any{}
 	for _, sid := range uniqueStrings(sessionA, sessionB) {
-		snap, err := hub.Snapshot(context.Background(), evtstream.SessionId(sid))
+		snap, err := hub.Snapshot(context.Background(), sessionstream.SessionId(sid))
 		if err != nil {
 			return phase2RunResponse{}, err
 		}
@@ -451,7 +451,7 @@ func (e *labEnvironment) ExportPhase2(format string) (string, string, []byte, er
 	}
 }
 
-func (e *labEnvironment) handlePhase2Command(ctx context.Context, cmd evtstream.Command, sess *evtstream.Session, pub evtstream.EventPublisher) error {
+func (e *labEnvironment) handlePhase2Command(ctx context.Context, cmd sessionstream.Command, sess *sessionstream.Session, pub sessionstream.EventPublisher) error {
 	payload := protoStructMap(cmd.Payload)
 	label := strings.TrimSpace(toString(payload["label"]))
 	if label == "" {
@@ -471,20 +471,20 @@ func (e *labEnvironment) handlePhase2Command(ctx context.Context, cmd evtstream.
 	if err != nil {
 		return err
 	}
-	return pub.Publish(ctx, evtstream.Event{Name: phase2EventName, SessionId: cmd.SessionId, Payload: eventPayload})
+	return pub.Publish(ctx, sessionstream.Event{Name: phase2EventName, SessionId: cmd.SessionId, Payload: eventPayload})
 }
 
-func (e *labEnvironment) phase2UIProjection(_ context.Context, ev evtstream.Event, _ *evtstream.Session, _ evtstream.TimelineView) ([]evtstream.UIEvent, error) {
+func (e *labEnvironment) phase2UIProjection(_ context.Context, ev sessionstream.Event, _ *sessionstream.Session, _ sessionstream.TimelineView) ([]sessionstream.UIEvent, error) {
 	payload := protoStructMap(ev.Payload)
 	payload["ordinal"] = fmt.Sprintf("%d", ev.Ordinal)
 	pb, err := structpb.NewStruct(payload)
 	if err != nil {
 		return nil, err
 	}
-	return []evtstream.UIEvent{{Name: phase2UIEventName, Payload: pb}}, nil
+	return []sessionstream.UIEvent{{Name: phase2UIEventName, Payload: pb}}, nil
 }
 
-func (e *labEnvironment) phase2TimelineProjection(_ context.Context, ev evtstream.Event, _ *evtstream.Session, _ evtstream.TimelineView) ([]evtstream.TimelineEntity, error) {
+func (e *labEnvironment) phase2TimelineProjection(_ context.Context, ev sessionstream.Event, _ *sessionstream.Session, _ sessionstream.TimelineView) ([]sessionstream.TimelineEntity, error) {
 	payload := protoStructMap(ev.Payload)
 	label := toString(payload["label"])
 	entityPayload, err := structpb.NewStruct(map[string]any{
@@ -495,10 +495,10 @@ func (e *labEnvironment) phase2TimelineProjection(_ context.Context, ev evtstrea
 	if err != nil {
 		return nil, err
 	}
-	return []evtstream.TimelineEntity{{Kind: phase2TimelineEntity, Id: label, Payload: entityPayload}}, nil
+	return []sessionstream.TimelineEntity{{Kind: phase2TimelineEntity, Id: label, Payload: entityPayload}}, nil
 }
 
-func (e *labEnvironment) phase2MessageMutator(_ context.Context, _ evtstream.Event, msg *message.Message) error {
+func (e *labEnvironment) phase2MessageMutator(_ context.Context, _ sessionstream.Event, msg *message.Message) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if e.phase2 == nil {
@@ -510,14 +510,14 @@ func (e *labEnvironment) phase2MessageMutator(_ context.Context, _ evtstream.Eve
 	case "missing":
 		return nil
 	case "invalid":
-		msg.Metadata.Set(evtstream.MetadataKeyStreamID, fmt.Sprintf("invalid-%d", seq))
+		msg.Metadata.Set(sessionstream.MetadataKeyStreamID, fmt.Sprintf("invalid-%d", seq))
 	default:
-		msg.Metadata.Set(evtstream.MetadataKeyStreamID, fmt.Sprintf("1713560000123-%d", seq))
+		msg.Metadata.Set(sessionstream.MetadataKeyStreamID, fmt.Sprintf("1713560000123-%d", seq))
 	}
 	return nil
 }
 
-func (e *labEnvironment) phase2Published(_ context.Context, ev evtstream.Event, rec evtstream.BusRecord) {
+func (e *labEnvironment) phase2Published(_ context.Context, ev sessionstream.Event, rec sessionstream.BusRecord) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if e.phase2 == nil {
@@ -534,11 +534,11 @@ func (e *labEnvironment) phase2Published(_ context.Context, ev evtstream.Event, 
 	e.phase2AppendTraceLocked("publish", "phase 2 event published", map[string]any{
 		"messageId": rec.MessageID,
 		"sessionId": record.SessionID,
-		"streamId":  rec.Metadata[evtstream.MetadataKeyStreamID],
+		"streamId":  rec.Metadata[sessionstream.MetadataKeyStreamID],
 	})
 }
 
-func (e *labEnvironment) phase2Consumed(_ context.Context, ev evtstream.Event, rec evtstream.BusRecord) {
+func (e *labEnvironment) phase2Consumed(_ context.Context, ev sessionstream.Event, rec sessionstream.BusRecord) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if e.phase2 == nil {
@@ -557,7 +557,7 @@ func (e *labEnvironment) phase2Consumed(_ context.Context, ev evtstream.Event, r
 		"messageId": rec.MessageID,
 		"sessionId": string(ev.SessionId),
 		"ordinal":   fmt.Sprintf("%d", ev.Ordinal),
-		"streamId":  rec.Metadata[evtstream.MetadataKeyStreamID],
+		"streamId":  rec.Metadata[sessionstream.MetadataKeyStreamID],
 	})
 }
 

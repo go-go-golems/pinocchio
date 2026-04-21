@@ -9,10 +9,10 @@ import (
 
 	"github.com/ThreeDotsLabs/watermill"
 	"github.com/ThreeDotsLabs/watermill/pubsub/gochannel"
-	"github.com/go-go-golems/pinocchio/pkg/evtstream"
-	storememory "github.com/go-go-golems/pinocchio/pkg/evtstream/hydration/memory"
-	storesqlite "github.com/go-go-golems/pinocchio/pkg/evtstream/hydration/sqlite"
-	wstransport "github.com/go-go-golems/pinocchio/pkg/evtstream/transport/ws"
+	sessionstream "github.com/go-go-golems/sessionstream"
+	storememory "github.com/go-go-golems/sessionstream/hydration/memory"
+	storesqlite "github.com/go-go-golems/sessionstream/hydration/sqlite"
+	wstransport "github.com/go-go-golems/sessionstream/transport/ws"
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
@@ -21,7 +21,7 @@ const (
 	phase5EventName   = "RecordPersisted"
 	phase5UIEventName = "RecordObserved"
 	phase5EntityKind  = "RecordEntity"
-	phase5BusTopic    = "evtstream.phase5"
+	phase5BusTopic    = "sessionstream.phase5"
 )
 
 type phase5RunRequest struct {
@@ -46,13 +46,13 @@ type phase5RunResponse struct {
 
 type phase5Runtime struct {
 	mode   string
-	hub    *evtstream.Hub
+	hub    *sessionstream.Hub
 	ws     *wstransport.Server
-	store  evtstream.HydrationStore
+	store  sessionstream.HydrationStore
 	close  func() error
 	cancel context.CancelFunc
 	dbPath string
-	reg    *evtstream.SchemaRegistry
+	reg    *sessionstream.SchemaRegistry
 }
 
 type phase5State struct {
@@ -75,7 +75,7 @@ func (e *labEnvironment) newPhase5State(mode string, existingDBPath string) (*ph
 
 func (e *labEnvironment) buildPhase5Runtime(mode string, existingDBPath string) (*phase5Runtime, error) {
 	mode = normalizePhase5Mode(mode)
-	reg := evtstream.NewSchemaRegistry()
+	reg := sessionstream.NewSchemaRegistry()
 	for _, err := range []error{
 		reg.RegisterCommand(phase5CommandName, &structpb.Struct{}),
 		reg.RegisterEvent(phase5EventName, &structpb.Struct{}),
@@ -88,7 +88,7 @@ func (e *labEnvironment) buildPhase5Runtime(mode string, existingDBPath string) 
 	}
 
 	var (
-		store   evtstream.HydrationStore
+		store   sessionstream.HydrationStore
 		closeFn func() error
 		dbPath  string
 	)
@@ -118,19 +118,19 @@ func (e *labEnvironment) buildPhase5Runtime(mode string, existingDBPath string) 
 	}
 
 	wsServer, err := wstransport.NewServer(hydrationSnapshotProvider{store: store}, wstransport.WithHooks(wstransport.Hooks{
-		OnConnect: func(cid evtstream.ConnectionId) {
+		OnConnect: func(cid sessionstream.ConnectionId) {
 			e.appendPhase5Trace("transport", "phase 5 websocket connected", map[string]any{"connectionId": string(cid)})
 		},
-		OnDisconnect: func(cid evtstream.ConnectionId) {
+		OnDisconnect: func(cid sessionstream.ConnectionId) {
 			e.appendPhase5Trace("transport", "phase 5 websocket disconnected", map[string]any{"connectionId": string(cid)})
 		},
-		OnSubscribe: func(cid evtstream.ConnectionId, sid evtstream.SessionId, since uint64) {
+		OnSubscribe: func(cid sessionstream.ConnectionId, sid sessionstream.SessionId, since uint64) {
 			e.appendPhase5Trace("transport", "phase 5 subscribed", map[string]any{"connectionId": string(cid), "sessionId": string(sid), "sinceOrdinal": fmt.Sprintf("%d", since)})
 		},
-		OnSnapshotSent: func(cid evtstream.ConnectionId, sid evtstream.SessionId, snap evtstream.Snapshot) {
+		OnSnapshotSent: func(cid sessionstream.ConnectionId, sid sessionstream.SessionId, snap sessionstream.Snapshot) {
 			e.appendPhase5Trace("transport", "phase 5 snapshot sent", map[string]any{"connectionId": string(cid), "sessionId": string(sid), "ordinal": fmt.Sprintf("%d", snap.Ordinal), "entityCount": len(snap.Entities)})
 		},
-		OnUIEventSent: func(cid evtstream.ConnectionId, sid evtstream.SessionId, ord uint64, event evtstream.UIEvent) {
+		OnUIEventSent: func(cid sessionstream.ConnectionId, sid sessionstream.SessionId, ord uint64, event sessionstream.UIEvent) {
 			details := protoStructMap(event.Payload)
 			details["connectionId"] = string(cid)
 			details["sessionId"] = string(sid)
@@ -144,11 +144,11 @@ func (e *labEnvironment) buildPhase5Runtime(mode string, existingDBPath string) 
 	}
 
 	pubsub := gochannel.NewGoChannel(gochannel.Config{OutputChannelBuffer: 256}, watermill.NopLogger{})
-	hub, err := evtstream.NewHub(
-		evtstream.WithSchemaRegistry(reg),
-		evtstream.WithHydrationStore(store),
-		evtstream.WithUIFanout(wsServer),
-		evtstream.WithEventBus(pubsub, pubsub, evtstream.WithBusTopic(phase5BusTopic)),
+	hub, err := sessionstream.NewHub(
+		sessionstream.WithSchemaRegistry(reg),
+		sessionstream.WithHydrationStore(store),
+		sessionstream.WithUIFanout(wsServer),
+		sessionstream.WithEventBus(pubsub, pubsub, sessionstream.WithBusTopic(phase5BusTopic)),
 	)
 	if err != nil {
 		_ = closeFn()
@@ -158,11 +158,11 @@ func (e *labEnvironment) buildPhase5Runtime(mode string, existingDBPath string) 
 		_ = closeFn()
 		return nil, err
 	}
-	if err := hub.RegisterUIProjection(evtstream.UIProjectionFunc(e.phase5UIProjection)); err != nil {
+	if err := hub.RegisterUIProjection(sessionstream.UIProjectionFunc(e.phase5UIProjection)); err != nil {
 		_ = closeFn()
 		return nil, err
 	}
-	if err := hub.RegisterTimelineProjection(evtstream.TimelineProjectionFunc(e.phase5TimelineProjection)); err != nil {
+	if err := hub.RegisterTimelineProjection(sessionstream.TimelineProjectionFunc(e.phase5TimelineProjection)); err != nil {
 		_ = closeFn()
 		return nil, err
 	}
@@ -252,8 +252,8 @@ func (e *labEnvironment) RunPhase5(ctx context.Context, in phase5RunRequest) (ph
 		if buildErr != nil {
 			return phase5RunResponse{}, buildErr
 		}
-		before, _ := state.runtime.hub.Cursor(ctx, evtstream.SessionId(sessionID))
-		err = state.runtime.hub.Submit(ctx, evtstream.SessionId(sessionID), phase5CommandName, payload)
+		before, _ := state.runtime.hub.Cursor(ctx, sessionstream.SessionId(sessionID))
+		err = state.runtime.hub.Submit(ctx, sessionstream.SessionId(sessionID), phase5CommandName, payload)
 		if err == nil {
 			err = e.waitForPhase5Cursor(sessionID, before+1)
 		}
@@ -343,7 +343,7 @@ func (e *labEnvironment) buildPhase5Response(action, mode, sessionID, text strin
 }
 
 func (e *labEnvironment) phase5SnapshotFor(runtime *phase5Runtime, sessionID string) (map[string]any, error) {
-	snap, err := runtime.hub.Snapshot(context.Background(), evtstream.SessionId(sessionID))
+	snap, err := runtime.hub.Snapshot(context.Background(), sessionstream.SessionId(sessionID))
 	if err != nil {
 		return nil, err
 	}
@@ -361,7 +361,7 @@ func (e *labEnvironment) waitForPhase5Cursor(sessionID string, want uint64) erro
 		if state == nil || state.runtime == nil {
 			return fmt.Errorf("phase 5 runtime is not initialized")
 		}
-		cursor, err := state.runtime.hub.Cursor(context.Background(), evtstream.SessionId(sessionID))
+		cursor, err := state.runtime.hub.Cursor(context.Background(), sessionstream.SessionId(sessionID))
 		if err != nil {
 			return err
 		}
@@ -373,7 +373,7 @@ func (e *labEnvironment) waitForPhase5Cursor(sessionID string, want uint64) erro
 	return fmt.Errorf("timeout waiting for phase 5 cursor %d", want)
 }
 
-func (e *labEnvironment) handlePhase5Command(ctx context.Context, cmd evtstream.Command, _ *evtstream.Session, pub evtstream.EventPublisher) error {
+func (e *labEnvironment) handlePhase5Command(ctx context.Context, cmd sessionstream.Command, _ *sessionstream.Session, pub sessionstream.EventPublisher) error {
 	payload := protoStructMap(cmd.Payload)
 	text := strings.TrimSpace(toString(payload["text"]))
 	if text == "" {
@@ -384,10 +384,10 @@ func (e *labEnvironment) handlePhase5Command(ctx context.Context, cmd evtstream.
 	if err != nil {
 		return err
 	}
-	return pub.Publish(ctx, evtstream.Event{Name: phase5EventName, SessionId: cmd.SessionId, Payload: pb})
+	return pub.Publish(ctx, sessionstream.Event{Name: phase5EventName, SessionId: cmd.SessionId, Payload: pb})
 }
 
-func (e *labEnvironment) phase5UIProjection(_ context.Context, ev evtstream.Event, _ *evtstream.Session, _ evtstream.TimelineView) ([]evtstream.UIEvent, error) {
+func (e *labEnvironment) phase5UIProjection(_ context.Context, ev sessionstream.Event, _ *sessionstream.Session, _ sessionstream.TimelineView) ([]sessionstream.UIEvent, error) {
 	payload := protoStructMap(ev.Payload)
 	payload["ordinal"] = fmt.Sprintf("%d", ev.Ordinal)
 	pb, err := structpb.NewStruct(payload)
@@ -395,10 +395,10 @@ func (e *labEnvironment) phase5UIProjection(_ context.Context, ev evtstream.Even
 		return nil, err
 	}
 	e.appendPhase5Trace("ui-projection", "phase 5 ui projection emitted event", map[string]any{"sessionId": string(ev.SessionId), "ordinal": fmt.Sprintf("%d", ev.Ordinal), "text": payload["text"]})
-	return []evtstream.UIEvent{{Name: phase5UIEventName, Payload: pb}}, nil
+	return []sessionstream.UIEvent{{Name: phase5UIEventName, Payload: pb}}, nil
 }
 
-func (e *labEnvironment) phase5TimelineProjection(_ context.Context, ev evtstream.Event, _ *evtstream.Session, _ evtstream.TimelineView) ([]evtstream.TimelineEntity, error) {
+func (e *labEnvironment) phase5TimelineProjection(_ context.Context, ev sessionstream.Event, _ *sessionstream.Session, _ sessionstream.TimelineView) ([]sessionstream.TimelineEntity, error) {
 	payload := protoStructMap(ev.Payload)
 	id := fmt.Sprintf("record-%d", ev.Ordinal)
 	pb, err := structpb.NewStruct(map[string]any{"text": payload["text"], "ordinal": fmt.Sprintf("%d", ev.Ordinal)})
@@ -406,7 +406,7 @@ func (e *labEnvironment) phase5TimelineProjection(_ context.Context, ev evtstrea
 		return nil, err
 	}
 	e.appendPhase5Trace("timeline-projection", "phase 5 timeline projection upserted entity", map[string]any{"sessionId": string(ev.SessionId), "ordinal": fmt.Sprintf("%d", ev.Ordinal), "entityId": id})
-	return []evtstream.TimelineEntity{{Kind: phase5EntityKind, Id: id, Payload: pb}}, nil
+	return []sessionstream.TimelineEntity{{Kind: phase5EntityKind, Id: id, Payload: pb}}, nil
 }
 
 func (e *labEnvironment) appendPhase5Trace(kind, message string, details map[string]any) {
