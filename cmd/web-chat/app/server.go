@@ -12,12 +12,12 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/go-go-golems/pinocchio/pkg/evtstream"
-	chatapp "github.com/go-go-golems/pinocchio/pkg/evtstream/apps/chat"
-	storememory "github.com/go-go-golems/pinocchio/pkg/evtstream/hydration/memory"
-	storesqlite "github.com/go-go-golems/pinocchio/pkg/evtstream/hydration/sqlite"
-	wstransport "github.com/go-go-golems/pinocchio/pkg/evtstream/transport/ws"
+	chatapp "github.com/go-go-golems/pinocchio/pkg/chatapp"
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
+	sessionstream "github.com/go-go-golems/sessionstream"
+	storememory "github.com/go-go-golems/sessionstream/hydration/memory"
+	storesqlite "github.com/go-go-golems/sessionstream/hydration/sqlite"
+	wstransport "github.com/go-go-golems/sessionstream/transport/ws"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )
@@ -85,7 +85,7 @@ func NewServer(opts ...Option) (*Server, error) {
 		}
 	}
 
-	reg := evtstream.NewSchemaRegistry()
+	reg := sessionstream.NewSchemaRegistry()
 	if err := chatapp.RegisterSchemas(reg); err != nil {
 		return nil, err
 	}
@@ -99,10 +99,10 @@ func NewServer(opts ...Option) (*Server, error) {
 		return nil, err
 	}
 	engine := chatapp.NewEngine(chatapp.WithChunkDelay(s.chunkDelay))
-	hub, err := evtstream.NewHub(
-		evtstream.WithSchemaRegistry(reg),
-		evtstream.WithHydrationStore(store),
-		evtstream.WithUIFanout(ws),
+	hub, err := sessionstream.NewHub(
+		sessionstream.WithSchemaRegistry(reg),
+		sessionstream.WithHydrationStore(store),
+		sessionstream.WithUIFanout(ws),
 	)
 	if err != nil {
 		return nil, err
@@ -121,7 +121,7 @@ func NewServer(opts ...Option) (*Server, error) {
 	return s, nil
 }
 
-func newHydrationStore(s *Server, reg *evtstream.SchemaRegistry) (evtstream.HydrationStore, func() error, error) {
+func newHydrationStore(s *Server, reg *sessionstream.SchemaRegistry) (sessionstream.HydrationStore, func() error, error) {
 	if s == nil || reg == nil {
 		return nil, nil, fmt.Errorf("app server or schema registry is nil")
 	}
@@ -159,16 +159,16 @@ type hydrationSnapshotProvider struct {
 	server *Server
 }
 
-func (p *hydrationSnapshotProvider) Snapshot(_ context.Context, sid evtstream.SessionId) (evtstream.Snapshot, error) {
+func (p *hydrationSnapshotProvider) Snapshot(_ context.Context, sid sessionstream.SessionId) (sessionstream.Snapshot, error) {
 	if p == nil || p.server == nil {
-		return evtstream.Snapshot{}, fmt.Errorf("snapshot provider is not initialized")
+		return sessionstream.Snapshot{}, fmt.Errorf("snapshot provider is not initialized")
 	}
 	return p.server.Snapshot(sid)
 }
 
-func (s *Server) Snapshot(sessionID evtstream.SessionId) (evtstream.Snapshot, error) {
+func (s *Server) Snapshot(sessionID sessionstream.SessionId) (sessionstream.Snapshot, error) {
 	if s == nil || s.service == nil {
-		return evtstream.Snapshot{}, fmt.Errorf("server is not initialized")
+		return sessionstream.Snapshot{}, fmt.Errorf("server is not initialized")
 	}
 	return s.service.Snapshot(context.Background(), sessionID)
 }
@@ -196,7 +196,7 @@ func (s *Server) HandleSessionRoutes(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusNotFound, errorResponse{Error: "not found"})
 		return
 	}
-	sid := evtstream.SessionId(sessionID)
+	sid := sessionstream.SessionId(sessionID)
 	if sid == "" {
 		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "missing session id"})
 		return
@@ -220,7 +220,7 @@ func (s *Server) HandleWS(w http.ResponseWriter, r *http.Request) {
 	s.ws.ServeHTTP(w, r)
 }
 
-func (s *Server) handleSubmitMessage(w http.ResponseWriter, r *http.Request, sid evtstream.SessionId) {
+func (s *Server) handleSubmitMessage(w http.ResponseWriter, r *http.Request, sid sessionstream.SessionId) {
 	if r.Method != http.MethodPost {
 		writeJSON(w, http.StatusMethodNotAllowed, errorResponse{Error: "method not allowed"})
 		return
@@ -258,7 +258,7 @@ func (s *Server) handleSubmitMessage(w http.ResponseWriter, r *http.Request, sid
 	writeJSON(w, http.StatusOK, SubmitMessageResponse{SessionID: string(sid), Accepted: true, Status: "running", Profile: profile})
 }
 
-func (s *Server) handleSessionSnapshot(w http.ResponseWriter, r *http.Request, sid evtstream.SessionId) {
+func (s *Server) handleSessionSnapshot(w http.ResponseWriter, r *http.Request, sid sessionstream.SessionId) {
 	if r.Method != http.MethodGet {
 		writeJSON(w, http.StatusMethodNotAllowed, errorResponse{Error: "method not allowed"})
 		return
@@ -271,7 +271,7 @@ func (s *Server) handleSessionSnapshot(w http.ResponseWriter, r *http.Request, s
 	writeJSON(w, http.StatusOK, encodeSnapshotResponse(snap))
 }
 
-func encodeSnapshotResponse(snap evtstream.Snapshot) SessionSnapshotResponse {
+func encodeSnapshotResponse(snap sessionstream.Snapshot) SessionSnapshotResponse {
 	resp := SessionSnapshotResponse{
 		SessionID: string(snap.SessionId),
 		Ordinal:   fmt.Sprintf("%d", snap.Ordinal),
