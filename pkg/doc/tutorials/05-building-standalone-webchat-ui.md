@@ -399,7 +399,7 @@ for e in entities:
 
 ### 15.1 Integration tests (backend)
 
-Use patterns from the focused `cmd/web-chat/app/server_test.go` suite and the canonical evtstream-backed tests under `pkg/evtstream/apps/chat/chat_test.go`:
+Use patterns from the focused `cmd/web-chat/app/server_test.go` suite and the canonical evtstream-backed tests under `pkg/chatapp/chat_test.go`:
 
 - assert `/chat` returns `started` with IDs,
 - connect `/ws` and assert hello/pong behavior,

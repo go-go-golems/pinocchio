@@ -319,7 +319,8 @@ The projector supports an extension point via `handleTimelineHandlers()` which a
 | `pinocchio/pkg/webchat/timeline_projector.go` | Timeline hydration/projection |
 | `pinocchio/pkg/webchat/timeline_store.go` | TimelineStore interface |
 | `pinocchio/pkg/persistence/chatstore/timeline_store_sqlite.go` | SQLite implementation |
-| `pinocchio/pkg/evtstream/apps/chat/chat.go` | Canonical translation of runtime custom events such as agent-mode preview/commit into hydrated entities and UI events |
+| `pinocchio/pkg/chatapp/chat.go` | Canonical base chat translation/hydration for the live app cutover path |
+| `pinocchio/cmd/web-chat/agentmode_chat_feature.go` | App-owned agent-mode feature translation/projection layered onto the downstream chat package |
 | `pinocchio/pkg/middlewares/agentmode/` | Current agent-mode middleware, preview parser, and committed mode-switch event source |
 | `pinocchio/cmd/web-chat/proto/` | App-owned middleware/timeline proto schemas + Buf module (historical and optional app-owned contracts) |
 

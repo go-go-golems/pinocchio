@@ -28,7 +28,7 @@ This tutorial is written for a new intern developer working in `pinocchio/` who 
 5. React widget renderers display the entities,
 6. all ownership stays app-local under `cmd/web-chat`.
 
-The emphasis is not only "make it work," but "make it modular, testable, and maintainable." The examples in this tutorial use generic `myfeature` placeholders; for a current concrete reference, study `pkg/middlewares/agentmode`, `pkg/evtstream/apps/chat/chat.go`, and `cmd/web-chat/web/src/ws/wsManager.ts`.
+The emphasis is not only "make it work," but "make it modular, testable, and maintainable." The examples in this tutorial use generic `myfeature` placeholders; for a current concrete reference, study `pkg/middlewares/agentmode`, `pkg/chatapp/chat.go`, `cmd/web-chat/agentmode_chat_feature.go`, and `cmd/web-chat/web/src/ws/wsManager.ts`.
 
 ## What you will build
 
@@ -86,7 +86,7 @@ Read these files before coding:
   - `pkg/middlewares/agentmode/preview_event.go`
   - `pkg/middlewares/agentmode/protocol.go`
 - canonical backend translation/hydration:
-  - `pkg/evtstream/apps/chat/chat.go`
+  - `pkg/chatapp/chat.go`
 - backend startup wiring:
   - `cmd/web-chat/main.go`
   - `cmd/web-chat/middleware_definitions.go`
@@ -101,7 +101,7 @@ Read these files before coding:
 Study tests too:
 
 - backend translation/hydration tests:
-  - `pkg/evtstream/apps/chat/chat_test.go`
+  - `pkg/chatapp/chat_test.go`
 - frontend mapping tests:
   - `cmd/web-chat/web/src/ws/wsManager.test.ts`
 - middleware definition tests:
@@ -247,7 +247,7 @@ the registry and runtime-composer wiring app-owned under `cmd/web-chat`.
 
 Event emission alone does not reach frontend. You must map typed events to SEM frames.
 
-Use `semregistry.RegisterByType[...]` in your module backend file (same style as the explicit backend-to-UI event translation code in `pkg/evtstream/apps/chat/chat.go`).
+Use `semregistry.RegisterByType[...]` in your module backend file (same style as the explicit backend-to-UI event translation code in `pkg/chatapp/chat.go`).
 
 ### Core responsibilities
 
@@ -296,7 +296,7 @@ Avoid overloaded event types that need ad-hoc branching on many optional fields.
 
 SEM frames are transient unless projected to timeline entities.
 
-If you are extending the legacy SEM/timeline path, register handlers with `webchat.RegisterTimelineHandler(eventType, handler)` from module bootstrap. For the current canonical evtstream path, add the translation/projection in `pkg/evtstream/apps/chat/chat.go` and surface the result through hydrated snapshots/UI events.
+If you are extending the legacy SEM/timeline path, register handlers with `webchat.RegisterTimelineHandler(eventType, handler)` from module bootstrap. For the current canonical sessionstream-backed path, keep base chat translation/hydration in `pkg/chatapp/chat.go`, add app-owned feature translation/projection in a downstream file such as `cmd/web-chat/agentmode_chat_feature.go`, and surface the result through hydrated snapshots/UI events.
 
 ### Projection handler responsibilities
 
@@ -478,7 +478,7 @@ At minimum, add these tests:
 
 ### Backend tests
 
-Pattern to copy from focused backend translation/hydration tests such as `pkg/evtstream/apps/chat/chat_test.go`:
+Pattern to copy from focused backend translation/hydration tests such as `pkg/chatapp/chat_test.go`:
 
 - construct event (`NewThinkingModeStarted` style)
 - call `semregistry.Handle(ev)`

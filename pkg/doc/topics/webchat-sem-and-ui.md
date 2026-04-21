@@ -40,7 +40,7 @@ Pinocchio uses protobuf-authored contracts under the hood, but frames are transm
 
 - Shared/core SEM contracts are generated under `pinocchio/pkg/sem/pb/`.
 - App-owned web-chat proto sources live under `pinocchio/cmd/web-chat/proto/`.
-- Current canonical custom-event translation for the live app happens in `pinocchio/pkg/evtstream/apps/chat/chat.go`, and the frontend mapping lives in `pinocchio/cmd/web-chat/web/src/ws/wsManager.ts`.
+- Current canonical base chat translation/hydration for the live app happens in `pinocchio/pkg/chatapp/chat.go`, the app-owned `agentmode` feature lives in `pinocchio/cmd/web-chat/agentmode_chat_feature.go`, and the frontend mapping lives in `pinocchio/cmd/web-chat/web/src/ws/wsManager.ts`.
 
 ## Event Types
 
@@ -451,7 +451,8 @@ Event not appearing in UI?
 | File | Purpose |
 |------|---------|
 | `pinocchio/pkg/webchat/sem_translator.go` | Backend event translation for the legacy SEM path |
-| `pinocchio/pkg/evtstream/apps/chat/chat.go` | Canonical custom-event translation and hydration for the live app cutover path |
+| `pinocchio/pkg/chatapp/chat.go` | Canonical base chat translation and hydration for the live app cutover path |
+| `pinocchio/cmd/web-chat/agentmode_chat_feature.go` | App-owned agent-mode feature translation/projection layered onto the downstream chat package |
 | `pinocchio/cmd/web-chat/web/src/sem/registry.ts` | Frontend SEM registry for legacy/custom SEM handlers |
 | `pinocchio/cmd/web-chat/proto/` | App-owned middleware/timeline proto definitions |
 | `pinocchio/cmd/web-chat/web/src/ws/wsManager.ts` | Canonical frontend mapping from snapshots/UI events into timeline entities |

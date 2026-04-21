@@ -3,8 +3,8 @@ package chat
 import (
 	"time"
 
-	"github.com/go-go-golems/pinocchio/pkg/evtstream"
-	appchat "github.com/go-go-golems/pinocchio/pkg/evtstream/apps/chat"
+	appchat "github.com/go-go-golems/pinocchio/pkg/chatapp"
+	sessionstream "github.com/go-go-golems/sessionstream"
 )
 
 const (
@@ -44,14 +44,14 @@ func NewEngine(opts ...Option) *Engine {
 	return appchat.NewEngine(opts...)
 }
 
-func RegisterSchemas(reg *evtstream.SchemaRegistry) error {
+func RegisterSchemas(reg *sessionstream.SchemaRegistry) error {
 	return appchat.RegisterSchemas(reg)
 }
 
-func Install(hub *evtstream.Hub, engine *Engine) error {
+func Install(hub *sessionstream.Hub, engine *Engine) error {
 	return appchat.Install(hub, engine)
 }
 
-func NewService(hub *evtstream.Hub, engine *Engine) (*Service, error) {
+func NewService(hub *sessionstream.Hub, engine *Engine) (*Service, error) {
 	return appchat.NewService(hub, engine)
 }
