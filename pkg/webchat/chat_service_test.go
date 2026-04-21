@@ -20,7 +20,6 @@ func TestChatService_ResolveAndSubmitDelegateToConversationService(t *testing.T)
 	runtimeComposer := infruntime.RuntimeBuilderFunc(func(context.Context, infruntime.ConversationRuntimeRequest) (infruntime.ComposedRuntime, error) {
 		return infruntime.ComposedRuntime{
 			Engine:             noopEngine{},
-			Sink:               noopSink{},
 			RuntimeKey:         "default",
 			RuntimeFingerprint: "fp-default",
 		}, nil
@@ -29,6 +28,7 @@ func TestChatService_ResolveAndSubmitDelegateToConversationService(t *testing.T)
 		BaseCtx:         context.Background(),
 		RuntimeComposer: runtimeComposer,
 		BuildSubscriber: func(string) (message.Subscriber, bool, error) { return nil, false, nil },
+		BuildSink:       stubSinkBuilder,
 	})
 
 	svc, err := NewConversationService(ConversationServiceConfig{
@@ -94,7 +94,6 @@ func TestChatService_StartPromptWithRunner_PreservesQueueing(t *testing.T) {
 	runtimeComposer := infruntime.RuntimeBuilderFunc(func(context.Context, infruntime.ConversationRuntimeRequest) (infruntime.ComposedRuntime, error) {
 		return infruntime.ComposedRuntime{
 			Engine:             noopEngine{},
-			Sink:               noopSink{},
 			RuntimeKey:         "default",
 			RuntimeFingerprint: "fp-default",
 		}, nil
@@ -103,6 +102,7 @@ func TestChatService_StartPromptWithRunner_PreservesQueueing(t *testing.T) {
 		BaseCtx:         context.Background(),
 		RuntimeComposer: runtimeComposer,
 		BuildSubscriber: func(string) (message.Subscriber, bool, error) { return nil, false, nil },
+		BuildSink:       stubSinkBuilder,
 	})
 	svc, err := NewConversationService(ConversationServiceConfig{
 		BaseCtx:     context.Background(),
@@ -141,7 +141,6 @@ func TestChatService_StartPromptWithRunner_IdempotentReplayUsesStartedResponse(t
 	runtimeComposer := infruntime.RuntimeBuilderFunc(func(context.Context, infruntime.ConversationRuntimeRequest) (infruntime.ComposedRuntime, error) {
 		return infruntime.ComposedRuntime{
 			Engine:             noopEngine{},
-			Sink:               noopSink{},
 			RuntimeKey:         "default",
 			RuntimeFingerprint: "fp-default",
 		}, nil
@@ -150,6 +149,7 @@ func TestChatService_StartPromptWithRunner_IdempotentReplayUsesStartedResponse(t
 		BaseCtx:         context.Background(),
 		RuntimeComposer: runtimeComposer,
 		BuildSubscriber: func(string) (message.Subscriber, bool, error) { return nil, false, nil },
+		BuildSink:       stubSinkBuilder,
 	})
 	svc, err := NewConversationService(ConversationServiceConfig{
 		BaseCtx:     context.Background(),
@@ -188,7 +188,6 @@ func TestChatService_StartPromptWithRunner_QueuedReplayUsesPromotedStartedRespon
 	runtimeComposer := infruntime.RuntimeBuilderFunc(func(context.Context, infruntime.ConversationRuntimeRequest) (infruntime.ComposedRuntime, error) {
 		return infruntime.ComposedRuntime{
 			Engine:             noopEngine{},
-			Sink:               noopSink{},
 			RuntimeKey:         "default",
 			RuntimeFingerprint: "fp-default",
 		}, nil
@@ -197,6 +196,7 @@ func TestChatService_StartPromptWithRunner_QueuedReplayUsesPromotedStartedRespon
 		BaseCtx:         context.Background(),
 		RuntimeComposer: runtimeComposer,
 		BuildSubscriber: func(string) (message.Subscriber, bool, error) { return nil, false, nil },
+		BuildSink:       stubSinkBuilder,
 	})
 	svc, err := NewConversationService(ConversationServiceConfig{
 		BaseCtx:     context.Background(),

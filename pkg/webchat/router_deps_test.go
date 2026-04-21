@@ -21,9 +21,7 @@ func mustNewInMemoryStreamBackend(t *testing.T) StreamBackend {
 
 func stubRuntimeComposer() infruntime.RuntimeBuilder {
 	return infruntime.RuntimeBuilderFunc(func(context.Context, infruntime.ConversationRuntimeRequest) (infruntime.ComposedRuntime, error) {
-		return infruntime.ComposedRuntime{
-			Sink: noopSink{},
-		}, nil
+		return infruntime.ComposedRuntime{Engine: noopEngine{}}, nil
 	})
 }
 

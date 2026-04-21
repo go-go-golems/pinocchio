@@ -12,6 +12,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 
+	"github.com/go-go-golems/geppetto/pkg/events"
 	"github.com/go-go-golems/geppetto/pkg/inference/middleware"
 	"github.com/go-go-golems/geppetto/pkg/inference/toolloop"
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
@@ -106,10 +107,12 @@ func NewRouterFromDeps(ctx context.Context, deps RouterDeps, opts ...RouterOptio
 			StepController:     r.stepCtrl,
 			RuntimeComposer:    r.convRuntimeComposer(),
 			BuildSubscriber:    r.BuildSubscriber,
+			BuildSink:          r.convSinkBuilder(),
 			TimelineUpsertHook: r.TimelineUpsertHook,
 		})
 	} else {
 		r.cm.SetRuntimeComposer(r.convRuntimeComposer())
+		r.cm.SetSinkBuilder(r.convSinkBuilder())
 	}
 	if r.cm != nil {
 		r.cm.SetTimelineStore(r.timelineStore)
@@ -332,23 +335,6 @@ func (r *Router) convRuntimeComposer() infruntime.RuntimeBuilder {
 		if artifacts.Engine == nil {
 			return infruntime.ComposedRuntime{}, errors.New("runtime composer returned nil engine")
 		}
-		if artifacts.Sink == nil {
-			artifacts.Sink = middleware.NewWatermillSink(r.router.Publisher, topicForConv(req.ConvID))
-		}
-		if artifacts.WrapSink != nil {
-			wrapped, err := artifacts.WrapSink(artifacts.Sink)
-			if err != nil {
-				return infruntime.ComposedRuntime{}, err
-			}
-			artifacts.Sink = wrapped
-		}
-		if r.eventSinkWrapper != nil {
-			wrapped, err := r.eventSinkWrapper(req.ConvID, req, artifacts.Sink)
-			if err != nil {
-				return infruntime.ComposedRuntime{}, err
-			}
-			artifacts.Sink = wrapped
-		}
 		if strings.TrimSpace(artifacts.RuntimeKey) == "" {
 			artifacts.RuntimeKey = strings.TrimSpace(req.ProfileKey)
 		}
@@ -357,6 +343,34 @@ func (r *Router) convRuntimeComposer() infruntime.RuntimeBuilder {
 		}
 		return artifacts, nil
 	})
+}
+
+func (r *Router) convSinkBuilder() RuntimeEventSinkBuilder {
+	return func(req infruntime.ConversationRuntimeRequest, runtime infruntime.ComposedRuntime) (events.EventSink, error) {
+		if r == nil {
+			return nil, errors.New("router is nil")
+		}
+		if r.router == nil || r.router.Publisher == nil {
+			return nil, errors.New("event router publisher is not configured")
+		}
+		baseSink := middleware.NewWatermillSink(r.router.Publisher, topicForConv(req.ConvID))
+		var sink events.EventSink = baseSink
+		if runtime.WrapSink != nil {
+			wrapped, err := runtime.WrapSink(sink)
+			if err != nil {
+				return nil, err
+			}
+			sink = wrapped
+		}
+		if r.eventSinkWrapper != nil {
+			wrapped, err := r.eventSinkWrapper(req.ConvID, req, sink)
+			if err != nil {
+				return nil, err
+			}
+			sink = wrapped
+		}
+		return sink, nil
+	}
 }
 
 // BuildSubscriber exposes the subscriber builder for external use.

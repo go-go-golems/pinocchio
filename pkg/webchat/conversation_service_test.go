@@ -52,11 +52,14 @@ type noopSink struct{}
 
 func (noopSink) PublishEvent(events.Event) error { return nil }
 
+func stubSinkBuilder(infruntime.ConversationRuntimeRequest, infruntime.ComposedRuntime) (events.EventSink, error) {
+	return noopSink{}, nil
+}
+
 func TestConversationService_SubmitPromptQueuesWhenConversationBusy(t *testing.T) {
 	runtimeComposer := infruntime.RuntimeBuilderFunc(func(context.Context, infruntime.ConversationRuntimeRequest) (infruntime.ComposedRuntime, error) {
 		return infruntime.ComposedRuntime{
 			Engine:             noopEngine{},
-			Sink:               noopSink{},
 			RuntimeKey:         "default",
 			RuntimeFingerprint: "fp-default",
 		}, nil
@@ -65,6 +68,7 @@ func TestConversationService_SubmitPromptQueuesWhenConversationBusy(t *testing.T
 		BaseCtx:         context.Background(),
 		RuntimeComposer: runtimeComposer,
 		BuildSubscriber: func(string) (message.Subscriber, bool, error) { return nil, false, nil },
+		BuildSink:       stubSinkBuilder,
 	})
 	conv := &Conversation{
 		ID:                 "conv-1",
@@ -110,7 +114,6 @@ func TestEnsureLLMStateUsesLockedRuntimeFingerprintSnapshotForFallback(t *testin
 		conv.mu.Unlock()
 		return infruntime.ComposedRuntime{
 			Engine:             noopEngine{},
-			Sink:               noopSink{},
 			RuntimeKey:         "default",
 			RuntimeFingerprint: "",
 			SeedSystemPrompt:   "seed",
@@ -120,6 +123,7 @@ func TestEnsureLLMStateUsesLockedRuntimeFingerprintSnapshotForFallback(t *testin
 		BaseCtx:         context.Background(),
 		RuntimeComposer: runtimeComposer,
 		BuildSubscriber: func(string) (message.Subscriber, bool, error) { return nil, false, nil },
+		BuildSink:       stubSinkBuilder,
 	})
 	conv = &Conversation{
 		ID:                 "conv-fallback-fingerprint",
@@ -140,7 +144,6 @@ func TestConversationService_ResolveAndEnsureConversation_DefaultsAndLifecycle(t
 	runtimeComposer := infruntime.RuntimeBuilderFunc(func(context.Context, infruntime.ConversationRuntimeRequest) (infruntime.ComposedRuntime, error) {
 		return infruntime.ComposedRuntime{
 			Engine:             noopEngine{},
-			Sink:               noopSink{},
 			RuntimeKey:         "default",
 			RuntimeFingerprint: "fp-default",
 			SeedSystemPrompt:   "seed",
@@ -150,6 +153,7 @@ func TestConversationService_ResolveAndEnsureConversation_DefaultsAndLifecycle(t
 		BaseCtx:         context.Background(),
 		RuntimeComposer: runtimeComposer,
 		BuildSubscriber: func(string) (message.Subscriber, bool, error) { return nil, false, nil },
+		BuildSink:       stubSinkBuilder,
 	})
 	svc, err := NewConversationService(ConversationServiceConfig{
 		BaseCtx:     context.Background(),
@@ -178,7 +182,6 @@ func TestConversationService_ResolveAndEnsureConversation_RebuildsOnProfileVersi
 		engineID := fmt.Sprintf("eng-v%d-call-%d", req.ProfileVersion, callCount)
 		return infruntime.ComposedRuntime{
 			Engine:             &versionedEngine{id: engineID},
-			Sink:               noopSink{},
 			RuntimeKey:         "default",
 			RuntimeFingerprint: fmt.Sprintf("fp-v%d", req.ProfileVersion),
 		}, nil
@@ -187,6 +190,7 @@ func TestConversationService_ResolveAndEnsureConversation_RebuildsOnProfileVersi
 		BaseCtx:         context.Background(),
 		RuntimeComposer: runtimeComposer,
 		BuildSubscriber: func(string) (message.Subscriber, bool, error) { return nil, false, nil },
+		BuildSink:       stubSinkBuilder,
 	})
 	svc, err := NewConversationService(ConversationServiceConfig{
 		BaseCtx:     context.Background(),
@@ -241,7 +245,6 @@ func TestConversationService_SubmitPromptRejectsMissingPrompt(t *testing.T) {
 	runtimeComposer := infruntime.RuntimeBuilderFunc(func(context.Context, infruntime.ConversationRuntimeRequest) (infruntime.ComposedRuntime, error) {
 		return infruntime.ComposedRuntime{
 			Engine:             noopEngine{},
-			Sink:               noopSink{},
 			RuntimeKey:         "default",
 			RuntimeFingerprint: "fp-default",
 		}, nil
@@ -250,6 +253,7 @@ func TestConversationService_SubmitPromptRejectsMissingPrompt(t *testing.T) {
 		BaseCtx:         context.Background(),
 		RuntimeComposer: runtimeComposer,
 		BuildSubscriber: func(string) (message.Subscriber, bool, error) { return nil, false, nil },
+		BuildSink:       stubSinkBuilder,
 	})
 	svc, err := NewConversationService(ConversationServiceConfig{
 		BaseCtx:     context.Background(),
@@ -272,7 +276,6 @@ func TestConversationService_PrepareRunnerStart_ProvidesTransportEnvelopeWithout
 	runtimeComposer := infruntime.RuntimeBuilderFunc(func(context.Context, infruntime.ConversationRuntimeRequest) (infruntime.ComposedRuntime, error) {
 		return infruntime.ComposedRuntime{
 			Engine:             noopEngine{},
-			Sink:               noopSink{},
 			RuntimeKey:         "default",
 			RuntimeFingerprint: "fp-default",
 			SeedSystemPrompt:   "seed",
@@ -282,6 +285,7 @@ func TestConversationService_PrepareRunnerStart_ProvidesTransportEnvelopeWithout
 		BaseCtx:         context.Background(),
 		RuntimeComposer: runtimeComposer,
 		BuildSubscriber: func(string) (message.Subscriber, bool, error) { return nil, false, nil },
+		BuildSink:       stubSinkBuilder,
 	})
 	svc, err := NewConversationService(ConversationServiceConfig{
 		BaseCtx:     context.Background(),
@@ -308,7 +312,6 @@ func TestConversationService_AttachWebSocketValidatesArguments(t *testing.T) {
 	runtimeComposer := infruntime.RuntimeBuilderFunc(func(context.Context, infruntime.ConversationRuntimeRequest) (infruntime.ComposedRuntime, error) {
 		return infruntime.ComposedRuntime{
 			Engine:             noopEngine{},
-			Sink:               noopSink{},
 			RuntimeKey:         "default",
 			RuntimeFingerprint: "fp-default",
 		}, nil
@@ -317,6 +320,7 @@ func TestConversationService_AttachWebSocketValidatesArguments(t *testing.T) {
 		BaseCtx:         context.Background(),
 		RuntimeComposer: runtimeComposer,
 		BuildSubscriber: func(string) (message.Subscriber, bool, error) { return nil, false, nil },
+		BuildSink:       stubSinkBuilder,
 	})
 	svc, err := NewConversationService(ConversationServiceConfig{
 		BaseCtx:     context.Background(),

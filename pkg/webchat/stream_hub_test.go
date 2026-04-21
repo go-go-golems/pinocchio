@@ -21,7 +21,6 @@ func TestStreamHub_ResolveAndEnsureConversation_Defaults(t *testing.T) {
 	runtimeComposer := infruntime.RuntimeBuilderFunc(func(context.Context, infruntime.ConversationRuntimeRequest) (infruntime.ComposedRuntime, error) {
 		return infruntime.ComposedRuntime{
 			Engine:             noopEngine{},
-			Sink:               noopSink{},
 			RuntimeKey:         "default",
 			RuntimeFingerprint: "fp-default",
 			SeedSystemPrompt:   "seed",
@@ -31,6 +30,7 @@ func TestStreamHub_ResolveAndEnsureConversation_Defaults(t *testing.T) {
 		BaseCtx:         context.Background(),
 		RuntimeComposer: runtimeComposer,
 		BuildSubscriber: func(string) (message.Subscriber, bool, error) { return nil, false, nil },
+		BuildSink:       stubSinkBuilder,
 	})
 	hub, err := NewStreamHub(StreamHubConfig{
 		BaseCtx:     context.Background(),
@@ -54,7 +54,6 @@ func TestStreamHub_AttachWebSocketValidatesArguments(t *testing.T) {
 	runtimeComposer := infruntime.RuntimeBuilderFunc(func(context.Context, infruntime.ConversationRuntimeRequest) (infruntime.ComposedRuntime, error) {
 		return infruntime.ComposedRuntime{
 			Engine:             noopEngine{},
-			Sink:               noopSink{},
 			RuntimeKey:         "default",
 			RuntimeFingerprint: "fp-default",
 		}, nil
@@ -63,6 +62,7 @@ func TestStreamHub_AttachWebSocketValidatesArguments(t *testing.T) {
 		BaseCtx:         context.Background(),
 		RuntimeComposer: runtimeComposer,
 		BuildSubscriber: func(string) (message.Subscriber, bool, error) { return nil, false, nil },
+		BuildSink:       stubSinkBuilder,
 	})
 	hub, err := NewStreamHub(StreamHubConfig{
 		BaseCtx:     context.Background(),

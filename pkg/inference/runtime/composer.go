@@ -27,11 +27,9 @@ type EventSinkWrapper func(events.EventSink) (events.EventSink, error)
 type ComposedRuntime struct {
 	Engine engine.Engine
 	// WrapSink decorates an application-provided base sink with runtime-owned behavior.
-	// Canonical evtstream chat uses this to wrap its chat-owned runtime sink.
-	WrapSink EventSinkWrapper
-	// Sink is the concrete event sink used by legacy webchat conversation wiring after
-	// router-level sink assembly. New canonical code should prefer WrapSink.
-	Sink               events.EventSink
+	// Both canonical evtstream chat and legacy webchat now use this to keep sink decoration
+	// owned by runtime composition while letting the application provide the transport sink.
+	WrapSink           EventSinkWrapper
 	RuntimeFingerprint string
 	RuntimeKey         string
 

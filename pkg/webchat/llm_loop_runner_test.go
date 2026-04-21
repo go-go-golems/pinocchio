@@ -65,7 +65,6 @@ func TestLLMLoopRunner_StartFiltersRegisteredToolsAndPersistsTurns(t *testing.T)
 	runtimeComposer := infruntime.RuntimeBuilderFunc(func(_ context.Context, req infruntime.ConversationRuntimeRequest) (infruntime.ComposedRuntime, error) {
 		return infruntime.ComposedRuntime{
 			Engine:             noopEngine{},
-			Sink:               noopSink{},
 			RuntimeKey:         req.ProfileKey,
 			RuntimeFingerprint: "fp-tools",
 			SeedSystemPrompt:   "seed",
@@ -75,6 +74,7 @@ func TestLLMLoopRunner_StartFiltersRegisteredToolsAndPersistsTurns(t *testing.T)
 		BaseCtx:         context.Background(),
 		RuntimeComposer: runtimeComposer,
 		BuildSubscriber: func(string) (message.Subscriber, bool, error) { return nil, false, nil },
+		BuildSink:       stubSinkBuilder,
 	})
 	svc, err := NewConversationService(ConversationServiceConfig{
 		BaseCtx:     context.Background(),

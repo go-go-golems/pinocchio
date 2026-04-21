@@ -23,6 +23,10 @@ type RunLoop func(ctx context.Context, eng engine.Engine, t *turns.Turn, reg gep
 // EventSinkWrapper allows callers to wrap or replace the default event sink.
 type EventSinkWrapper func(convID string, req infruntime.ConversationRuntimeRequest, sink events.EventSink) (events.EventSink, error)
 
+// RuntimeEventSinkBuilder assembles the concrete conversation sink from an app-owned base sink
+// plus any runtime-owned and router-owned wrappers.
+type RuntimeEventSinkBuilder func(req infruntime.ConversationRuntimeRequest, runtime infruntime.ComposedRuntime) (events.EventSink, error)
+
 // Router wires HTTP endpoints, registries and conversation lifecycle.
 type Router struct {
 	baseCtx  context.Context

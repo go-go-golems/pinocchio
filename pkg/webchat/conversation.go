@@ -71,6 +71,7 @@ type ConvManager struct {
 
 	runtimeComposer infruntime.RuntimeBuilder
 	buildSubscriber func(convID string) (message.Subscriber, bool, error)
+	buildSink       RuntimeEventSinkBuilder
 
 	evictIdle     time.Duration
 	evictInterval time.Duration
@@ -90,6 +91,7 @@ type ConvManagerOptions struct {
 
 	RuntimeComposer infruntime.RuntimeBuilder
 	BuildSubscriber func(convID string) (message.Subscriber, bool, error)
+	BuildSink       RuntimeEventSinkBuilder
 }
 
 func NewConvManager(opts ConvManagerOptions) *ConvManager {
@@ -106,6 +108,7 @@ func NewConvManager(opts ConvManagerOptions) *ConvManager {
 		timelineUpsertHook: opts.TimelineUpsertHook,
 		runtimeComposer:    opts.RuntimeComposer,
 		buildSubscriber:    opts.BuildSubscriber,
+		buildSink:          opts.BuildSink,
 		evictIdle:          opts.EvictIdle,
 		evictInterval:      opts.EvictInterval,
 	}
@@ -135,6 +138,15 @@ func (cm *ConvManager) SetRuntimeComposer(composer infruntime.RuntimeBuilder) {
 	}
 	cm.mu.Lock()
 	cm.runtimeComposer = composer
+	cm.mu.Unlock()
+}
+
+func (cm *ConvManager) SetSinkBuilder(builder RuntimeEventSinkBuilder) {
+	if cm == nil || builder == nil {
+		return
+	}
+	cm.mu.Lock()
+	cm.buildSink = builder
 	cm.mu.Unlock()
 }
 
@@ -259,6 +271,20 @@ func (cm *ConvManager) timelineProjectorUpsertHook(conv *Conversation) func(enti
 // topicForConv computes the event topic for a conversation.
 func topicForConv(convID string) string { return "chat:" + convID }
 
+func (cm *ConvManager) buildConversationSink(req infruntime.ConversationRuntimeRequest, runtime infruntime.ComposedRuntime) (events.EventSink, error) {
+	if cm == nil || cm.buildSink == nil {
+		return nil, errors.New("conversation manager missing sink builder")
+	}
+	sink, err := cm.buildSink(req, runtime)
+	if err != nil {
+		return nil, err
+	}
+	if sink == nil {
+		return nil, errors.New("conversation sink builder returned nil sink")
+	}
+	return sink, nil
+}
+
 // GetOrCreate creates or reuses a conversation based on runtime fingerprint changes.
 func (cm *ConvManager) GetOrCreate(
 	convID, runtimeKey string,
@@ -271,7 +297,7 @@ func (cm *ConvManager) GetOrCreate(
 	if cm == nil {
 		return nil, errors.New("conversation manager is nil")
 	}
-	if cm.runtimeComposer == nil || cm.buildSubscriber == nil {
+	if cm.runtimeComposer == nil || cm.buildSubscriber == nil || cm.buildSink == nil {
 		return nil, errors.New("conversation manager missing dependencies")
 	}
 	req := infruntime.ConversationRuntimeRequest{
@@ -286,8 +312,8 @@ func (cm *ConvManager) GetOrCreate(
 	if err != nil {
 		return nil, err
 	}
-	if runtime.Sink == nil {
-		return nil, errors.New("runtime composer returned nil sink")
+	if runtime.Engine == nil {
+		return nil, errors.New("runtime composer returned nil engine")
 	}
 	if strings.TrimSpace(runtime.RuntimeKey) == "" {
 		runtime.RuntimeKey = runtimeKey
@@ -316,8 +342,13 @@ func (cm *ConvManager) GetOrCreate(
 		if c.timelineProj == nil && cm.timelineStore != nil {
 			c.timelineProj = NewTimelineProjector(c.ID, cm.timelineStore, cm.timelineProjectorUpsertHook(c))
 		}
+		runtimeChanged := c.RuntimeFingerprint != runtime.RuntimeFingerprint
 		c.mu.Unlock()
-		if c.RuntimeFingerprint != runtime.RuntimeFingerprint {
+		if runtimeChanged {
+			sink, err := cm.buildConversationSink(req, runtime)
+			if err != nil {
+				return nil, err
+			}
 			log.Info().
 				Str("component", "webchat").
 				Str("conv_id", convID).
@@ -339,7 +370,8 @@ func (cm *ConvManager) GetOrCreate(
 				}
 			}
 
-			c.Sink = runtime.Sink
+			c.mu.Lock()
+			c.Sink = sink
 			c.sub = sub
 			c.subClose = subClose
 			c.RuntimeKey = runtime.RuntimeKey
@@ -349,6 +381,7 @@ func (cm *ConvManager) GetOrCreate(
 			c.resolvedRuntime = resolvedRuntime
 			c.profileVersion = profileVersion
 			c.llm = nil
+			c.mu.Unlock()
 
 			c.stream = NewStreamCoordinator(
 				c.ID,
@@ -382,6 +415,10 @@ func (cm *ConvManager) GetOrCreate(
 		cm.persistConversationIndexToStore(timelineStore, c, "active", "")
 		return c, nil
 	}
+	sink, err := cm.buildConversationSink(req, runtime)
+	if err != nil {
+		return nil, err
+	}
 	sessionID := uuid.NewString()
 	conv := &Conversation{
 		ID:                        convID,
@@ -405,7 +442,7 @@ func (cm *ConvManager) GetOrCreate(
 	if err != nil {
 		return nil, err
 	}
-	conv.Sink = runtime.Sink
+	conv.Sink = sink
 	conv.sub = sub
 	conv.subClose = subClose
 
