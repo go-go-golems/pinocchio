@@ -399,7 +399,7 @@ for e in entities:
 
 ### 15.1 Integration tests (backend)
 
-Use patterns from `cmd/web-chat/app_owned_chat_integration_test.go`:
+Use patterns from the focused `cmd/web-chat/app/server_test.go` suite and the canonical evtstream-backed tests under `pkg/evtstream/apps/chat/chat_test.go`:
 
 - assert `/chat` returns `started` with IDs,
 - connect `/ws` and assert hello/pong behavior,
@@ -417,7 +417,7 @@ Recommended targets:
 
 Existing examples:
 
-- `cmd/web-chat/web/src/features/thinkingMode/registerThinkingMode.test.tsx`
+- `cmd/web-chat/web/src/ws/wsManager.test.ts`
 - `cmd/web-chat/web/src/debug-ui/ws/debugTimelineWsManager.test.ts`
 
 ### 15.3 Manual validation checklist

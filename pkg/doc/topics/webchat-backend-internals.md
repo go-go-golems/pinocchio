@@ -221,7 +221,7 @@ The projector is per-conversation: each `Conversation` creates its own projector
 | `tool.start` | `tool_call` | `pinocchio/proto/sem/timeline/tool.proto` | name, input, status=running |
 | `tool.done` | `tool_call` | `pinocchio/proto/sem/timeline/tool.proto` | status=completed, progress=1 |
 | `tool.result` | `tool_result` | `pinocchio/proto/sem/timeline/tool.proto` | Result (structured or raw) |
-| `thinking.mode.*` | `thinking_mode` | `pinocchio/cmd/web-chat/proto/sem/timeline/middleware.proto` | App-owned module projection |
+| `agent.mode` | `agent_mode` | evtstream chat snapshot/UI-event payloads | Canonical agent-mode projection in the cutover app |
 | `planning.*` | `planning` | `pinocchio/proto/sem/timeline/tool.proto` + planning aggregate schema | Aggregated from multiple events |
 | `execution.*` | (updates planning) | `pinocchio/proto/sem/timeline/tool.proto` + planning aggregate schema | Updates nested execution snapshot |
 
@@ -319,8 +319,9 @@ The projector supports an extension point via `handleTimelineHandlers()` which a
 | `pinocchio/pkg/webchat/timeline_projector.go` | Timeline hydration/projection |
 | `pinocchio/pkg/webchat/timeline_store.go` | TimelineStore interface |
 | `pinocchio/pkg/persistence/chatstore/timeline_store_sqlite.go` | SQLite implementation |
-| `pinocchio/cmd/web-chat/thinkingmode/backend.go` | App-owned `thinking.mode.*` SEM + projection handlers |
-| `pinocchio/cmd/web-chat/proto/` | App-owned middleware/timeline proto schemas + Buf module |
+| `pinocchio/pkg/evtstream/apps/chat/chat.go` | Canonical translation of runtime custom events such as agent-mode preview/commit into hydrated entities and UI events |
+| `pinocchio/pkg/middlewares/agentmode/` | Current agent-mode middleware, preview parser, and committed mode-switch event source |
+| `pinocchio/cmd/web-chat/proto/` | App-owned middleware/timeline proto schemas + Buf module (historical and optional app-owned contracts) |
 
 ## See Also
 

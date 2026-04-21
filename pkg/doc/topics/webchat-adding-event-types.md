@@ -94,7 +94,7 @@ events.PublishEventToContext(ctx, events.NewMyFeatureProgressEvent(meta, "analyz
 Protobuf messages define the contract between backend and frontend. There are two ownership locations:
 
 - **Shared/core messages** (`pinocchio/proto/sem/...`) — used by reusable webchat core flows
-- **App-owned messages** (`pinocchio/cmd/web-chat/proto/sem/...`) — used by app feature modules such as thinking-mode
+- **App-owned messages** (`pinocchio/cmd/web-chat/proto/sem/...`) — used by custom app-specific features owned by `cmd/web-chat`
 
 You may need one or both depending on whether the event is transient or persistent.
 
@@ -441,7 +441,7 @@ For reference, these are the currently registered event-to-entity mappings:
 | `log` | `log` | StatusWidget | Backend log messages |
 | `agent.mode` | `agent_mode` | GenericCard | Agent mode switch |
 | `debugger.pause` | `debugger_pause` | DebugPauseWidget | Step-controller pause |
-| `thinking.mode.*` | `thinking_mode` | ThinkingModeWidget | Thinking mode selection |
+| `agent.mode` | `agent_mode` | AgentModeCard | Canonical app-owned agent-mode card |
 | `planning.*` | `planning` | PlanningWidget | Planning run aggregation |
 | `execution.*` | (updates planning) | PlanningWidget | Execution phase of planning |
 

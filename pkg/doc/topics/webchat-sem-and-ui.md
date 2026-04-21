@@ -39,9 +39,8 @@ SEM events arrive as JSON frames:
 Pinocchio uses protobuf-authored contracts under the hood, but frames are transmitted as JSON for WebSocket compatibility.
 
 - Shared/core SEM contracts are generated under `pinocchio/pkg/sem/pb/`.
-- App-owned web-chat middleware contracts are generated under:
-  - `pinocchio/cmd/web-chat/thinkingmode/pb/` (Go)
-  - `pinocchio/cmd/web-chat/web/src/features/thinkingMode/pb/` (TS)
+- App-owned web-chat proto sources live under `pinocchio/cmd/web-chat/proto/`.
+- Current canonical custom-event translation for the live app happens in `pinocchio/pkg/evtstream/apps/chat/chat.go`, and the frontend mapping lives in `pinocchio/cmd/web-chat/web/src/ws/wsManager.ts`.
 
 ## Event Types
 
@@ -72,9 +71,8 @@ Pinocchio uses protobuf-authored contracts under the hood, but frames are transm
 | `log` | `{ message, level, fields? }` | Backend log message |
 | `agent.mode` | `{ title, data }` | Agent mode widget |
 | `debugger.pause` | `{ pauseId, phase, summary }` | Step-controller pause prompt |
-| `thinking.mode.started` | `{ mode, phase, reasoning }` | Thinking mode widget |
-| `thinking.mode.update` | `{ mode, phase, reasoning }` | Thinking mode widget update |
-| `thinking.mode.completed` | `{ mode, phase, reasoning, success }` | Thinking mode widget complete |
+| `agent.mode.preview` | `{ messageId, title, candidateMode, analysis, rawText }` | Provisional agent-mode preview card |
+| `agent.mode` | `{ messageId, title, from, to, analysis }` | Committed agent-mode card |
 | `timeline.upsert` | `{ entity, version }` | Durable timeline entity upsert |
 
 ## SEM Frame Payload Examples
@@ -276,18 +274,18 @@ type TimelineEntity = {
 | `tool_result` | Tool execution output | `tool.result` | `ToolResultWidget` |
 | `log` | Backend log/status messages | `log` | `StatusWidget` |
 
-#### Thinking and Planning Entities
+#### Agent and Planning Entities
 
 | Kind | Description | Created By | Widget |
 |------|-------------|------------|--------|
-| `thinking_mode` | Thinking mode selection indicator | `thinking.mode.*` | `ThinkingModeWidget` |
+| `agent_mode_preview` | Provisional agent-mode preview while structured output is still incomplete | `agent.mode.preview` | `AgentModeCard` |
+| `agent_mode` | Committed agent-mode switch card | `agent.mode` | `AgentModeCard` |
 | `planning` | Planning run with iterations and execution | `planning.*`, `execution.*` | `PlanningWidget` |
 
 #### UI / Interaction Entities
 
 | Kind | Description | Created By | Widget |
 |------|-------------|------------|--------|
-| `agent_mode` | Agent mode switch card | `agent.mode` | `GenericCard` |
 | `debugger_pause` | Step-controller pause prompt | `debugger.pause` | `DebugPauseWidget` |
 | `multiple_choice` | Multiple choice selection prompt | `multiple.choice.*` | `MultipleChoiceWidget` |
 | `default` | Fallback card for unknown kinds | (any unregistered kind) | `GenericCard` |
@@ -452,16 +450,15 @@ Event not appearing in UI?
 
 | File | Purpose |
 |------|---------|
-| `pinocchio/pkg/webchat/sem_translator.go` | Backend event translation |
-| `pinocchio/cmd/web-chat/thinkingmode/backend.go` | App-owned thinking-mode backend module (SEM + projection) |
-| `pinocchio/cmd/web-chat/web/src/sem/registry.ts` | Frontend SEM registry |
+| `pinocchio/pkg/webchat/sem_translator.go` | Backend event translation for the legacy SEM path |
+| `pinocchio/pkg/evtstream/apps/chat/chat.go` | Canonical custom-event translation and hydration for the live app cutover path |
+| `pinocchio/cmd/web-chat/web/src/sem/registry.ts` | Frontend SEM registry for legacy/custom SEM handlers |
 | `pinocchio/cmd/web-chat/proto/` | App-owned middleware/timeline proto definitions |
-| `pinocchio/cmd/web-chat/web/src/features/thinkingMode/registerThinkingMode.tsx` | App-owned thinking-mode frontend registration |
-| `pinocchio/cmd/web-chat/web/src/features/thinkingMode/pb/` | App-owned TS protobuf bindings |
-| `pinocchio/cmd/web-chat/web/src/sem/pb/` | Shared/core TS protobuf bindings |
+| `pinocchio/cmd/web-chat/web/src/ws/wsManager.ts` | Canonical frontend mapping from snapshots/UI events into timeline entities |
+| `pinocchio/cmd/web-chat/web/src/ws/wsManager.test.ts` | Focused tests for canonical agent-mode/custom-event mapping |
 | `pinocchio/cmd/web-chat/web/src/store/timelineSlice.ts` | Timeline state |
-| `pinocchio/cmd/web-chat/web/src/webchat/cards.tsx` | Default entity renderers |
-| `pinocchio/cmd/web-chat/web/src/webchat/ChatWidget.tsx` | Renderer wiring |
+| `pinocchio/cmd/web-chat/web/src/webchat/cards.tsx` | Default entity renderers including `AgentModeCard` |
+| `pinocchio/cmd/web-chat/web/src/webchat/rendererRegistry.ts` | Renderer wiring |
 
 ## See Also
 

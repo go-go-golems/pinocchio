@@ -59,9 +59,11 @@ No compatibility aliases are kept for these symbols. Consumers must migrate to t
 
 ## Cookie Literal Cleanup
 
-The repeated `chat_profile` literal is now centralized:
+The repeated `chat_profile` literal is now configured through the profiles package rather than the removed legacy shim:
 
-- `currentProfileCookieName` in `cmd/web-chat/profile_policy.go`
+- `CurrentProfileCookieName` in `cmd/web-chat/profiles/types.go`
+- route wiring in `cmd/web-chat/profiles/api.go`
+- current app usage in `cmd/web-chat/main.go`
 
 ## Migration Steps
 

@@ -19,7 +19,7 @@ SectionType: Tutorial
 
 ## Who this is for
 
-This tutorial is written for a new intern developer working in `pinocchio/` who needs to add a complete feature with the same architecture style as thinking-mode. You will implement a feature end-to-end:
+This tutorial is written for a new intern developer working in `pinocchio/` who needs to add a complete app-owned feature using the same ownership pattern as the current agentmode/custom-event flow. You will implement a feature end-to-end:
 
 1. backend middleware emits typed events,
 2. events are translated into SEM frames,
@@ -28,11 +28,11 @@ This tutorial is written for a new intern developer working in `pinocchio/` who 
 5. React widget renderers display the entities,
 6. all ownership stays app-local under `cmd/web-chat`.
 
-The emphasis is not only "make it work," but "make it modular, testable, and maintainable." The examples in this tutorial reference the current thinking-mode implementation and teach the reusable pattern.
+The emphasis is not only "make it work," but "make it modular, testable, and maintainable." The examples in this tutorial use generic `myfeature` placeholders; for a current concrete reference, study `pkg/middlewares/agentmode`, `pkg/evtstream/apps/chat/chat.go`, and `cmd/web-chat/web/src/ws/wsManager.ts`.
 
 ## What you will build
 
-You will build a feature module called `myfeature` that mirrors thinking-mode architecture:
+You will build a feature module called `myfeature` that follows the same app-owned custom-feature architecture:
 
 - backend module location: `cmd/web-chat/myfeature/`
 - frontend module location: `cmd/web-chat/web/src/features/myFeature/`
@@ -81,31 +81,31 @@ That split is the key design goal.
 
 Read these files before coding:
 
-- backend app module bootstrap:
-  - `cmd/web-chat/thinkingmode/backend.go`
-- backend app-owned event contracts:
-  - `cmd/web-chat/thinkingmode/events.go`
-- frontend app module registration:
-  - `cmd/web-chat/web/src/features/thinkingMode/registerThinkingMode.tsx`
+- backend middleware and typed events:
+  - `pkg/middlewares/agentmode/middleware.go`
+  - `pkg/middlewares/agentmode/preview_event.go`
+  - `pkg/middlewares/agentmode/protocol.go`
+- canonical backend translation/hydration:
+  - `pkg/evtstream/apps/chat/chat.go`
 - backend startup wiring:
   - `cmd/web-chat/main.go`
-- frontend startup wiring:
+  - `cmd/web-chat/middleware_definitions.go`
+- frontend startup and canonical mapping:
   - `cmd/web-chat/web/src/ws/wsManager.ts`
 - frontend renderer registry:
   - `cmd/web-chat/web/src/webchat/rendererRegistry.ts`
-- frontend props normalizer registry:
-  - `cmd/web-chat/web/src/sem/timelinePropsRegistry.ts`
-- timeline SEM registry:
+  - `cmd/web-chat/web/src/webchat/cards.tsx`
+- legacy/custom SEM registry reference (still useful when working on the older SEM path):
   - `cmd/web-chat/web/src/sem/registry.ts`
 
 Study tests too:
 
-- backend module tests:
-  - `cmd/web-chat/thinkingmode/backend_test.go`
-- frontend module tests:
-  - `cmd/web-chat/web/src/features/thinkingMode/registerThinkingMode.test.tsx`
-- isolation gate tests:
-  - `cmd/web-chat/thinkingmode/isolation_test.go`
+- backend translation/hydration tests:
+  - `pkg/evtstream/apps/chat/chat_test.go`
+- frontend mapping tests:
+  - `cmd/web-chat/web/src/ws/wsManager.test.ts`
+- middleware definition tests:
+  - `cmd/web-chat/middleware_definitions_test.go`
 
 ## Prerequisites and tooling
 
@@ -132,7 +132,7 @@ Use this rule:
 - if reusable across multiple binaries/apps in repo: candidate for `pkg/`
 - if specific to web-chat application behavior: place in `cmd/web-chat/`
 
-For thinking-mode-style features, choose app-owned by default unless you have a clear reuse requirement.
+For app-specific custom features, choose app-owned by default unless you have a clear reuse requirement.
 
 ### Ownership checklist
 
@@ -146,7 +146,7 @@ If yes, keep it under `cmd/web-chat`.
 
 Create event contracts in your module package, not in `pkg/inference/events`.
 
-Target pattern (from `cmd/web-chat/thinkingmode/events.go`):
+Target pattern (mirror the explicit typed-event style used by `pkg/middlewares/agentmode` preview events and the canonical chat app translators):
 
 - payload struct with typed fields
 - typed event structs embedding `gepevents.EventImpl`
@@ -247,7 +247,7 @@ the registry and runtime-composer wiring app-owned under `cmd/web-chat`.
 
 Event emission alone does not reach frontend. You must map typed events to SEM frames.
 
-Use `semregistry.RegisterByType[...]` in module backend file (same style as `registerSemTranslatorHandlers()` in `cmd/web-chat/thinkingmode/backend.go`).
+Use `semregistry.RegisterByType[...]` in your module backend file (same style as the explicit backend-to-UI event translation code in `pkg/evtstream/apps/chat/chat.go`).
 
 ### Core responsibilities
 
@@ -296,7 +296,7 @@ Avoid overloaded event types that need ad-hoc branching on many optional fields.
 
 SEM frames are transient unless projected to timeline entities.
 
-Register your handlers with `webchat.RegisterTimelineHandler(eventType, handler)` from module bootstrap (see `registerTimelineProjectionHandlers()` in `cmd/web-chat/thinkingmode/backend.go`).
+If you are extending the legacy SEM/timeline path, register handlers with `webchat.RegisterTimelineHandler(eventType, handler)` from module bootstrap. For the current canonical evtstream path, add the translation/projection in `pkg/evtstream/apps/chat/chat.go` and surface the result through hydrated snapshots/UI events.
 
 ### Projection handler responsibilities
 
@@ -444,10 +444,10 @@ Do not place app-owned schemas in shared `proto/sem/...`.
   - `cmd/web-chat/proto/buf.yaml`
   - `cmd/web-chat/proto/buf.gen.yaml`
 
-Generated outputs:
+Generated outputs for a new app-owned feature module would typically live alongside that feature, for example:
 
-- Go: `cmd/web-chat/thinkingmode/pb/*.pb.go`
-- TS: `cmd/web-chat/web/src/features/thinkingMode/pb/sem/.../*_pb.ts`
+- Go: `cmd/web-chat/myfeature/pb/*.pb.go`
+- TS: `cmd/web-chat/web/src/features/myFeature/pb/sem/.../*_pb.ts`
 
 ### Regeneration commands
 
@@ -478,7 +478,7 @@ At minimum, add these tests:
 
 ### Backend tests
 
-Pattern from `cmd/web-chat/thinkingmode/backend_test.go`:
+Pattern to copy from focused backend translation/hydration tests such as `pkg/evtstream/apps/chat/chat_test.go`:
 
 - construct event (`NewThinkingModeStarted` style)
 - call `semregistry.Handle(ev)`
@@ -493,7 +493,7 @@ Projection test:
 
 ### Frontend tests
 
-Pattern from `cmd/web-chat/web/src/features/thinkingMode/registerThinkingMode.test.tsx`:
+Pattern to copy from focused frontend mapping tests such as `cmd/web-chat/web/src/ws/wsManager.test.ts`:
 
 - clear registries
 - call `registerMyFeatureModule()`
@@ -503,7 +503,7 @@ Pattern from `cmd/web-chat/web/src/features/thinkingMode/registerThinkingMode.te
 
 ### Isolation gate test
 
-Pattern from `cmd/web-chat/thinkingmode/isolation_test.go`:
+Pattern to copy from a simple module-local isolation/boundary test in your own feature package:
 
 - scan source tree for feature markers
 - fail if markers appear outside allowed module paths
@@ -638,7 +638,7 @@ If you follow these six rules, your feature will scale with the architecture ins
 
 ## Final notes for interns
 
-When in doubt, copy the thinking-mode pattern first, then rename and simplify. Do not invent a new lifecycle shape unless your feature truly needs one.
+When in doubt, copy the current agentmode/custom-event pattern first, then rename and simplify. Do not invent a new lifecycle shape unless your feature truly needs one.
 
 Safe strategy:
 
@@ -930,7 +930,7 @@ Cause:
 
 Fix:
 
-- verify `webchat.RegisterTimelineHandler` calls exist,
+- if you are using the legacy SEM path, verify `webchat.RegisterTimelineHandler` calls exist,
 - verify projection decode path is not returning early due unmarshal failure,
 - inspect `/api/timeline?conv_id=...` payload.
 
