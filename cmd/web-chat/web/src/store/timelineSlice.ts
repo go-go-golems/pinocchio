@@ -96,6 +96,12 @@ export const timelineSlice = createSlice({
         props: { ...(existing.props ?? {}), ...(e.props ?? {}) },
       };
     },
+    deleteEntity(state, action: PayloadAction<string>) {
+      const id = action.payload;
+      if (!id || !state.byId[id]) return;
+      delete state.byId[id];
+      state.order = state.order.filter((entry) => entry !== id);
+    },
     clear(state) {
       state.byId = {};
       state.order = [];

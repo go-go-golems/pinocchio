@@ -13,6 +13,7 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/turns"
 	"github.com/go-go-golems/pinocchio/pkg/evtstream"
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
+	agentmode "github.com/go-go-golems/pinocchio/pkg/middlewares/agentmode"
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
@@ -25,14 +26,20 @@ const (
 	EventTokensDelta         = "ChatTokensDelta"
 	EventInferenceFinished   = "ChatInferenceFinished"
 	EventInferenceStopped    = "ChatInferenceStopped"
+	EventAgentModePreview    = "ChatAgentModePreviewUpdated"
+	EventAgentModeCommitted  = "ChatAgentModeCommitted"
 
-	UIMessageAccepted = "ChatMessageAccepted"
-	UIMessageStarted  = "ChatMessageStarted"
-	UIMessageAppended = "ChatMessageAppended"
-	UIMessageFinished = "ChatMessageFinished"
-	UIMessageStopped  = "ChatMessageStopped"
+	UIMessageAccepted       = "ChatMessageAccepted"
+	UIMessageStarted        = "ChatMessageStarted"
+	UIMessageAppended       = "ChatMessageAppended"
+	UIMessageFinished       = "ChatMessageFinished"
+	UIMessageStopped        = "ChatMessageStopped"
+	UIAgentModePreview      = "ChatAgentModePreviewUpdated"
+	UIAgentModeCommitted    = "ChatAgentModeCommitted"
+	UIAgentModePreviewClear = "ChatAgentModePreviewCleared"
 
 	TimelineEntityChatMessage = "ChatMessage"
+	TimelineEntityAgentMode   = "AgentMode"
 )
 
 type Hooks struct {
@@ -101,12 +108,18 @@ func RegisterSchemas(reg *evtstream.SchemaRegistry) error {
 		reg.RegisterEvent(EventTokensDelta, &structpb.Struct{}),
 		reg.RegisterEvent(EventInferenceFinished, &structpb.Struct{}),
 		reg.RegisterEvent(EventInferenceStopped, &structpb.Struct{}),
+		reg.RegisterEvent(EventAgentModePreview, &structpb.Struct{}),
+		reg.RegisterEvent(EventAgentModeCommitted, &structpb.Struct{}),
 		reg.RegisterUIEvent(UIMessageAccepted, &structpb.Struct{}),
 		reg.RegisterUIEvent(UIMessageStarted, &structpb.Struct{}),
 		reg.RegisterUIEvent(UIMessageAppended, &structpb.Struct{}),
 		reg.RegisterUIEvent(UIMessageFinished, &structpb.Struct{}),
 		reg.RegisterUIEvent(UIMessageStopped, &structpb.Struct{}),
+		reg.RegisterUIEvent(UIAgentModePreview, &structpb.Struct{}),
+		reg.RegisterUIEvent(UIAgentModeCommitted, &structpb.Struct{}),
+		reg.RegisterUIEvent(UIAgentModePreviewClear, &structpb.Struct{}),
 		reg.RegisterTimelineEntity(TimelineEntityChatMessage, &structpb.Struct{}),
+		reg.RegisterTimelineEntity(TimelineEntityAgentMode, &structpb.Struct{}),
 	} {
 		if err != nil {
 			return err
@@ -398,6 +411,24 @@ func (s *runtimeEventSink) PublishEvent(event gepevents.Event) error {
 			"status":    "stopped",
 			"streaming": false,
 		})
+	case *agentmode.EventModeSwitchPreview:
+		return s.engine.publish(context.Background(), s.sessionID, s.pub, EventAgentModePreview, map[string]any{
+			"messageId":     s.messageID,
+			"candidateMode": ev.CandidateMode,
+			"analysis":      ev.Analysis,
+			"parseState":    ev.ParseState,
+			"preview":       true,
+		})
+	case *gepevents.EventAgentModeSwitch:
+		payload := map[string]any{
+			"messageId": s.messageID,
+			"title":     ev.Message,
+			"preview":   false,
+		}
+		for k, v := range ev.Data {
+			payload[k] = v
+		}
+		return s.engine.publish(context.Background(), s.sessionID, s.pub, EventAgentModeCommitted, payload)
 	default:
 		return nil
 	}
@@ -428,31 +459,68 @@ func uiProjection(_ context.Context, ev evtstream.Event, _ *evtstream.Session, _
 	if err != nil {
 		return nil, err
 	}
-	name := ""
 	switch ev.Name {
 	case EventUserMessageAccepted:
-		name = UIMessageAccepted
+		return []evtstream.UIEvent{{Name: UIMessageAccepted, Payload: pb}}, nil
 	case EventInferenceStarted:
-		name = UIMessageStarted
+		return []evtstream.UIEvent{{Name: UIMessageStarted, Payload: pb}}, nil
 	case EventTokensDelta:
-		name = UIMessageAppended
+		return []evtstream.UIEvent{{Name: UIMessageAppended, Payload: pb}}, nil
 	case EventInferenceFinished:
-		name = UIMessageFinished
+		clearPB, err := structpb.NewStruct(map[string]any{"messageId": asString(payload["messageId"]), "ordinal": fmt.Sprintf("%d", ev.Ordinal)})
+		if err != nil {
+			return nil, err
+		}
+		return []evtstream.UIEvent{{Name: UIMessageFinished, Payload: pb}, {Name: UIAgentModePreviewClear, Payload: clearPB}}, nil
 	case EventInferenceStopped:
-		name = UIMessageStopped
+		clearPB, err := structpb.NewStruct(map[string]any{"messageId": asString(payload["messageId"]), "ordinal": fmt.Sprintf("%d", ev.Ordinal)})
+		if err != nil {
+			return nil, err
+		}
+		return []evtstream.UIEvent{{Name: UIMessageStopped, Payload: pb}, {Name: UIAgentModePreviewClear, Payload: clearPB}}, nil
+	case EventAgentModePreview:
+		return []evtstream.UIEvent{{Name: UIAgentModePreview, Payload: pb}}, nil
+	case EventAgentModeCommitted:
+		clearPB, err := structpb.NewStruct(map[string]any{"messageId": asString(payload["messageId"]), "ordinal": fmt.Sprintf("%d", ev.Ordinal)})
+		if err != nil {
+			return nil, err
+		}
+		return []evtstream.UIEvent{{Name: UIAgentModeCommitted, Payload: pb}, {Name: UIAgentModePreviewClear, Payload: clearPB}}, nil
 	default:
 		return nil, nil
 	}
-	return []evtstream.UIEvent{{Name: name, Payload: pb}}, nil
 }
 
 func timelineProjection(_ context.Context, ev evtstream.Event, _ *evtstream.Session, view evtstream.TimelineView) ([]evtstream.TimelineEntity, error) {
 	payload := toMap(ev.Payload)
+	switch ev.Name {
+	case EventAgentModeCommitted:
+		entity := currentKindEntity(view, TimelineEntityAgentMode, "session")
+		entity["messageId"] = asString(payload["messageId"])
+		entity["title"] = asString(payload["title"])
+		entity["preview"] = false
+		data := map[string]any{}
+		for k, v := range payload {
+			switch k {
+			case "messageId", "title", "ordinal", "preview":
+				continue
+			default:
+				data[k] = v
+			}
+		}
+		entity["data"] = data
+		pb, err := structpb.NewStruct(entity)
+		if err != nil {
+			return nil, err
+		}
+		return []evtstream.TimelineEntity{{Kind: TimelineEntityAgentMode, Id: "session", Payload: pb}}, nil
+	}
+
 	messageID := asString(payload["messageId"])
 	if messageID == "" {
 		return nil, nil
 	}
-	entity := currentEntity(view, messageID)
+	entity := currentKindEntity(view, TimelineEntityChatMessage, messageID)
 	entity["messageId"] = messageID
 	switch ev.Name {
 	case EventUserMessageAccepted:
@@ -498,8 +566,8 @@ func timelineProjection(_ context.Context, ev evtstream.Event, _ *evtstream.Sess
 	return []evtstream.TimelineEntity{{Kind: TimelineEntityChatMessage, Id: messageID, Payload: pb}}, nil
 }
 
-func currentEntity(view evtstream.TimelineView, id string) map[string]any {
-	entity, ok := view.Get(TimelineEntityChatMessage, id)
+func currentKindEntity(view evtstream.TimelineView, kind, id string) map[string]any {
+	entity, ok := view.Get(kind, id)
 	if !ok || entity.Payload == nil {
 		return map[string]any{}
 	}

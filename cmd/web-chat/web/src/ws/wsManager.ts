@@ -63,6 +63,20 @@ function messageEntity(id: string, props: Record<string, unknown>): TimelineEnti
   };
 }
 
+function agentModeEntity(id: string, kind: 'agent_mode' | 'agent_mode_preview', props: Record<string, unknown>): TimelineEntity {
+  return {
+    id,
+    kind,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+    props,
+  };
+}
+
+function agentModePreviewEntityId(messageId: string): string {
+  return `agent-mode-preview:${messageId}`;
+}
+
 function timelineEntityFromSnapshotEntity(entity: SnapshotEntityFrame): TimelineEntity | null {
   const kind = asString(entity?.kind);
   const id = asString(entity?.id);
@@ -78,6 +92,15 @@ function timelineEntityFromSnapshotEntity(entity: SnapshotEntityFrame): Timeline
       status: asString(payload.status) || 'idle',
       streaming: payload.streaming === true,
       error: asString(payload.error),
+    });
+  }
+
+  if (kind === 'AgentMode') {
+    return agentModeEntity(id || 'agent-mode', 'agent_mode', {
+      title: asString(payload.title) || 'Agent mode switch',
+      data: asRecord(payload.data),
+      preview: payload.preview === true,
+      messageId: asString(payload.messageId),
     });
   }
 
@@ -157,6 +180,34 @@ function applyUIEvent(frame: CanonicalFrame, dispatch: AppDispatch) {
         error: asString(payload.error),
       })));
       dispatch(appSlice.actions.setStatus('stopped'));
+      return;
+    case 'ChatAgentModePreviewUpdated':
+      dispatch(timelineSlice.actions.upsertEntity(agentModeEntity(agentModePreviewEntityId(messageId), 'agent_mode_preview', {
+        title: 'Agent mode preview',
+        data: {
+          from: '',
+          to: asString(payload.candidateMode),
+          analysis: asString(payload.analysis),
+          parseState: asString(payload.parseState),
+        },
+        preview: true,
+        messageId,
+      })));
+      return;
+    case 'ChatAgentModeCommitted':
+      dispatch(timelineSlice.actions.upsertEntity(agentModeEntity('agent-mode', 'agent_mode', {
+        title: asString(payload.title) || 'Agent mode switch',
+        data: {
+          from: asString(payload.from),
+          to: asString(payload.to),
+          analysis: asString(payload.analysis),
+        },
+        preview: false,
+        messageId,
+      })));
+      return;
+    case 'ChatAgentModePreviewCleared':
+      dispatch(timelineSlice.actions.deleteEntity(agentModePreviewEntityId(messageId)));
       return;
     default:
       return;
