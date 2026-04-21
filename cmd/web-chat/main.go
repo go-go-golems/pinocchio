@@ -327,6 +327,7 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 		appserver.WithSQLiteDSN(s.TimelineDSN),
 		appserver.WithSQLiteDBPath(s.TimelineDB),
 		appserver.WithRuntimeResolver(canonicalRuntimeResolver),
+		appserver.WithChatFeatureSets(newAgentModeChatFeature()),
 	)
 	if err != nil {
 		return errors.Wrap(err, "build canonical evtstream-backed app")

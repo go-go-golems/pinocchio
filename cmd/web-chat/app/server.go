@@ -32,6 +32,7 @@ type Server struct {
 	sqliteDSN       string
 	sqliteDBPath    string
 	runtimeResolver RuntimeResolver
+	chatFeatures    []chatapp.FeatureSet
 	closeFn         func() error
 }
 
@@ -77,6 +78,19 @@ func WithRuntimeResolver(resolver RuntimeResolver) Option {
 	}
 }
 
+func WithChatFeatureSets(features ...chatapp.FeatureSet) Option {
+	return func(s *Server) {
+		if s == nil {
+			return
+		}
+		for _, feature := range features {
+			if feature != nil {
+				s.chatFeatures = append(s.chatFeatures, feature)
+			}
+		}
+	}
+}
+
 func NewServer(opts ...Option) (*Server, error) {
 	s := &Server{chunkDelay: 20 * time.Millisecond}
 	for _, opt := range opts {
@@ -86,7 +100,7 @@ func NewServer(opts ...Option) (*Server, error) {
 	}
 
 	reg := sessionstream.NewSchemaRegistry()
-	if err := chatapp.RegisterSchemas(reg); err != nil {
+	if err := chatapp.RegisterSchemas(reg, s.chatFeatures...); err != nil {
 		return nil, err
 	}
 	store, cleanup, err := newHydrationStore(s, reg)
@@ -98,7 +112,7 @@ func NewServer(opts ...Option) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	engine := chatapp.NewEngine(chatapp.WithChunkDelay(s.chunkDelay))
+	engine := chatapp.NewEngine(chatapp.WithChunkDelay(s.chunkDelay), chatapp.WithFeatureSets(s.chatFeatures...))
 	hub, err := sessionstream.NewHub(
 		sessionstream.WithSchemaRegistry(reg),
 		sessionstream.WithHydrationStore(store),

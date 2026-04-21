@@ -11,9 +11,8 @@ import (
 	gepsession "github.com/go-go-golems/geppetto/pkg/inference/session"
 	"github.com/go-go-golems/geppetto/pkg/inference/toolloop/enginebuilder"
 	"github.com/go-go-golems/geppetto/pkg/turns"
-	sessionstream "github.com/go-go-golems/sessionstream"
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
-	agentmode "github.com/go-go-golems/pinocchio/pkg/middlewares/agentmode"
+	sessionstream "github.com/go-go-golems/sessionstream"
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
@@ -26,20 +25,14 @@ const (
 	EventTokensDelta         = "ChatTokensDelta"
 	EventInferenceFinished   = "ChatInferenceFinished"
 	EventInferenceStopped    = "ChatInferenceStopped"
-	EventAgentModePreview    = "ChatAgentModePreviewUpdated"
-	EventAgentModeCommitted  = "ChatAgentModeCommitted"
 
-	UIMessageAccepted       = "ChatMessageAccepted"
-	UIMessageStarted        = "ChatMessageStarted"
-	UIMessageAppended       = "ChatMessageAppended"
-	UIMessageFinished       = "ChatMessageFinished"
-	UIMessageStopped        = "ChatMessageStopped"
-	UIAgentModePreview      = "ChatAgentModePreviewUpdated"
-	UIAgentModeCommitted    = "ChatAgentModeCommitted"
-	UIAgentModePreviewClear = "ChatAgentModePreviewCleared"
+	UIMessageAccepted = "ChatMessageAccepted"
+	UIMessageStarted  = "ChatMessageStarted"
+	UIMessageAppended = "ChatMessageAppended"
+	UIMessageFinished = "ChatMessageFinished"
+	UIMessageStopped  = "ChatMessageStopped"
 
 	TimelineEntityChatMessage = "ChatMessage"
-	TimelineEntityAgentMode   = "AgentMode"
 )
 
 type Hooks struct {
@@ -55,6 +48,7 @@ type Engine struct {
 	pending    map[sessionstream.SessionId]PromptRequest
 	chunkDelay time.Duration
 	hooks      Hooks
+	features   []FeatureSet
 }
 
 type activeRun struct {
@@ -99,7 +93,7 @@ func NewEngine(opts ...Option) *Engine {
 	return engine
 }
 
-func RegisterSchemas(reg *sessionstream.SchemaRegistry) error {
+func RegisterSchemas(reg *sessionstream.SchemaRegistry, features ...FeatureSet) error {
 	for _, err := range []error{
 		reg.RegisterCommand(CommandStartInference, &structpb.Struct{}),
 		reg.RegisterCommand(CommandStopInference, &structpb.Struct{}),
@@ -108,20 +102,22 @@ func RegisterSchemas(reg *sessionstream.SchemaRegistry) error {
 		reg.RegisterEvent(EventTokensDelta, &structpb.Struct{}),
 		reg.RegisterEvent(EventInferenceFinished, &structpb.Struct{}),
 		reg.RegisterEvent(EventInferenceStopped, &structpb.Struct{}),
-		reg.RegisterEvent(EventAgentModePreview, &structpb.Struct{}),
-		reg.RegisterEvent(EventAgentModeCommitted, &structpb.Struct{}),
 		reg.RegisterUIEvent(UIMessageAccepted, &structpb.Struct{}),
 		reg.RegisterUIEvent(UIMessageStarted, &structpb.Struct{}),
 		reg.RegisterUIEvent(UIMessageAppended, &structpb.Struct{}),
 		reg.RegisterUIEvent(UIMessageFinished, &structpb.Struct{}),
 		reg.RegisterUIEvent(UIMessageStopped, &structpb.Struct{}),
-		reg.RegisterUIEvent(UIAgentModePreview, &structpb.Struct{}),
-		reg.RegisterUIEvent(UIAgentModeCommitted, &structpb.Struct{}),
-		reg.RegisterUIEvent(UIAgentModePreviewClear, &structpb.Struct{}),
 		reg.RegisterTimelineEntity(TimelineEntityChatMessage, &structpb.Struct{}),
-		reg.RegisterTimelineEntity(TimelineEntityAgentMode, &structpb.Struct{}),
 	} {
 		if err != nil {
+			return err
+		}
+	}
+	for _, feature := range features {
+		if feature == nil {
+			continue
+		}
+		if err := feature.RegisterSchemas(reg); err != nil {
 			return err
 		}
 	}
@@ -141,10 +137,10 @@ func Install(hub *sessionstream.Hub, engine *Engine) error {
 	if err := hub.RegisterCommand(CommandStopInference, engine.handleStopInference); err != nil {
 		return err
 	}
-	if err := hub.RegisterUIProjection(sessionstream.UIProjectionFunc(uiProjection)); err != nil {
+	if err := hub.RegisterUIProjection(sessionstream.UIProjectionFunc(engine.uiProjection)); err != nil {
 		return err
 	}
-	if err := hub.RegisterTimelineProjection(sessionstream.TimelineProjectionFunc(timelineProjection)); err != nil {
+	if err := hub.RegisterTimelineProjection(sessionstream.TimelineProjectionFunc(engine.timelineProjection)); err != nil {
 		return err
 	}
 	return nil
@@ -411,26 +407,8 @@ func (s *runtimeEventSink) PublishEvent(event gepevents.Event) error {
 			"status":    "stopped",
 			"streaming": false,
 		})
-	case *agentmode.EventModeSwitchPreview:
-		return s.engine.publish(context.Background(), s.sessionID, s.pub, EventAgentModePreview, map[string]any{
-			"messageId":     s.messageID,
-			"candidateMode": ev.CandidateMode,
-			"analysis":      ev.Analysis,
-			"parseState":    ev.ParseState,
-			"preview":       true,
-		})
-	case *gepevents.EventAgentModeSwitch:
-		payload := map[string]any{
-			"messageId": s.messageID,
-			"title":     ev.Message,
-			"preview":   false,
-		}
-		for k, v := range ev.Data {
-			payload[k] = v
-		}
-		return s.engine.publish(context.Background(), s.sessionID, s.pub, EventAgentModeCommitted, payload)
 	default:
-		return nil
+		return s.engine.handleFeatureRuntimeEvent(context.Background(), s.sessionID, s.messageID, s.pub, event)
 	}
 }
 
@@ -452,7 +430,7 @@ func (s *runtimeEventSink) IsTerminal() bool {
 	return s.terminal
 }
 
-func uiProjection(_ context.Context, ev sessionstream.Event, _ *sessionstream.Session, _ sessionstream.TimelineView) ([]sessionstream.UIEvent, error) {
+func baseUIProjection(_ context.Context, ev sessionstream.Event, _ *sessionstream.Session, _ sessionstream.TimelineView) ([]sessionstream.UIEvent, error) {
 	payload := toMap(ev.Payload)
 	payload["ordinal"] = fmt.Sprintf("%d", ev.Ordinal)
 	pb, err := structpb.NewStruct(payload)
@@ -467,55 +445,16 @@ func uiProjection(_ context.Context, ev sessionstream.Event, _ *sessionstream.Se
 	case EventTokensDelta:
 		return []sessionstream.UIEvent{{Name: UIMessageAppended, Payload: pb}}, nil
 	case EventInferenceFinished:
-		clearPB, err := structpb.NewStruct(map[string]any{"messageId": asString(payload["messageId"]), "ordinal": fmt.Sprintf("%d", ev.Ordinal)})
-		if err != nil {
-			return nil, err
-		}
-		return []sessionstream.UIEvent{{Name: UIMessageFinished, Payload: pb}, {Name: UIAgentModePreviewClear, Payload: clearPB}}, nil
+		return []sessionstream.UIEvent{{Name: UIMessageFinished, Payload: pb}}, nil
 	case EventInferenceStopped:
-		clearPB, err := structpb.NewStruct(map[string]any{"messageId": asString(payload["messageId"]), "ordinal": fmt.Sprintf("%d", ev.Ordinal)})
-		if err != nil {
-			return nil, err
-		}
-		return []sessionstream.UIEvent{{Name: UIMessageStopped, Payload: pb}, {Name: UIAgentModePreviewClear, Payload: clearPB}}, nil
-	case EventAgentModePreview:
-		return []sessionstream.UIEvent{{Name: UIAgentModePreview, Payload: pb}}, nil
-	case EventAgentModeCommitted:
-		clearPB, err := structpb.NewStruct(map[string]any{"messageId": asString(payload["messageId"]), "ordinal": fmt.Sprintf("%d", ev.Ordinal)})
-		if err != nil {
-			return nil, err
-		}
-		return []sessionstream.UIEvent{{Name: UIAgentModeCommitted, Payload: pb}, {Name: UIAgentModePreviewClear, Payload: clearPB}}, nil
+		return []sessionstream.UIEvent{{Name: UIMessageStopped, Payload: pb}}, nil
 	default:
 		return nil, nil
 	}
 }
 
-func timelineProjection(_ context.Context, ev sessionstream.Event, _ *sessionstream.Session, view sessionstream.TimelineView) ([]sessionstream.TimelineEntity, error) {
+func baseTimelineProjection(_ context.Context, ev sessionstream.Event, _ *sessionstream.Session, view sessionstream.TimelineView) ([]sessionstream.TimelineEntity, error) {
 	payload := toMap(ev.Payload)
-	switch ev.Name {
-	case EventAgentModeCommitted:
-		entity := currentKindEntity(view, TimelineEntityAgentMode, "session")
-		entity["messageId"] = asString(payload["messageId"])
-		entity["title"] = asString(payload["title"])
-		entity["preview"] = false
-		data := map[string]any{}
-		for k, v := range payload {
-			switch k {
-			case "messageId", "title", "ordinal", "preview":
-				continue
-			default:
-				data[k] = v
-			}
-		}
-		entity["data"] = data
-		pb, err := structpb.NewStruct(entity)
-		if err != nil {
-			return nil, err
-		}
-		return []sessionstream.TimelineEntity{{Kind: TimelineEntityAgentMode, Id: "session", Payload: pb}}, nil
-	}
-
 	messageID := asString(payload["messageId"])
 	if messageID == "" {
 		return nil, nil
