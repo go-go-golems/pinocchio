@@ -182,7 +182,6 @@ function flattenTimelineProps(entity: Record<string, unknown>): Record<string, u
     'toolCall',
     'toolResult',
     'status',
-    'thinkingMode',
     'modeEvaluation',
     'innerThoughts',
     'teamAnalysis',

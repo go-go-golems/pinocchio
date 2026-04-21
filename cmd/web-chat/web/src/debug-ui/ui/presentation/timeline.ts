@@ -12,8 +12,6 @@ export function getTimelineKindPresentation(kind: string): TimelineKindPresentat
       return { icon: '🔧', color: 'var(--accent-yellow)', badgeClass: 'badge-yellow' };
     case 'tool_result':
       return { icon: '📤', color: 'var(--accent-cyan)', badgeClass: 'badge-cyan' };
-    case 'thinking_mode':
-      return { icon: '💭', color: 'var(--accent-purple)', badgeClass: 'badge-purple' };
     case 'planning':
       return { icon: '📋', color: 'var(--accent-green)', badgeClass: 'badge-green' };
     case 'log':
