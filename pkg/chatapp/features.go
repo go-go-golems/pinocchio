@@ -4,7 +4,7 @@ import (
 	"context"
 
 	gepevents "github.com/go-go-golems/geppetto/pkg/events"
-	sessionstream "github.com/go-go-golems/sessionstream"
+	sessionstream "github.com/go-go-golems/sessionstream/pkg/sessionstream"
 )
 
 type FeatureSet interface {

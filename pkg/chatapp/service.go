@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	sessionstream "github.com/go-go-golems/sessionstream"
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
+	sessionstream "github.com/go-go-golems/sessionstream/pkg/sessionstream"
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
