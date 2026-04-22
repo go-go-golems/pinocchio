@@ -1,5 +1,5 @@
 import type { KeyboardEvent } from 'react';
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { appSlice } from '../store/appSlice';
 import { errorsSlice, makeAppError } from '../store/errorsSlice';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
@@ -12,6 +12,7 @@ import { DefaultComposer } from './components/Composer';
 import { DefaultHeader } from './components/Header';
 import { DefaultStatusbar } from './components/Statusbar';
 import { ChatTimeline } from './components/Timeline';
+import { useStickyScrollFollow } from './hooks/useStickyScrollFollow';
 import { getPartProps, mergeClassName, mergeStyle } from './parts';
 import { resolveSelectedProfile } from './profileSelection';
 import { resolveTimelineRenderers } from './rendererRegistry';
@@ -23,15 +24,6 @@ import type {
 } from './types';
 import './styles/theme-default.css';
 import './styles/webchat.css';
-
-const ATTACH_THRESHOLD_PX = 24;
-const DETACH_THRESHOLD_PX = 48;
-
-type ScrollMode = 'following' | 'detached';
-
-function distanceFromBottom(container: HTMLElement): number {
-  return container.scrollHeight - container.clientHeight - container.scrollTop;
-}
 
 function sessionIdFromLocation(): string {
   try {
@@ -91,10 +83,6 @@ export function ChatWidget({
   const [text, setText] = useState('');
   const [showErrors, setShowErrors] = useState(false);
   const [statusText, setStatusText] = useState('idle');
-  const [scrollMode, setScrollMode] = useState<ScrollMode>('following');
-  const mainRef = useRef<HTMLElement>(null);
-  const bottomRef = useRef<HTMLDivElement>(null);
-  const isProgrammaticScrollRef = useRef(false);
 
   const { data: profileData, refetch: refetchProfile } = useGetProfileQuery();
   const { data: profilesData } = useGetProfilesQuery();
@@ -161,67 +149,19 @@ export function ChatWidget({
     };
   }, [app.convId, dispatch]);
 
-  const scrollToBottom = useCallback((behavior: ScrollBehavior = 'auto') => {
-    const container = mainRef.current;
-    if (!container) return;
-    isProgrammaticScrollRef.current = true;
-    container.scrollTo({ top: container.scrollHeight, behavior });
-    window.requestAnimationFrame(() => {
-      isProgrammaticScrollRef.current = false;
-    });
-  }, []);
-
-  const onMainScroll = useCallback(() => {
-    const container = mainRef.current;
-    if (!container || isProgrammaticScrollRef.current) return;
-    const distance = distanceFromBottom(container);
-    setScrollMode((current) => {
-      if (current === 'following' && distance > DETACH_THRESHOLD_PX) {
-        return 'detached';
-      }
-      if (current === 'detached' && distance <= ATTACH_THRESHOLD_PX) {
-        return 'following';
-      }
-      return current;
-    });
-  }, []);
-
-  const jumpToLatest = useCallback(() => {
-    setScrollMode('following');
-    scrollToBottom('auto');
-  }, [scrollToBottom]);
-
-  useEffect(() => {
-    if (app.convId) {
-      setScrollMode('following');
-      return;
-    }
-    setScrollMode('following');
-  }, [app.convId]);
-
-  useLayoutEffect(() => {
-    if (!entityCount || scrollMode !== 'following') return;
-    scrollToBottom(app.status === 'streaming' ? 'auto' : 'smooth');
-  }, [app.status, entityCount, scrollMode, scrollToBottom]);
-
-  useLayoutEffect(() => {
-    if (
-      !entityCount ||
-      scrollMode !== 'following' ||
-      !mainRef.current ||
-      !bottomRef.current ||
-      typeof MutationObserver === 'undefined'
-    ) {
-      return;
-    }
-    const timeline = bottomRef.current.parentElement;
-    if (!(timeline instanceof HTMLElement)) return;
-    const observer = new MutationObserver(() => {
-      scrollToBottom('auto');
-    });
-    observer.observe(timeline, { childList: true, subtree: true, characterData: true });
-    return () => observer.disconnect();
-  }, [entityCount, scrollMode, scrollToBottom]);
+  const {
+    containerRef: mainRef,
+    tailRef: bottomRef,
+    mode: scrollMode,
+    jumpToLatest,
+    onScroll: onMainScroll,
+    onWheel: onMainWheel,
+  } = useStickyScrollFollow({
+    enabled: entityCount > 0,
+    isStreaming: app.status === 'streaming',
+    contentVersion: `${entityCount}:${app.status}`,
+    resetKey: app.convId,
+  });
 
   const send = useCallback(() => {
     if (!text.trim()) return;
@@ -344,7 +284,6 @@ export function ChatWidget({
 
   const onNewConversation = useCallback(() => {
     wsManager.disconnect();
-    setScrollMode('following');
     dispatch(appSlice.actions.setConvId(''));
     dispatch(appSlice.actions.setStatus('idle'));
     dispatch(appSlice.actions.setWsStatus('disconnected'));
@@ -413,7 +352,7 @@ export function ChatWidget({
         />
       )}
 
-      <main data-part="main" ref={mainRef} onScroll={onMainScroll}>
+      <main data-part="main" ref={mainRef} onScroll={onMainScroll} onWheel={onMainWheel}>
         <ChatTimeline
           entities={entities}
           errors={errors}
