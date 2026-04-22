@@ -1,5 +1,5 @@
 import type { KeyboardEvent } from 'react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { appSlice } from '../store/appSlice';
 import { errorsSlice, makeAppError } from '../store/errorsSlice';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
@@ -78,6 +78,7 @@ export function ChatWidget({
 
   const entities = useMemo(() => entitiesRaw.map(toRenderEntity), [entitiesRaw]);
   const entityCount = entities.length;
+  const lastEntity = entityCount > 0 ? entities[entityCount - 1] : null;
 
   const [text, setText] = useState('');
   const [showErrors, setShowErrors] = useState(false);
@@ -149,12 +150,14 @@ export function ChatWidget({
     };
   }, [app.convId, dispatch]);
 
-  useEffect(() => {
-    if (!entityCount) return;
-    if (bottomRef.current) {
-      bottomRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
-    }
-  }, [entityCount]);
+  useLayoutEffect(() => {
+    if (!entityCount || !bottomRef.current) return;
+    const followBehavior: ScrollBehavior = app.status === 'streaming' || lastEntity?.props?.streaming ? 'auto' : 'smooth';
+    const raf = window.requestAnimationFrame(() => {
+      bottomRef.current?.scrollIntoView({ behavior: followBehavior, block: 'end' });
+    });
+    return () => window.cancelAnimationFrame(raf);
+  });
 
   const send = useCallback(() => {
     if (!text.trim()) return;
