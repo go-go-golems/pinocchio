@@ -143,7 +143,7 @@ Then replace symbols in this order:
 
 1. `go test ./pkg/inference/runtime -count=1`
 2. `go test ./cmd/web-chat -count=1`
-3. `go test ./pkg/webchat/... -count=1`
+3. `go test ./cmd/web-chat/... -count=1`
 4. `go test ./... -count=1`
 
 ## Troubleshooting

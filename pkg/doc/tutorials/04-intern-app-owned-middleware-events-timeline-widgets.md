@@ -40,7 +40,7 @@ You will build a feature module called `myfeature` that follows the same app-own
 - Go generated bindings location: `cmd/web-chat/myfeature/pb/`
 - TS generated bindings location: `cmd/web-chat/web/src/features/myFeature/pb/`
 
-You will not put app-specific feature logic in `pkg/webchat`.
+You will not put app-specific feature logic in `pkg/chatapp` or `sessionstream/pkg/sessionstream`.
 
 ## Architectural mental model
 
@@ -71,8 +71,9 @@ SEM frame
 
 ### Why this split exists
 
-- `pkg/webchat` is reusable core.
-- `cmd/web-chat` is app-owned composition.
+- `sessionstream/pkg/sessionstream` is the reusable streaming substrate.
+- `pkg/chatapp` is the reusable Pinocchio chat application package.
+- `cmd/web-chat` is the app-owned composition layer for concrete product features.
 - app-specific features must be registered explicitly from app entrypoints, not hidden behind `init()` side effects.
 
 That split is the key design goal.
@@ -233,7 +234,7 @@ _ = middlewareDefinitions.RegisterDefinition(middlewarecfg.Definition{
 
 runtimeComposer := newProfileRuntimeComposer(middlewareDefinitions, buildDeps, baseStepSettings)
 
-webhttp.RegisterProfileAPIHandlers(mux, profileRegistry, webhttp.ProfileAPIHandlerOptions{
+profiles.RegisterAPIHandlers(mux, profileRegistry, profiles.APIOptions{
   DefaultRegistrySlug:             gepprofiles.MustRegistrySlug("default"),
   EnableCurrentProfileCookieRoute: true,
   MiddlewareDefinitions:           middlewareDefinitions,
@@ -728,7 +729,7 @@ Pattern:
 
 - scan source tree for marker strings,
 - allow only feature module path and explicit bootstrap locations,
-- fail if marker appears in `pkg/webchat` or generic frontend registry files.
+- fail if marker appears in `pkg/chatapp`, `sessionstream/pkg/sessionstream`, or generic frontend registry files.
 
 This is how you prevent architecture drift over time.
 
@@ -1018,7 +1019,7 @@ Use this rubric during code review to evaluate intern submissions.
 ### Architecture (must pass)
 
 - feature logic isolated in `cmd/web-chat`,
-- no accidental additions to `pkg/webchat` for app-specific behavior,
+- no accidental additions to `pkg/chatapp` or `sessionstream/pkg/sessionstream` for app-specific behavior,
 - explicit bootstrap in `main.go` and `wsManager.ts`.
 
 ### Correctness (must pass)
