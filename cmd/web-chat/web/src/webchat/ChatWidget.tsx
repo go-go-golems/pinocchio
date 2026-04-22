@@ -78,11 +78,11 @@ export function ChatWidget({
 
   const entities = useMemo(() => entitiesRaw.map(toRenderEntity), [entitiesRaw]);
   const entityCount = entities.length;
-  const lastEntity = entityCount > 0 ? entities[entityCount - 1] : null;
 
   const [text, setText] = useState('');
   const [showErrors, setShowErrors] = useState(false);
   const [statusText, setStatusText] = useState('idle');
+  const mainRef = useRef<HTMLElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const { data: profileData, refetch: refetchProfile } = useGetProfileQuery();
@@ -151,13 +151,22 @@ export function ChatWidget({
   }, [app.convId, dispatch]);
 
   useLayoutEffect(() => {
-    if (!entityCount || !bottomRef.current) return;
-    const followBehavior: ScrollBehavior = app.status === 'streaming' || lastEntity?.props?.streaming ? 'auto' : 'smooth';
-    const raf = window.requestAnimationFrame(() => {
-      bottomRef.current?.scrollIntoView({ behavior: followBehavior, block: 'end' });
-    });
-    return () => window.cancelAnimationFrame(raf);
+    if (!entityCount || !mainRef.current) return;
+    const container = mainRef.current;
+    container.scrollTop = container.scrollHeight;
   });
+
+  useLayoutEffect(() => {
+    if (!entityCount || !mainRef.current || !bottomRef.current || typeof MutationObserver === 'undefined') return;
+    const container = mainRef.current;
+    const timeline = bottomRef.current.parentElement;
+    if (!(timeline instanceof HTMLElement)) return;
+    const observer = new MutationObserver(() => {
+      container.scrollTop = container.scrollHeight;
+    });
+    observer.observe(timeline, { childList: true, subtree: true, characterData: true });
+    return () => observer.disconnect();
+  }, [entityCount]);
 
   const send = useCallback(() => {
     if (!text.trim()) return;
@@ -348,7 +357,7 @@ export function ChatWidget({
         />
       )}
 
-      <main data-part="main">
+      <main data-part="main" ref={mainRef}>
         <ChatTimeline
           entities={entities}
           errors={errors}
