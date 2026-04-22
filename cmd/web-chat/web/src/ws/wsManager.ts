@@ -192,6 +192,40 @@ export function timelineMutationFromUIEvent(frame: CanonicalFrame): TimelineMuta
         }),
         status: 'stopped',
       };
+    case 'ChatReasoningStarted': {
+      const content = asString(payload.content) || asString(payload.text);
+      if (!content) return null;
+      return {
+        upsert: messageEntity(messageId, {
+          role: 'thinking',
+          content,
+          status: asString(payload.status) || 'streaming',
+          streaming: payload.streaming !== false,
+        }),
+        status: 'streaming',
+      };
+    }
+    case 'ChatReasoningAppended':
+      return {
+        upsert: messageEntity(messageId, {
+          role: 'thinking',
+          content: asString(payload.content) || asString(payload.text) || asString(payload.chunk),
+          status: asString(payload.status) || 'streaming',
+          streaming: payload.streaming !== false,
+        }),
+        status: 'streaming',
+      };
+    case 'ChatReasoningFinished': {
+      const content = asString(payload.content) || asString(payload.text);
+      return {
+        upsert: messageEntity(messageId, {
+          role: 'thinking',
+          content,
+          status: asString(payload.status) || 'finished',
+          streaming: false,
+        }),
+      };
+    }
     case 'ChatAgentModePreviewUpdated':
       return {
         upsert: agentModeEntity(agentModePreviewEntityId(messageId), 'agent_mode_preview', {
