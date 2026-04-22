@@ -24,6 +24,15 @@ import type {
 import './styles/theme-default.css';
 import './styles/webchat.css';
 
+const ATTACH_THRESHOLD_PX = 24;
+const DETACH_THRESHOLD_PX = 48;
+
+type ScrollMode = 'following' | 'detached';
+
+function distanceFromBottom(container: HTMLElement): number {
+  return container.scrollHeight - container.clientHeight - container.scrollTop;
+}
+
 function sessionIdFromLocation(): string {
   try {
     const u = new URL(window.location.href);
@@ -82,8 +91,10 @@ export function ChatWidget({
   const [text, setText] = useState('');
   const [showErrors, setShowErrors] = useState(false);
   const [statusText, setStatusText] = useState('idle');
+  const [scrollMode, setScrollMode] = useState<ScrollMode>('following');
   const mainRef = useRef<HTMLElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const isProgrammaticScrollRef = useRef(false);
 
   const { data: profileData, refetch: refetchProfile } = useGetProfileQuery();
   const { data: profilesData } = useGetProfilesQuery();
@@ -150,23 +161,67 @@ export function ChatWidget({
     };
   }, [app.convId, dispatch]);
 
-  useLayoutEffect(() => {
-    if (!entityCount || !mainRef.current) return;
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = 'auto') => {
     const container = mainRef.current;
-    container.scrollTop = container.scrollHeight;
-  });
+    if (!container) return;
+    isProgrammaticScrollRef.current = true;
+    container.scrollTo({ top: container.scrollHeight, behavior });
+    window.requestAnimationFrame(() => {
+      isProgrammaticScrollRef.current = false;
+    });
+  }, []);
+
+  const onMainScroll = useCallback(() => {
+    const container = mainRef.current;
+    if (!container || isProgrammaticScrollRef.current) return;
+    const distance = distanceFromBottom(container);
+    setScrollMode((current) => {
+      if (current === 'following' && distance > DETACH_THRESHOLD_PX) {
+        return 'detached';
+      }
+      if (current === 'detached' && distance <= ATTACH_THRESHOLD_PX) {
+        return 'following';
+      }
+      return current;
+    });
+  }, []);
+
+  const jumpToLatest = useCallback(() => {
+    setScrollMode('following');
+    scrollToBottom('auto');
+  }, [scrollToBottom]);
+
+  useEffect(() => {
+    if (app.convId) {
+      setScrollMode('following');
+      return;
+    }
+    setScrollMode('following');
+  }, [app.convId]);
 
   useLayoutEffect(() => {
-    if (!entityCount || !mainRef.current || !bottomRef.current || typeof MutationObserver === 'undefined') return;
-    const container = mainRef.current;
+    if (!entityCount || scrollMode !== 'following') return;
+    scrollToBottom(app.status === 'streaming' ? 'auto' : 'smooth');
+  }, [app.status, entityCount, scrollMode, scrollToBottom]);
+
+  useLayoutEffect(() => {
+    if (
+      !entityCount ||
+      scrollMode !== 'following' ||
+      !mainRef.current ||
+      !bottomRef.current ||
+      typeof MutationObserver === 'undefined'
+    ) {
+      return;
+    }
     const timeline = bottomRef.current.parentElement;
     if (!(timeline instanceof HTMLElement)) return;
     const observer = new MutationObserver(() => {
-      container.scrollTop = container.scrollHeight;
+      scrollToBottom('auto');
     });
     observer.observe(timeline, { childList: true, subtree: true, characterData: true });
     return () => observer.disconnect();
-  }, [entityCount]);
+  }, [entityCount, scrollMode, scrollToBottom]);
 
   const send = useCallback(() => {
     if (!text.trim()) return;
@@ -289,6 +344,7 @@ export function ChatWidget({
 
   const onNewConversation = useCallback(() => {
     wsManager.disconnect();
+    setScrollMode('following');
     dispatch(appSlice.actions.setConvId(''));
     dispatch(appSlice.actions.setStatus('idle'));
     dispatch(appSlice.actions.setWsStatus('disconnected'));
@@ -357,7 +413,7 @@ export function ChatWidget({
         />
       )}
 
-      <main data-part="main" ref={mainRef}>
+      <main data-part="main" ref={mainRef} onScroll={onMainScroll}>
         <ChatTimeline
           entities={entities}
           errors={errors}
@@ -370,6 +426,13 @@ export function ChatWidget({
           partProps={partProps}
           state={app.status}
         />
+        {scrollMode === 'detached' ? (
+          <div data-part="jump-to-latest-wrap">
+            <button type="button" data-part="pill-button" data-variant="accent" onClick={jumpToLatest}>
+              Jump to latest
+            </button>
+          </div>
+        ) : null}
       </main>
 
       <ComposerComponent
