@@ -39,6 +39,25 @@ func TestChatExampleHappyPath(t *testing.T) {
 	require.Equal(t, "Answer: Explain ordinals", assistant["text"])
 }
 
+func TestBaseTimelineProjection_DelaysAssistantEntityUntilContentArrives(t *testing.T) {
+	startedPayload, err := structpb.NewStruct(map[string]any{"messageId": "chat-msg-start", "prompt": "Explain ordinals", "content": "", "status": "streaming", "streaming": true})
+	require.NoError(t, err)
+
+	entities, err := baseTimelineProjection(context.Background(), sessionstream.Event{Name: EventInferenceStarted, SessionId: "chat-projection", Ordinal: 2, Payload: startedPayload}, nil, staticTimelineView{})
+	require.NoError(t, err)
+	require.Nil(t, entities)
+
+	finishedPayload, err := structpb.NewStruct(map[string]any{"messageId": "chat-msg-start", "prompt": "Explain ordinals", "content": "Answer: Explain ordinals", "text": "Answer: Explain ordinals", "status": "finished", "streaming": false})
+	require.NoError(t, err)
+	entities, err = baseTimelineProjection(context.Background(), sessionstream.Event{Name: EventInferenceFinished, SessionId: "chat-projection", Ordinal: 3, Payload: finishedPayload}, nil, staticTimelineView{})
+	require.NoError(t, err)
+	require.Len(t, entities, 1)
+	payload := entities[0].Payload.(*structpb.Struct).AsMap()
+	require.Equal(t, "assistant", payload["role"])
+	require.Equal(t, "Answer: Explain ordinals", payload["content"])
+	require.Equal(t, "Explain ordinals", payload["prompt"])
+}
+
 func TestChatExampleStopPath(t *testing.T) {
 	engine := NewEngine(WithChunkDelay(10 * time.Millisecond))
 	hub := newTestHub(t, engine)
@@ -64,6 +83,15 @@ func TestChatExampleStopPath(t *testing.T) {
 	require.Equal(t, "stopped", assistant["status"])
 	require.Equal(t, false, assistant["streaming"])
 }
+
+type staticTimelineView struct{}
+
+func (staticTimelineView) Get(string, string) (sessionstream.TimelineEntity, bool) {
+	return sessionstream.TimelineEntity{}, false
+}
+
+func (staticTimelineView) List(string) []sessionstream.TimelineEntity { return nil }
+func (staticTimelineView) Ordinal() uint64                            { return 0 }
 
 func newTestHub(t *testing.T, engine *Engine) *sessionstream.Hub {
 	t.Helper()

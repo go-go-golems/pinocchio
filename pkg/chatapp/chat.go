@@ -61,6 +61,7 @@ type runtimeEventSink struct {
 	mu        sync.Mutex
 	sessionID sessionstream.SessionId
 	messageID string
+	prompt    string
 	pub       sessionstream.EventPublisher
 	engine    *Engine
 	lastText  string
@@ -205,16 +206,16 @@ func (e *Engine) runDemoInference(ctx context.Context, sid sessionstream.Session
 	for _, chunk := range chunks {
 		select {
 		case <-ctx.Done():
-			_ = e.publish(context.Background(), sid, pub, EventInferenceStopped, map[string]any{"messageId": messageID, "role": "assistant", "text": accumulated, "content": accumulated, "status": "stopped", "streaming": false})
+			_ = e.publish(context.Background(), sid, pub, EventInferenceStopped, map[string]any{"messageId": messageID, "prompt": prompt, "role": "assistant", "text": accumulated, "content": accumulated, "status": "stopped", "streaming": false})
 			return
 		case <-time.After(e.chunkDelay):
 		}
 		accumulated += chunk
-		if err := e.publish(context.Background(), sid, pub, EventTokensDelta, map[string]any{"messageId": messageID, "role": "assistant", "chunk": chunk, "text": accumulated, "content": accumulated, "status": "streaming", "streaming": true}); err != nil {
+		if err := e.publish(context.Background(), sid, pub, EventTokensDelta, map[string]any{"messageId": messageID, "prompt": prompt, "role": "assistant", "chunk": chunk, "text": accumulated, "content": accumulated, "status": "streaming", "streaming": true}); err != nil {
 			return
 		}
 	}
-	_ = e.publish(context.Background(), sid, pub, EventInferenceFinished, map[string]any{"messageId": messageID, "role": "assistant", "text": accumulated, "content": accumulated, "status": "finished", "streaming": false})
+	_ = e.publish(context.Background(), sid, pub, EventInferenceFinished, map[string]any{"messageId": messageID, "prompt": prompt, "role": "assistant", "text": accumulated, "content": accumulated, "status": "finished", "streaming": false})
 }
 
 func (e *Engine) runRuntimeInference(ctx context.Context, sid sessionstream.SessionId, messageID, prompt string, runtime *infruntime.ComposedRuntime, pub sessionstream.EventPublisher) {
@@ -227,19 +228,19 @@ func (e *Engine) runRuntimeInference(ctx context.Context, sid sessionstream.Sess
 		return
 	}
 
-	baseSink := gepevents.EventSink(&runtimeEventSink{sessionID: sid, messageID: messageID, pub: pub, engine: e})
+	baseSink := gepevents.EventSink(&runtimeEventSink{sessionID: sid, messageID: messageID, prompt: prompt, pub: pub, engine: e})
 	eventSink := baseSink
 	if runtime.WrapSink != nil {
 		wrapped, err := runtime.WrapSink(baseSink)
 		if err != nil {
-			_ = e.publish(context.Background(), sid, pub, EventInferenceStopped, map[string]any{"messageId": messageID, "role": "assistant", "text": "", "content": "", "status": "stopped", "streaming": false, "error": err.Error()})
+			_ = e.publish(context.Background(), sid, pub, EventInferenceStopped, map[string]any{"messageId": messageID, "prompt": prompt, "role": "assistant", "text": "", "content": "", "status": "stopped", "streaming": false, "error": err.Error()})
 			return
 		}
 		eventSink = wrapped
 	}
 	sink, ok := baseSink.(*runtimeEventSink)
 	if !ok {
-		_ = e.publish(context.Background(), sid, pub, EventInferenceStopped, map[string]any{"messageId": messageID, "role": "assistant", "text": "", "content": "", "status": "stopped", "streaming": false, "error": "internal runtime sink type assertion failed"})
+		_ = e.publish(context.Background(), sid, pub, EventInferenceStopped, map[string]any{"messageId": messageID, "prompt": prompt, "role": "assistant", "text": "", "content": "", "status": "stopped", "streaming": false, "error": "internal runtime sink type assertion failed"})
 		return
 	}
 	sess := gepsession.NewSession()
@@ -249,18 +250,18 @@ func (e *Engine) runRuntimeInference(ctx context.Context, sid sessionstream.Sess
 	}
 	_, err := sess.AppendNewTurnFromUserPrompt(prompt)
 	if err != nil {
-		_ = e.publish(context.Background(), sid, pub, EventInferenceStopped, map[string]any{"messageId": messageID, "role": "assistant", "text": sink.LastText(), "content": sink.LastText(), "status": "stopped", "streaming": false, "error": err.Error()})
+		_ = e.publish(context.Background(), sid, pub, EventInferenceStopped, map[string]any{"messageId": messageID, "prompt": prompt, "role": "assistant", "text": sink.LastText(), "content": sink.LastText(), "status": "stopped", "streaming": false, "error": err.Error()})
 		return
 	}
 	handle, err := sess.StartInference(ctx)
 	if err != nil {
-		_ = e.publish(context.Background(), sid, pub, EventInferenceStopped, map[string]any{"messageId": messageID, "role": "assistant", "text": sink.LastText(), "content": sink.LastText(), "status": "stopped", "streaming": false, "error": err.Error()})
+		_ = e.publish(context.Background(), sid, pub, EventInferenceStopped, map[string]any{"messageId": messageID, "prompt": prompt, "role": "assistant", "text": sink.LastText(), "content": sink.LastText(), "status": "stopped", "streaming": false, "error": err.Error()})
 		return
 	}
 	output, err := handle.Wait()
 	if err != nil {
 		if !sink.IsTerminal() {
-			_ = e.publish(context.Background(), sid, pub, EventInferenceStopped, map[string]any{"messageId": messageID, "role": "assistant", "text": sink.LastText(), "content": sink.LastText(), "status": "stopped", "streaming": false, "error": err.Error()})
+			_ = e.publish(context.Background(), sid, pub, EventInferenceStopped, map[string]any{"messageId": messageID, "prompt": prompt, "role": "assistant", "text": sink.LastText(), "content": sink.LastText(), "status": "stopped", "streaming": false, "error": err.Error()})
 		}
 		return
 	}
@@ -271,7 +272,7 @@ func (e *Engine) runRuntimeInference(ctx context.Context, sid sessionstream.Sess
 	if finalText == "" {
 		finalText = assistantTextFromTurn(output)
 	}
-	_ = e.publish(context.Background(), sid, pub, EventInferenceFinished, map[string]any{"messageId": messageID, "role": "assistant", "text": finalText, "content": finalText, "status": "finished", "streaming": false})
+	_ = e.publish(context.Background(), sid, pub, EventInferenceFinished, map[string]any{"messageId": messageID, "prompt": prompt, "role": "assistant", "text": finalText, "content": finalText, "status": "finished", "streaming": false})
 }
 
 func (e *Engine) publish(ctx context.Context, sid sessionstream.SessionId, pub sessionstream.EventPublisher, name string, payload map[string]any) error {
@@ -360,6 +361,7 @@ func (s *runtimeEventSink) PublishEvent(event gepevents.Event) error {
 		s.mu.Unlock()
 		return s.engine.publish(context.Background(), s.sessionID, s.pub, EventTokensDelta, map[string]any{
 			"messageId": s.messageID,
+			"prompt":    s.prompt,
 			"role":      "assistant",
 			"chunk":     ev.Delta,
 			"text":      ev.Completion,
@@ -374,6 +376,7 @@ func (s *runtimeEventSink) PublishEvent(event gepevents.Event) error {
 		s.mu.Unlock()
 		return s.engine.publish(context.Background(), s.sessionID, s.pub, EventInferenceFinished, map[string]any{
 			"messageId": s.messageID,
+			"prompt":    s.prompt,
 			"role":      "assistant",
 			"text":      ev.Text,
 			"content":   ev.Text,
@@ -387,6 +390,7 @@ func (s *runtimeEventSink) PublishEvent(event gepevents.Event) error {
 		s.mu.Unlock()
 		return s.engine.publish(context.Background(), s.sessionID, s.pub, EventInferenceStopped, map[string]any{
 			"messageId": s.messageID,
+			"prompt":    s.prompt,
 			"role":      "assistant",
 			"text":      text,
 			"content":   text,
@@ -401,6 +405,7 @@ func (s *runtimeEventSink) PublishEvent(event gepevents.Event) error {
 		s.mu.Unlock()
 		return s.engine.publish(context.Background(), s.sessionID, s.pub, EventInferenceStopped, map[string]any{
 			"messageId": s.messageID,
+			"prompt":    s.prompt,
 			"role":      "assistant",
 			"text":      ev.Text,
 			"content":   ev.Text,
@@ -460,38 +465,93 @@ func baseTimelineProjection(_ context.Context, ev sessionstream.Event, _ *sessio
 		return nil, nil
 	}
 	entity := currentKindEntity(view, TimelineEntityChatMessage, messageID)
-	entity["messageId"] = messageID
+	hadEntity := len(entity) > 0
 	switch ev.Name {
 	case EventUserMessageAccepted:
+		entity["messageId"] = messageID
 		entity["role"] = "user"
 		entity["content"] = asString(payload["content"])
 		entity["text"] = asString(payload["content"])
 		entity["streaming"] = false
 	case EventInferenceStarted:
-		entity["prompt"] = asString(payload["prompt"])
+		content := asString(payload["content"])
+		if content == "" && !hadEntity {
+			return nil, nil
+		}
+		entity["messageId"] = messageID
 		entity["role"] = "assistant"
-		entity["content"] = ""
-		entity["text"] = ""
 		entity["status"] = "streaming"
 		entity["streaming"] = true
+		if prompt := asString(payload["prompt"]); prompt != "" {
+			entity["prompt"] = prompt
+		}
+		if content != "" {
+			entity["content"] = content
+			entity["text"] = content
+		}
 	case EventTokensDelta:
+		content := asString(payload["content"])
+		if content == "" {
+			content = asString(payload["text"])
+		}
+		if content == "" && !hadEntity {
+			return nil, nil
+		}
+		entity["messageId"] = messageID
 		entity["role"] = "assistant"
-		entity["content"] = asString(payload["content"])
-		entity["text"] = asString(payload["text"])
+		entity["content"] = content
+		entity["text"] = content
 		entity["status"] = "streaming"
 		entity["streaming"] = true
+		if prompt := asString(payload["prompt"]); prompt != "" {
+			entity["prompt"] = prompt
+		}
 	case EventInferenceFinished:
+		content := asString(payload["content"])
+		if content == "" {
+			content = asString(payload["text"])
+		}
+		if content == "" {
+			content = asString(entity["content"])
+			if content == "" {
+				content = asString(entity["text"])
+			}
+		}
+		if content == "" && !hadEntity {
+			return nil, nil
+		}
+		entity["messageId"] = messageID
 		entity["role"] = "assistant"
-		entity["content"] = asString(payload["content"])
-		entity["text"] = asString(payload["text"])
+		entity["content"] = content
+		entity["text"] = content
 		entity["status"] = "finished"
 		entity["streaming"] = false
+		if prompt := asString(payload["prompt"]); prompt != "" {
+			entity["prompt"] = prompt
+		}
 	case EventInferenceStopped:
+		content := asString(payload["content"])
+		if content == "" {
+			content = asString(payload["text"])
+		}
+		if content == "" {
+			content = asString(entity["content"])
+			if content == "" {
+				content = asString(entity["text"])
+			}
+		}
+		if content == "" && !hadEntity {
+			return nil, nil
+		}
+		entity["messageId"] = messageID
 		entity["role"] = "assistant"
-		entity["content"] = asString(payload["content"])
-		entity["text"] = asString(payload["text"])
+		entity["content"] = content
+		entity["text"] = content
 		entity["status"] = "stopped"
 		entity["streaming"] = false
+		if prompt := asString(payload["prompt"]); prompt != "" {
+			entity["prompt"] = prompt
+		}
 		if errText := asString(payload["error"]); errText != "" {
 			entity["error"] = errText
 		}

@@ -150,17 +150,21 @@ export function timelineMutationFromUIEvent(frame: CanonicalFrame): TimelineMuta
           streaming: payload.streaming === true,
         }),
       };
-    case 'ChatMessageStarted':
+    case 'ChatMessageStarted': {
+      const content = asString(payload.content) || asString(payload.text);
       return {
-        upsert: messageEntity(messageId, {
-          role: asString(payload.role) || 'assistant',
-          prompt: asString(payload.prompt),
-          content: asString(payload.content) || '',
-          status: asString(payload.status) || 'streaming',
-          streaming: true,
-        }),
+        upsert: content
+          ? messageEntity(messageId, {
+              role: asString(payload.role) || 'assistant',
+              prompt: asString(payload.prompt),
+              content,
+              status: asString(payload.status) || 'streaming',
+              streaming: true,
+            })
+          : undefined,
         status: 'streaming',
       };
+    }
     case 'ChatMessageAppended':
       return {
         upsert: messageEntity(messageId, {
@@ -171,27 +175,37 @@ export function timelineMutationFromUIEvent(frame: CanonicalFrame): TimelineMuta
         }),
         status: 'streaming',
       };
-    case 'ChatMessageFinished':
+    case 'ChatMessageFinished': {
+      const content = asString(payload.content) || asString(payload.text);
       return {
-        upsert: messageEntity(messageId, {
-          role: asString(payload.role) || 'assistant',
-          content: asString(payload.content) || asString(payload.text),
-          status: asString(payload.status) || 'finished',
-          streaming: false,
-        }),
+        upsert: content
+          ? messageEntity(messageId, {
+              role: asString(payload.role) || 'assistant',
+              prompt: asString(payload.prompt),
+              content,
+              status: asString(payload.status) || 'finished',
+              streaming: false,
+            })
+          : undefined,
         status: 'finished',
       };
-    case 'ChatMessageStopped':
+    }
+    case 'ChatMessageStopped': {
+      const content = asString(payload.content) || asString(payload.text);
       return {
-        upsert: messageEntity(messageId, {
-          role: asString(payload.role) || 'assistant',
-          content: asString(payload.content) || asString(payload.text),
-          status: asString(payload.status) || 'stopped',
-          streaming: false,
-          error: asString(payload.error),
-        }),
+        upsert: content
+          ? messageEntity(messageId, {
+              role: asString(payload.role) || 'assistant',
+              prompt: asString(payload.prompt),
+              content,
+              status: asString(payload.status) || 'stopped',
+              streaming: false,
+              error: asString(payload.error),
+            })
+          : undefined,
         status: 'stopped',
       };
+    }
     case 'ChatReasoningStarted': {
       const content = asString(payload.content) || asString(payload.text);
       if (!content) return null;
@@ -217,6 +231,7 @@ export function timelineMutationFromUIEvent(frame: CanonicalFrame): TimelineMuta
       };
     case 'ChatReasoningFinished': {
       const content = asString(payload.content) || asString(payload.text);
+      if (!content) return null;
       return {
         upsert: messageEntity(messageId, {
           role: 'thinking',

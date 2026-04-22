@@ -43,6 +43,20 @@ describe('timelineEntityFromSnapshotEntity', () => {
 });
 
 describe('timelineMutationFromUIEvent', () => {
+  it('updates status without creating an empty assistant placeholder for ChatMessageStarted', () => {
+    const mutation = timelineMutationFromUIEvent({
+      name: 'ChatMessageStarted',
+      payload: {
+        messageId: 'chat-msg-2',
+        prompt: 'Explain ordinals',
+        status: 'streaming',
+        streaming: true,
+      },
+    });
+
+    expect(mutation).toEqual({ status: 'streaming', upsert: undefined });
+  });
+
   it('does not create an empty placeholder mutation for ChatReasoningStarted without visible content', () => {
     const mutation = timelineMutationFromUIEvent({
       name: 'ChatReasoningStarted',
@@ -73,6 +87,19 @@ describe('timelineMutationFromUIEvent', () => {
     expect(mutation?.upsert?.props.role).toBe('thinking');
     expect(mutation?.upsert?.props.content).toBe('draft plan');
     expect(mutation?.status).toBe('streaming');
+  });
+
+  it('does not create an empty placeholder mutation for ChatReasoningFinished without visible content', () => {
+    const mutation = timelineMutationFromUIEvent({
+      name: 'ChatReasoningFinished',
+      payload: {
+        messageId: 'chat-msg-2:thinking',
+        status: 'finished',
+        streaming: false,
+      },
+    });
+
+    expect(mutation).toBeNull();
   });
 
   it('creates a finished thinking message mutation for ChatReasoningFinished', () => {
