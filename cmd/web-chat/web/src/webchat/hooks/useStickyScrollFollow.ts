@@ -31,6 +31,8 @@ export function useStickyScrollFollow({
   const tailRef = useRef<HTMLDivElement>(null);
   const isProgrammaticScrollRef = useRef(false);
   const lastScrollTopRef = useRef(0);
+  const previousResetKeyRef = useRef(resetKey);
+  const previousContentVersionRef = useRef<string | number | undefined>(undefined);
 
   const scrollToBottom = useCallback((behavior: ScrollBehavior = 'auto') => {
     const container = containerRef.current;
@@ -78,11 +80,22 @@ export function useStickyScrollFollow({
   }, [attachThresholdPx, detachThresholdPx, enabled]);
 
   useEffect(() => {
+    if (previousResetKeyRef.current === resetKey) {
+      return;
+    }
+    previousResetKeyRef.current = resetKey;
     setMode('following');
   }, [resetKey]);
 
   useLayoutEffect(() => {
-    if (!enabled || mode !== 'following' || !contentVersion) return;
+    if (!enabled || mode !== 'following' || !contentVersion) {
+      previousContentVersionRef.current = contentVersion;
+      return;
+    }
+    if (previousContentVersionRef.current === contentVersion) {
+      return;
+    }
+    previousContentVersionRef.current = contentVersion;
     scrollToBottom(isStreaming ? 'auto' : 'smooth');
   }, [contentVersion, enabled, isStreaming, mode, scrollToBottom]);
 
@@ -97,7 +110,7 @@ export function useStickyScrollFollow({
     });
     observer.observe(timeline, { childList: true, subtree: true, characterData: true });
     return () => observer.disconnect();
-  }, [contentVersion, enabled, mode, scrollToBottom]);
+  }, [enabled, mode, scrollToBottom]);
 
   return {
     containerRef,
