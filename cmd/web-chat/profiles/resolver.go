@@ -141,13 +141,13 @@ func (r *RequestResolver) BuildConversationPlan(ctx context.Context, convID, pro
 	runtimeKey := runtimeKeyFromResolvedProfile(resolvedProfile)
 
 	rt := &ResolvedRuntime{
-		SystemPrompt: "",
-		Middlewares:  nil,
-		ToolNames:    nil,
-		RuntimeKey:   runtimeKey,
-		ProfileVersion:     0,
-		InferenceSettings:  nil,
-		ProfileMetadata:    nil,
+		SystemPrompt:      "",
+		Middlewares:       nil,
+		ToolNames:         nil,
+		RuntimeKey:        runtimeKey,
+		ProfileVersion:    0,
+		InferenceSettings: nil,
+		ProfileMetadata:   nil,
 	}
 	if resolvedPlan != nil {
 		rt.ProfileVersion = resolvedPlan.ProfileVersion

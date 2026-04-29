@@ -341,7 +341,7 @@ func writeJSON(w http.ResponseWriter, status int, payload any) {
 	_ = json.NewEncoder(w).Encode(payload)
 }
 
-func parseSessionPath(path string) (sessionID string, action string, ok bool) {
+func parseSessionPath(path string) (string, string, bool) {
 	const prefix = "/api/chat/sessions/"
 	if !strings.HasPrefix(path, prefix) {
 		return "", "", false

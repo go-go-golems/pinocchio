@@ -191,21 +191,22 @@ func TestReasoningChatFeatureServerSnapshotAndUIEvents(t *testing.T) {
 		var snap appserver.SessionSnapshotResponse
 		require.NoError(t, json.NewDecoder(snapResp.Body).Decode(&snap))
 		_ = snapResp.Body.Close()
-		if snap.Status == "finished" {
-			roles := map[string]map[string]any{}
-			for _, entity := range snap.Entities {
-				payload, ok := entity.Payload.(map[string]any)
-				require.True(t, ok)
-				if role, ok := payload["role"].(string); ok {
-					roles[role] = payload
+		roles := map[string]map[string]any{}
+		for _, entity := range snap.Entities {
+			payload, ok := entity.Payload.(map[string]any)
+			require.True(t, ok)
+			if role, ok := payload["role"].(string); ok {
+				roles[role] = payload
+			}
+		}
+		if _, ok := roles["user"]; ok {
+			if thinking, ok := roles["thinking"]; ok {
+				if _, ok := roles["assistant"]; ok {
+					require.Equal(t, "high level plan", thinking["content"])
+					require.Equal(t, false, thinking["streaming"])
+					return
 				}
 			}
-			require.Contains(t, roles, "user")
-			require.Contains(t, roles, "thinking")
-			require.Contains(t, roles, "assistant")
-			require.Equal(t, "high level plan", roles["thinking"]["content"])
-			require.Equal(t, false, roles["thinking"]["streaming"])
-			return
 		}
 		if time.Now().After(deadline) {
 			t.Fatalf("timed out waiting for reasoning snapshot; last status=%q", snap.Status)

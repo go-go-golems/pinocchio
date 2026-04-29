@@ -106,19 +106,18 @@ func (s *modeSwitchSession) OnCompleted(_ context.Context, raw []byte, success b
 	return nil
 }
 
-func previewFields(payload *ModeSwitchPayload) (analysis string, newMode string, parseState string) {
+func previewFields(payload *ModeSwitchPayload) (string, string, string) {
 	if payload == nil {
 		return "", "", ""
 	}
-	analysis = strings.TrimSpace(payload.ModeSwitch.Analysis)
-	newMode = strings.TrimSpace(payload.ModeSwitch.NewMode)
+	analysis := strings.TrimSpace(payload.ModeSwitch.Analysis)
+	newMode := strings.TrimSpace(payload.ModeSwitch.NewMode)
+	parseState := ""
 	switch {
 	case newMode != "":
 		parseState = "candidate"
 	case analysis != "":
 		parseState = "analysis-only"
-	default:
-		parseState = ""
 	}
 	return analysis, newMode, parseState
 }
