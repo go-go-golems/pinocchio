@@ -59,6 +59,17 @@ func newTestMux(t *testing.T, opts ...Option) (*Server, *httptest.Server) {
 	return srv, httpSrv
 }
 
+func TestSnapshotStatusDoesNotFinishBeforeAssistant(t *testing.T) {
+	entities := []SnapshotEntity{
+		{Payload: map[string]any{"role": "user", "status": ""}},
+		{Payload: map[string]any{"role": "thinking", "status": "finished"}},
+	}
+	require.Equal(t, "streaming", snapshotStatus(entities))
+
+	entities = append(entities, SnapshotEntity{Payload: map[string]any{"role": "assistant", "status": "finished"}})
+	require.Equal(t, "finished", snapshotStatus(entities))
+}
+
 func TestCreateSession(t *testing.T) {
 	_, httpSrv := newTestMux(t)
 

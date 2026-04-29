@@ -307,15 +307,41 @@ func encodeSnapshotResponse(snap sessionstream.Snapshot) SessionSnapshotResponse
 }
 
 func snapshotStatus(entities []SnapshotEntity) string {
+	hasUser := false
+	hasNonUserStatus := false
+	fallbackStatus := ""
 	for i := len(entities) - 1; i >= 0; i-- {
 		payload, ok := entities[i].Payload.(map[string]any)
 		if !ok {
 			continue
 		}
+		role, _ := payload["role"].(string)
 		status, _ := payload["status"].(string)
-		if status != "" {
+		if role == "assistant" && status != "" {
 			return status
 		}
+		if role == "user" {
+			hasUser = true
+			continue
+		}
+		if status == "streaming" {
+			return status
+		}
+		if status != "" {
+			hasNonUserStatus = true
+			if fallbackStatus == "" {
+				fallbackStatus = status
+			}
+		}
+	}
+	if hasUser && hasNonUserStatus {
+		return "streaming"
+	}
+	if fallbackStatus != "" {
+		return fallbackStatus
+	}
+	if hasUser {
+		return "streaming"
 	}
 	return "idle"
 }
