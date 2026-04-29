@@ -15,7 +15,6 @@ import (
 	chatapp "github.com/go-go-golems/pinocchio/pkg/chatapp"
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 	sessionstream "github.com/go-go-golems/sessionstream/pkg/sessionstream"
-	storememory "github.com/go-go-golems/sessionstream/pkg/sessionstream/hydration/memory"
 	storesqlite "github.com/go-go-golems/sessionstream/pkg/sessionstream/hydration/sqlite"
 	wstransport "github.com/go-go-golems/sessionstream/pkg/sessionstream/transport/ws"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -140,7 +139,11 @@ func newHydrationStore(s *Server, reg *sessionstream.SchemaRegistry) (sessionstr
 		return nil, nil, fmt.Errorf("app server or schema registry is nil")
 	}
 	if s.sqliteDSN == "" && s.sqliteDBPath == "" {
-		return storememory.New(), nil, nil
+		store, err := storesqlite.NewInMemory(reg)
+		if err != nil {
+			return nil, nil, err
+		}
+		return store, store.Close, nil
 	}
 	dsn := s.sqliteDSN
 	if dsn == "" {

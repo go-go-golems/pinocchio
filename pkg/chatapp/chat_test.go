@@ -6,7 +6,7 @@ import (
 	"time"
 
 	sessionstream "github.com/go-go-golems/sessionstream/pkg/sessionstream"
-	storememory "github.com/go-go-golems/sessionstream/pkg/sessionstream/hydration/memory"
+	storesqlite "github.com/go-go-golems/sessionstream/pkg/sessionstream/hydration/sqlite"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/types/known/structpb"
 )
@@ -97,9 +97,12 @@ func newTestHub(t *testing.T, engine *Engine) *sessionstream.Hub {
 	t.Helper()
 	reg := sessionstream.NewSchemaRegistry()
 	require.NoError(t, RegisterSchemas(reg))
+	store, err := storesqlite.NewInMemory(reg)
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, store.Close()) })
 	hub, err := sessionstream.NewHub(
 		sessionstream.WithSchemaRegistry(reg),
-		sessionstream.WithHydrationStore(storememory.New()),
+		sessionstream.WithHydrationStore(store),
 	)
 	require.NoError(t, err)
 	require.NoError(t, Install(hub, engine))
