@@ -7,6 +7,7 @@ import (
 
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 	sessionstream "github.com/go-go-golems/sessionstream/pkg/sessionstream"
+	"github.com/google/uuid"
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
@@ -50,14 +51,24 @@ func (s *Service) SubmitPromptRequest(ctx context.Context, sid sessionstream.Ses
 	if req.Prompt == "" {
 		return fmt.Errorf("prompt is empty")
 	}
+	requestID := uuid.NewString()
 	if s.engine != nil {
-		s.engine.setPendingRequest(sid, req)
+		s.engine.setPendingRequest(requestID, req)
 	}
-	payload, err := structpb.NewStruct(map[string]any{"prompt": req.Prompt})
+	payload, err := structpb.NewStruct(map[string]any{
+		"prompt":         req.Prompt,
+		"requestId":      requestID,
+		"idempotencyKey": req.IdempotencyKey,
+	})
 	if err != nil {
+		s.engine.clearPendingRequest(requestID)
 		return err
 	}
-	return s.hub.Submit(ctx, sid, CommandStartInference, payload)
+	if err := s.hub.Submit(ctx, sid, CommandStartInference, payload); err != nil {
+		s.engine.clearPendingRequest(requestID)
+		return err
+	}
+	return nil
 }
 
 func (s *Service) Stop(ctx context.Context, sid sessionstream.SessionId) error {

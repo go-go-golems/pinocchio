@@ -45,7 +45,7 @@ type Engine struct {
 	mu         sync.Mutex
 	nextID     int
 	active     map[sessionstream.SessionId]*activeRun
-	pending    map[sessionstream.SessionId]PromptRequest
+	pending    map[string]PromptRequest
 	chunkDelay time.Duration
 	hooks      Hooks
 	features   []FeatureSet
@@ -83,7 +83,7 @@ func WithHooks(h Hooks) Option {
 func NewEngine(opts ...Option) *Engine {
 	engine := &Engine{
 		active:     map[sessionstream.SessionId]*activeRun{},
-		pending:    map[sessionstream.SessionId]PromptRequest{},
+		pending:    map[string]PromptRequest{},
 		chunkDelay: 20 * time.Millisecond,
 	}
 	for _, opt := range opts {
@@ -149,7 +149,7 @@ func Install(hub *sessionstream.Hub, engine *Engine) error {
 
 func (e *Engine) handleStartInference(ctx context.Context, cmd sessionstream.Command, _ *sessionstream.Session, pub sessionstream.EventPublisher) error {
 	payload := toMap(cmd.Payload)
-	pending := e.takePendingRequest(cmd.SessionId)
+	pending := e.takePendingRequest(asString(payload["requestId"]))
 	prompt := strings.TrimSpace(pending.Prompt)
 	if prompt == "" {
 		prompt = strings.TrimSpace(asString(payload["prompt"]))
@@ -330,24 +330,33 @@ func (e *Engine) clearRun(sid sessionstream.SessionId, messageID string) {
 	}
 }
 
-func (e *Engine) setPendingRequest(sid sessionstream.SessionId, req PromptRequest) {
-	if e == nil || sid == "" {
+func (e *Engine) setPendingRequest(requestID string, req PromptRequest) {
+	if e == nil || requestID == "" {
 		return
 	}
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	e.pending[sid] = req
+	e.pending[requestID] = req
 }
 
-func (e *Engine) takePendingRequest(sid sessionstream.SessionId) PromptRequest {
-	if e == nil || sid == "" {
+func (e *Engine) takePendingRequest(requestID string) PromptRequest {
+	if e == nil || requestID == "" {
 		return PromptRequest{}
 	}
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	req := e.pending[sid]
-	delete(e.pending, sid)
+	req := e.pending[requestID]
+	delete(e.pending, requestID)
 	return req
+}
+
+func (e *Engine) clearPendingRequest(requestID string) {
+	if e == nil || requestID == "" {
+		return
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	delete(e.pending, requestID)
 }
 
 func (s *runtimeEventSink) PublishEvent(event gepevents.Event) error {

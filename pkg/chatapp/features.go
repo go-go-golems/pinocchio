@@ -63,41 +63,35 @@ func (e *Engine) handleFeatureRuntimeEvent(ctx context.Context, sid sessionstrea
 }
 
 func (e *Engine) uiProjection(ctx context.Context, ev sessionstream.Event, sess *sessionstream.Session, view sessionstream.TimelineView) ([]sessionstream.UIEvent, error) {
-	base, err := baseUIProjection(ctx, ev, sess, view)
+	projected, err := baseUIProjection(ctx, ev, sess, view)
 	if err != nil {
 		return nil, err
 	}
-	if base != nil {
-		return base, nil
-	}
 	for _, feature := range e.activeFeatures() {
-		projected, handled, err := feature.ProjectUI(ctx, ev, sess, view)
+		featureEvents, handled, err := feature.ProjectUI(ctx, ev, sess, view)
 		if err != nil {
 			return nil, err
 		}
 		if handled {
-			return projected, nil
+			projected = append(projected, featureEvents...)
 		}
 	}
-	return nil, nil
+	return projected, nil
 }
 
 func (e *Engine) timelineProjection(ctx context.Context, ev sessionstream.Event, sess *sessionstream.Session, view sessionstream.TimelineView) ([]sessionstream.TimelineEntity, error) {
-	base, err := baseTimelineProjection(ctx, ev, sess, view)
+	projected, err := baseTimelineProjection(ctx, ev, sess, view)
 	if err != nil {
 		return nil, err
 	}
-	if base != nil {
-		return base, nil
-	}
 	for _, feature := range e.activeFeatures() {
-		projected, handled, err := feature.ProjectTimeline(ctx, ev, sess, view)
+		featureEntities, handled, err := feature.ProjectTimeline(ctx, ev, sess, view)
 		if err != nil {
 			return nil, err
 		}
 		if handled {
-			return projected, nil
+			projected = append(projected, featureEntities...)
 		}
 	}
-	return nil, nil
+	return projected, nil
 }

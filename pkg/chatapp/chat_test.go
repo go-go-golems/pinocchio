@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	gepevents "github.com/go-go-golems/geppetto/pkg/events"
 	sessionstream "github.com/go-go-golems/sessionstream/pkg/sessionstream"
 	storesqlite "github.com/go-go-golems/sessionstream/pkg/sessionstream/hydration/sqlite"
 	"github.com/stretchr/testify/require"
@@ -58,6 +59,33 @@ func TestBaseTimelineProjection_DelaysAssistantEntityUntilContentArrives(t *test
 	require.Equal(t, "Explain ordinals", payload["prompt"])
 }
 
+func TestFeatureUIProjectionRunsForBaseChatEvents(t *testing.T) {
+	engine := NewEngine(WithFeatureSets(testFeatureProjection{}))
+	payload, err := structpb.NewStruct(map[string]any{
+		"messageId": "chat-msg-1",
+		"role":      "assistant",
+		"content":   "done",
+		"status":    "finished",
+	})
+	require.NoError(t, err)
+
+	uiEvents, err := engine.uiProjection(context.Background(), sessionstream.Event{Name: EventInferenceFinished, SessionId: "chat-feature", Ordinal: 3, Payload: payload}, nil, staticTimelineView{})
+	require.NoError(t, err)
+	require.Len(t, uiEvents, 2)
+	require.Equal(t, UIMessageFinished, uiEvents[0].Name)
+	require.Equal(t, "FeatureSawFinished", uiEvents[1].Name)
+}
+
+func TestPendingRequestsAreKeyedByRequestID(t *testing.T) {
+	engine := NewEngine()
+	engine.setPendingRequest("request-1", PromptRequest{Prompt: "first"})
+	engine.setPendingRequest("request-2", PromptRequest{Prompt: "second"})
+
+	require.Equal(t, "first", engine.takePendingRequest("request-1").Prompt)
+	require.Equal(t, "second", engine.takePendingRequest("request-2").Prompt)
+	require.Empty(t, engine.takePendingRequest("request-1").Prompt)
+}
+
 func TestChatExampleStopPath(t *testing.T) {
 	engine := NewEngine(WithChunkDelay(10 * time.Millisecond))
 	hub := newTestHub(t, engine)
@@ -82,6 +110,29 @@ func TestChatExampleStopPath(t *testing.T) {
 	}
 	require.Equal(t, "stopped", assistant["status"])
 	require.Equal(t, false, assistant["streaming"])
+}
+
+type testFeatureProjection struct{}
+
+func (testFeatureProjection) RegisterSchemas(*sessionstream.SchemaRegistry) error { return nil }
+
+func (testFeatureProjection) HandleRuntimeEvent(context.Context, RuntimeEventContext, gepevents.Event) (bool, error) {
+	return false, nil
+}
+
+func (testFeatureProjection) ProjectUI(_ context.Context, ev sessionstream.Event, _ *sessionstream.Session, _ sessionstream.TimelineView) ([]sessionstream.UIEvent, bool, error) {
+	if ev.Name != EventInferenceFinished {
+		return nil, false, nil
+	}
+	payload, err := structpb.NewStruct(map[string]any{"messageId": asString(toMap(ev.Payload)["messageId"])})
+	if err != nil {
+		return nil, true, err
+	}
+	return []sessionstream.UIEvent{{Name: "FeatureSawFinished", Payload: payload}}, true, nil
+}
+
+func (testFeatureProjection) ProjectTimeline(context.Context, sessionstream.Event, *sessionstream.Session, sessionstream.TimelineView) ([]sessionstream.TimelineEntity, bool, error) {
+	return nil, false, nil
 }
 
 type staticTimelineView struct{}
