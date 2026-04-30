@@ -16,7 +16,7 @@ require (
 	github.com/go-go-golems/bobatea v0.1.5
 	github.com/go-go-golems/clay v0.4.7
 	github.com/go-go-golems/geppetto v0.11.17
-	github.com/go-go-golems/glazed v1.2.5
+	github.com/go-go-golems/glazed v1.2.6
 	github.com/go-go-golems/go-go-goja v0.4.15
 	github.com/go-go-golems/sessionstream v0.0.2
 	github.com/go-go-golems/uhoh v0.0.5
