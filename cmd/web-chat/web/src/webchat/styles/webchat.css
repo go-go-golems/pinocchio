@@ -88,8 +88,17 @@
   border-color: color-mix(in srgb, var(--pwchat-danger) 45%, transparent);
 }
 
+:where([data-pwchat] [data-part="pill-button"][data-variant="accent"]) {
+  color: var(--pwchat-accent);
+  border-color: color-mix(in srgb, var(--pwchat-accent) 45%, transparent);
+}
+
 :where([data-pwchat] [data-part="pill-button"]:hover) {
   border-color: color-mix(in srgb, var(--pwchat-danger) 40%, transparent);
+}
+
+:where([data-pwchat] [data-part="pill-button"][data-variant="accent"]:hover) {
+  border-color: color-mix(in srgb, var(--pwchat-accent) 40%, transparent);
 }
 
 :where([data-pwchat] [data-part="pill-select"]) {
@@ -113,6 +122,20 @@
   display: flex;
   flex-direction: column;
   gap: var(--pwchat-gap);
+}
+
+:where([data-pwchat] [data-part="jump-to-latest-wrap"]) {
+  position: sticky;
+  bottom: 12px;
+  display: flex;
+  justify-content: center;
+  margin-top: 12px;
+  pointer-events: none;
+}
+
+:where([data-pwchat] [data-part="jump-to-latest-wrap"] > button) {
+  pointer-events: auto;
+  box-shadow: 0 8px 32px var(--pwchat-shadow);
 }
 
 :where([data-pwchat] [data-part="turn"]) {

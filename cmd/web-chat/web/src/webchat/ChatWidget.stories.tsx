@@ -1,7 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import type { ComponentProps } from 'react';
 import { useEffect } from 'react';
-import { registerThinkingModeModule } from '../features/thinkingMode/registerThinkingMode';
 import { handleSem, registerDefaultSemHandlers } from '../sem/registry';
 import { useAppDispatch } from '../store/hooks';
 import { timelineSlice } from '../store/timelineSlice';
@@ -83,7 +82,6 @@ function ScenarioRunner({ frames, delayMs, widgetProps }: ScenarioRunnerProps) {
   const dispatch = useAppDispatch();
   useEffect(() => {
     registerDefaultSemHandlers();
-    registerThinkingModeModule();
     dispatch(timelineSlice.actions.clear());
     if (!delayMs) {
       for (const fr of frames) handleSem(fr, dispatch);
@@ -214,49 +212,3 @@ export const WidgetOnlyAgentMode: Story = {
   ),
 };
 
-export const WidgetOnlyThinkingMode: Story = {
-  render: () => (
-    <ScenarioRunner
-      frames={[
-        {
-          sem: true,
-          event: {
-            type: 'thinking.mode.started',
-            id: 'tm-1',
-            seq: 1,
-            data: {
-              itemId: 'tm-1',
-              data: { mode: 'deep', phase: 'selection', reasoning: 'The task benefits from deep reasoning and careful planning.' },
-            },
-          },
-        },
-        {
-          sem: true,
-          event: {
-            type: 'thinking.mode.update',
-            id: 'tm-1',
-            seq: 2,
-            data: {
-              itemId: 'tm-1',
-              data: { mode: 'deep', phase: 'confirmed', reasoning: 'Proceeding with deep mode.' },
-            },
-          },
-        },
-        {
-          sem: true,
-          event: {
-            type: 'thinking.mode.completed',
-            id: 'tm-1',
-            seq: 3,
-            data: {
-              itemId: 'tm-1',
-              data: { mode: 'deep', phase: 'confirmed', reasoning: 'Locked in.' },
-              success: true,
-              error: '',
-            },
-          },
-        },
-      ]}
-    />
-  ),
-};

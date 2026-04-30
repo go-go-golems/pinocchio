@@ -127,6 +127,7 @@ export function AgentModeCard({ e }: { e: RenderEntity }) {
   const from = typeof data.from === 'string' ? data.from : '';
   const to = typeof data.to === 'string' ? data.to : '';
   const analysis = typeof data.analysis === 'string' ? normalizeAgentModeAnalysis(data.analysis) : '';
+  const preview = e.props?.preview === true;
   const extraData: Record<string, unknown> = { ...data };
   delete extraData.from;
   delete extraData.to;
@@ -137,6 +138,11 @@ export function AgentModeCard({ e }: { e: RenderEntity }) {
     <div data-part="card">
       <div data-part="card-header">
         <div data-part="card-header-title">{title}</div>
+        {preview ? (
+          <div data-part="pill" data-variant="warning">
+            preview
+          </div>
+        ) : null}
         {from ? (
           <div data-part="pill" data-mono="true">
             from {from}

@@ -5,8 +5,12 @@ import (
 	"embed"
 	"encoding/json"
 	"io"
+	"io/fs"
 	"net/http"
+	"os/signal"
 	"strings"
+	"syscall"
+	"time"
 
 	clay "github.com/go-go-golems/clay/pkg"
 	"github.com/go-go-golems/glazed/pkg/cli"
@@ -17,22 +21,19 @@ import (
 	"github.com/go-go-golems/glazed/pkg/help"
 	help_cmd "github.com/go-go-golems/glazed/pkg/help/cmd"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
+	"golang.org/x/sync/errgroup"
 
 	gepprofiles "github.com/go-go-golems/geppetto/pkg/engineprofiles"
 	"github.com/go-go-golems/geppetto/pkg/inference/middlewarecfg"
-	geptools "github.com/go-go-golems/geppetto/pkg/inference/tools"
 	aisettings "github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
-	toolspkg "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/tools"
-	thinkingmode "github.com/go-go-golems/pinocchio/cmd/web-chat/thinkingmode"
+	appserver "github.com/go-go-golems/pinocchio/cmd/web-chat/app"
+	"github.com/go-go-golems/pinocchio/cmd/web-chat/profiles"
 	timelinecmd "github.com/go-go-golems/pinocchio/cmd/web-chat/timeline"
 	profilebootstrap "github.com/go-go-golems/pinocchio/pkg/cmds/profilebootstrap"
 	agentmode "github.com/go-go-golems/pinocchio/pkg/middlewares/agentmode"
 	rediscfg "github.com/go-go-golems/pinocchio/pkg/redisstream"
-	webchat "github.com/go-go-golems/pinocchio/pkg/webchat"
-	webhttp "github.com/go-go-golems/pinocchio/pkg/webchat/http"
-	"github.com/gorilla/websocket"
-	"github.com/rs/zerolog/log"
 )
 
 //go:embed static
@@ -73,6 +74,157 @@ func runtimeConfigScript(basePrefix string, debugAPI bool) (string, error) {
 	return "window.__PINOCCHIO_WEBCHAT_CONFIG__ = " + string(payload) + ";\n", nil
 }
 
+func buildAppConfigHandler(appConfigJS string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-store")
+		if r.Method == http.MethodHead {
+			return
+		}
+		_, _ = io.WriteString(w, appConfigJS)
+	}
+}
+
+func fsSub(staticFS fs.FS, path string) (fs.FS, error) {
+	return fs.Sub(staticFS, path)
+}
+
+func registerStaticUIHandlers(mux *http.ServeMux, staticFS fs.FS) {
+	if mux == nil || staticFS == nil {
+		return
+	}
+	logger := log.With().Str("component", "web-chat").Logger()
+	if staticSub, err := fsSub(staticFS, "static"); err == nil {
+		mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticSub))))
+	} else {
+		logger.Warn().Err(err).Msg("failed to mount /static/ asset handler")
+	}
+	if distAssets, err := fsSub(staticFS, "static/dist/assets"); err == nil {
+		mux.Handle("/assets/", http.StripPrefix("/assets/", http.FileServer(http.FS(distAssets))))
+	} else {
+		logger.Warn().Err(err).Msg("no built dist assets found under static/dist/assets")
+	}
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+			http.NotFound(w, r)
+			return
+		}
+		if strings.HasPrefix(r.URL.Path, "/api/") || r.URL.Path == "/api" {
+			http.NotFound(w, r)
+			return
+		}
+		if b, err := fs.ReadFile(staticFS, "static/dist/index.html"); err == nil {
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			_, _ = w.Write(b)
+			return
+		}
+		if b, err := fs.ReadFile(staticFS, "static/index.html"); err == nil {
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			_, _ = w.Write(b)
+			return
+		}
+		http.Error(w, "index not found", http.StatusInternalServerError)
+	})
+}
+
+func buildAppMux(staticFS fs.FS, appConfigJS string, requestResolver *profiles.RequestResolver, canonicalApp *appserver.Server) *http.ServeMux {
+	mux := http.NewServeMux()
+	if requestResolver != nil && requestResolver.Registry() != nil {
+		middlewareRegistry, _ := newWebChatMiddlewareDefinitionRegistry()
+		profiles.RegisterAPIHandlers(mux, requestResolver.Registry(), profiles.APIOptions{
+			DefaultRegistrySlug:             requestResolver.DefaultRegistrySlug(),
+			EnableCurrentProfileCookieRoute: true,
+			CurrentProfileCookieName:        "chat_profile",
+			MiddlewareDefinitions:           middlewareRegistry,
+			ExtensionSchemas: []profiles.ExtensionSchemaDocument{
+				{
+					Key: "webchat.starter_suggestions@v1",
+					Schema: map[string]any{
+						"type": "object",
+						"properties": map[string]any{
+							"items": map[string]any{
+								"type": "array",
+								"items": map[string]any{
+									"type": "string",
+								},
+								"default": []any{},
+							},
+						},
+						"required":             []any{"items"},
+						"additionalProperties": false,
+					},
+				},
+			},
+		})
+	}
+	if canonicalApp != nil {
+		mux.HandleFunc("/api/chat/sessions", canonicalApp.HandleCreateSession)
+		mux.HandleFunc("/api/chat/sessions/", canonicalApp.HandleSessionRoutes)
+		mux.HandleFunc("/api/chat/ws", canonicalApp.HandleWS)
+	}
+	mux.HandleFunc("/app-config.js", buildAppConfigHandler(appConfigJS))
+	registerStaticUIHandlers(mux, staticFS)
+	return mux
+}
+
+func buildRootHandler(root string, appMux http.Handler, appConfigJS string) http.Handler {
+	if appMux == nil {
+		return http.NotFoundHandler()
+	}
+	if root == "" || root == "/" {
+		return appMux
+	}
+	prefix := root
+	if !strings.HasPrefix(prefix, "/") {
+		prefix = "/" + prefix
+	}
+	if !strings.HasSuffix(prefix, "/") {
+		prefix += "/"
+	}
+	parent := http.NewServeMux()
+	parent.HandleFunc("/app-config.js", buildAppConfigHandler(appConfigJS))
+	parent.Handle(prefix, http.StripPrefix(strings.TrimRight(prefix, "/"), appMux))
+	log.Info().Str("root", prefix).Msg("mounted webchat under custom root")
+	return parent
+}
+
+func runHTTPServer(ctx context.Context, srv *http.Server, closeFn func() error) error {
+	if ctx == nil {
+		return errors.New("ctx is nil")
+	}
+	if srv == nil {
+		return errors.New("http server is not initialized")
+	}
+	srvCtx, stop := signal.NotifyContext(ctx, syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+	eg, egCtx := errgroup.WithContext(srvCtx)
+	eg.Go(func() error {
+		<-egCtx.Done()
+		shutdownBase := context.WithoutCancel(ctx)
+		shutdownCtx, cancel := context.WithTimeout(shutdownBase, 30*time.Second)
+		defer cancel()
+		if err := srv.Shutdown(shutdownCtx); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			return err
+		}
+		if closeFn != nil {
+			return closeFn()
+		}
+		return nil
+	})
+	eg.Go(func() error {
+		log.Info().Str("addr", srv.Addr).Msg("starting web-chat server")
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			return err
+		}
+		return nil
+	})
+	return eg.Wait()
+}
+
 func NewCommand() (*Command, error) {
 	profileSettingsSection, err := profilebootstrap.NewProfileSettingsSection()
 	if err != nil {
@@ -99,7 +251,6 @@ func NewCommand() (*Command, error) {
 			fields.New("debug-api", fields.TypeBool, fields.WithDefault(false), fields.WithHelp("Enable debug API endpoints under /api/debug/*")),
 			fields.New("timeline-dsn", fields.TypeString, fields.WithDefault(""), fields.WithHelp("SQLite DSN for durable timeline snapshots (enables GET /timeline); preferred over timeline-db")),
 			fields.New("timeline-db", fields.TypeString, fields.WithDefault(""), fields.WithHelp("SQLite DB file path for durable timeline snapshots (enables GET /timeline); DSN is derived with WAL/busy_timeout")),
-			fields.New("timeline-js-script", fields.TypeStringList, fields.WithHelp("Path to JavaScript SEM reducer/handler script (repeat flag or pass comma-separated list)")),
 			fields.New("turns-dsn", fields.TypeString, fields.WithDefault(""), fields.WithHelp("SQLite DSN for durable turn snapshots (enables GET /turns); preferred over turns-db")),
 			fields.New("turns-db", fields.TypeString, fields.WithDefault(""), fields.WithHelp("SQLite DB file path for durable turn snapshots (enables GET /turns); DSN is derived with WAL/busy_timeout")),
 		),
@@ -110,9 +261,11 @@ func NewCommand() (*Command, error) {
 
 func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io.Writer) error {
 	type serverSettings struct {
-		Root              string   `glazed:"root"`
-		DebugAPI          bool     `glazed:"debug-api"`
-		TimelineJSScripts []string `glazed:"timeline-js-script"`
+		Addr        string `glazed:"addr"`
+		Root        string `glazed:"root"`
+		DebugAPI    bool   `glazed:"debug-api"`
+		TimelineDSN string `glazed:"timeline-dsn"`
+		TimelineDB  string `glazed:"timeline-db"`
 	}
 	s := &serverSettings{}
 	if err := parsed.DecodeSectionInto(values.DefaultSlug, s); err != nil {
@@ -127,9 +280,7 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 	}
 	profileSelection := profileRuntime.ProfileSettings
 	if len(profileSelection.ProfileRegistries) > 0 {
-		log.Info().
-			Strs("profile_registries", profileSelection.ProfileRegistries).
-			Msg("resolved profile registry sources")
+		log.Info().Strs("profile_registries", profileSelection.ProfileRegistries).Msg("resolved profile registry sources")
 	}
 
 	appConfigJS, err := runtimeConfigScript(s.Root, s.DebugAPI)
@@ -137,28 +288,17 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 		return errors.Wrap(err, "build runtime config script")
 	}
 
-	// Agent mode configuration (optional)
 	amSvc := agentmode.NewStaticService([]*agentmode.AgentMode{
 		{Name: "financial_analyst", Prompt: "You are a financial transaction analyst. Analyze transactions and propose categories."},
 		{Name: "category_regexp_designer", Prompt: "Design regex patterns to categorize transactions. Verify with SQL counts before proposing changes."},
 		{Name: "category_regexp_reviewer", Prompt: "Review proposed regex patterns and assess over/under matching risks."},
 	})
 
-	var (
-		profileRegistry     gepprofiles.Registry
-		defaultRegistrySlug gepprofiles.RegistrySlug
-	)
-	registryChain := profileRuntime.ProfileRegistryChain
-	if registryChain != nil {
-		profileRegistry = registryChain.Registry
-		defaultRegistrySlug = registryChain.DefaultRegistrySlug
-	}
-
 	middlewareRegistry, err := newWebChatMiddlewareDefinitionRegistry()
 	if err != nil {
 		return errors.Wrap(err, "create middleware definition registry")
 	}
-	hiddenBaseInferenceSettings, configFiles, err := profilebootstrap.ResolveBaseInferenceSettings(parsed)
+	hiddenBaseInferenceSettings, _, err := profilebootstrap.ResolveBaseInferenceSettings(parsed)
 	if err != nil {
 		return err
 	}
@@ -166,109 +306,44 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 	if err != nil {
 		return errors.Wrap(err, "resolve web-chat base inference settings from hidden base and parsed values")
 	}
-	log.Debug().
-		Strs("config_files", configFiles).
-		Interface("step_metadata", baseInferenceSettings.GetMetadata()).
-		Msg("resolved web-chat base inference settings")
 	runtimeComposer := newProfileRuntimeComposer(middlewareRegistry, middlewarecfg.BuildDeps{
 		Values: map[string]any{
 			dependencyAgentModeServiceKey: amSvc,
 		},
 	}, baseInferenceSettings)
-	requestResolver := newProfileRequestResolver(profileRegistry, defaultRegistrySlug, baseInferenceSettings)
 
-	if err := configureTimelineJSScripts(s.TimelineJSScripts); err != nil {
-		return err
+	var (
+		profileRegistry     gepprofiles.Registry
+		defaultRegistrySlug gepprofiles.RegistrySlug
+	)
+	if profileRuntime != nil && profileRuntime.ProfileRegistryChain != nil {
+		profileRegistry = profileRuntime.ProfileRegistryChain.Registry
+		defaultRegistrySlug = profileRuntime.ProfileRegistryChain.DefaultRegistrySlug
 	}
+	requestResolver := profiles.NewRequestResolver(profileRegistry, defaultRegistrySlug, baseInferenceSettings)
+	canonicalRuntimeResolver := newCanonicalRuntimeResolver(requestResolver, runtimeComposer)
 
-	// Register app-owned thinking-mode SEM/timeline handlers.
-	thinkingmode.Register()
-
-	// Build webchat server and register middlewares/tools/profile handlers.
-	srv, err := webchat.NewServer(
-		ctx,
-		parsed,
-		staticFS,
-		webchat.WithRuntimeComposer(runtimeComposer),
-		webchat.WithEventSinkWrapper(newAgentModeStructuredSinkWrapper()),
-		webchat.WithDebugRoutesEnabled(s.DebugAPI),
+	canonicalApp, err := appserver.NewServer(
+		appserver.WithSQLiteDSN(s.TimelineDSN),
+		appserver.WithSQLiteDBPath(s.TimelineDB),
+		appserver.WithRuntimeResolver(canonicalRuntimeResolver),
+		appserver.WithChatFeatureSets(newAgentModeChatFeature(), newReasoningChatFeature()),
 	)
 	if err != nil {
-		return errors.Wrap(err, "new webchat server")
+		return errors.Wrap(err, "build canonical evtstream-backed app")
 	}
 
-	// Register calculator tool
-	srv.RegisterTool("calculator", func(reg geptools.ToolRegistry) error {
-		if im, ok := reg.(*geptools.InMemoryToolRegistry); ok {
-			return toolspkg.RegisterCalculatorTool(im)
-		}
-		im2 := geptools.NewInMemoryToolRegistry()
-		if err := toolspkg.RegisterCalculatorTool(im2); err != nil {
-			return err
-		}
-		for _, td := range im2.ListTools() {
-			_ = reg.RegisterTool(td.Name, td)
-		}
-		return nil
-	})
-
-	chatHandler := webhttp.NewChatHandler(srv.ChatService(), requestResolver)
-	wsHandler := webhttp.NewWSHandler(
-		srv.StreamHub(),
-		requestResolver,
-		websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }},
-	)
-	appMux := http.NewServeMux()
-	appMux.HandleFunc("/chat", chatHandler)
-	appMux.HandleFunc("/chat/", chatHandler)
-	appMux.HandleFunc("/ws", wsHandler)
-	registerProfileAPIHandlers(appMux, requestResolver)
-	timelineLogger := log.With().Str("component", "webchat").Str("route", "/api/timeline").Logger()
-	timelineHandler := webhttp.NewTimelineHandler(srv.TimelineService(), timelineLogger)
-	appMux.HandleFunc("/api/timeline", timelineHandler)
-	appMux.HandleFunc("/api/timeline/", timelineHandler)
-	serveAppConfigJS := func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet && r.Method != http.MethodHead {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
-		w.Header().Set("Cache-Control", "no-store")
-		if r.Method == http.MethodHead {
-			return
-		}
-		_, _ = io.WriteString(w, appConfigJS)
+	appMux := buildAppMux(staticFS, appConfigJS, requestResolver, canonicalApp)
+	handler := buildRootHandler(s.Root, appMux, appConfigJS)
+	httpSrv := &http.Server{
+		Addr:              s.Addr,
+		Handler:           handler,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      60 * time.Second,
+		IdleTimeout:       120 * time.Second,
 	}
-	appMux.HandleFunc("/app-config.js", serveAppConfigJS)
-	appMux.Handle("/api/", srv.APIHandler())
-	appMux.Handle("/", srv.UIHandler())
-
-	// HTTP server and run, with optional root mounting
-	httpSrv := srv.HTTPServer()
-	if httpSrv == nil {
-		return errors.New("http server is not initialized")
-	}
-
-	// If --root is not "/", mount router under that root with a parent mux
-	if s.Root != "" && s.Root != "/" {
-		parent := http.NewServeMux()
-		// Normalize prefix: ensure it starts with "/" and ends with "/"
-		prefix := s.Root
-		if !strings.HasPrefix(prefix, "/") {
-			prefix = "/" + prefix
-		}
-		if !strings.HasSuffix(prefix, "/") {
-			prefix = prefix + "/"
-		}
-		parent.HandleFunc("/app-config.js", serveAppConfigJS)
-		parent.Handle(prefix, http.StripPrefix(strings.TrimRight(prefix, "/"), appMux))
-		httpSrv.Handler = parent
-		log.Info().Str("root", prefix).Msg("mounted webchat under custom root")
-	} else {
-		httpSrv.Handler = appMux
-	}
-
-	return srv.Run(ctx)
+	return runHTTPServer(ctx, httpSrv, canonicalApp.Close)
 }
 
 func main() {

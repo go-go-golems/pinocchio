@@ -18,10 +18,6 @@ describe('presentation helpers', () => {
     });
   });
 
-  it('supports thinking icon overrides for event types', () => {
-    expect(getEventPresentation('llm.thinking_mode').icon).toBe('💭');
-    expect(getEventPresentation('llm.thinking_mode', { thinkingIcon: 'bot' }).icon).toBe('🤖');
-  });
 
   it('falls back safely for unknown event types', () => {
     expect(getEventPresentation('custom.unknown')).toEqual({

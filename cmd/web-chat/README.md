@@ -18,51 +18,56 @@ SectionType: GeneralTopic
 
 ## Overview
 
-`cmd/web-chat` is the reference app for the new HTTP route ownership model.
+`cmd/web-chat` now serves the migrated session-based `evtstream` path as its live chat runtime.
 
-- App code owns `/chat` and `/ws`.
-- `pkg/webchat` provides service surfaces and helper handlers.
-- Timeline hydration is served at `/api/timeline`.
-- Debug endpoints live under `/api/debug/*` when `--debug-api` is enabled.
-- Runtime engine/provider selection comes from the resolved profile registry runtime, not direct `--ai-*` command flags.
+- App code owns the canonical routes under `/api/chat/...`.
+- The main browser flow uses session-based HTTP + websocket transport:
+  - `POST /api/chat/sessions`
+  - `POST /api/chat/sessions/:sessionId/messages`
+  - `GET /api/chat/sessions/:sessionId`
+  - `GET /api/chat/ws`
+- Profile selection APIs remain app-owned under `/api/chat/profile*`.
+- The embedded web UI is served directly from `cmd/web-chat/static`.
+- Legacy `/chat`, `/ws`, and `/api/timeline` are no longer part of the live default path.
 
 ## Directory Structure
 
 - `main.go`:
-  - builds `webchat.Server` via `webchat.NewServer`
-  - registers middleware/tool factories
-  - mounts app-owned `/chat` and `/ws` handlers
-  - mounts `/api/timeline`, `srv.APIHandler()`, `srv.UIHandler()`
-- `runtime_composer.go`: runtime composition policy for engines/middlewares/tools
-- `profile_policy.go`: request resolver and app-owned profile endpoints
+  - builds the canonical `cmd/web-chat/app` server
+  - mounts profile APIs plus canonical session/snapshot/websocket routes
+  - serves embedded UI assets directly
+- `app/`: app-owned canonical chat contracts and handlers
+- `profile_policy.go`: app-owned profile endpoints and request/profile selection policy
 - `web/`: Vite frontend source
-- `static/`: embedded frontend assets (including `static/dist` build output)
+- `static/`: embedded frontend assets (with optional `static/dist` build output)
 - `gen_frontend.go`: `go generate` frontend build hook
 
 ## Runtime Flow
 
 1. Browser opens UI from `/`.
-2. Frontend connects `GET /ws?conv_id=<id>`.
-3. Frontend submits prompt via `POST /chat`.
-4. Backend emits SEM frames over websocket.
-5. Frontend hydrates and reconciles with `GET /api/timeline`.
+2. Frontend creates or resumes a `sessionId`.
+3. Frontend connects `GET /api/chat/ws` and sends a subscribe frame.
+4. Frontend submits prompts via `POST /api/chat/sessions/:sessionId/messages`.
+5. Backend sends websocket `snapshot`, `subscribed`, and `ui-event` frames.
+6. Frontend reload/reconnect uses `GET /api/chat/sessions/:sessionId` plus websocket resubscription.
 
 ## HTTP API
 
-- `POST /chat`
-- `POST /chat/{runtime}`
-- `GET /ws?conv_id=<id>`
-- `GET /api/timeline?conv_id=<id>&since_version=<n>&limit=<n>`
+Canonical live routes:
+
+- `POST /api/chat/sessions`
+- `POST /api/chat/sessions/:sessionId/messages`
+- `GET /api/chat/sessions/:sessionId`
+- `GET /api/chat/ws`
 - `GET /api/chat/profiles` (app-owned)
 - `GET /api/chat/profile` (app-owned)
 - `POST /api/chat/profile` (app-owned)
-- `GET /api/debug/turns?...` (debug only, turn store required)
-- `GET /api/debug/turn/:convId/:sessionId/:turnId` (debug only)
 
-Debug routes are opt-in and only mounted when `--debug-api` is set.
+Legacy route names are intentionally no longer part of the live contract:
 
-Legacy route names are intentionally not documented here:
-
+- `/chat`
+- `/ws`
+- `/api/timeline`
 - `/timeline`
 - `/turns`
 - `/hydrate`
@@ -202,13 +207,14 @@ npm run check
 
 ## Root Prefix
 
-With `--root /chat`, routes are mounted under `/chat`:
+With `--root /chat`, canonical routes are mounted under `/chat`:
 
-- `/chat/chat`
-- `/chat/ws`
-- `/chat/api/timeline`
-- `/chat/api/debug/conversations`
-- `/chat/api/debug/turns`
+- `/chat/api/chat/sessions`
+- `/chat/api/chat/sessions/:sessionId/messages`
+- `/chat/api/chat/sessions/:sessionId`
+- `/chat/api/chat/ws`
+- `/chat/api/chat/profiles`
+- `/chat/api/chat/profile`
 
 ## Related Docs
 

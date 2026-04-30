@@ -17,6 +17,7 @@ const builtinRenderers: Record<string, Renderer> = {
   tool_result: ToolResultCard,
   log: LogCard,
   agent_mode: AgentModeCard,
+  agent_mode_preview: AgentModeCard,
 };
 
 const extensionRenderers = new Map<string, Renderer>();

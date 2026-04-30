@@ -2,9 +2,11 @@ package agentmode
 
 import (
 	"context"
+	"strings"
 
 	"github.com/go-go-golems/geppetto/pkg/events"
 	"github.com/go-go-golems/geppetto/pkg/events/structuredsink"
+	"github.com/go-go-golems/geppetto/pkg/events/structuredsink/parsehelpers"
 )
 
 type ExtractorConfig struct {
@@ -50,20 +52,50 @@ func (e *ModeSwitchExtractor) TagPackage() string { return ModeSwitchTagPackage 
 func (e *ModeSwitchExtractor) TagType() string    { return ModeSwitchTagType }
 func (e *ModeSwitchExtractor) TagVersion() string { return ModeSwitchTagVersion }
 
-func (e *ModeSwitchExtractor) NewSession(_ context.Context, _ events.EventMetadata, _ string) structuredsink.ExtractorSession {
-	return &modeSwitchSession{parseOptions: e.parseOptions}
+func (e *ModeSwitchExtractor) NewSession(_ context.Context, meta events.EventMetadata, itemID string) structuredsink.ExtractorSession {
+	debounce := parsehelpers.DebounceConfig{SnapshotOnNewline: true}
+	debounce = debounce.WithSanitizeYAML(e.parseOptions.SanitizeEnabled())
+	return &modeSwitchSession{
+		parseOptions: e.parseOptions,
+		meta:         meta,
+		itemID:       strings.TrimSpace(itemID),
+		ctrl:         parsehelpers.NewDebouncedYAML[ModeSwitchPayload](debounce),
+	}
 }
 
 type modeSwitchSession struct {
 	parseOptions ParseOptions
+	meta         events.EventMetadata
+	itemID       string
+	ctrl         *parsehelpers.YAMLController[ModeSwitchPayload]
+	lastAnalysis string
+	lastMode     string
+	lastState    string
 }
 
 func (s *modeSwitchSession) OnStart(context.Context) []events.Event {
 	return nil
 }
 
-func (s *modeSwitchSession) OnRaw(context.Context, []byte) []events.Event {
-	return nil
+func (s *modeSwitchSession) OnRaw(_ context.Context, chunk []byte) []events.Event {
+	if s == nil || s.ctrl == nil {
+		return nil
+	}
+	snapshot, err := s.ctrl.FeedBytes(chunk)
+	if err != nil || snapshot == nil {
+		return nil
+	}
+	analysis, newMode, parseState := previewFields(snapshot)
+	if analysis == "" && newMode == "" {
+		return nil
+	}
+	if analysis == s.lastAnalysis && newMode == s.lastMode && parseState == s.lastState {
+		return nil
+	}
+	s.lastAnalysis = analysis
+	s.lastMode = newMode
+	s.lastState = parseState
+	return []events.Event{NewModeSwitchPreviewEvent(s.meta, s.itemID, newMode, analysis, parseState)}
 }
 
 func (s *modeSwitchSession) OnCompleted(_ context.Context, raw []byte, success bool, err error) []events.Event {
@@ -72,6 +104,22 @@ func (s *modeSwitchSession) OnCompleted(_ context.Context, raw []byte, success b
 	}
 	_, _ = ParseModeSwitchPayload(raw, s.parseOptions)
 	return nil
+}
+
+func previewFields(payload *ModeSwitchPayload) (string, string, string) {
+	if payload == nil {
+		return "", "", ""
+	}
+	analysis := strings.TrimSpace(payload.ModeSwitch.Analysis)
+	newMode := strings.TrimSpace(payload.ModeSwitch.NewMode)
+	parseState := ""
+	switch {
+	case newMode != "":
+		parseState = "candidate"
+	case analysis != "":
+		parseState = "analysis-only"
+	}
+	return analysis, newMode, parseState
 }
 
 func WrapStructuredSink(next events.EventSink, cfg StructuredSinkConfig) events.EventSink {

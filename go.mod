@@ -14,15 +14,16 @@ require (
 	github.com/dop251/goja v0.0.0-20251103141225-af2ceb9156d7
 	github.com/dop251/goja_nodejs v0.0.0-20250409162600-f7acab6894b0
 	github.com/go-go-golems/bobatea v0.1.5
-	github.com/go-go-golems/clay v0.4.6
-	github.com/go-go-golems/geppetto v0.11.14
-	github.com/go-go-golems/glazed v1.2.3
-	github.com/go-go-golems/go-go-goja v0.4.8
+	github.com/go-go-golems/clay v0.4.7
+	github.com/go-go-golems/geppetto v0.11.17
+	github.com/go-go-golems/glazed v1.2.6
+	github.com/go-go-golems/go-go-goja v0.4.15
+	github.com/go-go-golems/sessionstream v0.0.2
 	github.com/go-go-golems/uhoh v0.0.5
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.4-0.20250319132907-e064f32e3674
 	github.com/mattn/go-isatty v0.0.20
-	github.com/mattn/go-sqlite3 v1.14.32
+	github.com/mattn/go-sqlite3 v1.14.42
 	github.com/pkg/errors v0.9.1
 	github.com/redis/go-redis/v9 v9.18.0
 	github.com/rs/zerolog v1.35.0
@@ -76,6 +77,7 @@ require (
 	github.com/clipperhouse/uax29/v2 v2.7.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
+	github.com/dop251/base64dec v0.0.0-20231022112746-c6c9f9a96217 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/go-jose/go-jose/v4 v4.1.4 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
