@@ -1,5 +1,4 @@
 import type { AppDispatch } from '../../store/store';
-import { useAppDispatch, useAppSelector } from '../store/hooks';
 import { setFollowStatus } from '../store/uiSlice';
 
 type ConnectArgs = {
@@ -74,14 +73,3 @@ class DebugWsManager {
 }
 
 export const debugWsManager = new DebugWsManager();
-
-export function useDebugTimelineFollow() {
-  const dispatch = useAppDispatch();
-  const selectedSessionId = useAppSelector((state) => state.ui.selectedSessionId);
-  const follow = useAppSelector((state) => state.ui.follow);
-  const basePrefix = '';
-
-  // This is intentionally simple — the real connect/disconnect lifecycle
-  // is managed by the component that reads follow.enabled and sessionId.
-  return { dispatch, selectedSessionId, follow, basePrefix };
-}

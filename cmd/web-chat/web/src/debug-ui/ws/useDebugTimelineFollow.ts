@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { basePrefixFromLocation } from '../../utils/basePrefix';
 import { appendEvent, clear, deleteEntity, setSnapshotOrdinal, upsertEntity } from '../store/debugSlice';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
 import { selectSession, setFollowStatus } from '../store/uiSlice';
@@ -14,6 +15,9 @@ export function useDebugTimelineFollow() {
       debugWsManager.disconnect();
       return;
     }
+
+    // Clear stale data from any previous session before connecting
+    dispatch(clear());
 
     // Wire frame handler
     setOnFrame((frame) => {
@@ -47,7 +51,7 @@ export function useDebugTimelineFollow() {
 
     void debugWsManager.connect({
       sessionId,
-      basePrefix: '',
+      basePrefix: basePrefixFromLocation(),
       dispatch,
     });
 
