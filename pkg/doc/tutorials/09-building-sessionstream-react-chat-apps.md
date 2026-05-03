@@ -599,5 +599,5 @@ If any of those answers is no, the application may still work, but it probably d
 - `webchat-backend-reference` — current backend contract details
 - `webchat-frontend-architecture` — current React-side structure
 - `webchat-sem-and-ui` — frontend/backend event and rendering model
-- `intern-app-owned-middleware-events-timeline-widgets` — deeper feature and widget reference
+
 - `sessionstream/cmd/sessionstream-systemlab` — framework-oriented lab examples and chapters in the extracted framework repo
