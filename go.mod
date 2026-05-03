@@ -14,9 +14,9 @@ require (
 	github.com/dop251/goja v0.0.0-20251103141225-af2ceb9156d7
 	github.com/dop251/goja_nodejs v0.0.0-20250409162600-f7acab6894b0
 	github.com/go-go-golems/bobatea v0.1.5
-	github.com/go-go-golems/clay v0.4.7
-	github.com/go-go-golems/geppetto v0.11.17
-	github.com/go-go-golems/glazed v1.2.6
+	github.com/go-go-golems/clay v0.4.9
+	github.com/go-go-golems/geppetto v0.11.18
+	github.com/go-go-golems/glazed v1.2.7
 	github.com/go-go-golems/go-go-goja v0.4.15
 	github.com/go-go-golems/sessionstream v0.0.2
 	github.com/go-go-golems/uhoh v0.0.5
@@ -26,7 +26,7 @@ require (
 	github.com/mattn/go-sqlite3 v1.14.42
 	github.com/pkg/errors v0.9.1
 	github.com/redis/go-redis/v9 v9.18.0
-	github.com/rs/zerolog v1.35.0
+	github.com/rs/zerolog v1.35.1
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.11.1
 	github.com/tcnksm/go-input v0.0.0-20180404061846-548a7d7a8ee8
