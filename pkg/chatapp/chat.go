@@ -549,9 +549,6 @@ func baseTimelineProjection(_ context.Context, ev sessionstream.Event, _ *sessio
 				content = asString(entity["text"])
 			}
 		}
-		if content == "" && !hadEntity {
-			return nil, nil
-		}
 		entity["messageId"] = messageID
 		entity["role"] = "assistant"
 		entity["content"] = content
