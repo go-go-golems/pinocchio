@@ -48,7 +48,7 @@ type Engine struct {
 	pending    map[string]PromptRequest
 	chunkDelay time.Duration
 	hooks      Hooks
-	features   []FeatureSet
+	features   []ChatPlugin
 }
 
 type activeRun struct {
@@ -94,7 +94,7 @@ func NewEngine(opts ...Option) *Engine {
 	return engine
 }
 
-func RegisterSchemas(reg *sessionstream.SchemaRegistry, features ...FeatureSet) error {
+func RegisterSchemas(reg *sessionstream.SchemaRegistry, features ...ChatPlugin) error {
 	for _, err := range []error{
 		reg.RegisterCommand(CommandStartInference, &structpb.Struct{}),
 		reg.RegisterCommand(CommandStopInference, &structpb.Struct{}),

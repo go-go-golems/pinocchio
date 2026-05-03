@@ -7,7 +7,7 @@ import (
 	sessionstream "github.com/go-go-golems/sessionstream/pkg/sessionstream"
 )
 
-type FeatureSet interface {
+type ChatPlugin interface {
 	RegisterSchemas(reg *sessionstream.SchemaRegistry) error
 	HandleRuntimeEvent(ctx context.Context, runtime RuntimeEventContext, event gepevents.Event) (handled bool, err error)
 	ProjectUI(ctx context.Context, ev sessionstream.Event, session *sessionstream.Session, view sessionstream.TimelineView) ([]sessionstream.UIEvent, bool, error)
@@ -20,7 +20,7 @@ type RuntimeEventContext struct {
 	Publish   func(ctx context.Context, eventName string, payload map[string]any) error
 }
 
-func WithFeatureSets(features ...FeatureSet) Option {
+func WithPlugins(features ...ChatPlugin) Option {
 	return func(e *Engine) {
 		for _, feature := range features {
 			if feature != nil {
@@ -30,11 +30,11 @@ func WithFeatureSets(features ...FeatureSet) Option {
 	}
 }
 
-func (e *Engine) activeFeatures() []FeatureSet {
+func (e *Engine) activePlugins() []ChatPlugin {
 	if e == nil || len(e.features) == 0 {
 		return nil
 	}
-	out := make([]FeatureSet, 0, len(e.features))
+	out := make([]ChatPlugin, 0, len(e.features))
 	for _, feature := range e.features {
 		if feature != nil {
 			out = append(out, feature)
@@ -44,7 +44,7 @@ func (e *Engine) activeFeatures() []FeatureSet {
 }
 
 func (e *Engine) handleFeatureRuntimeEvent(ctx context.Context, sid sessionstream.SessionId, messageID string, pub sessionstream.EventPublisher, event gepevents.Event) error {
-	for _, feature := range e.activeFeatures() {
+	for _, feature := range e.activePlugins() {
 		handled, err := feature.HandleRuntimeEvent(ctx, RuntimeEventContext{
 			SessionID: sid,
 			MessageID: messageID,
@@ -67,7 +67,7 @@ func (e *Engine) uiProjection(ctx context.Context, ev sessionstream.Event, sess 
 	if err != nil {
 		return nil, err
 	}
-	for _, feature := range e.activeFeatures() {
+	for _, feature := range e.activePlugins() {
 		featureEvents, handled, err := feature.ProjectUI(ctx, ev, sess, view)
 		if err != nil {
 			return nil, err
@@ -84,7 +84,7 @@ func (e *Engine) timelineProjection(ctx context.Context, ev sessionstream.Event,
 	if err != nil {
 		return nil, err
 	}
-	for _, feature := range e.activeFeatures() {
+	for _, feature := range e.activePlugins() {
 		featureEntities, handled, err := feature.ProjectTimeline(ctx, ev, sess, view)
 		if err != nil {
 			return nil, err

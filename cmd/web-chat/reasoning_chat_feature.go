@@ -19,13 +19,13 @@ const (
 	reasoningFinishedUIName = "ChatReasoningFinished"
 )
 
-type reasoningChatFeature struct{}
+type reasoningPlugin struct{}
 
-func newReasoningChatFeature() chatapp.FeatureSet {
-	return reasoningChatFeature{}
+func newReasoningPlugin() chatapp.ChatPlugin {
+	return reasoningPlugin{}
 }
 
-func (reasoningChatFeature) RegisterSchemas(reg *sessionstream.SchemaRegistry) error {
+func (reasoningPlugin) RegisterSchemas(reg *sessionstream.SchemaRegistry) error {
 	for _, err := range []error{
 		reg.RegisterEvent(reasoningStartedEventName, &structpb.Struct{}),
 		reg.RegisterEvent(reasoningDeltaEventName, &structpb.Struct{}),
@@ -41,7 +41,7 @@ func (reasoningChatFeature) RegisterSchemas(reg *sessionstream.SchemaRegistry) e
 	return nil
 }
 
-func (reasoningChatFeature) HandleRuntimeEvent(ctx context.Context, runtime chatapp.RuntimeEventContext, event gepevents.Event) (bool, error) {
+func (reasoningPlugin) HandleRuntimeEvent(ctx context.Context, runtime chatapp.RuntimeEventContext, event gepevents.Event) (bool, error) {
 	reasoningMessageID := reasoningEntityID(runtime.MessageID)
 	if reasoningMessageID == "" {
 		return false, nil
@@ -99,7 +99,7 @@ func (reasoningChatFeature) HandleRuntimeEvent(ctx context.Context, runtime chat
 	}
 }
 
-func (reasoningChatFeature) ProjectUI(_ context.Context, ev sessionstream.Event, _ *sessionstream.Session, view sessionstream.TimelineView) ([]sessionstream.UIEvent, bool, error) {
+func (reasoningPlugin) ProjectUI(_ context.Context, ev sessionstream.Event, _ *sessionstream.Session, view sessionstream.TimelineView) ([]sessionstream.UIEvent, bool, error) {
 	payload, ok := reasoningProjectedPayload(ev, view)
 	if !ok {
 		return nil, false, nil
@@ -120,7 +120,7 @@ func (reasoningChatFeature) ProjectUI(_ context.Context, ev sessionstream.Event,
 	}
 }
 
-func (reasoningChatFeature) ProjectTimeline(_ context.Context, ev sessionstream.Event, _ *sessionstream.Session, view sessionstream.TimelineView) ([]sessionstream.TimelineEntity, bool, error) {
+func (reasoningPlugin) ProjectTimeline(_ context.Context, ev sessionstream.Event, _ *sessionstream.Session, view sessionstream.TimelineView) ([]sessionstream.TimelineEntity, bool, error) {
 	payload, ok := reasoningProjectedPayload(ev, view)
 	if !ok {
 		return nil, false, nil

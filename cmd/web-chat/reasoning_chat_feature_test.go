@@ -22,7 +22,7 @@ import (
 )
 
 func TestReasoningChatFeatureHandleRuntimeEvent(t *testing.T) {
-	feature := newReasoningChatFeature()
+	feature := newReasoningPlugin()
 	var published []sessionstream.Event
 	ctx := chatapp.RuntimeEventContext{
 		SessionID: "sid",
@@ -51,7 +51,7 @@ func TestReasoningChatFeatureHandleRuntimeEvent(t *testing.T) {
 }
 
 func TestReasoningChatFeatureProjectsUIAndTimeline(t *testing.T) {
-	feature := newReasoningChatFeature()
+	feature := newReasoningPlugin()
 
 	deltaPayload, err := structpb.NewStruct(map[string]any{
 		"messageId":       "chat-msg-2:thinking",
@@ -241,7 +241,7 @@ func newReasoningTestMux(t *testing.T) (*appserver.Server, *httptest.Server) {
 		appserver.WithDefaultProfile("gpt-5-low"),
 		appserver.WithChunkDelay(time.Millisecond),
 		appserver.WithRuntimeResolver(reasoningRuntimeResolver{}),
-		appserver.WithChatFeatureSets(newReasoningChatFeature()),
+		appserver.WithChatPlugins(newReasoningPlugin()),
 	)
 	require.NoError(t, err)
 
