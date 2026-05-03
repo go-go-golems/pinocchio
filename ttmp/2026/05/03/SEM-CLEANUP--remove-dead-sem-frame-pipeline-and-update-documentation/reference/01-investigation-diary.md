@@ -483,6 +483,82 @@ Type-checking and linting are necessary but not sufficient. The debug UI had bee
 
 ---
 
+## Step 8: Rename FeatureSet to ChatPlugin
+
+The design doc had already renamed `FeatureSet` to `ChatPlugin` in prose, but the actual Go code still used the old name. This step made the code match the documentation. The old name `FeatureSet` was ambiguous — it sounds like a data structure holding features, not a plugin interface that extends chat behavior.
+
+### Prompt Context
+
+**User prompt (verbatim):** "Continue with the rename."
+
+**Assistant interpretation:** Rename `FeatureSet` → `ChatPlugin` and `WithFeatureSets` → `WithPlugins` across all Go code and documentation.
+
+**Inferred user intent:** Make the code naming consistent with the design doc and the naming rationale ("plugin" conveys extension interface better than "feature set").
+
+**Commit (code):** `8a2ca23` — "refactor: rename FeatureSet to ChatPlugin, WithFeatureSets to WithPlugins"
+
+### What I did
+
+Applied a systematic rename across 11 files using `sed`:
+
+| Old name | New name |
+|----------|----------|
+| `FeatureSet` (interface) | `ChatPlugin` |
+| `WithFeatureSets()` (option func) | `WithPlugins()` |
+| `chatFeatures` (struct field) | `chatPlugins` |
+| `WithChatFeatureSets()` (server option) | `WithChatPlugins()` |
+| `agentModeChatFeature` (type) | `agentModePlugin` |
+| `reasoningChatFeature` (type) | `reasoningPlugin` |
+| `testFeatureProjection` (test type) | `testPlugin` |
+
+Files changed:
+- `pkg/chatapp/features.go` — interface + option func + internal methods
+- `pkg/chatapp/chat.go` — struct field + `RegisterSchemas` signature
+- `pkg/chatapp/chat_test.go` — test type + option call
+- `cmd/web-chat/app/server.go` — struct field + server option func
+- `cmd/web-chat/main.go` — constructor call
+- `cmd/web-chat/agentmode_chat_feature.go` — type + constructor
+- `cmd/web-chat/agentmode_chat_feature_test.go` — constructor call
+- `cmd/web-chat/reasoning_chat_feature.go` — type + constructor
+- `cmd/web-chat/reasoning_chat_feature_test.go` — constructor call
+- `pkg/doc/tutorials/09-building-sessionstream-react-chat-apps.md` — tutorial references
+- `.gitignore` — added `.playwright-mcp/`
+
+### Why
+
+"FeatureSet" describes what the thing contains (features), not what it does (extends chat behavior via a plugin interface). Every implementor (`agentModePlugin`, `reasoningPlugin`) is a plugin that registers schemas, handles runtime events, and projects UI/timeline entities. "ChatPlugin" names the role.
+
+### What worked
+
+- `sed` across all Go files was fast and accurate.
+- The Go compiler caught two references in `server.go` that the first `sed` pass missed (the `chatapp.FeatureSet` type references in struct field and function signature).
+- `gofmt -w` fixed a formatting issue that `golangci-lint` caught in the pre-commit hook.
+- All lefthook hooks passed: lint (0 issues), test (all pass).
+
+### What didn't work
+
+- First commit attempt failed the pre-commit `lint` hook with a gofmt error on `server.go:34`. The `sed` replacement changed the field name length, breaking struct field alignment. Fixed with `gofmt -w`.
+- The `agentmode_chat_feature_test.go` file was missed in the initial `sed` pass because it wasn't included in the grep results I reviewed. The compiler caught it immediately.
+
+### What was tricky to build
+
+- The `sed` commands had to run in the right order. Running `sed` for `chatFeatures` before `chatapp.FeatureSet` on `server.go` meant the first pattern didn't match the type references (which used the qualified form `chatapp.FeatureSet`). Had to run a separate `sed` pass for `chatapp.FeatureSet` → `chatapp.ChatPlugin` after the initial batch.
+
+### What warrants a second pair of eyes
+
+- Confirm the file names `agentmode_chat_feature.go` and `reasoning_chat_feature.go` are acceptable even though the internal types are now `agentModePlugin`/`reasoningPlugin`. A file rename would be more consistent but adds noise to the git history.
+
+### What should be done in the future
+
+- Consider renaming the files `agentmode_chat_feature.go` → `agentmode_plugin.go` and `reasoning_chat_feature.go` → `reasoning_plugin.go` for consistency with the type names.
+
+### Code review instructions
+
+- `git show 8a2ca23` — 11 files, all mechanical renames.
+- Verify: `grep -rn 'FeatureSet\|WithFeatureSet\|ChatFeatureSet' --include="*.go" .` returns nothing.
+
+---
+
 ## Summary
 
 | Step | Description | Commit | Delta |
@@ -494,5 +570,6 @@ Type-checking and linting are necessary but not sufficient. The debug UI had bee
 | 5 | Rewrite 4 stale doc topics | `7f52c12` | -48 |
 | 6 | Migrate debug UI to sessionstream | `2992681` | -8638 |
 | 7 | End-to-end Playwright testing | (no commit) | 0 |
+| 8 | Rename FeatureSet → ChatPlugin | `8a2ca23` | +44/-43 |
 
-**Totals:** 5 commits, ~9000 net lines deleted, 0 new Go code, 0 new dependencies.
+**Totals:** 6 commits, ~9000 net lines deleted, 0 new dependencies.
