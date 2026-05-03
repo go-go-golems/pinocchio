@@ -20,13 +20,13 @@ const (
 	agentModeTimelineEntityKind = "AgentMode"
 )
 
-type agentModeChatFeature struct{}
+type agentModePlugin struct{}
 
-func newAgentModeChatFeature() chatapp.FeatureSet {
-	return agentModeChatFeature{}
+func newAgentModePlugin() chatapp.ChatPlugin {
+	return agentModePlugin{}
 }
 
-func (agentModeChatFeature) RegisterSchemas(reg *sessionstream.SchemaRegistry) error {
+func (agentModePlugin) RegisterSchemas(reg *sessionstream.SchemaRegistry) error {
 	for _, err := range []error{
 		reg.RegisterEvent(agentModePreviewEventName, &structpb.Struct{}),
 		reg.RegisterEvent(agentModeCommittedEventName, &structpb.Struct{}),
@@ -42,7 +42,7 @@ func (agentModeChatFeature) RegisterSchemas(reg *sessionstream.SchemaRegistry) e
 	return nil
 }
 
-func (agentModeChatFeature) HandleRuntimeEvent(ctx context.Context, runtime chatapp.RuntimeEventContext, event gepevents.Event) (bool, error) {
+func (agentModePlugin) HandleRuntimeEvent(ctx context.Context, runtime chatapp.RuntimeEventContext, event gepevents.Event) (bool, error) {
 	switch ev := event.(type) {
 	case *agentmode.EventModeSwitchPreview:
 		return true, runtime.Publish(ctx, agentModePreviewEventName, map[string]any{
@@ -67,7 +67,7 @@ func (agentModeChatFeature) HandleRuntimeEvent(ctx context.Context, runtime chat
 	}
 }
 
-func (agentModeChatFeature) ProjectUI(_ context.Context, ev sessionstream.Event, _ *sessionstream.Session, _ sessionstream.TimelineView) ([]sessionstream.UIEvent, bool, error) {
+func (agentModePlugin) ProjectUI(_ context.Context, ev sessionstream.Event, _ *sessionstream.Session, _ sessionstream.TimelineView) ([]sessionstream.UIEvent, bool, error) {
 	payload := payloadWithOrdinal(ev)
 	switch ev.Name {
 	case agentModePreviewEventName:
@@ -97,7 +97,7 @@ func (agentModeChatFeature) ProjectUI(_ context.Context, ev sessionstream.Event,
 	}
 }
 
-func (agentModeChatFeature) ProjectTimeline(_ context.Context, ev sessionstream.Event, _ *sessionstream.Session, view sessionstream.TimelineView) ([]sessionstream.TimelineEntity, bool, error) {
+func (agentModePlugin) ProjectTimeline(_ context.Context, ev sessionstream.Event, _ *sessionstream.Session, view sessionstream.TimelineView) ([]sessionstream.TimelineEntity, bool, error) {
 	if ev.Name != agentModeCommittedEventName {
 		return nil, false, nil
 	}

@@ -28,3 +28,4 @@ __debug*
 
 *.db 
 *.log
+.playwright-mcp/

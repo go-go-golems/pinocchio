@@ -274,7 +274,7 @@ Do this early. If you wait until the third or fourth app-owned widget, you will 
 The reference seam is `pinocchio/pkg/chatapp/features.go`.
 
 ```go
-type FeatureSet interface {
+type ChatPlugin interface {
     RegisterSchemas(reg *sessionstream.SchemaRegistry) error
     HandleRuntimeEvent(ctx context.Context, runtime RuntimeEventContext, event gepevents.Event) (bool, error)
     ProjectUI(ctx context.Context, ev sessionstream.Event, session *sessionstream.Session, view sessionstream.TimelineView) ([]sessionstream.UIEvent, bool, error)
@@ -323,7 +323,7 @@ hub, _ := sessionstream.NewHub(
 )
 
 engine := mychatapp.NewEngine(
-    mychatapp.WithFeatureSets(myFeatures...),
+    mychatapp.WithChatPlugins(myFeatures...),
 )
 
 _ = mychatapp.Install(hub, engine)
@@ -591,7 +591,7 @@ If any of those answers is no, the application may still work, but it probably d
 | Reload restores messages but not widget state | Snapshot encoding does not include the custom entity kind | Register schemas and timeline projection for the feature entity |
 | Websocket subscribes but no initial state appears | Snapshot provider or hydration store is missing/incorrect | Verify `transport/ws` is built with a working snapshot provider backed by the same store used by the Hub |
 | Frontend works in dev but breaks after restart | State depends on transient UI events instead of hydrated entities | Make snapshot entities sufficient to rebuild the page |
-| Feature logic keeps creeping into the chat core | No generic feature seam exists | Add a `FeatureSet` interface like `pinocchio/pkg/chatapp/features.go` and move product features out |
+| Feature logic keeps creeping into the chat core | No generic feature seam exists | Add a `ChatPlugin` interface like `pinocchio/pkg/chatapp/features.go` and move product features out |
 
 ## See Also
 
@@ -599,5 +599,5 @@ If any of those answers is no, the application may still work, but it probably d
 - `webchat-backend-reference` — current backend contract details
 - `webchat-frontend-architecture` — current React-side structure
 - `webchat-sem-and-ui` — frontend/backend event and rendering model
-- `intern-app-owned-middleware-events-timeline-widgets` — deeper feature and widget reference
+
 - `sessionstream/cmd/sessionstream-systemlab` — framework-oriented lab examples and chapters in the extracted framework repo

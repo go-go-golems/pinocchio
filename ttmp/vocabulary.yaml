@@ -53,6 +53,16 @@ topics:
       description: Cleanup, simplification, and removal of deprecated code paths
     - slug: merge
       description: Merge conflict analysis and resolution work
+    - slug: sem
+      description: SEM (Structured Event Messaging) frame pipeline, now deprecated
+    - slug: sessionstream
+      description: Sessionstream event streaming package
+    - slug: timeline
+      description: Timeline entities and projection
+    - slug: documentation
+      description: Documentation files and tutorials
+    - slug: webchat
+      description: Web chat application (cmd/web-chat)
 docTypes:
     - slug: index
       description: Ticket index / overall plan

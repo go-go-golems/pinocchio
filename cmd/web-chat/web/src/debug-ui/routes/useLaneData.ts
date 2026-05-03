@@ -1,38 +1,20 @@
-import {
-  useGetEventsQuery,
-  useGetTimelineQuery,
-  useGetTurnsQuery,
-} from '../api/debugApi';
-import type { SemEvent, TimelineEntity, TurnSnapshot } from '../types';
+import type { DebugEntity, DebugEvent } from '../store/debugSlice';
+import { useAppSelector } from '../store/hooks';
 
-export interface LiveLaneData {
-  turns: TurnSnapshot[];
-  events: SemEvent[];
-  entities: TimelineEntity[];
+export interface LaneData {
+  entities: DebugEntity[];
+  events: DebugEvent[];
   isLoading: boolean;
 }
 
-export function useLiveLaneData(convId: string | null, sessionId?: string): LiveLaneData {
-  const skip = !convId;
-
-  const { data: turns, isLoading: turnsLoading } = useGetTurnsQuery(
-    { convId: convId ?? '', sessionId },
-    { skip }
-  );
-  const { data: eventsData, isLoading: eventsLoading } = useGetEventsQuery(
-    { convId: convId ?? '' },
-    { skip }
-  );
-  const { data: timelineData, isLoading: timelineLoading } = useGetTimelineQuery(
-    { convId: convId ?? '' },
-    { skip }
-  );
+export function useLaneData(): LaneData {
+  const entityMap = useAppSelector((state) => state.debug.entities);
+  const events = useAppSelector((state) => state.debug.events);
+  const connected = useAppSelector((state) => state.ui.follow.status === 'connected');
 
   return {
-    turns: turns ?? [],
-    events: eventsData?.events ?? [],
-    entities: timelineData?.entities ?? [],
-    isLoading: turnsLoading || eventsLoading || timelineLoading,
+    entities: Object.values(entityMap),
+    events,
+    isLoading: !connected && Object.keys(entityMap).length === 0,
   };
 }
-

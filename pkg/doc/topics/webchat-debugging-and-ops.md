@@ -82,11 +82,11 @@ Look for lifecycle logs:
   - `js timeline reducer upsert failed; continuing`
 - JS bindings are exposed as a native module:
   - `const p = require("pinocchio")` (alias: `require("pnocchio")`)
-  - `p.timeline.registerSemReducer(eventType, fn)`
-  - `p.timeline.onSem(eventType, fn)`
+  - `p.timeline.onUIEvent(eventName, fn)`
+  - `p.timeline.upsertEntity(entity)`
 - If builtin projection disappears for an event type (for example `llm.delta`), verify your reducer is not returning `consume: true`.
 - For additive projection, return `consume: false` and only emit `upserts`.
-- Wildcard hooks use `p.timeline.onSem("*", fn)` and run for all SEM event types.
+- Wildcard hooks use `p.timeline.onUIEvent("*", fn)` and run for all UI event types.
 
 ## Operational Checks
 

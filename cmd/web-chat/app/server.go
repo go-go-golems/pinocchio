@@ -31,7 +31,7 @@ type Server struct {
 	sqliteDSN       string
 	sqliteDBPath    string
 	runtimeResolver RuntimeResolver
-	chatFeatures    []chatapp.FeatureSet
+	chatPlugins     []chatapp.ChatPlugin
 	closeFn         func() error
 }
 
@@ -77,14 +77,14 @@ func WithRuntimeResolver(resolver RuntimeResolver) Option {
 	}
 }
 
-func WithChatFeatureSets(features ...chatapp.FeatureSet) Option {
+func WithChatPlugins(features ...chatapp.ChatPlugin) Option {
 	return func(s *Server) {
 		if s == nil {
 			return
 		}
 		for _, feature := range features {
 			if feature != nil {
-				s.chatFeatures = append(s.chatFeatures, feature)
+				s.chatPlugins = append(s.chatPlugins, feature)
 			}
 		}
 	}
@@ -99,7 +99,7 @@ func NewServer(opts ...Option) (*Server, error) {
 	}
 
 	reg := sessionstream.NewSchemaRegistry()
-	if err := chatapp.RegisterSchemas(reg, s.chatFeatures...); err != nil {
+	if err := chatapp.RegisterSchemas(reg, s.chatPlugins...); err != nil {
 		return nil, err
 	}
 	store, cleanup, err := newHydrationStore(s, reg)
@@ -111,7 +111,7 @@ func NewServer(opts ...Option) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	engine := chatapp.NewEngine(chatapp.WithChunkDelay(s.chunkDelay), chatapp.WithFeatureSets(s.chatFeatures...))
+	engine := chatapp.NewEngine(chatapp.WithChunkDelay(s.chunkDelay), chatapp.WithPlugins(s.chatPlugins...))
 	hub, err := sessionstream.NewHub(
 		sessionstream.WithSchemaRegistry(reg),
 		sessionstream.WithHydrationStore(store),

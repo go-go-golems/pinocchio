@@ -13,7 +13,7 @@ import (
 )
 
 func TestAgentModeChatFeatureHandleRuntimeEvent(t *testing.T) {
-	feature := newAgentModeChatFeature()
+	feature := newAgentModePlugin()
 	var published []sessionstream.Event
 	ctx := chatapp.RuntimeEventContext{
 		SessionID: "sid",
@@ -40,7 +40,7 @@ func TestAgentModeChatFeatureHandleRuntimeEvent(t *testing.T) {
 }
 
 func TestAgentModeChatFeatureProjectsUIAndTimeline(t *testing.T) {
-	feature := newAgentModeChatFeature()
+	feature := newAgentModePlugin()
 	previewPayload, err := structpb.NewStruct(map[string]any{"messageId": "chat-msg-2", "candidateMode": "reviewer", "analysis": "hello"})
 	require.NoError(t, err)
 	previewEvents, handled, err := feature.ProjectUI(context.Background(), sessionstream.Event{Name: agentModePreviewEventName, SessionId: "sid", Ordinal: 7, Payload: previewPayload}, nil, nil)

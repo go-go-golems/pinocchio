@@ -60,7 +60,7 @@ func TestBaseTimelineProjection_DelaysAssistantEntityUntilContentArrives(t *test
 }
 
 func TestFeatureUIProjectionRunsForBaseChatEvents(t *testing.T) {
-	engine := NewEngine(WithFeatureSets(testFeatureProjection{}))
+	engine := NewEngine(WithPlugins(testPlugin{}))
 	payload, err := structpb.NewStruct(map[string]any{
 		"messageId": "chat-msg-1",
 		"role":      "assistant",
@@ -112,15 +112,15 @@ func TestChatExampleStopPath(t *testing.T) {
 	require.Equal(t, false, assistant["streaming"])
 }
 
-type testFeatureProjection struct{}
+type testPlugin struct{}
 
-func (testFeatureProjection) RegisterSchemas(*sessionstream.SchemaRegistry) error { return nil }
+func (testPlugin) RegisterSchemas(*sessionstream.SchemaRegistry) error { return nil }
 
-func (testFeatureProjection) HandleRuntimeEvent(context.Context, RuntimeEventContext, gepevents.Event) (bool, error) {
+func (testPlugin) HandleRuntimeEvent(context.Context, RuntimeEventContext, gepevents.Event) (bool, error) {
 	return false, nil
 }
 
-func (testFeatureProjection) ProjectUI(_ context.Context, ev sessionstream.Event, _ *sessionstream.Session, _ sessionstream.TimelineView) ([]sessionstream.UIEvent, bool, error) {
+func (testPlugin) ProjectUI(_ context.Context, ev sessionstream.Event, _ *sessionstream.Session, _ sessionstream.TimelineView) ([]sessionstream.UIEvent, bool, error) {
 	if ev.Name != EventInferenceFinished {
 		return nil, false, nil
 	}
@@ -131,7 +131,7 @@ func (testFeatureProjection) ProjectUI(_ context.Context, ev sessionstream.Event
 	return []sessionstream.UIEvent{{Name: "FeatureSawFinished", Payload: payload}}, true, nil
 }
 
-func (testFeatureProjection) ProjectTimeline(context.Context, sessionstream.Event, *sessionstream.Session, sessionstream.TimelineView) ([]sessionstream.TimelineEntity, bool, error) {
+func (testPlugin) ProjectTimeline(context.Context, sessionstream.Event, *sessionstream.Session, sessionstream.TimelineView) ([]sessionstream.TimelineEntity, bool, error) {
 	return nil, false, nil
 }
 

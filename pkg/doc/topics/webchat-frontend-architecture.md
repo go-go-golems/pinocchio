@@ -1,7 +1,7 @@
 ---
 Title: Webchat Frontend Architecture
 Slug: webchat-frontend-architecture
-Short: Component, state, and data-flow architecture for the React webchat UI.
+Short: Frontend architecture for the sessionstream-backed webchat application.
 Topics:
 - webchat
 - frontend
@@ -14,79 +14,83 @@ ShowPerDefault: true
 SectionType: GeneralTopic
 ---
 
-## Source Layout
+## Frontend Stack
+
+The webchat frontend is a React SPA under `cmd/web-chat/web/src/`:
+
+- React 18+ with TypeScript
+- Redux Toolkit for state management
+- Sessionstream WebSocket transport for live updates
+- Vite for build
+
+## Directory Structure
 
 ```
 cmd/web-chat/web/src/
-  webchat/
-    ChatWidget.tsx
-    components/
-    cards.tsx
-    styles/
-    types.ts
-    parts.ts
-  sem/
   ws/
+    wsManager.ts          WebSocket lifecycle + sessionstream protocol
   store/
-  utils/
+    store.ts              Redux store configuration
+    appSlice.ts           App-level state (status, errors)
+    timelineSlice.ts      Timeline entity state (upsert, delete, clear)
+  webchat/
+    ChatWidget.tsx        Root chat widget component
+    rendererRegistry.ts   Entity kind → React component mapping
+    cards.tsx             Card renderers (message, agent mode, etc.)
+    timelinePropsRegistry.ts  Props normalization before rendering
+  sem/
+    pb/                   Protobuf-generated TypeScript types (data types only)
 ```
 
-## Runtime Data Flow
+## Sessionstream Projection Pipeline
 
-1. `ChatWidget` initializes conversation state from URL or generated ID.
-2. `wsManager` opens `/ws?conv_id=...`.
-3. Hydration loads `/api/timeline`.
-4. SEM registry decodes websocket events.
-5. Timeline slice merges hydration + stream updates.
-6. Renderers map entity kinds to cards.
+The frontend receives data through the sessionstream WebSocket transport:
 
-## Component Hierarchy
+1. Connect to `/api/chat/ws`.
+2. Subscribe with `{ type: "subscribe", sessionId }`.
+3. Receive `{ type: "snapshot", entities: [...] }` — full current state.
+4. Receive `{ type: "ui-event", name, payload }` — live updates.
 
+The `wsManager.ts` maps incoming frames to Redux store mutations:
+
+```text
+snapshot frame
+  -> clear store, upsert all entities
+
+ui-event frame
+  -> derive mutation (upsert entity, delete entity, update status)
+  -> dispatch to timelineSlice
+  -> rendererRegistry resolves component by entity kind
+  -> React re-renders
 ```
-ChatWidget
-  Header
-  Statusbar
-  Timeline
-    MessageCard
-    ToolCallCard
-    ToolResultCard
-    LogCard
-  Composer
+
+No SEM envelope parsing or protobuf decoding is involved in the production frontend. All frame shapes are plain JSON.
+
+## State Flow
+
+```text
+WebSocket frame
+  -> wsManager.ts
+    -> timelineSlice.upsertEntity / deleteEntity
+      -> Redux store
+        -> React components (ChatWidget, cards)
 ```
 
-## State Slices
+## Renderer Registry
 
-- `appSlice`: connection status, profile, queue signals
-- `timelineSlice`: timeline entities (`byId` + `order`)
-- `errorsSlice`: user-visible errors
-- `profileApi`: profile endpoints when app provides them
+Entities are rendered by kind. Register a renderer for each entity kind:
 
-## SEM Pipeline
+```typescript
+import { registerTimelineRenderer } from './rendererRegistry';
+registerTimelineRenderer('message', MessageCard);
+registerTimelineRenderer('agent_mode', AgentModeCard);
+```
 
-1. Validate envelope (`sem: true`).
-2. Decode payload.
-3. Dispatch timeline updates (`addEntity`, `upsertEntity`, `rekeyEntity`).
-4. Preserve ordering via version/sequence semantics.
+Props are normalized through `timelinePropsRegistry.ts` before reaching renderers, protecting against schema drift.
 
-## Theming and Extension
+## Key Files
 
-- Token source: `styles/theme-default.css`
-- Structural CSS: `styles/webchat.css`
-- Stable selectors: `data-part`, `data-role`, `data-state`
-- Override points: `components`, `renderers`, `themeVars`, `partProps`
-
-## Route Assumptions
-
-This UI assumes canonical backend routes:
-
-- `POST /chat`
-- `GET /ws`
-- `GET /api/timeline`
-
-When mounted with `--root`, the same relative endpoints are used under that prefix.
-
-## See Also
-
-- [Webchat Frontend Integration](webchat-frontend-integration.md)
-- [Webchat HTTP Chat Setup](webchat-http-chat-setup.md)
-- [Webchat User Guide](webchat-user-guide.md)
+- `cmd/web-chat/web/src/ws/wsManager.ts` — WebSocket lifecycle and frame→state mapping
+- `cmd/web-chat/web/src/store/timelineSlice.ts` — Redux slice for timeline entities
+- `cmd/web-chat/web/src/webchat/ChatWidget.tsx` — Root component
+- `cmd/web-chat/web/src/webchat/rendererRegistry.ts` — Kind → component registry
