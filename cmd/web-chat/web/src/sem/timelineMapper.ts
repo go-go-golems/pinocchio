@@ -1,7 +1,7 @@
 import type { TimelineEntityV2 } from '../sem/pb/proto/sem/timeline/transport_pb';
 import type { TimelineEntity } from '../store/timelineSlice';
 import { toNumber, toNumberOr } from '../utils/number';
-import { normalizeTimelineProps } from './timelinePropsRegistry';
+import { normalizeTimelineProps } from '../webchat/timelinePropsRegistry';
 
 function isObject(v: unknown): v is Record<string, unknown> {
   return !!v && typeof v === 'object' && !Array.isArray(v);
