@@ -1,7 +1,7 @@
 ---
 Title: Remove Dead SEM Frame Pipeline and Update Documentation
 Ticket: SEM-CLEANUP
-Status: active
+Status: complete
 Topics:
     - sem
     - sessionstream
@@ -37,10 +37,11 @@ RelatedFiles:
       Note: Dead Go SEM registry - zero consumers
 ExternalSources: []
 Summary: 'The SEM (Structured Event Messaging) frame pipeline has been fully replaced by sessionstream + chatapp.FeatureSet. Dead code, dead documentation, and misplaced frontend modules remain. This ticket tracks the complete cleanup: delete dead Go/TS registry code, delete the obsolete intern tutorial, update four stale doc topics, relocate two misplaced TS utilities, and migrate Storybook stories away from SEM.'
-LastUpdated: 2026-05-03T08:48:23.855807169-04:00
+LastUpdated: 2026-05-03T10:26:59.135779732-04:00
 WhatFor: ""
 WhenToUse: ""
 ---
+
 
 
 # Remove Dead SEM Frame Pipeline and Update Documentation

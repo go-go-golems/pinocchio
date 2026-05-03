@@ -31,3 +31,12 @@ DocType: changelog
 - Added debug-ui files to DELETE and UPDATE tables in Key File Reference.
 - Updated tasks from 15 to 23 items.
 - Re-uploaded to reMarkable.
+
+## 2026-05-03
+
+Step 7: End-to-end Playwright testing of debug UI. Verified snapshot replay (3 entities), live event streaming (795 events), all 3 pages working. Go server + Vite running in tmux.
+
+### Related Files
+
+- /home/manuel/code/wesen/corporate-headquarters/pinocchio/cmd/web-chat/web/src/debug-ui/ws/debugWsManager.ts — Verified working with real sessionstream WS
+
