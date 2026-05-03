@@ -1,72 +1,33 @@
-import { useState } from 'react';
-import { useGetEventsQuery } from '../api/debugApi';
-import { EventCard } from '../components/EventCard';
-import { EventInspector } from '../components/EventInspector';
 import { useAppSelector } from '../store/hooks';
-import type { SemEvent } from '../types';
+import { useLaneData } from './useLaneData';
 
 export function EventsPage() {
-  const selectedConvId = useAppSelector((state) => state.ui.selectedConvId);
-  const [selectedEvent, setSelectedEvent] = useState<SemEvent | null>(null);
-
-  const { data: eventsData, isLoading } = useGetEventsQuery(
-    { convId: selectedConvId ?? '' },
-    { skip: !selectedConvId }
-  );
-
-  if (!selectedConvId) {
-    return (
-      <div className="events-empty-state">
-        <h2>⚡ Events</h2>
-        <p>Select a conversation to view its events.</p>
-      </div>
-    );
-  }
-
-  if (isLoading) {
-    return (
-      <div className="events-loading-state">
-        <p>Loading events...</p>
-      </div>
-    );
-  }
-
-  const events = eventsData?.events ?? [];
+  const sessionId = useAppSelector((state) => state.ui.selectedSessionId);
+  const laneData = useLaneData();
 
   return (
     <div className="events-page">
-      <div className="events-page-header">
-        <h2>⚡ Events</h2>
-        <div className="events-header-meta">
-          <span>{events.length} events</span>
-          <span>Buffer: {eventsData?.buffer_capacity ?? 0}</span>
-        </div>
-      </div>
-
-      <div className="events-layout">
-        {/* Event list */}
+      <h2>⚡ Events</h2>
+      {sessionId ? (
         <div className="events-list">
-          {events.length === 0 ? (
-            <div className="empty-list">No events recorded</div>
+          {laneData.events.length === 0 ? (
+            <p>No events received yet.</p>
           ) : (
-            events.map((event) => (
-              <EventCard
-                key={event.id}
-                event={event}
-                onClick={() => setSelectedEvent(event)}
-                selected={selectedEvent?.id === event.id}
-              />
+            [...laneData.events].reverse().map((event, i) => (
+              <div key={i} className="event-card">
+                <div className="event-card-header">
+                  <span className="event-name">{event.name}</span>
+                  <span className="event-ordinal">#{event.ordinal}</span>
+                  <span className="event-time">{event.receivedAt}</span>
+                </div>
+                <pre className="event-payload">{JSON.stringify(event.payload, null, 2)}</pre>
+              </div>
             ))
           )}
         </div>
-
-        {/* Event detail */}
-        {selectedEvent && (
-          <div className="event-detail">
-            <EventInspector event={selectedEvent} />
-          </div>
-        )}
-      </div>
+      ) : (
+        <p>Enter a session ID to see events.</p>
+      )}
     </div>
   );
 }

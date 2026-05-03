@@ -5,7 +5,6 @@ import { AppShell } from '../components/AppShell';
 import { EventsPage } from './EventsPage';
 import { OverviewPage } from './OverviewPage';
 import { TimelinePage } from './TimelinePage';
-import { TurnDetailPage } from './TurnDetailPage';
 
 export const router = createBrowserRouter(
   [
@@ -24,19 +23,6 @@ export const router = createBrowserRouter(
         {
           path: 'events',
           element: <EventsPage />,
-        },
-        {
-          path: 'session/:sessionId',
-          children: [
-            {
-              index: true,
-              element: <OverviewPage />,
-            },
-            {
-              path: 'turn/:turnId',
-              element: <TurnDetailPage />,
-            },
-          ],
         },
       ],
     },

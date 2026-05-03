@@ -1,156 +1,39 @@
-import { useEffect, useMemo, useState } from 'react';
-import {
-  NavLink,
-  Outlet,
-  useLocation,
-  useParams,
-  useSearchParams,
-} from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
-import {
-  selectConversation,
-  selectSession,
-  selectTurn,
-} from '../store/uiSlice';
+import { selectSession, setFollowEnabled } from '../store/uiSlice';
 import { useDebugTimelineFollow } from '../ws/useDebugTimelineFollow';
-import { type Anomaly, AnomalyPanel } from './AnomalyPanel';
-import { FilterBar, type FilterState } from './FilterBar';
-import { SessionList } from './SessionList';
 
-const defaultFilters: FilterState = {
-  blockKinds: [],
-  eventTypes: [],
-  searchQuery: '',
-  showEmpty: true,
-};
-
-export interface AppShellProps {
-  /** Mock anomalies for Storybook */
-  anomalies?: Anomaly[];
-}
-
-export function AppShell({ anomalies = [] }: AppShellProps) {
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [filterOpen, setFilterOpen] = useState(false);
-  const [anomalyOpen, setAnomalyOpen] = useState(false);
-  const [filters, setFilters] = useState<FilterState>(defaultFilters);
-
+export function AppShell() {
   const dispatch = useAppDispatch();
-  const selectedConvId = useAppSelector((state) => state.ui.selectedConvId);
-  const selectedSessionId = useAppSelector((state) => state.ui.selectedSessionId);
-  const selectedTurnId = useAppSelector((state) => state.ui.selectedTurnId);
+  const sessionId = useAppSelector((state) => state.ui.selectedSessionId);
   const follow = useAppSelector((state) => state.ui.follow);
   const location = useLocation();
-  const [, setSearchParams] = useSearchParams();
-  const { sessionId, turnId } = useParams();
-  const params = useMemo(() => new URLSearchParams(location.search), [location.search]);
-
-  const activeFilterCount =
-    filters.blockKinds.length +
-    filters.eventTypes.length +
-    (filters.searchQuery ? 1 : 0);
+  const [inputId, setInputId] = useState(sessionId ?? '');
 
   useDebugTimelineFollow();
 
-  const convFromURL = params.get('conv');
-  const sessionFromURL = params.get('session');
-  const turnFromURL = params.get('turn');
-  const desiredSession = sessionId ?? sessionFromURL;
-  const desiredTurn = turnId ?? turnFromURL;
-
   useEffect(() => {
-    if (convFromURL && convFromURL !== selectedConvId) {
-      dispatch(selectConversation(convFromURL));
+    if (sessionId) {
+      setInputId(sessionId);
     }
+  }, [sessionId]);
 
-    if (!convFromURL && !selectedConvId) {
-      const persistedConv = window.localStorage.getItem('debug-ui:selected-conv');
-      if (persistedConv) {
-        dispatch(selectConversation(persistedConv));
-      }
-    }
+  const handleFollow = () => {
+    const trimmed = inputId.trim();
+    if (!trimmed) return;
+    dispatch(selectSession(trimmed));
+    dispatch(setFollowEnabled(true));
+  };
 
-    if (desiredSession && desiredSession !== selectedSessionId) {
-      dispatch(selectSession(desiredSession));
-    }
-
-    if (desiredTurn && desiredTurn !== selectedTurnId) {
-      dispatch(selectTurn(desiredTurn));
-    }
-  }, [
-    dispatch,
-    desiredSession,
-    desiredTurn,
-    convFromURL,
-    selectedConvId,
-    selectedSessionId,
-    selectedTurnId,
-  ]);
-
-  useEffect(() => {
-    const pendingHydration =
-      (!!convFromURL && convFromURL !== selectedConvId) ||
-      (!!desiredSession && desiredSession !== selectedSessionId) ||
-      (!!desiredTurn && desiredTurn !== selectedTurnId);
-
-    if (pendingHydration) {
-      return;
-    }
-
-    const nextParams = new URLSearchParams(location.search);
-    let changed = false;
-
-    const applyParam = (key: string, value: string | null) => {
-      const current = nextParams.get(key);
-      if (!value) {
-        if (current !== null) {
-          nextParams.delete(key);
-          changed = true;
-        }
-        return;
-      }
-      if (current !== value) {
-        nextParams.set(key, value);
-        changed = true;
-      }
-    };
-
-    applyParam('conv', selectedConvId);
-    applyParam('session', selectedSessionId ?? sessionId ?? null);
-    applyParam('turn', selectedTurnId ?? turnId ?? null);
-
-    if (selectedConvId) {
-      window.localStorage.setItem('debug-ui:selected-conv', selectedConvId);
-    }
-
-    if (changed) {
-      setSearchParams(nextParams, { replace: true });
-    }
-  }, [
-    convFromURL,
-    desiredSession,
-    desiredTurn,
-    location.search,
-    selectedConvId,
-    selectedSessionId,
-    selectedTurnId,
-    sessionId,
-    setSearchParams,
-    turnId,
-  ]);
+  const handleDisconnect = () => {
+    dispatch(setFollowEnabled(false));
+  };
 
   return (
     <div className="app-shell">
-      {/* Top nav bar */}
       <header className="app-header">
         <div className="app-header-left">
-          <button 
-            className="btn app-btn-icon"
-            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-            title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          >
-            {sidebarCollapsed ? '☰' : '◀'}
-          </button>
           <h1 className="app-title">🔍 Debug UI</h1>
         </div>
 
@@ -177,76 +60,30 @@ export function AppShell({ anomalies = [] }: AppShellProps) {
         </nav>
 
         <div className="app-header-right">
-          <span
-            className={`app-follow-badge status-${follow.status}`}
-            title={follow.lastError ?? 'Realtime follow status'}
-          >
+          <input
+            type="text"
+            placeholder="Session ID"
+            value={inputId}
+            onChange={(e) => setInputId(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') handleFollow(); }}
+            className="session-input"
+          />
+          {follow.enabled ? (
+            <button className="btn btn-disconnect" onClick={handleDisconnect}>Disconnect</button>
+          ) : (
+            <button className="btn btn-follow" onClick={handleFollow}>Follow</button>
+          )}
+          <span className={`app-follow-badge status-${follow.status}`}>
             live: {follow.status}
           </span>
-          <button
-            className={`btn app-btn-icon ${activeFilterCount > 0 ? 'has-badge' : ''}`}
-            onClick={() => setFilterOpen(!filterOpen)}
-            title="Filters"
-          >
-            🔍
-            {activeFilterCount > 0 && <span className="app-btn-badge">{activeFilterCount}</span>}
-          </button>
-          <button
-            className={`btn app-btn-icon ${anomalies.length > 0 ? 'has-badge' : ''}`}
-            onClick={() => setAnomalyOpen(!anomalyOpen)}
-            title="Anomalies"
-          >
-            ⚠️
-            {anomalies.length > 0 && <span className="app-btn-badge">{anomalies.length}</span>}
-          </button>
         </div>
       </header>
 
       <div className="app-body">
-        {/* Sidebar */}
-        <aside className={`app-sidebar ${sidebarCollapsed ? 'collapsed' : ''}`}>
-          {!sidebarCollapsed && <SessionList />}
-        </aside>
-
-        {/* Main content */}
         <main className="app-main">
-          {/* Breadcrumb */}
-          <div className="app-breadcrumb">
-            <span className="app-breadcrumb-crumb">
-              {selectedConvId ? `conv: ${selectedConvId.slice(0, 8)}...` : 'No conversation selected'}
-            </span>
-            {sessionId && (
-              <>
-                <span className="app-breadcrumb-sep">/</span>
-                <span className="app-breadcrumb-crumb">session: {sessionId.slice(0, 8)}...</span>
-              </>
-            )}
-          </div>
-
-          {/* Router outlet */}
-          <div className="app-main-content">
-            <Outlet context={{ filters }} />
-          </div>
+          <Outlet />
         </main>
-
-        {/* Filter sidebar (right) */}
-        {filterOpen && (
-          <aside className="app-filter-sidebar">
-            <FilterBar
-              filters={filters}
-              onFiltersChange={setFilters}
-              onClose={() => setFilterOpen(false)}
-            />
-          </aside>
-        )}
       </div>
-
-      {/* Anomaly panel overlay */}
-      <AnomalyPanel
-        anomalies={anomalies}
-        isOpen={anomalyOpen}
-        onClose={() => setAnomalyOpen(false)}
-      />
     </div>
   );
 }
