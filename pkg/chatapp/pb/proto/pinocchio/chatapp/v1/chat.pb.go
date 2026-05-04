@@ -118,18 +118,22 @@ func (*StopInferenceCommand) Descriptor() ([]byte, []int) {
 }
 
 type ChatMessageUpdate struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	MessageId     string                 `protobuf:"bytes,1,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
-	Role          string                 `protobuf:"bytes,2,opt,name=role,proto3" json:"role,omitempty"`
-	Prompt        string                 `protobuf:"bytes,3,opt,name=prompt,proto3" json:"prompt,omitempty"`
-	Chunk         string                 `protobuf:"bytes,4,opt,name=chunk,proto3" json:"chunk,omitempty"`
-	Text          string                 `protobuf:"bytes,5,opt,name=text,proto3" json:"text,omitempty"`
-	Content       string                 `protobuf:"bytes,6,opt,name=content,proto3" json:"content,omitempty"`
-	Status        string                 `protobuf:"bytes,7,opt,name=status,proto3" json:"status,omitempty"`
-	Streaming     bool                   `protobuf:"varint,8,opt,name=streaming,proto3" json:"streaming,omitempty"`
-	Error         string                 `protobuf:"bytes,9,opt,name=error,proto3" json:"error,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	MessageId       string                 `protobuf:"bytes,1,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
+	Role            string                 `protobuf:"bytes,2,opt,name=role,proto3" json:"role,omitempty"`
+	Prompt          string                 `protobuf:"bytes,3,opt,name=prompt,proto3" json:"prompt,omitempty"`
+	Chunk           string                 `protobuf:"bytes,4,opt,name=chunk,proto3" json:"chunk,omitempty"`
+	Text            string                 `protobuf:"bytes,5,opt,name=text,proto3" json:"text,omitempty"`
+	Content         string                 `protobuf:"bytes,6,opt,name=content,proto3" json:"content,omitempty"`
+	Status          string                 `protobuf:"bytes,7,opt,name=status,proto3" json:"status,omitempty"`
+	Streaming       bool                   `protobuf:"varint,8,opt,name=streaming,proto3" json:"streaming,omitempty"`
+	Error           string                 `protobuf:"bytes,9,opt,name=error,proto3" json:"error,omitempty"`
+	ParentMessageId string                 `protobuf:"bytes,10,opt,name=parent_message_id,json=parentMessageId,proto3" json:"parent_message_id,omitempty"`
+	Segment         int32                  `protobuf:"varint,11,opt,name=segment,proto3" json:"segment,omitempty"`
+	SegmentType     string                 `protobuf:"bytes,12,opt,name=segment_type,json=segmentType,proto3" json:"segment_type,omitempty"`
+	Final           bool                   `protobuf:"varint,13,opt,name=final,proto3" json:"final,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *ChatMessageUpdate) Reset() {
@@ -225,18 +229,50 @@ func (x *ChatMessageUpdate) GetError() string {
 	return ""
 }
 
+func (x *ChatMessageUpdate) GetParentMessageId() string {
+	if x != nil {
+		return x.ParentMessageId
+	}
+	return ""
+}
+
+func (x *ChatMessageUpdate) GetSegment() int32 {
+	if x != nil {
+		return x.Segment
+	}
+	return 0
+}
+
+func (x *ChatMessageUpdate) GetSegmentType() string {
+	if x != nil {
+		return x.SegmentType
+	}
+	return ""
+}
+
+func (x *ChatMessageUpdate) GetFinal() bool {
+	if x != nil {
+		return x.Final
+	}
+	return false
+}
+
 type ChatMessageEntity struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	MessageId     string                 `protobuf:"bytes,1,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
-	Role          string                 `protobuf:"bytes,2,opt,name=role,proto3" json:"role,omitempty"`
-	Prompt        string                 `protobuf:"bytes,3,opt,name=prompt,proto3" json:"prompt,omitempty"`
-	Text          string                 `protobuf:"bytes,4,opt,name=text,proto3" json:"text,omitempty"`
-	Content       string                 `protobuf:"bytes,5,opt,name=content,proto3" json:"content,omitempty"`
-	Status        string                 `protobuf:"bytes,6,opt,name=status,proto3" json:"status,omitempty"`
-	Streaming     bool                   `protobuf:"varint,7,opt,name=streaming,proto3" json:"streaming,omitempty"`
-	Error         string                 `protobuf:"bytes,8,opt,name=error,proto3" json:"error,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	MessageId       string                 `protobuf:"bytes,1,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
+	Role            string                 `protobuf:"bytes,2,opt,name=role,proto3" json:"role,omitempty"`
+	Prompt          string                 `protobuf:"bytes,3,opt,name=prompt,proto3" json:"prompt,omitempty"`
+	Text            string                 `protobuf:"bytes,4,opt,name=text,proto3" json:"text,omitempty"`
+	Content         string                 `protobuf:"bytes,5,opt,name=content,proto3" json:"content,omitempty"`
+	Status          string                 `protobuf:"bytes,6,opt,name=status,proto3" json:"status,omitempty"`
+	Streaming       bool                   `protobuf:"varint,7,opt,name=streaming,proto3" json:"streaming,omitempty"`
+	Error           string                 `protobuf:"bytes,8,opt,name=error,proto3" json:"error,omitempty"`
+	ParentMessageId string                 `protobuf:"bytes,9,opt,name=parent_message_id,json=parentMessageId,proto3" json:"parent_message_id,omitempty"`
+	Segment         int32                  `protobuf:"varint,10,opt,name=segment,proto3" json:"segment,omitempty"`
+	SegmentType     string                 `protobuf:"bytes,11,opt,name=segment_type,json=segmentType,proto3" json:"segment_type,omitempty"`
+	Final           bool                   `protobuf:"varint,12,opt,name=final,proto3" json:"final,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *ChatMessageEntity) Reset() {
@@ -323,6 +359,34 @@ func (x *ChatMessageEntity) GetError() string {
 		return x.Error
 	}
 	return ""
+}
+
+func (x *ChatMessageEntity) GetParentMessageId() string {
+	if x != nil {
+		return x.ParentMessageId
+	}
+	return ""
+}
+
+func (x *ChatMessageEntity) GetSegment() int32 {
+	if x != nil {
+		return x.Segment
+	}
+	return 0
+}
+
+func (x *ChatMessageEntity) GetSegmentType() string {
+	if x != nil {
+		return x.SegmentType
+	}
+	return ""
+}
+
+func (x *ChatMessageEntity) GetFinal() bool {
+	if x != nil {
+		return x.Final
+	}
+	return false
 }
 
 type ToolCallUpdate struct {
@@ -655,7 +719,7 @@ const file_proto_pinocchio_chatapp_v1_chat_proto_rawDesc = "" +
 	"\x0fidempotency_key\x18\x02 \x01(\tR\x0eidempotencyKey\x12\x1d\n" +
 	"\n" +
 	"request_id\x18\x03 \x01(\tR\trequestId\"\x16\n" +
-	"\x14StopInferenceCommand\"\xee\x01\n" +
+	"\x14StopInferenceCommand\"\xed\x02\n" +
 	"\x11ChatMessageUpdate\x12\x1d\n" +
 	"\n" +
 	"message_id\x18\x01 \x01(\tR\tmessageId\x12\x12\n" +
@@ -666,7 +730,12 @@ const file_proto_pinocchio_chatapp_v1_chat_proto_rawDesc = "" +
 	"\acontent\x18\x06 \x01(\tR\acontent\x12\x16\n" +
 	"\x06status\x18\a \x01(\tR\x06status\x12\x1c\n" +
 	"\tstreaming\x18\b \x01(\bR\tstreaming\x12\x14\n" +
-	"\x05error\x18\t \x01(\tR\x05error\"\xd8\x01\n" +
+	"\x05error\x18\t \x01(\tR\x05error\x12*\n" +
+	"\x11parent_message_id\x18\n" +
+	" \x01(\tR\x0fparentMessageId\x12\x18\n" +
+	"\asegment\x18\v \x01(\x05R\asegment\x12!\n" +
+	"\fsegment_type\x18\f \x01(\tR\vsegmentType\x12\x14\n" +
+	"\x05final\x18\r \x01(\bR\x05final\"\xd7\x02\n" +
 	"\x11ChatMessageEntity\x12\x1d\n" +
 	"\n" +
 	"message_id\x18\x01 \x01(\tR\tmessageId\x12\x12\n" +
@@ -676,7 +745,12 @@ const file_proto_pinocchio_chatapp_v1_chat_proto_rawDesc = "" +
 	"\acontent\x18\x05 \x01(\tR\acontent\x12\x16\n" +
 	"\x06status\x18\x06 \x01(\tR\x06status\x12\x1c\n" +
 	"\tstreaming\x18\a \x01(\bR\tstreaming\x12\x14\n" +
-	"\x05error\x18\b \x01(\tR\x05error\"\xba\x01\n" +
+	"\x05error\x18\b \x01(\tR\x05error\x12*\n" +
+	"\x11parent_message_id\x18\t \x01(\tR\x0fparentMessageId\x12\x18\n" +
+	"\asegment\x18\n" +
+	" \x01(\x05R\asegment\x12!\n" +
+	"\fsegment_type\x18\v \x01(\tR\vsegmentType\x12\x14\n" +
+	"\x05final\x18\f \x01(\bR\x05final\"\xba\x01\n" +
 	"\x0eToolCallUpdate\x12\x1d\n" +
 	"\n" +
 	"message_id\x18\x01 \x01(\tR\tmessageId\x12 \n" +

@@ -84,6 +84,41 @@ func TestPendingRequestsAreKeyedByRequestID(t *testing.T) {
 	require.Empty(t, engine.takePendingRequest("request-1").Prompt)
 }
 
+func TestRuntimeInterleavedTextToolTextUsesDistinctTextSegments(t *testing.T) {
+	engine := NewEngine(WithChunkDelay(time.Millisecond))
+	hub := newTestHub(t, engine)
+	engine.setPendingRequest("request-interleaved", PromptRequest{
+		Prompt: "Use tools and explain",
+		Runtime: &infruntime.ComposedRuntime{
+			Engine: interleavedTextToolEngine{},
+		},
+	})
+
+	require.NoError(t, hub.Submit(context.Background(), sessionstream.SessionId("chat-interleaved"), CommandStartInference, &chatappv1.StartInferenceCommand{RequestId: "request-interleaved"}))
+	require.NoError(t, engine.WaitIdle(context.Background(), sessionstream.SessionId("chat-interleaved")))
+
+	snap, err := hub.Snapshot(context.Background(), sessionstream.SessionId("chat-interleaved"))
+	require.NoError(t, err)
+
+	ids := map[string]*chatappv1.ChatMessageEntity{}
+	for _, entity := range snap.Entities {
+		if entity.Kind != TimelineEntityChatMessage {
+			continue
+		}
+		payloadMsg := entity.Payload.(*chatappv1.ChatMessageEntity)
+		ids[entity.Id] = payloadMsg
+	}
+	require.Contains(t, ids, "chat-msg-1:text:1")
+	require.Contains(t, ids, "chat-msg-1:text:2")
+	require.Equal(t, "first text", ids["chat-msg-1:text:1"].GetContent())
+	require.Equal(t, "final text", ids["chat-msg-1:text:2"].GetContent())
+	require.Equal(t, int32(1), ids["chat-msg-1:text:1"].GetSegment())
+	require.Equal(t, int32(2), ids["chat-msg-1:text:2"].GetSegment())
+	require.Equal(t, "text", ids["chat-msg-1:text:1"].GetSegmentType())
+	require.Equal(t, "text", ids["chat-msg-1:text:2"].GetSegmentType())
+	require.True(t, ids["chat-msg-1:text:2"].GetFinal())
+}
+
 func TestRuntimeMaxIterationsErrorPublishesWarningMessage(t *testing.T) {
 	engine := NewEngine(WithChunkDelay(time.Millisecond))
 	hub := newTestHub(t, engine)
@@ -144,6 +179,18 @@ func TestChatExampleStopPath(t *testing.T) {
 	require.Equal(t, false, assistant.GetStreaming())
 }
 
+type interleavedTextToolEngine struct{}
+
+func (interleavedTextToolEngine) RunInference(ctx context.Context, t *turns.Turn) (*turns.Turn, error) {
+	meta := gepevents.EventMetadata{SessionID: "sid"}
+	gepevents.PublishEventToContext(ctx, gepevents.NewPartialCompletionEvent(meta, "first text", "first text"))
+	gepevents.PublishEventToContext(ctx, gepevents.NewToolCallEvent(meta, gepevents.ToolCall{ID: "call-1", Name: "lookup", Input: `{"q":"x"}`}))
+	gepevents.PublishEventToContext(ctx, gepevents.NewToolResultEvent(meta, gepevents.ToolResult{ID: "call-1", Name: "lookup", Result: `{"ok":true}`}))
+	gepevents.PublishEventToContext(ctx, gepevents.NewPartialCompletionEvent(meta, "final text", "final text"))
+	gepevents.PublishEventToContext(ctx, gepevents.NewFinalEvent(meta, "final text"))
+	return t, nil
+}
+
 type maxIterationsErrorEngine struct{}
 
 func (maxIterationsErrorEngine) RunInference(context.Context, *turns.Turn) (*turns.Turn, error) {
@@ -184,8 +231,13 @@ func (staticTimelineView) Ordinal() uint64                            { return 0
 
 func newTestHub(t *testing.T, engine *Engine) *sessionstream.Hub {
 	t.Helper()
+	return newTestHubWithPlugins(t, engine)
+}
+
+func newTestHubWithPlugins(t *testing.T, engine *Engine, features ...ChatPlugin) *sessionstream.Hub {
+	t.Helper()
 	reg := sessionstream.NewSchemaRegistry()
-	require.NoError(t, RegisterSchemas(reg))
+	require.NoError(t, RegisterSchemas(reg, features...))
 	store, err := storesqlite.NewInMemory(reg)
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, store.Close()) })

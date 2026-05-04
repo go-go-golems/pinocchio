@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 
 	gepevents "github.com/go-go-golems/geppetto/pkg/events"
 	chatapp "github.com/go-go-golems/pinocchio/pkg/chatapp"
@@ -34,13 +35,22 @@ const (
 // (thinking-started, thinking-ended, reasoning-summary) into sessionstream
 // events, and projects them into ChatMessage timeline entities with role "thinking".
 //
-// The thinking message ID is derived from the parent message ID by appending
-// ":thinking" (e.g., "chat-msg-5:thinking").
-type ReasoningPlugin struct{}
+// Each contiguous thinking phase gets its own segment ID derived from the
+// parent assistant message ID (for example, "chat-msg-5:thinking:1",
+// "chat-msg-5:thinking:2").
+type ReasoningPlugin struct {
+	mu       sync.Mutex
+	segments map[string]reasoningSegmentState
+}
+
+type reasoningSegmentState struct {
+	Current int
+	Active  bool
+}
 
 // NewReasoningPlugin creates a new ReasoningPlugin.
 func NewReasoningPlugin() chatapp.ChatPlugin {
-	return &ReasoningPlugin{}
+	return &ReasoningPlugin{segments: map[string]reasoningSegmentState{}}
 }
 
 // RegisterSchemas registers the reasoning event names, UI events with structpb.Struct payloads.
@@ -62,16 +72,18 @@ func (p *ReasoningPlugin) RegisterSchemas(reg *sessionstream.SchemaRegistry) err
 
 // HandleRuntimeEvent handles EventThinkingPartial and EventInfo events.
 func (p *ReasoningPlugin) HandleRuntimeEvent(ctx context.Context, runtime chatapp.RuntimeEventContext, event gepevents.Event) (bool, error) {
-	reasoningMessageID := reasoningEntityID(runtime.MessageID)
-	if reasoningMessageID == "" {
+	parentMessageID := strings.TrimSpace(runtime.MessageID)
+	if parentMessageID == "" {
 		return false, nil
 	}
 
 	switch ev := event.(type) {
 	case *gepevents.EventThinkingPartial:
+		reasoningMessageID, segment := p.ensureReasoningSegment(parentMessageID)
 		pb, err := structpb.NewStruct(map[string]any{
 			"messageId":       reasoningMessageID,
-			"parentMessageId": runtime.MessageID,
+			"parentMessageId": parentMessageID,
+			"segment":         segment,
 			"role":            "thinking",
 			"chunk":           ev.Delta,
 			"content":         ev.Completion,
@@ -87,9 +99,11 @@ func (p *ReasoningPlugin) HandleRuntimeEvent(ctx context.Context, runtime chatap
 	case *gepevents.EventInfo:
 		switch ev.Message {
 		case "thinking-started":
+			reasoningMessageID, segment := p.startReasoningSegment(parentMessageID)
 			pb, err := structpb.NewStruct(map[string]any{
 				"messageId":       reasoningMessageID,
-				"parentMessageId": runtime.MessageID,
+				"parentMessageId": parentMessageID,
+				"segment":         segment,
 				"role":            "thinking",
 				"status":          "streaming",
 				"streaming":       true,
@@ -100,9 +114,15 @@ func (p *ReasoningPlugin) HandleRuntimeEvent(ctx context.Context, runtime chatap
 			}
 			return true, runtime.Publish(ctx, ReasoningStartedEventName, pb)
 		case "thinking-ended":
+			reasoningMessageID, segment, ok := p.currentReasoningSegment(parentMessageID)
+			if !ok {
+				return false, nil
+			}
+			p.finishReasoningSegment(parentMessageID)
 			pb, err := structpb.NewStruct(map[string]any{
 				"messageId":       reasoningMessageID,
-				"parentMessageId": runtime.MessageID,
+				"parentMessageId": parentMessageID,
+				"segment":         segment,
 				"role":            "thinking",
 				"status":          "finished",
 				"streaming":       false,
@@ -113,9 +133,12 @@ func (p *ReasoningPlugin) HandleRuntimeEvent(ctx context.Context, runtime chatap
 			}
 			return true, runtime.Publish(ctx, ReasoningFinishedEventName, pb)
 		case "reasoning-summary":
+			reasoningMessageID, segment := p.ensureReasoningSegment(parentMessageID)
+			p.finishReasoningSegment(parentMessageID)
 			pb, err := structpb.NewStruct(map[string]any{
 				"messageId":       reasoningMessageID,
-				"parentMessageId": runtime.MessageID,
+				"parentMessageId": parentMessageID,
+				"segment":         segment,
 				"role":            "thinking",
 				"content":         infoText(ev.Data),
 				"text":            infoText(ev.Data),
@@ -184,6 +207,11 @@ func (p *ReasoningPlugin) ProjectTimeline(_ context.Context, ev sessionstream.Ev
 	entity.Role = "thinking"
 	entity.Content = content
 	entity.Text = content
+	entity.ParentMessageId = asString(payload["parentMessageId"])
+	if segment, ok := payload["segment"].(float64); ok {
+		entity.Segment = int32(segment)
+	}
+	entity.SegmentType = "thinking"
 
 	switch ev.Name {
 	case ReasoningStartedEventName, ReasoningDeltaEventName:
@@ -199,17 +227,70 @@ func (p *ReasoningPlugin) ProjectTimeline(_ context.Context, ev sessionstream.Ev
 	return []sessionstream.TimelineEntity{{Kind: chatapp.TimelineEntityChatMessage, Id: messageID, Payload: entity}}, true, nil
 }
 
-// ReasoningEntityID returns the thinking message ID for a given parent message ID.
+// ReasoningEntityID returns the first thinking segment ID for a given parent message ID.
 func ReasoningEntityID(messageID string) string {
-	return reasoningEntityID(messageID)
+	return ReasoningSegmentEntityID(messageID, 1)
 }
 
-func reasoningEntityID(messageID string) string {
+// ReasoningSegmentEntityID returns the thinking message ID for a specific parent
+// assistant message and reasoning segment number.
+func ReasoningSegmentEntityID(messageID string, segment int) string {
 	messageID = strings.TrimSpace(messageID)
-	if messageID == "" {
+	if messageID == "" || segment <= 0 {
 		return ""
 	}
-	return messageID + ":thinking"
+	return fmt.Sprintf("%s:thinking:%d", messageID, segment)
+}
+
+func (p *ReasoningPlugin) startReasoningSegment(parentMessageID string) (string, int) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.segments == nil {
+		p.segments = map[string]reasoningSegmentState{}
+	}
+	state := p.segments[parentMessageID]
+	if !state.Active {
+		state.Current++
+		state.Active = true
+	}
+	p.segments[parentMessageID] = state
+	return ReasoningSegmentEntityID(parentMessageID, state.Current), state.Current
+}
+
+func (p *ReasoningPlugin) ensureReasoningSegment(parentMessageID string) (string, int) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.segments == nil {
+		p.segments = map[string]reasoningSegmentState{}
+	}
+	state := p.segments[parentMessageID]
+	if !state.Active {
+		state.Current++
+		state.Active = true
+	}
+	p.segments[parentMessageID] = state
+	return ReasoningSegmentEntityID(parentMessageID, state.Current), state.Current
+}
+
+func (p *ReasoningPlugin) currentReasoningSegment(parentMessageID string) (string, int, bool) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	state := p.segments[parentMessageID]
+	if !state.Active || state.Current <= 0 {
+		return "", 0, false
+	}
+	return ReasoningSegmentEntityID(parentMessageID, state.Current), state.Current, true
+}
+
+func (p *ReasoningPlugin) finishReasoningSegment(parentMessageID string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.segments == nil {
+		return
+	}
+	state := p.segments[parentMessageID]
+	state.Active = false
+	p.segments[parentMessageID] = state
 }
 
 func reasoningProjectedPayload(ev sessionstream.Event, view sessionstream.TimelineView) (map[string]any, bool) {
@@ -251,14 +332,18 @@ func currentReasoningEntity(view sessionstream.TimelineView, id string) (*chatap
 		return &chatappv1.ChatMessageEntity{}, false
 	}
 	return &chatappv1.ChatMessageEntity{
-		MessageId: pb.GetMessageId(),
-		Role:      pb.GetRole(),
-		Prompt:    pb.GetPrompt(),
-		Text:      pb.GetText(),
-		Content:   pb.GetContent(),
-		Status:    pb.GetStatus(),
-		Streaming: pb.GetStreaming(),
-		Error:     pb.GetError(),
+		MessageId:       pb.GetMessageId(),
+		Role:            pb.GetRole(),
+		Prompt:          pb.GetPrompt(),
+		Text:            pb.GetText(),
+		Content:         pb.GetContent(),
+		Status:          pb.GetStatus(),
+		Streaming:       pb.GetStreaming(),
+		Error:           pb.GetError(),
+		ParentMessageId: pb.GetParentMessageId(),
+		Segment:         pb.GetSegment(),
+		SegmentType:     pb.GetSegmentType(),
+		Final:           pb.GetFinal(),
 	}, true
 }
 

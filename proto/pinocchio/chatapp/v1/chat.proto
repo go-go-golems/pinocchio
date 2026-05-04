@@ -22,6 +22,10 @@ message ChatMessageUpdate {
   string status = 7;
   bool streaming = 8;
   string error = 9;
+  string parent_message_id = 10;
+  int32 segment = 11;
+  string segment_type = 12;
+  bool final = 13;
 }
 
 message ChatMessageEntity {
@@ -33,6 +37,10 @@ message ChatMessageEntity {
   string status = 6;
   bool streaming = 7;
   string error = 8;
+  string parent_message_id = 9;
+  int32 segment = 10;
+  string segment_type = 11;
+  bool final = 12;
 }
 
 message ToolCallUpdate {

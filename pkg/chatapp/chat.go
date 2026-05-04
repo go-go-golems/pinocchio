@@ -61,14 +61,16 @@ type activeRun struct {
 }
 
 type runtimeEventSink struct {
-	mu        sync.Mutex
-	sessionID sessionstream.SessionId
-	messageID string
-	prompt    string
-	pub       sessionstream.EventPublisher
-	engine    *Engine
-	lastText  string
-	terminal  bool
+	mu          sync.Mutex
+	sessionID   sessionstream.SessionId
+	messageID   string
+	prompt      string
+	pub         sessionstream.EventPublisher
+	engine      *Engine
+	lastText    string
+	terminal    bool
+	textSegment int
+	textActive  bool
 }
 
 func WithChunkDelay(delay time.Duration) Option {
@@ -276,7 +278,13 @@ func (e *Engine) runRuntimeInference(ctx context.Context, sid sessionstream.Sess
 	if finalText == "" {
 		finalText = assistantTextFromTurn(output)
 	}
-	_ = e.publish(context.Background(), sid, pub, EventInferenceFinished, newChatMessageUpdate(messageID, "assistant", finalText, finalText, prompt, "finished", false, ""))
+	textMessageID, segment := sink.ensureTextSegmentID()
+	finished := newChatMessageUpdate(textMessageID, "assistant", finalText, finalText, prompt, "finished", false, "")
+	finished.ParentMessageId = messageID
+	finished.Segment = int32(segment)
+	finished.SegmentType = "text"
+	finished.Final = true
+	_ = e.publish(context.Background(), sid, pub, EventInferenceFinished, finished)
 }
 
 func (e *Engine) publish(ctx context.Context, sid sessionstream.SessionId, pub sessionstream.EventPublisher, name string, payload proto.Message) error {
@@ -368,30 +376,111 @@ func (s *runtimeEventSink) PublishEvent(event gepevents.Event) error {
 	}
 	switch ev := event.(type) {
 	case *gepevents.EventPartialCompletion:
+		textMessageID, segment := s.ensureTextSegmentID()
 		s.mu.Lock()
 		s.lastText = ev.Completion
 		s.mu.Unlock()
-		return s.engine.publish(context.Background(), s.sessionID, s.pub, EventTokensDelta, newChatMessageDelta(s.messageID, ev.Delta, ev.Completion, s.prompt, "streaming", true, ""))
+		payload := newChatMessageDelta(textMessageID, ev.Delta, ev.Completion, s.prompt, "streaming", true, "")
+		payload.ParentMessageId = s.messageID
+		payload.Segment = int32(segment)
+		payload.SegmentType = "text"
+		return s.engine.publish(context.Background(), s.sessionID, s.pub, EventTokensDelta, payload)
 	case *gepevents.EventFinal:
+		textMessageID, segment := s.ensureTextSegmentID()
 		s.mu.Lock()
 		s.lastText = ev.Text
 		s.terminal = true
+		s.textActive = false
 		s.mu.Unlock()
-		return s.engine.publish(context.Background(), s.sessionID, s.pub, EventInferenceFinished, newChatMessageUpdate(s.messageID, "assistant", ev.Text, ev.Text, s.prompt, "finished", false, ""))
+		payload := newChatMessageUpdate(textMessageID, "assistant", ev.Text, ev.Text, s.prompt, "finished", false, "")
+		payload.ParentMessageId = s.messageID
+		payload.Segment = int32(segment)
+		payload.SegmentType = "text"
+		payload.Final = true
+		return s.engine.publish(context.Background(), s.sessionID, s.pub, EventInferenceFinished, payload)
 	case *gepevents.EventError:
 		text := s.LastText()
+		textMessageID, segment := s.ensureTextSegmentID()
 		s.mu.Lock()
 		s.terminal = true
+		s.textActive = false
 		s.mu.Unlock()
-		return s.engine.publish(context.Background(), s.sessionID, s.pub, EventInferenceStopped, newChatMessageUpdate(s.messageID, "assistant", text, text, s.prompt, "stopped", false, ev.ErrorString))
+		payload := newChatMessageUpdate(textMessageID, "assistant", text, text, s.prompt, "stopped", false, ev.ErrorString)
+		payload.ParentMessageId = s.messageID
+		payload.Segment = int32(segment)
+		payload.SegmentType = "text"
+		payload.Final = true
+		return s.engine.publish(context.Background(), s.sessionID, s.pub, EventInferenceStopped, payload)
 	case *gepevents.EventInterrupt:
+		textMessageID, segment := s.ensureTextSegmentID()
 		s.mu.Lock()
 		s.lastText = ev.Text
 		s.terminal = true
+		s.textActive = false
 		s.mu.Unlock()
-		return s.engine.publish(context.Background(), s.sessionID, s.pub, EventInferenceStopped, newChatMessageUpdate(s.messageID, "assistant", ev.Text, ev.Text, s.prompt, "stopped", false, ""))
+		payload := newChatMessageUpdate(textMessageID, "assistant", ev.Text, ev.Text, s.prompt, "stopped", false, "")
+		payload.ParentMessageId = s.messageID
+		payload.Segment = int32(segment)
+		payload.SegmentType = "text"
+		payload.Final = true
+		return s.engine.publish(context.Background(), s.sessionID, s.pub, EventInferenceStopped, payload)
 	default:
+		if isTranscriptBoundaryEvent(event) {
+			if textMessageID, segment, text, ok := s.finishTextSegment(); ok {
+				payload := newChatMessageUpdate(textMessageID, "assistant", text, text, s.prompt, "finished", false, "")
+				payload.ParentMessageId = s.messageID
+				payload.Segment = int32(segment)
+				payload.SegmentType = "text"
+				if err := s.engine.publish(context.Background(), s.sessionID, s.pub, EventInferenceFinished, payload); err != nil {
+					return err
+				}
+			}
+		}
 		return s.engine.handleFeatureRuntimeEvent(context.Background(), s.sessionID, s.messageID, s.pub, event)
+	}
+}
+
+func (s *runtimeEventSink) ensureTextSegmentID() (string, int) {
+	if s == nil {
+		return "", 0
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !s.textActive {
+		s.textSegment++
+		s.textActive = true
+	}
+	return textSegmentMessageID(s.messageID, s.textSegment), s.textSegment
+}
+
+func (s *runtimeEventSink) finishTextSegment() (string, int, string, bool) {
+	if s == nil {
+		return "", 0, "", false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !s.textActive || s.textSegment <= 0 || strings.TrimSpace(s.lastText) == "" {
+		s.textActive = false
+		return "", 0, "", false
+	}
+	s.textActive = false
+	return textSegmentMessageID(s.messageID, s.textSegment), s.textSegment, s.lastText, true
+}
+
+func textSegmentMessageID(messageID string, segment int) string {
+	messageID = strings.TrimSpace(messageID)
+	if messageID == "" || segment <= 0 {
+		return ""
+	}
+	return fmt.Sprintf("%s:text:%d", messageID, segment)
+}
+
+func isTranscriptBoundaryEvent(event gepevents.Event) bool {
+	switch event.(type) {
+	case *gepevents.EventToolCall, *gepevents.EventToolCallExecute, *gepevents.EventToolResult, *gepevents.EventToolCallExecutionResult:
+		return true
+	default:
+		return false
 	}
 }
 
@@ -513,6 +602,10 @@ func baseTimelineProjection(_ context.Context, ev sessionstream.Event, _ *sessio
 	default:
 		return nil, nil
 	}
+	entity.ParentMessageId = payload.GetParentMessageId()
+	entity.Segment = payload.GetSegment()
+	entity.SegmentType = payload.GetSegmentType()
+	entity.Final = payload.GetFinal()
 	return []sessionstream.TimelineEntity{{Kind: TimelineEntityChatMessage, Id: messageID, Payload: entity}}, nil
 }
 
