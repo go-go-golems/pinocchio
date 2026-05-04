@@ -253,12 +253,12 @@ func (e *Engine) runRuntimeInference(ctx context.Context, sid sessionstream.Sess
 	}
 	_, err := sess.AppendNewTurnFromUserPrompt(prompt)
 	if err != nil {
-		_ = e.publish(context.Background(), sid, pub, EventInferenceStopped, newChatMessageUpdate(messageID, "assistant", sink.LastText(), sink.LastText(), prompt, "stopped", false, err.Error()))
+		_ = e.publish(context.Background(), sid, pub, EventInferenceStopped, sink.stoppedMessageUpdate(messageID, err.Error()))
 		return
 	}
 	handle, err := sess.StartInference(ctx)
 	if err != nil {
-		_ = e.publish(context.Background(), sid, pub, EventInferenceStopped, newChatMessageUpdate(messageID, "assistant", sink.LastText(), sink.LastText(), prompt, "stopped", false, err.Error()))
+		_ = e.publish(context.Background(), sid, pub, EventInferenceStopped, sink.stoppedMessageUpdate(messageID, err.Error()))
 		return
 	}
 	output, err := handle.Wait()
@@ -267,7 +267,7 @@ func (e *Engine) runRuntimeInference(ctx context.Context, sid sessionstream.Sess
 			if isMaxIterationsError(err) {
 				_ = e.publish(context.Background(), sid, pub, EventInferenceFinished, newChatMessageUpdate(runtimeWarningMessageID(messageID), "warning", maxIterationsWarningText(err), maxIterationsWarningText(err), prompt, "finished", false, ""))
 			}
-			_ = e.publish(context.Background(), sid, pub, EventInferenceStopped, newChatMessageUpdate(messageID, "assistant", sink.LastText(), sink.LastText(), prompt, "stopped", false, err.Error()))
+			_ = e.publish(context.Background(), sid, pub, EventInferenceStopped, sink.stoppedMessageUpdate(messageID, err.Error()))
 		}
 		return
 	}
@@ -399,18 +399,7 @@ func (s *runtimeEventSink) PublishEvent(event gepevents.Event) error {
 		payload.Final = true
 		return s.engine.publish(context.Background(), s.sessionID, s.pub, EventInferenceFinished, payload)
 	case *gepevents.EventError:
-		text := s.LastText()
-		textMessageID, segment := s.ensureTextSegmentID()
-		s.mu.Lock()
-		s.terminal = true
-		s.textActive = false
-		s.mu.Unlock()
-		payload := newChatMessageUpdate(textMessageID, "assistant", text, text, s.prompt, "stopped", false, ev.ErrorString)
-		payload.ParentMessageId = s.messageID
-		payload.Segment = segment
-		payload.SegmentType = "text"
-		payload.Final = true
-		return s.engine.publish(context.Background(), s.sessionID, s.pub, EventInferenceStopped, payload)
+		return s.engine.publish(context.Background(), s.sessionID, s.pub, EventInferenceStopped, s.stoppedMessageUpdate(s.messageID, ev.ErrorString))
 	case *gepevents.EventInterrupt:
 		textMessageID, segment := s.ensureTextSegmentID()
 		s.mu.Lock()
@@ -451,6 +440,36 @@ func (s *runtimeEventSink) ensureTextSegmentID() (string, int32) {
 		s.textActive = true
 	}
 	return textSegmentMessageID(s.messageID, s.textSegment), s.textSegment
+}
+
+func (s *runtimeEventSink) stoppedMessageUpdate(defaultMessageID, errText string) *chatappv1.ChatMessageUpdate {
+	if s == nil {
+		return newChatMessageUpdate(defaultMessageID, "assistant", "", "", "", "stopped", false, errText)
+	}
+	s.mu.Lock()
+	text := s.lastText
+	segment := s.textSegment
+	active := s.textActive && segment > 0
+	if active {
+		s.textActive = false
+	}
+	s.terminal = true
+	s.mu.Unlock()
+
+	if !active {
+		// If a prior text segment was already closed by a tool/reasoning boundary,
+		// do not duplicate that segment's content into the parent run-level stopped row.
+		if segment > 0 {
+			text = ""
+		}
+		return newChatMessageUpdate(defaultMessageID, "assistant", text, text, s.prompt, "stopped", false, errText)
+	}
+	payload := newChatMessageUpdate(textSegmentMessageID(s.messageID, segment), "assistant", text, text, s.prompt, "stopped", false, errText)
+	payload.ParentMessageId = s.messageID
+	payload.Segment = segment
+	payload.SegmentType = "text"
+	payload.Final = true
+	return payload
 }
 
 func (s *runtimeEventSink) finishTextSegment() (string, int32, string, bool) {

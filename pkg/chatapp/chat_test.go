@@ -119,6 +119,80 @@ func TestRuntimeInterleavedTextToolTextUsesDistinctTextSegments(t *testing.T) {
 	require.True(t, ids["chat-msg-1:text:2"].GetFinal())
 }
 
+func TestRuntimeErrorAfterPartialStopsActiveTextSegment(t *testing.T) {
+	engine := NewEngine(WithChunkDelay(time.Millisecond))
+	hub := newTestHub(t, engine)
+	engine.setPendingRequest("request-partial-error", PromptRequest{
+		Prompt: "Fail after a partial",
+		Runtime: &infruntime.ComposedRuntime{
+			Engine: partialThenErrorEngine{},
+		},
+	})
+
+	require.NoError(t, hub.Submit(context.Background(), sessionstream.SessionId("chat-partial-error"), CommandStartInference, &chatappv1.StartInferenceCommand{RequestId: "request-partial-error"}))
+	require.NoError(t, engine.WaitIdle(context.Background(), sessionstream.SessionId("chat-partial-error")))
+
+	snap, err := hub.Snapshot(context.Background(), sessionstream.SessionId("chat-partial-error"))
+	require.NoError(t, err)
+
+	ids := map[string]*chatappv1.ChatMessageEntity{}
+	for _, entity := range snap.Entities {
+		if entity.Kind != TimelineEntityChatMessage {
+			continue
+		}
+		ids[entity.Id] = entity.Payload.(*chatappv1.ChatMessageEntity)
+	}
+
+	textSegment := ids["chat-msg-1:text:1"]
+	require.NotNil(t, textSegment)
+	require.Equal(t, "partial text", textSegment.GetContent())
+	require.Equal(t, "stopped", textSegment.GetStatus())
+	require.False(t, textSegment.GetStreaming())
+	require.Equal(t, "provider failed after partial", textSegment.GetError())
+	require.Equal(t, "chat-msg-1", textSegment.GetParentMessageId())
+	require.Equal(t, int32(1), textSegment.GetSegment())
+	require.Equal(t, "text", textSegment.GetSegmentType())
+	require.True(t, textSegment.GetFinal())
+	require.NotContains(t, ids, "chat-msg-1")
+}
+
+func TestRuntimeErrorAfterClosedTextSegmentDoesNotDuplicateSegmentContent(t *testing.T) {
+	engine := NewEngine(WithChunkDelay(time.Millisecond))
+	hub := newTestHub(t, engine)
+	engine.setPendingRequest("request-boundary-error", PromptRequest{
+		Prompt: "Fail after a boundary",
+		Runtime: &infruntime.ComposedRuntime{
+			Engine: boundaryThenErrorEngine{},
+		},
+	})
+
+	require.NoError(t, hub.Submit(context.Background(), sessionstream.SessionId("chat-boundary-error"), CommandStartInference, &chatappv1.StartInferenceCommand{RequestId: "request-boundary-error"}))
+	require.NoError(t, engine.WaitIdle(context.Background(), sessionstream.SessionId("chat-boundary-error")))
+
+	snap, err := hub.Snapshot(context.Background(), sessionstream.SessionId("chat-boundary-error"))
+	require.NoError(t, err)
+
+	ids := map[string]*chatappv1.ChatMessageEntity{}
+	for _, entity := range snap.Entities {
+		if entity.Kind != TimelineEntityChatMessage {
+			continue
+		}
+		ids[entity.Id] = entity.Payload.(*chatappv1.ChatMessageEntity)
+	}
+
+	finishedSegment := ids["chat-msg-1:text:1"]
+	require.NotNil(t, finishedSegment)
+	require.Equal(t, "first text", finishedSegment.GetContent())
+	require.Equal(t, "finished", finishedSegment.GetStatus())
+	require.False(t, finishedSegment.GetStreaming())
+
+	parentStopped := ids["chat-msg-1"]
+	require.NotNil(t, parentStopped)
+	require.Empty(t, parentStopped.GetContent())
+	require.Equal(t, "stopped", parentStopped.GetStatus())
+	require.Equal(t, "provider failed after boundary", parentStopped.GetError())
+}
+
 func TestRuntimeMaxIterationsErrorPublishesWarningMessage(t *testing.T) {
 	engine := NewEngine(WithChunkDelay(time.Millisecond))
 	hub := newTestHub(t, engine)
@@ -189,6 +263,23 @@ func (interleavedTextToolEngine) RunInference(ctx context.Context, t *turns.Turn
 	gepevents.PublishEventToContext(ctx, gepevents.NewPartialCompletionEvent(meta, "final text", "final text"))
 	gepevents.PublishEventToContext(ctx, gepevents.NewFinalEvent(meta, "final text"))
 	return t, nil
+}
+
+type partialThenErrorEngine struct{}
+
+func (partialThenErrorEngine) RunInference(ctx context.Context, t *turns.Turn) (*turns.Turn, error) {
+	meta := gepevents.EventMetadata{SessionID: "sid"}
+	gepevents.PublishEventToContext(ctx, gepevents.NewPartialCompletionEvent(meta, "partial text", "partial text"))
+	return t, errors.New("provider failed after partial")
+}
+
+type boundaryThenErrorEngine struct{}
+
+func (boundaryThenErrorEngine) RunInference(ctx context.Context, t *turns.Turn) (*turns.Turn, error) {
+	meta := gepevents.EventMetadata{SessionID: "sid"}
+	gepevents.PublishEventToContext(ctx, gepevents.NewPartialCompletionEvent(meta, "first text", "first text"))
+	gepevents.PublishEventToContext(ctx, gepevents.NewToolCallEvent(meta, gepevents.ToolCall{ID: "call-1", Name: "lookup", Input: `{"q":"x"}`}))
+	return t, errors.New("provider failed after boundary")
 }
 
 type maxIterationsErrorEngine struct{}
