@@ -784,7 +784,7 @@ const file_proto_pinocchio_chatapp_v1_chat_proto_rawDesc = "" +
 	"toolCallId\x12\x1b\n" +
 	"\ttool_name\x18\x03 \x01(\tR\btoolName\x12\x16\n" +
 	"\x06result\x18\x04 \x01(\tR\x06result\x12\x16\n" +
-	"\x06status\x18\x05 \x01(\tR\x06statusBQZOgithub.com/go-go-golems/pinocchio/pkg/chatapp/pb/pinocchio/chatapp/v1;chatappv1b\x06proto3"
+	"\x06status\x18\x05 \x01(\tR\x06statusBWZUgithub.com/go-go-golems/pinocchio/pkg/chatapp/pb/proto/pinocchio/chatapp/v1;chatappv1b\x06proto3"
 
 var (
 	file_proto_pinocchio_chatapp_v1_chat_proto_rawDescOnce sync.Once

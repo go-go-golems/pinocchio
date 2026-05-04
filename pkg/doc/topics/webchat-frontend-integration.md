@@ -33,22 +33,24 @@ Browser UI
 
 Go backend
   -> ChatService handles submit/queue/idempotency
-  -> sessionstream Hub manages event projection and UI fanout
-  -> WebSocket transport delivers snapshot + live UI events
+  -> sessionstream Hub manages protobuf-registered event projection and UI fanout
+  -> WebSocket transport delivers protobuf JSON snapshot + live UI events
 ```
 
 ## WebSocket Lifecycle
 
-The sessionstream WebSocket transport speaks a simple protocol:
+The sessionstream WebSocket transport uses protobuf-defined `ClientFrame` and `ServerFrame` messages serialized as JSON. The browser still sends and receives JSON objects, but the backend schema source is protobuf.
 
 1. Client connects to `/api/chat/ws`.
 2. Server sends `{ type: "hello", connectionId: "conn-N" }`.
-3. Client sends `{ type: "subscribe", sessionId: "...", sinceOrdinal: "0" }`.
-4. Server sends `{ type: "snapshot", sessionId, ordinal, entities: [...] }` with current state.
+3. Client sends `{ type: "subscribe", sessionId: "...", sinceSnapshotOrdinal: "0" }`.
+4. Server sends `{ type: "snapshot", sessionId, snapshotOrdinal, entities: [...] }` with current state.
 5. Server sends `{ type: "subscribed", sessionId }`.
-6. Server sends `{ type: "ui-event", sessionId, ordinal, name, payload }` for each live event.
+6. Server sends `{ type: "ui-event", sessionId, eventOrdinal, name, payload }` for each live event.
 7. Client may send `{ type: "unsubscribe", sessionId }` to stop receiving events.
 8. Client may send `{ type: "ping" }` to check liveness (server replies `{ type: "pong" }`).
+
+Some existing frontend helpers still accept the older `sinceOrdinal` / `ordinal` spellings while sessionstream clients are being aligned. New documentation and new clients should use the role-specific names `sinceSnapshotOrdinal`, `snapshotOrdinal`, and `eventOrdinal`.
 
 ## Recommended Client Pattern: `wsManager` (Dedicated WebSocket Lifecycle Module)
 
@@ -62,20 +64,24 @@ Key reasons:
 
 ## UI Event Frame Contract
 
-After subscribing, the server sends live updates as UI event frames:
+After subscribing, the server sends live updates as UI event frames. The payload is the protobuf JSON form of the registered UI event message.
 
 ```json
 {
   "type": "ui-event",
   "sessionId": "sess-1",
-  "ordinal": "42",
+  "eventOrdinal": "42",
   "name": "ChatMessageAppended",
   "payload": {
-    "messageId": "msg-1",
+    "messageId": "chat-msg-1:text:2",
+    "parentMessageId": "chat-msg-1",
+    "segment": 2,
+    "segmentType": "text",
     "role": "assistant",
     "content": "Hi",
     "status": "streaming",
-    "streaming": true
+    "streaming": true,
+    "final": false
   }
 }
 ```
@@ -84,27 +90,39 @@ Common UI event names:
 
 - `ChatMessageAccepted` — user message submitted
 - `ChatMessageStarted` — assistant begins responding
-- `ChatMessageAppended` — token/chunk appended during streaming
-- `ChatMessageFinished` — assistant response complete
+- `ChatMessageAppended` — assistant text segment updated during streaming
+- `ChatMessageFinished` — assistant text segment or final response complete
 - `ChatMessageStopped` — response stopped (user cancel or error)
-- `ChatReasoningStarted`, `ChatReasoningAppended`, `ChatReasoningFinished` — thinking/reasoning blocks
-- `ChatAgentModePreviewUpdated`, `ChatAgentModeCommitted`, `ChatAgentModePreviewCleared` — mode switch events
+- `ChatReasoningStarted`, `ChatReasoningAppended`, `ChatReasoningFinished` — shared thinking/reasoning plugin events
+- `ChatToolCallStarted`, `ChatToolCallUpdated`, `ChatToolCallFinished`, `ChatToolResultReady` — shared tool-call plugin events
+- `ChatAgentModePreviewUpdated`, `ChatAgentModeCommitted`, `ChatAgentModePreviewCleared` — app-owned mode switch events
 
 ## Snapshot Frame Contract
 
-On subscribe, the server sends the current state:
+On subscribe, the server sends the current state. Entity payloads are protobuf JSON for their registered timeline entity kind.
 
 ```json
 {
   "type": "snapshot",
   "sessionId": "sess-1",
-  "ordinal": "15",
+  "snapshotOrdinal": "15",
   "entities": [
     {
-      "kind": "message",
-      "id": "msg-1",
+      "kind": "ChatMessage",
+      "id": "chat-msg-1:thinking:1",
       "tombstone": false,
-      "payload": { "role": "user", "content": "Hello", "status": "submitted" }
+      "createdOrdinal": "11",
+      "lastEventOrdinal": "14",
+      "payload": {
+        "messageId": "chat-msg-1:thinking:1",
+        "parentMessageId": "chat-msg-1",
+        "segment": 1,
+        "segmentType": "thinking",
+        "role": "thinking",
+        "content": "I should inspect the tool output first.",
+        "status": "finished",
+        "streaming": false
+      }
     }
   ]
 }
@@ -145,5 +163,6 @@ Compute a base prefix from `window.location.pathname` and reuse it consistently 
 
 ## See Also
 
+- [Chatapp Protobuf Schemas and Shared Plugins](chatapp-protobuf-plugins.md)
 - [Webchat Frontend Architecture](webchat-frontend-architecture.md)
 - [Webchat Debugging and Ops](webchat-debugging-and-ops.md)

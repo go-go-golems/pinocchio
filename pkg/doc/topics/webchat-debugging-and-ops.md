@@ -17,13 +17,14 @@ SectionType: GeneralTopic
 
 ## Scope
 
-This guide focuses on operational debugging for the current HTTP chat setup:
+This guide focuses on operational debugging for the current sessionstream-backed HTTP chat setup:
 
-- `POST /chat`
-- `GET /ws?conv_id=...`
-- `GET /api/timeline`
-- `GET /api/debug/conversations` for current runtime pointer inspection
-- `GET /api/debug/turns` for turn inspection
+- `POST /api/chat/sessions` to create a session
+- `POST /api/chat/sessions/:sessionId/messages` to submit a prompt
+- `GET /api/chat/sessions/:sessionId` for snapshot hydration
+- `GET /api/chat/ws` for protobuf JSON websocket frames
+- `GET /api/debug/conversations` for current runtime pointer inspection when debug APIs are enabled
+- `GET /api/debug/turns` for turn inspection when a turn store is enabled
 - `GET /api/chat/profiles` and schema endpoints for profile API health checks
 
 ## WebSocket Debugging
@@ -45,21 +46,22 @@ Look for lifecycle logs:
 
 ### No events after websocket open
 
-- Verify `conv_id` is present in websocket URL.
-- Check backend logs for run start and stream publish.
-- Confirm resolver accepts websocket requests.
+- Verify the client sends a subscribe frame with the intended `sessionId`.
+- Check backend logs for run start and sessionstream publish.
+- Confirm the app server registered chatapp schemas and plugins before constructing the hub.
+- Confirm the selected profile resolves successfully for message submissions.
 
 ### Hydration ordering issues
 
-- Inspect `/api/timeline?conv_id=...` output.
-- Compare entity versions with websocket `event.seq` ordering.
+- Inspect `GET /api/chat/sessions/:sessionId` output.
+- Compare snapshot `snapshotOrdinal`, entity `createdOrdinal` / `lastEventOrdinal`, and live `eventOrdinal` values.
 - Rebuild stale SQLite snapshots if legacy data used incompatible ordering.
 
 ### Chat request failures
 
-- Check resolver errors from `POST /chat`.
-- Validate JSON body keys: `prompt`, `conv_id`, `profile`, `registry`, `idempotency_key`.
-- Confirm profile slug exists when calling `/chat/{profile}`.
+- Check resolver errors from `POST /api/chat/sessions/:sessionId/messages`.
+- Validate JSON body keys: `prompt`, `profile`, `registry`, and `idempotencyKey`.
+- Confirm the profile slug exists in the selected profile registry.
 
 ### Turns endpoint unavailable
 
@@ -92,7 +94,8 @@ Look for lifecycle logs:
 
 Backend checks:
 
-- Confirm HTTP server route mounts include `/chat`, `/ws`, `/api/timeline`, `/api/`.
+- Confirm HTTP server route mounts include `/api/chat/sessions`, `/api/chat/sessions/:sessionId/messages`, `/api/chat/sessions/:sessionId`, `/api/chat/ws`, and profile routes.
+- Confirm `chatapp.RegisterSchemas(reg, plugins...)` runs with `NewReasoningPlugin()` and `NewToolCallPlugin()` when reasoning/tool rows are expected.
 - Confirm timeline store configuration (`--timeline-db` or `--timeline-dsn`) when durability is expected.
 - Confirm turn store configuration for debug turn queries.
 - Confirm profile API mounts include `/api/chat/profiles`, `/api/chat/schemas/middlewares`, and `/api/chat/schemas/extensions`.
@@ -100,22 +103,27 @@ Backend checks:
 
 Frontend checks:
 
-- Verify fetch targets `/api/timeline`, not `/timeline`.
-- Verify websocket URL is `/ws?conv_id=...` under current base prefix.
+- Verify fetch targets `/api/chat/sessions/:sessionId`, not `/api/timeline`.
+- Verify websocket URL is `/api/chat/ws` under the current base prefix.
 - Ensure hydration gate is active before live stream replay.
+- Verify the websocket frame parser reads role-specific ordinals (`snapshotOrdinal`, `eventOrdinal`) or explicitly supports compatibility aliases.
 
 ## Quick Curl Smoke Tests
 
 ```bash
-curl -i -X POST http://localhost:8080/chat \
+session_id=$(curl -s -X POST http://localhost:8080/api/chat/sessions \
   -H 'content-type: application/json' \
-  -d '{"prompt":"hello","conv_id":"conv-smoke"}'
+  -d '{}' | jq -r '.sessionId')
 
-curl -i 'http://localhost:8080/api/timeline?conv_id=conv-smoke'
+curl -i -X POST "http://localhost:8080/api/chat/sessions/${session_id}/messages" \
+  -H 'content-type: application/json' \
+  -d '{"prompt":"hello"}'
 
-curl -i 'http://localhost:8080/api/debug/conversations/conv-smoke'
+curl -i "http://localhost:8080/api/chat/sessions/${session_id}"
 
-curl -i 'http://localhost:8080/api/debug/turns?conv_id=conv-smoke&limit=5'
+curl -i "http://localhost:8080/api/debug/conversations/${session_id}"
+
+curl -i "http://localhost:8080/api/debug/turns?conv_id=${session_id}&limit=5"
 
 curl -i 'http://localhost:8080/api/chat/profiles'
 
@@ -125,7 +133,7 @@ curl -i 'http://localhost:8080/api/chat/schemas/middlewares'
 Example runtime history query:
 
 ```bash
-curl -s 'http://localhost:8080/api/debug/turns?conv_id=conv-smoke&limit=50' \
+curl -s "http://localhost:8080/api/debug/turns?conv_id=${session_id}&limit=50" \
   | jq '.items[] | {turn_id, phase, runtime_key, inference_id, created_at_ms}'
 ```
 
@@ -139,7 +147,7 @@ If operational runbooks still mention these, update them:
 
 ## See Also
 
-- [Webchat HTTP Chat Setup](webchat-http-chat-setup.md)
+- [Chatapp Protobuf Schemas and Shared Plugins](chatapp-protobuf-plugins.md)
 - [Webchat Frontend Integration](webchat-frontend-integration.md)
-- [Webchat Framework Guide](webchat-framework-guide.md)
+- [Webchat Frontend Architecture](webchat-frontend-architecture.md)
 - [Webchat Runtime Truth Migration Playbook](webchat-runtime-truth-migration-playbook.md)

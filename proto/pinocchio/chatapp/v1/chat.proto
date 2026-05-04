@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package pinocchio.chatapp.v1;
 
-option go_package = "github.com/go-go-golems/pinocchio/pkg/chatapp/pb/pinocchio/chatapp/v1;chatappv1";
+option go_package = "github.com/go-go-golems/pinocchio/pkg/chatapp/pb/proto/pinocchio/chatapp/v1;chatappv1";
 
 message StartInferenceCommand {
   string prompt = 1;

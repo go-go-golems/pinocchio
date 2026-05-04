@@ -19,7 +19,7 @@ ShowPerDefault: true
 SectionType: Tutorial
 ---
 
-This tutorial explains how to build an application shaped like `cmd/web-chat` without copying the old historical `pkg/evtstream` layout. The goal is not merely to get a chat box on the screen. The goal is to build a **maintainable session-based chat application** with a clear ownership model: `sessionstream` owns the event-streaming substrate, `pinocchio` and `geppetto` own runtime composition and inference machinery, and your application owns product-specific HTTP contracts, feature extensions, widgets, and frontend state.
+This tutorial explains how to build an application shaped like `cmd/web-chat` without copying the old historical `pkg/evtstream` layout. The goal is not merely to get a chat box on the screen. The goal is to build a **maintainable session-based chat application** with a clear ownership model: `sessionstream` owns the event-streaming substrate and protobuf transport, `pinocchio` and `geppetto` own runtime composition and inference machinery, and your application owns product-specific HTTP contracts, feature extensions, widgets, and frontend state.
 
 By the end, you should understand where each piece belongs, how a prompt moves from React to Go to Geppetto and back again, how hydrated snapshots and live UI events fit together, and how to add custom widgets without polluting the shared substrate.
 
@@ -62,7 +62,8 @@ Start here, because most mistakes in this space are ownership mistakes.
 - hydration store interfaces and implementations,
 - websocket transport,
 - framework-oriented examples and framework-oriented Systemlab,
-- generic session-based streaming semantics.
+- generic session-based streaming semantics,
+- protobuf `ClientFrame` / `ServerFrame` websocket transport with role-specific ordinals.
 
 ### `pinocchio` / `geppetto` own
 
@@ -100,6 +101,9 @@ Read these files before starting implementation:
 - `pinocchio/pkg/chatapp/chat.go`
 - `pinocchio/pkg/chatapp/service.go`
 - `pinocchio/pkg/chatapp/features.go`
+- `pinocchio/pkg/chatapp/plugins/reasoning.go`
+- `pinocchio/pkg/chatapp/plugins/toolcall.go`
+- `proto/pinocchio/chatapp/v1/chat.proto`
 - `pinocchio/cmd/web-chat/app/server.go`
 - `pinocchio/cmd/web-chat/main.go`
 
@@ -218,10 +222,10 @@ type SubmitMessageRequest struct {
 }
 
 type SessionSnapshotResponse struct {
-    SessionID string           `json:"sessionId"`
-    Ordinal   string           `json:"ordinal"`
-    Status    string           `json:"status,omitempty"`
-    Entities  []SnapshotEntity `json:"entities"`
+    SessionID       string           `json:"sessionId"`
+    SnapshotOrdinal string           `json:"snapshotOrdinal"`
+    Status          string           `json:"status,omitempty"`
+    Entities        []SnapshotEntity `json:"entities"`
 }
 ```
 
@@ -241,6 +245,8 @@ The reference pattern is `pinocchio/pkg/chatapp`.
 - base UI projection,
 - prompt submission service methods,
 - runtime-event handling for generic completion/error/interrupt events,
+- protobuf schema registration for base chat payloads,
+- shared reasoning and tool-call plugins,
 - and a feature extension seam.
 
 ### What does not belong here
@@ -284,11 +290,11 @@ type ChatPlugin interface {
 
 This seam gives you three critical powers:
 
-- register app-specific schemas without changing `sessionstream`,
+- register app-specific protobuf schemas without changing `sessionstream`,
 - translate runtime/middleware events into app-owned backend events,
 - project those events into timeline entities and live UI events.
 
-That is the mechanism that makes custom widgets clean instead of invasive.
+That is the mechanism that makes custom widgets clean instead of invasive. For common chat behaviors, prefer the shared plugins under `pinocchio/pkg/chatapp/plugins`: `NewReasoningPlugin()` for thinking/reasoning streams and `NewToolCallPlugin()` for generic Geppetto tool lifecycle rows.
 
 ## Step 4 — wire the app server to sessionstream
 
@@ -323,7 +329,7 @@ hub, _ := sessionstream.NewHub(
 )
 
 engine := mychatapp.NewEngine(
-    mychatapp.WithChatPlugins(myFeatures...),
+    mychatapp.WithPlugins(myFeatures...),
 )
 
 _ = mychatapp.Install(hub, engine)
@@ -369,10 +375,11 @@ Start with memory if you must, but keep the store seam active from day one.
 The frontend should merge:
 
 - initial snapshot entities,
-- subsequent UI events,
+- websocket `snapshot` frames with `snapshotOrdinal`,
+- websocket `ui-event` frames with `eventOrdinal`,
 - and custom widget entities.
 
-The reference websocket client is `pinocchio/cmd/web-chat/web/src/ws/wsManager.ts`.
+The reference websocket client is `pinocchio/cmd/web-chat/web/src/ws/wsManager.ts`. Browser frames are JSON, but backend commands, events, UI events, and timeline entities are registered protobuf messages. Preserve `createdOrdinal` and `lastEventOrdinal` metadata when you need deterministic hydrated ordering.
 
 The key frontend rules are:
 
@@ -419,18 +426,21 @@ middleware does something
 
 The correct pattern is more work upfront, but it gives you durable state, reconnect correctness, and testable semantics.
 
-### Reference: `agentmode`
+### Reference: shared plugins and `agentmode`
 
 Study:
 
+- `pinocchio/pkg/chatapp/plugins/reasoning.go`
+- `pinocchio/pkg/chatapp/plugins/toolcall.go`
 - `pinocchio/cmd/web-chat/agentmode_chat_feature.go`
 - `pinocchio/pkg/middlewares/agentmode/*`
 - `pinocchio/cmd/web-chat/web/src/webchat/cards.tsx`
 
-What this feature shows:
+What these features show:
 
-- runtime-specific middleware events stay outside `sessionstream`,
-- app-owned feature code registers extra schemas,
+- reusable chat behaviors such as reasoning and tool calls live in `pkg/chatapp/plugins`,
+- app-specific middleware semantics such as `agentmode` stay in the app package,
+- feature code registers extra schemas,
 - preview vs committed state are treated differently,
 - frontend gets both hydrated entity state and live preview-clearing events.
 
@@ -440,14 +450,17 @@ A custom widget is not just a React component. It is a contract between backend 
 
 ### Backend side
 
-Your feature should emit a timeline entity kind such as:
+Your feature should emit a registered timeline entity kind such as:
 
 ```text
 AgentMode
-ToolCall
+ChatToolCall
+ChatToolResult
 ResearchPlan
 ApprovalGate
 ```
+
+Define stable protobuf payloads for durable entities when the shape is known. Use `google.protobuf.Struct` only when the feature intentionally needs flexible metadata.
 
 ### Frontend side
 
@@ -492,6 +505,8 @@ Test:
 
 Reference:
 
+- `pinocchio/pkg/chatapp/plugins/reasoning_test.go`
+- `pinocchio/pkg/chatapp/plugins/toolcall_test.go`
 - `pinocchio/cmd/web-chat/agentmode_chat_feature_test.go`
 
 #### App server tests
@@ -598,6 +613,7 @@ If any of those answers is no, the application may still work, but it probably d
 - `webchat-getting-started` — quick local run workflow for the existing reference app
 - `webchat-backend-reference` — current backend contract details
 - `webchat-frontend-architecture` — current React-side structure
-- `webchat-sem-and-ui` — frontend/backend event and rendering model
+- `chatapp-protobuf-plugins` — protobuf payloads and shared chatapp plugins
+- `webchat-frontend-integration` — frontend/backend event and rendering model
 
 - `sessionstream/cmd/sessionstream-systemlab` — framework-oriented lab examples and chapters in the extracted framework repo
