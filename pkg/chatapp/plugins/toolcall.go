@@ -91,30 +91,36 @@ func (p *ToolCallPlugin) HandleRuntimeEvent(ctx context.Context, runtime chatapp
 		})
 
 	case *gepevents.EventToolResult:
-		_ = runtime.Publish(ctx, EventToolResultReady, &chatappv1.ToolResultUpdate{
+		if err := runtime.Publish(ctx, EventToolResultReady, &chatappv1.ToolResultUpdate{
 			MessageId:  runtime.MessageID,
 			ToolCallId: ev.ToolResult.ID,
 			ToolName:   ev.ToolResult.Name,
 			Result:     ev.ToolResult.Result,
 			Status:     "success",
-		})
+		}); err != nil {
+			return true, err
+		}
 		return true, runtime.Publish(ctx, EventToolCallFinished, &chatappv1.ToolCallUpdate{
 			MessageId:  runtime.MessageID,
 			ToolCallId: ev.ToolResult.ID,
+			ToolName:   ev.ToolResult.Name,
 			Status:     "completed",
 		})
 
 	case *gepevents.EventToolCallExecutionResult:
-		_ = runtime.Publish(ctx, EventToolResultReady, &chatappv1.ToolResultUpdate{
+		if err := runtime.Publish(ctx, EventToolResultReady, &chatappv1.ToolResultUpdate{
 			MessageId:  runtime.MessageID,
 			ToolCallId: ev.ToolResult.ID,
 			ToolName:   ev.ToolResult.Name,
 			Result:     ev.ToolResult.Result,
 			Status:     "success",
-		})
+		}); err != nil {
+			return true, err
+		}
 		return true, runtime.Publish(ctx, EventToolCallFinished, &chatappv1.ToolCallUpdate{
 			MessageId:  runtime.MessageID,
 			ToolCallId: ev.ToolResult.ID,
+			ToolName:   ev.ToolResult.Name,
 			Status:     "completed",
 		})
 
@@ -162,7 +168,7 @@ func (p *ToolCallPlugin) ProjectTimeline(_ context.Context, ev sessionstream.Eve
 		if !ok || payload == nil {
 			return nil, true, fmt.Errorf("tool call updated payload must be %T, got %T", &chatappv1.ToolCallUpdate{}, ev.Payload)
 		}
-		existing := currentToolCallEntity(view, payload.GetToolCallId())
+		existing := mergeToolCallUpdate(currentToolCallEntity(view, payload.GetToolCallId()), payload)
 		existing.Executing = payload.GetExecuting()
 		existing.Status = "executing"
 		return []sessionstream.TimelineEntity{{
@@ -176,8 +182,9 @@ func (p *ToolCallPlugin) ProjectTimeline(_ context.Context, ev sessionstream.Eve
 		if !ok || payload == nil {
 			return nil, true, fmt.Errorf("tool call finished payload must be %T, got %T", &chatappv1.ToolCallUpdate{}, ev.Payload)
 		}
-		existing := currentToolCallEntity(view, payload.GetToolCallId())
+		existing := mergeToolCallUpdate(currentToolCallEntity(view, payload.GetToolCallId()), payload)
 		existing.Status = "completed"
+		existing.Executing = false
 		return []sessionstream.TimelineEntity{{
 			Kind:    TimelineEntityToolCall,
 			Id:      payload.GetToolCallId(),
@@ -226,6 +233,28 @@ func currentToolCallEntity(view sessionstream.TimelineView, id string) *chatappv
 		Executing:  pb.GetExecuting(),
 		Status:     pb.GetStatus(),
 	}
+}
+
+func mergeToolCallUpdate(entity *chatappv1.ToolCallEntity, update *chatappv1.ToolCallUpdate) *chatappv1.ToolCallEntity {
+	if entity == nil {
+		entity = &chatappv1.ToolCallEntity{}
+	}
+	if update == nil {
+		return entity
+	}
+	if update.GetMessageId() != "" {
+		entity.MessageId = update.GetMessageId()
+	}
+	if update.GetToolCallId() != "" {
+		entity.ToolCallId = update.GetToolCallId()
+	}
+	if update.GetToolName() != "" {
+		entity.ToolName = update.GetToolName()
+	}
+	if update.GetInput() != "" {
+		entity.Input = update.GetInput()
+	}
+	return entity
 }
 
 // Ensure ToolCallPlugin implements ChatPlugin.
