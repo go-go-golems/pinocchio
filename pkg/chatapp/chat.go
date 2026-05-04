@@ -62,7 +62,7 @@ type activeRun struct {
 
 type runtimeEventSink struct {
 	mu          sync.Mutex
-	ctx         context.Context
+	publishCtx  context.Context
 	sessionID   sessionstream.SessionId
 	messageID   string
 	prompt      string
@@ -232,7 +232,7 @@ func (e *Engine) runRuntimeInference(ctx context.Context, sid sessionstream.Sess
 		return
 	}
 
-	baseSink := gepevents.EventSink(&runtimeEventSink{ctx: publishContext(ctx), sessionID: sid, messageID: messageID, prompt: prompt, pub: pub, engine: e})
+	baseSink := gepevents.EventSink(&runtimeEventSink{publishCtx: publishContext(ctx), sessionID: sid, messageID: messageID, prompt: prompt, pub: pub, engine: e})
 	eventSink := baseSink
 	if runtime.WrapSink != nil {
 		wrapped, err := runtime.WrapSink(baseSink)
@@ -441,7 +441,7 @@ func (s *runtimeEventSink) publishContext() context.Context {
 	if s == nil {
 		return context.Background()
 	}
-	return publishContext(s.ctx)
+	return publishContext(s.publishCtx)
 }
 
 func (s *runtimeEventSink) ensureTextSegmentID() (string, int32) {
