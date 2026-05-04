@@ -1,0 +1,36 @@
+syntax = "proto3";
+
+package pinocchio.chatapp.v1;
+
+option go_package = "github.com/go-go-golems/pinocchio/pkg/chatapp/pb/pinocchio/chatapp/v1;chatappv1";
+
+message StartInferenceCommand {
+  string prompt = 1;
+  string idempotency_key = 2;
+  string request_id = 3;
+}
+
+message StopInferenceCommand {}
+
+message ChatMessageUpdate {
+  string message_id = 1;
+  string role = 2;
+  string prompt = 3;
+  string chunk = 4;
+  string text = 5;
+  string content = 6;
+  string status = 7;
+  bool streaming = 8;
+  string error = 9;
+}
+
+message ChatMessageEntity {
+  string message_id = 1;
+  string role = 2;
+  string prompt = 3;
+  string text = 4;
+  string content = 5;
+  string status = 6;
+  bool streaming = 7;
+  string error = 8;
+}
