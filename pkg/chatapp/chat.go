@@ -69,7 +69,7 @@ type runtimeEventSink struct {
 	engine      *Engine
 	lastText    string
 	terminal    bool
-	textSegment int
+	textSegment int32
 	textActive  bool
 }
 
@@ -281,7 +281,7 @@ func (e *Engine) runRuntimeInference(ctx context.Context, sid sessionstream.Sess
 	textMessageID, segment := sink.ensureTextSegmentID()
 	finished := newChatMessageUpdate(textMessageID, "assistant", finalText, finalText, prompt, "finished", false, "")
 	finished.ParentMessageId = messageID
-	finished.Segment = int32(segment)
+	finished.Segment = segment
 	finished.SegmentType = "text"
 	finished.Final = true
 	_ = e.publish(context.Background(), sid, pub, EventInferenceFinished, finished)
@@ -382,7 +382,7 @@ func (s *runtimeEventSink) PublishEvent(event gepevents.Event) error {
 		s.mu.Unlock()
 		payload := newChatMessageDelta(textMessageID, ev.Delta, ev.Completion, s.prompt, "streaming", true, "")
 		payload.ParentMessageId = s.messageID
-		payload.Segment = int32(segment)
+		payload.Segment = segment
 		payload.SegmentType = "text"
 		return s.engine.publish(context.Background(), s.sessionID, s.pub, EventTokensDelta, payload)
 	case *gepevents.EventFinal:
@@ -394,7 +394,7 @@ func (s *runtimeEventSink) PublishEvent(event gepevents.Event) error {
 		s.mu.Unlock()
 		payload := newChatMessageUpdate(textMessageID, "assistant", ev.Text, ev.Text, s.prompt, "finished", false, "")
 		payload.ParentMessageId = s.messageID
-		payload.Segment = int32(segment)
+		payload.Segment = segment
 		payload.SegmentType = "text"
 		payload.Final = true
 		return s.engine.publish(context.Background(), s.sessionID, s.pub, EventInferenceFinished, payload)
@@ -407,7 +407,7 @@ func (s *runtimeEventSink) PublishEvent(event gepevents.Event) error {
 		s.mu.Unlock()
 		payload := newChatMessageUpdate(textMessageID, "assistant", text, text, s.prompt, "stopped", false, ev.ErrorString)
 		payload.ParentMessageId = s.messageID
-		payload.Segment = int32(segment)
+		payload.Segment = segment
 		payload.SegmentType = "text"
 		payload.Final = true
 		return s.engine.publish(context.Background(), s.sessionID, s.pub, EventInferenceStopped, payload)
@@ -420,7 +420,7 @@ func (s *runtimeEventSink) PublishEvent(event gepevents.Event) error {
 		s.mu.Unlock()
 		payload := newChatMessageUpdate(textMessageID, "assistant", ev.Text, ev.Text, s.prompt, "stopped", false, "")
 		payload.ParentMessageId = s.messageID
-		payload.Segment = int32(segment)
+		payload.Segment = segment
 		payload.SegmentType = "text"
 		payload.Final = true
 		return s.engine.publish(context.Background(), s.sessionID, s.pub, EventInferenceStopped, payload)
@@ -429,7 +429,7 @@ func (s *runtimeEventSink) PublishEvent(event gepevents.Event) error {
 			if textMessageID, segment, text, ok := s.finishTextSegment(); ok {
 				payload := newChatMessageUpdate(textMessageID, "assistant", text, text, s.prompt, "finished", false, "")
 				payload.ParentMessageId = s.messageID
-				payload.Segment = int32(segment)
+				payload.Segment = segment
 				payload.SegmentType = "text"
 				if err := s.engine.publish(context.Background(), s.sessionID, s.pub, EventInferenceFinished, payload); err != nil {
 					return err
@@ -440,7 +440,7 @@ func (s *runtimeEventSink) PublishEvent(event gepevents.Event) error {
 	}
 }
 
-func (s *runtimeEventSink) ensureTextSegmentID() (string, int) {
+func (s *runtimeEventSink) ensureTextSegmentID() (string, int32) {
 	if s == nil {
 		return "", 0
 	}
@@ -453,7 +453,7 @@ func (s *runtimeEventSink) ensureTextSegmentID() (string, int) {
 	return textSegmentMessageID(s.messageID, s.textSegment), s.textSegment
 }
 
-func (s *runtimeEventSink) finishTextSegment() (string, int, string, bool) {
+func (s *runtimeEventSink) finishTextSegment() (string, int32, string, bool) {
 	if s == nil {
 		return "", 0, "", false
 	}
@@ -467,7 +467,7 @@ func (s *runtimeEventSink) finishTextSegment() (string, int, string, bool) {
 	return textSegmentMessageID(s.messageID, s.textSegment), s.textSegment, s.lastText, true
 }
 
-func textSegmentMessageID(messageID string, segment int) string {
+func textSegmentMessageID(messageID string, segment int32) string {
 	messageID = strings.TrimSpace(messageID)
 	if messageID == "" || segment <= 0 {
 		return ""
