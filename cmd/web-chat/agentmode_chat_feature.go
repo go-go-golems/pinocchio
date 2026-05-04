@@ -45,13 +45,17 @@ func (agentModePlugin) RegisterSchemas(reg *sessionstream.SchemaRegistry) error 
 func (agentModePlugin) HandleRuntimeEvent(ctx context.Context, runtime chatapp.RuntimeEventContext, event gepevents.Event) (bool, error) {
 	switch ev := event.(type) {
 	case *agentmode.EventModeSwitchPreview:
-		return true, runtime.Publish(ctx, agentModePreviewEventName, map[string]any{
+		pb, err := structpb.NewStruct(map[string]any{
 			"messageId":     runtime.MessageID,
 			"candidateMode": ev.CandidateMode,
 			"analysis":      ev.Analysis,
 			"parseState":    ev.ParseState,
 			"preview":       true,
 		})
+		if err != nil {
+			return true, err
+		}
+		return true, runtime.Publish(ctx, agentModePreviewEventName, pb)
 	case *gepevents.EventAgentModeSwitch:
 		payload := map[string]any{
 			"messageId": runtime.MessageID,
@@ -61,7 +65,11 @@ func (agentModePlugin) HandleRuntimeEvent(ctx context.Context, runtime chatapp.R
 		for k, v := range ev.Data {
 			payload[k] = v
 		}
-		return true, runtime.Publish(ctx, agentModeCommittedEventName, payload)
+		pb, err := structpb.NewStruct(payload)
+		if err != nil {
+			return true, err
+		}
+		return true, runtime.Publish(ctx, agentModeCommittedEventName, pb)
 	default:
 		return false, nil
 	}

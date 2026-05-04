@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
+	chatappv1 "github.com/go-go-golems/pinocchio/pkg/chatapp/pb/proto/pinocchio/chatapp/v1"
 	sessionstream "github.com/go-go-golems/sessionstream/pkg/sessionstream"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/protobuf/types/known/structpb"
 )
 
 func TestServiceSubmitPromptHappyPath(t *testing.T) {
@@ -22,20 +22,20 @@ func TestServiceSubmitPromptHappyPath(t *testing.T) {
 	snap, err := svc.Snapshot(context.Background(), sessionstream.SessionId("svc-chat-1"))
 	require.NoError(t, err)
 	require.Len(t, snap.Entities, 2)
-	var assistant map[string]any
-	var user map[string]any
+	var assistant *chatappv1.ChatMessageEntity
+	var user *chatappv1.ChatMessageEntity
 	for _, entity := range snap.Entities {
-		payloadMap := entity.Payload.(*structpb.Struct).AsMap()
-		switch payloadMap["role"] {
+		payloadMsg := entity.Payload.(*chatappv1.ChatMessageEntity)
+		switch payloadMsg.GetRole() {
 		case "assistant":
-			assistant = payloadMap
+			assistant = payloadMsg
 		case "user":
-			user = payloadMap
+			user = payloadMsg
 		}
 	}
-	require.Equal(t, "Explain ordinals", user["content"])
-	require.Equal(t, "finished", assistant["status"])
-	require.Equal(t, "Answer: Explain ordinals", assistant["text"])
+	require.Equal(t, "Explain ordinals", user.GetContent())
+	require.Equal(t, "finished", assistant.GetStatus())
+	require.Equal(t, "Answer: Explain ordinals", assistant.GetText())
 }
 
 func TestServiceStopPath(t *testing.T) {
@@ -52,13 +52,13 @@ func TestServiceStopPath(t *testing.T) {
 	snap, err := svc.Snapshot(context.Background(), sessionstream.SessionId("svc-chat-2"))
 	require.NoError(t, err)
 	require.Len(t, snap.Entities, 2)
-	var assistant map[string]any
+	var assistant *chatappv1.ChatMessageEntity
 	for _, entity := range snap.Entities {
-		payloadMap := entity.Payload.(*structpb.Struct).AsMap()
-		if payloadMap["role"] == "assistant" {
-			assistant = payloadMap
+		payloadMsg := entity.Payload.(*chatappv1.ChatMessageEntity)
+		if payloadMsg.GetRole() == "assistant" {
+			assistant = payloadMsg
 		}
 	}
-	require.Equal(t, "stopped", assistant["status"])
-	require.Equal(t, false, assistant["streaming"])
+	require.Equal(t, "stopped", assistant.GetStatus())
+	require.Equal(t, false, assistant.GetStreaming())
 }

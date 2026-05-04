@@ -2,6 +2,7 @@ package chatapp
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
@@ -11,9 +12,11 @@ import (
 	gepsession "github.com/go-go-golems/geppetto/pkg/inference/session"
 	"github.com/go-go-golems/geppetto/pkg/inference/toolloop/enginebuilder"
 	"github.com/go-go-golems/geppetto/pkg/turns"
+	chatappv1 "github.com/go-go-golems/pinocchio/pkg/chatapp/pb/proto/pinocchio/chatapp/v1"
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 	sessionstream "github.com/go-go-golems/sessionstream/pkg/sessionstream"
-	"google.golang.org/protobuf/types/known/structpb"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 )
 
 const (
@@ -96,19 +99,19 @@ func NewEngine(opts ...Option) *Engine {
 
 func RegisterSchemas(reg *sessionstream.SchemaRegistry, features ...ChatPlugin) error {
 	for _, err := range []error{
-		reg.RegisterCommand(CommandStartInference, &structpb.Struct{}),
-		reg.RegisterCommand(CommandStopInference, &structpb.Struct{}),
-		reg.RegisterEvent(EventUserMessageAccepted, &structpb.Struct{}),
-		reg.RegisterEvent(EventInferenceStarted, &structpb.Struct{}),
-		reg.RegisterEvent(EventTokensDelta, &structpb.Struct{}),
-		reg.RegisterEvent(EventInferenceFinished, &structpb.Struct{}),
-		reg.RegisterEvent(EventInferenceStopped, &structpb.Struct{}),
-		reg.RegisterUIEvent(UIMessageAccepted, &structpb.Struct{}),
-		reg.RegisterUIEvent(UIMessageStarted, &structpb.Struct{}),
-		reg.RegisterUIEvent(UIMessageAppended, &structpb.Struct{}),
-		reg.RegisterUIEvent(UIMessageFinished, &structpb.Struct{}),
-		reg.RegisterUIEvent(UIMessageStopped, &structpb.Struct{}),
-		reg.RegisterTimelineEntity(TimelineEntityChatMessage, &structpb.Struct{}),
+		reg.RegisterCommand(CommandStartInference, &chatappv1.StartInferenceCommand{}),
+		reg.RegisterCommand(CommandStopInference, &chatappv1.StopInferenceCommand{}),
+		reg.RegisterEvent(EventUserMessageAccepted, &chatappv1.ChatMessageUpdate{}),
+		reg.RegisterEvent(EventInferenceStarted, &chatappv1.ChatMessageUpdate{}),
+		reg.RegisterEvent(EventTokensDelta, &chatappv1.ChatMessageUpdate{}),
+		reg.RegisterEvent(EventInferenceFinished, &chatappv1.ChatMessageUpdate{}),
+		reg.RegisterEvent(EventInferenceStopped, &chatappv1.ChatMessageUpdate{}),
+		reg.RegisterUIEvent(UIMessageAccepted, &chatappv1.ChatMessageUpdate{}),
+		reg.RegisterUIEvent(UIMessageStarted, &chatappv1.ChatMessageUpdate{}),
+		reg.RegisterUIEvent(UIMessageAppended, &chatappv1.ChatMessageUpdate{}),
+		reg.RegisterUIEvent(UIMessageFinished, &chatappv1.ChatMessageUpdate{}),
+		reg.RegisterUIEvent(UIMessageStopped, &chatappv1.ChatMessageUpdate{}),
+		reg.RegisterTimelineEntity(TimelineEntityChatMessage, &chatappv1.ChatMessageEntity{}),
 	} {
 		if err != nil {
 			return err
@@ -148,23 +151,21 @@ func Install(hub *sessionstream.Hub, engine *Engine) error {
 }
 
 func (e *Engine) handleStartInference(ctx context.Context, cmd sessionstream.Command, _ *sessionstream.Session, pub sessionstream.EventPublisher) error {
-	payload := toMap(cmd.Payload)
-	pending := e.takePendingRequest(asString(payload["requestId"]))
+	payload, ok := cmd.Payload.(*chatappv1.StartInferenceCommand)
+	if !ok || payload == nil {
+		return fmt.Errorf("start inference payload must be %T, got %T", &chatappv1.StartInferenceCommand{}, cmd.Payload)
+	}
+	pending := e.takePendingRequest(strings.TrimSpace(payload.GetRequestId()))
 	prompt := strings.TrimSpace(pending.Prompt)
 	if prompt == "" {
-		prompt = strings.TrimSpace(asString(payload["prompt"]))
+		prompt = strings.TrimSpace(payload.GetPrompt())
 	}
 	if prompt == "" {
 		prompt = "Explain evtstream"
 	}
 	messageID := e.nextMessageID()
 	userMessageID := messageID + "-user"
-	if err := e.publish(ctx, cmd.SessionId, pub, EventUserMessageAccepted, map[string]any{
-		"messageId": userMessageID,
-		"role":      "user",
-		"content":   prompt,
-		"streaming": false,
-	}); err != nil {
+	if err := e.publish(ctx, cmd.SessionId, pub, EventUserMessageAccepted, newChatMessageUpdate(userMessageID, "user", prompt, prompt, "", "", false, "")); err != nil {
 		return err
 	}
 	runCtx, cancel := context.WithCancel(context.Background())
@@ -195,7 +196,7 @@ func (e *Engine) runPrompt(ctx context.Context, sid sessionstream.SessionId, mes
 }
 
 func (e *Engine) runDemoInference(ctx context.Context, sid sessionstream.SessionId, messageID, prompt string, pub sessionstream.EventPublisher) {
-	started := map[string]any{"messageId": messageID, "prompt": prompt, "role": "assistant", "content": "", "status": "streaming", "streaming": true}
+	started := newChatMessageUpdate(messageID, "assistant", "", "", prompt, "streaming", true, "")
 	if err := e.publish(ctx, sid, pub, EventInferenceStarted, started); err != nil {
 		return
 	}
@@ -206,16 +207,16 @@ func (e *Engine) runDemoInference(ctx context.Context, sid sessionstream.Session
 	for _, chunk := range chunks {
 		select {
 		case <-ctx.Done():
-			_ = e.publish(context.Background(), sid, pub, EventInferenceStopped, map[string]any{"messageId": messageID, "prompt": prompt, "role": "assistant", "text": accumulated, "content": accumulated, "status": "stopped", "streaming": false})
+			_ = e.publish(context.Background(), sid, pub, EventInferenceStopped, newChatMessageUpdate(messageID, "assistant", accumulated, accumulated, prompt, "stopped", false, ""))
 			return
 		case <-time.After(e.chunkDelay):
 		}
 		accumulated += chunk
-		if err := e.publish(context.Background(), sid, pub, EventTokensDelta, map[string]any{"messageId": messageID, "prompt": prompt, "role": "assistant", "chunk": chunk, "text": accumulated, "content": accumulated, "status": "streaming", "streaming": true}); err != nil {
+		if err := e.publish(context.Background(), sid, pub, EventTokensDelta, newChatMessageDelta(messageID, chunk, accumulated, prompt, "streaming", true, "")); err != nil {
 			return
 		}
 	}
-	_ = e.publish(context.Background(), sid, pub, EventInferenceFinished, map[string]any{"messageId": messageID, "prompt": prompt, "role": "assistant", "text": accumulated, "content": accumulated, "status": "finished", "streaming": false})
+	_ = e.publish(context.Background(), sid, pub, EventInferenceFinished, newChatMessageUpdate(messageID, "assistant", accumulated, accumulated, prompt, "finished", false, ""))
 }
 
 func (e *Engine) runRuntimeInference(ctx context.Context, sid sessionstream.SessionId, messageID, prompt string, runtime *infruntime.ComposedRuntime, pub sessionstream.EventPublisher) {
@@ -223,7 +224,7 @@ func (e *Engine) runRuntimeInference(ctx context.Context, sid sessionstream.Sess
 		e.runDemoInference(ctx, sid, messageID, prompt, pub)
 		return
 	}
-	started := map[string]any{"messageId": messageID, "prompt": prompt, "role": "assistant", "content": "", "status": "streaming", "streaming": true}
+	started := newChatMessageUpdate(messageID, "assistant", "", "", prompt, "streaming", true, "")
 	if err := e.publish(ctx, sid, pub, EventInferenceStarted, started); err != nil {
 		return
 	}
@@ -233,14 +234,14 @@ func (e *Engine) runRuntimeInference(ctx context.Context, sid sessionstream.Sess
 	if runtime.WrapSink != nil {
 		wrapped, err := runtime.WrapSink(baseSink)
 		if err != nil {
-			_ = e.publish(context.Background(), sid, pub, EventInferenceStopped, map[string]any{"messageId": messageID, "prompt": prompt, "role": "assistant", "text": "", "content": "", "status": "stopped", "streaming": false, "error": err.Error()})
+			_ = e.publish(context.Background(), sid, pub, EventInferenceStopped, newChatMessageUpdate(messageID, "assistant", "", "", prompt, "stopped", false, err.Error()))
 			return
 		}
 		eventSink = wrapped
 	}
 	sink, ok := baseSink.(*runtimeEventSink)
 	if !ok {
-		_ = e.publish(context.Background(), sid, pub, EventInferenceStopped, map[string]any{"messageId": messageID, "prompt": prompt, "role": "assistant", "text": "", "content": "", "status": "stopped", "streaming": false, "error": "internal runtime sink type assertion failed"})
+		_ = e.publish(context.Background(), sid, pub, EventInferenceStopped, newChatMessageUpdate(messageID, "assistant", "", "", prompt, "stopped", false, "internal runtime sink type assertion failed"))
 		return
 	}
 	sess := gepsession.NewSession()
@@ -250,18 +251,18 @@ func (e *Engine) runRuntimeInference(ctx context.Context, sid sessionstream.Sess
 	}
 	_, err := sess.AppendNewTurnFromUserPrompt(prompt)
 	if err != nil {
-		_ = e.publish(context.Background(), sid, pub, EventInferenceStopped, map[string]any{"messageId": messageID, "prompt": prompt, "role": "assistant", "text": sink.LastText(), "content": sink.LastText(), "status": "stopped", "streaming": false, "error": err.Error()})
+		_ = e.publish(context.Background(), sid, pub, EventInferenceStopped, newChatMessageUpdate(messageID, "assistant", sink.LastText(), sink.LastText(), prompt, "stopped", false, err.Error()))
 		return
 	}
 	handle, err := sess.StartInference(ctx)
 	if err != nil {
-		_ = e.publish(context.Background(), sid, pub, EventInferenceStopped, map[string]any{"messageId": messageID, "prompt": prompt, "role": "assistant", "text": sink.LastText(), "content": sink.LastText(), "status": "stopped", "streaming": false, "error": err.Error()})
+		_ = e.publish(context.Background(), sid, pub, EventInferenceStopped, newChatMessageUpdate(messageID, "assistant", sink.LastText(), sink.LastText(), prompt, "stopped", false, err.Error()))
 		return
 	}
 	output, err := handle.Wait()
 	if err != nil {
 		if !sink.IsTerminal() {
-			_ = e.publish(context.Background(), sid, pub, EventInferenceStopped, map[string]any{"messageId": messageID, "prompt": prompt, "role": "assistant", "text": sink.LastText(), "content": sink.LastText(), "status": "stopped", "streaming": false, "error": err.Error()})
+			_ = e.publish(context.Background(), sid, pub, EventInferenceStopped, newChatMessageUpdate(messageID, "assistant", sink.LastText(), sink.LastText(), prompt, "stopped", false, err.Error()))
 		}
 		return
 	}
@@ -272,18 +273,17 @@ func (e *Engine) runRuntimeInference(ctx context.Context, sid sessionstream.Sess
 	if finalText == "" {
 		finalText = assistantTextFromTurn(output)
 	}
-	_ = e.publish(context.Background(), sid, pub, EventInferenceFinished, map[string]any{"messageId": messageID, "prompt": prompt, "role": "assistant", "text": finalText, "content": finalText, "status": "finished", "streaming": false})
+	_ = e.publish(context.Background(), sid, pub, EventInferenceFinished, newChatMessageUpdate(messageID, "assistant", finalText, finalText, prompt, "finished", false, ""))
 }
 
-func (e *Engine) publish(ctx context.Context, sid sessionstream.SessionId, pub sessionstream.EventPublisher, name string, payload map[string]any) error {
-	pb, err := structpb.NewStruct(payload)
-	if err != nil {
-		return err
+func (e *Engine) publish(ctx context.Context, sid sessionstream.SessionId, pub sessionstream.EventPublisher, name string, payload proto.Message) error {
+	if payload == nil {
+		return fmt.Errorf("event %s payload is nil", name)
 	}
 	if e.hooks.OnBackendEvent != nil {
-		e.hooks.OnBackendEvent(string(sid), name, cloneMap(payload))
+		e.hooks.OnBackendEvent(string(sid), name, protoMessageAsMap(payload))
 	}
-	return pub.Publish(ctx, sessionstream.Event{Name: name, SessionId: sid, Payload: pb})
+	return pub.Publish(ctx, sessionstream.Event{Name: name, SessionId: sid, Payload: payload})
 }
 
 func (e *Engine) WaitIdle(ctx context.Context, sid sessionstream.SessionId) error {
@@ -368,59 +368,25 @@ func (s *runtimeEventSink) PublishEvent(event gepevents.Event) error {
 		s.mu.Lock()
 		s.lastText = ev.Completion
 		s.mu.Unlock()
-		return s.engine.publish(context.Background(), s.sessionID, s.pub, EventTokensDelta, map[string]any{
-			"messageId": s.messageID,
-			"prompt":    s.prompt,
-			"role":      "assistant",
-			"chunk":     ev.Delta,
-			"text":      ev.Completion,
-			"content":   ev.Completion,
-			"status":    "streaming",
-			"streaming": true,
-		})
+		return s.engine.publish(context.Background(), s.sessionID, s.pub, EventTokensDelta, newChatMessageDelta(s.messageID, ev.Delta, ev.Completion, s.prompt, "streaming", true, ""))
 	case *gepevents.EventFinal:
 		s.mu.Lock()
 		s.lastText = ev.Text
 		s.terminal = true
 		s.mu.Unlock()
-		return s.engine.publish(context.Background(), s.sessionID, s.pub, EventInferenceFinished, map[string]any{
-			"messageId": s.messageID,
-			"prompt":    s.prompt,
-			"role":      "assistant",
-			"text":      ev.Text,
-			"content":   ev.Text,
-			"status":    "finished",
-			"streaming": false,
-		})
+		return s.engine.publish(context.Background(), s.sessionID, s.pub, EventInferenceFinished, newChatMessageUpdate(s.messageID, "assistant", ev.Text, ev.Text, s.prompt, "finished", false, ""))
 	case *gepevents.EventError:
 		text := s.LastText()
 		s.mu.Lock()
 		s.terminal = true
 		s.mu.Unlock()
-		return s.engine.publish(context.Background(), s.sessionID, s.pub, EventInferenceStopped, map[string]any{
-			"messageId": s.messageID,
-			"prompt":    s.prompt,
-			"role":      "assistant",
-			"text":      text,
-			"content":   text,
-			"status":    "stopped",
-			"streaming": false,
-			"error":     ev.ErrorString,
-		})
+		return s.engine.publish(context.Background(), s.sessionID, s.pub, EventInferenceStopped, newChatMessageUpdate(s.messageID, "assistant", text, text, s.prompt, "stopped", false, ev.ErrorString))
 	case *gepevents.EventInterrupt:
 		s.mu.Lock()
 		s.lastText = ev.Text
 		s.terminal = true
 		s.mu.Unlock()
-		return s.engine.publish(context.Background(), s.sessionID, s.pub, EventInferenceStopped, map[string]any{
-			"messageId": s.messageID,
-			"prompt":    s.prompt,
-			"role":      "assistant",
-			"text":      ev.Text,
-			"content":   ev.Text,
-			"status":    "stopped",
-			"streaming": false,
-		})
+		return s.engine.publish(context.Background(), s.sessionID, s.pub, EventInferenceStopped, newChatMessageUpdate(s.messageID, "assistant", ev.Text, ev.Text, s.prompt, "stopped", false, ""))
 	default:
 		return s.engine.handleFeatureRuntimeEvent(context.Background(), s.sessionID, s.messageID, s.pub, event)
 	}
@@ -445,140 +411,118 @@ func (s *runtimeEventSink) IsTerminal() bool {
 }
 
 func baseUIProjection(_ context.Context, ev sessionstream.Event, _ *sessionstream.Session, _ sessionstream.TimelineView) ([]sessionstream.UIEvent, error) {
-	payload := toMap(ev.Payload)
-	pb, err := structpb.NewStruct(payload)
-	if err != nil {
-		return nil, err
+	payload, ok := ev.Payload.(*chatappv1.ChatMessageUpdate)
+	if !ok || payload == nil {
+		return nil, nil
 	}
+	cloned := proto.Clone(payload)
 	switch ev.Name {
 	case EventUserMessageAccepted:
-		return []sessionstream.UIEvent{{Name: UIMessageAccepted, Payload: pb}}, nil
+		return []sessionstream.UIEvent{{Name: UIMessageAccepted, Payload: cloned}}, nil
 	case EventInferenceStarted:
-		return []sessionstream.UIEvent{{Name: UIMessageStarted, Payload: pb}}, nil
+		return []sessionstream.UIEvent{{Name: UIMessageStarted, Payload: cloned}}, nil
 	case EventTokensDelta:
-		return []sessionstream.UIEvent{{Name: UIMessageAppended, Payload: pb}}, nil
+		return []sessionstream.UIEvent{{Name: UIMessageAppended, Payload: cloned}}, nil
 	case EventInferenceFinished:
-		return []sessionstream.UIEvent{{Name: UIMessageFinished, Payload: pb}}, nil
+		return []sessionstream.UIEvent{{Name: UIMessageFinished, Payload: cloned}}, nil
 	case EventInferenceStopped:
-		return []sessionstream.UIEvent{{Name: UIMessageStopped, Payload: pb}}, nil
+		return []sessionstream.UIEvent{{Name: UIMessageStopped, Payload: cloned}}, nil
 	default:
 		return nil, nil
 	}
 }
 
 func baseTimelineProjection(_ context.Context, ev sessionstream.Event, _ *sessionstream.Session, view sessionstream.TimelineView) ([]sessionstream.TimelineEntity, error) {
-	payload := toMap(ev.Payload)
-	messageID := asString(payload["messageId"])
+	payload, ok := ev.Payload.(*chatappv1.ChatMessageUpdate)
+	if !ok || payload == nil {
+		return nil, nil
+	}
+	messageID := strings.TrimSpace(payload.GetMessageId())
 	if messageID == "" {
 		return nil, nil
 	}
-	entity := currentKindEntity(view, TimelineEntityChatMessage, messageID)
-	hadEntity := len(entity) > 0
+	entity, hadEntity := currentChatMessageEntity(view, messageID)
 	switch ev.Name {
 	case EventUserMessageAccepted:
-		entity["messageId"] = messageID
-		entity["role"] = "user"
-		entity["content"] = asString(payload["content"])
-		entity["text"] = asString(payload["content"])
-		entity["streaming"] = false
+		entity.MessageId = messageID
+		entity.Role = "user"
+		entity.Content = firstNonEmpty(payload.GetContent(), payload.GetText())
+		entity.Text = entity.Content
+		entity.Streaming = false
 	case EventInferenceStarted:
-		content := asString(payload["content"])
+		content := firstNonEmpty(payload.GetContent(), payload.GetText())
 		if content == "" && !hadEntity {
 			return nil, nil
 		}
-		entity["messageId"] = messageID
-		entity["role"] = "assistant"
-		entity["status"] = "streaming"
-		entity["streaming"] = true
-		if prompt := asString(payload["prompt"]); prompt != "" {
-			entity["prompt"] = prompt
+		entity.MessageId = messageID
+		entity.Role = firstNonEmpty(payload.GetRole(), "assistant")
+		entity.Status = "streaming"
+		entity.Streaming = true
+		if prompt := payload.GetPrompt(); prompt != "" {
+			entity.Prompt = prompt
 		}
 		if content != "" {
-			entity["content"] = content
-			entity["text"] = content
+			entity.Content = content
+			entity.Text = content
 		}
 	case EventTokensDelta:
-		content := asString(payload["content"])
-		if content == "" {
-			content = asString(payload["text"])
-		}
+		content := firstNonEmpty(payload.GetContent(), payload.GetText())
 		if content == "" && !hadEntity {
 			return nil, nil
 		}
-		entity["messageId"] = messageID
-		entity["role"] = "assistant"
-		entity["content"] = content
-		entity["text"] = content
-		entity["status"] = "streaming"
-		entity["streaming"] = true
-		if prompt := asString(payload["prompt"]); prompt != "" {
-			entity["prompt"] = prompt
+		entity.MessageId = messageID
+		entity.Role = firstNonEmpty(payload.GetRole(), "assistant")
+		entity.Content = content
+		entity.Text = content
+		entity.Status = "streaming"
+		entity.Streaming = true
+		if prompt := payload.GetPrompt(); prompt != "" {
+			entity.Prompt = prompt
 		}
 	case EventInferenceFinished:
-		content := asString(payload["content"])
-		if content == "" {
-			content = asString(payload["text"])
-		}
-		if content == "" {
-			content = asString(entity["content"])
-			if content == "" {
-				content = asString(entity["text"])
-			}
-		}
+		content := firstNonEmpty(payload.GetContent(), payload.GetText(), entity.GetContent(), entity.GetText())
 		if content == "" && !hadEntity {
 			return nil, nil
 		}
-		entity["messageId"] = messageID
-		entity["role"] = "assistant"
-		entity["content"] = content
-		entity["text"] = content
-		entity["status"] = "finished"
-		entity["streaming"] = false
-		if prompt := asString(payload["prompt"]); prompt != "" {
-			entity["prompt"] = prompt
+		entity.MessageId = messageID
+		entity.Role = firstNonEmpty(payload.GetRole(), "assistant")
+		entity.Content = content
+		entity.Text = content
+		entity.Status = "finished"
+		entity.Streaming = false
+		if prompt := payload.GetPrompt(); prompt != "" {
+			entity.Prompt = prompt
 		}
 	case EventInferenceStopped:
-		content := asString(payload["content"])
-		if content == "" {
-			content = asString(payload["text"])
+		content := firstNonEmpty(payload.GetContent(), payload.GetText(), entity.GetContent(), entity.GetText())
+		entity.MessageId = messageID
+		entity.Role = firstNonEmpty(payload.GetRole(), "assistant")
+		entity.Content = content
+		entity.Text = content
+		entity.Status = "stopped"
+		entity.Streaming = false
+		if prompt := payload.GetPrompt(); prompt != "" {
+			entity.Prompt = prompt
 		}
-		if content == "" {
-			content = asString(entity["content"])
-			if content == "" {
-				content = asString(entity["text"])
-			}
-		}
-		entity["messageId"] = messageID
-		entity["role"] = "assistant"
-		entity["content"] = content
-		entity["text"] = content
-		entity["status"] = "stopped"
-		entity["streaming"] = false
-		if prompt := asString(payload["prompt"]); prompt != "" {
-			entity["prompt"] = prompt
-		}
-		if errText := asString(payload["error"]); errText != "" {
-			entity["error"] = errText
+		if errText := payload.GetError(); errText != "" {
+			entity.Error = errText
 		}
 	default:
 		return nil, nil
 	}
-	pb, err := structpb.NewStruct(entity)
-	if err != nil {
-		return nil, err
-	}
-	return []sessionstream.TimelineEntity{{Kind: TimelineEntityChatMessage, Id: messageID, Payload: pb}}, nil
+	return []sessionstream.TimelineEntity{{Kind: TimelineEntityChatMessage, Id: messageID, Payload: entity}}, nil
 }
 
-func currentKindEntity(view sessionstream.TimelineView, kind, id string) map[string]any {
-	entity, ok := view.Get(kind, id)
+func currentChatMessageEntity(view sessionstream.TimelineView, id string) (*chatappv1.ChatMessageEntity, bool) {
+	entity, ok := view.Get(TimelineEntityChatMessage, id)
 	if !ok || entity.Payload == nil {
-		return map[string]any{}
+		return &chatappv1.ChatMessageEntity{}, false
 	}
-	if pb, ok := entity.Payload.(*structpb.Struct); ok {
-		return cloneMap(pb.AsMap())
+	pb, ok := entity.Payload.(*chatappv1.ChatMessageEntity)
+	if !ok || pb == nil {
+		return &chatappv1.ChatMessageEntity{}, false
 	}
-	return map[string]any{}
+	return proto.Clone(pb).(*chatappv1.ChatMessageEntity), true
 }
 
 func renderAnswer(prompt string) string {
@@ -619,27 +563,54 @@ func chunkText(text string, size int) []string {
 	return out
 }
 
-func toMap(msg any) map[string]any {
-	if pb, ok := msg.(*structpb.Struct); ok && pb != nil {
-		return cloneMap(pb.AsMap())
+func newChatMessageUpdate(messageID, role, content, text, prompt, status string, streaming bool, errText string) *chatappv1.ChatMessageUpdate {
+	return &chatappv1.ChatMessageUpdate{
+		MessageId: messageID,
+		Role:      role,
+		Prompt:    prompt,
+		Text:      text,
+		Content:   content,
+		Status:    status,
+		Streaming: streaming,
+		Error:     errText,
+		Chunk:     "",
 	}
-	return map[string]any{}
 }
 
-func asString(v any) string {
-	if s, ok := v.(string); ok {
-		return s
+func newChatMessageDelta(messageID, chunk, content, prompt, status string, streaming bool, errText string) *chatappv1.ChatMessageUpdate {
+	return &chatappv1.ChatMessageUpdate{
+		MessageId: messageID,
+		Role:      "assistant",
+		Prompt:    prompt,
+		Chunk:     chunk,
+		Text:      content,
+		Content:   content,
+		Status:    status,
+		Streaming: streaming,
+		Error:     errText,
+	}
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return value
+		}
 	}
 	return ""
 }
 
-func cloneMap(in map[string]any) map[string]any {
-	if in == nil {
-		return nil
+func protoMessageAsMap(msg proto.Message) map[string]any {
+	if msg == nil {
+		return map[string]any{}
 	}
-	out := make(map[string]any, len(in))
-	for k, v := range in {
-		out[k] = v
+	body, err := protojson.MarshalOptions{EmitUnpopulated: false, UseProtoNames: false}.Marshal(msg)
+	if err != nil {
+		return map[string]any{"error": err.Error()}
+	}
+	out := map[string]any{}
+	if err := json.Unmarshal(body, &out); err != nil {
+		return map[string]any{"error": err.Error()}
 	}
 	return out
 }

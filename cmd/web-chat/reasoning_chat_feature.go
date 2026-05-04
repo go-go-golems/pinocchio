@@ -5,6 +5,7 @@ import (
 
 	gepevents "github.com/go-go-golems/geppetto/pkg/events"
 	chatapp "github.com/go-go-golems/pinocchio/pkg/chatapp"
+	chatappv1 "github.com/go-go-golems/pinocchio/pkg/chatapp/pb/proto/pinocchio/chatapp/v1"
 	sessionstream "github.com/go-go-golems/sessionstream/pkg/sessionstream"
 	"google.golang.org/protobuf/types/known/structpb"
 )
@@ -49,7 +50,7 @@ func (reasoningPlugin) HandleRuntimeEvent(ctx context.Context, runtime chatapp.R
 
 	switch ev := event.(type) {
 	case *gepevents.EventThinkingPartial:
-		return true, runtime.Publish(ctx, reasoningDeltaEventName, map[string]any{
+		pb, err := structpb.NewStruct(map[string]any{
 			"messageId":       reasoningMessageID,
 			"parentMessageId": runtime.MessageID,
 			"role":            "thinking",
@@ -60,10 +61,14 @@ func (reasoningPlugin) HandleRuntimeEvent(ctx context.Context, runtime chatapp.R
 			"streaming":       true,
 			"source":          "thinking",
 		})
+		if err != nil {
+			return true, err
+		}
+		return true, runtime.Publish(ctx, reasoningDeltaEventName, pb)
 	case *gepevents.EventInfo:
 		switch ev.Message {
 		case "thinking-started":
-			return true, runtime.Publish(ctx, reasoningStartedEventName, map[string]any{
+			pb, err := structpb.NewStruct(map[string]any{
 				"messageId":       reasoningMessageID,
 				"parentMessageId": runtime.MessageID,
 				"role":            "thinking",
@@ -71,8 +76,12 @@ func (reasoningPlugin) HandleRuntimeEvent(ctx context.Context, runtime chatapp.R
 				"streaming":       true,
 				"source":          "thinking",
 			})
+			if err != nil {
+				return true, err
+			}
+			return true, runtime.Publish(ctx, reasoningStartedEventName, pb)
 		case "thinking-ended":
-			return true, runtime.Publish(ctx, reasoningFinishedEventName, map[string]any{
+			pb, err := structpb.NewStruct(map[string]any{
 				"messageId":       reasoningMessageID,
 				"parentMessageId": runtime.MessageID,
 				"role":            "thinking",
@@ -80,8 +89,12 @@ func (reasoningPlugin) HandleRuntimeEvent(ctx context.Context, runtime chatapp.R
 				"streaming":       false,
 				"source":          "thinking",
 			})
+			if err != nil {
+				return true, err
+			}
+			return true, runtime.Publish(ctx, reasoningFinishedEventName, pb)
 		case "reasoning-summary":
-			return true, runtime.Publish(ctx, reasoningFinishedEventName, map[string]any{
+			pb, err := structpb.NewStruct(map[string]any{
 				"messageId":       reasoningMessageID,
 				"parentMessageId": runtime.MessageID,
 				"role":            "thinking",
@@ -91,6 +104,10 @@ func (reasoningPlugin) HandleRuntimeEvent(ctx context.Context, runtime chatapp.R
 				"streaming":       false,
 				"source":          "summary",
 			})
+			if err != nil {
+				return true, err
+			}
+			return true, runtime.Publish(ctx, reasoningFinishedEventName, pb)
 		default:
 			return false, nil
 		}
@@ -129,43 +146,35 @@ func (reasoningPlugin) ProjectTimeline(_ context.Context, ev sessionstream.Event
 	if messageID == "" {
 		return nil, true, nil
 	}
-	entity := currentKindEntity(view, chatapp.TimelineEntityChatMessage, messageID)
+	entity, hadEntity := currentReasoningEntity(view, messageID)
 	content := asString(payload["content"])
 	if content == "" {
-		content = asString(entity["content"])
+		content = entity.GetContent()
 		if content == "" {
-			content = asString(entity["text"])
+			content = entity.GetText()
 		}
 	}
-	if content == "" && len(entity) == 0 {
+	if content == "" && !hadEntity {
 		return nil, true, nil
 	}
 
-	entity["messageId"] = messageID
-	entity["parentMessageId"] = asString(payload["parentMessageId"])
-	entity["role"] = "thinking"
-	entity["content"] = content
-	entity["text"] = content
-	if source := asString(payload["source"]); source != "" {
-		entity["source"] = source
-	}
+	entity.MessageId = messageID
+	entity.Role = "thinking"
+	entity.Content = content
+	entity.Text = content
 
 	switch ev.Name {
 	case reasoningStartedEventName, reasoningDeltaEventName:
-		entity["status"] = "streaming"
-		entity["streaming"] = true
+		entity.Status = "streaming"
+		entity.Streaming = true
 	case reasoningFinishedEventName:
-		entity["status"] = "finished"
-		entity["streaming"] = false
+		entity.Status = "finished"
+		entity.Streaming = false
 	default:
 		return nil, false, nil
 	}
 
-	pb, err := structpb.NewStruct(entity)
-	if err != nil {
-		return nil, true, err
-	}
-	return []sessionstream.TimelineEntity{{Kind: chatapp.TimelineEntityChatMessage, Id: messageID, Payload: pb}}, true, nil
+	return []sessionstream.TimelineEntity{{Kind: chatapp.TimelineEntityChatMessage, Id: messageID, Payload: entity}}, true, nil
 }
 
 func reasoningProjectedPayload(ev sessionstream.Event, view sessionstream.TimelineView) (map[string]any, bool) {
@@ -178,11 +187,11 @@ func reasoningProjectedPayload(ev sessionstream.Event, view sessionstream.Timeli
 		if view != nil {
 			messageID := asString(payload["messageId"])
 			if messageID != "" {
-				current := currentKindEntity(view, chatapp.TimelineEntityChatMessage, messageID)
-				if currentContent := asString(current["content"]); asString(payload["content"]) == "" && currentContent != "" {
+				current, _ := currentReasoningEntity(view, messageID)
+				if currentContent := current.GetContent(); asString(payload["content"]) == "" && currentContent != "" {
 					payload["content"] = currentContent
 					payload["text"] = currentContent
-				} else if currentText := asString(current["text"]); asString(payload["content"]) == "" && currentText != "" {
+				} else if currentText := current.GetText(); asString(payload["content"]) == "" && currentText != "" {
 					payload["content"] = currentText
 					payload["text"] = currentText
 				}
@@ -192,6 +201,30 @@ func reasoningProjectedPayload(ev sessionstream.Event, view sessionstream.Timeli
 	default:
 		return nil, false
 	}
+}
+
+func currentReasoningEntity(view sessionstream.TimelineView, id string) (*chatappv1.ChatMessageEntity, bool) {
+	if view == nil {
+		return &chatappv1.ChatMessageEntity{}, false
+	}
+	entity, ok := view.Get(chatapp.TimelineEntityChatMessage, id)
+	if !ok || entity.Payload == nil {
+		return &chatappv1.ChatMessageEntity{}, false
+	}
+	pb, ok := entity.Payload.(*chatappv1.ChatMessageEntity)
+	if !ok || pb == nil {
+		return &chatappv1.ChatMessageEntity{}, false
+	}
+	return &chatappv1.ChatMessageEntity{
+		MessageId: pb.GetMessageId(),
+		Role:      pb.GetRole(),
+		Prompt:    pb.GetPrompt(),
+		Text:      pb.GetText(),
+		Content:   pb.GetContent(),
+		Status:    pb.GetStatus(),
+		Streaming: pb.GetStreaming(),
+		Error:     pb.GetError(),
+	}, true
 }
 
 func reasoningEntityID(messageID string) string {

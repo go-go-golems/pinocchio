@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"strings"
 
+	chatappv1 "github.com/go-go-golems/pinocchio/pkg/chatapp/pb/proto/pinocchio/chatapp/v1"
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 	sessionstream "github.com/go-go-golems/sessionstream/pkg/sessionstream"
 	"github.com/google/uuid"
-	"google.golang.org/protobuf/types/known/structpb"
 )
 
 // PromptRequest is the app-facing prompt submission input.
@@ -55,14 +55,10 @@ func (s *Service) SubmitPromptRequest(ctx context.Context, sid sessionstream.Ses
 	if s.engine != nil {
 		s.engine.setPendingRequest(requestID, req)
 	}
-	payload, err := structpb.NewStruct(map[string]any{
-		"prompt":         req.Prompt,
-		"requestId":      requestID,
-		"idempotencyKey": req.IdempotencyKey,
-	})
-	if err != nil {
-		s.engine.clearPendingRequest(requestID)
-		return err
+	payload := &chatappv1.StartInferenceCommand{
+		Prompt:         req.Prompt,
+		RequestId:      requestID,
+		IdempotencyKey: req.IdempotencyKey,
 	}
 	if err := s.hub.Submit(ctx, sid, CommandStartInference, payload); err != nil {
 		s.engine.clearPendingRequest(requestID)
@@ -78,11 +74,7 @@ func (s *Service) Stop(ctx context.Context, sid sessionstream.SessionId) error {
 	if sid == "" {
 		return fmt.Errorf("session id is empty")
 	}
-	payload, err := structpb.NewStruct(map[string]any{})
-	if err != nil {
-		return err
-	}
-	return s.hub.Submit(ctx, sid, CommandStopInference, payload)
+	return s.hub.Submit(ctx, sid, CommandStopInference, &chatappv1.StopInferenceCommand{})
 }
 
 func (s *Service) WaitIdle(ctx context.Context, sid sessionstream.SessionId) error {
