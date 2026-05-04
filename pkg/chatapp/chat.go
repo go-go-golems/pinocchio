@@ -62,6 +62,7 @@ type activeRun struct {
 
 type runtimeEventSink struct {
 	mu          sync.Mutex
+	ctx         context.Context
 	sessionID   sessionstream.SessionId
 	messageID   string
 	prompt      string
@@ -170,7 +171,7 @@ func (e *Engine) handleStartInference(ctx context.Context, cmd sessionstream.Com
 	if err := e.publish(ctx, cmd.SessionId, pub, EventUserMessageAccepted, newChatMessageUpdate(userMessageID, "user", prompt, prompt, "", "", false, "")); err != nil {
 		return err
 	}
-	runCtx, cancel := context.WithCancel(context.Background())
+	runCtx, cancel := context.WithCancel(publishContext(ctx))
 	run := &activeRun{messageID: messageID, cancel: cancel, done: make(chan struct{})}
 	if previous := e.swapRun(cmd.SessionId, run); previous != nil {
 		previous.cancel()
@@ -209,16 +210,16 @@ func (e *Engine) runDemoInference(ctx context.Context, sid sessionstream.Session
 	for _, chunk := range chunks {
 		select {
 		case <-ctx.Done():
-			_ = e.publish(context.Background(), sid, pub, EventInferenceStopped, newChatMessageUpdate(messageID, "assistant", accumulated, accumulated, prompt, "stopped", false, ""))
+			_ = e.publish(publishContext(ctx), sid, pub, EventInferenceStopped, newChatMessageUpdate(messageID, "assistant", accumulated, accumulated, prompt, "stopped", false, ""))
 			return
 		case <-time.After(e.chunkDelay):
 		}
 		accumulated += chunk
-		if err := e.publish(context.Background(), sid, pub, EventTokensDelta, newChatMessageDelta(messageID, chunk, accumulated, prompt, "streaming", true, "")); err != nil {
+		if err := e.publish(publishContext(ctx), sid, pub, EventTokensDelta, newChatMessageDelta(messageID, chunk, accumulated, prompt, "streaming", true, "")); err != nil {
 			return
 		}
 	}
-	_ = e.publish(context.Background(), sid, pub, EventInferenceFinished, newChatMessageUpdate(messageID, "assistant", accumulated, accumulated, prompt, "finished", false, ""))
+	_ = e.publish(publishContext(ctx), sid, pub, EventInferenceFinished, newChatMessageUpdate(messageID, "assistant", accumulated, accumulated, prompt, "finished", false, ""))
 }
 
 func (e *Engine) runRuntimeInference(ctx context.Context, sid sessionstream.SessionId, messageID, prompt string, runtime *infruntime.ComposedRuntime, pub sessionstream.EventPublisher) {
@@ -231,19 +232,19 @@ func (e *Engine) runRuntimeInference(ctx context.Context, sid sessionstream.Sess
 		return
 	}
 
-	baseSink := gepevents.EventSink(&runtimeEventSink{sessionID: sid, messageID: messageID, prompt: prompt, pub: pub, engine: e})
+	baseSink := gepevents.EventSink(&runtimeEventSink{ctx: publishContext(ctx), sessionID: sid, messageID: messageID, prompt: prompt, pub: pub, engine: e})
 	eventSink := baseSink
 	if runtime.WrapSink != nil {
 		wrapped, err := runtime.WrapSink(baseSink)
 		if err != nil {
-			_ = e.publish(context.Background(), sid, pub, EventInferenceStopped, newChatMessageUpdate(messageID, "assistant", "", "", prompt, "stopped", false, err.Error()))
+			_ = e.publish(publishContext(ctx), sid, pub, EventInferenceStopped, newChatMessageUpdate(messageID, "assistant", "", "", prompt, "stopped", false, err.Error()))
 			return
 		}
 		eventSink = wrapped
 	}
 	sink, ok := baseSink.(*runtimeEventSink)
 	if !ok {
-		_ = e.publish(context.Background(), sid, pub, EventInferenceStopped, newChatMessageUpdate(messageID, "assistant", "", "", prompt, "stopped", false, "internal runtime sink type assertion failed"))
+		_ = e.publish(publishContext(ctx), sid, pub, EventInferenceStopped, newChatMessageUpdate(messageID, "assistant", "", "", prompt, "stopped", false, "internal runtime sink type assertion failed"))
 		return
 	}
 	sess := gepsession.NewSession()
@@ -253,21 +254,21 @@ func (e *Engine) runRuntimeInference(ctx context.Context, sid sessionstream.Sess
 	}
 	_, err := sess.AppendNewTurnFromUserPrompt(prompt)
 	if err != nil {
-		_ = e.publish(context.Background(), sid, pub, EventInferenceStopped, sink.stoppedMessageUpdate(messageID, err.Error()))
+		_ = e.publish(publishContext(ctx), sid, pub, EventInferenceStopped, sink.stoppedMessageUpdate(messageID, err.Error()))
 		return
 	}
 	handle, err := sess.StartInference(ctx)
 	if err != nil {
-		_ = e.publish(context.Background(), sid, pub, EventInferenceStopped, sink.stoppedMessageUpdate(messageID, err.Error()))
+		_ = e.publish(publishContext(ctx), sid, pub, EventInferenceStopped, sink.stoppedMessageUpdate(messageID, err.Error()))
 		return
 	}
 	output, err := handle.Wait()
 	if err != nil {
 		if !sink.IsTerminal() {
 			if isMaxIterationsError(err) {
-				_ = e.publish(context.Background(), sid, pub, EventInferenceFinished, newChatMessageUpdate(runtimeWarningMessageID(messageID), "warning", maxIterationsWarningText(err), maxIterationsWarningText(err), prompt, "finished", false, ""))
+				_ = e.publish(publishContext(ctx), sid, pub, EventInferenceFinished, newChatMessageUpdate(runtimeWarningMessageID(messageID), "warning", maxIterationsWarningText(err), maxIterationsWarningText(err), prompt, "finished", false, ""))
 			}
-			_ = e.publish(context.Background(), sid, pub, EventInferenceStopped, sink.stoppedMessageUpdate(messageID, err.Error()))
+			_ = e.publish(publishContext(ctx), sid, pub, EventInferenceStopped, sink.stoppedMessageUpdate(messageID, err.Error()))
 		}
 		return
 	}
@@ -284,7 +285,14 @@ func (e *Engine) runRuntimeInference(ctx context.Context, sid sessionstream.Sess
 	finished.Segment = segment
 	finished.SegmentType = "text"
 	finished.Final = true
-	_ = e.publish(context.Background(), sid, pub, EventInferenceFinished, finished)
+	_ = e.publish(publishContext(ctx), sid, pub, EventInferenceFinished, finished)
+}
+
+func publishContext(ctx context.Context) context.Context {
+	if ctx == nil {
+		return context.Background()
+	}
+	return context.WithoutCancel(ctx)
 }
 
 func (e *Engine) publish(ctx context.Context, sid sessionstream.SessionId, pub sessionstream.EventPublisher, name string, payload proto.Message) error {
@@ -384,7 +392,7 @@ func (s *runtimeEventSink) PublishEvent(event gepevents.Event) error {
 		payload.ParentMessageId = s.messageID
 		payload.Segment = segment
 		payload.SegmentType = "text"
-		return s.engine.publish(context.Background(), s.sessionID, s.pub, EventTokensDelta, payload)
+		return s.engine.publish(s.publishContext(), s.sessionID, s.pub, EventTokensDelta, payload)
 	case *gepevents.EventFinal:
 		textMessageID, segment := s.ensureTextSegmentID()
 		s.mu.Lock()
@@ -397,9 +405,9 @@ func (s *runtimeEventSink) PublishEvent(event gepevents.Event) error {
 		payload.Segment = segment
 		payload.SegmentType = "text"
 		payload.Final = true
-		return s.engine.publish(context.Background(), s.sessionID, s.pub, EventInferenceFinished, payload)
+		return s.engine.publish(s.publishContext(), s.sessionID, s.pub, EventInferenceFinished, payload)
 	case *gepevents.EventError:
-		return s.engine.publish(context.Background(), s.sessionID, s.pub, EventInferenceStopped, s.stoppedMessageUpdate(s.messageID, ev.ErrorString))
+		return s.engine.publish(s.publishContext(), s.sessionID, s.pub, EventInferenceStopped, s.stoppedMessageUpdate(s.messageID, ev.ErrorString))
 	case *gepevents.EventInterrupt:
 		textMessageID, segment := s.ensureTextSegmentID()
 		s.mu.Lock()
@@ -412,7 +420,7 @@ func (s *runtimeEventSink) PublishEvent(event gepevents.Event) error {
 		payload.Segment = segment
 		payload.SegmentType = "text"
 		payload.Final = true
-		return s.engine.publish(context.Background(), s.sessionID, s.pub, EventInferenceStopped, payload)
+		return s.engine.publish(s.publishContext(), s.sessionID, s.pub, EventInferenceStopped, payload)
 	default:
 		if isTranscriptBoundaryEvent(event) {
 			if textMessageID, segment, text, ok := s.finishTextSegment(); ok {
@@ -420,13 +428,20 @@ func (s *runtimeEventSink) PublishEvent(event gepevents.Event) error {
 				payload.ParentMessageId = s.messageID
 				payload.Segment = segment
 				payload.SegmentType = "text"
-				if err := s.engine.publish(context.Background(), s.sessionID, s.pub, EventInferenceFinished, payload); err != nil {
+				if err := s.engine.publish(s.publishContext(), s.sessionID, s.pub, EventInferenceFinished, payload); err != nil {
 					return err
 				}
 			}
 		}
-		return s.engine.handleFeatureRuntimeEvent(context.Background(), s.sessionID, s.messageID, s.pub, event)
+		return s.engine.handleFeatureRuntimeEvent(s.publishContext(), s.sessionID, s.messageID, s.pub, event)
 	}
+}
+
+func (s *runtimeEventSink) publishContext() context.Context {
+	if s == nil {
+		return context.Background()
+	}
+	return publishContext(s.ctx)
 }
 
 func (s *runtimeEventSink) ensureTextSegmentID() (string, int32) {
