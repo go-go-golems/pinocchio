@@ -107,7 +107,7 @@ func TestSubmitAndSnapshot(t *testing.T) {
 		_ = snapResp.Body.Close()
 		if snap.Status == "finished" {
 			require.Equal(t, "sess-1", snap.SessionID)
-			require.NotEmpty(t, snap.Ordinal)
+			require.NotEmpty(t, snap.SnapshotOrdinal)
 			require.Len(t, snap.Entities, 2)
 			foundAssistant := false
 			foundUser := false
@@ -148,9 +148,9 @@ func TestWebSocketSnapshotAndLiveEvent(t *testing.T) {
 	require.Equal(t, "hello", hello["type"])
 
 	require.NoError(t, conn.WriteJSON(map[string]any{
-		"type":         "subscribe",
-		"sessionId":    "sess-ws-1",
-		"sinceOrdinal": "0",
+		"type":                 "subscribe",
+		"sessionId":            "sess-ws-1",
+		"sinceSnapshotOrdinal": "0",
 	}))
 
 	_, raw, err = conn.ReadMessage()

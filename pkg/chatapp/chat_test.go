@@ -22,22 +22,21 @@ func TestChatExampleHappyPath(t *testing.T) {
 
 	snap, err := hub.Snapshot(context.Background(), sessionstream.SessionId("chat-1"))
 	require.NoError(t, err)
-	require.Equal(t, uint64(6), snap.Ordinal)
+	require.Equal(t, uint64(6), snap.SnapshotOrdinal)
 	require.Len(t, snap.Entities, 2)
-	var assistant map[string]any
-	var user map[string]any
-	for _, entity := range snap.Entities {
-		payloadMap := entity.Payload.(*structpb.Struct).AsMap()
-		switch payloadMap["role"] {
-		case "assistant":
-			assistant = payloadMap
-		case "user":
-			user = payloadMap
-		}
-	}
+	userEntity := snap.Entities[0]
+	assistantEntity := snap.Entities[1]
+	user := userEntity.Payload.(*structpb.Struct).AsMap()
+	assistant := assistantEntity.Payload.(*structpb.Struct).AsMap()
+	require.Equal(t, "user", user["role"])
+	require.Equal(t, "assistant", assistant["role"])
 	require.Equal(t, "Explain ordinals", user["content"])
 	require.Equal(t, "finished", assistant["status"])
 	require.Equal(t, "Answer: Explain ordinals", assistant["text"])
+	require.Equal(t, uint64(1), userEntity.CreatedOrdinal)
+	require.Equal(t, uint64(1), userEntity.LastEventOrdinal)
+	require.Equal(t, uint64(3), assistantEntity.CreatedOrdinal)
+	require.Equal(t, uint64(6), assistantEntity.LastEventOrdinal)
 }
 
 func TestBaseTimelineProjection_DelaysAssistantEntityUntilContentArrives(t *testing.T) {
@@ -57,6 +56,8 @@ func TestBaseTimelineProjection_DelaysAssistantEntityUntilContentArrives(t *test
 	require.Equal(t, "assistant", payload["role"])
 	require.Equal(t, "Answer: Explain ordinals", payload["content"])
 	require.Equal(t, "Explain ordinals", payload["prompt"])
+	require.NotContains(t, payload, "createdAtMs")
+	require.NotContains(t, payload, "updatedAtMs")
 }
 
 func TestFeatureUIProjectionRunsForBaseChatEvents(t *testing.T) {

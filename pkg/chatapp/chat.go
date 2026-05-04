@@ -446,7 +446,6 @@ func (s *runtimeEventSink) IsTerminal() bool {
 
 func baseUIProjection(_ context.Context, ev sessionstream.Event, _ *sessionstream.Session, _ sessionstream.TimelineView) ([]sessionstream.UIEvent, error) {
 	payload := toMap(ev.Payload)
-	payload["ordinal"] = fmt.Sprintf("%d", ev.Ordinal)
 	pb, err := structpb.NewStruct(payload)
 	if err != nil {
 		return nil, err
