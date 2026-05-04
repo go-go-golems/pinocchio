@@ -21,6 +21,7 @@ The webchat frontend is a React SPA under `cmd/web-chat/web/src/`:
 - React 18+ with TypeScript
 - Redux Toolkit for state management
 - Sessionstream WebSocket transport for live updates
+- Protobuf-backed backend contracts rendered as JSON websocket frames
 - Vite for build
 
 ## Directory Structure
@@ -39,7 +40,7 @@ cmd/web-chat/web/src/
     cards.tsx             Card renderers (message, agent mode, etc.)
     timelinePropsRegistry.ts  Props normalization before rendering
   sem/
-    pb/                   Protobuf-generated TypeScript types (data types only)
+    pb/                   Historical SEM protobuf-generated TypeScript types (not the live chatapp transport)
 ```
 
 ## Sessionstream Projection Pipeline
@@ -47,24 +48,24 @@ cmd/web-chat/web/src/
 The frontend receives data through the sessionstream WebSocket transport:
 
 1. Connect to `/api/chat/ws`.
-2. Subscribe with `{ type: "subscribe", sessionId }`.
-3. Receive `{ type: "snapshot", entities: [...] }` — full current state.
-4. Receive `{ type: "ui-event", name, payload }` — live updates.
+2. Subscribe with a JSON `ClientFrame` shape such as `{ type: "subscribe", sessionId, sinceSnapshotOrdinal: "0" }`.
+3. Receive a JSON `ServerFrame` snapshot with `snapshotOrdinal` and `entities` — the full current state.
+4. Receive JSON `ServerFrame` UI events with `eventOrdinal`, `name`, and `payload` — live updates.
 
-The `wsManager.ts` maps incoming frames to Redux store mutations:
+On the backend these frames and payloads are protobuf-backed: sessionstream uses registered protobuf message schemas and serializes them to JSON for browser delivery. The frontend currently treats the decoded frame as a canonical JSON object and maps it into local Redux state.
 
 ```text
 snapshot frame
-  -> clear store, upsert all entities
+  -> clear store, map registered timeline entities, upsert all entities
 
 ui-event frame
   -> derive mutation (upsert entity, delete entity, update status)
   -> dispatch to timelineSlice
-  -> rendererRegistry resolves component by entity kind
+  -> rendererRegistry resolves component by local entity kind
   -> React re-renders
 ```
 
-No SEM envelope parsing or protobuf decoding is involved in the production frontend. All frame shapes are plain JSON.
+The production frontend does not parse historical SEM envelopes. Chatapp backend events and timeline entities are defined by `proto/pinocchio/chatapp/v1/chat.proto` and by registered `ChatPlugin` schemas.
 
 ## State Flow
 
@@ -84,9 +85,13 @@ Entities are rendered by kind. Register a renderer for each entity kind:
 import { registerTimelineRenderer } from './rendererRegistry';
 registerTimelineRenderer('message', MessageCard);
 registerTimelineRenderer('agent_mode', AgentModeCard);
+registerTimelineRenderer('tool_call', ToolCallCard);
+registerTimelineRenderer('tool_result', ToolResultCard);
 ```
 
-Props are normalized through `timelinePropsRegistry.ts` before reaching renderers, protecting against schema drift.
+Props are normalized through `timelinePropsRegistry.ts` before reaching renderers, protecting against schema drift between protobuf JSON payloads and local React prop names.
+
+The default web frontend maps registered backend entity kinds into local renderer kinds. For example, `ChatMessage` snapshot entities become local `message` entities, thinking rows are `message` entities with `role: "thinking"`, and shared tool-call plugin entities can be normalized into `tool_call` / `tool_result` renderers by downstream apps.
 
 ## Key Files
 

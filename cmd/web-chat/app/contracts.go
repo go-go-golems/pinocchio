@@ -25,17 +25,19 @@ type SubmitMessageResponse struct {
 }
 
 type SnapshotEntity struct {
-	Kind      string `json:"kind"`
-	ID        string `json:"id"`
-	Tombstone bool   `json:"tombstone"`
-	Payload   any    `json:"payload,omitempty"`
+	Kind             string `json:"kind"`
+	ID               string `json:"id"`
+	CreatedOrdinal   string `json:"createdOrdinal,omitempty"`
+	LastEventOrdinal string `json:"lastEventOrdinal,omitempty"`
+	Tombstone        bool   `json:"tombstone"`
+	Payload          any    `json:"payload,omitempty"`
 }
 
 type SessionSnapshotResponse struct {
-	SessionID string           `json:"sessionId"`
-	Ordinal   string           `json:"ordinal"`
-	Status    string           `json:"status,omitempty"`
-	Entities  []SnapshotEntity `json:"entities"`
+	SessionID       string           `json:"sessionId"`
+	SnapshotOrdinal string           `json:"snapshotOrdinal"`
+	Status          string           `json:"status,omitempty"`
+	Entities        []SnapshotEntity `json:"entities"`
 }
 
 type errorResponse struct {

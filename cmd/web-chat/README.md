@@ -1,7 +1,7 @@
 ---
 Title: Pinocchio Web-Chat Example
 Slug: web-chat
-Short: Handler-first webchat example with app-owned HTTP routes and SEM streaming.
+Short: Handler-first webchat example with app-owned HTTP routes, sessionstream transport, and protobuf-backed chatapp events.
 Topics:
 - webchat
 - streaming
@@ -18,7 +18,7 @@ SectionType: GeneralTopic
 
 ## Overview
 
-`cmd/web-chat` now serves the migrated session-based `evtstream` path as its live chat runtime.
+`cmd/web-chat` serves the session-based `sessionstream` chat runtime. The backend registers protobuf schemas from `pinocchio/pkg/chatapp`, then delivers snapshot and live UI events over the sessionstream WebSocket transport.
 
 - App code owns the canonical routes under `/api/chat/...`.
 - The main browser flow uses session-based HTTP + websocket transport:
@@ -28,6 +28,8 @@ SectionType: GeneralTopic
   - `GET /api/chat/ws`
 - Profile selection APIs remain app-owned under `/api/chat/profile*`.
 - The embedded web UI is served directly from `cmd/web-chat/static`.
+- Base chat messages use protobuf payloads from `proto/pinocchio/chatapp/v1/chat.proto`.
+- Shared reasoning and tool-call projections are wired through `pkg/chatapp/plugins`.
 - Legacy `/chat`, `/ws`, and `/api/timeline` are no longer part of the live default path.
 
 ## Directory Structure
@@ -37,6 +39,7 @@ SectionType: GeneralTopic
   - mounts profile APIs plus canonical session/snapshot/websocket routes
   - serves embedded UI assets directly
 - `app/`: app-owned canonical chat contracts and handlers
+- `agentmode_chat_feature.go`: app-owned `ChatPlugin` for agent mode preview/commit cards
 - `profile_policy.go`: app-owned profile endpoints and request/profile selection policy
 - `web/`: Vite frontend source
 - `static/`: embedded frontend assets (with optional `static/dist` build output)
@@ -48,7 +51,7 @@ SectionType: GeneralTopic
 2. Frontend creates or resumes a `sessionId`.
 3. Frontend connects `GET /api/chat/ws` and sends a subscribe frame.
 4. Frontend submits prompts via `POST /api/chat/sessions/:sessionId/messages`.
-5. Backend sends websocket `snapshot`, `subscribed`, and `ui-event` frames.
+5. Backend sends websocket `snapshot`, `subscribed`, and `ui-event` frames as protobuf JSON.
 6. Frontend reload/reconnect uses `GET /api/chat/sessions/:sessionId` plus websocket resubscription.
 
 ## HTTP API
@@ -72,36 +75,33 @@ Legacy route names are intentionally no longer part of the live contract:
 - `/turns`
 - `/hydrate`
 
-### `POST /chat` Request (Hard-Cut Contract)
+### Message Request Contract
 
-Use canonical request keys:
+Create a session with optional profile selection:
 
 ```json
+POST /api/chat/sessions
+
 {
-  "prompt": "hello",
-  "conv_id": "optional-conversation-id",
   "profile": "optional-profile-slug-or-runtime-key",
-  "registry": "optional-registry-slug",
-  "idempotency_key": "optional-client-idempotency-key"
+  "registry": "optional-registry-slug"
 }
 ```
 
-Legacy aliases are removed from resolver handling:
+Submit messages with canonical request keys:
 
-- `runtime_key`
-- `registry_slug`
-- `overrides`
-- `runtime` query alias
+```json
+POST /api/chat/sessions/:sessionId/messages
 
-### Runtime Metadata in Responses
+{
+  "prompt": "hello",
+  "profile": "optional-profile-slug-or-runtime-key",
+  "registry": "optional-registry-slug",
+  "idempotencyKey": "optional-client-idempotency-key"
+}
+```
 
-Chat responses now include resolver/runtime metadata fields:
-
-- `runtime_fingerprint`
-- `profile_metadata`
-  - includes resolver metadata keys such as:
-    - `profile.stack.lineage`
-    - `profile.stack.trace`
+Legacy `/chat` request aliases such as `conv_id`, `idempotency_key`, `runtime_key`, `registry_slug`, `overrides`, and the `runtime` query alias are not part of the canonical session API.
 
 ## Durable Stores
 
@@ -114,6 +114,19 @@ Turn store:
 
 - `--turns-dsn "<sqlite dsn>"`
 - `--turns-db "<path/to/turns.db>"`
+
+## Protobuf Chatapp Runtime
+
+`web-chat` registers the base chatapp schema plus plugins before creating the sessionstream hub:
+
+- base commands/events/entities from `proto/pinocchio/chatapp/v1/chat.proto`
+- `plugins.NewReasoningPlugin()` for `EventThinkingPartial` and thinking boundary events
+- `plugins.NewToolCallPlugin()` for Geppetto tool call/result events
+- `newAgentModePlugin()` for app-specific agent mode preview/commit events
+
+Base chat messages are projected as `ChatMessage` timeline entities. Assistant runs can produce multiple transcript rows with segment-aware IDs such as `chat-msg-1:thinking:1` and `chat-msg-1:text:2`; this prevents thinking and text blocks from overwriting each other during tool loops.
+
+Generic tool calls are projected as `ChatToolCall` and `ChatToolResult` timeline entities by the shared tool-call plugin. Product-specific widgets should add their own `ChatPlugin` instead of modifying `sessionstream`.
 
 ## JavaScript Timeline Runtime
 
@@ -218,6 +231,7 @@ With `--root /chat`, canonical routes are mounted under `/chat`:
 
 ## Related Docs
 
-- [Webchat HTTP Chat Setup](../../pkg/doc/topics/webchat-http-chat-setup.md)
-- [Webchat Framework Guide](../../pkg/doc/topics/webchat-framework-guide.md)
+- [Chatapp Protobuf Schemas and Shared Plugins](../../pkg/doc/topics/chatapp-protobuf-plugins.md)
 - [Webchat Frontend Integration](../../pkg/doc/topics/webchat-frontend-integration.md)
+- [Webchat Frontend Architecture](../../pkg/doc/topics/webchat-frontend-architecture.md)
+- [Webchat Debugging and Ops](../../pkg/doc/topics/webchat-debugging-and-ops.md)

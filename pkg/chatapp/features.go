@@ -5,6 +5,7 @@ import (
 
 	gepevents "github.com/go-go-golems/geppetto/pkg/events"
 	sessionstream "github.com/go-go-golems/sessionstream/pkg/sessionstream"
+	"google.golang.org/protobuf/proto"
 )
 
 type ChatPlugin interface {
@@ -17,7 +18,7 @@ type ChatPlugin interface {
 type RuntimeEventContext struct {
 	SessionID sessionstream.SessionId
 	MessageID string
-	Publish   func(ctx context.Context, eventName string, payload map[string]any) error
+	Publish   func(ctx context.Context, eventName string, payload proto.Message) error
 }
 
 func WithPlugins(features ...ChatPlugin) Option {
@@ -48,7 +49,7 @@ func (e *Engine) handleFeatureRuntimeEvent(ctx context.Context, sid sessionstrea
 		handled, err := feature.HandleRuntimeEvent(ctx, RuntimeEventContext{
 			SessionID: sid,
 			MessageID: messageID,
-			Publish: func(ctx context.Context, eventName string, payload map[string]any) error {
+			Publish: func(ctx context.Context, eventName string, payload proto.Message) error {
 				return e.publish(ctx, sid, pub, eventName, payload)
 			},
 		}, event)

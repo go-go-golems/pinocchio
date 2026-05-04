@@ -9,6 +9,7 @@ import (
 	agentmode "github.com/go-go-golems/pinocchio/pkg/middlewares/agentmode"
 	sessionstream "github.com/go-go-golems/sessionstream/pkg/sessionstream"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
@@ -18,10 +19,8 @@ func TestAgentModeChatFeatureHandleRuntimeEvent(t *testing.T) {
 	ctx := chatapp.RuntimeEventContext{
 		SessionID: "sid",
 		MessageID: "chat-msg-1",
-		Publish: func(_ context.Context, eventName string, payload map[string]any) error {
-			pb, err := structpb.NewStruct(payload)
-			require.NoError(t, err)
-			published = append(published, sessionstream.Event{Name: eventName, SessionId: "sid", Payload: pb})
+		Publish: func(_ context.Context, eventName string, payload proto.Message) error {
+			published = append(published, sessionstream.Event{Name: eventName, SessionId: "sid", Payload: payload})
 			return nil
 		},
 	}

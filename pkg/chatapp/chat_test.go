@@ -2,72 +2,70 @@ package chatapp
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
 	gepevents "github.com/go-go-golems/geppetto/pkg/events"
+	"github.com/go-go-golems/geppetto/pkg/turns"
+	chatappv1 "github.com/go-go-golems/pinocchio/pkg/chatapp/pb/proto/pinocchio/chatapp/v1"
+	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 	sessionstream "github.com/go-go-golems/sessionstream/pkg/sessionstream"
 	storesqlite "github.com/go-go-golems/sessionstream/pkg/sessionstream/hydration/sqlite"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/protobuf/types/known/structpb"
 )
 
 func TestChatExampleHappyPath(t *testing.T) {
 	engine := NewEngine(WithChunkDelay(time.Millisecond))
 	hub := newTestHub(t, engine)
-	payload, err := structpb.NewStruct(map[string]any{"prompt": "Explain ordinals"})
-	require.NoError(t, err)
+	payload := &chatappv1.StartInferenceCommand{Prompt: "Explain ordinals"}
 	require.NoError(t, hub.Submit(context.Background(), sessionstream.SessionId("chat-1"), CommandStartInference, payload))
 	require.NoError(t, engine.WaitIdle(context.Background(), sessionstream.SessionId("chat-1")))
 
 	snap, err := hub.Snapshot(context.Background(), sessionstream.SessionId("chat-1"))
 	require.NoError(t, err)
-	require.Equal(t, uint64(6), snap.Ordinal)
+	require.Equal(t, uint64(6), snap.SnapshotOrdinal)
 	require.Len(t, snap.Entities, 2)
-	var assistant map[string]any
-	var user map[string]any
-	for _, entity := range snap.Entities {
-		payloadMap := entity.Payload.(*structpb.Struct).AsMap()
-		switch payloadMap["role"] {
-		case "assistant":
-			assistant = payloadMap
-		case "user":
-			user = payloadMap
-		}
-	}
-	require.Equal(t, "Explain ordinals", user["content"])
-	require.Equal(t, "finished", assistant["status"])
-	require.Equal(t, "Answer: Explain ordinals", assistant["text"])
+	userEntity := snap.Entities[0]
+	assistantEntity := snap.Entities[1]
+	user := userEntity.Payload.(*chatappv1.ChatMessageEntity)
+	assistant := assistantEntity.Payload.(*chatappv1.ChatMessageEntity)
+	require.Equal(t, "user", user.GetRole())
+	require.Equal(t, "assistant", assistant.GetRole())
+	require.Equal(t, "Explain ordinals", user.GetContent())
+	require.Equal(t, "finished", assistant.GetStatus())
+	require.Equal(t, "Answer: Explain ordinals", assistant.GetText())
+	require.Equal(t, uint64(1), userEntity.CreatedOrdinal)
+	require.Equal(t, uint64(1), userEntity.LastEventOrdinal)
+	require.Equal(t, uint64(3), assistantEntity.CreatedOrdinal)
+	require.Equal(t, uint64(6), assistantEntity.LastEventOrdinal)
 }
 
 func TestBaseTimelineProjection_DelaysAssistantEntityUntilContentArrives(t *testing.T) {
-	startedPayload, err := structpb.NewStruct(map[string]any{"messageId": "chat-msg-start", "prompt": "Explain ordinals", "content": "", "status": "streaming", "streaming": true})
-	require.NoError(t, err)
+	startedPayload := &chatappv1.ChatMessageUpdate{MessageId: "chat-msg-start", Prompt: "Explain ordinals", Content: "", Status: "streaming", Streaming: true}
 
 	entities, err := baseTimelineProjection(context.Background(), sessionstream.Event{Name: EventInferenceStarted, SessionId: "chat-projection", Ordinal: 2, Payload: startedPayload}, nil, staticTimelineView{})
 	require.NoError(t, err)
 	require.Nil(t, entities)
 
-	finishedPayload, err := structpb.NewStruct(map[string]any{"messageId": "chat-msg-start", "prompt": "Explain ordinals", "content": "Answer: Explain ordinals", "text": "Answer: Explain ordinals", "status": "finished", "streaming": false})
-	require.NoError(t, err)
+	finishedPayload := &chatappv1.ChatMessageUpdate{MessageId: "chat-msg-start", Prompt: "Explain ordinals", Content: "Answer: Explain ordinals", Text: "Answer: Explain ordinals", Status: "finished", Streaming: false}
 	entities, err = baseTimelineProjection(context.Background(), sessionstream.Event{Name: EventInferenceFinished, SessionId: "chat-projection", Ordinal: 3, Payload: finishedPayload}, nil, staticTimelineView{})
 	require.NoError(t, err)
 	require.Len(t, entities, 1)
-	payload := entities[0].Payload.(*structpb.Struct).AsMap()
-	require.Equal(t, "assistant", payload["role"])
-	require.Equal(t, "Answer: Explain ordinals", payload["content"])
-	require.Equal(t, "Explain ordinals", payload["prompt"])
+	payload := entities[0].Payload.(*chatappv1.ChatMessageEntity)
+	require.Equal(t, "assistant", payload.GetRole())
+	require.Equal(t, "Answer: Explain ordinals", payload.GetContent())
+	require.Equal(t, "Explain ordinals", payload.GetPrompt())
 }
 
 func TestFeatureUIProjectionRunsForBaseChatEvents(t *testing.T) {
 	engine := NewEngine(WithPlugins(testPlugin{}))
-	payload, err := structpb.NewStruct(map[string]any{
-		"messageId": "chat-msg-1",
-		"role":      "assistant",
-		"content":   "done",
-		"status":    "finished",
-	})
-	require.NoError(t, err)
+	payload := &chatappv1.ChatMessageUpdate{
+		MessageId: "chat-msg-1",
+		Role:      "assistant",
+		Content:   "done",
+		Status:    "finished",
+	}
 
 	uiEvents, err := engine.uiProjection(context.Background(), sessionstream.Event{Name: EventInferenceFinished, SessionId: "chat-feature", Ordinal: 3, Payload: payload}, nil, staticTimelineView{})
 	require.NoError(t, err)
@@ -86,30 +84,208 @@ func TestPendingRequestsAreKeyedByRequestID(t *testing.T) {
 	require.Empty(t, engine.takePendingRequest("request-1").Prompt)
 }
 
+func TestRuntimeInterleavedTextToolTextUsesDistinctTextSegments(t *testing.T) {
+	engine := NewEngine(WithChunkDelay(time.Millisecond))
+	hub := newTestHub(t, engine)
+	engine.setPendingRequest("request-interleaved", PromptRequest{
+		Prompt: "Use tools and explain",
+		Runtime: &infruntime.ComposedRuntime{
+			Engine: interleavedTextToolEngine{},
+		},
+	})
+
+	require.NoError(t, hub.Submit(context.Background(), sessionstream.SessionId("chat-interleaved"), CommandStartInference, &chatappv1.StartInferenceCommand{RequestId: "request-interleaved"}))
+	require.NoError(t, engine.WaitIdle(context.Background(), sessionstream.SessionId("chat-interleaved")))
+
+	snap, err := hub.Snapshot(context.Background(), sessionstream.SessionId("chat-interleaved"))
+	require.NoError(t, err)
+
+	ids := map[string]*chatappv1.ChatMessageEntity{}
+	for _, entity := range snap.Entities {
+		if entity.Kind != TimelineEntityChatMessage {
+			continue
+		}
+		payloadMsg := entity.Payload.(*chatappv1.ChatMessageEntity)
+		ids[entity.Id] = payloadMsg
+	}
+	require.Contains(t, ids, "chat-msg-1:text:1")
+	require.Contains(t, ids, "chat-msg-1:text:2")
+	require.Equal(t, "first text", ids["chat-msg-1:text:1"].GetContent())
+	require.Equal(t, "final text", ids["chat-msg-1:text:2"].GetContent())
+	require.Equal(t, int32(1), ids["chat-msg-1:text:1"].GetSegment())
+	require.Equal(t, int32(2), ids["chat-msg-1:text:2"].GetSegment())
+	require.Equal(t, "text", ids["chat-msg-1:text:1"].GetSegmentType())
+	require.Equal(t, "text", ids["chat-msg-1:text:2"].GetSegmentType())
+	require.True(t, ids["chat-msg-1:text:2"].GetFinal())
+}
+
+func TestRuntimeErrorAfterPartialStopsActiveTextSegment(t *testing.T) {
+	engine := NewEngine(WithChunkDelay(time.Millisecond))
+	hub := newTestHub(t, engine)
+	engine.setPendingRequest("request-partial-error", PromptRequest{
+		Prompt: "Fail after a partial",
+		Runtime: &infruntime.ComposedRuntime{
+			Engine: partialThenErrorEngine{},
+		},
+	})
+
+	require.NoError(t, hub.Submit(context.Background(), sessionstream.SessionId("chat-partial-error"), CommandStartInference, &chatappv1.StartInferenceCommand{RequestId: "request-partial-error"}))
+	require.NoError(t, engine.WaitIdle(context.Background(), sessionstream.SessionId("chat-partial-error")))
+
+	snap, err := hub.Snapshot(context.Background(), sessionstream.SessionId("chat-partial-error"))
+	require.NoError(t, err)
+
+	ids := map[string]*chatappv1.ChatMessageEntity{}
+	for _, entity := range snap.Entities {
+		if entity.Kind != TimelineEntityChatMessage {
+			continue
+		}
+		ids[entity.Id] = entity.Payload.(*chatappv1.ChatMessageEntity)
+	}
+
+	textSegment := ids["chat-msg-1:text:1"]
+	require.NotNil(t, textSegment)
+	require.Equal(t, "partial text", textSegment.GetContent())
+	require.Equal(t, "stopped", textSegment.GetStatus())
+	require.False(t, textSegment.GetStreaming())
+	require.Equal(t, "provider failed after partial", textSegment.GetError())
+	require.Equal(t, "chat-msg-1", textSegment.GetParentMessageId())
+	require.Equal(t, int32(1), textSegment.GetSegment())
+	require.Equal(t, "text", textSegment.GetSegmentType())
+	require.True(t, textSegment.GetFinal())
+	require.NotContains(t, ids, "chat-msg-1")
+}
+
+func TestRuntimeErrorAfterClosedTextSegmentDoesNotDuplicateSegmentContent(t *testing.T) {
+	engine := NewEngine(WithChunkDelay(time.Millisecond))
+	hub := newTestHub(t, engine)
+	engine.setPendingRequest("request-boundary-error", PromptRequest{
+		Prompt: "Fail after a boundary",
+		Runtime: &infruntime.ComposedRuntime{
+			Engine: boundaryThenErrorEngine{},
+		},
+	})
+
+	require.NoError(t, hub.Submit(context.Background(), sessionstream.SessionId("chat-boundary-error"), CommandStartInference, &chatappv1.StartInferenceCommand{RequestId: "request-boundary-error"}))
+	require.NoError(t, engine.WaitIdle(context.Background(), sessionstream.SessionId("chat-boundary-error")))
+
+	snap, err := hub.Snapshot(context.Background(), sessionstream.SessionId("chat-boundary-error"))
+	require.NoError(t, err)
+
+	ids := map[string]*chatappv1.ChatMessageEntity{}
+	for _, entity := range snap.Entities {
+		if entity.Kind != TimelineEntityChatMessage {
+			continue
+		}
+		ids[entity.Id] = entity.Payload.(*chatappv1.ChatMessageEntity)
+	}
+
+	finishedSegment := ids["chat-msg-1:text:1"]
+	require.NotNil(t, finishedSegment)
+	require.Equal(t, "first text", finishedSegment.GetContent())
+	require.Equal(t, "finished", finishedSegment.GetStatus())
+	require.False(t, finishedSegment.GetStreaming())
+
+	parentStopped := ids["chat-msg-1"]
+	require.NotNil(t, parentStopped)
+	require.Empty(t, parentStopped.GetContent())
+	require.Equal(t, "stopped", parentStopped.GetStatus())
+	require.Equal(t, "provider failed after boundary", parentStopped.GetError())
+}
+
+func TestRuntimeMaxIterationsErrorPublishesWarningMessage(t *testing.T) {
+	engine := NewEngine(WithChunkDelay(time.Millisecond))
+	hub := newTestHub(t, engine)
+	engine.setPendingRequest("request-max-iterations", PromptRequest{
+		Prompt: "Run many tools",
+		Runtime: &infruntime.ComposedRuntime{
+			Engine: maxIterationsErrorEngine{},
+		},
+	})
+
+	require.NoError(t, hub.Submit(context.Background(), sessionstream.SessionId("chat-max-iterations"), CommandStartInference, &chatappv1.StartInferenceCommand{RequestId: "request-max-iterations"}))
+	require.NoError(t, engine.WaitIdle(context.Background(), sessionstream.SessionId("chat-max-iterations")))
+
+	snap, err := hub.Snapshot(context.Background(), sessionstream.SessionId("chat-max-iterations"))
+	require.NoError(t, err)
+
+	var warning *chatappv1.ChatMessageEntity
+	var assistant *chatappv1.ChatMessageEntity
+	for _, entity := range snap.Entities {
+		payloadMsg := entity.Payload.(*chatappv1.ChatMessageEntity)
+		switch payloadMsg.GetRole() {
+		case "warning":
+			warning = payloadMsg
+		case "assistant":
+			assistant = payloadMsg
+		}
+	}
+	require.NotNil(t, warning)
+	require.Contains(t, warning.GetContent(), "max iterations (20) reached")
+	require.Contains(t, warning.GetContent(), "answer may be incomplete")
+	require.Equal(t, "finished", warning.GetStatus())
+	require.False(t, warning.GetStreaming())
+	require.NotNil(t, assistant)
+	require.Equal(t, "stopped", assistant.GetStatus())
+	require.Equal(t, "max iterations (20) reached", assistant.GetError())
+}
+
 func TestChatExampleStopPath(t *testing.T) {
 	engine := NewEngine(WithChunkDelay(10 * time.Millisecond))
 	hub := newTestHub(t, engine)
-	payload, err := structpb.NewStruct(map[string]any{"prompt": "Stop me"})
-	require.NoError(t, err)
+	payload := &chatappv1.StartInferenceCommand{Prompt: "Stop me"}
 	require.NoError(t, hub.Submit(context.Background(), sessionstream.SessionId("chat-2"), CommandStartInference, payload))
 	time.Sleep(12 * time.Millisecond)
-	stop, err := structpb.NewStruct(map[string]any{})
-	require.NoError(t, err)
-	require.NoError(t, hub.Submit(context.Background(), sessionstream.SessionId("chat-2"), CommandStopInference, stop))
+	require.NoError(t, hub.Submit(context.Background(), sessionstream.SessionId("chat-2"), CommandStopInference, &chatappv1.StopInferenceCommand{}))
 	require.NoError(t, engine.WaitIdle(context.Background(), sessionstream.SessionId("chat-2")))
 
 	snap, err := hub.Snapshot(context.Background(), sessionstream.SessionId("chat-2"))
 	require.NoError(t, err)
 	require.Len(t, snap.Entities, 2)
-	var assistant map[string]any
+	var assistant *chatappv1.ChatMessageEntity
 	for _, entity := range snap.Entities {
-		payloadMap := entity.Payload.(*structpb.Struct).AsMap()
-		if payloadMap["role"] == "assistant" {
-			assistant = payloadMap
+		payloadMsg := entity.Payload.(*chatappv1.ChatMessageEntity)
+		if payloadMsg.GetRole() == "assistant" {
+			assistant = payloadMsg
 		}
 	}
-	require.Equal(t, "stopped", assistant["status"])
-	require.Equal(t, false, assistant["streaming"])
+	require.Equal(t, "stopped", assistant.GetStatus())
+	require.Equal(t, false, assistant.GetStreaming())
+}
+
+type interleavedTextToolEngine struct{}
+
+func (interleavedTextToolEngine) RunInference(ctx context.Context, t *turns.Turn) (*turns.Turn, error) {
+	meta := gepevents.EventMetadata{SessionID: "sid"}
+	gepevents.PublishEventToContext(ctx, gepevents.NewPartialCompletionEvent(meta, "first text", "first text"))
+	gepevents.PublishEventToContext(ctx, gepevents.NewToolCallEvent(meta, gepevents.ToolCall{ID: "call-1", Name: "lookup", Input: `{"q":"x"}`}))
+	gepevents.PublishEventToContext(ctx, gepevents.NewToolResultEvent(meta, gepevents.ToolResult{ID: "call-1", Name: "lookup", Result: `{"ok":true}`}))
+	gepevents.PublishEventToContext(ctx, gepevents.NewPartialCompletionEvent(meta, "final text", "final text"))
+	gepevents.PublishEventToContext(ctx, gepevents.NewFinalEvent(meta, "final text"))
+	return t, nil
+}
+
+type partialThenErrorEngine struct{}
+
+func (partialThenErrorEngine) RunInference(ctx context.Context, t *turns.Turn) (*turns.Turn, error) {
+	meta := gepevents.EventMetadata{SessionID: "sid"}
+	gepevents.PublishEventToContext(ctx, gepevents.NewPartialCompletionEvent(meta, "partial text", "partial text"))
+	return t, errors.New("provider failed after partial")
+}
+
+type boundaryThenErrorEngine struct{}
+
+func (boundaryThenErrorEngine) RunInference(ctx context.Context, t *turns.Turn) (*turns.Turn, error) {
+	meta := gepevents.EventMetadata{SessionID: "sid"}
+	gepevents.PublishEventToContext(ctx, gepevents.NewPartialCompletionEvent(meta, "first text", "first text"))
+	gepevents.PublishEventToContext(ctx, gepevents.NewToolCallEvent(meta, gepevents.ToolCall{ID: "call-1", Name: "lookup", Input: `{"q":"x"}`}))
+	return t, errors.New("provider failed after boundary")
+}
+
+type maxIterationsErrorEngine struct{}
+
+func (maxIterationsErrorEngine) RunInference(context.Context, *turns.Turn) (*turns.Turn, error) {
+	return nil, errors.New("max iterations (20) reached")
 }
 
 type testPlugin struct{}
@@ -124,11 +300,11 @@ func (testPlugin) ProjectUI(_ context.Context, ev sessionstream.Event, _ *sessio
 	if ev.Name != EventInferenceFinished {
 		return nil, false, nil
 	}
-	payload, err := structpb.NewStruct(map[string]any{"messageId": asString(toMap(ev.Payload)["messageId"])})
-	if err != nil {
-		return nil, true, err
+	payload, ok := ev.Payload.(*chatappv1.ChatMessageUpdate)
+	if !ok || payload == nil {
+		return nil, true, nil
 	}
-	return []sessionstream.UIEvent{{Name: "FeatureSawFinished", Payload: payload}}, true, nil
+	return []sessionstream.UIEvent{{Name: "FeatureSawFinished", Payload: &chatappv1.ChatMessageUpdate{MessageId: payload.GetMessageId()}}}, true, nil
 }
 
 func (testPlugin) ProjectTimeline(context.Context, sessionstream.Event, *sessionstream.Session, sessionstream.TimelineView) ([]sessionstream.TimelineEntity, bool, error) {
@@ -146,8 +322,13 @@ func (staticTimelineView) Ordinal() uint64                            { return 0
 
 func newTestHub(t *testing.T, engine *Engine) *sessionstream.Hub {
 	t.Helper()
+	return newTestHubWithPlugins(t, engine)
+}
+
+func newTestHubWithPlugins(t *testing.T, engine *Engine, features ...ChatPlugin) *sessionstream.Hub {
+	t.Helper()
 	reg := sessionstream.NewSchemaRegistry()
-	require.NoError(t, RegisterSchemas(reg))
+	require.NoError(t, RegisterSchemas(reg, features...))
 	store, err := storesqlite.NewInMemory(reg)
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, store.Close()) })

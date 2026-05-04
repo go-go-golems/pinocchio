@@ -290,16 +290,18 @@ func (s *Server) handleSessionSnapshot(w http.ResponseWriter, r *http.Request, s
 
 func encodeSnapshotResponse(snap sessionstream.Snapshot) SessionSnapshotResponse {
 	resp := SessionSnapshotResponse{
-		SessionID: string(snap.SessionId),
-		Ordinal:   fmt.Sprintf("%d", snap.Ordinal),
-		Entities:  make([]SnapshotEntity, 0, len(snap.Entities)),
+		SessionID:       string(snap.SessionId),
+		SnapshotOrdinal: fmt.Sprintf("%d", snap.SnapshotOrdinal),
+		Entities:        make([]SnapshotEntity, 0, len(snap.Entities)),
 	}
 	for _, entity := range snap.Entities {
 		resp.Entities = append(resp.Entities, SnapshotEntity{
-			Kind:      entity.Kind,
-			ID:        entity.Id,
-			Tombstone: entity.Tombstone,
-			Payload:   encodeProtoJSON(entity.Payload),
+			Kind:             entity.Kind,
+			ID:               entity.Id,
+			CreatedOrdinal:   fmt.Sprintf("%d", entity.CreatedOrdinal),
+			LastEventOrdinal: fmt.Sprintf("%d", entity.LastEventOrdinal),
+			Tombstone:        entity.Tombstone,
+			Payload:          encodeProtoJSON(entity.Payload),
 		})
 	}
 	resp.Status = snapshotStatus(resp.Entities)

@@ -49,31 +49,41 @@ npm run dev
 
 Open: `http://localhost:5173/`
 
-If you want to bind the chat to a specific conversation ID:
+If you want to resume a specific session ID, pass it in the URL:
 
 ```
-http://localhost:5173/?conv_id=<uuid>
+http://localhost:5173/?sessionId=<session-id>
 ```
+
+Some older links use `conv_id`; the current API names the backend resource a session and the frontend URL parameter is `sessionId`.
 
 ## 3) Send a message through HTTP
 
+Create a session, then submit a prompt to that session:
+
 ```bash
-curl -s http://localhost:5173/chat \
+session_id=$(curl -s -X POST http://localhost:5173/api/chat/sessions \
   -H "Content-Type: application/json" \
-  -d '{"conv_id":"<uuid>","prompt":"hello"}'
+  -d '{}' | jq -r '.sessionId')
+
+curl -s -X POST "http://localhost:5173/api/chat/sessions/${session_id}/messages" \
+  -H "Content-Type: application/json" \
+  -d '{"prompt":"hello"}'
+
+curl -s "http://localhost:5173/api/chat/sessions/${session_id}" | jq
 ```
 
-If the UI is running, you can just type in the composer and hit Enter.
+If the UI is running, you can just type in the composer and hit Enter. The backend projects protobuf-backed chatapp events into sessionstream snapshot and UI-event frames.
 
 ## 4) WebSocket connection (optional manual)
 
 The UI connects to:
 
 ```
-ws://localhost:5173/ws?conv_id=<uuid>
+ws://localhost:5173/api/chat/ws
 ```
 
-In dev, Vite proxies `/ws` to the Go backend.
+After the socket opens, the client subscribes with the session ID. In dev, Vite proxies `/api/chat/ws` to the Go backend.
 
 ## 5) Profiles and request overrides
 
@@ -96,7 +106,6 @@ Chat payloads stay small and selection-oriented:
 
 ```json
 {
-  "conv_id": "<uuid>",
   "prompt": "use tools",
   "profile": "analyst"
 }
@@ -104,16 +113,20 @@ Chat payloads stay small and selection-oriented:
 
 For full endpoint semantics and selection behavior, see:
 
-- `pinocchio/pkg/doc/topics/webchat-profile-registry.md`
+- `pinocchio/pkg/doc/topics/webchat-frontend-integration.md`
+- `pinocchio/pkg/doc/topics/chatapp-protobuf-plugins.md`
 
 ## Troubleshooting
 
 - **`prompt_len=0`** in logs: ensure you send `prompt`, not `text`.
-- **WS not connecting**: confirm `/ws` proxy in `vite.config.ts` and backend is on `:8080`.
-- **Timeline empty**: pass `--timeline-db` or `--timeline-dsn` on backend start.
+- **WS not connecting**: confirm `/api/chat/ws` proxy in `vite.config.ts` and backend is on `:8080`.
+- **Timeline empty after reload**: pass `--timeline-db` or `--timeline-dsn` on backend start.
+- **Reasoning/tool rows missing**: confirm `web-chat` was built with `NewReasoningPlugin()` and `NewToolCallPlugin()` in the chat plugin list.
 
 ## Next: User Guide
 
-Read the user guide for API details and customization:
+Read these guides for API details and customization:
 
-- `pinocchio/pkg/doc/topics/webchat-user-guide.md`
+- `pinocchio/pkg/doc/topics/webchat-frontend-integration.md`
+- `pinocchio/pkg/doc/topics/webchat-frontend-architecture.md`
+- `pinocchio/pkg/doc/topics/chatapp-protobuf-plugins.md`

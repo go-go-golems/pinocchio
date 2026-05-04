@@ -14,8 +14,10 @@ import (
 	gepevents "github.com/go-go-golems/geppetto/pkg/events"
 	"github.com/go-go-golems/geppetto/pkg/turns"
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
+	sessionstreamv1 "github.com/go-go-golems/sessionstream/pkg/sessionstream/pb/proto/sessionstream/v1"
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 type runtimeBackedTestEngine struct {
@@ -107,7 +109,7 @@ func TestSubmitAndSnapshot(t *testing.T) {
 		_ = snapResp.Body.Close()
 		if snap.Status == "finished" {
 			require.Equal(t, "sess-1", snap.SessionID)
-			require.NotEmpty(t, snap.Ordinal)
+			require.NotEmpty(t, snap.SnapshotOrdinal)
 			require.Len(t, snap.Entities, 2)
 			foundAssistant := false
 			foundUser := false
@@ -141,30 +143,22 @@ func TestWebSocketSnapshotAndLiveEvent(t *testing.T) {
 	defer func() { _ = conn.Close() }()
 
 	require.NoError(t, conn.SetReadDeadline(time.Now().Add(2*time.Second)))
-	_, raw, err := conn.ReadMessage()
-	require.NoError(t, err)
-	var hello map[string]any
-	require.NoError(t, json.Unmarshal(raw, &hello))
-	require.Equal(t, "hello", hello["type"])
+	hello := readServerFrame(t, conn)
+	require.NotNil(t, hello.GetHello())
 
-	require.NoError(t, conn.WriteJSON(map[string]any{
-		"type":         "subscribe",
-		"sessionId":    "sess-ws-1",
-		"sinceOrdinal": "0",
-	}))
+	writeClientFrame(t, conn, map[string]any{
+		"subscribe": map[string]any{
+			"sessionId":            "sess-ws-1",
+			"sinceSnapshotOrdinal": "0",
+		},
+	})
 
-	_, raw, err = conn.ReadMessage()
-	require.NoError(t, err)
-	var snap map[string]any
-	require.NoError(t, json.Unmarshal(raw, &snap))
-	require.Equal(t, "snapshot", snap["type"])
-	require.Equal(t, "sess-ws-1", snap["sessionId"])
+	snap := readServerFrame(t, conn)
+	require.NotNil(t, snap.GetSnapshot())
+	require.Equal(t, "sess-ws-1", snap.GetSnapshot().GetSessionId())
 
-	_, raw, err = conn.ReadMessage()
-	require.NoError(t, err)
-	var subscribed map[string]any
-	require.NoError(t, json.Unmarshal(raw, &subscribed))
-	require.Equal(t, "subscribed", subscribed["type"])
+	subscribed := readServerFrame(t, conn)
+	require.NotNil(t, subscribed.GetSubscribed())
 
 	body := []byte(`{"prompt":"hello over websocket"}`)
 	resp, err := http.Post(httpSrv.URL+"/api/chat/sessions/sess-ws-1/messages", "application/json", bytes.NewReader(body))
@@ -175,13 +169,10 @@ func TestWebSocketSnapshotAndLiveEvent(t *testing.T) {
 	seenUIEvent := false
 	deadline := time.Now().Add(2 * time.Second)
 	for !seenUIEvent && time.Now().Before(deadline) {
-		_, raw, err = conn.ReadMessage()
-		require.NoError(t, err)
-		var frame map[string]any
-		require.NoError(t, json.Unmarshal(raw, &frame))
-		if frame["type"] == "ui-event" {
+		frame := readServerFrame(t, conn)
+		if frame.GetUiEvent() != nil {
 			seenUIEvent = true
-			require.Equal(t, "sess-ws-1", frame["sessionId"])
+			require.Equal(t, "sess-ws-1", frame.GetUiEvent().GetSessionId())
 		}
 	}
 	require.True(t, seenUIEvent, "expected at least one ui-event frame")
@@ -279,4 +270,21 @@ func TestSQLiteSnapshotPersistsAcrossRestart(t *testing.T) {
 	}
 	require.True(t, foundAssistant)
 	require.True(t, foundUser)
+}
+
+func readServerFrame(t *testing.T, conn *websocket.Conn) *sessionstreamv1.ServerFrame {
+	t.Helper()
+	_, raw, err := conn.ReadMessage()
+	require.NoError(t, err)
+	frame := &sessionstreamv1.ServerFrame{}
+	require.NoError(t, protojson.Unmarshal(raw, frame))
+	require.NoError(t, conn.SetReadDeadline(time.Now().Add(2*time.Second)))
+	return frame
+}
+
+func writeClientFrame(t *testing.T, conn *websocket.Conn, payload map[string]any) {
+	t.Helper()
+	body, err := json.Marshal(payload)
+	require.NoError(t, err)
+	require.NoError(t, conn.WriteMessage(websocket.TextMessage, body))
 }
