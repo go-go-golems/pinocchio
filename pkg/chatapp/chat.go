@@ -262,6 +262,9 @@ func (e *Engine) runRuntimeInference(ctx context.Context, sid sessionstream.Sess
 	output, err := handle.Wait()
 	if err != nil {
 		if !sink.IsTerminal() {
+			if isMaxIterationsError(err) {
+				_ = e.publish(context.Background(), sid, pub, EventInferenceFinished, newChatMessageUpdate(runtimeWarningMessageID(messageID), "warning", maxIterationsWarningText(err), maxIterationsWarningText(err), prompt, "finished", false, ""))
+			}
 			_ = e.publish(context.Background(), sid, pub, EventInferenceStopped, newChatMessageUpdate(messageID, "assistant", sink.LastText(), sink.LastText(), prompt, "stopped", false, err.Error()))
 		}
 		return
@@ -589,6 +592,29 @@ func newChatMessageDelta(messageID, chunk, content, prompt, status string, strea
 		Streaming: streaming,
 		Error:     errText,
 	}
+}
+
+func runtimeWarningMessageID(messageID string) string {
+	messageID = strings.TrimSpace(messageID)
+	if messageID == "" {
+		return "chat-warning"
+	}
+	return messageID + ":warning"
+}
+
+func isMaxIterationsError(err error) bool {
+	if err == nil {
+		return false
+	}
+	return strings.Contains(strings.ToLower(err.Error()), "max iterations")
+}
+
+func maxIterationsWarningText(err error) string {
+	message := "tool loop reached the maximum iteration limit"
+	if err != nil && strings.TrimSpace(err.Error()) != "" {
+		message = strings.TrimSpace(err.Error())
+	}
+	return "Warning: inference stopped because " + message + ". The answer may be incomplete; try narrowing the request or increasing the max-iterations setting."
 }
 
 func firstNonEmpty(values ...string) string {

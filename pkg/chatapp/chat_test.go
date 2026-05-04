@@ -2,11 +2,14 @@ package chatapp
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
 	gepevents "github.com/go-go-golems/geppetto/pkg/events"
+	"github.com/go-go-golems/geppetto/pkg/turns"
 	chatappv1 "github.com/go-go-golems/pinocchio/pkg/chatapp/pb/proto/pinocchio/chatapp/v1"
+	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 	sessionstream "github.com/go-go-golems/sessionstream/pkg/sessionstream"
 	storesqlite "github.com/go-go-golems/sessionstream/pkg/sessionstream/hydration/sqlite"
 	"github.com/stretchr/testify/require"
@@ -81,6 +84,43 @@ func TestPendingRequestsAreKeyedByRequestID(t *testing.T) {
 	require.Empty(t, engine.takePendingRequest("request-1").Prompt)
 }
 
+func TestRuntimeMaxIterationsErrorPublishesWarningMessage(t *testing.T) {
+	engine := NewEngine(WithChunkDelay(time.Millisecond))
+	hub := newTestHub(t, engine)
+	engine.setPendingRequest("request-max-iterations", PromptRequest{
+		Prompt: "Run many tools",
+		Runtime: &infruntime.ComposedRuntime{
+			Engine: maxIterationsErrorEngine{},
+		},
+	})
+
+	require.NoError(t, hub.Submit(context.Background(), sessionstream.SessionId("chat-max-iterations"), CommandStartInference, &chatappv1.StartInferenceCommand{RequestId: "request-max-iterations"}))
+	require.NoError(t, engine.WaitIdle(context.Background(), sessionstream.SessionId("chat-max-iterations")))
+
+	snap, err := hub.Snapshot(context.Background(), sessionstream.SessionId("chat-max-iterations"))
+	require.NoError(t, err)
+
+	var warning *chatappv1.ChatMessageEntity
+	var assistant *chatappv1.ChatMessageEntity
+	for _, entity := range snap.Entities {
+		payloadMsg := entity.Payload.(*chatappv1.ChatMessageEntity)
+		switch payloadMsg.GetRole() {
+		case "warning":
+			warning = payloadMsg
+		case "assistant":
+			assistant = payloadMsg
+		}
+	}
+	require.NotNil(t, warning)
+	require.Contains(t, warning.GetContent(), "max iterations (20) reached")
+	require.Contains(t, warning.GetContent(), "answer may be incomplete")
+	require.Equal(t, "finished", warning.GetStatus())
+	require.False(t, warning.GetStreaming())
+	require.NotNil(t, assistant)
+	require.Equal(t, "stopped", assistant.GetStatus())
+	require.Equal(t, "max iterations (20) reached", assistant.GetError())
+}
+
 func TestChatExampleStopPath(t *testing.T) {
 	engine := NewEngine(WithChunkDelay(10 * time.Millisecond))
 	hub := newTestHub(t, engine)
@@ -102,6 +142,12 @@ func TestChatExampleStopPath(t *testing.T) {
 	}
 	require.Equal(t, "stopped", assistant.GetStatus())
 	require.Equal(t, false, assistant.GetStreaming())
+}
+
+type maxIterationsErrorEngine struct{}
+
+func (maxIterationsErrorEngine) RunInference(context.Context, *turns.Turn) (*turns.Turn, error) {
+	return nil, errors.New("max iterations (20) reached")
 }
 
 type testPlugin struct{}
