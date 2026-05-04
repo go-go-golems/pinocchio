@@ -15,6 +15,7 @@ import (
 	appserver "github.com/go-go-golems/pinocchio/cmd/web-chat/app"
 	chatapp "github.com/go-go-golems/pinocchio/pkg/chatapp"
 	chatappv1 "github.com/go-go-golems/pinocchio/pkg/chatapp/pb/proto/pinocchio/chatapp/v1"
+	"github.com/go-go-golems/pinocchio/pkg/chatapp/plugins"
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 	sessionstream "github.com/go-go-golems/sessionstream/pkg/sessionstream"
 	sessionstreamv1 "github.com/go-go-golems/sessionstream/pkg/sessionstream/pb/proto/sessionstream/v1"
@@ -26,7 +27,7 @@ import (
 )
 
 func TestReasoningChatFeatureHandleRuntimeEvent(t *testing.T) {
-	feature := newReasoningPlugin()
+	feature := plugins.NewReasoningPlugin()
 	var published []sessionstream.Event
 	ctx := chatapp.RuntimeEventContext{
 		SessionID: "sid",
@@ -41,19 +42,19 @@ func TestReasoningChatFeatureHandleRuntimeEvent(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, handled)
 	require.Len(t, published, 1)
-	require.Equal(t, reasoningDeltaEventName, published[0].Name)
+	require.Equal(t, plugins.ReasoningDeltaEventName, published[0].Name)
 	require.Equal(t, "chat-msg-1:thinking", published[0].Payload.(*structpb.Struct).AsMap()["messageId"])
 
 	handled, err = feature.HandleRuntimeEvent(context.Background(), ctx, gepevents.NewInfoEvent(gepevents.EventMetadata{SessionID: "sid"}, "reasoning-summary", map[string]interface{}{"text": "short summary"}))
 	require.NoError(t, err)
 	require.True(t, handled)
 	require.Len(t, published, 2)
-	require.Equal(t, reasoningFinishedEventName, published[1].Name)
+	require.Equal(t, plugins.ReasoningFinishedEventName, published[1].Name)
 	require.Equal(t, "short summary", published[1].Payload.(*structpb.Struct).AsMap()["content"])
 }
 
 func TestReasoningChatFeatureProjectsUIAndTimeline(t *testing.T) {
-	feature := newReasoningPlugin()
+	feature := plugins.NewReasoningPlugin()
 
 	deltaPayload, err := structpb.NewStruct(map[string]any{
 		"messageId":       "chat-msg-2:thinking",
@@ -64,13 +65,13 @@ func TestReasoningChatFeatureProjectsUIAndTimeline(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	uiEvents, handled, err := feature.ProjectUI(context.Background(), sessionstream.Event{Name: reasoningDeltaEventName, SessionId: "sid", Ordinal: 7, Payload: deltaPayload}, nil, reasoningStaticTimelineView{})
+	uiEvents, handled, err := feature.ProjectUI(context.Background(), sessionstream.Event{Name: plugins.ReasoningDeltaEventName, SessionId: "sid", Ordinal: 7, Payload: deltaPayload}, nil, reasoningStaticTimelineView{})
 	require.NoError(t, err)
 	require.True(t, handled)
 	require.Len(t, uiEvents, 1)
-	require.Equal(t, reasoningAppendedUIName, uiEvents[0].Name)
+	require.Equal(t, plugins.ReasoningAppendedUIName, uiEvents[0].Name)
 
-	entities, handled, err := feature.ProjectTimeline(context.Background(), sessionstream.Event{Name: reasoningDeltaEventName, SessionId: "sid", Ordinal: 7, Payload: deltaPayload}, nil, reasoningStaticTimelineView{})
+	entities, handled, err := feature.ProjectTimeline(context.Background(), sessionstream.Event{Name: plugins.ReasoningDeltaEventName, SessionId: "sid", Ordinal: 7, Payload: deltaPayload}, nil, reasoningStaticTimelineView{})
 	require.NoError(t, err)
 	require.True(t, handled)
 	require.Len(t, entities, 1)
@@ -101,7 +102,7 @@ func TestReasoningChatFeatureProjectsUIAndTimeline(t *testing.T) {
 		},
 	}}
 
-	entities, handled, err = feature.ProjectTimeline(context.Background(), sessionstream.Event{Name: reasoningFinishedEventName, SessionId: "sid", Ordinal: 8, Payload: finishedPayload}, nil, view)
+	entities, handled, err = feature.ProjectTimeline(context.Background(), sessionstream.Event{Name: plugins.ReasoningFinishedEventName, SessionId: "sid", Ordinal: 8, Payload: finishedPayload}, nil, view)
 	require.NoError(t, err)
 	require.True(t, handled)
 	require.Len(t, entities, 1)
@@ -118,7 +119,7 @@ func TestReasoningChatFeatureProjectsUIAndTimeline(t *testing.T) {
 		"streaming":       false,
 	})
 	require.NoError(t, err)
-	entities, handled, err = feature.ProjectTimeline(context.Background(), sessionstream.Event{Name: reasoningFinishedEventName, SessionId: "sid", Ordinal: 9, Payload: summaryPayload}, nil, view)
+	entities, handled, err = feature.ProjectTimeline(context.Background(), sessionstream.Event{Name: plugins.ReasoningFinishedEventName, SessionId: "sid", Ordinal: 9, Payload: summaryPayload}, nil, view)
 	require.NoError(t, err)
 	require.True(t, handled)
 	require.Len(t, entities, 1)
@@ -216,7 +217,7 @@ func newReasoningTestMux(t *testing.T) (*appserver.Server, *httptest.Server) {
 		appserver.WithDefaultProfile("gpt-5-low"),
 		appserver.WithChunkDelay(time.Millisecond),
 		appserver.WithRuntimeResolver(reasoningRuntimeResolver{}),
-		appserver.WithChatPlugins(newReasoningPlugin()),
+		appserver.WithChatPlugins(plugins.NewReasoningPlugin()),
 	)
 	require.NoError(t, err)
 

@@ -34,3 +34,37 @@ message ChatMessageEntity {
   bool streaming = 7;
   string error = 8;
 }
+
+message ToolCallUpdate {
+  string message_id = 1;
+  string tool_call_id = 2;
+  string tool_name = 3;
+  string input = 4;
+  bool executing = 5;
+  string status = 6;
+}
+
+message ToolResultUpdate {
+  string message_id = 1;
+  string tool_call_id = 2;
+  string tool_name = 3;
+  string result = 4;
+  string status = 5;
+}
+
+message ToolCallEntity {
+  string message_id = 1;
+  string tool_call_id = 2;
+  string tool_name = 3;
+  string input = 4;
+  bool executing = 5;
+  string status = 6;
+}
+
+message ToolResultEntity {
+  string message_id = 1;
+  string tool_call_id = 2;
+  string tool_name = 3;
+  string result = 4;
+  string status = 5;
+}

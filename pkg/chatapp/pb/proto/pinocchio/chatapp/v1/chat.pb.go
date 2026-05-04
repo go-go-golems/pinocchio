@@ -325,6 +325,326 @@ func (x *ChatMessageEntity) GetError() string {
 	return ""
 }
 
+type ToolCallUpdate struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	MessageId     string                 `protobuf:"bytes,1,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
+	ToolCallId    string                 `protobuf:"bytes,2,opt,name=tool_call_id,json=toolCallId,proto3" json:"tool_call_id,omitempty"`
+	ToolName      string                 `protobuf:"bytes,3,opt,name=tool_name,json=toolName,proto3" json:"tool_name,omitempty"`
+	Input         string                 `protobuf:"bytes,4,opt,name=input,proto3" json:"input,omitempty"`
+	Executing     bool                   `protobuf:"varint,5,opt,name=executing,proto3" json:"executing,omitempty"`
+	Status        string                 `protobuf:"bytes,6,opt,name=status,proto3" json:"status,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ToolCallUpdate) Reset() {
+	*x = ToolCallUpdate{}
+	mi := &file_proto_pinocchio_chatapp_v1_chat_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ToolCallUpdate) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ToolCallUpdate) ProtoMessage() {}
+
+func (x *ToolCallUpdate) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_pinocchio_chatapp_v1_chat_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ToolCallUpdate.ProtoReflect.Descriptor instead.
+func (*ToolCallUpdate) Descriptor() ([]byte, []int) {
+	return file_proto_pinocchio_chatapp_v1_chat_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *ToolCallUpdate) GetMessageId() string {
+	if x != nil {
+		return x.MessageId
+	}
+	return ""
+}
+
+func (x *ToolCallUpdate) GetToolCallId() string {
+	if x != nil {
+		return x.ToolCallId
+	}
+	return ""
+}
+
+func (x *ToolCallUpdate) GetToolName() string {
+	if x != nil {
+		return x.ToolName
+	}
+	return ""
+}
+
+func (x *ToolCallUpdate) GetInput() string {
+	if x != nil {
+		return x.Input
+	}
+	return ""
+}
+
+func (x *ToolCallUpdate) GetExecuting() bool {
+	if x != nil {
+		return x.Executing
+	}
+	return false
+}
+
+func (x *ToolCallUpdate) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+type ToolResultUpdate struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	MessageId     string                 `protobuf:"bytes,1,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
+	ToolCallId    string                 `protobuf:"bytes,2,opt,name=tool_call_id,json=toolCallId,proto3" json:"tool_call_id,omitempty"`
+	ToolName      string                 `protobuf:"bytes,3,opt,name=tool_name,json=toolName,proto3" json:"tool_name,omitempty"`
+	Result        string                 `protobuf:"bytes,4,opt,name=result,proto3" json:"result,omitempty"`
+	Status        string                 `protobuf:"bytes,5,opt,name=status,proto3" json:"status,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ToolResultUpdate) Reset() {
+	*x = ToolResultUpdate{}
+	mi := &file_proto_pinocchio_chatapp_v1_chat_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ToolResultUpdate) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ToolResultUpdate) ProtoMessage() {}
+
+func (x *ToolResultUpdate) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_pinocchio_chatapp_v1_chat_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ToolResultUpdate.ProtoReflect.Descriptor instead.
+func (*ToolResultUpdate) Descriptor() ([]byte, []int) {
+	return file_proto_pinocchio_chatapp_v1_chat_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *ToolResultUpdate) GetMessageId() string {
+	if x != nil {
+		return x.MessageId
+	}
+	return ""
+}
+
+func (x *ToolResultUpdate) GetToolCallId() string {
+	if x != nil {
+		return x.ToolCallId
+	}
+	return ""
+}
+
+func (x *ToolResultUpdate) GetToolName() string {
+	if x != nil {
+		return x.ToolName
+	}
+	return ""
+}
+
+func (x *ToolResultUpdate) GetResult() string {
+	if x != nil {
+		return x.Result
+	}
+	return ""
+}
+
+func (x *ToolResultUpdate) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+type ToolCallEntity struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	MessageId     string                 `protobuf:"bytes,1,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
+	ToolCallId    string                 `protobuf:"bytes,2,opt,name=tool_call_id,json=toolCallId,proto3" json:"tool_call_id,omitempty"`
+	ToolName      string                 `protobuf:"bytes,3,opt,name=tool_name,json=toolName,proto3" json:"tool_name,omitempty"`
+	Input         string                 `protobuf:"bytes,4,opt,name=input,proto3" json:"input,omitempty"`
+	Executing     bool                   `protobuf:"varint,5,opt,name=executing,proto3" json:"executing,omitempty"`
+	Status        string                 `protobuf:"bytes,6,opt,name=status,proto3" json:"status,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ToolCallEntity) Reset() {
+	*x = ToolCallEntity{}
+	mi := &file_proto_pinocchio_chatapp_v1_chat_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ToolCallEntity) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ToolCallEntity) ProtoMessage() {}
+
+func (x *ToolCallEntity) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_pinocchio_chatapp_v1_chat_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ToolCallEntity.ProtoReflect.Descriptor instead.
+func (*ToolCallEntity) Descriptor() ([]byte, []int) {
+	return file_proto_pinocchio_chatapp_v1_chat_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *ToolCallEntity) GetMessageId() string {
+	if x != nil {
+		return x.MessageId
+	}
+	return ""
+}
+
+func (x *ToolCallEntity) GetToolCallId() string {
+	if x != nil {
+		return x.ToolCallId
+	}
+	return ""
+}
+
+func (x *ToolCallEntity) GetToolName() string {
+	if x != nil {
+		return x.ToolName
+	}
+	return ""
+}
+
+func (x *ToolCallEntity) GetInput() string {
+	if x != nil {
+		return x.Input
+	}
+	return ""
+}
+
+func (x *ToolCallEntity) GetExecuting() bool {
+	if x != nil {
+		return x.Executing
+	}
+	return false
+}
+
+func (x *ToolCallEntity) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+type ToolResultEntity struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	MessageId     string                 `protobuf:"bytes,1,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
+	ToolCallId    string                 `protobuf:"bytes,2,opt,name=tool_call_id,json=toolCallId,proto3" json:"tool_call_id,omitempty"`
+	ToolName      string                 `protobuf:"bytes,3,opt,name=tool_name,json=toolName,proto3" json:"tool_name,omitempty"`
+	Result        string                 `protobuf:"bytes,4,opt,name=result,proto3" json:"result,omitempty"`
+	Status        string                 `protobuf:"bytes,5,opt,name=status,proto3" json:"status,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ToolResultEntity) Reset() {
+	*x = ToolResultEntity{}
+	mi := &file_proto_pinocchio_chatapp_v1_chat_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ToolResultEntity) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ToolResultEntity) ProtoMessage() {}
+
+func (x *ToolResultEntity) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_pinocchio_chatapp_v1_chat_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ToolResultEntity.ProtoReflect.Descriptor instead.
+func (*ToolResultEntity) Descriptor() ([]byte, []int) {
+	return file_proto_pinocchio_chatapp_v1_chat_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *ToolResultEntity) GetMessageId() string {
+	if x != nil {
+		return x.MessageId
+	}
+	return ""
+}
+
+func (x *ToolResultEntity) GetToolCallId() string {
+	if x != nil {
+		return x.ToolCallId
+	}
+	return ""
+}
+
+func (x *ToolResultEntity) GetToolName() string {
+	if x != nil {
+		return x.ToolName
+	}
+	return ""
+}
+
+func (x *ToolResultEntity) GetResult() string {
+	if x != nil {
+		return x.Result
+	}
+	return ""
+}
+
+func (x *ToolResultEntity) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
 var File_proto_pinocchio_chatapp_v1_chat_proto protoreflect.FileDescriptor
 
 const file_proto_pinocchio_chatapp_v1_chat_proto_rawDesc = "" +
@@ -356,7 +676,41 @@ const file_proto_pinocchio_chatapp_v1_chat_proto_rawDesc = "" +
 	"\acontent\x18\x05 \x01(\tR\acontent\x12\x16\n" +
 	"\x06status\x18\x06 \x01(\tR\x06status\x12\x1c\n" +
 	"\tstreaming\x18\a \x01(\bR\tstreaming\x12\x14\n" +
-	"\x05error\x18\b \x01(\tR\x05errorBQZOgithub.com/go-go-golems/pinocchio/pkg/chatapp/pb/pinocchio/chatapp/v1;chatappv1b\x06proto3"
+	"\x05error\x18\b \x01(\tR\x05error\"\xba\x01\n" +
+	"\x0eToolCallUpdate\x12\x1d\n" +
+	"\n" +
+	"message_id\x18\x01 \x01(\tR\tmessageId\x12 \n" +
+	"\ftool_call_id\x18\x02 \x01(\tR\n" +
+	"toolCallId\x12\x1b\n" +
+	"\ttool_name\x18\x03 \x01(\tR\btoolName\x12\x14\n" +
+	"\x05input\x18\x04 \x01(\tR\x05input\x12\x1c\n" +
+	"\texecuting\x18\x05 \x01(\bR\texecuting\x12\x16\n" +
+	"\x06status\x18\x06 \x01(\tR\x06status\"\xa0\x01\n" +
+	"\x10ToolResultUpdate\x12\x1d\n" +
+	"\n" +
+	"message_id\x18\x01 \x01(\tR\tmessageId\x12 \n" +
+	"\ftool_call_id\x18\x02 \x01(\tR\n" +
+	"toolCallId\x12\x1b\n" +
+	"\ttool_name\x18\x03 \x01(\tR\btoolName\x12\x16\n" +
+	"\x06result\x18\x04 \x01(\tR\x06result\x12\x16\n" +
+	"\x06status\x18\x05 \x01(\tR\x06status\"\xba\x01\n" +
+	"\x0eToolCallEntity\x12\x1d\n" +
+	"\n" +
+	"message_id\x18\x01 \x01(\tR\tmessageId\x12 \n" +
+	"\ftool_call_id\x18\x02 \x01(\tR\n" +
+	"toolCallId\x12\x1b\n" +
+	"\ttool_name\x18\x03 \x01(\tR\btoolName\x12\x14\n" +
+	"\x05input\x18\x04 \x01(\tR\x05input\x12\x1c\n" +
+	"\texecuting\x18\x05 \x01(\bR\texecuting\x12\x16\n" +
+	"\x06status\x18\x06 \x01(\tR\x06status\"\xa0\x01\n" +
+	"\x10ToolResultEntity\x12\x1d\n" +
+	"\n" +
+	"message_id\x18\x01 \x01(\tR\tmessageId\x12 \n" +
+	"\ftool_call_id\x18\x02 \x01(\tR\n" +
+	"toolCallId\x12\x1b\n" +
+	"\ttool_name\x18\x03 \x01(\tR\btoolName\x12\x16\n" +
+	"\x06result\x18\x04 \x01(\tR\x06result\x12\x16\n" +
+	"\x06status\x18\x05 \x01(\tR\x06statusBQZOgithub.com/go-go-golems/pinocchio/pkg/chatapp/pb/pinocchio/chatapp/v1;chatappv1b\x06proto3"
 
 var (
 	file_proto_pinocchio_chatapp_v1_chat_proto_rawDescOnce sync.Once
@@ -370,12 +724,16 @@ func file_proto_pinocchio_chatapp_v1_chat_proto_rawDescGZIP() []byte {
 	return file_proto_pinocchio_chatapp_v1_chat_proto_rawDescData
 }
 
-var file_proto_pinocchio_chatapp_v1_chat_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
+var file_proto_pinocchio_chatapp_v1_chat_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
 var file_proto_pinocchio_chatapp_v1_chat_proto_goTypes = []any{
 	(*StartInferenceCommand)(nil), // 0: pinocchio.chatapp.v1.StartInferenceCommand
 	(*StopInferenceCommand)(nil),  // 1: pinocchio.chatapp.v1.StopInferenceCommand
 	(*ChatMessageUpdate)(nil),     // 2: pinocchio.chatapp.v1.ChatMessageUpdate
 	(*ChatMessageEntity)(nil),     // 3: pinocchio.chatapp.v1.ChatMessageEntity
+	(*ToolCallUpdate)(nil),        // 4: pinocchio.chatapp.v1.ToolCallUpdate
+	(*ToolResultUpdate)(nil),      // 5: pinocchio.chatapp.v1.ToolResultUpdate
+	(*ToolCallEntity)(nil),        // 6: pinocchio.chatapp.v1.ToolCallEntity
+	(*ToolResultEntity)(nil),      // 7: pinocchio.chatapp.v1.ToolResultEntity
 }
 var file_proto_pinocchio_chatapp_v1_chat_proto_depIdxs = []int32{
 	0, // [0:0] is the sub-list for method output_type
@@ -396,7 +754,7 @@ func file_proto_pinocchio_chatapp_v1_chat_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_pinocchio_chatapp_v1_chat_proto_rawDesc), len(file_proto_pinocchio_chatapp_v1_chat_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   4,
+			NumMessages:   8,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

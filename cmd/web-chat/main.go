@@ -31,6 +31,7 @@ import (
 	appserver "github.com/go-go-golems/pinocchio/cmd/web-chat/app"
 	"github.com/go-go-golems/pinocchio/cmd/web-chat/profiles"
 	timelinecmd "github.com/go-go-golems/pinocchio/cmd/web-chat/timeline"
+	"github.com/go-go-golems/pinocchio/pkg/chatapp/plugins"
 	profilebootstrap "github.com/go-go-golems/pinocchio/pkg/cmds/profilebootstrap"
 	agentmode "github.com/go-go-golems/pinocchio/pkg/middlewares/agentmode"
 	rediscfg "github.com/go-go-golems/pinocchio/pkg/redisstream"
@@ -327,7 +328,7 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 		appserver.WithSQLiteDSN(s.TimelineDSN),
 		appserver.WithSQLiteDBPath(s.TimelineDB),
 		appserver.WithRuntimeResolver(canonicalRuntimeResolver),
-		appserver.WithChatPlugins(newAgentModePlugin(), newReasoningPlugin()),
+		appserver.WithChatPlugins(newAgentModePlugin(), plugins.NewReasoningPlugin(), plugins.NewToolCallPlugin()),
 	)
 	if err != nil {
 		return errors.Wrap(err, "build canonical evtstream-backed app")
