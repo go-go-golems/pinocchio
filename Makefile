@@ -7,6 +7,8 @@ GORELEASER_ARGS ?= --skip=sign --snapshot --clean
 GORELEASER_TARGET ?= --single-target
 GOLANGCI_LINT_VERSION ?= $(shell cat .golangci-lint-version)
 GOLANGCI_LINT_BIN ?= $(CURDIR)/.bin/golangci-lint
+SESSIONSTREAM_LINT ?= /tmp/sessionstream-lint
+SESSIONSTREAM_LINT_PKG ?= ../sessionstream/cmd/sessionstream-lint
 
 TAPES=$(shell ls doc/vhs/*tape 2>/dev/null || echo "")
 gifs:
@@ -81,8 +83,8 @@ proto-gen-web-chat:
 proto-gen: proto-gen-core proto-gen-web-chat
 
 schema-vet:
-	go build -o /tmp/pinocchio-lint ./cmd/tools/pinocchio-lint
-	go vet -vettool=/tmp/pinocchio-lint ./cmd/... ./pkg/...
+	go build -o $(SESSIONSTREAM_LINT) $(SESSIONSTREAM_LINT_PKG)
+	go vet -vettool=$(SESSIONSTREAM_LINT) ./cmd/... ./pkg/...
 
 goreleaser:
 	goreleaser release $(GORELEASER_ARGS) $(GORELEASER_TARGET)
