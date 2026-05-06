@@ -171,15 +171,16 @@ export function timelineMutationFromUIEvent(frame: CanonicalFrame): TimelineMuta
     }
     case 'ChatMessageStopped': {
       const content = asString(payload.content) || asString(payload.text);
+      const error = asString(payload.error);
       return {
-        upsert: content
+        upsert: content || error
           ? messageEntity(messageId, {
               role: asString(payload.role) || 'assistant',
               prompt: asString(payload.prompt),
               content,
               status: asString(payload.status) || 'stopped',
               streaming: false,
-              error: asString(payload.error),
+              error,
             })
           : undefined,
         status: 'stopped',

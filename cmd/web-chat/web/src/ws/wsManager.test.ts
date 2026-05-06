@@ -57,6 +57,28 @@ describe('timelineMutationFromUIEvent', () => {
     expect(mutation).toEqual({ status: 'streaming', upsert: undefined });
   });
 
+  it('creates a stopped message mutation when ChatMessageStopped carries only an error', () => {
+    const mutation = timelineMutationFromUIEvent({
+      name: 'ChatMessageStopped',
+      payload: {
+        messageId: 'chat-msg-5',
+        role: 'assistant',
+        prompt: 'ok what is next',
+        status: 'stopped',
+        error: "responses api error: invalid input id",
+      },
+    });
+
+    expect(mutation).not.toBeNull();
+    expect(mutation?.status).toBe('stopped');
+    expect(mutation?.upsert?.id).toBe('chat-msg-5');
+    expect(mutation?.upsert?.kind).toBe('message');
+    expect(mutation?.upsert?.props.role).toBe('assistant');
+    expect(mutation?.upsert?.props.content).toBe('');
+    expect(mutation?.upsert?.props.error).toBe('responses api error: invalid input id');
+    expect(mutation?.upsert?.props.streaming).toBe(false);
+  });
+
   it('does not create an empty placeholder mutation for ChatReasoningStarted without visible content', () => {
     const mutation = timelineMutationFromUIEvent({
       name: 'ChatReasoningStarted',

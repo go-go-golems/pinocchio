@@ -14,6 +14,7 @@ function asRecord(value: unknown): Record<string, unknown> {
 export function MessageCard({ e }: { e: RenderEntity }) {
   const role = String(e.props?.role ?? 'assistant');
   const content = String(e.props?.content ?? '');
+  const error = String(e.props?.error ?? '');
   const streaming = !!e.props?.streaming;
   const roleAttr = role === 'user' || role === 'assistant' || role === 'thinking' ? role : 'assistant';
 
@@ -27,7 +28,17 @@ export function MessageCard({ e }: { e: RenderEntity }) {
         <div data-part="card-header-meta">{fmtSentAt(e.createdAt)}</div>
       </div>
       <div data-part="card-body">
-        {content ? <Markdown text={content} /> : <div data-part="pill">...</div>}
+        {error ? (
+          <div data-part="error-item">
+            <div data-part="pill" data-variant="danger">
+              stopped
+            </div>
+            <div data-part="error-item-detail" data-mono="true" style={{ marginTop: 8 }}>
+              {error}
+            </div>
+          </div>
+        ) : null}
+        {content ? <Markdown text={content} /> : error ? null : <div data-part="pill">...</div>}
       </div>
     </div>
   );
