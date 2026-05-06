@@ -43,7 +43,7 @@ type ReasoningPlugin struct {
 }
 
 type reasoningSegmentState struct {
-	Current int
+	Current int32
 	Active  bool
 }
 
@@ -82,7 +82,7 @@ func (p *ReasoningPlugin) HandleRuntimeEvent(ctx context.Context, runtime chatap
 		return true, runtime.Publish(ctx, ReasoningDeltaEventName, &chatappv1.ReasoningUpdate{
 			MessageId:       reasoningMessageID,
 			ParentMessageId: parentMessageID,
-			Segment:         int32(segment),
+			Segment:         segment,
 			Role:            "thinking",
 			Chunk:           ev.Delta,
 			Content:         ev.Completion,
@@ -99,7 +99,7 @@ func (p *ReasoningPlugin) HandleRuntimeEvent(ctx context.Context, runtime chatap
 			return true, runtime.Publish(ctx, ReasoningStartedEventName, &chatappv1.ReasoningUpdate{
 				MessageId:       reasoningMessageID,
 				ParentMessageId: parentMessageID,
-				Segment:         int32(segment),
+				Segment:         segment,
 				Role:            "thinking",
 				Status:          "streaming",
 				Streaming:       true,
@@ -115,7 +115,7 @@ func (p *ReasoningPlugin) HandleRuntimeEvent(ctx context.Context, runtime chatap
 			return true, runtime.Publish(ctx, ReasoningFinishedEventName, &chatappv1.ReasoningUpdate{
 				MessageId:       reasoningMessageID,
 				ParentMessageId: parentMessageID,
-				Segment:         int32(segment),
+				Segment:         segment,
 				Role:            "thinking",
 				Status:          "finished",
 				Streaming:       false,
@@ -129,7 +129,7 @@ func (p *ReasoningPlugin) HandleRuntimeEvent(ctx context.Context, runtime chatap
 			return true, runtime.Publish(ctx, ReasoningFinishedEventName, &chatappv1.ReasoningUpdate{
 				MessageId:       reasoningMessageID,
 				ParentMessageId: parentMessageID,
-				Segment:         int32(segment),
+				Segment:         segment,
 				Role:            "thinking",
 				Content:         text,
 				Text:            text,
@@ -216,7 +216,7 @@ func ReasoningEntityID(messageID string) string {
 
 // ReasoningSegmentEntityID returns the thinking message ID for a specific parent
 // assistant message and reasoning segment number.
-func ReasoningSegmentEntityID(messageID string, segment int) string {
+func ReasoningSegmentEntityID(messageID string, segment int32) string {
 	messageID = strings.TrimSpace(messageID)
 	if messageID == "" || segment <= 0 {
 		return ""
@@ -224,7 +224,7 @@ func ReasoningSegmentEntityID(messageID string, segment int) string {
 	return fmt.Sprintf("%s:thinking:%d", messageID, segment)
 }
 
-func (p *ReasoningPlugin) startReasoningSegment(parentMessageID string) (string, int) {
+func (p *ReasoningPlugin) startReasoningSegment(parentMessageID string) (string, int32) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if p.segments == nil {
@@ -239,7 +239,7 @@ func (p *ReasoningPlugin) startReasoningSegment(parentMessageID string) (string,
 	return ReasoningSegmentEntityID(parentMessageID, state.Current), state.Current
 }
 
-func (p *ReasoningPlugin) ensureReasoningSegment(parentMessageID string) (string, int) {
+func (p *ReasoningPlugin) ensureReasoningSegment(parentMessageID string) (string, int32) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if p.segments == nil {
@@ -254,7 +254,7 @@ func (p *ReasoningPlugin) ensureReasoningSegment(parentMessageID string) (string
 	return ReasoningSegmentEntityID(parentMessageID, state.Current), state.Current
 }
 
-func (p *ReasoningPlugin) currentReasoningSegment(parentMessageID string) (string, int, bool) {
+func (p *ReasoningPlugin) currentReasoningSegment(parentMessageID string) (string, int32, bool) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	state := p.segments[parentMessageID]
