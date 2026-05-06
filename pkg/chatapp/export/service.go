@@ -150,13 +150,6 @@ func (s *Service) ExportTurns(ctx context.Context, sessionID string, opts Option
 	return out, nil
 }
 
-func (s *Service) ExportTurnsMinitrace(context.Context, string, Options) (any, error) {
-	if s == nil || strings.TrimSpace(s.turnsDBPath) == "" {
-		return nil, ErrTurnsDBPathRequired
-	}
-	return nil, errors.New("minitrace export converter is not wired yet")
-}
-
 func (s *Service) formatNow() string {
 	now := time.Now
 	if s != nil && s.now != nil {

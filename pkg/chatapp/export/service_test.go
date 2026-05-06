@@ -3,9 +3,12 @@ package export
 import (
 	"context"
 	"errors"
+	"path/filepath"
 	"testing"
 	"time"
 
+	"github.com/go-go-golems/geppetto/pkg/turns"
+	"github.com/go-go-golems/geppetto/pkg/turns/serde"
 	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
 	sessionstream "github.com/go-go-golems/sessionstream/pkg/sessionstream"
 	"github.com/stretchr/testify/require"
@@ -69,6 +72,35 @@ func TestExportTurnsMinitraceRequiresFileBackedDBPath(t *testing.T) {
 	svc := NewService(nil)
 	_, err := svc.ExportTurnsMinitrace(context.Background(), "session-1", Options{})
 	require.ErrorIs(t, err, ErrTurnsDBPathRequired)
+}
+
+func TestExportTurnsMinitraceFromFileBackedDB(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "turns.db")
+	store, err := chatstore.NewSQLiteTurnStore(dbPath)
+	require.NoError(t, err)
+	defer func() { _ = store.Close() }()
+
+	turn := &turns.Turn{ID: "turn-1"}
+	turns.AppendBlock(turn, turns.NewUserTextBlock("hello minitrace"))
+	turns.AppendBlock(turn, turns.NewAssistantTextBlock("hello back"))
+	payload, err := serde.ToYAML(turn, serde.Options{})
+	require.NoError(t, err)
+	require.NoError(t, store.Save(context.Background(), "session-1", "session-1", "turn-1", "final", 1000, string(payload), chatstore.TurnSaveOptions{RuntimeKey: "gpt-5-mini"}))
+
+	svc := NewService(nil, WithTurnsDBPath(dbPath), WithClock(fixedClock))
+	raw, err := svc.ExportTurnsMinitrace(context.Background(), "session-1", Options{})
+	require.NoError(t, err)
+	session, ok := raw.(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "session-1", session["id"])
+	require.Equal(t, "minitrace-v0.2.0", session["schema_version"])
+	require.Equal(t, "B", session["quality"])
+	require.Equal(t, "hello minitrace", session["title"])
+	require.Equal(t, "pinocchio-turns-sqlite-v1", session["provenance"].(map[string]any)["source_format"])
+	require.Equal(t, "pinocchio", session["environment"].(map[string]any)["agent_framework"])
+	require.Equal(t, "openai", session["environment"].(map[string]any)["provider_hint"])
+	require.Len(t, session["turns"], 2)
+	require.Equal(t, 2, session["metrics"].(map[string]any)["turn_count"])
 }
 
 func TestRenderJSONAndYAML(t *testing.T) {
