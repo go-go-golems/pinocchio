@@ -53,6 +53,52 @@ function asString(value: unknown): string {
   return typeof value === 'string' ? value : '';
 }
 
+function normalizeServerFrame(frame: CanonicalFrame): CanonicalFrame {
+  if ('type' in frame) return frame;
+  if (frame.hello) return { type: 'hello', ...(asRecord(frame.hello)) };
+  if (frame.snapshot) {
+    const snapshot = asRecord(frame.snapshot);
+    return {
+      type: 'snapshot',
+      sessionId: asString(snapshot.sessionId),
+      ordinal: snapshot.snapshotOrdinal,
+      entities: Array.isArray(snapshot.entities) ? snapshot.entities : [],
+    };
+  }
+  if (frame.subscribed) {
+    const subscribed = asRecord(frame.subscribed);
+    return {
+      type: 'subscribed',
+      sessionId: asString(subscribed.sessionId),
+      ordinal: subscribed.sinceSnapshotOrdinal,
+    };
+  }
+  if (frame.unsubscribed) return { type: 'unsubscribed', ...(asRecord(frame.unsubscribed)) };
+  if (frame.uiEvent) {
+    const uiEvent = asRecord(frame.uiEvent);
+    return {
+      type: 'ui-event',
+      sessionId: asString(uiEvent.sessionId),
+      ordinal: uiEvent.eventOrdinal,
+      name: asString(uiEvent.name),
+      payload: asRecord(uiEvent.payload),
+    };
+  }
+  if (frame.error) {
+    const error = asRecord(frame.error);
+    return {
+      type: 'error',
+      sessionId: asString(error.sessionId),
+      error: asString(error.message),
+      code: asString(error.code),
+      detail: asString(error.detail),
+    };
+  }
+  if (frame.ping) return { type: 'ping', ...(asRecord(frame.ping)) };
+  if (frame.pong) return { type: 'pong', ...(asRecord(frame.pong)) };
+  return frame;
+}
+
 function messageEntity(id: string, props: Record<string, unknown>): TimelineEntity {
   return {
     id,
@@ -337,7 +383,7 @@ class WsManager {
       args.onStatus?.('ws connected');
       args.dispatch(appSlice.actions.setWsStatus('connected'));
       try {
-        ws.send(JSON.stringify({ type: 'subscribe', sessionId: args.sessionId, sinceOrdinal: '0' }));
+        ws.send(JSON.stringify({ subscribe: { sessionId: args.sessionId, sinceSnapshotOrdinal: '0' } }));
       } catch (err) {
         reportError(args.dispatch, 'ws subscribe failed', 'ws.subscribe', err, { sessionId: args.sessionId });
       }
@@ -359,7 +405,7 @@ class WsManager {
     ws.onmessage = (m) => {
       if (nonce !== this.connectNonce) return;
       try {
-        const frame = JSON.parse(String(m.data)) as CanonicalFrame;
+        const frame = normalizeServerFrame(JSON.parse(String(m.data)) as CanonicalFrame);
         const ord = safeOrdinal(frame.ordinal);
         if (ord !== null) {
           args.dispatch(appSlice.actions.setLastSeq(ord));
