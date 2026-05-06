@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -263,6 +264,79 @@ func TestSubmitAndSnapshot_WiresSessionIDAndTurnStoreIntoRuntime(t *testing.T) {
 	require.Equal(t, "follow up", seenTurn.Blocks[2].Payload[turns.PayloadKeyText])
 }
 
+func TestTimelineExportJSONDownload(t *testing.T) {
+	_, httpSrv := newTestMux(t)
+
+	body := []byte(`{"prompt":"export this timeline","profile":"gpt-5-nano-low"}`)
+	resp, err := http.Post(httpSrv.URL+"/api/chat/sessions/sess-export-1/messages", "application/json", bytes.NewReader(body))
+	require.NoError(t, err)
+	_ = resp.Body.Close()
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	waitForFinishedSnapshot(t, httpSrv.URL, "sess-export-1")
+
+	exportResp, err := http.Get(httpSrv.URL + "/api/chat/sessions/sess-export-1/timeline?format=json&view=entities&download=true")
+	require.NoError(t, err)
+	defer func() { _ = exportResp.Body.Close() }()
+	require.Equal(t, http.StatusOK, exportResp.StatusCode)
+	require.Equal(t, "application/json", exportResp.Header.Get("Content-Type"))
+	require.Contains(t, exportResp.Header.Get("Content-Disposition"), "pinocchio-sess-export-1-timeline.json")
+
+	var payload map[string]any
+	require.NoError(t, json.NewDecoder(exportResp.Body).Decode(&payload))
+	require.Equal(t, "sess-export-1", payload["session_id"])
+	require.Equal(t, "entities", payload["view"])
+	require.Len(t, payload["entities"], 2)
+}
+
+func TestTurnsExportYAMLAndMinitraceMissingPath(t *testing.T) {
+	_, httpSrv := newTestMux(t, WithTurnStore(&fakeTurnStore{snapshot: &chatstore.TurnSnapshot{
+		ConvID:      "sess-turn-export",
+		SessionID:   "sess-turn-export",
+		TurnID:      "turn-1",
+		Phase:       "final",
+		RuntimeKey:  "runtime-a",
+		CreatedAtMs: 1000,
+		Payload:     "id: turn-1\n",
+	}}))
+
+	yamlResp, err := http.Get(httpSrv.URL + "/api/chat/sessions/sess-turn-export/turns?format=yaml&download=true")
+	require.NoError(t, err)
+	defer func() { _ = yamlResp.Body.Close() }()
+	require.Equal(t, http.StatusOK, yamlResp.StatusCode)
+	require.Equal(t, "application/x-yaml", yamlResp.Header.Get("Content-Type"))
+	require.Contains(t, yamlResp.Header.Get("Content-Disposition"), "pinocchio-sess-turn-export-turns.yaml")
+	yamlBody, err := io.ReadAll(yamlResp.Body)
+	require.NoError(t, err)
+	require.Contains(t, string(yamlBody), "turn_id: turn-1")
+	require.Contains(t, string(yamlBody), "runtime_key: runtime-a")
+
+	minitraceResp, err := http.Get(httpSrv.URL + "/api/chat/sessions/sess-turn-export/turns?format=minitrace&download=true")
+	require.NoError(t, err)
+	defer func() { _ = minitraceResp.Body.Close() }()
+	require.Equal(t, http.StatusConflict, minitraceResp.StatusCode)
+}
+
+func TestFullExportOmitsTurnsWhenStoreUnavailable(t *testing.T) {
+	_, httpSrv := newTestMux(t)
+
+	body := []byte(`{"prompt":"export bundle","profile":"gpt-5-nano-low"}`)
+	resp, err := http.Post(httpSrv.URL+"/api/chat/sessions/sess-full-export/messages", "application/json", bytes.NewReader(body))
+	require.NoError(t, err)
+	_ = resp.Body.Close()
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	waitForFinishedSnapshot(t, httpSrv.URL, "sess-full-export")
+
+	exportResp, err := http.Get(httpSrv.URL + "/api/chat/sessions/sess-full-export/export?format=json")
+	require.NoError(t, err)
+	defer func() { _ = exportResp.Body.Close() }()
+	require.Equal(t, http.StatusOK, exportResp.StatusCode)
+	var payload map[string]any
+	require.NoError(t, json.NewDecoder(exportResp.Body).Decode(&payload))
+	require.Equal(t, "sess-full-export", payload["session_id"])
+	require.Contains(t, payload, "timeline")
+	require.NotContains(t, payload, "turns")
+}
+
 func TestSQLiteSnapshotPersistsAcrossRestart(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "evtstream-web-chat.db")
 	serverA, httpSrvA := newTestMux(t, WithSQLiteDBPath(dbPath))
@@ -319,6 +393,25 @@ func TestSQLiteSnapshotPersistsAcrossRestart(t *testing.T) {
 	}
 	require.True(t, foundAssistant)
 	require.True(t, foundUser)
+}
+
+func waitForFinishedSnapshot(t *testing.T, baseURL string, sessionID string) SessionSnapshotResponse {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		snapResp, err := http.Get(baseURL + "/api/chat/sessions/" + sessionID)
+		require.NoError(t, err)
+		var snap SessionSnapshotResponse
+		require.NoError(t, json.NewDecoder(snapResp.Body).Decode(&snap))
+		_ = snapResp.Body.Close()
+		if snap.Status == "finished" {
+			return snap
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("timed out waiting for finished snapshot; last status=%q", snap.Status)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 }
 
 type fakeTurnStore struct {
