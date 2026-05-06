@@ -11,7 +11,6 @@ import (
 	chatappv1 "github.com/go-go-golems/pinocchio/pkg/chatapp/pb/proto/pinocchio/chatapp/v1"
 	sessionstream "github.com/go-go-golems/sessionstream/pkg/sessionstream"
 	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/known/structpb"
 )
 
 const (
@@ -53,15 +52,15 @@ func NewReasoningPlugin() chatapp.ChatPlugin {
 	return &ReasoningPlugin{segments: map[string]reasoningSegmentState{}}
 }
 
-// RegisterSchemas registers the reasoning event names, UI events with structpb.Struct payloads.
+// RegisterSchemas registers the reasoning event and UI event payload schemas.
 func (p *ReasoningPlugin) RegisterSchemas(reg *sessionstream.SchemaRegistry) error {
 	for _, err := range []error{
-		reg.RegisterEvent(ReasoningStartedEventName, &structpb.Struct{}),
-		reg.RegisterEvent(ReasoningDeltaEventName, &structpb.Struct{}),
-		reg.RegisterEvent(ReasoningFinishedEventName, &structpb.Struct{}),
-		reg.RegisterUIEvent(ReasoningStartedUIName, &structpb.Struct{}),
-		reg.RegisterUIEvent(ReasoningAppendedUIName, &structpb.Struct{}),
-		reg.RegisterUIEvent(ReasoningFinishedUIName, &structpb.Struct{}),
+		reg.RegisterEvent(ReasoningStartedEventName, &chatappv1.ReasoningUpdate{}),
+		reg.RegisterEvent(ReasoningDeltaEventName, &chatappv1.ReasoningUpdate{}),
+		reg.RegisterEvent(ReasoningFinishedEventName, &chatappv1.ReasoningUpdate{}),
+		reg.RegisterUIEvent(ReasoningStartedUIName, &chatappv1.ReasoningUpdate{}),
+		reg.RegisterUIEvent(ReasoningAppendedUIName, &chatappv1.ReasoningUpdate{}),
+		reg.RegisterUIEvent(ReasoningFinishedUIName, &chatappv1.ReasoningUpdate{}),
 	} {
 		if err != nil {
 			return err
@@ -80,76 +79,65 @@ func (p *ReasoningPlugin) HandleRuntimeEvent(ctx context.Context, runtime chatap
 	switch ev := event.(type) {
 	case *gepevents.EventThinkingPartial:
 		reasoningMessageID, segment := p.ensureReasoningSegment(parentMessageID)
-		pb, err := structpb.NewStruct(map[string]any{
-			"messageId":       reasoningMessageID,
-			"parentMessageId": parentMessageID,
-			"segment":         segment,
-			"role":            "thinking",
-			"chunk":           ev.Delta,
-			"content":         ev.Completion,
-			"text":            ev.Completion,
-			"status":          "streaming",
-			"streaming":       true,
-			"source":          "thinking",
+		return true, runtime.Publish(ctx, ReasoningDeltaEventName, &chatappv1.ReasoningUpdate{
+			MessageId:       reasoningMessageID,
+			ParentMessageId: parentMessageID,
+			Segment:         int32(segment),
+			Role:            "thinking",
+			Chunk:           ev.Delta,
+			Content:         ev.Completion,
+			Text:            ev.Completion,
+			Status:          "streaming",
+			Streaming:       true,
+			Source:          "thinking",
+			SegmentType:     "thinking",
 		})
-		if err != nil {
-			return true, err
-		}
-		return true, runtime.Publish(ctx, ReasoningDeltaEventName, pb)
 	case *gepevents.EventInfo:
 		switch ev.Message {
 		case "thinking-started":
 			reasoningMessageID, segment := p.startReasoningSegment(parentMessageID)
-			pb, err := structpb.NewStruct(map[string]any{
-				"messageId":       reasoningMessageID,
-				"parentMessageId": parentMessageID,
-				"segment":         segment,
-				"role":            "thinking",
-				"status":          "streaming",
-				"streaming":       true,
-				"source":          "thinking",
+			return true, runtime.Publish(ctx, ReasoningStartedEventName, &chatappv1.ReasoningUpdate{
+				MessageId:       reasoningMessageID,
+				ParentMessageId: parentMessageID,
+				Segment:         int32(segment),
+				Role:            "thinking",
+				Status:          "streaming",
+				Streaming:       true,
+				Source:          "thinking",
+				SegmentType:     "thinking",
 			})
-			if err != nil {
-				return true, err
-			}
-			return true, runtime.Publish(ctx, ReasoningStartedEventName, pb)
 		case "thinking-ended":
 			reasoningMessageID, segment, ok := p.currentReasoningSegment(parentMessageID)
 			if !ok {
 				return false, nil
 			}
 			p.finishReasoningSegment(parentMessageID)
-			pb, err := structpb.NewStruct(map[string]any{
-				"messageId":       reasoningMessageID,
-				"parentMessageId": parentMessageID,
-				"segment":         segment,
-				"role":            "thinking",
-				"status":          "finished",
-				"streaming":       false,
-				"source":          "thinking",
+			return true, runtime.Publish(ctx, ReasoningFinishedEventName, &chatappv1.ReasoningUpdate{
+				MessageId:       reasoningMessageID,
+				ParentMessageId: parentMessageID,
+				Segment:         int32(segment),
+				Role:            "thinking",
+				Status:          "finished",
+				Streaming:       false,
+				Source:          "thinking",
+				SegmentType:     "thinking",
 			})
-			if err != nil {
-				return true, err
-			}
-			return true, runtime.Publish(ctx, ReasoningFinishedEventName, pb)
 		case "reasoning-summary":
 			reasoningMessageID, segment := p.ensureReasoningSegment(parentMessageID)
 			p.finishReasoningSegment(parentMessageID)
-			pb, err := structpb.NewStruct(map[string]any{
-				"messageId":       reasoningMessageID,
-				"parentMessageId": parentMessageID,
-				"segment":         segment,
-				"role":            "thinking",
-				"content":         infoText(ev.Data),
-				"text":            infoText(ev.Data),
-				"status":          "finished",
-				"streaming":       false,
-				"source":          "summary",
+			text := infoText(ev.Data)
+			return true, runtime.Publish(ctx, ReasoningFinishedEventName, &chatappv1.ReasoningUpdate{
+				MessageId:       reasoningMessageID,
+				ParentMessageId: parentMessageID,
+				Segment:         int32(segment),
+				Role:            "thinking",
+				Content:         text,
+				Text:            text,
+				Status:          "finished",
+				Streaming:       false,
+				Source:          "summary",
+				SegmentType:     "thinking",
 			})
-			if err != nil {
-				return true, err
-			}
-			return true, runtime.Publish(ctx, ReasoningFinishedEventName, pb)
 		default:
 			return false, nil
 		}
@@ -164,17 +152,13 @@ func (p *ReasoningPlugin) ProjectUI(_ context.Context, ev sessionstream.Event, _
 	if !ok {
 		return nil, false, nil
 	}
-	pb, err := structpb.NewStruct(payload)
-	if err != nil {
-		return nil, true, err
-	}
 	switch ev.Name {
 	case ReasoningStartedEventName:
-		return []sessionstream.UIEvent{{Name: ReasoningStartedUIName, Payload: pb}}, true, nil
+		return []sessionstream.UIEvent{{Name: ReasoningStartedUIName, Payload: payload}}, true, nil
 	case ReasoningDeltaEventName:
-		return []sessionstream.UIEvent{{Name: ReasoningAppendedUIName, Payload: pb}}, true, nil
+		return []sessionstream.UIEvent{{Name: ReasoningAppendedUIName, Payload: payload}}, true, nil
 	case ReasoningFinishedEventName:
-		return []sessionstream.UIEvent{{Name: ReasoningFinishedUIName, Payload: pb}}, true, nil
+		return []sessionstream.UIEvent{{Name: ReasoningFinishedUIName, Payload: payload}}, true, nil
 	default:
 		return nil, false, nil
 	}
@@ -187,12 +171,12 @@ func (p *ReasoningPlugin) ProjectTimeline(_ context.Context, ev sessionstream.Ev
 	if !ok {
 		return nil, false, nil
 	}
-	messageID := asString(payload["messageId"])
+	messageID := payload.GetMessageId()
 	if messageID == "" {
 		return nil, true, nil
 	}
 	entity, hadEntity := currentReasoningEntity(view, messageID)
-	content := asString(payload["content"])
+	content := payload.GetContent()
 	if content == "" {
 		content = entity.GetContent()
 		if content == "" {
@@ -207,10 +191,8 @@ func (p *ReasoningPlugin) ProjectTimeline(_ context.Context, ev sessionstream.Ev
 	entity.Role = "thinking"
 	entity.Content = content
 	entity.Text = content
-	entity.ParentMessageId = asString(payload["parentMessageId"])
-	if segment, ok := payload["segment"].(float64); ok {
-		entity.Segment = int32(segment)
-	}
+	entity.ParentMessageId = payload.GetParentMessageId()
+	entity.Segment = payload.GetSegment()
 	entity.SegmentType = "thinking"
 
 	switch ev.Name {
@@ -293,24 +275,28 @@ func (p *ReasoningPlugin) finishReasoningSegment(parentMessageID string) {
 	p.segments[parentMessageID] = state
 }
 
-func reasoningProjectedPayload(ev sessionstream.Event, view sessionstream.TimelineView) (map[string]any, bool) {
+func reasoningProjectedPayload(ev sessionstream.Event, view sessionstream.TimelineView) (*chatappv1.ReasoningUpdate, bool) {
 	switch ev.Name {
 	case ReasoningStartedEventName, ReasoningDeltaEventName, ReasoningFinishedEventName:
-		payload := payloadWithOrdinal(ev)
-		if asString(payload["role"]) == "" {
-			payload["role"] = "thinking"
+		payload, ok := ev.Payload.(*chatappv1.ReasoningUpdate)
+		if !ok || payload == nil {
+			return nil, false
 		}
-		if view != nil {
-			messageID := asString(payload["messageId"])
-			if messageID != "" {
-				current, _ := currentReasoningEntity(view, messageID)
-				if currentContent := current.GetContent(); asString(payload["content"]) == "" && currentContent != "" {
-					payload["content"] = currentContent
-					payload["text"] = currentContent
-				} else if currentText := current.GetText(); asString(payload["content"]) == "" && currentText != "" {
-					payload["content"] = currentText
-					payload["text"] = currentText
-				}
+		payload = proto.Clone(payload).(*chatappv1.ReasoningUpdate)
+		if payload.Role == "" {
+			payload.Role = "thinking"
+		}
+		if payload.SegmentType == "" {
+			payload.SegmentType = "thinking"
+		}
+		if view != nil && payload.GetMessageId() != "" && payload.GetContent() == "" {
+			current, _ := currentReasoningEntity(view, payload.GetMessageId())
+			if currentContent := current.GetContent(); currentContent != "" {
+				payload.Content = currentContent
+				payload.Text = currentContent
+			} else if currentText := current.GetText(); currentText != "" {
+				payload.Content = currentText
+				payload.Text = currentText
 			}
 		}
 		return payload, true
@@ -347,12 +333,6 @@ func currentReasoningEntity(view sessionstream.TimelineView, id string) (*chatap
 	}, true
 }
 
-func payloadWithOrdinal(ev sessionstream.Event) map[string]any {
-	payload := toMap(ev.Payload)
-	payload["ordinal"] = fmt.Sprintf("%d", ev.Ordinal)
-	return payload
-}
-
 func infoText(data map[string]interface{}) string {
 	if len(data) == 0 {
 		return ""
@@ -361,31 +341,6 @@ func infoText(data map[string]interface{}) string {
 		return s
 	}
 	return ""
-}
-
-func asString(v any) string {
-	if s, ok := v.(string); ok {
-		return s
-	}
-	return ""
-}
-
-func toMap(msg any) map[string]any {
-	if pb, ok := msg.(*structpb.Struct); ok && pb != nil {
-		return cloneMap(pb.AsMap())
-	}
-	return map[string]any{}
-}
-
-func cloneMap(in map[string]any) map[string]any {
-	if in == nil {
-		return nil
-	}
-	out := make(map[string]any, len(in))
-	for k, v := range in {
-		out[k] = v
-	}
-	return out
 }
 
 // Ensure ReasoningPlugin implements ChatPlugin.

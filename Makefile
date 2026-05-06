@@ -1,4 +1,4 @@
-.PHONY: all test build lint lintmax docker-lint golangci-lint-install gosec govulncheck goreleaser tag-major tag-minor tag-patch release bump-glazed install codeql-local geppetto-lint-build geppetto-lint web-typecheck web-lint web-check proto-gen proto-gen-core proto-gen-web-chat
+.PHONY: all test build lint lintmax docker-lint golangci-lint-install gosec govulncheck goreleaser tag-major tag-minor tag-patch release bump-glazed install codeql-local geppetto-lint-build geppetto-lint web-typecheck web-lint web-check proto-gen proto-gen-core proto-gen-web-chat schema-vet
 
 all: test build
 
@@ -79,6 +79,10 @@ proto-gen-web-chat:
 	cd cmd/web-chat/proto && buf generate
 
 proto-gen: proto-gen-core proto-gen-web-chat
+
+schema-vet:
+	go build -o /tmp/pinocchio-lint ./cmd/tools/pinocchio-lint
+	go vet -vettool=/tmp/pinocchio-lint ./cmd/... ./pkg/...
 
 goreleaser:
 	goreleaser release $(GORELEASER_ARGS) $(GORELEASER_TARGET)

@@ -76,9 +76,17 @@ export function timelineEntityFromSnapshotEntity(entity: SnapshotEntityFrame): T
   }
 
   if (kind === 'AgentMode') {
+    const data = asRecord(payload.data);
+    const flattenedData = Object.keys(data).length > 0
+      ? data
+      : {
+          from: asString(payload.from),
+          to: asString(payload.to),
+          analysis: asString(payload.analysis),
+        };
     return agentModeEntity(id || 'agent-mode', 'agent_mode', {
       title: asString(payload.title) || 'Agent mode switch',
-      data: asRecord(payload.data),
+      data: flattenedData,
       preview: payload.preview === true,
       messageId: asString(payload.messageId),
     });

@@ -43,6 +43,50 @@ message ChatMessageEntity {
   bool final = 12;
 }
 
+message ReasoningUpdate {
+  string message_id = 1;
+  string parent_message_id = 2;
+  int32 segment = 3;
+  string role = 4;
+  string chunk = 5;
+  string text = 6;
+  string content = 7;
+  string status = 8;
+  bool streaming = 9;
+  string source = 10;
+  string segment_type = 11;
+}
+
+message AgentModePreviewUpdate {
+  string message_id = 1;
+  string candidate_mode = 2;
+  string analysis = 3;
+  string parse_state = 4;
+  bool preview = 5;
+}
+
+message AgentModeCommittedUpdate {
+  string message_id = 1;
+  string title = 2;
+  string from = 3;
+  string to = 4;
+  string analysis = 5;
+  bool preview = 6;
+}
+
+message AgentModePreviewCleared {
+  string message_id = 1;
+}
+
+message AgentModeEntity {
+  string message_id = 1;
+  string title = 2;
+  string from = 3;
+  string to = 4;
+  string analysis = 5;
+  bool preview = 6;
+}
+
 message ToolCallUpdate {
   string message_id = 1;
   string tool_call_id = 2;

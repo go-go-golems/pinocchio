@@ -6,10 +6,10 @@ import (
 
 	gepevents "github.com/go-go-golems/geppetto/pkg/events"
 	chatapp "github.com/go-go-golems/pinocchio/pkg/chatapp"
+	chatappv1 "github.com/go-go-golems/pinocchio/pkg/chatapp/pb/proto/pinocchio/chatapp/v1"
 	sessionstream "github.com/go-go-golems/sessionstream/pkg/sessionstream"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/known/structpb"
 )
 
 func TestReasoningPluginAllocatesDistinctThinkingSegments(t *testing.T) {
@@ -42,8 +42,8 @@ func TestReasoningPluginAllocatesDistinctThinkingSegments(t *testing.T) {
 	require.Len(t, published, 6)
 	ids := make([]string, 0, len(published))
 	for _, event := range published {
-		payload := event.Payload.(*structpb.Struct).AsMap()
-		ids = append(ids, payload["messageId"].(string))
+		payload := event.Payload.(*chatappv1.ReasoningUpdate)
+		ids = append(ids, payload.GetMessageId())
 	}
 	require.Equal(t, []string{
 		"chat-msg-1:thinking:1",

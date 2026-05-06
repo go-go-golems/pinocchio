@@ -58,3 +58,54 @@ Rationale:
 - Each widget can evolve independently.
 
 Also clarified that this migration does not need backwards compatibility shims for old local `Struct` payloads. Reset local smoke DBs or perform an explicit one-off repair outside the app runtime if old sessions must be inspected.
+
+## 2026-05-06 — Implemented typed payload migration and schema vet tool
+
+Implemented the no-backwards-compatibility migration for the current known payload debt.
+
+Pinocchio changes:
+
+- Added concrete protobuf messages in `proto/pinocchio/chatapp/v1/chat.proto`:
+  - `ReasoningUpdate`
+  - `AgentModePreviewUpdate`
+  - `AgentModeCommittedUpdate`
+  - `AgentModePreviewCleared`
+  - `AgentModeEntity`
+- Regenerated Go protobuf code.
+- Migrated `pkg/chatapp/plugins/reasoning.go` to publish/project `ReasoningUpdate` instead of `structpb.Struct`.
+- Migrated `cmd/web-chat/agentmode_chat_feature.go` to publish/project typed AgentMode messages and a flattened `AgentModeEntity`.
+- Removed the temporary policy-test allowlist.
+- Added real analyzer package `pkg/analysis/sessionstreamschema` and vettool command `cmd/tools/pinocchio-lint`.
+- Added `make schema-vet` for `go vet -vettool=/tmp/pinocchio-lint ./cmd/... ./pkg/...`.
+
+CoinVault changes:
+
+- Replaced `CoinVaultWidgetUpsert` / `CoinVaultWidgetEntity` with per-widget protobuf messages in `proto/coinvault/widgets/v1/widgets.proto`.
+- Regenerated Go and TypeScript protobuf code.
+- Migrated `internal/webchat/coinvault_projection_feature.go` to register separate event/UI/timeline names per widget:
+  - inventory cards
+  - inventory table
+  - stats row
+  - stock alert
+  - projection error
+- Updated frontend protobuf parsing to dispatch by widget-specific event/entity kind.
+
+Validation run:
+
+```text
+cd pinocchio && go test ./pkg/chatapp ./pkg/chatapp/plugins ./cmd/web-chat ./pkg/analysis/sessionstreamschema -count=1
+cd pinocchio && make schema-vet
+cd pinocchio/cmd/web-chat/web && npx vitest run src/ws/wsManager.test.ts && npm run typecheck
+cd 2026-03-16--gec-rag && go test ./internal/webchat ./internal/projectionlookup ./internal/projectionblocks -count=1
+cd 2026-03-16--gec-rag/web && npm run typecheck && npm run test:unit -- src/ws/parsing.test.ts
+```
+
+Smoke test:
+
+- Started a fresh pinocchio web-chat server on `:8092` with empty `/tmp/pinocchio-proto-smoke` timeline/turn DBs.
+- Created session `131e9d08-78f4-44f6-9aca-f9512914e6a6`.
+- Submitted a prompt through the HTTP API.
+- OpenAI Responses returned HTTP 200 SSE.
+- Session reached `finished` with hydrated `ChatMessage` user, thinking, assistant text, and final thinking entities.
+
+No backwards compatibility shims were added. Old local smoke databases with Struct payloads should be reset if they need to be used with the new schema.

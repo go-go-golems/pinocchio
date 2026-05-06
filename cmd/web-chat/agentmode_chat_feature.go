@@ -6,9 +6,9 @@ import (
 
 	gepevents "github.com/go-go-golems/geppetto/pkg/events"
 	chatapp "github.com/go-go-golems/pinocchio/pkg/chatapp"
+	chatappv1 "github.com/go-go-golems/pinocchio/pkg/chatapp/pb/proto/pinocchio/chatapp/v1"
 	agentmode "github.com/go-go-golems/pinocchio/pkg/middlewares/agentmode"
 	sessionstream "github.com/go-go-golems/sessionstream/pkg/sessionstream"
-	"google.golang.org/protobuf/types/known/structpb"
 )
 
 const (
@@ -28,12 +28,12 @@ func newAgentModePlugin() chatapp.ChatPlugin {
 
 func (agentModePlugin) RegisterSchemas(reg *sessionstream.SchemaRegistry) error {
 	for _, err := range []error{
-		reg.RegisterEvent(agentModePreviewEventName, &structpb.Struct{}),
-		reg.RegisterEvent(agentModeCommittedEventName, &structpb.Struct{}),
-		reg.RegisterUIEvent(agentModePreviewUIName, &structpb.Struct{}),
-		reg.RegisterUIEvent(agentModeCommittedUIName, &structpb.Struct{}),
-		reg.RegisterUIEvent(agentModePreviewClearUIName, &structpb.Struct{}),
-		reg.RegisterTimelineEntity(agentModeTimelineEntityKind, &structpb.Struct{}),
+		reg.RegisterEvent(agentModePreviewEventName, &chatappv1.AgentModePreviewUpdate{}),
+		reg.RegisterEvent(agentModeCommittedEventName, &chatappv1.AgentModeCommittedUpdate{}),
+		reg.RegisterUIEvent(agentModePreviewUIName, &chatappv1.AgentModePreviewUpdate{}),
+		reg.RegisterUIEvent(agentModeCommittedUIName, &chatappv1.AgentModeCommittedUpdate{}),
+		reg.RegisterUIEvent(agentModePreviewClearUIName, &chatappv1.AgentModePreviewCleared{}),
+		reg.RegisterTimelineEntity(agentModeTimelineEntityKind, &chatappv1.AgentModeEntity{}),
 	} {
 		if err != nil {
 			return err
@@ -45,138 +45,75 @@ func (agentModePlugin) RegisterSchemas(reg *sessionstream.SchemaRegistry) error 
 func (agentModePlugin) HandleRuntimeEvent(ctx context.Context, runtime chatapp.RuntimeEventContext, event gepevents.Event) (bool, error) {
 	switch ev := event.(type) {
 	case *agentmode.EventModeSwitchPreview:
-		pb, err := structpb.NewStruct(map[string]any{
-			"messageId":     runtime.MessageID,
-			"candidateMode": ev.CandidateMode,
-			"analysis":      ev.Analysis,
-			"parseState":    ev.ParseState,
-			"preview":       true,
+		return true, runtime.Publish(ctx, agentModePreviewEventName, &chatappv1.AgentModePreviewUpdate{
+			MessageId:     runtime.MessageID,
+			CandidateMode: ev.CandidateMode,
+			Analysis:      ev.Analysis,
+			ParseState:    ev.ParseState,
+			Preview:       true,
 		})
-		if err != nil {
-			return true, err
-		}
-		return true, runtime.Publish(ctx, agentModePreviewEventName, pb)
 	case *gepevents.EventAgentModeSwitch:
-		payload := map[string]any{
-			"messageId": runtime.MessageID,
-			"title":     ev.Message,
-			"preview":   false,
-		}
-		for k, v := range ev.Data {
-			payload[k] = v
-		}
-		pb, err := structpb.NewStruct(payload)
-		if err != nil {
-			return true, err
-		}
-		return true, runtime.Publish(ctx, agentModeCommittedEventName, pb)
+		return true, runtime.Publish(ctx, agentModeCommittedEventName, &chatappv1.AgentModeCommittedUpdate{
+			MessageId: runtime.MessageID,
+			Title:     ev.Message,
+			From:      eventStringData(ev.Data, "from"),
+			To:        eventStringData(ev.Data, "to"),
+			Analysis:  eventStringData(ev.Data, "analysis"),
+			Preview:   false,
+		})
 	default:
 		return false, nil
 	}
 }
 
 func (agentModePlugin) ProjectUI(_ context.Context, ev sessionstream.Event, _ *sessionstream.Session, _ sessionstream.TimelineView) ([]sessionstream.UIEvent, bool, error) {
-	payload := payloadWithOrdinal(ev)
 	switch ev.Name {
 	case agentModePreviewEventName:
-		pb, err := structpb.NewStruct(payload)
-		if err != nil {
-			return nil, true, err
+		payload, ok := ev.Payload.(*chatappv1.AgentModePreviewUpdate)
+		if !ok || payload == nil {
+			return nil, true, unexpectedAgentModePayload(&chatappv1.AgentModePreviewUpdate{}, ev.Payload)
 		}
-		return []sessionstream.UIEvent{{Name: agentModePreviewUIName, Payload: pb}}, true, nil
+		return []sessionstream.UIEvent{{Name: agentModePreviewUIName, Payload: payload}}, true, nil
 	case agentModeCommittedEventName:
-		pb, err := structpb.NewStruct(payload)
-		if err != nil {
-			return nil, true, err
+		payload, ok := ev.Payload.(*chatappv1.AgentModeCommittedUpdate)
+		if !ok || payload == nil {
+			return nil, true, unexpectedAgentModePayload(&chatappv1.AgentModeCommittedUpdate{}, ev.Payload)
 		}
-		clearPB, err := previewClearPayload(ev)
-		if err != nil {
-			return nil, true, err
-		}
-		return []sessionstream.UIEvent{{Name: agentModeCommittedUIName, Payload: pb}, {Name: agentModePreviewClearUIName, Payload: clearPB}}, true, nil
+		clearPB := &chatappv1.AgentModePreviewCleared{MessageId: payload.GetMessageId()}
+		return []sessionstream.UIEvent{{Name: agentModeCommittedUIName, Payload: payload}, {Name: agentModePreviewClearUIName, Payload: clearPB}}, true, nil
 	case chatapp.EventInferenceFinished, chatapp.EventInferenceStopped:
-		clearPB, err := previewClearPayload(ev)
-		if err != nil {
-			return nil, true, err
-		}
-		return []sessionstream.UIEvent{{Name: agentModePreviewClearUIName, Payload: clearPB}}, true, nil
+		return []sessionstream.UIEvent{{Name: agentModePreviewClearUIName, Payload: &chatappv1.AgentModePreviewCleared{}}}, true, nil
 	default:
 		return nil, false, nil
 	}
 }
 
-func (agentModePlugin) ProjectTimeline(_ context.Context, ev sessionstream.Event, _ *sessionstream.Session, view sessionstream.TimelineView) ([]sessionstream.TimelineEntity, bool, error) {
+func (agentModePlugin) ProjectTimeline(_ context.Context, ev sessionstream.Event, _ *sessionstream.Session, _ sessionstream.TimelineView) ([]sessionstream.TimelineEntity, bool, error) {
 	if ev.Name != agentModeCommittedEventName {
 		return nil, false, nil
 	}
-	payload := toMap(ev.Payload)
-	entity := currentKindEntity(view, agentModeTimelineEntityKind, "session")
-	entity["messageId"] = asString(payload["messageId"])
-	entity["title"] = asString(payload["title"])
-	entity["preview"] = false
-	data := map[string]any{}
-	for k, v := range payload {
-		switch k {
-		case "messageId", "title", "ordinal", "preview":
-			continue
-		default:
-			data[k] = v
-		}
+	payload, ok := ev.Payload.(*chatappv1.AgentModeCommittedUpdate)
+	if !ok || payload == nil {
+		return nil, true, unexpectedAgentModePayload(&chatappv1.AgentModeCommittedUpdate{}, ev.Payload)
 	}
-	entity["data"] = data
-	pb, err := structpb.NewStruct(entity)
-	if err != nil {
-		return nil, true, err
+	entity := &chatappv1.AgentModeEntity{
+		MessageId: payload.GetMessageId(),
+		Title:     payload.GetTitle(),
+		From:      payload.GetFrom(),
+		To:        payload.GetTo(),
+		Analysis:  payload.GetAnalysis(),
+		Preview:   false,
 	}
-	return []sessionstream.TimelineEntity{{Kind: agentModeTimelineEntityKind, Id: "session", Payload: pb}}, true, nil
+	return []sessionstream.TimelineEntity{{Kind: agentModeTimelineEntityKind, Id: "session", Payload: entity}}, true, nil
 }
 
-func payloadWithOrdinal(ev sessionstream.Event) map[string]any {
-	payload := toMap(ev.Payload)
-	payload["ordinal"] = fmt.Sprintf("%d", ev.Ordinal)
-	return payload
-}
-
-func previewClearPayload(ev sessionstream.Event) (*structpb.Struct, error) {
-	payload := toMap(ev.Payload)
-	return structpb.NewStruct(map[string]any{
-		"messageId": asString(payload["messageId"]),
-		"ordinal":   fmt.Sprintf("%d", ev.Ordinal),
-	})
-}
-
-func toMap(msg any) map[string]any {
-	if pb, ok := msg.(*structpb.Struct); ok && pb != nil {
-		return cloneMap(pb.AsMap())
-	}
-	return map[string]any{}
-}
-
-func asString(v any) string {
-	if s, ok := v.(string); ok {
+func eventStringData(data map[string]interface{}, key string) string {
+	if s, ok := data[key].(string); ok {
 		return s
 	}
 	return ""
 }
 
-func cloneMap(in map[string]any) map[string]any {
-	if in == nil {
-		return nil
-	}
-	out := make(map[string]any, len(in))
-	for k, v := range in {
-		out[k] = v
-	}
-	return out
-}
-
-func currentKindEntity(view sessionstream.TimelineView, kind, id string) map[string]any {
-	entity, ok := view.Get(kind, id)
-	if !ok || entity.Payload == nil {
-		return map[string]any{}
-	}
-	if pb, ok := entity.Payload.(*structpb.Struct); ok {
-		return cloneMap(pb.AsMap())
-	}
-	return map[string]any{}
+func unexpectedAgentModePayload(want any, got any) error {
+	return fmt.Errorf("agent mode payload must be %T, got %T", want, got)
 }

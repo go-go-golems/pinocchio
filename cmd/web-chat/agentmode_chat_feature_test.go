@@ -6,11 +6,11 @@ import (
 
 	gepevents "github.com/go-go-golems/geppetto/pkg/events"
 	chatapp "github.com/go-go-golems/pinocchio/pkg/chatapp"
+	chatappv1 "github.com/go-go-golems/pinocchio/pkg/chatapp/pb/proto/pinocchio/chatapp/v1"
 	agentmode "github.com/go-go-golems/pinocchio/pkg/middlewares/agentmode"
 	sessionstream "github.com/go-go-golems/sessionstream/pkg/sessionstream"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/known/structpb"
 )
 
 func TestAgentModeChatFeatureHandleRuntimeEvent(t *testing.T) {
@@ -40,16 +40,14 @@ func TestAgentModeChatFeatureHandleRuntimeEvent(t *testing.T) {
 
 func TestAgentModeChatFeatureProjectsUIAndTimeline(t *testing.T) {
 	feature := newAgentModePlugin()
-	previewPayload, err := structpb.NewStruct(map[string]any{"messageId": "chat-msg-2", "candidateMode": "reviewer", "analysis": "hello"})
-	require.NoError(t, err)
+	previewPayload := &chatappv1.AgentModePreviewUpdate{MessageId: "chat-msg-2", CandidateMode: "reviewer", Analysis: "hello"}
 	previewEvents, handled, err := feature.ProjectUI(context.Background(), sessionstream.Event{Name: agentModePreviewEventName, SessionId: "sid", Ordinal: 7, Payload: previewPayload}, nil, nil)
 	require.NoError(t, err)
 	require.True(t, handled)
 	require.Len(t, previewEvents, 1)
 	require.Equal(t, agentModePreviewUIName, previewEvents[0].Name)
 
-	commitPayload, err := structpb.NewStruct(map[string]any{"messageId": "chat-msg-3", "title": "agentmode: mode switched", "from": "analyst", "to": "reviewer", "analysis": "hello"})
-	require.NoError(t, err)
+	commitPayload := &chatappv1.AgentModeCommittedUpdate{MessageId: "chat-msg-3", Title: "agentmode: mode switched", From: "analyst", To: "reviewer", Analysis: "hello"}
 	commitEvents, handled, err := feature.ProjectUI(context.Background(), sessionstream.Event{Name: agentModeCommittedEventName, SessionId: "sid", Ordinal: 8, Payload: commitPayload}, nil, nil)
 	require.NoError(t, err)
 	require.True(t, handled)
@@ -62,8 +60,9 @@ func TestAgentModeChatFeatureProjectsUIAndTimeline(t *testing.T) {
 	require.True(t, handled)
 	require.Len(t, entities, 1)
 	require.Equal(t, agentModeTimelineEntityKind, entities[0].Kind)
-	entityPayload := entities[0].Payload.(*structpb.Struct).AsMap()
-	require.Equal(t, "agentmode: mode switched", entityPayload["title"])
+	entityPayload := entities[0].Payload.(*chatappv1.AgentModeEntity)
+	require.Equal(t, "agentmode: mode switched", entityPayload.GetTitle())
+	require.Equal(t, "hello", entityPayload.GetAnalysis())
 }
 
 type agentmodeStaticTimelineView struct{}

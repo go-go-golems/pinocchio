@@ -57,7 +57,7 @@ reg.RegisterTimelineEntity("AgentMode", &structpb.Struct{})
 
 Use `google.protobuf.Struct` only inside a typed message field when the field is intentionally open-ended metadata, for example provider-specific debug details or arbitrary tool input/output. The outer payload registered with sessionstream should still be a named protobuf message.
 
-A repository-level architecture test (`pkg/chatapp/schema_policy_test.go`) rejects new `RegisterEvent`, `RegisterUIEvent`, and `RegisterTimelineEntity` registrations that use `&structpb.Struct{}`. Existing Struct-based plugins are temporary migration debt and should be converted rather than copied.
+A repository-level architecture test (`pkg/chatapp/schema_policy_test.go`) and vet analyzer (`pkg/analysis/sessionstreamschema`, runnable with `make schema-vet`) reject `RegisterEvent`, `RegisterUIEvent`, and `RegisterTimelineEntity` registrations that use `&structpb.Struct{}`.
 
 ## Base chatapp schema
 
@@ -119,13 +119,13 @@ It handles:
 - `*events.EventInfo` with `thinking-ended`
 - reasoning summary info payloads when available
 
-It currently registers Struct payloads as temporary migration debt:
+It registers concrete `ReasoningUpdate` protobuf payloads:
 
-| Backend event | UI event | Current payload | Target payload |
-|---|---|---|---|
-| `ChatReasoningStarted` | `ChatReasoningStarted` | `google.protobuf.Struct` | concrete `ReasoningUpdate` protobuf |
-| `ChatReasoningDelta` | `ChatReasoningAppended` | `google.protobuf.Struct` | concrete `ReasoningUpdate` protobuf |
-| `ChatReasoningFinished` | `ChatReasoningFinished` | `google.protobuf.Struct` | concrete `ReasoningUpdate` protobuf |
+| Backend event | UI event | Payload |
+|---|---|---|
+| `ChatReasoningStarted` | `ChatReasoningStarted` | `ReasoningUpdate` |
+| `ChatReasoningDelta` | `ChatReasoningAppended` | `ReasoningUpdate` |
+| `ChatReasoningFinished` | `ChatReasoningFinished` | `ReasoningUpdate` |
 
 The payload contains chat-message-shaped fields such as `messageId`, `parentMessageId`, `segment`, `role: "thinking"`, `chunk`, `content`, `status`, and `streaming`. Each contiguous thinking phase gets a segment ID such as `chat-msg-5:thinking:1`.
 

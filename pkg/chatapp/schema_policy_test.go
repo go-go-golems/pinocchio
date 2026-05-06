@@ -11,13 +11,6 @@ import (
 func TestSchemaRegistrationsAvoidGenericStructPayloads(t *testing.T) {
 	root := moduleRoot(t)
 
-	// Temporary compatibility allowlist for existing debt. Do not add new entries:
-	// migrate these plugins to concrete protobuf messages instead.
-	allowed := map[string]bool{
-		filepath.ToSlash(filepath.Join(root, "pkg/chatapp/plugins/reasoning.go")):       true,
-		filepath.ToSlash(filepath.Join(root, "cmd/web-chat/agentmode_chat_feature.go")): true,
-	}
-
 	var violations []string
 	err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
@@ -44,11 +37,7 @@ func TestSchemaRegistrationsAvoidGenericStructPayloads(t *testing.T) {
 		if !strings.Contains(text, "RegisterEvent(") && !strings.Contains(text, "RegisterUIEvent(") && !strings.Contains(text, "RegisterTimelineEntity(") {
 			return nil
 		}
-		path = filepath.ToSlash(path)
-		if allowed[path] {
-			return nil
-		}
-		violations = append(violations, path)
+		violations = append(violations, filepath.ToSlash(path))
 		return nil
 	})
 	if err != nil {

@@ -29,3 +29,13 @@ Updated the CoinVault design: use separate protobuf messages and separate event/
 - /home/manuel/workspaces/2026-05-02/use-sessionstream-coinvault/pinocchio/ttmp/2026/05/06/PINO-PROTO-SCHEMAS--migrate-struct-payloads-to-explicit-protobuf-schemas-and-enforce-with-vet/design/01-explicit-protobuf-payloads-and-vet-enforcement.md — Revised CoinVault target architecture
 - /home/manuel/workspaces/2026-05-02/use-sessionstream-coinvault/pinocchio/ttmp/2026/05/06/PINO-PROTO-SCHEMAS--migrate-struct-payloads-to-explicit-protobuf-schemas-and-enforce-with-vet/tasks.md — Updated CoinVault task wording
 
+
+## 2026-05-06
+
+Implemented typed Pinocchio AgentMode/Reasoning payloads, per-widget CoinVault protobuf payloads, and a sessionstream schema go vet tool; smoke-tested fresh pinocchio web-chat on :8092.
+
+
+## 2026-05-06
+
+Re-uploaded the final updated implementation guide bundle to reMarkable after implementation and validation.
+

@@ -23,7 +23,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/known/structpb"
 )
 
 func TestReasoningChatFeatureHandleRuntimeEvent(t *testing.T) {
@@ -43,27 +42,26 @@ func TestReasoningChatFeatureHandleRuntimeEvent(t *testing.T) {
 	require.True(t, handled)
 	require.Len(t, published, 1)
 	require.Equal(t, plugins.ReasoningDeltaEventName, published[0].Name)
-	require.Equal(t, "chat-msg-1:thinking:1", published[0].Payload.(*structpb.Struct).AsMap()["messageId"])
+	require.Equal(t, "chat-msg-1:thinking:1", published[0].Payload.(*chatappv1.ReasoningUpdate).GetMessageId())
 
 	handled, err = feature.HandleRuntimeEvent(context.Background(), ctx, gepevents.NewInfoEvent(gepevents.EventMetadata{SessionID: "sid"}, "reasoning-summary", map[string]interface{}{"text": "short summary"}))
 	require.NoError(t, err)
 	require.True(t, handled)
 	require.Len(t, published, 2)
 	require.Equal(t, plugins.ReasoningFinishedEventName, published[1].Name)
-	require.Equal(t, "short summary", published[1].Payload.(*structpb.Struct).AsMap()["content"])
+	require.Equal(t, "short summary", published[1].Payload.(*chatappv1.ReasoningUpdate).GetContent())
 }
 
 func TestReasoningChatFeatureProjectsUIAndTimeline(t *testing.T) {
 	feature := plugins.NewReasoningPlugin()
 
-	deltaPayload, err := structpb.NewStruct(map[string]any{
-		"messageId":       "chat-msg-2:thinking:1",
-		"parentMessageId": "chat-msg-2",
-		"content":         "thinking out loud",
-		"status":          "streaming",
-		"streaming":       true,
-	})
-	require.NoError(t, err)
+	deltaPayload := &chatappv1.ReasoningUpdate{
+		MessageId:       "chat-msg-2:thinking:1",
+		ParentMessageId: "chat-msg-2",
+		Content:         "thinking out loud",
+		Status:          "streaming",
+		Streaming:       true,
+	}
 
 	uiEvents, handled, err := feature.ProjectUI(context.Background(), sessionstream.Event{Name: plugins.ReasoningDeltaEventName, SessionId: "sid", Ordinal: 7, Payload: deltaPayload}, nil, reasoningStaticTimelineView{})
 	require.NoError(t, err)
@@ -80,13 +78,12 @@ func TestReasoningChatFeatureProjectsUIAndTimeline(t *testing.T) {
 	require.Equal(t, "thinking out loud", entityPayload.GetContent())
 	require.Equal(t, true, entityPayload.GetStreaming())
 
-	finishedPayload, err := structpb.NewStruct(map[string]any{
-		"messageId":       "chat-msg-2:thinking:1",
-		"parentMessageId": "chat-msg-2",
-		"status":          "finished",
-		"streaming":       false,
-	})
-	require.NoError(t, err)
+	finishedPayload := &chatappv1.ReasoningUpdate{
+		MessageId:       "chat-msg-2:thinking:1",
+		ParentMessageId: "chat-msg-2",
+		Status:          "finished",
+		Streaming:       false,
+	}
 
 	view := reasoningStaticTimelineView{entities: map[string]sessionstream.TimelineEntity{
 		"ChatMessage/chat-msg-2:thinking:1": {
@@ -110,15 +107,14 @@ func TestReasoningChatFeatureProjectsUIAndTimeline(t *testing.T) {
 	require.Equal(t, "kept content", entityPayload.GetContent())
 	require.Equal(t, false, entityPayload.GetStreaming())
 
-	summaryPayload, err := structpb.NewStruct(map[string]any{
-		"messageId":       "chat-msg-2:thinking:1",
-		"parentMessageId": "chat-msg-2",
-		"content":         "summary wins",
-		"source":          "summary",
-		"status":          "finished",
-		"streaming":       false,
-	})
-	require.NoError(t, err)
+	summaryPayload := &chatappv1.ReasoningUpdate{
+		MessageId:       "chat-msg-2:thinking:1",
+		ParentMessageId: "chat-msg-2",
+		Content:         "summary wins",
+		Source:          "summary",
+		Status:          "finished",
+		Streaming:       false,
+	}
 	entities, handled, err = feature.ProjectTimeline(context.Background(), sessionstream.Event{Name: plugins.ReasoningFinishedEventName, SessionId: "sid", Ordinal: 9, Payload: summaryPayload}, nil, view)
 	require.NoError(t, err)
 	require.True(t, handled)
