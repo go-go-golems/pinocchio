@@ -12,8 +12,10 @@ import (
 	gepsession "github.com/go-go-golems/geppetto/pkg/inference/session"
 	"github.com/go-go-golems/geppetto/pkg/inference/toolloop/enginebuilder"
 	"github.com/go-go-golems/geppetto/pkg/turns"
+	"github.com/go-go-golems/geppetto/pkg/turns/serde"
 	chatappv1 "github.com/go-go-golems/pinocchio/pkg/chatapp/pb/proto/pinocchio/chatapp/v1"
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
+	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
 	sessionstream "github.com/go-go-golems/sessionstream/pkg/sessionstream"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
@@ -52,6 +54,7 @@ type Engine struct {
 	chunkDelay time.Duration
 	hooks      Hooks
 	features   []ChatPlugin
+	turnStore  chatstore.TurnStore
 }
 
 type activeRun struct {
@@ -83,6 +86,12 @@ func WithChunkDelay(delay time.Duration) Option {
 func WithHooks(h Hooks) Option {
 	return func(e *Engine) {
 		e.hooks = h
+	}
+}
+
+func WithTurnStore(ts chatstore.TurnStore) Option {
+	return func(e *Engine) {
+		e.turnStore = ts
 	}
 }
 
@@ -252,6 +261,21 @@ func (e *Engine) runRuntimeInference(ctx context.Context, sid sessionstream.Sess
 		Base:       runtime.Engine,
 		EventSinks: []gepevents.EventSink{eventSink},
 	}
+
+	// Load conversation history: the last persisted turn contains the full
+	// conversation as an accumulator. AppendNewTurnFromUserPrompt will clone
+	// it and add the new user block, giving the LLM the full context.
+	if e.turnStore != nil {
+		snapshot, err := e.turnStore.LoadLatestTurn(ctx, string(sid), "final")
+		if err == nil && snapshot != nil {
+			turn, err := serde.FromYAML([]byte(snapshot.Payload))
+			if err == nil && turn != nil {
+				sess.Append(turn)
+			}
+		}
+		// Errors are non-fatal: inference proceeds with a fresh session.
+	}
+
 	_, err := sess.AppendNewTurnFromUserPrompt(prompt)
 	if err != nil {
 		_ = e.publish(publishContext(ctx), sid, pub, EventInferenceStopped, sink.stoppedMessageUpdate(messageID, err.Error()))
