@@ -24,7 +24,7 @@ func newCanonicalRuntimeResolver(requestResolver *profiles.RequestResolver, runt
 	}
 }
 
-func (r *canonicalRuntimeResolver) Resolve(ctx context.Context, req *http.Request, profile string, registry string) (*infruntime.ComposedRuntime, error) {
+func (r *canonicalRuntimeResolver) Resolve(ctx context.Context, req *http.Request, sessionID string, profile string, registry string) (*infruntime.ComposedRuntime, error) {
 	if r == nil || r.requestResolver == nil || r.runtimeComposer == nil {
 		return nil, nil
 	}
@@ -43,7 +43,7 @@ func (r *canonicalRuntimeResolver) Resolve(ctx context.Context, req *http.Reques
 	if err != nil {
 		return nil, err
 	}
-	plan, err := r.requestResolver.BuildConversationPlan(ctx, "", "", "", resolvedProfile)
+	plan, err := r.requestResolver.BuildConversationPlan(ctx, sessionID, "", "", resolvedProfile)
 	if err != nil {
 		return nil, err
 	}
@@ -51,7 +51,7 @@ func (r *canonicalRuntimeResolver) Resolve(ctx context.Context, req *http.Reques
 		return nil, nil
 	}
 	composed, err := r.runtimeComposer.Compose(ctx, infruntime.ConversationRuntimeRequest{
-		ConvID:                     "",
+		ConvID:                     plan.ConvID,
 		ProfileKey:                 plan.Runtime.RuntimeKey,
 		ProfileVersion:             plan.Runtime.ProfileVersion,
 		ResolvedInferenceSettings:  profiles.CloneResolvedInferenceSettings(plan.Runtime.InferenceSettings),

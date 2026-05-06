@@ -256,3 +256,78 @@ func queryRowCount(t *testing.T, db *sql.DB, query string, args ...any) int64 {
 func validTurnPayload(turnID string, text string) string {
 	return "id: " + turnID + "\nblocks:\n  - id: " + turnID + "-b1\n    kind: llm_text\n    role: assistant\n    payload:\n      text: " + text + "\n"
 }
+
+func TestSQLiteTurnStore_LoadLatestTurn(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "turns.db")
+	dsn, err := SQLiteTurnDSNForFile(dbPath)
+	require.NoError(t, err)
+
+	s, err := NewSQLiteTurnStore(dsn)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = s.Close() })
+
+	ctx := context.Background()
+
+	// Empty store returns nil
+	snap, err := s.LoadLatestTurn(ctx, "conv-1", "final")
+	require.NoError(t, err)
+	require.Nil(t, snap)
+
+	// Save two final turns for conv-1
+	err = s.Save(ctx, "conv-1", "sess-1", "turn-1", "final", 100, validTurnPayload("turn-1", "hello"), TurnSaveOptions{})
+	require.NoError(t, err)
+	err = s.Save(ctx, "conv-1", "sess-1", "turn-2", "final", 200, validTurnPayload("turn-2", "world"), TurnSaveOptions{})
+	require.NoError(t, err)
+	// Save a draft for conv-1
+	err = s.Save(ctx, "conv-1", "sess-1", "turn-3", "draft", 300, validTurnPayload("turn-3", "draft"), TurnSaveOptions{})
+	require.NoError(t, err)
+
+	// LoadLatestTurn("final") returns the most recent final turn
+	snap, err = s.LoadLatestTurn(ctx, "conv-1", "final")
+	require.NoError(t, err)
+	require.NotNil(t, snap)
+	require.Equal(t, "turn-2", snap.TurnID)
+	require.Equal(t, "final", snap.Phase)
+	require.Contains(t, snap.Payload, "world")
+
+	// LoadLatestTurn("draft") returns the draft
+	snap, err = s.LoadLatestTurn(ctx, "conv-1", "draft")
+	require.NoError(t, err)
+	require.NotNil(t, snap)
+	require.Equal(t, "turn-3", snap.TurnID)
+	require.Equal(t, "draft", snap.Phase)
+
+	// LoadLatestTurn with no matching phase returns nil
+	snap, err = s.LoadLatestTurn(ctx, "conv-1", "nonexistent")
+	require.NoError(t, err)
+	require.Nil(t, snap)
+
+	// LoadLatestTurn with no matching convID returns nil
+	snap, err = s.LoadLatestTurn(ctx, "conv-nonexistent", "final")
+	require.NoError(t, err)
+	require.Nil(t, snap)
+
+	// LoadLatestTurn without phase filter returns the overall latest
+	snap, err = s.LoadLatestTurn(ctx, "conv-1", "")
+	require.NoError(t, err)
+	require.NotNil(t, snap)
+	require.Equal(t, "turn-3", snap.TurnID)
+}
+
+func TestSQLiteTurnStore_LoadLatestTurnValidation(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "turns.db")
+	dsn, err := SQLiteTurnDSNForFile(dbPath)
+	require.NoError(t, err)
+
+	s, err := NewSQLiteTurnStore(dsn)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = s.Close() })
+
+	ctx := context.Background()
+
+	// Empty convID returns error
+	_, err = s.LoadLatestTurn(ctx, "", "final")
+	require.Error(t, err)
+}

@@ -3,6 +3,17 @@ import { errorsSlice, makeAppError } from '../store/errorsSlice';
 import type { AppDispatch } from '../store/store';
 import { type TimelineEntity, timelineSlice } from '../store/timelineSlice';
 import { logWarn } from '../utils/logger';
+import {
+  asRecord,
+  asString,
+  buildWebSocketURL,
+  type CanonicalFrame,
+  encodeSubscribeFrame,
+  parseServerFrame,
+  type SnapshotEntityFrame,
+  safeOrdinal,
+  unwrapAnyPayload,
+} from './protocol';
 
 type ConnectArgs = {
   sessionId: string;
@@ -10,15 +21,6 @@ type ConnectArgs = {
   dispatch: AppDispatch;
   onStatus?: (s: string) => void;
   hydrate?: boolean;
-};
-
-type CanonicalFrame = Record<string, unknown>;
-
-type SnapshotEntityFrame = {
-  kind?: unknown;
-  id?: unknown;
-  tombstone?: unknown;
-  payload?: unknown;
 };
 
 function reportError(
@@ -29,28 +31,6 @@ function reportError(
   extra?: Record<string, unknown>,
 ) {
   dispatch(errorsSlice.actions.reportError(makeAppError(message, scope, err, extra)));
-}
-
-function safeOrdinal(raw: unknown): number | null {
-  if (typeof raw === 'number' && Number.isFinite(raw)) {
-    return Number.isSafeInteger(raw) ? raw : null;
-  }
-  if (typeof raw === 'string' && raw.trim()) {
-    const n = Number(raw);
-    if (Number.isFinite(n) && Number.isSafeInteger(n)) return n;
-  }
-  return null;
-}
-
-function asRecord(value: unknown): Record<string, unknown> {
-  if (value && typeof value === 'object' && !Array.isArray(value)) {
-    return value as Record<string, unknown>;
-  }
-  return {};
-}
-
-function asString(value: unknown): string {
-  return typeof value === 'string' ? value : '';
 }
 
 function messageEntity(id: string, props: Record<string, unknown>): TimelineEntity {
@@ -80,7 +60,7 @@ function agentModePreviewEntityId(messageId: string): string {
 export function timelineEntityFromSnapshotEntity(entity: SnapshotEntityFrame): TimelineEntity | null {
   const kind = asString(entity?.kind);
   const id = asString(entity?.id);
-  const payload = asRecord(entity?.payload);
+  const payload = unwrapAnyPayload(entity?.payload);
   if (!id) return null;
 
   if (kind === 'ChatMessage') {
@@ -96,9 +76,17 @@ export function timelineEntityFromSnapshotEntity(entity: SnapshotEntityFrame): T
   }
 
   if (kind === 'AgentMode') {
+    const data = asRecord(payload.data);
+    const flattenedData = Object.keys(data).length > 0
+      ? data
+      : {
+          from: asString(payload.from),
+          to: asString(payload.to),
+          analysis: asString(payload.analysis),
+        };
     return agentModeEntity(id || 'agent-mode', 'agent_mode', {
       title: asString(payload.title) || 'Agent mode switch',
-      data: asRecord(payload.data),
+      data: flattenedData,
       preview: payload.preview === true,
       messageId: asString(payload.messageId),
     });
@@ -192,15 +180,16 @@ export function timelineMutationFromUIEvent(frame: CanonicalFrame): TimelineMuta
     }
     case 'ChatMessageStopped': {
       const content = asString(payload.content) || asString(payload.text);
+      const error = asString(payload.error);
       return {
-        upsert: content
+        upsert: content || error
           ? messageEntity(messageId, {
               role: asString(payload.role) || 'assistant',
               prompt: asString(payload.prompt),
               content,
               status: asString(payload.status) || 'stopped',
               streaming: false,
-              error: asString(payload.error),
+              error,
             })
           : undefined,
         status: 'stopped',
@@ -315,9 +304,7 @@ class WsManager {
 
     args.onStatus?.('connecting ws...');
     args.dispatch(appSlice.actions.setWsStatus('connecting'));
-    const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
-    const url = `${proto}://${window.location.host}${args.basePrefix}/api/chat/ws`;
-    const ws = new WebSocket(url);
+    const ws = new WebSocket(buildWebSocketURL({ basePrefix: args.basePrefix }));
     this.ws = ws;
 
     let settleOpen: (() => void) | null = null;
@@ -337,7 +324,7 @@ class WsManager {
       args.onStatus?.('ws connected');
       args.dispatch(appSlice.actions.setWsStatus('connected'));
       try {
-        ws.send(JSON.stringify({ type: 'subscribe', sessionId: args.sessionId, sinceOrdinal: '0' }));
+        ws.send(encodeSubscribeFrame(args.sessionId));
       } catch (err) {
         reportError(args.dispatch, 'ws subscribe failed', 'ws.subscribe', err, { sessionId: args.sessionId });
       }
@@ -359,7 +346,7 @@ class WsManager {
     ws.onmessage = (m) => {
       if (nonce !== this.connectNonce) return;
       try {
-        const frame = JSON.parse(String(m.data)) as CanonicalFrame;
+        const frame = parseServerFrame(String(m.data));
         const ord = safeOrdinal(frame.ordinal);
         if (ord !== null) {
           args.dispatch(appSlice.actions.setLastSeq(ord));

@@ -496,6 +496,99 @@ func (s *SQLiteTurnStore) List(ctx context.Context, q TurnQuery) ([]TurnSnapshot
 	return items, nil
 }
 
+func (s *SQLiteTurnStore) LoadLatestTurn(ctx context.Context, convID, phase string) (*TurnSnapshot, error) {
+	if s == nil || s.db == nil {
+		return nil, errors.New("sqlite turn store: db is nil")
+	}
+	convID = strings.TrimSpace(convID)
+	if convID == "" {
+		return nil, errors.New("sqlite turn store: convID is empty")
+	}
+	if ctx == nil {
+		return nil, errors.New("sqlite turn store: ctx is nil")
+	}
+	phase = strings.TrimSpace(phase)
+
+	clauses := []string{"m.conv_id = ?"}
+	args := []any{convID}
+	if phase != "" {
+		clauses = append(clauses, "m.phase = ?")
+		args = append(args, phase)
+	}
+	where := "WHERE " + strings.Join(clauses, " AND ")
+
+	// #nosec G201 -- where only interpolates constant clause fragments; values remain parameterized in args.
+	query := fmt.Sprintf(`
+		SELECT
+			m.conv_id,
+			m.session_id,
+			m.turn_id,
+			m.phase,
+			m.snapshot_created_at_ms,
+			COALESCE(MAX(t.runtime_key), '') AS runtime_key,
+			COALESCE(MAX(t.inference_id), '') AS inference_id,
+			COALESCE(MAX(t.turn_metadata_json), '{}') AS turn_metadata_json,
+			COALESCE(MAX(t.turn_data_json), '{}') AS turn_data_json
+		FROM turn_block_membership m
+		LEFT JOIN turns t
+			ON t.conv_id = m.conv_id
+			AND t.session_id = m.session_id
+			AND t.turn_id = m.turn_id
+		%s
+		GROUP BY
+			m.conv_id,
+			m.session_id,
+			m.turn_id,
+			m.phase,
+			m.snapshot_created_at_ms
+		ORDER BY m.snapshot_created_at_ms DESC
+		LIMIT 1
+	`, where)
+
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, errors.Wrap(err, "sqlite turn store: load latest turn")
+	}
+	defer func() { _ = rows.Close() }()
+
+	if !rows.Next() {
+		return nil, nil
+	}
+
+	var (
+		item             TurnSnapshot
+		turnMetadataJSON string
+		turnDataJSON     string
+	)
+	if err := rows.Scan(
+		&item.ConvID,
+		&item.SessionID,
+		&item.TurnID,
+		&item.Phase,
+		&item.CreatedAtMs,
+		&item.RuntimeKey,
+		&item.InferenceID,
+		&turnMetadataJSON,
+		&turnDataJSON,
+	); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	blockRows, err := s.loadSnapshotBlocks(ctx, item.ConvID, item.SessionID, item.TurnID, item.Phase, item.CreatedAtMs)
+	if err != nil {
+		return nil, err
+	}
+	payload, err := buildTurnPayloadYAML(item.TurnID, blockRows, turnMetadataJSON, turnDataJSON)
+	if err != nil {
+		return nil, err
+	}
+	item.Payload = payload
+	return &item, nil
+}
+
 func SQLiteTurnDSNForFile(path string) (string, error) {
 	if strings.TrimSpace(path) == "" {
 		return "", errors.New("sqlite turn store: empty path")

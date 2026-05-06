@@ -1,4 +1,5 @@
 import type { AppDispatch } from '../../store/store';
+import { buildWebSocketURL, type CanonicalFrame, encodeSubscribeFrame, parseServerFrame } from '../../ws/protocol';
 import { setFollowStatus } from '../store/uiSlice';
 
 type ConnectArgs = {
@@ -6,8 +7,6 @@ type ConnectArgs = {
   basePrefix: string;
   dispatch: AppDispatch;
 };
-
-type CanonicalFrame = Record<string, unknown>;
 
 let onFrame: ((frame: CanonicalFrame) => void) | null = null;
 
@@ -29,16 +28,14 @@ class DebugWsManager {
     this.disconnect();
     const nonce = ++this.nonce;
 
-    const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
-    const url = `${proto}://${window.location.host}${args.basePrefix}/api/chat/ws`;
-    const ws = new WebSocket(url);
+    const ws = new WebSocket(buildWebSocketURL({ basePrefix: args.basePrefix }));
     this.ws = ws;
 
     args.dispatch(setFollowStatus('connecting'));
 
     ws.onopen = () => {
       if (nonce !== this.nonce) return;
-      ws.send(JSON.stringify({ type: 'subscribe', sessionId: args.sessionId, sinceOrdinal: '0' }));
+      ws.send(encodeSubscribeFrame(args.sessionId));
     };
 
     ws.onclose = () => {
@@ -55,7 +52,7 @@ class DebugWsManager {
       if (nonce !== this.nonce) return;
       let frame: CanonicalFrame;
       try {
-        frame = JSON.parse(String(message.data)) as CanonicalFrame;
+        frame = parseServerFrame(String(message.data));
       } catch {
         return;
       }

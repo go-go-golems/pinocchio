@@ -152,6 +152,9 @@ func initRootCmd() (*help.HelpSystem, error) {
 	err = pinocchio_docs.AddDocToHelpSystem(helpSystem)
 	cobra.CheckErr(err)
 
+	err = addWorkspaceSessionstreamDocs(helpSystem)
+	cobra.CheckErr(err)
+
 	help_cmd.SetupCobraRootCommand(helpSystem, rootCmd)
 
 	err = clay.InitGlazed("pinocchio", rootCmd)
@@ -165,6 +168,23 @@ func initRootCmd() (*help.HelpSystem, error) {
 	rootCmd.AddCommand(runCommandCmd)
 	rootCmd.AddCommand(pinocchio_cmds.NewJSCommand())
 	return helpSystem, nil
+}
+
+func addWorkspaceSessionstreamDocs(helpSystem *help.HelpSystem) error {
+	if helpSystem == nil {
+		return nil
+	}
+	for _, candidate := range []string{
+		"../sessionstream/pkg/doc",
+		"../../sessionstream/pkg/doc",
+	} {
+		info, err := os.Stat(candidate)
+		if err != nil || !info.IsDir() {
+			continue
+		}
+		return helpSystem.LoadSectionsFromFS(os.DirFS(candidate), ".")
+	}
+	return nil
 }
 
 // loadRepositoriesFromConfig reads repository paths from the unified layered pinocchio config document.

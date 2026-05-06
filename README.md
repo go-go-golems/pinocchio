@@ -42,6 +42,16 @@ go get -u github.com/go-go-golems/pinocchio/cmd/pinocchio
 
 Finally, install by downloading the binaries straight from [github](https://github.com/go-go-golems/geppetto/releases).
 
+## Development
+
+Run the shared Sessionstream schema registration analyzer with:
+
+```bash
+make schema-vet
+```
+
+This builds `../sessionstream/cmd/sessionstream-lint` and rejects top-level `*structpb.Struct` payloads registered through `sessionstream.SchemaRegistry`. See the Sessionstream README for the source-of-truth policy and downstream usage.
+
 ## Usage
 
 Configure Pinocchio through layered unified config documents plus an optional engine-profile registry stack.

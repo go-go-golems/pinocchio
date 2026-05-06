@@ -1,4 +1,4 @@
-.PHONY: all test build lint lintmax docker-lint golangci-lint-install gosec govulncheck goreleaser tag-major tag-minor tag-patch release bump-glazed install codeql-local geppetto-lint-build geppetto-lint web-typecheck web-lint web-check proto-gen proto-gen-core proto-gen-web-chat
+.PHONY: all test build lint lintmax docker-lint golangci-lint-install gosec govulncheck goreleaser tag-major tag-minor tag-patch release bump-glazed install codeql-local geppetto-lint-build geppetto-lint web-typecheck web-lint web-check proto-gen proto-gen-core proto-gen-web-chat schema-vet
 
 all: test build
 
@@ -7,6 +7,8 @@ GORELEASER_ARGS ?= --skip=sign --snapshot --clean
 GORELEASER_TARGET ?= --single-target
 GOLANGCI_LINT_VERSION ?= $(shell cat .golangci-lint-version)
 GOLANGCI_LINT_BIN ?= $(CURDIR)/.bin/golangci-lint
+SESSIONSTREAM_LINT ?= /tmp/sessionstream-lint
+SESSIONSTREAM_LINT_PKG ?= ../sessionstream/cmd/sessionstream-lint
 
 TAPES=$(shell ls doc/vhs/*tape 2>/dev/null || echo "")
 gifs:
@@ -80,6 +82,10 @@ proto-gen-web-chat:
 
 proto-gen: proto-gen-core proto-gen-web-chat
 
+schema-vet:
+	go build -o $(SESSIONSTREAM_LINT) $(SESSIONSTREAM_LINT_PKG)
+	go vet -vettool=$(SESSIONSTREAM_LINT) ./cmd/... ./pkg/...
+
 goreleaser:
 	goreleaser release $(GORELEASER_ARGS) $(GORELEASER_TARGET)
 
@@ -103,6 +109,7 @@ bump-glazed:
 	go get github.com/go-go-golems/bobatea@latest
 	go get github.com/go-go-golems/geppetto@latest
 	go get github.com/go-go-golems/go-go-goja@latest
+	go get github.com/go-go-golems/sessionstream@latest
 	go mod tidy
 
 # Path to CodeQL CLI - adjust based on installation location

@@ -13,7 +13,9 @@ import (
 
 	gepevents "github.com/go-go-golems/geppetto/pkg/events"
 	"github.com/go-go-golems/geppetto/pkg/turns"
+	"github.com/go-go-golems/geppetto/pkg/turns/serde"
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
+	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
 	sessionstreamv1 "github.com/go-go-golems/sessionstream/pkg/sessionstream/pb/proto/sessionstream/v1"
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/require"
@@ -22,9 +24,13 @@ import (
 
 type runtimeBackedTestEngine struct {
 	completion string
+	seen       **turns.Turn
 }
 
 func (e runtimeBackedTestEngine) RunInference(ctx context.Context, t *turns.Turn) (*turns.Turn, error) {
+	if e.seen != nil && t != nil {
+		*e.seen = t.Clone()
+	}
 	completion := strings.TrimSpace(e.completion)
 	if completion == "" {
 		completion = "runtime-backed response"
@@ -36,11 +42,16 @@ func (e runtimeBackedTestEngine) RunInference(ctx context.Context, t *turns.Turn
 }
 
 type staticRuntimeResolver struct {
-	completion string
+	completion    string
+	seenSessionID *string
+	seenTurn      **turns.Turn
 }
 
-func (r staticRuntimeResolver) Resolve(context.Context, *http.Request, string, string) (*infruntime.ComposedRuntime, error) {
-	return &infruntime.ComposedRuntime{Engine: runtimeBackedTestEngine(r)}, nil
+func (r staticRuntimeResolver) Resolve(_ context.Context, _ *http.Request, sessionID string, _ string, _ string) (*infruntime.ComposedRuntime, error) {
+	if r.seenSessionID != nil {
+		*r.seenSessionID = sessionID
+	}
+	return &infruntime.ComposedRuntime{Engine: runtimeBackedTestEngine{completion: r.completion, seen: r.seenTurn}}, nil
 }
 
 func newTestMux(t *testing.T, opts ...Option) (*Server, *httptest.Server) {
@@ -214,6 +225,44 @@ func TestSubmitAndSnapshot_UsesResolvedRuntimeWhenConfigured(t *testing.T) {
 	}
 }
 
+func TestSubmitAndSnapshot_WiresSessionIDAndTurnStoreIntoRuntime(t *testing.T) {
+	prior := &turns.Turn{ID: "turn-prior"}
+	turns.AppendBlock(prior, turns.NewUserTextBlock("previous question"))
+	turns.AppendBlock(prior, turns.NewAssistantTextBlock("previous answer"))
+	payload, err := serde.ToYAML(prior, serde.Options{})
+	require.NoError(t, err)
+
+	var seenSessionID string
+	var seenTurn *turns.Turn
+	_, httpSrv := newTestMux(t,
+		WithTurnStore(&fakeTurnStore{snapshot: &chatstore.TurnSnapshot{
+			ConvID:    "sess-history-app",
+			SessionID: "sess-history-app",
+			TurnID:    "turn-prior",
+			Phase:     "final",
+			Payload:   string(payload),
+		}}),
+		WithRuntimeResolver(staticRuntimeResolver{completion: "history-aware response", seenSessionID: &seenSessionID, seenTurn: &seenTurn}),
+	)
+
+	body := []byte(`{"prompt":"follow up","profile":"gpt-5-nano-low"}`)
+	resp, err := http.Post(httpSrv.URL+"/api/chat/sessions/sess-history-app/messages", "application/json", bytes.NewReader(body))
+	require.NoError(t, err)
+	defer func() { _ = resp.Body.Close() }()
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	deadline := time.Now().Add(2 * time.Second)
+	for seenTurn == nil && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	require.NotNil(t, seenTurn)
+	require.Equal(t, "sess-history-app", seenSessionID)
+	require.Len(t, seenTurn.Blocks, 3)
+	require.Equal(t, "previous question", seenTurn.Blocks[0].Payload[turns.PayloadKeyText])
+	require.Equal(t, "previous answer", seenTurn.Blocks[1].Payload[turns.PayloadKeyText])
+	require.Equal(t, "follow up", seenTurn.Blocks[2].Payload[turns.PayloadKeyText])
+}
+
 func TestSQLiteSnapshotPersistsAcrossRestart(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "evtstream-web-chat.db")
 	serverA, httpSrvA := newTestMux(t, WithSQLiteDBPath(dbPath))
@@ -271,6 +320,28 @@ func TestSQLiteSnapshotPersistsAcrossRestart(t *testing.T) {
 	require.True(t, foundAssistant)
 	require.True(t, foundUser)
 }
+
+type fakeTurnStore struct {
+	snapshot *chatstore.TurnSnapshot
+	err      error
+}
+
+func (s *fakeTurnStore) Save(context.Context, string, string, string, string, int64, string, chatstore.TurnSaveOptions) error {
+	return nil
+}
+
+func (s *fakeTurnStore) List(context.Context, chatstore.TurnQuery) ([]chatstore.TurnSnapshot, error) {
+	if s.snapshot == nil {
+		return nil, s.err
+	}
+	return []chatstore.TurnSnapshot{*s.snapshot}, s.err
+}
+
+func (s *fakeTurnStore) LoadLatestTurn(context.Context, string, string) (*chatstore.TurnSnapshot, error) {
+	return s.snapshot, s.err
+}
+
+func (s *fakeTurnStore) Close() error { return nil }
 
 func readServerFrame(t *testing.T, conn *websocket.Conn) *sessionstreamv1.ServerFrame {
 	t.Helper()

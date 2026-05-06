@@ -460,7 +460,9 @@ ResearchPlan
 ApprovalGate
 ```
 
-Define stable protobuf payloads for durable entities when the shape is known. Use `google.protobuf.Struct` only when the feature intentionally needs flexible metadata.
+Define a stable, concrete protobuf payload for every command, event, UI event, and timeline entity you register, even when the feature is app-specific. App-specific payloads are still durable contracts once they are stored in snapshots or consumed by frontend renderers.
+
+Use `google.protobuf.Struct` only inside a typed message field for intentionally open-ended metadata. Do not register `&structpb.Struct{}` as the top-level payload for a sessionstream event, UI event, or timeline entity.
 
 ### Frontend side
 

@@ -36,5 +36,11 @@ type TurnQuery struct {
 type TurnStore interface {
 	Save(ctx context.Context, convID, sessionID, turnID, phase string, createdAtMs int64, payload string, opts TurnSaveOptions) error
 	List(ctx context.Context, q TurnQuery) ([]TurnSnapshot, error)
+
+	// LoadLatestTurn returns the most recent turn snapshot for the given convID
+	// and phase, ordered by creation time descending. Returns (nil, nil) when
+	// no matching turn exists.
+	LoadLatestTurn(ctx context.Context, convID, phase string) (*TurnSnapshot, error)
+
 	Close() error
 }

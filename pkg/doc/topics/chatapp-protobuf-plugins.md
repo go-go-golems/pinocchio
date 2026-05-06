@@ -27,7 +27,37 @@ The current chatapp contract is protobuf-first:
 - generator config: `buf.chatapp.gen.yaml`
 - runtime registration: `chatapp.RegisterSchemas(reg, plugins...)`
 
-Sessionstream still delivers browser frames as JSON over WebSocket, but those frames are the JSON form of registered protobuf messages. Backend code should publish `proto.Message` payloads, not ad-hoc maps, unless the feature intentionally uses `google.protobuf.Struct` for flexible metadata.
+Sessionstream still delivers browser frames as JSON over WebSocket, but those frames are the JSON form of registered protobuf messages. Backend code should publish concrete, feature-owned `proto.Message` payloads, not ad-hoc maps or generic `google.protobuf.Struct` objects.
+
+## Schema policy: concrete protobuf for every durable contract
+
+Every chatapp/sessionstream command, backend event, UI event, and timeline entity payload must have its own concrete protobuf message, including app-specific features. Treat the protobuf type as the durable API contract between:
+
+- runtime event producers;
+- sessionstream projection code;
+- persisted timeline snapshots;
+- WebSocket JSON frames;
+- frontend renderers and generated TypeScript types.
+
+Do not register `google.protobuf.Struct` for event/UI/timeline payloads just because a feature is app-local. App-local still means durable once it is persisted, hydrated, or rendered after reload.
+
+Good:
+
+```go
+reg.RegisterUIEvent("ChatAgentModeCommitted", &chatappv1.AgentModeCommittedUpdate{})
+reg.RegisterTimelineEntity("AgentMode", &chatappv1.AgentModeEntity{})
+```
+
+Avoid:
+
+```go
+reg.RegisterUIEvent("ChatAgentModeCommitted", &structpb.Struct{})
+reg.RegisterTimelineEntity("AgentMode", &structpb.Struct{})
+```
+
+Use `google.protobuf.Struct` only inside a typed message field when the field is intentionally open-ended metadata, for example provider-specific debug details or arbitrary tool input/output. The outer payload registered with sessionstream should still be a named protobuf message.
+
+A repository-level architecture test (`pkg/chatapp/schema_policy_test.go`) and vet analyzer (`pkg/analysis/sessionstreamschema`, runnable with `make schema-vet`) reject `RegisterEvent`, `RegisterUIEvent`, and `RegisterTimelineEntity` registrations that use `&structpb.Struct{}`.
 
 ## Base chatapp schema
 
@@ -89,13 +119,13 @@ It handles:
 - `*events.EventInfo` with `thinking-ended`
 - reasoning summary info payloads when available
 
-It registers:
+It registers concrete `ReasoningUpdate` protobuf payloads:
 
 | Backend event | UI event | Payload |
 |---|---|---|
-| `ChatReasoningStarted` | `ChatReasoningStarted` | `google.protobuf.Struct` |
-| `ChatReasoningDelta` | `ChatReasoningAppended` | `google.protobuf.Struct` |
-| `ChatReasoningFinished` | `ChatReasoningFinished` | `google.protobuf.Struct` |
+| `ChatReasoningStarted` | `ChatReasoningStarted` | `ReasoningUpdate` |
+| `ChatReasoningDelta` | `ChatReasoningAppended` | `ReasoningUpdate` |
+| `ChatReasoningFinished` | `ChatReasoningFinished` | `ReasoningUpdate` |
 
 The payload contains chat-message-shaped fields such as `messageId`, `parentMessageId`, `segment`, `role: "thinking"`, `chunk`, `content`, `status`, and `streaming`. Each contiguous thinking phase gets a segment ID such as `chat-msg-5:thinking:1`.
 
