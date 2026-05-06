@@ -40,6 +40,32 @@ describe('timelineEntityFromSnapshotEntity', () => {
     expect(entity?.props.preview).toBe(false);
     expect(entity?.props.data).toEqual({ from: 'analyst', to: 'reviewer', analysis: 'hello' });
   });
+
+  it('unwraps Struct payloads for hydrated AgentMode snapshot entities', () => {
+    const entity = timelineEntityFromSnapshotEntity({
+      kind: 'AgentMode',
+      id: 'session',
+      payload: {
+        '@type': 'type.googleapis.com/google.protobuf.Struct',
+        value: {
+          title: 'agentmode: mode switched',
+          data: { from: 'financial_analyst', to: 'financial_analyst', analysis: 'No switch needed.' },
+          preview: false,
+          messageId: 'chat-msg-5',
+        },
+      },
+    });
+
+    expect(entity).not.toBeNull();
+    expect(entity?.kind).toBe('agent_mode');
+    expect(entity?.props.title).toBe('agentmode: mode switched');
+    expect(entity?.props.messageId).toBe('chat-msg-5');
+    expect(entity?.props.data).toEqual({
+      from: 'financial_analyst',
+      to: 'financial_analyst',
+      analysis: 'No switch needed.',
+    });
+  });
 });
 
 describe('timelineMutationFromUIEvent', () => {

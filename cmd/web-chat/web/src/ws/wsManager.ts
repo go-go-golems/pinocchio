@@ -12,6 +12,7 @@ import {
   parseServerFrame,
   type SnapshotEntityFrame,
   safeOrdinal,
+  unwrapAnyPayload,
 } from './protocol';
 
 type ConnectArgs = {
@@ -59,7 +60,7 @@ function agentModePreviewEntityId(messageId: string): string {
 export function timelineEntityFromSnapshotEntity(entity: SnapshotEntityFrame): TimelineEntity | null {
   const kind = asString(entity?.kind);
   const id = asString(entity?.id);
-  const payload = asRecord(entity?.payload);
+  const payload = unwrapAnyPayload(entity?.payload);
   if (!id) return null;
 
   if (kind === 'ChatMessage') {
