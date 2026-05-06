@@ -6,16 +6,20 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/go-go-golems/geppetto/pkg/inference/engine/factory"
 	gepmiddleware "github.com/go-go-golems/geppetto/pkg/inference/middleware"
 	"github.com/go-go-golems/geppetto/pkg/inference/middlewarecfg"
+	"github.com/go-go-golems/geppetto/pkg/inference/toolloop/enginebuilder"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
+	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
 )
 
 type ProfileRuntimeComposer struct {
 	definitions middlewarecfg.DefinitionRegistry
 	buildDeps   middlewarecfg.BuildDeps
 	base        *settings.InferenceSettings
+	turnStore   chatstore.TurnStore
 }
 
 func newProfileRuntimeComposer(
@@ -28,6 +32,14 @@ func newProfileRuntimeComposer(
 		buildDeps:   buildDeps,
 		base:        base,
 	}
+}
+
+func (c *ProfileRuntimeComposer) WithTurnStore(turnStore chatstore.TurnStore) *ProfileRuntimeComposer {
+	if c == nil {
+		return c
+	}
+	c.turnStore = turnStore
+	return c
 }
 
 func (c *ProfileRuntimeComposer) Compose(ctx context.Context, req infruntime.ConversationRuntimeRequest) (infruntime.ComposedRuntime, error) {
@@ -80,12 +92,23 @@ func (c *ProfileRuntimeComposer) Compose(ctx context.Context, req infruntime.Con
 		}
 	}
 
-	eng, err := infruntime.BuildEngineFromSettingsWithMiddlewares(
-		ctx,
-		effectiveInferenceSettings,
-		systemPrompt,
-		resolvedMiddlewares,
-	)
+	baseEngine, err := factory.NewEngineFromSettings(effectiveInferenceSettings)
+	if err != nil {
+		return infruntime.ComposedRuntime{}, fmt.Errorf("engine init failed: %w", err)
+	}
+	middlewares := make([]gepmiddleware.Middleware, 0, 2+len(resolvedMiddlewares))
+	middlewares = append(middlewares, gepmiddleware.NewToolResultReorderMiddleware())
+	middlewares = append(middlewares, resolvedMiddlewares...)
+	if systemPrompt != "" {
+		middlewares = append(middlewares, gepmiddleware.NewSystemPromptMiddleware(systemPrompt))
+	}
+	builder := &enginebuilder.Builder{Base: baseEngine, Middlewares: middlewares}
+	if c.turnStore != nil && strings.TrimSpace(req.ConvID) != "" {
+		sessionID := strings.TrimSpace(req.ConvID)
+		builder.Persister = newTurnStorePersister(c.turnStore, sessionID, runtimeKey, "final")
+		builder.SnapshotHook = newTurnSnapshotHook(sessionID, runtimeKey, c.turnStore)
+	}
+	eng, err := builder.Build(ctx, req.ConvID)
 	if err != nil {
 		return infruntime.ComposedRuntime{}, err
 	}

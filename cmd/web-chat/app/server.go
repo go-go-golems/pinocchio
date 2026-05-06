@@ -14,6 +14,7 @@ import (
 
 	chatapp "github.com/go-go-golems/pinocchio/pkg/chatapp"
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
+	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
 	sessionstream "github.com/go-go-golems/sessionstream/pkg/sessionstream"
 	storesqlite "github.com/go-go-golems/sessionstream/pkg/sessionstream/hydration/sqlite"
 	wstransport "github.com/go-go-golems/sessionstream/pkg/sessionstream/transport/ws"
@@ -31,6 +32,7 @@ type Server struct {
 	sqliteDSN       string
 	sqliteDBPath    string
 	runtimeResolver RuntimeResolver
+	turnStore       chatstore.TurnStore
 	chatPlugins     []chatapp.ChatPlugin
 	closeFn         func() error
 }
@@ -77,6 +79,15 @@ func WithRuntimeResolver(resolver RuntimeResolver) Option {
 	}
 }
 
+func WithTurnStore(store chatstore.TurnStore) Option {
+	return func(s *Server) {
+		if s == nil {
+			return
+		}
+		s.turnStore = store
+	}
+}
+
 func WithChatPlugins(features ...chatapp.ChatPlugin) Option {
 	return func(s *Server) {
 		if s == nil {
@@ -111,7 +122,7 @@ func NewServer(opts ...Option) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	engine := chatapp.NewEngine(chatapp.WithChunkDelay(s.chunkDelay), chatapp.WithPlugins(s.chatPlugins...))
+	engine := chatapp.NewEngine(chatapp.WithChunkDelay(s.chunkDelay), chatapp.WithPlugins(s.chatPlugins...), chatapp.WithTurnStore(s.turnStore))
 	hub, err := sessionstream.NewHub(
 		sessionstream.WithSchemaRegistry(reg),
 		sessionstream.WithHydrationStore(store),
@@ -253,7 +264,7 @@ func (s *Server) handleSubmitMessage(w http.ResponseWriter, r *http.Request, sid
 	}
 	var runtime *infruntime.ComposedRuntime
 	if s.runtimeResolver != nil {
-		resolved, err := s.runtimeResolver.Resolve(r.Context(), r, in.Profile, in.Registry)
+		resolved, err := s.runtimeResolver.Resolve(r.Context(), r, string(sid), in.Profile, in.Registry)
 		if err != nil {
 			writeJSON(w, http.StatusBadRequest, errorResponse{Error: err.Error()})
 			return

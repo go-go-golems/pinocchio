@@ -7,7 +7,9 @@ import (
 	"io"
 	"io/fs"
 	"net/http"
+	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -34,6 +36,7 @@ import (
 	"github.com/go-go-golems/pinocchio/pkg/chatapp/plugins"
 	profilebootstrap "github.com/go-go-golems/pinocchio/pkg/cmds/profilebootstrap"
 	agentmode "github.com/go-go-golems/pinocchio/pkg/middlewares/agentmode"
+	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
 	rediscfg "github.com/go-go-golems/pinocchio/pkg/redisstream"
 )
 
@@ -193,6 +196,32 @@ func buildRootHandler(root string, appMux http.Handler, appConfigJS string) http
 	return parent
 }
 
+func openWebChatTurnStore(turnsDSN string, turnsDB string) (chatstore.TurnStore, func() error, error) {
+	turnsDSN = strings.TrimSpace(turnsDSN)
+	turnsDB = strings.TrimSpace(turnsDB)
+	if turnsDSN == "" && turnsDB == "" {
+		return nil, nil, nil
+	}
+	dsn := turnsDSN
+	if dsn == "" {
+		if dir := filepath.Dir(turnsDB); dir != "" && dir != "." {
+			if err := os.MkdirAll(dir, 0o755); err != nil {
+				return nil, nil, err
+			}
+		}
+		var err error
+		dsn, err = chatstore.SQLiteTurnDSNForFile(turnsDB)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+	store, err := chatstore.NewSQLiteTurnStore(dsn)
+	if err != nil {
+		return nil, nil, err
+	}
+	return store, store.Close, nil
+}
+
 func runHTTPServer(ctx context.Context, srv *http.Server, closeFn func() error) error {
 	if ctx == nil {
 		return errors.New("ctx is nil")
@@ -267,6 +296,8 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 		DebugAPI    bool   `glazed:"debug-api"`
 		TimelineDSN string `glazed:"timeline-dsn"`
 		TimelineDB  string `glazed:"timeline-db"`
+		TurnsDSN    string `glazed:"turns-dsn"`
+		TurnsDB     string `glazed:"turns-db"`
 	}
 	s := &serverSettings{}
 	if err := parsed.DecodeSectionInto(values.DefaultSlug, s); err != nil {
@@ -307,11 +338,19 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 	if err != nil {
 		return errors.Wrap(err, "resolve web-chat base inference settings from hidden base and parsed values")
 	}
+	turnStore, closeTurnStore, err := openWebChatTurnStore(s.TurnsDSN, s.TurnsDB)
+	if err != nil {
+		return err
+	}
+	if closeTurnStore != nil {
+		defer func() { _ = closeTurnStore() }()
+	}
+
 	runtimeComposer := newProfileRuntimeComposer(middlewareRegistry, middlewarecfg.BuildDeps{
 		Values: map[string]any{
 			dependencyAgentModeServiceKey: amSvc,
 		},
-	}, baseInferenceSettings)
+	}, baseInferenceSettings).WithTurnStore(turnStore)
 
 	var (
 		profileRegistry     gepprofiles.Registry
@@ -328,6 +367,7 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 		appserver.WithSQLiteDSN(s.TimelineDSN),
 		appserver.WithSQLiteDBPath(s.TimelineDB),
 		appserver.WithRuntimeResolver(canonicalRuntimeResolver),
+		appserver.WithTurnStore(turnStore),
 		appserver.WithChatPlugins(newAgentModePlugin(), plugins.NewReasoningPlugin(), plugins.NewToolCallPlugin()),
 	)
 	if err != nil {

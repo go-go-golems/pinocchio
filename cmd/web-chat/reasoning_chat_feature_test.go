@@ -207,7 +207,7 @@ func (reasoningRuntimeTestEngine) RunInference(ctx context.Context, t *turns.Tur
 
 type reasoningRuntimeResolver struct{}
 
-func (reasoningRuntimeResolver) Resolve(context.Context, *http.Request, string, string) (*infruntime.ComposedRuntime, error) {
+func (reasoningRuntimeResolver) Resolve(context.Context, *http.Request, string, string, string) (*infruntime.ComposedRuntime, error) {
 	return &infruntime.ComposedRuntime{Engine: reasoningRuntimeTestEngine{}}, nil
 }
 
