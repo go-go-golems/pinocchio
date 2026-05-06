@@ -18,7 +18,7 @@ require (
 	github.com/go-go-golems/geppetto v0.11.20
 	github.com/go-go-golems/glazed v1.2.7
 	github.com/go-go-golems/go-go-goja v0.4.15
-	github.com/go-go-golems/sessionstream v0.0.3
+	github.com/go-go-golems/sessionstream v0.0.4
 	github.com/go-go-golems/uhoh v0.0.5
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.4-0.20250319132907-e064f32e3674

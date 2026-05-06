@@ -205,8 +205,8 @@ github.com/go-go-golems/go-go-goja v0.4.15 h1:0PNFBk4yRpfvi3o/cP5ciduyJGB3b52EIN
 github.com/go-go-golems/go-go-goja v0.4.15/go.mod h1:mnEFH70HM3+JROMsBSBNTV8REF0K4YSYes6d0NS900o=
 github.com/go-go-golems/sanitize v0.0.1 h1:Kdi7QC5pNtc7H9BsskQQiuhXnly9lMei+LhXf1AtUiQ=
 github.com/go-go-golems/sanitize v0.0.1/go.mod h1:ahtFsvUHMZC+/CIRxbrC5RKEqgCcyDyd6fSns+zWEN0=
-github.com/go-go-golems/sessionstream v0.0.3 h1:FYA2xL1BDlhY3GRQKSn9/2vIwJZmqpWdeloc0+Mrt6c=
-github.com/go-go-golems/sessionstream v0.0.3/go.mod h1:2r6eFwjrsLG4VFQFR1EyZl4Wh7BGCRLJ2fScVX5VCuc=
+github.com/go-go-golems/sessionstream v0.0.4 h1:MSm71+/OJf728ldpP2jGLEBcXPIYdAE2+Pd67HL0lOg=
+github.com/go-go-golems/sessionstream v0.0.4/go.mod h1:sYsT/7MKM5E/g2u/ryXvUGo/eg6aKtK8cMwk63a963Y=
 github.com/go-go-golems/uhoh v0.0.5 h1:udrvNPiRNulREtZMCRPWe7rnRWxB5P3NwTIXmXF8Ye4=
 github.com/go-go-golems/uhoh v0.0.5/go.mod h1:6/1kZngxZc6eX3egmZyeFeq3c9FsteBQyWD4T/in9SU=
 github.com/go-jose/go-jose/v4 v4.1.4 h1:moDMcTHmvE6Groj34emNPLs/qtYXRVcd6S7NHbHz3kA=
