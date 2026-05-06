@@ -82,7 +82,12 @@ func (agentModePlugin) ProjectUI(_ context.Context, ev sessionstream.Event, _ *s
 		clearPB := &chatappv1.AgentModePreviewCleared{MessageId: payload.GetMessageId()}
 		return []sessionstream.UIEvent{{Name: agentModeCommittedUIName, Payload: payload}, {Name: agentModePreviewClearUIName, Payload: clearPB}}, true, nil
 	case chatapp.EventInferenceFinished, chatapp.EventInferenceStopped:
-		return []sessionstream.UIEvent{{Name: agentModePreviewClearUIName, Payload: &chatappv1.AgentModePreviewCleared{}}}, true, nil
+		payload, ok := ev.Payload.(*chatappv1.ChatMessageUpdate)
+		if !ok || payload == nil {
+			return nil, true, unexpectedAgentModePayload(&chatappv1.ChatMessageUpdate{}, ev.Payload)
+		}
+		clearPB := &chatappv1.AgentModePreviewCleared{MessageId: payload.GetMessageId()}
+		return []sessionstream.UIEvent{{Name: agentModePreviewClearUIName, Payload: clearPB}}, true, nil
 	default:
 		return nil, false, nil
 	}
