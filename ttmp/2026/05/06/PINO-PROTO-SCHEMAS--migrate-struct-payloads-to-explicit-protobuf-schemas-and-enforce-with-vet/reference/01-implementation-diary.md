@@ -45,3 +45,16 @@ Important caveat:
 
 - `docmgr` defaults to the workspace-level `.ttmp.yaml`, which points at the gec-rag `ttmp` root. For this ticket, commands must use the absolute Pinocchio root:
   `/home/manuel/workspaces/2026-05-02/use-sessionstream-coinvault/pinocchio/ttmp`
+
+## 2026-05-06 — CoinVault widget schema decision update
+
+Updated the design after review: CoinVault widgets should not use a single wrapper `oneof` as the main durable widget contract. Instead, each widget gets its own protobuf messages and its own sessionstream backend event, UI event, and timeline entity kind.
+
+Rationale:
+
+- `sessionstream` already has event names and timeline entity kinds, so those names should be the primary dispatch mechanism.
+- The frontend renderer registry naturally dispatches by entity kind.
+- Separate widget messages avoid a mega-wrapper that grows every time a widget is added.
+- Each widget can evolve independently.
+
+Also clarified that this migration does not need backwards compatibility shims for old local `Struct` payloads. Reset local smoke DBs or perform an explicit one-off repair outside the app runtime if old sessions must be inspected.

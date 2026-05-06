@@ -27,7 +27,7 @@ WhenToUse: "Use when planning or resuming work on the ticket."
 - [ ] Add concrete Pinocchio protobuf messages for reasoning payloads.
 - [ ] Migrate `pkg/chatapp/plugins/reasoning.go` away from top-level `structpb.Struct`.
 - [ ] Inventory CoinVault widget payload shapes.
-- [ ] Replace CoinVault `type + google.protobuf.Struct payload` widget schema with typed messages / `oneof`.
+- [ ] Replace CoinVault `type + google.protobuf.Struct payload` widget schema with separate typed protobuf messages and separate event/UI/timeline names per widget; no backwards compatibility shims.
 - [ ] Build a real `go/analysis` vet analyzer for sessionstream schema registrations.
 - [ ] Wire analyzer into Pinocchio lint/CI/pre-commit validation.
 - [ ] Remove the temporary allowlist in `pkg/chatapp/schema_policy_test.go` after migrations.

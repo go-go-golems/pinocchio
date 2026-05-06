@@ -285,44 +285,69 @@ message CoinVaultWidgetEntity {
 
 This is better than registering `Struct` directly, but it is still too generic for durable UI widgets. The `type` string plus `payload` map is a second dynamic dispatch layer. It prevents generated frontend types for concrete widget shapes.
 
-Target: use a protobuf `oneof` for known CoinVault widgets.
+Target: define a separate protobuf message, backend event, UI event, and timeline entity kind for each durable CoinVault widget. Do **not** use a single `oneof` wrapper as the primary widget contract. `sessionstream` already has event names and timeline entity kinds; those names should be the discriminant instead of a `type` string or `oneof` case.
 
 Sketch:
 
 ```proto
-message CoinVaultWidgetUpsert {
+message CoinVaultStatsRowUpsert {
   string id = 1;
-  oneof widget {
-    InventoryCards inventory_cards = 10;
-    InventoryTable inventory_table = 11;
-    SqlTable sql_table = 12;
-    StatsRow stats_row = 13;
-    StockAlert stock_alert = 14;
-  }
+  repeated CoinVaultStat stats = 2;
 }
 
-message CoinVaultWidgetEntity {
+message CoinVaultStatsRowEntity {
   string id = 1;
-  oneof widget {
-    InventoryCards inventory_cards = 10;
-    InventoryTable inventory_table = 11;
-    SqlTable sql_table = 12;
-    StatsRow stats_row = 13;
-    StockAlert stock_alert = 14;
-  }
+  repeated CoinVaultStat stats = 2;
 }
 
-message StatsRow {
-  repeated Stat stats = 1;
-}
-
-message Stat {
+message CoinVaultStat {
   string label = 1;
   string value = 2;
   string unit = 3;
   string tone = 4;
 }
+
+message CoinVaultInventoryCardsUpsert {
+  string id = 1;
+  repeated CoinVaultInventoryCard cards = 2;
+}
+
+message CoinVaultInventoryCardsEntity {
+  string id = 1;
+  repeated CoinVaultInventoryCard cards = 2;
+}
+
+message CoinVaultInventoryCard {
+  string title = 1;
+  string subtitle = 2;
+  string status = 3;
+  string amount = 4;
+}
+
+message CoinVaultSqlTableUpsert {
+  string id = 1;
+  CoinVaultDynamicTable table = 2;
+}
+
+message CoinVaultSqlTableEntity {
+  string id = 1;
+  CoinVaultDynamicTable table = 2;
+}
 ```
+
+Register each widget independently:
+
+```go
+reg.RegisterEvent("CoinVaultStatsRowProjected", &coinvaultwidgetsv1.CoinVaultStatsRowUpsert{})
+reg.RegisterUIEvent("CoinVaultStatsRowUpserted", &coinvaultwidgetsv1.CoinVaultStatsRowUpsert{})
+reg.RegisterTimelineEntity("CoinVaultStatsRow", &coinvaultwidgetsv1.CoinVaultStatsRowEntity{})
+
+reg.RegisterEvent("CoinVaultSqlTableProjected", &coinvaultwidgetsv1.CoinVaultSqlTableUpsert{})
+reg.RegisterUIEvent("CoinVaultSqlTableUpserted", &coinvaultwidgetsv1.CoinVaultSqlTableUpsert{})
+reg.RegisterTimelineEntity("CoinVaultSqlTable", &coinvaultwidgetsv1.CoinVaultSqlTableEntity{})
+```
+
+This makes renderer dispatch simple: the frontend chooses a renderer by timeline entity kind (`CoinVaultStatsRow`, `CoinVaultSqlTable`, `CoinVaultStockAlert`) and then consumes the corresponding typed payload. There is no generic `CoinVaultWidget` envelope and no `type` string to keep synchronized.
 
 For table-shaped data, prefer typed table messages over arbitrary rows if the columns are known. If columns are genuinely dynamic SQL result columns, use a typed dynamic table representation rather than `Struct`:
 
@@ -364,7 +389,7 @@ This keeps the contract explicit while still supporting dynamic SQL tables.
 - No new `RegisterTimelineEntity(..., &structpb.Struct{})`.
 - No app-specific exception: app-specific payloads are durable contracts too.
 - Existing `Struct` fields inside a typed message require a comment explaining why the field is intentionally dynamic.
-- CoinVault widget schemas should use typed messages or `oneof` rather than `type + Struct payload`.
+- CoinVault widget schemas should use separate typed messages and separate sessionstream event/UI/timeline names per widget rather than `type + Struct payload` or a single wrapper `oneof`.
 
 ### 5.2 Generated types
 
@@ -522,7 +547,7 @@ ProjectTimeline(committed event):
   return TimelineEntity{Kind: "AgentMode", Id: "session", Payload: entity}
 ```
 
-Frontend mapping should no longer need to unwrap `payload.value` for AgentMode after all old data is gone. If historical local snapshots remain, keep `unwrapAnyPayload` as a frontend compatibility helper until the local DB is reset or migration is explicitly out of scope.
+Frontend mapping should no longer need to unwrap `payload.value` for AgentMode after all old data is gone. No backwards compatibility is required for historical local snapshots in this cleanup; reset local smoke DBs or perform an explicit one-off data repair outside the app runtime if old sessions must be inspected.
 
 ### Phase 4: Migrate CoinVault widgets
 
@@ -552,32 +577,54 @@ google.protobuf.Struct payload = 3;
 Migration strategy:
 
 1. Inventory all current `type` values from code and fixture data.
-2. Define concrete messages for each stable widget shape.
-3. Replace `type + payload` with a `oneof`.
-4. Update projection code to construct the right `oneof` branch.
-5. Update frontend mapping to switch on the protobuf oneof case instead of a string type.
+2. Decide the durable widget kind names, for example `CoinVaultStatsRow`, `CoinVaultInventoryCards`, `CoinVaultSqlTable`, `CoinVaultStockAlert`.
+3. Define concrete upsert and entity messages for each stable widget shape.
+4. Replace the generic `CoinVaultWidgetProjected` path with widget-specific backend event names.
+5. Replace the generic `CoinVaultWidgetUpserted` UI event with widget-specific UI event names.
+6. Replace the generic `CoinVaultWidget` timeline entity kind with widget-specific timeline entity kinds.
+7. Update frontend mapping to dispatch by event/entity kind, not by `type` string or `oneof` case.
+8. Delete the old generic widget messages and registrations. No backwards compatibility is required for this local schema cleanup.
 
 Pseudocode:
 
 ```go
-func widgetUpsertFromProjection(block projectionblocks.Block) (*CoinVaultWidgetUpsert, error) {
-    switch block.Type {
-    case "stats_row":
-        stats, err := parseStats(block.Payload)
-        if err != nil { return nil, err }
-        return &CoinVaultWidgetUpsert{
-            Id: block.ID,
-            Widget: &CoinVaultWidgetUpsert_StatsRow{StatsRow: stats},
-        }, nil
-    case "sql_table":
-        table, err := parseDynamicTable(block.Payload)
-        if err != nil { return nil, err }
-        return &CoinVaultWidgetUpsert{
-            Id: block.ID,
-            Widget: &CoinVaultWidgetUpsert_SqlTable{SqlTable: table},
-        }, nil
+func projectStatsRow(block projectionblocks.Block) (*coinvaultwidgetsv1.CoinVaultStatsRowUpsert, error) {
+    stats, err := parseStatsRow(block.Payload)
+    if err != nil {
+        return nil, err
+    }
+    return &coinvaultwidgetsv1.CoinVaultStatsRowUpsert{
+        Id: block.ID,
+        Stats: stats,
+    }, nil
+}
+
+func (f *CoinVaultProjectionFeature) RegisterSchemas(reg *sessionstream.SchemaRegistry) error {
+    for _, err := range []error{
+        reg.RegisterEvent(coinVaultStatsRowProjectedEvent, &coinvaultwidgetsv1.CoinVaultStatsRowUpsert{}),
+        reg.RegisterUIEvent(coinVaultStatsRowUpsertUI, &coinvaultwidgetsv1.CoinVaultStatsRowUpsert{}),
+        reg.RegisterTimelineEntity(coinVaultStatsRowEntityKind, &coinvaultwidgetsv1.CoinVaultStatsRowEntity{}),
+        reg.RegisterEvent(coinVaultSqlTableProjectedEvent, &coinvaultwidgetsv1.CoinVaultSqlTableUpsert{}),
+        reg.RegisterUIEvent(coinVaultSqlTableUpsertUI, &coinvaultwidgetsv1.CoinVaultSqlTableUpsert{}),
+        reg.RegisterTimelineEntity(coinVaultSqlTableEntityKind, &coinvaultwidgetsv1.CoinVaultSqlTableEntity{}),
+    } {
+        if err != nil { return err }
+    }
+    return nil
+}
+
+func (f *CoinVaultProjectionFeature) ProjectTimeline(..., ev sessionstream.Event, ...) ([]sessionstream.TimelineEntity, bool, error) {
+    switch ev.Name {
+    case coinVaultStatsRowProjectedEvent:
+        upsert := ev.Payload.(*coinvaultwidgetsv1.CoinVaultStatsRowUpsert)
+        entity := &coinvaultwidgetsv1.CoinVaultStatsRowEntity{Id: upsert.Id, Stats: upsert.Stats}
+        return []sessionstream.TimelineEntity{{Kind: coinVaultStatsRowEntityKind, Id: upsert.Id, Payload: entity}}, true, nil
+    case coinVaultSqlTableProjectedEvent:
+        upsert := ev.Payload.(*coinvaultwidgetsv1.CoinVaultSqlTableUpsert)
+        entity := &coinvaultwidgetsv1.CoinVaultSqlTableEntity{Id: upsert.Id, Table: upsert.Table}
+        return []sessionstream.TimelineEntity{{Kind: coinVaultSqlTableEntityKind, Id: upsert.Id, Payload: entity}}, true, nil
     default:
-        return nil, fmt.Errorf("unknown widget type %q", block.Type)
+        return nil, false, nil
     }
 }
 ```
@@ -769,9 +816,7 @@ reg.RegisterUIEvent("Good", &chatappv1.AgentModeEntity{})
 
 Old local SQLite timeline DBs may contain `Struct` payloads. Decide explicitly per app:
 
-- If local data can be discarded, reset local smoke DBs.
-- If data must survive, write a one-off migration.
-- Do not silently support two schemas forever unless product requires it.
+- Local data can be discarded or smoke DBs can be reset. Do not write compatibility shims for old `Struct` payloads in this pass. Do not silently support two schemas forever.
 
 ### Risk: CoinVault widgets may be genuinely dynamic
 
@@ -826,7 +871,7 @@ Protobuf changes touch generated Go and TS files. Keep commits small:
 This ticket is done when:
 
 - Pinocchio has no production `RegisterEvent`, `RegisterUIEvent`, or `RegisterTimelineEntity` calls using `&structpb.Struct{}`.
-- CoinVault widget schemas no longer use `type + google.protobuf.Struct payload` for known widgets.
+- CoinVault widget schemas no longer use `type + google.protobuf.Struct payload` for known widgets and no longer use a single generic wrapper for all widgets.
 - A real Go analyzer rejects generic Struct top-level sessionstream registrations.
 - The analyzer runs in Pinocchio validation (`make lint` or equivalent CI/pre-commit path).
 - Frontend hydration and live streaming tests cover AgentMode and reasoning with the new payloads.
