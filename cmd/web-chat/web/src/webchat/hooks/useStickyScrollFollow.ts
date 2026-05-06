@@ -14,8 +14,12 @@ type UseStickyScrollFollowOptions = {
   detachThresholdPx?: number;
 };
 
+function maxScrollTop(container: HTMLElement): number {
+  return Math.max(0, container.scrollHeight - container.clientHeight);
+}
+
 function distanceFromBottom(container: HTMLElement): number {
-  return container.scrollHeight - container.clientHeight - container.scrollTop;
+  return maxScrollTop(container) - container.scrollTop;
 }
 
 export function useStickyScrollFollow({
@@ -30,18 +34,41 @@ export function useStickyScrollFollow({
   const containerRef = useRef<HTMLElement>(null);
   const tailRef = useRef<HTMLDivElement>(null);
   const isProgrammaticScrollRef = useRef(false);
+  const programmaticReleaseTimerRef = useRef<number | null>(null);
   const lastScrollTopRef = useRef(0);
   const previousResetKeyRef = useRef(resetKey);
   const previousContentVersionRef = useRef<string | number | undefined>(undefined);
 
-  const scrollToBottom = useCallback((behavior: ScrollBehavior = 'auto') => {
+  const scrollToBottom = useCallback((_behavior: ScrollBehavior = 'auto') => {
     const container = containerRef.current;
     if (!container) return;
-    isProgrammaticScrollRef.current = true;
-    container.scrollTo({ top: container.scrollHeight, behavior });
-    window.requestAnimationFrame(() => {
-      isProgrammaticScrollRef.current = false;
+
+    const target = maxScrollTop(container);
+    if (Math.abs(container.scrollTop - target) <= 1) {
       lastScrollTopRef.current = container.scrollTop;
+      return;
+    }
+
+    isProgrammaticScrollRef.current = true;
+    if (programmaticReleaseTimerRef.current !== null) {
+      window.clearTimeout(programmaticReleaseTimerRef.current);
+    }
+
+    // Use an immediate, clamped scroll target. Smooth scrolling emits a long
+    // sequence of scroll events that can race with streaming token updates and
+    // with the jump-to-latest pill appearing/disappearing, causing visible jitter.
+    container.scrollTo({ top: target, behavior: 'auto' });
+
+    window.requestAnimationFrame(() => {
+      lastScrollTopRef.current = container.scrollTop;
+      programmaticReleaseTimerRef.current = window.setTimeout(() => {
+        isProgrammaticScrollRef.current = false;
+        programmaticReleaseTimerRef.current = null;
+        const latest = containerRef.current;
+        if (latest) {
+          lastScrollTopRef.current = latest.scrollTop;
+        }
+      }, 80);
     });
   }, []);
 
@@ -67,7 +94,11 @@ export function useStickyScrollFollow({
 
     setMode((currentMode) => {
       if (currentMode === 'following') {
-        if (currentScrollTop < previousScrollTop || distance > detachThresholdPx) {
+        // Only detach when the user scrolls upward. Do not detach merely because
+        // content grew or the sticky jump button disappeared; those layout changes
+        // can temporarily increase distance-from-bottom and cause follow/detach
+        // oscillation at the bottom of long histories.
+        if (currentScrollTop < previousScrollTop - 2) {
           return 'detached';
         }
         return currentMode;
@@ -96,7 +127,7 @@ export function useStickyScrollFollow({
       return;
     }
     previousContentVersionRef.current = contentVersion;
-    scrollToBottom(isStreaming ? 'auto' : 'smooth');
+    scrollToBottom('auto');
   }, [contentVersion, enabled, isStreaming, mode, scrollToBottom]);
 
   useLayoutEffect(() => {
@@ -111,6 +142,14 @@ export function useStickyScrollFollow({
     observer.observe(timeline, { childList: true, subtree: true, characterData: true });
     return () => observer.disconnect();
   }, [enabled, mode, scrollToBottom]);
+
+  useEffect(() => {
+    return () => {
+      if (programmaticReleaseTimerRef.current !== null) {
+        window.clearTimeout(programmaticReleaseTimerRef.current);
+      }
+    };
+  }, []);
 
   return {
     containerRef,
