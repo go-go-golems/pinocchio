@@ -1,4 +1,5 @@
 import type { AppDispatch } from '../../store/store';
+import { buildWebSocketURL, type CanonicalFrame, encodeSubscribeFrame, parseServerFrame } from '../../ws/protocol';
 import { setFollowStatus } from '../store/uiSlice';
 
 type ConnectArgs = {
@@ -6,55 +7,6 @@ type ConnectArgs = {
   basePrefix: string;
   dispatch: AppDispatch;
 };
-
-type CanonicalFrame = Record<string, unknown>;
-
-function asRecord(value: unknown): Record<string, unknown> {
-  if (value && typeof value === 'object' && !Array.isArray(value)) {
-    return value as Record<string, unknown>;
-  }
-  return {};
-}
-
-function asString(value: unknown): string {
-  return typeof value === 'string' ? value : '';
-}
-
-function normalizeServerFrame(frame: CanonicalFrame): CanonicalFrame {
-  if ('type' in frame) return frame;
-  if (frame.hello) return { type: 'hello', ...(asRecord(frame.hello)) };
-  if (frame.snapshot) {
-    const snapshot = asRecord(frame.snapshot);
-    return {
-      type: 'snapshot',
-      sessionId: asString(snapshot.sessionId),
-      ordinal: snapshot.snapshotOrdinal,
-      entities: Array.isArray(snapshot.entities) ? snapshot.entities : [],
-    };
-  }
-  if (frame.subscribed) return { type: 'subscribed', ...(asRecord(frame.subscribed)) };
-  if (frame.uiEvent) {
-    const uiEvent = asRecord(frame.uiEvent);
-    return {
-      type: 'ui-event',
-      sessionId: asString(uiEvent.sessionId),
-      ordinal: uiEvent.eventOrdinal,
-      name: asString(uiEvent.name),
-      payload: asRecord(uiEvent.payload),
-    };
-  }
-  if (frame.error) {
-    const error = asRecord(frame.error);
-    return {
-      type: 'error',
-      sessionId: asString(error.sessionId),
-      error: asString(error.message),
-      code: asString(error.code),
-      detail: asString(error.detail),
-    };
-  }
-  return frame;
-}
 
 let onFrame: ((frame: CanonicalFrame) => void) | null = null;
 
@@ -76,16 +28,14 @@ class DebugWsManager {
     this.disconnect();
     const nonce = ++this.nonce;
 
-    const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
-    const url = `${proto}://${window.location.host}${args.basePrefix}/api/chat/ws`;
-    const ws = new WebSocket(url);
+    const ws = new WebSocket(buildWebSocketURL({ basePrefix: args.basePrefix }));
     this.ws = ws;
 
     args.dispatch(setFollowStatus('connecting'));
 
     ws.onopen = () => {
       if (nonce !== this.nonce) return;
-      ws.send(JSON.stringify({ subscribe: { sessionId: args.sessionId, sinceSnapshotOrdinal: '0' } }));
+      ws.send(encodeSubscribeFrame(args.sessionId));
     };
 
     ws.onclose = () => {
@@ -102,7 +52,7 @@ class DebugWsManager {
       if (nonce !== this.nonce) return;
       let frame: CanonicalFrame;
       try {
-        frame = normalizeServerFrame(JSON.parse(String(message.data)) as CanonicalFrame);
+        frame = parseServerFrame(String(message.data));
       } catch {
         return;
       }
