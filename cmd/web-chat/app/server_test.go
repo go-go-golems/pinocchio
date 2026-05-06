@@ -288,6 +288,30 @@ func TestTimelineExportJSONDownload(t *testing.T) {
 	require.Len(t, payload["entities"], 2)
 }
 
+func TestTurnsExportMinitraceWithFileBackedDB(t *testing.T) {
+	turnsDBPath := filepath.Join(t.TempDir(), "turns.db")
+	turnStore, err := chatstore.NewSQLiteTurnStore(turnsDBPath)
+	require.NoError(t, err)
+	defer func() { _ = turnStore.Close() }()
+	turn := &turns.Turn{ID: "turn-1"}
+	turns.AppendBlock(turn, turns.NewUserTextBlock("pinocchio minitrace export"))
+	payload, err := serde.ToYAML(turn, serde.Options{})
+	require.NoError(t, err)
+	require.NoError(t, turnStore.Save(context.Background(), "sess-minitrace", "sess-minitrace", "turn-1", "final", 1000, string(payload), chatstore.TurnSaveOptions{RuntimeKey: "gpt-5-mini"}))
+
+	_, httpSrv := newTestMux(t, WithTurnStore(turnStore), WithTurnsDBPath(turnsDBPath))
+	resp, err := http.Get(httpSrv.URL + "/api/chat/sessions/sess-minitrace/turns?format=minitrace&download=true")
+	require.NoError(t, err)
+	defer func() { _ = resp.Body.Close() }()
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	require.Equal(t, "application/json", resp.Header.Get("Content-Type"))
+	require.Contains(t, resp.Header.Get("Content-Disposition"), "pinocchio-sess-minitrace-turns.minitrace.json")
+	var mt map[string]any
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&mt))
+	require.Equal(t, "minitrace-v0.2.0", mt["schema_version"])
+	require.Equal(t, "pinocchio-turns-sqlite-v1", mt["provenance"].(map[string]any)["source_format"])
+}
+
 func TestTurnsExportYAMLAndMinitraceMissingPath(t *testing.T) {
 	_, httpSrv := newTestMux(t, WithTurnStore(&fakeTurnStore{snapshot: &chatstore.TurnSnapshot{
 		ConvID:      "sess-turn-export",
