@@ -256,7 +256,7 @@ func (e *Engine) runRuntimeInference(ctx context.Context, sid sessionstream.Sess
 		_ = e.publish(publishContext(ctx), sid, pub, EventInferenceStopped, newChatMessageUpdate(messageID, "assistant", "", "", prompt, "stopped", false, "internal runtime sink type assertion failed"))
 		return
 	}
-	sess := gepsession.NewSession()
+	sess := gepsession.NewSessionWithID(string(sid))
 	sess.Builder = &enginebuilder.Builder{
 		Base:       runtime.Engine,
 		EventSinks: []gepevents.EventSink{eventSink},
@@ -267,13 +267,22 @@ func (e *Engine) runRuntimeInference(ctx context.Context, sid sessionstream.Sess
 	// it and add the new user block, giving the LLM the full context.
 	if e.turnStore != nil {
 		snapshot, err := e.turnStore.LoadLatestTurn(ctx, string(sid), "final")
-		if err == nil && snapshot != nil {
-			turn, err := serde.FromYAML([]byte(snapshot.Payload))
-			if err == nil && turn != nil {
-				sess.Append(turn)
-			}
+		if err != nil {
+			_ = e.publish(publishContext(ctx), sid, pub, EventInferenceStopped, sink.stoppedMessageUpdate(messageID, fmt.Sprintf("load conversation history: %v", err)))
+			return
 		}
-		// Errors are non-fatal: inference proceeds with a fresh session.
+		if snapshot != nil {
+			turn, err := serde.FromYAML([]byte(snapshot.Payload))
+			if err != nil {
+				_ = e.publish(publishContext(ctx), sid, pub, EventInferenceStopped, sink.stoppedMessageUpdate(messageID, fmt.Sprintf("decode conversation history: %v", err)))
+				return
+			}
+			if turn == nil {
+				_ = e.publish(publishContext(ctx), sid, pub, EventInferenceStopped, sink.stoppedMessageUpdate(messageID, "decode conversation history: empty turn"))
+				return
+			}
+			sess.Append(turn)
+		}
 	}
 
 	_, err := sess.AppendNewTurnFromUserPrompt(prompt)

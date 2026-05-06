@@ -7,9 +7,12 @@ import (
 	"time"
 
 	gepevents "github.com/go-go-golems/geppetto/pkg/events"
+	gepsession "github.com/go-go-golems/geppetto/pkg/inference/session"
 	"github.com/go-go-golems/geppetto/pkg/turns"
+	"github.com/go-go-golems/geppetto/pkg/turns/serde"
 	chatappv1 "github.com/go-go-golems/pinocchio/pkg/chatapp/pb/proto/pinocchio/chatapp/v1"
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
+	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
 	sessionstream "github.com/go-go-golems/sessionstream/pkg/sessionstream"
 	storesqlite "github.com/go-go-golems/sessionstream/pkg/sessionstream/hydration/sqlite"
 	"github.com/stretchr/testify/require"
@@ -82,6 +85,140 @@ func TestPendingRequestsAreKeyedByRequestID(t *testing.T) {
 	require.Equal(t, "first", engine.takePendingRequest("request-1").Prompt)
 	require.Equal(t, "second", engine.takePendingRequest("request-2").Prompt)
 	require.Empty(t, engine.takePendingRequest("request-1").Prompt)
+}
+
+func TestRuntimeInferenceLoadsLatestTurnHistory(t *testing.T) {
+	ctx := context.Background()
+	prior := &turns.Turn{ID: "turn-prior"}
+	turns.AppendBlock(prior, turns.NewUserTextBlock("What products do we have?"))
+	turns.AppendBlock(prior, turns.NewAssistantTextBlock("We have American Gold Eagles."))
+	payload, err := serde.ToYAML(prior, serde.Options{})
+	require.NoError(t, err)
+
+	store := &fakeTurnStore{snapshot: &chatstore.TurnSnapshot{
+		ConvID:      "chat-history",
+		SessionID:   "chat-history",
+		TurnID:      "turn-prior",
+		Phase:       "final",
+		CreatedAtMs: 100,
+		Payload:     string(payload),
+	}}
+	recorder := &recordingHistoryEngine{}
+	engine := NewEngine(WithChunkDelay(time.Millisecond), WithTurnStore(store))
+	hub := newTestHub(t, engine)
+	engine.setPendingRequest("request-history", PromptRequest{
+		Prompt: "Tell me more about the first one",
+		Runtime: &infruntime.ComposedRuntime{
+			Engine: recorder,
+		},
+	})
+
+	require.NoError(t, hub.Submit(ctx, sessionstream.SessionId("chat-history"), CommandStartInference, &chatappv1.StartInferenceCommand{RequestId: "request-history"}))
+	require.NoError(t, engine.WaitIdle(ctx, sessionstream.SessionId("chat-history")))
+
+	seen := recorder.seen
+	require.NotNil(t, seen)
+	require.Equal(t, "chat-history", recorder.sessionID)
+	require.Len(t, seen.Blocks, 3)
+	require.Equal(t, turns.RoleUser, seen.Blocks[0].Role)
+	require.Equal(t, "What products do we have?", seen.Blocks[0].Payload[turns.PayloadKeyText])
+	require.Equal(t, turns.RoleAssistant, seen.Blocks[1].Role)
+	require.Equal(t, "We have American Gold Eagles.", seen.Blocks[1].Payload[turns.PayloadKeyText])
+	require.Equal(t, turns.RoleUser, seen.Blocks[2].Role)
+	require.Equal(t, "Tell me more about the first one", seen.Blocks[2].Payload[turns.PayloadKeyText])
+}
+
+func TestRuntimeInferenceStartsFreshWhenNoHistoryExists(t *testing.T) {
+	ctx := context.Background()
+	store := &fakeTurnStore{}
+	recorder := &recordingHistoryEngine{}
+	engine := NewEngine(WithChunkDelay(time.Millisecond), WithTurnStore(store))
+	hub := newTestHub(t, engine)
+	engine.setPendingRequest("request-no-history", PromptRequest{
+		Prompt: "First message",
+		Runtime: &infruntime.ComposedRuntime{
+			Engine: recorder,
+		},
+	})
+
+	require.NoError(t, hub.Submit(ctx, sessionstream.SessionId("chat-empty"), CommandStartInference, &chatappv1.StartInferenceCommand{RequestId: "request-no-history"}))
+	require.NoError(t, engine.WaitIdle(ctx, sessionstream.SessionId("chat-empty")))
+
+	seen := recorder.seen
+	require.NotNil(t, seen)
+	require.Equal(t, "chat-empty", recorder.sessionID)
+	require.Len(t, seen.Blocks, 1)
+	require.Equal(t, turns.RoleUser, seen.Blocks[0].Role)
+	require.Equal(t, "First message", seen.Blocks[0].Payload[turns.PayloadKeyText])
+}
+
+func TestRuntimeInferenceStopsWhenHistoryLoadFails(t *testing.T) {
+	ctx := context.Background()
+	store := &fakeTurnStore{err: errors.New("database unavailable")}
+	recorder := &recordingHistoryEngine{}
+	engine := NewEngine(WithChunkDelay(time.Millisecond), WithTurnStore(store))
+	hub := newTestHub(t, engine)
+	engine.setPendingRequest("request-history-error", PromptRequest{
+		Prompt: "Follow up",
+		Runtime: &infruntime.ComposedRuntime{
+			Engine: recorder,
+		},
+	})
+
+	require.NoError(t, hub.Submit(ctx, sessionstream.SessionId("chat-load-error"), CommandStartInference, &chatappv1.StartInferenceCommand{RequestId: "request-history-error"}))
+	require.NoError(t, engine.WaitIdle(ctx, sessionstream.SessionId("chat-load-error")))
+	require.Nil(t, recorder.seen)
+
+	snap, err := hub.Snapshot(ctx, sessionstream.SessionId("chat-load-error"))
+	require.NoError(t, err)
+	var stopped *chatappv1.ChatMessageEntity
+	for _, entity := range snap.Entities {
+		msg, ok := entity.Payload.(*chatappv1.ChatMessageEntity)
+		if ok && msg.GetRole() == "assistant" {
+			stopped = msg
+		}
+	}
+	require.NotNil(t, stopped)
+	require.Equal(t, "stopped", stopped.GetStatus())
+	require.Contains(t, stopped.GetError(), "load conversation history")
+	require.Contains(t, stopped.GetError(), "database unavailable")
+}
+
+func TestRuntimeInferenceStopsWhenHistoryDecodeFails(t *testing.T) {
+	ctx := context.Background()
+	store := &fakeTurnStore{snapshot: &chatstore.TurnSnapshot{
+		ConvID:    "chat-corrupt",
+		SessionID: "chat-corrupt",
+		TurnID:    "turn-corrupt",
+		Phase:     "final",
+		Payload:   "not: [valid",
+	}}
+	recorder := &recordingHistoryEngine{}
+	engine := NewEngine(WithChunkDelay(time.Millisecond), WithTurnStore(store))
+	hub := newTestHub(t, engine)
+	engine.setPendingRequest("request-history-decode-error", PromptRequest{
+		Prompt: "Follow up",
+		Runtime: &infruntime.ComposedRuntime{
+			Engine: recorder,
+		},
+	})
+
+	require.NoError(t, hub.Submit(ctx, sessionstream.SessionId("chat-corrupt"), CommandStartInference, &chatappv1.StartInferenceCommand{RequestId: "request-history-decode-error"}))
+	require.NoError(t, engine.WaitIdle(ctx, sessionstream.SessionId("chat-corrupt")))
+	require.Nil(t, recorder.seen)
+
+	snap, err := hub.Snapshot(ctx, sessionstream.SessionId("chat-corrupt"))
+	require.NoError(t, err)
+	var stopped *chatappv1.ChatMessageEntity
+	for _, entity := range snap.Entities {
+		msg, ok := entity.Payload.(*chatappv1.ChatMessageEntity)
+		if ok && msg.GetRole() == "assistant" {
+			stopped = msg
+		}
+	}
+	require.NotNil(t, stopped)
+	require.Equal(t, "stopped", stopped.GetStatus())
+	require.Contains(t, stopped.GetError(), "decode conversation history")
 }
 
 func TestRuntimeInterleavedTextToolTextUsesDistinctTextSegments(t *testing.T) {
@@ -287,6 +424,43 @@ type maxIterationsErrorEngine struct{}
 func (maxIterationsErrorEngine) RunInference(context.Context, *turns.Turn) (*turns.Turn, error) {
 	return nil, errors.New("max iterations (20) reached")
 }
+
+type recordingHistoryEngine struct {
+	seen      *turns.Turn
+	sessionID string
+}
+
+func (e *recordingHistoryEngine) RunInference(ctx context.Context, t *turns.Turn) (*turns.Turn, error) {
+	if t != nil {
+		e.seen = t.Clone()
+	}
+	e.sessionID = gepsession.SessionIDFromContext(ctx)
+	turns.AppendBlock(t, turns.NewAssistantTextBlock("ok"))
+	gepevents.PublishEventToContext(ctx, gepevents.NewFinalEvent(gepevents.EventMetadata{SessionID: e.sessionID}, "ok"))
+	return t, nil
+}
+
+type fakeTurnStore struct {
+	snapshot *chatstore.TurnSnapshot
+	err      error
+}
+
+func (s *fakeTurnStore) Save(context.Context, string, string, string, string, int64, string, chatstore.TurnSaveOptions) error {
+	return nil
+}
+
+func (s *fakeTurnStore) List(context.Context, chatstore.TurnQuery) ([]chatstore.TurnSnapshot, error) {
+	if s.snapshot == nil {
+		return nil, s.err
+	}
+	return []chatstore.TurnSnapshot{*s.snapshot}, s.err
+}
+
+func (s *fakeTurnStore) LoadLatestTurn(context.Context, string, string) (*chatstore.TurnSnapshot, error) {
+	return s.snapshot, s.err
+}
+
+func (s *fakeTurnStore) Close() error { return nil }
 
 type testPlugin struct{}
 
