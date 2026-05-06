@@ -113,8 +113,8 @@ func TestWebChatRuntimeComposer_UsesResolvedRuntimeSpec(t *testing.T) {
 	if err != nil {
 		t.Fatalf("compose failed: %v", err)
 	}
-	if res.SeedSystemPrompt != "You are analyst" {
-		t.Fatalf("unexpected seed prompt: %q", res.SeedSystemPrompt)
+	if res.RuntimeKey != "analyst" {
+		t.Fatalf("unexpected runtime key: %q", res.RuntimeKey)
 	}
 }
 

@@ -103,7 +103,6 @@ func (c *ProfileRuntimeComposer) Compose(ctx context.Context, req infruntime.Con
 		WrapSink:           runtimeSinkWrapperFromProfile(req.ResolvedProfileRuntime),
 		RuntimeKey:         runtimeKey,
 		RuntimeFingerprint: runtimeFingerprint,
-		SeedSystemPrompt:   systemPrompt,
 	}, nil
 }
 

@@ -32,9 +32,6 @@ type ComposedRuntime struct {
 	WrapSink           EventSinkWrapper
 	RuntimeFingerprint string
 	RuntimeKey         string
-
-	// SeedSystemPrompt is used to initialize the first seed turn for a new conversation.
-	SeedSystemPrompt string
 }
 
 // RuntimeBuilder composes an engine/sink runtime for a conversation request.
