@@ -769,3 +769,76 @@ The low-risk sequence is to first add generated TypeScript descriptors for `prot
 
 ### Code review instructions
 - Review the generation template and generated file path first; behavior should not change until the decoder refactor commit.
+
+## Step 14: Add typed UI-event payload decoder and refactor timeline mapping
+
+I completed typed frontend payload decoding phase 3. The frontend now has generated chatapp protobuf descriptors and a typed decoder that maps known Sessionstream UI events to concrete chatapp payload types before constructing timeline mutations.
+
+The mapper still accepts the same normalized WebSocket frame shape, and `wsManager.ts` continues to re-export the tested mapping helpers, but the known event switch now operates on typed `ChatMessageUpdate`, `ReasoningUpdate`, `ToolCallUpdate`, `ToolResultUpdate`, and agent-mode payloads rather than repeatedly reading fields from generic records.
+
+### Prompt Context
+
+**User prompt (verbatim):** (same as Step 13)
+
+**Assistant interpretation:** Finish the typed frontend decoding tasks, validate them, update task state, and commit the implementation slice.
+
+**Inferred user intent:** Close the guide item about schema-aware frontend payload mapping, including reasoning provider-ID preservation and tool update handling.
+
+### What I did
+- Added `cmd/web-chat/web/src/ws/chatappPayloads.ts`.
+- Added `decodeKnownUIEvent(frame)` with a typed union over known chatapp UI events:
+  - `ChatMessageAccepted`, `ChatMessageStarted`, `ChatMessageAppended`, `ChatMessageFinished`, `ChatMessageStopped` → `ChatMessageUpdate`
+  - `ChatReasoningStarted`, `ChatReasoningAppended`, `ChatReasoningFinished` → `ReasoningUpdate`
+  - `ChatToolCallStarted`, `ChatToolCallUpdated`, `ChatToolCallFinished` → `ToolCallUpdate`
+  - `ChatToolResultReady` → `ToolResultUpdate`
+  - `ChatAgentModePreviewUpdated`, `ChatAgentModeCommitted`, `ChatAgentModePreviewCleared` → agent-mode update messages
+- Used `fromJson(schema, payload, { ignoreUnknownFields: true })` from `@bufbuild/protobuf` to decode normalized protobuf JSON payloads.
+- Refactored `cmd/web-chat/web/src/ws/timelineEvents.ts` so known event mapping switches on typed decoded payloads.
+- Preserved reasoning provider correlation fields in timeline message props:
+  - `provider`
+  - `responseId`
+  - `itemId`
+  - `outputIndex`
+  - `summaryIndex`
+- Added typed tool-call and tool-result frontend timeline mutations:
+  - `ChatToolCall*` now maps to `tool_call` entities.
+  - `ChatToolResultReady` now maps to `tool_result` entities.
+- Added tests for:
+  - typed reasoning provider IDs and optional zero-valued indexes;
+  - typed tool call and tool result mutations;
+  - existing chat/reasoning/agent-mode behavior.
+
+### Why
+- The backend payloads are protobuf messages; decoding them as generated frontend types catches field-name drift earlier and documents which events carry which payloads.
+- Provider IDs on `ReasoningUpdate` were added specifically for browser/debug correlation, so the frontend should preserve them in mapped timeline props.
+- Tool updates were registered and projected by the backend but had no typed frontend mapper in the WebSocket path.
+
+### What worked
+- Frontend validation passed:
+  - `npm run typecheck`
+  - `npx vitest run src/ws/wsManager.test.ts`
+- The targeted Vitest file now has 13 passing tests.
+
+### What didn't work
+- N/A. The generated v2 protobuf API worked once the decoder used the schema-based `fromJson` helper instead of the older static `Message.fromJson` pattern from the sketch.
+
+### What I learned
+- `ignoreUnknownFields: true` is useful because normalized protobuf `Any` payloads can still contain fields such as `@type`, and the renderer only needs typed known fields.
+- The typed union keeps event-name/payload pairing explicit without requiring a bigger architectural change to the WebSocket manager.
+
+### What was tricky to build
+- Tool-call inputs are string payloads in the chatapp proto. For renderer friendliness, the mapper now keeps both `inputRaw` and a parsed `input` when the string is valid JSON.
+
+### What warrants a second pair of eyes
+- The typed mapper now adds visible `tool_call` / `tool_result` entities from UI events. This aligns with existing renderers, but reviewers should confirm duplicate behavior is acceptable when snapshots and live UI events both arrive.
+- Consider whether future debug/correlation UI should surface reasoning provider IDs directly in the rendered thinking card or only keep them in props/debug data.
+
+### What should be done in the future
+- Consider moving tests to import mapper helpers directly from `timelineEvents.ts` / `timelineSnapshot.ts` instead of relying on `wsManager.ts` re-exports.
+- Consider adding a table-driven event-name-to-schema registry if the number of chatapp UI event payload types grows.
+
+### Code review instructions
+- Review the generated schema commit separately from this typed mapper commit.
+- Validate from `cmd/web-chat/web` with:
+  - `npm run typecheck`
+  - `npx vitest run src/ws/wsManager.test.ts`
