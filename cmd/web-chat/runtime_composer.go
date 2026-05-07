@@ -16,10 +16,11 @@ import (
 )
 
 type ProfileRuntimeComposer struct {
-	definitions middlewarecfg.DefinitionRegistry
-	buildDeps   middlewarecfg.BuildDeps
-	base        *settings.InferenceSettings
-	turnStore   chatstore.TurnStore
+	definitions   middlewarecfg.DefinitionRegistry
+	buildDeps     middlewarecfg.BuildDeps
+	base          *settings.InferenceSettings
+	turnStore     chatstore.TurnStore
+	engineFactory factory.EngineFactory
 }
 
 func newProfileRuntimeComposer(
@@ -39,6 +40,14 @@ func (c *ProfileRuntimeComposer) WithTurnStore(turnStore chatstore.TurnStore) *P
 		return c
 	}
 	c.turnStore = turnStore
+	return c
+}
+
+func (c *ProfileRuntimeComposer) WithEngineFactory(engineFactory factory.EngineFactory) *ProfileRuntimeComposer {
+	if c == nil {
+		return c
+	}
+	c.engineFactory = engineFactory
 	return c
 }
 
@@ -92,7 +101,11 @@ func (c *ProfileRuntimeComposer) Compose(ctx context.Context, req infruntime.Con
 		}
 	}
 
-	baseEngine, err := factory.NewEngineFromSettings(effectiveInferenceSettings)
+	engineFactory := c.engineFactory
+	if engineFactory == nil {
+		engineFactory = factory.NewStandardEngineFactory()
+	}
+	baseEngine, err := engineFactory.CreateEngine(effectiveInferenceSettings)
 	if err != nil {
 		return infruntime.ComposedRuntime{}, fmt.Errorf("engine init failed: %w", err)
 	}

@@ -15,6 +15,7 @@ import (
 	"time"
 
 	gepevents "github.com/go-go-golems/geppetto/pkg/events"
+	geppettoobs "github.com/go-go-golems/geppetto/pkg/observability"
 	"github.com/go-go-golems/geppetto/pkg/turns"
 	"github.com/go-go-golems/geppetto/pkg/turns/serde"
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
@@ -261,6 +262,41 @@ func TestDebugRecorderEndpointsExposePipelineAndTransportRecords(t *testing.T) {
 	require.Equal(t, "sess-debug-1", reconcile.SessionID)
 	require.NotZero(t, reconcile.PipelineRecordCount)
 	require.NotZero(t, reconcile.TransportRecordCount)
+}
+
+func TestDebugRecorderEndpointExposesGeppettoRecords(t *testing.T) {
+	recorder := NewStreamDebugRecorder(1000)
+	_, httpSrv := newTestMux(t, WithDebugRecorder(recorder), WithRuntimeResolver(staticRuntimeResolver{completion: "debug response"}))
+
+	recorder.OnGeppettoRecord(context.Background(), geppettoobs.Record{
+		Timestamp:    time.Now().UTC(),
+		SessionID:    "sess-geppetto-1",
+		Stage:        geppettoobs.StageProviderRoutedEvent,
+		Provider:     "openai_responses",
+		EventType:    "response.reasoning_summary_text.delta",
+		ResponseID:   "resp_1",
+		ItemID:       "rs_1",
+		ObjectJSON:   json.RawMessage(`{"item_id":"rs_1","delta":"thinking"}`),
+		EventJSON:    json.RawMessage(`{"message":"reasoning-summary"}`),
+		MetadataJSON: json.RawMessage(`{"turn_id":"turn_1"}`),
+	})
+
+	geppettoResp, err := http.Get(httpSrv.URL + "/api/debug/sessions/sess-geppetto-1/geppetto")
+	require.NoError(t, err)
+	defer func() { _ = geppettoResp.Body.Close() }()
+	require.Equal(t, http.StatusOK, geppettoResp.StatusCode)
+	var out debugRecordsResponse
+	require.NoError(t, json.NewDecoder(geppettoResp.Body).Decode(&out))
+	require.Equal(t, "sess-geppetto-1", out.SessionID)
+	require.Equal(t, string(DebugRecordKindGeppetto), out.Kind)
+	require.Len(t, out.Records, 1)
+	require.Equal(t, DebugRecordKindGeppetto, out.Records[0].Kind)
+	require.NotNil(t, out.Records[0].Geppetto)
+	require.Equal(t, "rs_1", out.Records[0].Geppetto.ItemID)
+	require.Equal(t, "response.reasoning_summary_text.delta", out.Records[0].Geppetto.EventType)
+	require.NotNil(t, out.Records[0].Geppetto.ObjectJSON)
+	require.NotNil(t, out.Records[0].Geppetto.EventJSON)
+	require.NotNil(t, out.Records[0].Geppetto.MetadataJSON)
 }
 
 func TestSubmitAndSnapshot_UsesResolvedRuntimeWhenConfigured(t *testing.T) {
@@ -570,6 +606,37 @@ func TestDebugReconcileUploadReturnsSQLiteDatabase(t *testing.T) {
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 	_ = readServerFrame(t, conn)
 
+	recorder.OnGeppettoRecord(context.Background(), geppettoobs.Record{
+		Timestamp:    time.Now().UTC(),
+		SessionID:    "sess-sqlite-debug",
+		InferenceID:  "inf_1",
+		TurnID:       "turn_1",
+		MessageID:    "msg_1",
+		Stage:        geppettoobs.StageProviderRoutedEvent,
+		Provider:     "openai_responses",
+		EventType:    "response.reasoning_summary_text.delta",
+		ResponseID:   "resp_1",
+		ItemID:       "rs_1",
+		SummaryIndex: ptr(0),
+		ObjectJSON:   json.RawMessage(`{"item_id":"rs_1","summary_index":0,"delta":"thinking"}`),
+	})
+	recorder.OnGeppettoRecord(context.Background(), geppettoobs.Record{
+		Timestamp:    time.Now().UTC(),
+		SessionID:    "sess-sqlite-debug",
+		InferenceID:  "inf_1",
+		TurnID:       "turn_1",
+		MessageID:    "msg_1",
+		Stage:        geppettoobs.StageGeppettoPublishDone,
+		Provider:     "openai_responses",
+		EventType:    string(gepevents.EventTypeInfo),
+		InfoMessage:  "reasoning-summary",
+		ResponseID:   "resp_1",
+		ItemID:       "rs_1",
+		SummaryIndex: ptr(0),
+		EventJSON:    json.RawMessage(`{"message":"reasoning-summary","data":{"item_id":"rs_1"}}`),
+		MetadataJSON: json.RawMessage(`{"turn_id":"turn_1","inference_id":"inf_1"}`),
+	})
+
 	uploadBody := `{"records":[{"id":1,"timestamp":1770000000000,"type":"parsed-frame","sessionId":"sess-sqlite-debug","ordinal":"1","frameType":"ui-event","name":"ChatMessageAppended","frame":{"type":"ui-event"}},{"id":2,"timestamp":1770000000001,"type":"ui-event","sessionId":"sess-sqlite-debug","ordinal":"1","name":"ChatMessageAppended","messageId":"chat-msg-1","mutation":{"upsert":{"id":"chat-msg-1"}}}]}`
 	uploadResp, err := http.Post(httpSrv.URL+"/api/debug/sessions/sess-sqlite-debug/reconcile/upload", "application/json", strings.NewReader(uploadBody))
 	require.NoError(t, err)
@@ -591,6 +658,25 @@ func TestDebugReconcileUploadReturnsSQLiteDatabase(t *testing.T) {
 	assertTableCount(t, db, "frontend_records")
 	assertTableCount(t, db, "frontend_parsed_frames")
 	assertTableCount(t, db, "frontend_ui_events")
+
+	assertTableCount(t, db, "geppetto_records")
+	assertTableCount(t, db, "geppetto_provider_events")
+	assertTableCount(t, db, "geppetto_emitted_events")
+	var geppettoMeta string
+	require.NoError(t, db.QueryRow("SELECT value FROM meta WHERE key='geppetto_record_count'").Scan(&geppettoMeta))
+	assert.Equal(t, "2", geppettoMeta)
+	var itemID, objectJSON string
+	require.NoError(t, db.QueryRow("SELECT item_id, object_json FROM geppetto_provider_events WHERE provider_event_type=?", "response.reasoning_summary_text.delta").Scan(&itemID, &objectJSON))
+	assert.Equal(t, "rs_1", itemID)
+	assert.Contains(t, objectJSON, "thinking")
+	var eventJSON, metadataJSON string
+	require.NoError(t, db.QueryRow("SELECT event_json, metadata_json FROM geppetto_emitted_events WHERE info_message=?", "reasoning-summary").Scan(&eventJSON, &metadataJSON))
+	assert.Contains(t, eventJSON, "reasoning-summary")
+	assert.Contains(t, metadataJSON, "turn_1")
+	assertViewExists(t, db, "geppetto_reasoning_sequence")
+	assertViewExists(t, db, "geppetto_summary_without_item_id")
+	assertViewExists(t, db, "geppetto_publish_errors")
+	assertViewExists(t, db, "geppetto_reasoning_to_frontend")
 
 	// Verify timeline_entities and turns tables exist (may be empty without turn store).
 	assertTableExists(t, db, "timeline_entities")
@@ -681,6 +767,8 @@ func (m *mockDebugDataProvider) ExportTurnsList(_ context.Context, _ string) ([]
 	return m.turns, nil
 }
 
+func ptr[T any](v T) *T { return &v }
+
 func assertTableCount(t *testing.T, db *sql.DB, table string) {
 	t.Helper()
 	var count int
@@ -693,4 +781,11 @@ func assertTableExists(t *testing.T, db *sql.DB, table string) {
 	var name string
 	require.NoError(t, db.QueryRow("SELECT name FROM sqlite_master WHERE type='table' AND name=?", table).Scan(&name))
 	require.Equal(t, table, name, "expected table %s to exist", table)
+}
+
+func assertViewExists(t *testing.T, db *sql.DB, view string) {
+	t.Helper()
+	var name string
+	require.NoError(t, db.QueryRow("SELECT name FROM sqlite_master WHERE type='view' AND name=?", view).Scan(&name))
+	require.Equal(t, view, name, "expected view %s to exist", view)
 }

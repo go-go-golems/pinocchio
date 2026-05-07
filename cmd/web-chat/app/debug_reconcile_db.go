@@ -144,6 +144,12 @@ func createDebugSQLiteSchema(ctx context.Context, db *sql.DB) error {
 		`CREATE TABLE backend_pipeline_entities (id INTEGER PRIMARY KEY AUTOINCREMENT, record_id INTEGER NOT NULL REFERENCES backend_records(id), source TEXT NOT NULL, kind TEXT, entity_id TEXT, created_ordinal INTEGER, last_event_ordinal INTEGER, tombstone INTEGER, payload_type TEXT, payload_json TEXT)`,
 		`CREATE TABLE backend_transport (record_id INTEGER PRIMARY KEY REFERENCES backend_records(id), stage TEXT, direction TEXT, frame_type TEXT, event_name TEXT, payload_type TEXT, since_snapshot_ordinal INTEGER, snapshot_ordinal INTEGER, snapshot_entity_count INTEGER, fanout_event_count INTEGER, raw_bytes INTEGER, queue_len INTEGER, queue_cap INTEGER, error TEXT)`,
 		`CREATE TABLE backend_transport_snapshot_entities (id INTEGER PRIMARY KEY AUTOINCREMENT, record_id INTEGER NOT NULL REFERENCES backend_records(id), kind TEXT, entity_id TEXT, created_ordinal INTEGER, last_event_ordinal INTEGER, payload_type TEXT, tombstone INTEGER)`,
+		`CREATE TABLE geppetto_records (record_id INTEGER PRIMARY KEY REFERENCES backend_records(id), ts TEXT, provider TEXT, model TEXT, session_id TEXT, inference_id TEXT, turn_id TEXT, message_id TEXT, stage TEXT NOT NULL, event_type TEXT, info_message TEXT, response_id TEXT, item_id TEXT, output_index INTEGER, summary_index INTEGER, delta_len INTEGER, normalized_delta_len INTEGER, buffer_len INTEGER, error TEXT, object_json TEXT, event_json TEXT, metadata_json TEXT)`,
+		`CREATE TABLE geppetto_provider_events (record_id INTEGER PRIMARY KEY REFERENCES geppetto_records(record_id), provider_event_type TEXT, response_id TEXT, item_id TEXT, output_index INTEGER, summary_index INTEGER, object_json TEXT)`,
+		`CREATE TABLE geppetto_emitted_events (record_id INTEGER PRIMARY KEY REFERENCES geppetto_records(record_id), geppetto_event_type TEXT, info_message TEXT, response_id TEXT, item_id TEXT, output_index INTEGER, summary_index INTEGER, event_json TEXT, metadata_json TEXT)`,
+		`CREATE INDEX idx_geppetto_records_session_stage ON geppetto_records(session_id, stage)`,
+		`CREATE INDEX idx_geppetto_records_item ON geppetto_records(item_id)`,
+		`CREATE INDEX idx_geppetto_records_event_type ON geppetto_records(event_type)`,
 		`CREATE TABLE frontend_records (id INTEGER PRIMARY KEY, type TEXT NOT NULL, ts_ms INTEGER, ts_iso TEXT, session_id TEXT, ordinal INTEGER, raw_json TEXT NOT NULL)`,
 		`CREATE TABLE frontend_raw_ws (record_id INTEGER PRIMARY KEY REFERENCES frontend_records(id), size INTEGER, preview TEXT, raw TEXT)`,
 		`CREATE TABLE frontend_parsed_frames (record_id INTEGER PRIMARY KEY REFERENCES frontend_records(id), frame_type TEXT, name TEXT, payload_type TEXT, frame_json TEXT)`,
@@ -219,6 +225,133 @@ func createDebugSQLiteViews(ctx context.Context, db *sql.DB) error {
 		   JOIN backend_records br ON br.id = bt.record_id
 		  WHERE bt.error IS NOT NULL AND bt.error != ''`,
 
+		// Geppetto reasoning/provider sequence for OpenAI Responses debugging.
+		`CREATE VIEW geppetto_reasoning_sequence AS
+		 SELECT record_id, ts, stage, event_type, info_message, message_id, response_id, item_id,
+		        output_index, summary_index, delta_len, normalized_delta_len, buffer_len, error
+		   FROM geppetto_records
+		  WHERE COALESCE(event_type, '') LIKE '%reasoning%'
+		     OR COALESCE(event_type, '') LIKE '%summary%'
+		     OR COALESCE(info_message, '') LIKE '%thinking%'
+		     OR COALESCE(info_message, '') LIKE '%reasoning%'
+		  ORDER BY ts, record_id`,
+
+		// Summary-related Geppetto records missing provider item IDs.
+		`CREATE VIEW geppetto_summary_without_item_id AS
+		 SELECT *
+		   FROM geppetto_records
+		  WHERE (COALESCE(event_type, '') LIKE '%summary%'
+		     OR COALESCE(info_message, '') LIKE '%summary%')
+		    AND COALESCE(item_id, '') = ''`,
+
+		// Geppetto publish errors.
+		`CREATE VIEW geppetto_publish_errors AS
+		 SELECT *
+		   FROM geppetto_records
+		  WHERE stage = 'geppetto_publish_error'
+		     OR COALESCE(error, '') != ''`,
+
+		// Provider records next to emitted Geppetto events by provider item id.
+		`CREATE VIEW geppetto_provider_to_emitted AS
+		 SELECT p.record_id AS provider_record_id,
+		        p.provider_event_type,
+		        p.response_id,
+		        p.item_id,
+		        e.record_id AS emitted_record_id,
+		        e.geppetto_event_type,
+		        e.info_message
+		   FROM geppetto_provider_events p
+		   LEFT JOIN geppetto_emitted_events e
+		     ON COALESCE(e.item_id, '') = COALESCE(p.item_id, '')
+		    AND COALESCE(e.item_id, '') != ''`,
+
+		// Provider reasoning deltas correlated through Geppetto publish records,
+		// backend Sessionstream ordinals, frontend parsed frames, UI mutations, and
+		// persisted timeline entities. This is row-order/chunk based until provider
+		// IDs are propagated into frontend ReasoningUpdate payloads.
+		`CREATE VIEW geppetto_reasoning_to_frontend AS
+		 WITH
+		 provider_delta AS (
+		   SELECT row_number() OVER (ORDER BY record_id) AS rn,
+		          record_id AS provider_record_id,
+		          response_id,
+		          item_id,
+		          output_index,
+		          summary_index,
+		          json_extract(object_json, '$.delta') AS provider_delta
+		     FROM geppetto_records
+		    WHERE stage = 'provider_normalize_delta'
+		      AND event_type = 'response.reasoning_summary_text.delta'
+		 ),
+		 geppetto_delta AS (
+		   SELECT row_number() OVER (ORDER BY record_id) AS rn,
+		          record_id AS geppetto_event_record_id,
+		          json_extract(event_json, '$.delta') AS geppetto_delta,
+		          message_id AS geppetto_message_id
+		     FROM geppetto_records
+		    WHERE stage = 'geppetto_publish_done'
+		      AND event_type = 'partial-thinking'
+		 ),
+		 backend_reasoning AS (
+		   SELECT row_number() OVER (ORDER BY CAST(br.ordinal AS INTEGER)) AS rn,
+		          br.ordinal AS backend_ordinal,
+		          bp.event_name AS backend_event_name,
+		          json_extract(bpue.payload_json, '$.messageId') AS backend_message_id,
+		          json_extract(bpue.payload_json, '$.chunk') AS backend_chunk
+		     FROM backend_pipeline bp
+		     JOIN backend_records br ON br.id = bp.record_id
+		     JOIN backend_pipeline_ui_events bpue ON bpue.record_id = br.id
+		    WHERE bp.event_name = 'ChatReasoningDelta'
+		      AND bpue.source = 'uiEvents'
+		 ),
+		 frontend_reasoning AS (
+		   SELECT row_number() OVER (ORDER BY CAST(fr.ordinal AS INTEGER)) AS rn,
+		          fr.ordinal AS frontend_ordinal,
+		          fpf.name AS frontend_event_name,
+		          json_extract(fpf.frame_json, '$.payload.messageId') AS frontend_message_id,
+		          json_extract(fpf.frame_json, '$.payload.chunk') AS frontend_chunk
+		     FROM frontend_parsed_frames fpf
+		     JOIN frontend_records fr ON fr.id = fpf.record_id
+		    WHERE fpf.name = 'ChatReasoningAppended'
+		 ),
+		 frontend_mutation AS (
+		   SELECT fr.ordinal,
+		          fui.name AS frontend_ui_event_name,
+		          fui.message_id AS ui_mutation_message_id
+		     FROM frontend_ui_events fui
+		     JOIN frontend_records fr ON fr.id = fui.record_id
+		    WHERE fui.name = 'ChatReasoningAppended'
+		 )
+		 SELECT pd.rn,
+		        pd.provider_record_id,
+		        pd.response_id,
+		        pd.item_id AS provider_item_id,
+		        pd.output_index,
+		        pd.summary_index,
+		        pd.provider_delta,
+		        gd.geppetto_event_record_id,
+		        gd.geppetto_delta,
+		        gd.geppetto_message_id,
+		        br.backend_ordinal,
+		        br.backend_event_name,
+		        br.backend_message_id,
+		        br.backend_chunk,
+		        fr.frontend_ordinal,
+		        fr.frontend_event_name,
+		        fr.frontend_message_id,
+		        fr.frontend_chunk,
+		        fm.frontend_ui_event_name,
+		        fm.ui_mutation_message_id,
+		        te.entity_id AS timeline_entity_id,
+		        te.created_ordinal AS timeline_created_ordinal,
+		        te.last_event_ordinal AS timeline_last_event_ordinal
+		   FROM provider_delta pd
+		   JOIN geppetto_delta gd ON gd.rn = pd.rn
+		   JOIN backend_reasoning br ON br.rn = pd.rn
+		   JOIN frontend_reasoning fr ON fr.rn = pd.rn
+		   LEFT JOIN frontend_mutation fm ON fm.ordinal = fr.frontend_ordinal
+		   LEFT JOIN timeline_entities te ON te.entity_id = fr.frontend_message_id`,
+
 		// Frontend parsed frames with no corresponding UI event mutation.
 		`CREATE VIEW frontend_parsed_no_mutation AS
 		 SELECT pf.record_id, pf.frame_type, pf.name, fr.ordinal
@@ -284,6 +417,7 @@ func insertDebugSQLiteMeta(ctx context.Context, db *sql.DB, sessionID string, ba
 		"created_at":            time.Now().UTC().Format(time.RFC3339Nano),
 		"backend_record_count":  strconv.Itoa(backendCount),
 		"frontend_record_count": strconv.Itoa(frontendCount),
+		"geppetto_record_count": strconv.Itoa(0),
 	}
 	for k, v := range entries {
 		if _, err := db.ExecContext(ctx, `INSERT INTO meta(key, value) VALUES(?, ?)`, k, v); err != nil {
@@ -294,6 +428,7 @@ func insertDebugSQLiteMeta(ctx context.Context, db *sql.DB, sessionID string, ba
 }
 
 func insertBackendDebugRecords(ctx context.Context, db *sql.DB, records []DebugRecord) error {
+	geppettoCount := 0
 	for _, rec := range records {
 		raw := mustJSON(rec)
 		res, err := db.ExecContext(ctx, `INSERT INTO backend_records(kind, ts, session_id, connection_id, ordinal, raw_json) VALUES(?, ?, ?, ?, ?, ?)`, rec.Kind, rec.Timestamp.Format(time.RFC3339Nano), rec.SessionID, rec.ConnectionID, nullableInt(rec.Ordinal), raw)
@@ -314,8 +449,15 @@ func insertBackendDebugRecords(ctx context.Context, db *sql.DB, records []DebugR
 				return err
 			}
 		}
+		if rec.Geppetto != nil {
+			geppettoCount++
+			if err := insertGeppettoRecord(ctx, db, id, rec.Timestamp, rec.SessionID, rec.Geppetto); err != nil {
+				return err
+			}
+		}
 	}
-	return nil
+	_, err := db.ExecContext(ctx, `INSERT OR REPLACE INTO meta(key, value) VALUES('geppetto_record_count', ?)`, strconv.Itoa(geppettoCount))
+	return err
 }
 
 func insertBackendPipeline(ctx context.Context, db *sql.DB, id int64, rec *PipelineDebugRecord) error {
@@ -361,6 +503,23 @@ func insertBackendTransport(ctx context.Context, db *sql.DB, id int64, rec *Tran
 	}
 	for _, ent := range rec.SnapshotEntities {
 		if _, err := db.ExecContext(ctx, `INSERT INTO backend_transport_snapshot_entities(record_id, kind, entity_id, created_ordinal, last_event_ordinal, payload_type, tombstone) VALUES(?, ?, ?, ?, ?, ?, ?)`, id, ent.Kind, ent.ID, nullableInt(ent.CreatedOrdinal), nullableInt(ent.LastEventOrdinal), ent.PayloadType, boolInt(ent.Tombstone)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func insertGeppettoRecord(ctx context.Context, db *sql.DB, id int64, timestamp time.Time, sessionID string, rec *GeppettoDebugRecord) error {
+	if _, err := db.ExecContext(ctx, `INSERT INTO geppetto_records(record_id, ts, provider, model, session_id, inference_id, turn_id, message_id, stage, event_type, info_message, response_id, item_id, output_index, summary_index, delta_len, normalized_delta_len, buffer_len, error, object_json, event_json, metadata_json) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, id, timestamp.Format(time.RFC3339Nano), rec.Provider, rec.Model, sessionID, rec.InferenceID, rec.TurnID, rec.MessageID, rec.Stage, rec.EventType, rec.InfoMessage, rec.ResponseID, rec.ItemID, nullableIntPtr(rec.OutputIndex), nullableIntPtr(rec.SummaryIndex), rec.DeltaLen, rec.NormalizedDeltaLen, rec.BufferLen, rec.Error, mustJSON(rec.ObjectJSON), mustJSON(rec.EventJSON), mustJSON(rec.MetadataJSON)); err != nil {
+		return err
+	}
+	if rec.ObjectJSON != nil {
+		if _, err := db.ExecContext(ctx, `INSERT INTO geppetto_provider_events(record_id, provider_event_type, response_id, item_id, output_index, summary_index, object_json) VALUES(?, ?, ?, ?, ?, ?, ?)`, id, rec.EventType, rec.ResponseID, rec.ItemID, nullableIntPtr(rec.OutputIndex), nullableIntPtr(rec.SummaryIndex), mustJSON(rec.ObjectJSON)); err != nil {
+			return err
+		}
+	}
+	if rec.EventJSON != nil || rec.MetadataJSON != nil {
+		if _, err := db.ExecContext(ctx, `INSERT INTO geppetto_emitted_events(record_id, geppetto_event_type, info_message, response_id, item_id, output_index, summary_index, event_json, metadata_json) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)`, id, rec.EventType, rec.InfoMessage, rec.ResponseID, rec.ItemID, nullableIntPtr(rec.OutputIndex), nullableIntPtr(rec.SummaryIndex), mustJSON(rec.EventJSON), mustJSON(rec.MetadataJSON)); err != nil {
 			return err
 		}
 	}
@@ -524,6 +683,13 @@ func (p *exportDataProvider) ExportTurnsList(ctx context.Context, sessionID stri
 		})
 	}
 	return out, nil
+}
+
+func nullableIntPtr(v *int) any {
+	if v == nil {
+		return nil
+	}
+	return *v
 }
 
 func nullableInt(s string) any {

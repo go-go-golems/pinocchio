@@ -38,6 +38,8 @@ func (s *Server) HandleDebugRoutes(w http.ResponseWriter, r *http.Request) {
 		kind = DebugRecordKindPipeline
 	case "transport":
 		kind = DebugRecordKindTransport
+	case "geppetto":
+		kind = DebugRecordKindGeppetto
 	case "reconcile":
 		writeJSON(w, http.StatusOK, s.debugRecorder.Reconcile(sessionID))
 		return

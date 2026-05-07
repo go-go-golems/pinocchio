@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strconv"
@@ -9,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	geppettoobs "github.com/go-go-golems/geppetto/pkg/observability"
 	sessionstream "github.com/go-go-golems/sessionstream/pkg/sessionstream"
 	wstransport "github.com/go-go-golems/sessionstream/pkg/sessionstream/transport/ws"
 	"google.golang.org/protobuf/proto"
@@ -21,6 +23,7 @@ type DebugRecordKind string
 const (
 	DebugRecordKindPipeline  DebugRecordKind = "pipeline"
 	DebugRecordKindTransport DebugRecordKind = "transport"
+	DebugRecordKindGeppetto  DebugRecordKind = "geppetto"
 )
 
 type DebugRecord struct {
@@ -33,6 +36,7 @@ type DebugRecord struct {
 
 	Pipeline  *PipelineDebugRecord  `json:"pipeline,omitempty"`
 	Transport *TransportDebugRecord `json:"transport,omitempty"`
+	Geppetto  *GeppettoDebugRecord  `json:"geppetto,omitempty"`
 }
 
 type PipelineDebugRecord struct {
@@ -106,6 +110,32 @@ type TransportEntitySummaryDebug struct {
 	Tombstone        bool   `json:"tombstone,omitempty"`
 }
 
+type GeppettoDebugRecord struct {
+	Stage       string `json:"stage"`
+	Provider    string `json:"provider,omitempty"`
+	Model       string `json:"model,omitempty"`
+	EventType   string `json:"eventType,omitempty"`
+	InfoMessage string `json:"infoMessage,omitempty"`
+
+	MessageID   string `json:"messageId,omitempty"`
+	InferenceID string `json:"inferenceId,omitempty"`
+	TurnID      string `json:"turnId,omitempty"`
+
+	ResponseID   string `json:"responseId,omitempty"`
+	ItemID       string `json:"itemId,omitempty"`
+	OutputIndex  *int   `json:"outputIndex,omitempty"`
+	SummaryIndex *int   `json:"summaryIndex,omitempty"`
+
+	DeltaLen           int `json:"deltaLen,omitempty"`
+	NormalizedDeltaLen int `json:"normalizedDeltaLen,omitempty"`
+	BufferLen          int `json:"bufferLen,omitempty"`
+
+	ObjectJSON   any    `json:"objectJson,omitempty"`
+	EventJSON    any    `json:"eventJson,omitempty"`
+	MetadataJSON any    `json:"metadataJson,omitempty"`
+	Error        string `json:"error,omitempty"`
+}
+
 type DebugReconcileResponse struct {
 	SessionID               string   `json:"sessionId"`
 	PipelineFanoutOrdinals  []string `json:"pipelineFanoutOrdinals"`
@@ -137,6 +167,10 @@ func (r *StreamDebugRecorder) OnTransport(ctx context.Context, rec wstransport.T
 	r.RecordTransport(ctx, rec)
 }
 
+func (r *StreamDebugRecorder) OnGeppettoRecord(ctx context.Context, rec geppettoobs.Record) {
+	r.RecordGeppetto(ctx, rec)
+}
+
 func (r *StreamDebugRecorder) RecordPipeline(_ context.Context, rec sessionstream.PipelineRecord) {
 	if r == nil {
 		return
@@ -162,6 +196,23 @@ func (r *StreamDebugRecorder) RecordTransport(_ context.Context, rec wstransport
 		ConnectionID: string(rec.ConnectionId),
 		Ordinal:      formatUint(rec.Ordinal),
 		Transport:    encodeTransportRecord(rec),
+	}
+	r.append(out)
+}
+
+func (r *StreamDebugRecorder) RecordGeppetto(_ context.Context, rec geppettoobs.Record) {
+	if r == nil {
+		return
+	}
+	timestamp := rec.Timestamp
+	if timestamp.IsZero() {
+		timestamp = time.Now().UTC()
+	}
+	out := DebugRecord{
+		Kind:      DebugRecordKindGeppetto,
+		Timestamp: timestamp,
+		SessionID: rec.SessionID,
+		Geppetto:  encodeGeppettoRecord(rec),
 	}
 	r.append(out)
 }
@@ -224,6 +275,30 @@ func (r *StreamDebugRecorder) Reconcile(sessionID string) DebugReconcileResponse
 		ExtraTransportFanout:    missingKeys(transport, pipeline),
 		PipelineRecordCount:     pipelineCount,
 		TransportRecordCount:    transportCount,
+	}
+}
+
+func encodeGeppettoRecord(rec geppettoobs.Record) *GeppettoDebugRecord {
+	return &GeppettoDebugRecord{
+		Stage:              string(rec.Stage),
+		Provider:           rec.Provider,
+		Model:              rec.Model,
+		EventType:          rec.EventType,
+		InfoMessage:        rec.InfoMessage,
+		MessageID:          rec.MessageID,
+		InferenceID:        rec.InferenceID,
+		TurnID:             rec.TurnID,
+		ResponseID:         rec.ResponseID,
+		ItemID:             rec.ItemID,
+		OutputIndex:        rec.OutputIndex,
+		SummaryIndex:       rec.SummaryIndex,
+		DeltaLen:           rec.DeltaLen,
+		NormalizedDeltaLen: rec.NormalizedDeltaLen,
+		BufferLen:          rec.BufferLen,
+		ObjectJSON:         decodeJSONRaw(rec.ObjectJSON),
+		EventJSON:          decodeJSONRaw(rec.EventJSON),
+		MetadataJSON:       decodeJSONRaw(rec.MetadataJSON),
+		Error:              rec.Error,
 	}
 }
 
@@ -326,6 +401,17 @@ func encodeConnectionIDs(ids []sessionstream.ConnectionId) []string {
 	out := make([]string, 0, len(ids))
 	for _, id := range ids {
 		out = append(out, string(id))
+	}
+	return out
+}
+
+func decodeJSONRaw(raw json.RawMessage) any {
+	if len(raw) == 0 {
+		return nil
+	}
+	var out any
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return string(raw)
 	}
 	return out
 }

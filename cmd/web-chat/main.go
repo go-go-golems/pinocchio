@@ -27,8 +27,11 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
 
+	geppettobootstrap "github.com/go-go-golems/geppetto/pkg/cli/bootstrap"
 	gepprofiles "github.com/go-go-golems/geppetto/pkg/engineprofiles"
+	enginefactory "github.com/go-go-golems/geppetto/pkg/inference/engine/factory"
 	"github.com/go-go-golems/geppetto/pkg/inference/middlewarecfg"
+	openairesponses "github.com/go-go-golems/geppetto/pkg/steps/ai/openai_responses"
 	aisettings "github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 	appserver "github.com/go-go-golems/pinocchio/cmd/web-chat/app"
 	"github.com/go-go-golems/pinocchio/cmd/web-chat/profiles"
@@ -271,6 +274,10 @@ func NewCommand() (*Command, error) {
 	if err != nil {
 		return nil, err
 	}
+	observabilitySection, err := geppettobootstrap.NewInferenceObservabilitySection()
+	if err != nil {
+		return nil, errors.Wrap(err, "create geppetto observability section")
+	}
 
 	desc := cmds.NewCommandDescription(
 		"web-chat",
@@ -287,7 +294,7 @@ func NewCommand() (*Command, error) {
 			fields.New("turns-dsn", fields.TypeString, fields.WithDefault(""), fields.WithHelp("SQLite DSN for durable turn snapshots (enables GET /turns); preferred over turns-db")),
 			fields.New("turns-db", fields.TypeString, fields.WithDefault(""), fields.WithHelp("SQLite DB file path for durable turn snapshots (enables GET /turns); DSN is derived with WAL/busy_timeout")),
 		),
-		cmds.WithSections(profileSettingsSection, clientSection, redisLayer),
+		cmds.WithSections(profileSettingsSection, clientSection, redisLayer, observabilitySection),
 	)
 	return &Command{CommandDescription: desc}, nil
 }
@@ -305,6 +312,14 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 	s := &serverSettings{}
 	if err := parsed.DecodeSectionInto(values.DefaultSlug, s); err != nil {
 		return errors.Wrap(err, "decode server settings")
+	}
+	obsSettings := &geppettobootstrap.InferenceObservabilitySettings{}
+	if err := parsed.DecodeSectionInto(geppettobootstrap.InferenceObservabilitySectionSlug, obsSettings); err != nil {
+		return errors.Wrap(err, "decode geppetto observability settings")
+	}
+	obsConfig, err := obsSettings.Config()
+	if err != nil {
+		return errors.Wrap(err, "validate geppetto observability settings")
 	}
 	profileRuntime, err := profilebootstrap.ResolveCLIProfileRuntime(ctx, parsed)
 	if err != nil {
@@ -368,7 +383,15 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 
 	var debugRecorder *appserver.StreamDebugRecorder
 	if s.DebugAPI {
-		debugRecorder = appserver.NewStreamDebugRecorder(10000)
+		debugRecorder = appserver.NewStreamDebugRecorder(obsSettings.MaxRecords)
+	}
+	if debugRecorder != nil && obsConfig.Enabled() {
+		runtimeComposer.WithEngineFactory(enginefactory.NewStandardEngineFactory(
+			enginefactory.WithOpenAIResponsesOptions(
+				openairesponses.WithObserver(debugRecorder),
+				openairesponses.WithObservabilityConfig(obsConfig),
+			),
+		))
 	}
 	canonicalApp, err := appserver.NewServer(
 		appserver.WithSQLiteDSN(s.TimelineDSN),
