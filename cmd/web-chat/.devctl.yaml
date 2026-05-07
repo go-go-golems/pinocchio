@@ -1,0 +1,6 @@
+plugins:
+  - id: pinocchio-webchat
+    path: python3
+    args:
+      - ./plugins/webchat.py
+    priority: 10

@@ -5,6 +5,7 @@ import {
   getStreamDebugEntries,
   type StreamDebugEntry,
   streamDebugEnabled,
+  toggleStreamDebug,
   uploadAndDownloadSQLite,
 } from '../../ws/streamDebug';
 
@@ -48,7 +49,28 @@ export function StreamDebugPanel() {
     return entries.filter((entry) => JSON.stringify(entry).toLowerCase().includes(q)).slice(-200).reverse();
   }, [entries, filter]);
 
-  if (!enabled) return null;
+  const handleToggle = () => {
+    const nowEnabled = toggleStreamDebug();
+    setEnabled(nowEnabled);
+    if (!nowEnabled) {
+      setOpen(false);
+    }
+  };
+
+  if (!enabled) {
+    return (
+      <div style={{ position: 'fixed', right: 12, bottom: 12, zIndex: 9999, fontFamily: 'monospace', fontSize: 12 }}>
+        <button
+          type="button"
+          onClick={handleToggle}
+          style={{ padding: '4px 8px', border: '1px dashed #666', background: '#111', color: '#888', cursor: 'pointer' }}
+          title="Enable stream debug recording"
+        >
+          Debug
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div style={{ position: 'fixed', right: 12, bottom: 12, zIndex: 9999, fontFamily: 'monospace', fontSize: 12 }}>
@@ -71,6 +93,7 @@ export function StreamDebugPanel() {
             <button type="button" onClick={() => void uploadAndDownloadSQLite()}>Download SQLite</button>
             <button type="button" onClick={exportStreamDebugJSON}>Export</button>
             <button type="button" onClick={() => { clearStreamDebugEntries(); setEntries([]); }}>Clear</button>
+            <button type="button" onClick={handleToggle} style={{ color: '#f88' }}>Stop</button>
           </div>
           <div style={{ overflow: 'auto', height: 310 }}>
             {visible.map((entry) => (

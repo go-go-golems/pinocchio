@@ -37,6 +37,21 @@ export function streamDebugEnabled(): boolean {
   return state.enabled;
 }
 
+export function toggleStreamDebug(): boolean {
+  const now = !isEnabled();
+  try {
+    if (now) {
+      window.localStorage.setItem(STORAGE_KEY, '1');
+    } else {
+      window.localStorage.removeItem(STORAGE_KEY);
+    }
+  } catch {
+    // Ignore non-browser environments.
+  }
+  state.enabled = now;
+  return now;
+}
+
 export function recordStreamDebug(entry: Omit<StreamDebugEntry, 'id' | 'timestamp'>) {
   if (!streamDebugEnabled()) return;
   state.entries.push({ ...(entry as Record<string, unknown>), id: nextId++, timestamp: Date.now(), type: String(entry.type) });
