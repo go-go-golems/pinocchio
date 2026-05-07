@@ -31,6 +31,7 @@ import (
 	gepprofiles "github.com/go-go-golems/geppetto/pkg/engineprofiles"
 	enginefactory "github.com/go-go-golems/geppetto/pkg/inference/engine/factory"
 	"github.com/go-go-golems/geppetto/pkg/inference/middlewarecfg"
+	"github.com/go-go-golems/geppetto/pkg/steps/ai/claude"
 	openairesponses "github.com/go-go-golems/geppetto/pkg/steps/ai/openai_responses"
 	aisettings "github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 	appserver "github.com/go-go-golems/pinocchio/cmd/web-chat/app"
@@ -390,6 +391,10 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 			enginefactory.WithOpenAIResponsesOptions(
 				openairesponses.WithObserver(debugRecorder),
 				openairesponses.WithObservabilityConfig(obsConfig),
+			),
+			enginefactory.WithClaudeOptions(
+				claude.WithObserver(debugRecorder),
+				claude.WithObservabilityConfig(obsConfig),
 			),
 		))
 	}

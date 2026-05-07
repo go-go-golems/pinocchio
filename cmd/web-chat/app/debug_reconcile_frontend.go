@@ -9,10 +9,6 @@ import (
 	"time"
 )
 
-type frontendLogUpload struct {
-	Records []map[string]any `json:"records"`
-}
-
 func parseFrontendLogUpload(body io.Reader) ([]map[string]any, error) {
 	if body == nil {
 		return nil, fmt.Errorf("missing frontend log body")

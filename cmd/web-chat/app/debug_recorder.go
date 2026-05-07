@@ -167,6 +167,9 @@ func (r *StreamDebugRecorder) Reconcile(sessionID string) DebugReconcileResponse
 			if rec.Transport != nil && rec.Transport.Stage == "fanout_started" && rec.Ordinal != "" {
 				transport[rec.Ordinal] = true
 			}
+		case DebugRecordKindGeppetto:
+			// Geppetto records are correlated separately and do not affect the
+			// pipeline-vs-transport fanout reconciliation counts.
 		}
 	}
 	return DebugReconcileResponse{
