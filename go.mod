@@ -15,10 +15,10 @@ require (
 	github.com/dop251/goja_nodejs v0.0.0-20250409162600-f7acab6894b0
 	github.com/go-go-golems/bobatea v0.1.5
 	github.com/go-go-golems/clay v0.4.9
-	github.com/go-go-golems/geppetto v0.11.20
+	github.com/go-go-golems/geppetto v0.11.21
 	github.com/go-go-golems/glazed v1.2.7
 	github.com/go-go-golems/go-go-goja v0.4.15
-	github.com/go-go-golems/sessionstream v0.0.4
+	github.com/go-go-golems/sessionstream v0.0.5
 	github.com/go-go-golems/uhoh v0.0.5
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.4-0.20250319132907-e064f32e3674
@@ -211,11 +211,11 @@ require (
 	github.com/yuin/goldmark v1.8.2 // indirect
 	github.com/yuin/goldmark-emoji v1.0.6 // indirect
 	go.mongodb.org/mongo-driver v1.14.0 // indirect
-	golang.org/x/crypto v0.49.0 // indirect
-	golang.org/x/net v0.52.0 // indirect
+	golang.org/x/crypto v0.50.0 // indirect
+	golang.org/x/net v0.53.0 // indirect
 	golang.org/x/sys v0.43.0 // indirect
 	golang.org/x/term v0.42.0
-	golang.org/x/text v0.35.0 // indirect
+	golang.org/x/text v0.36.0 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
