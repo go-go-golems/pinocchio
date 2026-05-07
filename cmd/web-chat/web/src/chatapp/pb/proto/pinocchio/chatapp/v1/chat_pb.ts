@@ -2,9 +2,9 @@
 // @generated from file proto/pinocchio/chatapp/v1/chat.proto (package pinocchio.chatapp.v1, syntax proto3)
 /* eslint-disable */
 
+import type { Message } from "@bufbuild/protobuf";
 import type { GenFile, GenMessage } from "@bufbuild/protobuf/codegenv2";
 import { fileDesc, messageDesc } from "@bufbuild/protobuf/codegenv2";
-import type { Message } from "@bufbuild/protobuf";
 
 /**
  * Describes the file proto/pinocchio/chatapp/v1/chat.proto.

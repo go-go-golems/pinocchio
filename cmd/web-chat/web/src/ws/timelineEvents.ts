@@ -1,9 +1,9 @@
 import { appSlice } from '../store/appSlice';
 import type { AppDispatch } from '../store/store';
 import { type TimelineEntity, timelineSlice } from '../store/timelineSlice';
-import { type CanonicalFrame } from './protocol';
-import { recordUIEventDebug } from './streamDebug';
 import { decodeKnownUIEvent } from './chatappPayloads';
+import type { CanonicalFrame } from './protocol';
+import { recordUIEventDebug } from './streamDebug';
 import { agentModeEntity, agentModePreviewEntityId, messageEntity } from './timelineSnapshot';
 
 type TimelineMutation = {
