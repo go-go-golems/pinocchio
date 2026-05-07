@@ -109,7 +109,7 @@ func (agentModePlugin) ProjectTimeline(_ context.Context, ev sessionstream.Event
 		Analysis:  payload.GetAnalysis(),
 		Preview:   false,
 	}
-	return []sessionstream.TimelineEntity{{Kind: agentModeTimelineEntityKind, Id: "session", Payload: entity}}, true, nil
+	return []sessionstream.TimelineEntity{{Kind: agentModeTimelineEntityKind, Id: payload.GetMessageId(), Payload: entity}}, true, nil
 }
 
 func eventStringData(data map[string]interface{}, key string) string {

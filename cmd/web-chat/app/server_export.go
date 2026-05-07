@@ -92,10 +92,11 @@ func (s *Server) handleFullExport(w http.ResponseWriter, r *http.Request, sid se
 func parseExportOptions(r *http.Request, defaultView chatexport.TimelineView) (chatexport.Options, error) {
 	query := r.URL.Query()
 	opts := chatexport.Options{
-		Format:    chatexport.Format(query.Get("format")),
-		View:      chatexport.TimelineView(query.Get("view")),
-		Download:  query.Get("download") == "true" || query.Get("download") == "1",
-		TurnPhase: query.Get("phase"),
+		Format:     chatexport.Format(query.Get("format")),
+		View:       chatexport.TimelineView(query.Get("view")),
+		Download:   query.Get("download") == "true" || query.Get("download") == "1",
+		TurnPhase:  query.Get("phase"),
+		LatestOnly: true,
 	}
 	if opts.View == "" {
 		opts.View = defaultView

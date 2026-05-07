@@ -37,6 +37,7 @@ type Options struct {
 	Download        bool
 	TurnPhase       string
 	Limit           int
+	LatestOnly      bool
 	IncludeTimeline bool
 	IncludeTurns    bool
 }

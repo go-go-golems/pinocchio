@@ -128,6 +128,9 @@ func (s *Service) ExportTurns(ctx context.Context, sessionID string, opts Option
 		}
 		return turns[i].TurnID < turns[j].TurnID
 	})
+	if normalized.LatestOnly && len(turns) > 0 {
+		turns = turns[len(turns)-1:]
+	}
 	out := &TurnsExport{
 		SessionID:  sessionID,
 		Phase:      normalized.TurnPhase,
