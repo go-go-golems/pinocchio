@@ -527,3 +527,60 @@ I continued the chatapp split by extracting the Geppetto runtime event sink from
 ### Code review instructions
 - Review as code movement only.
 - Validate with `go test ./pkg/chatapp ./pkg/chatapp/plugins ./cmd/web-chat -count=1`.
+
+## Step 9: Extract runtime inference orchestration
+
+I completed the remaining requested chatapp core split by moving command handling and runtime inference orchestration out of `pkg/chatapp/chat.go` into `pkg/chatapp/runtime_inference.go`.
+
+After this slice, `chat.go` is down to engine state, option constructors, schema/install registration, idle waiting, active-run bookkeeping, and pending-request bookkeeping. Runtime execution now has a dedicated file next to the runtime sink.
+
+### Prompt Context
+
+**User prompt (verbatim):** (same as Step 8)
+
+**Assistant interpretation:** Move the runtime flow (`handleStartInference`, `runPrompt`, `runRuntimeInference`, publish helpers, final turn text extraction) into its own file while preserving behavior.
+
+**Inferred user intent:** Make `chat.go` small enough that future chatapp changes can target focused files rather than a central 500+ line module.
+
+### What I did
+- Added `pkg/chatapp/runtime_inference.go`.
+- Moved these functions from `chat.go`:
+  - `handleStartInference`
+  - `handleStopInference`
+  - `runPrompt`
+  - `runRuntimeInference`
+  - `publishContext`
+  - `publish`
+  - `assistantTextFromTurn`
+- Cleaned stale imports from `chat.go`.
+
+### Why
+- Runtime inference orchestration has many dependencies: Geppetto events/session/engine builder, turn serde, runtime composition, protobuf publishing, and chat store history handling.
+- Keeping those dependencies outside `chat.go` clarifies which code constructs the engine versus which code executes inference.
+
+### What worked
+- Focused tests passed:
+  - `go test ./pkg/chatapp ./pkg/chatapp/plugins ./cmd/web-chat -count=1`
+- Line counts after the split:
+  - `pkg/chatapp/chat.go`: 212
+  - `pkg/chatapp/runtime_inference.go`: 187
+  - `pkg/chatapp/runtime_sink.go`: 184
+
+### What didn't work
+- The mechanical move initially left stale imports in `chat.go` (`strings`, Geppetto packages, runtime, protobuf). Removing them fixed the compile.
+
+### What I learned
+- The runtime orchestration and sink are balanced in size and responsibility now. The remaining `chat.go` is mostly stable setup/bookkeeping code.
+
+### What was tricky to build
+- `publish` moved with runtime orchestration even though demo inference also uses it. Keeping it in `runtime_inference.go` is acceptable for now because it is part of the backend-event publishing path used by both runtime and demo paths.
+
+### What warrants a second pair of eyes
+- If `publish` feels too generic for `runtime_inference.go`, a later tiny split could move it into `publishing.go`.
+
+### What should be done in the future
+- Add frontend `wsManager.ts` split tasks and start the TypeScript split with the same behavior-preserving approach.
+
+### Code review instructions
+- Review this as code movement plus import cleanup.
+- Validate with `go test ./pkg/chatapp ./pkg/chatapp/plugins ./cmd/web-chat -count=1`.
