@@ -1,10 +1,8 @@
 import { TimelineLanes } from '../components/TimelineLanes';
-import { useAppDispatch, useAppSelector } from '../store/hooks';
-import { selectSession, setFollowEnabled } from '../store/uiSlice';
+import { useAppSelector } from '../store/hooks';
 import { useLaneData } from './useLaneData';
 
 export function OverviewPage() {
-  const dispatch = useAppDispatch();
   const sessionId = useAppSelector((state) => state.ui.selectedSessionId);
   const follow = useAppSelector((state) => state.ui.follow);
   const laneData = useLaneData();

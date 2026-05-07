@@ -1,0 +1,28 @@
+profile:
+  active: web-chat
+
+profiles:
+  web-chat:
+    display_name: Web Chat
+    description: Launch the Pinocchio web-chat backend and Vite frontend with the default Pinocchio profile resolution chain.
+    plugins:
+      - pinocchio-webchat
+    env:
+      PINOCCHIO_WEBCHAT_DEBUG_API: "true"
+      PINOCCHIO_WEBCHAT_TRACE_LEVEL: "off"
+
+  web-chat-observe:
+    display_name: Web Chat with Provider Observability
+    description: Launch web-chat with debug APIs and Geppetto provider-level observability enabled.
+    plugins:
+      - pinocchio-webchat
+    env:
+      PINOCCHIO_WEBCHAT_DEBUG_API: "true"
+      PINOCCHIO_WEBCHAT_TRACE_LEVEL: "provider"
+
+plugins:
+  - id: pinocchio-webchat
+    path: python3
+    args:
+      - ./plugins/webchat.py
+    priority: 10

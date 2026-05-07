@@ -20,6 +20,9 @@ const (
 	agentModeTimelineEntityKind = "AgentMode"
 )
 
+// agentModePlugin is web-chat-app-local glue for the demo/product-specific
+// agent-mode middleware. Keep it out of reusable chatapp plugin packages unless
+// the protobuf and UI contracts become a shared Pinocchio feature.
 type agentModePlugin struct{}
 
 func newAgentModePlugin() chatapp.ChatPlugin {

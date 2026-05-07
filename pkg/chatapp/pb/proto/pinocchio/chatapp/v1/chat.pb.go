@@ -402,6 +402,11 @@ type ReasoningUpdate struct {
 	Streaming       bool                   `protobuf:"varint,9,opt,name=streaming,proto3" json:"streaming,omitempty"`
 	Source          string                 `protobuf:"bytes,10,opt,name=source,proto3" json:"source,omitempty"`
 	SegmentType     string                 `protobuf:"bytes,11,opt,name=segment_type,json=segmentType,proto3" json:"segment_type,omitempty"`
+	Provider        string                 `protobuf:"bytes,12,opt,name=provider,proto3" json:"provider,omitempty"`
+	ResponseId      string                 `protobuf:"bytes,13,opt,name=response_id,json=responseId,proto3" json:"response_id,omitempty"`
+	ItemId          string                 `protobuf:"bytes,14,opt,name=item_id,json=itemId,proto3" json:"item_id,omitempty"`
+	OutputIndex     *int32                 `protobuf:"varint,15,opt,name=output_index,json=outputIndex,proto3,oneof" json:"output_index,omitempty"`
+	SummaryIndex    *int32                 `protobuf:"varint,16,opt,name=summary_index,json=summaryIndex,proto3,oneof" json:"summary_index,omitempty"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -511,6 +516,41 @@ func (x *ReasoningUpdate) GetSegmentType() string {
 		return x.SegmentType
 	}
 	return ""
+}
+
+func (x *ReasoningUpdate) GetProvider() string {
+	if x != nil {
+		return x.Provider
+	}
+	return ""
+}
+
+func (x *ReasoningUpdate) GetResponseId() string {
+	if x != nil {
+		return x.ResponseId
+	}
+	return ""
+}
+
+func (x *ReasoningUpdate) GetItemId() string {
+	if x != nil {
+		return x.ItemId
+	}
+	return ""
+}
+
+func (x *ReasoningUpdate) GetOutputIndex() int32 {
+	if x != nil && x.OutputIndex != nil {
+		return *x.OutputIndex
+	}
+	return 0
+}
+
+func (x *ReasoningUpdate) GetSummaryIndex() int32 {
+	if x != nil && x.SummaryIndex != nil {
+		return *x.SummaryIndex
+	}
+	return 0
 }
 
 type AgentModePreviewUpdate struct {
@@ -1162,7 +1202,7 @@ const file_proto_pinocchio_chatapp_v1_chat_proto_rawDesc = "" +
 	"\asegment\x18\n" +
 	" \x01(\x05R\asegment\x12!\n" +
 	"\fsegment_type\x18\v \x01(\tR\vsegmentType\x12\x14\n" +
-	"\x05final\x18\f \x01(\bR\x05final\"\xbf\x02\n" +
+	"\x05final\x18\f \x01(\bR\x05final\"\x8a\x04\n" +
 	"\x0fReasoningUpdate\x12\x1d\n" +
 	"\n" +
 	"message_id\x18\x01 \x01(\tR\tmessageId\x12*\n" +
@@ -1176,7 +1216,15 @@ const file_proto_pinocchio_chatapp_v1_chat_proto_rawDesc = "" +
 	"\tstreaming\x18\t \x01(\bR\tstreaming\x12\x16\n" +
 	"\x06source\x18\n" +
 	" \x01(\tR\x06source\x12!\n" +
-	"\fsegment_type\x18\v \x01(\tR\vsegmentType\"\xb5\x01\n" +
+	"\fsegment_type\x18\v \x01(\tR\vsegmentType\x12\x1a\n" +
+	"\bprovider\x18\f \x01(\tR\bprovider\x12\x1f\n" +
+	"\vresponse_id\x18\r \x01(\tR\n" +
+	"responseId\x12\x17\n" +
+	"\aitem_id\x18\x0e \x01(\tR\x06itemId\x12&\n" +
+	"\foutput_index\x18\x0f \x01(\x05H\x00R\voutputIndex\x88\x01\x01\x12(\n" +
+	"\rsummary_index\x18\x10 \x01(\x05H\x01R\fsummaryIndex\x88\x01\x01B\x0f\n" +
+	"\r_output_indexB\x10\n" +
+	"\x0e_summary_index\"\xb5\x01\n" +
 	"\x16AgentModePreviewUpdate\x12\x1d\n" +
 	"\n" +
 	"message_id\x18\x01 \x01(\tR\tmessageId\x12%\n" +
@@ -1280,6 +1328,7 @@ func file_proto_pinocchio_chatapp_v1_chat_proto_init() {
 	if File_proto_pinocchio_chatapp_v1_chat_proto != nil {
 		return
 	}
+	file_proto_pinocchio_chatapp_v1_chat_proto_msgTypes[4].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{

@@ -1,8 +1,8 @@
 import { useEffect } from 'react';
 import { basePrefixFromLocation } from '../../utils/basePrefix';
-import { appendEvent, clear, deleteEntity, setSnapshotOrdinal, upsertEntity } from '../store/debugSlice';
+import { appendEvent, clear, setSnapshotOrdinal, upsertEntity } from '../store/debugSlice';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
-import { selectSession, setFollowStatus } from '../store/uiSlice';
+import { setFollowStatus } from '../store/uiSlice';
 import { debugWsManager, setOnFrame } from '../ws/debugWsManager';
 
 export function useDebugTimelineFollow() {

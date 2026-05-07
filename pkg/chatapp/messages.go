@@ -1,0 +1,85 @@
+package chatapp
+
+import (
+	"encoding/json"
+	"strings"
+
+	chatappv1 "github.com/go-go-golems/pinocchio/pkg/chatapp/pb/proto/pinocchio/chatapp/v1"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
+)
+
+func newChatMessageUpdate(messageID, role, content, text, prompt, status string, streaming bool, errText string) *chatappv1.ChatMessageUpdate {
+	return &chatappv1.ChatMessageUpdate{
+		MessageId: messageID,
+		Role:      role,
+		Prompt:    prompt,
+		Text:      text,
+		Content:   content,
+		Status:    status,
+		Streaming: streaming,
+		Error:     errText,
+		Chunk:     "",
+	}
+}
+
+func newChatMessageDelta(messageID, chunk, content, prompt, status string, streaming bool, errText string) *chatappv1.ChatMessageUpdate {
+	return &chatappv1.ChatMessageUpdate{
+		MessageId: messageID,
+		Role:      "assistant",
+		Prompt:    prompt,
+		Chunk:     chunk,
+		Text:      content,
+		Content:   content,
+		Status:    status,
+		Streaming: streaming,
+		Error:     errText,
+	}
+}
+
+func runtimeWarningMessageID(messageID string) string {
+	messageID = strings.TrimSpace(messageID)
+	if messageID == "" {
+		return "chat-warning"
+	}
+	return messageID + ":warning"
+}
+
+func isMaxIterationsError(err error) bool {
+	if err == nil {
+		return false
+	}
+	return strings.Contains(strings.ToLower(err.Error()), "max iterations")
+}
+
+func maxIterationsWarningText(err error) string {
+	message := "tool loop reached the maximum iteration limit"
+	if err != nil && strings.TrimSpace(err.Error()) != "" {
+		message = strings.TrimSpace(err.Error())
+	}
+	return "Warning: inference stopped because " + message + ". The answer may be incomplete; try narrowing the request or increasing the max-iterations setting."
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+func protoMessageAsMap(msg proto.Message) map[string]any {
+	if msg == nil {
+		return map[string]any{}
+	}
+	body, err := protojson.MarshalOptions{EmitUnpopulated: false, UseProtoNames: false}.Marshal(msg)
+	if err != nil {
+		return map[string]any{"error": err.Error()}
+	}
+	out := map[string]any{}
+	if err := json.Unmarshal(body, &out); err != nil {
+		return map[string]any{"error": err.Error()}
+	}
+	return out
+}

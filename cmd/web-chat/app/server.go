@@ -37,6 +37,7 @@ type Server struct {
 	turnsDBPath     string
 	exportService   *chatexport.Service
 	chatPlugins     []chatapp.ChatPlugin
+	debugRecorder   *StreamDebugRecorder
 	closeFn         func() error
 }
 
@@ -113,6 +114,15 @@ func WithChatPlugins(features ...chatapp.ChatPlugin) Option {
 	}
 }
 
+func WithDebugRecorder(recorder *StreamDebugRecorder) Option {
+	return func(s *Server) {
+		if s == nil {
+			return
+		}
+		s.debugRecorder = recorder
+	}
+}
+
 func NewServer(opts ...Option) (*Server, error) {
 	s := &Server{chunkDelay: 20 * time.Millisecond}
 	for _, opt := range opts {
@@ -130,16 +140,24 @@ func NewServer(opts ...Option) (*Server, error) {
 		return nil, err
 	}
 	provider := &hydrationSnapshotProvider{server: s}
-	ws, err := wstransport.NewServer(provider)
+	wsOptions := []wstransport.Option(nil)
+	if s.debugRecorder != nil {
+		wsOptions = append(wsOptions, wstransport.WithTransportObserver(s.debugRecorder))
+	}
+	ws, err := wstransport.NewServer(provider, wsOptions...)
 	if err != nil {
 		return nil, err
 	}
 	engine := chatapp.NewEngine(chatapp.WithChunkDelay(s.chunkDelay), chatapp.WithPlugins(s.chatPlugins...), chatapp.WithTurnStore(s.turnStore))
-	hub, err := sessionstream.NewHub(
+	hubOptions := []sessionstream.HubOption{
 		sessionstream.WithSchemaRegistry(reg),
 		sessionstream.WithHydrationStore(store),
 		sessionstream.WithUIFanout(ws),
-	)
+	}
+	if s.debugRecorder != nil {
+		hubOptions = append(hubOptions, sessionstream.WithPipelineObserver(s.debugRecorder))
+	}
+	hub, err := sessionstream.NewHub(hubOptions...)
 	if err != nil {
 		return nil, err
 	}

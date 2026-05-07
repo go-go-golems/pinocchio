@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { decodeKnownUIEvent } from './chatappPayloads';
 import { timelineEntityFromSnapshotEntity, timelineMutationFromUIEvent } from './wsManager';
 
 describe('timelineEntityFromSnapshotEntity', () => {
@@ -168,6 +169,40 @@ describe('timelineMutationFromUIEvent', () => {
     expect(mutation?.upsert?.props.streaming).toBe(false);
   });
 
+  it('preserves typed reasoning provider IDs and optional zero indexes', () => {
+    const event = decodeKnownUIEvent({
+      name: 'ChatReasoningAppended',
+      payload: {
+        '@type': 'type.googleapis.com/pinocchio.chatapp.v1.ReasoningUpdate',
+        messageId: 'chat-msg-2:thinking:1',
+        parentMessageId: 'chat-msg-2',
+        segment: 1,
+        segmentType: 'thinking',
+        chunk: 'plan',
+        content: 'plan',
+        status: 'streaming',
+        streaming: true,
+        provider: 'openai-responses',
+        responseId: 'resp_123',
+        itemId: 'rs_123',
+        outputIndex: 0,
+        summaryIndex: 0,
+      },
+    });
+
+    expect(event?.name).toBe('ChatReasoningAppended');
+    if (event?.name !== 'ChatReasoningAppended') throw new Error('expected typed reasoning event');
+    expect(event.payload.outputIndex).toBe(0);
+    expect(event.payload.summaryIndex).toBe(0);
+
+    const mutation = timelineMutationFromUIEvent({ name: event.name, payload: event.payload });
+    expect(mutation?.upsert?.props.provider).toBe('openai-responses');
+    expect(mutation?.upsert?.props.responseId).toBe('resp_123');
+    expect(mutation?.upsert?.props.itemId).toBe('rs_123');
+    expect(mutation?.upsert?.props.outputIndex).toBe(0);
+    expect(mutation?.upsert?.props.summaryIndex).toBe(0);
+  });
+
   it('creates a preview entity mutation for ChatAgentModePreviewUpdated', () => {
     const mutation = timelineMutationFromUIEvent({
       name: 'ChatAgentModePreviewUpdated',
@@ -199,5 +234,41 @@ describe('timelineMutationFromUIEvent', () => {
     });
 
     expect(mutation).toEqual({ deleteId: 'agent-mode-preview:chat-msg-2' });
+  });
+
+  it('creates typed tool call and tool result mutations', () => {
+    const toolCall = timelineMutationFromUIEvent({
+      name: 'ChatToolCallUpdated',
+      payload: {
+        messageId: 'chat-msg-7',
+        toolCallId: 'call_1',
+        toolName: 'search',
+        input: '{"query":"gold"}',
+        executing: true,
+        status: 'executing',
+      },
+    });
+
+    expect(toolCall?.upsert?.id).toBe('call_1');
+    expect(toolCall?.upsert?.kind).toBe('tool_call');
+    expect(toolCall?.upsert?.props.name).toBe('search');
+    expect(toolCall?.upsert?.props.input).toEqual({ query: 'gold' });
+    expect(toolCall?.upsert?.props.executing).toBe(true);
+
+    const result = timelineMutationFromUIEvent({
+      name: 'ChatToolResultReady',
+      payload: {
+        messageId: 'chat-msg-7',
+        toolCallId: 'call_1',
+        toolName: 'search',
+        result: 'found it',
+        status: 'success',
+      },
+    });
+
+    expect(result?.upsert?.id).toBe('call_1:result');
+    expect(result?.upsert?.kind).toBe('tool_result');
+    expect(result?.upsert?.props.customKind).toBe('search');
+    expect(result?.upsert?.props.result).toBe('found it');
   });
 });

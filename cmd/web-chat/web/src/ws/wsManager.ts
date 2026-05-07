@@ -1,19 +1,25 @@
 import { appSlice } from '../store/appSlice';
 import { errorsSlice, makeAppError } from '../store/errorsSlice';
 import type { AppDispatch } from '../store/store';
-import { type TimelineEntity, timelineSlice } from '../store/timelineSlice';
 import { logWarn } from '../utils/logger';
 import {
-  asRecord,
   asString,
   buildWebSocketURL,
   type CanonicalFrame,
   encodeSubscribeFrame,
   parseServerFrame,
-  type SnapshotEntityFrame,
   safeOrdinal,
-  unwrapAnyPayload,
 } from './protocol';
+import {
+  recordLifecycle,
+  recordParsedFrame,
+  recordRawWS,
+} from './streamDebug';
+import { applyUIEvent } from './timelineEvents';
+import { applySnapshot } from './timelineSnapshot';
+
+export { timelineMutationFromUIEvent } from './timelineEvents';
+export { timelineEntityFromSnapshotEntity } from './timelineSnapshot';
 
 type ConnectArgs = {
   sessionId: string;
@@ -31,251 +37,6 @@ function reportError(
   extra?: Record<string, unknown>,
 ) {
   dispatch(errorsSlice.actions.reportError(makeAppError(message, scope, err, extra)));
-}
-
-function messageEntity(id: string, props: Record<string, unknown>): TimelineEntity {
-  return {
-    id,
-    kind: 'message',
-    createdAt: Date.now(),
-    updatedAt: Date.now(),
-    props,
-  };
-}
-
-function agentModeEntity(id: string, kind: 'agent_mode' | 'agent_mode_preview', props: Record<string, unknown>): TimelineEntity {
-  return {
-    id,
-    kind,
-    createdAt: Date.now(),
-    updatedAt: Date.now(),
-    props,
-  };
-}
-
-function agentModePreviewEntityId(messageId: string): string {
-  return `agent-mode-preview:${messageId}`;
-}
-
-export function timelineEntityFromSnapshotEntity(entity: SnapshotEntityFrame): TimelineEntity | null {
-  const kind = asString(entity?.kind);
-  const id = asString(entity?.id);
-  const payload = unwrapAnyPayload(entity?.payload);
-  if (!id) return null;
-
-  if (kind === 'ChatMessage') {
-    const messageId = asString(payload.messageId) || id;
-    return messageEntity(messageId, {
-      role: asString(payload.role) || 'assistant',
-      prompt: asString(payload.prompt),
-      content: asString(payload.content) || asString(payload.text),
-      status: asString(payload.status) || 'idle',
-      streaming: payload.streaming === true,
-      error: asString(payload.error),
-    });
-  }
-
-  if (kind === 'AgentMode') {
-    const data = asRecord(payload.data);
-    const flattenedData = Object.keys(data).length > 0
-      ? data
-      : {
-          from: asString(payload.from),
-          to: asString(payload.to),
-          analysis: asString(payload.analysis),
-        };
-    return agentModeEntity(id || 'agent-mode', 'agent_mode', {
-      title: asString(payload.title) || 'Agent mode switch',
-      data: flattenedData,
-      preview: payload.preview === true,
-      messageId: asString(payload.messageId),
-    });
-  }
-
-  return {
-    id,
-    kind: kind || 'system',
-    createdAt: Date.now(),
-    updatedAt: Date.now(),
-    props: payload,
-  };
-}
-
-function applySnapshot(frame: CanonicalFrame, dispatch: AppDispatch) {
-  dispatch(timelineSlice.actions.clear());
-  const entities = Array.isArray(frame.entities) ? (frame.entities as SnapshotEntityFrame[]) : [];
-  let status = 'idle';
-  for (const entity of entities) {
-    const mapped = timelineEntityFromSnapshotEntity(entity);
-    if (!mapped) continue;
-    dispatch(timelineSlice.actions.upsertEntity(mapped));
-    if (mapped.kind === 'message') {
-      const nextStatus = asString(mapped.props?.status);
-      if (nextStatus) status = nextStatus;
-    }
-  }
-  dispatch(appSlice.actions.setStatus(status));
-}
-
-type TimelineMutation = {
-  upsert?: TimelineEntity;
-  deleteId?: string;
-  status?: string;
-};
-
-export function timelineMutationFromUIEvent(frame: CanonicalFrame): TimelineMutation | null {
-  const payload = asRecord(frame.payload);
-  const messageId = asString(payload.messageId);
-  if (!messageId) return null;
-
-  switch (asString(frame.name)) {
-    case 'ChatMessageAccepted':
-      return {
-        upsert: messageEntity(messageId, {
-          role: asString(payload.role) || 'user',
-          content: asString(payload.content) || asString(payload.text),
-          status: asString(payload.status) || 'submitted',
-          streaming: payload.streaming === true,
-        }),
-      };
-    case 'ChatMessageStarted': {
-      const content = asString(payload.content) || asString(payload.text);
-      return {
-        upsert: content
-          ? messageEntity(messageId, {
-              role: asString(payload.role) || 'assistant',
-              prompt: asString(payload.prompt),
-              content,
-              status: asString(payload.status) || 'streaming',
-              streaming: true,
-            })
-          : undefined,
-        status: 'streaming',
-      };
-    }
-    case 'ChatMessageAppended':
-      return {
-        upsert: messageEntity(messageId, {
-          role: asString(payload.role) || 'assistant',
-          content: asString(payload.content) || asString(payload.text) || asString(payload.chunk),
-          status: asString(payload.status) || 'streaming',
-          streaming: true,
-        }),
-        status: 'streaming',
-      };
-    case 'ChatMessageFinished': {
-      const content = asString(payload.content) || asString(payload.text);
-      return {
-        upsert: content
-          ? messageEntity(messageId, {
-              role: asString(payload.role) || 'assistant',
-              prompt: asString(payload.prompt),
-              content,
-              status: asString(payload.status) || 'finished',
-              streaming: false,
-            })
-          : undefined,
-        status: 'finished',
-      };
-    }
-    case 'ChatMessageStopped': {
-      const content = asString(payload.content) || asString(payload.text);
-      const error = asString(payload.error);
-      return {
-        upsert: content || error
-          ? messageEntity(messageId, {
-              role: asString(payload.role) || 'assistant',
-              prompt: asString(payload.prompt),
-              content,
-              status: asString(payload.status) || 'stopped',
-              streaming: false,
-              error,
-            })
-          : undefined,
-        status: 'stopped',
-      };
-    }
-    case 'ChatReasoningStarted': {
-      const content = asString(payload.content) || asString(payload.text);
-      if (!content) return null;
-      return {
-        upsert: messageEntity(messageId, {
-          role: 'thinking',
-          content,
-          status: asString(payload.status) || 'streaming',
-          streaming: payload.streaming !== false,
-        }),
-        status: 'streaming',
-      };
-    }
-    case 'ChatReasoningAppended':
-      return {
-        upsert: messageEntity(messageId, {
-          role: 'thinking',
-          content: asString(payload.content) || asString(payload.text) || asString(payload.chunk),
-          status: asString(payload.status) || 'streaming',
-          streaming: payload.streaming !== false,
-        }),
-        status: 'streaming',
-      };
-    case 'ChatReasoningFinished': {
-      const content = asString(payload.content) || asString(payload.text);
-      if (!content) return null;
-      return {
-        upsert: messageEntity(messageId, {
-          role: 'thinking',
-          content,
-          status: asString(payload.status) || 'finished',
-          streaming: false,
-        }),
-      };
-    }
-    case 'ChatAgentModePreviewUpdated':
-      return {
-        upsert: agentModeEntity(agentModePreviewEntityId(messageId), 'agent_mode_preview', {
-          title: 'Agent mode preview',
-          data: {
-            from: '',
-            to: asString(payload.candidateMode),
-            analysis: asString(payload.analysis),
-            parseState: asString(payload.parseState),
-          },
-          preview: true,
-          messageId,
-        }),
-      };
-    case 'ChatAgentModeCommitted':
-      return {
-        upsert: agentModeEntity('agent-mode', 'agent_mode', {
-          title: asString(payload.title) || 'Agent mode switch',
-          data: {
-            from: asString(payload.from),
-            to: asString(payload.to),
-            analysis: asString(payload.analysis),
-          },
-          preview: false,
-          messageId,
-        }),
-      };
-    case 'ChatAgentModePreviewCleared':
-      return { deleteId: agentModePreviewEntityId(messageId) };
-    default:
-      return null;
-  }
-}
-
-function applyUIEvent(frame: CanonicalFrame, dispatch: AppDispatch) {
-  const mutation = timelineMutationFromUIEvent(frame);
-  if (!mutation) return;
-  if (mutation.deleteId) {
-    dispatch(timelineSlice.actions.deleteEntity(mutation.deleteId));
-  }
-  if (mutation.upsert) {
-    dispatch(timelineSlice.actions.upsertEntity(mutation.upsert));
-  }
-  if (mutation.status) {
-    dispatch(appSlice.actions.setStatus(mutation.status));
-  }
 }
 
 class WsManager {
@@ -318,9 +79,12 @@ class WsManager {
       setTimeout(() => settleOpen?.(), 1500);
     });
 
+    recordLifecycle(args.sessionId, 'connect-start', { basePrefix: args.basePrefix });
+
     ws.onopen = () => {
       settleOpen?.();
       if (nonce !== this.connectNonce) return;
+      recordLifecycle(args.sessionId, 'open');
       args.onStatus?.('ws connected');
       args.dispatch(appSlice.actions.setWsStatus('connected'));
       try {
@@ -332,12 +96,14 @@ class WsManager {
     ws.onclose = () => {
       settleOpen?.();
       if (nonce !== this.connectNonce) return;
+      recordLifecycle(args.sessionId, 'close');
       args.onStatus?.('ws closed');
       args.dispatch(appSlice.actions.setWsStatus('closed'));
     };
     ws.onerror = () => {
       settleOpen?.();
       if (nonce !== this.connectNonce) return;
+      recordLifecycle(args.sessionId, 'error');
       logWarn('websocket error', { scope: 'ws.onerror', sessionId: args.sessionId });
       reportError(args.dispatch, 'websocket error', 'ws.onerror', undefined, { sessionId: args.sessionId });
       args.onStatus?.('ws error');
@@ -346,7 +112,10 @@ class WsManager {
     ws.onmessage = (m) => {
       if (nonce !== this.connectNonce) return;
       try {
-        const frame = parseServerFrame(String(m.data));
+        const raw = String(m.data);
+        recordRawWS(args.sessionId, raw);
+        const frame = parseServerFrame(raw);
+        recordParsedFrame(args.sessionId, frame);
         const ord = safeOrdinal(frame.ordinal);
         if (ord !== null) {
           args.dispatch(appSlice.actions.setLastSeq(ord));
@@ -386,13 +155,13 @@ class WsManager {
     }
     if (type === 'snapshot') {
       if (nonce !== this.connectNonce) return;
-      applySnapshot(frame, args.dispatch);
+      applySnapshot(frame, args.dispatch, args.sessionId);
       this.hydrated = true;
       args.onStatus?.('hydrated');
       const buffered = this.buffered;
       this.buffered = [];
       for (const next of buffered) {
-        applyUIEvent(next, args.dispatch);
+        applyUIEvent(next, args.dispatch, args.sessionId);
       }
       return;
     }
@@ -405,7 +174,7 @@ class WsManager {
         this.buffered.push(frame);
         return;
       }
-      applyUIEvent(frame, args.dispatch);
+      applyUIEvent(frame, args.dispatch, args.sessionId);
     }
   }
 }
