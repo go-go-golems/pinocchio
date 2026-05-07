@@ -267,8 +267,8 @@ func createDebugSQLiteViews(ctx context.Context, db *sql.DB) error {
 
 		// Provider reasoning deltas correlated through Geppetto publish records,
 		// backend Sessionstream ordinals, frontend parsed frames, UI mutations, and
-		// persisted timeline entities. This is row-order/chunk based until provider
-		// IDs are propagated into frontend ReasoningUpdate payloads.
+		// persisted timeline entities. ReasoningUpdate payloads now expose provider
+		// IDs directly; row order still disambiguates multiple deltas for one item.
 		`CREATE VIEW geppetto_reasoning_to_frontend AS
 		 WITH
 		 provider_delta AS (
@@ -297,6 +297,11 @@ func createDebugSQLiteViews(ctx context.Context, db *sql.DB) error {
 		          br.ordinal AS backend_ordinal,
 		          bp.event_name AS backend_event_name,
 		          json_extract(bpue.payload_json, '$.messageId') AS backend_message_id,
+		          json_extract(bpue.payload_json, '$.provider') AS backend_provider,
+		          json_extract(bpue.payload_json, '$.responseId') AS backend_response_id,
+		          json_extract(bpue.payload_json, '$.itemId') AS backend_item_id,
+		          json_extract(bpue.payload_json, '$.outputIndex') AS backend_output_index,
+		          json_extract(bpue.payload_json, '$.summaryIndex') AS backend_summary_index,
 		          json_extract(bpue.payload_json, '$.chunk') AS backend_chunk
 		     FROM backend_pipeline bp
 		     JOIN backend_records br ON br.id = bp.record_id
@@ -309,6 +314,11 @@ func createDebugSQLiteViews(ctx context.Context, db *sql.DB) error {
 		          fr.ordinal AS frontend_ordinal,
 		          fpf.name AS frontend_event_name,
 		          json_extract(fpf.frame_json, '$.payload.messageId') AS frontend_message_id,
+		          json_extract(fpf.frame_json, '$.payload.provider') AS frontend_provider,
+		          json_extract(fpf.frame_json, '$.payload.responseId') AS frontend_response_id,
+		          json_extract(fpf.frame_json, '$.payload.itemId') AS frontend_item_id,
+		          json_extract(fpf.frame_json, '$.payload.outputIndex') AS frontend_output_index,
+		          json_extract(fpf.frame_json, '$.payload.summaryIndex') AS frontend_summary_index,
 		          json_extract(fpf.frame_json, '$.payload.chunk') AS frontend_chunk
 		     FROM frontend_parsed_frames fpf
 		     JOIN frontend_records fr ON fr.id = fpf.record_id
@@ -335,10 +345,20 @@ func createDebugSQLiteViews(ctx context.Context, db *sql.DB) error {
 		        br.backend_ordinal,
 		        br.backend_event_name,
 		        br.backend_message_id,
+		        br.backend_provider,
+		        br.backend_response_id,
+		        br.backend_item_id,
+		        br.backend_output_index,
+		        br.backend_summary_index,
 		        br.backend_chunk,
 		        fr.frontend_ordinal,
 		        fr.frontend_event_name,
 		        fr.frontend_message_id,
+		        fr.frontend_provider,
+		        fr.frontend_response_id,
+		        fr.frontend_item_id,
+		        fr.frontend_output_index,
+		        fr.frontend_summary_index,
 		        fr.frontend_chunk,
 		        fm.frontend_ui_event_name,
 		        fm.ui_mutation_message_id,

@@ -55,6 +55,69 @@ func TestReasoningPluginAllocatesDistinctThinkingSegments(t *testing.T) {
 	}, ids)
 }
 
+func TestReasoningPluginCarriesProviderIDsOnReasoningUpdates(t *testing.T) {
+	plugin := NewReasoningPlugin()
+	var published []sessionstream.Event
+	runtime := chatapp.RuntimeEventContext{
+		SessionID: "sid",
+		MessageID: "chat-msg-1",
+		Publish: func(_ context.Context, eventName string, payload proto.Message) error {
+			published = append(published, sessionstream.Event{Name: eventName, SessionId: "sid", Payload: payload})
+			return nil
+		},
+	}
+
+	meta := gepevents.EventMetadata{SessionID: "sid"}
+	startHandled, err := plugin.HandleRuntimeEvent(context.Background(), runtime, gepevents.NewInfoEvent(meta, "thinking-started", map[string]interface{}{
+		"provider":     "openai_responses",
+		"response_id":  "resp_1",
+		"item_id":      "rs_1",
+		"output_index": 0,
+	}))
+	require.NoError(t, err)
+	require.True(t, startHandled)
+
+	summaryStartedHandled, err := plugin.HandleRuntimeEvent(context.Background(), runtime, gepevents.NewInfoEvent(meta, "reasoning-summary-started", map[string]interface{}{
+		"provider":      "openai_responses",
+		"response_id":   "resp_1",
+		"item_id":       "rs_1",
+		"output_index":  0,
+		"summary_index": 0,
+	}))
+	require.NoError(t, err)
+	require.False(t, summaryStartedHandled)
+
+	deltaHandled, err := plugin.HandleRuntimeEvent(context.Background(), runtime, gepevents.NewThinkingPartialEvent(meta, "a", "alpha"))
+	require.NoError(t, err)
+	require.True(t, deltaHandled)
+
+	summaryHandled, err := plugin.HandleRuntimeEvent(context.Background(), runtime, gepevents.NewInfoEvent(meta, "reasoning-summary", map[string]interface{}{
+		"text":          "alpha summary",
+		"provider":      "openai_responses",
+		"response_id":   "resp_1",
+		"item_id":       "rs_1",
+		"output_index":  0,
+		"summary_index": 0,
+	}))
+	require.NoError(t, err)
+	require.True(t, summaryHandled)
+
+	require.Len(t, published, 3)
+	for _, event := range published {
+		payload := event.Payload.(*chatappv1.ReasoningUpdate)
+		require.Equal(t, "openai_responses", payload.GetProvider())
+		require.Equal(t, "resp_1", payload.GetResponseId())
+		require.Equal(t, "rs_1", payload.GetItemId())
+		require.Equal(t, int32(0), payload.GetOutputIndex())
+		require.NotNil(t, payload.OutputIndex)
+	}
+	for _, event := range published[1:] {
+		payload := event.Payload.(*chatappv1.ReasoningUpdate)
+		require.Equal(t, int32(0), payload.GetSummaryIndex())
+		require.NotNil(t, payload.SummaryIndex)
+	}
+}
+
 func TestReasoningPluginSummaryUpdatesCompletedSegment(t *testing.T) {
 	plugin := NewReasoningPlugin()
 	var published []sessionstream.Event
