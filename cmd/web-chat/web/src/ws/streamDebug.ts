@@ -1,4 +1,5 @@
 import type { TimelineEntity } from '../store/timelineSlice';
+import { basePrefixFromLocation } from '../utils/basePrefix';
 import type { CanonicalFrame } from './protocol';
 
 type DebugEntryBase = {
@@ -143,7 +144,8 @@ export async function uploadAndDownloadSQLite(): Promise<void> {
     return;
   }
   const body = JSON.stringify({ records: entries });
-  const resp = await fetch(`/api/debug/sessions/${encodeURIComponent(sessionId)}/reconcile/upload`, {
+  const basePrefix = basePrefixFromLocation();
+  const resp = await fetch(`${basePrefix}/api/debug/sessions/${encodeURIComponent(sessionId)}/reconcile/upload`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body,
