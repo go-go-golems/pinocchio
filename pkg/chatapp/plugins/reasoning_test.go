@@ -155,3 +155,103 @@ func TestReasoningPluginSummaryUpdatesCompletedSegment(t *testing.T) {
 	require.Equal(t, "summary", last.GetSource())
 	require.Equal(t, "alpha summary", last.GetText())
 }
+
+func TestReasoningPluginRoutesInterleavedProviderItemsByMetadata(t *testing.T) {
+	plugin := NewReasoningPlugin()
+	var published []sessionstream.Event
+	runtime := chatapp.RuntimeEventContext{
+		SessionID: "sid",
+		MessageID: "chat-msg-1",
+		Publish: func(_ context.Context, eventName string, payload proto.Message) error {
+			published = append(published, sessionstream.Event{Name: eventName, SessionId: "sid", Payload: payload})
+			return nil
+		},
+	}
+
+	providerData := func(itemID string) map[string]interface{} {
+		return map[string]interface{}{
+			"provider":     "openai_responses",
+			"response_id":  "resp_1",
+			"item_id":      itemID,
+			"output_index": 0,
+		}
+	}
+	providerMeta := func(itemID string) gepevents.EventMetadata {
+		return gepevents.EventMetadata{SessionID: "sid", Extra: providerData(itemID)}
+	}
+
+	_, err := plugin.HandleRuntimeEvent(context.Background(), runtime, gepevents.NewInfoEvent(providerMeta("rs_a"), "thinking-started", providerData("rs_a")))
+	require.NoError(t, err)
+	_, err = plugin.HandleRuntimeEvent(context.Background(), runtime, gepevents.NewInfoEvent(providerMeta("rs_b"), "thinking-started", providerData("rs_b")))
+	require.NoError(t, err)
+	_, err = plugin.HandleRuntimeEvent(context.Background(), runtime, gepevents.NewThinkingPartialEvent(providerMeta("rs_a"), "a", "alpha"))
+	require.NoError(t, err)
+	_, err = plugin.HandleRuntimeEvent(context.Background(), runtime, gepevents.NewThinkingPartialEvent(providerMeta("rs_b"), "b", "bravo"))
+	require.NoError(t, err)
+
+	require.Len(t, published, 4)
+	payloadA := published[2].Payload.(*chatappv1.ReasoningUpdate)
+	require.Equal(t, ReasoningDeltaEventName, published[2].Name)
+	require.Equal(t, "chat-msg-1:thinking:1", payloadA.GetMessageId())
+	require.Equal(t, int32(1), payloadA.GetSegment())
+	require.Equal(t, "rs_a", payloadA.GetItemId())
+	require.Equal(t, "alpha", payloadA.GetContent())
+
+	payloadB := published[3].Payload.(*chatappv1.ReasoningUpdate)
+	require.Equal(t, ReasoningDeltaEventName, published[3].Name)
+	require.Equal(t, "chat-msg-1:thinking:2", payloadB.GetMessageId())
+	require.Equal(t, int32(2), payloadB.GetSegment())
+	require.Equal(t, "rs_b", payloadB.GetItemId())
+	require.Equal(t, "bravo", payloadB.GetContent())
+}
+
+func TestReasoningPluginRoutesSummaryToCompletedProviderSegment(t *testing.T) {
+	plugin := NewReasoningPlugin()
+	var published []sessionstream.Event
+	runtime := chatapp.RuntimeEventContext{
+		SessionID: "sid",
+		MessageID: "chat-msg-1",
+		Publish: func(_ context.Context, eventName string, payload proto.Message) error {
+			published = append(published, sessionstream.Event{Name: eventName, SessionId: "sid", Payload: payload})
+			return nil
+		},
+	}
+
+	providerData := func(itemID string) map[string]interface{} {
+		return map[string]interface{}{
+			"provider":     "openai_responses",
+			"response_id":  "resp_1",
+			"item_id":      itemID,
+			"output_index": 0,
+		}
+	}
+	providerMeta := func(itemID string) gepevents.EventMetadata {
+		return gepevents.EventMetadata{SessionID: "sid", Extra: providerData(itemID)}
+	}
+
+	_, err := plugin.HandleRuntimeEvent(context.Background(), runtime, gepevents.NewInfoEvent(providerMeta("rs_a"), "thinking-started", providerData("rs_a")))
+	require.NoError(t, err)
+	_, err = plugin.HandleRuntimeEvent(context.Background(), runtime, gepevents.NewThinkingPartialEvent(providerMeta("rs_a"), "a", "alpha"))
+	require.NoError(t, err)
+	_, err = plugin.HandleRuntimeEvent(context.Background(), runtime, gepevents.NewInfoEvent(providerMeta("rs_a"), "thinking-ended", providerData("rs_a")))
+	require.NoError(t, err)
+	_, err = plugin.HandleRuntimeEvent(context.Background(), runtime, gepevents.NewInfoEvent(providerMeta("rs_b"), "thinking-started", providerData("rs_b")))
+	require.NoError(t, err)
+
+	summaryData := providerData("rs_a")
+	summaryData["summary_index"] = 0
+	summaryData["text"] = "alpha summary"
+	_, err = plugin.HandleRuntimeEvent(context.Background(), runtime, gepevents.NewInfoEvent(providerMeta("rs_a"), "reasoning-summary", summaryData))
+	require.NoError(t, err)
+
+	require.Len(t, published, 5)
+	summary := published[4].Payload.(*chatappv1.ReasoningUpdate)
+	require.Equal(t, ReasoningFinishedEventName, published[4].Name)
+	require.Equal(t, "chat-msg-1:thinking:1", summary.GetMessageId())
+	require.Equal(t, int32(1), summary.GetSegment())
+	require.Equal(t, "rs_a", summary.GetItemId())
+	require.Equal(t, "summary", summary.GetSource())
+	require.Equal(t, "alpha summary", summary.GetText())
+	require.NotNil(t, summary.SummaryIndex)
+	require.Equal(t, int32(0), summary.GetSummaryIndex())
+}

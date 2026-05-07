@@ -48,5 +48,16 @@
 - [x] Add tests for typed lowerCamel protobuf JSON decoding, optional reasoning provider IDs, and tool updates.
 - [x] Re-run frontend typecheck and targeted Vitest tests.
 - [x] Commit each behavior-preserving frontend decoding slice with diary updates.
-- [ ] Move app-local agent-mode plugin code out of `cmd/web-chat` or explicitly document it as example-only.
+- [x] Keep agent-mode plugin code in `cmd/web-chat` and document it as intentionally app-local/example-specific.
 - [ ] Resolve cross-repo Sessionstream/Geppetto/Pinocchio dependency alignment so Pinocchio passes `GOWORK=off` validation.
+
+## State-machine hardening
+
+- [x] Add a state-machine hardening plan to the diary before editing code.
+- [x] Key reasoning segment state by parent message plus provider item identity when available.
+- [x] Preserve fallback parent-only behavior for providers that do not emit item IDs.
+- [x] Route summaries for completed provider items back to their original segment even when another segment is active.
+- [x] Parse reasoning provider IDs from event metadata extras as well as info-event data.
+- [x] Add focused tests for interleaved provider items, completed-segment summaries, and fallback behavior.
+- [x] Re-run focused chatapp/plugin/web-chat tests.
+- [x] Commit state-machine hardening with diary updates.

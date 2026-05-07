@@ -553,11 +553,11 @@ type ReasoningPlugin struct {
 }
 ```
 
-Do not implement this until a fixture proves interleaving is possible. The current implementation is acceptable for current OpenAI Responses behavior.
+Implementation update, 2026-05-07: this hardening was implemented after provider IDs were propagated into reasoning payloads. The plugin now keys reasoning state by parent message plus provider item identity when available, keeps parent-only fallback behavior, and includes tests for metadata-routed interleaving and summaries for completed provider items.
 
-### 5.8 App-local agent-mode plugin should be clearly marked or moved
+### 5.8 Agent-mode plugin is intentionally app-local
 
-Problem: shared plugins live under `pkg/chatapp/plugins`, but agent-mode plugin files live under `cmd/web-chat`. That may be correct if agent mode is app-local, but it is easy for interns to assume it is a shared chatapp feature.
+Decision: agent mode is app-local web-chat glue. Shared plugins live under `pkg/chatapp/plugins`, while agent-mode plugin files intentionally remain under `cmd/web-chat`. Interns should not move this code into the reusable package unless the app-local product contract changes.
 
 Where to look:
 
@@ -573,19 +573,11 @@ Why it matters:
 
 Cleanup sketch:
 
-Option A: make it shared:
-
-```text
-pkg/chatapp/plugins/agentmode/
-  plugin.go
-  sink.go
-```
-
-Option B: make it explicitly app-local:
+Make the ownership explicit with comments near the plugin definition:
 
 ```go
 // agentModePlugin is web-chat-app-local glue. Do not import from reusable packages.
-// Promote to pkg/chatapp/plugins only after the protobuf and UI contracts stabilize.
+// Promote to pkg/chatapp/plugins only if the product contract becomes reusable.
 ```
 
 ### 5.9 `cmd/web-chat/main.go` is still an example app and an integration harness

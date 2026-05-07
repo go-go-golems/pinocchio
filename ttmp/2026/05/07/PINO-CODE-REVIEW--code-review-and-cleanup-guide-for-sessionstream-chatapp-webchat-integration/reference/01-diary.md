@@ -842,3 +842,123 @@ The mapper still accepts the same normalized WebSocket frame shape, and `wsManag
 - Validate from `cmd/web-chat/web` with:
   - `npm run typecheck`
   - `npx vitest run src/ws/wsManager.test.ts`
+
+## Step 15: Plan final state-machine hardening and agent-mode decision
+
+The final cleanup phase is reasoning state-machine hardening. The risk called out in the guide is that `ReasoningPlugin` tracks reasoning state only by parent assistant message ID. That works for a single non-interleaved stream, but provider observability now exposes item IDs, response IDs, output indexes, and summary indexes. The state machine should use provider item identity when available while retaining parent-only behavior for providers that do not emit those IDs.
+
+The user also clarified that agent mode is app-local. I updated the tasks to treat the `cmd/web-chat` agent-mode plugin as intentionally app-local/example-specific instead of moving it into generic `pkg/chatapp`.
+
+### Prompt Context
+
+**User prompt (verbatim):** "then finally state-machine hardening. 
+
+agent-mode is app-local."
+
+**Assistant interpretation:** Finish the cleanup-guide state-machine item, specifically harden reasoning segment tracking with provider IDs, and do not move agent-mode code out of the web-chat app.
+
+**Inferred user intent:** Keep app-specific features local, but make shared chatapp reasoning behavior robust now that provider correlation fields exist.
+
+### What I will do
+- Change `ReasoningPlugin` state from parent-only to a composite key:
+  - parent message ID;
+  - provider;
+  - response ID;
+  - item ID;
+  - output index when present.
+- Keep `summaryIndex` as payload/provider metadata, but not as the primary segment key, so summary lifecycle events can enrich the same provider item state.
+- Keep parent-only fallback for streams with no provider identity.
+- Parse provider IDs from `EventMetadata.Extra` for `EventThinkingPartial`, in addition to info-event `Data`.
+- Add tests proving:
+  - provider-keyed summaries update the original completed segment even after another provider item becomes active;
+  - metadata extras route thinking partials to the correct provider-keyed segment;
+  - existing parent-only behavior still allocates distinct segments.
+
+### Why
+- Provider-to-browser correlation only helps if the state machine keeps provider items attached to the correct segment.
+- Parent-only state is too coarse once providers can interleave multiple reasoning items under one assistant message.
+
+### What worked
+- The existing plugin already carries provider IDs in payloads, so this can be a focused state-key refactor rather than a protobuf/API change.
+
+### What didn't work
+- N/A yet.
+
+### What I learned
+- Agent mode should remain in `cmd/web-chat`; it is not a generic chatapp feature.
+
+### What was tricky to build
+- Summary lifecycle events add `summaryIndex`, but using `summaryIndex` in the primary segment key would split summary updates away from the original item state. I will preserve it as metadata, not as key identity.
+
+### What warrants a second pair of eyes
+- The key choice: `parent + provider + response + item + outputIndex` is intentionally conservative. If a provider later emits simultaneous summaries for the same item/output with different summary indexes, we may need a nested summary state.
+
+### What should be done in the future
+- Consider adding sequence-level diagnostics if provider streams ever interleave thinking deltas without provider metadata on the delta events.
+
+## Step 16: Harden reasoning state machine with provider item keys
+
+I implemented the final state-machine hardening slice. `ReasoningPlugin` no longer tracks all reasoning state only by parent assistant message ID. It now uses a provider-aware key when provider identity is available and keeps the original parent-only path as the fallback.
+
+I also marked the agent-mode plugin as intentionally app-local in code and in the guide, per the user's clarification.
+
+### Prompt Context
+
+**User prompt (verbatim):** (same as Step 15)
+
+**Assistant interpretation:** Implement the reasoning state-machine hardening from the guide and treat agent mode as a web-chat-local app feature, not a reusable plugin migration target.
+
+**Inferred user intent:** Close out the remaining high-value cleanup by making reasoning segmentation robust for provider IDs while preserving current behavior and ownership boundaries.
+
+### What I did
+- Changed `ReasoningPlugin` state from `map[parentMessageID]state` to:
+  - `segments map[reasoningKey]reasoningSegmentState`
+  - `activeByParent map[parentMessageID]reasoningKey`
+  - `nextSegment map[parentMessageID]int32`
+- Added `reasoningKey` with:
+  - parent message ID;
+  - provider;
+  - response ID;
+  - item ID;
+  - output index presence/value.
+- Kept `summaryIndex` as propagated metadata, not as part of the primary segment key.
+- Added provider-info parsing from `EventMetadata.Extra` for `EventThinkingPartial`.
+- Preserved parent-only fallback behavior when no provider identity is present.
+- Hardened `int32FromAny` so provider indexes reject out-of-range and non-integral values instead of blindly narrowing.
+- Added tests for:
+  - metadata-routed interleaved provider items;
+  - summaries for completed provider segments while another provider item is active;
+  - existing parent-only segment allocation through the pre-existing tests.
+- Added a code comment marking `cmd/web-chat` agent-mode plugin as app-local glue.
+- Updated the guide section 5.8 to reflect the decision that agent mode remains app-local.
+
+### Why
+- A parent-only reasoning state machine can misroute a completed item's summary if another reasoning item becomes active under the same assistant message.
+- Provider IDs were added for observability and browser correlation, so the runtime state machine should use them where possible.
+- Agent mode has product-specific semantics and middleware dependencies; keeping it in `cmd/web-chat` preserves the reusable `pkg/chatapp/plugins` boundary.
+
+### What worked
+- Focused validation passed:
+  - `go test ./pkg/chatapp/plugins -count=1`
+  - `go test ./pkg/chatapp ./pkg/chatapp/plugins ./cmd/web-chat -count=1`
+
+### What didn't work
+- The first compile failed because I moved `EventThinkingPartial` to parse metadata extras before adding the helper function. Adding `reasoningProviderInfoFromMetadata` fixed it.
+
+### What I learned
+- Summary lifecycle events should enrich provider metadata but should not create a separate key solely because `summaryIndex` is present. Otherwise summaries can detach from the original provider item segment.
+
+### What was tricky to build
+- Maintaining fallback behavior required an `activeByParent` map. It lets unkeyed providers and unkeyed deltas continue to attach to the active segment, while keyed deltas can still route back to a non-current provider item.
+
+### What warrants a second pair of eyes
+- If providers emit interleaved unkeyed deltas, no frontend/backend state machine can fully disambiguate them. This implementation handles provider-keyed deltas and keeps old fallback semantics for unkeyed streams.
+- Review whether output index alone should count as provider identity. It currently does, but in practice it is most useful together with provider/response/item IDs.
+
+### What should be done in the future
+- Consider adding provider identity to thinking delta metadata at the Geppetto event source if any provider emits interleaved deltas without metadata extras.
+- Consider adding debug counters for fallback parent-only routing versus provider-keyed routing.
+
+### Code review instructions
+- Review `pkg/chatapp/plugins/reasoning.go` for state transition behavior, not public API changes.
+- Validate with `go test ./pkg/chatapp ./pkg/chatapp/plugins ./cmd/web-chat -count=1`.
