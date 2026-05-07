@@ -3,10 +3,12 @@ package app
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -545,4 +547,54 @@ func writeClientFrame(t *testing.T, conn *websocket.Conn, payload map[string]any
 	body, err := json.Marshal(payload)
 	require.NoError(t, err)
 	require.NoError(t, conn.WriteMessage(websocket.TextMessage, body))
+}
+
+func TestDebugReconcileUploadReturnsSQLiteDatabase(t *testing.T) {
+	recorder := NewStreamDebugRecorder(1000)
+	_, httpSrv := newTestMux(t, WithDebugRecorder(recorder), WithRuntimeResolver(staticRuntimeResolver{completion: "sqlite debug response"}))
+
+	wsURL := "ws" + strings.TrimPrefix(httpSrv.URL, "http") + "/api/chat/ws"
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	require.NoError(t, err)
+	defer func() { _ = conn.Close() }()
+	require.NoError(t, conn.SetReadDeadline(time.Now().Add(2*time.Second)))
+	_ = readServerFrame(t, conn)
+	writeClientFrame(t, conn, map[string]any{"subscribe": map[string]any{"sessionId": "sess-sqlite-debug"}})
+	_ = readServerFrame(t, conn)
+	_ = readServerFrame(t, conn)
+
+	resp, err := http.Post(httpSrv.URL+"/api/chat/sessions/sess-sqlite-debug/messages", "application/json", bytes.NewReader([]byte(`{"prompt":"make records"}`)))
+	require.NoError(t, err)
+	_ = resp.Body.Close()
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	_ = readServerFrame(t, conn)
+
+	uploadBody := `{"records":[{"id":1,"timestamp":1770000000000,"type":"parsed-frame","sessionId":"sess-sqlite-debug","ordinal":"1","frameType":"ui-event","name":"ChatMessageAppended","frame":{"type":"ui-event"}},{"id":2,"timestamp":1770000000001,"type":"ui-event","sessionId":"sess-sqlite-debug","ordinal":"1","name":"ChatMessageAppended","messageId":"chat-msg-1","mutation":{"upsert":{"id":"chat-msg-1"}}}]}`
+	uploadResp, err := http.Post(httpSrv.URL+"/api/debug/sessions/sess-sqlite-debug/reconcile/upload", "application/json", strings.NewReader(uploadBody))
+	require.NoError(t, err)
+	defer func() { _ = uploadResp.Body.Close() }()
+	require.Equal(t, http.StatusOK, uploadResp.StatusCode)
+	require.Equal(t, "application/vnd.sqlite3", uploadResp.Header.Get("Content-Type"))
+	body, err := io.ReadAll(uploadResp.Body)
+	require.NoError(t, err)
+	require.NotEmpty(t, body)
+
+	dbPath := filepath.Join(t.TempDir(), "debug.sqlite")
+	require.NoError(t, os.WriteFile(dbPath, body, 0o644))
+	db, err := sql.Open("sqlite3", dbPath)
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+	assertTableCount(t, db, "backend_records")
+	assertTableCount(t, db, "backend_pipeline")
+	assertTableCount(t, db, "backend_transport")
+	assertTableCount(t, db, "frontend_records")
+	assertTableCount(t, db, "frontend_parsed_frames")
+	assertTableCount(t, db, "frontend_ui_events")
+}
+
+func assertTableCount(t *testing.T, db *sql.DB, table string) {
+	t.Helper()
+	var count int
+	require.NoError(t, db.QueryRow("SELECT COUNT(*) FROM "+table).Scan(&count))
+	require.Greater(t, count, 0, "expected rows in %s", table)
 }

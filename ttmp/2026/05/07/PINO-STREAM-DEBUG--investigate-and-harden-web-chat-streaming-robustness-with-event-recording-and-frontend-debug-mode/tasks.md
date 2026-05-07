@@ -36,6 +36,18 @@
 - [ ] Detect browser-side missing events, extra events, ordering differences, and payload mismatches from frontend debug JSON.
 - [ ] Build a diff view for hydration snapshot vs live-rendered state after streaming completes.
 
+
+## Phase 3b: SQLite reconcile upload artifact
+
+- [x] Write a detailed design document for frontend-log upload returning a SQLite debug database.
+- [x] Add `POST /api/debug/sessions/{id}/reconcile/upload`.
+- [x] Accept frontend debug logs as either `{records:[...]}` or raw array JSON.
+- [x] Create SQLite schema with raw backend/frontend record tables and parsed typed tables.
+- [x] Insert backend pipeline and transport observer records into SQLite.
+- [x] Insert frontend raw WebSocket, parsed frame, snapshot, UI-event, and lifecycle records into SQLite.
+- [x] Return the SQLite DB as `application/vnd.sqlite3` with attachment headers.
+- [x] Add integration test that opens the returned SQLite DB and verifies key tables contain rows.
+
 ## Phase 4: Robustness testing scenarios
 
 - [ ] Scenario: normal chat flow — send prompt, receive streaming response, verify all entities rendered.

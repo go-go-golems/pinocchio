@@ -1,0 +1,332 @@
+package app
+
+import (
+	"context"
+	"database/sql"
+	"encoding/json"
+	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"strconv"
+	"time"
+
+	_ "github.com/mattn/go-sqlite3"
+)
+
+type frontendLogUpload struct {
+	Records []map[string]any `json:"records"`
+}
+
+func (r *StreamDebugRecorder) BuildSQLiteReconcileDB(ctx context.Context, sessionID string, body io.Reader) ([]byte, error) {
+	frontendRecords, err := parseFrontendLogUpload(body)
+	if err != nil {
+		return nil, err
+	}
+	dir, err := os.MkdirTemp("", "pinocchio-stream-debug-*")
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = os.RemoveAll(dir) }()
+
+	path := filepath.Join(dir, "stream-debug.sqlite")
+	db, err := sql.Open("sqlite3", path)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = db.Close() }()
+	if err := createDebugSQLiteSchema(ctx, db); err != nil {
+		return nil, err
+	}
+	backendRecords := r.Records(sessionID, "")
+	if err := insertDebugSQLiteMeta(ctx, db, sessionID, len(backendRecords), len(frontendRecords)); err != nil {
+		return nil, err
+	}
+	if err := insertBackendDebugRecords(ctx, db, backendRecords); err != nil {
+		return nil, err
+	}
+	if err := insertFrontendDebugRecords(ctx, db, frontendRecords); err != nil {
+		return nil, err
+	}
+	if err := db.Close(); err != nil {
+		return nil, err
+	}
+	return os.ReadFile(path)
+}
+
+func parseFrontendLogUpload(body io.Reader) ([]map[string]any, error) {
+	if body == nil {
+		return nil, fmt.Errorf("missing frontend log body")
+	}
+	var raw any
+	if err := json.NewDecoder(body).Decode(&raw); err != nil {
+		return nil, fmt.Errorf("decode frontend log upload: %w", err)
+	}
+	if obj, ok := raw.(map[string]any); ok {
+		raw = obj["records"]
+	}
+	items, ok := raw.([]any)
+	if !ok {
+		return nil, fmt.Errorf("frontend log upload must be an array or object with records array")
+	}
+	out := make([]map[string]any, 0, len(items))
+	for i, item := range items {
+		obj, ok := item.(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("frontend log record %d is not an object", i)
+		}
+		out = append(out, obj)
+	}
+	return out, nil
+}
+
+func createDebugSQLiteSchema(ctx context.Context, db *sql.DB) error {
+	stmts := []string{
+		`CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)`,
+		`CREATE TABLE backend_records (id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL, ts TEXT, session_id TEXT, connection_id TEXT, ordinal INTEGER, raw_json TEXT NOT NULL)`,
+		`CREATE TABLE backend_pipeline (record_id INTEGER PRIMARY KEY REFERENCES backend_records(id), mode TEXT, event_name TEXT, event_type TEXT, event_appended INTEGER, view_ordinal INTEGER, timeline_cursor_advanced INTEGER, append_error TEXT, session_error TEXT, view_error TEXT, ui_projection_error TEXT, timeline_projection_error TEXT, apply_error TEXT, cursor_error TEXT, fanout_error TEXT)`,
+		`CREATE TABLE backend_pipeline_ui_events (id INTEGER PRIMARY KEY AUTOINCREMENT, record_id INTEGER NOT NULL REFERENCES backend_records(id), source TEXT NOT NULL, name TEXT, payload_type TEXT, payload_json TEXT)`,
+		`CREATE TABLE backend_pipeline_entities (id INTEGER PRIMARY KEY AUTOINCREMENT, record_id INTEGER NOT NULL REFERENCES backend_records(id), source TEXT NOT NULL, kind TEXT, entity_id TEXT, created_ordinal INTEGER, last_event_ordinal INTEGER, tombstone INTEGER, payload_type TEXT, payload_json TEXT)`,
+		`CREATE TABLE backend_transport (record_id INTEGER PRIMARY KEY REFERENCES backend_records(id), stage TEXT, direction TEXT, frame_type TEXT, event_name TEXT, payload_type TEXT, since_snapshot_ordinal INTEGER, snapshot_ordinal INTEGER, snapshot_entity_count INTEGER, fanout_event_count INTEGER, raw_bytes INTEGER, queue_len INTEGER, queue_cap INTEGER, error TEXT)`,
+		`CREATE TABLE backend_transport_snapshot_entities (id INTEGER PRIMARY KEY AUTOINCREMENT, record_id INTEGER NOT NULL REFERENCES backend_records(id), kind TEXT, entity_id TEXT, created_ordinal INTEGER, last_event_ordinal INTEGER, payload_type TEXT, tombstone INTEGER)`,
+		`CREATE TABLE frontend_records (id INTEGER PRIMARY KEY, type TEXT NOT NULL, ts_ms INTEGER, ts_iso TEXT, session_id TEXT, ordinal INTEGER, raw_json TEXT NOT NULL)`,
+		`CREATE TABLE frontend_raw_ws (record_id INTEGER PRIMARY KEY REFERENCES frontend_records(id), size INTEGER, preview TEXT, raw TEXT)`,
+		`CREATE TABLE frontend_parsed_frames (record_id INTEGER PRIMARY KEY REFERENCES frontend_records(id), frame_type TEXT, name TEXT, payload_type TEXT, frame_json TEXT)`,
+		`CREATE TABLE frontend_snapshots (record_id INTEGER PRIMARY KEY REFERENCES frontend_records(id), entity_count INTEGER, dropped_count INTEGER)`,
+		`CREATE TABLE frontend_snapshot_entities (id INTEGER PRIMARY KEY AUTOINCREMENT, record_id INTEGER NOT NULL REFERENCES frontend_records(id), raw_kind TEXT, raw_id TEXT, mapped_kind TEXT, mapped_id TEXT, dropped INTEGER)`,
+		`CREATE TABLE frontend_ui_events (record_id INTEGER PRIMARY KEY REFERENCES frontend_records(id), name TEXT, message_id TEXT, mutation_json TEXT)`,
+		`CREATE TABLE frontend_lifecycle (record_id INTEGER PRIMARY KEY REFERENCES frontend_records(id), event TEXT)`,
+		`CREATE INDEX idx_backend_records_session_ordinal ON backend_records(session_id, ordinal)`,
+		`CREATE INDEX idx_backend_transport_stage ON backend_transport(stage)`,
+		`CREATE INDEX idx_frontend_records_session_ordinal ON frontend_records(session_id, ordinal)`,
+		`CREATE INDEX idx_frontend_records_type ON frontend_records(type)`,
+	}
+	for _, stmt := range stmts {
+		if _, err := db.ExecContext(ctx, stmt); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func insertDebugSQLiteMeta(ctx context.Context, db *sql.DB, sessionID string, backendCount, frontendCount int) error {
+	entries := map[string]string{
+		"schema_version":        "pinocchio-stream-debug-sqlite-v1",
+		"session_id":            sessionID,
+		"created_at":            time.Now().UTC().Format(time.RFC3339Nano),
+		"backend_record_count":  strconv.Itoa(backendCount),
+		"frontend_record_count": strconv.Itoa(frontendCount),
+	}
+	for k, v := range entries {
+		if _, err := db.ExecContext(ctx, `INSERT INTO meta(key, value) VALUES(?, ?)`, k, v); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func insertBackendDebugRecords(ctx context.Context, db *sql.DB, records []DebugRecord) error {
+	for _, rec := range records {
+		raw := mustJSON(rec)
+		res, err := db.ExecContext(ctx, `INSERT INTO backend_records(kind, ts, session_id, connection_id, ordinal, raw_json) VALUES(?, ?, ?, ?, ?, ?)`, rec.Kind, rec.Timestamp.Format(time.RFC3339Nano), rec.SessionID, rec.ConnectionID, nullableInt(rec.Ordinal), raw)
+		if err != nil {
+			return err
+		}
+		id, err := res.LastInsertId()
+		if err != nil {
+			return err
+		}
+		if rec.Pipeline != nil {
+			if err := insertBackendPipeline(ctx, db, id, rec.Pipeline); err != nil {
+				return err
+			}
+		}
+		if rec.Transport != nil {
+			if err := insertBackendTransport(ctx, db, id, rec.Transport); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func insertBackendPipeline(ctx context.Context, db *sql.DB, id int64, rec *PipelineDebugRecord) error {
+	if _, err := db.ExecContext(ctx, `INSERT INTO backend_pipeline(record_id, mode, event_name, event_type, event_appended, view_ordinal, timeline_cursor_advanced, append_error, session_error, view_error, ui_projection_error, timeline_projection_error, apply_error, cursor_error, fanout_error) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, id, rec.Mode, rec.Event, rec.EventTyp, boolInt(rec.EventAppended), nullableInt(rec.ViewOrdinal), boolInt(rec.TimelineCursorAdvanced), rec.AppendError, rec.SessionError, rec.ViewError, rec.UIProjectionError, rec.TimelineProjectionError, rec.ApplyError, rec.CursorError, rec.FanoutError); err != nil {
+		return err
+	}
+	for _, ev := range rec.UIEvents {
+		if err := insertBackendPipelineUIEvent(ctx, db, id, "uiEvents", ev); err != nil {
+			return err
+		}
+	}
+	for _, ev := range rec.FanoutEvents {
+		if err := insertBackendPipelineUIEvent(ctx, db, id, "fanoutEvents", ev); err != nil {
+			return err
+		}
+	}
+	for _, ent := range rec.TimelineEntities {
+		if err := insertBackendPipelineEntity(ctx, db, id, "timelineEntities", ent); err != nil {
+			return err
+		}
+	}
+	for _, ent := range rec.AppliedEntities {
+		if err := insertBackendPipelineEntity(ctx, db, id, "appliedEntities", ent); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func insertBackendPipelineUIEvent(ctx context.Context, db *sql.DB, id int64, source string, ev UIEventDebug) error {
+	_, err := db.ExecContext(ctx, `INSERT INTO backend_pipeline_ui_events(record_id, source, name, payload_type, payload_json) VALUES(?, ?, ?, ?, ?)`, id, source, ev.Name, ev.PayloadType, mustJSON(ev.Payload))
+	return err
+}
+
+func insertBackendPipelineEntity(ctx context.Context, db *sql.DB, id int64, source string, ent TimelineEntityDebug) error {
+	_, err := db.ExecContext(ctx, `INSERT INTO backend_pipeline_entities(record_id, source, kind, entity_id, created_ordinal, last_event_ordinal, tombstone, payload_type, payload_json) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)`, id, source, ent.Kind, ent.ID, nullableInt(ent.CreatedOrdinal), nullableInt(ent.LastEventOrdinal), boolInt(ent.Tombstone), ent.PayloadType, mustJSON(ent.Payload))
+	return err
+}
+
+func insertBackendTransport(ctx context.Context, db *sql.DB, id int64, rec *TransportDebugRecord) error {
+	if _, err := db.ExecContext(ctx, `INSERT INTO backend_transport(record_id, stage, direction, frame_type, event_name, payload_type, since_snapshot_ordinal, snapshot_ordinal, snapshot_entity_count, fanout_event_count, raw_bytes, queue_len, queue_cap, error) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, id, rec.Stage, rec.Direction, rec.FrameType, rec.EventName, rec.PayloadType, nullableInt(rec.SinceSnapshotOrdinal), nullableInt(rec.SnapshotOrdinal), rec.SnapshotEntityCount, rec.FanoutEventCount, rec.RawBytes, rec.QueueLen, rec.QueueCap, rec.Error); err != nil {
+		return err
+	}
+	for _, ent := range rec.SnapshotEntities {
+		if _, err := db.ExecContext(ctx, `INSERT INTO backend_transport_snapshot_entities(record_id, kind, entity_id, created_ordinal, last_event_ordinal, payload_type, tombstone) VALUES(?, ?, ?, ?, ?, ?, ?)`, id, ent.Kind, ent.ID, nullableInt(ent.CreatedOrdinal), nullableInt(ent.LastEventOrdinal), ent.PayloadType, boolInt(ent.Tombstone)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func insertFrontendDebugRecords(ctx context.Context, db *sql.DB, records []map[string]any) error {
+	for i, rec := range records {
+		id := int64FromAny(rec["id"])
+		if id == 0 {
+			id = int64(i + 1)
+		}
+		typ := stringFromAny(rec["type"])
+		if typ == "" {
+			typ = "unknown"
+		}
+		tsMs := int64FromAny(rec["timestamp"])
+		tsISO := ""
+		if tsMs > 0 {
+			tsISO = time.UnixMilli(tsMs).UTC().Format(time.RFC3339Nano)
+		}
+		raw := mustJSON(rec)
+		if _, err := db.ExecContext(ctx, `INSERT INTO frontend_records(id, type, ts_ms, ts_iso, session_id, ordinal, raw_json) VALUES(?, ?, ?, ?, ?, ?, ?)`, id, typ, tsMs, tsISO, stringFromAny(rec["sessionId"]), nullableIntFromAny(rec["ordinal"]), raw); err != nil {
+			return err
+		}
+		if err := insertFrontendTypedRecord(ctx, db, id, typ, rec); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func insertFrontendTypedRecord(ctx context.Context, db *sql.DB, id int64, typ string, rec map[string]any) error {
+	switch typ {
+	case "raw-ws":
+		_, err := db.ExecContext(ctx, `INSERT INTO frontend_raw_ws(record_id, size, preview, raw) VALUES(?, ?, ?, ?)`, id, int64FromAny(rec["size"]), stringFromAny(rec["preview"]), stringFromAny(rec["raw"]))
+		return err
+	case "parsed-frame":
+		_, err := db.ExecContext(ctx, `INSERT INTO frontend_parsed_frames(record_id, frame_type, name, payload_type, frame_json) VALUES(?, ?, ?, ?, ?)`, id, stringFromAny(rec["frameType"]), stringFromAny(rec["name"]), stringFromAny(rec["payloadType"]), mustJSON(rec["frame"]))
+		return err
+	case "snapshot":
+		if _, err := db.ExecContext(ctx, `INSERT INTO frontend_snapshots(record_id, entity_count, dropped_count) VALUES(?, ?, ?)`, id, int64FromAny(rec["entityCount"]), int64FromAny(rec["droppedCount"])); err != nil {
+			return err
+		}
+		for _, item := range arrayFromAny(rec["entities"]) {
+			obj, _ := item.(map[string]any)
+			if _, err := db.ExecContext(ctx, `INSERT INTO frontend_snapshot_entities(record_id, raw_kind, raw_id, mapped_kind, mapped_id, dropped) VALUES(?, ?, ?, ?, ?, ?)`, id, stringFromAny(obj["rawKind"]), stringFromAny(obj["rawId"]), stringFromAny(obj["mappedKind"]), stringFromAny(obj["mappedId"]), boolInt(boolFromAny(obj["dropped"]))); err != nil {
+				return err
+			}
+		}
+		return nil
+	case "ui-event":
+		_, err := db.ExecContext(ctx, `INSERT INTO frontend_ui_events(record_id, name, message_id, mutation_json) VALUES(?, ?, ?, ?)`, id, stringFromAny(rec["name"]), stringFromAny(rec["messageId"]), mustJSON(rec["mutation"]))
+		return err
+	case "ws-lifecycle":
+		_, err := db.ExecContext(ctx, `INSERT INTO frontend_lifecycle(record_id, event) VALUES(?, ?)`, id, stringFromAny(rec["event"]))
+		return err
+	default:
+		return nil
+	}
+}
+
+func mustJSON(v any) string {
+	if v == nil {
+		return "null"
+	}
+	body, err := json.Marshal(v)
+	if err != nil {
+		return fmt.Sprintf(`{"error":%q}`, err.Error())
+	}
+	return string(body)
+}
+
+func nullableInt(s string) any {
+	if s == "" {
+		return nil
+	}
+	v, err := strconv.ParseInt(s, 10, 64)
+	if err != nil {
+		return nil
+	}
+	return v
+}
+
+func nullableIntFromAny(v any) any {
+	i := int64FromAny(v)
+	if i == 0 {
+		return nil
+	}
+	return i
+}
+
+func int64FromAny(v any) int64 {
+	switch typed := v.(type) {
+	case int64:
+		return typed
+	case int:
+		return int64(typed)
+	case float64:
+		return int64(typed)
+	case json.Number:
+		out, _ := typed.Int64()
+		return out
+	case string:
+		out, _ := strconv.ParseInt(typed, 10, 64)
+		return out
+	default:
+		return 0
+	}
+}
+
+func stringFromAny(v any) string {
+	if v == nil {
+		return ""
+	}
+	if s, ok := v.(string); ok {
+		return s
+	}
+	return fmt.Sprintf("%v", v)
+}
+
+func boolFromAny(v any) bool {
+	b, _ := v.(bool)
+	return b
+}
+
+func boolInt(v bool) int {
+	if v {
+		return 1
+	}
+	return 0
+}
+
+func arrayFromAny(v any) []any {
+	items, _ := v.([]any)
+	return items
+}

@@ -284,3 +284,89 @@ The only subtlety was sorting ordinals numerically even though API JSON represen
 ### Code review instructions
 
 Review `StreamDebugRecorder.Reconcile` in `cmd/web-chat/app/debug_recorder.go` and the route in `cmd/web-chat/app/server_debug.go`.
+
+## Step 4: Reconcile upload endpoint returning SQLite
+
+The fourth implementation step changed the reconciliation direction from “return one more JSON report” to “return a queryable SQLite artifact.” The endpoint accepts frontend debug records from the browser, combines them with backend observer records already held by the server, and returns a SQLite database with raw and parsed tables.
+
+This is deliberately a storage/schema step, not a heavy analysis step. The important outcome is that every future analysis can be added as SQL over stable tables without reparsing ad-hoc JSON exports.
+
+### Prompt Context
+
+**User prompt (verbatim):** "Add a reconcile/upload endpoint, that returns a sqlite.db with all the data loaded in appropriate tables, that way we can not only access the raw data in a schematized way, but we can over time add more and more analysis incrementally. 
+
+For now, only parse the logs and store them in the appropriate schema. Add a detailed design document to the ticket, then implement"
+
+**Assistant interpretation:** Add a detailed ticket design for SQLite-based uploaded frontend-log reconciliation, then implement an endpoint that returns a SQLite DB containing backend and uploaded frontend debug records in normalized tables.
+
+**Inferred user intent:** The user wants a durable, queryable debug artifact that can evolve over time, rather than a fixed JSON reconciliation report.
+
+**Commit (code):** pending — this commit will include design doc, endpoint, SQLite builder, schema, and tests.
+
+### What I did
+
+- Added `design/02-reconcile-upload-sqlite-export.md` with endpoint contract, schema, implementation plan, and future analysis notes.
+- Added `cmd/web-chat/app/debug_reconcile_db.go`.
+- Added `POST /api/debug/sessions/{sessionId}/reconcile/upload`.
+- Accepted frontend uploads as either `{ "records": [...] }` or raw `[...]` arrays.
+- Created a temporary SQLite DB and returned it as `application/vnd.sqlite3`.
+- Inserted backend records into:
+  - `backend_records`
+  - `backend_pipeline`
+  - `backend_pipeline_ui_events`
+  - `backend_pipeline_entities`
+  - `backend_transport`
+  - `backend_transport_snapshot_entities`
+- Inserted frontend records into:
+  - `frontend_records`
+  - `frontend_raw_ws`
+  - `frontend_parsed_frames`
+  - `frontend_snapshots`
+  - `frontend_snapshot_entities`
+  - `frontend_ui_events`
+  - `frontend_lifecycle`
+- Added metadata rows in `meta`.
+- Added an integration test that uploads frontend records, receives a SQLite DB, opens it, and asserts key backend/frontend tables contain rows.
+- Ran `go test ./cmd/web-chat/app ./cmd/web-chat -count=1` successfully.
+
+### Why
+
+SQLite makes debugging incremental. Instead of baking every analysis into one endpoint response, we can preserve raw evidence and expose common columns for SQL exploration. Future reports can be added as views or queries.
+
+### What worked
+
+- The existing backend debug DTOs were already JSON-safe, so inserting raw backend JSON and parsed columns was straightforward.
+- The frontend debug log format is flexible enough to parse as generic `map[string]any` records.
+- Returning a temporary SQLite file avoids keeping debug databases on disk after the request completes.
+
+### What didn't work
+
+N/A for this step. The focused Go validation passed.
+
+### What I learned
+
+The route parser needed to support nested debug actions like `reconcile/upload`, not just one action segment. I updated it to join all path segments after the session ID.
+
+### What was tricky to build
+
+The main tricky part was schema design: enough typed columns for immediate queries, while keeping raw JSON for future fields. The first schema version keeps both.
+
+### What warrants a second pair of eyes
+
+- The endpoint currently returns `400` for SQLite construction errors as well as malformed upload errors. We may want to distinguish malformed input (`400`) from internal DB construction failures (`500`) later.
+- The schema stores frontend timestamps as milliseconds and ISO strings; backend timestamps are ISO strings from server-side records.
+- The endpoint builds the database in a temp file rather than pure memory because returning SQLite bytes reliably is simpler from a file-backed DB.
+
+### What should be done in the future
+
+- Add SQL views for delivery-chain gaps.
+- Add frontend UI button that uploads the current debug log and downloads the SQLite DB directly.
+- Add a small query playbook for common investigations.
+
+### Code review instructions
+
+Review `design/02-reconcile-upload-sqlite-export.md`, then `cmd/web-chat/app/debug_reconcile_db.go`, then `cmd/web-chat/app/server_debug.go`. Validate with:
+
+```bash
+go test ./cmd/web-chat/app ./cmd/web-chat -count=1
+```

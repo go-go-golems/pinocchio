@@ -29,3 +29,9 @@
 ## 2026-05-07
 
 - Added backend reconciliation endpoint `/api/debug/sessions/{id}/reconcile` comparing Hub pipeline fanout ordinals with WebSocket transport fanout ordinals.
+
+## 2026-05-07
+
+- Added design document for SQLite reconcile upload artifacts.
+- Implemented `POST /api/debug/sessions/{id}/reconcile/upload`, returning a SQLite DB populated with backend observer records and uploaded frontend debug records.
+- Added integration test that validates the returned SQLite schema contains backend and frontend rows.
