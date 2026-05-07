@@ -11,14 +11,58 @@ import (
 	"strconv"
 	"time"
 
+	chatexport "github.com/go-go-golems/pinocchio/pkg/chatapp/export"
+	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
+	sessionstream "github.com/go-go-golems/sessionstream/pkg/sessionstream"
+
 	_ "github.com/mattn/go-sqlite3"
 )
+
+// DebugTimelineProvider fetches timeline snapshot data for the reconcile DB.
+type DebugTimelineProvider interface {
+	ExportTimelineEntities(ctx context.Context, sessionID string) ([]DebugTimelineEntity, error)
+}
+
+// DebugTurnsProvider fetches turns data for the reconcile DB.
+type DebugTurnsProvider interface {
+	ExportTurnsList(ctx context.Context, sessionID string) ([]DebugTurn, error)
+}
+
+// DebugTimelineEntity is a flat timeline entity row for the reconcile DB.
+type DebugTimelineEntity struct {
+	Kind             string `json:"kind"`
+	ID               string `json:"id"`
+	CreatedOrdinal   uint64 `json:"createdOrdinal"`
+	LastEventOrdinal uint64 `json:"lastEventOrdinal"`
+	Tombstone        bool   `json:"tombstone"`
+	PayloadType      string `json:"payloadType,omitempty"`
+	Payload          string `json:"payload,omitempty"`
+}
+
+// DebugTurn is a flat turn row for the reconcile DB.
+type DebugTurn struct {
+	ConvID      string `json:"convId"`
+	SessionID   string `json:"sessionId"`
+	TurnID      string `json:"turnId"`
+	Phase       string `json:"phase"`
+	RuntimeKey  string `json:"runtimeKey,omitempty"`
+	InferenceID string `json:"inferenceId,omitempty"`
+	CreatedAtMs int64  `json:"createdAtMs"`
+	CreatedAt   string `json:"createdAt,omitempty"`
+	Payload     string `json:"payload"`
+}
+
+// DebugDataProvider combines timeline and turns providers.
+type DebugDataProvider interface {
+	DebugTimelineProvider
+	DebugTurnsProvider
+}
 
 type frontendLogUpload struct {
 	Records []map[string]any `json:"records"`
 }
 
-func (r *StreamDebugRecorder) BuildSQLiteReconcileDB(ctx context.Context, sessionID string, body io.Reader) ([]byte, error) {
+func (r *StreamDebugRecorder) BuildSQLiteReconcileDB(ctx context.Context, sessionID string, body io.Reader, provider DebugDataProvider) ([]byte, error) {
 	frontendRecords, err := parseFrontendLogUpload(body)
 	if err != nil {
 		return nil, err
@@ -47,6 +91,14 @@ func (r *StreamDebugRecorder) BuildSQLiteReconcileDB(ctx context.Context, sessio
 	}
 	if err := insertFrontendDebugRecords(ctx, db, frontendRecords); err != nil {
 		return nil, err
+	}
+	if provider != nil {
+		if err := insertTimelineEntities(ctx, db, provider, sessionID); err != nil {
+			return nil, fmt.Errorf("insert timeline: %w", err)
+		}
+		if err := insertTurns(ctx, db, provider, sessionID); err != nil {
+			return nil, fmt.Errorf("insert turns: %w", err)
+		}
 	}
 	if err := db.Close(); err != nil {
 		return nil, err
@@ -100,6 +152,15 @@ func createDebugSQLiteSchema(ctx context.Context, db *sql.DB) error {
 		`CREATE INDEX idx_backend_transport_stage ON backend_transport(stage)`,
 		`CREATE INDEX idx_frontend_records_session_ordinal ON frontend_records(session_id, ordinal)`,
 		`CREATE INDEX idx_frontend_records_type ON frontend_records(type)`,
+
+		// Timeline and turns tables — persisted data alongside event evidence.
+		`CREATE TABLE timeline_entities (id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL, entity_id TEXT NOT NULL, created_ordinal INTEGER NOT NULL, last_event_ordinal INTEGER NOT NULL, tombstone INTEGER NOT NULL DEFAULT 0, payload_type TEXT, payload_json TEXT)`,
+		`CREATE INDEX idx_timeline_entities_kind ON timeline_entities(kind)`,
+		`CREATE INDEX idx_timeline_entities_entity_id ON timeline_entities(entity_id)`,
+
+		`CREATE TABLE turns (id INTEGER PRIMARY KEY AUTOINCREMENT, conv_id TEXT NOT NULL, session_id TEXT NOT NULL, turn_id TEXT NOT NULL, phase TEXT NOT NULL, runtime_key TEXT, inference_id TEXT, created_at_ms INTEGER, created_at TEXT, payload_json TEXT NOT NULL)`,
+		`CREATE INDEX idx_turns_session_id ON turns(session_id)`,
+		`CREATE INDEX idx_turns_conv_id ON turns(conv_id)`,
 	}
 	for _, stmt := range stmts {
 		if _, err := db.ExecContext(ctx, stmt); err != nil {
@@ -255,6 +316,38 @@ func insertFrontendTypedRecord(ctx context.Context, db *sql.DB, id int64, typ st
 	}
 }
 
+func insertTimelineEntities(ctx context.Context, db *sql.DB, provider DebugTimelineProvider, sessionID string) error {
+	entities, err := provider.ExportTimelineEntities(ctx, sessionID)
+	if err != nil {
+		return err
+	}
+	for _, ent := range entities {
+		_, err := db.ExecContext(ctx,
+			`INSERT INTO timeline_entities(kind, entity_id, created_ordinal, last_event_ordinal, tombstone, payload_type, payload_json) VALUES(?, ?, ?, ?, ?, ?, ?)`,
+			ent.Kind, ent.ID, ent.CreatedOrdinal, ent.LastEventOrdinal, boolInt(ent.Tombstone), ent.PayloadType, ent.Payload)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func insertTurns(ctx context.Context, db *sql.DB, provider DebugTurnsProvider, sessionID string) error {
+	turns, err := provider.ExportTurnsList(ctx, sessionID)
+	if err != nil {
+		return err
+	}
+	for _, turn := range turns {
+		_, err := db.ExecContext(ctx,
+			`INSERT INTO turns(conv_id, session_id, turn_id, phase, runtime_key, inference_id, created_at_ms, created_at, payload_json) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			turn.ConvID, turn.SessionID, turn.TurnID, turn.Phase, turn.RuntimeKey, turn.InferenceID, turn.CreatedAtMs, turn.CreatedAt, turn.Payload)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func mustJSON(v any) string {
 	if v == nil {
 		return "null"
@@ -264,6 +357,66 @@ func mustJSON(v any) string {
 		return fmt.Sprintf(`{"error":%q}`, err.Error())
 	}
 	return string(body)
+}
+
+// exportDataProvider adapts the app's Service and TurnStore to DebugDataProvider.
+type exportDataProvider struct {
+	snapshotProvider chatexport.SnapshotProvider
+	turnStore        chatstore.TurnStore
+}
+
+func newExportDataProvider(snapshotProvider chatexport.SnapshotProvider, turnStore chatstore.TurnStore) *exportDataProvider {
+	if snapshotProvider == nil && turnStore == nil {
+		return nil
+	}
+	return &exportDataProvider{snapshotProvider: snapshotProvider, turnStore: turnStore}
+}
+
+func (p *exportDataProvider) ExportTimelineEntities(ctx context.Context, sessionID string) ([]DebugTimelineEntity, error) {
+	if p == nil || p.snapshotProvider == nil {
+		return nil, nil
+	}
+	snap, err := p.snapshotProvider.Snapshot(ctx, sessionstream.SessionId(sessionID))
+	if err != nil {
+		return nil, err
+	}
+	entities := make([]DebugTimelineEntity, 0, len(snap.Entities))
+	for _, ent := range snap.Entities {
+		entities = append(entities, DebugTimelineEntity{
+			Kind:             ent.Kind,
+			ID:               ent.Id,
+			CreatedOrdinal:   ent.CreatedOrdinal,
+			LastEventOrdinal: ent.LastEventOrdinal,
+			Tombstone:        ent.Tombstone,
+			PayloadType:      protoType(ent.Payload),
+			Payload:          mustJSON(encodeProtoJSON(ent.Payload)),
+		})
+	}
+	return entities, nil
+}
+
+func (p *exportDataProvider) ExportTurnsList(ctx context.Context, sessionID string) ([]DebugTurn, error) {
+	if p == nil || p.turnStore == nil {
+		return nil, nil
+	}
+	turns, err := p.turnStore.List(ctx, chatstore.TurnQuery{ConvID: sessionID})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]DebugTurn, 0, len(turns))
+	for _, turn := range turns {
+		out = append(out, DebugTurn{
+			ConvID:      turn.ConvID,
+			SessionID:   turn.SessionID,
+			TurnID:      turn.TurnID,
+			Phase:       turn.Phase,
+			RuntimeKey:  turn.RuntimeKey,
+			InferenceID: turn.InferenceID,
+			CreatedAtMs: turn.CreatedAtMs,
+			Payload:     turn.Payload,
+		})
+	}
+	return out, nil
 }
 
 func nullableInt(s string) any {

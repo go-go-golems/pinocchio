@@ -22,6 +22,7 @@ import (
 	sessionstreamv1 "github.com/go-go-golems/sessionstream/pkg/sessionstream/pb/proto/sessionstream/v1"
 	wstransport "github.com/go-go-golems/sessionstream/pkg/sessionstream/transport/ws"
 	"github.com/gorilla/websocket"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/protojson"
 )
@@ -590,6 +591,84 @@ func TestDebugReconcileUploadReturnsSQLiteDatabase(t *testing.T) {
 	assertTableCount(t, db, "frontend_records")
 	assertTableCount(t, db, "frontend_parsed_frames")
 	assertTableCount(t, db, "frontend_ui_events")
+
+	// Verify timeline_entities and turns tables exist (may be empty without turn store).
+	assertTableExists(t, db, "timeline_entities")
+	assertTableExists(t, db, "turns")
+}
+
+func TestDebugReconcileUploadIncludesTimelineAndTurns(t *testing.T) {
+	recorder := NewStreamDebugRecorder(1000)
+	mockProvider := &mockDebugDataProvider{
+		timelineEntities: []DebugTimelineEntity{
+			{Kind: "message", ID: "msg-1", CreatedOrdinal: 1, LastEventOrdinal: 3, Tombstone: false, PayloadType: "ChatMessage", Payload: `{"text":"hello"}`},
+			{Kind: "message", ID: "msg-2", CreatedOrdinal: 2, LastEventOrdinal: 4, Tombstone: true, PayloadType: "ChatMessage", Payload: `{"text":"deleted"}`},
+		},
+		turns: []DebugTurn{
+			{ConvID: "sess-tl-turns", SessionID: "sess-tl-turns", TurnID: "turn-1", Phase: "final", CreatedAtMs: 1700000000000, Payload: `{"blocks":[{"id":"b1"}]}`},
+			{ConvID: "sess-tl-turns", SessionID: "sess-tl-turns", TurnID: "turn-2", Phase: "streaming", CreatedAtMs: 1700000001000, Payload: `{"blocks":[{"id":"b2"}]}`},
+		},
+	}
+	uploadBody := `{"records":[]}`
+	body, err := recorder.BuildSQLiteReconcileDB(context.Background(), "sess-tl-turns", strings.NewReader(uploadBody), mockProvider)
+	require.NoError(t, err)
+	require.NotEmpty(t, body)
+
+	dbPath := filepath.Join(t.TempDir(), "debug-tl.sqlite")
+	require.NoError(t, os.WriteFile(dbPath, body, 0o644))
+	db, err := sql.Open("sqlite3", dbPath)
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	// Verify timeline entities.
+	var tlCount int
+	require.NoError(t, db.QueryRow("SELECT COUNT(*) FROM timeline_entities").Scan(&tlCount))
+	assert.Equal(t, 2, tlCount)
+
+	var kind, eid, pt string
+	var co, lo int
+	var tomb int
+	require.NoError(t, db.QueryRow("SELECT kind, entity_id, created_ordinal, last_event_ordinal, tombstone, payload_type FROM timeline_entities WHERE entity_id=?", "msg-1").Scan(&kind, &eid, &co, &lo, &tomb, &pt))
+	assert.Equal(t, "message", kind)
+	assert.Equal(t, "msg-1", eid)
+	assert.Equal(t, 1, co)
+	assert.Equal(t, 3, lo)
+	assert.Equal(t, 0, tomb)
+	assert.Equal(t, "ChatMessage", pt)
+
+	// Verify tombstone entity.
+	require.NoError(t, db.QueryRow("SELECT tombstone FROM timeline_entities WHERE entity_id=?", "msg-2").Scan(&tomb))
+	assert.Equal(t, 1, tomb)
+
+	// Verify turns.
+	var turnCount int
+	require.NoError(t, db.QueryRow("SELECT COUNT(*) FROM turns").Scan(&turnCount))
+	assert.Equal(t, 2, turnCount)
+
+	var phase, payload string
+	var createdAtMs int64
+	require.NoError(t, db.QueryRow("SELECT phase, created_at_ms, payload_json FROM turns WHERE turn_id=?", "turn-1").Scan(&phase, &createdAtMs, &payload))
+	assert.Equal(t, "final", phase)
+	assert.Equal(t, int64(1700000000000), createdAtMs)
+	assert.Contains(t, payload, "b1")
+
+	// Meta should reference the session.
+	var metaSession string
+	require.NoError(t, db.QueryRow("SELECT value FROM meta WHERE key='session_id'").Scan(&metaSession))
+	assert.Equal(t, "sess-tl-turns", metaSession)
+}
+
+type mockDebugDataProvider struct {
+	timelineEntities []DebugTimelineEntity
+	turns            []DebugTurn
+}
+
+func (m *mockDebugDataProvider) ExportTimelineEntities(_ context.Context, _ string) ([]DebugTimelineEntity, error) {
+	return m.timelineEntities, nil
+}
+
+func (m *mockDebugDataProvider) ExportTurnsList(_ context.Context, _ string) ([]DebugTurn, error) {
+	return m.turns, nil
 }
 
 func assertTableCount(t *testing.T, db *sql.DB, table string) {
@@ -597,4 +676,11 @@ func assertTableCount(t *testing.T, db *sql.DB, table string) {
 	var count int
 	require.NoError(t, db.QueryRow("SELECT COUNT(*) FROM "+table).Scan(&count))
 	require.Greater(t, count, 0, "expected rows in %s", table)
+}
+
+func assertTableExists(t *testing.T, db *sql.DB, table string) {
+	t.Helper()
+	var name string
+	require.NoError(t, db.QueryRow("SELECT name FROM sqlite_master WHERE type='table' AND name=?", table).Scan(&name))
+	require.Equal(t, table, name, "expected table %s to exist", table)
 }

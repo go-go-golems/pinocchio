@@ -5,6 +5,7 @@ import {
   getStreamDebugEntries,
   type StreamDebugEntry,
   streamDebugEnabled,
+  uploadAndDownloadSQLite,
 } from '../../ws/streamDebug';
 
 function summarize(entry: StreamDebugEntry): string {
@@ -67,6 +68,7 @@ export function StreamDebugPanel() {
               placeholder="filter"
               style={{ flex: 1, background: '#1d1d24', color: '#eee', border: '1px solid #555', padding: 4 }}
             />
+            <button type="button" onClick={() => void uploadAndDownloadSQLite()}>Download SQLite</button>
             <button type="button" onClick={exportStreamDebugJSON}>Export</button>
             <button type="button" onClick={() => { clearStreamDebugEntries(); setEntries([]); }}>Clear</button>
           </div>

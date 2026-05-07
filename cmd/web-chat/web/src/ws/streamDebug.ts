@@ -113,11 +113,50 @@ export function recordLifecycle(sessionId: string, event: string, extra?: Record
   recordStreamDebug({ type: 'ws-lifecycle', sessionId, event, ...(extra ?? {}) });
 }
 
+export async function uploadAndDownloadSQLite(): Promise<void> {
+  const entries = getStreamDebugEntries();
+  // Derive session ID from the most recent entry that has one.
+  let sessionId = '';
+  for (let i = entries.length - 1; i >= 0; i--) {
+    if (entries[i].sessionId) {
+      sessionId = entries[i].sessionId as string;
+      break;
+    }
+  }
+  if (!sessionId) {
+    alert('No session ID found in debug entries');
+    return;
+  }
+  const body = JSON.stringify({ records: entries });
+  const resp = await fetch(`/api/debug/sessions/${encodeURIComponent(sessionId)}/reconcile/upload`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body,
+  });
+  if (!resp.ok) {
+    const text = await resp.text();
+    alert(`Upload failed: ${resp.status} ${text}`);
+    return;
+  }
+  const blob = await resp.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  const cd = resp.headers.get('Content-Disposition') || '';
+  const match = cd.match(/filename="?([^";]+)"?/);
+  a.download = match ? match[1] : `pinocchio-stream-debug-${sessionId}.sqlite`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 try {
   (window as any).__pinocchioStreamDebug = {
     entries: getStreamDebugEntries,
     clear: clearStreamDebugEntries,
     exportJSON: exportStreamDebugJSON,
+    uploadSQLite: uploadAndDownloadSQLite,
     enable: () => window.localStorage.setItem(STORAGE_KEY, '1'),
     disable: () => window.localStorage.removeItem(STORAGE_KEY),
   };

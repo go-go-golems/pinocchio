@@ -57,7 +57,7 @@ func (s *Server) handleDebugReconcileUpload(w http.ResponseWriter, r *http.Reque
 		writeJSON(w, http.StatusMethodNotAllowed, errorResponse{Error: "method not allowed"})
 		return
 	}
-	body, err := s.debugRecorder.BuildSQLiteReconcileDB(r.Context(), sessionID, r.Body)
+	body, err := s.debugRecorder.BuildSQLiteReconcileDB(r.Context(), sessionID, r.Body, newExportDataProvider(s.service, s.turnStore))
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, errorResponse{Error: err.Error()})
 		return
