@@ -725,3 +725,47 @@ I completed the second frontend mapper split by moving UI-event mutation mapping
 ### Code review instructions
 - Review this as TypeScript code movement and import cleanup.
 - Validate from `cmd/web-chat/web` with `npm run typecheck` and `npx vitest run src/ws/wsManager.test.ts`.
+
+## Step 13: Plan typed frontend payload decoding phase 3
+
+I started the next frontend cleanup phase: make the WebSocket UI-event mapping schema-aware for known chatapp protobuf payloads instead of treating all known events as untyped `Record<string, unknown>` objects.
+
+The low-risk sequence is to first add generated TypeScript descriptors for `proto/pinocchio/chatapp/v1/chat.proto`, then introduce a typed decoder module, then refactor `timelineEvents.ts` event-by-event while preserving the existing `wsManager.ts` re-exports and tests.
+
+### Prompt Context
+
+**User prompt (verbatim):** "then do typed frontend payload decoding phase 3: add tasks, work on them all, commit at appropriate intervals, keep a diary"
+
+**Assistant interpretation:** Create explicit ticket tasks for phase 3, then implement the generated/typed frontend event payload decoding work completely with test coverage and commits at natural boundaries.
+
+**Inferred user intent:** Finish the cleanup-guide item about typed frontend mapping for `ChatMessageUpdate`, `ReasoningUpdate`, `ToolCallUpdate`, and related chatapp payloads.
+
+### What I did
+- Added a `Frontend typed payload decoding phase 3` task group to `tasks.md`.
+- Added `buf.chatapp.web.gen.yaml` so chatapp protobuf descriptors can be generated for the web-chat frontend.
+- Generated `cmd/web-chat/web/src/chatapp/pb/proto/pinocchio/chatapp/v1/chat_pb.ts` from `proto/pinocchio/chatapp/v1/chat.proto`.
+
+### Why
+- The backend already uses protobuf payload types, but the frontend mapper was manually reading generic JSON fields.
+- Generated descriptors let the frontend use `@bufbuild/protobuf` JSON decoding and compile-time payload types.
+
+### What worked
+- `buf generate --template buf.chatapp.web.gen.yaml --path proto/pinocchio/chatapp/v1/chat.proto` produced the expected frontend generated file.
+
+### What didn't work
+- N/A yet.
+
+### What I learned
+- The existing `buf.gen.yaml` only generated sem descriptors for the web frontend. Chatapp descriptors needed a small dedicated template to avoid mixing output paths.
+
+### What was tricky to build
+- The generated file uses the `@bufbuild/protobuf` v2 schema style, so decoding should use `fromJson(schema, json, { ignoreUnknownFields: true })` rather than the older static `Message.fromJson` style shown in the initial cleanup sketch.
+
+### What warrants a second pair of eyes
+- Whether the new `buf.chatapp.web.gen.yaml` should later be folded into a broader frontend generation target.
+
+### What should be done in the future
+- Add the typed decoder module and refactor timeline event mapping to use decoded payloads.
+
+### Code review instructions
+- Review the generation template and generated file path first; behavior should not change until the decoder refactor commit.

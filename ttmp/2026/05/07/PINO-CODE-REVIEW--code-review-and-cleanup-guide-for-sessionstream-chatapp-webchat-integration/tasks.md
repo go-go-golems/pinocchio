@@ -38,5 +38,15 @@
 - [x] Extract `cmd/web-chat/app/debug_reconcile_db.go` into schema, inserts, frontend parsing, views, and provider adapters.
 - [ ] Split `cmd/web-chat/web/src/ws/wsManager.ts` into transport client, hydration coordinator, event mapper, and debug hooks.
 - [ ] Add a generated or table-driven frontend mapping for typed `ReasoningUpdate`, `ToolCallUpdate`, and `ChatMessageUpdate` payloads.
+
+## Frontend typed payload decoding phase 3
+
+- [x] Add a phase-3 typed payload decoding plan to the diary before editing code.
+- [x] Generate chatapp TypeScript protobuf descriptors for the web-chat frontend.
+- [ ] Add a typed `decodeKnownUIEvent` utility for `ChatMessageUpdate`, `ReasoningUpdate`, `ToolCallUpdate`, `ToolResultUpdate`, and agent-mode updates.
+- [ ] Refactor `timelineEvents.ts` to map known typed UI events instead of reading all known payloads as generic records.
+- [ ] Add tests for typed lowerCamel protobuf JSON decoding, optional reasoning provider IDs, and tool updates.
+- [ ] Re-run frontend typecheck and targeted Vitest tests.
+- [ ] Commit each behavior-preserving frontend decoding slice with diary updates.
 - [ ] Move app-local agent-mode plugin code out of `cmd/web-chat` or explicitly document it as example-only.
 - [ ] Resolve cross-repo Sessionstream/Geppetto/Pinocchio dependency alignment so Pinocchio passes `GOWORK=off` validation.
