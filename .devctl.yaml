@@ -24,5 +24,5 @@ plugins:
   - id: pinocchio-webchat
     path: python3
     args:
-      - ./plugins/webchat.py
+      - ./cmd/web-chat/plugins/webchat.py
     priority: 10
