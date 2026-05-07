@@ -46,3 +46,15 @@ Started implementation of the cleanup guide. Split `pkg/chatapp/chat.go` leaf he
 - /home/manuel/workspaces/2026-05-02/use-sessionstream-coinvault/pinocchio/cmd/web-chat/app/debug_reconcile_provider.go — Export data provider adapters
 - /home/manuel/workspaces/2026-05-02/use-sessionstream-coinvault/pinocchio/cmd/web-chat/app/debug_reconcile_snapshots.go — Timeline/turn snapshot inserts
 - /home/manuel/workspaces/2026-05-02/use-sessionstream-coinvault/pinocchio/cmd/web-chat/app/debug_reconcile_values.go — Reconcile DB scalar/JSON conversion helpers
+
+## 2026-05-07 Continued
+
+Completed the remaining requested chatapp splits and started the frontend WebSocket manager split. `pkg/chatapp/chat.go` now primarily contains engine setup and run bookkeeping; runtime execution and the Geppetto event sink live in focused files. `wsManager.ts` now delegates snapshot mapping/application and UI-event mutation/application to focused modules while preserving legacy mapper re-exports used by existing tests. Commits: `e4503e2` extract runtime sink, `5a62fb5` extract runtime inference flow, `2fce349` extract snapshot mapping, `d2a80f8` extract UI event mapping.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-05-02/use-sessionstream-coinvault/pinocchio/pkg/chatapp/runtime_sink.go — Geppetto runtime event sink and text segment state helpers
+- /home/manuel/workspaces/2026-05-02/use-sessionstream-coinvault/pinocchio/pkg/chatapp/runtime_inference.go — Chatapp command handling and runtime inference orchestration
+- /home/manuel/workspaces/2026-05-02/use-sessionstream-coinvault/pinocchio/cmd/web-chat/web/src/ws/timelineSnapshot.ts — Snapshot entity mapping/application helpers
+- /home/manuel/workspaces/2026-05-02/use-sessionstream-coinvault/pinocchio/cmd/web-chat/web/src/ws/timelineEvents.ts — UI-event mutation mapping/application helpers
+- /home/manuel/workspaces/2026-05-02/use-sessionstream-coinvault/pinocchio/cmd/web-chat/web/src/ws/wsManager.ts — WebSocket lifecycle and hydration coordinator after mapper extraction

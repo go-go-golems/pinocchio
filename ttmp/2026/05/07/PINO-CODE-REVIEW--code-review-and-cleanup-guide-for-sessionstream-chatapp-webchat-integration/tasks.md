@@ -28,7 +28,8 @@
 - [x] Extract UI event mutation mapping and application out of `wsManager.ts`.
 - [ ] Extract WebSocket connection lifecycle / message handler helpers if the manager remains large after mapper splits.
 - [x] Re-run frontend unit/type checks after each split slice.
-- [ ] Commit each behavior-preserving frontend slice with diary updates.
+- [x] Commit each behavior-preserving frontend slice with diary updates.
+- [x] Assess post-mapper `wsManager.ts` size and defer lifecycle extraction unless connection logic grows again.
 
 ## Follow-up cleanup candidates
 
