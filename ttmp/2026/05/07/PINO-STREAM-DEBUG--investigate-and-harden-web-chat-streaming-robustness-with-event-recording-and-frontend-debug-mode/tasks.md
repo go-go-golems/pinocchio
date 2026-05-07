@@ -31,7 +31,7 @@
 ## Phase 3: Comparison and reconciliation tools
 
 - [x] Build a backend reconciliation endpoint that loads Sessionstream observer records for the same session and highlights backend pipeline-vs-transport discrepancies.
-- [ ] Extend reconciliation to load/export frontend logs for browser receipt and mutation comparison.
+- [x] Extend reconciliation to load/export frontend logs for browser receipt and mutation comparison.
 - [x] Detect backend missing fanout ordinals between Hub pipeline records and WebSocket transport records.
 - [ ] Detect browser-side missing events, extra events, ordering differences, and payload mismatches from frontend debug JSON.
 - [ ] Build a diff view for hydration snapshot vs live-rendered state after streaming completes.
@@ -45,8 +45,13 @@
 - [x] Create SQLite schema with raw backend/frontend record tables and parsed typed tables.
 - [x] Insert backend pipeline and transport observer records into SQLite.
 - [x] Insert frontend raw WebSocket, parsed frame, snapshot, UI-event, and lifecycle records into SQLite.
+- [x] Insert timeline entities (durable persisted state) into SQLite.
+- [x] Insert turns (accumulated turn snapshots) into SQLite.
+- [x] Add `exportDataProvider` adapter bridging `chatapp.Service` and `TurnStore` to debug interfaces.
 - [x] Return the SQLite DB as `application/vnd.sqlite3` with attachment headers.
 - [x] Add integration test that opens the returned SQLite DB and verifies key tables contain rows.
+- [x] Add frontend "Download SQLite" button that uploads browser debug and downloads the merged artifact.
+- [x] Full-circle Playwright validation: real browser session, real backend observers, uploaded frontend logs, verified all 15 tables populated.
 
 ## Phase 4: Robustness testing scenarios
 

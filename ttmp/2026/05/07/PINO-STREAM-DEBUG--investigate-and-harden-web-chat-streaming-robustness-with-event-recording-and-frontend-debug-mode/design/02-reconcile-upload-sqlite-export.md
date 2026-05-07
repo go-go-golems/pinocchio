@@ -435,6 +435,54 @@ CREATE VIEW snapshot_dropped_entities AS ...;
 
 We can then add CLI presets or dashboard queries without changing the upload endpoint.
 
+## Timeline and turns data (implemented)
+
+In addition to observer event records, the SQLite artifact now includes two tables for persisted state:
+
+### timeline_entities
+
+The durable timeline entities from the session's current snapshot. These represent what the system *persisted* — messages, reasoning blocks, agent mode cards, tool calls, and tool results.
+
+```sql
+CREATE TABLE timeline_entities (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    kind TEXT NOT NULL,
+    entity_id TEXT NOT NULL,
+    created_ordinal INTEGER NOT NULL,
+    last_event_ordinal INTEGER NOT NULL,
+    tombstone INTEGER NOT NULL DEFAULT 0,
+    payload_type TEXT,
+    payload_json TEXT
+);
+```
+
+### turns
+
+The accumulated turn snapshots from the turn store. Each turn is a full accumulator snapshot containing the serialized conversation state at that point.
+
+```sql
+CREATE TABLE turns (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    conv_id TEXT NOT NULL,
+    session_id TEXT NOT NULL,
+    turn_id TEXT NOT NULL,
+    phase TEXT NOT NULL,
+    runtime_key TEXT,
+    inference_id TEXT,
+    created_at_ms INTEGER,
+    created_at TEXT,
+    payload_json TEXT NOT NULL
+);
+```
+
+These tables are populated by a `DebugDataProvider` interface, implemented by `exportDataProvider` which bridges `chatapp.Service` (for timeline snapshots) and `TurnStore` (for turns). When the provider is nil (e.g., test server without turn store), these tables are empty but still exist in the schema.
+
+This means a single SQLite file now contains:
+1. Backend observer records (what happened)
+2. Frontend debug records (what the browser saw)
+3. Timeline entities (what was persisted)
+4. Turns (what was accumulated)
+
 ## Closing guidance
 
 The endpoint should be boring and reliable. It should not try to be clever about every possible analysis. The important property is that it preserves raw evidence while adding enough schema to make common questions queryable. Analysis can grow over time; lost raw records cannot be recovered.

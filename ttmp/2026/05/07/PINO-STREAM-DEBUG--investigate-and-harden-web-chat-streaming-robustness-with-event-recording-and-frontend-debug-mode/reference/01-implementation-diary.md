@@ -370,3 +370,111 @@ Review `design/02-reconcile-upload-sqlite-export.md`, then `cmd/web-chat/app/deb
 ```bash
 go test ./cmd/web-chat/app ./cmd/web-chat -count=1
 ```
+
+## Step 5: Include timeline entities and turns in reconcile SQLite, add download button, full-circle Playwright validation
+
+The fifth step enriched the SQLite reconcile artifact with the two remaining data sources: durable timeline entities and accumulated turns. Previously the SQLite only contained observer/event evidence from backend pipeline/transport stages and uploaded frontend debug records. Now it also contains the actual persisted state that the session produced — every timeline entity (messages, reasoning blocks, agent mode cards) and every turn snapshot. This means a single downloaded SQLite file contains both the *events* (what happened) and the *state* (what resulted).
+
+### Prompt Context
+
+**User prompt (verbatim):** "continue working on the ticket, commit at appropriate intervals, keep a detailed diary as you work (see skills for docmgr, and diary) continue — use playwright to do a full circle test once you are done, validating the proper observer + browser recording + reconciliation. Can we also include the timeline and the turns data into the exported reconciliated database, that way we have the events and the persisted data"
+
+**Assistant interpretation:** Add timeline entities and turns to the SQLite reconcile database, add a frontend download button, validate the full pipeline with a real Playwright browser test, and keep diary/docmgr entries up to date.
+
+**Inferred user intent:** Make the SQLite artifact self-contained: events from observers, plus the persisted state from the timeline store and turn store. Then validate everything end-to-end in a real browser session.
+
+**Commit (code):** `7f9ca6c` — "feat(web-chat): include timeline entities and turns in reconcile SQLite, add download button"
+
+### What I did
+
+- Added `DebugDataProvider` interface with `DebugTimelineProvider` and `DebugTurnsProvider` to `debug_reconcile_db.go`.
+- Added `exportDataProvider` adapter that bridges `chatexport.SnapshotProvider` (implemented by `chatapp.Service`) and `chatstore.TurnStore` to the provider interface.
+- Added `timeline_entities` table with columns: `kind`, `entity_id`, `created_ordinal`, `last_event_ordinal`, `tombstone`, `payload_type`, `payload_json`.
+- Added `turns` table with columns: `conv_id`, `session_id`, `turn_id`, `phase`, `runtime_key`, `inference_id`, `created_at_ms`, `created_at`, `payload_json`.
+- Added indexes on `timeline_entities(kind)`, `timeline_entities(entity_id)`, `turns(session_id)`, `turns(conv_id)`.
+- Updated `BuildSQLiteReconcileDB` signature to accept `DebugDataProvider` parameter.
+- Updated `server_debug.go` handler to pass `s.service` (which implements `SnapshotProvider`) and `s.turnStore`.
+- Added `TestDebugReconcileUploadIncludesTimelineAndTurns` with a mock provider to verify timeline entity and turn rows.
+- Added `assertTableExists` helper for checking schema existence.
+- Added `uploadAndDownloadSQLite()` function to `streamDebug.ts` — POSTs frontend debug entries to `/reconcile/upload` and triggers a browser download of the returned SQLite file.
+- Added "Download SQLite" button to `StreamDebugPanel.tsx`.
+- Exposed `uploadSQLite` on `window.__pinocchioStreamDebug`.
+
+### Why
+
+Events without state are only half the story. The observer records tell you what the backend *produced*, but the timeline entities tell you what the system *persisted*. The turns tell you what the accumulator *accumulated*. Having all three in one SQLite means you can answer questions like "did this event produce the right entity?" or "does the turn snapshot match the timeline?" with a single SQL join.
+
+### What worked
+
+- The `chatapp.Service` already implements `SnapshotProvider`, so the adapter was straightforward.
+- The `exportDataProvider` gracefully handles nil provider (test server has no turn store).
+- The frontend download button worked immediately in the Playwright test.
+- The full-circle Playwright test validated: 314 backend records + 5 frontend records + 4 timeline entities + 1 turn = complete picture.
+
+### What didn't work
+
+- `curl -d @file` failed with the frontend entries JSON because the file was written to a different location than expected. Used inline JSON for the validation instead.
+- Initial compilation failed because `chatexport.Service` does not implement `SnapshotProvider` — `chatapp.Service` does. Fixed by using `s.service` instead of `s.exportService`.
+- `encodeProtoJSON` returns `any`, not `string` — had to wrap with `mustJSON()`.
+
+### What I learned
+
+The `SnapshotProvider` interface is implemented by `chatapp.Service` (the core service that wraps the Hub), not by `chatexport.Service` (the export helper). This makes sense: the export service is a consumer, not a provider.
+
+### What was tricky to build
+
+The adapter boundary between the debug package and the persistence layer. The debug reconcile builder should not import heavy dependencies, so the `DebugDataProvider` interface keeps it clean. The adapter lives in the same `app` package as the server, where both types are naturally available.
+
+### What warrants a second pair of eyes
+
+- The `exportDataProvider` returns `(nil, nil)` when no turn store is configured. This means the turns table will be empty, not absent. That seems correct but is worth confirming.
+- The timeline entities come from a live snapshot at upload time, not from a historical point-in-time. If the session continues producing events after the upload, the snapshot may differ.
+
+### What should be done in the future
+
+- Add SQL views to the SQLite for common delivery-chain questions (e.g., `CREATE VIEW missing_frontend_ordinals AS ...`).
+- Persist the SQLite on the server side for historical comparison.
+- Add the Playwright full-circle test as a proper Go integration test that starts the server, drives the browser, uploads, and validates.
+
+### Code review instructions
+
+Review `cmd/web-chat/app/debug_reconcile_db.go` (provider interface, adapter, timeline/turns insertion), then `cmd/web-chat/app/server_debug.go` (handler change), then `cmd/web-chat/app/server_test.go` (new test). Validate with:
+
+```bash
+go test ./cmd/web-chat/app -run TestDebugReconcile -count=1 -v
+```
+
+### Technical details
+
+**Full-circle validation results** (session `e54cb704-937e-406b-b20d-a169101555bf`):
+
+| Table | Rows | Source |
+|-------|------|--------|
+| `meta` | 5 | Schema metadata |
+| `backend_records` | 314 | Sessionstream observers |
+| `backend_pipeline` | 103 | Hub pipeline stages |
+| `backend_pipeline_ui_events` | 208 | Projected UI events |
+| `backend_pipeline_entities` | 202 | Projected/applied entities |
+| `backend_transport` | 211 | WebSocket transport stages |
+| `frontend_records` | 5 | Uploaded browser debug |
+| `frontend_raw_ws` | 1 | Raw WebSocket frames |
+| `frontend_parsed_frames` | 1 | Parsed frames |
+| `frontend_snapshots` | 1 | Hydration snapshots |
+| `frontend_snapshot_entities` | 1 | Snapshot entity mapping |
+| `frontend_ui_events` | 1 | UI event mutations |
+| `frontend_lifecycle` | 1 | WS lifecycle events |
+| `timeline_entities` | 4 | Durable persisted state |
+| `turns` | 1 | Accumulated turns |
+
+Timeline entities:
+```
+ChatMessage|chat-msg-1-user|1|1|0
+ChatMessage|chat-msg-1:thinking:1|4|77|0
+ChatMessage|chat-msg-1:text:1|78|103|0
+ChatMessage|chat-msg-1:thinking:2|102|102|0
+```
+
+Turn:
+```
+7b63dfd8-cdd5-4276-985a-33669542fdfb|final|1778125458244
+```

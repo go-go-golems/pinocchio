@@ -35,3 +35,14 @@
 - Added design document for SQLite reconcile upload artifacts.
 - Implemented `POST /api/debug/sessions/{id}/reconcile/upload`, returning a SQLite DB populated with backend observer records and uploaded frontend debug records.
 - Added integration test that validates the returned SQLite schema contains backend and frontend rows.
+
+## 2026-05-07 (step 5)
+
+- Added timeline entities and turns tables to the SQLite reconcile artifact.
+- Added `DebugDataProvider` interface and `exportDataProvider` adapter.
+- Added `Download SQLite` button to the frontend StreamDebugPanel.
+- Added `uploadAndDownloadSQLite()` to the frontend stream debug module.
+- Added `TestDebugReconcileUploadIncludesTimelineAndTurns` with mock provider.
+- Performed full-circle Playwright validation with real server on :8092.
+- Verified all 15 SQLite tables populated: backend pipeline/transport, frontend raw/parsed/snapshot/ui/lifecycle, timeline entities, turns.
+- Commit: `7f9ca6c feat(web-chat): include timeline entities and turns in reconcile SQLite, add download button`
