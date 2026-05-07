@@ -478,3 +478,52 @@ This reduces the main builder file to 59 lines. The largest remaining split file
 ### Code review instructions
 - Review this as a file split. The public method and SQL strings should be unchanged except for file location.
 - Validate with `go test ./cmd/web-chat/app ./cmd/web-chat ./pkg/chatapp -count=1`.
+
+## Step 8: Extract runtime event sink
+
+I continued the chatapp split by extracting the Geppetto runtime event sink from `pkg/chatapp/chat.go` into its own file. This is the second low-risk chatapp slice after the helper/projection split: it moves a cohesive type plus its methods without changing public API or event behavior.
+
+### Prompt Context
+
+**User prompt (verbatim):** "Continue remaining chatapp split tasks: extract `runtimeEventSink` and runtime inference orchestration from `pkg/chatapp/chat.go`. Keep a diary, commit at appropriate intervals. Then, add tasks to split wsManager.ts and work on those."
+
+**Assistant interpretation:** Finish the remaining chatapp splits first, validating and committing each natural boundary, then update the ticket with frontend WebSocket split tasks and begin implementing them.
+
+**Inferred user intent:** Keep the same small, behavior-preserving refactor workflow: no API changes, keep tests green, and maintain ticket narrative.
+
+### What I did
+- Moved `runtimeEventSink` and its methods from `chat.go` to `pkg/chatapp/runtime_sink.go`.
+- Moved related text segment helpers with the sink:
+  - `textSegmentMessageID`
+  - `isTranscriptBoundaryEvent`
+- Kept the sink in package `chatapp` so all existing unexported helpers and plugin dispatch behavior remain available.
+
+### Why
+- The sink owns Geppetto-event-to-chat-message translation, text segment state, terminal state, and feature runtime event dispatch.
+- Keeping that state machine out of `chat.go` makes the core engine construction and command flow easier to read.
+
+### What worked
+- Focused tests passed:
+  - `go test ./pkg/chatapp ./pkg/chatapp/plugins ./cmd/web-chat -count=1`
+- Line counts after the split:
+  - `pkg/chatapp/chat.go`: 390
+  - `pkg/chatapp/runtime_sink.go`: 184
+
+### What didn't work
+- N/A. The move was mechanical and imports resolved cleanly after `gofmt`.
+
+### What I learned
+- The sink is internally cohesive enough to stand alone; it only needs the engine publish/plugin methods and standard chat message helpers.
+
+### What was tricky to build
+- The sink still calls `engine.handleFeatureRuntimeEvent`, so it must remain in the same package for now unless we later introduce a small dispatcher interface.
+
+### What warrants a second pair of eyes
+- Confirm the text segment helper names are still discoverable now that they live in `runtime_sink.go`.
+
+### What should be done in the future
+- Extract runtime inference orchestration next so `chat.go` becomes mostly engine setup, command registration, and active-run bookkeeping.
+
+### Code review instructions
+- Review as code movement only.
+- Validate with `go test ./pkg/chatapp ./pkg/chatapp/plugins ./cmd/web-chat -count=1`.
