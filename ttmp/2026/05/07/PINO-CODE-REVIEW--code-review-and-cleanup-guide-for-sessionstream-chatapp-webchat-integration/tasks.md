@@ -16,10 +16,19 @@
 
 - [x] Add a behavior-preserving `pkg/chatapp/chat.go` split plan to the diary before editing code.
 - [x] Extract message helpers, demo inference, and base projections out of `pkg/chatapp/chat.go`.
-- [ ] Extract `runtimeEventSink` and text segment state helpers out of `pkg/chatapp/chat.go`.
-- [ ] Extract runtime inference / Geppetto session orchestration out of `pkg/chatapp/chat.go`.
-- [ ] Re-run focused chatapp and web-chat tests after each split slice.
-- [ ] Commit each behavior-preserving slice with diary updates.
+- [x] Extract `runtimeEventSink` and text segment state helpers out of `pkg/chatapp/chat.go`.
+- [x] Extract runtime inference / Geppetto session orchestration out of `pkg/chatapp/chat.go`.
+- [x] Re-run focused chatapp and web-chat tests after each split slice.
+- [x] Commit each behavior-preserving slice with diary updates.
+
+## Frontend wsManager split execution
+
+- [x] Add a behavior-preserving `cmd/web-chat/web/src/ws/wsManager.ts` split plan to the diary before editing code.
+- [x] Extract snapshot entity mapping and snapshot application out of `wsManager.ts`.
+- [ ] Extract UI event mutation mapping and application out of `wsManager.ts`.
+- [ ] Extract WebSocket connection lifecycle / message handler helpers if the manager remains large after mapper splits.
+- [ ] Re-run frontend unit/type checks after each split slice.
+- [ ] Commit each behavior-preserving frontend slice with diary updates.
 
 ## Follow-up cleanup candidates
 

@@ -584,3 +584,95 @@ After this slice, `chat.go` is down to engine state, option constructors, schema
 ### Code review instructions
 - Review this as code movement plus import cleanup.
 - Validate with `go test ./pkg/chatapp ./pkg/chatapp/plugins ./cmd/web-chat -count=1`.
+
+## Step 10: Plan frontend wsManager split
+
+With the remaining chatapp backend split slices committed, I added explicit tasks for splitting `cmd/web-chat/web/src/ws/wsManager.ts` and started with the lowest-risk frontend boundaries.
+
+### Prompt Context
+
+**User prompt (verbatim):** (same as Step 8)
+
+**Assistant interpretation:** After backend chatapp splits, update ticket tasks for the TypeScript WebSocket manager and begin the same behavior-preserving split workflow.
+
+**Inferred user intent:** Avoid leaving `wsManager.ts` as the next large multipurpose integration file; split it by mapper/application responsibilities before changing behavior.
+
+### What I did
+- Added a `Frontend wsManager split execution` task group to `tasks.md`.
+- Chose the split order:
+  1. snapshot entity mapping and snapshot application;
+  2. UI-event mutation mapping and application;
+  3. connection lifecycle/message-handler helpers only if the manager remains too dense.
+
+### Why
+- Snapshot mapping and UI-event mapping are pure-ish transformation layers with existing tests.
+- The WebSocket class should keep connection state and buffering while importing mapping/application helpers.
+
+### What worked
+- Existing tests already import `timelineEntityFromSnapshotEntity` and `timelineMutationFromUIEvent`, so re-exporting those helpers from `wsManager.ts` can preserve the public test/import surface while moving implementation.
+
+### What didn't work
+- N/A yet.
+
+### What I learned
+- `wsManager.ts` has three obvious responsibilities today: entity mapping, UI mutation mapping, and socket lifecycle/hydration buffering.
+
+### What was tricky to build
+- The mapper exports are currently imported from `wsManager.ts` by tests, so the first split should either update tests or re-export from `wsManager.ts`. I will re-export first to reduce churn.
+
+### What warrants a second pair of eyes
+- Whether the UI event mapper should later become table-driven after the split, especially for typed protobuf payloads.
+
+### What should be done in the future
+- Once the first mapper splits pass tests, decide whether to extract a small transport client around `WebSocket` events.
+
+## Step 11: Extract WebSocket snapshot mapping
+
+I started the `wsManager.ts` split by moving snapshot entity mapping and snapshot application into a focused frontend module. The `WsManager` class still owns socket lifecycle, hydration buffering, and frame dispatch, but snapshot mapping no longer lives in the same file as connection management.
+
+### Prompt Context
+
+**User prompt (verbatim):** (same as Step 8)
+
+**Assistant interpretation:** Implement the first frontend mapper split from the newly added tasks.
+
+**Inferred user intent:** Reduce `wsManager.ts` size while preserving current imports/tests and runtime behavior.
+
+### What I did
+- Added `cmd/web-chat/web/src/ws/timelineSnapshot.ts`.
+- Moved snapshot-related helpers:
+  - `messageEntity`
+  - `agentModeEntity`
+  - `agentModePreviewEntityId`
+  - `timelineEntityFromSnapshotEntity`
+  - `applySnapshot`
+- Re-exported `timelineEntityFromSnapshotEntity` from `wsManager.ts` so existing tests and callers do not need to change yet.
+- Updated `wsManager.ts` to import `applySnapshot` and shared entity factories.
+
+### Why
+- Snapshot mapping is a distinct responsibility from WebSocket connection lifecycle.
+- Keeping the old re-export minimizes review noise and test churn.
+
+### What worked
+- Frontend checks passed:
+  - `npm run typecheck`
+  - `npx vitest run src/ws/wsManager.test.ts`
+
+### What didn't work
+- `npx @biomejs/biome@2.3.8 format --write src/ws/wsManager.ts src/ws/timelineSnapshot.ts` reported that those paths were ignored by the current Biome configuration, so I relied on the existing formatting style and TypeScript/Vitest validation.
+
+### What I learned
+- The snapshot mapper was easy to isolate, but the UI event mapper still needs the same entity factory helpers. Exporting the factories from `timelineSnapshot.ts` keeps the next split small.
+
+### What was tricky to build
+- Preserving the old test import surface required a re-export from `wsManager.ts`.
+
+### What warrants a second pair of eyes
+- Naming: `timelineSnapshot.ts` currently contains shared timeline entity factories as well as snapshot mapping. That is pragmatic for this split, but could later become `timelineEntities.ts` plus `timelineSnapshot.ts`.
+
+### What should be done in the future
+- Extract UI-event mutation mapping into its own module and re-export `timelineMutationFromUIEvent` from `wsManager.ts`.
+
+### Code review instructions
+- Review this as TypeScript code movement and import cleanup.
+- Validate from `cmd/web-chat/web` with `npm run typecheck` and `npx vitest run src/ws/wsManager.test.ts`.
