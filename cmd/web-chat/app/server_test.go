@@ -656,6 +656,16 @@ func TestDebugReconcileUploadIncludesTimelineAndTurns(t *testing.T) {
 	var metaSession string
 	require.NoError(t, db.QueryRow("SELECT value FROM meta WHERE key='session_id'").Scan(&metaSession))
 	assert.Equal(t, "sess-tl-turns", metaSession)
+
+	// Verify SQL views were created.
+	var viewCount int
+	require.NoError(t, db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='view'").Scan(&viewCount))
+	assert.Greater(t, viewCount, 0, "expected SQL views to be created")
+
+	// Spot-check a view query works.
+	var deliveryRows int
+	require.NoError(t, db.QueryRow("SELECT COUNT(*) FROM delivery_chain").Scan(&deliveryRows))
+	assert.GreaterOrEqual(t, deliveryRows, 0, "delivery_chain view should be queryable")
 }
 
 type mockDebugDataProvider struct {

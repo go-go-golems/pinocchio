@@ -100,6 +100,9 @@ func (r *StreamDebugRecorder) BuildSQLiteReconcileDB(ctx context.Context, sessio
 			return nil, fmt.Errorf("insert turns: %w", err)
 		}
 	}
+	if err := createDebugSQLiteViews(ctx, db); err != nil {
+		return nil, fmt.Errorf("create views: %w", err)
+	}
 	if err := db.Close(); err != nil {
 		return nil, err
 	}
@@ -164,6 +167,110 @@ func createDebugSQLiteSchema(ctx context.Context, db *sql.DB) error {
 	}
 	for _, stmt := range stmts {
 		if _, err := db.ExecContext(ctx, stmt); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func createDebugSQLiteViews(ctx context.Context, db *sql.DB) error {
+	views := []string{
+		// Backend pipeline fanout ordinals that never reached WebSocket transport.
+		`CREATE VIEW missing_transport_fanout AS
+		 SELECT bp.record_id, bp.event_name, br.ordinal
+		   FROM backend_pipeline bp
+		   JOIN backend_records br ON br.id = bp.record_id
+		   WHERE bp.fanout_error = ''
+		     AND br.ordinal != ''
+		     AND NOT EXISTS (
+		       SELECT 1 FROM backend_transport bt
+		         JOIN backend_records br2 ON br2.id = bt.record_id
+		        WHERE bt.stage = 'fanout_started' AND br2.ordinal = br.ordinal
+		     )`,
+
+		// Backend transport fanout ordinals with no corresponding pipeline record.
+		`CREATE VIEW extra_transport_fanout AS
+		 SELECT bt.record_id, bt.stage, br.ordinal
+		   FROM backend_transport bt
+		   JOIN backend_records br ON br.id = bt.record_id
+		  WHERE bt.stage = 'fanout_started'
+		    AND br.ordinal != ''
+		    AND NOT EXISTS (
+		      SELECT 1 FROM backend_pipeline bp
+		        JOIN backend_records br2 ON br2.id = bp.record_id
+		       WHERE br2.ordinal = br.ordinal
+		    )`,
+
+		// Backend pipeline events with errors.
+		`CREATE VIEW backend_pipeline_errors AS
+		 SELECT br.ordinal, bp.event_name,
+		        bp.append_error, bp.view_error,
+		        bp.ui_projection_error, bp.timeline_projection_error,
+		        bp.apply_error, bp.cursor_error, bp.fanout_error
+		   FROM backend_pipeline bp
+		   JOIN backend_records br ON br.id = bp.record_id
+		  WHERE COALESCE(bp.append_error, bp.view_error, bp.ui_projection_error,
+		                 bp.timeline_projection_error, bp.apply_error, bp.cursor_error, bp.fanout_error, '') != ''`,
+
+		// Backend transport events with errors.
+		`CREATE VIEW backend_transport_errors AS
+		 SELECT br.ordinal, bt.stage, bt.frame_type, bt.error
+		   FROM backend_transport bt
+		   JOIN backend_records br ON br.id = bt.record_id
+		  WHERE bt.error IS NOT NULL AND bt.error != ''`,
+
+		// Frontend parsed frames with no corresponding UI event mutation.
+		`CREATE VIEW frontend_parsed_no_mutation AS
+		 SELECT pf.record_id, pf.frame_type, pf.name, fr.ordinal
+		   FROM frontend_parsed_frames pf
+		   JOIN frontend_records fr ON fr.id = pf.record_id
+		  WHERE pf.frame_type = 'ui-event'
+		    AND NOT EXISTS (
+		      SELECT 1 FROM frontend_ui_events fue
+		       WHERE fue.record_id = pf.record_id
+		    )`,
+
+		// Frontend snapshot entities that were dropped during hydration.
+		`CREATE VIEW frontend_dropped_entities AS
+		 SELECT fse.raw_kind, fse.raw_id, fse.mapped_kind, fse.mapped_id
+		   FROM frontend_snapshot_entities fse
+		  WHERE fse.dropped = 1`,
+
+		// Timeline entities that are tombstoned.
+		`CREATE VIEW tombstoned_entities AS
+		 SELECT kind, entity_id, created_ordinal, last_event_ordinal, payload_type
+		   FROM timeline_entities
+		  WHERE tombstone = 1`,
+
+		// Delivery chain: pipeline fanout -> transport fanout -> frontend parsed.
+		`CREATE VIEW delivery_chain AS
+		 SELECT br.ordinal,
+		        bp.event_name AS pipeline_event,
+		        CASE WHEN EXISTS (
+		          SELECT 1 FROM backend_transport bt
+		            JOIN backend_records br2 ON br2.id = bt.record_id
+		           WHERE bt.stage = 'fanout_started' AND br2.ordinal = br.ordinal
+		        ) THEN 'yes' ELSE 'no' END AS transport_fanout,
+		        CASE WHEN EXISTS (
+		          SELECT 1 FROM frontend_parsed_frames fpf
+		            JOIN frontend_records fr ON fr.id = fpf.record_id
+		           WHERE fr.ordinal = br.ordinal
+		        ) THEN 'yes' ELSE 'no' END AS frontend_parsed
+		   FROM backend_pipeline bp
+		   JOIN backend_records br ON br.id = bp.record_id
+		  WHERE br.ordinal != ''
+		  ORDER BY CAST(br.ordinal AS INTEGER)`,
+
+		// Per-entity timeline state: entity kind counts.
+		`CREATE VIEW entity_kind_summary AS
+		 SELECT kind, COUNT(*) AS count,
+		        SUM(CASE WHEN tombstone = 0 THEN 1 ELSE 0 END) AS alive,
+		        SUM(CASE WHEN tombstone = 1 THEN 1 ELSE 0 END) AS tombstoned
+		   FROM timeline_entities
+		  GROUP BY kind`,
+	}
+	for _, view := range views {
+		if _, err := db.ExecContext(ctx, view); err != nil {
 			return err
 		}
 	}
