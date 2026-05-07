@@ -468,6 +468,16 @@ func int32FromAny(v any) (int32, bool) {
 		}
 		return int32(n), true
 	}
+	fromUint64 := func(n uint64) (int32, bool) {
+		if n > uint64(maxInt32) {
+			return 0, false
+		}
+		parsed, err := strconv.ParseInt(strconv.FormatUint(n, 10), 10, 32)
+		if err != nil {
+			return 0, false
+		}
+		return int32(parsed), true
+	}
 	switch tv := v.(type) {
 	case int:
 		return fromInt64(int64(tv))
@@ -476,20 +486,11 @@ func int32FromAny(v any) (int32, bool) {
 	case int64:
 		return fromInt64(tv)
 	case uint:
-		if uint64(tv) > uint64(maxInt32) {
-			return 0, false
-		}
-		return int32(tv), true
+		return fromUint64(uint64(tv))
 	case uint32:
-		if tv > uint32(maxInt32) {
-			return 0, false
-		}
-		return int32(tv), true
+		return fromUint64(uint64(tv))
 	case uint64:
-		if tv > uint64(maxInt32) {
-			return 0, false
-		}
-		return int32(tv), true
+		return fromUint64(tv)
 	case float64:
 		if tv < float64(minInt32) || tv > float64(maxInt32) || tv != float64(int32(tv)) {
 			return 0, false

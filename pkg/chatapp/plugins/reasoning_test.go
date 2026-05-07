@@ -255,3 +255,13 @@ func TestReasoningPluginRoutesSummaryToCompletedProviderSegment(t *testing.T) {
 	require.NotNil(t, summary.SummaryIndex)
 	require.Equal(t, int32(0), summary.GetSummaryIndex())
 }
+
+func TestReasoningInt32FromAnyRejectsUnsignedOverflow(t *testing.T) {
+	v, ok := int32FromAny(uint64(1 << 31))
+	require.False(t, ok)
+	require.Equal(t, int32(0), v)
+
+	v, ok = int32FromAny(uint32(1<<31 - 1))
+	require.True(t, ok)
+	require.Equal(t, int32(1<<31-1), v)
+}
