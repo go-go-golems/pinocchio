@@ -25,9 +25,9 @@
 
 - [x] Add a behavior-preserving `cmd/web-chat/web/src/ws/wsManager.ts` split plan to the diary before editing code.
 - [x] Extract snapshot entity mapping and snapshot application out of `wsManager.ts`.
-- [ ] Extract UI event mutation mapping and application out of `wsManager.ts`.
+- [x] Extract UI event mutation mapping and application out of `wsManager.ts`.
 - [ ] Extract WebSocket connection lifecycle / message handler helpers if the manager remains large after mapper splits.
-- [ ] Re-run frontend unit/type checks after each split slice.
+- [x] Re-run frontend unit/type checks after each split slice.
 - [ ] Commit each behavior-preserving frontend slice with diary updates.
 
 ## Follow-up cleanup candidates

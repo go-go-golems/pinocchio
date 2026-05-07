@@ -676,3 +676,52 @@ I started the `wsManager.ts` split by moving snapshot entity mapping and snapsho
 ### Code review instructions
 - Review this as TypeScript code movement and import cleanup.
 - Validate from `cmd/web-chat/web` with `npm run typecheck` and `npx vitest run src/ws/wsManager.test.ts`.
+
+## Step 12: Extract WebSocket UI event mapping
+
+I completed the second frontend mapper split by moving UI-event mutation mapping and application out of `wsManager.ts`. The WebSocket manager now imports both snapshot and UI-event application helpers and mostly owns socket lifecycle, buffering, status updates, and frame routing.
+
+### Prompt Context
+
+**User prompt (verbatim):** (same as Step 8)
+
+**Assistant interpretation:** Continue the frontend split after the snapshot extraction and commit at the next natural mapper boundary.
+
+**Inferred user intent:** Get `wsManager.ts` closer to a connection manager by separating Redux/timeline mapping logic.
+
+### What I did
+- Added `cmd/web-chat/web/src/ws/timelineEvents.ts`.
+- Moved these UI-event helpers out of `wsManager.ts`:
+  - `TimelineMutation`
+  - `timelineMutationFromUIEvent`
+  - `applyUIEvent`
+- Re-exported `timelineMutationFromUIEvent` from `wsManager.ts` to preserve existing tests/imports.
+- Cleaned stale imports in `wsManager.ts`.
+
+### Why
+- UI-event mutation mapping is distinct from WebSocket lifecycle and snapshot hydration.
+- The split makes it easier to later make event mapping table-driven or typed by protobuf payload type.
+
+### What worked
+- Frontend checks passed:
+  - `npm run typecheck`
+  - `npx vitest run src/ws/wsManager.test.ts`
+
+### What didn't work
+- N/A. The split was mechanical after snapshot factories were exported.
+
+### What I learned
+- After extracting snapshot and UI mapping, `wsManager.ts` is now small enough to read as a lifecycle/hydration coordinator.
+
+### What was tricky to build
+- Keeping the test import path stable again required re-exporting from `wsManager.ts`.
+
+### What warrants a second pair of eyes
+- Whether future tests should import mapper functions from `timelineSnapshot.ts` and `timelineEvents.ts` directly instead of through the legacy `wsManager.ts` re-export.
+
+### What should be done in the future
+- Consider extracting connection lifecycle helpers only if future WebSocket behavior grows; the immediate high-value mapper split is done.
+
+### Code review instructions
+- Review this as TypeScript code movement and import cleanup.
+- Validate from `cmd/web-chat/web` with `npm run typecheck` and `npx vitest run src/ws/wsManager.test.ts`.
