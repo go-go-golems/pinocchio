@@ -2,7 +2,6 @@ package chatapp
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
@@ -17,7 +16,6 @@ import (
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
 	sessionstream "github.com/go-go-golems/sessionstream/pkg/sessionstream"
-	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -205,30 +203,6 @@ func (e *Engine) runPrompt(ctx context.Context, sid sessionstream.SessionId, mes
 		return
 	}
 	e.runDemoInference(ctx, sid, messageID, prompt, pub)
-}
-
-func (e *Engine) runDemoInference(ctx context.Context, sid sessionstream.SessionId, messageID, prompt string, pub sessionstream.EventPublisher) {
-	started := newChatMessageUpdate(messageID, "assistant", "", "", prompt, "streaming", true, "")
-	if err := e.publish(ctx, sid, pub, EventInferenceStarted, started); err != nil {
-		return
-	}
-
-	answer := renderAnswer(prompt)
-	chunks := chunkText(answer, 10)
-	accumulated := ""
-	for _, chunk := range chunks {
-		select {
-		case <-ctx.Done():
-			_ = e.publish(publishContext(ctx), sid, pub, EventInferenceStopped, newChatMessageUpdate(messageID, "assistant", accumulated, accumulated, prompt, "stopped", false, ""))
-			return
-		case <-time.After(e.chunkDelay):
-		}
-		accumulated += chunk
-		if err := e.publish(publishContext(ctx), sid, pub, EventTokensDelta, newChatMessageDelta(messageID, chunk, accumulated, prompt, "streaming", true, "")); err != nil {
-			return
-		}
-	}
-	_ = e.publish(publishContext(ctx), sid, pub, EventInferenceFinished, newChatMessageUpdate(messageID, "assistant", accumulated, accumulated, prompt, "finished", false, ""))
 }
 
 func (e *Engine) runRuntimeInference(ctx context.Context, sid sessionstream.SessionId, messageID, prompt string, runtime *infruntime.ComposedRuntime, pub sessionstream.EventPublisher) {
@@ -569,129 +543,6 @@ func (s *runtimeEventSink) IsTerminal() bool {
 	return s.terminal
 }
 
-func baseUIProjection(_ context.Context, ev sessionstream.Event, _ *sessionstream.Session, _ sessionstream.TimelineView) ([]sessionstream.UIEvent, error) {
-	payload, ok := ev.Payload.(*chatappv1.ChatMessageUpdate)
-	if !ok || payload == nil {
-		return nil, nil
-	}
-	cloned := proto.Clone(payload)
-	switch ev.Name {
-	case EventUserMessageAccepted:
-		return []sessionstream.UIEvent{{Name: UIMessageAccepted, Payload: cloned}}, nil
-	case EventInferenceStarted:
-		return []sessionstream.UIEvent{{Name: UIMessageStarted, Payload: cloned}}, nil
-	case EventTokensDelta:
-		return []sessionstream.UIEvent{{Name: UIMessageAppended, Payload: cloned}}, nil
-	case EventInferenceFinished:
-		return []sessionstream.UIEvent{{Name: UIMessageFinished, Payload: cloned}}, nil
-	case EventInferenceStopped:
-		return []sessionstream.UIEvent{{Name: UIMessageStopped, Payload: cloned}}, nil
-	default:
-		return nil, nil
-	}
-}
-
-func baseTimelineProjection(_ context.Context, ev sessionstream.Event, _ *sessionstream.Session, view sessionstream.TimelineView) ([]sessionstream.TimelineEntity, error) {
-	payload, ok := ev.Payload.(*chatappv1.ChatMessageUpdate)
-	if !ok || payload == nil {
-		return nil, nil
-	}
-	messageID := strings.TrimSpace(payload.GetMessageId())
-	if messageID == "" {
-		return nil, nil
-	}
-	entity, hadEntity := currentChatMessageEntity(view, messageID)
-	switch ev.Name {
-	case EventUserMessageAccepted:
-		entity.MessageId = messageID
-		entity.Role = "user"
-		entity.Content = firstNonEmpty(payload.GetContent(), payload.GetText())
-		entity.Text = entity.Content
-		entity.Streaming = false
-	case EventInferenceStarted:
-		content := firstNonEmpty(payload.GetContent(), payload.GetText())
-		if content == "" && !hadEntity {
-			return nil, nil
-		}
-		entity.MessageId = messageID
-		entity.Role = firstNonEmpty(payload.GetRole(), "assistant")
-		entity.Status = "streaming"
-		entity.Streaming = true
-		if prompt := payload.GetPrompt(); prompt != "" {
-			entity.Prompt = prompt
-		}
-		if content != "" {
-			entity.Content = content
-			entity.Text = content
-		}
-	case EventTokensDelta:
-		content := firstNonEmpty(payload.GetContent(), payload.GetText())
-		if content == "" && !hadEntity {
-			return nil, nil
-		}
-		entity.MessageId = messageID
-		entity.Role = firstNonEmpty(payload.GetRole(), "assistant")
-		entity.Content = content
-		entity.Text = content
-		entity.Status = "streaming"
-		entity.Streaming = true
-		if prompt := payload.GetPrompt(); prompt != "" {
-			entity.Prompt = prompt
-		}
-	case EventInferenceFinished:
-		content := firstNonEmpty(payload.GetContent(), payload.GetText(), entity.GetContent(), entity.GetText())
-		if content == "" && !hadEntity {
-			return nil, nil
-		}
-		entity.MessageId = messageID
-		entity.Role = firstNonEmpty(payload.GetRole(), "assistant")
-		entity.Content = content
-		entity.Text = content
-		entity.Status = "finished"
-		entity.Streaming = false
-		if prompt := payload.GetPrompt(); prompt != "" {
-			entity.Prompt = prompt
-		}
-	case EventInferenceStopped:
-		content := firstNonEmpty(payload.GetContent(), payload.GetText(), entity.GetContent(), entity.GetText())
-		entity.MessageId = messageID
-		entity.Role = firstNonEmpty(payload.GetRole(), "assistant")
-		entity.Content = content
-		entity.Text = content
-		entity.Status = "stopped"
-		entity.Streaming = false
-		if prompt := payload.GetPrompt(); prompt != "" {
-			entity.Prompt = prompt
-		}
-		if errText := payload.GetError(); errText != "" {
-			entity.Error = errText
-		}
-	default:
-		return nil, nil
-	}
-	entity.ParentMessageId = payload.GetParentMessageId()
-	entity.Segment = payload.GetSegment()
-	entity.SegmentType = payload.GetSegmentType()
-	entity.Final = payload.GetFinal()
-	return []sessionstream.TimelineEntity{{Kind: TimelineEntityChatMessage, Id: messageID, Payload: entity}}, nil
-}
-
-func currentChatMessageEntity(view sessionstream.TimelineView, id string) (*chatappv1.ChatMessageEntity, bool) {
-	entity, ok := view.Get(TimelineEntityChatMessage, id)
-	if !ok || entity.Payload == nil {
-		return &chatappv1.ChatMessageEntity{}, false
-	}
-	pb, ok := entity.Payload.(*chatappv1.ChatMessageEntity)
-	if !ok || pb == nil {
-		return &chatappv1.ChatMessageEntity{}, false
-	}
-	return proto.Clone(pb).(*chatappv1.ChatMessageEntity), true
-}
-
-func renderAnswer(prompt string) string {
-	return "Answer: " + prompt
-}
-
 func assistantTextFromTurn(turn *turns.Turn) string {
 	if turn == nil {
 		return ""
@@ -708,95 +559,4 @@ func assistantTextFromTurn(turn *turns.Turn) string {
 		parts = append(parts, text)
 	}
 	return strings.Join(parts, "")
-}
-
-func chunkText(text string, size int) []string {
-	if size <= 0 || len(text) <= size {
-		return []string{text}
-	}
-	out := make([]string, 0, (len(text)+size-1)/size)
-	for len(text) > 0 {
-		if len(text) <= size {
-			out = append(out, text)
-			break
-		}
-		out = append(out, text[:size])
-		text = text[size:]
-	}
-	return out
-}
-
-func newChatMessageUpdate(messageID, role, content, text, prompt, status string, streaming bool, errText string) *chatappv1.ChatMessageUpdate {
-	return &chatappv1.ChatMessageUpdate{
-		MessageId: messageID,
-		Role:      role,
-		Prompt:    prompt,
-		Text:      text,
-		Content:   content,
-		Status:    status,
-		Streaming: streaming,
-		Error:     errText,
-		Chunk:     "",
-	}
-}
-
-func newChatMessageDelta(messageID, chunk, content, prompt, status string, streaming bool, errText string) *chatappv1.ChatMessageUpdate {
-	return &chatappv1.ChatMessageUpdate{
-		MessageId: messageID,
-		Role:      "assistant",
-		Prompt:    prompt,
-		Chunk:     chunk,
-		Text:      content,
-		Content:   content,
-		Status:    status,
-		Streaming: streaming,
-		Error:     errText,
-	}
-}
-
-func runtimeWarningMessageID(messageID string) string {
-	messageID = strings.TrimSpace(messageID)
-	if messageID == "" {
-		return "chat-warning"
-	}
-	return messageID + ":warning"
-}
-
-func isMaxIterationsError(err error) bool {
-	if err == nil {
-		return false
-	}
-	return strings.Contains(strings.ToLower(err.Error()), "max iterations")
-}
-
-func maxIterationsWarningText(err error) string {
-	message := "tool loop reached the maximum iteration limit"
-	if err != nil && strings.TrimSpace(err.Error()) != "" {
-		message = strings.TrimSpace(err.Error())
-	}
-	return "Warning: inference stopped because " + message + ". The answer may be incomplete; try narrowing the request or increasing the max-iterations setting."
-}
-
-func firstNonEmpty(values ...string) string {
-	for _, value := range values {
-		if strings.TrimSpace(value) != "" {
-			return value
-		}
-	}
-	return ""
-}
-
-func protoMessageAsMap(msg proto.Message) map[string]any {
-	if msg == nil {
-		return map[string]any{}
-	}
-	body, err := protojson.MarshalOptions{EmitUnpopulated: false, UseProtoNames: false}.Marshal(msg)
-	if err != nil {
-		return map[string]any{"error": err.Error()}
-	}
-	out := map[string]any{}
-	if err := json.Unmarshal(body, &out); err != nil {
-		return map[string]any{"error": err.Error()}
-	}
-	return out
 }

@@ -12,6 +12,15 @@
 - [x] Upload guide bundle to reMarkable.
 - [ ] Validate doc metadata with docmgr doctor if this workspace has docmgr vocabulary for the new ticket.
 
+## Chatapp split execution
+
+- [x] Add a behavior-preserving `pkg/chatapp/chat.go` split plan to the diary before editing code.
+- [x] Extract message helpers, demo inference, and base projections out of `pkg/chatapp/chat.go`.
+- [ ] Extract `runtimeEventSink` and text segment state helpers out of `pkg/chatapp/chat.go`.
+- [ ] Extract runtime inference / Geppetto session orchestration out of `pkg/chatapp/chat.go`.
+- [ ] Re-run focused chatapp and web-chat tests after each split slice.
+- [ ] Commit each behavior-preserving slice with diary updates.
+
 ## Follow-up cleanup candidates
 
 - [ ] Split `pkg/chatapp/chat.go` into engine, runtime sink, projections, IDs, and demo inference files.
