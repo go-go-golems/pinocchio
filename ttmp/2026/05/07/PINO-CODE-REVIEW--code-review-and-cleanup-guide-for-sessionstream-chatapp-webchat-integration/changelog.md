@@ -70,3 +70,13 @@ Completed phase 3 of the frontend payload cleanup. Added a dedicated Buf templat
 - /home/manuel/workspaces/2026-05-02/use-sessionstream-coinvault/pinocchio/cmd/web-chat/web/src/ws/chatappPayloads.ts — Typed decoder for known chatapp UI events
 - /home/manuel/workspaces/2026-05-02/use-sessionstream-coinvault/pinocchio/cmd/web-chat/web/src/ws/timelineEvents.ts — Timeline mutation mapper using typed decoded payloads
 - /home/manuel/workspaces/2026-05-02/use-sessionstream-coinvault/pinocchio/cmd/web-chat/web/src/ws/wsManager.test.ts — Coverage for typed reasoning provider IDs and tool event mapping
+
+## 2026-05-07 Reasoning State-Machine Hardening
+
+Completed the final state-machine hardening phase. `ReasoningPlugin` now tracks reasoning segments by parent message plus provider item identity when available, falls back to parent-only routing for unkeyed streams, parses provider identity from `EventMetadata.Extra` for thinking deltas, and routes summaries for completed provider items back to their original segment even if another provider item is active. Agent mode was clarified as intentionally app-local web-chat glue. Commit: `2126b5d` harden reasoning segment state machine.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-05-02/use-sessionstream-coinvault/pinocchio/pkg/chatapp/plugins/reasoning.go — Provider-keyed reasoning state machine and metadata-extra parsing
+- /home/manuel/workspaces/2026-05-02/use-sessionstream-coinvault/pinocchio/pkg/chatapp/plugins/reasoning_test.go — Interleaved provider item and completed-summary routing tests
+- /home/manuel/workspaces/2026-05-02/use-sessionstream-coinvault/pinocchio/cmd/web-chat/agentmode_chat_feature.go — App-local agent-mode ownership comment
