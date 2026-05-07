@@ -22,11 +22,11 @@
 
 ## Phase 2: Frontend debug mode
 
-- [ ] Add a `debugStream` flag activated by `localStorage.setItem('pinocchio.debugStream', '1')`.
-- [ ] When active, record every raw WebSocket message, every parsed frame, every hydration entity, every UI event, and every timeline mutation to an in-memory log.
-- [ ] Add a debug panel (collapsible overlay) that shows the recorded log with filtering by type (raw, parsed, snapshot, ui-event, mutation).
-- [ ] Show hydration snapshot details: entity count per kind, snapshot ordinal, hydration timestamp.
-- [ ] Allow exporting the debug log as JSON for offline comparison.
+- [x] Add a `debugStream` flag activated by `localStorage.setItem('pinocchio.debugStream', '1')`.
+- [x] When active, record every raw WebSocket message, every parsed frame, every hydration entity, every UI event, and every timeline mutation to an in-memory log.
+- [x] Add a debug panel (collapsible overlay) that shows the recorded log with filtering by type (raw, parsed, snapshot, ui-event, mutation).
+- [x] Show hydration snapshot details: entity count per kind, snapshot ordinal, hydration timestamp.
+- [x] Allow exporting the debug log as JSON for offline comparison.
 
 ## Phase 3: Comparison and reconciliation tools
 

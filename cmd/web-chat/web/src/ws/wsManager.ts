@@ -14,6 +14,13 @@ import {
   safeOrdinal,
   unwrapAnyPayload,
 } from './protocol';
+import {
+  recordLifecycle,
+  recordParsedFrame,
+  recordRawWS,
+  recordSnapshotDebug,
+  recordUIEventDebug,
+} from './streamDebug';
 
 type ConnectArgs = {
   sessionId: string;
@@ -101,12 +108,14 @@ export function timelineEntityFromSnapshotEntity(entity: SnapshotEntityFrame): T
   };
 }
 
-function applySnapshot(frame: CanonicalFrame, dispatch: AppDispatch) {
+function applySnapshot(frame: CanonicalFrame, dispatch: AppDispatch, sessionId = '') {
   dispatch(timelineSlice.actions.clear());
   const entities = Array.isArray(frame.entities) ? (frame.entities as SnapshotEntityFrame[]) : [];
+  const mappedEntities: Array<{ raw: SnapshotEntityFrame; mapped: TimelineEntity | null }> = [];
   let status = 'idle';
   for (const entity of entities) {
     const mapped = timelineEntityFromSnapshotEntity(entity);
+    mappedEntities.push({ raw: entity, mapped });
     if (!mapped) continue;
     dispatch(timelineSlice.actions.upsertEntity(mapped));
     if (mapped.kind === 'message') {
@@ -115,6 +124,7 @@ function applySnapshot(frame: CanonicalFrame, dispatch: AppDispatch) {
     }
   }
   dispatch(appSlice.actions.setStatus(status));
+  recordSnapshotDebug(sessionId, frame.ordinal, mappedEntities);
 }
 
 type TimelineMutation = {
@@ -264,8 +274,9 @@ export function timelineMutationFromUIEvent(frame: CanonicalFrame): TimelineMuta
   }
 }
 
-function applyUIEvent(frame: CanonicalFrame, dispatch: AppDispatch) {
+function applyUIEvent(frame: CanonicalFrame, dispatch: AppDispatch, sessionId = '') {
   const mutation = timelineMutationFromUIEvent(frame);
+  recordUIEventDebug(sessionId, frame, mutation);
   if (!mutation) return;
   if (mutation.deleteId) {
     dispatch(timelineSlice.actions.deleteEntity(mutation.deleteId));
@@ -318,9 +329,12 @@ class WsManager {
       setTimeout(() => settleOpen?.(), 1500);
     });
 
+    recordLifecycle(args.sessionId, 'connect-start', { basePrefix: args.basePrefix });
+
     ws.onopen = () => {
       settleOpen?.();
       if (nonce !== this.connectNonce) return;
+      recordLifecycle(args.sessionId, 'open');
       args.onStatus?.('ws connected');
       args.dispatch(appSlice.actions.setWsStatus('connected'));
       try {
@@ -332,12 +346,14 @@ class WsManager {
     ws.onclose = () => {
       settleOpen?.();
       if (nonce !== this.connectNonce) return;
+      recordLifecycle(args.sessionId, 'close');
       args.onStatus?.('ws closed');
       args.dispatch(appSlice.actions.setWsStatus('closed'));
     };
     ws.onerror = () => {
       settleOpen?.();
       if (nonce !== this.connectNonce) return;
+      recordLifecycle(args.sessionId, 'error');
       logWarn('websocket error', { scope: 'ws.onerror', sessionId: args.sessionId });
       reportError(args.dispatch, 'websocket error', 'ws.onerror', undefined, { sessionId: args.sessionId });
       args.onStatus?.('ws error');
@@ -346,7 +362,10 @@ class WsManager {
     ws.onmessage = (m) => {
       if (nonce !== this.connectNonce) return;
       try {
-        const frame = parseServerFrame(String(m.data));
+        const raw = String(m.data);
+        recordRawWS(args.sessionId, raw);
+        const frame = parseServerFrame(raw);
+        recordParsedFrame(args.sessionId, frame);
         const ord = safeOrdinal(frame.ordinal);
         if (ord !== null) {
           args.dispatch(appSlice.actions.setLastSeq(ord));
@@ -386,13 +405,13 @@ class WsManager {
     }
     if (type === 'snapshot') {
       if (nonce !== this.connectNonce) return;
-      applySnapshot(frame, args.dispatch);
+      applySnapshot(frame, args.dispatch, args.sessionId);
       this.hydrated = true;
       args.onStatus?.('hydrated');
       const buffered = this.buffered;
       this.buffered = [];
       for (const next of buffered) {
-        applyUIEvent(next, args.dispatch);
+        applyUIEvent(next, args.dispatch, args.sessionId);
       }
       return;
     }
@@ -405,7 +424,7 @@ class WsManager {
         this.buffered.push(frame);
         return;
       }
-      applyUIEvent(frame, args.dispatch);
+      applyUIEvent(frame, args.dispatch, args.sessionId);
     }
   }
 }

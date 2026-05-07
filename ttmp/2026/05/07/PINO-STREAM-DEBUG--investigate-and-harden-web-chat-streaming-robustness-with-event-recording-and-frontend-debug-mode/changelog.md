@@ -20,3 +20,8 @@
 - Implemented backend debug recorder wiring for Sessionstream `PipelineRecord` and WebSocket `TransportRecord` values.
 - Added debug endpoints under `/api/debug/sessions/{id}/{pipeline,transport,records}` behind `--debug-api`.
 - Added Pinocchio implementation diary and backend recorder integration test.
+
+## 2026-05-07
+
+- Implemented frontend `pinocchio.debugStream` recorder for raw WebSocket frames, parsed frames, snapshots, UI-event mutations, and lifecycle events.
+- Added `StreamDebugPanel` overlay with filtering, clear, and JSON export.

@@ -11,6 +11,7 @@ import { wsManager } from '../ws/wsManager';
 import { DefaultComposer } from './components/Composer';
 import { DefaultHeader } from './components/Header';
 import { DefaultStatusbar } from './components/Statusbar';
+import { StreamDebugPanel } from './components/StreamDebugPanel';
 import { ChatTimeline } from './components/Timeline';
 import { useStickyScrollFollow } from './hooks/useStickyScrollFollow';
 import { getPartProps, mergeClassName, mergeStyle } from './parts';
@@ -383,6 +384,7 @@ export function ChatWidget({
         onKeyDown={onKeyDown}
         partProps={partProps}
       />
+      <StreamDebugPanel />
     </div>
   );
 }
