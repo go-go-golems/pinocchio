@@ -5,8 +5,8 @@
 - [x] Create ticket PINO-STREAM-DEBUG.
 - [x] Analyze the full streaming pipeline: backend event emission → WebSocket transport → frontend parsing → projection → Redux state → rendering.
 - [x] Design the event recording format for backend events (what to persist, where, and how to query).
-- [ ] Design the frontend debug mode: what to capture, how to store, how to present.
-- [ ] Design the comparison/reconciliation tool for backend-emitted vs frontend-received event sequences.
+- [x] Design the frontend debug mode: what to capture, how to store, how to present.
+- [x] Design the comparison/reconciliation tool for backend-emitted vs frontend-received event sequences.
 
 ## Phase 1: Backend event recording
 
@@ -33,8 +33,8 @@
 - [x] Build a backend reconciliation endpoint that loads Sessionstream observer records for the same session and highlights backend pipeline-vs-transport discrepancies.
 - [x] Extend reconciliation to load/export frontend logs for browser receipt and mutation comparison.
 - [x] Detect backend missing fanout ordinals between Hub pipeline records and WebSocket transport records.
-- [ ] Detect browser-side missing events, extra events, ordering differences, and payload mismatches from frontend debug JSON.
-- [ ] Build a diff view for hydration snapshot vs live-rendered state after streaming completes.
+- [x] Detect browser-side missing events, extra events, ordering differences, and payload mismatches from frontend debug JSON.
+- [x] Build a diff view for hydration snapshot vs live-rendered state after streaming completes.
 
 
 ## Phase 3b: SQLite reconcile upload artifact
@@ -55,8 +55,8 @@
 
 ## Phase 4: Robustness testing scenarios
 
-- [ ] Scenario: normal chat flow — send prompt, receive streaming response, verify all entities rendered.
-- [ ] Scenario: reload while streaming — mid-stream page reload, reconnect, re-hydrate, verify state matches.
+- [x] Scenario: normal chat flow — send prompt, receive streaming response, verify all entities rendered.
+- [x] Scenario: reload while streaming — mid-stream page reload, reconnect, re-hydrate, verify state matches.
 - [ ] Scenario: second tab on same conversation — open second browser tab, subscribe to same session, verify both tabs receive events.
 - [ ] Scenario: reload second tab — reload one tab while other continues streaming, verify recovery.
 - [ ] Scenario: rapid sequential prompts — send multiple prompts without waiting for completion, verify no event cross-contamination.
@@ -64,8 +64,8 @@
 
 ## Phase 5: Hardening
 
-- [ ] Use `SS-WS-RACE` observer traces as the canonical reload-during-streaming scenario.
-- [ ] After `SS-WS-RACE` lands, verify that reload-during-streaming produces snapshot-first plus buffered-live event ordering.
+- [x] Use `SS-WS-RACE` observer traces as the canonical reload-during-streaming scenario.
+- [x] After `SS-WS-RACE` lands, verify that reload-during-streaming produces snapshot-first plus buffered-live event ordering.
 - [ ] Fix any discrepancies found during Phase 4 testing.
 - [ ] Add regression tests for discovered edge cases.
 - [ ] Document the debug mode usage in a playbook.

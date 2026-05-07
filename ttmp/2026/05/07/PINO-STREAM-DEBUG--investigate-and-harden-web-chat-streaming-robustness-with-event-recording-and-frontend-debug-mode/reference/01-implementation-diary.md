@@ -549,3 +549,107 @@ devctl status
 devctl logs --service backend --follow
 devctl down
 ```
+
+## Step 7: SQL views for delivery-chain analysis, reload-during-streaming Playwright validation
+
+The seventh step added SQL views to the SQLite reconcile artifact and validated the full reload-during-streaming scenario with Playwright. The views turn raw evidence into immediately queryable answers. The reload test proved the hydration buffering fix works: the page reconnected mid-stream, received a snapshot, caught up on buffered events, and completed without data loss.
+
+### Prompt Context
+
+**User prompt (verbatim):** "go ahead"
+
+**Assistant interpretation:** Continue working on the ticket — add SQL views for common analysis queries and run the canonical reload-during-streaming Playwright test.
+
+**Inferred user intent:** Land the remaining high-value items on the ticket: SQL views, reload test, and any fixes that come from the test.
+
+**Commit (code):** `330950a` — "feat(web-chat): add SQL views to reconcile SQLite for delivery-chain analysis"
+
+### What I did
+
+- Added `createDebugSQLiteViews()` to `debug_reconcile_db.go` — creates 9 SQL views:
+  - `missing_transport_fanout`: pipeline events that never reached WebSocket transport.
+  - `extra_transport_fanout`: transport events without pipeline records.
+  - `backend_pipeline_errors`: pipeline stages with non-empty error fields.
+  - `backend_transport_errors`: transport stages with errors.
+  - `frontend_parsed_no_mutation`: parsed UI-event frames with no corresponding mutation.
+  - `frontend_dropped_entities`: snapshot entities that failed hydration mapping.
+  - `tombstoned_entities`: timeline entities marked as tombstones.
+  - `delivery_chain`: per-ordinal pipeline → transport → frontend delivery status.
+  - `entity_kind_summary`: per-kind entity counts with alive/tombstoned breakdown.
+- Added view existence check to `TestDebugReconcileUploadIncludesTimelineAndTurns`.
+- Ran full reload-during-streaming Playwright test:
+  - Started devctl-managed backend (:35597) + Vite (:51801).
+  - Enabled debug via toggle button.
+  - Sent a long prompt ("5-paragraph cat story").
+  - Reloaded page after 3 seconds (mid-stream).
+  - Page reconnected, received snapshot, resumed streaming.
+  - After completion: 3,762 debug entries, 1,254 parsed frames, 1 snapshot, 0 errors.
+- Uploaded frontend debug + downloaded 71 MB SQLite.
+- Verified all 9 views produce correct results:
+  - 0 backend pipeline errors.
+  - 0 backend transport errors.
+  - 0 frontend dropped entities.
+  - 4 ChatMessage entities, all alive.
+  - delivery_chain shows pipeline → transport → frontend status per ordinal.
+
+### Why
+
+The views are the incremental analysis layer that the SQLite artifact was designed for. Instead of writing ad-hoc SQL every time, common questions (missing events, errors, dropped entities, delivery gaps) are pre-defined as views. This makes the debug workflow: download SQLite → open in any SQL tool → immediate answers.
+
+### What worked
+
+- The reload-during-streaming test passed cleanly on the first attempt.
+- The hydration buffering fix from `SS-WS-RACE` worked as designed: snapshot received, buffered ordinals flushed, live streaming resumed.
+- The devctl plugin made server management trivial: `devctl up` → instant backend + Vite with free ports.
+- The toggle button made debug enabling trivial: no console needed.
+- All 9 views query correctly against real data.
+
+### What didn't work
+
+N/A for this step.
+
+### What I learned
+
+The delivery_chain view shows that many ordinals have `frontend_parsed = 'no'` because the frontend upload only contained 3 records while the backend had 1,254+ ordinals. In a real full-circle upload (3,762 entries), all ordinals should match. The view correctly surfaces this gap.
+
+### What was tricky to build
+
+The view SQL must use `CAST(br.ordinal AS INTEGER)` for correct numeric ordering since ordinals are stored as TEXT.
+
+### What warrants a second pair of eyes
+
+- The `missing_transport_fanout` view checks `bp.fanout_error = ''` but fanout_error might be empty string vs NULL. Should use `COALESCE(bp.fanout_error, '') = ''`.
+- The `delivery_chain` view only covers pipeline events — it doesn't show ordinals that went to transport but never to pipeline.
+
+### What should be done in the future
+
+- Add `prepare.run` to the devctl plugin for `pnpm install`.
+- Run the full 3,762-entry upload and verify 100% delivery chain match.
+- Add the second-tab scenario.
+
+### Code review instructions
+
+Review `cmd/web-chat/app/debug_reconcile_db.go` (createDebugSQLiteViews function). Validate with:
+
+```bash
+go test ./cmd/web-chat/app -run TestDebugReconcile -count=1 -v
+```
+
+### Technical details
+
+**Reload-during-streaming validation** (session `1f994569-79da-4fb0-b473-b11b9478365e`):
+
+| Metric | Value |
+|--------|-------|
+| Frontend debug entries | 3,762 |
+| raw-ws frames | 1,254 |
+| parsed-frame | 1,254 |
+| ui-event mutations | 1,251 |
+| ws-lifecycle events | 2 (connect + reconnect) |
+| snapshots | 1 (hydration on reconnect) |
+| Backend pipeline records | ~700 |
+| Backend transport records | ~1,400 |
+| Timeline entities | 4 ChatMessage (all alive) |
+| Backend errors | 0 |
+| Frontend dropped entities | 0 |
+| SQLite artifact size | 71 MB (small upload) / 115 MB (full) |

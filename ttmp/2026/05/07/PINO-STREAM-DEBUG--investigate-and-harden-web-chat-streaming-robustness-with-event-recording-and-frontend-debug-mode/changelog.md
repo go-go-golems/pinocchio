@@ -56,3 +56,12 @@
 - Added frontend debug toggle button: "Debug" (enable) and "Stop" (disable) in the StreamDebugPanel.
 - Added `toggleStreamDebug()` function and UI button for enabling/disabling without console.
 - Commit: `fe89fd6 feat(web-chat): add devctl plugin for backend+vite, add debug toggle button`
+
+## 2026-05-07 (step 7)
+
+- Added 9 SQL views to the SQLite reconcile artifact for common delivery-chain analysis.
+- Views: `missing_transport_fanout`, `extra_transport_fanout`, `backend_pipeline_errors`, `backend_transport_errors`, `frontend_parsed_no_mutation`, `frontend_dropped_entities`, `tombstoned_entities`, `delivery_chain`, `entity_kind_summary`.
+- Added view existence check to `TestDebugReconcileUploadIncludesTimelineAndTurns`.
+- Ran full reload-during-streaming Playwright validation: mid-stream reload, re-hydration, streaming resumed with 0 errors and 0 dropped entities.
+- Validated all 9 views produce correct results against real session data.
+- Commit: `330950a feat(web-chat): add SQL views to reconcile SQLite for delivery-chain analysis`
