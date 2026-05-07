@@ -1018,3 +1018,113 @@ Each scenario describes a specific user interaction pattern, what should happen,
 |------|---------|
 | `pinocchio.debugStream` | Enable frontend debug recording. |
 | `pinocchio.debugScroll` | Enable sticky scroll debug logging (prefix: `[pinocchio-scroll]`). |
+
+## Update: Integrating Sessionstream Observers
+
+After the initial Pinocchio-specific debug design, we identified two generic observability seams that belong in `sessionstream` rather than in `cmd/web-chat`: the Hub pipeline and the WebSocket transport. These are now tracked in the Sessionstream ticket `SS-OBSERVERS`.
+
+The Pinocchio debug implementation should take advantage of those hooks instead of scraping internal state where possible. The boundary should be:
+
+- `sessionstream` emits neutral structured observations about pipeline and transport behavior.
+- `pinocchio/cmd/web-chat` records those observations in a debug recorder when debug mode is enabled.
+- `pinocchio/cmd/web-chat/web` renders browser-side debug records and reconciliation output.
+- `pinocchio/pkg/chatapp` remains focused on chat semantics and should not own debug storage or HTTP endpoints.
+
+### New backend evidence chain
+
+With `SS-OBSERVERS`, the backend-side debug story becomes much clearer:
+
+```text
+Hub PipelineObserver
+  Event ordinal 101 entered projectAndApply
+  UI projection produced ChatMessageAppended
+  Timeline projection produced ChatMessage entity chat-msg-2
+  Hydration store applied that entity
+  Fanout handed UI event 101 to the websocket server
+
+WebSocket TransportObserver
+  fanout_started ordinal=101 targets=[conn-A, conn-B]
+  server_frame_queued conn-A frame=uiEvent ordinal=101
+  server_frame_written conn-A bytes=...
+  server_frame_queued conn-B frame=uiEvent ordinal=101
+  server_frame_written conn-B bytes=...
+```
+
+If a frontend log later shows that `conn-B` never rendered ordinal 101, we can separate the possibilities:
+
+- The Hub never produced the UI event.
+- The Hub produced it, but fanout failed.
+- The websocket server queued it, but write failed.
+- The browser received it, but frontend parsing or Redux mutation dropped it.
+
+This distinction is the purpose of the observer split.
+
+### Pinocchio debug recorder wiring
+
+The Pinocchio server should wire both observers in `cmd/web-chat/app/server.go` when debug recording is enabled.
+
+```go
+recorder := debug.NewStreamRecorder(debug.Options{MaxRecords: 10000})
+
+wsServer, err := wstransport.NewServer(snapshotProvider,
+    wstransport.WithTransportObserver(wstransport.TransportObserverFunc(func(ctx context.Context, rec wstransport.TransportRecord) {
+        recorder.RecordTransport(ctx, rec)
+    })),
+)
+
+hub, err := sessionstream.NewHub(
+    sessionstream.WithSchemaRegistry(reg),
+    sessionstream.WithHydrationStore(store),
+    sessionstream.WithUIFanout(wsServer),
+    sessionstream.WithPipelineObserver(sessionstream.PipelineObserverFunc(func(ctx context.Context, rec sessionstream.PipelineRecord) {
+        recorder.RecordPipeline(ctx, rec)
+    })),
+)
+```
+
+The recorder output should be available from Pinocchio debug endpoints, not from Sessionstream:
+
+```text
+GET /api/debug/sessions/{sessionId}/pipeline
+GET /api/debug/sessions/{sessionId}/transport
+GET /api/debug/sessions/{sessionId}/records
+GET /api/debug/sessions/{sessionId}/reconcile
+```
+
+### Relationship to the websocket race ticket
+
+The reload-during-streaming race is now tracked separately in `SS-WS-RACE`. The relevant failure is:
+
+```text
+snapshot loaded at ordinal 100
+live UI event ordinal 101 emitted before subscription registration
+new browser connection does not receive ordinal 101
+future ordinal 102+ events arrive normally
+```
+
+For Pinocchio, the debug implementation should first consume observer records that prove this interleaving. Once Sessionstream implements the subscribe-first hydration buffer from `SS-WS-RACE`, Pinocchio can use the same recorder to verify the fixed sequence:
+
+```text
+subscription_registered state=hydrating
+snapshot_loaded ordinal=100
+fanout_started ordinal=101 targets=[conn]
+ui_event_buffered ordinal=101
+snapshot_queued ordinal=100
+buffer_flushed ordinal=101
+subscription_live
+```
+
+### Revised implementation order for PINO-STREAM-DEBUG
+
+The recommended Pinocchio implementation order is now:
+
+1. Wait for or vendor/update `sessionstream` with `SS-OBSERVERS` if we want full backend evidence.
+2. Implement a Pinocchio debug recorder that accepts `PipelineRecord` and `TransportRecord` values.
+3. Add Pinocchio debug HTTP endpoints that expose recorded observer data by session ID.
+4. Implement the frontend debug mode that records raw WebSocket frames, parsed frames, hydration application, UI-event mutations, Redux actions, and rendered entity lists.
+5. Implement reconciliation between Sessionstream observer records and frontend debug records.
+6. Use `SS-WS-RACE` traces as the primary reload-during-streaming robustness scenario.
+
+### If the observer work is not ready yet
+
+Pinocchio can still implement a reduced version by wrapping `UIFanout` and recording frontend frames. That is useful, but it cannot see projection outputs or exact transport queue/write stages. The observer-based design is preferred because it gives a single causal chain from backend event ordinal to browser frame write.
