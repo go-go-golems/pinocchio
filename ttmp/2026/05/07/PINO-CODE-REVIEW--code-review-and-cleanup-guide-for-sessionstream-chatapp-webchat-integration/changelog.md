@@ -58,3 +58,15 @@ Completed the remaining requested chatapp splits and started the frontend WebSoc
 - /home/manuel/workspaces/2026-05-02/use-sessionstream-coinvault/pinocchio/cmd/web-chat/web/src/ws/timelineSnapshot.ts — Snapshot entity mapping/application helpers
 - /home/manuel/workspaces/2026-05-02/use-sessionstream-coinvault/pinocchio/cmd/web-chat/web/src/ws/timelineEvents.ts — UI-event mutation mapping/application helpers
 - /home/manuel/workspaces/2026-05-02/use-sessionstream-coinvault/pinocchio/cmd/web-chat/web/src/ws/wsManager.ts — WebSocket lifecycle and hydration coordinator after mapper extraction
+
+## 2026-05-07 Typed Frontend Payload Decoding
+
+Completed phase 3 of the frontend payload cleanup. Added a dedicated Buf template and generated TypeScript chatapp protobuf descriptors for the web-chat frontend, then introduced typed UI-event decoding for chat message, reasoning, tool, and agent-mode payloads. The live timeline mapper now switches on typed decoded payloads, preserves reasoning provider correlation fields, and creates frontend `tool_call` / `tool_result` entities from tool UI events. Commits: `0cfbe08` generate chatapp protobuf types, `891bf09` decode web chat UI payloads with typed protos.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-05-02/use-sessionstream-coinvault/pinocchio/buf.chatapp.web.gen.yaml — Frontend chatapp protobuf generation template
+- /home/manuel/workspaces/2026-05-02/use-sessionstream-coinvault/pinocchio/cmd/web-chat/web/src/chatapp/pb/proto/pinocchio/chatapp/v1/chat_pb.ts — Generated chatapp TypeScript protobuf descriptors
+- /home/manuel/workspaces/2026-05-02/use-sessionstream-coinvault/pinocchio/cmd/web-chat/web/src/ws/chatappPayloads.ts — Typed decoder for known chatapp UI events
+- /home/manuel/workspaces/2026-05-02/use-sessionstream-coinvault/pinocchio/cmd/web-chat/web/src/ws/timelineEvents.ts — Timeline mutation mapper using typed decoded payloads
+- /home/manuel/workspaces/2026-05-02/use-sessionstream-coinvault/pinocchio/cmd/web-chat/web/src/ws/wsManager.test.ts — Coverage for typed reasoning provider IDs and tool event mapping
