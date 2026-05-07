@@ -1,9 +1,11 @@
 package app
 
 import (
+	"bytes"
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 )
 
 type debugRecordsResponse struct {
@@ -67,8 +69,8 @@ func (s *Server) handleDebugReconcileUpload(w http.ResponseWriter, r *http.Reque
 	filename := fmt.Sprintf("pinocchio-stream-debug-%s.sqlite", safeDownloadName(sessionID))
 	w.Header().Set("Content-Type", "application/vnd.sqlite3")
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename=%q`, filename))
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write(body)
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	http.ServeContent(w, r, filename, time.Now(), bytes.NewReader(body))
 }
 
 func parseDebugSessionPath(path string) (string, string, bool) {
