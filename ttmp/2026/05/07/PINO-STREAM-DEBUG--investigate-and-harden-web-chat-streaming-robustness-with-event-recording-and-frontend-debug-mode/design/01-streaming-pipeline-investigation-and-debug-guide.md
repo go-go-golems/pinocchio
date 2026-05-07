@@ -1128,3 +1128,29 @@ The recommended Pinocchio implementation order is now:
 ### If the observer work is not ready yet
 
 Pinocchio can still implement a reduced version by wrapping `UIFanout` and recording frontend frames. That is useful, but it cannot see projection outputs or exact transport queue/write stages. The observer-based design is preferred because it gives a single causal chain from backend event ordinal to browser frame write.
+
+## Update: Sessionstream Observers and Subscribe Race Fix Landed
+
+The Sessionstream-side foundation described above has now been implemented:
+
+- `SS-OBSERVERS` landed Hub `PipelineObserver` support for live and rebuild event processing.
+- `SS-OBSERVERS` landed WebSocket `TransportObserver` support for connection lifecycle, client-frame decoding, subscribe/snapshot stages, fanout target selection, frame queueing, and frame writes.
+- `SS-WS-RACE` landed subscribe-first hydration buffering so a reconnecting WebSocket is visible to fanout as `hydrating` before snapshot load starts.
+
+The corrected reconnect sequence is now:
+
+```text
+subscribe_received
+subscription_registered(state=hydrating)
+snapshot_load_started
+fanout_started(ordinal=N+1, targets=[conn])
+ui_event_buffered(ordinal=N+1)
+snapshot_loaded(snapshotOrdinal=N)
+server_frame_queued(snapshot N)
+hydration_buffer_flushed(ordinals>N)
+server_frame_queued(uiEvent N+1)
+subscription_live
+server_frame_queued(subscribed)
+```
+
+For Pinocchio, this means the backend debug recorder no longer needs to infer the race by scraping SQLite tables or wrapping only `UIFanout`. It can subscribe directly to `PipelineRecord` and `TransportRecord`, then correlate those records with browser-side frontend debug logs.
