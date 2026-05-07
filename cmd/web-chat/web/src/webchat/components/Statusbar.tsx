@@ -1,6 +1,7 @@
 import { getPartProps, mergeClassName, mergeStyle } from '../parts';
 import type { StatusbarSlotProps } from '../types';
 import { fmtShort } from '../utils';
+import { ExportMenu } from './ExportMenu';
 
 export function DefaultStatusbar(props: StatusbarSlotProps) {
   const {
@@ -49,6 +50,7 @@ export function DefaultStatusbar(props: StatusbarSlotProps) {
       <span data-part="pill">seq: {fmtShort(lastSeq)}</span>
       <span data-part="pill">q: {fmtShort(queueDepth)}</span>
       <span data-part="pill">{status}</span>
+      <ExportMenu />
       {errorCount > 0 ? (
         <button
           type="button"

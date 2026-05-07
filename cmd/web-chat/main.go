@@ -368,6 +368,7 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 		appserver.WithSQLiteDBPath(s.TimelineDB),
 		appserver.WithRuntimeResolver(canonicalRuntimeResolver),
 		appserver.WithTurnStore(turnStore),
+		appserver.WithTurnsDBPath(s.TurnsDB),
 		appserver.WithChatPlugins(newAgentModePlugin(), plugins.NewReasoningPlugin(), plugins.NewToolCallPlugin()),
 	)
 	if err != nil {

@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 
 	chatapp "github.com/go-go-golems/pinocchio/pkg/chatapp"
+	chatexport "github.com/go-go-golems/pinocchio/pkg/chatapp/export"
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
 	sessionstream "github.com/go-go-golems/sessionstream/pkg/sessionstream"
@@ -33,6 +34,8 @@ type Server struct {
 	sqliteDBPath    string
 	runtimeResolver RuntimeResolver
 	turnStore       chatstore.TurnStore
+	turnsDBPath     string
+	exportService   *chatexport.Service
 	chatPlugins     []chatapp.ChatPlugin
 	closeFn         func() error
 }
@@ -88,6 +91,15 @@ func WithTurnStore(store chatstore.TurnStore) Option {
 	}
 }
 
+func WithTurnsDBPath(path string) Option {
+	return func(s *Server) {
+		if s == nil {
+			return
+		}
+		s.turnsDBPath = strings.TrimSpace(path)
+	}
+}
+
 func WithChatPlugins(features ...chatapp.ChatPlugin) Option {
 	return func(s *Server) {
 		if s == nil {
@@ -140,6 +152,7 @@ func NewServer(opts ...Option) (*Server, error) {
 	}
 
 	s.service = service
+	s.exportService = chatexport.NewService(service, chatexport.WithTurnStore(s.turnStore), chatexport.WithTurnsDBPath(s.turnsDBPath))
 	s.ws = ws
 	s.closeFn = cleanup
 	return s, nil
@@ -235,6 +248,18 @@ func (s *Server) HandleSessionRoutes(w http.ResponseWriter, r *http.Request) {
 	}
 	if action == "messages" {
 		s.handleSubmitMessage(w, r, sid)
+		return
+	}
+	if action == "timeline" {
+		s.handleTimelineExport(w, r, sid)
+		return
+	}
+	if action == "turns" {
+		s.handleTurnsExport(w, r, sid)
+		return
+	}
+	if action == "export" {
+		s.handleFullExport(w, r, sid)
 		return
 	}
 	writeJSON(w, http.StatusNotFound, errorResponse{Error: "not found"})
