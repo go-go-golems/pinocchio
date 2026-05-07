@@ -478,3 +478,74 @@ Turn:
 ```
 7b63dfd8-cdd5-4276-985a-33669542fdfb|final|1778125458244
 ```
+
+## Step 6: devctl plugin for backend+vite, frontend debug toggle button
+
+The sixth step added a devctl plugin so the developer workflow is `devctl up` instead of manual tmux/jobs management. It also added a frontend toggle button so debug recording can be enabled/disabled from the UI instead of the browser console.
+
+### Prompt Context
+
+**User prompt (verbatim):** "add devctl support for starting the backend and vite. See the skill (i think?) that way we can also configure for finding a proper port that is free and letting vite know about said port"
+
+**Assistant interpretation:** Create a devctl plugin that discovers free ports for the Go backend and Vite frontend, wires `VITE_BACKEND_ORIGIN` so Vite proxies correctly, and manages both services with health checks.
+
+**Inferred user intent:** Replace manual server management with devctl's standard up/status/logs/down lifecycle, with automatic port discovery.
+
+**Commit (code):** `fe89fd6` — "feat(web-chat): add devctl plugin for backend+vite, add debug toggle button"
+
+### What I did
+
+- Created `cmd/web-chat/plugins/webchat.py` — a devctl v2 NDJSON plugin implementing `config.mutate`, `validate.run`, `build.run`, `launch.plan`, and two commands (`build-frontend`, `build-backend`).
+- Created `cmd/web-chat/.devctl.yaml` — wires the plugin.
+- Created `cmd/web-chat/.gitignore` — ignores `bin/` and `var/`.
+- Port discovery: `find_free_port(8092)` for backend, `find_free_port(5174)` for Vite. Falls back to OS-assigned free ports if preferred ports are taken.
+- Config propagation: `config.mutate` sets `services.backend.port`, `services.vite.port`, and `env.VITE_BACKEND_ORIGIN`. `launch.plan` reads the nested config structure to build commands with the right ports.
+- Go module root detection: `go_module_root()` walks up from `.devctl.yaml` dir to find `go.mod`, so Go builds run from the module root even though `.devctl.yaml` lives in `cmd/web-chat/`.
+- Health checks: backend uses `GET /api/chat/profiles`, Vite uses `GET /`.
+- Added `toggleStreamDebug()` to `streamDebug.ts` — toggles localStorage and returns new state.
+- Added "Debug" button (visible when disabled, dashed border) and "Stop" button (inside open panel, red text).
+
+### Why
+
+Manually managing tmux sessions, port assignments, and Vite proxy configuration is error-prone. devctl gives us: automatic port discovery, health-check-gated startup, log capture, and clean shutdown. The toggle button removes the last console-only workflow step.
+
+### What worked
+
+- devctl plugin handshake and pipeline worked on the first try.
+- Port discovery is deterministic: tries preferred port first, falls back to OS-assigned.
+- Vite proxy respects `VITE_BACKEND_ORIGIN` automatically (already in `vite.config.ts`).
+- The toggle button worked immediately in the Vite-served page.
+
+### What didn't work
+
+- First attempt used dotted key access (`config.get("services.backend.port")`) which doesn't work on nested JSON objects. Fixed by using `services_config.get("backend", {}).get("port")`.
+- Go build must run from the module root (`pinocchio/`), not from `.devctl.yaml` dir (`pinocchio/cmd/web-chat/`). Added `go_module_root()` helper.
+- The Go-embedded static bundle was stale when testing the toggle button — had to rebuild with Vite first, then rebuild Go binary.
+
+### What was tricky to build
+
+The config flow between `config.mutate` and `launch.plan`. devctl sends the config from `config.mutate` as a nested JSON object in `launch.plan`'s input. The plugin must navigate that nesting correctly.
+
+### What warrants a second pair of eyes
+
+- `go_module_root()` walks up at most 5 levels. If someone nests `.devctl.yaml` deeper than 5 levels from the Go module root, it will fail.
+- The binary is placed at `cmd/web-chat/bin/web-chat` which is gitignored. Every `devctl up` rebuilds it.
+
+### What should be done in the future
+
+- Add `prepare.run` for `pnpm install` when node_modules is missing.
+- Add a `reset-db` command that wipes the SQLite data files.
+- Consider caching the Go binary and only rebuilding when `go.sum` or source files change.
+
+### Code review instructions
+
+Review `cmd/web-chat/plugins/webchat.py`, then `cmd/web-chat/.devctl.yaml`. Test with:
+
+```bash
+cd cmd/web-chat
+devctl plan
+devctl up
+devctl status
+devctl logs --service backend --follow
+devctl down
+```

@@ -46,3 +46,13 @@
 - Performed full-circle Playwright validation with real server on :8092.
 - Verified all 15 SQLite tables populated: backend pipeline/transport, frontend raw/parsed/snapshot/ui/lifecycle, timeline entities, turns.
 - Commit: `7f9ca6c feat(web-chat): include timeline entities and turns in reconcile SQLite, add download button`
+
+## 2026-05-07 (step 6)
+
+- Added devctl plugin `cmd/web-chat/plugins/webchat.py` for backend + Vite lifecycle management.
+- Added `cmd/web-chat/.devctl.yaml` configuration.
+- Plugin discovers free ports for backend (default 8092) and Vite (default 5174).
+- Plugin builds Go binary from module root, wires `VITE_BACKEND_ORIGIN` for Vite proxy.
+- Added frontend debug toggle button: "Debug" (enable) and "Stop" (disable) in the StreamDebugPanel.
+- Added `toggleStreamDebug()` function and UI button for enabling/disabling without console.
+- Commit: `fe89fd6 feat(web-chat): add devctl plugin for backend+vite, add debug toggle button`
