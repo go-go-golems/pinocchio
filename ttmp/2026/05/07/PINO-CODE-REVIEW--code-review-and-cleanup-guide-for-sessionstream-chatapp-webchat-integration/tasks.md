@@ -24,6 +24,7 @@
 ## Follow-up cleanup candidates
 
 - [ ] Split `pkg/chatapp/chat.go` into engine, runtime sink, projections, IDs, and demo inference files.
+- [x] Split `cmd/web-chat/app/debug_recorder.go` by pipeline, transport, and Geppetto record domains.
 - [ ] Extract `cmd/web-chat/app/debug_reconcile_db.go` into schema, inserts, frontend parsing, views, and provider adapters.
 - [ ] Split `cmd/web-chat/web/src/ws/wsManager.ts` into transport client, hydration coordinator, event mapper, and debug hooks.
 - [ ] Add a generated or table-driven frontend mapping for typed `ReasoningUpdate`, `ToolCallUpdate`, and `ChatMessageUpdate` payloads.

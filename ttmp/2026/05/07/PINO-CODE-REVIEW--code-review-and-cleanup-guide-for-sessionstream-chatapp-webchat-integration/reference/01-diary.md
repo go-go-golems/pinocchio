@@ -290,3 +290,120 @@ The split reduced `chat.go` from roughly 802 lines to 562 lines and created thre
   - Sessionstream observer APIs such as `PipelineRecord`, `TransportRecord`, `WithPipelineObserver`, and `WithTransportObserver`.
 - This failure is unrelated to the `pkg/chatapp` file split; the focused tests and full workspace `go test ./...` completed successfully in workspace mode.
 - I will use `--no-verify` for this behavior-preserving split commit and keep the hook caveat documented here.
+
+## Step 5: Plan and start guide items 5.3 and 5.4
+
+The next requested cleanup targets the debug subsystem rather than chatapp core. Guide item 5.4 is the safer first slice: split `debug_recorder.go` by record domain while keeping the `StreamDebugRecorder` type and public methods unchanged. Guide item 5.3 is larger because `debug_reconcile_db.go` contains SQL schema, views, frontend parsing, backend inserts, Geppetto inserts, timeline/turn inserts, and utility conversion helpers.
+
+I added explicit task coverage for the recorder split and will commit the recorder split before moving to the larger SQLite reconcile split.
+
+### Prompt Context
+
+**User prompt (verbatim):** "do the splits from 5.3 and 5.4 as well, similar approach."
+
+**Assistant interpretation:** Continue the cleanup-guide implementation by splitting `cmd/web-chat/app/debug_recorder.go` and `cmd/web-chat/app/debug_reconcile_db.go` in behavior-preserving task-sized commits, with tests and diary notes.
+
+**Inferred user intent:** Apply the same small, reviewable, documented refactor approach used for chatapp to the debug recorder and SQLite reconcile exporter.
+
+### What I did
+- Added a task for splitting `debug_recorder.go` by record domain.
+- Chose the split order:
+  1. `debug_recorder.go` domain split;
+  2. `debug_reconcile_db.go` schema/views/insert split.
+
+### Why
+- `debug_recorder.go` is smaller and mostly pure DTO/encoder movement.
+- `debug_reconcile_db.go` has more SQL and cross-table coupling, so it should be handled after the recorder split validates cleanly.
+
+### What worked
+- The code has clear function groups:
+  - Geppetto DTO/encoder;
+  - Pipeline DTO/encoder/UI event/entity helpers;
+  - Transport DTO/encoder/connection helpers;
+  - generic recorder retention/reconcile helpers.
+
+### What didn't work
+- N/A yet.
+
+### What I learned
+- Keeping `StreamDebugRecorder` methods in one central file should preserve the mental model while domain encoders move out.
+
+### What was tricky to build
+- The split must avoid creating import cycles or moving shared helpers (`formatUint`, `protoType`, `errString`) into domain files where they become duplicated.
+
+### What warrants a second pair of eyes
+- Whether the DTO types should live next to the encoders or in a single `debug_record_types.go` file. I will keep each DTO near its encoder for now.
+
+### What should be done in the future
+- Once both splits are complete, consider moving the reconcile database code into an internal subpackage only if `cmd/web-chat/app` remains too dense.
+
+## Step 6: Split debug recorder record domains
+
+I completed guide item 5.4 as a behavior-preserving file split. The central recorder still owns retention, filtering, and reconcile counts, but each debug record domain now has its own file with its DTOs and encoder helpers.
+
+This reduces `debug_recorder.go` from 473 lines to 237 lines and removes the conflict-prone cluster where pipeline, transport, and Geppetto encoders all lived together.
+
+### Prompt Context
+
+**User prompt (verbatim):** (same as Step 5)
+
+**Assistant interpretation:** Implement the `debug_recorder.go` split from the guide.
+
+**Inferred user intent:** Make the debug recorder easier to review and extend without changing debug API behavior.
+
+### What I did
+- Moved pipeline DTOs and encoders to `cmd/web-chat/app/debug_record_pipeline.go`:
+  - `PipelineDebugRecord`
+  - `UIEventDebug`
+  - `TimelineEntityDebug`
+  - `encodePipelineRecord`
+  - `encodeUIEvents`
+  - `encodeTimelineEntities`
+- Moved transport DTOs and encoders to `cmd/web-chat/app/debug_record_transport.go`:
+  - `TransportDebugRecord`
+  - `TransportEntitySummaryDebug`
+  - `encodeTransportRecord`
+  - `encodeTransportEntities`
+  - `encodeConnectionIDs`
+- Moved Geppetto DTO and encoder to `cmd/web-chat/app/debug_record_geppetto.go`:
+  - `GeppettoDebugRecord`
+  - `encodeGeppettoRecord`
+  - `decodeJSONRaw`
+- Kept shared recorder mechanics in `debug_recorder.go`:
+  - `StreamDebugRecorder`
+  - `RecordPipeline`, `RecordTransport`, `RecordGeppetto`
+  - `Records`, `append`, `Reconcile`
+  - shared helpers such as `protoType`, `errString`, `formatUint`, and numeric sorting.
+
+### Why
+- Pipeline, transport, and Geppetto records evolve for different reasons.
+- Splitting by record domain makes future changes smaller and avoids putting provider-specific fields next to websocket transport fields.
+
+### What worked
+- Focused validation passed:
+  - `go test ./cmd/web-chat/app ./cmd/web-chat ./pkg/chatapp -count=1`
+- New line counts:
+  - `debug_recorder.go`: 237
+  - `debug_record_geppetto.go`: 68
+  - `debug_record_pipeline.go`: 68
+  - `debug_record_transport.go`: 115
+
+### What didn't work
+- First compile failed because `debug_recorder.go` still imported `encoding/json` after `decodeJSONRaw` moved.
+- Removed the stale import and reran tests successfully.
+
+### What I learned
+- The recorder domain split is mostly mechanical; the shared helpers are few enough to keep in the central recorder file for now.
+
+### What was tricky to build
+- `protoType`, `formatUint`, and `errString` are shared by multiple domain encoders. Duplicating them would make later behavior drift likely, so I left them centralized.
+
+### What warrants a second pair of eyes
+- Confirm whether `decodeJSONRaw` should stay with Geppetto records only. If frontend/backend raw JSON decoding grows, it may deserve a generic helper file later.
+
+### What should be done in the future
+- Implement guide item 5.3 by splitting `debug_reconcile_db.go` into schema, views, inserts, frontend parsing, and provider/export adapter files.
+
+### Code review instructions
+- Review this commit as code movement plus import cleanup.
+- Validate with `go test ./cmd/web-chat/app ./cmd/web-chat ./pkg/chatapp -count=1`.
