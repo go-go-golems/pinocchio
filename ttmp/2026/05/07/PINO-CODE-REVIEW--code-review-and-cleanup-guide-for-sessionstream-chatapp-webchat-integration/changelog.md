@@ -24,3 +24,25 @@ Uploaded the PINO-CODE-REVIEW bundle to reMarkable at `/ai/2026/05/07/PINO-CODE-
 
 - /home/manuel/workspaces/2026-05-02/use-sessionstream-coinvault/pinocchio/ttmp/2026/05/07/PINO-CODE-REVIEW--code-review-and-cleanup-guide-for-sessionstream-chatapp-webchat-integration/reference/01-diary.md — Upload notes and safe prompt formatting
 - /home/manuel/workspaces/2026-05-02/use-sessionstream-coinvault/pinocchio/ttmp/2026/05/07/PINO-CODE-REVIEW--code-review-and-cleanup-guide-for-sessionstream-chatapp-webchat-integration/tasks.md — Marked reMarkable upload done
+
+## 2026-05-07
+
+Started implementation of the cleanup guide. Split `pkg/chatapp/chat.go` leaf helpers into focused files, then completed guide items 5.4 and 5.3 by splitting the web-chat debug recorder and SQLite reconcile exporter. Commits: `c6e7229` split chatapp projections/helpers, `f2d8fef` split debug record encoders, `6ba757d` split reconcile DB exporter.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-05-02/use-sessionstream-coinvault/pinocchio/pkg/chatapp/demo.go — Demo inference helpers extracted from chat.go
+- /home/manuel/workspaces/2026-05-02/use-sessionstream-coinvault/pinocchio/pkg/chatapp/messages.go — Chat message/protobuf helper functions extracted from chat.go
+- /home/manuel/workspaces/2026-05-02/use-sessionstream-coinvault/pinocchio/pkg/chatapp/projections.go — Base UI and timeline projections extracted from chat.go
+- /home/manuel/workspaces/2026-05-02/use-sessionstream-coinvault/pinocchio/cmd/web-chat/app/debug_record_pipeline.go — Pipeline debug DTOs and encoders
+- /home/manuel/workspaces/2026-05-02/use-sessionstream-coinvault/pinocchio/cmd/web-chat/app/debug_record_transport.go — Transport debug DTOs and encoders
+- /home/manuel/workspaces/2026-05-02/use-sessionstream-coinvault/pinocchio/cmd/web-chat/app/debug_record_geppetto.go — Geppetto debug DTO and encoder
+- /home/manuel/workspaces/2026-05-02/use-sessionstream-coinvault/pinocchio/cmd/web-chat/app/debug_reconcile_db.go — Reconcile DB orchestration only after split
+- /home/manuel/workspaces/2026-05-02/use-sessionstream-coinvault/pinocchio/cmd/web-chat/app/debug_reconcile_schema.go — Reconcile DB schema DDL
+- /home/manuel/workspaces/2026-05-02/use-sessionstream-coinvault/pinocchio/cmd/web-chat/app/debug_reconcile_views.go — Reconcile DB SQL views
+- /home/manuel/workspaces/2026-05-02/use-sessionstream-coinvault/pinocchio/cmd/web-chat/app/debug_reconcile_backend.go — Backend pipeline/transport inserts
+- /home/manuel/workspaces/2026-05-02/use-sessionstream-coinvault/pinocchio/cmd/web-chat/app/debug_reconcile_frontend.go — Frontend upload parsing/inserts
+- /home/manuel/workspaces/2026-05-02/use-sessionstream-coinvault/pinocchio/cmd/web-chat/app/debug_reconcile_geppetto.go — Geppetto table inserts
+- /home/manuel/workspaces/2026-05-02/use-sessionstream-coinvault/pinocchio/cmd/web-chat/app/debug_reconcile_provider.go — Export data provider adapters
+- /home/manuel/workspaces/2026-05-02/use-sessionstream-coinvault/pinocchio/cmd/web-chat/app/debug_reconcile_snapshots.go — Timeline/turn snapshot inserts
+- /home/manuel/workspaces/2026-05-02/use-sessionstream-coinvault/pinocchio/cmd/web-chat/app/debug_reconcile_values.go — Reconcile DB scalar/JSON conversion helpers
