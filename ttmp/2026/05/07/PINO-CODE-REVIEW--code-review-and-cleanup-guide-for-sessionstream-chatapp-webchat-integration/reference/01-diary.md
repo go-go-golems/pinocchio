@@ -407,3 +407,74 @@ This reduces `debug_recorder.go` from 473 lines to 237 lines and removes the con
 ### Code review instructions
 - Review this commit as code movement plus import cleanup.
 - Validate with `go test ./cmd/web-chat/app ./cmd/web-chat ./pkg/chatapp -count=1`.
+
+## Step 7: Split the SQLite reconcile exporter
+
+I completed guide item 5.3 as another behavior-preserving file split. The original `debug_reconcile_db.go` was a compact data warehouse in one file; it now keeps only the high-level `BuildSQLiteReconcileDB` orchestration, while schema, views, inserts, provider adapters, and conversion helpers live in focused files.
+
+This reduces the main builder file to 59 lines. The largest remaining split file is `debug_reconcile_views.go`, which is still SQL-heavy but now isolated from parsing and inserts.
+
+### Prompt Context
+
+**User prompt (verbatim):** (same as Step 5)
+
+**Assistant interpretation:** Implement the `debug_reconcile_db.go` split from the guide.
+
+**Inferred user intent:** Make the SQLite debug export easier to review and extend without changing the debug API or generated database shape.
+
+### What I did
+- Kept `BuildSQLiteReconcileDB` in `cmd/web-chat/app/debug_reconcile_db.go`.
+- Moved schema creation to `debug_reconcile_schema.go`.
+- Moved view creation to `debug_reconcile_views.go`.
+- Moved backend pipeline/transport insert logic to `debug_reconcile_backend.go`.
+- Moved Geppetto insert logic to `debug_reconcile_geppetto.go`.
+- Moved frontend upload parsing and frontend inserts to `debug_reconcile_frontend.go`.
+- Moved timeline/turn snapshot inserts to `debug_reconcile_snapshots.go`.
+- Moved export provider adapter types and methods to `debug_reconcile_provider.go`.
+- Moved JSON/null/scalar conversion helpers to `debug_reconcile_values.go`.
+- Ran `gofmt` and focused tests.
+
+### Why
+- Schema/view changes should be reviewable without reading frontend upload parsing.
+- Frontend debug upload parsing should be reviewable without reading Geppetto-specific table inserts.
+- Provider/export adapters should be separated from the SQLite builder and SQL DDL.
+
+### What worked
+- Focused validation passed:
+  - `go test ./cmd/web-chat/app ./cmd/web-chat ./pkg/chatapp -count=1`
+- New line counts:
+  - `debug_reconcile_db.go`: 59
+  - `debug_reconcile_backend.go`: 107
+  - `debug_reconcile_frontend.go`: 96
+  - `debug_reconcile_geppetto.go`: 24
+  - `debug_reconcile_provider.go`: 108
+  - `debug_reconcile_schema.go`: 50
+  - `debug_reconcile_snapshots.go`: 38
+  - `debug_reconcile_values.go`: 90
+  - `debug_reconcile_views.go`: 257
+
+### What didn't work
+- First compile failed after the mechanical move because several new files needed imports that had previously lived in the monolithic file:
+  - `time` and `strconv` in backend inserts;
+  - `time` in frontend inserts;
+  - `sessionstream` in the export provider;
+  - `fmt` in value helpers.
+- I fixed the imports and reran tests successfully.
+
+### What I learned
+- The view definitions are now the only large chunk left in the reconcile exporter. That is acceptable because SQL views are easier to review as a contiguous block than interleaved with insert code.
+
+### What was tricky to build
+- The provider adapter and snapshot insert functions both use similar domain names (`DebugTimelineProvider`, `insertTimelineEntities`) but have different responsibilities. Keeping interfaces with the adapter file and row insertion with snapshot inserts makes that distinction clearer.
+
+### What warrants a second pair of eyes
+- Confirm whether `debug_reconcile_views.go` should eventually split Geppetto views from generic backend/frontend delivery views.
+- Confirm that the generated SQLite schema remains byte-for-byte compatible enough for existing scripts. The tests cover behavior but not exact DDL string ordering beyond successful creation and query.
+
+### What should be done in the future
+- Run the browser-backed SQLite correlation smoke after provider dependency alignment is fixed.
+- Consider adding a golden schema/view smoke if the SQLite export becomes a public operator contract.
+
+### Code review instructions
+- Review this as a file split. The public method and SQL strings should be unchanged except for file location.
+- Validate with `go test ./cmd/web-chat/app ./cmd/web-chat ./pkg/chatapp -count=1`.
