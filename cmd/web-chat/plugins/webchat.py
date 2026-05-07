@@ -64,7 +64,7 @@ emit(
         "protocol_version": "v2",
         "plugin_name": "pinocchio-webchat",
         "capabilities": {
-            "ops": ["config.mutate", "validate.run", "build.run", "launch.plan"],
+            "ops": ["config.mutate", "validate.run", "build.run", "prepare.run", "launch.plan"],
             "commands": [
                 {
                     "name": "build-frontend",
@@ -200,6 +200,48 @@ for line in sys.stdin:
                     "request_id": rid,
                     "ok": True,
                     "output": {"steps": steps, "artifacts": {"binary": bin_path}},
+                }
+            )
+
+        # ---- prepare.run ----
+        elif op == "prepare.run":
+            dry_run = ctx.get("dry_run", False)
+            steps = []
+
+            web_dir = os.path.join(repo_root, "web")
+            node_modules = os.path.join(web_dir, "node_modules")
+            if not os.path.isdir(node_modules) and not dry_run:
+                log(f"installing frontend dependencies in {web_dir}")
+                result = subprocess.run(
+                    ["pnpm", "install"],
+                    cwd=web_dir,
+                    capture_output=True,
+                    text=True,
+                    timeout=120,
+                )
+                if result.returncode != 0:
+                    emit(
+                        {
+                            "type": "response",
+                            "request_id": rid,
+                            "ok": False,
+                            "error": {
+                                "code": "E_PREPARE_FAILED",
+                                "message": f"pnpm install failed: {result.stderr[:500]}",
+                            },
+                        }
+                    )
+                    continue
+                steps.append({"name": "pnpm-install", "status": "ok"})
+            elif os.path.isdir(node_modules):
+                steps.append({"name": "pnpm-install", "status": "skipped", "output": {"reason": "node_modules exists"}})
+
+            emit(
+                {
+                    "type": "response",
+                    "request_id": rid,
+                    "ok": True,
+                    "output": {"steps": steps},
                 }
             )
 
