@@ -653,3 +653,89 @@ go test ./cmd/web-chat/app -run TestDebugReconcile -count=1 -v
 | Backend errors | 0 |
 | Frontend dropped entities | 0 |
 | SQLite artifact size | 71 MB (small upload) / 115 MB (full) |
+
+## Step 8: Fix duplicate thinking block caused by reasoning-summary creating a second segment
+
+The eighth step used the debug/timeline data to investigate a user-visible bug: a thinking block appeared twice in the timeline. The durable timeline confirmed the problem was not a React rendering duplication. The backend had persisted two distinct entities for the same parent assistant message: `chat-msg-1:thinking:1` and `chat-msg-1:thinking:2`, both with duplicate reasoning content.
+
+The root cause was in `ReasoningPlugin`: after a normal `thinking-started` → `thinking-delta` → `thinking-ended` sequence, a later `reasoning-summary` event called `ensureReasoningSegment`. Because the first segment had already been marked inactive, `ensureReasoningSegment` incremented the segment counter and created a new `:thinking:2` entity. The summary was therefore persisted as a second thinking block rather than updating the completed first block.
+
+### Prompt Context
+
+**User prompt (verbatim):** "can you see the thinking block that is shown twice in the timeline? continue"
+
+**Assistant interpretation:** Investigate and fix the duplicated thinking/reasoning block shown in the chat timeline.
+
+**Inferred user intent:** The debug tooling exposed a real correctness issue; use the captured evidence to find the root cause and prevent duplicate thinking entities going forward.
+
+**Commit (code):** `0e927f6` — "fix(web-chat): avoid duplicate reasoning summary timeline blocks"
+
+### What I did
+
+- Queried the persisted timeline for session `1f994569-79da-4fb0-b473-b11b9478365e` and confirmed two durable thinking entities existed:
+  - `chat-msg-1:thinking:1` created at ordinal 4, last updated at 700.
+  - `chat-msg-1:thinking:2` created at ordinal 1659, last updated at 1659.
+- Compared their payloads and confirmed both contained duplicate reasoning text.
+- Changed `reasoning-summary` handling to call `summaryReasoningSegment()` instead of `ensureReasoningSegment()`.
+- Added `summaryReasoningSegment()` which reuses the current completed segment when one exists, and only creates segment 1 when no prior segment exists.
+- Added `TestReasoningPluginSummaryUpdatesCompletedSegment` to guard the exact sequence:
+  - `thinking-started`
+  - `thinking-partial`
+  - `thinking-ended`
+  - `reasoning-summary`
+- Validated in a live browser session `63108dd7-88c4-4d99-830d-bed7c8b0fb75`; final timeline contained exactly one thinking entity.
+
+### Why
+
+A reasoning summary is not a new thinking segment when it summarizes a just-completed thinking stream. It is a replacement/finalization update for the existing thinking segment. Creating a new segment makes the timeline look duplicated and makes the persisted timeline misleading.
+
+### What worked
+
+- The persisted SQLite timeline made the bug obvious: two distinct entity IDs were present.
+- The new unit test reproduces the problematic event sequence without requiring a live provider.
+- Live Playwright smoke confirmed only one thinking block after the fix.
+
+### What didn't work
+
+N/A for the final fix. The only initial ambiguity was whether the bug was frontend rendering or backend persistence; timeline inspection ruled out frontend-only duplication.
+
+### What I learned
+
+Provider streams can produce both token-level thinking events and a later reasoning summary. The plugin must treat the summary as a final representation of the same reasoning segment, not as a separate segment.
+
+### What was tricky to build
+
+The plugin still needs to support truly distinct thinking phases. The existing test `TestReasoningPluginAllocatesDistinctThinkingSegments` verifies that `thinking-started` after a completed segment still increments to `:thinking:2`. The new helper only changes `reasoning-summary`, not normal started/delta events.
+
+### What warrants a second pair of eyes
+
+- `reasoning-summary` with no prior thinking stream now creates segment 1 as finished, which is still the intended fallback.
+- Old persisted sessions with duplicate thinking entities remain duplicated unless migrated/rebuilt; the fix prevents future sessions.
+
+### What should be done in the future
+
+- Optionally add a reconciliation view/query that flags multiple thinking entities with near-identical payloads for the same parent message.
+- Optionally add a rebuild/migration command for old duplicate-thinking sessions if they matter.
+
+### Code review instructions
+
+Review `pkg/chatapp/plugins/reasoning.go`, especially `summaryReasoningSegment`, and `pkg/chatapp/plugins/reasoning_test.go`. Validate with:
+
+```bash
+go test ./pkg/chatapp/plugins -run Reasoning -count=1 -v
+go test ./cmd/web-chat/app ./cmd/web-chat ./pkg/chatapp/plugins -count=1
+```
+
+### Technical details
+
+Live validation after fix:
+
+```text
+Session: 63108dd7-88c4-4d99-830d-bed7c8b0fb75
+Snapshot ordinal: 1159
+Entities: 3
+ChatMessage chat-msg-1-user          role=user
+ChatMessage chat-msg-1:thinking:1    role=thinking
+ChatMessage chat-msg-1:text:1        role=assistant
+Thinking count: 1
+```

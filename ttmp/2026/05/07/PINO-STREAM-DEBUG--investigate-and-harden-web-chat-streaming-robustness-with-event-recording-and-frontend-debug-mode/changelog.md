@@ -65,3 +65,12 @@
 - Ran full reload-during-streaming Playwright validation: mid-stream reload, re-hydration, streaming resumed with 0 errors and 0 dropped entities.
 - Validated all 9 views produce correct results against real session data.
 - Commit: `330950a feat(web-chat): add SQL views to reconcile SQLite for delivery-chain analysis`
+
+## 2026-05-07 (step 8)
+
+- Investigated duplicated thinking block visible in the timeline.
+- Confirmed root cause in persisted timeline: `reasoning-summary` created `chat-msg-1:thinking:2` after `thinking-ended` completed `chat-msg-1:thinking:1`.
+- Fixed `ReasoningPlugin` so `reasoning-summary` updates the completed current segment instead of allocating a new segment.
+- Added regression test `TestReasoningPluginSummaryUpdatesCompletedSegment`.
+- Live-smoke validated new session has exactly one thinking entity.
+- Commit: `0e927f6 fix(web-chat): avoid duplicate reasoning summary timeline blocks`
