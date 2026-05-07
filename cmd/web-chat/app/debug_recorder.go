@@ -3,6 +3,8 @@ package app
 import (
 	"context"
 	"fmt"
+	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -104,6 +106,16 @@ type TransportEntitySummaryDebug struct {
 	Tombstone        bool   `json:"tombstone,omitempty"`
 }
 
+type DebugReconcileResponse struct {
+	SessionID               string   `json:"sessionId"`
+	PipelineFanoutOrdinals  []string `json:"pipelineFanoutOrdinals"`
+	TransportFanoutOrdinals []string `json:"transportFanoutOrdinals"`
+	MissingTransportFanout  []string `json:"missingTransportFanout"`
+	ExtraTransportFanout    []string `json:"extraTransportFanout"`
+	PipelineRecordCount     int      `json:"pipelineRecordCount"`
+	TransportRecordCount    int      `json:"transportRecordCount"`
+}
+
 type StreamDebugRecorder struct {
 	mu         sync.RWMutex
 	maxRecords int
@@ -181,6 +193,37 @@ func (r *StreamDebugRecorder) append(rec DebugRecord) {
 	if len(r.records) > r.maxRecords {
 		copy(r.records, r.records[len(r.records)-r.maxRecords:])
 		r.records = r.records[:r.maxRecords]
+	}
+}
+
+func (r *StreamDebugRecorder) Reconcile(sessionID string) DebugReconcileResponse {
+	records := r.Records(sessionID, "")
+	pipeline := map[string]bool{}
+	transport := map[string]bool{}
+	pipelineCount := 0
+	transportCount := 0
+	for _, rec := range records {
+		switch rec.Kind {
+		case DebugRecordKindPipeline:
+			pipelineCount++
+			if rec.Pipeline != nil && len(rec.Pipeline.FanoutEvents) > 0 && rec.Ordinal != "" {
+				pipeline[rec.Ordinal] = true
+			}
+		case DebugRecordKindTransport:
+			transportCount++
+			if rec.Transport != nil && rec.Transport.Stage == "fanout_started" && rec.Ordinal != "" {
+				transport[rec.Ordinal] = true
+			}
+		}
+	}
+	return DebugReconcileResponse{
+		SessionID:               sessionID,
+		PipelineFanoutOrdinals:  sortedKeys(pipeline),
+		TransportFanoutOrdinals: sortedKeys(transport),
+		MissingTransportFanout:  missingKeys(pipeline, transport),
+		ExtraTransportFanout:    missingKeys(transport, pipeline),
+		PipelineRecordCount:     pipelineCount,
+		TransportRecordCount:    transportCount,
 	}
 }
 
@@ -306,4 +349,39 @@ func formatUint(v uint64) string {
 		return ""
 	}
 	return fmt.Sprintf("%d", v)
+}
+
+func sortedKeys(m map[string]bool) []string {
+	if len(m) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	sort.Slice(out, func(i, j int) bool { return numericStringLess(out[i], out[j]) })
+	return out
+}
+
+func missingKeys(left, right map[string]bool) []string {
+	if len(left) == 0 {
+		return nil
+	}
+	out := make([]string, 0)
+	for k := range left {
+		if !right[k] {
+			out = append(out, k)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return numericStringLess(out[i], out[j]) })
+	return out
+}
+
+func numericStringLess(a, b string) bool {
+	ai, aerr := strconv.ParseUint(a, 10, 64)
+	bi, berr := strconv.ParseUint(b, 10, 64)
+	if aerr == nil && berr == nil {
+		return ai < bi
+	}
+	return a < b
 }

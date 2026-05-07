@@ -30,8 +30,10 @@
 
 ## Phase 3: Comparison and reconciliation tools
 
-- [ ] Build a reconciliation script/endpoint that loads Sessionstream observer records and frontend log for the same session and highlights discrepancies.
-- [ ] Detect: missing events (emitted but not received), extra events (received but not emitted), ordering differences, payload mismatches.
+- [x] Build a backend reconciliation endpoint that loads Sessionstream observer records for the same session and highlights backend pipeline-vs-transport discrepancies.
+- [ ] Extend reconciliation to load/export frontend logs for browser receipt and mutation comparison.
+- [x] Detect backend missing fanout ordinals between Hub pipeline records and WebSocket transport records.
+- [ ] Detect browser-side missing events, extra events, ordering differences, and payload mismatches from frontend debug JSON.
 - [ ] Build a diff view for hydration snapshot vs live-rendered state after streaming completes.
 
 ## Phase 4: Robustness testing scenarios

@@ -33,6 +33,9 @@ func (s *Server) HandleDebugRoutes(w http.ResponseWriter, r *http.Request) {
 		kind = DebugRecordKindPipeline
 	case "transport":
 		kind = DebugRecordKindTransport
+	case "reconcile":
+		writeJSON(w, http.StatusOK, s.debugRecorder.Reconcile(sessionID))
+		return
 	default:
 		writeJSON(w, http.StatusNotFound, errorResponse{Error: "not found"})
 		return

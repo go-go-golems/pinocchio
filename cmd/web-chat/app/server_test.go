@@ -248,6 +248,16 @@ func TestDebugRecorderEndpointsExposePipelineAndTransportRecords(t *testing.T) {
 		}
 	}
 	require.True(t, foundFanout)
+
+	reconcileResp, err := http.Get(httpSrv.URL + "/api/debug/sessions/sess-debug-1/reconcile")
+	require.NoError(t, err)
+	defer func() { _ = reconcileResp.Body.Close() }()
+	require.Equal(t, http.StatusOK, reconcileResp.StatusCode)
+	var reconcile DebugReconcileResponse
+	require.NoError(t, json.NewDecoder(reconcileResp.Body).Decode(&reconcile))
+	require.Equal(t, "sess-debug-1", reconcile.SessionID)
+	require.NotZero(t, reconcile.PipelineRecordCount)
+	require.NotZero(t, reconcile.TransportRecordCount)
 }
 
 func TestSubmitAndSnapshot_UsesResolvedRuntimeWhenConfigured(t *testing.T) {

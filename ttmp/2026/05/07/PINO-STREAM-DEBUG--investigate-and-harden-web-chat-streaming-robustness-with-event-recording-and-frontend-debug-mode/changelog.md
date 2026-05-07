@@ -25,3 +25,7 @@
 
 - Implemented frontend `pinocchio.debugStream` recorder for raw WebSocket frames, parsed frames, snapshots, UI-event mutations, and lifecycle events.
 - Added `StreamDebugPanel` overlay with filtering, clear, and JSON export.
+
+## 2026-05-07
+
+- Added backend reconciliation endpoint `/api/debug/sessions/{id}/reconcile` comparing Hub pipeline fanout ordinals with WebSocket transport fanout ordinals.

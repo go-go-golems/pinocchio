@@ -227,3 +227,60 @@ npx --yes @biomejs/biome@2.3.8 check --write src/webchat/components/StreamDebugP
 2. Pre-existing unrelated Biome issues in `src/debug-ui/routes/OverviewPage.tsx` and `src/debug-ui/ws/useDebugTimelineFollow.ts`, which are outside this change set.
 
 I committed this frontend step with `--no-verify` after focused typecheck and Vitest passed.
+
+## Step 3: Backend reconciliation endpoint
+
+The third implementation step added a small backend reconciliation endpoint. This is not the full frontend-vs-backend comparison yet; it is the backend half of reconciliation, checking whether Hub pipeline fanout ordinals also appear in WebSocket transport fanout records.
+
+This endpoint gives a fast sanity check before involving exported browser logs. If the Hub says it fanned out ordinal N but the WebSocket transport never recorded `fanout_started` for ordinal N, the problem is still backend-side. If both exist, the next comparison point is browser receipt and frontend mutation.
+
+### Prompt Context
+
+**User prompt (verbatim):** (same as Step 1)
+
+**Assistant interpretation:** Continue implementing the planned debug workflow task by task, adding reconciliation after backend and frontend recording.
+
+**Inferred user intent:** The user wants actionable comparison tools, not just raw debug logs.
+
+**Commit (code):** pending — third Pinocchio implementation commit will include the reconciliation endpoint.
+
+### What I did
+
+- Added `DebugReconcileResponse`.
+- Added `StreamDebugRecorder.Reconcile(sessionID)`.
+- Compared pipeline records with fanout events against transport `fanout_started` records by ordinal.
+- Added `GET /api/debug/sessions/{id}/reconcile`.
+- Extended the backend debug integration test to assert the reconcile endpoint returns non-zero backend record counts.
+- Ran `go test ./cmd/web-chat/app ./cmd/web-chat -count=1` successfully.
+
+### Why
+
+The first useful reconciliation boundary is between Hub fanout and WebSocket fanout. This endpoint answers whether backend projection/fanout records and WebSocket fanout target selection agree for a session.
+
+### What worked
+
+The in-memory debug recorder already had all required records. The endpoint is a pure summary over existing data.
+
+### What didn't work
+
+N/A for this step.
+
+### What I learned
+
+Reconciliation should be built in layers. Backend pipeline-vs-transport comparison is cheap and deterministic. Browser-export comparison can be added next using frontend debug JSON.
+
+### What was tricky to build
+
+The only subtlety was sorting ordinals numerically even though API JSON represents them as strings for JavaScript integer safety.
+
+### What warrants a second pair of eyes
+
+- The current reconciliation only compares ordinals with pipeline fanout events to transport `fanout_started`. It does not yet compare individual UI event names, payloads, frame queue/write status, or frontend receipt.
+
+### What should be done in the future
+
+- Add frontend log upload or paste-based reconciliation against exported `pinocchio.debugStream` JSON.
+
+### Code review instructions
+
+Review `StreamDebugRecorder.Reconcile` in `cmd/web-chat/app/debug_recorder.go` and the route in `cmd/web-chat/app/server_debug.go`.
