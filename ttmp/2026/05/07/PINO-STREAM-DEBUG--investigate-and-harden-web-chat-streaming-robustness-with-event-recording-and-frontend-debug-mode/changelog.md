@@ -14,3 +14,9 @@
 
 - Noted that Sessionstream observer APIs (`SS-OBSERVERS`) and subscribe hydration buffering (`SS-WS-RACE`) have landed.
 - Updated the implementation guide with the corrected reconnect trace that Pinocchio should now consume and verify.
+
+## 2026-05-07
+
+- Implemented backend debug recorder wiring for Sessionstream `PipelineRecord` and WebSocket `TransportRecord` values.
+- Added debug endpoints under `/api/debug/sessions/{id}/{pipeline,transport,records}` behind `--debug-api`.
+- Added Pinocchio implementation diary and backend recorder integration test.

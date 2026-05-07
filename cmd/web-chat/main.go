@@ -135,7 +135,7 @@ func registerStaticUIHandlers(mux *http.ServeMux, staticFS fs.FS) {
 	})
 }
 
-func buildAppMux(staticFS fs.FS, appConfigJS string, requestResolver *profiles.RequestResolver, canonicalApp *appserver.Server) *http.ServeMux {
+func buildAppMux(staticFS fs.FS, appConfigJS string, requestResolver *profiles.RequestResolver, canonicalApp *appserver.Server, debugAPI bool) *http.ServeMux {
 	mux := http.NewServeMux()
 	if requestResolver != nil && requestResolver.Registry() != nil {
 		middlewareRegistry, _ := newWebChatMiddlewareDefinitionRegistry()
@@ -169,6 +169,9 @@ func buildAppMux(staticFS fs.FS, appConfigJS string, requestResolver *profiles.R
 		mux.HandleFunc("/api/chat/sessions", canonicalApp.HandleCreateSession)
 		mux.HandleFunc("/api/chat/sessions/", canonicalApp.HandleSessionRoutes)
 		mux.HandleFunc("/api/chat/ws", canonicalApp.HandleWS)
+		if debugAPI {
+			mux.HandleFunc("/api/debug/sessions/", canonicalApp.HandleDebugRoutes)
+		}
 	}
 	mux.HandleFunc("/app-config.js", buildAppConfigHandler(appConfigJS))
 	registerStaticUIHandlers(mux, staticFS)
@@ -363,19 +366,24 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 	requestResolver := profiles.NewRequestResolver(profileRegistry, defaultRegistrySlug, baseInferenceSettings)
 	canonicalRuntimeResolver := newCanonicalRuntimeResolver(requestResolver, runtimeComposer)
 
+	var debugRecorder *appserver.StreamDebugRecorder
+	if s.DebugAPI {
+		debugRecorder = appserver.NewStreamDebugRecorder(10000)
+	}
 	canonicalApp, err := appserver.NewServer(
 		appserver.WithSQLiteDSN(s.TimelineDSN),
 		appserver.WithSQLiteDBPath(s.TimelineDB),
 		appserver.WithRuntimeResolver(canonicalRuntimeResolver),
 		appserver.WithTurnStore(turnStore),
 		appserver.WithTurnsDBPath(s.TurnsDB),
+		appserver.WithDebugRecorder(debugRecorder),
 		appserver.WithChatPlugins(newAgentModePlugin(), plugins.NewReasoningPlugin(), plugins.NewToolCallPlugin()),
 	)
 	if err != nil {
 		return errors.Wrap(err, "build canonical evtstream-backed app")
 	}
 
-	appMux := buildAppMux(staticFS, appConfigJS, requestResolver, canonicalApp)
+	appMux := buildAppMux(staticFS, appConfigJS, requestResolver, canonicalApp, s.DebugAPI)
 	handler := buildRootHandler(s.Root, appMux, appConfigJS)
 	httpSrv := &http.Server{
 		Addr:              s.Addr,

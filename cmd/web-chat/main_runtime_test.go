@@ -40,7 +40,7 @@ func newMigratedRuntimeTestServer(t *testing.T) (*appserver.Server, *httptest.Se
 		"static/dist/index.html":     {Data: []byte("<html><body>built migrated ui</body></html>")},
 		"static/dist/assets/app.css": {Data: []byte("body{}")},
 	}
-	mux := buildAppMux(appFS, appConfigJS, resolver, canonicalApp)
+	mux := buildAppMux(appFS, appConfigJS, resolver, canonicalApp, false)
 	httpSrv := httptest.NewServer(mux)
 	t.Cleanup(func() {
 		httpSrv.Close()
@@ -110,7 +110,7 @@ func TestBuildRootHandler_MountsCanonicalAppUnderCustomRoot(t *testing.T) {
 	appFS := fstest.MapFS{
 		"static/index.html": {Data: []byte("<html><body>rooted ui</body></html>")},
 	}
-	mux := buildAppMux(appFS, appConfigJS, resolver, canonicalApp)
+	mux := buildAppMux(appFS, appConfigJS, resolver, canonicalApp, false)
 	handler := buildRootHandler("/chat", mux, appConfigJS)
 	httpSrv := httptest.NewServer(handler)
 	defer httpSrv.Close()

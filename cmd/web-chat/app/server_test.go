@@ -18,6 +18,7 @@ import (
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
 	sessionstreamv1 "github.com/go-go-golems/sessionstream/pkg/sessionstream/pb/proto/sessionstream/v1"
+	wstransport "github.com/go-go-golems/sessionstream/pkg/sessionstream/transport/ws"
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -67,6 +68,9 @@ func newTestMux(t *testing.T, opts ...Option) (*Server, *httptest.Server) {
 	mux.HandleFunc("/api/chat/sessions", srv.HandleCreateSession)
 	mux.HandleFunc("/api/chat/sessions/", srv.HandleSessionRoutes)
 	mux.HandleFunc("/api/chat/ws", srv.HandleWS)
+	if srv.debugRecorder != nil {
+		mux.HandleFunc("/api/debug/sessions/", srv.HandleDebugRoutes)
+	}
 
 	httpSrv := httptest.NewServer(mux)
 	t.Cleanup(httpSrv.Close)
@@ -188,6 +192,62 @@ func TestWebSocketSnapshotAndLiveEvent(t *testing.T) {
 		}
 	}
 	require.True(t, seenUIEvent, "expected at least one ui-event frame")
+}
+
+func TestDebugRecorderEndpointsExposePipelineAndTransportRecords(t *testing.T) {
+	recorder := NewStreamDebugRecorder(1000)
+	_, httpSrv := newTestMux(t, WithDebugRecorder(recorder), WithRuntimeResolver(staticRuntimeResolver{completion: "debug response"}))
+
+	wsURL := "ws" + strings.TrimPrefix(httpSrv.URL, "http") + "/api/chat/ws"
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	require.NoError(t, err)
+	defer func() { _ = conn.Close() }()
+	require.NoError(t, conn.SetReadDeadline(time.Now().Add(2*time.Second)))
+	_ = readServerFrame(t, conn) // hello
+	writeClientFrame(t, conn, map[string]any{"subscribe": map[string]any{"sessionId": "sess-debug-1"}})
+	_ = readServerFrame(t, conn) // snapshot
+	_ = readServerFrame(t, conn) // subscribed
+
+	body := []byte(`{"prompt":"collect debug records"}`)
+	resp, err := http.Post(httpSrv.URL+"/api/chat/sessions/sess-debug-1/messages", "application/json", bytes.NewReader(body))
+	require.NoError(t, err)
+	_ = resp.Body.Close()
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		frame := readServerFrame(t, conn)
+		if frame.GetUiEvent() != nil && frame.GetUiEvent().GetName() == "ChatMessageFinished" {
+			break
+		}
+	}
+
+	pipelineResp, err := http.Get(httpSrv.URL + "/api/debug/sessions/sess-debug-1/pipeline")
+	require.NoError(t, err)
+	defer func() { _ = pipelineResp.Body.Close() }()
+	require.Equal(t, http.StatusOK, pipelineResp.StatusCode)
+	var pipeline debugRecordsResponse
+	require.NoError(t, json.NewDecoder(pipelineResp.Body).Decode(&pipeline))
+	require.Equal(t, "sess-debug-1", pipeline.SessionID)
+	require.Equal(t, string(DebugRecordKindPipeline), pipeline.Kind)
+	require.NotEmpty(t, pipeline.Records)
+	require.Equal(t, DebugRecordKindPipeline, pipeline.Records[0].Kind)
+
+	transportResp, err := http.Get(httpSrv.URL + "/api/debug/sessions/sess-debug-1/transport")
+	require.NoError(t, err)
+	defer func() { _ = transportResp.Body.Close() }()
+	require.Equal(t, http.StatusOK, transportResp.StatusCode)
+	var transport debugRecordsResponse
+	require.NoError(t, json.NewDecoder(transportResp.Body).Decode(&transport))
+	require.Equal(t, string(DebugRecordKindTransport), transport.Kind)
+	require.NotEmpty(t, transport.Records)
+	foundFanout := false
+	for _, rec := range transport.Records {
+		if rec.Transport != nil && rec.Transport.Stage == string(wstransport.TransportStageFanoutStarted) {
+			foundFanout = true
+		}
+	}
+	require.True(t, foundFanout)
 }
 
 func TestSubmitAndSnapshot_UsesResolvedRuntimeWhenConfigured(t *testing.T) {

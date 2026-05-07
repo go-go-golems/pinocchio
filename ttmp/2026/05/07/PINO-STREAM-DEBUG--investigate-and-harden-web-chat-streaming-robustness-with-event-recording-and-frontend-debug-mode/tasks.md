@@ -10,14 +10,14 @@
 
 ## Phase 1: Backend event recording
 
-- [ ] Update Pinocchio to a `sessionstream` version that includes `SS-OBSERVERS` Hub pipeline and WebSocket transport observers.
-- [ ] Add a debug recorder in `cmd/web-chat/app` that captures Sessionstream `PipelineRecord` values by session.
-- [ ] Add a debug recorder in `cmd/web-chat/app` that captures Sessionstream WebSocket `TransportRecord` values by session and connection.
-- [ ] Record event ordinal, event name, payload type, stage outputs, target connection IDs, frame type, queue/write status, errors, and timestamp.
-- [ ] Add a debug API endpoint to retrieve pipeline records for a session (e.g., `GET /api/debug/sessions/{id}/pipeline`).
-- [ ] Add a debug API endpoint to retrieve transport records for a session (e.g., `GET /api/debug/sessions/{id}/transport`).
-- [ ] Add a combined debug API endpoint to retrieve all backend stream records for a session (e.g., `GET /api/debug/sessions/{id}/records`).
-- [ ] Make event recording opt-in via `--debug-api` flag or environment variable.
+- [x] Update Pinocchio to a `sessionstream` version that includes `SS-OBSERVERS` Hub pipeline and WebSocket transport observers.
+- [x] Add a debug recorder in `cmd/web-chat/app` that captures Sessionstream `PipelineRecord` values by session.
+- [x] Add a debug recorder in `cmd/web-chat/app` that captures Sessionstream WebSocket `TransportRecord` values by session and connection.
+- [x] Record event ordinal, event name, payload type, stage outputs, target connection IDs, frame type, queue/write status, errors, and timestamp.
+- [x] Add a debug API endpoint to retrieve pipeline records for a session (e.g., `GET /api/debug/sessions/{id}/pipeline`).
+- [x] Add a debug API endpoint to retrieve transport records for a session (e.g., `GET /api/debug/sessions/{id}/transport`).
+- [x] Add a combined debug API endpoint to retrieve all backend stream records for a session (e.g., `GET /api/debug/sessions/{id}/records`).
+- [x] Make event recording opt-in via `--debug-api` flag or environment variable.
 - [ ] If `SS-OBSERVERS` is not available yet, implement a temporary reduced recorder by wrapping `UIFanout`, and mark it as replaceable.
 
 ## Phase 2: Frontend debug mode
@@ -53,5 +53,5 @@
 
 ## External dependencies
 
-- [ ] Track `SS-OBSERVERS` in `sessionstream/ttmp`: Hub pipeline observer and WebSocket transport observer.
-- [ ] Track `SS-WS-RACE` in `sessionstream/ttmp`: subscribe-first hydration buffer for reload/reconnect correctness.
+- [x] Track `SS-OBSERVERS` in `sessionstream/ttmp`: Hub pipeline observer and WebSocket transport observer.
+- [x] Track `SS-WS-RACE` in `sessionstream/ttmp`: subscribe-first hydration buffer for reload/reconnect correctness.
