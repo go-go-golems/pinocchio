@@ -54,3 +54,41 @@ func TestReasoningPluginAllocatesDistinctThinkingSegments(t *testing.T) {
 		"chat-msg-1:thinking:2",
 	}, ids)
 }
+
+func TestReasoningPluginSummaryUpdatesCompletedSegment(t *testing.T) {
+	plugin := NewReasoningPlugin()
+	var published []sessionstream.Event
+	runtime := chatapp.RuntimeEventContext{
+		SessionID: "sid",
+		MessageID: "chat-msg-1",
+		Publish: func(_ context.Context, eventName string, payload proto.Message) error {
+			published = append(published, sessionstream.Event{Name: eventName, SessionId: "sid", Payload: payload})
+			return nil
+		},
+	}
+
+	meta := gepevents.EventMetadata{SessionID: "sid"}
+	events := []gepevents.Event{
+		gepevents.NewInfoEvent(meta, "thinking-started", nil),
+		gepevents.NewThinkingPartialEvent(meta, "a", "alpha"),
+		gepevents.NewInfoEvent(meta, "thinking-ended", nil),
+		gepevents.NewInfoEvent(meta, "reasoning-summary", map[string]interface{}{"text": "alpha summary"}),
+	}
+	for _, event := range events {
+		handled, err := plugin.HandleRuntimeEvent(context.Background(), runtime, event)
+		require.NoError(t, err)
+		require.True(t, handled)
+	}
+
+	require.Len(t, published, 4)
+	for _, event := range published {
+		payload := event.Payload.(*chatappv1.ReasoningUpdate)
+		require.Equal(t, "chat-msg-1:thinking:1", payload.GetMessageId())
+		require.Equal(t, int32(1), payload.GetSegment())
+	}
+	last := published[len(published)-1].Payload.(*chatappv1.ReasoningUpdate)
+	require.Equal(t, "finished", last.GetStatus())
+	require.False(t, last.GetStreaming())
+	require.Equal(t, "summary", last.GetSource())
+	require.Equal(t, "alpha summary", last.GetText())
+}

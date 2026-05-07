@@ -123,7 +123,7 @@ func (p *ReasoningPlugin) HandleRuntimeEvent(ctx context.Context, runtime chatap
 				SegmentType:     "thinking",
 			})
 		case "reasoning-summary":
-			reasoningMessageID, segment := p.ensureReasoningSegment(parentMessageID)
+			reasoningMessageID, segment := p.summaryReasoningSegment(parentMessageID)
 			p.finishReasoningSegment(parentMessageID)
 			text := infoText(ev.Data)
 			return true, runtime.Publish(ctx, ReasoningFinishedEventName, &chatappv1.ReasoningUpdate{
@@ -262,6 +262,21 @@ func (p *ReasoningPlugin) currentReasoningSegment(parentMessageID string) (strin
 		return "", 0, false
 	}
 	return ReasoningSegmentEntityID(parentMessageID, state.Current), state.Current, true
+}
+
+func (p *ReasoningPlugin) summaryReasoningSegment(parentMessageID string) (string, int32) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.segments == nil {
+		p.segments = map[string]reasoningSegmentState{}
+	}
+	state := p.segments[parentMessageID]
+	if state.Current <= 0 {
+		state.Current = 1
+	}
+	state.Active = false
+	p.segments[parentMessageID] = state
+	return ReasoningSegmentEntityID(parentMessageID, state.Current), state.Current
 }
 
 func (p *ReasoningPlugin) finishReasoningSegment(parentMessageID string) {
