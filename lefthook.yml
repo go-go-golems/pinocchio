@@ -20,8 +20,8 @@ pre-push:
   parallel: false
   commands:
     release:
-      run: make goreleaser
+      run: GOWORK=off make goreleaser
     lint:
-      run: make lintmax gosec govulncheck
+      run: GOWORK=off make lintmax gosec govulncheck
     test:
-      run: make test
+      run: GOWORK=off make test
