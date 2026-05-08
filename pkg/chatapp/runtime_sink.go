@@ -182,7 +182,11 @@ func applyChatMessageProviderInfo(update *chatappv1.ChatMessageUpdate, metadata 
 func int32FromMetadata(v any) (int32, bool) {
 	switch tv := v.(type) {
 	case int:
-		return int32(tv), int(tv) == int(int32(tv))
+		parsed, err := strconv.ParseInt(strconv.Itoa(tv), 10, 32)
+		if err != nil {
+			return 0, false
+		}
+		return int32(parsed), true
 	case int32:
 		return tv, true
 	case int64:
