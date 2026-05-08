@@ -18,6 +18,16 @@ RelatedFiles:
       Note: Defines canonical tool lifecycle input events.
     - Path: geppetto/pkg/events/correlation.go
       Note: Defines typed Geppetto correlation propagated through the protocol.
+    - Path: geppetto/pkg/events/correlation_builders.go
+      Note: Defines provider-specific correlation builders used by provider adapters.
+    - Path: geppetto/pkg/steps/ai/openai_responses/streaming.go
+      Note: Normalizes OpenAI Responses stream events into canonical Geppetto events.
+    - Path: geppetto/pkg/steps/ai/openai/engine_openai.go
+      Note: Normalizes OpenAI-compatible Chat Completions streams, including reasoning and tool-call arguments.
+    - Path: geppetto/pkg/steps/ai/claude/content-block-merger.go
+      Note: Normalizes Claude message/content-block streams into provider, text, and tool lifecycles.
+    - Path: geppetto/pkg/steps/ai/gemini/engine_gemini.go
+      Note: Normalizes Gemini text/function-call responses into canonical provider, text, and tool events.
     - Path: pinocchio/cmd/web-chat/web/src/store/timelineSlice.ts
       Note: Merges sparse frontend timeline entity patches.
     - Path: pinocchio/cmd/web-chat/web/src/ws/timelineEvents.ts
@@ -41,10 +51,10 @@ RelatedFiles:
     - Path: pinocchio/proto/pinocchio/chatapp/v1/chat.proto
       Note: Defines Pinocchio protobuf lifecycle payloads and CorrelationInfo.
 ExternalSources: []
-Summary: Design and implementation guide for systematic Pinocchio chat protocol conformance tests covering canonical run, text, reasoning, tool, projection, persistence, and frontend reducer lifecycles.
-LastUpdated: 2026-05-08T15:45:00-04:00
-WhatFor: Use this guide to add a conformance test layer that prevents whack-a-mole fixes around canonical chat event lifecycles.
-WhenToUse: Use before changing Pinocchio chat runtime, Geppetto-to-Pinocchio event mapping, sessionstream projections, timeline persistence, or web-chat reducer behavior.
+Summary: Design and implementation guide for systematic provider-to-browser chat protocol conformance tests covering provider normalization, canonical Geppetto events, Pinocchio runtime projection, persistence, and frontend reducer lifecycles.
+LastUpdated: 2026-05-08T18:05:00-04:00
+WhatFor: Use this guide to add a conformance test layer that prevents whack-a-mole fixes around provider normalization and canonical chat event lifecycles.
+WhenToUse: Use before changing Geppetto provider adapters, Pinocchio chat runtime, Geppetto-to-Pinocchio event mapping, sessionstream projections, timeline persistence, or web-chat reducer behavior.
 ---
 
 
@@ -52,14 +62,15 @@ WhenToUse: Use before changing Pinocchio chat runtime, Geppetto-to-Pinocchio eve
 
 ## Executive summary
 
-Pinocchio now sits in the middle of a canonical event protocol:
+Pinocchio now sits in the middle of a canonical event protocol, but the protocol starts one layer earlier than Pinocchio. Provider-specific stream events are first normalized inside Geppetto, and only then do they become the canonical Geppetto events that Pinocchio consumes:
 
-1. Geppetto emits typed canonical events with `events.Correlation`.
-2. Pinocchio translates them into `pinocchio.chatapp.v1` protobuf backend events.
-3. Sessionstream projects backend events into timeline entities and UI events.
-4. The web-chat frontend maps UI events into sparse timeline patches.
-5. Redux merges those patches into renderable state.
-6. Timeline persistence writes durable snapshots from the event stream.
+1. Provider adapters normalize provider-native events from OpenAI Responses, OpenAI-compatible Chat Completions, Claude, and Gemini.
+2. Geppetto emits typed canonical events with `events.Correlation`.
+3. Pinocchio translates them into `pinocchio.chatapp.v1` protobuf backend events.
+4. Sessionstream projects backend events into timeline entities and UI events.
+5. The web-chat frontend maps UI events into sparse timeline patches.
+6. Redux merges those patches into renderable state.
+7. Timeline persistence writes durable snapshots from the event stream.
 
 Recent review fixes were correct, but they were reactive. The same class of defects can recur whenever a terminal event is sparse, a run fails after partial text, a stop arrives before text exists, a tool finish omits input, or a provider sends optional correlation fields such as zero indexes. The systematic fix is not more one-off tests. The systematic fix is a small protocol conformance layer with explicit lifecycle invariants, deterministic table-driven programs, reducer merge-contract tests, and eventually trace replay and fuzz/property checks.
 
@@ -69,6 +80,7 @@ This document is the intern-oriented implementation guide for that conformance l
 
 The chat protocol is a multi-stage pipeline, not a single function. A bug may be introduced in any one of these stages and only become visible after a browser run:
 
+- Provider-specific stream normalization into Geppetto canonical events.
 - Geppetto canonical event emission.
 - Pinocchio runtime event sink translation.
 - Feature plugin event projection.
@@ -88,6 +100,7 @@ Without explicit protocol tests, each review comment becomes a local repair. The
 
 ### In scope
 
+- Geppetto provider-adapter tests for provider-native event normalization into canonical run/provider-call/text/reasoning/tool events.
 - Pinocchio chat runtime tests for canonical run, provider-call, text, reasoning, and tool lifecycles.
 - Plugin projection tests for tool and reasoning events.
 - Sessionstream timeline snapshot assertions.
@@ -99,6 +112,7 @@ Without explicit protocol tests, each review comment becomes a local repair. The
 ### Out of scope for the first implementation pass
 
 - Changing the Geppetto canonical event vocabulary itself.
+- Replacing provider SDK clients or provider API contracts.
 - Adding backwards-compatible legacy event aliases.
 - Browser E2E automation for every matrix row.
 - Fuzz/property testing before deterministic invariants are encoded.
@@ -120,17 +134,19 @@ Without explicit protocol tests, each review comment becomes a local repair. The
 
 ```mermaid
 flowchart LR
-  A[Geppetto canonical events] --> B[Pinocchio runtimeEventSink]
-  B --> C[sessionstream backend events]
-  C --> D[base + plugin UI projections]
-  C --> E[base + plugin timeline projections]
-  D --> F[websocket canonical frames]
-  F --> G[timelineMutationFromUIEvent]
-  G --> H[Redux timelineSlice.upsertEntity]
-  C --> I[StepTimelinePersistFunc]
-  E --> J[sessionstream snapshot]
-  H --> K[rendered web timeline]
-  I --> L[persisted timeline store]
+  P[Provider-native stream events] --> A[Geppetto provider adapters]
+  A --> B[Geppetto canonical events]
+  B --> C[Pinocchio runtimeEventSink]
+  C --> D[sessionstream backend events]
+  D --> E[base + plugin UI projections]
+  D --> F[base + plugin timeline projections]
+  E --> G[websocket canonical frames]
+  G --> H[timelineMutationFromUIEvent]
+  H --> I[Redux timelineSlice.upsertEntity]
+  D --> J[StepTimelinePersistFunc]
+  F --> K[sessionstream snapshot]
+  I --> L[rendered web timeline]
+  J --> M[persisted timeline store]
 ```
 
 The important architectural point is that no single test currently owns this whole contract. Existing tests cover useful cases, but they are distributed across runtime, plugin, persistence, and frontend mapper tests. The conformance layer should connect them through a shared vocabulary of lifecycle cases.
@@ -139,6 +155,11 @@ The important architectural point is that no single test currently owns this who
 
 | Area | Evidence | Why it matters |
 |---|---|---|
+| Provider correlation builders | `geppetto/pkg/events/correlation_builders.go:25`, `:79`, `:107`, `:131`, `:153` | Provider adapters must use stable provider-specific correlation builders instead of ad hoc metadata joins. |
+| OpenAI Responses normalization | `geppetto/pkg/steps/ai/openai_responses/streaming.go:98`, `:166`, `:266`, `:302`, `:579`, `:733`, `:888` | OpenAI Responses stream events normalize into provider-call, text, reasoning, and tool lifecycles. |
+| OpenAI Chat Completions normalization | `geppetto/pkg/steps/ai/openai/engine_openai.go:225`, `:322`, `:351`, `:380`, `:430`, `:437`, `:483` | Chat Completions streams require choice-scoped text/reasoning/tool correlation and accumulated tool arguments. |
+| Claude normalization | `geppetto/pkg/steps/ai/claude/content-block-merger.go:187`, `:214`, `:277`, `:296`, `:337`, `:352`, `:370` | Claude message events and content blocks normalize into distinct provider, text, and tool lifecycles. |
+| Gemini normalization | `geppetto/pkg/steps/ai/gemini/engine_gemini.go:332`, `:412`, `:425`, `:429`, `:434`, `:475` | Gemini candidate parts normalize into provider-call, text segment, and tool request lifecycles. |
 | Geppetto typed correlation | `geppetto/pkg/events/correlation.go:7` | `Correlation` is the identity object that should be preserved through Pinocchio and the frontend. |
 | Geppetto text/provider/reasoning events | `geppetto/pkg/events/canonical_events.go:65`, `:112`, `:126`, `:142`, `:157` | These are the canonical input event types Pinocchio must translate. |
 | Geppetto tool events | `geppetto/pkg/events/canonical_tool_events.go:3`, `:17`, `:32`, `:47`, `:62`, `:77` | These define the tool lifecycle inputs and distinguish current argument delta from accumulated input. |
@@ -159,7 +180,51 @@ The important architectural point is that no single test currently owns this who
 
 ## Current behavior, stage by stage
 
-### 1. Geppetto canonical events are the protocol input
+### 1. Provider-specific normalization is the lowest and hardest layer
+
+The protocol starts before Pinocchio sees anything. OpenAI Responses, OpenAI-compatible Chat Completions, Claude, and Gemini each expose a different stream vocabulary. Geppetto provider adapters translate those provider-native objects into the canonical event vocabulary. This layer is the most complex layer because it has to reconcile different provider event taxonomies, late provider IDs, stream deltas, accumulated buffers, content block indexes, tool-call fragments, final usage chunks, and provider stop reasons.
+
+The canonical contract at this boundary is strict:
+
+- Provider envelope events become provider-call lifecycle events. They do not create transcript text.
+- Provider text deltas become text segment lifecycle events. They start, append to, and finish actual text segments.
+- Provider reasoning deltas become reasoning segment lifecycle events. They do not become assistant text.
+- Provider tool-call events become tool lifecycle events. Argument delta events carry both the current fragment and accumulated input.
+- Provider terminal events, such as OpenAI response completion or Claude message stop, close the provider call. They do not manufacture text segment finals unless a text-specific provider event has established an actual text segment.
+- Every canonical event emitted by a provider adapter carries typed `events.Correlation`.
+
+The provider-specific risks are not identical:
+
+| Provider family | Difficult normalization points | Files to inspect |
+|---|---|---|
+| OpenAI Responses | Output item identity, response IDs that become known late, reasoning summary deltas, output text done/backfill behavior, function-call argument deltas. | `geppetto/pkg/steps/ai/openai_responses/streaming.go`, `nonstreaming.go` |
+| OpenAI-compatible Chat Completions | Choice indexes, compatible-provider reasoning fields, usage-only chunks, EOF/final chunks, streamed tool-call fragments that must accumulate. | `geppetto/pkg/steps/ai/openai/engine_openai.go`, `chat_stream.go` |
+| Claude | Message envelope events versus content block events, text deltas, input JSON deltas, content block stop, tool-use stop reasons. | `geppetto/pkg/steps/ai/claude/content-block-merger.go` |
+| Gemini | Candidate parts, function call parts, finish reasons, text segment existence, provider metadata, and tool request IDs. | `geppetto/pkg/steps/ai/gemini/engine_gemini.go` |
+
+This provider-adapter layer needs its own conformance tests. Pinocchio tests can prove that canonical Geppetto events are projected correctly, but they cannot prove that a provider adapter emitted the right canonical events in the first place. A bug at this layer propagates cleanly through Pinocchio because every downstream layer may faithfully process the wrong canonical event.
+
+Provider-adapter tests should use provider-native fixtures, not only synthetic canonical Geppetto events. A good fixture is a short provider stream with expected canonical output:
+
+```text
+Provider stream:
+  Claude MessageStart
+  Claude ContentBlockStart(type=text, index=0)
+  Claude ContentBlockDelta(text_delta="hello")
+  Claude ContentBlockStop(index=0)
+  Claude MessageStop(stop_reason=end_turn)
+
+Expected Geppetto events:
+  EventProviderCallStarted
+  EventTextSegmentStarted(segment_type=text, content_block_index=0)
+  EventTextDelta(delta="hello", text="hello")
+  EventTextSegmentFinished(text="hello")
+  EventProviderCallFinished(stop_reason=end_turn, has_tool_calls=false)
+```
+
+The same pattern should be written for OpenAI Responses text/reasoning/tool streams, Chat Completions streamed tool-call fragments, and Gemini text/function-call responses.
+
+### 2. Geppetto canonical events are the protocol input
 
 Geppetto canonical events expose `Correlation() events.Correlation` instead of requiring consumers to inspect debug metadata. Pinocchio should treat this typed correlation as the routing and joining authority.
 
@@ -194,7 +259,7 @@ type Correlation struct {
 
 Intern note: optional indexes are pointers in Go because zero is meaningful. A provider can legitimately use index `0`; tests must assert that zero survives decoding and patch generation.
 
-### 2. Runtime inference creates one assistant run and connects the sink
+### 3. Runtime inference creates one assistant run and connects the sink
 
 `pkg/chatapp/runtime_inference.go:63` publishes `ChatRunStarted`, builds a `runtimeEventSink`, wraps it if needed, starts Geppetto inference, waits for completion, and then publishes either `ChatRunFinished` or `ChatRunFailed`.
 
@@ -206,7 +271,7 @@ Important current behavior:
 
 This stage needs conformance tests because it is where run-level terminal events and child text state interact.
 
-### 3. `runtimeEventSink` translates canonical events and tracks active text
+### 4. `runtimeEventSink` translates canonical events and tracks active text
 
 `pkg/chatapp/runtime_sink.go:30` is the primary bridge from Geppetto canonical events to Pinocchio backend events.
 
@@ -234,7 +299,7 @@ Important current behavior:
 
 This is a good start, but it is still implicit state. The conformance suite should make the expected state transitions explicit.
 
-### 4. Base projections intentionally avoid empty assistant entities
+### 5. Base projections intentionally avoid empty assistant entities
 
 `pkg/chatapp/projections.go:27` projects backend events into sessionstream timeline entities. The projection delays assistant entity creation until there is content or an existing entity:
 
@@ -244,13 +309,13 @@ This is a good start, but it is still implicit state. The conformance suite shou
 
 The conformance suite should preserve this behavior. A stopped run with no assistant text should not create an empty assistant entity just to satisfy a terminal run event.
 
-### 5. Tool projection already uses a sparse merge model
+### 6. Tool projection already uses a sparse merge model
 
 `pkg/chatapp/plugins/toolcall.go:100` projects tool backend events. It reads the current timeline entity and calls `mergeToolCallFields` (`toolcall.go:107`, `:177`). The merge helper only updates non-empty `MessageID`, `ToolCallID`, `ToolName`, `Input`, `Status`, and non-nil correlation.
 
 This is the backend equivalent of the frontend sparse-patch contract. A sparse `ChatToolCallFinished` should mark `Status` and `Executing`, but must not clear `ToolName` or `Input` learned earlier.
 
-### 6. Reasoning projection uses separate thinking entities
+### 7. Reasoning projection uses separate thinking entities
 
 `pkg/chatapp/plugins/reasoning.go:52` translates canonical Geppetto reasoning events into Pinocchio reasoning events. The timeline projection uses `reasoningEntityFromFields` (`reasoning.go:171`) and keeps reasoning entities separate from assistant text:
 
@@ -261,7 +326,7 @@ This is the backend equivalent of the frontend sparse-patch contract. A sparse `
 
 The conformance suite should assert reasoning does not pollute assistant text state and that terminal reasoning events preserve previous content.
 
-### 7. The protobuf contract encodes the lifecycle vocabulary
+### 8. The protobuf contract encodes the lifecycle vocabulary
 
 `proto/pinocchio/chatapp/v1/chat.proto` is the browser/backend contract. The important separation is visible in the schema:
 
@@ -274,7 +339,7 @@ The conformance suite should assert reasoning does not pollute assistant text st
 
 Intern note: proto3 scalar strings default to empty strings. The frontend must not interpret an omitted field decoded as `""` as an instruction to clear previous state unless the protocol explicitly defines clearing semantics.
 
-### 8. Frontend mapping creates sparse patches
+### 9. Frontend mapping creates sparse patches
 
 `cmd/web-chat/web/src/ws/timelineEvents.ts:86` maps typed UI events to timeline mutations. The important helpers are:
 
@@ -288,6 +353,12 @@ The Redux reducer then shallow-merges entity props in `timelineSlice.upsertEntit
 2. The reducer must merge sparse data without deleting prior props.
 
 ## Gap analysis
+
+### Gap 0: provider-specific normalization is not covered as a first-class protocol layer
+
+The first draft of this guide started with canonical Geppetto events. That misses the hardest layer. Provider adapters translate OpenAI Responses, OpenAI-compatible Chat Completions, Claude, and Gemini streams into canonical Geppetto events. Many previous defects originated there: duplicate final text, provider terminal events treated as transcript events, missing observability hooks, unstable correlation, and streamed tool-call arguments that exposed only the latest fragment instead of accumulated input.
+
+Pinocchio runtime tests cannot detect all of these defects because they consume already-normalized Geppetto events. If the provider adapter emits the wrong canonical event, downstream layers may process it correctly and still produce the wrong user-visible behavior. The conformance strategy therefore needs provider-native fixture tests before the Pinocchio matrix.
 
 ### Gap 1: lifecycle invariants are implicit
 
@@ -316,6 +387,18 @@ The browser/debug SQLite traces contain realistic event streams that table tests
 ## Protocol invariants
 
 The following invariants are the contract. Tests should name these invariants explicitly in helper assertions and failure messages.
+
+### I0. Provider-native normalization boundary
+
+For each provider adapter:
+
+- Provider envelope events map only to provider-call lifecycle events.
+- Provider terminal events do not manufacture text, reasoning, or tool transcript events.
+- Provider text deltas map to text segment lifecycle events and only finish a text segment that exists.
+- Provider reasoning deltas map to reasoning segment lifecycle events, not assistant text.
+- Provider tool-call argument fragments map to tool lifecycle events with `Delta` as the current fragment and `Arguments` as accumulated input.
+- Provider-specific correlation builders are used consistently, and every emitted canonical event carries typed `events.Correlation`.
+- Late provider IDs, output indexes, content block indexes, choice indexes, and tool call IDs remain stable enough to join provider rows to Geppetto events and downstream frontend entities.
 
 ### I1. Run lifecycle terminality
 
@@ -386,18 +469,29 @@ For persistence:
 
 ### Overview
 
-Add a conformance test layer in four pieces:
+Add a conformance test layer in five pieces:
 
-1. **Go runtime protocol matrix** in `pkg/chatapp`.
-2. **Go plugin projection matrix** in `pkg/chatapp/plugins`.
-3. **TypeScript frontend patch/reducer matrix** in `cmd/web-chat/web/src/ws` and optionally `src/store`.
-4. **Trace replay harness** that can ingest saved UI frames after the deterministic matrix exists.
+1. **Geppetto provider-normalization matrix** in provider adapter packages.
+2. **Go runtime protocol matrix** in `pkg/chatapp`.
+3. **Go plugin projection matrix** in `pkg/chatapp/plugins`.
+4. **TypeScript frontend patch/reducer matrix** in `cmd/web-chat/web/src/ws` and optionally `src/store`.
+5. **Trace replay harness** that can ingest saved provider/debug/UI frames after the deterministic matrix exists.
 
 The first version should not change production code unless tests expose a true bug. The goal is to encode the contract before adding more edge-case patches.
 
 ### Recommended file layout
 
 ```text
+geppetto/
+  pkg/steps/ai/openai_responses/
+    provider_protocol_conformance_test.go    # provider-native Responses stream fixtures
+  pkg/steps/ai/openai/
+    provider_protocol_conformance_test.go    # Chat Completions stream fixtures
+  pkg/steps/ai/claude/
+    provider_protocol_conformance_test.go    # Claude message/content-block fixtures
+  pkg/steps/ai/gemini/
+    provider_protocol_conformance_test.go    # Gemini candidate/function-call fixtures
+
 pinocchio/
   pkg/chatapp/
     chat_protocol_conformance_test.go        # runtime + sessionstream snapshot matrix
@@ -417,6 +511,80 @@ pinocchio/
 ```
 
 Keep the first implementation in test files only. If the assertion helpers become useful outside tests, then promote them later.
+
+## Geppetto provider-normalization conformance design
+
+Provider normalization deserves its own test layer because it is the first place where protocol semantics can be lost. The tests should feed provider-native stream fixtures into the provider adapter and assert the canonical Geppetto events produced by that adapter. These tests should run before any Pinocchio runtime projection test.
+
+### Provider fixture API sketch
+
+Use a small test fixture shape per provider. The provider-native event type differs across packages, so the generic idea matters more than a shared concrete type.
+
+```go
+type ProviderFixture[NativeEvent any] struct {
+    Name   string
+    Events []NativeEvent
+    Want   []CanonicalExpectation
+}
+
+type CanonicalExpectation struct {
+    Type             events.EventType
+    SegmentType      string
+    StreamKind       string
+    Provider         string
+    ResponseID       string
+    ItemID           string
+    ContentBlockIndex *int32
+    ChoiceIndex      *int32
+    ToolCallID       string
+    Delta            string
+    Text             string
+    Arguments        string
+    StopReason       string
+}
+```
+
+The expectation should focus on canonical semantics, not every provider field. A test should fail when the adapter emits a provider-call terminal as a text terminal, drops a correlation key, loses a zero index, or reports a tool argument fragment as the full accumulated input.
+
+### Provider fixture matrix
+
+| Provider | Fixture | Expected canonical behavior |
+|---|---|---|
+| OpenAI Responses | response created, text output item start, text delta, text done, response completed | provider start, text start/delta/finish, provider finish; response completion does not create extra text. |
+| OpenAI Responses | reasoning summary start/delta/done, response completed | reasoning start/delta/finish; no assistant text entity. |
+| OpenAI Responses | function call item, argument deltas, argument done, response completed | tool started, argument deltas with accumulated arguments, tool requested, provider finish with `has_tool_calls=true`. |
+| Chat Completions | content delta chunks, final finish reason | text start/delta/finish and provider finish; usage-only chunks do not create text. |
+| Chat Completions | streamed tool call args `{"q"` then `:"gold"}` | first tool args event has `Delta={"q"`, `Arguments={"q"`; second has current fragment as `Delta` and accumulated JSON as `Arguments`. |
+| Chat Completions | reasoning delta from compatible provider | reasoning segment events, not text segment events. |
+| Claude | message start, text content block start/delta/stop, message stop | provider start, text start/delta/finish, provider finish. |
+| Claude | tool-use content block start, input_json deltas, content block stop, message stop with `tool_use` | tool started, accumulated argument deltas, tool requested, provider metadata/finish with tool-use stop reason. |
+| Claude | message stop with no text block | provider finish only; no manufactured text finish. |
+| Gemini | text part and finish reason | provider start, text start/delta/finish, provider finish. |
+| Gemini | function call part and finish reason | tool started/requested, provider finish with tool calls; no fake text segment. |
+
+### Provider-level assertions
+
+Add shared assertion helpers in Geppetto tests where possible:
+
+```go
+func AssertCanonicalEventsCarryCorrelation(t *testing.T, got []events.Event)
+func AssertProviderTerminalDoesNotManufactureText(t *testing.T, got []events.Event)
+func AssertToolArgumentsAccumulate(t *testing.T, got []events.Event, toolID string, deltas []string)
+func AssertNoRoutingThroughMetadataExtra(t *testing.T, got []events.Event)
+func AssertSegmentFinishRequiresSegmentStart(t *testing.T, got []events.Event, segmentType string)
+```
+
+The most important helper is `AssertSegmentFinishRequiresSegmentStart`. It should scan canonical events by `Correlation.SegmentID` or `Correlation.CorrelationKey` and fail if a text or reasoning finish appears for a segment that had no start or delta. Provider final events should close provider calls, not invent transcript lifecycle.
+
+### Provider validation commands
+
+```bash
+cd /home/manuel/workspaces/2026-05-02/use-sessionstream-coinvault/geppetto
+go test ./pkg/steps/ai/openai_responses ./pkg/steps/ai/openai ./pkg/steps/ai/claude ./pkg/steps/ai/gemini -run 'ProviderProtocol|Canonical|ToolArguments' -count=1
+go test ./pkg/steps/ai/openai_responses ./pkg/steps/ai/openai ./pkg/steps/ai/claude ./pkg/steps/ai/gemini -count=1
+```
+
+These tests should be committed in Geppetto, while Pinocchio runtime/frontend tests live in Pinocchio. The ticket can track both because the protocol spans both repositories.
 
 ## Go runtime conformance design
 
@@ -795,7 +963,32 @@ Exit criteria:
 - `docmgr doctor --root pinocchio/ttmp --ticket PINO-PROTOCOL-CONFORMANCE --stale-after 30` passes.
 - reMarkable upload succeeds.
 
-### Phase 1: Add Go runtime matrix
+### Phase 1: Add Geppetto provider-normalization matrices
+
+Files:
+
+- `geppetto/pkg/steps/ai/openai_responses/provider_protocol_conformance_test.go`
+- `geppetto/pkg/steps/ai/openai/provider_protocol_conformance_test.go`
+- `geppetto/pkg/steps/ai/claude/provider_protocol_conformance_test.go`
+- `geppetto/pkg/steps/ai/gemini/provider_protocol_conformance_test.go`
+
+Steps:
+
+1. Add provider-native stream fixtures for text, reasoning, tool, and terminal-only cases.
+2. Assert canonical Geppetto event sequences and typed correlation fields.
+3. Assert provider terminal events do not manufacture text segments.
+4. Assert tool-call argument deltas expose current `Delta` and accumulated `Arguments`.
+5. Assert provider-specific correlation builders preserve response/item/choice/content-block/tool identities.
+
+Validation:
+
+```bash
+cd geppetto
+go test ./pkg/steps/ai/openai_responses ./pkg/steps/ai/openai ./pkg/steps/ai/claude ./pkg/steps/ai/gemini -run 'ProviderProtocol|Canonical|ToolArguments' -count=1
+go test ./pkg/steps/ai/openai_responses ./pkg/steps/ai/openai ./pkg/steps/ai/claude ./pkg/steps/ai/gemini -count=1
+```
+
+### Phase 2: Add Go runtime matrix
 
 Files:
 
@@ -818,7 +1011,7 @@ go test ./pkg/chatapp -run 'TestChatProtocolConformance|TestRuntime' -count=1
 go test ./pkg/chatapp -count=1
 ```
 
-### Phase 2: Add plugin projection matrices
+### Phase 3: Add plugin projection matrices
 
 Files:
 
@@ -839,7 +1032,7 @@ cd pinocchio
 go test ./pkg/chatapp/plugins -count=1
 ```
 
-### Phase 3: Add frontend reducer-backed matrix
+### Phase 4: Add frontend reducer-backed matrix
 
 Files:
 
@@ -863,7 +1056,7 @@ npm run typecheck
 npm run lint
 ```
 
-### Phase 4: Add persistence matrix
+### Phase 5: Add persistence matrix
 
 Files:
 
@@ -883,7 +1076,7 @@ cd pinocchio
 go test ./pkg/ui -count=1
 ```
 
-### Phase 5: Add trace replay fixtures
+### Phase 6: Add trace replay fixtures
 
 Files:
 
@@ -905,7 +1098,7 @@ cd pinocchio/cmd/web-chat/web
 npx vitest run src/ws/traceReplay.test.ts
 ```
 
-### Phase 6: Add fuzz/property tests only after deterministic coverage
+### Phase 7: Add fuzz/property tests only after deterministic coverage
 
 Potential targets:
 
@@ -918,9 +1111,10 @@ Do not start here. Fuzzing without named invariants tends to produce hard-to-deb
 
 Before opening a PR, answer these questions in the PR description:
 
-1. Which invariants (`I1`-`I7`) does this PR add or change?
-2. Which lifecycle matrix rows are covered?
-3. Does any test rely on `metadata.Extra` for routing or joining? It should not.
+1. Which invariants (`I0`-`I7`) does this PR add or change?
+2. Which provider-normalization and lifecycle matrix rows are covered?
+3. If provider adapter code changed, which provider-native fixtures prove the normalized Geppetto events are correct?
+4. Does any test rely on `metadata.Extra` for routing or joining? It should not.
 4. Do sparse terminal events omit absent fields instead of sending empty strings that clear state?
 5. Are optional zero indexes preserved in Go protobuf payloads and TypeScript props?
 6. Does a terminal run leave any entity `streaming=true` or `executing=true`?
@@ -932,8 +1126,10 @@ Before opening a PR, answer these questions in the PR description:
 Use this command set for the first conformance PR:
 
 ```bash
-cd /home/manuel/workspaces/2026-05-02/use-sessionstream-coinvault/pinocchio
+cd /home/manuel/workspaces/2026-05-02/use-sessionstream-coinvault/geppetto
+go test ./pkg/steps/ai/openai_responses ./pkg/steps/ai/openai ./pkg/steps/ai/claude ./pkg/steps/ai/gemini -count=1
 
+cd /home/manuel/workspaces/2026-05-02/use-sessionstream-coinvault/pinocchio
 go test ./pkg/chatapp ./pkg/chatapp/plugins ./pkg/ui -count=1
 make gosec
 
@@ -994,6 +1190,7 @@ Rejected for now. Fuzzing is valuable only after invariants and deterministic ex
 
 ## Quick implementation checklist
 
+- [ ] Add provider-normalization protocol matrix.
 - [ ] Add runtime protocol matrix.
 - [ ] Add tool plugin sparse merge matrix.
 - [ ] Add reasoning plugin stable identity matrix.
@@ -1008,6 +1205,13 @@ Rejected for now. Fuzzing is valuable only after invariants and deterministic ex
 - `geppetto/pkg/events/correlation.go`
 - `geppetto/pkg/events/canonical_events.go`
 - `geppetto/pkg/events/canonical_tool_events.go`
+- `geppetto/pkg/events/correlation_builders.go`
+- `geppetto/pkg/steps/ai/openai_responses/streaming.go`
+- `geppetto/pkg/steps/ai/openai_responses/nonstreaming.go`
+- `geppetto/pkg/steps/ai/openai/engine_openai.go`
+- `geppetto/pkg/steps/ai/openai/chat_stream.go`
+- `geppetto/pkg/steps/ai/claude/content-block-merger.go`
+- `geppetto/pkg/steps/ai/gemini/engine_gemini.go`
 - `pinocchio/proto/pinocchio/chatapp/v1/chat.proto`
 - `pinocchio/pkg/chatapp/runtime_inference.go`
 - `pinocchio/pkg/chatapp/runtime_sink.go`

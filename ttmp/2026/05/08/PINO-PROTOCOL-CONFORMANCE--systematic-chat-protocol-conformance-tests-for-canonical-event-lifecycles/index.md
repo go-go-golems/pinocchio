@@ -21,10 +21,10 @@ RelatedFiles:
     - Path: pinocchio/pkg/ui/timeline_persist.go
       Note: Timeline persistence lifecycle behavior covered by the conformance plan.
 ExternalSources: []
-Summary: Ticket for designing and implementing systematic protocol conformance tests for Pinocchio canonical chat event lifecycles.
-LastUpdated: 2026-05-08T15:45:00-04:00
-WhatFor: Use this ticket to coordinate lifecycle invariant tests that prevent reactive edge-case fixes in Pinocchio chat runtime and web-chat frontend.
-WhenToUse: Use before modifying chat runtime event handling, projections, persistence, or frontend sparse patch behavior.
+Summary: Ticket for designing and implementing systematic provider-to-browser protocol conformance tests for canonical chat event lifecycles.
+LastUpdated: 2026-05-08T18:05:00-04:00
+WhatFor: Use this ticket to coordinate lifecycle invariant tests that prevent reactive edge-case fixes in Geppetto provider adapters, Pinocchio chat runtime, and web-chat frontend.
+WhenToUse: Use before modifying provider adapters, chat runtime event handling, projections, persistence, or frontend sparse patch behavior.
 ---
 
 
@@ -32,23 +32,26 @@ WhenToUse: Use before modifying chat runtime event handling, projections, persis
 
 ## Overview
 
-This ticket defines a systematic conformance-testing strategy for Pinocchio's canonical chat protocol. It follows the recent Geppetto/Pinocchio event vocabulary cutover and turns review-discovered edge cases into explicit lifecycle invariants and deterministic test matrices.
+This ticket defines a systematic conformance-testing strategy for the provider-to-browser canonical chat protocol. It follows the recent Geppetto/Pinocchio event vocabulary cutover and turns review-discovered edge cases into explicit lifecycle invariants and deterministic test matrices.
 
 The core problem is that the chat protocol crosses several boundaries:
 
-1. Geppetto canonical events.
-2. Pinocchio runtime event sink.
-3. Pinocchio protobuf backend events.
-4. sessionstream UI/timeline projections.
-5. timeline persistence.
-6. web-chat UI event mapping.
-7. Redux sparse patch merging.
+1. Provider-native stream events from OpenAI Responses, OpenAI-compatible Chat Completions, Claude, and Gemini.
+2. Geppetto provider adapter normalization into canonical events.
+3. Pinocchio runtime event sink.
+4. Pinocchio protobuf backend events.
+5. sessionstream UI/timeline projections.
+6. timeline persistence.
+7. web-chat UI event mapping.
+8. Redux sparse patch merging.
 
-The primary design doc explains how to test these stages as one protocol rather than as isolated bug fixes.
+The primary design docs explain how to test these stages as one protocol rather than as isolated bug fixes.
 
 ## Key Links
 
 - [Design guide](./design-doc/01-chat-protocol-conformance-analysis-and-implementation-guide.md)
+- [Static analysis guide](./design-doc/02-static-analysis-for-protocol-conformance.md)
+- [Finite-state model guide](./design-doc/03-finite-state-model-for-protocol-conformance.md)
 - [Investigation diary](./reference/01-investigation-diary.md)
 - [Tasks](./tasks.md)
 - [Changelog](./changelog.md)

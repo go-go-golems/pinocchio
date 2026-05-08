@@ -408,3 +408,167 @@ Upload result:
 ```text
 OK: uploaded PINO_PROTOCOL_CONFORMANCE_chat_protocol_guide.pdf -> /ai/2026/05/08/PINO-PROTOCOL-CONFORMANCE
 ```
+
+## Step 5: Expand all guides to cover provider-native normalization
+
+I updated the protocol conformance documentation after the user pointed out that the first pass still started too high in the stack. The lowest layer is the provider-specific normalization layer inside Geppetto, and it is arguably the most complex layer because each provider exposes a different streaming vocabulary before Geppetto emits canonical events.
+
+### Prompt Context
+
+**User prompt (verbatim):** "are these documents even addressing the lowest level of transforming provider specific events into the geppetto events? We had quite a bit of issues with those too."
+
+**Follow-up user prompt (verbatim):** "in the 01-... document too! all 3"
+
+**Follow-up user prompt (verbatim):** "don't overwrite after ruploading btw. Update all 3 documents as needed to cover the lowest layer too, in fact I think it's the most complex layer, isn't it?"
+
+**Assistant interpretation:** Expand the original design guide, the static analysis guide, and the finite-state model guide so they all treat provider-native-to-Geppetto normalization as Phase 1 and as a first-class conformance target.
+
+**Inferred user intent:** Ensure the testing strategy catches bugs at the earliest provider adapter boundary, not only after events have already become canonical Geppetto events.
+
+**Commit (code):** N/A — documentation update only.
+
+### What I did
+
+- Updated `design-doc/01-chat-protocol-conformance-analysis-and-implementation-guide.md` to add:
+  - provider-native stream events before Geppetto canonical events in the pipeline;
+  - source evidence for OpenAI Responses, Chat Completions, Claude, Gemini, and correlation builders;
+  - `I0. Provider-native normalization boundary`;
+  - a Geppetto provider-normalization conformance design section;
+  - provider fixture matrix and provider-level assertions;
+  - implementation Phase 1 for Geppetto provider-normalization matrices.
+- Updated `design-doc/02-static-analysis-for-protocol-conformance.md` to add:
+  - Layer 0 provider-specific event normalization;
+  - provider adapter route-table extraction;
+  - provider-specific graph colors and forbidden edges;
+  - static checks for OpenAI Responses, Chat Completions, Claude, and Gemini;
+  - provider adapter route table as the first Go analyzer target.
+- Updated `design-doc/03-finite-state-model-for-protocol-conformance.md` to add:
+  - provider-normalization model before downstream Pinocchio lifecycles;
+  - provider-native model events;
+  - provider-normalization invariants `PN1` through `PN7`;
+  - provider-normalization production execution examples;
+  - Phase 1 deterministic provider-normalization model.
+- Updated `README.md`, `index.md`, `tasks.md`, and `changelog.md` to reflect all three guides and provider-normalization scope.
+
+### Why
+
+The provider adapter layer is where external provider semantics enter the system. If an adapter emits the wrong canonical Geppetto event, Pinocchio can process that event correctly and still produce wrong behavior. The documentation therefore needs to make provider-native normalization the first conformance layer, not an implied upstream concern.
+
+### What worked
+
+- The three design documents now consistently describe the protocol as provider-to-browser instead of only Geppetto-to-browser.
+- Phase 1 is now provider-normalization testing in Geppetto provider packages.
+- The static-analysis and finite-state-model guides both explain what can and cannot be proven at the provider adapter layer.
+
+### What didn't work
+
+- The first version of the documentation under-scoped the problem by starting at canonical Geppetto events. That was corrected in this step.
+
+### What I learned
+
+- The provider adapter layer is the right place to catch several past defect classes:
+  - provider terminal events treated as text terminal events;
+  - duplicate or manufactured text finals;
+  - streamed tool arguments not accumulating;
+  - provider IDs/indexes not preserved in typed correlation;
+  - reasoning deltas routed as assistant text.
+
+### What was tricky to build
+
+The tricky part is that the provider layer is both provider-specific and semantically shared. Each provider needs fixtures in its own native vocabulary, but the assertions should converge on shared canonical invariants: provider terminals are not transcript terminals, text finish requires text existence, reasoning stays separate, and tool arguments accumulate.
+
+### What warrants a second pair of eyes
+
+- Confirm that the proposed provider fixture matrix covers the highest-risk stream shapes for each provider.
+- Confirm whether the provider-normalization model should live in Geppetto test packages only or be shared as a small helper package.
+
+### What should be done in the future
+
+- Add provider-native fixtures for OpenAI Responses, Chat Completions, Claude, and Gemini before downstream Pinocchio matrix work.
+- Include provider fixtures in trace replay once the format is stable.
+
+### Code review instructions
+
+- Start with these sections:
+  - `01-chat-protocol-conformance-analysis-and-implementation-guide.md`: `I0. Provider-native normalization boundary` and `Geppetto provider-normalization conformance design`.
+  - `02-static-analysis-for-protocol-conformance.md`: `Layer 0: provider-specific event normalization` and `Go analyzer rule 3: provider adapter route table`.
+  - `03-finite-state-model-for-protocol-conformance.md`: `Provider-normalization model`.
+- Validate docs with:
+  - `docmgr doctor --root /home/manuel/workspaces/2026-05-02/use-sessionstream-coinvault/pinocchio/ttmp --ticket PINO-PROTOCOL-CONFORMANCE --stale-after 30`
+
+### Technical details
+
+Important provider adapter files referenced by the updated docs:
+
+```text
+geppetto/pkg/steps/ai/openai_responses/streaming.go
+geppetto/pkg/steps/ai/openai_responses/nonstreaming.go
+geppetto/pkg/steps/ai/openai/engine_openai.go
+geppetto/pkg/steps/ai/openai/chat_stream.go
+geppetto/pkg/steps/ai/claude/content-block-merger.go
+geppetto/pkg/steps/ai/gemini/engine_gemini.go
+geppetto/pkg/events/correlation_builders.go
+```
+
+## Step 6: Upload the provider-normalization guide bundle without overwriting
+
+I uploaded a new bundle after expanding all three guides. I used a different bundle name so the earlier reMarkable PDF remains untouched.
+
+### Prompt Context
+
+**User prompt (verbatim):** (same as Step 5 follow-up)
+
+**Assistant interpretation:** Publish the updated three-guide bundle, but do not overwrite the existing uploaded document.
+
+**Inferred user intent:** Preserve prior uploaded artifacts while making the expanded provider-layer documentation available on reMarkable.
+
+**Commit (code):** N/A — documentation/upload update only.
+
+### What I did
+
+- Ran a dry-run upload without `--layout` and without `--force`.
+- Uploaded a new bundle named `PINO PROTOCOL CONFORMANCE provider normalization guides`.
+- Included:
+  - `01-chat-protocol-conformance-analysis-and-implementation-guide.md`
+  - `02-static-analysis-for-protocol-conformance.md`
+  - `03-finite-state-model-for-protocol-conformance.md`
+  - diary, tasks, and changelog.
+
+### Why
+
+The user explicitly asked not to overwrite after reuploading. A new document name avoids replacing the previous PDF.
+
+### What worked
+
+- Dry-run reported `layout=default`.
+- Upload succeeded:
+  - `OK: uploaded PINO_PROTOCOL_CONFORMANCE_provider_normalization_guides.pdf -> /ai/2026/05/08/PINO-PROTOCOL-CONFORMANCE`
+
+### What didn't work
+
+N/A.
+
+### What I learned
+
+Use a distinct bundle name when a user wants a new reMarkable upload without overwriting an existing PDF.
+
+### What was tricky to build
+
+The only important detail was avoiding both `--force` and accidental reuse of the previous bundle name.
+
+### What warrants a second pair of eyes
+
+- Confirm whether future uploads should use incrementing suffixes or descriptive names like this one.
+
+### What should be done in the future
+
+- Keep using default layout and non-overwriting names unless explicitly instructed otherwise.
+
+### Code review instructions
+
+- Confirm the new upload path:
+  - `/ai/2026/05/08/PINO-PROTOCOL-CONFORMANCE/PINO_PROTOCOL_CONFORMANCE_provider_normalization_guides.pdf`
+
+### Technical details
+
+Upload command intentionally omitted `--force` and `--layout`.
