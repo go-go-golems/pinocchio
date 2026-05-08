@@ -42,8 +42,10 @@ func (e runtimeBackedTestEngine) RunInference(ctx context.Context, t *turns.Turn
 		completion = "runtime-backed response"
 	}
 	meta := gepevents.EventMetadata{}
-	gepevents.PublishEventToContext(ctx, gepevents.NewStartEvent(meta))
-	gepevents.PublishEventToContext(ctx, gepevents.NewPartialCompletionEvent(meta, completion, completion))
+	corr := gepevents.Correlation{SegmentID: "segment-1", SegmentIndex: 1, SegmentType: "text", StreamKind: "content", CorrelationKey: "text:1"}
+	gepevents.PublishEventToContext(ctx, gepevents.NewTextSegmentStartedEvent(meta, corr, "assistant"))
+	gepevents.PublishEventToContext(ctx, gepevents.NewTextDeltaEvent(meta, corr, completion, completion, 1))
+	gepevents.PublishEventToContext(ctx, gepevents.NewTextSegmentFinishedEvent(meta, corr, completion, "stop"))
 	return t, nil
 }
 

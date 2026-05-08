@@ -16,10 +16,6 @@ const (
 	CommandStopInference  = "ChatStopInference"
 
 	EventUserMessageAccepted = "ChatUserMessageAccepted"
-	EventInferenceStarted    = "ChatInferenceStarted"
-	EventTokensDelta         = "ChatTokensDelta"
-	EventInferenceFinished   = "ChatInferenceFinished"
-	EventInferenceStopped    = "ChatInferenceStopped"
 
 	EventChatRunStarted                  = "ChatRunStarted"
 	EventChatRunFinished                 = "ChatRunFinished"
@@ -110,10 +106,6 @@ func RegisterSchemas(reg *sessionstream.SchemaRegistry, features ...ChatPlugin) 
 		reg.RegisterCommand(CommandStartInference, &chatappv1.StartInferenceCommand{}),
 		reg.RegisterCommand(CommandStopInference, &chatappv1.StopInferenceCommand{}),
 		reg.RegisterEvent(EventUserMessageAccepted, &chatappv1.ChatMessageUpdate{}),
-		reg.RegisterEvent(EventInferenceStarted, &chatappv1.ChatMessageUpdate{}),
-		reg.RegisterEvent(EventTokensDelta, &chatappv1.ChatMessageUpdate{}),
-		reg.RegisterEvent(EventInferenceFinished, &chatappv1.ChatMessageUpdate{}),
-		reg.RegisterEvent(EventInferenceStopped, &chatappv1.ChatMessageUpdate{}),
 		reg.RegisterEvent(EventChatRunStarted, &chatappv1.ChatRunStarted{}),
 		reg.RegisterEvent(EventChatRunFinished, &chatappv1.ChatRunFinished{}),
 		reg.RegisterEvent(EventChatRunStopped, &chatappv1.ChatRunStopped{}),

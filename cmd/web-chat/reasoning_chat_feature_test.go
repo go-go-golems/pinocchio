@@ -196,8 +196,10 @@ func (reasoningRuntimeTestEngine) RunInference(ctx context.Context, t *turns.Tur
 	gepevents.PublishEventToContext(ctx, gepevents.NewThinkingPartialEvent(meta, "draft", "draft plan"))
 	gepevents.PublishEventToContext(ctx, gepevents.NewInfoEvent(meta, "reasoning-summary", map[string]interface{}{"text": "high level plan"}))
 	gepevents.PublishEventToContext(ctx, gepevents.NewInfoEvent(meta, "thinking-ended", nil))
-	gepevents.PublishEventToContext(ctx, gepevents.NewPartialCompletionEvent(meta, "Answer: ready", "Answer: ready"))
-	gepevents.PublishEventToContext(ctx, gepevents.NewFinalEvent(meta, "Answer: ready"))
+	corr := gepevents.Correlation{SegmentID: "segment-1", SegmentIndex: 1, SegmentType: "text", StreamKind: "content", CorrelationKey: "text:1"}
+	gepevents.PublishEventToContext(ctx, gepevents.NewTextSegmentStartedEvent(meta, corr, "assistant"))
+	gepevents.PublishEventToContext(ctx, gepevents.NewTextDeltaEvent(meta, corr, "Answer: ready", "Answer: ready", 1))
+	gepevents.PublishEventToContext(ctx, gepevents.NewTextSegmentFinishedEvent(meta, corr, "Answer: ready", "stop"))
 	return t, nil
 }
 

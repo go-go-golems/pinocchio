@@ -57,7 +57,7 @@ func TestAgentModeChatFeatureProjectsUIAndTimeline(t *testing.T) {
 	commitClearPayload := commitEvents[1].Payload.(*chatappv1.AgentModePreviewCleared)
 	require.Equal(t, "chat-msg-3", commitClearPayload.GetMessageId())
 
-	finishedEvents, handled, err := feature.ProjectUI(context.Background(), sessionstream.Event{Name: chatapp.EventInferenceFinished, SessionId: "sid", Ordinal: 10, Payload: &chatappv1.ChatMessageUpdate{MessageId: "chat-msg-finished"}}, nil, nil)
+	finishedEvents, handled, err := feature.ProjectUI(context.Background(), sessionstream.Event{Name: chatapp.EventChatTextSegmentFinished, SessionId: "sid", Ordinal: 10, Payload: &chatappv1.ChatTextSegmentFinished{MessageId: "chat-msg-finished"}}, nil, nil)
 	require.NoError(t, err)
 	require.True(t, handled)
 	require.Len(t, finishedEvents, 1)
@@ -65,7 +65,7 @@ func TestAgentModeChatFeatureProjectsUIAndTimeline(t *testing.T) {
 	finishedClearPayload := finishedEvents[0].Payload.(*chatappv1.AgentModePreviewCleared)
 	require.Equal(t, "chat-msg-finished", finishedClearPayload.GetMessageId())
 
-	stoppedEvents, handled, err := feature.ProjectUI(context.Background(), sessionstream.Event{Name: chatapp.EventInferenceStopped, SessionId: "sid", Ordinal: 11, Payload: &chatappv1.ChatMessageUpdate{MessageId: "chat-msg-stopped"}}, nil, nil)
+	stoppedEvents, handled, err := feature.ProjectUI(context.Background(), sessionstream.Event{Name: chatapp.EventChatRunStopped, SessionId: "sid", Ordinal: 11, Payload: &chatappv1.ChatRunStopped{MessageId: "chat-msg-stopped"}}, nil, nil)
 	require.NoError(t, err)
 	require.True(t, handled)
 	require.Len(t, stoppedEvents, 1)

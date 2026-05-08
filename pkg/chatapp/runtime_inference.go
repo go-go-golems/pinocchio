@@ -8,7 +8,6 @@ import (
 	gepevents "github.com/go-go-golems/geppetto/pkg/events"
 	gepsession "github.com/go-go-golems/geppetto/pkg/inference/session"
 	"github.com/go-go-golems/geppetto/pkg/inference/toolloop/enginebuilder"
-	"github.com/go-go-golems/geppetto/pkg/turns"
 	"github.com/go-go-golems/geppetto/pkg/turns/serde"
 	chatappv1 "github.com/go-go-golems/pinocchio/pkg/chatapp/pb/proto/pinocchio/chatapp/v1"
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
@@ -66,8 +65,7 @@ func (e *Engine) runRuntimeInference(ctx context.Context, sid sessionstream.Sess
 		e.runDemoInference(ctx, sid, messageID, prompt, pub)
 		return
 	}
-	started := newChatMessageUpdate(messageID, "assistant", "", "", prompt, "streaming", true, "")
-	if err := e.publish(ctx, sid, pub, EventInferenceStarted, started); err != nil {
+	if err := e.publish(ctx, sid, pub, EventChatRunStarted, &chatappv1.ChatRunStarted{MessageId: messageID, Prompt: prompt, Correlation: runCorrelationInfo(sid, messageID)}); err != nil {
 		return
 	}
 
@@ -76,14 +74,14 @@ func (e *Engine) runRuntimeInference(ctx context.Context, sid sessionstream.Sess
 	if runtime.WrapSink != nil {
 		wrapped, err := runtime.WrapSink(baseSink)
 		if err != nil {
-			_ = e.publish(publishContext(ctx), sid, pub, EventInferenceStopped, newChatMessageUpdate(messageID, "assistant", "", "", prompt, "stopped", false, err.Error()))
+			e.publishRunFailed(publishContext(ctx), sid, pub, messageID, err.Error())
 			return
 		}
 		eventSink = wrapped
 	}
 	sink, ok := baseSink.(*runtimeEventSink)
 	if !ok {
-		_ = e.publish(publishContext(ctx), sid, pub, EventInferenceStopped, newChatMessageUpdate(messageID, "assistant", "", "", prompt, "stopped", false, "internal runtime sink type assertion failed"))
+		e.publishRunFailed(publishContext(ctx), sid, pub, messageID, "internal runtime sink type assertion failed")
 		return
 	}
 	sess := gepsession.NewSessionWithID(string(sid))
@@ -98,17 +96,17 @@ func (e *Engine) runRuntimeInference(ctx context.Context, sid sessionstream.Sess
 	if e.turnStore != nil {
 		snapshot, err := e.turnStore.LoadLatestTurn(ctx, string(sid), "final")
 		if err != nil {
-			_ = e.publish(publishContext(ctx), sid, pub, EventInferenceStopped, sink.stoppedMessageUpdate(messageID, fmt.Sprintf("load conversation history: %v", err)))
+			e.publishRunFailed(publishContext(ctx), sid, pub, messageID, fmt.Sprintf("load conversation history: %v", err))
 			return
 		}
 		if snapshot != nil {
 			turn, err := serde.FromYAML([]byte(snapshot.Payload))
 			if err != nil {
-				_ = e.publish(publishContext(ctx), sid, pub, EventInferenceStopped, sink.stoppedMessageUpdate(messageID, fmt.Sprintf("decode conversation history: %v", err)))
+				e.publishRunFailed(publishContext(ctx), sid, pub, messageID, fmt.Sprintf("decode conversation history: %v", err))
 				return
 			}
 			if turn == nil {
-				_ = e.publish(publishContext(ctx), sid, pub, EventInferenceStopped, sink.stoppedMessageUpdate(messageID, "decode conversation history: empty turn"))
+				e.publishRunFailed(publishContext(ctx), sid, pub, messageID, "decode conversation history: empty turn")
 				return
 			}
 			sess.Append(turn)
@@ -117,38 +115,29 @@ func (e *Engine) runRuntimeInference(ctx context.Context, sid sessionstream.Sess
 
 	_, err := sess.AppendNewTurnFromUserPrompt(prompt)
 	if err != nil {
-		_ = e.publish(publishContext(ctx), sid, pub, EventInferenceStopped, sink.stoppedMessageUpdate(messageID, err.Error()))
+		e.publishRunFailed(publishContext(ctx), sid, pub, messageID, err.Error())
 		return
 	}
 	handle, err := sess.StartInference(ctx)
 	if err != nil {
-		_ = e.publish(publishContext(ctx), sid, pub, EventInferenceStopped, sink.stoppedMessageUpdate(messageID, err.Error()))
+		e.publishRunFailed(publishContext(ctx), sid, pub, messageID, err.Error())
 		return
 	}
 	output, err := handle.Wait()
 	if err != nil {
 		if !sink.IsTerminal() {
 			if isMaxIterationsError(err) {
-				_ = e.publish(publishContext(ctx), sid, pub, EventInferenceFinished, newChatMessageUpdate(runtimeWarningMessageID(messageID), "warning", maxIterationsWarningText(err), maxIterationsWarningText(err), prompt, "finished", false, ""))
+				_ = e.publish(publishContext(ctx), sid, pub, EventChatTextSegmentFinished, &chatappv1.ChatTextSegmentFinished{MessageId: runtimeWarningMessageID(messageID), Role: "warning", Prompt: prompt, Text: maxIterationsWarningText(err), Content: maxIterationsWarningText(err), Status: "finished", Streaming: false, Final: true})
 			}
-			_ = e.publish(publishContext(ctx), sid, pub, EventInferenceStopped, sink.stoppedMessageUpdate(messageID, err.Error()))
+			e.publishRunFailed(publishContext(ctx), sid, pub, messageID, err.Error())
 		}
 		return
 	}
 	if sink.IsTerminal() {
 		return
 	}
-	finalText := sink.LastText()
-	if finalText == "" {
-		finalText = assistantTextFromTurn(output)
-	}
-	textMessageID, segment := sink.ensureTextSegmentID()
-	finished := newChatMessageUpdate(textMessageID, "assistant", finalText, finalText, prompt, "finished", false, "")
-	finished.ParentMessageId = messageID
-	finished.Segment = segment
-	finished.SegmentType = "text"
-	finished.Final = true
-	_ = e.publish(publishContext(ctx), sid, pub, EventInferenceFinished, finished)
+	_ = output
+	_ = e.publish(publishContext(ctx), sid, pub, EventChatRunFinished, &chatappv1.ChatRunFinished{MessageId: messageID, Status: "finished", Correlation: runCorrelationInfo(sid, messageID)})
 }
 
 func publishContext(ctx context.Context) context.Context {
@@ -156,6 +145,14 @@ func publishContext(ctx context.Context) context.Context {
 		return context.Background()
 	}
 	return context.WithoutCancel(ctx)
+}
+
+func runCorrelationInfo(sid sessionstream.SessionId, messageID string) *chatappv1.CorrelationInfo {
+	return &chatappv1.CorrelationInfo{SessionId: string(sid), RunId: messageID, CorrelationKey: messageID}
+}
+
+func (e *Engine) publishRunFailed(ctx context.Context, sid sessionstream.SessionId, pub sessionstream.EventPublisher, messageID, errText string) {
+	_ = e.publish(ctx, sid, pub, EventChatRunFailed, &chatappv1.ChatRunFailed{MessageId: messageID, Status: "failed", Error: errText, Correlation: runCorrelationInfo(sid, messageID)})
 }
 
 func (e *Engine) publish(ctx context.Context, sid sessionstream.SessionId, pub sessionstream.EventPublisher, name string, payload proto.Message) error {
@@ -166,22 +163,4 @@ func (e *Engine) publish(ctx context.Context, sid sessionstream.SessionId, pub s
 		e.hooks.OnBackendEvent(string(sid), name, protoMessageAsMap(payload))
 	}
 	return pub.Publish(ctx, sessionstream.Event{Name: name, SessionId: sid, Payload: payload})
-}
-
-func assistantTextFromTurn(turn *turns.Turn) string {
-	if turn == nil {
-		return ""
-	}
-	parts := make([]string, 0, len(turn.Blocks))
-	for _, block := range turn.Blocks {
-		if block.Role != turns.RoleAssistant {
-			continue
-		}
-		text, _ := block.Payload[turns.PayloadKeyText].(string)
-		if strings.TrimSpace(text) == "" {
-			continue
-		}
-		parts = append(parts, text)
-	}
-	return strings.Join(parts, "")
 }

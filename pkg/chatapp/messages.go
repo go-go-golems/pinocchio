@@ -23,20 +23,6 @@ func newChatMessageUpdate(messageID, role, content, text, prompt, status string,
 	}
 }
 
-func newChatMessageDelta(messageID, chunk, content, prompt, status string, streaming bool, errText string) *chatappv1.ChatMessageUpdate {
-	return &chatappv1.ChatMessageUpdate{
-		MessageId: messageID,
-		Role:      "assistant",
-		Prompt:    prompt,
-		Chunk:     chunk,
-		Text:      content,
-		Content:   content,
-		Status:    status,
-		Streaming: streaming,
-		Error:     errText,
-	}
-}
-
 func runtimeWarningMessageID(messageID string) string {
 	messageID = strings.TrimSpace(messageID)
 	if messageID == "" {
