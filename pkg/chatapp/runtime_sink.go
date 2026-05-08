@@ -3,6 +3,7 @@ package chatapp
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -39,6 +40,7 @@ func (s *runtimeEventSink) PublishEvent(event gepevents.Event) error {
 		payload.ParentMessageId = s.messageID
 		payload.Segment = segment
 		payload.SegmentType = "text"
+		applyChatMessageProviderInfo(payload, ev.Metadata())
 		return s.engine.publish(s.publishContext(), s.sessionID, s.pub, EventTokensDelta, payload)
 	case *gepevents.EventFinal:
 		textMessageID, segment := s.ensureTextSegmentID()
@@ -154,6 +156,54 @@ func textSegmentMessageID(messageID string, segment int32) string {
 		return ""
 	}
 	return fmt.Sprintf("%s:text:%d", messageID, segment)
+}
+
+func applyChatMessageProviderInfo(update *chatappv1.ChatMessageUpdate, metadata gepevents.EventMetadata) {
+	if update == nil || metadata.Extra == nil {
+		return
+	}
+	if v, ok := metadata.Extra["provider"].(string); ok {
+		update.Provider = strings.TrimSpace(v)
+	}
+	if v, ok := metadata.Extra["response_id"].(string); ok {
+		update.ResponseId = strings.TrimSpace(v)
+	}
+	if v, ok := int32FromMetadata(metadata.Extra["choice_index"]); ok {
+		update.ChoiceIndex = &v
+	}
+	if v, ok := metadata.Extra["stream_kind"].(string); ok {
+		update.StreamKind = strings.TrimSpace(v)
+	}
+	if v, ok := metadata.Extra["correlation_key"].(string); ok {
+		update.CorrelationKey = strings.TrimSpace(v)
+	}
+}
+
+func int32FromMetadata(v any) (int32, bool) {
+	switch tv := v.(type) {
+	case int:
+		return int32(tv), int(tv) == int(int32(tv))
+	case int32:
+		return tv, true
+	case int64:
+		if tv < int64(-1<<31) || tv > int64(1<<31-1) {
+			return 0, false
+		}
+		return int32(tv), true
+	case float64:
+		if tv < float64(-1<<31) || tv > float64(1<<31-1) || tv != float64(int32(tv)) {
+			return 0, false
+		}
+		return int32(tv), true
+	case string:
+		parsed, err := strconv.ParseInt(strings.TrimSpace(tv), 10, 32)
+		if err != nil {
+			return 0, false
+		}
+		return int32(parsed), true
+	default:
+		return 0, false
+	}
 }
 
 func isTranscriptBoundaryEvent(event gepevents.Event) bool {

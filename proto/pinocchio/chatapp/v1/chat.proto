@@ -26,6 +26,11 @@ message ChatMessageUpdate {
   int32 segment = 11;
   string segment_type = 12;
   bool final = 13;
+  string provider = 14;
+  string response_id = 15;
+  optional int32 choice_index = 16;
+  string stream_kind = 17;
+  string correlation_key = 18;
 }
 
 message ChatMessageEntity {
@@ -60,6 +65,9 @@ message ReasoningUpdate {
   string item_id = 14;
   optional int32 output_index = 15;
   optional int32 summary_index = 16;
+  optional int32 choice_index = 17;
+  string stream_kind = 18;
+  string correlation_key = 19;
 }
 
 message AgentModePreviewUpdate {
@@ -99,6 +107,12 @@ message ToolCallUpdate {
   string input = 4;
   bool executing = 5;
   string status = 6;
+  string provider = 7;
+  string response_id = 8;
+  optional int32 choice_index = 9;
+  string stream_kind = 10;
+  string correlation_key = 11;
+  optional int32 tool_call_index = 12;
 }
 
 message ToolResultUpdate {
@@ -107,6 +121,12 @@ message ToolResultUpdate {
   string tool_name = 3;
   string result = 4;
   string status = 5;
+  string provider = 6;
+  string response_id = 7;
+  optional int32 choice_index = 8;
+  string stream_kind = 9;
+  string correlation_key = 10;
+  optional int32 tool_call_index = 11;
 }
 
 message ToolCallEntity {

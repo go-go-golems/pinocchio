@@ -132,6 +132,11 @@ type ChatMessageUpdate struct {
 	Segment         int32                  `protobuf:"varint,11,opt,name=segment,proto3" json:"segment,omitempty"`
 	SegmentType     string                 `protobuf:"bytes,12,opt,name=segment_type,json=segmentType,proto3" json:"segment_type,omitempty"`
 	Final           bool                   `protobuf:"varint,13,opt,name=final,proto3" json:"final,omitempty"`
+	Provider        string                 `protobuf:"bytes,14,opt,name=provider,proto3" json:"provider,omitempty"`
+	ResponseId      string                 `protobuf:"bytes,15,opt,name=response_id,json=responseId,proto3" json:"response_id,omitempty"`
+	ChoiceIndex     *int32                 `protobuf:"varint,16,opt,name=choice_index,json=choiceIndex,proto3,oneof" json:"choice_index,omitempty"`
+	StreamKind      string                 `protobuf:"bytes,17,opt,name=stream_kind,json=streamKind,proto3" json:"stream_kind,omitempty"`
+	CorrelationKey  string                 `protobuf:"bytes,18,opt,name=correlation_key,json=correlationKey,proto3" json:"correlation_key,omitempty"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -255,6 +260,41 @@ func (x *ChatMessageUpdate) GetFinal() bool {
 		return x.Final
 	}
 	return false
+}
+
+func (x *ChatMessageUpdate) GetProvider() string {
+	if x != nil {
+		return x.Provider
+	}
+	return ""
+}
+
+func (x *ChatMessageUpdate) GetResponseId() string {
+	if x != nil {
+		return x.ResponseId
+	}
+	return ""
+}
+
+func (x *ChatMessageUpdate) GetChoiceIndex() int32 {
+	if x != nil && x.ChoiceIndex != nil {
+		return *x.ChoiceIndex
+	}
+	return 0
+}
+
+func (x *ChatMessageUpdate) GetStreamKind() string {
+	if x != nil {
+		return x.StreamKind
+	}
+	return ""
+}
+
+func (x *ChatMessageUpdate) GetCorrelationKey() string {
+	if x != nil {
+		return x.CorrelationKey
+	}
+	return ""
 }
 
 type ChatMessageEntity struct {
@@ -407,6 +447,9 @@ type ReasoningUpdate struct {
 	ItemId          string                 `protobuf:"bytes,14,opt,name=item_id,json=itemId,proto3" json:"item_id,omitempty"`
 	OutputIndex     *int32                 `protobuf:"varint,15,opt,name=output_index,json=outputIndex,proto3,oneof" json:"output_index,omitempty"`
 	SummaryIndex    *int32                 `protobuf:"varint,16,opt,name=summary_index,json=summaryIndex,proto3,oneof" json:"summary_index,omitempty"`
+	ChoiceIndex     *int32                 `protobuf:"varint,17,opt,name=choice_index,json=choiceIndex,proto3,oneof" json:"choice_index,omitempty"`
+	StreamKind      string                 `protobuf:"bytes,18,opt,name=stream_kind,json=streamKind,proto3" json:"stream_kind,omitempty"`
+	CorrelationKey  string                 `protobuf:"bytes,19,opt,name=correlation_key,json=correlationKey,proto3" json:"correlation_key,omitempty"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -551,6 +594,27 @@ func (x *ReasoningUpdate) GetSummaryIndex() int32 {
 		return *x.SummaryIndex
 	}
 	return 0
+}
+
+func (x *ReasoningUpdate) GetChoiceIndex() int32 {
+	if x != nil && x.ChoiceIndex != nil {
+		return *x.ChoiceIndex
+	}
+	return 0
+}
+
+func (x *ReasoningUpdate) GetStreamKind() string {
+	if x != nil {
+		return x.StreamKind
+	}
+	return ""
+}
+
+func (x *ReasoningUpdate) GetCorrelationKey() string {
+	if x != nil {
+		return x.CorrelationKey
+	}
+	return ""
 }
 
 type AgentModePreviewUpdate struct {
@@ -842,15 +906,21 @@ func (x *AgentModeEntity) GetPreview() bool {
 }
 
 type ToolCallUpdate struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	MessageId     string                 `protobuf:"bytes,1,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
-	ToolCallId    string                 `protobuf:"bytes,2,opt,name=tool_call_id,json=toolCallId,proto3" json:"tool_call_id,omitempty"`
-	ToolName      string                 `protobuf:"bytes,3,opt,name=tool_name,json=toolName,proto3" json:"tool_name,omitempty"`
-	Input         string                 `protobuf:"bytes,4,opt,name=input,proto3" json:"input,omitempty"`
-	Executing     bool                   `protobuf:"varint,5,opt,name=executing,proto3" json:"executing,omitempty"`
-	Status        string                 `protobuf:"bytes,6,opt,name=status,proto3" json:"status,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	MessageId      string                 `protobuf:"bytes,1,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
+	ToolCallId     string                 `protobuf:"bytes,2,opt,name=tool_call_id,json=toolCallId,proto3" json:"tool_call_id,omitempty"`
+	ToolName       string                 `protobuf:"bytes,3,opt,name=tool_name,json=toolName,proto3" json:"tool_name,omitempty"`
+	Input          string                 `protobuf:"bytes,4,opt,name=input,proto3" json:"input,omitempty"`
+	Executing      bool                   `protobuf:"varint,5,opt,name=executing,proto3" json:"executing,omitempty"`
+	Status         string                 `protobuf:"bytes,6,opt,name=status,proto3" json:"status,omitempty"`
+	Provider       string                 `protobuf:"bytes,7,opt,name=provider,proto3" json:"provider,omitempty"`
+	ResponseId     string                 `protobuf:"bytes,8,opt,name=response_id,json=responseId,proto3" json:"response_id,omitempty"`
+	ChoiceIndex    *int32                 `protobuf:"varint,9,opt,name=choice_index,json=choiceIndex,proto3,oneof" json:"choice_index,omitempty"`
+	StreamKind     string                 `protobuf:"bytes,10,opt,name=stream_kind,json=streamKind,proto3" json:"stream_kind,omitempty"`
+	CorrelationKey string                 `protobuf:"bytes,11,opt,name=correlation_key,json=correlationKey,proto3" json:"correlation_key,omitempty"`
+	ToolCallIndex  *int32                 `protobuf:"varint,12,opt,name=tool_call_index,json=toolCallIndex,proto3,oneof" json:"tool_call_index,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *ToolCallUpdate) Reset() {
@@ -925,15 +995,63 @@ func (x *ToolCallUpdate) GetStatus() string {
 	return ""
 }
 
+func (x *ToolCallUpdate) GetProvider() string {
+	if x != nil {
+		return x.Provider
+	}
+	return ""
+}
+
+func (x *ToolCallUpdate) GetResponseId() string {
+	if x != nil {
+		return x.ResponseId
+	}
+	return ""
+}
+
+func (x *ToolCallUpdate) GetChoiceIndex() int32 {
+	if x != nil && x.ChoiceIndex != nil {
+		return *x.ChoiceIndex
+	}
+	return 0
+}
+
+func (x *ToolCallUpdate) GetStreamKind() string {
+	if x != nil {
+		return x.StreamKind
+	}
+	return ""
+}
+
+func (x *ToolCallUpdate) GetCorrelationKey() string {
+	if x != nil {
+		return x.CorrelationKey
+	}
+	return ""
+}
+
+func (x *ToolCallUpdate) GetToolCallIndex() int32 {
+	if x != nil && x.ToolCallIndex != nil {
+		return *x.ToolCallIndex
+	}
+	return 0
+}
+
 type ToolResultUpdate struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	MessageId     string                 `protobuf:"bytes,1,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
-	ToolCallId    string                 `protobuf:"bytes,2,opt,name=tool_call_id,json=toolCallId,proto3" json:"tool_call_id,omitempty"`
-	ToolName      string                 `protobuf:"bytes,3,opt,name=tool_name,json=toolName,proto3" json:"tool_name,omitempty"`
-	Result        string                 `protobuf:"bytes,4,opt,name=result,proto3" json:"result,omitempty"`
-	Status        string                 `protobuf:"bytes,5,opt,name=status,proto3" json:"status,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	MessageId      string                 `protobuf:"bytes,1,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
+	ToolCallId     string                 `protobuf:"bytes,2,opt,name=tool_call_id,json=toolCallId,proto3" json:"tool_call_id,omitempty"`
+	ToolName       string                 `protobuf:"bytes,3,opt,name=tool_name,json=toolName,proto3" json:"tool_name,omitempty"`
+	Result         string                 `protobuf:"bytes,4,opt,name=result,proto3" json:"result,omitempty"`
+	Status         string                 `protobuf:"bytes,5,opt,name=status,proto3" json:"status,omitempty"`
+	Provider       string                 `protobuf:"bytes,6,opt,name=provider,proto3" json:"provider,omitempty"`
+	ResponseId     string                 `protobuf:"bytes,7,opt,name=response_id,json=responseId,proto3" json:"response_id,omitempty"`
+	ChoiceIndex    *int32                 `protobuf:"varint,8,opt,name=choice_index,json=choiceIndex,proto3,oneof" json:"choice_index,omitempty"`
+	StreamKind     string                 `protobuf:"bytes,9,opt,name=stream_kind,json=streamKind,proto3" json:"stream_kind,omitempty"`
+	CorrelationKey string                 `protobuf:"bytes,10,opt,name=correlation_key,json=correlationKey,proto3" json:"correlation_key,omitempty"`
+	ToolCallIndex  *int32                 `protobuf:"varint,11,opt,name=tool_call_index,json=toolCallIndex,proto3,oneof" json:"tool_call_index,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *ToolResultUpdate) Reset() {
@@ -999,6 +1117,48 @@ func (x *ToolResultUpdate) GetStatus() string {
 		return x.Status
 	}
 	return ""
+}
+
+func (x *ToolResultUpdate) GetProvider() string {
+	if x != nil {
+		return x.Provider
+	}
+	return ""
+}
+
+func (x *ToolResultUpdate) GetResponseId() string {
+	if x != nil {
+		return x.ResponseId
+	}
+	return ""
+}
+
+func (x *ToolResultUpdate) GetChoiceIndex() int32 {
+	if x != nil && x.ChoiceIndex != nil {
+		return *x.ChoiceIndex
+	}
+	return 0
+}
+
+func (x *ToolResultUpdate) GetStreamKind() string {
+	if x != nil {
+		return x.StreamKind
+	}
+	return ""
+}
+
+func (x *ToolResultUpdate) GetCorrelationKey() string {
+	if x != nil {
+		return x.CorrelationKey
+	}
+	return ""
+}
+
+func (x *ToolResultUpdate) GetToolCallIndex() int32 {
+	if x != nil && x.ToolCallIndex != nil {
+		return *x.ToolCallIndex
+	}
+	return 0
 }
 
 type ToolCallEntity struct {
@@ -1171,7 +1331,7 @@ const file_proto_pinocchio_chatapp_v1_chat_proto_rawDesc = "" +
 	"\x0fidempotency_key\x18\x02 \x01(\tR\x0eidempotencyKey\x12\x1d\n" +
 	"\n" +
 	"request_id\x18\x03 \x01(\tR\trequestId\"\x16\n" +
-	"\x14StopInferenceCommand\"\xed\x02\n" +
+	"\x14StopInferenceCommand\"\xad\x04\n" +
 	"\x11ChatMessageUpdate\x12\x1d\n" +
 	"\n" +
 	"message_id\x18\x01 \x01(\tR\tmessageId\x12\x12\n" +
@@ -1187,7 +1347,15 @@ const file_proto_pinocchio_chatapp_v1_chat_proto_rawDesc = "" +
 	" \x01(\tR\x0fparentMessageId\x12\x18\n" +
 	"\asegment\x18\v \x01(\x05R\asegment\x12!\n" +
 	"\fsegment_type\x18\f \x01(\tR\vsegmentType\x12\x14\n" +
-	"\x05final\x18\r \x01(\bR\x05final\"\xd7\x02\n" +
+	"\x05final\x18\r \x01(\bR\x05final\x12\x1a\n" +
+	"\bprovider\x18\x0e \x01(\tR\bprovider\x12\x1f\n" +
+	"\vresponse_id\x18\x0f \x01(\tR\n" +
+	"responseId\x12&\n" +
+	"\fchoice_index\x18\x10 \x01(\x05H\x00R\vchoiceIndex\x88\x01\x01\x12\x1f\n" +
+	"\vstream_kind\x18\x11 \x01(\tR\n" +
+	"streamKind\x12'\n" +
+	"\x0fcorrelation_key\x18\x12 \x01(\tR\x0ecorrelationKeyB\x0f\n" +
+	"\r_choice_index\"\xd7\x02\n" +
 	"\x11ChatMessageEntity\x12\x1d\n" +
 	"\n" +
 	"message_id\x18\x01 \x01(\tR\tmessageId\x12\x12\n" +
@@ -1202,7 +1370,7 @@ const file_proto_pinocchio_chatapp_v1_chat_proto_rawDesc = "" +
 	"\asegment\x18\n" +
 	" \x01(\x05R\asegment\x12!\n" +
 	"\fsegment_type\x18\v \x01(\tR\vsegmentType\x12\x14\n" +
-	"\x05final\x18\f \x01(\bR\x05final\"\x8a\x04\n" +
+	"\x05final\x18\f \x01(\bR\x05final\"\x8d\x05\n" +
 	"\x0fReasoningUpdate\x12\x1d\n" +
 	"\n" +
 	"message_id\x18\x01 \x01(\tR\tmessageId\x12*\n" +
@@ -1222,9 +1390,14 @@ const file_proto_pinocchio_chatapp_v1_chat_proto_rawDesc = "" +
 	"responseId\x12\x17\n" +
 	"\aitem_id\x18\x0e \x01(\tR\x06itemId\x12&\n" +
 	"\foutput_index\x18\x0f \x01(\x05H\x00R\voutputIndex\x88\x01\x01\x12(\n" +
-	"\rsummary_index\x18\x10 \x01(\x05H\x01R\fsummaryIndex\x88\x01\x01B\x0f\n" +
+	"\rsummary_index\x18\x10 \x01(\x05H\x01R\fsummaryIndex\x88\x01\x01\x12&\n" +
+	"\fchoice_index\x18\x11 \x01(\x05H\x02R\vchoiceIndex\x88\x01\x01\x12\x1f\n" +
+	"\vstream_kind\x18\x12 \x01(\tR\n" +
+	"streamKind\x12'\n" +
+	"\x0fcorrelation_key\x18\x13 \x01(\tR\x0ecorrelationKeyB\x0f\n" +
 	"\r_output_indexB\x10\n" +
-	"\x0e_summary_index\"\xb5\x01\n" +
+	"\x0e_summary_indexB\x0f\n" +
+	"\r_choice_index\"\xb5\x01\n" +
 	"\x16AgentModePreviewUpdate\x12\x1d\n" +
 	"\n" +
 	"message_id\x18\x01 \x01(\tR\tmessageId\x12%\n" +
@@ -1251,7 +1424,7 @@ const file_proto_pinocchio_chatapp_v1_chat_proto_rawDesc = "" +
 	"\x04from\x18\x03 \x01(\tR\x04from\x12\x0e\n" +
 	"\x02to\x18\x04 \x01(\tR\x02to\x12\x1a\n" +
 	"\banalysis\x18\x05 \x01(\tR\banalysis\x12\x18\n" +
-	"\apreview\x18\x06 \x01(\bR\apreview\"\xba\x01\n" +
+	"\apreview\x18\x06 \x01(\bR\apreview\"\xbb\x03\n" +
 	"\x0eToolCallUpdate\x12\x1d\n" +
 	"\n" +
 	"message_id\x18\x01 \x01(\tR\tmessageId\x12 \n" +
@@ -1260,7 +1433,18 @@ const file_proto_pinocchio_chatapp_v1_chat_proto_rawDesc = "" +
 	"\ttool_name\x18\x03 \x01(\tR\btoolName\x12\x14\n" +
 	"\x05input\x18\x04 \x01(\tR\x05input\x12\x1c\n" +
 	"\texecuting\x18\x05 \x01(\bR\texecuting\x12\x16\n" +
-	"\x06status\x18\x06 \x01(\tR\x06status\"\xa0\x01\n" +
+	"\x06status\x18\x06 \x01(\tR\x06status\x12\x1a\n" +
+	"\bprovider\x18\a \x01(\tR\bprovider\x12\x1f\n" +
+	"\vresponse_id\x18\b \x01(\tR\n" +
+	"responseId\x12&\n" +
+	"\fchoice_index\x18\t \x01(\x05H\x00R\vchoiceIndex\x88\x01\x01\x12\x1f\n" +
+	"\vstream_kind\x18\n" +
+	" \x01(\tR\n" +
+	"streamKind\x12'\n" +
+	"\x0fcorrelation_key\x18\v \x01(\tR\x0ecorrelationKey\x12+\n" +
+	"\x0ftool_call_index\x18\f \x01(\x05H\x01R\rtoolCallIndex\x88\x01\x01B\x0f\n" +
+	"\r_choice_indexB\x12\n" +
+	"\x10_tool_call_index\"\xa1\x03\n" +
 	"\x10ToolResultUpdate\x12\x1d\n" +
 	"\n" +
 	"message_id\x18\x01 \x01(\tR\tmessageId\x12 \n" +
@@ -1268,7 +1452,18 @@ const file_proto_pinocchio_chatapp_v1_chat_proto_rawDesc = "" +
 	"toolCallId\x12\x1b\n" +
 	"\ttool_name\x18\x03 \x01(\tR\btoolName\x12\x16\n" +
 	"\x06result\x18\x04 \x01(\tR\x06result\x12\x16\n" +
-	"\x06status\x18\x05 \x01(\tR\x06status\"\xba\x01\n" +
+	"\x06status\x18\x05 \x01(\tR\x06status\x12\x1a\n" +
+	"\bprovider\x18\x06 \x01(\tR\bprovider\x12\x1f\n" +
+	"\vresponse_id\x18\a \x01(\tR\n" +
+	"responseId\x12&\n" +
+	"\fchoice_index\x18\b \x01(\x05H\x00R\vchoiceIndex\x88\x01\x01\x12\x1f\n" +
+	"\vstream_kind\x18\t \x01(\tR\n" +
+	"streamKind\x12'\n" +
+	"\x0fcorrelation_key\x18\n" +
+	" \x01(\tR\x0ecorrelationKey\x12+\n" +
+	"\x0ftool_call_index\x18\v \x01(\x05H\x01R\rtoolCallIndex\x88\x01\x01B\x0f\n" +
+	"\r_choice_indexB\x12\n" +
+	"\x10_tool_call_index\"\xba\x01\n" +
 	"\x0eToolCallEntity\x12\x1d\n" +
 	"\n" +
 	"message_id\x18\x01 \x01(\tR\tmessageId\x12 \n" +
@@ -1328,7 +1523,10 @@ func file_proto_pinocchio_chatapp_v1_chat_proto_init() {
 	if File_proto_pinocchio_chatapp_v1_chat_proto != nil {
 		return
 	}
+	file_proto_pinocchio_chatapp_v1_chat_proto_msgTypes[2].OneofWrappers = []any{}
 	file_proto_pinocchio_chatapp_v1_chat_proto_msgTypes[4].OneofWrappers = []any{}
+	file_proto_pinocchio_chatapp_v1_chat_proto_msgTypes[9].OneofWrappers = []any{}
+	file_proto_pinocchio_chatapp_v1_chat_proto_msgTypes[10].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{

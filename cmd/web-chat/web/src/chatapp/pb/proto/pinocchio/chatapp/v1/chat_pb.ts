@@ -10,7 +10,7 @@ import { fileDesc, messageDesc } from "@bufbuild/protobuf/codegenv2";
  * Describes the file proto/pinocchio/chatapp/v1/chat.proto.
  */
 export const file_proto_pinocchio_chatapp_v1_chat: GenFile = /*@__PURE__*/
-  fileDesc("CiVwcm90by9waW5vY2NoaW8vY2hhdGFwcC92MS9jaGF0LnByb3RvEhRwaW5vY2NoaW8uY2hhdGFwcC52MSJUChVTdGFydEluZmVyZW5jZUNvbW1hbmQSDgoGcHJvbXB0GAEgASgJEhcKD2lkZW1wb3RlbmN5X2tleRgCIAEoCRISCgpyZXF1ZXN0X2lkGAMgASgJIhYKFFN0b3BJbmZlcmVuY2VDb21tYW5kIvYBChFDaGF0TWVzc2FnZVVwZGF0ZRISCgptZXNzYWdlX2lkGAEgASgJEgwKBHJvbGUYAiABKAkSDgoGcHJvbXB0GAMgASgJEg0KBWNodW5rGAQgASgJEgwKBHRleHQYBSABKAkSDwoHY29udGVudBgGIAEoCRIOCgZzdGF0dXMYByABKAkSEQoJc3RyZWFtaW5nGAggASgIEg0KBWVycm9yGAkgASgJEhkKEXBhcmVudF9tZXNzYWdlX2lkGAogASgJEg8KB3NlZ21lbnQYCyABKAUSFAoMc2VnbWVudF90eXBlGAwgASgJEg0KBWZpbmFsGA0gASgIIucBChFDaGF0TWVzc2FnZUVudGl0eRISCgptZXNzYWdlX2lkGAEgASgJEgwKBHJvbGUYAiABKAkSDgoGcHJvbXB0GAMgASgJEgwKBHRleHQYBCABKAkSDwoHY29udGVudBgFIAEoCRIOCgZzdGF0dXMYBiABKAkSEQoJc3RyZWFtaW5nGAcgASgIEg0KBWVycm9yGAggASgJEhkKEXBhcmVudF9tZXNzYWdlX2lkGAkgASgJEg8KB3NlZ21lbnQYCiABKAUSFAoMc2VnbWVudF90eXBlGAsgASgJEg0KBWZpbmFsGAwgASgIIugCCg9SZWFzb25pbmdVcGRhdGUSEgoKbWVzc2FnZV9pZBgBIAEoCRIZChFwYXJlbnRfbWVzc2FnZV9pZBgCIAEoCRIPCgdzZWdtZW50GAMgASgFEgwKBHJvbGUYBCABKAkSDQoFY2h1bmsYBSABKAkSDAoEdGV4dBgGIAEoCRIPCgdjb250ZW50GAcgASgJEg4KBnN0YXR1cxgIIAEoCRIRCglzdHJlYW1pbmcYCSABKAgSDgoGc291cmNlGAogASgJEhQKDHNlZ21lbnRfdHlwZRgLIAEoCRIQCghwcm92aWRlchgMIAEoCRITCgtyZXNwb25zZV9pZBgNIAEoCRIPCgdpdGVtX2lkGA4gASgJEhkKDG91dHB1dF9pbmRleBgPIAEoBUgAiAEBEhoKDXN1bW1hcnlfaW5kZXgYECABKAVIAYgBAUIPCg1fb3V0cHV0X2luZGV4QhAKDl9zdW1tYXJ5X2luZGV4InwKFkFnZW50TW9kZVByZXZpZXdVcGRhdGUSEgoKbWVzc2FnZV9pZBgBIAEoCRIWCg5jYW5kaWRhdGVfbW9kZRgCIAEoCRIQCghhbmFseXNpcxgDIAEoCRITCgtwYXJzZV9zdGF0ZRgEIAEoCRIPCgdwcmV2aWV3GAUgASgIInoKGEFnZW50TW9kZUNvbW1pdHRlZFVwZGF0ZRISCgptZXNzYWdlX2lkGAEgASgJEg0KBXRpdGxlGAIgASgJEgwKBGZyb20YAyABKAkSCgoCdG8YBCABKAkSEAoIYW5hbHlzaXMYBSABKAkSDwoHcHJldmlldxgGIAEoCCItChdBZ2VudE1vZGVQcmV2aWV3Q2xlYXJlZBISCgptZXNzYWdlX2lkGAEgASgJInEKD0FnZW50TW9kZUVudGl0eRISCgptZXNzYWdlX2lkGAEgASgJEg0KBXRpdGxlGAIgASgJEgwKBGZyb20YAyABKAkSCgoCdG8YBCABKAkSEAoIYW5hbHlzaXMYBSABKAkSDwoHcHJldmlldxgGIAEoCCJ/Cg5Ub29sQ2FsbFVwZGF0ZRISCgptZXNzYWdlX2lkGAEgASgJEhQKDHRvb2xfY2FsbF9pZBgCIAEoCRIRCgl0b29sX25hbWUYAyABKAkSDQoFaW5wdXQYBCABKAkSEQoJZXhlY3V0aW5nGAUgASgIEg4KBnN0YXR1cxgGIAEoCSJvChBUb29sUmVzdWx0VXBkYXRlEhIKCm1lc3NhZ2VfaWQYASABKAkSFAoMdG9vbF9jYWxsX2lkGAIgASgJEhEKCXRvb2xfbmFtZRgDIAEoCRIOCgZyZXN1bHQYBCABKAkSDgoGc3RhdHVzGAUgASgJIn8KDlRvb2xDYWxsRW50aXR5EhIKCm1lc3NhZ2VfaWQYASABKAkSFAoMdG9vbF9jYWxsX2lkGAIgASgJEhEKCXRvb2xfbmFtZRgDIAEoCRINCgVpbnB1dBgEIAEoCRIRCglleGVjdXRpbmcYBSABKAgSDgoGc3RhdHVzGAYgASgJIm8KEFRvb2xSZXN1bHRFbnRpdHkSEgoKbWVzc2FnZV9pZBgBIAEoCRIUCgx0b29sX2NhbGxfaWQYAiABKAkSEQoJdG9vbF9uYW1lGAMgASgJEg4KBnJlc3VsdBgEIAEoCRIOCgZzdGF0dXMYBSABKAlCV1pVZ2l0aHViLmNvbS9nby1nby1nb2xlbXMvcGlub2NjaGlvL3BrZy9jaGF0YXBwL3BiL3Byb3RvL3Bpbm9jY2hpby9jaGF0YXBwL3YxO2NoYXRhcHB2MWIGcHJvdG8z");
+  fileDesc("CiVwcm90by9waW5vY2NoaW8vY2hhdGFwcC92MS9jaGF0LnByb3RvEhRwaW5vY2NoaW8uY2hhdGFwcC52MSJUChVTdGFydEluZmVyZW5jZUNvbW1hbmQSDgoGcHJvbXB0GAEgASgJEhcKD2lkZW1wb3RlbmN5X2tleRgCIAEoCRISCgpyZXF1ZXN0X2lkGAMgASgJIhYKFFN0b3BJbmZlcmVuY2VDb21tYW5kIvcCChFDaGF0TWVzc2FnZVVwZGF0ZRISCgptZXNzYWdlX2lkGAEgASgJEgwKBHJvbGUYAiABKAkSDgoGcHJvbXB0GAMgASgJEg0KBWNodW5rGAQgASgJEgwKBHRleHQYBSABKAkSDwoHY29udGVudBgGIAEoCRIOCgZzdGF0dXMYByABKAkSEQoJc3RyZWFtaW5nGAggASgIEg0KBWVycm9yGAkgASgJEhkKEXBhcmVudF9tZXNzYWdlX2lkGAogASgJEg8KB3NlZ21lbnQYCyABKAUSFAoMc2VnbWVudF90eXBlGAwgASgJEg0KBWZpbmFsGA0gASgIEhAKCHByb3ZpZGVyGA4gASgJEhMKC3Jlc3BvbnNlX2lkGA8gASgJEhkKDGNob2ljZV9pbmRleBgQIAEoBUgAiAEBEhMKC3N0cmVhbV9raW5kGBEgASgJEhcKD2NvcnJlbGF0aW9uX2tleRgSIAEoCUIPCg1fY2hvaWNlX2luZGV4IucBChFDaGF0TWVzc2FnZUVudGl0eRISCgptZXNzYWdlX2lkGAEgASgJEgwKBHJvbGUYAiABKAkSDgoGcHJvbXB0GAMgASgJEgwKBHRleHQYBCABKAkSDwoHY29udGVudBgFIAEoCRIOCgZzdGF0dXMYBiABKAkSEQoJc3RyZWFtaW5nGAcgASgIEg0KBWVycm9yGAggASgJEhkKEXBhcmVudF9tZXNzYWdlX2lkGAkgASgJEg8KB3NlZ21lbnQYCiABKAUSFAoMc2VnbWVudF90eXBlGAsgASgJEg0KBWZpbmFsGAwgASgIIsIDCg9SZWFzb25pbmdVcGRhdGUSEgoKbWVzc2FnZV9pZBgBIAEoCRIZChFwYXJlbnRfbWVzc2FnZV9pZBgCIAEoCRIPCgdzZWdtZW50GAMgASgFEgwKBHJvbGUYBCABKAkSDQoFY2h1bmsYBSABKAkSDAoEdGV4dBgGIAEoCRIPCgdjb250ZW50GAcgASgJEg4KBnN0YXR1cxgIIAEoCRIRCglzdHJlYW1pbmcYCSABKAgSDgoGc291cmNlGAogASgJEhQKDHNlZ21lbnRfdHlwZRgLIAEoCRIQCghwcm92aWRlchgMIAEoCRITCgtyZXNwb25zZV9pZBgNIAEoCRIPCgdpdGVtX2lkGA4gASgJEhkKDG91dHB1dF9pbmRleBgPIAEoBUgAiAEBEhoKDXN1bW1hcnlfaW5kZXgYECABKAVIAYgBARIZCgxjaG9pY2VfaW5kZXgYESABKAVIAogBARITCgtzdHJlYW1fa2luZBgSIAEoCRIXCg9jb3JyZWxhdGlvbl9rZXkYEyABKAlCDwoNX291dHB1dF9pbmRleEIQCg5fc3VtbWFyeV9pbmRleEIPCg1fY2hvaWNlX2luZGV4InwKFkFnZW50TW9kZVByZXZpZXdVcGRhdGUSEgoKbWVzc2FnZV9pZBgBIAEoCRIWCg5jYW5kaWRhdGVfbW9kZRgCIAEoCRIQCghhbmFseXNpcxgDIAEoCRITCgtwYXJzZV9zdGF0ZRgEIAEoCRIPCgdwcmV2aWV3GAUgASgIInoKGEFnZW50TW9kZUNvbW1pdHRlZFVwZGF0ZRISCgptZXNzYWdlX2lkGAEgASgJEg0KBXRpdGxlGAIgASgJEgwKBGZyb20YAyABKAkSCgoCdG8YBCABKAkSEAoIYW5hbHlzaXMYBSABKAkSDwoHcHJldmlldxgGIAEoCCItChdBZ2VudE1vZGVQcmV2aWV3Q2xlYXJlZBISCgptZXNzYWdlX2lkGAEgASgJInEKD0FnZW50TW9kZUVudGl0eRISCgptZXNzYWdlX2lkGAEgASgJEg0KBXRpdGxlGAIgASgJEgwKBGZyb20YAyABKAkSCgoCdG8YBCABKAkSEAoIYW5hbHlzaXMYBSABKAkSDwoHcHJldmlldxgGIAEoCCKyAgoOVG9vbENhbGxVcGRhdGUSEgoKbWVzc2FnZV9pZBgBIAEoCRIUCgx0b29sX2NhbGxfaWQYAiABKAkSEQoJdG9vbF9uYW1lGAMgASgJEg0KBWlucHV0GAQgASgJEhEKCWV4ZWN1dGluZxgFIAEoCBIOCgZzdGF0dXMYBiABKAkSEAoIcHJvdmlkZXIYByABKAkSEwoLcmVzcG9uc2VfaWQYCCABKAkSGQoMY2hvaWNlX2luZGV4GAkgASgFSACIAQESEwoLc3RyZWFtX2tpbmQYCiABKAkSFwoPY29ycmVsYXRpb25fa2V5GAsgASgJEhwKD3Rvb2xfY2FsbF9pbmRleBgMIAEoBUgBiAEBQg8KDV9jaG9pY2VfaW5kZXhCEgoQX3Rvb2xfY2FsbF9pbmRleCKiAgoQVG9vbFJlc3VsdFVwZGF0ZRISCgptZXNzYWdlX2lkGAEgASgJEhQKDHRvb2xfY2FsbF9pZBgCIAEoCRIRCgl0b29sX25hbWUYAyABKAkSDgoGcmVzdWx0GAQgASgJEg4KBnN0YXR1cxgFIAEoCRIQCghwcm92aWRlchgGIAEoCRITCgtyZXNwb25zZV9pZBgHIAEoCRIZCgxjaG9pY2VfaW5kZXgYCCABKAVIAIgBARITCgtzdHJlYW1fa2luZBgJIAEoCRIXCg9jb3JyZWxhdGlvbl9rZXkYCiABKAkSHAoPdG9vbF9jYWxsX2luZGV4GAsgASgFSAGIAQFCDwoNX2Nob2ljZV9pbmRleEISChBfdG9vbF9jYWxsX2luZGV4In8KDlRvb2xDYWxsRW50aXR5EhIKCm1lc3NhZ2VfaWQYASABKAkSFAoMdG9vbF9jYWxsX2lkGAIgASgJEhEKCXRvb2xfbmFtZRgDIAEoCRINCgVpbnB1dBgEIAEoCRIRCglleGVjdXRpbmcYBSABKAgSDgoGc3RhdHVzGAYgASgJIm8KEFRvb2xSZXN1bHRFbnRpdHkSEgoKbWVzc2FnZV9pZBgBIAEoCRIUCgx0b29sX2NhbGxfaWQYAiABKAkSEQoJdG9vbF9uYW1lGAMgASgJEg4KBnJlc3VsdBgEIAEoCRIOCgZzdGF0dXMYBSABKAlCV1pVZ2l0aHViLmNvbS9nby1nby1nb2xlbXMvcGlub2NjaGlvL3BrZy9jaGF0YXBwL3BiL3Byb3RvL3Bpbm9jY2hpby9jaGF0YXBwL3YxO2NoYXRhcHB2MWIGcHJvdG8z");
 
 /**
  * @generated from message pinocchio.chatapp.v1.StartInferenceCommand
@@ -120,6 +120,31 @@ export type ChatMessageUpdate = Message<"pinocchio.chatapp.v1.ChatMessageUpdate"
    * @generated from field: bool final = 13;
    */
   final: boolean;
+
+  /**
+   * @generated from field: string provider = 14;
+   */
+  provider: string;
+
+  /**
+   * @generated from field: string response_id = 15;
+   */
+  responseId: string;
+
+  /**
+   * @generated from field: optional int32 choice_index = 16;
+   */
+  choiceIndex?: number | undefined;
+
+  /**
+   * @generated from field: string stream_kind = 17;
+   */
+  streamKind: string;
+
+  /**
+   * @generated from field: string correlation_key = 18;
+   */
+  correlationKey: string;
 };
 
 /**
@@ -284,6 +309,21 @@ export type ReasoningUpdate = Message<"pinocchio.chatapp.v1.ReasoningUpdate"> & 
    * @generated from field: optional int32 summary_index = 16;
    */
   summaryIndex?: number | undefined;
+
+  /**
+   * @generated from field: optional int32 choice_index = 17;
+   */
+  choiceIndex?: number | undefined;
+
+  /**
+   * @generated from field: string stream_kind = 18;
+   */
+  streamKind: string;
+
+  /**
+   * @generated from field: string correlation_key = 19;
+   */
+  correlationKey: string;
 };
 
 /**
@@ -464,6 +504,36 @@ export type ToolCallUpdate = Message<"pinocchio.chatapp.v1.ToolCallUpdate"> & {
    * @generated from field: string status = 6;
    */
   status: string;
+
+  /**
+   * @generated from field: string provider = 7;
+   */
+  provider: string;
+
+  /**
+   * @generated from field: string response_id = 8;
+   */
+  responseId: string;
+
+  /**
+   * @generated from field: optional int32 choice_index = 9;
+   */
+  choiceIndex?: number | undefined;
+
+  /**
+   * @generated from field: string stream_kind = 10;
+   */
+  streamKind: string;
+
+  /**
+   * @generated from field: string correlation_key = 11;
+   */
+  correlationKey: string;
+
+  /**
+   * @generated from field: optional int32 tool_call_index = 12;
+   */
+  toolCallIndex?: number | undefined;
 };
 
 /**
@@ -501,6 +571,36 @@ export type ToolResultUpdate = Message<"pinocchio.chatapp.v1.ToolResultUpdate"> 
    * @generated from field: string status = 5;
    */
   status: string;
+
+  /**
+   * @generated from field: string provider = 6;
+   */
+  provider: string;
+
+  /**
+   * @generated from field: string response_id = 7;
+   */
+  responseId: string;
+
+  /**
+   * @generated from field: optional int32 choice_index = 8;
+   */
+  choiceIndex?: number | undefined;
+
+  /**
+   * @generated from field: string stream_kind = 9;
+   */
+  streamKind: string;
+
+  /**
+   * @generated from field: string correlation_key = 10;
+   */
+  correlationKey: string;
+
+  /**
+   * @generated from field: optional int32 tool_call_index = 11;
+   */
+  toolCallIndex?: number | undefined;
 };
 
 /**

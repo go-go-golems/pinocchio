@@ -22,6 +22,12 @@ type GeppettoDebugRecord struct {
 	OutputIndex  *int   `json:"outputIndex,omitempty"`
 	SummaryIndex *int   `json:"summaryIndex,omitempty"`
 
+	ChoiceIndex    *int   `json:"choiceIndex,omitempty"`
+	StreamKind     string `json:"streamKind,omitempty"`
+	CorrelationKey string `json:"correlationKey,omitempty"`
+	ToolCallID     string `json:"toolCallId,omitempty"`
+	ToolCallIndex  *int   `json:"toolCallIndex,omitempty"`
+
 	DeltaLen           int `json:"deltaLen,omitempty"`
 	NormalizedDeltaLen int `json:"normalizedDeltaLen,omitempty"`
 	BufferLen          int `json:"bufferLen,omitempty"`
@@ -46,6 +52,11 @@ func encodeGeppettoRecord(rec geppettoobs.Record) *GeppettoDebugRecord {
 		ItemID:             rec.ItemID,
 		OutputIndex:        rec.OutputIndex,
 		SummaryIndex:       rec.SummaryIndex,
+		ChoiceIndex:        rec.ChoiceIndex,
+		StreamKind:         rec.StreamKind,
+		CorrelationKey:     rec.CorrelationKey,
+		ToolCallID:         rec.ToolCallID,
+		ToolCallIndex:      rec.ToolCallIndex,
 		DeltaLen:           rec.DeltaLen,
 		NormalizedDeltaLen: rec.NormalizedDeltaLen,
 		BufferLen:          rec.BufferLen,

@@ -72,57 +72,59 @@ func (p *ToolCallPlugin) RegisterSchemas(reg *sessionstream.SchemaRegistry) erro
 func (p *ToolCallPlugin) HandleRuntimeEvent(ctx context.Context, runtime chatapp.RuntimeEventContext, event gepevents.Event) (bool, error) {
 	switch ev := event.(type) {
 	case *gepevents.EventToolCall:
-		return true, runtime.Publish(ctx, EventToolCallStarted, &chatappv1.ToolCallUpdate{
+		return true, runtime.Publish(ctx, EventToolCallStarted, applyToolCallProviderInfo(&chatappv1.ToolCallUpdate{
 			MessageId:  runtime.MessageID,
 			ToolCallId: ev.ToolCall.ID,
 			ToolName:   ev.ToolCall.Name,
 			Input:      ev.ToolCall.Input,
 			Status:     "pending",
-		})
+		}, reasoningProviderInfoFromMetadata(ev.Metadata())))
 
 	case *gepevents.EventToolCallExecute:
-		return true, runtime.Publish(ctx, EventToolCallUpdated, &chatappv1.ToolCallUpdate{
+		return true, runtime.Publish(ctx, EventToolCallUpdated, applyToolCallProviderInfo(&chatappv1.ToolCallUpdate{
 			MessageId:  runtime.MessageID,
 			ToolCallId: ev.ToolCall.ID,
 			ToolName:   ev.ToolCall.Name,
 			Input:      ev.ToolCall.Input,
 			Executing:  true,
 			Status:     "executing",
-		})
+		}, reasoningProviderInfoFromMetadata(ev.Metadata())))
 
 	case *gepevents.EventToolResult:
-		if err := runtime.Publish(ctx, EventToolResultReady, &chatappv1.ToolResultUpdate{
+		providerInfo := reasoningProviderInfoFromMetadata(ev.Metadata())
+		if err := runtime.Publish(ctx, EventToolResultReady, applyToolResultProviderInfo(&chatappv1.ToolResultUpdate{
 			MessageId:  runtime.MessageID,
 			ToolCallId: ev.ToolResult.ID,
 			ToolName:   ev.ToolResult.Name,
 			Result:     ev.ToolResult.Result,
 			Status:     "success",
-		}); err != nil {
+		}, providerInfo)); err != nil {
 			return true, err
 		}
-		return true, runtime.Publish(ctx, EventToolCallFinished, &chatappv1.ToolCallUpdate{
+		return true, runtime.Publish(ctx, EventToolCallFinished, applyToolCallProviderInfo(&chatappv1.ToolCallUpdate{
 			MessageId:  runtime.MessageID,
 			ToolCallId: ev.ToolResult.ID,
 			ToolName:   ev.ToolResult.Name,
 			Status:     "completed",
-		})
+		}, providerInfo))
 
 	case *gepevents.EventToolCallExecutionResult:
-		if err := runtime.Publish(ctx, EventToolResultReady, &chatappv1.ToolResultUpdate{
+		providerInfo := reasoningProviderInfoFromMetadata(ev.Metadata())
+		if err := runtime.Publish(ctx, EventToolResultReady, applyToolResultProviderInfo(&chatappv1.ToolResultUpdate{
 			MessageId:  runtime.MessageID,
 			ToolCallId: ev.ToolResult.ID,
 			ToolName:   ev.ToolResult.Name,
 			Result:     ev.ToolResult.Result,
 			Status:     "success",
-		}); err != nil {
+		}, providerInfo)); err != nil {
 			return true, err
 		}
-		return true, runtime.Publish(ctx, EventToolCallFinished, &chatappv1.ToolCallUpdate{
+		return true, runtime.Publish(ctx, EventToolCallFinished, applyToolCallProviderInfo(&chatappv1.ToolCallUpdate{
 			MessageId:  runtime.MessageID,
 			ToolCallId: ev.ToolResult.ID,
 			ToolName:   ev.ToolResult.Name,
 			Status:     "completed",
-		})
+		}, providerInfo))
 
 	default:
 		return false, nil
@@ -255,6 +257,38 @@ func mergeToolCallUpdate(entity *chatappv1.ToolCallEntity, update *chatappv1.Too
 		entity.Input = update.GetInput()
 	}
 	return entity
+}
+
+func applyToolCallProviderInfo(update *chatappv1.ToolCallUpdate, info reasoningProviderInfo) *chatappv1.ToolCallUpdate {
+	if update == nil {
+		return nil
+	}
+	update.Provider = info.Provider
+	update.ResponseId = info.ResponseID
+	update.ChoiceIndex = cloneInt32Ptr(info.ChoiceIndex)
+	update.StreamKind = info.StreamKind
+	update.CorrelationKey = info.CorrelationKey
+	update.ToolCallIndex = cloneInt32Ptr(info.ToolCallIndex)
+	if update.StreamKind == "" && update.CorrelationKey != "" {
+		update.StreamKind = "tool_call"
+	}
+	return update
+}
+
+func applyToolResultProviderInfo(update *chatappv1.ToolResultUpdate, info reasoningProviderInfo) *chatappv1.ToolResultUpdate {
+	if update == nil {
+		return nil
+	}
+	update.Provider = info.Provider
+	update.ResponseId = info.ResponseID
+	update.ChoiceIndex = cloneInt32Ptr(info.ChoiceIndex)
+	update.StreamKind = info.StreamKind
+	update.CorrelationKey = info.CorrelationKey
+	update.ToolCallIndex = cloneInt32Ptr(info.ToolCallIndex)
+	if update.StreamKind == "" && update.CorrelationKey != "" {
+		update.StreamKind = "tool_call"
+	}
+	return update
 }
 
 // Ensure ToolCallPlugin implements ChatPlugin.

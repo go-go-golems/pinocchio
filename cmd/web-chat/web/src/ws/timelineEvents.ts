@@ -16,6 +16,62 @@ function visibleText(payload: { content?: string; text?: string; chunk?: string 
   return payload.content || payload.text || payload.chunk || '';
 }
 
+function messageCorrelationProps(payload: {
+  provider?: string;
+  responseId?: string;
+  choiceIndex?: number;
+  streamKind?: string;
+  correlationKey?: string;
+}): Record<string, unknown> {
+  return {
+    provider: payload.provider,
+    responseId: payload.responseId,
+    choiceIndex: payload.choiceIndex,
+    streamKind: payload.streamKind,
+    correlationKey: payload.correlationKey,
+  };
+}
+
+function reasoningCorrelationProps(payload: {
+  provider?: string;
+  responseId?: string;
+  itemId?: string;
+  outputIndex?: number;
+  summaryIndex?: number;
+  choiceIndex?: number;
+  streamKind?: string;
+  correlationKey?: string;
+}): Record<string, unknown> {
+  return {
+    provider: payload.provider,
+    responseId: payload.responseId,
+    itemId: payload.itemId,
+    outputIndex: payload.outputIndex,
+    summaryIndex: payload.summaryIndex,
+    choiceIndex: payload.choiceIndex,
+    streamKind: payload.streamKind,
+    correlationKey: payload.correlationKey,
+  };
+}
+
+function toolCorrelationProps(payload: {
+  provider?: string;
+  responseId?: string;
+  choiceIndex?: number;
+  streamKind?: string;
+  correlationKey?: string;
+  toolCallIndex?: number;
+}): Record<string, unknown> {
+  return {
+    provider: payload.provider,
+    responseId: payload.responseId,
+    choiceIndex: payload.choiceIndex,
+    streamKind: payload.streamKind,
+    correlationKey: payload.correlationKey,
+    toolCallIndex: payload.toolCallIndex,
+  };
+}
+
 function toolCallEntity(id: string, props: Record<string, unknown>): TimelineEntity {
   return {
     id,
@@ -65,6 +121,7 @@ export function timelineMutationFromUIEvent(frame: CanonicalFrame): TimelineMuta
           segment: payload.segment,
           segmentType: payload.segmentType,
           final: payload.final,
+          ...messageCorrelationProps(payload),
         }),
       };
     }
@@ -85,6 +142,7 @@ export function timelineMutationFromUIEvent(frame: CanonicalFrame): TimelineMuta
               segment: payload.segment,
               segmentType: payload.segmentType,
               final: payload.final,
+              ...messageCorrelationProps(payload),
             })
           : undefined,
         status: 'streaming',
@@ -104,6 +162,7 @@ export function timelineMutationFromUIEvent(frame: CanonicalFrame): TimelineMuta
           segment: payload.segment,
           segmentType: payload.segmentType,
           final: payload.final,
+          ...messageCorrelationProps(payload),
         }),
         status: 'streaming',
       };
@@ -125,6 +184,7 @@ export function timelineMutationFromUIEvent(frame: CanonicalFrame): TimelineMuta
               segment: payload.segment,
               segmentType: payload.segmentType,
               final: payload.final,
+              ...messageCorrelationProps(payload),
             })
           : undefined,
         status: 'finished',
@@ -148,6 +208,7 @@ export function timelineMutationFromUIEvent(frame: CanonicalFrame): TimelineMuta
               segment: payload.segment,
               segmentType: payload.segmentType,
               final: payload.final,
+              ...messageCorrelationProps(payload),
             })
           : undefined,
         status: 'stopped',
@@ -169,11 +230,7 @@ export function timelineMutationFromUIEvent(frame: CanonicalFrame): TimelineMuta
           segment: payload.segment,
           segmentType: payload.segmentType,
           source: payload.source,
-          provider: payload.provider,
-          responseId: payload.responseId,
-          itemId: payload.itemId,
-          outputIndex: payload.outputIndex,
-          summaryIndex: payload.summaryIndex,
+          ...reasoningCorrelationProps(payload),
         }),
         status: 'streaming',
       };
@@ -192,11 +249,7 @@ export function timelineMutationFromUIEvent(frame: CanonicalFrame): TimelineMuta
           segment: payload.segment,
           segmentType: payload.segmentType,
           source: payload.source,
-          provider: payload.provider,
-          responseId: payload.responseId,
-          itemId: payload.itemId,
-          outputIndex: payload.outputIndex,
-          summaryIndex: payload.summaryIndex,
+          ...reasoningCorrelationProps(payload),
         }),
         status: 'streaming',
       };
@@ -217,11 +270,7 @@ export function timelineMutationFromUIEvent(frame: CanonicalFrame): TimelineMuta
           segment: payload.segment,
           segmentType: payload.segmentType,
           source: payload.source,
-          provider: payload.provider,
-          responseId: payload.responseId,
-          itemId: payload.itemId,
-          outputIndex: payload.outputIndex,
-          summaryIndex: payload.summaryIndex,
+          ...reasoningCorrelationProps(payload),
         }),
       };
     }
@@ -280,6 +329,7 @@ export function timelineMutationFromUIEvent(frame: CanonicalFrame): TimelineMuta
           inputRaw: payload.input,
           executing: payload.executing,
           status: payload.status,
+          ...toolCorrelationProps(payload),
           done: event.name === 'ChatToolCallFinished' || payload.status === 'completed',
         }),
       };
@@ -297,6 +347,7 @@ export function timelineMutationFromUIEvent(frame: CanonicalFrame): TimelineMuta
           result: payload.result,
           resultRaw: payload.result,
           status: payload.status,
+          ...toolCorrelationProps(payload),
         }),
       };
     }
