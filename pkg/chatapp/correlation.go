@@ -5,7 +5,7 @@ import (
 	chatappv1 "github.com/go-go-golems/pinocchio/pkg/chatapp/pb/proto/pinocchio/chatapp/v1"
 )
 
-func correlationInfoFromEvent(event gepevents.Event) *chatappv1.CorrelationInfo {
+func CorrelationInfoFromEvent(event gepevents.Event) *chatappv1.CorrelationInfo {
 	if event == nil {
 		return nil
 	}
@@ -13,10 +13,14 @@ func correlationInfoFromEvent(event gepevents.Event) *chatappv1.CorrelationInfo 
 	if !ok {
 		return nil
 	}
-	return correlationInfoFromGeppetto(correlated.Correlation())
+	return CorrelationInfoFromGeppetto(correlated.Correlation())
 }
 
-func correlationInfoFromGeppetto(corr gepevents.Correlation) *chatappv1.CorrelationInfo {
+func correlationInfoFromEvent(event gepevents.Event) *chatappv1.CorrelationInfo {
+	return CorrelationInfoFromEvent(event)
+}
+
+func CorrelationInfoFromGeppetto(corr gepevents.Correlation) *chatappv1.CorrelationInfo {
 	return &chatappv1.CorrelationInfo{
 		SessionId:            corr.SessionID,
 		RunId:                corr.RunID,
@@ -43,7 +47,7 @@ func correlationInfoFromGeppetto(corr gepevents.Correlation) *chatappv1.Correlat
 	}
 }
 
-func usageInfoFromGeppetto(usage *gepevents.Usage) *chatappv1.UsageInfo {
+func UsageInfoFromGeppetto(usage *gepevents.Usage) *chatappv1.UsageInfo {
 	if usage == nil {
 		return nil
 	}
@@ -54,6 +58,10 @@ func usageInfoFromGeppetto(usage *gepevents.Usage) *chatappv1.UsageInfo {
 		CacheCreationInputTokens: int32(usage.CacheCreationInputTokens),
 		CacheReadInputTokens:     int32(usage.CacheReadInputTokens),
 	}
+}
+
+func usageInfoFromGeppetto(usage *gepevents.Usage) *chatappv1.UsageInfo {
+	return UsageInfoFromGeppetto(usage)
 }
 
 func cloneInt32Ptr(v *int32) *int32 {
