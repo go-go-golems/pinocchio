@@ -12,6 +12,213 @@ message StartInferenceCommand {
 
 message StopInferenceCommand {}
 
+message UsageInfo {
+  int32 input_tokens = 1;
+  int32 output_tokens = 2;
+  int32 cached_tokens = 3;
+  int32 cache_creation_input_tokens = 4;
+  int32 cache_read_input_tokens = 5;
+}
+
+message CorrelationInfo {
+  string session_id = 1;
+  string run_id = 2;
+  string inference_id = 3;
+  string turn_id = 4;
+  string provider_call_id = 5;
+  int32 provider_call_index = 6;
+  string provider = 7;
+  string model = 8;
+  string response_id = 9;
+  string item_id = 10;
+  optional int32 output_index = 11;
+  optional int32 summary_index = 12;
+  optional int32 choice_index = 13;
+  optional int32 content_block_index = 14;
+  string segment_id = 15;
+  int32 segment_index = 16;
+  string segment_type = 17;
+  string stream_kind = 18;
+  string tool_call_id = 19;
+  optional int32 tool_call_index = 20;
+  string correlation_key = 21;
+  string parent_correlation_key = 22;
+}
+
+message ChatRunStarted {
+  string message_id = 1;
+  string prompt = 2;
+  CorrelationInfo correlation = 3;
+}
+
+message ChatRunFinished {
+  string message_id = 1;
+  string status = 2;
+  string error = 3;
+  optional int64 duration_ms = 4;
+  CorrelationInfo correlation = 5;
+}
+
+message ChatRunStopped {
+  string message_id = 1;
+  string status = 2;
+  string error = 3;
+  CorrelationInfo correlation = 4;
+}
+
+message ChatRunFailed {
+  string message_id = 1;
+  string status = 2;
+  string error = 3;
+  CorrelationInfo correlation = 4;
+}
+
+message ChatProviderCallStarted {
+  CorrelationInfo correlation = 1;
+}
+
+message ChatProviderCallMetadataUpdated {
+  string stop_reason = 1;
+  UsageInfo usage = 2;
+  CorrelationInfo correlation = 3;
+}
+
+message ChatProviderCallFinished {
+  string stop_reason = 1;
+  string finish_class = 2;
+  UsageInfo usage = 3;
+  optional int64 duration_ms = 4;
+  bool has_tool_calls = 5;
+  CorrelationInfo correlation = 6;
+}
+
+message ChatTextSegmentStarted {
+  string message_id = 1;
+  string role = 2;
+  string prompt = 3;
+  string status = 4;
+  bool streaming = 5;
+  CorrelationInfo correlation = 6;
+}
+
+message ChatTextDelta {
+  string message_id = 1;
+  string role = 2;
+  string prompt = 3;
+  string chunk = 4;
+  string text = 5;
+  string content = 6;
+  string status = 7;
+  bool streaming = 8;
+  CorrelationInfo correlation = 9;
+}
+
+message ChatTextSegmentFinished {
+  string message_id = 1;
+  string role = 2;
+  string prompt = 3;
+  string text = 4;
+  string content = 5;
+  string status = 6;
+  bool streaming = 7;
+  bool final = 8;
+  string finish_reason = 9;
+  CorrelationInfo correlation = 10;
+}
+
+message ChatReasoningSegmentStarted {
+  string message_id = 1;
+  string parent_message_id = 2;
+  string role = 3;
+  string status = 4;
+  bool streaming = 5;
+  string source = 6;
+  CorrelationInfo correlation = 7;
+}
+
+message ChatReasoningDelta {
+  string message_id = 1;
+  string parent_message_id = 2;
+  string role = 3;
+  string chunk = 4;
+  string text = 5;
+  string content = 6;
+  string status = 7;
+  bool streaming = 8;
+  string source = 9;
+  CorrelationInfo correlation = 10;
+}
+
+message ChatReasoningSegmentFinished {
+  string message_id = 1;
+  string parent_message_id = 2;
+  string role = 3;
+  string text = 4;
+  string content = 5;
+  string status = 6;
+  bool streaming = 7;
+  string source = 8;
+  string finish_reason = 9;
+  CorrelationInfo correlation = 10;
+}
+
+message ChatToolCallStarted {
+  string message_id = 1;
+  string tool_call_id = 2;
+  string tool_name = 3;
+  string input = 4;
+  bool executing = 5;
+  string status = 6;
+  CorrelationInfo correlation = 7;
+}
+
+message ChatToolCallArgumentsDelta {
+  string message_id = 1;
+  string tool_call_id = 2;
+  string tool_name = 3;
+  string arguments_delta = 4;
+  string input = 5;
+  string status = 6;
+  CorrelationInfo correlation = 7;
+}
+
+message ChatToolCallRequested {
+  string message_id = 1;
+  string tool_call_id = 2;
+  string tool_name = 3;
+  string input = 4;
+  bool executing = 5;
+  string status = 6;
+  CorrelationInfo correlation = 7;
+}
+
+message ChatToolExecutionStarted {
+  string message_id = 1;
+  string tool_call_id = 2;
+  string tool_name = 3;
+  string input = 4;
+  bool executing = 5;
+  string status = 6;
+  CorrelationInfo correlation = 7;
+}
+
+message ChatToolResultReady {
+  string message_id = 1;
+  string tool_call_id = 2;
+  string tool_name = 3;
+  string result = 4;
+  string status = 5;
+  CorrelationInfo correlation = 6;
+}
+
+message ChatToolCallFinished {
+  string message_id = 1;
+  string tool_call_id = 2;
+  string tool_name = 3;
+  string status = 4;
+  CorrelationInfo correlation = 5;
+}
+
 message ChatMessageUpdate {
   string message_id = 1;
   string role = 2;
