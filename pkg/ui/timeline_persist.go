@@ -80,6 +80,8 @@ func StepTimelinePersistFuncWithVersion(store chatstore.TimelineStore, convID st
 		return out
 	}
 
+	currentTextID := ""
+
 	upsertEntity := func(ctx context.Context, entityID string, kind string, propsMap map[string]any) error {
 		if store == nil || strings.TrimSpace(convID) == "" || strings.TrimSpace(entityID) == "" {
 			return nil
@@ -167,9 +169,10 @@ func StepTimelinePersistFuncWithVersion(store chatstore.TimelineStore, convID st
 		switch e := ev.(type) {
 		case *events.EventTextSegmentStarted:
 			// Do not create an empty assistant entry on segment start.
-			_ = e
+			currentTextID = canonicalEntityID(e.Correlation())
 		case *events.EventTextDelta:
 			textID := canonicalEntityID(e.Correlation())
+			currentTextID = textID
 			if strings.TrimSpace(e.Text) == "" {
 				break
 			}
@@ -180,6 +183,7 @@ func StepTimelinePersistFuncWithVersion(store chatstore.TimelineStore, convID st
 			persistMessage(textID, "assistant", e.Text, true)
 		case *events.EventTextSegmentFinished:
 			textID := canonicalEntityID(e.Correlation())
+			currentTextID = textID
 			mu.Lock()
 			seen := assistantSeen[textID]
 			content := e.Text
@@ -196,21 +200,25 @@ func StepTimelinePersistFuncWithVersion(store chatstore.TimelineStore, convID st
 			}
 			persistMessage(textID, "assistant", content, false)
 		case *events.EventInterrupt:
+			textID := strings.TrimSpace(currentTextID)
+			if textID == "" {
+				textID = entityID
+			}
 			mu.Lock()
-			seen := assistantSeen[entityID]
+			seen := assistantSeen[textID]
 			content := e.Text
 			if strings.TrimSpace(content) == "" {
-				content = assistantContent[entityID]
+				content = assistantContent[textID]
 			}
 			if strings.TrimSpace(content) != "" {
-				assistantSeen[entityID] = true
-				assistantContent[entityID] = content
+				assistantSeen[textID] = true
+				assistantContent[textID] = content
 			}
 			mu.Unlock()
 			if strings.TrimSpace(content) == "" && !seen {
 				break
 			}
-			persistMessage(entityID, "assistant", content, false)
+			persistMessage(textID, "assistant", content, false)
 		case *events.EventError:
 			errText := "**Error**\n\n" + e.ErrorString
 			mu.Lock()

@@ -44,6 +44,27 @@ func TestStepTimelinePersistFunc_AssistantLifecycle(t *testing.T) {
 	require.Equal(t, false, props["streaming"])
 }
 
+func TestStepTimelinePersistFunc_InterruptFinishesCurrentTextSegment(t *testing.T) {
+	store := chatstore.NewInMemoryTimelineStore(100)
+	h := StepTimelinePersistFunc(store, "conv-interrupt")
+
+	md := events.EventMetadata{ID: uuid.New(), SessionID: "session-interrupt", TurnID: "turn-interrupt"}
+	corr := textCorrelation(md)
+	emitPersistEvent(t, h, events.NewTextSegmentStartedEvent(md, corr, "assistant"))
+	emitPersistEvent(t, h, events.NewTextDeltaEvent(md, corr, "partial", "partial", 1))
+	emitPersistEvent(t, h, events.NewInterruptEvent(md, ""))
+
+	snap, err := store.GetSnapshot(context.Background(), "conv-interrupt", 0, 100)
+	require.NoError(t, err)
+	require.Len(t, snap.Entities, 1)
+	require.Equal(t, md.ID.String(), snap.Entities[0].Id)
+
+	props := snap.Entities[0].GetProps().AsMap()
+	require.Equal(t, "assistant", props["role"])
+	require.Equal(t, "partial", props["content"])
+	require.Equal(t, false, props["streaming"])
+}
+
 func TestStepTimelinePersistFunc_ThinkingLifecycle(t *testing.T) {
 	store := chatstore.NewInMemoryTimelineStore(100)
 	h := StepTimelinePersistFunc(store, "conv-2")
