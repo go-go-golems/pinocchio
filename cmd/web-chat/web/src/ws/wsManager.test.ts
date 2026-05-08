@@ -312,4 +312,22 @@ describe('timelineMutationFromUIEvent', () => {
     expect(result?.upsert?.props.correlationKey).toBe('openai-chat:resp_tool:choice:0:tool:call_1');
     expect(result?.upsert?.props.toolCallIndex).toBe(0);
   });
+
+  it('does not clear tool input props on ChatToolCallFinished', () => {
+    const finished = timelineMutationFromUIEvent({
+      name: 'ChatToolCallFinished',
+      payload: {
+        messageId: 'chat-msg-7',
+        toolCallId: 'call_1',
+        toolName: 'search',
+        status: 'completed',
+      },
+    });
+
+    expect(finished?.upsert?.id).toBe('call_1');
+    expect(finished?.upsert?.props.done).toBe(true);
+    expect(finished?.upsert?.props.status).toBe('completed');
+    expect(finished?.upsert?.props).not.toHaveProperty('input');
+    expect(finished?.upsert?.props).not.toHaveProperty('inputRaw');
+  });
 });

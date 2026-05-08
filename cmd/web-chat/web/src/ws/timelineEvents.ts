@@ -260,22 +260,25 @@ export function timelineMutationFromUIEvent(frame: CanonicalFrame): TimelineMuta
     case 'ChatToolCallFinished': {
       const payload = event.payload;
       if (!payload.toolCallId) return null;
-      const input = 'input' in payload ? payload.input : '';
+      const hasInput = 'input' in payload && payload.input !== '';
+      const input = hasInput ? payload.input : '';
       const executing = 'executing' in payload ? payload.executing : false;
       return {
-        upsert: toolCallEntity(payload.toolCallId, {
-          messageId: payload.messageId,
-          toolCallId: payload.toolCallId,
-          name: payload.toolName || 'tool',
-          toolName: payload.toolName,
-          input: parseToolInput(input),
-          inputRaw: input,
-          executing,
-          status: payload.status,
-          argumentsDelta: 'argumentsDelta' in payload ? payload.argumentsDelta : undefined,
-          ...correlationProps(payload.correlation),
-          done: event.name === 'ChatToolCallFinished' || payload.status === 'completed',
-        }),
+        upsert: toolCallEntity(
+          payload.toolCallId,
+          definedProps({
+            messageId: payload.messageId,
+            toolCallId: payload.toolCallId,
+            name: payload.toolName || 'tool',
+            toolName: payload.toolName,
+            ...(hasInput ? { input: parseToolInput(input), inputRaw: input } : {}),
+            executing,
+            status: payload.status,
+            argumentsDelta: 'argumentsDelta' in payload ? payload.argumentsDelta : undefined,
+            ...correlationProps(payload.correlation),
+            done: event.name === 'ChatToolCallFinished' || payload.status === 'completed',
+          }),
+        ),
       };
     }
     case 'ChatToolResultReady': {

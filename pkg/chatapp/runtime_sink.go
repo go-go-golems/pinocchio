@@ -71,25 +71,38 @@ func (s *runtimeEventSink) PublishEvent(event gepevents.Event) error {
 		s.mu.Lock()
 		s.terminal = true
 		s.mu.Unlock()
+		if err := s.finishActiveTextSegment("failed", "error", ""); err != nil {
+			return err
+		}
 		return s.engine.publish(s.publishContext(), s.sessionID, s.pub, EventChatRunFailed, &chatappv1.ChatRunFailed{MessageId: s.messageID, Status: "failed", Error: ev.ErrorString})
 	case *gepevents.EventInterrupt:
 		s.mu.Lock()
-		content := firstNonEmpty(ev.Text, s.lastText)
-		textMessageID := s.lastTextMessageID
-		corr := s.lastTextCorrelation
-		hadActiveText := s.textActive || strings.TrimSpace(content) != ""
 		s.terminal = true
-		s.textActive = false
 		s.mu.Unlock()
-		if hadActiveText && strings.TrimSpace(textMessageID) != "" {
-			if err := s.engine.publish(s.publishContext(), s.sessionID, s.pub, EventChatTextSegmentFinished, &chatappv1.ChatTextSegmentFinished{MessageId: textMessageID, Role: "assistant", Prompt: s.prompt, Text: content, Content: content, Status: "stopped", Streaming: false, Final: true, FinishReason: "stopped", Correlation: CorrelationInfoFromGeppetto(corr)}); err != nil {
-				return err
-			}
+		if err := s.finishActiveTextSegment("stopped", "stopped", ev.Text); err != nil {
+			return err
 		}
 		return s.engine.publish(s.publishContext(), s.sessionID, s.pub, EventChatRunStopped, &chatappv1.ChatRunStopped{MessageId: s.messageID, Status: "stopped", Error: ev.Text})
 	default:
 		return s.engine.handleFeatureRuntimeEvent(s.publishContext(), s.sessionID, s.messageID, s.pub, event)
 	}
+}
+
+func (s *runtimeEventSink) finishActiveTextSegment(status, finishReason, text string) error {
+	if s == nil || s.engine == nil || s.pub == nil {
+		return nil
+	}
+	s.mu.Lock()
+	content := firstNonEmpty(text, s.lastText)
+	textMessageID := s.lastTextMessageID
+	corr := s.lastTextCorrelation
+	hadActiveText := s.textActive
+	s.textActive = false
+	s.mu.Unlock()
+	if !hadActiveText || strings.TrimSpace(textMessageID) == "" {
+		return nil
+	}
+	return s.engine.publish(s.publishContext(), s.sessionID, s.pub, EventChatTextSegmentFinished, &chatappv1.ChatTextSegmentFinished{MessageId: textMessageID, Role: "assistant", Prompt: s.prompt, Text: content, Content: content, Status: status, Streaming: false, Final: true, FinishReason: finishReason, Correlation: CorrelationInfoFromGeppetto(corr)})
 }
 
 func (s *runtimeEventSink) publishContext() context.Context {

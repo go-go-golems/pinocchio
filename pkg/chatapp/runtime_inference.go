@@ -126,6 +126,7 @@ func (e *Engine) runRuntimeInference(ctx context.Context, sid sessionstream.Sess
 	output, err := handle.Wait()
 	if err != nil {
 		if !sink.IsTerminal() {
+			_ = sink.finishActiveTextSegment("failed", "error", "")
 			if isMaxIterationsError(err) {
 				_ = e.publish(publishContext(ctx), sid, pub, EventChatTextSegmentFinished, &chatappv1.ChatTextSegmentFinished{MessageId: runtimeWarningMessageID(messageID), Role: "warning", Prompt: prompt, Text: maxIterationsWarningText(err), Content: maxIterationsWarningText(err), Status: "finished", Streaming: false, Final: true})
 			}

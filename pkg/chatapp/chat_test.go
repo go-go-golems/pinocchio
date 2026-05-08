@@ -274,12 +274,12 @@ func TestRuntimeErrorAfterPartialStopsActiveTextSegment(t *testing.T) {
 	textSegment := ids["chat-msg-1:text:1"]
 	require.NotNil(t, textSegment)
 	require.Equal(t, "partial text", textSegment.GetContent())
-	require.Equal(t, "streaming", textSegment.GetStatus())
-	require.True(t, textSegment.GetStreaming())
+	require.Equal(t, "failed", textSegment.GetStatus())
+	require.False(t, textSegment.GetStreaming())
 	require.Equal(t, "chat-msg-1", textSegment.GetParentMessageId())
 	require.Equal(t, int32(1), textSegment.GetSegment())
 	require.Equal(t, "text", textSegment.GetSegmentType())
-	require.False(t, textSegment.GetFinal())
+	require.True(t, textSegment.GetFinal())
 	require.NotContains(t, ids, "chat-msg-1")
 }
 
