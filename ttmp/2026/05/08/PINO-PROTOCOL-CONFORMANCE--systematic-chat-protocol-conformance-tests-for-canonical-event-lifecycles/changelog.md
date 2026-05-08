@@ -10,6 +10,7 @@
 - Completed source-backed protocol conformance design guide and investigation diary for canonical chat lifecycle testing.
 - `docmgr doctor --root /home/manuel/workspaces/2026-05-02/use-sessionstream-coinvault/pinocchio/ttmp --ticket PINO-PROTOCOL-CONFORMANCE --stale-after 30` passed.
 - Uploaded the design/diary/tasks/changelog bundle to reMarkable: `/ai/2026/05/08/PINO-PROTOCOL-CONFORMANCE/PINO_PROTOCOL_CONFORMANCE_chat_protocol_guide.pdf`.
+- Reuploaded the same bundle with the default PDF layout after removing layout-option guidance from the local reMarkable upload skill.
 
 ### Related Files
 

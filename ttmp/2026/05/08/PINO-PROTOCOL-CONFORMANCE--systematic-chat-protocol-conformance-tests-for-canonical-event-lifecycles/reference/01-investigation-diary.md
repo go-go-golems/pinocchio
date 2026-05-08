@@ -348,6 +348,7 @@ The ticket should be valid according to `docmgr` and the requested guide should 
 - The reMarkable dry-run showed the intended bundle contents and destination.
 - The actual upload succeeded with:
   - `OK: uploaded PINO_PROTOCOL_CONFORMANCE_chat_protocol_guide.pdf -> /ai/2026/05/08/PINO-PROTOCOL-CONFORMANCE`
+- Correction: the bundle was reuploaded with the default PDF layout after removing the layout option from the local reMarkable upload skill.
 
 ### What didn't work
 
@@ -398,7 +399,6 @@ remarquee upload bundle \
   --name "PINO PROTOCOL CONFORMANCE chat protocol guide" \
   --remote-dir "/ai/2026/05/08/PINO-PROTOCOL-CONFORMANCE" \
   --toc-depth 2 \
-  --layout editor \
   --dry-run \
   --non-interactive
 ```
