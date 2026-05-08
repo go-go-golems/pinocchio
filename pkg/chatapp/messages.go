@@ -4,24 +4,9 @@ import (
 	"encoding/json"
 	"strings"
 
-	chatappv1 "github.com/go-go-golems/pinocchio/pkg/chatapp/pb/proto/pinocchio/chatapp/v1"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )
-
-func newChatMessageUpdate(messageID, role, content, text, prompt, status string, streaming bool, errText string) *chatappv1.ChatMessageUpdate {
-	return &chatappv1.ChatMessageUpdate{
-		MessageId: messageID,
-		Role:      role,
-		Prompt:    prompt,
-		Text:      text,
-		Content:   content,
-		Status:    status,
-		Streaming: streaming,
-		Error:     errText,
-		Chunk:     "",
-	}
-}
 
 func runtimeWarningMessageID(messageID string) string {
 	messageID = strings.TrimSpace(messageID)

@@ -30,19 +30,19 @@ func AddPrettyHandlers(router *events.EventRouter, w io.Writer) {
 			return err
 		}
 		switch ev := e.(type) {
-		case *events.EventPartialCompletionStart:
-			fmt.Fprintln(w, headerStyle.Render("— Inference started —"))
-		case *events.EventPartialCompletion:
+		case *events.EventTextSegmentStarted:
+			fmt.Fprintln(w, headerStyle.Render("— Text segment started —"))
+		case *events.EventTextDelta:
 			if ev.Delta != "" {
 				_, _ = fmt.Fprint(w, deltaStyle.Render(ev.Delta))
 			}
-		case *events.EventFinal:
+		case *events.EventTextSegmentFinished:
 			if ev.Text != "" {
 				fmt.Fprintln(w, "")
-				fmt.Fprintln(w, finalStyle.Render("— Inference finished —"))
+				fmt.Fprintln(w, finalStyle.Render("— Text segment finished —"))
 			}
-		case *events.EventToolCall:
-			inputJSON := ev.ToolCall.Input
+		case *events.EventToolCallRequested:
+			inputJSON := ev.Input
 			if s := strings.TrimSpace(inputJSON); strings.HasPrefix(s, "{") || strings.HasPrefix(s, "[") {
 				var tmp interface{}
 				if err := json.Unmarshal([]byte(inputJSON), &tmp); err == nil {
@@ -52,14 +52,14 @@ func AddPrettyHandlers(router *events.EventRouter, w io.Writer) {
 				}
 			}
 			block := []string{
-				subHeaderStyle.Render("Tool Call:"),
-				toolNameStyle.Render(fmt.Sprintf("Name: %s", ev.ToolCall.Name)),
-				jsonStyle.Render(fmt.Sprintf("ID: %s", ev.ToolCall.ID)),
+				subHeaderStyle.Render("Tool Call Requested:"),
+				toolNameStyle.Render(fmt.Sprintf("Name: %s", ev.ToolName)),
+				jsonStyle.Render(fmt.Sprintf("ID: %s", ev.ToolCallID)),
 				jsonStyle.Render(inputJSON),
 			}
 			fmt.Fprintln(w, strings.Join(block, "\n"))
-		case *events.EventToolCallExecute:
-			inputJSON := ev.ToolCall.Input
+		case *events.EventToolExecutionStarted:
+			inputJSON := ev.Input
 			if s := strings.TrimSpace(inputJSON); strings.HasPrefix(s, "{") || strings.HasPrefix(s, "[") {
 				var tmp interface{}
 				if err := json.Unmarshal([]byte(inputJSON), &tmp); err == nil {
@@ -70,13 +70,13 @@ func AddPrettyHandlers(router *events.EventRouter, w io.Writer) {
 			}
 			block := []string{
 				subHeaderStyle.Render("Tool Execute:"),
-				toolNameStyle.Render(fmt.Sprintf("Name: %s", ev.ToolCall.Name)),
-				jsonStyle.Render(fmt.Sprintf("ID: %s", ev.ToolCall.ID)),
+				toolNameStyle.Render(fmt.Sprintf("Name: %s", ev.ToolName)),
+				jsonStyle.Render(fmt.Sprintf("ID: %s", ev.ToolCallID)),
 				jsonStyle.Render(inputJSON),
 			}
 			fmt.Fprintln(w, strings.Join(block, "\n"))
-		case *events.EventToolResult:
-			resultJSON := ev.ToolResult.Result
+		case *events.EventToolResultReady:
+			resultJSON := ev.Result
 			if s := strings.TrimSpace(resultJSON); strings.HasPrefix(s, "{") || strings.HasPrefix(s, "[") {
 				var tmp interface{}
 				if err := json.Unmarshal([]byte(resultJSON), &tmp); err == nil {
@@ -87,23 +87,7 @@ func AddPrettyHandlers(router *events.EventRouter, w io.Writer) {
 			}
 			block := []string{
 				subHeaderStyle.Render("Tool Result:"),
-				toolNameStyle.Render(fmt.Sprintf("ID: %s", ev.ToolResult.ID)),
-				jsonStyle.Render(resultJSON),
-			}
-			fmt.Fprintln(w, strings.Join(block, "\n"))
-		case *events.EventToolCallExecutionResult:
-			resultJSON := ev.ToolResult.Result
-			if s := strings.TrimSpace(resultJSON); strings.HasPrefix(s, "{") || strings.HasPrefix(s, "[") {
-				var tmp interface{}
-				if err := json.Unmarshal([]byte(resultJSON), &tmp); err == nil {
-					if b, err := json.MarshalIndent(tmp, "", "  "); err == nil {
-						resultJSON = string(b)
-					}
-				}
-			}
-			block := []string{
-				subHeaderStyle.Render("Tool Exec Result:"),
-				toolNameStyle.Render(fmt.Sprintf("ID: %s", ev.ToolResult.ID)),
+				toolNameStyle.Render(fmt.Sprintf("ID: %s", ev.ToolCallID)),
 				jsonStyle.Render(resultJSON),
 			}
 			fmt.Fprintln(w, strings.Join(block, "\n"))

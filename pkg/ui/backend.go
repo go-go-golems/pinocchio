@@ -312,24 +312,24 @@ func StepChatForwardFunc(p *tea.Program) func(msg *message.Message) error {
 		entityID := md.ID.String()
 
 		switch e_ := e.(type) {
-		case *events.EventPartialCompletionStart:
+		case *events.EventTextSegmentStarted:
 			// Defer assistant entity creation until first visible assistant token arrives.
 			markAssistantStart(entityID)
-		case *events.EventPartialCompletion:
-			// Create on first non-empty completion; then update as tokens stream in.
-			if strings.TrimSpace(e_.Completion) != "" {
-				ensureAssistantEntity(entityID, md, e_.Completion)
+		case *events.EventTextDelta:
+			// Create on first non-empty text update; then update as tokens stream in.
+			if strings.TrimSpace(e_.Text) != "" {
+				ensureAssistantEntity(entityID, md, e_.Text)
 			}
 			if !hasAssistantEntity(entityID) {
 				break
 			}
 			p.Send(timeline.UIEntityUpdated{
 				ID:        timeline.EntityID{LocalID: entityID, Kind: "llm_text"},
-				Patch:     map[string]any{"text": e_.Completion, "metadata": md.LLMInferenceData, "streaming": true},
+				Patch:     map[string]any{"text": e_.Text, "metadata": md.LLMInferenceData, "streaming": true},
 				Version:   time.Now().UnixNano(),
 				UpdatedAt: time.Now(),
 			})
-		case *events.EventFinal:
+		case *events.EventTextSegmentFinished:
 			if strings.TrimSpace(e_.Text) != "" {
 				ensureAssistantEntity(entityID, md, e_.Text)
 			}
@@ -352,13 +352,8 @@ func StepChatForwardFunc(p *tea.Program) func(msg *message.Message) error {
 			clearAssistantTracking(entityID)
 			p.Send(boba_chat.BackendFinishedMsg{})
 		case *events.EventInterrupt:
-			intr, ok := events.ToTypedEvent[events.EventInterrupt](e)
-			if !ok {
-				log.Error().Str("component", "step_forward").Msg("EventInterrupt type assertion failed")
-				return errors.New("payload is not of type EventInterrupt")
-			}
-			if strings.TrimSpace(intr.Text) != "" {
-				ensureAssistantEntity(entityID, md, intr.Text)
+			if strings.TrimSpace(e_.Text) != "" {
+				ensureAssistantEntity(entityID, md, e_.Text)
 			}
 			if !hasAssistantEntity(entityID) {
 				clearAssistantTracking(entityID)
@@ -367,7 +362,7 @@ func StepChatForwardFunc(p *tea.Program) func(msg *message.Message) error {
 			}
 			p.Send(timeline.UIEntityCompleted{
 				ID:     timeline.EntityID{LocalID: entityID, Kind: "llm_text"},
-				Result: map[string]any{"text": intr.Text},
+				Result: map[string]any{"text": e_.Text},
 			})
 			p.Send(timeline.UIEntityUpdated{ID: timeline.EntityID{LocalID: entityID, Kind: "llm_text"}, Patch: map[string]any{"streaming": false}, Version: time.Now().UnixNano(), UpdatedAt: time.Now()})
 			clearAssistantTracking(entityID)
@@ -388,34 +383,31 @@ func StepChatForwardFunc(p *tea.Program) func(msg *message.Message) error {
 			clearAssistantTracking(entityID)
 			p.Send(boba_chat.BackendFinishedMsg{})
 			// Tool-related events can be mapped to dedicated tool_call entities if desired
-		case *events.EventInfo:
-			if e_.Message == "thinking-started" {
-				thinkID := timeline.EntityID{LocalID: entityID + ":thinking", Kind: "llm_text"}
-				p.Send(timeline.UIEntityCreated{
-					ID:        thinkID,
-					Renderer:  timeline.RendererDescriptor{Kind: "llm_text"},
-					Props:     map[string]any{"role": "thinking", "text": "", "streaming": true},
-					StartedAt: time.Now(),
-				})
-			}
-			if e_.Message == "thinking-ended" {
-				thinkID := timeline.EntityID{LocalID: entityID + ":thinking", Kind: "llm_text"}
-				p.Send(timeline.UIEntityUpdated{
-					ID:        thinkID,
-					Patch:     map[string]any{"streaming": false},
-					Version:   time.Now().UnixNano(),
-					UpdatedAt: time.Now(),
-				})
-				p.Send(timeline.UIEntityCompleted{ID: thinkID})
-			}
-		case *events.EventThinkingPartial:
+		case *events.EventReasoningSegmentStarted:
+			thinkID := timeline.EntityID{LocalID: entityID + ":thinking", Kind: "llm_text"}
+			p.Send(timeline.UIEntityCreated{
+				ID:        thinkID,
+				Renderer:  timeline.RendererDescriptor{Kind: "llm_text"},
+				Props:     map[string]any{"role": "thinking", "text": "", "streaming": true},
+				StartedAt: time.Now(),
+			})
+		case *events.EventReasoningDelta:
 			thinkID := timeline.EntityID{LocalID: entityID + ":thinking", Kind: "llm_text"}
 			p.Send(timeline.UIEntityUpdated{
 				ID:        thinkID,
-				Patch:     map[string]any{"text": e_.Completion, "streaming": true},
+				Patch:     map[string]any{"text": e_.Text, "streaming": true},
 				Version:   time.Now().UnixNano(),
 				UpdatedAt: time.Now(),
 			})
+		case *events.EventReasoningSegmentFinished:
+			thinkID := timeline.EntityID{LocalID: entityID + ":thinking", Kind: "llm_text"}
+			p.Send(timeline.UIEntityUpdated{
+				ID:        thinkID,
+				Patch:     map[string]any{"text": e_.Text, "streaming": false},
+				Version:   time.Now().UnixNano(),
+				UpdatedAt: time.Now(),
+			})
+			p.Send(timeline.UIEntityCompleted{ID: thinkID})
 		}
 
 		return nil

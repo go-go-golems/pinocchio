@@ -212,7 +212,7 @@ func (b *Backend) Start(ctx context.Context, prompt string) (tea.Cmd, error) {
 		if updated != nil {
 			log.Debug().Int("blocks", len(updated.Blocks)).Msg("inference completed")
 		}
-		// BackendFinishedMsg is emitted by the forwarder (EventFinal/EventError), not here.
+		// BackendFinishedMsg is emitted by the forwarder (canonical text-finished/error events), not here.
 		return nil
 	}, nil
 }

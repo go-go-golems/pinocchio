@@ -69,7 +69,7 @@ func TestReasoningPluginPublishesCanonicalReasoningEvents(t *testing.T) {
 	require.Equal(t, "stop", finished.GetFinishReason())
 }
 
-func TestReasoningPluginProjectsCanonicalEventsToCompatibilityUIAndTimeline(t *testing.T) {
+func TestReasoningPluginProjectsCanonicalEventsToUIAndTimeline(t *testing.T) {
 	plugin := NewReasoningPlugin()
 	corr := &chatappv1.CorrelationInfo{
 		Provider:       "openai_responses",
@@ -98,13 +98,13 @@ func TestReasoningPluginProjectsCanonicalEventsToCompatibilityUIAndTimeline(t *t
 	require.NoError(t, err)
 	require.True(t, handled)
 	require.Len(t, uiEvents, 1)
-	require.Equal(t, ReasoningFinishedUIName, uiEvents[0].Name)
-	uiPayload := uiEvents[0].Payload.(*chatappv1.ReasoningUpdate)
+	require.Equal(t, ReasoningFinishedEventName, uiEvents[0].Name)
+	uiPayload := uiEvents[0].Payload.(*chatappv1.ChatReasoningSegmentFinished)
 	require.Equal(t, "summary text", uiPayload.GetText())
-	require.Equal(t, "openai_responses", uiPayload.GetProvider())
-	require.Equal(t, int32(0), uiPayload.GetSummaryIndex())
-	require.NotNil(t, uiPayload.SummaryIndex)
-	require.Equal(t, "reasoning:rs_1", uiPayload.GetCorrelationKey())
+	require.Equal(t, "openai_responses", uiPayload.GetCorrelation().GetProvider())
+	require.Equal(t, int32(0), uiPayload.GetCorrelation().GetSummaryIndex())
+	require.NotNil(t, uiPayload.GetCorrelation().SummaryIndex)
+	require.Equal(t, "reasoning:rs_1", uiPayload.GetCorrelation().GetCorrelationKey())
 
 	entities, handled, err := plugin.ProjectTimeline(context.Background(), backend, nil, reasoningStaticTimelineView{})
 	require.NoError(t, err)
@@ -116,11 +116,12 @@ func TestReasoningPluginProjectsCanonicalEventsToCompatibilityUIAndTimeline(t *t
 	require.Equal(t, "summary text", entity.GetContent())
 	require.Equal(t, "finished", entity.GetStatus())
 	require.False(t, entity.GetStreaming())
+	require.Equal(t, "reasoning:rs_1", entity.GetCorrelation().GetCorrelationKey())
 }
 
-func TestReasoningPluginIgnoresLegacyThinkingEvents(t *testing.T) {
+func TestReasoningPluginIgnoresUnrelatedEvents(t *testing.T) {
 	plugin := NewReasoningPlugin()
-	handled, err := plugin.HandleRuntimeEvent(context.Background(), chatapp.RuntimeEventContext{SessionID: "sid", MessageID: "chat-msg-1"}, gepevents.NewThinkingPartialEvent(gepevents.EventMetadata{SessionID: "sid"}, "a", "alpha"))
+	handled, err := plugin.HandleRuntimeEvent(context.Background(), chatapp.RuntimeEventContext{SessionID: "sid", MessageID: "chat-msg-1"}, gepevents.NewErrorEvent(gepevents.EventMetadata{SessionID: "sid"}, context.Canceled))
 	require.NoError(t, err)
 	require.False(t, handled)
 }

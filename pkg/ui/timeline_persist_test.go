@@ -28,9 +28,10 @@ func TestStepTimelinePersistFunc_AssistantLifecycle(t *testing.T) {
 	h := StepTimelinePersistFunc(store, "conv-1")
 
 	md := events.EventMetadata{ID: uuid.New(), SessionID: "session-1", TurnID: "turn-1"}
-	emitPersistEvent(t, h, events.NewStartEvent(md))
-	emitPersistEvent(t, h, events.NewPartialCompletionEvent(md, "he", "he"))
-	emitPersistEvent(t, h, events.NewFinalEvent(md, "hello"))
+	corr := textCorrelation(md)
+	emitPersistEvent(t, h, events.NewTextSegmentStartedEvent(md, corr, "assistant"))
+	emitPersistEvent(t, h, events.NewTextDeltaEvent(md, corr, "he", "he", 1))
+	emitPersistEvent(t, h, events.NewTextSegmentFinishedEvent(md, corr, "hello", "stop"))
 
 	snap, err := store.GetSnapshot(context.Background(), "conv-1", 0, 100)
 	require.NoError(t, err)
@@ -48,9 +49,10 @@ func TestStepTimelinePersistFunc_ThinkingLifecycle(t *testing.T) {
 	h := StepTimelinePersistFunc(store, "conv-2")
 
 	md := events.EventMetadata{ID: uuid.New(), SessionID: "session-2", TurnID: "turn-2"}
-	emitPersistEvent(t, h, events.NewInfoEvent(md, "thinking-started", nil))
-	emitPersistEvent(t, h, events.NewThinkingPartialEvent(md, "r", "reasoning text"))
-	emitPersistEvent(t, h, events.NewInfoEvent(md, "thinking-ended", nil))
+	corr := reasoningCorrelation(md)
+	emitPersistEvent(t, h, events.NewReasoningSegmentStartedEvent(md, corr, "thinking"))
+	emitPersistEvent(t, h, events.NewReasoningDeltaEvent(md, corr, "r", "reasoning text", 1))
+	emitPersistEvent(t, h, events.NewReasoningSegmentFinishedEvent(md, corr, "reasoning text", "stop"))
 
 	snap, err := store.GetSnapshot(context.Background(), "conv-2", 0, 100)
 	require.NoError(t, err)
@@ -69,7 +71,7 @@ func TestStepTimelinePersistFunc_DoesNotCreateEmptyAssistantOnStartOnly(t *testi
 	h := StepTimelinePersistFunc(store, "conv-3")
 
 	md := events.EventMetadata{ID: uuid.New(), SessionID: "session-3", TurnID: "turn-3"}
-	emitPersistEvent(t, h, events.NewStartEvent(md))
+	emitPersistEvent(t, h, events.NewTextSegmentStartedEvent(md, textCorrelation(md), "assistant"))
 
 	snap, err := store.GetSnapshot(context.Background(), "conv-3", 0, 100)
 	require.NoError(t, err)
@@ -92,8 +94,9 @@ func TestStepTimelinePersistFunc_PersistsRuntimeAttributionFromMetadataExtra(t *
 			"profile.version":     uint64(7),
 		},
 	}
-	emitPersistEvent(t, h, events.NewPartialCompletionEvent(md, "hi", "hi"))
-	emitPersistEvent(t, h, events.NewFinalEvent(md, "hello"))
+	corr := textCorrelation(md)
+	emitPersistEvent(t, h, events.NewTextDeltaEvent(md, corr, "hi", "hi", 1))
+	emitPersistEvent(t, h, events.NewTextSegmentFinishedEvent(md, corr, "hello", "stop"))
 
 	snap, err := store.GetSnapshot(context.Background(), "conv-attr", 0, 100)
 	require.NoError(t, err)
@@ -172,12 +175,36 @@ func (s *recordingTimelineStore) ListConversations(context.Context, int, int64) 
 
 func (s *recordingTimelineStore) Close() error { return nil }
 
+func textCorrelation(md events.EventMetadata) events.Correlation {
+	return events.Correlation{
+		SessionID:      md.SessionID,
+		TurnID:         md.TurnID,
+		SegmentID:      md.ID.String(),
+		SegmentIndex:   1,
+		SegmentType:    events.SegmentTypeText,
+		StreamKind:     events.StreamKindContent,
+		CorrelationKey: md.ID.String(),
+	}
+}
+
+func reasoningCorrelation(md events.EventMetadata) events.Correlation {
+	return events.Correlation{
+		SessionID:      md.SessionID,
+		TurnID:         md.TurnID,
+		SegmentID:      md.ID.String() + ":thinking",
+		SegmentIndex:   1,
+		SegmentType:    events.SegmentTypeReasoning,
+		StreamKind:     events.StreamKindReasoning,
+		CorrelationKey: md.ID.String() + ":thinking",
+	}
+}
+
 func TestStepTimelinePersistFunc_UsesDetachedContextAfterMessageContextCancellation(t *testing.T) {
 	store := &recordingTimelineStore{}
 	h := StepTimelinePersistFunc(store, "conv-4")
 
 	md := events.EventMetadata{ID: uuid.New(), SessionID: "session-4", TurnID: "turn-4"}
-	b, err := json.Marshal(events.NewPartialCompletionEvent(md, "he", "he"))
+	b, err := json.Marshal(events.NewTextDeltaEvent(md, textCorrelation(md), "he", "he", 1))
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithCancel(context.Background())

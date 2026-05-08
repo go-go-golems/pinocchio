@@ -10,7 +10,7 @@ import { fileDesc, messageDesc } from "@bufbuild/protobuf/codegenv2";
  * Describes the file proto/pinocchio/chatapp/v1/chat.proto.
  */
 export const file_proto_pinocchio_chatapp_v1_chat: GenFile = /*@__PURE__*/
-  fileDesc("CiVwcm90by9waW5vY2NoaW8vY2hhdGFwcC92MS9jaGF0LnByb3RvEhRwaW5vY2NoaW8uY2hhdGFwcC52MSJUChVTdGFydEluZmVyZW5jZUNvbW1hbmQSDgoGcHJvbXB0GAEgASgJEhcKD2lkZW1wb3RlbmN5X2tleRgCIAEoCRISCgpyZXF1ZXN0X2lkGAMgASgJIhYKFFN0b3BJbmZlcmVuY2VDb21tYW5kIpUBCglVc2FnZUluZm8SFAoMaW5wdXRfdG9rZW5zGAEgASgFEhUKDW91dHB1dF90b2tlbnMYAiABKAUSFQoNY2FjaGVkX3Rva2VucxgDIAEoBRIjChtjYWNoZV9jcmVhdGlvbl9pbnB1dF90b2tlbnMYBCABKAUSHwoXY2FjaGVfcmVhZF9pbnB1dF90b2tlbnMYBSABKAUi8QQKD0NvcnJlbGF0aW9uSW5mbxISCgpzZXNzaW9uX2lkGAEgASgJEg4KBnJ1bl9pZBgCIAEoCRIUCgxpbmZlcmVuY2VfaWQYAyABKAkSDwoHdHVybl9pZBgEIAEoCRIYChBwcm92aWRlcl9jYWxsX2lkGAUgASgJEhsKE3Byb3ZpZGVyX2NhbGxfaW5kZXgYBiABKAUSEAoIcHJvdmlkZXIYByABKAkSDQoFbW9kZWwYCCABKAkSEwoLcmVzcG9uc2VfaWQYCSABKAkSDwoHaXRlbV9pZBgKIAEoCRIZCgxvdXRwdXRfaW5kZXgYCyABKAVIAIgBARIaCg1zdW1tYXJ5X2luZGV4GAwgASgFSAGIAQESGQoMY2hvaWNlX2luZGV4GA0gASgFSAKIAQESIAoTY29udGVudF9ibG9ja19pbmRleBgOIAEoBUgDiAEBEhIKCnNlZ21lbnRfaWQYDyABKAkSFQoNc2VnbWVudF9pbmRleBgQIAEoBRIUCgxzZWdtZW50X3R5cGUYESABKAkSEwoLc3RyZWFtX2tpbmQYEiABKAkSFAoMdG9vbF9jYWxsX2lkGBMgASgJEhwKD3Rvb2xfY2FsbF9pbmRleBgUIAEoBUgEiAEBEhcKD2NvcnJlbGF0aW9uX2tleRgVIAEoCRIeChZwYXJlbnRfY29ycmVsYXRpb25fa2V5GBYgASgJQg8KDV9vdXRwdXRfaW5kZXhCEAoOX3N1bW1hcnlfaW5kZXhCDwoNX2Nob2ljZV9pbmRleEIWChRfY29udGVudF9ibG9ja19pbmRleEISChBfdG9vbF9jYWxsX2luZGV4InAKDkNoYXRSdW5TdGFydGVkEhIKCm1lc3NhZ2VfaWQYASABKAkSDgoGcHJvbXB0GAIgASgJEjoKC2NvcnJlbGF0aW9uGAMgASgLMiUucGlub2NjaGlvLmNoYXRhcHAudjEuQ29ycmVsYXRpb25JbmZvIqoBCg9DaGF0UnVuRmluaXNoZWQSEgoKbWVzc2FnZV9pZBgBIAEoCRIOCgZzdGF0dXMYAiABKAkSDQoFZXJyb3IYAyABKAkSGAoLZHVyYXRpb25fbXMYBCABKANIAIgBARI6Cgtjb3JyZWxhdGlvbhgFIAEoCzIlLnBpbm9jY2hpby5jaGF0YXBwLnYxLkNvcnJlbGF0aW9uSW5mb0IOCgxfZHVyYXRpb25fbXMifwoOQ2hhdFJ1blN0b3BwZWQSEgoKbWVzc2FnZV9pZBgBIAEoCRIOCgZzdGF0dXMYAiABKAkSDQoFZXJyb3IYAyABKAkSOgoLY29ycmVsYXRpb24YBCABKAsyJS5waW5vY2NoaW8uY2hhdGFwcC52MS5Db3JyZWxhdGlvbkluZm8ifgoNQ2hhdFJ1bkZhaWxlZBISCgptZXNzYWdlX2lkGAEgASgJEg4KBnN0YXR1cxgCIAEoCRINCgVlcnJvchgDIAEoCRI6Cgtjb3JyZWxhdGlvbhgEIAEoCzIlLnBpbm9jY2hpby5jaGF0YXBwLnYxLkNvcnJlbGF0aW9uSW5mbyJVChdDaGF0UHJvdmlkZXJDYWxsU3RhcnRlZBI6Cgtjb3JyZWxhdGlvbhgBIAEoCzIlLnBpbm9jY2hpby5jaGF0YXBwLnYxLkNvcnJlbGF0aW9uSW5mbyKiAQofQ2hhdFByb3ZpZGVyQ2FsbE1ldGFkYXRhVXBkYXRlZBITCgtzdG9wX3JlYXNvbhgBIAEoCRIuCgV1c2FnZRgCIAEoCzIfLnBpbm9jY2hpby5jaGF0YXBwLnYxLlVzYWdlSW5mbxI6Cgtjb3JyZWxhdGlvbhgDIAEoCzIlLnBpbm9jY2hpby5jaGF0YXBwLnYxLkNvcnJlbGF0aW9uSW5mbyLzAQoYQ2hhdFByb3ZpZGVyQ2FsbEZpbmlzaGVkEhMKC3N0b3BfcmVhc29uGAEgASgJEhQKDGZpbmlzaF9jbGFzcxgCIAEoCRIuCgV1c2FnZRgDIAEoCzIfLnBpbm9jY2hpby5jaGF0YXBwLnYxLlVzYWdlSW5mbxIYCgtkdXJhdGlvbl9tcxgEIAEoA0gAiAEBEhYKDmhhc190b29sX2NhbGxzGAUgASgIEjoKC2NvcnJlbGF0aW9uGAYgASgLMiUucGlub2NjaGlvLmNoYXRhcHAudjEuQ29ycmVsYXRpb25JbmZvQg4KDF9kdXJhdGlvbl9tcyKpAQoWQ2hhdFRleHRTZWdtZW50U3RhcnRlZBISCgptZXNzYWdlX2lkGAEgASgJEgwKBHJvbGUYAiABKAkSDgoGcHJvbXB0GAMgASgJEg4KBnN0YXR1cxgEIAEoCRIRCglzdHJlYW1pbmcYBSABKAgSOgoLY29ycmVsYXRpb24YBiABKAsyJS5waW5vY2NoaW8uY2hhdGFwcC52MS5Db3JyZWxhdGlvbkluZm8izgEKDUNoYXRUZXh0RGVsdGESEgoKbWVzc2FnZV9pZBgBIAEoCRIMCgRyb2xlGAIgASgJEg4KBnByb21wdBgDIAEoCRINCgVjaHVuaxgEIAEoCRIMCgR0ZXh0GAUgASgJEg8KB2NvbnRlbnQYBiABKAkSDgoGc3RhdHVzGAcgASgJEhEKCXN0cmVhbWluZxgIIAEoCBI6Cgtjb3JyZWxhdGlvbhgJIAEoCzIlLnBpbm9jY2hpby5jaGF0YXBwLnYxLkNvcnJlbGF0aW9uSW5mbyLvAQoXQ2hhdFRleHRTZWdtZW50RmluaXNoZWQSEgoKbWVzc2FnZV9pZBgBIAEoCRIMCgRyb2xlGAIgASgJEg4KBnByb21wdBgDIAEoCRIMCgR0ZXh0GAQgASgJEg8KB2NvbnRlbnQYBSABKAkSDgoGc3RhdHVzGAYgASgJEhEKCXN0cmVhbWluZxgHIAEoCBINCgVmaW5hbBgIIAEoCBIVCg1maW5pc2hfcmVhc29uGAkgASgJEjoKC2NvcnJlbGF0aW9uGAogASgLMiUucGlub2NjaGlvLmNoYXRhcHAudjEuQ29ycmVsYXRpb25JbmZvIskBChtDaGF0UmVhc29uaW5nU2VnbWVudFN0YXJ0ZWQSEgoKbWVzc2FnZV9pZBgBIAEoCRIZChFwYXJlbnRfbWVzc2FnZV9pZBgCIAEoCRIMCgRyb2xlGAMgASgJEg4KBnN0YXR1cxgEIAEoCRIRCglzdHJlYW1pbmcYBSABKAgSDgoGc291cmNlGAYgASgJEjoKC2NvcnJlbGF0aW9uGAcgASgLMiUucGlub2NjaGlvLmNoYXRhcHAudjEuQ29ycmVsYXRpb25JbmZvIu4BChJDaGF0UmVhc29uaW5nRGVsdGESEgoKbWVzc2FnZV9pZBgBIAEoCRIZChFwYXJlbnRfbWVzc2FnZV9pZBgCIAEoCRIMCgRyb2xlGAMgASgJEg0KBWNodW5rGAQgASgJEgwKBHRleHQYBSABKAkSDwoHY29udGVudBgGIAEoCRIOCgZzdGF0dXMYByABKAkSEQoJc3RyZWFtaW5nGAggASgIEg4KBnNvdXJjZRgJIAEoCRI6Cgtjb3JyZWxhdGlvbhgKIAEoCzIlLnBpbm9jY2hpby5jaGF0YXBwLnYxLkNvcnJlbGF0aW9uSW5mbyKAAgocQ2hhdFJlYXNvbmluZ1NlZ21lbnRGaW5pc2hlZBISCgptZXNzYWdlX2lkGAEgASgJEhkKEXBhcmVudF9tZXNzYWdlX2lkGAIgASgJEgwKBHJvbGUYAyABKAkSDAoEdGV4dBgEIAEoCRIPCgdjb250ZW50GAUgASgJEg4KBnN0YXR1cxgGIAEoCRIRCglzdHJlYW1pbmcYByABKAgSDgoGc291cmNlGAggASgJEhUKDWZpbmlzaF9yZWFzb24YCSABKAkSOgoLY29ycmVsYXRpb24YCiABKAsyJS5waW5vY2NoaW8uY2hhdGFwcC52MS5Db3JyZWxhdGlvbkluZm8iwAEKE0NoYXRUb29sQ2FsbFN0YXJ0ZWQSEgoKbWVzc2FnZV9pZBgBIAEoCRIUCgx0b29sX2NhbGxfaWQYAiABKAkSEQoJdG9vbF9uYW1lGAMgASgJEg0KBWlucHV0GAQgASgJEhEKCWV4ZWN1dGluZxgFIAEoCBIOCgZzdGF0dXMYBiABKAkSOgoLY29ycmVsYXRpb24YByABKAsyJS5waW5vY2NoaW8uY2hhdGFwcC52MS5Db3JyZWxhdGlvbkluZm8izQEKGkNoYXRUb29sQ2FsbEFyZ3VtZW50c0RlbHRhEhIKCm1lc3NhZ2VfaWQYASABKAkSFAoMdG9vbF9jYWxsX2lkGAIgASgJEhEKCXRvb2xfbmFtZRgDIAEoCRIXCg9hcmd1bWVudHNfZGVsdGEYBCABKAkSDQoFaW5wdXQYBSABKAkSDgoGc3RhdHVzGAYgASgJEjoKC2NvcnJlbGF0aW9uGAcgASgLMiUucGlub2NjaGlvLmNoYXRhcHAudjEuQ29ycmVsYXRpb25JbmZvIsIBChVDaGF0VG9vbENhbGxSZXF1ZXN0ZWQSEgoKbWVzc2FnZV9pZBgBIAEoCRIUCgx0b29sX2NhbGxfaWQYAiABKAkSEQoJdG9vbF9uYW1lGAMgASgJEg0KBWlucHV0GAQgASgJEhEKCWV4ZWN1dGluZxgFIAEoCBIOCgZzdGF0dXMYBiABKAkSOgoLY29ycmVsYXRpb24YByABKAsyJS5waW5vY2NoaW8uY2hhdGFwcC52MS5Db3JyZWxhdGlvbkluZm8ixQEKGENoYXRUb29sRXhlY3V0aW9uU3RhcnRlZBISCgptZXNzYWdlX2lkGAEgASgJEhQKDHRvb2xfY2FsbF9pZBgCIAEoCRIRCgl0b29sX25hbWUYAyABKAkSDQoFaW5wdXQYBCABKAkSEQoJZXhlY3V0aW5nGAUgASgIEg4KBnN0YXR1cxgGIAEoCRI6Cgtjb3JyZWxhdGlvbhgHIAEoCzIlLnBpbm9jY2hpby5jaGF0YXBwLnYxLkNvcnJlbGF0aW9uSW5mbyKuAQoTQ2hhdFRvb2xSZXN1bHRSZWFkeRISCgptZXNzYWdlX2lkGAEgASgJEhQKDHRvb2xfY2FsbF9pZBgCIAEoCRIRCgl0b29sX25hbWUYAyABKAkSDgoGcmVzdWx0GAQgASgJEg4KBnN0YXR1cxgFIAEoCRI6Cgtjb3JyZWxhdGlvbhgGIAEoCzIlLnBpbm9jY2hpby5jaGF0YXBwLnYxLkNvcnJlbGF0aW9uSW5mbyKfAQoUQ2hhdFRvb2xDYWxsRmluaXNoZWQSEgoKbWVzc2FnZV9pZBgBIAEoCRIUCgx0b29sX2NhbGxfaWQYAiABKAkSEQoJdG9vbF9uYW1lGAMgASgJEg4KBnN0YXR1cxgEIAEoCRI6Cgtjb3JyZWxhdGlvbhgFIAEoCzIlLnBpbm9jY2hpby5jaGF0YXBwLnYxLkNvcnJlbGF0aW9uSW5mbyL3AgoRQ2hhdE1lc3NhZ2VVcGRhdGUSEgoKbWVzc2FnZV9pZBgBIAEoCRIMCgRyb2xlGAIgASgJEg4KBnByb21wdBgDIAEoCRINCgVjaHVuaxgEIAEoCRIMCgR0ZXh0GAUgASgJEg8KB2NvbnRlbnQYBiABKAkSDgoGc3RhdHVzGAcgASgJEhEKCXN0cmVhbWluZxgIIAEoCBINCgVlcnJvchgJIAEoCRIZChFwYXJlbnRfbWVzc2FnZV9pZBgKIAEoCRIPCgdzZWdtZW50GAsgASgFEhQKDHNlZ21lbnRfdHlwZRgMIAEoCRINCgVmaW5hbBgNIAEoCBIQCghwcm92aWRlchgOIAEoCRITCgtyZXNwb25zZV9pZBgPIAEoCRIZCgxjaG9pY2VfaW5kZXgYECABKAVIAIgBARITCgtzdHJlYW1fa2luZBgRIAEoCRIXCg9jb3JyZWxhdGlvbl9rZXkYEiABKAlCDwoNX2Nob2ljZV9pbmRleCLnAQoRQ2hhdE1lc3NhZ2VFbnRpdHkSEgoKbWVzc2FnZV9pZBgBIAEoCRIMCgRyb2xlGAIgASgJEg4KBnByb21wdBgDIAEoCRIMCgR0ZXh0GAQgASgJEg8KB2NvbnRlbnQYBSABKAkSDgoGc3RhdHVzGAYgASgJEhEKCXN0cmVhbWluZxgHIAEoCBINCgVlcnJvchgIIAEoCRIZChFwYXJlbnRfbWVzc2FnZV9pZBgJIAEoCRIPCgdzZWdtZW50GAogASgFEhQKDHNlZ21lbnRfdHlwZRgLIAEoCRINCgVmaW5hbBgMIAEoCCLCAwoPUmVhc29uaW5nVXBkYXRlEhIKCm1lc3NhZ2VfaWQYASABKAkSGQoRcGFyZW50X21lc3NhZ2VfaWQYAiABKAkSDwoHc2VnbWVudBgDIAEoBRIMCgRyb2xlGAQgASgJEg0KBWNodW5rGAUgASgJEgwKBHRleHQYBiABKAkSDwoHY29udGVudBgHIAEoCRIOCgZzdGF0dXMYCCABKAkSEQoJc3RyZWFtaW5nGAkgASgIEg4KBnNvdXJjZRgKIAEoCRIUCgxzZWdtZW50X3R5cGUYCyABKAkSEAoIcHJvdmlkZXIYDCABKAkSEwoLcmVzcG9uc2VfaWQYDSABKAkSDwoHaXRlbV9pZBgOIAEoCRIZCgxvdXRwdXRfaW5kZXgYDyABKAVIAIgBARIaCg1zdW1tYXJ5X2luZGV4GBAgASgFSAGIAQESGQoMY2hvaWNlX2luZGV4GBEgASgFSAKIAQESEwoLc3RyZWFtX2tpbmQYEiABKAkSFwoPY29ycmVsYXRpb25fa2V5GBMgASgJQg8KDV9vdXRwdXRfaW5kZXhCEAoOX3N1bW1hcnlfaW5kZXhCDwoNX2Nob2ljZV9pbmRleCJ8ChZBZ2VudE1vZGVQcmV2aWV3VXBkYXRlEhIKCm1lc3NhZ2VfaWQYASABKAkSFgoOY2FuZGlkYXRlX21vZGUYAiABKAkSEAoIYW5hbHlzaXMYAyABKAkSEwoLcGFyc2Vfc3RhdGUYBCABKAkSDwoHcHJldmlldxgFIAEoCCJ6ChhBZ2VudE1vZGVDb21taXR0ZWRVcGRhdGUSEgoKbWVzc2FnZV9pZBgBIAEoCRINCgV0aXRsZRgCIAEoCRIMCgRmcm9tGAMgASgJEgoKAnRvGAQgASgJEhAKCGFuYWx5c2lzGAUgASgJEg8KB3ByZXZpZXcYBiABKAgiLQoXQWdlbnRNb2RlUHJldmlld0NsZWFyZWQSEgoKbWVzc2FnZV9pZBgBIAEoCSJxCg9BZ2VudE1vZGVFbnRpdHkSEgoKbWVzc2FnZV9pZBgBIAEoCRINCgV0aXRsZRgCIAEoCRIMCgRmcm9tGAMgASgJEgoKAnRvGAQgASgJEhAKCGFuYWx5c2lzGAUgASgJEg8KB3ByZXZpZXcYBiABKAgisgIKDlRvb2xDYWxsVXBkYXRlEhIKCm1lc3NhZ2VfaWQYASABKAkSFAoMdG9vbF9jYWxsX2lkGAIgASgJEhEKCXRvb2xfbmFtZRgDIAEoCRINCgVpbnB1dBgEIAEoCRIRCglleGVjdXRpbmcYBSABKAgSDgoGc3RhdHVzGAYgASgJEhAKCHByb3ZpZGVyGAcgASgJEhMKC3Jlc3BvbnNlX2lkGAggASgJEhkKDGNob2ljZV9pbmRleBgJIAEoBUgAiAEBEhMKC3N0cmVhbV9raW5kGAogASgJEhcKD2NvcnJlbGF0aW9uX2tleRgLIAEoCRIcCg90b29sX2NhbGxfaW5kZXgYDCABKAVIAYgBAUIPCg1fY2hvaWNlX2luZGV4QhIKEF90b29sX2NhbGxfaW5kZXgiogIKEFRvb2xSZXN1bHRVcGRhdGUSEgoKbWVzc2FnZV9pZBgBIAEoCRIUCgx0b29sX2NhbGxfaWQYAiABKAkSEQoJdG9vbF9uYW1lGAMgASgJEg4KBnJlc3VsdBgEIAEoCRIOCgZzdGF0dXMYBSABKAkSEAoIcHJvdmlkZXIYBiABKAkSEwoLcmVzcG9uc2VfaWQYByABKAkSGQoMY2hvaWNlX2luZGV4GAggASgFSACIAQESEwoLc3RyZWFtX2tpbmQYCSABKAkSFwoPY29ycmVsYXRpb25fa2V5GAogASgJEhwKD3Rvb2xfY2FsbF9pbmRleBgLIAEoBUgBiAEBQg8KDV9jaG9pY2VfaW5kZXhCEgoQX3Rvb2xfY2FsbF9pbmRleCJ/Cg5Ub29sQ2FsbEVudGl0eRISCgptZXNzYWdlX2lkGAEgASgJEhQKDHRvb2xfY2FsbF9pZBgCIAEoCRIRCgl0b29sX25hbWUYAyABKAkSDQoFaW5wdXQYBCABKAkSEQoJZXhlY3V0aW5nGAUgASgIEg4KBnN0YXR1cxgGIAEoCSJvChBUb29sUmVzdWx0RW50aXR5EhIKCm1lc3NhZ2VfaWQYASABKAkSFAoMdG9vbF9jYWxsX2lkGAIgASgJEhEKCXRvb2xfbmFtZRgDIAEoCRIOCgZyZXN1bHQYBCABKAkSDgoGc3RhdHVzGAUgASgJQldaVWdpdGh1Yi5jb20vZ28tZ28tZ29sZW1zL3Bpbm9jY2hpby9wa2cvY2hhdGFwcC9wYi9wcm90by9waW5vY2NoaW8vY2hhdGFwcC92MTtjaGF0YXBwdjFiBnByb3RvMw");
+  fileDesc("CiVwcm90by9waW5vY2NoaW8vY2hhdGFwcC92MS9jaGF0LnByb3RvEhRwaW5vY2NoaW8uY2hhdGFwcC52MSJUChVTdGFydEluZmVyZW5jZUNvbW1hbmQSDgoGcHJvbXB0GAEgASgJEhcKD2lkZW1wb3RlbmN5X2tleRgCIAEoCRISCgpyZXF1ZXN0X2lkGAMgASgJIhYKFFN0b3BJbmZlcmVuY2VDb21tYW5kIpUBCglVc2FnZUluZm8SFAoMaW5wdXRfdG9rZW5zGAEgASgFEhUKDW91dHB1dF90b2tlbnMYAiABKAUSFQoNY2FjaGVkX3Rva2VucxgDIAEoBRIjChtjYWNoZV9jcmVhdGlvbl9pbnB1dF90b2tlbnMYBCABKAUSHwoXY2FjaGVfcmVhZF9pbnB1dF90b2tlbnMYBSABKAUi8QQKD0NvcnJlbGF0aW9uSW5mbxISCgpzZXNzaW9uX2lkGAEgASgJEg4KBnJ1bl9pZBgCIAEoCRIUCgxpbmZlcmVuY2VfaWQYAyABKAkSDwoHdHVybl9pZBgEIAEoCRIYChBwcm92aWRlcl9jYWxsX2lkGAUgASgJEhsKE3Byb3ZpZGVyX2NhbGxfaW5kZXgYBiABKAUSEAoIcHJvdmlkZXIYByABKAkSDQoFbW9kZWwYCCABKAkSEwoLcmVzcG9uc2VfaWQYCSABKAkSDwoHaXRlbV9pZBgKIAEoCRIZCgxvdXRwdXRfaW5kZXgYCyABKAVIAIgBARIaCg1zdW1tYXJ5X2luZGV4GAwgASgFSAGIAQESGQoMY2hvaWNlX2luZGV4GA0gASgFSAKIAQESIAoTY29udGVudF9ibG9ja19pbmRleBgOIAEoBUgDiAEBEhIKCnNlZ21lbnRfaWQYDyABKAkSFQoNc2VnbWVudF9pbmRleBgQIAEoBRIUCgxzZWdtZW50X3R5cGUYESABKAkSEwoLc3RyZWFtX2tpbmQYEiABKAkSFAoMdG9vbF9jYWxsX2lkGBMgASgJEhwKD3Rvb2xfY2FsbF9pbmRleBgUIAEoBUgEiAEBEhcKD2NvcnJlbGF0aW9uX2tleRgVIAEoCRIeChZwYXJlbnRfY29ycmVsYXRpb25fa2V5GBYgASgJQg8KDV9vdXRwdXRfaW5kZXhCEAoOX3N1bW1hcnlfaW5kZXhCDwoNX2Nob2ljZV9pbmRleEIWChRfY29udGVudF9ibG9ja19pbmRleEISChBfdG9vbF9jYWxsX2luZGV4InAKDkNoYXRSdW5TdGFydGVkEhIKCm1lc3NhZ2VfaWQYASABKAkSDgoGcHJvbXB0GAIgASgJEjoKC2NvcnJlbGF0aW9uGAMgASgLMiUucGlub2NjaGlvLmNoYXRhcHAudjEuQ29ycmVsYXRpb25JbmZvIqoBCg9DaGF0UnVuRmluaXNoZWQSEgoKbWVzc2FnZV9pZBgBIAEoCRIOCgZzdGF0dXMYAiABKAkSDQoFZXJyb3IYAyABKAkSGAoLZHVyYXRpb25fbXMYBCABKANIAIgBARI6Cgtjb3JyZWxhdGlvbhgFIAEoCzIlLnBpbm9jY2hpby5jaGF0YXBwLnYxLkNvcnJlbGF0aW9uSW5mb0IOCgxfZHVyYXRpb25fbXMifwoOQ2hhdFJ1blN0b3BwZWQSEgoKbWVzc2FnZV9pZBgBIAEoCRIOCgZzdGF0dXMYAiABKAkSDQoFZXJyb3IYAyABKAkSOgoLY29ycmVsYXRpb24YBCABKAsyJS5waW5vY2NoaW8uY2hhdGFwcC52MS5Db3JyZWxhdGlvbkluZm8ifgoNQ2hhdFJ1bkZhaWxlZBISCgptZXNzYWdlX2lkGAEgASgJEg4KBnN0YXR1cxgCIAEoCRINCgVlcnJvchgDIAEoCRI6Cgtjb3JyZWxhdGlvbhgEIAEoCzIlLnBpbm9jY2hpby5jaGF0YXBwLnYxLkNvcnJlbGF0aW9uSW5mbyJVChdDaGF0UHJvdmlkZXJDYWxsU3RhcnRlZBI6Cgtjb3JyZWxhdGlvbhgBIAEoCzIlLnBpbm9jY2hpby5jaGF0YXBwLnYxLkNvcnJlbGF0aW9uSW5mbyKiAQofQ2hhdFByb3ZpZGVyQ2FsbE1ldGFkYXRhVXBkYXRlZBITCgtzdG9wX3JlYXNvbhgBIAEoCRIuCgV1c2FnZRgCIAEoCzIfLnBpbm9jY2hpby5jaGF0YXBwLnYxLlVzYWdlSW5mbxI6Cgtjb3JyZWxhdGlvbhgDIAEoCzIlLnBpbm9jY2hpby5jaGF0YXBwLnYxLkNvcnJlbGF0aW9uSW5mbyLzAQoYQ2hhdFByb3ZpZGVyQ2FsbEZpbmlzaGVkEhMKC3N0b3BfcmVhc29uGAEgASgJEhQKDGZpbmlzaF9jbGFzcxgCIAEoCRIuCgV1c2FnZRgDIAEoCzIfLnBpbm9jY2hpby5jaGF0YXBwLnYxLlVzYWdlSW5mbxIYCgtkdXJhdGlvbl9tcxgEIAEoA0gAiAEBEhYKDmhhc190b29sX2NhbGxzGAUgASgIEjoKC2NvcnJlbGF0aW9uGAYgASgLMiUucGlub2NjaGlvLmNoYXRhcHAudjEuQ29ycmVsYXRpb25JbmZvQg4KDF9kdXJhdGlvbl9tcyKpAQoWQ2hhdFRleHRTZWdtZW50U3RhcnRlZBISCgptZXNzYWdlX2lkGAEgASgJEgwKBHJvbGUYAiABKAkSDgoGcHJvbXB0GAMgASgJEg4KBnN0YXR1cxgEIAEoCRIRCglzdHJlYW1pbmcYBSABKAgSOgoLY29ycmVsYXRpb24YBiABKAsyJS5waW5vY2NoaW8uY2hhdGFwcC52MS5Db3JyZWxhdGlvbkluZm8izgEKDUNoYXRUZXh0RGVsdGESEgoKbWVzc2FnZV9pZBgBIAEoCRIMCgRyb2xlGAIgASgJEg4KBnByb21wdBgDIAEoCRINCgVjaHVuaxgEIAEoCRIMCgR0ZXh0GAUgASgJEg8KB2NvbnRlbnQYBiABKAkSDgoGc3RhdHVzGAcgASgJEhEKCXN0cmVhbWluZxgIIAEoCBI6Cgtjb3JyZWxhdGlvbhgJIAEoCzIlLnBpbm9jY2hpby5jaGF0YXBwLnYxLkNvcnJlbGF0aW9uSW5mbyLvAQoXQ2hhdFRleHRTZWdtZW50RmluaXNoZWQSEgoKbWVzc2FnZV9pZBgBIAEoCRIMCgRyb2xlGAIgASgJEg4KBnByb21wdBgDIAEoCRIMCgR0ZXh0GAQgASgJEg8KB2NvbnRlbnQYBSABKAkSDgoGc3RhdHVzGAYgASgJEhEKCXN0cmVhbWluZxgHIAEoCBINCgVmaW5hbBgIIAEoCBIVCg1maW5pc2hfcmVhc29uGAkgASgJEjoKC2NvcnJlbGF0aW9uGAogASgLMiUucGlub2NjaGlvLmNoYXRhcHAudjEuQ29ycmVsYXRpb25JbmZvIskBChtDaGF0UmVhc29uaW5nU2VnbWVudFN0YXJ0ZWQSEgoKbWVzc2FnZV9pZBgBIAEoCRIZChFwYXJlbnRfbWVzc2FnZV9pZBgCIAEoCRIMCgRyb2xlGAMgASgJEg4KBnN0YXR1cxgEIAEoCRIRCglzdHJlYW1pbmcYBSABKAgSDgoGc291cmNlGAYgASgJEjoKC2NvcnJlbGF0aW9uGAcgASgLMiUucGlub2NjaGlvLmNoYXRhcHAudjEuQ29ycmVsYXRpb25JbmZvIu4BChJDaGF0UmVhc29uaW5nRGVsdGESEgoKbWVzc2FnZV9pZBgBIAEoCRIZChFwYXJlbnRfbWVzc2FnZV9pZBgCIAEoCRIMCgRyb2xlGAMgASgJEg0KBWNodW5rGAQgASgJEgwKBHRleHQYBSABKAkSDwoHY29udGVudBgGIAEoCRIOCgZzdGF0dXMYByABKAkSEQoJc3RyZWFtaW5nGAggASgIEg4KBnNvdXJjZRgJIAEoCRI6Cgtjb3JyZWxhdGlvbhgKIAEoCzIlLnBpbm9jY2hpby5jaGF0YXBwLnYxLkNvcnJlbGF0aW9uSW5mbyKAAgocQ2hhdFJlYXNvbmluZ1NlZ21lbnRGaW5pc2hlZBISCgptZXNzYWdlX2lkGAEgASgJEhkKEXBhcmVudF9tZXNzYWdlX2lkGAIgASgJEgwKBHJvbGUYAyABKAkSDAoEdGV4dBgEIAEoCRIPCgdjb250ZW50GAUgASgJEg4KBnN0YXR1cxgGIAEoCRIRCglzdHJlYW1pbmcYByABKAgSDgoGc291cmNlGAggASgJEhUKDWZpbmlzaF9yZWFzb24YCSABKAkSOgoLY29ycmVsYXRpb24YCiABKAsyJS5waW5vY2NoaW8uY2hhdGFwcC52MS5Db3JyZWxhdGlvbkluZm8iwAEKE0NoYXRUb29sQ2FsbFN0YXJ0ZWQSEgoKbWVzc2FnZV9pZBgBIAEoCRIUCgx0b29sX2NhbGxfaWQYAiABKAkSEQoJdG9vbF9uYW1lGAMgASgJEg0KBWlucHV0GAQgASgJEhEKCWV4ZWN1dGluZxgFIAEoCBIOCgZzdGF0dXMYBiABKAkSOgoLY29ycmVsYXRpb24YByABKAsyJS5waW5vY2NoaW8uY2hhdGFwcC52MS5Db3JyZWxhdGlvbkluZm8izQEKGkNoYXRUb29sQ2FsbEFyZ3VtZW50c0RlbHRhEhIKCm1lc3NhZ2VfaWQYASABKAkSFAoMdG9vbF9jYWxsX2lkGAIgASgJEhEKCXRvb2xfbmFtZRgDIAEoCRIXCg9hcmd1bWVudHNfZGVsdGEYBCABKAkSDQoFaW5wdXQYBSABKAkSDgoGc3RhdHVzGAYgASgJEjoKC2NvcnJlbGF0aW9uGAcgASgLMiUucGlub2NjaGlvLmNoYXRhcHAudjEuQ29ycmVsYXRpb25JbmZvIsIBChVDaGF0VG9vbENhbGxSZXF1ZXN0ZWQSEgoKbWVzc2FnZV9pZBgBIAEoCRIUCgx0b29sX2NhbGxfaWQYAiABKAkSEQoJdG9vbF9uYW1lGAMgASgJEg0KBWlucHV0GAQgASgJEhEKCWV4ZWN1dGluZxgFIAEoCBIOCgZzdGF0dXMYBiABKAkSOgoLY29ycmVsYXRpb24YByABKAsyJS5waW5vY2NoaW8uY2hhdGFwcC52MS5Db3JyZWxhdGlvbkluZm8ixQEKGENoYXRUb29sRXhlY3V0aW9uU3RhcnRlZBISCgptZXNzYWdlX2lkGAEgASgJEhQKDHRvb2xfY2FsbF9pZBgCIAEoCRIRCgl0b29sX25hbWUYAyABKAkSDQoFaW5wdXQYBCABKAkSEQoJZXhlY3V0aW5nGAUgASgIEg4KBnN0YXR1cxgGIAEoCRI6Cgtjb3JyZWxhdGlvbhgHIAEoCzIlLnBpbm9jY2hpby5jaGF0YXBwLnYxLkNvcnJlbGF0aW9uSW5mbyKuAQoTQ2hhdFRvb2xSZXN1bHRSZWFkeRISCgptZXNzYWdlX2lkGAEgASgJEhQKDHRvb2xfY2FsbF9pZBgCIAEoCRIRCgl0b29sX25hbWUYAyABKAkSDgoGcmVzdWx0GAQgASgJEg4KBnN0YXR1cxgFIAEoCRI6Cgtjb3JyZWxhdGlvbhgGIAEoCzIlLnBpbm9jY2hpby5jaGF0YXBwLnYxLkNvcnJlbGF0aW9uSW5mbyKfAQoUQ2hhdFRvb2xDYWxsRmluaXNoZWQSEgoKbWVzc2FnZV9pZBgBIAEoCRIUCgx0b29sX2NhbGxfaWQYAiABKAkSEQoJdG9vbF9uYW1lGAMgASgJEg4KBnN0YXR1cxgEIAEoCRI6Cgtjb3JyZWxhdGlvbhgFIAEoCzIlLnBpbm9jY2hpby5jaGF0YXBwLnYxLkNvcnJlbGF0aW9uSW5mbyJ6ChdDaGF0VXNlck1lc3NhZ2VBY2NlcHRlZBISCgptZXNzYWdlX2lkGAEgASgJEgwKBHJvbGUYAiABKAkSDgoGcHJvbXB0GAMgASgJEgwKBHRleHQYBCABKAkSDwoHY29udGVudBgFIAEoCRIOCgZzdGF0dXMYBiABKAkiowIKEUNoYXRNZXNzYWdlRW50aXR5EhIKCm1lc3NhZ2VfaWQYASABKAkSDAoEcm9sZRgCIAEoCRIOCgZwcm9tcHQYAyABKAkSDAoEdGV4dBgEIAEoCRIPCgdjb250ZW50GAUgASgJEg4KBnN0YXR1cxgGIAEoCRIRCglzdHJlYW1pbmcYByABKAgSDQoFZXJyb3IYCCABKAkSGQoRcGFyZW50X21lc3NhZ2VfaWQYCSABKAkSDwoHc2VnbWVudBgKIAEoBRIUCgxzZWdtZW50X3R5cGUYCyABKAkSDQoFZmluYWwYDCABKAgSOgoLY29ycmVsYXRpb24YDSABKAsyJS5waW5vY2NoaW8uY2hhdGFwcC52MS5Db3JyZWxhdGlvbkluZm8ifAoWQWdlbnRNb2RlUHJldmlld1VwZGF0ZRISCgptZXNzYWdlX2lkGAEgASgJEhYKDmNhbmRpZGF0ZV9tb2RlGAIgASgJEhAKCGFuYWx5c2lzGAMgASgJEhMKC3BhcnNlX3N0YXRlGAQgASgJEg8KB3ByZXZpZXcYBSABKAgiegoYQWdlbnRNb2RlQ29tbWl0dGVkVXBkYXRlEhIKCm1lc3NhZ2VfaWQYASABKAkSDQoFdGl0bGUYAiABKAkSDAoEZnJvbRgDIAEoCRIKCgJ0bxgEIAEoCRIQCghhbmFseXNpcxgFIAEoCRIPCgdwcmV2aWV3GAYgASgIIi0KF0FnZW50TW9kZVByZXZpZXdDbGVhcmVkEhIKCm1lc3NhZ2VfaWQYASABKAkicQoPQWdlbnRNb2RlRW50aXR5EhIKCm1lc3NhZ2VfaWQYASABKAkSDQoFdGl0bGUYAiABKAkSDAoEZnJvbRgDIAEoCRIKCgJ0bxgEIAEoCRIQCghhbmFseXNpcxgFIAEoCRIPCgdwcmV2aWV3GAYgASgIIrsBCg5Ub29sQ2FsbEVudGl0eRISCgptZXNzYWdlX2lkGAEgASgJEhQKDHRvb2xfY2FsbF9pZBgCIAEoCRIRCgl0b29sX25hbWUYAyABKAkSDQoFaW5wdXQYBCABKAkSEQoJZXhlY3V0aW5nGAUgASgIEg4KBnN0YXR1cxgGIAEoCRI6Cgtjb3JyZWxhdGlvbhgHIAEoCzIlLnBpbm9jY2hpby5jaGF0YXBwLnYxLkNvcnJlbGF0aW9uSW5mbyKrAQoQVG9vbFJlc3VsdEVudGl0eRISCgptZXNzYWdlX2lkGAEgASgJEhQKDHRvb2xfY2FsbF9pZBgCIAEoCRIRCgl0b29sX25hbWUYAyABKAkSDgoGcmVzdWx0GAQgASgJEg4KBnN0YXR1cxgFIAEoCRI6Cgtjb3JyZWxhdGlvbhgGIAEoCzIlLnBpbm9jY2hpby5jaGF0YXBwLnYxLkNvcnJlbGF0aW9uSW5mb0JXWlVnaXRodWIuY29tL2dvLWdvLWdvbGVtcy9waW5vY2NoaW8vcGtnL2NoYXRhcHAvcGIvcHJvdG8vcGlub2NjaGlvL2NoYXRhcHAvdjE7Y2hhdGFwcHYxYgZwcm90bzM");
 
 /**
  * @generated from message pinocchio.chatapp.v1.StartInferenceCommand
@@ -1025,9 +1025,9 @@ export const ChatToolCallFinishedSchema: GenMessage<ChatToolCallFinished> = /*@_
   messageDesc(file_proto_pinocchio_chatapp_v1_chat, 22);
 
 /**
- * @generated from message pinocchio.chatapp.v1.ChatMessageUpdate
+ * @generated from message pinocchio.chatapp.v1.ChatUserMessageAccepted
  */
-export type ChatMessageUpdate = Message<"pinocchio.chatapp.v1.ChatMessageUpdate"> & {
+export type ChatUserMessageAccepted = Message<"pinocchio.chatapp.v1.ChatUserMessageAccepted"> & {
   /**
    * @generated from field: string message_id = 1;
    */
@@ -1044,86 +1044,26 @@ export type ChatMessageUpdate = Message<"pinocchio.chatapp.v1.ChatMessageUpdate"
   prompt: string;
 
   /**
-   * @generated from field: string chunk = 4;
-   */
-  chunk: string;
-
-  /**
-   * @generated from field: string text = 5;
+   * @generated from field: string text = 4;
    */
   text: string;
 
   /**
-   * @generated from field: string content = 6;
+   * @generated from field: string content = 5;
    */
   content: string;
 
   /**
-   * @generated from field: string status = 7;
+   * @generated from field: string status = 6;
    */
   status: string;
-
-  /**
-   * @generated from field: bool streaming = 8;
-   */
-  streaming: boolean;
-
-  /**
-   * @generated from field: string error = 9;
-   */
-  error: string;
-
-  /**
-   * @generated from field: string parent_message_id = 10;
-   */
-  parentMessageId: string;
-
-  /**
-   * @generated from field: int32 segment = 11;
-   */
-  segment: number;
-
-  /**
-   * @generated from field: string segment_type = 12;
-   */
-  segmentType: string;
-
-  /**
-   * @generated from field: bool final = 13;
-   */
-  final: boolean;
-
-  /**
-   * @generated from field: string provider = 14;
-   */
-  provider: string;
-
-  /**
-   * @generated from field: string response_id = 15;
-   */
-  responseId: string;
-
-  /**
-   * @generated from field: optional int32 choice_index = 16;
-   */
-  choiceIndex?: number | undefined;
-
-  /**
-   * @generated from field: string stream_kind = 17;
-   */
-  streamKind: string;
-
-  /**
-   * @generated from field: string correlation_key = 18;
-   */
-  correlationKey: string;
 };
 
 /**
- * Describes the message pinocchio.chatapp.v1.ChatMessageUpdate.
- * Use `create(ChatMessageUpdateSchema)` to create a new message.
+ * Describes the message pinocchio.chatapp.v1.ChatUserMessageAccepted.
+ * Use `create(ChatUserMessageAcceptedSchema)` to create a new message.
  */
-export const ChatMessageUpdateSchema: GenMessage<ChatMessageUpdate> = /*@__PURE__*/
+export const ChatUserMessageAcceptedSchema: GenMessage<ChatUserMessageAccepted> = /*@__PURE__*/
   messageDesc(file_proto_pinocchio_chatapp_v1_chat, 23);
 
 /**
@@ -1189,6 +1129,11 @@ export type ChatMessageEntity = Message<"pinocchio.chatapp.v1.ChatMessageEntity"
    * @generated from field: bool final = 12;
    */
   final: boolean;
+
+  /**
+   * @generated from field: pinocchio.chatapp.v1.CorrelationInfo correlation = 13;
+   */
+  correlation?: CorrelationInfo | undefined;
 };
 
 /**
@@ -1197,113 +1142,6 @@ export type ChatMessageEntity = Message<"pinocchio.chatapp.v1.ChatMessageEntity"
  */
 export const ChatMessageEntitySchema: GenMessage<ChatMessageEntity> = /*@__PURE__*/
   messageDesc(file_proto_pinocchio_chatapp_v1_chat, 24);
-
-/**
- * @generated from message pinocchio.chatapp.v1.ReasoningUpdate
- */
-export type ReasoningUpdate = Message<"pinocchio.chatapp.v1.ReasoningUpdate"> & {
-  /**
-   * @generated from field: string message_id = 1;
-   */
-  messageId: string;
-
-  /**
-   * @generated from field: string parent_message_id = 2;
-   */
-  parentMessageId: string;
-
-  /**
-   * @generated from field: int32 segment = 3;
-   */
-  segment: number;
-
-  /**
-   * @generated from field: string role = 4;
-   */
-  role: string;
-
-  /**
-   * @generated from field: string chunk = 5;
-   */
-  chunk: string;
-
-  /**
-   * @generated from field: string text = 6;
-   */
-  text: string;
-
-  /**
-   * @generated from field: string content = 7;
-   */
-  content: string;
-
-  /**
-   * @generated from field: string status = 8;
-   */
-  status: string;
-
-  /**
-   * @generated from field: bool streaming = 9;
-   */
-  streaming: boolean;
-
-  /**
-   * @generated from field: string source = 10;
-   */
-  source: string;
-
-  /**
-   * @generated from field: string segment_type = 11;
-   */
-  segmentType: string;
-
-  /**
-   * @generated from field: string provider = 12;
-   */
-  provider: string;
-
-  /**
-   * @generated from field: string response_id = 13;
-   */
-  responseId: string;
-
-  /**
-   * @generated from field: string item_id = 14;
-   */
-  itemId: string;
-
-  /**
-   * @generated from field: optional int32 output_index = 15;
-   */
-  outputIndex?: number | undefined;
-
-  /**
-   * @generated from field: optional int32 summary_index = 16;
-   */
-  summaryIndex?: number | undefined;
-
-  /**
-   * @generated from field: optional int32 choice_index = 17;
-   */
-  choiceIndex?: number | undefined;
-
-  /**
-   * @generated from field: string stream_kind = 18;
-   */
-  streamKind: string;
-
-  /**
-   * @generated from field: string correlation_key = 19;
-   */
-  correlationKey: string;
-};
-
-/**
- * Describes the message pinocchio.chatapp.v1.ReasoningUpdate.
- * Use `create(ReasoningUpdateSchema)` to create a new message.
- */
-export const ReasoningUpdateSchema: GenMessage<ReasoningUpdate> = /*@__PURE__*/
-  messageDesc(file_proto_pinocchio_chatapp_v1_chat, 25);
 
 /**
  * @generated from message pinocchio.chatapp.v1.AgentModePreviewUpdate
@@ -1340,7 +1178,7 @@ export type AgentModePreviewUpdate = Message<"pinocchio.chatapp.v1.AgentModePrev
  * Use `create(AgentModePreviewUpdateSchema)` to create a new message.
  */
 export const AgentModePreviewUpdateSchema: GenMessage<AgentModePreviewUpdate> = /*@__PURE__*/
-  messageDesc(file_proto_pinocchio_chatapp_v1_chat, 26);
+  messageDesc(file_proto_pinocchio_chatapp_v1_chat, 25);
 
 /**
  * @generated from message pinocchio.chatapp.v1.AgentModeCommittedUpdate
@@ -1382,7 +1220,7 @@ export type AgentModeCommittedUpdate = Message<"pinocchio.chatapp.v1.AgentModeCo
  * Use `create(AgentModeCommittedUpdateSchema)` to create a new message.
  */
 export const AgentModeCommittedUpdateSchema: GenMessage<AgentModeCommittedUpdate> = /*@__PURE__*/
-  messageDesc(file_proto_pinocchio_chatapp_v1_chat, 27);
+  messageDesc(file_proto_pinocchio_chatapp_v1_chat, 26);
 
 /**
  * @generated from message pinocchio.chatapp.v1.AgentModePreviewCleared
@@ -1399,7 +1237,7 @@ export type AgentModePreviewCleared = Message<"pinocchio.chatapp.v1.AgentModePre
  * Use `create(AgentModePreviewClearedSchema)` to create a new message.
  */
 export const AgentModePreviewClearedSchema: GenMessage<AgentModePreviewCleared> = /*@__PURE__*/
-  messageDesc(file_proto_pinocchio_chatapp_v1_chat, 28);
+  messageDesc(file_proto_pinocchio_chatapp_v1_chat, 27);
 
 /**
  * @generated from message pinocchio.chatapp.v1.AgentModeEntity
@@ -1441,146 +1279,7 @@ export type AgentModeEntity = Message<"pinocchio.chatapp.v1.AgentModeEntity"> & 
  * Use `create(AgentModeEntitySchema)` to create a new message.
  */
 export const AgentModeEntitySchema: GenMessage<AgentModeEntity> = /*@__PURE__*/
-  messageDesc(file_proto_pinocchio_chatapp_v1_chat, 29);
-
-/**
- * @generated from message pinocchio.chatapp.v1.ToolCallUpdate
- */
-export type ToolCallUpdate = Message<"pinocchio.chatapp.v1.ToolCallUpdate"> & {
-  /**
-   * @generated from field: string message_id = 1;
-   */
-  messageId: string;
-
-  /**
-   * @generated from field: string tool_call_id = 2;
-   */
-  toolCallId: string;
-
-  /**
-   * @generated from field: string tool_name = 3;
-   */
-  toolName: string;
-
-  /**
-   * @generated from field: string input = 4;
-   */
-  input: string;
-
-  /**
-   * @generated from field: bool executing = 5;
-   */
-  executing: boolean;
-
-  /**
-   * @generated from field: string status = 6;
-   */
-  status: string;
-
-  /**
-   * @generated from field: string provider = 7;
-   */
-  provider: string;
-
-  /**
-   * @generated from field: string response_id = 8;
-   */
-  responseId: string;
-
-  /**
-   * @generated from field: optional int32 choice_index = 9;
-   */
-  choiceIndex?: number | undefined;
-
-  /**
-   * @generated from field: string stream_kind = 10;
-   */
-  streamKind: string;
-
-  /**
-   * @generated from field: string correlation_key = 11;
-   */
-  correlationKey: string;
-
-  /**
-   * @generated from field: optional int32 tool_call_index = 12;
-   */
-  toolCallIndex?: number | undefined;
-};
-
-/**
- * Describes the message pinocchio.chatapp.v1.ToolCallUpdate.
- * Use `create(ToolCallUpdateSchema)` to create a new message.
- */
-export const ToolCallUpdateSchema: GenMessage<ToolCallUpdate> = /*@__PURE__*/
-  messageDesc(file_proto_pinocchio_chatapp_v1_chat, 30);
-
-/**
- * @generated from message pinocchio.chatapp.v1.ToolResultUpdate
- */
-export type ToolResultUpdate = Message<"pinocchio.chatapp.v1.ToolResultUpdate"> & {
-  /**
-   * @generated from field: string message_id = 1;
-   */
-  messageId: string;
-
-  /**
-   * @generated from field: string tool_call_id = 2;
-   */
-  toolCallId: string;
-
-  /**
-   * @generated from field: string tool_name = 3;
-   */
-  toolName: string;
-
-  /**
-   * @generated from field: string result = 4;
-   */
-  result: string;
-
-  /**
-   * @generated from field: string status = 5;
-   */
-  status: string;
-
-  /**
-   * @generated from field: string provider = 6;
-   */
-  provider: string;
-
-  /**
-   * @generated from field: string response_id = 7;
-   */
-  responseId: string;
-
-  /**
-   * @generated from field: optional int32 choice_index = 8;
-   */
-  choiceIndex?: number | undefined;
-
-  /**
-   * @generated from field: string stream_kind = 9;
-   */
-  streamKind: string;
-
-  /**
-   * @generated from field: string correlation_key = 10;
-   */
-  correlationKey: string;
-
-  /**
-   * @generated from field: optional int32 tool_call_index = 11;
-   */
-  toolCallIndex?: number | undefined;
-};
-
-/**
- * Describes the message pinocchio.chatapp.v1.ToolResultUpdate.
- * Use `create(ToolResultUpdateSchema)` to create a new message.
- */
-export const ToolResultUpdateSchema: GenMessage<ToolResultUpdate> = /*@__PURE__*/
-  messageDesc(file_proto_pinocchio_chatapp_v1_chat, 31);
+  messageDesc(file_proto_pinocchio_chatapp_v1_chat, 28);
 
 /**
  * @generated from message pinocchio.chatapp.v1.ToolCallEntity
@@ -1615,6 +1314,11 @@ export type ToolCallEntity = Message<"pinocchio.chatapp.v1.ToolCallEntity"> & {
    * @generated from field: string status = 6;
    */
   status: string;
+
+  /**
+   * @generated from field: pinocchio.chatapp.v1.CorrelationInfo correlation = 7;
+   */
+  correlation?: CorrelationInfo | undefined;
 };
 
 /**
@@ -1622,7 +1326,7 @@ export type ToolCallEntity = Message<"pinocchio.chatapp.v1.ToolCallEntity"> & {
  * Use `create(ToolCallEntitySchema)` to create a new message.
  */
 export const ToolCallEntitySchema: GenMessage<ToolCallEntity> = /*@__PURE__*/
-  messageDesc(file_proto_pinocchio_chatapp_v1_chat, 32);
+  messageDesc(file_proto_pinocchio_chatapp_v1_chat, 29);
 
 /**
  * @generated from message pinocchio.chatapp.v1.ToolResultEntity
@@ -1652,6 +1356,11 @@ export type ToolResultEntity = Message<"pinocchio.chatapp.v1.ToolResultEntity"> 
    * @generated from field: string status = 5;
    */
   status: string;
+
+  /**
+   * @generated from field: pinocchio.chatapp.v1.CorrelationInfo correlation = 6;
+   */
+  correlation?: CorrelationInfo | undefined;
 };
 
 /**
@@ -1659,5 +1368,5 @@ export type ToolResultEntity = Message<"pinocchio.chatapp.v1.ToolResultEntity"> 
  * Use `create(ToolResultEntitySchema)` to create a new message.
  */
 export const ToolResultEntitySchema: GenMessage<ToolResultEntity> = /*@__PURE__*/
-  messageDesc(file_proto_pinocchio_chatapp_v1_chat, 33);
+  messageDesc(file_proto_pinocchio_chatapp_v1_chat, 30);
 

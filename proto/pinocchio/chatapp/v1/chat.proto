@@ -219,25 +219,13 @@ message ChatToolCallFinished {
   CorrelationInfo correlation = 5;
 }
 
-message ChatMessageUpdate {
+message ChatUserMessageAccepted {
   string message_id = 1;
   string role = 2;
   string prompt = 3;
-  string chunk = 4;
-  string text = 5;
-  string content = 6;
-  string status = 7;
-  bool streaming = 8;
-  string error = 9;
-  string parent_message_id = 10;
-  int32 segment = 11;
-  string segment_type = 12;
-  bool final = 13;
-  string provider = 14;
-  string response_id = 15;
-  optional int32 choice_index = 16;
-  string stream_kind = 17;
-  string correlation_key = 18;
+  string text = 4;
+  string content = 5;
+  string status = 6;
 }
 
 message ChatMessageEntity {
@@ -253,28 +241,7 @@ message ChatMessageEntity {
   int32 segment = 10;
   string segment_type = 11;
   bool final = 12;
-}
-
-message ReasoningUpdate {
-  string message_id = 1;
-  string parent_message_id = 2;
-  int32 segment = 3;
-  string role = 4;
-  string chunk = 5;
-  string text = 6;
-  string content = 7;
-  string status = 8;
-  bool streaming = 9;
-  string source = 10;
-  string segment_type = 11;
-  string provider = 12;
-  string response_id = 13;
-  string item_id = 14;
-  optional int32 output_index = 15;
-  optional int32 summary_index = 16;
-  optional int32 choice_index = 17;
-  string stream_kind = 18;
-  string correlation_key = 19;
+  CorrelationInfo correlation = 13;
 }
 
 message AgentModePreviewUpdate {
@@ -307,35 +274,6 @@ message AgentModeEntity {
   bool preview = 6;
 }
 
-message ToolCallUpdate {
-  string message_id = 1;
-  string tool_call_id = 2;
-  string tool_name = 3;
-  string input = 4;
-  bool executing = 5;
-  string status = 6;
-  string provider = 7;
-  string response_id = 8;
-  optional int32 choice_index = 9;
-  string stream_kind = 10;
-  string correlation_key = 11;
-  optional int32 tool_call_index = 12;
-}
-
-message ToolResultUpdate {
-  string message_id = 1;
-  string tool_call_id = 2;
-  string tool_name = 3;
-  string result = 4;
-  string status = 5;
-  string provider = 6;
-  string response_id = 7;
-  optional int32 choice_index = 8;
-  string stream_kind = 9;
-  string correlation_key = 10;
-  optional int32 tool_call_index = 11;
-}
-
 message ToolCallEntity {
   string message_id = 1;
   string tool_call_id = 2;
@@ -343,6 +281,7 @@ message ToolCallEntity {
   string input = 4;
   bool executing = 5;
   string status = 6;
+  CorrelationInfo correlation = 7;
 }
 
 message ToolResultEntity {
@@ -351,4 +290,5 @@ message ToolResultEntity {
   string tool_name = 3;
   string result = 4;
   string status = 5;
+  CorrelationInfo correlation = 6;
 }

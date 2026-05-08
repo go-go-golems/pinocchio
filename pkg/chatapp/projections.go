@@ -10,150 +10,106 @@ import (
 )
 
 func baseUIProjection(_ context.Context, ev sessionstream.Event, _ *sessionstream.Session, _ sessionstream.TimelineView) ([]sessionstream.UIEvent, error) {
-	payload := chatMessageUpdateFromEvent(ev)
-	if payload == nil {
+	if ev.Payload == nil {
 		return nil, nil
 	}
-	cloned := proto.Clone(payload)
 	switch ev.Name {
-	case EventUserMessageAccepted:
-		return []sessionstream.UIEvent{{Name: UIMessageAccepted, Payload: cloned}}, nil
-	case EventChatTextSegmentStarted:
-		return []sessionstream.UIEvent{{Name: UIMessageStarted, Payload: cloned}}, nil
-	case EventChatTextDelta:
-		return []sessionstream.UIEvent{{Name: UIMessageAppended, Payload: cloned}}, nil
-	case EventChatTextSegmentFinished:
-		return []sessionstream.UIEvent{{Name: UIMessageFinished, Payload: cloned}}, nil
-	case EventChatRunStopped, EventChatRunFailed:
-		return []sessionstream.UIEvent{{Name: UIMessageStopped, Payload: cloned}}, nil
+	case EventUserMessageAccepted,
+		EventChatRunStarted, EventChatRunFinished, EventChatRunStopped, EventChatRunFailed,
+		EventChatProviderCallStarted, EventChatProviderCallMetadataUpdated, EventChatProviderCallFinished,
+		EventChatTextSegmentStarted, EventChatTextDelta, EventChatTextSegmentFinished:
+		return []sessionstream.UIEvent{{Name: ev.Name, Payload: proto.Clone(ev.Payload)}}, nil
 	default:
 		return nil, nil
 	}
 }
 
 func baseTimelineProjection(_ context.Context, ev sessionstream.Event, _ *sessionstream.Session, view sessionstream.TimelineView) ([]sessionstream.TimelineEntity, error) {
-	payload := chatMessageUpdateFromEvent(ev)
-	if payload == nil {
-		return nil, nil
-	}
-	messageID := strings.TrimSpace(payload.GetMessageId())
-	if messageID == "" {
-		return nil, nil
-	}
-	entity, hadEntity := currentChatMessageEntity(view, messageID)
-	switch ev.Name {
-	case EventUserMessageAccepted:
-		entity.MessageId = messageID
-		entity.Role = "user"
-		entity.Content = firstNonEmpty(payload.GetContent(), payload.GetText())
+	switch payload := ev.Payload.(type) {
+	case *chatappv1.ChatUserMessageAccepted:
+		messageID := strings.TrimSpace(payload.GetMessageId())
+		if messageID == "" {
+			return nil, nil
+		}
+		entity := &chatappv1.ChatMessageEntity{
+			MessageId: messageID,
+			Role:      firstNonEmpty(payload.GetRole(), "user"),
+			Prompt:    payload.GetPrompt(),
+			Content:   firstNonEmpty(payload.GetContent(), payload.GetText()),
+			Status:    firstNonEmpty(payload.GetStatus(), "accepted"),
+			Streaming: false,
+		}
 		entity.Text = entity.Content
-		entity.Streaming = false
-	case EventChatTextSegmentStarted:
-		content := firstNonEmpty(payload.GetContent(), payload.GetText())
+		return []sessionstream.TimelineEntity{{Kind: TimelineEntityChatMessage, Id: messageID, Payload: entity}}, nil
+	case *chatappv1.ChatTextSegmentStarted:
+		messageID := strings.TrimSpace(payload.GetMessageId())
+		if messageID == "" {
+			return nil, nil
+		}
+		entity, hadEntity := currentChatMessageEntity(view, messageID)
+		content := firstNonEmpty(entity.GetContent(), entity.GetText())
 		if content == "" && !hadEntity {
 			return nil, nil
 		}
 		entity.MessageId = messageID
 		entity.Role = firstNonEmpty(payload.GetRole(), "assistant")
-		entity.Status = "streaming"
-		entity.Streaming = true
-		if prompt := payload.GetPrompt(); prompt != "" {
-			entity.Prompt = prompt
-		}
-		if content != "" {
-			entity.Content = content
-			entity.Text = content
-		}
-	case EventChatTextDelta:
-		content := firstNonEmpty(payload.GetContent(), payload.GetText())
-		if content == "" && !hadEntity {
-			return nil, nil
-		}
-		entity.MessageId = messageID
-		entity.Role = firstNonEmpty(payload.GetRole(), "assistant")
+		entity.Prompt = firstNonEmpty(payload.GetPrompt(), entity.GetPrompt())
 		entity.Content = content
 		entity.Text = content
-		entity.Status = "streaming"
-		entity.Streaming = true
-		if prompt := payload.GetPrompt(); prompt != "" {
-			entity.Prompt = prompt
+		entity.Status = firstNonEmpty(payload.GetStatus(), "streaming")
+		entity.Streaming = payload.GetStreaming()
+		entity.ParentMessageId = parentMessageIDFromSegmentMessageID(messageID)
+		entity.Segment = payload.GetCorrelation().GetSegmentIndex()
+		entity.SegmentType = payload.GetCorrelation().GetSegmentType()
+		entity.Correlation = cloneCorrelationInfo(payload.GetCorrelation())
+		return []sessionstream.TimelineEntity{{Kind: TimelineEntityChatMessage, Id: messageID, Payload: entity}}, nil
+	case *chatappv1.ChatTextDelta:
+		messageID := strings.TrimSpace(payload.GetMessageId())
+		if messageID == "" {
+			return nil, nil
 		}
-	case EventChatTextSegmentFinished:
+		content := firstNonEmpty(payload.GetContent(), payload.GetText())
+		if content == "" {
+			return nil, nil
+		}
+		entity, _ := currentChatMessageEntity(view, messageID)
+		entity.MessageId = messageID
+		entity.Role = firstNonEmpty(payload.GetRole(), "assistant")
+		entity.Prompt = firstNonEmpty(payload.GetPrompt(), entity.GetPrompt())
+		entity.Content = content
+		entity.Text = content
+		entity.Status = firstNonEmpty(payload.GetStatus(), "streaming")
+		entity.Streaming = payload.GetStreaming()
+		entity.ParentMessageId = parentMessageIDFromSegmentMessageID(messageID)
+		entity.Segment = payload.GetCorrelation().GetSegmentIndex()
+		entity.SegmentType = payload.GetCorrelation().GetSegmentType()
+		entity.Correlation = cloneCorrelationInfo(payload.GetCorrelation())
+		return []sessionstream.TimelineEntity{{Kind: TimelineEntityChatMessage, Id: messageID, Payload: entity}}, nil
+	case *chatappv1.ChatTextSegmentFinished:
+		messageID := strings.TrimSpace(payload.GetMessageId())
+		if messageID == "" {
+			return nil, nil
+		}
+		entity, hadEntity := currentChatMessageEntity(view, messageID)
 		content := firstNonEmpty(payload.GetContent(), payload.GetText(), entity.GetContent(), entity.GetText())
 		if content == "" && !hadEntity {
 			return nil, nil
 		}
 		entity.MessageId = messageID
 		entity.Role = firstNonEmpty(payload.GetRole(), "assistant")
+		entity.Prompt = firstNonEmpty(payload.GetPrompt(), entity.GetPrompt())
 		entity.Content = content
 		entity.Text = content
 		entity.Status = firstNonEmpty(payload.GetStatus(), "finished")
-		entity.Streaming = false
-		if prompt := payload.GetPrompt(); prompt != "" {
-			entity.Prompt = prompt
-		}
+		entity.Streaming = payload.GetStreaming()
+		entity.Final = payload.GetFinal()
+		entity.ParentMessageId = parentMessageIDFromSegmentMessageID(messageID)
+		entity.Segment = payload.GetCorrelation().GetSegmentIndex()
+		entity.SegmentType = payload.GetCorrelation().GetSegmentType()
+		entity.Correlation = cloneCorrelationInfo(payload.GetCorrelation())
+		return []sessionstream.TimelineEntity{{Kind: TimelineEntityChatMessage, Id: messageID, Payload: entity}}, nil
 	default:
 		return nil, nil
-	}
-	entity.ParentMessageId = payload.GetParentMessageId()
-	entity.Segment = payload.GetSegment()
-	entity.SegmentType = payload.GetSegmentType()
-	entity.Final = payload.GetFinal()
-	return []sessionstream.TimelineEntity{{Kind: TimelineEntityChatMessage, Id: messageID, Payload: entity}}, nil
-}
-
-func chatMessageUpdateFromEvent(ev sessionstream.Event) *chatappv1.ChatMessageUpdate {
-	switch payload := ev.Payload.(type) {
-	case *chatappv1.ChatMessageUpdate:
-		return payload
-	case *chatappv1.ChatTextSegmentStarted:
-		segment := payload.GetCorrelation().GetSegmentIndex()
-		return &chatappv1.ChatMessageUpdate{
-			MessageId:       payload.GetMessageId(),
-			Role:            payload.GetRole(),
-			Prompt:          payload.GetPrompt(),
-			Status:          payload.GetStatus(),
-			Streaming:       payload.GetStreaming(),
-			ParentMessageId: parentMessageIDFromSegmentMessageID(payload.GetMessageId()),
-			Segment:         segment,
-			SegmentType:     payload.GetCorrelation().GetSegmentType(),
-		}
-	case *chatappv1.ChatTextDelta:
-		segment := payload.GetCorrelation().GetSegmentIndex()
-		return &chatappv1.ChatMessageUpdate{
-			MessageId:       payload.GetMessageId(),
-			Role:            payload.GetRole(),
-			Prompt:          payload.GetPrompt(),
-			Chunk:           payload.GetChunk(),
-			Text:            payload.GetText(),
-			Content:         payload.GetContent(),
-			Status:          payload.GetStatus(),
-			Streaming:       payload.GetStreaming(),
-			ParentMessageId: parentMessageIDFromSegmentMessageID(payload.GetMessageId()),
-			Segment:         segment,
-			SegmentType:     payload.GetCorrelation().GetSegmentType(),
-		}
-	case *chatappv1.ChatTextSegmentFinished:
-		segment := payload.GetCorrelation().GetSegmentIndex()
-		return &chatappv1.ChatMessageUpdate{
-			MessageId:       payload.GetMessageId(),
-			Role:            payload.GetRole(),
-			Prompt:          payload.GetPrompt(),
-			Text:            payload.GetText(),
-			Content:         payload.GetContent(),
-			Status:          payload.GetStatus(),
-			Streaming:       payload.GetStreaming(),
-			Final:           payload.GetFinal(),
-			ParentMessageId: parentMessageIDFromSegmentMessageID(payload.GetMessageId()),
-			Segment:         segment,
-			SegmentType:     payload.GetCorrelation().GetSegmentType(),
-		}
-	case *chatappv1.ChatRunStopped:
-		return newChatMessageUpdate(payload.GetMessageId(), "assistant", "", "", "", "stopped", false, payload.GetError())
-	case *chatappv1.ChatRunFailed:
-		return newChatMessageUpdate(payload.GetMessageId(), "assistant", "", "", "", "stopped", false, payload.GetError())
-	default:
-		return nil
 	}
 }
 
@@ -176,4 +132,11 @@ func currentChatMessageEntity(view sessionstream.TimelineView, id string) (*chat
 		return &chatappv1.ChatMessageEntity{}, false
 	}
 	return proto.Clone(pb).(*chatappv1.ChatMessageEntity), true
+}
+
+func cloneCorrelationInfo(corr *chatappv1.CorrelationInfo) *chatappv1.CorrelationInfo {
+	if corr == nil {
+		return nil
+	}
+	return proto.Clone(corr).(*chatappv1.CorrelationInfo)
 }

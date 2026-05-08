@@ -66,7 +66,7 @@ func TestToolCallPluginPublishesCanonicalToolEvents(t *testing.T) {
 	require.Equal(t, `{"price":123}`, result.GetResult())
 }
 
-func TestToolCallPluginProjectsCanonicalEventsToCompatibilityUIAndTimeline(t *testing.T) {
+func TestToolCallPluginProjectsCanonicalEventsToUIAndTimeline(t *testing.T) {
 	plugin := NewToolCallPlugin()
 	corr := &chatappv1.CorrelationInfo{
 		Provider:       "openai",
@@ -90,12 +90,12 @@ func TestToolCallPluginProjectsCanonicalEventsToCompatibilityUIAndTimeline(t *te
 	require.NoError(t, err)
 	require.True(t, handled)
 	require.Len(t, uiEvents, 1)
-	require.Equal(t, UIToolCallStarted, uiEvents[0].Name)
-	uiPayload := uiEvents[0].Payload.(*chatappv1.ToolCallUpdate)
+	require.Equal(t, EventToolCallRequested, uiEvents[0].Name)
+	uiPayload := uiEvents[0].Payload.(*chatappv1.ChatToolCallRequested)
 	require.Equal(t, "call-2", uiPayload.GetToolCallId())
 	require.Equal(t, "inventory", uiPayload.GetToolName())
 	require.Equal(t, `{"coin":"ETH"}`, uiPayload.GetInput())
-	require.Equal(t, "tool:call-2", uiPayload.GetCorrelationKey())
+	require.Equal(t, "tool:call-2", uiPayload.GetCorrelation().GetCorrelationKey())
 
 	entities, handled, err := plugin.ProjectTimeline(context.Background(), requested, nil, toolCallStaticTimelineView{})
 	require.NoError(t, err)
@@ -108,6 +108,7 @@ func TestToolCallPluginProjectsCanonicalEventsToCompatibilityUIAndTimeline(t *te
 	require.Equal(t, "inventory", entityPayload.GetToolName())
 	require.Equal(t, `{"coin":"ETH"}`, entityPayload.GetInput())
 	require.Equal(t, "pending", entityPayload.GetStatus())
+	require.Equal(t, "tool:call-2", entityPayload.GetCorrelation().GetCorrelationKey())
 
 	view := toolCallStaticTimelineView{entities: map[string]sessionstream.TimelineEntity{
 		TimelineEntityToolCall + "/call-2": {
@@ -142,11 +143,12 @@ func TestToolCallPluginProjectsCanonicalEventsToCompatibilityUIAndTimeline(t *te
 	require.Equal(t, "call-2", resultEntity.GetToolCallId())
 	require.Equal(t, "inventory", resultEntity.GetToolName())
 	require.Equal(t, `{"ok":true}`, resultEntity.GetResult())
+	require.Equal(t, "tool:call-2", resultEntity.GetCorrelation().GetCorrelationKey())
 }
 
-func TestToolCallPluginIgnoresLegacyToolEvents(t *testing.T) {
+func TestToolCallPluginIgnoresUnrelatedEvents(t *testing.T) {
 	plugin := NewToolCallPlugin()
-	handled, err := plugin.HandleRuntimeEvent(context.Background(), chatapp.RuntimeEventContext{SessionID: "sid", MessageID: "chat-msg-1"}, gepevents.NewToolCallEvent(gepevents.EventMetadata{SessionID: "sid"}, gepevents.ToolCall{ID: "call-1", Name: "lookup"}))
+	handled, err := plugin.HandleRuntimeEvent(context.Background(), chatapp.RuntimeEventContext{SessionID: "sid", MessageID: "chat-msg-1"}, gepevents.NewErrorEvent(gepevents.EventMetadata{SessionID: "sid"}, context.Canceled))
 	require.NoError(t, err)
 	require.False(t, handled)
 }

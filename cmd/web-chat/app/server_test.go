@@ -18,6 +18,7 @@ import (
 	geppettoobs "github.com/go-go-golems/geppetto/pkg/observability"
 	"github.com/go-go-golems/geppetto/pkg/turns"
 	"github.com/go-go-golems/geppetto/pkg/turns/serde"
+	chatapp "github.com/go-go-golems/pinocchio/pkg/chatapp"
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
 	sessionstreamv1 "github.com/go-go-golems/sessionstream/pkg/sessionstream/pb/proto/sessionstream/v1"
@@ -223,7 +224,7 @@ func TestDebugRecorderEndpointsExposePipelineAndTransportRecords(t *testing.T) {
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
 		frame := readServerFrame(t, conn)
-		if frame.GetUiEvent() != nil && frame.GetUiEvent().GetName() == "ChatMessageFinished" {
+		if frame.GetUiEvent() != nil && frame.GetUiEvent().GetName() == chatapp.EventChatTextSegmentFinished {
 			break
 		}
 	}

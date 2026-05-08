@@ -97,7 +97,7 @@ func createDebugSQLiteViews(ctx context.Context, db *sql.DB) error {
 
 		// Provider reasoning deltas correlated through Geppetto publish records,
 		// backend Sessionstream ordinals, frontend parsed frames, UI mutations, and
-		// persisted timeline entities. ReasoningUpdate payloads now expose provider
+		// persisted timeline entities. Canonical reasoning payloads expose provider
 		// IDs directly; row order still disambiguates multiple deltas for one item.
 		`CREATE VIEW geppetto_reasoning_to_frontend AS
 		 WITH

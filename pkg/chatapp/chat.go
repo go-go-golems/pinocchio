@@ -37,12 +37,6 @@ const (
 	EventChatToolResultReady             = "ChatToolResultReady"
 	EventChatToolCallFinished            = "ChatToolCallFinished"
 
-	UIMessageAccepted = "ChatMessageAccepted"
-	UIMessageStarted  = "ChatMessageStarted"
-	UIMessageAppended = "ChatMessageAppended"
-	UIMessageFinished = "ChatMessageFinished"
-	UIMessageStopped  = "ChatMessageStopped"
-
 	TimelineEntityChatMessage = "ChatMessage"
 )
 
@@ -105,7 +99,7 @@ func RegisterSchemas(reg *sessionstream.SchemaRegistry, features ...ChatPlugin) 
 	for _, err := range []error{
 		reg.RegisterCommand(CommandStartInference, &chatappv1.StartInferenceCommand{}),
 		reg.RegisterCommand(CommandStopInference, &chatappv1.StopInferenceCommand{}),
-		reg.RegisterEvent(EventUserMessageAccepted, &chatappv1.ChatMessageUpdate{}),
+		reg.RegisterEvent(EventUserMessageAccepted, &chatappv1.ChatUserMessageAccepted{}),
 		reg.RegisterEvent(EventChatRunStarted, &chatappv1.ChatRunStarted{}),
 		reg.RegisterEvent(EventChatRunFinished, &chatappv1.ChatRunFinished{}),
 		reg.RegisterEvent(EventChatRunStopped, &chatappv1.ChatRunStopped{}),
@@ -116,11 +110,17 @@ func RegisterSchemas(reg *sessionstream.SchemaRegistry, features ...ChatPlugin) 
 		reg.RegisterEvent(EventChatTextSegmentStarted, &chatappv1.ChatTextSegmentStarted{}),
 		reg.RegisterEvent(EventChatTextDelta, &chatappv1.ChatTextDelta{}),
 		reg.RegisterEvent(EventChatTextSegmentFinished, &chatappv1.ChatTextSegmentFinished{}),
-		reg.RegisterUIEvent(UIMessageAccepted, &chatappv1.ChatMessageUpdate{}),
-		reg.RegisterUIEvent(UIMessageStarted, &chatappv1.ChatMessageUpdate{}),
-		reg.RegisterUIEvent(UIMessageAppended, &chatappv1.ChatMessageUpdate{}),
-		reg.RegisterUIEvent(UIMessageFinished, &chatappv1.ChatMessageUpdate{}),
-		reg.RegisterUIEvent(UIMessageStopped, &chatappv1.ChatMessageUpdate{}),
+		reg.RegisterUIEvent(EventUserMessageAccepted, &chatappv1.ChatUserMessageAccepted{}),
+		reg.RegisterUIEvent(EventChatRunStarted, &chatappv1.ChatRunStarted{}),
+		reg.RegisterUIEvent(EventChatRunFinished, &chatappv1.ChatRunFinished{}),
+		reg.RegisterUIEvent(EventChatRunStopped, &chatappv1.ChatRunStopped{}),
+		reg.RegisterUIEvent(EventChatRunFailed, &chatappv1.ChatRunFailed{}),
+		reg.RegisterUIEvent(EventChatProviderCallStarted, &chatappv1.ChatProviderCallStarted{}),
+		reg.RegisterUIEvent(EventChatProviderCallMetadataUpdated, &chatappv1.ChatProviderCallMetadataUpdated{}),
+		reg.RegisterUIEvent(EventChatProviderCallFinished, &chatappv1.ChatProviderCallFinished{}),
+		reg.RegisterUIEvent(EventChatTextSegmentStarted, &chatappv1.ChatTextSegmentStarted{}),
+		reg.RegisterUIEvent(EventChatTextDelta, &chatappv1.ChatTextDelta{}),
+		reg.RegisterUIEvent(EventChatTextSegmentFinished, &chatappv1.ChatTextSegmentFinished{}),
 		reg.RegisterTimelineEntity(TimelineEntityChatMessage, &chatappv1.ChatMessageEntity{}),
 	} {
 		if err != nil {

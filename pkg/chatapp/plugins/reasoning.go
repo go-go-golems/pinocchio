@@ -9,6 +9,7 @@ import (
 	chatapp "github.com/go-go-golems/pinocchio/pkg/chatapp"
 	chatappv1 "github.com/go-go-golems/pinocchio/pkg/chatapp/pb/proto/pinocchio/chatapp/v1"
 	sessionstream "github.com/go-go-golems/sessionstream/pkg/sessionstream"
+	"google.golang.org/protobuf/proto"
 )
 
 const (
@@ -19,31 +20,26 @@ const (
 	// ReasoningFinishedEventName is the canonical backend event published when a reasoning segment completes.
 	ReasoningFinishedEventName = chatapp.EventChatReasoningSegmentFinished
 
-	// ReasoningStartedUIName is the UI event emitted when a thinking stream begins.
-	ReasoningStartedUIName = "ChatReasoningStarted"
-	// ReasoningAppendedUIName is the UI event emitted for each thinking token delta.
-	ReasoningAppendedUIName = "ChatReasoningAppended"
-	// ReasoningFinishedUIName is the UI event emitted when thinking ends.
-	ReasoningFinishedUIName = "ChatReasoningFinished"
+	// TimelineEntityReasoning aliases the base chat message entity kind; reasoning blocks are messages with role=thinking.
+	TimelineEntityReasoning = chatapp.TimelineEntityChatMessage
 )
 
 // ReasoningPlugin translates canonical Geppetto reasoning segment events into
-// canonical Pinocchio backend events, then projects them into the existing
-// reasoning UI event vocabulary for frontend compatibility.
+// canonical Pinocchio reasoning events and timeline entities.
 type ReasoningPlugin struct{}
 
 // NewReasoningPlugin creates a new ReasoningPlugin.
 func NewReasoningPlugin() chatapp.ChatPlugin { return &ReasoningPlugin{} }
 
-// RegisterSchemas registers the reasoning event and UI event payload schemas.
+// RegisterSchemas registers canonical reasoning event, UI event, and timeline payload schemas.
 func (p *ReasoningPlugin) RegisterSchemas(reg *sessionstream.SchemaRegistry) error {
 	for _, err := range []error{
 		reg.RegisterEvent(ReasoningStartedEventName, &chatappv1.ChatReasoningSegmentStarted{}),
 		reg.RegisterEvent(ReasoningDeltaEventName, &chatappv1.ChatReasoningDelta{}),
 		reg.RegisterEvent(ReasoningFinishedEventName, &chatappv1.ChatReasoningSegmentFinished{}),
-		reg.RegisterUIEvent(ReasoningStartedUIName, &chatappv1.ReasoningUpdate{}),
-		reg.RegisterUIEvent(ReasoningAppendedUIName, &chatappv1.ReasoningUpdate{}),
-		reg.RegisterUIEvent(ReasoningFinishedUIName, &chatappv1.ReasoningUpdate{}),
+		reg.RegisterUIEvent(ReasoningStartedEventName, &chatappv1.ChatReasoningSegmentStarted{}),
+		reg.RegisterUIEvent(ReasoningDeltaEventName, &chatappv1.ChatReasoningDelta{}),
+		reg.RegisterUIEvent(ReasoningFinishedEventName, &chatappv1.ChatReasoningSegmentFinished{}),
 	} {
 		if err != nil {
 			return err
@@ -101,19 +97,14 @@ func (p *ReasoningPlugin) HandleRuntimeEvent(ctx context.Context, runtime chatap
 	}
 }
 
-// ProjectUI projects canonical reasoning backend events into compatibility UI events.
-func (p *ReasoningPlugin) ProjectUI(_ context.Context, ev sessionstream.Event, _ *sessionstream.Session, view sessionstream.TimelineView) ([]sessionstream.UIEvent, bool, error) {
-	payload, ok := reasoningProjectedPayload(ev, view)
-	if !ok {
-		return nil, false, nil
-	}
+// ProjectUI forwards canonical reasoning backend events as canonical UI events.
+func (p *ReasoningPlugin) ProjectUI(_ context.Context, ev sessionstream.Event, _ *sessionstream.Session, _ sessionstream.TimelineView) ([]sessionstream.UIEvent, bool, error) {
 	switch ev.Name {
-	case ReasoningStartedEventName:
-		return []sessionstream.UIEvent{{Name: ReasoningStartedUIName, Payload: payload}}, true, nil
-	case ReasoningDeltaEventName:
-		return []sessionstream.UIEvent{{Name: ReasoningAppendedUIName, Payload: payload}}, true, nil
-	case ReasoningFinishedEventName:
-		return []sessionstream.UIEvent{{Name: ReasoningFinishedUIName, Payload: payload}}, true, nil
+	case ReasoningStartedEventName, ReasoningDeltaEventName, ReasoningFinishedEventName:
+		if ev.Payload == nil {
+			return nil, true, fmt.Errorf("reasoning payload must be proto message, got %T", ev.Payload)
+		}
+		return []sessionstream.UIEvent{{Name: ev.Name, Payload: proto.Clone(ev.Payload)}}, true, nil
 	default:
 		return nil, false, nil
 	}
@@ -121,45 +112,10 @@ func (p *ReasoningPlugin) ProjectUI(_ context.Context, ev sessionstream.Event, _
 
 // ProjectTimeline projects reasoning backend events into ChatMessage timeline entities.
 func (p *ReasoningPlugin) ProjectTimeline(_ context.Context, ev sessionstream.Event, _ *sessionstream.Session, view sessionstream.TimelineView) ([]sessionstream.TimelineEntity, bool, error) {
-	payload, ok := reasoningProjectedPayload(ev, view)
-	if !ok {
-		return nil, false, nil
+	messageID, entity, ok, err := reasoningEntityFromEvent(ev, view)
+	if err != nil || !ok {
+		return nil, ok, err
 	}
-	messageID := payload.GetMessageId()
-	if messageID == "" {
-		return nil, true, nil
-	}
-	entity, hadEntity := currentReasoningEntity(view, messageID)
-	content := payload.GetContent()
-	if content == "" {
-		content = entity.GetContent()
-		if content == "" {
-			content = entity.GetText()
-		}
-	}
-	if content == "" && !hadEntity {
-		return nil, true, nil
-	}
-
-	entity.MessageId = messageID
-	entity.Role = "thinking"
-	entity.Content = content
-	entity.Text = content
-	entity.ParentMessageId = payload.GetParentMessageId()
-	entity.Segment = payload.GetSegment()
-	entity.SegmentType = "thinking"
-
-	switch ev.Name {
-	case ReasoningStartedEventName, ReasoningDeltaEventName:
-		entity.Status = "streaming"
-		entity.Streaming = true
-	case ReasoningFinishedEventName:
-		entity.Status = "finished"
-		entity.Streaming = false
-	default:
-		return nil, false, nil
-	}
-
 	return []sessionstream.TimelineEntity{{Kind: chatapp.TimelineEntityChatMessage, Id: messageID, Payload: entity}}, true, nil
 }
 
@@ -199,93 +155,51 @@ func firstNonEmptyString(values ...string) string {
 	return ""
 }
 
-func reasoningUpdateFromCorrelation(base *chatappv1.ReasoningUpdate, corr *chatappv1.CorrelationInfo) *chatappv1.ReasoningUpdate {
-	if base == nil {
-		return nil
+func reasoningEntityFromEvent(ev sessionstream.Event, view sessionstream.TimelineView) (string, *chatappv1.ChatMessageEntity, bool, error) {
+	switch payload := ev.Payload.(type) {
+	case *chatappv1.ChatReasoningSegmentStarted:
+		return reasoningEntityFromFields(view, payload.GetMessageId(), payload.GetParentMessageId(), payload.GetRole(), "", "", payload.GetStatus(), payload.GetStreaming(), payload.GetCorrelation(), ev.Name)
+	case *chatappv1.ChatReasoningDelta:
+		return reasoningEntityFromFields(view, payload.GetMessageId(), payload.GetParentMessageId(), payload.GetRole(), payload.GetContent(), payload.GetText(), payload.GetStatus(), payload.GetStreaming(), payload.GetCorrelation(), ev.Name)
+	case *chatappv1.ChatReasoningSegmentFinished:
+		return reasoningEntityFromFields(view, payload.GetMessageId(), payload.GetParentMessageId(), payload.GetRole(), payload.GetContent(), payload.GetText(), payload.GetStatus(), payload.GetStreaming(), payload.GetCorrelation(), ev.Name)
+	default:
+		return "", nil, false, nil
 	}
-	if corr == nil {
-		return base
-	}
-	base.Segment = corr.GetSegmentIndex()
-	base.SegmentType = firstNonEmptyString(corr.GetSegmentType(), "thinking")
-	base.Provider = corr.GetProvider()
-	base.ResponseId = corr.GetResponseId()
-	base.ItemId = corr.GetItemId()
-	base.OutputIndex = cloneInt32Ptr(corr.OutputIndex)
-	base.SummaryIndex = cloneInt32Ptr(corr.SummaryIndex)
-	base.ChoiceIndex = cloneInt32Ptr(corr.ChoiceIndex)
-	base.StreamKind = corr.GetStreamKind()
-	base.CorrelationKey = corr.GetCorrelationKey()
-	return base
 }
 
-func reasoningProjectedPayload(ev sessionstream.Event, view sessionstream.TimelineView) (*chatappv1.ReasoningUpdate, bool) {
-	var payload *chatappv1.ReasoningUpdate
-	switch ev.Name {
-	case ReasoningStartedEventName:
-		p, ok := ev.Payload.(*chatappv1.ChatReasoningSegmentStarted)
-		if !ok || p == nil {
-			return nil, false
-		}
-		payload = reasoningUpdateFromCorrelation(&chatappv1.ReasoningUpdate{
-			MessageId:       p.GetMessageId(),
-			ParentMessageId: p.GetParentMessageId(),
-			Role:            firstNonEmptyString(p.GetRole(), "thinking"),
-			Status:          firstNonEmptyString(p.GetStatus(), "streaming"),
-			Streaming:       p.GetStreaming(),
-			Source:          firstNonEmptyString(p.GetSource(), "thinking"),
-		}, p.GetCorrelation())
-	case ReasoningDeltaEventName:
-		p, ok := ev.Payload.(*chatappv1.ChatReasoningDelta)
-		if !ok || p == nil {
-			return nil, false
-		}
-		payload = reasoningUpdateFromCorrelation(&chatappv1.ReasoningUpdate{
-			MessageId:       p.GetMessageId(),
-			ParentMessageId: p.GetParentMessageId(),
-			Role:            firstNonEmptyString(p.GetRole(), "thinking"),
-			Chunk:           p.GetChunk(),
-			Content:         p.GetContent(),
-			Text:            p.GetText(),
-			Status:          firstNonEmptyString(p.GetStatus(), "streaming"),
-			Streaming:       p.GetStreaming(),
-			Source:          firstNonEmptyString(p.GetSource(), "thinking"),
-		}, p.GetCorrelation())
+func reasoningEntityFromFields(view sessionstream.TimelineView, messageID, parentMessageID, role, content, text, status string, streaming bool, corr *chatappv1.CorrelationInfo, eventName string) (string, *chatappv1.ChatMessageEntity, bool, error) {
+	messageID = strings.TrimSpace(messageID)
+	if messageID == "" {
+		return "", nil, true, nil
+	}
+	entity, hadEntity := currentReasoningEntity(view, messageID)
+	content = firstNonEmptyString(content, text)
+	if content == "" {
+		content = firstNonEmptyString(entity.GetContent(), entity.GetText())
+	}
+	if content == "" && !hadEntity {
+		return "", nil, true, nil
+	}
+	entity.MessageId = messageID
+	entity.Role = firstNonEmptyString(role, "thinking")
+	entity.Content = content
+	entity.Text = content
+	entity.ParentMessageId = parentMessageID
+	entity.Segment = corr.GetSegmentIndex()
+	entity.SegmentType = firstNonEmptyString(corr.GetSegmentType(), gepevents.SegmentTypeReasoning)
+	entity.Correlation = cloneCorrelationInfo(corr)
+	switch eventName {
+	case ReasoningStartedEventName, ReasoningDeltaEventName:
+		entity.Status = firstNonEmptyString(status, "streaming")
+		entity.Streaming = streaming
 	case ReasoningFinishedEventName:
-		p, ok := ev.Payload.(*chatappv1.ChatReasoningSegmentFinished)
-		if !ok || p == nil {
-			return nil, false
-		}
-		payload = reasoningUpdateFromCorrelation(&chatappv1.ReasoningUpdate{
-			MessageId:       p.GetMessageId(),
-			ParentMessageId: p.GetParentMessageId(),
-			Role:            firstNonEmptyString(p.GetRole(), "thinking"),
-			Content:         p.GetContent(),
-			Text:            p.GetText(),
-			Status:          firstNonEmptyString(p.GetStatus(), "finished"),
-			Streaming:       p.GetStreaming(),
-			Source:          firstNonEmptyString(p.GetSource(), "thinking"),
-		}, p.GetCorrelation())
+		entity.Status = firstNonEmptyString(status, "finished")
+		entity.Streaming = false
 	default:
-		return nil, false
+		return "", nil, false, nil
 	}
-	if payload.Role == "" {
-		payload.Role = "thinking"
-	}
-	if payload.SegmentType == "" {
-		payload.SegmentType = "thinking"
-	}
-	if view != nil && payload.GetMessageId() != "" && payload.GetContent() == "" {
-		current, _ := currentReasoningEntity(view, payload.GetMessageId())
-		if currentContent := current.GetContent(); currentContent != "" {
-			payload.Content = currentContent
-			payload.Text = currentContent
-		} else if currentText := current.GetText(); currentText != "" {
-			payload.Content = currentText
-			payload.Text = currentText
-		}
-	}
-	return payload, true
+	return messageID, entity, true, nil
 }
 
 func currentReasoningEntity(view sessionstream.TimelineView, id string) (*chatappv1.ChatMessageEntity, bool) {
@@ -300,28 +214,7 @@ func currentReasoningEntity(view sessionstream.TimelineView, id string) (*chatap
 	if !ok || pb == nil {
 		return &chatappv1.ChatMessageEntity{}, false
 	}
-	return &chatappv1.ChatMessageEntity{
-		MessageId:       pb.GetMessageId(),
-		Role:            pb.GetRole(),
-		Prompt:          pb.GetPrompt(),
-		Text:            pb.GetText(),
-		Content:         pb.GetContent(),
-		Status:          pb.GetStatus(),
-		Streaming:       pb.GetStreaming(),
-		Error:           pb.GetError(),
-		ParentMessageId: pb.GetParentMessageId(),
-		Segment:         pb.GetSegment(),
-		SegmentType:     pb.GetSegmentType(),
-		Final:           pb.GetFinal(),
-	}, true
-}
-
-func cloneInt32Ptr(v *int32) *int32 {
-	if v == nil {
-		return nil
-	}
-	vv := *v
-	return &vv
+	return proto.Clone(pb).(*chatappv1.ChatMessageEntity), true
 }
 
 // Ensure ReasoningPlugin implements ChatPlugin.

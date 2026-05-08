@@ -2025,44 +2025,32 @@ func (x *ChatToolCallFinished) GetCorrelation() *CorrelationInfo {
 	return nil
 }
 
-type ChatMessageUpdate struct {
-	state           protoimpl.MessageState `protogen:"open.v1"`
-	MessageId       string                 `protobuf:"bytes,1,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
-	Role            string                 `protobuf:"bytes,2,opt,name=role,proto3" json:"role,omitempty"`
-	Prompt          string                 `protobuf:"bytes,3,opt,name=prompt,proto3" json:"prompt,omitempty"`
-	Chunk           string                 `protobuf:"bytes,4,opt,name=chunk,proto3" json:"chunk,omitempty"`
-	Text            string                 `protobuf:"bytes,5,opt,name=text,proto3" json:"text,omitempty"`
-	Content         string                 `protobuf:"bytes,6,opt,name=content,proto3" json:"content,omitempty"`
-	Status          string                 `protobuf:"bytes,7,opt,name=status,proto3" json:"status,omitempty"`
-	Streaming       bool                   `protobuf:"varint,8,opt,name=streaming,proto3" json:"streaming,omitempty"`
-	Error           string                 `protobuf:"bytes,9,opt,name=error,proto3" json:"error,omitempty"`
-	ParentMessageId string                 `protobuf:"bytes,10,opt,name=parent_message_id,json=parentMessageId,proto3" json:"parent_message_id,omitempty"`
-	Segment         int32                  `protobuf:"varint,11,opt,name=segment,proto3" json:"segment,omitempty"`
-	SegmentType     string                 `protobuf:"bytes,12,opt,name=segment_type,json=segmentType,proto3" json:"segment_type,omitempty"`
-	Final           bool                   `protobuf:"varint,13,opt,name=final,proto3" json:"final,omitempty"`
-	Provider        string                 `protobuf:"bytes,14,opt,name=provider,proto3" json:"provider,omitempty"`
-	ResponseId      string                 `protobuf:"bytes,15,opt,name=response_id,json=responseId,proto3" json:"response_id,omitempty"`
-	ChoiceIndex     *int32                 `protobuf:"varint,16,opt,name=choice_index,json=choiceIndex,proto3,oneof" json:"choice_index,omitempty"`
-	StreamKind      string                 `protobuf:"bytes,17,opt,name=stream_kind,json=streamKind,proto3" json:"stream_kind,omitempty"`
-	CorrelationKey  string                 `protobuf:"bytes,18,opt,name=correlation_key,json=correlationKey,proto3" json:"correlation_key,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+type ChatUserMessageAccepted struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	MessageId     string                 `protobuf:"bytes,1,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
+	Role          string                 `protobuf:"bytes,2,opt,name=role,proto3" json:"role,omitempty"`
+	Prompt        string                 `protobuf:"bytes,3,opt,name=prompt,proto3" json:"prompt,omitempty"`
+	Text          string                 `protobuf:"bytes,4,opt,name=text,proto3" json:"text,omitempty"`
+	Content       string                 `protobuf:"bytes,5,opt,name=content,proto3" json:"content,omitempty"`
+	Status        string                 `protobuf:"bytes,6,opt,name=status,proto3" json:"status,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
-func (x *ChatMessageUpdate) Reset() {
-	*x = ChatMessageUpdate{}
+func (x *ChatUserMessageAccepted) Reset() {
+	*x = ChatUserMessageAccepted{}
 	mi := &file_proto_pinocchio_chatapp_v1_chat_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *ChatMessageUpdate) String() string {
+func (x *ChatUserMessageAccepted) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*ChatMessageUpdate) ProtoMessage() {}
+func (*ChatUserMessageAccepted) ProtoMessage() {}
 
-func (x *ChatMessageUpdate) ProtoReflect() protoreflect.Message {
+func (x *ChatUserMessageAccepted) ProtoReflect() protoreflect.Message {
 	mi := &file_proto_pinocchio_chatapp_v1_chat_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -2074,133 +2062,49 @@ func (x *ChatMessageUpdate) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use ChatMessageUpdate.ProtoReflect.Descriptor instead.
-func (*ChatMessageUpdate) Descriptor() ([]byte, []int) {
+// Deprecated: Use ChatUserMessageAccepted.ProtoReflect.Descriptor instead.
+func (*ChatUserMessageAccepted) Descriptor() ([]byte, []int) {
 	return file_proto_pinocchio_chatapp_v1_chat_proto_rawDescGZIP(), []int{23}
 }
 
-func (x *ChatMessageUpdate) GetMessageId() string {
+func (x *ChatUserMessageAccepted) GetMessageId() string {
 	if x != nil {
 		return x.MessageId
 	}
 	return ""
 }
 
-func (x *ChatMessageUpdate) GetRole() string {
+func (x *ChatUserMessageAccepted) GetRole() string {
 	if x != nil {
 		return x.Role
 	}
 	return ""
 }
 
-func (x *ChatMessageUpdate) GetPrompt() string {
+func (x *ChatUserMessageAccepted) GetPrompt() string {
 	if x != nil {
 		return x.Prompt
 	}
 	return ""
 }
 
-func (x *ChatMessageUpdate) GetChunk() string {
-	if x != nil {
-		return x.Chunk
-	}
-	return ""
-}
-
-func (x *ChatMessageUpdate) GetText() string {
+func (x *ChatUserMessageAccepted) GetText() string {
 	if x != nil {
 		return x.Text
 	}
 	return ""
 }
 
-func (x *ChatMessageUpdate) GetContent() string {
+func (x *ChatUserMessageAccepted) GetContent() string {
 	if x != nil {
 		return x.Content
 	}
 	return ""
 }
 
-func (x *ChatMessageUpdate) GetStatus() string {
+func (x *ChatUserMessageAccepted) GetStatus() string {
 	if x != nil {
 		return x.Status
-	}
-	return ""
-}
-
-func (x *ChatMessageUpdate) GetStreaming() bool {
-	if x != nil {
-		return x.Streaming
-	}
-	return false
-}
-
-func (x *ChatMessageUpdate) GetError() string {
-	if x != nil {
-		return x.Error
-	}
-	return ""
-}
-
-func (x *ChatMessageUpdate) GetParentMessageId() string {
-	if x != nil {
-		return x.ParentMessageId
-	}
-	return ""
-}
-
-func (x *ChatMessageUpdate) GetSegment() int32 {
-	if x != nil {
-		return x.Segment
-	}
-	return 0
-}
-
-func (x *ChatMessageUpdate) GetSegmentType() string {
-	if x != nil {
-		return x.SegmentType
-	}
-	return ""
-}
-
-func (x *ChatMessageUpdate) GetFinal() bool {
-	if x != nil {
-		return x.Final
-	}
-	return false
-}
-
-func (x *ChatMessageUpdate) GetProvider() string {
-	if x != nil {
-		return x.Provider
-	}
-	return ""
-}
-
-func (x *ChatMessageUpdate) GetResponseId() string {
-	if x != nil {
-		return x.ResponseId
-	}
-	return ""
-}
-
-func (x *ChatMessageUpdate) GetChoiceIndex() int32 {
-	if x != nil && x.ChoiceIndex != nil {
-		return *x.ChoiceIndex
-	}
-	return 0
-}
-
-func (x *ChatMessageUpdate) GetStreamKind() string {
-	if x != nil {
-		return x.StreamKind
-	}
-	return ""
-}
-
-func (x *ChatMessageUpdate) GetCorrelationKey() string {
-	if x != nil {
-		return x.CorrelationKey
 	}
 	return ""
 }
@@ -2219,6 +2123,7 @@ type ChatMessageEntity struct {
 	Segment         int32                  `protobuf:"varint,10,opt,name=segment,proto3" json:"segment,omitempty"`
 	SegmentType     string                 `protobuf:"bytes,11,opt,name=segment_type,json=segmentType,proto3" json:"segment_type,omitempty"`
 	Final           bool                   `protobuf:"varint,12,opt,name=final,proto3" json:"final,omitempty"`
+	Correlation     *CorrelationInfo       `protobuf:"bytes,13,opt,name=correlation,proto3" json:"correlation,omitempty"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -2337,192 +2242,11 @@ func (x *ChatMessageEntity) GetFinal() bool {
 	return false
 }
 
-type ReasoningUpdate struct {
-	state           protoimpl.MessageState `protogen:"open.v1"`
-	MessageId       string                 `protobuf:"bytes,1,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
-	ParentMessageId string                 `protobuf:"bytes,2,opt,name=parent_message_id,json=parentMessageId,proto3" json:"parent_message_id,omitempty"`
-	Segment         int32                  `protobuf:"varint,3,opt,name=segment,proto3" json:"segment,omitempty"`
-	Role            string                 `protobuf:"bytes,4,opt,name=role,proto3" json:"role,omitempty"`
-	Chunk           string                 `protobuf:"bytes,5,opt,name=chunk,proto3" json:"chunk,omitempty"`
-	Text            string                 `protobuf:"bytes,6,opt,name=text,proto3" json:"text,omitempty"`
-	Content         string                 `protobuf:"bytes,7,opt,name=content,proto3" json:"content,omitempty"`
-	Status          string                 `protobuf:"bytes,8,opt,name=status,proto3" json:"status,omitempty"`
-	Streaming       bool                   `protobuf:"varint,9,opt,name=streaming,proto3" json:"streaming,omitempty"`
-	Source          string                 `protobuf:"bytes,10,opt,name=source,proto3" json:"source,omitempty"`
-	SegmentType     string                 `protobuf:"bytes,11,opt,name=segment_type,json=segmentType,proto3" json:"segment_type,omitempty"`
-	Provider        string                 `protobuf:"bytes,12,opt,name=provider,proto3" json:"provider,omitempty"`
-	ResponseId      string                 `protobuf:"bytes,13,opt,name=response_id,json=responseId,proto3" json:"response_id,omitempty"`
-	ItemId          string                 `protobuf:"bytes,14,opt,name=item_id,json=itemId,proto3" json:"item_id,omitempty"`
-	OutputIndex     *int32                 `protobuf:"varint,15,opt,name=output_index,json=outputIndex,proto3,oneof" json:"output_index,omitempty"`
-	SummaryIndex    *int32                 `protobuf:"varint,16,opt,name=summary_index,json=summaryIndex,proto3,oneof" json:"summary_index,omitempty"`
-	ChoiceIndex     *int32                 `protobuf:"varint,17,opt,name=choice_index,json=choiceIndex,proto3,oneof" json:"choice_index,omitempty"`
-	StreamKind      string                 `protobuf:"bytes,18,opt,name=stream_kind,json=streamKind,proto3" json:"stream_kind,omitempty"`
-	CorrelationKey  string                 `protobuf:"bytes,19,opt,name=correlation_key,json=correlationKey,proto3" json:"correlation_key,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
-}
-
-func (x *ReasoningUpdate) Reset() {
-	*x = ReasoningUpdate{}
-	mi := &file_proto_pinocchio_chatapp_v1_chat_proto_msgTypes[25]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ReasoningUpdate) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ReasoningUpdate) ProtoMessage() {}
-
-func (x *ReasoningUpdate) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_pinocchio_chatapp_v1_chat_proto_msgTypes[25]
+func (x *ChatMessageEntity) GetCorrelation() *CorrelationInfo {
 	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
+		return x.Correlation
 	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ReasoningUpdate.ProtoReflect.Descriptor instead.
-func (*ReasoningUpdate) Descriptor() ([]byte, []int) {
-	return file_proto_pinocchio_chatapp_v1_chat_proto_rawDescGZIP(), []int{25}
-}
-
-func (x *ReasoningUpdate) GetMessageId() string {
-	if x != nil {
-		return x.MessageId
-	}
-	return ""
-}
-
-func (x *ReasoningUpdate) GetParentMessageId() string {
-	if x != nil {
-		return x.ParentMessageId
-	}
-	return ""
-}
-
-func (x *ReasoningUpdate) GetSegment() int32 {
-	if x != nil {
-		return x.Segment
-	}
-	return 0
-}
-
-func (x *ReasoningUpdate) GetRole() string {
-	if x != nil {
-		return x.Role
-	}
-	return ""
-}
-
-func (x *ReasoningUpdate) GetChunk() string {
-	if x != nil {
-		return x.Chunk
-	}
-	return ""
-}
-
-func (x *ReasoningUpdate) GetText() string {
-	if x != nil {
-		return x.Text
-	}
-	return ""
-}
-
-func (x *ReasoningUpdate) GetContent() string {
-	if x != nil {
-		return x.Content
-	}
-	return ""
-}
-
-func (x *ReasoningUpdate) GetStatus() string {
-	if x != nil {
-		return x.Status
-	}
-	return ""
-}
-
-func (x *ReasoningUpdate) GetStreaming() bool {
-	if x != nil {
-		return x.Streaming
-	}
-	return false
-}
-
-func (x *ReasoningUpdate) GetSource() string {
-	if x != nil {
-		return x.Source
-	}
-	return ""
-}
-
-func (x *ReasoningUpdate) GetSegmentType() string {
-	if x != nil {
-		return x.SegmentType
-	}
-	return ""
-}
-
-func (x *ReasoningUpdate) GetProvider() string {
-	if x != nil {
-		return x.Provider
-	}
-	return ""
-}
-
-func (x *ReasoningUpdate) GetResponseId() string {
-	if x != nil {
-		return x.ResponseId
-	}
-	return ""
-}
-
-func (x *ReasoningUpdate) GetItemId() string {
-	if x != nil {
-		return x.ItemId
-	}
-	return ""
-}
-
-func (x *ReasoningUpdate) GetOutputIndex() int32 {
-	if x != nil && x.OutputIndex != nil {
-		return *x.OutputIndex
-	}
-	return 0
-}
-
-func (x *ReasoningUpdate) GetSummaryIndex() int32 {
-	if x != nil && x.SummaryIndex != nil {
-		return *x.SummaryIndex
-	}
-	return 0
-}
-
-func (x *ReasoningUpdate) GetChoiceIndex() int32 {
-	if x != nil && x.ChoiceIndex != nil {
-		return *x.ChoiceIndex
-	}
-	return 0
-}
-
-func (x *ReasoningUpdate) GetStreamKind() string {
-	if x != nil {
-		return x.StreamKind
-	}
-	return ""
-}
-
-func (x *ReasoningUpdate) GetCorrelationKey() string {
-	if x != nil {
-		return x.CorrelationKey
-	}
-	return ""
+	return nil
 }
 
 type AgentModePreviewUpdate struct {
@@ -2538,7 +2262,7 @@ type AgentModePreviewUpdate struct {
 
 func (x *AgentModePreviewUpdate) Reset() {
 	*x = AgentModePreviewUpdate{}
-	mi := &file_proto_pinocchio_chatapp_v1_chat_proto_msgTypes[26]
+	mi := &file_proto_pinocchio_chatapp_v1_chat_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2550,7 +2274,7 @@ func (x *AgentModePreviewUpdate) String() string {
 func (*AgentModePreviewUpdate) ProtoMessage() {}
 
 func (x *AgentModePreviewUpdate) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_pinocchio_chatapp_v1_chat_proto_msgTypes[26]
+	mi := &file_proto_pinocchio_chatapp_v1_chat_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2563,7 +2287,7 @@ func (x *AgentModePreviewUpdate) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AgentModePreviewUpdate.ProtoReflect.Descriptor instead.
 func (*AgentModePreviewUpdate) Descriptor() ([]byte, []int) {
-	return file_proto_pinocchio_chatapp_v1_chat_proto_rawDescGZIP(), []int{26}
+	return file_proto_pinocchio_chatapp_v1_chat_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *AgentModePreviewUpdate) GetMessageId() string {
@@ -2615,7 +2339,7 @@ type AgentModeCommittedUpdate struct {
 
 func (x *AgentModeCommittedUpdate) Reset() {
 	*x = AgentModeCommittedUpdate{}
-	mi := &file_proto_pinocchio_chatapp_v1_chat_proto_msgTypes[27]
+	mi := &file_proto_pinocchio_chatapp_v1_chat_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2627,7 +2351,7 @@ func (x *AgentModeCommittedUpdate) String() string {
 func (*AgentModeCommittedUpdate) ProtoMessage() {}
 
 func (x *AgentModeCommittedUpdate) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_pinocchio_chatapp_v1_chat_proto_msgTypes[27]
+	mi := &file_proto_pinocchio_chatapp_v1_chat_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2640,7 +2364,7 @@ func (x *AgentModeCommittedUpdate) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AgentModeCommittedUpdate.ProtoReflect.Descriptor instead.
 func (*AgentModeCommittedUpdate) Descriptor() ([]byte, []int) {
-	return file_proto_pinocchio_chatapp_v1_chat_proto_rawDescGZIP(), []int{27}
+	return file_proto_pinocchio_chatapp_v1_chat_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *AgentModeCommittedUpdate) GetMessageId() string {
@@ -2694,7 +2418,7 @@ type AgentModePreviewCleared struct {
 
 func (x *AgentModePreviewCleared) Reset() {
 	*x = AgentModePreviewCleared{}
-	mi := &file_proto_pinocchio_chatapp_v1_chat_proto_msgTypes[28]
+	mi := &file_proto_pinocchio_chatapp_v1_chat_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2706,7 +2430,7 @@ func (x *AgentModePreviewCleared) String() string {
 func (*AgentModePreviewCleared) ProtoMessage() {}
 
 func (x *AgentModePreviewCleared) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_pinocchio_chatapp_v1_chat_proto_msgTypes[28]
+	mi := &file_proto_pinocchio_chatapp_v1_chat_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2719,7 +2443,7 @@ func (x *AgentModePreviewCleared) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AgentModePreviewCleared.ProtoReflect.Descriptor instead.
 func (*AgentModePreviewCleared) Descriptor() ([]byte, []int) {
-	return file_proto_pinocchio_chatapp_v1_chat_proto_rawDescGZIP(), []int{28}
+	return file_proto_pinocchio_chatapp_v1_chat_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *AgentModePreviewCleared) GetMessageId() string {
@@ -2743,7 +2467,7 @@ type AgentModeEntity struct {
 
 func (x *AgentModeEntity) Reset() {
 	*x = AgentModeEntity{}
-	mi := &file_proto_pinocchio_chatapp_v1_chat_proto_msgTypes[29]
+	mi := &file_proto_pinocchio_chatapp_v1_chat_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2755,7 +2479,7 @@ func (x *AgentModeEntity) String() string {
 func (*AgentModeEntity) ProtoMessage() {}
 
 func (x *AgentModeEntity) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_pinocchio_chatapp_v1_chat_proto_msgTypes[29]
+	mi := &file_proto_pinocchio_chatapp_v1_chat_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2768,7 +2492,7 @@ func (x *AgentModeEntity) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AgentModeEntity.ProtoReflect.Descriptor instead.
 func (*AgentModeEntity) Descriptor() ([]byte, []int) {
-	return file_proto_pinocchio_chatapp_v1_chat_proto_rawDescGZIP(), []int{29}
+	return file_proto_pinocchio_chatapp_v1_chat_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *AgentModeEntity) GetMessageId() string {
@@ -2813,262 +2537,6 @@ func (x *AgentModeEntity) GetPreview() bool {
 	return false
 }
 
-type ToolCallUpdate struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	MessageId      string                 `protobuf:"bytes,1,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
-	ToolCallId     string                 `protobuf:"bytes,2,opt,name=tool_call_id,json=toolCallId,proto3" json:"tool_call_id,omitempty"`
-	ToolName       string                 `protobuf:"bytes,3,opt,name=tool_name,json=toolName,proto3" json:"tool_name,omitempty"`
-	Input          string                 `protobuf:"bytes,4,opt,name=input,proto3" json:"input,omitempty"`
-	Executing      bool                   `protobuf:"varint,5,opt,name=executing,proto3" json:"executing,omitempty"`
-	Status         string                 `protobuf:"bytes,6,opt,name=status,proto3" json:"status,omitempty"`
-	Provider       string                 `protobuf:"bytes,7,opt,name=provider,proto3" json:"provider,omitempty"`
-	ResponseId     string                 `protobuf:"bytes,8,opt,name=response_id,json=responseId,proto3" json:"response_id,omitempty"`
-	ChoiceIndex    *int32                 `protobuf:"varint,9,opt,name=choice_index,json=choiceIndex,proto3,oneof" json:"choice_index,omitempty"`
-	StreamKind     string                 `protobuf:"bytes,10,opt,name=stream_kind,json=streamKind,proto3" json:"stream_kind,omitempty"`
-	CorrelationKey string                 `protobuf:"bytes,11,opt,name=correlation_key,json=correlationKey,proto3" json:"correlation_key,omitempty"`
-	ToolCallIndex  *int32                 `protobuf:"varint,12,opt,name=tool_call_index,json=toolCallIndex,proto3,oneof" json:"tool_call_index,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
-}
-
-func (x *ToolCallUpdate) Reset() {
-	*x = ToolCallUpdate{}
-	mi := &file_proto_pinocchio_chatapp_v1_chat_proto_msgTypes[30]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ToolCallUpdate) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ToolCallUpdate) ProtoMessage() {}
-
-func (x *ToolCallUpdate) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_pinocchio_chatapp_v1_chat_proto_msgTypes[30]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ToolCallUpdate.ProtoReflect.Descriptor instead.
-func (*ToolCallUpdate) Descriptor() ([]byte, []int) {
-	return file_proto_pinocchio_chatapp_v1_chat_proto_rawDescGZIP(), []int{30}
-}
-
-func (x *ToolCallUpdate) GetMessageId() string {
-	if x != nil {
-		return x.MessageId
-	}
-	return ""
-}
-
-func (x *ToolCallUpdate) GetToolCallId() string {
-	if x != nil {
-		return x.ToolCallId
-	}
-	return ""
-}
-
-func (x *ToolCallUpdate) GetToolName() string {
-	if x != nil {
-		return x.ToolName
-	}
-	return ""
-}
-
-func (x *ToolCallUpdate) GetInput() string {
-	if x != nil {
-		return x.Input
-	}
-	return ""
-}
-
-func (x *ToolCallUpdate) GetExecuting() bool {
-	if x != nil {
-		return x.Executing
-	}
-	return false
-}
-
-func (x *ToolCallUpdate) GetStatus() string {
-	if x != nil {
-		return x.Status
-	}
-	return ""
-}
-
-func (x *ToolCallUpdate) GetProvider() string {
-	if x != nil {
-		return x.Provider
-	}
-	return ""
-}
-
-func (x *ToolCallUpdate) GetResponseId() string {
-	if x != nil {
-		return x.ResponseId
-	}
-	return ""
-}
-
-func (x *ToolCallUpdate) GetChoiceIndex() int32 {
-	if x != nil && x.ChoiceIndex != nil {
-		return *x.ChoiceIndex
-	}
-	return 0
-}
-
-func (x *ToolCallUpdate) GetStreamKind() string {
-	if x != nil {
-		return x.StreamKind
-	}
-	return ""
-}
-
-func (x *ToolCallUpdate) GetCorrelationKey() string {
-	if x != nil {
-		return x.CorrelationKey
-	}
-	return ""
-}
-
-func (x *ToolCallUpdate) GetToolCallIndex() int32 {
-	if x != nil && x.ToolCallIndex != nil {
-		return *x.ToolCallIndex
-	}
-	return 0
-}
-
-type ToolResultUpdate struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	MessageId      string                 `protobuf:"bytes,1,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
-	ToolCallId     string                 `protobuf:"bytes,2,opt,name=tool_call_id,json=toolCallId,proto3" json:"tool_call_id,omitempty"`
-	ToolName       string                 `protobuf:"bytes,3,opt,name=tool_name,json=toolName,proto3" json:"tool_name,omitempty"`
-	Result         string                 `protobuf:"bytes,4,opt,name=result,proto3" json:"result,omitempty"`
-	Status         string                 `protobuf:"bytes,5,opt,name=status,proto3" json:"status,omitempty"`
-	Provider       string                 `protobuf:"bytes,6,opt,name=provider,proto3" json:"provider,omitempty"`
-	ResponseId     string                 `protobuf:"bytes,7,opt,name=response_id,json=responseId,proto3" json:"response_id,omitempty"`
-	ChoiceIndex    *int32                 `protobuf:"varint,8,opt,name=choice_index,json=choiceIndex,proto3,oneof" json:"choice_index,omitempty"`
-	StreamKind     string                 `protobuf:"bytes,9,opt,name=stream_kind,json=streamKind,proto3" json:"stream_kind,omitempty"`
-	CorrelationKey string                 `protobuf:"bytes,10,opt,name=correlation_key,json=correlationKey,proto3" json:"correlation_key,omitempty"`
-	ToolCallIndex  *int32                 `protobuf:"varint,11,opt,name=tool_call_index,json=toolCallIndex,proto3,oneof" json:"tool_call_index,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
-}
-
-func (x *ToolResultUpdate) Reset() {
-	*x = ToolResultUpdate{}
-	mi := &file_proto_pinocchio_chatapp_v1_chat_proto_msgTypes[31]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ToolResultUpdate) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ToolResultUpdate) ProtoMessage() {}
-
-func (x *ToolResultUpdate) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_pinocchio_chatapp_v1_chat_proto_msgTypes[31]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ToolResultUpdate.ProtoReflect.Descriptor instead.
-func (*ToolResultUpdate) Descriptor() ([]byte, []int) {
-	return file_proto_pinocchio_chatapp_v1_chat_proto_rawDescGZIP(), []int{31}
-}
-
-func (x *ToolResultUpdate) GetMessageId() string {
-	if x != nil {
-		return x.MessageId
-	}
-	return ""
-}
-
-func (x *ToolResultUpdate) GetToolCallId() string {
-	if x != nil {
-		return x.ToolCallId
-	}
-	return ""
-}
-
-func (x *ToolResultUpdate) GetToolName() string {
-	if x != nil {
-		return x.ToolName
-	}
-	return ""
-}
-
-func (x *ToolResultUpdate) GetResult() string {
-	if x != nil {
-		return x.Result
-	}
-	return ""
-}
-
-func (x *ToolResultUpdate) GetStatus() string {
-	if x != nil {
-		return x.Status
-	}
-	return ""
-}
-
-func (x *ToolResultUpdate) GetProvider() string {
-	if x != nil {
-		return x.Provider
-	}
-	return ""
-}
-
-func (x *ToolResultUpdate) GetResponseId() string {
-	if x != nil {
-		return x.ResponseId
-	}
-	return ""
-}
-
-func (x *ToolResultUpdate) GetChoiceIndex() int32 {
-	if x != nil && x.ChoiceIndex != nil {
-		return *x.ChoiceIndex
-	}
-	return 0
-}
-
-func (x *ToolResultUpdate) GetStreamKind() string {
-	if x != nil {
-		return x.StreamKind
-	}
-	return ""
-}
-
-func (x *ToolResultUpdate) GetCorrelationKey() string {
-	if x != nil {
-		return x.CorrelationKey
-	}
-	return ""
-}
-
-func (x *ToolResultUpdate) GetToolCallIndex() int32 {
-	if x != nil && x.ToolCallIndex != nil {
-		return *x.ToolCallIndex
-	}
-	return 0
-}
-
 type ToolCallEntity struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	MessageId     string                 `protobuf:"bytes,1,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
@@ -3077,13 +2545,14 @@ type ToolCallEntity struct {
 	Input         string                 `protobuf:"bytes,4,opt,name=input,proto3" json:"input,omitempty"`
 	Executing     bool                   `protobuf:"varint,5,opt,name=executing,proto3" json:"executing,omitempty"`
 	Status        string                 `protobuf:"bytes,6,opt,name=status,proto3" json:"status,omitempty"`
+	Correlation   *CorrelationInfo       `protobuf:"bytes,7,opt,name=correlation,proto3" json:"correlation,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ToolCallEntity) Reset() {
 	*x = ToolCallEntity{}
-	mi := &file_proto_pinocchio_chatapp_v1_chat_proto_msgTypes[32]
+	mi := &file_proto_pinocchio_chatapp_v1_chat_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3095,7 +2564,7 @@ func (x *ToolCallEntity) String() string {
 func (*ToolCallEntity) ProtoMessage() {}
 
 func (x *ToolCallEntity) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_pinocchio_chatapp_v1_chat_proto_msgTypes[32]
+	mi := &file_proto_pinocchio_chatapp_v1_chat_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3108,7 +2577,7 @@ func (x *ToolCallEntity) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ToolCallEntity.ProtoReflect.Descriptor instead.
 func (*ToolCallEntity) Descriptor() ([]byte, []int) {
-	return file_proto_pinocchio_chatapp_v1_chat_proto_rawDescGZIP(), []int{32}
+	return file_proto_pinocchio_chatapp_v1_chat_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *ToolCallEntity) GetMessageId() string {
@@ -3153,6 +2622,13 @@ func (x *ToolCallEntity) GetStatus() string {
 	return ""
 }
 
+func (x *ToolCallEntity) GetCorrelation() *CorrelationInfo {
+	if x != nil {
+		return x.Correlation
+	}
+	return nil
+}
+
 type ToolResultEntity struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	MessageId     string                 `protobuf:"bytes,1,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
@@ -3160,13 +2636,14 @@ type ToolResultEntity struct {
 	ToolName      string                 `protobuf:"bytes,3,opt,name=tool_name,json=toolName,proto3" json:"tool_name,omitempty"`
 	Result        string                 `protobuf:"bytes,4,opt,name=result,proto3" json:"result,omitempty"`
 	Status        string                 `protobuf:"bytes,5,opt,name=status,proto3" json:"status,omitempty"`
+	Correlation   *CorrelationInfo       `protobuf:"bytes,6,opt,name=correlation,proto3" json:"correlation,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ToolResultEntity) Reset() {
 	*x = ToolResultEntity{}
-	mi := &file_proto_pinocchio_chatapp_v1_chat_proto_msgTypes[33]
+	mi := &file_proto_pinocchio_chatapp_v1_chat_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3178,7 +2655,7 @@ func (x *ToolResultEntity) String() string {
 func (*ToolResultEntity) ProtoMessage() {}
 
 func (x *ToolResultEntity) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_pinocchio_chatapp_v1_chat_proto_msgTypes[33]
+	mi := &file_proto_pinocchio_chatapp_v1_chat_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3191,7 +2668,7 @@ func (x *ToolResultEntity) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ToolResultEntity.ProtoReflect.Descriptor instead.
 func (*ToolResultEntity) Descriptor() ([]byte, []int) {
-	return file_proto_pinocchio_chatapp_v1_chat_proto_rawDescGZIP(), []int{33}
+	return file_proto_pinocchio_chatapp_v1_chat_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *ToolResultEntity) GetMessageId() string {
@@ -3227,6 +2704,13 @@ func (x *ToolResultEntity) GetStatus() string {
 		return x.Status
 	}
 	return ""
+}
+
+func (x *ToolResultEntity) GetCorrelation() *CorrelationInfo {
+	if x != nil {
+		return x.Correlation
+	}
+	return nil
 }
 
 var File_proto_pinocchio_chatapp_v1_chat_proto protoreflect.FileDescriptor
@@ -3446,31 +2930,15 @@ const file_proto_pinocchio_chatapp_v1_chat_proto_rawDesc = "" +
 	"toolCallId\x12\x1b\n" +
 	"\ttool_name\x18\x03 \x01(\tR\btoolName\x12\x16\n" +
 	"\x06status\x18\x04 \x01(\tR\x06status\x12G\n" +
-	"\vcorrelation\x18\x05 \x01(\v2%.pinocchio.chatapp.v1.CorrelationInfoR\vcorrelation\"\xad\x04\n" +
-	"\x11ChatMessageUpdate\x12\x1d\n" +
+	"\vcorrelation\x18\x05 \x01(\v2%.pinocchio.chatapp.v1.CorrelationInfoR\vcorrelation\"\xaa\x01\n" +
+	"\x17ChatUserMessageAccepted\x12\x1d\n" +
 	"\n" +
 	"message_id\x18\x01 \x01(\tR\tmessageId\x12\x12\n" +
 	"\x04role\x18\x02 \x01(\tR\x04role\x12\x16\n" +
-	"\x06prompt\x18\x03 \x01(\tR\x06prompt\x12\x14\n" +
-	"\x05chunk\x18\x04 \x01(\tR\x05chunk\x12\x12\n" +
-	"\x04text\x18\x05 \x01(\tR\x04text\x12\x18\n" +
-	"\acontent\x18\x06 \x01(\tR\acontent\x12\x16\n" +
-	"\x06status\x18\a \x01(\tR\x06status\x12\x1c\n" +
-	"\tstreaming\x18\b \x01(\bR\tstreaming\x12\x14\n" +
-	"\x05error\x18\t \x01(\tR\x05error\x12*\n" +
-	"\x11parent_message_id\x18\n" +
-	" \x01(\tR\x0fparentMessageId\x12\x18\n" +
-	"\asegment\x18\v \x01(\x05R\asegment\x12!\n" +
-	"\fsegment_type\x18\f \x01(\tR\vsegmentType\x12\x14\n" +
-	"\x05final\x18\r \x01(\bR\x05final\x12\x1a\n" +
-	"\bprovider\x18\x0e \x01(\tR\bprovider\x12\x1f\n" +
-	"\vresponse_id\x18\x0f \x01(\tR\n" +
-	"responseId\x12&\n" +
-	"\fchoice_index\x18\x10 \x01(\x05H\x00R\vchoiceIndex\x88\x01\x01\x12\x1f\n" +
-	"\vstream_kind\x18\x11 \x01(\tR\n" +
-	"streamKind\x12'\n" +
-	"\x0fcorrelation_key\x18\x12 \x01(\tR\x0ecorrelationKeyB\x0f\n" +
-	"\r_choice_index\"\xd7\x02\n" +
+	"\x06prompt\x18\x03 \x01(\tR\x06prompt\x12\x12\n" +
+	"\x04text\x18\x04 \x01(\tR\x04text\x12\x18\n" +
+	"\acontent\x18\x05 \x01(\tR\acontent\x12\x16\n" +
+	"\x06status\x18\x06 \x01(\tR\x06status\"\xa0\x03\n" +
 	"\x11ChatMessageEntity\x12\x1d\n" +
 	"\n" +
 	"message_id\x18\x01 \x01(\tR\tmessageId\x12\x12\n" +
@@ -3485,34 +2953,8 @@ const file_proto_pinocchio_chatapp_v1_chat_proto_rawDesc = "" +
 	"\asegment\x18\n" +
 	" \x01(\x05R\asegment\x12!\n" +
 	"\fsegment_type\x18\v \x01(\tR\vsegmentType\x12\x14\n" +
-	"\x05final\x18\f \x01(\bR\x05final\"\x8d\x05\n" +
-	"\x0fReasoningUpdate\x12\x1d\n" +
-	"\n" +
-	"message_id\x18\x01 \x01(\tR\tmessageId\x12*\n" +
-	"\x11parent_message_id\x18\x02 \x01(\tR\x0fparentMessageId\x12\x18\n" +
-	"\asegment\x18\x03 \x01(\x05R\asegment\x12\x12\n" +
-	"\x04role\x18\x04 \x01(\tR\x04role\x12\x14\n" +
-	"\x05chunk\x18\x05 \x01(\tR\x05chunk\x12\x12\n" +
-	"\x04text\x18\x06 \x01(\tR\x04text\x12\x18\n" +
-	"\acontent\x18\a \x01(\tR\acontent\x12\x16\n" +
-	"\x06status\x18\b \x01(\tR\x06status\x12\x1c\n" +
-	"\tstreaming\x18\t \x01(\bR\tstreaming\x12\x16\n" +
-	"\x06source\x18\n" +
-	" \x01(\tR\x06source\x12!\n" +
-	"\fsegment_type\x18\v \x01(\tR\vsegmentType\x12\x1a\n" +
-	"\bprovider\x18\f \x01(\tR\bprovider\x12\x1f\n" +
-	"\vresponse_id\x18\r \x01(\tR\n" +
-	"responseId\x12\x17\n" +
-	"\aitem_id\x18\x0e \x01(\tR\x06itemId\x12&\n" +
-	"\foutput_index\x18\x0f \x01(\x05H\x00R\voutputIndex\x88\x01\x01\x12(\n" +
-	"\rsummary_index\x18\x10 \x01(\x05H\x01R\fsummaryIndex\x88\x01\x01\x12&\n" +
-	"\fchoice_index\x18\x11 \x01(\x05H\x02R\vchoiceIndex\x88\x01\x01\x12\x1f\n" +
-	"\vstream_kind\x18\x12 \x01(\tR\n" +
-	"streamKind\x12'\n" +
-	"\x0fcorrelation_key\x18\x13 \x01(\tR\x0ecorrelationKeyB\x0f\n" +
-	"\r_output_indexB\x10\n" +
-	"\x0e_summary_indexB\x0f\n" +
-	"\r_choice_index\"\xb5\x01\n" +
+	"\x05final\x18\f \x01(\bR\x05final\x12G\n" +
+	"\vcorrelation\x18\r \x01(\v2%.pinocchio.chatapp.v1.CorrelationInfoR\vcorrelation\"\xb5\x01\n" +
 	"\x16AgentModePreviewUpdate\x12\x1d\n" +
 	"\n" +
 	"message_id\x18\x01 \x01(\tR\tmessageId\x12%\n" +
@@ -3539,46 +2981,7 @@ const file_proto_pinocchio_chatapp_v1_chat_proto_rawDesc = "" +
 	"\x04from\x18\x03 \x01(\tR\x04from\x12\x0e\n" +
 	"\x02to\x18\x04 \x01(\tR\x02to\x12\x1a\n" +
 	"\banalysis\x18\x05 \x01(\tR\banalysis\x12\x18\n" +
-	"\apreview\x18\x06 \x01(\bR\apreview\"\xbb\x03\n" +
-	"\x0eToolCallUpdate\x12\x1d\n" +
-	"\n" +
-	"message_id\x18\x01 \x01(\tR\tmessageId\x12 \n" +
-	"\ftool_call_id\x18\x02 \x01(\tR\n" +
-	"toolCallId\x12\x1b\n" +
-	"\ttool_name\x18\x03 \x01(\tR\btoolName\x12\x14\n" +
-	"\x05input\x18\x04 \x01(\tR\x05input\x12\x1c\n" +
-	"\texecuting\x18\x05 \x01(\bR\texecuting\x12\x16\n" +
-	"\x06status\x18\x06 \x01(\tR\x06status\x12\x1a\n" +
-	"\bprovider\x18\a \x01(\tR\bprovider\x12\x1f\n" +
-	"\vresponse_id\x18\b \x01(\tR\n" +
-	"responseId\x12&\n" +
-	"\fchoice_index\x18\t \x01(\x05H\x00R\vchoiceIndex\x88\x01\x01\x12\x1f\n" +
-	"\vstream_kind\x18\n" +
-	" \x01(\tR\n" +
-	"streamKind\x12'\n" +
-	"\x0fcorrelation_key\x18\v \x01(\tR\x0ecorrelationKey\x12+\n" +
-	"\x0ftool_call_index\x18\f \x01(\x05H\x01R\rtoolCallIndex\x88\x01\x01B\x0f\n" +
-	"\r_choice_indexB\x12\n" +
-	"\x10_tool_call_index\"\xa1\x03\n" +
-	"\x10ToolResultUpdate\x12\x1d\n" +
-	"\n" +
-	"message_id\x18\x01 \x01(\tR\tmessageId\x12 \n" +
-	"\ftool_call_id\x18\x02 \x01(\tR\n" +
-	"toolCallId\x12\x1b\n" +
-	"\ttool_name\x18\x03 \x01(\tR\btoolName\x12\x16\n" +
-	"\x06result\x18\x04 \x01(\tR\x06result\x12\x16\n" +
-	"\x06status\x18\x05 \x01(\tR\x06status\x12\x1a\n" +
-	"\bprovider\x18\x06 \x01(\tR\bprovider\x12\x1f\n" +
-	"\vresponse_id\x18\a \x01(\tR\n" +
-	"responseId\x12&\n" +
-	"\fchoice_index\x18\b \x01(\x05H\x00R\vchoiceIndex\x88\x01\x01\x12\x1f\n" +
-	"\vstream_kind\x18\t \x01(\tR\n" +
-	"streamKind\x12'\n" +
-	"\x0fcorrelation_key\x18\n" +
-	" \x01(\tR\x0ecorrelationKey\x12+\n" +
-	"\x0ftool_call_index\x18\v \x01(\x05H\x01R\rtoolCallIndex\x88\x01\x01B\x0f\n" +
-	"\r_choice_indexB\x12\n" +
-	"\x10_tool_call_index\"\xba\x01\n" +
+	"\apreview\x18\x06 \x01(\bR\apreview\"\x83\x02\n" +
 	"\x0eToolCallEntity\x12\x1d\n" +
 	"\n" +
 	"message_id\x18\x01 \x01(\tR\tmessageId\x12 \n" +
@@ -3587,7 +2990,8 @@ const file_proto_pinocchio_chatapp_v1_chat_proto_rawDesc = "" +
 	"\ttool_name\x18\x03 \x01(\tR\btoolName\x12\x14\n" +
 	"\x05input\x18\x04 \x01(\tR\x05input\x12\x1c\n" +
 	"\texecuting\x18\x05 \x01(\bR\texecuting\x12\x16\n" +
-	"\x06status\x18\x06 \x01(\tR\x06status\"\xa0\x01\n" +
+	"\x06status\x18\x06 \x01(\tR\x06status\x12G\n" +
+	"\vcorrelation\x18\a \x01(\v2%.pinocchio.chatapp.v1.CorrelationInfoR\vcorrelation\"\xe9\x01\n" +
 	"\x10ToolResultEntity\x12\x1d\n" +
 	"\n" +
 	"message_id\x18\x01 \x01(\tR\tmessageId\x12 \n" +
@@ -3595,7 +2999,8 @@ const file_proto_pinocchio_chatapp_v1_chat_proto_rawDesc = "" +
 	"toolCallId\x12\x1b\n" +
 	"\ttool_name\x18\x03 \x01(\tR\btoolName\x12\x16\n" +
 	"\x06result\x18\x04 \x01(\tR\x06result\x12\x16\n" +
-	"\x06status\x18\x05 \x01(\tR\x06statusBWZUgithub.com/go-go-golems/pinocchio/pkg/chatapp/pb/proto/pinocchio/chatapp/v1;chatappv1b\x06proto3"
+	"\x06status\x18\x05 \x01(\tR\x06status\x12G\n" +
+	"\vcorrelation\x18\x06 \x01(\v2%.pinocchio.chatapp.v1.CorrelationInfoR\vcorrelationBWZUgithub.com/go-go-golems/pinocchio/pkg/chatapp/pb/proto/pinocchio/chatapp/v1;chatappv1b\x06proto3"
 
 var (
 	file_proto_pinocchio_chatapp_v1_chat_proto_rawDescOnce sync.Once
@@ -3609,7 +3014,7 @@ func file_proto_pinocchio_chatapp_v1_chat_proto_rawDescGZIP() []byte {
 	return file_proto_pinocchio_chatapp_v1_chat_proto_rawDescData
 }
 
-var file_proto_pinocchio_chatapp_v1_chat_proto_msgTypes = make([]protoimpl.MessageInfo, 34)
+var file_proto_pinocchio_chatapp_v1_chat_proto_msgTypes = make([]protoimpl.MessageInfo, 31)
 var file_proto_pinocchio_chatapp_v1_chat_proto_goTypes = []any{
 	(*StartInferenceCommand)(nil),           // 0: pinocchio.chatapp.v1.StartInferenceCommand
 	(*StopInferenceCommand)(nil),            // 1: pinocchio.chatapp.v1.StopInferenceCommand
@@ -3634,17 +3039,14 @@ var file_proto_pinocchio_chatapp_v1_chat_proto_goTypes = []any{
 	(*ChatToolExecutionStarted)(nil),        // 20: pinocchio.chatapp.v1.ChatToolExecutionStarted
 	(*ChatToolResultReady)(nil),             // 21: pinocchio.chatapp.v1.ChatToolResultReady
 	(*ChatToolCallFinished)(nil),            // 22: pinocchio.chatapp.v1.ChatToolCallFinished
-	(*ChatMessageUpdate)(nil),               // 23: pinocchio.chatapp.v1.ChatMessageUpdate
+	(*ChatUserMessageAccepted)(nil),         // 23: pinocchio.chatapp.v1.ChatUserMessageAccepted
 	(*ChatMessageEntity)(nil),               // 24: pinocchio.chatapp.v1.ChatMessageEntity
-	(*ReasoningUpdate)(nil),                 // 25: pinocchio.chatapp.v1.ReasoningUpdate
-	(*AgentModePreviewUpdate)(nil),          // 26: pinocchio.chatapp.v1.AgentModePreviewUpdate
-	(*AgentModeCommittedUpdate)(nil),        // 27: pinocchio.chatapp.v1.AgentModeCommittedUpdate
-	(*AgentModePreviewCleared)(nil),         // 28: pinocchio.chatapp.v1.AgentModePreviewCleared
-	(*AgentModeEntity)(nil),                 // 29: pinocchio.chatapp.v1.AgentModeEntity
-	(*ToolCallUpdate)(nil),                  // 30: pinocchio.chatapp.v1.ToolCallUpdate
-	(*ToolResultUpdate)(nil),                // 31: pinocchio.chatapp.v1.ToolResultUpdate
-	(*ToolCallEntity)(nil),                  // 32: pinocchio.chatapp.v1.ToolCallEntity
-	(*ToolResultEntity)(nil),                // 33: pinocchio.chatapp.v1.ToolResultEntity
+	(*AgentModePreviewUpdate)(nil),          // 25: pinocchio.chatapp.v1.AgentModePreviewUpdate
+	(*AgentModeCommittedUpdate)(nil),        // 26: pinocchio.chatapp.v1.AgentModeCommittedUpdate
+	(*AgentModePreviewCleared)(nil),         // 27: pinocchio.chatapp.v1.AgentModePreviewCleared
+	(*AgentModeEntity)(nil),                 // 28: pinocchio.chatapp.v1.AgentModeEntity
+	(*ToolCallEntity)(nil),                  // 29: pinocchio.chatapp.v1.ToolCallEntity
+	(*ToolResultEntity)(nil),                // 30: pinocchio.chatapp.v1.ToolResultEntity
 }
 var file_proto_pinocchio_chatapp_v1_chat_proto_depIdxs = []int32{
 	3,  // 0: pinocchio.chatapp.v1.ChatRunStarted.correlation:type_name -> pinocchio.chatapp.v1.CorrelationInfo
@@ -3668,11 +3070,14 @@ var file_proto_pinocchio_chatapp_v1_chat_proto_depIdxs = []int32{
 	3,  // 18: pinocchio.chatapp.v1.ChatToolExecutionStarted.correlation:type_name -> pinocchio.chatapp.v1.CorrelationInfo
 	3,  // 19: pinocchio.chatapp.v1.ChatToolResultReady.correlation:type_name -> pinocchio.chatapp.v1.CorrelationInfo
 	3,  // 20: pinocchio.chatapp.v1.ChatToolCallFinished.correlation:type_name -> pinocchio.chatapp.v1.CorrelationInfo
-	21, // [21:21] is the sub-list for method output_type
-	21, // [21:21] is the sub-list for method input_type
-	21, // [21:21] is the sub-list for extension type_name
-	21, // [21:21] is the sub-list for extension extendee
-	0,  // [0:21] is the sub-list for field type_name
+	3,  // 21: pinocchio.chatapp.v1.ChatMessageEntity.correlation:type_name -> pinocchio.chatapp.v1.CorrelationInfo
+	3,  // 22: pinocchio.chatapp.v1.ToolCallEntity.correlation:type_name -> pinocchio.chatapp.v1.CorrelationInfo
+	3,  // 23: pinocchio.chatapp.v1.ToolResultEntity.correlation:type_name -> pinocchio.chatapp.v1.CorrelationInfo
+	24, // [24:24] is the sub-list for method output_type
+	24, // [24:24] is the sub-list for method input_type
+	24, // [24:24] is the sub-list for extension type_name
+	24, // [24:24] is the sub-list for extension extendee
+	0,  // [0:24] is the sub-list for field type_name
 }
 
 func init() { file_proto_pinocchio_chatapp_v1_chat_proto_init() }
@@ -3683,17 +3088,13 @@ func file_proto_pinocchio_chatapp_v1_chat_proto_init() {
 	file_proto_pinocchio_chatapp_v1_chat_proto_msgTypes[3].OneofWrappers = []any{}
 	file_proto_pinocchio_chatapp_v1_chat_proto_msgTypes[5].OneofWrappers = []any{}
 	file_proto_pinocchio_chatapp_v1_chat_proto_msgTypes[10].OneofWrappers = []any{}
-	file_proto_pinocchio_chatapp_v1_chat_proto_msgTypes[23].OneofWrappers = []any{}
-	file_proto_pinocchio_chatapp_v1_chat_proto_msgTypes[25].OneofWrappers = []any{}
-	file_proto_pinocchio_chatapp_v1_chat_proto_msgTypes[30].OneofWrappers = []any{}
-	file_proto_pinocchio_chatapp_v1_chat_proto_msgTypes[31].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_pinocchio_chatapp_v1_chat_proto_rawDesc), len(file_proto_pinocchio_chatapp_v1_chat_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   34,
+			NumMessages:   31,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

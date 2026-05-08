@@ -72,7 +72,7 @@ func TestReasoningChatFeatureProjectsUIAndTimeline(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, handled)
 	require.Len(t, uiEvents, 1)
-	require.Equal(t, plugins.ReasoningAppendedUIName, uiEvents[0].Name)
+	require.Equal(t, plugins.ReasoningDeltaEventName, uiEvents[0].Name)
 
 	entities, handled, err := feature.ProjectTimeline(context.Background(), sessionstream.Event{Name: plugins.ReasoningDeltaEventName, SessionId: "sid", Ordinal: 7, Payload: deltaPayload}, nil, reasoningStaticTimelineView{})
 	require.NoError(t, err)
