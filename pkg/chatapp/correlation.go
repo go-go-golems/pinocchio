@@ -1,6 +1,8 @@
 package chatapp
 
 import (
+	"math"
+
 	gepevents "github.com/go-go-golems/geppetto/pkg/events"
 	chatappv1 "github.com/go-go-golems/pinocchio/pkg/chatapp/pb/proto/pinocchio/chatapp/v1"
 )
@@ -52,16 +54,26 @@ func UsageInfoFromGeppetto(usage *gepevents.Usage) *chatappv1.UsageInfo {
 		return nil
 	}
 	return &chatappv1.UsageInfo{
-		InputTokens:              int32(usage.InputTokens),
-		OutputTokens:             int32(usage.OutputTokens),
-		CachedTokens:             int32(usage.CachedTokens),
-		CacheCreationInputTokens: int32(usage.CacheCreationInputTokens),
-		CacheReadInputTokens:     int32(usage.CacheReadInputTokens),
+		InputTokens:              intToInt32Saturating(usage.InputTokens),
+		OutputTokens:             intToInt32Saturating(usage.OutputTokens),
+		CachedTokens:             intToInt32Saturating(usage.CachedTokens),
+		CacheCreationInputTokens: intToInt32Saturating(usage.CacheCreationInputTokens),
+		CacheReadInputTokens:     intToInt32Saturating(usage.CacheReadInputTokens),
 	}
 }
 
 func usageInfoFromGeppetto(usage *gepevents.Usage) *chatappv1.UsageInfo {
 	return UsageInfoFromGeppetto(usage)
+}
+
+func intToInt32Saturating(v int) int32 {
+	if v > math.MaxInt32 {
+		return math.MaxInt32
+	}
+	if v < math.MinInt32 {
+		return math.MinInt32
+	}
+	return int32(v)
 }
 
 func cloneInt32Ptr(v *int32) *int32 {

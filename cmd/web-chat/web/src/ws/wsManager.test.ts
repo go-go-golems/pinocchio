@@ -165,6 +165,26 @@ describe('timelineMutationFromUIEvent', () => {
     expect(mutation?.upsert?.props.streaming).toBe(false);
   });
 
+  it('omits undefined correlation props so later terminal events preserve earlier keys', () => {
+    const mutation = timelineMutationFromUIEvent({
+      name: 'ChatReasoningSegmentFinished',
+      payload: {
+        messageId: 'chat-msg-2:thinking:1',
+        content: 'done',
+        status: 'finished',
+        streaming: false,
+        correlation: { segmentIndex: 1, segmentType: 'reasoning' },
+      },
+    });
+
+    expect(mutation?.upsert?.props.segment).toBe(1);
+    expect(mutation?.upsert?.props.segmentType).toBe('reasoning');
+    expect(mutation?.upsert?.props).not.toHaveProperty('provider');
+    expect(mutation?.upsert?.props).not.toHaveProperty('responseId');
+    expect(mutation?.upsert?.props).not.toHaveProperty('correlationKey');
+    expect(mutation?.upsert?.props).not.toHaveProperty('streamKind');
+  });
+
   it('preserves typed reasoning provider IDs and optional zero indexes', () => {
     const event = decodeKnownUIEvent({
       name: 'ChatReasoningDelta',

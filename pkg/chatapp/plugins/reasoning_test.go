@@ -69,6 +69,50 @@ func TestReasoningPluginPublishesCanonicalReasoningEvents(t *testing.T) {
 	require.Equal(t, "stop", finished.GetFinishReason())
 }
 
+func TestReasoningPluginRoutesReasoningByStableSegmentIdentity(t *testing.T) {
+	plugin := NewReasoningPlugin()
+	var published []sessionstream.Event
+	runtime := chatapp.RuntimeEventContext{
+		SessionID: "sid",
+		MessageID: "chat-msg-1",
+		Publish: func(_ context.Context, eventName string, payload proto.Message) error {
+			published = append(published, sessionstream.Event{Name: eventName, SessionId: "sid", Payload: payload})
+			return nil
+		},
+	}
+
+	baseCorr := gepevents.Correlation{
+		SessionID:      "sid",
+		Provider:       "openai_responses",
+		ResponseID:     "resp_1",
+		ItemID:         "rs_1",
+		OutputIndex:    int32Ptr(0),
+		SegmentIndex:   1,
+		SegmentType:    gepevents.SegmentTypeReasoning,
+		StreamKind:     gepevents.StreamKindReasoning,
+		CorrelationKey: "reasoning:rs_1:full",
+		ProviderCallID: "provider-call-1",
+	}
+	meta := gepevents.EventMetadata{SessionID: "sid"}
+	_, err := plugin.HandleRuntimeEvent(context.Background(), runtime, gepevents.NewReasoningDeltaEvent(meta, baseCorr, "draft", "draft", 1))
+	require.NoError(t, err)
+
+	summaryCorr := baseCorr
+	summaryCorr.SummaryIndex = int32Ptr(0)
+	summaryCorr.StreamKind = "reasoning-summary"
+	summaryCorr.CorrelationKey = "reasoning:rs_1:summary:0"
+	_, err = plugin.HandleRuntimeEvent(context.Background(), runtime, gepevents.NewReasoningSegmentFinishedEvent(meta, summaryCorr, "summary", "stop"))
+	require.NoError(t, err)
+
+	require.Len(t, published, 2)
+	delta := published[0].Payload.(*chatappv1.ChatReasoningDelta)
+	finished := published[1].Payload.(*chatappv1.ChatReasoningSegmentFinished)
+	require.Equal(t, delta.GetMessageId(), finished.GetMessageId())
+	require.Equal(t, "chat-msg-1:thinking:1", finished.GetMessageId())
+	require.Equal(t, "reasoning:rs_1:summary:0", finished.GetCorrelation().GetCorrelationKey())
+	require.Equal(t, "reasoning-summary", finished.GetCorrelation().GetStreamKind())
+}
+
 func TestReasoningPluginProjectsCanonicalEventsToUIAndTimeline(t *testing.T) {
 	plugin := NewReasoningPlugin()
 	corr := &chatappv1.CorrelationInfo{

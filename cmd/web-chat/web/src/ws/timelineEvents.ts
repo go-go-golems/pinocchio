@@ -17,9 +17,15 @@ function visibleText(payload: { content?: string; text?: string; chunk?: string 
   return payload.content || payload.text || payload.chunk || '';
 }
 
+function definedProps(props: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(props).filter(([, value]) => value !== undefined && !(typeof value === 'string' && value === '')),
+  );
+}
+
 function correlationProps(correlation?: CorrelationInfo): Record<string, unknown> {
   if (!correlation) return {};
-  return {
+  return definedProps({
     correlation,
     provider: correlation.provider,
     model: correlation.model,
@@ -39,7 +45,7 @@ function correlationProps(correlation?: CorrelationInfo): Record<string, unknown
     segmentType: correlation.segmentType,
     toolCallId: correlation.toolCallId,
     toolCallIndex: correlation.toolCallIndex,
-  };
+  });
 }
 
 function toolCallEntity(id: string, props: Record<string, unknown>): TimelineEntity {
