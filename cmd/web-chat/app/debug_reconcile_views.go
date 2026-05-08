@@ -54,7 +54,8 @@ func createDebugSQLiteViews(ctx context.Context, db *sql.DB) error {
 		// Geppetto reasoning/provider sequence for OpenAI Responses debugging.
 		`CREATE VIEW geppetto_reasoning_sequence AS
 		 SELECT record_id, ts, stage, event_type, info_message, message_id, response_id, item_id,
-		        output_index, summary_index, delta_len, normalized_delta_len, buffer_len, error
+		        output_index, summary_index, choice_index, stream_kind, correlation_key,
+		        tool_call_id, tool_call_index, delta_len, normalized_delta_len, buffer_len, error
 		   FROM geppetto_records
 		  WHERE COALESCE(event_type, '') LIKE '%reasoning%'
 		     OR COALESCE(event_type, '') LIKE '%summary%'
@@ -83,13 +84,16 @@ func createDebugSQLiteViews(ctx context.Context, db *sql.DB) error {
 		        p.provider_event_type,
 		        p.response_id,
 		        p.item_id,
+		        p.correlation_key,
+		        p.stream_kind,
+		        p.tool_call_id,
 		        e.record_id AS emitted_record_id,
 		        e.geppetto_event_type,
 		        e.info_message
 		   FROM geppetto_provider_events p
 		   LEFT JOIN geppetto_emitted_events e
-		     ON COALESCE(e.item_id, '') = COALESCE(p.item_id, '')
-		    AND COALESCE(e.item_id, '') != ''`,
+		     ON ((COALESCE(e.item_id, '') = COALESCE(p.item_id, '') AND COALESCE(e.item_id, '') != '')
+		      OR (COALESCE(e.correlation_key, '') = COALESCE(p.correlation_key, '') AND COALESCE(e.correlation_key, '') != ''))`,
 
 		// Provider reasoning deltas correlated through Geppetto publish records,
 		// backend Sessionstream ordinals, frontend parsed frames, UI mutations, and
@@ -197,6 +201,61 @@ func createDebugSQLiteViews(ctx context.Context, db *sql.DB) error {
 		   JOIN frontend_reasoning fr ON fr.rn = pd.rn
 		   LEFT JOIN frontend_mutation fm ON fm.ordinal = fr.frontend_ordinal
 		   LEFT JOIN timeline_entities te ON te.entity_id = fr.frontend_message_id`,
+
+		// Generic provider/backend/frontend correlation by normalized correlation key.
+		`CREATE VIEW geppetto_correlation_to_frontend AS
+		 WITH
+		 provider_records AS (
+		   SELECT record_id, provider_event_type, response_id, item_id, choice_index,
+		          stream_kind, correlation_key, tool_call_id, tool_call_index, object_json
+		     FROM geppetto_provider_events
+		    WHERE COALESCE(correlation_key, '') != ''
+		 ),
+		 backend_events AS (
+		   SELECT br.ordinal AS backend_ordinal,
+		          bpue.name AS backend_event_name,
+		          json_extract(bpue.payload_json, '$.messageId') AS backend_message_id,
+		          json_extract(bpue.payload_json, '$.correlationKey') AS backend_correlation_key,
+		          json_extract(bpue.payload_json, '$.streamKind') AS backend_stream_kind,
+		          json_extract(bpue.payload_json, '$.chunk') AS backend_chunk,
+		          json_extract(bpue.payload_json, '$.toolCallId') AS backend_tool_call_id
+		     FROM backend_pipeline_ui_events bpue
+		     JOIN backend_records br ON br.id = bpue.record_id
+		    WHERE bpue.source = 'uiEvents'
+		 ),
+		 frontend_events AS (
+		   SELECT fr.ordinal AS frontend_ordinal,
+		          fpf.name AS frontend_event_name,
+		          json_extract(fpf.frame_json, '$.payload.messageId') AS frontend_message_id,
+		          json_extract(fpf.frame_json, '$.payload.correlationKey') AS frontend_correlation_key,
+		          json_extract(fpf.frame_json, '$.payload.streamKind') AS frontend_stream_kind,
+		          json_extract(fpf.frame_json, '$.payload.chunk') AS frontend_chunk,
+		          json_extract(fpf.frame_json, '$.payload.toolCallId') AS frontend_tool_call_id
+		     FROM frontend_parsed_frames fpf
+		     JOIN frontend_records fr ON fr.id = fpf.record_id
+		    WHERE fpf.frame_type = 'ui-event'
+		 )
+		 SELECT p.record_id AS provider_record_id,
+		        p.provider_event_type,
+		        p.response_id,
+		        p.item_id,
+		        p.choice_index,
+		        p.stream_kind,
+		        p.correlation_key,
+		        p.tool_call_id,
+		        b.backend_ordinal,
+		        b.backend_event_name,
+		        b.backend_message_id,
+		        b.backend_chunk,
+		        b.backend_tool_call_id,
+		        f.frontend_ordinal,
+		        f.frontend_event_name,
+		        f.frontend_message_id,
+		        f.frontend_chunk,
+		        f.frontend_tool_call_id
+		   FROM provider_records p
+		   LEFT JOIN backend_events b ON b.backend_correlation_key = p.correlation_key
+		   LEFT JOIN frontend_events f ON f.frontend_correlation_key = p.correlation_key`,
 
 		// Frontend parsed frames with no corresponding UI event mutation.
 		`CREATE VIEW frontend_parsed_no_mutation AS

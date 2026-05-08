@@ -187,6 +187,9 @@ describe('timelineMutationFromUIEvent', () => {
         itemId: 'rs_123',
         outputIndex: 0,
         summaryIndex: 0,
+        choiceIndex: 0,
+        streamKind: 'reasoning',
+        correlationKey: 'openai-chat:resp_123:choice:0:reasoning',
       },
     });
 
@@ -194,6 +197,8 @@ describe('timelineMutationFromUIEvent', () => {
     if (event?.name !== 'ChatReasoningAppended') throw new Error('expected typed reasoning event');
     expect(event.payload.outputIndex).toBe(0);
     expect(event.payload.summaryIndex).toBe(0);
+    expect(event.payload.choiceIndex).toBe(0);
+    expect(event.payload.correlationKey).toBe('openai-chat:resp_123:choice:0:reasoning');
 
     const mutation = timelineMutationFromUIEvent({ name: event.name, payload: event.payload });
     expect(mutation?.upsert?.props.provider).toBe('openai-responses');
@@ -201,6 +206,9 @@ describe('timelineMutationFromUIEvent', () => {
     expect(mutation?.upsert?.props.itemId).toBe('rs_123');
     expect(mutation?.upsert?.props.outputIndex).toBe(0);
     expect(mutation?.upsert?.props.summaryIndex).toBe(0);
+    expect(mutation?.upsert?.props.choiceIndex).toBe(0);
+    expect(mutation?.upsert?.props.streamKind).toBe('reasoning');
+    expect(mutation?.upsert?.props.correlationKey).toBe('openai-chat:resp_123:choice:0:reasoning');
   });
 
   it('creates a preview entity mutation for ChatAgentModePreviewUpdated', () => {
@@ -246,6 +254,12 @@ describe('timelineMutationFromUIEvent', () => {
         input: '{"query":"gold"}',
         executing: true,
         status: 'executing',
+        provider: 'openai',
+        responseId: 'resp_tool',
+        choiceIndex: 0,
+        streamKind: 'tool_call',
+        correlationKey: 'openai-chat:resp_tool:choice:0:tool:call_1',
+        toolCallIndex: 0,
       },
     });
 
@@ -254,6 +268,8 @@ describe('timelineMutationFromUIEvent', () => {
     expect(toolCall?.upsert?.props.name).toBe('search');
     expect(toolCall?.upsert?.props.input).toEqual({ query: 'gold' });
     expect(toolCall?.upsert?.props.executing).toBe(true);
+    expect(toolCall?.upsert?.props.correlationKey).toBe('openai-chat:resp_tool:choice:0:tool:call_1');
+    expect(toolCall?.upsert?.props.toolCallIndex).toBe(0);
 
     const result = timelineMutationFromUIEvent({
       name: 'ChatToolResultReady',
@@ -263,6 +279,12 @@ describe('timelineMutationFromUIEvent', () => {
         toolName: 'search',
         result: 'found it',
         status: 'success',
+        provider: 'openai',
+        responseId: 'resp_tool',
+        choiceIndex: 0,
+        streamKind: 'tool_call',
+        correlationKey: 'openai-chat:resp_tool:choice:0:tool:call_1',
+        toolCallIndex: 0,
       },
     });
 
@@ -270,5 +292,7 @@ describe('timelineMutationFromUIEvent', () => {
     expect(result?.upsert?.kind).toBe('tool_result');
     expect(result?.upsert?.props.customKind).toBe('search');
     expect(result?.upsert?.props.result).toBe('found it');
+    expect(result?.upsert?.props.correlationKey).toBe('openai-chat:resp_tool:choice:0:tool:call_1');
+    expect(result?.upsert?.props.toolCallIndex).toBe(0);
   });
 });

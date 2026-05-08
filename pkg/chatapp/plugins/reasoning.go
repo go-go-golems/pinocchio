@@ -52,6 +52,10 @@ type reasoningKey struct {
 	ItemID          string
 	OutputIndex     int32
 	HasOutputIndex  bool
+	ChoiceIndex     int32
+	HasChoiceIndex  bool
+	StreamKind      string
+	CorrelationKey  string
 }
 
 type reasoningSegmentState struct {
@@ -61,11 +65,16 @@ type reasoningSegmentState struct {
 }
 
 type reasoningProviderInfo struct {
-	Provider     string
-	ResponseID   string
-	ItemID       string
-	OutputIndex  *int32
-	SummaryIndex *int32
+	Provider       string
+	ResponseID     string
+	ItemID         string
+	OutputIndex    *int32
+	SummaryIndex   *int32
+	ChoiceIndex    *int32
+	StreamKind     string
+	CorrelationKey string
+	ToolCallID     string
+	ToolCallIndex  *int32
 }
 
 // NewReasoningPlugin creates a new ReasoningPlugin.
@@ -389,6 +398,12 @@ func reasoningKeyFromProviderInfo(parentMessageID string, providerInfo reasoning
 		key.OutputIndex = *providerInfo.OutputIndex
 		key.HasOutputIndex = true
 	}
+	if providerInfo.ChoiceIndex != nil {
+		key.ChoiceIndex = *providerInfo.ChoiceIndex
+		key.HasChoiceIndex = true
+	}
+	key.StreamKind = providerInfo.StreamKind
+	key.CorrelationKey = providerInfo.CorrelationKey
 	if !key.HasProviderIdentity() {
 		return reasoningKey{ParentMessageID: key.ParentMessageID}
 	}
@@ -396,7 +411,7 @@ func reasoningKeyFromProviderInfo(parentMessageID string, providerInfo reasoning
 }
 
 func (key reasoningKey) HasProviderIdentity() bool {
-	return key.Provider != "" || key.ResponseID != "" || key.ItemID != "" || key.HasOutputIndex
+	return key.Provider != "" || key.ResponseID != "" || key.ItemID != "" || key.HasOutputIndex || key.HasChoiceIndex || key.StreamKind != "" || key.CorrelationKey != ""
 }
 
 func (info reasoningProviderInfo) merge(next reasoningProviderInfo) reasoningProviderInfo {
@@ -415,6 +430,21 @@ func (info reasoningProviderInfo) merge(next reasoningProviderInfo) reasoningPro
 	if next.SummaryIndex != nil {
 		info.SummaryIndex = cloneInt32Ptr(next.SummaryIndex)
 	}
+	if next.ChoiceIndex != nil {
+		info.ChoiceIndex = cloneInt32Ptr(next.ChoiceIndex)
+	}
+	if next.StreamKind != "" {
+		info.StreamKind = next.StreamKind
+	}
+	if next.CorrelationKey != "" {
+		info.CorrelationKey = next.CorrelationKey
+	}
+	if next.ToolCallID != "" {
+		info.ToolCallID = next.ToolCallID
+	}
+	if next.ToolCallIndex != nil {
+		info.ToolCallIndex = cloneInt32Ptr(next.ToolCallIndex)
+	}
 	return info
 }
 
@@ -427,6 +457,9 @@ func applyReasoningProviderInfo(update *chatappv1.ReasoningUpdate, info reasonin
 	update.ItemId = info.ItemID
 	update.OutputIndex = cloneInt32Ptr(info.OutputIndex)
 	update.SummaryIndex = cloneInt32Ptr(info.SummaryIndex)
+	update.ChoiceIndex = cloneInt32Ptr(info.ChoiceIndex)
+	update.StreamKind = info.StreamKind
+	update.CorrelationKey = info.CorrelationKey
 	return update
 }
 
@@ -453,6 +486,21 @@ func reasoningProviderInfoFromData(data map[string]interface{}) reasoningProvide
 	}
 	if v, ok := int32FromAny(data["summary_index"]); ok {
 		info.SummaryIndex = &v
+	}
+	if v, ok := int32FromAny(data["choice_index"]); ok {
+		info.ChoiceIndex = &v
+	}
+	if v, ok := data["stream_kind"].(string); ok {
+		info.StreamKind = strings.TrimSpace(v)
+	}
+	if v, ok := data["correlation_key"].(string); ok {
+		info.CorrelationKey = strings.TrimSpace(v)
+	}
+	if v, ok := data["tool_call_id"].(string); ok {
+		info.ToolCallID = strings.TrimSpace(v)
+	}
+	if v, ok := int32FromAny(data["tool_call_index"]); ok {
+		info.ToolCallIndex = &v
 	}
 	return info
 }
