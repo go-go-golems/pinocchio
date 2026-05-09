@@ -43,6 +43,11 @@
 - Added provider event table-driven testing guide: `geppetto/docs/design/implementation/01-provider-event-testing.md`.
 - Moved the provider event testing guide from the Pinocchio ticket-local `docs/` tree to `geppetto/docs/design/implementation/01-provider-event-testing.md` so Geppetto provider adapter docs live with the provider code.
 - Added review-derived provider-normalization scenarios to the Geppetto testing guide and explicitly deferred sparse-patch/projection/frontend scenarios to later Pinocchio phases.
+- Added OpenAI Chat Completions review-derived reducer tests: `4bcf089 Test OpenAI chat review-derived stream scenarios`.
+- Added Claude review-derived `ContentBlockMerger` tests: `fab1d3c Test Claude review-derived stream scenarios`.
+- Added OpenAI Responses review-derived stream tests and sparse function-call finalization fix: `904c77a Test Responses review-derived stream scenarios`.
+- Extracted Gemini stream reducer seam and provider-native chunk tests: `aeb3c38 Extract Gemini stream reducer tests`.
+- Updated the Geppetto provider testing guide to reference the Gemini reducer seam: `1be5777 Docs: update Gemini testing seam`.
 
 ### Related Files
 

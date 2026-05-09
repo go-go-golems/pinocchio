@@ -26,7 +26,7 @@ RelatedFiles:
       Note: Investigated active text finalization on stop/error.
 ExternalSources: []
 Summary: Chronological diary for the PINO-PROTOCOL-CONFORMANCE research/design task.
-LastUpdated: 2026-05-09T00:35:00-04:00
+LastUpdated: 2026-05-09T01:15:00-04:00
 WhatFor: Use this diary to understand how the protocol conformance guide was created and how to continue the work.
 WhenToUse: Use when implementing, reviewing, or extending the protocol conformance test plan.
 ---
@@ -1668,3 +1668,134 @@ Focus on the `Review-derived edge scenarios` section and the new `P06`, `T07`, a
 ### Technical details
 
 No code behavior changed. This is a documentation update that refines the Phase 1 test scenario source.
+
+## Step 19: Implement first review-derived provider-normalization tests
+
+I implemented the provider-side scenarios from the Geppetto provider event testing guide across the current provider adapters. The work stayed provider-specific: OpenAI Chat Completions uses its reducer inputs, OpenAI Responses uses SSE-style fixtures through the engine, Claude uses `api.StreamingEvent` with `ContentBlockMerger`, and Gemini now has a small stream reducer seam for `genai.GenerateContentResponse` chunks.
+
+This is the first concrete Phase 1 provider-normalization test checkpoint derived from the guide. It does not implement the downstream Pinocchio sparse patch/projection/frontend scenarios; those remain later phases.
+
+### Prompt Context
+
+**User prompt (verbatim):** "now implement them, using the guide as guidane, committing at appropriate intervals."
+
+**Assistant interpretation:** Implement the provider-normalization tests described in the guide, especially the review-derived scenarios just added, and commit stable checkpoints as each provider is covered.
+
+**Inferred user intent:** Move from planning documents to concrete provider-specific table-driven tests while preserving review traceability.
+
+**Commit (code):** `4bcf089` — "Test OpenAI chat review-derived stream scenarios"
+
+**Commit (code):** `fab1d3c` — "Test Claude review-derived stream scenarios"
+
+**Commit (code):** `904c77a` — "Test Responses review-derived stream scenarios"
+
+**Commit (code):** `aeb3c38` — "Extract Gemini stream reducer tests"
+
+**Commit (docs):** `1be5777` — "Docs: update Gemini testing seam"
+
+### What I did
+
+- OpenAI Chat Completions:
+  - added table-driven review-derived reducer scenarios for metadata-only final chunks and sparse tool argument deltas;
+  - added canonical event validation for the new projected event traces.
+- Claude:
+  - added table-driven `ContentBlockMerger` scenarios for metadata-only message stop, split/sparse tool JSON deltas preserving identity, and stream error after active text.
+- OpenAI Responses:
+  - added SSE-backed engine tests for metadata-only `response.completed`, sparse function-call finalization, and stream error after active text;
+  - fixed sparse function-call finalization so `response.output_item.done` can reuse previously observed call id, name, output index, status, and arguments from `responsesStreamState.callsByItem`.
+- Gemini:
+  - extracted `geminiStreamState` and `reduceGeminiStreamResponse` into `stream_reducer.go`;
+  - changed `RunInference` to delegate per-chunk provider normalization to the reducer while keeping SDK iteration and final completion in the engine;
+  - added table-driven reducer tests for metadata-only final chunks, multiple text chunks, and complete function calls.
+- Updated the Geppetto provider testing guide to mention the new Gemini seam.
+
+### Why
+
+The guide intentionally says that each provider should keep its native input fixtures while sharing canonical lifecycle scenario names. These tests prove that approach works: each provider got provider-specific tables or fixtures, but the checked behavior maps back to the same scenario IDs (`P06`, `T07`, `S01`, tool lifecycle, and text accumulation).
+
+### What worked
+
+- Targeted package tests passed after each provider checkpoint:
+
+```bash
+go test ./pkg/steps/ai/openai -count=1
+go test ./pkg/steps/ai/claude -count=1
+go test ./pkg/steps/ai/openai_responses -count=1
+go test ./pkg/steps/ai/gemini -count=1
+```
+
+- Geppetto pre-commit ran and passed for each code commit:
+
+```bash
+go test ./...
+make lintmax
+```
+
+- The OpenAI Responses sparse function-call test exposed a real provider-normalization gap, and the fix stayed small.
+- Gemini now has a reducer seam suitable for additional provider-native chunk tests.
+
+### What didn't work
+
+Nothing remained broken, but there were important implementation constraints:
+
+- OpenAI Responses active-text terminal error currently preserves partial text and emits failed provider-call finish, but the test does not assert a text-segment-finished event because the current Responses completion path does not explicitly close active text on provider error.
+- Gemini terminal completion is still partly inline in `RunInference`; the new reducer covers chunk normalization, not final turn-block/error/cancel completion yet.
+
+### What I learned
+
+The provider-specific table approach is practical. Claude did not need a rewrite because `ContentBlockMerger` is already reducer-like. Gemini was the outlier; extracting a small chunk reducer made tests easy without a large engine rewrite.
+
+### What was tricky to build
+
+OpenAI Responses sparse function-call finalization was the sharp edge. The final `response.output_item.done` event can be sparse and omit name/call id even though an earlier `response.output_item.added` carried them. The fix was to merge missing final fields from `streamState.callsByItem[itemID]` before deciding whether to emit `ToolCallRequested` and final tool-call blocks.
+
+Gemini was tricky because its SDK chunks use concrete `genai` types. The reducer keeps those native types, rather than inventing a fake provider-neutral input shape, which aligns with the guide.
+
+### What warrants a second pair of eyes
+
+- Review OpenAI Responses sparse function-call finalization to ensure fallback from `callsByItem` is correct for call id, name, output index, status, and arguments.
+- Review whether Responses should also emit `TextSegmentFinished` on stream error with active text, or whether preserving the final assistant block plus failed provider-call finish is enough for Phase 1.
+- Review Gemini reducer boundaries: chunk normalization is extracted, but terminal completion remains in `RunInference`.
+
+### What should be done in the future
+
+- Add more OpenAI Responses tests for reasoning summary/text terminal behavior.
+- Add Gemini terminal completion helpers if we want direct tests for EOF/error/cancel final turn-block behavior.
+- Carry the deferred Pinocchio sparse patch/projection/frontend scenarios into Phase 2-5 test docs and implementations.
+
+### Code review instructions
+
+Review commits in order:
+
+```bash
+git -C geppetto show 4bcf089
+git -C geppetto show fab1d3c
+git -C geppetto show 904c77a
+git -C geppetto show aeb3c38
+git -C geppetto show 1be5777
+```
+
+Start with these files:
+
+```text
+geppetto/pkg/steps/ai/openai/chat_stream_reducer_test.go
+geppetto/pkg/steps/ai/claude/content-block-merger_test.go
+geppetto/pkg/steps/ai/openai_responses/engine_test.go
+geppetto/pkg/steps/ai/openai_responses/stream_events.go
+geppetto/pkg/steps/ai/gemini/stream_reducer.go
+geppetto/pkg/steps/ai/gemini/engine_gemini_test.go
+geppetto/docs/design/implementation/01-provider-event-testing.md
+```
+
+Validate with:
+
+```bash
+cd geppetto
+go test ./pkg/steps/ai/openai ./pkg/steps/ai/claude ./pkg/steps/ai/openai_responses ./pkg/steps/ai/gemini -count=1
+go test ./...
+make lintmax
+```
+
+### Technical details
+
+The new tests intentionally do not share a provider-neutral fixture format. They share scenario intent and canonical trace expectations while keeping native provider fixtures in each provider package.
