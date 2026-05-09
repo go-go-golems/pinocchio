@@ -136,7 +136,31 @@ func reasoningMessageID(parentMessageID string, corr gepevents.Correlation) stri
 	if corr.SegmentIndex > 0 {
 		return ReasoningSegmentEntityID(parentMessageID, corr.SegmentIndex)
 	}
+	if suffix := reasoningCorrelationSuffix(corr); suffix != "" {
+		return fmt.Sprintf("%s:thinking:%s", strings.TrimSpace(parentMessageID), suffix)
+	}
 	return ReasoningSegmentEntityID(parentMessageID, 1)
+}
+
+func reasoningCorrelationSuffix(corr gepevents.Correlation) string {
+	for _, candidate := range []string{corr.SegmentID, corr.CorrelationKey} {
+		candidate = strings.TrimSpace(candidate)
+		if candidate == "" {
+			continue
+		}
+		var b strings.Builder
+		for _, r := range candidate {
+			if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' || r == '_' || r == '.' || r == ':' {
+				b.WriteRune(r)
+			} else {
+				b.WriteByte('-')
+			}
+		}
+		if suffix := strings.Trim(b.String(), "-:_ ."); suffix != "" {
+			return suffix
+		}
+	}
+	return ""
 }
 
 func reasoningSource(corr gepevents.Correlation) string {

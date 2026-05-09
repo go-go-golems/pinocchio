@@ -113,6 +113,52 @@ func TestReasoningPluginRoutesReasoningByStableSegmentIdentity(t *testing.T) {
 	require.Equal(t, "reasoning-summary", finished.GetCorrelation().GetStreamKind())
 }
 
+func TestReasoningPluginUsesCorrelationIdentityWhenSegmentIndexIsAbsent(t *testing.T) {
+	plugin := NewReasoningPlugin()
+	var published []sessionstream.Event
+	runtime := chatapp.RuntimeEventContext{
+		SessionID: "sid",
+		MessageID: "chat-msg-1",
+		Publish: func(_ context.Context, eventName string, payload proto.Message) error {
+			published = append(published, sessionstream.Event{Name: eventName, SessionId: "sid", Payload: payload})
+			return nil
+		},
+	}
+	meta := gepevents.EventMetadata{SessionID: "sid"}
+
+	first := gepevents.Correlation{
+		SessionID:      "sid",
+		Provider:       "openai",
+		ResponseID:     "resp-1",
+		SegmentID:      "openai-chat:resp-1:choice:0:reasoning",
+		SegmentType:    gepevents.SegmentTypeReasoning,
+		StreamKind:     gepevents.StreamKindReasoning,
+		CorrelationKey: "openai-chat:resp-1:choice:0:reasoning",
+	}
+	second := first
+	second.ResponseID = "resp-2"
+	second.SegmentID = "openai-chat:resp-2:choice:0:reasoning"
+	second.CorrelationKey = second.SegmentID
+
+	for _, corr := range []gepevents.Correlation{first, second} {
+		_, err := plugin.HandleRuntimeEvent(context.Background(), runtime, gepevents.NewReasoningSegmentStartedEvent(meta, corr, "thinking"))
+		require.NoError(t, err)
+		_, err = plugin.HandleRuntimeEvent(context.Background(), runtime, gepevents.NewReasoningSegmentFinishedEvent(meta, corr, "done", "stop"))
+		require.NoError(t, err)
+	}
+
+	require.Len(t, published, 4)
+	firstStarted := published[0].Payload.(*chatappv1.ChatReasoningSegmentStarted)
+	firstFinished := published[1].Payload.(*chatappv1.ChatReasoningSegmentFinished)
+	secondStarted := published[2].Payload.(*chatappv1.ChatReasoningSegmentStarted)
+	secondFinished := published[3].Payload.(*chatappv1.ChatReasoningSegmentFinished)
+	require.Equal(t, "chat-msg-1:thinking:openai-chat:resp-1:choice:0:reasoning", firstStarted.GetMessageId())
+	require.Equal(t, firstStarted.GetMessageId(), firstFinished.GetMessageId())
+	require.Equal(t, "chat-msg-1:thinking:openai-chat:resp-2:choice:0:reasoning", secondStarted.GetMessageId())
+	require.Equal(t, secondStarted.GetMessageId(), secondFinished.GetMessageId())
+	require.NotEqual(t, firstStarted.GetMessageId(), secondStarted.GetMessageId())
+}
+
 func TestReasoningPluginProjectsCanonicalEventsToUIAndTimeline(t *testing.T) {
 	plugin := NewReasoningPlugin()
 	corr := &chatappv1.CorrelationInfo{
