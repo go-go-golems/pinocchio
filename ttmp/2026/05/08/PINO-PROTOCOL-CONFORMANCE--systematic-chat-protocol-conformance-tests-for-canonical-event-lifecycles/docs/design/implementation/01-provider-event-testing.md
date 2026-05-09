@@ -30,12 +30,81 @@ RelatedFiles:
       Note: Gemini stream logic is still inline and should be extracted before deep table testing.
 ExternalSources: []
 Summary: Reference guide for deriving provider-specific table-driven tests from shared canonical lifecycle scenarios.
-LastUpdated: 2026-05-08T23:05:00-04:00
+LastUpdated: 2026-05-09T00:20:00-04:00
 WhatFor: Use this document when writing provider-normalization tests for OpenAI Chat Completions, OpenAI Responses, Claude, and Gemini.
 WhenToUse: Use before adding or reviewing table-driven tests that translate provider-native stream events into canonical Geppetto provider/text/reasoning/tool lifecycles.
 ---
 
 # Provider event table-driven testing guide
+
+## Docmgr preamble
+
+### Document identity
+
+- **Ticket:** `PINO-PROTOCOL-CONFORMANCE`
+- **Document type:** `design-doc`
+- **Intent:** implementation reference for Phase 1 provider-normalization tests
+- **Primary audience:** maintainers writing Geppetto provider adapter tests and reviewers checking protocol lifecycle coverage
+- **Canonical path:** `pinocchio/ttmp/2026/05/08/PINO-PROTOCOL-CONFORMANCE--systematic-chat-protocol-conformance-tests-for-canonical-event-lifecycles/docs/design/implementation/01-provider-event-testing.md`
+- **Status:** active reference; update whenever provider test seams or the scenario matrix change
+
+### How to use this document
+
+Use this document as the coordination layer between the high-level protocol conformance guides and the concrete provider package tests. The important split is:
+
+```text
+this document: shared scenarios, invariants, and provider applicability
+provider tests: native fixtures, reducer calls, and concrete expected traces
+```
+
+When implementing a provider test file, start from the scenario matrix below, choose the rows that apply to the provider, then encode those rows using that provider's native stream representation. Do not invent a cross-provider input format unless a later review finds a repeated helper pattern that is both small and obvious.
+
+### Related ticket documents
+
+- [Ticket index](../../../index.md) — coordination page for the overall conformance ticket.
+- [Protocol conformance implementation guide](../../../design-doc/01-chat-protocol-conformance-analysis-and-implementation-guide.md) — end-to-end protocol layers from provider adapters to frontend state.
+- [OpenAI Chat Completions reducer refactor](../../../design-doc/04-openai-chat-stream-reducer-refactor.md) — reference implementation for reducer-shaped provider normalization.
+- [OpenAI Responses stream refactor](../../../design-doc/05-openai-responses-stream-refactor.md) — reference implementation for explicit state, stream consumption, and completion in the Responses adapter.
+- [Investigation diary](../../../reference/01-investigation-diary.md) — chronological implementation notes, validation commands, failed attempts, and review guidance.
+- [Tasks](../../../tasks.md) and [Changelog](../../../changelog.md) — ticket bookkeeping for implementation progress.
+
+### Source map: provider adapter directories
+
+| Provider | Directory | Current testing/refactor seam | Notes |
+|---|---|---|---|
+| OpenAI Chat Completions | [`geppetto/pkg/steps/ai/openai/`](../../../../../../../../geppetto/pkg/steps/ai/openai/) | [`chat_stream_reducer.go`](../../../../../../../../geppetto/pkg/steps/ai/openai/chat_stream_reducer.go), [`chat_stream_reducer_test.go`](../../../../../../../../geppetto/pkg/steps/ai/openai/chat_stream_reducer_test.go) | Best current model for table-driven reducer tests. |
+| OpenAI Responses | [`geppetto/pkg/steps/ai/openai_responses/`](../../../../../../../../geppetto/pkg/steps/ai/openai_responses/) | [`stream_state.go`](../../../../../../../../geppetto/pkg/steps/ai/openai_responses/stream_state.go), [`stream_events.go`](../../../../../../../../geppetto/pkg/steps/ai/openai_responses/stream_events.go), [`streaming.go`](../../../../../../../../geppetto/pkg/steps/ai/openai_responses/streaming.go) | Explicit stream state exists; next tests should target provider-event handling and completion helpers. |
+| Claude | [`geppetto/pkg/steps/ai/claude/`](../../../../../../../../geppetto/pkg/steps/ai/claude/) | [`content-block-merger.go`](../../../../../../../../geppetto/pkg/steps/ai/claude/content-block-merger.go), [`content-block-merger_test.go`](../../../../../../../../geppetto/pkg/steps/ai/claude/content-block-merger_test.go) | Already reducer-like; extend the merger tests before doing any large refactor. |
+| Gemini | [`geppetto/pkg/steps/ai/gemini/`](../../../../../../../../geppetto/pkg/steps/ai/gemini/) | [`engine_gemini.go`](../../../../../../../../geppetto/pkg/steps/ai/gemini/engine_gemini.go) | Stream logic is still inline; extract a stream state/reducer seam before deep table tests. |
+
+### Source map: canonical protocol files
+
+| Layer | Files | Why it matters for tests |
+|---|---|---|
+| Canonical events | [`geppetto/pkg/events/canonical_events.go`](../../../../../../../../geppetto/pkg/events/canonical_events.go), [`geppetto/pkg/events/canonical_tool_events.go`](../../../../../../../../geppetto/pkg/events/canonical_tool_events.go) | Defines provider-call, text, reasoning, and tool lifecycle events that tests should project into traces. |
+| Correlation builders | [`geppetto/pkg/events/correlation_builders.go`](../../../../../../../../geppetto/pkg/events/correlation_builders.go) | Provider tests should verify typed identities are present without hard-coding generated keys. |
+| Correlation validation | [`geppetto/pkg/events/correlation_validation.go`](../../../../../../../../geppetto/pkg/events/correlation_validation.go) | `events.ValidateCanonicalEvent` is the preferred invariant check for emitted canonical events. |
+| Turn blocks | [`geppetto/pkg/turns/types.go`](../../../../../../../../geppetto/pkg/turns/types.go), [`geppetto/pkg/turns/helpers_blocks.go`](../../../../../../../../geppetto/pkg/turns/helpers_blocks.go) | Completion-helper tests should assert final assistant, reasoning, and tool-call blocks match emitted lifecycle events. |
+| Inference result metadata | [`geppetto/pkg/inference/engine/inference_result_metadata.go`](../../../../../../../../geppetto/pkg/inference/engine/inference_result_metadata.go) | Final completion tests should verify finish class, stop reason, usage, duration, and tool-call state are persisted consistently. |
+
+### Implementation contract
+
+A provider-specific test derived from this document should state:
+
+1. **Provider-native input** — the exact native chunks/events/maps used by that provider.
+2. **Reducer or adapter seam** — the helper or reducer being tested.
+3. **Terminal condition** — EOF, provider final event, context cancellation, or stream error.
+4. **Expected canonical trace** — projected lifecycle events in order.
+5. **Correlation checks** — at minimum, every canonical event validates with `events.ValidateCanonicalEvent` where applicable.
+6. **Final state checks** — when testing completion helpers, final turn blocks and inference-result metadata match the canonical trace.
+
+### Maintenance rules
+
+- Add a scenario row here before adding a new provider-specific table family if the scenario should be shared across providers.
+- Keep provider-specific fixture helpers in the provider package until at least two providers need the same tiny assertion helper.
+- Prefer projected trace comparisons over full event struct equality.
+- Keep `metadata.Extra` out of routing/joining assertions; it is debug/provenance only.
+- Record substantial scenario or seam changes in the ticket diary and changelog.
 
 ## Purpose
 
