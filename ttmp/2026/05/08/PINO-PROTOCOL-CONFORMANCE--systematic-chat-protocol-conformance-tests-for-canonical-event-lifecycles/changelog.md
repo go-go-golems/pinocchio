@@ -22,6 +22,9 @@
 - Implemented OpenAI Chat Completions stream reducer in Geppetto: `4262075 Add OpenAI chat stream reducer tests`.
 - Wired `engine_openai.go` to use the reducer and apply effects: `12d58dc Wire OpenAI chat stream reducer`.
 - Recorded validation: targeted OpenAI package tests and Geppetto pre-commit `go test ./...` plus lint passed.
+- Refined OpenAI terminal handling so EOF, cancel, and error share stream completion: `ec6be03 Finalize OpenAI chat terminal streams`.
+- Extracted named helpers for consuming the stream, completing terminal state, appending turn blocks, and recording terminal stop reasons.
+- Added table-driven tests proving cancel/error preserve partial text/reasoning while avoiding executable tool-call blocks.
 
 ### Related Files
 

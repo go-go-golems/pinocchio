@@ -26,7 +26,7 @@ RelatedFiles:
       Note: Investigated active text finalization on stop/error.
 ExternalSources: []
 Summary: Chronological diary for the PINO-PROTOCOL-CONFORMANCE research/design task.
-LastUpdated: 2026-05-08T20:27:00-04:00
+LastUpdated: 2026-05-08T20:45:00-04:00
 WhatFor: Use this diary to understand how the protocol conformance guide was created and how to continue the work.
 WhenToUse: Use when implementing, reviewing, or extending the protocol conformance test plan.
 ---
@@ -774,4 +774,91 @@ Targeted validation also run:
 
 ```bash
 go test ./pkg/steps/ai/openai -run TestReduceOpenAIChatStream -count=1
+```
+
+## Step 10: Share terminal completion for EOF, cancel, and error
+
+After wiring the reducer, the user pointed out that the cancellation path should do at least part of `streamingComplete`, and that the main function should show the overall principle more clearly through smaller named functions.
+
+### Prompt Context
+
+**User prompt (verbatim):** "continue. also, i think the cancel path should probably at lest do part of streamingComplete. Maybe extract some smaller parts of the main function into smaller named functions, so that the overall principle is nicely visible"
+
+**Assistant interpretation:** Keep the reducer, but make terminal handling symmetric: EOF, cancel, and error should all run a shared completion path where appropriate. Extract named helpers so `RunInference` reads as setup, consume stream, complete stream.
+
+**Inferred user intent:** Preserve partial work on cancellation/error and make the code teach the protocol instead of hiding it in branches.
+
+**Commit (code):** Geppetto `ec6be03 Finalize OpenAI chat terminal streams`
+
+### What I did
+
+- Extracted `consumeOpenAIChatStream`, which owns only stream reading and chunk-effect application.
+- Extracted `completeOpenAIChatStream`, which finalizes metadata, reduces the terminal input, applies terminal effects, appends turn blocks, and persists inference metadata.
+- Extracted `appendOpenAIChatTurnBlocks`, so transcript construction is named and testable.
+- Added terminal stop-reason helpers so cancellation records `cancelled` and stream errors record `error` in final metadata.
+- Changed cancel/error paths to return the partially updated turn together with the error instead of returning `nil, err` after publishing only interrupt/error events.
+- Kept tool-call block appending limited to EOF; cancel/error preserve partial text/reasoning but do not create executable tool requests or tool-call blocks.
+- Added table-driven tests for transcript block appending and terminal stop-reason behavior.
+
+### Why
+
+Cancellation and stream errors are terminal states of the same stream lifecycle. They should close active segments and preserve useful partial transcript state, but they should not pretend the provider completed successfully or request partial tools. The shared completion helper makes that rule visible.
+
+### What worked
+
+- `go test ./pkg/steps/ai/openai -count=1` passed.
+- Geppetto pre-commit passed full `go test ./...` and lint.
+- The top-level `RunInference` now reads as:
+  1. build request and start provider call;
+  2. consume stream chunks;
+  3. complete stream terminal;
+  4. return the turn plus terminal error, if any.
+
+### What didn't work
+
+No command failures occurred in this step.
+
+### What I learned
+
+The reducer by itself was useful, but the main function still hid policy in branches. The helper extraction made the policy legible: all terminal kinds complete the stream, while only EOF includes tool-call requests/blocks.
+
+### What was tricky to build
+
+The subtle part was deciding what "part of streamingComplete" means for cancellation. The chosen behavior is:
+
+- preserve reasoning and text blocks;
+- persist final metadata with stop reason `cancelled`;
+- publish interrupt and provider-call finished events;
+- do not append tool-call blocks;
+- return the partial turn with `ctx.Err()`.
+
+### What warrants a second pair of eyes
+
+- Confirm downstream callers are comfortable receiving a non-nil turn with a non-nil error on cancellation/error.
+- Confirm `error` as the persisted stop reason is the right canonical value for stream failures.
+
+### What should be done in the future
+
+- Consider whether Claude should get the same shared terminal completion treatment.
+- Add an integration-style fake stream test if future regressions happen around `RunInference` return values.
+
+### Code review instructions
+
+Review these helpers in `geppetto/pkg/steps/ai/openai/engine_openai.go`:
+
+- `consumeOpenAIChatStream`
+- `completeOpenAIChatStream`
+- `appendOpenAIChatTurnBlocks`
+- `withTerminalStopReason`
+
+Review the new table-driven tests in `geppetto/pkg/steps/ai/openai/chat_stream_reducer_test.go`:
+
+- `TestAppendOpenAIChatTurnBlocks`
+- `TestOpenAIChatTerminalStopReason`
+
+Validation run by pre-commit:
+
+```bash
+go test ./...
+make lintmax
 ```

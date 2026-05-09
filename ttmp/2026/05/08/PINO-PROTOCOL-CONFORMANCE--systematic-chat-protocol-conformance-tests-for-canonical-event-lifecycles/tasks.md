@@ -33,3 +33,5 @@
 - [x] Added table-driven reducer tests for text delta + EOF, empty EOF, cancel after text, error after reasoning, tool argument accumulation, and no tool requests on cancel/error.
 - [x] Wired `engine_openai.go` to call the reducer and apply effects while keeping provider stream I/O in the engine.
 - [x] Validated OpenAI Chat Completions package and full Geppetto pre-commit tests/lint.
+- [x] Shared OpenAI Chat Completions terminal completion across EOF, cancel, and error while preserving partial text/reasoning and avoiding partial tool requests.
+- [x] Extracted named `engine_openai.go` helpers so the stream loop principle is visible.

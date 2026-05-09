@@ -36,7 +36,7 @@ RelatedFiles:
       Note: Records provider-native and normalized stream observations.
 ExternalSources: []
 Summary: Refactor OpenAI-compatible Chat Completions streaming into a small reducer that turns normalized stream inputs plus explicit state into canonical event/effect outputs, with table-driven lifecycle tests.
-LastUpdated: 2026-05-08T20:07:08-04:00
+LastUpdated: 2026-05-08T20:45:00-04:00
 WhatFor: Use this before changing `geppetto/pkg/steps/ai/openai/engine_openai.go` so stream lifecycle rules are explicit, testable, and easy to review.
 WhenToUse: Use when implementing or reviewing OpenAI Chat Completions stream handling, cancellation/error semantics, tool-call argument accumulation, or provider-normalization conformance tests.
 ---
@@ -114,10 +114,11 @@ The existing `engine_openai.go` remains responsible for:
 
 - request construction;
 - opening and closing the provider stream;
-- turning `Recv()` results into reducer inputs;
+- consuming stream chunks through a small named helper;
+- completing EOF/cancel/error through one shared terminal helper;
 - applying reducer effects;
-- final metadata duration;
-- appending final turn blocks;
+- final metadata duration and stop reason;
+- appending transcript turn blocks;
 - persisting the final inference result.
 
 The reducer owns:
@@ -259,25 +260,32 @@ This method is the only place where Chat Completions stream coordinates become c
 
 ## Terminal rules
 
-EOF, cancellation, and errors all close active segments. They differ in classification.
+EOF, cancellation, and errors all close active segments and run through the same completion helper. They differ in classification and in whether tool requests are materialized.
 
 ```text
 EOF:
   finish open reasoning/text segments;
   emit ToolCallRequested for complete merged tool calls;
+  append reasoning/text/tool-call turn blocks;
   finish provider call as completed or tool_calls_pending.
 
 cancel:
   finish open reasoning/text segments with reason cancelled;
   emit interrupt;
+  append partial reasoning/text turn blocks;
   do not emit ToolCallRequested;
-  finish provider call as cancelled.
+  do not append executable tool-call blocks;
+  finish provider call as cancelled;
+  return the partial turn with ctx.Err().
 
 error:
   finish open reasoning/text segments with reason error;
   emit error;
+  append partial reasoning/text turn blocks;
   do not emit ToolCallRequested;
-  finish provider call as failed.
+  do not append executable tool-call blocks;
+  finish provider call as failed;
+  return the partial turn with the stream error.
 ```
 
 The shared invariant is:
