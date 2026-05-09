@@ -71,3 +71,4 @@
 - [x] Added timeline persistence terminal protocol tests for interrupt/error/provider-finish/correlation-key behavior.
 - [x] Ran Playwright browser E2E validation for `cmd/web-chat` across `gpt-5-nano`, `haiku`, `gemini-2.5-flash`, and `wafer-qwen3.5-397b`.
 - [x] Re-checked PR 146 review scenarios, including resolved threads, and fixed the remaining runtime cancellation-as-error gap.
+- [x] Restored fallback assistant text publication for successful runtimes that return output turns without emitting canonical text events.

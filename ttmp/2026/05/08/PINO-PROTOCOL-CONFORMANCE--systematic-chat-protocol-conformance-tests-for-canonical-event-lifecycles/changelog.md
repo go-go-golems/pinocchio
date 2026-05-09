@@ -8,6 +8,7 @@
 - Recorded the validation in `reference/01-investigation-diary.md` and marked the browser E2E task done in `tasks.md`.
 - Audited all PR 146 review-thread scenarios, including resolved comments, and found one remaining gap: runtime cancellation returned as `context.Canceled` without an `EventInterrupt` was still classified as failed.
 - Fixed the runtime cancellation gap so canceled runtime waits publish stopped semantics and close active text as stopped; added `TestRuntimeCancellationErrorStopsActiveTextSegment`.
+- Restored fallback assistant text publication for successful runtimes that return assistant text in the output turn without emitting canonical text events; added `TestRuntimeInferencePublishesFallbackAssistantTextFromReturnedTurn`.
 
 ## 2026-05-08
 

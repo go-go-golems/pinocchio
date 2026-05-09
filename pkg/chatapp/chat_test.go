@@ -153,6 +153,41 @@ func TestRuntimeInferenceStartsFreshWhenNoHistoryExists(t *testing.T) {
 	require.Equal(t, "First message", seen.Blocks[0].Payload[turns.PayloadKeyText])
 }
 
+func TestRuntimeInferencePublishesFallbackAssistantTextFromReturnedTurn(t *testing.T) {
+	engine := NewEngine(WithChunkDelay(time.Millisecond))
+	hub := newTestHub(t, engine)
+	engine.setPendingRequest("request-nonstreaming-output", PromptRequest{
+		Prompt: "Return text without events",
+		Runtime: &infruntime.ComposedRuntime{
+			Engine: nonStreamingAssistantTextEngine{},
+		},
+	})
+
+	require.NoError(t, hub.Submit(context.Background(), sessionstream.SessionId("chat-nonstreaming-output"), CommandStartInference, &chatappv1.StartInferenceCommand{RequestId: "request-nonstreaming-output"}))
+	require.NoError(t, engine.WaitIdle(context.Background(), sessionstream.SessionId("chat-nonstreaming-output")))
+
+	snap, err := hub.Snapshot(context.Background(), sessionstream.SessionId("chat-nonstreaming-output"))
+	require.NoError(t, err)
+
+	ids := map[string]*chatappv1.ChatMessageEntity{}
+	for _, entity := range snap.Entities {
+		if entity.Kind != TimelineEntityChatMessage {
+			continue
+		}
+		ids[entity.Id] = entity.Payload.(*chatappv1.ChatMessageEntity)
+	}
+
+	textSegment := ids["chat-msg-1:text:1"]
+	require.NotNil(t, textSegment)
+	require.Equal(t, "fallback assistant answer", textSegment.GetContent())
+	require.Equal(t, "finished", textSegment.GetStatus())
+	require.False(t, textSegment.GetStreaming())
+	require.True(t, textSegment.GetFinal())
+	require.Equal(t, "chat-msg-1", textSegment.GetParentMessageId())
+	require.Equal(t, int32(1), textSegment.GetSegment())
+	require.Equal(t, "text", textSegment.GetSegmentType())
+}
+
 func TestRuntimeInferenceStopsWhenHistoryLoadFails(t *testing.T) {
 	ctx := context.Background()
 	store := &fakeTurnStore{err: errors.New("database unavailable")}
@@ -450,6 +485,13 @@ func TestChatExampleStopPath(t *testing.T) {
 		require.Equal(t, "stopped", assistant.GetStatus())
 		require.Equal(t, false, assistant.GetStreaming())
 	}
+}
+
+type nonStreamingAssistantTextEngine struct{}
+
+func (nonStreamingAssistantTextEngine) RunInference(_ context.Context, t *turns.Turn) (*turns.Turn, error) {
+	turns.AppendBlock(t, turns.NewAssistantTextBlock("fallback assistant answer"))
+	return t, nil
 }
 
 type interleavedTextToolEngine struct{}

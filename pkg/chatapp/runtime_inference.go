@@ -9,6 +9,7 @@ import (
 	gepevents "github.com/go-go-golems/geppetto/pkg/events"
 	gepsession "github.com/go-go-golems/geppetto/pkg/inference/session"
 	"github.com/go-go-golems/geppetto/pkg/inference/toolloop/enginebuilder"
+	"github.com/go-go-golems/geppetto/pkg/turns"
 	"github.com/go-go-golems/geppetto/pkg/turns/serde"
 	chatappv1 "github.com/go-go-golems/pinocchio/pkg/chatapp/pb/proto/pinocchio/chatapp/v1"
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
@@ -143,7 +144,11 @@ func (e *Engine) runRuntimeInference(ctx context.Context, sid sessionstream.Sess
 	if sink.IsTerminal() {
 		return
 	}
-	_ = output
+	if sink.HasActiveTextSegment() {
+		_ = sink.finishActiveTextSegment("finished", "stop", "")
+	} else if !sink.HasTextSegment() {
+		_ = e.publishFallbackAssistantText(publishContext(ctx), sid, pub, messageID, prompt, output)
+	}
 	_ = e.publish(publishContext(ctx), sid, pub, EventChatRunFinished, &chatappv1.ChatRunFinished{MessageId: messageID, Status: "finished", Correlation: runCorrelationInfo(sid, messageID)})
 }
 
@@ -156,6 +161,43 @@ func publishContext(ctx context.Context) context.Context {
 
 func runCorrelationInfo(sid sessionstream.SessionId, messageID string) *chatappv1.CorrelationInfo {
 	return &chatappv1.CorrelationInfo{SessionId: string(sid), RunId: messageID, CorrelationKey: messageID}
+}
+
+func fallbackTextCorrelationInfo(sid sessionstream.SessionId, messageID string, segment int32) *chatappv1.CorrelationInfo {
+	segmentID := textSegmentMessageID(messageID, segment)
+	return &chatappv1.CorrelationInfo{SessionId: string(sid), RunId: messageID, SegmentId: segmentID, SegmentIndex: segment, SegmentType: "text", StreamKind: "content", CorrelationKey: segmentID, ParentCorrelationKey: messageID}
+}
+
+func (e *Engine) publishFallbackAssistantText(ctx context.Context, sid sessionstream.SessionId, pub sessionstream.EventPublisher, messageID, prompt string, output *turns.Turn) error {
+	text := assistantTextFromTurn(output)
+	if strings.TrimSpace(text) == "" {
+		return nil
+	}
+	const segment int32 = 1
+	textMessageID := textSegmentMessageID(messageID, segment)
+	corr := fallbackTextCorrelationInfo(sid, messageID, segment)
+	if err := e.publish(ctx, sid, pub, EventChatTextSegmentStarted, &chatappv1.ChatTextSegmentStarted{MessageId: textMessageID, Role: "assistant", Prompt: prompt, Status: "streaming", Streaming: true, Correlation: corr}); err != nil {
+		return err
+	}
+	return e.publish(ctx, sid, pub, EventChatTextSegmentFinished, &chatappv1.ChatTextSegmentFinished{MessageId: textMessageID, Role: "assistant", Prompt: prompt, Text: text, Content: text, Status: "finished", Streaming: false, Final: true, FinishReason: "stop", Correlation: corr})
+}
+
+func assistantTextFromTurn(turn *turns.Turn) string {
+	if turn == nil {
+		return ""
+	}
+	parts := make([]string, 0, len(turn.Blocks))
+	for _, block := range turn.Blocks {
+		if block.Role != turns.RoleAssistant {
+			continue
+		}
+		text, _ := block.Payload[turns.PayloadKeyText].(string)
+		if strings.TrimSpace(text) == "" {
+			continue
+		}
+		parts = append(parts, text)
+	}
+	return strings.Join(parts, "")
 }
 
 func (e *Engine) publishRunFailed(ctx context.Context, sid sessionstream.SessionId, pub sessionstream.EventPublisher, messageID, errText string) {

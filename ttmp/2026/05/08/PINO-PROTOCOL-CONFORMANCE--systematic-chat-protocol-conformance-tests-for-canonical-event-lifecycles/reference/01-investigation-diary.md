@@ -26,7 +26,7 @@ RelatedFiles:
       Note: Investigated active text finalization on stop/error.
 ExternalSources: []
 Summary: Chronological diary for the PINO-PROTOCOL-CONFORMANCE research/design task.
-LastUpdated: 2026-05-09T00:35:00-04:00
+LastUpdated: 2026-05-09T00:55:00-04:00
 WhatFor: Use this diary to understand how the protocol conformance guide was created and how to continue the work.
 WhenToUse: Use when implementing, reviewing, or extending the protocol conformance test plan.
 ---
@@ -2722,3 +2722,43 @@ All commands passed.
 ### What warrants a second pair of eyes
 
 The new cancellation classification treats `context.Canceled` and `ctx.Err() != nil` as stopped. In this runtime path the context is created from `publishContext(ctx)` and canceled by the app's active-run cancellation path, so this matches the review scenario. If a future caller uses the same context for server shutdown, we may want a separate cancellation reason in `activeRun`.
+
+## Step 30: Restore fallback assistant text publication for non-eventing runtimes
+
+A new PR review comment pointed out a P1 regression in the canonical cutover: some successful runtime engines can return assistant text in the output `turns.Turn` without emitting canonical `ChatText*` events. The current code ignored `output` and only published `ChatRunFinished`; because timeline projections create visible assistant messages from text-segment events, those engines would complete with no assistant answer in the UI.
+
+### Prompt Context
+
+**User prompt (verbatim):** The user pasted the reviewer comment: "P1 Badge Restore fallback assistant text publication ... Please synthesize a final text segment from output when no text segment was emitted."
+
+**Assistant interpretation:** Explain the review comment, decide whether it applies to the current branch, and implement the required compatibility fallback if it does.
+
+**Inferred user intent:** Preserve the canonical event protocol without breaking non-streaming/runtime engines that only return the final turn.
+
+**Commit (code):** pending — fallback assistant text publication.
+
+### What I changed
+
+- Added sink state queries in `pkg/chatapp/runtime_sink.go`:
+  - `HasTextSegment()`
+  - `HasActiveTextSegment()`
+- Updated successful `runRuntimeInference` completion in `pkg/chatapp/runtime_inference.go`:
+  - if an active text segment exists, close it as finished;
+  - else if no text segment was emitted, extract assistant text from the returned `turns.Turn` and synthesize a canonical `ChatTextSegmentStarted` + `ChatTextSegmentFinished` pair;
+  - then publish `ChatRunFinished`.
+- Restored `assistantTextFromTurn` as the fallback extractor.
+- Added `TestRuntimeInferencePublishesFallbackAssistantTextFromReturnedTurn` with a runtime engine that appends assistant text but emits no canonical events.
+
+### Why
+
+`ChatRunFinished` is a run lifecycle event, not a transcript event. It should not be expected to create assistant text in the timeline. If the runtime did not emit canonical text events, Pinocchio must bridge the returned turn into canonical text events at the app boundary.
+
+### Validation
+
+```bash
+cd pinocchio
+go test ./pkg/chatapp -run 'TestRuntimeInferencePublishesFallbackAssistantTextFromReturnedTurn|TestRuntimeCancellationErrorStopsActiveTextSegment|TestRuntimeInterleavedTextToolTextUsesDistinctTextSegments' -count=1
+go test ./pkg/chatapp ./pkg/chatapp/plugins ./pkg/ui -count=1
+```
+
+Both commands passed.

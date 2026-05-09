@@ -148,6 +148,24 @@ func textSegmentMessageID(messageID string, segment int32) string {
 	return fmt.Sprintf("%s:text:%d", messageID, segment)
 }
 
+func (s *runtimeEventSink) HasTextSegment() bool {
+	if s == nil {
+		return false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return strings.TrimSpace(s.lastTextMessageID) != ""
+}
+
+func (s *runtimeEventSink) HasActiveTextSegment() bool {
+	if s == nil {
+		return false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.textActive && strings.TrimSpace(s.lastTextMessageID) != ""
+}
+
 func (s *runtimeEventSink) LastText() string {
 	if s == nil {
 		return ""
