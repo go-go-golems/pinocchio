@@ -2,7 +2,18 @@
 
 ## TODO
 
-- [ ] Implement remaining Phase 1 Geppetto provider-normalization table tests in provider adapter packages beyond OpenAI Chat Completions reducer coverage.
+- [ ] Refactor OpenAI Responses streaming to follow the Chat Completions consume/complete/state pattern.
+- [ ] Extract Responses stream terminal types and explicit `responsesStreamState`.
+- [ ] Move Responses provider-call, segment, and tool correlation helpers onto state methods.
+- [ ] Extract final Responses metadata update into a named helper.
+- [ ] Extract final Responses assistant/tool turn-block appending into a named helper.
+- [ ] Extract Responses provider-call finish classification/emission into a named helper.
+- [ ] Extract Responses SSE consume/flush loop into `consumeResponsesStream` while preserving event behavior.
+- [ ] Wire `runStreamingInference` to read as setup → state → consume → complete → return.
+- [ ] Add small table-driven helper tests for new Responses helper behavior where existing tests do not already cover it.
+- [ ] Validate `go test ./pkg/steps/ai/openai_responses -count=1` after each code checkpoint.
+- [ ] Run full Geppetto pre-commit/full validation before final Responses refactor commit.
+- [ ] Implement remaining Phase 1 Geppetto provider-normalization table tests in provider adapter packages after the Responses structural refactor is complete.
 - [ ] Implement Phase 2 Go runtime protocol matrix in `pkg/chatapp`.
 - [ ] Implement Phase 3 tool/reasoning plugin projection matrices in `pkg/chatapp/plugins`.
 - [ ] Implement Phase 4 frontend reducer-backed conformance matrix in `cmd/web-chat/web/src/ws`.

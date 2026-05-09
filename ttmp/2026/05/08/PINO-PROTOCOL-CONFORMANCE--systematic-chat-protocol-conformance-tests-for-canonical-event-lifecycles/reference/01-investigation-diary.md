@@ -26,7 +26,7 @@ RelatedFiles:
       Note: Investigated active text finalization on stop/error.
 ExternalSources: []
 Summary: Chronological diary for the PINO-PROTOCOL-CONFORMANCE research/design task.
-LastUpdated: 2026-05-08T20:45:00-04:00
+LastUpdated: 2026-05-08T20:58:00-04:00
 WhatFor: Use this diary to understand how the protocol conformance guide was created and how to continue the work.
 WhenToUse: Use when implementing, reviewing, or extending the protocol conformance test plan.
 ---
@@ -861,4 +861,79 @@ Validation run by pre-commit:
 ```bash
 go test ./...
 make lintmax
+```
+
+## Step 11: Design the OpenAI Responses stream refactor
+
+The user asked to pause broad provider-normalization tests and first create a design document for refactoring the OpenAI Responses engine to follow the same structure as the newly refactored Chat Completions engine.
+
+### Prompt Context
+
+**User prompt (verbatim):** "Let's wait with the normalization tests, and create a document for refactoring the responses engine in the same pattern, to be as close as possible to the structure of completion, to adaopt a pattern so to say. Then add detailed tasks to the ticket and implement and commit as you go and keep a diary"
+
+**Assistant interpretation:** Do not start the next conformance matrix tests yet. First document and implement a Responses structural refactor so provider adapters converge on one visible consume/complete/state pattern.
+
+**Inferred user intent:** Establish a reusable provider-adapter shape before multiplying tests, so the code itself becomes easier to review and teach.
+
+**Commit (code):** Pending at the time this diary entry was written.
+
+### What I did
+
+- Added `design-doc/05-openai-responses-stream-refactor.md`.
+- Updated `README.md`, `index.md`, `tasks.md`, and `changelog.md` to make the Responses refactor the next implementation focus.
+- Explicitly paused broad provider-normalization matrix tests until after this structural refactor.
+
+### Why
+
+OpenAI Responses streaming is significantly more complex than Chat Completions. It handles provider-native output items, reasoning items, reasoning summaries, function-call items, citations, web-search lifecycle events, and final turn persistence. Before adding broader conformance tests, the code should adopt the same visible structure:
+
+```text
+setup request
+initialize stream state
+consume stream
+complete terminal state
+append/persist final turn data
+return turn + terminal error if any
+```
+
+### What worked
+
+The design doc maps the existing complexity into implementation tasks without pretending that Responses can immediately be a tiny pure reducer. It proposes an incremental structural refactor: explicit state, state-owned correlation helpers, consume helper, provider-object handler, and shared completion helper.
+
+### What didn't work
+
+No implementation was attempted in this step.
+
+### What I learned
+
+The Responses engine should probably converge on the Chat Completions pattern in stages. The first goal is not a perfect reducer; it is making terminal behavior and stream state explicit enough that future smaller reducers can emerge naturally.
+
+### What was tricky to build
+
+The tricky semantic distinction is reasoning persistence. Responses reasoning blocks are usually appended when `response.output_item.done` arrives because that event carries item metadata and encrypted content. The shared completion helper should preserve already-appended reasoning and final metadata, but it should not manufacture rich reasoning blocks without provider item metadata.
+
+### What warrants a second pair of eyes
+
+- Confirm how much partial reasoning should be appended on cancel/error if a reasoning item started but never reached `output_item.done`.
+- Confirm whether Responses cancellation should return a non-nil partial turn with `ctx.Err()`, matching the Chat Completions refactor.
+
+### What should be done in the future
+
+- Implement the Responses stream state and terminal helpers.
+- Extract completion helpers before extracting the full consume loop.
+- Use existing Responses package tests as the main behavior guard.
+- Add only small table-driven helper tests for new helper behavior, not broad normalization matrices yet.
+
+### Code review instructions
+
+Review:
+
+```text
+pinocchio/ttmp/2026/05/08/PINO-PROTOCOL-CONFORMANCE--systematic-chat-protocol-conformance-tests-for-canonical-event-lifecycles/design-doc/05-openai-responses-stream-refactor.md
+```
+
+Then implement against:
+
+```text
+geppetto/pkg/steps/ai/openai_responses/streaming.go
 ```

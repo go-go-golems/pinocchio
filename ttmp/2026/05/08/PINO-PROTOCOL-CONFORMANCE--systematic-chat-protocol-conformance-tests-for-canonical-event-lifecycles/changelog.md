@@ -17,6 +17,7 @@
 - Expanded tasks to make Geppetto provider-normalization matrices Phase 1 before Pinocchio runtime/projection/frontend conformance tests.
 - Uploaded a new non-overwriting reMarkable bundle with all three updated guides: `/ai/2026/05/08/PINO-PROTOCOL-CONFORMANCE/PINO_PROTOCOL_CONFORMANCE_provider_normalization_guides.pdf`.
 - Added reducer refactor design: `design-doc/04-openai-chat-stream-reducer-refactor.md`.
+- Added Responses stream refactor design: `design-doc/05-openai-responses-stream-refactor.md`.
 - Updated tasks to focus immediate implementation on OpenAI Chat Completions reducer refactoring with table-driven tests.
 - Marked static-analysis and model-checking implementation out of scope for this ticket.
 - Implemented OpenAI Chat Completions stream reducer in Geppetto: `4262075 Add OpenAI chat stream reducer tests`.
@@ -25,6 +26,7 @@
 - Refined OpenAI terminal handling so EOF, cancel, and error share stream completion: `ec6be03 Finalize OpenAI chat terminal streams`.
 - Extracted named helpers for consuming the stream, completing terminal state, appending turn blocks, and recording terminal stop reasons.
 - Added table-driven tests proving cancel/error preserve partial text/reasoning while avoiding executable tool-call blocks.
+- Paused broad provider-normalization matrix tests and queued an OpenAI Responses structural refactor to adopt the same consume/complete/state pattern as Chat Completions.
 
 ### Related Files
 
@@ -32,6 +34,7 @@
 - /home/manuel/workspaces/2026-05-02/use-sessionstream-coinvault/pinocchio/ttmp/2026/05/08/PINO-PROTOCOL-CONFORMANCE--systematic-chat-protocol-conformance-tests-for-canonical-event-lifecycles/design-doc/02-static-analysis-for-protocol-conformance.md — Static analysis guide including provider-adapter checks.
 - /home/manuel/workspaces/2026-05-02/use-sessionstream-coinvault/pinocchio/ttmp/2026/05/08/PINO-PROTOCOL-CONFORMANCE--systematic-chat-protocol-conformance-tests-for-canonical-event-lifecycles/design-doc/03-finite-state-model-for-protocol-conformance.md — Finite-state/model-based testing guide including provider-normalization model.
 - /home/manuel/workspaces/2026-05-02/use-sessionstream-coinvault/pinocchio/ttmp/2026/05/08/PINO-PROTOCOL-CONFORMANCE--systematic-chat-protocol-conformance-tests-for-canonical-event-lifecycles/design-doc/04-openai-chat-stream-reducer-refactor.md — Current reducer refactor implementation plan.
+- /home/manuel/workspaces/2026-05-02/use-sessionstream-coinvault/pinocchio/ttmp/2026/05/08/PINO-PROTOCOL-CONFORMANCE--systematic-chat-protocol-conformance-tests-for-canonical-event-lifecycles/design-doc/05-openai-responses-stream-refactor.md — Responses stream refactor plan to adopt the Chat Completions pattern.
 - /home/manuel/workspaces/2026-05-02/use-sessionstream-coinvault/geppetto/pkg/steps/ai/openai/chat_stream_reducer.go — Implemented reducer state, inputs, terminal handling, effects, and correlation helper.
 - /home/manuel/workspaces/2026-05-02/use-sessionstream-coinvault/geppetto/pkg/steps/ai/openai/chat_stream_reducer_test.go — Table-driven reducer protocol tests.
 - /home/manuel/workspaces/2026-05-02/use-sessionstream-coinvault/geppetto/pkg/steps/ai/openai/engine_openai.go — Engine stream loop now delegates protocol transitions to the reducer.

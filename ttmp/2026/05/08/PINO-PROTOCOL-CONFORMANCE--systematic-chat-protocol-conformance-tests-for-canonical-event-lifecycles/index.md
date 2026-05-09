@@ -22,7 +22,7 @@ RelatedFiles:
       Note: Timeline persistence lifecycle behavior covered by the conformance plan.
 ExternalSources: []
 Summary: Ticket for designing and implementing systematic provider-to-browser protocol conformance tests for canonical chat event lifecycles.
-LastUpdated: 2026-05-08T20:27:00-04:00
+LastUpdated: 2026-05-08T20:58:00-04:00
 WhatFor: Use this ticket to coordinate lifecycle invariant tests that prevent reactive edge-case fixes in Geppetto provider adapters, Pinocchio chat runtime, and web-chat frontend.
 WhenToUse: Use before modifying provider adapters, chat runtime event handling, projections, persistence, or frontend sparse patch behavior.
 ---
@@ -51,6 +51,7 @@ The primary design docs explain how to test these stages as one protocol rather 
 
 - [Design guide](./design-doc/01-chat-protocol-conformance-analysis-and-implementation-guide.md)
 - [OpenAI Chat Completions stream reducer refactor](./design-doc/04-openai-chat-stream-reducer-refactor.md)
+- [OpenAI Responses stream refactor](./design-doc/05-openai-responses-stream-refactor.md)
 - [Static analysis guide](./design-doc/02-static-analysis-for-protocol-conformance.md) — reference only; not an implementation target for this ticket.
 - [Finite-state model guide](./design-doc/03-finite-state-model-for-protocol-conformance.md) — reference only; not an implementation target for this ticket.
 - [Investigation diary](./reference/01-investigation-diary.md)
@@ -61,7 +62,7 @@ The primary design docs explain how to test these stages as one protocol rather 
 
 Current status: **active**.
 
-The design/research deliverable is complete. The OpenAI Chat Completions stream reducer refactor and table-driven tests are implemented in Geppetto. Static-analysis and model-checking implementation are explicitly out of scope for this ticket.
+The design/research deliverable is complete. The OpenAI Chat Completions stream reducer refactor and table-driven tests are implemented in Geppetto. Current focus is adopting the same consume/complete/state pattern in OpenAI Responses before adding broader provider-normalization tests. Static-analysis and model-checking implementation are explicitly out of scope for this ticket.
 
 ## Topics
 
