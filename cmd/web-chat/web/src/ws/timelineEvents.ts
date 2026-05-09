@@ -9,6 +9,7 @@ import { agentModeEntity, agentModePreviewEntityId, messageEntity } from './time
 
 type TimelineMutation = {
   upsert?: TimelineEntity;
+  upsertIfExists?: TimelineEntity;
   deleteId?: string;
   status?: string;
 };
@@ -148,23 +149,24 @@ export function timelineMutationFromUIEvent(frame: CanonicalFrame): TimelineMuta
       const messageId = payload.messageId;
       if (!messageId) return null;
       const content = payload.content || payload.text;
+      const upsert = messageEntity(
+        messageId,
+        definedProps({
+          role: payload.role || 'assistant',
+          prompt: payload.prompt,
+          ...(content ? { content } : {}),
+          status: payload.status || 'finished',
+          streaming: false,
+          parentMessageId: parentMessageId(messageId, ':text:'),
+          segment: payload.correlation?.segmentIndex,
+          segmentType: payload.correlation?.segmentType,
+          ...(payload.final ? { final: payload.final } : {}),
+          finishReason: payload.finishReason,
+          ...correlationProps(payload.correlation),
+        }),
+      );
       return {
-        upsert: messageEntity(
-          messageId,
-          definedProps({
-            role: payload.role || 'assistant',
-            prompt: payload.prompt,
-            ...(content ? { content } : {}),
-            status: payload.status || 'finished',
-            streaming: false,
-            parentMessageId: parentMessageId(messageId, ':text:'),
-            segment: payload.correlation?.segmentIndex,
-            segmentType: payload.correlation?.segmentType,
-            ...(payload.final ? { final: payload.final } : {}),
-            finishReason: payload.finishReason,
-            ...correlationProps(payload.correlation),
-          }),
-        ),
+        ...(content ? { upsert } : { upsertIfExists: upsert }),
         status: payload.status || 'finished',
       };
     }
@@ -198,11 +200,11 @@ export function timelineMutationFromUIEvent(frame: CanonicalFrame): TimelineMuta
       const messageId = payload.messageId;
       if (!messageId) return null;
       const content = payload.content || payload.text;
-      if (!content) return null;
-      return {
-        upsert: messageEntity(messageId, {
+      const upsert = messageEntity(
+        messageId,
+        definedProps({
           role: 'thinking',
-          content,
+          ...(content ? { content } : {}),
           status: payload.status || 'finished',
           streaming: false,
           parentMessageId: payload.parentMessageId,
@@ -212,7 +214,8 @@ export function timelineMutationFromUIEvent(frame: CanonicalFrame): TimelineMuta
           finishReason: payload.finishReason,
           ...correlationProps(payload.correlation),
         }),
-      };
+      );
+      return content ? { upsert } : { upsertIfExists: upsert };
     }
     case 'ChatAgentModePreviewUpdated': {
       const payload = event.payload;
@@ -286,17 +289,20 @@ export function timelineMutationFromUIEvent(frame: CanonicalFrame): TimelineMuta
       const payload = event.payload;
       if (!payload.toolCallId) return null;
       return {
-        upsert: toolResultEntity(`${payload.toolCallId}:result`, {
-          messageId: payload.messageId,
-          toolCallId: payload.toolCallId,
-          name: payload.toolName,
-          toolName: payload.toolName,
-          customKind: payload.toolName,
-          result: payload.result,
-          resultRaw: payload.result,
-          status: payload.status,
-          ...correlationProps(payload.correlation),
-        }),
+        upsert: toolResultEntity(
+          `${payload.toolCallId}:result`,
+          definedProps({
+            messageId: payload.messageId,
+            toolCallId: payload.toolCallId,
+            name: payload.toolName,
+            toolName: payload.toolName,
+            customKind: payload.toolName,
+            result: payload.result,
+            resultRaw: payload.result,
+            status: payload.status,
+            ...correlationProps(payload.correlation),
+          }),
+        ),
       };
     }
     default:
@@ -313,6 +319,9 @@ export function applyUIEvent(frame: CanonicalFrame, dispatch: AppDispatch, sessi
   }
   if (mutation.upsert) {
     dispatch(timelineSlice.actions.upsertEntity(mutation.upsert));
+  }
+  if (mutation.upsertIfExists) {
+    dispatch(timelineSlice.actions.upsertEntityIfExists(mutation.upsertIfExists));
   }
   if (mutation.status) {
     dispatch(appSlice.actions.setStatus(mutation.status));

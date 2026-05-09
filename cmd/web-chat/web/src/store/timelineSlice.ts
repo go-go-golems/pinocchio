@@ -15,6 +15,47 @@ type TimelineState = {
   order: string[];
 };
 
+function mergeTimelineEntity(state: TimelineState, e: TimelineEntity, createIfMissing: boolean) {
+  if (!state.byId[e.id]) {
+    if (!createIfMissing) return;
+    state.byId[e.id] = e;
+    state.order.push(e.id);
+    return;
+  }
+  const existing = state.byId[e.id];
+  const incomingVersion = typeof e.version === 'number' && Number.isFinite(e.version) ? e.version : 0;
+  const existingVersion = typeof existing.version === 'number' && Number.isFinite(existing.version) ? existing.version : 0;
+  if (incomingVersion > 0) {
+    if (incomingVersion < existingVersion) {
+      return;
+    }
+    state.byId[e.id] = {
+      ...existing,
+      ...e,
+      createdAt: e.createdAt || existing.createdAt,
+      kind: e.kind || existing.kind,
+      version: incomingVersion,
+      props: { ...(existing.props ?? {}), ...(e.props ?? {}) },
+    };
+    return;
+  }
+  if (existingVersion > 0) {
+    state.byId[e.id] = {
+      ...existing,
+      updatedAt: e.updatedAt ?? existing.updatedAt,
+      props: { ...(existing.props ?? {}), ...(e.props ?? {}) },
+    };
+    return;
+  }
+  state.byId[e.id] = {
+    ...existing,
+    ...e,
+    createdAt: existing.createdAt,
+    kind: e.kind || existing.kind,
+    props: { ...(existing.props ?? {}), ...(e.props ?? {}) },
+  };
+}
+
 export const timelineSlice = createSlice({
   name: 'timeline',
   initialState: { byId: {}, order: [] } as TimelineState,
@@ -57,44 +98,10 @@ export const timelineSlice = createSlice({
       state.order.push(e.id);
     },
     upsertEntity(state, action: PayloadAction<TimelineEntity>) {
-      const e = action.payload;
-      if (!state.byId[e.id]) {
-        state.byId[e.id] = e;
-        state.order.push(e.id);
-        return;
-      }
-      const existing = state.byId[e.id];
-      const incomingVersion = typeof e.version === 'number' && Number.isFinite(e.version) ? e.version : 0;
-      const existingVersion = typeof existing.version === 'number' && Number.isFinite(existing.version) ? existing.version : 0;
-      if (incomingVersion > 0) {
-        if (incomingVersion < existingVersion) {
-          return;
-        }
-        state.byId[e.id] = {
-          ...existing,
-          ...e,
-          createdAt: e.createdAt || existing.createdAt,
-          kind: e.kind || existing.kind,
-          version: incomingVersion,
-          props: { ...(existing.props ?? {}), ...(e.props ?? {}) },
-        };
-        return;
-      }
-      if (existingVersion > 0) {
-        state.byId[e.id] = {
-          ...existing,
-          updatedAt: e.updatedAt ?? existing.updatedAt,
-          props: { ...(existing.props ?? {}), ...(e.props ?? {}) },
-        };
-        return;
-      }
-      state.byId[e.id] = {
-        ...existing,
-        ...e,
-        createdAt: existing.createdAt,
-        kind: e.kind || existing.kind,
-        props: { ...(existing.props ?? {}), ...(e.props ?? {}) },
-      };
+      mergeTimelineEntity(state, action.payload, true);
+    },
+    upsertEntityIfExists(state, action: PayloadAction<TimelineEntity>) {
+      mergeTimelineEntity(state, action.payload, false);
     },
     deleteEntity(state, action: PayloadAction<string>) {
       const id = action.payload;

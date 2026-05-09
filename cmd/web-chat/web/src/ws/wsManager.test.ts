@@ -132,7 +132,7 @@ describe('timelineMutationFromUIEvent', () => {
     expect(mutation?.status).toBe('streaming');
   });
 
-  it('does not create an empty placeholder mutation for ChatReasoningSegmentFinished without visible content', () => {
+  it('creates an existing-entity-only terminal patch for ChatReasoningSegmentFinished without visible content', () => {
     const mutation = timelineMutationFromUIEvent({
       name: 'ChatReasoningSegmentFinished',
       payload: {
@@ -143,7 +143,11 @@ describe('timelineMutationFromUIEvent', () => {
       },
     });
 
-    expect(mutation).toBeNull();
+    expect(mutation?.upsert).toBeUndefined();
+    expect(mutation?.upsertIfExists?.id).toBe('chat-msg-2:thinking:1');
+    expect(mutation?.upsertIfExists?.props.status).toBe('finished');
+    expect(mutation?.upsertIfExists?.props.streaming).toBe(false);
+    expect(mutation?.upsertIfExists?.props).not.toHaveProperty('content');
   });
 
   it('creates a finished thinking message mutation for ChatReasoningSegmentFinished', () => {
