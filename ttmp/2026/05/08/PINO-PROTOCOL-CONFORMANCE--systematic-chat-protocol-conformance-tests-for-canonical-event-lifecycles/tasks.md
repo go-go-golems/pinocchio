@@ -10,6 +10,7 @@
 - [ ] Continue Phase 4 frontend reducer-backed conformance matrix in `cmd/web-chat/web/src/ws` only if additional rows are requested.
 - [ ] Continue Phase 5 timeline persistence protocol tests in `pkg/ui` only if additional rows are requested.
 - [ ] Add a trace extraction/replay helper and decide whether curated fixtures belong in source testdata.
+- [ ] Run CoinVault full-trace/tool-use browser validation after Pinocchio web-chat confirmation.
 
 ## Not doing
 
@@ -68,3 +69,4 @@
 - [x] Added frontend sparse timeline reduction tests for tool finish, display fallback avoidance, and sparse text finish Redux merges.
 - [x] Extended frontend sparse terminal reduction tests for reasoning finish and tool result fallback avoidance.
 - [x] Added timeline persistence terminal protocol tests for interrupt/error/provider-finish/correlation-key behavior.
+- [x] Ran Playwright browser E2E validation for `cmd/web-chat` across `gpt-5-nano`, `haiku`, `gemini-2.5-flash`, and `wafer-qwen3.5-397b`.

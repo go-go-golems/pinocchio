@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { timelineSlice, type TimelineEntity } from '../store/timelineSlice';
-import { timelineMutationFromUIEvent } from './timelineEvents';
+import { type TimelineEntity, timelineSlice } from '../store/timelineSlice';
 import type { CanonicalFrame } from './protocol';
+import { timelineMutationFromUIEvent } from './timelineEvents';
 
 type TimelineState = {
   byId: Record<string, TimelineEntity>;

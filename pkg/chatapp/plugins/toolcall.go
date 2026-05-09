@@ -174,10 +174,6 @@ func currentToolCallEntity(view sessionstream.TimelineView, id string) *chatappv
 	return proto.Clone(pb).(*chatappv1.ToolCallEntity)
 }
 
-func cloneCorrelationInfo(corr *chatappv1.CorrelationInfo) *chatappv1.CorrelationInfo {
-	return chatapp.CloneCorrelationInfo(corr)
-}
-
 func mergeToolCallFields(entity *chatappv1.ToolCallEntity, update toolCallFields) *chatappv1.ToolCallEntity {
 	if entity == nil {
 		entity = &chatappv1.ToolCallEntity{}

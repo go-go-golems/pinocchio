@@ -5,6 +5,7 @@ import (
 
 	gepevents "github.com/go-go-golems/geppetto/pkg/events"
 	chatappv1 "github.com/go-go-golems/pinocchio/pkg/chatapp/pb/proto/pinocchio/chatapp/v1"
+	"google.golang.org/protobuf/proto"
 )
 
 func CorrelationInfoFromEvent(event gepevents.Event) *chatappv1.CorrelationInfo {
@@ -88,13 +89,7 @@ func CloneCorrelationInfo(corr *chatappv1.CorrelationInfo) *chatappv1.Correlatio
 	if corr == nil {
 		return nil
 	}
-	out := *corr
-	out.OutputIndex = cloneInt32Ptr(corr.OutputIndex)
-	out.SummaryIndex = cloneInt32Ptr(corr.SummaryIndex)
-	out.ChoiceIndex = cloneInt32Ptr(corr.ChoiceIndex)
-	out.ContentBlockIndex = cloneInt32Ptr(corr.ContentBlockIndex)
-	out.ToolCallIndex = cloneInt32Ptr(corr.ToolCallIndex)
-	return &out
+	return proto.Clone(corr).(*chatappv1.CorrelationInfo)
 }
 
 func MergeCorrelationInfo(existing, update *chatappv1.CorrelationInfo) *chatappv1.CorrelationInfo {

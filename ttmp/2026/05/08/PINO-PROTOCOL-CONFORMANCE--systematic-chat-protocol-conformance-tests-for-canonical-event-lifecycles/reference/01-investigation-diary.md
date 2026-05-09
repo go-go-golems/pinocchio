@@ -26,7 +26,7 @@ RelatedFiles:
       Note: Investigated active text finalization on stop/error.
 ExternalSources: []
 Summary: Chronological diary for the PINO-PROTOCOL-CONFORMANCE research/design task.
-LastUpdated: 2026-05-09T04:20:00-04:00
+LastUpdated: 2026-05-09T00:15:00-04:00
 WhatFor: Use this diary to understand how the protocol conformance guide was created and how to continue the work.
 WhenToUse: Use when implementing, reviewing, or extending the protocol conformance test plan.
 ---
@@ -2575,3 +2575,103 @@ go test ./...
 ### Technical details
 
 `currentTextActive` is set on text start/delta, cleared on text finish/interrupt/error, and used by `EventError` to decide whether to close active partial text or create an error-only message. `canonicalEntityID` already preferred `SegmentID`, then `CorrelationKey`, then event ID; the new correlation-key test locks in the fallback behavior when `SegmentID` is absent.
+
+## Step 28: Run Playwright web-chat E2E across four providers
+
+I ran the live `cmd/web-chat` browser flow through Playwright against the four target profiles: OpenAI Responses (`gpt-5-nano`), Claude (`haiku`), Gemini (`gemini-2.5-flash`), and OpenAI-compatible Wafer (`wafer-qwen3.5-397b`). This was the first post-matrix browser validation pass after the frontend/persistence sparse-terminal fixes and the OpenAI Responses `stream: true` request fix.
+
+### Prompt Context
+
+**User prompt (verbatim):** "run end-to-end Playwright tests for `cmd/web-chat` against all 4 providers."
+
+**Assistant interpretation:** Start the web-chat backend and Vite frontend with the real profile registry, drive the browser UI with Playwright, select each provider profile, send a minimal prompt, wait for terminal UI state, and collect debug artifacts.
+
+**Inferred user intent:** Confirm that the canonical event protocol still works through the actual browser surface for the four provider families before moving on to CoinVault validation.
+
+**Commit (code):** N/A — browser validation only.
+
+### What I did
+
+- Started the backend with debug routes enabled:
+
+```bash
+cd pinocchio
+go run ./cmd/web-chat web-chat --addr :8081 --debug-api --profile-registries /home/manuel/.config/pinocchio/profiles.yaml
+```
+
+- Started the frontend dev server against that backend:
+
+```bash
+cd pinocchio/cmd/web-chat/web
+VITE_BACKEND_ORIGIN=http://localhost:8081 npm run dev -- --host 127.0.0.1 --port 5714
+```
+
+- Enabled browser stream debug capture with `localStorage.pinocchio.debugStream = "1"`.
+- Used Playwright to select each profile, send `Reply with exactly: pong <profile>`, and wait for a terminal `finished` UI state.
+- Fetched backend debug records for each session from:
+  - `/api/debug/sessions/{sessionID}/reconcile`
+  - `/api/debug/sessions/{sessionID}/records`
+  - `/api/debug/sessions/{sessionID}/pipeline`
+  - `/api/debug/sessions/{sessionID}/transport`
+  - `/api/debug/sessions/{sessionID}/geppetto`
+- Saved the final Wafer frontend debug records and generated a reconcile SQLite database for that session.
+
+### Results
+
+All four provider profiles reached `finished` in the browser and displayed an assistant response containing the expected `pong` marker:
+
+- `gpt-5-nano` — session `dd9d0e05-fe6c-4e09-b51c-c4890c1648aa`, 60 frontend debug entries, 16 backend pipeline records, 57 transport records.
+- `haiku` — session `f629e5ea-310c-4caf-9f23-e292b79c297e`, 45 frontend debug entries, 11 backend pipeline records, 42 transport records.
+- `gemini-2.5-flash` — session `386ed041-b952-4e7e-b611-7d45610a705c`, 78 frontend debug entries, 21 backend pipeline records, 73 transport records.
+- `wafer-qwen3.5-397b` — session `e1bfbea8-0d02-4bf6-af25-1af7da7af93e`, 4263 frontend debug entries, 1417 backend pipeline records, 4260 transport records.
+
+Artifact directory:
+
+```text
+pinocchio/ttmp/2026/05/08/PINO-PROTOCOL-CONFORMANCE--systematic-chat-protocol-conformance-tests-for-canonical-event-lifecycles/various/e2e-webchat-20260509-000248
+```
+
+Important files:
+
+- `results.json` — summarized profile/session/status table.
+- `{sessionID}/reconcile.json` — backend reconcile summary for each run.
+- `{sessionID}/records.json`, `pipeline.json`, `transport.json`, `geppetto.json` — debug API exports for each run.
+- `e1bfbea8-0d02-4bf6-af25-1af7da7af93e/frontend-records.json` — frontend stream-debug records for the final Wafer run.
+- `e1bfbea8-0d02-4bf6-af25-1af7da7af93e/reconcile.sqlite` — SQLite reconcile export for the final Wafer run.
+- `wafer-final.png` — final browser screenshot.
+
+### What worked
+
+- Profile switching worked in the actual browser UI for all four profiles.
+- WebSocket status reached connected and terminal `finished` state for all four runs.
+- OpenAI Responses (`gpt-5-nano`) completed successfully through the browser after the request-body `stream: true` fix.
+- The long Wafer/Qwen reasoning stream produced a very large event trace and still converged to a final assistant text block.
+
+### What didn't work
+
+- My first Playwright wait helper accidentally passed the timeout object as the function argument, so it used Playwright's default 30s timeout for the Wafer run. The run was still streaming at that point; I corrected the wait call to `page.waitForFunction(fn, null, { timeout: 240000 })` and the same Wafer session finished successfully.
+- Browser console still reports a Redux selector memoization warning for `selectTimelineEntities` and a harmless missing `favicon.ico` request. These did not block completion.
+- Only the final Wafer run has frontend records uploaded into a reconcile SQLite file; earlier sessions still have backend debug API exports and summarized frontend debug counts from the Playwright run.
+
+### What I learned
+
+The browser path now exercises the sparse-terminal and correlation-preserving reducers under real provider traffic. The Wafer profile is especially useful as a stress run because it can produce thousands of reasoning and transport frames before the final assistant text.
+
+### What warrants a second pair of eyes
+
+- Decide whether to memoize `selectTimelineEntities` now or leave it as a known dev-mode warning.
+- Decide whether every browser E2E run should export per-session frontend records before moving to the next profile, or whether backend records plus one full SQLite trace are enough for smoke validation.
+
+### What should be done in the future
+
+- Repeat this browser flow with an explicit tool-use prompt once the profile/tool setup is ready.
+- Run the same provider matrix through CoinVault's web chat after confirming Pinocchio PR state.
+- Consider adding a scripted Playwright spec so this manual harness becomes repeatable outside the agent session.
+
+### Code review instructions
+
+This step changed no source code. Review the generated artifacts and backend logs under:
+
+```text
+pinocchio/ttmp/2026/05/08/PINO-PROTOCOL-CONFORMANCE--systematic-chat-protocol-conformance-tests-for-canonical-event-lifecycles/various/e2e-webchat-20260509-000248
+```
