@@ -26,7 +26,7 @@ RelatedFiles:
       Note: Investigated active text finalization on stop/error.
 ExternalSources: []
 Summary: Chronological diary for the PINO-PROTOCOL-CONFORMANCE research/design task.
-LastUpdated: 2026-05-09T01:15:00-04:00
+LastUpdated: 2026-05-09T01:45:00-04:00
 WhatFor: Use this diary to understand how the protocol conformance guide was created and how to continue the work.
 WhenToUse: Use when implementing, reviewing, or extending the protocol conformance test plan.
 ---
@@ -1693,6 +1693,10 @@ This is the first concrete Phase 1 provider-normalization test checkpoint derive
 
 **Commit (docs):** `1be5777` — "Docs: update Gemini testing seam"
 
+**Commit (code):** `e57d532` — "Extract Gemini stream completion helpers"
+
+**Commit (docs):** `59df153` — "Docs: record Gemini completion helpers"
+
 ### What I did
 
 - OpenAI Chat Completions:
@@ -1708,6 +1712,8 @@ This is the first concrete Phase 1 provider-normalization test checkpoint derive
   - changed `RunInference` to delegate per-chunk provider normalization to the reducer while keeping SDK iteration and final completion in the engine;
   - added table-driven reducer tests for metadata-only final chunks, multiple text chunks, and complete function calls.
 - Updated the Geppetto provider testing guide to mention the new Gemini seam.
+- Extracted Gemini stream consumption and terminal completion helpers into `stream_helpers.go`.
+- Added a Gemini helper test proving that a terminal stream error after active text closes the active text segment, appends the partial assistant text block, emits an error event, and publishes a failed provider-call finish.
 
 ### Why
 
@@ -1739,7 +1745,7 @@ make lintmax
 Nothing remained broken, but there were important implementation constraints:
 
 - OpenAI Responses active-text terminal error currently preserves partial text and emits failed provider-call finish, but the test does not assert a text-segment-finished event because the current Responses completion path does not explicitly close active text on provider error.
-- Gemini terminal completion is still partly inline in `RunInference`; the new reducer covers chunk normalization, not final turn-block/error/cancel completion yet.
+- Gemini terminal completion is no longer entirely inline; the new `completeGeminiStream` helper covers final turn-block/error handling, but additional terminal scenario rows can still be added if review wants broader EOF/cancel coverage.
 
 ### What I learned
 
@@ -1755,12 +1761,12 @@ Gemini was tricky because its SDK chunks use concrete `genai` types. The reducer
 
 - Review OpenAI Responses sparse function-call finalization to ensure fallback from `callsByItem` is correct for call id, name, output index, status, and arguments.
 - Review whether Responses should also emit `TextSegmentFinished` on stream error with active text, or whether preserving the final assistant block plus failed provider-call finish is enough for Phase 1.
-- Review Gemini reducer boundaries: chunk normalization is extracted, but terminal completion remains in `RunInference`.
+- Review Gemini helper boundaries: chunk normalization, stream consumption, and terminal completion are now extracted, while request setup and SDK model orchestration remain in `RunInference`.
 
 ### What should be done in the future
 
 - Add more OpenAI Responses tests for reasoning summary/text terminal behavior.
-- Add Gemini terminal completion helpers if we want direct tests for EOF/error/cancel final turn-block behavior.
+- Add any remaining Gemini terminal completion scenarios if we want broader EOF/error/cancel final turn-block behavior.
 - Carry the deferred Pinocchio sparse patch/projection/frontend scenarios into Phase 2-5 test docs and implementations.
 
 ### Code review instructions
@@ -1773,6 +1779,8 @@ git -C geppetto show fab1d3c
 git -C geppetto show 904c77a
 git -C geppetto show aeb3c38
 git -C geppetto show 1be5777
+git -C geppetto show e57d532
+git -C geppetto show 59df153
 ```
 
 Start with these files:
@@ -1783,6 +1791,7 @@ geppetto/pkg/steps/ai/claude/content-block-merger_test.go
 geppetto/pkg/steps/ai/openai_responses/engine_test.go
 geppetto/pkg/steps/ai/openai_responses/stream_events.go
 geppetto/pkg/steps/ai/gemini/stream_reducer.go
+geppetto/pkg/steps/ai/gemini/stream_helpers.go
 geppetto/pkg/steps/ai/gemini/engine_gemini_test.go
 geppetto/docs/design/implementation/01-provider-event-testing.md
 ```

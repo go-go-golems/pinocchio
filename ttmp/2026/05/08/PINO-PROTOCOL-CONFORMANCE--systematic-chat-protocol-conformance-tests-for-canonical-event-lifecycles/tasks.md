@@ -59,3 +59,4 @@
 - [x] Added review-derived provider-normalization tests for Claude metadata-only stops, sparse tool deltas, and stream errors after active text.
 - [x] Added review-derived provider-normalization tests for OpenAI Responses metadata-only completions, sparse function-call finalization, and stream errors after active text.
 - [x] Extracted a Gemini stream reducer seam and added provider-native chunk tests for metadata-only chunks, text accumulation, and function calls.
+- [x] Extracted Gemini stream consumption/completion helpers and added an active-text terminal-error completion test.

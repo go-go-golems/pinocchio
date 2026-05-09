@@ -48,6 +48,8 @@
 - Added OpenAI Responses review-derived stream tests and sparse function-call finalization fix: `904c77a Test Responses review-derived stream scenarios`.
 - Extracted Gemini stream reducer seam and provider-native chunk tests: `aeb3c38 Extract Gemini stream reducer tests`.
 - Updated the Geppetto provider testing guide to reference the Gemini reducer seam: `1be5777 Docs: update Gemini testing seam`.
+- Extracted Gemini stream consumption/completion helpers and terminal-error text completion coverage: `e57d532 Extract Gemini stream completion helpers`.
+- Updated the Geppetto provider testing guide to reference Gemini completion helpers: `59df153 Docs: record Gemini completion helpers`.
 
 ### Related Files
 
