@@ -163,6 +163,137 @@ func TestReasoningPluginProjectsCanonicalEventsToUIAndTimeline(t *testing.T) {
 	require.Equal(t, "reasoning:rs_1", entity.GetCorrelation().GetCorrelationKey())
 }
 
+func TestReasoningPluginSparseProjectionMatrix(t *testing.T) {
+	plugin := NewReasoningPlugin()
+	fullCorr := &chatappv1.CorrelationInfo{
+		Provider:             "openai-responses",
+		Model:                "gpt-test",
+		ResponseId:           "resp_reason",
+		ItemId:               "rs_1",
+		OutputIndex:          int32Ptr(0),
+		SummaryIndex:         int32Ptr(0),
+		SegmentId:            "reasoning-segment-1",
+		SegmentIndex:         1,
+		SegmentType:          gepevents.SegmentTypeReasoning,
+		StreamKind:           gepevents.StreamKindReasoning,
+		CorrelationKey:       "reasoning:rs_1",
+		ParentCorrelationKey: "provider-call-key",
+	}
+	segmentOnlyCorr := &chatappv1.CorrelationInfo{SegmentIndex: 1, SegmentType: gepevents.SegmentTypeReasoning}
+
+	tests := []struct {
+		name    string
+		view    sessionstream.TimelineView
+		event   sessionstream.Event
+		wantNil bool
+		check   func(t *testing.T, entity *chatappv1.ChatMessageEntity)
+	}{
+		{
+			name: "REASONING-PROJECTION-01 sparse finish preserves content and correlation",
+			view: reasoningTimelineViewWithMessage(&chatappv1.ChatMessageEntity{
+				MessageId:       "chat-msg-1:thinking:1",
+				ParentMessageId: "chat-msg-1",
+				Role:            "thinking",
+				Content:         "partial plan",
+				Text:            "partial plan",
+				Status:          "streaming",
+				Streaming:       true,
+				Correlation:     fullCorr,
+			}),
+			event: sessionstream.Event{Name: ReasoningFinishedEventName, SessionId: "sid", Payload: &chatappv1.ChatReasoningSegmentFinished{
+				MessageId:   "chat-msg-1:thinking:1",
+				Status:      "finished",
+				Streaming:   false,
+				Correlation: segmentOnlyCorr,
+			}},
+			check: func(t *testing.T, entity *chatappv1.ChatMessageEntity) {
+				t.Helper()
+				require.Equal(t, "partial plan", entity.GetContent())
+				require.Equal(t, "chat-msg-1", entity.GetParentMessageId())
+				require.Equal(t, "finished", entity.GetStatus())
+				require.False(t, entity.GetStreaming())
+				requireReasoningFullCorrelation(t, entity.GetCorrelation())
+			},
+		},
+		{
+			name: "REASONING-PROJECTION-02 sparse delta preserves provider identity while updating content",
+			view: reasoningTimelineViewWithMessage(&chatappv1.ChatMessageEntity{
+				MessageId:       "chat-msg-1:thinking:1",
+				ParentMessageId: "chat-msg-1",
+				Role:            "thinking",
+				Content:         "partial",
+				Text:            "partial",
+				Status:          "streaming",
+				Streaming:       true,
+				Correlation:     fullCorr,
+			}),
+			event: sessionstream.Event{Name: ReasoningDeltaEventName, SessionId: "sid", Payload: &chatappv1.ChatReasoningDelta{
+				MessageId:   "chat-msg-1:thinking:1",
+				Content:     "partial plan",
+				Text:        "partial plan",
+				Status:      "streaming",
+				Streaming:   true,
+				Correlation: segmentOnlyCorr,
+			}},
+			check: func(t *testing.T, entity *chatappv1.ChatMessageEntity) {
+				t.Helper()
+				require.Equal(t, "partial plan", entity.GetContent())
+				require.Equal(t, "chat-msg-1", entity.GetParentMessageId())
+				requireReasoningFullCorrelation(t, entity.GetCorrelation())
+			},
+		},
+		{
+			name: "REASONING-PROJECTION-03 empty start without existing content creates no entity",
+			view: reasoningStaticTimelineView{},
+			event: sessionstream.Event{Name: ReasoningStartedEventName, SessionId: "sid", Payload: &chatappv1.ChatReasoningSegmentStarted{
+				MessageId:       "chat-msg-1:thinking:1",
+				ParentMessageId: "chat-msg-1",
+				Status:          "streaming",
+				Streaming:       true,
+				Correlation:     segmentOnlyCorr,
+			}},
+			wantNil: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			entities, handled, err := plugin.ProjectTimeline(context.Background(), tt.event, nil, tt.view)
+			require.NoError(t, err)
+			require.True(t, handled)
+			if tt.wantNil {
+				require.Nil(t, entities)
+				return
+			}
+			require.Len(t, entities, 1)
+			require.Equal(t, chatapp.TimelineEntityChatMessage, entities[0].Kind)
+			payload := entities[0].Payload.(*chatappv1.ChatMessageEntity)
+			if tt.check != nil {
+				tt.check(t, payload)
+			}
+		})
+	}
+}
+
+func requireReasoningFullCorrelation(t *testing.T, corr *chatappv1.CorrelationInfo) {
+	t.Helper()
+	require.NotNil(t, corr)
+	require.Equal(t, "openai-responses", corr.GetProvider())
+	require.Equal(t, "gpt-test", corr.GetModel())
+	require.Equal(t, "resp_reason", corr.GetResponseId())
+	require.Equal(t, "rs_1", corr.GetItemId())
+	require.NotNil(t, corr.OutputIndex)
+	require.Equal(t, int32(0), corr.GetOutputIndex())
+	require.NotNil(t, corr.SummaryIndex)
+	require.Equal(t, int32(0), corr.GetSummaryIndex())
+	require.Equal(t, "reasoning-segment-1", corr.GetSegmentId())
+	require.Equal(t, int32(1), corr.GetSegmentIndex())
+	require.Equal(t, gepevents.SegmentTypeReasoning, corr.GetSegmentType())
+	require.Equal(t, gepevents.StreamKindReasoning, corr.GetStreamKind())
+	require.Equal(t, "reasoning:rs_1", corr.GetCorrelationKey())
+	require.Equal(t, "provider-call-key", corr.GetParentCorrelationKey())
+}
+
 func TestReasoningPluginIgnoresUnrelatedEvents(t *testing.T) {
 	plugin := NewReasoningPlugin()
 	handled, err := plugin.HandleRuntimeEvent(context.Background(), chatapp.RuntimeEventContext{SessionID: "sid", MessageID: "chat-msg-1"}, gepevents.NewErrorEvent(gepevents.EventMetadata{SessionID: "sid"}, context.Canceled))
@@ -170,10 +301,26 @@ func TestReasoningPluginIgnoresUnrelatedEvents(t *testing.T) {
 	require.False(t, handled)
 }
 
-type reasoningStaticTimelineView struct{}
+type reasoningStaticTimelineView struct {
+	entities map[string]sessionstream.TimelineEntity
+}
 
-func (reasoningStaticTimelineView) Get(string, string) (sessionstream.TimelineEntity, bool) {
-	return sessionstream.TimelineEntity{}, false
+func reasoningTimelineViewWithMessage(message *chatappv1.ChatMessageEntity) reasoningStaticTimelineView {
+	return reasoningStaticTimelineView{entities: map[string]sessionstream.TimelineEntity{
+		chatapp.TimelineEntityChatMessage + "/" + message.GetMessageId(): {
+			Kind:    chatapp.TimelineEntityChatMessage,
+			Id:      message.GetMessageId(),
+			Payload: message,
+		},
+	}}
+}
+
+func (v reasoningStaticTimelineView) Get(kind, id string) (sessionstream.TimelineEntity, bool) {
+	if v.entities == nil {
+		return sessionstream.TimelineEntity{}, false
+	}
+	entity, ok := v.entities[kind+"/"+id]
+	return entity, ok
 }
 func (reasoningStaticTimelineView) List(string) []sessionstream.TimelineEntity { return nil }
 func (reasoningStaticTimelineView) Ordinal() uint64                            { return 0 }

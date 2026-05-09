@@ -113,7 +113,7 @@ func (p *ReasoningPlugin) ProjectUI(_ context.Context, ev sessionstream.Event, _
 // ProjectTimeline projects reasoning backend events into ChatMessage timeline entities.
 func (p *ReasoningPlugin) ProjectTimeline(_ context.Context, ev sessionstream.Event, _ *sessionstream.Session, view sessionstream.TimelineView) ([]sessionstream.TimelineEntity, bool, error) {
 	messageID, entity, ok, err := reasoningEntityFromEvent(ev, view)
-	if err != nil || !ok {
+	if err != nil || !ok || entity == nil || strings.TrimSpace(messageID) == "" {
 		return nil, ok, err
 	}
 	return []sessionstream.TimelineEntity{{Kind: chatapp.TimelineEntityChatMessage, Id: messageID, Payload: entity}}, true, nil
@@ -185,10 +185,10 @@ func reasoningEntityFromFields(view sessionstream.TimelineView, messageID, paren
 	entity.Role = firstNonEmptyString(role, "thinking")
 	entity.Content = content
 	entity.Text = content
-	entity.ParentMessageId = parentMessageID
-	entity.Segment = corr.GetSegmentIndex()
-	entity.SegmentType = firstNonEmptyString(corr.GetSegmentType(), gepevents.SegmentTypeReasoning)
-	entity.Correlation = cloneCorrelationInfo(corr)
+	entity.ParentMessageId = firstNonEmptyString(parentMessageID, entity.GetParentMessageId())
+	entity.Correlation = chatapp.MergeCorrelationInfo(entity.GetCorrelation(), corr)
+	entity.Segment = entity.GetCorrelation().GetSegmentIndex()
+	entity.SegmentType = firstNonEmptyString(entity.GetCorrelation().GetSegmentType(), gepevents.SegmentTypeReasoning)
 	switch eventName {
 	case ReasoningStartedEventName, ReasoningDeltaEventName:
 		entity.Status = firstNonEmptyString(status, "streaming")
