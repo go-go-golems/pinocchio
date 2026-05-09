@@ -30,6 +30,9 @@
 - Implemented initial Responses stream state/completion helpers in Geppetto: `fe6423d Share Responses stream completion state`.
 - Removed the Responses non-streaming inference path so Responses normalization now has one streaming lifecycle: `db0c69b Remove Responses nonstreaming path`.
 - Updated Responses tests so the previous non-streaming usage coverage now runs through the forced streaming path.
+- Extracted Responses stream opening: `2735014 Extract Responses stream opening`.
+- Extracted Responses provider-call correlation and terminal completion helper: `b56187c Extract Responses stream completion helper`.
+- Extracted small Responses stream helper functions and table-driven tests: `a07ebac Extract Responses stream helper functions`.
 
 ### Related Files
 

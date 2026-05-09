@@ -2,8 +2,8 @@
 
 ## TODO
 
-- [ ] Continue extracting `runStreamingInference` toward setup → state → consume → complete → return, now that final state helpers and single streaming path are in place.
-- [ ] Add small table-driven helper tests for new Responses helper behavior where existing tests do not already cover it.
+- [ ] Continue moving the large Responses provider-event switch into small named handlers where it improves readability.
+- [ ] Continue moving remaining Responses mutable locals directly into `responsesStreamState` without introducing noisy or unsafe rewrites.
 - [ ] Validate `go test ./pkg/steps/ai/openai_responses -count=1` after each Responses code checkpoint.
 - [ ] Implement remaining Phase 1 Geppetto provider-normalization table tests in provider adapter packages after the Responses structural refactor is complete.
 - [ ] Implement Phase 2 Go runtime protocol matrix in `pkg/chatapp`.
@@ -47,4 +47,8 @@
 - [x] Extracted Responses SSE consume loop into `consumeResponsesSSE` while preserving event behavior.
 - [x] Removed the Responses non-streaming inference path so Responses normalization has one streaming lifecycle.
 - [x] Updated the former non-streaming usage test to verify usage through the forced streaming path.
+- [x] Extracted Responses HTTP stream opening into `openResponsesStream`.
+- [x] Extracted Responses provider-call correlation and terminal completion helpers.
+- [x] Extracted small Responses stream helpers for provider suffix backfill and JSON/string chunk conversion.
+- [x] Added table-driven helper tests for Responses provider suffix backfill and chunk conversion.
 - [x] Validated Responses package tests and full Geppetto pre-commit tests/lint for the committed Responses checkpoints.

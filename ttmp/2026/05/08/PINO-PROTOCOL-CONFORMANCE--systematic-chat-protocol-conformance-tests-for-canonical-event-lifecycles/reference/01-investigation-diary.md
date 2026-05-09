@@ -26,7 +26,7 @@ RelatedFiles:
       Note: Investigated active text finalization on stop/error.
 ExternalSources: []
 Summary: Chronological diary for the PINO-PROTOCOL-CONFORMANCE research/design task.
-LastUpdated: 2026-05-08T21:18:00-04:00
+LastUpdated: 2026-05-08T21:40:00-04:00
 WhatFor: Use this diary to understand how the protocol conformance guide was created and how to continue the work.
 WhenToUse: Use when implementing, reviewing, or extending the protocol conformance test plan.
 ---
@@ -1029,6 +1029,93 @@ Validation run:
 
 ```bash
 go test ./pkg/steps/ai/openai_responses -count=1
+go test ./...
+make lintmax
+```
+
+## Step 13: Continue Responses extraction in small safe commits
+
+I continued the Responses structural refactor after removing the non-streaming path. The focus was to extract obvious pieces without doing a risky whole-file rewrite.
+
+### Prompt Context
+
+**User prompt (verbatim):** "continue."
+
+**Assistant interpretation:** Continue implementing the Responses refactor in committed checkpoints, keeping the diary current.
+
+**Inferred user intent:** Keep converging Responses toward the Chat Completions pattern, but preserve behavior and avoid a giant unsafe rewrite.
+
+**Commits (code):**
+
+- Geppetto `2735014 Extract Responses stream opening`
+- Geppetto `b56187c Extract Responses stream completion helper`
+- Geppetto `a07ebac Extract Responses stream helper functions`
+
+### What I did
+
+- Extracted `openResponsesStream` from `runStreamingInference`:
+  - request construction;
+  - SSE headers;
+  - debug tap HTTP capture;
+  - HTTP status handling.
+- Extracted `newResponsesProviderCallCorrelation`.
+- Extracted `completeResponsesStream`, so terminal metadata, summary emission, final turn-block appending, inference-result persistence, and provider-call finish are in one named completion helper.
+- Extracted small provider stream helpers:
+  - `missingProviderSuffix`;
+  - `responsesChunkFromValue`.
+- Added table-driven helper tests in `stream_helpers_test.go`.
+
+### Why
+
+These extractions make the main Responses function more readable without changing the large provider-event switch yet. They also continue the same shape used by Chat Completions:
+
+```text
+open stream
+consume stream
+complete terminal state
+```
+
+### What worked
+
+- `go test ./pkg/steps/ai/openai_responses -count=1` passed after each checkpoint.
+- Full Geppetto pre-commit passed for each commit.
+- The helper tests make the provider backfill logic less magical.
+
+### What didn't work
+
+I briefly tried to move all mutable locals directly into `responsesStreamState` in one broad rewrite. That produced noisy and unsafe replacements, including replacements inside string keys and log field names. I reverted that uncommitted attempt and continued with smaller named extractions instead.
+
+### What I learned
+
+For this file, a Peter-Norvig-style refactor means small obvious transformations, not a heroic conversion. The large provider-event switch should be carved up by semantic cases, one at a time.
+
+### What was tricky to build
+
+The overlap/backfill logic is small but subtle: provider terminal payloads may repeat already-streamed text or contain only the missing suffix. Extracting `missingProviderSuffix` made that behavior testable.
+
+### What warrants a second pair of eyes
+
+- Decide which provider-event switch cases should be extracted next. Good candidates are message text handling, reasoning summary handling, and function-call handling.
+- Confirm whether the large switch should remain in `streaming.go` with named helpers, or move into a `stream_handlers.go` file.
+
+### What should be done in the future
+
+- Extract message/text provider-event handling into named helpers.
+- Extract function-call argument handling into named helpers.
+- Move state gradually into `responsesStreamState`, preferably as part of those handler extractions.
+
+### Code review instructions
+
+Review:
+
+```text
+geppetto/pkg/steps/ai/openai_responses/streaming.go
+geppetto/pkg/steps/ai/openai_responses/stream_helpers_test.go
+```
+
+Validation run by pre-commit:
+
+```bash
 go test ./...
 make lintmax
 ```
