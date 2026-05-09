@@ -149,21 +149,22 @@ export function timelineMutationFromUIEvent(frame: CanonicalFrame): TimelineMuta
       if (!messageId) return null;
       const content = payload.content || payload.text;
       return {
-        upsert: content
-          ? messageEntity(messageId, {
-              role: payload.role || 'assistant',
-              prompt: payload.prompt,
-              content,
-              status: payload.status || 'finished',
-              streaming: false,
-              parentMessageId: parentMessageId(messageId, ':text:'),
-              segment: payload.correlation?.segmentIndex,
-              segmentType: payload.correlation?.segmentType,
-              final: payload.final,
-              finishReason: payload.finishReason,
-              ...correlationProps(payload.correlation),
-            })
-          : undefined,
+        upsert: messageEntity(
+          messageId,
+          definedProps({
+            role: payload.role || 'assistant',
+            prompt: payload.prompt,
+            ...(content ? { content } : {}),
+            status: payload.status || 'finished',
+            streaming: false,
+            parentMessageId: parentMessageId(messageId, ':text:'),
+            segment: payload.correlation?.segmentIndex,
+            segmentType: payload.correlation?.segmentType,
+            ...(payload.final ? { final: payload.final } : {}),
+            finishReason: payload.finishReason,
+            ...correlationProps(payload.correlation),
+          }),
+        ),
         status: payload.status || 'finished',
       };
     }
@@ -269,7 +270,7 @@ export function timelineMutationFromUIEvent(frame: CanonicalFrame): TimelineMuta
           definedProps({
             messageId: payload.messageId,
             toolCallId: payload.toolCallId,
-            name: payload.toolName || 'tool',
+            name: payload.toolName,
             toolName: payload.toolName,
             ...(hasInput ? { input: parseToolInput(input), inputRaw: input } : {}),
             executing,
@@ -288,7 +289,7 @@ export function timelineMutationFromUIEvent(frame: CanonicalFrame): TimelineMuta
         upsert: toolResultEntity(`${payload.toolCallId}:result`, {
           messageId: payload.messageId,
           toolCallId: payload.toolCallId,
-          name: payload.toolName || 'tool',
+          name: payload.toolName,
           toolName: payload.toolName,
           customKind: payload.toolName,
           result: payload.result,
