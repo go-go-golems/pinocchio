@@ -23,26 +23,10 @@ message UsageInfo {
 message CorrelationInfo {
   string session_id = 1;
   string run_id = 2;
-  string inference_id = 3;
   string turn_id = 4;
   string provider_call_id = 5;
-  int32 provider_call_index = 6;
-  string provider = 7;
-  string model = 8;
-  string response_id = 9;
-  string item_id = 10;
-  optional int32 output_index = 11;
-  optional int32 summary_index = 12;
-  optional int32 choice_index = 13;
-  optional int32 content_block_index = 14;
   string segment_id = 15;
-  int32 segment_index = 16;
-  string segment_type = 17;
-  string stream_kind = 18;
   string tool_call_id = 19;
-  optional int32 tool_call_index = 20;
-  string correlation_key = 21;
-  string parent_correlation_key = 22;
 }
 
 message ChatRunStarted {

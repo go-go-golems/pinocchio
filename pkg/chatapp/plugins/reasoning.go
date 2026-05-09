@@ -133,9 +133,6 @@ func ReasoningSegmentEntityID(messageID string, segment int32) string {
 }
 
 func reasoningMessageID(parentMessageID string, corr gepevents.Correlation) string {
-	if corr.SegmentIndex > 0 {
-		return ReasoningSegmentEntityID(parentMessageID, corr.SegmentIndex)
-	}
 	if suffix := reasoningCorrelationSuffix(corr); suffix != "" {
 		return fmt.Sprintf("%s:thinking:%s", strings.TrimSpace(parentMessageID), suffix)
 	}
@@ -143,30 +140,22 @@ func reasoningMessageID(parentMessageID string, corr gepevents.Correlation) stri
 }
 
 func reasoningCorrelationSuffix(corr gepevents.Correlation) string {
-	for _, candidate := range []string{corr.SegmentID, corr.CorrelationKey} {
-		candidate = strings.TrimSpace(candidate)
-		if candidate == "" {
-			continue
-		}
-		var b strings.Builder
-		for _, r := range candidate {
-			if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' || r == '_' || r == '.' || r == ':' {
-				b.WriteRune(r)
-			} else {
-				b.WriteByte('-')
-			}
-		}
-		if suffix := strings.Trim(b.String(), "-:_ ."); suffix != "" {
-			return suffix
+	candidate := strings.TrimSpace(corr.SegmentID)
+	if candidate == "" {
+		return ""
+	}
+	var b strings.Builder
+	for _, r := range candidate {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' || r == '_' || r == '.' || r == ':' {
+			b.WriteRune(r)
+		} else {
+			b.WriteByte('-')
 		}
 	}
-	return ""
+	return strings.Trim(b.String(), "-:_ .")
 }
 
-func reasoningSource(corr gepevents.Correlation) string {
-	if corr.SummaryIndex != nil {
-		return "summary"
-	}
+func reasoningSource(_ gepevents.Correlation) string {
 	return "thinking"
 }
 
@@ -211,8 +200,7 @@ func reasoningEntityFromFields(view sessionstream.TimelineView, messageID, paren
 	entity.Text = content
 	entity.ParentMessageId = firstNonEmptyString(parentMessageID, entity.GetParentMessageId())
 	entity.Correlation = chatapp.MergeCorrelationInfo(entity.GetCorrelation(), corr)
-	entity.Segment = entity.GetCorrelation().GetSegmentIndex()
-	entity.SegmentType = firstNonEmptyString(entity.GetCorrelation().GetSegmentType(), gepevents.SegmentTypeReasoning)
+	entity.SegmentType = gepevents.SegmentTypeReasoning
 	switch eventName {
 	case ReasoningStartedEventName, ReasoningDeltaEventName:
 		entity.Status = firstNonEmptyString(status, "streaming")

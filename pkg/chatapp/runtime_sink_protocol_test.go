@@ -123,7 +123,6 @@ func TestRuntimeEventSinkProtocolMatrix(t *testing.T) {
 				requireRuntimeSinkEventCount(t, published, EventChatTextSegmentFinished, 1)
 				providerFinished := published[3].Payload.(*chatappv1.ChatProviderCallFinished)
 				require.Equal(t, "provider-call-1", providerFinished.GetCorrelation().GetProviderCallId())
-				require.Equal(t, "provider-call-key", providerFinished.GetCorrelation().GetCorrelationKey())
 			},
 		},
 	}
@@ -175,33 +174,16 @@ func requireRuntimeSinkEventCount(t *testing.T, events []sessionstream.Event, na
 
 func runtimeSinkProviderCorrelation() gepevents.Correlation {
 	return gepevents.Correlation{
-		SessionID:            "session-1",
-		RunID:                "message-1",
-		InferenceID:          "inference-1",
-		TurnID:               "turn-1",
-		ProviderCallID:       "provider-call-1",
-		ProviderCallIndex:    0,
-		Provider:             "test-provider",
-		Model:                "test-model",
-		ResponseID:           "response-1",
-		CorrelationKey:       "provider-call-key",
-		ParentCorrelationKey: "message-1",
+		SessionID:      "session-1",
+		RunID:          "message-1",
+		TurnID:         "turn-1",
+		ProviderCallID: "provider-call-1",
 	}
 }
 
 func runtimeSinkTextCorrelation() gepevents.Correlation {
-	outputIndex := int32(0)
-	choiceIndex := int32(0)
 	corr := runtimeSinkProviderCorrelation()
-	corr.ItemID = "item-1"
-	corr.OutputIndex = &outputIndex
-	corr.ChoiceIndex = &choiceIndex
 	corr.SegmentID = "segment-text-1"
-	corr.SegmentIndex = 1
-	corr.SegmentType = gepevents.SegmentTypeText
-	corr.StreamKind = gepevents.StreamKindContent
-	corr.CorrelationKey = "text-segment-key"
-	corr.ParentCorrelationKey = "provider-call-key"
 	return corr
 }
 
@@ -210,21 +192,7 @@ func requireRuntimeSinkTextCorrelation(t *testing.T, corr *chatappv1.Correlation
 	require.NotNil(t, corr)
 	require.Equal(t, "session-1", corr.GetSessionId())
 	require.Equal(t, "message-1", corr.GetRunId())
-	require.Equal(t, "inference-1", corr.GetInferenceId())
 	require.Equal(t, "turn-1", corr.GetTurnId())
 	require.Equal(t, "provider-call-1", corr.GetProviderCallId())
-	require.Equal(t, "test-provider", corr.GetProvider())
-	require.Equal(t, "test-model", corr.GetModel())
-	require.Equal(t, "response-1", corr.GetResponseId())
-	require.Equal(t, "item-1", corr.GetItemId())
-	require.NotNil(t, corr.OutputIndex)
-	require.Equal(t, int32(0), corr.GetOutputIndex())
-	require.NotNil(t, corr.ChoiceIndex)
-	require.Equal(t, int32(0), corr.GetChoiceIndex())
 	require.Equal(t, "segment-text-1", corr.GetSegmentId())
-	require.Equal(t, int32(1), corr.GetSegmentIndex())
-	require.Equal(t, gepevents.SegmentTypeText, corr.GetSegmentType())
-	require.Equal(t, gepevents.StreamKindContent, corr.GetStreamKind())
-	require.Equal(t, "text-segment-key", corr.GetCorrelationKey())
-	require.Equal(t, "provider-call-key", corr.GetParentCorrelationKey())
 }

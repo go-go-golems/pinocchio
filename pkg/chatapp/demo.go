@@ -17,7 +17,7 @@ func (e *Engine) runDemoInference(ctx context.Context, sid sessionstream.Session
 	chunks := chunkText(answer, 10)
 	accumulated := ""
 	textMessageID := textSegmentMessageID(messageID, 1)
-	corr := &chatappv1.CorrelationInfo{SessionId: string(sid), RunId: messageID, SegmentId: textMessageID, SegmentIndex: 1, SegmentType: "text", StreamKind: "content", CorrelationKey: textMessageID}
+	corr := &chatappv1.CorrelationInfo{SessionId: string(sid), RunId: messageID, SegmentId: textMessageID}
 	if err := e.publish(publishContext(ctx), sid, pub, EventChatTextSegmentStarted, &chatappv1.ChatTextSegmentStarted{MessageId: textMessageID, Role: "assistant", Prompt: prompt, Status: "streaming", Streaming: true, Correlation: corr}); err != nil {
 		return
 	}

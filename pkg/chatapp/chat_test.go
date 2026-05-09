@@ -46,13 +46,13 @@ func TestChatExampleHappyPath(t *testing.T) {
 }
 
 func TestBaseTimelineProjection_DelaysAssistantEntityUntilContentArrives(t *testing.T) {
-	startedPayload := &chatappv1.ChatTextSegmentStarted{MessageId: "chat-msg-start:text:1", Prompt: "Explain ordinals", Status: "streaming", Streaming: true, Correlation: &chatappv1.CorrelationInfo{SegmentIndex: 1, SegmentType: "text"}}
+	startedPayload := &chatappv1.ChatTextSegmentStarted{MessageId: "chat-msg-start:text:1", Prompt: "Explain ordinals", Status: "streaming", Streaming: true, Correlation: &chatappv1.CorrelationInfo{SegmentId: "segment-1"}}
 
 	entities, err := baseTimelineProjection(context.Background(), sessionstream.Event{Name: EventChatTextSegmentStarted, SessionId: "chat-projection", Ordinal: 2, Payload: startedPayload}, nil, staticTimelineView{})
 	require.NoError(t, err)
 	require.Nil(t, entities)
 
-	finishedPayload := &chatappv1.ChatTextSegmentFinished{MessageId: "chat-msg-start:text:1", Prompt: "Explain ordinals", Content: "Answer: Explain ordinals", Text: "Answer: Explain ordinals", Status: "finished", Streaming: false, Correlation: &chatappv1.CorrelationInfo{SegmentIndex: 1, SegmentType: "text"}}
+	finishedPayload := &chatappv1.ChatTextSegmentFinished{MessageId: "chat-msg-start:text:1", Prompt: "Explain ordinals", Content: "Answer: Explain ordinals", Text: "Answer: Explain ordinals", Status: "finished", Streaming: false, Correlation: &chatappv1.CorrelationInfo{SegmentId: "segment-1"}}
 	entities, err = baseTimelineProjection(context.Background(), sessionstream.Event{Name: EventChatTextSegmentFinished, SessionId: "chat-projection", Ordinal: 3, Payload: finishedPayload}, nil, staticTimelineView{})
 	require.NoError(t, err)
 	require.Len(t, entities, 1)
@@ -65,7 +65,7 @@ func TestBaseTimelineProjection_DelaysAssistantEntityUntilContentArrives(t *test
 func TestFeatureUIProjectionRunsForBaseChatEvents(t *testing.T) {
 	engine := NewEngine(WithPlugins(testPlugin{}))
 	payload := &chatappv1.ChatTextSegmentFinished{
-		MessageId: "chat-msg-1:text:1",
+		MessageId: "chat-msg-1:text:segment-1",
 		Role:      "assistant",
 		Content:   "done",
 		Status:    "finished",
@@ -184,8 +184,6 @@ func TestRuntimeInferencePublishesFallbackAssistantTextFromReturnedTurn(t *testi
 	require.False(t, textSegment.GetStreaming())
 	require.True(t, textSegment.GetFinal())
 	require.Equal(t, "chat-msg-1", textSegment.GetParentMessageId())
-	require.Equal(t, int32(1), textSegment.GetSegment())
-	require.Equal(t, "text", textSegment.GetSegmentType())
 }
 
 func TestRuntimeInferenceStopsWhenHistoryLoadFails(t *testing.T) {
@@ -271,15 +269,11 @@ func TestRuntimeInterleavedTextToolTextUsesDistinctTextSegments(t *testing.T) {
 		payloadMsg := entity.Payload.(*chatappv1.ChatMessageEntity)
 		ids[entity.Id] = payloadMsg
 	}
-	require.Contains(t, ids, "chat-msg-1:text:1")
-	require.Contains(t, ids, "chat-msg-1:text:2")
-	require.Equal(t, "first text", ids["chat-msg-1:text:1"].GetContent())
-	require.Equal(t, "final text", ids["chat-msg-1:text:2"].GetContent())
-	require.Equal(t, int32(1), ids["chat-msg-1:text:1"].GetSegment())
-	require.Equal(t, int32(2), ids["chat-msg-1:text:2"].GetSegment())
-	require.Equal(t, "text", ids["chat-msg-1:text:1"].GetSegmentType())
-	require.Equal(t, "text", ids["chat-msg-1:text:2"].GetSegmentType())
-	require.True(t, ids["chat-msg-1:text:2"].GetFinal())
+	require.Contains(t, ids, "chat-msg-1:text:segment-1")
+	require.Contains(t, ids, "chat-msg-1:text:segment-2")
+	require.Equal(t, "first text", ids["chat-msg-1:text:segment-1"].GetContent())
+	require.Equal(t, "final text", ids["chat-msg-1:text:segment-2"].GetContent())
+	require.True(t, ids["chat-msg-1:text:segment-2"].GetFinal())
 }
 
 func TestRuntimeErrorAfterPartialStopsActiveTextSegment(t *testing.T) {
@@ -306,14 +300,12 @@ func TestRuntimeErrorAfterPartialStopsActiveTextSegment(t *testing.T) {
 		ids[entity.Id] = entity.Payload.(*chatappv1.ChatMessageEntity)
 	}
 
-	textSegment := ids["chat-msg-1:text:1"]
+	textSegment := ids["chat-msg-1:text:segment-1"]
 	require.NotNil(t, textSegment)
 	require.Equal(t, "partial text", textSegment.GetContent())
 	require.Equal(t, "failed", textSegment.GetStatus())
 	require.False(t, textSegment.GetStreaming())
 	require.Equal(t, "chat-msg-1", textSegment.GetParentMessageId())
-	require.Equal(t, int32(1), textSegment.GetSegment())
-	require.Equal(t, "text", textSegment.GetSegmentType())
 	require.True(t, textSegment.GetFinal())
 	require.NotContains(t, ids, "chat-msg-1")
 }
@@ -342,7 +334,7 @@ func TestRuntimeInterruptAfterPartialStopsActiveTextSegment(t *testing.T) {
 		ids[entity.Id] = entity.Payload.(*chatappv1.ChatMessageEntity)
 	}
 
-	textSegment := ids["chat-msg-1:text:1"]
+	textSegment := ids["chat-msg-1:text:segment-1"]
 	require.NotNil(t, textSegment)
 	require.Equal(t, "partial before stop", textSegment.GetContent())
 	require.Equal(t, "stopped", textSegment.GetStatus())
@@ -385,7 +377,7 @@ func TestRuntimeCancellationErrorStopsActiveTextSegment(t *testing.T) {
 		ids[entity.Id] = entity.Payload.(*chatappv1.ChatMessageEntity)
 	}
 
-	textSegment := ids["chat-msg-1:text:1"]
+	textSegment := ids["chat-msg-1:text:segment-1"]
 	require.NotNil(t, textSegment)
 	require.Equal(t, "partial before cancel", textSegment.GetContent())
 	require.Equal(t, "stopped", textSegment.GetStatus())
@@ -418,7 +410,7 @@ func TestRuntimeErrorAfterClosedTextSegmentDoesNotDuplicateSegmentContent(t *tes
 		ids[entity.Id] = entity.Payload.(*chatappv1.ChatMessageEntity)
 	}
 
-	finishedSegment := ids["chat-msg-1:text:1"]
+	finishedSegment := ids["chat-msg-1:text:segment-1"]
 	require.NotNil(t, finishedSegment)
 	require.Equal(t, "first text", finishedSegment.GetContent())
 	require.Equal(t, "finished", finishedSegment.GetStatus())
@@ -499,7 +491,7 @@ type interleavedTextToolEngine struct{}
 func (interleavedTextToolEngine) RunInference(ctx context.Context, t *turns.Turn) (*turns.Turn, error) {
 	publishCanonicalTextSegment(ctx, 1, "first text")
 	meta := gepevents.EventMetadata{SessionID: "sid"}
-	corr := gepevents.Correlation{SessionID: "sid", ToolCallID: "call-1", CorrelationKey: "tool:call-1"}
+	corr := gepevents.Correlation{SessionID: "sid", RunID: "run-1", ProviderCallID: "provider-call-1", ToolCallID: "call-1"}
 	gepevents.PublishEventToContext(ctx, gepevents.NewToolCallRequestedEvent(meta, corr, "call-1", "lookup", `{"q":"x"}`))
 	gepevents.PublishEventToContext(ctx, gepevents.NewToolResultReadyEvent(meta, corr, "call-1", "lookup", `{"ok":true}`, "finished"))
 	publishCanonicalTextSegment(ctx, 2, "final text")
@@ -619,7 +611,7 @@ func publishCanonicalTextSegment(ctx context.Context, segment int32, text string
 }
 
 func testTextCorrelation(segment int32) gepevents.Correlation {
-	return gepevents.Correlation{SessionID: "sid", SegmentID: fmt.Sprintf("segment-%d", segment), SegmentIndex: segment, SegmentType: "text", StreamKind: "content", CorrelationKey: fmt.Sprintf("text:%d", segment)}
+	return gepevents.Correlation{SessionID: "sid", RunID: "run-1", ProviderCallID: "provider-call-1", SegmentID: fmt.Sprintf("segment-%d", segment)}
 }
 
 func (testPlugin) ProjectTimeline(context.Context, sessionstream.Event, *sessionstream.Session, sessionstream.TimelineView) ([]sessionstream.TimelineEntity, bool, error) {

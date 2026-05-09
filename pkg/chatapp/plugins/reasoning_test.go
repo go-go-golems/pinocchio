@@ -26,17 +26,10 @@ func TestReasoningPluginPublishesCanonicalReasoningEvents(t *testing.T) {
 
 	meta := gepevents.EventMetadata{SessionID: "sid"}
 	corr := gepevents.Correlation{
-		SessionID:            "sid",
-		Provider:             "openai_responses",
-		ResponseID:           "resp_1",
-		ItemID:               "rs_1",
-		OutputIndex:          int32Ptr(0),
-		SegmentID:            "reasoning-segment-1",
-		SegmentIndex:         2,
-		SegmentType:          gepevents.SegmentTypeReasoning,
-		StreamKind:           gepevents.StreamKindReasoning,
-		CorrelationKey:       "reasoning:rs_1",
-		ParentCorrelationKey: "provider:1",
+		SessionID:      "sid",
+		RunID:          "run-1",
+		ProviderCallID: "provider:1",
+		SegmentID:      "reasoning-segment-1",
 	}
 
 	for _, event := range []gepevents.Event{
@@ -52,16 +45,15 @@ func TestReasoningPluginPublishesCanonicalReasoningEvents(t *testing.T) {
 	require.Len(t, published, 3)
 	require.Equal(t, chatapp.EventChatReasoningSegmentStarted, published[0].Name)
 	started := published[0].Payload.(*chatappv1.ChatReasoningSegmentStarted)
-	require.Equal(t, "chat-msg-1:thinking:2", started.GetMessageId())
+	require.Equal(t, "chat-msg-1:thinking:reasoning-segment-1", started.GetMessageId())
 	require.Equal(t, "chat-msg-1", started.GetParentMessageId())
-	require.Equal(t, "openai_responses", started.GetCorrelation().GetProvider())
-	require.Equal(t, "reasoning:rs_1", started.GetCorrelation().GetCorrelationKey())
+	require.Equal(t, "reasoning-segment-1", started.GetCorrelation().GetSegmentId())
 
 	require.Equal(t, chatapp.EventChatReasoningDelta, published[1].Name)
 	delta := published[1].Payload.(*chatappv1.ChatReasoningDelta)
 	require.Equal(t, "draft", delta.GetChunk())
 	require.Equal(t, "draft plan", delta.GetText())
-	require.Equal(t, int32(2), delta.GetCorrelation().GetSegmentIndex())
+	require.Equal(t, "reasoning-segment-1", delta.GetCorrelation().GetSegmentId())
 
 	require.Equal(t, chatapp.EventChatReasoningSegmentFinished, published[2].Name)
 	finished := published[2].Payload.(*chatappv1.ChatReasoningSegmentFinished)
@@ -81,36 +73,19 @@ func TestReasoningPluginRoutesReasoningByStableSegmentIdentity(t *testing.T) {
 		},
 	}
 
-	baseCorr := gepevents.Correlation{
-		SessionID:      "sid",
-		Provider:       "openai_responses",
-		ResponseID:     "resp_1",
-		ItemID:         "rs_1",
-		OutputIndex:    int32Ptr(0),
-		SegmentIndex:   1,
-		SegmentType:    gepevents.SegmentTypeReasoning,
-		StreamKind:     gepevents.StreamKindReasoning,
-		CorrelationKey: "reasoning:rs_1:full",
-		ProviderCallID: "provider-call-1",
-	}
+	corr := gepevents.Correlation{SessionID: "sid", RunID: "run-1", ProviderCallID: "provider-call-1", SegmentID: "reasoning-rs-1"}
 	meta := gepevents.EventMetadata{SessionID: "sid"}
-	_, err := plugin.HandleRuntimeEvent(context.Background(), runtime, gepevents.NewReasoningDeltaEvent(meta, baseCorr, "draft", "draft", 1))
+	_, err := plugin.HandleRuntimeEvent(context.Background(), runtime, gepevents.NewReasoningDeltaEvent(meta, corr, "draft", "draft", 1))
 	require.NoError(t, err)
-
-	summaryCorr := baseCorr
-	summaryCorr.SummaryIndex = int32Ptr(0)
-	summaryCorr.StreamKind = "reasoning-summary"
-	summaryCorr.CorrelationKey = "reasoning:rs_1:summary:0"
-	_, err = plugin.HandleRuntimeEvent(context.Background(), runtime, gepevents.NewReasoningSegmentFinishedEvent(meta, summaryCorr, "summary", "stop"))
+	_, err = plugin.HandleRuntimeEvent(context.Background(), runtime, gepevents.NewReasoningSegmentFinishedEvent(meta, corr, "summary", "stop"))
 	require.NoError(t, err)
 
 	require.Len(t, published, 2)
 	delta := published[0].Payload.(*chatappv1.ChatReasoningDelta)
 	finished := published[1].Payload.(*chatappv1.ChatReasoningSegmentFinished)
 	require.Equal(t, delta.GetMessageId(), finished.GetMessageId())
-	require.Equal(t, "chat-msg-1:thinking:1", finished.GetMessageId())
-	require.Equal(t, "reasoning:rs_1:summary:0", finished.GetCorrelation().GetCorrelationKey())
-	require.Equal(t, "reasoning-summary", finished.GetCorrelation().GetStreamKind())
+	require.Equal(t, "chat-msg-1:thinking:reasoning-rs-1", finished.GetMessageId())
+	require.Equal(t, "reasoning-rs-1", finished.GetCorrelation().GetSegmentId())
 }
 
 func TestReasoningPluginUsesCorrelationIdentityWhenSegmentIndexIsAbsent(t *testing.T) {
@@ -126,19 +101,8 @@ func TestReasoningPluginUsesCorrelationIdentityWhenSegmentIndexIsAbsent(t *testi
 	}
 	meta := gepevents.EventMetadata{SessionID: "sid"}
 
-	first := gepevents.Correlation{
-		SessionID:      "sid",
-		Provider:       "openai",
-		ResponseID:     "resp-1",
-		SegmentID:      "openai-chat:resp-1:choice:0:reasoning",
-		SegmentType:    gepevents.SegmentTypeReasoning,
-		StreamKind:     gepevents.StreamKindReasoning,
-		CorrelationKey: "openai-chat:resp-1:choice:0:reasoning",
-	}
-	second := first
-	second.ResponseID = "resp-2"
-	second.SegmentID = "openai-chat:resp-2:choice:0:reasoning"
-	second.CorrelationKey = second.SegmentID
+	first := gepevents.Correlation{SessionID: "sid", RunID: "run-1", ProviderCallID: "provider-1", SegmentID: "openai-chat:resp-1:choice:0:reasoning"}
+	second := gepevents.Correlation{SessionID: "sid", RunID: "run-1", ProviderCallID: "provider-2", SegmentID: "openai-chat:resp-2:choice:0:reasoning"}
 
 	for _, corr := range []gepevents.Correlation{first, second} {
 		_, err := plugin.HandleRuntimeEvent(context.Background(), runtime, gepevents.NewReasoningSegmentStartedEvent(meta, corr, "thinking"))
@@ -161,26 +125,16 @@ func TestReasoningPluginUsesCorrelationIdentityWhenSegmentIndexIsAbsent(t *testi
 
 func TestReasoningPluginProjectsCanonicalEventsToUIAndTimeline(t *testing.T) {
 	plugin := NewReasoningPlugin()
-	corr := &chatappv1.CorrelationInfo{
-		Provider:       "openai_responses",
-		ResponseId:     "resp_1",
-		ItemId:         "rs_1",
-		OutputIndex:    int32Ptr(0),
-		SummaryIndex:   int32Ptr(0),
-		SegmentIndex:   1,
-		SegmentType:    gepevents.SegmentTypeReasoning,
-		StreamKind:     gepevents.StreamKindReasoning,
-		CorrelationKey: "reasoning:rs_1",
-	}
+	corr := &chatappv1.CorrelationInfo{SessionId: "sid", RunId: "run-1", ProviderCallId: "provider-call-1", SegmentId: "reasoning-segment-1"}
 	backend := sessionstream.Event{Name: ReasoningFinishedEventName, SessionId: "sid", Ordinal: 10, Payload: &chatappv1.ChatReasoningSegmentFinished{
-		MessageId:       "chat-msg-1:thinking:1",
+		MessageId:       "chat-msg-1:thinking:reasoning-segment-1",
 		ParentMessageId: "chat-msg-1",
 		Role:            "thinking",
 		Text:            "summary text",
 		Content:         "summary text",
 		Status:          "finished",
 		Streaming:       false,
-		Source:          "summary",
+		Source:          "thinking",
 		Correlation:     corr,
 	}}
 
@@ -191,41 +145,25 @@ func TestReasoningPluginProjectsCanonicalEventsToUIAndTimeline(t *testing.T) {
 	require.Equal(t, ReasoningFinishedEventName, uiEvents[0].Name)
 	uiPayload := uiEvents[0].Payload.(*chatappv1.ChatReasoningSegmentFinished)
 	require.Equal(t, "summary text", uiPayload.GetText())
-	require.Equal(t, "openai_responses", uiPayload.GetCorrelation().GetProvider())
-	require.Equal(t, int32(0), uiPayload.GetCorrelation().GetSummaryIndex())
-	require.NotNil(t, uiPayload.GetCorrelation().SummaryIndex)
-	require.Equal(t, "reasoning:rs_1", uiPayload.GetCorrelation().GetCorrelationKey())
+	require.Equal(t, "reasoning-segment-1", uiPayload.GetCorrelation().GetSegmentId())
 
 	entities, handled, err := plugin.ProjectTimeline(context.Background(), backend, nil, reasoningStaticTimelineView{})
 	require.NoError(t, err)
 	require.True(t, handled)
 	require.Len(t, entities, 1)
 	entity := entities[0].Payload.(*chatappv1.ChatMessageEntity)
-	require.Equal(t, "chat-msg-1:thinking:1", entity.GetMessageId())
+	require.Equal(t, "chat-msg-1:thinking:reasoning-segment-1", entity.GetMessageId())
 	require.Equal(t, "thinking", entity.GetRole())
 	require.Equal(t, "summary text", entity.GetContent())
 	require.Equal(t, "finished", entity.GetStatus())
 	require.False(t, entity.GetStreaming())
-	require.Equal(t, "reasoning:rs_1", entity.GetCorrelation().GetCorrelationKey())
+	require.Equal(t, "reasoning-segment-1", entity.GetCorrelation().GetSegmentId())
 }
 
 func TestReasoningPluginSparseProjectionMatrix(t *testing.T) {
 	plugin := NewReasoningPlugin()
-	fullCorr := &chatappv1.CorrelationInfo{
-		Provider:             "openai-responses",
-		Model:                "gpt-test",
-		ResponseId:           "resp_reason",
-		ItemId:               "rs_1",
-		OutputIndex:          int32Ptr(0),
-		SummaryIndex:         int32Ptr(0),
-		SegmentId:            "reasoning-segment-1",
-		SegmentIndex:         1,
-		SegmentType:          gepevents.SegmentTypeReasoning,
-		StreamKind:           gepevents.StreamKindReasoning,
-		CorrelationKey:       "reasoning:rs_1",
-		ParentCorrelationKey: "provider-call-key",
-	}
-	segmentOnlyCorr := &chatappv1.CorrelationInfo{SegmentIndex: 1, SegmentType: gepevents.SegmentTypeReasoning}
+	fullCorr := &chatappv1.CorrelationInfo{SessionId: "sid", RunId: "run-1", ProviderCallId: "provider-call-key", SegmentId: "reasoning-segment-1"}
+	segmentOnlyCorr := &chatappv1.CorrelationInfo{SegmentId: "reasoning-segment-1"}
 
 	tests := []struct {
 		name    string
@@ -237,7 +175,7 @@ func TestReasoningPluginSparseProjectionMatrix(t *testing.T) {
 		{
 			name: "REASONING-PROJECTION-01 sparse finish preserves content and correlation",
 			view: reasoningTimelineViewWithMessage(&chatappv1.ChatMessageEntity{
-				MessageId:       "chat-msg-1:thinking:1",
+				MessageId:       "chat-msg-1:thinking:reasoning-segment-1",
 				ParentMessageId: "chat-msg-1",
 				Role:            "thinking",
 				Content:         "partial plan",
@@ -247,7 +185,7 @@ func TestReasoningPluginSparseProjectionMatrix(t *testing.T) {
 				Correlation:     fullCorr,
 			}),
 			event: sessionstream.Event{Name: ReasoningFinishedEventName, SessionId: "sid", Payload: &chatappv1.ChatReasoningSegmentFinished{
-				MessageId:   "chat-msg-1:thinking:1",
+				MessageId:   "chat-msg-1:thinking:reasoning-segment-1",
 				Status:      "finished",
 				Streaming:   false,
 				Correlation: segmentOnlyCorr,
@@ -264,7 +202,7 @@ func TestReasoningPluginSparseProjectionMatrix(t *testing.T) {
 		{
 			name: "REASONING-PROJECTION-02 sparse delta preserves provider identity while updating content",
 			view: reasoningTimelineViewWithMessage(&chatappv1.ChatMessageEntity{
-				MessageId:       "chat-msg-1:thinking:1",
+				MessageId:       "chat-msg-1:thinking:reasoning-segment-1",
 				ParentMessageId: "chat-msg-1",
 				Role:            "thinking",
 				Content:         "partial",
@@ -274,7 +212,7 @@ func TestReasoningPluginSparseProjectionMatrix(t *testing.T) {
 				Correlation:     fullCorr,
 			}),
 			event: sessionstream.Event{Name: ReasoningDeltaEventName, SessionId: "sid", Payload: &chatappv1.ChatReasoningDelta{
-				MessageId:   "chat-msg-1:thinking:1",
+				MessageId:   "chat-msg-1:thinking:reasoning-segment-1",
 				Content:     "partial plan",
 				Text:        "partial plan",
 				Status:      "streaming",
@@ -292,7 +230,7 @@ func TestReasoningPluginSparseProjectionMatrix(t *testing.T) {
 			name: "REASONING-PROJECTION-03 empty start without existing content creates no entity",
 			view: reasoningStaticTimelineView{},
 			event: sessionstream.Event{Name: ReasoningStartedEventName, SessionId: "sid", Payload: &chatappv1.ChatReasoningSegmentStarted{
-				MessageId:       "chat-msg-1:thinking:1",
+				MessageId:       "chat-msg-1:thinking:reasoning-segment-1",
 				ParentMessageId: "chat-msg-1",
 				Status:          "streaming",
 				Streaming:       true,
@@ -324,20 +262,10 @@ func TestReasoningPluginSparseProjectionMatrix(t *testing.T) {
 func requireReasoningFullCorrelation(t *testing.T, corr *chatappv1.CorrelationInfo) {
 	t.Helper()
 	require.NotNil(t, corr)
-	require.Equal(t, "openai-responses", corr.GetProvider())
-	require.Equal(t, "gpt-test", corr.GetModel())
-	require.Equal(t, "resp_reason", corr.GetResponseId())
-	require.Equal(t, "rs_1", corr.GetItemId())
-	require.NotNil(t, corr.OutputIndex)
-	require.Equal(t, int32(0), corr.GetOutputIndex())
-	require.NotNil(t, corr.SummaryIndex)
-	require.Equal(t, int32(0), corr.GetSummaryIndex())
+	require.Equal(t, "sid", corr.GetSessionId())
+	require.Equal(t, "run-1", corr.GetRunId())
+	require.Equal(t, "provider-call-key", corr.GetProviderCallId())
 	require.Equal(t, "reasoning-segment-1", corr.GetSegmentId())
-	require.Equal(t, int32(1), corr.GetSegmentIndex())
-	require.Equal(t, gepevents.SegmentTypeReasoning, corr.GetSegmentType())
-	require.Equal(t, gepevents.StreamKindReasoning, corr.GetStreamKind())
-	require.Equal(t, "reasoning:rs_1", corr.GetCorrelationKey())
-	require.Equal(t, "provider-call-key", corr.GetParentCorrelationKey())
 }
 
 func TestReasoningPluginIgnoresUnrelatedEvents(t *testing.T) {
@@ -370,5 +298,3 @@ func (v reasoningStaticTimelineView) Get(kind, id string) (sessionstream.Timelin
 }
 func (reasoningStaticTimelineView) List(string) []sessionstream.TimelineEntity { return nil }
 func (reasoningStaticTimelineView) Ordinal() uint64                            { return 0 }
-
-func int32Ptr(v int32) *int32 { return &v }

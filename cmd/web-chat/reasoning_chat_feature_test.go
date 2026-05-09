@@ -38,17 +38,15 @@ func TestReasoningChatFeatureHandleRuntimeEvent(t *testing.T) {
 	}
 
 	meta := gepevents.EventMetadata{SessionID: "sid"}
-	corr := gepevents.Correlation{SessionID: "sid", SegmentID: "reasoning-1", SegmentIndex: 1, SegmentType: gepevents.SegmentTypeReasoning, StreamKind: gepevents.StreamKindReasoning, CorrelationKey: "reasoning:1"}
+	corr := gepevents.Correlation{SessionID: "sid", RunID: "run-1", ProviderCallID: "provider-call-1", SegmentID: "reasoning-1"}
 	handled, err := feature.HandleRuntimeEvent(context.Background(), ctx, gepevents.NewReasoningDeltaEvent(meta, corr, "why", "why because", 1))
 	require.NoError(t, err)
 	require.True(t, handled)
 	require.Len(t, published, 1)
 	require.Equal(t, plugins.ReasoningDeltaEventName, published[0].Name)
-	require.Equal(t, "chat-msg-1:thinking:1", published[0].Payload.(*chatappv1.ChatReasoningDelta).GetMessageId())
+	require.Equal(t, "chat-msg-1:thinking:reasoning-1", published[0].Payload.(*chatappv1.ChatReasoningDelta).GetMessageId())
 
-	summaryCorr := corr
-	summaryCorr.SummaryIndex = int32Ptr(0)
-	handled, err = feature.HandleRuntimeEvent(context.Background(), ctx, gepevents.NewReasoningSegmentFinishedEvent(meta, summaryCorr, "short summary", "summary"))
+	handled, err = feature.HandleRuntimeEvent(context.Background(), ctx, gepevents.NewReasoningSegmentFinishedEvent(meta, corr, "short summary", "summary"))
 	require.NoError(t, err)
 	require.True(t, handled)
 	require.Len(t, published, 2)
@@ -65,7 +63,7 @@ func TestReasoningChatFeatureProjectsUIAndTimeline(t *testing.T) {
 		Content:         "thinking out loud",
 		Status:          "streaming",
 		Streaming:       true,
-		Correlation:     &chatappv1.CorrelationInfo{SegmentIndex: 1, SegmentType: gepevents.SegmentTypeReasoning},
+		Correlation:     &chatappv1.CorrelationInfo{SegmentId: "reasoning-1"},
 	}
 
 	uiEvents, handled, err := feature.ProjectUI(context.Background(), sessionstream.Event{Name: plugins.ReasoningDeltaEventName, SessionId: "sid", Ordinal: 7, Payload: deltaPayload}, nil, reasoningStaticTimelineView{})
@@ -88,7 +86,7 @@ func TestReasoningChatFeatureProjectsUIAndTimeline(t *testing.T) {
 		ParentMessageId: "chat-msg-2",
 		Status:          "finished",
 		Streaming:       false,
-		Correlation:     &chatappv1.CorrelationInfo{SegmentIndex: 1, SegmentType: gepevents.SegmentTypeReasoning},
+		Correlation:     &chatappv1.CorrelationInfo{SegmentId: "reasoning-1"},
 	}
 
 	view := reasoningStaticTimelineView{entities: map[string]sessionstream.TimelineEntity{
@@ -120,7 +118,7 @@ func TestReasoningChatFeatureProjectsUIAndTimeline(t *testing.T) {
 		Source:          "summary",
 		Status:          "finished",
 		Streaming:       false,
-		Correlation:     &chatappv1.CorrelationInfo{SegmentIndex: 1, SegmentType: gepevents.SegmentTypeReasoning},
+		Correlation:     &chatappv1.CorrelationInfo{SegmentId: "reasoning-1"},
 	}
 	entities, handled, err = feature.ProjectTimeline(context.Background(), sessionstream.Event{Name: plugins.ReasoningFinishedEventName, SessionId: "sid", Ordinal: 9, Payload: summaryPayload}, nil, view)
 	require.NoError(t, err)
@@ -198,13 +196,11 @@ type reasoningRuntimeTestEngine struct{}
 
 func (reasoningRuntimeTestEngine) RunInference(ctx context.Context, t *turns.Turn) (*turns.Turn, error) {
 	meta := gepevents.EventMetadata{}
-	reasoningCorr := gepevents.Correlation{SegmentID: "reasoning-1", SegmentIndex: 1, SegmentType: gepevents.SegmentTypeReasoning, StreamKind: gepevents.StreamKindReasoning, CorrelationKey: "reasoning:1"}
+	reasoningCorr := gepevents.Correlation{RunID: "run-1", ProviderCallID: "provider-call-1", SegmentID: "reasoning-1"}
 	gepevents.PublishEventToContext(ctx, gepevents.NewReasoningSegmentStartedEvent(meta, reasoningCorr, "thinking"))
 	gepevents.PublishEventToContext(ctx, gepevents.NewReasoningDeltaEvent(meta, reasoningCorr, "draft", "draft plan", 1))
-	summaryCorr := reasoningCorr
-	summaryCorr.SummaryIndex = int32Ptr(0)
-	gepevents.PublishEventToContext(ctx, gepevents.NewReasoningSegmentFinishedEvent(meta, summaryCorr, "high level plan", "summary"))
-	corr := gepevents.Correlation{SegmentID: "segment-1", SegmentIndex: 1, SegmentType: "text", StreamKind: "content", CorrelationKey: "text:1"}
+	gepevents.PublishEventToContext(ctx, gepevents.NewReasoningSegmentFinishedEvent(meta, reasoningCorr, "high level plan", "summary"))
+	corr := gepevents.Correlation{RunID: "run-1", ProviderCallID: "provider-call-1", SegmentID: "segment-1"}
 	gepevents.PublishEventToContext(ctx, gepevents.NewTextSegmentStartedEvent(meta, corr, "assistant"))
 	gepevents.PublishEventToContext(ctx, gepevents.NewTextDeltaEvent(meta, corr, "Answer: ready", "Answer: ready", 1))
 	gepevents.PublishEventToContext(ctx, gepevents.NewTextSegmentFinishedEvent(meta, corr, "Answer: ready", "stop"))
@@ -235,8 +231,6 @@ func newReasoningTestMux(t *testing.T) (*appserver.Server, *httptest.Server) {
 	httpSrv := httptest.NewServer(mux)
 	return srv, httpSrv
 }
-
-func int32Ptr(v int32) *int32 { return &v }
 
 type reasoningStaticTimelineView struct {
 	entities map[string]sessionstream.TimelineEntity

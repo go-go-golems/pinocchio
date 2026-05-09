@@ -26,13 +26,9 @@ func TestToolCallPluginPublishesCanonicalToolEvents(t *testing.T) {
 	meta := gepevents.EventMetadata{SessionID: "sid"}
 	corr := gepevents.Correlation{
 		SessionID:      "sid",
-		Provider:       "openai",
-		ResponseID:     "resp_1",
-		ChoiceIndex:    int32Ptr(0),
-		StreamKind:     gepevents.StreamKindToolCall,
+		RunID:          "run-1",
+		ProviderCallID: "provider-call-1",
 		ToolCallID:     "call-1",
-		ToolCallIndex:  int32Ptr(0),
-		CorrelationKey: "tool:call-1",
 	}
 
 	for _, event := range []gepevents.Event{
@@ -54,7 +50,7 @@ func TestToolCallPluginPublishesCanonicalToolEvents(t *testing.T) {
 	require.Equal(t, "chat-msg-1", started.GetMessageId())
 	require.Equal(t, "call-1", started.GetToolCallId())
 	require.Equal(t, "lookup", started.GetToolName())
-	require.Equal(t, "tool:call-1", started.GetCorrelation().GetCorrelationKey())
+	require.Equal(t, "call-1", started.GetCorrelation().GetToolCallId())
 
 	require.Equal(t, chatapp.EventChatToolCallArgumentsDelta, published[1].Name)
 	args := published[1].Payload.(*chatappv1.ChatToolCallArgumentsDelta)
@@ -68,15 +64,7 @@ func TestToolCallPluginPublishesCanonicalToolEvents(t *testing.T) {
 
 func TestToolCallPluginProjectsCanonicalEventsToUIAndTimeline(t *testing.T) {
 	plugin := NewToolCallPlugin()
-	corr := &chatappv1.CorrelationInfo{
-		Provider:       "openai",
-		ResponseId:     "resp_1",
-		ChoiceIndex:    int32Ptr(0),
-		StreamKind:     gepevents.StreamKindToolCall,
-		ToolCallId:     "call-2",
-		ToolCallIndex:  int32Ptr(0),
-		CorrelationKey: "tool:call-2",
-	}
+	corr := &chatappv1.CorrelationInfo{SessionId: "sid", RunId: "run-1", ProviderCallId: "provider-call-2", ToolCallId: "call-2"}
 	requested := sessionstream.Event{Name: EventToolCallRequested, SessionId: "sid", Ordinal: 10, Payload: &chatappv1.ChatToolCallRequested{
 		MessageId:   "chat-msg-2",
 		ToolCallId:  "call-2",
@@ -95,7 +83,7 @@ func TestToolCallPluginProjectsCanonicalEventsToUIAndTimeline(t *testing.T) {
 	require.Equal(t, "call-2", uiPayload.GetToolCallId())
 	require.Equal(t, "inventory", uiPayload.GetToolName())
 	require.Equal(t, `{"coin":"ETH"}`, uiPayload.GetInput())
-	require.Equal(t, "tool:call-2", uiPayload.GetCorrelation().GetCorrelationKey())
+	require.Equal(t, "call-2", uiPayload.GetCorrelation().GetToolCallId())
 
 	entities, handled, err := plugin.ProjectTimeline(context.Background(), requested, nil, toolCallStaticTimelineView{})
 	require.NoError(t, err)
@@ -108,7 +96,7 @@ func TestToolCallPluginProjectsCanonicalEventsToUIAndTimeline(t *testing.T) {
 	require.Equal(t, "inventory", entityPayload.GetToolName())
 	require.Equal(t, `{"coin":"ETH"}`, entityPayload.GetInput())
 	require.Equal(t, "pending", entityPayload.GetStatus())
-	require.Equal(t, "tool:call-2", entityPayload.GetCorrelation().GetCorrelationKey())
+	require.Equal(t, "call-2", entityPayload.GetCorrelation().GetToolCallId())
 
 	view := toolCallStaticTimelineView{entities: map[string]sessionstream.TimelineEntity{
 		TimelineEntityToolCall + "/call-2": {
@@ -143,24 +131,13 @@ func TestToolCallPluginProjectsCanonicalEventsToUIAndTimeline(t *testing.T) {
 	require.Equal(t, "call-2", resultEntity.GetToolCallId())
 	require.Equal(t, "inventory", resultEntity.GetToolName())
 	require.Equal(t, `{"ok":true}`, resultEntity.GetResult())
-	require.Equal(t, "tool:call-2", resultEntity.GetCorrelation().GetCorrelationKey())
+	require.Equal(t, "call-2", resultEntity.GetCorrelation().GetToolCallId())
 }
 
 func TestToolCallPluginSparseProjectionMatrix(t *testing.T) {
 	plugin := NewToolCallPlugin()
-	fullCorr := &chatappv1.CorrelationInfo{
-		Provider:             "openai-responses",
-		Model:                "gpt-test",
-		ResponseId:           "resp_tool",
-		ItemId:               "fc_1",
-		OutputIndex:          int32Ptr(0),
-		StreamKind:           gepevents.StreamKindToolCall,
-		ToolCallId:           "call-sparse",
-		ToolCallIndex:        int32Ptr(0),
-		CorrelationKey:       "tool:call-sparse",
-		ParentCorrelationKey: "provider-call-key",
-	}
-	segmentOnlyCorr := &chatappv1.CorrelationInfo{ToolCallId: "call-sparse", ToolCallIndex: int32Ptr(0)}
+	fullCorr := &chatappv1.CorrelationInfo{SessionId: "sid", RunId: "run-1", ProviderCallId: "provider-call-key", ToolCallId: "call-sparse"}
+	segmentOnlyCorr := &chatappv1.CorrelationInfo{ToolCallId: "call-sparse"}
 
 	tests := []struct {
 		name  string
@@ -265,18 +242,10 @@ func TestToolCallPluginSparseProjectionMatrix(t *testing.T) {
 func requireToolProjectionFullCorrelation(t *testing.T, corr *chatappv1.CorrelationInfo) {
 	t.Helper()
 	require.NotNil(t, corr)
-	require.Equal(t, "openai-responses", corr.GetProvider())
-	require.Equal(t, "gpt-test", corr.GetModel())
-	require.Equal(t, "resp_tool", corr.GetResponseId())
-	require.Equal(t, "fc_1", corr.GetItemId())
-	require.NotNil(t, corr.OutputIndex)
-	require.Equal(t, int32(0), corr.GetOutputIndex())
-	require.Equal(t, gepevents.StreamKindToolCall, corr.GetStreamKind())
+	require.Equal(t, "sid", corr.GetSessionId())
+	require.Equal(t, "run-1", corr.GetRunId())
+	require.Equal(t, "provider-call-key", corr.GetProviderCallId())
 	require.Equal(t, "call-sparse", corr.GetToolCallId())
-	require.NotNil(t, corr.ToolCallIndex)
-	require.Equal(t, int32(0), corr.GetToolCallIndex())
-	require.Equal(t, "tool:call-sparse", corr.GetCorrelationKey())
-	require.Equal(t, "provider-call-key", corr.GetParentCorrelationKey())
 }
 
 func TestToolCallPluginIgnoresUnrelatedEvents(t *testing.T) {

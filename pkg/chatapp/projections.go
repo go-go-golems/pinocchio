@@ -60,8 +60,6 @@ func baseTimelineProjection(_ context.Context, ev sessionstream.Event, _ *sessio
 		entity.Streaming = payload.GetStreaming()
 		entity.ParentMessageId = parentMessageIDFromSegmentMessageID(messageID)
 		entity.Correlation = MergeCorrelationInfo(entity.GetCorrelation(), payload.GetCorrelation())
-		entity.Segment = entity.GetCorrelation().GetSegmentIndex()
-		entity.SegmentType = entity.GetCorrelation().GetSegmentType()
 		return []sessionstream.TimelineEntity{{Kind: TimelineEntityChatMessage, Id: messageID, Payload: entity}}, nil
 	case *chatappv1.ChatTextDelta:
 		messageID := strings.TrimSpace(payload.GetMessageId())
@@ -82,8 +80,6 @@ func baseTimelineProjection(_ context.Context, ev sessionstream.Event, _ *sessio
 		entity.Streaming = payload.GetStreaming()
 		entity.ParentMessageId = parentMessageIDFromSegmentMessageID(messageID)
 		entity.Correlation = MergeCorrelationInfo(entity.GetCorrelation(), payload.GetCorrelation())
-		entity.Segment = entity.GetCorrelation().GetSegmentIndex()
-		entity.SegmentType = entity.GetCorrelation().GetSegmentType()
 		return []sessionstream.TimelineEntity{{Kind: TimelineEntityChatMessage, Id: messageID, Payload: entity}}, nil
 	case *chatappv1.ChatTextSegmentFinished:
 		messageID := strings.TrimSpace(payload.GetMessageId())
@@ -105,8 +101,6 @@ func baseTimelineProjection(_ context.Context, ev sessionstream.Event, _ *sessio
 		entity.Final = payload.GetFinal()
 		entity.ParentMessageId = parentMessageIDFromSegmentMessageID(messageID)
 		entity.Correlation = MergeCorrelationInfo(entity.GetCorrelation(), payload.GetCorrelation())
-		entity.Segment = entity.GetCorrelation().GetSegmentIndex()
-		entity.SegmentType = entity.GetCorrelation().GetSegmentType()
 		return []sessionstream.TimelineEntity{{Kind: TimelineEntityChatMessage, Id: messageID, Payload: entity}}, nil
 	default:
 		return nil, nil

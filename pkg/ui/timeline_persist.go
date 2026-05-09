@@ -121,17 +121,11 @@ func StepTimelinePersistFuncWithVersion(store chatstore.TimelineStore, convID st
 			if strings.TrimSpace(corr.SegmentID) != "" {
 				return strings.TrimSpace(corr.SegmentID)
 			}
-			if strings.TrimSpace(corr.CorrelationKey) != "" {
-				return strings.TrimSpace(corr.CorrelationKey)
-			}
 			return entityID
 		}
 		reasoningEntityID := func(corr events.Correlation) string {
 			if strings.TrimSpace(corr.SegmentID) != "" {
 				return strings.TrimSpace(corr.SegmentID)
-			}
-			if strings.TrimSpace(corr.CorrelationKey) != "" {
-				return strings.TrimSpace(corr.CorrelationKey)
 			}
 			return entityID + ":thinking"
 		}

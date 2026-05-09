@@ -25,28 +25,12 @@ func correlationInfoFromEvent(event gepevents.Event) *chatappv1.CorrelationInfo 
 
 func CorrelationInfoFromGeppetto(corr gepevents.Correlation) *chatappv1.CorrelationInfo {
 	return &chatappv1.CorrelationInfo{
-		SessionId:            corr.SessionID,
-		RunId:                corr.RunID,
-		InferenceId:          corr.InferenceID,
-		TurnId:               corr.TurnID,
-		ProviderCallId:       corr.ProviderCallID,
-		ProviderCallIndex:    corr.ProviderCallIndex,
-		Provider:             corr.Provider,
-		Model:                corr.Model,
-		ResponseId:           corr.ResponseID,
-		ItemId:               corr.ItemID,
-		OutputIndex:          cloneInt32Ptr(corr.OutputIndex),
-		SummaryIndex:         cloneInt32Ptr(corr.SummaryIndex),
-		ChoiceIndex:          cloneInt32Ptr(corr.ChoiceIndex),
-		ContentBlockIndex:    cloneInt32Ptr(corr.ContentBlockIndex),
-		SegmentId:            corr.SegmentID,
-		SegmentIndex:         corr.SegmentIndex,
-		SegmentType:          corr.SegmentType,
-		StreamKind:           corr.StreamKind,
-		ToolCallId:           corr.ToolCallID,
-		ToolCallIndex:        cloneInt32Ptr(corr.ToolCallIndex),
-		CorrelationKey:       corr.CorrelationKey,
-		ParentCorrelationKey: corr.ParentCorrelationKey,
+		SessionId:      corr.SessionID,
+		RunId:          corr.RunID,
+		TurnId:         corr.TurnID,
+		ProviderCallId: corr.ProviderCallID,
+		SegmentId:      corr.SegmentID,
+		ToolCallId:     corr.ToolCallID,
 	}
 }
 
@@ -77,14 +61,6 @@ func intToInt32Saturating(v int) int32 {
 	return int32(v)
 }
 
-func cloneInt32Ptr(v *int32) *int32 {
-	if v == nil {
-		return nil
-	}
-	out := *v
-	return &out
-}
-
 func CloneCorrelationInfo(corr *chatappv1.CorrelationInfo) *chatappv1.CorrelationInfo {
 	if corr == nil {
 		return nil
@@ -106,65 +82,17 @@ func MergeCorrelationInfo(existing, update *chatappv1.CorrelationInfo) *chatappv
 	if update.RunId != "" {
 		out.RunId = update.RunId
 	}
-	if update.InferenceId != "" {
-		out.InferenceId = update.InferenceId
-	}
 	if update.TurnId != "" {
 		out.TurnId = update.TurnId
 	}
 	if update.ProviderCallId != "" {
 		out.ProviderCallId = update.ProviderCallId
 	}
-	if update.ProviderCallIndex != 0 {
-		out.ProviderCallIndex = update.ProviderCallIndex
-	}
-	if update.Provider != "" {
-		out.Provider = update.Provider
-	}
-	if update.Model != "" {
-		out.Model = update.Model
-	}
-	if update.ResponseId != "" {
-		out.ResponseId = update.ResponseId
-	}
-	if update.ItemId != "" {
-		out.ItemId = update.ItemId
-	}
-	if update.OutputIndex != nil {
-		out.OutputIndex = cloneInt32Ptr(update.OutputIndex)
-	}
-	if update.SummaryIndex != nil {
-		out.SummaryIndex = cloneInt32Ptr(update.SummaryIndex)
-	}
-	if update.ChoiceIndex != nil {
-		out.ChoiceIndex = cloneInt32Ptr(update.ChoiceIndex)
-	}
-	if update.ContentBlockIndex != nil {
-		out.ContentBlockIndex = cloneInt32Ptr(update.ContentBlockIndex)
-	}
 	if update.SegmentId != "" {
 		out.SegmentId = update.SegmentId
 	}
-	if update.SegmentIndex != 0 {
-		out.SegmentIndex = update.SegmentIndex
-	}
-	if update.SegmentType != "" {
-		out.SegmentType = update.SegmentType
-	}
-	if update.StreamKind != "" {
-		out.StreamKind = update.StreamKind
-	}
 	if update.ToolCallId != "" {
 		out.ToolCallId = update.ToolCallId
-	}
-	if update.ToolCallIndex != nil {
-		out.ToolCallIndex = cloneInt32Ptr(update.ToolCallIndex)
-	}
-	if update.CorrelationKey != "" {
-		out.CorrelationKey = update.CorrelationKey
-	}
-	if update.ParentCorrelationKey != "" {
-		out.ParentCorrelationKey = update.ParentCorrelationKey
 	}
 	return out
 }

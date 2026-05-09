@@ -160,12 +160,12 @@ func publishContext(ctx context.Context) context.Context {
 }
 
 func runCorrelationInfo(sid sessionstream.SessionId, messageID string) *chatappv1.CorrelationInfo {
-	return &chatappv1.CorrelationInfo{SessionId: string(sid), RunId: messageID, CorrelationKey: messageID}
+	return &chatappv1.CorrelationInfo{SessionId: string(sid), RunId: messageID}
 }
 
 func fallbackTextCorrelationInfo(sid sessionstream.SessionId, messageID string, segment int32) *chatappv1.CorrelationInfo {
 	segmentID := textSegmentMessageID(messageID, segment)
-	return &chatappv1.CorrelationInfo{SessionId: string(sid), RunId: messageID, SegmentId: segmentID, SegmentIndex: segment, SegmentType: "text", StreamKind: "content", CorrelationKey: segmentID, ParentCorrelationKey: messageID}
+	return &chatappv1.CorrelationInfo{SessionId: string(sid), RunId: messageID, SegmentId: segmentID}
 }
 
 func (e *Engine) publishFallbackAssistantText(ctx context.Context, sid sessionstream.SessionId, pub sessionstream.EventPublisher, messageID, prompt string, output *turns.Turn) error {

@@ -113,7 +113,7 @@ func TestStepTimelinePersistFunc_ProviderFinishDoesNotRewriteClosedText(t *testi
 	emitPersistEvent(t, h, events.NewTextSegmentStartedEvent(md, corr, "assistant"))
 	emitPersistEvent(t, h, events.NewTextDeltaEvent(md, corr, "done", "done", 1))
 	emitPersistEvent(t, h, events.NewTextSegmentFinishedEvent(md, corr, "done", "stop"))
-	emitPersistEvent(t, h, events.NewProviderCallFinishedEvent(md, events.Correlation{ProviderCallID: "provider-call-1", CorrelationKey: "provider-call-key"}, "stop", "completed", nil, nil, false))
+	emitPersistEvent(t, h, events.NewProviderCallFinishedEvent(md, events.Correlation{RunID: "run-1", ProviderCallID: "provider-call-1"}, "stop", "completed", nil, nil, false))
 
 	snap, err := store.GetSnapshot(context.Background(), "conv-provider-finish", 0, 100)
 	require.NoError(t, err)
@@ -124,20 +124,19 @@ func TestStepTimelinePersistFunc_ProviderFinishDoesNotRewriteClosedText(t *testi
 	require.Equal(t, false, props["streaming"])
 }
 
-func TestStepTimelinePersistFunc_UsesCorrelationKeyWhenSegmentIDAbsent(t *testing.T) {
+func TestStepTimelinePersistFunc_UsesSegmentIDAsEntityID(t *testing.T) {
 	store := chatstore.NewInMemoryTimelineStore(100)
-	h := StepTimelinePersistFunc(store, "conv-correlation-key")
+	h := StepTimelinePersistFunc(store, "conv-segment-id")
 
-	md := events.EventMetadata{ID: uuid.New(), SessionID: "session-correlation-key", TurnID: "turn-correlation-key"}
+	md := events.EventMetadata{ID: uuid.New(), SessionID: "session-segment-id", TurnID: "turn-segment-id"}
 	corr := textCorrelation(md)
-	corr.SegmentID = ""
-	corr.CorrelationKey = "text-correlation-key"
+	corr.SegmentID = "text-segment-id"
 	emitPersistEvent(t, h, events.NewTextDeltaEvent(md, corr, "hi", "hi", 1))
 
-	snap, err := store.GetSnapshot(context.Background(), "conv-correlation-key", 0, 100)
+	snap, err := store.GetSnapshot(context.Background(), "conv-segment-id", 0, 100)
 	require.NoError(t, err)
 	require.Len(t, snap.Entities, 1)
-	require.Equal(t, "text-correlation-key", snap.Entities[0].Id)
+	require.Equal(t, "text-segment-id", snap.Entities[0].Id)
 	props := snap.Entities[0].GetProps().AsMap()
 	require.Equal(t, "hi", props["content"])
 }
@@ -276,24 +275,20 @@ func (s *recordingTimelineStore) Close() error { return nil }
 func textCorrelation(md events.EventMetadata) events.Correlation {
 	return events.Correlation{
 		SessionID:      md.SessionID,
+		RunID:          md.ID.String(),
 		TurnID:         md.TurnID,
+		ProviderCallID: "provider-call-1",
 		SegmentID:      md.ID.String(),
-		SegmentIndex:   1,
-		SegmentType:    events.SegmentTypeText,
-		StreamKind:     events.StreamKindContent,
-		CorrelationKey: md.ID.String(),
 	}
 }
 
 func reasoningCorrelation(md events.EventMetadata) events.Correlation {
 	return events.Correlation{
 		SessionID:      md.SessionID,
+		RunID:          md.ID.String(),
 		TurnID:         md.TurnID,
+		ProviderCallID: "provider-call-1",
 		SegmentID:      md.ID.String() + ":thinking",
-		SegmentIndex:   1,
-		SegmentType:    events.SegmentTypeReasoning,
-		StreamKind:     events.StreamKindReasoning,
-		CorrelationKey: md.ID.String() + ":thinking",
 	}
 }
 

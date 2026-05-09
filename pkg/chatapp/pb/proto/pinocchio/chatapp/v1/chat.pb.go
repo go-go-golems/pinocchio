@@ -194,31 +194,15 @@ func (x *UsageInfo) GetCacheReadInputTokens() int32 {
 }
 
 type CorrelationInfo struct {
-	state                protoimpl.MessageState `protogen:"open.v1"`
-	SessionId            string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
-	RunId                string                 `protobuf:"bytes,2,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
-	InferenceId          string                 `protobuf:"bytes,3,opt,name=inference_id,json=inferenceId,proto3" json:"inference_id,omitempty"`
-	TurnId               string                 `protobuf:"bytes,4,opt,name=turn_id,json=turnId,proto3" json:"turn_id,omitempty"`
-	ProviderCallId       string                 `protobuf:"bytes,5,opt,name=provider_call_id,json=providerCallId,proto3" json:"provider_call_id,omitempty"`
-	ProviderCallIndex    int32                  `protobuf:"varint,6,opt,name=provider_call_index,json=providerCallIndex,proto3" json:"provider_call_index,omitempty"`
-	Provider             string                 `protobuf:"bytes,7,opt,name=provider,proto3" json:"provider,omitempty"`
-	Model                string                 `protobuf:"bytes,8,opt,name=model,proto3" json:"model,omitempty"`
-	ResponseId           string                 `protobuf:"bytes,9,opt,name=response_id,json=responseId,proto3" json:"response_id,omitempty"`
-	ItemId               string                 `protobuf:"bytes,10,opt,name=item_id,json=itemId,proto3" json:"item_id,omitempty"`
-	OutputIndex          *int32                 `protobuf:"varint,11,opt,name=output_index,json=outputIndex,proto3,oneof" json:"output_index,omitempty"`
-	SummaryIndex         *int32                 `protobuf:"varint,12,opt,name=summary_index,json=summaryIndex,proto3,oneof" json:"summary_index,omitempty"`
-	ChoiceIndex          *int32                 `protobuf:"varint,13,opt,name=choice_index,json=choiceIndex,proto3,oneof" json:"choice_index,omitempty"`
-	ContentBlockIndex    *int32                 `protobuf:"varint,14,opt,name=content_block_index,json=contentBlockIndex,proto3,oneof" json:"content_block_index,omitempty"`
-	SegmentId            string                 `protobuf:"bytes,15,opt,name=segment_id,json=segmentId,proto3" json:"segment_id,omitempty"`
-	SegmentIndex         int32                  `protobuf:"varint,16,opt,name=segment_index,json=segmentIndex,proto3" json:"segment_index,omitempty"`
-	SegmentType          string                 `protobuf:"bytes,17,opt,name=segment_type,json=segmentType,proto3" json:"segment_type,omitempty"`
-	StreamKind           string                 `protobuf:"bytes,18,opt,name=stream_kind,json=streamKind,proto3" json:"stream_kind,omitempty"`
-	ToolCallId           string                 `protobuf:"bytes,19,opt,name=tool_call_id,json=toolCallId,proto3" json:"tool_call_id,omitempty"`
-	ToolCallIndex        *int32                 `protobuf:"varint,20,opt,name=tool_call_index,json=toolCallIndex,proto3,oneof" json:"tool_call_index,omitempty"`
-	CorrelationKey       string                 `protobuf:"bytes,21,opt,name=correlation_key,json=correlationKey,proto3" json:"correlation_key,omitempty"`
-	ParentCorrelationKey string                 `protobuf:"bytes,22,opt,name=parent_correlation_key,json=parentCorrelationKey,proto3" json:"parent_correlation_key,omitempty"`
-	unknownFields        protoimpl.UnknownFields
-	sizeCache            protoimpl.SizeCache
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	SessionId      string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	RunId          string                 `protobuf:"bytes,2,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
+	TurnId         string                 `protobuf:"bytes,4,opt,name=turn_id,json=turnId,proto3" json:"turn_id,omitempty"`
+	ProviderCallId string                 `protobuf:"bytes,5,opt,name=provider_call_id,json=providerCallId,proto3" json:"provider_call_id,omitempty"`
+	SegmentId      string                 `protobuf:"bytes,15,opt,name=segment_id,json=segmentId,proto3" json:"segment_id,omitempty"`
+	ToolCallId     string                 `protobuf:"bytes,19,opt,name=tool_call_id,json=toolCallId,proto3" json:"tool_call_id,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *CorrelationInfo) Reset() {
@@ -265,13 +249,6 @@ func (x *CorrelationInfo) GetRunId() string {
 	return ""
 }
 
-func (x *CorrelationInfo) GetInferenceId() string {
-	if x != nil {
-		return x.InferenceId
-	}
-	return ""
-}
-
 func (x *CorrelationInfo) GetTurnId() string {
 	if x != nil {
 		return x.TurnId
@@ -286,69 +263,6 @@ func (x *CorrelationInfo) GetProviderCallId() string {
 	return ""
 }
 
-func (x *CorrelationInfo) GetProviderCallIndex() int32 {
-	if x != nil {
-		return x.ProviderCallIndex
-	}
-	return 0
-}
-
-func (x *CorrelationInfo) GetProvider() string {
-	if x != nil {
-		return x.Provider
-	}
-	return ""
-}
-
-func (x *CorrelationInfo) GetModel() string {
-	if x != nil {
-		return x.Model
-	}
-	return ""
-}
-
-func (x *CorrelationInfo) GetResponseId() string {
-	if x != nil {
-		return x.ResponseId
-	}
-	return ""
-}
-
-func (x *CorrelationInfo) GetItemId() string {
-	if x != nil {
-		return x.ItemId
-	}
-	return ""
-}
-
-func (x *CorrelationInfo) GetOutputIndex() int32 {
-	if x != nil && x.OutputIndex != nil {
-		return *x.OutputIndex
-	}
-	return 0
-}
-
-func (x *CorrelationInfo) GetSummaryIndex() int32 {
-	if x != nil && x.SummaryIndex != nil {
-		return *x.SummaryIndex
-	}
-	return 0
-}
-
-func (x *CorrelationInfo) GetChoiceIndex() int32 {
-	if x != nil && x.ChoiceIndex != nil {
-		return *x.ChoiceIndex
-	}
-	return 0
-}
-
-func (x *CorrelationInfo) GetContentBlockIndex() int32 {
-	if x != nil && x.ContentBlockIndex != nil {
-		return *x.ContentBlockIndex
-	}
-	return 0
-}
-
 func (x *CorrelationInfo) GetSegmentId() string {
 	if x != nil {
 		return x.SegmentId
@@ -356,51 +270,9 @@ func (x *CorrelationInfo) GetSegmentId() string {
 	return ""
 }
 
-func (x *CorrelationInfo) GetSegmentIndex() int32 {
-	if x != nil {
-		return x.SegmentIndex
-	}
-	return 0
-}
-
-func (x *CorrelationInfo) GetSegmentType() string {
-	if x != nil {
-		return x.SegmentType
-	}
-	return ""
-}
-
-func (x *CorrelationInfo) GetStreamKind() string {
-	if x != nil {
-		return x.StreamKind
-	}
-	return ""
-}
-
 func (x *CorrelationInfo) GetToolCallId() string {
 	if x != nil {
 		return x.ToolCallId
-	}
-	return ""
-}
-
-func (x *CorrelationInfo) GetToolCallIndex() int32 {
-	if x != nil && x.ToolCallIndex != nil {
-		return *x.ToolCallIndex
-	}
-	return 0
-}
-
-func (x *CorrelationInfo) GetCorrelationKey() string {
-	if x != nil {
-		return x.CorrelationKey
-	}
-	return ""
-}
-
-func (x *CorrelationInfo) GetParentCorrelationKey() string {
-	if x != nil {
-		return x.ParentCorrelationKey
 	}
 	return ""
 }
@@ -2729,41 +2601,17 @@ const file_proto_pinocchio_chatapp_v1_chat_proto_rawDesc = "" +
 	"\routput_tokens\x18\x02 \x01(\x05R\foutputTokens\x12#\n" +
 	"\rcached_tokens\x18\x03 \x01(\x05R\fcachedTokens\x12=\n" +
 	"\x1bcache_creation_input_tokens\x18\x04 \x01(\x05R\x18cacheCreationInputTokens\x125\n" +
-	"\x17cache_read_input_tokens\x18\x05 \x01(\x05R\x14cacheReadInputTokens\"\x8e\a\n" +
+	"\x17cache_read_input_tokens\x18\x05 \x01(\x05R\x14cacheReadInputTokens\"\xcb\x01\n" +
 	"\x0fCorrelationInfo\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x15\n" +
-	"\x06run_id\x18\x02 \x01(\tR\x05runId\x12!\n" +
-	"\finference_id\x18\x03 \x01(\tR\vinferenceId\x12\x17\n" +
+	"\x06run_id\x18\x02 \x01(\tR\x05runId\x12\x17\n" +
 	"\aturn_id\x18\x04 \x01(\tR\x06turnId\x12(\n" +
-	"\x10provider_call_id\x18\x05 \x01(\tR\x0eproviderCallId\x12.\n" +
-	"\x13provider_call_index\x18\x06 \x01(\x05R\x11providerCallIndex\x12\x1a\n" +
-	"\bprovider\x18\a \x01(\tR\bprovider\x12\x14\n" +
-	"\x05model\x18\b \x01(\tR\x05model\x12\x1f\n" +
-	"\vresponse_id\x18\t \x01(\tR\n" +
-	"responseId\x12\x17\n" +
-	"\aitem_id\x18\n" +
-	" \x01(\tR\x06itemId\x12&\n" +
-	"\foutput_index\x18\v \x01(\x05H\x00R\voutputIndex\x88\x01\x01\x12(\n" +
-	"\rsummary_index\x18\f \x01(\x05H\x01R\fsummaryIndex\x88\x01\x01\x12&\n" +
-	"\fchoice_index\x18\r \x01(\x05H\x02R\vchoiceIndex\x88\x01\x01\x123\n" +
-	"\x13content_block_index\x18\x0e \x01(\x05H\x03R\x11contentBlockIndex\x88\x01\x01\x12\x1d\n" +
+	"\x10provider_call_id\x18\x05 \x01(\tR\x0eproviderCallId\x12\x1d\n" +
 	"\n" +
-	"segment_id\x18\x0f \x01(\tR\tsegmentId\x12#\n" +
-	"\rsegment_index\x18\x10 \x01(\x05R\fsegmentIndex\x12!\n" +
-	"\fsegment_type\x18\x11 \x01(\tR\vsegmentType\x12\x1f\n" +
-	"\vstream_kind\x18\x12 \x01(\tR\n" +
-	"streamKind\x12 \n" +
+	"segment_id\x18\x0f \x01(\tR\tsegmentId\x12 \n" +
 	"\ftool_call_id\x18\x13 \x01(\tR\n" +
-	"toolCallId\x12+\n" +
-	"\x0ftool_call_index\x18\x14 \x01(\x05H\x04R\rtoolCallIndex\x88\x01\x01\x12'\n" +
-	"\x0fcorrelation_key\x18\x15 \x01(\tR\x0ecorrelationKey\x124\n" +
-	"\x16parent_correlation_key\x18\x16 \x01(\tR\x14parentCorrelationKeyB\x0f\n" +
-	"\r_output_indexB\x10\n" +
-	"\x0e_summary_indexB\x0f\n" +
-	"\r_choice_indexB\x16\n" +
-	"\x14_content_block_indexB\x12\n" +
-	"\x10_tool_call_index\"\x90\x01\n" +
+	"toolCallId\"\x90\x01\n" +
 	"\x0eChatRunStarted\x12\x1d\n" +
 	"\n" +
 	"message_id\x18\x01 \x01(\tR\tmessageId\x12\x16\n" +
@@ -3085,7 +2933,6 @@ func file_proto_pinocchio_chatapp_v1_chat_proto_init() {
 	if File_proto_pinocchio_chatapp_v1_chat_proto != nil {
 		return
 	}
-	file_proto_pinocchio_chatapp_v1_chat_proto_msgTypes[3].OneofWrappers = []any{}
 	file_proto_pinocchio_chatapp_v1_chat_proto_msgTypes[5].OneofWrappers = []any{}
 	file_proto_pinocchio_chatapp_v1_chat_proto_msgTypes[10].OneofWrappers = []any{}
 	type x struct{}

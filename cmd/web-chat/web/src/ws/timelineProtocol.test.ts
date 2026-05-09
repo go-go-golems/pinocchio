@@ -28,16 +28,7 @@ function applyFrames(frames: CanonicalFrame[]): TimelineState {
 describe('frontend timeline protocol matrix', () => {
   it('FRONTEND-01 sparse tool finish preserves name input and correlation after Redux merge', () => {
     const correlation = {
-      provider: 'openai-responses',
-      model: 'gpt-test',
-      responseId: 'resp_tool',
-      itemId: 'fc_1',
-      outputIndex: 0,
-      streamKind: 'tool_call',
       toolCallId: 'call_1',
-      toolCallIndex: 0,
-      correlationKey: 'tool:call_1',
-      parentCorrelationKey: 'provider-call-key',
     };
 
     const state = applyFrames([
@@ -70,11 +61,6 @@ describe('frontend timeline protocol matrix', () => {
     expect(entity?.props.inputRaw).toBe('{"query":"gold"}');
     expect(entity?.props.done).toBe(true);
     expect(entity?.props.status).toBe('completed');
-    expect(entity?.props.provider).toBe('openai-responses');
-    expect(entity?.props.responseId).toBe('resp_tool');
-    expect(entity?.props.outputIndex).toBe(0);
-    expect(entity?.props.toolCallIndex).toBe(0);
-    expect(entity?.props.correlationKey).toBe('tool:call_1');
   });
 
   it('FRONTEND-02 missing tool name does not persist display fallback as canonical state', () => {
@@ -94,17 +80,7 @@ describe('frontend timeline protocol matrix', () => {
 
   it('FRONTEND-03 sparse text finish preserves prior content and correlation after Redux merge', () => {
     const correlation = {
-      provider: 'openai-responses',
-      model: 'gpt-test',
-      responseId: 'resp_text',
-      itemId: 'msg_1',
-      outputIndex: 0,
       segmentId: 'segment-text-1',
-      segmentIndex: 1,
-      segmentType: 'text',
-      streamKind: 'content',
-      correlationKey: 'text:msg_1',
-      parentCorrelationKey: 'provider-call-key',
     };
 
     const state = applyFrames([
@@ -136,27 +112,12 @@ describe('frontend timeline protocol matrix', () => {
     expect(entity?.props.content).toBe('partial answer');
     expect(entity?.props.status).toBe('failed');
     expect(entity?.props.final).toBe(true);
-    expect(entity?.props.provider).toBe('openai-responses');
-    expect(entity?.props.responseId).toBe('resp_text');
-    expect(entity?.props.outputIndex).toBe(0);
     expect(entity?.props.segmentId).toBe('segment-text-1');
-    expect(entity?.props.correlationKey).toBe('text:msg_1');
   });
 
   it('FRONTEND-04 sparse reasoning finish preserves content and correlation after Redux merge', () => {
     const correlation = {
-      provider: 'openai-responses',
-      model: 'gpt-test',
-      responseId: 'resp_reason',
-      itemId: 'rs_1',
-      outputIndex: 0,
-      summaryIndex: 0,
       segmentId: 'reasoning-segment-1',
-      segmentIndex: 1,
-      segmentType: 'reasoning',
-      streamKind: 'reasoning',
-      correlationKey: 'reasoning:rs_1',
-      parentCorrelationKey: 'provider-call-key',
     };
 
     const state = applyFrames([
@@ -190,11 +151,6 @@ describe('frontend timeline protocol matrix', () => {
     expect(entity?.props.status).toBe('finished');
     expect(entity?.props.streaming).toBe(false);
     expect(entity?.props.parentMessageId).toBe('chat-msg-1');
-    expect(entity?.props.provider).toBe('openai-responses');
-    expect(entity?.props.responseId).toBe('resp_reason');
-    expect(entity?.props.outputIndex).toBe(0);
-    expect(entity?.props.summaryIndex).toBe(0);
-    expect(entity?.props.correlationKey).toBe('reasoning:rs_1');
   });
 
   it('FRONTEND-05 missing tool result name does not persist display fallback as canonical state', () => {

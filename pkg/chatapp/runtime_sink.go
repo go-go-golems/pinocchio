@@ -129,13 +129,8 @@ func (s *runtimeEventSink) textSegmentIDForCorrelation(corr gepevents.Correlatio
 	if s == nil {
 		return "", 0
 	}
-	if corr.SegmentIndex > 0 {
-		s.mu.Lock()
-		if corr.SegmentIndex > s.textSegment {
-			s.textSegment = corr.SegmentIndex
-		}
-		s.mu.Unlock()
-		return textSegmentMessageID(s.messageID, corr.SegmentIndex), corr.SegmentIndex
+	if suffix := sanitizeCorrelationID(corr.SegmentID); suffix != "" {
+		return fmt.Sprintf("%s:text:%s", strings.TrimSpace(s.messageID), suffix), 0
 	}
 	return s.ensureTextSegmentID()
 }
@@ -146,6 +141,22 @@ func textSegmentMessageID(messageID string, segment int32) string {
 		return ""
 	}
 	return fmt.Sprintf("%s:text:%d", messageID, segment)
+}
+
+func sanitizeCorrelationID(id string) string {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return ""
+	}
+	var b strings.Builder
+	for _, r := range id {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' || r == '_' || r == '.' || r == ':' {
+			b.WriteRune(r)
+		} else {
+			b.WriteByte('-')
+		}
+	}
+	return strings.Trim(b.String(), "-:_ .")
 }
 
 func (s *runtimeEventSink) HasTextSegment() bool {

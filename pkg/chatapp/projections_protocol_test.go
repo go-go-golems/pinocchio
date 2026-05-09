@@ -11,7 +11,7 @@ import (
 
 func TestBaseTimelineProjectionSparseTextMatrix(t *testing.T) {
 	fullCorr := projectionFullTextCorrelation()
-	segmentOnlyCorr := &chatappv1.CorrelationInfo{SegmentIndex: 1, SegmentType: "text"}
+	segmentOnlyCorr := &chatappv1.CorrelationInfo{SegmentId: "segment-1"}
 
 	tests := []struct {
 		name    string
@@ -23,7 +23,7 @@ func TestBaseTimelineProjectionSparseTextMatrix(t *testing.T) {
 		{
 			name: "PROJECTION-01 sparse finished preserves existing content and correlation",
 			view: projectionTimelineViewWithMessage(&chatappv1.ChatMessageEntity{
-				MessageId:   "message-1:text:1",
+				MessageId:   "message-1:text:segment-1",
 				Role:        "assistant",
 				Content:     "partial answer",
 				Text:        "partial answer",
@@ -32,7 +32,7 @@ func TestBaseTimelineProjectionSparseTextMatrix(t *testing.T) {
 				Correlation: fullCorr,
 			}),
 			event: sessionstream.Event{Name: EventChatTextSegmentFinished, SessionId: "session-1", Payload: &chatappv1.ChatTextSegmentFinished{
-				MessageId: "message-1:text:1",
+				MessageId: "message-1:text:segment-1",
 				Status:    "failed",
 				Streaming: false,
 				Final:     true,
@@ -48,7 +48,7 @@ func TestBaseTimelineProjectionSparseTextMatrix(t *testing.T) {
 		{
 			name: "PROJECTION-02 sparse finished correlation merges instead of clearing provider identity",
 			view: projectionTimelineViewWithMessage(&chatappv1.ChatMessageEntity{
-				MessageId:   "message-1:text:1",
+				MessageId:   "message-1:text:segment-1",
 				Role:        "assistant",
 				Content:     "partial answer",
 				Text:        "partial answer",
@@ -57,7 +57,7 @@ func TestBaseTimelineProjectionSparseTextMatrix(t *testing.T) {
 				Correlation: fullCorr,
 			}),
 			event: sessionstream.Event{Name: EventChatTextSegmentFinished, SessionId: "session-1", Payload: &chatappv1.ChatTextSegmentFinished{
-				MessageId:   "message-1:text:1",
+				MessageId:   "message-1:text:segment-1",
 				Status:      "finished",
 				Streaming:   false,
 				Final:       true,
@@ -66,15 +66,13 @@ func TestBaseTimelineProjectionSparseTextMatrix(t *testing.T) {
 			check: func(t *testing.T, entity *chatappv1.ChatMessageEntity) {
 				t.Helper()
 				require.Equal(t, "partial answer", entity.GetContent())
-				require.Equal(t, int32(1), entity.GetSegment())
-				require.Equal(t, "text", entity.GetSegmentType())
 				requireProjectionFullCorrelation(t, entity.GetCorrelation())
 			},
 		},
 		{
 			name: "PROJECTION-03 sparse delta correlation merges while updating content",
 			view: projectionTimelineViewWithMessage(&chatappv1.ChatMessageEntity{
-				MessageId:   "message-1:text:1",
+				MessageId:   "message-1:text:segment-1",
 				Role:        "assistant",
 				Content:     "partial",
 				Text:        "partial",
@@ -83,7 +81,7 @@ func TestBaseTimelineProjectionSparseTextMatrix(t *testing.T) {
 				Correlation: fullCorr,
 			}),
 			event: sessionstream.Event{Name: EventChatTextDelta, SessionId: "session-1", Payload: &chatappv1.ChatTextDelta{
-				MessageId:   "message-1:text:1",
+				MessageId:   "message-1:text:segment-1",
 				Content:     "partial answer",
 				Text:        "partial answer",
 				Status:      "streaming",
@@ -101,7 +99,7 @@ func TestBaseTimelineProjectionSparseTextMatrix(t *testing.T) {
 			name: "PROJECTION-04 empty started without existing content still creates no placeholder",
 			view: projectionTimelineView{},
 			event: sessionstream.Event{Name: EventChatTextSegmentStarted, SessionId: "session-1", Payload: &chatappv1.ChatTextSegmentStarted{
-				MessageId:   "message-1:text:1",
+				MessageId:   "message-1:text:segment-1",
 				Status:      "streaming",
 				Streaming:   true,
 				Correlation: segmentOnlyCorr,
@@ -154,25 +152,12 @@ func (v projectionTimelineView) List(string) []sessionstream.TimelineEntity { re
 func (v projectionTimelineView) Ordinal() uint64                            { return 0 }
 
 func projectionFullTextCorrelation() *chatappv1.CorrelationInfo {
-	zero := int32(0)
 	return &chatappv1.CorrelationInfo{
-		SessionId:            "session-1",
-		RunId:                "message-1",
-		InferenceId:          "inference-1",
-		TurnId:               "turn-1",
-		ProviderCallId:       "provider-call-1",
-		Provider:             "openai-responses",
-		Model:                "gpt-test",
-		ResponseId:           "resp-1",
-		ItemId:               "item-1",
-		OutputIndex:          &zero,
-		ChoiceIndex:          &zero,
-		SegmentId:            "segment-1",
-		SegmentIndex:         1,
-		SegmentType:          "text",
-		StreamKind:           "content",
-		CorrelationKey:       "text-correlation-key",
-		ParentCorrelationKey: "provider-call-key",
+		SessionId:      "session-1",
+		RunId:          "message-1",
+		TurnId:         "turn-1",
+		ProviderCallId: "provider-call-1",
+		SegmentId:      "segment-1",
 	}
 }
 
@@ -181,21 +166,7 @@ func requireProjectionFullCorrelation(t *testing.T, corr *chatappv1.CorrelationI
 	require.NotNil(t, corr)
 	require.Equal(t, "session-1", corr.GetSessionId())
 	require.Equal(t, "message-1", corr.GetRunId())
-	require.Equal(t, "inference-1", corr.GetInferenceId())
 	require.Equal(t, "turn-1", corr.GetTurnId())
 	require.Equal(t, "provider-call-1", corr.GetProviderCallId())
-	require.Equal(t, "openai-responses", corr.GetProvider())
-	require.Equal(t, "gpt-test", corr.GetModel())
-	require.Equal(t, "resp-1", corr.GetResponseId())
-	require.Equal(t, "item-1", corr.GetItemId())
-	require.NotNil(t, corr.OutputIndex)
-	require.Equal(t, int32(0), corr.GetOutputIndex())
-	require.NotNil(t, corr.ChoiceIndex)
-	require.Equal(t, int32(0), corr.GetChoiceIndex())
 	require.Equal(t, "segment-1", corr.GetSegmentId())
-	require.Equal(t, int32(1), corr.GetSegmentIndex())
-	require.Equal(t, "text", corr.GetSegmentType())
-	require.Equal(t, "content", corr.GetStreamKind())
-	require.Equal(t, "text-correlation-key", corr.GetCorrelationKey())
-	require.Equal(t, "provider-call-key", corr.GetParentCorrelationKey())
 }
