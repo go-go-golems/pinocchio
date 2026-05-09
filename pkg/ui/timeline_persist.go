@@ -81,6 +81,7 @@ func StepTimelinePersistFuncWithVersion(store chatstore.TimelineStore, convID st
 	}
 
 	currentTextID := ""
+	currentTextActive := false
 
 	upsertEntity := func(ctx context.Context, entityID string, kind string, propsMap map[string]any) error {
 		if store == nil || strings.TrimSpace(convID) == "" || strings.TrimSpace(entityID) == "" {
@@ -170,9 +171,11 @@ func StepTimelinePersistFuncWithVersion(store chatstore.TimelineStore, convID st
 		case *events.EventTextSegmentStarted:
 			// Do not create an empty assistant entry on segment start.
 			currentTextID = canonicalEntityID(e.Correlation())
+			currentTextActive = true
 		case *events.EventTextDelta:
 			textID := canonicalEntityID(e.Correlation())
 			currentTextID = textID
+			currentTextActive = true
 			if strings.TrimSpace(e.Text) == "" {
 				break
 			}
@@ -184,6 +187,7 @@ func StepTimelinePersistFuncWithVersion(store chatstore.TimelineStore, convID st
 		case *events.EventTextSegmentFinished:
 			textID := canonicalEntityID(e.Correlation())
 			currentTextID = textID
+			currentTextActive = false
 			mu.Lock()
 			seen := assistantSeen[textID]
 			content := e.Text
@@ -218,13 +222,27 @@ func StepTimelinePersistFuncWithVersion(store chatstore.TimelineStore, convID st
 			if strings.TrimSpace(content) == "" && !seen {
 				break
 			}
+			currentTextActive = false
 			persistMessage(textID, "assistant", content, false)
 		case *events.EventError:
+			textID := strings.TrimSpace(currentTextID)
+			if currentTextActive && textID != "" {
+				mu.Lock()
+				seen := assistantSeen[textID]
+				content := assistantContent[textID]
+				mu.Unlock()
+				if strings.TrimSpace(content) != "" || seen {
+					currentTextActive = false
+					persistMessage(textID, "assistant", content, false)
+					break
+				}
+			}
 			errText := "**Error**\n\n" + e.ErrorString
 			mu.Lock()
 			assistantSeen[entityID] = true
 			assistantContent[entityID] = errText
 			mu.Unlock()
+			currentTextActive = false
 			persistMessage(entityID, "assistant", errText, false)
 		case *events.EventInfo:
 			if strings.TrimSpace(e.Message) == "profile-switched" {

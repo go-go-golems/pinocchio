@@ -65,6 +65,83 @@ func TestStepTimelinePersistFunc_InterruptFinishesCurrentTextSegment(t *testing.
 	require.Equal(t, false, props["streaming"])
 }
 
+func TestStepTimelinePersistFunc_ErrorFinishesCurrentTextSegment(t *testing.T) {
+	store := chatstore.NewInMemoryTimelineStore(100)
+	h := StepTimelinePersistFunc(store, "conv-error")
+
+	md := events.EventMetadata{ID: uuid.New(), SessionID: "session-error", TurnID: "turn-error"}
+	corr := textCorrelation(md)
+	emitPersistEvent(t, h, events.NewTextSegmentStartedEvent(md, corr, "assistant"))
+	emitPersistEvent(t, h, events.NewTextDeltaEvent(md, corr, "partial", "partial", 1))
+	emitPersistEvent(t, h, events.NewErrorEvent(md, context.Canceled))
+
+	snap, err := store.GetSnapshot(context.Background(), "conv-error", 0, 100)
+	require.NoError(t, err)
+	require.Len(t, snap.Entities, 1)
+	require.Equal(t, md.ID.String(), snap.Entities[0].Id)
+
+	props := snap.Entities[0].GetProps().AsMap()
+	require.Equal(t, "assistant", props["role"])
+	require.Equal(t, "partial", props["content"])
+	require.Equal(t, false, props["streaming"])
+}
+
+func TestStepTimelinePersistFunc_ErrorWithoutActiveTextPersistsErrorMessage(t *testing.T) {
+	store := chatstore.NewInMemoryTimelineStore(100)
+	h := StepTimelinePersistFunc(store, "conv-error-only")
+
+	md := events.EventMetadata{ID: uuid.New(), SessionID: "session-error-only", TurnID: "turn-error-only"}
+	emitPersistEvent(t, h, events.NewErrorEvent(md, context.Canceled))
+
+	snap, err := store.GetSnapshot(context.Background(), "conv-error-only", 0, 100)
+	require.NoError(t, err)
+	require.Len(t, snap.Entities, 1)
+	require.Equal(t, md.ID.String(), snap.Entities[0].Id)
+
+	props := snap.Entities[0].GetProps().AsMap()
+	require.Equal(t, "assistant", props["role"])
+	require.Equal(t, "**Error**\n\ncontext canceled", props["content"])
+	require.Equal(t, false, props["streaming"])
+}
+
+func TestStepTimelinePersistFunc_ProviderFinishDoesNotRewriteClosedText(t *testing.T) {
+	store := chatstore.NewInMemoryTimelineStore(100)
+	h := StepTimelinePersistFunc(store, "conv-provider-finish")
+
+	md := events.EventMetadata{ID: uuid.New(), SessionID: "session-provider-finish", TurnID: "turn-provider-finish"}
+	corr := textCorrelation(md)
+	emitPersistEvent(t, h, events.NewTextSegmentStartedEvent(md, corr, "assistant"))
+	emitPersistEvent(t, h, events.NewTextDeltaEvent(md, corr, "done", "done", 1))
+	emitPersistEvent(t, h, events.NewTextSegmentFinishedEvent(md, corr, "done", "stop"))
+	emitPersistEvent(t, h, events.NewProviderCallFinishedEvent(md, events.Correlation{ProviderCallID: "provider-call-1", CorrelationKey: "provider-call-key"}, "stop", "completed", nil, nil, false))
+
+	snap, err := store.GetSnapshot(context.Background(), "conv-provider-finish", 0, 100)
+	require.NoError(t, err)
+	require.Len(t, snap.Entities, 1)
+	require.Equal(t, md.ID.String(), snap.Entities[0].Id)
+	props := snap.Entities[0].GetProps().AsMap()
+	require.Equal(t, "done", props["content"])
+	require.Equal(t, false, props["streaming"])
+}
+
+func TestStepTimelinePersistFunc_UsesCorrelationKeyWhenSegmentIDAbsent(t *testing.T) {
+	store := chatstore.NewInMemoryTimelineStore(100)
+	h := StepTimelinePersistFunc(store, "conv-correlation-key")
+
+	md := events.EventMetadata{ID: uuid.New(), SessionID: "session-correlation-key", TurnID: "turn-correlation-key"}
+	corr := textCorrelation(md)
+	corr.SegmentID = ""
+	corr.CorrelationKey = "text-correlation-key"
+	emitPersistEvent(t, h, events.NewTextDeltaEvent(md, corr, "hi", "hi", 1))
+
+	snap, err := store.GetSnapshot(context.Background(), "conv-correlation-key", 0, 100)
+	require.NoError(t, err)
+	require.Len(t, snap.Entities, 1)
+	require.Equal(t, "text-correlation-key", snap.Entities[0].Id)
+	props := snap.Entities[0].GetProps().AsMap()
+	require.Equal(t, "hi", props["content"])
+}
+
 func TestStepTimelinePersistFunc_ThinkingLifecycle(t *testing.T) {
 	store := chatstore.NewInMemoryTimelineStore(100)
 	h := StepTimelinePersistFunc(store, "conv-2")
