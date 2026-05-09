@@ -26,7 +26,7 @@ RelatedFiles:
       Note: Investigated active text finalization on stop/error.
 ExternalSources: []
 Summary: Chronological diary for the PINO-PROTOCOL-CONFORMANCE research/design task.
-LastUpdated: 2026-05-09T03:55:00-04:00
+LastUpdated: 2026-05-09T04:20:00-04:00
 WhatFor: Use this diary to understand how the protocol conformance guide was created and how to continue the work.
 WhenToUse: Use when implementing, reviewing, or extending the protocol conformance test plan.
 ---
@@ -2375,3 +2375,203 @@ npm run typecheck
 ### Technical details
 
 The new test file defines `applyFrames`, which calls `timelineMutationFromUIEvent` for each frame and then applies the resulting sparse mutation to `timelineSlice.reducer`. This keeps the test close to browser behavior while avoiding a full React/browser harness.
+
+## Step 26: Extend frontend sparse terminal reductions
+
+I extended the frontend protocol matrix with the two rows that were still missing after the first frontend reducer pass: sparse reasoning terminal behavior and tool-result fallback behavior. This required making terminal UI mutations state-aware at the Redux reducer level without introducing a broad framework.
+
+The important design decision was to add an “upsert only if the entity already exists” path. A sparse terminal event without visible content should be able to close an existing entity, but it should not create a new empty placeholder when no entity exists yet.
+
+### Prompt Context
+
+**User prompt (verbatim):** "alright, get to work and do it all"
+
+**Assistant interpretation:** Finish the remaining frontend and persistence conformance rows, with commits and diary updates.
+
+**Inferred user intent:** Complete the planned Pinocchio downstream matrices rather than stopping after partial frontend coverage.
+
+**Commit (code):** `ebc3d62` — "Extend frontend sparse terminal reductions"
+
+### What I did
+
+- Extended `cmd/web-chat/web/src/ws/timelineProtocol.test.ts` with:
+  - sparse reasoning finish preserving prior content/correlation after Redux merge;
+  - missing tool result name not persisting display fallback fields.
+- Added `timelineSlice.actions.upsertEntityIfExists`.
+- Refactored `timelineSlice.upsertEntity` to share merge logic through `mergeTimelineEntity`.
+- Extended `TimelineMutation` with `upsertIfExists`.
+- Updated `timelineEvents.ts` so sparse text/reasoning terminal events without content produce an existing-entity-only patch instead of unconditional creation.
+- Updated `wsManager.test.ts` to assert that no-content reasoning finish produces an existing-entity-only terminal patch, not a normal placeholder-creating upsert.
+
+### Why
+
+The frontend needs two different terminal behaviors:
+
+- If a terminal event includes visible content, it can create or update an entity.
+- If a terminal event is sparse and has no content, it should only update an entity that already exists.
+
+This preserves the old invariant that empty terminal events do not create placeholders while also allowing sparse terminal events to close existing entities.
+
+### What worked
+
+Frontend validation passed:
+
+```bash
+cd pinocchio/cmd/web-chat/web
+npx vitest run src/ws/timelineProtocol.test.ts src/ws/wsManager.test.ts
+npm run typecheck
+```
+
+Then the full frontend test suite passed:
+
+```bash
+cd pinocchio/cmd/web-chat/web
+npx vitest run
+npm run typecheck
+```
+
+### What didn't work
+
+The first version made sparse reasoning finish always return a normal `upsert`, which broke an existing placeholder-avoidance test:
+
+```text
+FAIL src/ws/wsManager.test.ts > timelineMutationFromUIEvent > does not create an empty placeholder mutation for ChatReasoningSegmentFinished without visible content
+AssertionError: expected { upsert: { … } } to be null
+```
+
+I fixed this by introducing `upsertIfExists`, then updated the test to check the more precise contract: the event is handled as a terminal patch, but it cannot create a new empty entity.
+
+### What I learned
+
+A stateless UI-frame mapper cannot fully decide whether a sparse terminal event should update state. The reducer knows whether an entity exists, so the right seam is a reducer action that only merges into existing entities. This is a small reducer-oriented refactor that directly supports the protocol invariant.
+
+### What was tricky to build
+
+The tricky part was not clearing content while still updating terminal status. If we returned no mutation, existing entities stayed `streaming`. If we returned a normal upsert with no content, missing entities became empty placeholders. `upsertIfExists` gives us the third option: update existing state only.
+
+### What warrants a second pair of eyes
+
+- Review whether `upsertIfExists` should be used for any other sparse terminal events beyond text/reasoning finish.
+- Review whether frontend debug recording should distinguish normal upserts from existing-entity-only patches in a more visible way.
+
+### What should be done in the future
+
+- Add browser-level validation to confirm the UI closes sparse terminal reasoning/text blocks correctly in live sessions.
+
+### Code review instructions
+
+Start with:
+
+```text
+pinocchio/cmd/web-chat/web/src/store/timelineSlice.ts
+pinocchio/cmd/web-chat/web/src/ws/timelineEvents.ts
+pinocchio/cmd/web-chat/web/src/ws/timelineProtocol.test.ts
+pinocchio/cmd/web-chat/web/src/ws/wsManager.test.ts
+```
+
+Validate with:
+
+```bash
+cd pinocchio/cmd/web-chat/web
+npx vitest run
+npm run typecheck
+```
+
+### Technical details
+
+`upsertIfExists` reuses the same merge semantics as `upsertEntity`, but returns without mutation if `state.byId[e.id]` is absent. This keeps sparse terminal events from creating placeholders while still preserving prior content/correlation on existing entities.
+
+## Step 27: Add timeline persistence terminal protocol tests
+
+I finished the planned downstream matrix pass at the timeline persistence layer. This layer stores durable timeline snapshots from canonical Geppetto events, so it must follow the same terminal rules as runtime and frontend state: active partial text should be preserved on error/interrupt, provider terminal events should not rewrite closed text, and canonical correlation keys should determine entity identity where available.
+
+The persistence change fixes an important mismatch with the runtime sink. Before this step, `EventError` persisted an error markdown message under the event ID even if assistant text was actively streaming. The new behavior closes the active text entity with the last safe partial content; error-only cases still persist an error message.
+
+### Prompt Context
+
+**User prompt (verbatim):** (same as Step 26)
+
+**Assistant interpretation:** Continue from frontend matrices into the final planned Pinocchio persistence matrix.
+
+**Inferred user intent:** Complete the deterministic downstream conformance pass before broader validation/browser runs.
+
+**Commit (code):** `10ea343` — "Test timeline persistence terminal semantics"
+
+### What I did
+
+- Added persistence tests in `pkg/ui/timeline_persist_test.go` for:
+  - error after active text preserving partial assistant content;
+  - error without active text persisting an error message;
+  - provider-call finish not rewriting a closed text segment;
+  - correlation key being used as durable entity ID when segment ID is absent.
+- Updated `pkg/ui/timeline_persist.go` to track `currentTextActive`.
+- Changed `EventError` handling so active text is closed with preserved content when available; only no-active-text errors persist a dedicated error markdown message.
+
+### Why
+
+Persistence should not be the layer that loses safe partial transcript state. If the live runtime and frontend preserve partial text on terminal error, the durable timeline snapshot should preserve it too.
+
+### What worked
+
+Targeted and package tests passed:
+
+```bash
+cd pinocchio
+go test ./pkg/ui -run 'TestStepTimelinePersistFunc_(ErrorFinishesCurrentTextSegment|ErrorWithoutActiveTextPersistsErrorMessage|ProviderFinishDoesNotRewriteClosedText|UsesCorrelationKeyWhenSegmentIDAbsent|InterruptFinishesCurrentTextSegment)' -count=1
+go test ./pkg/ui -count=1
+go test ./pkg/chatapp ./pkg/chatapp/plugins ./pkg/ui -count=1
+```
+
+Broader Go and frontend validation also passed:
+
+```bash
+cd pinocchio
+go test ./...
+
+cd pinocchio/cmd/web-chat/web
+npx vitest run
+npm run typecheck
+```
+
+### What didn't work
+
+No command failed during the persistence step. The main behavior change was intentional: active-text errors no longer overwrite the active assistant entity with an error markdown block.
+
+### What I learned
+
+The persistence layer needed the same active-segment state as the runtime sink. `currentTextID` alone is not enough because a closed text segment should not be treated as active just because it was the last text ID seen. The new `currentTextActive` flag makes the terminal policy explicit.
+
+### What was tricky to build
+
+The tricky part was preserving error-only behavior. If no text is active, `EventError` should still create a visible error message. If text is active and has content, `EventError` should close that text instead. The tests cover both cases so future changes cannot accidentally collapse the distinction.
+
+### What warrants a second pair of eyes
+
+- Review whether persisted message props should eventually include terminal status or finish reason; the current timeline message schema stores role/content/streaming but not status.
+- Review whether reasoning persistence needs a similar active terminal error policy if Geppetto starts emitting reasoning terminal errors without explicit reasoning finish events.
+
+### What should be done in the future
+
+- Run browser validation for OpenAI Responses streaming and tool/reasoning sessions.
+- Consider adding trace replay from saved debug/frontend artifacts now that deterministic layer matrices are in place.
+
+### Code review instructions
+
+Start with:
+
+```text
+pinocchio/pkg/ui/timeline_persist.go
+pinocchio/pkg/ui/timeline_persist_test.go
+```
+
+Validate with:
+
+```bash
+cd pinocchio
+go test ./pkg/ui -count=1
+go test ./... 
+```
+
+### Technical details
+
+`currentTextActive` is set on text start/delta, cleared on text finish/interrupt/error, and used by `EventError` to decide whether to close active partial text or create an error-only message. `canonicalEntityID` already preferred `SegmentID`, then `CorrelationKey`, then event ID; the new correlation-key test locks in the fallback behavior when `SegmentID` is absent.

@@ -56,6 +56,8 @@
 - Added tool plugin sparse projection tests, promoted correlation merge helpers, and preserved tool name/input/correlation across sparse tool updates: `08f1cfa Preserve sparse tool projection correlation`.
 - Added reasoning plugin sparse projection tests and preserved reasoning content/parent/correlation across sparse delta/finish updates while suppressing empty starts: `9b69e84 Preserve sparse reasoning projection state`.
 - Added frontend sparse timeline reducer tests, stopped persisting generic `tool` display fallback names, and made sparse text finished UI mutations update terminal state without clearing content/correlation: `c2027de Test frontend sparse timeline reductions`.
+- Extended frontend sparse terminal reducer coverage with existing-entity-only terminal patches for sparse text/reasoning finish and tool result fallback avoidance: `ebc3d62 Extend frontend sparse terminal reductions`.
+- Added timeline persistence terminal protocol tests and changed persistence error handling to close active text with partial content rather than overwrite it with an error message: `10ea343 Test timeline persistence terminal semantics`.
 
 ### Related Files
 
