@@ -26,7 +26,7 @@ RelatedFiles:
       Note: Investigated active text finalization on stop/error.
 ExternalSources: []
 Summary: Chronological diary for the PINO-PROTOCOL-CONFORMANCE research/design task.
-LastUpdated: 2026-05-08T20:58:00-04:00
+LastUpdated: 2026-05-08T21:18:00-04:00
 WhatFor: Use this diary to understand how the protocol conformance guide was created and how to continue the work.
 WhenToUse: Use when implementing, reviewing, or extending the protocol conformance test plan.
 ---
@@ -936,4 +936,99 @@ Then implement against:
 
 ```text
 geppetto/pkg/steps/ai/openai_responses/streaming.go
+```
+
+## Step 12: Start Responses implementation and remove the non-streaming path
+
+The user asked whether killing `runNonStreamingInference` would simplify the Responses refactor. I agreed and removed it, because maintaining two runtime paths would work against the desired provider-adapter pattern.
+
+### Prompt Context
+
+**User prompt (verbatim):** "kill nonstreaminginference, does that simplify things?"
+
+**Assistant interpretation:** Remove the Responses non-streaming branch if that makes the consume/complete/state pattern cleaner and safer.
+
+**Inferred user intent:** Avoid preserving a second provider-normalization path that duplicates final metadata, turn-block persistence, usage handling, and provider-call finishing.
+
+**Commits (code):**
+
+- Geppetto `fe6423d Share Responses stream completion state`
+- Geppetto `db0c69b Remove Responses nonstreaming path`
+
+### What I did
+
+- Added `geppetto/pkg/steps/ai/openai_responses/stream_state.go` with:
+  - `responsesStreamTerminalKind` and `responsesStreamTerminal`;
+  - `responsesStreamState`;
+  - state-owned provider-call/segment/tool correlation helpers;
+  - final metadata helper;
+  - final turn-block append helper;
+  - finish-class and inference-result persistence helpers.
+- Updated `streaming.go` to use the new state helpers for final completion.
+- Extracted the SSE read loop into `consumeResponsesSSE`.
+- Updated stream-error behavior to publish a failed provider-call finish event, matching the canonical lifecycle direction already used in Chat Completions.
+- Removed `geppetto/pkg/steps/ai/openai_responses/nonstreaming.go`.
+- Updated `Engine.RunInference` so Responses always uses `runStreamingInference`.
+- Updated the previous non-streaming usage test so it verifies cached/reasoning usage through an SSE response instead.
+- Removed an unused non-streaming-only helper after lint identified it.
+
+### Why
+
+Removing non-streaming simplifies the refactor substantially:
+
+- one provider-call lifecycle path;
+- one final metadata path;
+- one turn-block persistence path;
+- one place to fix cancellation/error behavior;
+- no need to keep non-streaming and streaming event semantics aligned by hand.
+
+The Responses API may still receive profiles with `Chat.Stream=false`, but this engine now ignores that for runtime path selection. It always requests/consumes the provider through the streaming code path.
+
+### What worked
+
+- `go test ./pkg/steps/ai/openai_responses -count=1` passed after the refactor.
+- Full Geppetto pre-commit passed for `db0c69b`, including `go test ./...` and lint.
+- Lint caught dead code (`reasoningTextFromOutputContent`) left behind by deleting the non-streaming path, which was removed.
+
+### What didn't work
+
+- The first commit attempt failed because the new state methods were not all referenced yet. I wired the existing inline correlation closures through the state methods so lint could verify the helper extraction is real, not aspirational.
+- The first updated test incorrectly expected a JSON `stream:true` field in the Responses request. The request schema does not currently expose such a field; streaming is selected by engine runtime path and SSE `Accept` header. I removed that assertion and kept the usage coverage through an SSE fixture.
+
+### What I learned
+
+The non-streaming path had hidden cleanup cost: it carried separate usage parsing, reasoning block persistence, tool block persistence, and final event logic. Removing it makes the remaining Responses refactor much easier to reason about.
+
+### What was tricky to build
+
+The tricky part was preserving existing behavior while introducing state helpers. The current implementation still has a large provider-event switch, but final completion and correlation now have clearer homes.
+
+### What warrants a second pair of eyes
+
+- Confirm that ignoring `Chat.Stream=false` for Responses is acceptable. This now matches the Chat Completions direction: the engine uses streaming internally so observers and canonical lifecycle events stay consistent.
+- Confirm failed provider-call finish events on Responses stream errors are desired downstream.
+
+### What should be done in the future
+
+- Continue extracting `runStreamingInference` so its top-level shape becomes as clear as Chat Completions.
+- Move more provider-event switch branches into named handlers only where doing so improves readability.
+- Add small table-driven helper tests for the new state/completion helpers if review wants direct coverage beyond package integration tests.
+
+### Code review instructions
+
+Review these files:
+
+```text
+geppetto/pkg/steps/ai/openai_responses/stream_state.go
+geppetto/pkg/steps/ai/openai_responses/streaming.go
+geppetto/pkg/steps/ai/openai_responses/engine.go
+geppetto/pkg/steps/ai/openai_responses/engine_test.go
+```
+
+Validation run:
+
+```bash
+go test ./pkg/steps/ai/openai_responses -count=1
+go test ./...
+make lintmax
 ```

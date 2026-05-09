@@ -32,7 +32,7 @@ RelatedFiles:
         Responses streaming implementation to reshape around explicit state
 ExternalSources: []
 Summary: 'Refactor OpenAI Responses streaming to follow the same visible pattern as Chat Completions: initialize state, consume provider stream, reduce/provider-handle events, complete terminal state, and append/persist final turn data.'
-LastUpdated: 2026-05-08T20:58:00-04:00
+LastUpdated: 2026-05-08T21:18:00-04:00
 WhatFor: Use this before changing `geppetto/pkg/steps/ai/openai_responses/streaming.go` so Responses streaming converges on the same structure as Chat Completions.
 WhenToUse: Use when implementing or reviewing Responses stream handling, cancellation/error semantics, provider item handling, tool-call accumulation, reasoning persistence, and final metadata persistence.
 ---
@@ -54,7 +54,7 @@ persist inference metadata
 return turn + terminal error if any
 ```
 
-`openai_responses/streaming.go` should adopt the same shape. The Responses API is more complex than Chat Completions because it has provider-native output items, message items, reasoning items, reasoning summaries, web-search items, and function-call argument deltas. The goal is therefore not to force a tiny reducer too early. The goal is to make the same principle visible:
+`openai_responses/streaming.go` should adopt the same shape. The Responses API is more complex than Chat Completions because it has provider-native output items, message items, reasoning items, reasoning summaries, web-search items, and function-call argument deltas. The refactor also removes the old non-streaming runtime path so Responses provider normalization has one canonical lifecycle path. The goal is therefore not to force a tiny reducer too early. The goal is to make the same principle visible:
 
 ```text
 provider input + explicit Responses state -> canonical effects + final turn data
@@ -97,6 +97,7 @@ The exact names may differ, but the story should be obvious.
    - avoid materializing incomplete function calls as executable tool-call blocks.
 6. Keep existing behavior for provider item handling, reasoning summaries, citations, web search, and final tool calls.
 7. Use existing package tests as behavior protection, plus small table-driven helper tests if new helper behavior is not already covered.
+8. Remove the non-streaming Responses path so cancellation/error/EOF semantics only need to be correct once.
 
 ## Non-goals
 

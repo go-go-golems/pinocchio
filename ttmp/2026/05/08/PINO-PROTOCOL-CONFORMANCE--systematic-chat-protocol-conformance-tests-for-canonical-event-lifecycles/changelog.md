@@ -27,6 +27,9 @@
 - Extracted named helpers for consuming the stream, completing terminal state, appending turn blocks, and recording terminal stop reasons.
 - Added table-driven tests proving cancel/error preserve partial text/reasoning while avoiding executable tool-call blocks.
 - Paused broad provider-normalization matrix tests and queued an OpenAI Responses structural refactor to adopt the same consume/complete/state pattern as Chat Completions.
+- Implemented initial Responses stream state/completion helpers in Geppetto: `fe6423d Share Responses stream completion state`.
+- Removed the Responses non-streaming inference path so Responses normalization now has one streaming lifecycle: `db0c69b Remove Responses nonstreaming path`.
+- Updated Responses tests so the previous non-streaming usage coverage now runs through the forced streaming path.
 
 ### Related Files
 

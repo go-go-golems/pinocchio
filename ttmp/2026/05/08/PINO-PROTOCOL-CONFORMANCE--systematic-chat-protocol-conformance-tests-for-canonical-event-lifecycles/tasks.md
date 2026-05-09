@@ -2,17 +2,9 @@
 
 ## TODO
 
-- [ ] Refactor OpenAI Responses streaming to follow the Chat Completions consume/complete/state pattern.
-- [ ] Extract Responses stream terminal types and explicit `responsesStreamState`.
-- [ ] Move Responses provider-call, segment, and tool correlation helpers onto state methods.
-- [ ] Extract final Responses metadata update into a named helper.
-- [ ] Extract final Responses assistant/tool turn-block appending into a named helper.
-- [ ] Extract Responses provider-call finish classification/emission into a named helper.
-- [ ] Extract Responses SSE consume/flush loop into `consumeResponsesStream` while preserving event behavior.
-- [ ] Wire `runStreamingInference` to read as setup → state → consume → complete → return.
+- [ ] Continue extracting `runStreamingInference` toward setup → state → consume → complete → return, now that final state helpers and single streaming path are in place.
 - [ ] Add small table-driven helper tests for new Responses helper behavior where existing tests do not already cover it.
-- [ ] Validate `go test ./pkg/steps/ai/openai_responses -count=1` after each code checkpoint.
-- [ ] Run full Geppetto pre-commit/full validation before final Responses refactor commit.
+- [ ] Validate `go test ./pkg/steps/ai/openai_responses -count=1` after each Responses code checkpoint.
 - [ ] Implement remaining Phase 1 Geppetto provider-normalization table tests in provider adapter packages after the Responses structural refactor is complete.
 - [ ] Implement Phase 2 Go runtime protocol matrix in `pkg/chatapp`.
 - [ ] Implement Phase 3 tool/reasoning plugin projection matrices in `pkg/chatapp/plugins`.
@@ -46,3 +38,13 @@
 - [x] Validated OpenAI Chat Completions package and full Geppetto pre-commit tests/lint.
 - [x] Shared OpenAI Chat Completions terminal completion across EOF, cancel, and error while preserving partial text/reasoning and avoiding partial tool requests.
 - [x] Extracted named `engine_openai.go` helpers so the stream loop principle is visible.
+- [x] Designed the OpenAI Responses refactor to adopt the Chat Completions consume/complete/state pattern.
+- [x] Extracted Responses stream terminal types and explicit `responsesStreamState`.
+- [x] Moved Responses provider-call, segment, and tool correlation helpers onto state methods.
+- [x] Extracted final Responses metadata update into a named helper.
+- [x] Extracted final Responses assistant/tool turn-block appending into a named helper.
+- [x] Extracted Responses provider-call finish classification/persistence helpers.
+- [x] Extracted Responses SSE consume loop into `consumeResponsesSSE` while preserving event behavior.
+- [x] Removed the Responses non-streaming inference path so Responses normalization has one streaming lifecycle.
+- [x] Updated the former non-streaming usage test to verify usage through the forced streaming path.
+- [x] Validated Responses package tests and full Geppetto pre-commit tests/lint for the committed Responses checkpoints.
