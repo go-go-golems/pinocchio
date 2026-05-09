@@ -26,7 +26,7 @@ RelatedFiles:
       Note: Investigated active text finalization on stop/error.
 ExternalSources: []
 Summary: Chronological diary for the PINO-PROTOCOL-CONFORMANCE research/design task.
-LastUpdated: 2026-05-09T00:15:00-04:00
+LastUpdated: 2026-05-09T00:35:00-04:00
 WhatFor: Use this diary to understand how the protocol conformance guide was created and how to continue the work.
 WhenToUse: Use when implementing, reviewing, or extending the protocol conformance test plan.
 ---
@@ -2675,3 +2675,50 @@ This step changed no source code. Review the generated artifacts and backend log
 ```text
 pinocchio/ttmp/2026/05/08/PINO-PROTOCOL-CONFORMANCE--systematic-chat-protocol-conformance-tests-for-canonical-event-lifecycles/various/e2e-webchat-20260509-000248
 ```
+
+## Step 29: Re-check PR 146 review scenarios, including unresolved comments
+
+I pulled the PR 146 review threads through GitHub and mapped every review scenario to current code/tests. Most scenarios were already covered by earlier fixes and the deterministic protocol matrices, but one unresolved review comment was still only partially addressed: cancellation returned as `context.Canceled` from `handle.Wait()` without an `EventInterrupt` was still classified as failed.
+
+### Prompt Context
+
+**User prompt (verbatim):** "Do we properly address the scenarios that were brought up in the comments (including the resolved ones) in here? https://github.com/go-go-golems/pinocchio/pull/146"
+
+**Assistant interpretation:** Audit the PR review comments, including resolved threads, against the current branch and fill any missing scenario coverage.
+
+**Inferred user intent:** Ensure the conformance work actually covers the originally reported review edge cases, not only the newly invented matrix rows.
+
+**Commit (code):** pending — runtime cancellation classification fix.
+
+### What I found
+
+- Resolved cancellation thread: active text + `EventInterrupt` is covered by `runtimeEventSink.finishActiveTextSegment("stopped", ...)` and `TestRuntimeInterruptAfterPartialStopsActiveTextSegment` / `RUNTIME-02`.
+- Resolved persistence thread: interrupt persistence uses the active canonical text segment id and is covered by `TestStepTimelinePersistFunc_InterruptFinishesCurrentTextSegment`.
+- Error-after-partial thread: active text + `EventError` is covered by the runtime sink matrix and `TestRuntimeErrorAfterPartialStopsActiveTextSegment`.
+- Tool finish erasing input: frontend finish patches omit absent `input`/`inputRaw`, and Go/plugin/frontend sparse matrices preserve input across sparse finish events.
+- Tool argument delta overwriting name: frontend argument delta patches no longer persist the generic `tool` fallback, and Go/plugin/frontend sparse matrices preserve known tool names across sparse deltas.
+- Runtime cancellation returned as an error without `EventInterrupt`: this was still a real gap in `runRuntimeInference`.
+
+### What I changed
+
+- Updated `pkg/chatapp/runtime_inference.go` so `handle.Wait()` errors that are `context.Canceled` or occur after the run context is canceled publish stopped semantics instead of failed semantics:
+  - close active text as `status="stopped"`, `finishReason="stopped"`;
+  - publish `ChatRunStopped`;
+  - do not publish `ChatRunFailed`.
+- Added `TestRuntimeCancellationErrorStopsActiveTextSegment` in `pkg/chatapp/chat_test.go` with a runtime engine that emits partial text, waits for cancellation, and returns `ctx.Err()` without emitting `EventInterrupt`.
+
+### Validation
+
+```bash
+cd pinocchio
+go test ./pkg/chatapp -run 'TestRuntime(CancellationErrorStopsActiveTextSegment|ErrorAfterPartialStopsActiveTextSegment|InterruptAfterPartialStopsActiveTextSegment)$' -count=1
+go test ./pkg/chatapp ./pkg/chatapp/plugins ./pkg/ui -count=1
+cd cmd/web-chat/web
+npx vitest run src/ws/timelineProtocol.test.ts src/ws/wsManager.test.ts
+```
+
+All commands passed.
+
+### What warrants a second pair of eyes
+
+The new cancellation classification treats `context.Canceled` and `ctx.Err() != nil` as stopped. In this runtime path the context is created from `publishContext(ctx)` and canceled by the app's active-run cancellation path, so this matches the review scenario. If a future caller uses the same context for server shutdown, we may want a separate cancellation reason in `activeRun`.

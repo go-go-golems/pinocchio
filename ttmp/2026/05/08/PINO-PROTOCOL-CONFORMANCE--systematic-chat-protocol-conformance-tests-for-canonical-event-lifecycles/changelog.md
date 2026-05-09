@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-05-09
+
+- Ran live Playwright browser E2E validation for `cmd/web-chat` across all four target provider profiles: `gpt-5-nano`, `haiku`, `gemini-2.5-flash`, and `wafer-qwen3.5-397b`.
+- Confirmed all four sessions reached terminal `finished` UI state and displayed assistant text containing the expected `pong` marker.
+- Saved debug artifacts under `pinocchio/ttmp/2026/05/08/PINO-PROTOCOL-CONFORMANCE--systematic-chat-protocol-conformance-tests-for-canonical-event-lifecycles/various/e2e-webchat-20260509-000248`, including per-session backend debug exports and a full frontend+SQLite reconcile export for the Wafer/Qwen run.
+- Recorded the validation in `reference/01-investigation-diary.md` and marked the browser E2E task done in `tasks.md`.
+- Audited all PR 146 review-thread scenarios, including resolved comments, and found one remaining gap: runtime cancellation returned as `context.Canceled` without an `EventInterrupt` was still classified as failed.
+- Fixed the runtime cancellation gap so canceled runtime waits publish stopped semantics and close active text as stopped; added `TestRuntimeCancellationErrorStopsActiveTextSegment`.
+
 ## 2026-05-08
 
 - Created `PINO-PROTOCOL-CONFORMANCE` workspace for systematic chat protocol conformance testing.

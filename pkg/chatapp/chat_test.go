@@ -316,6 +316,49 @@ func TestRuntimeInterruptAfterPartialStopsActiveTextSegment(t *testing.T) {
 	require.NotContains(t, ids, "chat-msg-1")
 }
 
+func TestRuntimeCancellationErrorStopsActiveTextSegment(t *testing.T) {
+	engine := NewEngine(WithChunkDelay(time.Millisecond))
+	hub := newTestHub(t, engine)
+	cancelEngine := &partialThenContextCanceledEngine{started: make(chan struct{})}
+	engine.setPendingRequest("request-partial-cancel", PromptRequest{
+		Prompt: "Stop without an interrupt event",
+		Runtime: &infruntime.ComposedRuntime{
+			Engine: cancelEngine,
+		},
+	})
+
+	require.NoError(t, hub.Submit(context.Background(), sessionstream.SessionId("chat-partial-cancel"), CommandStartInference, &chatappv1.StartInferenceCommand{RequestId: "request-partial-cancel"}))
+	require.Eventually(t, func() bool {
+		select {
+		case <-cancelEngine.started:
+			return true
+		default:
+			return false
+		}
+	}, time.Second, time.Millisecond)
+	require.NoError(t, hub.Submit(context.Background(), sessionstream.SessionId("chat-partial-cancel"), CommandStopInference, &chatappv1.StopInferenceCommand{}))
+	require.NoError(t, engine.WaitIdle(context.Background(), sessionstream.SessionId("chat-partial-cancel")))
+
+	snap, err := hub.Snapshot(context.Background(), sessionstream.SessionId("chat-partial-cancel"))
+	require.NoError(t, err)
+
+	ids := map[string]*chatappv1.ChatMessageEntity{}
+	for _, entity := range snap.Entities {
+		if entity.Kind != TimelineEntityChatMessage {
+			continue
+		}
+		ids[entity.Id] = entity.Payload.(*chatappv1.ChatMessageEntity)
+	}
+
+	textSegment := ids["chat-msg-1:text:1"]
+	require.NotNil(t, textSegment)
+	require.Equal(t, "partial before cancel", textSegment.GetContent())
+	require.Equal(t, "stopped", textSegment.GetStatus())
+	require.False(t, textSegment.GetStreaming())
+	require.True(t, textSegment.GetFinal())
+	require.NotContains(t, ids, "chat-msg-1")
+}
+
 func TestRuntimeErrorAfterClosedTextSegmentDoesNotDuplicateSegmentContent(t *testing.T) {
 	engine := NewEngine(WithChunkDelay(time.Millisecond))
 	hub := newTestHub(t, engine)
@@ -440,6 +483,20 @@ func (partialThenInterruptEngine) RunInference(ctx context.Context, t *turns.Tur
 	gepevents.PublishEventToContext(ctx, gepevents.NewTextDeltaEvent(meta, corr, "partial before stop", "partial before stop", 1))
 	gepevents.PublishEventToContext(ctx, gepevents.NewInterruptEvent(meta, ""))
 	return t, nil
+}
+
+type partialThenContextCanceledEngine struct {
+	started chan struct{}
+}
+
+func (e *partialThenContextCanceledEngine) RunInference(ctx context.Context, t *turns.Turn) (*turns.Turn, error) {
+	meta := gepevents.EventMetadata{SessionID: "sid"}
+	corr := testTextCorrelation(1)
+	gepevents.PublishEventToContext(ctx, gepevents.NewTextSegmentStartedEvent(meta, corr, "assistant"))
+	gepevents.PublishEventToContext(ctx, gepevents.NewTextDeltaEvent(meta, corr, "partial before cancel", "partial before cancel", 1))
+	close(e.started)
+	<-ctx.Done()
+	return t, ctx.Err()
 }
 
 type boundaryThenErrorEngine struct{}
