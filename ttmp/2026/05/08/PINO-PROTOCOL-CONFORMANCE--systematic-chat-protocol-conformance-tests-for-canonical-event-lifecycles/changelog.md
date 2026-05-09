@@ -33,6 +33,10 @@
 - Extracted Responses stream opening: `2735014 Extract Responses stream opening`.
 - Extracted Responses provider-call correlation and terminal completion helper: `b56187c Extract Responses stream completion helper`.
 - Extracted small Responses stream helper functions and table-driven tests: `a07ebac Extract Responses stream helper functions`.
+- Moved Responses assistant stream state into `responsesStreamState`: `acd7812 Move Responses assistant stream state into reducer state`.
+- Kept Responses response id directly in `responsesStreamState`: `6ed2113 Keep Responses response id in stream state`.
+- Kept Responses tool-call accumulation directly in `responsesStreamState`: `c9bebc8 Keep Responses tool stream state in reducer state`.
+- Kept Responses terminal usage/stop/error state directly in `responsesStreamState`: `f1ddf3b Keep Responses terminal stream state in reducer state`.
 
 ### Related Files
 

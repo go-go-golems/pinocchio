@@ -32,7 +32,7 @@ RelatedFiles:
         Responses streaming implementation to reshape around explicit state
 ExternalSources: []
 Summary: 'Refactor OpenAI Responses streaming to follow the same visible pattern as Chat Completions: initialize state, consume provider stream, reduce/provider-handle events, complete terminal state, and append/persist final turn data.'
-LastUpdated: 2026-05-08T21:40:00-04:00
+LastUpdated: 2026-05-08T22:20:00-04:00
 WhatFor: Use this before changing `geppetto/pkg/steps/ai/openai_responses/streaming.go` so Responses streaming converges on the same structure as Chat Completions.
 WhenToUse: Use when implementing or reviewing Responses stream handling, cancellation/error semantics, provider item handling, tool-call accumulation, reasoning persistence, and final metadata persistence.
 ---
@@ -325,8 +325,8 @@ The exact handling of reasoning blocks is slightly different from Chat Completio
 9. Extract terminal completion into `completeResponsesStream`. **Done.**
 10. Add small table-driven helper tests only for new helper behavior that is not already protected. **Started: suffix backfill and chunk conversion helpers are covered.**
 11. Continue moving provider-event cases into named handlers only where readability improves.
-12. Continue moving mutable scratch state into `responsesStreamState` carefully, without large unsafe rewrites.
-13. Run `go test ./pkg/steps/ai/openai_responses -count=1` and then Geppetto pre-commit/full validation at commit points.
+12. Continue moving mutable scratch state into `responsesStreamState` carefully, without large unsafe rewrites. **Partially done for assistant message state, response id, tool-call accumulation, and terminal usage/stop/error state. Reasoning scratch state remains local.**
+13. Run `go test ./pkg/steps/ai/openai_responses -count=1` and then Geppetto pre-commit/full validation at commit points. **Done for the committed state-migration checkpoints.**
 14. Update diary/tasks/changelog and commit each stable checkpoint.
 
 ## Review checklist

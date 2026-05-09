@@ -3,7 +3,7 @@
 ## TODO
 
 - [ ] Continue moving the large Responses provider-event switch into small named handlers where it improves readability.
-- [ ] Continue moving remaining Responses mutable locals directly into `responsesStreamState` without introducing noisy or unsafe rewrites.
+- [ ] Continue moving remaining Responses reasoning scratch locals directly into `responsesStreamState` without introducing noisy or unsafe rewrites.
 - [ ] Validate `go test ./pkg/steps/ai/openai_responses -count=1` after each Responses code checkpoint.
 - [ ] Implement remaining Phase 1 Geppetto provider-normalization table tests in provider adapter packages after the Responses structural refactor is complete.
 - [ ] Implement Phase 2 Go runtime protocol matrix in `pkg/chatapp`.
@@ -51,4 +51,5 @@
 - [x] Extracted Responses provider-call correlation and terminal completion helpers.
 - [x] Extracted small Responses stream helpers for provider suffix backfill and JSON/string chunk conversion.
 - [x] Added table-driven helper tests for Responses provider suffix backfill and chunk conversion.
+- [x] Moved Responses assistant text/message, response id, tool-call accumulation, and terminal/usage/error state into `responsesStreamState`.
 - [x] Validated Responses package tests and full Geppetto pre-commit tests/lint for the committed Responses checkpoints.

@@ -26,7 +26,7 @@ RelatedFiles:
       Note: Investigated active text finalization on stop/error.
 ExternalSources: []
 Summary: Chronological diary for the PINO-PROTOCOL-CONFORMANCE research/design task.
-LastUpdated: 2026-05-08T21:40:00-04:00
+LastUpdated: 2026-05-08T22:20:00-04:00
 WhatFor: Use this diary to understand how the protocol conformance guide was created and how to continue the work.
 WhenToUse: Use when implementing, reviewing, or extending the protocol conformance test plan.
 ---
@@ -1119,3 +1119,149 @@ Validation run by pre-commit:
 go test ./...
 make lintmax
 ```
+
+## Step 14: Move Responses mutable stream data into explicit state
+
+I continued the Responses refactor by moving more of the provider stream's mutable data into `responsesStreamState`. This was deliberately split into small commits so each checkpoint preserved behavior and kept the large provider-event switch readable enough to review.
+
+The main result is that the completion helper now receives the same state object that was initialized before consuming the stream, instead of a mostly reconstructed state assembled from many local variables at the end. This makes the Responses path closer to the Chat Completions consume/complete shape.
+
+### Prompt Context
+
+**User prompt (verbatim):** "Continue, keep a diary, and commit at appropriate intervals (read docmgr and diary skill)"
+
+**Assistant interpretation:** Continue the OpenAI Responses structural refactor, explicitly follow the docmgr/diary workflows, record the implementation journey, validate, and commit focused checkpoints.
+
+**Inferred user intent:** Make the Responses implementation easier to reason about without losing the traceability needed for review and later continuation.
+
+**Commit (code):** `acd7812` — "Move Responses assistant stream state into reducer state"
+
+**Commit (code):** `6ed2113` — "Keep Responses response id in stream state"
+
+**Commit (code):** `c9bebc8` — "Keep Responses tool stream state in reducer state"
+
+**Commit (code):** `f1ddf3b` — "Keep Responses terminal stream state in reducer state"
+
+### What I did
+
+- Read the `docmgr` and `diary` skills before continuing.
+- Moved assistant text/message state into `responsesStreamState`:
+  - accumulated message text;
+  - per-item assistant text map;
+  - `sayBuf`;
+  - latest message item/output/status.
+- Kept `currentResponseID` directly in `responsesStreamState`, removing the extra local response-id variable and the synchronization closure around correlation helpers.
+- Moved function-call accumulation into `responsesStreamState`:
+  - `callsByItem`;
+  - `finalCalls`.
+- Moved terminal envelope state into `responsesStreamState`:
+  - usage totals;
+  - stop reason;
+  - `responseCompleted`;
+  - stream/provider error.
+- Ran targeted package tests after each migration:
+
+```bash
+go test ./pkg/steps/ai/openai_responses -count=1
+```
+
+- Let the Geppetto pre-commit hook run full validation for each code commit:
+
+```bash
+go test ./...
+make lintmax
+```
+
+### Why
+
+The previous version created `responsesStreamState` early, but still tracked many important values in locals and copied them into a new state at the end. That made the function look less like an explicit reducer/state-machine path than it really was.
+
+Moving state gradually lets the code converge on a single source of truth while avoiding the failed broad rewrite pattern from Step 13.
+
+### What worked
+
+- The assistant state migration removed several locals and the final reconstructed-state copy for assistant text data.
+- Response ID correlation is now simpler: state correlation helpers read the current response id directly.
+- Tool-call accumulation now lives in the same state object used by final turn-block appending.
+- Terminal usage/stop/error state now flows directly into `finalizeResponsesStreamMetadata` through `responsesStreamState`.
+- Package tests and full pre-commit validation passed for each code commit.
+
+### What didn't work
+
+- A scripted replacement for `currentResponseID` briefly produced invalid code:
+
+```text
+streamState.streamState.currentResponseID
+```
+
+- This was caught immediately by:
+
+```bash
+go test ./pkg/steps/ai/openai_responses -count=1
+```
+
+- The exact build error was:
+
+```text
+pkg/steps/ai/openai_responses/streaming.go:673:14: streamState.streamState undefined (type *responsesStreamState has no field or method streamState)
+```
+
+- I fixed the bad replacement before committing and kept the successful response-id state migration as a focused commit.
+- I also attempted to use `docmgr doc relate` with absolute and root-relative document paths after the docs edits. The relation lookup did not resolve the target document even though `docmgr doc list --root /home/manuel/workspaces/2026-05-02/use-sessionstream-coinvault/pinocchio/ttmp --ticket PINO-PROTOCOL-CONFORMANCE` listed it. The attempted command failed with:
+
+```text
+Error: expected exactly 1 doc for --doc "2026/05/08/PINO-PROTOCOL-CONFORMANCE--systematic-chat-protocol-conformance-tests-for-canonical-event-lifecycles/design-doc/05-openai-responses-stream-refactor.md", got 0
+```
+
+### What I learned
+
+Identifier-level rewrites in this file are still risky because the function has nested closures, state helpers, and final synchronization code. Small semantic migrations are safer than broad replacement, and the targeted package test gives fast feedback before the heavier pre-commit hook.
+
+### What was tricky to build
+
+The tricky part is preserving correlation timing while moving response id into state. `segmentCorrelation` and `toolCorrelation` must see the latest provider response id, but they should not rely on a shadow local being copied into state at call time. The migration worked by making the SSE flush update `streamState.currentResponseID` as soon as the provider object exposes it, then letting correlation helpers read that field directly.
+
+For tool calls, the sharp edge is preserving partial argument accumulation without materializing partial calls on cancel/error. Moving `callsByItem` into state is safe because final executable `ToolCallRequested` and final turn blocks still only come from the existing completion/event conditions.
+
+### What warrants a second pair of eyes
+
+- Review `response.function_call_arguments.delta` and `response.output_item.done` to ensure the state migration did not subtly change argument accumulation order.
+- Review response-id propagation in `response.output_item.added`, reasoning summary events, reasoning text deltas, and final block metadata.
+- Confirm that terminal errors still publish failed provider-call finish events and return partial turns as before.
+
+### What should be done in the future
+
+- Move remaining reasoning scratch state into `responsesStreamState` carefully.
+- Extract semantic handlers for the large provider-event switch after state ownership is clear.
+- Add focused tests if a future handler extraction changes reasoning or tool-call behavior.
+
+### Code review instructions
+
+Start with:
+
+```text
+geppetto/pkg/steps/ai/openai_responses/streaming.go
+geppetto/pkg/steps/ai/openai_responses/stream_state.go
+```
+
+Review the four commits in order:
+
+```bash
+git -C geppetto show acd7812
+git -C geppetto show 6ed2113
+git -C geppetto show c9bebc8
+git -C geppetto show f1ddf3b
+```
+
+Validate with:
+
+```bash
+cd geppetto
+go test ./pkg/steps/ai/openai_responses -count=1
+go test ./...
+make lintmax
+```
+
+### Technical details
+
+The current Responses shape now has one state object initialized before stream consumption and used by terminal completion. Remaining local mutable state is mostly reasoning-specific scratch data that should be migrated or extracted next.
