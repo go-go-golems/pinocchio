@@ -26,7 +26,7 @@ RelatedFiles:
       Note: Investigated active text finalization on stop/error.
 ExternalSources: []
 Summary: Chronological diary for the PINO-PROTOCOL-CONFORMANCE research/design task.
-LastUpdated: 2026-05-09T01:45:00-04:00
+LastUpdated: 2026-05-09T02:25:00-04:00
 WhatFor: Use this diary to understand how the protocol conformance guide was created and how to continue the work.
 WhenToUse: Use when implementing, reviewing, or extending the protocol conformance test plan.
 ---
@@ -1808,3 +1808,98 @@ make lintmax
 ### Technical details
 
 The new tests intentionally do not share a provider-neutral fixture format. They share scenario intent and canonical trace expectations while keeping native provider fixtures in each provider package.
+
+## Step 20: Start Pinocchio Phase 2 runtime sink protocol matrix
+
+I started the Pinocchio-side conformance work at the layer where canonical Geppetto events first enter Pinocchio: `runtimeEventSink`. This is the right first table because it exercises the Go runtime translation boundary before sessionstream projection, frontend reduction, or persistence add more transformations.
+
+The implementation is intentionally table-driven rather than a broad framework. Each row is a small protocol program made of synthetic Geppetto canonical events, and the assertions inspect the protobuf backend events published by the sink. This gives us reducer-like coverage of the stateful runtime translator without rewriting it first.
+
+### Prompt Context
+
+**User prompt (verbatim):** "remember: where would we build table diven tests, and does it make sense to do a similar more reducer oriented refactor?
+
+continue"
+
+**Assistant interpretation:** Continue into Pinocchio, answer the testing/refactor placement question through implementation, and keep recording the work in the ticket diary.
+
+**Inferred user intent:** Begin the Pinocchio conformance phase with concrete table-driven tests, while deciding whether to refactor runtime/projection/frontend code toward reducer-shaped seams.
+
+**Commit (code):** `52a16af` — "Test chat runtime protocol terminal cases"
+
+### What I did
+
+- Added `pkg/chatapp/runtime_sink_protocol_test.go`.
+- Created a small `recordingEventPublisher` for capturing backend `sessionstream.Event` values published by `runtimeEventSink`.
+- Added a table-driven `TestRuntimeEventSinkProtocolMatrix` with rows for:
+  - `RUNTIME-01` active text plus `EventError` closes the text segment and publishes `ChatRunFailed`;
+  - `RUNTIME-02` active text plus `EventInterrupt` closes the text segment and publishes `ChatRunStopped`;
+  - `RUNTIME-03` a closed text segment is not rewritten by a later error;
+  - `RUNTIME-04` an error without active text does not manufacture `ChatTextSegmentFinished`;
+  - `RUNTIME-05` provider-call finish after text finish does not rewrite text and preserves provider-call correlation.
+- Added helper assertions for event names, event counts, and typed correlation propagation, including optional zero index pointers.
+
+### Why
+
+The provider-side work made Geppetto canonical events reliable enough to use as test inputs. Pinocchio now needs to prove that its first translation layer preserves those semantics. The runtime sink is stateful: it remembers the active text segment, latest text, and latest text correlation. That makes it the natural first reducer-like target.
+
+### What worked
+
+Targeted tests passed:
+
+```bash
+cd pinocchio
+go test ./pkg/chatapp -run TestRuntimeEventSinkProtocolMatrix -count=1
+go test ./pkg/chatapp -count=1
+```
+
+The existing `runtimeEventSink` did not need a code refactor for this first matrix. The test could exercise its current state machine directly by feeding canonical Geppetto events and capturing published protobuf events.
+
+### What didn't work
+
+No implementation failure remained. The main constraint was choosing the correct scope: testing `runtimeEventSink` directly gives precise terminal/correlation coverage, while a full service/hub integration test would be slower and less explicit for these lifecycle rows.
+
+### What I learned
+
+Pinocchio already has reducer-shaped units. `runtimeEventSink.PublishEvent` is a stateful reducer from canonical Geppetto event to zero-or-more protobuf backend events. `baseTimelineProjection`, plugin projections, `timelineMutationFromUIEvent`, and `timelineSlice.upsertEntity` are also reducer-shaped. We should test these seams first and only extract pure helpers when tests become awkward.
+
+### What was tricky to build
+
+The sharp edge is terminal text finalization. `EventError` and `EventInterrupt` are not correlated text events, so `finishActiveTextSegment` must reuse the last active text correlation and message ID. The tests therefore need to assert not just that a finish event appears, but that it carries the original text segment correlation, including zero-valued optional indexes.
+
+A second sharp edge is closed-segment protection. Once an explicit `EventTextSegmentFinished` has set `textActive=false`, a later `EventError` must not publish a second failed text finish. The `RUNTIME-03` row asserts this by counting `ChatTextSegmentFinished` events.
+
+### What warrants a second pair of eyes
+
+- Review whether `EventInterrupt` should prefer interrupt text over the last streamed text when the interrupt payload is non-empty. The current table uses an empty interrupt text so partial assistant content is preserved.
+- Review whether the runtime sink should publish run-level correlation on `ChatRunFailed`/`ChatRunStopped`; the current test focuses on message ID/status/error because the current payloads do not include correlation in these code paths.
+- Review whether the runtime sink should be split into a pure reducer helper later if additional rows make direct `PublishEvent` tests too verbose.
+
+### What should be done in the future
+
+- Add runtime sink rows for reasoning/tool plugin forwarding only where the base runtime sink is responsible; most tool/reasoning behavior belongs in plugin tests.
+- Add base timeline projection matrix rows in `pkg/chatapp` for sparse text start/delta/finish behavior.
+- Add plugin projection matrices for tool and reasoning sparse updates.
+- Add frontend reducer matrix rows for sparse UI patches and Redux merge preservation.
+
+### Code review instructions
+
+Start with:
+
+```text
+pinocchio/pkg/chatapp/runtime_sink_protocol_test.go
+pinocchio/pkg/chatapp/runtime_sink.go
+pinocchio/pkg/chatapp/correlation.go
+```
+
+Validate with:
+
+```bash
+cd pinocchio
+go test ./pkg/chatapp -run TestRuntimeEventSinkProtocolMatrix -count=1
+go test ./pkg/chatapp -count=1
+```
+
+### Technical details
+
+The test deliberately treats `runtimeEventSink` as the reducer seam instead of extracting a new abstraction first. The input is a native Go slice of `gepevents.Event`; the output is the ordered list of `sessionstream.Event` names and protobuf payloads published through `Engine.publish`.

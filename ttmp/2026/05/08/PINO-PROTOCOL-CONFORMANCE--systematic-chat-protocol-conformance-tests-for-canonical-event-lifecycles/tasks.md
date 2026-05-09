@@ -5,7 +5,7 @@
 - [ ] Split the extracted Responses provider-event handler into smaller semantic handlers only if review finds the remaining switch too hard to follow.
 - [ ] Validate `go test ./pkg/steps/ai/openai_responses -count=1` after each Responses code checkpoint.
 - [ ] Continue Phase 1 Geppetto provider-normalization tables for any remaining guide rows and terminal completion helpers, using `geppetto/docs/design/implementation/01-provider-event-testing.md` as the scenario source.
-- [ ] Implement Phase 2 Go runtime protocol matrix in `pkg/chatapp`.
+- [ ] Continue Phase 2 Go runtime protocol matrix in `pkg/chatapp` beyond the initial runtime sink terminal/correlation table.
 - [ ] Implement Phase 3 tool/reasoning plugin projection matrices in `pkg/chatapp/plugins`.
 - [ ] Implement Phase 4 frontend reducer-backed conformance matrix in `cmd/web-chat/web/src/ws`.
 - [ ] Implement Phase 5 timeline persistence protocol tests in `pkg/ui`.
@@ -60,3 +60,4 @@
 - [x] Added review-derived provider-normalization tests for OpenAI Responses metadata-only completions, sparse function-call finalization, and stream errors after active text.
 - [x] Extracted a Gemini stream reducer seam and added provider-native chunk tests for metadata-only chunks, text accumulation, and function calls.
 - [x] Extracted Gemini stream consumption/completion helpers and added an active-text terminal-error completion test.
+- [x] Added the first Pinocchio Phase 2 table-driven runtime sink protocol matrix for terminal text/error/interrupt/provider-finish cases.
