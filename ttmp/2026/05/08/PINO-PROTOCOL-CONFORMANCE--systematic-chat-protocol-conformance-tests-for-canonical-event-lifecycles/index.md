@@ -52,7 +52,7 @@ The primary design docs explain how to test these stages as one protocol rather 
 - [Design guide](./design-doc/01-chat-protocol-conformance-analysis-and-implementation-guide.md)
 - [OpenAI Chat Completions stream reducer refactor](./design-doc/04-openai-chat-stream-reducer-refactor.md)
 - [OpenAI Responses stream refactor](./design-doc/05-openai-responses-stream-refactor.md)
-- [Provider event table-driven testing guide](./docs/design/implementation/01-provider-event-testing.md)
+- [Provider event table-driven testing guide](../../../../../../geppetto/docs/design/implementation/01-provider-event-testing.md)
 - [Static analysis guide](./design-doc/02-static-analysis-for-protocol-conformance.md) — reference only; not an implementation target for this ticket.
 - [Finite-state model guide](./design-doc/03-finite-state-model-for-protocol-conformance.md) — reference only; not an implementation target for this ticket.
 - [Investigation diary](./reference/01-investigation-diary.md)

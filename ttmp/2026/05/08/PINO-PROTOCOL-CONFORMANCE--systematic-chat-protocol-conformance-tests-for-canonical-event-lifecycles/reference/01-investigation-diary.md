@@ -26,7 +26,7 @@ RelatedFiles:
       Note: Investigated active text finalization on stop/error.
 ExternalSources: []
 Summary: Chronological diary for the PINO-PROTOCOL-CONFORMANCE research/design task.
-LastUpdated: 2026-05-08T23:05:00-04:00
+LastUpdated: 2026-05-09T00:35:00-04:00
 WhatFor: Use this diary to understand how the protocol conformance guide was created and how to continue the work.
 WhenToUse: Use when implementing, reviewing, or extending the protocol conformance test plan.
 ---
@@ -1427,7 +1427,7 @@ This gives the next implementation phase a single checklist of provider-normaliz
 - Created:
 
 ```text
-pinocchio/ttmp/2026/05/08/PINO-PROTOCOL-CONFORMANCE--systematic-chat-protocol-conformance-tests-for-canonical-event-lifecycles/docs/design/implementation/01-provider-event-testing.md
+geppetto/docs/design/implementation/01-provider-event-testing.md
 ```
 
 - Documented the testing pattern:
@@ -1479,7 +1479,7 @@ The tricky part was being precise about Gemini and Claude. Claude already has a 
 Start with:
 
 ```text
-pinocchio/ttmp/2026/05/08/PINO-PROTOCOL-CONFORMANCE--systematic-chat-protocol-conformance-tests-for-canonical-event-lifecycles/docs/design/implementation/01-provider-event-testing.md
+geppetto/docs/design/implementation/01-provider-event-testing.md
 ```
 
 Then review the index/readme links and task/changelog updates.
@@ -1493,3 +1493,178 @@ docmgr doctor --root /home/manuel/workspaces/2026-05-02/use-sessionstream-coinva
 ### Technical details
 
 The guide intentionally avoids a large shared provider conformance framework. It recommends provider-native tables plus a compact projected canonical trace helper, potentially local to each provider until commonality stabilizes.
+
+## Step 17: Move the provider testing guide into Geppetto docs
+
+I moved the provider event testing guide from the Pinocchio ticket-local `docs/` directory into `geppetto/docs`. The guide is about Geppetto provider adapter tests, so keeping it next to the provider code makes it a better candidate for the docmgr extension experiments around repository-local design documentation.
+
+The Pinocchio ticket still links to the guide and records the decision, but the canonical document path is now in Geppetto.
+
+### Prompt Context
+
+**User prompt (verbatim):** "the docs/ folder should be in ./geppetto/docs"
+
+**Assistant interpretation:** Relocate the provider event testing guide so the `docs/design/implementation` tree lives under the Geppetto repository rather than inside the Pinocchio ticket workspace.
+
+**Inferred user intent:** Experiment with docmgr-style documentation that can live in a code repository's own docs tree while still being linked from the ticket workspace.
+
+**Commit (docs):** pending at time of diary entry.
+
+### What I did
+
+- Moved:
+
+```text
+pinocchio/ttmp/.../docs/design/implementation/01-provider-event-testing.md
+```
+
+  to:
+
+```text
+geppetto/docs/design/implementation/01-provider-event-testing.md
+```
+
+- Updated the guide's canonical path in its docmgr-style preamble.
+- Rewrote relative links in the guide:
+  - Geppetto source links now point to `../../../pkg/...`.
+  - Pinocchio ticket links now point back into `../../../../pinocchio/ttmp/...`.
+- Updated Pinocchio ticket `README.md`, `index.md`, `tasks.md`, `changelog.md`, and this diary to refer to the Geppetto docs location.
+
+### Why
+
+The document is an implementation reference for Geppetto provider-normalization tests. It should therefore live in the repository where those tests will be written, while the Pinocchio ticket remains the coordination and history layer.
+
+### What worked
+
+- The guide now lives under `geppetto/docs/design/implementation/`.
+- Pinocchio ticket links point to the moved guide.
+- `docmgr doctor` for the Pinocchio ticket still passes after the move.
+
+### What didn't work
+
+N/A.
+
+### What I learned
+
+This is a useful split for docmgr extension experiments: ticket docs can coordinate work across repositories, while implementation reference docs can live in the code repository that owns the eventual tests.
+
+### What was tricky to build
+
+The only tricky part was relative links. Moving from a deep ticket-local docs path into `geppetto/docs/design/implementation` changed both directions of navigation: source links became shorter, while links back to the ticket became cross-repository relative links.
+
+### What warrants a second pair of eyes
+
+- Confirm whether cross-repository relative links are the desired convention for the docmgr extension experiment.
+- Confirm whether the Geppetto docs file should keep `Ticket: PINO-PROTOCOL-CONFORMANCE` frontmatter even though it lives outside the ticket root.
+
+### What should be done in the future
+
+- If docmgr grows support for repository-local docs linked to ticket workspaces, use this document as a test case.
+- Consider adding a Geppetto docs index if more provider-testing docs are added.
+
+### Code review instructions
+
+Review:
+
+```text
+geppetto/docs/design/implementation/01-provider-event-testing.md
+pinocchio/ttmp/2026/05/08/PINO-PROTOCOL-CONFORMANCE--systematic-chat-protocol-conformance-tests-for-canonical-event-lifecycles/README.md
+pinocchio/ttmp/2026/05/08/PINO-PROTOCOL-CONFORMANCE--systematic-chat-protocol-conformance-tests-for-canonical-event-lifecycles/index.md
+```
+
+Validate with:
+
+```bash
+docmgr doctor --root /home/manuel/workspaces/2026-05-02/use-sessionstream-coinvault/pinocchio/ttmp --ticket PINO-PROTOCOL-CONFORMANCE --stale-after 30
+```
+
+### Technical details
+
+This move spans two Git repositories: the new guide is tracked in Geppetto, while the ticket link updates and deletion of the old copy are tracked in Pinocchio.
+
+## Step 18: Add review-derived provider scenarios and defer downstream ones
+
+I updated the Geppetto provider event testing guide with the review-derived scenarios that should be tested at the provider-normalization layer now. I also added a clear boundary for related PR review issues that belong to later Pinocchio runtime, projection, persistence, and frontend phases.
+
+This keeps the provider guide honest: it covers provider-native stream normalization, while sparse protobuf/sessionstream/frontend patch merge behavior remains a downstream conformance topic.
+
+### Prompt Context
+
+**User prompt (verbatim):** "ok, add the ones you said to add now."
+
+**Assistant interpretation:** Add the provider-relevant PR review-derived scenarios to the provider testing guide now, without pulling downstream Pinocchio projection/frontend scenarios into the Geppetto provider test phase.
+
+**Inferred user intent:** Preserve the lessons from PR 146 and related review feedback in the concrete testing guide, but keep the phase boundaries clear.
+
+**Commit (docs):** pending at time of diary entry.
+
+### What I did
+
+- Added a `Review-derived edge scenarios` section to:
+
+```text
+geppetto/docs/design/implementation/01-provider-event-testing.md
+```
+
+- Added provider-normalization scenarios for:
+  - active text plus error/cancel;
+  - active reasoning plus error/cancel;
+  - partial tool arguments plus error/cancel;
+  - sparse provider deltas preserving accumulated state;
+  - final usage/stop without transcript content.
+- Added a downstream deferral list for:
+  - sparse protobuf/sessionstream/frontend patches;
+  - display fallback labels not being persisted as state;
+  - closed segments not being rewritten by later terminal events;
+  - centralized runtime terminal handling;
+  - correlation surviving projection, persistence, and frontend reduction.
+- Updated the scenario matrix with:
+  - `P06` metadata-only final/stop/completed event;
+  - `T07` active text plus error/cancel;
+  - `S01` sparse provider-native deltas preserving accumulated state.
+- Updated provider-specific priority rows to include the new scenario IDs where relevant.
+
+### Why
+
+PR review surfaced real edge cases that should not remain oral history. Some are provider-normalization issues, while others only appear after canonical events pass through Pinocchio projections and UI patch merging. The guide now distinguishes those groups explicitly.
+
+### What worked
+
+- The added scenarios fit the existing matrix without changing the provider-specific fixture strategy.
+- The downstream deferral section keeps the document from becoming a Pinocchio runtime/frontend testing guide.
+
+### What didn't work
+
+N/A.
+
+### What I learned
+
+The provider-side version of sparse state is about not erasing accumulated provider-native identities or arguments when later native deltas omit fields. The Pinocchio-side version is about sparse patches not erasing projected UI state. They are related, but they need different tests at different layers.
+
+### What was tricky to build
+
+The tricky part was naming the scenarios so they are provider-applicable without overclaiming. For example, Gemini currently receives complete function calls, so partial tool argument scenarios only apply if a future Gemini seam models partial calls.
+
+### What warrants a second pair of eyes
+
+- Confirm whether `S01` should be required for Claude or only applied to tool/input JSON cases.
+- Confirm whether `P06` should assert a provider-call metadata update event or only final metadata on provider-call finish for providers that do not emit intermediate metadata updates.
+
+### What should be done in the future
+
+- Carry the deferred downstream scenarios into the Phase 2-5 Pinocchio runtime/projection/frontend test documents.
+- When implementing provider tests, reference the review-derived section first for terminal and sparse-state edge cases.
+
+### Code review instructions
+
+Review:
+
+```text
+geppetto/docs/design/implementation/01-provider-event-testing.md
+```
+
+Focus on the `Review-derived edge scenarios` section and the new `P06`, `T07`, and `S01` matrix rows.
+
+### Technical details
+
+No code behavior changed. This is a documentation update that refines the Phase 1 test scenario source.
