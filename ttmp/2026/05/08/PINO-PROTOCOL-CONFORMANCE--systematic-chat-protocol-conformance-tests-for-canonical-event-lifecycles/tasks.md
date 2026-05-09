@@ -2,13 +2,23 @@
 
 ## TODO
 
-- [ ] Implement Phase 1 Geppetto provider-normalization matrices in provider adapter packages.
+- [ ] Refactor OpenAI Chat Completions streaming around `openAIChatStreamState`, reducer inputs, terminal inputs, and reducer effects.
+- [ ] Move Chat Completions correlation construction into a reducer state helper.
+- [ ] Add table-driven reducer tests for text delta + EOF, empty EOF, cancel after text, error after reasoning, tool argument accumulation, and no tool requests on cancel/error.
+- [ ] Wire `engine_openai.go` to call the reducer and apply effects while keeping provider stream I/O in the engine.
+- [ ] Validate OpenAI Chat Completions package tests after the reducer refactor.
+- [ ] Implement Phase 1 Geppetto provider-normalization table tests in provider adapter packages, starting with OpenAI Chat Completions reducer coverage.
 - [ ] Implement Phase 2 Go runtime protocol matrix in `pkg/chatapp`.
 - [ ] Implement Phase 3 tool/reasoning plugin projection matrices in `pkg/chatapp/plugins`.
 - [ ] Implement Phase 4 frontend reducer-backed conformance matrix in `cmd/web-chat/web/src/ws`.
 - [ ] Implement Phase 5 timeline persistence protocol tests in `pkg/ui`.
 - [ ] Add a trace extraction/replay helper and decide whether curated fixtures belong in source testdata.
-- [ ] Consider fuzz/property tests only after deterministic invariants are accepted.
+
+## Not doing
+
+- [ ] Static-analysis implementation for this ticket.
+- [ ] Model-checking implementation for this ticket.
+- [ ] Fuzz/property tests until deterministic reducer/table tests are in place and accepted.
 
 ## Done
 

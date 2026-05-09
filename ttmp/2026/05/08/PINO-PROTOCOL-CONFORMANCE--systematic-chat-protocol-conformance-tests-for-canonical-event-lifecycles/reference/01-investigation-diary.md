@@ -26,7 +26,7 @@ RelatedFiles:
       Note: Investigated active text finalization on stop/error.
 ExternalSources: []
 Summary: Chronological diary for the PINO-PROTOCOL-CONFORMANCE research/design task.
-LastUpdated: 2026-05-08T15:45:00-04:00
+LastUpdated: 2026-05-08T20:07:08-04:00
 WhatFor: Use this diary to understand how the protocol conformance guide was created and how to continue the work.
 WhenToUse: Use when implementing, reviewing, or extending the protocol conformance test plan.
 ---
@@ -572,3 +572,102 @@ The only important detail was avoiding both `--force` and accidental reuse of th
 ### Technical details
 
 Upload command intentionally omitted `--force` and `--layout`.
+
+## Step 8: Narrow implementation focus to an OpenAI Chat Completions reducer
+
+The user chose a practical refactor path over static-analysis or model-checking implementation. The target is `geppetto/pkg/steps/ai/openai/engine_openai.go`, whose current stream loop interleaves provider I/O, mutable protocol state, correlation construction, canonical event emission, observability, and final turn construction.
+
+### Prompt Context
+
+**User prompt (verbatim):** "ok, let's add a design document for this refacator and store it in the ticket, then add tasks to the ticket, and go through them one by one, committing at appropriate intervals. Use table driven tests. Go for code clarity and elegance, think peter norvig style."
+
+**Assistant interpretation:** Create a ticket design document for a reducer-style refactor, update ticket tasks, then start implementation in small committed checkpoints using table-driven tests.
+
+**Inferred user intent:** Replace whack-a-mole protocol fixes with clear, ordinary code: explicit state, explicit inputs, explicit outputs, and examples-as-tests.
+
+**Commit (code):** Pending at the time this diary entry was written.
+
+### What I did
+
+- Added `design-doc/04-openai-chat-stream-reducer-refactor.md`.
+- Updated `tasks.md` to make reducer refactoring and table-driven tests the immediate implementation path.
+- Updated `README.md` and `index.md` so the new reducer design is the current implementation starting point.
+- Explicitly marked static-analysis and model-checking implementation as out of scope for this ticket.
+
+### Why
+
+The prior conformance plan identified provider normalization as the first layer to test, but the OpenAI Chat Completions adapter is currently too complex to test cleanly. A reducer gives us a small executable protocol core:
+
+```text
+state + stream input -> next state + effects
+```
+
+That lets tests describe behavior without network calls, provider SDK mocks, or browser runs.
+
+### What worked
+
+The reducer design naturally absorbed the important lifecycle rules:
+
+- EOF, cancel, and error all close active text/reasoning segments.
+- Terminal events do not manufacture segments.
+- Cancel/error do not emit executable `ToolCallRequested` events.
+- Tool argument deltas preserve both the current fragment and accumulated arguments.
+- Correlation construction has one home on the reducer state.
+
+### What didn't work
+
+No implementation was attempted in this step. One unrelated Geppetto working-tree deletion was already present before starting this step:
+
+```text
+D pkg/steps/ai/openai/transcribe.go
+```
+
+Do not accidentally include that deletion in reducer commits unless it is intentionally resolved first.
+
+### What I learned
+
+The cleanest first implementation checkpoint is not a full engine rewrite. It is:
+
+1. add reducer types and helpers;
+2. add table-driven tests for reducer behavior;
+3. then wire `engine_openai.go` to use the reducer.
+
+This keeps the review small and makes the tests drive the refactor.
+
+### What was tricky to build
+
+The tricky semantic point is cancellation: it should close open segments like EOF, but it should not mean success. It should emit interruption semantics and avoid requesting partial tool calls.
+
+### What warrants a second pair of eyes
+
+- Confirm the terminal event ordering: child segment finishes, then interrupt/error if any, then provider-call finished.
+- Confirm whether error/cancel segment finish reasons should be exactly `error` and `cancelled` or should preserve provider stop reason when available.
+
+### What should be done in the future
+
+- Implement `chat_stream_reducer.go` and `chat_stream_reducer_test.go`.
+- Keep the reducer package-private until a wider provider-normalization test harness needs it.
+- Commit the documentation checkpoint before code changes.
+
+### Code review instructions
+
+Review:
+
+- `design-doc/04-openai-chat-stream-reducer-refactor.md`
+- `tasks.md`
+- `README.md`
+- `index.md`
+
+Then validate the ticket with:
+
+```bash
+docmgr doctor --root /home/manuel/workspaces/2026-05-02/use-sessionstream-coinvault/pinocchio/ttmp --ticket PINO-PROTOCOL-CONFORMANCE --stale-after 30
+```
+
+### Technical details
+
+Immediate reducer implementation target:
+
+```text
+/home/manuel/workspaces/2026-05-02/use-sessionstream-coinvault/geppetto/pkg/steps/ai/openai/engine_openai.go
+```
