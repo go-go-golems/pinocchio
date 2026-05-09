@@ -59,7 +59,7 @@ func baseTimelineProjection(_ context.Context, ev sessionstream.Event, _ *sessio
 		entity.Status = firstNonEmpty(payload.GetStatus(), "streaming")
 		entity.Streaming = payload.GetStreaming()
 		entity.ParentMessageId = parentMessageIDFromSegmentMessageID(messageID)
-		entity.Correlation = mergeCorrelationInfo(entity.GetCorrelation(), payload.GetCorrelation())
+		entity.Correlation = MergeCorrelationInfo(entity.GetCorrelation(), payload.GetCorrelation())
 		entity.Segment = entity.GetCorrelation().GetSegmentIndex()
 		entity.SegmentType = entity.GetCorrelation().GetSegmentType()
 		return []sessionstream.TimelineEntity{{Kind: TimelineEntityChatMessage, Id: messageID, Payload: entity}}, nil
@@ -81,7 +81,7 @@ func baseTimelineProjection(_ context.Context, ev sessionstream.Event, _ *sessio
 		entity.Status = firstNonEmpty(payload.GetStatus(), "streaming")
 		entity.Streaming = payload.GetStreaming()
 		entity.ParentMessageId = parentMessageIDFromSegmentMessageID(messageID)
-		entity.Correlation = mergeCorrelationInfo(entity.GetCorrelation(), payload.GetCorrelation())
+		entity.Correlation = MergeCorrelationInfo(entity.GetCorrelation(), payload.GetCorrelation())
 		entity.Segment = entity.GetCorrelation().GetSegmentIndex()
 		entity.SegmentType = entity.GetCorrelation().GetSegmentType()
 		return []sessionstream.TimelineEntity{{Kind: TimelineEntityChatMessage, Id: messageID, Payload: entity}}, nil
@@ -104,7 +104,7 @@ func baseTimelineProjection(_ context.Context, ev sessionstream.Event, _ *sessio
 		entity.Streaming = payload.GetStreaming()
 		entity.Final = payload.GetFinal()
 		entity.ParentMessageId = parentMessageIDFromSegmentMessageID(messageID)
-		entity.Correlation = mergeCorrelationInfo(entity.GetCorrelation(), payload.GetCorrelation())
+		entity.Correlation = MergeCorrelationInfo(entity.GetCorrelation(), payload.GetCorrelation())
 		entity.Segment = entity.GetCorrelation().GetSegmentIndex()
 		entity.SegmentType = entity.GetCorrelation().GetSegmentType()
 		return []sessionstream.TimelineEntity{{Kind: TimelineEntityChatMessage, Id: messageID, Payload: entity}}, nil
@@ -132,88 +132,4 @@ func currentChatMessageEntity(view sessionstream.TimelineView, id string) (*chat
 		return &chatappv1.ChatMessageEntity{}, false
 	}
 	return proto.Clone(pb).(*chatappv1.ChatMessageEntity), true
-}
-
-func cloneCorrelationInfo(corr *chatappv1.CorrelationInfo) *chatappv1.CorrelationInfo {
-	if corr == nil {
-		return nil
-	}
-	return proto.Clone(corr).(*chatappv1.CorrelationInfo)
-}
-
-func mergeCorrelationInfo(existing, update *chatappv1.CorrelationInfo) *chatappv1.CorrelationInfo {
-	if existing == nil {
-		return cloneCorrelationInfo(update)
-	}
-	if update == nil {
-		return cloneCorrelationInfo(existing)
-	}
-	out := cloneCorrelationInfo(existing)
-	if update.SessionId != "" {
-		out.SessionId = update.SessionId
-	}
-	if update.RunId != "" {
-		out.RunId = update.RunId
-	}
-	if update.InferenceId != "" {
-		out.InferenceId = update.InferenceId
-	}
-	if update.TurnId != "" {
-		out.TurnId = update.TurnId
-	}
-	if update.ProviderCallId != "" {
-		out.ProviderCallId = update.ProviderCallId
-	}
-	if update.ProviderCallIndex != 0 {
-		out.ProviderCallIndex = update.ProviderCallIndex
-	}
-	if update.Provider != "" {
-		out.Provider = update.Provider
-	}
-	if update.Model != "" {
-		out.Model = update.Model
-	}
-	if update.ResponseId != "" {
-		out.ResponseId = update.ResponseId
-	}
-	if update.ItemId != "" {
-		out.ItemId = update.ItemId
-	}
-	if update.OutputIndex != nil {
-		out.OutputIndex = cloneInt32Ptr(update.OutputIndex)
-	}
-	if update.SummaryIndex != nil {
-		out.SummaryIndex = cloneInt32Ptr(update.SummaryIndex)
-	}
-	if update.ChoiceIndex != nil {
-		out.ChoiceIndex = cloneInt32Ptr(update.ChoiceIndex)
-	}
-	if update.ContentBlockIndex != nil {
-		out.ContentBlockIndex = cloneInt32Ptr(update.ContentBlockIndex)
-	}
-	if update.SegmentId != "" {
-		out.SegmentId = update.SegmentId
-	}
-	if update.SegmentIndex != 0 {
-		out.SegmentIndex = update.SegmentIndex
-	}
-	if update.SegmentType != "" {
-		out.SegmentType = update.SegmentType
-	}
-	if update.StreamKind != "" {
-		out.StreamKind = update.StreamKind
-	}
-	if update.ToolCallId != "" {
-		out.ToolCallId = update.ToolCallId
-	}
-	if update.ToolCallIndex != nil {
-		out.ToolCallIndex = cloneInt32Ptr(update.ToolCallIndex)
-	}
-	if update.CorrelationKey != "" {
-		out.CorrelationKey = update.CorrelationKey
-	}
-	if update.ParentCorrelationKey != "" {
-		out.ParentCorrelationKey = update.ParentCorrelationKey
-	}
-	return out
 }

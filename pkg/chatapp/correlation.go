@@ -83,3 +83,93 @@ func cloneInt32Ptr(v *int32) *int32 {
 	out := *v
 	return &out
 }
+
+func CloneCorrelationInfo(corr *chatappv1.CorrelationInfo) *chatappv1.CorrelationInfo {
+	if corr == nil {
+		return nil
+	}
+	out := *corr
+	out.OutputIndex = cloneInt32Ptr(corr.OutputIndex)
+	out.SummaryIndex = cloneInt32Ptr(corr.SummaryIndex)
+	out.ChoiceIndex = cloneInt32Ptr(corr.ChoiceIndex)
+	out.ContentBlockIndex = cloneInt32Ptr(corr.ContentBlockIndex)
+	out.ToolCallIndex = cloneInt32Ptr(corr.ToolCallIndex)
+	return &out
+}
+
+func MergeCorrelationInfo(existing, update *chatappv1.CorrelationInfo) *chatappv1.CorrelationInfo {
+	if existing == nil {
+		return CloneCorrelationInfo(update)
+	}
+	if update == nil {
+		return CloneCorrelationInfo(existing)
+	}
+	out := CloneCorrelationInfo(existing)
+	if update.SessionId != "" {
+		out.SessionId = update.SessionId
+	}
+	if update.RunId != "" {
+		out.RunId = update.RunId
+	}
+	if update.InferenceId != "" {
+		out.InferenceId = update.InferenceId
+	}
+	if update.TurnId != "" {
+		out.TurnId = update.TurnId
+	}
+	if update.ProviderCallId != "" {
+		out.ProviderCallId = update.ProviderCallId
+	}
+	if update.ProviderCallIndex != 0 {
+		out.ProviderCallIndex = update.ProviderCallIndex
+	}
+	if update.Provider != "" {
+		out.Provider = update.Provider
+	}
+	if update.Model != "" {
+		out.Model = update.Model
+	}
+	if update.ResponseId != "" {
+		out.ResponseId = update.ResponseId
+	}
+	if update.ItemId != "" {
+		out.ItemId = update.ItemId
+	}
+	if update.OutputIndex != nil {
+		out.OutputIndex = cloneInt32Ptr(update.OutputIndex)
+	}
+	if update.SummaryIndex != nil {
+		out.SummaryIndex = cloneInt32Ptr(update.SummaryIndex)
+	}
+	if update.ChoiceIndex != nil {
+		out.ChoiceIndex = cloneInt32Ptr(update.ChoiceIndex)
+	}
+	if update.ContentBlockIndex != nil {
+		out.ContentBlockIndex = cloneInt32Ptr(update.ContentBlockIndex)
+	}
+	if update.SegmentId != "" {
+		out.SegmentId = update.SegmentId
+	}
+	if update.SegmentIndex != 0 {
+		out.SegmentIndex = update.SegmentIndex
+	}
+	if update.SegmentType != "" {
+		out.SegmentType = update.SegmentType
+	}
+	if update.StreamKind != "" {
+		out.StreamKind = update.StreamKind
+	}
+	if update.ToolCallId != "" {
+		out.ToolCallId = update.ToolCallId
+	}
+	if update.ToolCallIndex != nil {
+		out.ToolCallIndex = cloneInt32Ptr(update.ToolCallIndex)
+	}
+	if update.CorrelationKey != "" {
+		out.CorrelationKey = update.CorrelationKey
+	}
+	if update.ParentCorrelationKey != "" {
+		out.ParentCorrelationKey = update.ParentCorrelationKey
+	}
+	return out
+}

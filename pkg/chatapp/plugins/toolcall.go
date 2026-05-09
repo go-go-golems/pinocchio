@@ -124,7 +124,7 @@ func (p *ToolCallPlugin) ProjectTimeline(_ context.Context, ev sessionstream.Eve
 				ToolName:    payload.GetToolName(),
 				Result:      payload.GetResult(),
 				Status:      payload.GetStatus(),
-				Correlation: cloneCorrelationInfo(payload.GetCorrelation()),
+				Correlation: chatapp.CloneCorrelationInfo(payload.GetCorrelation()),
 			},
 		}}, true, nil
 	default:
@@ -174,6 +174,10 @@ func currentToolCallEntity(view sessionstream.TimelineView, id string) *chatappv
 	return proto.Clone(pb).(*chatappv1.ToolCallEntity)
 }
 
+func cloneCorrelationInfo(corr *chatappv1.CorrelationInfo) *chatappv1.CorrelationInfo {
+	return chatapp.CloneCorrelationInfo(corr)
+}
+
 func mergeToolCallFields(entity *chatappv1.ToolCallEntity, update toolCallFields) *chatappv1.ToolCallEntity {
 	if entity == nil {
 		entity = &chatappv1.ToolCallEntity{}
@@ -194,17 +198,8 @@ func mergeToolCallFields(entity *chatappv1.ToolCallEntity, update toolCallFields
 	if update.Status != "" {
 		entity.Status = update.Status
 	}
-	if update.Correlation != nil {
-		entity.Correlation = cloneCorrelationInfo(update.Correlation)
-	}
+	entity.Correlation = chatapp.MergeCorrelationInfo(entity.GetCorrelation(), update.Correlation)
 	return entity
-}
-
-func cloneCorrelationInfo(corr *chatappv1.CorrelationInfo) *chatappv1.CorrelationInfo {
-	if corr == nil {
-		return nil
-	}
-	return proto.Clone(corr).(*chatappv1.CorrelationInfo)
 }
 
 // Ensure ToolCallPlugin implements ChatPlugin.

@@ -146,6 +146,139 @@ func TestToolCallPluginProjectsCanonicalEventsToUIAndTimeline(t *testing.T) {
 	require.Equal(t, "tool:call-2", resultEntity.GetCorrelation().GetCorrelationKey())
 }
 
+func TestToolCallPluginSparseProjectionMatrix(t *testing.T) {
+	plugin := NewToolCallPlugin()
+	fullCorr := &chatappv1.CorrelationInfo{
+		Provider:             "openai-responses",
+		Model:                "gpt-test",
+		ResponseId:           "resp_tool",
+		ItemId:               "fc_1",
+		OutputIndex:          int32Ptr(0),
+		StreamKind:           gepevents.StreamKindToolCall,
+		ToolCallId:           "call-sparse",
+		ToolCallIndex:        int32Ptr(0),
+		CorrelationKey:       "tool:call-sparse",
+		ParentCorrelationKey: "provider-call-key",
+	}
+	segmentOnlyCorr := &chatappv1.CorrelationInfo{ToolCallId: "call-sparse", ToolCallIndex: int32Ptr(0)}
+
+	tests := []struct {
+		name  string
+		view  sessionstream.TimelineView
+		event sessionstream.Event
+		check func(t *testing.T, entity *chatappv1.ToolCallEntity)
+	}{
+		{
+			name: "TOOL-PROJECTION-01 sparse finish preserves name input and correlation",
+			view: toolCallStaticTimelineView{entities: map[string]sessionstream.TimelineEntity{
+				TimelineEntityToolCall + "/call-sparse": {
+					Kind: TimelineEntityToolCall,
+					Id:   "call-sparse",
+					Payload: &chatappv1.ToolCallEntity{
+						MessageId:   "chat-msg-tool",
+						ToolCallId:  "call-sparse",
+						ToolName:    "inventory",
+						Input:       `{"coin":"ETH"}`,
+						Executing:   true,
+						Status:      "executing",
+						Correlation: fullCorr,
+					},
+				},
+			}},
+			event: sessionstream.Event{Name: EventToolCallFinished, SessionId: "sid", Payload: &chatappv1.ChatToolCallFinished{
+				MessageId:   "chat-msg-tool",
+				ToolCallId:  "call-sparse",
+				Status:      "completed",
+				Correlation: segmentOnlyCorr,
+			}},
+			check: func(t *testing.T, entity *chatappv1.ToolCallEntity) {
+				t.Helper()
+				require.Equal(t, "inventory", entity.GetToolName())
+				require.Equal(t, `{"coin":"ETH"}`, entity.GetInput())
+				require.False(t, entity.GetExecuting())
+				require.Equal(t, "completed", entity.GetStatus())
+				requireToolProjectionFullCorrelation(t, entity.GetCorrelation())
+			},
+		},
+		{
+			name: "TOOL-PROJECTION-02 sparse argument delta preserves known tool name",
+			view: toolCallStaticTimelineView{entities: map[string]sessionstream.TimelineEntity{
+				TimelineEntityToolCall + "/call-sparse": {
+					Kind: TimelineEntityToolCall,
+					Id:   "call-sparse",
+					Payload: &chatappv1.ToolCallEntity{
+						MessageId:   "chat-msg-tool",
+						ToolCallId:  "call-sparse",
+						ToolName:    "inventory",
+						Status:      "pending",
+						Correlation: fullCorr,
+					},
+				},
+			}},
+			event: sessionstream.Event{Name: EventToolCallArgumentsDelta, SessionId: "sid", Payload: &chatappv1.ChatToolCallArgumentsDelta{
+				MessageId:      "chat-msg-tool",
+				ToolCallId:     "call-sparse",
+				ArgumentsDelta: `"ETH"}`,
+				Input:          `{"coin":"ETH"}`,
+				Status:         "streaming_args",
+				Correlation:    segmentOnlyCorr,
+			}},
+			check: func(t *testing.T, entity *chatappv1.ToolCallEntity) {
+				t.Helper()
+				require.Equal(t, "inventory", entity.GetToolName())
+				require.Equal(t, `{"coin":"ETH"}`, entity.GetInput())
+				require.Equal(t, "streaming_args", entity.GetStatus())
+				requireToolProjectionFullCorrelation(t, entity.GetCorrelation())
+			},
+		},
+		{
+			name: "TOOL-PROJECTION-03 empty tool name stays empty instead of persisting display fallback",
+			view: toolCallStaticTimelineView{},
+			event: sessionstream.Event{Name: EventToolCallStarted, SessionId: "sid", Payload: &chatappv1.ChatToolCallStarted{
+				MessageId:  "chat-msg-tool",
+				ToolCallId: "call-sparse",
+				Status:     "pending",
+			}},
+			check: func(t *testing.T, entity *chatappv1.ToolCallEntity) {
+				t.Helper()
+				require.Empty(t, entity.GetToolName())
+				require.NotEqual(t, "tool", entity.GetToolName())
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			entities, handled, err := plugin.ProjectTimeline(context.Background(), tt.event, nil, tt.view)
+			require.NoError(t, err)
+			require.True(t, handled)
+			require.Len(t, entities, 1)
+			require.Equal(t, TimelineEntityToolCall, entities[0].Kind)
+			payload := entities[0].Payload.(*chatappv1.ToolCallEntity)
+			if tt.check != nil {
+				tt.check(t, payload)
+			}
+		})
+	}
+}
+
+func requireToolProjectionFullCorrelation(t *testing.T, corr *chatappv1.CorrelationInfo) {
+	t.Helper()
+	require.NotNil(t, corr)
+	require.Equal(t, "openai-responses", corr.GetProvider())
+	require.Equal(t, "gpt-test", corr.GetModel())
+	require.Equal(t, "resp_tool", corr.GetResponseId())
+	require.Equal(t, "fc_1", corr.GetItemId())
+	require.NotNil(t, corr.OutputIndex)
+	require.Equal(t, int32(0), corr.GetOutputIndex())
+	require.Equal(t, gepevents.StreamKindToolCall, corr.GetStreamKind())
+	require.Equal(t, "call-sparse", corr.GetToolCallId())
+	require.NotNil(t, corr.ToolCallIndex)
+	require.Equal(t, int32(0), corr.GetToolCallIndex())
+	require.Equal(t, "tool:call-sparse", corr.GetCorrelationKey())
+	require.Equal(t, "provider-call-key", corr.GetParentCorrelationKey())
+}
+
 func TestToolCallPluginIgnoresUnrelatedEvents(t *testing.T) {
 	plugin := NewToolCallPlugin()
 	handled, err := plugin.HandleRuntimeEvent(context.Background(), chatapp.RuntimeEventContext{SessionID: "sid", MessageID: "chat-msg-1"}, gepevents.NewErrorEvent(gepevents.EventMetadata{SessionID: "sid"}, context.Canceled))
