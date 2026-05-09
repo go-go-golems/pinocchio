@@ -4,7 +4,7 @@
 
 - [ ] Split the extracted Responses provider-event handler into smaller semantic handlers only if review finds the remaining switch too hard to follow.
 - [ ] Validate `go test ./pkg/steps/ai/openai_responses -count=1` after each Responses code checkpoint.
-- [ ] Implement remaining Phase 1 Geppetto provider-normalization table tests in provider adapter packages after the Responses structural refactor is complete.
+- [ ] Implement remaining Phase 1 Geppetto provider-normalization table tests in provider adapter packages using `docs/design/implementation/01-provider-event-testing.md` as the scenario source.
 - [ ] Implement Phase 2 Go runtime protocol matrix in `pkg/chatapp`.
 - [ ] Implement Phase 3 tool/reasoning plugin projection matrices in `pkg/chatapp/plugins`.
 - [ ] Implement Phase 4 frontend reducer-backed conformance matrix in `cmd/web-chat/web/src/ws`.
@@ -24,6 +24,7 @@
 - [x] Wrote intern-oriented protocol conformance analysis/design/implementation guide.
 - [x] Wrote static analysis guide.
 - [x] Wrote finite-state model guide.
+- [x] Wrote provider event table-driven testing guide with shared scenarios and provider-specific fixture shapes.
 - [x] Updated all three guides to cover the provider-native normalization layer.
 - [x] Wrote investigation diary.
 - [x] Validated ticket with `docmgr doctor`.

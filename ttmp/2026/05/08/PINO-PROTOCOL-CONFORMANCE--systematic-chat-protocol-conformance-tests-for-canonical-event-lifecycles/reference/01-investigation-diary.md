@@ -26,7 +26,7 @@ RelatedFiles:
       Note: Investigated active text finalization on stop/error.
 ExternalSources: []
 Summary: Chronological diary for the PINO-PROTOCOL-CONFORMANCE research/design task.
-LastUpdated: 2026-05-08T22:45:00-04:00
+LastUpdated: 2026-05-08T23:05:00-04:00
 WhatFor: Use this diary to understand how the protocol conformance guide was created and how to continue the work.
 WhenToUse: Use when implementing, reviewing, or extending the protocol conformance test plan.
 ---
@@ -1405,3 +1405,91 @@ make lintmax
 ### Technical details
 
 The top-level Responses stream runner now delegates provider-native event semantics to `handleResponsesProviderEvent`. `responsesStreamState` is the single mutable state object used for assistant output, reasoning output, tool-call accumulation, usage/stop/error state, response id, and final completion.
+
+## Step 16: Write the provider event table-driven testing guide
+
+I wrote a dedicated implementation reference for provider event testing so the concrete test suites can share scenario intent without forcing all providers into the same artificial input format. The document clarifies that OpenAI Chat Completions, OpenAI Responses, Claude, and Gemini should each keep provider-native fixtures, while their expected outputs are projected into the same canonical lifecycle vocabulary.
+
+This gives the next implementation phase a single checklist of provider-normalization scenarios. It also captures the current decision that Claude already has a reducer-like `ContentBlockMerger`, while Gemini still needs a stream-state/reducer seam before deep table-driven tests will be pleasant.
+
+### Prompt Context
+
+**User prompt (verbatim):** "create a docs/design/implementation/01-provider-event-testing.md which details how the table driven testing works, and a list of scenario that apply to each provider. That way we have one freference document from which we can derive the concrete table driven tests for the providers, but the scenarios are all similar across providers."
+
+**Assistant interpretation:** Create a reference implementation document that explains how to build provider-specific table-driven tests from shared canonical lifecycle scenarios.
+
+**Inferred user intent:** Avoid an over-generic cross-provider test framework while still coordinating provider tests around one common scenario matrix.
+
+**Commit (docs):** pending at time of diary entry.
+
+### What I did
+
+- Created:
+
+```text
+pinocchio/ttmp/2026/05/08/PINO-PROTOCOL-CONFORMANCE--systematic-chat-protocol-conformance-tests-for-canonical-event-lifecycles/docs/design/implementation/01-provider-event-testing.md
+```
+
+- Documented the testing pattern:
+  - same lifecycle questions;
+  - provider-specific native inputs;
+  - provider-specific reducer/adapter seams;
+  - shared-ish canonical trace assertions.
+- Added a canonical trace projection sketch for comparing emitted canonical events without brittle generated IDs.
+- Listed shared invariants for provider-call, text, reasoning, tool, terminal, and correlation lifecycles.
+- Added a scenario matrix covering OpenAI Chat Completions, OpenAI Responses, Claude, and Gemini.
+- Added provider-specific table shapes and priority rows.
+- Updated ticket links in `README.md` and `index.md`.
+- Updated `tasks.md` and `changelog.md`.
+
+### Why
+
+The providers have very different native stream grammars, so a single shared input table would hide provider-specific edge cases. But the canonical Geppetto output protocol should obey the same lifecycle invariants regardless of provider. The new guide captures that split explicitly.
+
+### What worked
+
+- The document gives a concrete path from scenario names to provider-specific tests.
+- The scenario matrix marks which rows are required, conditional, or not applicable for each provider.
+- The guide recommends keeping helpers local at first and only extracting a shared `streamtest` package if duplication becomes obvious.
+
+### What didn't work
+
+N/A.
+
+### What I learned
+
+The important shared layer is not native input shape. It is the expected canonical lifecycle trace after provider normalization. That is where a small assertion vocabulary can be shared without flattening provider semantics.
+
+### What was tricky to build
+
+The tricky part was being precise about Gemini and Claude. Claude already has a reducer-like seam in `ContentBlockMerger`, so the guide should not imply a full rewrite is necessary. Gemini still has inline stream logic, so the guide needs to recommend reducer extraction before deep table tests.
+
+### What warrants a second pair of eyes
+
+- Review the scenario matrix for provider applicability, especially reasoning support and Gemini function-call partiality.
+- Review whether the canonical trace projection fields are enough for the first tests or whether correlation details need a richer projected shape.
+
+### What should be done in the future
+
+- Use this guide to implement the next provider-specific table tests.
+- Start with OpenAI Chat Completions and Responses as reference implementations, then Claude, then Gemini reducer extraction and tests.
+
+### Code review instructions
+
+Start with:
+
+```text
+pinocchio/ttmp/2026/05/08/PINO-PROTOCOL-CONFORMANCE--systematic-chat-protocol-conformance-tests-for-canonical-event-lifecycles/docs/design/implementation/01-provider-event-testing.md
+```
+
+Then review the index/readme links and task/changelog updates.
+
+Validate with:
+
+```bash
+docmgr doctor --root /home/manuel/workspaces/2026-05-02/use-sessionstream-coinvault/pinocchio/ttmp --ticket PINO-PROTOCOL-CONFORMANCE --stale-after 30
+```
+
+### Technical details
+
+The guide intentionally avoids a large shared provider conformance framework. It recommends provider-native tables plus a compact projected canonical trace helper, potentially local to each provider until commonality stabilizes.

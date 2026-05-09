@@ -22,7 +22,7 @@ RelatedFiles:
       Note: Timeline persistence lifecycle behavior covered by the conformance plan.
 ExternalSources: []
 Summary: Ticket for designing and implementing systematic provider-to-browser protocol conformance tests for canonical chat event lifecycles.
-LastUpdated: 2026-05-08T20:58:00-04:00
+LastUpdated: 2026-05-08T23:05:00-04:00
 WhatFor: Use this ticket to coordinate lifecycle invariant tests that prevent reactive edge-case fixes in Geppetto provider adapters, Pinocchio chat runtime, and web-chat frontend.
 WhenToUse: Use before modifying provider adapters, chat runtime event handling, projections, persistence, or frontend sparse patch behavior.
 ---
@@ -52,6 +52,7 @@ The primary design docs explain how to test these stages as one protocol rather 
 - [Design guide](./design-doc/01-chat-protocol-conformance-analysis-and-implementation-guide.md)
 - [OpenAI Chat Completions stream reducer refactor](./design-doc/04-openai-chat-stream-reducer-refactor.md)
 - [OpenAI Responses stream refactor](./design-doc/05-openai-responses-stream-refactor.md)
+- [Provider event table-driven testing guide](./docs/design/implementation/01-provider-event-testing.md)
 - [Static analysis guide](./design-doc/02-static-analysis-for-protocol-conformance.md) — reference only; not an implementation target for this ticket.
 - [Finite-state model guide](./design-doc/03-finite-state-model-for-protocol-conformance.md) — reference only; not an implementation target for this ticket.
 - [Investigation diary](./reference/01-investigation-diary.md)
@@ -62,7 +63,7 @@ The primary design docs explain how to test these stages as one protocol rather 
 
 Current status: **active**.
 
-The design/research deliverable is complete. The OpenAI Chat Completions stream reducer refactor and table-driven tests are implemented in Geppetto. Current focus is adopting the same consume/complete/state pattern in OpenAI Responses before adding broader provider-normalization tests. Static-analysis and model-checking implementation are explicitly out of scope for this ticket.
+The design/research deliverable is complete. The OpenAI Chat Completions stream reducer refactor and table-driven tests are implemented in Geppetto, and OpenAI Responses has been structurally refactored around explicit stream state and provider-event handling. Current focus is deriving provider-specific table-driven tests from the shared provider event testing guide. Static-analysis and model-checking implementation are explicitly out of scope for this ticket.
 
 ## Topics
 
@@ -74,7 +75,8 @@ The design/research deliverable is complete. The OpenAI Chat Completions stream 
 
 ## Structure
 
-- `design-doc/` - Architecture and implementation guide.
+- `design-doc/` - Architecture and provider refactor guides.
+- `docs/design/implementation/` - Concrete implementation references for deriving test suites.
 - `reference/` - Investigation diary and future reference material.
 - `scripts/` - Future trace extraction/replay helpers.
 - `various/` - Future working notes and browser/debug artifacts.

@@ -40,6 +40,7 @@
 - Kept Responses reasoning scratch state directly in `responsesStreamState`: `78990d0 Keep Responses reasoning stream state in reducer state`.
 - Extracted Responses provider event handling out of `runStreamingInference`: `f67e02d Extract Responses provider event handler`.
 - Moved the extracted Responses provider-event handler into `stream_events.go`: `5bfa040 Move Responses provider event handling to stream events`.
+- Added provider event table-driven testing guide: `docs/design/implementation/01-provider-event-testing.md`.
 
 ### Related Files
 
