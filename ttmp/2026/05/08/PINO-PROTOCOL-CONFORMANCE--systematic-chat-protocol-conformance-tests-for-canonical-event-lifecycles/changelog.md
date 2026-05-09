@@ -55,6 +55,7 @@
 - Fixed OpenAI Responses forced streaming to include `stream: true` in the serialized request body before using the unified streaming runtime: `bb23476c Force Responses streaming request body`.
 - Added tool plugin sparse projection tests, promoted correlation merge helpers, and preserved tool name/input/correlation across sparse tool updates: `08f1cfa Preserve sparse tool projection correlation`.
 - Added reasoning plugin sparse projection tests and preserved reasoning content/parent/correlation across sparse delta/finish updates while suppressing empty starts: `9b69e84 Preserve sparse reasoning projection state`.
+- Added frontend sparse timeline reducer tests, stopped persisting generic `tool` display fallback names, and made sparse text finished UI mutations update terminal state without clearing content/correlation: `c2027de Test frontend sparse timeline reductions`.
 
 ### Related Files
 

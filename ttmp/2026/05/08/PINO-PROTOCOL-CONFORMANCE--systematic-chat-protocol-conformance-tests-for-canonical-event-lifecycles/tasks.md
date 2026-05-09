@@ -7,7 +7,7 @@
 - [ ] Continue Phase 1 Geppetto provider-normalization tables for any remaining guide rows and terminal completion helpers, using `geppetto/docs/design/implementation/01-provider-event-testing.md` as the scenario source.
 - [ ] Continue Phase 2 Go runtime protocol matrix in `pkg/chatapp` beyond the initial runtime sink terminal/correlation table.
 - [ ] Continue Phase 3 tool/reasoning plugin projection matrices in `pkg/chatapp/plugins` if additional edge rows are requested.
-- [ ] Implement Phase 4 frontend reducer-backed conformance matrix in `cmd/web-chat/web/src/ws`.
+- [ ] Continue Phase 4 frontend reducer-backed conformance matrix in `cmd/web-chat/web/src/ws` for additional reasoning/tool/result rows.
 - [ ] Implement Phase 5 timeline persistence protocol tests in `pkg/ui`.
 - [ ] Add a trace extraction/replay helper and decide whether curated fixtures belong in source testdata.
 
@@ -65,3 +65,4 @@
 - [x] Fixed OpenAI Responses forced streaming so the serialized request body includes `stream: true` before using the unified streaming runtime.
 - [x] Added table-driven tool plugin sparse projection tests and preserved tool correlation/name/input across sparse updates.
 - [x] Added table-driven reasoning plugin sparse projection tests and preserved reasoning content/correlation across sparse updates while suppressing empty placeholders.
+- [x] Added frontend sparse timeline reduction tests for tool finish, display fallback avoidance, and sparse text finish Redux merges.

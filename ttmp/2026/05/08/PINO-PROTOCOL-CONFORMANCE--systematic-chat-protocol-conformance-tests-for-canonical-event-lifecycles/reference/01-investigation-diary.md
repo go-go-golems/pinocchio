@@ -26,7 +26,7 @@ RelatedFiles:
       Note: Investigated active text finalization on stop/error.
 ExternalSources: []
 Summary: Chronological diary for the PINO-PROTOCOL-CONFORMANCE research/design task.
-LastUpdated: 2026-05-09T03:30:00-04:00
+LastUpdated: 2026-05-09T03:55:00-04:00
 WhatFor: Use this diary to understand how the protocol conformance guide was created and how to continue the work.
 WhenToUse: Use when implementing, reviewing, or extending the protocol conformance test plan.
 ---
@@ -2265,3 +2265,113 @@ go test ./pkg/chatapp/plugins -run TestReasoningPluginSparseProjectionMatrix -co
 ### Technical details
 
 The reasoning table uses a synthetic timeline view with an existing `ChatMessageEntity`, then applies sparse reasoning delta/finish backend events. The projected entity must keep prior provider/model/response/item/correlation fields and optional zero indexes while updating content/status/streaming state.
+
+## Step 25: Add frontend sparse timeline reducer matrix
+
+After the Go runtime/projection/plugin matrices, I moved to the web-chat frontend reducer layer. This is where UI frames become sparse timeline mutations and Redux merges those mutations into renderable state.
+
+The test is intentionally end-to-end within the frontend reducer layer: it calls `timelineMutationFromUIEvent`, then applies `timelineSlice.upsertEntity`. This catches bugs that do not appear if we inspect only the first mutation in isolation.
+
+### Prompt Context
+
+**User prompt (verbatim):** (same as Step 23)
+
+**Assistant interpretation:** Continue Pinocchio protocol matrices into the frontend reducer layer and keep committing/documenting checkpoints.
+
+**Inferred user intent:** Encode the deferred frontend sparse patch/reducer invariants after the Go-side runtime/projection/plugin matrices.
+
+**Commit (code):** `c2027de` — "Test frontend sparse timeline reductions"
+
+### What I did
+
+- Added `cmd/web-chat/web/src/ws/timelineProtocol.test.ts`.
+- Added frontend matrix rows for:
+  - sparse tool finish preserving `name`, `toolName`, parsed input, raw input, done/status, and correlation after Redux merge;
+  - missing tool name not persisting the generic display fallback `tool` as canonical state;
+  - sparse text finish preserving previous content and correlation while updating terminal status/final state after Redux merge.
+- Updated `timelineEvents.ts` so:
+  - tool call/result mutations no longer persist `name: 'tool'` when the provider did not supply a tool name;
+  - `ChatTextSegmentFinished` always emits a sparse message upsert with terminal status/streaming/final fields, even when terminal content is omitted;
+  - sparse finished text mutations omit missing `content` so Redux keeps previous content.
+
+### Why
+
+The frontend is the last place sparse updates can accidentally become destructive replacements. The Redux merge reducer preserves existing props only if incoming sparse mutations omit absent fields. Therefore the UI-frame mapper must not include fake fallback values or explicit `undefined` content fields that overwrite previous state.
+
+### What worked
+
+After installing frontend dependencies, focused frontend tests and typecheck passed:
+
+```bash
+cd pinocchio/cmd/web-chat/web
+npx vitest run src/ws/timelineProtocol.test.ts src/ws/wsManager.test.ts
+npm run typecheck
+```
+
+### What didn't work
+
+The first attempt to run Vitest failed because frontend dependencies were not installed:
+
+```text
+failed to load config from /home/manuel/workspaces/2026-05-02/use-sessionstream-coinvault/pinocchio/cmd/web-chat/web/vite.config.ts
+Error [ERR_MODULE_NOT_FOUND]: Cannot find package '@vitejs/plugin-react'
+```
+
+I ran:
+
+```bash
+cd pinocchio/cmd/web-chat/web
+npm install
+```
+
+Then Vitest ran, but the first frontend matrix exposed the text terminal sparse-update bug:
+
+```text
+FAIL src/ws/timelineProtocol.test.ts > frontend timeline protocol matrix > FRONTEND-03 sparse text finish preserves prior content and correlation after Redux merge
+AssertionError: expected 'streaming' to be 'failed'
+Expected: "failed"
+Received: "streaming"
+```
+
+The cause was that `ChatTextSegmentFinished` returned no `upsert` when terminal content was sparse. Redux therefore had no entity patch to update status/final/streaming. I changed the mapper to emit a sparse message upsert even without content.
+
+### What I learned
+
+Frontend protocol tests need to apply both stages: UI-frame mapping and Redux merge. Looking only at `timelineMutationFromUIEvent` would not prove that sparse patches preserve existing state after merging.
+
+### What was tricky to build
+
+The tricky part is representing absence correctly in JavaScript objects. If `content: undefined` is included in the incoming props, Redux shallow merge can overwrite the previous content with `undefined`. The fix is to construct sparse props with `definedProps` and only include `content` when the terminal payload has visible text. The same reasoning applies to generic tool fallback labels: the renderer can display `tool`, but the state patch should omit `name`/`toolName` if the provider did not supply one.
+
+### What warrants a second pair of eyes
+
+- Review whether `ChatReasoningSegmentFinished` needs the same sparse terminal frontend behavior as `ChatTextSegmentFinished`; current matrix did not add that row yet.
+- Review whether `ToolResultReady` should also avoid persisting fallback `name` in all display paths; the current change removes the fallback from state mutations and leaves rendering fallback to cards.
+
+### What should be done in the future
+
+- Add frontend reasoning sparse terminal rows.
+- Add tool result sparse/fallback rows if review wants result-specific coverage.
+- Consider adding a small helper for applying UI frames to a reducer state if more frontend protocol rows accumulate.
+
+### Code review instructions
+
+Start with:
+
+```text
+pinocchio/cmd/web-chat/web/src/ws/timelineEvents.ts
+pinocchio/cmd/web-chat/web/src/ws/timelineProtocol.test.ts
+pinocchio/cmd/web-chat/web/src/store/timelineSlice.ts
+```
+
+Validate with:
+
+```bash
+cd pinocchio/cmd/web-chat/web
+npx vitest run src/ws/timelineProtocol.test.ts src/ws/wsManager.test.ts
+npm run typecheck
+```
+
+### Technical details
+
+The new test file defines `applyFrames`, which calls `timelineMutationFromUIEvent` for each frame and then applies the resulting sparse mutation to `timelineSlice.reducer`. This keeps the test close to browser behavior while avoiding a full React/browser harness.
