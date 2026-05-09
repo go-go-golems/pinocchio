@@ -281,20 +281,27 @@ func (s *SQLiteStore) LogEvent(ctx context.Context, ev events.Event) {
 	}
 
 	switch e := ev.(type) {
-	case *events.EventToolCall:
-		toolName = e.ToolCall.Name
-		toolID = e.ToolCall.ID
-		input = e.ToolCall.Input
-	case *events.EventToolCallExecute:
-		toolName = e.ToolCall.Name
-		toolID = e.ToolCall.ID
-		input = e.ToolCall.Input
-	case *events.EventToolResult:
-		toolID = e.ToolResult.ID
-		result = e.ToolResult.Result
-	case *events.EventToolCallExecutionResult:
-		toolID = e.ToolResult.ID
-		result = e.ToolResult.Result
+	case *events.EventToolCallStarted:
+		toolName = e.ToolName
+		toolID = e.ToolCallID
+	case *events.EventToolCallArgumentsDelta:
+		toolID = e.ToolCallID
+		input = e.Arguments
+	case *events.EventToolCallRequested:
+		toolName = e.ToolName
+		toolID = e.ToolCallID
+		input = e.Input
+	case *events.EventToolExecutionStarted:
+		toolName = e.ToolName
+		toolID = e.ToolCallID
+		input = e.Input
+	case *events.EventToolResultReady:
+		toolName = e.ToolName
+		toolID = e.ToolCallID
+		result = e.Result
+	case *events.EventToolCallFinished:
+		toolName = e.ToolName
+		toolID = e.ToolCallID
 	case *events.EventLog:
 		level = e.Level
 		message = e.Message

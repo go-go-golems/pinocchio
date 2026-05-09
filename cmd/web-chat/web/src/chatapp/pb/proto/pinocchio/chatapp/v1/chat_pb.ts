@@ -10,7 +10,7 @@ import { fileDesc, messageDesc } from "@bufbuild/protobuf/codegenv2";
  * Describes the file proto/pinocchio/chatapp/v1/chat.proto.
  */
 export const file_proto_pinocchio_chatapp_v1_chat: GenFile = /*@__PURE__*/
-  fileDesc("CiVwcm90by9waW5vY2NoaW8vY2hhdGFwcC92MS9jaGF0LnByb3RvEhRwaW5vY2NoaW8uY2hhdGFwcC52MSJUChVTdGFydEluZmVyZW5jZUNvbW1hbmQSDgoGcHJvbXB0GAEgASgJEhcKD2lkZW1wb3RlbmN5X2tleRgCIAEoCRISCgpyZXF1ZXN0X2lkGAMgASgJIhYKFFN0b3BJbmZlcmVuY2VDb21tYW5kIvcCChFDaGF0TWVzc2FnZVVwZGF0ZRISCgptZXNzYWdlX2lkGAEgASgJEgwKBHJvbGUYAiABKAkSDgoGcHJvbXB0GAMgASgJEg0KBWNodW5rGAQgASgJEgwKBHRleHQYBSABKAkSDwoHY29udGVudBgGIAEoCRIOCgZzdGF0dXMYByABKAkSEQoJc3RyZWFtaW5nGAggASgIEg0KBWVycm9yGAkgASgJEhkKEXBhcmVudF9tZXNzYWdlX2lkGAogASgJEg8KB3NlZ21lbnQYCyABKAUSFAoMc2VnbWVudF90eXBlGAwgASgJEg0KBWZpbmFsGA0gASgIEhAKCHByb3ZpZGVyGA4gASgJEhMKC3Jlc3BvbnNlX2lkGA8gASgJEhkKDGNob2ljZV9pbmRleBgQIAEoBUgAiAEBEhMKC3N0cmVhbV9raW5kGBEgASgJEhcKD2NvcnJlbGF0aW9uX2tleRgSIAEoCUIPCg1fY2hvaWNlX2luZGV4IucBChFDaGF0TWVzc2FnZUVudGl0eRISCgptZXNzYWdlX2lkGAEgASgJEgwKBHJvbGUYAiABKAkSDgoGcHJvbXB0GAMgASgJEgwKBHRleHQYBCABKAkSDwoHY29udGVudBgFIAEoCRIOCgZzdGF0dXMYBiABKAkSEQoJc3RyZWFtaW5nGAcgASgIEg0KBWVycm9yGAggASgJEhkKEXBhcmVudF9tZXNzYWdlX2lkGAkgASgJEg8KB3NlZ21lbnQYCiABKAUSFAoMc2VnbWVudF90eXBlGAsgASgJEg0KBWZpbmFsGAwgASgIIsIDCg9SZWFzb25pbmdVcGRhdGUSEgoKbWVzc2FnZV9pZBgBIAEoCRIZChFwYXJlbnRfbWVzc2FnZV9pZBgCIAEoCRIPCgdzZWdtZW50GAMgASgFEgwKBHJvbGUYBCABKAkSDQoFY2h1bmsYBSABKAkSDAoEdGV4dBgGIAEoCRIPCgdjb250ZW50GAcgASgJEg4KBnN0YXR1cxgIIAEoCRIRCglzdHJlYW1pbmcYCSABKAgSDgoGc291cmNlGAogASgJEhQKDHNlZ21lbnRfdHlwZRgLIAEoCRIQCghwcm92aWRlchgMIAEoCRITCgtyZXNwb25zZV9pZBgNIAEoCRIPCgdpdGVtX2lkGA4gASgJEhkKDG91dHB1dF9pbmRleBgPIAEoBUgAiAEBEhoKDXN1bW1hcnlfaW5kZXgYECABKAVIAYgBARIZCgxjaG9pY2VfaW5kZXgYESABKAVIAogBARITCgtzdHJlYW1fa2luZBgSIAEoCRIXCg9jb3JyZWxhdGlvbl9rZXkYEyABKAlCDwoNX291dHB1dF9pbmRleEIQCg5fc3VtbWFyeV9pbmRleEIPCg1fY2hvaWNlX2luZGV4InwKFkFnZW50TW9kZVByZXZpZXdVcGRhdGUSEgoKbWVzc2FnZV9pZBgBIAEoCRIWCg5jYW5kaWRhdGVfbW9kZRgCIAEoCRIQCghhbmFseXNpcxgDIAEoCRITCgtwYXJzZV9zdGF0ZRgEIAEoCRIPCgdwcmV2aWV3GAUgASgIInoKGEFnZW50TW9kZUNvbW1pdHRlZFVwZGF0ZRISCgptZXNzYWdlX2lkGAEgASgJEg0KBXRpdGxlGAIgASgJEgwKBGZyb20YAyABKAkSCgoCdG8YBCABKAkSEAoIYW5hbHlzaXMYBSABKAkSDwoHcHJldmlldxgGIAEoCCItChdBZ2VudE1vZGVQcmV2aWV3Q2xlYXJlZBISCgptZXNzYWdlX2lkGAEgASgJInEKD0FnZW50TW9kZUVudGl0eRISCgptZXNzYWdlX2lkGAEgASgJEg0KBXRpdGxlGAIgASgJEgwKBGZyb20YAyABKAkSCgoCdG8YBCABKAkSEAoIYW5hbHlzaXMYBSABKAkSDwoHcHJldmlldxgGIAEoCCKyAgoOVG9vbENhbGxVcGRhdGUSEgoKbWVzc2FnZV9pZBgBIAEoCRIUCgx0b29sX2NhbGxfaWQYAiABKAkSEQoJdG9vbF9uYW1lGAMgASgJEg0KBWlucHV0GAQgASgJEhEKCWV4ZWN1dGluZxgFIAEoCBIOCgZzdGF0dXMYBiABKAkSEAoIcHJvdmlkZXIYByABKAkSEwoLcmVzcG9uc2VfaWQYCCABKAkSGQoMY2hvaWNlX2luZGV4GAkgASgFSACIAQESEwoLc3RyZWFtX2tpbmQYCiABKAkSFwoPY29ycmVsYXRpb25fa2V5GAsgASgJEhwKD3Rvb2xfY2FsbF9pbmRleBgMIAEoBUgBiAEBQg8KDV9jaG9pY2VfaW5kZXhCEgoQX3Rvb2xfY2FsbF9pbmRleCKiAgoQVG9vbFJlc3VsdFVwZGF0ZRISCgptZXNzYWdlX2lkGAEgASgJEhQKDHRvb2xfY2FsbF9pZBgCIAEoCRIRCgl0b29sX25hbWUYAyABKAkSDgoGcmVzdWx0GAQgASgJEg4KBnN0YXR1cxgFIAEoCRIQCghwcm92aWRlchgGIAEoCRITCgtyZXNwb25zZV9pZBgHIAEoCRIZCgxjaG9pY2VfaW5kZXgYCCABKAVIAIgBARITCgtzdHJlYW1fa2luZBgJIAEoCRIXCg9jb3JyZWxhdGlvbl9rZXkYCiABKAkSHAoPdG9vbF9jYWxsX2luZGV4GAsgASgFSAGIAQFCDwoNX2Nob2ljZV9pbmRleEISChBfdG9vbF9jYWxsX2luZGV4In8KDlRvb2xDYWxsRW50aXR5EhIKCm1lc3NhZ2VfaWQYASABKAkSFAoMdG9vbF9jYWxsX2lkGAIgASgJEhEKCXRvb2xfbmFtZRgDIAEoCRINCgVpbnB1dBgEIAEoCRIRCglleGVjdXRpbmcYBSABKAgSDgoGc3RhdHVzGAYgASgJIm8KEFRvb2xSZXN1bHRFbnRpdHkSEgoKbWVzc2FnZV9pZBgBIAEoCRIUCgx0b29sX2NhbGxfaWQYAiABKAkSEQoJdG9vbF9uYW1lGAMgASgJEg4KBnJlc3VsdBgEIAEoCRIOCgZzdGF0dXMYBSABKAlCV1pVZ2l0aHViLmNvbS9nby1nby1nb2xlbXMvcGlub2NjaGlvL3BrZy9jaGF0YXBwL3BiL3Byb3RvL3Bpbm9jY2hpby9jaGF0YXBwL3YxO2NoYXRhcHB2MWIGcHJvdG8z");
+  fileDesc("CiVwcm90by9waW5vY2NoaW8vY2hhdGFwcC92MS9jaGF0LnByb3RvEhRwaW5vY2NoaW8uY2hhdGFwcC52MSJUChVTdGFydEluZmVyZW5jZUNvbW1hbmQSDgoGcHJvbXB0GAEgASgJEhcKD2lkZW1wb3RlbmN5X2tleRgCIAEoCRISCgpyZXF1ZXN0X2lkGAMgASgJIhYKFFN0b3BJbmZlcmVuY2VDb21tYW5kIpUBCglVc2FnZUluZm8SFAoMaW5wdXRfdG9rZW5zGAEgASgFEhUKDW91dHB1dF90b2tlbnMYAiABKAUSFQoNY2FjaGVkX3Rva2VucxgDIAEoBRIjChtjYWNoZV9jcmVhdGlvbl9pbnB1dF90b2tlbnMYBCABKAUSHwoXY2FjaGVfcmVhZF9pbnB1dF90b2tlbnMYBSABKAUi8QQKD0NvcnJlbGF0aW9uSW5mbxISCgpzZXNzaW9uX2lkGAEgASgJEg4KBnJ1bl9pZBgCIAEoCRIUCgxpbmZlcmVuY2VfaWQYAyABKAkSDwoHdHVybl9pZBgEIAEoCRIYChBwcm92aWRlcl9jYWxsX2lkGAUgASgJEhsKE3Byb3ZpZGVyX2NhbGxfaW5kZXgYBiABKAUSEAoIcHJvdmlkZXIYByABKAkSDQoFbW9kZWwYCCABKAkSEwoLcmVzcG9uc2VfaWQYCSABKAkSDwoHaXRlbV9pZBgKIAEoCRIZCgxvdXRwdXRfaW5kZXgYCyABKAVIAIgBARIaCg1zdW1tYXJ5X2luZGV4GAwgASgFSAGIAQESGQoMY2hvaWNlX2luZGV4GA0gASgFSAKIAQESIAoTY29udGVudF9ibG9ja19pbmRleBgOIAEoBUgDiAEBEhIKCnNlZ21lbnRfaWQYDyABKAkSFQoNc2VnbWVudF9pbmRleBgQIAEoBRIUCgxzZWdtZW50X3R5cGUYESABKAkSEwoLc3RyZWFtX2tpbmQYEiABKAkSFAoMdG9vbF9jYWxsX2lkGBMgASgJEhwKD3Rvb2xfY2FsbF9pbmRleBgUIAEoBUgEiAEBEhcKD2NvcnJlbGF0aW9uX2tleRgVIAEoCRIeChZwYXJlbnRfY29ycmVsYXRpb25fa2V5GBYgASgJQg8KDV9vdXRwdXRfaW5kZXhCEAoOX3N1bW1hcnlfaW5kZXhCDwoNX2Nob2ljZV9pbmRleEIWChRfY29udGVudF9ibG9ja19pbmRleEISChBfdG9vbF9jYWxsX2luZGV4InAKDkNoYXRSdW5TdGFydGVkEhIKCm1lc3NhZ2VfaWQYASABKAkSDgoGcHJvbXB0GAIgASgJEjoKC2NvcnJlbGF0aW9uGAMgASgLMiUucGlub2NjaGlvLmNoYXRhcHAudjEuQ29ycmVsYXRpb25JbmZvIqoBCg9DaGF0UnVuRmluaXNoZWQSEgoKbWVzc2FnZV9pZBgBIAEoCRIOCgZzdGF0dXMYAiABKAkSDQoFZXJyb3IYAyABKAkSGAoLZHVyYXRpb25fbXMYBCABKANIAIgBARI6Cgtjb3JyZWxhdGlvbhgFIAEoCzIlLnBpbm9jY2hpby5jaGF0YXBwLnYxLkNvcnJlbGF0aW9uSW5mb0IOCgxfZHVyYXRpb25fbXMifwoOQ2hhdFJ1blN0b3BwZWQSEgoKbWVzc2FnZV9pZBgBIAEoCRIOCgZzdGF0dXMYAiABKAkSDQoFZXJyb3IYAyABKAkSOgoLY29ycmVsYXRpb24YBCABKAsyJS5waW5vY2NoaW8uY2hhdGFwcC52MS5Db3JyZWxhdGlvbkluZm8ifgoNQ2hhdFJ1bkZhaWxlZBISCgptZXNzYWdlX2lkGAEgASgJEg4KBnN0YXR1cxgCIAEoCRINCgVlcnJvchgDIAEoCRI6Cgtjb3JyZWxhdGlvbhgEIAEoCzIlLnBpbm9jY2hpby5jaGF0YXBwLnYxLkNvcnJlbGF0aW9uSW5mbyJVChdDaGF0UHJvdmlkZXJDYWxsU3RhcnRlZBI6Cgtjb3JyZWxhdGlvbhgBIAEoCzIlLnBpbm9jY2hpby5jaGF0YXBwLnYxLkNvcnJlbGF0aW9uSW5mbyKiAQofQ2hhdFByb3ZpZGVyQ2FsbE1ldGFkYXRhVXBkYXRlZBITCgtzdG9wX3JlYXNvbhgBIAEoCRIuCgV1c2FnZRgCIAEoCzIfLnBpbm9jY2hpby5jaGF0YXBwLnYxLlVzYWdlSW5mbxI6Cgtjb3JyZWxhdGlvbhgDIAEoCzIlLnBpbm9jY2hpby5jaGF0YXBwLnYxLkNvcnJlbGF0aW9uSW5mbyLzAQoYQ2hhdFByb3ZpZGVyQ2FsbEZpbmlzaGVkEhMKC3N0b3BfcmVhc29uGAEgASgJEhQKDGZpbmlzaF9jbGFzcxgCIAEoCRIuCgV1c2FnZRgDIAEoCzIfLnBpbm9jY2hpby5jaGF0YXBwLnYxLlVzYWdlSW5mbxIYCgtkdXJhdGlvbl9tcxgEIAEoA0gAiAEBEhYKDmhhc190b29sX2NhbGxzGAUgASgIEjoKC2NvcnJlbGF0aW9uGAYgASgLMiUucGlub2NjaGlvLmNoYXRhcHAudjEuQ29ycmVsYXRpb25JbmZvQg4KDF9kdXJhdGlvbl9tcyKpAQoWQ2hhdFRleHRTZWdtZW50U3RhcnRlZBISCgptZXNzYWdlX2lkGAEgASgJEgwKBHJvbGUYAiABKAkSDgoGcHJvbXB0GAMgASgJEg4KBnN0YXR1cxgEIAEoCRIRCglzdHJlYW1pbmcYBSABKAgSOgoLY29ycmVsYXRpb24YBiABKAsyJS5waW5vY2NoaW8uY2hhdGFwcC52MS5Db3JyZWxhdGlvbkluZm8izgEKDUNoYXRUZXh0RGVsdGESEgoKbWVzc2FnZV9pZBgBIAEoCRIMCgRyb2xlGAIgASgJEg4KBnByb21wdBgDIAEoCRINCgVjaHVuaxgEIAEoCRIMCgR0ZXh0GAUgASgJEg8KB2NvbnRlbnQYBiABKAkSDgoGc3RhdHVzGAcgASgJEhEKCXN0cmVhbWluZxgIIAEoCBI6Cgtjb3JyZWxhdGlvbhgJIAEoCzIlLnBpbm9jY2hpby5jaGF0YXBwLnYxLkNvcnJlbGF0aW9uSW5mbyLvAQoXQ2hhdFRleHRTZWdtZW50RmluaXNoZWQSEgoKbWVzc2FnZV9pZBgBIAEoCRIMCgRyb2xlGAIgASgJEg4KBnByb21wdBgDIAEoCRIMCgR0ZXh0GAQgASgJEg8KB2NvbnRlbnQYBSABKAkSDgoGc3RhdHVzGAYgASgJEhEKCXN0cmVhbWluZxgHIAEoCBINCgVmaW5hbBgIIAEoCBIVCg1maW5pc2hfcmVhc29uGAkgASgJEjoKC2NvcnJlbGF0aW9uGAogASgLMiUucGlub2NjaGlvLmNoYXRhcHAudjEuQ29ycmVsYXRpb25JbmZvIskBChtDaGF0UmVhc29uaW5nU2VnbWVudFN0YXJ0ZWQSEgoKbWVzc2FnZV9pZBgBIAEoCRIZChFwYXJlbnRfbWVzc2FnZV9pZBgCIAEoCRIMCgRyb2xlGAMgASgJEg4KBnN0YXR1cxgEIAEoCRIRCglzdHJlYW1pbmcYBSABKAgSDgoGc291cmNlGAYgASgJEjoKC2NvcnJlbGF0aW9uGAcgASgLMiUucGlub2NjaGlvLmNoYXRhcHAudjEuQ29ycmVsYXRpb25JbmZvIu4BChJDaGF0UmVhc29uaW5nRGVsdGESEgoKbWVzc2FnZV9pZBgBIAEoCRIZChFwYXJlbnRfbWVzc2FnZV9pZBgCIAEoCRIMCgRyb2xlGAMgASgJEg0KBWNodW5rGAQgASgJEgwKBHRleHQYBSABKAkSDwoHY29udGVudBgGIAEoCRIOCgZzdGF0dXMYByABKAkSEQoJc3RyZWFtaW5nGAggASgIEg4KBnNvdXJjZRgJIAEoCRI6Cgtjb3JyZWxhdGlvbhgKIAEoCzIlLnBpbm9jY2hpby5jaGF0YXBwLnYxLkNvcnJlbGF0aW9uSW5mbyKAAgocQ2hhdFJlYXNvbmluZ1NlZ21lbnRGaW5pc2hlZBISCgptZXNzYWdlX2lkGAEgASgJEhkKEXBhcmVudF9tZXNzYWdlX2lkGAIgASgJEgwKBHJvbGUYAyABKAkSDAoEdGV4dBgEIAEoCRIPCgdjb250ZW50GAUgASgJEg4KBnN0YXR1cxgGIAEoCRIRCglzdHJlYW1pbmcYByABKAgSDgoGc291cmNlGAggASgJEhUKDWZpbmlzaF9yZWFzb24YCSABKAkSOgoLY29ycmVsYXRpb24YCiABKAsyJS5waW5vY2NoaW8uY2hhdGFwcC52MS5Db3JyZWxhdGlvbkluZm8iwAEKE0NoYXRUb29sQ2FsbFN0YXJ0ZWQSEgoKbWVzc2FnZV9pZBgBIAEoCRIUCgx0b29sX2NhbGxfaWQYAiABKAkSEQoJdG9vbF9uYW1lGAMgASgJEg0KBWlucHV0GAQgASgJEhEKCWV4ZWN1dGluZxgFIAEoCBIOCgZzdGF0dXMYBiABKAkSOgoLY29ycmVsYXRpb24YByABKAsyJS5waW5vY2NoaW8uY2hhdGFwcC52MS5Db3JyZWxhdGlvbkluZm8izQEKGkNoYXRUb29sQ2FsbEFyZ3VtZW50c0RlbHRhEhIKCm1lc3NhZ2VfaWQYASABKAkSFAoMdG9vbF9jYWxsX2lkGAIgASgJEhEKCXRvb2xfbmFtZRgDIAEoCRIXCg9hcmd1bWVudHNfZGVsdGEYBCABKAkSDQoFaW5wdXQYBSABKAkSDgoGc3RhdHVzGAYgASgJEjoKC2NvcnJlbGF0aW9uGAcgASgLMiUucGlub2NjaGlvLmNoYXRhcHAudjEuQ29ycmVsYXRpb25JbmZvIsIBChVDaGF0VG9vbENhbGxSZXF1ZXN0ZWQSEgoKbWVzc2FnZV9pZBgBIAEoCRIUCgx0b29sX2NhbGxfaWQYAiABKAkSEQoJdG9vbF9uYW1lGAMgASgJEg0KBWlucHV0GAQgASgJEhEKCWV4ZWN1dGluZxgFIAEoCBIOCgZzdGF0dXMYBiABKAkSOgoLY29ycmVsYXRpb24YByABKAsyJS5waW5vY2NoaW8uY2hhdGFwcC52MS5Db3JyZWxhdGlvbkluZm8ixQEKGENoYXRUb29sRXhlY3V0aW9uU3RhcnRlZBISCgptZXNzYWdlX2lkGAEgASgJEhQKDHRvb2xfY2FsbF9pZBgCIAEoCRIRCgl0b29sX25hbWUYAyABKAkSDQoFaW5wdXQYBCABKAkSEQoJZXhlY3V0aW5nGAUgASgIEg4KBnN0YXR1cxgGIAEoCRI6Cgtjb3JyZWxhdGlvbhgHIAEoCzIlLnBpbm9jY2hpby5jaGF0YXBwLnYxLkNvcnJlbGF0aW9uSW5mbyKuAQoTQ2hhdFRvb2xSZXN1bHRSZWFkeRISCgptZXNzYWdlX2lkGAEgASgJEhQKDHRvb2xfY2FsbF9pZBgCIAEoCRIRCgl0b29sX25hbWUYAyABKAkSDgoGcmVzdWx0GAQgASgJEg4KBnN0YXR1cxgFIAEoCRI6Cgtjb3JyZWxhdGlvbhgGIAEoCzIlLnBpbm9jY2hpby5jaGF0YXBwLnYxLkNvcnJlbGF0aW9uSW5mbyKfAQoUQ2hhdFRvb2xDYWxsRmluaXNoZWQSEgoKbWVzc2FnZV9pZBgBIAEoCRIUCgx0b29sX2NhbGxfaWQYAiABKAkSEQoJdG9vbF9uYW1lGAMgASgJEg4KBnN0YXR1cxgEIAEoCRI6Cgtjb3JyZWxhdGlvbhgFIAEoCzIlLnBpbm9jY2hpby5jaGF0YXBwLnYxLkNvcnJlbGF0aW9uSW5mbyJ6ChdDaGF0VXNlck1lc3NhZ2VBY2NlcHRlZBISCgptZXNzYWdlX2lkGAEgASgJEgwKBHJvbGUYAiABKAkSDgoGcHJvbXB0GAMgASgJEgwKBHRleHQYBCABKAkSDwoHY29udGVudBgFIAEoCRIOCgZzdGF0dXMYBiABKAkiowIKEUNoYXRNZXNzYWdlRW50aXR5EhIKCm1lc3NhZ2VfaWQYASABKAkSDAoEcm9sZRgCIAEoCRIOCgZwcm9tcHQYAyABKAkSDAoEdGV4dBgEIAEoCRIPCgdjb250ZW50GAUgASgJEg4KBnN0YXR1cxgGIAEoCRIRCglzdHJlYW1pbmcYByABKAgSDQoFZXJyb3IYCCABKAkSGQoRcGFyZW50X21lc3NhZ2VfaWQYCSABKAkSDwoHc2VnbWVudBgKIAEoBRIUCgxzZWdtZW50X3R5cGUYCyABKAkSDQoFZmluYWwYDCABKAgSOgoLY29ycmVsYXRpb24YDSABKAsyJS5waW5vY2NoaW8uY2hhdGFwcC52MS5Db3JyZWxhdGlvbkluZm8ifAoWQWdlbnRNb2RlUHJldmlld1VwZGF0ZRISCgptZXNzYWdlX2lkGAEgASgJEhYKDmNhbmRpZGF0ZV9tb2RlGAIgASgJEhAKCGFuYWx5c2lzGAMgASgJEhMKC3BhcnNlX3N0YXRlGAQgASgJEg8KB3ByZXZpZXcYBSABKAgiegoYQWdlbnRNb2RlQ29tbWl0dGVkVXBkYXRlEhIKCm1lc3NhZ2VfaWQYASABKAkSDQoFdGl0bGUYAiABKAkSDAoEZnJvbRgDIAEoCRIKCgJ0bxgEIAEoCRIQCghhbmFseXNpcxgFIAEoCRIPCgdwcmV2aWV3GAYgASgIIi0KF0FnZW50TW9kZVByZXZpZXdDbGVhcmVkEhIKCm1lc3NhZ2VfaWQYASABKAkicQoPQWdlbnRNb2RlRW50aXR5EhIKCm1lc3NhZ2VfaWQYASABKAkSDQoFdGl0bGUYAiABKAkSDAoEZnJvbRgDIAEoCRIKCgJ0bxgEIAEoCRIQCghhbmFseXNpcxgFIAEoCRIPCgdwcmV2aWV3GAYgASgIIrsBCg5Ub29sQ2FsbEVudGl0eRISCgptZXNzYWdlX2lkGAEgASgJEhQKDHRvb2xfY2FsbF9pZBgCIAEoCRIRCgl0b29sX25hbWUYAyABKAkSDQoFaW5wdXQYBCABKAkSEQoJZXhlY3V0aW5nGAUgASgIEg4KBnN0YXR1cxgGIAEoCRI6Cgtjb3JyZWxhdGlvbhgHIAEoCzIlLnBpbm9jY2hpby5jaGF0YXBwLnYxLkNvcnJlbGF0aW9uSW5mbyKrAQoQVG9vbFJlc3VsdEVudGl0eRISCgptZXNzYWdlX2lkGAEgASgJEhQKDHRvb2xfY2FsbF9pZBgCIAEoCRIRCgl0b29sX25hbWUYAyABKAkSDgoGcmVzdWx0GAQgASgJEg4KBnN0YXR1cxgFIAEoCRI6Cgtjb3JyZWxhdGlvbhgGIAEoCzIlLnBpbm9jY2hpby5jaGF0YXBwLnYxLkNvcnJlbGF0aW9uSW5mb0JXWlVnaXRodWIuY29tL2dvLWdvLWdvbGVtcy9waW5vY2NoaW8vcGtnL2NoYXRhcHAvcGIvcHJvdG8vcGlub2NjaGlvL2NoYXRhcHAvdjE7Y2hhdGFwcHYxYgZwcm90bzM");
 
 /**
  * @generated from message pinocchio.chatapp.v1.StartInferenceCommand
@@ -53,9 +53,424 @@ export const StopInferenceCommandSchema: GenMessage<StopInferenceCommand> = /*@_
   messageDesc(file_proto_pinocchio_chatapp_v1_chat, 1);
 
 /**
- * @generated from message pinocchio.chatapp.v1.ChatMessageUpdate
+ * @generated from message pinocchio.chatapp.v1.UsageInfo
  */
-export type ChatMessageUpdate = Message<"pinocchio.chatapp.v1.ChatMessageUpdate"> & {
+export type UsageInfo = Message<"pinocchio.chatapp.v1.UsageInfo"> & {
+  /**
+   * @generated from field: int32 input_tokens = 1;
+   */
+  inputTokens: number;
+
+  /**
+   * @generated from field: int32 output_tokens = 2;
+   */
+  outputTokens: number;
+
+  /**
+   * @generated from field: int32 cached_tokens = 3;
+   */
+  cachedTokens: number;
+
+  /**
+   * @generated from field: int32 cache_creation_input_tokens = 4;
+   */
+  cacheCreationInputTokens: number;
+
+  /**
+   * @generated from field: int32 cache_read_input_tokens = 5;
+   */
+  cacheReadInputTokens: number;
+};
+
+/**
+ * Describes the message pinocchio.chatapp.v1.UsageInfo.
+ * Use `create(UsageInfoSchema)` to create a new message.
+ */
+export const UsageInfoSchema: GenMessage<UsageInfo> = /*@__PURE__*/
+  messageDesc(file_proto_pinocchio_chatapp_v1_chat, 2);
+
+/**
+ * @generated from message pinocchio.chatapp.v1.CorrelationInfo
+ */
+export type CorrelationInfo = Message<"pinocchio.chatapp.v1.CorrelationInfo"> & {
+  /**
+   * @generated from field: string session_id = 1;
+   */
+  sessionId: string;
+
+  /**
+   * @generated from field: string run_id = 2;
+   */
+  runId: string;
+
+  /**
+   * @generated from field: string inference_id = 3;
+   */
+  inferenceId: string;
+
+  /**
+   * @generated from field: string turn_id = 4;
+   */
+  turnId: string;
+
+  /**
+   * @generated from field: string provider_call_id = 5;
+   */
+  providerCallId: string;
+
+  /**
+   * @generated from field: int32 provider_call_index = 6;
+   */
+  providerCallIndex: number;
+
+  /**
+   * @generated from field: string provider = 7;
+   */
+  provider: string;
+
+  /**
+   * @generated from field: string model = 8;
+   */
+  model: string;
+
+  /**
+   * @generated from field: string response_id = 9;
+   */
+  responseId: string;
+
+  /**
+   * @generated from field: string item_id = 10;
+   */
+  itemId: string;
+
+  /**
+   * @generated from field: optional int32 output_index = 11;
+   */
+  outputIndex?: number | undefined;
+
+  /**
+   * @generated from field: optional int32 summary_index = 12;
+   */
+  summaryIndex?: number | undefined;
+
+  /**
+   * @generated from field: optional int32 choice_index = 13;
+   */
+  choiceIndex?: number | undefined;
+
+  /**
+   * @generated from field: optional int32 content_block_index = 14;
+   */
+  contentBlockIndex?: number | undefined;
+
+  /**
+   * @generated from field: string segment_id = 15;
+   */
+  segmentId: string;
+
+  /**
+   * @generated from field: int32 segment_index = 16;
+   */
+  segmentIndex: number;
+
+  /**
+   * @generated from field: string segment_type = 17;
+   */
+  segmentType: string;
+
+  /**
+   * @generated from field: string stream_kind = 18;
+   */
+  streamKind: string;
+
+  /**
+   * @generated from field: string tool_call_id = 19;
+   */
+  toolCallId: string;
+
+  /**
+   * @generated from field: optional int32 tool_call_index = 20;
+   */
+  toolCallIndex?: number | undefined;
+
+  /**
+   * @generated from field: string correlation_key = 21;
+   */
+  correlationKey: string;
+
+  /**
+   * @generated from field: string parent_correlation_key = 22;
+   */
+  parentCorrelationKey: string;
+};
+
+/**
+ * Describes the message pinocchio.chatapp.v1.CorrelationInfo.
+ * Use `create(CorrelationInfoSchema)` to create a new message.
+ */
+export const CorrelationInfoSchema: GenMessage<CorrelationInfo> = /*@__PURE__*/
+  messageDesc(file_proto_pinocchio_chatapp_v1_chat, 3);
+
+/**
+ * @generated from message pinocchio.chatapp.v1.ChatRunStarted
+ */
+export type ChatRunStarted = Message<"pinocchio.chatapp.v1.ChatRunStarted"> & {
+  /**
+   * @generated from field: string message_id = 1;
+   */
+  messageId: string;
+
+  /**
+   * @generated from field: string prompt = 2;
+   */
+  prompt: string;
+
+  /**
+   * @generated from field: pinocchio.chatapp.v1.CorrelationInfo correlation = 3;
+   */
+  correlation?: CorrelationInfo | undefined;
+};
+
+/**
+ * Describes the message pinocchio.chatapp.v1.ChatRunStarted.
+ * Use `create(ChatRunStartedSchema)` to create a new message.
+ */
+export const ChatRunStartedSchema: GenMessage<ChatRunStarted> = /*@__PURE__*/
+  messageDesc(file_proto_pinocchio_chatapp_v1_chat, 4);
+
+/**
+ * @generated from message pinocchio.chatapp.v1.ChatRunFinished
+ */
+export type ChatRunFinished = Message<"pinocchio.chatapp.v1.ChatRunFinished"> & {
+  /**
+   * @generated from field: string message_id = 1;
+   */
+  messageId: string;
+
+  /**
+   * @generated from field: string status = 2;
+   */
+  status: string;
+
+  /**
+   * @generated from field: string error = 3;
+   */
+  error: string;
+
+  /**
+   * @generated from field: optional int64 duration_ms = 4;
+   */
+  durationMs?: bigint | undefined;
+
+  /**
+   * @generated from field: pinocchio.chatapp.v1.CorrelationInfo correlation = 5;
+   */
+  correlation?: CorrelationInfo | undefined;
+};
+
+/**
+ * Describes the message pinocchio.chatapp.v1.ChatRunFinished.
+ * Use `create(ChatRunFinishedSchema)` to create a new message.
+ */
+export const ChatRunFinishedSchema: GenMessage<ChatRunFinished> = /*@__PURE__*/
+  messageDesc(file_proto_pinocchio_chatapp_v1_chat, 5);
+
+/**
+ * @generated from message pinocchio.chatapp.v1.ChatRunStopped
+ */
+export type ChatRunStopped = Message<"pinocchio.chatapp.v1.ChatRunStopped"> & {
+  /**
+   * @generated from field: string message_id = 1;
+   */
+  messageId: string;
+
+  /**
+   * @generated from field: string status = 2;
+   */
+  status: string;
+
+  /**
+   * @generated from field: string error = 3;
+   */
+  error: string;
+
+  /**
+   * @generated from field: pinocchio.chatapp.v1.CorrelationInfo correlation = 4;
+   */
+  correlation?: CorrelationInfo | undefined;
+};
+
+/**
+ * Describes the message pinocchio.chatapp.v1.ChatRunStopped.
+ * Use `create(ChatRunStoppedSchema)` to create a new message.
+ */
+export const ChatRunStoppedSchema: GenMessage<ChatRunStopped> = /*@__PURE__*/
+  messageDesc(file_proto_pinocchio_chatapp_v1_chat, 6);
+
+/**
+ * @generated from message pinocchio.chatapp.v1.ChatRunFailed
+ */
+export type ChatRunFailed = Message<"pinocchio.chatapp.v1.ChatRunFailed"> & {
+  /**
+   * @generated from field: string message_id = 1;
+   */
+  messageId: string;
+
+  /**
+   * @generated from field: string status = 2;
+   */
+  status: string;
+
+  /**
+   * @generated from field: string error = 3;
+   */
+  error: string;
+
+  /**
+   * @generated from field: pinocchio.chatapp.v1.CorrelationInfo correlation = 4;
+   */
+  correlation?: CorrelationInfo | undefined;
+};
+
+/**
+ * Describes the message pinocchio.chatapp.v1.ChatRunFailed.
+ * Use `create(ChatRunFailedSchema)` to create a new message.
+ */
+export const ChatRunFailedSchema: GenMessage<ChatRunFailed> = /*@__PURE__*/
+  messageDesc(file_proto_pinocchio_chatapp_v1_chat, 7);
+
+/**
+ * @generated from message pinocchio.chatapp.v1.ChatProviderCallStarted
+ */
+export type ChatProviderCallStarted = Message<"pinocchio.chatapp.v1.ChatProviderCallStarted"> & {
+  /**
+   * @generated from field: pinocchio.chatapp.v1.CorrelationInfo correlation = 1;
+   */
+  correlation?: CorrelationInfo | undefined;
+};
+
+/**
+ * Describes the message pinocchio.chatapp.v1.ChatProviderCallStarted.
+ * Use `create(ChatProviderCallStartedSchema)` to create a new message.
+ */
+export const ChatProviderCallStartedSchema: GenMessage<ChatProviderCallStarted> = /*@__PURE__*/
+  messageDesc(file_proto_pinocchio_chatapp_v1_chat, 8);
+
+/**
+ * @generated from message pinocchio.chatapp.v1.ChatProviderCallMetadataUpdated
+ */
+export type ChatProviderCallMetadataUpdated = Message<"pinocchio.chatapp.v1.ChatProviderCallMetadataUpdated"> & {
+  /**
+   * @generated from field: string stop_reason = 1;
+   */
+  stopReason: string;
+
+  /**
+   * @generated from field: pinocchio.chatapp.v1.UsageInfo usage = 2;
+   */
+  usage?: UsageInfo | undefined;
+
+  /**
+   * @generated from field: pinocchio.chatapp.v1.CorrelationInfo correlation = 3;
+   */
+  correlation?: CorrelationInfo | undefined;
+};
+
+/**
+ * Describes the message pinocchio.chatapp.v1.ChatProviderCallMetadataUpdated.
+ * Use `create(ChatProviderCallMetadataUpdatedSchema)` to create a new message.
+ */
+export const ChatProviderCallMetadataUpdatedSchema: GenMessage<ChatProviderCallMetadataUpdated> = /*@__PURE__*/
+  messageDesc(file_proto_pinocchio_chatapp_v1_chat, 9);
+
+/**
+ * @generated from message pinocchio.chatapp.v1.ChatProviderCallFinished
+ */
+export type ChatProviderCallFinished = Message<"pinocchio.chatapp.v1.ChatProviderCallFinished"> & {
+  /**
+   * @generated from field: string stop_reason = 1;
+   */
+  stopReason: string;
+
+  /**
+   * @generated from field: string finish_class = 2;
+   */
+  finishClass: string;
+
+  /**
+   * @generated from field: pinocchio.chatapp.v1.UsageInfo usage = 3;
+   */
+  usage?: UsageInfo | undefined;
+
+  /**
+   * @generated from field: optional int64 duration_ms = 4;
+   */
+  durationMs?: bigint | undefined;
+
+  /**
+   * @generated from field: bool has_tool_calls = 5;
+   */
+  hasToolCalls: boolean;
+
+  /**
+   * @generated from field: pinocchio.chatapp.v1.CorrelationInfo correlation = 6;
+   */
+  correlation?: CorrelationInfo | undefined;
+};
+
+/**
+ * Describes the message pinocchio.chatapp.v1.ChatProviderCallFinished.
+ * Use `create(ChatProviderCallFinishedSchema)` to create a new message.
+ */
+export const ChatProviderCallFinishedSchema: GenMessage<ChatProviderCallFinished> = /*@__PURE__*/
+  messageDesc(file_proto_pinocchio_chatapp_v1_chat, 10);
+
+/**
+ * @generated from message pinocchio.chatapp.v1.ChatTextSegmentStarted
+ */
+export type ChatTextSegmentStarted = Message<"pinocchio.chatapp.v1.ChatTextSegmentStarted"> & {
+  /**
+   * @generated from field: string message_id = 1;
+   */
+  messageId: string;
+
+  /**
+   * @generated from field: string role = 2;
+   */
+  role: string;
+
+  /**
+   * @generated from field: string prompt = 3;
+   */
+  prompt: string;
+
+  /**
+   * @generated from field: string status = 4;
+   */
+  status: string;
+
+  /**
+   * @generated from field: bool streaming = 5;
+   */
+  streaming: boolean;
+
+  /**
+   * @generated from field: pinocchio.chatapp.v1.CorrelationInfo correlation = 6;
+   */
+  correlation?: CorrelationInfo | undefined;
+};
+
+/**
+ * Describes the message pinocchio.chatapp.v1.ChatTextSegmentStarted.
+ * Use `create(ChatTextSegmentStartedSchema)` to create a new message.
+ */
+export const ChatTextSegmentStartedSchema: GenMessage<ChatTextSegmentStarted> = /*@__PURE__*/
+  messageDesc(file_proto_pinocchio_chatapp_v1_chat, 11);
+
+/**
+ * @generated from message pinocchio.chatapp.v1.ChatTextDelta
+ */
+export type ChatTextDelta = Message<"pinocchio.chatapp.v1.ChatTextDelta"> & {
   /**
    * @generated from field: string message_id = 1;
    */
@@ -97,62 +512,559 @@ export type ChatMessageUpdate = Message<"pinocchio.chatapp.v1.ChatMessageUpdate"
   streaming: boolean;
 
   /**
-   * @generated from field: string error = 9;
+   * @generated from field: pinocchio.chatapp.v1.CorrelationInfo correlation = 9;
    */
-  error: string;
+  correlation?: CorrelationInfo | undefined;
+};
+
+/**
+ * Describes the message pinocchio.chatapp.v1.ChatTextDelta.
+ * Use `create(ChatTextDeltaSchema)` to create a new message.
+ */
+export const ChatTextDeltaSchema: GenMessage<ChatTextDelta> = /*@__PURE__*/
+  messageDesc(file_proto_pinocchio_chatapp_v1_chat, 12);
+
+/**
+ * @generated from message pinocchio.chatapp.v1.ChatTextSegmentFinished
+ */
+export type ChatTextSegmentFinished = Message<"pinocchio.chatapp.v1.ChatTextSegmentFinished"> & {
+  /**
+   * @generated from field: string message_id = 1;
+   */
+  messageId: string;
 
   /**
-   * @generated from field: string parent_message_id = 10;
+   * @generated from field: string role = 2;
    */
-  parentMessageId: string;
+  role: string;
 
   /**
-   * @generated from field: int32 segment = 11;
+   * @generated from field: string prompt = 3;
    */
-  segment: number;
+  prompt: string;
 
   /**
-   * @generated from field: string segment_type = 12;
+   * @generated from field: string text = 4;
    */
-  segmentType: string;
+  text: string;
 
   /**
-   * @generated from field: bool final = 13;
+   * @generated from field: string content = 5;
+   */
+  content: string;
+
+  /**
+   * @generated from field: string status = 6;
+   */
+  status: string;
+
+  /**
+   * @generated from field: bool streaming = 7;
+   */
+  streaming: boolean;
+
+  /**
+   * @generated from field: bool final = 8;
    */
   final: boolean;
 
   /**
-   * @generated from field: string provider = 14;
+   * @generated from field: string finish_reason = 9;
    */
-  provider: string;
+  finishReason: string;
 
   /**
-   * @generated from field: string response_id = 15;
+   * @generated from field: pinocchio.chatapp.v1.CorrelationInfo correlation = 10;
    */
-  responseId: string;
-
-  /**
-   * @generated from field: optional int32 choice_index = 16;
-   */
-  choiceIndex?: number | undefined;
-
-  /**
-   * @generated from field: string stream_kind = 17;
-   */
-  streamKind: string;
-
-  /**
-   * @generated from field: string correlation_key = 18;
-   */
-  correlationKey: string;
+  correlation?: CorrelationInfo | undefined;
 };
 
 /**
- * Describes the message pinocchio.chatapp.v1.ChatMessageUpdate.
- * Use `create(ChatMessageUpdateSchema)` to create a new message.
+ * Describes the message pinocchio.chatapp.v1.ChatTextSegmentFinished.
+ * Use `create(ChatTextSegmentFinishedSchema)` to create a new message.
  */
-export const ChatMessageUpdateSchema: GenMessage<ChatMessageUpdate> = /*@__PURE__*/
-  messageDesc(file_proto_pinocchio_chatapp_v1_chat, 2);
+export const ChatTextSegmentFinishedSchema: GenMessage<ChatTextSegmentFinished> = /*@__PURE__*/
+  messageDesc(file_proto_pinocchio_chatapp_v1_chat, 13);
+
+/**
+ * @generated from message pinocchio.chatapp.v1.ChatReasoningSegmentStarted
+ */
+export type ChatReasoningSegmentStarted = Message<"pinocchio.chatapp.v1.ChatReasoningSegmentStarted"> & {
+  /**
+   * @generated from field: string message_id = 1;
+   */
+  messageId: string;
+
+  /**
+   * @generated from field: string parent_message_id = 2;
+   */
+  parentMessageId: string;
+
+  /**
+   * @generated from field: string role = 3;
+   */
+  role: string;
+
+  /**
+   * @generated from field: string status = 4;
+   */
+  status: string;
+
+  /**
+   * @generated from field: bool streaming = 5;
+   */
+  streaming: boolean;
+
+  /**
+   * @generated from field: string source = 6;
+   */
+  source: string;
+
+  /**
+   * @generated from field: pinocchio.chatapp.v1.CorrelationInfo correlation = 7;
+   */
+  correlation?: CorrelationInfo | undefined;
+};
+
+/**
+ * Describes the message pinocchio.chatapp.v1.ChatReasoningSegmentStarted.
+ * Use `create(ChatReasoningSegmentStartedSchema)` to create a new message.
+ */
+export const ChatReasoningSegmentStartedSchema: GenMessage<ChatReasoningSegmentStarted> = /*@__PURE__*/
+  messageDesc(file_proto_pinocchio_chatapp_v1_chat, 14);
+
+/**
+ * @generated from message pinocchio.chatapp.v1.ChatReasoningDelta
+ */
+export type ChatReasoningDelta = Message<"pinocchio.chatapp.v1.ChatReasoningDelta"> & {
+  /**
+   * @generated from field: string message_id = 1;
+   */
+  messageId: string;
+
+  /**
+   * @generated from field: string parent_message_id = 2;
+   */
+  parentMessageId: string;
+
+  /**
+   * @generated from field: string role = 3;
+   */
+  role: string;
+
+  /**
+   * @generated from field: string chunk = 4;
+   */
+  chunk: string;
+
+  /**
+   * @generated from field: string text = 5;
+   */
+  text: string;
+
+  /**
+   * @generated from field: string content = 6;
+   */
+  content: string;
+
+  /**
+   * @generated from field: string status = 7;
+   */
+  status: string;
+
+  /**
+   * @generated from field: bool streaming = 8;
+   */
+  streaming: boolean;
+
+  /**
+   * @generated from field: string source = 9;
+   */
+  source: string;
+
+  /**
+   * @generated from field: pinocchio.chatapp.v1.CorrelationInfo correlation = 10;
+   */
+  correlation?: CorrelationInfo | undefined;
+};
+
+/**
+ * Describes the message pinocchio.chatapp.v1.ChatReasoningDelta.
+ * Use `create(ChatReasoningDeltaSchema)` to create a new message.
+ */
+export const ChatReasoningDeltaSchema: GenMessage<ChatReasoningDelta> = /*@__PURE__*/
+  messageDesc(file_proto_pinocchio_chatapp_v1_chat, 15);
+
+/**
+ * @generated from message pinocchio.chatapp.v1.ChatReasoningSegmentFinished
+ */
+export type ChatReasoningSegmentFinished = Message<"pinocchio.chatapp.v1.ChatReasoningSegmentFinished"> & {
+  /**
+   * @generated from field: string message_id = 1;
+   */
+  messageId: string;
+
+  /**
+   * @generated from field: string parent_message_id = 2;
+   */
+  parentMessageId: string;
+
+  /**
+   * @generated from field: string role = 3;
+   */
+  role: string;
+
+  /**
+   * @generated from field: string text = 4;
+   */
+  text: string;
+
+  /**
+   * @generated from field: string content = 5;
+   */
+  content: string;
+
+  /**
+   * @generated from field: string status = 6;
+   */
+  status: string;
+
+  /**
+   * @generated from field: bool streaming = 7;
+   */
+  streaming: boolean;
+
+  /**
+   * @generated from field: string source = 8;
+   */
+  source: string;
+
+  /**
+   * @generated from field: string finish_reason = 9;
+   */
+  finishReason: string;
+
+  /**
+   * @generated from field: pinocchio.chatapp.v1.CorrelationInfo correlation = 10;
+   */
+  correlation?: CorrelationInfo | undefined;
+};
+
+/**
+ * Describes the message pinocchio.chatapp.v1.ChatReasoningSegmentFinished.
+ * Use `create(ChatReasoningSegmentFinishedSchema)` to create a new message.
+ */
+export const ChatReasoningSegmentFinishedSchema: GenMessage<ChatReasoningSegmentFinished> = /*@__PURE__*/
+  messageDesc(file_proto_pinocchio_chatapp_v1_chat, 16);
+
+/**
+ * @generated from message pinocchio.chatapp.v1.ChatToolCallStarted
+ */
+export type ChatToolCallStarted = Message<"pinocchio.chatapp.v1.ChatToolCallStarted"> & {
+  /**
+   * @generated from field: string message_id = 1;
+   */
+  messageId: string;
+
+  /**
+   * @generated from field: string tool_call_id = 2;
+   */
+  toolCallId: string;
+
+  /**
+   * @generated from field: string tool_name = 3;
+   */
+  toolName: string;
+
+  /**
+   * @generated from field: string input = 4;
+   */
+  input: string;
+
+  /**
+   * @generated from field: bool executing = 5;
+   */
+  executing: boolean;
+
+  /**
+   * @generated from field: string status = 6;
+   */
+  status: string;
+
+  /**
+   * @generated from field: pinocchio.chatapp.v1.CorrelationInfo correlation = 7;
+   */
+  correlation?: CorrelationInfo | undefined;
+};
+
+/**
+ * Describes the message pinocchio.chatapp.v1.ChatToolCallStarted.
+ * Use `create(ChatToolCallStartedSchema)` to create a new message.
+ */
+export const ChatToolCallStartedSchema: GenMessage<ChatToolCallStarted> = /*@__PURE__*/
+  messageDesc(file_proto_pinocchio_chatapp_v1_chat, 17);
+
+/**
+ * @generated from message pinocchio.chatapp.v1.ChatToolCallArgumentsDelta
+ */
+export type ChatToolCallArgumentsDelta = Message<"pinocchio.chatapp.v1.ChatToolCallArgumentsDelta"> & {
+  /**
+   * @generated from field: string message_id = 1;
+   */
+  messageId: string;
+
+  /**
+   * @generated from field: string tool_call_id = 2;
+   */
+  toolCallId: string;
+
+  /**
+   * @generated from field: string tool_name = 3;
+   */
+  toolName: string;
+
+  /**
+   * @generated from field: string arguments_delta = 4;
+   */
+  argumentsDelta: string;
+
+  /**
+   * @generated from field: string input = 5;
+   */
+  input: string;
+
+  /**
+   * @generated from field: string status = 6;
+   */
+  status: string;
+
+  /**
+   * @generated from field: pinocchio.chatapp.v1.CorrelationInfo correlation = 7;
+   */
+  correlation?: CorrelationInfo | undefined;
+};
+
+/**
+ * Describes the message pinocchio.chatapp.v1.ChatToolCallArgumentsDelta.
+ * Use `create(ChatToolCallArgumentsDeltaSchema)` to create a new message.
+ */
+export const ChatToolCallArgumentsDeltaSchema: GenMessage<ChatToolCallArgumentsDelta> = /*@__PURE__*/
+  messageDesc(file_proto_pinocchio_chatapp_v1_chat, 18);
+
+/**
+ * @generated from message pinocchio.chatapp.v1.ChatToolCallRequested
+ */
+export type ChatToolCallRequested = Message<"pinocchio.chatapp.v1.ChatToolCallRequested"> & {
+  /**
+   * @generated from field: string message_id = 1;
+   */
+  messageId: string;
+
+  /**
+   * @generated from field: string tool_call_id = 2;
+   */
+  toolCallId: string;
+
+  /**
+   * @generated from field: string tool_name = 3;
+   */
+  toolName: string;
+
+  /**
+   * @generated from field: string input = 4;
+   */
+  input: string;
+
+  /**
+   * @generated from field: bool executing = 5;
+   */
+  executing: boolean;
+
+  /**
+   * @generated from field: string status = 6;
+   */
+  status: string;
+
+  /**
+   * @generated from field: pinocchio.chatapp.v1.CorrelationInfo correlation = 7;
+   */
+  correlation?: CorrelationInfo | undefined;
+};
+
+/**
+ * Describes the message pinocchio.chatapp.v1.ChatToolCallRequested.
+ * Use `create(ChatToolCallRequestedSchema)` to create a new message.
+ */
+export const ChatToolCallRequestedSchema: GenMessage<ChatToolCallRequested> = /*@__PURE__*/
+  messageDesc(file_proto_pinocchio_chatapp_v1_chat, 19);
+
+/**
+ * @generated from message pinocchio.chatapp.v1.ChatToolExecutionStarted
+ */
+export type ChatToolExecutionStarted = Message<"pinocchio.chatapp.v1.ChatToolExecutionStarted"> & {
+  /**
+   * @generated from field: string message_id = 1;
+   */
+  messageId: string;
+
+  /**
+   * @generated from field: string tool_call_id = 2;
+   */
+  toolCallId: string;
+
+  /**
+   * @generated from field: string tool_name = 3;
+   */
+  toolName: string;
+
+  /**
+   * @generated from field: string input = 4;
+   */
+  input: string;
+
+  /**
+   * @generated from field: bool executing = 5;
+   */
+  executing: boolean;
+
+  /**
+   * @generated from field: string status = 6;
+   */
+  status: string;
+
+  /**
+   * @generated from field: pinocchio.chatapp.v1.CorrelationInfo correlation = 7;
+   */
+  correlation?: CorrelationInfo | undefined;
+};
+
+/**
+ * Describes the message pinocchio.chatapp.v1.ChatToolExecutionStarted.
+ * Use `create(ChatToolExecutionStartedSchema)` to create a new message.
+ */
+export const ChatToolExecutionStartedSchema: GenMessage<ChatToolExecutionStarted> = /*@__PURE__*/
+  messageDesc(file_proto_pinocchio_chatapp_v1_chat, 20);
+
+/**
+ * @generated from message pinocchio.chatapp.v1.ChatToolResultReady
+ */
+export type ChatToolResultReady = Message<"pinocchio.chatapp.v1.ChatToolResultReady"> & {
+  /**
+   * @generated from field: string message_id = 1;
+   */
+  messageId: string;
+
+  /**
+   * @generated from field: string tool_call_id = 2;
+   */
+  toolCallId: string;
+
+  /**
+   * @generated from field: string tool_name = 3;
+   */
+  toolName: string;
+
+  /**
+   * @generated from field: string result = 4;
+   */
+  result: string;
+
+  /**
+   * @generated from field: string status = 5;
+   */
+  status: string;
+
+  /**
+   * @generated from field: pinocchio.chatapp.v1.CorrelationInfo correlation = 6;
+   */
+  correlation?: CorrelationInfo | undefined;
+};
+
+/**
+ * Describes the message pinocchio.chatapp.v1.ChatToolResultReady.
+ * Use `create(ChatToolResultReadySchema)` to create a new message.
+ */
+export const ChatToolResultReadySchema: GenMessage<ChatToolResultReady> = /*@__PURE__*/
+  messageDesc(file_proto_pinocchio_chatapp_v1_chat, 21);
+
+/**
+ * @generated from message pinocchio.chatapp.v1.ChatToolCallFinished
+ */
+export type ChatToolCallFinished = Message<"pinocchio.chatapp.v1.ChatToolCallFinished"> & {
+  /**
+   * @generated from field: string message_id = 1;
+   */
+  messageId: string;
+
+  /**
+   * @generated from field: string tool_call_id = 2;
+   */
+  toolCallId: string;
+
+  /**
+   * @generated from field: string tool_name = 3;
+   */
+  toolName: string;
+
+  /**
+   * @generated from field: string status = 4;
+   */
+  status: string;
+
+  /**
+   * @generated from field: pinocchio.chatapp.v1.CorrelationInfo correlation = 5;
+   */
+  correlation?: CorrelationInfo | undefined;
+};
+
+/**
+ * Describes the message pinocchio.chatapp.v1.ChatToolCallFinished.
+ * Use `create(ChatToolCallFinishedSchema)` to create a new message.
+ */
+export const ChatToolCallFinishedSchema: GenMessage<ChatToolCallFinished> = /*@__PURE__*/
+  messageDesc(file_proto_pinocchio_chatapp_v1_chat, 22);
+
+/**
+ * @generated from message pinocchio.chatapp.v1.ChatUserMessageAccepted
+ */
+export type ChatUserMessageAccepted = Message<"pinocchio.chatapp.v1.ChatUserMessageAccepted"> & {
+  /**
+   * @generated from field: string message_id = 1;
+   */
+  messageId: string;
+
+  /**
+   * @generated from field: string role = 2;
+   */
+  role: string;
+
+  /**
+   * @generated from field: string prompt = 3;
+   */
+  prompt: string;
+
+  /**
+   * @generated from field: string text = 4;
+   */
+  text: string;
+
+  /**
+   * @generated from field: string content = 5;
+   */
+  content: string;
+
+  /**
+   * @generated from field: string status = 6;
+   */
+  status: string;
+};
+
+/**
+ * Describes the message pinocchio.chatapp.v1.ChatUserMessageAccepted.
+ * Use `create(ChatUserMessageAcceptedSchema)` to create a new message.
+ */
+export const ChatUserMessageAcceptedSchema: GenMessage<ChatUserMessageAccepted> = /*@__PURE__*/
+  messageDesc(file_proto_pinocchio_chatapp_v1_chat, 23);
 
 /**
  * @generated from message pinocchio.chatapp.v1.ChatMessageEntity
@@ -217,6 +1129,11 @@ export type ChatMessageEntity = Message<"pinocchio.chatapp.v1.ChatMessageEntity"
    * @generated from field: bool final = 12;
    */
   final: boolean;
+
+  /**
+   * @generated from field: pinocchio.chatapp.v1.CorrelationInfo correlation = 13;
+   */
+  correlation?: CorrelationInfo | undefined;
 };
 
 /**
@@ -224,114 +1141,7 @@ export type ChatMessageEntity = Message<"pinocchio.chatapp.v1.ChatMessageEntity"
  * Use `create(ChatMessageEntitySchema)` to create a new message.
  */
 export const ChatMessageEntitySchema: GenMessage<ChatMessageEntity> = /*@__PURE__*/
-  messageDesc(file_proto_pinocchio_chatapp_v1_chat, 3);
-
-/**
- * @generated from message pinocchio.chatapp.v1.ReasoningUpdate
- */
-export type ReasoningUpdate = Message<"pinocchio.chatapp.v1.ReasoningUpdate"> & {
-  /**
-   * @generated from field: string message_id = 1;
-   */
-  messageId: string;
-
-  /**
-   * @generated from field: string parent_message_id = 2;
-   */
-  parentMessageId: string;
-
-  /**
-   * @generated from field: int32 segment = 3;
-   */
-  segment: number;
-
-  /**
-   * @generated from field: string role = 4;
-   */
-  role: string;
-
-  /**
-   * @generated from field: string chunk = 5;
-   */
-  chunk: string;
-
-  /**
-   * @generated from field: string text = 6;
-   */
-  text: string;
-
-  /**
-   * @generated from field: string content = 7;
-   */
-  content: string;
-
-  /**
-   * @generated from field: string status = 8;
-   */
-  status: string;
-
-  /**
-   * @generated from field: bool streaming = 9;
-   */
-  streaming: boolean;
-
-  /**
-   * @generated from field: string source = 10;
-   */
-  source: string;
-
-  /**
-   * @generated from field: string segment_type = 11;
-   */
-  segmentType: string;
-
-  /**
-   * @generated from field: string provider = 12;
-   */
-  provider: string;
-
-  /**
-   * @generated from field: string response_id = 13;
-   */
-  responseId: string;
-
-  /**
-   * @generated from field: string item_id = 14;
-   */
-  itemId: string;
-
-  /**
-   * @generated from field: optional int32 output_index = 15;
-   */
-  outputIndex?: number | undefined;
-
-  /**
-   * @generated from field: optional int32 summary_index = 16;
-   */
-  summaryIndex?: number | undefined;
-
-  /**
-   * @generated from field: optional int32 choice_index = 17;
-   */
-  choiceIndex?: number | undefined;
-
-  /**
-   * @generated from field: string stream_kind = 18;
-   */
-  streamKind: string;
-
-  /**
-   * @generated from field: string correlation_key = 19;
-   */
-  correlationKey: string;
-};
-
-/**
- * Describes the message pinocchio.chatapp.v1.ReasoningUpdate.
- * Use `create(ReasoningUpdateSchema)` to create a new message.
- */
-export const ReasoningUpdateSchema: GenMessage<ReasoningUpdate> = /*@__PURE__*/
-  messageDesc(file_proto_pinocchio_chatapp_v1_chat, 4);
+  messageDesc(file_proto_pinocchio_chatapp_v1_chat, 24);
 
 /**
  * @generated from message pinocchio.chatapp.v1.AgentModePreviewUpdate
@@ -368,7 +1178,7 @@ export type AgentModePreviewUpdate = Message<"pinocchio.chatapp.v1.AgentModePrev
  * Use `create(AgentModePreviewUpdateSchema)` to create a new message.
  */
 export const AgentModePreviewUpdateSchema: GenMessage<AgentModePreviewUpdate> = /*@__PURE__*/
-  messageDesc(file_proto_pinocchio_chatapp_v1_chat, 5);
+  messageDesc(file_proto_pinocchio_chatapp_v1_chat, 25);
 
 /**
  * @generated from message pinocchio.chatapp.v1.AgentModeCommittedUpdate
@@ -410,7 +1220,7 @@ export type AgentModeCommittedUpdate = Message<"pinocchio.chatapp.v1.AgentModeCo
  * Use `create(AgentModeCommittedUpdateSchema)` to create a new message.
  */
 export const AgentModeCommittedUpdateSchema: GenMessage<AgentModeCommittedUpdate> = /*@__PURE__*/
-  messageDesc(file_proto_pinocchio_chatapp_v1_chat, 6);
+  messageDesc(file_proto_pinocchio_chatapp_v1_chat, 26);
 
 /**
  * @generated from message pinocchio.chatapp.v1.AgentModePreviewCleared
@@ -427,7 +1237,7 @@ export type AgentModePreviewCleared = Message<"pinocchio.chatapp.v1.AgentModePre
  * Use `create(AgentModePreviewClearedSchema)` to create a new message.
  */
 export const AgentModePreviewClearedSchema: GenMessage<AgentModePreviewCleared> = /*@__PURE__*/
-  messageDesc(file_proto_pinocchio_chatapp_v1_chat, 7);
+  messageDesc(file_proto_pinocchio_chatapp_v1_chat, 27);
 
 /**
  * @generated from message pinocchio.chatapp.v1.AgentModeEntity
@@ -469,146 +1279,7 @@ export type AgentModeEntity = Message<"pinocchio.chatapp.v1.AgentModeEntity"> & 
  * Use `create(AgentModeEntitySchema)` to create a new message.
  */
 export const AgentModeEntitySchema: GenMessage<AgentModeEntity> = /*@__PURE__*/
-  messageDesc(file_proto_pinocchio_chatapp_v1_chat, 8);
-
-/**
- * @generated from message pinocchio.chatapp.v1.ToolCallUpdate
- */
-export type ToolCallUpdate = Message<"pinocchio.chatapp.v1.ToolCallUpdate"> & {
-  /**
-   * @generated from field: string message_id = 1;
-   */
-  messageId: string;
-
-  /**
-   * @generated from field: string tool_call_id = 2;
-   */
-  toolCallId: string;
-
-  /**
-   * @generated from field: string tool_name = 3;
-   */
-  toolName: string;
-
-  /**
-   * @generated from field: string input = 4;
-   */
-  input: string;
-
-  /**
-   * @generated from field: bool executing = 5;
-   */
-  executing: boolean;
-
-  /**
-   * @generated from field: string status = 6;
-   */
-  status: string;
-
-  /**
-   * @generated from field: string provider = 7;
-   */
-  provider: string;
-
-  /**
-   * @generated from field: string response_id = 8;
-   */
-  responseId: string;
-
-  /**
-   * @generated from field: optional int32 choice_index = 9;
-   */
-  choiceIndex?: number | undefined;
-
-  /**
-   * @generated from field: string stream_kind = 10;
-   */
-  streamKind: string;
-
-  /**
-   * @generated from field: string correlation_key = 11;
-   */
-  correlationKey: string;
-
-  /**
-   * @generated from field: optional int32 tool_call_index = 12;
-   */
-  toolCallIndex?: number | undefined;
-};
-
-/**
- * Describes the message pinocchio.chatapp.v1.ToolCallUpdate.
- * Use `create(ToolCallUpdateSchema)` to create a new message.
- */
-export const ToolCallUpdateSchema: GenMessage<ToolCallUpdate> = /*@__PURE__*/
-  messageDesc(file_proto_pinocchio_chatapp_v1_chat, 9);
-
-/**
- * @generated from message pinocchio.chatapp.v1.ToolResultUpdate
- */
-export type ToolResultUpdate = Message<"pinocchio.chatapp.v1.ToolResultUpdate"> & {
-  /**
-   * @generated from field: string message_id = 1;
-   */
-  messageId: string;
-
-  /**
-   * @generated from field: string tool_call_id = 2;
-   */
-  toolCallId: string;
-
-  /**
-   * @generated from field: string tool_name = 3;
-   */
-  toolName: string;
-
-  /**
-   * @generated from field: string result = 4;
-   */
-  result: string;
-
-  /**
-   * @generated from field: string status = 5;
-   */
-  status: string;
-
-  /**
-   * @generated from field: string provider = 6;
-   */
-  provider: string;
-
-  /**
-   * @generated from field: string response_id = 7;
-   */
-  responseId: string;
-
-  /**
-   * @generated from field: optional int32 choice_index = 8;
-   */
-  choiceIndex?: number | undefined;
-
-  /**
-   * @generated from field: string stream_kind = 9;
-   */
-  streamKind: string;
-
-  /**
-   * @generated from field: string correlation_key = 10;
-   */
-  correlationKey: string;
-
-  /**
-   * @generated from field: optional int32 tool_call_index = 11;
-   */
-  toolCallIndex?: number | undefined;
-};
-
-/**
- * Describes the message pinocchio.chatapp.v1.ToolResultUpdate.
- * Use `create(ToolResultUpdateSchema)` to create a new message.
- */
-export const ToolResultUpdateSchema: GenMessage<ToolResultUpdate> = /*@__PURE__*/
-  messageDesc(file_proto_pinocchio_chatapp_v1_chat, 10);
+  messageDesc(file_proto_pinocchio_chatapp_v1_chat, 28);
 
 /**
  * @generated from message pinocchio.chatapp.v1.ToolCallEntity
@@ -643,6 +1314,11 @@ export type ToolCallEntity = Message<"pinocchio.chatapp.v1.ToolCallEntity"> & {
    * @generated from field: string status = 6;
    */
   status: string;
+
+  /**
+   * @generated from field: pinocchio.chatapp.v1.CorrelationInfo correlation = 7;
+   */
+  correlation?: CorrelationInfo | undefined;
 };
 
 /**
@@ -650,7 +1326,7 @@ export type ToolCallEntity = Message<"pinocchio.chatapp.v1.ToolCallEntity"> & {
  * Use `create(ToolCallEntitySchema)` to create a new message.
  */
 export const ToolCallEntitySchema: GenMessage<ToolCallEntity> = /*@__PURE__*/
-  messageDesc(file_proto_pinocchio_chatapp_v1_chat, 11);
+  messageDesc(file_proto_pinocchio_chatapp_v1_chat, 29);
 
 /**
  * @generated from message pinocchio.chatapp.v1.ToolResultEntity
@@ -680,6 +1356,11 @@ export type ToolResultEntity = Message<"pinocchio.chatapp.v1.ToolResultEntity"> 
    * @generated from field: string status = 5;
    */
   status: string;
+
+  /**
+   * @generated from field: pinocchio.chatapp.v1.CorrelationInfo correlation = 6;
+   */
+  correlation?: CorrelationInfo | undefined;
 };
 
 /**
@@ -687,5 +1368,5 @@ export type ToolResultEntity = Message<"pinocchio.chatapp.v1.ToolResultEntity"> 
  * Use `create(ToolResultEntitySchema)` to create a new message.
  */
 export const ToolResultEntitySchema: GenMessage<ToolResultEntity> = /*@__PURE__*/
-  messageDesc(file_proto_pinocchio_chatapp_v1_chat, 12);
+  messageDesc(file_proto_pinocchio_chatapp_v1_chat, 30);
 

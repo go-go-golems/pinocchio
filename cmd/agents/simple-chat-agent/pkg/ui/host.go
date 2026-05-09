@@ -111,7 +111,7 @@ func (m HostModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			forwardMsg = tea.WindowSizeMsg{Width: m.leftWidth, Height: innerHeight}
 		}
-	case *events.EventLog, *events.EventInfo, *events.EventToolCall, *events.EventToolResult, *events.EventToolCallExecutionResult:
+	case *events.EventLog, *events.EventInfo, *events.EventToolCallStarted, *events.EventToolCallRequested, *events.EventToolResultReady:
 		m.sidebar, _ = m.sidebar.Update(ev)
 		// keep forwarding to inner too
 	}

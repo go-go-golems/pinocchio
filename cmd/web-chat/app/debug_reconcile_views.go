@@ -97,7 +97,7 @@ func createDebugSQLiteViews(ctx context.Context, db *sql.DB) error {
 
 		// Provider reasoning deltas correlated through Geppetto publish records,
 		// backend Sessionstream ordinals, frontend parsed frames, UI mutations, and
-		// persisted timeline entities. ReasoningUpdate payloads now expose provider
+		// persisted timeline entities. Canonical reasoning payloads expose provider
 		// IDs directly; row order still disambiguates multiple deltas for one item.
 		`CREATE VIEW geppetto_reasoning_to_frontend AS
 		 WITH
@@ -117,21 +117,24 @@ func createDebugSQLiteViews(ctx context.Context, db *sql.DB) error {
 		   SELECT row_number() OVER (ORDER BY record_id) AS rn,
 		          record_id AS geppetto_event_record_id,
 		          json_extract(event_json, '$.delta') AS geppetto_delta,
-		          message_id AS geppetto_message_id
+		          message_id AS geppetto_message_id,
+		          segment_id AS geppetto_segment_id,
+		          correlation_key AS geppetto_correlation_key
 		     FROM geppetto_records
 		    WHERE stage = 'geppetto_publish_done'
-		      AND event_type = 'partial-thinking'
+		      AND event_type = 'reasoning-delta'
 		 ),
 		 backend_reasoning AS (
 		   SELECT row_number() OVER (ORDER BY CAST(br.ordinal AS INTEGER)) AS rn,
 		          br.ordinal AS backend_ordinal,
 		          bp.event_name AS backend_event_name,
 		          json_extract(bpue.payload_json, '$.messageId') AS backend_message_id,
-		          json_extract(bpue.payload_json, '$.provider') AS backend_provider,
-		          json_extract(bpue.payload_json, '$.responseId') AS backend_response_id,
-		          json_extract(bpue.payload_json, '$.itemId') AS backend_item_id,
-		          json_extract(bpue.payload_json, '$.outputIndex') AS backend_output_index,
-		          json_extract(bpue.payload_json, '$.summaryIndex') AS backend_summary_index,
+		          json_extract(bpue.payload_json, '$.correlation.provider') AS backend_provider,
+		          json_extract(bpue.payload_json, '$.correlation.responseId') AS backend_response_id,
+		          json_extract(bpue.payload_json, '$.correlation.itemId') AS backend_item_id,
+		          json_extract(bpue.payload_json, '$.correlation.outputIndex') AS backend_output_index,
+		          json_extract(bpue.payload_json, '$.correlation.summaryIndex') AS backend_summary_index,
+		          json_extract(bpue.payload_json, '$.correlation.correlationKey') AS backend_correlation_key,
 		          json_extract(bpue.payload_json, '$.chunk') AS backend_chunk
 		     FROM backend_pipeline bp
 		     JOIN backend_records br ON br.id = bp.record_id
@@ -144,15 +147,16 @@ func createDebugSQLiteViews(ctx context.Context, db *sql.DB) error {
 		          fr.ordinal AS frontend_ordinal,
 		          fpf.name AS frontend_event_name,
 		          json_extract(fpf.frame_json, '$.payload.messageId') AS frontend_message_id,
-		          json_extract(fpf.frame_json, '$.payload.provider') AS frontend_provider,
-		          json_extract(fpf.frame_json, '$.payload.responseId') AS frontend_response_id,
-		          json_extract(fpf.frame_json, '$.payload.itemId') AS frontend_item_id,
-		          json_extract(fpf.frame_json, '$.payload.outputIndex') AS frontend_output_index,
-		          json_extract(fpf.frame_json, '$.payload.summaryIndex') AS frontend_summary_index,
+		          json_extract(fpf.frame_json, '$.payload.correlation.provider') AS frontend_provider,
+		          json_extract(fpf.frame_json, '$.payload.correlation.responseId') AS frontend_response_id,
+		          json_extract(fpf.frame_json, '$.payload.correlation.itemId') AS frontend_item_id,
+		          json_extract(fpf.frame_json, '$.payload.correlation.outputIndex') AS frontend_output_index,
+		          json_extract(fpf.frame_json, '$.payload.correlation.summaryIndex') AS frontend_summary_index,
+		          json_extract(fpf.frame_json, '$.payload.correlation.correlationKey') AS frontend_correlation_key,
 		          json_extract(fpf.frame_json, '$.payload.chunk') AS frontend_chunk
 		     FROM frontend_parsed_frames fpf
 		     JOIN frontend_records fr ON fr.id = fpf.record_id
-		    WHERE fpf.name = 'ChatReasoningAppended'
+		    WHERE fpf.name = 'ChatReasoningDelta'
 		 ),
 		 frontend_mutation AS (
 		   SELECT fr.ordinal,
@@ -160,7 +164,7 @@ func createDebugSQLiteViews(ctx context.Context, db *sql.DB) error {
 		          fui.message_id AS ui_mutation_message_id
 		     FROM frontend_ui_events fui
 		     JOIN frontend_records fr ON fr.id = fui.record_id
-		    WHERE fui.name = 'ChatReasoningAppended'
+		    WHERE fui.name = 'ChatReasoningDelta'
 		 )
 		 SELECT pd.rn,
 		        pd.provider_record_id,
@@ -172,6 +176,8 @@ func createDebugSQLiteViews(ctx context.Context, db *sql.DB) error {
 		        gd.geppetto_event_record_id,
 		        gd.geppetto_delta,
 		        gd.geppetto_message_id,
+		        gd.geppetto_segment_id,
+		        gd.geppetto_correlation_key,
 		        br.backend_ordinal,
 		        br.backend_event_name,
 		        br.backend_message_id,
@@ -180,6 +186,7 @@ func createDebugSQLiteViews(ctx context.Context, db *sql.DB) error {
 		        br.backend_item_id,
 		        br.backend_output_index,
 		        br.backend_summary_index,
+		        br.backend_correlation_key,
 		        br.backend_chunk,
 		        fr.frontend_ordinal,
 		        fr.frontend_event_name,
@@ -189,6 +196,7 @@ func createDebugSQLiteViews(ctx context.Context, db *sql.DB) error {
 		        fr.frontend_item_id,
 		        fr.frontend_output_index,
 		        fr.frontend_summary_index,
+		        fr.frontend_correlation_key,
 		        fr.frontend_chunk,
 		        fm.frontend_ui_event_name,
 		        fm.ui_mutation_message_id,
@@ -215,8 +223,8 @@ func createDebugSQLiteViews(ctx context.Context, db *sql.DB) error {
 		   SELECT br.ordinal AS backend_ordinal,
 		          bpue.name AS backend_event_name,
 		          json_extract(bpue.payload_json, '$.messageId') AS backend_message_id,
-		          json_extract(bpue.payload_json, '$.correlationKey') AS backend_correlation_key,
-		          json_extract(bpue.payload_json, '$.streamKind') AS backend_stream_kind,
+		          json_extract(bpue.payload_json, '$.correlation.correlationKey') AS backend_correlation_key,
+		          json_extract(bpue.payload_json, '$.correlation.streamKind') AS backend_stream_kind,
 		          json_extract(bpue.payload_json, '$.chunk') AS backend_chunk,
 		          json_extract(bpue.payload_json, '$.toolCallId') AS backend_tool_call_id
 		     FROM backend_pipeline_ui_events bpue
@@ -227,8 +235,8 @@ func createDebugSQLiteViews(ctx context.Context, db *sql.DB) error {
 		   SELECT fr.ordinal AS frontend_ordinal,
 		          fpf.name AS frontend_event_name,
 		          json_extract(fpf.frame_json, '$.payload.messageId') AS frontend_message_id,
-		          json_extract(fpf.frame_json, '$.payload.correlationKey') AS frontend_correlation_key,
-		          json_extract(fpf.frame_json, '$.payload.streamKind') AS frontend_stream_kind,
+		          json_extract(fpf.frame_json, '$.payload.correlation.correlationKey') AS frontend_correlation_key,
+		          json_extract(fpf.frame_json, '$.payload.correlation.streamKind') AS frontend_stream_kind,
 		          json_extract(fpf.frame_json, '$.payload.chunk') AS frontend_chunk,
 		          json_extract(fpf.frame_json, '$.payload.toolCallId') AS frontend_tool_call_id
 		     FROM frontend_parsed_frames fpf
@@ -256,6 +264,30 @@ func createDebugSQLiteViews(ctx context.Context, db *sql.DB) error {
 		   FROM provider_records p
 		   LEFT JOIN backend_events b ON b.backend_correlation_key = p.correlation_key
 		   LEFT JOIN frontend_events f ON f.frontend_correlation_key = p.correlation_key`,
+
+		// Provider-call results with canonical stop reasons and usage.
+		`CREATE VIEW geppetto_inference_result_summary AS
+		 SELECT record_id, ts, provider, model, session_id, run_id, inference_id, turn_id,
+		        provider_call_id, provider_call_index, response_id, stop_reason, finish_class,
+		        has_tool_calls, duration_ms, usage_json, correlation_key
+		   FROM geppetto_inference_results
+		  ORDER BY ts, record_id`,
+
+		// Canonical text/reasoning/tool segment lifecycle rows.
+		`CREATE VIEW geppetto_segment_lifecycle AS
+		 SELECT record_id, ts, session_id, turn_id, provider, model,
+		        provider_call_id, response_id, item_id, segment_id, segment_index,
+		        segment_type, stream_kind, segment_status, text_len, tool_call_id,
+		        correlation_key, event_type, stage
+		   FROM geppetto_segments
+		  ORDER BY COALESCE(segment_id, correlation_key, tool_call_id, ''), record_id`,
+
+		// Text segments only. Provider-call lifecycle rows should not appear here.
+		`CREATE VIEW geppetto_text_segments AS
+		 SELECT *
+		   FROM geppetto_segments
+		  WHERE segment_type = 'text'
+		  ORDER BY record_id`,
 
 		// Frontend parsed frames with no corresponding UI event mutation.
 		`CREATE VIEW frontend_parsed_no_mutation AS

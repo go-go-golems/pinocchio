@@ -18,6 +18,7 @@ import (
 	geppettoobs "github.com/go-go-golems/geppetto/pkg/observability"
 	"github.com/go-go-golems/geppetto/pkg/turns"
 	"github.com/go-go-golems/geppetto/pkg/turns/serde"
+	chatapp "github.com/go-go-golems/pinocchio/pkg/chatapp"
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
 	sessionstreamv1 "github.com/go-go-golems/sessionstream/pkg/sessionstream/pb/proto/sessionstream/v1"
@@ -42,8 +43,10 @@ func (e runtimeBackedTestEngine) RunInference(ctx context.Context, t *turns.Turn
 		completion = "runtime-backed response"
 	}
 	meta := gepevents.EventMetadata{}
-	gepevents.PublishEventToContext(ctx, gepevents.NewStartEvent(meta))
-	gepevents.PublishEventToContext(ctx, gepevents.NewPartialCompletionEvent(meta, completion, completion))
+	corr := gepevents.Correlation{SegmentID: "segment-1", SegmentIndex: 1, SegmentType: "text", StreamKind: "content", CorrelationKey: "text:1"}
+	gepevents.PublishEventToContext(ctx, gepevents.NewTextSegmentStartedEvent(meta, corr, "assistant"))
+	gepevents.PublishEventToContext(ctx, gepevents.NewTextDeltaEvent(meta, corr, completion, completion, 1))
+	gepevents.PublishEventToContext(ctx, gepevents.NewTextSegmentFinishedEvent(meta, corr, completion, "stop"))
 	return t, nil
 }
 
@@ -221,7 +224,7 @@ func TestDebugRecorderEndpointsExposePipelineAndTransportRecords(t *testing.T) {
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
 		frame := readServerFrame(t, conn)
-		if frame.GetUiEvent() != nil && frame.GetUiEvent().GetName() == "ChatMessageFinished" {
+		if frame.GetUiEvent() != nil && frame.GetUiEvent().GetName() == chatapp.EventChatTextSegmentFinished {
 			break
 		}
 	}
@@ -621,20 +624,70 @@ func TestDebugReconcileUploadReturnsSQLiteDatabase(t *testing.T) {
 		ObjectJSON:   json.RawMessage(`{"item_id":"rs_1","summary_index":0,"delta":"thinking"}`),
 	})
 	recorder.OnGeppettoRecord(context.Background(), geppettoobs.Record{
-		Timestamp:    time.Now().UTC(),
-		SessionID:    "sess-sqlite-debug",
-		InferenceID:  "inf_1",
-		TurnID:       "turn_1",
-		MessageID:    "msg_1",
-		Stage:        geppettoobs.StageGeppettoPublishDone,
-		Provider:     "openai_responses",
-		EventType:    string(gepevents.EventTypeInfo),
-		InfoMessage:  "reasoning-summary",
-		ResponseID:   "resp_1",
-		ItemID:       "rs_1",
-		SummaryIndex: ptr(0),
-		EventJSON:    json.RawMessage(`{"message":"reasoning-summary","data":{"item_id":"rs_1"}}`),
-		MetadataJSON: json.RawMessage(`{"turn_id":"turn_1","inference_id":"inf_1"}`),
+		Timestamp:            time.Now().UTC(),
+		SessionID:            "sess-sqlite-debug",
+		InferenceID:          "inf_1",
+		TurnID:               "turn_1",
+		MessageID:            "msg_1",
+		Stage:                geppettoobs.StageGeppettoPublishDone,
+		Kind:                 geppettoobs.RecordKindCanonicalEvent,
+		Provider:             "openai_responses",
+		EventType:            string(gepevents.EventTypeReasoningDelta),
+		ResponseID:           "resp_1",
+		ItemID:               "rs_1",
+		SummaryIndex:         ptr(0),
+		SegmentID:            "reasoning-rs_1",
+		SegmentIndex:         ptr(1),
+		SegmentType:          gepevents.SegmentTypeReasoning,
+		StreamKind:           gepevents.StreamKindReasoning,
+		CorrelationKey:       "reasoning:rs_1",
+		ParentCorrelationKey: "provider:inf_1:0",
+		EventJSON:            json.RawMessage(`{"delta":"thinking","text":"thinking","correlation":{"itemId":"rs_1","correlationKey":"reasoning:rs_1"}}`),
+		MetadataJSON:         json.RawMessage(`{"turn_id":"turn_1","inference_id":"inf_1"}`),
+	})
+	recorder.OnGeppettoRecord(context.Background(), geppettoobs.Record{
+		Timestamp:            time.Now().UTC(),
+		SessionID:            "sess-sqlite-debug",
+		InferenceID:          "inf_1",
+		TurnID:               "turn_1",
+		MessageID:            "msg_1",
+		Stage:                geppettoobs.StageProviderCallResultFinalized,
+		Kind:                 geppettoobs.RecordKindProviderCallResult,
+		Provider:             "openai_responses",
+		Model:                "gpt-test",
+		EventType:            string(gepevents.EventTypeProviderCallFinished),
+		ProviderCallID:       "provider:inf_1:0",
+		ProviderCallIndex:    ptr(0),
+		ResponseID:           "resp_1",
+		StopReason:           "tool_use",
+		FinishClass:          "tool_call",
+		HasToolCalls:         true,
+		DurationMs:           ptr[int64](12),
+		CorrelationKey:       "provider:inf_1:0",
+		ParentCorrelationKey: "run:inf_1",
+	})
+	recorder.OnGeppettoRecord(context.Background(), geppettoobs.Record{
+		Timestamp:            time.Now().UTC(),
+		SessionID:            "sess-sqlite-debug",
+		InferenceID:          "inf_1",
+		TurnID:               "turn_1",
+		MessageID:            "msg_1",
+		Stage:                geppettoobs.StageSegmentFinished,
+		Kind:                 geppettoobs.RecordKindSegment,
+		Provider:             "openai_responses",
+		EventType:            string(gepevents.EventTypeTextSegmentFinished),
+		ProviderCallID:       "provider:inf_1:0",
+		ProviderCallIndex:    ptr(0),
+		ResponseID:           "resp_1",
+		ItemID:               "msg-text-1",
+		SegmentID:            "text-msg-1",
+		SegmentIndex:         ptr(1),
+		SegmentType:          gepevents.SegmentTypeText,
+		StreamKind:           gepevents.StreamKindContent,
+		SegmentStatus:        "stop",
+		TextLen:              5,
+		CorrelationKey:       "text:msg_1:1",
+		ParentCorrelationKey: "provider:inf_1:0",
 	})
 
 	uploadBody := `{"records":[{"id":1,"timestamp":1770000000000,"type":"parsed-frame","sessionId":"sess-sqlite-debug","ordinal":"1","frameType":"ui-event","name":"ChatMessageAppended","frame":{"type":"ui-event"}},{"id":2,"timestamp":1770000000001,"type":"ui-event","sessionId":"sess-sqlite-debug","ordinal":"1","name":"ChatMessageAppended","messageId":"chat-msg-1","mutation":{"upsert":{"id":"chat-msg-1"}}}]}`
@@ -662,21 +715,32 @@ func TestDebugReconcileUploadReturnsSQLiteDatabase(t *testing.T) {
 	assertTableCount(t, db, "geppetto_records")
 	assertTableCount(t, db, "geppetto_provider_events")
 	assertTableCount(t, db, "geppetto_emitted_events")
+	assertTableCount(t, db, "geppetto_inference_results")
+	assertTableCount(t, db, "geppetto_segments")
 	var geppettoMeta string
 	require.NoError(t, db.QueryRow("SELECT value FROM meta WHERE key='geppetto_record_count'").Scan(&geppettoMeta))
-	assert.Equal(t, "2", geppettoMeta)
+	assert.Equal(t, "4", geppettoMeta)
 	var itemID, objectJSON string
 	require.NoError(t, db.QueryRow("SELECT item_id, object_json FROM geppetto_provider_events WHERE provider_event_type=?", "response.reasoning_summary_text.delta").Scan(&itemID, &objectJSON))
 	assert.Equal(t, "rs_1", itemID)
 	assert.Contains(t, objectJSON, "thinking")
 	var eventJSON, metadataJSON string
-	require.NoError(t, db.QueryRow("SELECT event_json, metadata_json FROM geppetto_emitted_events WHERE info_message=?", "reasoning-summary").Scan(&eventJSON, &metadataJSON))
-	assert.Contains(t, eventJSON, "reasoning-summary")
+	require.NoError(t, db.QueryRow("SELECT event_json, metadata_json FROM geppetto_emitted_events WHERE geppetto_event_type=?", string(gepevents.EventTypeReasoningDelta)).Scan(&eventJSON, &metadataJSON))
+	assert.Contains(t, eventJSON, "thinking")
 	assert.Contains(t, metadataJSON, "turn_1")
+	var stopReason string
+	require.NoError(t, db.QueryRow("SELECT stop_reason FROM geppetto_inference_results WHERE provider_call_id=?", "provider:inf_1:0").Scan(&stopReason))
+	assert.Equal(t, "tool_use", stopReason)
+	var segmentType string
+	require.NoError(t, db.QueryRow("SELECT segment_type FROM geppetto_segments WHERE segment_id=?", "text-msg-1").Scan(&segmentType))
+	assert.Equal(t, gepevents.SegmentTypeText, segmentType)
 	assertViewExists(t, db, "geppetto_reasoning_sequence")
 	assertViewExists(t, db, "geppetto_summary_without_item_id")
 	assertViewExists(t, db, "geppetto_publish_errors")
 	assertViewExists(t, db, "geppetto_reasoning_to_frontend")
+	assertViewExists(t, db, "geppetto_inference_result_summary")
+	assertViewExists(t, db, "geppetto_segment_lifecycle")
+	assertViewExists(t, db, "geppetto_text_segments")
 
 	// Verify timeline_entities and turns tables exist (may be empty without turn store).
 	assertTableExists(t, db, "timeline_entities")

@@ -49,7 +49,7 @@ type AppModel struct {
 	// Tool call/result compact log shown above the REPL (cleared on final)
 	toolEvents     string
 	toolEntryIndex map[string]int
-	toolEntries    []events.ToolEventEntry
+	toolEntries    []ToolEventEntry
 
 	// status bar fields
 	currentMode string
@@ -70,8 +70,15 @@ type AppModel struct {
 	rightWidth  int
 }
 
-// ToolEventEntry aggregates provider call, local exec, and exec result by tool call ID
-// Deprecated local struct replaced by events.ToolEventEntry; keep type alias if needed in future
+// ToolEventEntry aggregates provider call, local execution, and result state by tool call ID.
+type ToolEventEntry struct {
+	ID             string
+	Name           string
+	Input          string
+	ProviderCalled bool
+	ExecStarted    bool
+	Result         string
+}
 
 func NewAppModel(uiCh <-chan interface{}, replModel repl.Model, toolReqCh <-chan toolspkg.ToolUIRequest) AppModel {
 	sp := bspinner.New()
@@ -87,7 +94,7 @@ func NewAppModel(uiCh <-chan interface{}, replModel repl.Model, toolReqCh <-chan
 		toolReqCh:      toolReqCh,
 		sidebar:        NewSidebarModel(),
 		toolEntryIndex: map[string]int{},
-		toolEntries:    []events.ToolEventEntry{},
+		toolEntries:    []ToolEventEntry{},
 		currentMode:    "teacher",
 	}
 }
@@ -150,7 +157,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		m.sidebar, _ = m.sidebar.Update(ev)
-	case *events.EventPartialCompletionStart:
+	case *events.EventTextSegmentStarted:
 		// Extract run/turn from event metadata
 		meta := ev.Metadata()
 		if meta.SessionID != "" {
@@ -237,86 +244,84 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.formVals = ev.Values
 		m.formReply = ev.ReplyCh
 		return m, nil
-	// removed duplicate EventPartialCompletionStart case
-	case *events.EventPartialCompletion:
+	case *events.EventTextDelta:
 		// append raw deltas; REPL will show final answers post-loop as well
 		m.live += ev.Delta
 		m.needsScrollBottom = true
 		return m, tea.Batch(m.spinner.Tick, waitForUIEvent(m.uiEvents))
-	case *events.EventToolCall:
-		m.status = "Tool: " + ev.ToolCall.Name
+	case *events.EventToolCallStarted:
+		m.status = "Tool: " + ev.ToolName
 		// Aggregate into single entry per ID
-		log.Debug().Str("id", ev.ToolCall.ID).Str("name", ev.ToolCall.Name).Msg("UI: EventToolCall")
-		idx, found := m.toolEntryIndex[ev.ToolCall.ID]
+		log.Debug().Str("id", ev.ToolCallID).Str("name", ev.ToolName).Msg("UI: EventToolCallStarted")
+		idx, found := m.toolEntryIndex[ev.ToolCallID]
 		if !found {
 			idx = len(m.toolEntries)
-			m.toolEntryIndex[ev.ToolCall.ID] = idx
-			m.toolEntries = append(m.toolEntries, events.ToolEventEntry{ID: ev.ToolCall.ID})
+			m.toolEntryIndex[ev.ToolCallID] = idx
+			m.toolEntries = append(m.toolEntries, ToolEventEntry{ID: ev.ToolCallID})
 		}
 		entry := &m.toolEntries[idx]
 		entry.ProviderCalled = true
-		entry.Name = ev.ToolCall.Name
-		if ev.ToolCall.Input != "" {
-			entry.Input = ev.ToolCall.Input
+		entry.Name = ev.ToolName
+		m.renderToolEvents()
+		m.needsScrollBottom = true
+		m.sidebar, _ = m.sidebar.Update(ev)
+		return m, waitForUIEvent(m.uiEvents)
+	case *events.EventToolCallRequested:
+		m.status = "Tool: " + ev.ToolName
+		log.Debug().Str("id", ev.ToolCallID).Str("name", ev.ToolName).Msg("UI: EventToolCallRequested")
+		idx, found := m.toolEntryIndex[ev.ToolCallID]
+		if !found {
+			idx = len(m.toolEntries)
+			m.toolEntryIndex[ev.ToolCallID] = idx
+			m.toolEntries = append(m.toolEntries, ToolEventEntry{ID: ev.ToolCallID})
+		}
+		entry := &m.toolEntries[idx]
+		entry.ProviderCalled = true
+		entry.Name = ev.ToolName
+		if ev.Input != "" {
+			entry.Input = ev.Input
 		}
 		m.renderToolEvents()
 		m.needsScrollBottom = true
-		// Do not add partial tool info into REPL; we add a coalesced line on result
 		m.sidebar, _ = m.sidebar.Update(ev)
 		return m, waitForUIEvent(m.uiEvents)
-	case *events.EventToolCallExecute:
-		m.status = "Executing: " + ev.ToolCall.Name
+	case *events.EventToolExecutionStarted:
+		m.status = "Executing: " + ev.ToolName
 		// Aggregate into entry
-		log.Debug().Str("id", ev.ToolCall.ID).Str("name", ev.ToolCall.Name).Msg("UI: EventToolCallExecute")
-		idx, ok := m.toolEntryIndex[ev.ToolCall.ID]
+		log.Debug().Str("id", ev.ToolCallID).Str("name", ev.ToolName).Msg("UI: EventToolExecutionStarted")
+		idx, ok := m.toolEntryIndex[ev.ToolCallID]
 		if !ok {
 			idx = len(m.toolEntries)
-			m.toolEntryIndex[ev.ToolCall.ID] = idx
-			m.toolEntries = append(m.toolEntries, events.ToolEventEntry{ID: ev.ToolCall.ID, Name: ev.ToolCall.Name})
+			m.toolEntryIndex[ev.ToolCallID] = idx
+			m.toolEntries = append(m.toolEntries, ToolEventEntry{ID: ev.ToolCallID, Name: ev.ToolName})
 		}
 		m.toolEntries[idx].ExecStarted = true
-		if ev.ToolCall.Input != "" && m.toolEntries[idx].Input == "" {
-			m.toolEntries[idx].Input = ev.ToolCall.Input
+		if ev.Input != "" && m.toolEntries[idx].Input == "" {
+			m.toolEntries[idx].Input = ev.Input
 		}
 		m.renderToolEvents()
 		m.needsScrollBottom = true
-		// Do not add partial tool info into REPL; we add a coalesced line on result
 		return m, waitForUIEvent(m.uiEvents)
-	case *events.EventToolResult:
+	case *events.EventToolResultReady:
 		m.status = ""
-		res := ev.ToolResult.Result
-		log.Debug().Str("id", ev.ToolResult.ID).Int("entries", len(m.toolEntries)).Msg("UI: EventToolResult")
-		idx, ok := m.toolEntryIndex[ev.ToolResult.ID]
+		res := ev.Result
+		log.Debug().Str("id", ev.ToolCallID).Int("entries", len(m.toolEntries)).Msg("UI: EventToolResultReady")
+		idx, ok := m.toolEntryIndex[ev.ToolCallID]
 		if !ok {
 			idx = len(m.toolEntries)
-			m.toolEntryIndex[ev.ToolResult.ID] = idx
-			m.toolEntries = append(m.toolEntries, events.ToolEventEntry{ID: ev.ToolResult.ID})
+			m.toolEntryIndex[ev.ToolCallID] = idx
+			m.toolEntries = append(m.toolEntries, ToolEventEntry{ID: ev.ToolCallID})
 		}
 		m.toolEntries[idx].Result = res
+		if ev.ToolName != "" {
+			m.toolEntries[idx].Name = ev.ToolName
+		}
 		m.renderToolEvents()
-		// Interleave coalesced tool info into REPL history (single line)
-		m.addCoalescedToolLineToRepl(ev.ToolResult.ID)
+		m.addCoalescedToolLineToRepl(ev.ToolCallID)
 		m.needsScrollBottom = true
 		m.sidebar, _ = m.sidebar.Update(ev)
 		return m, waitForUIEvent(m.uiEvents)
-	case *events.EventToolCallExecutionResult:
-		m.status = ""
-		res := ev.ToolResult.Result
-		log.Debug().Str("id", ev.ToolResult.ID).Int("entries", len(m.toolEntries)).Msg("UI: EventToolCallExecutionResult")
-		idx, ok := m.toolEntryIndex[ev.ToolResult.ID]
-		if !ok {
-			idx = len(m.toolEntries)
-			m.toolEntryIndex[ev.ToolResult.ID] = idx
-			m.toolEntries = append(m.toolEntries, events.ToolEventEntry{ID: ev.ToolResult.ID})
-		}
-		m.toolEntries[idx].Result = res
-		m.renderToolEvents()
-		// Interleave coalesced tool info into REPL history (single line)
-		m.addCoalescedToolLineToRepl(ev.ToolResult.ID)
-		m.needsScrollBottom = true
-		m.sidebar, _ = m.sidebar.Update(ev)
-		return m, waitForUIEvent(m.uiEvents)
-	case *events.EventFinal:
+	case *events.EventTextSegmentFinished:
 		m.isStreaming = false
 		m.live = ""
 		m.toolEvents = ""

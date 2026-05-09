@@ -84,10 +84,17 @@ func (agentModePlugin) ProjectUI(_ context.Context, ev sessionstream.Event, _ *s
 		}
 		clearPB := &chatappv1.AgentModePreviewCleared{MessageId: payload.GetMessageId()}
 		return []sessionstream.UIEvent{{Name: agentModeCommittedUIName, Payload: payload}, {Name: agentModePreviewClearUIName, Payload: clearPB}}, true, nil
-	case chatapp.EventInferenceFinished, chatapp.EventInferenceStopped:
-		payload, ok := ev.Payload.(*chatappv1.ChatMessageUpdate)
+	case chatapp.EventChatTextSegmentFinished:
+		payload, ok := ev.Payload.(*chatappv1.ChatTextSegmentFinished)
 		if !ok || payload == nil {
-			return nil, true, unexpectedAgentModePayload(&chatappv1.ChatMessageUpdate{}, ev.Payload)
+			return nil, true, unexpectedAgentModePayload(&chatappv1.ChatTextSegmentFinished{}, ev.Payload)
+		}
+		clearPB := &chatappv1.AgentModePreviewCleared{MessageId: payload.GetMessageId()}
+		return []sessionstream.UIEvent{{Name: agentModePreviewClearUIName, Payload: clearPB}}, true, nil
+	case chatapp.EventChatRunStopped, chatapp.EventChatRunFailed:
+		payload, ok := ev.Payload.(interface{ GetMessageId() string })
+		if !ok || payload == nil {
+			return nil, true, unexpectedAgentModePayload(&chatappv1.ChatRunStopped{}, ev.Payload)
 		}
 		clearPB := &chatappv1.AgentModePreviewCleared{MessageId: payload.GetMessageId()}
 		return []sessionstream.UIEvent{{Name: agentModePreviewClearUIName, Payload: clearPB}}, true, nil

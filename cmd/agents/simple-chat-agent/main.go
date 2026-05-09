@@ -102,10 +102,10 @@ func (c *SimpleAgentCmd) RunIntoWriter(ctx context.Context, parsed *values.Value
 			return err
 		}
 		switch ev := e.(type) {
-		case *events.EventToolCall:
-			log.Info().Str("tool", ev.ToolCall.Name).Str("id", ev.ToolCall.ID).Str("input", ev.ToolCall.Input).Msg("ToolCall")
-		case *events.EventToolCallExecute:
-			log.Info().Str("tool", ev.ToolCall.Name).Str("id", ev.ToolCall.ID).Str("input", ev.ToolCall.Input).Msg("ToolExecute")
+		case *events.EventToolCallRequested:
+			log.Info().Str("tool", ev.ToolName).Str("id", ev.ToolCallID).Str("input", ev.Input).Msg("ToolCallRequested")
+		case *events.EventToolExecutionStarted:
+			log.Info().Str("tool", ev.ToolName).Str("id", ev.ToolCallID).Str("input", ev.Input).Msg("ToolExecute")
 		case *events.EventLog:
 			l := ev.Level
 			if l == "" {

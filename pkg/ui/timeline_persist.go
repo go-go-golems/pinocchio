@@ -80,6 +80,9 @@ func StepTimelinePersistFuncWithVersion(store chatstore.TimelineStore, convID st
 		return out
 	}
 
+	currentTextID := ""
+	currentTextActive := false
+
 	upsertEntity := func(ctx context.Context, entityID string, kind string, propsMap map[string]any) error {
 		if store == nil || strings.TrimSpace(convID) == "" || strings.TrimSpace(entityID) == "" {
 			return nil
@@ -114,6 +117,25 @@ func StepTimelinePersistFuncWithVersion(store chatstore.TimelineStore, convID st
 			return nil
 		}
 
+		canonicalEntityID := func(corr events.Correlation) string {
+			if strings.TrimSpace(corr.SegmentID) != "" {
+				return strings.TrimSpace(corr.SegmentID)
+			}
+			if strings.TrimSpace(corr.CorrelationKey) != "" {
+				return strings.TrimSpace(corr.CorrelationKey)
+			}
+			return entityID
+		}
+		reasoningEntityID := func(corr events.Correlation) string {
+			if strings.TrimSpace(corr.SegmentID) != "" {
+				return strings.TrimSpace(corr.SegmentID)
+			}
+			if strings.TrimSpace(corr.CorrelationKey) != "" {
+				return strings.TrimSpace(corr.CorrelationKey)
+			}
+			return entityID + ":thinking"
+		}
+
 		attrib := attribFromExtra(md.Extra)
 
 		persistMessage := func(id string, role string, content string, streaming bool) {
@@ -146,56 +168,81 @@ func StepTimelinePersistFuncWithVersion(store chatstore.TimelineStore, convID st
 		}
 
 		switch e := ev.(type) {
-		case *events.EventPartialCompletionStart:
-			// Do not create an empty assistant entry on start.
-			_ = e
-		case *events.EventPartialCompletion:
-			if strings.TrimSpace(e.Completion) == "" {
+		case *events.EventTextSegmentStarted:
+			// Do not create an empty assistant entry on segment start.
+			currentTextID = canonicalEntityID(e.Correlation())
+			currentTextActive = true
+		case *events.EventTextDelta:
+			textID := canonicalEntityID(e.Correlation())
+			currentTextID = textID
+			currentTextActive = true
+			if strings.TrimSpace(e.Text) == "" {
 				break
 			}
 			mu.Lock()
-			assistantSeen[entityID] = true
-			assistantContent[entityID] = e.Completion
+			assistantSeen[textID] = true
+			assistantContent[textID] = e.Text
 			mu.Unlock()
-			persistMessage(entityID, "assistant", e.Completion, true)
-		case *events.EventFinal:
+			persistMessage(textID, "assistant", e.Text, true)
+		case *events.EventTextSegmentFinished:
+			textID := canonicalEntityID(e.Correlation())
+			currentTextID = textID
+			currentTextActive = false
 			mu.Lock()
-			seen := assistantSeen[entityID]
+			seen := assistantSeen[textID]
 			content := e.Text
 			if strings.TrimSpace(content) == "" {
-				content = assistantContent[entityID]
+				content = assistantContent[textID]
 			}
 			if strings.TrimSpace(content) != "" {
-				assistantSeen[entityID] = true
-				assistantContent[entityID] = content
+				assistantSeen[textID] = true
+				assistantContent[textID] = content
 			}
 			mu.Unlock()
 			if strings.TrimSpace(content) == "" && !seen {
 				break
 			}
-			persistMessage(entityID, "assistant", content, false)
+			persistMessage(textID, "assistant", content, false)
 		case *events.EventInterrupt:
+			textID := strings.TrimSpace(currentTextID)
+			if textID == "" {
+				textID = entityID
+			}
 			mu.Lock()
-			seen := assistantSeen[entityID]
+			seen := assistantSeen[textID]
 			content := e.Text
 			if strings.TrimSpace(content) == "" {
-				content = assistantContent[entityID]
+				content = assistantContent[textID]
 			}
 			if strings.TrimSpace(content) != "" {
-				assistantSeen[entityID] = true
-				assistantContent[entityID] = content
+				assistantSeen[textID] = true
+				assistantContent[textID] = content
 			}
 			mu.Unlock()
 			if strings.TrimSpace(content) == "" && !seen {
 				break
 			}
-			persistMessage(entityID, "assistant", content, false)
+			currentTextActive = false
+			persistMessage(textID, "assistant", content, false)
 		case *events.EventError:
+			textID := strings.TrimSpace(currentTextID)
+			if currentTextActive && textID != "" {
+				mu.Lock()
+				seen := assistantSeen[textID]
+				content := assistantContent[textID]
+				mu.Unlock()
+				if strings.TrimSpace(content) != "" || seen {
+					currentTextActive = false
+					persistMessage(textID, "assistant", content, false)
+					break
+				}
+			}
 			errText := "**Error**\n\n" + e.ErrorString
 			mu.Lock()
 			assistantSeen[entityID] = true
 			assistantContent[entityID] = errText
 			mu.Unlock()
+			currentTextActive = false
 			persistMessage(entityID, "assistant", errText, false)
 		case *events.EventInfo:
 			if strings.TrimSpace(e.Message) == "profile-switched" {
@@ -223,34 +270,36 @@ func StepTimelinePersistFuncWithVersion(store chatstore.TimelineStore, convID st
 				}
 				break
 			}
-			thinkID := entityID + ":thinking"
-			switch strings.TrimSpace(e.Message) {
-			case "thinking-started":
-				mu.Lock()
-				thinkingSeen[thinkID] = true
-				content := thinkingContent[thinkID]
-				mu.Unlock()
-				persistMessage(thinkID, "thinking", content, true)
-			case "thinking-ended":
-				mu.Lock()
-				seen := thinkingSeen[thinkID]
-				content := thinkingContent[thinkID]
-				mu.Unlock()
-				if !seen && strings.TrimSpace(content) == "" {
-					break
-				}
-				persistMessage(thinkID, "thinking", content, false)
-			}
-		case *events.EventThinkingPartial:
-			thinkID := entityID + ":thinking"
-			if strings.TrimSpace(e.Completion) == "" {
+		case *events.EventReasoningSegmentStarted:
+			thinkID := reasoningEntityID(e.Correlation())
+			mu.Lock()
+			thinkingSeen[thinkID] = true
+			content := thinkingContent[thinkID]
+			mu.Unlock()
+			persistMessage(thinkID, "thinking", content, true)
+		case *events.EventReasoningDelta:
+			thinkID := reasoningEntityID(e.Correlation())
+			if strings.TrimSpace(e.Text) == "" {
 				break
 			}
 			mu.Lock()
 			thinkingSeen[thinkID] = true
-			thinkingContent[thinkID] = e.Completion
+			thinkingContent[thinkID] = e.Text
 			mu.Unlock()
-			persistMessage(thinkID, "thinking", e.Completion, true)
+			persistMessage(thinkID, "thinking", e.Text, true)
+		case *events.EventReasoningSegmentFinished:
+			thinkID := reasoningEntityID(e.Correlation())
+			mu.Lock()
+			seen := thinkingSeen[thinkID]
+			content := e.Text
+			if strings.TrimSpace(content) == "" {
+				content = thinkingContent[thinkID]
+			}
+			mu.Unlock()
+			if !seen && strings.TrimSpace(content) == "" {
+				break
+			}
+			persistMessage(thinkID, "thinking", content, false)
 		}
 
 		return nil

@@ -1,0 +1,82 @@
+# Changelog
+
+## 2026-05-09
+
+- Ran live Playwright browser E2E validation for `cmd/web-chat` across all four target provider profiles: `gpt-5-nano`, `haiku`, `gemini-2.5-flash`, and `wafer-qwen3.5-397b`.
+- Confirmed all four sessions reached terminal `finished` UI state and displayed assistant text containing the expected `pong` marker.
+- Saved debug artifacts under `pinocchio/ttmp/2026/05/08/PINO-PROTOCOL-CONFORMANCE--systematic-chat-protocol-conformance-tests-for-canonical-event-lifecycles/various/e2e-webchat-20260509-000248`, including per-session backend debug exports and a full frontend+SQLite reconcile export for the Wafer/Qwen run.
+- Recorded the validation in `reference/01-investigation-diary.md` and marked the browser E2E task done in `tasks.md`.
+- Audited all PR 146 review-thread scenarios, including resolved comments, and found one remaining gap: runtime cancellation returned as `context.Canceled` without an `EventInterrupt` was still classified as failed.
+- Fixed the runtime cancellation gap so canceled runtime waits publish stopped semantics and close active text as stopped; added `TestRuntimeCancellationErrorStopsActiveTextSegment`.
+- Restored fallback assistant text publication for successful runtimes that return assistant text in the output turn without emitting canonical text events; added `TestRuntimeInferencePublishesFallbackAssistantTextFromReturnedTurn`.
+
+## 2026-05-08
+
+- Created `PINO-PROTOCOL-CONFORMANCE` workspace for systematic chat protocol conformance testing.
+- Added primary design guide: `design-doc/01-chat-protocol-conformance-analysis-and-implementation-guide.md`.
+- Added chronological investigation diary: `reference/01-investigation-diary.md`.
+- Documented source-backed protocol invariants for run, text, reasoning, tool, correlation, projection, persistence, and frontend sparse-patch behavior.
+- Documented phased implementation plan for Go runtime tests, plugin projection tests, frontend reducer tests, persistence tests, trace replay, and later fuzz/property tests.
+- Completed source-backed protocol conformance design guide and investigation diary for canonical chat lifecycle testing.
+- `docmgr doctor --root /home/manuel/workspaces/2026-05-02/use-sessionstream-coinvault/pinocchio/ttmp --ticket PINO-PROTOCOL-CONFORMANCE --stale-after 30` passed.
+- Uploaded the design/diary/tasks/changelog bundle to reMarkable: `/ai/2026/05/08/PINO-PROTOCOL-CONFORMANCE/PINO_PROTOCOL_CONFORMANCE_chat_protocol_guide.pdf`.
+- Reuploaded the same bundle with the default PDF layout after removing layout-option guidance from the local reMarkable upload skill.
+- Added textbook-style static analysis guide: `design-doc/02-static-analysis-for-protocol-conformance.md`.
+- Added textbook-style finite-state model guide: `design-doc/03-finite-state-model-for-protocol-conformance.md`.
+- Updated all three design guides to cover the lowest provider-native normalization layer across OpenAI Responses, OpenAI-compatible Chat Completions, Claude, and Gemini.
+- Expanded tasks to make Geppetto provider-normalization matrices Phase 1 before Pinocchio runtime/projection/frontend conformance tests.
+- Uploaded a new non-overwriting reMarkable bundle with all three updated guides: `/ai/2026/05/08/PINO-PROTOCOL-CONFORMANCE/PINO_PROTOCOL_CONFORMANCE_provider_normalization_guides.pdf`.
+- Added reducer refactor design: `design-doc/04-openai-chat-stream-reducer-refactor.md`.
+- Added Responses stream refactor design: `design-doc/05-openai-responses-stream-refactor.md`.
+- Updated tasks to focus immediate implementation on OpenAI Chat Completions reducer refactoring with table-driven tests.
+- Marked static-analysis and model-checking implementation out of scope for this ticket.
+- Implemented OpenAI Chat Completions stream reducer in Geppetto: `4262075 Add OpenAI chat stream reducer tests`.
+- Wired `engine_openai.go` to use the reducer and apply effects: `12d58dc Wire OpenAI chat stream reducer`.
+- Recorded validation: targeted OpenAI package tests and Geppetto pre-commit `go test ./...` plus lint passed.
+- Refined OpenAI terminal handling so EOF, cancel, and error share stream completion: `ec6be03 Finalize OpenAI chat terminal streams`.
+- Extracted named helpers for consuming the stream, completing terminal state, appending turn blocks, and recording terminal stop reasons.
+- Added table-driven tests proving cancel/error preserve partial text/reasoning while avoiding executable tool-call blocks.
+- Paused broad provider-normalization matrix tests and queued an OpenAI Responses structural refactor to adopt the same consume/complete/state pattern as Chat Completions.
+- Implemented initial Responses stream state/completion helpers in Geppetto: `fe6423d Share Responses stream completion state`.
+- Removed the Responses non-streaming inference path so Responses normalization now has one streaming lifecycle: `db0c69b Remove Responses nonstreaming path`.
+- Updated Responses tests so the previous non-streaming usage coverage now runs through the forced streaming path.
+- Extracted Responses stream opening: `2735014 Extract Responses stream opening`.
+- Extracted Responses provider-call correlation and terminal completion helper: `b56187c Extract Responses stream completion helper`.
+- Extracted small Responses stream helper functions and table-driven tests: `a07ebac Extract Responses stream helper functions`.
+- Moved Responses assistant stream state into `responsesStreamState`: `acd7812 Move Responses assistant stream state into reducer state`.
+- Kept Responses response id directly in `responsesStreamState`: `6ed2113 Keep Responses response id in stream state`.
+- Kept Responses tool-call accumulation directly in `responsesStreamState`: `c9bebc8 Keep Responses tool stream state in reducer state`.
+- Kept Responses terminal usage/stop/error state directly in `responsesStreamState`: `f1ddf3b Keep Responses terminal stream state in reducer state`.
+- Kept Responses reasoning scratch state directly in `responsesStreamState`: `78990d0 Keep Responses reasoning stream state in reducer state`.
+- Extracted Responses provider event handling out of `runStreamingInference`: `f67e02d Extract Responses provider event handler`.
+- Moved the extracted Responses provider-event handler into `stream_events.go`: `5bfa040 Move Responses provider event handling to stream events`.
+- Added provider event table-driven testing guide: `geppetto/docs/design/implementation/01-provider-event-testing.md`.
+- Moved the provider event testing guide from the Pinocchio ticket-local `docs/` tree to `geppetto/docs/design/implementation/01-provider-event-testing.md` so Geppetto provider adapter docs live with the provider code.
+- Added review-derived provider-normalization scenarios to the Geppetto testing guide and explicitly deferred sparse-patch/projection/frontend scenarios to later Pinocchio phases.
+- Added OpenAI Chat Completions review-derived reducer tests: `4bcf089 Test OpenAI chat review-derived stream scenarios`.
+- Added Claude review-derived `ContentBlockMerger` tests: `fab1d3c Test Claude review-derived stream scenarios`.
+- Added OpenAI Responses review-derived stream tests and sparse function-call finalization fix: `904c77a Test Responses review-derived stream scenarios`.
+- Extracted Gemini stream reducer seam and provider-native chunk tests: `aeb3c38 Extract Gemini stream reducer tests`.
+- Updated the Geppetto provider testing guide to reference the Gemini reducer seam: `1be5777 Docs: update Gemini testing seam`.
+- Extracted Gemini stream consumption/completion helpers and terminal-error text completion coverage: `e57d532 Extract Gemini stream completion helpers`.
+- Updated the Geppetto provider testing guide to reference Gemini completion helpers: `59df153 Docs: record Gemini completion helpers`.
+- Added the first Pinocchio Phase 2 runtime sink protocol matrix for active text terminal handling, no-text error behavior, closed-text protection, provider-finish non-rewrite behavior, and correlation preservation: `52a16af Test chat runtime protocol terminal cases`.
+- Added a base timeline projection sparse text/correlation matrix and fixed sparse text delta/finish projection to merge existing correlation instead of clearing provider identity or optional zero indexes: `54dd827 Preserve sparse chat projection correlation`.
+- Fixed OpenAI Responses forced streaming to include `stream: true` in the serialized request body before using the unified streaming runtime: `bb23476c Force Responses streaming request body`.
+- Added tool plugin sparse projection tests, promoted correlation merge helpers, and preserved tool name/input/correlation across sparse tool updates: `08f1cfa Preserve sparse tool projection correlation`.
+- Added reasoning plugin sparse projection tests and preserved reasoning content/parent/correlation across sparse delta/finish updates while suppressing empty starts: `9b69e84 Preserve sparse reasoning projection state`.
+- Added frontend sparse timeline reducer tests, stopped persisting generic `tool` display fallback names, and made sparse text finished UI mutations update terminal state without clearing content/correlation: `c2027de Test frontend sparse timeline reductions`.
+- Extended frontend sparse terminal reducer coverage with existing-entity-only terminal patches for sparse text/reasoning finish and tool result fallback avoidance: `ebc3d62 Extend frontend sparse terminal reductions`.
+- Added timeline persistence terminal protocol tests and changed persistence error handling to close active text with partial content rather than overwrite it with an error message: `10ea343 Test timeline persistence terminal semantics`.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-05-02/use-sessionstream-coinvault/pinocchio/ttmp/2026/05/08/PINO-PROTOCOL-CONFORMANCE--systematic-chat-protocol-conformance-tests-for-canonical-event-lifecycles/design-doc/01-chat-protocol-conformance-analysis-and-implementation-guide.md — Primary intern-oriented design and implementation guide.
+- /home/manuel/workspaces/2026-05-02/use-sessionstream-coinvault/pinocchio/ttmp/2026/05/08/PINO-PROTOCOL-CONFORMANCE--systematic-chat-protocol-conformance-tests-for-canonical-event-lifecycles/design-doc/02-static-analysis-for-protocol-conformance.md — Static analysis guide including provider-adapter checks.
+- /home/manuel/workspaces/2026-05-02/use-sessionstream-coinvault/pinocchio/ttmp/2026/05/08/PINO-PROTOCOL-CONFORMANCE--systematic-chat-protocol-conformance-tests-for-canonical-event-lifecycles/design-doc/03-finite-state-model-for-protocol-conformance.md — Finite-state/model-based testing guide including provider-normalization model.
+- /home/manuel/workspaces/2026-05-02/use-sessionstream-coinvault/pinocchio/ttmp/2026/05/08/PINO-PROTOCOL-CONFORMANCE--systematic-chat-protocol-conformance-tests-for-canonical-event-lifecycles/design-doc/04-openai-chat-stream-reducer-refactor.md — Current reducer refactor implementation plan.
+- /home/manuel/workspaces/2026-05-02/use-sessionstream-coinvault/pinocchio/ttmp/2026/05/08/PINO-PROTOCOL-CONFORMANCE--systematic-chat-protocol-conformance-tests-for-canonical-event-lifecycles/design-doc/05-openai-responses-stream-refactor.md — Responses stream refactor plan to adopt the Chat Completions pattern.
+- /home/manuel/workspaces/2026-05-02/use-sessionstream-coinvault/geppetto/pkg/steps/ai/openai/chat_stream_reducer.go — Implemented reducer state, inputs, terminal handling, effects, and correlation helper.
+- /home/manuel/workspaces/2026-05-02/use-sessionstream-coinvault/geppetto/pkg/steps/ai/openai/chat_stream_reducer_test.go — Table-driven reducer protocol tests.
+- /home/manuel/workspaces/2026-05-02/use-sessionstream-coinvault/geppetto/pkg/steps/ai/openai/engine_openai.go — Engine stream loop now delegates protocol transitions to the reducer.
+- /home/manuel/workspaces/2026-05-02/use-sessionstream-coinvault/pinocchio/ttmp/2026/05/08/PINO-PROTOCOL-CONFORMANCE--systematic-chat-protocol-conformance-tests-for-canonical-event-lifecycles/reference/01-investigation-diary.md — Chronological research diary for the ticket.

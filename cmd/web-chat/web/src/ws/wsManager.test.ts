@@ -70,135 +70,157 @@ describe('timelineEntityFromSnapshotEntity', () => {
 });
 
 describe('timelineMutationFromUIEvent', () => {
-  it('updates status without creating an empty assistant placeholder for ChatMessageStarted', () => {
+  it('updates status without creating an empty assistant placeholder for ChatTextSegmentStarted', () => {
     const mutation = timelineMutationFromUIEvent({
-      name: 'ChatMessageStarted',
+      name: 'ChatTextSegmentStarted',
       payload: {
-        messageId: 'chat-msg-2',
+        messageId: 'chat-msg-2:text:1',
         prompt: 'Explain ordinals',
         status: 'streaming',
         streaming: true,
+        correlation: { segmentIndex: 1, segmentType: 'text' },
       },
     });
 
     expect(mutation).toEqual({ status: 'streaming', upsert: undefined });
   });
 
-  it('creates a stopped message mutation when ChatMessageStopped carries only an error', () => {
+  it('updates status for ChatRunFailed without creating a message wrapper', () => {
     const mutation = timelineMutationFromUIEvent({
-      name: 'ChatMessageStopped',
+      name: 'ChatRunFailed',
       payload: {
         messageId: 'chat-msg-5',
-        role: 'assistant',
-        prompt: 'ok what is next',
-        status: 'stopped',
-        error: "responses api error: invalid input id",
+        status: 'failed',
+        error: 'responses api error: invalid input id',
       },
     });
 
-    expect(mutation).not.toBeNull();
-    expect(mutation?.status).toBe('stopped');
-    expect(mutation?.upsert?.id).toBe('chat-msg-5');
-    expect(mutation?.upsert?.kind).toBe('message');
-    expect(mutation?.upsert?.props.role).toBe('assistant');
-    expect(mutation?.upsert?.props.content).toBe('');
-    expect(mutation?.upsert?.props.error).toBe('responses api error: invalid input id');
-    expect(mutation?.upsert?.props.streaming).toBe(false);
+    expect(mutation).toEqual({ status: 'failed' });
   });
 
-  it('does not create an empty placeholder mutation for ChatReasoningStarted without visible content', () => {
+  it('does not create an empty placeholder mutation for ChatReasoningSegmentStarted without visible content', () => {
     const mutation = timelineMutationFromUIEvent({
-      name: 'ChatReasoningStarted',
+      name: 'ChatReasoningSegmentStarted',
       payload: {
-        messageId: 'chat-msg-2:thinking',
+        messageId: 'chat-msg-2:thinking:1',
         status: 'streaming',
         streaming: true,
+        correlation: { segmentIndex: 1, segmentType: 'reasoning' },
       },
     });
 
-    expect(mutation).toBeNull();
+    expect(mutation).toEqual({ status: 'streaming' });
   });
 
-  it('creates a thinking message mutation for ChatReasoningAppended', () => {
+  it('creates a thinking message mutation for ChatReasoningDelta', () => {
     const mutation = timelineMutationFromUIEvent({
-      name: 'ChatReasoningAppended',
+      name: 'ChatReasoningDelta',
       payload: {
-        messageId: 'chat-msg-2:thinking',
+        messageId: 'chat-msg-2:thinking:1',
         content: 'draft plan',
         status: 'streaming',
         streaming: true,
+        correlation: { segmentIndex: 1, segmentType: 'reasoning' },
       },
     });
 
     expect(mutation).not.toBeNull();
-    expect(mutation?.upsert?.id).toBe('chat-msg-2:thinking');
+    expect(mutation?.upsert?.id).toBe('chat-msg-2:thinking:1');
     expect(mutation?.upsert?.kind).toBe('message');
     expect(mutation?.upsert?.props.role).toBe('thinking');
     expect(mutation?.upsert?.props.content).toBe('draft plan');
     expect(mutation?.status).toBe('streaming');
   });
 
-  it('does not create an empty placeholder mutation for ChatReasoningFinished without visible content', () => {
+  it('creates an existing-entity-only terminal patch for ChatReasoningSegmentFinished without visible content', () => {
     const mutation = timelineMutationFromUIEvent({
-      name: 'ChatReasoningFinished',
+      name: 'ChatReasoningSegmentFinished',
       payload: {
-        messageId: 'chat-msg-2:thinking',
+        messageId: 'chat-msg-2:thinking:1',
         status: 'finished',
         streaming: false,
+        correlation: { segmentIndex: 1, segmentType: 'reasoning' },
       },
     });
 
-    expect(mutation).toBeNull();
+    expect(mutation?.upsert).toBeUndefined();
+    expect(mutation?.upsertIfExists?.id).toBe('chat-msg-2:thinking:1');
+    expect(mutation?.upsertIfExists?.props.status).toBe('finished');
+    expect(mutation?.upsertIfExists?.props.streaming).toBe(false);
+    expect(mutation?.upsertIfExists?.props).not.toHaveProperty('content');
   });
 
-  it('creates a finished thinking message mutation for ChatReasoningFinished', () => {
+  it('creates a finished thinking message mutation for ChatReasoningSegmentFinished', () => {
     const mutation = timelineMutationFromUIEvent({
-      name: 'ChatReasoningFinished',
+      name: 'ChatReasoningSegmentFinished',
       payload: {
-        messageId: 'chat-msg-2:thinking',
+        messageId: 'chat-msg-2:thinking:1',
         content: 'high level plan',
         status: 'finished',
         streaming: false,
+        correlation: { segmentIndex: 1, segmentType: 'reasoning' },
       },
     });
 
     expect(mutation).not.toBeNull();
-    expect(mutation?.upsert?.id).toBe('chat-msg-2:thinking');
+    expect(mutation?.upsert?.id).toBe('chat-msg-2:thinking:1');
     expect(mutation?.upsert?.props.role).toBe('thinking');
     expect(mutation?.upsert?.props.content).toBe('high level plan');
     expect(mutation?.upsert?.props.streaming).toBe(false);
   });
 
+  it('omits undefined correlation props so later terminal events preserve earlier keys', () => {
+    const mutation = timelineMutationFromUIEvent({
+      name: 'ChatReasoningSegmentFinished',
+      payload: {
+        messageId: 'chat-msg-2:thinking:1',
+        content: 'done',
+        status: 'finished',
+        streaming: false,
+        correlation: { segmentIndex: 1, segmentType: 'reasoning' },
+      },
+    });
+
+    expect(mutation?.upsert?.props.segment).toBe(1);
+    expect(mutation?.upsert?.props.segmentType).toBe('reasoning');
+    expect(mutation?.upsert?.props).not.toHaveProperty('provider');
+    expect(mutation?.upsert?.props).not.toHaveProperty('responseId');
+    expect(mutation?.upsert?.props).not.toHaveProperty('correlationKey');
+    expect(mutation?.upsert?.props).not.toHaveProperty('streamKind');
+  });
+
   it('preserves typed reasoning provider IDs and optional zero indexes', () => {
     const event = decodeKnownUIEvent({
-      name: 'ChatReasoningAppended',
+      name: 'ChatReasoningDelta',
       payload: {
-        '@type': 'type.googleapis.com/pinocchio.chatapp.v1.ReasoningUpdate',
+        '@type': 'type.googleapis.com/pinocchio.chatapp.v1.ChatReasoningDelta',
         messageId: 'chat-msg-2:thinking:1',
         parentMessageId: 'chat-msg-2',
-        segment: 1,
-        segmentType: 'thinking',
         chunk: 'plan',
         content: 'plan',
         status: 'streaming',
         streaming: true,
-        provider: 'openai-responses',
-        responseId: 'resp_123',
-        itemId: 'rs_123',
-        outputIndex: 0,
-        summaryIndex: 0,
-        choiceIndex: 0,
-        streamKind: 'reasoning',
-        correlationKey: 'openai-chat:resp_123:choice:0:reasoning',
+        correlation: {
+          provider: 'openai-responses',
+          responseId: 'resp_123',
+          itemId: 'rs_123',
+          outputIndex: 0,
+          summaryIndex: 0,
+          choiceIndex: 0,
+          segmentIndex: 1,
+          segmentType: 'reasoning',
+          streamKind: 'reasoning',
+          correlationKey: 'openai-chat:resp_123:choice:0:reasoning',
+        },
       },
     });
 
-    expect(event?.name).toBe('ChatReasoningAppended');
-    if (event?.name !== 'ChatReasoningAppended') throw new Error('expected typed reasoning event');
-    expect(event.payload.outputIndex).toBe(0);
-    expect(event.payload.summaryIndex).toBe(0);
-    expect(event.payload.choiceIndex).toBe(0);
-    expect(event.payload.correlationKey).toBe('openai-chat:resp_123:choice:0:reasoning');
+    expect(event?.name).toBe('ChatReasoningDelta');
+    if (event?.name !== 'ChatReasoningDelta') throw new Error('expected typed reasoning event');
+    expect(event.payload.correlation?.outputIndex).toBe(0);
+    expect(event.payload.correlation?.summaryIndex).toBe(0);
+    expect(event.payload.correlation?.choiceIndex).toBe(0);
+    expect(event.payload.correlation?.correlationKey).toBe('openai-chat:resp_123:choice:0:reasoning');
 
     const mutation = timelineMutationFromUIEvent({ name: event.name, payload: event.payload });
     expect(mutation?.upsert?.props.provider).toBe('openai-responses');
@@ -245,8 +267,17 @@ describe('timelineMutationFromUIEvent', () => {
   });
 
   it('creates typed tool call and tool result mutations', () => {
+    const correlation = {
+      provider: 'openai',
+      responseId: 'resp_tool',
+      choiceIndex: 0,
+      streamKind: 'tool_call',
+      correlationKey: 'openai-chat:resp_tool:choice:0:tool:call_1',
+      toolCallId: 'call_1',
+      toolCallIndex: 0,
+    };
     const toolCall = timelineMutationFromUIEvent({
-      name: 'ChatToolCallUpdated',
+      name: 'ChatToolExecutionStarted',
       payload: {
         messageId: 'chat-msg-7',
         toolCallId: 'call_1',
@@ -254,12 +285,7 @@ describe('timelineMutationFromUIEvent', () => {
         input: '{"query":"gold"}',
         executing: true,
         status: 'executing',
-        provider: 'openai',
-        responseId: 'resp_tool',
-        choiceIndex: 0,
-        streamKind: 'tool_call',
-        correlationKey: 'openai-chat:resp_tool:choice:0:tool:call_1',
-        toolCallIndex: 0,
+        correlation,
       },
     });
 
@@ -279,12 +305,7 @@ describe('timelineMutationFromUIEvent', () => {
         toolName: 'search',
         result: 'found it',
         status: 'success',
-        provider: 'openai',
-        responseId: 'resp_tool',
-        choiceIndex: 0,
-        streamKind: 'tool_call',
-        correlationKey: 'openai-chat:resp_tool:choice:0:tool:call_1',
-        toolCallIndex: 0,
+        correlation,
       },
     });
 
@@ -294,5 +315,23 @@ describe('timelineMutationFromUIEvent', () => {
     expect(result?.upsert?.props.result).toBe('found it');
     expect(result?.upsert?.props.correlationKey).toBe('openai-chat:resp_tool:choice:0:tool:call_1');
     expect(result?.upsert?.props.toolCallIndex).toBe(0);
+  });
+
+  it('does not clear tool input props on ChatToolCallFinished', () => {
+    const finished = timelineMutationFromUIEvent({
+      name: 'ChatToolCallFinished',
+      payload: {
+        messageId: 'chat-msg-7',
+        toolCallId: 'call_1',
+        toolName: 'search',
+        status: 'completed',
+      },
+    });
+
+    expect(finished?.upsert?.id).toBe('call_1');
+    expect(finished?.upsert?.props.done).toBe(true);
+    expect(finished?.upsert?.props.status).toBe('completed');
+    expect(finished?.upsert?.props).not.toHaveProperty('input');
+    expect(finished?.upsert?.props).not.toHaveProperty('inputRaw');
   });
 });

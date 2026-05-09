@@ -4,31 +4,40 @@ import (
 	"context"
 	"time"
 
+	chatappv1 "github.com/go-go-golems/pinocchio/pkg/chatapp/pb/proto/pinocchio/chatapp/v1"
 	sessionstream "github.com/go-go-golems/sessionstream/pkg/sessionstream"
 )
 
 func (e *Engine) runDemoInference(ctx context.Context, sid sessionstream.SessionId, messageID, prompt string, pub sessionstream.EventPublisher) {
-	started := newChatMessageUpdate(messageID, "assistant", "", "", prompt, "streaming", true, "")
-	if err := e.publish(ctx, sid, pub, EventInferenceStarted, started); err != nil {
+	if err := e.publish(ctx, sid, pub, EventChatRunStarted, &chatappv1.ChatRunStarted{MessageId: messageID, Prompt: prompt, Correlation: runCorrelationInfo(sid, messageID)}); err != nil {
 		return
 	}
 
 	answer := renderAnswer(prompt)
 	chunks := chunkText(answer, 10)
 	accumulated := ""
+	textMessageID := textSegmentMessageID(messageID, 1)
+	corr := &chatappv1.CorrelationInfo{SessionId: string(sid), RunId: messageID, SegmentId: textMessageID, SegmentIndex: 1, SegmentType: "text", StreamKind: "content", CorrelationKey: textMessageID}
+	if err := e.publish(publishContext(ctx), sid, pub, EventChatTextSegmentStarted, &chatappv1.ChatTextSegmentStarted{MessageId: textMessageID, Role: "assistant", Prompt: prompt, Status: "streaming", Streaming: true, Correlation: corr}); err != nil {
+		return
+	}
 	for _, chunk := range chunks {
 		select {
 		case <-ctx.Done():
-			_ = e.publish(publishContext(ctx), sid, pub, EventInferenceStopped, newChatMessageUpdate(messageID, "assistant", accumulated, accumulated, prompt, "stopped", false, ""))
+			_ = e.publish(publishContext(ctx), sid, pub, EventChatTextSegmentFinished, &chatappv1.ChatTextSegmentFinished{MessageId: textMessageID, Role: "assistant", Prompt: prompt, Text: accumulated, Content: accumulated, Status: "stopped", Streaming: false, Final: true, FinishReason: "stopped", Correlation: corr})
+			_ = e.publish(publishContext(ctx), sid, pub, EventChatRunStopped, &chatappv1.ChatRunStopped{MessageId: messageID, Status: "stopped", Correlation: runCorrelationInfo(sid, messageID)})
 			return
 		case <-time.After(e.chunkDelay):
 		}
 		accumulated += chunk
-		if err := e.publish(publishContext(ctx), sid, pub, EventTokensDelta, newChatMessageDelta(messageID, chunk, accumulated, prompt, "streaming", true, "")); err != nil {
+		if err := e.publish(publishContext(ctx), sid, pub, EventChatTextDelta, &chatappv1.ChatTextDelta{MessageId: textMessageID, Role: "assistant", Prompt: prompt, Chunk: chunk, Text: accumulated, Content: accumulated, Status: "streaming", Streaming: true, Correlation: corr}); err != nil {
 			return
 		}
 	}
-	_ = e.publish(publishContext(ctx), sid, pub, EventInferenceFinished, newChatMessageUpdate(messageID, "assistant", accumulated, accumulated, prompt, "finished", false, ""))
+	if err := e.publish(publishContext(ctx), sid, pub, EventChatTextSegmentFinished, &chatappv1.ChatTextSegmentFinished{MessageId: textMessageID, Role: "assistant", Prompt: prompt, Text: accumulated, Content: accumulated, Status: "finished", Streaming: false, Final: true, Correlation: corr}); err != nil {
+		return
+	}
+	_ = e.publish(publishContext(ctx), sid, pub, EventChatRunFinished, &chatappv1.ChatRunFinished{MessageId: messageID, Status: "finished", Correlation: runCorrelationInfo(sid, messageID)})
 }
 
 func renderAnswer(prompt string) string {

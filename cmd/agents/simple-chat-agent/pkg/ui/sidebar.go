@@ -69,31 +69,21 @@ func (m SidebarModel) Update(msg tea.Msg) (SidebarModel, tea.Cmd) {
 			m.width = ev.Width
 		}
 		return m, nil
-	case *events.EventToolCall:
-		if ev.ToolCall.Name == "calc" {
+	case *events.EventToolCallRequested:
+		if ev.ToolName == "calc" {
 			var req toolspkg.CalcRequest
-			_ = json.Unmarshal([]byte(ev.ToolCall.Input), &req)
-			rec := ComputationRecord{ID: ev.ToolCall.ID, A: req.A, B: req.B, Op: req.Op}
-			m.compIndexByID[ev.ToolCall.ID] = len(m.computations)
+			_ = json.Unmarshal([]byte(ev.Input), &req)
+			rec := ComputationRecord{ID: ev.ToolCallID, A: req.A, B: req.B, Op: req.Op}
+			m.compIndexByID[ev.ToolCallID] = len(m.computations)
 			m.computations = append(m.computations, rec)
 		}
 		return m, nil
-	case *events.EventToolResult:
-		if idx, ok := m.compIndexByID[ev.ToolResult.ID]; ok {
+	case *events.EventToolResultReady:
+		if idx, ok := m.compIndexByID[ev.ToolCallID]; ok {
 			var r struct {
 				Result float64 `json:"result"`
 			}
-			if err := json.Unmarshal([]byte(ev.ToolResult.Result), &r); err == nil {
-				m.computations[idx].Result = &r.Result
-			}
-		}
-		return m, nil
-	case *events.EventToolCallExecutionResult:
-		if idx, ok := m.compIndexByID[ev.ToolResult.ID]; ok {
-			var r struct {
-				Result float64 `json:"result"`
-			}
-			if err := json.Unmarshal([]byte(ev.ToolResult.Result), &r); err == nil {
+			if err := json.Unmarshal([]byte(ev.Result), &r); err == nil {
 				m.computations[idx].Result = &r.Result
 			}
 		}
