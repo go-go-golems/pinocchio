@@ -61,3 +61,4 @@
 - [x] Extracted a Gemini stream reducer seam and added provider-native chunk tests for metadata-only chunks, text accumulation, and function calls.
 - [x] Extracted Gemini stream consumption/completion helpers and added an active-text terminal-error completion test.
 - [x] Added the first Pinocchio Phase 2 table-driven runtime sink protocol matrix for terminal text/error/interrupt/provider-finish cases.
+- [x] Added a table-driven base timeline projection sparse text/correlation matrix and preserved existing correlation when terminal/delta payloads are sparse.

@@ -26,7 +26,7 @@ RelatedFiles:
       Note: Investigated active text finalization on stop/error.
 ExternalSources: []
 Summary: Chronological diary for the PINO-PROTOCOL-CONFORMANCE research/design task.
-LastUpdated: 2026-05-09T02:25:00-04:00
+LastUpdated: 2026-05-09T02:45:00-04:00
 WhatFor: Use this diary to understand how the protocol conformance guide was created and how to continue the work.
 WhenToUse: Use when implementing, reviewing, or extending the protocol conformance test plan.
 ---
@@ -1903,3 +1903,90 @@ go test ./pkg/chatapp -count=1
 ### Technical details
 
 The test deliberately treats `runtimeEventSink` as the reducer seam instead of extracting a new abstraction first. The input is a native Go slice of `gepevents.Event`; the output is the ordered list of `sessionstream.Event` names and protobuf payloads published through `Engine.publish`.
+
+## Step 21: Preserve sparse text projection correlation in base timeline projection
+
+After the runtime sink table, I moved one layer downstream to `baseTimelineProjection`. This is the sessionstream projection layer that turns protobuf backend text events into `ChatMessageEntity` timeline snapshots. It is a reducer-like function already: it receives the current timeline view plus one backend event, then returns zero or more updated entities.
+
+The new table found and fixed the same sparse-patch class we saw on the provider side. A sparse terminal text event may omit content or carry only a partial correlation object. The projection should preserve previous content and typed provider/correlation identity instead of treating missing fields as clears.
+
+### Prompt Context
+
+**User prompt (verbatim):** (same as Step 20)
+
+**Assistant interpretation:** Continue the Pinocchio table-driven protocol matrix at the next reducer-like layer after runtime translation.
+
+**Inferred user intent:** Turn the planned Pinocchio sparse patch/reducer invariants into concrete tests and fixes.
+
+**Commit (code):** `54dd827` — "Preserve sparse chat projection correlation"
+
+### What I did
+
+- Added `pkg/chatapp/projections_protocol_test.go`.
+- Added table-driven `TestBaseTimelineProjectionSparseTextMatrix` covering:
+  - sparse `ChatTextSegmentFinished` preserves existing content and full correlation;
+  - sparse terminal correlation merges with existing correlation instead of clearing provider identity;
+  - sparse `ChatTextDelta` correlation merges while updating content;
+  - empty `ChatTextSegmentStarted` without existing content still creates no placeholder entity.
+- Updated `pkg/chatapp/projections.go` so text started/delta/finished cases use `mergeCorrelationInfo(existing, update)`.
+- Added `mergeCorrelationInfo` to preserve existing correlation fields when sparse updates omit them, while accepting explicitly present update fields and optional zero index pointers.
+
+### Why
+
+The provider guide explicitly deferred sparse protobuf/sessionstream/frontend patch behavior to Pinocchio phases. This is the Go timeline projection version of that invariant. A terminal event with only `segmentIndex` and `segmentType` should not erase `provider`, `model`, `responseId`, `correlationKey`, or optional zero indexes that arrived earlier.
+
+### What worked
+
+The focused projection/runtime tests passed:
+
+```bash
+cd pinocchio
+go test ./pkg/chatapp -run 'TestBaseTimelineProjectionSparseTextMatrix|TestRuntimeEventSinkProtocolMatrix' -count=1
+go test ./pkg/chatapp -count=1
+```
+
+The fix stayed local to base text projection. No broader sessionstream changes were needed.
+
+### What didn't work
+
+No command failed. The main issue was that the initial projection code cloned the incoming correlation directly. That was fine for full events, but wrong for sparse terminal/update events because it treated omission as replacement.
+
+### What I learned
+
+The Pinocchio layer really does benefit from reducer terminology. `baseTimelineProjection` already has the shape of a reducer, but its merge semantics were incomplete for correlation. Naming the operation `mergeCorrelationInfo` makes the contract visible: timeline projection updates are patches over existing state, not always full replacements.
+
+### What was tricky to build
+
+Correlation merging is subtle because protobuf scalar strings and non-optional integers cannot always distinguish absent from explicitly empty/zero. For the current text projection use case, the safe rule is to preserve existing string fields when the update string is empty, preserve existing non-optional indexes when the update is zero, and replace optional index pointers only when the update pointer is non-nil. This preserves meaningful zero-valued optional indexes such as `choiceIndex=0`.
+
+### What warrants a second pair of eyes
+
+- Review whether `mergeCorrelationInfo` should move from `projections.go` to `correlation.go` if tool/reasoning projections need the same merge contract.
+- Review whether non-optional integer fields such as `ProviderCallIndex` and `SegmentIndex` need explicit presence in a future protobuf revision; today zero is both a meaningful index and the default absence value.
+- Review whether base text projection should merge any other sparse fields besides correlation, content, and prompt.
+
+### What should be done in the future
+
+- Reuse or generalize `mergeCorrelationInfo` for tool and reasoning projections if their tests expose the same sparse-correlation clearing behavior.
+- Add frontend Redux reducer tests proving the browser-side sparse patch merge preserves the same fields.
+
+### Code review instructions
+
+Start with:
+
+```text
+pinocchio/pkg/chatapp/projections.go
+pinocchio/pkg/chatapp/projections_protocol_test.go
+```
+
+Validate with:
+
+```bash
+cd pinocchio
+go test ./pkg/chatapp -run TestBaseTimelineProjectionSparseTextMatrix -count=1
+go test ./pkg/chatapp -count=1
+```
+
+### Technical details
+
+The table constructs existing `ChatMessageEntity` values in a synthetic `sessionstream.TimelineView`, then applies sparse `ChatTextDelta` and `ChatTextSegmentFinished` events. The projected entity must keep the previous provider/correlation identity and optional zero indexes while updating content/status/final state.

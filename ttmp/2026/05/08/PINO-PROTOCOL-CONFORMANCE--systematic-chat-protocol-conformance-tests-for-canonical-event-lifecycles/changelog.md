@@ -51,6 +51,7 @@
 - Extracted Gemini stream consumption/completion helpers and terminal-error text completion coverage: `e57d532 Extract Gemini stream completion helpers`.
 - Updated the Geppetto provider testing guide to reference Gemini completion helpers: `59df153 Docs: record Gemini completion helpers`.
 - Added the first Pinocchio Phase 2 runtime sink protocol matrix for active text terminal handling, no-text error behavior, closed-text protection, provider-finish non-rewrite behavior, and correlation preservation: `52a16af Test chat runtime protocol terminal cases`.
+- Added a base timeline projection sparse text/correlation matrix and fixed sparse text delta/finish projection to merge existing correlation instead of clearing provider identity or optional zero indexes: `54dd827 Preserve sparse chat projection correlation`.
 
 ### Related Files
 
