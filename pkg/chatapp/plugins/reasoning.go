@@ -76,7 +76,7 @@ func (p *ReasoningPlugin) HandleRuntimeEvent(ctx context.Context, runtime chatap
 			Content:         ev.Text,
 			Status:          "streaming",
 			Streaming:       true,
-			Source:          reasoningSource(ev.Correlation()),
+			Source:          firstNonEmptyString(ev.Source, "thinking"),
 			Correlation:     chatapp.CorrelationInfoFromEvent(ev),
 		})
 	case *gepevents.EventReasoningSegmentFinished:
@@ -88,7 +88,7 @@ func (p *ReasoningPlugin) HandleRuntimeEvent(ctx context.Context, runtime chatap
 			Content:         ev.Text,
 			Status:          "finished",
 			Streaming:       false,
-			Source:          reasoningSource(ev.Correlation()),
+			Source:          firstNonEmptyString(ev.Source, "thinking"),
 			FinishReason:    ev.FinishReason,
 			Correlation:     chatapp.CorrelationInfoFromEvent(ev),
 		})
@@ -153,10 +153,6 @@ func reasoningCorrelationSuffix(corr gepevents.Correlation) string {
 		}
 	}
 	return strings.Trim(b.String(), "-:_ .")
-}
-
-func reasoningSource(_ gepevents.Correlation) string {
-	return "thinking"
 }
 
 func firstNonEmptyString(values ...string) string {

@@ -34,8 +34,8 @@ func TestReasoningPluginPublishesCanonicalReasoningEvents(t *testing.T) {
 
 	for _, event := range []gepevents.Event{
 		gepevents.NewReasoningSegmentStartedEvent(meta, corr, "thinking"),
-		gepevents.NewReasoningDeltaEvent(meta, corr, "draft", "draft plan", 1),
-		gepevents.NewReasoningSegmentFinishedEvent(meta, corr, "draft plan", "stop"),
+		gepevents.NewReasoningDeltaEventWithSource(meta, corr, "summary", "draft", "draft plan", 1),
+		gepevents.NewReasoningSegmentFinishedEventWithSource(meta, corr, "summary", "draft plan", "stop"),
 	} {
 		handled, err := plugin.HandleRuntimeEvent(context.Background(), runtime, event)
 		require.NoError(t, err)
@@ -54,11 +54,13 @@ func TestReasoningPluginPublishesCanonicalReasoningEvents(t *testing.T) {
 	require.Equal(t, "draft", delta.GetChunk())
 	require.Equal(t, "draft plan", delta.GetText())
 	require.Equal(t, "reasoning-segment-1", delta.GetCorrelation().GetSegmentId())
+	require.Equal(t, "summary", delta.GetSource())
 
 	require.Equal(t, chatapp.EventChatReasoningSegmentFinished, published[2].Name)
 	finished := published[2].Payload.(*chatappv1.ChatReasoningSegmentFinished)
 	require.Equal(t, "draft plan", finished.GetText())
 	require.Equal(t, "stop", finished.GetFinishReason())
+	require.Equal(t, "summary", finished.GetSource())
 }
 
 func TestReasoningPluginRoutesReasoningByStableSegmentIdentity(t *testing.T) {
