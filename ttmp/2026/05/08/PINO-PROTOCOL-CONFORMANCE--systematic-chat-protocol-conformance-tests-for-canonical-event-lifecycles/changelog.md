@@ -52,6 +52,9 @@
 - Updated the Geppetto provider testing guide to reference Gemini completion helpers: `59df153 Docs: record Gemini completion helpers`.
 - Added the first Pinocchio Phase 2 runtime sink protocol matrix for active text terminal handling, no-text error behavior, closed-text protection, provider-finish non-rewrite behavior, and correlation preservation: `52a16af Test chat runtime protocol terminal cases`.
 - Added a base timeline projection sparse text/correlation matrix and fixed sparse text delta/finish projection to merge existing correlation instead of clearing provider identity or optional zero indexes: `54dd827 Preserve sparse chat projection correlation`.
+- Fixed OpenAI Responses forced streaming to include `stream: true` in the serialized request body before using the unified streaming runtime: `bb23476c Force Responses streaming request body`.
+- Added tool plugin sparse projection tests, promoted correlation merge helpers, and preserved tool name/input/correlation across sparse tool updates: `08f1cfa Preserve sparse tool projection correlation`.
+- Added reasoning plugin sparse projection tests and preserved reasoning content/parent/correlation across sparse delta/finish updates while suppressing empty starts: `9b69e84 Preserve sparse reasoning projection state`.
 
 ### Related Files
 

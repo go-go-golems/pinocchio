@@ -26,7 +26,7 @@ RelatedFiles:
       Note: Investigated active text finalization on stop/error.
 ExternalSources: []
 Summary: Chronological diary for the PINO-PROTOCOL-CONFORMANCE research/design task.
-LastUpdated: 2026-05-09T02:45:00-04:00
+LastUpdated: 2026-05-09T03:30:00-04:00
 WhatFor: Use this diary to understand how the protocol conformance guide was created and how to continue the work.
 WhenToUse: Use when implementing, reviewing, or extending the protocol conformance test plan.
 ---
@@ -1990,3 +1990,278 @@ go test ./pkg/chatapp -count=1
 ### Technical details
 
 The table constructs existing `ChatMessageEntity` values in a synthetic `sessionstream.TimelineView`, then applies sparse `ChatTextDelta` and `ChatTextSegmentFinished` events. The projected entity must keep the previous provider/correlation identity and optional zero indexes while updating content/status/final state.
+
+## Step 22: Fix OpenAI Responses forced streaming request body
+
+Before continuing deeper into Pinocchio, I handled a review item in Geppetto's OpenAI Responses engine. The runtime had been unified so Responses always uses the streaming path, but the serialized request body did not yet include `stream: true`. That meant OpenAI-compatible servers could return a normal JSON response while Geppetto tried to consume SSE frames.
+
+This was a P1 correctness issue because it broke the single-path streaming design at the provider boundary. The fix keeps the unified runtime path, but makes the HTTP request match it.
+
+### Prompt Context
+
+**User prompt (verbatim):** "pkg/steps/ai/openai_responses/engine.go
+    // Responses always uses streaming internally so provider-to-canonical event
+    // normalization has one lifecycle path. Profiles may still carry chat.stream
+    // for other engines, but this engine forces the request and runtime path.
+    return e.runStreamingInference(ctx, t, httpClient, url, b, apiKey, metadata, tap, startT
+
+---
+
+
+
+P1 Badge Send stream=true before forcing the streaming path
+
+Because b is marshaled before this call from a responsesRequest that no longer contains a stream field, this forced streaming path still sends a non-streaming Responses request. OpenAI will return a normal JSON response rather than SSE frames, and consumeResponsesSSE will hit EOF without flushing any data: payload, so successful Responses calls complete with no assistant text/tool blocks. Keep the unified streaming runtime, but make the serialized request include \"stream\": true before calling it."
+
+**Assistant interpretation:** Fix the Responses request schema/serialization so the forced streaming runtime sends `stream: true`, then add regression coverage.
+
+**Inferred user intent:** Address a PR review correctness issue before continuing Pinocchio-side protocol tests.
+
+**Commit (code):** `bb23476c` — "Force Responses streaming request body"
+
+### What I did
+
+- Added `Stream *bool json:"stream,omitempty"` to `responsesRequest`.
+- Set `reqBody.Stream = &true` in `RunInference` before marshaling the request body.
+- Added `TestRunInference_ForcesStreamingRequestBody` to assert the actual serialized HTTP request contains `stream: true` even when profile settings have `Chat.Stream=false`.
+
+### Why
+
+The Responses engine now intentionally has one runtime lifecycle path: streaming. The request body must agree with that runtime path. Otherwise the provider may return non-SSE JSON, and `consumeResponsesSSE` will see EOF without canonical content events.
+
+### What worked
+
+Validation passed:
+
+```bash
+cd geppetto
+go test ./pkg/steps/ai/openai_responses -run 'TestRunInference_ForcesStreamingRequestBody|TestRunInference_ForcesStreamingUsageIncludesCachedTokens' -count=1
+go test ./pkg/steps/ai/openai_responses -count=1
+```
+
+### What didn't work
+
+No command failed. The bug was caught by review rather than by existing tests because the previous forced-streaming test used a fake server that returned SSE regardless of the request body.
+
+### What I learned
+
+A unified runtime path needs a request-level assertion. It is not enough to test the consumer path with a cooperative fake server; tests must inspect the outbound request when the runtime is intentionally overriding profile-level stream settings.
+
+### What was tricky to build
+
+The key ordering detail is that `b` is the marshaled request body. Setting a stream field after `json.Marshal(reqBody)` would not fix anything. The engine must set `reqBody.Stream` before marshaling and before calling `runStreamingInference`.
+
+### What warrants a second pair of eyes
+
+- Review whether any OpenAI-compatible Responses providers use a different streaming flag name. For the OpenAI Responses API, `stream: true` is the expected field.
+- Review whether token-count/request-preview code should intentionally omit `stream` or share the same request struct with `Stream` left nil.
+
+### What should be done in the future
+
+- Keep outbound request-shape assertions around runtime-forced behaviors, not just response-consumer assertions.
+
+### Code review instructions
+
+Start with:
+
+```text
+geppetto/pkg/steps/ai/openai_responses/engine.go
+geppetto/pkg/steps/ai/openai_responses/helpers.go
+geppetto/pkg/steps/ai/openai_responses/engine_test.go
+```
+
+Validate with:
+
+```bash
+cd geppetto
+go test ./pkg/steps/ai/openai_responses -count=1
+```
+
+### Technical details
+
+The regression test installs a custom `http.DefaultClient` transport, decodes `r.Body`, and fails unless `body["stream"] == true`. The fake server then returns a minimal SSE `response.completed` event so the unified streaming runtime can finish normally.
+
+## Step 23: Add tool plugin sparse projection matrix
+
+I continued Pinocchio Phase 3 at the tool plugin layer. The tool plugin translates canonical Geppetto tool events into Pinocchio protobuf events and then projects those backend events into tool timeline entities. This is another reducer-like seam: a tool backend event plus the current timeline view produces an updated `ToolCallEntity` or `ToolResultEntity`.
+
+The new table encodes the sparse update rules that were previously only implicit. A terminal tool update should not clear the known tool name, input, or correlation just because the terminal payload is sparse. Display fallback labels such as `tool` should also remain a rendering concern, not persisted canonical state.
+
+### Prompt Context
+
+**User prompt (verbatim):** "then, continue with pinocchio, commit at appropriate intervals, keep a detailed diary as you work"
+
+**Assistant interpretation:** Resume Pinocchio conformance matrices, commit focused checkpoints, and keep detailed diary entries.
+
+**Inferred user intent:** Continue implementing downstream protocol-hardening tests after the Geppetto review fix.
+
+**Commit (code):** `08f1cfa` — "Preserve sparse tool projection correlation"
+
+### What I did
+
+- Added `TestToolCallPluginSparseProjectionMatrix` in `pkg/chatapp/plugins/toolcall_test.go`.
+- Added rows for:
+  - sparse `ChatToolCallFinished` preserving tool name, input, and full correlation;
+  - sparse `ChatToolCallArgumentsDelta` preserving known tool name while updating accumulated input;
+  - empty tool name staying empty instead of persisting the display fallback `tool`.
+- Promoted correlation helpers into `pkg/chatapp/correlation.go`:
+  - `CloneCorrelationInfo`;
+  - `MergeCorrelationInfo`.
+- Updated base text projection and tool projection to use the shared merge helper.
+
+### Why
+
+The same sparse-patch rule applies to tool entities: missing fields are omitted updates, not clears. Tool calls are particularly sensitive because name/input determine what the user sees and what was executable.
+
+### What worked
+
+Validation passed:
+
+```bash
+cd pinocchio
+go test ./pkg/chatapp ./pkg/chatapp/plugins -run 'TestBaseTimelineProjectionSparseTextMatrix|TestToolCallPluginSparseProjectionMatrix' -count=1
+go test ./pkg/chatapp ./pkg/chatapp/plugins -count=1
+```
+
+### What didn't work
+
+Moving the clone helper out of `toolcall.go` briefly broke `reasoning.go`, which was using the package-level `cloneCorrelationInfo` helper from the same `plugins` package:
+
+```text
+pkg/chatapp/plugins/reasoning.go:191:23: undefined: cloneCorrelationInfo
+```
+
+I restored a small package-level wrapper in `toolcall.go` that delegates to `chatapp.CloneCorrelationInfo`, so existing plugin code kept compiling while the shared helper became available to other packages.
+
+### What I learned
+
+The tool and reasoning plugins already shared an accidental package-local helper. Promoting the real correlation merge/clone logic into `chatapp` is the right direction, but plugin-local wrappers may still be useful for compatibility inside the package until all plugin code is cleaned up.
+
+### What was tricky to build
+
+Tool correlation has optional zero-valued indexes (`outputIndex=0`, `toolCallIndex=0`) that must survive sparse updates. A simple clone of sparse incoming correlation would drop those pointers. `MergeCorrelationInfo` preserves existing optional pointers unless the update explicitly provides a pointer.
+
+### What warrants a second pair of eyes
+
+- Review whether `CloneCorrelationInfo` should use protobuf clone instead of manual struct copy. The manual copy currently deep-copies optional pointer fields and avoids unknown-field concerns for this internal DTO.
+- Review whether `cloneCorrelationInfo` should move from `toolcall.go` into a small `plugins/correlation.go` helper file for clarity.
+
+### What should be done in the future
+
+- Add frontend Redux tests that apply tool requested/finished sparse mutations and assert final browser state preserves name/input/correlation.
+
+### Code review instructions
+
+Start with:
+
+```text
+pinocchio/pkg/chatapp/correlation.go
+pinocchio/pkg/chatapp/plugins/toolcall.go
+pinocchio/pkg/chatapp/plugins/toolcall_test.go
+```
+
+Validate with:
+
+```bash
+cd pinocchio
+go test ./pkg/chatapp/plugins -run TestToolCallPluginSparseProjectionMatrix -count=1
+```
+
+### Technical details
+
+`MergeCorrelationInfo` treats empty strings and zero non-optional integers as absent updates, and treats non-nil optional integer pointers as explicit updates. This is the same merge policy used by the base text projection matrix.
+
+## Step 24: Add reasoning plugin sparse projection matrix
+
+I then applied the same sparse projection approach to reasoning timeline entities. Reasoning segments are represented as chat message entities with role `thinking`, so sparse terminal reasoning events must preserve previous content, parent message ID, and correlation fields.
+
+The new table also exposed a small empty-placeholder bug. A reasoning start with no content and no existing entity should be handled, but should not return a timeline entity with an empty ID and nil payload.
+
+### Prompt Context
+
+**User prompt (verbatim):** (same as Step 23)
+
+**Assistant interpretation:** Continue Pinocchio plugin matrices after tool projection, focusing on reasoning sparse updates.
+
+**Inferred user intent:** Complete the first pass over Go plugin projection protocol tests before moving to frontend reducers.
+
+**Commit (code):** `9b69e84` — "Preserve sparse reasoning projection state"
+
+### What I did
+
+- Added `TestReasoningPluginSparseProjectionMatrix` in `pkg/chatapp/plugins/reasoning_test.go`.
+- Added rows for:
+  - sparse reasoning finish preserving prior content, parent ID, and full correlation;
+  - sparse reasoning delta preserving provider identity while updating content;
+  - empty reasoning start without existing content creating no entity.
+- Updated `reasoningEntityFromFields` to:
+  - preserve existing parent message ID when incoming parent ID is empty;
+  - merge correlation via `chatapp.MergeCorrelationInfo`;
+  - derive segment fields from merged correlation.
+- Updated `ProjectTimeline` to return no timeline entity when the reducer decides there is no visible entity to create.
+
+### Why
+
+Reasoning has the same sparse patch risks as text and tools. Terminal reasoning events often carry less provider/correlation detail than earlier deltas. Projection should preserve the durable identity from earlier events.
+
+### What worked
+
+Validation passed:
+
+```bash
+cd pinocchio
+go test ./pkg/chatapp/plugins -run 'TestReasoningPluginSparseProjectionMatrix|TestToolCallPluginSparseProjectionMatrix' -count=1
+go test ./pkg/chatapp ./pkg/chatapp/plugins -count=1
+```
+
+### What didn't work
+
+The first run of the new reasoning test exposed this failure:
+
+```text
+--- FAIL: TestReasoningPluginSparseProjectionMatrix
+    --- FAIL: TestReasoningPluginSparseProjectionMatrix/REASONING-PROJECTION-03_empty_start_without_existing_content_creates_no_entity
+        reasoning_test.go:265:
+             Error Trace: .../pkg/chatapp/plugins/reasoning_test.go:265
+             Error:       Expected nil, but got: []sessionstream.TimelineEntity{sessionstream.TimelineEntity{Kind:"ChatMessage", Id:"", CreatedOrdinal:0x0, LastEventOrdinal:0x0, Payload:(*chatappv1.ChatMessageEntity)(nil), Tombstone:false}}
+```
+
+The underlying cause was that `reasoningEntityFromFields` could return `(messageID="", entity=nil, ok=true, err=nil)` to mean “handled but no visible entity,” but `ProjectTimeline` always wrapped that into a timeline entity. I fixed `ProjectTimeline` to return nil when `entity == nil` or `messageID` is empty.
+
+### What I learned
+
+A projection reducer sometimes needs to distinguish “not handled” from “handled and intentionally produced no entity.” Returning `ok=true` with `entity=nil` is a valid pattern, but the caller must respect it.
+
+### What was tricky to build
+
+Reasoning projection merges two different concepts into one timeline entity: transcript-like content and reasoning-specific identity. Sparse terminal events may legitimately omit content and parent message ID while still closing the reasoning segment. The reducer must preserve existing visible content and identity while still applying terminal status/streaming state.
+
+### What warrants a second pair of eyes
+
+- Review the `ok=true, entity=nil` convention in `reasoningEntityFromEvent`; it now works, but a clearer return type could make this less error-prone.
+- Review whether reasoning source should also be persisted/merged on `ChatMessageEntity`; current code does not store source in the Go timeline entity, while frontend mutations do carry source.
+
+### What should be done in the future
+
+- Move next to frontend table-driven tests in `cmd/web-chat/web/src/ws`, where sparse UI mutations and Redux merge behavior are the main remaining risk.
+
+### Code review instructions
+
+Start with:
+
+```text
+pinocchio/pkg/chatapp/plugins/reasoning.go
+pinocchio/pkg/chatapp/plugins/reasoning_test.go
+pinocchio/pkg/chatapp/correlation.go
+```
+
+Validate with:
+
+```bash
+cd pinocchio
+go test ./pkg/chatapp/plugins -run TestReasoningPluginSparseProjectionMatrix -count=1
+```
+
+### Technical details
+
+The reasoning table uses a synthetic timeline view with an existing `ChatMessageEntity`, then applies sparse reasoning delta/finish backend events. The projected entity must keep prior provider/model/response/item/correlation fields and optional zero indexes while updating content/status/streaming state.
