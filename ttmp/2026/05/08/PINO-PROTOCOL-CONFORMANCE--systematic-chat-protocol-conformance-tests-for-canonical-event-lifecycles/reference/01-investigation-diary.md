@@ -26,7 +26,7 @@ RelatedFiles:
       Note: Investigated active text finalization on stop/error.
 ExternalSources: []
 Summary: Chronological diary for the PINO-PROTOCOL-CONFORMANCE research/design task.
-LastUpdated: 2026-05-08T22:20:00-04:00
+LastUpdated: 2026-05-08T22:45:00-04:00
 WhatFor: Use this diary to understand how the protocol conformance guide was created and how to continue the work.
 WhenToUse: Use when implementing, reviewing, or extending the protocol conformance test plan.
 ---
@@ -1265,3 +1265,143 @@ make lintmax
 ### Technical details
 
 The current Responses shape now has one state object initialized before stream consumption and used by terminal completion. Remaining local mutable state is mostly reasoning-specific scratch data that should be migrated or extracted next.
+
+## Step 15: Finish Responses state ownership and pull provider events out of the runner
+
+I finished the remaining state-ownership pass for OpenAI Responses and then separated provider-event handling from the top-level stream runner. The runner now reads like the intended pattern: open the HTTP/SSE stream, initialize `responsesStreamState`, consume SSE frames, complete terminal state, and return the turn plus terminal error.
+
+This step does not attempt to reinterpret provider semantics. It is a structural cleanup: the same mutable state is now owned by the explicit state object throughout the stream, and the large provider-native event switch no longer obscures the high-level flow in `runStreamingInference`.
+
+### Prompt Context
+
+**User prompt (verbatim):** "go ahead, do them all"
+
+**Assistant interpretation:** Complete the remaining Responses refactor items: move the rest of the mutable scratch state into `responsesStreamState`, extract provider-event handling out of the runner, keep diary/docs current, validate, and commit at safe checkpoints.
+
+**Inferred user intent:** Finish the Responses structural refactor rather than stopping at partial state migration.
+
+**Commit (code):** `78990d0` — "Keep Responses reasoning stream state in reducer state"
+
+**Commit (code):** `f67e02d` — "Extract Responses provider event handler"
+
+**Commit (code):** `5bfa040` — "Move Responses provider event handling to stream events"
+
+### What I did
+
+- Removed the remaining reasoning scratch locals from `runStreamingInference` and used `responsesStreamState` directly for:
+  - `thinkBuf`;
+  - `summaryBuf`;
+  - current reasoning text/summary builders;
+  - current/last reasoning item ids;
+  - current/last reasoning output and summary indexes;
+  - current reasoning status;
+  - encrypted reasoning content.
+- Removed the final synchronization block that copied reasoning locals back into state.
+- Extracted provider-native event handling from `runStreamingInference` into `handleResponsesProviderEvent`.
+- Moved the extracted handler into `stream_events.go`, next to `normalizeResponsesEventName` and `toInt`.
+- Preserved the top-level stream lifecycle shape in `streaming.go`:
+
+```text
+openResponsesStream
+newResponsesStreamState
+consumeResponsesSSE
+completeResponsesStream
+```
+
+### Why
+
+The purpose of this refactor is to make the Responses stream code readable in the same way as the Chat Completions path. Keeping all mutable stream data in one explicit state object removes the mental model where some data lives in locals and some data lives in the state object.
+
+Moving provider-event handling out of `runStreamingInference` makes the runner small enough to audit for lifecycle behavior: provider-call start, consume, terminal error normalization, completion, and return.
+
+### What worked
+
+- The package tests passed after migrating reasoning state:
+
+```bash
+go test ./pkg/steps/ai/openai_responses -count=1
+```
+
+- Full Geppetto pre-commit validation passed for all three code commits:
+
+```bash
+go test ./...
+make lintmax
+```
+
+- `streaming.go` is now focused on setup/consume/complete rather than provider-specific event details.
+- `stream_events.go` now contains provider-native event normalization details.
+
+### What didn't work
+
+- The first mechanical reasoning-state replacement created temporary `streamState.streamState...` expressions. Package tests caught the problem before commit. I removed the accidental self-assignments and reran:
+
+```bash
+go test ./pkg/steps/ai/openai_responses -count=1
+```
+
+- While moving the provider-event handler into `stream_events.go`, I initially overwrote the small existing helper file and temporarily lost `normalizeResponsesEventName` and `toInt`. The package test failed with errors including:
+
+```text
+pkg/steps/ai/openai_responses/streaming.go:50:24: undefined: normalizeResponsesEventName
+pkg/steps/ai/openai_responses/token_count.go:135:14: undefined: toInt
+```
+
+- I restored those helpers at the top of `stream_events.go`, reran the package tests, and only then committed.
+
+### What I learned
+
+The Responses code is now structurally much closer to the Chat Completions pattern, but the provider event handler remains semantically dense. The right next move, if review asks for more clarity, is not another broad rewrite; it is small semantic extraction inside `stream_events.go` for groups such as reasoning events, message events, tool-call events, and terminal/error events.
+
+### What was tricky to build
+
+The tricky part was keeping provider-native semantics stable while changing ownership and file boundaries. Reasoning deltas use both provider text and normalized display text, summary deltas update both per-item and aggregate summary buffers, and reasoning finalization appends transcript blocks while also emitting canonical segment-finished events. Moving that state into `responsesStreamState` had to preserve all of those relationships.
+
+The file move had a second sharp edge: `stream_events.go` already existed for shared event/number helpers. Replacing it with the extracted handler accidentally removed helpers used by both streaming and usage parsing. The fix was to restore `normalizeResponsesEventName` and `toInt` before the new handler.
+
+### What warrants a second pair of eyes
+
+- Review the reasoning-event paths in `stream_events.go`, especially summary delta accumulation and reasoning block finalization.
+- Review that `runStreamingInference` now has the desired high-level lifecycle shape and still emits provider-call start/finish correctly.
+- Decide whether `handleResponsesProviderEvent` should be split further by semantic groups now that it is isolated from the runner.
+
+### What should be done in the future
+
+- If review finds the provider handler too large, split it into smaller handlers:
+  - output item added/done;
+  - reasoning summary/text;
+  - assistant output text/json;
+  - function-call arguments;
+  - response terminal/error.
+- Resume Phase 1 provider-normalization conformance tests after this Responses structural checkpoint is accepted.
+
+### Code review instructions
+
+Start with:
+
+```text
+geppetto/pkg/steps/ai/openai_responses/streaming.go
+geppetto/pkg/steps/ai/openai_responses/stream_events.go
+geppetto/pkg/steps/ai/openai_responses/stream_state.go
+```
+
+Review commits:
+
+```bash
+git -C geppetto show 78990d0
+git -C geppetto show f67e02d
+git -C geppetto show 5bfa040
+```
+
+Validate with:
+
+```bash
+cd geppetto
+go test ./pkg/steps/ai/openai_responses -count=1
+go test ./...
+make lintmax
+```
+
+### Technical details
+
+The top-level Responses stream runner now delegates provider-native event semantics to `handleResponsesProviderEvent`. `responsesStreamState` is the single mutable state object used for assistant output, reasoning output, tool-call accumulation, usage/stop/error state, response id, and final completion.

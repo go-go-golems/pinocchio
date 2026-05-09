@@ -37,6 +37,9 @@
 - Kept Responses response id directly in `responsesStreamState`: `6ed2113 Keep Responses response id in stream state`.
 - Kept Responses tool-call accumulation directly in `responsesStreamState`: `c9bebc8 Keep Responses tool stream state in reducer state`.
 - Kept Responses terminal usage/stop/error state directly in `responsesStreamState`: `f1ddf3b Keep Responses terminal stream state in reducer state`.
+- Kept Responses reasoning scratch state directly in `responsesStreamState`: `78990d0 Keep Responses reasoning stream state in reducer state`.
+- Extracted Responses provider event handling out of `runStreamingInference`: `f67e02d Extract Responses provider event handler`.
+- Moved the extracted Responses provider-event handler into `stream_events.go`: `5bfa040 Move Responses provider event handling to stream events`.
 
 ### Related Files
 
