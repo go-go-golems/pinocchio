@@ -26,7 +26,7 @@ RelatedFiles:
       Note: Investigated active text finalization on stop/error.
 ExternalSources: []
 Summary: Chronological diary for the PINO-PROTOCOL-CONFORMANCE research/design task.
-LastUpdated: 2026-05-08T20:07:08-04:00
+LastUpdated: 2026-05-08T20:27:00-04:00
 WhatFor: Use this diary to understand how the protocol conformance guide was created and how to continue the work.
 WhenToUse: Use when implementing, reviewing, or extending the protocol conformance test plan.
 ---
@@ -670,4 +670,108 @@ Immediate reducer implementation target:
 
 ```text
 /home/manuel/workspaces/2026-05-02/use-sessionstream-coinvault/geppetto/pkg/steps/ai/openai/engine_openai.go
+```
+
+## Step 9: Implement OpenAI Chat Completions reducer and wire the engine
+
+I implemented the reducer refactor described in Step 8 and kept the implementation intentionally ordinary: small state, explicit inputs, explicit terminal kinds, effects, and table-driven tests.
+
+### Prompt Context
+
+**User prompt (verbatim):** "ok, let's add a design document for this refacator and store it in the ticket, then add tasks to the ticket, and go through them one by one, committing at appropriate intervals. Use table driven tests. Go for code clarity and elegance, think peter norvig style."
+
+**Assistant interpretation:** After the documentation checkpoint, implement the reducer in incremental commits and validate each checkpoint.
+
+**Inferred user intent:** Make `engine_openai.go` easier to reason about by moving protocol state transitions out of the provider stream loop.
+
+**Commits (code):**
+
+- Geppetto `4262075 Add OpenAI chat stream reducer tests`
+- Geppetto `12d58dc Wire OpenAI chat stream reducer`
+
+### What I did
+
+- Added `geppetto/pkg/steps/ai/openai/chat_stream_reducer.go`.
+- Added `geppetto/pkg/steps/ai/openai/chat_stream_reducer_test.go`.
+- Moved Chat Completions stream state into `openAIChatStreamState`.
+- Added reducer inputs for chunks and terminal events.
+- Added terminal kinds for EOF, cancellation, and stream error.
+- Added reducer effects for canonical events and observability callbacks.
+- Added table-driven reducer tests for:
+  - text delta then EOF;
+  - EOF with no content;
+  - cancellation after active text;
+  - error after active reasoning;
+  - tool argument accumulation then EOF;
+  - cancellation after partial tool arguments.
+- Wired `engine_openai.go` to call the reducer and apply effects.
+- Kept stream I/O, final turn-block construction, and inference-result persistence in the engine.
+
+### Why
+
+The previous stream loop mixed provider I/O with lifecycle state. The reducer makes the lifecycle rules local and testable. It also makes cancellation/error cleanup explicit: active text/reasoning segments are closed, but partial tool calls are not promoted into executable `ToolCallRequested` events.
+
+### What worked
+
+- `go test ./pkg/steps/ai/openai -run TestReduceOpenAIChatStream -count=1` passed after adding the reducer tests.
+- The first commit attempt caught an `exhaustive` lint issue in the terminal switch; adding the explicit EOF no-op case fixed it.
+- Geppetto pre-commit ran full `go test ./...` and lint successfully for both code commits.
+
+### What didn't work
+
+- There was an unrelated pre-existing working-tree deletion of `pkg/steps/ai/openai/transcribe.go` before this implementation step.
+- The first reducer commit accidentally included that deletion because it was already staged/visible in the working tree.
+- I immediately restored `transcribe.go` from `HEAD^` and amended the commit, so the final reducer commit contains only the new reducer files.
+
+### What I learned
+
+- Avoid storing `strings.Builder` directly in a value-returning reducer state. Copying a non-zero builder is unsafe. The implementation uses plain strings for `Message` and `Reasoning`, which is simpler and safer for a small reducer.
+- The reducer pattern made the cancellation semantics straightforward: terminal cleanup is one code path, while classification differs by terminal kind.
+
+### What was tricky to build
+
+The main tricky detail was preserving observability without mixing it back into protocol logic. The reducer returns effects; `engine_openai.go` applies those effects by calling `observeProviderEvent`, `observeProviderNormalizeDelta`, and `publishEvent`.
+
+### What warrants a second pair of eyes
+
+- Confirm event order on cancellation/error: finish child segments, emit interrupt/error, then finish provider call.
+- Confirm that provider-call finished events on stream error/cancel are desired across all downstream consumers. This is more complete lifecycle behavior than the old loop, which returned after publishing only interrupt/error.
+
+### What should be done in the future
+
+- Extend provider-normalization table tests to OpenAI Responses, Claude, and Gemini.
+- Consider adding a small fake stream integration test for `RunInference` once the reducer behavior is accepted.
+- Use the reducer pattern as a template for any future provider adapter cleanup only where it reduces complexity.
+
+### Code review instructions
+
+Start with the tests:
+
+```text
+geppetto/pkg/steps/ai/openai/chat_stream_reducer_test.go
+```
+
+Then review the reducer:
+
+```text
+geppetto/pkg/steps/ai/openai/chat_stream_reducer.go
+```
+
+Finally review the engine diff:
+
+```text
+geppetto/pkg/steps/ai/openai/engine_openai.go
+```
+
+Validation already run by Geppetto pre-commit:
+
+```bash
+go test ./...
+make lintmax
+```
+
+Targeted validation also run:
+
+```bash
+go test ./pkg/steps/ai/openai -run TestReduceOpenAIChatStream -count=1
 ```

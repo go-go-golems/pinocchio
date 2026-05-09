@@ -19,6 +19,9 @@
 - Added reducer refactor design: `design-doc/04-openai-chat-stream-reducer-refactor.md`.
 - Updated tasks to focus immediate implementation on OpenAI Chat Completions reducer refactoring with table-driven tests.
 - Marked static-analysis and model-checking implementation out of scope for this ticket.
+- Implemented OpenAI Chat Completions stream reducer in Geppetto: `4262075 Add OpenAI chat stream reducer tests`.
+- Wired `engine_openai.go` to use the reducer and apply effects: `12d58dc Wire OpenAI chat stream reducer`.
+- Recorded validation: targeted OpenAI package tests and Geppetto pre-commit `go test ./...` plus lint passed.
 
 ### Related Files
 
@@ -26,4 +29,7 @@
 - /home/manuel/workspaces/2026-05-02/use-sessionstream-coinvault/pinocchio/ttmp/2026/05/08/PINO-PROTOCOL-CONFORMANCE--systematic-chat-protocol-conformance-tests-for-canonical-event-lifecycles/design-doc/02-static-analysis-for-protocol-conformance.md — Static analysis guide including provider-adapter checks.
 - /home/manuel/workspaces/2026-05-02/use-sessionstream-coinvault/pinocchio/ttmp/2026/05/08/PINO-PROTOCOL-CONFORMANCE--systematic-chat-protocol-conformance-tests-for-canonical-event-lifecycles/design-doc/03-finite-state-model-for-protocol-conformance.md — Finite-state/model-based testing guide including provider-normalization model.
 - /home/manuel/workspaces/2026-05-02/use-sessionstream-coinvault/pinocchio/ttmp/2026/05/08/PINO-PROTOCOL-CONFORMANCE--systematic-chat-protocol-conformance-tests-for-canonical-event-lifecycles/design-doc/04-openai-chat-stream-reducer-refactor.md — Current reducer refactor implementation plan.
+- /home/manuel/workspaces/2026-05-02/use-sessionstream-coinvault/geppetto/pkg/steps/ai/openai/chat_stream_reducer.go — Implemented reducer state, inputs, terminal handling, effects, and correlation helper.
+- /home/manuel/workspaces/2026-05-02/use-sessionstream-coinvault/geppetto/pkg/steps/ai/openai/chat_stream_reducer_test.go — Table-driven reducer protocol tests.
+- /home/manuel/workspaces/2026-05-02/use-sessionstream-coinvault/geppetto/pkg/steps/ai/openai/engine_openai.go — Engine stream loop now delegates protocol transitions to the reducer.
 - /home/manuel/workspaces/2026-05-02/use-sessionstream-coinvault/pinocchio/ttmp/2026/05/08/PINO-PROTOCOL-CONFORMANCE--systematic-chat-protocol-conformance-tests-for-canonical-event-lifecycles/reference/01-investigation-diary.md — Chronological research diary for the ticket.

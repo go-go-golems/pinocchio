@@ -24,6 +24,10 @@ RelatedFiles:
       Note: |-
         Defines normalized Chat Completions stream chunks consumed by the engine.
         Normalized stream chunk type consumed by reducer tests
+    - Path: ../../../../../../../geppetto/pkg/steps/ai/openai/chat_stream_reducer.go
+      Note: Reducer state
+    - Path: ../../../../../../../geppetto/pkg/steps/ai/openai/chat_stream_reducer_test.go
+      Note: Table-driven reducer tests for canonical lifecycle behavior
     - Path: ../../../../../../../geppetto/pkg/steps/ai/openai/engine_openai.go
       Note: |-
         Current stream loop that interleaves I/O, protocol state, correlation, observability, and canonical event emission.
@@ -36,6 +40,7 @@ LastUpdated: 2026-05-08T20:07:08-04:00
 WhatFor: Use this before changing `geppetto/pkg/steps/ai/openai/engine_openai.go` so stream lifecycle rules are explicit, testable, and easy to review.
 WhenToUse: Use when implementing or reviewing OpenAI Chat Completions stream handling, cancellation/error semantics, tool-call argument accumulation, or provider-normalization conformance tests.
 ---
+
 
 
 # OpenAI Chat Completions stream reducer refactor

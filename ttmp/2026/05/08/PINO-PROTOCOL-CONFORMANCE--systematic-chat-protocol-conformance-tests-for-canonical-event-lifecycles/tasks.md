@@ -2,12 +2,7 @@
 
 ## TODO
 
-- [ ] Refactor OpenAI Chat Completions streaming around `openAIChatStreamState`, reducer inputs, terminal inputs, and reducer effects.
-- [ ] Move Chat Completions correlation construction into a reducer state helper.
-- [ ] Add table-driven reducer tests for text delta + EOF, empty EOF, cancel after text, error after reasoning, tool argument accumulation, and no tool requests on cancel/error.
-- [ ] Wire `engine_openai.go` to call the reducer and apply effects while keeping provider stream I/O in the engine.
-- [ ] Validate OpenAI Chat Completions package tests after the reducer refactor.
-- [ ] Implement Phase 1 Geppetto provider-normalization table tests in provider adapter packages, starting with OpenAI Chat Completions reducer coverage.
+- [ ] Implement remaining Phase 1 Geppetto provider-normalization table tests in provider adapter packages beyond OpenAI Chat Completions reducer coverage.
 - [ ] Implement Phase 2 Go runtime protocol matrix in `pkg/chatapp`.
 - [ ] Implement Phase 3 tool/reasoning plugin projection matrices in `pkg/chatapp/plugins`.
 - [ ] Implement Phase 4 frontend reducer-backed conformance matrix in `cmd/web-chat/web/src/ws`.
@@ -32,3 +27,9 @@
 - [x] Validated ticket with `docmgr doctor`.
 - [x] Uploaded guide bundle to reMarkable at `/ai/2026/05/08/PINO-PROTOCOL-CONFORMANCE`.
 - [x] Uploaded new non-overwriting provider-normalization guide bundle to reMarkable.
+- [x] Added OpenAI Chat Completions reducer refactor design doc.
+- [x] Refactored OpenAI Chat Completions streaming around `openAIChatStreamState`, reducer inputs, terminal inputs, and reducer effects.
+- [x] Moved Chat Completions correlation construction into a reducer state helper.
+- [x] Added table-driven reducer tests for text delta + EOF, empty EOF, cancel after text, error after reasoning, tool argument accumulation, and no tool requests on cancel/error.
+- [x] Wired `engine_openai.go` to call the reducer and apply effects while keeping provider stream I/O in the engine.
+- [x] Validated OpenAI Chat Completions package and full Geppetto pre-commit tests/lint.

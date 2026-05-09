@@ -22,7 +22,7 @@ RelatedFiles:
       Note: Timeline persistence lifecycle behavior covered by the conformance plan.
 ExternalSources: []
 Summary: Ticket for designing and implementing systematic provider-to-browser protocol conformance tests for canonical chat event lifecycles.
-LastUpdated: 2026-05-08T20:07:08-04:00
+LastUpdated: 2026-05-08T20:27:00-04:00
 WhatFor: Use this ticket to coordinate lifecycle invariant tests that prevent reactive edge-case fixes in Geppetto provider adapters, Pinocchio chat runtime, and web-chat frontend.
 WhenToUse: Use before modifying provider adapters, chat runtime event handling, projections, persistence, or frontend sparse patch behavior.
 ---
@@ -61,7 +61,7 @@ The primary design docs explain how to test these stages as one protocol rather 
 
 Current status: **active**.
 
-The design/research deliverable is complete. Current implementation focus is a practical OpenAI Chat Completions stream reducer refactor with table-driven tests; static-analysis and model-checking implementation are explicitly out of scope for this ticket.
+The design/research deliverable is complete. The OpenAI Chat Completions stream reducer refactor and table-driven tests are implemented in Geppetto. Static-analysis and model-checking implementation are explicitly out of scope for this ticket.
 
 ## Topics
 
