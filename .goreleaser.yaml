@@ -3,6 +3,9 @@ project_name: pinocchio
 
 before:
   hooks:
+    # Fetch the glazed help browser SPA assets from the latest glazed release.
+    # The SPA tarball is published as a GitHub release asset by glazed's CI.
+    - make fetch-spa
     # NOTE: this repo currently relies on a workspace-local geppetto/glazed pair
     # during migration; running `go mod tidy` from GoReleaser resolves against
     # published modules and fails. Keep tidy as a separate dev/CI step.
@@ -21,11 +24,11 @@ builds:
       - 'CXX={{ index .Env (print "CXX_" .Os "_" .Arch) }}'
     goos:
       - linux
-# I am not able to test windows at the time
-#      - windows
     goarch:
       - amd64
       - arm64
+    tags:
+      - embed
   - id: pinocchio-darwin
     main: ./cmd/pinocchio
     env:
@@ -35,6 +38,8 @@ builds:
     goarch:
       - amd64
       - arm64
+    tags:
+      - embed
 checksum:
   name_template: 'checksums.txt'
 
