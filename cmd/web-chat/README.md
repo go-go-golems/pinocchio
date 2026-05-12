@@ -27,6 +27,7 @@ SectionType: GeneralTopic
   - `GET /api/chat/sessions/:sessionId`
   - `GET /api/chat/ws`
 - Profile selection APIs remain app-owned under `/api/chat/profile*`.
+- Profile list/detail responses include optional `model_info` from the selected engine profile so the frontend can render model capabilities, context limits, and cost metadata.
 - The embedded web UI is served directly from `cmd/web-chat/static`.
 - Base chat messages use protobuf payloads from `proto/pinocchio/chatapp/v1/chat.proto`.
 - Shared reasoning and tool-call projections are wired through `pkg/chatapp/plugins`.
@@ -62,7 +63,7 @@ Canonical live routes:
 - `POST /api/chat/sessions/:sessionId/messages`
 - `GET /api/chat/sessions/:sessionId`
 - `GET /api/chat/ws`
-- `GET /api/chat/profiles` (app-owned)
+- `GET /api/chat/profiles` (app-owned, includes optional `model_info` per profile)
 - `GET /api/chat/profile` (app-owned)
 - `POST /api/chat/profile` (app-owned)
 

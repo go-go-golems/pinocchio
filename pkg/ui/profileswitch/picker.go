@@ -7,6 +7,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 	overlaywidget "github.com/go-go-golems/pinocchio/pkg/tui/widgets/overlay"
 )
 
@@ -155,6 +156,9 @@ func (m *PickerModel) View() string {
 		if name := strings.TrimSpace(it.DisplayName); name != "" && name != slug {
 			label += " — " + name
 		}
+		if modelSummary := profileModelInfoSummary(it.ModelInfo); modelSummary != "" {
+			label += " " + modelSummary
+		}
 
 		line := marker + label
 
@@ -219,6 +223,46 @@ func (m *PickerModel) SetSize(w, h int) {
 }
 
 // rebuildFiltered rebuilds the filtered index list from the current filter string.
+func profileModelInfoSummary(info *settings.ModelInfo) string {
+	if info == nil {
+		return ""
+	}
+	parts := []string{}
+	if info.Reasoning != nil && *info.Reasoning {
+		parts = append(parts, "✨")
+	}
+	if len(info.Input) > 0 {
+		modalities := make([]string, 0, len(info.Input))
+		for _, modality := range info.Input {
+			switch modality {
+			case settings.InputModalityImage:
+				modalities = append(modalities, "🖼")
+			case settings.InputModalityAudio:
+				modalities = append(modalities, "🎵")
+			case settings.InputModalityVideo:
+				modalities = append(modalities, "🎬")
+			case settings.InputModalityPDF:
+				modalities = append(modalities, "📄")
+			case settings.InputModalityText:
+				modalities = append(modalities, "📝")
+			default:
+				modalities = append(modalities, string(modality))
+			}
+		}
+		parts = append(parts, strings.Join(modalities, ""))
+	}
+	if limit := info.EffectiveContextLimit(); limit > 0 {
+		parts = append(parts, fmt.Sprintf("ctx:%dk", limit/1000))
+	}
+	if info.Cost != nil && (info.Cost.Input != 0 || info.Cost.Output != 0) {
+		parts = append(parts, fmt.Sprintf("$%.2f/%.2f", info.Cost.Input, info.Cost.Output))
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return "[" + strings.Join(parts, " ") + "]"
+}
+
 func (m *PickerModel) rebuildFiltered() {
 	if m.filter == "" {
 		m.filtered = make([]int, len(m.items))

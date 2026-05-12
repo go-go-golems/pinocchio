@@ -12,6 +12,7 @@ type ProfileListItem struct {
 	Description  string
 	IsDefault    bool
 	Version      uint64
+	ModelInfo    *settings.ModelInfo
 }
 
 // Resolved captures the selected engine profile and the final merged

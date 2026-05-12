@@ -51,14 +51,15 @@ type ResolvedRuntime struct {
 
 // ProfileListItem is the JSON shape for profile listing.
 type ProfileListItem struct {
-	Registry      string         `json:"registry"`
-	Slug          string         `json:"slug"`
-	DisplayName   string         `json:"display_name,omitempty"`
-	Description   string         `json:"description,omitempty"`
-	DefaultPrompt string         `json:"default_prompt,omitempty"`
-	Extensions    map[string]any `json:"extensions,omitempty"`
-	IsDefault     bool           `json:"is_default,omitempty"`
-	Version       uint64         `json:"version,omitempty"`
+	Registry      string                `json:"registry"`
+	Slug          string                `json:"slug"`
+	DisplayName   string                `json:"display_name,omitempty"`
+	Description   string                `json:"description,omitempty"`
+	DefaultPrompt string                `json:"default_prompt,omitempty"`
+	Extensions    map[string]any        `json:"extensions,omitempty"`
+	ModelInfo     *aisettings.ModelInfo `json:"model_info,omitempty"`
+	IsDefault     bool                  `json:"is_default,omitempty"`
+	Version       uint64                `json:"version,omitempty"`
 }
 
 // ProfileDocument is the JSON shape for a single profile detail response.
@@ -70,6 +71,7 @@ type ProfileDocument struct {
 	Runtime     *infruntime.ProfileRuntime        `json:"runtime,omitempty"`
 	Metadata    gepprofiles.EngineProfileMetadata `json:"metadata,omitempty"`
 	Extensions  map[string]any                    `json:"extensions,omitempty"`
+	ModelInfo   *aisettings.ModelInfo             `json:"model_info,omitempty"`
 	IsDefault   bool                              `json:"is_default"`
 }
 
