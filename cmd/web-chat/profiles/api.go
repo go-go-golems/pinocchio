@@ -10,6 +10,7 @@ import (
 
 	gepprofiles "github.com/go-go-golems/geppetto/pkg/engineprofiles"
 	"github.com/go-go-golems/geppetto/pkg/inference/middlewarecfg"
+	aisettings "github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 )
 
@@ -312,6 +313,9 @@ func profileDocFromModel(registrySlug gepprofiles.RegistrySlug, registry *geppro
 	}
 	doc.Metadata = p.Metadata
 	doc.Extensions = cloneExtensionMap(p.Extensions)
+	if p.InferenceSettings != nil {
+		doc.ModelInfo = p.InferenceSettings.ModelInfo.Clone()
+	}
 	doc.IsDefault = registry != nil && registry.DefaultEngineProfileSlug == p.Slug
 	return doc
 }
@@ -336,6 +340,10 @@ func profileListItemsFromRegistry(registrySlug gepprofiles.RegistrySlug, registr
 		if runtime, _, err := infruntime.ProfileRuntimeFromEngineProfile(p); err == nil && runtime != nil {
 			defaultPrompt = runtime.SystemPrompt
 		}
+		var modelInfo *aisettings.ModelInfo
+		if p.InferenceSettings != nil {
+			modelInfo = p.InferenceSettings.ModelInfo.Clone()
+		}
 		items = append(items, ProfileListItem{
 			Registry:      registrySlug.String(),
 			Slug:          p.Slug.String(),
@@ -343,6 +351,7 @@ func profileListItemsFromRegistry(registrySlug gepprofiles.RegistrySlug, registr
 			Description:   p.Description,
 			DefaultPrompt: defaultPrompt,
 			Extensions:    cloneExtensionMap(p.Extensions),
+			ModelInfo:     modelInfo,
 			IsDefault:     registry != nil && registry.DefaultEngineProfileSlug == p.Slug,
 			Version:       p.Metadata.Version,
 		})

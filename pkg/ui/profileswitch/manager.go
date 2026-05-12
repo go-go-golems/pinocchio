@@ -105,6 +105,10 @@ func (m *Manager) ListEngineProfiles(ctx context.Context) ([]ProfileListItem, er
 			if p == nil {
 				continue
 			}
+			var modelInfo *settings.ModelInfo
+			if p.InferenceSettings != nil {
+				modelInfo = p.InferenceSettings.ModelInfo.Clone()
+			}
 			items = append(items, ProfileListItem{
 				RegistrySlug: regSlug,
 				ProfileSlug:  p.Slug,
@@ -112,6 +116,7 @@ func (m *Manager) ListEngineProfiles(ctx context.Context) ([]ProfileListItem, er
 				Description:  strings.TrimSpace(p.Description),
 				IsDefault:    rs.DefaultEngineProfileSlug == p.Slug,
 				Version:      p.Metadata.Version,
+				ModelInfo:    modelInfo,
 			})
 		}
 	}
