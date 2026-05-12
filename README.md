@@ -148,6 +148,21 @@ profiles:
       chat:
         api_type: openai
         engine: gpt-4o-mini
+      model_info:
+        id: gpt-4o-mini
+        name: GPT-4o Mini
+        reasoning: false
+        input:
+          - text
+          - image
+        context_window: 128000
+        quality_high_watermark: 128000
+        max_output_tokens: 16384
+        cost:
+          input: 0.15
+          output: 0.60
+          cache_read: 0.075
+          cache_write: 0.30
   gpt-5-mini:
     slug: gpt-5-mini
     stack:
@@ -155,7 +170,12 @@ profiles:
     inference_settings:
       chat:
         engine: gpt-5-mini
+      model_info:
+        id: gpt-5-mini
+        reasoning: true
 ```
+
+`model_info` is optional static model metadata. Pinocchio surfaces it in profile APIs and profile-switch UI so consumers can display reasoning support, input modalities, context limits, and cost information. `context_window` is the hard limit; `quality_high_watermark` is the planning limit where model quality is expected to remain high. Cost values are USD per one million tokens.
 
 Keep prompts, middlewares, and tool selection out of this file. Those are application-level concerns now.
 
