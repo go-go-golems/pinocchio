@@ -144,8 +144,7 @@ clean-spa:
 	rm -rf $(GLAZED_SPA_DIR)
 
 build-with-spa: fetch-spa
-	go generate ./...
-	go build -tags embed ./...
+	go build -tags embed ./cmd/pinocchio
 
 pinocchio_BINARY=$(shell which pinocchio)
 install:

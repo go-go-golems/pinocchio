@@ -9,8 +9,6 @@ before:
     # NOTE: this repo currently relies on a workspace-local geppetto/glazed pair
     # during migration; running `go mod tidy` from GoReleaser resolves against
     # published modules and fails. Keep tidy as a separate dev/CI step.
-    # you may remove this if you don't need go generate
-    - go generate ./...
 builds:
   - id: pinocchio-linux
     main: ./cmd/pinocchio
