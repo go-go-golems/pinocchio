@@ -17,7 +17,11 @@ import (
 )
 
 // NewServeCommand creates a cobra command that starts the pinocchio help browser.
-func NewServeCommand() *cobra.Command {
+//
+// The command serves the initialized HelpSystem from main(), rather than
+// rebuilding a smaller documentation set, so repository-provided help pages
+// loaded during command discovery are visible in the browser as well.
+func NewServeCommand(hs *help.HelpSystem) *cobra.Command {
 	var address string
 
 	cmd := &cobra.Command{
@@ -35,7 +39,7 @@ Use --address to change the listen address (default :8088).
 If the SPA assets are not available (binary built without -tags embed,
 or 'make fetch-spa' not run), the server falls back to API-only mode.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runServe(address)
+			return runServe(cmd.Context(), address, hs)
 		},
 	}
 
@@ -44,11 +48,16 @@ or 'make fetch-spa' not run), the server falls back to API-only mode.`,
 	return cmd
 }
 
-func runServe(address string) error {
-	// Create help system and load all pinocchio documentation.
-	hs := help.NewHelpSystem()
-	if err := LoadAllHelpDocs(hs); err != nil {
-		return fmt.Errorf("loading help docs: %w", err)
+func runServe(ctx context.Context, address string, hs *help.HelpSystem) error {
+	if hs == nil {
+		return fmt.Errorf("help system is not initialized")
+	}
+
+	// Assign a stable package name to embedded and repository docs that were
+	// loaded without package metadata. The browser asks for package-filtered
+	// sections using this package name.
+	if err := hs.Store.SetDefaultPackage(ctx, "pinocchio", ""); err != nil {
+		return fmt.Errorf("assigning default help package: %w", err)
 	}
 
 	// Try to create the SPA handler from embedded assets.
@@ -60,12 +69,10 @@ func runServe(address string) error {
 	}
 
 	// Create the combined handler (API + SPA).
-	// NewServeHandler auto-assigns a default package name to sections
-	// loaded without one (fixes issue #571).
 	deps := helpserver.HandlerDeps{Store: hs.Store}
 	handler := helpserver.NewServeHandler(deps, spaHandler)
 
-	count, err := hs.Store.Count(context.Background())
+	count, err := hs.Store.Count(ctx)
 	if err != nil {
 		return fmt.Errorf("counting help sections: %w", err)
 	}
@@ -97,8 +104,8 @@ func runServe(address string) error {
 		return fmt.Errorf("server error: %w", err)
 	case sig := <-sigCh:
 		log.Info().Str("signal", sig.String()).Msg("Shutting down")
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		return httpSrv.Shutdown(ctx)
+		return httpSrv.Shutdown(shutdownCtx)
 	}
 }

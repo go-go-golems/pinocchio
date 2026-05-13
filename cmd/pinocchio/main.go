@@ -167,7 +167,7 @@ func initRootCmd() (*help.HelpSystem, error) {
 
 	rootCmd.AddCommand(runCommandCmd)
 	rootCmd.AddCommand(pinocchio_cmds.NewJSCommand())
-	rootCmd.AddCommand(pinocchio_cmds.NewServeCommand())
+	rootCmd.AddCommand(pinocchio_cmds.NewServeCommand(helpSystem))
 	return helpSystem, nil
 }
 
