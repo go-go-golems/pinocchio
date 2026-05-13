@@ -15,14 +15,42 @@ type TimelineState = {
   order: string[];
 };
 
+function parseJsonOrRaw(value: string): unknown {
+  try {
+    return JSON.parse(value);
+  } catch {
+    return value;
+  }
+}
+
+function mergePropsWithPatches(existingProps: any, incomingProps: any, contentPatch?: string, inputRawPatch?: string): any {
+  const merged = { ...(existingProps ?? {}), ...(incomingProps ?? {}) };
+  if (contentPatch !== undefined) {
+    const previous = typeof existingProps?.content === 'string' ? existingProps.content : '';
+    merged.content = previous + contentPatch;
+  }
+  if (inputRawPatch !== undefined) {
+    const previous = typeof existingProps?.inputRaw === 'string' ? existingProps.inputRaw : '';
+    const inputRaw = previous + inputRawPatch;
+    merged.inputRaw = inputRaw;
+    merged.input = parseJsonOrRaw(inputRaw);
+  }
+  return merged;
+}
+
 function mergeTimelineEntity(state: TimelineState, e: TimelineEntity, createIfMissing: boolean) {
-  if (!state.byId[e.id]) {
+  const existing = state.byId[e.id];
+  const incomingProps = { ...(e.props ?? {}) };
+  const contentPatch = typeof incomingProps.contentPatch === 'string' ? incomingProps.contentPatch : undefined;
+  const inputRawPatch = typeof incomingProps.inputRawPatch === 'string' ? incomingProps.inputRawPatch : undefined;
+  delete incomingProps.contentPatch;
+  delete incomingProps.inputRawPatch;
+  if (!existing) {
     if (!createIfMissing) return;
-    state.byId[e.id] = e;
+    state.byId[e.id] = { ...e, props: mergePropsWithPatches({}, incomingProps, contentPatch, inputRawPatch) };
     state.order.push(e.id);
     return;
   }
-  const existing = state.byId[e.id];
   const incomingVersion = typeof e.version === 'number' && Number.isFinite(e.version) ? e.version : 0;
   const existingVersion = typeof existing.version === 'number' && Number.isFinite(existing.version) ? existing.version : 0;
   if (incomingVersion > 0) {
@@ -35,7 +63,7 @@ function mergeTimelineEntity(state: TimelineState, e: TimelineEntity, createIfMi
       createdAt: e.createdAt || existing.createdAt,
       kind: e.kind || existing.kind,
       version: incomingVersion,
-      props: { ...(existing.props ?? {}), ...(e.props ?? {}) },
+      props: mergePropsWithPatches(existing.props, incomingProps, contentPatch, inputRawPatch),
     };
     return;
   }
@@ -43,7 +71,7 @@ function mergeTimelineEntity(state: TimelineState, e: TimelineEntity, createIfMi
     state.byId[e.id] = {
       ...existing,
       updatedAt: e.updatedAt ?? existing.updatedAt,
-      props: { ...(existing.props ?? {}), ...(e.props ?? {}) },
+      props: mergePropsWithPatches(existing.props, incomingProps, contentPatch, inputRawPatch),
     };
     return;
   }
@@ -52,7 +80,7 @@ function mergeTimelineEntity(state: TimelineState, e: TimelineEntity, createIfMi
     ...e,
     createdAt: existing.createdAt,
     kind: e.kind || existing.kind,
-    props: { ...(existing.props ?? {}), ...(e.props ?? {}) },
+    props: mergePropsWithPatches(existing.props, incomingProps, contentPatch, inputRawPatch),
   };
 }
 

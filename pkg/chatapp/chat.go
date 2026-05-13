@@ -25,13 +25,13 @@ const (
 	EventChatProviderCallMetadataUpdated = "ChatProviderCallMetadataUpdated"
 	EventChatProviderCallFinished        = "ChatProviderCallFinished"
 	EventChatTextSegmentStarted          = "ChatTextSegmentStarted"
-	EventChatTextDelta                   = "ChatTextDelta"
+	EventChatTextPatch                   = "ChatTextPatch"
 	EventChatTextSegmentFinished         = "ChatTextSegmentFinished"
 	EventChatReasoningSegmentStarted     = "ChatReasoningSegmentStarted"
-	EventChatReasoningDelta              = "ChatReasoningDelta"
+	EventChatReasoningPatch              = "ChatReasoningPatch"
 	EventChatReasoningSegmentFinished    = "ChatReasoningSegmentFinished"
 	EventChatToolCallStarted             = "ChatToolCallStarted"
-	EventChatToolCallArgumentsDelta      = "ChatToolCallArgumentsDelta"
+	EventChatToolArgumentsPatch          = "ChatToolArgumentsPatch"
 	EventChatToolCallRequested           = "ChatToolCallRequested"
 	EventChatToolExecutionStarted        = "ChatToolExecutionStarted"
 	EventChatToolResultReady             = "ChatToolResultReady"
@@ -108,7 +108,7 @@ func RegisterSchemas(reg *sessionstream.SchemaRegistry, features ...ChatPlugin) 
 		reg.RegisterEvent(EventChatProviderCallMetadataUpdated, &chatappv1.ChatProviderCallMetadataUpdated{}),
 		reg.RegisterEvent(EventChatProviderCallFinished, &chatappv1.ChatProviderCallFinished{}),
 		reg.RegisterEvent(EventChatTextSegmentStarted, &chatappv1.ChatTextSegmentStarted{}),
-		reg.RegisterEvent(EventChatTextDelta, &chatappv1.ChatTextDelta{}),
+		reg.RegisterEvent(EventChatTextPatch, &chatappv1.ChatTextPatch{}),
 		reg.RegisterEvent(EventChatTextSegmentFinished, &chatappv1.ChatTextSegmentFinished{}),
 		reg.RegisterUIEvent(EventUserMessageAccepted, &chatappv1.ChatUserMessageAccepted{}),
 		reg.RegisterUIEvent(EventChatRunStarted, &chatappv1.ChatRunStarted{}),
@@ -119,7 +119,7 @@ func RegisterSchemas(reg *sessionstream.SchemaRegistry, features ...ChatPlugin) 
 		reg.RegisterUIEvent(EventChatProviderCallMetadataUpdated, &chatappv1.ChatProviderCallMetadataUpdated{}),
 		reg.RegisterUIEvent(EventChatProviderCallFinished, &chatappv1.ChatProviderCallFinished{}),
 		reg.RegisterUIEvent(EventChatTextSegmentStarted, &chatappv1.ChatTextSegmentStarted{}),
-		reg.RegisterUIEvent(EventChatTextDelta, &chatappv1.ChatTextDelta{}),
+		reg.RegisterUIEvent(EventChatTextPatch, &chatappv1.ChatTextPatch{}),
 		reg.RegisterUIEvent(EventChatTextSegmentFinished, &chatappv1.ChatTextSegmentFinished{}),
 		reg.RegisterTimelineEntity(TimelineEntityChatMessage, &chatappv1.ChatMessageEntity{}),
 	} {

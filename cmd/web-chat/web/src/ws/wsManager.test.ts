@@ -112,9 +112,9 @@ describe('timelineMutationFromUIEvent', () => {
     expect(mutation).toEqual({ status: 'streaming' });
   });
 
-  it('creates a thinking message mutation for ChatReasoningDelta', () => {
+  it('creates a thinking message mutation for ChatReasoningPatch', () => {
     const mutation = timelineMutationFromUIEvent({
-      name: 'ChatReasoningDelta',
+      name: 'ChatReasoningPatch',
       payload: {
         messageId: 'chat-msg-2:thinking:1',
         content: 'draft plan',
@@ -188,9 +188,9 @@ describe('timelineMutationFromUIEvent', () => {
 
   it('preserves typed reasoning provider IDs and optional zero indexes', () => {
     const event = decodeKnownUIEvent({
-      name: 'ChatReasoningDelta',
+      name: 'ChatReasoningPatch',
       payload: {
-        '@type': 'type.googleapis.com/pinocchio.chatapp.v1.ChatReasoningDelta',
+        '@type': 'type.googleapis.com/pinocchio.chatapp.v1.ChatReasoningPatch',
         messageId: 'chat-msg-2:thinking:1',
         parentMessageId: 'chat-msg-2',
         chunk: 'plan',
@@ -203,8 +203,8 @@ describe('timelineMutationFromUIEvent', () => {
       },
     });
 
-    expect(event?.name).toBe('ChatReasoningDelta');
-    if (event?.name !== 'ChatReasoningDelta') throw new Error('expected typed reasoning event');
+    expect(event?.name).toBe('ChatReasoningPatch');
+    if (event?.name !== 'ChatReasoningPatch') throw new Error('expected typed reasoning event');
 
     const mutation = timelineMutationFromUIEvent({ name: event.name, payload: event.payload });
     expect(mutation?.upsert?.props.segmentId).toBe('reasoning-segment-1');

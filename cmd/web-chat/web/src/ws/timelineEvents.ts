@@ -14,8 +14,8 @@ type TimelineMutation = {
   status?: string;
 };
 
-function visibleText(payload: { content?: string; text?: string; chunk?: string }): string {
-  return payload.content || payload.text || payload.chunk || '';
+function visibleText(payload: { content?: string; text?: string }): string {
+  return payload.content || payload.text || '';
 }
 
 function definedProps(props: Record<string, unknown>): Record<string, unknown> {
@@ -112,7 +112,7 @@ export function timelineMutationFromUIEvent(frame: CanonicalFrame): TimelineMuta
         upsert: undefined,
       };
     }
-    case 'ChatTextDelta': {
+    case 'ChatTextPatch': {
       const payload = event.payload;
       const messageId = payload.messageId;
       if (!messageId) return null;
@@ -120,9 +120,9 @@ export function timelineMutationFromUIEvent(frame: CanonicalFrame): TimelineMuta
         upsert: messageEntity(messageId, {
           role: payload.role || 'assistant',
           prompt: payload.prompt,
-          content: visibleText(payload),
+          contentPatch: visibleText(payload),
           status: payload.status || 'streaming',
-          streaming: true,
+          streaming: !payload.final,
           parentMessageId: parentMessageId(messageId, ':text:'),
           final: false,
           ...correlationProps(payload.correlation),
@@ -160,16 +160,16 @@ export function timelineMutationFromUIEvent(frame: CanonicalFrame): TimelineMuta
       if (!messageId) return null;
       return { status: 'streaming' };
     }
-    case 'ChatReasoningDelta': {
+    case 'ChatReasoningPatch': {
       const payload = event.payload;
       const messageId = payload.messageId;
       if (!messageId) return null;
       return {
         upsert: messageEntity(messageId, {
           role: 'thinking',
-          content: visibleText(payload),
+          contentPatch: visibleText(payload),
           status: payload.status || 'streaming',
-          streaming: payload.streaming !== false,
+          streaming: !payload.final,
           parentMessageId: payload.parentMessageId,
           source: payload.source,
           ...correlationProps(payload.correlation),
@@ -238,14 +238,15 @@ export function timelineMutationFromUIEvent(frame: CanonicalFrame): TimelineMuta
       return { deleteId: agentModePreviewEntityId(messageId) };
     }
     case 'ChatToolCallStarted':
-    case 'ChatToolCallArgumentsDelta':
+    case 'ChatToolArgumentsPatch':
     case 'ChatToolCallRequested':
     case 'ChatToolExecutionStarted':
     case 'ChatToolCallFinished': {
       const payload = event.payload;
       if (!payload.toolCallId) return null;
-      const hasInput = 'input' in payload && payload.input !== '';
-      const input = hasInput ? payload.input : '';
+      const isPatch = event.name === 'ChatToolArgumentsPatch';
+      const hasInput = isPatch ? 'arguments' in payload && payload.arguments !== '' : 'input' in payload && payload.input !== '';
+      const input = hasInput ? (isPatch && 'arguments' in payload ? payload.arguments : 'input' in payload ? payload.input : '') : '';
       const executing = 'executing' in payload ? payload.executing : false;
       return {
         upsert: toolCallEntity(
@@ -255,10 +256,10 @@ export function timelineMutationFromUIEvent(frame: CanonicalFrame): TimelineMuta
             toolCallId: payload.toolCallId,
             name: payload.toolName,
             toolName: payload.toolName,
-            ...(hasInput ? { input: parseToolInput(input), inputRaw: input } : {}),
+            ...(hasInput ? (isPatch ? { inputRawPatch: input } : { input: parseToolInput(input), inputRaw: input }) : {}),
             executing,
             status: payload.status,
-            argumentsDelta: 'argumentsDelta' in payload ? payload.argumentsDelta : undefined,
+            arguments: 'arguments' in payload ? payload.arguments : undefined,
             ...correlationProps(payload.correlation),
             done: event.name === 'ChatToolCallFinished' || payload.status === 'completed',
           }),

@@ -21,7 +21,7 @@ func (e *Engine) runDemoInference(ctx context.Context, sid sessionstream.Session
 	if err := e.publish(publishContext(ctx), sid, pub, EventChatTextSegmentStarted, &chatappv1.ChatTextSegmentStarted{MessageId: textMessageID, Role: "assistant", Prompt: prompt, Status: "streaming", Streaming: true, Correlation: corr}); err != nil {
 		return
 	}
-	for _, chunk := range chunks {
+	for i, chunk := range chunks {
 		select {
 		case <-ctx.Done():
 			_ = e.publish(publishContext(ctx), sid, pub, EventChatTextSegmentFinished, &chatappv1.ChatTextSegmentFinished{MessageId: textMessageID, Role: "assistant", Prompt: prompt, Text: accumulated, Content: accumulated, Status: "stopped", Streaming: false, Final: true, FinishReason: "stopped", Correlation: corr})
@@ -30,7 +30,7 @@ func (e *Engine) runDemoInference(ctx context.Context, sid sessionstream.Session
 		case <-time.After(e.chunkDelay):
 		}
 		accumulated += chunk
-		if err := e.publish(publishContext(ctx), sid, pub, EventChatTextDelta, &chatappv1.ChatTextDelta{MessageId: textMessageID, Role: "assistant", Prompt: prompt, Chunk: chunk, Text: accumulated, Content: accumulated, Status: "streaming", Streaming: true, Correlation: corr}); err != nil {
+		if err := e.publish(publishContext(ctx), sid, pub, EventChatTextPatch, &chatappv1.ChatTextPatch{MessageId: textMessageID, Role: "assistant", Prompt: prompt, StreamId: textMessageID, Sequence: uint64(i + 1), Offset: uint64(len(accumulated) - len(chunk)), Text: chunk, Mode: chatappv1.ChatStreamPatchMode_CHAT_STREAM_PATCH_MODE_APPEND, Status: "streaming", Correlation: corr}); err != nil {
 			return
 		}
 	}

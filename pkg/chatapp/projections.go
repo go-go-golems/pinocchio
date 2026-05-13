@@ -17,7 +17,7 @@ func baseUIProjection(_ context.Context, ev sessionstream.Event, _ *sessionstrea
 	case EventUserMessageAccepted,
 		EventChatRunStarted, EventChatRunFinished, EventChatRunStopped, EventChatRunFailed,
 		EventChatProviderCallStarted, EventChatProviderCallMetadataUpdated, EventChatProviderCallFinished,
-		EventChatTextSegmentStarted, EventChatTextDelta, EventChatTextSegmentFinished:
+		EventChatTextSegmentStarted, EventChatTextPatch, EventChatTextSegmentFinished:
 		return []sessionstream.UIEvent{{Name: ev.Name, Payload: proto.Clone(ev.Payload)}}, nil
 	default:
 		return nil, nil
@@ -61,23 +61,24 @@ func baseTimelineProjection(_ context.Context, ev sessionstream.Event, _ *sessio
 		entity.ParentMessageId = parentMessageIDFromSegmentMessageID(messageID)
 		entity.Correlation = MergeCorrelationInfo(entity.GetCorrelation(), payload.GetCorrelation())
 		return []sessionstream.TimelineEntity{{Kind: TimelineEntityChatMessage, Id: messageID, Payload: entity}}, nil
-	case *chatappv1.ChatTextDelta:
+	case *chatappv1.ChatTextPatch:
 		messageID := strings.TrimSpace(payload.GetMessageId())
 		if messageID == "" {
 			return nil, nil
 		}
-		content := firstNonEmpty(payload.GetContent(), payload.GetText())
+		entity, _ := currentChatMessageEntity(view, messageID)
+		content := ApplyStreamPatch(firstNonEmpty(entity.GetContent(), entity.GetText()), payload.GetText(), payload.GetMode())
 		if content == "" {
 			return nil, nil
 		}
-		entity, _ := currentChatMessageEntity(view, messageID)
 		entity.MessageId = messageID
 		entity.Role = firstNonEmpty(payload.GetRole(), "assistant")
 		entity.Prompt = firstNonEmpty(payload.GetPrompt(), entity.GetPrompt())
 		entity.Content = content
 		entity.Text = content
 		entity.Status = firstNonEmpty(payload.GetStatus(), "streaming")
-		entity.Streaming = payload.GetStreaming()
+		entity.Streaming = !payload.GetFinal()
+		entity.Final = payload.GetFinal()
 		entity.ParentMessageId = parentMessageIDFromSegmentMessageID(messageID)
 		entity.Correlation = MergeCorrelationInfo(entity.GetCorrelation(), payload.GetCorrelation())
 		return []sessionstream.TimelineEntity{{Kind: TimelineEntityChatMessage, Id: messageID, Payload: entity}}, nil
@@ -126,4 +127,17 @@ func currentChatMessageEntity(view sessionstream.TimelineView, id string) (*chat
 		return &chatappv1.ChatMessageEntity{}, false
 	}
 	return proto.Clone(pb).(*chatappv1.ChatMessageEntity), true
+}
+
+func ApplyStreamPatch(current, patch string, mode chatappv1.ChatStreamPatchMode) string {
+	switch mode {
+	case chatappv1.ChatStreamPatchMode_CHAT_STREAM_PATCH_MODE_SNAPSHOT,
+		chatappv1.ChatStreamPatchMode_CHAT_STREAM_PATCH_MODE_REPLACE:
+		return patch
+	case chatappv1.ChatStreamPatchMode_CHAT_STREAM_PATCH_MODE_APPEND,
+		chatappv1.ChatStreamPatchMode_CHAT_STREAM_PATCH_MODE_UNSPECIFIED:
+		fallthrough
+	default:
+		return current + patch
+	}
 }

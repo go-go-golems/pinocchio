@@ -43,8 +43,8 @@ func TestReasoningChatFeatureHandleRuntimeEvent(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, handled)
 	require.Len(t, published, 1)
-	require.Equal(t, plugins.ReasoningDeltaEventName, published[0].Name)
-	require.Equal(t, "chat-msg-1:thinking:reasoning-1", published[0].Payload.(*chatappv1.ChatReasoningDelta).GetMessageId())
+	require.Equal(t, plugins.ReasoningPatchEventName, published[0].Name)
+	require.Equal(t, "chat-msg-1:thinking:reasoning-1", published[0].Payload.(*chatappv1.ChatReasoningPatch).GetMessageId())
 
 	handled, err = feature.HandleRuntimeEvent(context.Background(), ctx, gepevents.NewReasoningSegmentFinishedEvent(meta, corr, "short summary", "summary"))
 	require.NoError(t, err)
@@ -57,22 +57,22 @@ func TestReasoningChatFeatureHandleRuntimeEvent(t *testing.T) {
 func TestReasoningChatFeatureProjectsUIAndTimeline(t *testing.T) {
 	feature := plugins.NewReasoningPlugin()
 
-	deltaPayload := &chatappv1.ChatReasoningDelta{
+	deltaPayload := &chatappv1.ChatReasoningPatch{
 		MessageId:       "chat-msg-2:thinking:1",
 		ParentMessageId: "chat-msg-2",
-		Content:         "thinking out loud",
+		Text:            "thinking out loud",
+		Mode:            chatappv1.ChatStreamPatchMode_CHAT_STREAM_PATCH_MODE_APPEND,
 		Status:          "streaming",
-		Streaming:       true,
 		Correlation:     &chatappv1.CorrelationInfo{SegmentId: "reasoning-1"},
 	}
 
-	uiEvents, handled, err := feature.ProjectUI(context.Background(), sessionstream.Event{Name: plugins.ReasoningDeltaEventName, SessionId: "sid", Ordinal: 7, Payload: deltaPayload}, nil, reasoningStaticTimelineView{})
+	uiEvents, handled, err := feature.ProjectUI(context.Background(), sessionstream.Event{Name: plugins.ReasoningPatchEventName, SessionId: "sid", Ordinal: 7, Payload: deltaPayload}, nil, reasoningStaticTimelineView{})
 	require.NoError(t, err)
 	require.True(t, handled)
 	require.Len(t, uiEvents, 1)
-	require.Equal(t, plugins.ReasoningDeltaEventName, uiEvents[0].Name)
+	require.Equal(t, plugins.ReasoningPatchEventName, uiEvents[0].Name)
 
-	entities, handled, err := feature.ProjectTimeline(context.Background(), sessionstream.Event{Name: plugins.ReasoningDeltaEventName, SessionId: "sid", Ordinal: 7, Payload: deltaPayload}, nil, reasoningStaticTimelineView{})
+	entities, handled, err := feature.ProjectTimeline(context.Background(), sessionstream.Event{Name: plugins.ReasoningPatchEventName, SessionId: "sid", Ordinal: 7, Payload: deltaPayload}, nil, reasoningStaticTimelineView{})
 	require.NoError(t, err)
 	require.True(t, handled)
 	require.Len(t, entities, 1)

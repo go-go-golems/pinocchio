@@ -80,12 +80,11 @@ func TestBaseTimelineProjectionSparseTextMatrix(t *testing.T) {
 				Streaming:   true,
 				Correlation: fullCorr,
 			}),
-			event: sessionstream.Event{Name: EventChatTextDelta, SessionId: "session-1", Payload: &chatappv1.ChatTextDelta{
+			event: sessionstream.Event{Name: EventChatTextPatch, SessionId: "session-1", Payload: &chatappv1.ChatTextPatch{
 				MessageId:   "message-1:text:segment-1",
-				Content:     "partial answer",
-				Text:        "partial answer",
+				Text:        " answer",
+				Mode:        chatappv1.ChatStreamPatchMode_CHAT_STREAM_PATCH_MODE_APPEND,
 				Status:      "streaming",
-				Streaming:   true,
 				Correlation: segmentOnlyCorr,
 			}},
 			check: func(t *testing.T, entity *chatappv1.ChatMessageEntity) {

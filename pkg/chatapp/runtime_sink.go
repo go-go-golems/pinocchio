@@ -56,7 +56,7 @@ func (s *runtimeEventSink) PublishEvent(event gepevents.Event) error {
 		s.lastTextCorrelation = corr
 		s.textActive = true
 		s.mu.Unlock()
-		return s.engine.publish(s.publishContext(), s.sessionID, s.pub, EventChatTextDelta, &chatappv1.ChatTextDelta{MessageId: textMessageID, Role: "assistant", Prompt: s.prompt, Chunk: ev.Delta, Text: ev.Text, Content: ev.Text, Status: "streaming", Streaming: true, Correlation: correlationInfoFromEvent(ev)})
+		return s.engine.publish(s.publishContext(), s.sessionID, s.pub, EventChatTextPatch, &chatappv1.ChatTextPatch{MessageId: textMessageID, Role: "assistant", Prompt: s.prompt, StreamId: textMessageID, Sequence: Uint64FromInt64(ev.Sequence), Offset: PatchOffset(ev.Text, ev.Delta), Text: ev.Delta, Mode: chatappv1.ChatStreamPatchMode_CHAT_STREAM_PATCH_MODE_APPEND, Status: "streaming", Correlation: correlationInfoFromEvent(ev)})
 	case *gepevents.EventTextSegmentFinished:
 		corr := ev.Correlation()
 		textMessageID, _ := s.textSegmentIDForCorrelation(corr)
@@ -193,4 +193,18 @@ func (s *runtimeEventSink) IsTerminal() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.terminal
+}
+
+func Uint64FromInt64(value int64) uint64 {
+	if value <= 0 {
+		return 0
+	}
+	return uint64(value)
+}
+
+func PatchOffset(snapshot, delta string) uint64 {
+	if delta == "" || len(snapshot) < len(delta) {
+		return 0
+	}
+	return uint64(len(snapshot) - len(delta))
 }

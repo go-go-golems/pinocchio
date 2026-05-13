@@ -15,8 +15,8 @@ import (
 const (
 	// ReasoningStartedEventName is the canonical backend event published when a reasoning segment begins.
 	ReasoningStartedEventName = chatapp.EventChatReasoningSegmentStarted
-	// ReasoningDeltaEventName is the canonical backend event published for each reasoning token delta.
-	ReasoningDeltaEventName = chatapp.EventChatReasoningDelta
+	// ReasoningPatchEventName is the canonical backend event published for each reasoning token delta.
+	ReasoningPatchEventName = chatapp.EventChatReasoningPatch
 	// ReasoningFinishedEventName is the canonical backend event published when a reasoning segment completes.
 	ReasoningFinishedEventName = chatapp.EventChatReasoningSegmentFinished
 
@@ -35,10 +35,10 @@ func NewReasoningPlugin() chatapp.ChatPlugin { return &ReasoningPlugin{} }
 func (p *ReasoningPlugin) RegisterSchemas(reg *sessionstream.SchemaRegistry) error {
 	for _, err := range []error{
 		reg.RegisterEvent(ReasoningStartedEventName, &chatappv1.ChatReasoningSegmentStarted{}),
-		reg.RegisterEvent(ReasoningDeltaEventName, &chatappv1.ChatReasoningDelta{}),
+		reg.RegisterEvent(ReasoningPatchEventName, &chatappv1.ChatReasoningPatch{}),
 		reg.RegisterEvent(ReasoningFinishedEventName, &chatappv1.ChatReasoningSegmentFinished{}),
 		reg.RegisterUIEvent(ReasoningStartedEventName, &chatappv1.ChatReasoningSegmentStarted{}),
-		reg.RegisterUIEvent(ReasoningDeltaEventName, &chatappv1.ChatReasoningDelta{}),
+		reg.RegisterUIEvent(ReasoningPatchEventName, &chatappv1.ChatReasoningPatch{}),
 		reg.RegisterUIEvent(ReasoningFinishedEventName, &chatappv1.ChatReasoningSegmentFinished{}),
 	} {
 		if err != nil {
@@ -67,15 +67,17 @@ func (p *ReasoningPlugin) HandleRuntimeEvent(ctx context.Context, runtime chatap
 			Correlation:     chatapp.CorrelationInfoFromEvent(ev),
 		})
 	case *gepevents.EventReasoningDelta:
-		return true, runtime.Publish(ctx, ReasoningDeltaEventName, &chatappv1.ChatReasoningDelta{
-			MessageId:       reasoningMessageID(parentMessageID, ev.Correlation()),
+		messageID := reasoningMessageID(parentMessageID, ev.Correlation())
+		return true, runtime.Publish(ctx, ReasoningPatchEventName, &chatappv1.ChatReasoningPatch{
+			MessageId:       messageID,
 			ParentMessageId: parentMessageID,
 			Role:            "thinking",
-			Chunk:           ev.Delta,
-			Text:            ev.Text,
-			Content:         ev.Text,
+			StreamId:        messageID,
+			Sequence:        chatapp.Uint64FromInt64(ev.Sequence),
+			Offset:          chatapp.PatchOffset(ev.Text, ev.Delta),
+			Text:            ev.Delta,
+			Mode:            chatappv1.ChatStreamPatchMode_CHAT_STREAM_PATCH_MODE_APPEND,
 			Status:          "streaming",
-			Streaming:       true,
 			Source:          firstNonEmptyString(ev.Source, "thinking"),
 			Correlation:     chatapp.CorrelationInfoFromEvent(ev),
 		})
@@ -100,7 +102,7 @@ func (p *ReasoningPlugin) HandleRuntimeEvent(ctx context.Context, runtime chatap
 // ProjectUI forwards canonical reasoning backend events as canonical UI events.
 func (p *ReasoningPlugin) ProjectUI(_ context.Context, ev sessionstream.Event, _ *sessionstream.Session, _ sessionstream.TimelineView) ([]sessionstream.UIEvent, bool, error) {
 	switch ev.Name {
-	case ReasoningStartedEventName, ReasoningDeltaEventName, ReasoningFinishedEventName:
+	case ReasoningStartedEventName, ReasoningPatchEventName, ReasoningFinishedEventName:
 		if ev.Payload == nil {
 			return nil, true, fmt.Errorf("reasoning payload must be proto message, got %T", ev.Payload)
 		}
@@ -168,8 +170,10 @@ func reasoningEntityFromEvent(ev sessionstream.Event, view sessionstream.Timelin
 	switch payload := ev.Payload.(type) {
 	case *chatappv1.ChatReasoningSegmentStarted:
 		return reasoningEntityFromFields(view, payload.GetMessageId(), payload.GetParentMessageId(), payload.GetRole(), "", "", payload.GetStatus(), payload.GetStreaming(), payload.GetCorrelation(), ev.Name)
-	case *chatappv1.ChatReasoningDelta:
-		return reasoningEntityFromFields(view, payload.GetMessageId(), payload.GetParentMessageId(), payload.GetRole(), payload.GetContent(), payload.GetText(), payload.GetStatus(), payload.GetStreaming(), payload.GetCorrelation(), ev.Name)
+	case *chatappv1.ChatReasoningPatch:
+		entity, _ := currentReasoningEntity(view, payload.GetMessageId())
+		content := chatapp.ApplyStreamPatch(firstNonEmptyString(entity.GetContent(), entity.GetText()), payload.GetText(), payload.GetMode())
+		return reasoningEntityFromFields(view, payload.GetMessageId(), payload.GetParentMessageId(), payload.GetRole(), content, content, payload.GetStatus(), !payload.GetFinal(), payload.GetCorrelation(), ev.Name)
 	case *chatappv1.ChatReasoningSegmentFinished:
 		return reasoningEntityFromFields(view, payload.GetMessageId(), payload.GetParentMessageId(), payload.GetRole(), payload.GetContent(), payload.GetText(), payload.GetStatus(), payload.GetStreaming(), payload.GetCorrelation(), ev.Name)
 	default:
@@ -198,7 +202,7 @@ func reasoningEntityFromFields(view sessionstream.TimelineView, messageID, paren
 	entity.Correlation = chatapp.MergeCorrelationInfo(entity.GetCorrelation(), corr)
 	entity.SegmentType = gepevents.SegmentTypeReasoning
 	switch eventName {
-	case ReasoningStartedEventName, ReasoningDeltaEventName:
+	case ReasoningStartedEventName, ReasoningPatchEventName:
 		entity.Status = firstNonEmptyString(status, "streaming")
 		entity.Streaming = streaming
 	case ReasoningFinishedEventName:

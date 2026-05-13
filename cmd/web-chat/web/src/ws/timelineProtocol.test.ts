@@ -85,7 +85,7 @@ describe('frontend timeline protocol matrix', () => {
 
     const state = applyFrames([
       {
-        name: 'ChatTextDelta',
+        name: 'ChatTextPatch',
         payload: {
           messageId: 'chat-msg-1:text:1',
           role: 'assistant',
@@ -122,7 +122,7 @@ describe('frontend timeline protocol matrix', () => {
 
     const state = applyFrames([
       {
-        name: 'ChatReasoningDelta',
+        name: 'ChatReasoningPatch',
         payload: {
           messageId: 'chat-msg-1:thinking:1',
           parentMessageId: 'chat-msg-1',

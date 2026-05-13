@@ -21,6 +21,58 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+type ChatStreamPatchMode int32
+
+const (
+	ChatStreamPatchMode_CHAT_STREAM_PATCH_MODE_UNSPECIFIED ChatStreamPatchMode = 0
+	ChatStreamPatchMode_CHAT_STREAM_PATCH_MODE_APPEND      ChatStreamPatchMode = 1
+	ChatStreamPatchMode_CHAT_STREAM_PATCH_MODE_SNAPSHOT    ChatStreamPatchMode = 2
+	ChatStreamPatchMode_CHAT_STREAM_PATCH_MODE_REPLACE     ChatStreamPatchMode = 3
+)
+
+// Enum value maps for ChatStreamPatchMode.
+var (
+	ChatStreamPatchMode_name = map[int32]string{
+		0: "CHAT_STREAM_PATCH_MODE_UNSPECIFIED",
+		1: "CHAT_STREAM_PATCH_MODE_APPEND",
+		2: "CHAT_STREAM_PATCH_MODE_SNAPSHOT",
+		3: "CHAT_STREAM_PATCH_MODE_REPLACE",
+	}
+	ChatStreamPatchMode_value = map[string]int32{
+		"CHAT_STREAM_PATCH_MODE_UNSPECIFIED": 0,
+		"CHAT_STREAM_PATCH_MODE_APPEND":      1,
+		"CHAT_STREAM_PATCH_MODE_SNAPSHOT":    2,
+		"CHAT_STREAM_PATCH_MODE_REPLACE":     3,
+	}
+)
+
+func (x ChatStreamPatchMode) Enum() *ChatStreamPatchMode {
+	p := new(ChatStreamPatchMode)
+	*p = x
+	return p
+}
+
+func (x ChatStreamPatchMode) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (ChatStreamPatchMode) Descriptor() protoreflect.EnumDescriptor {
+	return file_proto_pinocchio_chatapp_v1_chat_proto_enumTypes[0].Descriptor()
+}
+
+func (ChatStreamPatchMode) Type() protoreflect.EnumType {
+	return &file_proto_pinocchio_chatapp_v1_chat_proto_enumTypes[0]
+}
+
+func (x ChatStreamPatchMode) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use ChatStreamPatchMode.Descriptor instead.
+func (ChatStreamPatchMode) EnumDescriptor() ([]byte, []int) {
+	return file_proto_pinocchio_chatapp_v1_chat_proto_rawDescGZIP(), []int{0}
+}
+
 type StartInferenceCommand struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	Prompt         string                 `protobuf:"bytes,1,opt,name=prompt,proto3" json:"prompt,omitempty"`
@@ -821,35 +873,38 @@ func (x *ChatTextSegmentStarted) GetCorrelation() *CorrelationInfo {
 	return nil
 }
 
-type ChatTextDelta struct {
+type ChatTextPatch struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	MessageId     string                 `protobuf:"bytes,1,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
 	Role          string                 `protobuf:"bytes,2,opt,name=role,proto3" json:"role,omitempty"`
-	Prompt        string                 `protobuf:"bytes,3,opt,name=prompt,proto3" json:"prompt,omitempty"`
-	Chunk         string                 `protobuf:"bytes,4,opt,name=chunk,proto3" json:"chunk,omitempty"`
-	Text          string                 `protobuf:"bytes,5,opt,name=text,proto3" json:"text,omitempty"`
-	Content       string                 `protobuf:"bytes,6,opt,name=content,proto3" json:"content,omitempty"`
-	Status        string                 `protobuf:"bytes,7,opt,name=status,proto3" json:"status,omitempty"`
-	Streaming     bool                   `protobuf:"varint,8,opt,name=streaming,proto3" json:"streaming,omitempty"`
-	Correlation   *CorrelationInfo       `protobuf:"bytes,9,opt,name=correlation,proto3" json:"correlation,omitempty"`
+	StreamId      string                 `protobuf:"bytes,3,opt,name=stream_id,json=streamId,proto3" json:"stream_id,omitempty"`
+	Sequence      uint64                 `protobuf:"varint,4,opt,name=sequence,proto3" json:"sequence,omitempty"`
+	Offset        uint64                 `protobuf:"varint,5,opt,name=offset,proto3" json:"offset,omitempty"`
+	Text          string                 `protobuf:"bytes,6,opt,name=text,proto3" json:"text,omitempty"`
+	Mode          ChatStreamPatchMode    `protobuf:"varint,7,opt,name=mode,proto3,enum=pinocchio.chatapp.v1.ChatStreamPatchMode" json:"mode,omitempty"`
+	Status        string                 `protobuf:"bytes,8,opt,name=status,proto3" json:"status,omitempty"`
+	Final         bool                   `protobuf:"varint,9,opt,name=final,proto3" json:"final,omitempty"`
+	FinishReason  string                 `protobuf:"bytes,10,opt,name=finish_reason,json=finishReason,proto3" json:"finish_reason,omitempty"`
+	Prompt        string                 `protobuf:"bytes,11,opt,name=prompt,proto3" json:"prompt,omitempty"`
+	Correlation   *CorrelationInfo       `protobuf:"bytes,12,opt,name=correlation,proto3" json:"correlation,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *ChatTextDelta) Reset() {
-	*x = ChatTextDelta{}
+func (x *ChatTextPatch) Reset() {
+	*x = ChatTextPatch{}
 	mi := &file_proto_pinocchio_chatapp_v1_chat_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *ChatTextDelta) String() string {
+func (x *ChatTextPatch) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*ChatTextDelta) ProtoMessage() {}
+func (*ChatTextPatch) ProtoMessage() {}
 
-func (x *ChatTextDelta) ProtoReflect() protoreflect.Message {
+func (x *ChatTextPatch) ProtoReflect() protoreflect.Message {
 	mi := &file_proto_pinocchio_chatapp_v1_chat_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -861,68 +916,89 @@ func (x *ChatTextDelta) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use ChatTextDelta.ProtoReflect.Descriptor instead.
-func (*ChatTextDelta) Descriptor() ([]byte, []int) {
+// Deprecated: Use ChatTextPatch.ProtoReflect.Descriptor instead.
+func (*ChatTextPatch) Descriptor() ([]byte, []int) {
 	return file_proto_pinocchio_chatapp_v1_chat_proto_rawDescGZIP(), []int{12}
 }
 
-func (x *ChatTextDelta) GetMessageId() string {
+func (x *ChatTextPatch) GetMessageId() string {
 	if x != nil {
 		return x.MessageId
 	}
 	return ""
 }
 
-func (x *ChatTextDelta) GetRole() string {
+func (x *ChatTextPatch) GetRole() string {
 	if x != nil {
 		return x.Role
 	}
 	return ""
 }
 
-func (x *ChatTextDelta) GetPrompt() string {
+func (x *ChatTextPatch) GetStreamId() string {
 	if x != nil {
-		return x.Prompt
+		return x.StreamId
 	}
 	return ""
 }
 
-func (x *ChatTextDelta) GetChunk() string {
+func (x *ChatTextPatch) GetSequence() uint64 {
 	if x != nil {
-		return x.Chunk
+		return x.Sequence
 	}
-	return ""
+	return 0
 }
 
-func (x *ChatTextDelta) GetText() string {
+func (x *ChatTextPatch) GetOffset() uint64 {
+	if x != nil {
+		return x.Offset
+	}
+	return 0
+}
+
+func (x *ChatTextPatch) GetText() string {
 	if x != nil {
 		return x.Text
 	}
 	return ""
 }
 
-func (x *ChatTextDelta) GetContent() string {
+func (x *ChatTextPatch) GetMode() ChatStreamPatchMode {
 	if x != nil {
-		return x.Content
+		return x.Mode
 	}
-	return ""
+	return ChatStreamPatchMode_CHAT_STREAM_PATCH_MODE_UNSPECIFIED
 }
 
-func (x *ChatTextDelta) GetStatus() string {
+func (x *ChatTextPatch) GetStatus() string {
 	if x != nil {
 		return x.Status
 	}
 	return ""
 }
 
-func (x *ChatTextDelta) GetStreaming() bool {
+func (x *ChatTextPatch) GetFinal() bool {
 	if x != nil {
-		return x.Streaming
+		return x.Final
 	}
 	return false
 }
 
-func (x *ChatTextDelta) GetCorrelation() *CorrelationInfo {
+func (x *ChatTextPatch) GetFinishReason() string {
+	if x != nil {
+		return x.FinishReason
+	}
+	return ""
+}
+
+func (x *ChatTextPatch) GetPrompt() string {
+	if x != nil {
+		return x.Prompt
+	}
+	return ""
+}
+
+func (x *ChatTextPatch) GetCorrelation() *CorrelationInfo {
 	if x != nil {
 		return x.Correlation
 	}
@@ -1137,36 +1213,39 @@ func (x *ChatReasoningSegmentStarted) GetCorrelation() *CorrelationInfo {
 	return nil
 }
 
-type ChatReasoningDelta struct {
+type ChatReasoningPatch struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
 	MessageId       string                 `protobuf:"bytes,1,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
 	ParentMessageId string                 `protobuf:"bytes,2,opt,name=parent_message_id,json=parentMessageId,proto3" json:"parent_message_id,omitempty"`
 	Role            string                 `protobuf:"bytes,3,opt,name=role,proto3" json:"role,omitempty"`
-	Chunk           string                 `protobuf:"bytes,4,opt,name=chunk,proto3" json:"chunk,omitempty"`
-	Text            string                 `protobuf:"bytes,5,opt,name=text,proto3" json:"text,omitempty"`
-	Content         string                 `protobuf:"bytes,6,opt,name=content,proto3" json:"content,omitempty"`
-	Status          string                 `protobuf:"bytes,7,opt,name=status,proto3" json:"status,omitempty"`
-	Streaming       bool                   `protobuf:"varint,8,opt,name=streaming,proto3" json:"streaming,omitempty"`
-	Source          string                 `protobuf:"bytes,9,opt,name=source,proto3" json:"source,omitempty"`
-	Correlation     *CorrelationInfo       `protobuf:"bytes,10,opt,name=correlation,proto3" json:"correlation,omitempty"`
+	StreamId        string                 `protobuf:"bytes,4,opt,name=stream_id,json=streamId,proto3" json:"stream_id,omitempty"`
+	Sequence        uint64                 `protobuf:"varint,5,opt,name=sequence,proto3" json:"sequence,omitempty"`
+	Offset          uint64                 `protobuf:"varint,6,opt,name=offset,proto3" json:"offset,omitempty"`
+	Text            string                 `protobuf:"bytes,7,opt,name=text,proto3" json:"text,omitempty"`
+	Mode            ChatStreamPatchMode    `protobuf:"varint,8,opt,name=mode,proto3,enum=pinocchio.chatapp.v1.ChatStreamPatchMode" json:"mode,omitempty"`
+	Status          string                 `protobuf:"bytes,9,opt,name=status,proto3" json:"status,omitempty"`
+	Final           bool                   `protobuf:"varint,10,opt,name=final,proto3" json:"final,omitempty"`
+	Source          string                 `protobuf:"bytes,11,opt,name=source,proto3" json:"source,omitempty"`
+	FinishReason    string                 `protobuf:"bytes,12,opt,name=finish_reason,json=finishReason,proto3" json:"finish_reason,omitempty"`
+	Correlation     *CorrelationInfo       `protobuf:"bytes,13,opt,name=correlation,proto3" json:"correlation,omitempty"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
 
-func (x *ChatReasoningDelta) Reset() {
-	*x = ChatReasoningDelta{}
+func (x *ChatReasoningPatch) Reset() {
+	*x = ChatReasoningPatch{}
 	mi := &file_proto_pinocchio_chatapp_v1_chat_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *ChatReasoningDelta) String() string {
+func (x *ChatReasoningPatch) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*ChatReasoningDelta) ProtoMessage() {}
+func (*ChatReasoningPatch) ProtoMessage() {}
 
-func (x *ChatReasoningDelta) ProtoReflect() protoreflect.Message {
+func (x *ChatReasoningPatch) ProtoReflect() protoreflect.Message {
 	mi := &file_proto_pinocchio_chatapp_v1_chat_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -1178,75 +1257,96 @@ func (x *ChatReasoningDelta) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use ChatReasoningDelta.ProtoReflect.Descriptor instead.
-func (*ChatReasoningDelta) Descriptor() ([]byte, []int) {
+// Deprecated: Use ChatReasoningPatch.ProtoReflect.Descriptor instead.
+func (*ChatReasoningPatch) Descriptor() ([]byte, []int) {
 	return file_proto_pinocchio_chatapp_v1_chat_proto_rawDescGZIP(), []int{15}
 }
 
-func (x *ChatReasoningDelta) GetMessageId() string {
+func (x *ChatReasoningPatch) GetMessageId() string {
 	if x != nil {
 		return x.MessageId
 	}
 	return ""
 }
 
-func (x *ChatReasoningDelta) GetParentMessageId() string {
+func (x *ChatReasoningPatch) GetParentMessageId() string {
 	if x != nil {
 		return x.ParentMessageId
 	}
 	return ""
 }
 
-func (x *ChatReasoningDelta) GetRole() string {
+func (x *ChatReasoningPatch) GetRole() string {
 	if x != nil {
 		return x.Role
 	}
 	return ""
 }
 
-func (x *ChatReasoningDelta) GetChunk() string {
+func (x *ChatReasoningPatch) GetStreamId() string {
 	if x != nil {
-		return x.Chunk
+		return x.StreamId
 	}
 	return ""
 }
 
-func (x *ChatReasoningDelta) GetText() string {
+func (x *ChatReasoningPatch) GetSequence() uint64 {
+	if x != nil {
+		return x.Sequence
+	}
+	return 0
+}
+
+func (x *ChatReasoningPatch) GetOffset() uint64 {
+	if x != nil {
+		return x.Offset
+	}
+	return 0
+}
+
+func (x *ChatReasoningPatch) GetText() string {
 	if x != nil {
 		return x.Text
 	}
 	return ""
 }
 
-func (x *ChatReasoningDelta) GetContent() string {
+func (x *ChatReasoningPatch) GetMode() ChatStreamPatchMode {
 	if x != nil {
-		return x.Content
+		return x.Mode
 	}
-	return ""
+	return ChatStreamPatchMode_CHAT_STREAM_PATCH_MODE_UNSPECIFIED
 }
 
-func (x *ChatReasoningDelta) GetStatus() string {
+func (x *ChatReasoningPatch) GetStatus() string {
 	if x != nil {
 		return x.Status
 	}
 	return ""
 }
 
-func (x *ChatReasoningDelta) GetStreaming() bool {
+func (x *ChatReasoningPatch) GetFinal() bool {
 	if x != nil {
-		return x.Streaming
+		return x.Final
 	}
 	return false
 }
 
-func (x *ChatReasoningDelta) GetSource() string {
+func (x *ChatReasoningPatch) GetSource() string {
 	if x != nil {
 		return x.Source
 	}
 	return ""
 }
 
-func (x *ChatReasoningDelta) GetCorrelation() *CorrelationInfo {
+func (x *ChatReasoningPatch) GetFinishReason() string {
+	if x != nil {
+		return x.FinishReason
+	}
+	return ""
+}
+
+func (x *ChatReasoningPatch) GetCorrelation() *CorrelationInfo {
 	if x != nil {
 		return x.Correlation
 	}
@@ -1461,33 +1561,37 @@ func (x *ChatToolCallStarted) GetCorrelation() *CorrelationInfo {
 	return nil
 }
 
-type ChatToolCallArgumentsDelta struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	MessageId      string                 `protobuf:"bytes,1,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
-	ToolCallId     string                 `protobuf:"bytes,2,opt,name=tool_call_id,json=toolCallId,proto3" json:"tool_call_id,omitempty"`
-	ToolName       string                 `protobuf:"bytes,3,opt,name=tool_name,json=toolName,proto3" json:"tool_name,omitempty"`
-	ArgumentsDelta string                 `protobuf:"bytes,4,opt,name=arguments_delta,json=argumentsDelta,proto3" json:"arguments_delta,omitempty"`
-	Input          string                 `protobuf:"bytes,5,opt,name=input,proto3" json:"input,omitempty"`
-	Status         string                 `protobuf:"bytes,6,opt,name=status,proto3" json:"status,omitempty"`
-	Correlation    *CorrelationInfo       `protobuf:"bytes,7,opt,name=correlation,proto3" json:"correlation,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+type ChatToolArgumentsPatch struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	MessageId     string                 `protobuf:"bytes,1,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
+	ToolCallId    string                 `protobuf:"bytes,2,opt,name=tool_call_id,json=toolCallId,proto3" json:"tool_call_id,omitempty"`
+	ToolName      string                 `protobuf:"bytes,3,opt,name=tool_name,json=toolName,proto3" json:"tool_name,omitempty"`
+	StreamId      string                 `protobuf:"bytes,4,opt,name=stream_id,json=streamId,proto3" json:"stream_id,omitempty"`
+	Sequence      uint64                 `protobuf:"varint,5,opt,name=sequence,proto3" json:"sequence,omitempty"`
+	Offset        uint64                 `protobuf:"varint,6,opt,name=offset,proto3" json:"offset,omitempty"`
+	Arguments     string                 `protobuf:"bytes,7,opt,name=arguments,proto3" json:"arguments,omitempty"`
+	Mode          ChatStreamPatchMode    `protobuf:"varint,8,opt,name=mode,proto3,enum=pinocchio.chatapp.v1.ChatStreamPatchMode" json:"mode,omitempty"`
+	Status        string                 `protobuf:"bytes,9,opt,name=status,proto3" json:"status,omitempty"`
+	Final         bool                   `protobuf:"varint,10,opt,name=final,proto3" json:"final,omitempty"`
+	Correlation   *CorrelationInfo       `protobuf:"bytes,11,opt,name=correlation,proto3" json:"correlation,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
-func (x *ChatToolCallArgumentsDelta) Reset() {
-	*x = ChatToolCallArgumentsDelta{}
+func (x *ChatToolArgumentsPatch) Reset() {
+	*x = ChatToolArgumentsPatch{}
 	mi := &file_proto_pinocchio_chatapp_v1_chat_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *ChatToolCallArgumentsDelta) String() string {
+func (x *ChatToolArgumentsPatch) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*ChatToolCallArgumentsDelta) ProtoMessage() {}
+func (*ChatToolArgumentsPatch) ProtoMessage() {}
 
-func (x *ChatToolCallArgumentsDelta) ProtoReflect() protoreflect.Message {
+func (x *ChatToolArgumentsPatch) ProtoReflect() protoreflect.Message {
 	mi := &file_proto_pinocchio_chatapp_v1_chat_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -1499,54 +1603,82 @@ func (x *ChatToolCallArgumentsDelta) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use ChatToolCallArgumentsDelta.ProtoReflect.Descriptor instead.
-func (*ChatToolCallArgumentsDelta) Descriptor() ([]byte, []int) {
+// Deprecated: Use ChatToolArgumentsPatch.ProtoReflect.Descriptor instead.
+func (*ChatToolArgumentsPatch) Descriptor() ([]byte, []int) {
 	return file_proto_pinocchio_chatapp_v1_chat_proto_rawDescGZIP(), []int{18}
 }
 
-func (x *ChatToolCallArgumentsDelta) GetMessageId() string {
+func (x *ChatToolArgumentsPatch) GetMessageId() string {
 	if x != nil {
 		return x.MessageId
 	}
 	return ""
 }
 
-func (x *ChatToolCallArgumentsDelta) GetToolCallId() string {
+func (x *ChatToolArgumentsPatch) GetToolCallId() string {
 	if x != nil {
 		return x.ToolCallId
 	}
 	return ""
 }
 
-func (x *ChatToolCallArgumentsDelta) GetToolName() string {
+func (x *ChatToolArgumentsPatch) GetToolName() string {
 	if x != nil {
 		return x.ToolName
 	}
 	return ""
 }
 
-func (x *ChatToolCallArgumentsDelta) GetArgumentsDelta() string {
+func (x *ChatToolArgumentsPatch) GetStreamId() string {
 	if x != nil {
-		return x.ArgumentsDelta
+		return x.StreamId
 	}
 	return ""
 }
 
-func (x *ChatToolCallArgumentsDelta) GetInput() string {
+func (x *ChatToolArgumentsPatch) GetSequence() uint64 {
 	if x != nil {
-		return x.Input
+		return x.Sequence
+	}
+	return 0
+}
+
+func (x *ChatToolArgumentsPatch) GetOffset() uint64 {
+	if x != nil {
+		return x.Offset
+	}
+	return 0
+}
+
+func (x *ChatToolArgumentsPatch) GetArguments() string {
+	if x != nil {
+		return x.Arguments
 	}
 	return ""
 }
 
-func (x *ChatToolCallArgumentsDelta) GetStatus() string {
+func (x *ChatToolArgumentsPatch) GetMode() ChatStreamPatchMode {
+	if x != nil {
+		return x.Mode
+	}
+	return ChatStreamPatchMode_CHAT_STREAM_PATCH_MODE_UNSPECIFIED
+}
+
+func (x *ChatToolArgumentsPatch) GetStatus() string {
 	if x != nil {
 		return x.Status
 	}
 	return ""
 }
 
-func (x *ChatToolCallArgumentsDelta) GetCorrelation() *CorrelationInfo {
+func (x *ChatToolArgumentsPatch) GetFinal() bool {
+	if x != nil {
+		return x.Final
+	}
+	return false
+}
+
+func (x *ChatToolArgumentsPatch) GetCorrelation() *CorrelationInfo {
 	if x != nil {
 		return x.Correlation
 	}
@@ -2662,18 +2794,22 @@ const file_proto_pinocchio_chatapp_v1_chat_proto_rawDesc = "" +
 	"\x06prompt\x18\x03 \x01(\tR\x06prompt\x12\x16\n" +
 	"\x06status\x18\x04 \x01(\tR\x06status\x12\x1c\n" +
 	"\tstreaming\x18\x05 \x01(\bR\tstreaming\x12G\n" +
-	"\vcorrelation\x18\x06 \x01(\v2%.pinocchio.chatapp.v1.CorrelationInfoR\vcorrelation\"\x9d\x02\n" +
-	"\rChatTextDelta\x12\x1d\n" +
+	"\vcorrelation\x18\x06 \x01(\v2%.pinocchio.chatapp.v1.CorrelationInfoR\vcorrelation\"\x9a\x03\n" +
+	"\rChatTextPatch\x12\x1d\n" +
 	"\n" +
 	"message_id\x18\x01 \x01(\tR\tmessageId\x12\x12\n" +
-	"\x04role\x18\x02 \x01(\tR\x04role\x12\x16\n" +
-	"\x06prompt\x18\x03 \x01(\tR\x06prompt\x12\x14\n" +
-	"\x05chunk\x18\x04 \x01(\tR\x05chunk\x12\x12\n" +
-	"\x04text\x18\x05 \x01(\tR\x04text\x12\x18\n" +
-	"\acontent\x18\x06 \x01(\tR\acontent\x12\x16\n" +
-	"\x06status\x18\a \x01(\tR\x06status\x12\x1c\n" +
-	"\tstreaming\x18\b \x01(\bR\tstreaming\x12G\n" +
-	"\vcorrelation\x18\t \x01(\v2%.pinocchio.chatapp.v1.CorrelationInfoR\vcorrelation\"\xcc\x02\n" +
+	"\x04role\x18\x02 \x01(\tR\x04role\x12\x1b\n" +
+	"\tstream_id\x18\x03 \x01(\tR\bstreamId\x12\x1a\n" +
+	"\bsequence\x18\x04 \x01(\x04R\bsequence\x12\x16\n" +
+	"\x06offset\x18\x05 \x01(\x04R\x06offset\x12\x12\n" +
+	"\x04text\x18\x06 \x01(\tR\x04text\x12=\n" +
+	"\x04mode\x18\a \x01(\x0e2).pinocchio.chatapp.v1.ChatStreamPatchModeR\x04mode\x12\x16\n" +
+	"\x06status\x18\b \x01(\tR\x06status\x12\x14\n" +
+	"\x05final\x18\t \x01(\bR\x05final\x12#\n" +
+	"\rfinish_reason\x18\n" +
+	" \x01(\tR\ffinishReason\x12\x16\n" +
+	"\x06prompt\x18\v \x01(\tR\x06prompt\x12G\n" +
+	"\vcorrelation\x18\f \x01(\v2%.pinocchio.chatapp.v1.CorrelationInfoR\vcorrelation\"\xcc\x02\n" +
 	"\x17ChatTextSegmentFinished\x12\x1d\n" +
 	"\n" +
 	"message_id\x18\x01 \x01(\tR\tmessageId\x12\x12\n" +
@@ -2695,20 +2831,23 @@ const file_proto_pinocchio_chatapp_v1_chat_proto_rawDesc = "" +
 	"\x06status\x18\x04 \x01(\tR\x06status\x12\x1c\n" +
 	"\tstreaming\x18\x05 \x01(\bR\tstreaming\x12\x16\n" +
 	"\x06source\x18\x06 \x01(\tR\x06source\x12G\n" +
-	"\vcorrelation\x18\a \x01(\v2%.pinocchio.chatapp.v1.CorrelationInfoR\vcorrelation\"\xce\x02\n" +
-	"\x12ChatReasoningDelta\x12\x1d\n" +
+	"\vcorrelation\x18\a \x01(\v2%.pinocchio.chatapp.v1.CorrelationInfoR\vcorrelation\"\xcb\x03\n" +
+	"\x12ChatReasoningPatch\x12\x1d\n" +
 	"\n" +
 	"message_id\x18\x01 \x01(\tR\tmessageId\x12*\n" +
 	"\x11parent_message_id\x18\x02 \x01(\tR\x0fparentMessageId\x12\x12\n" +
-	"\x04role\x18\x03 \x01(\tR\x04role\x12\x14\n" +
-	"\x05chunk\x18\x04 \x01(\tR\x05chunk\x12\x12\n" +
-	"\x04text\x18\x05 \x01(\tR\x04text\x12\x18\n" +
-	"\acontent\x18\x06 \x01(\tR\acontent\x12\x16\n" +
-	"\x06status\x18\a \x01(\tR\x06status\x12\x1c\n" +
-	"\tstreaming\x18\b \x01(\bR\tstreaming\x12\x16\n" +
-	"\x06source\x18\t \x01(\tR\x06source\x12G\n" +
-	"\vcorrelation\x18\n" +
-	" \x01(\v2%.pinocchio.chatapp.v1.CorrelationInfoR\vcorrelation\"\xe7\x02\n" +
+	"\x04role\x18\x03 \x01(\tR\x04role\x12\x1b\n" +
+	"\tstream_id\x18\x04 \x01(\tR\bstreamId\x12\x1a\n" +
+	"\bsequence\x18\x05 \x01(\x04R\bsequence\x12\x16\n" +
+	"\x06offset\x18\x06 \x01(\x04R\x06offset\x12\x12\n" +
+	"\x04text\x18\a \x01(\tR\x04text\x12=\n" +
+	"\x04mode\x18\b \x01(\x0e2).pinocchio.chatapp.v1.ChatStreamPatchModeR\x04mode\x12\x16\n" +
+	"\x06status\x18\t \x01(\tR\x06status\x12\x14\n" +
+	"\x05final\x18\n" +
+	" \x01(\bR\x05final\x12\x16\n" +
+	"\x06source\x18\v \x01(\tR\x06source\x12#\n" +
+	"\rfinish_reason\x18\f \x01(\tR\ffinishReason\x12G\n" +
+	"\vcorrelation\x18\r \x01(\v2%.pinocchio.chatapp.v1.CorrelationInfoR\vcorrelation\"\xe7\x02\n" +
 	"\x1cChatReasoningSegmentFinished\x12\x1d\n" +
 	"\n" +
 	"message_id\x18\x01 \x01(\tR\tmessageId\x12*\n" +
@@ -2731,17 +2870,22 @@ const file_proto_pinocchio_chatapp_v1_chat_proto_rawDesc = "" +
 	"\x05input\x18\x04 \x01(\tR\x05input\x12\x1c\n" +
 	"\texecuting\x18\x05 \x01(\bR\texecuting\x12\x16\n" +
 	"\x06status\x18\x06 \x01(\tR\x06status\x12G\n" +
-	"\vcorrelation\x18\a \x01(\v2%.pinocchio.chatapp.v1.CorrelationInfoR\vcorrelation\"\x9a\x02\n" +
-	"\x1aChatToolCallArgumentsDelta\x12\x1d\n" +
+	"\vcorrelation\x18\a \x01(\v2%.pinocchio.chatapp.v1.CorrelationInfoR\vcorrelation\"\x9b\x03\n" +
+	"\x16ChatToolArgumentsPatch\x12\x1d\n" +
 	"\n" +
 	"message_id\x18\x01 \x01(\tR\tmessageId\x12 \n" +
 	"\ftool_call_id\x18\x02 \x01(\tR\n" +
 	"toolCallId\x12\x1b\n" +
-	"\ttool_name\x18\x03 \x01(\tR\btoolName\x12'\n" +
-	"\x0farguments_delta\x18\x04 \x01(\tR\x0eargumentsDelta\x12\x14\n" +
-	"\x05input\x18\x05 \x01(\tR\x05input\x12\x16\n" +
-	"\x06status\x18\x06 \x01(\tR\x06status\x12G\n" +
-	"\vcorrelation\x18\a \x01(\v2%.pinocchio.chatapp.v1.CorrelationInfoR\vcorrelation\"\x8a\x02\n" +
+	"\ttool_name\x18\x03 \x01(\tR\btoolName\x12\x1b\n" +
+	"\tstream_id\x18\x04 \x01(\tR\bstreamId\x12\x1a\n" +
+	"\bsequence\x18\x05 \x01(\x04R\bsequence\x12\x16\n" +
+	"\x06offset\x18\x06 \x01(\x04R\x06offset\x12\x1c\n" +
+	"\targuments\x18\a \x01(\tR\targuments\x12=\n" +
+	"\x04mode\x18\b \x01(\x0e2).pinocchio.chatapp.v1.ChatStreamPatchModeR\x04mode\x12\x16\n" +
+	"\x06status\x18\t \x01(\tR\x06status\x12\x14\n" +
+	"\x05final\x18\n" +
+	" \x01(\bR\x05final\x12G\n" +
+	"\vcorrelation\x18\v \x01(\v2%.pinocchio.chatapp.v1.CorrelationInfoR\vcorrelation\"\x8a\x02\n" +
 	"\x15ChatToolCallRequested\x12\x1d\n" +
 	"\n" +
 	"message_id\x18\x01 \x01(\tR\tmessageId\x12 \n" +
@@ -2848,7 +2992,12 @@ const file_proto_pinocchio_chatapp_v1_chat_proto_rawDesc = "" +
 	"\ttool_name\x18\x03 \x01(\tR\btoolName\x12\x16\n" +
 	"\x06result\x18\x04 \x01(\tR\x06result\x12\x16\n" +
 	"\x06status\x18\x05 \x01(\tR\x06status\x12G\n" +
-	"\vcorrelation\x18\x06 \x01(\v2%.pinocchio.chatapp.v1.CorrelationInfoR\vcorrelationBWZUgithub.com/go-go-golems/pinocchio/pkg/chatapp/pb/proto/pinocchio/chatapp/v1;chatappv1b\x06proto3"
+	"\vcorrelation\x18\x06 \x01(\v2%.pinocchio.chatapp.v1.CorrelationInfoR\vcorrelation*\xa9\x01\n" +
+	"\x13ChatStreamPatchMode\x12&\n" +
+	"\"CHAT_STREAM_PATCH_MODE_UNSPECIFIED\x10\x00\x12!\n" +
+	"\x1dCHAT_STREAM_PATCH_MODE_APPEND\x10\x01\x12#\n" +
+	"\x1fCHAT_STREAM_PATCH_MODE_SNAPSHOT\x10\x02\x12\"\n" +
+	"\x1eCHAT_STREAM_PATCH_MODE_REPLACE\x10\x03BWZUgithub.com/go-go-golems/pinocchio/pkg/chatapp/pb/proto/pinocchio/chatapp/v1;chatappv1b\x06proto3"
 
 var (
 	file_proto_pinocchio_chatapp_v1_chat_proto_rawDescOnce sync.Once
@@ -2862,70 +3011,75 @@ func file_proto_pinocchio_chatapp_v1_chat_proto_rawDescGZIP() []byte {
 	return file_proto_pinocchio_chatapp_v1_chat_proto_rawDescData
 }
 
+var file_proto_pinocchio_chatapp_v1_chat_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
 var file_proto_pinocchio_chatapp_v1_chat_proto_msgTypes = make([]protoimpl.MessageInfo, 31)
 var file_proto_pinocchio_chatapp_v1_chat_proto_goTypes = []any{
-	(*StartInferenceCommand)(nil),           // 0: pinocchio.chatapp.v1.StartInferenceCommand
-	(*StopInferenceCommand)(nil),            // 1: pinocchio.chatapp.v1.StopInferenceCommand
-	(*UsageInfo)(nil),                       // 2: pinocchio.chatapp.v1.UsageInfo
-	(*CorrelationInfo)(nil),                 // 3: pinocchio.chatapp.v1.CorrelationInfo
-	(*ChatRunStarted)(nil),                  // 4: pinocchio.chatapp.v1.ChatRunStarted
-	(*ChatRunFinished)(nil),                 // 5: pinocchio.chatapp.v1.ChatRunFinished
-	(*ChatRunStopped)(nil),                  // 6: pinocchio.chatapp.v1.ChatRunStopped
-	(*ChatRunFailed)(nil),                   // 7: pinocchio.chatapp.v1.ChatRunFailed
-	(*ChatProviderCallStarted)(nil),         // 8: pinocchio.chatapp.v1.ChatProviderCallStarted
-	(*ChatProviderCallMetadataUpdated)(nil), // 9: pinocchio.chatapp.v1.ChatProviderCallMetadataUpdated
-	(*ChatProviderCallFinished)(nil),        // 10: pinocchio.chatapp.v1.ChatProviderCallFinished
-	(*ChatTextSegmentStarted)(nil),          // 11: pinocchio.chatapp.v1.ChatTextSegmentStarted
-	(*ChatTextDelta)(nil),                   // 12: pinocchio.chatapp.v1.ChatTextDelta
-	(*ChatTextSegmentFinished)(nil),         // 13: pinocchio.chatapp.v1.ChatTextSegmentFinished
-	(*ChatReasoningSegmentStarted)(nil),     // 14: pinocchio.chatapp.v1.ChatReasoningSegmentStarted
-	(*ChatReasoningDelta)(nil),              // 15: pinocchio.chatapp.v1.ChatReasoningDelta
-	(*ChatReasoningSegmentFinished)(nil),    // 16: pinocchio.chatapp.v1.ChatReasoningSegmentFinished
-	(*ChatToolCallStarted)(nil),             // 17: pinocchio.chatapp.v1.ChatToolCallStarted
-	(*ChatToolCallArgumentsDelta)(nil),      // 18: pinocchio.chatapp.v1.ChatToolCallArgumentsDelta
-	(*ChatToolCallRequested)(nil),           // 19: pinocchio.chatapp.v1.ChatToolCallRequested
-	(*ChatToolExecutionStarted)(nil),        // 20: pinocchio.chatapp.v1.ChatToolExecutionStarted
-	(*ChatToolResultReady)(nil),             // 21: pinocchio.chatapp.v1.ChatToolResultReady
-	(*ChatToolCallFinished)(nil),            // 22: pinocchio.chatapp.v1.ChatToolCallFinished
-	(*ChatUserMessageAccepted)(nil),         // 23: pinocchio.chatapp.v1.ChatUserMessageAccepted
-	(*ChatMessageEntity)(nil),               // 24: pinocchio.chatapp.v1.ChatMessageEntity
-	(*AgentModePreviewUpdate)(nil),          // 25: pinocchio.chatapp.v1.AgentModePreviewUpdate
-	(*AgentModeCommittedUpdate)(nil),        // 26: pinocchio.chatapp.v1.AgentModeCommittedUpdate
-	(*AgentModePreviewCleared)(nil),         // 27: pinocchio.chatapp.v1.AgentModePreviewCleared
-	(*AgentModeEntity)(nil),                 // 28: pinocchio.chatapp.v1.AgentModeEntity
-	(*ToolCallEntity)(nil),                  // 29: pinocchio.chatapp.v1.ToolCallEntity
-	(*ToolResultEntity)(nil),                // 30: pinocchio.chatapp.v1.ToolResultEntity
+	(ChatStreamPatchMode)(0),                // 0: pinocchio.chatapp.v1.ChatStreamPatchMode
+	(*StartInferenceCommand)(nil),           // 1: pinocchio.chatapp.v1.StartInferenceCommand
+	(*StopInferenceCommand)(nil),            // 2: pinocchio.chatapp.v1.StopInferenceCommand
+	(*UsageInfo)(nil),                       // 3: pinocchio.chatapp.v1.UsageInfo
+	(*CorrelationInfo)(nil),                 // 4: pinocchio.chatapp.v1.CorrelationInfo
+	(*ChatRunStarted)(nil),                  // 5: pinocchio.chatapp.v1.ChatRunStarted
+	(*ChatRunFinished)(nil),                 // 6: pinocchio.chatapp.v1.ChatRunFinished
+	(*ChatRunStopped)(nil),                  // 7: pinocchio.chatapp.v1.ChatRunStopped
+	(*ChatRunFailed)(nil),                   // 8: pinocchio.chatapp.v1.ChatRunFailed
+	(*ChatProviderCallStarted)(nil),         // 9: pinocchio.chatapp.v1.ChatProviderCallStarted
+	(*ChatProviderCallMetadataUpdated)(nil), // 10: pinocchio.chatapp.v1.ChatProviderCallMetadataUpdated
+	(*ChatProviderCallFinished)(nil),        // 11: pinocchio.chatapp.v1.ChatProviderCallFinished
+	(*ChatTextSegmentStarted)(nil),          // 12: pinocchio.chatapp.v1.ChatTextSegmentStarted
+	(*ChatTextPatch)(nil),                   // 13: pinocchio.chatapp.v1.ChatTextPatch
+	(*ChatTextSegmentFinished)(nil),         // 14: pinocchio.chatapp.v1.ChatTextSegmentFinished
+	(*ChatReasoningSegmentStarted)(nil),     // 15: pinocchio.chatapp.v1.ChatReasoningSegmentStarted
+	(*ChatReasoningPatch)(nil),              // 16: pinocchio.chatapp.v1.ChatReasoningPatch
+	(*ChatReasoningSegmentFinished)(nil),    // 17: pinocchio.chatapp.v1.ChatReasoningSegmentFinished
+	(*ChatToolCallStarted)(nil),             // 18: pinocchio.chatapp.v1.ChatToolCallStarted
+	(*ChatToolArgumentsPatch)(nil),          // 19: pinocchio.chatapp.v1.ChatToolArgumentsPatch
+	(*ChatToolCallRequested)(nil),           // 20: pinocchio.chatapp.v1.ChatToolCallRequested
+	(*ChatToolExecutionStarted)(nil),        // 21: pinocchio.chatapp.v1.ChatToolExecutionStarted
+	(*ChatToolResultReady)(nil),             // 22: pinocchio.chatapp.v1.ChatToolResultReady
+	(*ChatToolCallFinished)(nil),            // 23: pinocchio.chatapp.v1.ChatToolCallFinished
+	(*ChatUserMessageAccepted)(nil),         // 24: pinocchio.chatapp.v1.ChatUserMessageAccepted
+	(*ChatMessageEntity)(nil),               // 25: pinocchio.chatapp.v1.ChatMessageEntity
+	(*AgentModePreviewUpdate)(nil),          // 26: pinocchio.chatapp.v1.AgentModePreviewUpdate
+	(*AgentModeCommittedUpdate)(nil),        // 27: pinocchio.chatapp.v1.AgentModeCommittedUpdate
+	(*AgentModePreviewCleared)(nil),         // 28: pinocchio.chatapp.v1.AgentModePreviewCleared
+	(*AgentModeEntity)(nil),                 // 29: pinocchio.chatapp.v1.AgentModeEntity
+	(*ToolCallEntity)(nil),                  // 30: pinocchio.chatapp.v1.ToolCallEntity
+	(*ToolResultEntity)(nil),                // 31: pinocchio.chatapp.v1.ToolResultEntity
 }
 var file_proto_pinocchio_chatapp_v1_chat_proto_depIdxs = []int32{
-	3,  // 0: pinocchio.chatapp.v1.ChatRunStarted.correlation:type_name -> pinocchio.chatapp.v1.CorrelationInfo
-	3,  // 1: pinocchio.chatapp.v1.ChatRunFinished.correlation:type_name -> pinocchio.chatapp.v1.CorrelationInfo
-	3,  // 2: pinocchio.chatapp.v1.ChatRunStopped.correlation:type_name -> pinocchio.chatapp.v1.CorrelationInfo
-	3,  // 3: pinocchio.chatapp.v1.ChatRunFailed.correlation:type_name -> pinocchio.chatapp.v1.CorrelationInfo
-	3,  // 4: pinocchio.chatapp.v1.ChatProviderCallStarted.correlation:type_name -> pinocchio.chatapp.v1.CorrelationInfo
-	2,  // 5: pinocchio.chatapp.v1.ChatProviderCallMetadataUpdated.usage:type_name -> pinocchio.chatapp.v1.UsageInfo
-	3,  // 6: pinocchio.chatapp.v1.ChatProviderCallMetadataUpdated.correlation:type_name -> pinocchio.chatapp.v1.CorrelationInfo
-	2,  // 7: pinocchio.chatapp.v1.ChatProviderCallFinished.usage:type_name -> pinocchio.chatapp.v1.UsageInfo
-	3,  // 8: pinocchio.chatapp.v1.ChatProviderCallFinished.correlation:type_name -> pinocchio.chatapp.v1.CorrelationInfo
-	3,  // 9: pinocchio.chatapp.v1.ChatTextSegmentStarted.correlation:type_name -> pinocchio.chatapp.v1.CorrelationInfo
-	3,  // 10: pinocchio.chatapp.v1.ChatTextDelta.correlation:type_name -> pinocchio.chatapp.v1.CorrelationInfo
-	3,  // 11: pinocchio.chatapp.v1.ChatTextSegmentFinished.correlation:type_name -> pinocchio.chatapp.v1.CorrelationInfo
-	3,  // 12: pinocchio.chatapp.v1.ChatReasoningSegmentStarted.correlation:type_name -> pinocchio.chatapp.v1.CorrelationInfo
-	3,  // 13: pinocchio.chatapp.v1.ChatReasoningDelta.correlation:type_name -> pinocchio.chatapp.v1.CorrelationInfo
-	3,  // 14: pinocchio.chatapp.v1.ChatReasoningSegmentFinished.correlation:type_name -> pinocchio.chatapp.v1.CorrelationInfo
-	3,  // 15: pinocchio.chatapp.v1.ChatToolCallStarted.correlation:type_name -> pinocchio.chatapp.v1.CorrelationInfo
-	3,  // 16: pinocchio.chatapp.v1.ChatToolCallArgumentsDelta.correlation:type_name -> pinocchio.chatapp.v1.CorrelationInfo
-	3,  // 17: pinocchio.chatapp.v1.ChatToolCallRequested.correlation:type_name -> pinocchio.chatapp.v1.CorrelationInfo
-	3,  // 18: pinocchio.chatapp.v1.ChatToolExecutionStarted.correlation:type_name -> pinocchio.chatapp.v1.CorrelationInfo
-	3,  // 19: pinocchio.chatapp.v1.ChatToolResultReady.correlation:type_name -> pinocchio.chatapp.v1.CorrelationInfo
-	3,  // 20: pinocchio.chatapp.v1.ChatToolCallFinished.correlation:type_name -> pinocchio.chatapp.v1.CorrelationInfo
-	3,  // 21: pinocchio.chatapp.v1.ChatMessageEntity.correlation:type_name -> pinocchio.chatapp.v1.CorrelationInfo
-	3,  // 22: pinocchio.chatapp.v1.ToolCallEntity.correlation:type_name -> pinocchio.chatapp.v1.CorrelationInfo
-	3,  // 23: pinocchio.chatapp.v1.ToolResultEntity.correlation:type_name -> pinocchio.chatapp.v1.CorrelationInfo
-	24, // [24:24] is the sub-list for method output_type
-	24, // [24:24] is the sub-list for method input_type
-	24, // [24:24] is the sub-list for extension type_name
-	24, // [24:24] is the sub-list for extension extendee
-	0,  // [0:24] is the sub-list for field type_name
+	4,  // 0: pinocchio.chatapp.v1.ChatRunStarted.correlation:type_name -> pinocchio.chatapp.v1.CorrelationInfo
+	4,  // 1: pinocchio.chatapp.v1.ChatRunFinished.correlation:type_name -> pinocchio.chatapp.v1.CorrelationInfo
+	4,  // 2: pinocchio.chatapp.v1.ChatRunStopped.correlation:type_name -> pinocchio.chatapp.v1.CorrelationInfo
+	4,  // 3: pinocchio.chatapp.v1.ChatRunFailed.correlation:type_name -> pinocchio.chatapp.v1.CorrelationInfo
+	4,  // 4: pinocchio.chatapp.v1.ChatProviderCallStarted.correlation:type_name -> pinocchio.chatapp.v1.CorrelationInfo
+	3,  // 5: pinocchio.chatapp.v1.ChatProviderCallMetadataUpdated.usage:type_name -> pinocchio.chatapp.v1.UsageInfo
+	4,  // 6: pinocchio.chatapp.v1.ChatProviderCallMetadataUpdated.correlation:type_name -> pinocchio.chatapp.v1.CorrelationInfo
+	3,  // 7: pinocchio.chatapp.v1.ChatProviderCallFinished.usage:type_name -> pinocchio.chatapp.v1.UsageInfo
+	4,  // 8: pinocchio.chatapp.v1.ChatProviderCallFinished.correlation:type_name -> pinocchio.chatapp.v1.CorrelationInfo
+	4,  // 9: pinocchio.chatapp.v1.ChatTextSegmentStarted.correlation:type_name -> pinocchio.chatapp.v1.CorrelationInfo
+	0,  // 10: pinocchio.chatapp.v1.ChatTextPatch.mode:type_name -> pinocchio.chatapp.v1.ChatStreamPatchMode
+	4,  // 11: pinocchio.chatapp.v1.ChatTextPatch.correlation:type_name -> pinocchio.chatapp.v1.CorrelationInfo
+	4,  // 12: pinocchio.chatapp.v1.ChatTextSegmentFinished.correlation:type_name -> pinocchio.chatapp.v1.CorrelationInfo
+	4,  // 13: pinocchio.chatapp.v1.ChatReasoningSegmentStarted.correlation:type_name -> pinocchio.chatapp.v1.CorrelationInfo
+	0,  // 14: pinocchio.chatapp.v1.ChatReasoningPatch.mode:type_name -> pinocchio.chatapp.v1.ChatStreamPatchMode
+	4,  // 15: pinocchio.chatapp.v1.ChatReasoningPatch.correlation:type_name -> pinocchio.chatapp.v1.CorrelationInfo
+	4,  // 16: pinocchio.chatapp.v1.ChatReasoningSegmentFinished.correlation:type_name -> pinocchio.chatapp.v1.CorrelationInfo
+	4,  // 17: pinocchio.chatapp.v1.ChatToolCallStarted.correlation:type_name -> pinocchio.chatapp.v1.CorrelationInfo
+	0,  // 18: pinocchio.chatapp.v1.ChatToolArgumentsPatch.mode:type_name -> pinocchio.chatapp.v1.ChatStreamPatchMode
+	4,  // 19: pinocchio.chatapp.v1.ChatToolArgumentsPatch.correlation:type_name -> pinocchio.chatapp.v1.CorrelationInfo
+	4,  // 20: pinocchio.chatapp.v1.ChatToolCallRequested.correlation:type_name -> pinocchio.chatapp.v1.CorrelationInfo
+	4,  // 21: pinocchio.chatapp.v1.ChatToolExecutionStarted.correlation:type_name -> pinocchio.chatapp.v1.CorrelationInfo
+	4,  // 22: pinocchio.chatapp.v1.ChatToolResultReady.correlation:type_name -> pinocchio.chatapp.v1.CorrelationInfo
+	4,  // 23: pinocchio.chatapp.v1.ChatToolCallFinished.correlation:type_name -> pinocchio.chatapp.v1.CorrelationInfo
+	4,  // 24: pinocchio.chatapp.v1.ChatMessageEntity.correlation:type_name -> pinocchio.chatapp.v1.CorrelationInfo
+	4,  // 25: pinocchio.chatapp.v1.ToolCallEntity.correlation:type_name -> pinocchio.chatapp.v1.CorrelationInfo
+	4,  // 26: pinocchio.chatapp.v1.ToolResultEntity.correlation:type_name -> pinocchio.chatapp.v1.CorrelationInfo
+	27, // [27:27] is the sub-list for method output_type
+	27, // [27:27] is the sub-list for method input_type
+	27, // [27:27] is the sub-list for extension type_name
+	27, // [27:27] is the sub-list for extension extendee
+	0,  // [0:27] is the sub-list for field type_name
 }
 
 func init() { file_proto_pinocchio_chatapp_v1_chat_proto_init() }
@@ -2940,13 +3094,14 @@ func file_proto_pinocchio_chatapp_v1_chat_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_pinocchio_chatapp_v1_chat_proto_rawDesc), len(file_proto_pinocchio_chatapp_v1_chat_proto_rawDesc)),
-			NumEnums:      0,
+			NumEnums:      1,
 			NumMessages:   31,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
 		GoTypes:           file_proto_pinocchio_chatapp_v1_chat_proto_goTypes,
 		DependencyIndexes: file_proto_pinocchio_chatapp_v1_chat_proto_depIdxs,
+		EnumInfos:         file_proto_pinocchio_chatapp_v1_chat_proto_enumTypes,
 		MessageInfos:      file_proto_pinocchio_chatapp_v1_chat_proto_msgTypes,
 	}.Build()
 	File_proto_pinocchio_chatapp_v1_chat_proto = out.File

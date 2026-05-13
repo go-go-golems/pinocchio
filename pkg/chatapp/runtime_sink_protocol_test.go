@@ -38,7 +38,7 @@ func TestRuntimeEventSinkProtocolMatrix(t *testing.T) {
 				gepevents.NewTextDeltaEvent(metadata, textCorr, "partial", "partial", 1),
 				gepevents.NewErrorEvent(metadata, errors.New("stream exploded")),
 			},
-			wantNames: []string{EventChatTextSegmentStarted, EventChatTextDelta, EventChatTextSegmentFinished, EventChatRunFailed},
+			wantNames: []string{EventChatTextSegmentStarted, EventChatTextPatch, EventChatTextSegmentFinished, EventChatRunFailed},
 			check: func(t *testing.T, published []sessionstream.Event, sink *runtimeEventSink) {
 				t.Helper()
 				finished := published[2].Payload.(*chatappv1.ChatTextSegmentFinished)
@@ -63,7 +63,7 @@ func TestRuntimeEventSinkProtocolMatrix(t *testing.T) {
 				gepevents.NewTextDeltaEvent(metadata, textCorr, "partial", "partial", 1),
 				gepevents.NewInterruptEvent(metadata, ""),
 			},
-			wantNames: []string{EventChatTextSegmentStarted, EventChatTextDelta, EventChatTextSegmentFinished, EventChatRunStopped},
+			wantNames: []string{EventChatTextSegmentStarted, EventChatTextPatch, EventChatTextSegmentFinished, EventChatRunStopped},
 			check: func(t *testing.T, published []sessionstream.Event, sink *runtimeEventSink) {
 				t.Helper()
 				finished := published[2].Payload.(*chatappv1.ChatTextSegmentFinished)
@@ -85,7 +85,7 @@ func TestRuntimeEventSinkProtocolMatrix(t *testing.T) {
 				gepevents.NewTextSegmentFinishedEvent(metadata, textCorr, "done", "stop"),
 				gepevents.NewErrorEvent(metadata, errors.New("late error")),
 			},
-			wantNames: []string{EventChatTextSegmentStarted, EventChatTextDelta, EventChatTextSegmentFinished, EventChatRunFailed},
+			wantNames: []string{EventChatTextSegmentStarted, EventChatTextPatch, EventChatTextSegmentFinished, EventChatRunFailed},
 			check: func(t *testing.T, published []sessionstream.Event, _ *runtimeEventSink) {
 				t.Helper()
 				finished := published[2].Payload.(*chatappv1.ChatTextSegmentFinished)
@@ -117,7 +117,7 @@ func TestRuntimeEventSinkProtocolMatrix(t *testing.T) {
 				gepevents.NewTextSegmentFinishedEvent(metadata, textCorr, "done", "stop"),
 				gepevents.NewProviderCallFinishedEvent(metadata, providerCorr, "stop", "completed", nil, nil, false),
 			},
-			wantNames: []string{EventChatTextSegmentStarted, EventChatTextDelta, EventChatTextSegmentFinished, EventChatProviderCallFinished},
+			wantNames: []string{EventChatTextSegmentStarted, EventChatTextPatch, EventChatTextSegmentFinished, EventChatProviderCallFinished},
 			check: func(t *testing.T, published []sessionstream.Event, _ *runtimeEventSink) {
 				t.Helper()
 				requireRuntimeSinkEventCount(t, published, EventChatTextSegmentFinished, 1)
