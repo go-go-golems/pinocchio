@@ -129,13 +129,14 @@ codeql-local:
 # Downloads the help browser SPA and extracts it for embedding.
 # Parses go.mod directly (go list doesn't work in workspace mode).
 GLAZED_VERSION := $(shell grep 'go-go-golems/glazed ' go.mod | head -1 | awk '{print $$2}')
+GLAZED_VERSION_NO_V := $(patsubst v%,%,$(GLAZED_VERSION))
 GLAZED_SPA_DIR := pkg/spa/dist
 
 fetch-spa:
 	@if [ -z "$(GLAZED_VERSION)" ]; then echo "Warning: cannot detect glazed version from go.mod, skipping SPA fetch"; exit 0; fi
 	@mkdir -p $(GLAZED_SPA_DIR)
 	@echo "Fetching SPA assets for glazed $(GLAZED_VERSION)..."
-	@curl -sfL https://github.com/go-go-golems/glazed/releases/download/$(GLAZED_VERSION)/glazed-spa.tar.gz \
+	@curl -sfL https://github.com/go-go-golems/glazed/releases/download/$(GLAZED_VERSION)/glazed-spa-$(GLAZED_VERSION_NO_V).tar.gz \
 		| tar xz -C $(GLAZED_SPA_DIR) \
 	|| (echo "Warning: SPA assets not found for glazed $(GLAZED_VERSION), building without browser UI"; rm -rf $(GLAZED_SPA_DIR))
 
