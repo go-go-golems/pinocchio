@@ -30,3 +30,6 @@ __debug*
 *.log
 .playwright-mcp/
 .devctl/
+
+# SPA frontend assets (fetched from glazed release by make fetch-spa)
+pkg/spa/dist/
