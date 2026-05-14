@@ -30,7 +30,7 @@ func (e *Engine) runDemoInference(ctx context.Context, sid sessionstream.Session
 		case <-time.After(e.chunkDelay):
 		}
 		accumulated += chunk
-		if err := e.publish(publishContext(ctx), sid, pub, EventChatTextPatch, &chatappv1.ChatTextPatch{MessageId: textMessageID, Role: "assistant", Prompt: prompt, StreamId: textMessageID, Sequence: uint64(i + 1), Offset: uint64(len(accumulated) - len(chunk)), Text: chunk, Mode: chatappv1.ChatStreamPatchMode_CHAT_STREAM_PATCH_MODE_APPEND, Status: "streaming", Correlation: corr}); err != nil {
+		if err := e.publish(publishContext(ctx), sid, pub, EventChatTextPatch, &chatappv1.ChatTextPatch{MessageId: textMessageID, Role: "assistant", Prompt: prompt, StreamId: textMessageID, Sequence: Uint64FromInt(i + 1), Offset: PatchOffset(accumulated, chunk), Text: chunk, Mode: chatappv1.ChatStreamPatchMode_CHAT_STREAM_PATCH_MODE_APPEND, Status: "streaming", Correlation: corr}); err != nil {
 			return
 		}
 	}

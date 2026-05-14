@@ -206,5 +206,13 @@ func PatchOffset(snapshot, delta string) uint64 {
 	if delta == "" || len(snapshot) < len(delta) {
 		return 0
 	}
-	return uint64(len(snapshot) - len(delta))
+	return Uint64FromInt(len(snapshot) - len(delta))
+}
+
+func Uint64FromInt(value int) uint64 {
+	if value <= 0 {
+		return 0
+	}
+	// #nosec G115 -- value is non-negative and Go int fits in uint64 on supported architectures.
+	return uint64(value)
 }
