@@ -23,15 +23,35 @@ function parseJsonOrRaw(value: string): unknown {
   }
 }
 
-function mergePropsWithPatches(existingProps: any, incomingProps: any, contentPatch?: string, inputRawPatch?: string): any {
+function applyStreamPatch(previous: string, patch: string, mode: unknown): string {
+  if (
+    mode === 'CHAT_STREAM_PATCH_MODE_SNAPSHOT' ||
+    mode === 'CHAT_STREAM_PATCH_MODE_REPLACE' ||
+    mode === 'SNAPSHOT' ||
+    mode === 'REPLACE' ||
+    mode === 2 ||
+    mode === 3
+  ) {
+    return patch;
+  }
+  return `${previous}${patch}`;
+}
+
+function mergePropsWithPatches(
+  existingProps: any,
+  incomingProps: any,
+  contentPatch?: string,
+  inputRawPatch?: string,
+  patchMode?: unknown,
+): any {
   const merged = { ...(existingProps ?? {}), ...(incomingProps ?? {}) };
   if (contentPatch !== undefined) {
     const previous = typeof existingProps?.content === 'string' ? existingProps.content : '';
-    merged.content = previous + contentPatch;
+    merged.content = applyStreamPatch(previous, contentPatch, patchMode);
   }
   if (inputRawPatch !== undefined) {
     const previous = typeof existingProps?.inputRaw === 'string' ? existingProps.inputRaw : '';
-    const inputRaw = previous + inputRawPatch;
+    const inputRaw = applyStreamPatch(previous, inputRawPatch, patchMode);
     merged.inputRaw = inputRaw;
     merged.input = parseJsonOrRaw(inputRaw);
   }
@@ -43,11 +63,13 @@ function mergeTimelineEntity(state: TimelineState, e: TimelineEntity, createIfMi
   const incomingProps = { ...(e.props ?? {}) };
   const contentPatch = typeof incomingProps.contentPatch === 'string' ? incomingProps.contentPatch : undefined;
   const inputRawPatch = typeof incomingProps.inputRawPatch === 'string' ? incomingProps.inputRawPatch : undefined;
+  const patchMode = incomingProps.patchMode;
   delete incomingProps.contentPatch;
   delete incomingProps.inputRawPatch;
+  delete incomingProps.patchMode;
   if (!existing) {
     if (!createIfMissing) return;
-    state.byId[e.id] = { ...e, props: mergePropsWithPatches({}, incomingProps, contentPatch, inputRawPatch) };
+    state.byId[e.id] = { ...e, props: mergePropsWithPatches({}, incomingProps, contentPatch, inputRawPatch, patchMode) };
     state.order.push(e.id);
     return;
   }
@@ -63,7 +85,7 @@ function mergeTimelineEntity(state: TimelineState, e: TimelineEntity, createIfMi
       createdAt: e.createdAt || existing.createdAt,
       kind: e.kind || existing.kind,
       version: incomingVersion,
-      props: mergePropsWithPatches(existing.props, incomingProps, contentPatch, inputRawPatch),
+      props: mergePropsWithPatches(existing.props, incomingProps, contentPatch, inputRawPatch, patchMode),
     };
     return;
   }
@@ -71,7 +93,7 @@ function mergeTimelineEntity(state: TimelineState, e: TimelineEntity, createIfMi
     state.byId[e.id] = {
       ...existing,
       updatedAt: e.updatedAt ?? existing.updatedAt,
-      props: mergePropsWithPatches(existing.props, incomingProps, contentPatch, inputRawPatch),
+      props: mergePropsWithPatches(existing.props, incomingProps, contentPatch, inputRawPatch, patchMode),
     };
     return;
   }
@@ -80,7 +102,7 @@ function mergeTimelineEntity(state: TimelineState, e: TimelineEntity, createIfMi
     ...e,
     createdAt: existing.createdAt,
     kind: e.kind || existing.kind,
-    props: mergePropsWithPatches(existing.props, incomingProps, contentPatch, inputRawPatch),
+    props: mergePropsWithPatches(existing.props, incomingProps, contentPatch, inputRawPatch, patchMode),
   };
 }
 

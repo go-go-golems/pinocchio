@@ -1,4 +1,4 @@
-import type { CorrelationInfo } from '../chatapp/pb/proto/pinocchio/chatapp/v1/chat_pb';
+import { ChatStreamPatchMode, type CorrelationInfo } from '../chatapp/pb/proto/pinocchio/chatapp/v1/chat_pb';
 import { appSlice } from '../store/appSlice';
 import type { AppDispatch } from '../store/store';
 import { type TimelineEntity, timelineSlice } from '../store/timelineSlice';
@@ -16,6 +16,22 @@ type TimelineMutation = {
 
 function visibleText(payload: { content?: string; text?: string }): string {
   return payload.content || payload.text || '';
+}
+
+function patchModeName(mode: unknown): string {
+  if (typeof mode === 'string' && mode.trim()) {
+    return mode;
+  }
+  switch (mode) {
+    case ChatStreamPatchMode.SNAPSHOT:
+      return 'CHAT_STREAM_PATCH_MODE_SNAPSHOT';
+    case ChatStreamPatchMode.REPLACE:
+      return 'CHAT_STREAM_PATCH_MODE_REPLACE';
+    case ChatStreamPatchMode.UNSPECIFIED:
+      return 'CHAT_STREAM_PATCH_MODE_UNSPECIFIED';
+    default:
+      return 'CHAT_STREAM_PATCH_MODE_APPEND';
+  }
 }
 
 function definedProps(props: Record<string, unknown>): Record<string, unknown> {
@@ -121,6 +137,7 @@ export function timelineMutationFromUIEvent(frame: CanonicalFrame): TimelineMuta
           role: payload.role || 'assistant',
           prompt: payload.prompt,
           contentPatch: visibleText(payload),
+          patchMode: patchModeName(payload.mode),
           status: payload.status || 'streaming',
           streaming: !payload.final,
           parentMessageId: parentMessageId(messageId, ':text:'),
@@ -168,6 +185,7 @@ export function timelineMutationFromUIEvent(frame: CanonicalFrame): TimelineMuta
         upsert: messageEntity(messageId, {
           role: 'thinking',
           contentPatch: visibleText(payload),
+          patchMode: patchModeName(payload.mode),
           status: payload.status || 'streaming',
           streaming: !payload.final,
           parentMessageId: payload.parentMessageId,
@@ -247,6 +265,7 @@ export function timelineMutationFromUIEvent(frame: CanonicalFrame): TimelineMuta
       const isPatch = event.name === 'ChatToolArgumentsPatch';
       const hasInput = isPatch ? 'arguments' in payload && payload.arguments !== '' : 'input' in payload && payload.input !== '';
       const input = hasInput ? (isPatch && 'arguments' in payload ? payload.arguments : 'input' in payload ? payload.input : '') : '';
+      const patchMode = isPatch && 'mode' in payload ? payload.mode : undefined;
       const executing = 'executing' in payload ? payload.executing : false;
       return {
         upsert: toolCallEntity(
@@ -256,7 +275,7 @@ export function timelineMutationFromUIEvent(frame: CanonicalFrame): TimelineMuta
             toolCallId: payload.toolCallId,
             name: payload.toolName,
             toolName: payload.toolName,
-            ...(hasInput ? (isPatch ? { inputRawPatch: input } : { input: parseToolInput(input), inputRaw: input }) : {}),
+            ...(hasInput ? (isPatch ? { inputRawPatch: input, patchMode: patchModeName(patchMode) } : { input: parseToolInput(input), inputRaw: input }) : {}),
             executing,
             status: payload.status,
             arguments: 'arguments' in payload ? payload.arguments : undefined,
