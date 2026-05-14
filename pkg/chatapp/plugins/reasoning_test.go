@@ -49,10 +49,10 @@ func TestReasoningPluginPublishesCanonicalReasoningEvents(t *testing.T) {
 	require.Equal(t, "chat-msg-1", started.GetParentMessageId())
 	require.Equal(t, "reasoning-segment-1", started.GetCorrelation().GetSegmentId())
 
-	require.Equal(t, chatapp.EventChatReasoningDelta, published[1].Name)
-	delta := published[1].Payload.(*chatappv1.ChatReasoningDelta)
-	require.Equal(t, "draft", delta.GetChunk())
-	require.Equal(t, "draft plan", delta.GetText())
+	require.Equal(t, chatapp.EventChatReasoningPatch, published[1].Name)
+	delta := published[1].Payload.(*chatappv1.ChatReasoningPatch)
+	require.Equal(t, "draft", delta.GetText())
+	require.Equal(t, chatappv1.ChatStreamPatchMode_CHAT_STREAM_PATCH_MODE_APPEND, delta.GetMode())
 	require.Equal(t, "reasoning-segment-1", delta.GetCorrelation().GetSegmentId())
 	require.Equal(t, "summary", delta.GetSource())
 
@@ -83,7 +83,7 @@ func TestReasoningPluginRoutesReasoningByStableSegmentIdentity(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Len(t, published, 2)
-	delta := published[0].Payload.(*chatappv1.ChatReasoningDelta)
+	delta := published[0].Payload.(*chatappv1.ChatReasoningPatch)
 	finished := published[1].Payload.(*chatappv1.ChatReasoningSegmentFinished)
 	require.Equal(t, delta.GetMessageId(), finished.GetMessageId())
 	require.Equal(t, "chat-msg-1:thinking:reasoning-rs-1", finished.GetMessageId())
@@ -213,12 +213,11 @@ func TestReasoningPluginSparseProjectionMatrix(t *testing.T) {
 				Streaming:       true,
 				Correlation:     fullCorr,
 			}),
-			event: sessionstream.Event{Name: ReasoningDeltaEventName, SessionId: "sid", Payload: &chatappv1.ChatReasoningDelta{
+			event: sessionstream.Event{Name: ReasoningPatchEventName, SessionId: "sid", Payload: &chatappv1.ChatReasoningPatch{
 				MessageId:   "chat-msg-1:thinking:reasoning-segment-1",
-				Content:     "partial plan",
-				Text:        "partial plan",
+				Text:        " plan",
+				Mode:        chatappv1.ChatStreamPatchMode_CHAT_STREAM_PATCH_MODE_APPEND,
 				Status:      "streaming",
-				Streaming:   true,
 				Correlation: segmentOnlyCorr,
 			}},
 			check: func(t *testing.T, entity *chatappv1.ChatMessageEntity) {

@@ -14,8 +14,8 @@ import (
 const (
 	// EventToolCallStarted is published when the model starts a tool call.
 	EventToolCallStarted = chatapp.EventChatToolCallStarted
-	// EventToolCallArgumentsDelta is published for streamed tool-call arguments.
-	EventToolCallArgumentsDelta = chatapp.EventChatToolCallArgumentsDelta
+	// EventToolArgumentsPatch is published for streamed tool-call arguments.
+	EventToolArgumentsPatch = chatapp.EventChatToolArgumentsPatch
 	// EventToolCallRequested is published when the model has fully requested a tool call.
 	EventToolCallRequested = chatapp.EventChatToolCallRequested
 	// EventToolExecutionStarted is published when host-side tool execution begins.
@@ -42,13 +42,13 @@ func NewToolCallPlugin() chatapp.ChatPlugin { return &ToolCallPlugin{} }
 func (p *ToolCallPlugin) RegisterSchemas(reg *sessionstream.SchemaRegistry) error {
 	for _, err := range []error{
 		reg.RegisterEvent(EventToolCallStarted, &chatappv1.ChatToolCallStarted{}),
-		reg.RegisterEvent(EventToolCallArgumentsDelta, &chatappv1.ChatToolCallArgumentsDelta{}),
+		reg.RegisterEvent(EventToolArgumentsPatch, &chatappv1.ChatToolArgumentsPatch{}),
 		reg.RegisterEvent(EventToolCallRequested, &chatappv1.ChatToolCallRequested{}),
 		reg.RegisterEvent(EventToolExecutionStarted, &chatappv1.ChatToolExecutionStarted{}),
 		reg.RegisterEvent(EventToolResultReady, &chatappv1.ChatToolResultReady{}),
 		reg.RegisterEvent(EventToolCallFinished, &chatappv1.ChatToolCallFinished{}),
 		reg.RegisterUIEvent(EventToolCallStarted, &chatappv1.ChatToolCallStarted{}),
-		reg.RegisterUIEvent(EventToolCallArgumentsDelta, &chatappv1.ChatToolCallArgumentsDelta{}),
+		reg.RegisterUIEvent(EventToolArgumentsPatch, &chatappv1.ChatToolArgumentsPatch{}),
 		reg.RegisterUIEvent(EventToolCallRequested, &chatappv1.ChatToolCallRequested{}),
 		reg.RegisterUIEvent(EventToolExecutionStarted, &chatappv1.ChatToolExecutionStarted{}),
 		reg.RegisterUIEvent(EventToolResultReady, &chatappv1.ChatToolResultReady{}),
@@ -69,7 +69,7 @@ func (p *ToolCallPlugin) HandleRuntimeEvent(ctx context.Context, runtime chatapp
 	case *gepevents.EventToolCallStarted:
 		return true, runtime.Publish(ctx, EventToolCallStarted, &chatappv1.ChatToolCallStarted{MessageId: runtime.MessageID, ToolCallId: ev.ToolCallID, ToolName: ev.ToolName, Status: "pending", Correlation: chatapp.CorrelationInfoFromEvent(ev)})
 	case *gepevents.EventToolCallArgumentsDelta:
-		return true, runtime.Publish(ctx, EventToolCallArgumentsDelta, &chatappv1.ChatToolCallArgumentsDelta{MessageId: runtime.MessageID, ToolCallId: ev.ToolCallID, ArgumentsDelta: ev.Delta, Input: ev.Arguments, Status: "streaming_args", Correlation: chatapp.CorrelationInfoFromEvent(ev)})
+		return true, runtime.Publish(ctx, EventToolArgumentsPatch, &chatappv1.ChatToolArgumentsPatch{MessageId: runtime.MessageID, ToolCallId: ev.ToolCallID, StreamId: ev.ToolCallID, Sequence: chatapp.Uint64FromInt64(ev.Sequence), Offset: chatapp.PatchOffset(ev.Arguments, ev.Delta), Arguments: ev.Delta, Mode: chatappv1.ChatStreamPatchMode_CHAT_STREAM_PATCH_MODE_APPEND, Status: "streaming_args", Correlation: chatapp.CorrelationInfoFromEvent(ev)})
 	case *gepevents.EventToolCallRequested:
 		return true, runtime.Publish(ctx, EventToolCallRequested, &chatappv1.ChatToolCallRequested{MessageId: runtime.MessageID, ToolCallId: ev.ToolCallID, ToolName: ev.ToolName, Input: ev.Input, Status: "pending", Correlation: chatapp.CorrelationInfoFromEvent(ev)})
 	case *gepevents.EventToolExecutionStarted:
@@ -86,7 +86,7 @@ func (p *ToolCallPlugin) HandleRuntimeEvent(ctx context.Context, runtime chatapp
 // ProjectUI forwards canonical tool backend events as canonical UI events.
 func (p *ToolCallPlugin) ProjectUI(_ context.Context, ev sessionstream.Event, _ *sessionstream.Session, _ sessionstream.TimelineView) ([]sessionstream.UIEvent, bool, error) {
 	switch ev.Name {
-	case EventToolCallStarted, EventToolCallArgumentsDelta, EventToolCallRequested, EventToolExecutionStarted, EventToolResultReady, EventToolCallFinished:
+	case EventToolCallStarted, EventToolArgumentsPatch, EventToolCallRequested, EventToolExecutionStarted, EventToolResultReady, EventToolCallFinished:
 		if ev.Payload == nil {
 			return nil, true, fmt.Errorf("tool payload must be proto message, got %T", ev.Payload)
 		}
@@ -99,7 +99,7 @@ func (p *ToolCallPlugin) ProjectUI(_ context.Context, ev sessionstream.Event, _ 
 // ProjectTimeline projects tool call backend events into timeline entities.
 func (p *ToolCallPlugin) ProjectTimeline(_ context.Context, ev sessionstream.Event, _ *sessionstream.Session, view sessionstream.TimelineView) ([]sessionstream.TimelineEntity, bool, error) {
 	switch ev.Name {
-	case EventToolCallStarted, EventToolCallArgumentsDelta, EventToolCallRequested, EventToolExecutionStarted, EventToolCallFinished:
+	case EventToolCallStarted, EventToolArgumentsPatch, EventToolCallRequested, EventToolExecutionStarted, EventToolCallFinished:
 		payload, ok := toolCallFieldsFromCanonical(ev)
 		if !ok {
 			return nil, true, fmt.Errorf("unexpected tool call payload %T", ev.Payload)
@@ -146,8 +146,8 @@ func toolCallFieldsFromCanonical(ev sessionstream.Event) (toolCallFields, bool) 
 	switch payload := ev.Payload.(type) {
 	case *chatappv1.ChatToolCallStarted:
 		return toolCallFields{MessageID: payload.GetMessageId(), ToolCallID: payload.GetToolCallId(), ToolName: payload.GetToolName(), Input: payload.GetInput(), Executing: payload.GetExecuting(), Status: firstNonEmptyString(payload.GetStatus(), "pending"), Correlation: payload.GetCorrelation()}, true
-	case *chatappv1.ChatToolCallArgumentsDelta:
-		return toolCallFields{MessageID: payload.GetMessageId(), ToolCallID: payload.GetToolCallId(), ToolName: payload.GetToolName(), Input: payload.GetInput(), Status: firstNonEmptyString(payload.GetStatus(), "streaming_args"), Correlation: payload.GetCorrelation()}, true
+	case *chatappv1.ChatToolArgumentsPatch:
+		return toolCallFields{MessageID: payload.GetMessageId(), ToolCallID: payload.GetToolCallId(), ToolName: payload.GetToolName(), Input: payload.GetArguments(), Status: firstNonEmptyString(payload.GetStatus(), "streaming_args"), Correlation: payload.GetCorrelation()}, true
 	case *chatappv1.ChatToolCallRequested:
 		return toolCallFields{MessageID: payload.GetMessageId(), ToolCallID: payload.GetToolCallId(), ToolName: payload.GetToolName(), Input: payload.GetInput(), Executing: payload.GetExecuting(), Status: firstNonEmptyString(payload.GetStatus(), "pending"), Correlation: payload.GetCorrelation()}, true
 	case *chatappv1.ChatToolExecutionStarted:
@@ -188,7 +188,11 @@ func mergeToolCallFields(entity *chatappv1.ToolCallEntity, update toolCallFields
 		entity.ToolName = update.ToolName
 	}
 	if update.Input != "" {
-		entity.Input = update.Input
+		if update.Status == "streaming_args" {
+			entity.Input += update.Input
+		} else {
+			entity.Input = update.Input
+		}
 	}
 	entity.Executing = update.Executing
 	if update.Status != "" {

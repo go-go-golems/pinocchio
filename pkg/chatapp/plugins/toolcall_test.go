@@ -52,10 +52,10 @@ func TestToolCallPluginPublishesCanonicalToolEvents(t *testing.T) {
 	require.Equal(t, "lookup", started.GetToolName())
 	require.Equal(t, "call-1", started.GetCorrelation().GetToolCallId())
 
-	require.Equal(t, chatapp.EventChatToolCallArgumentsDelta, published[1].Name)
-	args := published[1].Payload.(*chatappv1.ChatToolCallArgumentsDelta)
-	require.Equal(t, `{"symbol"`, args.GetArgumentsDelta())
-	require.Equal(t, `{"symbol":"BTC"}`, args.GetInput())
+	require.Equal(t, chatapp.EventChatToolArgumentsPatch, published[1].Name)
+	args := published[1].Payload.(*chatappv1.ChatToolArgumentsPatch)
+	require.Equal(t, `{"symbol"`, args.GetArguments())
+	require.Equal(t, chatappv1.ChatStreamPatchMode_CHAT_STREAM_PATCH_MODE_APPEND, args.GetMode())
 
 	require.Equal(t, chatapp.EventChatToolResultReady, published[4].Name)
 	result := published[4].Payload.(*chatappv1.ChatToolResultReady)
@@ -187,18 +187,19 @@ func TestToolCallPluginSparseProjectionMatrix(t *testing.T) {
 						MessageId:   "chat-msg-tool",
 						ToolCallId:  "call-sparse",
 						ToolName:    "inventory",
+						Input:       `{"coin":`,
 						Status:      "pending",
 						Correlation: fullCorr,
 					},
 				},
 			}},
-			event: sessionstream.Event{Name: EventToolCallArgumentsDelta, SessionId: "sid", Payload: &chatappv1.ChatToolCallArgumentsDelta{
-				MessageId:      "chat-msg-tool",
-				ToolCallId:     "call-sparse",
-				ArgumentsDelta: `"ETH"}`,
-				Input:          `{"coin":"ETH"}`,
-				Status:         "streaming_args",
-				Correlation:    segmentOnlyCorr,
+			event: sessionstream.Event{Name: EventToolArgumentsPatch, SessionId: "sid", Payload: &chatappv1.ChatToolArgumentsPatch{
+				MessageId:   "chat-msg-tool",
+				ToolCallId:  "call-sparse",
+				Arguments:   `"ETH"}`,
+				Mode:        chatappv1.ChatStreamPatchMode_CHAT_STREAM_PATCH_MODE_APPEND,
+				Status:      "streaming_args",
+				Correlation: segmentOnlyCorr,
 			}},
 			check: func(t *testing.T, entity *chatappv1.ToolCallEntity) {
 				t.Helper()

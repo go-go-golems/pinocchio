@@ -139,7 +139,7 @@ func createDebugSQLiteViews(ctx context.Context, db *sql.DB) error {
 		     FROM backend_pipeline bp
 		     JOIN backend_records br ON br.id = bp.record_id
 		     JOIN backend_pipeline_ui_events bpue ON bpue.record_id = br.id
-		    WHERE bp.event_name = 'ChatReasoningDelta'
+		    WHERE bp.event_name = 'ChatReasoningPatch'
 		      AND bpue.source = 'uiEvents'
 		 ),
 		 frontend_reasoning AS (
@@ -153,10 +153,10 @@ func createDebugSQLiteViews(ctx context.Context, db *sql.DB) error {
 		          json_extract(fpf.frame_json, '$.payload.correlation.outputIndex') AS frontend_output_index,
 		          json_extract(fpf.frame_json, '$.payload.correlation.summaryIndex') AS frontend_summary_index,
 		          json_extract(fpf.frame_json, '$.payload.correlation.correlationKey') AS frontend_correlation_key,
-		          json_extract(fpf.frame_json, '$.payload.chunk') AS frontend_chunk
+		          json_extract(fpf.frame_json, '$.payload.text') AS frontend_chunk
 		     FROM frontend_parsed_frames fpf
 		     JOIN frontend_records fr ON fr.id = fpf.record_id
-		    WHERE fpf.name = 'ChatReasoningDelta'
+		    WHERE fpf.name = 'ChatReasoningPatch'
 		 ),
 		 frontend_mutation AS (
 		   SELECT fr.ordinal,
@@ -164,7 +164,7 @@ func createDebugSQLiteViews(ctx context.Context, db *sql.DB) error {
 		          fui.message_id AS ui_mutation_message_id
 		     FROM frontend_ui_events fui
 		     JOIN frontend_records fr ON fr.id = fui.record_id
-		    WHERE fui.name = 'ChatReasoningDelta'
+		    WHERE fui.name = 'ChatReasoningPatch'
 		 )
 		 SELECT pd.rn,
 		        pd.provider_record_id,
@@ -237,7 +237,7 @@ func createDebugSQLiteViews(ctx context.Context, db *sql.DB) error {
 		          json_extract(fpf.frame_json, '$.payload.messageId') AS frontend_message_id,
 		          json_extract(fpf.frame_json, '$.payload.correlation.correlationKey') AS frontend_correlation_key,
 		          json_extract(fpf.frame_json, '$.payload.correlation.streamKind') AS frontend_stream_kind,
-		          json_extract(fpf.frame_json, '$.payload.chunk') AS frontend_chunk,
+		          json_extract(fpf.frame_json, '$.payload.text') AS frontend_chunk,
 		          json_extract(fpf.frame_json, '$.payload.toolCallId') AS frontend_tool_call_id
 		     FROM frontend_parsed_frames fpf
 		     JOIN frontend_records fr ON fr.id = fpf.record_id

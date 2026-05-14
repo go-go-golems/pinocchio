@@ -6,17 +6,17 @@ import type {
   ChatProviderCallFinished,
   ChatProviderCallMetadataUpdated,
   ChatProviderCallStarted,
-  ChatReasoningDelta,
+  ChatReasoningPatch,
   ChatReasoningSegmentFinished,
   ChatReasoningSegmentStarted,
   ChatRunFailed,
   ChatRunFinished,
   ChatRunStarted,
   ChatRunStopped,
-  ChatTextDelta,
+  ChatTextPatch,
   ChatTextSegmentFinished,
   ChatTextSegmentStarted,
-  ChatToolCallArgumentsDelta,
+  ChatToolArgumentsPatch,
   ChatToolCallFinished,
   ChatToolCallRequested,
   ChatToolCallStarted,
@@ -31,17 +31,17 @@ import {
   ChatProviderCallFinishedSchema,
   ChatProviderCallMetadataUpdatedSchema,
   ChatProviderCallStartedSchema,
-  ChatReasoningDeltaSchema,
+  ChatReasoningPatchSchema,
   ChatReasoningSegmentFinishedSchema,
   ChatReasoningSegmentStartedSchema,
   ChatRunFailedSchema,
   ChatRunFinishedSchema,
   ChatRunStartedSchema,
   ChatRunStoppedSchema,
-  ChatTextDeltaSchema,
+  ChatTextPatchSchema,
   ChatTextSegmentFinishedSchema,
   ChatTextSegmentStartedSchema,
-  ChatToolCallArgumentsDeltaSchema,
+  ChatToolArgumentsPatchSchema,
   ChatToolCallFinishedSchema,
   ChatToolCallRequestedSchema,
   ChatToolCallStartedSchema,
@@ -51,13 +51,13 @@ import {
 } from '../chatapp/pb/proto/pinocchio/chatapp/v1/chat_pb';
 import { asRecord, asString, type CanonicalFrame } from './protocol';
 
-export type ChatTextUIEventName = 'ChatUserMessageAccepted' | 'ChatTextSegmentStarted' | 'ChatTextDelta' | 'ChatTextSegmentFinished';
+export type ChatTextUIEventName = 'ChatUserMessageAccepted' | 'ChatTextSegmentStarted' | 'ChatTextPatch' | 'ChatTextSegmentFinished';
 export type ChatRunUIEventName = 'ChatRunStarted' | 'ChatRunFinished' | 'ChatRunStopped' | 'ChatRunFailed';
 export type ProviderCallUIEventName = 'ChatProviderCallStarted' | 'ChatProviderCallMetadataUpdated' | 'ChatProviderCallFinished';
-export type ReasoningUIEventName = 'ChatReasoningSegmentStarted' | 'ChatReasoningDelta' | 'ChatReasoningSegmentFinished';
+export type ReasoningUIEventName = 'ChatReasoningSegmentStarted' | 'ChatReasoningPatch' | 'ChatReasoningSegmentFinished';
 export type ToolUIEventName =
   | 'ChatToolCallStarted'
-  | 'ChatToolCallArgumentsDelta'
+  | 'ChatToolArgumentsPatch'
   | 'ChatToolCallRequested'
   | 'ChatToolExecutionStarted'
   | 'ChatToolResultReady'
@@ -74,13 +74,13 @@ export type KnownUIEvent =
   | { name: 'ChatProviderCallMetadataUpdated'; payload: ChatProviderCallMetadataUpdated }
   | { name: 'ChatProviderCallFinished'; payload: ChatProviderCallFinished }
   | { name: 'ChatTextSegmentStarted'; payload: ChatTextSegmentStarted }
-  | { name: 'ChatTextDelta'; payload: ChatTextDelta }
+  | { name: 'ChatTextPatch'; payload: ChatTextPatch }
   | { name: 'ChatTextSegmentFinished'; payload: ChatTextSegmentFinished }
   | { name: 'ChatReasoningSegmentStarted'; payload: ChatReasoningSegmentStarted }
-  | { name: 'ChatReasoningDelta'; payload: ChatReasoningDelta }
+  | { name: 'ChatReasoningPatch'; payload: ChatReasoningPatch }
   | { name: 'ChatReasoningSegmentFinished'; payload: ChatReasoningSegmentFinished }
   | { name: 'ChatToolCallStarted'; payload: ChatToolCallStarted }
-  | { name: 'ChatToolCallArgumentsDelta'; payload: ChatToolCallArgumentsDelta }
+  | { name: 'ChatToolArgumentsPatch'; payload: ChatToolArgumentsPatch }
   | { name: 'ChatToolCallRequested'; payload: ChatToolCallRequested }
   | { name: 'ChatToolExecutionStarted'; payload: ChatToolExecutionStarted }
   | { name: 'ChatToolResultReady'; payload: ChatToolResultReady }
@@ -115,20 +115,20 @@ export function decodeKnownUIEvent(frame: CanonicalFrame): KnownUIEvent | null {
         return { name, payload: fromJson(ChatProviderCallFinishedSchema, jsonPayload(frame), { ignoreUnknownFields: true }) };
       case 'ChatTextSegmentStarted':
         return { name, payload: fromJson(ChatTextSegmentStartedSchema, jsonPayload(frame), { ignoreUnknownFields: true }) };
-      case 'ChatTextDelta':
-        return { name, payload: fromJson(ChatTextDeltaSchema, jsonPayload(frame), { ignoreUnknownFields: true }) };
+      case 'ChatTextPatch':
+        return { name, payload: fromJson(ChatTextPatchSchema, jsonPayload(frame), { ignoreUnknownFields: true }) };
       case 'ChatTextSegmentFinished':
         return { name, payload: fromJson(ChatTextSegmentFinishedSchema, jsonPayload(frame), { ignoreUnknownFields: true }) };
       case 'ChatReasoningSegmentStarted':
         return { name, payload: fromJson(ChatReasoningSegmentStartedSchema, jsonPayload(frame), { ignoreUnknownFields: true }) };
-      case 'ChatReasoningDelta':
-        return { name, payload: fromJson(ChatReasoningDeltaSchema, jsonPayload(frame), { ignoreUnknownFields: true }) };
+      case 'ChatReasoningPatch':
+        return { name, payload: fromJson(ChatReasoningPatchSchema, jsonPayload(frame), { ignoreUnknownFields: true }) };
       case 'ChatReasoningSegmentFinished':
         return { name, payload: fromJson(ChatReasoningSegmentFinishedSchema, jsonPayload(frame), { ignoreUnknownFields: true }) };
       case 'ChatToolCallStarted':
         return { name, payload: fromJson(ChatToolCallStartedSchema, jsonPayload(frame), { ignoreUnknownFields: true }) };
-      case 'ChatToolCallArgumentsDelta':
-        return { name, payload: fromJson(ChatToolCallArgumentsDeltaSchema, jsonPayload(frame), { ignoreUnknownFields: true }) };
+      case 'ChatToolArgumentsPatch':
+        return { name, payload: fromJson(ChatToolArgumentsPatchSchema, jsonPayload(frame), { ignoreUnknownFields: true }) };
       case 'ChatToolCallRequested':
         return { name, payload: fromJson(ChatToolCallRequestedSchema, jsonPayload(frame), { ignoreUnknownFields: true }) };
       case 'ChatToolExecutionStarted':

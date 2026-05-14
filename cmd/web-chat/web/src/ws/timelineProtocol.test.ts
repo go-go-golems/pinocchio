@@ -85,7 +85,7 @@ describe('frontend timeline protocol matrix', () => {
 
     const state = applyFrames([
       {
-        name: 'ChatTextDelta',
+        name: 'ChatTextPatch',
         payload: {
           messageId: 'chat-msg-1:text:1',
           role: 'assistant',
@@ -122,7 +122,7 @@ describe('frontend timeline protocol matrix', () => {
 
     const state = applyFrames([
       {
-        name: 'ChatReasoningDelta',
+        name: 'ChatReasoningPatch',
         payload: {
           messageId: 'chat-msg-1:thinking:1',
           parentMessageId: 'chat-msg-1',
@@ -153,7 +153,98 @@ describe('frontend timeline protocol matrix', () => {
     expect(entity?.props.parentMessageId).toBe('chat-msg-1');
   });
 
-  it('FRONTEND-05 missing tool result name does not persist display fallback as canonical state', () => {
+  it('FRONTEND-05 non-append text patches replace existing live content', () => {
+    const state = applyFrames([
+      {
+        name: 'ChatTextPatch',
+        payload: {
+          messageId: 'chat-msg-1:text:1',
+          role: 'assistant',
+          text: 'old ',
+          mode: 'CHAT_STREAM_PATCH_MODE_APPEND',
+          status: 'streaming',
+        },
+      },
+      {
+        name: 'ChatTextPatch',
+        payload: {
+          messageId: 'chat-msg-1:text:1',
+          role: 'assistant',
+          text: 'replacement',
+          mode: 'CHAT_STREAM_PATCH_MODE_REPLACE',
+          status: 'streaming',
+        },
+      },
+    ]);
+
+    const entity = state.byId['chat-msg-1:text:1'];
+    expect(entity?.kind).toBe('message');
+    expect(entity?.props.content).toBe('replacement');
+    expect(entity?.props.contentPatch).toBeUndefined();
+    expect(entity?.props.patchMode).toBeUndefined();
+  });
+
+  it('FRONTEND-06 non-append reasoning patches replace existing live content', () => {
+    const state = applyFrames([
+      {
+        name: 'ChatReasoningPatch',
+        payload: {
+          messageId: 'chat-msg-1:thinking:1',
+          parentMessageId: 'chat-msg-1',
+          text: 'partial reasoning',
+          mode: 'CHAT_STREAM_PATCH_MODE_APPEND',
+          status: 'streaming',
+        },
+      },
+      {
+        name: 'ChatReasoningPatch',
+        payload: {
+          messageId: 'chat-msg-1:thinking:1',
+          parentMessageId: 'chat-msg-1',
+          text: 'snapshot reasoning',
+          mode: 'CHAT_STREAM_PATCH_MODE_SNAPSHOT',
+          status: 'streaming',
+        },
+      },
+    ]);
+
+    const entity = state.byId['chat-msg-1:thinking:1'];
+    expect(entity?.kind).toBe('message');
+    expect(entity?.props.role).toBe('thinking');
+    expect(entity?.props.content).toBe('snapshot reasoning');
+  });
+
+  it('FRONTEND-07 non-append tool argument patches replace existing raw input', () => {
+    const state = applyFrames([
+      {
+        name: 'ChatToolCallRequested',
+        payload: {
+          messageId: 'chat-msg-1',
+          toolCallId: 'call_1',
+          toolName: 'sql_query',
+          input: '{"sql":"SELECT old"}',
+          status: 'pending',
+        },
+      },
+      {
+        name: 'ChatToolArgumentsPatch',
+        payload: {
+          messageId: 'chat-msg-1',
+          toolCallId: 'call_1',
+          toolName: 'sql_query',
+          arguments: '{"sql":"SELECT new"}',
+          mode: 'CHAT_STREAM_PATCH_MODE_REPLACE',
+          status: 'pending',
+        },
+      },
+    ]);
+
+    const entity = state.byId.call_1;
+    expect(entity?.props.inputRaw).toBe('{"sql":"SELECT new"}');
+    expect(entity?.props.input).toEqual({ sql: 'SELECT new' });
+  });
+
+  it('FRONTEND-08 missing tool result name does not persist display fallback as canonical state', () => {
     const mutation = timelineMutationFromUIEvent({
       name: 'ChatToolResultReady',
       payload: {

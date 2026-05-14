@@ -85,16 +85,26 @@ message ChatTextSegmentStarted {
   CorrelationInfo correlation = 6;
 }
 
-message ChatTextDelta {
+enum ChatStreamPatchMode {
+  CHAT_STREAM_PATCH_MODE_UNSPECIFIED = 0;
+  CHAT_STREAM_PATCH_MODE_APPEND = 1;
+  CHAT_STREAM_PATCH_MODE_SNAPSHOT = 2;
+  CHAT_STREAM_PATCH_MODE_REPLACE = 3;
+}
+
+message ChatTextPatch {
   string message_id = 1;
   string role = 2;
-  string prompt = 3;
-  string chunk = 4;
-  string text = 5;
-  string content = 6;
-  string status = 7;
-  bool streaming = 8;
-  CorrelationInfo correlation = 9;
+  string stream_id = 3;
+  uint64 sequence = 4;
+  uint64 offset = 5;
+  string text = 6;
+  ChatStreamPatchMode mode = 7;
+  string status = 8;
+  bool final = 9;
+  string finish_reason = 10;
+  string prompt = 11;
+  CorrelationInfo correlation = 12;
 }
 
 message ChatTextSegmentFinished {
@@ -120,17 +130,20 @@ message ChatReasoningSegmentStarted {
   CorrelationInfo correlation = 7;
 }
 
-message ChatReasoningDelta {
+message ChatReasoningPatch {
   string message_id = 1;
   string parent_message_id = 2;
   string role = 3;
-  string chunk = 4;
-  string text = 5;
-  string content = 6;
-  string status = 7;
-  bool streaming = 8;
-  string source = 9;
-  CorrelationInfo correlation = 10;
+  string stream_id = 4;
+  uint64 sequence = 5;
+  uint64 offset = 6;
+  string text = 7;
+  ChatStreamPatchMode mode = 8;
+  string status = 9;
+  bool final = 10;
+  string source = 11;
+  string finish_reason = 12;
+  CorrelationInfo correlation = 13;
 }
 
 message ChatReasoningSegmentFinished {
@@ -156,14 +169,18 @@ message ChatToolCallStarted {
   CorrelationInfo correlation = 7;
 }
 
-message ChatToolCallArgumentsDelta {
+message ChatToolArgumentsPatch {
   string message_id = 1;
   string tool_call_id = 2;
   string tool_name = 3;
-  string arguments_delta = 4;
-  string input = 5;
-  string status = 6;
-  CorrelationInfo correlation = 7;
+  string stream_id = 4;
+  uint64 sequence = 5;
+  uint64 offset = 6;
+  string arguments = 7;
+  ChatStreamPatchMode mode = 8;
+  string status = 9;
+  bool final = 10;
+  CorrelationInfo correlation = 11;
 }
 
 message ChatToolCallRequested {
