@@ -63,6 +63,12 @@ topics:
       description: Documentation files and tutorials
     - slug: webchat
       description: Web chat application (cmd/web-chat)
+    - slug: jsonl
+      description: JSON Lines format and newline-delimited JSON streams
+    - slug: rpc
+      description: Remote procedure call and subprocess protocol design
+    - slug: structured-output
+      description: Machine-readable CLI or event output contracts
 docTypes:
     - slug: index
       description: Ticket index / overall plan
