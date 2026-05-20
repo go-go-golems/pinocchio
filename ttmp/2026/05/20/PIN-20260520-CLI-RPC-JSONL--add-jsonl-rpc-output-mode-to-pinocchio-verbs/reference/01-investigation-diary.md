@@ -1222,3 +1222,42 @@ Commands run:
 gofmt -w pkg/cmds/cmd.go pkg/cmds/run/context.go pkg/cmds/cmdlayers/helpers.go pkg/cmds/cmd_rpc_jsonl_test.go
 go test ./pkg/cmds ./pkg/chatapp/... -count=1
 ```
+
+## Step 14: Commit Phase 6 CLI RPC integration
+
+Phase 6 was committed after the full pre-commit hook completed successfully.
+
+### Prompt Context
+
+**User prompt (verbatim):** `continue`
+
+**Assistant interpretation:** Finish the current phase's commit before continuing to the next implementation phase.
+
+**Inferred user intent:** Keep clean phase boundaries and maintain the implementation diary.
+
+**Commit (code):** `cfaf7fb8778b81417450235edc72cb3611d73ddf` (`cmds: route RPC JSONL through chatapp`)
+
+### What I did
+
+- Staged the Phase 6 CLI RPC files and ticket docs.
+- Ran the repository pre-commit hook via `git commit`.
+- The hook ran `go generate ./...`, frontend install/build, `go build ./...`, `golangci-lint`, `go vet`, and `go test ./...`.
+- Commit succeeded.
+
+### What worked
+
+- The full pre-commit hook passed.
+- The focused commit contains:
+  - `pkg/cmds/cmd.go`
+  - `pkg/cmds/cmdlayers/helpers.go`
+  - `pkg/cmds/run/context.go`
+  - `pkg/cmds/cmd_rpc_jsonl_test.go`
+  - ticket task/changelog/design/diary updates
+
+### What didn't work
+
+- No new failures during commit.
+
+### What should be done in the future
+
+- Begin Phase 7 by inspecting current Bubble Tea/TUI event paths and identifying the clean adapter seam for `sessionstream.UIFanout`.

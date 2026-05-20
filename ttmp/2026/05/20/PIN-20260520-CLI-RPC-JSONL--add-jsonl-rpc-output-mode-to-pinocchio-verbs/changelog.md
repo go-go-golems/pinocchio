@@ -123,3 +123,12 @@ Phase 6: wired Pinocchio CLI --rpc/--output jsonl through chatapp/sessionstream 
 - /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/cmds/cmdlayers/helpers.go — --rpc flag and jsonl output choice
 - /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/cmds/run/context.go — RunModeRPCJSONL and UI RPC setting
 
+
+## 2026-05-20
+
+Committed Phase 6 CLI RPC integration as cfaf7fb
+
+### Related Files
+
+- /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/cmds/cmd.go — Phase 6 committed in cfaf7fb
+

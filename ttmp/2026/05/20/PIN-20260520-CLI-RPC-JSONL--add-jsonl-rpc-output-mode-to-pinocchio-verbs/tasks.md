@@ -134,7 +134,7 @@ Goal: route `--rpc` / `--output jsonl` through chatapp/sessionstream and protobu
   - [x] every line unmarshals as `RpcLine`.
   - [x] `ChatTextPatch` and `ChatRunFinished` appear.
   - [x] process errors still surface via exit status and/or terminal error frame.
-- [ ] Commit Phase 6 as a focused CLI-RPC integration commit. (pending after diary update)
+- [x] Commit Phase 6 as a focused CLI-RPC integration commit (`cfaf7fb`).
 
 ## Phase 7 — Bubble Tea/TUI adapter over sessionstream
 
@@ -172,6 +172,6 @@ Goal: finish the migration and remove avoidable duplicate stream mappings.
 
 ## Current implementation checkpoint
 
-- Active phase: Phase 6 validation/commit.
-- Current source changes: CLI `--rpc`/`--output jsonl` routing through chatapp/sessionstream JSONL plus tests.
-- Next concrete action: commit Phase 6, then start Phase 7 TUI adapter planning/implementation.
+- Active phase: Phase 7 planning/implementation.
+- Current source changes: none; Phase 6 committed as `cfaf7fb`.
+- Next concrete action: inspect current TUI event path and design the Bubble Tea `sessionstream.UIFanout` adapter.
