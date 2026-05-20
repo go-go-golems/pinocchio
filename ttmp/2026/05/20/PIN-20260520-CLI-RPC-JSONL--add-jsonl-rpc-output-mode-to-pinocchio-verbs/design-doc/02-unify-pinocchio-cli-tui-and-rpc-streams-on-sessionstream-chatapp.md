@@ -38,16 +38,22 @@ RelatedFiles:
       Note: Web-chat runtime resolver plugin and server wiring
     - Path: cmd/web-chat/runtime_composer.go
       Note: Reusable runtime composition candidate currently under cmd/web-chat
+    - Path: cmd/web-chat/web/src/chatapp/pb/proto/pinocchio/chatapp/rpc/v1/rpc_pb.ts
+      Note: Generated TypeScript bindings for RpcLine contract
     - Path: pkg/chatapp/chat.go
       Note: Canonical chat event names schema registration and hub installation
     - Path: pkg/chatapp/features.go
       Note: Plugin extension API for runtime events projections and schemas
+    - Path: pkg/chatapp/pb/proto/pinocchio/chatapp/rpc/v1/rpc.pb.go
+      Note: Generated Go bindings for RpcLine contract
     - Path: pkg/chatapp/plugins/reasoning.go
       Note: Reasoning event plugin proving extensible stream mapping
     - Path: pkg/chatapp/plugins/toolcall.go
       Note: Tool call event plugin proving extensible stream mapping
     - Path: pkg/chatapp/projections.go
       Note: Base chat UI and timeline projections
+    - Path: pkg/chatapp/rpc/rpc_proto_test.go
+      Note: Compile and protojson round-trip test for generated RpcLine
     - Path: pkg/chatapp/runtime_inference.go
       Note: Chatapp runtime execution path using ComposedRuntime
     - Path: pkg/chatapp/runtime_sink.go
@@ -60,6 +66,8 @@ RelatedFiles:
       Note: Current raw Geppetto TUI forwarding path proposed for migration
     - Path: pkg/ui/timeline_persist.go
       Note: Current raw Geppetto timeline persistence path proposed for migration
+    - Path: proto/pinocchio/chatapp/rpc/v1/rpc.proto
+      Note: Implemented protobuf JSONL line envelope proposed by the design
     - Path: proto/pinocchio/chatapp/v1/chat.proto
       Note: |-
         Canonical Pinocchio chat command event UI and entity payload schema
@@ -70,6 +78,7 @@ LastUpdated: 2026-05-20T13:15:00-04:00
 WhatFor: Use when deciding whether the Pinocchio --rpc implementation should wrap raw Geppetto events or reuse the existing sessionstream/chatapp canonical chat pipeline.
 WhenToUse: Before implementing JSONL RPC output, TUI stream forwarding, or new chat event projections for Pinocchio verbs.
 ---
+
 
 
 

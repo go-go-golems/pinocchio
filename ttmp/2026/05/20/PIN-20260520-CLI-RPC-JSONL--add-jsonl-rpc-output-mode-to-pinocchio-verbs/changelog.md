@@ -50,3 +50,23 @@ Expanded ticket tasks into phased implementation plan and marked Phase 1 as acti
 - /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/ttmp/2026/05/20/PIN-20260520-CLI-RPC-JSONL--add-jsonl-rpc-output-mode-to-pinocchio-verbs/reference/01-investigation-diary.md — Diary step for phased task planning
 - /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/ttmp/2026/05/20/PIN-20260520-CLI-RPC-JSONL--add-jsonl-rpc-output-mode-to-pinocchio-verbs/tasks.md — Phased implementation checklist
 
+
+## 2026-05-20
+
+Phase 1: added protobuf RpcLine contract, generated Go/TS bindings, and protojson round-trip test
+
+### Related Files
+
+- /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/chatapp/rpc/rpc_proto_test.go — Generated RpcLine protojson round-trip test
+- /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/proto/pinocchio/chatapp/rpc/v1/rpc.proto — New protobuf JSONL line contract
+
+
+## 2026-05-20
+
+Fixed generated RPC TypeScript binding import ordering after Biome pre-commit failure
+
+### Related Files
+
+- /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/cmd/web-chat/web/src/chatapp/pb/proto/pinocchio/chatapp/rpc/v1/rpc_pb.ts — Generated TypeScript binding formatted for Biome
+- /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/ttmp/2026/05/20/PIN-20260520-CLI-RPC-JSONL--add-jsonl-rpc-output-mode-to-pinocchio-verbs/reference/01-investigation-diary.md — Recorded pre-commit failure and fix
+

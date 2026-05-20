@@ -18,24 +18,24 @@
 
 Goal: create the explicit generated boundary for JSONL/RPC lines before writing adapters.
 
-- [ ] Add `proto/pinocchio/chatapp/rpc/v1/rpc.proto`.
-  - [ ] Define `RpcLine` with `version`, `session_id`, `request_id`, and a `oneof frame`.
-  - [ ] Define `HelloFrame` with protocol/server/capabilities.
-  - [ ] Define `SnapshotFrame` and `SnapshotEntity` for sessionstream hydration snapshots.
-  - [ ] Define `UiEventFrame` with ordinal/name/`google.protobuf.Any` payload.
-  - [ ] Define `BackendEventFrame` with ordinal/name/`google.protobuf.Any` payload for future debug/advanced modes.
-  - [ ] Define `ErrorFrame` and `DoneFrame`.
-  - [ ] Reserve or document field-number ranges for future bidirectional stdin frames if not included now.
-- [ ] Regenerate Go protobuf bindings for chatapp protos.
-  - [ ] Verify generated Go package path under `pkg/chatapp/pb/proto/pinocchio/chatapp/rpc/v1` or the final chosen path.
-  - [ ] Verify existing `chatapp/v1` generated files are not unexpectedly reformatted or churned.
-- [ ] Regenerate TypeScript bindings if the repository's existing chatapp web generation supports the new proto path.
-  - [ ] If not wired yet, document the follow-up rather than forcing a partial generation layout.
-- [ ] Add a minimal compile-time test that imports the generated `chatapprpcv1` package.
-- [ ] Run protobuf validation commands.
-  - [ ] `buf lint --path proto/pinocchio/chatapp/rpc/v1/rpc.proto`
-  - [ ] targeted Go tests for generated package import.
-- [ ] Commit Phase 1 as a focused protobuf-contract commit.
+- [x] Add `proto/pinocchio/chatapp/rpc/v1/rpc.proto`.
+  - [x] Define `RpcLine` with `version`, `session_id`, `request_id`, and a `oneof frame`.
+  - [x] Define `HelloFrame` with protocol/server/capabilities.
+  - [x] Define `SnapshotFrame` and `SnapshotEntity` for sessionstream hydration snapshots.
+  - [x] Define `UiEventFrame` with ordinal/name/`google.protobuf.Any` payload.
+  - [x] Define `BackendEventFrame` with ordinal/name/`google.protobuf.Any` payload for future debug/advanced modes.
+  - [x] Define `ErrorFrame` and `DoneFrame`.
+  - [x] Reserve or document field-number ranges for future bidirectional stdin frames if not included now.
+- [x] Regenerate Go protobuf bindings for chatapp protos.
+  - [x] Verify generated Go package path under `pkg/chatapp/pb/proto/pinocchio/chatapp/rpc/v1` or the final chosen path.
+  - [x] Verify existing `chatapp/v1` generated files are not unexpectedly reformatted or churned.
+- [x] Regenerate TypeScript bindings if the repository's existing chatapp web generation supports the new proto path.
+  - [x] Existing chatapp web generation supports the new proto path; generated `rpc_pb.ts`.
+- [x] Add a minimal compile-time test that imports the generated `chatapprpcv1` package.
+- [x] Run protobuf validation commands.
+  - [x] `buf lint --path proto/pinocchio/chatapp/rpc/v1/rpc.proto`
+  - [x] targeted Go tests for generated package import.
+- [ ] Commit Phase 1 as a focused protobuf-contract commit. (pending after diary update)
 
 ## Phase 2 — ProtoJSON JSONL writer package
 
@@ -172,6 +172,6 @@ Goal: finish the migration and remove avoidable duplicate stream mappings.
 
 ## Current implementation checkpoint
 
-- Active phase: Phase 1.
-- Current source changes: none yet; planning docs updated.
-- Next concrete action: add `proto/pinocchio/chatapp/rpc/v1/rpc.proto`, regenerate bindings, and add the first generated-package compile test.
+- Active phase: Phase 1 validation/commit.
+- Current source changes: `rpc.proto`, generated Go/TS bindings, and generated-package protojson round-trip test.
+- Next concrete action: commit Phase 1, then start Phase 2 JSONL writer package.

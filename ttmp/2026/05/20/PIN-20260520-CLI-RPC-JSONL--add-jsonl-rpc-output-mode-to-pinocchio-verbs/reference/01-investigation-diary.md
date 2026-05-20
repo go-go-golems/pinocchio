@@ -20,18 +20,23 @@ RelatedFiles:
       Note: Investigation identified UIFanout as the key adapter seam
     - Path: cmd/web-chat/app/server.go
       Note: Investigation source for working sessionstream chatapp integration
+    - Path: pkg/chatapp/rpc/rpc_proto_test.go
+      Note: Phase 1 validation test recorded in diary
     - Path: pkg/chatapp/runtime_sink.go
       Note: Investigation identified existing Geppetto-to-chat event mapping
     - Path: pkg/cmds/cmd.go
       Note: Primary investigation target for runtime output handler selection
     - Path: pkg/cmds/cmdlayers/helpers.go
       Note: Primary investigation target for public CLI flags
+    - Path: proto/pinocchio/chatapp/rpc/v1/rpc.proto
+      Note: Phase 1 implementation artifact recorded in diary
 ExternalSources: []
 Summary: Chronological investigation diary for the Pinocchio JSONL/RPC CLI output design.
 LastUpdated: 2026-05-20T12:45:00-04:00
 WhatFor: Use to understand how the JSONL/RPC output-mode design was researched and what evidence shaped the recommendations.
 WhenToUse: When continuing the ticket, reviewing the design, or implementing the proposed Pinocchio/Geppetto changes.
 ---
+
 
 
 
@@ -538,3 +543,185 @@ I turned the design into a phased implementation checklist so the work can proce
 ### Technical details
 
 - Updated task list path: `/home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/ttmp/2026/05/20/PIN-20260520-CLI-RPC-JSONL--add-jsonl-rpc-output-mode-to-pinocchio-verbs/tasks.md`.
+
+## Step 7: Implement Phase 1 protobuf contract and generated bindings
+
+I implemented the first phase of the plan: the JSONL/RPC line envelope now has a protobuf schema, generated Go and TypeScript bindings, and a minimal Go round-trip test that proves the generated `RpcLine` type can be serialized and deserialized with protobuf JSON.
+
+### Prompt Context
+
+**User prompt (verbatim):** (same as Step 6)
+
+**Assistant interpretation:** Begin executing the phased implementation plan with focused source changes and validation.
+
+**Inferred user intent:** Establish the generated protocol boundary first so later writer and fanout code cannot drift into ad-hoc JSON.
+
+**Commit (code):** pending — Phase 1 source and diary changes are ready for a focused commit.
+
+### What I did
+
+- Added `proto/pinocchio/chatapp/rpc/v1/rpc.proto`.
+- Defined `pinocchio.chatapp.rpc.v1.RpcLine` with:
+  - `version`
+  - `session_id`
+  - `request_id`
+  - `oneof frame`
+- Defined frame messages:
+  - `HelloFrame`
+  - `SnapshotFrame`
+  - `SnapshotEntity`
+  - `UiEventFrame`
+  - `BackendEventFrame`
+  - `ErrorFrame`
+  - `DoneFrame`
+- Used `google.protobuf.Any` for event/entity payloads.
+- Reserved field range `100 to 199` for future expansion.
+- Ran Buf lint for the new proto.
+- Generated Go bindings with `buf.chatapp.gen.yaml`.
+- Generated TypeScript bindings with `buf.chatapp.web.gen.yaml`.
+- Added `pkg/chatapp/rpc/rpc_proto_test.go` to import `chatapprpcv1` and round-trip a hello frame through `protojson`.
+
+### Why
+
+- This creates the explicit protocol boundary requested by the user.
+- Later JSONL writer code can now accept `*chatapprpcv1.RpcLine` instead of untyped maps.
+- TypeScript clients can consume the same generated schema.
+
+### What worked
+
+- `buf lint --path proto/pinocchio/chatapp/rpc/v1/rpc.proto` passed.
+- `buf generate --template buf.chatapp.gen.yaml --path proto/pinocchio/chatapp/rpc/v1/rpc.proto` generated `pkg/chatapp/pb/proto/pinocchio/chatapp/rpc/v1/rpc.pb.go`.
+- `buf generate --template buf.chatapp.web.gen.yaml --path proto/pinocchio/chatapp/rpc/v1/rpc.proto` generated `cmd/web-chat/web/src/chatapp/pb/proto/pinocchio/chatapp/rpc/v1/rpc_pb.ts`.
+- `go test ./pkg/chatapp/rpc ./pkg/chatapp/... -count=1` passed.
+
+### What didn't work
+
+- The first test version used a composite literal directly in an `if err := ...; err != nil` initializer:
+
+```go
+if err := protojson.UnmarshalOptions{DiscardUnknown: false}.Unmarshal(b, &decoded); err != nil {
+```
+
+Go parsed that incorrectly and reported:
+
+```text
+pkg/chatapp/rpc/rpc_proto_test.go:29:5: expected boolean expression, found assignment (missing parentheses around composite literal?)
+```
+
+I fixed it by adding parentheses around the composite literal:
+
+```go
+if err := (protojson.UnmarshalOptions{DiscardUnknown: false}).Unmarshal(b, &decoded); err != nil {
+```
+
+### What I learned
+
+- The existing chatapp Buf generation templates already work for the new nested `chatapp/rpc/v1` proto path.
+- We can generate web TypeScript bindings immediately; no separate generator wiring was needed for Phase 1.
+
+### What was tricky to build
+
+- The main implementation detail was choosing the `go_package` path so it stays under the existing chatapp generated package tree while getting a clean import alias (`chatapprpcv1`).
+
+### What warrants a second pair of eyes
+
+- The exact field numbers and frame set in `rpc.proto` should be reviewed because this is the public contract foundation.
+- The reserved field range is intentionally broad but arbitrary; reviewers may prefer explicit comments or a different reservation strategy.
+
+### What should be done in the future
+
+- Implement Phase 2: a mutex-protected protojson JSONL writer that writes exactly one `RpcLine` per line.
+
+### Code review instructions
+
+- Start with `proto/pinocchio/chatapp/rpc/v1/rpc.proto`.
+- Verify generated files match the proto and do not introduce unexpected changes to existing chatapp v1 bindings.
+- Run `buf lint --path proto/pinocchio/chatapp/rpc/v1/rpc.proto`.
+- Run `go test ./pkg/chatapp/rpc ./pkg/chatapp/... -count=1`.
+
+### Technical details
+
+Commands run:
+
+```bash
+buf lint --path proto/pinocchio/chatapp/rpc/v1/rpc.proto
+buf generate --template buf.chatapp.gen.yaml --path proto/pinocchio/chatapp/rpc/v1/rpc.proto
+buf generate --template buf.chatapp.web.gen.yaml --path proto/pinocchio/chatapp/rpc/v1/rpc.proto
+gofmt -w pkg/chatapp/rpc/rpc_proto_test.go
+go test ./pkg/chatapp/rpc ./pkg/chatapp/... -count=1
+```
+
+## Step 8: Fix generated TypeScript import ordering found by pre-commit
+
+The first Phase 1 commit attempt ran the repository pre-commit hooks and failed in `web-check`. The generated TypeScript file was valid but did not satisfy Biome's import-order rule. I fixed the generated file with Biome's safe write mode and kept the fix in the same Phase 1 commit.
+
+### Prompt Context
+
+**User prompt (verbatim):** (same as Step 6)
+
+**Assistant interpretation:** Keep committing at appropriate intervals and record validation failures as they happen.
+
+**Inferred user intent:** Preserve a reliable implementation diary that captures both successful validation and hook failures.
+
+**Commit (code):** pending — this fix is part of the Phase 1 protobuf contract commit.
+
+### What I did
+
+- Attempted to commit Phase 1 with `git commit -m "chatapp: add protobuf JSONL RPC envelope"`.
+- The pre-commit hook ran broad validation, including `go generate`, `go build`, golangci-lint, `go test ./...`, frontend typecheck, and frontend Biome lint.
+- Biome reported unsorted imports in the generated TypeScript file.
+- Ran:
+
+```bash
+cd cmd/web-chat/web && npx --yes @biomejs/biome@2.3.8 check --write src/chatapp/pb/proto/pinocchio/chatapp/rpc/v1/rpc_pb.ts
+```
+
+### Why
+
+- The generated web binding is part of the protobuf boundary. Keeping it checked in means it must satisfy the repository's frontend lint rules.
+
+### What worked
+
+- The pre-commit hook's Go-side validation passed before the frontend lint failure:
+  - `go build ./...`
+  - golangci-lint
+  - `go vet -vettool=/tmp/geppetto-lint ./...`
+  - `go test ./...`
+  - frontend typecheck
+- Biome fixed the import ordering automatically.
+
+### What didn't work
+
+- The commit failed because Biome reported:
+
+```text
+src/chatapp/pb/proto/pinocchio/chatapp/rpc/v1/rpc_pb.ts:5:1 assist/source/organizeImports FIXABLE
+✖ The imports and exports are not sorted.
+```
+
+- The first commit command also previously timed out at 120 seconds while the hook was still running, so I reran with a longer timeout.
+
+### What I learned
+
+- Generating chatapp TypeScript bindings may require a Biome organize-imports pass before commit.
+- The pre-commit hook is expensive because it can install frontend dependencies, build the web UI, run full Go tests, and run frontend checks.
+
+### What was tricky to build
+
+- The generated file is tool-owned, but repository lint still enforces formatting. The least invasive fix was running the repository's existing Biome version against only that generated file.
+
+### What warrants a second pair of eyes
+
+- If generated TS files frequently need Biome post-processing, the generation workflow could add an explicit formatting step.
+
+### What should be done in the future
+
+- After future TypeScript generation, run `npx --yes @biomejs/biome@2.3.8 check --write <generated-file>` before committing.
+
+### Code review instructions
+
+- Review the TypeScript generated file only for expected generated-schema content and import ordering; do not hand-edit semantic generated code.
+
+### Technical details
+
+- File fixed: `/home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/cmd/web-chat/web/src/chatapp/pb/proto/pinocchio/chatapp/rpc/v1/rpc_pb.ts`.
