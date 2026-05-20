@@ -26,14 +26,18 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cmds/fields"
 	"github.com/go-go-golems/glazed/pkg/cmds/schema"
 	"github.com/go-go-golems/glazed/pkg/cmds/values"
+	"github.com/go-go-golems/pinocchio/pkg/chatapp"
+	chatapprpcjsonl "github.com/go-go-golems/pinocchio/pkg/chatapp/rpc/jsonl"
 	"github.com/go-go-golems/pinocchio/pkg/cmds/cmdlayers"
 	profilebootstrap "github.com/go-go-golems/pinocchio/pkg/cmds/profilebootstrap"
 	"github.com/go-go-golems/pinocchio/pkg/cmds/run"
+	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 	"github.com/go-go-golems/pinocchio/pkg/tui/overlay"
 	overlaywidget "github.com/go-go-golems/pinocchio/pkg/tui/widgets/overlay"
 	pinui "github.com/go-go-golems/pinocchio/pkg/ui"
 	"github.com/go-go-golems/pinocchio/pkg/ui/profileswitch"
-	"github.com/go-go-golems/pinocchio/pkg/ui/runtime"
+	uiruntime "github.com/go-go-golems/pinocchio/pkg/ui/runtime"
+	sessionstream "github.com/go-go-golems/sessionstream/pkg/sessionstream"
 	"github.com/google/uuid"
 	"github.com/mattn/go-isatty"
 	"github.com/pkg/errors"
@@ -286,7 +290,9 @@ func (g *PinocchioCommand) RunIntoWriter(
 
 	// Determine run mode based on helper settings
 	runMode := run.RunModeBlocking
-	if helpersSettings.StartInChat {
+	if helpersSettings.RPC || strings.EqualFold(helpersSettings.Output, "jsonl") {
+		runMode = run.RunModeRPCJSONL
+	} else if helpersSettings.StartInChat {
 		runMode = run.RunModeChat
 	} else if helpersSettings.Interactive {
 		runMode = run.RunModeInteractive
@@ -300,6 +306,7 @@ func (g *PinocchioCommand) RunIntoWriter(
 		StartInChat:      helpersSettings.StartInChat,
 		PrintPrompt:      helpersSettings.PrintPrompt,
 		Output:           helpersSettings.Output,
+		RPC:              helpersSettings.RPC,
 		WithMetadata:     helpersSettings.WithMetadata,
 		FullOutput:       helpersSettings.FullOutput,
 	}
@@ -416,6 +423,8 @@ func (g *PinocchioCommand) RunWithOptions(ctx context.Context, options ...run.Ru
 	switch runCtx.RunMode {
 	case run.RunModeBlocking:
 		return g.runBlocking(ctx, runCtx)
+	case run.RunModeRPCJSONL:
+		return g.runRPCJSONL(ctx, runCtx)
 	case run.RunModeInteractive, run.RunModeChat:
 		return g.runChat(ctx, runCtx)
 	default:
@@ -477,6 +486,114 @@ func (g *PinocchioCommand) runBlocking(ctx context.Context, rc *run.RunContext) 
 
 	// Return resulting Turn when available
 	return rc.ResultTurn, nil
+}
+
+// runRPCJSONL executes the command through chatapp/sessionstream and writes one
+// protobuf JSON RpcLine per stdout line. This path is script-friendly and shares
+// projected chat UI events with web-chat instead of printing raw Geppetto events.
+func (g *PinocchioCommand) runRPCJSONL(ctx context.Context, rc *run.RunContext) (*turns.Turn, error) {
+	if rc.Writer == nil {
+		rc.Writer = io.Discard
+	}
+	if rc.EngineFactory == nil {
+		rc.EngineFactory = factory.NewStandardEngineFactory()
+	}
+
+	seed, err := g.buildInitialTurn(rc.Variables, rc.ImagePaths)
+	if err != nil {
+		return nil, fmt.Errorf("failed to render templates: %w", err)
+	}
+	sid := commandSessionID(seed)
+	prompt := displayPromptForTurn(seed)
+	if strings.TrimSpace(prompt) == "" {
+		prompt = "(input turn)"
+	}
+
+	fanout, err := chatapprpcjsonl.NewUIFanout(rc.Writer)
+	if err != nil {
+		return nil, err
+	}
+	if err := fanout.WriteHello(sid, []string{"ui-events", "snapshot", "done"}); err != nil {
+		return nil, err
+	}
+
+	runner, err := chatapp.NewRunner(chatapp.RunnerOptions{UIFanout: fanout})
+	if err != nil {
+		_ = fanout.WriteError(sid, "runner_init_failed", err, true)
+		return nil, err
+	}
+	defer func() { _ = runner.Close() }()
+	initialSnap, err := runner.Service.Snapshot(ctx, sid)
+	if err != nil {
+		_ = fanout.WriteError(sid, "initial_snapshot_failed", err, true)
+		return nil, err
+	}
+	if err := fanout.WriteSnapshot(initialSnap); err != nil {
+		return nil, err
+	}
+
+	engine, err := rc.EngineFactory.CreateEngine(rc.InferenceSettings)
+	if err != nil {
+		err = fmt.Errorf("failed to create engine: %w", err)
+		_ = fanout.WriteError(sid, "engine_init_failed", err, true)
+		return nil, err
+	}
+
+	req := chatapp.PromptRequest{
+		Prompt:      prompt,
+		InitialTurn: seed,
+		Runtime: &infruntime.ComposedRuntime{
+			Engine: engine,
+		},
+	}
+	if err := runner.Service.SubmitPromptRequest(ctx, sid, req); err != nil {
+		_ = fanout.WriteError(sid, "submit_failed", err, true)
+		return nil, err
+	}
+	if err := runner.Service.WaitIdle(ctx, sid); err != nil {
+		_ = fanout.WriteError(sid, "wait_failed", err, true)
+		return nil, err
+	}
+	snap, err := runner.Service.Snapshot(ctx, sid)
+	if err != nil {
+		_ = fanout.WriteError(sid, "snapshot_failed", err, true)
+		return nil, err
+	}
+	if err := fanout.WriteSnapshot(snap); err != nil {
+		return nil, err
+	}
+	if err := fanout.WriteDone(sid, "ok"); err != nil {
+		return nil, err
+	}
+	return seed, nil
+}
+
+func commandSessionID(seed *turns.Turn) sessionstream.SessionId {
+	if seed != nil {
+		if sid, ok, err := turns.KeyTurnMetaSessionID.Get(seed.Metadata); err == nil && ok && sid != "" {
+			return sessionstream.SessionId(sid)
+		}
+		sid := uuid.NewString()
+		_ = turns.KeyTurnMetaSessionID.Set(&seed.Metadata, sid)
+		return sessionstream.SessionId(sid)
+	}
+	return sessionstream.SessionId(uuid.NewString())
+}
+
+func displayPromptForTurn(seed *turns.Turn) string {
+	if seed == nil {
+		return ""
+	}
+	for i := len(seed.Blocks) - 1; i >= 0; i-- {
+		block := seed.Blocks[i]
+		if block.Role != turns.RoleUser || block.Payload == nil {
+			continue
+		}
+		if text, ok := block.Payload[turns.PayloadKeyText].(string); ok && strings.TrimSpace(text) != "" {
+			return text
+		}
+	}
+	return ""
 }
 
 // runEngineAndCollectMessages handles the actual engine execution and message collection
@@ -782,7 +899,7 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) (*tu
 			})
 		} else {
 			// Build program and session via unified builder (no /profile switching).
-			sess, p2, err := runtime.NewChatBuilder().
+			sess, p2, err := uiruntime.NewChatBuilder().
 				WithContext(ctx).
 				WithEngineFactory(rc.EngineFactory).
 				WithSettings(rc.InferenceSettings).

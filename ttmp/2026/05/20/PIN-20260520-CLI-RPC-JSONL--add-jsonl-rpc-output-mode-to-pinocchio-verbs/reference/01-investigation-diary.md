@@ -43,9 +43,17 @@ RelatedFiles:
     - Path: pkg/chatapp/service.go
       Note: Phase 5 implementation artifact recorded in diary
     - Path: pkg/cmds/cmd.go
-      Note: Primary investigation target for runtime output handler selection
+      Note: |-
+        Primary investigation target for runtime output handler selection
+        Phase 6 CLI RPC implementation recorded in diary
+    - Path: pkg/cmds/cmd_rpc_jsonl_test.go
+      Note: Phase 6 integration tests recorded in diary
     - Path: pkg/cmds/cmdlayers/helpers.go
-      Note: Primary investigation target for public CLI flags
+      Note: |-
+        Primary investigation target for public CLI flags
+        Phase 6 helper flag changes recorded in diary
+    - Path: pkg/cmds/run/context.go
+      Note: Phase 6 run mode changes recorded in diary
     - Path: proto/pinocchio/chatapp/rpc/v1/rpc.proto
       Note: Phase 1 implementation artifact recorded in diary
 ExternalSources: []
@@ -54,6 +62,7 @@ LastUpdated: 2026-05-20T12:45:00-04:00
 WhatFor: Use to understand how the JSONL/RPC output-mode design was researched and what evidence shaped the recommendations.
 WhenToUse: When continuing the ticket, reviewing the design, or implementing the proposed Pinocchio/Geppetto changes.
 ---
+
 
 
 
@@ -1110,4 +1119,106 @@ Commands run:
 ```bash
 gofmt -w pkg/chatapp/service.go pkg/chatapp/runtime_inference.go pkg/chatapp/chat_test.go
 go test ./pkg/chatapp/... -count=1
+```
+
+## Step 13: Implement Phase 6 CLI RPC JSONL integration
+
+I added the first real Pinocchio CLI integration path for protobuf-defined JSONL RPC output. `--rpc` and `--output jsonl` now route blocking command execution through `chatapp.Runner`, `sessionstream`, and the JSONL `UIFanout` instead of the old raw Geppetto event printer.
+
+### Prompt Context
+
+**User prompt (verbatim):** `continue`
+
+**Assistant interpretation:** Continue the phased implementation after Phase 5, with the next concrete phase being CLI RPC integration.
+
+**Inferred user intent:** Keep implementing, validating, documenting, and committing focused slices of the ticket.
+
+**Commit (code):** pending — Phase 6 CLI RPC changes are ready for a focused commit.
+
+### What I did
+
+- Added `jsonl` as an allowed `--output` choice.
+- Added a helper `--rpc` boolean flag.
+- Added `RPC bool` to `run.UISettings`.
+- Added `run.RunModeRPCJSONL`.
+- Updated `RunIntoWriter` so `--rpc` or `--output jsonl` selects the RPC JSONL path before chat/interactive modes.
+- Implemented `PinocchioCommand.runRPCJSONL`:
+  - renders the command into the same initial `turns.Turn` as the legacy path,
+  - derives or assigns a session ID on the turn,
+  - creates a protobuf JSONL `UIFanout`,
+  - writes a `hello` frame,
+  - creates a reusable `chatapp.Runner`,
+  - writes an initial snapshot before prompt submission,
+  - creates the runtime engine from the existing CLI engine factory/settings,
+  - submits `chatapp.PromptRequest{InitialTurn: seed, Runtime: composedRuntime}`,
+  - waits for idle,
+  - writes final snapshot and done frames,
+  - writes terminal error frames for runner, snapshot, engine-init, submit, and wait failures.
+- Added integration-style tests in `pkg/cmds/cmd_rpc_jsonl_test.go`:
+  - protojson line parsing for every stdout line,
+  - hello/done frames,
+  - projected user, finished-text, run-finished, and snapshot frames,
+  - streaming `ChatTextPatch` from a fake streaming engine,
+  - terminal error frame from a fake engine factory failure.
+
+### Why
+
+- This is the first end-to-end proof that Pinocchio verbs can use the same chatapp/sessionstream projection layer as web-chat while still producing script-friendly stdout.
+- Keeping non-JSONL output on the legacy raw Geppetto path preserves compatibility for `--output text`, `--output json`, and `--output yaml`.
+
+### What worked
+
+- Targeted tests passed:
+
+```text
+ok  	github.com/go-go-golems/pinocchio/pkg/cmds	0.169s
+ok  	github.com/go-go-golems/pinocchio/pkg/chatapp	0.077s
+ok  	github.com/go-go-golems/pinocchio/pkg/chatapp/export	0.025s
+ok  	github.com/go-go-golems/pinocchio/pkg/chatapp/plugins	0.006s
+ok  	github.com/go-go-golems/pinocchio/pkg/chatapp/rpc	0.003s
+ok  	github.com/go-go-golems/pinocchio/pkg/chatapp/rpc/jsonl	0.005s
+```
+
+### What didn't work
+
+- The first terminal-error test failed because engine creation happened before the JSONL fanout existed, so no error frame could be written. I moved engine creation to after hello, runner creation, and initial snapshot writing.
+- The first smoke test initially expected old dotted event names, but chatapp currently emits names such as `ChatUserMessageAccepted`, `ChatTextSegmentFinished`, and `ChatRunFinished`. I updated the tests to assert the actual projected event names.
+
+### What I learned
+
+- The JSONL path now has a useful ordering: hello, initial snapshot, UI events, final snapshot, done/error.
+- The CLI path can reuse `PromptRequest.InitialTurn` cleanly; no raw Geppetto event mapping was added to `pkg/cmds`.
+
+### What was tricky to build
+
+- Error frame semantics require the JSONL transport to exist before expensive engine construction. This slightly changes the setup order from the legacy blocking path but produces a better subprocess protocol.
+- The fake streaming engine needed to publish canonical Geppetto text segment events so chatapp projections could generate a `ChatTextPatch` frame.
+
+### What warrants a second pair of eyes
+
+- Review whether initial snapshots should always be emitted by default, or only when a future flag asks for snapshots.
+- Review whether `runRPCJSONL` should return the final turn from chatapp rather than the seed turn once persistence/replay is wired.
+- Review whether `--rpc` should force stderr-only logs globally to guarantee stdout purity under all logger configurations.
+
+### What should be done in the future
+
+- Commit Phase 6.
+- Exercise a real command manually with `--output jsonl | jq` once the focused commit is in place.
+- Continue with Phase 7: Bubble Tea/TUI adapter over `sessionstream.UIFanout`.
+
+### Code review instructions
+
+- Review `pkg/cmds/cmdlayers/helpers.go` for the new flag/choice behavior.
+- Review `pkg/cmds/run/context.go` for `RunModeRPCJSONL` and `UISettings.RPC`.
+- Review `pkg/cmds/cmd.go` for the transport setup order and legacy compatibility path.
+- Review `pkg/cmds/cmd_rpc_jsonl_test.go` for protocol and error-frame coverage.
+- Run `go test ./pkg/cmds ./pkg/chatapp/... -count=1`.
+
+### Technical details
+
+Commands run:
+
+```bash
+gofmt -w pkg/cmds/cmd.go pkg/cmds/run/context.go pkg/cmds/cmdlayers/helpers.go pkg/cmds/cmd_rpc_jsonl_test.go
+go test ./pkg/cmds ./pkg/chatapp/... -count=1
 ```

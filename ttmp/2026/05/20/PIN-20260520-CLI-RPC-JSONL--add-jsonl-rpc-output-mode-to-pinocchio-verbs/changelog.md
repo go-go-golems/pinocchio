@@ -111,3 +111,15 @@ Phase 5: added PromptRequest.InitialTurn and runtime seeding tests for rich Pino
 - /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/chatapp/runtime_inference.go — Runtime seeding from InitialTurn
 - /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/chatapp/service.go — PromptRequest InitialTurn input
 
+
+## 2026-05-20
+
+Phase 6: wired Pinocchio CLI --rpc/--output jsonl through chatapp/sessionstream protobuf JSONL
+
+### Related Files
+
+- /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/cmds/cmd.go — RPC JSONL run mode implementation
+- /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/cmds/cmd_rpc_jsonl_test.go — CLI RPC JSONL integration tests
+- /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/cmds/cmdlayers/helpers.go — --rpc flag and jsonl output choice
+- /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/cmds/run/context.go — RunModeRPCJSONL and UI RPC setting
+

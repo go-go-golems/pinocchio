@@ -17,6 +17,7 @@ const (
 	RunModeBlocking RunMode = iota
 	RunModeInteractive
 	RunModeChat
+	RunModeRPCJSONL
 )
 
 // UISettings contains all settings related to terminal UI and output formatting
@@ -27,6 +28,7 @@ type UISettings struct {
 	StartInChat      bool
 	PrintPrompt      bool
 	Output           string
+	RPC              bool
 	WithMetadata     bool
 	FullOutput       bool
 }

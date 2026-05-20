@@ -79,7 +79,15 @@ RelatedFiles:
         Application-facing chat service used by proposed CLI and TUI runners
         Implemented PromptRequest InitialTurn input for rich Pinocchio verb seeds
     - Path: pkg/cmds/cmd.go
-      Note: Pinocchio verb runtime integration point for RPC and TUI modes
+      Note: |-
+        Pinocchio verb runtime integration point for RPC and TUI modes
+        Implemented CLI RPC JSONL route through chatapp/sessionstream
+    - Path: pkg/cmds/cmd_rpc_jsonl_test.go
+      Note: CLI RPC JSONL tests for protobuf lines
+    - Path: pkg/cmds/cmdlayers/helpers.go
+      Note: Added --rpc flag and jsonl output choice
+    - Path: pkg/cmds/run/context.go
+      Note: Added RunModeRPCJSONL and UISettings.RPC
     - Path: pkg/ui/backend.go
       Note: Current raw Geppetto TUI forwarding path proposed for migration
     - Path: pkg/ui/timeline_persist.go
@@ -96,6 +104,7 @@ LastUpdated: 2026-05-20T13:15:00-04:00
 WhatFor: Use when deciding whether the Pinocchio --rpc implementation should wrap raw Geppetto events or reuse the existing sessionstream/chatapp canonical chat pipeline.
 WhenToUse: Before implementing JSONL RPC output, TUI stream forwarding, or new chat event projections for Pinocchio verbs.
 ---
+
 
 
 

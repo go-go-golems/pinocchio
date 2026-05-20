@@ -31,6 +31,7 @@ type HelpersSettings struct {
 	Autosave               *AutosaveSettings  `glazed:"autosave,from_json"`
 	NonInteractive         bool               `glazed:"non-interactive"`
 	Output                 string             `glazed:"output"`
+	RPC                    bool               `glazed:"rpc"`
 	WithMetadata           bool               `glazed:"with-metadata"`
 	FullOutput             bool               `glazed:"full-output"`
 }
@@ -135,9 +136,15 @@ func NewHelpersParameterLayer() (schema.Section, error) {
 			fields.New(
 				"output",
 				fields.TypeChoice,
-				fields.WithHelp("Output format (text, json, yaml)"),
+				fields.WithHelp("Output format (text, json, yaml, jsonl)"),
 				fields.WithDefault("text"),
-				fields.WithChoices("text", "json", "yaml"),
+				fields.WithChoices("text", "json", "yaml", "jsonl"),
+			),
+			fields.New(
+				"rpc",
+				fields.TypeBool,
+				fields.WithHelp("Emit protobuf-defined JSONL RPC frames on stdout"),
+				fields.WithDefault(false),
 			),
 			fields.New(
 				"with-metadata",

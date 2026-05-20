@@ -110,31 +110,31 @@ Goal: avoid losing existing Pinocchio verb semantics when routing through chatap
   - [x] prompt-only requests still append user prompt as today.
   - [x] initial-turn requests pass system/user/image/block context into runtime.
   - [x] prior turn-store history behavior remains correct or is explicitly ordered relative to initial turn.
-- [ ] Commit Phase 5 as a focused chatapp-input commit. (pending after diary update)
+- [x] Commit Phase 5 as a focused chatapp-input commit (`86e2305`).
 
 ## Phase 6 — CLI RPC integration for Pinocchio verbs
 
 Goal: route `--rpc` / `--output jsonl` through chatapp/sessionstream and protobuf JSONL.
 
-- [ ] Add or finalize helper flags/settings.
-  - [ ] Add `--rpc` to `pkg/cmds/cmdlayers/helpers.go`.
-  - [ ] Add `jsonl` to `--output` choices.
-  - [ ] Add `RPC bool` to `run.UISettings`.
-  - [ ] Make `--rpc` imply non-interactive behavior.
-- [ ] Add `runRPCViaChatApp` or equivalent path in `pkg/cmds/cmd.go`.
-  - [ ] Build/render the initial `turns.Turn` from the Pinocchio command.
-  - [ ] Build or adapt `infruntime.ComposedRuntime` from existing CLI inference settings/profile resolution.
-  - [ ] Create JSONL writer/fanout and chatapp runner.
-  - [ ] Emit hello and snapshot frames before submitting prompt.
-  - [ ] Submit `chatapp.PromptRequest` and wait idle.
-  - [ ] Emit done or error frame.
-- [ ] Keep `--output text|json|yaml` on the existing raw Geppetto path for compatibility.
-- [ ] Add integration-style tests using fake runtime engines.
-  - [ ] stdout contains only protobuf JSONL lines.
-  - [ ] every line unmarshals as `RpcLine`.
-  - [ ] `ChatTextPatch` and `ChatRunFinished` appear.
-  - [ ] process errors still surface via exit status and/or terminal error frame.
-- [ ] Commit Phase 6 as a focused CLI-RPC integration commit.
+- [x] Add or finalize helper flags/settings.
+  - [x] Add `--rpc` to `pkg/cmds/cmdlayers/helpers.go`.
+  - [x] Add `jsonl` to `--output` choices.
+  - [x] Add `RPC bool` to `run.UISettings`.
+  - [x] Make `--rpc` imply non-interactive behavior.
+- [x] Add `runRPCViaChatApp` or equivalent path in `pkg/cmds/cmd.go`.
+  - [x] Build/render the initial `turns.Turn` from the Pinocchio command.
+  - [x] Build or adapt `infruntime.ComposedRuntime` from existing CLI inference settings/profile resolution.
+  - [x] Create JSONL writer/fanout and chatapp runner.
+  - [x] Emit hello and snapshot frames before submitting prompt.
+  - [x] Submit `chatapp.PromptRequest` and wait idle.
+  - [x] Emit done or error frame.
+- [x] Keep `--output text|json|yaml` on the existing raw Geppetto path for compatibility.
+- [x] Add integration-style tests using fake runtime engines.
+  - [x] stdout contains only protobuf JSONL lines.
+  - [x] every line unmarshals as `RpcLine`.
+  - [x] `ChatTextPatch` and `ChatRunFinished` appear.
+  - [x] process errors still surface via exit status and/or terminal error frame.
+- [ ] Commit Phase 6 as a focused CLI-RPC integration commit. (pending after diary update)
 
 ## Phase 7 — Bubble Tea/TUI adapter over sessionstream
 
@@ -172,6 +172,6 @@ Goal: finish the migration and remove avoidable duplicate stream mappings.
 
 ## Current implementation checkpoint
 
-- Active phase: Phase 5 validation/commit.
-- Current source changes: `PromptRequest.InitialTurn`, runtime seeding changes, and chatapp tests.
-- Next concrete action: commit Phase 5, then start Phase 6 CLI RPC integration.
+- Active phase: Phase 6 validation/commit.
+- Current source changes: CLI `--rpc`/`--output jsonl` routing through chatapp/sessionstream JSONL plus tests.
+- Next concrete action: commit Phase 6, then start Phase 7 TUI adapter planning/implementation.
