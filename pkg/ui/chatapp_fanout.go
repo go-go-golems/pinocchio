@@ -77,10 +77,10 @@ func (f *ChatAppUIFanout) HydrateSnapshot(snap sessionstream.Snapshot) error {
 func (f *ChatAppUIFanout) publishOne(ev sessionstream.UIEvent) error {
 	switch p := ev.Payload.(type) {
 	case *chatappv1.ChatUserMessageAccepted:
-		id := firstNonEmpty(p.GetMessageId(), "user-message")
-		text := firstNonEmpty(p.GetContent(), p.GetText())
-		f.sender.Send(timeline.UIEntityCreated{ID: timeline.EntityID{LocalID: id, Kind: "llm_text"}, Renderer: timeline.RendererDescriptor{Kind: "llm_text"}, Props: map[string]any{"role": "user", "text": text, "streaming": false}, StartedAt: time.Now()})
-		f.sender.Send(timeline.UIEntityCompleted{ID: timeline.EntityID{LocalID: id, Kind: "llm_text"}, Result: map[string]any{"text": text}})
+		// The bobatea chat model renders submitted user messages immediately.
+		// Live fanout intentionally ignores this event to avoid duplicating the
+		// user's own message in the TUI timeline; HydrateSnapshot still renders
+		// user messages when reconstructing an existing session.
 	case *chatappv1.ChatTextSegmentStarted:
 		f.markStart(p.GetMessageId())
 	case *chatappv1.ChatTextPatch:

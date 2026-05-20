@@ -46,6 +46,7 @@ RelatedFiles:
       Note: |-
         Primary investigation target for runtime output handler selection
         Phase 6 CLI RPC implementation recorded in diary
+        Step 18 command TUI migration diary artifact
     - Path: pkg/cmds/cmd_rpc_jsonl_test.go
       Note: Phase 6 integration tests recorded in diary
     - Path: pkg/cmds/cmdlayers/helpers.go
@@ -54,10 +55,14 @@ RelatedFiles:
         Phase 6 helper flag changes recorded in diary
     - Path: pkg/cmds/run/context.go
       Note: Phase 6 run mode changes recorded in diary
+    - Path: pkg/ui/chatapp_backend.go
+      Note: Step 18 TUI migration diary artifact
     - Path: pkg/ui/chatapp_fanout.go
       Note: Phase 7 adapter implementation recorded in diary
     - Path: pkg/ui/chatapp_fanout_test.go
       Note: Phase 7 adapter validation recorded in diary
+    - Path: pkg/ui/fanout_proxy.go
+      Note: Step 18 fanout proxy diary artifact
     - Path: proto/pinocchio/chatapp/rpc/v1/rpc.proto
       Note: Phase 1 implementation artifact recorded in diary
 ExternalSources: []
@@ -66,6 +71,7 @@ LastUpdated: 2026-05-20T12:45:00-04:00
 WhatFor: Use to understand how the JSONL/RPC output-mode design was researched and what evidence shaped the recommendations.
 WhenToUse: When continuing the ticket, reviewing the design, or implementing the proposed Pinocchio/Geppetto changes.
 ---
+
 
 
 
@@ -1527,3 +1533,157 @@ ok  	github.com/go-go-golems/pinocchio/pkg/cmds/profilebootstrap	0.096s
 
 - Decide whether the old raw Geppetto `StepChatForwardFunc` should be removed now or only after full chat-mode wiring through chatapp/sessionstream. It is still used by current TUI code paths, so deleting it now would require a broader migration.
 - Replace the “mini smoke ok” text with a neutral token in future real-provider tests to avoid safety interpretations.
+
+## Step 18: Wire command TUI chat mode to chatapp/sessionstream and test TAB multiturn
+
+I replaced the Pinocchio command chat-mode path with a chatapp/sessionstream-backed Bubble Tea backend. The command TUI no longer routes its main chat stream through the raw Geppetto Watermill `StepChatForwardFunc` path.
+
+### Prompt Context
+
+**User prompt (verbatim):** `continue. Btw submititng in the TUI is done with TAB, so you can test multiturn`
+
+**Assistant interpretation:** Continue the migration, use TAB instead of Enter for TUI submission, and specifically validate multi-turn behavior in a real tmux TUI.
+
+**Inferred user intent:** Prove the new TUI path is not just one-shot auto-submit but can carry conversation state across turns.
+
+**Commit (code):** pending — TUI migration slice is ready for focused commit.
+
+### What I changed
+
+- Added `pkg/ui/chatapp_backend.go`:
+  - implements `bobatea/pkg/chat.Backend`,
+  - submits prompts through `chatapp.Service.SubmitPromptRequest`,
+  - uses `PromptRequest.InitialTurn` for rich command seed state,
+  - waits for chatapp idle,
+  - reconstructs the next turn from `sessionstream.Snapshot` so TAB-submitted follow-up prompts keep prior user/assistant context.
+- Added `pkg/ui/fanout_proxy.go`:
+  - lets `chatapp.Runner` be constructed before the Bubble Tea program exists,
+  - then points the sessionstream fanout at `NewChatAppUIFanout(program)` once the program has been created.
+- Rewrote `PinocchioCommand.runChat` to:
+  - build the system/block seed turn,
+  - create a chatapp runner with the fanout proxy,
+  - create `ChatAppBackend`,
+  - create the Bubble Tea chat model/program directly,
+  - install the real `ChatAppUIFanout`,
+  - auto-submit the initial command prompt for both `--chat` and `--interactive`,
+  - show a simple `profile: ...` status line from the resolved profile.
+- Removed `pkg/ui/runtime/builder.go` entirely; it was now an unused transitional raw-handler builder.
+- Updated `ChatAppUIFanout` to ignore live `ChatUserMessageAccepted` events because bobatea already renders the submitted user message immediately. Snapshot hydration still renders user messages for existing sessions.
+- Updated `chatapp.publishFallbackAssistantText` so non-streaming fallback only publishes assistant blocks produced by the current run. This fixes multi-turn fallback cases where prior assistant text could be concatenated into the new assistant segment.
+- Added `pkg/ui/chatapp_backend_test.go` to verify snapshot-based history carry-over across turns.
+
+### Real tmux validation
+
+Built:
+
+```bash
+go build -o /tmp/pinocchio-chatapp-tui ./cmd/pinocchio
+```
+
+RPC after the migration:
+
+```bash
+PINOCCHIO_PROFILE=gpt-5-nano-low /tmp/pinocchio-chatapp-tui run-command /tmp/pin-smoke/tui-multiturn.yaml --output jsonl > /tmp/pin-rpc-final.out 2>/tmp/pin-rpc-final.err
+```
+
+Result:
+
+- exit status: `0`
+- stdout lines: `14`
+- stderr lines: `0`
+- all stdout lines parsed as JSON.
+
+TUI multiturn with `PINOCCHIO_PROFILE=gpt-5-mini`:
+
+```bash
+tmux new-session -d -s pin-tui-mini2 'cd .../pinocchio && PINOCCHIO_PROFILE=gpt-5-mini /tmp/pinocchio-chatapp-tui run-command /tmp/pin-smoke/tui-multiturn.yaml --chat --force-interactive 2> /tmp/pin-tui-mini2.err; echo $? > /tmp/pin-tui-mini2.status'
+```
+
+I first sent a malformed tmux command without `send-keys -l`, which submitted only `Reply with exactly:`. That was useful because it confirmed TAB submission, but it was not a good content test. I then sent a literal follow-up correctly:
+
+```bash
+tmux send-keys -t pin-tui-mini2 -l 'Now reply with exactly the token tab_second_ok'
+tmux send-keys -t pin-tui-mini2 Tab
+```
+
+Captured result:
+
+```text
+(user): Now reply with exactly the token tab_second_ok
+(assistant): tab_second_ok
+profile: gpt-5-mini
+```
+
+TUI multiturn with `PINOCCHIO_PROFILE=gpt-5-nano-low`:
+
+```bash
+tmux new-session -d -s pin-tui-nano2 'cd .../pinocchio && PINOCCHIO_PROFILE=gpt-5-nano-low /tmp/pinocchio-chatapp-tui run-command /tmp/pin-smoke/tui-multiturn.yaml --chat --force-interactive 2> /tmp/pin-tui-nano2.err; echo $? > /tmp/pin-tui-nano2.status'
+tmux send-keys -t pin-tui-nano2 -l 'Now reply with exactly the token nano_second_ok'
+tmux send-keys -t pin-tui-nano2 Tab
+```
+
+Captured result:
+
+```text
+(user): Now reply with exactly the token nano_second_ok
+(assistant): nano_second_ok
+profile: gpt-5-nano-low
+```
+
+Exit status was `0`.
+
+### Automated validation
+
+```bash
+go test ./pkg/ui ./pkg/chatapp ./pkg/cmds -count=1
+```
+
+Result:
+
+```text
+ok  	github.com/go-go-golems/pinocchio/pkg/ui	0.052s
+ok  	github.com/go-go-golems/pinocchio/pkg/chatapp	0.137s
+ok  	github.com/go-go-golems/pinocchio/pkg/cmds	0.183s
+```
+
+### What worked
+
+- TAB submission works in tmux for real profiles.
+- The new chatapp TUI path supports multiple turns.
+- The duplicate user-message rendering bug was fixed by suppressing live user-accepted events in the TUI fanout.
+- RPC JSONL still emits clean JSONL after the TUI migration.
+
+### What didn't work
+
+- My first tmux follow-up used `tmux send-keys` without `-l`, and the colon in the prompt caused tmux to submit only part of the string. The fix is to use `tmux send-keys -l 'literal text'` and then a separate `tmux send-keys Tab`.
+
+### What remains
+
+- `StepChatForwardFunc` still exists because `cmd/switch-profiles-tui` uses it. It is no longer used by Pinocchio command chat mode. Removing it completely requires either deleting or migrating that separate helper command.
+- The rich profile-switch overlay was removed from the command chat path in favor of the direct chatapp/sessionstream path. The selected `PINOCCHIO_PROFILE` still applies and is shown in a simple status line.
+
+### Code review instructions
+
+- Review `pkg/ui/chatapp_backend.go` for multi-turn state reconstruction from `sessionstream.Snapshot`.
+- Review `pkg/cmds/cmd.go` for the new direct chatapp TUI path.
+- Review `pkg/chatapp/runtime_inference.go` for the fallback assistant offset fix.
+- Run `go test ./pkg/ui ./pkg/chatapp ./pkg/cmds -count=1`.
+- Optionally repeat the tmux TAB smoke test with `tmux send-keys -l` followed by `Tab`.
+
+### Commit attempt note
+
+The first `git commit -m "ui: route command chat through chatapp"` attempt failed in the pre-commit lint stage. The full test suite passed, but `golangci-lint` reported three newly-unused helpers left behind by removing the raw/profile-switch command chat path:
+
+```text
+pkg/cmds/profile_switch_events.go:13:6: func systemNoticeEntityCmd is unused
+pkg/cmds/profile_switch_events.go:33:6: func publishProfileSwitchedInfo is unused
+pkg/cmds/seed_emit.go:11:6: func emitSeedTurnToProgram is unused
+```
+
+I removed `pkg/cmds/profile_switch_events.go` and `pkg/cmds/seed_emit.go` rather than keeping wrappers/compatibility helpers. Targeted validation after removal passed:
+
+```text
+ok  	github.com/go-go-golems/pinocchio/pkg/cmds	0.112s
+ok  	github.com/go-go-golems/pinocchio/pkg/ui	0.045s
+ok  	github.com/go-go-golems/pinocchio/pkg/chatapp	0.074s
+```

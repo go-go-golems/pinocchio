@@ -162,3 +162,26 @@ Ran real tmux smoke tests for RPC JSONL and TUI with gpt-5-nano-low and gpt-5-mi
 - /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/ui/chatapp_fanout.go — Removed NewChatAppUIFanoutForProgram wrapper
 - /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/ui/runtime/builder.go — Removed unused handler-factory and BuildComponents wrapper APIs
 
+
+## 2026-05-20
+
+Wired command TUI chat mode to chatapp/sessionstream, added multiturn backend, and validated TAB submission in tmux with gpt-5 profiles
+
+### Related Files
+
+- /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/chatapp/runtime_inference.go — Fallback assistant text publishes only current-run assistant blocks
+- /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/cmds/cmd.go — Command chat mode now uses chatapp runner and TUI fanout
+- /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/ui/chatapp_backend.go — Chatapp-backed Bubble Tea backend with multiturn snapshot reconstruction
+- /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/ui/fanout_proxy.go — Proxy fanout for Bubble Tea program construction order
+- /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/ui/runtime/builder.go — Removed unused transitional raw-handler builder
+
+
+## 2026-05-20
+
+Removed leftover unused command TUI profile-switch/seed helper files after migrating command chat mode
+
+### Related Files
+
+- /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/cmds/profile_switch_events.go — Removed unused profile-switch event helpers
+- /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/cmds/seed_emit.go — Removed unused raw seed emission helpers
+

@@ -124,6 +124,7 @@ func (e *Engine) runRuntimeInference(ctx context.Context, sid sessionstream.Sess
 			return
 		}
 	}
+	assistantBlockOffset := countAssistantBlocks(sess.Latest())
 	handle, err := sess.StartInference(ctx)
 	if err != nil {
 		e.publishRunFailed(publishContext(ctx), sid, pub, messageID, err.Error())
@@ -151,7 +152,7 @@ func (e *Engine) runRuntimeInference(ctx context.Context, sid sessionstream.Sess
 	if sink.HasActiveTextSegment() {
 		_ = sink.finishActiveTextSegment("finished", "stop", "")
 	} else if !sink.HasTextSegment() {
-		_ = e.publishFallbackAssistantText(publishContext(ctx), sid, pub, messageID, prompt, output)
+		_ = e.publishFallbackAssistantText(publishContext(ctx), sid, pub, messageID, prompt, output, assistantBlockOffset)
 	}
 	_ = e.publish(publishContext(ctx), sid, pub, EventChatRunFinished, &chatappv1.ChatRunFinished{MessageId: messageID, Status: "finished", Correlation: runCorrelationInfo(sid, messageID)})
 }
@@ -172,8 +173,8 @@ func fallbackTextCorrelationInfo(sid sessionstream.SessionId, messageID string, 
 	return &chatappv1.CorrelationInfo{SessionId: string(sid), RunId: messageID, SegmentId: segmentID}
 }
 
-func (e *Engine) publishFallbackAssistantText(ctx context.Context, sid sessionstream.SessionId, pub sessionstream.EventPublisher, messageID, prompt string, output *turns.Turn) error {
-	text := assistantTextFromTurn(output)
+func (e *Engine) publishFallbackAssistantText(ctx context.Context, sid sessionstream.SessionId, pub sessionstream.EventPublisher, messageID, prompt string, output *turns.Turn, assistantBlockOffset int) error {
+	text := assistantTextFromTurnAfter(output, assistantBlockOffset)
 	if strings.TrimSpace(text) == "" {
 		return nil
 	}
@@ -186,15 +187,34 @@ func (e *Engine) publishFallbackAssistantText(ctx context.Context, sid sessionst
 	return e.publish(ctx, sid, pub, EventChatTextSegmentFinished, &chatappv1.ChatTextSegmentFinished{MessageId: textMessageID, Role: "assistant", Prompt: prompt, Text: text, Content: text, Status: "finished", Streaming: false, Final: true, FinishReason: "stop", Correlation: corr})
 }
 
-func assistantTextFromTurn(turn *turns.Turn) string {
+func countAssistantBlocks(turn *turns.Turn) int {
+	if turn == nil {
+		return 0
+	}
+	count := 0
+	for _, block := range turn.Blocks {
+		if block.Role == turns.RoleAssistant {
+			count++
+		}
+	}
+	return count
+}
+
+func assistantTextFromTurnAfter(turn *turns.Turn, skip int) string {
 	if turn == nil {
 		return ""
 	}
 	parts := make([]string, 0, len(turn.Blocks))
+	seen := 0
 	for _, block := range turn.Blocks {
 		if block.Role != turns.RoleAssistant {
 			continue
 		}
+		if seen < skip {
+			seen++
+			continue
+		}
+		seen++
 		text, _ := block.Payload[turns.PayloadKeyText].(string)
 		if strings.TrimSpace(text) == "" {
 			continue

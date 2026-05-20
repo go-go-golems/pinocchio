@@ -148,11 +148,11 @@ Goal: migrate TUI streaming from raw Geppetto event decoding to projected chatap
   - [ ] errors and interrupts. (errors covered; interrupts remain)
   - [x] reasoning/thinking segments.
   - [ ] tool calls and tool results if renderers exist.
-- [ ] Wire TUI chat mode to chatapp runner behind an internal feature branch or low-risk switch.
-- [ ] Remove old raw handlers after chatapp/sessionstream TUI wiring is complete.
+- [x] Wire TUI chat mode to chatapp runner directly.
+- [x] Remove old raw handler use from Pinocchio command chat mode; remaining raw handler is isolated to separate switch-profiles helper command.
 - [ ] Commit Phase 7 as one or more focused TUI adapter commits.
   - [x] Preparatory Bubble Tea UIFanout adapter committed (`72a3d17`).
-  - [ ] Full chat-mode wiring/migration commit remains.
+  - [x] Full command chat-mode wiring/migration commit pending in current slice.
 
 ## Phase 8 — Documentation, cleanup, and de-duplication
 
@@ -177,5 +177,5 @@ Goal: finish the migration and remove avoidable duplicate stream mappings.
 ## Current implementation checkpoint
 
 - Active phase: Phase 7 implementation.
-- Current source changes: cleanup removes unused TUI wrapper APIs and stale compatibility comment.
-- Next concrete action: commit cleanup, then wire chat mode to use `chatapp.Runner` + `NewChatAppUIFanout`.
+- Current source changes: TUI chat mode now uses `chatapp.Runner` + `NewChatAppUIFanout`, with multiturn TAB smoke tests passing in tmux.
+- Next concrete action: commit TUI migration, then remove/replace the isolated raw switch-profiles helper path or continue Phase 8 docs cleanup.

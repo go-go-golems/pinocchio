@@ -82,7 +82,7 @@ func TestChatAppUIFanoutHydratesSnapshot(t *testing.T) {
 	require.Equal(t, "hello", assistantCompleted.Result["text"])
 }
 
-func TestChatAppUIFanoutMapsUserAndFailureEvents(t *testing.T) {
+func TestChatAppUIFanoutIgnoresLiveUserEventsAndMapsFailureEvents(t *testing.T) {
 	sender := &recordingTeaSender{}
 	fanout, err := NewChatAppUIFanout(sender)
 	require.NoError(t, err)
@@ -93,13 +93,7 @@ func TestChatAppUIFanoutMapsUserAndFailureEvents(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	userCreated := requireMsgType[timeline.UIEntityCreated](t, sender.msgs, 0)
-	require.Equal(t, "user-1", userCreated.ID.LocalID)
-	require.Equal(t, "user", userCreated.Props["role"])
-	userCompleted := requireMsgType[timeline.UIEntityCompleted](t, sender.msgs, 1)
-	require.Equal(t, "hi", userCompleted.Result["text"])
-
-	errCreated := requireMsgType[timeline.UIEntityCreated](t, sender.msgs, 2)
+	errCreated := requireMsgType[timeline.UIEntityCreated](t, sender.msgs, 0)
 	require.Equal(t, "assistant-err", errCreated.ID.LocalID)
 	require.Contains(t, errCreated.Props["text"], "boom")
 	requireMsgType[boba_chat.BackendFinishedMsg](t, sender.msgs, len(sender.msgs)-1)

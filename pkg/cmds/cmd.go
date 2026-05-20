@@ -17,7 +17,6 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/events"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 	bobatea_chat "github.com/go-go-golems/bobatea/pkg/chat"
 
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
@@ -32,17 +31,11 @@ import (
 	profilebootstrap "github.com/go-go-golems/pinocchio/pkg/cmds/profilebootstrap"
 	"github.com/go-go-golems/pinocchio/pkg/cmds/run"
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
-	"github.com/go-go-golems/pinocchio/pkg/tui/overlay"
-	overlaywidget "github.com/go-go-golems/pinocchio/pkg/tui/widgets/overlay"
 	pinui "github.com/go-go-golems/pinocchio/pkg/ui"
-	"github.com/go-go-golems/pinocchio/pkg/ui/profileswitch"
-	uiruntime "github.com/go-go-golems/pinocchio/pkg/ui/runtime"
 	sessionstream "github.com/go-go-golems/sessionstream/pkg/sessionstream"
 	"github.com/google/uuid"
 	"github.com/mattn/go-isatty"
 	"github.com/pkg/errors"
-	"github.com/rs/zerolog/log"
-	"github.com/tcnksm/go-input"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -634,392 +627,86 @@ func (g *PinocchioCommand) runEngineAndCollectMessages(ctx context.Context, rc *
 
 // runChat handles chat execution mode
 func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) (*turns.Turn, error) {
-	if rc.Router == nil {
-		return nil, errors.New("chat mode requires a router")
+	if rc.EngineFactory == nil {
+		rc.EngineFactory = factory.NewStandardEngineFactory()
+	}
+	if rc.InferenceSettings == nil {
+		return nil, errors.New("inference settings are required")
+	}
+	if rc.InferenceSettings.Chat != nil {
+		rc.InferenceSettings.Chat.Stream = true
+	}
+	if rc.BaseSettings != nil && rc.BaseSettings.Chat != nil {
+		rc.BaseSettings.Chat.Stream = true
 	}
 
-	chatConvID := "cli-" + uuid.NewString()
-	timelineStore, turnStore, closeStores, err := openChatPersistenceStores(rc.Persistence)
+	seed, err := buildInitialTurnFromBlocksRendered(g.SystemPrompt, g.Blocks, "", rc.Variables, rc.ImagePaths)
 	if err != nil {
-		return nil, errors.Wrap(err, "open chat persistence stores")
+		return nil, err
 	}
-	defer closeStores()
+	sid := commandSessionID(seed)
+	eng, err := rc.EngineFactory.CreateEngine(rc.InferenceSettings)
+	if err != nil {
+		return nil, err
+	}
+
+	fanoutProxy := pinui.NewUIFanoutProxy()
+	runner, err := chatapp.NewRunner(chatapp.RunnerOptions{UIFanout: fanoutProxy})
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = runner.Close() }()
+
+	backend, err := pinui.NewChatAppBackend(runner.Service, sid, &infruntime.ComposedRuntime{Engine: eng}, seed)
+	if err != nil {
+		return nil, err
+	}
 
 	isOutputTerminal := isatty.IsTerminal(os.Stdout.Fd())
-
-	options := []tea.ProgramOption{
-		tea.WithMouseCellMotion(),
-	}
+	options := []tea.ProgramOption{tea.WithMouseCellMotion()}
 	if !isOutputTerminal {
 		options = append(options, tea.WithOutput(os.Stderr))
 	} else {
 		options = append(options, tea.WithAltScreen())
 	}
 
-	// Enable streaming for the UI
-	rc.InferenceSettings.Chat.Stream = true
-	if rc.BaseSettings != nil && rc.BaseSettings.Chat != nil {
-		rc.BaseSettings.Chat.Stream = true
+	statusBar := func() string {
+		profile := strings.TrimSpace(rc.Profile)
+		if profile == "" {
+			return ""
+		}
+		return "profile: " + profile
 	}
-
-	// Start router in a goroutine
-	eg := errgroup.Group{}
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-
-	f := func() {
-		cancel()
-		defer func(Router *events.EventRouter) {
-			_ = Router.Close()
-		}(rc.Router)
-	}
-
-	eg.Go(func() error {
-		defer f()
-		ret := rc.Router.Run(ctx)
-		if ret != nil {
-			return ret
-		}
-		return nil
-	})
-
-	eg.Go(func() error {
-		defer f()
-		var err error
-
-		// Wait for router to be ready
-		<-rc.Router.Running()
-
-		// If we're in interactive mode, run initial blocking step
-		if rc.RunMode == run.RunModeInteractive {
-			// Create options for initial step with chat topic
-			chatSink := middleware.NewWatermillSink(rc.Router.Publisher, "chat")
-
-			// Add default printer for initial step
-			if rc.UISettings == nil || rc.UISettings.Output == "" || rc.UISettings.Output == "text" {
-				rc.Router.AddHandler("chat", "chat", events.StepPrinterFunc("", rc.Writer))
-			} else {
-				printer := events.NewStructuredPrinter(rc.Writer, events.PrinterOptions{
-					Format:          events.PrinterFormat(rc.UISettings.Output),
-					Name:            "",
-					IncludeMetadata: rc.UISettings.WithMetadata,
-					Full:            rc.UISettings.FullOutput,
-				})
-				rc.Router.AddHandler("chat", "chat", printer)
-			}
-			err := rc.Router.RunHandlers(ctx)
-			if err != nil {
-				return err
-			}
-
-			err = g.runEngineAndCollectMessages(ctx, rc, []events.EventSink{chatSink})
-			if err != nil {
-				return err
-			}
-
-			// If we're not in interactive mode or it's explicitly disabled, return early
-			if rc.UISettings != nil && rc.UISettings.NonInteractive {
-				return nil
-			}
-
-			// Check if we should ask for chat continuation
-			askChat := (isOutputTerminal || rc.UISettings != nil && rc.UISettings.ForceInteractive) && (rc.UISettings == nil || !rc.UISettings.NonInteractive)
-			if !askChat {
-				return nil
-			}
-
-			// Ask user if they want to continue in chat mode
-			continueInChat, err := askForChatContinuation()
-			if err != nil {
-				return err
-			}
-
-			if !continueInChat {
-				return nil
-			}
-		}
-
-		startInChat := rc.UISettings != nil && rc.UISettings.StartInChat
-
-		var (
-			p           *tea.Program
-			seedGroup   errgroup.Group
-			chatBackend interface {
-				IsFinished() bool
-			}
-		)
-
-		// Prefer profile-switch-capable backend when profile registries are configured.
-		if strings.TrimSpace(rc.ProfileRegistries) != "" && rc.BaseSettings != nil {
-			mgr, err := profileswitch.NewManagerFromSources(ctx, rc.ProfileRegistries, rc.BaseSettings)
-			if err != nil {
-				return err
-			}
-			defer func() { _ = mgr.Close() }()
-
-			items, err := mgr.ListEngineProfiles(ctx)
-			if err != nil {
-				return err
-			}
-			if len(items) == 0 {
-				return errors.New("no profiles loaded from --profile-registries (refusing to start chat)")
-			}
-
-			sink := middleware.NewWatermillSink(rc.Router.Publisher, "ui")
-			backend, err := profileswitch.NewBackend(mgr, sink, nil, nil)
-			if err != nil {
-				return err
-			}
-			if turnStore != nil {
-				backend.SetTurnPersister(
-					newCLITurnStorePersister(turnStore, chatConvID, backend.SessionID(), "final"),
-				)
-			}
-			_, err = backend.InitDefaultProfile(ctx, rc.Profile)
-			if err != nil {
-				return err
-			}
-
-			statusBarStyle := lipgloss.NewStyle().
-				Foreground(lipgloss.Color("252")).
-				Background(lipgloss.Color("236")).
-				Padding(0, 1)
-			statusBarKeyStyle := lipgloss.NewStyle().
-				Foreground(lipgloss.Color("241")).
-				Background(lipgloss.Color("236"))
-			statusBarValStyle := lipgloss.NewStyle().
-				Foreground(lipgloss.Color("230")).
-				Background(lipgloss.Color("236")).
-				Bold(true)
-			statusBarHintStyle := lipgloss.NewStyle().
-				Foreground(lipgloss.Color("241")).
-				Background(lipgloss.Color("236")).
-				Italic(true)
-			header := func() string {
-				cur := backend.Current()
-				if cur.ProfileSlug.IsZero() {
-					return ""
-				}
-				parts := []string{
-					statusBarKeyStyle.Render("profile: ") + statusBarValStyle.Render(cur.ProfileSlug.String()),
-					statusBarKeyStyle.Render("engine profile: ") + statusBarValStyle.Render(cur.ProfileSlug.String()),
-				}
-				parts = append(parts, statusBarHintStyle.Render("ctrl+p to switch"))
-				return statusBarStyle.Render(strings.Join(parts, "  "))
-			}
-
-			interceptor := func(input string) (bool, tea.Cmd) {
-				parts := strings.Fields(strings.TrimSpace(input))
-				if len(parts) == 0 || parts[0] != "/profile" {
-					return false, nil
-				}
-				if len(parts) == 1 {
-					return true, func() tea.Msg { return overlay.OpenOverlayMsg{} }
-				}
-				if len(parts) >= 2 && parts[1] == "help" {
-					return true, systemNoticeEntityCmd("usage: /profile [<slug>|help]")
-				}
-				target := strings.TrimSpace(parts[1])
-				from := backend.Current().ProfileSlug.String()
-				res, err := backend.SwitchProfile(ctx, target)
-				if err != nil {
-					return true, systemNoticeEntityCmd(fmt.Sprintf("profile error: %s", err.Error()))
-				}
-				return true, tea.Batch(
-					func() tea.Msg {
-						_ = publishProfileSwitchedInfo(sink, chatConvID, from, res.ProfileSlug.String())
-						return nil
-					},
-					systemNoticeEntityCmd(fmt.Sprintf("switched profile: %s → %s", from, res.ProfileSlug.String())),
-				)
-			}
-
-			model := bobatea_chat.InitialModel(backend,
-				bobatea_chat.WithTitle("pinocchio"),
-				bobatea_chat.WithSubmitInterceptor(interceptor),
-				bobatea_chat.WithStatusBarView(header),
-			)
-
-			// Build profile picker overlay.
-			var selectedSlug string
-			profileOverlay := overlaywidget.New(overlaywidget.Config{
-				Title:     "Switch Profile",
-				Factory:   profileswitch.PickerFactory(mgr, &selectedSlug),
-				Placement: overlaywidget.PlacementCenter,
-				MaxWidth:  80,
-				MaxHeight: 30,
-				OnClose: func() {
-					target := strings.TrimSpace(selectedSlug)
-					from := backend.Current().ProfileSlug.String()
-					res, switchErr := backend.SwitchProfile(context.Background(), target)
-					if switchErr != nil {
-						log.Warn().Err(switchErr).Str("target", target).Msg("profile switch failed")
-						return
-					}
-					_ = publishProfileSwitchedInfo(sink, chatConvID, from, res.ProfileSlug.String())
-				},
-			})
-
-			app := overlay.NewHost(model, overlay.Config{
-				Overlay: profileOverlay,
-				OpenKey: "ctrl+p",
-			})
-			p = tea.NewProgram(app, options...)
-			chatBackend = backend
-
-			rc.Router.AddHandler("ui", "ui", pinui.StepChatForwardFunc(p))
-			if timelineStore != nil {
-				rc.Router.AddHandler("ui-persist", "ui", pinui.StepTimelinePersistFunc(timelineStore, chatConvID))
-			}
-			if err := rc.Router.RunHandlers(ctx); err != nil {
-				return err
-			}
-
-			seedGroup.Go(func() error {
-				<-rc.Router.Running()
-				if rc.ResultTurn != nil {
-					if err := backend.SetSeedTurn(rc.ResultTurn); err != nil {
-						return err
-					}
-					emitSeedTurnToProgram(p, rc.ResultTurn)
-					return nil
-				}
-				seed, err := buildInitialTurnFromBlocksRendered(g.SystemPrompt, g.Blocks, "", rc.Variables, rc.ImagePaths)
-				if err == nil {
-					_ = backend.SetSeedTurn(seed)
-					emitSeedTurnToProgram(p, seed)
-					return nil
-				}
-				fallbackSeed, _ := buildInitialTurnFromBlocks(g.SystemPrompt, g.Blocks, "", nil)
-				_ = backend.SetSeedTurn(fallbackSeed)
-				emitSeedTurnToProgram(p, fallbackSeed)
-				return nil
-			})
-		} else {
-			// Build program and session via unified builder (no /profile switching).
-			sess, p2, err := uiruntime.NewChatBuilder().
-				WithContext(ctx).
-				WithEngineFactory(rc.EngineFactory).
-				WithSettings(rc.InferenceSettings).
-				WithRouter(rc.Router).
-				WithProgramOptions(options...).
-				WithModelOptions(
-					bobatea_chat.WithTitle("pinocchio"),
-				).
-				BuildProgram()
-			if err != nil {
-				return err
-			}
-			p = p2
-			chatBackend = sess.Backend
-
-			if turnStore != nil {
-				sess.Backend.SetTurnPersister(
-					newCLITurnStorePersister(turnStore, chatConvID, sess.Backend.SessionID(), "final"),
-				)
-			}
-			if timelineStore != nil {
-				rc.Router.AddHandler("ui-persist", "ui", pinui.StepTimelinePersistFunc(timelineStore, chatConvID))
-			}
-
-			rc.Router.AddHandler("ui", "ui", sess.EventHandler())
-			err = rc.Router.RunHandlers(ctx)
-			if err != nil {
-				return err
-			}
-
-			seedGroup.Go(func() error {
-				<-rc.Router.Running()
-				if rc.ResultTurn != nil {
-					sess.Backend.SetSeedTurn(rc.ResultTurn)
-					return nil
-				}
-				seed, err := buildInitialTurnFromBlocksRendered(g.SystemPrompt, g.Blocks, "", rc.Variables, rc.ImagePaths)
-				if err == nil {
-					sess.Backend.SetSeedTurn(seed)
-					return nil
-				}
-				fallbackSeed, _ := buildInitialTurnFromBlocks(g.SystemPrompt, g.Blocks, "", nil)
-				sess.Backend.SetSeedTurn(fallbackSeed)
-				return nil
-			})
-		}
-
-		// If we're starting directly in chat mode, pre-fill the prompt text (if any), then submit.
-		if startInChat {
-			seedGroup.Go(func() error {
-				<-rc.Router.Running()
-				// Render prompt before auto-submit in chat
-				promptText := strings.TrimSpace(g.Prompt)
-				if promptText != "" && rc.Variables != nil {
-					if rendered, err := renderTemplateString("prompt", promptText, rc.Variables); err == nil {
-						promptText = rendered
-					}
-				}
-				if promptText != "" {
-					log.Debug().Int("len", len(promptText)).Msg("Auto-start: submitting rendered prompt after router.Running")
-					p.Send(bobatea_chat.ReplaceInputTextMsg{Text: promptText})
-					p.Send(bobatea_chat.SubmitMessageMsg{})
-				} else {
-					log.Debug().Msg("Auto-start enabled, but no prompt text found; skipping submit")
-				}
-				return nil
-			})
-		}
-
-		_, err = p.Run()
-		if seedErr := seedGroup.Wait(); seedErr != nil && err == nil {
-			err = seedErr
-		}
-		_ = chatBackend
-		return err
-	})
-
-	err = eg.Wait()
+	model := bobatea_chat.InitialModel(backend, bobatea_chat.WithTitle("pinocchio"), bobatea_chat.WithStatusBarView(statusBar))
+	p := tea.NewProgram(model, options...)
+	uiFanout, err := pinui.NewChatAppUIFanout(p)
 	if err != nil {
 		return nil, err
 	}
-
-	// Return resulting Turn when available
-	return rc.ResultTurn, nil
-}
-
-// Helper function to ask user about continuing in chat mode
-func askForChatContinuation() (bool, error) {
-	tty_, err := bobatea_chat.OpenTTY()
-	if err != nil {
-		return false, err
+	if err := fanoutProxy.SetTarget(uiFanout); err != nil {
+		return nil, err
 	}
-	defer func() {
-		err := tty_.Close()
-		if err != nil {
-			fmt.Println("Failed to close tty:", err)
-		}
-	}()
-
-	ui := &input.UI{
-		Writer: tty_,
-		Reader: tty_,
+	if snap, err := runner.Service.Snapshot(ctx, sid); err == nil {
+		_ = uiFanout.HydrateSnapshot(snap)
 	}
 
-	query := "\nDo you want to continue in chat? [y/n]"
-	answer, err := ui.Ask(query, &input.Options{
-		Default:  "y",
-		Required: true,
-		Loop:     true,
-		ValidateFunc: func(answer string) error {
-			switch answer {
-			case "y", "Y", "n", "N":
-				return nil
-			default:
-				return errors.Errorf("please enter 'y' or 'n'")
+	if rc.RunMode == run.RunModeInteractive || (rc.UISettings != nil && rc.UISettings.StartInChat) {
+		go func() {
+			promptText := strings.TrimSpace(g.Prompt)
+			if promptText != "" && rc.Variables != nil {
+				if rendered, err := renderTemplateString("prompt", promptText, rc.Variables); err == nil {
+					promptText = rendered
+				}
 			}
-		},
-	})
-	if err != nil {
-		fmt.Println("Failed to get user input:", err)
-		return false, err
+			if promptText != "" {
+				p.Send(bobatea_chat.ReplaceInputTextMsg{Text: promptText})
+				p.Send(bobatea_chat.SubmitMessageMsg{})
+			}
+		}()
 	}
 
-	return answer == "y" || answer == "Y", nil
+	if _, err := p.Run(); err != nil {
+		return nil, err
+	}
+	return rc.ResultTurn, nil
 }

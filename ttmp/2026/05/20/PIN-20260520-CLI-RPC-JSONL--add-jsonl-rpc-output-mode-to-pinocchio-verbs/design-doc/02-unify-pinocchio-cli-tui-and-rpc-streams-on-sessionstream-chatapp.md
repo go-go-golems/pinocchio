@@ -72,6 +72,7 @@ RelatedFiles:
       Note: |-
         Chatapp runtime execution path using ComposedRuntime
         Implemented InitialTurn runtime seeding and history-skip behavior
+        Fallback assistant offset fix for multiturn
     - Path: pkg/chatapp/runtime_sink.go
       Note: Existing Geppetto to canonical chat event mapping
     - Path: pkg/chatapp/service.go
@@ -82,6 +83,7 @@ RelatedFiles:
       Note: |-
         Pinocchio verb runtime integration point for RPC and TUI modes
         Implemented CLI RPC JSONL route through chatapp/sessionstream
+        Command chat mode migrated to chatapp runner
     - Path: pkg/cmds/cmd_rpc_jsonl_test.go
       Note: CLI RPC JSONL tests for protobuf lines
     - Path: pkg/cmds/cmdlayers/helpers.go
@@ -90,10 +92,16 @@ RelatedFiles:
       Note: Added RunModeRPCJSONL and UISettings.RPC
     - Path: pkg/ui/backend.go
       Note: Current raw Geppetto TUI forwarding path proposed for migration
+    - Path: pkg/ui/chatapp_backend.go
+      Note: Command TUI backend over chatapp/sessionstream with multiturn state
     - Path: pkg/ui/chatapp_fanout.go
       Note: Bubble Tea adapter for projected chatapp/sessionstream UI events
     - Path: pkg/ui/chatapp_fanout_test.go
       Note: Adapter tests for streaming
+    - Path: pkg/ui/fanout_proxy.go
+      Note: Fanout proxy for TUI construction order
+    - Path: pkg/ui/runtime/builder.go
+      Note: Removed transitional raw-handler builder
     - Path: pkg/ui/timeline_persist.go
       Note: Current raw Geppetto timeline persistence path proposed for migration
     - Path: proto/pinocchio/chatapp/rpc/v1/rpc.proto
@@ -108,6 +116,7 @@ LastUpdated: 2026-05-20T13:15:00-04:00
 WhatFor: Use when deciding whether the Pinocchio --rpc implementation should wrap raw Geppetto events or reuse the existing sessionstream/chatapp canonical chat pipeline.
 WhenToUse: Before implementing JSONL RPC output, TUI stream forwarding, or new chat event projections for Pinocchio verbs.
 ---
+
 
 
 
