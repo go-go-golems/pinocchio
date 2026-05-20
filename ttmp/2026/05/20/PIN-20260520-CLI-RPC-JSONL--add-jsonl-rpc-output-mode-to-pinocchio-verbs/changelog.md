@@ -80,3 +80,13 @@ Phase 2: added protojson JSONL writer and framing tests for RpcLine
 - /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/chatapp/rpc/jsonl/writer.go — ProtoJSON JSONL writer implementation
 - /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/chatapp/rpc/jsonl/writer_test.go — Writer framing and round-trip tests
 
+
+## 2026-05-20
+
+Phase 3: added sessionstream UIFanout JSONL adapter with snapshot/backend-event helpers and Any payload tests
+
+### Related Files
+
+- /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/chatapp/rpc/jsonl/fanout.go — sessionstream UI fanout to protobuf JSONL frames
+- /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/chatapp/rpc/jsonl/fanout_test.go — fanout
+

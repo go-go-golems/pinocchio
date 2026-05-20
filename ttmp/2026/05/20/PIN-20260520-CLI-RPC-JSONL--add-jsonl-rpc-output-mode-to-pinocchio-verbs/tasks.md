@@ -56,29 +56,29 @@ Goal: provide a small, tested writer that guarantees one protobuf JSON `RpcLine`
   - [x] concurrent writes produce complete JSON lines without interleaving.
   - [x] no empty `{}` lines for nil/invalid input; invalid input returns an error.
 - [x] Run targeted tests for the package.
-- [ ] Commit Phase 2 as a focused writer commit. (pending after diary update)
+- [x] Commit Phase 2 as a focused writer commit (`18c1513`).
 
 ## Phase 3 — sessionstream JSONL fanout and snapshot helpers
 
 Goal: adapt projected chatapp/sessionstream UI events and snapshots to protobuf-defined JSONL.
 
-- [ ] Implement `JSONLUIFanout` that satisfies `sessionstream.UIFanout`.
-  - [ ] For each `sessionstream.UIEvent`, pack `ev.Payload` with `anypb.New`.
-  - [ ] Emit `RpcLine_UiEvent` frames with session ID, ordinal, event name, and `Any` payload.
-  - [ ] Return errors for nil/non-packable payloads.
-- [ ] Implement snapshot emission.
-  - [ ] Convert `sessionstream.Snapshot` to `SnapshotFrame`.
-  - [ ] Pack `TimelineEntity.Payload` with `anypb.New`.
-  - [ ] Preserve `kind`, `id`, `created_ordinal`, `last_event_ordinal`, and `tombstone`.
-- [ ] Add optional backend-event writer support using the same `RpcLine_BackendEvent` shape, but keep it disabled by default.
+- [x] Implement `JSONLUIFanout` that satisfies `sessionstream.UIFanout`.
+  - [x] For each `sessionstream.UIEvent`, pack `ev.Payload` with `anypb.New`.
+  - [x] Emit `RpcLine_UiEvent` frames with session ID, ordinal, event name, and `Any` payload.
+  - [x] Return errors for nil/non-packable payloads.
+- [x] Implement snapshot emission.
+  - [x] Convert `sessionstream.Snapshot` to `SnapshotFrame`.
+  - [x] Pack `TimelineEntity.Payload` with `anypb.New`.
+  - [x] Preserve `kind`, `id`, `created_ordinal`, `last_event_ordinal`, and `tombstone`.
+- [x] Add optional backend-event writer support using the same `RpcLine_BackendEvent` shape, but keep it disabled by default.
 - [x] Add tests:
-  - [ ] `ChatTextPatch` UI event emits a valid `uiEvent` line.
-  - [ ] `ChatTextSegmentFinished` UI event emits a valid `uiEvent` line.
-  - [ ] `ChatRunFinished` UI event emits a valid `uiEvent` line.
-  - [ ] emitted `Any` payloads unpack into concrete `chatappv1` messages.
-  - [ ] snapshot entities unpack into concrete `chatappv1.ChatMessageEntity` messages.
-- [ ] Run targeted tests.
-- [ ] Commit Phase 3 as a focused fanout commit.
+  - [x] `ChatTextPatch` UI event emits a valid `uiEvent` line.
+  - [x] `ChatTextSegmentFinished` UI event emits a valid `uiEvent` line.
+  - [x] `ChatRunFinished` UI event emits a valid `uiEvent` line.
+  - [x] emitted `Any` payloads unpack into concrete `chatappv1` messages.
+  - [x] snapshot entities unpack into concrete `chatappv1.ChatMessageEntity` messages.
+- [x] Run targeted tests.
+- [ ] Commit Phase 3 as a focused fanout commit. (pending after diary update)
 
 ## Phase 4 — Reusable non-web chatapp runner
 
@@ -106,7 +106,7 @@ Goal: avoid losing existing Pinocchio verb semantics when routing through chatap
   - [ ] Preserve `Prompt string` for display/user-message content and simple chat calls.
 - [ ] Update `chatapp.runRuntimeInference` to seed `geppetto` session from `InitialTurn` when provided.
 - [ ] Preserve existing prompt-only behavior and tests.
-- [x] Add tests:
+- [ ] Add tests:
   - [ ] prompt-only requests still append user prompt as today.
   - [ ] initial-turn requests pass system/user/image/block context into runtime.
   - [ ] prior turn-store history behavior remains correct or is explicitly ordered relative to initial turn.
@@ -172,6 +172,6 @@ Goal: finish the migration and remove avoidable duplicate stream mappings.
 
 ## Current implementation checkpoint
 
-- Active phase: Phase 2 validation/commit.
-- Current source changes: `pkg/chatapp/rpc/jsonl` writer and tests.
-- Next concrete action: commit Phase 2, then start Phase 3 sessionstream JSONL fanout.
+- Active phase: Phase 3 validation/commit.
+- Current source changes: `pkg/chatapp/rpc/jsonl` sessionstream UI fanout, snapshot helpers, backend-event helper, and tests.
+- Next concrete action: commit Phase 3, then start Phase 4 reusable non-web chatapp runner.

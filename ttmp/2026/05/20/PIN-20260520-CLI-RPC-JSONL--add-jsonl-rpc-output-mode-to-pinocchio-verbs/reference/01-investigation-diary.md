@@ -20,6 +20,10 @@ RelatedFiles:
       Note: Investigation identified UIFanout as the key adapter seam
     - Path: cmd/web-chat/app/server.go
       Note: Investigation source for working sessionstream chatapp integration
+    - Path: pkg/chatapp/rpc/jsonl/fanout.go
+      Note: Phase 3 implementation artifact recorded in diary
+    - Path: pkg/chatapp/rpc/jsonl/fanout_test.go
+      Note: Phase 3 validation tests recorded in diary
     - Path: pkg/chatapp/rpc/jsonl/writer.go
       Note: Phase 2 implementation artifact recorded in diary
     - Path: pkg/chatapp/rpc/jsonl/writer_test.go
@@ -40,6 +44,7 @@ LastUpdated: 2026-05-20T12:45:00-04:00
 WhatFor: Use to understand how the JSONL/RPC output-mode design was researched and what evidence shaped the recommendations.
 WhenToUse: When continuing the ticket, reviewing the design, or implementing the proposed Pinocchio/Geppetto changes.
 ---
+
 
 
 
@@ -811,5 +816,99 @@ Commands run:
 
 ```bash
 gofmt -w pkg/chatapp/rpc/jsonl/writer.go pkg/chatapp/rpc/jsonl/writer_test.go
+go test ./pkg/chatapp/rpc/... -count=1
+```
+
+## Step 10: Implement Phase 3 sessionstream JSONL fanout and snapshot helpers
+
+I implemented the adapter that connects sessionstream projected UI events to the protobuf-defined JSONL writer. This is the first code that uses the new `RpcLine` boundary as an application transport: UI events and snapshot entities are packed into `google.protobuf.Any`, wrapped in generated RPC frames, and emitted as protobuf JSON lines.
+
+### Prompt Context
+
+**User prompt (verbatim):** (same as Step 6)
+
+**Assistant interpretation:** Continue implementing the phased plan by connecting sessionstream fanout to the protobuf JSONL writer.
+
+**Inferred user intent:** Reuse the existing sessionstream/chatapp projection model instead of adding raw Geppetto stream mapping.
+
+**Commit (code):** pending — Phase 3 fanout changes are ready for focused commit.
+
+### What I did
+
+- Added `pkg/chatapp/rpc/jsonl/fanout.go`.
+- Implemented `UIFanout` satisfying `sessionstream.UIFanout`.
+- Implemented `PublishUI` to:
+  - iterate over `sessionstream.UIEvent` batches,
+  - pack event payloads with `anypb.New`,
+  - write `RpcLine_UiEvent` frames with session ID, ordinal, event name, and typed payload.
+- Added control/supplementary helpers:
+  - `WriteHello`
+  - `WriteError`
+  - `WriteDone`
+  - `WriteSnapshot`
+  - `WriteBackendEvent`
+- Added nil payload validation so malformed UI events and snapshot entities fail instead of emitting ambiguous frames.
+- Added `pkg/chatapp/rpc/jsonl/fanout_test.go` covering:
+  - `ChatTextPatch` UI event output.
+  - `ChatTextSegmentFinished` UI event output.
+  - `ChatRunFinished` UI event output.
+  - `Any` unpacking into concrete chatapp messages.
+  - snapshot entity packing/unpacking.
+  - hello/error/done/backend-event helper frames.
+  - nil payload errors.
+
+### Why
+
+- `sessionstream.UIFanout` is the shared seam for web, CLI JSONL, and future TUI adapters.
+- Packing payloads with `Any` preserves typed chatapp payload boundaries while keeping the stream shell-readable as JSONL.
+
+### What worked
+
+- Targeted tests passed:
+
+```text
+ok  	github.com/go-go-golems/pinocchio/pkg/chatapp/rpc	0.003s
+ok  	github.com/go-go-golems/pinocchio/pkg/chatapp/rpc/jsonl	0.009s
+```
+
+### What didn't work
+
+- The first helper signature for unpacking `Any` payloads used a variadic `proto.UnmarshalOptions` signature, but the installed `anypb.Any.UnmarshalTo` method has the simpler signature `UnmarshalTo(proto.Message) error`. The build failed with messages like:
+
+```text
+*anypb.Any does not implement interface{UnmarshalTo(proto.Message, ...proto.UnmarshalOptions) error}
+```
+
+I fixed the test helper to accept `*anypb.Any` directly.
+
+### What I learned
+
+- The existing protobuf runtime version exposes `Any.UnmarshalTo(proto.Message) error`, so test helpers should not assume newer/alternate variadic signatures.
+- The fanout adapter stays small because sessionstream already batches UI events with ordinals and chatapp already produces concrete protobuf payloads.
+
+### What was tricky to build
+
+- The subtle part was keeping this package generic enough for sessionstream UI events while still enforcing the Pinocchio chatapp RPC boundary. The package does not inspect specific chatapp message types; tests use chatapp messages to prove `Any` payloads round-trip.
+
+### What warrants a second pair of eyes
+
+- `WriteBackendEvent` lives on `UIFanout` for convenience even though backend events are not part of the `sessionstream.UIFanout` interface. Reviewers may prefer a separate backend recorder type later.
+
+### What should be done in the future
+
+- Phase 4 should add a reusable non-web chatapp runner that accepts this fanout and mirrors web-chat setup without HTTP.
+
+### Code review instructions
+
+- Review `pkg/chatapp/rpc/jsonl/fanout.go` for the `sessionstream.UIFanout` implementation.
+- Confirm `PublishUI` does not inspect or reinterpret Geppetto events.
+- Run `go test ./pkg/chatapp/rpc/... -count=1`.
+
+### Technical details
+
+Commands run:
+
+```bash
+gofmt -w pkg/chatapp/rpc/jsonl/fanout.go pkg/chatapp/rpc/jsonl/fanout_test.go
 go test ./pkg/chatapp/rpc/... -count=1
 ```

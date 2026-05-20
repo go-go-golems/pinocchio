@@ -52,6 +52,10 @@ RelatedFiles:
       Note: Tool call event plugin proving extensible stream mapping
     - Path: pkg/chatapp/projections.go
       Note: Base chat UI and timeline projections
+    - Path: pkg/chatapp/rpc/jsonl/fanout.go
+      Note: Implemented sessionstream UI fanout to protobuf JSONL adapter
+    - Path: pkg/chatapp/rpc/jsonl/fanout_test.go
+      Note: Fanout
     - Path: pkg/chatapp/rpc/jsonl/writer.go
       Note: Implemented protojson JSONL writer proposed by design
     - Path: pkg/chatapp/rpc/jsonl/writer_test.go
@@ -82,6 +86,7 @@ LastUpdated: 2026-05-20T13:15:00-04:00
 WhatFor: Use when deciding whether the Pinocchio --rpc implementation should wrap raw Geppetto events or reuse the existing sessionstream/chatapp canonical chat pipeline.
 WhenToUse: Before implementing JSONL RPC output, TUI stream forwarding, or new chat event projections for Pinocchio verbs.
 ---
+
 
 
 
