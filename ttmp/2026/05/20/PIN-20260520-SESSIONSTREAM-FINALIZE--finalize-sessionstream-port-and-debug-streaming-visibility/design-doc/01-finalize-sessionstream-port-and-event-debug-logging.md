@@ -20,6 +20,10 @@ RelatedFiles:
       Note: Run-mode selection plus RPC/TUI debug JSONL fanout lifecycle
     - Path: pkg/cmds/cmdlayers/helpers.go
       Note: Defines the --debug-events-jsonl helper flag
+    - Path: pkg/cmds/event_printer.go
+      Note: Restores human-readable streaming output with thinking markers
+    - Path: pkg/cmds/event_printer_test.go
+      Note: Regression coverage for reasoning-summary pretty printing
     - Path: pkg/cmds/run/context.go
       Note: Carries debug event log path in UI settings
     - Path: pkg/cmds/run_status_fanout.go
@@ -34,6 +38,7 @@ LastUpdated: 0001-01-01T00:00:00Z
 WhatFor: ""
 WhenToUse: ""
 ---
+
 
 
 

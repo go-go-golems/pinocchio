@@ -66,3 +66,14 @@ Addressed PR 153 review findings: TUI backend-finished now waits for run complet
 - /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/ui/chatapp_fanout.go — BackendFinishedMsg now follows run terminal events
 - /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/ui/chatapp_fanout_test.go — Tests segment finish does not end backend
 
+
+## 2026-05-20
+
+Restored pretty human text printer for reasoning summaries and suppressed duplicate aggregate reasoning YAML
+
+### Related Files
+
+- /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/cmds/cmd.go — Selects pretty text printer for default/text output
+- /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/cmds/event_printer.go — Pinocchio text printer maps reasoning-summary boundaries to thinking markers
+- /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/cmds/event_printer_test.go — Covers reasoning-summary formatting and duplicate aggregate suppression
+

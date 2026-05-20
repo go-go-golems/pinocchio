@@ -523,3 +523,140 @@ Relevant PR review findings:
 
 - `pkg/ui/chatapp_fanout.go`: emit `BackendFinishedMsg` only after run completion.
 - `pkg/cmds/cmd.go`: derive RPC `done.status` from the actual run result rather than always writing `ok` after `WaitIdle`.
+
+## Step 7: Restore human-readable text streaming printer
+
+A real command run showed that default text output was being routed through Geppetto's structured text printer, which printed verbose info payloads for reasoning summary events. The symptom was a noisy transcript with repeated reasoning summary start/end records and a final YAML-ish aggregate event after the assistant answer.
+
+I restored the human streaming printer behavior for normal `--output text`: text mode now uses a Pinocchio pretty event printer that renders reasoning-summary boundaries as thinking markers, streams reasoning deltas as text, and suppresses the final duplicate `reasoning-summary` aggregate event.
+
+### Prompt Context
+
+**User prompt (verbatim):** "❯ go run ./cmd/pinocchio code professional hello  --with-caller --
+
+[i] reasoning-summary-started
+item_id: rs_064da96f7d4dc91e006a0e3e1676c08190ba436156684d7c73
+output_index: 0
+provider: openai_responses
+response_id: resp_064da96f7d4dc91e006a0e3e15f1d88190b03db095b8347cc9
+segment_id: openai_responses:resp_064da96f7d4dc91e006a0e3e15f1d88190b03db095b8347cc9:item:rs_064da96f7d4dc91e006a0e3e1676c08190ba436156684d7c73
+summary_index: 0
+
+**Responding to a greeting**
+
+The user just said "hello," so I think I should greet them back. A concise response seems best, maybe offering help or asking what they’d like to work on. Since the user hasn’t provided much detail, I can prompt for more information. I could suggest topics like architecture, code help, or design decisions. So, how about saying: “Hi there! How can I help today?” and then I can offer options to choose from.
+[i] reasoning-summary-ended
+item_id: rs_064da96f7d4dc91e006a0e3e1676c08190ba436156684d7c73
+output_index: 0
+provider: openai_responses
+response_id: resp_064da96f7d4dc91e006a0e3e15f1d88190b03db095b8347cc9
+segment_id: openai_responses:resp_064da96f7d4dc91e006a0e3e15f1d88190b03db095b8347cc9:item:rs_064da96f7d4dc91e006a0e3e1676c08190ba436156684d7c73
+summary_index: 0
+
+
+[i] reasoning-summary-started
+item_id: rs_064da96f7d4dc91e006a0e3e1676c08190ba436156684d7c73
+output_index: 0
+provider: openai_responses
+response_id: resp_064da96f7d4dc91e006a0e3e15f1d88190b03db095b8347cc9
+segment_id: openai_responses:resp_064da96f7d4dc91e006a0e3e15f1d88190b03db095b8347cc9:item:rs_064da96f7d4dc91e006a0e3e1676c08190ba436156684d7c73
+summary_index: 1
+
+
+
+**Crafting a support response**
+
+I want to offer support in several areas like architecture, code reviews, tech strategy, and more. It’s important to keep a friendly tone and be concise. Since the user hasn't specified a request, I’ll ask what they’d like to discuss. My final response could be: "Hello! What would you like to work on? I can help with architecture decisions, code reviews, debugging, performance improvements, or project planning. Let me know about your project or any problems you're facing!"
+[i] reasoning-summary-ended
+item_id: rs_064da96f7d4dc91e006a0e3e1676c08190ba436156684d7c73
+output_index: 0
+provider: openai_responses
+response_id: resp_064da96f7d4dc91e006a0e3e15f1d88190b03db095b8347cc9
+segment_id: openai_responses:resp_064da96f7d4dc91e006a0e3e15f1d88190b03db095b8347cc9:item:rs_064da96f7d4dc91e006a0e3e1676c08190ba436156684d7c73
+summary_index: 1
+
+Hello! How can I help today? I can assist with architecture and design, code reviews, debugging, performance improvements, or project planning. Tell me about your project or paste a problem you’re facing, and I’ll jump in.
+[i] reasoning-summary
+item_id: rs_064da96f7d4dc91e006a0e3e1676c08190ba436156684d7c73
+output_index: 0
+provider: openai_responses
+response_id: resp_064da96f7d4dc91e006a0e3e15f1d88190b03db095b8347cc9
+segment_id: openai_responses:resp_064da96f7d4dc91e006a0e3e15f1d88190ba436156684d7c73
+summary_index: 1
+text: |-
+    **Responding to a greeting**
+
+    The user just said "hello," so I think I should greet them back. A concise response seems best, maybe offering help or asking what they’d like to work on. Since the user hasn’t provided much detail, I can prompt for more information. I could suggest topics like architecture, code help, or design decisions. So, how about saying: “Hi there! How can I help today?” and then I can offer options to choose from.
+
+    **Crafting a support response**
+
+    I want to offer support in several areas like architecture, code reviews, tech strategy, and more. It’s important to keep a friendly tone and be concise. Since the user hasn't specified a request, I’ll ask what they’d like to discuss. My final response could be: "Hello! What would you like to work on? I can help with architecture decisions, code reviews, debugging, performance improvements, or project planning. Let me know about your project or any problems you're facing!" 
+
+I got this, wihich is a mess. What about the nice -- Thinking started  -- etc.. we started with (look at diary) ?
+
+It seems to have repeated output, and then some yaml at the end, etc..."
+
+**Assistant interpretation:** Diagnose why regular text output became verbose/duplicated and restore the pretty thinking markers documented in the earlier diary.
+
+**Inferred user intent:** Keep normal command output readable while still supporting structured/RPC/debug modes separately.
+
+**Commit (code):** pending — this fix will be committed after validation.
+
+### What I did
+
+- Added `pkg/cmds/event_printer.go` with `pinocchioStepPrinterFunc`.
+- Changed blocking text-mode output to use the pretty Pinocchio step printer when output is default/text and metadata/full output are not requested.
+- Kept `events.NewStructuredPrinter` for explicit structured/debug-style outputs such as JSON/YAML and text-with-metadata/full-output.
+- Mapped `reasoning-summary-started` to `--- Thinking started ---`.
+- Mapped `reasoning-summary-ended` to `--- Thinking ended ---`.
+- Suppressed `reasoning-summary` and `reasoning-summary-delta` info events in text mode because their content has already streamed as reasoning deltas.
+- Added `pkg/cmds/event_printer_test.go`.
+
+### Why
+
+- Human text mode should not dump info-event metadata or final aggregate reasoning YAML.
+- The clean structured/RPC debug boundary already exists through `--output jsonl`, `--rpc`, `--debug-events-jsonl`, `--output json`, and `--output yaml`.
+
+### What worked
+
+- `go test ./pkg/cmds -count=1` passed.
+
+### What didn't work
+
+- My first test/implementation used older Geppetto event names (`EventPartialCompletion`, `EventThinkingPartial`, `NewThinkingPartialEvent`) from module-cache examples. The workspace Geppetto now uses canonical event names such as `EventTextDelta` and `EventReasoningDelta`, so the first compile failed with undefined symbols.
+
+### What I learned
+
+- The current workspace Geppetto already has a cleaner `StepPrinterFunc`, but Pinocchio needs one extra policy: treat `reasoning-summary-started/ended` as thinking markers too.
+- The messy YAML at the end was the `reasoning-summary` aggregate info event printed by structured text mode.
+
+### What was tricky to build
+
+- The bug was not in provider streaming; it was in the printer selected for default text output. Since `Output` defaults to `text`, the previous branch used `NewStructuredPrinter` even for human output. That printer intentionally dumps info payloads. The fix is to separate human text printing from structured event text printing.
+
+### What warrants a second pair of eyes
+
+- Review whether `--output text --with-metadata` should keep using structured text output as implemented, or whether it should also use the pretty printer with selected metadata.
+
+### What should be done in the future
+
+- Run the user's exact command with a real profile after committing if API/time permits.
+
+### Code review instructions
+
+- Start in `pkg/cmds/cmd.go` at `shouldUsePrettyTextPrinter` and the `runBlocking` printer selection.
+- Review `pkg/cmds/event_printer.go` for the text-mode event policy.
+- Validate with `go test ./pkg/cmds -count=1`.
+
+### Technical details
+
+Expected text-mode behavior for reasoning summaries:
+
+```text
+--- Thinking started ---
+...reasoning delta text...
+--- Thinking ended ---
+...assistant output...
+```
+
+The final aggregate `reasoning-summary` event is intentionally suppressed in human text mode.

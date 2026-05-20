@@ -586,6 +586,13 @@ func firstNonEmptyString(values ...string) string {
 	return ""
 }
 
+func shouldUsePrettyTextPrinter(settings *run.UISettings) bool {
+	if settings == nil || strings.TrimSpace(settings.Output) == "" {
+		return true
+	}
+	return strings.EqualFold(settings.Output, "text") && !settings.WithMetadata && !settings.FullOutput
+}
+
 // runBlocking handles blocking execution mode using Engine directly
 func (g *PinocchioCommand) runBlocking(ctx context.Context, rc *run.RunContext) (*turns.Turn, error) {
 	// If we have a router, set up watermill sink for event publishing
@@ -594,9 +601,11 @@ func (g *PinocchioCommand) runBlocking(ctx context.Context, rc *run.RunContext) 
 		watermillSink := middleware.NewWatermillSink(rc.Router.Publisher, "chat")
 		sinks = []events.EventSink{watermillSink}
 
-		// Add default printer if none is set
-		if rc.UISettings == nil || rc.UISettings.Output == "" {
-			rc.Router.AddHandler("chat", "chat", events.StepPrinterFunc("", rc.Writer))
+		// Add default printer if none is set. Human text output should use the
+		// pretty streaming printer; the structured printer's text mode is intended
+		// for event debugging and prints verbose info payloads.
+		if shouldUsePrettyTextPrinter(rc.UISettings) {
+			rc.Router.AddHandler("chat", "chat", pinocchioStepPrinterFunc("", rc.Writer))
 		} else {
 			printer := events.NewStructuredPrinter(rc.Writer, events.PrinterOptions{
 				Format:          events.PrinterFormat(rc.UISettings.Output),
