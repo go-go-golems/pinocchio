@@ -151,6 +151,8 @@ Goal: migrate TUI streaming from raw Geppetto event decoding to projected chatap
 - [ ] Wire TUI chat mode to chatapp runner behind an internal feature branch or low-risk switch.
 - [ ] Keep old raw handlers until parity is proven.
 - [ ] Commit Phase 7 as one or more focused TUI adapter commits.
+  - [x] Preparatory Bubble Tea UIFanout adapter committed (`72a3d17`).
+  - [ ] Full chat-mode wiring/migration commit remains.
 
 ## Phase 8 — Documentation, cleanup, and de-duplication
 
@@ -173,5 +175,5 @@ Goal: finish the migration and remove avoidable duplicate stream mappings.
 ## Current implementation checkpoint
 
 - Active phase: Phase 7 implementation.
-- Current source changes: Bubble Tea `sessionstream.UIFanout` adapter and tests.
-- Next concrete action: decide whether to wire the adapter into chat mode now or commit the adapter as a preparatory slice.
+- Current source changes: none; preparatory Bubble Tea adapter committed as `72a3d17`.
+- Next concrete action: wire chat mode to use `chatapp.Runner` + `NewChatAppUIFanoutForProgram`, or defer TUI migration and start Phase 8 docs cleanup.

@@ -1356,3 +1356,31 @@ ok  	github.com/go-go-golems/pinocchio/pkg/chatapp	0.123s
 - Review `pkg/ui/chatapp_fanout.go` for event-to-timeline mapping and snapshot hydration.
 - Review `pkg/ui/chatapp_fanout_test.go` for coverage of streaming, completion, failure, reasoning, and hydration.
 - Run `go test ./pkg/ui -count=1`.
+
+## Step 16: Commit Phase 7 adapter slice
+
+The preparatory Bubble Tea adapter slice for Phase 7 was committed successfully.
+
+### Prompt Context
+
+**User prompt (verbatim):** `continue`
+
+**Assistant interpretation:** Preserve the focused phase-slice commit and record what remains.
+
+**Inferred user intent:** Keep implementation and diary synchronized with commits.
+
+**Commit (code):** `72a3d17265fafbcafdc470e2f1bdcda542360ec9` (`ui: add chatapp Bubble Tea fanout`)
+
+### What I did
+
+- Staged the new adapter/tests and ticket docs.
+- Ran the full pre-commit hook through `git commit`.
+- Commit succeeded after full lint/build/test validation.
+
+### What worked
+
+- The full repository pre-commit hook passed, including `go test ./...`.
+
+### What remains
+
+- Full chat-mode migration is not done yet. The next implementation step is to wire `runChat` to `chatapp.Runner` and `NewChatAppUIFanoutForProgram`, or defer that migration and perform Phase 8 documentation cleanup.

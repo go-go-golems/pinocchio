@@ -142,3 +142,12 @@ Phase 7: added Bubble Tea sessionstream UIFanout adapter and snapshot hydration 
 - /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/ui/chatapp_fanout.go — Bubble Tea chatapp UIFanout adapter
 - /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/ui/chatapp_fanout_test.go — Adapter tests for streaming
 
+
+## 2026-05-20
+
+Committed Phase 7 preparatory Bubble Tea adapter as 72a3d17
+
+### Related Files
+
+- /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/ui/chatapp_fanout.go — Phase 7 adapter committed in 72a3d17
+
