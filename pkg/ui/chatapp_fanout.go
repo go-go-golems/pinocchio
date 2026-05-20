@@ -38,13 +38,6 @@ func NewChatAppUIFanout(sender BubbleTeaSender) (*ChatAppUIFanout, error) {
 	return &ChatAppUIFanout{sender: sender, seen: map[string]bool{}, starts: map[string]time.Time{}}, nil
 }
 
-func NewChatAppUIFanoutForProgram(program *tea.Program) (*ChatAppUIFanout, error) {
-	if program == nil {
-		return nil, fmt.Errorf("bubble tea program is nil")
-	}
-	return NewChatAppUIFanout(program)
-}
-
 func (f *ChatAppUIFanout) PublishUI(_ context.Context, _ sessionstream.SessionId, _ uint64, events []sessionstream.UIEvent) error {
 	if f == nil || f.sender == nil {
 		return fmt.Errorf("chatapp UI fanout is not initialized")

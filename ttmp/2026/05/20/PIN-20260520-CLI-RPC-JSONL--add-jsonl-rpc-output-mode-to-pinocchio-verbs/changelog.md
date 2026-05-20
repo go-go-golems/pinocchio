@@ -151,3 +151,14 @@ Committed Phase 7 preparatory Bubble Tea adapter as 72a3d17
 
 - /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/ui/chatapp_fanout.go — Phase 7 adapter committed in 72a3d17
 
+
+## 2026-05-20
+
+Ran real tmux smoke tests for RPC JSONL and TUI with gpt-5-nano-low and gpt-5-mini; removed unused TUI wrapper APIs
+
+### Related Files
+
+- /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/cmds/cmd.go — Removed stale compatibility comment
+- /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/ui/chatapp_fanout.go — Removed NewChatAppUIFanoutForProgram wrapper
+- /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/ui/runtime/builder.go — Removed unused handler-factory and BuildComponents wrapper APIs
+

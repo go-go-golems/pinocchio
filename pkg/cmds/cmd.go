@@ -211,8 +211,6 @@ func NewPinocchioCommand(
 	return ret, nil
 }
 
-// conversation manager removed; no-op left intentionally for compatibility if referenced elsewhere
-
 // RunIntoWriter runs the command and writes the output into the given writer.
 func (g *PinocchioCommand) RunIntoWriter(
 	ctx context.Context,

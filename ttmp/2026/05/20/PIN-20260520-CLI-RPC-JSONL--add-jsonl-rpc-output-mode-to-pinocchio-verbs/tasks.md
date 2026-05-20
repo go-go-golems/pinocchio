@@ -149,7 +149,7 @@ Goal: migrate TUI streaming from raw Geppetto event decoding to projected chatap
   - [x] reasoning/thinking segments.
   - [ ] tool calls and tool results if renderers exist.
 - [ ] Wire TUI chat mode to chatapp runner behind an internal feature branch or low-risk switch.
-- [ ] Keep old raw handlers until parity is proven.
+- [ ] Remove old raw handlers after chatapp/sessionstream TUI wiring is complete.
 - [ ] Commit Phase 7 as one or more focused TUI adapter commits.
   - [x] Preparatory Bubble Tea UIFanout adapter committed (`72a3d17`).
   - [ ] Full chat-mode wiring/migration commit remains.
@@ -171,9 +171,11 @@ Goal: finish the migration and remove avoidable duplicate stream mappings.
   - [ ] `go test ./cmd/web-chat/...` if runtime composer movement touched web-chat.
   - [ ] `make schema-vet` if schema changes need vet coverage.
 - [ ] Commit documentation/cleanup changes.
+  - [x] Real tmux smoke tests completed for RPC and TUI with `gpt-5-nano-low` and `gpt-5-mini`.
+  - [x] Removed unused TUI wrapper APIs introduced by earlier migration scaffolding.
 
 ## Current implementation checkpoint
 
 - Active phase: Phase 7 implementation.
-- Current source changes: none; preparatory Bubble Tea adapter committed as `72a3d17`.
-- Next concrete action: wire chat mode to use `chatapp.Runner` + `NewChatAppUIFanoutForProgram`, or defer TUI migration and start Phase 8 docs cleanup.
+- Current source changes: cleanup removes unused TUI wrapper APIs and stale compatibility comment.
+- Next concrete action: commit cleanup, then wire chat mode to use `chatapp.Runner` + `NewChatAppUIFanout`.
