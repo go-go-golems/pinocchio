@@ -15,6 +15,7 @@ Commands:
 Flags:
 - rpc
 - output
+- debug-events-jsonl
 IsTopLevel: true
 IsTemplate: false
 ShowPerDefault: true
@@ -51,6 +52,23 @@ pinocchio run-command ./my-command.yaml --rpc
 Both forms route the command through the chatapp/sessionstream runner and write protobuf JSONL frames to stdout.
 
 If you need logs, keep them on stderr or in a log file. Do not enable log-to-stdout for RPC consumers, because stdout is the protocol stream.
+
+## Debug Event Files
+
+Use `--debug-events-jsonl PATH` when you want to keep normal stdout behavior but also capture the projected chatapp/sessionstream events that are entering the RPC/TUI adapter:
+
+```bash
+pinocchio run-command ./my-command.yaml \
+  --debug-events-jsonl /tmp/pinocchio-events.jsonl
+```
+
+In regular text mode this flag does not turn stdout into JSONL. It writes the debug stream to the requested file while stdout remains the command output.
+
+In `--chat` / `--force-interactive` mode it records the same projected UI events that the Bubble Tea adapter receives. This is useful when the terminal UI does not appear to stream in real time and you want to check whether events are arriving incrementally.
+
+In `--rpc` / `--output jsonl` mode the debug file receives the same protobuf `RpcLine` family as stdout: `hello`, `snapshot`, live `uiEvent` frames, terminal `error` frames, and `done`.
+
+The file is created or truncated on each run. Parent directories are created automatically.
 
 ## Frame Shape
 

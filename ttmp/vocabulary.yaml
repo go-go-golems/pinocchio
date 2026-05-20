@@ -69,6 +69,8 @@ topics:
       description: Remote procedure call and subprocess protocol design
     - slug: structured-output
       description: Machine-readable CLI or event output contracts
+    - slug: debugging
+      description: Debugging instrumentation, traces, diagnostics, and troubleshooting artifacts
 docTypes:
     - slug: index
       description: Ticket index / overall plan

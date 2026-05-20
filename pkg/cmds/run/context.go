@@ -29,6 +29,7 @@ type UISettings struct {
 	PrintPrompt      bool
 	Output           string
 	RPC              bool
+	DebugEventsJSONL string
 	WithMetadata     bool
 	FullOutput       bool
 }

@@ -32,6 +32,7 @@ type HelpersSettings struct {
 	NonInteractive         bool               `glazed:"non-interactive"`
 	Output                 string             `glazed:"output"`
 	RPC                    bool               `glazed:"rpc"`
+	DebugEventsJSONL       string             `glazed:"debug-events-jsonl"`
 	WithMetadata           bool               `glazed:"with-metadata"`
 	FullOutput             bool               `glazed:"full-output"`
 }
@@ -145,6 +146,12 @@ func NewHelpersParameterLayer() (schema.Section, error) {
 				fields.TypeBool,
 				fields.WithHelp("Emit protobuf-defined JSONL RPC frames on stdout"),
 				fields.WithDefault(false),
+			),
+			fields.New(
+				"debug-events-jsonl",
+				fields.TypeString,
+				fields.WithHelp("Write projected chatapp/sessionstream UI events to this JSONL file for debugging"),
+				fields.WithDefault(""),
 			),
 			fields.New(
 				"with-metadata",

@@ -21,6 +21,7 @@ func TestChatAppUIFanoutMapsStreamingTextEvents(t *testing.T) {
 		{Name: "ChatTextSegmentStarted", Payload: &chatappv1.ChatTextSegmentStarted{MessageId: "assistant-1", Role: "assistant", Streaming: true}},
 		{Name: "ChatTextPatch", Payload: &chatappv1.ChatTextPatch{MessageId: "assistant-1", Role: "assistant", Text: "hello", Mode: chatappv1.ChatStreamPatchMode_CHAT_STREAM_PATCH_MODE_SNAPSHOT}},
 		{Name: "ChatTextSegmentFinished", Payload: &chatappv1.ChatTextSegmentFinished{MessageId: "assistant-1", Role: "assistant", Text: "hello", Content: "hello", Final: true}},
+		{Name: "ChatRunFinished", Payload: &chatappv1.ChatRunFinished{MessageId: "assistant-1", Status: "finished"}},
 	})
 	require.NoError(t, err)
 
@@ -41,6 +42,44 @@ func TestChatAppUIFanoutMapsStreamingTextEvents(t *testing.T) {
 	finishedUpdate := requireMsgType[timeline.UIEntityUpdated](t, sender.msgs, 3)
 	require.Equal(t, false, finishedUpdate.Patch["streaming"])
 	requireMsgType[boba_chat.BackendFinishedMsg](t, sender.msgs, 4)
+}
+
+func TestChatAppUIFanoutWaitsForRunFinishedBeforeBackendFinished(t *testing.T) {
+	sender := &recordingTeaSender{}
+	fanout, err := NewChatAppUIFanout(sender)
+	require.NoError(t, err)
+
+	err = fanout.PublishUI(context.Background(), "sid", 1, []sessionstream.UIEvent{
+		{Name: "ChatTextSegmentFinished", Payload: &chatappv1.ChatTextSegmentFinished{MessageId: "assistant-1", Role: "assistant", Text: "first", Content: "first", Final: true}},
+	})
+	require.NoError(t, err)
+	for _, msg := range sender.msgs {
+		_, isFinished := msg.(boba_chat.BackendFinishedMsg)
+		require.False(t, isFinished, "did not expect BackendFinishedMsg before ChatRunFinished")
+	}
+
+	err = fanout.PublishUI(context.Background(), "sid", 2, []sessionstream.UIEvent{
+		{Name: "ChatRunFinished", Payload: &chatappv1.ChatRunFinished{MessageId: "assistant-1", Status: "finished"}},
+	})
+	require.NoError(t, err)
+	requireMsgType[boba_chat.BackendFinishedMsg](t, sender.msgs, len(sender.msgs)-1)
+}
+
+func TestChatAppUIFanoutAccumulatesAppendTextPatches(t *testing.T) {
+	sender := &recordingTeaSender{}
+	fanout, err := NewChatAppUIFanout(sender)
+	require.NoError(t, err)
+
+	err = fanout.PublishUI(context.Background(), "sid", 1, []sessionstream.UIEvent{
+		{Name: "ChatTextPatch", Payload: &chatappv1.ChatTextPatch{MessageId: "assistant-1", Role: "assistant", Text: "hel", Mode: chatappv1.ChatStreamPatchMode_CHAT_STREAM_PATCH_MODE_APPEND}},
+		{Name: "ChatTextPatch", Payload: &chatappv1.ChatTextPatch{MessageId: "assistant-1", Role: "assistant", Text: "lo", Mode: chatappv1.ChatStreamPatchMode_CHAT_STREAM_PATCH_MODE_APPEND}},
+	})
+	require.NoError(t, err)
+
+	firstUpdate := requireMsgType[timeline.UIEntityUpdated](t, sender.msgs, 1)
+	require.Equal(t, "hel", firstUpdate.Patch["text"])
+	secondUpdate := requireMsgType[timeline.UIEntityUpdated](t, sender.msgs, 2)
+	require.Equal(t, "hello", secondUpdate.Patch["text"])
 }
 
 func TestChatAppUIFanoutMapsReasoningEvents(t *testing.T) {

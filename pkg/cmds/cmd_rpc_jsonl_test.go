@@ -74,6 +74,39 @@ func TestRunWithOptionsRPCJSONLEmitsStreamingPatchEvents(t *testing.T) {
 	require.True(t, sawRunFinished, "expected run-finished UI event in %s", out.String())
 }
 
+func TestRunWithOptionsRPCJSONLReturnsRuntimeFailureStatus(t *testing.T) {
+	cmd := newRPCJSONLTestCommand(t, "rpc-jsonl-runtime-error", runtimeFailingEngineFactory{})
+
+	inferenceSettings, err := settings.NewInferenceSettings()
+	require.NoError(t, err)
+
+	var out bytes.Buffer
+	_, err = cmd.RunWithOptions(context.Background(),
+		run.WithRunMode(run.RunModeRPCJSONL),
+		run.WithWriter(&out),
+		run.WithInferenceSettings(inferenceSettings),
+		run.WithEngineFactory(cmd.EngineFactory),
+	)
+	require.Error(t, err)
+
+	var sawRunFailed, sawTerminalError bool
+	var doneStatus string
+	for _, frame := range parseRPCLines(t, out.String()) {
+		if ui := frame.GetUiEvent(); ui != nil && ui.GetName() == "ChatRunFailed" {
+			sawRunFailed = true
+		}
+		if ef := frame.GetError(); ef != nil {
+			sawTerminalError = ef.GetTerminal() && strings.Contains(ef.GetMessage(), "runtime boom")
+		}
+		if done := frame.GetDone(); done != nil {
+			doneStatus = done.GetStatus()
+		}
+	}
+	require.True(t, sawRunFailed, out.String())
+	require.True(t, sawTerminalError, out.String())
+	require.Equal(t, "failed", doneStatus)
+}
+
 func TestRunWithOptionsRPCJSONLEmitsTerminalErrorFrame(t *testing.T) {
 	cmd := newRPCJSONLTestCommand(t, "rpc-jsonl-error-smoke", failingEngineFactory{})
 
@@ -113,6 +146,8 @@ func newRPCJSONLTestCommand(t *testing.T, name string, engineFactory any) *Pinoc
 	case streamingEngineFactory:
 		cmd.EngineFactory = ef
 	case failingEngineFactory:
+		cmd.EngineFactory = ef
+	case runtimeFailingEngineFactory:
 		cmd.EngineFactory = ef
 	default:
 		t.Fatalf("unsupported engine factory %T", engineFactory)
@@ -176,3 +211,18 @@ func (failingEngineFactory) CreateEngine(*settings.InferenceSettings) (engine.En
 
 func (failingEngineFactory) SupportedProviders() []string { return []string{"openai"} }
 func (failingEngineFactory) DefaultProvider() string      { return "openai" }
+
+type runtimeFailingEngineFactory struct{}
+
+func (runtimeFailingEngineFactory) CreateEngine(*settings.InferenceSettings) (engine.Engine, error) {
+	return runtimeFailingEngine{}, nil
+}
+
+func (runtimeFailingEngineFactory) SupportedProviders() []string { return []string{"openai"} }
+func (runtimeFailingEngineFactory) DefaultProvider() string      { return "openai" }
+
+type runtimeFailingEngine struct{}
+
+func (runtimeFailingEngine) RunInference(context.Context, *turns.Turn) (*turns.Turn, error) {
+	return nil, errors.New("runtime boom")
+}

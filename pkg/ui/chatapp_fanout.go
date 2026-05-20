@@ -27,6 +27,7 @@ type ChatAppUIFanout struct {
 	mu     sync.Mutex
 	seen   map[string]bool
 	starts map[string]time.Time
+	texts  map[string]string
 }
 
 var _ sessionstream.UIFanout = (*ChatAppUIFanout)(nil)
@@ -35,7 +36,7 @@ func NewChatAppUIFanout(sender BubbleTeaSender) (*ChatAppUIFanout, error) {
 	if sender == nil {
 		return nil, fmt.Errorf("bubble tea sender is nil")
 	}
-	return &ChatAppUIFanout{sender: sender, seen: map[string]bool{}, starts: map[string]time.Time{}}, nil
+	return &ChatAppUIFanout{sender: sender, seen: map[string]bool{}, starts: map[string]time.Time{}, texts: map[string]string{}}, nil
 }
 
 func (f *ChatAppUIFanout) PublishUI(_ context.Context, _ sessionstream.SessionId, _ uint64, events []sessionstream.UIEvent) error {
@@ -85,7 +86,7 @@ func (f *ChatAppUIFanout) publishOne(ev sessionstream.UIEvent) error {
 		f.markStart(p.GetMessageId())
 	case *chatappv1.ChatTextPatch:
 		id := firstNonEmpty(p.GetMessageId(), p.GetStreamId())
-		text := p.GetText()
+		text := f.applyTextPatch(id, p.GetText(), p.GetMode())
 		if strings.TrimSpace(text) != "" {
 			f.ensureAssistant(id, p.GetRole(), text)
 		}
@@ -94,7 +95,7 @@ func (f *ChatAppUIFanout) publishOne(ev sessionstream.UIEvent) error {
 		}
 	case *chatappv1.ChatTextSegmentFinished:
 		id := p.GetMessageId()
-		text := firstNonEmpty(p.GetContent(), p.GetText())
+		text := firstNonEmpty(p.GetContent(), p.GetText(), f.text(id))
 		if strings.TrimSpace(text) != "" {
 			f.ensureAssistant(id, p.GetRole(), text)
 		}
@@ -103,6 +104,7 @@ func (f *ChatAppUIFanout) publishOne(ev sessionstream.UIEvent) error {
 			f.sender.Send(timeline.UIEntityUpdated{ID: timeline.EntityID{LocalID: id, Kind: "llm_text"}, Patch: map[string]any{"streaming": false}, Version: time.Now().UnixNano(), UpdatedAt: time.Now()})
 			f.clear(id)
 		}
+	case *chatappv1.ChatRunFinished:
 		f.sender.Send(boba_chat.BackendFinishedMsg{})
 	case *chatappv1.ChatRunFailed:
 		id := firstNonEmpty(p.GetMessageId(), "chat-run-failed")
@@ -119,10 +121,11 @@ func (f *ChatAppUIFanout) publishOne(ev sessionstream.UIEvent) error {
 		f.sender.Send(timeline.UIEntityCreated{ID: timeline.EntityID{LocalID: id, Kind: "llm_text"}, Renderer: timeline.RendererDescriptor{Kind: "llm_text"}, Props: map[string]any{"role": "thinking", "text": "", "streaming": true}, StartedAt: time.Now()})
 	case *chatappv1.ChatReasoningPatch:
 		id := firstNonEmpty(p.GetMessageId(), p.GetParentMessageId()+":thinking")
-		f.sender.Send(timeline.UIEntityUpdated{ID: timeline.EntityID{LocalID: id, Kind: "llm_text"}, Patch: map[string]any{"text": p.GetText(), "streaming": !p.GetFinal()}, Version: time.Now().UnixNano(), UpdatedAt: time.Now()})
+		text := f.applyTextPatch(id, p.GetText(), p.GetMode())
+		f.sender.Send(timeline.UIEntityUpdated{ID: timeline.EntityID{LocalID: id, Kind: "llm_text"}, Patch: map[string]any{"text": text, "streaming": !p.GetFinal()}, Version: time.Now().UnixNano(), UpdatedAt: time.Now()})
 	case *chatappv1.ChatReasoningSegmentFinished:
 		id := firstNonEmpty(p.GetMessageId(), p.GetParentMessageId()+":thinking")
-		text := firstNonEmpty(p.GetContent(), p.GetText())
+		text := firstNonEmpty(p.GetContent(), p.GetText(), f.text(id))
 		f.sender.Send(timeline.UIEntityUpdated{ID: timeline.EntityID{LocalID: id, Kind: "llm_text"}, Patch: map[string]any{"text": text, "streaming": false}, Version: time.Now().UnixNano(), UpdatedAt: time.Now()})
 		f.sender.Send(timeline.UIEntityCompleted{ID: timeline.EntityID{LocalID: id, Kind: "llm_text"}})
 	}
@@ -169,6 +172,39 @@ func (f *ChatAppUIFanout) clear(id string) {
 	defer f.mu.Unlock()
 	delete(f.seen, id)
 	delete(f.starts, id)
+	delete(f.texts, id)
+}
+
+func (f *ChatAppUIFanout) text(id string) string {
+	if strings.TrimSpace(id) == "" {
+		return ""
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.texts[id]
+}
+
+func (f *ChatAppUIFanout) applyTextPatch(id, patch string, mode chatappv1.ChatStreamPatchMode) string {
+	if strings.TrimSpace(id) == "" {
+		return patch
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	switch mode {
+	case chatappv1.ChatStreamPatchMode_CHAT_STREAM_PATCH_MODE_APPEND,
+		chatappv1.ChatStreamPatchMode_CHAT_STREAM_PATCH_MODE_UNSPECIFIED:
+		f.texts[id] += patch
+	case chatappv1.ChatStreamPatchMode_CHAT_STREAM_PATCH_MODE_SNAPSHOT,
+		chatappv1.ChatStreamPatchMode_CHAT_STREAM_PATCH_MODE_REPLACE:
+		f.texts[id] = patch
+	default:
+		if f.texts[id] == "" {
+			f.texts[id] = patch
+		} else {
+			f.texts[id] += patch
+		}
+	}
+	return f.texts[id]
 }
 
 func firstNonEmpty(values ...string) string {
