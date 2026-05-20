@@ -20,6 +20,8 @@ RelatedFiles:
       Note: Investigation identified UIFanout as the key adapter seam
     - Path: cmd/web-chat/app/server.go
       Note: Investigation source for working sessionstream chatapp integration
+    - Path: pkg/chatapp/chat_test.go
+      Note: Phase 5 validation tests recorded in diary
     - Path: pkg/chatapp/rpc/jsonl/fanout.go
       Note: Phase 3 implementation artifact recorded in diary
     - Path: pkg/chatapp/rpc/jsonl/fanout_test.go
@@ -34,8 +36,12 @@ RelatedFiles:
       Note: Phase 4 implementation artifact recorded in diary
     - Path: pkg/chatapp/runner_test.go
       Note: Phase 4 validation tests recorded in diary
+    - Path: pkg/chatapp/runtime_inference.go
+      Note: Phase 5 runtime seeding changes recorded in diary
     - Path: pkg/chatapp/runtime_sink.go
       Note: Investigation identified existing Geppetto-to-chat event mapping
+    - Path: pkg/chatapp/service.go
+      Note: Phase 5 implementation artifact recorded in diary
     - Path: pkg/cmds/cmd.go
       Note: Primary investigation target for runtime output handler selection
     - Path: pkg/cmds/cmdlayers/helpers.go
@@ -48,6 +54,7 @@ LastUpdated: 2026-05-20T12:45:00-04:00
 WhatFor: Use to understand how the JSONL/RPC output-mode design was researched and what evidence shaped the recommendations.
 WhenToUse: When continuing the ticket, reviewing the design, or implementing the proposed Pinocchio/Geppetto changes.
 ---
+
 
 
 
@@ -1013,5 +1020,94 @@ Commands run:
 
 ```bash
 gofmt -w pkg/chatapp/runner.go pkg/chatapp/runner_test.go
+go test ./pkg/chatapp/... -count=1
+```
+
+## Step 12: Implement Phase 5 rich Pinocchio verb input for chatapp
+
+I extended `chatapp.PromptRequest` so non-web callers can provide a fully rendered Geppetto `turns.Turn`. This lets future Pinocchio CLI/RPC integration preserve verb inputs that include system prompts, pre-seeded blocks, image blocks, and templated content instead of reducing every verb to a plain prompt string.
+
+### Prompt Context
+
+**User prompt (verbatim):** (same as Step 6)
+
+**Assistant interpretation:** Continue the phased implementation by resolving the main mismatch between Pinocchio verb execution and chatapp's prompt-string input.
+
+**Inferred user intent:** Route real Pinocchio verbs through chatapp/sessionstream without losing existing command semantics.
+
+**Commit (code):** pending — Phase 5 input changes are ready for focused commit.
+
+### What I did
+
+- Added `InitialTurn *turns.Turn` to `chatapp.PromptRequest`.
+- Documented that `InitialTurn` is for in-process CLI/TUI use where the command has already rendered a full Geppetto turn.
+- Changed `runPrompt` / `runRuntimeInference` so `runRuntimeInference` receives the full `PromptRequest`, not only the runtime.
+- Updated `runRuntimeInference` to:
+  - use `pending.InitialTurn.Clone()` when provided,
+  - skip turn-store history loading when an explicit initial turn is provided,
+  - preserve existing history + `AppendNewTurnFromUserPrompt` behavior when no initial turn is provided.
+- Added tests:
+  - `TestRuntimeInferenceUsesInitialTurnWhenProvided`
+  - `TestRuntimeInferenceInitialTurnSkipsTurnStoreHistory`
+- Ran `go test ./pkg/chatapp/... -count=1`.
+
+### Why
+
+- `PinocchioCommand.buildInitialTurn` can produce richer input than a prompt string. Without this change, CLI RPC through chatapp would lose system prompt and block context.
+- Skipping turn-store history when `InitialTurn` is explicit avoids accidental double context or history-load failures when the caller is providing the entire seed turn.
+
+### What worked
+
+- Targeted tests passed:
+
+```text
+ok  	github.com/go-go-golems/pinocchio/pkg/chatapp	0.075s
+ok  	github.com/go-go-golems/pinocchio/pkg/chatapp/export	0.035s
+ok  	github.com/go-go-golems/pinocchio/pkg/chatapp/plugins	0.006s
+ok  	github.com/go-go-golems/pinocchio/pkg/chatapp/rpc	0.003s
+ok  	github.com/go-go-golems/pinocchio/pkg/chatapp/rpc/jsonl	0.004s
+```
+
+### What didn't work
+
+- The first edit referenced `pending.InitialTurn` inside `runRuntimeInference`, but the function still accepted only `runtime *infruntime.ComposedRuntime`. The build failed:
+
+```text
+pkg/chatapp/runtime_inference.go:95:5: undefined: pending
+pkg/chatapp/runtime_inference.go:96:15: undefined: pending
+```
+
+- I fixed this by changing `runRuntimeInference` to accept `pending PromptRequest`, deriving `runtime := pending.Runtime` inside the function, and removing the now-unused `infruntime` import from `runtime_inference.go`.
+
+### What I learned
+
+- The existing history-loading tests made it easy to verify that prompt-only behavior still works.
+- `InitialTurn` should be treated as authoritative seed context for this first implementation phase.
+
+### What was tricky to build
+
+- The ordering between turn-store history and explicit initial turns is the main semantic decision. I chose explicit `InitialTurn` over history loading because CLI verbs are already constructing the seed context they want the model to see.
+
+### What warrants a second pair of eyes
+
+- Review whether `InitialTurn` should skip history permanently or whether a later option should allow appending an explicit turn after persisted history.
+- Review whether `InitialTurn` should eventually be represented in protobuf for durable/replayable command logs.
+
+### What should be done in the future
+
+- Phase 6 can now build a Pinocchio command seed turn and pass it into `chatapp.PromptRequest{InitialTurn: seed}`.
+
+### Code review instructions
+
+- Review `pkg/chatapp/service.go` for the new `PromptRequest.InitialTurn` field and comment.
+- Review `pkg/chatapp/runtime_inference.go` for history-vs-initial-turn ordering.
+- Run `go test ./pkg/chatapp/... -count=1`.
+
+### Technical details
+
+Commands run:
+
+```bash
+gofmt -w pkg/chatapp/service.go pkg/chatapp/runtime_inference.go pkg/chatapp/chat_test.go
 go test ./pkg/chatapp/... -count=1
 ```

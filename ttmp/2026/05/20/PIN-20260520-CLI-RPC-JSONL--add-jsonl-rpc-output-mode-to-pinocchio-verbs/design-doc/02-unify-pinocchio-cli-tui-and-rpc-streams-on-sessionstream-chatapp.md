@@ -42,6 +42,8 @@ RelatedFiles:
       Note: Generated TypeScript bindings for RpcLine contract
     - Path: pkg/chatapp/chat.go
       Note: Canonical chat event names schema registration and hub installation
+    - Path: pkg/chatapp/chat_test.go
+      Note: InitialTurn behavior and regression tests
     - Path: pkg/chatapp/features.go
       Note: Plugin extension API for runtime events projections and schemas
     - Path: pkg/chatapp/pb/proto/pinocchio/chatapp/rpc/v1/rpc.pb.go
@@ -67,11 +69,15 @@ RelatedFiles:
     - Path: pkg/chatapp/runner_test.go
       Note: Runner tests for prompt submission snapshot and plugin schemas
     - Path: pkg/chatapp/runtime_inference.go
-      Note: Chatapp runtime execution path using ComposedRuntime
+      Note: |-
+        Chatapp runtime execution path using ComposedRuntime
+        Implemented InitialTurn runtime seeding and history-skip behavior
     - Path: pkg/chatapp/runtime_sink.go
       Note: Existing Geppetto to canonical chat event mapping
     - Path: pkg/chatapp/service.go
-      Note: Application-facing chat service used by proposed CLI and TUI runners
+      Note: |-
+        Application-facing chat service used by proposed CLI and TUI runners
+        Implemented PromptRequest InitialTurn input for rich Pinocchio verb seeds
     - Path: pkg/cmds/cmd.go
       Note: Pinocchio verb runtime integration point for RPC and TUI modes
     - Path: pkg/ui/backend.go
@@ -90,6 +96,7 @@ LastUpdated: 2026-05-20T13:15:00-04:00
 WhatFor: Use when deciding whether the Pinocchio --rpc implementation should wrap raw Geppetto events or reuse the existing sessionstream/chatapp canonical chat pipeline.
 WhenToUse: Before implementing JSONL RPC output, TUI stream forwarding, or new chat event projections for Pinocchio verbs.
 ---
+
 
 
 

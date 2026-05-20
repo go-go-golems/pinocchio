@@ -12,7 +12,6 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/turns"
 	"github.com/go-go-golems/geppetto/pkg/turns/serde"
 	chatappv1 "github.com/go-go-golems/pinocchio/pkg/chatapp/pb/proto/pinocchio/chatapp/v1"
-	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 	sessionstream "github.com/go-go-golems/sessionstream/pkg/sessionstream"
 	"google.golang.org/protobuf/proto"
 )
@@ -56,13 +55,14 @@ func (e *Engine) runPrompt(ctx context.Context, sid sessionstream.SessionId, mes
 	defer close(done)
 	defer e.clearRun(sid, messageID)
 	if pending.Runtime != nil && pending.Runtime.Engine != nil {
-		e.runRuntimeInference(ctx, sid, messageID, prompt, pending.Runtime, pub)
+		e.runRuntimeInference(ctx, sid, messageID, prompt, pending, pub)
 		return
 	}
 	e.runDemoInference(ctx, sid, messageID, prompt, pub)
 }
 
-func (e *Engine) runRuntimeInference(ctx context.Context, sid sessionstream.SessionId, messageID, prompt string, runtime *infruntime.ComposedRuntime, pub sessionstream.EventPublisher) {
+func (e *Engine) runRuntimeInference(ctx context.Context, sid sessionstream.SessionId, messageID, prompt string, pending PromptRequest, pub sessionstream.EventPublisher) {
+	runtime := pending.Runtime
 	if runtime == nil || runtime.Engine == nil {
 		e.runDemoInference(ctx, sid, messageID, prompt, pub)
 		return
@@ -92,33 +92,37 @@ func (e *Engine) runRuntimeInference(ctx context.Context, sid sessionstream.Sess
 		EventSinks: []gepevents.EventSink{eventSink},
 	}
 
-	// Load conversation history: the last persisted turn contains the full
-	// conversation as an accumulator. AppendNewTurnFromUserPrompt will clone
-	// it and add the new user block, giving the LLM the full context.
-	if e.turnStore != nil {
-		snapshot, err := e.turnStore.LoadLatestTurn(ctx, string(sid), "final")
+	if pending.InitialTurn != nil {
+		sess.Append(pending.InitialTurn.Clone())
+	} else {
+		// Load conversation history: the last persisted turn contains the full
+		// conversation as an accumulator. AppendNewTurnFromUserPrompt will clone
+		// it and add the new user block, giving the LLM the full context.
+		if e.turnStore != nil {
+			snapshot, err := e.turnStore.LoadLatestTurn(ctx, string(sid), "final")
+			if err != nil {
+				e.publishRunFailed(publishContext(ctx), sid, pub, messageID, fmt.Sprintf("load conversation history: %v", err))
+				return
+			}
+			if snapshot != nil {
+				turn, err := serde.FromYAML([]byte(snapshot.Payload))
+				if err != nil {
+					e.publishRunFailed(publishContext(ctx), sid, pub, messageID, fmt.Sprintf("decode conversation history: %v", err))
+					return
+				}
+				if turn == nil {
+					e.publishRunFailed(publishContext(ctx), sid, pub, messageID, "decode conversation history: empty turn")
+					return
+				}
+				sess.Append(turn)
+			}
+		}
+
+		_, err := sess.AppendNewTurnFromUserPrompt(prompt)
 		if err != nil {
-			e.publishRunFailed(publishContext(ctx), sid, pub, messageID, fmt.Sprintf("load conversation history: %v", err))
+			e.publishRunFailed(publishContext(ctx), sid, pub, messageID, err.Error())
 			return
 		}
-		if snapshot != nil {
-			turn, err := serde.FromYAML([]byte(snapshot.Payload))
-			if err != nil {
-				e.publishRunFailed(publishContext(ctx), sid, pub, messageID, fmt.Sprintf("decode conversation history: %v", err))
-				return
-			}
-			if turn == nil {
-				e.publishRunFailed(publishContext(ctx), sid, pub, messageID, "decode conversation history: empty turn")
-				return
-			}
-			sess.Append(turn)
-		}
-	}
-
-	_, err := sess.AppendNewTurnFromUserPrompt(prompt)
-	if err != nil {
-		e.publishRunFailed(publishContext(ctx), sid, pub, messageID, err.Error())
-		return
 	}
 	handle, err := sess.StartInference(ctx)
 	if err != nil {

@@ -100,3 +100,14 @@ Phase 4: added reusable non-web chatapp runner with sessionstream wiring and tes
 - /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/chatapp/runner.go — Reusable chatapp/sessionstream runner
 - /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/chatapp/runner_test.go — Runner submission snapshot and plugin schema tests
 
+
+## 2026-05-20
+
+Phase 5: added PromptRequest.InitialTurn and runtime seeding tests for rich Pinocchio verb input
+
+### Related Files
+
+- /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/chatapp/chat_test.go — InitialTurn runtime behavior tests
+- /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/chatapp/runtime_inference.go — Runtime seeding from InitialTurn
+- /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/chatapp/service.go — PromptRequest InitialTurn input
+

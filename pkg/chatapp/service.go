@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/go-go-golems/geppetto/pkg/turns"
 	chatappv1 "github.com/go-go-golems/pinocchio/pkg/chatapp/pb/proto/pinocchio/chatapp/v1"
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 	sessionstream "github.com/go-go-golems/sessionstream/pkg/sessionstream"
@@ -16,6 +17,11 @@ type PromptRequest struct {
 	Prompt         string
 	IdempotencyKey string
 	Runtime        *infruntime.ComposedRuntime
+	// InitialTurn optionally seeds the Geppetto runtime with a fully rendered
+	// turn instead of appending Prompt as a new user-only turn. This is used by
+	// Pinocchio verbs whose inputs can include system prompts, pre-seeded blocks,
+	// images, and templated content.
+	InitialTurn *turns.Turn
 }
 
 // Service is an app-facing chat service surface suitable for consumer apps such as cmd/web-chat.

@@ -95,22 +95,22 @@ Goal: make CLI/TUI able to use the same sessionstream/chatapp stack currently wi
   - [x] runner can submit a demo prompt and wait idle.
   - [x] runner can return a snapshot.
   - [x] plugins register reasoning/tool schemas through the runner.
-- [ ] Commit Phase 4 as a focused runner commit. (pending after diary update)
+- [x] Commit Phase 4 as a focused runner commit (`4f36ae0`).
 
 ## Phase 5 — Support rich Pinocchio verb input in chatapp
 
 Goal: avoid losing existing Pinocchio verb semantics when routing through chatapp.
 
-- [ ] Extend `chatapp.PromptRequest` with an optional initial turn or equivalent typed input.
-  - [ ] Preferred first step: `InitialTurn *turns.Turn` for in-process CLI/TUI use.
-  - [ ] Preserve `Prompt string` for display/user-message content and simple chat calls.
-- [ ] Update `chatapp.runRuntimeInference` to seed `geppetto` session from `InitialTurn` when provided.
-- [ ] Preserve existing prompt-only behavior and tests.
-- [ ] Add tests:
-  - [ ] prompt-only requests still append user prompt as today.
-  - [ ] initial-turn requests pass system/user/image/block context into runtime.
-  - [ ] prior turn-store history behavior remains correct or is explicitly ordered relative to initial turn.
-- [ ] Commit Phase 5 as a focused chatapp-input commit.
+- [x] Extend `chatapp.PromptRequest` with an optional initial turn or equivalent typed input.
+  - [x] Preferred first step: `InitialTurn *turns.Turn` for in-process CLI/TUI use.
+  - [x] Preserve `Prompt string` for display/user-message content and simple chat calls.
+- [x] Update `chatapp.runRuntimeInference` to seed `geppetto` session from `InitialTurn` when provided.
+- [x] Preserve existing prompt-only behavior and tests.
+- [x] Add tests:
+  - [x] prompt-only requests still append user prompt as today.
+  - [x] initial-turn requests pass system/user/image/block context into runtime.
+  - [x] prior turn-store history behavior remains correct or is explicitly ordered relative to initial turn.
+- [ ] Commit Phase 5 as a focused chatapp-input commit. (pending after diary update)
 
 ## Phase 6 — CLI RPC integration for Pinocchio verbs
 
@@ -172,6 +172,6 @@ Goal: finish the migration and remove avoidable duplicate stream mappings.
 
 ## Current implementation checkpoint
 
-- Active phase: Phase 4 validation/commit.
-- Current source changes: reusable `chatapp.Runner` and runner tests.
-- Next concrete action: commit Phase 4, then start Phase 5 rich Pinocchio verb input in chatapp.
+- Active phase: Phase 5 validation/commit.
+- Current source changes: `PromptRequest.InitialTurn`, runtime seeding changes, and chatapp tests.
+- Next concrete action: commit Phase 5, then start Phase 6 CLI RPC integration.
