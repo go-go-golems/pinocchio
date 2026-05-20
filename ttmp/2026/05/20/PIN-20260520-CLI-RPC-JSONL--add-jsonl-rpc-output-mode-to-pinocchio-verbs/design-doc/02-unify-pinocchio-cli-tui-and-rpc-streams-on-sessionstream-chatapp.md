@@ -90,6 +90,10 @@ RelatedFiles:
       Note: Added RunModeRPCJSONL and UISettings.RPC
     - Path: pkg/ui/backend.go
       Note: Current raw Geppetto TUI forwarding path proposed for migration
+    - Path: pkg/ui/chatapp_fanout.go
+      Note: Bubble Tea adapter for projected chatapp/sessionstream UI events
+    - Path: pkg/ui/chatapp_fanout_test.go
+      Note: Adapter tests for streaming
     - Path: pkg/ui/timeline_persist.go
       Note: Current raw Geppetto timeline persistence path proposed for migration
     - Path: proto/pinocchio/chatapp/rpc/v1/rpc.proto
@@ -104,6 +108,7 @@ LastUpdated: 2026-05-20T13:15:00-04:00
 WhatFor: Use when deciding whether the Pinocchio --rpc implementation should wrap raw Geppetto events or reuse the existing sessionstream/chatapp canonical chat pipeline.
 WhenToUse: Before implementing JSONL RPC output, TUI stream forwarding, or new chat event projections for Pinocchio verbs.
 ---
+
 
 
 

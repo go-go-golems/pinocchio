@@ -140,13 +140,13 @@ Goal: route `--rpc` / `--output jsonl` through chatapp/sessionstream and protobu
 
 Goal: migrate TUI streaming from raw Geppetto event decoding to projected chatapp UI events.
 
-- [ ] Implement a `sessionstream.UIFanout` adapter that sends Bubble Tea timeline messages.
-- [ ] Implement snapshot hydration for Bubble Tea timeline from `sessionstream.Snapshot`.
+- [x] Implement a `sessionstream.UIFanout` adapter that sends Bubble Tea timeline messages.
+- [x] Implement snapshot hydration for Bubble Tea timeline from `sessionstream.Snapshot`.
 - [ ] Add parity tests against current `StepChatForwardFunc` behavior for:
-  - [ ] assistant text streaming.
-  - [ ] final assistant completion.
-  - [ ] errors and interrupts.
-  - [ ] reasoning/thinking segments.
+  - [x] assistant text streaming.
+  - [x] final assistant completion.
+  - [ ] errors and interrupts. (errors covered; interrupts remain)
+  - [x] reasoning/thinking segments.
   - [ ] tool calls and tool results if renderers exist.
 - [ ] Wire TUI chat mode to chatapp runner behind an internal feature branch or low-risk switch.
 - [ ] Keep old raw handlers until parity is proven.
@@ -172,6 +172,6 @@ Goal: finish the migration and remove avoidable duplicate stream mappings.
 
 ## Current implementation checkpoint
 
-- Active phase: Phase 7 planning/implementation.
-- Current source changes: none; Phase 6 committed as `cfaf7fb`.
-- Next concrete action: inspect current TUI event path and design the Bubble Tea `sessionstream.UIFanout` adapter.
+- Active phase: Phase 7 implementation.
+- Current source changes: Bubble Tea `sessionstream.UIFanout` adapter and tests.
+- Next concrete action: decide whether to wire the adapter into chat mode now or commit the adapter as a preparatory slice.

@@ -54,6 +54,10 @@ RelatedFiles:
         Phase 6 helper flag changes recorded in diary
     - Path: pkg/cmds/run/context.go
       Note: Phase 6 run mode changes recorded in diary
+    - Path: pkg/ui/chatapp_fanout.go
+      Note: Phase 7 adapter implementation recorded in diary
+    - Path: pkg/ui/chatapp_fanout_test.go
+      Note: Phase 7 adapter validation recorded in diary
     - Path: proto/pinocchio/chatapp/rpc/v1/rpc.proto
       Note: Phase 1 implementation artifact recorded in diary
 ExternalSources: []
@@ -62,6 +66,7 @@ LastUpdated: 2026-05-20T12:45:00-04:00
 WhatFor: Use to understand how the JSONL/RPC output-mode design was researched and what evidence shaped the recommendations.
 WhenToUse: When continuing the ticket, reviewing the design, or implementing the proposed Pinocchio/Geppetto changes.
 ---
+
 
 
 
@@ -1261,3 +1266,93 @@ Phase 6 was committed after the full pre-commit hook completed successfully.
 ### What should be done in the future
 
 - Begin Phase 7 by inspecting current Bubble Tea/TUI event paths and identifying the clean adapter seam for `sessionstream.UIFanout`.
+
+## Step 15: Start Phase 7 with a Bubble Tea chatapp UIFanout adapter
+
+I started Phase 7 by implementing a testable `sessionstream.UIFanout` adapter for Bubble Tea timeline messages. This does not yet migrate `runChat` to the chatapp runner, but it creates the missing adapter seam needed for that migration.
+
+### Prompt Context
+
+**User prompt (verbatim):** `continue`
+
+**Assistant interpretation:** Continue after the Phase 6 commit into the TUI adapter phase.
+
+**Inferred user intent:** Make incremental implementation progress while preserving focused commits and diary updates.
+
+**Commit (code):** pending — Phase 7 adapter slice is ready for review/commit decision.
+
+### What I did
+
+- Added `pkg/ui/chatapp_fanout.go`.
+- Implemented `ChatAppUIFanout`, satisfying `sessionstream.UIFanout`.
+- Introduced a small `BubbleTeaSender` interface so tests do not need a real `tea.Program`.
+- Added `NewChatAppUIFanoutForProgram(*tea.Program)` for production wiring.
+- Mapped projected chatapp UI payloads to existing bobatea timeline messages:
+  - `ChatUserMessageAccepted`
+  - `ChatTextSegmentStarted`
+  - `ChatTextPatch`
+  - `ChatTextSegmentFinished`
+  - `ChatRunFailed`
+  - `ChatRunStopped`
+  - `ChatReasoningSegmentStarted`
+  - `ChatReasoningPatch`
+  - `ChatReasoningSegmentFinished`
+- Added `HydrateSnapshot(sessionstream.Snapshot)` for pre-existing `ChatMessageEntity` timeline state.
+- Added `pkg/ui/chatapp_fanout_test.go` covering:
+  - assistant text streaming,
+  - final assistant completion,
+  - snapshot hydration,
+  - user messages,
+  - run failures,
+  - reasoning/thinking segments.
+
+### Why
+
+- The existing TUI path maps raw Geppetto events in `StepChatForwardFunc`. The new adapter maps projected chatapp UI events instead, matching the design goal of avoiding duplicate raw event mapping in CLI/TUI/RPC surfaces.
+- Keeping this as an adapter slice de-risks the eventual chat-mode migration.
+
+### What worked
+
+- Focused tests passed:
+
+```text
+ok  	github.com/go-go-golems/pinocchio/pkg/ui	0.027s
+```
+
+- Broader targeted suite passed before the final reasoning test was added:
+
+```text
+ok  	github.com/go-go-golems/pinocchio/pkg/ui	0.060s
+ok  	github.com/go-go-golems/pinocchio/pkg/cmds	0.189s
+ok  	github.com/go-go-golems/pinocchio/pkg/chatapp	0.123s
+```
+
+### What didn't work
+
+- I did not wire the adapter into `runChat` yet. Current chat mode still uses the raw Geppetto Watermill handler path.
+
+### What I learned
+
+- A `sessionstream.UIFanout` is a good seam for the TUI because it can be tested without running the full Bubble Tea program.
+- Snapshot hydration can map `ChatMessageEntity` directly into the same `timeline.UIEntityCreated` / `UIEntityCompleted` messages as streaming events.
+
+### What was tricky to build
+
+- The adapter has to preserve the existing bobatea message shape (`llm_text`, `streaming`, `BackendFinishedMsg`) so the current widgets do not need immediate changes.
+
+### What warrants a second pair of eyes
+
+- Review whether user messages should be represented as `llm_text` or a dedicated renderer kind.
+- Review append-vs-snapshot semantics for `ChatTextPatch`; the current adapter forwards `text` directly, matching the chatapp projection's accumulated text behavior.
+- Review whether interrupts should get a dedicated chatapp event before marking the interrupt parity task complete.
+
+### What should be done in the future
+
+- Wire chat mode to use `chatapp.Runner` with `NewChatAppUIFanoutForProgram`.
+- Add an interrupt/stop projection test once chatapp has an explicit projected interruption payload.
+
+### Code review instructions
+
+- Review `pkg/ui/chatapp_fanout.go` for event-to-timeline mapping and snapshot hydration.
+- Review `pkg/ui/chatapp_fanout_test.go` for coverage of streaming, completion, failure, reasoning, and hydration.
+- Run `go test ./pkg/ui -count=1`.

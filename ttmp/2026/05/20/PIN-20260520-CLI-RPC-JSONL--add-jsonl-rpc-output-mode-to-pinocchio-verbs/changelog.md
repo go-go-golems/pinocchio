@@ -132,3 +132,13 @@ Committed Phase 6 CLI RPC integration as cfaf7fb
 
 - /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/cmds/cmd.go — Phase 6 committed in cfaf7fb
 
+
+## 2026-05-20
+
+Phase 7: added Bubble Tea sessionstream UIFanout adapter and snapshot hydration tests
+
+### Related Files
+
+- /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/ui/chatapp_fanout.go — Bubble Tea chatapp UIFanout adapter
+- /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/ui/chatapp_fanout_test.go — Adapter tests for streaming
+
