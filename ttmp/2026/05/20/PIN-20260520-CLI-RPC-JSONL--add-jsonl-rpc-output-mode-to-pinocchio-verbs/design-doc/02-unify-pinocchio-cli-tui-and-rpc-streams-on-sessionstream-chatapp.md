@@ -52,6 +52,10 @@ RelatedFiles:
       Note: Tool call event plugin proving extensible stream mapping
     - Path: pkg/chatapp/projections.go
       Note: Base chat UI and timeline projections
+    - Path: pkg/chatapp/rpc/jsonl/writer.go
+      Note: Implemented protojson JSONL writer proposed by design
+    - Path: pkg/chatapp/rpc/jsonl/writer_test.go
+      Note: Writer framing and round-trip validation
     - Path: pkg/chatapp/rpc/rpc_proto_test.go
       Note: Compile and protojson round-trip test for generated RpcLine
     - Path: pkg/chatapp/runtime_inference.go
@@ -78,6 +82,7 @@ LastUpdated: 2026-05-20T13:15:00-04:00
 WhatFor: Use when deciding whether the Pinocchio --rpc implementation should wrap raw Geppetto events or reuse the existing sessionstream/chatapp canonical chat pipeline.
 WhenToUse: Before implementing JSONL RPC output, TUI stream forwarding, or new chat event projections for Pinocchio verbs.
 ---
+
 
 
 

@@ -41,22 +41,22 @@ Goal: create the explicit generated boundary for JSONL/RPC lines before writing 
 
 Goal: provide a small, tested writer that guarantees one protobuf JSON `RpcLine` per line.
 
-- [ ] Add a package such as `pkg/chatapp/rpc/jsonl`.
-- [ ] Implement `Writer` with:
-  - [ ] `protojson.MarshalOptions{EmitUnpopulated:false, UseProtoNames:false}`.
-  - [ ] mutex-protected writes to keep concurrent fanout output line-safe.
-  - [ ] `WriteLine(*chatapprpcv1.RpcLine) error`.
-- [ ] Implement helper constructors/writers:
-  - [ ] `NewHelloLine(sessionID string, capabilities []string) *RpcLine`.
-  - [ ] `NewErrorLine(sessionID string, code string, err error, terminal bool) *RpcLine`.
-  - [ ] `NewDoneLine(sessionID string, status string) *RpcLine`.
-- [ ] Add tests:
-  - [ ] one call writes exactly one newline-terminated line.
-  - [ ] line unmarshals back into `chatapprpcv1.RpcLine` with `protojson.UnmarshalOptions`.
-  - [ ] concurrent writes produce complete JSON lines without interleaving.
-  - [ ] no empty `{}` lines for nil/invalid input; invalid input returns an error.
-- [ ] Run targeted tests for the package.
-- [ ] Commit Phase 2 as a focused writer commit.
+- [x] Add a package such as `pkg/chatapp/rpc/jsonl`.
+- [x] Implement `Writer` with:
+  - [x] `protojson.MarshalOptions{EmitUnpopulated:false, UseProtoNames:false}`.
+  - [x] mutex-protected writes to keep concurrent fanout output line-safe.
+  - [x] `WriteLine(*chatapprpcv1.RpcLine) error`.
+- [x] Implement helper constructors/writers:
+  - [x] `NewHelloLine(sessionID string, capabilities []string) *RpcLine`.
+  - [x] `NewErrorLine(sessionID string, code string, err error, terminal bool) *RpcLine`.
+  - [x] `NewDoneLine(sessionID string, status string) *RpcLine`.
+- [x] Add tests:
+  - [x] one call writes exactly one newline-terminated line.
+  - [x] line unmarshals back into `chatapprpcv1.RpcLine` with `protojson.UnmarshalOptions`.
+  - [x] concurrent writes produce complete JSON lines without interleaving.
+  - [x] no empty `{}` lines for nil/invalid input; invalid input returns an error.
+- [x] Run targeted tests for the package.
+- [ ] Commit Phase 2 as a focused writer commit. (pending after diary update)
 
 ## Phase 3 — sessionstream JSONL fanout and snapshot helpers
 
@@ -71,7 +71,7 @@ Goal: adapt projected chatapp/sessionstream UI events and snapshots to protobuf-
   - [ ] Pack `TimelineEntity.Payload` with `anypb.New`.
   - [ ] Preserve `kind`, `id`, `created_ordinal`, `last_event_ordinal`, and `tombstone`.
 - [ ] Add optional backend-event writer support using the same `RpcLine_BackendEvent` shape, but keep it disabled by default.
-- [ ] Add tests:
+- [x] Add tests:
   - [ ] `ChatTextPatch` UI event emits a valid `uiEvent` line.
   - [ ] `ChatTextSegmentFinished` UI event emits a valid `uiEvent` line.
   - [ ] `ChatRunFinished` UI event emits a valid `uiEvent` line.
@@ -106,7 +106,7 @@ Goal: avoid losing existing Pinocchio verb semantics when routing through chatap
   - [ ] Preserve `Prompt string` for display/user-message content and simple chat calls.
 - [ ] Update `chatapp.runRuntimeInference` to seed `geppetto` session from `InitialTurn` when provided.
 - [ ] Preserve existing prompt-only behavior and tests.
-- [ ] Add tests:
+- [x] Add tests:
   - [ ] prompt-only requests still append user prompt as today.
   - [ ] initial-turn requests pass system/user/image/block context into runtime.
   - [ ] prior turn-store history behavior remains correct or is explicitly ordered relative to initial turn.
@@ -172,6 +172,6 @@ Goal: finish the migration and remove avoidable duplicate stream mappings.
 
 ## Current implementation checkpoint
 
-- Active phase: Phase 1 validation/commit.
-- Current source changes: `rpc.proto`, generated Go/TS bindings, and generated-package protojson round-trip test.
-- Next concrete action: commit Phase 1, then start Phase 2 JSONL writer package.
+- Active phase: Phase 2 validation/commit.
+- Current source changes: `pkg/chatapp/rpc/jsonl` writer and tests.
+- Next concrete action: commit Phase 2, then start Phase 3 sessionstream JSONL fanout.

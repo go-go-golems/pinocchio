@@ -70,3 +70,13 @@ Fixed generated RPC TypeScript binding import ordering after Biome pre-commit fa
 - /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/cmd/web-chat/web/src/chatapp/pb/proto/pinocchio/chatapp/rpc/v1/rpc_pb.ts — Generated TypeScript binding formatted for Biome
 - /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/ttmp/2026/05/20/PIN-20260520-CLI-RPC-JSONL--add-jsonl-rpc-output-mode-to-pinocchio-verbs/reference/01-investigation-diary.md — Recorded pre-commit failure and fix
 
+
+## 2026-05-20
+
+Phase 2: added protojson JSONL writer and framing tests for RpcLine
+
+### Related Files
+
+- /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/chatapp/rpc/jsonl/writer.go — ProtoJSON JSONL writer implementation
+- /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/chatapp/rpc/jsonl/writer_test.go — Writer framing and round-trip tests
+

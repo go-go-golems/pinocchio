@@ -20,6 +20,10 @@ RelatedFiles:
       Note: Investigation identified UIFanout as the key adapter seam
     - Path: cmd/web-chat/app/server.go
       Note: Investigation source for working sessionstream chatapp integration
+    - Path: pkg/chatapp/rpc/jsonl/writer.go
+      Note: Phase 2 implementation artifact recorded in diary
+    - Path: pkg/chatapp/rpc/jsonl/writer_test.go
+      Note: Phase 2 validation tests recorded in diary
     - Path: pkg/chatapp/rpc/rpc_proto_test.go
       Note: Phase 1 validation test recorded in diary
     - Path: pkg/chatapp/runtime_sink.go
@@ -36,6 +40,7 @@ LastUpdated: 2026-05-20T12:45:00-04:00
 WhatFor: Use to understand how the JSONL/RPC output-mode design was researched and what evidence shaped the recommendations.
 WhenToUse: When continuing the ticket, reviewing the design, or implementing the proposed Pinocchio/Geppetto changes.
 ---
+
 
 
 
@@ -725,3 +730,86 @@ src/chatapp/pb/proto/pinocchio/chatapp/rpc/v1/rpc_pb.ts:5:1 assist/source/organi
 ### Technical details
 
 - File fixed: `/home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/cmd/web-chat/web/src/chatapp/pb/proto/pinocchio/chatapp/rpc/v1/rpc_pb.ts`.
+
+## Step 9: Implement Phase 2 protojson JSONL writer
+
+I implemented the small writer package that turns generated `RpcLine` protobuf messages into newline-delimited protobuf JSON. This phase deliberately avoids sessionstream fanout logic; it only guarantees the low-level output invariant that every successful write is one complete JSON object followed by one newline.
+
+### Prompt Context
+
+**User prompt (verbatim):** (same as Step 6)
+
+**Assistant interpretation:** Continue executing the phased implementation plan after the protobuf envelope commit.
+
+**Inferred user intent:** Build the implementation in layers so the RPC writer can be reviewed independently from fanout and CLI integration.
+
+**Commit (code):** pending — Phase 2 writer changes are ready for focused commit.
+
+### What I did
+
+- Added `pkg/chatapp/rpc/jsonl/writer.go`.
+- Implemented `Writer` with:
+  - `protojson.MarshalOptions{EmitUnpopulated:false, UseProtoNames:false}`.
+  - mutex-protected writes.
+  - `WriteLine(*chatapprpcv1.RpcLine) error`.
+  - nil-writer and nil-line validation.
+- Added frame constructor helpers:
+  - `NewHelloLine`
+  - `NewErrorLine`
+  - `NewDoneLine`
+- Added `pkg/chatapp/rpc/jsonl/writer_test.go` with tests for:
+  - newline-terminated single-line output.
+  - protojson round-trip back into `RpcLine`.
+  - invalid input not emitting `{}`.
+  - concurrent writes producing complete parseable lines.
+  - helper constructor fields.
+- Ran `go test ./pkg/chatapp/rpc/... -count=1`.
+
+### Why
+
+- Later fanout and CLI code should not manually marshal JSON maps. This writer makes the protobuf-defined boundary easy to use correctly.
+- The mutex is important because sessionstream fanout could be called from concurrent paths in future adapters.
+
+### What worked
+
+- Targeted tests passed:
+
+```text
+ok  	github.com/go-go-golems/pinocchio/pkg/chatapp/rpc	0.002s
+ok  	github.com/go-go-golems/pinocchio/pkg/chatapp/rpc/jsonl	0.002s
+```
+
+### What didn't work
+
+- N/A for this step.
+
+### What I learned
+
+- Keeping the writer package separate from sessionstream fanout makes the output framing invariant straightforward to test.
+
+### What was tricky to build
+
+- The main edge case is avoiding accidental empty JSON objects. A nil `RpcLine` is technically marshalable to `{}`, but that would be a protocol bug, so the writer rejects nil lines.
+
+### What warrants a second pair of eyes
+
+- Whether `NewErrorLine` should duplicate `err.Error()` into both `message` and `detail` or reserve `detail` for richer diagnostics later.
+
+### What should be done in the future
+
+- Phase 3 should use this writer from a `sessionstream.UIFanout` implementation and add `Any` payload tests.
+
+### Code review instructions
+
+- Review `pkg/chatapp/rpc/jsonl/writer.go` first.
+- Confirm `WriteLine` is the only place that writes raw bytes and that it always appends exactly one newline per call.
+- Run `go test ./pkg/chatapp/rpc/... -count=1`.
+
+### Technical details
+
+Commands run:
+
+```bash
+gofmt -w pkg/chatapp/rpc/jsonl/writer.go pkg/chatapp/rpc/jsonl/writer_test.go
+go test ./pkg/chatapp/rpc/... -count=1
+```
