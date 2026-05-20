@@ -197,3 +197,19 @@ Removed switch-profiles-tui, profileswitch package, raw simple-chat TUI backend/
 - /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/ui/profileswitch — Removed runtime TUI profile-switch package
 - /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/scripts — Removed switch-profile TUI smoke scripts
 
+
+## 2026-05-20
+
+Phase 8: added RPC JSONL help page, removed StepTimelinePersistFunc raw persistence helper, and ran final targeted validation/schema-vet
+
+### Related Files
+
+- /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/cmd/pinocchio/doc/general/06-rpc-jsonl-output.md — User-facing RPC JSONL help page
+- /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/ui/timeline_persist.go — Removed raw UI-topic persistence helper
+- /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/ui/timeline_persist_test.go — Removed tests for deleted raw persistence helper
+
+
+## 2026-05-20
+
+Committed and pushed Phase 8 docs/cleanup as c4af742 docs: finish RPC JSONL phase eight
+

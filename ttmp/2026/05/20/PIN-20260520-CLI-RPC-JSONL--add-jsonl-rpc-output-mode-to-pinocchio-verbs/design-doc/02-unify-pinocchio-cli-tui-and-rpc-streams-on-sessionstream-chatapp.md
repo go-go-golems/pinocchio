@@ -32,6 +32,8 @@ RelatedFiles:
       Note: |-
         Existing websocket frame schema reference
         Existing protobuf JSON websocket transport used as a reference but not reused directly for CLI JSONL
+    - Path: cmd/pinocchio/doc/general/06-rpc-jsonl-output.md
+      Note: Final user-facing RPC JSONL help documentation
     - Path: cmd/switch-profiles-tui
       Note: Removed obsolete switch-profiles TUI command
     - Path: cmd/web-chat/app/server.go
@@ -109,7 +111,9 @@ RelatedFiles:
     - Path: pkg/ui/runtime/builder.go
       Note: Removed transitional raw-handler builder
     - Path: pkg/ui/timeline_persist.go
-      Note: Current raw Geppetto timeline persistence path proposed for migration
+      Note: |-
+        Current raw Geppetto timeline persistence path proposed for migration
+        Removed raw UI-topic persistence helper after sessionstream hydration migration
     - Path: proto/pinocchio/chatapp/rpc/v1/rpc.proto
       Note: Implemented protobuf JSONL line envelope proposed by the design
     - Path: proto/pinocchio/chatapp/v1/chat.proto
@@ -122,6 +126,7 @@ LastUpdated: 2026-05-20T13:15:00-04:00
 WhatFor: Use when deciding whether the Pinocchio --rpc implementation should wrap raw Geppetto events or reuse the existing sessionstream/chatapp canonical chat pipeline.
 WhenToUse: Before implementing JSONL RPC output, TUI stream forwarding, or new chat event projections for Pinocchio verbs.
 ---
+
 
 
 

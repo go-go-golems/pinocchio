@@ -158,24 +158,24 @@ Goal: migrate TUI streaming from raw Geppetto event decoding to projected chatap
 
 Goal: finish the migration and remove avoidable duplicate stream mappings.
 
-- [ ] Add CLI help docs for `--rpc` / `--output jsonl`.
-  - [ ] Explain protobuf JSONL.
-  - [ ] Explain `google.protobuf.Any` `@type` payloads.
-  - [ ] Explain protobuf JSON `uint64` strings and `jq tonumber`.
-  - [ ] Include jq examples for `ChatTextPatch`, final text, tool results, and done/error frames.
-- [ ] Update design docs if implementation decisions differ from the ticket plan.
+- [x] Add CLI help docs for `--rpc` / `--output jsonl`.
+  - [x] Explain protobuf JSONL.
+  - [x] Explain `google.protobuf.Any` `@type` payloads.
+  - [x] Explain protobuf JSON `uint64` strings and `jq tonumber`.
+  - [x] Include jq examples for `ChatTextPatch`, final text, tool results, and done/error frames.
+- [x] Update design docs if implementation decisions differ from the ticket plan. (Design relations/changelog updated; implementation differences documented in diary/report.)
 - [x] Remove `StepChatForwardFunc` and the raw `EngineBackend` path.
-- [ ] Evaluate whether `StepTimelinePersistFunc` can be deprecated in favor of sessionstream hydration stores.
+- [x] Remove `StepTimelinePersistFunc`; command TUI/RPC now use sessionstream hydration stores.
 - [ ] Run broad validation:
-  - [ ] `go test ./pkg/chatapp/... ./pkg/cmds/... ./cmd/pinocchio/...`
-  - [ ] `go test ./cmd/web-chat/...` if runtime composer movement touched web-chat.
-  - [ ] `make schema-vet` if schema changes need vet coverage.
-- [ ] Commit documentation/cleanup changes.
+  - [x] `go test ./pkg/chatapp/... ./pkg/cmds/... ./cmd/pinocchio/...`
+  - [x] `go test ./cmd/web-chat/...` if runtime composer movement touched web-chat.
+  - [x] `make schema-vet` if schema changes need vet coverage.
+- [x] Commit documentation/cleanup changes. (`c4af742 docs: finish RPC JSONL phase eight`)
   - [x] Real tmux smoke tests completed for RPC and TUI with `gpt-5-nano-low` and `gpt-5-mini`.
   - [x] Removed unused TUI wrapper APIs introduced by earlier migration scaffolding.
 
 ## Current implementation checkpoint
 
-- Active phase: Phase 7 implementation.
-- Current source changes: removed `switch-profiles-tui`, `profileswitch`, raw `EngineBackend`/`StepChatForwardFunc`, and related scripts/docs.
-- Next concrete action: commit deletion slice, then complete Phase 8 CLI help/docs and final smoke upload.
+- Active phase: Phase 8 complete; branch pushed for PR review.
+- Current source changes: none; working tree clean after Phase 8 commit.
+- Next concrete action: open/review PR and optionally refresh final reMarkable/doc bundle.

@@ -18,6 +18,8 @@ RelatedFiles:
       Note: Confirmed source of human output markers mentioned in the prompt
     - Path: ../../../../../../../sessionstream/pkg/sessionstream/fanout.go
       Note: Investigation identified UIFanout as the key adapter seam
+    - Path: cmd/pinocchio/doc/general/06-rpc-jsonl-output.md
+      Note: Phase 8 help doc recorded in diary
     - Path: cmd/switch-profiles-tui
       Note: Removal recorded in Step 19
     - Path: cmd/web-chat/app/server.go
@@ -67,6 +69,8 @@ RelatedFiles:
       Note: Phase 7 adapter validation recorded in diary
     - Path: pkg/ui/fanout_proxy.go
       Note: Step 18 fanout proxy diary artifact
+    - Path: pkg/ui/timeline_persist.go
+      Note: Phase 8 raw persistence removal recorded in diary
     - Path: proto/pinocchio/chatapp/rpc/v1/rpc.proto
       Note: Phase 1 implementation artifact recorded in diary
 ExternalSources: []
@@ -75,6 +79,7 @@ LastUpdated: 2026-05-20T12:45:00-04:00
 WhatFor: Use to understand how the JSONL/RPC output-mode design was researched and what evidence shaped the recommendations.
 WhenToUse: When continuing the ticket, reviewing the design, or implementing the proposed Pinocchio/Geppetto changes.
 ---
+
 
 
 
@@ -1751,3 +1756,75 @@ Result: all packages passed.
 
 - Confirm that dropping runtime TUI profile switching is acceptable now that command chat uses the selected launch profile only.
 - Confirm whether any external documentation outside this repo mentions `switch-profiles-tui` and should be cleaned later.
+
+## Step 20: Phase 8 CLI help docs and final raw persistence cleanup
+
+I continued Phase 8 after the command TUI and switch-profile cleanup. This step focused on user-facing documentation for the RPC stream and removing the last unused raw TUI persistence helper.
+
+### Prompt Context
+
+**User prompt (verbatim):** `then continue phase 8`
+
+**Assistant interpretation:** Finish the Phase 8 documentation, cleanup, and validation tasks that remained after the TUI migration and switch-profiles removal.
+
+**Inferred user intent:** Complete the project enough that users can discover the JSONL/RPC mode from `pinocchio help`, and remove residual raw event persistence code that no longer belongs to the command TUI/RPC path.
+
+**Commit (code):** `c4af742 docs: finish RPC JSONL phase eight`
+
+### What I changed
+
+- Added a Glazed help page at `cmd/pinocchio/doc/general/06-rpc-jsonl-output.md`.
+- The page documents:
+  - `--rpc` and `--output jsonl`,
+  - the fact that every stdout line is a protojson `pinocchio.chatapp.rpc.v1.RpcLine`,
+  - the outer frame shape,
+  - `google.protobuf.Any` `@type` payloads,
+  - protobuf JSON `uint64` strings and `jq tonumber`,
+  - `jq` examples for `ChatTextPatch`, final assistant text, tool-related frames, done frames, and terminal error frames,
+  - troubleshooting guidance for stdout purity, missing `done`, and typed payload filtering.
+- Removed `pkg/ui/timeline_persist.go` and `pkg/ui/timeline_persist_test.go`.
+  - This was the last raw Watermill UI-topic persistence helper tied to the old command TUI architecture.
+  - Command RPC and command TUI now use sessionstream hydration snapshots instead.
+
+### Validation
+
+I ran the targeted test suite requested in the Phase 8 checklist:
+
+```bash
+go test ./pkg/chatapp/... ./pkg/cmds/... ./cmd/pinocchio/... ./cmd/web-chat/... -count=1
+```
+
+Result: all listed packages passed.
+
+I verified the new help topic is discoverable:
+
+```bash
+go run ./cmd/pinocchio help rpc-jsonl-output
+```
+
+The help renderer displayed the new `Protobuf JSONL RPC Output` page.
+
+I also ran schema vet:
+
+```bash
+make schema-vet
+```
+
+Result:
+
+```text
+go build -o /tmp/sessionstream-lint ../sessionstream/cmd/sessionstream-lint
+go vet -vettool=/tmp/sessionstream-lint ./cmd/... ./pkg/...
+```
+
+No schema-vet errors were reported.
+
+### What worked
+
+- The help page loaded through the existing embedded `cmd/pinocchio/doc` help system without additional Go wiring.
+- Removing `StepTimelinePersistFunc` did not break the targeted command/chatapp/web-chat test set.
+
+### What remains
+
+- The Phase 8 slice was committed and pushed to `origin/task/pinocchio-structured-data-cli`.
+- Optionally upload or refresh the reMarkable/doc bundle if final deliverable distribution is desired.
