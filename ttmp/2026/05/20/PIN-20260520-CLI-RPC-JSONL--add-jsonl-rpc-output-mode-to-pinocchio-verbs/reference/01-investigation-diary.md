@@ -18,6 +18,8 @@ RelatedFiles:
       Note: Confirmed source of human output markers mentioned in the prompt
     - Path: ../../../../../../../sessionstream/pkg/sessionstream/fanout.go
       Note: Investigation identified UIFanout as the key adapter seam
+    - Path: cmd/switch-profiles-tui
+      Note: Removal recorded in Step 19
     - Path: cmd/web-chat/app/server.go
       Note: Investigation source for working sessionstream chatapp integration
     - Path: pkg/chatapp/chat_test.go
@@ -55,6 +57,8 @@ RelatedFiles:
         Phase 6 helper flag changes recorded in diary
     - Path: pkg/cmds/run/context.go
       Note: Phase 6 run mode changes recorded in diary
+    - Path: pkg/ui/backend.go
+      Note: Raw forwarder removal recorded in Step 19
     - Path: pkg/ui/chatapp_backend.go
       Note: Step 18 TUI migration diary artifact
     - Path: pkg/ui/chatapp_fanout.go
@@ -71,6 +75,7 @@ LastUpdated: 2026-05-20T12:45:00-04:00
 WhatFor: Use to understand how the JSONL/RPC output-mode design was researched and what evidence shaped the recommendations.
 WhenToUse: When continuing the ticket, reviewing the design, or implementing the proposed Pinocchio/Geppetto changes.
 ---
+
 
 
 
@@ -1687,3 +1692,62 @@ ok  	github.com/go-go-golems/pinocchio/pkg/cmds	0.112s
 ok  	github.com/go-go-golems/pinocchio/pkg/ui	0.045s
 ok  	github.com/go-go-golems/pinocchio/pkg/chatapp	0.074s
 ```
+
+## Step 19: Remove switch-profiles TUI and remaining raw simple-chat forwarder
+
+I removed the standalone `cmd/switch-profiles-tui` helper and the associated profile-switch package/scripts. Since the command chat path now runs through chatapp/sessionstream, these files were only keeping the old raw TUI forwarding stack alive.
+
+### Prompt Context
+
+**User prompt (verbatim):** `remove swithc-profiles-tui`
+
+**Assistant interpretation:** Remove the misspelled-but-clear `switch-profiles-tui` command and related raw/profile-switching support code.
+
+**Inferred user intent:** Finish deleting the old TUI/profile-switch compatibility path rather than preserving a separate legacy executable.
+
+**Commit (code):** pending — deletion slice is ready for commit.
+
+### What I removed
+
+- `cmd/switch-profiles-tui/`
+- `pkg/ui/profileswitch/`
+- switch-profile TUI smoke/verification scripts:
+  - `scripts/switch-profiles-tui-*.sh`
+  - `scripts/pinocchio-chat-profile-switch-*.sh`
+- raw simple-chat TUI backend/forwarder:
+  - `pkg/ui/backend.go`
+  - `pkg/ui/backend_test.go`
+
+### What I updated
+
+- Removed references to `profileswitch`, `switch-profiles-tui`, `StepChatForwardFunc`, and `EngineBackend` from docs.
+- Updated profile-resolution docs so they describe profile resolution/baseline handling, not runtime TUI profile switching.
+- Updated TUI integration docs to point simple chat users at the chatapp/sessionstream backend and fanout.
+- Updated the run-context comment so `Profile` is described as selected-profile display metadata, not an interactive switching input.
+
+### Validation
+
+First `go test ./... -count=1` failed because `pkg/ui/backend_test.go` still referenced `backendWaitResultMsg` after deleting `pkg/ui/backend.go`:
+
+```text
+pkg/ui/backend_test.go:12:9: undefined: backendWaitResultMsg
+pkg/ui/backend_test.go:24:9: undefined: backendWaitResultMsg
+```
+
+I deleted `pkg/ui/backend_test.go` too. Full validation then passed:
+
+```bash
+go test ./... -count=1
+```
+
+Result: all packages passed.
+
+### What worked
+
+- After deletion, repository-wide search no longer finds `StepChatForwardFunc`, `EngineBackend`, `NewEngineBackend`, `profileswitch`, or `switch-profiles-tui` under source/docs/scripts outside the ticket history.
+- Full Go tests pass.
+
+### What should be reviewed
+
+- Confirm that dropping runtime TUI profile switching is acceptable now that command chat uses the selected launch profile only.
+- Confirm whether any external documentation outside this repo mentions `switch-profiles-tui` and should be cleaned later.

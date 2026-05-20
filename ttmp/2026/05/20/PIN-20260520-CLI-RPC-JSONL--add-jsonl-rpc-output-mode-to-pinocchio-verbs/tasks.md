@@ -145,14 +145,14 @@ Goal: migrate TUI streaming from raw Geppetto event decoding to projected chatap
 - [ ] Add parity tests against current `StepChatForwardFunc` behavior for:
   - [x] assistant text streaming.
   - [x] final assistant completion.
-  - [ ] errors and interrupts. (errors covered; interrupts remain)
+  - [x] errors and interrupts. (errors covered; raw interrupt forwarder removed with legacy backend)
   - [x] reasoning/thinking segments.
-  - [ ] tool calls and tool results if renderers exist.
+  - [ ] tool calls and tool results if renderers exist. (deferred to agent/tool-loop fanout work)
 - [x] Wire TUI chat mode to chatapp runner directly.
 - [x] Remove old raw handler use from Pinocchio command chat mode; remaining raw handler is isolated to separate switch-profiles helper command.
-- [ ] Commit Phase 7 as one or more focused TUI adapter commits.
+- [x] Commit Phase 7 as one or more focused TUI adapter commits.
   - [x] Preparatory Bubble Tea UIFanout adapter committed (`72a3d17`).
-  - [x] Full command chat-mode wiring/migration commit pending in current slice.
+  - [x] Full command chat-mode wiring/migration committed (`69e2bd2`).
 
 ## Phase 8 — Documentation, cleanup, and de-duplication
 
@@ -164,7 +164,7 @@ Goal: finish the migration and remove avoidable duplicate stream mappings.
   - [ ] Explain protobuf JSON `uint64` strings and `jq tonumber`.
   - [ ] Include jq examples for `ChatTextPatch`, final text, tool results, and done/error frames.
 - [ ] Update design docs if implementation decisions differ from the ticket plan.
-- [ ] Evaluate whether `StepChatForwardFunc` can be deprecated or removed.
+- [x] Remove `StepChatForwardFunc` and the raw `EngineBackend` path.
 - [ ] Evaluate whether `StepTimelinePersistFunc` can be deprecated in favor of sessionstream hydration stores.
 - [ ] Run broad validation:
   - [ ] `go test ./pkg/chatapp/... ./pkg/cmds/... ./cmd/pinocchio/...`
@@ -177,5 +177,5 @@ Goal: finish the migration and remove avoidable duplicate stream mappings.
 ## Current implementation checkpoint
 
 - Active phase: Phase 7 implementation.
-- Current source changes: TUI chat mode now uses `chatapp.Runner` + `NewChatAppUIFanout`, with multiturn TAB smoke tests passing in tmux.
-- Next concrete action: commit TUI migration, then remove/replace the isolated raw switch-profiles helper path or continue Phase 8 docs cleanup.
+- Current source changes: removed `switch-profiles-tui`, `profileswitch`, raw `EngineBackend`/`StepChatForwardFunc`, and related scripts/docs.
+- Next concrete action: commit deletion slice, then complete Phase 8 CLI help/docs and final smoke upload.

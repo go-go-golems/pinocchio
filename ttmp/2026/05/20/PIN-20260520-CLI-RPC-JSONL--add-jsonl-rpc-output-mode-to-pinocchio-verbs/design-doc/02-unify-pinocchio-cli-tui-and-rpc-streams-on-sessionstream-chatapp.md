@@ -32,6 +32,8 @@ RelatedFiles:
       Note: |-
         Existing websocket frame schema reference
         Existing protobuf JSON websocket transport used as a reference but not reused directly for CLI JSONL
+    - Path: cmd/switch-profiles-tui
+      Note: Removed obsolete switch-profiles TUI command
     - Path: cmd/web-chat/app/server.go
       Note: Working web integration of sessionstream and chatapp
     - Path: cmd/web-chat/main.go
@@ -91,7 +93,9 @@ RelatedFiles:
     - Path: pkg/cmds/run/context.go
       Note: Added RunModeRPCJSONL and UISettings.RPC
     - Path: pkg/ui/backend.go
-      Note: Current raw Geppetto TUI forwarding path proposed for migration
+      Note: |-
+        Current raw Geppetto TUI forwarding path proposed for migration
+        Removed raw simple-chat backend/forwarder
     - Path: pkg/ui/chatapp_backend.go
       Note: Command TUI backend over chatapp/sessionstream with multiturn state
     - Path: pkg/ui/chatapp_fanout.go
@@ -100,6 +104,8 @@ RelatedFiles:
       Note: Adapter tests for streaming
     - Path: pkg/ui/fanout_proxy.go
       Note: Fanout proxy for TUI construction order
+    - Path: pkg/ui/profileswitch
+      Note: Removed obsolete runtime TUI profile switch package
     - Path: pkg/ui/runtime/builder.go
       Note: Removed transitional raw-handler builder
     - Path: pkg/ui/timeline_persist.go
@@ -116,6 +122,7 @@ LastUpdated: 2026-05-20T13:15:00-04:00
 WhatFor: Use when deciding whether the Pinocchio --rpc implementation should wrap raw Geppetto events or reuse the existing sessionstream/chatapp canonical chat pipeline.
 WhenToUse: Before implementing JSONL RPC output, TUI stream forwarding, or new chat event projections for Pinocchio verbs.
 ---
+
 
 
 

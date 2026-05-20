@@ -339,15 +339,13 @@ This stack has multiple concurrent subsystems (Bubble Tea UI loop, inference gor
 - Avoid binding SQLite writes to `msg.Context()` inside Watermill handlers. That context is scoped to message delivery and can be canceled unexpectedly. Use a detached bounded context (`context.WithTimeout(context.Background(), ...)`) for best-effort persistence.
 - Do not cancel the backend/inference context during “completion cleanup” unless the user explicitly requested interrupt/quit. Canceling too early can prevent persisters from flushing final turn snapshots.
 
-## When to use ChatBuilder instead
+## When to use chatapp/sessionstream instead
 
-If you do **not** need tool-loop/agent entities, Pinocchio already has a “simple chat” reusable builder:
+If you do **not** need tool-loop/agent entities, use the command chatapp/sessionstream path instead of raw Watermill forwarding:
 
-- Builder: `pinocchio/pkg/ui/runtime/builder.go`
-- Backend: `pinocchio/pkg/ui/backend.go` (`EngineBackend`)
-- Forwarder: `pinocchio/pkg/ui/backend.go` (`StepChatForwardFunc`)
-
-See: `pinocchio help chatbuilder-guide`
+- Backend: `pinocchio/pkg/ui/chatapp_backend.go` (`ChatAppBackend`)
+- Fanout: `pinocchio/pkg/ui/chatapp_fanout.go` (`ChatAppUIFanout`)
+- Runner: `pinocchio/pkg/chatapp/runner.go`
 
 ## Troubleshooting
 

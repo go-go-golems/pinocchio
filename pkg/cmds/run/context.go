@@ -45,7 +45,7 @@ type RunContext struct {
 	InferenceSettings *settings.InferenceSettings
 	BaseSettings      *settings.InferenceSettings
 
-	// Profile selection inputs (used by interactive chat to support profile switching).
+	// Profile selection inputs used to report the resolved profile in chat UI.
 	Profile           string
 	ProfileRegistries string
 

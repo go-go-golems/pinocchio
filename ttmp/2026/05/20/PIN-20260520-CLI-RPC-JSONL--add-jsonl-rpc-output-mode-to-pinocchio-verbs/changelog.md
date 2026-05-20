@@ -185,3 +185,15 @@ Removed leftover unused command TUI profile-switch/seed helper files after migra
 - /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/cmds/profile_switch_events.go — Removed unused profile-switch event helpers
 - /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/cmds/seed_emit.go — Removed unused raw seed emission helpers
 
+
+## 2026-05-20
+
+Removed switch-profiles-tui, profileswitch package, raw simple-chat TUI backend/forwarder, and related scripts/docs references
+
+### Related Files
+
+- /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/cmd/switch-profiles-tui — Removed standalone switch-profiles TUI command
+- /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/ui/backend.go — Removed raw simple-chat TUI backend and StepChatForwardFunc
+- /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/ui/profileswitch — Removed runtime TUI profile-switch package
+- /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/scripts — Removed switch-profile TUI smoke scripts
+

@@ -1,7 +1,7 @@
 ---
-Title: Pinocchio Profile Resolution and Runtime Switching
+Title: Pinocchio Profile Resolution
 Slug: profile-resolution-runtime-switching
-Short: How Pinocchio builds hidden base settings, merges engine profiles, and switches profiles at runtime without losing the underlying baseline.
+Short: How Pinocchio builds hidden base settings and merges engine profiles without contaminating the underlying baseline.
 Topics:
 - pinocchio
 - profiles
@@ -23,7 +23,7 @@ ShowPerDefault: true
 SectionType: GeneralTopic
 ---
 
-# Pinocchio Profile Resolution and Runtime Switching
+# Pinocchio Profile Resolution
 
 ## What This Page Covers
 
@@ -38,7 +38,7 @@ You need this page when you are trying to understand:
 
 - what `BaseInferenceSettings` really means
 - why `FinalInferenceSettings` is separate
-- how runtime profile switching avoids contaminating the baseline
+- how profile resolution avoids contaminating the baseline
 - why cross-profile settings such as `ai-client.*` belong in the baseline rather than in profiles
 - how local project config files such as `.pinocchio.yml` participate in bootstrap
 - how to inspect parsed field history to see which config layer won
@@ -57,9 +57,7 @@ The profile overlay is Geppetto-owned.
 
 The active runtime settings are what the current engine is actually built from.
 
-When a user switches profiles later, Pinocchio does not mutate the existing active settings in place and treat that as the new baseline. It goes back to the preserved baseline, resolves a new profile overlay, and builds a new active settings object from scratch.
-
-That is the whole reason profile switching stays deterministic.
+Pinocchio keeps baseline reconstruction separate from profile overlay merging so selected profiles do not become the new baseline for future command resolution.
 
 ## The Three Settings States
 
@@ -127,7 +125,7 @@ See:
 
 - `pinocchio/pkg/cmds/profile_base_settings.go`
 
-This path is especially important for commands that already parsed their real flag surface and for runtime profile switching.
+This path is especially important for commands that already parsed their real flag surface and still need a clean profile-free baseline.
 
 ### 3. Final inference settings
 
@@ -183,7 +181,7 @@ Glazed middleware parses values
   -> engine factory
 ```
 
-The important subtlety is that `stepSettings` can already reflect profile effects. That makes it useful for ordinary command execution but unsafe as the baseline for later profile switching unless profile-derived values are removed first.
+The important subtlety is that `stepSettings` can already reflect profile effects. That makes it useful for ordinary command execution but unsafe as a clean baseline unless profile-derived values are removed first.
 
 ## Why Stripping `profiles` Parse Steps Matters
 
@@ -203,7 +201,7 @@ parsed values
   = profile-free parsed baseline
 ```
 
-That is the key trick that lets Pinocchio rebase runtime profile changes onto the original launch-time settings instead of onto whatever profile happened to be active last.
+That is the key trick that lets Pinocchio recover the original launch-time settings instead of treating the selected profile as part of the baseline.
 
 ## Config Provenance In Parsed Field History
 
@@ -247,32 +245,6 @@ profile.active:
 ```
 
 This provenance is especially useful when reviewing bug reports or unexpected profile selection in nested repositories.
-
-## Runtime Profile Switching
-
-The runtime switching implementation lives in:
-
-- `pinocchio/pkg/ui/profileswitch/manager.go`
-- `pinocchio/pkg/ui/profileswitch/backend.go`
-
-The manager keeps a preserved `base *settings.InferenceSettings`. When a switch happens:
-
-1. it resolves the requested profile from the registry
-2. it merges that profile onto the preserved base
-3. it returns a new `Resolved` object
-4. the backend rebuilds the engine/session builder from the new final settings
-
-Sequence sketch:
-
-```text
-SwitchProfile(profileSlug)
-  -> manager.Resolve(profileSlug)
-  -> merge(preserved base, resolved overlay)
-  -> backend.applyResolved(...)
-  -> new engine + new session builder
-```
-
-The session builder changes. The preserved base does not.
 
 ## Why This Matters For `ai-client`
 
