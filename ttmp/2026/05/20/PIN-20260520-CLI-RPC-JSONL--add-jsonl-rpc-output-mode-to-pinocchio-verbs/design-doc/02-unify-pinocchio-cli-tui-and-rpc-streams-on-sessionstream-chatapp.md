@@ -62,6 +62,10 @@ RelatedFiles:
       Note: Writer framing and round-trip validation
     - Path: pkg/chatapp/rpc/rpc_proto_test.go
       Note: Compile and protojson round-trip test for generated RpcLine
+    - Path: pkg/chatapp/runner.go
+      Note: Implemented reusable non-web chatapp/sessionstream runner proposed by design
+    - Path: pkg/chatapp/runner_test.go
+      Note: Runner tests for prompt submission snapshot and plugin schemas
     - Path: pkg/chatapp/runtime_inference.go
       Note: Chatapp runtime execution path using ComposedRuntime
     - Path: pkg/chatapp/runtime_sink.go
@@ -86,6 +90,7 @@ LastUpdated: 2026-05-20T13:15:00-04:00
 WhatFor: Use when deciding whether the Pinocchio --rpc implementation should wrap raw Geppetto events or reuse the existing sessionstream/chatapp canonical chat pipeline.
 WhenToUse: Before implementing JSONL RPC output, TUI stream forwarding, or new chat event projections for Pinocchio verbs.
 ---
+
 
 
 

@@ -90,3 +90,13 @@ Phase 3: added sessionstream UIFanout JSONL adapter with snapshot/backend-event 
 - /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/chatapp/rpc/jsonl/fanout.go — sessionstream UI fanout to protobuf JSONL frames
 - /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/chatapp/rpc/jsonl/fanout_test.go — fanout
 
+
+## 2026-05-20
+
+Phase 4: added reusable non-web chatapp runner with sessionstream wiring and tests
+
+### Related Files
+
+- /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/chatapp/runner.go — Reusable chatapp/sessionstream runner
+- /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/chatapp/runner_test.go — Runner submission snapshot and plugin schema tests
+

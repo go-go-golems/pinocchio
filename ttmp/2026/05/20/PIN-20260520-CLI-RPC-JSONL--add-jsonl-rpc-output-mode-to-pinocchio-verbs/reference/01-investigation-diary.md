@@ -30,6 +30,10 @@ RelatedFiles:
       Note: Phase 2 validation tests recorded in diary
     - Path: pkg/chatapp/rpc/rpc_proto_test.go
       Note: Phase 1 validation test recorded in diary
+    - Path: pkg/chatapp/runner.go
+      Note: Phase 4 implementation artifact recorded in diary
+    - Path: pkg/chatapp/runner_test.go
+      Note: Phase 4 validation tests recorded in diary
     - Path: pkg/chatapp/runtime_sink.go
       Note: Investigation identified existing Geppetto-to-chat event mapping
     - Path: pkg/cmds/cmd.go
@@ -44,6 +48,7 @@ LastUpdated: 2026-05-20T12:45:00-04:00
 WhatFor: Use to understand how the JSONL/RPC output-mode design was researched and what evidence shaped the recommendations.
 WhenToUse: When continuing the ticket, reviewing the design, or implementing the proposed Pinocchio/Geppetto changes.
 ---
+
 
 
 
@@ -911,4 +916,102 @@ Commands run:
 ```bash
 gofmt -w pkg/chatapp/rpc/jsonl/fanout.go pkg/chatapp/rpc/jsonl/fanout_test.go
 go test ./pkg/chatapp/rpc/... -count=1
+```
+
+## Step 11: Implement Phase 4 reusable non-web chatapp runner
+
+I added a package-level runner that wires together chatapp and sessionstream without HTTP or websocket dependencies. This is the reusable foundation that CLI RPC and TUI adapters can use instead of duplicating the web-chat server setup.
+
+### Prompt Context
+
+**User prompt (verbatim):** (same as Step 6)
+
+**Assistant interpretation:** Continue the phased migration by extracting the non-web chatapp/sessionstream wiring needed by CLI and TUI surfaces.
+
+**Inferred user intent:** Make web-chat's sessionstream/chatapp architecture reusable by non-web Pinocchio verbs.
+
+**Commit (code):** pending — Phase 4 runner changes are ready for focused commit.
+
+### What I did
+
+- Added `pkg/chatapp/runner.go`.
+- Implemented `RunnerOptions` with:
+  - optional schema registry,
+  - optional hydration store,
+  - optional `sessionstream.UIFanout`,
+  - optional turn store,
+  - plugins,
+  - chunk delay.
+- Implemented `Runner` with handles to:
+  - schema registry,
+  - hydration store,
+  - hub,
+  - engine,
+  - service.
+- Implemented `NewRunner` to:
+  - register chatapp schemas and plugin schemas,
+  - create an in-memory SQLite hydration store if none is provided,
+  - create a chatapp engine,
+  - create a sessionstream hub,
+  - install chatapp commands/projections,
+  - return a service.
+- Implemented `Runner.Close` for cleanup of the default in-memory store.
+- Added `pkg/chatapp/runner_test.go` with tests for:
+  - submitting a demo prompt through the runner,
+  - waiting for idle,
+  - observing projected UI events through a recording fanout,
+  - fetching a snapshot,
+  - registering reasoning and tool plugin schemas.
+
+### Why
+
+- `cmd/web-chat/app/server.go` already has working setup logic, but it is tied to HTTP/websocket server construction. CLI and TUI need the same substrate without importing a command package.
+- This runner is the bridge from the earlier protocol/fanout work to actual Pinocchio verb integration.
+
+### What worked
+
+- Targeted tests passed:
+
+```text
+ok  	github.com/go-go-golems/pinocchio/pkg/chatapp	0.090s
+ok  	github.com/go-go-golems/pinocchio/pkg/chatapp/export	0.029s
+ok  	github.com/go-go-golems/pinocchio/pkg/chatapp/plugins	0.006s
+ok  	github.com/go-go-golems/pinocchio/pkg/chatapp/rpc	0.002s
+ok  	github.com/go-go-golems/pinocchio/pkg/chatapp/rpc/jsonl	0.005s
+```
+
+### What didn't work
+
+- N/A for this step.
+
+### What I learned
+
+- The non-web setup is compact because `chatapp.Install` already owns command/projection registration and sessionstream already owns the hub mechanics.
+- A recording `UIFanout` is enough to test that the runner produces projected UI events without involving websocket or JSONL transport.
+
+### What was tricky to build
+
+- The runner needed to avoid colliding with the existing `Option` type used by `chatapp.Engine`; the new public config type is `RunnerOptions` rather than another option-function API.
+
+### What warrants a second pair of eyes
+
+- Whether the default hydration store should be SQLite in-memory, as web-chat uses, or a simpler sessionstream memory store if one exists or is added later.
+- Whether `Runner` should expose `Registry`, `Store`, `Hub`, and `Engine` directly or hide some of those behind methods.
+
+### What should be done in the future
+
+- Phase 5 should extend `PromptRequest` to accept rich initial turns so Pinocchio verbs can preserve system prompts, blocks, and images when routed through the runner.
+
+### Code review instructions
+
+- Review `pkg/chatapp/runner.go` against `cmd/web-chat/app/server.go` to verify it mirrors the substrate setup without HTTP concerns.
+- Run `go test ./pkg/chatapp/... -count=1`.
+
+### Technical details
+
+Commands run:
+
+```bash
+gofmt -w pkg/chatapp/runner.go pkg/chatapp/runner_test.go
+go test ./pkg/chatapp/... -count=1
 ```

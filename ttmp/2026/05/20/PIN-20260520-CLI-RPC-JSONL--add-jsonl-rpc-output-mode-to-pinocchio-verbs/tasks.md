@@ -78,24 +78,24 @@ Goal: adapt projected chatapp/sessionstream UI events and snapshots to protobuf-
   - [x] emitted `Any` payloads unpack into concrete `chatappv1` messages.
   - [x] snapshot entities unpack into concrete `chatappv1.ChatMessageEntity` messages.
 - [x] Run targeted tests.
-- [ ] Commit Phase 3 as a focused fanout commit. (pending after diary update)
+- [x] Commit Phase 3 as a focused fanout commit (`b6ab166`).
 
 ## Phase 4 — Reusable non-web chatapp runner
 
 Goal: make CLI/TUI able to use the same sessionstream/chatapp stack currently wired by web-chat.
 
-- [ ] Add `pkg/chatapp/runner.go` or an equivalent package-level helper.
-  - [ ] Accept `HydrationStore`, `UIFanout`, `TurnStore`, plugins, and chunk-delay options.
-  - [ ] Create a `SchemaRegistry` and call `chatapp.RegisterSchemas`.
-  - [ ] Create default in-memory hydration store when none is provided.
-  - [ ] Create `chatapp.Engine` with plugins and turn-store support.
-  - [ ] Create `sessionstream.Hub` with schema registry, hydration store, and fanout.
-  - [ ] Call `chatapp.Install` and return `chatapp.Service` plus useful handles.
-- [ ] Add tests mirroring web-chat setup without HTTP.
-  - [ ] runner can submit a demo prompt and wait idle.
-  - [ ] runner can return a snapshot.
-  - [ ] plugins register reasoning/tool schemas through the runner.
-- [ ] Commit Phase 4 as a focused runner commit.
+- [x] Add `pkg/chatapp/runner.go` or an equivalent package-level helper.
+  - [x] Accept `HydrationStore`, `UIFanout`, `TurnStore`, plugins, and chunk-delay options.
+  - [x] Create a `SchemaRegistry` and call `chatapp.RegisterSchemas`.
+  - [x] Create default in-memory hydration store when none is provided.
+  - [x] Create `chatapp.Engine` with plugins and turn-store support.
+  - [x] Create `sessionstream.Hub` with schema registry, hydration store, and fanout.
+  - [x] Call `chatapp.Install` and return `chatapp.Service` plus useful handles.
+- [x] Add tests mirroring web-chat setup without HTTP.
+  - [x] runner can submit a demo prompt and wait idle.
+  - [x] runner can return a snapshot.
+  - [x] plugins register reasoning/tool schemas through the runner.
+- [ ] Commit Phase 4 as a focused runner commit. (pending after diary update)
 
 ## Phase 5 — Support rich Pinocchio verb input in chatapp
 
@@ -172,6 +172,6 @@ Goal: finish the migration and remove avoidable duplicate stream mappings.
 
 ## Current implementation checkpoint
 
-- Active phase: Phase 3 validation/commit.
-- Current source changes: `pkg/chatapp/rpc/jsonl` sessionstream UI fanout, snapshot helpers, backend-event helper, and tests.
-- Next concrete action: commit Phase 3, then start Phase 4 reusable non-web chatapp runner.
+- Active phase: Phase 4 validation/commit.
+- Current source changes: reusable `chatapp.Runner` and runner tests.
+- Next concrete action: commit Phase 4, then start Phase 5 rich Pinocchio verb input in chatapp.
