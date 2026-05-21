@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
+	"github.com/go-go-golems/geppetto/pkg/turns"
 	"github.com/go-go-golems/pinocchio/pkg/cmds/cmdlayers"
 	"github.com/go-go-golems/pinocchio/pkg/cmds/run"
 	"github.com/stretchr/testify/require"
@@ -52,6 +53,22 @@ func TestRunWithOptionsBlockingDebugEventsKeepsTextOnStdout(t *testing.T) {
 		}
 	}
 	require.True(t, sawPatch, string(debugBytes))
+}
+
+func TestSnapshotFromTurnForHydrationPreservesVisibleChatHistory(t *testing.T) {
+	seed := &turns.Turn{}
+	turns.AppendBlock(seed, turns.NewSystemTextBlock("system seed"))
+	turns.AppendBlock(seed, turns.NewUserTextBlock("user question"))
+	turns.AppendBlock(seed, turns.NewAssistantTextBlock("assistant answer"))
+
+	snap := snapshotFromTurnForHydration("sid", seed)
+	require.Equal(t, "sid", string(snap.SessionId))
+	require.Len(t, snap.Entities, 2)
+	require.Equal(t, "user", snap.Entities[0].Payload.(interface{ GetRole() string }).GetRole())
+	require.Equal(t, "user question", snap.Entities[0].Payload.(interface{ GetContent() string }).GetContent())
+	require.Equal(t, "assistant", snap.Entities[1].Payload.(interface{ GetRole() string }).GetRole())
+	require.Equal(t, "finished", snap.Entities[1].Payload.(interface{ GetStatus() string }).GetStatus())
+	require.Equal(t, "assistant answer", snap.Entities[1].Payload.(interface{ GetContent() string }).GetContent())
 }
 
 func TestRunWithOptionsRPCJSONLWritesDebugEventsJSONL(t *testing.T) {

@@ -125,12 +125,17 @@ func TestRunWithOptionsRPCJSONLEmitsTerminalErrorFrame(t *testing.T) {
 	require.Error(t, err)
 
 	var sawTerminalError bool
+	var doneStatus string
 	for _, frame := range parseRPCLines(t, out.String()) {
 		if ef := frame.GetError(); ef != nil {
 			sawTerminalError = ef.GetTerminal() && strings.Contains(ef.GetMessage(), "failed to create engine")
 		}
+		if done := frame.GetDone(); done != nil {
+			doneStatus = done.GetStatus()
+		}
 	}
 	require.True(t, sawTerminalError, "expected terminal error frame in %s", out.String())
+	require.Equal(t, "failed", doneStatus, "startup failures should still close the RPC stream with a done frame")
 }
 
 func newRPCJSONLTestCommand(t *testing.T, name string, engineFactory any) *PinocchioCommand {

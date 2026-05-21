@@ -495,6 +495,10 @@ func shouldAskForChatContinuation(rc *run.RunContext, force bool) bool {
 		return false
 	}
 	if force || (rc.UISettings != nil && rc.UISettings.ForceInteractive) {
+		// Explicit interactive modes are operator requests, not scripting compatibility
+		// shims. They intentionally proceed to /dev/tty prompting even when stdout is
+		// redirected; callers that need a guaranteed non-prompting scripted path should
+		// use --non-interactive or avoid --interactive/--force-interactive.
 		return true
 	}
 	return isatty.IsTerminal(os.Stdout.Fd())
@@ -573,13 +577,13 @@ func (g *PinocchioCommand) runBlockingWithDebugEvents(ctx context.Context, rc *r
 	statusFanout := newRunStatusFanout(debugFanout)
 	runner, err := chatapp.NewRunner(commandRunnerOptions(statusFanout))
 	if err != nil {
-		_ = writeErrorAll(sid, "runner_init_failed", err, true, debugFanout)
+		_ = writeTerminalErrorDoneAll(sid, "runner_init_failed", err, debugFanout)
 		return nil, err
 	}
 	defer func() { _ = runner.Close() }()
 	initialSnap, err := runner.Service.Snapshot(ctx, sid)
 	if err != nil {
-		_ = writeErrorAll(sid, "initial_snapshot_failed", err, true, debugFanout)
+		_ = writeTerminalErrorDoneAll(sid, "initial_snapshot_failed", err, debugFanout)
 		return nil, err
 	}
 	if err := writeSnapshotAll(initialSnap, debugFanout); err != nil {
@@ -589,21 +593,21 @@ func (g *PinocchioCommand) runBlockingWithDebugEvents(ctx context.Context, rc *r
 	engine, err := rc.EngineFactory.CreateEngine(rc.InferenceSettings)
 	if err != nil {
 		err = fmt.Errorf("failed to create engine: %w", err)
-		_ = writeErrorAll(sid, "engine_init_failed", err, true, debugFanout)
+		_ = writeTerminalErrorDoneAll(sid, "engine_init_failed", err, debugFanout)
 		return nil, err
 	}
 	req := chatapp.PromptRequest{Prompt: prompt, InitialTurn: seed, Runtime: &infruntime.ComposedRuntime{Engine: engine}}
 	if err := runner.Service.SubmitPromptRequest(ctx, sid, req); err != nil {
-		_ = writeErrorAll(sid, "submit_failed", err, true, debugFanout)
+		_ = writeTerminalErrorDoneAll(sid, "submit_failed", err, debugFanout)
 		return nil, err
 	}
 	if err := runner.Service.WaitIdle(ctx, sid); err != nil {
-		_ = writeErrorAll(sid, "wait_failed", err, true, debugFanout)
+		_ = writeTerminalErrorDoneAll(sid, "wait_failed", err, debugFanout)
 		return nil, err
 	}
 	snap, err := runner.Service.Snapshot(ctx, sid)
 	if err != nil {
-		_ = writeErrorAll(sid, "snapshot_failed", err, true, debugFanout)
+		_ = writeTerminalErrorDoneAll(sid, "snapshot_failed", err, debugFanout)
 		return nil, err
 	}
 	if err := writeSnapshotAll(snap, debugFanout); err != nil {
@@ -673,6 +677,52 @@ func turnFromCommandSnapshot(seed *turns.Turn, snap sessionstream.Snapshot) *tur
 		}
 	}
 	return out
+}
+
+func snapshotFromTurnForHydration(sid sessionstream.SessionId, seed *turns.Turn) sessionstream.Snapshot {
+	snap := sessionstream.Snapshot{SessionId: sid}
+	if seed == nil {
+		return snap
+	}
+	ordinal := uint64(1)
+	for idx, block := range seed.Blocks {
+		if block.Payload == nil {
+			continue
+		}
+		role := ""
+		switch block.Role {
+		case turns.RoleUser:
+			role = "user"
+		case turns.RoleAssistant:
+			role = "assistant"
+		default:
+			continue
+		}
+		text, _ := block.Payload[turns.PayloadKeyText].(string)
+		text = strings.TrimSpace(text)
+		if text == "" {
+			continue
+		}
+		id := fmt.Sprintf("seed-%s-%d", role, idx)
+		status := "accepted"
+		if role == "assistant" {
+			status = "finished"
+		}
+		snap.Entities = append(snap.Entities, sessionstream.TimelineEntity{
+			Kind:           "ChatMessage",
+			Id:             id,
+			CreatedOrdinal: ordinal,
+			Payload: &chatappv1.ChatMessageEntity{
+				MessageId: id,
+				Role:      role,
+				Content:   text,
+				Text:      text,
+				Status:    status,
+			},
+		})
+		ordinal++
+	}
+	return snap
 }
 
 func firstNonEmptyString(values ...string) string {
@@ -793,13 +843,13 @@ func (g *PinocchioCommand) runRPCJSONL(ctx context.Context, rc *run.RunContext) 
 	statusFanout := newRunStatusFanout(liveFanout)
 	runner, err := chatapp.NewRunner(commandRunnerOptions(statusFanout))
 	if err != nil {
-		_ = writeErrorAll(sid, "runner_init_failed", err, true, fanout, debugFanout)
+		_ = writeTerminalErrorDoneAll(sid, "runner_init_failed", err, fanout, debugFanout)
 		return nil, err
 	}
 	defer func() { _ = runner.Close() }()
 	initialSnap, err := runner.Service.Snapshot(ctx, sid)
 	if err != nil {
-		_ = writeErrorAll(sid, "initial_snapshot_failed", err, true, fanout, debugFanout)
+		_ = writeTerminalErrorDoneAll(sid, "initial_snapshot_failed", err, fanout, debugFanout)
 		return nil, err
 	}
 	if err := writeSnapshotAll(initialSnap, fanout, debugFanout); err != nil {
@@ -809,7 +859,7 @@ func (g *PinocchioCommand) runRPCJSONL(ctx context.Context, rc *run.RunContext) 
 	engine, err := rc.EngineFactory.CreateEngine(rc.InferenceSettings)
 	if err != nil {
 		err = fmt.Errorf("failed to create engine: %w", err)
-		_ = writeErrorAll(sid, "engine_init_failed", err, true, fanout, debugFanout)
+		_ = writeTerminalErrorDoneAll(sid, "engine_init_failed", err, fanout, debugFanout)
 		return nil, err
 	}
 
@@ -821,16 +871,16 @@ func (g *PinocchioCommand) runRPCJSONL(ctx context.Context, rc *run.RunContext) 
 		},
 	}
 	if err := runner.Service.SubmitPromptRequest(ctx, sid, req); err != nil {
-		_ = writeErrorAll(sid, "submit_failed", err, true, fanout, debugFanout)
+		_ = writeTerminalErrorDoneAll(sid, "submit_failed", err, fanout, debugFanout)
 		return nil, err
 	}
 	if err := runner.Service.WaitIdle(ctx, sid); err != nil {
-		_ = writeErrorAll(sid, "wait_failed", err, true, fanout, debugFanout)
+		_ = writeTerminalErrorDoneAll(sid, "wait_failed", err, fanout, debugFanout)
 		return nil, err
 	}
 	snap, err := runner.Service.Snapshot(ctx, sid)
 	if err != nil {
-		_ = writeErrorAll(sid, "snapshot_failed", err, true, fanout, debugFanout)
+		_ = writeTerminalErrorDoneAll(sid, "snapshot_failed", err, fanout, debugFanout)
 		return nil, err
 	}
 	if err := writeSnapshotAll(snap, fanout, debugFanout); err != nil {
@@ -917,6 +967,13 @@ func writeDoneAll(sid sessionstream.SessionId, status string, fanouts ...*chatap
 		}
 	}
 	return nil
+}
+
+func writeTerminalErrorDoneAll(sid sessionstream.SessionId, code string, err error, fanouts ...*chatapprpcjsonl.UIFanout) error {
+	if writeErr := writeErrorAll(sid, code, err, true, fanouts...); writeErr != nil {
+		return writeErr
+	}
+	return writeDoneAll(sid, "failed", fanouts...)
 }
 
 func commandSessionID(seed *turns.Turn) sessionstream.SessionId {
@@ -1070,7 +1127,16 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) (*tu
 	}
 	if snap, err := runner.Service.Snapshot(ctx, sid); err == nil {
 		_ = writeSnapshotAll(snap, debugFanout)
-		_ = uiFanout.HydrateSnapshot(snap)
+		if len(snap.Entities) > 0 {
+			_ = uiFanout.HydrateSnapshot(snap)
+		}
+	}
+	if rc.ResultTurn != nil {
+		// Continuation mode seeds chat with the already-produced blocking answer. The
+		// sessionstream store starts empty for this TUI session, so hydrate bobatea
+		// directly from the result turn to make the prior exchange visible without
+		// replaying it through the backend or issuing a second provider call.
+		_ = uiFanout.HydrateSnapshot(snapshotFromTurnForHydration(sid, rc.ResultTurn))
 	}
 
 	if rc.ResultTurn == nil && (rc.RunMode == run.RunModeInteractive || (rc.UISettings != nil && rc.UISettings.StartInChat)) {
