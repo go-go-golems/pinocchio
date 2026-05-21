@@ -279,7 +279,7 @@ The new verb accepts a plain profile slug, a `registry/profile` reference, or no
 
 **Inferred user intent:** The user wants a better place for full profile details than repeating nested settings for every row in `profiles list`.
 
-**Commit (code):** pending — show verb implemented and targeted validation run before commit.
+**Commit (code):** 41be9ce — "profiles: add show command"
 
 ### What I did
 

@@ -67,3 +67,12 @@ Added pinocchio profiles show for one-profile override/effective settings inspec
 - /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/doc/topics/pinocchio-profile-resolution-and-runtime-switching.md — Show command docs
 - /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/ttmp/2026/05/21/PIN-20260521-PROFILES-LIST-VERB--add-profiles-list-glazed-command/reference/01-implementation-diary.md — Diary Step 3
 
+
+## 2026-05-21
+
+Recorded implementation commit 41be9ce for profiles show command.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/ttmp/2026/05/21/PIN-20260521-PROFILES-LIST-VERB--add-profiles-list-glazed-command/reference/01-implementation-diary.md — Diary updated with show commit
+
