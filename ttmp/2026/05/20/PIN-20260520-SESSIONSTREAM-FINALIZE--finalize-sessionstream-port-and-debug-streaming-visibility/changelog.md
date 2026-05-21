@@ -137,3 +137,13 @@ Recorded follow-up PR review fixes from commit 2094b14 in the implementation dia
 
 - /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/ttmp/2026/05/20/PIN-20260520-SESSIONSTREAM-FINALIZE--finalize-sessionstream-port-and-debug-streaming-visibility/reference/01-implementation-diary.md — Step 9 records the follow-up PR review fixes and validation
 
+
+## 2026-05-21
+
+Fixed continuation TUI startup deadlock by moving Bubble Tea hydration sends into the startup goroutine before p.Run; verified with tmux y-continuation and TAB follow-up.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/cmds/cmd.go — Moves continuation hydration Program.Send calls into an asynchronous startup goroutine to avoid pre-Run deadlock
+- /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/ttmp/2026/05/20/PIN-20260520-SESSIONSTREAM-FINALIZE--finalize-sessionstream-port-and-debug-streaming-visibility/reference/01-implementation-diary.md — Step 10 documents the continuation TUI startup deadlock and tmux validation
+

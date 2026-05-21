@@ -977,3 +977,124 @@ error.terminal=true
 ```
 
 The continuation hydration path constructs `ChatMessageEntity` payloads from the prior `turns.Turn` and feeds them through the existing `ChatAppUIFanout.HydrateSnapshot` adapter.
+
+## Step 10: Fix continuation TUI startup deadlock
+
+I reproduced the reported hang after answering `y` to the continuation prompt in a real tmux session. The process was not stuck in provider inference; it deadlocked before the Bubble Tea event loop started because the newly added continuation hydration path called `Program.Send` synchronously before `p.Run()`.
+
+The fix keeps the seed-history hydration behavior, but moves all startup UI messages into a goroutine that runs alongside `p.Run()`. Bubble Tea `Program.Send` can block until the program is running, so startup hydration and auto-submit messages must be sent asynchronously rather than on the main path before `p.Run()`.
+
+### Prompt Context
+
+**User prompt (verbatim):** " 2% ❯ go run ./cmd/pinocchio code professional \"hello i am manuel\"        
+
+--- Thinking started ---
+**Greeting User Manuel**
+
+Okay, the user introduced themselves as Manuel. I should greet him and offer my assistance. It might be good to ask what he's currently working on or any goals he has. I could suggest options like coding help, architecture reviews, debugging, or career advice. Keeping it concise is essential, so I'll say something like, \"Hi Manuel, nice to meet you! How can I help today?\" This way, I can guide the conversation effectively.
+--- Thinking ended ---
+
+--- Thinking started ---
+
+
+**Offering Assistance to User**
+
+I need to find out if Manuel is working on something he wants help with, like architecture, code review, or debugging. If he has a project brief or question, sharing that would be great so I can provide concrete steps or recommendations. I want to keep my response concise but still offer options like code review, system design, or project management. So, I’ll say something friendly and open, like, \"Hi Manuel — nice to meet you! What can I help with today?\"
+--- Thinking ended ---
+Hi Manuel — nice to meet you.
+
+What would you like help with today? I can assist with code review, system design, debugging, performance, project planning, or product/UX guidance. If you share a quick context or a question, I’ll give concrete steps and recommendations.
+
+Do you want to continue in chat? [y/n]
+Enter a value (Default is y): y
+
+---
+
+It hangs after the y. Note that you can use --log-level trace --log-file XXX --with-caller to get logs to look at as well.
+
+But I'm not able to switch into the UI at that point"
+
+**Assistant interpretation:** Reproduce and fix the hang that occurs after accepting the default TTY continuation prompt, using trace logs and real terminal/TUI validation if needed.
+
+**Inferred user intent:** Make the default stdout-first-then-chat continuation path actually enter the TUI after `y`, with the prior exchange visible and the chat usable.
+
+**Commit (code):** 91c7f18 — "fix: avoid chat continuation startup deadlock"
+
+### What I did
+
+- Reproduced the hang in tmux with:
+  - `PINOCCHIO_PROFILE=gpt-5-nano-low go run ./cmd/pinocchio code professional "hello i am manuel" --log-level trace --log-file /tmp/pin-cont.log --with-caller`
+- Sent `y` at the continuation prompt and observed that the pane stayed on the prompt/blank area with the process still running.
+- Identified the new synchronous hydration call before `p.Run()` as the deadlock point.
+- Changed `runChat` to collect initial `sessionstream.Snapshot` values first, then send hydration snapshots from a goroutine once Bubble Tea is starting/running.
+- Kept initial prompt auto-submit in the same startup goroutine so all `Program.Send` calls follow the same safe pattern.
+- Re-ran the tmux flow and confirmed the TUI appears with the prior user and assistant messages visible.
+- Submitted a second TAB message in the TUI (`Reply with exactly continue_ok`) and confirmed the assistant responded `continue_ok`.
+
+### Why
+
+- `Program.Send` is safe for cross-goroutine UI messages, but it can block until the Bubble Tea program is running. Calling it synchronously before `p.Run()` prevents `p.Run()` from ever being reached.
+- The previous Step 9 hydration fix was semantically right but placed the send at the wrong lifecycle point.
+
+### What worked
+
+- `go test ./pkg/cmds ./pkg/ui -count=1` passed.
+- `go test ./pkg/chatapp/... ./pkg/ui ./pkg/cmds ./cmd/pinocchio/... -count=1` passed.
+- Real tmux smoke after the fix showed the TUI with:
+  - `(user): hello i am manuel`,
+  - `(assistant): ...`,
+  - status bar `profile: gpt-5-nano-low`.
+- A follow-up TAB-submitted message produced the exact response `continue_ok`.
+
+### What didn't work
+
+- A non-TTY reproduction using stdin redirection did not exercise the prompt path because `shouldAskForChatContinuation` correctly skips the default prompt when stdout is not a terminal.
+- The first tmux reproduction confirmed the blank/hung post-`y` state but did not require trace-log inspection once the lifecycle issue was visible from the code.
+
+### What I learned
+
+- Bubble Tea startup messages must be treated as asynchronous startup work; even hydration messages that look like simple local rendering can block before the program starts.
+- Real tmux validation is essential for this class of bug because unit tests do not exercise the terminal lifecycle of `tea.Program`.
+
+### What was tricky to build
+
+- The fix needed to preserve message ordering: hydrate prior visible history first, then optionally auto-submit the initial prompt for direct interactive/start-in-chat runs. Keeping both operations in one goroutine preserves that order while allowing `p.Run()` to start.
+- The continuation path has two state channels: backend context via `rc.ResultTurn` and visible UI state via hydration. The backend was already correct; only the visible startup delivery was blocking.
+
+### What warrants a second pair of eyes
+
+- Review whether future `p.Send` calls around startup should be centralized behind a helper to make pre-`Run` blocking impossible.
+- Review whether a lightweight integration test can exercise Bubble Tea startup in-process without being flaky, or whether tmux smoke should remain the validation method.
+
+### What should be done in the future
+
+- Consider documenting in code near other Bubble Tea startup paths that `Program.Send` before `Run` must happen from a goroutine.
+
+### Code review instructions
+
+- Review `pkg/cmds/cmd.go` in `runChat`, especially the `hydrationSnapshots` collection and startup goroutine before `p.Run()`.
+- Validate with:
+  - `go test ./pkg/cmds ./pkg/ui -count=1`,
+  - `go test ./pkg/chatapp/... ./pkg/ui ./pkg/cmds ./cmd/pinocchio/... -count=1`,
+  - a tmux continuation smoke that answers `y`, then submits a second message with TAB.
+
+### Technical details
+
+The bug was introduced by the Step 9 code shape:
+
+```go
+_ = uiFanout.HydrateSnapshot(snapshotFromTurnForHydration(...)) // calls p.Send before p.Run()
+_, err := p.Run()
+```
+
+The fixed shape is:
+
+```go
+go func() {
+    for _, snap := range hydrationSnapshots {
+        _ = uiFanout.HydrateSnapshot(snap)
+    }
+    // optional startup auto-submit after hydration
+}()
+_, err := p.Run()
+```
