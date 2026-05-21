@@ -14,6 +14,7 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/inference/engine/factory"
 	"github.com/go-go-golems/geppetto/pkg/inference/middleware"
 	"github.com/go-go-golems/geppetto/pkg/inference/toolloop/enginebuilder"
+	geppettosections "github.com/go-go-golems/geppetto/pkg/sections"
 	"github.com/go-go-golems/glazed/pkg/helpers/templating"
 
 	"github.com/go-go-golems/geppetto/pkg/events"
@@ -196,8 +197,12 @@ func NewPinocchioCommand(
 	if err != nil {
 		return nil, err
 	}
+	profileIntrospectionLayer, err := geppettosections.NewProfileIntrospectionSection()
+	if err != nil {
+		return nil, err
+	}
 
-	description.Schema.PrependSections(helpersParameterLayer)
+	description.Schema.PrependSections(helpersParameterLayer, profileIntrospectionLayer)
 
 	ret := &PinocchioCommand{
 		CommandDescription: description,
@@ -221,6 +226,22 @@ func (g *PinocchioCommand) RunIntoWriter(
 	err := parsedValues.DecodeSectionInto(cmdlayers.GeppettoHelpersSlug, helpersSettings)
 	if err != nil {
 		return errors.Wrap(err, "failed to initialize helpers settings")
+	}
+
+	profileIntrospectionSettings := profilebootstrap.ResolveProfileIntrospectionSettings(parsedValues)
+	if profileIntrospectionSettings.PrintProfiles {
+		report, cleanup, err := profilebootstrap.BuildProfileRegistryReport(ctx, parsedValues, profilebootstrap.ProfileRegistryReportOptions{
+			IncludeResolution:     profileIntrospectionSettings.PrintProfileResolution,
+			IncludeMergedSettings: profileIntrospectionSettings.PrintProfileResolution,
+			RedactSecrets:         true,
+		})
+		if cleanup != nil {
+			defer cleanup()
+		}
+		if err != nil {
+			return errors.Wrap(err, "build profile registry report")
+		}
+		return profilebootstrap.RenderProfileRegistryReport(w, report, profileIntrospectionSettings.ProfileOutput)
 	}
 
 	// Update inference settings from parsed layers

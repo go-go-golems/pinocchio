@@ -17,6 +17,9 @@ Flags:
 - config-file
 - profile
 - profile-registries
+- print-profiles
+- print-profile-resolution
+- profile-output
 IsTopLevel: true
 IsTemplate: false
 ShowPerDefault: true
@@ -322,6 +325,46 @@ So the clean split is:
 
 - Geppetto/shared bootstrap owns profile/config/runtime resolution
 - Pinocchio root startup owns repository harvesting and command discovery
+
+## Printing Loaded Profiles
+
+Use `--print-profiles` on Pinocchio command verbs to inspect the profile registry chain and exit before inference:
+
+```bash
+pinocchio run-command ./cmd.yaml \
+  --profile-registries ./profiles.yaml \
+  --print-profiles
+```
+
+The output includes:
+
+- loaded profile sources;
+- default registry and profile;
+- selected registry and profile;
+- registries and profile counts;
+- individual profiles with model/API summaries.
+
+Use `--profile-output` for machine-readable output:
+
+```bash
+pinocchio run-command ./cmd.yaml \
+  --profile-registries ./profiles.yaml \
+  --print-profiles \
+  --profile-output json
+```
+
+Use `--print-profile-resolution` to include selected stack lineage and redacted merged profile settings:
+
+```bash
+pinocchio run-command ./cmd.yaml \
+  --profile-registries ./profiles.yaml \
+  --profile child \
+  --print-profiles \
+  --print-profile-resolution \
+  --profile-output yaml
+```
+
+Pinocchio routes this through its application-specific profile bootstrap wrapper, so local `.pinocchio.yml` inline profiles are included alongside imported Geppetto registries.
 
 ## Troubleshooting
 

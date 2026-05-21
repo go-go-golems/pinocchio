@@ -165,6 +165,11 @@ func initRootCmd() (*help.HelpSystem, error) {
 	err = profileSettingsSection.(schema.CobraSection).AddSectionToCobraCommand(rootCmd)
 	cobra.CheckErr(err)
 
+	profileIntrospectionSection, err := sections2.NewProfileIntrospectionSection()
+	cobra.CheckErr(err)
+	err = profileIntrospectionSection.(schema.CobraSection).AddSectionToCobraCommand(rootCmd)
+	cobra.CheckErr(err)
+
 	rootCmd.AddCommand(runCommandCmd)
 	rootCmd.AddCommand(pinocchio_cmds.NewJSCommand())
 	rootCmd.AddCommand(pinocchio_cmds.NewServeCommand(helpSystem))
