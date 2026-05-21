@@ -13,13 +13,22 @@ Intent: long-term
 Owners: []
 RelatedFiles:
     - Path: cmd/pinocchio/doc/general/06-rpc-jsonl-output.md
-      Note: User-facing TUI persistence help in commit 94c7b29
+      Note: |-
+        User-facing TUI persistence help in commit 94c7b29
+        Documents TUI session id and resume usage
     - Path: pkg/cmds/chat_persistence.go
-      Note: CLI turns and sessionstream hydration store helpers in commit 94c7b29
+      Note: |-
+        CLI turns and sessionstream hydration store helpers in commit 94c7b29
+        Loads latest persisted final turn for resume
     - Path: pkg/cmds/cmd.go
       Note: |-
         Primary future implementation target for runChat persistence wiring
         runChat opens turn and sessionstream timeline stores in commit 94c7b29
+        Applies explicit session id and resume seed in runChat
+    - Path: pkg/cmds/cmdlayers/helpers.go
+      Note: Defines --session-id and --resume flags for minimal TUI resume
+    - Path: pkg/cmds/run/context.go
+      Note: Carries session id and resume settings into runChat
     - Path: pkg/ui/chatapp_backend.go
       Note: |-
         Primary future implementation target for final-turn persistence
@@ -28,10 +37,11 @@ RelatedFiles:
       Note: Design produced in Step 1
 ExternalSources: []
 Summary: Diary for the TUI chatapp turns persistence design ticket.
-LastUpdated: 2026-05-21T17:05:00-04:00
+LastUpdated: 2026-05-21T17:20:00-04:00
 WhatFor: Track analysis, design decisions, validation, and future implementation notes for persisting command TUI chat turns.
 WhenToUse: Read before resuming implementation of PIN-20260521-TUI-TURNS-PERSISTENCE.
 ---
+
 
 
 
@@ -414,6 +424,140 @@ pinocchio run-command ./cmd.yaml \
 ```
 
 The intended keying rule is:
+
+```text
+conv_id = --session-id
+session_id = --session-id
+phase = "final"
+```
+
+## Step 4: Implement minimal session-id resume
+
+This step implemented the narrowed Phase 3 UX. Command TUI chat now accepts an explicit `--session-id` and can resume from the latest persisted final turn with `--resume`.
+
+The implementation keeps the keying rule intentionally small: `convID=sessionID=--session-id`. This avoids a separate conversation concept while still giving scripts and operators a stable durable handle.
+
+### Prompt Context
+
+**User prompt (verbatim):** "go ahead"
+
+**Assistant interpretation:** Proceed with implementing the previously agreed minimal `--session-id XXX --resume` UX.
+
+**Inferred user intent:** The user wants the remaining resume feature built now, rather than only documented.
+
+**Commit (code):** 4d1f3dc — "chat: add TUI session resume"
+
+### What I did
+
+- Added helper-layer flags:
+  - `--session-id ID`
+  - `--resume`
+- Added `SessionID` and `Resume` to `run.UISettings`.
+- Propagated helper settings into `run.UISettings` in `pkg/cmds/cmd.go`.
+- Updated `runChat` so:
+  - `--resume` requires `--session-id`;
+  - `--session-id` is written into the seed turn metadata before `commandSessionID(seed)`;
+  - resume opens the configured turns store and loads the latest `phase="final"` turn for `convID=sessionID`;
+  - the resumed turn becomes the TUI backend seed/current model context.
+- Added `loadLatestCLIFinalTurn` in `pkg/cmds/chat_persistence.go`.
+- Added tests for successful and failing resume-turn loading in `pkg/cmds/chat_persistence_test.go`.
+- Updated `cmd/pinocchio/doc/general/06-rpc-jsonl-output.md` with concrete `--session-id` and `--resume` examples.
+- Ran a real tmux two-run smoke test:
+  1. start `--chat --session-id resume-smoke` and persist `first_resume_ok`;
+  2. start `--chat --session-id resume-smoke --resume` and persist `second_resume_ok`.
+
+### Why
+
+- The previous implementation persisted final turns but did not expose a deterministic way to load them in a future process.
+- The user explicitly chose the minimal UX, so the implementation should not add `--conversation-id`, list commands, or branching semantics.
+- Loading from `TurnStore` keeps model context grounded in final Geppetto turns instead of reconstructing it from UI timeline entities.
+
+### What worked
+
+- Targeted tests passed:
+  - `go test ./pkg/cmds ./pkg/ui ./pkg/persistence/chatstore -count=1`
+- Full tests passed:
+  - `go test ./... -count=1`
+- Schema vet passed:
+  - `make schema-vet`
+- Pre-commit hooks passed for commit `4d1f3dc`, including generated assets, frontend build, Go build, lint, vet, and all Go tests.
+- Real tmux resume smoke passed:
+  - first TUI run rendered `first_resume_ok`;
+  - second `--resume` TUI run hydrated the previous assistant answer visibly before the new prompt;
+  - second run rendered `second_resume_ok`;
+  - debug JSONL files were written for both runs.
+
+### What didn't work
+
+- The turns table row count stayed at `1` in the smoke test because the same turn id can be updated across snapshots for the same `convID=sessionID`. This is consistent with the current turn-store schema: snapshots/block membership record phase/time history while the `turns` row stores the latest serialized turn for that turn id.
+- No code blocker occurred.
+
+### What I learned
+
+- Existing timeline hydration already helps the resumed TUI redraw prior visible messages when `--timeline-db` is reused with the same `--session-id`.
+- The turns DB remains the source of model context; the timeline DB improves visible continuity.
+- A minimal explicit session id is enough to validate resume without adding discovery/listing UX.
+
+### What was tricky to build
+
+The key ordering issue was that `runChat` previously generated the session id before opening stores and before any resume decision. The implementation now applies `--session-id` to seed turn metadata first, then derives `sid`, then opens stores, then replaces the seed with the latest final turn when `--resume` is set.
+
+This ordering preserves compatibility with the existing `commandSessionID(seed)` helper while letting the user override the generated id. After loading the resumed turn, the code writes the same session id into the resumed turn metadata so future persistence remains under the same key.
+
+### What warrants a second pair of eyes
+
+- Whether `--resume` should require a turns DB/DSN exactly as implemented, or whether it should silently start fresh when no stored turn exists. The current behavior is strict because silent fresh starts would be dangerous.
+- Whether the current `LoadLatestTurn(convID, phase)` API is enough for future list/branching UX. For the minimal rule `convID=sessionID`, it is sufficient.
+- Whether visible timeline hydration should receive a user-facing warning when model-context resume succeeds but timeline hydration has no entities.
+
+### What should be done in the future
+
+- Optional: add a sessionstream timeline inspection command for `--timeline-db` files.
+- Optional: add discovery/listing commands after the minimal resume path has been used in practice.
+- Optional: decide whether turn ids should advance per inference run for clearer row-level history, or whether the existing snapshot membership history is sufficient.
+
+### Code review instructions
+
+- Start with `pkg/cmds/cmdlayers/helpers.go` and `pkg/cmds/run/context.go` to review the new flags/settings.
+- Then inspect `pkg/cmds/cmd.go`, especially the top of `runChat` where `--session-id` and `--resume` are applied.
+- Then inspect `pkg/cmds/chat_persistence.go`, especially `loadLatestCLIFinalTurn`.
+- Validate with:
+  - `go test ./pkg/cmds ./pkg/ui ./pkg/persistence/chatstore -count=1`
+  - `go test ./... -count=1`
+  - `make schema-vet`
+- Real smoke test:
+  - run a first TUI command with `--session-id resume-smoke --turns-db /tmp/turns.db --timeline-db /tmp/timeline.db`;
+  - run a second TUI command with the same flags plus `--resume`;
+  - verify the second TUI shows the prior exchange and persists the new final turn.
+
+### Technical details
+
+The minimal UX is:
+
+```bash
+pinocchio run-command ./cmd.yaml \
+  --chat \
+  --session-id my-session \
+  --turns-db ~/.local/share/pinocchio/turns.db \
+  --timeline-db ~/.local/share/pinocchio/timeline.db
+
+pinocchio run-command ./cmd.yaml \
+  --chat \
+  --session-id my-session \
+  --resume \
+  --turns-db ~/.local/share/pinocchio/turns.db \
+  --timeline-db ~/.local/share/pinocchio/timeline.db
+```
+
+The resume load path is:
+
+```go
+snap, err := store.LoadLatestTurn(ctx, sessionID, "final")
+turn, err := serde.FromYAML([]byte(snap.Payload))
+_ = turns.KeyTurnMetaSessionID.Set(&turn.Metadata, sessionID)
+```
+
+The keying rule is:
 
 ```text
 conv_id = --session-id
