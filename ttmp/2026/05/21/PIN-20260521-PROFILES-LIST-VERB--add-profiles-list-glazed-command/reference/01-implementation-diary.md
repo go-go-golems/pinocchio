@@ -11,22 +11,35 @@ DocType: reference
 Intent: long-term
 Owners: []
 RelatedFiles:
-    - Path: cmd/pinocchio/main.go
-      Note: Future root command wiring point
+    - Path: ../../../../../../../geppetto/pkg/cli/bootstrap/profile_introspection.go
+      Note: Source of the current no-header text renderer and profile report structs
     - Path: cmd/pinocchio/cmds/clip.go
       Note: Existing simple Glazed command example
+    - Path: cmd/pinocchio/cmds/profiles/list.go
+      Note: Glazed profiles list command with override/effective settings
+    - Path: cmd/pinocchio/cmds/profiles/list_test.go
+      Note: Profiles list regression tests
+    - Path: cmd/pinocchio/cmds/profiles/root.go
+      Note: Profiles command group
     - Path: cmd/pinocchio/cmds/tokens/helpers.go
       Note: Existing command group with Glazed subcommands
+    - Path: cmd/pinocchio/main.go
+      Note: |-
+        Future root command wiring point
+        Root wiring and removal of profile introspection flags
+    - Path: pkg/cmds/cmd.go
+      Note: Removed dynamic command print-profiles early exit
     - Path: pkg/cmds/profilebootstrap/profile_introspection.go
       Note: Existing Pinocchio-aware report builder from the flag experiment
-    - Path: geppetto/pkg/cli/bootstrap/profile_introspection.go
-      Note: Source of the current no-header text renderer and profile report structs
+    - Path: pkg/doc/topics/pinocchio-profile-resolution-and-runtime-switching.md
+      Note: Updated user docs for profiles list
 ExternalSources: []
 Summary: Diary for designing a first-class `pinocchio profiles list` Glazed command.
 LastUpdated: 2026-05-21T18:05:00-04:00
 WhatFor: Track why the profile listing UX moved from early-exit flags to a dedicated Glazed verb.
 WhenToUse: Read before implementing or reviewing `pinocchio profiles list`.
 ---
+
 
 # Diary
 
@@ -123,4 +136,131 @@ The proposed replacement is one Glazed row per profile with explicit fields:
 
 ```text
 selected default registry profile display_name model api_type description
+```
+
+## Step 2: Implement `pinocchio profiles list`
+
+This step implemented the design as a real Glazed command and removed the flag-based user-facing path. The new command lists one row per profile, so table output has headers and structured output can be produced through Glazed's normal `--output` and `--fields` controls.
+
+The implementation also distinguishes raw profile overrides from effective settings. Raw `override_*` fields come from the profile's own `EngineProfile.InferenceSettings`; effective fields come from resolving the profile stack. This lets operators answer both "what does this profile set?" and "what values will be active after inheritance?"
+
+### Prompt Context
+
+**User prompt (verbatim):** "ok, update the guide, then tasks, then implement, commit at appropriate intervals, and keep a diary"
+
+**Assistant interpretation:** Update the design/tasks to include inference override/effective settings, implement the Glazed command, remove the flag-based UX, validate, commit, and keep the diary current.
+
+**Inferred user intent:** The user wants the profile listing UX implemented now, with enough introspection detail to debug important inference settings such as `chat.engine` and `reasoning_effort`.
+
+**Commit (code):** pending — code implemented and targeted validation run before commit.
+
+### What I did
+
+- Added `cmd/pinocchio/cmds/profiles/root.go` with a `profiles` command group.
+- Added `cmd/pinocchio/cmds/profiles/list.go` with a Glazed `list` command.
+- Registered `profiles` in `cmd/pinocchio/main.go`.
+- Removed root `NewProfileIntrospectionSection()` flag wiring from `cmd/pinocchio/main.go`.
+- Removed dynamic command `--print-profiles` schema injection and early-exit handling from `pkg/cmds/cmd.go`.
+- Removed the previous flag-path test file `pkg/cmds/profile_introspection_test.go`.
+- Added `cmd/pinocchio/cmds/profiles/list_test.go` covering:
+  - raw override fields;
+  - effective inherited fields;
+  - selected marker;
+  - full JSON-ish settings fields;
+  - invalid verbosity validation.
+- Updated profile-resolution docs to document `pinocchio profiles list` instead of `--print-profiles`.
+
+### Why
+
+- A dedicated command is clearer than an early-exit flag on unrelated verbs.
+- Glazed table output provides headers, which solves the confusing unlabeled `default` registry column.
+- Operators need to inspect both profile-declared overrides and inherited/effective settings.
+
+### What worked
+
+- Targeted tests passed:
+
+```bash
+go test ./cmd/pinocchio/cmds/profiles ./pkg/cmds ./pkg/cmds/profilebootstrap -count=1
+```
+
+- Manual JSON smoke showed selected/default rows and override/effective fields:
+
+```bash
+go run ./cmd/pinocchio profiles list \
+  --profile-registries $tmp/profiles.yaml \
+  --profile mini \
+  --verbosity detailed \
+  --output json
+```
+
+- Manual table smoke showed headers:
+
+```bash
+go run ./cmd/pinocchio profiles list --profile-registries $tmp/profiles.yaml
+```
+
+The table started with explicit headers:
+
+```text
+selected | default | registry | profile | display_name | effective_chat_engine | effective_chat_api_type | reasoning_effort | description
+```
+
+### What didn't work
+
+- First compile attempt used `profilebootstrap.ProfileRegistrySummaryReport` and `profilebootstrap.ProfileSummaryReport`, but those aliases did not exist. The compiler error was:
+
+```text
+undefined: profilebootstrap.ProfileRegistrySummaryReport
+undefined: profilebootstrap.ProfileSummaryReport
+```
+
+I fixed this by using the Geppetto bootstrap report types directly for summary structs while still using the Pinocchio wrapper type alias for the top-level report.
+
+### What I learned
+
+- The existing Pinocchio-aware report builder is useful, but the Glazed command needs raw `EngineProfile` values too. Summary rows alone only expose `model` and `api_type` and cannot answer which inference settings a profile explicitly overrides.
+- YAML marshaling is preferable for flattening `InferenceSettings` paths because the structs use YAML tags for profile file names such as `chat.engine` and `inference.reasoning_effort`.
+
+### What was tricky to build
+
+The subtle part was keeping raw and effective fields separate. Raw override fields must come from `registry.GetEngineProfile(...).InferenceSettings`; effective fields must come from `registry.ResolveEngineProfile(...)`. If the implementation used only the resolved settings, inherited values would look like explicit overrides. If it used only raw settings, inherited API type and default reasoning settings would disappear.
+
+Another subtle part was replacing, not duplicating, the UX. The earlier flag path was mechanically valid, but leaving it wired would preserve the less clear early-exit command semantics the new ticket is intended to avoid.
+
+### What warrants a second pair of eyes
+
+- Whether full-mode nested fields (`resolution_metadata`, `merged_inference_settings`) render acceptably in all Glazed output modes.
+- Whether default output should include `effective_chat_api_type` or keep the table narrower.
+- Whether `override_settings_json` should be a string or a nested object for JSON output.
+
+### What should be done in the future
+
+- Consider adding `pinocchio profiles show <profile>` for profile-specific full details without repeating full nested settings on every row.
+- Consider adding `pinocchio profiles sources` for registry source diagnostics.
+
+### Code review instructions
+
+- Start with `cmd/pinocchio/cmds/profiles/list.go` and review `buildProfileRow`, `extractOverrideSummary`, and `extractEffectiveSummary`.
+- Verify root wiring in `cmd/pinocchio/main.go`.
+- Verify the old flag path was removed from `pkg/cmds/cmd.go`.
+- Validate with:
+  - `go test ./cmd/pinocchio/cmds/profiles ./pkg/cmds ./pkg/cmds/profilebootstrap -count=1`
+  - `go run ./cmd/pinocchio profiles list --profile-registries ./examples/js/profiles/basic.yaml --verbosity detailed`
+  - `go test ./... -count=1`
+
+### Technical details
+
+The key invariant is:
+
+```text
+raw EngineProfile.InferenceSettings -> override_* fields
+resolved EngineProfile stack          -> effective_* fields
+```
+
+The command currently emits default columns:
+
+```text
+selected, default, registry, profile, display_name,
+effective_chat_engine, effective_chat_api_type, reasoning_effort, description
 ```

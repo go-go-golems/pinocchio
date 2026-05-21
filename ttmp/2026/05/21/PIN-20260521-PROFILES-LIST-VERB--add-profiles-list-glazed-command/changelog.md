@@ -32,3 +32,16 @@ Expanded profiles list guide with raw inference-setting override fields versus e
 
 - /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/ttmp/2026/05/21/PIN-20260521-PROFILES-LIST-VERB--add-profiles-list-glazed-command/design-doc/01-implementation-guide.md — Inference settings override/effective field catalog
 
+
+## 2026-05-21
+
+Implemented Glazed pinocchio profiles list with raw override and effective inference-setting fields; removed flag-based profile printing UX.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/cmd/pinocchio/cmds/profiles/list.go — New list command
+- /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/cmd/pinocchio/cmds/profiles/list_test.go — Regression tests
+- /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/cmd/pinocchio/main.go — Root command wiring
+- /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/cmds/cmd.go — Removed flag early exit
+- /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/doc/topics/pinocchio-profile-resolution-and-runtime-switching.md — Docs update
+
