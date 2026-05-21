@@ -14,3 +14,12 @@ Created implementation guide for replacing profile introspection flags with a Gl
 - /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/ttmp/2026/05/21/PIN-20260521-PROFILES-LIST-VERB--add-profiles-list-glazed-command/design-doc/01-implementation-guide.md — Implementation guide
 - /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/ttmp/2026/05/21/PIN-20260521-PROFILES-LIST-VERB--add-profiles-list-glazed-command/reference/01-implementation-diary.md — Diary
 
+
+## 2026-05-21
+
+Added a field catalog for the future profiles list command, including default/detailed/full verbosity mappings.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/ttmp/2026/05/21/PIN-20260521-PROFILES-LIST-VERB--add-profiles-list-glazed-command/design-doc/01-implementation-guide.md — Profiles list field catalog
+

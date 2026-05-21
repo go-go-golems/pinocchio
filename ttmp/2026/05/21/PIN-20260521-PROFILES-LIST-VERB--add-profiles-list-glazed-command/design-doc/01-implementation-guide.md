@@ -507,6 +507,115 @@ For the new UX, do this:
 
 This preserves the correct profile resolution logic while replacing the user-facing surface.
 
+## Field Catalog
+
+The command can expose fields from four layers: profile rows, registry summaries, source summaries, and selected-profile resolution. The Glazed `profiles list` verb should keep default output small, but these are the available candidate fields for `--fields` and verbosity modes.
+
+### Profile row fields
+
+These are the natural one-row-per-profile fields.
+
+| Field | Source | Suggested verbosity | Meaning |
+|---|---|---|---|
+| `selected` | `ProfileSummaryReport.IsSelected` plus selected fallback logic | default | Whether this row is the active selected profile. |
+| `default` | `ProfileSummaryReport.IsDefault` | default | Whether this profile is the default profile for its registry/default resolution. |
+| `registry` | `ProfileSummaryReport.Registry` | default | Registry slug containing the profile, often `default` for inline Pinocchio profiles. |
+| `profile` | `ProfileSummaryReport.Slug` | default | Engine profile slug. |
+| `display_name` | `ProfileSummaryReport.DisplayName` | default | Human-readable profile name. |
+| `description` | `ProfileSummaryReport.Description` | default | Human-readable profile description. |
+| `model` | `ProfileSummaryReport.Model` | default | Declared chat engine/model summary. |
+| `api_type` | `ProfileSummaryReport.APIType` | default | Declared chat API/provider type summary. |
+| `version` | `ProfileSummaryReport.Version` | detailed | Profile metadata version. |
+| `source` | `ProfileSummaryReport.Source` | detailed | Profile metadata source path/name, when available. |
+| `profile_ref` | derived | detailed | Stable `registry/profile` string for copy/paste. |
+| `is_selected` | alias of `selected` if preferred | default or detailed | Machine-friendly selected boolean; avoid exposing both unless aliases are useful. |
+| `is_default` | alias of `default` if preferred | default or detailed | Machine-friendly default boolean; avoid exposing both unless aliases are useful. |
+
+Recommendation: expose `selected` and `default` as the public table column names. They are shorter and read well in table output. If JSON compatibility with Geppetto reports matters, also support `is_selected` and `is_default` through aliases or documented JSON mode.
+
+### Registry summary fields
+
+These can be joined onto each profile row by matching `profile.registry == registry.slug`, especially in `detailed` mode.
+
+| Field | Source | Suggested verbosity | Meaning |
+|---|---|---|---|
+| `registry_slug` | `ProfileRegistrySummaryReport.Slug` | detailed/full | Same value as `registry`, included only if explicit disambiguation is desired. |
+| `registry_display_name` | `ProfileRegistrySummaryReport.DisplayName` | detailed | Human-readable registry name. |
+| `registry_description` | `ProfileRegistrySummaryReport.Description` | detailed | Registry description. |
+| `registry_default_profile` | `ProfileRegistrySummaryReport.DefaultProfile` | detailed | Default profile slug for this registry. |
+| `registry_profile_count` | `ProfileRegistrySummaryReport.ProfileCount` | detailed | Number of profiles in this registry. |
+| `registry_is_default` | `ProfileRegistrySummaryReport.IsDefault` | detailed | Whether this registry is the default registry. |
+
+### Source fields
+
+These describe configured registry sources. They are not naturally one-to-one with profile rows, so use them carefully. For `profiles list`, prefer `source` from the profile metadata when available. Source reports are better for a future `pinocchio profiles sources` verb or a `--verbosity full` synthetic column.
+
+| Field | Source | Suggested verbosity | Meaning |
+|---|---|---|---|
+| `source_raw` | `ProfileRegistrySourceReport.Raw` | full | Original registry source string. |
+| `source_kind` | `ProfileRegistrySourceReport.Kind` | full | Source type, e.g. yaml/sqlite/sqlite-dsn. |
+| `source_path` | `ProfileRegistrySourceReport.Path` | full | Filesystem path for file-backed registry sources. |
+| `source_dsn` | `ProfileRegistrySourceReport.DSN` | full | DSN for DSN-backed sources; must be redacted if it can include secrets. |
+
+### Global/default-selection fields
+
+These fields are report-level values. They can be repeated on every row in `full` mode or omitted from row output and reserved for future summary commands.
+
+| Field | Source | Suggested verbosity | Meaning |
+|---|---|---|---|
+| `default_registry` | `ProfileRegistryReport.DefaultRegistry` | full | Default registry slug. |
+| `default_profile` | `ProfileRegistryReport.DefaultProfile` | full | Default profile slug. |
+| `selected_registry` | `ProfileRegistryReport.SelectedRegistry` | full | Resolved selected registry slug. |
+| `selected_profile` | `ProfileRegistryReport.SelectedProfile` | full | Resolved selected profile slug. |
+
+### Resolution fields
+
+These are available when the command asks the report builder for resolution details. Use them for `detailed`/`full`, not default output.
+
+| Field | Source | Suggested verbosity | Meaning |
+|---|---|---|---|
+| `resolved_registry` | `ProfileResolutionReport.Registry` | detailed/full | Registry of the resolved selected profile. |
+| `resolved_profile` | `ProfileResolutionReport.Profile` | detailed/full | Slug of the resolved selected profile. |
+| `resolution_lineage` | `ProfileResolutionReport.Lineage` | full | Base-to-leaf profile stack lineage. Prefer compact JSON or a joined string in table mode. |
+| `resolution_metadata` | `ProfileResolutionReport.Metadata` | full | Redacted selected-profile metadata map. |
+| `merged_inference_settings` | `ProfileResolutionReport.InferenceSettings` | full | Redacted merged inference settings for the selected profile. Large; best in JSON/YAML output. |
+
+Lineage entries have these subfields:
+
+| Subfield | Source | Meaning |
+|---|---|---|
+| `lineage.registry_slug` | `ResolvedProfileStackEntry.RegistrySlug` | Registry slug for a stack entry. |
+| `lineage.profile_slug` | `ResolvedProfileStackEntry.EngineProfileSlug` | Profile slug for a stack entry. |
+| `lineage.version` | `ResolvedProfileStackEntry.Version` | Profile version for a stack entry. |
+| `lineage.source` | `ResolvedProfileStackEntry.Source` | Source for a stack entry. |
+
+### Recommended `--verbosity` mapping
+
+Default:
+
+```text
+selected, default, registry, profile, display_name, model, api_type, description
+```
+
+Detailed:
+
+```text
+selected, default, registry, profile, display_name, model, api_type, description,
+version, source, registry_default_profile, registry_is_default, registry_profile_count,
+profile_ref
+```
+
+Full:
+
+```text
+all detailed fields,
+default_registry, default_profile, selected_registry, selected_profile,
+resolved_registry, resolved_profile, resolution_lineage,
+resolution_metadata, merged_inference_settings
+```
+
+For full table output, consider omitting or compacting very large nested fields unless the user explicitly requests them with `--fields`. For `--output json` and `--output yaml`, nested values are acceptable if redacted.
+
 ## Tests
 
 ### Unit tests for command rows
