@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	geppettobootstrap "github.com/go-go-golems/geppetto/pkg/cli/bootstrap"
 	geppettosections "github.com/go-go-golems/geppetto/pkg/sections"
 	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	"github.com/go-go-golems/glazed/pkg/types"
@@ -61,6 +62,45 @@ profiles:
 	assertCell(t, row, "registry", "workspace")
 	assertCell(t, row, "profile", "mini")
 	assertCell(t, row, "selected", true)
+}
+
+func TestResolveShowTargetUsesRequestedRegistryDefaultWhenProfileOmitted(t *testing.T) {
+	report := &geppettobootstrap.ProfileRegistryReport{
+		DefaultRegistry:  "workspace",
+		DefaultProfile:   "assistant",
+		SelectedRegistry: "workspace",
+		SelectedProfile:  "assistant",
+		Registries: []geppettobootstrap.ProfileRegistrySummaryReport{
+			{Slug: "workspace", DefaultProfile: "assistant"},
+			{Slug: "other", DefaultProfile: "other-default"},
+		},
+	}
+
+	registry, profile, err := resolveShowTarget(report, "other", "")
+	if err != nil {
+		t.Fatalf("resolveShowTarget: %v", err)
+	}
+	if registry != "other" || profile != "other-default" {
+		t.Fatalf("expected other/other-default, got %s/%s", registry, profile)
+	}
+}
+
+func TestResolveShowTargetUsesSelectedProfileWhenNoRegistryOrProfile(t *testing.T) {
+	report := &geppettobootstrap.ProfileRegistryReport{
+		SelectedRegistry: "workspace",
+		SelectedProfile:  "assistant",
+		Registries: []geppettobootstrap.ProfileRegistrySummaryReport{
+			{Slug: "workspace", DefaultProfile: "default"},
+		},
+	}
+
+	registry, profile, err := resolveShowTarget(report, "", "")
+	if err != nil {
+		t.Fatalf("resolveShowTarget: %v", err)
+	}
+	if registry != "workspace" || profile != "assistant" {
+		t.Fatalf("expected workspace/assistant, got %s/%s", registry, profile)
+	}
 }
 
 func TestShowCommandFullIncludesSettingsJSON(t *testing.T) {

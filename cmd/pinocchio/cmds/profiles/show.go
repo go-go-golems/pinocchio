@@ -143,25 +143,45 @@ func (c *ShowCommand) RunIntoGlazeProcessor(ctx context.Context, parsedLayers *v
 func resolveShowTarget(report *profilebootstrap.ProfileRegistryReport, registryFlag string, profileRef string) (string, string, error) {
 	registryFlag = strings.TrimSpace(registryFlag)
 	profileRef = strings.TrimSpace(profileRef)
+	explicitRegistry := registryFlag != ""
 	if strings.Contains(profileRef, "/") {
 		parts := strings.SplitN(profileRef, "/", 2)
 		registryFlag = strings.TrimSpace(parts[0])
 		profileRef = strings.TrimSpace(parts[1])
+		explicitRegistry = registryFlag != ""
 	}
+
 	selectedRegistry, selectedProfile := selectedProfileRef(report)
 	if registryFlag == "" {
 		registryFlag = selectedRegistry
 	}
-	if profileRef == "" {
-		profileRef = selectedProfile
-	}
 	if registryFlag == "" {
 		return "", "", fmt.Errorf("profiles show requires a registry; pass --registry or configure/select a default registry")
+	}
+
+	if profileRef == "" {
+		if explicitRegistry {
+			profileRef = defaultProfileForRegistry(report, registryFlag)
+		} else {
+			profileRef = selectedProfile
+		}
 	}
 	if profileRef == "" {
 		return "", "", fmt.Errorf("profiles show requires a profile argument or selected/default profile")
 	}
 	return registryFlag, profileRef, nil
+}
+
+func defaultProfileForRegistry(report *profilebootstrap.ProfileRegistryReport, registrySlug string) string {
+	if report == nil {
+		return ""
+	}
+	for _, registry := range report.Registries {
+		if registry.Slug == registrySlug {
+			return strings.TrimSpace(registry.DefaultProfile)
+		}
+	}
+	return ""
 }
 
 func profileSummaryFor(report *profilebootstrap.ProfileRegistryReport, registrySlug string, profileSlug string, profile *gepprofiles.EngineProfile) (geppettobootstrap.ProfileSummaryReport, error) {

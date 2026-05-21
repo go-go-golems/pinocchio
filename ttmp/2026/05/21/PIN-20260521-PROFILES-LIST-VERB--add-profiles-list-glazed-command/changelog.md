@@ -76,3 +76,14 @@ Recorded implementation commit 41be9ce for profiles show command.
 
 - /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/ttmp/2026/05/21/PIN-20260521-PROFILES-LIST-VERB--add-profiles-list-glazed-command/reference/01-implementation-diary.md — Diary updated with show commit
 
+
+## 2026-05-21
+
+Addressed PR 155 review: profiles show --registry now uses the requested registry's default profile when profile argument is omitted.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/cmd/pinocchio/cmds/profiles/show.go — Target resolution fix
+- /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/cmd/pinocchio/cmds/profiles/show_test.go — Regression tests for registry-only show target
+- /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/ttmp/2026/05/21/PIN-20260521-PROFILES-LIST-VERB--add-profiles-list-glazed-command/reference/01-implementation-diary.md — Diary Step 4
+

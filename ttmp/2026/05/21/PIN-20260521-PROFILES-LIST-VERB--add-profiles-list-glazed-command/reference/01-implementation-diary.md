@@ -337,3 +337,78 @@ pinocchio profiles show
 pinocchio profiles show mini --registry workspace
 pinocchio profiles show workspace/mini
 ```
+
+## Step 4: Address PR review for `profiles show --registry`
+
+A PR review pointed out that `profiles show --registry <other>` with no profile argument combined the requested registry with the globally selected/default profile slug. That could show the wrong profile or fail if the selected profile slug did not exist in the requested registry.
+
+I changed target resolution so an explicit registry with an omitted profile uses that registry's own default profile. The no-argument case still uses the globally selected/default profile, and explicit `registry/profile` references still win over `--registry`.
+
+### Prompt Context
+
+**User prompt (verbatim):** "Address PR review comments: https://github.com/go-go-golems/pinocchio/pull/155"
+
+**Assistant interpretation:** Fetch PR review comments, identify requested changes, implement fixes, validate, and document the work.
+
+**Inferred user intent:** The user wants the automated review feedback resolved cleanly on the PR branch.
+
+**Commit (code):** pending — PR review fix implemented and targeted validation run before commit.
+
+### What I did
+
+- Fetched PR 155 inline comments via GitHub CLI.
+- Updated `resolveShowTarget` in `cmd/pinocchio/cmds/profiles/show.go`.
+- Added `defaultProfileForRegistry` helper.
+- Added tests for:
+  - `profiles show --registry other` choosing `other` registry's default profile;
+  - no registry/no profile still choosing the selected profile.
+
+### Why
+
+- An explicit registry should not be paired with a profile slug selected in another registry when the user omits the profile argument.
+- The command should be predictable for multi-registry setups.
+
+### What worked
+
+- Targeted tests passed:
+
+```bash
+go test ./cmd/pinocchio/cmds/profiles -count=1
+go test ./cmd/pinocchio/cmds/profiles ./pkg/cmds ./pkg/cmds/profilebootstrap -count=1
+```
+
+### What didn't work
+
+- N/A. The review comment was precise and the target-resolution logic was isolated.
+
+### What I learned
+
+- `--registry` without a profile should be interpreted as "show this registry's default profile", not "show the global selected profile in this registry".
+
+### What was tricky to build
+
+The key distinction is whether the registry was explicit. If the registry is explicit and the profile is omitted, derive the profile from that registry. If neither is explicit, use the selected/default global target.
+
+### What warrants a second pair of eyes
+
+- Whether `profiles show --registry other` should error when `other` has no default profile, or whether it should fall back to global selected profile. The current behavior errors, which is safer.
+
+### What should be done in the future
+
+- N/A.
+
+### Code review instructions
+
+- Review `resolveShowTarget` in `cmd/pinocchio/cmds/profiles/show.go`.
+- Review the new target-resolution tests in `cmd/pinocchio/cmds/profiles/show_test.go`.
+
+### Technical details
+
+Resolution now follows:
+
+```text
+registry/profile argument -> exact target
+profile + --registry      -> requested registry + profile
+--registry only           -> requested registry + that registry's default profile
+no target flags/args      -> selected/default registry + selected/default profile
+```
