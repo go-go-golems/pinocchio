@@ -568,6 +568,61 @@ These fields are report-level values. They can be repeated on every row in `full
 | `selected_registry` | `ProfileRegistryReport.SelectedRegistry` | full | Resolved selected registry slug. |
 | `selected_profile` | `ProfileRegistryReport.SelectedProfile` | full | Resolved selected profile slug. |
 
+### Inference settings and override fields
+
+Yes: a profile can tell us both the **raw values it declares as overrides** and the **resolved effective settings** after its stack is merged.
+
+These are different and should be represented separately:
+
+| Concept | How to compute | Meaning |
+|---|---|---|
+| Raw profile overrides | Inspect `EngineProfile.InferenceSettings` for the profile itself | "If this profile is layered onto a base, these are the fields it contributes/overrides." |
+| Resolved profile overlay | Resolve the profile stack with `Registry.ResolveEngineProfile(...)` | "After applying stack parents, these are the profile-layer settings." |
+| Final runtime settings | Merge Pinocchio baseline + resolved profile overlay | "These are the settings the engine will actually run with." |
+
+For `profiles list`, the most useful output is usually the raw override summary plus selected-profile resolved details.
+
+Recommended raw override fields:
+
+| Field | Source path | Suggested verbosity | Meaning |
+|---|---|---|---|
+| `override_paths` | derived from non-empty `EngineProfile.InferenceSettings` fields | detailed | Comma-separated list of YAML-style paths this profile sets, e.g. `chat.engine,inference.reasoning_effort`. |
+| `override_count` | derived | detailed | Number of override paths. |
+| `override_chat_engine` | `inference_settings.chat.engine` | default/detailed | Model/engine this profile declares. This is important enough to keep visible. |
+| `override_chat_api_type` | `inference_settings.chat.api_type` | default/detailed | API/provider type this profile declares. |
+| `override_chat_temperature` | `inference_settings.chat.temperature` | detailed | Chat-level sampling temperature override. |
+| `override_chat_top_p` | `inference_settings.chat.top_p` | detailed | Chat-level top-p override. |
+| `override_chat_max_response_tokens` | `inference_settings.chat.max_response_tokens` | detailed | Chat-level max response tokens override. |
+| `override_inference_reasoning_effort` | `inference_settings.inference.reasoning_effort` | default/detailed | Engine-level reasoning effort override. Important for OpenAI Responses and compatible models. |
+| `override_inference_reasoning_summary` | `inference_settings.inference.reasoning_summary` | detailed | Reasoning summary mode override. |
+| `override_inference_thinking_budget` | `inference_settings.inference.thinking_budget` | detailed | Thinking/reasoning token budget override. |
+| `override_inference_thinking_type` | `inference_settings.inference.thinking_type` | detailed | Provider-native thinking mode override. |
+| `override_inference_temperature` | `inference_settings.inference.temperature` | detailed | Per-turn/engine inference temperature default. |
+| `override_inference_top_p` | `inference_settings.inference.top_p` | detailed | Per-turn/engine inference top-p default. |
+| `override_inference_max_response_tokens` | `inference_settings.inference.max_response_tokens` | detailed | Per-turn/engine max response tokens default. |
+| `override_model_reasoning` | `inference_settings.model_info.reasoning` | detailed | Static model capability hint for reasoning. |
+| `override_model_context_window` | `inference_settings.model_info.context_window` | detailed | Model context window metadata override. |
+| `override_model_max_output_tokens` | `inference_settings.model_info.max_output_tokens` | detailed | Model max-output metadata override. |
+| `override_settings_json` | redacted raw `EngineProfile.InferenceSettings` | full | Complete raw profile override object as JSON/YAML-compatible data. |
+
+Recommended resolved/effective settings fields:
+
+| Field | Source path | Suggested verbosity | Meaning |
+|---|---|---|---|
+| `effective_chat_engine` | resolved/final `chat.engine` | default/detailed | Engine after stack/default merging. This may differ from raw override if inherited. |
+| `effective_chat_api_type` | resolved/final `chat.api_type` | default/detailed | API type after stack/default merging. |
+| `effective_reasoning_effort` | resolved/final `inference.reasoning_effort` | default/detailed | Reasoning effort after stack/default merging. |
+| `effective_reasoning_summary` | resolved/final `inference.reasoning_summary` | detailed | Reasoning summary after stack/default merging. |
+| `effective_thinking_budget` | resolved/final `inference.thinking_budget` | detailed | Thinking budget after stack/default merging. |
+| `effective_temperature` | resolved/final inference/chat temperature | detailed | Effective temperature value used by runtime defaults. |
+| `effective_top_p` | resolved/final inference/chat top-p | detailed | Effective top-p value used by runtime defaults. |
+| `effective_max_response_tokens` | resolved/final inference/chat max response tokens | detailed | Effective max output budget. |
+| `effective_settings_json` | redacted resolved/final settings | full | Complete resolved/final settings object. |
+
+Important implementation note: `model` and `api_type` in the current Geppetto `ProfileSummaryReport` come from `profileModelAndAPIType(profile)`, which inspects the profile summary. They should not be the only settings shown. The new command should either fetch each `EngineProfile` with `GetEngineProfile(...)` or extend the report builder so it includes raw override summaries.
+
+For the question "what values is this profile going to override?", the answer should be based on raw non-empty fields in `EngineProfile.InferenceSettings`, not the final merged settings. Final merged settings answer a different question: "what will the runtime value be after all defaults and stack layers are applied?"
+
 ### Resolution fields
 
 These are available when the command asks the report builder for resolution details. Use them for `detailed`/`full`, not default output.
@@ -594,15 +649,24 @@ Lineage entries have these subfields:
 Default:
 
 ```text
-selected, default, registry, profile, display_name, model, api_type, description
+selected, default, registry, profile, display_name,
+effective_chat_engine, effective_chat_api_type,
+reasoning_effort, description
 ```
+
+`reasoning_effort` may be an alias for `effective_reasoning_effort` in default table output to keep the common case readable.
 
 Detailed:
 
 ```text
-selected, default, registry, profile, display_name, model, api_type, description,
+selected, default, registry, profile, display_name,
+effective_chat_engine, effective_chat_api_type, effective_reasoning_effort,
 version, source, registry_default_profile, registry_is_default, registry_profile_count,
-profile_ref
+profile_ref,
+override_count, override_paths,
+override_chat_engine, override_chat_api_type,
+override_inference_reasoning_effort, override_inference_reasoning_summary,
+override_inference_thinking_budget, override_inference_thinking_type
 ```
 
 Full:
@@ -611,7 +675,8 @@ Full:
 all detailed fields,
 default_registry, default_profile, selected_registry, selected_profile,
 resolved_registry, resolved_profile, resolution_lineage,
-resolution_metadata, merged_inference_settings
+resolution_metadata,
+override_settings_json, effective_settings_json, merged_inference_settings
 ```
 
 For full table output, consider omitting or compacting very large nested fields unless the user explicitly requests them with `--fields`. For `--output json` and `--output yaml`, nested values are acceptable if redacted.

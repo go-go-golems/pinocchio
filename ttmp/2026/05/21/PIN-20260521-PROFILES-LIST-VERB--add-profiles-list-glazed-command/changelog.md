@@ -23,3 +23,12 @@ Added a field catalog for the future profiles list command, including default/de
 
 - /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/ttmp/2026/05/21/PIN-20260521-PROFILES-LIST-VERB--add-profiles-list-glazed-command/design-doc/01-implementation-guide.md — Profiles list field catalog
 
+
+## 2026-05-21
+
+Expanded profiles list guide with raw inference-setting override fields versus effective resolved settings.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/ttmp/2026/05/21/PIN-20260521-PROFILES-LIST-VERB--add-profiles-list-glazed-command/design-doc/01-implementation-guide.md — Inference settings override/effective field catalog
+
