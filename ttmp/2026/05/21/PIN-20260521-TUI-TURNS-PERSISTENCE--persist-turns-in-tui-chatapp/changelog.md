@@ -24,3 +24,13 @@ Implemented Phase 1 TUI final-turn persistence and Phase 2 sessionstream timelin
 - /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/cmds/cmd.go — Wires turns and timeline stores into runChat
 - /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/ui/chatapp_backend.go — Persists successful final turns from OnFinalTurn
 
+
+## 2026-05-21
+
+Narrowed Phase 3 resume UX to minimal --session-id ID --resume; no first-pass --conversation-id.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/ttmp/2026/05/21/PIN-20260521-TUI-TURNS-PERSISTENCE--persist-turns-in-tui-chatapp/design-doc/01-persisting-turns-in-the-tui-chatapp.md — Resume UX decision
+- /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/ttmp/2026/05/21/PIN-20260521-TUI-TURNS-PERSISTENCE--persist-turns-in-tui-chatapp/tasks.md — Remaining Phase 3 task updated
+

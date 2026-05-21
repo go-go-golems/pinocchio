@@ -14,5 +14,5 @@
 
 ## TODO
 
-- [ ] Phase 3 design/implementation: add stable session/conversation id and resume UX.
-- [ ] If needed, add sessionstream hydration inspection tooling for `--timeline-db` files.
+- [ ] Phase 3 implementation: add minimal `--session-id ID --resume` UX, with `convID=sessionID=--session-id`.
+- [ ] If needed, add sessionstream hydration inspection tooling for `--timeline-db` files after minimal resume works.

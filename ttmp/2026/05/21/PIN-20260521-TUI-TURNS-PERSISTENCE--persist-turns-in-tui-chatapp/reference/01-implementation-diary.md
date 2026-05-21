@@ -28,7 +28,7 @@ RelatedFiles:
       Note: Design produced in Step 1
 ExternalSources: []
 Summary: Diary for the TUI chatapp turns persistence design ticket.
-LastUpdated: 2026-05-21T16:50:00-04:00
+LastUpdated: 2026-05-21T17:05:00-04:00
 WhatFor: Track analysis, design decisions, validation, and future implementation notes for persisting command TUI chat turns.
 WhenToUse: Read before resuming implementation of PIN-20260521-TUI-TURNS-PERSISTENCE.
 ---
@@ -268,13 +268,13 @@ The other sharp edge was avoiding import cycles and layering violations. `pkg/ui
 ### What warrants a second pair of eyes
 
 - Whether TUI persistence failure should abort the current Bubble Tea command or become best-effort with a visible warning.
-- Whether `convID=sessionID=commandSessionID(seed)` is enough until resume UX lands.
+- Whether `convID=sessionID=commandSessionID(seed)` is enough until resume UX lands; the follow-up UX decision is now minimal `--session-id ID --resume`.
 - Whether storing both `TurnStore` in `RunnerOptions` and an explicit TUI `TurnPersister` is surprising; it is intentional because explicit `InitialTurn` skips runner-side history loading.
 - Whether `--timeline-db` should receive a more discoverable inspection/export command against `sessionstream.HydrationStore`.
 
 ### What should be done in the future
 
-- Implement Phase 3: stable `--session-id` / `--conversation-id` and explicit resume UX.
+- Implement Phase 3: minimal `--session-id ID --resume` with `convID=sessionID=--session-id`; do not add `--conversation-id` in the first resume pass.
 - Add sessionstream timeline inspection tooling if operators need to inspect `--timeline-db` without custom SQLite queries.
 - Consider converting the `OnFinalTurn` callback into a typed run-result API so command callers can receive final turn, status, and persistence metadata through one structured return value.
 
@@ -336,4 +336,87 @@ runner, err := chatapp.NewRunner(commandRunnerOptionsWithPersistence(
     hydrationStore,
     turnStore,
 ))
+```
+
+## Step 3: Narrow resume UX to explicit session id
+
+This step records the product decision for the remaining resume work. The first resume pass should not introduce a separate conversation identifier or a new `pinocchio chat resume` command family.
+
+The accepted minimal UX is `--session-id ID --resume`. For the first implementation, the persistence key should stay simple: `convID=sessionID=--session-id`.
+
+### Prompt Context
+
+**User prompt (verbatim):** "keep it at the --session-id XXX --resume minimal UX"
+
+**Assistant interpretation:** Update the remaining TUI persistence/resume plan so Phase 3 uses only an explicit session id plus resume flag, without adding `--conversation-id` or richer chat subcommands.
+
+**Inferred user intent:** The user wants a small, deterministic resume feature that is easy to implement and review, rather than a broader product surface.
+
+**Commit (code):** N/A — this step updates the design direction only.
+
+### What I did
+
+- Updated the design doc to make `--session-id ID --resume` the chosen Phase 3 UX.
+- Removed `--conversation-id` and dedicated `pinocchio chat resume` from the first-pass recommendation.
+- Updated the task list so the remaining Phase 3 work says `convID=sessionID=--session-id`.
+- Updated the prior diary follow-up language to avoid implying that `--conversation-id` should be part of the first resume implementation.
+
+### Why
+
+- A minimal explicit session id avoids premature product design.
+- It keeps persistence keying obvious and scriptable.
+- It gives operators a deterministic handle for resume without requiring list/discovery commands first.
+
+### What worked
+
+- The existing design already had `--session-id` as an option, so the change was a narrowing of scope rather than a new design.
+
+### What didn't work
+
+- N/A — no code was changed in this step.
+
+### What I learned
+
+- The first resume implementation should optimize for correctness and reviewability over discoverability.
+- Discovery/listing commands can remain future work after the minimal resume path is proven.
+
+### What was tricky to build
+
+No code was built. The tricky part was avoiding two overlapping identity concepts. Using only `--session-id` means the first implementation does not need to define the relationship between conversation ids, session ids, branches, and runs.
+
+### What warrants a second pair of eyes
+
+- Whether `--resume` should require `--session-id`, or whether deterministic `commandSessionID(seed)` fallback is acceptable.
+- Whether timeline hydration should be included in the first resume implementation or deferred until model-context resume is working.
+
+### What should be done in the future
+
+- Implement `--session-id ID --resume`.
+- Use `convID=sessionID=--session-id` for turn-store lookup and persistence.
+- Defer `--conversation-id`, list/resume helper commands, and richer branching semantics.
+
+### Code review instructions
+
+- Review Phase 3 in the design doc and confirm no first-pass `--conversation-id` behavior is implied.
+- When implementing, start in `pkg/cmds/cmd.go` and the command-layer flag definitions.
+
+### Technical details
+
+The intended first-pass resume command shape is:
+
+```bash
+pinocchio run-command ./cmd.yaml \
+  --chat \
+  --turns-db ~/.local/share/pinocchio/turns.db \
+  --timeline-db ~/.local/share/pinocchio/timeline.db \
+  --session-id my-session \
+  --resume
+```
+
+The intended keying rule is:
+
+```text
+conv_id = --session-id
+session_id = --session-id
+phase = "final"
 ```
