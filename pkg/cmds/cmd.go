@@ -35,6 +35,7 @@ import (
 	profilebootstrap "github.com/go-go-golems/pinocchio/pkg/cmds/profilebootstrap"
 	"github.com/go-go-golems/pinocchio/pkg/cmds/run"
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
+	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
 	pinui "github.com/go-go-golems/pinocchio/pkg/ui"
 	sessionstream "github.com/go-go-golems/sessionstream/pkg/sessionstream"
 	"github.com/google/uuid"
@@ -505,8 +506,15 @@ func shouldAskForChatContinuation(rc *run.RunContext, force bool) bool {
 }
 
 func commandRunnerOptions(fanout sessionstream.UIFanout) chatapp.RunnerOptions {
+	return commandRunnerOptionsWithPersistence(fanout, nil, nil, nil)
+}
+
+func commandRunnerOptionsWithPersistence(fanout sessionstream.UIFanout, reg *sessionstream.SchemaRegistry, hydrationStore sessionstream.HydrationStore, turnStore chatstore.TurnStore) chatapp.RunnerOptions {
 	return chatapp.RunnerOptions{
-		UIFanout: fanout,
+		Registry:       reg,
+		HydrationStore: hydrationStore,
+		UIFanout:       fanout,
+		TurnStore:      turnStore,
 		Plugins: []chatapp.ChatPlugin{
 			plugins.NewReasoningPlugin(),
 			plugins.NewToolCallPlugin(),
@@ -1066,6 +1074,18 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) (*tu
 		}
 	}
 	sid := commandSessionID(seed)
+	reg := sessionstream.NewSchemaRegistry()
+	hydrationStore, closeHydrationStore, err := openCLISessionstreamHydrationStore(rc.Persistence, reg)
+	if err != nil {
+		return nil, err
+	}
+	defer closeHydrationStore()
+	turnStore, closeTurnStore, err := openCLITurnStore(rc.Persistence)
+	if err != nil {
+		return nil, err
+	}
+	defer closeTurnStore()
+
 	eng, err := rc.EngineFactory.CreateEngine(rc.InferenceSettings)
 	if err != nil {
 		return nil, err
@@ -1081,14 +1101,18 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) (*tu
 	}
 
 	fanoutProxy := pinui.NewUIFanoutProxy()
-	runner, err := chatapp.NewRunner(commandRunnerOptions(fanoutProxy))
+	runner, err := chatapp.NewRunner(commandRunnerOptionsWithPersistence(fanoutProxy, reg, hydrationStore, turnStore))
 	if err != nil {
 		_ = writeErrorAll(sid, "runner_init_failed", err, true, debugFanout)
 		return nil, err
 	}
 	defer func() { _ = runner.Close() }()
 
-	backend, err := pinui.NewChatAppBackend(runner.Service, sid, &infruntime.ComposedRuntime{Engine: eng}, seed)
+	var turnPersister pinui.TurnPersister
+	if turnStore != nil {
+		turnPersister = newCLITurnStorePersister(turnStore, string(sid), string(sid), "final")
+	}
+	backend, err := pinui.NewChatAppBackend(runner.Service, sid, &infruntime.ComposedRuntime{Engine: eng}, seed, pinui.WithTurnPersister(turnPersister))
 	if err != nil {
 		return nil, err
 	}

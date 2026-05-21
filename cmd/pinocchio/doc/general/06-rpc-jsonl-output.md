@@ -230,6 +230,30 @@ The process exit status still matters. Treat a non-zero exit as failure even if 
 
 `--output jsonl` and `--rpc` are transport modes. They use chatapp/sessionstream projections and protobuf JSON lines. Use them for automation.
 
+## TUI Chat Persistence
+
+Command TUI mode can persist both the model-context turn history and the visible sessionstream timeline:
+
+```bash
+pinocchio run-command ./my-command.yaml \
+  --chat \
+  --turns-db ~/.local/share/pinocchio/chat/turns.db \
+  --timeline-db ~/.local/share/pinocchio/chat/timeline.db
+```
+
+`--turns-db` / `--turns-dsn` stores successful final `turns.Turn` snapshots after each TUI inference run. This is the model-context accumulator that should seed future turns.
+
+`--timeline-db` / `--timeline-dsn` stores the live `sessionstream` hydration timeline: projected UI entities, ordinals, and snapshots. This is the visible UI/debug/export state, not the model-context source.
+
+The two databases intentionally serve different purposes:
+
+| Flag | Stores | Used for |
+|---|---|---|
+| `--turns-db` / `--turns-dsn` | Final Geppetto `turns.Turn` YAML payloads | durable model-context turns, export, future resume support |
+| `--timeline-db` / `--timeline-dsn` | `sessionstream` timeline entities and snapshots | UI hydration, debug inspection, export |
+
+Current command TUI chat persists data when these flags are configured. Resume UX with stable `--session-id` / `--resume` semantics is a separate future feature.
+
 ## Troubleshooting
 
 | Problem | Cause | Solution |

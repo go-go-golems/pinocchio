@@ -11,6 +11,8 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/turns/serde"
 	"github.com/go-go-golems/pinocchio/pkg/cmds/run"
 	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
+	sessionstream "github.com/go-go-golems/sessionstream/pkg/sessionstream"
+	storesqlite "github.com/go-go-golems/sessionstream/pkg/sessionstream/hydration/sqlite"
 	"github.com/pkg/errors"
 )
 
@@ -84,6 +86,37 @@ func toString(v any) string {
 		return s
 	}
 	return ""
+}
+
+func openCLISessionstreamHydrationStore(settings run.PersistenceSettings, reg *sessionstream.SchemaRegistry) (sessionstream.HydrationStore, func(), error) {
+	noop := func() {}
+	if strings.TrimSpace(settings.TimelineDSN) == "" && strings.TrimSpace(settings.TimelineDB) == "" {
+		return nil, noop, nil
+	}
+	if reg == nil {
+		return nil, noop, errors.New("sessionstream schema registry is nil")
+	}
+
+	dsn := strings.TrimSpace(settings.TimelineDSN)
+	if dsn == "" {
+		timelineDB := strings.TrimSpace(settings.TimelineDB)
+		if dir := filepath.Dir(timelineDB); dir != "" && dir != "." {
+			if err := os.MkdirAll(dir, 0o755); err != nil {
+				return nil, noop, errors.Wrap(err, "create timeline db dir")
+			}
+		}
+		var err error
+		dsn, err = storesqlite.FileDSN(timelineDB)
+		if err != nil {
+			return nil, noop, err
+		}
+	}
+
+	store, err := storesqlite.New(dsn, reg)
+	if err != nil {
+		return nil, noop, err
+	}
+	return store, func() { _ = store.Close() }, nil
 }
 
 func openCLITurnStore(settings run.PersistenceSettings) (chatstore.TurnStore, func(), error) {

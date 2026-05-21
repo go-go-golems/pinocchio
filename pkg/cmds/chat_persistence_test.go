@@ -9,8 +9,30 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/turns"
 	"github.com/go-go-golems/pinocchio/pkg/cmds/run"
 	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
+	sessionstream "github.com/go-go-golems/sessionstream/pkg/sessionstream"
 	"github.com/stretchr/testify/require"
 )
+
+func TestOpenCLISessionstreamHydrationStore_NoneConfigured(t *testing.T) {
+	store, cleanup, err := openCLISessionstreamHydrationStore(run.PersistenceSettings{}, sessionstream.NewSchemaRegistry())
+	require.NoError(t, err)
+	require.Nil(t, store)
+	require.NotNil(t, cleanup)
+	cleanup()
+}
+
+func TestOpenCLISessionstreamHydrationStore_OpenFromDBPath(t *testing.T) {
+	dir := t.TempDir()
+	timelineDB := filepath.Join(dir, "timeline", "timeline.db")
+
+	store, cleanup, err := openCLISessionstreamHydrationStore(run.PersistenceSettings{TimelineDB: timelineDB}, sessionstream.NewSchemaRegistry())
+	require.NoError(t, err)
+	require.NotNil(t, store)
+	t.Cleanup(cleanup)
+
+	_, err = os.Stat(filepath.Dir(timelineDB))
+	require.NoError(t, err)
+}
 
 func TestOpenCLITurnStore_NoneConfigured(t *testing.T) {
 	turnStore, cleanup, err := openCLITurnStore(run.PersistenceSettings{})
