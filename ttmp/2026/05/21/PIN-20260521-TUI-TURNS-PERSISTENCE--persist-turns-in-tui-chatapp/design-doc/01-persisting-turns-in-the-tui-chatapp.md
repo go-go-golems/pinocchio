@@ -507,12 +507,18 @@ conversation id = string(session id)
 
 This is simple and avoids adding another flag in the first pass.
 
-However, durable resume needs stable ids across process invocations. A generated UUID is not enough for resume unless the user can recover it. A follow-up should add one of:
+However, durable resume needs a stable id across process invocations. The chosen minimal UX is:
 
-- `--session-id ID` for explicit session selection;
-- `--conversation-id ID` with session id derived from it;
-- `pinocchio chat list` and `pinocchio chat resume ID` commands;
-- reuse an existing conversation id embedded in imported seed metadata.
+```bash
+--session-id ID
+--resume
+```
+
+For this first resume implementation, do not add `--conversation-id`, `pinocchio chat resume`, or list/resume helper commands. Keep the identity rule simple:
+
+```text
+conversation id = session id = --session-id
+```
 
 For this ticket, the implementation guide includes resume as Phase 3. Phase 1 and Phase 2 should persist data first.
 
@@ -1134,18 +1140,14 @@ Use sessionstream or web-chat timeline tools if they support the same schema.
 
 Goal: user can resume TUI chat from a prior persisted final turn.
 
-This needs UX design. Recommended flags:
+The UX decision is intentionally minimal:
 
 ```bash
 --session-id ID
 --resume
 ```
 
-or a dedicated command:
-
-```bash
-pinocchio chat resume ID --turns-db PATH --timeline-db PATH
-```
+Do not add `--conversation-id` for the first resume implementation. Do not add a dedicated `pinocchio chat resume` command yet. Use the explicit session id as both the turn-store `conv_id` and `session_id`.
 
 Startup logic:
 
@@ -1169,7 +1171,7 @@ if timelineStore has snapshot for sid {
 }
 ```
 
-Phase 3 should have a separate design review before implementation because it affects CLI UX and user expectations.
+Phase 3 no longer needs a broad UX design review before implementation; the accepted first UX is `--session-id ID --resume`. A review should still check loading semantics, persistence key consistency, and error messages.
 
 ## Testing Strategy
 
@@ -1424,10 +1426,9 @@ Mitigation:
 ## Open Questions
 
 1. Should persistence failure fail the TUI message, or should it be best-effort with a visible warning?
-2. Should the first implementation add `--session-id`, or should resume be a follow-up ticket?
-3. Should command chat use `convID=sessionID`, or introduce a separate `--conversation-id` immediately?
-4. Should timeline DB support be implemented in the same PR as turns DB, or split into two PRs?
-5. Should we add CLI tools for listing/resuming persisted command chat sessions, reusing web-chat export/list code?
+2. Should `--resume` require `--session-id`, or may it fall back to `commandSessionID(seed)` for deterministic command seeds?
+3. Should timeline hydration on resume be implemented immediately, or should first resume only restore model context from the turns DB?
+4. Should we add CLI tools for listing/resuming persisted command chat sessions later, after the minimal `--session-id ID --resume` UX is proven?
 
 ## Recommended First PR Scope
 
@@ -1448,10 +1449,11 @@ The second PR should add:
 
 The third PR should add:
 
-- explicit session id/resume UX;
+- minimal `--session-id ID --resume` UX;
+- `convID=sessionID=--session-id` persistence keying;
 - load-latest-final-turn startup path;
-- visible hydration from timeline DB or turn fallback;
-- list/resume helper commands if needed.
+- visible hydration from timeline DB or turn fallback if this is low-risk;
+- no `--conversation-id` and no list/resume helper commands in the first resume pass.
 
 ## Appendix: New Intern Checklist
 

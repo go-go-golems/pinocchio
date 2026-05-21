@@ -33,6 +33,8 @@ type HelpersSettings struct {
 	Output                 string             `glazed:"output"`
 	RPC                    bool               `glazed:"rpc"`
 	DebugEventsJSONL       string             `glazed:"debug-events-jsonl"`
+	SessionID              string             `glazed:"session-id"`
+	Resume                 bool               `glazed:"resume"`
 	WithMetadata           bool               `glazed:"with-metadata"`
 	FullOutput             bool               `glazed:"full-output"`
 }
@@ -152,6 +154,18 @@ func NewHelpersParameterLayer() (schema.Section, error) {
 				fields.TypeString,
 				fields.WithHelp("Write projected chatapp/sessionstream UI events to this JSONL file for debugging"),
 				fields.WithDefault(""),
+			),
+			fields.New(
+				"session-id",
+				fields.TypeString,
+				fields.WithHelp("Explicit chat session id for TUI persistence and resume"),
+				fields.WithDefault(""),
+			),
+			fields.New(
+				"resume",
+				fields.TypeBool,
+				fields.WithHelp("Resume TUI chat from the latest final turn for --session-id in the turns DB"),
+				fields.WithDefault(false),
 			),
 			fields.New(
 				"with-metadata",

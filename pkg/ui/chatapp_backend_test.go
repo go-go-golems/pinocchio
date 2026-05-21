@@ -2,8 +2,10 @@ package ui
 
 import (
 	"context"
+	"errors"
 	"testing"
 
+	boba_chat "github.com/go-go-golems/bobatea/pkg/chat"
 	"github.com/go-go-golems/geppetto/pkg/turns"
 	"github.com/go-go-golems/pinocchio/pkg/chatapp"
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
@@ -45,6 +47,74 @@ func TestChatAppBackendCarriesSnapshotHistoryAcrossTurns(t *testing.T) {
 	require.Equal(t, "second", current.Blocks[3].Payload[turns.PayloadKeyText])
 	require.Equal(t, turns.RoleAssistant, current.Blocks[4].Role)
 	require.Equal(t, "seen: second", current.Blocks[4].Payload[turns.PayloadKeyText])
+}
+
+func TestChatAppBackendPersistsFinalTurn(t *testing.T) {
+	runner, err := chatapp.NewRunner(chatapp.RunnerOptions{})
+	require.NoError(t, err)
+	defer func() { _ = runner.Close() }()
+
+	persister := &recordingTurnPersister{}
+	backend, err := NewChatAppBackend(
+		runner.Service,
+		sessionstream.SessionId("chatapp-backend-persist"),
+		&infruntime.ComposedRuntime{Engine: recordingTurnEngine{}},
+		nil,
+		WithTurnPersister(persister),
+	)
+	require.NoError(t, err)
+
+	cmd, err := backend.Start(context.Background(), "persist me")
+	require.NoError(t, err)
+	msg := cmd()
+	require.IsType(t, boba_chat.BackendFinishedMsg{}, msg)
+
+	require.Len(t, persister.turns, 1)
+	persisted := persister.turns[0]
+	require.Len(t, persisted.Blocks, 2)
+	require.Equal(t, turns.RoleUser, persisted.Blocks[0].Role)
+	require.Equal(t, "persist me", persisted.Blocks[0].Payload[turns.PayloadKeyText])
+	require.Equal(t, turns.RoleAssistant, persisted.Blocks[1].Role)
+	require.Equal(t, "seen: persist me", persisted.Blocks[1].Payload[turns.PayloadKeyText])
+}
+
+func TestChatAppBackendReturnsErrorWhenTurnPersistenceFails(t *testing.T) {
+	runner, err := chatapp.NewRunner(chatapp.RunnerOptions{})
+	require.NoError(t, err)
+	defer func() { _ = runner.Close() }()
+
+	persister := &recordingTurnPersister{err: errors.New("persist failed")}
+	backend, err := NewChatAppBackend(
+		runner.Service,
+		sessionstream.SessionId("chatapp-backend-persist-failure"),
+		&infruntime.ComposedRuntime{Engine: recordingTurnEngine{}},
+		nil,
+		WithTurnPersister(persister),
+	)
+	require.NoError(t, err)
+
+	cmd, err := backend.Start(context.Background(), "persist failure")
+	require.NoError(t, err)
+	msg := cmd()
+	errMsg, ok := msg.(boba_chat.ErrorMsg)
+	require.True(t, ok)
+	require.Contains(t, errMsg.Error(), "persist failed")
+	require.True(t, backend.IsFinished())
+}
+
+type recordingTurnPersister struct {
+	turns []*turns.Turn
+	err   error
+}
+
+func (p *recordingTurnPersister) PersistTurn(_ context.Context, t *turns.Turn) error {
+	if p.err != nil {
+		return p.err
+	}
+	if t != nil {
+		p.turns = append(p.turns, t.Clone())
+	}
+	return nil
 }
 
 type recordingTurnEngine struct{}

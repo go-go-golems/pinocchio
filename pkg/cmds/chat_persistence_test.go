@@ -9,34 +9,94 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/turns"
 	"github.com/go-go-golems/pinocchio/pkg/cmds/run"
 	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
+	sessionstream "github.com/go-go-golems/sessionstream/pkg/sessionstream"
 	"github.com/stretchr/testify/require"
 )
 
-func TestOpenChatPersistenceStores_NoneConfigured(t *testing.T) {
-	timelineStore, turnStore, cleanup, err := openChatPersistenceStores(run.PersistenceSettings{})
+func TestOpenCLISessionstreamHydrationStore_NoneConfigured(t *testing.T) {
+	store, cleanup, err := openCLISessionstreamHydrationStore(run.PersistenceSettings{}, sessionstream.NewSchemaRegistry())
 	require.NoError(t, err)
-	require.Nil(t, timelineStore)
+	require.Nil(t, store)
+	require.NotNil(t, cleanup)
+	cleanup()
+}
+
+func TestOpenCLISessionstreamHydrationStore_OpenFromDBPath(t *testing.T) {
+	dir := t.TempDir()
+	timelineDB := filepath.Join(dir, "timeline", "timeline.db")
+
+	store, cleanup, err := openCLISessionstreamHydrationStore(run.PersistenceSettings{TimelineDB: timelineDB}, sessionstream.NewSchemaRegistry())
+	require.NoError(t, err)
+	require.NotNil(t, store)
+	t.Cleanup(cleanup)
+
+	_, err = os.Stat(filepath.Dir(timelineDB))
+	require.NoError(t, err)
+}
+
+func TestLoadLatestCLIFinalTurn(t *testing.T) {
+	dir := t.TempDir()
+	dsn, err := chatstore.SQLiteTurnDSNForFile(filepath.Join(dir, "turns.db"))
+	require.NoError(t, err)
+	store, err := chatstore.NewSQLiteTurnStore(dsn)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = store.Close() })
+
+	turn := &turns.Turn{ID: "turn-resume"}
+	turns.AppendBlock(turn, turns.NewUserTextBlock("first prompt"))
+	turns.AppendBlock(turn, turns.NewAssistantTextBlock("first answer"))
+	persister := newCLITurnStorePersister(store, "resume-session", "resume-session", "final")
+	require.NotNil(t, persister)
+	require.NoError(t, persister.PersistTurn(context.Background(), turn))
+
+	loaded, err := loadLatestCLIFinalTurn(context.Background(), store, "resume-session")
+	require.NoError(t, err)
+	require.NotNil(t, loaded)
+	require.Equal(t, "turn-resume", loaded.ID)
+	require.Len(t, loaded.Blocks, 2)
+	sessionID, ok, err := turns.KeyTurnMetaSessionID.Get(loaded.Metadata)
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.Equal(t, "resume-session", sessionID)
+}
+
+func TestLoadLatestCLIFinalTurnRequiresStoreAndSession(t *testing.T) {
+	_, err := loadLatestCLIFinalTurn(context.Background(), nil, "resume-session")
+	require.ErrorContains(t, err, "resume requires --turns-db or --turns-dsn")
+
+	dir := t.TempDir()
+	dsn, err := chatstore.SQLiteTurnDSNForFile(filepath.Join(dir, "turns.db"))
+	require.NoError(t, err)
+	store, err := chatstore.NewSQLiteTurnStore(dsn)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = store.Close() })
+
+	_, err = loadLatestCLIFinalTurn(context.Background(), store, "")
+	require.ErrorContains(t, err, "resume requires --session-id")
+
+	_, err = loadLatestCLIFinalTurn(context.Background(), store, "missing-session")
+	require.ErrorContains(t, err, "no persisted final turn found")
+}
+
+func TestOpenCLITurnStore_NoneConfigured(t *testing.T) {
+	turnStore, cleanup, err := openCLITurnStore(run.PersistenceSettings{})
+	require.NoError(t, err)
 	require.Nil(t, turnStore)
 	require.NotNil(t, cleanup)
 	cleanup()
 }
 
-func TestOpenChatPersistenceStores_OpenBothFromDBPaths(t *testing.T) {
+func TestOpenCLITurnStore_OpenFromDBPath(t *testing.T) {
 	dir := t.TempDir()
-	timelineDB := filepath.Join(dir, "timeline", "timeline.db")
 	turnsDB := filepath.Join(dir, "turns", "turns.db")
 
-	timelineStore, turnStore, cleanup, err := openChatPersistenceStores(run.PersistenceSettings{
-		TimelineDB: timelineDB,
-		TurnsDB:    turnsDB,
+	turnStore, cleanup, err := openCLITurnStore(run.PersistenceSettings{
+		TurnsDB: turnsDB,
 	})
 	require.NoError(t, err)
-	require.NotNil(t, timelineStore)
 	require.NotNil(t, turnStore)
 	t.Cleanup(cleanup)
 
-	_, err = os.Stat(filepath.Dir(timelineDB))
-	require.NoError(t, err)
 	_, err = os.Stat(filepath.Dir(turnsDB))
 	require.NoError(t, err)
 }

@@ -39,8 +39,6 @@ cmd/web-chat/web/src/
     rendererRegistry.ts   Entity kind → React component mapping
     cards.tsx             Card renderers (message, agent mode, etc.)
     timelinePropsRegistry.ts  Props normalization before rendering
-  sem/
-    pb/                   Historical SEM protobuf-generated TypeScript types (not the live chatapp transport)
 ```
 
 ## Sessionstream Projection Pipeline

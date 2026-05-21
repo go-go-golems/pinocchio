@@ -30,6 +30,8 @@ type UISettings struct {
 	Output           string
 	RPC              bool
 	DebugEventsJSONL string
+	SessionID        string
+	Resume           bool
 	WithMetadata     bool
 	FullOutput       bool
 }

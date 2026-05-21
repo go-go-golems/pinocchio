@@ -5,8 +5,6 @@
     "includes": [
       "src/**",
       "vite.config.ts",
-      "!!**/src/sem/pb",
-      "!!**/src/features/thinkingMode/pb",
       "!!**/storybook-static"
     ]
   },

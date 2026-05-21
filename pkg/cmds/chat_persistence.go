@@ -11,6 +11,8 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/turns/serde"
 	"github.com/go-go-golems/pinocchio/pkg/cmds/run"
 	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
+	sessionstream "github.com/go-go-golems/sessionstream/pkg/sessionstream"
+	storesqlite "github.com/go-go-golems/sessionstream/pkg/sessionstream/hydration/sqlite"
 	"github.com/pkg/errors"
 )
 
@@ -86,71 +88,96 @@ func toString(v any) string {
 	return ""
 }
 
-func openChatPersistenceStores(settings run.PersistenceSettings) (chatstore.TimelineStore, chatstore.TurnStore, func(), error) {
-	var timelineStore chatstore.TimelineStore
+func openCLISessionstreamHydrationStore(settings run.PersistenceSettings, reg *sessionstream.SchemaRegistry) (sessionstream.HydrationStore, func(), error) {
+	noop := func() {}
+	if strings.TrimSpace(settings.TimelineDSN) == "" && strings.TrimSpace(settings.TimelineDB) == "" {
+		return nil, noop, nil
+	}
+	if reg == nil {
+		return nil, noop, errors.New("sessionstream schema registry is nil")
+	}
+
+	dsn := strings.TrimSpace(settings.TimelineDSN)
+	if dsn == "" {
+		timelineDB := strings.TrimSpace(settings.TimelineDB)
+		if dir := filepath.Dir(timelineDB); dir != "" && dir != "." {
+			if err := os.MkdirAll(dir, 0o755); err != nil {
+				return nil, noop, errors.Wrap(err, "create timeline db dir")
+			}
+		}
+		var err error
+		dsn, err = storesqlite.FileDSN(timelineDB)
+		if err != nil {
+			return nil, noop, err
+		}
+	}
+
+	store, err := storesqlite.New(dsn, reg)
+	if err != nil {
+		return nil, noop, err
+	}
+	return store, func() { _ = store.Close() }, nil
+}
+
+func loadLatestCLIFinalTurn(ctx context.Context, store chatstore.TurnStore, sessionID string) (*turns.Turn, error) {
+	if store == nil {
+		return nil, errors.New("resume requires --turns-db or --turns-dsn")
+	}
+	sessionID = strings.TrimSpace(sessionID)
+	if sessionID == "" {
+		return nil, errors.New("resume requires --session-id")
+	}
+	snap, err := store.LoadLatestTurn(ctx, sessionID, "final")
+	if err != nil {
+		return nil, errors.Wrap(err, "load latest final turn")
+	}
+	if snap == nil {
+		return nil, errors.Errorf("no persisted final turn found for session %q", sessionID)
+	}
+	t, err := serde.FromYAML([]byte(snap.Payload))
+	if err != nil {
+		return nil, errors.Wrap(err, "decode latest final turn")
+	}
+	if t == nil {
+		return nil, errors.Errorf("latest final turn for session %q decoded to nil", sessionID)
+	}
+	_ = turns.KeyTurnMetaSessionID.Set(&t.Metadata, sessionID)
+	return t, nil
+}
+
+func openCLITurnStore(settings run.PersistenceSettings) (chatstore.TurnStore, func(), error) {
 	var turnStore chatstore.TurnStore
 
 	cleanup := func() {
 		if turnStore != nil {
 			_ = turnStore.Close()
 		}
-		if timelineStore != nil {
-			_ = timelineStore.Close()
-		}
 	}
 
-	openTimeline := strings.TrimSpace(settings.TimelineDSN) != "" || strings.TrimSpace(settings.TimelineDB) != ""
 	openTurns := strings.TrimSpace(settings.TurnsDSN) != "" || strings.TrimSpace(settings.TurnsDB) != ""
-	if !openTimeline && !openTurns {
-		return nil, nil, cleanup, nil
+	if !openTurns {
+		return nil, cleanup, nil
 	}
 
-	if openTimeline {
-		dsn := strings.TrimSpace(settings.TimelineDSN)
-		if dsn == "" {
-			timelineDB := strings.TrimSpace(settings.TimelineDB)
-			if dir := filepath.Dir(timelineDB); dir != "" && dir != "." {
-				if err := os.MkdirAll(dir, 0o755); err != nil {
-					return nil, nil, cleanup, errors.Wrap(err, "create timeline db dir")
-				}
-			}
-			var err error
-			dsn, err = chatstore.SQLiteTimelineDSNForFile(timelineDB)
-			if err != nil {
-				return nil, nil, cleanup, err
+	dsn := strings.TrimSpace(settings.TurnsDSN)
+	if dsn == "" {
+		turnsDB := strings.TrimSpace(settings.TurnsDB)
+		if dir := filepath.Dir(turnsDB); dir != "" && dir != "." {
+			if err := os.MkdirAll(dir, 0o755); err != nil {
+				return nil, cleanup, errors.Wrap(err, "create turns db dir")
 			}
 		}
-		s, err := chatstore.NewSQLiteTimelineStore(dsn)
+		var err error
+		dsn, err = chatstore.SQLiteTurnDSNForFile(turnsDB)
 		if err != nil {
-			return nil, nil, cleanup, err
+			return nil, cleanup, err
 		}
-		timelineStore = s
 	}
-
-	if openTurns {
-		dsn := strings.TrimSpace(settings.TurnsDSN)
-		if dsn == "" {
-			turnsDB := strings.TrimSpace(settings.TurnsDB)
-			if dir := filepath.Dir(turnsDB); dir != "" && dir != "." {
-				if err := os.MkdirAll(dir, 0o755); err != nil {
-					cleanup()
-					return nil, nil, cleanup, errors.Wrap(err, "create turns db dir")
-				}
-			}
-			var err error
-			dsn, err = chatstore.SQLiteTurnDSNForFile(turnsDB)
-			if err != nil {
-				cleanup()
-				return nil, nil, cleanup, err
-			}
-		}
-		s, err := chatstore.NewSQLiteTurnStore(dsn)
-		if err != nil {
-			cleanup()
-			return nil, nil, cleanup, err
-		}
-		turnStore = s
+	s, err := chatstore.NewSQLiteTurnStore(dsn)
+	if err != nil {
+		return nil, cleanup, err
 	}
+	turnStore = s
 
-	return timelineStore, turnStore, cleanup, nil
+	return turnStore, cleanup, nil
 }
