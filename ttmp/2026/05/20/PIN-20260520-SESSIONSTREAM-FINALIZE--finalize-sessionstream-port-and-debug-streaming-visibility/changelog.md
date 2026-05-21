@@ -117,3 +117,23 @@ Committed command chatapp plugin registration for reasoning/tool-call projection
 - /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/cmds/cmd.go — Committed command runner plugin registration
 - /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/cmds/cmd_rpc_jsonl_test.go — Committed ChatReasoningPatch regression coverage
 
+
+## 2026-05-20
+
+Addressed follow-up PR review comments: documented explicit interactive prompting semantics, emitted failed done frames on RPC/debug terminal startup failures, and hydrated chat continuation UI from the seed result turn.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/cmds/cmd.go — Follow-up PR review fixes for interactive semantics
+- /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/cmds/cmd_rpc_jsonl_test.go — Regression coverage for done.status failed on RPC startup errors
+- /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/cmds/cmd_sessionstream_finalize_test.go — Regression coverage for seed-turn hydration snapshots
+
+
+## 2026-05-20
+
+Recorded follow-up PR review fixes from commit 2094b14 in the implementation diary.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/ttmp/2026/05/20/PIN-20260520-SESSIONSTREAM-FINALIZE--finalize-sessionstream-port-and-debug-streaming-visibility/reference/01-implementation-diary.md — Step 9 records the follow-up PR review fixes and validation
+

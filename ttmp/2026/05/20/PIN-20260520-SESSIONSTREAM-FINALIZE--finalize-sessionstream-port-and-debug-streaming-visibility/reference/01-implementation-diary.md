@@ -16,12 +16,16 @@ RelatedFiles:
       Note: |-
         Restores chat continuation prompting and explicit interactive dispatch
         Installs reasoning/tool-call chatapp plugins for command RPC/debug/TUI runners
+        Follow-up PR review fixes for interactive semantics
     - Path: pkg/cmds/cmd_rpc_jsonl_test.go
-      Note: Regression coverage that canonical reasoning events become ChatReasoningPatch JSONL frames
+      Note: |-
+        Regression coverage that canonical reasoning events become ChatReasoningPatch JSONL frames
+        Regression coverage for done.status failed on RPC startup errors
     - Path: pkg/cmds/cmd_sessionstream_finalize_test.go
       Note: |-
         Tests default stdout mode selection and RPC debug JSONL file output
         Run-mode coverage for explicit interactive and non-interactive behavior
+        Regression coverage for seed-turn hydration snapshots
     - Path: pkg/cmds/cmdlayers/helpers.go
       Note: Changes interactive default so explicit --interactive is meaningful
     - Path: pkg/ui/chatapp_fanout.go
@@ -38,6 +42,7 @@ LastUpdated: 0001-01-01T00:00:00Z
 WhatFor: ""
 WhenToUse: ""
 ---
+
 
 
 
@@ -887,3 +892,88 @@ uiEvent.name = ChatReasoningPatch
 payload.@type = type.googleapis.com/pinocchio.chatapp.v1.ChatReasoningPatch
 payload.role = thinking
 ```
+
+## Step 9: Address follow-up PR review comments
+
+I addressed the three follow-up PR comments on the sessionstream-finalize work. One comment identified a deliberate behavior choice rather than a bug: explicit `--interactive` / `--force-interactive` should remain operator-requested prompting modes, so I kept the current behavior and added a code comment explaining that scripted callers should use `--non-interactive` instead.
+
+The other two comments resulted in code changes: terminal RPC startup failures now emit both an error frame and a final failed done frame, and chat continuation now hydrates the visible Bubble Tea timeline from the previously produced blocking result turn before entering the TUI.
+
+### Prompt Context
+
+**User prompt (verbatim):** "it's possible that the first about the scripting regression is not a bug, we don't care about scripting backwards compatibility, so if the current behavior is better, then keep that, and add a comment"
+
+**Assistant interpretation:** Treat the non-TTY `--interactive` behavior as intentional if it is the preferred current semantics, but document that choice in code; still fix the remaining review comments.
+
+**Inferred user intent:** Avoid adding compatibility shims for scripting behavior that is no longer desired, while closing out actionable PR review issues.
+
+**Commit (code):** 2094b14 — "fix: address sessionstream review followups"
+
+### What I did
+
+- Added an explanatory comment in `shouldAskForChatContinuation` documenting why explicit interactive modes bypass the stdout TTY check.
+- Added `writeTerminalErrorDoneAll` so terminal JSONL/debug failures can write `error` followed by `done.status = "failed"` consistently.
+- Updated RPC JSONL startup/submit/wait/snapshot error branches to use the new terminal error+done helper.
+- Updated blocking debug-event error branches to use the same terminal error+done helper for protocol consistency in debug files.
+- Added `snapshotFromTurnForHydration` to convert the already-produced user/assistant turn history into `sessionstream.Snapshot` entities for TUI hydration.
+- Updated `runChat` so continuation from a blocking result hydrates bobatea with the existing exchange instead of showing an empty timeline.
+- Added regression coverage for startup failure `done.status = "failed"` and seed-turn hydration snapshot construction.
+
+### Why
+
+- RPC consumers should be able to finalize stream state from the documented `done` frame even when startup fails after the protocol has already emitted `hello`.
+- Continuation mode uses `rc.ResultTurn` as the backend seed to avoid a second provider call; the visible TUI should show that same context.
+- The project intentionally prioritizes the new explicit command semantics over backwards compatibility for scripts that pass `--interactive` while expecting no prompt.
+
+### What worked
+
+- `go test ./pkg/cmds ./pkg/ui -count=1` passed.
+- `go test ./pkg/chatapp/... ./pkg/ui ./pkg/cmds ./cmd/pinocchio/... -count=1` passed.
+- The new RPC startup-failure assertion observes a final `done.status = "failed"` frame.
+- The hydration helper preserves only visible user/assistant text blocks and skips system seed blocks.
+
+### What didn't work
+
+- The first implementation attempt set `UpdatedOrdinal` on `sessionstream.TimelineEntity`, but that field does not exist. The exact build error was:
+  - `pkg/cmds/cmd.go:715:4: unknown field UpdatedOrdinal in struct literal of type sessionstream.TimelineEntity`
+- I removed the nonexistent field and reran the targeted tests successfully.
+
+### What I learned
+
+- The sessionstream timeline entity contract only needs `Kind`, `Id`, `CreatedOrdinal`, and payload for this synthetic hydration use case.
+- For command continuation, the sessionstream store and the bobatea visible timeline are separate concerns: the backend receives the seed turn for context, while bobatea needs explicit hydration messages for display.
+
+### What was tricky to build
+
+- The hydration fix needed to avoid replaying the seed as live backend events, because that could duplicate state or look like a new run. Constructing a snapshot-shaped view of only user/assistant text blocks lets the existing `ChatAppUIFanout.HydrateSnapshot` path render the prior exchange without invoking the model again.
+- Error handling needed to preserve protocol ordering. The new helper is only used after a session id and fanout exist; earlier failures that happen before the protocol starts still return normally as setup errors.
+
+### What warrants a second pair of eyes
+
+- Review whether blocking debug-event traces should always include `done.status = "failed"` on every terminal setup failure, or whether some pre-run failures should remain error-only diagnostics.
+- Review whether the synthetic hydration ids (`seed-user-N`, `seed-assistant-N`) are the right long-term id shape for future richer seed blocks.
+
+### What should be done in the future
+
+- Consider adding richer seed hydration for non-text/image blocks if bobatea gains first-class renderers for those block types.
+
+### Code review instructions
+
+- Start in `pkg/cmds/cmd.go` at `shouldAskForChatContinuation`, `writeTerminalErrorDoneAll`, `snapshotFromTurnForHydration`, and the initial hydration block in `runChat`.
+- Then review `pkg/cmds/cmd_rpc_jsonl_test.go` and `pkg/cmds/cmd_sessionstream_finalize_test.go` for the new regression assertions.
+- Validate with:
+  - `go test ./pkg/cmds ./pkg/ui -count=1`
+  - `go test ./pkg/chatapp/... ./pkg/ui ./pkg/cmds ./cmd/pinocchio/... -count=1`
+
+### Technical details
+
+The RPC startup error path now follows this shape after `hello` has been emitted:
+
+```text
+hello
+snapshot?         # if available before the failure
+error.terminal=true
+ done.status=failed
+```
+
+The continuation hydration path constructs `ChatMessageEntity` payloads from the prior `turns.Turn` and feeds them through the existing `ChatAppUIFanout.HydrateSnapshot` adapter.
