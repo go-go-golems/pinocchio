@@ -34,6 +34,50 @@ func TestOpenCLISessionstreamHydrationStore_OpenFromDBPath(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestLoadLatestCLIFinalTurn(t *testing.T) {
+	dir := t.TempDir()
+	dsn, err := chatstore.SQLiteTurnDSNForFile(filepath.Join(dir, "turns.db"))
+	require.NoError(t, err)
+	store, err := chatstore.NewSQLiteTurnStore(dsn)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = store.Close() })
+
+	turn := &turns.Turn{ID: "turn-resume"}
+	turns.AppendBlock(turn, turns.NewUserTextBlock("first prompt"))
+	turns.AppendBlock(turn, turns.NewAssistantTextBlock("first answer"))
+	persister := newCLITurnStorePersister(store, "resume-session", "resume-session", "final")
+	require.NotNil(t, persister)
+	require.NoError(t, persister.PersistTurn(context.Background(), turn))
+
+	loaded, err := loadLatestCLIFinalTurn(context.Background(), store, "resume-session")
+	require.NoError(t, err)
+	require.NotNil(t, loaded)
+	require.Equal(t, "turn-resume", loaded.ID)
+	require.Len(t, loaded.Blocks, 2)
+	sessionID, ok, err := turns.KeyTurnMetaSessionID.Get(loaded.Metadata)
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.Equal(t, "resume-session", sessionID)
+}
+
+func TestLoadLatestCLIFinalTurnRequiresStoreAndSession(t *testing.T) {
+	_, err := loadLatestCLIFinalTurn(context.Background(), nil, "resume-session")
+	require.ErrorContains(t, err, "resume requires --turns-db or --turns-dsn")
+
+	dir := t.TempDir()
+	dsn, err := chatstore.SQLiteTurnDSNForFile(filepath.Join(dir, "turns.db"))
+	require.NoError(t, err)
+	store, err := chatstore.NewSQLiteTurnStore(dsn)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = store.Close() })
+
+	_, err = loadLatestCLIFinalTurn(context.Background(), store, "")
+	require.ErrorContains(t, err, "resume requires --session-id")
+
+	_, err = loadLatestCLIFinalTurn(context.Background(), store, "missing-session")
+	require.ErrorContains(t, err, "no persisted final turn found")
+}
+
 func TestOpenCLITurnStore_NoneConfigured(t *testing.T) {
 	turnStore, cleanup, err := openCLITurnStore(run.PersistenceSettings{})
 	require.NoError(t, err)

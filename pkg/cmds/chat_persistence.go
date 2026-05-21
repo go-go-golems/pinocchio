@@ -119,6 +119,32 @@ func openCLISessionstreamHydrationStore(settings run.PersistenceSettings, reg *s
 	return store, func() { _ = store.Close() }, nil
 }
 
+func loadLatestCLIFinalTurn(ctx context.Context, store chatstore.TurnStore, sessionID string) (*turns.Turn, error) {
+	if store == nil {
+		return nil, errors.New("resume requires --turns-db or --turns-dsn")
+	}
+	sessionID = strings.TrimSpace(sessionID)
+	if sessionID == "" {
+		return nil, errors.New("resume requires --session-id")
+	}
+	snap, err := store.LoadLatestTurn(ctx, sessionID, "final")
+	if err != nil {
+		return nil, errors.Wrap(err, "load latest final turn")
+	}
+	if snap == nil {
+		return nil, errors.Errorf("no persisted final turn found for session %q", sessionID)
+	}
+	t, err := serde.FromYAML([]byte(snap.Payload))
+	if err != nil {
+		return nil, errors.Wrap(err, "decode latest final turn")
+	}
+	if t == nil {
+		return nil, errors.Errorf("latest final turn for session %q decoded to nil", sessionID)
+	}
+	_ = turns.KeyTurnMetaSessionID.Set(&t.Metadata, sessionID)
+	return t, nil
+}
+
 func openCLITurnStore(settings run.PersistenceSettings) (chatstore.TurnStore, func(), error) {
 	var turnStore chatstore.TurnStore
 

@@ -298,6 +298,8 @@ func (g *PinocchioCommand) RunIntoWriter(
 		Output:           helpersSettings.Output,
 		RPC:              helpersSettings.RPC,
 		DebugEventsJSONL: strings.TrimSpace(helpersSettings.DebugEventsJSONL),
+		SessionID:        strings.TrimSpace(helpersSettings.SessionID),
+		Resume:           helpersSettings.Resume,
 		WithMetadata:     helpersSettings.WithMetadata,
 		FullOutput:       helpersSettings.FullOutput,
 	}
@@ -1073,6 +1075,17 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) (*tu
 			return nil, err
 		}
 	}
+	resume := rc.UISettings != nil && rc.UISettings.Resume
+	requestedSessionID := ""
+	if rc.UISettings != nil {
+		requestedSessionID = strings.TrimSpace(rc.UISettings.SessionID)
+	}
+	if resume && requestedSessionID == "" {
+		return nil, errors.New("--resume requires --session-id")
+	}
+	if requestedSessionID != "" {
+		_ = turns.KeyTurnMetaSessionID.Set(&seed.Metadata, requestedSessionID)
+	}
 	sid := commandSessionID(seed)
 	reg := sessionstream.NewSchemaRegistry()
 	hydrationStore, closeHydrationStore, err := openCLISessionstreamHydrationStore(rc.Persistence, reg)
@@ -1085,6 +1098,13 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) (*tu
 		return nil, err
 	}
 	defer closeTurnStore()
+	if resume {
+		seed, err = loadLatestCLIFinalTurn(ctx, turnStore, string(sid))
+		if err != nil {
+			return nil, err
+		}
+		_ = turns.KeyTurnMetaSessionID.Set(&seed.Metadata, string(sid))
+	}
 
 	eng, err := rc.EngineFactory.CreateEngine(rc.InferenceSettings)
 	if err != nil {

@@ -252,7 +252,28 @@ The two databases intentionally serve different purposes:
 | `--turns-db` / `--turns-dsn` | Final Geppetto `turns.Turn` YAML payloads | durable model-context turns, export, future resume support |
 | `--timeline-db` / `--timeline-dsn` | `sessionstream` timeline entities and snapshots | UI hydration, debug inspection, export |
 
-Current command TUI chat persists data when these flags are configured. Resume UX with stable `--session-id` / `--resume` semantics is a separate future feature.
+To persist under an explicit stable key, pass `--session-id`:
+
+```bash
+pinocchio run-command ./my-command.yaml \
+  --chat \
+  --session-id project-notes \
+  --turns-db ~/.local/share/pinocchio/chat/turns.db \
+  --timeline-db ~/.local/share/pinocchio/chat/timeline.db
+```
+
+To resume model context from the latest persisted final turn for that session, add `--resume`:
+
+```bash
+pinocchio run-command ./my-command.yaml \
+  --chat \
+  --session-id project-notes \
+  --resume \
+  --turns-db ~/.local/share/pinocchio/chat/turns.db \
+  --timeline-db ~/.local/share/pinocchio/chat/timeline.db
+```
+
+`--resume` requires `--session-id` and a configured turns DB/DSN. The first implementation uses the simple keying rule `conv_id = session_id = --session-id`.
 
 ## Troubleshooting
 
