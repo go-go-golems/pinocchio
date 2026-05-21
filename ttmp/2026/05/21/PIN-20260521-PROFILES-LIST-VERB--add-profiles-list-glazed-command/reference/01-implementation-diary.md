@@ -352,7 +352,7 @@ I changed target resolution so an explicit registry with an omitted profile uses
 
 **Inferred user intent:** The user wants the automated review feedback resolved cleanly on the PR branch.
 
-**Commit (code):** pending — PR review fix implemented and targeted validation run before commit.
+**Commit (code):** 0c96569 — "profiles: fix show registry default resolution"
 
 ### What I did
 
