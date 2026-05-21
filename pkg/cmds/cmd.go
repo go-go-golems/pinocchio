@@ -1125,10 +1125,11 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) (*tu
 	if err := fanoutProxy.SetTarget(statusFanout); err != nil {
 		return nil, err
 	}
+	var hydrationSnapshots []sessionstream.Snapshot
 	if snap, err := runner.Service.Snapshot(ctx, sid); err == nil {
 		_ = writeSnapshotAll(snap, debugFanout)
 		if len(snap.Entities) > 0 {
-			_ = uiFanout.HydrateSnapshot(snap)
+			hydrationSnapshots = append(hydrationSnapshots, snap)
 		}
 	}
 	if rc.ResultTurn != nil {
@@ -1136,11 +1137,21 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) (*tu
 		// sessionstream store starts empty for this TUI session, so hydrate bobatea
 		// directly from the result turn to make the prior exchange visible without
 		// replaying it through the backend or issuing a second provider call.
-		_ = uiFanout.HydrateSnapshot(snapshotFromTurnForHydration(sid, rc.ResultTurn))
+		hydrationSnapshots = append(hydrationSnapshots, snapshotFromTurnForHydration(sid, rc.ResultTurn))
 	}
 
-	if rc.ResultTurn == nil && (rc.RunMode == run.RunModeInteractive || (rc.UISettings != nil && rc.UISettings.StartInChat)) {
+	autoSubmitInitialPrompt := rc.ResultTurn == nil && (rc.RunMode == run.RunModeInteractive || (rc.UISettings != nil && rc.UISettings.StartInChat))
+	if len(hydrationSnapshots) > 0 || autoSubmitInitialPrompt {
 		go func() {
+			// Bubble Tea Program.Send blocks until the program is running. Keep all
+			// startup UI messages in this goroutine so continuation hydration cannot
+			// deadlock before p.Run() has a chance to enter the event loop.
+			for _, snap := range hydrationSnapshots {
+				_ = uiFanout.HydrateSnapshot(snap)
+			}
+			if !autoSubmitInitialPrompt {
+				return
+			}
 			promptText := strings.TrimSpace(g.Prompt)
 			if promptText != "" && rc.Variables != nil {
 				if rendered, err := renderTemplateString("prompt", promptText, rc.Variables); err == nil {
