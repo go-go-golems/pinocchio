@@ -352,6 +352,17 @@ Detailed output includes fields such as:
 - `effective_chat_api_type`
 - `effective_reasoning_effort`
 
+Use `pinocchio profiles show` when you want one profile's raw overrides and resolved effective settings without repeating full details for every profile row:
+
+```bash
+pinocchio profiles show child \
+  --profile-registries ./profiles.yaml \
+  --verbosity full \
+  --output json
+```
+
+The profile argument can be `profile` or `registry/profile`. If omitted, `profiles show` uses the selected/default profile.
+
 Use normal Glazed output flags for machine-readable output:
 
 ```bash
@@ -361,7 +372,7 @@ pinocchio profiles list \
   --output json
 ```
 
-Pinocchio routes this through its application-specific profile bootstrap path, so local `.pinocchio.yml` inline profiles are included alongside imported Geppetto registries.
+Pinocchio routes these commands through its application-specific profile bootstrap path, so local `.pinocchio.yml` inline profiles are included alongside imported Geppetto registries.
 
 ## Troubleshooting
 

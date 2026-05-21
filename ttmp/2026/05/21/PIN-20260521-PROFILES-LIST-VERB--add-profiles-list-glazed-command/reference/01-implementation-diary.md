@@ -264,3 +264,76 @@ The command currently emits default columns:
 selected, default, registry, profile, display_name,
 effective_chat_engine, effective_chat_api_type, reasoning_effort, description
 ```
+
+## Step 3: Add `pinocchio profiles show`
+
+The list command is useful for comparing profiles, but full nested settings are awkward when repeated on every row. This step adds a focused `show` verb that emits exactly one profile row using the same raw override and effective setting extraction logic as `profiles list`.
+
+The new verb accepts a plain profile slug, a `registry/profile` reference, or no argument. With no argument, it shows the selected/default profile. This keeps quick operator usage short while still supporting explicit registry disambiguation.
+
+### Prompt Context
+
+**User prompt (verbatim):** "add the show verb."
+
+**Assistant interpretation:** Add `pinocchio profiles show` to inspect a single profile in detail using the existing Glazed profile introspection infrastructure.
+
+**Inferred user intent:** The user wants a better place for full profile details than repeating nested settings for every row in `profiles list`.
+
+**Commit (code):** pending — show verb implemented and targeted validation run before commit.
+
+### What I did
+
+- Added `cmd/pinocchio/cmds/profiles/show.go`.
+- Wired `show` into `cmd/pinocchio/cmds/profiles/root.go`.
+- Added `cmd/pinocchio/cmds/profiles/show_test.go`.
+- Updated user docs to mention `pinocchio profiles show`.
+- Updated ticket tasks and design guide references.
+
+### Why
+
+- `profiles list --verbosity full` can be too wide for table output.
+- A focused `show` command lets users inspect one profile's overrides, resolved effective settings, lineage, and settings JSON through normal Glazed output.
+
+### What worked
+
+- `profiles show workspace/mini --profile-registries $tmp/profiles.yaml --output json` emitted exactly one row.
+- The row included raw override fields such as `override_chat_engine` and `override_inference_reasoning_effort`.
+- The row included inherited effective fields such as `effective_chat_api_type`.
+
+### What didn't work
+
+- N/A in implementation; the initial approach reused the existing row builder cleanly.
+
+### What I learned
+
+- The extraction split from Step 2 made `show` small: the command only needed target resolution and one-row emission.
+
+### What was tricky to build
+
+The main detail was target resolution. The command accepts either `profile`, `registry/profile`, or no argument. The implementation resolves those inputs against the selected/default registry and profile from the report so the default behavior matches `profiles list` selection semantics.
+
+### What warrants a second pair of eyes
+
+- Whether `profiles show` should default to `detailed` or `full`. It currently defaults to `detailed` to avoid very wide table output while still showing override/effective fields.
+- Whether the positional argument should be renamed from `profile-ref` to `profile` in help output.
+
+### What should be done in the future
+
+- Consider adding examples in embedded help docs if a dedicated profiles help page is added.
+
+### Code review instructions
+
+- Review `cmd/pinocchio/cmds/profiles/show.go` target resolution and row reuse.
+- Validate with:
+  - `go test ./cmd/pinocchio/cmds/profiles -count=1`
+  - `go run ./cmd/pinocchio profiles show workspace/mini --profile-registries $tmp/profiles.yaml --output json`
+
+### Technical details
+
+Supported forms:
+
+```bash
+pinocchio profiles show
+pinocchio profiles show mini --registry workspace
+pinocchio profiles show workspace/mini
+```

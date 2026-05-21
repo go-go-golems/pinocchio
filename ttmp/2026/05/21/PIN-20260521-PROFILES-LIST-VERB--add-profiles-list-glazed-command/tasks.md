@@ -13,3 +13,5 @@
 - [x] Validate with targeted tests and manual CLI smoke.
 - [x] Validate with `go test ./...`.
 - [x] Update diary/changelog and commit code/docs.
+- [x] Add `pinocchio profiles show [profile|registry/profile]` for one-profile inspection.
+- [x] Add tests and docs for the show verb.

@@ -751,6 +751,7 @@ If an end-to-end CLI test is added, it may assert the table output contains `reg
 ## Review Checklist
 
 - [ ] `pinocchio profiles list` uses Pinocchio's full profile bootstrap path.
+- [ ] `pinocchio profiles show [profile|registry/profile]` shows one profile through the same bootstrap path.
 - [ ] Inline `.pinocchio.yml` profiles are visible.
 - [ ] Registry file profiles are visible.
 - [ ] Table output has clear headers.
@@ -778,4 +779,4 @@ Rejected because the user explicitly requested a Glazed command and because stru
 
 A resolve verb may be useful later, but users first need a simple inventory command.
 
-Deferred. The `profiles` group can grow future verbs.
+Deferred. The `profiles` group has now grown a `show` verb for one-profile inspection.

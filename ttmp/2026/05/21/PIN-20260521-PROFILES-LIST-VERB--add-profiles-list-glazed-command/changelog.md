@@ -55,3 +55,15 @@ Recorded implementation commit 1b4aedb for profiles list command and completed t
 - /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/ttmp/2026/05/21/PIN-20260521-PROFILES-LIST-VERB--add-profiles-list-glazed-command/reference/01-implementation-diary.md — Diary updated with implementation commit
 - /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/ttmp/2026/05/21/PIN-20260521-PROFILES-LIST-VERB--add-profiles-list-glazed-command/tasks.md — Tasks completed
 
+
+## 2026-05-21
+
+Added pinocchio profiles show for one-profile override/effective settings inspection.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/cmd/pinocchio/cmds/profiles/show.go — Show command implementation
+- /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/cmd/pinocchio/cmds/profiles/show_test.go — Show command tests
+- /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/doc/topics/pinocchio-profile-resolution-and-runtime-switching.md — Show command docs
+- /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/ttmp/2026/05/21/PIN-20260521-PROFILES-LIST-VERB--add-profiles-list-glazed-command/reference/01-implementation-diary.md — Diary Step 3
+
