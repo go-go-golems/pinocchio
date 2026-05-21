@@ -161,7 +161,7 @@ The important preservation rule was that only the legacy timeline stack was remo
 
 **Inferred user intent:** The user wants the old `sem`/timeline stack removed rather than merely documented, with ticket bookkeeping updated so later readers can understand what was deleted and why.
 
-**Commit (code):** pending — implementation in working tree before final commit.
+**Commit (code):** 051ce27 — "cleanup: remove legacy sem timeline stack"
 
 ### What I did
 
