@@ -90,7 +90,7 @@ Restored terminal chat-continuation prompt, made --interactive select the intera
 
 ## 2026-05-20
 
-Committed Step 7 interactive chat continuation and TUI reasoning/debug fixes (commit 3fe107e).
+Committed Step 7 interactive chat continuation and TUI reasoning/debug fixes (commit 26962fc).
 
 ### Related Files
 

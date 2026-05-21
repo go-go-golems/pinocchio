@@ -692,7 +692,7 @@ Keep a diary, commit at appropriate intervals."
 
 **Inferred user intent:** Preserve the old terminal workflow where a command can answer once and then drop into chat, while making the chatapp/sessionstream TUI path debuggable with a JSONL event log.
 
-**Commit (code):** 3fe107e — "fix: restore interactive chat continuation"
+**Commit (code):** 26962fc — "fix: restore interactive chat continuation"
 
 ### What I did
 
