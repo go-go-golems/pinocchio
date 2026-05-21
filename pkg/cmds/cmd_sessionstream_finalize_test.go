@@ -14,7 +14,9 @@ import (
 )
 
 func TestDetermineRunModeKeepsDefaultOnBlockingStdoutPath(t *testing.T) {
-	require.Equal(t, run.RunModeBlocking, determineRunMode(&cmdlayers.HelpersSettings{Interactive: true, Output: "text"}))
+	require.Equal(t, run.RunModeBlocking, determineRunMode(&cmdlayers.HelpersSettings{Output: "text"}))
+	require.Equal(t, run.RunModeInteractive, determineRunMode(&cmdlayers.HelpersSettings{Interactive: true, Output: "text"}))
+	require.Equal(t, run.RunModeBlocking, determineRunMode(&cmdlayers.HelpersSettings{Interactive: true, NonInteractive: true, Output: "text"}))
 	require.Equal(t, run.RunModeChat, determineRunMode(&cmdlayers.HelpersSettings{StartInChat: true, Interactive: true, Output: "text"}))
 	require.Equal(t, run.RunModeInteractive, determineRunMode(&cmdlayers.HelpersSettings{ForceInteractive: true, Interactive: true, Output: "text"}))
 	require.Equal(t, run.RunModeRPCJSONL, determineRunMode(&cmdlayers.HelpersSettings{RPC: true, Output: "text"}))

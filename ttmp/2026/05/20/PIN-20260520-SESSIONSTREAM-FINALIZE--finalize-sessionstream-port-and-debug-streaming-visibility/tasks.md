@@ -12,3 +12,4 @@
 - [x] Run targeted validation for `pkg/chatapp`, `pkg/ui`, `pkg/cmds`, and `cmd/pinocchio`.
 - [ ] Run optional real command/TUI smoke with `--debug-events-jsonl` if API profile/time permits.
 - [ ] Commit and push the sessionstream-finalize changes.
+- [ ] Run reasoning-capable TUI smoke to confirm visible ChatReasoningPatch rendering

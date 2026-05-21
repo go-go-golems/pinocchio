@@ -103,6 +103,23 @@ func TestChatAppUIFanoutMapsReasoningEvents(t *testing.T) {
 	require.Equal(t, "reason-1", completed.ID.LocalID)
 }
 
+func TestChatAppUIFanoutCreatesReasoningEntityForPatchWithoutStart(t *testing.T) {
+	sender := &recordingTeaSender{}
+	fanout, err := NewChatAppUIFanout(sender)
+	require.NoError(t, err)
+
+	err = fanout.PublishUI(context.Background(), "sid", 1, []sessionstream.UIEvent{
+		{Name: "ChatReasoningPatch", Payload: &chatappv1.ChatReasoningPatch{MessageId: "reason-1", ParentMessageId: "assistant-1", Text: "thinking"}},
+	})
+	require.NoError(t, err)
+
+	created := requireMsgType[timeline.UIEntityCreated](t, sender.msgs, 0)
+	require.Equal(t, "reason-1", created.ID.LocalID)
+	require.Equal(t, "thinking", created.Props["role"])
+	updated := requireMsgType[timeline.UIEntityUpdated](t, sender.msgs, 1)
+	require.Equal(t, "thinking", updated.Patch["text"])
+}
+
 func TestChatAppUIFanoutHydratesSnapshot(t *testing.T) {
 	sender := &recordingTeaSender{}
 	fanout, err := NewChatAppUIFanout(sender)

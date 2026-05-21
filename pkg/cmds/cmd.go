@@ -39,6 +39,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/mattn/go-isatty"
 	"github.com/pkg/errors"
+	"github.com/tcnksm/go-input"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -374,7 +375,7 @@ func determineRunMode(settings *cmdlayers.HelpersSettings) run.RunMode {
 	if settings.StartInChat {
 		return run.RunModeChat
 	}
-	if settings.ForceInteractive {
+	if settings.ForceInteractive || (settings.Interactive && !settings.NonInteractive) {
 		return run.RunModeInteractive
 	}
 	return run.RunModeBlocking
@@ -426,17 +427,103 @@ func (g *PinocchioCommand) RunWithOptions(ctx context.Context, options ...run.Ru
 
 	switch runCtx.RunMode {
 	case run.RunModeBlocking:
-		if runCtx.UISettings != nil && strings.TrimSpace(runCtx.UISettings.DebugEventsJSONL) != "" {
-			return g.runBlockingWithDebugEvents(ctx, runCtx)
-		}
-		return g.runBlocking(ctx, runCtx)
+		return g.runBlockingMaybeContinueInChat(ctx, runCtx)
 	case run.RunModeRPCJSONL:
 		return g.runRPCJSONL(ctx, runCtx)
-	case run.RunModeInteractive, run.RunModeChat:
+	case run.RunModeInteractive:
+		return g.runInteractive(ctx, runCtx)
+	case run.RunModeChat:
 		return g.runChat(ctx, runCtx)
 	default:
 		return nil, errors.Errorf("unknown run mode: %v", runCtx.RunMode)
 	}
+}
+
+func (g *PinocchioCommand) runBlockingMaybeContinueInChat(ctx context.Context, rc *run.RunContext) (*turns.Turn, error) {
+	result, err := g.runBlockingOnce(ctx, rc)
+	if err != nil {
+		return nil, err
+	}
+	if !shouldAskForChatContinuation(rc, false) {
+		return result, nil
+	}
+	continueInChat, err := askForChatContinuation()
+	if err != nil {
+		return nil, err
+	}
+	if !continueInChat {
+		return result, nil
+	}
+	rc.ResultTurn = result
+	rc.RunMode = run.RunModeChat
+	return g.runChat(ctx, rc)
+}
+
+func (g *PinocchioCommand) runInteractive(ctx context.Context, rc *run.RunContext) (*turns.Turn, error) {
+	result, err := g.runBlockingOnce(ctx, rc)
+	if err != nil {
+		return nil, err
+	}
+	if !shouldAskForChatContinuation(rc, true) {
+		return result, nil
+	}
+	continueInChat, err := askForChatContinuation()
+	if err != nil {
+		return nil, err
+	}
+	if !continueInChat {
+		return result, nil
+	}
+	rc.ResultTurn = result
+	rc.RunMode = run.RunModeChat
+	return g.runChat(ctx, rc)
+}
+
+func (g *PinocchioCommand) runBlockingOnce(ctx context.Context, rc *run.RunContext) (*turns.Turn, error) {
+	if rc.UISettings != nil && strings.TrimSpace(rc.UISettings.DebugEventsJSONL) != "" {
+		return g.runBlockingWithDebugEvents(ctx, rc)
+	}
+	return g.runBlocking(ctx, rc)
+}
+
+func shouldAskForChatContinuation(rc *run.RunContext, force bool) bool {
+	if rc == nil {
+		return false
+	}
+	if rc.UISettings != nil && rc.UISettings.NonInteractive {
+		return false
+	}
+	if force || (rc.UISettings != nil && rc.UISettings.ForceInteractive) {
+		return true
+	}
+	return isatty.IsTerminal(os.Stdout.Fd())
+}
+
+func askForChatContinuation() (bool, error) {
+	tty, err := os.OpenFile("/dev/tty", os.O_RDWR, 0)
+	if err != nil {
+		return false, err
+	}
+	defer func() { _ = tty.Close() }()
+
+	ui := &input.UI{Writer: tty, Reader: tty}
+	answer, err := ui.Ask("\nDo you want to continue in chat? [y/n]", &input.Options{
+		Default:  "y",
+		Required: true,
+		Loop:     true,
+		ValidateFunc: func(answer string) error {
+			switch answer {
+			case "y", "Y", "n", "N":
+				return nil
+			default:
+				return errors.Errorf("please enter 'y' or 'n'")
+			}
+		},
+	})
+	if err != nil {
+		return false, err
+	}
+	return answer == "y" || answer == "Y", nil
 }
 
 // runBlockingWithDebugEvents keeps stdout in normal text mode while routing the
@@ -902,9 +989,13 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) (*tu
 		rc.BaseSettings.Chat.Stream = true
 	}
 
-	seed, err := buildInitialTurnFromBlocksRendered(g.SystemPrompt, g.Blocks, "", rc.Variables, rc.ImagePaths)
-	if err != nil {
-		return nil, err
+	seed := rc.ResultTurn
+	if seed == nil {
+		var err error
+		seed, err = buildInitialTurnFromBlocksRendered(g.SystemPrompt, g.Blocks, "", rc.Variables, rc.ImagePaths)
+		if err != nil {
+			return nil, err
+		}
 	}
 	sid := commandSessionID(seed)
 	eng, err := rc.EngineFactory.CreateEngine(rc.InferenceSettings)
@@ -971,7 +1062,7 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) (*tu
 		_ = uiFanout.HydrateSnapshot(snap)
 	}
 
-	if rc.RunMode == run.RunModeInteractive || (rc.UISettings != nil && rc.UISettings.StartInChat) {
+	if rc.ResultTurn == nil && (rc.RunMode == run.RunModeInteractive || (rc.UISettings != nil && rc.UISettings.StartInChat)) {
 		go func() {
 			promptText := strings.TrimSpace(g.Prompt)
 			if promptText != "" && rc.Variables != nil {

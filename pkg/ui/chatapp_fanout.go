@@ -118,16 +118,19 @@ func (f *ChatAppUIFanout) publishOne(ev sessionstream.UIEvent) error {
 		f.sender.Send(boba_chat.BackendFinishedMsg{})
 	case *chatappv1.ChatReasoningSegmentStarted:
 		id := firstNonEmpty(p.GetMessageId(), p.GetParentMessageId()+":thinking")
-		f.sender.Send(timeline.UIEntityCreated{ID: timeline.EntityID{LocalID: id, Kind: "llm_text"}, Renderer: timeline.RendererDescriptor{Kind: "llm_text"}, Props: map[string]any{"role": "thinking", "text": "", "streaming": true}, StartedAt: time.Now()})
+		f.ensureAssistant(id, "thinking", "")
 	case *chatappv1.ChatReasoningPatch:
-		id := firstNonEmpty(p.GetMessageId(), p.GetParentMessageId()+":thinking")
+		id := firstNonEmpty(p.GetMessageId(), p.GetStreamId(), p.GetParentMessageId()+":thinking")
 		text := f.applyTextPatch(id, p.GetText(), p.GetMode())
+		f.ensureAssistant(id, "thinking", text)
 		f.sender.Send(timeline.UIEntityUpdated{ID: timeline.EntityID{LocalID: id, Kind: "llm_text"}, Patch: map[string]any{"text": text, "streaming": !p.GetFinal()}, Version: time.Now().UnixNano(), UpdatedAt: time.Now()})
 	case *chatappv1.ChatReasoningSegmentFinished:
 		id := firstNonEmpty(p.GetMessageId(), p.GetParentMessageId()+":thinking")
 		text := firstNonEmpty(p.GetContent(), p.GetText(), f.text(id))
+		f.ensureAssistant(id, "thinking", text)
 		f.sender.Send(timeline.UIEntityUpdated{ID: timeline.EntityID{LocalID: id, Kind: "llm_text"}, Patch: map[string]any{"text": text, "streaming": false}, Version: time.Now().UnixNano(), UpdatedAt: time.Now()})
 		f.sender.Send(timeline.UIEntityCompleted{ID: timeline.EntityID{LocalID: id, Kind: "llm_text"}})
+		f.clear(id)
 	}
 	return nil
 }

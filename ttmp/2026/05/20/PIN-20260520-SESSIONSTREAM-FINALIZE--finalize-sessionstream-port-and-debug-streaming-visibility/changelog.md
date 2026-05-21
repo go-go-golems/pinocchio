@@ -77,3 +77,23 @@ Restored pretty human text printer for reasoning summaries and suppressed duplic
 - /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/cmds/event_printer.go — Pinocchio text printer maps reasoning-summary boundaries to thinking markers
 - /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/cmds/event_printer_test.go — Covers reasoning-summary formatting and duplicate aggregate suppression
 
+
+## 2026-05-20
+
+Restored terminal chat-continuation prompt, made --interactive select the interactive path, verified --chat debug JSONL logging, and made TUI reasoning patches create thinking entities when needed.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/cmds/cmd.go — Chat continuation and interactive control flow
+- /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/ui/chatapp_fanout.go — TUI reasoning entity creation
+
+
+## 2026-05-20
+
+Committed Step 7 interactive chat continuation and TUI reasoning/debug fixes (commit 3fe107e).
+
+### Related Files
+
+- /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/cmds/cmd.go — Committed chat continuation control flow
+- /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/ui/chatapp_fanout.go — Committed reasoning patch entity creation
+

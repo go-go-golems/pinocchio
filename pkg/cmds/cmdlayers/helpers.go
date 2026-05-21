@@ -75,7 +75,7 @@ func NewHelpersParameterLayer() (schema.Section, error) {
 				"interactive",
 				fields.TypeBool,
 				fields.WithHelp("Ask for chat continuation after inference"),
-				fields.WithDefault(true),
+				fields.WithDefault(false),
 			),
 			fields.New(
 				"chat",

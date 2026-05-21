@@ -12,10 +12,20 @@ DocType: reference
 Intent: long-term
 Owners: []
 RelatedFiles:
+    - Path: pkg/cmds/cmd.go
+      Note: Restores chat continuation prompting and explicit interactive dispatch
     - Path: pkg/cmds/cmd_sessionstream_finalize_test.go
-      Note: Tests default stdout mode selection and RPC debug JSONL file output
+      Note: |-
+        Tests default stdout mode selection and RPC debug JSONL file output
+        Run-mode coverage for explicit interactive and non-interactive behavior
+    - Path: pkg/cmds/cmdlayers/helpers.go
+      Note: Changes interactive default so explicit --interactive is meaningful
+    - Path: pkg/ui/chatapp_fanout.go
+      Note: Creates thinking timeline entities when reasoning patches arrive without a start event
     - Path: pkg/ui/chatapp_fanout_test.go
-      Note: Tests cumulative append-patch rendering
+      Note: |-
+        Tests cumulative append-patch rendering
+        Regression coverage for sparse reasoning patch streams
     - Path: pkg/ui/multi_fanout_test.go
       Note: Tests fanout tee behavior
 ExternalSources: []
@@ -24,6 +34,7 @@ LastUpdated: 0001-01-01T00:00:00Z
 WhatFor: ""
 WhenToUse: ""
 ---
+
 
 # Diary
 
@@ -660,3 +671,109 @@ Expected text-mode behavior for reasoning summaries:
 ```
 
 The final aggregate `reasoning-summary` event is intentionally suppressed in human text mode.
+
+## Step 7: Restore chat continuation prompt and TUI reasoning/debug observability
+
+I fixed the follow-up regressions from the stdout restoration pass: default terminal runs now ask whether to continue in chat again, `--interactive` once again selects the interactive continuation path, and `--chat --debug-events-jsonl` was smoke-tested to confirm it records the same projected chatapp/sessionstream events that drive the TUI.
+
+I also tightened the TUI reasoning fanout. Some providers can emit reasoning patches without an explicit reasoning-start event, so the Bubble Tea adapter now creates the thinking timeline entity on the first reasoning patch or finish event if necessary instead of silently sending updates for an entity that does not exist.
+
+### Prompt Context
+
+**User prompt (verbatim):** "it doesn't ask me to drop to chat anymore, but exits after the first answer. and --interactive doesn't launch the TUI either. 
+
+--chat works, but I don't see the thinking stream. not sure if that's registered.
+
+Make sure that recording a log works with --chat too, since you can use that to debug.
+
+Keep a diary, commit at appropriate intervals."
+
+**Assistant interpretation:** Restore the post-answer chat continuation prompt and explicit interactive path, investigate missing TUI thinking visibility, verify chat-mode debug JSONL logging, keep documenting the work, and commit the fix.
+
+**Inferred user intent:** Preserve the old terminal workflow where a command can answer once and then drop into chat, while making the chatapp/sessionstream TUI path debuggable with a JSONL event log.
+
+**Commit (code):** 3fe107e — "fix: restore interactive chat continuation"
+
+### What I did
+
+- Changed the `interactive` helper flag default to `false` so an explicit `--interactive` can be distinguished from the normal default blocking path.
+- Updated `determineRunMode` so `--interactive` selects `RunModeInteractive`, while the no-flag default remains `RunModeBlocking`.
+- Added `runBlockingMaybeContinueInChat`, `runInteractive`, `runBlockingOnce`, `shouldAskForChatContinuation`, and `askForChatContinuation`.
+- Restored the `/dev/tty` prompt: `Do you want to continue in chat? [y/n]`.
+- Reused `rc.ResultTurn` as the seed when entering chat after an initial blocking answer, so the TUI starts with the already-produced user/assistant context instead of repeating the first provider call.
+- Updated `ChatAppUIFanout` so reasoning patch/finish events create a `role=thinking` timeline entity if no start event was seen.
+- Added a regression test for reasoning patches without a start event.
+- Ran a real tmux smoke test for `--chat --debug-events-jsonl /tmp/pin-chat-debug.jsonl`; the file contained hello, snapshot, `ChatUserMessageAccepted`, many `ChatTextPatch` events, and terminal frames.
+- Ran a real tmux smoke test for the default blocking path; the command printed an answer and then prompted for chat continuation.
+
+### Why
+
+- The previous stdout-first fix went too far by removing the historical terminal continuation prompt.
+- `--interactive` should have an observable effect; with `interactive` defaulting to true, the code could not tell an explicit flag from the default value.
+- The TUI thinking stream should be robust to providers that send reasoning deltas/patches without a clean start event.
+- `--chat --debug-events-jsonl` is the fastest way to debug whether missing TUI content is absent upstream or only not rendered.
+
+### What worked
+
+- `go test ./pkg/cmds ./pkg/ui -count=1` passed.
+- `go test ./pkg/chatapp/... ./pkg/ui ./pkg/cmds ./cmd/pinocchio/... -count=1` passed.
+- The `--chat --debug-events-jsonl` tmux smoke produced a 42-line JSONL trace at `/tmp/pin-chat-debug.jsonl`.
+- The default blocking tmux smoke showed the restored prompt after the first answer.
+
+### What didn't work
+
+- The first tmux default-prompt smoke command tried to capture the pane after sending `n`; the program had already exited, so `tmux capture-pane` reported `can't find pane: pin-default-ask`. The earlier capture still verified the prompt was displayed, and the session exiting after `n` is the expected behavior.
+
+### What I learned
+
+- The `interactive` boolean default hid explicit user intent; setting it to false lets `--interactive` become meaningful while the default prompt can still be controlled by TTY detection.
+- Chat-mode debug logging was already correctly wired through `MultiUIFanout`; the useful validation was a real terminal/TUI run with an actual profile.
+- Missing thinking output can be a registration/rendering issue even when reasoning patches exist; the fanout should create entities defensively.
+
+### What was tricky to build
+
+- The continuation path had to avoid a second provider call. The solution was to run the initial answer once on the blocking path, store the resulting `turns.Turn` in `rc.ResultTurn`, and have `runChat` use that turn as the initial session seed without auto-submitting the prompt again.
+- The default behavior needs two different ideas: no-flag command execution remains stdout-first, but terminal users should still get a continuation prompt. That required keeping `RunModeBlocking` as the default and adding the prompt after the blocking run rather than selecting TUI mode up front.
+- Reasoning streams may be sparse. The TUI fanout now treats the first reasoning patch as sufficient evidence to create a thinking entity.
+
+### What warrants a second pair of eyes
+
+- Review whether changing `interactive`'s default from `true` to `false` has any config-file compatibility consequences.
+- Review the continuation prompt policy for explicit `--output json` / `--output yaml` in an interactive terminal; the prompt is written to `/dev/tty`, not stdout, but the UX should be confirmed.
+- Review whether `--debug-events-jsonl` should append rather than truncate if a blocking run drops into chat and both phases are logged.
+
+### What should be done in the future
+
+- Run a reasoning-capable profile smoke test specifically looking for `ChatReasoningPatch` in the debug JSONL file and visible thinking content in the TUI.
+- Consider documenting the distinction between `--chat`, `--interactive`, `--force-interactive`, and the default chat-continuation prompt in user help.
+
+### Code review instructions
+
+- Start in `pkg/cmds/cmd.go`: `determineRunMode`, `runBlockingMaybeContinueInChat`, `runInteractive`, `askForChatContinuation`, and the `runChat` `rc.ResultTurn` seed logic.
+- Then review `pkg/ui/chatapp_fanout.go` reasoning event handling.
+- Validate with:
+  - `go test ./pkg/cmds ./pkg/ui -count=1`
+  - `go test ./pkg/chatapp/... ./pkg/ui ./pkg/cmds ./cmd/pinocchio/... -count=1`
+  - a tmux `--chat --debug-events-jsonl` smoke test.
+
+### Technical details
+
+The default path is now:
+
+```text
+RunModeBlocking -> runBlockingOnce -> /dev/tty continuation prompt -> optional RunModeChat using rc.ResultTurn
+```
+
+The explicit interactive path is:
+
+```text
+--interactive -> RunModeInteractive -> runBlockingOnce -> forced continuation prompt -> optional RunModeChat using rc.ResultTurn
+```
+
+The chat debug log smoke used:
+
+```bash
+PINOCCHIO_PROFILE=gpt-5-nano-low \
+  go run ./cmd/pinocchio code professional hello --with-caller \
+  --chat --debug-events-jsonl /tmp/pin-chat-debug.jsonl --
+```
