@@ -147,3 +147,24 @@ Fixed continuation TUI startup deadlock by moving Bubble Tea hydration sends int
 - /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/cmds/cmd.go — Moves continuation hydration Program.Send calls into an asynchronous startup goroutine to avoid pre-Run deadlock
 - /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/ttmp/2026/05/20/PIN-20260520-SESSIONSTREAM-FINALIZE--finalize-sessionstream-port-and-debug-streaming-visibility/reference/01-implementation-diary.md — Step 10 documents the continuation TUI startup deadlock and tmux validation
 
+
+## 2026-05-21
+
+Corrected ChatAppBackend state model so the seed initializes currentTurn once; subsequent turns clone previous currentTurn and append only newly projected assistant messages from the snapshot.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/ui/chatapp_backend.go — Removes stored seed and advances currentTurn incrementally from the previous turn
+- /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/ttmp/2026/05/20/PIN-20260520-SESSIONSTREAM-FINALIZE--finalize-sessionstream-port-and-debug-streaming-visibility/reference/01-implementation-diary.md — Step 11 documents the seed/currentTurn correction
+
+
+## 2026-05-21
+
+Simplified ChatAppBackend turn accumulation by using the final Geppetto turn from the inference loop via PromptRequest.OnFinalTurn instead of reconstructing from timeline snapshots.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/chatapp/runtime_inference.go — Calls OnFinalTurn with the successful final inference turn
+- /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/chatapp/service.go — Adds OnFinalTurn callback to PromptRequest
+- /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/ui/chatapp_backend.go — Uses final turn callback to advance currentTurn from the previous turn plus new user prompt
+

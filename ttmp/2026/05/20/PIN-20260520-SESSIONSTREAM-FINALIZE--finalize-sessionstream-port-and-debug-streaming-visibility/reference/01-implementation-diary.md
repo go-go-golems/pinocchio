@@ -1098,3 +1098,91 @@ go func() {
 }()
 _, err := p.Run()
 ```
+
+## Step 11: Keep the seed as the initial current turn only
+
+I corrected the chat backend state model after reviewing the seed-vs-current-turn discussion. The seed should initialize the backend's `currentTurn`; after that, each turn should clone the previous `currentTurn`, append the new user prompt, run inference, and then append only the newly produced assistant content. The backend should not keep a separate seed and re-merge it on every turn.
+
+This change removes the stored `seed` field from `ChatAppBackend`. The Geppetto inference/session loop already produces the final updated `turns.Turn`. The backend now receives that final turn through `PromptRequest.OnFinalTurn` and stores it as the next `currentTurn`, instead of reconstructing assistant output from sessionstream timeline entities.
+
+### Prompt Context
+
+**User prompt (verbatim):** "wait no, turn previous TUrn is basically what we should reuse for the next currentTurn, as a clone. I don't understand why we changed that. And we shuld only use the seed once, not at every turn."
+
+**Assistant interpretation:** Revert the conceptual direction of `turnFromSnapshot`: the backend should carry forward the previous turn as the accumulator and use the seed only to initialize that accumulator.
+
+**Inferred user intent:** Keep multi-turn context simple and faithful to the Geppetto `turns.Turn` accumulator model instead of reconstructing user/assistant history from sessionstream on each turn.
+
+**Commit (code):** 8f6712e — "fix: carry chat backend turn from inference result"
+
+### What I did
+
+- Removed `seed *turns.Turn` from `ChatAppBackend`.
+- Kept the constructor behavior that clones the seed into `currentTurn` once.
+- Changed `Start` so `initialTurn := turnWithUserPrompt(b.currentTurn, prompt)` remains the authoritative input for the next run.
+- Added `PromptRequest.OnFinalTurn func(*turns.Turn)` so the chatapp runtime can hand the completed Geppetto turn back to callers that maintain an in-memory accumulator.
+- Updated `runRuntimeInference` to call `OnFinalTurn(output.Clone())` after successful `handle.Wait()`.
+- Updated `ChatAppBackend.Start` so after `WaitIdle` it sets `currentTurn` to the final turn returned by the inference loop.
+- Removed the snapshot-based `turnFromSnapshot` reconstruction path from the backend.
+
+### Why
+
+- `turns.Turn` is already the accumulator used for inference context. Rebuilding it from the timeline after every run creates an unnecessary second source of truth.
+- The seed should contribute initial system/context/history once. Reapplying seed blocks on every turn makes the code harder to reason about and can duplicate or stale context if seed and timeline diverge.
+- The Geppetto inference/session loop is already the right place to append the assistant response. The backend should use that final turn directly instead of deriving inference context from projected UI state.
+
+### What worked
+
+- `go test ./pkg/ui -count=1` passed.
+- `go test ./pkg/chatapp/... ./pkg/ui ./pkg/cmds ./cmd/pinocchio/... -count=1` passed.
+- Existing multi-turn backend coverage still verifies that the system seed appears once and both user/assistant turns are retained in order.
+
+### What didn't work
+
+- My previous explanation overstated the timeline snapshot as the authoritative source for all chat history in the TUI backend. That is true for visible sessionstream clients, but it is not the simplest or best model for the backend's `currentTurn` accumulator.
+
+### What I learned
+
+- There are two related but distinct state models:
+  - The visible/sessionstream timeline is authoritative for what clients saw.
+  - The backend `currentTurn` is the inference accumulator and should be advanced from the previous turn.
+- The bridge between the two should be explicit: use sessionstream for visible UI projection and use the final Geppetto turn for the inference accumulator.
+
+### What was tricky to build
+
+- The important ordering is that `OnFinalTurn` is invoked from the chatapp runtime goroutine before the run is considered idle. The backend can then safely read the captured final turn after `WaitIdle`.
+- The callback crosses a goroutine boundary, so `ChatAppBackend.Start` protects the captured final turn with a small mutex.
+
+### What warrants a second pair of eyes
+
+- Review whether `OnFinalTurn` is the right long-term API shape, or whether `SubmitPromptRequest` / `WaitIdle` should grow a first-class run result object.
+- Review whether failed or cancelled runs should optionally expose a partial turn, or whether `currentTurn` should remain unchanged on those paths.
+
+### What should be done in the future
+
+- Consider replacing the callback with a typed run handle/result if more callers need final-turn access.
+
+### Code review instructions
+
+- Start in `pkg/ui/chatapp_backend.go`, especially `ChatAppBackend`, `NewChatAppBackend`, and `Start`, then review `pkg/chatapp/service.go` and `pkg/chatapp/runtime_inference.go` for `OnFinalTurn`.
+- Validate with:
+  - `go test ./pkg/ui -count=1`
+  - `go test ./pkg/chatapp/... ./pkg/ui ./pkg/cmds ./cmd/pinocchio/... -count=1`
+
+### Technical details
+
+The corrected state progression is:
+
+```text
+constructor:
+    currentTurn = seed.Clone()
+
+Start(prompt):
+    initialTurn = currentTurn.Clone() + user(prompt)
+    SubmitPromptRequest(InitialTurn: initialTurn)
+    WaitIdle()
+    finalTurn = inference loop output
+    currentTurn = finalTurn.Clone()
+```
+
+This means the seed is not a stored recurrent input. It is just the initial value of the accumulator.
