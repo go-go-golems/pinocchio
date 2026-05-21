@@ -63,14 +63,16 @@ func TestRunWithOptionsRPCJSONLEmitsStreamingPatchEvents(t *testing.T) {
 	var out bytes.Buffer
 	runRPCJSONLTestCommand(t, cmd, &out)
 
-	var sawPatch, sawRunFinished bool
+	var sawPatch, sawReasoningPatch, sawRunFinished bool
 	for _, frame := range parseRPCLines(t, out.String()) {
 		if ui := frame.GetUiEvent(); ui != nil {
 			sawPatch = sawPatch || ui.GetName() == "ChatTextPatch"
+			sawReasoningPatch = sawReasoningPatch || ui.GetName() == "ChatReasoningPatch"
 			sawRunFinished = sawRunFinished || ui.GetName() == "ChatRunFinished"
 		}
 	}
 	require.True(t, sawPatch, "expected streaming patch UI event in %s", out.String())
+	require.True(t, sawReasoningPatch, "expected reasoning patch UI event in %s", out.String())
 	require.True(t, sawRunFinished, "expected run-finished UI event in %s", out.String())
 }
 
@@ -195,6 +197,11 @@ type streamingEngine struct{}
 
 func (streamingEngine) RunInference(ctx context.Context, t *turns.Turn) (*turns.Turn, error) {
 	meta := gepevents.EventMetadata{SessionID: "sid"}
+	reasoningCorr := gepevents.Correlation{SessionID: "sid", RunID: "run-1", ProviderCallID: "provider-call-1", SegmentID: "reasoning-1"}
+	gepevents.PublishEventToContext(ctx, gepevents.NewReasoningSegmentStartedEvent(meta, reasoningCorr, "summary"))
+	gepevents.PublishEventToContext(ctx, gepevents.NewReasoningDeltaEventWithSource(meta, reasoningCorr, "summary", "thinking", "thinking", 1))
+	gepevents.PublishEventToContext(ctx, gepevents.NewReasoningSegmentFinishedEventWithSource(meta, reasoningCorr, "summary", "thinking", "stop"))
+
 	corr := gepevents.Correlation{SessionID: "sid", RunID: "run-1", ProviderCallID: "provider-call-1", SegmentID: "segment-1"}
 	gepevents.PublishEventToContext(ctx, gepevents.NewTextSegmentStartedEvent(meta, corr, "assistant"))
 	gepevents.PublishEventToContext(ctx, gepevents.NewTextDeltaEvent(meta, corr, "streamed", "streamed", 1))

@@ -10,6 +10,6 @@
 - [x] Accumulate append-mode TUI text/reasoning patches so live updates carry current text.
 - [x] Add focused unit tests for run-mode selection, debug event files, multi-fanout, and accumulated patches.
 - [x] Run targeted validation for `pkg/chatapp`, `pkg/ui`, `pkg/cmds`, and `cmd/pinocchio`.
-- [ ] Run optional real command/TUI smoke with `--debug-events-jsonl` if API profile/time permits.
+- [x] Run optional real command/TUI smoke with `--debug-events-jsonl` if API profile/time permits.
 - [ ] Commit and push the sessionstream-finalize changes.
-- [ ] Run reasoning-capable TUI smoke to confirm visible ChatReasoningPatch rendering
+- [x] Run reasoning-capable TUI smoke to confirm visible ChatReasoningPatch rendering

@@ -29,6 +29,7 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	"github.com/go-go-golems/pinocchio/pkg/chatapp"
 	chatappv1 "github.com/go-go-golems/pinocchio/pkg/chatapp/pb/proto/pinocchio/chatapp/v1"
+	"github.com/go-go-golems/pinocchio/pkg/chatapp/plugins"
 	chatapprpcjsonl "github.com/go-go-golems/pinocchio/pkg/chatapp/rpc/jsonl"
 	"github.com/go-go-golems/pinocchio/pkg/cmds/cmdlayers"
 	profilebootstrap "github.com/go-go-golems/pinocchio/pkg/cmds/profilebootstrap"
@@ -499,6 +500,16 @@ func shouldAskForChatContinuation(rc *run.RunContext, force bool) bool {
 	return isatty.IsTerminal(os.Stdout.Fd())
 }
 
+func commandRunnerOptions(fanout sessionstream.UIFanout) chatapp.RunnerOptions {
+	return chatapp.RunnerOptions{
+		UIFanout: fanout,
+		Plugins: []chatapp.ChatPlugin{
+			plugins.NewReasoningPlugin(),
+			plugins.NewToolCallPlugin(),
+		},
+	}
+}
+
 func askForChatContinuation() (bool, error) {
 	tty, err := os.OpenFile("/dev/tty", os.O_RDWR, 0)
 	if err != nil {
@@ -560,7 +571,7 @@ func (g *PinocchioCommand) runBlockingWithDebugEvents(ctx context.Context, rc *r
 	}
 
 	statusFanout := newRunStatusFanout(debugFanout)
-	runner, err := chatapp.NewRunner(chatapp.RunnerOptions{UIFanout: statusFanout})
+	runner, err := chatapp.NewRunner(commandRunnerOptions(statusFanout))
 	if err != nil {
 		_ = writeErrorAll(sid, "runner_init_failed", err, true, debugFanout)
 		return nil, err
@@ -780,7 +791,7 @@ func (g *PinocchioCommand) runRPCJSONL(ctx context.Context, rc *run.RunContext) 
 	}
 
 	statusFanout := newRunStatusFanout(liveFanout)
-	runner, err := chatapp.NewRunner(chatapp.RunnerOptions{UIFanout: statusFanout})
+	runner, err := chatapp.NewRunner(commandRunnerOptions(statusFanout))
 	if err != nil {
 		_ = writeErrorAll(sid, "runner_init_failed", err, true, fanout, debugFanout)
 		return nil, err
@@ -1013,7 +1024,7 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) (*tu
 	}
 
 	fanoutProxy := pinui.NewUIFanoutProxy()
-	runner, err := chatapp.NewRunner(chatapp.RunnerOptions{UIFanout: fanoutProxy})
+	runner, err := chatapp.NewRunner(commandRunnerOptions(fanoutProxy))
 	if err != nil {
 		_ = writeErrorAll(sid, "runner_init_failed", err, true, debugFanout)
 		return nil, err

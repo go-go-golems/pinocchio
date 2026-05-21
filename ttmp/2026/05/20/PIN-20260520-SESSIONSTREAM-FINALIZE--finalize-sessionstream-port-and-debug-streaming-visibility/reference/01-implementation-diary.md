@@ -13,7 +13,11 @@ Intent: long-term
 Owners: []
 RelatedFiles:
     - Path: pkg/cmds/cmd.go
-      Note: Restores chat continuation prompting and explicit interactive dispatch
+      Note: |-
+        Restores chat continuation prompting and explicit interactive dispatch
+        Installs reasoning/tool-call chatapp plugins for command RPC/debug/TUI runners
+    - Path: pkg/cmds/cmd_rpc_jsonl_test.go
+      Note: Regression coverage that canonical reasoning events become ChatReasoningPatch JSONL frames
     - Path: pkg/cmds/cmd_sessionstream_finalize_test.go
       Note: |-
         Tests default stdout mode selection and RPC debug JSONL file output
@@ -34,6 +38,7 @@ LastUpdated: 0001-01-01T00:00:00Z
 WhatFor: ""
 WhenToUse: ""
 ---
+
 
 
 # Diary
@@ -776,4 +781,109 @@ The chat debug log smoke used:
 PINOCCHIO_PROFILE=gpt-5-nano-low \
   go run ./cmd/pinocchio code professional hello --with-caller \
   --chat --debug-events-jsonl /tmp/pin-chat-debug.jsonl --
+```
+
+## Step 8: Register chatapp feature plugins for CLI runners and verify real reasoning streams
+
+I followed up on the suspicion that `gpt-5-mini` or the Wafer GLM profile should produce thinking events. The decisive finding was that the CLI/RPC/TUI runners were constructed without the chatapp feature plugins, so canonical Geppetto reasoning events could reach the chatapp engine but were not translated into projected `ChatReasoning*` UI events.
+
+I wired the command-side runners with the reasoning and tool-call plugins, added regression coverage that a streaming engine's canonical reasoning events become RPC JSONL `ChatReasoningPatch` frames, and then ran real tmux smoke tests. `gpt-5-mini` and `wafer-glm-5.1` were both tried; the Wafer GLM profile produced a visible thinking stream and a debug JSONL log full of `ChatReasoningPatch` frames.
+
+### Prompt Context
+
+**User prompt (verbatim):** "Pretty sure gpt-5-mini does thinking. you can also try the wafer glm (see ~/.config/pinocchio/profiles.yaml)."
+
+**Assistant interpretation:** Use the suggested profiles to validate whether the missing TUI thinking stream is a provider/profile issue or a Pinocchio event-registration issue, and fix the event path if necessary.
+
+**Inferred user intent:** Confirm that the TUI can actually display reasoning streams from profiles that emit them, using the new `--debug-events-jsonl` trace to diagnose the event path.
+
+**Commit (code):** pending — this step is being committed after validation.
+
+### What I did
+
+- Inspected `~/.config/pinocchio/profiles.yaml` and confirmed relevant profiles:
+  - `gpt-5-mini`,
+  - `gpt-5-nano-low`,
+  - `wafer-glm-5.1`,
+  - Wafer DeepSeek thinking variants.
+- Ran `--chat --debug-events-jsonl` tmux smokes before the code change:
+  - `gpt-5-mini` produced text patches but no `ChatReasoning*` frames,
+  - `wafer-glm-5.1` produced text patches but no `ChatReasoning*` frames.
+- Found that `chatapp.NewRunner` only installs feature plugins when callers pass `RunnerOptions.Plugins`.
+- Added `commandRunnerOptions` in `pkg/cmds/cmd.go` so RPC JSONL, blocking-debug, and TUI runners all include:
+  - `plugins.NewReasoningPlugin()`,
+  - `plugins.NewToolCallPlugin()`.
+- Updated the streaming RPC test engine to publish canonical reasoning start/delta/finish events before text events.
+- Updated `TestRunWithOptionsRPCJSONLEmitsStreamingPatchEvents` to require a `ChatReasoningPatch` frame.
+- Re-ran real tmux smokes after the change:
+  - `gpt-5-nano-low` produced `ChatReasoningSegmentStarted` / `ChatReasoningSegmentFinished` with no reasoning patch text in that run,
+  - `wafer-glm-5.1` produced many `ChatReasoningPatch` frames and visible `(thinking)` content in the TUI.
+
+### Why
+
+- The TUI fanout already knew how to render `ChatReasoning*` events, but the command runners were not installing the plugin that converts canonical Geppetto reasoning events into those chatapp/sessionstream UI events.
+- The debug log is the correct diagnostic boundary: if `ChatReasoningPatch` is in the JSONL file, the issue is rendering; if it is absent, the issue is upstream registration/projection/provider behavior.
+
+### What worked
+
+- `go test ./pkg/cmds ./pkg/ui -count=1` passed.
+- `go test ./pkg/chatapp/... ./pkg/ui ./pkg/cmds ./cmd/pinocchio/... -count=1` passed.
+- `/tmp/pin-chat-glm-plugin-debug.jsonl` contained many `ChatReasoningPatch` frames.
+- The Wafer GLM tmux capture showed a `(thinking)` block followed by the assistant answer.
+
+### What didn't work
+
+- `gpt-5-mini` did not emit `ChatReasoning*` frames in the tested run. The profile currently sets `engine: gpt-5-mini` but does not set `reasoning_summary` in `~/.config/pinocchio/profiles.yaml`, unlike `gpt-5-nano-low`.
+- `gpt-5-nano-low` emitted reasoning start/finish events but no visible patch text in the tested run, so the TUI showed an empty `(thinking)` block.
+
+### What I learned
+
+- Command-side chatapp runners must opt into the same feature plugins expected by web-chat/plugin tests; otherwise plugin-defined UI event schemas and projections are absent.
+- Wafer GLM is a good smoke profile for visible reasoning patches because it produced a rich stream of `ChatReasoningPatch` events.
+- `gpt-5-mini` may need explicit reasoning summary/profile settings before it reliably emits reasoning frames through the Responses API path.
+
+### What was tricky to build
+
+- The plugin package imports `chatapp`, so the default plugin set cannot simply be imported into `chatapp.NewRunner` without creating an import cycle. The command layer is the right place to choose command-runner plugins.
+- The debug output from long reasoning streams can be large; using `rg ChatReasoning` on the JSONL trace was much more reliable than relying only on terminal screenshots.
+
+### What warrants a second pair of eyes
+
+- Review whether command runners should always install both reasoning and tool-call plugins, or whether this should become an explicit shared helper outside `pkg/chatapp` to avoid each command caller choosing independently.
+- Review whether `gpt-5-mini` should have a local profile variant with `reasoning_summary: concise` like `gpt-5-nano-low`.
+
+### What should be done in the future
+
+- Consider adding a documented `gpt-5-mini-low` or `gpt-5-mini-reasoning` profile if users expect visible reasoning summaries from `gpt-5-mini`.
+- Consider a compact debug-log inspection helper that summarizes counts by UI event name.
+
+### Code review instructions
+
+- Start in `pkg/cmds/cmd.go`, especially `commandRunnerOptions` and the three `chatapp.NewRunner(...)` call sites.
+- Then review `pkg/cmds/cmd_rpc_jsonl_test.go`, especially the synthetic reasoning events in `streamingEngine` and the `ChatReasoningPatch` assertion.
+- Validate with:
+  - `go test ./pkg/cmds ./pkg/ui -count=1`,
+  - `go test ./pkg/chatapp/... ./pkg/ui ./pkg/cmds ./cmd/pinocchio/... -count=1`,
+  - `PINOCCHIO_PROFILE=wafer-glm-5.1 ... --chat --debug-events-jsonl /tmp/pin-chat-glm-plugin-debug.jsonl`.
+
+### Technical details
+
+The key fix is that command runners now use:
+
+```go
+chatapp.RunnerOptions{
+    UIFanout: fanout,
+    Plugins: []chatapp.ChatPlugin{
+        plugins.NewReasoningPlugin(),
+        plugins.NewToolCallPlugin(),
+    },
+}
+```
+
+The Wafer GLM smoke confirmed JSONL lines like:
+
+```text
+uiEvent.name = ChatReasoningPatch
+payload.@type = type.googleapis.com/pinocchio.chatapp.v1.ChatReasoningPatch
+payload.role = thinking
 ```

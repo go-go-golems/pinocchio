@@ -97,3 +97,13 @@ Committed Step 7 interactive chat continuation and TUI reasoning/debug fixes (co
 - /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/cmds/cmd.go — Committed chat continuation control flow
 - /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/ui/chatapp_fanout.go — Committed reasoning patch entity creation
 
+
+## 2026-05-20
+
+Registered chatapp reasoning/tool-call plugins for command runners and verified Wafer GLM emits visible ChatReasoningPatch streams through --chat debug JSONL.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/cmds/cmd.go — Command runner plugin registration
+- /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/cmds/cmd_rpc_jsonl_test.go — Reasoning projection regression test
+
