@@ -86,71 +86,39 @@ func toString(v any) string {
 	return ""
 }
 
-func openChatPersistenceStores(settings run.PersistenceSettings) (chatstore.TimelineStore, chatstore.TurnStore, func(), error) {
-	var timelineStore chatstore.TimelineStore
+func openCLITurnStore(settings run.PersistenceSettings) (chatstore.TurnStore, func(), error) {
 	var turnStore chatstore.TurnStore
 
 	cleanup := func() {
 		if turnStore != nil {
 			_ = turnStore.Close()
 		}
-		if timelineStore != nil {
-			_ = timelineStore.Close()
-		}
 	}
 
-	openTimeline := strings.TrimSpace(settings.TimelineDSN) != "" || strings.TrimSpace(settings.TimelineDB) != ""
 	openTurns := strings.TrimSpace(settings.TurnsDSN) != "" || strings.TrimSpace(settings.TurnsDB) != ""
-	if !openTimeline && !openTurns {
-		return nil, nil, cleanup, nil
+	if !openTurns {
+		return nil, cleanup, nil
 	}
 
-	if openTimeline {
-		dsn := strings.TrimSpace(settings.TimelineDSN)
-		if dsn == "" {
-			timelineDB := strings.TrimSpace(settings.TimelineDB)
-			if dir := filepath.Dir(timelineDB); dir != "" && dir != "." {
-				if err := os.MkdirAll(dir, 0o755); err != nil {
-					return nil, nil, cleanup, errors.Wrap(err, "create timeline db dir")
-				}
-			}
-			var err error
-			dsn, err = chatstore.SQLiteTimelineDSNForFile(timelineDB)
-			if err != nil {
-				return nil, nil, cleanup, err
+	dsn := strings.TrimSpace(settings.TurnsDSN)
+	if dsn == "" {
+		turnsDB := strings.TrimSpace(settings.TurnsDB)
+		if dir := filepath.Dir(turnsDB); dir != "" && dir != "." {
+			if err := os.MkdirAll(dir, 0o755); err != nil {
+				return nil, cleanup, errors.Wrap(err, "create turns db dir")
 			}
 		}
-		s, err := chatstore.NewSQLiteTimelineStore(dsn)
+		var err error
+		dsn, err = chatstore.SQLiteTurnDSNForFile(turnsDB)
 		if err != nil {
-			return nil, nil, cleanup, err
+			return nil, cleanup, err
 		}
-		timelineStore = s
 	}
-
-	if openTurns {
-		dsn := strings.TrimSpace(settings.TurnsDSN)
-		if dsn == "" {
-			turnsDB := strings.TrimSpace(settings.TurnsDB)
-			if dir := filepath.Dir(turnsDB); dir != "" && dir != "." {
-				if err := os.MkdirAll(dir, 0o755); err != nil {
-					cleanup()
-					return nil, nil, cleanup, errors.Wrap(err, "create turns db dir")
-				}
-			}
-			var err error
-			dsn, err = chatstore.SQLiteTurnDSNForFile(turnsDB)
-			if err != nil {
-				cleanup()
-				return nil, nil, cleanup, err
-			}
-		}
-		s, err := chatstore.NewSQLiteTurnStore(dsn)
-		if err != nil {
-			cleanup()
-			return nil, nil, cleanup, err
-		}
-		turnStore = s
+	s, err := chatstore.NewSQLiteTurnStore(dsn)
+	if err != nil {
+		return nil, cleanup, err
 	}
+	turnStore = s
 
-	return timelineStore, turnStore, cleanup, nil
+	return turnStore, cleanup, nil
 }

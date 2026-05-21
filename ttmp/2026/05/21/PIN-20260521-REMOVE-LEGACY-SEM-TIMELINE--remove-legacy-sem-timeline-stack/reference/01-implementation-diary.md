@@ -146,3 +146,169 @@ cmd/web-chat/timeline
   -> pkg/sem/pb/proto/sem/timeline
   -> proto/sem/timeline
 ```
+
+## Step 2: Delete the legacy timeline stack
+
+This step implemented the cleanup plan from the design document. The deletion removed the old `sem` protobuf tree, the generated sem Go and TypeScript outputs, the old `chatstore.TimelineStore` implementations, and the `web-chat timeline` command group that inspected the old SQLite timeline schema.
+
+The important preservation rule was that only the legacy timeline stack was removed. `chatstore.TurnStore` remains in place because it is still the current storage seam for serialized final `turns.Turn` snapshots and is needed by web-chat and the upcoming TUI turns persistence work.
+
+### Prompt Context
+
+**User prompt (verbatim):** "Ok, create tasks (if you haven't yet), then kill all the old timeline stuff. Keep a diary as you work."
+
+**Assistant interpretation:** Ensure the cleanup ticket has concrete tasks, implement the legacy timeline deletion now, and update the implementation diary while doing the work.
+
+**Inferred user intent:** The user wants the old `sem`/timeline stack removed rather than merely documented, with ticket bookkeeping updated so later readers can understand what was deleted and why.
+
+**Commit (code):** pending — implementation in working tree before final commit.
+
+### What I did
+
+- Confirmed tasks already existed and then updated them after implementation.
+- Deleted the old web-chat timeline CLI command group:
+  - `cmd/web-chat/timeline/`
+- Removed root command wiring from `cmd/web-chat/main.go`:
+  - removed `timelinecmd` import;
+  - removed `timelinecmd.AddToRootCommand(root)`.
+- Deleted legacy timeline store code and tests:
+  - `pkg/persistence/chatstore/timeline_store.go`
+  - `pkg/persistence/chatstore/timeline_store_memory.go`
+  - `pkg/persistence/chatstore/timeline_store_memory_test.go`
+  - `pkg/persistence/chatstore/timeline_store_sqlite.go`
+  - `pkg/persistence/chatstore/timeline_store_sqlite_test.go`
+- Rewrote `pkg/cmds/chat_persistence.go` so it only opens `chatstore.TurnStore` via `openCLITurnStore` and no longer mentions `chatstore.TimelineStore`.
+- Updated `pkg/cmds/chat_persistence_test.go` to test turns-only store opening and preserve `cliTurnStorePersister` coverage.
+- Deleted sem source and generated outputs:
+  - `proto/sem/`
+  - `pkg/sem/`
+  - `web/src/sem/`
+  - `cmd/web-chat/web/src/sem/`
+- Deleted the unused excluded web-chat proto island:
+  - `cmd/web-chat/proto/`
+- Updated generation/tooling configuration:
+  - removed `buf.gen.yaml` because it only generated sem outputs;
+  - updated `Makefile` so `proto-gen-core` uses `buf.chatapp.gen.yaml` and `buf.chatapp.web.gen.yaml` for `proto/pinocchio`;
+  - removed the `proto-gen-web-chat` target that only generated the removed excluded proto island;
+  - removed `pkg/sem/pb` from the gosec exclude list;
+  - removed sem generated directory ignores from `cmd/web-chat/web/biome.json`.
+- Updated frontend architecture docs to remove the historical `sem/pb` directory from the documented live frontend shape.
+- Verified that no live-code references remain for:
+  - `pkg/sem/pb`
+  - `web/src/sem/pb`
+  - `cmd/web-chat/web/src/sem/pb`
+  - `proto/sem`
+  - `cmd/web-chat/proto`
+  - `TimelineStore`
+  - `TimelineEntityV2`
+  - `TimelineSnapshotV2`
+  - `timelinepb`
+  - `cmd/web-chat/timeline`
+
+### Why
+
+- The old stack used `sem.timeline.TimelineEntityV2` and `sem.timeline.TimelineSnapshotV2`, which are not the current `sessionstream` runtime types.
+- New runtime timeline persistence should use `sessionstream.HydrationStore`, not `chatstore.TimelineStore`.
+- Keeping the old CLI commands and generated protobuf trees made the repository appear to have two active timeline systems.
+- Removing the old stack makes the current architecture easier to understand: visible timeline state belongs to `sessionstream`; model-context turns belong to `chatstore.TurnStore`.
+
+### What worked
+
+- The initial grep audit was accurate: once `cmd/web-chat/timeline` and `chatstore.TimelineStore` were removed, the `sem` protobuf tree and generated outputs had no live-code users.
+- Targeted Go tests passed:
+  - `go test ./pkg/persistence/chatstore ./pkg/cmds ./cmd/web-chat/... -count=1`
+- Protobuf generation and schema vet passed after Makefile updates:
+  - `make proto-gen`
+  - `make schema-vet`
+- Full Go tests passed:
+  - `go test ./... -count=1`
+- Frontend typecheck passed:
+  - `npm run typecheck` from `cmd/web-chat/web`.
+- Frontend lint passed after formatting generated chatapp TypeScript imports with Biome:
+  - `npx --yes @biomejs/biome@2.3.8 check --write src/chatapp/pb/proto/pinocchio/chatapp/rpc/v1/rpc_pb.ts src/chatapp/pb/proto/pinocchio/chatapp/v1/chat_pb.ts`
+  - `npm run lint` from `cmd/web-chat/web`.
+
+### What didn't work
+
+- The first frontend lint run failed after `make proto-gen` regenerated chatapp TypeScript files with import ordering that Biome rejected.
+- Exact failure:
+  - command: `cd cmd/web-chat/web && npm run lint`
+  - files: `src/chatapp/pb/proto/pinocchio/chatapp/rpc/v1/rpc_pb.ts` and `src/chatapp/pb/proto/pinocchio/chatapp/v1/chat_pb.ts`
+  - error: `The imports and exports are not sorted.`
+- Fix:
+  - ran Biome write mode on the two generated chatapp TypeScript files;
+  - reran `npm run lint`, which passed.
+
+### What I learned
+
+- The root `buf.gen.yaml` was entirely sem-specific and could be removed once `proto/sem` was gone.
+- Active chatapp protobuf generation already has dedicated templates:
+  - `buf.chatapp.gen.yaml`
+  - `buf.chatapp.web.gen.yaml`
+- The excluded `cmd/web-chat/proto/sem` island had no non-proto consumers and was safe to remove with the legacy timeline cleanup.
+- `pkg/doc/topics/webchat-frontend-architecture.md` had already described `sem/pb` as historical; after deletion it needed to be removed from the directory tree entirely.
+
+### What was tricky to build
+
+The tricky part was deleting aggressively without deleting the current persistence substrate. `pkg/persistence/chatstore` contained both the old timeline store and the current turn store. Removing the whole package would have broken web-chat turn persistence and the planned TUI turns persistence work.
+
+The solution was to remove only `timeline_store*` files and keep `turn_store*` files. `pkg/cmds/chat_persistence.go` was then rewritten to expose a turns-only `openCLITurnStore` helper. This preserves the current `cliTurnStorePersister` path while removing the old timeline store dependency.
+
+### What warrants a second pair of eyes
+
+- Whether any external users relied on the removed `web-chat timeline` command group for old database inspection.
+- Whether `proto-gen-core` should remain named `core` now that it only generates active Pinocchio chatapp protos.
+- Whether generated chatapp TypeScript files should be excluded from Biome or consistently post-processed after `make proto-gen`.
+- Whether replacement sessionstream hydration inspection commands should be added in a follow-up.
+
+### What should be done in the future
+
+- If timeline inspection is still needed, add new tooling against `sessionstream.HydrationStore` rather than restoring `chatstore.TimelineStore`.
+- Coordinate with `PIN-20260521-TUI-TURNS-PERSISTENCE` so future TUI `--timeline-db` support opens a `sessionstream` SQLite hydration store.
+- Consider renaming Makefile proto targets to make it clear they generate chatapp protobuf outputs.
+
+### Code review instructions
+
+- Start with deletion boundaries:
+  - confirm `pkg/persistence/chatstore/turn_store*.go` remain;
+  - confirm `pkg/persistence/chatstore/timeline_store*.go` are gone;
+  - confirm `proto/pinocchio/chatapp/*` and `pkg/chatapp/pb/*` remain;
+  - confirm `proto/sem`, `pkg/sem`, `web/src/sem`, and `cmd/web-chat/web/src/sem` are gone.
+- Review `pkg/cmds/chat_persistence.go` to ensure turns DB behavior still works and no timeline store API remains.
+- Review `Makefile` and `buf.yaml` to ensure proto generation no longer references deleted sem paths.
+- Validate with:
+  - `go test ./pkg/persistence/chatstore ./pkg/cmds ./cmd/web-chat/... -count=1`
+  - `make proto-gen`
+  - `make schema-vet`
+  - `go test ./... -count=1`
+  - `cd cmd/web-chat/web && npm run typecheck && npm run lint`
+
+### Technical details
+
+The removed dependency chain was:
+
+```text
+cmd/web-chat/timeline
+  -> chatstore.SQLiteTimelineStore
+  -> chatstore.TimelineStore
+  -> pkg/sem/pb/proto/sem/timeline
+  -> proto/sem/timeline
+```
+
+The retained current persistence split is:
+
+```text
+visible UI timeline:
+  sessionstream.HydrationStore
+
+model-context final turns:
+  chatstore.TurnStore
+```
+
+The final reference audit command was:
+
+```bash
+rg "pkg/sem/pb|web/src/sem/pb|cmd/web-chat/web/src/sem/pb|proto/sem|cmd/web-chat/proto|src/sem/pb|TimelineStore|NewSQLiteTimelineStore|NewInMemoryTimelineStore|TimelineEntityV2|TimelineSnapshotV2|timelinepb|cmd/web-chat/timeline" -n --glob '!ttmp/**'
+```
+
+It returned no live-code matches.

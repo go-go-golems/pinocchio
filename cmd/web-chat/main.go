@@ -38,7 +38,6 @@ import (
 	aisettings "github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 	appserver "github.com/go-go-golems/pinocchio/cmd/web-chat/app"
 	"github.com/go-go-golems/pinocchio/cmd/web-chat/profiles"
-	timelinecmd "github.com/go-go-golems/pinocchio/cmd/web-chat/timeline"
 	"github.com/go-go-golems/pinocchio/pkg/chatapp/plugins"
 	profilebootstrap "github.com/go-go-golems/pinocchio/pkg/cmds/profilebootstrap"
 	agentmode "github.com/go-go-golems/pinocchio/pkg/middlewares/agentmode"
@@ -445,8 +444,6 @@ func main() {
 	if err := clay.InitGlazed("pinocchio", root); err != nil {
 		cobra.CheckErr(err)
 	}
-
-	timelinecmd.AddToRootCommand(root)
 
 	c, err := NewCommand()
 	cobra.CheckErr(err)

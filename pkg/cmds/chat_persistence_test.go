@@ -12,31 +12,25 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestOpenChatPersistenceStores_NoneConfigured(t *testing.T) {
-	timelineStore, turnStore, cleanup, err := openChatPersistenceStores(run.PersistenceSettings{})
+func TestOpenCLITurnStore_NoneConfigured(t *testing.T) {
+	turnStore, cleanup, err := openCLITurnStore(run.PersistenceSettings{})
 	require.NoError(t, err)
-	require.Nil(t, timelineStore)
 	require.Nil(t, turnStore)
 	require.NotNil(t, cleanup)
 	cleanup()
 }
 
-func TestOpenChatPersistenceStores_OpenBothFromDBPaths(t *testing.T) {
+func TestOpenCLITurnStore_OpenFromDBPath(t *testing.T) {
 	dir := t.TempDir()
-	timelineDB := filepath.Join(dir, "timeline", "timeline.db")
 	turnsDB := filepath.Join(dir, "turns", "turns.db")
 
-	timelineStore, turnStore, cleanup, err := openChatPersistenceStores(run.PersistenceSettings{
-		TimelineDB: timelineDB,
-		TurnsDB:    turnsDB,
+	turnStore, cleanup, err := openCLITurnStore(run.PersistenceSettings{
+		TurnsDB: turnsDB,
 	})
 	require.NoError(t, err)
-	require.NotNil(t, timelineStore)
 	require.NotNil(t, turnStore)
 	t.Cleanup(cleanup)
 
-	_, err = os.Stat(filepath.Dir(timelineDB))
-	require.NoError(t, err)
 	_, err = os.Stat(filepath.Dir(turnsDB))
 	require.NoError(t, err)
 }

@@ -53,7 +53,7 @@ lintmax: build geppetto-lint-build golangci-lint-install
 
 gosec:
 	go install github.com/securego/gosec/v2/cmd/gosec@latest
-	gosec -exclude=G101,G203,G304,G301,G306,G204,G302 -exclude-generated -exclude-dir=.history -exclude-dir=testdata -exclude-dir=pkg/sem/pb -exclude-dir=pkg/chatapp/pb ./...
+	gosec -exclude=G101,G203,G304,G301,G306,G204,G302 -exclude-generated -exclude-dir=.history -exclude-dir=testdata -exclude-dir=pkg/chatapp/pb ./...
 
 govulncheck:
 	go install golang.org/x/vuln/cmd/govulncheck@latest
@@ -75,12 +75,10 @@ web-lint:
 web-check: web-typecheck web-lint
 
 proto-gen-core:
-	buf generate --path proto/sem
+	buf generate --template buf.chatapp.gen.yaml --path proto/pinocchio
+	buf generate --template buf.chatapp.web.gen.yaml --path proto/pinocchio
 
-proto-gen-web-chat:
-	cd cmd/web-chat/proto && buf generate
-
-proto-gen: proto-gen-core proto-gen-web-chat
+proto-gen: proto-gen-core
 
 schema-vet:
 	go build -o $(SESSIONSTREAM_LINT) $(SESSIONSTREAM_LINT_PKG)
