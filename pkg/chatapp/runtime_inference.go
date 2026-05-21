@@ -146,6 +146,9 @@ func (e *Engine) runRuntimeInference(ctx context.Context, sid sessionstream.Sess
 		}
 		return
 	}
+	if pending.OnFinalTurn != nil && output != nil {
+		pending.OnFinalTurn(output.Clone())
+	}
 	if sink.IsTerminal() {
 		return
 	}

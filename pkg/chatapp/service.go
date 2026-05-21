@@ -22,6 +22,11 @@ type PromptRequest struct {
 	// Pinocchio verbs whose inputs can include system prompts, pre-seeded blocks,
 	// images, and templated content.
 	InitialTurn *turns.Turn
+	// OnFinalTurn is called with the final Geppetto turn after successful runtime
+	// inference. Callers that maintain an in-memory conversation accumulator can
+	// clone this turn directly instead of reconstructing assistant output from
+	// projected timeline entities.
+	OnFinalTurn func(*turns.Turn)
 }
 
 // Service is an app-facing chat service surface suitable for consumer apps such as cmd/web-chat.

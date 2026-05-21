@@ -3,7 +3,6 @@ package ui
 import (
 	"context"
 	"fmt"
-	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -12,7 +11,6 @@ import (
 	boba_chat "github.com/go-go-golems/bobatea/pkg/chat"
 	"github.com/go-go-golems/geppetto/pkg/turns"
 	"github.com/go-go-golems/pinocchio/pkg/chatapp"
-	chatappv1 "github.com/go-go-golems/pinocchio/pkg/chatapp/pb/proto/pinocchio/chatapp/v1"
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 	sessionstream "github.com/go-go-golems/sessionstream/pkg/sessionstream"
 )
@@ -24,7 +22,6 @@ type ChatAppBackend struct {
 	runtime *infruntime.ComposedRuntime
 
 	mu          sync.Mutex
-	seed        *turns.Turn
 	currentTurn *turns.Turn
 	running     bool
 	killed      atomic.Bool
@@ -46,7 +43,7 @@ func NewChatAppBackend(service *chatapp.Service, sid sessionstream.SessionId, ru
 	if seed != nil {
 		seedClone = seed.Clone()
 	}
-	return &ChatAppBackend{service: service, sid: sid, runtime: runtime, seed: seedClone, currentTurn: seedClone}, nil
+	return &ChatAppBackend{service: service, sid: sid, runtime: runtime, currentTurn: seedClone}, nil
 }
 
 func (b *ChatAppBackend) Start(ctx context.Context, prompt string) (tea.Cmd, error) {
@@ -63,7 +60,20 @@ func (b *ChatAppBackend) Start(ctx context.Context, prompt string) (tea.Cmd, err
 	b.running = true
 	b.mu.Unlock()
 
-	req := chatapp.PromptRequest{Prompt: prompt, InitialTurn: initialTurn, Runtime: b.runtime}
+	var finalTurnMu sync.Mutex
+	var finalTurn *turns.Turn
+	req := chatapp.PromptRequest{
+		Prompt:      prompt,
+		InitialTurn: initialTurn,
+		Runtime:     b.runtime,
+		OnFinalTurn: func(t *turns.Turn) {
+			finalTurnMu.Lock()
+			defer finalTurnMu.Unlock()
+			if t != nil {
+				finalTurn = t.Clone()
+			}
+		},
+	}
 	if err := b.service.SubmitPromptRequest(ctx, b.sid, req); err != nil {
 		b.mu.Lock()
 		b.running = false
@@ -74,14 +84,17 @@ func (b *ChatAppBackend) Start(ctx context.Context, prompt string) (tea.Cmd, err
 	return func() tea.Msg {
 		err := b.service.WaitIdle(ctx, b.sid)
 		if err == nil {
-			var snap sessionstream.Snapshot
-			snap, err = b.service.Snapshot(ctx, b.sid)
-			if err == nil {
-				b.mu.Lock()
-				b.currentTurn = turnFromSnapshot(b.seed, snap)
-				b.running = false
-				b.mu.Unlock()
+			finalTurnMu.Lock()
+			updatedTurn := finalTurn
+			finalTurnMu.Unlock()
+			b.mu.Lock()
+			if updatedTurn != nil {
+				b.currentTurn = updatedTurn.Clone()
+			} else {
+				b.currentTurn = initialTurn.Clone()
 			}
+			b.running = false
+			b.mu.Unlock()
 		}
 		if err != nil {
 			b.mu.Lock()
@@ -125,35 +138,4 @@ func turnWithUserPrompt(base *turns.Turn, prompt string) *turns.Turn {
 	}
 	turns.AppendBlock(t, turns.NewUserTextBlock(prompt))
 	return t
-}
-
-func turnFromSnapshot(seed *turns.Turn, snap sessionstream.Snapshot) *turns.Turn {
-	out := &turns.Turn{}
-	if seed != nil {
-		for _, block := range seed.Blocks {
-			if block.Role == turns.RoleUser || block.Role == turns.RoleAssistant {
-				continue
-			}
-			turns.AppendBlock(out, block)
-		}
-	}
-	entities := append([]sessionstream.TimelineEntity(nil), snap.Entities...)
-	sort.SliceStable(entities, func(i, j int) bool { return entities[i].CreatedOrdinal < entities[j].CreatedOrdinal })
-	for _, entity := range entities {
-		msg, ok := entity.Payload.(*chatappv1.ChatMessageEntity)
-		if !ok || msg == nil {
-			continue
-		}
-		text := strings.TrimSpace(firstNonEmpty(msg.GetContent(), msg.GetText()))
-		if text == "" {
-			continue
-		}
-		switch msg.GetRole() {
-		case "user":
-			turns.AppendBlock(out, turns.NewUserTextBlock(text))
-		case "assistant":
-			turns.AppendBlock(out, turns.NewAssistantTextBlock(text))
-		}
-	}
-	return out
 }

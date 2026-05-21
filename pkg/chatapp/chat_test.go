@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -136,6 +137,8 @@ func TestRuntimeInferenceUsesInitialTurnWhenProvided(t *testing.T) {
 	turns.AppendBlock(seed, turns.NewUserTextBlock("Rendered verb prompt"))
 
 	recorder := &recordingHistoryEngine{}
+	var finalMu sync.Mutex
+	var final *turns.Turn
 	engine := NewEngine(WithChunkDelay(time.Millisecond))
 	hub := newTestHub(t, engine)
 	engine.setPendingRequest("request-initial-turn", PromptRequest{
@@ -143,6 +146,11 @@ func TestRuntimeInferenceUsesInitialTurnWhenProvided(t *testing.T) {
 		InitialTurn: seed,
 		Runtime: &infruntime.ComposedRuntime{
 			Engine: recorder,
+		},
+		OnFinalTurn: func(t *turns.Turn) {
+			finalMu.Lock()
+			defer finalMu.Unlock()
+			final = t.Clone()
 		},
 	})
 
@@ -157,6 +165,17 @@ func TestRuntimeInferenceUsesInitialTurnWhenProvided(t *testing.T) {
 	require.Equal(t, "You are a precise assistant.", seen.Blocks[0].Payload[turns.PayloadKeyText])
 	require.Equal(t, turns.RoleUser, seen.Blocks[1].Role)
 	require.Equal(t, "Rendered verb prompt", seen.Blocks[1].Payload[turns.PayloadKeyText])
+
+	finalMu.Lock()
+	finalSeen := final
+	if finalSeen != nil {
+		finalSeen = finalSeen.Clone()
+	}
+	finalMu.Unlock()
+	require.NotNil(t, finalSeen)
+	require.Len(t, finalSeen.Blocks, 3)
+	require.Equal(t, turns.RoleAssistant, finalSeen.Blocks[2].Role)
+	require.Equal(t, "ok", finalSeen.Blocks[2].Payload[turns.PayloadKeyText])
 }
 
 func TestRuntimeInferenceInitialTurnSkipsTurnStoreHistory(t *testing.T) {
