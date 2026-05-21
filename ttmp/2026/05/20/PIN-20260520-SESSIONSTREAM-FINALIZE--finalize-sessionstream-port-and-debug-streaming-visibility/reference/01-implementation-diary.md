@@ -797,7 +797,7 @@ I wired the command-side runners with the reasoning and tool-call plugins, added
 
 **Inferred user intent:** Confirm that the TUI can actually display reasoning streams from profiles that emit them, using the new `--debug-events-jsonl` trace to diagnose the event path.
 
-**Commit (code):** pending — this step is being committed after validation.
+**Commit (code):** b24b93e — "fix: register command chatapp plugins"
 
 ### What I did
 

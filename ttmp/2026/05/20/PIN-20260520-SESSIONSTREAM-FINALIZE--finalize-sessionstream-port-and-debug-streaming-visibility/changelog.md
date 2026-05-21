@@ -107,3 +107,13 @@ Registered chatapp reasoning/tool-call plugins for command runners and verified 
 - /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/cmds/cmd.go — Command runner plugin registration
 - /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/cmds/cmd_rpc_jsonl_test.go — Reasoning projection regression test
 
+
+## 2026-05-20
+
+Committed command chatapp plugin registration for reasoning/tool-call projections (commit b24b93e).
+
+### Related Files
+
+- /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/cmds/cmd.go — Committed command runner plugin registration
+- /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/cmds/cmd_rpc_jsonl_test.go — Committed ChatReasoningPatch regression coverage
+
