@@ -152,7 +152,7 @@ The implementation also distinguishes raw profile overrides from effective setti
 
 **Inferred user intent:** The user wants the profile listing UX implemented now, with enough introspection detail to debug important inference settings such as `chat.engine` and `reasoning_effort`.
 
-**Commit (code):** pending — code implemented and targeted validation run before commit.
+**Commit (code):** 1b4aedb — "profiles: add list command"
 
 ### What I did
 

@@ -12,4 +12,4 @@
 - [x] Update user-facing docs to prefer `pinocchio profiles list`.
 - [x] Validate with targeted tests and manual CLI smoke.
 - [x] Validate with `go test ./...`.
-- [ ] Update diary/changelog and commit code/docs.
+- [x] Update diary/changelog and commit code/docs.
