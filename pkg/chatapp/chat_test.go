@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -127,6 +128,81 @@ func TestRuntimeInferenceLoadsLatestTurnHistory(t *testing.T) {
 	require.Equal(t, "We have American Gold Eagles.", seen.Blocks[1].Payload[turns.PayloadKeyText])
 	require.Equal(t, turns.RoleUser, seen.Blocks[2].Role)
 	require.Equal(t, "Tell me more about the first one", seen.Blocks[2].Payload[turns.PayloadKeyText])
+}
+
+func TestRuntimeInferenceUsesInitialTurnWhenProvided(t *testing.T) {
+	ctx := context.Background()
+	seed := &turns.Turn{ID: "turn-seed"}
+	turns.AppendBlock(seed, turns.NewSystemTextBlock("You are a precise assistant."))
+	turns.AppendBlock(seed, turns.NewUserTextBlock("Rendered verb prompt"))
+
+	recorder := &recordingHistoryEngine{}
+	var finalMu sync.Mutex
+	var final *turns.Turn
+	engine := NewEngine(WithChunkDelay(time.Millisecond))
+	hub := newTestHub(t, engine)
+	engine.setPendingRequest("request-initial-turn", PromptRequest{
+		Prompt:      "Rendered verb prompt",
+		InitialTurn: seed,
+		Runtime: &infruntime.ComposedRuntime{
+			Engine: recorder,
+		},
+		OnFinalTurn: func(t *turns.Turn) {
+			finalMu.Lock()
+			defer finalMu.Unlock()
+			final = t.Clone()
+		},
+	})
+
+	require.NoError(t, hub.Submit(ctx, sessionstream.SessionId("chat-initial-turn"), CommandStartInference, &chatappv1.StartInferenceCommand{RequestId: "request-initial-turn"}))
+	require.NoError(t, engine.WaitIdle(ctx, sessionstream.SessionId("chat-initial-turn")))
+
+	seen := recorder.seen
+	require.NotNil(t, seen)
+	require.Equal(t, "chat-initial-turn", recorder.sessionID)
+	require.Len(t, seen.Blocks, 2)
+	require.Equal(t, turns.RoleSystem, seen.Blocks[0].Role)
+	require.Equal(t, "You are a precise assistant.", seen.Blocks[0].Payload[turns.PayloadKeyText])
+	require.Equal(t, turns.RoleUser, seen.Blocks[1].Role)
+	require.Equal(t, "Rendered verb prompt", seen.Blocks[1].Payload[turns.PayloadKeyText])
+
+	finalMu.Lock()
+	finalSeen := final
+	if finalSeen != nil {
+		finalSeen = finalSeen.Clone()
+	}
+	finalMu.Unlock()
+	require.NotNil(t, finalSeen)
+	require.Len(t, finalSeen.Blocks, 3)
+	require.Equal(t, turns.RoleAssistant, finalSeen.Blocks[2].Role)
+	require.Equal(t, "ok", finalSeen.Blocks[2].Payload[turns.PayloadKeyText])
+}
+
+func TestRuntimeInferenceInitialTurnSkipsTurnStoreHistory(t *testing.T) {
+	ctx := context.Background()
+	seed := &turns.Turn{ID: "turn-seed"}
+	turns.AppendBlock(seed, turns.NewUserTextBlock("Use this explicit turn"))
+
+	store := &fakeTurnStore{err: errors.New("history should not be loaded")}
+	recorder := &recordingHistoryEngine{}
+	engine := NewEngine(WithChunkDelay(time.Millisecond), WithTurnStore(store))
+	hub := newTestHub(t, engine)
+	engine.setPendingRequest("request-initial-turn-no-history", PromptRequest{
+		Prompt:      "Use this explicit turn",
+		InitialTurn: seed,
+		Runtime: &infruntime.ComposedRuntime{
+			Engine: recorder,
+		},
+	})
+
+	require.NoError(t, hub.Submit(ctx, sessionstream.SessionId("chat-initial-turn-no-history"), CommandStartInference, &chatappv1.StartInferenceCommand{RequestId: "request-initial-turn-no-history"}))
+	require.NoError(t, engine.WaitIdle(ctx, sessionstream.SessionId("chat-initial-turn-no-history")))
+
+	seen := recorder.seen
+	require.NotNil(t, seen)
+	require.Len(t, seen.Blocks, 1)
+	require.Equal(t, turns.RoleUser, seen.Blocks[0].Role)
+	require.Equal(t, "Use this explicit turn", seen.Blocks[0].Payload[turns.PayloadKeyText])
 }
 
 func TestRuntimeInferenceStartsFreshWhenNoHistoryExists(t *testing.T) {

@@ -12,7 +12,6 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/turns"
 	"github.com/go-go-golems/geppetto/pkg/turns/serde"
 	chatappv1 "github.com/go-go-golems/pinocchio/pkg/chatapp/pb/proto/pinocchio/chatapp/v1"
-	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 	sessionstream "github.com/go-go-golems/sessionstream/pkg/sessionstream"
 	"google.golang.org/protobuf/proto"
 )
@@ -56,13 +55,14 @@ func (e *Engine) runPrompt(ctx context.Context, sid sessionstream.SessionId, mes
 	defer close(done)
 	defer e.clearRun(sid, messageID)
 	if pending.Runtime != nil && pending.Runtime.Engine != nil {
-		e.runRuntimeInference(ctx, sid, messageID, prompt, pending.Runtime, pub)
+		e.runRuntimeInference(ctx, sid, messageID, prompt, pending, pub)
 		return
 	}
 	e.runDemoInference(ctx, sid, messageID, prompt, pub)
 }
 
-func (e *Engine) runRuntimeInference(ctx context.Context, sid sessionstream.SessionId, messageID, prompt string, runtime *infruntime.ComposedRuntime, pub sessionstream.EventPublisher) {
+func (e *Engine) runRuntimeInference(ctx context.Context, sid sessionstream.SessionId, messageID, prompt string, pending PromptRequest, pub sessionstream.EventPublisher) {
+	runtime := pending.Runtime
 	if runtime == nil || runtime.Engine == nil {
 		e.runDemoInference(ctx, sid, messageID, prompt, pub)
 		return
@@ -92,34 +92,39 @@ func (e *Engine) runRuntimeInference(ctx context.Context, sid sessionstream.Sess
 		EventSinks: []gepevents.EventSink{eventSink},
 	}
 
-	// Load conversation history: the last persisted turn contains the full
-	// conversation as an accumulator. AppendNewTurnFromUserPrompt will clone
-	// it and add the new user block, giving the LLM the full context.
-	if e.turnStore != nil {
-		snapshot, err := e.turnStore.LoadLatestTurn(ctx, string(sid), "final")
+	if pending.InitialTurn != nil {
+		sess.Append(pending.InitialTurn.Clone())
+	} else {
+		// Load conversation history: the last persisted turn contains the full
+		// conversation as an accumulator. AppendNewTurnFromUserPrompt will clone
+		// it and add the new user block, giving the LLM the full context.
+		if e.turnStore != nil {
+			snapshot, err := e.turnStore.LoadLatestTurn(ctx, string(sid), "final")
+			if err != nil {
+				e.publishRunFailed(publishContext(ctx), sid, pub, messageID, fmt.Sprintf("load conversation history: %v", err))
+				return
+			}
+			if snapshot != nil {
+				turn, err := serde.FromYAML([]byte(snapshot.Payload))
+				if err != nil {
+					e.publishRunFailed(publishContext(ctx), sid, pub, messageID, fmt.Sprintf("decode conversation history: %v", err))
+					return
+				}
+				if turn == nil {
+					e.publishRunFailed(publishContext(ctx), sid, pub, messageID, "decode conversation history: empty turn")
+					return
+				}
+				sess.Append(turn)
+			}
+		}
+
+		_, err := sess.AppendNewTurnFromUserPrompt(prompt)
 		if err != nil {
-			e.publishRunFailed(publishContext(ctx), sid, pub, messageID, fmt.Sprintf("load conversation history: %v", err))
+			e.publishRunFailed(publishContext(ctx), sid, pub, messageID, err.Error())
 			return
 		}
-		if snapshot != nil {
-			turn, err := serde.FromYAML([]byte(snapshot.Payload))
-			if err != nil {
-				e.publishRunFailed(publishContext(ctx), sid, pub, messageID, fmt.Sprintf("decode conversation history: %v", err))
-				return
-			}
-			if turn == nil {
-				e.publishRunFailed(publishContext(ctx), sid, pub, messageID, "decode conversation history: empty turn")
-				return
-			}
-			sess.Append(turn)
-		}
 	}
-
-	_, err := sess.AppendNewTurnFromUserPrompt(prompt)
-	if err != nil {
-		e.publishRunFailed(publishContext(ctx), sid, pub, messageID, err.Error())
-		return
-	}
+	assistantBlockOffset := countAssistantBlocks(sess.Latest())
 	handle, err := sess.StartInference(ctx)
 	if err != nil {
 		e.publishRunFailed(publishContext(ctx), sid, pub, messageID, err.Error())
@@ -141,13 +146,16 @@ func (e *Engine) runRuntimeInference(ctx context.Context, sid sessionstream.Sess
 		}
 		return
 	}
+	if pending.OnFinalTurn != nil && output != nil {
+		pending.OnFinalTurn(output.Clone())
+	}
 	if sink.IsTerminal() {
 		return
 	}
 	if sink.HasActiveTextSegment() {
 		_ = sink.finishActiveTextSegment("finished", "stop", "")
 	} else if !sink.HasTextSegment() {
-		_ = e.publishFallbackAssistantText(publishContext(ctx), sid, pub, messageID, prompt, output)
+		_ = e.publishFallbackAssistantText(publishContext(ctx), sid, pub, messageID, prompt, output, assistantBlockOffset)
 	}
 	_ = e.publish(publishContext(ctx), sid, pub, EventChatRunFinished, &chatappv1.ChatRunFinished{MessageId: messageID, Status: "finished", Correlation: runCorrelationInfo(sid, messageID)})
 }
@@ -168,8 +176,8 @@ func fallbackTextCorrelationInfo(sid sessionstream.SessionId, messageID string, 
 	return &chatappv1.CorrelationInfo{SessionId: string(sid), RunId: messageID, SegmentId: segmentID}
 }
 
-func (e *Engine) publishFallbackAssistantText(ctx context.Context, sid sessionstream.SessionId, pub sessionstream.EventPublisher, messageID, prompt string, output *turns.Turn) error {
-	text := assistantTextFromTurn(output)
+func (e *Engine) publishFallbackAssistantText(ctx context.Context, sid sessionstream.SessionId, pub sessionstream.EventPublisher, messageID, prompt string, output *turns.Turn, assistantBlockOffset int) error {
+	text := assistantTextFromTurnAfter(output, assistantBlockOffset)
 	if strings.TrimSpace(text) == "" {
 		return nil
 	}
@@ -182,15 +190,34 @@ func (e *Engine) publishFallbackAssistantText(ctx context.Context, sid sessionst
 	return e.publish(ctx, sid, pub, EventChatTextSegmentFinished, &chatappv1.ChatTextSegmentFinished{MessageId: textMessageID, Role: "assistant", Prompt: prompt, Text: text, Content: text, Status: "finished", Streaming: false, Final: true, FinishReason: "stop", Correlation: corr})
 }
 
-func assistantTextFromTurn(turn *turns.Turn) string {
+func countAssistantBlocks(turn *turns.Turn) int {
+	if turn == nil {
+		return 0
+	}
+	count := 0
+	for _, block := range turn.Blocks {
+		if block.Role == turns.RoleAssistant {
+			count++
+		}
+	}
+	return count
+}
+
+func assistantTextFromTurnAfter(turn *turns.Turn, skip int) string {
 	if turn == nil {
 		return ""
 	}
 	parts := make([]string, 0, len(turn.Blocks))
+	seen := 0
 	for _, block := range turn.Blocks {
 		if block.Role != turns.RoleAssistant {
 			continue
 		}
+		if seen < skip {
+			seen++
+			continue
+		}
+		seen++
 		text, _ := block.Payload[turns.PayloadKeyText].(string)
 		if strings.TrimSpace(text) == "" {
 			continue

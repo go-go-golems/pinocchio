@@ -31,6 +31,8 @@ type HelpersSettings struct {
 	Autosave               *AutosaveSettings  `glazed:"autosave,from_json"`
 	NonInteractive         bool               `glazed:"non-interactive"`
 	Output                 string             `glazed:"output"`
+	RPC                    bool               `glazed:"rpc"`
+	DebugEventsJSONL       string             `glazed:"debug-events-jsonl"`
 	WithMetadata           bool               `glazed:"with-metadata"`
 	FullOutput             bool               `glazed:"full-output"`
 }
@@ -73,7 +75,7 @@ func NewHelpersParameterLayer() (schema.Section, error) {
 				"interactive",
 				fields.TypeBool,
 				fields.WithHelp("Ask for chat continuation after inference"),
-				fields.WithDefault(true),
+				fields.WithDefault(false),
 			),
 			fields.New(
 				"chat",
@@ -135,9 +137,21 @@ func NewHelpersParameterLayer() (schema.Section, error) {
 			fields.New(
 				"output",
 				fields.TypeChoice,
-				fields.WithHelp("Output format (text, json, yaml)"),
+				fields.WithHelp("Output format (text, json, yaml, jsonl)"),
 				fields.WithDefault("text"),
-				fields.WithChoices("text", "json", "yaml"),
+				fields.WithChoices("text", "json", "yaml", "jsonl"),
+			),
+			fields.New(
+				"rpc",
+				fields.TypeBool,
+				fields.WithHelp("Emit protobuf-defined JSONL RPC frames on stdout"),
+				fields.WithDefault(false),
+			),
+			fields.New(
+				"debug-events-jsonl",
+				fields.TypeString,
+				fields.WithHelp("Write projected chatapp/sessionstream UI events to this JSONL file for debugging"),
+				fields.WithDefault(""),
 			),
 			fields.New(
 				"with-metadata",

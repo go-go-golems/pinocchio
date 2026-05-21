@@ -35,7 +35,7 @@ That companion topic explains:
 - hidden base settings
 - stripped parsed-values base settings
 - `BaseInferenceSettings` vs `FinalInferenceSettings`
-- runtime profile switching without losing the baseline
+- profile resolution without contaminating the baseline
 
 - `ai-client`
 

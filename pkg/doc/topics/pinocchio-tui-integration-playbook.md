@@ -118,14 +118,13 @@ Reference patterns:
 
 ### 4) Confirm backend completion behavior matches your forwarder
 
-The “simple chat” forwarder (`StepChatForwardFunc`) sends `BackendFinishedMsg` on provider final/error/interrupt.
+The command chat TUI now uses the chatapp/sessionstream backend and `ChatAppUIFanout`, so completion arrives from the backend after `chatapp.Service.WaitIdle`.
 
-The “agent/tool-loop” forwarder must **not** do that because the tool loop may continue past a provider final.
+The “agent/tool-loop” forwarder must **not** emit `BackendFinishedMsg` on provider-final events because the tool loop may continue past a provider final.
 
-Rules of thumb:
+Rule of thumb:
 
 - If you use `pinocchio/pkg/ui/forwarders/agent`, your backend must emit `BackendFinishedMsg` only when the whole loop completes.
-- If you use `pinocchio/pkg/ui.StepChatForwardFunc`, your backend is typically “single pass” and provider final ends the UI step.
 
 ## tmux playbook: smoke checks and capture-pane
 

@@ -17,6 +17,7 @@ const (
 	RunModeBlocking RunMode = iota
 	RunModeInteractive
 	RunModeChat
+	RunModeRPCJSONL
 )
 
 // UISettings contains all settings related to terminal UI and output formatting
@@ -27,6 +28,8 @@ type UISettings struct {
 	StartInChat      bool
 	PrintPrompt      bool
 	Output           string
+	RPC              bool
+	DebugEventsJSONL string
 	WithMetadata     bool
 	FullOutput       bool
 }
@@ -43,7 +46,7 @@ type RunContext struct {
 	InferenceSettings *settings.InferenceSettings
 	BaseSettings      *settings.InferenceSettings
 
-	// Profile selection inputs (used by interactive chat to support profile switching).
+	// Profile selection inputs used to report the resolved profile in chat UI.
 	Profile           string
 	ProfileRegistries string
 

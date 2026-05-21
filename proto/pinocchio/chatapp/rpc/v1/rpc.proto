@@ -1,0 +1,86 @@
+syntax = "proto3";
+
+package pinocchio.chatapp.rpc.v1;
+
+import "google/protobuf/any.proto";
+
+option go_package = "github.com/go-go-golems/pinocchio/pkg/chatapp/pb/proto/pinocchio/chatapp/rpc/v1;chatapprpcv1";
+
+// RpcLine is the protobuf-defined JSONL envelope emitted by Pinocchio's
+// chatapp-backed CLI RPC mode. Each stdout line is one RpcLine encoded with
+// protobuf JSON (protojson), not binary protobuf.
+message RpcLine {
+  // Protocol version for the line envelope. Version 1 is defined by this file.
+  uint32 version = 1;
+
+  // Session identifier used by sessionstream/chatapp routing.
+  string session_id = 2;
+
+  // Optional client-supplied or adapter-generated request identifier for future
+  // bidirectional stdin/stdout RPC flows.
+  string request_id = 3;
+
+  oneof frame {
+    HelloFrame hello = 10;
+    SnapshotFrame snapshot = 11;
+    UiEventFrame ui_event = 12;
+    BackendEventFrame backend_event = 13;
+    ErrorFrame error = 14;
+    DoneFrame done = 15;
+  }
+
+  reserved 100 to 199;
+}
+
+// HelloFrame identifies the protocol and advertised capabilities for this
+// stream. It is normally the first line emitted by --rpc.
+message HelloFrame {
+  string protocol = 1;
+  string server = 2;
+  repeated string capabilities = 3;
+}
+
+// SnapshotFrame carries the current sessionstream hydration snapshot before
+// live UI events are emitted.
+message SnapshotFrame {
+  uint64 snapshot_ordinal = 1;
+  repeated SnapshotEntity entities = 2;
+}
+
+// SnapshotEntity is the JSONL representation of a sessionstream.TimelineEntity.
+message SnapshotEntity {
+  string kind = 1;
+  string id = 2;
+  uint64 created_ordinal = 3;
+  uint64 last_event_ordinal = 4;
+  bool tombstone = 5;
+  google.protobuf.Any payload = 6;
+}
+
+// UiEventFrame carries one projected sessionstream UI event.
+message UiEventFrame {
+  uint64 ordinal = 1;
+  string name = 2;
+  google.protobuf.Any payload = 3;
+}
+
+// BackendEventFrame is reserved for optional debug/advanced streams that expose
+// canonical chatapp backend events in addition to projected UI events.
+message BackendEventFrame {
+  uint64 ordinal = 1;
+  string name = 2;
+  google.protobuf.Any payload = 3;
+}
+
+// ErrorFrame reports adapter/protocol errors or terminal runtime failures.
+message ErrorFrame {
+  string code = 1;
+  string message = 2;
+  string detail = 3;
+  bool terminal = 4;
+}
+
+// DoneFrame marks that the adapter observed the requested run becoming idle.
+message DoneFrame {
+  string status = 1;
+}

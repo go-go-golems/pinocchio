@@ -1,0 +1,220 @@
+package ui
+
+import (
+	"context"
+	"fmt"
+	"strings"
+	"sync"
+	"time"
+
+	tea "github.com/charmbracelet/bubbletea"
+	boba_chat "github.com/go-go-golems/bobatea/pkg/chat"
+	"github.com/go-go-golems/bobatea/pkg/timeline"
+	chatappv1 "github.com/go-go-golems/pinocchio/pkg/chatapp/pb/proto/pinocchio/chatapp/v1"
+	sessionstream "github.com/go-go-golems/sessionstream/pkg/sessionstream"
+)
+
+// BubbleTeaSender is the small subset of tea.Program used by the chatapp UI
+// fanout. *tea.Program satisfies this interface, and tests can provide a fake.
+type BubbleTeaSender interface {
+	Send(tea.Msg)
+}
+
+// ChatAppUIFanout adapts projected chatapp/sessionstream UI events into the
+// Bubble Tea timeline messages consumed by the existing bobatea chat widgets.
+type ChatAppUIFanout struct {
+	sender BubbleTeaSender
+	mu     sync.Mutex
+	seen   map[string]bool
+	starts map[string]time.Time
+	texts  map[string]string
+}
+
+var _ sessionstream.UIFanout = (*ChatAppUIFanout)(nil)
+
+func NewChatAppUIFanout(sender BubbleTeaSender) (*ChatAppUIFanout, error) {
+	if sender == nil {
+		return nil, fmt.Errorf("bubble tea sender is nil")
+	}
+	return &ChatAppUIFanout{sender: sender, seen: map[string]bool{}, starts: map[string]time.Time{}, texts: map[string]string{}}, nil
+}
+
+func (f *ChatAppUIFanout) PublishUI(_ context.Context, _ sessionstream.SessionId, _ uint64, events []sessionstream.UIEvent) error {
+	if f == nil || f.sender == nil {
+		return fmt.Errorf("chatapp UI fanout is not initialized")
+	}
+	for _, ev := range events {
+		if err := f.publishOne(ev); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// HydrateSnapshot sends Bubble Tea timeline messages for already-hydrated
+// chatapp timeline entities. Callers can use this when entering a TUI session
+// before new UI events start streaming.
+func (f *ChatAppUIFanout) HydrateSnapshot(snap sessionstream.Snapshot) error {
+	if f == nil || f.sender == nil {
+		return fmt.Errorf("chatapp UI fanout is not initialized")
+	}
+	for _, entity := range snap.Entities {
+		msg, ok := entity.Payload.(*chatappv1.ChatMessageEntity)
+		if !ok || msg == nil {
+			continue
+		}
+		id := firstNonEmpty(msg.GetMessageId(), entity.Id)
+		text := firstNonEmpty(msg.GetContent(), msg.GetText())
+		role := firstNonEmpty(msg.GetRole(), "assistant")
+		streaming := msg.GetStreaming() || strings.EqualFold(msg.GetStatus(), "streaming")
+		f.sender.Send(timeline.UIEntityCreated{ID: timeline.EntityID{LocalID: id, Kind: "llm_text"}, Renderer: timeline.RendererDescriptor{Kind: "llm_text"}, Props: map[string]any{"role": role, "text": text, "streaming": streaming}, StartedAt: time.Now()})
+		if !streaming {
+			f.sender.Send(timeline.UIEntityCompleted{ID: timeline.EntityID{LocalID: id, Kind: "llm_text"}, Result: map[string]any{"text": text}})
+		}
+	}
+	return nil
+}
+
+func (f *ChatAppUIFanout) publishOne(ev sessionstream.UIEvent) error {
+	switch p := ev.Payload.(type) {
+	case *chatappv1.ChatUserMessageAccepted:
+		// The bobatea chat model renders submitted user messages immediately.
+		// Live fanout intentionally ignores this event to avoid duplicating the
+		// user's own message in the TUI timeline; HydrateSnapshot still renders
+		// user messages when reconstructing an existing session.
+	case *chatappv1.ChatTextSegmentStarted:
+		f.markStart(p.GetMessageId())
+	case *chatappv1.ChatTextPatch:
+		id := firstNonEmpty(p.GetMessageId(), p.GetStreamId())
+		text := f.applyTextPatch(id, p.GetText(), p.GetMode())
+		if strings.TrimSpace(text) != "" {
+			f.ensureAssistant(id, p.GetRole(), text)
+		}
+		if f.has(id) {
+			f.sender.Send(timeline.UIEntityUpdated{ID: timeline.EntityID{LocalID: id, Kind: "llm_text"}, Patch: map[string]any{"text": text, "streaming": !p.GetFinal()}, Version: time.Now().UnixNano(), UpdatedAt: time.Now()})
+		}
+	case *chatappv1.ChatTextSegmentFinished:
+		id := p.GetMessageId()
+		text := firstNonEmpty(p.GetContent(), p.GetText(), f.text(id))
+		if strings.TrimSpace(text) != "" {
+			f.ensureAssistant(id, p.GetRole(), text)
+		}
+		if f.has(id) {
+			f.sender.Send(timeline.UIEntityCompleted{ID: timeline.EntityID{LocalID: id, Kind: "llm_text"}, Result: map[string]any{"text": text}})
+			f.sender.Send(timeline.UIEntityUpdated{ID: timeline.EntityID{LocalID: id, Kind: "llm_text"}, Patch: map[string]any{"streaming": false}, Version: time.Now().UnixNano(), UpdatedAt: time.Now()})
+			f.clear(id)
+		}
+	case *chatappv1.ChatRunFinished:
+		f.sender.Send(boba_chat.BackendFinishedMsg{})
+	case *chatappv1.ChatRunFailed:
+		id := firstNonEmpty(p.GetMessageId(), "chat-run-failed")
+		text := "**Error**\n\n" + p.GetError()
+		f.ensureAssistant(id, "assistant", text)
+		f.sender.Send(timeline.UIEntityCompleted{ID: timeline.EntityID{LocalID: id, Kind: "llm_text"}, Result: map[string]any{"text": text}})
+		f.sender.Send(timeline.UIEntityUpdated{ID: timeline.EntityID{LocalID: id, Kind: "llm_text"}, Patch: map[string]any{"streaming": false}, Version: time.Now().UnixNano(), UpdatedAt: time.Now()})
+		f.clear(id)
+		f.sender.Send(boba_chat.BackendFinishedMsg{})
+	case *chatappv1.ChatRunStopped:
+		f.sender.Send(boba_chat.BackendFinishedMsg{})
+	case *chatappv1.ChatReasoningSegmentStarted:
+		id := firstNonEmpty(p.GetMessageId(), p.GetParentMessageId()+":thinking")
+		f.ensureAssistant(id, "thinking", "")
+	case *chatappv1.ChatReasoningPatch:
+		id := firstNonEmpty(p.GetMessageId(), p.GetStreamId(), p.GetParentMessageId()+":thinking")
+		text := f.applyTextPatch(id, p.GetText(), p.GetMode())
+		f.ensureAssistant(id, "thinking", text)
+		f.sender.Send(timeline.UIEntityUpdated{ID: timeline.EntityID{LocalID: id, Kind: "llm_text"}, Patch: map[string]any{"text": text, "streaming": !p.GetFinal()}, Version: time.Now().UnixNano(), UpdatedAt: time.Now()})
+	case *chatappv1.ChatReasoningSegmentFinished:
+		id := firstNonEmpty(p.GetMessageId(), p.GetParentMessageId()+":thinking")
+		text := firstNonEmpty(p.GetContent(), p.GetText(), f.text(id))
+		f.ensureAssistant(id, "thinking", text)
+		f.sender.Send(timeline.UIEntityUpdated{ID: timeline.EntityID{LocalID: id, Kind: "llm_text"}, Patch: map[string]any{"text": text, "streaming": false}, Version: time.Now().UnixNano(), UpdatedAt: time.Now()})
+		f.sender.Send(timeline.UIEntityCompleted{ID: timeline.EntityID{LocalID: id, Kind: "llm_text"}})
+		f.clear(id)
+	}
+	return nil
+}
+
+func (f *ChatAppUIFanout) markStart(id string) {
+	if strings.TrimSpace(id) == "" {
+		return
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.starts[id].IsZero() {
+		f.starts[id] = time.Now()
+	}
+}
+
+func (f *ChatAppUIFanout) ensureAssistant(id, role, initialText string) {
+	if strings.TrimSpace(id) == "" {
+		return
+	}
+	f.mu.Lock()
+	if f.seen[id] {
+		f.mu.Unlock()
+		return
+	}
+	started := f.starts[id]
+	if started.IsZero() {
+		started = time.Now()
+	}
+	f.seen[id] = true
+	f.mu.Unlock()
+	f.sender.Send(timeline.UIEntityCreated{ID: timeline.EntityID{LocalID: id, Kind: "llm_text"}, Renderer: timeline.RendererDescriptor{Kind: "llm_text"}, Props: map[string]any{"role": firstNonEmpty(role, "assistant"), "text": initialText, "streaming": true}, StartedAt: started})
+}
+
+func (f *ChatAppUIFanout) has(id string) bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.seen[id]
+}
+
+func (f *ChatAppUIFanout) clear(id string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	delete(f.seen, id)
+	delete(f.starts, id)
+	delete(f.texts, id)
+}
+
+func (f *ChatAppUIFanout) text(id string) string {
+	if strings.TrimSpace(id) == "" {
+		return ""
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.texts[id]
+}
+
+func (f *ChatAppUIFanout) applyTextPatch(id, patch string, mode chatappv1.ChatStreamPatchMode) string {
+	if strings.TrimSpace(id) == "" {
+		return patch
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	switch mode {
+	case chatappv1.ChatStreamPatchMode_CHAT_STREAM_PATCH_MODE_APPEND,
+		chatappv1.ChatStreamPatchMode_CHAT_STREAM_PATCH_MODE_UNSPECIFIED:
+		f.texts[id] += patch
+	case chatappv1.ChatStreamPatchMode_CHAT_STREAM_PATCH_MODE_SNAPSHOT,
+		chatappv1.ChatStreamPatchMode_CHAT_STREAM_PATCH_MODE_REPLACE:
+		f.texts[id] = patch
+	default:
+		if f.texts[id] == "" {
+			f.texts[id] = patch
+		} else {
+			f.texts[id] += patch
+		}
+	}
+	return f.texts[id]
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return value
+		}
+	}
+	return ""
+}
