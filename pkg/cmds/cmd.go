@@ -1039,7 +1039,7 @@ func (g *PinocchioCommand) runStdinRPC(ctx context.Context, rc *run.RunContext) 
 		case *chatapprpcv1.RpcRequestLine_Submit:
 			prompt := strings.TrimSpace(req.Submit.GetPrompt())
 			if prompt == "" {
-				_ = writeErrorForRequestAll(sid, reqID, "empty_prompt", fmt.Errorf("prompt is empty"), true, fanout, debugFanout)
+				_ = writeErrorForRequestAll(sid, reqID, "empty_prompt", fmt.Errorf("prompt is empty"), false, fanout, debugFanout)
 				_ = writeDoneForRequestAll(sid, reqID, "failed", fanout, debugFanout)
 				continue
 			}
@@ -1058,7 +1058,7 @@ func (g *PinocchioCommand) runStdinRPC(ctx context.Context, rc *run.RunContext) 
 			engine, err := rc.EngineFactory.CreateEngine(rc.InferenceSettings)
 			if err != nil {
 				state.mu.Unlock()
-				_ = writeErrorForRequestAll(sid, reqID, "engine_init_failed", err, true, fanout, debugFanout)
+				_ = writeErrorForRequestAll(sid, reqID, "engine_init_failed", err, false, fanout, debugFanout)
 				_ = writeDoneForRequestAll(sid, reqID, "failed", fanout, debugFanout)
 				continue
 			}
@@ -1086,7 +1086,7 @@ func (g *PinocchioCommand) runStdinRPC(ctx context.Context, rc *run.RunContext) 
 				})
 				close(active.started)
 				if err != nil {
-					_ = writeErrorForRequestAll(sid, reqID, "submit_failed", err, true, fanout, debugFanout)
+					_ = writeErrorForRequestAll(sid, reqID, "submit_failed", err, false, fanout, debugFanout)
 					_ = writeDoneForRequestAll(sid, reqID, "failed", fanout, debugFanout)
 					state.mu.Lock()
 					if state.active == active {
@@ -1100,7 +1100,7 @@ func (g *PinocchioCommand) runStdinRPC(ctx context.Context, rc *run.RunContext) 
 					return
 				}
 				if err := runner.Service.WaitIdle(ctx, sid); err != nil {
-					_ = writeErrorForRequestAll(sid, reqID, "wait_failed", err, true, fanout, debugFanout)
+					_ = writeErrorForRequestAll(sid, reqID, "wait_failed", err, false, fanout, debugFanout)
 					_ = writeDoneForRequestAll(sid, reqID, "failed", fanout, debugFanout)
 					state.mu.Lock()
 					if state.active == active {
@@ -1115,7 +1115,7 @@ func (g *PinocchioCommand) runStdinRPC(ctx context.Context, rc *run.RunContext) 
 				}
 				snap, err := runner.Service.Snapshot(ctx, sid)
 				if err != nil {
-					_ = writeErrorForRequestAll(sid, reqID, "snapshot_failed", err, true, fanout, debugFanout)
+					_ = writeErrorForRequestAll(sid, reqID, "snapshot_failed", err, false, fanout, debugFanout)
 					_ = writeDoneForRequestAll(sid, reqID, "failed", fanout, debugFanout)
 					state.mu.Lock()
 					if state.active == active {
@@ -1131,7 +1131,7 @@ func (g *PinocchioCommand) runStdinRPC(ctx context.Context, rc *run.RunContext) 
 				_ = writeSnapshotForRequestAll(reqID, snap, fanout, debugFanout)
 				status, runErr := statusFanout.Result()
 				if runErr != nil {
-					_ = writeErrorForRequestAll(sid, reqID, "run_failed", runErr, true, fanout, debugFanout)
+					_ = writeErrorForRequestAll(sid, reqID, "run_failed", runErr, false, fanout, debugFanout)
 				}
 				state.mu.Lock()
 				if state.active == active {
@@ -1155,7 +1155,7 @@ func (g *PinocchioCommand) runStdinRPC(ctx context.Context, rc *run.RunContext) 
 			waitActive()
 			snap, err := runner.Service.Snapshot(ctx, sid)
 			if err != nil {
-				_ = writeErrorForRequestAll(sid, reqID, "snapshot_failed", err, true, fanout, debugFanout)
+				_ = writeErrorForRequestAll(sid, reqID, "snapshot_failed", err, false, fanout, debugFanout)
 				_ = writeDoneForRequestAll(sid, reqID, "failed", fanout, debugFanout)
 				continue
 			}
@@ -1175,7 +1175,7 @@ func (g *PinocchioCommand) runStdinRPC(ctx context.Context, rc *run.RunContext) 
 			}
 			err := runner.Service.Stop(ctx, sid)
 			if err != nil {
-				_ = writeErrorForRequestAll(sid, reqID, "cancel_failed", err, true, fanout, debugFanout)
+				_ = writeErrorForRequestAll(sid, reqID, "cancel_failed", err, false, fanout, debugFanout)
 				_ = writeDoneForRequestAll(sid, reqID, "failed", fanout, debugFanout)
 				continue
 			}
@@ -1188,7 +1188,7 @@ func (g *PinocchioCommand) runStdinRPC(ctx context.Context, rc *run.RunContext) 
 			return state.currentTurn, nil
 		default:
 			waitActive()
-			_ = writeErrorForRequestAll(sid, reqID, "unknown_request", fmt.Errorf("request oneof is empty"), true, fanout, debugFanout)
+			_ = writeErrorForRequestAll(sid, reqID, "unknown_request", fmt.Errorf("request oneof is empty"), false, fanout, debugFanout)
 			_ = writeDoneForRequestAll(sid, reqID, "failed", fanout, debugFanout)
 		}
 	}

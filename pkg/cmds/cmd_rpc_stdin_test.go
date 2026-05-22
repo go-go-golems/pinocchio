@@ -187,6 +187,45 @@ func TestRunWithOptionsStdinRPCCancelWhileRunning(t *testing.T) {
 	require.Equal(t, "shutdown", done["shutdown"])
 }
 
+func TestRunWithOptionsStdinRPCRequestLocalErrorsAreNonTerminal(t *testing.T) {
+	cmd := newRPCStdinTestCommand(t)
+	inferenceSettings, err := settings.NewInferenceSettings()
+	require.NoError(t, err)
+
+	stdin := strings.NewReader(strings.Join([]string{
+		`{"version":1,"sessionId":"s1","requestId":"empty","submit":{"prompt":"   "}}`,
+		`{"version":1,"sessionId":"s1","requestId":"unknown"}`,
+		`{"version":1,"sessionId":"s1","requestId":"shutdown","shutdown":{}}`,
+	}, "\n") + "\n")
+	var out bytes.Buffer
+
+	_, err = cmd.RunWithOptions(context.Background(),
+		run.WithRunMode(run.RunModeRPCStdin),
+		run.WithReader(stdin),
+		run.WithWriter(&out),
+		run.WithInferenceSettings(inferenceSettings),
+		run.WithEngineFactory(countingEngineFactory{}),
+	)
+	require.NoError(t, err)
+
+	errorsByRequest := map[string]string{}
+	doneByRequest := map[string]string{}
+	for _, frame := range parseRPCLines(t, out.String()) {
+		if ef := frame.GetError(); ef != nil {
+			require.False(t, ef.GetTerminal(), "request-local error %s should be non-terminal", ef.GetCode())
+			errorsByRequest[frame.GetRequestId()] = ef.GetCode()
+		}
+		if df := frame.GetDone(); df != nil {
+			doneByRequest[frame.GetRequestId()] = df.GetStatus()
+		}
+	}
+	require.Equal(t, "empty_prompt", errorsByRequest["empty"])
+	require.Equal(t, "unknown_request", errorsByRequest["unknown"])
+	require.Equal(t, "failed", doneByRequest["empty"])
+	require.Equal(t, "failed", doneByRequest["unknown"])
+	require.Equal(t, "shutdown", doneByRequest["shutdown"])
+}
+
 func TestRunWithOptionsStdinRPCMalformedInputReportsError(t *testing.T) {
 	cmd := newRPCStdinTestCommand(t)
 	inferenceSettings, err := settings.NewInferenceSettings()

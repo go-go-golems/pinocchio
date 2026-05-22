@@ -1199,3 +1199,105 @@ PR comment URL:
 ```text
 https://github.com/go-go-golems/pinocchio/pull/156#issuecomment-4520970189
 ```
+
+## Step 11: Mark stdin RPC request-local failures as non-terminal
+
+This step addressed a PR review comment about terminal error semantics. The stdin RPC loop continued serving after request-local failures such as `empty_prompt`, but the error frame was marked `terminal=true`. That is inconsistent: terminal errors should mean the stream/process is no longer usable.
+
+I changed request-scoped failures in stdin RPC to emit non-terminal error frames. The process still emits a request `done.status = "failed"` for the failed request and continues serving later requests.
+
+### Prompt Context
+
+**User prompt (verbatim):** "pkg/cmds/cmd.go
+        case *chatapprpcv1.RpcRequestLine_Submit:
+            prompt := strings.TrimSpace(req.Submit.GetPrompt())
+            if prompt == "" {
+                _ = writeErrorForRequestAll(sid, reqID,
+
+---
+
+
+
+P1 Badge Mark request-local failures as non-terminal in stdin RPC
+
+This path emits error.terminal=true for a recoverable per-request validation error (empty_prompt) and then continues serving later requests, which violates the protocol meaning of terminal errors as non-recoverable stream failures. Clients that stop reading on terminal errors will incorrectly treat the session as dead and miss subsequent done/response frames. The same terminal/non-terminal distinction should be applied consistently to request-scoped failures that do not terminate the process."
+
+**Assistant interpretation:** Fix stdin RPC error frames so recoverable per-request failures are marked non-terminal, and cover the behavior with tests.
+
+**Inferred user intent:** The user wants PR review feedback addressed precisely so clients can rely on `error.terminal` to mean process/stream failure rather than request failure.
+
+**Commit (code):** 030385f — "rpc: mark stdin request errors non-terminal"
+
+### What I did
+
+- Updated `pkg/cmds/cmd.go` in `runStdinRPC` so request-scoped errors use `terminal=false`:
+  - `empty_prompt`;
+  - `engine_init_failed`;
+  - `submit_failed`;
+  - `wait_failed`;
+  - `snapshot_failed`;
+  - `run_failed`;
+  - `cancel_failed`;
+  - `unknown_request`.
+- Left process/stream failures as terminal, for example `stdin_read_failed` through `writeTerminalErrorDoneAll`.
+- Added `TestRunWithOptionsStdinRPCRequestLocalErrorsAreNonTerminal` to `pkg/cmds/cmd_rpc_stdin_test.go`.
+- The test sends:
+  - an empty prompt request;
+  - an unknown/empty oneof request;
+  - a shutdown request;
+  and asserts that request-local errors are non-terminal and the later shutdown still arrives.
+
+### Why
+
+- A client may stop reading if it sees `error.terminal=true`.
+- If the server continues serving after an error, that error must not be terminal.
+- The terminal flag should describe stream/process recoverability, not merely whether a request failed.
+
+### What worked
+
+Validation passed:
+
+```bash
+go test ./pkg/cmds -run 'TestRunWithOptionsStdinRPC' -count=1 -timeout=30s
+go test ./pkg/cmds ./pkg/chatapp/rpc/jsonl ./pkg/chatapp -count=1
+```
+
+### What didn't work
+
+- N/A.
+
+### What I learned
+
+- `done.status = "failed"` is the right request-level failure signal.
+- `error.terminal` should be reserved for failures after which the stream should be considered unusable.
+
+### What was tricky to build
+
+The tricky part is that some errors sound serious, such as `engine_init_failed`, but in the stdin RPC loop they are still request-local because the process can read and handle another request after emitting the failure. Therefore they should be non-terminal unless the process is actually returning or the transport is broken.
+
+### What warrants a second pair of eyes
+
+- Whether any request-local error should cause process shutdown by design. If so, the code should return after writing a terminal error instead of continuing.
+
+### What should be done in the future
+
+- Consider documenting the distinction explicitly in the RPC help topic: request errors use `done.status=failed`; terminal errors mean the stream is ending or unusable.
+
+### Code review instructions
+
+- Review `pkg/cmds/cmd.go` around `runStdinRPC` request error paths.
+- Review `pkg/cmds/cmd_rpc_stdin_test.go`, `TestRunWithOptionsStdinRPCRequestLocalErrorsAreNonTerminal`.
+- Validate with:
+
+```bash
+go test ./pkg/cmds -run 'TestRunWithOptionsStdinRPC' -count=1 -timeout=30s
+```
+
+### Technical details
+
+The corrected invariant is:
+
+```text
+request failed, server continues => error.terminal=false + done.status=failed
+stream/process failed, server returns/stops => error.terminal=true + done.status=failed
+```
