@@ -609,3 +609,167 @@ Expected response properties:
 - `cancel` receives `done.status = "ok"`;
 - the active submit receives `ChatRunStopped` and `done.status = "stopped"`;
 - shutdown waits for the stopped run and then receives `done.status = "shutdown"`.
+
+## Step 6: Respond to PR 156 with a multi-session RPC foundations guide
+
+This step responded to the PR 156 review comments by turning the concurrency concerns into a concrete architecture guide. The review identified that the current stdin RPC implementation uses mutable shared request-id and run-status state, which is not a safe foundation for concurrent multi-session operation.
+
+I created a new intern-ready design document that explains the current transport, chatapp/sessionstream flow, the bug class, and a proposed foundation based on request keys, request state, session actors, a request registry, request-aware fanout, and keyed run status tracking. The guide is stored in the existing stdin RPC ticket and uploaded to reMarkable.
+
+### Prompt Context
+
+**User prompt (verbatim):** "Address the code review comments in https://github.com/go-go-golems/pinocchio/pull/156 by reflecting on what data structxures / abstractions / design patterns we can use to actually properly handle multi-sessions, to get the proper foundations right away.
+
+Create  a detailed analysis / design / implementation guide that is for a new intern, explaining all the parts of the system needed to understand what it is, with prose paragraphs and bullet point sand pseudocode and diagrams and api references and file references. It should be very clear and technical. Store in the ticket and the nupload to remarkable."
+
+**Follow-up user prompt (verbatim):** "continue keeping a diary ofc"
+
+**Assistant interpretation:** Fetch and analyze PR 156 review comments, write a detailed implementation/design guide for a future refactor that correctly supports multi-session stdin RPC, store it in the docmgr ticket, upload it to reMarkable, and keep the diary current.
+
+**Inferred user intent:** The user wants the PR review addressed at the design level before more code is written, so the next implementation has correct abstractions instead of patching shared mutable state.
+
+**Commit (docs):** 511051c — "docs: design stdin RPC multisession foundations"
+
+### What I did
+
+- Fetched PR 156 inline review comments with:
+
+```bash
+gh api repos/go-go-golems/pinocchio/pulls/156/comments --paginate
+```
+
+- Captured the two P1 review concerns:
+  - shared mutable `request_id` stamping through `jsonl.UIFanout.SetRequestID`;
+  - shared mutable `runStatusFanout` state across concurrent sessions.
+- Created a new docmgr design document:
+  - `ttmp/2026/05/21/PIN-20260521-RPC-STDIN-MULTITURN--add-multi-turn-stdin-rpc-mode/design-doc/02-multi-session-rpc-foundations-and-pr-156-review-response.md`
+- The guide covers:
+  - current stdin RPC protobuf transport;
+  - chatapp `PromptRequest`, `InitialTurn`, `OnFinalTurn`, `Stop`, `WaitIdle`, `Snapshot`;
+  - sessionstream `UIFanout` flow;
+  - the current mutable-state bug class;
+  - proposed `RPCRequestKey`, `RPCRequestState`, `RPCSessionActor`, `RPCRequestRegistry`, `RequestAwareUIFanout`, and `RequestStatusStore` abstractions;
+  - actor-per-session design pattern;
+  - pseudocode and Mermaid diagrams;
+  - API and file references;
+  - phased implementation plan and test matrix.
+- Related the new design doc to the relevant source files with `docmgr doc relate`.
+- Updated changelog and tasks.
+- Validated frontmatter and ticket health:
+
+```bash
+docmgr validate frontmatter --doc 2026/05/21/PIN-20260521-RPC-STDIN-MULTITURN--add-multi-turn-stdin-rpc-mode/design-doc/02-multi-session-rpc-foundations-and-pr-156-review-response.md --suggest-fixes
+docmgr doctor --ticket PIN-20260521-RPC-STDIN-MULTITURN --stale-after 30
+```
+
+- Uploaded to reMarkable:
+
+```bash
+remarquee upload bundle \
+  ttmp/2026/05/21/PIN-20260521-RPC-STDIN-MULTITURN--add-multi-turn-stdin-rpc-mode/design-doc/02-multi-session-rpc-foundations-and-pr-156-review-response.md \
+  --name "PIN 20260521 RPC Multisession Foundations" \
+  --remote-dir "/ai/2026/05/22/PIN-20260521-RPC-STDIN-MULTITURN" \
+  --toc-depth 2 \
+  --non-interactive
+```
+
+### Why
+
+- The PR comments are architectural, not cosmetic. They identify that request id and status are request-scoped facts, but the current implementation stores them in process-shared mutable state.
+- A clear design guide gives the next implementer a safe path to refactor instead of layering more locks over the wrong ownership model.
+
+### What worked
+
+- `docmgr validate frontmatter` passed for the new guide.
+- `docmgr doctor --ticket PIN-20260521-RPC-STDIN-MULTITURN --stale-after 30` passed.
+- reMarkable upload succeeded:
+
+```text
+OK: uploaded PIN 20260521 RPC Multisession Foundations.pdf -> /ai/2026/05/22/PIN-20260521-RPC-STDIN-MULTITURN
+```
+
+### What didn't work
+
+- My first `docmgr validate frontmatter` invocation used a path prefixed with `ttmp/...`, which `docmgr` interpreted relative to the docs root and expanded to `ttmp/ttmp/...`:
+
+```text
+Error: open /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/ttmp/ttmp/2026/05/21/PIN-20260521-RPC-STDIN-MULTITURN--add-multi-turn-stdin-rpc-mode/design-doc/02-multi-session-rpc-foundations-and-pr-156-review-response.md: no such file or directory
+```
+
+I re-ran validation with the path relative to the doc root:
+
+```bash
+docmgr validate frontmatter --doc 2026/05/21/PIN-20260521-RPC-STDIN-MULTITURN--add-multi-turn-stdin-rpc-mode/design-doc/02-multi-session-rpc-foundations-and-pr-156-review-response.md --suggest-fixes
+```
+
+### What I learned
+
+- The best next implementation is not “make `SetRequestID` locked.” The issue is ownership: request id and status belong to a request, not to a shared adapter.
+- Because `sessionstream.UIFanout.PublishUI` receives `session_id`, and the protocol enforces one active submit per session, a request registry keyed by session is enough to fix concurrent multi-session request attribution without changing every chatapp event payload.
+
+### What was tricky to build
+
+The tricky part was designing a foundation that improves correctness without over-expanding the scope. Fully concurrent same-session submits would require event correlation by run id or message id. The recommended design avoids that by keeping one active submit per session, while allowing different sessions to run concurrently.
+
+The second tricky point is status ownership. It is tempting to keep the existing `runStatusFanout` and add locks, but locks would not prevent status cross-talk. The guide instead recommends a `RequestStatusStore` keyed by `RPCRequestKey` and updated by the same request-aware fanout that stamps frames.
+
+### What warrants a second pair of eyes
+
+- Whether the first refactor should use actor-per-session immediately, or whether a smaller request registry + keyed status store is enough for the next commit.
+- Whether `snapshot` during an active submit should wait, return a partial active snapshot, or be rejected.
+- Whether same-session overlapping submit should be rejected with `session_busy` or queued.
+
+### What should be done in the future
+
+- Implement the guide in phases:
+  1. request key/state/status types;
+  2. keyed status store;
+  3. request-aware fanout;
+  4. explicit request-keyed frame writer;
+  5. extracted stdin RPC server;
+  6. session actors;
+  7. PR 156 regression tests for concurrent sessions.
+- Update PR 156 with a comment pointing reviewers to the new guide and planned refactor.
+
+### Code review instructions
+
+- Start with the new guide:
+  - `ttmp/2026/05/21/PIN-20260521-RPC-STDIN-MULTITURN--add-multi-turn-stdin-rpc-mode/design-doc/02-multi-session-rpc-foundations-and-pr-156-review-response.md`
+- Compare it against the current implementation in:
+  - `pkg/cmds/cmd.go`, `runStdinRPC`;
+  - `pkg/chatapp/rpc/jsonl/fanout.go`;
+  - `pkg/cmds/run_status_fanout.go`.
+- Validate docs with:
+
+```bash
+docmgr doctor --ticket PIN-20260521-RPC-STDIN-MULTITURN --stale-after 30
+```
+
+### Technical details
+
+The proposed invariant is:
+
+> Every stdout frame caused by a request must derive its `request_id` from an `RPCRequestKey`, and every terminal run status must be stored under that same key.
+
+The central proposed types are:
+
+```go
+type RPCRequestKey struct {
+    SessionID sessionstream.SessionId
+    RequestID string
+}
+
+type RPCRequestState struct {
+    Key       RPCRequestKey
+    Kind      RPCRequestKind
+    Prompt    string
+    Done      chan struct{}
+    FinalTurn *turns.Turn
+    Status    RPCStatus
+}
+
+type RPCRequestRegistry struct {
+    activeBySession map[sessionstream.SessionId]*RPCRequestState
+    byKey           map[RPCRequestKey]*RPCRequestState
+}
+```

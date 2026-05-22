@@ -19,3 +19,5 @@
 - [x] Phase 5c: add stronger session isolation tests.
 - [x] Phase 6: run real subprocess smoke tests with a cheap profile.
 - [x] Update user-facing help once implementation lands.
+- [x] Write PR 156 multi-session RPC foundations guide
+- [x] Upload PR 156 multi-session RPC foundations guide to reMarkable

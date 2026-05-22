@@ -94,3 +94,52 @@ Recorded cancel-while-running commit 5f99604 in the diary.
 
 - /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/ttmp/2026/05/21/PIN-20260521-RPC-STDIN-MULTITURN--add-multi-turn-stdin-rpc-mode/reference/01-implementation-diary.md — Commit hash updated
 
+
+## 2026-05-22
+
+Added PR 156 multi-session RPC foundations guide covering request-scoped state, session actors, request-aware fanout, keyed status tracking, and implementation plan.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/chatapp/rpc/jsonl/fanout.go — Request id stamping review context
+- /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/cmds/cmd.go — Current concurrency problem context
+- /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/pkg/cmds/run_status_fanout.go — Status tracking review context
+- /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/ttmp/2026/05/21/PIN-20260521-RPC-STDIN-MULTITURN--add-multi-turn-stdin-rpc-mode/design-doc/02-multi-session-rpc-foundations-and-pr-156-review-response.md — New design guide
+
+
+## 2026-05-22
+
+Uploaded PR 156 multi-session RPC foundations guide to reMarkable at /ai/2026/05/22/PIN-20260521-RPC-STDIN-MULTITURN.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/ttmp/2026/05/21/PIN-20260521-RPC-STDIN-MULTITURN--add-multi-turn-stdin-rpc-mode/design-doc/02-multi-session-rpc-foundations-and-pr-156-review-response.md — Uploaded guide source
+
+
+## 2026-05-22
+
+Recorded diary Step 6 for PR 156 multi-session foundations guide and reMarkable upload.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/ttmp/2026/05/21/PIN-20260521-RPC-STDIN-MULTITURN--add-multi-turn-stdin-rpc-mode/design-doc/02-multi-session-rpc-foundations-and-pr-156-review-response.md — Guide referenced by diary
+- /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/ttmp/2026/05/21/PIN-20260521-RPC-STDIN-MULTITURN--add-multi-turn-stdin-rpc-mode/reference/01-implementation-diary.md — Diary Step 6
+
+
+## 2026-05-22
+
+Recorded docs commit 4124c7e for PR 156 multi-session foundations guide.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/ttmp/2026/05/21/PIN-20260521-RPC-STDIN-MULTITURN--add-multi-turn-stdin-rpc-mode/reference/01-implementation-diary.md — Commit hash updated
+
+
+## 2026-05-22
+
+Corrected diary commit hash after amend to 511051c.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/ttmp/2026/05/21/PIN-20260521-RPC-STDIN-MULTITURN--add-multi-turn-stdin-rpc-mode/reference/01-implementation-diary.md — Commit hash corrected
+
