@@ -1017,7 +1017,7 @@ The first smoke intentionally demonstrated the new strictness: a different sessi
 
 **Inferred user intent:** The user wants the simplified contract to be documented, implemented, validated, and archived for future reviewers.
 
-**Commit (docs):** 4def508 — "docs: record single-session stdin RPC completion"
+**Commit (docs):** 103f714 — "docs: record single-session stdin RPC completion"
 
 ### What I did
 
