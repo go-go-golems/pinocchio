@@ -152,3 +152,21 @@ Posted PR 156 comment linking to the multi-session RPC foundations guide.
 
 - /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/ttmp/2026/05/21/PIN-20260521-RPC-STDIN-MULTITURN--add-multi-turn-stdin-rpc-mode/reference/01-implementation-diary.md — PR comment recorded
 
+
+## 2026-05-22
+
+Added single-session stdin RPC implementation guide choosing one conversation per process for simplicity.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/ttmp/2026/05/21/PIN-20260521-RPC-STDIN-MULTITURN--add-multi-turn-stdin-rpc-mode/design-doc/03-single-session-stdin-rpc-implementation-guide.md — New implementation guide
+
+
+## 2026-05-22
+
+Recorded single-session guide commit d324461 in diary.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/ttmp/2026/05/21/PIN-20260521-RPC-STDIN-MULTITURN--add-multi-turn-stdin-rpc-mode/reference/01-implementation-diary.md — Step 7 commit hash
+

@@ -776,3 +776,109 @@ type RPCRequestRegistry struct {
     byKey           map[RPCRequestKey]*RPCRequestState
 }
 ```
+
+## Step 7: Choose and document the single-session stdin RPC approach
+
+This step records the decision to simplify stdin RPC around a single-session process model. Instead of turning the current implementation into a multi-session daemon, the process boundary becomes the session boundary: one stdin/stdout RPC process owns one conversation, and clients that need another independent conversation should start another process.
+
+I wrote a dedicated implementation guide for this approach before touching code. The guide explains the contract, state model, request-id behavior, cancellation rules, error codes, pseudocode, diagrams, implementation tasks, tests, and review checklist for a new intern.
+
+### Prompt Context
+
+**User prompt (verbatim):** "Ok, create a separate implementation guide for the single session approach, with all the information above. Then implement the single session solution, since we are going for elegance and simplicity. Add the relevant tasks, work task by taks, commit at appropriat eintervals, and keep a detailed diary as you work"
+
+**Assistant interpretation:** Create a separate guide for the single-session stdin RPC design, add tasks, implement the design in small steps with commits, and keep the diary current.
+
+**Inferred user intent:** The user wants to address PR 156 by narrowing the runtime contract rather than building full multi-session support, while preserving durable docs and reviewability.
+
+**Commit (docs):** d324461 — "docs: design single-session stdin RPC"
+
+### What I did
+
+- Added a new docmgr design document:
+  - `ttmp/2026/05/21/PIN-20260521-RPC-STDIN-MULTITURN--add-multi-turn-stdin-rpc-mode/design-doc/03-single-session-stdin-rpc-implementation-guide.md`
+- Added new ticket tasks for:
+  - writing the guide;
+  - implementing single-session enforcement;
+  - adding tests;
+  - updating user-facing docs;
+  - validating/uploading/recording diary.
+- Wrote the guide with:
+  - the `one RPC process = one conversation/session` contract;
+  - first-request session binding;
+  - `session_mismatch` semantics;
+  - `session_busy` semantics;
+  - cancel/request-id behavior;
+  - proposed state structs;
+  - pseudocode;
+  - Mermaid diagrams;
+  - implementation plan;
+  - review checklist.
+- Related the guide to the relevant source files.
+- Checked the guide-writing task.
+
+### Why
+
+- The multi-session foundations guide is correct but heavier than needed if subprocess clients can simply spawn another process per conversation.
+- Single-session RPC is easier to reason about, easier to test, and aligns with a clean Unix-style process boundary.
+- Even with single-session semantics, cancel can overlap with submit, so the guide still requires explicit request-id handling for control frames.
+
+### What worked
+
+- `docmgr doctor --ticket PIN-20260521-RPC-STDIN-MULTITURN --stale-after 30` passed after adding the guide and relationships.
+
+### What didn't work
+
+- N/A for this step.
+
+### What I learned
+
+- The simplest robust contract is not merely “do not use multiple sessions”; it must be enforced in protocol behavior with `session_mismatch` and `session_busy` errors.
+- Narrowing the contract still requires improving request-id attribution for cancel/control frames, because cancel is intentionally concurrent with the active submit.
+
+### What was tricky to build
+
+The tricky part was deciding how much of the multi-session design to keep. The guide keeps the useful insight that request-specific control frames should carry explicit request ids, but drops the heavier maps, actors, and request registries in favor of one bound session and one active submit.
+
+### What warrants a second pair of eyes
+
+- Whether first-request binding is better than requiring `--session-id` at process start.
+- Whether snapshot during an active submit should wait, return a partial snapshot, or be rejected.
+- Whether `session_busy` should be non-terminal `failed` or a separate status value.
+
+### What should be done in the future
+
+- Implement explicit request-id frame helpers.
+- Refactor `runStdinRPC` to single-session state.
+- Add tests for session mismatch, busy submit, cancel attribution, and sequential accumulation.
+- Update user-facing RPC docs.
+- Upload the new guide to reMarkable after validation.
+
+### Code review instructions
+
+- Start with the new guide:
+  - `ttmp/2026/05/21/PIN-20260521-RPC-STDIN-MULTITURN--add-multi-turn-stdin-rpc-mode/design-doc/03-single-session-stdin-rpc-implementation-guide.md`
+- Compare it to:
+  - `pkg/cmds/cmd.go`, `runStdinRPC`;
+  - `pkg/chatapp/rpc/jsonl/fanout.go`;
+  - `pkg/cmds/cmd_rpc_stdin_test.go`.
+
+### Technical details
+
+The chosen invariant is:
+
+```text
+one stdin/stdout RPC process = one bound session = one model-context accumulator
+```
+
+The main proposed state shape is:
+
+```go
+type stdinRPCSingleSessionState struct {
+    mu sync.Mutex
+
+    boundSessionID sessionstream.SessionId
+    currentTurn    *turns.Turn
+    active         *stdinRPCActiveSubmit
+}
+```

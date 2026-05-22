@@ -21,3 +21,8 @@
 - [x] Update user-facing help once implementation lands.
 - [x] Write PR 156 multi-session RPC foundations guide
 - [x] Upload PR 156 multi-session RPC foundations guide to reMarkable
+- [x] Write single-session stdin RPC implementation guide
+- [ ] Implement single-session stdin RPC enforcement and request attribution
+- [ ] Add tests for session mismatch, busy submit, cancel attribution, and sequential accumulation
+- [ ] Update user-facing RPC docs for single-session semantics
+- [ ] Validate, upload single-session guide to reMarkable, and record diary
