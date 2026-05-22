@@ -791,7 +791,7 @@ I wrote a dedicated implementation guide for this approach before touching code.
 
 **Inferred user intent:** The user wants to address PR 156 by narrowing the runtime contract rather than building full multi-session support, while preserving durable docs and reviewability.
 
-**Commit (docs):** d324461 — "docs: design single-session stdin RPC"
+**Commit (docs):** 3dda948 — "docs: design single-session stdin RPC"
 
 ### What I did
 
@@ -881,4 +881,254 @@ type stdinRPCSingleSessionState struct {
     currentTurn    *turns.Turn
     active         *stdinRPCActiveSubmit
 }
+```
+
+## Step 8: Implement single-session stdin RPC enforcement
+
+This step implemented the single-session design. The stdin RPC process now binds to one session id, rejects different session ids, rejects overlapping submit requests, and keeps cancel as the only request that can overlap with an active submit.
+
+I also fixed request attribution for control frames. Cancel, session mismatch, session busy, snapshot, and shutdown responses now write explicit request ids instead of mutating the active submit's UI-event request id. This keeps active submit events under the submit request id even when a cancel request is processed concurrently.
+
+### Prompt Context
+
+**User prompt (verbatim):** (same as Step 7)
+
+**Assistant interpretation:** Implement the single-session stdin RPC solution after writing the guide, with tests, docs, validation, and commits.
+
+**Inferred user intent:** The user wants the simpler process-per-session contract implemented as the concrete response to PR 156.
+
+**Commit (code):** 731eafd — "rpc: enforce single-session stdin mode"
+
+### What I did
+
+- Added explicit request-id helpers in `pkg/chatapp/rpc/jsonl/fanout.go`:
+  - `WriteHelloForRequest`;
+  - `WriteErrorForRequest`;
+  - `WriteDoneForRequest`;
+  - `WriteSnapshotForRequest`.
+- Refactored `pkg/cmds/cmd.go`, `runStdinRPC`:
+  - removed multi-session maps;
+  - added bound-session state;
+  - added one `currentTurn` accumulator;
+  - added one active submit slot;
+  - added `session_mismatch` for different session ids;
+  - added `session_busy` for submit while active;
+  - kept async submit so cancel can be read while a run is active;
+  - kept cancel as a control request that writes its own request id;
+  - advertised `single-session`, `multi-turn`, and `cancel` capabilities.
+- Updated `pkg/cmds/cmd_rpc_stdin_test.go`:
+  - sequential multi-turn test now models a client that waits between submit lines;
+  - added `TestRunWithOptionsStdinRPCRejectsDifferentSession`;
+  - added `TestRunWithOptionsStdinRPCRejectsSubmitWhileActive`;
+  - strengthened cancel test to assert active submit UI frames are not stamped with the cancel request id.
+- Updated user-facing docs:
+  - `cmd/pinocchio/doc/general/06-rpc-jsonl-output.md`
+  - documented one process per conversation, first-request binding, `session_mismatch`, `session_busy`, and cancel request-id behavior.
+
+### Why
+
+- This enforces the chosen elegant contract instead of leaving accidental multi-session behavior in place.
+- Explicit request-id frame helpers avoid the core PR 156 problem for control frames while retaining a simple single active submit UI-event path.
+
+### What worked
+
+- Focused stdin RPC tests passed:
+
+```bash
+go test ./pkg/cmds -run 'TestRunWithOptionsStdinRPC' -count=1 -timeout=30s
+```
+
+- Targeted package tests passed:
+
+```bash
+go test ./pkg/cmds ./pkg/chatapp/rpc/jsonl ./pkg/chatapp -count=1
+```
+
+- Pre-commit hook passed on the code commit, including:
+  - `go generate ./...`;
+  - frontend build;
+  - `go build ./...`;
+  - golangci-lint;
+  - geppetto-lint vet;
+  - `go test ./...`.
+
+### What didn't work
+
+- The old tests sent multiple submit lines through a pre-buffered `strings.Reader`. With the new `session_busy` semantics, the scanner can read the second submit before the first asynchronous submit has completed, so the old test expected sequential queuing that no longer exists.
+- I updated the sequential multi-turn test to use an `io.Pipe` with short delays. This better models the new client contract: wait for a submit's `done` frame before sending the next submit.
+
+### What I learned
+
+- Single-session does not mean fully synchronous. Cancel support still requires the stdin scanner to keep reading while submit is running.
+- The important distinction is between active submit UI frames and control frames. Active submit UI frames can use the active submit request id; control frames must write explicit request ids.
+
+### What was tricky to build
+
+The tricky part was preserving cancel-while-running while rejecting overlapping submits. The implementation keeps submit asynchronous, but only cancel is allowed to pass through while active. Other submit attempts fail with `session_busy`; shutdown waits for the active run to finish or stop.
+
+Another tricky point was final-turn updates. `currentTurn` must update only when the active submit finishes successfully with status `ok` and a non-nil `finalTurn`. Canceled or failed runs do not advance model context.
+
+### What warrants a second pair of eyes
+
+- The implementation still lives inside `runStdinRPC`; it could be extracted into a smaller single-session server type later.
+- The sequential multi-turn test uses short delays to simulate waiting clients. A future subprocess integration test could wait for actual `done` frames instead.
+- Whether `snapshot` while active should return `session_busy`, wait, or return a partial snapshot. The current behavior waits via `waitActive()`.
+
+### What should be done in the future
+
+- Run a real subprocess smoke with `PINOCCHIO_PROFILE=gpt-5-nano-low` after the docs upload.
+- Optionally extract single-session state into `pkg/cmds/stdin_rpc_single_session.go` for readability.
+- If true multi-session support is ever needed, use the separate multi-session foundations guide instead of loosening this code ad hoc.
+
+### Code review instructions
+
+- Start with `pkg/cmds/cmd.go`, `runStdinRPC`, especially:
+  - `bindOrValidateSession`;
+  - `session_busy` path;
+  - cancel path;
+  - active submit goroutine;
+  - explicit request-id frame helpers.
+- Then review `pkg/chatapp/rpc/jsonl/fanout.go` for explicit request-id methods.
+- Then review `pkg/cmds/cmd_rpc_stdin_test.go` for single-session behavior coverage.
+- Finally review `cmd/pinocchio/doc/general/06-rpc-jsonl-output.md` for user-facing semantics.
+
+### Technical details
+
+New protocol semantics:
+
+```text
+first valid request binds session_id
+later different session_id => error.code=session_mismatch, done.status=failed
+second submit while active => error.code=session_busy, done.status=failed
+cancel while active => cancel done.status=ok; submit request later gets stopped
+```
+
+## Step 9: Upload the single-session guide and smoke-test the final behavior
+
+This step closed the single-session implementation loop by uploading the guide to reMarkable and running real subprocess smokes against the implemented behavior.
+
+The first smoke intentionally demonstrated the new strictness: a different session id is rejected with `session_mismatch`, and a submit sent before the active run completed is rejected with `session_busy`. The second smoke used a small Python subprocess driver that waits for each request's `done` frame before sending the next submit; that verified the intended sequential multi-turn client contract.
+
+### Prompt Context
+
+**User prompt (verbatim):** (same as Step 7)
+
+**Assistant interpretation:** Finish the single-session implementation by validating behavior, uploading the guide, and recording outcomes.
+
+**Inferred user intent:** The user wants the simplified contract to be documented, implemented, validated, and archived for future reviewers.
+
+**Commit (docs):** 4def508 — "docs: record single-session stdin RPC completion"
+
+### What I did
+
+- Validated the new single-session guide frontmatter:
+
+```bash
+docmgr validate frontmatter --doc 2026/05/21/PIN-20260521-RPC-STDIN-MULTITURN--add-multi-turn-stdin-rpc-mode/design-doc/03-single-session-stdin-rpc-implementation-guide.md --suggest-fixes
+```
+
+- Ran ticket doctor:
+
+```bash
+docmgr doctor --ticket PIN-20260521-RPC-STDIN-MULTITURN --stale-after 30
+```
+
+- Uploaded the guide to reMarkable:
+
+```bash
+remarquee upload bundle \
+  ttmp/2026/05/21/PIN-20260521-RPC-STDIN-MULTITURN--add-multi-turn-stdin-rpc-mode/design-doc/03-single-session-stdin-rpc-implementation-guide.md \
+  --name "PIN 20260521 RPC Single Session Guide" \
+  --remote-dir "/ai/2026/05/22/PIN-20260521-RPC-STDIN-MULTITURN" \
+  --toc-depth 2 \
+  --non-interactive
+```
+
+- Ran a real subprocess smoke that showed strict errors:
+  - `session_mismatch` for `other-smoke` after binding to `single-smoke`;
+  - `session_busy` for a submit sent before the first run had completed;
+  - shutdown completed.
+- Ran a real sequential subprocess smoke with `PINOCCHIO_PROFILE=gpt-5-nano-low` using a Python driver that waits for `done` before sending the next request.
+
+### Why
+
+- The guide needed to be uploaded because the user requested reMarkable delivery.
+- The real smokes validate both sides of the new contract:
+  - strict rejection for invalid concurrent/multi-session use;
+  - successful sequential multi-turn operation when the client waits for `done`.
+
+### What worked
+
+- reMarkable upload succeeded:
+
+```text
+OK: uploaded PIN 20260521 RPC Single Session Guide.pdf -> /ai/2026/05/22/PIN-20260521-RPC-STDIN-MULTITURN
+```
+
+- Strictness smoke exited `0` and emitted:
+
+```text
+requestId="bad-session" error.code="session_mismatch"
+requestId="bad-session" done.status="failed"
+requestId="r2" error.code="session_busy"
+requestId="r2" done.status="failed"
+requestId="r3" done.status="shutdown"
+```
+
+- Sequential smoke exited `0` and printed:
+
+```text
+r1 ok
+r2 ok
+r3 shutdown
+exit 0
+frames 26
+stderr
+```
+
+### What didn't work
+
+- The first real smoke tried to send the second valid submit after a fixed `sleep 5`. The provider call was still active, so the server correctly returned `session_busy`. This was a useful confirmation of the new contract, but it was not a sequential-success smoke.
+- I followed up with a Python driver that waits for `done` frames before sending the next request.
+
+### What I learned
+
+- The single-session contract is clear in practice: clients must treat `done` as the synchronization point for the next submit.
+- Fixed sleeps are not a reliable way to model sequential RPC clients because provider latency varies.
+
+### What was tricky to build
+
+The tricky part in validation was distinguishing strictness tests from success tests. A shell pipeline with pre-scheduled writes is useful for proving `session_busy`, while a real client must read stdout and send the next submit only after seeing `done` for the previous request.
+
+### What warrants a second pair of eyes
+
+- Whether the user docs should include a tiny client loop example that waits for `done`.
+- Whether `session_busy` should mention “wait for done before submitting again” in the error message.
+
+### What should be done in the future
+
+- Optionally add a small sample stdin RPC client script under `examples/` or docs.
+- Optionally post a PR 156 comment explaining that the chosen resolution is single-session enforcement rather than full multi-session support.
+
+### Code review instructions
+
+- Review the uploaded guide source:
+  - `ttmp/2026/05/21/PIN-20260521-RPC-STDIN-MULTITURN--add-multi-turn-stdin-rpc-mode/design-doc/03-single-session-stdin-rpc-implementation-guide.md`
+- Validate with:
+
+```bash
+docmgr doctor --ticket PIN-20260521-RPC-STDIN-MULTITURN --stale-after 30
+```
+
+### Technical details
+
+Sequential smoke command shape:
+
+```python
+send({"version":1,"sessionId":"seq-smoke","requestId":"r1","submit":{"prompt":"Reply with exactly: one"}})
+read_until_done("r1")
+send({"version":1,"sessionId":"seq-smoke","requestId":"r2","submit":{"prompt":"Reply with exactly: two"}})
+read_until_done("r2")
+send({"version":1,"sessionId":"seq-smoke","requestId":"r3","shutdown":{}})
+read_until_done("r3")
 ```
