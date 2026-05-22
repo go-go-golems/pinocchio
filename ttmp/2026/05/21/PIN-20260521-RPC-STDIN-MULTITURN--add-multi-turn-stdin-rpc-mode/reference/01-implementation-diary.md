@@ -499,3 +499,113 @@ requestId="r2" done.status="ok"
 requestId="r3" done.status="shutdown"
 stderr empty
 ```
+
+## Step 5: Support and test cancel while a stdin RPC submit is running
+
+This step addressed the remaining validation gap around cancellation. The first stdin RPC implementation waited for each submit to finish before reading the next stdin line, which made a cancel request impossible to process while a provider call was still running.
+
+I changed the stdin RPC loop so submit handling runs asynchronously per active session while the scanner continues reading stdin. Normal submit/snapshot/shutdown requests still wait for an active run to finish, preserving sequential behavior for piped multi-turn scripts. Cancel requests are special: they are allowed through while a run is active and call `Service.Stop` for that session.
+
+### Prompt Context
+
+**User prompt (verbatim):** "add cancel while running"
+
+**Assistant interpretation:** Implement and test the ability for stdin RPC clients to send a cancel request while a previous submit request is still in flight.
+
+**Inferred user intent:** The user wants cancellation to be a real runtime behavior, not merely a request type that only works after inference has already completed.
+
+**Commit (code):** 5f99604 — "rpc: support stdin cancel while running"
+
+### What I did
+
+- Updated `PinocchioCommand.runStdinRPC` in `pkg/cmds/cmd.go`:
+  - added per-session active run tracking;
+  - submit requests now start the inference/wait/snapshot/done path in a goroutine;
+  - follow-up submit/snapshot/shutdown requests wait for the active session run;
+  - cancel requests do not wait for completion and instead call `runner.Service.Stop(ctx, sid)`;
+  - shutdown waits for active runs before emitting shutdown done.
+- Added `TestRunWithOptionsStdinRPCCancelWhileRunning` in `pkg/cmds/cmd_rpc_stdin_test.go`:
+  - uses an `io.Pipe` to send submit first;
+  - waits briefly so the run is active;
+  - sends cancel and shutdown;
+  - uses a blocking fake engine that exits only when its context is canceled;
+  - asserts `ChatRunStopped`, cancel `done.status = "ok"`, submit `done.status = "stopped"`, and shutdown `done.status = "shutdown"`.
+
+### Why
+
+- A long-lived stdin RPC process must be able to react to operator/client cancellation while inference is still running.
+- Without asynchronous submit handling, cancel lines stay unread in stdin until after `WaitIdle` returns, which defeats the purpose of cancellation.
+
+### What worked
+
+- Focused cancel test passed:
+
+```bash
+go test ./pkg/cmds -run 'TestRunWithOptionsStdinRPCCancelWhileRunning' -count=1 -timeout=20s
+```
+
+- All stdin RPC tests passed:
+
+```bash
+go test ./pkg/cmds -run 'TestRunWithOptionsStdinRPC' -count=1 -timeout=30s
+```
+
+- Targeted package tests passed:
+
+```bash
+go test ./pkg/cmds ./pkg/chatapp/rpc/jsonl ./pkg/chatapp -count=1
+```
+
+### What didn't work
+
+- The first attempt at the cancel test sent submit, cancel, and shutdown as pre-buffered stdin lines. That exposed the actual implementation problem: the original synchronous submit path did not read cancel until after the blocking engine completed, so the test timed out.
+- After making submit asynchronous, a too-immediate cancel could still race ahead of chatapp's active run registration. I fixed the test to model a real client by writing the cancel after a short delay via `io.Pipe`.
+
+### What I learned
+
+- Cancel semantics require the stdin reader loop to remain alive during inference.
+- The current request-id fanout remains fundamentally sequential. The implementation preserves that by allowing only cancel to bypass active-run waiting; other request types wait for active runs before writing their response frames.
+
+### What was tricky to build
+
+The tricky part was adding enough asynchrony for cancellation without turning the first implementation into a fully concurrent multi-session server. The request-id stamping model is mutable on the fanout, so unrestricted concurrent submits would risk stamping frames with the wrong request id.
+
+The compromise is deliberately conservative: submit runs asynchronously so cancel can be read, but normal requests wait for active runs. This preserves existing piped sequential multi-turn behavior and makes cancel usable.
+
+### What warrants a second pair of eyes
+
+- Request-id stamping is still mutable fanout state. The current code is intentionally conservative, but future concurrent per-session processing should replace it with request-scoped event attribution.
+- The cancel test uses a short delay to let the active run start. This is enough for coverage but not a formal protocol-level acknowledgement that a run is cancellable.
+- The code does not yet emit a separate `cancelled` status for the cancel request; cancel itself returns `ok`, while the submit request returns `stopped`.
+
+### What should be done in the future
+
+- Consider adding an explicit `accepted`/`started` response for submit requests if clients need deterministic timing for cancellation.
+- If concurrent sessions are required, replace global mutable fanout request-id state with request-scoped routing or event correlation.
+
+### Code review instructions
+
+- Start with `pkg/cmds/cmd.go`, `runStdinRPC`, especially active-run tracking and cancel handling.
+- Then review `pkg/cmds/cmd_rpc_stdin_test.go`, `TestRunWithOptionsStdinRPCCancelWhileRunning`.
+- Validate with:
+
+```bash
+go test ./pkg/cmds -run 'TestRunWithOptionsStdinRPC' -count=1 -timeout=30s
+go test ./pkg/cmds ./pkg/chatapp/rpc/jsonl ./pkg/chatapp -count=1
+```
+
+### Technical details
+
+Cancel request behavior after this step:
+
+```jsonl
+{"version":1,"sessionId":"s1","requestId":"run","submit":{"prompt":"block until canceled"}}
+{"version":1,"sessionId":"s1","requestId":"cancel","cancel":{}}
+{"version":1,"sessionId":"s1","requestId":"shutdown","shutdown":{}}
+```
+
+Expected response properties:
+
+- `cancel` receives `done.status = "ok"`;
+- the active submit receives `ChatRunStopped` and `done.status = "stopped"`;
+- shutdown waits for the stopped run and then receives `done.status = "shutdown"`.
