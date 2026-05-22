@@ -13,6 +13,12 @@ DocType: reference
 Intent: long-term
 Owners: []
 RelatedFiles:
+    - Path: cmd/pinocchio/doc/general/06-rpc-jsonl-output.md
+      Note: User-facing stdin RPC documentation
+    - Path: pkg/chatapp/rpc/jsonl/fanout.go
+      Note: Request-id-aware JSONL fanout
+    - Path: pkg/chatapp/rpc/jsonl/writer.go
+      Note: Request-id line helper
     - Path: pkg/chatapp/runtime_inference.go
       Note: InitialTurn and OnFinalTurn semantics that shape the design
     - Path: pkg/chatapp/service.go
@@ -21,10 +27,18 @@ RelatedFiles:
       Note: |-
         Current one-shot RPC implementation and future stdin RPC entry point
         Current RPC implementation inspected for Step 1
+        Stdin RPC server and run mode dispatch
+    - Path: pkg/cmds/cmd_rpc_stdin_test.go
+      Note: Multi-turn stdin RPC tests
+    - Path: pkg/cmds/cmdlayers/helpers.go
+      Note: stdin-rpc helper flag
+    - Path: pkg/cmds/run/context.go
+      Note: Reader and RunModeRPCStdin
     - Path: proto/pinocchio/chatapp/rpc/v1/rpc.proto
       Note: |-
         Existing RpcLine contract and future request proto location
         RPC contract inspected for Step 1
+        Stdin RpcRequestLine contract
     - Path: ttmp/2026/05/21/PIN-20260521-RPC-STDIN-MULTITURN--add-multi-turn-stdin-rpc-mode/design-doc/01-multi-turn-stdin-stdout-rpc-mode.md
       Note: Design produced in Step 1
 ExternalSources: []
@@ -33,6 +47,7 @@ LastUpdated: 2026-05-21T17:30:00-04:00
 WhatFor: Track design decisions, implementation guidance, validation, and future notes for stdin-driven multi-turn Pinocchio RPC.
 WhenToUse: Read before implementing or reviewing PIN-20260521-RPC-STDIN-MULTITURN.
 ---
+
 
 
 # Diary
@@ -237,3 +252,138 @@ Canonical ticket path:
 ```text
 ttmp/2026/05/21/PIN-20260521-RPC-STDIN-MULTITURN--add-multi-turn-stdin-rpc-mode
 ```
+
+## Step 3: Implement first-pass stdin multi-turn RPC
+
+This step implemented the first process-local version of the multi-turn stdin/stdout RPC mode. The existing one-shot `--rpc` / `--output jsonl` behavior remains unchanged; the new long-lived mode is explicit via `--stdin-rpc`.
+
+The implementation reads protobuf JSON `RpcRequestLine` values from stdin, stamps stdout `RpcLine` frames with the active request id, and keeps an in-memory `map[session_id]*turns.Turn` accumulator. Each successful submit stores the final Geppetto turn returned through `PromptRequest.OnFinalTurn`, and the next submit for the same session appends the new user prompt to that final turn.
+
+### Prompt Context
+
+**User prompt (verbatim):** "not yet. 
+
+Lets add tasks to the ticket, and implemlent the feature, commit at appropriate intervals. Keep a diary"
+
+**Assistant interpretation:** Add/adjust implementation tasks for the multi-turn RPC ticket, implement the stdin RPC feature, validate it, and keep the implementation diary current.
+
+**Inferred user intent:** The user wants the designed multi-turn stdin/stdout RPC mode implemented now, while preserving ticket bookkeeping and reviewable commits.
+
+**Commit (code):** d6f307a — "rpc: add stdin multiturn mode"
+
+### What I did
+
+- Extended `proto/pinocchio/chatapp/rpc/v1/rpc.proto` with `RpcRequestLine` and request messages:
+  - `SubmitPromptRequest`
+  - `CancelRequest`
+  - `SnapshotRequest`
+  - `ShutdownRequest`
+- Ran `make proto-gen` to regenerate Go and TypeScript protobuf bindings.
+- Added request-id stamping support to `pkg/chatapp/rpc/jsonl`:
+  - `WithRequestID` helper;
+  - `UIFanout.SetRequestID`;
+  - request id propagation for UI, snapshot, hello, error, done, and backend frames.
+- Added `--stdin-rpc` helper flag and `run.RunModeRPCStdin`.
+- Added `Reader io.Reader` to `run.RunContext` for testable stdin injection.
+- Implemented `PinocchioCommand.runStdinRPC`:
+  - emits initial hello;
+  - scans stdin JSONL;
+  - handles submit/snapshot/cancel/shutdown;
+  - maintains server-held final-turn accumulators by session id;
+  - emits request-scoped done/error/snapshot frames.
+- Added `pkg/cmds/cmd_rpc_stdin_test.go` for multi-turn accumulation and malformed JSON recovery.
+- Updated user docs in `cmd/pinocchio/doc/general/06-rpc-jsonl-output.md`.
+- Updated ticket tasks.
+
+### Why
+
+- Multi-turn subprocess clients need one process that can accept multiple prompt submissions.
+- Existing stdout `RpcLine` already has `request_id`; the missing half was stdin request input and request-aware fanout stamping.
+- Keeping state process-local avoids taking on durable session semantics in the first implementation.
+
+### What worked
+
+- Targeted Go tests passed:
+
+```bash
+go test ./pkg/cmds ./pkg/chatapp/rpc/jsonl ./pkg/chatapp -count=1
+make schema-vet
+go test ./pkg/cmds ./pkg/chatapp/rpc/jsonl ./pkg/chatapp -count=1
+```
+
+- Frontend typecheck passed after protobuf generation:
+
+```bash
+cd cmd/web-chat/web && npm run typecheck
+```
+
+- Biome import ordering needed a generated-file fix, then lint passed:
+
+```bash
+cd cmd/web-chat/web && npx --yes @biomejs/biome@2.3.8 check --write \
+  src/chatapp/pb/proto/pinocchio/chatapp/rpc/v1/rpc_pb.ts \
+  src/chatapp/pb/proto/pinocchio/chatapp/v1/chat_pb.ts
+cd cmd/web-chat/web && npm run lint
+```
+
+### What didn't work
+
+- Initial frontend lint failed after `make proto-gen` because generated TypeScript imports were not sorted:
+
+```text
+src/chatapp/pb/proto/pinocchio/chatapp/rpc/v1/rpc_pb.ts:5:1 FIXABLE
+The imports and exports are not sorted.
+
+src/chatapp/pb/proto/pinocchio/chatapp/v1/chat_pb.ts:5:1 FIXABLE
+The imports and exports are not sorted.
+```
+
+I fixed it with Biome `check --write` on the generated protobuf TypeScript files.
+
+### What I learned
+
+- The existing one-shot RPC path and TUI persistence work provided almost all required seams: `PromptRequest.InitialTurn`, `PromptRequest.OnFinalTurn`, and `sessionstream.UIFanout` were sufficient for first-pass multi-turn behavior.
+- Request id stamping is easiest as mutable state on the JSONL fanout because the first implementation processes one request at a time.
+
+### What was tricky to build
+
+The tricky part was keeping protocol concerns separate from model-context accumulation. `RpcRequestLine` carries client intent, `RpcLine` carries projected state, and only final `turns.Turn` values update model context. The implementation does not reconstruct context from snapshots.
+
+Another subtle point is run status. A single runner/fanout is reused across requests, so `runStatusFanout` needed a `Reset` method to avoid leaking terminal status between submissions.
+
+### What warrants a second pair of eyes
+
+- `CancelRequest` currently submits `Service.Stop` and emits done, but there is not yet a concurrent test that cancels an in-flight provider call.
+- The first implementation is sequential and process-local. It intentionally does not support overlapping submits in the same session.
+- Request id stamping is fanout-local mutable state; this is correct for sequential handling but would need redesign for concurrent request processing.
+
+### What should be done in the future
+
+- Add session isolation tests with interleaved session ids.
+- Add cancel-while-running tests with a blocking fake engine.
+- Run a real subprocess smoke test with a cheap profile.
+- Consider durable accumulator persistence only after process-local semantics are stable.
+
+### Code review instructions
+
+- Start with `proto/pinocchio/chatapp/rpc/v1/rpc.proto` to review the request contract.
+- Then review `pkg/cmds/cmd.go`, especially `runStdinRPC` and `turnWithUserPrompt`.
+- Review `pkg/chatapp/rpc/jsonl/fanout.go` for request-id stamping.
+- Review `pkg/cmds/cmd_rpc_stdin_test.go` for expected multi-turn behavior.
+
+### Technical details
+
+Example stdin:
+
+```jsonl
+{"version":1,"sessionId":"s1","requestId":"r1","submit":{"prompt":"first"}}
+{"version":1,"sessionId":"s1","requestId":"r2","submit":{"prompt":"second"}}
+{"version":1,"sessionId":"s1","requestId":"r3","shutdown":{}}
+```
+
+Expected stdout properties:
+
+- frames for request `r1` carry `requestId: r1`;
+- frames for request `r2` carry `requestId: r2`;
+- second submit sees first submit's final assistant turn as context;
+- shutdown emits `done.status = "shutdown"` and exits.
