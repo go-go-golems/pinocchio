@@ -56,6 +56,42 @@ func TestRunWithOptionsStdinRPCMultiTurn(t *testing.T) {
 	require.True(t, sawR2Patch, out.String())
 }
 
+func TestRunWithOptionsStdinRPCIsolatesSessionAccumulators(t *testing.T) {
+	cmd := newRPCStdinTestCommand(t)
+	inferenceSettings, err := settings.NewInferenceSettings()
+	require.NoError(t, err)
+
+	stdin := strings.NewReader(strings.Join([]string{
+		`{"version":1,"sessionId":"s1","requestId":"s1-r1","submit":{"prompt":"s1 first"}}`,
+		`{"version":1,"sessionId":"s2","requestId":"s2-r1","submit":{"prompt":"s2 first"}}`,
+		`{"version":1,"sessionId":"s1","requestId":"s1-r2","submit":{"prompt":"s1 second"}}`,
+		`{"version":1,"sessionId":"s1","requestId":"shutdown","shutdown":{}}`,
+	}, "\n") + "\n")
+	var out bytes.Buffer
+
+	finalTurn, err := cmd.RunWithOptions(context.Background(),
+		run.WithRunMode(run.RunModeRPCStdin),
+		run.WithReader(stdin),
+		run.WithWriter(&out),
+		run.WithInferenceSettings(inferenceSettings),
+		run.WithEngineFactory(countingEngineFactory{}),
+	)
+	require.NoError(t, err)
+	require.NotNil(t, finalTurn)
+	require.Contains(t, assistantTexts(finalTurn), "users=3") // seed prompt + s1 first + s1 second
+
+	done := map[string]string{}
+	for _, frame := range parseRPCLines(t, out.String()) {
+		if df := frame.GetDone(); df != nil {
+			done[frame.GetRequestId()] = frame.GetSessionId() + ":" + df.GetStatus()
+		}
+	}
+	require.Equal(t, "s1:ok", done["s1-r1"])
+	require.Equal(t, "s2:ok", done["s2-r1"])
+	require.Equal(t, "s1:ok", done["s1-r2"])
+	require.Equal(t, "s1:shutdown", done["shutdown"])
+}
+
 func TestRunWithOptionsStdinRPCMalformedInputReportsError(t *testing.T) {
 	cmd := newRPCStdinTestCommand(t)
 	inferenceSettings, err := settings.NewInferenceSettings()
