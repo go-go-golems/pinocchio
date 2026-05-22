@@ -68,6 +68,16 @@ func (f *runStatusFanout) record(events []sessionstream.UIEvent) {
 	}
 }
 
+func (f *runStatusFanout) Reset() {
+	if f == nil {
+		return
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.status = ""
+	f.errText = ""
+}
+
 func (f *runStatusFanout) Result() (string, error) {
 	if f == nil {
 		return "", nil

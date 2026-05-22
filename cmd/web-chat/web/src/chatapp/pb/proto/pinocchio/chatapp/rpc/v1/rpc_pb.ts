@@ -12,7 +12,7 @@ import { file_google_protobuf_any } from "@bufbuild/protobuf/wkt";
  * Describes the file proto/pinocchio/chatapp/rpc/v1/rpc.proto.
  */
 export const file_proto_pinocchio_chatapp_rpc_v1_rpc: GenFile = /*@__PURE__*/
-  fileDesc("Cihwcm90by9waW5vY2NoaW8vY2hhdGFwcC9ycGMvdjEvcnBjLnByb3RvEhhwaW5vY2NoaW8uY2hhdGFwcC5ycGMudjEitAMKB1JwY0xpbmUSDwoHdmVyc2lvbhgBIAEoDRISCgpzZXNzaW9uX2lkGAIgASgJEhIKCnJlcXVlc3RfaWQYAyABKAkSNQoFaGVsbG8YCiABKAsyJC5waW5vY2NoaW8uY2hhdGFwcC5ycGMudjEuSGVsbG9GcmFtZUgAEjsKCHNuYXBzaG90GAsgASgLMicucGlub2NjaGlvLmNoYXRhcHAucnBjLnYxLlNuYXBzaG90RnJhbWVIABI6Cgh1aV9ldmVudBgMIAEoCzImLnBpbm9jY2hpby5jaGF0YXBwLnJwYy52MS5VaUV2ZW50RnJhbWVIABJECg1iYWNrZW5kX2V2ZW50GA0gASgLMisucGlub2NjaGlvLmNoYXRhcHAucnBjLnYxLkJhY2tlbmRFdmVudEZyYW1lSAASNQoFZXJyb3IYDiABKAsyJC5waW5vY2NoaW8uY2hhdGFwcC5ycGMudjEuRXJyb3JGcmFtZUgAEjMKBGRvbmUYDyABKAsyIy5waW5vY2NoaW8uY2hhdGFwcC5ycGMudjEuRG9uZUZyYW1lSABCBwoFZnJhbWVKBQhkEMgBIkQKCkhlbGxvRnJhbWUSEAoIcHJvdG9jb2wYASABKAkSDgoGc2VydmVyGAIgASgJEhQKDGNhcGFiaWxpdGllcxgDIAMoCSJlCg1TbmFwc2hvdEZyYW1lEhgKEHNuYXBzaG90X29yZGluYWwYASABKAQSOgoIZW50aXRpZXMYAiADKAsyKC5waW5vY2NoaW8uY2hhdGFwcC5ycGMudjEuU25hcHNob3RFbnRpdHkimQEKDlNuYXBzaG90RW50aXR5EgwKBGtpbmQYASABKAkSCgoCaWQYAiABKAkSFwoPY3JlYXRlZF9vcmRpbmFsGAMgASgEEhoKEmxhc3RfZXZlbnRfb3JkaW5hbBgEIAEoBBIRCgl0b21ic3RvbmUYBSABKAgSJQoHcGF5bG9hZBgGIAEoCzIULmdvb2dsZS5wcm90b2J1Zi5BbnkiVAoMVWlFdmVudEZyYW1lEg8KB29yZGluYWwYASABKAQSDAoEbmFtZRgCIAEoCRIlCgdwYXlsb2FkGAMgASgLMhQuZ29vZ2xlLnByb3RvYnVmLkFueSJZChFCYWNrZW5kRXZlbnRGcmFtZRIPCgdvcmRpbmFsGAEgASgEEgwKBG5hbWUYAiABKAkSJQoHcGF5bG9hZBgDIAEoCzIULmdvb2dsZS5wcm90b2J1Zi5BbnkiTQoKRXJyb3JGcmFtZRIMCgRjb2RlGAEgASgJEg8KB21lc3NhZ2UYAiABKAkSDgoGZGV0YWlsGAMgASgJEhAKCHRlcm1pbmFsGAQgASgIIhsKCURvbmVGcmFtZRIOCgZzdGF0dXMYASABKAlCXlpcZ2l0aHViLmNvbS9nby1nby1nb2xlbXMvcGlub2NjaGlvL3BrZy9jaGF0YXBwL3BiL3Byb3RvL3Bpbm9jY2hpby9jaGF0YXBwL3JwYy92MTtjaGF0YXBwcnBjdjFiBnByb3RvMw", [file_google_protobuf_any]);
+  fileDesc("Cihwcm90by9waW5vY2NoaW8vY2hhdGFwcC9ycGMvdjEvcnBjLnByb3RvEhhwaW5vY2NoaW8uY2hhdGFwcC5ycGMudjEitAMKB1JwY0xpbmUSDwoHdmVyc2lvbhgBIAEoDRISCgpzZXNzaW9uX2lkGAIgASgJEhIKCnJlcXVlc3RfaWQYAyABKAkSNQoFaGVsbG8YCiABKAsyJC5waW5vY2NoaW8uY2hhdGFwcC5ycGMudjEuSGVsbG9GcmFtZUgAEjsKCHNuYXBzaG90GAsgASgLMicucGlub2NjaGlvLmNoYXRhcHAucnBjLnYxLlNuYXBzaG90RnJhbWVIABI6Cgh1aV9ldmVudBgMIAEoCzImLnBpbm9jY2hpby5jaGF0YXBwLnJwYy52MS5VaUV2ZW50RnJhbWVIABJECg1iYWNrZW5kX2V2ZW50GA0gASgLMisucGlub2NjaGlvLmNoYXRhcHAucnBjLnYxLkJhY2tlbmRFdmVudEZyYW1lSAASNQoFZXJyb3IYDiABKAsyJC5waW5vY2NoaW8uY2hhdGFwcC5ycGMudjEuRXJyb3JGcmFtZUgAEjMKBGRvbmUYDyABKAsyIy5waW5vY2NoaW8uY2hhdGFwcC5ycGMudjEuRG9uZUZyYW1lSABCBwoFZnJhbWVKBQhkEMgBItUCCg5ScGNSZXF1ZXN0TGluZRIPCgd2ZXJzaW9uGAEgASgNEhIKCnNlc3Npb25faWQYAiABKAkSEgoKcmVxdWVzdF9pZBgDIAEoCRI/CgZzdWJtaXQYCiABKAsyLS5waW5vY2NoaW8uY2hhdGFwcC5ycGMudjEuU3VibWl0UHJvbXB0UmVxdWVzdEgAEjkKBmNhbmNlbBgLIAEoCzInLnBpbm9jY2hpby5jaGF0YXBwLnJwYy52MS5DYW5jZWxSZXF1ZXN0SAASPQoIc25hcHNob3QYDCABKAsyKS5waW5vY2NoaW8uY2hhdGFwcC5ycGMudjEuU25hcHNob3RSZXF1ZXN0SAASPQoIc2h1dGRvd24YDSABKAsyKS5waW5vY2NoaW8uY2hhdGFwcC5ycGMudjEuU2h1dGRvd25SZXF1ZXN0SABCCQoHcmVxdWVzdEoFCGQQyAEiJQoTU3VibWl0UHJvbXB0UmVxdWVzdBIOCgZwcm9tcHQYASABKAkiDwoNQ2FuY2VsUmVxdWVzdCIRCg9TbmFwc2hvdFJlcXVlc3QiEQoPU2h1dGRvd25SZXF1ZXN0IkQKCkhlbGxvRnJhbWUSEAoIcHJvdG9jb2wYASABKAkSDgoGc2VydmVyGAIgASgJEhQKDGNhcGFiaWxpdGllcxgDIAMoCSJlCg1TbmFwc2hvdEZyYW1lEhgKEHNuYXBzaG90X29yZGluYWwYASABKAQSOgoIZW50aXRpZXMYAiADKAsyKC5waW5vY2NoaW8uY2hhdGFwcC5ycGMudjEuU25hcHNob3RFbnRpdHkimQEKDlNuYXBzaG90RW50aXR5EgwKBGtpbmQYASABKAkSCgoCaWQYAiABKAkSFwoPY3JlYXRlZF9vcmRpbmFsGAMgASgEEhoKEmxhc3RfZXZlbnRfb3JkaW5hbBgEIAEoBBIRCgl0b21ic3RvbmUYBSABKAgSJQoHcGF5bG9hZBgGIAEoCzIULmdvb2dsZS5wcm90b2J1Zi5BbnkiVAoMVWlFdmVudEZyYW1lEg8KB29yZGluYWwYASABKAQSDAoEbmFtZRgCIAEoCRIlCgdwYXlsb2FkGAMgASgLMhQuZ29vZ2xlLnByb3RvYnVmLkFueSJZChFCYWNrZW5kRXZlbnRGcmFtZRIPCgdvcmRpbmFsGAEgASgEEgwKBG5hbWUYAiABKAkSJQoHcGF5bG9hZBgDIAEoCzIULmdvb2dsZS5wcm90b2J1Zi5BbnkiTQoKRXJyb3JGcmFtZRIMCgRjb2RlGAEgASgJEg8KB21lc3NhZ2UYAiABKAkSDgoGZGV0YWlsGAMgASgJEhAKCHRlcm1pbmFsGAQgASgIIhsKCURvbmVGcmFtZRIOCgZzdGF0dXMYASABKAlCXlpcZ2l0aHViLmNvbS9nby1nby1nb2xlbXMvcGlub2NjaGlvL3BrZy9jaGF0YXBwL3BiL3Byb3RvL3Bpbm9jY2hpby9jaGF0YXBwL3JwYy92MTtjaGF0YXBwcnBjdjFiBnByb3RvMw", [file_google_protobuf_any]);
 
 /**
  * RpcLine is the protobuf-defined JSONL envelope emitted by Pinocchio's
@@ -94,6 +94,122 @@ export const RpcLineSchema: GenMessage<RpcLine> = /*@__PURE__*/
   messageDesc(file_proto_pinocchio_chatapp_rpc_v1_rpc, 0);
 
 /**
+ * RpcRequestLine is the protobuf-defined JSONL envelope read from stdin by the
+ * future long-lived multi-turn RPC mode. Each stdin line is one RpcRequestLine
+ * encoded with protobuf JSON (protojson).
+ *
+ * @generated from message pinocchio.chatapp.rpc.v1.RpcRequestLine
+ */
+export type RpcRequestLine = Message<"pinocchio.chatapp.rpc.v1.RpcRequestLine"> & {
+  /**
+   * @generated from field: uint32 version = 1;
+   */
+  version: number;
+
+  /**
+   * @generated from field: string session_id = 2;
+   */
+  sessionId: string;
+
+  /**
+   * @generated from field: string request_id = 3;
+   */
+  requestId: string;
+
+  /**
+   * @generated from oneof pinocchio.chatapp.rpc.v1.RpcRequestLine.request
+   */
+  request: {
+    /**
+     * @generated from field: pinocchio.chatapp.rpc.v1.SubmitPromptRequest submit = 10;
+     */
+    value: SubmitPromptRequest;
+    case: "submit";
+  } | {
+    /**
+     * @generated from field: pinocchio.chatapp.rpc.v1.CancelRequest cancel = 11;
+     */
+    value: CancelRequest;
+    case: "cancel";
+  } | {
+    /**
+     * @generated from field: pinocchio.chatapp.rpc.v1.SnapshotRequest snapshot = 12;
+     */
+    value: SnapshotRequest;
+    case: "snapshot";
+  } | {
+    /**
+     * @generated from field: pinocchio.chatapp.rpc.v1.ShutdownRequest shutdown = 13;
+     */
+    value: ShutdownRequest;
+    case: "shutdown";
+  } | { case: undefined; value?: undefined };
+};
+
+/**
+ * Describes the message pinocchio.chatapp.rpc.v1.RpcRequestLine.
+ * Use `create(RpcRequestLineSchema)` to create a new message.
+ */
+export const RpcRequestLineSchema: GenMessage<RpcRequestLine> = /*@__PURE__*/
+  messageDesc(file_proto_pinocchio_chatapp_rpc_v1_rpc, 1);
+
+/**
+ * @generated from message pinocchio.chatapp.rpc.v1.SubmitPromptRequest
+ */
+export type SubmitPromptRequest = Message<"pinocchio.chatapp.rpc.v1.SubmitPromptRequest"> & {
+  /**
+   * @generated from field: string prompt = 1;
+   */
+  prompt: string;
+};
+
+/**
+ * Describes the message pinocchio.chatapp.rpc.v1.SubmitPromptRequest.
+ * Use `create(SubmitPromptRequestSchema)` to create a new message.
+ */
+export const SubmitPromptRequestSchema: GenMessage<SubmitPromptRequest> = /*@__PURE__*/
+  messageDesc(file_proto_pinocchio_chatapp_rpc_v1_rpc, 2);
+
+/**
+ * @generated from message pinocchio.chatapp.rpc.v1.CancelRequest
+ */
+export type CancelRequest = Message<"pinocchio.chatapp.rpc.v1.CancelRequest"> & {
+};
+
+/**
+ * Describes the message pinocchio.chatapp.rpc.v1.CancelRequest.
+ * Use `create(CancelRequestSchema)` to create a new message.
+ */
+export const CancelRequestSchema: GenMessage<CancelRequest> = /*@__PURE__*/
+  messageDesc(file_proto_pinocchio_chatapp_rpc_v1_rpc, 3);
+
+/**
+ * @generated from message pinocchio.chatapp.rpc.v1.SnapshotRequest
+ */
+export type SnapshotRequest = Message<"pinocchio.chatapp.rpc.v1.SnapshotRequest"> & {
+};
+
+/**
+ * Describes the message pinocchio.chatapp.rpc.v1.SnapshotRequest.
+ * Use `create(SnapshotRequestSchema)` to create a new message.
+ */
+export const SnapshotRequestSchema: GenMessage<SnapshotRequest> = /*@__PURE__*/
+  messageDesc(file_proto_pinocchio_chatapp_rpc_v1_rpc, 4);
+
+/**
+ * @generated from message pinocchio.chatapp.rpc.v1.ShutdownRequest
+ */
+export type ShutdownRequest = Message<"pinocchio.chatapp.rpc.v1.ShutdownRequest"> & {
+};
+
+/**
+ * Describes the message pinocchio.chatapp.rpc.v1.ShutdownRequest.
+ * Use `create(ShutdownRequestSchema)` to create a new message.
+ */
+export const ShutdownRequestSchema: GenMessage<ShutdownRequest> = /*@__PURE__*/
+  messageDesc(file_proto_pinocchio_chatapp_rpc_v1_rpc, 5);
+
+/**
  * HelloFrame identifies the protocol and advertised capabilities for this
  * stream. It is normally the first line emitted by --rpc.
  *
@@ -121,7 +237,7 @@ export type HelloFrame = Message<"pinocchio.chatapp.rpc.v1.HelloFrame"> & {
  * Use `create(HelloFrameSchema)` to create a new message.
  */
 export const HelloFrameSchema: GenMessage<HelloFrame> = /*@__PURE__*/
-  messageDesc(file_proto_pinocchio_chatapp_rpc_v1_rpc, 1);
+  messageDesc(file_proto_pinocchio_chatapp_rpc_v1_rpc, 6);
 
 /**
  * SnapshotFrame carries the current sessionstream hydration snapshot before
@@ -146,7 +262,7 @@ export type SnapshotFrame = Message<"pinocchio.chatapp.rpc.v1.SnapshotFrame"> & 
  * Use `create(SnapshotFrameSchema)` to create a new message.
  */
 export const SnapshotFrameSchema: GenMessage<SnapshotFrame> = /*@__PURE__*/
-  messageDesc(file_proto_pinocchio_chatapp_rpc_v1_rpc, 2);
+  messageDesc(file_proto_pinocchio_chatapp_rpc_v1_rpc, 7);
 
 /**
  * SnapshotEntity is the JSONL representation of a sessionstream.TimelineEntity.
@@ -190,7 +306,7 @@ export type SnapshotEntity = Message<"pinocchio.chatapp.rpc.v1.SnapshotEntity"> 
  * Use `create(SnapshotEntitySchema)` to create a new message.
  */
 export const SnapshotEntitySchema: GenMessage<SnapshotEntity> = /*@__PURE__*/
-  messageDesc(file_proto_pinocchio_chatapp_rpc_v1_rpc, 3);
+  messageDesc(file_proto_pinocchio_chatapp_rpc_v1_rpc, 8);
 
 /**
  * UiEventFrame carries one projected sessionstream UI event.
@@ -219,7 +335,7 @@ export type UiEventFrame = Message<"pinocchio.chatapp.rpc.v1.UiEventFrame"> & {
  * Use `create(UiEventFrameSchema)` to create a new message.
  */
 export const UiEventFrameSchema: GenMessage<UiEventFrame> = /*@__PURE__*/
-  messageDesc(file_proto_pinocchio_chatapp_rpc_v1_rpc, 4);
+  messageDesc(file_proto_pinocchio_chatapp_rpc_v1_rpc, 9);
 
 /**
  * BackendEventFrame is reserved for optional debug/advanced streams that expose
@@ -249,7 +365,7 @@ export type BackendEventFrame = Message<"pinocchio.chatapp.rpc.v1.BackendEventFr
  * Use `create(BackendEventFrameSchema)` to create a new message.
  */
 export const BackendEventFrameSchema: GenMessage<BackendEventFrame> = /*@__PURE__*/
-  messageDesc(file_proto_pinocchio_chatapp_rpc_v1_rpc, 5);
+  messageDesc(file_proto_pinocchio_chatapp_rpc_v1_rpc, 10);
 
 /**
  * ErrorFrame reports adapter/protocol errors or terminal runtime failures.
@@ -283,7 +399,7 @@ export type ErrorFrame = Message<"pinocchio.chatapp.rpc.v1.ErrorFrame"> & {
  * Use `create(ErrorFrameSchema)` to create a new message.
  */
 export const ErrorFrameSchema: GenMessage<ErrorFrame> = /*@__PURE__*/
-  messageDesc(file_proto_pinocchio_chatapp_rpc_v1_rpc, 6);
+  messageDesc(file_proto_pinocchio_chatapp_rpc_v1_rpc, 11);
 
 /**
  * DoneFrame marks that the adapter observed the requested run becoming idle.
@@ -302,5 +418,5 @@ export type DoneFrame = Message<"pinocchio.chatapp.rpc.v1.DoneFrame"> & {
  * Use `create(DoneFrameSchema)` to create a new message.
  */
 export const DoneFrameSchema: GenMessage<DoneFrame> = /*@__PURE__*/
-  messageDesc(file_proto_pinocchio_chatapp_rpc_v1_rpc, 7);
+  messageDesc(file_proto_pinocchio_chatapp_rpc_v1_rpc, 12);
 

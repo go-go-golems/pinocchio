@@ -10,10 +10,19 @@
 
 ## TODO
 
-- [ ] Phase 1: add protobuf stdin request contract (`RpcRequestLine`, submit/cancel/snapshot/shutdown).
-- [ ] Phase 2: add request-id-aware JSONL writer/fanout support.
-- [ ] Phase 3: add explicit `--stdin-rpc` flag and run mode without changing existing one-shot `--rpc` / `--output jsonl`.
-- [ ] Phase 4: implement stdin RPC server with server-held per-session final-turn accumulators.
-- [ ] Phase 5: add unit/integration tests for multi-turn context, session isolation, malformed input, shutdown, and optional cancel.
-- [ ] Phase 6: run real subprocess smoke tests with a cheap profile.
-- [ ] Update user-facing help once implementation lands.
+- [x] Phase 1: add protobuf stdin request contract (`RpcRequestLine`, submit/cancel/snapshot/shutdown).
+- [x] Phase 2: add request-id-aware JSONL writer/fanout support.
+- [x] Phase 3: add explicit `--stdin-rpc` flag and run mode without changing existing one-shot `--rpc` / `--output jsonl`.
+- [x] Phase 4: implement stdin RPC server with server-held per-session final-turn accumulators.
+- [x] Phase 5: add unit/integration tests for multi-turn context, malformed input, shutdown, and request IDs.
+- [x] Phase 5b: add stronger cancel-while-running tests.
+- [x] Phase 5c: add stronger session isolation tests.
+- [x] Phase 6: run real subprocess smoke tests with a cheap profile.
+- [x] Update user-facing help once implementation lands.
+- [x] Write PR 156 multi-session RPC foundations guide
+- [x] Upload PR 156 multi-session RPC foundations guide to reMarkable
+- [x] Write single-session stdin RPC implementation guide
+- [x] Implement single-session stdin RPC enforcement and request attribution
+- [x] Add tests for session mismatch, busy submit, cancel attribution, and sequential accumulation
+- [x] Update user-facing RPC docs for single-session semantics
+- [x] Validate, upload single-session guide to reMarkable, and record diary

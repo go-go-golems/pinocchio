@@ -199,6 +199,299 @@ func (*RpcLine_Error) isRpcLine_Frame() {}
 
 func (*RpcLine_Done) isRpcLine_Frame() {}
 
+// RpcRequestLine is the protobuf-defined JSONL envelope read from stdin by the
+// future long-lived multi-turn RPC mode. Each stdin line is one RpcRequestLine
+// encoded with protobuf JSON (protojson).
+type RpcRequestLine struct {
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	Version   uint32                 `protobuf:"varint,1,opt,name=version,proto3" json:"version,omitempty"`
+	SessionId string                 `protobuf:"bytes,2,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	RequestId string                 `protobuf:"bytes,3,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	// Types that are valid to be assigned to Request:
+	//
+	//	*RpcRequestLine_Submit
+	//	*RpcRequestLine_Cancel
+	//	*RpcRequestLine_Snapshot
+	//	*RpcRequestLine_Shutdown
+	Request       isRpcRequestLine_Request `protobuf_oneof:"request"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RpcRequestLine) Reset() {
+	*x = RpcRequestLine{}
+	mi := &file_proto_pinocchio_chatapp_rpc_v1_rpc_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RpcRequestLine) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RpcRequestLine) ProtoMessage() {}
+
+func (x *RpcRequestLine) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_pinocchio_chatapp_rpc_v1_rpc_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RpcRequestLine.ProtoReflect.Descriptor instead.
+func (*RpcRequestLine) Descriptor() ([]byte, []int) {
+	return file_proto_pinocchio_chatapp_rpc_v1_rpc_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *RpcRequestLine) GetVersion() uint32 {
+	if x != nil {
+		return x.Version
+	}
+	return 0
+}
+
+func (x *RpcRequestLine) GetSessionId() string {
+	if x != nil {
+		return x.SessionId
+	}
+	return ""
+}
+
+func (x *RpcRequestLine) GetRequestId() string {
+	if x != nil {
+		return x.RequestId
+	}
+	return ""
+}
+
+func (x *RpcRequestLine) GetRequest() isRpcRequestLine_Request {
+	if x != nil {
+		return x.Request
+	}
+	return nil
+}
+
+func (x *RpcRequestLine) GetSubmit() *SubmitPromptRequest {
+	if x != nil {
+		if x, ok := x.Request.(*RpcRequestLine_Submit); ok {
+			return x.Submit
+		}
+	}
+	return nil
+}
+
+func (x *RpcRequestLine) GetCancel() *CancelRequest {
+	if x != nil {
+		if x, ok := x.Request.(*RpcRequestLine_Cancel); ok {
+			return x.Cancel
+		}
+	}
+	return nil
+}
+
+func (x *RpcRequestLine) GetSnapshot() *SnapshotRequest {
+	if x != nil {
+		if x, ok := x.Request.(*RpcRequestLine_Snapshot); ok {
+			return x.Snapshot
+		}
+	}
+	return nil
+}
+
+func (x *RpcRequestLine) GetShutdown() *ShutdownRequest {
+	if x != nil {
+		if x, ok := x.Request.(*RpcRequestLine_Shutdown); ok {
+			return x.Shutdown
+		}
+	}
+	return nil
+}
+
+type isRpcRequestLine_Request interface {
+	isRpcRequestLine_Request()
+}
+
+type RpcRequestLine_Submit struct {
+	Submit *SubmitPromptRequest `protobuf:"bytes,10,opt,name=submit,proto3,oneof"`
+}
+
+type RpcRequestLine_Cancel struct {
+	Cancel *CancelRequest `protobuf:"bytes,11,opt,name=cancel,proto3,oneof"`
+}
+
+type RpcRequestLine_Snapshot struct {
+	Snapshot *SnapshotRequest `protobuf:"bytes,12,opt,name=snapshot,proto3,oneof"`
+}
+
+type RpcRequestLine_Shutdown struct {
+	Shutdown *ShutdownRequest `protobuf:"bytes,13,opt,name=shutdown,proto3,oneof"`
+}
+
+func (*RpcRequestLine_Submit) isRpcRequestLine_Request() {}
+
+func (*RpcRequestLine_Cancel) isRpcRequestLine_Request() {}
+
+func (*RpcRequestLine_Snapshot) isRpcRequestLine_Request() {}
+
+func (*RpcRequestLine_Shutdown) isRpcRequestLine_Request() {}
+
+type SubmitPromptRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Prompt        string                 `protobuf:"bytes,1,opt,name=prompt,proto3" json:"prompt,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SubmitPromptRequest) Reset() {
+	*x = SubmitPromptRequest{}
+	mi := &file_proto_pinocchio_chatapp_rpc_v1_rpc_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SubmitPromptRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SubmitPromptRequest) ProtoMessage() {}
+
+func (x *SubmitPromptRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_pinocchio_chatapp_rpc_v1_rpc_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SubmitPromptRequest.ProtoReflect.Descriptor instead.
+func (*SubmitPromptRequest) Descriptor() ([]byte, []int) {
+	return file_proto_pinocchio_chatapp_rpc_v1_rpc_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *SubmitPromptRequest) GetPrompt() string {
+	if x != nil {
+		return x.Prompt
+	}
+	return ""
+}
+
+type CancelRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CancelRequest) Reset() {
+	*x = CancelRequest{}
+	mi := &file_proto_pinocchio_chatapp_rpc_v1_rpc_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CancelRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CancelRequest) ProtoMessage() {}
+
+func (x *CancelRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_pinocchio_chatapp_rpc_v1_rpc_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CancelRequest.ProtoReflect.Descriptor instead.
+func (*CancelRequest) Descriptor() ([]byte, []int) {
+	return file_proto_pinocchio_chatapp_rpc_v1_rpc_proto_rawDescGZIP(), []int{3}
+}
+
+type SnapshotRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SnapshotRequest) Reset() {
+	*x = SnapshotRequest{}
+	mi := &file_proto_pinocchio_chatapp_rpc_v1_rpc_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SnapshotRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SnapshotRequest) ProtoMessage() {}
+
+func (x *SnapshotRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_pinocchio_chatapp_rpc_v1_rpc_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SnapshotRequest.ProtoReflect.Descriptor instead.
+func (*SnapshotRequest) Descriptor() ([]byte, []int) {
+	return file_proto_pinocchio_chatapp_rpc_v1_rpc_proto_rawDescGZIP(), []int{4}
+}
+
+type ShutdownRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ShutdownRequest) Reset() {
+	*x = ShutdownRequest{}
+	mi := &file_proto_pinocchio_chatapp_rpc_v1_rpc_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ShutdownRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ShutdownRequest) ProtoMessage() {}
+
+func (x *ShutdownRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_pinocchio_chatapp_rpc_v1_rpc_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ShutdownRequest.ProtoReflect.Descriptor instead.
+func (*ShutdownRequest) Descriptor() ([]byte, []int) {
+	return file_proto_pinocchio_chatapp_rpc_v1_rpc_proto_rawDescGZIP(), []int{5}
+}
+
 // HelloFrame identifies the protocol and advertised capabilities for this
 // stream. It is normally the first line emitted by --rpc.
 type HelloFrame struct {
@@ -212,7 +505,7 @@ type HelloFrame struct {
 
 func (x *HelloFrame) Reset() {
 	*x = HelloFrame{}
-	mi := &file_proto_pinocchio_chatapp_rpc_v1_rpc_proto_msgTypes[1]
+	mi := &file_proto_pinocchio_chatapp_rpc_v1_rpc_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -224,7 +517,7 @@ func (x *HelloFrame) String() string {
 func (*HelloFrame) ProtoMessage() {}
 
 func (x *HelloFrame) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_pinocchio_chatapp_rpc_v1_rpc_proto_msgTypes[1]
+	mi := &file_proto_pinocchio_chatapp_rpc_v1_rpc_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -237,7 +530,7 @@ func (x *HelloFrame) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HelloFrame.ProtoReflect.Descriptor instead.
 func (*HelloFrame) Descriptor() ([]byte, []int) {
-	return file_proto_pinocchio_chatapp_rpc_v1_rpc_proto_rawDescGZIP(), []int{1}
+	return file_proto_pinocchio_chatapp_rpc_v1_rpc_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *HelloFrame) GetProtocol() string {
@@ -273,7 +566,7 @@ type SnapshotFrame struct {
 
 func (x *SnapshotFrame) Reset() {
 	*x = SnapshotFrame{}
-	mi := &file_proto_pinocchio_chatapp_rpc_v1_rpc_proto_msgTypes[2]
+	mi := &file_proto_pinocchio_chatapp_rpc_v1_rpc_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -285,7 +578,7 @@ func (x *SnapshotFrame) String() string {
 func (*SnapshotFrame) ProtoMessage() {}
 
 func (x *SnapshotFrame) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_pinocchio_chatapp_rpc_v1_rpc_proto_msgTypes[2]
+	mi := &file_proto_pinocchio_chatapp_rpc_v1_rpc_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -298,7 +591,7 @@ func (x *SnapshotFrame) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SnapshotFrame.ProtoReflect.Descriptor instead.
 func (*SnapshotFrame) Descriptor() ([]byte, []int) {
-	return file_proto_pinocchio_chatapp_rpc_v1_rpc_proto_rawDescGZIP(), []int{2}
+	return file_proto_pinocchio_chatapp_rpc_v1_rpc_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *SnapshotFrame) GetSnapshotOrdinal() uint64 {
@@ -330,7 +623,7 @@ type SnapshotEntity struct {
 
 func (x *SnapshotEntity) Reset() {
 	*x = SnapshotEntity{}
-	mi := &file_proto_pinocchio_chatapp_rpc_v1_rpc_proto_msgTypes[3]
+	mi := &file_proto_pinocchio_chatapp_rpc_v1_rpc_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -342,7 +635,7 @@ func (x *SnapshotEntity) String() string {
 func (*SnapshotEntity) ProtoMessage() {}
 
 func (x *SnapshotEntity) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_pinocchio_chatapp_rpc_v1_rpc_proto_msgTypes[3]
+	mi := &file_proto_pinocchio_chatapp_rpc_v1_rpc_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -355,7 +648,7 @@ func (x *SnapshotEntity) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SnapshotEntity.ProtoReflect.Descriptor instead.
 func (*SnapshotEntity) Descriptor() ([]byte, []int) {
-	return file_proto_pinocchio_chatapp_rpc_v1_rpc_proto_rawDescGZIP(), []int{3}
+	return file_proto_pinocchio_chatapp_rpc_v1_rpc_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *SnapshotEntity) GetKind() string {
@@ -412,7 +705,7 @@ type UiEventFrame struct {
 
 func (x *UiEventFrame) Reset() {
 	*x = UiEventFrame{}
-	mi := &file_proto_pinocchio_chatapp_rpc_v1_rpc_proto_msgTypes[4]
+	mi := &file_proto_pinocchio_chatapp_rpc_v1_rpc_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -424,7 +717,7 @@ func (x *UiEventFrame) String() string {
 func (*UiEventFrame) ProtoMessage() {}
 
 func (x *UiEventFrame) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_pinocchio_chatapp_rpc_v1_rpc_proto_msgTypes[4]
+	mi := &file_proto_pinocchio_chatapp_rpc_v1_rpc_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -437,7 +730,7 @@ func (x *UiEventFrame) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UiEventFrame.ProtoReflect.Descriptor instead.
 func (*UiEventFrame) Descriptor() ([]byte, []int) {
-	return file_proto_pinocchio_chatapp_rpc_v1_rpc_proto_rawDescGZIP(), []int{4}
+	return file_proto_pinocchio_chatapp_rpc_v1_rpc_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *UiEventFrame) GetOrdinal() uint64 {
@@ -474,7 +767,7 @@ type BackendEventFrame struct {
 
 func (x *BackendEventFrame) Reset() {
 	*x = BackendEventFrame{}
-	mi := &file_proto_pinocchio_chatapp_rpc_v1_rpc_proto_msgTypes[5]
+	mi := &file_proto_pinocchio_chatapp_rpc_v1_rpc_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -486,7 +779,7 @@ func (x *BackendEventFrame) String() string {
 func (*BackendEventFrame) ProtoMessage() {}
 
 func (x *BackendEventFrame) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_pinocchio_chatapp_rpc_v1_rpc_proto_msgTypes[5]
+	mi := &file_proto_pinocchio_chatapp_rpc_v1_rpc_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -499,7 +792,7 @@ func (x *BackendEventFrame) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BackendEventFrame.ProtoReflect.Descriptor instead.
 func (*BackendEventFrame) Descriptor() ([]byte, []int) {
-	return file_proto_pinocchio_chatapp_rpc_v1_rpc_proto_rawDescGZIP(), []int{5}
+	return file_proto_pinocchio_chatapp_rpc_v1_rpc_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *BackendEventFrame) GetOrdinal() uint64 {
@@ -536,7 +829,7 @@ type ErrorFrame struct {
 
 func (x *ErrorFrame) Reset() {
 	*x = ErrorFrame{}
-	mi := &file_proto_pinocchio_chatapp_rpc_v1_rpc_proto_msgTypes[6]
+	mi := &file_proto_pinocchio_chatapp_rpc_v1_rpc_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -548,7 +841,7 @@ func (x *ErrorFrame) String() string {
 func (*ErrorFrame) ProtoMessage() {}
 
 func (x *ErrorFrame) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_pinocchio_chatapp_rpc_v1_rpc_proto_msgTypes[6]
+	mi := &file_proto_pinocchio_chatapp_rpc_v1_rpc_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -561,7 +854,7 @@ func (x *ErrorFrame) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ErrorFrame.ProtoReflect.Descriptor instead.
 func (*ErrorFrame) Descriptor() ([]byte, []int) {
-	return file_proto_pinocchio_chatapp_rpc_v1_rpc_proto_rawDescGZIP(), []int{6}
+	return file_proto_pinocchio_chatapp_rpc_v1_rpc_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *ErrorFrame) GetCode() string {
@@ -602,7 +895,7 @@ type DoneFrame struct {
 
 func (x *DoneFrame) Reset() {
 	*x = DoneFrame{}
-	mi := &file_proto_pinocchio_chatapp_rpc_v1_rpc_proto_msgTypes[7]
+	mi := &file_proto_pinocchio_chatapp_rpc_v1_rpc_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -614,7 +907,7 @@ func (x *DoneFrame) String() string {
 func (*DoneFrame) ProtoMessage() {}
 
 func (x *DoneFrame) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_pinocchio_chatapp_rpc_v1_rpc_proto_msgTypes[7]
+	mi := &file_proto_pinocchio_chatapp_rpc_v1_rpc_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -627,7 +920,7 @@ func (x *DoneFrame) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DoneFrame.ProtoReflect.Descriptor instead.
 func (*DoneFrame) Descriptor() ([]byte, []int) {
-	return file_proto_pinocchio_chatapp_rpc_v1_rpc_proto_rawDescGZIP(), []int{7}
+	return file_proto_pinocchio_chatapp_rpc_v1_rpc_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *DoneFrame) GetStatus() string {
@@ -655,7 +948,24 @@ const file_proto_pinocchio_chatapp_rpc_v1_rpc_proto_rawDesc = "" +
 	"\rbackend_event\x18\r \x01(\v2+.pinocchio.chatapp.rpc.v1.BackendEventFrameH\x00R\fbackendEvent\x12<\n" +
 	"\x05error\x18\x0e \x01(\v2$.pinocchio.chatapp.rpc.v1.ErrorFrameH\x00R\x05error\x129\n" +
 	"\x04done\x18\x0f \x01(\v2#.pinocchio.chatapp.rpc.v1.DoneFrameH\x00R\x04doneB\a\n" +
-	"\x05frameJ\x05\bd\x10\xc8\x01\"d\n" +
+	"\x05frameJ\x05\bd\x10\xc8\x01\"\x98\x03\n" +
+	"\x0eRpcRequestLine\x12\x18\n" +
+	"\aversion\x18\x01 \x01(\rR\aversion\x12\x1d\n" +
+	"\n" +
+	"session_id\x18\x02 \x01(\tR\tsessionId\x12\x1d\n" +
+	"\n" +
+	"request_id\x18\x03 \x01(\tR\trequestId\x12G\n" +
+	"\x06submit\x18\n" +
+	" \x01(\v2-.pinocchio.chatapp.rpc.v1.SubmitPromptRequestH\x00R\x06submit\x12A\n" +
+	"\x06cancel\x18\v \x01(\v2'.pinocchio.chatapp.rpc.v1.CancelRequestH\x00R\x06cancel\x12G\n" +
+	"\bsnapshot\x18\f \x01(\v2).pinocchio.chatapp.rpc.v1.SnapshotRequestH\x00R\bsnapshot\x12G\n" +
+	"\bshutdown\x18\r \x01(\v2).pinocchio.chatapp.rpc.v1.ShutdownRequestH\x00R\bshutdownB\t\n" +
+	"\arequestJ\x05\bd\x10\xc8\x01\"-\n" +
+	"\x13SubmitPromptRequest\x12\x16\n" +
+	"\x06prompt\x18\x01 \x01(\tR\x06prompt\"\x0f\n" +
+	"\rCancelRequest\"\x11\n" +
+	"\x0fSnapshotRequest\"\x11\n" +
+	"\x0fShutdownRequest\"d\n" +
 	"\n" +
 	"HelloFrame\x12\x1a\n" +
 	"\bprotocol\x18\x01 \x01(\tR\bprotocol\x12\x16\n" +
@@ -700,34 +1010,43 @@ func file_proto_pinocchio_chatapp_rpc_v1_rpc_proto_rawDescGZIP() []byte {
 	return file_proto_pinocchio_chatapp_rpc_v1_rpc_proto_rawDescData
 }
 
-var file_proto_pinocchio_chatapp_rpc_v1_rpc_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
+var file_proto_pinocchio_chatapp_rpc_v1_rpc_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
 var file_proto_pinocchio_chatapp_rpc_v1_rpc_proto_goTypes = []any{
-	(*RpcLine)(nil),           // 0: pinocchio.chatapp.rpc.v1.RpcLine
-	(*HelloFrame)(nil),        // 1: pinocchio.chatapp.rpc.v1.HelloFrame
-	(*SnapshotFrame)(nil),     // 2: pinocchio.chatapp.rpc.v1.SnapshotFrame
-	(*SnapshotEntity)(nil),    // 3: pinocchio.chatapp.rpc.v1.SnapshotEntity
-	(*UiEventFrame)(nil),      // 4: pinocchio.chatapp.rpc.v1.UiEventFrame
-	(*BackendEventFrame)(nil), // 5: pinocchio.chatapp.rpc.v1.BackendEventFrame
-	(*ErrorFrame)(nil),        // 6: pinocchio.chatapp.rpc.v1.ErrorFrame
-	(*DoneFrame)(nil),         // 7: pinocchio.chatapp.rpc.v1.DoneFrame
-	(*anypb.Any)(nil),         // 8: google.protobuf.Any
+	(*RpcLine)(nil),             // 0: pinocchio.chatapp.rpc.v1.RpcLine
+	(*RpcRequestLine)(nil),      // 1: pinocchio.chatapp.rpc.v1.RpcRequestLine
+	(*SubmitPromptRequest)(nil), // 2: pinocchio.chatapp.rpc.v1.SubmitPromptRequest
+	(*CancelRequest)(nil),       // 3: pinocchio.chatapp.rpc.v1.CancelRequest
+	(*SnapshotRequest)(nil),     // 4: pinocchio.chatapp.rpc.v1.SnapshotRequest
+	(*ShutdownRequest)(nil),     // 5: pinocchio.chatapp.rpc.v1.ShutdownRequest
+	(*HelloFrame)(nil),          // 6: pinocchio.chatapp.rpc.v1.HelloFrame
+	(*SnapshotFrame)(nil),       // 7: pinocchio.chatapp.rpc.v1.SnapshotFrame
+	(*SnapshotEntity)(nil),      // 8: pinocchio.chatapp.rpc.v1.SnapshotEntity
+	(*UiEventFrame)(nil),        // 9: pinocchio.chatapp.rpc.v1.UiEventFrame
+	(*BackendEventFrame)(nil),   // 10: pinocchio.chatapp.rpc.v1.BackendEventFrame
+	(*ErrorFrame)(nil),          // 11: pinocchio.chatapp.rpc.v1.ErrorFrame
+	(*DoneFrame)(nil),           // 12: pinocchio.chatapp.rpc.v1.DoneFrame
+	(*anypb.Any)(nil),           // 13: google.protobuf.Any
 }
 var file_proto_pinocchio_chatapp_rpc_v1_rpc_proto_depIdxs = []int32{
-	1,  // 0: pinocchio.chatapp.rpc.v1.RpcLine.hello:type_name -> pinocchio.chatapp.rpc.v1.HelloFrame
-	2,  // 1: pinocchio.chatapp.rpc.v1.RpcLine.snapshot:type_name -> pinocchio.chatapp.rpc.v1.SnapshotFrame
-	4,  // 2: pinocchio.chatapp.rpc.v1.RpcLine.ui_event:type_name -> pinocchio.chatapp.rpc.v1.UiEventFrame
-	5,  // 3: pinocchio.chatapp.rpc.v1.RpcLine.backend_event:type_name -> pinocchio.chatapp.rpc.v1.BackendEventFrame
-	6,  // 4: pinocchio.chatapp.rpc.v1.RpcLine.error:type_name -> pinocchio.chatapp.rpc.v1.ErrorFrame
-	7,  // 5: pinocchio.chatapp.rpc.v1.RpcLine.done:type_name -> pinocchio.chatapp.rpc.v1.DoneFrame
-	3,  // 6: pinocchio.chatapp.rpc.v1.SnapshotFrame.entities:type_name -> pinocchio.chatapp.rpc.v1.SnapshotEntity
-	8,  // 7: pinocchio.chatapp.rpc.v1.SnapshotEntity.payload:type_name -> google.protobuf.Any
-	8,  // 8: pinocchio.chatapp.rpc.v1.UiEventFrame.payload:type_name -> google.protobuf.Any
-	8,  // 9: pinocchio.chatapp.rpc.v1.BackendEventFrame.payload:type_name -> google.protobuf.Any
-	10, // [10:10] is the sub-list for method output_type
-	10, // [10:10] is the sub-list for method input_type
-	10, // [10:10] is the sub-list for extension type_name
-	10, // [10:10] is the sub-list for extension extendee
-	0,  // [0:10] is the sub-list for field type_name
+	6,  // 0: pinocchio.chatapp.rpc.v1.RpcLine.hello:type_name -> pinocchio.chatapp.rpc.v1.HelloFrame
+	7,  // 1: pinocchio.chatapp.rpc.v1.RpcLine.snapshot:type_name -> pinocchio.chatapp.rpc.v1.SnapshotFrame
+	9,  // 2: pinocchio.chatapp.rpc.v1.RpcLine.ui_event:type_name -> pinocchio.chatapp.rpc.v1.UiEventFrame
+	10, // 3: pinocchio.chatapp.rpc.v1.RpcLine.backend_event:type_name -> pinocchio.chatapp.rpc.v1.BackendEventFrame
+	11, // 4: pinocchio.chatapp.rpc.v1.RpcLine.error:type_name -> pinocchio.chatapp.rpc.v1.ErrorFrame
+	12, // 5: pinocchio.chatapp.rpc.v1.RpcLine.done:type_name -> pinocchio.chatapp.rpc.v1.DoneFrame
+	2,  // 6: pinocchio.chatapp.rpc.v1.RpcRequestLine.submit:type_name -> pinocchio.chatapp.rpc.v1.SubmitPromptRequest
+	3,  // 7: pinocchio.chatapp.rpc.v1.RpcRequestLine.cancel:type_name -> pinocchio.chatapp.rpc.v1.CancelRequest
+	4,  // 8: pinocchio.chatapp.rpc.v1.RpcRequestLine.snapshot:type_name -> pinocchio.chatapp.rpc.v1.SnapshotRequest
+	5,  // 9: pinocchio.chatapp.rpc.v1.RpcRequestLine.shutdown:type_name -> pinocchio.chatapp.rpc.v1.ShutdownRequest
+	8,  // 10: pinocchio.chatapp.rpc.v1.SnapshotFrame.entities:type_name -> pinocchio.chatapp.rpc.v1.SnapshotEntity
+	13, // 11: pinocchio.chatapp.rpc.v1.SnapshotEntity.payload:type_name -> google.protobuf.Any
+	13, // 12: pinocchio.chatapp.rpc.v1.UiEventFrame.payload:type_name -> google.protobuf.Any
+	13, // 13: pinocchio.chatapp.rpc.v1.BackendEventFrame.payload:type_name -> google.protobuf.Any
+	14, // [14:14] is the sub-list for method output_type
+	14, // [14:14] is the sub-list for method input_type
+	14, // [14:14] is the sub-list for extension type_name
+	14, // [14:14] is the sub-list for extension extendee
+	0,  // [0:14] is the sub-list for field type_name
 }
 
 func init() { file_proto_pinocchio_chatapp_rpc_v1_rpc_proto_init() }
@@ -743,13 +1062,19 @@ func file_proto_pinocchio_chatapp_rpc_v1_rpc_proto_init() {
 		(*RpcLine_Error)(nil),
 		(*RpcLine_Done)(nil),
 	}
+	file_proto_pinocchio_chatapp_rpc_v1_rpc_proto_msgTypes[1].OneofWrappers = []any{
+		(*RpcRequestLine_Submit)(nil),
+		(*RpcRequestLine_Cancel)(nil),
+		(*RpcRequestLine_Snapshot)(nil),
+		(*RpcRequestLine_Shutdown)(nil),
+	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_pinocchio_chatapp_rpc_v1_rpc_proto_rawDesc), len(file_proto_pinocchio_chatapp_rpc_v1_rpc_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   8,
+			NumMessages:   13,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

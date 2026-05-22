@@ -14,6 +14,7 @@ Commands:
 - pinocchio run-command
 Flags:
 - rpc
+- stdin-rpc
 - output
 - debug-events-jsonl
 IsTopLevel: true
@@ -51,7 +52,55 @@ pinocchio run-command ./my-command.yaml --rpc
 
 Both forms route the command through the chatapp/sessionstream runner and write protobuf JSONL frames to stdout.
 
+Use `--stdin-rpc` with `--rpc` or `--output jsonl` for the long-lived multi-turn stdin/stdout protocol:
+
+```bash
+pinocchio run-command ./my-command.yaml --rpc --stdin-rpc
+```
+
+`--stdin-rpc` keeps the process alive, reads one protobuf JSON `RpcRequestLine` per stdin line, emits request-scoped `RpcLine` frames on stdout, and updates one in-memory final-turn accumulator for the process-bound session. This mode is intentionally single-session: one RPC process equals one conversation. Start another process for another independent conversation.
+
 If you need logs, keep them on stderr or in a log file. Do not enable log-to-stdout for RPC consumers, because stdout is the protocol stream.
+
+## Multi-turn stdin RPC
+
+The stdin protocol uses `RpcRequestLine`:
+
+```protobuf
+message RpcRequestLine {
+  uint32 version = 1;
+  string session_id = 2;
+  string request_id = 3;
+
+  oneof request {
+    SubmitPromptRequest submit = 10;
+    CancelRequest cancel = 11;
+    SnapshotRequest snapshot = 12;
+    ShutdownRequest shutdown = 13;
+  }
+}
+
+message SubmitPromptRequest { string prompt = 1; }
+message CancelRequest {}
+message SnapshotRequest {}
+message ShutdownRequest {}
+```
+
+Example session:
+
+```jsonl
+{"version":1,"sessionId":"demo","requestId":"r1","submit":{"prompt":"first question"}}
+{"version":1,"sessionId":"demo","requestId":"r2","submit":{"prompt":"follow-up question"}}
+{"version":1,"sessionId":"demo","requestId":"r3","shutdown":{}}
+```
+
+The first valid request binds the process to a single session id. If the first request omits `sessionId`, Pinocchio uses the generated default session id. Later requests may omit `sessionId` or repeat the bound id. A different `sessionId` receives `error.code = "session_mismatch"` and `done.status = "failed"`.
+
+Only one submit may be active at a time. A second submit while the session is still running receives `error.code = "session_busy"` and `done.status = "failed"`. Sequential clients should wait for the previous submit's `done` frame before sending the next submit.
+
+Every stdout frame emitted while handling a request is stamped with that request's `requestId`. `submit` requests stream normal `uiEvent` frames, a final `snapshot`, and a `done` frame. `snapshot` requests emit a snapshot and `done`. `cancel` requests write their own control `done.status = "ok"`; the active submit keeps its original request id and later receives `ChatRunStopped` plus `done.status = "stopped"`. `shutdown` waits for any active submit to finish or stop, emits `done.status = "shutdown"`, and exits.
+
+The first implementation is process-local: the bound session accumulator is held in memory as a final `turns.Turn` value. It does not yet provide external tool-result submission; tool-call lifecycle events can be reported through normal UI event frames when tool plugins are enabled.
 
 ## Debug Event Files
 

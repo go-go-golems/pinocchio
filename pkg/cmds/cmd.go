@@ -1,6 +1,7 @@
 package cmds
 
 import (
+	"bufio"
 	"context"
 	_ "embed"
 	"fmt"
@@ -9,8 +10,10 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 
 	geppettobootstrap "github.com/go-go-golems/geppetto/pkg/cli/bootstrap"
+	gepeengine "github.com/go-go-golems/geppetto/pkg/inference/engine"
 	"github.com/go-go-golems/geppetto/pkg/inference/engine/factory"
 	"github.com/go-go-golems/geppetto/pkg/inference/middleware"
 	"github.com/go-go-golems/geppetto/pkg/inference/toolloop/enginebuilder"
@@ -28,6 +31,7 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cmds/schema"
 	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	"github.com/go-go-golems/pinocchio/pkg/chatapp"
+	chatapprpcv1 "github.com/go-go-golems/pinocchio/pkg/chatapp/pb/proto/pinocchio/chatapp/rpc/v1"
 	chatappv1 "github.com/go-go-golems/pinocchio/pkg/chatapp/pb/proto/pinocchio/chatapp/v1"
 	"github.com/go-go-golems/pinocchio/pkg/chatapp/plugins"
 	chatapprpcjsonl "github.com/go-go-golems/pinocchio/pkg/chatapp/rpc/jsonl"
@@ -43,6 +47,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/tcnksm/go-input"
 	"golang.org/x/sync/errgroup"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 func renderTemplateString(name, text string, vars map[string]interface{}) (string, error) {
@@ -297,6 +302,7 @@ func (g *PinocchioCommand) RunIntoWriter(
 		PrintPrompt:      helpersSettings.PrintPrompt,
 		Output:           helpersSettings.Output,
 		RPC:              helpersSettings.RPC,
+		StdinRPC:         helpersSettings.StdinRPC,
 		DebugEventsJSONL: strings.TrimSpace(helpersSettings.DebugEventsJSONL),
 		SessionID:        strings.TrimSpace(helpersSettings.SessionID),
 		Resume:           helpersSettings.Resume,
@@ -350,6 +356,7 @@ func (g *PinocchioCommand) RunIntoWriter(
 		run.WithProfileSelection(profileSettings.Profile, strings.Join(profileSettings.ProfileRegistries, ",")),
 		run.WithEngineFactory(g.EngineFactory),
 		run.WithWriter(w),
+		run.WithReader(os.Stdin),
 		run.WithRunMode(runMode),
 		run.WithUISettings(uiSettings),
 		run.WithPersistenceSettings(run.PersistenceSettings{
@@ -372,6 +379,9 @@ func (g *PinocchioCommand) RunIntoWriter(
 func determineRunMode(settings *cmdlayers.HelpersSettings) run.RunMode {
 	if settings == nil {
 		return run.RunModeBlocking
+	}
+	if settings.StdinRPC {
+		return run.RunModeRPCStdin
 	}
 	if settings.RPC || strings.EqualFold(settings.Output, "jsonl") {
 		return run.RunModeRPCJSONL
@@ -434,6 +444,8 @@ func (g *PinocchioCommand) RunWithOptions(ctx context.Context, options ...run.Ru
 		return g.runBlockingMaybeContinueInChat(ctx, runCtx)
 	case run.RunModeRPCJSONL:
 		return g.runRPCJSONL(ctx, runCtx)
+	case run.RunModeRPCStdin:
+		return g.runStdinRPC(ctx, runCtx)
 	case run.RunModeInteractive:
 		return g.runInteractive(ctx, runCtx)
 	case run.RunModeChat:
@@ -908,6 +920,299 @@ func (g *PinocchioCommand) runRPCJSONL(ctx context.Context, rc *run.RunContext) 
 	return seed, nil
 }
 
+func (g *PinocchioCommand) runStdinRPC(ctx context.Context, rc *run.RunContext) (*turns.Turn, error) {
+	if rc.Writer == nil {
+		rc.Writer = io.Discard
+	}
+	if rc.Reader == nil {
+		rc.Reader = os.Stdin
+	}
+	if rc.EngineFactory == nil {
+		rc.EngineFactory = factory.NewStandardEngineFactory()
+	}
+
+	seed, err := g.buildInitialTurn(rc.Variables, rc.ImagePaths)
+	if err != nil {
+		return nil, fmt.Errorf("failed to render templates: %w", err)
+	}
+	defaultSID := commandSessionID(seed)
+
+	fanout, err := chatapprpcjsonl.NewUIFanout(rc.Writer)
+	if err != nil {
+		return nil, err
+	}
+	debugFanout, closeDebug, err := openDebugEventsFanout(rc.UISettings)
+	if err != nil {
+		return nil, err
+	}
+	defer closeDebug()
+	liveFanout := sessionstream.UIFanout(fanout)
+	if debugFanout != nil {
+		liveFanout, err = pinui.NewMultiUIFanout(fanout, debugFanout)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if err := writeHelloAll(defaultSID, []string{"ui-events", "snapshot", "done", "stdin-rpc", "single-session", "multi-turn", "cancel"}, fanout, debugFanout); err != nil {
+		return nil, err
+	}
+
+	statusFanout := newRunStatusFanout(liveFanout)
+	runner, err := chatapp.NewRunner(commandRunnerOptions(statusFanout))
+	if err != nil {
+		_ = writeTerminalErrorDoneAll(defaultSID, "runner_init_failed", err, fanout, debugFanout)
+		return nil, err
+	}
+	defer func() { _ = runner.Close() }()
+
+	type stdinRPCActiveSubmit struct {
+		requestID string
+		prompt    string
+		started   chan struct{}
+		done      chan struct{}
+	}
+	type stdinRPCSingleSessionState struct {
+		mu             sync.Mutex
+		boundSessionID sessionstream.SessionId
+		currentTurn    *turns.Turn
+		active         *stdinRPCActiveSubmit
+	}
+
+	state := &stdinRPCSingleSessionState{}
+	bindOrValidateSession := func(raw string) (sessionstream.SessionId, error) {
+		sid := sessionstream.SessionId(strings.TrimSpace(raw))
+		if sid == "" {
+			sid = defaultSID
+		}
+		state.mu.Lock()
+		defer state.mu.Unlock()
+		if state.boundSessionID == "" {
+			state.boundSessionID = sid
+			return sid, nil
+		}
+		if sid != state.boundSessionID {
+			return state.boundSessionID, fmt.Errorf("stdin RPC process is bound to session %s; got %s", state.boundSessionID, sid)
+		}
+		return sid, nil
+	}
+	waitActive := func() {
+		for {
+			state.mu.Lock()
+			active := state.active
+			state.mu.Unlock()
+			if active == nil {
+				return
+			}
+			<-active.done
+		}
+	}
+	requestIDOrNew := func(raw string) string {
+		reqID := strings.TrimSpace(raw)
+		if reqID == "" {
+			return uuid.NewString()
+		}
+		return reqID
+	}
+
+	scanner := bufio.NewScanner(rc.Reader)
+	scanner.Buffer(make([]byte, 0, 64*1024), 10*1024*1024)
+	unmarshal := protojson.UnmarshalOptions{DiscardUnknown: true}
+	for scanner.Scan() {
+		raw := strings.TrimSpace(scanner.Text())
+		if raw == "" {
+			continue
+		}
+		var line chatapprpcv1.RpcRequestLine
+		if err := unmarshal.Unmarshal([]byte(raw), &line); err != nil {
+			_ = writeErrorForRequestAll(defaultSID, "", "invalid_request_json", err, false, fanout, debugFanout)
+			continue
+		}
+		reqID := requestIDOrNew(line.GetRequestId())
+		sid, bindErr := bindOrValidateSession(line.GetSessionId())
+		if bindErr != nil {
+			_ = writeErrorForRequestAll(sid, reqID, "session_mismatch", bindErr, false, fanout, debugFanout)
+			_ = writeDoneForRequestAll(sid, reqID, "failed", fanout, debugFanout)
+			continue
+		}
+
+		switch req := line.GetRequest().(type) {
+		case *chatapprpcv1.RpcRequestLine_Submit:
+			prompt := strings.TrimSpace(req.Submit.GetPrompt())
+			if prompt == "" {
+				_ = writeErrorForRequestAll(sid, reqID, "empty_prompt", fmt.Errorf("prompt is empty"), false, fanout, debugFanout)
+				_ = writeDoneForRequestAll(sid, reqID, "failed", fanout, debugFanout)
+				continue
+			}
+			state.mu.Lock()
+			if state.active != nil {
+				state.mu.Unlock()
+				_ = writeErrorForRequestAll(sid, reqID, "session_busy", fmt.Errorf("stdin RPC session %s already has an active submit", sid), false, fanout, debugFanout)
+				_ = writeDoneForRequestAll(sid, reqID, "failed", fanout, debugFanout)
+				continue
+			}
+			base := state.currentTurn
+			if base == nil {
+				base = seed
+			}
+			inputTurn := turnWithUserPrompt(base, prompt)
+			engine, err := rc.EngineFactory.CreateEngine(rc.InferenceSettings)
+			if err != nil {
+				state.mu.Unlock()
+				_ = writeErrorForRequestAll(sid, reqID, "engine_init_failed", err, false, fanout, debugFanout)
+				_ = writeDoneForRequestAll(sid, reqID, "failed", fanout, debugFanout)
+				continue
+			}
+			active := &stdinRPCActiveSubmit{requestID: reqID, prompt: prompt, started: make(chan struct{}), done: make(chan struct{})}
+			state.active = active
+			fanout.SetRequestID(reqID)
+			if debugFanout != nil {
+				debugFanout.SetRequestID(reqID)
+			}
+			state.mu.Unlock()
+
+			go func(sid sessionstream.SessionId, reqID string, prompt string, inputTurn *turns.Turn, engine gepeengine.Engine, active *stdinRPCActiveSubmit) {
+				defer close(active.done)
+				statusFanout.Reset()
+				var finalTurn *turns.Turn
+				err := runner.Service.SubmitPromptRequest(ctx, sid, chatapp.PromptRequest{
+					Prompt:      prompt,
+					InitialTurn: inputTurn,
+					Runtime:     &infruntime.ComposedRuntime{Engine: engine},
+					OnFinalTurn: func(t *turns.Turn) {
+						if t != nil {
+							finalTurn = t.Clone()
+						}
+					},
+				})
+				close(active.started)
+				if err != nil {
+					_ = writeErrorForRequestAll(sid, reqID, "submit_failed", err, false, fanout, debugFanout)
+					_ = writeDoneForRequestAll(sid, reqID, "failed", fanout, debugFanout)
+					state.mu.Lock()
+					if state.active == active {
+						state.active = nil
+						fanout.SetRequestID("")
+						if debugFanout != nil {
+							debugFanout.SetRequestID("")
+						}
+					}
+					state.mu.Unlock()
+					return
+				}
+				if err := runner.Service.WaitIdle(ctx, sid); err != nil {
+					_ = writeErrorForRequestAll(sid, reqID, "wait_failed", err, false, fanout, debugFanout)
+					_ = writeDoneForRequestAll(sid, reqID, "failed", fanout, debugFanout)
+					state.mu.Lock()
+					if state.active == active {
+						state.active = nil
+						fanout.SetRequestID("")
+						if debugFanout != nil {
+							debugFanout.SetRequestID("")
+						}
+					}
+					state.mu.Unlock()
+					return
+				}
+				snap, err := runner.Service.Snapshot(ctx, sid)
+				if err != nil {
+					_ = writeErrorForRequestAll(sid, reqID, "snapshot_failed", err, false, fanout, debugFanout)
+					_ = writeDoneForRequestAll(sid, reqID, "failed", fanout, debugFanout)
+					state.mu.Lock()
+					if state.active == active {
+						state.active = nil
+						fanout.SetRequestID("")
+						if debugFanout != nil {
+							debugFanout.SetRequestID("")
+						}
+					}
+					state.mu.Unlock()
+					return
+				}
+				_ = writeSnapshotForRequestAll(reqID, snap, fanout, debugFanout)
+				status, runErr := statusFanout.Result()
+				if runErr != nil {
+					_ = writeErrorForRequestAll(sid, reqID, "run_failed", runErr, false, fanout, debugFanout)
+				}
+				state.mu.Lock()
+				if state.active == active {
+					if runErr == nil && status == "ok" && finalTurn != nil {
+						state.currentTurn = finalTurn
+					}
+					state.active = nil
+					fanout.SetRequestID("")
+					if debugFanout != nil {
+						debugFanout.SetRequestID("")
+					}
+				}
+				state.mu.Unlock()
+				if runErr != nil {
+					_ = writeDoneForRequestAll(sid, reqID, status, fanout, debugFanout)
+					return
+				}
+				_ = writeDoneForRequestAll(sid, reqID, status, fanout, debugFanout)
+			}(sid, reqID, prompt, inputTurn, engine, active)
+		case *chatapprpcv1.RpcRequestLine_Snapshot:
+			waitActive()
+			snap, err := runner.Service.Snapshot(ctx, sid)
+			if err != nil {
+				_ = writeErrorForRequestAll(sid, reqID, "snapshot_failed", err, false, fanout, debugFanout)
+				_ = writeDoneForRequestAll(sid, reqID, "failed", fanout, debugFanout)
+				continue
+			}
+			_ = writeSnapshotForRequestAll(reqID, snap, fanout, debugFanout)
+			_ = writeDoneForRequestAll(sid, reqID, "ok", fanout, debugFanout)
+		case *chatapprpcv1.RpcRequestLine_Cancel:
+			state.mu.Lock()
+			active := state.active
+			state.mu.Unlock()
+			if active != nil {
+				<-active.started
+			}
+			if active == nil {
+				_ = writeErrorForRequestAll(sid, reqID, "no_active_request", fmt.Errorf("stdin RPC session %s has no active submit", sid), false, fanout, debugFanout)
+				_ = writeDoneForRequestAll(sid, reqID, "ok", fanout, debugFanout)
+				continue
+			}
+			err := runner.Service.Stop(ctx, sid)
+			if err != nil {
+				_ = writeErrorForRequestAll(sid, reqID, "cancel_failed", err, false, fanout, debugFanout)
+				_ = writeDoneForRequestAll(sid, reqID, "failed", fanout, debugFanout)
+				continue
+			}
+			_ = writeDoneForRequestAll(sid, reqID, "ok", fanout, debugFanout)
+		case *chatapprpcv1.RpcRequestLine_Shutdown:
+			waitActive()
+			_ = writeDoneForRequestAll(sid, reqID, "shutdown", fanout, debugFanout)
+			state.mu.Lock()
+			defer state.mu.Unlock()
+			return state.currentTurn, nil
+		default:
+			waitActive()
+			_ = writeErrorForRequestAll(sid, reqID, "unknown_request", fmt.Errorf("request oneof is empty"), false, fanout, debugFanout)
+			_ = writeDoneForRequestAll(sid, reqID, "failed", fanout, debugFanout)
+		}
+	}
+	waitActive()
+	state.mu.Lock()
+	defer state.mu.Unlock()
+	if err := scanner.Err(); err != nil {
+		_ = writeTerminalErrorDoneAll(defaultSID, "stdin_read_failed", err, fanout, debugFanout)
+		return state.currentTurn, err
+	}
+	return state.currentTurn, nil
+}
+
+func turnWithUserPrompt(base *turns.Turn, prompt string) *turns.Turn {
+	var t *turns.Turn
+	if base != nil {
+		t = base.Clone()
+	} else {
+		t = &turns.Turn{}
+	}
+	turns.AppendBlock(t, turns.NewUserTextBlock(prompt))
+	return t
+}
+
 func openDebugEventsFanout(settings *run.UISettings) (*chatapprpcjsonl.UIFanout, func(), error) {
 	noop := func() {}
 	if settings == nil || strings.TrimSpace(settings.DebugEventsJSONL) == "" {
@@ -955,6 +1260,18 @@ func writeSnapshotAll(snap sessionstream.Snapshot, fanouts ...*chatapprpcjsonl.U
 	return nil
 }
 
+func writeSnapshotForRequestAll(requestID string, snap sessionstream.Snapshot, fanouts ...*chatapprpcjsonl.UIFanout) error {
+	for _, fanout := range fanouts {
+		if fanout == nil {
+			continue
+		}
+		if err := fanout.WriteSnapshotForRequest(requestID, snap); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func writeErrorAll(sid sessionstream.SessionId, code string, err error, terminal bool, fanouts ...*chatapprpcjsonl.UIFanout) error {
 	for _, fanout := range fanouts {
 		if fanout == nil {
@@ -967,12 +1284,36 @@ func writeErrorAll(sid sessionstream.SessionId, code string, err error, terminal
 	return nil
 }
 
+func writeErrorForRequestAll(sid sessionstream.SessionId, requestID string, code string, err error, terminal bool, fanouts ...*chatapprpcjsonl.UIFanout) error {
+	for _, fanout := range fanouts {
+		if fanout == nil {
+			continue
+		}
+		if writeErr := fanout.WriteErrorForRequest(sid, requestID, code, err, terminal); writeErr != nil {
+			return writeErr
+		}
+	}
+	return nil
+}
+
 func writeDoneAll(sid sessionstream.SessionId, status string, fanouts ...*chatapprpcjsonl.UIFanout) error {
 	for _, fanout := range fanouts {
 		if fanout == nil {
 			continue
 		}
 		if err := fanout.WriteDone(sid, status); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func writeDoneForRequestAll(sid sessionstream.SessionId, requestID string, status string, fanouts ...*chatapprpcjsonl.UIFanout) error {
+	for _, fanout := range fanouts {
+		if fanout == nil {
+			continue
+		}
+		if err := fanout.WriteDoneForRequest(sid, requestID, status); err != nil {
 			return err
 		}
 	}
