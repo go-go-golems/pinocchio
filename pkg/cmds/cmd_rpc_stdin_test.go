@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/go-go-golems/geppetto/pkg/inference/engine"
 	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
@@ -92,6 +94,48 @@ func TestRunWithOptionsStdinRPCIsolatesSessionAccumulators(t *testing.T) {
 	require.Equal(t, "s1:shutdown", done["shutdown"])
 }
 
+func TestRunWithOptionsStdinRPCCancelWhileRunning(t *testing.T) {
+	cmd := newRPCStdinTestCommand(t)
+	inferenceSettings, err := settings.NewInferenceSettings()
+	require.NoError(t, err)
+
+	stdinReader, stdinWriter := io.Pipe()
+	t.Cleanup(func() { _ = stdinReader.Close() })
+	go func() {
+		_, _ = fmt.Fprintln(stdinWriter, `{"version":1,"sessionId":"s1","requestId":"run","submit":{"prompt":"block until canceled"}}`)
+		time.Sleep(50 * time.Millisecond)
+		_, _ = fmt.Fprintln(stdinWriter, `{"version":1,"sessionId":"s1","requestId":"cancel","cancel":{}}`)
+		_, _ = fmt.Fprintln(stdinWriter, `{"version":1,"sessionId":"s1","requestId":"shutdown","shutdown":{}}`)
+		_ = stdinWriter.Close()
+	}()
+	var out bytes.Buffer
+
+	finalTurn, err := cmd.RunWithOptions(context.Background(),
+		run.WithRunMode(run.RunModeRPCStdin),
+		run.WithReader(stdinReader),
+		run.WithWriter(&out),
+		run.WithInferenceSettings(inferenceSettings),
+		run.WithEngineFactory(blockingEngineFactory{}),
+	)
+	require.NoError(t, err)
+	require.Nil(t, finalTurn)
+
+	var sawStopped bool
+	done := map[string]string{}
+	for _, frame := range parseRPCLines(t, out.String()) {
+		if ui := frame.GetUiEvent(); ui != nil && ui.GetName() == "ChatRunStopped" {
+			sawStopped = true
+		}
+		if df := frame.GetDone(); df != nil {
+			done[frame.GetRequestId()] = df.GetStatus()
+		}
+	}
+	require.True(t, sawStopped, out.String())
+	require.Equal(t, "ok", done["cancel"])
+	require.Equal(t, "stopped", done["run"])
+	require.Equal(t, "shutdown", done["shutdown"])
+}
+
 func TestRunWithOptionsStdinRPCMalformedInputReportsError(t *testing.T) {
 	cmd := newRPCStdinTestCommand(t)
 	inferenceSettings, err := settings.NewInferenceSettings()
@@ -136,6 +180,22 @@ func (countingEngineFactory) CreateEngine(*settings.InferenceSettings) (engine.E
 
 func (countingEngineFactory) SupportedProviders() []string { return []string{"openai"} }
 func (countingEngineFactory) DefaultProvider() string      { return "openai" }
+
+type blockingEngineFactory struct{}
+
+func (blockingEngineFactory) CreateEngine(*settings.InferenceSettings) (engine.Engine, error) {
+	return blockingEngine{}, nil
+}
+
+func (blockingEngineFactory) SupportedProviders() []string { return []string{"openai"} }
+func (blockingEngineFactory) DefaultProvider() string      { return "openai" }
+
+type blockingEngine struct{}
+
+func (blockingEngine) RunInference(ctx context.Context, _ *turns.Turn) (*turns.Turn, error) {
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
 
 type countingEngine struct{}
 

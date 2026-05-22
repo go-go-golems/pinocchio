@@ -10,8 +10,10 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 
 	geppettobootstrap "github.com/go-go-golems/geppetto/pkg/cli/bootstrap"
+	gepeengine "github.com/go-go-golems/geppetto/pkg/inference/engine"
 	"github.com/go-go-golems/geppetto/pkg/inference/engine/factory"
 	"github.com/go-go-golems/geppetto/pkg/inference/middleware"
 	"github.com/go-go-golems/geppetto/pkg/inference/toolloop/enginebuilder"
@@ -963,11 +965,53 @@ func (g *PinocchioCommand) runStdinRPC(ctx context.Context, rc *run.RunContext) 
 	}
 	defer func() { _ = runner.Close() }()
 
+	type stdinRPCActiveRun struct {
+		started chan struct{}
+		done    chan struct{}
+	}
+
 	turnsBySession := map[sessionstream.SessionId]*turns.Turn{}
+	activeBySession := map[sessionstream.SessionId]*stdinRPCActiveRun{}
+	var stateMu sync.Mutex
+	var lastTurn *turns.Turn
+
+	setRequestID := func(requestID string) {
+		fanout.SetRequestID(requestID)
+		if debugFanout != nil {
+			debugFanout.SetRequestID(requestID)
+		}
+	}
+	waitActive := func(sid sessionstream.SessionId) {
+		for {
+			stateMu.Lock()
+			active := activeBySession[sid]
+			stateMu.Unlock()
+			if active == nil {
+				return
+			}
+			<-active.done
+		}
+	}
+	waitAllActive := func() {
+		for {
+			stateMu.Lock()
+			activeRuns := make([]*stdinRPCActiveRun, 0, len(activeBySession))
+			for _, active := range activeBySession {
+				activeRuns = append(activeRuns, active)
+			}
+			stateMu.Unlock()
+			if len(activeRuns) == 0 {
+				return
+			}
+			for _, active := range activeRuns {
+				<-active.done
+			}
+		}
+	}
+
 	scanner := bufio.NewScanner(rc.Reader)
 	scanner.Buffer(make([]byte, 0, 64*1024), 10*1024*1024)
 	unmarshal := protojson.UnmarshalOptions{DiscardUnknown: true}
-	var lastTurn *turns.Turn
 	for scanner.Scan() {
 		raw := strings.TrimSpace(scanner.Text())
 		if raw == "" {
@@ -975,10 +1019,7 @@ func (g *PinocchioCommand) runStdinRPC(ctx context.Context, rc *run.RunContext) 
 		}
 		var line chatapprpcv1.RpcRequestLine
 		if err := unmarshal.Unmarshal([]byte(raw), &line); err != nil {
-			fanout.SetRequestID("")
-			if debugFanout != nil {
-				debugFanout.SetRequestID("")
-			}
+			setRequestID("")
 			_ = writeErrorAll(defaultSID, "invalid_request_json", err, false, fanout, debugFanout)
 			continue
 		}
@@ -990,21 +1031,20 @@ func (g *PinocchioCommand) runStdinRPC(ctx context.Context, rc *run.RunContext) 
 		if reqID == "" {
 			reqID = uuid.NewString()
 		}
-		fanout.SetRequestID(reqID)
-		if debugFanout != nil {
-			debugFanout.SetRequestID(reqID)
-		}
+		setRequestID(reqID)
 
 		switch req := line.GetRequest().(type) {
 		case *chatapprpcv1.RpcRequestLine_Submit:
-			statusFanout.Reset()
+			waitActive(sid)
 			prompt := strings.TrimSpace(req.Submit.GetPrompt())
 			if prompt == "" {
 				_ = writeErrorAll(sid, "empty_prompt", fmt.Errorf("prompt is empty"), true, fanout, debugFanout)
 				_ = writeDoneAll(sid, "failed", fanout, debugFanout)
 				continue
 			}
+			stateMu.Lock()
 			base := turnsBySession[sid]
+			stateMu.Unlock()
 			if base == nil {
 				base = seed
 			}
@@ -1014,43 +1054,70 @@ func (g *PinocchioCommand) runStdinRPC(ctx context.Context, rc *run.RunContext) 
 				_ = writeTerminalErrorDoneAll(sid, "engine_init_failed", err, fanout, debugFanout)
 				continue
 			}
-			var finalTurn *turns.Turn
-			err = runner.Service.SubmitPromptRequest(ctx, sid, chatapp.PromptRequest{
-				Prompt:      prompt,
-				InitialTurn: inputTurn,
-				Runtime:     &infruntime.ComposedRuntime{Engine: engine},
-				OnFinalTurn: func(t *turns.Turn) {
-					if t != nil {
-						finalTurn = t.Clone()
+
+			active := &stdinRPCActiveRun{started: make(chan struct{}), done: make(chan struct{})}
+			stateMu.Lock()
+			activeBySession[sid] = active
+			stateMu.Unlock()
+
+			go func(sid sessionstream.SessionId, reqID string, prompt string, inputTurn *turns.Turn, engine gepeengine.Engine, active *stdinRPCActiveRun) {
+				defer func() {
+					stateMu.Lock()
+					if activeBySession[sid] == active {
+						delete(activeBySession, sid)
 					}
-				},
-			})
-			if err != nil {
-				_ = writeTerminalErrorDoneAll(sid, "submit_failed", err, fanout, debugFanout)
-				continue
-			}
-			if err := runner.Service.WaitIdle(ctx, sid); err != nil {
-				_ = writeTerminalErrorDoneAll(sid, "wait_failed", err, fanout, debugFanout)
-				continue
-			}
-			snap, err := runner.Service.Snapshot(ctx, sid)
-			if err != nil {
-				_ = writeTerminalErrorDoneAll(sid, "snapshot_failed", err, fanout, debugFanout)
-				continue
-			}
-			_ = writeSnapshotAll(snap, fanout, debugFanout)
-			status, runErr := statusFanout.Result()
-			if runErr != nil {
-				_ = writeErrorAll(sid, "run_failed", runErr, true, fanout, debugFanout)
+					stateMu.Unlock()
+					close(active.done)
+				}()
+				setRequestID(reqID)
+				statusFanout.Reset()
+				var finalTurn *turns.Turn
+				err := runner.Service.SubmitPromptRequest(ctx, sid, chatapp.PromptRequest{
+					Prompt:      prompt,
+					InitialTurn: inputTurn,
+					Runtime:     &infruntime.ComposedRuntime{Engine: engine},
+					OnFinalTurn: func(t *turns.Turn) {
+						if t != nil {
+							finalTurn = t.Clone()
+						}
+					},
+				})
+				close(active.started)
+				if err != nil {
+					setRequestID(reqID)
+					_ = writeTerminalErrorDoneAll(sid, "submit_failed", err, fanout, debugFanout)
+					return
+				}
+				if err := runner.Service.WaitIdle(ctx, sid); err != nil {
+					setRequestID(reqID)
+					_ = writeTerminalErrorDoneAll(sid, "wait_failed", err, fanout, debugFanout)
+					return
+				}
+				snap, err := runner.Service.Snapshot(ctx, sid)
+				if err != nil {
+					setRequestID(reqID)
+					_ = writeTerminalErrorDoneAll(sid, "snapshot_failed", err, fanout, debugFanout)
+					return
+				}
+				setRequestID(reqID)
+				_ = writeSnapshotAll(snap, fanout, debugFanout)
+				status, runErr := statusFanout.Result()
+				if runErr != nil {
+					_ = writeErrorAll(sid, "run_failed", runErr, true, fanout, debugFanout)
+					_ = writeDoneAll(sid, status, fanout, debugFanout)
+					return
+				}
+				if finalTurn != nil {
+					stateMu.Lock()
+					turnsBySession[sid] = finalTurn
+					lastTurn = finalTurn
+					stateMu.Unlock()
+				}
 				_ = writeDoneAll(sid, status, fanout, debugFanout)
-				continue
-			}
-			if finalTurn != nil {
-				turnsBySession[sid] = finalTurn
-				lastTurn = finalTurn
-			}
-			_ = writeDoneAll(sid, status, fanout, debugFanout)
+			}(sid, reqID, prompt, inputTurn, engine, active)
 		case *chatapprpcv1.RpcRequestLine_Snapshot:
+			waitActive(sid)
+			setRequestID(reqID)
 			snap, err := runner.Service.Snapshot(ctx, sid)
 			if err != nil {
 				_ = writeErrorAll(sid, "snapshot_failed", err, true, fanout, debugFanout)
@@ -1060,19 +1127,33 @@ func (g *PinocchioCommand) runStdinRPC(ctx context.Context, rc *run.RunContext) 
 			_ = writeSnapshotAll(snap, fanout, debugFanout)
 			_ = writeDoneAll(sid, "ok", fanout, debugFanout)
 		case *chatapprpcv1.RpcRequestLine_Cancel:
+			stateMu.Lock()
+			active := activeBySession[sid]
+			stateMu.Unlock()
+			if active != nil {
+				<-active.started
+			}
+			setRequestID(reqID)
 			err := runner.Service.Stop(ctx, sid)
 			if err != nil {
 				_ = writeErrorAll(sid, "cancel_failed", err, true, fanout, debugFanout)
 			}
 			_ = writeDoneAll(sid, "ok", fanout, debugFanout)
 		case *chatapprpcv1.RpcRequestLine_Shutdown:
+			waitAllActive()
+			setRequestID(reqID)
 			_ = writeDoneAll(sid, "shutdown", fanout, debugFanout)
+			stateMu.Lock()
+			defer stateMu.Unlock()
 			return lastTurn, nil
 		default:
+			waitActive(sid)
+			setRequestID(reqID)
 			_ = writeErrorAll(sid, "unknown_request", fmt.Errorf("request oneof is empty"), true, fanout, debugFanout)
 			_ = writeDoneAll(sid, "failed", fanout, debugFanout)
 		}
 	}
+	waitAllActive()
 	if err := scanner.Err(); err != nil {
 		_ = writeTerminalErrorDoneAll(defaultSID, "stdin_read_failed", err, fanout, debugFanout)
 		return lastTurn, err
