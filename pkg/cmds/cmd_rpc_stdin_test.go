@@ -23,11 +23,11 @@ func TestRunWithOptionsStdinRPCMultiTurn(t *testing.T) {
 	inferenceSettings, err := settings.NewInferenceSettings()
 	require.NoError(t, err)
 
-	stdin := strings.NewReader(strings.Join([]string{
+	stdin := delayedJSONLReader(t, 20*time.Millisecond,
 		`{"version":1,"sessionId":"s1","requestId":"r1","submit":{"prompt":"first"}}`,
 		`{"version":1,"sessionId":"s1","requestId":"r2","submit":{"prompt":"second"}}`,
 		`{"version":1,"sessionId":"s1","requestId":"r3","shutdown":{}}`,
-	}, "\n") + "\n")
+	)
 	var out bytes.Buffer
 
 	finalTurn, err := cmd.RunWithOptions(context.Background(),
@@ -42,6 +42,8 @@ func TestRunWithOptionsStdinRPCMultiTurn(t *testing.T) {
 	require.Contains(t, assistantTexts(finalTurn), "users=3") // seed prompt + first + second
 
 	frames := parseRPCLines(t, out.String())
+	require.Contains(t, frames[0].GetHello().GetCapabilities(), "single-session")
+	require.Contains(t, frames[0].GetHello().GetCapabilities(), "cancel")
 	var doneByRequest []string
 	var sawR2Patch bool
 	for _, frame := range frames {
@@ -58,17 +60,16 @@ func TestRunWithOptionsStdinRPCMultiTurn(t *testing.T) {
 	require.True(t, sawR2Patch, out.String())
 }
 
-func TestRunWithOptionsStdinRPCIsolatesSessionAccumulators(t *testing.T) {
+func TestRunWithOptionsStdinRPCRejectsDifferentSession(t *testing.T) {
 	cmd := newRPCStdinTestCommand(t)
 	inferenceSettings, err := settings.NewInferenceSettings()
 	require.NoError(t, err)
 
-	stdin := strings.NewReader(strings.Join([]string{
+	stdin := delayedJSONLReader(t, 20*time.Millisecond,
 		`{"version":1,"sessionId":"s1","requestId":"s1-r1","submit":{"prompt":"s1 first"}}`,
 		`{"version":1,"sessionId":"s2","requestId":"s2-r1","submit":{"prompt":"s2 first"}}`,
-		`{"version":1,"sessionId":"s1","requestId":"s1-r2","submit":{"prompt":"s1 second"}}`,
 		`{"version":1,"sessionId":"s1","requestId":"shutdown","shutdown":{}}`,
-	}, "\n") + "\n")
+	)
 	var out bytes.Buffer
 
 	finalTurn, err := cmd.RunWithOptions(context.Background(),
@@ -80,18 +81,65 @@ func TestRunWithOptionsStdinRPCIsolatesSessionAccumulators(t *testing.T) {
 	)
 	require.NoError(t, err)
 	require.NotNil(t, finalTurn)
-	require.Contains(t, assistantTexts(finalTurn), "users=3") // seed prompt + s1 first + s1 second
+	require.Contains(t, assistantTexts(finalTurn), "users=2") // seed prompt + s1 first
 
 	done := map[string]string{}
+	var sawMismatch bool
 	for _, frame := range parseRPCLines(t, out.String()) {
+		if ef := frame.GetError(); ef != nil && ef.GetCode() == "session_mismatch" {
+			sawMismatch = frame.GetRequestId() == "s2-r1"
+		}
 		if df := frame.GetDone(); df != nil {
 			done[frame.GetRequestId()] = frame.GetSessionId() + ":" + df.GetStatus()
 		}
 	}
+	require.True(t, sawMismatch, out.String())
 	require.Equal(t, "s1:ok", done["s1-r1"])
-	require.Equal(t, "s2:ok", done["s2-r1"])
-	require.Equal(t, "s1:ok", done["s1-r2"])
+	require.Equal(t, "s1:failed", done["s2-r1"])
 	require.Equal(t, "s1:shutdown", done["shutdown"])
+}
+
+func TestRunWithOptionsStdinRPCRejectsSubmitWhileActive(t *testing.T) {
+	cmd := newRPCStdinTestCommand(t)
+	inferenceSettings, err := settings.NewInferenceSettings()
+	require.NoError(t, err)
+
+	stdinReader, stdinWriter := io.Pipe()
+	t.Cleanup(func() { _ = stdinReader.Close() })
+	go func() {
+		_, _ = fmt.Fprintln(stdinWriter, `{"version":1,"sessionId":"s1","requestId":"run","submit":{"prompt":"block until canceled"}}`)
+		time.Sleep(50 * time.Millisecond)
+		_, _ = fmt.Fprintln(stdinWriter, `{"version":1,"sessionId":"s1","requestId":"busy","submit":{"prompt":"should be rejected"}}`)
+		_, _ = fmt.Fprintln(stdinWriter, `{"version":1,"sessionId":"s1","requestId":"cancel","cancel":{}}`)
+		_, _ = fmt.Fprintln(stdinWriter, `{"version":1,"sessionId":"s1","requestId":"shutdown","shutdown":{}}`)
+		_ = stdinWriter.Close()
+	}()
+	var out bytes.Buffer
+
+	_, err = cmd.RunWithOptions(context.Background(),
+		run.WithRunMode(run.RunModeRPCStdin),
+		run.WithReader(stdinReader),
+		run.WithWriter(&out),
+		run.WithInferenceSettings(inferenceSettings),
+		run.WithEngineFactory(blockingEngineFactory{}),
+	)
+	require.NoError(t, err)
+
+	var sawBusy bool
+	done := map[string]string{}
+	for _, frame := range parseRPCLines(t, out.String()) {
+		if ef := frame.GetError(); ef != nil && ef.GetCode() == "session_busy" {
+			sawBusy = frame.GetRequestId() == "busy"
+		}
+		if df := frame.GetDone(); df != nil {
+			done[frame.GetRequestId()] = df.GetStatus()
+		}
+	}
+	require.True(t, sawBusy, out.String())
+	require.Equal(t, "failed", done["busy"])
+	require.Equal(t, "ok", done["cancel"])
+	require.Equal(t, "stopped", done["run"])
+	require.Equal(t, "shutdown", done["shutdown"])
 }
 
 func TestRunWithOptionsStdinRPCCancelWhileRunning(t *testing.T) {
@@ -123,8 +171,11 @@ func TestRunWithOptionsStdinRPCCancelWhileRunning(t *testing.T) {
 	var sawStopped bool
 	done := map[string]string{}
 	for _, frame := range parseRPCLines(t, out.String()) {
-		if ui := frame.GetUiEvent(); ui != nil && ui.GetName() == "ChatRunStopped" {
-			sawStopped = true
+		if ui := frame.GetUiEvent(); ui != nil {
+			require.NotEqual(t, "cancel", frame.GetRequestId(), "control request id must not steal active submit UI frames")
+			if ui.GetName() == "ChatRunStopped" && frame.GetRequestId() == "run" {
+				sawStopped = true
+			}
 		}
 		if df := frame.GetDone(); df != nil {
 			done[frame.GetRequestId()] = df.GetStatus()
@@ -158,6 +209,22 @@ func TestRunWithOptionsStdinRPCMalformedInputReportsError(t *testing.T) {
 		}
 	}
 	require.True(t, sawInvalid, out.String())
+}
+
+func delayedJSONLReader(t *testing.T, delay time.Duration, lines ...string) io.Reader {
+	t.Helper()
+	reader, writer := io.Pipe()
+	t.Cleanup(func() { _ = reader.Close() })
+	go func() {
+		for i, line := range lines {
+			if i > 0 && delay > 0 {
+				time.Sleep(delay)
+			}
+			_, _ = fmt.Fprintln(writer, line)
+		}
+		_ = writer.Close()
+	}()
+	return reader
 }
 
 func newRPCStdinTestCommand(t *testing.T) *PinocchioCommand {

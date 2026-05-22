@@ -90,31 +90,55 @@ func (f *UIFanout) PublishUI(_ context.Context, sid sessionstream.SessionId, ord
 
 // WriteHello writes the standard hello frame for a session.
 func (f *UIFanout) WriteHello(sid sessionstream.SessionId, capabilities []string) error {
+	return f.WriteHelloForRequest(sid, f.currentRequestID(), capabilities)
+}
+
+// WriteHelloForRequest writes a hello frame with an explicit request id. Most
+// hello frames are connection-level and should pass an empty request id.
+func (f *UIFanout) WriteHelloForRequest(sid sessionstream.SessionId, requestID string, capabilities []string) error {
 	if f == nil || f.writer == nil {
 		return fmt.Errorf("jsonl ui fanout is not initialized")
 	}
-	return f.writer.WriteLine(WithRequestID(NewHelloLine(string(sid), capabilities), f.currentRequestID()))
+	return f.writer.WriteLine(WithRequestID(NewHelloLine(string(sid), capabilities), requestID))
 }
 
 // WriteError writes a structured error frame for a session.
 func (f *UIFanout) WriteError(sid sessionstream.SessionId, code string, err error, terminal bool) error {
+	return f.WriteErrorForRequest(sid, f.currentRequestID(), code, err, terminal)
+}
+
+// WriteErrorForRequest writes a structured error frame with an explicit request
+// id. Stdin RPC control requests use this to avoid mutating the active submit's
+// request id while cancellation or validation errors are being reported.
+func (f *UIFanout) WriteErrorForRequest(sid sessionstream.SessionId, requestID string, code string, err error, terminal bool) error {
 	if f == nil || f.writer == nil {
 		return fmt.Errorf("jsonl ui fanout is not initialized")
 	}
-	return f.writer.WriteLine(WithRequestID(NewErrorLine(string(sid), code, err, terminal), f.currentRequestID()))
+	return f.writer.WriteLine(WithRequestID(NewErrorLine(string(sid), code, err, terminal), requestID))
 }
 
 // WriteDone writes the adapter-level done frame for a session.
 func (f *UIFanout) WriteDone(sid sessionstream.SessionId, status string) error {
+	return f.WriteDoneForRequest(sid, f.currentRequestID(), status)
+}
+
+// WriteDoneForRequest writes an adapter-level done frame with an explicit
+// request id.
+func (f *UIFanout) WriteDoneForRequest(sid sessionstream.SessionId, requestID string, status string) error {
 	if f == nil || f.writer == nil {
 		return fmt.Errorf("jsonl ui fanout is not initialized")
 	}
-	return f.writer.WriteLine(WithRequestID(NewDoneLine(string(sid), status), f.currentRequestID()))
+	return f.writer.WriteLine(WithRequestID(NewDoneLine(string(sid), status), requestID))
 }
 
 // WriteSnapshot writes one snapshot frame containing the current sessionstream
 // hydration entities.
 func (f *UIFanout) WriteSnapshot(snap sessionstream.Snapshot) error {
+	return f.WriteSnapshotForRequest(f.currentRequestID(), snap)
+}
+
+// WriteSnapshotForRequest writes one snapshot frame with an explicit request id.
+func (f *UIFanout) WriteSnapshotForRequest(requestID string, snap sessionstream.Snapshot) error {
 	if f == nil || f.writer == nil {
 		return fmt.Errorf("jsonl ui fanout is not initialized")
 	}
@@ -136,7 +160,7 @@ func (f *UIFanout) WriteSnapshot(snap sessionstream.Snapshot) error {
 	return f.writer.WriteLine(&chatapprpcv1.RpcLine{
 		Version:   1,
 		SessionId: string(snap.SessionId),
-		RequestId: f.currentRequestID(),
+		RequestId: strings.TrimSpace(requestID),
 		Frame: &chatapprpcv1.RpcLine_Snapshot{
 			Snapshot: &chatapprpcv1.SnapshotFrame{
 				SnapshotOrdinal: snap.SnapshotOrdinal,
