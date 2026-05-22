@@ -32,6 +32,34 @@ message RpcLine {
   reserved 100 to 199;
 }
 
+// RpcRequestLine is the protobuf-defined JSONL envelope read from stdin by the
+// future long-lived multi-turn RPC mode. Each stdin line is one RpcRequestLine
+// encoded with protobuf JSON (protojson).
+message RpcRequestLine {
+  uint32 version = 1;
+  string session_id = 2;
+  string request_id = 3;
+
+  oneof request {
+    SubmitPromptRequest submit = 10;
+    CancelRequest cancel = 11;
+    SnapshotRequest snapshot = 12;
+    ShutdownRequest shutdown = 13;
+  }
+
+  reserved 100 to 199;
+}
+
+message SubmitPromptRequest {
+  string prompt = 1;
+}
+
+message CancelRequest {}
+
+message SnapshotRequest {}
+
+message ShutdownRequest {}
+
 // HelloFrame identifies the protocol and advertised capabilities for this
 // stream. It is normally the first line emitted by --rpc.
 message HelloFrame {

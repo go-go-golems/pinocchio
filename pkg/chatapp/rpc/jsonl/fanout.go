@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"sync"
 
 	chatapprpcv1 "github.com/go-go-golems/pinocchio/pkg/chatapp/pb/proto/pinocchio/chatapp/rpc/v1"
 	sessionstream "github.com/go-go-golems/sessionstream/pkg/sessionstream"
@@ -15,7 +16,9 @@ import (
 // UIFanout adapts projected sessionstream UI events to protobuf-defined JSONL
 // RpcLine frames.
 type UIFanout struct {
-	writer *Writer
+	writer    *Writer
+	mu        sync.RWMutex
+	requestID string
 }
 
 var _ sessionstream.UIFanout = (*UIFanout)(nil)
@@ -37,6 +40,25 @@ func NewUIFanoutWithWriter(writer *Writer) (*UIFanout, error) {
 	return &UIFanout{writer: writer}, nil
 }
 
+// SetRequestID sets the request id stamped on subsequently written frames.
+func (f *UIFanout) SetRequestID(requestID string) {
+	if f == nil {
+		return
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.requestID = strings.TrimSpace(requestID)
+}
+
+func (f *UIFanout) currentRequestID() string {
+	if f == nil {
+		return ""
+	}
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+	return f.requestID
+}
+
 // PublishUI writes one ui_event RpcLine for every projected sessionstream UI event.
 func (f *UIFanout) PublishUI(_ context.Context, sid sessionstream.SessionId, ord uint64, events []sessionstream.UIEvent) error {
 	if f == nil || f.writer == nil {
@@ -50,6 +72,7 @@ func (f *UIFanout) PublishUI(_ context.Context, sid sessionstream.SessionId, ord
 		line := &chatapprpcv1.RpcLine{
 			Version:   1,
 			SessionId: string(sid),
+			RequestId: f.currentRequestID(),
 			Frame: &chatapprpcv1.RpcLine_UiEvent{
 				UiEvent: &chatapprpcv1.UiEventFrame{
 					Ordinal: ord,
@@ -70,7 +93,7 @@ func (f *UIFanout) WriteHello(sid sessionstream.SessionId, capabilities []string
 	if f == nil || f.writer == nil {
 		return fmt.Errorf("jsonl ui fanout is not initialized")
 	}
-	return f.writer.WriteLine(NewHelloLine(string(sid), capabilities))
+	return f.writer.WriteLine(WithRequestID(NewHelloLine(string(sid), capabilities), f.currentRequestID()))
 }
 
 // WriteError writes a structured error frame for a session.
@@ -78,7 +101,7 @@ func (f *UIFanout) WriteError(sid sessionstream.SessionId, code string, err erro
 	if f == nil || f.writer == nil {
 		return fmt.Errorf("jsonl ui fanout is not initialized")
 	}
-	return f.writer.WriteLine(NewErrorLine(string(sid), code, err, terminal))
+	return f.writer.WriteLine(WithRequestID(NewErrorLine(string(sid), code, err, terminal), f.currentRequestID()))
 }
 
 // WriteDone writes the adapter-level done frame for a session.
@@ -86,7 +109,7 @@ func (f *UIFanout) WriteDone(sid sessionstream.SessionId, status string) error {
 	if f == nil || f.writer == nil {
 		return fmt.Errorf("jsonl ui fanout is not initialized")
 	}
-	return f.writer.WriteLine(NewDoneLine(string(sid), status))
+	return f.writer.WriteLine(WithRequestID(NewDoneLine(string(sid), status), f.currentRequestID()))
 }
 
 // WriteSnapshot writes one snapshot frame containing the current sessionstream
@@ -113,6 +136,7 @@ func (f *UIFanout) WriteSnapshot(snap sessionstream.Snapshot) error {
 	return f.writer.WriteLine(&chatapprpcv1.RpcLine{
 		Version:   1,
 		SessionId: string(snap.SessionId),
+		RequestId: f.currentRequestID(),
 		Frame: &chatapprpcv1.RpcLine_Snapshot{
 			Snapshot: &chatapprpcv1.SnapshotFrame{
 				SnapshotOrdinal: snap.SnapshotOrdinal,
@@ -135,6 +159,7 @@ func (f *UIFanout) WriteBackendEvent(sid sessionstream.SessionId, ord uint64, na
 	return f.writer.WriteLine(&chatapprpcv1.RpcLine{
 		Version:   1,
 		SessionId: string(sid),
+		RequestId: f.currentRequestID(),
 		Frame: &chatapprpcv1.RpcLine_BackendEvent{
 			BackendEvent: &chatapprpcv1.BackendEventFrame{
 				Ordinal: ord,

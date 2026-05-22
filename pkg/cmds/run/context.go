@@ -18,6 +18,7 @@ const (
 	RunModeInteractive
 	RunModeChat
 	RunModeRPCJSONL
+	RunModeRPCStdin
 )
 
 // UISettings contains all settings related to terminal UI and output formatting
@@ -29,6 +30,7 @@ type UISettings struct {
 	PrintPrompt      bool
 	Output           string
 	RPC              bool
+	StdinRPC         bool
 	DebugEventsJSONL string
 	SessionID        string
 	Resume           bool
@@ -67,6 +69,7 @@ type RunContext struct {
 	// Optional UI/Terminal specific components
 	UISettings  *UISettings
 	Writer      io.Writer
+	Reader      io.Reader
 	Persistence PersistenceSettings
 
 	// Run configuration
@@ -141,6 +144,13 @@ func WithWriter(w io.Writer) RunOption {
 	}
 }
 
+func WithReader(r io.Reader) RunOption {
+	return func(rc *RunContext) error {
+		rc.Reader = r
+		return nil
+	}
+}
+
 func WithPersistenceSettings(settings PersistenceSettings) RunOption {
 	return func(rc *RunContext) error {
 		rc.Persistence = settings
@@ -170,5 +180,6 @@ func NewRunContext() *RunContext {
 	return &RunContext{
 		RunMode: RunModeBlocking,
 		Writer:  os.Stdout,
+		Reader:  os.Stdin,
 	}
 }

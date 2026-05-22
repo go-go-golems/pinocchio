@@ -72,6 +72,13 @@ func (w *Writer) WriteLine(line *chatapprpcv1.RpcLine) error {
 
 // NewHelloLine returns the standard hello frame for a Pinocchio chatapp RPC
 // stream.
+func WithRequestID(line *chatapprpcv1.RpcLine, requestID string) *chatapprpcv1.RpcLine {
+	if line != nil {
+		line.RequestId = strings.TrimSpace(requestID)
+	}
+	return line
+}
+
 func NewHelloLine(sessionID string, capabilities []string) *chatapprpcv1.RpcLine {
 	return &chatapprpcv1.RpcLine{
 		Version:   1,

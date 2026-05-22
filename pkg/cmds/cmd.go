@@ -1,6 +1,7 @@
 package cmds
 
 import (
+	"bufio"
 	"context"
 	_ "embed"
 	"fmt"
@@ -28,6 +29,7 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cmds/schema"
 	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	"github.com/go-go-golems/pinocchio/pkg/chatapp"
+	chatapprpcv1 "github.com/go-go-golems/pinocchio/pkg/chatapp/pb/proto/pinocchio/chatapp/rpc/v1"
 	chatappv1 "github.com/go-go-golems/pinocchio/pkg/chatapp/pb/proto/pinocchio/chatapp/v1"
 	"github.com/go-go-golems/pinocchio/pkg/chatapp/plugins"
 	chatapprpcjsonl "github.com/go-go-golems/pinocchio/pkg/chatapp/rpc/jsonl"
@@ -43,6 +45,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/tcnksm/go-input"
 	"golang.org/x/sync/errgroup"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 func renderTemplateString(name, text string, vars map[string]interface{}) (string, error) {
@@ -297,6 +300,7 @@ func (g *PinocchioCommand) RunIntoWriter(
 		PrintPrompt:      helpersSettings.PrintPrompt,
 		Output:           helpersSettings.Output,
 		RPC:              helpersSettings.RPC,
+		StdinRPC:         helpersSettings.StdinRPC,
 		DebugEventsJSONL: strings.TrimSpace(helpersSettings.DebugEventsJSONL),
 		SessionID:        strings.TrimSpace(helpersSettings.SessionID),
 		Resume:           helpersSettings.Resume,
@@ -350,6 +354,7 @@ func (g *PinocchioCommand) RunIntoWriter(
 		run.WithProfileSelection(profileSettings.Profile, strings.Join(profileSettings.ProfileRegistries, ",")),
 		run.WithEngineFactory(g.EngineFactory),
 		run.WithWriter(w),
+		run.WithReader(os.Stdin),
 		run.WithRunMode(runMode),
 		run.WithUISettings(uiSettings),
 		run.WithPersistenceSettings(run.PersistenceSettings{
@@ -372,6 +377,9 @@ func (g *PinocchioCommand) RunIntoWriter(
 func determineRunMode(settings *cmdlayers.HelpersSettings) run.RunMode {
 	if settings == nil {
 		return run.RunModeBlocking
+	}
+	if settings.StdinRPC {
+		return run.RunModeRPCStdin
 	}
 	if settings.RPC || strings.EqualFold(settings.Output, "jsonl") {
 		return run.RunModeRPCJSONL
@@ -434,6 +442,8 @@ func (g *PinocchioCommand) RunWithOptions(ctx context.Context, options ...run.Ru
 		return g.runBlockingMaybeContinueInChat(ctx, runCtx)
 	case run.RunModeRPCJSONL:
 		return g.runRPCJSONL(ctx, runCtx)
+	case run.RunModeRPCStdin:
+		return g.runStdinRPC(ctx, runCtx)
 	case run.RunModeInteractive:
 		return g.runInteractive(ctx, runCtx)
 	case run.RunModeChat:
@@ -906,6 +916,179 @@ func (g *PinocchioCommand) runRPCJSONL(ctx context.Context, rc *run.RunContext) 
 		return nil, err
 	}
 	return seed, nil
+}
+
+func (g *PinocchioCommand) runStdinRPC(ctx context.Context, rc *run.RunContext) (*turns.Turn, error) {
+	if rc.Writer == nil {
+		rc.Writer = io.Discard
+	}
+	if rc.Reader == nil {
+		rc.Reader = os.Stdin
+	}
+	if rc.EngineFactory == nil {
+		rc.EngineFactory = factory.NewStandardEngineFactory()
+	}
+
+	seed, err := g.buildInitialTurn(rc.Variables, rc.ImagePaths)
+	if err != nil {
+		return nil, fmt.Errorf("failed to render templates: %w", err)
+	}
+	defaultSID := commandSessionID(seed)
+
+	fanout, err := chatapprpcjsonl.NewUIFanout(rc.Writer)
+	if err != nil {
+		return nil, err
+	}
+	debugFanout, closeDebug, err := openDebugEventsFanout(rc.UISettings)
+	if err != nil {
+		return nil, err
+	}
+	defer closeDebug()
+	liveFanout := sessionstream.UIFanout(fanout)
+	if debugFanout != nil {
+		liveFanout, err = pinui.NewMultiUIFanout(fanout, debugFanout)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if err := writeHelloAll(defaultSID, []string{"ui-events", "snapshot", "done", "stdin-rpc", "multi-turn"}, fanout, debugFanout); err != nil {
+		return nil, err
+	}
+
+	statusFanout := newRunStatusFanout(liveFanout)
+	runner, err := chatapp.NewRunner(commandRunnerOptions(statusFanout))
+	if err != nil {
+		_ = writeTerminalErrorDoneAll(defaultSID, "runner_init_failed", err, fanout, debugFanout)
+		return nil, err
+	}
+	defer func() { _ = runner.Close() }()
+
+	turnsBySession := map[sessionstream.SessionId]*turns.Turn{}
+	scanner := bufio.NewScanner(rc.Reader)
+	scanner.Buffer(make([]byte, 0, 64*1024), 10*1024*1024)
+	unmarshal := protojson.UnmarshalOptions{DiscardUnknown: true}
+	var lastTurn *turns.Turn
+	for scanner.Scan() {
+		raw := strings.TrimSpace(scanner.Text())
+		if raw == "" {
+			continue
+		}
+		var line chatapprpcv1.RpcRequestLine
+		if err := unmarshal.Unmarshal([]byte(raw), &line); err != nil {
+			fanout.SetRequestID("")
+			if debugFanout != nil {
+				debugFanout.SetRequestID("")
+			}
+			_ = writeErrorAll(defaultSID, "invalid_request_json", err, false, fanout, debugFanout)
+			continue
+		}
+		sid := sessionstream.SessionId(strings.TrimSpace(line.GetSessionId()))
+		if sid == "" {
+			sid = defaultSID
+		}
+		reqID := strings.TrimSpace(line.GetRequestId())
+		if reqID == "" {
+			reqID = uuid.NewString()
+		}
+		fanout.SetRequestID(reqID)
+		if debugFanout != nil {
+			debugFanout.SetRequestID(reqID)
+		}
+
+		switch req := line.GetRequest().(type) {
+		case *chatapprpcv1.RpcRequestLine_Submit:
+			statusFanout.Reset()
+			prompt := strings.TrimSpace(req.Submit.GetPrompt())
+			if prompt == "" {
+				_ = writeErrorAll(sid, "empty_prompt", fmt.Errorf("prompt is empty"), true, fanout, debugFanout)
+				_ = writeDoneAll(sid, "failed", fanout, debugFanout)
+				continue
+			}
+			base := turnsBySession[sid]
+			if base == nil {
+				base = seed
+			}
+			inputTurn := turnWithUserPrompt(base, prompt)
+			engine, err := rc.EngineFactory.CreateEngine(rc.InferenceSettings)
+			if err != nil {
+				_ = writeTerminalErrorDoneAll(sid, "engine_init_failed", err, fanout, debugFanout)
+				continue
+			}
+			var finalTurn *turns.Turn
+			err = runner.Service.SubmitPromptRequest(ctx, sid, chatapp.PromptRequest{
+				Prompt:      prompt,
+				InitialTurn: inputTurn,
+				Runtime:     &infruntime.ComposedRuntime{Engine: engine},
+				OnFinalTurn: func(t *turns.Turn) {
+					if t != nil {
+						finalTurn = t.Clone()
+					}
+				},
+			})
+			if err != nil {
+				_ = writeTerminalErrorDoneAll(sid, "submit_failed", err, fanout, debugFanout)
+				continue
+			}
+			if err := runner.Service.WaitIdle(ctx, sid); err != nil {
+				_ = writeTerminalErrorDoneAll(sid, "wait_failed", err, fanout, debugFanout)
+				continue
+			}
+			snap, err := runner.Service.Snapshot(ctx, sid)
+			if err != nil {
+				_ = writeTerminalErrorDoneAll(sid, "snapshot_failed", err, fanout, debugFanout)
+				continue
+			}
+			_ = writeSnapshotAll(snap, fanout, debugFanout)
+			status, runErr := statusFanout.Result()
+			if runErr != nil {
+				_ = writeErrorAll(sid, "run_failed", runErr, true, fanout, debugFanout)
+				_ = writeDoneAll(sid, status, fanout, debugFanout)
+				continue
+			}
+			if finalTurn != nil {
+				turnsBySession[sid] = finalTurn
+				lastTurn = finalTurn
+			}
+			_ = writeDoneAll(sid, status, fanout, debugFanout)
+		case *chatapprpcv1.RpcRequestLine_Snapshot:
+			snap, err := runner.Service.Snapshot(ctx, sid)
+			if err != nil {
+				_ = writeErrorAll(sid, "snapshot_failed", err, true, fanout, debugFanout)
+				_ = writeDoneAll(sid, "failed", fanout, debugFanout)
+				continue
+			}
+			_ = writeSnapshotAll(snap, fanout, debugFanout)
+			_ = writeDoneAll(sid, "ok", fanout, debugFanout)
+		case *chatapprpcv1.RpcRequestLine_Cancel:
+			err := runner.Service.Stop(ctx, sid)
+			if err != nil {
+				_ = writeErrorAll(sid, "cancel_failed", err, true, fanout, debugFanout)
+			}
+			_ = writeDoneAll(sid, "ok", fanout, debugFanout)
+		case *chatapprpcv1.RpcRequestLine_Shutdown:
+			_ = writeDoneAll(sid, "shutdown", fanout, debugFanout)
+			return lastTurn, nil
+		default:
+			_ = writeErrorAll(sid, "unknown_request", fmt.Errorf("request oneof is empty"), true, fanout, debugFanout)
+			_ = writeDoneAll(sid, "failed", fanout, debugFanout)
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		_ = writeTerminalErrorDoneAll(defaultSID, "stdin_read_failed", err, fanout, debugFanout)
+		return lastTurn, err
+	}
+	return lastTurn, nil
+}
+
+func turnWithUserPrompt(base *turns.Turn, prompt string) *turns.Turn {
+	var t *turns.Turn
+	if base != nil {
+		t = base.Clone()
+	} else {
+		t = &turns.Turn{}
+	}
+	turns.AppendBlock(t, turns.NewUserTextBlock(prompt))
+	return t
 }
 
 func openDebugEventsFanout(settings *run.UISettings) (*chatapprpcjsonl.UIFanout, func(), error) {

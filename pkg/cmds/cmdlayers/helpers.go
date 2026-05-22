@@ -32,6 +32,7 @@ type HelpersSettings struct {
 	NonInteractive         bool               `glazed:"non-interactive"`
 	Output                 string             `glazed:"output"`
 	RPC                    bool               `glazed:"rpc"`
+	StdinRPC               bool               `glazed:"stdin-rpc"`
 	DebugEventsJSONL       string             `glazed:"debug-events-jsonl"`
 	SessionID              string             `glazed:"session-id"`
 	Resume                 bool               `glazed:"resume"`
@@ -147,6 +148,12 @@ func NewHelpersParameterLayer() (schema.Section, error) {
 				"rpc",
 				fields.TypeBool,
 				fields.WithHelp("Emit protobuf-defined JSONL RPC frames on stdout"),
+				fields.WithDefault(false),
+			),
+			fields.New(
+				"stdin-rpc",
+				fields.TypeBool,
+				fields.WithHelp("Run a long-lived stdin/stdout protobuf JSONL RPC server (requires --rpc or --output jsonl)"),
 				fields.WithDefault(false),
 			),
 			fields.New(
