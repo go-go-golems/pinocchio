@@ -628,7 +628,7 @@ Create  a detailed analysis / design / implementation guide that is for a new in
 
 **Inferred user intent:** The user wants the PR review addressed at the design level before more code is written, so the next implementation has correct abstractions instead of patching shared mutable state.
 
-**Commit (docs):** 511051c — "docs: design stdin RPC multisession foundations"
+**Commit (docs):** 3e1df8b — "docs: design stdin RPC multisession foundations"
 
 ### What I did
 
