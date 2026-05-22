@@ -1226,7 +1226,7 @@ This path emits error.terminal=true for a recoverable per-request validation err
 
 **Inferred user intent:** The user wants PR review feedback addressed precisely so clients can rely on `error.terminal` to mean process/stream failure rather than request failure.
 
-**Commit (code):** 030385f — "rpc: mark stdin request errors non-terminal"
+**Commit (code):** 0851bc0 — "rpc: mark stdin request errors non-terminal"
 
 ### What I did
 
