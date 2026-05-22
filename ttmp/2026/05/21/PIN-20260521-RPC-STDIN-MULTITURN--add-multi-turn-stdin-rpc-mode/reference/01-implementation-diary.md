@@ -387,3 +387,115 @@ Expected stdout properties:
 - frames for request `r2` carry `requestId: r2`;
 - second submit sees first submit's final assistant turn as context;
 - shutdown emits `done.status = "shutdown"` and exits.
+
+## Step 4: Add session-isolation coverage and run a real stdin RPC smoke test
+
+This step tightened validation after the first implementation commit. I added a regression test that alternates requests across two session ids and verifies that each session keeps its own final-turn accumulator.
+
+I also ran the new mode as an actual subprocess using `PINOCCHIO_PROFILE=gpt-5-nano-low`. The smoke test sent two submit requests and one shutdown request through stdin, then verified that stdout contained request-scoped protobuf JSONL frames for both turns and a final shutdown done frame.
+
+### Prompt Context
+
+**User prompt (verbatim):** "go ahead"
+
+**Assistant interpretation:** Continue with the remaining validation and follow-up tasks for the stdin RPC implementation.
+
+**Inferred user intent:** The user wants the feature carried forward beyond the first implementation: stronger tests, real smoke validation, ticket updates, and commits.
+
+**Commit (code):** da3b864 — "test: cover stdin RPC session isolation"
+
+### What I did
+
+- Added `TestRunWithOptionsStdinRPCIsolatesSessionAccumulators` in `pkg/cmds/cmd_rpc_stdin_test.go`.
+- The test sends requests for `s1`, `s2`, then `s1` again, and asserts:
+  - `s1-r1` completes for `s1`;
+  - `s2-r1` completes for `s2`;
+  - `s1-r2` completes for `s1`;
+  - the final returned turn for `s1-r2` has `users=3`, proving `s2` did not contaminate `s1`'s accumulator.
+- Ran focused stdin RPC tests:
+
+```bash
+go test ./pkg/cmds -run 'TestRunWithOptionsStdinRPC' -count=1
+```
+
+- Ran a real subprocess smoke test:
+
+```bash
+printf '%s\n' \
+  '{"version":1,"sessionId":"smoke-stdin-rpc","requestId":"r1","submit":{"prompt":"Reply with exactly: one"}}' \
+  '{"version":1,"sessionId":"smoke-stdin-rpc","requestId":"r2","submit":{"prompt":"Reply with exactly: two"}}' \
+  '{"version":1,"sessionId":"smoke-stdin-rpc","requestId":"r3","shutdown":{}}' \
+| PINOCCHIO_PROFILE=gpt-5-nano-low timeout 180 \
+  go run ./cmd/pinocchio --log-level error generate-prompt \
+    --goal 'stdin rpc smoke' --rpc --stdin-rpc --non-interactive
+```
+
+### Why
+
+- Session isolation is a core correctness property for any long-lived subprocess server.
+- The fake-engine tests validate accumulator mechanics quickly, but a real subprocess smoke catches CLI wiring, profile selection, stdout cleanliness, and actual protobuf JSONL behavior.
+
+### What worked
+
+- Focused stdin RPC tests passed:
+
+```text
+ok  github.com/go-go-golems/pinocchio/pkg/cmds  0.039s
+```
+
+- The real subprocess smoke exited `0`.
+- It produced 26 stdout JSONL frames.
+- The tail included:
+  - request `r2` `ChatRunFinished`;
+  - request `r2` snapshot containing assistant text `two`;
+  - request `r2` `done.status = "ok"`;
+  - request `r3` `done.status = "shutdown"`.
+- stderr was empty with `--log-level error`.
+
+### What didn't work
+
+- N/A for this step.
+
+### What I learned
+
+- The actual profile-backed subprocess path preserves stdout cleanliness for JSONL when logging is kept off stdout.
+- The process-local accumulator was visible in the second real request snapshot: both turns remained in the sessionstream snapshot for the same session.
+
+### What was tricky to build
+
+The main tricky point was testing isolation through the same public command path rather than reaching into internals. The fake engine reports the number of user blocks in the final turn, so a session contamination bug would be visible as an unexpected count in the final assistant text.
+
+The real smoke also needs `--non-interactive` and `--log-level error` so the JSONL protocol is not mixed with continuation prompts or verbose logs.
+
+### What warrants a second pair of eyes
+
+- Cancel semantics are still only lightly covered. The current implementation accepts cancel requests, but a dedicated cancel-while-running test is still warranted.
+- The smoke test used sequential submit requests. It did not test overlapping submit rejection or in-flight cancellation.
+
+### What should be done in the future
+
+- Add a blocking fake engine and a cancel-while-running test.
+- Decide whether stdin RPC should process requests strictly sequentially or eventually support concurrent sessions with per-session request-id stamping.
+
+### Code review instructions
+
+- Review `pkg/cmds/cmd_rpc_stdin_test.go`, especially `TestRunWithOptionsStdinRPCIsolatesSessionAccumulators`.
+- Re-run focused tests with:
+
+```bash
+go test ./pkg/cmds -run 'TestRunWithOptionsStdinRPC' -count=1
+```
+
+- Re-run the subprocess smoke with `PINOCCHIO_PROFILE=gpt-5-nano-low` if credentials and profile configuration are available.
+
+### Technical details
+
+Smoke output proof points:
+
+```text
+exit=0
+26 stdout JSONL lines
+requestId="r2" done.status="ok"
+requestId="r3" done.status="shutdown"
+stderr empty
+```
