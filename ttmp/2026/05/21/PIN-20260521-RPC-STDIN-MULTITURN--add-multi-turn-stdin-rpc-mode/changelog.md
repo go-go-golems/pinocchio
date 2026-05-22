@@ -143,3 +143,12 @@ Corrected diary commit hash after amend to 511051c.
 
 - /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/ttmp/2026/05/21/PIN-20260521-RPC-STDIN-MULTITURN--add-multi-turn-stdin-rpc-mode/reference/01-implementation-diary.md — Commit hash corrected
 
+
+## 2026-05-22
+
+Posted PR 156 comment linking to the multi-session RPC foundations guide.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-05-20/pinocchio-structured-data-cli/pinocchio/ttmp/2026/05/21/PIN-20260521-RPC-STDIN-MULTITURN--add-multi-turn-stdin-rpc-mode/reference/01-implementation-diary.md — PR comment recorded
+

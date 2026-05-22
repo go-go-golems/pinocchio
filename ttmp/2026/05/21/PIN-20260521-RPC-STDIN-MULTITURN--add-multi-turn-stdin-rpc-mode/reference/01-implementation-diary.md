@@ -673,6 +673,9 @@ remarquee upload bundle \
   --non-interactive
 ```
 
+- Posted a PR 156 comment pointing reviewers to the new guide and summarizing the proposed request-scoped/session-aware foundations:
+  - https://github.com/go-go-golems/pinocchio/pull/156#issuecomment-4520326535
+
 ### Why
 
 - The PR comments are architectural, not cosmetic. They identify that request id and status are request-scoped facts, but the current implementation stores them in process-shared mutable state.
