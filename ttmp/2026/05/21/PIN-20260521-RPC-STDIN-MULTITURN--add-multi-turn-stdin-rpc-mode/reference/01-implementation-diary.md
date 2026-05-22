@@ -1132,3 +1132,70 @@ read_until_done("r2")
 send({"version":1,"sessionId":"seq-smoke","requestId":"r3","shutdown":{}})
 read_until_done("r3")
 ```
+
+## Step 10: Notify PR 156 reviewers about the single-session resolution
+
+I posted a PR 156 comment explaining that the chosen resolution is explicit single-session stdin RPC rather than a full multi-session daemon in this PR.
+
+### Prompt Context
+
+**User prompt (verbatim):** (same as Step 7)
+
+**Assistant interpretation:** Keep the PR review loop informed after implementing the single-session solution.
+
+**Inferred user intent:** Reviewers should understand that the PR 156 concerns were addressed by narrowing and enforcing the protocol contract, not by claiming multi-session concurrency.
+
+**Commit (docs):** pending — this diary note will be committed after recording the PR comment.
+
+### What I did
+
+- Posted this PR 156 comment:
+  - https://github.com/go-go-golems/pinocchio/pull/156#issuecomment-4520970189
+- The comment explains:
+  - one RPC process equals one conversation;
+  - first request binds the session id;
+  - different session ids receive `session_mismatch`;
+  - overlapping submits receive `session_busy`;
+  - cancel remains supported while submit is active;
+  - control frames use explicit request ids;
+  - tests cover the new behavior.
+
+### Why
+
+- PR 156 reviewers need to know that the response to the original multi-session cross-talk comments is contract narrowing plus enforcement.
+
+### What worked
+
+- `gh pr comment 156` succeeded and returned the comment URL.
+
+### What didn't work
+
+- N/A.
+
+### What I learned
+
+- The PR discussion should explicitly call out that this is not multi-session support. It is an intentional process-per-session model.
+
+### What was tricky to build
+
+- N/A; this was communication/bookkeeping.
+
+### What warrants a second pair of eyes
+
+- Whether the PR description itself should also be updated, not just a comment.
+
+### What should be done in the future
+
+- If the PR description is editable and expected to be the source of truth, update it to mention single-session stdin RPC.
+
+### Code review instructions
+
+- Read the PR comment and compare it against `cmd/pinocchio/doc/general/06-rpc-jsonl-output.md` and the single-session guide.
+
+### Technical details
+
+PR comment URL:
+
+```text
+https://github.com/go-go-golems/pinocchio/pull/156#issuecomment-4520970189
+```
