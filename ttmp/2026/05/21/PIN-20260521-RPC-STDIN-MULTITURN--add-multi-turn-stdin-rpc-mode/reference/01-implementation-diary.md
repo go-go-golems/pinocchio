@@ -1145,7 +1145,7 @@ I posted a PR 156 comment explaining that the chosen resolution is explicit sing
 
 **Inferred user intent:** Reviewers should understand that the PR 156 concerns were addressed by narrowing and enforcing the protocol contract, not by claiming multi-session concurrency.
 
-**Commit (docs):** pending — this diary note will be committed after recording the PR comment.
+**Commit (docs):** 2a6c50d — "docs: record PR 156 single-session comment"
 
 ### What I did
 
