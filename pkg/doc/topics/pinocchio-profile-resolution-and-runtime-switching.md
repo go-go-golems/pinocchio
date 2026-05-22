@@ -323,6 +323,57 @@ So the clean split is:
 - Geppetto/shared bootstrap owns profile/config/runtime resolution
 - Pinocchio root startup owns repository harvesting and command discovery
 
+## Listing Loaded Profiles
+
+Use `pinocchio profiles list` to inspect the profile registry chain with explicit table headers:
+
+```bash
+pinocchio profiles list \
+  --profile-registries ./profiles.yaml
+```
+
+The default table includes columns for selection/default status, registry slug, profile slug, effective engine/API values, reasoning effort, and description. The `registry` column is important: if it says `default`, that means the profile lives in the `default` registry; it is not itself the default-profile marker.
+
+Use `--verbosity detailed` to see raw profile overrides and effective inherited values:
+
+```bash
+pinocchio profiles list \
+  --profile-registries ./profiles.yaml \
+  --profile child \
+  --verbosity detailed
+```
+
+Detailed output includes fields such as:
+
+- `override_paths`
+- `override_chat_engine`
+- `override_inference_reasoning_effort`
+- `effective_chat_engine`
+- `effective_chat_api_type`
+- `effective_reasoning_effort`
+
+Use `pinocchio profiles show` when you want one profile's raw overrides and resolved effective settings without repeating full details for every profile row:
+
+```bash
+pinocchio profiles show child \
+  --profile-registries ./profiles.yaml \
+  --verbosity full \
+  --output json
+```
+
+The profile argument can be `profile` or `registry/profile`. If omitted, `profiles show` uses the selected/default profile.
+
+Use normal Glazed output flags for machine-readable output:
+
+```bash
+pinocchio profiles list \
+  --profile-registries ./profiles.yaml \
+  --verbosity full \
+  --output json
+```
+
+Pinocchio routes these commands through its application-specific profile bootstrap path, so local `.pinocchio.yml` inline profiles are included alongside imported Geppetto registries.
+
 ## Troubleshooting
 
 | Problem | Cause | Solution |

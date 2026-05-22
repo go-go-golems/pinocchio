@@ -19,6 +19,7 @@ import (
 	pinocchio_cmds "github.com/go-go-golems/pinocchio/cmd/pinocchio/cmds"
 	"github.com/go-go-golems/pinocchio/cmd/pinocchio/cmds/catter"
 	catter_doc "github.com/go-go-golems/pinocchio/cmd/pinocchio/cmds/catter/pkg/doc"
+	"github.com/go-go-golems/pinocchio/cmd/pinocchio/cmds/profiles"
 	"github.com/go-go-golems/pinocchio/cmd/pinocchio/cmds/tokens"
 	pinocchio_docs "github.com/go-go-golems/pinocchio/cmd/pinocchio/doc"
 	"github.com/go-go-golems/pinocchio/pkg/cmds"
@@ -261,6 +262,12 @@ func initAllCommands(helpSystem *help.HelpSystem) error {
 
 	// Create and add the repositories command group
 	rootCmd.AddCommand(clay_repositories.NewRepositoriesGroupCommand())
+
+	profilesCmd, err := profiles.NewProfilesCommand()
+	if err != nil {
+		return err
+	}
+	rootCmd.AddCommand(profilesCmd)
 
 	catter.AddToRootCommand(rootCmd)
 
