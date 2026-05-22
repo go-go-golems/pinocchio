@@ -166,3 +166,74 @@ The first implementation should preserve this invariant:
 final turns.Turn -> next model context
 sessionstream events/snapshots -> stdout UI/RPC/debug state
 ```
+
+## Step 2: Reconfirm and publish the intern-ready guide
+
+This step responded to a follow-up request to create a ticket and upload an intern-ready multi-turn RPC design package. The ticket already existed from the earlier design pass, so I did not create a duplicate ticket. Instead, I verified the existing ticket, refreshed the guide with an explicit "How To Use This Guide As A New Intern" orientation section, and re-published the bundle to reMarkable.
+
+The design remains intentionally scoped: it documents a future explicit stdin/stdout multi-turn RPC mode, not a change to the existing one-shot `--rpc` / `--output jsonl` behavior.
+
+### Prompt Context
+
+**User prompt (verbatim):** "Ok, let's creeate a new ticket for multi-turn RPC mode (if we haven't got one already).
+
+Then Create  a detailed analysis / design / implementation guide that is for a new intern, explaining all the parts of the system needed to understand what it is, with prose paragraphs and bullet point sand pseudocode and diagrams and api references and file references. It should be very clear and technical. Store in the ticket and the nupload to remarkable."
+
+**Assistant interpretation:** Check whether the multi-turn RPC ticket exists; if so, reuse it. Ensure the guide is intern-ready, store it in the ticket, and upload the bundle to reMarkable.
+
+**Inferred user intent:** The user wants a durable onboarding-quality design package for a future implementer and wants it available on reMarkable.
+
+**Commit (code):** N/A — documentation refresh and upload only.
+
+### What I did
+
+- Verified existing ticket `PIN-20260521-RPC-STDIN-MULTITURN`.
+- Verified the guide exists at `design-doc/01-multi-turn-stdin-stdout-rpc-mode.md`.
+- Added a new "How To Use This Guide As A New Intern" section near the top of the guide.
+- Updated this diary with the follow-up prompt context.
+- Prepared the ticket bundle for reMarkable upload.
+
+### Why
+
+- Avoiding duplicate tickets keeps future implementation work in one canonical workspace.
+- The existing guide already contains system background, protocol design, pseudocode, diagrams, API references, file references, risks, and implementation phases.
+- The new orientation section makes it clearer how an intern should approach the guide.
+
+### What worked
+
+- `docmgr ticket list --ticket PIN-20260521-RPC-STDIN-MULTITURN` confirmed the ticket exists.
+- The existing guide was already detailed and only needed a reader-orientation refresh.
+
+### What didn't work
+
+- N/A.
+
+### What I learned
+
+- This ticket had already been created and uploaded once, so the right action was to refresh and re-upload rather than create a duplicate.
+
+### What was tricky to build
+
+The main risk was duplicating documentation and splitting implementation context across two tickets. I kept the existing ticket as the source of truth.
+
+### What warrants a second pair of eyes
+
+- Whether the first implementation should include durable `TurnStore` persistence or stay process-local as the guide recommends.
+- Whether `--stdin-rpc` is the final flag name or should be revised before implementation.
+
+### What should be done in the future
+
+- Implement Phase 1 of the guide: protobuf request contract for stdin request lines.
+
+### Code review instructions
+
+- Start with `design-doc/01-multi-turn-stdin-stdout-rpc-mode.md`.
+- Validate that the guide still preserves the key invariant: final `turns.Turn` is model context; `sessionstream` is visible state.
+
+### Technical details
+
+Canonical ticket path:
+
+```text
+ttmp/2026/05/21/PIN-20260521-RPC-STDIN-MULTITURN--add-multi-turn-stdin-rpc-mode
+```

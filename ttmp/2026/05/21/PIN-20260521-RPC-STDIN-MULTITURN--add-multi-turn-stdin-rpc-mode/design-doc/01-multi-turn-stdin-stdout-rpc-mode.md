@@ -43,7 +43,7 @@ RelatedFiles:
         Existing stdout RpcLine envelope and likely request message home
 ExternalSources: []
 Summary: Design and implementation guide for adding explicit multi-turn stdin/stdout RPC mode to Pinocchio while preserving the current one-shot stdout JSONL contract.
-LastUpdated: 2026-05-21T17:25:00-04:00
+LastUpdated: 2026-05-21T19:58:00-04:00
 WhatFor: Use when implementing stdin-driven multi-turn RPC for Pinocchio command/chat sessions.
 WhenToUse: Read before changing --rpc, --output jsonl, RpcLine protobufs, or chatapp/sessionstream command RPC behavior.
 ---
@@ -67,6 +67,30 @@ final Geppetto turns.Turn -> next model context
 ```
 
 Do not build a second Geppetto event mapper. Do not use `sessionstream.Snapshot` as model context. Use final `turns.Turn` values returned by `PromptRequest.OnFinalTurn` as the conversation accumulator, exactly like the command TUI backend now does.
+
+## How To Use This Guide As A New Intern
+
+Read this document in order before writing code. The first half explains the system pieces and the invariants that keep model context, visible UI state, and JSONL transport separate. The second half gives the concrete API and implementation plan.
+
+Recommended reading path:
+
+1. Read **Problem Statement** to understand why current `--rpc` is one-shot.
+2. Read **System Background for a New Intern** to learn the vocabulary: `turns.Turn`, `Block`, `sessionstream`, `chatapp`, `RpcLine`, and `PromptRequest`.
+3. Read **Proposed Solution** to understand the intended stdin/stdout protocol.
+4. Read **Detailed API Design** before touching protobufs or command flags.
+5. Follow **Implementation Plan** phase-by-phase; do not skip directly to the server loop.
+6. Use **File Reference Map** as the review checklist for code navigation.
+
+The most important mental model is:
+
+```text
+turns.Turn            = model/inference context
+sessionstream         = visible UI/projection state
+RpcLine JSONL stdout  = transport of projected state to subprocess clients
+RpcRequestLine stdin  = transport of client instructions into the long-lived process
+```
+
+If an implementation blurs these boundaries, stop and redesign before coding further.
 
 ## Problem Statement
 
