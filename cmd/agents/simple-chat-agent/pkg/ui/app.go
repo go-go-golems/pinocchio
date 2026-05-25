@@ -10,7 +10,6 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/events"
 	toolspkg "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/tools"
 	uhohdsl "github.com/go-go-golems/uhoh/pkg"
-	"github.com/rs/zerolog/log"
 	"strings"
 )
 

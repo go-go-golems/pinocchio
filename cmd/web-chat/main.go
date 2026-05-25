@@ -4,6 +4,7 @@ import (
 	"context"
 	"embed"
 	"encoding/json"
+	"github.com/rs/zerolog/log"
 	"io"
 	"io/fs"
 	"net/http"
@@ -14,7 +15,6 @@ import (
 	"syscall"
 	"time"
 
-	clay "github.com/go-go-golems/clay/pkg"
 	"github.com/go-go-golems/glazed/pkg/cli"
 	"github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/cmds/fields"
@@ -23,7 +23,6 @@ import (
 	"github.com/go-go-golems/glazed/pkg/help"
 	help_cmd "github.com/go-go-golems/glazed/pkg/help/cmd"
 	"github.com/pkg/errors"
-	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
 
@@ -441,7 +440,7 @@ func main() {
 	helpSystem := help.NewHelpSystem()
 	help_cmd.SetupCobraRootCommand(helpSystem, root)
 
-	if err := clay.InitGlazed("pinocchio", root); err != nil {
+	if err := logging.AddLoggingSectionToRootCommand(root, "pinocchio"); err != nil {
 		cobra.CheckErr(err)
 	}
 

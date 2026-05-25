@@ -1,4 +1,4 @@
-.PHONY: all test build lint lintmax docker-lint golangci-lint-install gosec govulncheck goreleaser tag-major tag-minor tag-patch release bump-glazed install codeql-local geppetto-lint-build geppetto-lint web-typecheck web-lint web-check proto-gen proto-gen-core proto-gen-web-chat schema-vet fetch-spa clean-spa build-with-spa
+.PHONY: all test build lint lintmax docker-lint golangci-lint-install gosec govulncheck goreleaser tag-major tag-minor tag-patch release bump-glazed install codeql-local geppetto-lint-build geppetto-lint web-typecheck web-lint web-check proto-gen proto-gen-core proto-gen-web-chat schema-vet fetch-spa clean-spa build-with-spa logcopter-generate logcopter-check
 
 all: test build
 
@@ -83,6 +83,12 @@ proto-gen: proto-gen-core
 schema-vet:
 	go build -o $(SESSIONSTREAM_LINT) $(SESSIONSTREAM_LINT_PKG)
 	go vet -vettool=$(SESSIONSTREAM_LINT) ./cmd/... ./pkg/...
+
+logcopter-generate:
+	go generate ./...
+
+logcopter-check:
+	go tool logcopter-gen -area-prefix go-go-golems.pinocchio -strip-prefix github.com/go-go-golems/pinocchio -check ./pkg/... ./cmd/...
 
 goreleaser:
 	goreleaser release $(GORELEASER_ARGS) $(GORELEASER_TARGET)

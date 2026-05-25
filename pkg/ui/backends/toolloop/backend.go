@@ -15,7 +15,6 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/inference/tools"
 	"github.com/go-go-golems/geppetto/pkg/turns"
 	"github.com/pkg/errors"
-	"github.com/rs/zerolog/log"
 )
 
 var _ boba_chat.Backend = (*ToolLoopBackend)(nil)

@@ -8,7 +8,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/go-go-golems/bobatea/pkg/timeline"
 	"github.com/go-go-golems/geppetto/pkg/events"
-	"github.com/rs/zerolog/log"
 )
 
 // MakeUIForwarder returns a Watermill handler that forwards Geppetto events to the Bubble Tea program p

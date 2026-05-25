@@ -7,7 +7,6 @@ import (
 	"io"
 	"strings"
 
-	clay "github.com/go-go-golems/clay/pkg"
 	"github.com/go-go-golems/glazed/pkg/cli"
 	"github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/cmds/fields"
@@ -186,7 +185,7 @@ func (c *TestCommand) RunIntoWriter(ctx context.Context, parsedLayers *values.Va
 }
 
 func main() {
-	err := clay.InitGlazed("pinocchio", rootCmd)
+	err := logging.AddLoggingSectionToRootCommand(rootCmd, "pinocchio")
 	cobra.CheckErr(err)
 
 	commands, err := pinocchio_cmds.LoadFromYAML(testYaml)
