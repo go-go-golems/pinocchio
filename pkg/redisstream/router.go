@@ -10,7 +10,7 @@ import (
 
 	"github.com/go-go-golems/geppetto/pkg/events"
 	"github.com/go-go-golems/geppetto/pkg/helpers"
-	"github.com/rs/zerolog/log"
+	zlog "github.com/rs/zerolog/log"
 )
 
 // BuildRouter constructs an events.EventRouter backed by Redis Streams when enabled.
@@ -28,7 +28,7 @@ func BuildRouter(s Settings, verbose bool) (*events.EventRouter, error) {
 	}
 	log.Debug().Str("addr", s.Addr).Msg("redis ping ok")
 	marshaler := rstream.DefaultMarshallerUnmarshaller{}
-	logger := helpers.NewWatermill(log.Logger)
+	logger := helpers.NewWatermill(zlog.Logger)
 
 	pub, err := rstream.NewPublisher(rstream.PublisherConfig{
 		Client:     client,
@@ -60,7 +60,7 @@ func BuildRouter(s Settings, verbose bool) (*events.EventRouter, error) {
 func BuildGroupSubscriber(addr, group, consumer string) (message.Subscriber, error) {
 	client := redis.NewClient(&redis.Options{Addr: addr})
 	marshaler := rstream.DefaultMarshallerUnmarshaller{}
-	logger := helpers.NewWatermill(log.Logger)
+	logger := helpers.NewWatermill(zlog.Logger)
 	return rstream.NewSubscriber(rstream.SubscriberConfig{
 		Client:        client,
 		Unmarshaller:  marshaler,

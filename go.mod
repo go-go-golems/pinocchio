@@ -16,6 +16,7 @@ require (
 	github.com/go-go-golems/geppetto v0.11.30
 	github.com/go-go-golems/glazed v1.3.0
 	github.com/go-go-golems/go-go-goja v0.5.0
+	github.com/go-go-golems/logcopter v0.1.0
 	github.com/go-go-golems/sessionstream v0.0.5
 	github.com/go-go-golems/uhoh v0.0.5
 	github.com/google/uuid v1.6.0
@@ -76,7 +77,6 @@ require (
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/dop251/base64dec v0.0.0-20231022112746-c6c9f9a96217 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
-	github.com/go-go-golems/logcopter v0.1.0 // indirect
 	github.com/go-jose/go-jose/v4 v4.1.4 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect

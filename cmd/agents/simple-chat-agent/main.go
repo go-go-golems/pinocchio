@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"github.com/rs/zerolog/log"
 	"io"
 	"strings"
 
@@ -10,7 +11,6 @@ import (
 	boba_chat "github.com/go-go-golems/bobatea/pkg/chat"
 	"github.com/go-go-golems/bobatea/pkg/timeline"
 	renderers "github.com/go-go-golems/bobatea/pkg/timeline/renderers"
-	clay "github.com/go-go-golems/clay/pkg"
 	"github.com/go-go-golems/geppetto/pkg/events"
 	"github.com/go-go-golems/geppetto/pkg/inference/middleware"
 	"github.com/go-go-golems/geppetto/pkg/inference/tools"
@@ -34,7 +34,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
 )
@@ -313,7 +312,7 @@ func main() {
 	helpSystem := help.NewHelpSystem()
 	help_cmd.SetupCobraRootCommand(helpSystem, root)
 
-	if err := clay.InitGlazed("pinocchio", root); err != nil {
+	if err := logging.AddLoggingSectionToRootCommand(root, "pinocchio"); err != nil {
 		cobra.CheckErr(err)
 	}
 

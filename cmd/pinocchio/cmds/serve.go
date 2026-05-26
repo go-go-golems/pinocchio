@@ -12,7 +12,6 @@ import (
 	"github.com/go-go-golems/glazed/pkg/help"
 	helpserver "github.com/go-go-golems/glazed/pkg/help/server"
 	"github.com/go-go-golems/pinocchio/pkg/spa"
-	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 )
 

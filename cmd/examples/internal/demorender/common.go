@@ -15,7 +15,6 @@ import (
 	chatstyle "github.com/go-go-golems/bobatea/pkg/timeline/chatstyle"
 	base_renderers "github.com/go-go-golems/bobatea/pkg/timeline/renderers"
 	"github.com/muesli/termenv"
-	"github.com/rs/zerolog/log"
 	"golang.org/x/term"
 	"gopkg.in/yaml.v3"
 )

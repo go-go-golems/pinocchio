@@ -5,20 +5,20 @@ import (
 	geppetto_cmds "github.com/go-go-golems/pinocchio/pkg/cmds"
 	"github.com/spf13/cobra"
 	"github.com/tiktoken-go/tokenizer"
-	"log"
+	stdlog "log"
 )
 
 func getCodec(model, encoding string) tokenizer.Codec {
 	if model != "" {
 		c, err := tokenizer.ForModel(tokenizer.Model(model))
 		if err != nil {
-			log.Fatalf("error creating tokenizer: %v", err)
+			stdlog.Fatalf("error creating tokenizer: %v", err)
 		}
 		return c
 	} else {
 		c, err := tokenizer.Get(tokenizer.Encoding(encoding))
 		if err != nil {
-			log.Fatalf("error creating tokenizer: %v", err)
+			stdlog.Fatalf("error creating tokenizer: %v", err)
 		}
 		return c
 	}

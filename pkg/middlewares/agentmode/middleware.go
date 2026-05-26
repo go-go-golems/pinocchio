@@ -12,7 +12,6 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/turns"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
-	"github.com/rs/zerolog/log"
 )
 
 // AgentMode describes a mode name with allowed tools and an optional system prompt snippet.

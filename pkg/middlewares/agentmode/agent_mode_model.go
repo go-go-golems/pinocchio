@@ -7,7 +7,6 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/go-go-golems/bobatea/pkg/timeline"
 	chatstyle "github.com/go-go-golems/bobatea/pkg/timeline/chatstyle"
-	"github.com/rs/zerolog/log"
 )
 
 // AgentModeModel renders agent mode analysis and optional switch info
