@@ -1,4 +1,4 @@
-.PHONY: all test build lint lintmax docker-lint golangci-lint-install gosec govulncheck goreleaser tag-major tag-minor tag-patch release bump-go-go-golems install codeql-local geppetto-lint-build geppetto-lint web-typecheck web-lint web-check proto-gen proto-gen-core proto-gen-web-chat schema-vet fetch-spa clean-spa build-with-spa logcopter-generate logcopter-check
+.PHONY: all test build lint lintmax docker-lint golangci-lint-install gosec govulncheck goreleaser tag-major tag-minor tag-patch release bump-go-go-golems install codeql-local geppetto-lint-build geppetto-lint glazed-lint-build glazed-lint web-typecheck web-lint web-check proto-gen proto-gen-core proto-gen-web-chat schema-vet fetch-spa clean-spa build-with-spa logcopter-generate logcopter-check
 
 all: test build
 
@@ -19,6 +19,10 @@ gifs:
 GEPPETTO_LINT_BIN ?= /tmp/geppetto-lint
 GEPPETTO_LINT_PKG ?= github.com/go-go-golems/geppetto/cmd/tools/geppetto-lint
 GEPPETTO_VERSION ?= $(shell go list -m -f '{{.Version}}' github.com/go-go-golems/geppetto 2>/dev/null)
+GLAZED_LINT_BIN ?= /tmp/glazed-lint
+GLAZED_LINT_PKG ?= github.com/go-go-golems/glazed/cmd/tools/glazed-lint
+GLAZED_VERSION ?= $(shell GOWORK=off go list -m -f '{{.Version}}' github.com/go-go-golems/glazed 2>/dev/null)
+GLAZED_LINT_FLAGS ?= -glazedclilint.allow-paths=pkg/analysis/,pkg/cli/,pkg/cmds/fields/,pkg/cmds/logging/,pkg/cmds/sources/,pkg/help/,pkg/cmds/cmdlayers/,cmd/pinocchio/cmds/clip.go,cmd/pinocchio/cmds/serve.go
 
 geppetto-lint-build:
 	@echo "Building geppetto-lint from geppetto module..."
@@ -36,6 +40,19 @@ geppetto-lint-build:
 geppetto-lint: geppetto-lint-build
 	go vet -vettool=$(GEPPETTO_LINT_BIN) ./...
 
+glazed-lint-build:
+	@echo "Building glazed-lint from Glazed module..."
+	@if [ -n "$(GLAZED_VERSION)" ] && [ "$(GLAZED_VERSION)" != "(devel)" ]; then \
+		echo "Installing $(GLAZED_LINT_PKG)@$(GLAZED_VERSION)"; \
+		GOBIN=$(dir $(GLAZED_LINT_BIN)) GOWORK=off go install $(GLAZED_LINT_PKG)@$(GLAZED_VERSION); \
+	else \
+		echo "Installing $(GLAZED_LINT_PKG) from workspace/module"; \
+		GOBIN=$(dir $(GLAZED_LINT_BIN)) go install $(GLAZED_LINT_PKG); \
+	fi
+
+glazed-lint: glazed-lint-build
+	go vet -vettool=$(GLAZED_LINT_BIN) $(GLAZED_LINT_FLAGS) ./cmd/... ./pkg/...
+
 docker-lint:
 	docker run --rm -v $(shell pwd):/app -w /app golangci/golangci-lint:$(GOLANGCI_LINT_VERSION) golangci-lint run -v
 
@@ -43,13 +60,15 @@ golangci-lint-install:
 	mkdir -p $(dir $(GOLANGCI_LINT_BIN))
 	GOBIN=$(dir $(GOLANGCI_LINT_BIN)) go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
 
-lint: build geppetto-lint-build golangci-lint-install
+lint: build geppetto-lint-build glazed-lint-build golangci-lint-install
 	$(GOLANGCI_LINT_BIN) run -v
 	go vet -vettool=$(GEPPETTO_LINT_BIN) ./...
+	go vet -vettool=$(GLAZED_LINT_BIN) $(GLAZED_LINT_FLAGS) ./cmd/... ./pkg/...
 
-lintmax: build geppetto-lint-build golangci-lint-install
+lintmax: build geppetto-lint-build glazed-lint-build golangci-lint-install
 	$(GOLANGCI_LINT_BIN) run -v --max-same-issues=100
 	go vet -vettool=$(GEPPETTO_LINT_BIN) ./...
+	go vet -vettool=$(GLAZED_LINT_BIN) $(GLAZED_LINT_FLAGS) ./cmd/... ./pkg/...
 
 gosec:
 	go install github.com/securego/gosec/v2/cmd/gosec@latest
