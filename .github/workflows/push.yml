@@ -20,7 +20,7 @@ jobs:
           cache: true
       -
         name: Verify logcopter package loggers
-        run: echo "TEMPORARY CODEX REVIEW TEST: intentionally skipping logcopter generated-file verification"
+        run: make logcopter-check
       -
         name: Generate files
         run: go generate ./...
