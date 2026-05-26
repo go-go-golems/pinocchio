@@ -13,7 +13,6 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/inference/toolloop/enginebuilder"
 	"github.com/go-go-golems/geppetto/pkg/turns"
 
-	clay "github.com/go-go-golems/clay/pkg"
 	geppettosections "github.com/go-go-golems/geppetto/pkg/sections"
 	"github.com/go-go-golems/glazed/pkg/cli"
 	"github.com/go-go-golems/glazed/pkg/cmds"
@@ -26,7 +25,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
+	zlog "github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
 
@@ -50,7 +49,7 @@ var rootCmd = &cobra.Command{
 			withCaller, _ := f.GetBool("with-caller")
 			if withCaller {
 				// Enable caller information in logs
-				log.Logger = log.Logger.With().Caller().Logger()
+				zlog.Logger = zlog.Logger.With().Caller().Logger()
 			}
 		}
 		return nil
@@ -109,7 +108,7 @@ func NewSimpleRedisStreamingInferenceCommand() (*SimpleRedisStreamingInferenceCo
 }
 
 func (c *SimpleRedisStreamingInferenceCommand) RunIntoWriter(ctx context.Context, parsedLayers *values.Values, w io.Writer) error {
-	log.Info().Msg("Starting simple Redis streaming inference command")
+	zlog.Info().Msg("Starting simple Redis streaming inference command")
 
 	s := &SimpleRedisStreamingInferenceSettings{}
 	if err := parsedLayers.DecodeSectionInto(values.DefaultSlug, s); err != nil {
@@ -120,7 +119,7 @@ func (c *SimpleRedisStreamingInferenceCommand) RunIntoWriter(ctx context.Context
 	}
 
 	// Build EventRouter with Redis Streams publisher/subscriber
-	log.Info().Str("addr", s.Redis.Addr).Str("group", s.Redis.Group).Str("consumer", s.Redis.Consumer).Msg("Initializing Redis router")
+	zlog.Info().Str("addr", s.Redis.Addr).Str("group", s.Redis.Group).Str("consumer", s.Redis.Consumer).Msg("Initializing Redis router")
 	router, err := rediscfg.BuildRouter(s.Redis, s.Verbose)
 	if err != nil {
 		return errors.Wrap(err, "create redis event router")
@@ -129,7 +128,7 @@ func (c *SimpleRedisStreamingInferenceCommand) RunIntoWriter(ctx context.Context
 
 	// Create sink publishing to topic "chat"
 	sink := middleware.NewWatermillSink(router.Publisher, "chat")
-	log.Info().Str("topic", "chat").Msg("Created Watermill sink (publisher -> Redis)")
+	zlog.Info().Str("topic", "chat").Msg("Created Watermill sink (publisher -> Redis)")
 
 	// Add a printer handler based on output format
 	if s.OutputFormat == "" {
@@ -151,23 +150,23 @@ func (c *SimpleRedisStreamingInferenceCommand) RunIntoWriter(ctx context.Context
 		defer msg.Ack()
 		e, err := events.NewEventFromJson(msg.Payload)
 		if err != nil {
-			log.Error().Err(err).Str("payload", string(msg.Payload)).Msg("Failed to parse event JSON")
+			zlog.Error().Err(err).Str("payload", string(msg.Payload)).Msg("Failed to parse event JSON")
 			return nil
 		}
 		md := e.Metadata()
-		log.Debug().Str("event_type", string(e.Type())).Str("session_id", md.SessionID).Str("inference_id", md.InferenceID).Str("turn_id", md.TurnID).Str("message_id", md.ID.String()).Msg("Received event from Redis stream")
+		zlog.Debug().Str("event_type", string(e.Type())).Str("session_id", md.SessionID).Str("inference_id", md.InferenceID).Str("turn_id", md.TurnID).Str("message_id", md.ID.String()).Msg("Received event from Redis stream")
 		return nil
 	})
 
 	// Build engine and attach the sink via run context.
 	eng, err := factory.NewEngineFromParsedValues(parsedLayers)
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to create engine")
+		zlog.Error().Err(err).Msg("Failed to create engine")
 		return errors.Wrap(err, "create engine")
 	}
 	var mws []middleware.Middleware
 	if s.WithLogging {
-		mws = append(mws, middleware.NewTurnLoggingMiddleware(log.Logger))
+		mws = append(mws, middleware.NewTurnLoggingMiddleware(zlog.Logger))
 	}
 
 	// Build initial Turn with Blocks
@@ -187,7 +186,7 @@ func (c *SimpleRedisStreamingInferenceCommand) RunIntoWriter(ctx context.Context
 
 	eg.Go(func() error {
 		defer cancel()
-		log.Info().Msg("Starting EventRouter (Redis-backed)")
+		zlog.Info().Msg("Starting EventRouter (Redis-backed)")
 		return router.Run(ctx)
 	})
 
@@ -195,7 +194,7 @@ func (c *SimpleRedisStreamingInferenceCommand) RunIntoWriter(ctx context.Context
 	eg.Go(func() error {
 		defer cancel()
 		<-router.Running()
-		log.Info().Msg("EventRouter is running; starting inference")
+		zlog.Info().Msg("EventRouter is running; starting inference")
 		runner, err := enginebuilder.New(
 			enginebuilder.WithBase(eng),
 			enginebuilder.WithMiddlewares(mws...),
@@ -206,7 +205,7 @@ func (c *SimpleRedisStreamingInferenceCommand) RunIntoWriter(ctx context.Context
 		}
 		updatedTurn, err := runner.RunInference(ctx, seed)
 		if err != nil {
-			log.Error().Err(err).Msg("Inference failed")
+			zlog.Error().Err(err).Msg("Inference failed")
 			return fmt.Errorf("inference failed: %w", err)
 		}
 		finalTurn = updatedTurn
@@ -222,12 +221,12 @@ func (c *SimpleRedisStreamingInferenceCommand) RunIntoWriter(ctx context.Context
 		turns.FprintTurn(w, finalTurn)
 	}
 
-	log.Info().Msg("Simple Redis streaming inference command completed successfully")
+	zlog.Info().Msg("Simple Redis streaming inference command completed successfully")
 	return nil
 }
 
 func main() {
-	if err := clay.InitGlazed("pinocchio", rootCmd); err != nil {
+	if err := logging.AddLoggingSectionToRootCommand(rootCmd, "pinocchio"); err != nil {
 		cobra.CheckErr(err)
 	}
 

@@ -3,12 +3,12 @@ package main
 import (
 	"embed"
 	"fmt"
+	"github.com/rs/zerolog/log"
 	"os"
 	"path/filepath"
 
 	sections2 "github.com/go-go-golems/geppetto/pkg/sections"
 
-	clay "github.com/go-go-golems/clay/pkg"
 	"github.com/go-go-golems/clay/pkg/repositories"
 	"github.com/go-go-golems/geppetto/pkg/doc"
 	"github.com/go-go-golems/glazed/pkg/cli"
@@ -27,7 +27,6 @@ import (
 	profilebootstrap "github.com/go-go-golems/pinocchio/pkg/cmds/profilebootstrap"
 	pkg_doc "github.com/go-go-golems/pinocchio/pkg/doc"
 	"github.com/pkg/errors"
-	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 
 	clay_repositories "github.com/go-go-golems/clay/pkg/cmds/repositories"
@@ -158,7 +157,7 @@ func initRootCmd() (*help.HelpSystem, error) {
 
 	help_cmd.SetupCobraRootCommand(helpSystem, rootCmd)
 
-	err = clay.InitGlazed("pinocchio", rootCmd)
+	err = logging.AddLoggingSectionToRootCommand(rootCmd, "pinocchio")
 	cobra.CheckErr(err)
 
 	profileSettingsSection, err := sections2.NewProfileSettingsSection()

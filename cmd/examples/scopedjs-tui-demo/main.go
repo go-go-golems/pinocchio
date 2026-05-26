@@ -3,11 +3,11 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/rs/zerolog/log"
 	"os"
 
 	"github.com/go-go-golems/geppetto/pkg/inference/engine"
 	"github.com/go-go-golems/pinocchio/cmd/examples/internal/tuidemo"
-	"github.com/rs/zerolog/log"
 )
 
 func main() {
