@@ -19,11 +19,11 @@ jobs:
           go-version-file: go.mod
           cache: true
       -
+        name: Verify logcopter package loggers
+        run: make logcopter-check
+      -
         name: Generate files
         run: go generate ./...
-      -
-        name: Verify logcopter package loggers
-        run: go tool logcopter-gen -area-prefix go-go-golems.pinocchio -strip-prefix github.com/go-go-golems/pinocchio -check ./pkg/... ./cmd/...
       -
         name: Run unit tests
         run: go test ./...
