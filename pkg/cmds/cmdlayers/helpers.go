@@ -1,7 +1,5 @@
 package cmdlayers
 
-//glazedclilint:file-ignore command-layer helper reads environment defaults before Glazed settings are constructed
-
 import (
 	"os"
 	"path/filepath"

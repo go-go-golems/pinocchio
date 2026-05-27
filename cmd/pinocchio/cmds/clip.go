@@ -1,7 +1,5 @@
 package cmds
 
-//glazedclilint:file-ignore legacy clip command reads environment default pending settings migration
-
 import (
 	"bytes"
 	"context"
