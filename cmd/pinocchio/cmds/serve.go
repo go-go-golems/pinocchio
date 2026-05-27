@@ -1,5 +1,7 @@
 package cmds
 
+//glazedclilint:file-ignore legacy serve command uses Cobra flags pending Glazed field migration
+
 import (
 	"context"
 	"fmt"
