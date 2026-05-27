@@ -22,7 +22,9 @@ GEPPETTO_VERSION ?= $(shell go list -m -f '{{.Version}}' github.com/go-go-golems
 GLAZED_LINT_BIN ?= /tmp/glazed-lint
 GLAZED_LINT_PKG ?= github.com/go-go-golems/glazed/cmd/tools/glazed-lint
 GLAZED_VERSION ?= $(shell GOWORK=off go list -m -f '{{.Version}}' github.com/go-go-golems/glazed 2>/dev/null)
+GLAZED_LINT_TOOL_VERSION ?= v1.3.4
 GLAZED_LINT_FLAGS ?= -glazedclilint.allow-paths=pkg/analysis/,pkg/cli/,pkg/cmds/fields/,pkg/cmds/logging/,pkg/cmds/sources/,pkg/help/,pkg/cmds/cmdlayers/,cmd/pinocchio/cmds/clip.go,cmd/pinocchio/cmds/serve.go
+GLAZED_LINT_DIRS ?= ./cmd/... ./pkg/...
 
 geppetto-lint-build:
 	@echo "Building geppetto-lint from geppetto module..."
@@ -44,14 +46,15 @@ glazed-lint-build:
 	@echo "Building glazed-lint from Glazed module..."
 	@if [ -n "$(GLAZED_VERSION)" ] && [ "$(GLAZED_VERSION)" != "(devel)" ]; then \
 		echo "Installing $(GLAZED_LINT_PKG)@$(GLAZED_VERSION)"; \
-		GOBIN=$(dir $(GLAZED_LINT_BIN)) GOWORK=off go install $(GLAZED_LINT_PKG)@$(GLAZED_VERSION); \
+		GOBIN=$(dir $(GLAZED_LINT_BIN)) GOWORK=off go install $(GLAZED_LINT_PKG)@$(GLAZED_VERSION) || \
+			GOBIN=$(dir $(GLAZED_LINT_BIN)) GOWORK=off go install $(GLAZED_LINT_PKG)@$(GLAZED_LINT_TOOL_VERSION); \
 	else \
-		echo "Installing $(GLAZED_LINT_PKG) from workspace/module"; \
-		GOBIN=$(dir $(GLAZED_LINT_BIN)) go install $(GLAZED_LINT_PKG); \
+		echo "Installing $(GLAZED_LINT_PKG)@$(GLAZED_LINT_TOOL_VERSION)"; \
+		GOBIN=$(dir $(GLAZED_LINT_BIN)) GOWORK=off go install $(GLAZED_LINT_PKG)@$(GLAZED_LINT_TOOL_VERSION); \
 	fi
 
 glazed-lint: glazed-lint-build
-	go vet -vettool=$(GLAZED_LINT_BIN) $(GLAZED_LINT_FLAGS) ./cmd/... ./pkg/...
+	GOWORK=off go vet -vettool=$(GLAZED_LINT_BIN) $(GLAZED_LINT_FLAGS) $(GLAZED_LINT_DIRS)
 
 docker-lint:
 	docker run --rm -v $(shell pwd):/app -w /app golangci/golangci-lint:$(GOLANGCI_LINT_VERSION) golangci-lint run -v
@@ -63,12 +66,12 @@ golangci-lint-install:
 lint: build geppetto-lint-build glazed-lint-build golangci-lint-install
 	$(GOLANGCI_LINT_BIN) run -v
 	go vet -vettool=$(GEPPETTO_LINT_BIN) ./...
-	go vet -vettool=$(GLAZED_LINT_BIN) $(GLAZED_LINT_FLAGS) ./cmd/... ./pkg/...
+	GOWORK=off go vet -vettool=$(GLAZED_LINT_BIN) $(GLAZED_LINT_FLAGS) $(GLAZED_LINT_DIRS)
 
 lintmax: build geppetto-lint-build glazed-lint-build golangci-lint-install
 	$(GOLANGCI_LINT_BIN) run -v --max-same-issues=100
 	go vet -vettool=$(GEPPETTO_LINT_BIN) ./...
-	go vet -vettool=$(GLAZED_LINT_BIN) $(GLAZED_LINT_FLAGS) ./cmd/... ./pkg/...
+	GOWORK=off go vet -vettool=$(GLAZED_LINT_BIN) $(GLAZED_LINT_FLAGS) $(GLAZED_LINT_DIRS)
 
 gosec:
 	go install github.com/securego/gosec/v2/cmd/gosec@latest
