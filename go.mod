@@ -12,13 +12,13 @@ require (
 	github.com/dop251/goja v0.0.0-20251103141225-af2ceb9156d7
 	github.com/dop251/goja_nodejs v0.0.0-20250409162600-f7acab6894b0
 	github.com/go-go-golems/bobatea v0.1.5
-	github.com/go-go-golems/clay v0.4.10
-	github.com/go-go-golems/geppetto v0.11.30
+	github.com/go-go-golems/clay v0.4.9
+	github.com/go-go-golems/geppetto v0.11.32
 	github.com/go-go-golems/glazed v1.3.0
-	github.com/go-go-golems/go-go-goja v0.5.0
+	github.com/go-go-golems/go-go-goja v0.6.0
 	github.com/go-go-golems/logcopter v0.1.0
 	github.com/go-go-golems/sessionstream v0.0.5
-	github.com/go-go-golems/uhoh v0.0.8
+	github.com/go-go-golems/uhoh v0.0.5
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.4-0.20250319132907-e064f32e3674
 	github.com/mattn/go-isatty v0.0.20

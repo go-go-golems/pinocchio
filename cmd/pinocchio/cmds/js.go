@@ -293,14 +293,17 @@ func newPinocchioJSRuntime(ctx context.Context, opts pinocchioJSRuntimeOptions) 
 	if err != nil {
 		return nil, err
 	}
-	rt, err := factory.NewRuntime(ctx)
+	rt, err := factory.NewRuntime(
+		gojengine.WithStartupContext(ctx),
+		gojengine.WithLifetimeContext(ctx),
+	)
 	if err != nil {
 		return nil, err
 	}
 
 	reg := require.NewRegistry(requireOpts...)
 	gp.Register(reg, gp.Options{
-		Runner:                   rt.Owner,
+		RuntimeOwner:             rt.Owner,
 		GoToolRegistry:           opts.GoToolRegistry,
 		GoMiddlewareFactories:    opts.GoMiddlewareFactories,
 		EngineProfileRegistry:    opts.ProfileRegistry,
