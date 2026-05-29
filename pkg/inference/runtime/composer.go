@@ -5,6 +5,7 @@ import (
 
 	"github.com/go-go-golems/geppetto/pkg/events"
 	"github.com/go-go-golems/geppetto/pkg/inference/engine"
+	geptools "github.com/go-go-golems/geppetto/pkg/inference/tools"
 	aisettings "github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 )
 
@@ -26,6 +27,12 @@ type EventSinkWrapper func(events.EventSink) (events.EventSink, error)
 // ComposedRuntime are the composed runtime pieces consumed by conversation lifecycle code.
 type ComposedRuntime struct {
 	Engine engine.Engine
+	// Registry enables Geppetto tool-loop execution for this runtime. When nil,
+	// chatapp runs a single-pass inference.
+	Registry geptools.ToolRegistry
+	// ToolExecutor optionally overrides Geppetto's default tool executor. This is
+	// the extension point used by browser/frontend tool bridges.
+	ToolExecutor geptools.ToolExecutor
 	// WrapSink decorates an application-provided base sink with runtime-owned behavior.
 	// Both canonical evtstream chat and legacy webchat now use this to keep sink decoration
 	// owned by runtime composition while letting the application provide the transport sink.

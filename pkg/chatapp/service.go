@@ -27,6 +27,10 @@ type PromptRequest struct {
 	// clone this turn directly instead of reconstructing assistant output from
 	// projected timeline entities.
 	OnFinalTurn func(*turns.Turn)
+	// RuntimeContext decorates the Geppetto run context with app-owned values such
+	// as browser-tool bridge handles. It runs inside chatapp when the session id,
+	// message id, and event publisher are known.
+	RuntimeContext func(ctx context.Context, sid sessionstream.SessionId, messageID string, pub sessionstream.EventPublisher) context.Context
 }
 
 // Service is an app-facing chat service surface suitable for consumer apps such as cmd/web-chat.
