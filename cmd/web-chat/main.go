@@ -8,9 +8,7 @@ import (
 	"io"
 	"io/fs"
 	"net/http"
-	"os"
 	"os/signal"
-	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -38,9 +36,9 @@ import (
 	appserver "github.com/go-go-golems/pinocchio/cmd/web-chat/app"
 	"github.com/go-go-golems/pinocchio/cmd/web-chat/profiles"
 	"github.com/go-go-golems/pinocchio/pkg/chatapp/plugins"
+	"github.com/go-go-golems/pinocchio/pkg/chatapp/serverkit"
 	profilebootstrap "github.com/go-go-golems/pinocchio/pkg/cmds/profilebootstrap"
 	agentmode "github.com/go-go-golems/pinocchio/pkg/middlewares/agentmode"
-	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
 	rediscfg "github.com/go-go-golems/pinocchio/pkg/redisstream"
 )
 
@@ -203,32 +201,6 @@ func buildRootHandler(root string, appMux http.Handler, appConfigJS string) http
 	return parent
 }
 
-func openWebChatTurnStore(turnsDSN string, turnsDB string) (chatstore.TurnStore, func() error, error) {
-	turnsDSN = strings.TrimSpace(turnsDSN)
-	turnsDB = strings.TrimSpace(turnsDB)
-	if turnsDSN == "" && turnsDB == "" {
-		return nil, nil, nil
-	}
-	dsn := turnsDSN
-	if dsn == "" {
-		if dir := filepath.Dir(turnsDB); dir != "" && dir != "." {
-			if err := os.MkdirAll(dir, 0o755); err != nil {
-				return nil, nil, err
-			}
-		}
-		var err error
-		dsn, err = chatstore.SQLiteTurnDSNForFile(turnsDB)
-		if err != nil {
-			return nil, nil, err
-		}
-	}
-	store, err := chatstore.NewSQLiteTurnStore(dsn)
-	if err != nil {
-		return nil, nil, err
-	}
-	return store, store.Close, nil
-}
-
 func runHTTPServer(ctx context.Context, srv *http.Server, closeFn func() error) error {
 	if ctx == nil {
 		return errors.New("ctx is nil")
@@ -357,13 +329,11 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 	if err != nil {
 		return errors.Wrap(err, "resolve web-chat base inference settings from hidden base and parsed values")
 	}
-	turnStore, closeTurnStore, err := openWebChatTurnStore(s.TurnsDSN, s.TurnsDB)
+	turnStore, closeTurnStore, err := serverkit.OpenTurnStore(serverkit.StoreOptions{TurnsDSN: s.TurnsDSN, TurnsDB: s.TurnsDB})
 	if err != nil {
 		return err
 	}
-	if closeTurnStore != nil {
-		defer func() { _ = closeTurnStore() }()
-	}
+	defer func() { _ = closeTurnStore() }()
 
 	runtimeComposer := newProfileRuntimeComposer(middlewareRegistry, middlewarecfg.BuildDeps{
 		Values: map[string]any{
