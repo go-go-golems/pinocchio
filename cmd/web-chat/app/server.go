@@ -295,6 +295,10 @@ func (s *Server) HandleSessionRoutes(w http.ResponseWriter, r *http.Request) {
 		s.handleFullExport(w, r, sid)
 		return
 	}
+	if action == "tools/manifest" {
+		s.handleFrontendToolManifest(w, r, sid)
+		return
+	}
 	if action == "tools/results" {
 		s.handleFrontendToolResult(w, r, sid)
 		return

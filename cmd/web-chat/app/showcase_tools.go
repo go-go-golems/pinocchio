@@ -13,6 +13,24 @@ import (
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
+type frontendToolManifestRequest struct {
+	Revision uint64                      `json:"revision"`
+	Tools    []frontendToolManifestEntry `json:"tools"`
+}
+
+type frontendToolManifestEntry struct {
+	Name        string         `json:"name"`
+	Description string         `json:"description"`
+	Mode        string         `json:"mode"`
+	InputSchema map[string]any `json:"inputSchema"`
+	Available   bool           `json:"available"`
+}
+
+type frontendToolManifestResponse struct {
+	Accepted bool   `json:"accepted"`
+	Revision uint64 `json:"revision"`
+}
+
 type frontendToolResultRequest struct {
 	ToolCallID string         `json:"toolCallId"`
 	ToolName   string         `json:"toolName"`
@@ -48,6 +66,58 @@ func parseWebChatSessionPath(path string) (string, string, bool) {
 		return "", "", false
 	}
 	return parts[0], strings.Join(parts[1:], "/"), true
+}
+
+func (s *Server) handleFrontendToolManifest(w http.ResponseWriter, r *http.Request, sid sessionstream.SessionId) {
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, errorResponse{Error: "method not allowed"})
+		return
+	}
+	var in frontendToolManifestRequest
+	if err := serverkit.DecodeJSON(r, &in); err != nil {
+		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "bad request"})
+		return
+	}
+	descriptors := make([]*toolv1.FrontendToolDescriptor, 0, len(in.Tools))
+	for _, tool := range in.Tools {
+		name := strings.TrimSpace(tool.Name)
+		if name == "" {
+			continue
+		}
+		inputSchema, err := structpb.NewStruct(tool.InputSchema)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, errorResponse{Error: fmt.Sprintf("bad input schema for %s", name)})
+			return
+		}
+		descriptors = append(descriptors, &toolv1.FrontendToolDescriptor{
+			Name:        name,
+			Description: tool.Description,
+			InputSchema: inputSchema,
+			Mode:        frontendToolMode(tool.Mode),
+			Available:   tool.Available,
+		})
+	}
+	if err := s.service.SubmitCommand(r.Context(), sid, frontendtools.CommandManifest, &toolv1.FrontendToolManifestCommand{
+		Tools:    descriptors,
+		Revision: in.Revision,
+	}); err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, frontendToolManifestResponse{Accepted: true, Revision: in.Revision})
+}
+
+func frontendToolMode(mode string) toolv1.ToolExecutionMode {
+	switch strings.TrimSpace(strings.ToLower(mode)) {
+	case "frontend", "frontend_auto", "auto":
+		return toolv1.ToolExecutionMode_TOOL_EXECUTION_MODE_FRONTEND_AUTO
+	case "human", "frontend_human":
+		return toolv1.ToolExecutionMode_TOOL_EXECUTION_MODE_FRONTEND_HUMAN
+	case "backend":
+		return toolv1.ToolExecutionMode_TOOL_EXECUTION_MODE_BACKEND
+	default:
+		return toolv1.ToolExecutionMode_TOOL_EXECUTION_MODE_UNSPECIFIED
+	}
 }
 
 func (s *Server) handleFrontendToolResult(w http.ResponseWriter, r *http.Request, sid sessionstream.SessionId) {

@@ -20,6 +20,7 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/turns/serde"
 	chatapp "github.com/go-go-golems/pinocchio/pkg/chatapp"
 	"github.com/go-go-golems/pinocchio/pkg/chatapp/frontendtools"
+	toolv1 "github.com/go-go-golems/pinocchio/pkg/chatapp/pb/proto/pinocchio/chatapp/frontendtools/v1"
 	"github.com/go-go-golems/pinocchio/pkg/chatapp/widgets"
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
@@ -109,6 +110,23 @@ func TestCreateSession(t *testing.T) {
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&out))
 	require.NotEmpty(t, out.SessionID)
 	require.Equal(t, "gpt-5-nano-low", out.Profile)
+}
+
+func TestFrontendToolManifestEndpointPublishesTimelineEntity(t *testing.T) {
+	manager := frontendtools.NewManager()
+	_, httpSrv := newTestMux(t, WithFrontendToolManager(manager), WithChatPlugins(frontendtools.NewPlugin()))
+
+	body := []byte(`{"revision":7,"tools":[{"name":"browser.confirm_action","description":"Confirm an action","mode":"human","inputSchema":{"type":"object"},"available":true}]}`)
+	resp, err := http.Post(httpSrv.URL+"/api/chat/sessions/sess-tools/tools/manifest", "application/json", bytes.NewReader(body))
+	require.NoError(t, err)
+	defer func() { _ = resp.Body.Close() }()
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	desc, ok := manager.Descriptor("sess-tools", "browser.confirm_action")
+	require.True(t, ok)
+	require.Equal(t, "browser.confirm_action", desc.Name)
+	require.Equal(t, toolv1.ToolExecutionMode_TOOL_EXECUTION_MODE_FRONTEND_HUMAN, desc.Mode)
+	require.True(t, desc.Available)
 }
 
 func TestFrontendToolResultEndpointPublishesTimelineEntity(t *testing.T) {
