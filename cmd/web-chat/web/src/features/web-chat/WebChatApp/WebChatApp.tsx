@@ -7,7 +7,6 @@ import {
 import type { KeyboardEvent } from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { StreamDebugPanel } from '../../../webchat/components/StreamDebugPanel';
-import { WebChatProviderCapabilities } from '../../../webchat/ProviderDemoPage';
 import { getPartProps, mergeClassName, mergeStyle } from '../../../webchat/parts';
 import { resolveTimelineRenderers } from '../../../webchat/rendererRegistry';
 import type { ChatWidgetComponents, ChatWidgetRenderers } from '../../../webchat/types';
@@ -113,7 +112,6 @@ export function WebChatApp({
       className={rootClassName}
       style={rootStyle}
     >
-      <WebChatProviderCapabilities />
       {HeaderOverride ? (
         <HeaderOverride
           title={profileTitle}

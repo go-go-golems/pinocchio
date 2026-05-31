@@ -27,13 +27,3 @@ export const Failed: Story = {
 export const UnknownWidget: Story = {
   args: { e: widgetEntity('w4', { widgetName: 'unknown.widget', status: 'ready', props: { raw: true } }) },
 };
-
-export const CapabilityDemo: Story = {
-  args: {
-    e: widgetEntity('w5', {
-      widgetName: 'demo.capability_card',
-      status: 'ready',
-      props: { title: 'Capabilities', summary: 'Temporary showcase widget.', steps: [{ label: 'Tool call', state: 'done' }, { label: 'Widget render', state: 'running' }] },
-    }),
-  },
-};

@@ -1,2 +1,2 @@
-export type { CapabilityStep, WidgetInstanceCardProps } from './types';
-export { CapabilityCard, WidgetInstanceCard } from './WidgetInstanceCard';
+export type { WidgetInstanceCardProps } from './types';
+export { WidgetInstanceCard } from './WidgetInstanceCard';

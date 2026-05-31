@@ -31,7 +31,7 @@ export const Failed: Story = {
 export const HumanTool: Story = {
   args: {
     e: toolCallEntity('t5', {
-      name: 'browser.confirm_action',
+      name: 'app.confirm_action',
       status: 'requested',
       sessionId: 'story-session',
       toolCallId: 'tool-call-1',

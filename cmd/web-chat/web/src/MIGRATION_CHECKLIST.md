@@ -21,8 +21,8 @@ This checklist tracks the intended cleanup path from the current mixed tree to t
 | `src/webchat/components/Composer.tsx` | `src/features/web-chat/ChatComposer/ChatComposer.tsx` | done | Added empty/typed/disabled/long-text stories. |
 | `src/webchat/components/Timeline.tsx` | `src/features/web-chat/ChatTimeline/ChatTimeline.tsx` | done | Moved sticky-scroll hook into `ChatTimeline/` and added focused timeline stories. |
 | `src/webchat/cards.tsx` | `src/features/web-chat/cards/*/` | in progress | Card renderers now live in one folder per card; old file is a compatibility barrel until imports move. |
-| `src/webchat/ProviderDemoPage.tsx` | delete | planned | Delete after replacement provider/tool/widget coverage exists. |
-| `src/chat/provider/ProviderMultiDemoPage.tsx` | `src/features/web-chat/demos/ProviderMultiDemo/` then test-only harness or delete | moved | Do not keep as production app surface; still scheduled for Phase 5 deletion/relocation. |
+| `src/webchat/ProviderDemoPage.tsx` | delete | done | Provider demo route and capability registration were deleted in Phase 5. |
+| `src/chat/provider/ProviderMultiDemoPage.tsx` | `src/features/web-chat/demos/ProviderMultiDemo/` then test-only harness or delete | route removed | Not reachable from production route parsing; remaining demo files are not exported through app routes. |
 | `src/webchat/ChatWidget.tsx` | delete after parity | planned | Legacy Redux/WebSocket runtime. |
 | `src/ws/wsManager.ts` | delete after parity | planned | Legacy singleton transport. |
 | `src/ws/timelineEvents.ts` | delete after parity | planned | Replace useful coverage with provider projector tests. |
@@ -46,8 +46,8 @@ This checklist tracks the intended cleanup path from the current mixed tree to t
 
 ## Demo deletion gate
 
-- [ ] Remove production imports of `WebChatProviderCapabilities`.
-- [ ] Delete `demo.capability_card`.
-- [ ] Delete demo tools `browser.get_page_context` and `browser.confirm_action`.
-- [ ] Remove `?providerDemo=1` or move equivalent coverage to tests.
-- [ ] Replace `run the capabilities demo` smoke with production-relevant coverage.
+- [x] Remove production imports of `WebChatProviderCapabilities`.
+- [x] Delete `demo.capability_card`.
+- [x] Delete demo tools `browser.get_page_context` and `browser.confirm_action`.
+- [x] Remove `?providerDemo=1` and route removed provider demo flags to production chat.
+- [x] Replace `run the capabilities demo` coverage with production route tests, main web-chat smoke, frontend-tool endpoint tests, and focused card stories.

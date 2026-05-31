@@ -11,7 +11,7 @@ WebChatProviderShell/  ChatProvider config, profile bridge, and runtime shell.
 WebChatApp/            Provider-backed web-chat chrome/body and provider renderers.
 provider-support/      Small provider support helpers such as session URL sync and debug bridging.
 extensions/            App-owned ChatProvider extensions and projectors.
-demos/                 Temporary demo/test harnesses scheduled for deletion or test-only relocation.
+demos/                 Test-only/demo harnesses that are not reachable from production app routing.
 ```
 
 Some imports still point back into `src/webchat/*` for visual components, CSS, parts, and types. That is expected until later phases split header/statusbar/composer/timeline/cards into one-folder-per-component modules.
@@ -28,5 +28,5 @@ Some imports still point back into `src/webchat/*` for visual components, CSS, p
 
 - Phase 3 moved visual components into `ChatHeader/`, `ChatStatusbar/`, `ChatComposer/`, and `ChatTimeline/`, each with focused Storybook coverage.
 - Phase 4 split `cards.tsx` into card folders under `cards/`; `src/webchat/cards.tsx` remains a temporary compatibility barrel.
-- Phase 5 will delete provider capability demo code.
+- Phase 5 deleted provider capability demo code and removed provider demo route flags from production routing.
 - Phase 7 will delete legacy Redux/WebSocket chat after parity.

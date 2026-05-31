@@ -13,5 +13,5 @@ export type { ToolCallCardProps } from './ToolCallCard';
 export { ToolCallCard } from './ToolCallCard';
 export type { ToolResultCardProps } from './ToolResultCard';
 export { ToolResultCard } from './ToolResultCard';
-export type { CapabilityStep, WidgetInstanceCardProps } from './WidgetInstanceCard';
-export { CapabilityCard, WidgetInstanceCard } from './WidgetInstanceCard';
+export type { WidgetInstanceCardProps } from './WidgetInstanceCard';
+export { WidgetInstanceCard } from './WidgetInstanceCard';

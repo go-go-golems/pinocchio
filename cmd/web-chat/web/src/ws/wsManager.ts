@@ -2,7 +2,6 @@ import { appSlice } from '../store/appSlice';
 import { errorsSlice, makeAppError } from '../store/errorsSlice';
 import type { AppDispatch } from '../store/store';
 import { logWarn } from '../utils/logger';
-import { handleAutomaticFrontendTool } from './frontendTools';
 import {
   asString,
   buildWebSocketURL,
@@ -162,7 +161,6 @@ class WsManager {
       const buffered = this.buffered;
       this.buffered = [];
       for (const next of buffered) {
-        handleAutomaticFrontendTool(next, args.sessionId);
         applyUIEvent(next, args.dispatch, args.sessionId);
       }
       return;
@@ -176,7 +174,6 @@ class WsManager {
         this.buffered.push(frame);
         return;
       }
-      handleAutomaticFrontendTool(frame, args.sessionId);
       applyUIEvent(frame, args.dispatch, args.sessionId);
     }
   }

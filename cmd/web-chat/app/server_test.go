@@ -21,7 +21,6 @@ import (
 	chatapp "github.com/go-go-golems/pinocchio/pkg/chatapp"
 	"github.com/go-go-golems/pinocchio/pkg/chatapp/frontendtools"
 	toolv1 "github.com/go-go-golems/pinocchio/pkg/chatapp/pb/proto/pinocchio/chatapp/frontendtools/v1"
-	"github.com/go-go-golems/pinocchio/pkg/chatapp/widgets"
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
 	sessionstreamv1 "github.com/go-go-golems/sessionstream/pkg/sessionstream/pb/proto/sessionstream/v1"
@@ -116,15 +115,15 @@ func TestFrontendToolManifestEndpointPublishesTimelineEntity(t *testing.T) {
 	manager := frontendtools.NewManager()
 	_, httpSrv := newTestMux(t, WithFrontendToolManager(manager), WithChatPlugins(frontendtools.NewPlugin()))
 
-	body := []byte(`{"revision":7,"tools":[{"name":"browser.confirm_action","description":"Confirm an action","mode":"human","inputSchema":{"type":"object"},"available":true}]}`)
+	body := []byte(`{"revision":7,"tools":[{"name":"app.confirm_action","description":"Confirm an action","mode":"human","inputSchema":{"type":"object"},"available":true}]}`)
 	resp, err := http.Post(httpSrv.URL+"/api/chat/sessions/sess-tools/tools/manifest", "application/json", bytes.NewReader(body))
 	require.NoError(t, err)
 	defer func() { _ = resp.Body.Close() }()
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
-	desc, ok := manager.Descriptor("sess-tools", "browser.confirm_action")
+	desc, ok := manager.Descriptor("sess-tools", "app.confirm_action")
 	require.True(t, ok)
-	require.Equal(t, "browser.confirm_action", desc.Name)
+	require.Equal(t, "app.confirm_action", desc.Name)
 	require.Equal(t, toolv1.ToolExecutionMode_TOOL_EXECUTION_MODE_FRONTEND_HUMAN, desc.Mode)
 	require.True(t, desc.Available)
 }
@@ -133,7 +132,7 @@ func TestFrontendToolResultEndpointPublishesTimelineEntity(t *testing.T) {
 	manager := frontendtools.NewManager()
 	_, httpSrv := newTestMux(t, WithFrontendToolManager(manager), WithChatPlugins(frontendtools.NewPlugin()))
 
-	body := []byte(`{"toolCallId":"call-1","toolName":"browser.confirm_action","status":"success","result":{"approved":true,"decision":"approved"}}`)
+	body := []byte(`{"toolCallId":"call-1","toolName":"app.confirm_action","status":"success","result":{"approved":true,"decision":"approved"}}`)
 	resp, err := http.Post(httpSrv.URL+"/api/chat/sessions/sess-tools/tools/results", "application/json", bytes.NewReader(body))
 	require.NoError(t, err)
 	defer func() { _ = resp.Body.Close() }()
@@ -150,51 +149,8 @@ func TestFrontendToolResultEndpointPublishesTimelineEntity(t *testing.T) {
 	require.Equal(t, "call-1", toolEntity.ID)
 	payload, ok := toolEntity.Payload.(map[string]any)
 	require.True(t, ok)
-	require.Equal(t, "browser.confirm_action", payload["toolName"])
+	require.Equal(t, "app.confirm_action", payload["toolName"])
 	require.Equal(t, "success", payload["status"])
-}
-
-func TestCapabilitiesShowcasePromptPublishesWidgetAndFrontendTool(t *testing.T) {
-	manager := frontendtools.NewManager()
-	_, httpSrv := newTestMux(t, WithFrontendToolManager(manager), WithChatPlugins(frontendtools.NewPlugin(), widgets.NewWidgetPlugin()), WithRuntimeResolver(staticRuntimeResolver{completion: "should not run"}))
-
-	body := []byte(`{"prompt":"run the capabilities demo","profile":"gpt-5-nano-low"}`)
-	resp, err := http.Post(httpSrv.URL+"/api/chat/sessions/sess-showcase/messages", "application/json", bytes.NewReader(body))
-	require.NoError(t, err)
-	defer func() { _ = resp.Body.Close() }()
-	require.Equal(t, http.StatusOK, resp.StatusCode)
-
-	deadline := time.Now().Add(2 * time.Second)
-	for {
-		snapResp, err := http.Get(httpSrv.URL + "/api/chat/sessions/sess-showcase")
-		require.NoError(t, err)
-		var snap SessionSnapshotResponse
-		require.NoError(t, json.NewDecoder(snapResp.Body).Decode(&snap))
-		_ = snapResp.Body.Close()
-		foundWidget := false
-		foundFrontendTool := false
-		for _, entity := range snap.Entities {
-			if entity.Kind == "ChatWidgetInstance" {
-				payload, ok := entity.Payload.(map[string]any)
-				require.True(t, ok)
-				require.Equal(t, "demo.capability_card", payload["widgetName"])
-				foundWidget = true
-			}
-			if entity.Kind == "ChatFrontendToolCall" {
-				payload, ok := entity.Payload.(map[string]any)
-				require.True(t, ok)
-				require.Equal(t, "browser.confirm_action", payload["toolName"])
-				foundFrontendTool = true
-			}
-		}
-		if foundWidget && foundFrontendTool {
-			return
-		}
-		if time.Now().After(deadline) {
-			t.Fatalf("timed out waiting for showcase widget and frontend tool; entities=%#v", snap.Entities)
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
 }
 
 func TestSubmitAndSnapshot(t *testing.T) {

@@ -12,9 +12,9 @@ export function ToolCallCard({ e }: ToolCallCardProps) {
   const sessionId = String(e.props?.sessionId ?? '');
   const toolCallId = String(e.props?.toolCallId ?? e.id ?? '');
   const done = !!e.props?.done || !!result || status === 'success' || status === 'denied' || status === 'failed';
-  const isHumanConfirm = name === 'browser.confirm_action' && !done && sessionId && toolCallId;
-  const title = done ? `${name} (done)` : name;
   const inputRecord = asRecord(input);
+  const isHumanConfirm = !done && !!sessionId && !!toolCallId && (typeof inputRecord.title === 'string' || typeof inputRecord.confirmLabel === 'string' || typeof inputRecord.cancelLabel === 'string');
+  const title = done ? `${name} (done)` : name;
   const confirmTitle = String(inputRecord.title ?? 'Confirm action');
   const confirmBody = String(inputRecord.body ?? 'The assistant is asking the browser to approve an action.');
   const confirmLabel = String(inputRecord.confirmLabel ?? 'Approve');

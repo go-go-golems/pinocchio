@@ -1,6 +1,5 @@
 export {
   AgentModeCard,
-  CapabilityCard,
   GenericCard,
   LogCard,
   Markdown,

@@ -329,21 +329,6 @@ func (s *Server) handleSubmitMessage(w http.ResponseWriter, r *http.Request, sid
 		return
 	}
 	var runtime *infruntime.ComposedRuntime
-	if isCapabilitiesShowcasePrompt(in.Prompt) {
-		if err := s.service.SubmitPromptRequest(r.Context(), sid, chatapp.PromptRequest{
-			Prompt:         in.Prompt,
-			IdempotencyKey: in.IdempotencyKey,
-		}); err != nil {
-			writeJSON(w, http.StatusInternalServerError, errorResponse{Error: err.Error()})
-			return
-		}
-		profile := strings.TrimSpace(in.Profile)
-		if profile == "" {
-			profile = s.defaultProfile
-		}
-		writeJSON(w, http.StatusOK, SubmitMessageResponse{SessionID: string(sid), Accepted: true, Status: "running", Profile: profile})
-		return
-	}
 	if s.runtimeResolver != nil {
 		resolved, err := s.runtimeResolver.Resolve(r.Context(), r, string(sid), in.Profile, in.Registry)
 		if err != nil {
