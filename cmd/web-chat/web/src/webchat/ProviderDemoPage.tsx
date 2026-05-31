@@ -1,14 +1,14 @@
 import {
   ChatProvider,
+  defineChatExtensions,
   defineTool,
-  defineToolkit,
   defineWidget,
   selectOverlay,
   selectTimelineEntities,
   ToolCallOutlet,
   useChatClient,
+  useChatExtensions,
   useAppSelector as useChatProviderSelector,
-  useToolkit,
   WidgetOutlet,
   type WidgetProps,
 } from '@go-go-golems/chat-provider';
@@ -88,7 +88,7 @@ function CapabilityCard({ status, props }: WidgetProps) {
 
 const capabilityWidget = defineWidget('demo.capability_card', CapabilityCard);
 
-const providerDemoToolkit = defineToolkit({
+export const webChatProviderCapabilitiesExtension = defineChatExtensions({
   name: 'web-chat-provider-demo',
   widgets: [capabilityWidget],
   tools: [
@@ -158,7 +158,7 @@ const providerDemoToolkit = defineToolkit({
 
 export function WebChatProviderCapabilities() {
   const client = useChatClient();
-  useToolkit(providerDemoToolkit);
+  useChatExtensions(webChatProviderCapabilitiesExtension);
   useEffect(() => {
     client.open();
   }, [client]);
