@@ -75,6 +75,27 @@ func (p *WidgetPlugin) ProjectUI(_ context.Context, ev sessionstream.Event, _ *s
 }
 
 // ProjectTimeline projects widget backend events into durable timeline entities.
+func PublishWidgetInstanceStarted(ctx context.Context, sid sessionstream.SessionId, pub sessionstream.EventPublisher, payload *widgetv1.WidgetInstanceStarted) error {
+	return publishWidgetEvent(ctx, sid, pub, EventWidgetInstanceStarted, payload)
+}
+
+func PublishWidgetInstancePatched(ctx context.Context, sid sessionstream.SessionId, pub sessionstream.EventPublisher, payload *widgetv1.WidgetInstancePatched) error {
+	return publishWidgetEvent(ctx, sid, pub, EventWidgetInstancePatched, payload)
+}
+
+func PublishWidgetInstanceCompleted(ctx context.Context, sid sessionstream.SessionId, pub sessionstream.EventPublisher, payload *widgetv1.WidgetInstanceCompleted) error {
+	return publishWidgetEvent(ctx, sid, pub, EventWidgetInstanceCompleted, payload)
+}
+
+func PublishWidgetInstanceRemoved(ctx context.Context, sid sessionstream.SessionId, pub sessionstream.EventPublisher, payload *widgetv1.WidgetInstanceRemoved) error {
+	return publishWidgetEvent(ctx, sid, pub, EventWidgetInstanceRemoved, payload)
+}
+
+func publishWidgetEvent(ctx context.Context, sid sessionstream.SessionId, pub sessionstream.EventPublisher, name string, payload proto.Message) error {
+	return pub.Publish(ctx, sessionstream.Event{Name: name, SessionId: sid, Payload: payload})
+}
+
+// ProjectTimeline projects widget backend events into durable timeline entities.
 func (p *WidgetPlugin) ProjectTimeline(_ context.Context, ev sessionstream.Event, _ *sessionstream.Session, view sessionstream.TimelineView) ([]sessionstream.TimelineEntity, bool, error) {
 	switch ev.Name {
 	case EventWidgetInstanceStarted:
