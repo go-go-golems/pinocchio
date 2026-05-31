@@ -156,7 +156,7 @@ const providerDemoToolkit = defineToolkit({
   ],
 });
 
-function WebChatProviderCapabilities() {
+export function WebChatProviderCapabilities() {
   const client = useChatClient();
   useToolkit(providerDemoToolkit);
   useEffect(() => {

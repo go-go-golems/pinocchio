@@ -1,9 +1,10 @@
-export { ChatWidget } from './ChatWidget';
+export { ChatWidget as LegacyChatWidget } from './ChatWidget';
 export * from './cards';
 export { DefaultComposer } from './components/Composer';
 export { DefaultHeader } from './components/Header';
 export { DefaultStatusbar } from './components/Statusbar';
 export { ChatTimeline } from './components/Timeline';
+export { ProviderBackedChatWidget as ChatWidget } from './ProviderBackedChatWidget';
 export {
   clearRegisteredTimelineRenderers,
   registerTimelineRenderer,
