@@ -26,6 +26,11 @@ type frontendToolResultResponse struct {
 	Status   string `json:"status"`
 }
 
+func isCapabilitiesShowcasePrompt(prompt string) bool {
+	p := strings.ToLower(strings.TrimSpace(prompt))
+	return strings.Contains(p, "capabilities demo") || strings.Contains(p, "capability demo") || strings.Contains(p, "frontend tool demo") || strings.Contains(p, "showcase")
+}
+
 func parseWebChatSessionPath(path string) (string, string, bool) {
 	const prefix = "/api/chat/sessions/"
 	if !strings.HasPrefix(path, prefix) {
