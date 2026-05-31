@@ -24,7 +24,8 @@
     "react-redux": "^9.2.0",
     "react-router-dom": "^6.28.1",
     "remark-gfm": "^4.0.1",
-    "yaml": "^2.6.1"
+    "yaml": "^2.6.1",
+    "@go-go-golems/chat-provider": "file:../../../../2026-05-29--chatbot-overlay-glm/packages/chat-provider"
   },
   "devDependencies": {
     "@redux-devtools/cli": "^4.0.4",
