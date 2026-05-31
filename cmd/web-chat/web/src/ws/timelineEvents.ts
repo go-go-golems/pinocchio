@@ -3,7 +3,7 @@ import { appSlice } from '../store/appSlice';
 import type { AppDispatch } from '../store/store';
 import { type TimelineEntity, timelineSlice } from '../store/timelineSlice';
 import { decodeKnownUIEvent } from './chatappPayloads';
-import type { CanonicalFrame } from './protocol';
+import { asRecord, asString, type CanonicalFrame } from './protocol';
 import { recordUIEventDebug } from './streamDebug';
 import { agentModeEntity, agentModePreviewEntityId, messageEntity } from './timelineSnapshot';
 
@@ -88,7 +88,106 @@ function parentMessageId(messageId: string, marker: string): string | undefined 
   return idx > 0 ? messageId.slice(0, idx) : undefined;
 }
 
-export function timelineMutationFromUIEvent(frame: CanonicalFrame): TimelineMutation | null {
+function widgetEntity(id: string, props: Record<string, unknown>): TimelineEntity {
+  return {
+    id,
+    kind: 'ChatWidgetInstance',
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+    props,
+  };
+}
+
+function frontendToolEntity(id: string, props: Record<string, unknown>): TimelineEntity {
+  return {
+    id,
+    kind: 'ChatFrontendToolCall',
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+    props,
+  };
+}
+
+function rawTimelineMutationFromUIEvent(frame: CanonicalFrame, sessionId = ''): TimelineMutation | null {
+  const name = asString(frame.name);
+  const payload = asRecord(frame.payload);
+  switch (name) {
+    case 'ChatWidgetInstanceStarted': {
+      const instanceId = asString(payload.instanceId);
+      if (!instanceId) return null;
+      return {
+        upsert: widgetEntity(instanceId, {
+          instanceId,
+          widgetName: asString(payload.widgetName),
+          parentMessageId: asString(payload.parentMessageId),
+          status: payload.status || 'WIDGET_STATUS_STREAMING',
+          props: asRecord(payload.props),
+        }),
+      };
+    }
+    case 'ChatWidgetInstancePatched': {
+      const instanceId = asString(payload.instanceId);
+      if (!instanceId) return null;
+      return {
+        upsert: widgetEntity(instanceId, definedProps({
+          instanceId,
+          widgetName: asString(payload.widgetName),
+          status: payload.status || 'WIDGET_STATUS_STREAMING',
+          props: asRecord(payload.patch),
+        })),
+      };
+    }
+    case 'ChatWidgetInstanceCompleted': {
+      const instanceId = asString(payload.instanceId);
+      if (!instanceId) return null;
+      return { upsert: widgetEntity(instanceId, { instanceId, status: payload.status || 'WIDGET_STATUS_READY' }) };
+    }
+    case 'ChatWidgetInstanceRemoved': {
+      const instanceId = asString(payload.instanceId);
+      return instanceId ? { deleteId: instanceId } : null;
+    }
+    case 'ChatFrontendToolCallRequested': {
+      const toolCallId = asString(payload.toolCallId);
+      if (!toolCallId) return null;
+      return {
+        upsert: frontendToolEntity(toolCallId, {
+          sessionId,
+          toolCallId,
+          toolName: asString(payload.toolName),
+          name: asString(payload.toolName),
+          parentMessageId: asString(payload.messageId),
+          mode: payload.mode,
+          status: asString(payload.status) || 'requested',
+          input: asRecord(payload.input),
+        }),
+      };
+    }
+    case 'ChatFrontendToolResultReceived': {
+      const toolCallId = asString(payload.toolCallId);
+      if (!toolCallId) return null;
+      return {
+        upsert: frontendToolEntity(toolCallId, {
+          sessionId,
+          toolCallId,
+          toolName: asString(payload.toolName),
+          name: asString(payload.toolName),
+          parentMessageId: asString(payload.messageId),
+          status: asString(payload.status) || 'success',
+          result: asRecord(payload.result),
+          error: asString(payload.error),
+          done: true,
+        }),
+      };
+    }
+    default:
+      return null;
+  }
+}
+
+export function timelineMutationFromUIEvent(frame: CanonicalFrame, sessionId = ''): TimelineMutation | null {
+  const rawMutation = rawTimelineMutationFromUIEvent(frame, sessionId);
+  if (rawMutation) return rawMutation;
+
   const event = decodeKnownUIEvent(frame);
   if (!event) return null;
 
@@ -311,7 +410,7 @@ export function timelineMutationFromUIEvent(frame: CanonicalFrame): TimelineMuta
 }
 
 export function applyUIEvent(frame: CanonicalFrame, dispatch: AppDispatch, sessionId = '') {
-  const mutation = timelineMutationFromUIEvent(frame);
+  const mutation = timelineMutationFromUIEvent(frame, sessionId);
   recordUIEventDebug(sessionId, frame, mutation);
   if (!mutation) return;
   if (mutation.deleteId) {

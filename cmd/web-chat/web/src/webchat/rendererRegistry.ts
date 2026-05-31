@@ -15,6 +15,7 @@ type Renderer = React.ComponentType<{ e: RenderEntity }>;
 const builtinRenderers: Record<string, Renderer> = {
   message: MessageCard,
   tool_call: ToolCallCard,
+  ChatFrontendToolCall: ToolCallCard,
   tool_result: ToolResultCard,
   log: LogCard,
   agent_mode: AgentModeCard,

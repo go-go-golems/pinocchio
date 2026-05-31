@@ -1,4 +1,5 @@
 import { logWarn } from '../utils/logger';
+import { submitFrontendToolResult } from '../ws/frontendTools';
 import { normalizeAgentModeAnalysis } from './agentModeMarkdown';
 import { Markdown } from './Markdown';
 import type { RenderEntity } from './types';
@@ -45,10 +46,33 @@ export function MessageCard({ e }: { e: RenderEntity }) {
 }
 
 export function ToolCallCard({ e }: { e: RenderEntity }) {
-  const name = String(e.props?.name ?? 'tool');
+  const name = String(e.props?.name ?? e.props?.toolName ?? 'tool');
   const input = e.props?.input ?? {};
-  const done = !!e.props?.done;
+  const result = e.props?.result;
+  const status = String(e.props?.status ?? '');
+  const sessionId = String(e.props?.sessionId ?? '');
+  const toolCallId = String(e.props?.toolCallId ?? e.id ?? '');
+  const done = !!e.props?.done || !!result || status === 'success' || status === 'denied' || status === 'failed';
+  const isHumanConfirm = name === 'browser.confirm_action' && !done && sessionId && toolCallId;
   const title = done ? `${name} (done)` : name;
+  const inputRecord = asRecord(input);
+  const confirmTitle = String(inputRecord.title ?? 'Confirm action');
+  const confirmBody = String(inputRecord.body ?? 'The assistant is asking the browser to approve an action.');
+  const confirmLabel = String(inputRecord.confirmLabel ?? 'Approve');
+  const cancelLabel = String(inputRecord.cancelLabel ?? 'Deny');
+  const respond = (approved: boolean) => {
+    void submitFrontendToolResult({
+      sessionId,
+      toolCallId,
+      toolName: name,
+      status: approved ? 'success' : 'denied',
+      result: {
+        approved,
+        decision: approved ? 'approved' : 'denied',
+        decidedAt: new Date().toISOString(),
+      },
+    }).catch((err) => logWarn('frontend tool result submission failed', { scope: 'tool.frontend.result', extra: { toolCallId, name } }, err));
+  };
   return (
     <div data-part="card">
       <div data-part="card-header">
@@ -73,6 +97,25 @@ export function ToolCallCard({ e }: { e: RenderEntity }) {
             Copy args
           </button>
         </div>
+        {isHumanConfirm ? (
+          <div data-part="callout" data-variant="warning" style={{ marginBottom: 10 }}>
+            <strong>{confirmTitle}</strong>
+            <div style={{ marginTop: 6 }}>{confirmBody}</div>
+            <div data-part="toolbar" style={{ marginTop: 10 }}>
+              <button type="button" data-part="button" data-variant="primary" onClick={() => respond(true)}>
+                {confirmLabel}
+              </button>
+              <button type="button" data-part="button" data-variant="ghost" onClick={() => respond(false)}>
+                {cancelLabel}
+              </button>
+            </div>
+          </div>
+        ) : null}
+        {result ? (
+          <pre data-part="mono" style={{ margin: '0 0 10px', whiteSpace: 'pre-wrap' }}>
+            {JSON.stringify(result, null, 2)}
+          </pre>
+        ) : null}
         <pre data-part="mono" style={{ margin: 0, whiteSpace: 'pre-wrap' }}>
           {JSON.stringify(input ?? {}, null, 2)}
         </pre>
@@ -178,8 +221,70 @@ export function AgentModeCard({ e }: { e: RenderEntity }) {
   );
 }
 
+type CapabilityStep = {
+  id?: string;
+  label?: string;
+  state?: string;
+};
+
+function stepVariant(state: string): string {
+  switch (state) {
+    case 'done':
+      return 'accent';
+    case 'running':
+      return 'warning';
+    case 'failed':
+      return 'danger';
+    default:
+      return 'ghost';
+  }
+}
+
+export function CapabilityCard({ e }: { e: RenderEntity }) {
+  const status = String(e.props?.status ?? 'unknown');
+  const props = asRecord(e.props?.props);
+  const title = String(props.title ?? 'Capabilities showcase');
+  const summary = String(props.summary ?? 'Demonstrating web-chat package capabilities.');
+  const steps = Array.isArray(props.steps) ? (props.steps as CapabilityStep[]) : [];
+  const result = props.result ? String(props.result) : '';
+  return (
+    <div data-part="card" data-variant="widget">
+      <div data-part="card-header">
+        <div data-part="card-header-title">{title}</div>
+        <div data-part="pill" data-variant="accent" data-mono="true">
+          demo.capability_card
+        </div>
+        <div data-part="pill" data-mono="true">
+          {status}
+        </div>
+        <div data-part="card-header-meta">{fmtSentAt(e.createdAt)}</div>
+      </div>
+      <div data-part="card-body">
+        <div style={{ color: 'var(--pwchat-muted)', marginBottom: 10 }}>{summary}</div>
+        <div style={{ display: 'grid', gap: 8 }}>
+          {steps.map((step, index) => {
+            const state = String(step.state ?? 'pending');
+            return (
+              <div key={step.id ?? index} data-part="row" style={{ justifyContent: 'space-between', gap: 10 }}>
+                <span>{String(step.label ?? step.id ?? `Step ${index + 1}`)}</span>
+                <span data-part="pill" data-variant={stepVariant(state)} data-mono="true">
+                  {state}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+        {result ? <div style={{ marginTop: 10 }}>{result}</div> : null}
+      </div>
+    </div>
+  );
+}
+
 export function WidgetInstanceCard({ e }: { e: RenderEntity }) {
   const widgetName = String(e.props?.widgetName ?? e.props?.widget_name ?? 'widget');
+  if (widgetName === 'demo.capability_card') {
+    return <CapabilityCard e={e} />;
+  }
   const status = String(e.props?.status ?? 'unknown');
   const props = asRecord(e.props?.props);
   return (
