@@ -1,0 +1,62 @@
+syntax = "proto3";
+
+package pinocchio.chatapp.widgets.v1;
+
+option go_package = "github.com/go-go-golems/pinocchio/pkg/chatapp/pb/proto/pinocchio/chatapp/widgets/v1;widgetsv1";
+
+import "google/protobuf/struct.proto";
+
+// WidgetStatus describes the lifecycle stage of a widget instance.
+enum WidgetStatus {
+  WIDGET_STATUS_UNSPECIFIED = 0;
+  WIDGET_STATUS_DRAFT = 1;
+  WIDGET_STATUS_STREAMING = 2;
+  WIDGET_STATUS_READY = 3;
+  WIDGET_STATUS_ERROR = 4;
+}
+
+// WidgetInstanceStarted is the backend event emitted when a widget instance begins.
+message WidgetInstanceStarted {
+  string instance_id = 1;
+  string widget_name = 2;
+  string parent_message_id = 3;
+  WidgetStatus status = 4;
+  google.protobuf.Struct props = 5;
+}
+
+// WidgetInstancePatched is the backend event emitted when a widget receives a partial props update.
+message WidgetInstancePatched {
+  string instance_id = 1;
+  string widget_name = 2;
+  WidgetStatus status = 3;
+  google.protobuf.Struct patch = 4;
+  repeated string patch_paths = 5;
+}
+
+// WidgetInstanceCompleted is the backend event emitted when a widget reaches its final state.
+message WidgetInstanceCompleted {
+  string instance_id = 1;
+  WidgetStatus status = 2;
+}
+
+// WidgetInstanceRemoved is the backend event emitted when a widget is removed.
+message WidgetInstanceRemoved {
+  string instance_id = 1;
+}
+
+// WidgetActionCommand is a client command dispatched when a user interacts with a widget.
+message WidgetActionCommand {
+  string instance_id = 1;
+  string widget_name = 2;
+  string action_name = 3;
+  google.protobuf.Struct input = 4;
+}
+
+// WidgetInstanceEntity is the durable timeline entity representing a widget instance.
+message WidgetInstanceEntity {
+  string instance_id = 1;
+  string widget_name = 2;
+  string parent_message_id = 3;
+  WidgetStatus status = 4;
+  google.protobuf.Struct props = 5;
+}
