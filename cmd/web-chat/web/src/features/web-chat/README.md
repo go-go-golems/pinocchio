@@ -26,7 +26,7 @@ Some imports still point back into `src/webchat/*` for visual components, CSS, p
 
 ## Near-term cleanup
 
-- Phase 3 will move visual components into `ChatHeader/`, `ChatStatusbar/`, `ChatComposer/`, and `ChatTimeline/`.
+- Phase 3 moved visual components into `ChatHeader/`, `ChatStatusbar/`, `ChatComposer/`, and `ChatTimeline/`, each with focused Storybook coverage.
 - Phase 4 will split `cards.tsx` into card folders.
 - Phase 5 will delete provider capability demo code.
 - Phase 7 will delete legacy Redux/WebSocket chat after parity.

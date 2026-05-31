@@ -16,10 +16,10 @@ This checklist tracks the intended cleanup path from the current mixed tree to t
 | `src/chat/provider/ProviderBackedChatWidget.tsx` | `src/features/web-chat/WebChatProviderShell/` | done | Provider config + profile bridge now live in `WebChatProviderShell.tsx`; old path re-exports through compatibility index. |
 | `src/chat/provider/ProviderBackedChatWidgetInner.tsx` | `src/features/web-chat/WebChatApp/` | done | Production chrome/body now live in `WebChatApp.tsx`. |
 | `src/chat/provider/projectors/pinocchioProjectors.ts` | `src/features/web-chat/extensions/pinocchio-projectors/` | moved | Split into reasoning/agent/backend-tool files later in Phase 9. |
-| `src/webchat/components/Header.tsx` | `src/features/web-chat/ChatHeader/ChatHeader.tsx` | planned | Add `types.ts`, `index.ts`, story. |
-| `src/webchat/components/Statusbar.tsx` | `src/features/web-chat/ChatStatusbar/ChatStatusbar.tsx` | planned | Add stories for status states. |
-| `src/webchat/components/Composer.tsx` | `src/features/web-chat/ChatComposer/ChatComposer.tsx` | planned | Add stories for empty/typed/disabled. |
-| `src/webchat/components/Timeline.tsx` | `src/features/web-chat/ChatTimeline/ChatTimeline.tsx` | planned | Move sticky-scroll hook nearby or to shared hooks. |
+| `src/webchat/components/Header.tsx` | `src/features/web-chat/ChatHeader/ChatHeader.tsx` | done | Added `types.ts`, `index.ts`, and focused stories. |
+| `src/webchat/components/Statusbar.tsx` | `src/features/web-chat/ChatStatusbar/ChatStatusbar.tsx` | done | Added connected/disconnected/error/export-visible stories. |
+| `src/webchat/components/Composer.tsx` | `src/features/web-chat/ChatComposer/ChatComposer.tsx` | done | Added empty/typed/disabled/long-text stories. |
+| `src/webchat/components/Timeline.tsx` | `src/features/web-chat/ChatTimeline/ChatTimeline.tsx` | done | Moved sticky-scroll hook into `ChatTimeline/` and added focused timeline stories. |
 | `src/webchat/cards.tsx` | `src/features/web-chat/cards/*/` | planned | One folder per card renderer. |
 | `src/webchat/ProviderDemoPage.tsx` | delete | planned | Delete after replacement provider/tool/widget coverage exists. |
 | `src/chat/provider/ProviderMultiDemoPage.tsx` | `src/features/web-chat/demos/ProviderMultiDemo/` then test-only harness or delete | moved | Do not keep as production app surface; still scheduled for Phase 5 deletion/relocation. |

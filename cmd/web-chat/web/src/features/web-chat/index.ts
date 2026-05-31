@@ -1,3 +1,11 @@
+export type { ChatComposerProps } from './ChatComposer';
+export { DefaultComposer } from './ChatComposer';
+export type { ChatHeaderProps } from './ChatHeader';
+export { DefaultHeader } from './ChatHeader';
+export type { ChatStatusbarProps } from './ChatStatusbar';
+export { DefaultStatusbar } from './ChatStatusbar';
+export type { ChatTimelineError, ChatTimelineProps, ScrollMode } from './ChatTimeline';
+export { ChatTimeline, useStickyScrollFollow } from './ChatTimeline';
 export { pinocchioWebChatProjectors } from './extensions/pinocchio-projectors';
 export type { WebChatAppProps } from './WebChatApp';
 export { WebChatApp } from './WebChatApp';

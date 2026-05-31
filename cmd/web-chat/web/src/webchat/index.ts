@@ -1,9 +1,9 @@
+export { DefaultComposer } from '../features/web-chat/ChatComposer';
+export { DefaultHeader } from '../features/web-chat/ChatHeader';
+export { DefaultStatusbar } from '../features/web-chat/ChatStatusbar';
+export { ChatTimeline } from '../features/web-chat/ChatTimeline';
 export { ChatWidget as LegacyChatWidget } from './ChatWidget';
 export * from './cards';
-export { DefaultComposer } from './components/Composer';
-export { DefaultHeader } from './components/Header';
-export { DefaultStatusbar } from './components/Statusbar';
-export { ChatTimeline } from './components/Timeline';
 export { ProviderBackedChatWidget as ChatWidget } from './ProviderBackedChatWidget';
 export {
   clearRegisteredTimelineRenderers,

@@ -1,19 +1,6 @@
-import type React from 'react';
-import { getPartProps, mergeClassName, mergeStyle } from '../parts';
-import type { ChatWidgetRenderers, PartProps, RenderEntity } from '../types';
-
-type TimelineProps = {
-  entities: RenderEntity[];
-  errors: Array<{ id: string; scope: string; message: string; detail?: string; extra?: unknown; time: number }>;
-  showErrors: boolean;
-  errorCount: number;
-  onClearErrors: () => void;
-  onToggleErrors: () => void;
-  renderers: ChatWidgetRenderers;
-  bottomRef: React.RefObject<HTMLDivElement>;
-  partProps?: PartProps;
-  state?: string;
-};
+import { getPartProps, mergeClassName, mergeStyle } from '../../../webchat/parts';
+import type { RenderEntity } from '../../../webchat/types';
+import type { ChatTimelineProps } from './types';
 
 function roleFromEntity(e: RenderEntity): string | undefined {
   if (e.kind === 'message') return String(e.props?.role ?? 'assistant');
@@ -35,7 +22,7 @@ export function ChatTimeline({
   bottomRef,
   partProps,
   state,
-}: TimelineProps) {
+}: ChatTimelineProps) {
   const timelineProps = getPartProps('timeline', partProps);
   const timelineClassName = mergeClassName(timelineProps.className);
   const timelineStyle = mergeStyle(timelineProps.style);

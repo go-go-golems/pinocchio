@@ -1,9 +1,9 @@
-import { getPartProps, mergeClassName, mergeStyle } from '../parts';
-import type { StatusbarSlotProps } from '../types';
-import { fmtShort } from '../utils';
-import { ExportMenu } from './ExportMenu';
+import { ExportMenu } from '../../../webchat/components/ExportMenu';
+import { getPartProps, mergeClassName, mergeStyle } from '../../../webchat/parts';
+import { fmtShort } from '../../../webchat/utils';
+import type { ChatStatusbarProps } from './types';
 
-export function DefaultStatusbar(props: StatusbarSlotProps) {
+export function DefaultStatusbar(props: ChatStatusbarProps) {
   const {
     profile,
     profiles,

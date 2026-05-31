@@ -6,15 +6,14 @@ import {
 } from '@go-go-golems/chat-provider';
 import type { KeyboardEvent } from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { DefaultComposer } from '../../../webchat/components/Composer';
-import { DefaultHeader } from '../../../webchat/components/Header';
 import { StreamDebugPanel } from '../../../webchat/components/StreamDebugPanel';
-import { ChatTimeline } from '../../../webchat/components/Timeline';
-import { useStickyScrollFollow } from '../../../webchat/hooks/useStickyScrollFollow';
 import { WebChatProviderCapabilities } from '../../../webchat/ProviderDemoPage';
 import { getPartProps, mergeClassName, mergeStyle } from '../../../webchat/parts';
 import { resolveTimelineRenderers } from '../../../webchat/rendererRegistry';
 import type { ChatWidgetComponents, ChatWidgetRenderers } from '../../../webchat/types';
+import { DefaultComposer } from '../ChatComposer';
+import { DefaultHeader } from '../ChatHeader';
+import { ChatTimeline, useStickyScrollFollow } from '../ChatTimeline';
 import { toRenderEntity } from '../provider-support/providerTimeline';
 import { ProviderStatusbar } from './ProviderStatusbar';
 import { ProviderToolCallRenderer } from './ProviderToolCallRenderer';

@@ -1,5 +1,5 @@
-import { getPartProps, mergeClassName, mergeStyle } from '../parts';
-import type { ComposerSlotProps } from '../types';
+import { getPartProps, mergeClassName, mergeStyle } from '../../../webchat/parts';
+import type { ChatComposerProps } from './types';
 
 export function DefaultComposer({
   text,
@@ -9,7 +9,7 @@ export function DefaultComposer({
   onNewConversation,
   onKeyDown,
   partProps,
-}: ComposerSlotProps) {
+}: ChatComposerProps) {
   const composerProps = getPartProps('composer', partProps);
   const composerClassName = mergeClassName(composerProps.className);
   const composerStyle = mergeStyle(composerProps.style);

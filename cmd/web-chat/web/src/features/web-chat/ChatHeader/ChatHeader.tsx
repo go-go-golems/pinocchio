@@ -1,11 +1,5 @@
-import type React from 'react';
-import { getPartProps, mergeClassName, mergeStyle } from '../parts';
-import type { HeaderSlotProps, StatusbarSlotProps } from '../types';
-
-export type DefaultHeaderProps = HeaderSlotProps & {
-  Statusbar: React.ComponentType<StatusbarSlotProps>;
-  partProps?: HeaderSlotProps['partProps'];
-};
+import { getPartProps, mergeClassName, mergeStyle } from '../../../webchat/parts';
+import type { ChatHeaderProps } from './types';
 
 export function DefaultHeader({
   Statusbar,
@@ -21,7 +15,7 @@ export function DefaultHeader({
   showErrors,
   onProfileChange,
   onToggleErrors,
-}: DefaultHeaderProps) {
+}: ChatHeaderProps) {
   const headerProps = getPartProps('header', partProps);
   const headerClassName = mergeClassName(headerProps.className);
   const headerStyle = mergeStyle(headerProps.style);
