@@ -1,11 +1,2 @@
-export { ProviderBackedChatWidget } from './ProviderBackedChatWidget';
-export { ProviderBackedChatWidgetInner } from './ProviderBackedChatWidgetInner';
-export { ProviderMultiDemoInstance } from './ProviderMultiDemoInstance';
-export { ProviderMultiDemoPage } from './ProviderMultiDemoPage';
-export { ProviderMultiDemoPanel } from './ProviderMultiDemoPanel';
-export { ProviderStatusbar } from './ProviderStatusbar';
-export { ProviderToolCallRenderer } from './ProviderToolCallRenderer';
-export { ProviderWidgetRenderer } from './ProviderWidgetRenderer';
-export { recordProviderDebugEvent } from './providerDebug';
-export { setSessionIdInLocation } from './providerSession';
-export { asRecord, toRenderEntity } from './providerTimeline';
+export { ProviderBackedChatWidget, WebChatProviderShell } from '../../features/web-chat';
+export { ProviderMultiDemoPage } from '../../features/web-chat/demos/ProviderMultiDemo';

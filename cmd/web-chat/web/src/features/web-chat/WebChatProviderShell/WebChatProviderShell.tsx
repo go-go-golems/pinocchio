@@ -1,20 +1,20 @@
 import { ChatProvider } from '@go-go-golems/chat-provider';
 import { useCallback, useEffect, useMemo } from 'react';
-import { appSlice } from '../../store/appSlice';
-import { useAppDispatch, useAppSelector } from '../../store/hooks';
-import { type ProfileInfo, useGetProfileQuery, useGetProfilesQuery, useSetProfileMutation } from '../../store/profileApi';
-import { basePrefixFromLocation } from '../../utils/basePrefix';
-import { logWarn } from '../../utils/logger';
-import { resolveSelectedProfile } from '../../webchat/profileSelection';
-import '../../webchat/styles/theme-default.css';
-import '../../webchat/styles/webchat.css';
-import type { ChatWidgetProps } from '../../webchat/types';
-import { ProviderBackedChatWidgetInner } from './ProviderBackedChatWidgetInner';
-import { pinocchioWebChatProjectors } from './projectors/pinocchioProjectors';
-import { recordProviderDebugEvent } from './providerDebug';
-import { setSessionIdInLocation } from './providerSession';
+import { appSlice } from '../../../store/appSlice';
+import { useAppDispatch, useAppSelector } from '../../../store/hooks';
+import { type ProfileInfo, useGetProfileQuery, useGetProfilesQuery, useSetProfileMutation } from '../../../store/profileApi';
+import { basePrefixFromLocation } from '../../../utils/basePrefix';
+import { logWarn } from '../../../utils/logger';
+import { resolveSelectedProfile } from '../../../webchat/profileSelection';
+import '../../../webchat/styles/theme-default.css';
+import '../../../webchat/styles/webchat.css';
+import { pinocchioWebChatProjectors } from '../extensions/pinocchio-projectors/pinocchioProjectors';
+import { recordProviderDebugEvent } from '../provider-support/providerDebug';
+import { setSessionIdInLocation } from '../provider-support/providerSession';
+import { WebChatApp } from '../WebChatApp';
+import type { WebChatProviderShellProps } from './types';
 
-export function ProviderBackedChatWidget(props: ChatWidgetProps) {
+export function WebChatProviderShell(props: WebChatProviderShellProps) {
   const dispatch = useAppDispatch();
   const appProfile = useAppSelector((s) => s.app.profile);
   const { data: profileData, refetch: refetchProfile } = useGetProfileQuery();
@@ -86,7 +86,7 @@ export function ProviderBackedChatWidget(props: ChatWidgetProps) {
 
   return (
     <ChatProvider config={config}>
-      <ProviderBackedChatWidgetInner
+      <WebChatApp
         {...props}
         selectedProfile={selectedProfile}
         profileOptions={profileOptions as ProfileInfo[]}

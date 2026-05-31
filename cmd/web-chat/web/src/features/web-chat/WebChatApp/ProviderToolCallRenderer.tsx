@@ -1,5 +1,5 @@
 import { ToolCallOutlet } from '@go-go-golems/chat-provider';
-import type { RenderEntity } from '../../webchat/types';
+import type { RenderEntity } from '../../../webchat/types';
 
 export function ProviderToolCallRenderer({ e }: { e: RenderEntity }) {
   return (

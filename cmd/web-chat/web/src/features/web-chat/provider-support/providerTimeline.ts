@@ -1,4 +1,4 @@
-import type { RenderEntity } from '../../webchat/types';
+import type { RenderEntity } from '../../../webchat/types';
 
 export function toRenderEntity(e: any): RenderEntity {
   const createdAt = Number(e?.createdAt ?? 0);

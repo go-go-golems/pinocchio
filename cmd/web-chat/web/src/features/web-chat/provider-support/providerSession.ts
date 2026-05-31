@@ -1,4 +1,4 @@
-import { logWarn } from '../../utils/logger';
+import { logWarn } from '../../../utils/logger';
 
 export function setSessionIdInLocation(sessionId: string | null) {
   try {

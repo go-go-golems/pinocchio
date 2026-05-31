@@ -1,5 +1,5 @@
-import '../../webchat/styles/theme-default.css';
-import '../../webchat/styles/webchat.css';
+import '../../../../webchat/styles/theme-default.css';
+import '../../../../webchat/styles/webchat.css';
 import { ProviderMultiDemoInstance } from './ProviderMultiDemoInstance';
 
 export function ProviderMultiDemoPage() {

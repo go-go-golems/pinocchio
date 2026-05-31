@@ -14,7 +14,7 @@ import {
 } from '@go-go-golems/chat-provider';
 import type React from 'react';
 import { useEffect, useMemo, useState } from 'react';
-import { pinocchioWebChatProjectors } from '../chat/provider/projectors/pinocchioProjectors';
+import { pinocchioWebChatProjectors } from '../features/web-chat';
 import { basePrefixFromLocation } from '../utils/basePrefix';
 import { Markdown } from './Markdown';
 import { fmtSentAt } from './utils';

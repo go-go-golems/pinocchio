@@ -6,29 +6,22 @@ import {
 } from '@go-go-golems/chat-provider';
 import type { KeyboardEvent } from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { ProfileInfo } from '../../store/profileApi';
-import { DefaultComposer } from '../../webchat/components/Composer';
-import { DefaultHeader } from '../../webchat/components/Header';
-import { StreamDebugPanel } from '../../webchat/components/StreamDebugPanel';
-import { ChatTimeline } from '../../webchat/components/Timeline';
-import { useStickyScrollFollow } from '../../webchat/hooks/useStickyScrollFollow';
-import { WebChatProviderCapabilities } from '../../webchat/ProviderDemoPage';
-import { getPartProps, mergeClassName, mergeStyle } from '../../webchat/parts';
-import { resolveTimelineRenderers } from '../../webchat/rendererRegistry';
-import type { ChatWidgetComponents, ChatWidgetProps, ChatWidgetRenderers } from '../../webchat/types';
+import { DefaultComposer } from '../../../webchat/components/Composer';
+import { DefaultHeader } from '../../../webchat/components/Header';
+import { StreamDebugPanel } from '../../../webchat/components/StreamDebugPanel';
+import { ChatTimeline } from '../../../webchat/components/Timeline';
+import { useStickyScrollFollow } from '../../../webchat/hooks/useStickyScrollFollow';
+import { WebChatProviderCapabilities } from '../../../webchat/ProviderDemoPage';
+import { getPartProps, mergeClassName, mergeStyle } from '../../../webchat/parts';
+import { resolveTimelineRenderers } from '../../../webchat/rendererRegistry';
+import type { ChatWidgetComponents, ChatWidgetRenderers } from '../../../webchat/types';
+import { toRenderEntity } from '../provider-support/providerTimeline';
 import { ProviderStatusbar } from './ProviderStatusbar';
 import { ProviderToolCallRenderer } from './ProviderToolCallRenderer';
 import { ProviderWidgetRenderer } from './ProviderWidgetRenderer';
-import { toRenderEntity } from './providerTimeline';
+import type { WebChatAppProps } from './types';
 
-export type ProviderBackedChatWidgetInnerProps = ChatWidgetProps & {
-  selectedProfile: string;
-  profileOptions: ProfileInfo[];
-  profileTitle: string;
-  onProfileChange: (slug: string) => void;
-};
-
-export function ProviderBackedChatWidgetInner({
+export function WebChatApp({
   unstyled,
   theme = 'default',
   themeVars,
@@ -41,7 +34,7 @@ export function ProviderBackedChatWidgetInner({
   profileOptions,
   profileTitle,
   onProfileChange,
-}: ProviderBackedChatWidgetInnerProps) {
+}: WebChatAppProps) {
   const client = useChatClient();
   const overlay = useChatProviderSelector(selectOverlay);
   const entitiesRaw = useChatProviderSelector(selectTimelineEntities);

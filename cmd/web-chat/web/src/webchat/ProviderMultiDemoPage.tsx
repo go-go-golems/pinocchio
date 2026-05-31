@@ -1,1 +1,1 @@
-export { ProviderMultiDemoPage } from '../chat/provider';
+export { ProviderMultiDemoPage } from '../features/web-chat/demos/ProviderMultiDemo';

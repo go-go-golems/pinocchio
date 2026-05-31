@@ -1,1 +1,1 @@
-export { ProviderBackedChatWidget } from '../chat/provider';
+export { ProviderBackedChatWidget } from '../features/web-chat';

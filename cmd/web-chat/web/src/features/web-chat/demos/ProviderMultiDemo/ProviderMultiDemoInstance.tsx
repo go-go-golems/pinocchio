@@ -1,6 +1,6 @@
 import { ChatProvider } from '@go-go-golems/chat-provider';
 import { useMemo } from 'react';
-import { basePrefixFromLocation } from '../../utils/basePrefix';
+import { basePrefixFromLocation } from '../../../../utils/basePrefix';
 import { ProviderMultiDemoPanel } from './ProviderMultiDemoPanel';
 
 export function ProviderMultiDemoInstance({ name, prompt }: { name: string; prompt: string }) {
