@@ -10,6 +10,7 @@ import '../../webchat/styles/theme-default.css';
 import '../../webchat/styles/webchat.css';
 import type { ChatWidgetProps } from '../../webchat/types';
 import { ProviderBackedChatWidgetInner } from './ProviderBackedChatWidgetInner';
+import { pinocchioWebChatProjectors } from './projectors/pinocchioProjectors';
 import { recordProviderDebugEvent } from './providerDebug';
 import { setSessionIdInLocation } from './providerSession';
 
@@ -74,6 +75,7 @@ export function ProviderBackedChatWidget(props: ChatWidgetProps) {
       sessionStorageKey: 'pinocchio.web-chat.sessionId',
       onSessionIdChange: setSessionIdInLocation,
       onDebugEvent: recordProviderDebugEvent,
+      extensions: [pinocchioWebChatProjectors],
       createSessionBody: () => ({ profile: selectedProfile }),
       sendMessageBody: ({ prompt }: { prompt: string }) => ({ prompt, profile: selectedProfile }),
     }),

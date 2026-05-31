@@ -14,6 +14,7 @@ import {
 } from '@go-go-golems/chat-provider';
 import type React from 'react';
 import { useEffect, useMemo, useState } from 'react';
+import { pinocchioWebChatProjectors } from '../chat/provider/projectors/pinocchioProjectors';
 import { basePrefixFromLocation } from '../utils/basePrefix';
 import { Markdown } from './Markdown';
 import { fmtSentAt } from './utils';
@@ -283,6 +284,7 @@ export function ProviderDemoPage() {
   const basePrefix = basePrefixFromLocation();
   const config = useMemo(() => ({
     basePrefix,
+    extensions: [pinocchioWebChatProjectors],
     createSessionBody: () => ({ profile: 'gpt-5-nano-low' }),
     sendMessageBody: ({ prompt }: { prompt: string }) => ({ prompt, profile: 'gpt-5-nano-low' }),
   }), [basePrefix]);
