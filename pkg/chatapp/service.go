@@ -10,6 +10,7 @@ import (
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 	sessionstream "github.com/go-go-golems/sessionstream/pkg/sessionstream"
 	"github.com/google/uuid"
+	"google.golang.org/protobuf/proto"
 )
 
 // PromptRequest is the app-facing prompt submission input.
@@ -80,6 +81,22 @@ func (s *Service) SubmitPromptRequest(ctx context.Context, sid sessionstream.Ses
 		return err
 	}
 	return nil
+}
+
+func (s *Service) SubmitCommand(ctx context.Context, sid sessionstream.SessionId, name string, payload proto.Message) error {
+	if s == nil || s.hub == nil {
+		return fmt.Errorf("chat service is not initialized")
+	}
+	if sid == "" {
+		return fmt.Errorf("session id is empty")
+	}
+	if strings.TrimSpace(name) == "" {
+		return fmt.Errorf("command name is empty")
+	}
+	if payload == nil {
+		return fmt.Errorf("command %q payload is nil", name)
+	}
+	return s.hub.Submit(ctx, sid, name, payload)
 }
 
 func (s *Service) Stop(ctx context.Context, sid sessionstream.SessionId) error {

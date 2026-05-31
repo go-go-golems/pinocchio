@@ -13,6 +13,7 @@ import (
 
 	chatapp "github.com/go-go-golems/pinocchio/pkg/chatapp"
 	chatexport "github.com/go-go-golems/pinocchio/pkg/chatapp/export"
+	"github.com/go-go-golems/pinocchio/pkg/chatapp/frontendtools"
 	"github.com/go-go-golems/pinocchio/pkg/chatapp/serverkit"
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
@@ -25,19 +26,20 @@ import (
 type Option func(*Server)
 
 type Server struct {
-	service         *chatapp.Service
-	ws              *wstransport.Server
-	defaultProfile  string
-	chunkDelay      time.Duration
-	sqliteDSN       string
-	sqliteDBPath    string
-	runtimeResolver RuntimeResolver
-	turnStore       chatstore.TurnStore
-	turnsDBPath     string
-	exportService   *chatexport.Service
-	chatPlugins     []chatapp.ChatPlugin
-	debugRecorder   *StreamDebugRecorder
-	closeFn         func() error
+	service             *chatapp.Service
+	ws                  *wstransport.Server
+	defaultProfile      string
+	chunkDelay          time.Duration
+	sqliteDSN           string
+	sqliteDBPath        string
+	runtimeResolver     RuntimeResolver
+	turnStore           chatstore.TurnStore
+	turnsDBPath         string
+	exportService       *chatexport.Service
+	chatPlugins         []chatapp.ChatPlugin
+	frontendToolManager *frontendtools.Manager
+	debugRecorder       *StreamDebugRecorder
+	closeFn             func() error
 }
 
 func WithDefaultProfile(profile string) Option {
@@ -113,6 +115,15 @@ func WithChatPlugins(features ...chatapp.ChatPlugin) Option {
 	}
 }
 
+func WithFrontendToolManager(manager *frontendtools.Manager) Option {
+	return func(s *Server) {
+		if s == nil {
+			return
+		}
+		s.frontendToolManager = manager
+	}
+}
+
 func WithDebugRecorder(recorder *StreamDebugRecorder) Option {
 	return func(s *Server) {
 		if s == nil {
@@ -162,6 +173,11 @@ func NewServer(opts ...Option) (*Server, error) {
 	}
 	if err := chatapp.Install(hub, engine); err != nil {
 		return nil, err
+	}
+	if s.frontendToolManager != nil {
+		if err := s.frontendToolManager.Install(hub); err != nil {
+			return nil, err
+		}
 	}
 	service, err := chatapp.NewService(hub, engine)
 	if err != nil {
@@ -249,7 +265,7 @@ func (s *Server) HandleCreateSession(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) HandleSessionRoutes(w http.ResponseWriter, r *http.Request) {
-	sessionID, action, ok := serverkit.ParseSessionPath(r.URL.Path)
+	sessionID, action, ok := parseWebChatSessionPath(r.URL.Path)
 	if !ok {
 		writeJSON(w, http.StatusNotFound, errorResponse{Error: "not found"})
 		return
@@ -277,6 +293,10 @@ func (s *Server) HandleSessionRoutes(w http.ResponseWriter, r *http.Request) {
 	}
 	if action == "export" {
 		s.handleFullExport(w, r, sid)
+		return
+	}
+	if action == "tools/results" {
+		s.handleFrontendToolResult(w, r, sid)
 		return
 	}
 	writeJSON(w, http.StatusNotFound, errorResponse{Error: "not found"})

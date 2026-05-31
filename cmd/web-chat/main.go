@@ -35,6 +35,7 @@ import (
 	aisettings "github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 	appserver "github.com/go-go-golems/pinocchio/cmd/web-chat/app"
 	"github.com/go-go-golems/pinocchio/cmd/web-chat/profiles"
+	"github.com/go-go-golems/pinocchio/pkg/chatapp/frontendtools"
 	"github.com/go-go-golems/pinocchio/pkg/chatapp/plugins"
 	"github.com/go-go-golems/pinocchio/pkg/chatapp/serverkit"
 	"github.com/go-go-golems/pinocchio/pkg/chatapp/widgets"
@@ -377,6 +378,7 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 			),
 		))
 	}
+	frontendToolManager := frontendtools.NewManager()
 	canonicalApp, err := appserver.NewServer(
 		appserver.WithSQLiteDSN(s.TimelineDSN),
 		appserver.WithSQLiteDBPath(s.TimelineDB),
@@ -384,7 +386,8 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 		appserver.WithTurnStore(turnStore),
 		appserver.WithTurnsDBPath(s.TurnsDB),
 		appserver.WithDebugRecorder(debugRecorder),
-		appserver.WithChatPlugins(newAgentModePlugin(), plugins.NewReasoningPlugin(), plugins.NewToolCallPlugin(), widgets.NewWidgetPlugin()),
+		appserver.WithFrontendToolManager(frontendToolManager),
+		appserver.WithChatPlugins(newAgentModePlugin(), plugins.NewReasoningPlugin(), plugins.NewToolCallPlugin(), frontendtools.NewPlugin(), widgets.NewWidgetPlugin()),
 	)
 	if err != nil {
 		return errors.Wrap(err, "build canonical evtstream-backed app")

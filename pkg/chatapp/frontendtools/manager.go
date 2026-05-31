@@ -101,18 +101,19 @@ func (m *Manager) HandleResult(ctx context.Context, cmd sessionstream.Command, _
 	m.mu.Lock()
 	pending := m.pending[payload.ToolCallId]
 	m.mu.Unlock()
-	if pending == nil {
-		return fmt.Errorf("no pending frontend tool call %q", payload.ToolCallId)
-	}
-	if payload.ToolName == "" {
-		payload.ToolName = pending.toolName
+	messageID := ""
+	if pending != nil {
+		if payload.ToolName == "" {
+			payload.ToolName = pending.toolName
+		}
+		messageID = pending.messageID
 	}
 	if payload.Status == "" {
 		payload.Status = "success"
 	}
 
 	if err := pub.Publish(ctx, sessionstream.Event{Name: EventResultReceived, SessionId: cmd.SessionId, Payload: &toolv1.FrontendToolResultReceived{
-		MessageId:  pending.messageID,
+		MessageId:  messageID,
 		ToolCallId: payload.ToolCallId,
 		ToolName:   payload.ToolName,
 		Result:     payload.Result,
@@ -122,9 +123,11 @@ func (m *Manager) HandleResult(ctx context.Context, cmd sessionstream.Command, _
 		return err
 	}
 
-	select {
-	case pending.ch <- proto.Clone(payload).(*toolv1.FrontendToolResultCommand):
-	default:
+	if pending != nil {
+		select {
+		case pending.ch <- proto.Clone(payload).(*toolv1.FrontendToolResultCommand):
+		default:
+		}
 	}
 	return nil
 }

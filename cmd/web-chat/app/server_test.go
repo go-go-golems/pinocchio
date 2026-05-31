@@ -19,6 +19,7 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/turns"
 	"github.com/go-go-golems/geppetto/pkg/turns/serde"
 	chatapp "github.com/go-go-golems/pinocchio/pkg/chatapp"
+	"github.com/go-go-golems/pinocchio/pkg/chatapp/frontendtools"
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
 	sessionstreamv1 "github.com/go-go-golems/sessionstream/pkg/sessionstream/pb/proto/sessionstream/v1"
@@ -107,6 +108,31 @@ func TestCreateSession(t *testing.T) {
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&out))
 	require.NotEmpty(t, out.SessionID)
 	require.Equal(t, "gpt-5-nano-low", out.Profile)
+}
+
+func TestFrontendToolResultEndpointPublishesTimelineEntity(t *testing.T) {
+	manager := frontendtools.NewManager()
+	_, httpSrv := newTestMux(t, WithFrontendToolManager(manager), WithChatPlugins(frontendtools.NewPlugin()))
+
+	body := []byte(`{"toolCallId":"call-1","toolName":"browser.confirm_action","status":"success","result":{"approved":true,"decision":"approved"}}`)
+	resp, err := http.Post(httpSrv.URL+"/api/chat/sessions/sess-tools/tools/results", "application/json", bytes.NewReader(body))
+	require.NoError(t, err)
+	defer func() { _ = resp.Body.Close() }()
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	snapResp, err := http.Get(httpSrv.URL + "/api/chat/sessions/sess-tools")
+	require.NoError(t, err)
+	defer func() { _ = snapResp.Body.Close() }()
+	var snap SessionSnapshotResponse
+	require.NoError(t, json.NewDecoder(snapResp.Body).Decode(&snap))
+	require.Len(t, snap.Entities, 1)
+	toolEntity := snap.Entities[0]
+	require.Equal(t, "ChatFrontendToolCall", toolEntity.Kind)
+	require.Equal(t, "call-1", toolEntity.ID)
+	payload, ok := toolEntity.Payload.(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "browser.confirm_action", payload["toolName"])
+	require.Equal(t, "success", payload["status"])
 }
 
 func TestSubmitAndSnapshot(t *testing.T) {
