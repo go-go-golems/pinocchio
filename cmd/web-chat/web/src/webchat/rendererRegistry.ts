@@ -6,6 +6,7 @@ import {
   MessageCard,
   ToolCallCard,
   ToolResultCard,
+  WidgetInstanceCard,
 } from './cards';
 import type { ChatWidgetRenderers, RenderEntity } from './types';
 
@@ -18,6 +19,8 @@ const builtinRenderers: Record<string, Renderer> = {
   log: LogCard,
   agent_mode: AgentModeCard,
   agent_mode_preview: AgentModeCard,
+  ChatWidgetInstance: WidgetInstanceCard,
+  widget_instance: WidgetInstanceCard,
 };
 
 const extensionRenderers = new Map<string, Renderer>();

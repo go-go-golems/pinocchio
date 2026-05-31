@@ -178,6 +178,31 @@ export function AgentModeCard({ e }: { e: RenderEntity }) {
   );
 }
 
+export function WidgetInstanceCard({ e }: { e: RenderEntity }) {
+  const widgetName = String(e.props?.widgetName ?? e.props?.widget_name ?? 'widget');
+  const status = String(e.props?.status ?? 'unknown');
+  const props = asRecord(e.props?.props);
+  return (
+    <div data-part="card" data-variant="widget">
+      <div data-part="card-header">
+        <div data-part="card-header-title">Widget</div>
+        <div data-part="pill" data-variant="accent" data-mono="true">
+          {widgetName}
+        </div>
+        <div data-part="pill" data-mono="true">
+          {status}
+        </div>
+        <div data-part="card-header-meta">{fmtSentAt(e.createdAt)}</div>
+      </div>
+      <div data-part="card-body">
+        <pre data-part="mono" style={{ margin: 0, whiteSpace: 'pre-wrap' }}>
+          {JSON.stringify(props, null, 2)}
+        </pre>
+      </div>
+    </div>
+  );
+}
+
 export function GenericCard({ e }: { e: RenderEntity }) {
   return (
     <div data-part="card">
