@@ -1,0 +1,84 @@
+import { logWarn } from '../../../../utils/logger';
+import { fmtSentAt } from '../../../../webchat/utils';
+import { submitFrontendToolResult } from '../../../../ws/frontendTools';
+import { asRecord } from '../utils';
+import type { ToolCallCardProps } from './types';
+
+export function ToolCallCard({ e }: ToolCallCardProps) {
+  const name = String(e.props?.name ?? e.props?.toolName ?? 'tool');
+  const input = e.props?.input ?? {};
+  const result = e.props?.result;
+  const status = String(e.props?.status ?? '');
+  const sessionId = String(e.props?.sessionId ?? '');
+  const toolCallId = String(e.props?.toolCallId ?? e.id ?? '');
+  const done = !!e.props?.done || !!result || status === 'success' || status === 'denied' || status === 'failed';
+  const isHumanConfirm = name === 'browser.confirm_action' && !done && sessionId && toolCallId;
+  const title = done ? `${name} (done)` : name;
+  const inputRecord = asRecord(input);
+  const confirmTitle = String(inputRecord.title ?? 'Confirm action');
+  const confirmBody = String(inputRecord.body ?? 'The assistant is asking the browser to approve an action.');
+  const confirmLabel = String(inputRecord.confirmLabel ?? 'Approve');
+  const cancelLabel = String(inputRecord.cancelLabel ?? 'Deny');
+  const respond = (approved: boolean) => {
+    void submitFrontendToolResult({
+      sessionId,
+      toolCallId,
+      toolName: name,
+      status: approved ? 'success' : 'denied',
+      result: {
+        approved,
+        decision: approved ? 'approved' : 'denied',
+        decidedAt: new Date().toISOString(),
+      },
+    }).catch((err) => logWarn('frontend tool result submission failed', { scope: 'tool.frontend.result', extra: { toolCallId, name } }, err));
+  };
+  return (
+    <div data-part="card">
+      <div data-part="card-header">
+        <div data-part="card-header-title">Tool</div>
+        <div data-part="pill" data-variant="accent" data-mono="true">
+          {title}
+        </div>
+        <div data-part="card-header-meta">{fmtSentAt(e.createdAt)}</div>
+      </div>
+      <div data-part="card-body">
+        <div data-part="toolbar">
+          <button
+            type="button"
+            data-part="button"
+            data-variant="ghost"
+            onClick={() =>
+              void navigator.clipboard
+                .writeText(JSON.stringify(input ?? {}, null, 2))
+                .catch((err) => logWarn('clipboard copy failed', { scope: 'tool.copyArgs' }, err))
+            }
+          >
+            Copy args
+          </button>
+        </div>
+        {isHumanConfirm ? (
+          <div data-part="callout" data-variant="warning" style={{ marginBottom: 10 }}>
+            <strong>{confirmTitle}</strong>
+            <div style={{ marginTop: 6 }}>{confirmBody}</div>
+            <div data-part="toolbar" style={{ marginTop: 10 }}>
+              <button type="button" data-part="button" data-variant="primary" onClick={() => respond(true)}>
+                {confirmLabel}
+              </button>
+              <button type="button" data-part="button" data-variant="ghost" onClick={() => respond(false)}>
+                {cancelLabel}
+              </button>
+            </div>
+          </div>
+        ) : null}
+        {result ? (
+          <pre data-part="mono" style={{ margin: '0 0 10px', whiteSpace: 'pre-wrap' }}>
+            {JSON.stringify(result, null, 2)}
+          </pre>
+        ) : null}
+        <pre data-part="mono" style={{ margin: 0, whiteSpace: 'pre-wrap' }}>
+          {JSON.stringify(input ?? {}, null, 2)}
+        </pre>
+      </div>
+    </div>
+  );
+}

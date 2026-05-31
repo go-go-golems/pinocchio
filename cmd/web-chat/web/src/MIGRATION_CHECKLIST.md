@@ -20,7 +20,7 @@ This checklist tracks the intended cleanup path from the current mixed tree to t
 | `src/webchat/components/Statusbar.tsx` | `src/features/web-chat/ChatStatusbar/ChatStatusbar.tsx` | done | Added connected/disconnected/error/export-visible stories. |
 | `src/webchat/components/Composer.tsx` | `src/features/web-chat/ChatComposer/ChatComposer.tsx` | done | Added empty/typed/disabled/long-text stories. |
 | `src/webchat/components/Timeline.tsx` | `src/features/web-chat/ChatTimeline/ChatTimeline.tsx` | done | Moved sticky-scroll hook into `ChatTimeline/` and added focused timeline stories. |
-| `src/webchat/cards.tsx` | `src/features/web-chat/cards/*/` | planned | One folder per card renderer. |
+| `src/webchat/cards.tsx` | `src/features/web-chat/cards/*/` | in progress | Card renderers now live in one folder per card; old file is a compatibility barrel until imports move. |
 | `src/webchat/ProviderDemoPage.tsx` | delete | planned | Delete after replacement provider/tool/widget coverage exists. |
 | `src/chat/provider/ProviderMultiDemoPage.tsx` | `src/features/web-chat/demos/ProviderMultiDemo/` then test-only harness or delete | moved | Do not keep as production app surface; still scheduled for Phase 5 deletion/relocation. |
 | `src/webchat/ChatWidget.tsx` | delete after parity | planned | Legacy Redux/WebSocket runtime. |
