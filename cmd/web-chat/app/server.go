@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -14,12 +13,12 @@ import (
 
 	chatapp "github.com/go-go-golems/pinocchio/pkg/chatapp"
 	chatexport "github.com/go-go-golems/pinocchio/pkg/chatapp/export"
+	"github.com/go-go-golems/pinocchio/pkg/chatapp/serverkit"
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
 	sessionstream "github.com/go-go-golems/sessionstream/pkg/sessionstream"
 	storesqlite "github.com/go-go-golems/sessionstream/pkg/sessionstream/hydration/sqlite"
 	wstransport "github.com/go-go-golems/sessionstream/pkg/sessionstream/transport/ws"
-	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -238,7 +237,7 @@ func (s *Server) HandleCreateSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var in CreateSessionRequest
-	if err := json.NewDecoder(r.Body).Decode(&in); err != nil && err.Error() != "EOF" {
+	if err := serverkit.DecodeJSON(r, &in); err != nil {
 		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "bad request"})
 		return
 	}
@@ -250,7 +249,7 @@ func (s *Server) HandleCreateSession(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) HandleSessionRoutes(w http.ResponseWriter, r *http.Request) {
-	sessionID, action, ok := parseSessionPath(r.URL.Path)
+	sessionID, action, ok := serverkit.ParseSessionPath(r.URL.Path)
 	if !ok {
 		writeJSON(w, http.StatusNotFound, errorResponse{Error: "not found"})
 		return
@@ -297,7 +296,7 @@ func (s *Server) handleSubmitMessage(w http.ResponseWriter, r *http.Request, sid
 		return
 	}
 	var in SubmitMessageRequest
-	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+	if err := serverkit.DecodeJSON(r, &in); err != nil {
 		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "bad request"})
 		return
 	}
@@ -343,23 +342,7 @@ func (s *Server) handleSessionSnapshot(w http.ResponseWriter, r *http.Request, s
 }
 
 func encodeSnapshotResponse(snap sessionstream.Snapshot) SessionSnapshotResponse {
-	resp := SessionSnapshotResponse{
-		SessionID:       string(snap.SessionId),
-		SnapshotOrdinal: fmt.Sprintf("%d", snap.SnapshotOrdinal),
-		Entities:        make([]SnapshotEntity, 0, len(snap.Entities)),
-	}
-	for _, entity := range snap.Entities {
-		resp.Entities = append(resp.Entities, SnapshotEntity{
-			Kind:             entity.Kind,
-			ID:               entity.Id,
-			CreatedOrdinal:   fmt.Sprintf("%d", entity.CreatedOrdinal),
-			LastEventOrdinal: fmt.Sprintf("%d", entity.LastEventOrdinal),
-			Tombstone:        entity.Tombstone,
-			Payload:          encodeProtoJSON(entity.Payload),
-		})
-	}
-	resp.Status = snapshotStatus(resp.Entities)
-	return resp
+	return serverkit.EncodeSnapshotResponse(snap, snapshotStatus)
 }
 
 func snapshotStatus(entities []SnapshotEntity) string {
@@ -403,42 +386,9 @@ func snapshotStatus(entities []SnapshotEntity) string {
 }
 
 func encodeProtoJSON(msg proto.Message) any {
-	if msg == nil {
-		return nil
-	}
-	body, err := protojson.MarshalOptions{EmitUnpopulated: false, UseProtoNames: false}.Marshal(msg)
-	if err != nil {
-		return map[string]any{"error": err.Error()}
-	}
-	var out any
-	if err := json.Unmarshal(body, &out); err != nil {
-		return string(body)
-	}
-	return out
+	return serverkit.EncodeProtoJSON(msg)
 }
 
 func writeJSON(w http.ResponseWriter, status int, payload any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(payload)
-}
-
-func parseSessionPath(path string) (string, string, bool) {
-	const prefix = "/api/chat/sessions/"
-	if !strings.HasPrefix(path, prefix) {
-		return "", "", false
-	}
-	rest := strings.TrimPrefix(path, prefix)
-	rest = strings.Trim(rest, "/")
-	if rest == "" {
-		return "", "", false
-	}
-	parts := strings.Split(rest, "/")
-	if len(parts) == 1 {
-		return parts[0], "", true
-	}
-	if len(parts) == 2 {
-		return parts[0], parts[1], true
-	}
-	return "", "", false
+	serverkit.WriteJSON(w, status, payload)
 }
