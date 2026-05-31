@@ -4,6 +4,10 @@ import { basePrefixFromLocation } from '../../utils/basePrefix';
 
 export function ExportMenu() {
   const convId = useAppSelector((s: { app: { convId: string } }) => s.app.convId);
+  return <ExportMenuForSession sessionId={convId} />;
+}
+
+export function ExportMenuForSession({ sessionId }: { sessionId?: string | null }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -12,14 +16,14 @@ export function ExportMenu() {
 
   const downloadUrl = useCallback(
     (suffix: string) => {
-      if (!convId) return '#';
+      if (!sessionId) return '#';
       const base = basePrefixFromLocation();
-      return `${base}/api/chat/sessions/${encodeURIComponent(convId)}${suffix}`;
+      return `${base}/api/chat/sessions/${encodeURIComponent(sessionId)}${suffix}`;
     },
-    [convId],
+    [sessionId],
   );
 
-  if (!convId) return null;
+  if (!sessionId) return null;
 
   return (
     <div

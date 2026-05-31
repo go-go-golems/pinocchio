@@ -3,6 +3,7 @@ import { DebugUIApp } from './debug-ui';
 import { store } from './store/store';
 import { ChatWidget } from './webchat';
 import { ProviderDemoPage } from './webchat/ProviderDemoPage';
+import { ProviderMultiDemoPage } from './webchat/ProviderMultiDemoPage';
 
 export function App() {
   const debugMode =
@@ -19,6 +20,14 @@ export function App() {
 
   if (providerDemoMode) {
     return <ProviderDemoPage />;
+  }
+
+  const providerMultiDemoMode =
+    typeof window !== 'undefined' &&
+    new URLSearchParams(window.location.search).get('providerMultiDemo') === '1';
+
+  if (providerMultiDemoMode) {
+    return <ProviderMultiDemoPage />;
   }
 
   return (

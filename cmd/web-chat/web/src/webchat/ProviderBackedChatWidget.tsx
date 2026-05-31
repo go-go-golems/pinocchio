@@ -1,3 +1,4 @@
+import type { ChatDebugEvent } from '@go-go-golems/chat-provider';
 import {
   ChatProvider,
   selectOverlay,
@@ -14,8 +15,11 @@ import { useAppDispatch, useAppSelector } from '../store/hooks';
 import { type ProfileInfo, useGetProfileQuery, useGetProfilesQuery, useSetProfileMutation } from '../store/profileApi';
 import { basePrefixFromLocation } from '../utils/basePrefix';
 import { logWarn } from '../utils/logger';
+import { recordStreamDebug } from '../ws/streamDebug';
 import { DefaultComposer } from './components/Composer';
+import { ExportMenuForSession } from './components/ExportMenu';
 import { DefaultHeader } from './components/Header';
+import { StreamDebugPanel } from './components/StreamDebugPanel';
 import { ChatTimeline } from './components/Timeline';
 import { useStickyScrollFollow } from './hooks/useStickyScrollFollow';
 import { WebChatProviderCapabilities } from './ProviderDemoPage';
@@ -52,6 +56,10 @@ function toRenderEntity(e: any): RenderEntity {
 function asRecord(value: unknown): Record<string, unknown> {
   if (value && typeof value === 'object' && !Array.isArray(value)) return value as Record<string, unknown>;
   return {};
+}
+
+function recordProviderDebugEvent(event: ChatDebugEvent) {
+  recordStreamDebug(event);
 }
 
 function ProviderToolCallRenderer({ e }: { e: RenderEntity }) {
@@ -92,6 +100,7 @@ function ProviderStatusbar(props: StatusbarSlotProps) {
     onToggleErrors,
     partProps,
   } = props;
+  const overlay = useChatProviderSelector(selectOverlay);
   const statusbarProps = getPartProps('statusbar', partProps);
   const statusbarClassName = mergeClassName(statusbarProps.className);
   const statusbarStyle = mergeStyle(statusbarProps.style);
@@ -120,6 +129,7 @@ function ProviderStatusbar(props: StatusbarSlotProps) {
       <span data-part="pill">seq: {fmtShort(lastSeq)}</span>
       <span data-part="pill">q: {fmtShort(queueDepth)}</span>
       <span data-part="pill">{status}</span>
+      <ExportMenuForSession sessionId={overlay.sessionId} />
       {errorCount > 0 ? (
         <button type="button" data-part="pill-button" data-variant="danger" aria-pressed={showErrors} onClick={onToggleErrors}>
           errors: {errorCount}
@@ -290,6 +300,7 @@ function ProviderBackedChatWidgetInner({
         onKeyDown={onKeyDown}
         partProps={partProps}
       />
+      <StreamDebugPanel />
     </div>
   );
 }
@@ -350,6 +361,7 @@ export function ProviderBackedChatWidget(props: ChatWidgetProps) {
     sessionIdParam: 'sessionId',
     sessionStorageKey: 'pinocchio.web-chat.sessionId',
     onSessionIdChange: setSessionIdInLocation,
+    onDebugEvent: recordProviderDebugEvent,
     createSessionBody: () => ({ profile: selectedProfile }),
     sendMessageBody: ({ prompt }: { prompt: string }) => ({ prompt, profile: selectedProfile }),
   }), [basePrefix, selectedProfile]);
