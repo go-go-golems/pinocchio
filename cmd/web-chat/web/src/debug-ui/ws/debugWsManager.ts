@@ -1,5 +1,5 @@
-import type { AppDispatch } from '../../store/store';
 import { buildWebSocketURL, type CanonicalFrame, encodeSubscribeFrame, parseServerFrame } from '../../ws/protocol';
+import type { AppDispatch } from '../store/store';
 import { setFollowStatus } from '../store/uiSlice';
 
 type ConnectArgs = {

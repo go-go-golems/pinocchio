@@ -5,7 +5,6 @@ import { MemoryRouter } from 'react-router-dom';
 import { initialize, mswLoader } from 'msw-storybook-addon';
 import { store as chatStore } from '../src/store/store';
 import { store as debugStore } from '../src/debug-ui/store/store';
-import '../src/debug-ui/index.css';
 import '../src/features/web-chat/styles/index.css';
 
 initialize();
