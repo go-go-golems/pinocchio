@@ -1,5 +1,5 @@
 import type React from 'react';
-import type { ChatWidgetRenderers, PartProps, RenderEntity } from '../../../webchat/types';
+import type { ChatWidgetRenderers, PartProps, RenderEntity } from '../types';
 
 export type ChatTimelineError = {
   id: string;

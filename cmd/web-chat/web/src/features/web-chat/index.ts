@@ -8,6 +8,20 @@ export type { ChatTimelineError, ChatTimelineProps, ScrollMode } from './ChatTim
 export { ChatTimeline, useStickyScrollFollow } from './ChatTimeline';
 export * from './cards';
 export { pinocchioWebChatTimelineAdapters } from './extensions/pinocchio-timeline-adapters';
+export type { WebChatRendererConfig } from './renderers';
+export { createWebChatRenderers } from './renderers';
+export type {
+  ChatPart,
+  ChatWidgetComponents,
+  ChatWidgetProps,
+  ChatWidgetRenderers,
+  ComposerSlotProps,
+  HeaderSlotProps,
+  PartProps,
+  RenderEntity,
+  StatusbarSlotProps,
+  ThemeVars,
+} from './types';
 export type { WebChatAppProps } from './WebChatApp';
 export { WebChatApp } from './WebChatApp';
 export type { WebChatProviderShellProps } from './WebChatProviderShell';

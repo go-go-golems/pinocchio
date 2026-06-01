@@ -1,8 +1,8 @@
 import { selectOverlay, useAppSelector as useChatProviderSelector } from '@go-go-golems/chat-provider';
-import { ExportMenuForSession } from '../../../webchat/components/ExportMenu';
-import { getPartProps, mergeClassName, mergeStyle } from '../../../webchat/parts';
-import type { StatusbarSlotProps } from '../../../webchat/types';
-import { fmtShort } from '../../../webchat/utils';
+import { ExportMenuForSession } from '../ChatStatusbar/ExportMenu';
+import { fmtShort } from '../format';
+import { getPartProps, mergeClassName, mergeStyle } from '../parts';
+import type { StatusbarSlotProps } from '../types';
 
 export function ProviderStatusbar(props: StatusbarSlotProps) {
   const {

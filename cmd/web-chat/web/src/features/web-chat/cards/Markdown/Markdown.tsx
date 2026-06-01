@@ -1,5 +1,5 @@
-import { useCallback, useMemo, useState } from 'react';
-import ReactMarkdown from 'react-markdown';
+import { isValidElement, type ReactNode, useCallback, useMemo, useState } from 'react';
+import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { logWarn } from '../../../../utils/logger';
 import type { MarkdownProps } from './types';
@@ -13,6 +13,14 @@ function isSafeHref(href: string): boolean {
   } catch {
     return false;
   }
+}
+
+function textFromNode(node: ReactNode): string {
+  if (node == null || typeof node === 'boolean') return '';
+  if (typeof node === 'string' || typeof node === 'number' || typeof node === 'bigint') return String(node);
+  if (Array.isArray(node)) return node.map(textFromNode).join('');
+  if (isValidElement<{ children?: ReactNode }>(node)) return textFromNode(node.props.children);
+  return '';
 }
 
 function CopyButton({ getText }: { getText: () => string }) {
@@ -35,10 +43,10 @@ function CopyButton({ getText }: { getText: () => string }) {
 }
 
 export function Markdown({ text, className }: MarkdownProps) {
-  const components = useMemo(
+  const components = useMemo<Components>(
     () => ({
-      pre({ children }: any) {
-        const raw = String(children?.props?.children ?? '');
+      pre({ children }) {
+        const raw = textFromNode(children);
         return (
           <div>
             <div data-part="toolbar" data-spacing="bottom">
@@ -48,11 +56,10 @@ export function Markdown({ text, className }: MarkdownProps) {
           </div>
         );
       },
-      code({ inline, children }: any) {
-        if (inline) return <code>{children}</code>;
+      code({ children }) {
         return <code>{children}</code>;
       },
-      a({ href, children }: any) {
+      a({ href, children }) {
         const safeHref = typeof href === 'string' && isSafeHref(href) ? href : undefined;
         if (!safeHref) {
           return <span data-part="unsafe-link">{children}</span>;
@@ -69,7 +76,7 @@ export function Markdown({ text, className }: MarkdownProps) {
 
   return (
     <div data-part="markdown" className={className}>
-      <ReactMarkdown remarkPlugins={[remarkGfm]} components={components as any}>
+      <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
         {text}
       </ReactMarkdown>
     </div>

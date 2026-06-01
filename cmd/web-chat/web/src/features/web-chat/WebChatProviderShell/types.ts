@@ -1,3 +1,3 @@
-import type { ChatWidgetProps } from '../../../webchat/types';
+import type { ChatWidgetProps } from '../types';
 
 export type WebChatProviderShellProps = ChatWidgetProps;

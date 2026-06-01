@@ -7,7 +7,7 @@ import {
   ToolCallCard,
   ToolResultCard,
   WidgetInstanceCard,
-} from '../features/web-chat/cards';
+} from './cards';
 import type { ChatWidgetRenderers, RenderEntity } from './types';
 
 type Renderer = React.ComponentType<{ e: RenderEntity }>;

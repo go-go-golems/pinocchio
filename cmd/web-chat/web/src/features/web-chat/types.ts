@@ -1,5 +1,5 @@
 import type React from 'react';
-import type { ProfileInfo } from '../store/profileApi';
+import type { ProfileInfo } from '../../store/profileApi';
 
 export type JsonObject = Record<string, unknown>;
 

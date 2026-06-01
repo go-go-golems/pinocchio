@@ -1,4 +1,4 @@
-import { fmtSentAt } from '../../../../webchat/utils';
+import { fmtSentAt } from '../../format';
 import type { LogCardProps } from './types';
 
 export function LogCard({ e }: LogCardProps) {

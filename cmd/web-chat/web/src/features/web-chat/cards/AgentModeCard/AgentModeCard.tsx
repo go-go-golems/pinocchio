@@ -1,5 +1,5 @@
-import { normalizeAgentModeAnalysis } from '../../../../webchat/agentModeMarkdown';
-import { fmtSentAt } from '../../../../webchat/utils';
+import { normalizeAgentModeAnalysis } from '../../agentModeMarkdown';
+import { fmtSentAt } from '../../format';
 import { Markdown } from '../Markdown';
 import { asRecord } from '../utils';
 import type { AgentModeCardProps } from './types';

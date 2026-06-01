@@ -1,6 +1,6 @@
-import { ExportMenu } from '../../../webchat/components/ExportMenu';
-import { getPartProps, mergeClassName, mergeStyle } from '../../../webchat/parts';
-import { fmtShort } from '../../../webchat/utils';
+import { fmtShort } from '../format';
+import { getPartProps, mergeClassName, mergeStyle } from '../parts';
+import { ExportMenu } from './ExportMenu';
 import type { ChatStatusbarProps } from './types';
 
 export function DefaultStatusbar(props: ChatStatusbarProps) {

@@ -1,6 +1,6 @@
 import { logWarn } from '../../../../utils/logger';
-import { fmtSentAt } from '../../../../webchat/utils';
 import { submitFrontendToolResult } from '../../../../ws/frontendTools';
+import { fmtSentAt } from '../../format';
 import { asRecord } from '../utils';
 import type { ToolCallCardProps } from './types';
 

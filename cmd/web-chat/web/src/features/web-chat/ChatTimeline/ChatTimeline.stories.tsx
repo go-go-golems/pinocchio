@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { useRef } from 'react';
-import type { ChatWidgetRenderers, RenderEntity } from '../../../webchat/types';
+import type { ChatWidgetRenderers, RenderEntity } from '../types';
 import { ChatTimeline } from './ChatTimeline';
 import type { ChatTimelineProps } from './types';
 

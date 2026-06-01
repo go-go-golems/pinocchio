@@ -1,4 +1,4 @@
-import { getPartProps, mergeClassName, mergeStyle } from '../../../webchat/parts';
+import { getPartProps, mergeClassName, mergeStyle } from '../parts';
 import type { ChatComposerProps } from './types';
 
 export function DefaultComposer({

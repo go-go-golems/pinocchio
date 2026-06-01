@@ -1,4 +1,4 @@
-import type { RenderEntity, RenderEntityProps } from '../../../webchat/types';
+import type { RenderEntity, RenderEntityProps } from '../types';
 
 export function toRenderEntity(value: unknown): RenderEntity {
   const e = asRecord(value);

@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import type { StatusbarSlotProps } from '../../../webchat/types';
+import type { StatusbarSlotProps } from '../types';
 import { DefaultHeader } from './ChatHeader';
 
 const profiles = [

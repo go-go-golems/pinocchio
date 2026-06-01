@@ -1,6 +1,6 @@
 import { WidgetOutlet } from '@go-go-golems/chat-provider';
-import type { RenderEntity } from '../../../webchat/types';
 import { asRecord } from '../provider-support/providerTimeline';
+import type { RenderEntity } from '../types';
 
 export function ProviderWidgetRenderer({ e }: { e: RenderEntity }) {
   return (

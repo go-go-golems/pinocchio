@@ -1,6 +1,6 @@
 import { ToolCallOutlet } from '@go-go-golems/chat-provider';
-import type { RenderEntity } from '../../../webchat/types';
 import { ToolCallCard } from '../cards';
+import type { RenderEntity } from '../types';
 
 export function ProviderToolCallRenderer({ e }: { e: RenderEntity }) {
   const mode = String(e.props?.mode ?? '');

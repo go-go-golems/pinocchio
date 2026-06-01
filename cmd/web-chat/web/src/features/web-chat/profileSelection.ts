@@ -1,4 +1,4 @@
-import type { ProfileInfo } from '../store/profileApi';
+import type { ProfileInfo } from '../../store/profileApi';
 
 function normalizeSlug(value: string | undefined | null): string {
   return String(value ?? '').trim();

@@ -1,4 +1,4 @@
-import { getPartProps, mergeClassName, mergeStyle } from '../../../webchat/parts';
+import { getPartProps, mergeClassName, mergeStyle } from '../parts';
 import type { ChatHeaderProps } from './types';
 
 export function DefaultHeader({

@@ -1,4 +1,4 @@
-import type { RenderEntity } from '../../../webchat/types';
+import type { RenderEntity } from '../types';
 
 export type CardProps = {
   e: RenderEntity;

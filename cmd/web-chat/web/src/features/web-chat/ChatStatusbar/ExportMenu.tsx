@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from 'react';
-import { useAppSelector } from '../../store/hooks';
-import { basePrefixFromLocation } from '../../utils/basePrefix';
+import { useAppSelector } from '../../../store/hooks';
+import { basePrefixFromLocation } from '../../../utils/basePrefix';
 
 export function ExportMenu() {
   const convId = useAppSelector((s: { app: { convId: string } }) => s.app.convId);

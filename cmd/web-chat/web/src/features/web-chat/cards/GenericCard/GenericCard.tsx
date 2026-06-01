@@ -1,4 +1,4 @@
-import { fmtSentAt } from '../../../../webchat/utils';
+import { fmtSentAt } from '../../format';
 import type { GenericCardProps } from './types';
 
 export function GenericCard({ e }: GenericCardProps) {

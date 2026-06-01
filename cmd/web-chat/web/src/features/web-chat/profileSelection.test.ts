@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { ProfileInfo } from '../store/profileApi';
+import type { ProfileInfo } from '../../store/profileApi';
 import { resolveSelectedProfile } from './profileSelection';
 
 describe('resolveSelectedProfile', () => {

@@ -1,4 +1,4 @@
-import { fmtSentAt } from '../../../../webchat/utils';
+import { fmtSentAt } from '../../format';
 import { asRecord } from '../utils';
 import type { WidgetInstanceCardProps } from './types';
 

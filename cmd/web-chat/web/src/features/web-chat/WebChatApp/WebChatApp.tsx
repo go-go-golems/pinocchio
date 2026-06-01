@@ -6,13 +6,13 @@ import {
 } from '@go-go-golems/chat-provider';
 import type { KeyboardEvent } from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { getPartProps, mergeClassName, mergeStyle } from '../../../webchat/parts';
-import { createWebChatRenderers } from '../../../webchat/renderers';
-import type { ChatWidgetComponents, ChatWidgetRenderers } from '../../../webchat/types';
 import { DefaultComposer } from '../ChatComposer';
 import { DefaultHeader } from '../ChatHeader';
 import { ChatTimeline, useStickyScrollFollow } from '../ChatTimeline';
+import { getPartProps, mergeClassName, mergeStyle } from '../parts';
 import { toRenderEntity } from '../provider-support/providerTimeline';
+import { createWebChatRenderers } from '../renderers';
+import type { ChatWidgetRenderers } from '../types';
 import { ProviderStatusbar } from './ProviderStatusbar';
 import { ProviderToolCallRenderer } from './ProviderToolCallRenderer';
 import { ProviderWidgetRenderer } from './ProviderWidgetRenderer';
@@ -91,9 +91,9 @@ export function WebChatApp({
     [renderers],
   );
 
-  const HeaderOverride = (components as ChatWidgetComponents | undefined)?.Header;
-  const StatusbarComponent = (components as ChatWidgetComponents | undefined)?.Statusbar ?? ProviderStatusbar;
-  const ComposerComponent = (components as ChatWidgetComponents | undefined)?.Composer ?? DefaultComposer;
+  const HeaderOverride = components?.Header;
+  const StatusbarComponent = components?.Statusbar ?? ProviderStatusbar;
+  const ComposerComponent = components?.Composer ?? DefaultComposer;
 
   const rootPartProps = getPartProps('root', partProps);
   const rootClassName = mergeClassName(className, rootPartProps.className, rootProps?.className);
@@ -141,7 +141,7 @@ export function WebChatApp({
           showErrors={showErrors}
           onProfileChange={onProfileChange}
           onToggleErrors={() => setShowErrors((prev) => !prev)}
-          Statusbar={StatusbarComponent as any}
+          Statusbar={StatusbarComponent}
           partProps={partProps}
         />
       )}

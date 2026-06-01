@@ -1,5 +1,5 @@
-import { getPartProps, mergeClassName, mergeStyle } from '../../../webchat/parts';
-import type { RenderEntity } from '../../../webchat/types';
+import { getPartProps, mergeClassName, mergeStyle } from '../parts';
+import type { RenderEntity } from '../types';
 import type { ChatTimelineProps } from './types';
 
 function roleFromEntity(e: RenderEntity): string | undefined {

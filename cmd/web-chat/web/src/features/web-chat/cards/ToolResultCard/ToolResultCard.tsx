@@ -1,5 +1,5 @@
 import { logWarn } from '../../../../utils/logger';
-import { fmtSentAt } from '../../../../webchat/utils';
+import { fmtSentAt } from '../../format';
 import type { ToolResultCardProps } from './types';
 
 export function ToolResultCard({ e }: ToolResultCardProps) {

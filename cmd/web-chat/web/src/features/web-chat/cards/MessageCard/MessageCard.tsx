@@ -1,4 +1,4 @@
-import { fmtSentAt } from '../../../../webchat/utils';
+import { fmtSentAt } from '../../format';
 import { Markdown } from '../Markdown';
 import type { MessageCardProps } from './types';
 

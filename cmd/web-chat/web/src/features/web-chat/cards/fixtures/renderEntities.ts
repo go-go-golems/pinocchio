@@ -1,4 +1,4 @@
-import type { RenderEntity } from '../../../../webchat/types';
+import type { RenderEntity } from '../../types';
 
 const now = Date.parse('2026-05-31T12:00:00Z');
 

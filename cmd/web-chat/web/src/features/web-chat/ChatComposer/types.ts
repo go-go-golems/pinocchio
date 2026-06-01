@@ -1,3 +1,3 @@
-import type { ComposerSlotProps } from '../../../webchat/types';
+import type { ComposerSlotProps } from '../types';
 
 export type ChatComposerProps = ComposerSlotProps;

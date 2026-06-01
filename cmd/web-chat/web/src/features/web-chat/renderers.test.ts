@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { GenericCard, MessageCard } from '../features/web-chat/cards';
+import { GenericCard, MessageCard } from './cards';
 import { createWebChatRenderers } from './renderers';
 
 function OverrideRenderer() {

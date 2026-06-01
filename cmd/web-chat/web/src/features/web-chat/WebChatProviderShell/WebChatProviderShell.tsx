@@ -5,7 +5,7 @@ import { useAppDispatch, useAppSelector } from '../../../store/hooks';
 import { type ProfileInfo, useGetProfileQuery, useGetProfilesQuery, useSetProfileMutation } from '../../../store/profileApi';
 import { basePrefixFromLocation } from '../../../utils/basePrefix';
 import { logWarn } from '../../../utils/logger';
-import { resolveSelectedProfile } from '../../../webchat/profileSelection';
+import { resolveSelectedProfile } from '../profileSelection';
 import '../styles/index.css';
 import { pinocchioWebChatTimelineAdapters } from '../extensions/pinocchio-timeline-adapters';
 import { setSessionIdInLocation } from '../provider-support/providerSession';
