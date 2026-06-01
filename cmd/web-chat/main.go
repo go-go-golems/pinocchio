@@ -4,8 +4,7 @@ import (
 	"context"
 	"embed"
 	"io"
-	"net/http"
-	"time"
+	"io/fs"
 
 	"github.com/go-go-golems/glazed/pkg/cli"
 	"github.com/go-go-golems/glazed/pkg/cmds"
@@ -15,44 +14,30 @@ import (
 	"github.com/go-go-golems/glazed/pkg/help"
 	help_cmd "github.com/go-go-golems/glazed/pkg/help/cmd"
 	"github.com/pkg/errors"
-	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 
-	gepprofiles "github.com/go-go-golems/geppetto/pkg/engineprofiles"
-	"github.com/go-go-golems/geppetto/pkg/inference/middlewarecfg"
-	aisettings "github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
-	appserver "github.com/go-go-golems/pinocchio/cmd/web-chat/internal/appserver"
-	"github.com/go-go-golems/pinocchio/cmd/web-chat/internal/middlewaredefs"
-	agentmodeplugin "github.com/go-go-golems/pinocchio/cmd/web-chat/internal/plugins/agentmode"
-	"github.com/go-go-golems/pinocchio/cmd/web-chat/internal/profiles"
-	webchatruntime "github.com/go-go-golems/pinocchio/cmd/web-chat/internal/runtime"
-	"github.com/go-go-golems/pinocchio/cmd/web-chat/internal/webapp"
-	"github.com/go-go-golems/pinocchio/pkg/chatapp/frontendtools"
-	"github.com/go-go-golems/pinocchio/pkg/chatapp/plugins"
-	"github.com/go-go-golems/pinocchio/pkg/chatapp/serverkit"
-	"github.com/go-go-golems/pinocchio/pkg/chatapp/widgets"
+	"github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
+	"github.com/go-go-golems/pinocchio/cmd/web-chat/internal/webchatcmd"
 	profilebootstrap "github.com/go-go-golems/pinocchio/pkg/cmds/profilebootstrap"
-	agentmode "github.com/go-go-golems/pinocchio/pkg/middlewares/agentmode"
 	rediscfg "github.com/go-go-golems/pinocchio/pkg/redisstream"
 )
 
 //go:embed static
 var staticFS embed.FS
 
-// no package-level root; we will build a cobra command dynamically in main()
-
 type Command struct {
 	*cmds.CommandDescription
+	staticFS fs.FS
 }
 
 const webChatCLIAppName = "pinocchio"
 
-func NewCommand() (*Command, error) {
+func NewCommand(staticFS fs.FS) (*Command, error) {
 	profileSettingsSection, err := profilebootstrap.NewProfileSettingsSection()
 	if err != nil {
 		return nil, errors.Wrap(err, "create web-chat profile settings section")
 	}
-	clientSection, err := aisettings.NewClientValueSection()
+	clientSection, err := settings.NewClientValueSection()
 	if err != nil {
 		return nil, errors.Wrap(err, "create web-chat ai-client section")
 	}
@@ -76,130 +61,11 @@ func NewCommand() (*Command, error) {
 		),
 		cmds.WithSections(profileSettingsSection, clientSection, redisLayer),
 	)
-	return &Command{CommandDescription: desc}, nil
+	return &Command{CommandDescription: desc, staticFS: staticFS}, nil
 }
 
 func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io.Writer) error {
-	type serverSettings struct {
-		Addr        string `glazed:"addr"`
-		Root        string `glazed:"root"`
-		TimelineDSN string `glazed:"timeline-dsn"`
-		TimelineDB  string `glazed:"timeline-db"`
-		TurnsDSN    string `glazed:"turns-dsn"`
-		TurnsDB     string `glazed:"turns-db"`
-	}
-	s := &serverSettings{}
-	if err := parsed.DecodeSectionInto(values.DefaultSlug, s); err != nil {
-		return errors.Wrap(err, "decode server settings")
-	}
-	profileRuntime, err := profilebootstrap.ResolveCLIProfileRuntime(ctx, parsed)
-	if err != nil {
-		return errors.Wrap(err, "resolve profile runtime")
-	}
-	if profileRuntime != nil && profileRuntime.Close != nil {
-		defer profileRuntime.Close()
-	}
-	profileSelection := profileRuntime.ProfileSettings
-	if len(profileSelection.ProfileRegistries) > 0 {
-		log.Info().Strs("profile_registries", profileSelection.ProfileRegistries).Msg("resolved profile registry sources")
-	}
-
-	appConfigJS, err := webapp.RuntimeConfigScript(s.Root)
-	if err != nil {
-		return errors.Wrap(err, "build runtime config script")
-	}
-
-	amSvc := agentmode.NewStaticService([]*agentmode.AgentMode{
-		{Name: "financial_analyst", Prompt: "You are a financial transaction analyst. Analyze transactions and propose categories."},
-		{Name: "category_regexp_designer", Prompt: "Design regex patterns to categorize transactions. Verify with SQL counts before proposing changes."},
-		{Name: "category_regexp_reviewer", Prompt: "Review proposed regex patterns and assess over/under matching risks."},
-	})
-
-	middlewareRegistry, err := middlewaredefs.NewRegistry()
-	if err != nil {
-		return errors.Wrap(err, "create middleware definition registry")
-	}
-	hiddenBaseInferenceSettings, _, err := profilebootstrap.ResolveBaseInferenceSettings(parsed)
-	if err != nil {
-		return err
-	}
-	baseInferenceSettings, err := profilebootstrap.ResolveParsedBaseInferenceSettingsWithBase(parsed, hiddenBaseInferenceSettings)
-	if err != nil {
-		return errors.Wrap(err, "resolve web-chat base inference settings from hidden base and parsed values")
-	}
-	turnStore, closeTurnStore, err := serverkit.OpenTurnStore(serverkit.StoreOptions{TurnsDSN: s.TurnsDSN, TurnsDB: s.TurnsDB})
-	if err != nil {
-		return err
-	}
-	defer func() { _ = closeTurnStore() }()
-
-	runtimeComposer := webchatruntime.NewProfileRuntimeComposer(middlewareRegistry, middlewarecfg.BuildDeps{
-		Values: map[string]any{
-			middlewaredefs.DependencyAgentModeServiceKey: amSvc,
-		},
-	}, baseInferenceSettings).WithTurnStore(turnStore)
-
-	var (
-		profileRegistry     gepprofiles.Registry
-		defaultRegistrySlug gepprofiles.RegistrySlug
-	)
-	if profileRuntime != nil && profileRuntime.ProfileRegistryChain != nil {
-		profileRegistry = profileRuntime.ProfileRegistryChain.Registry
-		defaultRegistrySlug = profileRuntime.ProfileRegistryChain.DefaultRegistrySlug
-	}
-	requestResolver := profiles.NewRequestResolver(profileRegistry, defaultRegistrySlug, baseInferenceSettings)
-	canonicalRuntimeResolver := webchatruntime.NewCanonicalRuntimeResolver(requestResolver, runtimeComposer)
-
-	frontendToolManager := frontendtools.NewManager()
-	canonicalApp, err := appserver.NewServer(
-		appserver.WithSQLiteDSN(s.TimelineDSN),
-		appserver.WithSQLiteDBPath(s.TimelineDB),
-		appserver.WithRuntimeResolver(canonicalRuntimeResolver),
-		appserver.WithTurnStore(turnStore),
-		appserver.WithTurnsDBPath(s.TurnsDB),
-		appserver.WithFrontendToolManager(frontendToolManager),
-		appserver.WithChatPlugins(agentmodeplugin.NewPlugin(), plugins.NewReasoningPlugin(), plugins.NewToolCallPlugin(), frontendtools.NewPlugin(), widgets.NewWidgetPlugin()),
-	)
-	if err != nil {
-		return errors.Wrap(err, "build canonical evtstream-backed app")
-	}
-
-	appMux := webapp.NewMux(webapp.MuxOptions{
-		StaticFS:              staticFS,
-		AppConfigJS:           appConfigJS,
-		RequestResolver:       requestResolver,
-		ChatServer:            canonicalApp,
-		MiddlewareDefinitions: middlewareRegistry,
-		ExtensionSchemas: []profiles.ExtensionSchemaDocument{
-			{
-				Key: "webchat.starter_suggestions@v1",
-				Schema: map[string]any{
-					"type": "object",
-					"properties": map[string]any{
-						"items": map[string]any{
-							"type": "array",
-							"items": map[string]any{
-								"type": "string",
-							},
-							"default": []any{},
-						},
-					},
-					"required":             []any{"items"},
-					"additionalProperties": false,
-				},
-			},
-		},
-	})
-	handler := webapp.MountRoot(s.Root, appMux, appConfigJS)
-	httpSrv := &http.Server{
-		Addr:              s.Addr,
-		Handler:           handler,
-		ReadHeaderTimeout: 5 * time.Second,
-		ReadTimeout:       30 * time.Second,
-		WriteTimeout:      60 * time.Second,
-		IdleTimeout:       120 * time.Second,
-	}
-	return webapp.RunHTTPServer(ctx, httpSrv, canonicalApp.Close)
+	return webchatcmd.Run(ctx, parsed, c.staticFS)
 }
 
 func main() {
@@ -214,7 +80,7 @@ func main() {
 		cobra.CheckErr(err)
 	}
 
-	c, err := NewCommand()
+	c, err := NewCommand(staticFS)
 	cobra.CheckErr(err)
 	command, err := cli.BuildCobraCommand(c, cli.WithParserConfig(cli.CobraParserConfig{
 		// Hidden base-settings parsing owns config-file loading so we can
