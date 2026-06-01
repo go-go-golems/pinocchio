@@ -1,6 +1,10 @@
-import type { TimelineEntity } from '../store/timelineSlice';
 import { basePrefixFromLocation } from '../utils/basePrefix';
 import type { CanonicalFrame } from './protocol';
+
+type DebugTimelineEntity = {
+  id: string;
+  kind: string;
+};
 
 type DebugEntryBase = {
   id: number;
@@ -97,7 +101,7 @@ export function recordParsedFrame(sessionId: string, frame: CanonicalFrame) {
   });
 }
 
-export function recordSnapshotDebug(sessionId: string, ordinal: unknown, entities: Array<{ raw: unknown; mapped: TimelineEntity | null }>) {
+export function recordSnapshotDebug(sessionId: string, ordinal: unknown, entities: Array<{ raw: unknown; mapped: DebugTimelineEntity | null }>) {
   recordStreamDebug({
     type: 'snapshot',
     sessionId,
