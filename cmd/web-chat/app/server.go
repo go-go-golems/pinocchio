@@ -20,7 +20,6 @@ import (
 	sessionstream "github.com/go-go-golems/sessionstream/pkg/sessionstream"
 	storesqlite "github.com/go-go-golems/sessionstream/pkg/sessionstream/hydration/sqlite"
 	wstransport "github.com/go-go-golems/sessionstream/pkg/sessionstream/transport/ws"
-	"google.golang.org/protobuf/proto"
 )
 
 type Option func(*Server)
@@ -38,7 +37,6 @@ type Server struct {
 	exportService       *chatexport.Service
 	chatPlugins         []chatapp.ChatPlugin
 	frontendToolManager *frontendtools.Manager
-	debugRecorder       *StreamDebugRecorder
 	closeFn             func() error
 }
 
@@ -124,15 +122,6 @@ func WithFrontendToolManager(manager *frontendtools.Manager) Option {
 	}
 }
 
-func WithDebugRecorder(recorder *StreamDebugRecorder) Option {
-	return func(s *Server) {
-		if s == nil {
-			return
-		}
-		s.debugRecorder = recorder
-	}
-}
-
 func NewServer(opts ...Option) (*Server, error) {
 	s := &Server{chunkDelay: 20 * time.Millisecond}
 	for _, opt := range opts {
@@ -150,11 +139,7 @@ func NewServer(opts ...Option) (*Server, error) {
 		return nil, err
 	}
 	provider := &hydrationSnapshotProvider{server: s}
-	wsOptions := []wstransport.Option(nil)
-	if s.debugRecorder != nil {
-		wsOptions = append(wsOptions, wstransport.WithTransportObserver(s.debugRecorder))
-	}
-	ws, err := wstransport.NewServer(provider, wsOptions...)
+	ws, err := wstransport.NewServer(provider)
 	if err != nil {
 		return nil, err
 	}
@@ -163,9 +148,6 @@ func NewServer(opts ...Option) (*Server, error) {
 		sessionstream.WithSchemaRegistry(reg),
 		sessionstream.WithHydrationStore(store),
 		sessionstream.WithUIFanout(ws),
-	}
-	if s.debugRecorder != nil {
-		hubOptions = append(hubOptions, sessionstream.WithPipelineObserver(s.debugRecorder))
 	}
 	hub, err := sessionstream.NewHub(hubOptions...)
 	if err != nil {
@@ -407,10 +389,6 @@ func snapshotStatus(entities []SnapshotEntity) string {
 		return "streaming"
 	}
 	return "idle"
-}
-
-func encodeProtoJSON(msg proto.Message) any {
-	return serverkit.EncodeProtoJSON(msg)
 }
 
 func writeJSON(w http.ResponseWriter, status int, payload any) {

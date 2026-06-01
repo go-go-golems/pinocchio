@@ -24,14 +24,8 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
 
-	geppettobootstrap "github.com/go-go-golems/geppetto/pkg/cli/bootstrap"
 	gepprofiles "github.com/go-go-golems/geppetto/pkg/engineprofiles"
-	enginefactory "github.com/go-go-golems/geppetto/pkg/inference/engine/factory"
 	"github.com/go-go-golems/geppetto/pkg/inference/middlewarecfg"
-	"github.com/go-go-golems/geppetto/pkg/steps/ai/claude"
-	"github.com/go-go-golems/geppetto/pkg/steps/ai/gemini"
-	"github.com/go-go-golems/geppetto/pkg/steps/ai/openai"
-	openairesponses "github.com/go-go-golems/geppetto/pkg/steps/ai/openai_responses"
 	aisettings "github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 	appserver "github.com/go-go-golems/pinocchio/cmd/web-chat/app"
 	"github.com/go-go-golems/pinocchio/cmd/web-chat/profiles"
@@ -54,8 +48,7 @@ type Command struct {
 }
 
 type webChatRuntimeConfig struct {
-	BasePrefix      string `json:"basePrefix"`
-	DebugAPIEnabled bool   `json:"debugApiEnabled"`
+	BasePrefix string `json:"basePrefix"`
 }
 
 const webChatCLIAppName = "pinocchio"
@@ -71,10 +64,9 @@ func normalizeBasePrefix(prefix string) string {
 	return strings.TrimRight(p, "/")
 }
 
-func runtimeConfigScript(basePrefix string, debugAPI bool) (string, error) {
+func runtimeConfigScript(basePrefix string) (string, error) {
 	payload, err := json.Marshal(webChatRuntimeConfig{
-		BasePrefix:      normalizeBasePrefix(basePrefix),
-		DebugAPIEnabled: debugAPI,
+		BasePrefix: normalizeBasePrefix(basePrefix),
 	})
 	if err != nil {
 		return "", err
@@ -139,7 +131,7 @@ func registerStaticUIHandlers(mux *http.ServeMux, staticFS fs.FS) {
 	})
 }
 
-func buildAppMux(staticFS fs.FS, appConfigJS string, requestResolver *profiles.RequestResolver, canonicalApp *appserver.Server, debugAPI bool) *http.ServeMux {
+func buildAppMux(staticFS fs.FS, appConfigJS string, requestResolver *profiles.RequestResolver, canonicalApp *appserver.Server) *http.ServeMux {
 	mux := http.NewServeMux()
 	if requestResolver != nil && requestResolver.Registry() != nil {
 		middlewareRegistry, _ := newWebChatMiddlewareDefinitionRegistry()
@@ -173,9 +165,6 @@ func buildAppMux(staticFS fs.FS, appConfigJS string, requestResolver *profiles.R
 		mux.HandleFunc("/api/chat/sessions", canonicalApp.HandleCreateSession)
 		mux.HandleFunc("/api/chat/sessions/", canonicalApp.HandleSessionRoutes)
 		mux.HandleFunc("/api/chat/ws", canonicalApp.HandleWS)
-		if debugAPI {
-			mux.HandleFunc("/api/debug/sessions/", canonicalApp.HandleDebugRoutes)
-		}
 	}
 	mux.HandleFunc("/app-config.js", buildAppConfigHandler(appConfigJS))
 	registerStaticUIHandlers(mux, staticFS)
@@ -249,11 +238,6 @@ func NewCommand() (*Command, error) {
 	if err != nil {
 		return nil, err
 	}
-	observabilitySection, err := geppettobootstrap.NewInferenceObservabilitySection()
-	if err != nil {
-		return nil, errors.Wrap(err, "create geppetto observability section")
-	}
-
 	desc := cmds.NewCommandDescription(
 		"web-chat",
 		cmds.WithShort("Serve a minimal WebSocket web UI that streams chat events"),
@@ -263,13 +247,12 @@ func NewCommand() (*Command, error) {
 			fields.New("evict-idle-seconds", fields.TypeInteger, fields.WithDefault(300), fields.WithHelp("Evict conversations after N seconds idle (0=disabled)")),
 			fields.New("evict-interval-seconds", fields.TypeInteger, fields.WithDefault(60), fields.WithHelp("Sweep idle conversations every N seconds (0=disabled)")),
 			fields.New("root", fields.TypeString, fields.WithDefault("/"), fields.WithHelp("Serve the chat UI under a given URL root (e.g., /chat)")),
-			fields.New("debug-api", fields.TypeBool, fields.WithDefault(false), fields.WithHelp("Enable debug API endpoints under /api/debug/*")),
 			fields.New("timeline-dsn", fields.TypeString, fields.WithDefault(""), fields.WithHelp("SQLite DSN for durable timeline snapshots (enables GET /timeline); preferred over timeline-db")),
 			fields.New("timeline-db", fields.TypeString, fields.WithDefault(""), fields.WithHelp("SQLite DB file path for durable timeline snapshots (enables GET /timeline); DSN is derived with WAL/busy_timeout")),
 			fields.New("turns-dsn", fields.TypeString, fields.WithDefault(""), fields.WithHelp("SQLite DSN for durable turn snapshots (enables GET /turns); preferred over turns-db")),
 			fields.New("turns-db", fields.TypeString, fields.WithDefault(""), fields.WithHelp("SQLite DB file path for durable turn snapshots (enables GET /turns); DSN is derived with WAL/busy_timeout")),
 		),
-		cmds.WithSections(profileSettingsSection, clientSection, redisLayer, observabilitySection),
+		cmds.WithSections(profileSettingsSection, clientSection, redisLayer),
 	)
 	return &Command{CommandDescription: desc}, nil
 }
@@ -278,7 +261,6 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 	type serverSettings struct {
 		Addr        string `glazed:"addr"`
 		Root        string `glazed:"root"`
-		DebugAPI    bool   `glazed:"debug-api"`
 		TimelineDSN string `glazed:"timeline-dsn"`
 		TimelineDB  string `glazed:"timeline-db"`
 		TurnsDSN    string `glazed:"turns-dsn"`
@@ -287,14 +269,6 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 	s := &serverSettings{}
 	if err := parsed.DecodeSectionInto(values.DefaultSlug, s); err != nil {
 		return errors.Wrap(err, "decode server settings")
-	}
-	obsSettings := &geppettobootstrap.InferenceObservabilitySettings{}
-	if err := parsed.DecodeSectionInto(geppettobootstrap.InferenceObservabilitySectionSlug, obsSettings); err != nil {
-		return errors.Wrap(err, "decode geppetto observability settings")
-	}
-	obsConfig, err := obsSettings.Config()
-	if err != nil {
-		return errors.Wrap(err, "validate geppetto observability settings")
 	}
 	profileRuntime, err := profilebootstrap.ResolveCLIProfileRuntime(ctx, parsed)
 	if err != nil {
@@ -308,7 +282,7 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 		log.Info().Strs("profile_registries", profileSelection.ProfileRegistries).Msg("resolved profile registry sources")
 	}
 
-	appConfigJS, err := runtimeConfigScript(s.Root, s.DebugAPI)
+	appConfigJS, err := runtimeConfigScript(s.Root)
 	if err != nil {
 		return errors.Wrap(err, "build runtime config script")
 	}
@@ -354,30 +328,6 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 	requestResolver := profiles.NewRequestResolver(profileRegistry, defaultRegistrySlug, baseInferenceSettings)
 	canonicalRuntimeResolver := newCanonicalRuntimeResolver(requestResolver, runtimeComposer)
 
-	var debugRecorder *appserver.StreamDebugRecorder
-	if s.DebugAPI {
-		debugRecorder = appserver.NewStreamDebugRecorder(obsSettings.MaxRecords)
-	}
-	if debugRecorder != nil && obsConfig.Enabled() {
-		runtimeComposer.WithEngineFactory(enginefactory.NewStandardEngineFactory(
-			enginefactory.WithOpenAIResponsesOptions(
-				openairesponses.WithObserver(debugRecorder),
-				openairesponses.WithObservabilityConfig(obsConfig),
-			),
-			enginefactory.WithOpenAIOptions(
-				openai.WithObserver(debugRecorder),
-				openai.WithObservabilityConfig(obsConfig),
-			),
-			enginefactory.WithClaudeOptions(
-				claude.WithObserver(debugRecorder),
-				claude.WithObservabilityConfig(obsConfig),
-			),
-			enginefactory.WithGeminiOptions(
-				gemini.WithObserver(debugRecorder),
-				gemini.WithObservabilityConfig(obsConfig),
-			),
-		))
-	}
 	frontendToolManager := frontendtools.NewManager()
 	canonicalApp, err := appserver.NewServer(
 		appserver.WithSQLiteDSN(s.TimelineDSN),
@@ -385,7 +335,6 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 		appserver.WithRuntimeResolver(canonicalRuntimeResolver),
 		appserver.WithTurnStore(turnStore),
 		appserver.WithTurnsDBPath(s.TurnsDB),
-		appserver.WithDebugRecorder(debugRecorder),
 		appserver.WithFrontendToolManager(frontendToolManager),
 		appserver.WithChatPlugins(newAgentModePlugin(), plugins.NewReasoningPlugin(), plugins.NewToolCallPlugin(), frontendtools.NewPlugin(), widgets.NewWidgetPlugin()),
 	)
@@ -393,7 +342,7 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 		return errors.Wrap(err, "build canonical evtstream-backed app")
 	}
 
-	appMux := buildAppMux(staticFS, appConfigJS, requestResolver, canonicalApp, s.DebugAPI)
+	appMux := buildAppMux(staticFS, appConfigJS, requestResolver, canonicalApp)
 	handler := buildRootHandler(s.Root, appMux, appConfigJS)
 	httpSrv := &http.Server{
 		Addr:              s.Addr,

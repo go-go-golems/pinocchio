@@ -6,7 +6,6 @@ import {
 } from '@go-go-golems/chat-provider';
 import type { KeyboardEvent } from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { StreamDebugPanel } from '../../../webchat/components/StreamDebugPanel';
 import { getPartProps, mergeClassName, mergeStyle } from '../../../webchat/parts';
 import { createWebChatRenderers } from '../../../webchat/renderers';
 import type { ChatWidgetComponents, ChatWidgetRenderers } from '../../../webchat/types';
@@ -178,7 +177,6 @@ export function WebChatApp({
         onKeyDown={onKeyDown}
         partProps={partProps}
       />
-      <StreamDebugPanel />
     </div>
   );
 }

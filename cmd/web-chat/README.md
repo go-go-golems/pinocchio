@@ -171,12 +171,6 @@ go run ./cmd/web-chat web-chat --addr :8080 --profile-registries ./profiles.db
 
 Open `http://localhost:8080/`.
 
-Enable debug API routes:
-
-```bash
-go run ./cmd/web-chat web-chat --addr :8080 --debug-api --profile-registries ./profiles.db
-```
-
 Example with JS reducer runtime and `gpt-5-nano` profile registry:
 
 ```bash
@@ -196,7 +190,7 @@ Example with root mount and non-default dev ports:
 
 ```bash
 # backend
-go run ./cmd/web-chat web-chat --addr :8081 --root /chat --debug-api --profile-registries ./profiles.db
+go run ./cmd/web-chat web-chat --addr :8081 --root /chat --profile-registries ./profiles.db
 
 # frontend (from cmd/web-chat/web)
 VITE_BACKEND_ORIGIN=http://localhost:8081 \
@@ -205,7 +199,7 @@ npm run dev -- --port 5714
 
 Runtime prefix is communicated to the TS app via `app-config.js`:
 
-- Go backend serves `app-config.js` from command settings (`--root`, `--debug-api`)
+- Go backend serves `app-config.js` from command settings (`--root`)
 - when mounted under `--root /chat`, backend exposes both `/chat/app-config.js` and `/app-config.js`
 - Vite dev server proxies `/app-config.js` to `VITE_BACKEND_ORIGIN`
 

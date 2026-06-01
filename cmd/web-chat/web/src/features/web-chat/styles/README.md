@@ -12,7 +12,6 @@ The web-chat stylesheet is scoped under `[data-pwchat]` and public `data-part` n
 - `timeline.css` — error panel and error item layout.
 - `cards.css` — card shell, markdown, mono, toolbar, generic buttons, and card-specific primitives.
 - `composer.css` — composer layout, input, actions, and send button.
-- `debug-panel.css` — small key/value and status text utilities used by debug/status surfaces.
 
 ## Public parts
 

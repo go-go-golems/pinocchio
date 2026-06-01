@@ -144,7 +144,6 @@ for line in sys.stdin:
             profile_registries = env_str("PINOCCHIO_WEBCHAT_PROFILE_REGISTRIES")
             trace_level = env_str("PINOCCHIO_WEBCHAT_TRACE_LEVEL", "off") or "off"
             root = env_str("PINOCCHIO_WEBCHAT_ROOT", "/") or "/"
-            debug_api = env_bool("PINOCCHIO_WEBCHAT_DEBUG_API", True)
 
             log(
                 "config: "
@@ -167,7 +166,6 @@ for line in sys.stdin:
                                 "webchat.profile": profile,
                                 "webchat.profile_registries": profile_registries,
                                 "webchat.trace_level": trace_level,
-                                "webchat.debug_api": debug_api,
                                 "webchat.root": root,
                                 "env.VITE_BACKEND_ORIGIN": backend_origin,
                             },
@@ -333,7 +331,6 @@ for line in sys.stdin:
             profile_registries = str(webchat_cfg.get("profile_registries", "") or "").strip()
             trace_level = str(webchat_cfg.get("trace_level", "off") or "off").strip()
             root = str(webchat_cfg.get("root", "/") or "/").strip()
-            debug_api = bool(webchat_cfg.get("debug_api", True))
 
             if not dry_run:
                 os.makedirs(data_dir, exist_ok=True)
@@ -352,8 +349,6 @@ for line in sys.stdin:
                 "--geppetto-trace-level",
                 trace_level,
             ]
-            if debug_api:
-                backend_args.append("--debug-api")
             if profile:
                 backend_args.extend(["--profile", profile])
             if profile_registries:

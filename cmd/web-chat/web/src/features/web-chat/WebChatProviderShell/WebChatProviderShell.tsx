@@ -8,7 +8,6 @@ import { logWarn } from '../../../utils/logger';
 import { resolveSelectedProfile } from '../../../webchat/profileSelection';
 import '../styles/index.css';
 import { pinocchioWebChatTimelineAdapters } from '../extensions/pinocchio-timeline-adapters';
-import { recordProviderDebugEvent } from '../provider-support/providerDebug';
 import { setSessionIdInLocation } from '../provider-support/providerSession';
 import { WebChatApp } from '../WebChatApp';
 import type { WebChatProviderShellProps } from './types';
@@ -73,7 +72,6 @@ export function WebChatProviderShell(props: WebChatProviderShellProps) {
       sessionIdParam: 'sessionId',
       sessionStorageKey: 'pinocchio.web-chat.sessionId',
       onSessionIdChange: setSessionIdInLocation,
-      onDebugEvent: recordProviderDebugEvent,
       extensions: [pinocchioWebChatTimelineAdapters],
       createSessionBody: () => ({ profile: selectedProfile }),
       sendMessageBody: ({ prompt }: { prompt: string }) => ({ prompt, profile: selectedProfile }),
