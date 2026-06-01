@@ -7,7 +7,7 @@ export { DefaultStatusbar } from './ChatStatusbar';
 export type { ChatTimelineError, ChatTimelineProps, ScrollMode } from './ChatTimeline';
 export { ChatTimeline, useStickyScrollFollow } from './ChatTimeline';
 export * from './cards';
-export { pinocchioWebChatProjectors } from './extensions/pinocchio-projectors';
+export { pinocchioWebChatTimelineAdapters } from './extensions/pinocchio-timeline-adapters';
 export type { WebChatAppProps } from './WebChatApp';
 export { WebChatApp } from './WebChatApp';
 export type { WebChatProviderShellProps } from './WebChatProviderShell';
