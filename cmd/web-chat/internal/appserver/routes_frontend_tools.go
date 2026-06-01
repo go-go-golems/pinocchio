@@ -44,25 +44,6 @@ type frontendToolResultResponse struct {
 	Status   string `json:"status"`
 }
 
-func parseWebChatSessionPath(path string) (string, string, bool) {
-	const prefix = "/api/chat/sessions/"
-	if !strings.HasPrefix(path, prefix) {
-		return "", "", false
-	}
-	rest := strings.Trim(strings.TrimPrefix(path, prefix), "/")
-	if rest == "" {
-		return "", "", false
-	}
-	parts := strings.Split(rest, "/")
-	if len(parts) == 1 {
-		return parts[0], "", true
-	}
-	if parts[0] == "" {
-		return "", "", false
-	}
-	return parts[0], strings.Join(parts[1:], "/"), true
-}
-
 func (s *Server) handleFrontendToolManifest(w http.ResponseWriter, r *http.Request, sid sessionstream.SessionId) {
 	if r.Method != http.MethodPost {
 		writeJSON(w, http.StatusMethodNotAllowed, errorResponse{Error: "method not allowed"})
