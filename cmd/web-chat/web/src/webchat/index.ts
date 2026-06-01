@@ -3,18 +3,8 @@ export { DefaultHeader } from '../features/web-chat/ChatHeader';
 export { DefaultStatusbar } from '../features/web-chat/ChatStatusbar';
 export { ChatTimeline } from '../features/web-chat/ChatTimeline';
 export * from './cards';
-export {
-  clearRegisteredTimelineRenderers,
-  registerTimelineRenderer,
-  resolveTimelineRenderers,
-  unregisterTimelineRenderer,
-} from './rendererRegistry';
-export {
-  clearRegisteredTimelinePropsNormalizers,
-  normalizeTimelineProps,
-  registerTimelinePropsNormalizer,
-  unregisterTimelinePropsNormalizer,
-} from './timelinePropsRegistry';
+export type { WebChatRendererConfig } from './renderers';
+export { createWebChatRenderers } from './renderers';
 export type {
   ChatPart,
   ChatWidgetComponents,

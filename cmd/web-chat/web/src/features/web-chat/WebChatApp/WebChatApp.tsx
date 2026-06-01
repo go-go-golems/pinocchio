@@ -8,7 +8,7 @@ import type { KeyboardEvent } from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { StreamDebugPanel } from '../../../webchat/components/StreamDebugPanel';
 import { getPartProps, mergeClassName, mergeStyle } from '../../../webchat/parts';
-import { resolveTimelineRenderers } from '../../../webchat/rendererRegistry';
+import { createWebChatRenderers } from '../../../webchat/renderers';
 import type { ChatWidgetComponents, ChatWidgetRenderers } from '../../../webchat/types';
 import { DefaultComposer } from '../ChatComposer';
 import { DefaultHeader } from '../ChatHeader';
@@ -82,10 +82,12 @@ export function WebChatApp({
 
   const mergedRenderers: ChatWidgetRenderers = useMemo(
     () =>
-      resolveTimelineRenderers({
-        ...renderers,
-        tool_call: ProviderToolCallRenderer,
-        widget: ProviderWidgetRenderer,
+      createWebChatRenderers({
+        overrides: {
+          ...renderers,
+          tool_call: ProviderToolCallRenderer,
+          widget: ProviderWidgetRenderer,
+        },
       }),
     [renderers],
   );
