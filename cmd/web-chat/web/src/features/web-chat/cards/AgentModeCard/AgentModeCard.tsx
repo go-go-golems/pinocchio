@@ -41,7 +41,7 @@ export function AgentModeCard({ e }: AgentModeCardProps) {
       <div data-part="card-body">
         {analysis ? <Markdown text={analysis} /> : <div data-part="pill">No analysis</div>}
         {hasExtraData ? (
-          <pre data-part="mono" style={{ margin: '10px 0 0', whiteSpace: 'pre-wrap' }}>
+          <pre data-part="mono" data-spacing="top">
             {JSON.stringify(extraData, null, 2)}
           </pre>
         ) : null}

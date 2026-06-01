@@ -26,11 +26,7 @@ export function ExportMenuForSession({ sessionId }: { sessionId?: string | null 
   if (!sessionId) return null;
 
   return (
-    <div
-      data-part="export-menu"
-      ref={ref}
-      style={{ position: 'relative', display: 'inline-block' }}
-    >
+    <div data-part="export-menu" ref={ref}>
       <button
         type="button"
         data-part="pill-button"
@@ -42,31 +38,8 @@ export function ExportMenuForSession({ sessionId }: { sessionId?: string | null 
       </button>
       {open ? (
         <>
-          <div
-            data-part="export-backdrop"
-            style={{
-              position: 'fixed',
-              inset: 0,
-              zIndex: 998,
-            }}
-            onClick={close}
-          />
-          <div
-            data-part="export-dropdown"
-            style={{
-              position: 'absolute',
-              right: 0,
-              top: '100%',
-              marginTop: 4,
-              zIndex: 999,
-              padding: '4px 0',
-              background: 'var(--pwchat-surface-1, #fff)',
-              border: '1px solid var(--pwchat-border, #ddd)',
-              borderRadius: 6,
-              minWidth: 220,
-              boxShadow: '0 4px 12px rgba(0,0,0,0.12)',
-            }}
-          >
+          <div data-part="export-backdrop" onClick={close} />
+          <div data-part="export-dropdown">
             <ExportItem
               label="Timeline JSON"
               href={downloadUrl('/timeline?format=json&download=true')}
@@ -120,19 +93,7 @@ function ExportItem({
 }) {
   return (
     <div>
-      <a
-        href={href}
-        download
-        onClick={close}
-        style={{
-          display: 'block',
-          padding: '6px 14px',
-          color: 'var(--pwchat-fg, #222)',
-          textDecoration: 'none',
-          fontSize: 13,
-          whiteSpace: 'nowrap',
-        }}
-      >
+      <a href={href} download onClick={close} data-part="export-link">
         {label}
       </a>
     </div>

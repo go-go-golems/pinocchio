@@ -41,7 +41,7 @@ export function Markdown({ text, className }: MarkdownProps) {
         const raw = String(children?.props?.children ?? '');
         return (
           <div>
-            <div data-part="toolbar" style={{ marginBottom: 6 }}>
+            <div data-part="toolbar" data-spacing="bottom">
               <CopyButton getText={() => raw} />
             </div>
             <pre>{children}</pre>
@@ -58,7 +58,7 @@ export function Markdown({ text, className }: MarkdownProps) {
           return <span data-part="unsafe-link">{children}</span>;
         }
         return (
-          <a href={safeHref} target="_blank" rel="noreferrer" style={{ color: 'var(--pwchat-accent)' }}>
+          <a href={safeHref} target="_blank" rel="noreferrer">
             {children}
           </a>
         );

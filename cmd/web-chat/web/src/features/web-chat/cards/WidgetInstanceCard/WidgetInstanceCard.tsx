@@ -19,7 +19,7 @@ export function WidgetInstanceCard({ e }: WidgetInstanceCardProps) {
         <div data-part="card-header-meta">{fmtSentAt(e.createdAt)}</div>
       </div>
       <div data-part="card-body">
-        <pre data-part="mono" style={{ margin: 0, whiteSpace: 'pre-wrap' }}>
+        <pre data-part="mono">
           {JSON.stringify(props, null, 2)}
         </pre>
       </div>

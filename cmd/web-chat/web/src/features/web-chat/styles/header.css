@@ -1,0 +1,13 @@
+:where([data-pwchat] [data-part="header"]) {
+  padding: var(--pwchat-padding) calc(var(--pwchat-padding) + 4px);
+  border-bottom: 1px solid var(--pwchat-border);
+  background: var(--pwchat-surface-1);
+  display: flex;
+  align-items: center;
+  gap: var(--pwchat-gap);
+}
+
+:where([data-pwchat] [data-part="header-title"]) {
+  font-weight: 650;
+  letter-spacing: 0.2px;
+}

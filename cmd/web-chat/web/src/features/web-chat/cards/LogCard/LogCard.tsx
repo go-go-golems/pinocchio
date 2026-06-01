@@ -7,13 +7,13 @@ export function LogCard({ e }: LogCardProps) {
   return (
     <div data-part="card" data-variant="log">
       <div data-part="card-body">
-        <div data-part="row" style={{ justifyContent: 'space-between' }}>
+        <div data-part="row" data-align="spread">
           <div data-part="pill" data-mono="true">
             {level}
           </div>
           <div data-part="card-header-meta">{fmtSentAt(e.createdAt)}</div>
         </div>
-        <div style={{ marginTop: 8, color: 'var(--pwchat-muted)', fontSize: 13 }}>{message}</div>
+        <div data-part="log-message">{message}</div>
       </div>
     </div>
   );

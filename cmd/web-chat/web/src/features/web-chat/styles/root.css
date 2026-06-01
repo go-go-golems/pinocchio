@@ -1,0 +1,21 @@
+:where([data-pwchat]) {
+  color: var(--pwchat-fg);
+  font-family: var(--pwchat-font-sans);
+  font-size: var(--pwchat-font-size);
+  line-height: var(--pwchat-line-height);
+}
+
+:where([data-pwchat] *, [data-pwchat] *::before, [data-pwchat] *::after) {
+  box-sizing: border-box;
+}
+
+:where([data-pwchat][data-part="root"]) {
+  min-height: 100vh;
+  background: var(--pwchat-bg);
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+}
+
+:where([data-pwchat][data-part="root"][data-fullscreen="true"]) {
+  height: 100vh;
+}

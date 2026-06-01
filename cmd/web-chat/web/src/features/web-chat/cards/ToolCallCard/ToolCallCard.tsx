@@ -57,10 +57,10 @@ export function ToolCallCard({ e }: ToolCallCardProps) {
           </button>
         </div>
         {isHumanConfirm ? (
-          <div data-part="callout" data-variant="warning" style={{ marginBottom: 10 }}>
+          <div data-part="callout" data-variant="warning" data-spacing="bottom">
             <strong>{confirmTitle}</strong>
-            <div style={{ marginTop: 6 }}>{confirmBody}</div>
-            <div data-part="toolbar" style={{ marginTop: 10 }}>
+            <div data-part="callout-body">{confirmBody}</div>
+            <div data-part="toolbar" data-spacing="top">
               <button type="button" data-part="button" data-variant="primary" onClick={() => respond(true)}>
                 {confirmLabel}
               </button>
@@ -71,11 +71,11 @@ export function ToolCallCard({ e }: ToolCallCardProps) {
           </div>
         ) : null}
         {result ? (
-          <pre data-part="mono" style={{ margin: '0 0 10px', whiteSpace: 'pre-wrap' }}>
+          <pre data-part="mono" data-spacing="bottom">
             {JSON.stringify(result, null, 2)}
           </pre>
         ) : null}
-        <pre data-part="mono" style={{ margin: 0, whiteSpace: 'pre-wrap' }}>
+        <pre data-part="mono">
           {JSON.stringify(input ?? {}, null, 2)}
         </pre>
       </div>

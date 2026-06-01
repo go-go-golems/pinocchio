@@ -1,0 +1,110 @@
+:where([data-pwchat] [data-part="statusbar"]) {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--pwchat-muted);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+:where([data-pwchat] [data-part="pill"]) {
+  font-size: 12px;
+  padding: 4px 8px;
+  border: 1px solid var(--pwchat-border);
+  border-radius: 999px;
+  background: var(--pwchat-surface-2);
+  color: var(--pwchat-muted);
+}
+
+:where([data-pwchat] [data-part="pill"][data-variant="accent"]) {
+  color: var(--pwchat-accent);
+  border-color: color-mix(in srgb, var(--pwchat-accent) 45%, transparent);
+}
+
+:where([data-pwchat] [data-part="pill"][data-variant="danger"]) {
+  color: var(--pwchat-danger);
+  border-color: color-mix(in srgb, var(--pwchat-danger) 45%, transparent);
+}
+
+:where([data-pwchat] [data-part="pill"][data-variant="ok"]) {
+  color: var(--pwchat-ok);
+  border-color: color-mix(in srgb, var(--pwchat-ok) 45%, transparent);
+}
+
+:where([data-pwchat] [data-part="pill"][data-variant="error"]) {
+  color: var(--pwchat-danger);
+  border-color: color-mix(in srgb, var(--pwchat-danger) 45%, transparent);
+}
+
+:where([data-pwchat] [data-part="pill-button"]) {
+  appearance: none;
+  border: 1px solid var(--pwchat-border);
+  border-radius: 999px;
+  padding: 4px 8px;
+  font-size: 12px;
+  background: var(--pwchat-surface-2);
+  color: var(--pwchat-muted);
+  cursor: pointer;
+}
+
+:where([data-pwchat] [data-part="pill-button"][data-variant="danger"]) {
+  color: var(--pwchat-danger);
+  border-color: color-mix(in srgb, var(--pwchat-danger) 45%, transparent);
+}
+
+:where([data-pwchat] [data-part="pill-button"][data-variant="accent"]) {
+  color: var(--pwchat-accent);
+  border-color: color-mix(in srgb, var(--pwchat-accent) 45%, transparent);
+}
+
+:where([data-pwchat] [data-part="pill-button"]:hover) {
+  border-color: color-mix(in srgb, var(--pwchat-danger) 40%, transparent);
+}
+
+:where([data-pwchat] [data-part="pill-button"][data-variant="accent"]:hover) {
+  border-color: color-mix(in srgb, var(--pwchat-accent) 40%, transparent);
+}
+
+:where([data-pwchat] [data-part="pill-select"]) {
+  margin-left: 6px;
+  font-size: 12px;
+  padding: 2px 8px;
+  border: 1px solid var(--pwchat-border);
+  border-radius: 999px;
+  background: var(--pwchat-surface-1);
+  color: var(--pwchat-fg);
+}
+
+:where([data-pwchat] [data-part="export-menu"]) {
+  position: relative;
+  display: inline-block;
+}
+
+:where([data-pwchat] [data-part="export-backdrop"]) {
+  position: fixed;
+  inset: 0;
+  z-index: 998;
+}
+
+:where([data-pwchat] [data-part="export-dropdown"]) {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  margin-top: 4px;
+  z-index: 999;
+  min-width: 220px;
+  padding: 4px 0;
+  border: 1px solid var(--pwchat-border, #ddd);
+  border-radius: 6px;
+  background: var(--pwchat-surface-1, #fff);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+
+:where([data-pwchat] [data-part="export-link"]) {
+  display: block;
+  padding: 6px 14px;
+  color: var(--pwchat-fg, #222);
+  font-size: 13px;
+  text-decoration: none;
+  white-space: nowrap;
+}

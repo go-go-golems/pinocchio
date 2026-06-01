@@ -59,13 +59,8 @@ export function StreamDebugPanel() {
 
   if (!enabled) {
     return (
-      <div style={{ position: 'fixed', right: 12, bottom: 12, zIndex: 9999, fontFamily: 'monospace', fontSize: 12 }}>
-        <button
-          type="button"
-          onClick={handleToggle}
-          style={{ padding: '4px 8px', border: '1px dashed #666', background: '#111', color: '#888', cursor: 'pointer' }}
-          title="Enable stream debug recording"
-        >
+      <div data-part="stream-debug">
+        <button type="button" onClick={handleToggle} data-part="stream-debug-toggle" data-state="disabled" title="Enable stream debug recording">
           Debug
         </button>
       </div>
@@ -73,33 +68,40 @@ export function StreamDebugPanel() {
   }
 
   return (
-    <div style={{ position: 'fixed', right: 12, bottom: 12, zIndex: 9999, fontFamily: 'monospace', fontSize: 12 }}>
-      <button
-        type="button"
-        onClick={() => setOpen((prev) => !prev)}
-        style={{ padding: '4px 8px', border: '1px solid #666', background: '#111', color: '#fff' }}
-      >
+    <div data-part="stream-debug">
+      <button type="button" onClick={() => setOpen((prev) => !prev)} data-part="stream-debug-toggle">
         Stream Debug ({entries.length})
       </button>
       {open ? (
-        <div style={{ width: 560, maxWidth: '90vw', height: 360, maxHeight: '50vh', overflow: 'hidden', background: '#101014', color: '#eee', border: '1px solid #555', boxShadow: '0 8px 30px rgba(0,0,0,0.4)' }}>
-          <div style={{ display: 'flex', gap: 6, padding: 8, borderBottom: '1px solid #333' }}>
-            <input
-              value={filter}
-              onChange={(ev) => setFilter(ev.target.value)}
-              placeholder="filter"
-              style={{ flex: 1, background: '#1d1d24', color: '#eee', border: '1px solid #555', padding: 4 }}
-            />
-            <button type="button" onClick={() => void uploadAndDownloadSQLite()}>Download SQLite</button>
-            <button type="button" onClick={exportStreamDebugJSON}>Export</button>
-            <button type="button" onClick={() => { clearStreamDebugEntries(); setEntries([]); }}>Clear</button>
-            <button type="button" onClick={handleToggle} style={{ color: '#f88' }}>Stop</button>
+        <div data-part="stream-debug-panel">
+          <div data-part="stream-debug-toolbar">
+            <input value={filter} onChange={(ev) => setFilter(ev.target.value)} placeholder="filter" data-part="stream-debug-filter" />
+            <button type="button" onClick={() => void uploadAndDownloadSQLite()}>
+              Download SQLite
+            </button>
+            <button type="button" onClick={exportStreamDebugJSON}>
+              Export
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                clearStreamDebugEntries();
+                setEntries([]);
+              }}
+            >
+              Clear
+            </button>
+            <button type="button" onClick={handleToggle} data-part="stream-debug-stop">
+              Stop
+            </button>
           </div>
-          <div style={{ overflow: 'auto', height: 310 }}>
+          <div data-part="stream-debug-list">
             {visible.map((entry) => (
-              <details key={entry.id} style={{ borderBottom: '1px solid #272730', padding: '4px 8px' }}>
-                <summary style={{ cursor: 'pointer', color: '#b8d7ff' }}>{new Date(entry.timestamp).toLocaleTimeString()} {summarize(entry)}</summary>
-                <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', color: '#ddd' }}>{JSON.stringify(entry, null, 2)}</pre>
+              <details key={entry.id} data-part="stream-debug-entry">
+                <summary data-part="stream-debug-summary">
+                  {new Date(entry.timestamp).toLocaleTimeString()} {summarize(entry)}
+                </summary>
+                <pre data-part="stream-debug-json">{JSON.stringify(entry, null, 2)}</pre>
               </details>
             ))}
           </div>

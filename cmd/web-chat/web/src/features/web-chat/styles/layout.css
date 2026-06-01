@@ -1,0 +1,43 @@
+:where([data-pwchat] [data-part="main"]) {
+  overflow: auto;
+  padding: calc(var(--pwchat-padding) + 4px);
+}
+
+:where([data-pwchat] [data-part="timeline"]) {
+  max-width: 980px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--pwchat-gap);
+}
+
+:where([data-pwchat] [data-part="jump-to-latest-wrap"]) {
+  position: sticky;
+  bottom: 12px;
+  display: flex;
+  justify-content: center;
+  margin-top: 12px;
+  pointer-events: none;
+}
+
+:where([data-pwchat] [data-part="jump-to-latest-wrap"] > button) {
+  pointer-events: auto;
+  box-shadow: 0 8px 32px var(--pwchat-shadow);
+}
+
+:where([data-pwchat] [data-part="turn"]) {
+  display: flex;
+}
+
+:where([data-pwchat] [data-part="turn"][data-role="user"]) {
+  justify-content: flex-end;
+}
+
+:where([data-pwchat] [data-part="bubble"]) {
+  max-width: min(720px, 92%);
+  width: 100%;
+}
+
+:where([data-pwchat] [data-part="content"]) {
+  width: 100%;
+}

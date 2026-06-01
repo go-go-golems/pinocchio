@@ -36,7 +36,7 @@ export function ToolResultCard({ e }: ToolResultCardProps) {
         </div>
         {error ? <div data-part="error-item-detail">{error}</div> : null}
         {result ? (
-          <pre data-part="mono" style={{ margin: 0, whiteSpace: 'pre-wrap' }}>
+          <pre data-part="mono">
             {result}
           </pre>
         ) : error ? null : (

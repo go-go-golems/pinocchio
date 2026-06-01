@@ -6,8 +6,7 @@ import { type ProfileInfo, useGetProfileQuery, useGetProfilesQuery, useSetProfil
 import { basePrefixFromLocation } from '../../../utils/basePrefix';
 import { logWarn } from '../../../utils/logger';
 import { resolveSelectedProfile } from '../../../webchat/profileSelection';
-import '../../../webchat/styles/theme-default.css';
-import '../../../webchat/styles/webchat.css';
+import '../styles/index.css';
 import { pinocchioWebChatTimelineAdapters } from '../extensions/pinocchio-timeline-adapters';
 import { recordProviderDebugEvent } from '../provider-support/providerDebug';
 import { setSessionIdInLocation } from '../provider-support/providerSession';

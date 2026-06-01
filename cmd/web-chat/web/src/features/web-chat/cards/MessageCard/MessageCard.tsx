@@ -24,7 +24,7 @@ export function MessageCard({ e }: MessageCardProps) {
             <div data-part="pill" data-variant="danger">
               stopped
             </div>
-            <div data-part="error-item-detail" data-mono="true" style={{ marginTop: 8 }}>
+            <div data-part="error-item-detail" data-mono="true">
               {error}
             </div>
           </div>
