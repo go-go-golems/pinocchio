@@ -13,6 +13,7 @@ import (
 	appserver "github.com/go-go-golems/pinocchio/cmd/web-chat/internal/appserver"
 	"github.com/go-go-golems/pinocchio/cmd/web-chat/internal/mockruntime"
 	"github.com/go-go-golems/pinocchio/cmd/web-chat/internal/profiles"
+	"github.com/go-go-golems/pinocchio/cmd/web-chat/internal/webapp"
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 	"github.com/stretchr/testify/require"
 )
@@ -34,7 +35,7 @@ func newMigratedRuntimeTestServer(t *testing.T) (*appserver.Server, *httptest.Se
 	resolver := profiles.NewRequestResolver(profileRegistry, gepprofiles.MustRegistrySlug(profiles.DefaultRegistrySlug), nil)
 	canonicalApp, err := appserver.NewServer()
 	require.NoError(t, err)
-	appConfigJS, err := runtimeConfigScript("")
+	appConfigJS, err := webapp.RuntimeConfigScript("")
 	require.NoError(t, err)
 	appFS := fstest.MapFS{
 		"static/index.html":          {Data: []byte("<html><body>migrated ui</body></html>")},
@@ -42,7 +43,7 @@ func newMigratedRuntimeTestServer(t *testing.T) (*appserver.Server, *httptest.Se
 		"static/dist/index.html":     {Data: []byte("<html><body>built migrated ui</body></html>")},
 		"static/dist/assets/app.css": {Data: []byte("body{}")},
 	}
-	mux := buildAppMux(appFS, appConfigJS, resolver, canonicalApp)
+	mux := webapp.NewMux(webapp.MuxOptions{StaticFS: appFS, AppConfigJS: appConfigJS, RequestResolver: resolver, ChatServer: canonicalApp})
 	httpSrv := httptest.NewServer(mux)
 	t.Cleanup(func() {
 		httpSrv.Close()
@@ -129,13 +130,13 @@ func TestBuildRootHandler_MountsCanonicalAppUnderCustomRoot(t *testing.T) {
 	require.NoError(t, err)
 	defer func() { _ = canonicalApp.Close() }()
 
-	appConfigJS, err := runtimeConfigScript("/chat")
+	appConfigJS, err := webapp.RuntimeConfigScript("/chat")
 	require.NoError(t, err)
 	appFS := fstest.MapFS{
 		"static/index.html": {Data: []byte("<html><body>rooted ui</body></html>")},
 	}
-	mux := buildAppMux(appFS, appConfigJS, resolver, canonicalApp)
-	handler := buildRootHandler("/chat", mux, appConfigJS)
+	mux := webapp.NewMux(webapp.MuxOptions{StaticFS: appFS, AppConfigJS: appConfigJS, RequestResolver: resolver, ChatServer: canonicalApp})
+	handler := webapp.MountRoot("/chat", mux, appConfigJS)
 	httpSrv := httptest.NewServer(handler)
 	defer httpSrv.Close()
 

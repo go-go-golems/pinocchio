@@ -4,4 +4,4 @@ package mockruntime
 
 import logcopter "github.com/go-go-golems/logcopter/pkg/logcopter"
 
-var log = logcopter.Package("go-go-golems.pinocchio.cmd.web-chat.mockruntime")
+var log = logcopter.Package("go-go-golems.pinocchio.cmd.web-chat.internal.mockruntime")
