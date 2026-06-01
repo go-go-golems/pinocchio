@@ -66,6 +66,9 @@ func RegisterAPIHandlers(mux *http.ServeMux, profileRegistry gepprofiles.Registr
 				return
 			}
 			items = append(items, profileListItemsFromRegistry(registrySlug, registry, profiles_)...)
+			if registrySlug == opts.DefaultRegistrySlug {
+				items = append(items, mockParityProfileListItem(registrySlug))
+			}
 		} else {
 			registries, err := profileRegistry.ListRegistries(req.Context())
 			if err != nil {
@@ -86,6 +89,7 @@ func RegisterAPIHandlers(mux *http.ServeMux, profileRegistry gepprofiles.Registr
 				}
 				items = append(items, profileListItemsFromRegistry(registrySlug, registry, profiles_)...)
 			}
+			items = append(items, mockParityProfileListItem(opts.DefaultRegistrySlug))
 		}
 		sort.Slice(items, func(i, j int) bool {
 			return items[i].Slug < items[j].Slug
@@ -109,6 +113,10 @@ func RegisterAPIHandlers(mux *http.ServeMux, profileRegistry gepprofiles.Registr
 		case "":
 			if req.Method != http.MethodGet {
 				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			if IsMockParityProfile(slug.String()) {
+				writeJSONResponse(w, http.StatusOK, mockParityProfileDocument(opts.DefaultRegistrySlug))
 				return
 			}
 			registryRaw := ""
@@ -231,13 +239,15 @@ func RegisterAPIHandlers(mux *http.ServeMux, profileRegistry gepprofiles.Registr
 				http.Error(w, "invalid registry", http.StatusBadRequest)
 				return
 			}
-			if _, err := profileRegistry.GetEngineProfile(req.Context(), registrySlug, slug); err != nil {
-				if errors.Is(err, gepprofiles.ErrProfileNotFound) {
-					http.Error(w, "profile not found", http.StatusNotFound)
+			if !IsMockParityProfile(slug.String()) {
+				if _, err := profileRegistry.GetEngineProfile(req.Context(), registrySlug, slug); err != nil {
+					if errors.Is(err, gepprofiles.ErrProfileNotFound) {
+						http.Error(w, "profile not found", http.StatusNotFound)
+						return
+					}
+					http.Error(w, "profile registry unavailable", http.StatusInternalServerError)
 					return
 				}
-				http.Error(w, "profile registry unavailable", http.StatusInternalServerError)
-				return
 			}
 			http.SetCookie(w, &http.Cookie{
 				Name:     opts.CurrentProfileCookieName,
@@ -538,6 +548,29 @@ func resolveDefaultEngineProfileSlug(ctx context.Context, profileRegistry geppro
 }
 
 func profileExists(ctx context.Context, profileRegistry gepprofiles.Registry, registrySlug gepprofiles.RegistrySlug, slug gepprofiles.EngineProfileSlug) bool {
+	if IsMockParityProfile(slug.String()) {
+		return true
+	}
 	_, err := profileRegistry.GetEngineProfile(ctx, registrySlug, slug)
 	return err == nil
+}
+
+func mockParityProfileListItem(registrySlug gepprofiles.RegistrySlug) ProfileListItem {
+	return ProfileListItem{
+		Registry:    registrySlug.String(),
+		Slug:        MockParityProfile,
+		DisplayName: "Mock parity engine",
+		Description: "Deterministic web-chat event stream for parity tests; no LLM/API key required.",
+		IsDefault:   false,
+	}
+}
+
+func mockParityProfileDocument(registrySlug gepprofiles.RegistrySlug) ProfileDocument {
+	return ProfileDocument{
+		Registry:    registrySlug.String(),
+		Slug:        MockParityProfile,
+		DisplayName: "Mock parity engine",
+		Description: "Deterministic web-chat event stream for parity tests; no LLM/API key required.",
+		IsDefault:   false,
+	}
 }

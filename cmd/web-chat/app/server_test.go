@@ -18,9 +18,11 @@ import (
 	geppettoobs "github.com/go-go-golems/geppetto/pkg/observability"
 	"github.com/go-go-golems/geppetto/pkg/turns"
 	"github.com/go-go-golems/geppetto/pkg/turns/serde"
+	"github.com/go-go-golems/pinocchio/cmd/web-chat/mockruntime"
 	chatapp "github.com/go-go-golems/pinocchio/pkg/chatapp"
 	"github.com/go-go-golems/pinocchio/pkg/chatapp/frontendtools"
 	toolv1 "github.com/go-go-golems/pinocchio/pkg/chatapp/pb/proto/pinocchio/chatapp/frontendtools/v1"
+	"github.com/go-go-golems/pinocchio/pkg/chatapp/plugins"
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
 	sessionstreamv1 "github.com/go-go-golems/sessionstream/pkg/sessionstream/pb/proto/sessionstream/v1"
@@ -50,6 +52,13 @@ func (e runtimeBackedTestEngine) RunInference(ctx context.Context, t *turns.Turn
 	gepevents.PublishEventToContext(ctx, gepevents.NewTextDeltaEvent(meta, corr, completion, completion, 1))
 	gepevents.PublishEventToContext(ctx, gepevents.NewTextSegmentFinishedEvent(meta, corr, completion, "stop"))
 	return t, nil
+}
+
+type mockRuntimeResolver struct{}
+
+func (mockRuntimeResolver) Resolve(context.Context, *http.Request, string, string, string) (*infruntime.ComposedRuntime, error) {
+	composed := mockruntime.NewComposedRuntime(mockruntime.Options{})
+	return &composed, nil
 }
 
 type staticRuntimeResolver struct {
@@ -343,6 +352,38 @@ func TestDebugRecorderEndpointExposesGeppettoRecords(t *testing.T) {
 	require.NotNil(t, out.Records[0].Geppetto.ObjectJSON)
 	require.NotNil(t, out.Records[0].Geppetto.EventJSON)
 	require.NotNil(t, out.Records[0].Geppetto.MetadataJSON)
+}
+
+func TestSubmitAndSnapshot_MockRuntimeProjectsDeterministicParityEntities(t *testing.T) {
+	_, httpSrv := newTestMux(t,
+		WithRuntimeResolver(mockRuntimeResolver{}),
+		WithChatPlugins(plugins.NewReasoningPlugin(), plugins.NewToolCallPlugin()),
+	)
+
+	body := []byte(`{"prompt":"run deterministic parity","profile":"mock_parity"}`)
+	resp, err := http.Post(httpSrv.URL+"/api/chat/sessions/sess-mock/messages", "application/json", bytes.NewReader(body))
+	require.NoError(t, err)
+	defer func() { _ = resp.Body.Close() }()
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	snap := waitForFinishedSnapshot(t, httpSrv.URL, "sess-mock")
+	kinds := map[string]bool{}
+	texts := []string{}
+	for _, entity := range snap.Entities {
+		kinds[entity.Kind] = true
+		if payload, ok := entity.Payload.(map[string]any); ok {
+			if text, ok := payload["text"].(string); ok {
+				texts = append(texts, text)
+			}
+			if content, ok := payload["content"].(string); ok {
+				texts = append(texts, content)
+			}
+		}
+	}
+	require.True(t, kinds[chatapp.TimelineEntityChatMessage])
+	require.True(t, kinds[plugins.TimelineEntityToolCall])
+	require.Contains(t, strings.Join(texts, "\n"), "Mock parity run complete")
+	require.Contains(t, strings.Join(texts, "\n"), "Inspecting deterministic inputs")
 }
 
 func TestSubmitAndSnapshot_UsesResolvedRuntimeWhenConfigured(t *testing.T) {

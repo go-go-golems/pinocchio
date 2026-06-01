@@ -3,8 +3,10 @@ package main
 import (
 	"context"
 	"net/http"
+	"time"
 
 	appserver "github.com/go-go-golems/pinocchio/cmd/web-chat/app"
+	"github.com/go-go-golems/pinocchio/cmd/web-chat/mockruntime"
 	"github.com/go-go-golems/pinocchio/cmd/web-chat/profiles"
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 )
@@ -30,6 +32,10 @@ func (r *canonicalRuntimeResolver) Resolve(ctx context.Context, req *http.Reques
 	}
 	if ctx == nil {
 		ctx = context.Background()
+	}
+	if profiles.IsMockParityProfile(profile) {
+		composed := mockruntime.NewComposedRuntime(mockruntime.Options{Scenario: mockruntime.DefaultScenario, ChunkDelay: 5 * time.Millisecond})
+		return &composed, nil
 	}
 	profileSlug, err := r.requestResolver.ResolveProfileSelection(ctx, "", profile, "", "")
 	if err != nil {

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -10,6 +11,7 @@ import (
 
 	gepprofiles "github.com/go-go-golems/geppetto/pkg/engineprofiles"
 	appserver "github.com/go-go-golems/pinocchio/cmd/web-chat/app"
+	"github.com/go-go-golems/pinocchio/cmd/web-chat/mockruntime"
 	"github.com/go-go-golems/pinocchio/cmd/web-chat/profiles"
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 	"github.com/stretchr/testify/require"
@@ -49,6 +51,26 @@ func newMigratedRuntimeTestServer(t *testing.T) (*appserver.Server, *httptest.Se
 	return canonicalApp, httpSrv
 }
 
+func TestCanonicalRuntimeResolver_MockParityProfileShortCircuitsNormalComposer(t *testing.T) {
+	profileRegistry, err := profiles.NewInMemoryProfileService(
+		"default",
+		testEngineProfileWithRuntime(t, "default", &infruntime.ProfileRuntime{SystemPrompt: "You are default"}),
+	)
+	require.NoError(t, err)
+	requestResolver := profiles.NewRequestResolver(profileRegistry, gepprofiles.MustRegistrySlug(profiles.DefaultRegistrySlug), nil)
+	composerCalled := false
+	resolver := newCanonicalRuntimeResolver(requestResolver, infruntime.RuntimeBuilderFunc(func(ctx context.Context, req infruntime.ConversationRuntimeRequest) (infruntime.ComposedRuntime, error) {
+		composerCalled = true
+		return infruntime.ComposedRuntime{}, nil
+	}))
+
+	composed, err := resolver.Resolve(context.Background(), httptest.NewRequest(http.MethodPost, "/api/chat/sessions/sess/messages", strings.NewReader(`{}`)), "sess", profiles.MockParityProfile, "")
+	require.NoError(t, err)
+	require.NotNil(t, composed)
+	require.IsType(t, &mockruntime.Engine{}, composed.Engine)
+	require.False(t, composerCalled)
+}
+
 func TestBuildAppMux_ServesCanonicalRoutesAndRemovesLegacyRoute(t *testing.T) {
 	_, httpSrv := newMigratedRuntimeTestServer(t)
 
@@ -75,7 +97,9 @@ func TestBuildAppMux_ServesCanonicalRoutesAndRemovesLegacyRoute(t *testing.T) {
 	require.NoError(t, err)
 	defer func() { _ = profilesResp.Body.Close() }()
 	require.Equal(t, http.StatusOK, profilesResp.StatusCode)
-	require.Contains(t, readBody(t, profilesResp), "default")
+	profilesBody := readBody(t, profilesResp)
+	require.Contains(t, profilesBody, "default")
+	require.Contains(t, profilesBody, profiles.MockParityProfile)
 
 	createResp, err := http.Post(httpSrv.URL+"/api/chat/sessions", "application/json", strings.NewReader(`{"profile":"default"}`))
 	require.NoError(t, err)
