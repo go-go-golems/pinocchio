@@ -1,7 +1,15 @@
 import { ToolCallOutlet } from '@go-go-golems/chat-provider';
 import type { RenderEntity } from '../../../webchat/types';
+import { ToolCallCard } from '../cards';
 
 export function ProviderToolCallRenderer({ e }: { e: RenderEntity }) {
+  const mode = String(e.props?.mode ?? '');
+  const isFrontendTool = mode.includes('FRONTEND');
+
+  if (!isFrontendTool) {
+    return <ToolCallCard e={e} />;
+  }
+
   return (
     <ToolCallOutlet
       toolCallId={String(e.props?.toolCallId ?? e.id)}
