@@ -2,6 +2,8 @@
 
 This is the opinionated React + Storybook frontend for `cmd/web-chat`. The production chat route is provider-backed through `@go-go-golems/chat-provider`; the old Redux/WebSocket chat runtime has been removed.
 
+For the Go backend package map, API routes, and runtime composition flow, read `../README.md` first.
+
 ## Package manager
 
 Use **npm** in this directory. `package-lock.json` is the canonical lockfile; do not add `pnpm-lock.yaml` here.
