@@ -1,4 +1,4 @@
-package main
+package middlewaredefs
 
 import (
 	"context"
@@ -11,14 +11,14 @@ import (
 )
 
 func TestAgentModeMiddlewareDefinition_DefaultModeMatchesWebChatCatalog(t *testing.T) {
-	def := newAgentModeMiddlewareDefinition()
+	def := NewAgentModeMiddlewareDefinition()
 	svc := agentmode.NewStaticService([]*agentmode.AgentMode{
-		{Name: defaultWebChatAgentMode, Prompt: "You are a financial analyst."},
+		{Name: DefaultWebChatAgentMode, Prompt: "You are a financial analyst."},
 	})
 
 	mw, err := def.Build(context.Background(), middlewarecfg.BuildDeps{
 		Values: map[string]any{
-			dependencyAgentModeServiceKey: svc,
+			DependencyAgentModeServiceKey: svc,
 		},
 	}, nil)
 	require.NoError(t, err)
@@ -35,7 +35,7 @@ func TestAgentModeMiddlewareDefinition_DefaultModeMatchesWebChatCatalog(t *testi
 	modeName, ok, err := turns.KeyAgentMode.Get(res.Data)
 	require.NoError(t, err)
 	require.True(t, ok)
-	require.Equal(t, defaultWebChatAgentMode, modeName)
+	require.Equal(t, DefaultWebChatAgentMode, modeName)
 
 	require.Len(t, res.Blocks, 1)
 	require.Equal(t, turns.RoleUser, res.Blocks[0].Role)
@@ -45,14 +45,14 @@ func TestAgentModeMiddlewareDefinition_DefaultModeMatchesWebChatCatalog(t *testi
 }
 
 func TestAgentModeMiddlewareDefinition_EmptyConfiguredDefaultModeFallsBackToWebChatDefault(t *testing.T) {
-	def := newAgentModeMiddlewareDefinition()
+	def := NewAgentModeMiddlewareDefinition()
 	svc := agentmode.NewStaticService([]*agentmode.AgentMode{
-		{Name: defaultWebChatAgentMode, Prompt: "You are a financial analyst."},
+		{Name: DefaultWebChatAgentMode, Prompt: "You are a financial analyst."},
 	})
 
 	mw, err := def.Build(context.Background(), middlewarecfg.BuildDeps{
 		Values: map[string]any{
-			dependencyAgentModeServiceKey: svc,
+			DependencyAgentModeServiceKey: svc,
 		},
 	}, map[string]any{
 		"default_mode": "",
@@ -71,5 +71,5 @@ func TestAgentModeMiddlewareDefinition_EmptyConfiguredDefaultModeFallsBackToWebC
 	modeName, ok, err := turns.KeyAgentMode.Get(res.Data)
 	require.NoError(t, err)
 	require.True(t, ok)
-	require.Equal(t, defaultWebChatAgentMode, modeName)
+	require.Equal(t, DefaultWebChatAgentMode, modeName)
 }

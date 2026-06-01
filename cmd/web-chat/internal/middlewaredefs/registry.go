@@ -1,4 +1,4 @@
-package main
+package middlewaredefs
 
 import (
 	"context"
@@ -12,8 +12,8 @@ import (
 )
 
 const (
-	dependencyAgentModeServiceKey = "agentmode.service"
-	defaultWebChatAgentMode       = "financial_analyst"
+	DependencyAgentModeServiceKey = "agentmode.service"
+	DefaultWebChatAgentMode       = "financial_analyst"
 )
 
 type middlewareDefinition struct {
@@ -59,10 +59,10 @@ func (d middlewareDefinition) Build(
 	return d.build(ctx, deps, cfg)
 }
 
-func newWebChatMiddlewareDefinitionRegistry() (*middlewarecfg.InMemoryDefinitionRegistry, error) {
+func NewRegistry() (*middlewarecfg.InMemoryDefinitionRegistry, error) {
 	registry := middlewarecfg.NewInMemoryDefinitionRegistry()
 	definitions := []middlewarecfg.Definition{
-		newAgentModeMiddlewareDefinition(),
+		NewAgentModeMiddlewareDefinition(),
 	}
 	for _, def := range definitions {
 		if err := registry.RegisterDefinition(def); err != nil {
@@ -72,7 +72,7 @@ func newWebChatMiddlewareDefinitionRegistry() (*middlewarecfg.InMemoryDefinition
 	return registry, nil
 }
 
-func newAgentModeMiddlewareDefinition() middlewarecfg.Definition {
+func NewAgentModeMiddlewareDefinition() middlewarecfg.Definition {
 	schema := map[string]any{
 		"title":       "Agent Mode Middleware",
 		"description": "Parses and applies agent-mode switches from model output.",
@@ -80,7 +80,7 @@ func newAgentModeMiddlewareDefinition() middlewarecfg.Definition {
 		"properties": map[string]any{
 			"default_mode": map[string]any{
 				"type":    "string",
-				"default": defaultWebChatAgentMode,
+				"default": DefaultWebChatAgentMode,
 			},
 			"sanitize_yaml": map[string]any{
 				"type":    "boolean",
@@ -102,22 +102,22 @@ func newAgentModeMiddlewareDefinition() middlewarecfg.Definition {
 		description: "Parses and applies agent-mode switches from model output.",
 		schema:      schema,
 		build: func(_ context.Context, deps middlewarecfg.BuildDeps, cfg any) (gepmiddleware.Middleware, error) {
-			svcRaw, ok := deps.Get(dependencyAgentModeServiceKey)
+			svcRaw, ok := deps.Get(DependencyAgentModeServiceKey)
 			if !ok || svcRaw == nil {
-				return nil, fmt.Errorf("missing dependency %q", dependencyAgentModeServiceKey)
+				return nil, fmt.Errorf("missing dependency %q", DependencyAgentModeServiceKey)
 			}
 			svc, ok := svcRaw.(agentmode.Service)
 			if !ok {
-				return nil, fmt.Errorf("dependency %q has unexpected type %T", dependencyAgentModeServiceKey, svcRaw)
+				return nil, fmt.Errorf("dependency %q has unexpected type %T", DependencyAgentModeServiceKey, svcRaw)
 			}
 
-			input := configInput{DefaultMode: defaultWebChatAgentMode}
+			input := configInput{DefaultMode: DefaultWebChatAgentMode}
 			if err := decodeResolvedMiddlewareConfig(cfg, &input); err != nil {
 				return nil, err
 			}
 
 			config := agentmode.DefaultConfig()
-			config.DefaultMode = defaultWebChatAgentMode
+			config.DefaultMode = DefaultWebChatAgentMode
 			if defaultMode := strings.TrimSpace(input.DefaultMode); defaultMode != "" {
 				config.DefaultMode = defaultMode
 			}

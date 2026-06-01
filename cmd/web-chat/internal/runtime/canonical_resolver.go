@@ -1,4 +1,4 @@
-package main
+package runtime
 
 import (
 	"context"
@@ -16,7 +16,7 @@ type canonicalRuntimeResolver struct {
 	runtimeComposer infruntime.RuntimeBuilder
 }
 
-func newCanonicalRuntimeResolver(requestResolver *profiles.RequestResolver, runtimeComposer infruntime.RuntimeBuilder) appserver.RuntimeResolver {
+func NewCanonicalRuntimeResolver(requestResolver *profiles.RequestResolver, runtimeComposer infruntime.RuntimeBuilder) appserver.RuntimeResolver {
 	if requestResolver == nil || runtimeComposer == nil {
 		return nil
 	}

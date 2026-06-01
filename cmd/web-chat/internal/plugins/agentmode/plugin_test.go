@@ -1,4 +1,4 @@
-package main
+package agentmodeplugin
 
 import (
 	"context"
@@ -14,7 +14,7 @@ import (
 )
 
 func TestAgentModeChatFeatureHandleRuntimeEvent(t *testing.T) {
-	feature := newAgentModePlugin()
+	feature := NewPlugin()
 	var published []sessionstream.Event
 	ctx := chatapp.RuntimeEventContext{
 		SessionID: "sid",
@@ -39,7 +39,7 @@ func TestAgentModeChatFeatureHandleRuntimeEvent(t *testing.T) {
 }
 
 func TestAgentModeChatFeatureProjectsUIAndTimeline(t *testing.T) {
-	feature := newAgentModePlugin()
+	feature := NewPlugin()
 	previewPayload := &chatappv1.AgentModePreviewUpdate{MessageId: "chat-msg-2", CandidateMode: "reviewer", Analysis: "hello"}
 	previewEvents, handled, err := feature.ProjectUI(context.Background(), sessionstream.Event{Name: agentModePreviewEventName, SessionId: "sid", Ordinal: 7, Payload: previewPayload}, nil, nil)
 	require.NoError(t, err)

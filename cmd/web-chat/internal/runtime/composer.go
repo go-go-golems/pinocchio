@@ -1,4 +1,4 @@
-package main
+package runtime
 
 import (
 	"context"
@@ -23,7 +23,7 @@ type ProfileRuntimeComposer struct {
 	engineFactory factory.EngineFactory
 }
 
-func newProfileRuntimeComposer(
+func NewProfileRuntimeComposer(
 	definitions middlewarecfg.DefinitionRegistry,
 	buildDeps middlewarecfg.BuildDeps,
 	base *settings.InferenceSettings,

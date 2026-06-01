@@ -13,6 +13,7 @@ import (
 	appserver "github.com/go-go-golems/pinocchio/cmd/web-chat/internal/appserver"
 	"github.com/go-go-golems/pinocchio/cmd/web-chat/internal/mockruntime"
 	"github.com/go-go-golems/pinocchio/cmd/web-chat/internal/profiles"
+	webchatruntime "github.com/go-go-golems/pinocchio/cmd/web-chat/internal/runtime"
 	"github.com/go-go-golems/pinocchio/cmd/web-chat/internal/webapp"
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 	"github.com/stretchr/testify/require"
@@ -60,7 +61,7 @@ func TestCanonicalRuntimeResolver_MockParityProfileShortCircuitsNormalComposer(t
 	require.NoError(t, err)
 	requestResolver := profiles.NewRequestResolver(profileRegistry, gepprofiles.MustRegistrySlug(profiles.DefaultRegistrySlug), nil)
 	composerCalled := false
-	resolver := newCanonicalRuntimeResolver(requestResolver, infruntime.RuntimeBuilderFunc(func(ctx context.Context, req infruntime.ConversationRuntimeRequest) (infruntime.ComposedRuntime, error) {
+	resolver := webchatruntime.NewCanonicalRuntimeResolver(requestResolver, infruntime.RuntimeBuilderFunc(func(ctx context.Context, req infruntime.ConversationRuntimeRequest) (infruntime.ComposedRuntime, error) {
 		composerCalled = true
 		return infruntime.ComposedRuntime{}, nil
 	}))

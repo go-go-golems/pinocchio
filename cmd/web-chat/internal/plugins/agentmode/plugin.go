@@ -1,4 +1,4 @@
-package main
+package agentmodeplugin
 
 import (
 	"context"
@@ -25,7 +25,7 @@ const (
 // the protobuf and UI contracts become a shared Pinocchio feature.
 type agentModePlugin struct{}
 
-func newAgentModePlugin() chatapp.ChatPlugin {
+func NewPlugin() chatapp.ChatPlugin {
 	return agentModePlugin{}
 }
 

@@ -1,4 +1,4 @@
-package main
+package runtime
 
 import (
 	"context"
@@ -95,7 +95,7 @@ func TestRuntimeFingerprint_DoesNotIncludeAPIKeys(t *testing.T) {
 }
 
 func TestWebChatRuntimeComposer_UsesResolvedRuntimeSpec(t *testing.T) {
-	composer := newProfileRuntimeComposer(
+	composer := NewProfileRuntimeComposer(
 		newRuntimeComposerRegistry(t),
 		middlewarecfg.BuildDeps{},
 		nil,
@@ -119,7 +119,7 @@ func TestWebChatRuntimeComposer_UsesResolvedRuntimeSpec(t *testing.T) {
 }
 
 func TestWebChatRuntimeComposer_UsesBaseInferenceSettingsWhenResolvedRuntimeIsEmpty(t *testing.T) {
-	composer := newProfileRuntimeComposer(
+	composer := NewProfileRuntimeComposer(
 		newRuntimeComposerRegistry(t),
 		middlewarecfg.BuildDeps{},
 		testBaseInferenceSettings(t),
@@ -164,7 +164,7 @@ func TestWebChatRuntimeComposer_UsesResolverPrecedenceForMiddlewareConfig(t *tes
 			return func(next gepmiddleware.HandlerFunc) gepmiddleware.HandlerFunc { return next }, nil
 		},
 	}
-	composer := newProfileRuntimeComposer(
+	composer := NewProfileRuntimeComposer(
 		newRuntimeComposerRegistry(t, def),
 		middlewarecfg.BuildDeps{},
 		nil,
@@ -212,7 +212,7 @@ func TestWebChatRuntimeComposer_RejectsInvalidMiddlewareSchemaPayload(t *testing
 			},
 		},
 	}
-	composer := newProfileRuntimeComposer(
+	composer := NewProfileRuntimeComposer(
 		newRuntimeComposerRegistry(t, def),
 		middlewarecfg.BuildDeps{},
 		nil,
@@ -254,7 +254,7 @@ func TestRuntimeFingerprint_ChangesOnProfileVersion(t *testing.T) {
 }
 
 func TestWebChatRuntimeComposer_PrefersResolvedProfileFingerprint(t *testing.T) {
-	composer := newProfileRuntimeComposer(
+	composer := NewProfileRuntimeComposer(
 		newRuntimeComposerRegistry(t),
 		middlewarecfg.BuildDeps{},
 		nil,
@@ -278,7 +278,7 @@ func TestWebChatRuntimeComposer_PrefersResolvedProfileFingerprint(t *testing.T) 
 }
 
 func TestWebChatRuntimeComposer_UsesResolvedInferenceSettings(t *testing.T) {
-	composer := newProfileRuntimeComposer(
+	composer := NewProfileRuntimeComposer(
 		newRuntimeComposerRegistry(t),
 		middlewarecfg.BuildDeps{},
 		nil,
@@ -308,7 +308,7 @@ func TestWebChatRuntimeComposer_UsesResolvedInferenceSettings(t *testing.T) {
 }
 
 func TestWebChatRuntimeComposer_ResolvedInferenceSettingsOverrideBase(t *testing.T) {
-	composer := newProfileRuntimeComposer(
+	composer := NewProfileRuntimeComposer(
 		newRuntimeComposerRegistry(t),
 		middlewarecfg.BuildDeps{},
 		testBaseInferenceSettings(t),

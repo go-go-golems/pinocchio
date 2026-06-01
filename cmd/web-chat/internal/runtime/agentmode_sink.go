@@ -1,6 +1,8 @@
-package main
+package runtime
 
 import (
+	"encoding/json"
+	"fmt"
 	"strings"
 
 	"github.com/go-go-golems/geppetto/pkg/events"
@@ -30,7 +32,7 @@ func runtimeSinkWrapperFromProfile(runtime *infruntime.ProfileRuntime) infruntim
 		}
 		found = true
 		input := agentModeSinkConfigInput{}
-		if err := decodeResolvedMiddlewareConfig(mw.Config, &input); err == nil && input.SanitizeYAML != nil {
+		if err := decodeAgentModeSinkConfig(mw.Config, &input); err == nil && input.SanitizeYAML != nil {
 			cfg.ParseOptions = cfg.ParseOptions.WithSanitizeYAML(*input.SanitizeYAML)
 		}
 	}
@@ -40,4 +42,18 @@ func runtimeSinkWrapperFromProfile(runtime *infruntime.ProfileRuntime) infruntim
 	return func(next events.EventSink) (events.EventSink, error) {
 		return agentmode.WrapStructuredSink(next, cfg), nil
 	}
+}
+
+func decodeAgentModeSinkConfig(cfg any, out any) error {
+	if cfg == nil || out == nil {
+		return nil
+	}
+	b, err := json.Marshal(cfg)
+	if err != nil {
+		return fmt.Errorf("serialize agent mode sink config: %w", err)
+	}
+	if err := json.Unmarshal(b, out); err != nil {
+		return fmt.Errorf("decode agent mode sink config: %w", err)
+	}
+	return nil
 }

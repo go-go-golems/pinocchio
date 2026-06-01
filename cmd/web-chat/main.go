@@ -22,7 +22,10 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/inference/middlewarecfg"
 	aisettings "github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 	appserver "github.com/go-go-golems/pinocchio/cmd/web-chat/internal/appserver"
+	"github.com/go-go-golems/pinocchio/cmd/web-chat/internal/middlewaredefs"
+	agentmodeplugin "github.com/go-go-golems/pinocchio/cmd/web-chat/internal/plugins/agentmode"
 	"github.com/go-go-golems/pinocchio/cmd/web-chat/internal/profiles"
+	webchatruntime "github.com/go-go-golems/pinocchio/cmd/web-chat/internal/runtime"
 	"github.com/go-go-golems/pinocchio/cmd/web-chat/internal/webapp"
 	"github.com/go-go-golems/pinocchio/pkg/chatapp/frontendtools"
 	"github.com/go-go-golems/pinocchio/pkg/chatapp/plugins"
@@ -112,7 +115,7 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 		{Name: "category_regexp_reviewer", Prompt: "Review proposed regex patterns and assess over/under matching risks."},
 	})
 
-	middlewareRegistry, err := newWebChatMiddlewareDefinitionRegistry()
+	middlewareRegistry, err := middlewaredefs.NewRegistry()
 	if err != nil {
 		return errors.Wrap(err, "create middleware definition registry")
 	}
@@ -130,9 +133,9 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 	}
 	defer func() { _ = closeTurnStore() }()
 
-	runtimeComposer := newProfileRuntimeComposer(middlewareRegistry, middlewarecfg.BuildDeps{
+	runtimeComposer := webchatruntime.NewProfileRuntimeComposer(middlewareRegistry, middlewarecfg.BuildDeps{
 		Values: map[string]any{
-			dependencyAgentModeServiceKey: amSvc,
+			middlewaredefs.DependencyAgentModeServiceKey: amSvc,
 		},
 	}, baseInferenceSettings).WithTurnStore(turnStore)
 
@@ -145,7 +148,7 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 		defaultRegistrySlug = profileRuntime.ProfileRegistryChain.DefaultRegistrySlug
 	}
 	requestResolver := profiles.NewRequestResolver(profileRegistry, defaultRegistrySlug, baseInferenceSettings)
-	canonicalRuntimeResolver := newCanonicalRuntimeResolver(requestResolver, runtimeComposer)
+	canonicalRuntimeResolver := webchatruntime.NewCanonicalRuntimeResolver(requestResolver, runtimeComposer)
 
 	frontendToolManager := frontendtools.NewManager()
 	canonicalApp, err := appserver.NewServer(
@@ -155,7 +158,7 @@ func (c *Command) RunIntoWriter(ctx context.Context, parsed *values.Values, _ io
 		appserver.WithTurnStore(turnStore),
 		appserver.WithTurnsDBPath(s.TurnsDB),
 		appserver.WithFrontendToolManager(frontendToolManager),
-		appserver.WithChatPlugins(newAgentModePlugin(), plugins.NewReasoningPlugin(), plugins.NewToolCallPlugin(), frontendtools.NewPlugin(), widgets.NewWidgetPlugin()),
+		appserver.WithChatPlugins(agentmodeplugin.NewPlugin(), plugins.NewReasoningPlugin(), plugins.NewToolCallPlugin(), frontendtools.NewPlugin(), widgets.NewWidgetPlugin()),
 	)
 	if err != nil {
 		return errors.Wrap(err, "build canonical evtstream-backed app")
