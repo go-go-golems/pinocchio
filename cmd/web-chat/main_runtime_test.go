@@ -10,9 +10,9 @@ import (
 	"testing/fstest"
 
 	gepprofiles "github.com/go-go-golems/geppetto/pkg/engineprofiles"
-	appserver "github.com/go-go-golems/pinocchio/cmd/web-chat/app"
-	"github.com/go-go-golems/pinocchio/cmd/web-chat/mockruntime"
-	"github.com/go-go-golems/pinocchio/cmd/web-chat/profiles"
+	appserver "github.com/go-go-golems/pinocchio/cmd/web-chat/internal/appserver"
+	"github.com/go-go-golems/pinocchio/cmd/web-chat/internal/mockruntime"
+	"github.com/go-go-golems/pinocchio/cmd/web-chat/internal/profiles"
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 	"github.com/stretchr/testify/require"
 )

@@ -21,7 +21,7 @@ type RunnerOptions struct {
 
 // Runner is the reusable non-web wiring of chatapp on top of sessionstream.
 //
-// It mirrors the core setup used by cmd/web-chat/app.Server without HTTP or
+// It mirrors the core setup used by cmd/web-chat/internal/appserver.Server without HTTP or
 // websocket assumptions, so CLI, RPC, and TUI adapters can share the same
 // command/event/projection/hydration pipeline.
 type Runner struct {

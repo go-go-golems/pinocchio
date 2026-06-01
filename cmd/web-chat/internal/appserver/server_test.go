@@ -1,4 +1,4 @@
-package app
+package appserver
 
 import (
 	"bytes"
@@ -15,7 +15,7 @@ import (
 	gepevents "github.com/go-go-golems/geppetto/pkg/events"
 	"github.com/go-go-golems/geppetto/pkg/turns"
 	"github.com/go-go-golems/geppetto/pkg/turns/serde"
-	"github.com/go-go-golems/pinocchio/cmd/web-chat/mockruntime"
+	"github.com/go-go-golems/pinocchio/cmd/web-chat/internal/mockruntime"
 	chatapp "github.com/go-go-golems/pinocchio/pkg/chatapp"
 	"github.com/go-go-golems/pinocchio/pkg/chatapp/frontendtools"
 	toolv1 "github.com/go-go-golems/pinocchio/pkg/chatapp/pb/proto/pinocchio/chatapp/frontendtools/v1"

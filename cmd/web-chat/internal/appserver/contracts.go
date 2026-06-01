@@ -1,4 +1,4 @@
-package app
+package appserver
 
 import "github.com/go-go-golems/pinocchio/pkg/chatapp/serverkit"
 
