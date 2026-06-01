@@ -1,10 +1,87 @@
 import type React from 'react';
 import type { ProfileInfo } from '../store/profileApi';
 
-export type RenderEntity = {
+export type JsonObject = Record<string, unknown>;
+
+export type MessageEntityProps = JsonObject & {
+  role?: 'user' | 'assistant' | 'thinking' | string;
+  content?: string;
+  error?: string;
+  streaming?: boolean;
+  status?: string;
+};
+
+export type ToolCallEntityProps = JsonObject & {
+  name?: string;
+  toolName?: string;
+  toolCallId?: string;
+  sessionId?: string;
+  status?: string;
+  input?: unknown;
+  result?: unknown;
+  error?: string;
+  done?: boolean;
+  mode?: string;
+};
+
+export type ToolResultEntityProps = JsonObject & {
+  customKind?: string;
+  result?: unknown;
+  resultRaw?: unknown;
+  error?: string;
+  status?: string;
+  toolName?: string;
+  toolCallId?: string;
+};
+
+export type AgentModeEntityProps = JsonObject & {
+  title?: string;
+  data?: JsonObject;
+  preview?: boolean;
+  messageId?: string;
+};
+
+export type WidgetEntityProps = JsonObject & {
+  instanceId?: string;
+  widgetName?: string;
+  widget_name?: string;
+  status?: string;
+  props?: JsonObject;
+};
+
+export type LogEntityProps = JsonObject & {
+  level?: string;
+  message?: string;
+};
+
+export type GenericEntityProps = JsonObject;
+
+export type RenderEntityKind =
+  | 'message'
+  | 'tool_call'
+  | 'tool_result'
+  | 'agent_mode'
+  | 'agent_mode_preview'
+  | 'widget'
+  | 'widget_instance'
+  | 'ChatFrontendToolCall'
+  | 'ChatWidgetInstance'
+  | 'log'
+  | (string & {});
+
+export type RenderEntityProps =
+  | MessageEntityProps
+  | ToolCallEntityProps
+  | ToolResultEntityProps
+  | AgentModeEntityProps
+  | WidgetEntityProps
+  | LogEntityProps
+  | GenericEntityProps;
+
+export type RenderEntity<K extends RenderEntityKind = RenderEntityKind, P extends RenderEntityProps = RenderEntityProps> = {
   id: string;
-  kind: string;
-  props: any;
+  kind: K;
+  props: P;
   createdAt: number;
   updatedAt?: number;
 };

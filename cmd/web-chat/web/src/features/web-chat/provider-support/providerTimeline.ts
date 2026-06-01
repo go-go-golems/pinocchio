@@ -1,13 +1,14 @@
-import type { RenderEntity } from '../../../webchat/types';
+import type { RenderEntity, RenderEntityProps } from '../../../webchat/types';
 
-export function toRenderEntity(e: any): RenderEntity {
-  const createdAt = Number(e?.createdAt ?? 0);
+export function toRenderEntity(value: unknown): RenderEntity {
+  const e = asRecord(value);
+  const createdAt = Number(e.createdAt ?? 0);
   return {
-    id: String(e?.id ?? ''),
-    kind: String(e?.kind ?? ''),
-    props: e?.props ?? {},
+    id: String(e.id ?? ''),
+    kind: String(e.kind ?? ''),
+    props: asRecord(e.props) as RenderEntityProps,
     createdAt: Number.isFinite(createdAt) ? createdAt : 0,
-    updatedAt: e?.updatedAt ? Number(e.updatedAt) : undefined,
+    updatedAt: e.updatedAt ? Number(e.updatedAt) : undefined,
   };
 }
 
