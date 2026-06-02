@@ -98,7 +98,7 @@ That role is bound to `go-go-golems/pinocchio`, tag push events for refs matchin
 go-go-golems/pinocchio/.github/workflows/buf-ci.yaml@refs/tags/v*
 ```
 
-Do not store the Buf token as a GitHub repository secret unless Vault OIDC is unavailable. The workflow currently reads the token on `v*` tag pushes. A previous version included a previous-release proto-diff gate, but that gate is temporarily disabled while the release path is being debugged.
+Do not store the Buf token as a GitHub repository secret unless Vault OIDC is unavailable. The workflow reads the token on `v*` tag pushes only after detecting that `proto/**/*.proto` changed compared with the previous `v*` tag.
 
 ## Manual publishing
 
@@ -137,11 +137,12 @@ Expected behavior:
 - Pull requests run Buf build, lint, format, and breaking-change checks without reading the Buf token.
 - Pull request breaking checks compare against the published BSR module with `breaking_against_registry: true`. This avoids false file-deletion reports from the initial migration from repository-root paths to `proto` module-root paths.
 - `v*` tag pushes run the same Buf checks.
-- On a `v*` tag push, the workflow authenticates to Vault with GitHub Actions OIDC, reads `kv/data/ci/buf/pinocchio-chatapp token`, and publishes the named module to the BSR.
-- The previous-release `.proto` diff gate is temporarily disabled for release-path debugging; re-enable it once the tag-triggered Vault/BSR path is proven.
+- On a `v*` tag push, the workflow compares `proto/**/*.proto` between the current tag and the previous `v*` tag.
+- If no `.proto` file changed, the workflow skips Vault and skips `buf push`.
+- If a `.proto` file changed, the workflow authenticates to Vault with GitHub Actions OIDC, reads `kv/data/ci/buf/pinocchio-chatapp token`, and publishes the named module to the BSR.
 - Archive is disabled for now because delete events do not need the Buf token and do not have a matching Vault role.
 
-The pull request workflow is path-filtered so it only runs when protobuf, Buf, documentation/license, or workflow files relevant to schema publishing change. Tag pushes for `v*` always start the publish path while debugging the release integration.
+The pull request workflow is path-filtered so it only runs when protobuf, Buf, documentation/license, or workflow files relevant to schema publishing change. Tag pushes for `v*` always start the Buf workflow, then the internal proto-diff gate decides whether Vault and BSR publishing are needed.
 
 ## Compatibility rules
 
