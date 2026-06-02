@@ -153,7 +153,7 @@ func TestResolveBaseInferenceSettings_UsesEnvAndReturnsResolvedUnifiedConfigFile
 }
 
 func TestWebChatCommand_UsesPinocchioConfigNamespaceAndExposesProfileAndAIClientFlags(t *testing.T) {
-	cmdDef, err := NewCommand()
+	cmdDef, err := NewCommand(staticFS)
 	require.NoError(t, err)
 
 	cobraCmd, err := cli.BuildCobraCommand(cmdDef, cli.WithParserConfig(cli.CobraParserConfig{

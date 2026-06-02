@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -9,8 +10,11 @@ import (
 	"testing/fstest"
 
 	gepprofiles "github.com/go-go-golems/geppetto/pkg/engineprofiles"
-	appserver "github.com/go-go-golems/pinocchio/cmd/web-chat/app"
-	"github.com/go-go-golems/pinocchio/cmd/web-chat/profiles"
+	appserver "github.com/go-go-golems/pinocchio/cmd/web-chat/internal/appserver"
+	"github.com/go-go-golems/pinocchio/cmd/web-chat/internal/mockruntime"
+	"github.com/go-go-golems/pinocchio/cmd/web-chat/internal/profiles"
+	webchatruntime "github.com/go-go-golems/pinocchio/cmd/web-chat/internal/runtime"
+	"github.com/go-go-golems/pinocchio/cmd/web-chat/internal/webapp"
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 	"github.com/stretchr/testify/require"
 )
@@ -32,7 +36,7 @@ func newMigratedRuntimeTestServer(t *testing.T) (*appserver.Server, *httptest.Se
 	resolver := profiles.NewRequestResolver(profileRegistry, gepprofiles.MustRegistrySlug(profiles.DefaultRegistrySlug), nil)
 	canonicalApp, err := appserver.NewServer()
 	require.NoError(t, err)
-	appConfigJS, err := runtimeConfigScript("", false)
+	appConfigJS, err := webapp.RuntimeConfigScript("")
 	require.NoError(t, err)
 	appFS := fstest.MapFS{
 		"static/index.html":          {Data: []byte("<html><body>migrated ui</body></html>")},
@@ -40,13 +44,33 @@ func newMigratedRuntimeTestServer(t *testing.T) (*appserver.Server, *httptest.Se
 		"static/dist/index.html":     {Data: []byte("<html><body>built migrated ui</body></html>")},
 		"static/dist/assets/app.css": {Data: []byte("body{}")},
 	}
-	mux := buildAppMux(appFS, appConfigJS, resolver, canonicalApp, false)
+	mux := webapp.NewMux(webapp.MuxOptions{StaticFS: appFS, AppConfigJS: appConfigJS, RequestResolver: resolver, ChatServer: canonicalApp})
 	httpSrv := httptest.NewServer(mux)
 	t.Cleanup(func() {
 		httpSrv.Close()
 		_ = canonicalApp.Close()
 	})
 	return canonicalApp, httpSrv
+}
+
+func TestCanonicalRuntimeResolver_MockParityProfileShortCircuitsNormalComposer(t *testing.T) {
+	profileRegistry, err := profiles.NewInMemoryProfileService(
+		"default",
+		testEngineProfileWithRuntime(t, "default", &infruntime.ProfileRuntime{SystemPrompt: "You are default"}),
+	)
+	require.NoError(t, err)
+	requestResolver := profiles.NewRequestResolver(profileRegistry, gepprofiles.MustRegistrySlug(profiles.DefaultRegistrySlug), nil)
+	composerCalled := false
+	resolver := webchatruntime.NewCanonicalRuntimeResolver(requestResolver, infruntime.RuntimeBuilderFunc(func(ctx context.Context, req infruntime.ConversationRuntimeRequest) (infruntime.ComposedRuntime, error) {
+		composerCalled = true
+		return infruntime.ComposedRuntime{}, nil
+	}))
+
+	composed, err := resolver.Resolve(context.Background(), httptest.NewRequest(http.MethodPost, "/api/chat/sessions/sess/messages", strings.NewReader(`{}`)), "sess", profiles.MockParityProfile, "")
+	require.NoError(t, err)
+	require.NotNil(t, composed)
+	require.IsType(t, &mockruntime.Engine{}, composed.Engine)
+	require.False(t, composerCalled)
 }
 
 func TestBuildAppMux_ServesCanonicalRoutesAndRemovesLegacyRoute(t *testing.T) {
@@ -75,7 +99,9 @@ func TestBuildAppMux_ServesCanonicalRoutesAndRemovesLegacyRoute(t *testing.T) {
 	require.NoError(t, err)
 	defer func() { _ = profilesResp.Body.Close() }()
 	require.Equal(t, http.StatusOK, profilesResp.StatusCode)
-	require.Contains(t, readBody(t, profilesResp), "default")
+	profilesBody := readBody(t, profilesResp)
+	require.Contains(t, profilesBody, "default")
+	require.Contains(t, profilesBody, profiles.MockParityProfile)
 
 	createResp, err := http.Post(httpSrv.URL+"/api/chat/sessions", "application/json", strings.NewReader(`{"profile":"default"}`))
 	require.NoError(t, err)
@@ -105,13 +131,13 @@ func TestBuildRootHandler_MountsCanonicalAppUnderCustomRoot(t *testing.T) {
 	require.NoError(t, err)
 	defer func() { _ = canonicalApp.Close() }()
 
-	appConfigJS, err := runtimeConfigScript("/chat", false)
+	appConfigJS, err := webapp.RuntimeConfigScript("/chat")
 	require.NoError(t, err)
 	appFS := fstest.MapFS{
 		"static/index.html": {Data: []byte("<html><body>rooted ui</body></html>")},
 	}
-	mux := buildAppMux(appFS, appConfigJS, resolver, canonicalApp, false)
-	handler := buildRootHandler("/chat", mux, appConfigJS)
+	mux := webapp.NewMux(webapp.MuxOptions{StaticFS: appFS, AppConfigJS: appConfigJS, RequestResolver: resolver, ChatServer: canonicalApp})
+	handler := webapp.MountRoot("/chat", mux, appConfigJS)
 	httpSrv := httptest.NewServer(handler)
 	defer httpSrv.Close()
 

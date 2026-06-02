@@ -1,0 +1,43 @@
+:where([data-pwchat] [data-part="error-panel"]) {
+  border: 1px solid color-mix(in srgb, var(--pwchat-danger) 45%, transparent);
+  border-radius: var(--pwchat-radius);
+  background: color-mix(in srgb, #140a0a 85%, transparent);
+  box-shadow: 0 6px 28px var(--pwchat-shadow);
+  overflow: hidden;
+}
+
+:where([data-pwchat] [data-part="error-panel-header"]) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-bottom: 1px solid color-mix(in srgb, var(--pwchat-danger) 20%, transparent);
+  background: color-mix(in srgb, #1e0c0c 90%, transparent);
+}
+
+:where([data-pwchat] [data-part="error-panel-body"]) {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+}
+
+:where([data-pwchat] [data-part="error-item"]) {
+  border: 1px solid color-mix(in srgb, var(--pwchat-danger) 20%, transparent);
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: color-mix(in srgb, #140808 65%, transparent);
+}
+
+:where([data-pwchat] [data-part="error-item-message"]) {
+  margin-top: 6px;
+  color: var(--pwchat-fg);
+  font-size: 13px;
+}
+
+:where([data-pwchat] [data-part="error-item-detail"]) {
+  margin-top: 6px;
+  color: var(--pwchat-muted);
+  font-size: 12px;
+  white-space: pre-wrap;
+}

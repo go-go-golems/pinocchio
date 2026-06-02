@@ -1,6 +1,7 @@
-version: v1
-deps:
-  - buf.build/google/protobuf
+version: v2
+modules:
+  - path: proto
+    name: buf.build/go-go-golems/pinocchio-chatapp
 lint:
   use:
     - STANDARD

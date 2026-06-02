@@ -86,10 +86,20 @@ func (e *Engine) runRuntimeInference(ctx context.Context, sid sessionstream.Sess
 		e.publishRunFailed(publishContext(ctx), sid, pub, messageID, "internal runtime sink type assertion failed")
 		return
 	}
+	runCtx := ctx
+	if pending.RuntimeContext != nil {
+		decorated := pending.RuntimeContext(runCtx, sid, messageID, pub)
+		if decorated != nil {
+			runCtx = decorated
+		}
+	}
+
 	sess := gepsession.NewSessionWithID(string(sid))
 	sess.Builder = &enginebuilder.Builder{
-		Base:       runtime.Engine,
-		EventSinks: []gepevents.EventSink{eventSink},
+		Base:         runtime.Engine,
+		Registry:     runtime.Registry,
+		ToolExecutor: runtime.ToolExecutor,
+		EventSinks:   []gepevents.EventSink{eventSink},
 	}
 
 	if pending.InitialTurn != nil {
@@ -125,7 +135,7 @@ func (e *Engine) runRuntimeInference(ctx context.Context, sid sessionstream.Sess
 		}
 	}
 	assistantBlockOffset := countAssistantBlocks(sess.Latest())
-	handle, err := sess.StartInference(ctx)
+	handle, err := sess.StartInference(runCtx)
 	if err != nil {
 		e.publishRunFailed(publishContext(ctx), sid, pub, messageID, err.Error())
 		return

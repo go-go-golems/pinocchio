@@ -1,0 +1,77 @@
+syntax = "proto3";
+
+package pinocchio.chatapp.frontendtools.v1;
+
+import "google/protobuf/struct.proto";
+
+option go_package = "github.com/go-go-golems/pinocchio/pkg/chatapp/pb/proto/pinocchio/chatapp/frontendtools/v1;frontendtoolsv1";
+
+// ToolExecutionMode describes where a named tool is executed.
+enum ToolExecutionMode {
+  TOOL_EXECUTION_MODE_UNSPECIFIED = 0;
+  TOOL_EXECUTION_MODE_FRONTEND_AUTO = 1;
+  TOOL_EXECUTION_MODE_FRONTEND_HUMAN = 2;
+  TOOL_EXECUTION_MODE_BACKEND = 3;
+}
+
+// FrontendToolDescriptor is the browser-advertised capability manifest entry.
+message FrontendToolDescriptor {
+  string name = 1;
+  string description = 2;
+  google.protobuf.Struct input_schema = 3;
+  ToolExecutionMode mode = 4;
+  bool available = 5;
+}
+
+// FrontendToolManifestCommand replaces the known browser-side tool manifest for a session.
+message FrontendToolManifestCommand {
+  repeated FrontendToolDescriptor tools = 1;
+  uint64 revision = 2;
+}
+
+// FrontendToolManifestUpdated records the backend-accepted tool manifest.
+message FrontendToolManifestUpdated {
+  repeated FrontendToolDescriptor tools = 1;
+  uint64 revision = 2;
+}
+
+// FrontendToolCallRequested asks a browser to execute or present one named tool call.
+message FrontendToolCallRequested {
+  string message_id = 1;
+  string tool_call_id = 2;
+  string tool_name = 3;
+  google.protobuf.Struct input = 4;
+  ToolExecutionMode mode = 5;
+  string status = 6;
+}
+
+// FrontendToolResultCommand is submitted by the browser after it executes or rejects a tool call.
+message FrontendToolResultCommand {
+  string tool_call_id = 1;
+  string tool_name = 2;
+  google.protobuf.Struct result = 3;
+  string status = 4;
+  string error = 5;
+}
+
+// FrontendToolResultReceived records the accepted browser result and unblocks the waiting run.
+message FrontendToolResultReceived {
+  string message_id = 1;
+  string tool_call_id = 2;
+  string tool_name = 3;
+  google.protobuf.Struct result = 4;
+  string status = 5;
+  string error = 6;
+}
+
+// FrontendToolCallEntity is the durable timeline representation of a frontend tool call.
+message FrontendToolCallEntity {
+  string tool_call_id = 1;
+  string tool_name = 2;
+  string parent_message_id = 3;
+  ToolExecutionMode mode = 4;
+  string status = 5;
+  google.protobuf.Struct input = 6;
+  google.protobuf.Struct result = 7;
+  string error = 8;
+}

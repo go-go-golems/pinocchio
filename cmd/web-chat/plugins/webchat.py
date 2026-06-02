@@ -142,14 +142,12 @@ for line in sys.stdin:
             backend_origin = f"http://127.0.0.1:{backend_port}"
             profile = env_str("PINOCCHIO_WEBCHAT_PROFILE")
             profile_registries = env_str("PINOCCHIO_WEBCHAT_PROFILE_REGISTRIES")
-            trace_level = env_str("PINOCCHIO_WEBCHAT_TRACE_LEVEL", "off") or "off"
             root = env_str("PINOCCHIO_WEBCHAT_ROOT", "/") or "/"
-            debug_api = env_bool("PINOCCHIO_WEBCHAT_DEBUG_API", True)
 
             log(
                 "config: "
                 + f"backend_port={backend_port} vite_port={vite_port} "
-                + f"profile={profile or '(config/default)'} trace={trace_level}"
+                + f"profile={profile or '(config/default)'}"
             )
 
             emit(
@@ -166,8 +164,6 @@ for line in sys.stdin:
                                 "services.vite.url": f"http://127.0.0.1:{vite_port}",
                                 "webchat.profile": profile,
                                 "webchat.profile_registries": profile_registries,
-                                "webchat.trace_level": trace_level,
-                                "webchat.debug_api": debug_api,
                                 "webchat.root": root,
                                 "env.VITE_BACKEND_ORIGIN": backend_origin,
                             },
@@ -331,9 +327,7 @@ for line in sys.stdin:
             web_dir = os.path.join(app_root, "web")
             profile = str(webchat_cfg.get("profile", "") or "").strip()
             profile_registries = str(webchat_cfg.get("profile_registries", "") or "").strip()
-            trace_level = str(webchat_cfg.get("trace_level", "off") or "off").strip()
             root = str(webchat_cfg.get("root", "/") or "/").strip()
-            debug_api = bool(webchat_cfg.get("debug_api", True))
 
             if not dry_run:
                 os.makedirs(data_dir, exist_ok=True)
@@ -349,11 +343,7 @@ for line in sys.stdin:
                 os.path.join(data_dir, "timeline.sqlite"),
                 "--turns-db",
                 os.path.join(data_dir, "turns.sqlite"),
-                "--geppetto-trace-level",
-                trace_level,
             ]
-            if debug_api:
-                backend_args.append("--debug-api")
             if profile:
                 backend_args.extend(["--profile", profile])
             if profile_registries:

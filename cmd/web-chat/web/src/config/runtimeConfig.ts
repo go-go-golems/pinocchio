@@ -1,6 +1,5 @@
 export interface WebChatRuntimeConfig {
   basePrefix?: string;
-  debugApiEnabled?: boolean;
 }
 
 declare global {

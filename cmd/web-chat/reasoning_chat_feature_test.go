@@ -12,7 +12,7 @@ import (
 
 	gepevents "github.com/go-go-golems/geppetto/pkg/events"
 	"github.com/go-go-golems/geppetto/pkg/turns"
-	appserver "github.com/go-go-golems/pinocchio/cmd/web-chat/app"
+	appserver "github.com/go-go-golems/pinocchio/cmd/web-chat/internal/appserver"
 	chatapp "github.com/go-go-golems/pinocchio/pkg/chatapp"
 	chatappv1 "github.com/go-go-golems/pinocchio/pkg/chatapp/pb/proto/pinocchio/chatapp/v1"
 	"github.com/go-go-golems/pinocchio/pkg/chatapp/plugins"
