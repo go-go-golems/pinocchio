@@ -20,7 +20,7 @@
   },
   "dependencies": {
     "@bufbuild/protobuf": "^2.11.0",
-    "@go-go-golems/chat-provider": "file:../../../../2026-05-29--chatbot-overlay-glm/packages/chat-provider",
+    "@go-go-golems/chat-provider": "^0.1.1",
     "@reduxjs/toolkit": "^2.9.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
