@@ -383,7 +383,53 @@ func TestRuntimeErrorAfterPartialStopsActiveTextSegment(t *testing.T) {
 	require.False(t, textSegment.GetStreaming())
 	require.Equal(t, "chat-msg-1", textSegment.GetParentMessageId())
 	require.True(t, textSegment.GetFinal())
-	require.NotContains(t, ids, "chat-msg-1")
+
+	failure := ids["chat-msg-1"]
+	require.NotNil(t, failure)
+	require.Equal(t, "error", failure.GetRole())
+	require.Equal(t, "failed", failure.GetStatus())
+	require.Contains(t, failure.GetContent(), "provider failed after partial")
+}
+
+func TestRuntimeFailureWithoutTextProjectsRunFailureAndPersistsFailedTurn(t *testing.T) {
+	store := &fakeTurnStore{}
+	engine := NewEngine(WithChunkDelay(time.Millisecond), WithTurnStore(store))
+	hub := newTestHub(t, engine)
+	engine.setPendingRequest("request-immediate-error", PromptRequest{
+		Prompt: "Fail before text",
+		Runtime: &infruntime.ComposedRuntime{
+			Engine:     immediateErrorEngine{},
+			RuntimeKey: "runtime-test",
+		},
+	})
+
+	require.NoError(t, hub.Submit(context.Background(), sessionstream.SessionId("chat-immediate-error"), CommandStartInference, &chatappv1.StartInferenceCommand{RequestId: "request-immediate-error"}))
+	require.NoError(t, engine.WaitIdle(context.Background(), sessionstream.SessionId("chat-immediate-error")))
+
+	snap, err := hub.Snapshot(context.Background(), sessionstream.SessionId("chat-immediate-error"))
+	require.NoError(t, err)
+
+	ids := map[string]*chatappv1.ChatMessageEntity{}
+	for _, entity := range snap.Entities {
+		if entity.Kind != TimelineEntityChatMessage {
+			continue
+		}
+		ids[entity.Id] = entity.Payload.(*chatappv1.ChatMessageEntity)
+	}
+
+	failure := ids["chat-msg-1"]
+	require.NotNil(t, failure)
+	require.Equal(t, "error", failure.GetRole())
+	require.Equal(t, "failed", failure.GetStatus())
+	require.Contains(t, failure.GetContent(), "provider rejected request")
+	require.False(t, failure.GetStreaming())
+	require.True(t, failure.GetFinal())
+
+	require.Len(t, store.saves, 1)
+	require.Equal(t, "failed", store.saves[0].phase)
+	require.Equal(t, "chat-immediate-error", store.saves[0].sessionID)
+	require.Equal(t, "runtime-test", store.saves[0].opts.RuntimeKey)
+	require.Contains(t, store.saves[0].payload, "Fail before text")
 }
 
 func TestRuntimeInterruptAfterPartialStopsActiveTextSegment(t *testing.T) {
@@ -492,7 +538,11 @@ func TestRuntimeErrorAfterClosedTextSegmentDoesNotDuplicateSegmentContent(t *tes
 	require.Equal(t, "finished", finishedSegment.GetStatus())
 	require.False(t, finishedSegment.GetStreaming())
 
-	require.NotContains(t, ids, "chat-msg-1")
+	failure := ids["chat-msg-1"]
+	require.NotNil(t, failure)
+	require.Equal(t, "error", failure.GetRole())
+	require.Equal(t, "failed", failure.GetStatus())
+	require.Contains(t, failure.GetContent(), "provider failed after boundary")
 }
 
 func TestRuntimeMaxIterationsErrorPublishesWarningMessage(t *testing.T) {
@@ -622,6 +672,12 @@ func (maxIterationsErrorEngine) RunInference(context.Context, *turns.Turn) (*tur
 	return nil, errors.New("max iterations (20) reached")
 }
 
+type immediateErrorEngine struct{}
+
+func (immediateErrorEngine) RunInference(_ context.Context, t *turns.Turn) (*turns.Turn, error) {
+	return t, errors.New("provider rejected request")
+}
+
 type recordingHistoryEngine struct {
 	seen      *turns.Turn
 	sessionID string
@@ -637,12 +693,24 @@ func (e *recordingHistoryEngine) RunInference(ctx context.Context, t *turns.Turn
 	return t, nil
 }
 
+type fakeTurnStoreSave struct {
+	convID      string
+	sessionID   string
+	turnID      string
+	phase       string
+	createdAtMs int64
+	payload     string
+	opts        chatstore.TurnSaveOptions
+}
+
 type fakeTurnStore struct {
 	snapshot *chatstore.TurnSnapshot
 	err      error
+	saves    []fakeTurnStoreSave
 }
 
-func (s *fakeTurnStore) Save(context.Context, string, string, string, string, int64, string, chatstore.TurnSaveOptions) error {
+func (s *fakeTurnStore) Save(_ context.Context, convID string, sessionID string, turnID string, phase string, createdAtMs int64, payload string, opts chatstore.TurnSaveOptions) error {
+	s.saves = append(s.saves, fakeTurnStoreSave{convID: convID, sessionID: sessionID, turnID: turnID, phase: phase, createdAtMs: createdAtMs, payload: payload, opts: opts})
 	return nil
 }
 
