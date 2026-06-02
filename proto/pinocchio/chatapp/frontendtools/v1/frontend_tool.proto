@@ -2,9 +2,9 @@ syntax = "proto3";
 
 package pinocchio.chatapp.frontendtools.v1;
 
-option go_package = "github.com/go-go-golems/pinocchio/pkg/chatapp/pb/proto/pinocchio/chatapp/frontendtools/v1;frontendtoolsv1";
-
 import "google/protobuf/struct.proto";
+
+option go_package = "github.com/go-go-golems/pinocchio/pkg/chatapp/pb/proto/pinocchio/chatapp/frontendtools/v1;frontendtoolsv1";
 
 // ToolExecutionMode describes where a named tool is executed.
 enum ToolExecutionMode {

@@ -2,9 +2,9 @@ syntax = "proto3";
 
 package pinocchio.chatapp.widgets.v1;
 
-option go_package = "github.com/go-go-golems/pinocchio/pkg/chatapp/pb/proto/pinocchio/chatapp/widgets/v1;widgetsv1";
-
 import "google/protobuf/struct.proto";
+
+option go_package = "github.com/go-go-golems/pinocchio/pkg/chatapp/pb/proto/pinocchio/chatapp/widgets/v1;widgetsv1";
 
 // WidgetStatus describes the lifecycle stage of a widget instance.
 enum WidgetStatus {
