@@ -432,6 +432,45 @@ func TestRuntimeFailureWithoutTextProjectsRunFailureAndPersistsFailedTurn(t *tes
 	require.Contains(t, store.saves[0].payload, "Fail before text")
 }
 
+func TestRuntimeEventErrorPersistsFailedTurnAfterTerminalSink(t *testing.T) {
+	store := &fakeTurnStore{}
+	engine := NewEngine(WithChunkDelay(time.Millisecond), WithTurnStore(store))
+	hub := newTestHub(t, engine)
+	engine.setPendingRequest("request-event-error", PromptRequest{
+		Prompt: "Fail through event sink",
+		Runtime: &infruntime.ComposedRuntime{
+			Engine:     eventErrorEngine{},
+			RuntimeKey: "runtime-event-error",
+		},
+	})
+
+	require.NoError(t, hub.Submit(context.Background(), sessionstream.SessionId("chat-event-error"), CommandStartInference, &chatappv1.StartInferenceCommand{RequestId: "request-event-error"}))
+	require.NoError(t, engine.WaitIdle(context.Background(), sessionstream.SessionId("chat-event-error")))
+
+	snap, err := hub.Snapshot(context.Background(), sessionstream.SessionId("chat-event-error"))
+	require.NoError(t, err)
+
+	ids := map[string]*chatappv1.ChatMessageEntity{}
+	for _, entity := range snap.Entities {
+		if entity.Kind != TimelineEntityChatMessage {
+			continue
+		}
+		ids[entity.Id] = entity.Payload.(*chatappv1.ChatMessageEntity)
+	}
+
+	failure := ids["chat-msg-1"]
+	require.NotNil(t, failure)
+	require.Equal(t, "error", failure.GetRole())
+	require.Equal(t, "failed", failure.GetStatus())
+	require.Contains(t, failure.GetContent(), "stream sink reported provider failure")
+
+	require.Len(t, store.saves, 1)
+	require.Equal(t, "failed", store.saves[0].phase)
+	require.Equal(t, "chat-event-error", store.saves[0].sessionID)
+	require.Equal(t, "runtime-event-error", store.saves[0].opts.RuntimeKey)
+	require.Contains(t, store.saves[0].payload, "Fail through event sink")
+}
+
 func TestRuntimeInterruptAfterPartialStopsActiveTextSegment(t *testing.T) {
 	engine := NewEngine(WithChunkDelay(time.Millisecond))
 	hub := newTestHub(t, engine)
@@ -676,6 +715,14 @@ type immediateErrorEngine struct{}
 
 func (immediateErrorEngine) RunInference(_ context.Context, t *turns.Turn) (*turns.Turn, error) {
 	return t, errors.New("provider rejected request")
+}
+
+type eventErrorEngine struct{}
+
+func (eventErrorEngine) RunInference(ctx context.Context, t *turns.Turn) (*turns.Turn, error) {
+	meta := gepevents.EventMetadata{SessionID: "sid"}
+	gepevents.PublishEventToContext(ctx, gepevents.NewErrorEvent(meta, errors.New("stream sink reported provider failure")))
+	return t, errors.New("provider failure returned after sink error")
 }
 
 type recordingHistoryEngine struct {

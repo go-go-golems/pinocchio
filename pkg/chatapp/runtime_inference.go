@@ -145,17 +145,19 @@ func (e *Engine) runRuntimeInference(ctx context.Context, sid sessionstream.Sess
 	}
 	output, err := handle.Wait()
 	if err != nil {
-		if !sink.IsTerminal() {
-			if errors.Is(err, context.Canceled) || ctx.Err() != nil {
+		if errors.Is(err, context.Canceled) || ctx.Err() != nil {
+			if !sink.IsTerminal() {
 				_ = sink.finishActiveTextSegment("stopped", "stopped", "")
 				_ = e.publish(publishContext(ctx), sid, pub, EventChatRunStopped, &chatappv1.ChatRunStopped{MessageId: messageID, Status: "stopped", Correlation: runCorrelationInfo(sid, messageID)})
-				return
 			}
+			return
+		}
+		e.persistRuntimeTurnSnapshot(publishContext(ctx), sid, runtime.RuntimeKey, "failed", sess.Latest())
+		if !sink.IsTerminal() {
 			_ = sink.finishActiveTextSegment("failed", "error", "")
 			if isMaxIterationsError(err) {
 				_ = e.publish(publishContext(ctx), sid, pub, EventChatTextSegmentFinished, &chatappv1.ChatTextSegmentFinished{MessageId: runtimeWarningMessageID(messageID), Role: "warning", Prompt: prompt, Text: maxIterationsWarningText(err), Content: maxIterationsWarningText(err), Status: "finished", Streaming: false, Final: true})
 			}
-			e.persistRuntimeTurnSnapshot(publishContext(ctx), sid, runtime.RuntimeKey, "failed", sess.Latest())
 			e.publishRunFailed(publishContext(ctx), sid, pub, messageID, err.Error())
 		}
 		return
