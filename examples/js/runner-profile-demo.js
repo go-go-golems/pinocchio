@@ -1,26 +1,31 @@
 const gp = require("geppetto");
 
-const resolved = gp.profiles.resolve({});
+const settings = gp.inferenceProfiles.resolve();
+const snapshot = settings.toJSON();
 
 console.log("resolved engine profile");
 console.log(JSON.stringify({
-  registrySlug: resolved.registrySlug,
-  profileSlug: resolved.profileSlug,
-  model: resolved.inferenceSettings?.chat?.engine || null,
-  apiType: resolved.inferenceSettings?.chat?.api_type || null,
+  registrySlug: snapshot.provenance?.registrySlug || null,
+  profileSlug: snapshot.provenance?.profileSlug || null,
+  model: snapshot.chat?.engine || null,
+  apiType: snapshot.chat?.api_type || null,
 }, null, 2));
 
-const engine = gp.engines.fromResolvedProfile(resolved);
+const agent = gp.agent()
+  .name("pinocchio-js-demo")
+  .inference(settings)
+  .build();
+const session = agent.session().id("pinocchio-js-demo").build();
 
 console.log("running live inference");
 
-const out = gp.runner.run({
-  engine,
-  prompt: "Say hello in one short sentence.",
-});
+const result = session.next()
+  .system("Answer in one short sentence.")
+  .user("Say hello in one short sentence.")
+  .run({ timeoutMs: 120000 });
 
 console.log("finished run");
 
-const last = out.blocks[out.blocks.length - 1];
-assert(last && typeof last.payload?.text === "string", "expected final assistant text block");
-console.log(last.payload.text);
+const text = String(result.text() || "").trim();
+assert(text !== "", "expected final assistant text");
+console.log(text);
