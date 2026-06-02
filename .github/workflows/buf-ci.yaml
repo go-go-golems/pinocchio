@@ -1,0 +1,37 @@
+name: Buf CI
+
+on:
+  push:
+    paths:
+      - '**.proto'
+      - '**/buf.yaml'
+      - '**/buf.lock'
+      - '**/buf.md'
+      - '**/README.md'
+      - '**/LICENSE'
+      - '.github/workflows/buf-ci.yaml'
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+    paths:
+      - '**.proto'
+      - '**/buf.yaml'
+      - '**/buf.lock'
+      - '**/buf.md'
+      - '**/README.md'
+      - '**/LICENSE'
+      - '.github/workflows/buf-ci.yaml'
+  delete:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  buf:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: bufbuild/buf-action@v1
+        with:
+          version: '1.55.1'
+          token: ${{ secrets.BUF_TOKEN }}
