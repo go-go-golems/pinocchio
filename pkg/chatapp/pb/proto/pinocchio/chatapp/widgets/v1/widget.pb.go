@@ -2,7 +2,7 @@
 // versions:
 // 	protoc-gen-go v1.36.11
 // 	protoc        (unknown)
-// source: proto/pinocchio/chatapp/widgets/v1/widget.proto
+// source: pinocchio/chatapp/widgets/v1/widget.proto
 
 package widgetsv1
 
@@ -62,11 +62,11 @@ func (x WidgetStatus) String() string {
 }
 
 func (WidgetStatus) Descriptor() protoreflect.EnumDescriptor {
-	return file_proto_pinocchio_chatapp_widgets_v1_widget_proto_enumTypes[0].Descriptor()
+	return file_pinocchio_chatapp_widgets_v1_widget_proto_enumTypes[0].Descriptor()
 }
 
 func (WidgetStatus) Type() protoreflect.EnumType {
-	return &file_proto_pinocchio_chatapp_widgets_v1_widget_proto_enumTypes[0]
+	return &file_pinocchio_chatapp_widgets_v1_widget_proto_enumTypes[0]
 }
 
 func (x WidgetStatus) Number() protoreflect.EnumNumber {
@@ -75,7 +75,7 @@ func (x WidgetStatus) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use WidgetStatus.Descriptor instead.
 func (WidgetStatus) EnumDescriptor() ([]byte, []int) {
-	return file_proto_pinocchio_chatapp_widgets_v1_widget_proto_rawDescGZIP(), []int{0}
+	return file_pinocchio_chatapp_widgets_v1_widget_proto_rawDescGZIP(), []int{0}
 }
 
 // WidgetInstanceStarted is the backend event emitted when a widget instance begins.
@@ -92,7 +92,7 @@ type WidgetInstanceStarted struct {
 
 func (x *WidgetInstanceStarted) Reset() {
 	*x = WidgetInstanceStarted{}
-	mi := &file_proto_pinocchio_chatapp_widgets_v1_widget_proto_msgTypes[0]
+	mi := &file_pinocchio_chatapp_widgets_v1_widget_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -104,7 +104,7 @@ func (x *WidgetInstanceStarted) String() string {
 func (*WidgetInstanceStarted) ProtoMessage() {}
 
 func (x *WidgetInstanceStarted) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_pinocchio_chatapp_widgets_v1_widget_proto_msgTypes[0]
+	mi := &file_pinocchio_chatapp_widgets_v1_widget_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -117,7 +117,7 @@ func (x *WidgetInstanceStarted) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WidgetInstanceStarted.ProtoReflect.Descriptor instead.
 func (*WidgetInstanceStarted) Descriptor() ([]byte, []int) {
-	return file_proto_pinocchio_chatapp_widgets_v1_widget_proto_rawDescGZIP(), []int{0}
+	return file_pinocchio_chatapp_widgets_v1_widget_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *WidgetInstanceStarted) GetInstanceId() string {
@@ -169,7 +169,7 @@ type WidgetInstancePatched struct {
 
 func (x *WidgetInstancePatched) Reset() {
 	*x = WidgetInstancePatched{}
-	mi := &file_proto_pinocchio_chatapp_widgets_v1_widget_proto_msgTypes[1]
+	mi := &file_pinocchio_chatapp_widgets_v1_widget_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -181,7 +181,7 @@ func (x *WidgetInstancePatched) String() string {
 func (*WidgetInstancePatched) ProtoMessage() {}
 
 func (x *WidgetInstancePatched) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_pinocchio_chatapp_widgets_v1_widget_proto_msgTypes[1]
+	mi := &file_pinocchio_chatapp_widgets_v1_widget_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -194,7 +194,7 @@ func (x *WidgetInstancePatched) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WidgetInstancePatched.ProtoReflect.Descriptor instead.
 func (*WidgetInstancePatched) Descriptor() ([]byte, []int) {
-	return file_proto_pinocchio_chatapp_widgets_v1_widget_proto_rawDescGZIP(), []int{1}
+	return file_pinocchio_chatapp_widgets_v1_widget_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *WidgetInstancePatched) GetInstanceId() string {
@@ -243,7 +243,7 @@ type WidgetInstanceCompleted struct {
 
 func (x *WidgetInstanceCompleted) Reset() {
 	*x = WidgetInstanceCompleted{}
-	mi := &file_proto_pinocchio_chatapp_widgets_v1_widget_proto_msgTypes[2]
+	mi := &file_pinocchio_chatapp_widgets_v1_widget_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -255,7 +255,7 @@ func (x *WidgetInstanceCompleted) String() string {
 func (*WidgetInstanceCompleted) ProtoMessage() {}
 
 func (x *WidgetInstanceCompleted) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_pinocchio_chatapp_widgets_v1_widget_proto_msgTypes[2]
+	mi := &file_pinocchio_chatapp_widgets_v1_widget_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -268,7 +268,7 @@ func (x *WidgetInstanceCompleted) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WidgetInstanceCompleted.ProtoReflect.Descriptor instead.
 func (*WidgetInstanceCompleted) Descriptor() ([]byte, []int) {
-	return file_proto_pinocchio_chatapp_widgets_v1_widget_proto_rawDescGZIP(), []int{2}
+	return file_pinocchio_chatapp_widgets_v1_widget_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *WidgetInstanceCompleted) GetInstanceId() string {
@@ -295,7 +295,7 @@ type WidgetInstanceRemoved struct {
 
 func (x *WidgetInstanceRemoved) Reset() {
 	*x = WidgetInstanceRemoved{}
-	mi := &file_proto_pinocchio_chatapp_widgets_v1_widget_proto_msgTypes[3]
+	mi := &file_pinocchio_chatapp_widgets_v1_widget_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -307,7 +307,7 @@ func (x *WidgetInstanceRemoved) String() string {
 func (*WidgetInstanceRemoved) ProtoMessage() {}
 
 func (x *WidgetInstanceRemoved) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_pinocchio_chatapp_widgets_v1_widget_proto_msgTypes[3]
+	mi := &file_pinocchio_chatapp_widgets_v1_widget_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -320,7 +320,7 @@ func (x *WidgetInstanceRemoved) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WidgetInstanceRemoved.ProtoReflect.Descriptor instead.
 func (*WidgetInstanceRemoved) Descriptor() ([]byte, []int) {
-	return file_proto_pinocchio_chatapp_widgets_v1_widget_proto_rawDescGZIP(), []int{3}
+	return file_pinocchio_chatapp_widgets_v1_widget_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *WidgetInstanceRemoved) GetInstanceId() string {
@@ -343,7 +343,7 @@ type WidgetActionCommand struct {
 
 func (x *WidgetActionCommand) Reset() {
 	*x = WidgetActionCommand{}
-	mi := &file_proto_pinocchio_chatapp_widgets_v1_widget_proto_msgTypes[4]
+	mi := &file_pinocchio_chatapp_widgets_v1_widget_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -355,7 +355,7 @@ func (x *WidgetActionCommand) String() string {
 func (*WidgetActionCommand) ProtoMessage() {}
 
 func (x *WidgetActionCommand) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_pinocchio_chatapp_widgets_v1_widget_proto_msgTypes[4]
+	mi := &file_pinocchio_chatapp_widgets_v1_widget_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -368,7 +368,7 @@ func (x *WidgetActionCommand) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WidgetActionCommand.ProtoReflect.Descriptor instead.
 func (*WidgetActionCommand) Descriptor() ([]byte, []int) {
-	return file_proto_pinocchio_chatapp_widgets_v1_widget_proto_rawDescGZIP(), []int{4}
+	return file_pinocchio_chatapp_widgets_v1_widget_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *WidgetActionCommand) GetInstanceId() string {
@@ -413,7 +413,7 @@ type WidgetInstanceEntity struct {
 
 func (x *WidgetInstanceEntity) Reset() {
 	*x = WidgetInstanceEntity{}
-	mi := &file_proto_pinocchio_chatapp_widgets_v1_widget_proto_msgTypes[5]
+	mi := &file_pinocchio_chatapp_widgets_v1_widget_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -425,7 +425,7 @@ func (x *WidgetInstanceEntity) String() string {
 func (*WidgetInstanceEntity) ProtoMessage() {}
 
 func (x *WidgetInstanceEntity) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_pinocchio_chatapp_widgets_v1_widget_proto_msgTypes[5]
+	mi := &file_pinocchio_chatapp_widgets_v1_widget_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -438,7 +438,7 @@ func (x *WidgetInstanceEntity) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WidgetInstanceEntity.ProtoReflect.Descriptor instead.
 func (*WidgetInstanceEntity) Descriptor() ([]byte, []int) {
-	return file_proto_pinocchio_chatapp_widgets_v1_widget_proto_rawDescGZIP(), []int{5}
+	return file_pinocchio_chatapp_widgets_v1_widget_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *WidgetInstanceEntity) GetInstanceId() string {
@@ -476,11 +476,11 @@ func (x *WidgetInstanceEntity) GetProps() *structpb.Struct {
 	return nil
 }
 
-var File_proto_pinocchio_chatapp_widgets_v1_widget_proto protoreflect.FileDescriptor
+var File_pinocchio_chatapp_widgets_v1_widget_proto protoreflect.FileDescriptor
 
-const file_proto_pinocchio_chatapp_widgets_v1_widget_proto_rawDesc = "" +
+const file_pinocchio_chatapp_widgets_v1_widget_proto_rawDesc = "" +
 	"\n" +
-	"/proto/pinocchio/chatapp/widgets/v1/widget.proto\x12\x1cpinocchio.chatapp.widgets.v1\x1a\x1cgoogle/protobuf/struct.proto\"\xf8\x01\n" +
+	")pinocchio/chatapp/widgets/v1/widget.proto\x12\x1cpinocchio.chatapp.widgets.v1\x1a\x1cgoogle/protobuf/struct.proto\"\xf8\x01\n" +
 	"\x15WidgetInstanceStarted\x12\x1f\n" +
 	"\vinstance_id\x18\x01 \x01(\tR\n" +
 	"instanceId\x12\x1f\n" +
@@ -529,20 +529,20 @@ const file_proto_pinocchio_chatapp_widgets_v1_widget_proto_rawDesc = "" +
 	"\x13WIDGET_STATUS_ERROR\x10\x04B_Z]github.com/go-go-golems/pinocchio/pkg/chatapp/pb/proto/pinocchio/chatapp/widgets/v1;widgetsv1b\x06proto3"
 
 var (
-	file_proto_pinocchio_chatapp_widgets_v1_widget_proto_rawDescOnce sync.Once
-	file_proto_pinocchio_chatapp_widgets_v1_widget_proto_rawDescData []byte
+	file_pinocchio_chatapp_widgets_v1_widget_proto_rawDescOnce sync.Once
+	file_pinocchio_chatapp_widgets_v1_widget_proto_rawDescData []byte
 )
 
-func file_proto_pinocchio_chatapp_widgets_v1_widget_proto_rawDescGZIP() []byte {
-	file_proto_pinocchio_chatapp_widgets_v1_widget_proto_rawDescOnce.Do(func() {
-		file_proto_pinocchio_chatapp_widgets_v1_widget_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_proto_pinocchio_chatapp_widgets_v1_widget_proto_rawDesc), len(file_proto_pinocchio_chatapp_widgets_v1_widget_proto_rawDesc)))
+func file_pinocchio_chatapp_widgets_v1_widget_proto_rawDescGZIP() []byte {
+	file_pinocchio_chatapp_widgets_v1_widget_proto_rawDescOnce.Do(func() {
+		file_pinocchio_chatapp_widgets_v1_widget_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_pinocchio_chatapp_widgets_v1_widget_proto_rawDesc), len(file_pinocchio_chatapp_widgets_v1_widget_proto_rawDesc)))
 	})
-	return file_proto_pinocchio_chatapp_widgets_v1_widget_proto_rawDescData
+	return file_pinocchio_chatapp_widgets_v1_widget_proto_rawDescData
 }
 
-var file_proto_pinocchio_chatapp_widgets_v1_widget_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_proto_pinocchio_chatapp_widgets_v1_widget_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
-var file_proto_pinocchio_chatapp_widgets_v1_widget_proto_goTypes = []any{
+var file_pinocchio_chatapp_widgets_v1_widget_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
+var file_pinocchio_chatapp_widgets_v1_widget_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
+var file_pinocchio_chatapp_widgets_v1_widget_proto_goTypes = []any{
 	(WidgetStatus)(0),               // 0: pinocchio.chatapp.widgets.v1.WidgetStatus
 	(*WidgetInstanceStarted)(nil),   // 1: pinocchio.chatapp.widgets.v1.WidgetInstanceStarted
 	(*WidgetInstancePatched)(nil),   // 2: pinocchio.chatapp.widgets.v1.WidgetInstancePatched
@@ -552,7 +552,7 @@ var file_proto_pinocchio_chatapp_widgets_v1_widget_proto_goTypes = []any{
 	(*WidgetInstanceEntity)(nil),    // 6: pinocchio.chatapp.widgets.v1.WidgetInstanceEntity
 	(*structpb.Struct)(nil),         // 7: google.protobuf.Struct
 }
-var file_proto_pinocchio_chatapp_widgets_v1_widget_proto_depIdxs = []int32{
+var file_pinocchio_chatapp_widgets_v1_widget_proto_depIdxs = []int32{
 	0, // 0: pinocchio.chatapp.widgets.v1.WidgetInstanceStarted.status:type_name -> pinocchio.chatapp.widgets.v1.WidgetStatus
 	7, // 1: pinocchio.chatapp.widgets.v1.WidgetInstanceStarted.props:type_name -> google.protobuf.Struct
 	0, // 2: pinocchio.chatapp.widgets.v1.WidgetInstancePatched.status:type_name -> pinocchio.chatapp.widgets.v1.WidgetStatus
@@ -568,27 +568,27 @@ var file_proto_pinocchio_chatapp_widgets_v1_widget_proto_depIdxs = []int32{
 	0, // [0:8] is the sub-list for field type_name
 }
 
-func init() { file_proto_pinocchio_chatapp_widgets_v1_widget_proto_init() }
-func file_proto_pinocchio_chatapp_widgets_v1_widget_proto_init() {
-	if File_proto_pinocchio_chatapp_widgets_v1_widget_proto != nil {
+func init() { file_pinocchio_chatapp_widgets_v1_widget_proto_init() }
+func file_pinocchio_chatapp_widgets_v1_widget_proto_init() {
+	if File_pinocchio_chatapp_widgets_v1_widget_proto != nil {
 		return
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_pinocchio_chatapp_widgets_v1_widget_proto_rawDesc), len(file_proto_pinocchio_chatapp_widgets_v1_widget_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_pinocchio_chatapp_widgets_v1_widget_proto_rawDesc), len(file_pinocchio_chatapp_widgets_v1_widget_proto_rawDesc)),
 			NumEnums:      1,
 			NumMessages:   6,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
-		GoTypes:           file_proto_pinocchio_chatapp_widgets_v1_widget_proto_goTypes,
-		DependencyIndexes: file_proto_pinocchio_chatapp_widgets_v1_widget_proto_depIdxs,
-		EnumInfos:         file_proto_pinocchio_chatapp_widgets_v1_widget_proto_enumTypes,
-		MessageInfos:      file_proto_pinocchio_chatapp_widgets_v1_widget_proto_msgTypes,
+		GoTypes:           file_pinocchio_chatapp_widgets_v1_widget_proto_goTypes,
+		DependencyIndexes: file_pinocchio_chatapp_widgets_v1_widget_proto_depIdxs,
+		EnumInfos:         file_pinocchio_chatapp_widgets_v1_widget_proto_enumTypes,
+		MessageInfos:      file_pinocchio_chatapp_widgets_v1_widget_proto_msgTypes,
 	}.Build()
-	File_proto_pinocchio_chatapp_widgets_v1_widget_proto = out.File
-	file_proto_pinocchio_chatapp_widgets_v1_widget_proto_goTypes = nil
-	file_proto_pinocchio_chatapp_widgets_v1_widget_proto_depIdxs = nil
+	File_pinocchio_chatapp_widgets_v1_widget_proto = out.File
+	file_pinocchio_chatapp_widgets_v1_widget_proto_goTypes = nil
+	file_pinocchio_chatapp_widgets_v1_widget_proto_depIdxs = nil
 }

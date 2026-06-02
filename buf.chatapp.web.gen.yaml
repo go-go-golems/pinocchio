@@ -1,7 +1,7 @@
 version: v1
 plugins:
   - plugin: buf.build/bufbuild/es
-    out: cmd/web-chat/web/src/generated/chatapp
+    out: cmd/web-chat/web/src/generated/chatapp/proto
     opt:
       - target=ts
       - import_extension=none

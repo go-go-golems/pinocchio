@@ -2,7 +2,7 @@
 // versions:
 // 	protoc-gen-go v1.36.11
 // 	protoc        (unknown)
-// source: proto/pinocchio/chatapp/frontendtools/v1/frontend_tool.proto
+// source: pinocchio/chatapp/frontendtools/v1/frontend_tool.proto
 
 package frontendtoolsv1
 
@@ -59,11 +59,11 @@ func (x ToolExecutionMode) String() string {
 }
 
 func (ToolExecutionMode) Descriptor() protoreflect.EnumDescriptor {
-	return file_proto_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_enumTypes[0].Descriptor()
+	return file_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_enumTypes[0].Descriptor()
 }
 
 func (ToolExecutionMode) Type() protoreflect.EnumType {
-	return &file_proto_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_enumTypes[0]
+	return &file_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_enumTypes[0]
 }
 
 func (x ToolExecutionMode) Number() protoreflect.EnumNumber {
@@ -72,7 +72,7 @@ func (x ToolExecutionMode) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use ToolExecutionMode.Descriptor instead.
 func (ToolExecutionMode) EnumDescriptor() ([]byte, []int) {
-	return file_proto_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_rawDescGZIP(), []int{0}
+	return file_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_rawDescGZIP(), []int{0}
 }
 
 // FrontendToolDescriptor is the browser-advertised capability manifest entry.
@@ -89,7 +89,7 @@ type FrontendToolDescriptor struct {
 
 func (x *FrontendToolDescriptor) Reset() {
 	*x = FrontendToolDescriptor{}
-	mi := &file_proto_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_msgTypes[0]
+	mi := &file_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -101,7 +101,7 @@ func (x *FrontendToolDescriptor) String() string {
 func (*FrontendToolDescriptor) ProtoMessage() {}
 
 func (x *FrontendToolDescriptor) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_msgTypes[0]
+	mi := &file_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -114,7 +114,7 @@ func (x *FrontendToolDescriptor) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FrontendToolDescriptor.ProtoReflect.Descriptor instead.
 func (*FrontendToolDescriptor) Descriptor() ([]byte, []int) {
-	return file_proto_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_rawDescGZIP(), []int{0}
+	return file_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *FrontendToolDescriptor) GetName() string {
@@ -163,7 +163,7 @@ type FrontendToolManifestCommand struct {
 
 func (x *FrontendToolManifestCommand) Reset() {
 	*x = FrontendToolManifestCommand{}
-	mi := &file_proto_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_msgTypes[1]
+	mi := &file_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -175,7 +175,7 @@ func (x *FrontendToolManifestCommand) String() string {
 func (*FrontendToolManifestCommand) ProtoMessage() {}
 
 func (x *FrontendToolManifestCommand) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_msgTypes[1]
+	mi := &file_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -188,7 +188,7 @@ func (x *FrontendToolManifestCommand) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FrontendToolManifestCommand.ProtoReflect.Descriptor instead.
 func (*FrontendToolManifestCommand) Descriptor() ([]byte, []int) {
-	return file_proto_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_rawDescGZIP(), []int{1}
+	return file_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *FrontendToolManifestCommand) GetTools() []*FrontendToolDescriptor {
@@ -216,7 +216,7 @@ type FrontendToolManifestUpdated struct {
 
 func (x *FrontendToolManifestUpdated) Reset() {
 	*x = FrontendToolManifestUpdated{}
-	mi := &file_proto_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_msgTypes[2]
+	mi := &file_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -228,7 +228,7 @@ func (x *FrontendToolManifestUpdated) String() string {
 func (*FrontendToolManifestUpdated) ProtoMessage() {}
 
 func (x *FrontendToolManifestUpdated) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_msgTypes[2]
+	mi := &file_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -241,7 +241,7 @@ func (x *FrontendToolManifestUpdated) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FrontendToolManifestUpdated.ProtoReflect.Descriptor instead.
 func (*FrontendToolManifestUpdated) Descriptor() ([]byte, []int) {
-	return file_proto_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_rawDescGZIP(), []int{2}
+	return file_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *FrontendToolManifestUpdated) GetTools() []*FrontendToolDescriptor {
@@ -273,7 +273,7 @@ type FrontendToolCallRequested struct {
 
 func (x *FrontendToolCallRequested) Reset() {
 	*x = FrontendToolCallRequested{}
-	mi := &file_proto_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_msgTypes[3]
+	mi := &file_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -285,7 +285,7 @@ func (x *FrontendToolCallRequested) String() string {
 func (*FrontendToolCallRequested) ProtoMessage() {}
 
 func (x *FrontendToolCallRequested) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_msgTypes[3]
+	mi := &file_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -298,7 +298,7 @@ func (x *FrontendToolCallRequested) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FrontendToolCallRequested.ProtoReflect.Descriptor instead.
 func (*FrontendToolCallRequested) Descriptor() ([]byte, []int) {
-	return file_proto_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_rawDescGZIP(), []int{3}
+	return file_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *FrontendToolCallRequested) GetMessageId() string {
@@ -357,7 +357,7 @@ type FrontendToolResultCommand struct {
 
 func (x *FrontendToolResultCommand) Reset() {
 	*x = FrontendToolResultCommand{}
-	mi := &file_proto_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_msgTypes[4]
+	mi := &file_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -369,7 +369,7 @@ func (x *FrontendToolResultCommand) String() string {
 func (*FrontendToolResultCommand) ProtoMessage() {}
 
 func (x *FrontendToolResultCommand) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_msgTypes[4]
+	mi := &file_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -382,7 +382,7 @@ func (x *FrontendToolResultCommand) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FrontendToolResultCommand.ProtoReflect.Descriptor instead.
 func (*FrontendToolResultCommand) Descriptor() ([]byte, []int) {
-	return file_proto_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_rawDescGZIP(), []int{4}
+	return file_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *FrontendToolResultCommand) GetToolCallId() string {
@@ -435,7 +435,7 @@ type FrontendToolResultReceived struct {
 
 func (x *FrontendToolResultReceived) Reset() {
 	*x = FrontendToolResultReceived{}
-	mi := &file_proto_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_msgTypes[5]
+	mi := &file_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -447,7 +447,7 @@ func (x *FrontendToolResultReceived) String() string {
 func (*FrontendToolResultReceived) ProtoMessage() {}
 
 func (x *FrontendToolResultReceived) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_msgTypes[5]
+	mi := &file_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -460,7 +460,7 @@ func (x *FrontendToolResultReceived) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FrontendToolResultReceived.ProtoReflect.Descriptor instead.
 func (*FrontendToolResultReceived) Descriptor() ([]byte, []int) {
-	return file_proto_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_rawDescGZIP(), []int{5}
+	return file_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *FrontendToolResultReceived) GetMessageId() string {
@@ -522,7 +522,7 @@ type FrontendToolCallEntity struct {
 
 func (x *FrontendToolCallEntity) Reset() {
 	*x = FrontendToolCallEntity{}
-	mi := &file_proto_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_msgTypes[6]
+	mi := &file_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -534,7 +534,7 @@ func (x *FrontendToolCallEntity) String() string {
 func (*FrontendToolCallEntity) ProtoMessage() {}
 
 func (x *FrontendToolCallEntity) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_msgTypes[6]
+	mi := &file_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -547,7 +547,7 @@ func (x *FrontendToolCallEntity) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FrontendToolCallEntity.ProtoReflect.Descriptor instead.
 func (*FrontendToolCallEntity) Descriptor() ([]byte, []int) {
-	return file_proto_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_rawDescGZIP(), []int{6}
+	return file_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *FrontendToolCallEntity) GetToolCallId() string {
@@ -606,11 +606,11 @@ func (x *FrontendToolCallEntity) GetError() string {
 	return ""
 }
 
-var File_proto_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto protoreflect.FileDescriptor
+var File_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto protoreflect.FileDescriptor
 
-const file_proto_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_rawDesc = "" +
+const file_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_rawDesc = "" +
 	"\n" +
-	"<proto/pinocchio/chatapp/frontendtools/v1/frontend_tool.proto\x12\"pinocchio.chatapp.frontendtools.v1\x1a\x1cgoogle/protobuf/struct.proto\"\xf3\x01\n" +
+	"6pinocchio/chatapp/frontendtools/v1/frontend_tool.proto\x12\"pinocchio.chatapp.frontendtools.v1\x1a\x1cgoogle/protobuf/struct.proto\"\xf3\x01\n" +
 	"\x16FrontendToolDescriptor\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12 \n" +
 	"\vdescription\x18\x02 \x01(\tR\vdescription\x12:\n" +
@@ -665,20 +665,20 @@ const file_proto_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_rawDesc 
 	"\x1bTOOL_EXECUTION_MODE_BACKEND\x10\x03BkZigithub.com/go-go-golems/pinocchio/pkg/chatapp/pb/proto/pinocchio/chatapp/frontendtools/v1;frontendtoolsv1b\x06proto3"
 
 var (
-	file_proto_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_rawDescOnce sync.Once
-	file_proto_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_rawDescData []byte
+	file_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_rawDescOnce sync.Once
+	file_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_rawDescData []byte
 )
 
-func file_proto_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_rawDescGZIP() []byte {
-	file_proto_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_rawDescOnce.Do(func() {
-		file_proto_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_proto_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_rawDesc), len(file_proto_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_rawDesc)))
+func file_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_rawDescGZIP() []byte {
+	file_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_rawDescOnce.Do(func() {
+		file_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_rawDesc), len(file_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_rawDesc)))
 	})
-	return file_proto_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_rawDescData
+	return file_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_rawDescData
 }
 
-var file_proto_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_proto_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
-var file_proto_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_goTypes = []any{
+var file_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
+var file_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
+var file_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_goTypes = []any{
 	(ToolExecutionMode)(0),              // 0: pinocchio.chatapp.frontendtools.v1.ToolExecutionMode
 	(*FrontendToolDescriptor)(nil),      // 1: pinocchio.chatapp.frontendtools.v1.FrontendToolDescriptor
 	(*FrontendToolManifestCommand)(nil), // 2: pinocchio.chatapp.frontendtools.v1.FrontendToolManifestCommand
@@ -689,7 +689,7 @@ var file_proto_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_goTypes = 
 	(*FrontendToolCallEntity)(nil),      // 7: pinocchio.chatapp.frontendtools.v1.FrontendToolCallEntity
 	(*structpb.Struct)(nil),             // 8: google.protobuf.Struct
 }
-var file_proto_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_depIdxs = []int32{
+var file_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_depIdxs = []int32{
 	8,  // 0: pinocchio.chatapp.frontendtools.v1.FrontendToolDescriptor.input_schema:type_name -> google.protobuf.Struct
 	0,  // 1: pinocchio.chatapp.frontendtools.v1.FrontendToolDescriptor.mode:type_name -> pinocchio.chatapp.frontendtools.v1.ToolExecutionMode
 	1,  // 2: pinocchio.chatapp.frontendtools.v1.FrontendToolManifestCommand.tools:type_name -> pinocchio.chatapp.frontendtools.v1.FrontendToolDescriptor
@@ -708,27 +708,27 @@ var file_proto_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_depIdxs = 
 	0,  // [0:11] is the sub-list for field type_name
 }
 
-func init() { file_proto_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_init() }
-func file_proto_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_init() {
-	if File_proto_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto != nil {
+func init() { file_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_init() }
+func file_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_init() {
+	if File_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto != nil {
 		return
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_rawDesc), len(file_proto_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_rawDesc), len(file_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_rawDesc)),
 			NumEnums:      1,
 			NumMessages:   7,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
-		GoTypes:           file_proto_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_goTypes,
-		DependencyIndexes: file_proto_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_depIdxs,
-		EnumInfos:         file_proto_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_enumTypes,
-		MessageInfos:      file_proto_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_msgTypes,
+		GoTypes:           file_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_goTypes,
+		DependencyIndexes: file_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_depIdxs,
+		EnumInfos:         file_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_enumTypes,
+		MessageInfos:      file_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_msgTypes,
 	}.Build()
-	File_proto_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto = out.File
-	file_proto_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_goTypes = nil
-	file_proto_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_depIdxs = nil
+	File_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto = out.File
+	file_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_goTypes = nil
+	file_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_depIdxs = nil
 }
