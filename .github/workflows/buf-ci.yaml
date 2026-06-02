@@ -62,7 +62,7 @@ jobs:
 
       - name: Read Buf token from Vault
         if: github.event_name == 'push' && github.ref_type == 'tag' && steps.proto_changes.outputs.changed == 'true'
-        uses: hashicorp/vault-action@v3
+        uses: hashicorp/vault-action@v4
         with:
           url: https://vault.yolo.scapegoat.dev
           method: jwt
