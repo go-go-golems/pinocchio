@@ -79,7 +79,26 @@ buf registry module create buf.build/go-go-golems/pinocchio-chatapp \
 
 If the organization wants schemas private initially, use `--visibility private` and update consumers/auth accordingly.
 
-The GitHub Actions workflow expects a repository secret named `BUF_TOKEN`. Create the token in the Buf Schema Registry and add it to GitHub repository secrets before relying on automated pushes.
+The GitHub Actions workflow reads the Buf token from Vault through GitHub Actions OIDC. Store the token at:
+
+```text
+kv/ci/buf/pinocchio-chatapp
+  token = <Buf API token>
+```
+
+The corresponding Vault JWT role is:
+
+```text
+bsr-pinocchio-chatapp-publisher
+```
+
+That role is bound to `go-go-golems/pinocchio`, `refs/heads/main`, push events, and this workflow:
+
+```text
+go-go-golems/pinocchio/.github/workflows/buf-ci.yaml@refs/heads/main
+```
+
+Do not store the Buf token as a GitHub repository secret unless Vault OIDC is unavailable.
 
 ## Manual publishing
 
@@ -111,13 +130,13 @@ Record that commit ID in release notes when a frontend package depends on it.
 
 ## CI behavior
 
-`.github/workflows/buf-ci.yaml` uses `bufbuild/buf-action@v1`.
+`.github/workflows/buf-ci.yaml` uses `hashicorp/vault-action@v3` and `bufbuild/buf-action@v1`.
 
 Expected behavior:
 
-- Pull requests run Buf build, lint, format, and breaking-change checks.
-- Pushes publish named modules to the BSR using `${{ secrets.BUF_TOKEN }}`.
-- Delete events allow Buf labels for deleted branches or tags to be archived.
+- Pull requests run Buf build, lint, format, and breaking-change checks without reading the Buf token.
+- Pushes to `refs/heads/main` authenticate to Vault with GitHub Actions OIDC, read `kv/data/ci/buf/pinocchio-chatapp token`, and publish the named module to the BSR.
+- Archive is disabled for now because delete events do not need the Buf token and do not have a matching Vault role.
 
 The workflow is path-filtered so it only runs when protobuf, Buf, documentation/license, or workflow files relevant to schema publishing change.
 
