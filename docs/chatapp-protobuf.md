@@ -92,13 +92,13 @@ The corresponding Vault JWT role is:
 bsr-pinocchio-chatapp-publisher
 ```
 
-That role is bound to `go-go-golems/pinocchio`, `refs/heads/main`, push events, and this workflow:
+That role is bound to `go-go-golems/pinocchio`, release events, release tag refs matching `refs/tags/v*`, and this workflow running from a release tag:
 
 ```text
-go-go-golems/pinocchio/.github/workflows/buf-ci.yaml@refs/heads/main
+go-go-golems/pinocchio/.github/workflows/buf-ci.yaml@refs/tags/v*
 ```
 
-Do not store the Buf token as a GitHub repository secret unless Vault OIDC is unavailable.
+Do not store the Buf token as a GitHub repository secret unless Vault OIDC is unavailable. The workflow reads the token only after it detects `.proto` changes compared with the previous non-draft GitHub release.
 
 ## Manual publishing
 
@@ -135,10 +135,14 @@ Record that commit ID in release notes when a frontend package depends on it.
 Expected behavior:
 
 - Pull requests run Buf build, lint, format, and breaking-change checks without reading the Buf token.
-- Pushes to `refs/heads/main` authenticate to Vault with GitHub Actions OIDC, read `kv/data/ci/buf/pinocchio-chatapp token`, and publish the named module to the BSR.
+- Pull request breaking checks compare against the published BSR module with `breaking_against_registry: true`. This avoids false file-deletion reports from the initial migration from repository-root paths to `proto` module-root paths.
+- Published GitHub releases run the same Buf checks.
+- On a release, the workflow compares `proto/**/*.proto` between the current release tag and the previous non-draft GitHub release tag.
+- If no `.proto` file changed, the release workflow skips Vault and skips `buf push`.
+- If a `.proto` file changed, the release workflow authenticates to Vault with GitHub Actions OIDC, reads `kv/data/ci/buf/pinocchio-chatapp token`, and publishes the named module to the BSR.
 - Archive is disabled for now because delete events do not need the Buf token and do not have a matching Vault role.
 
-The workflow is path-filtered so it only runs when protobuf, Buf, documentation/license, or workflow files relevant to schema publishing change.
+The pull request workflow is path-filtered so it only runs when protobuf, Buf, documentation/license, or workflow files relevant to schema publishing change. The release workflow always starts on published releases, then the internal proto-diff gate decides whether to publish.
 
 ## Compatibility rules
 
