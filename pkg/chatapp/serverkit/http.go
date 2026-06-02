@@ -65,6 +65,15 @@ func ParseSessionPathWithPrefix(path string, prefix string) (string, string, boo
 	}
 }
 
+const maxInt64AsUint64 = uint64(1<<63 - 1)
+
+func uint64ToInt64OrZero(v uint64) int64 {
+	if v > maxInt64AsUint64 {
+		return 0
+	}
+	return int64(v)
+}
+
 func EncodeSnapshotResponse(snap sessionstream.Snapshot, statusFn func([]SnapshotEntity) string) SessionSnapshotResponse {
 	resp := SessionSnapshotResponse{
 		SessionID:       string(snap.SessionId),
@@ -79,7 +88,7 @@ func EncodeSnapshotResponse(snap sessionstream.Snapshot, statusFn func([]Snapsho
 			LastEventOrdinal: fmt.Sprintf("%d", entity.LastEventOrdinal),
 			Tombstone:        entity.Tombstone,
 			Payload:          EncodeProtoJSON(entity.Payload),
-			CreatedAt:        int64(entity.CreatedOrdinal),
+			CreatedAt:        uint64ToInt64OrZero(entity.CreatedOrdinal),
 		})
 	}
 	if statusFn != nil {
