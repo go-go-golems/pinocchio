@@ -92,13 +92,13 @@ The corresponding Vault JWT role is:
 bsr-pinocchio-chatapp-publisher
 ```
 
-That role is bound to `go-go-golems/pinocchio`, release events, release tag refs matching `refs/tags/v*`, and this workflow running from a release tag:
+That role is bound to `go-go-golems/pinocchio`, tag push events for refs matching `refs/tags/v*`, and this workflow running from a tag:
 
 ```text
 go-go-golems/pinocchio/.github/workflows/buf-ci.yaml@refs/tags/v*
 ```
 
-Do not store the Buf token as a GitHub repository secret unless Vault OIDC is unavailable. The workflow reads the token only after it detects `.proto` changes compared with the previous non-draft GitHub release.
+Do not store the Buf token as a GitHub repository secret unless Vault OIDC is unavailable. The workflow currently reads the token on `v*` tag pushes. A previous version included a previous-release proto-diff gate, but that gate is temporarily disabled while the release path is being debugged.
 
 ## Manual publishing
 
@@ -136,13 +136,12 @@ Expected behavior:
 
 - Pull requests run Buf build, lint, format, and breaking-change checks without reading the Buf token.
 - Pull request breaking checks compare against the published BSR module with `breaking_against_registry: true`. This avoids false file-deletion reports from the initial migration from repository-root paths to `proto` module-root paths.
-- Published GitHub releases run the same Buf checks.
-- On a release, the workflow compares `proto/**/*.proto` between the current release tag and the previous non-draft GitHub release tag.
-- If no `.proto` file changed, the release workflow skips Vault and skips `buf push`.
-- If a `.proto` file changed, the release workflow authenticates to Vault with GitHub Actions OIDC, reads `kv/data/ci/buf/pinocchio-chatapp token`, and publishes the named module to the BSR.
+- `v*` tag pushes run the same Buf checks.
+- On a `v*` tag push, the workflow authenticates to Vault with GitHub Actions OIDC, reads `kv/data/ci/buf/pinocchio-chatapp token`, and publishes the named module to the BSR.
+- The previous-release `.proto` diff gate is temporarily disabled for release-path debugging; re-enable it once the tag-triggered Vault/BSR path is proven.
 - Archive is disabled for now because delete events do not need the Buf token and do not have a matching Vault role.
 
-The pull request workflow is path-filtered so it only runs when protobuf, Buf, documentation/license, or workflow files relevant to schema publishing change. The release workflow always starts on published releases, then the internal proto-diff gate decides whether to publish.
+The pull request workflow is path-filtered so it only runs when protobuf, Buf, documentation/license, or workflow files relevant to schema publishing change. Tag pushes for `v*` always start the publish path while debugging the release integration.
 
 ## Compatibility rules
 

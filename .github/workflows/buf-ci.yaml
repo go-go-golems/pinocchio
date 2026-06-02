@@ -11,8 +11,9 @@ on:
       - '**/README.md'
       - '**/LICENSE'
       - '.github/workflows/buf-ci.yaml'
-  release:
-    types: [published]
+  push:
+    tags:
+      - 'v*'
 
 permissions:
   contents: read
@@ -30,39 +31,8 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Detect chatapp proto changes since previous release
-        id: proto_changes
-        if: github.event_name == 'release'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          CURRENT_TAG: ${{ github.event.release.tag_name }}
-        run: |
-          set -euo pipefail
-
-          previous_tag="$(
-            gh release list --limit 50 --json tagName,isDraft,createdAt \
-              --jq '.[] | select(.isDraft == false) | .tagName' \
-              | grep -v "^${CURRENT_TAG}$" \
-              | head -n 1 || true
-          )"
-
-          if [ -z "$previous_tag" ]; then
-            echo "No previous non-draft release found; publishing Buf module."
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          echo "Comparing chatapp proto files between ${previous_tag} and ${CURRENT_TAG}."
-          if git diff --quiet "${previous_tag}..${CURRENT_TAG}" -- 'proto/**/*.proto'; then
-            echo "No chatapp proto changes since ${previous_tag}; skipping Buf publish."
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "Chatapp proto changes detected since ${previous_tag}; publishing Buf module."
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Read Buf token from Vault
-        if: github.event_name == 'release' && steps.proto_changes.outputs.changed == 'true'
+        if: github.event_name == 'push' && github.ref_type == 'tag'
         uses: hashicorp/vault-action@v3
         with:
           url: https://vault.yolo.scapegoat.dev
@@ -82,5 +52,5 @@ jobs:
           lint: true
           format: true
           breaking: true
-          push: ${{ github.event_name == 'release' && steps.proto_changes.outputs.changed == 'true' }}
+          push: ${{ github.event_name == 'push' && github.ref_type == 'tag' }}
           archive: false
