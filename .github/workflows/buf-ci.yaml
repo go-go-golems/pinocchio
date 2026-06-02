@@ -29,9 +29,29 @@ permissions:
 jobs:
   buf:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      id-token: write
     steps:
       - uses: actions/checkout@v4
+
+      - name: Read Buf token from Vault
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: hashicorp/vault-action@v3
+        with:
+          url: https://vault.yolo.scapegoat.dev
+          method: jwt
+          path: github-actions
+          role: bsr-pinocchio-chatapp-publisher
+          jwtGithubAudience: https://vault.yolo.scapegoat.dev
+          exportToken: false
+          secrets: |
+            kv/data/ci/buf/pinocchio-chatapp token | BUF_TOKEN
+
       - uses: bufbuild/buf-action@v1
         with:
           version: '1.55.1'
-          token: ${{ secrets.BUF_TOKEN }}
+          token: ${{ env.BUF_TOKEN }}
+          push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+          archive: false
