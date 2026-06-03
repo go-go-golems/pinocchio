@@ -41,6 +41,23 @@ func baseTimelineProjection(_ context.Context, ev sessionstream.Event, _ *sessio
 		}
 		entity.Text = entity.Content
 		return []sessionstream.TimelineEntity{{Kind: TimelineEntityChatMessage, Id: messageID, Payload: entity}}, nil
+	case *chatappv1.ChatRunFailed:
+		messageID := strings.TrimSpace(payload.GetMessageId())
+		if messageID == "" {
+			return nil, nil
+		}
+		content := firstNonEmpty(payload.GetError(), "Chat run failed")
+		entity := &chatappv1.ChatMessageEntity{
+			MessageId:   messageID,
+			Role:        "error",
+			Content:     content,
+			Text:        content,
+			Status:      firstNonEmpty(payload.GetStatus(), "failed"),
+			Streaming:   false,
+			Final:       true,
+			Correlation: payload.GetCorrelation(),
+		}
+		return []sessionstream.TimelineEntity{{Kind: TimelineEntityChatMessage, Id: messageID, Payload: entity}}, nil
 	case *chatappv1.ChatTextSegmentStarted:
 		messageID := strings.TrimSpace(payload.GetMessageId())
 		if messageID == "" {

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	gepevents "github.com/go-go-golems/geppetto/pkg/events"
 	gepsession "github.com/go-go-golems/geppetto/pkg/inference/session"
@@ -12,6 +13,7 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/turns"
 	"github.com/go-go-golems/geppetto/pkg/turns/serde"
 	chatappv1 "github.com/go-go-golems/pinocchio/pkg/chatapp/pb/proto/pinocchio/chatapp/v1"
+	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
 	sessionstream "github.com/go-go-golems/sessionstream/pkg/sessionstream"
 	"google.golang.org/protobuf/proto"
 )
@@ -137,17 +139,21 @@ func (e *Engine) runRuntimeInference(ctx context.Context, sid sessionstream.Sess
 	assistantBlockOffset := countAssistantBlocks(sess.Latest())
 	handle, err := sess.StartInference(runCtx)
 	if err != nil {
+		e.persistRuntimeTurnSnapshot(publishContext(ctx), sid, runtime.RuntimeKey, "failed", sess.Latest())
 		e.publishRunFailed(publishContext(ctx), sid, pub, messageID, err.Error())
 		return
 	}
 	output, err := handle.Wait()
 	if err != nil {
-		if !sink.IsTerminal() {
-			if errors.Is(err, context.Canceled) || ctx.Err() != nil {
+		if errors.Is(err, context.Canceled) || ctx.Err() != nil {
+			if !sink.IsTerminal() {
 				_ = sink.finishActiveTextSegment("stopped", "stopped", "")
 				_ = e.publish(publishContext(ctx), sid, pub, EventChatRunStopped, &chatappv1.ChatRunStopped{MessageId: messageID, Status: "stopped", Correlation: runCorrelationInfo(sid, messageID)})
-				return
 			}
+			return
+		}
+		e.persistRuntimeTurnSnapshot(publishContext(ctx), sid, runtime.RuntimeKey, "failed", sess.Latest())
+		if !sink.IsTerminal() {
 			_ = sink.finishActiveTextSegment("failed", "error", "")
 			if isMaxIterationsError(err) {
 				_ = e.publish(publishContext(ctx), sid, pub, EventChatTextSegmentFinished, &chatappv1.ChatTextSegmentFinished{MessageId: runtimeWarningMessageID(messageID), Role: "warning", Prompt: prompt, Text: maxIterationsWarningText(err), Content: maxIterationsWarningText(err), Status: "finished", Streaming: false, Final: true})
@@ -235,6 +241,36 @@ func assistantTextFromTurnAfter(turn *turns.Turn, skip int) string {
 		parts = append(parts, text)
 	}
 	return strings.Join(parts, "")
+}
+
+func (e *Engine) persistRuntimeTurnSnapshot(ctx context.Context, sid sessionstream.SessionId, runtimeKey string, phase string, t *turns.Turn) {
+	if e == nil || e.turnStore == nil || t == nil || strings.TrimSpace(string(sid)) == "" {
+		return
+	}
+	turnID := strings.TrimSpace(t.ID)
+	if turnID == "" {
+		turnID = "turn"
+	}
+	phase = strings.TrimSpace(phase)
+	if phase == "" {
+		phase = "snapshot"
+	}
+	runtimeKey = strings.TrimSpace(runtimeKey)
+	if runtimeKey == "" {
+		runtimeKey = "default"
+	}
+	payload, err := serde.ToYAML(t, serde.Options{})
+	if err != nil {
+		return
+	}
+	inferenceID := ""
+	if v, ok, err := turns.KeyTurnMetaInferenceID.Get(t.Metadata); err == nil && ok {
+		inferenceID = strings.TrimSpace(v)
+	}
+	_ = e.turnStore.Save(ctx, string(sid), string(sid), turnID, phase, time.Now().UnixMilli(), string(payload), chatstore.TurnSaveOptions{
+		RuntimeKey:  runtimeKey,
+		InferenceID: inferenceID,
+	})
 }
 
 func (e *Engine) publishRunFailed(ctx context.Context, sid sessionstream.SessionId, pub sessionstream.EventPublisher, messageID, errText string) {

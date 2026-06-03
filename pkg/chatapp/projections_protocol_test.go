@@ -169,3 +169,24 @@ func requireProjectionFullCorrelation(t *testing.T, corr *chatappv1.CorrelationI
 	require.Equal(t, "provider-call-1", corr.GetProviderCallId())
 	require.Equal(t, "segment-1", corr.GetSegmentId())
 }
+
+func TestBaseTimelineProjectionProjectsRunFailure(t *testing.T) {
+	entities, err := baseTimelineProjection(context.Background(), sessionstream.Event{Name: EventChatRunFailed, SessionId: "chat-projection", Payload: &chatappv1.ChatRunFailed{
+		MessageId:   "chat-msg-1",
+		Status:      "failed",
+		Error:       "provider rejected tool name",
+		Correlation: &chatappv1.CorrelationInfo{SessionId: "chat-projection", RunId: "chat-msg-1"},
+	}}, nil, projectionTimelineView{})
+	require.NoError(t, err)
+	require.Len(t, entities, 1)
+	require.Equal(t, TimelineEntityChatMessage, entities[0].Kind)
+	require.Equal(t, "chat-msg-1", entities[0].Id)
+	payload := entities[0].Payload.(*chatappv1.ChatMessageEntity)
+	require.Equal(t, "error", payload.GetRole())
+	require.Equal(t, "failed", payload.GetStatus())
+	require.Equal(t, "provider rejected tool name", payload.GetContent())
+	require.Equal(t, "provider rejected tool name", payload.GetText())
+	require.False(t, payload.GetStreaming())
+	require.True(t, payload.GetFinal())
+	require.Equal(t, "chat-msg-1", payload.GetCorrelation().GetRunId())
+}
