@@ -1,6 +1,6 @@
 module github.com/go-go-golems/pinocchio
 
-go 1.26.1
+go 1.26.3
 
 toolchain go1.26.4
 
@@ -13,14 +13,14 @@ require (
 	github.com/charmbracelet/glamour v1.0.0
 	github.com/dop251/goja v0.0.0-20251103141225-af2ceb9156d7
 	github.com/dop251/goja_nodejs v0.0.0-20250409162600-f7acab6894b0
-	github.com/go-go-golems/bobatea v0.1.5
+	github.com/go-go-golems/bobatea v0.1.6
 	github.com/go-go-golems/clay v0.4.11
-	github.com/go-go-golems/geppetto v0.12.3-0.20260602222052-7409ecc72a55
-	github.com/go-go-golems/glazed v1.3.5
-	github.com/go-go-golems/go-go-goja v0.7.2
+	github.com/go-go-golems/geppetto v0.13.1
+	github.com/go-go-golems/glazed v1.3.6
+	github.com/go-go-golems/go-go-goja v0.7.4
 	github.com/go-go-golems/logcopter v0.1.0
-	github.com/go-go-golems/sessionstream v0.0.5
-	github.com/go-go-golems/uhoh v0.0.8
+	github.com/go-go-golems/sessionstream v0.0.6
+	github.com/go-go-golems/uhoh v0.0.9
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.4-0.20250319132907-e064f32e3674
 	github.com/invopop/jsonschema v0.13.0
@@ -167,7 +167,7 @@ require (
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/erikgeiser/coninput v0.0.0-20211004153227-1c3628e74d0f // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
-	github.com/go-go-golems/sanitize v0.0.1
+	github.com/go-go-golems/sanitize v0.0.2
 	github.com/go-openapi/errors v0.22.0 // indirect
 	github.com/go-openapi/strfmt v0.23.0 // indirect
 	github.com/gorilla/css v1.0.1 // indirect
