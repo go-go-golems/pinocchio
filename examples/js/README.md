@@ -19,7 +19,8 @@ That means:
 - engine profile registries come from `--profile-registries`, `PINOCCHIO_PROFILE_REGISTRIES`, config, or the default `${XDG_CONFIG_HOME:-~/.config}/pinocchio/profiles.yaml`
 - engine profile selection comes from `--profile`, `PINOCCHIO_PROFILE`, config, or the registry default profile
 - `--config-file` can supply the same unified `profile.*` values used by the rest of the CLI
-- scripts can either resolve an engine profile with `gp.profiles.resolve({})` and build with `gp.engines.fromResolvedProfile(...)`, or build directly from hidden base config with `pinocchio.engines.fromDefaults()`
+- scripts resolve settings with `gp.inferenceProfiles.resolve()` and execute through `gp.agent().session().next().run()`
+- `--turns-dsn` / `--turns-db` install a default `gp.turnStores.default()` store for session persistence and resume
 
 If your default `profiles.yaml` is still in the old mixed-runtime format, rewrite it first to the engine-only `inference_settings` shape. Use [profiles/basic.yaml](./profiles/basic.yaml) as the reference.
 
@@ -27,12 +28,11 @@ If your default `profiles.yaml` is still in the old mixed-runtime format, rewrit
 
 - `runner-profile-demo.js`
   - real profile-driven inference example
-  - demonstrates `gp.profiles.resolve({})`
-  - demonstrates `gp.engines.fromResolvedProfile(...)`
-  - demonstrates a real `gp.runner.run(...)`
+  - demonstrates `gp.inferenceProfiles.resolve()`
+  - demonstrates session-centered `session.next().run()` execution
 - `runner-profile-smoke.js`
   - deterministic local smoke script used by tests
-  - proves that profile selection changes the resolved engine settings without calling a live model
+  - proves that profile selection resolves engine settings and builds a session-capable agent without calling a live model
 - `profiles/basic.yaml`
   - small local engine-profile registry used by the demo
 
@@ -59,4 +59,13 @@ Use the smoke script if you want deterministic local output:
 pinocchio js \
   --script examples/js/runner-profile-smoke.js \
   --profile-registries examples/js/profiles/basic.yaml
+```
+
+Enable durable turn persistence for a script with:
+
+```bash
+pinocchio js \
+  --script path/to/session-script.js \
+  --profile-registries "$HOME/.config/pinocchio/profiles.yaml" \
+  --turns-db /tmp/pinocchio-js-turns.db
 ```

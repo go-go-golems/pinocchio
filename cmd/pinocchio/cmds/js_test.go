@@ -53,6 +53,12 @@ func TestNewJSCommand_ExposesProfileFlags(t *testing.T) {
 	if cmd.Flags().Lookup("print-inference-settings") == nil {
 		t.Fatal("expected --print-inference-settings flag on js command")
 	}
+	if cmd.Flags().Lookup("turns-dsn") == nil {
+		t.Fatal("expected --turns-dsn flag on js command")
+	}
+	if cmd.Flags().Lookup("turns-db") == nil {
+		t.Fatal("expected --turns-db flag on js command")
+	}
 }
 
 func TestResolvePinocchioJSRuntimeBootstrap_UsesFinalInferenceSettingsFromSelectedProfile(t *testing.T) {

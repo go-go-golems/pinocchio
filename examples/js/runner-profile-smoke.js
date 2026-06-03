@@ -1,26 +1,20 @@
 const gp = require("geppetto");
 
-const resolved = gp.profiles.resolve({});
+const settings = gp.inferenceProfiles.resolve();
+const snapshot = settings.toJSON();
+const agent = gp.agent()
+  .name("pinocchio-js-smoke")
+  .inference(settings)
+  .build();
+const session = agent.session().id("pinocchio-js-smoke").build();
 
-assert(resolved.profileSlug !== "", "expected resolved engine profile slug");
-assert(
-  typeof resolved.inferenceSettings?.chat?.engine === "string" && resolved.inferenceSettings.chat.engine !== "",
-  "expected resolved engine profile to include an engine",
-);
+assert(typeof agent.session === "function", "expected session-capable agent");
+assert(typeof session.next === "function", "expected session.next()");
+assert(typeof snapshot.chat?.engine === "string" && snapshot.chat.engine !== "", "expected resolved engine profile to include an engine");
 
-const localEngine = gp.engines.fromFunction((turn) => {
-  const promptBlock = turn.blocks[turn.blocks.length - 1];
-  const model = resolved.inferenceSettings?.chat?.engine || "<missing>";
-  return gp.turns.newTurn({
-    blocks: [
-      gp.turns.newAssistantBlock(`profile=${resolved.profileSlug} model=${model} prompt=${promptBlock.payload.text}`),
-    ],
-  });
-});
-
-const out = gp.runner.run({
-  engine: localEngine,
-  prompt: "hello from pinocchio js",
-});
-
-console.log(out.blocks[0].payload.text);
+console.log(JSON.stringify({
+  profile: snapshot.provenance?.profileSlug || "",
+  registry: snapshot.provenance?.registrySlug || "",
+  model: snapshot.chat.engine,
+  session: session.id(),
+}, null, 2));

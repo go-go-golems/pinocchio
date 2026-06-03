@@ -50,6 +50,8 @@ type JSSettings struct {
 	ScriptArg   string `glazed:"script_path"`
 	PrintResult bool   `glazed:"print-result"`
 	ListGoTools bool   `glazed:"list-go-tools"`
+	TurnsDSN    string `glazed:"turns-dsn"`
+	TurnsDB     string `glazed:"turns-db"`
 }
 
 type JSCommand struct {
@@ -87,6 +89,18 @@ func newJSCommand() (*JSCommand, error) {
 				fields.TypeBool,
 				fields.WithDefault(false),
 				fields.WithHelp("List built-in Go tools exposed to JS and exit"),
+			),
+			fields.New(
+				"turns-dsn",
+				fields.TypeString,
+				fields.WithDefault(""),
+				fields.WithHelp("SQLite DSN for durable Geppetto JS turn snapshots (preferred over turns-db)"),
+			),
+			fields.New(
+				"turns-db",
+				fields.TypeString,
+				fields.WithDefault(""),
+				fields.WithHelp("SQLite DB file path for durable Geppetto JS turn snapshots"),
 			),
 		),
 		cmds.WithArguments(
@@ -180,6 +194,11 @@ func (c *JSCommand) RunIntoWriter(ctx context.Context, parsed *values.Values, w 
 		return err
 	}
 	middlewareFactories := buildPinocchioJSMiddlewareFactories(buildDeps)
+	turnStore, closeTurnStore, err := openPinocchioJSTurnStore(settings.TurnsDSN, settings.TurnsDB)
+	if err != nil {
+		return err
+	}
+	defer closeTurnStore()
 
 	scriptDir := filepath.Dir(scriptPath)
 	rt, err := newPinocchioJSRuntime(ctx, pinocchioJSRuntimeOptions{
@@ -191,6 +210,7 @@ func (c *JSCommand) RunIntoWriter(ctx context.Context, parsed *values.Values, w 
 		DefaultProfileResolve:    runtimeBootstrap.DefaultProfileResolve,
 		GoMiddlewareFactories:    middlewareFactories,
 		MiddlewareDefinitions:    middlewareDefs,
+		TurnStore:                turnStore,
 		Stdout:                   w,
 		Stderr:                   os.Stderr,
 	})
@@ -277,6 +297,7 @@ type pinocchioJSRuntimeOptions struct {
 	DefaultProfileResolve    gepprofiles.ResolveInput
 	GoMiddlewareFactories    map[string]gp.MiddlewareFactory
 	MiddlewareDefinitions    middlewarecfg.DefinitionRegistry
+	TurnStore                gp.TurnStore
 	Stdout                   io.Writer
 	Stderr                   io.Writer
 }
@@ -302,7 +323,7 @@ func newPinocchioJSRuntime(ctx context.Context, opts pinocchioJSRuntimeOptions) 
 	}
 
 	reg := require.NewRegistry(requireOpts...)
-	gp.Register(reg, gp.Options{
+	gpOptions := gp.Options{
 		RuntimeOwner:             rt.Owner,
 		GoToolRegistry:           opts.GoToolRegistry,
 		GoMiddlewareFactories:    opts.GoMiddlewareFactories,
@@ -311,7 +332,14 @@ func newPinocchioJSRuntime(ctx context.Context, opts pinocchioJSRuntimeOptions) 
 		UseDefaultProfileResolve: opts.UseDefaultProfileResolve,
 		DefaultProfileResolve:    opts.DefaultProfileResolve,
 		MiddlewareSchemas:        opts.MiddlewareDefinitions,
-	})
+	}
+	if opts.TurnStore != nil {
+		gpOptions.EnableStorage = true
+		gpOptions.DefaultTurnStore = opts.TurnStore
+		gpOptions.DefaultPersister = opts.TurnStore
+		gpOptions.TurnStores = map[string]gp.TurnStore{"default": opts.TurnStore}
+	}
+	gp.Register(reg, gpOptions)
 	pjs.Register(reg, pjs.Options{
 		DefaultInferenceSettings: opts.DefaultInferenceSettings,
 	})
