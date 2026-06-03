@@ -1,4 +1,4 @@
-import { selectOverlay, useAppSelector as useChatProviderSelector } from '@go-go-golems/chat-provider';
+import { selectOverlay, useChatSelector } from '@go-go-golems/chat-provider';
 import { ExportMenuForSession } from '../ChatStatusbar/ExportMenu';
 import { fmtShort } from '../format';
 import { getPartProps, mergeClassName, mergeStyle } from '../parts';
@@ -18,7 +18,7 @@ export function ProviderStatusbar(props: StatusbarSlotProps) {
     onToggleErrors,
     partProps,
   } = props;
-  const overlay = useChatProviderSelector(selectOverlay);
+  const overlay = useChatSelector(selectOverlay);
   const statusbarProps = getPartProps('statusbar', partProps);
   const statusbarClassName = mergeClassName(statusbarProps.className);
   const statusbarStyle = mergeStyle(statusbarProps.style);

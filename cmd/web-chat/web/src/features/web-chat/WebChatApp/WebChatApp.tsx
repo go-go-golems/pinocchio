@@ -2,7 +2,7 @@ import {
   selectOverlay,
   selectTimelineEntities,
   useChatClient,
-  useAppSelector as useChatProviderSelector,
+  useChatSelector,
 } from '@go-go-golems/chat-provider';
 import type { KeyboardEvent } from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -33,8 +33,8 @@ export function WebChatApp({
   onProfileChange,
 }: WebChatAppProps) {
   const client = useChatClient();
-  const overlay = useChatProviderSelector(selectOverlay);
-  const entitiesRaw = useChatProviderSelector(selectTimelineEntities);
+  const overlay = useChatSelector(selectOverlay);
+  const entitiesRaw = useChatSelector(selectTimelineEntities);
   const entities = useMemo(() => entitiesRaw.map(toRenderEntity), [entitiesRaw]);
   const entityCount = entities.length;
   const [text, setText] = useState('');
