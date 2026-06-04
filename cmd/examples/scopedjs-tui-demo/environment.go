@@ -12,9 +12,9 @@ import (
 	"time"
 
 	"github.com/dop251/goja"
-	gojengine "github.com/go-go-golems/go-go-goja/engine"
 	ggjmodules "github.com/go-go-golems/go-go-goja/modules"
 	_ "github.com/go-go-golems/go-go-goja/modules/fs"
+	gojengine "github.com/go-go-golems/go-go-goja/pkg/engine"
 
 	"github.com/go-go-golems/geppetto/pkg/inference/tools"
 	"github.com/go-go-golems/geppetto/pkg/inference/tools/scopedjs"
@@ -156,7 +156,7 @@ func configureDemoRuntime(ctx context.Context, b *scopedjs.Builder, scope demoSc
 	if err := b.AddNativeModule(&obsidianModule{workspaceRoot: scope.WorkspaceRoot}); err != nil {
 		return demoMeta{}, err
 	}
-	if err := b.AddGlobal("workspaceRoot", func(ctx *gojengine.RuntimeContext) error {
+	if err := b.AddGlobal("workspaceRoot", func(ctx *gojengine.RuntimeInitializationContext) error {
 		return ctx.VM.Set("workspaceRoot", scope.WorkspaceRoot)
 	}, scopedjs.GlobalDoc{
 		Type:        "string",
@@ -164,7 +164,7 @@ func configureDemoRuntime(ctx context.Context, b *scopedjs.Builder, scope demoSc
 	}); err != nil {
 		return demoMeta{}, err
 	}
-	if err := b.AddGlobal("db", func(ctx *gojengine.RuntimeContext) error {
+	if err := b.AddGlobal("db", func(ctx *gojengine.RuntimeInitializationContext) error {
 		return ctx.VM.Set("db", buildDBGlobal(scope.Fixtures))
 	}, scopedjs.GlobalDoc{
 		Type:        "object",

@@ -24,7 +24,7 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cmds/fields"
 	cmd_sources "github.com/go-go-golems/glazed/pkg/cmds/sources"
 	"github.com/go-go-golems/glazed/pkg/cmds/values"
-	gojengine "github.com/go-go-golems/go-go-goja/engine"
+	gojengine "github.com/go-go-golems/go-go-goja/pkg/engine"
 	agenttools "github.com/go-go-golems/pinocchio/cmd/agents/simple-chat-agent/pkg/tools"
 	profilebootstrap "github.com/go-go-golems/pinocchio/pkg/cmds/profilebootstrap"
 	pjs "github.com/go-go-golems/pinocchio/pkg/js/modules/pinocchio"
@@ -309,7 +309,7 @@ func newPinocchioJSRuntime(ctx context.Context, opts pinocchioJSRuntimeOptions) 
 			filepath.Join(opts.ScriptDir, "node_modules"),
 		),
 	}
-	builder := gojengine.NewBuilder(gojengine.WithRequireOptions(requireOpts...))
+	builder := gojengine.NewRuntimeFactoryBuilder(gojengine.WithRequireOptions(requireOpts...))
 	factory, err := builder.Build()
 	if err != nil {
 		return nil, err
@@ -346,7 +346,7 @@ func newPinocchioJSRuntime(ctx context.Context, opts pinocchioJSRuntimeOptions) 
 	req := reg.Enable(rt.VM)
 	rt.Require = req
 
-	runtimeCtx := &gojengine.RuntimeContext{
+	runtimeCtx := &gojengine.RuntimeInitializationContext{
 		VM:      rt.VM,
 		Require: req,
 		Loop:    rt.Loop,
@@ -354,7 +354,7 @@ func newPinocchioJSRuntime(ctx context.Context, opts pinocchioJSRuntimeOptions) 
 	}
 	if err := (runtimeInitializerFunc{
 		id: "pinocchio-js-helpers",
-		fn: func(_ *gojengine.RuntimeContext) error {
+		fn: func(_ *gojengine.RuntimeInitializationContext) error {
 			installConsole(rt.VM, opts.Stdout, opts.Stderr)
 			installHelpers(rt.VM)
 			return nil
@@ -368,12 +368,12 @@ func newPinocchioJSRuntime(ctx context.Context, opts pinocchioJSRuntimeOptions) 
 
 type runtimeInitializerFunc struct {
 	id string
-	fn func(ctx *gojengine.RuntimeContext) error
+	fn func(ctx *gojengine.RuntimeInitializationContext) error
 }
 
 func (f runtimeInitializerFunc) ID() string { return f.id }
 
-func (f runtimeInitializerFunc) InitRuntime(ctx *gojengine.RuntimeContext) error {
+func (f runtimeInitializerFunc) InitRuntime(ctx *gojengine.RuntimeInitializationContext) error {
 	if f.fn == nil {
 		return nil
 	}
