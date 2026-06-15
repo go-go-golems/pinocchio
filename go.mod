@@ -17,7 +17,7 @@ require (
 	github.com/go-go-golems/clay v0.4.11
 	github.com/go-go-golems/geppetto v0.13.3
 	github.com/go-go-golems/glazed v1.3.6
-	github.com/go-go-golems/go-go-goja v0.8.3
+	github.com/go-go-golems/go-go-goja v0.9.5
 	github.com/go-go-golems/logcopter v0.1.0
 	github.com/go-go-golems/sessionstream v0.0.6
 	github.com/go-go-golems/uhoh v0.0.9
