@@ -1,6 +1,12 @@
 topics:
     - slug: pinocchio
       description: Pinocchio CLI, commands, and workflows
+    - slug: oauth
+      description: OAuth authorization, token exchange, PKCE, and refresh grants
+    - slug: credentials
+      description: Credential lifecycle, token storage, and provider authentication
+    - slug: security
+      description: Security boundaries, threat models, and secret handling
     - slug: geppetto
       description: Geppetto engine integration and runtime
     - slug: glazed
