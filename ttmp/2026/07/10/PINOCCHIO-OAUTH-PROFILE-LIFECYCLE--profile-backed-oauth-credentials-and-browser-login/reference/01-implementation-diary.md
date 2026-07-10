@@ -109,3 +109,66 @@ Start with the design document sections 3–7. Review the cited Pinocchio profil
 ### Technical details
 
 No access token, refresh token, authorization code, client secret, profile file content, or provider endpoint specific to a real account was read, printed, or stored in ticket documentation.
+
+## Step 2: Validate and publish the intern guide
+
+The ticket design, diary, tasks, index, and changelog were validated against the Pinocchio docs root and bundled as a single offline-readable PDF. The bundle gives an intern the proposed architecture, file evidence, API sketches, lifecycle pseudocode, decision records, security constraints, and phased implementation plan without embedding any credential material.
+
+The current ticket is intentionally still active: only architecture/discovery documentation is complete. Implementation tasks for typed profile state, secure persistence, runtime injection, and browser login remain open and are clearly separated in the task list.
+
+### Prompt Context
+
+**User prompt (verbatim):** (see Step 1)
+
+**Assistant interpretation:** Finish the documentation deliverable by validating the ticket and publishing the review bundle to reMarkable.
+
+**Inferred user intent:** Make the implementation plan accessible and reviewable away from the local worktree while preserving security boundaries.
+
+### What I did
+
+- Ran `docmgr doctor --root /home/manuel/workspaces/2026-07-10/refresh-oauth-token-geppetto/pinocchio/ttmp --ticket PINOCCHIO-OAUTH-PROFILE-LIFECYCLE --stale-after 30` successfully.
+- Ran a dry-run bundle upload containing the ticket index, design guide, diary, tasks, and changelog.
+- Uploaded the same bundle with ToC depth 2 to the ticket-specific reMarkable directory.
+
+### Why
+
+- The bundle supplies a stable review artifact before implementation begins.
+- Keeping the current documentation separate from live profile credentials ensures a review artifact cannot leak local OAuth material.
+
+### What worked
+
+The dry run selected all five intended Markdown documents. The actual upload returned:
+
+```text
+OK: uploaded Pinocchio OAuth Profile Lifecycle Guide.pdf -> /ai/2026/07/10/PINOCCHIO-OAUTH-PROFILE-LIFECYCLE
+```
+
+### What didn't work
+
+N/A.
+
+### What I learned
+
+The repository did not initially have a local `.ttmp.yaml`; adding one made the intended Pinocchio docs root explicit for ticket creation and validation. The `docmgr vocab add --root` behavior still resolved vocabulary through a parent workspace, so the local vocabulary was updated directly and the unintended external changes were reverted before delivery.
+
+### What was tricky to build
+
+The delivery artifact needs to be complete enough for a review but cannot include live configuration examples with actual values. The guide uses only placeholder endpoints and token markers, while retaining enough detail for implementation.
+
+### What warrants a second pair of eyes
+
+- Review the proposed `extensions.pinocchio.oauth` schema against the actual direct registry YAML codec before code begins.
+- Review whether plaintext owner-only YAML meets the intended local threat model.
+
+### What should be done in the future
+
+- Begin Phase 0 writable-registry and profile-output discovery.
+- Re-upload an updated bundle after implementation phases materially change the guide or diary.
+
+### Code review instructions
+
+Review the uploaded PDF’s architecture and decision-record sections first, then validate the local ticket with the doctor command above.
+
+### Technical details
+
+Bundle destination: `/ai/2026/07/10/PINOCCHIO-OAUTH-PROFILE-LIFECYCLE/Pinocchio OAuth Profile Lifecycle Guide.pdf`.
