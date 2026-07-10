@@ -17,6 +17,8 @@ RelatedFiles:
       Note: Reusable renewable source/store/refresher contracts
     - Path: ws://geppetto/pkg/steps/ai/credentials/oauth/oauth.go
       Note: Reusable pure OAuth protocol operations
+    - Path: ws://pinocchio/Makefile
+      Note: Pre-commit lint now retains workspace dependency resolution
     - Path: ws://pinocchio/cmd/pinocchio/main.go
       Note: CLI root command registration point for planned auth group
     - Path: ws://pinocchio/pkg/cmds/profilebootstrap/engine_settings.go
@@ -25,6 +27,10 @@ RelatedFiles:
       Note: Copies extensions into Geppetto engine profiles
     - Path: ws://pinocchio/pkg/configdoc/types.go
       Note: Inline profile extension model proposed as typed OAuth metadata transport
+    - Path: ws://pinocchio/pkg/oauthprofiles/profile.go
+      Note: Implemented versioned OAuth extension parser and redaction policy
+    - Path: ws://pinocchio/pkg/oauthprofiles/store.go
+      Note: Implemented locked atomic owner-only YAML credential persistence
 ExternalSources:
     - https://github.com/go-go-golems/geppetto/issues/387
 Summary: Intern-oriented design for Pinocchio profile-backed OAuth tokens, secure persistence, browser login, and Geppetto source injection.
@@ -32,6 +38,7 @@ LastUpdated: 2026-07-10T23:35:00-04:00
 WhatFor: Implement secure profile OAuth lifecycle support without placing secrets in Geppetto inference settings.
 WhenToUse: Use before changing Pinocchio profile schemas, CLI bootstrap, profile display, OAuth login, or credential refresh behavior.
 ---
+
 
 
 # Profile OAuth credential lifecycle: analysis, design, and implementation guide
@@ -182,21 +189,19 @@ profiles:
         base_urls:
           openai-base-url: https://provider.example.invalid/v1
     extensions:
-      pinocchio:
-        oauth:
-          kind: oauth_bearer
-          provider: umans
-          authorization_url: https://issuer.example.invalid/authorize
-          token_url: https://issuer.example.invalid/token
-          client_id: public-cli-client
-          scopes: [inference]
-          refresh_token_policy: preserve_previous
-          access_token: <secret>
-          refresh_token: <secret>
-          expires_at: "2026-07-10T23:30:00Z"
+      "pinocchio.oauth@v1":
+        kind: oauth_bearer
+        authorization_url: https://issuer.example.invalid/authorize
+        token_url: https://issuer.example.invalid/token
+        client_id: public-cli-client
+        scopes: [inference]
+        refresh_token_policy: preserve_previous
+        access_token: <secret>
+        refresh_token: <secret>
+        expires_at: "2026-07-10T23:30:00Z"
 ```
 
-This exact nesting is proposed, not yet implemented. During Phase 0, validate it against the actual YAML registry codec and profile-extension serialization. The parser must reject a profile that simultaneously configures `oauth_bearer` and a provider static API key for the same outbound path unless a documented migration flag exists.
+The direct Geppetto YAML codec validates extension keys as `namespace.feature@vN`; implementation therefore uses `pinocchio.oauth@v1`, not the earlier nested `extensions.pinocchio.oauth` sketch. `pkg/oauthprofiles` now validates the public-client policy and token tuple. Runtime static-key conflict rejection remains to be wired before source injection.
 
 ### 5.3 Typed Pinocchio API sketch
 
@@ -270,9 +275,9 @@ Save(profile identity, replacement):
   document = parse registry YAML fresh from disk
   profile = locate exact registry/profile
   validate profile OAuth configuration still matches expected endpoint/client
-  profile.extensions.pinocchio.oauth.access_token = replacement.access
-  profile.extensions.pinocchio.oauth.refresh_token = replacement.refresh
-  profile.extensions.pinocchio.oauth.expires_at = RFC3339 UTC(replacement.expiry)
+  profile.extensions["pinocchio.oauth@v1"].access_token = replacement.access
+  profile.extensions["pinocchio.oauth@v1"].refresh_token = replacement.refresh
+  profile.extensions["pinocchio.oauth@v1"].expires_at = RFC3339 UTC(replacement.expiry)
   write YAML to same-directory temporary file mode 0600
   fsync temporary file
   rename temporary over registry
@@ -325,7 +330,7 @@ The command must bind loopback before building the redirect URL. It must not use
 ### Decision: Store OAuth token state in a typed profile extension
 
 - **Context:** The user requires access/refresh/expiry data in profile YAML; `InferenceSettings` is runtime configuration and its API key maps are broadly consumed.
-- **Options considered:** Add fields to `InferenceSettings`; reserve typed `extensions.pinocchio.oauth`; external sidecar/keyring only.
+- **Options considered:** Add fields to `InferenceSettings`; reserve typed `extensions."pinocchio.oauth@v1"`; external sidecar/keyring only.
 - **Decision:** Use a reserved typed extension for the first release, with a typed parser/store and strict redaction.
 - **Rationale:** It travels with the profile while avoiding accidental engine configuration propagation.
 - **Consequences:** Existing generic extension display paths require audit/redaction; future keyring migration can retain the non-secret OAuth policy fields.

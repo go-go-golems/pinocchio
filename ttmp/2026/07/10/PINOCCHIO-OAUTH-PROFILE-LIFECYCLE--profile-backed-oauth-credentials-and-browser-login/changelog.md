@@ -22,3 +22,12 @@ Validated and published the initial intern-oriented OAuth profile lifecycle guid
 
 - /home/manuel/workspaces/2026-07-10/refresh-oauth-token-geppetto/pinocchio/ttmp/2026/07/10/PINOCCHIO-OAUTH-PROFILE-LIFECYCLE--profile-backed-oauth-credentials-and-browser-login/design-doc/01-profile-oauth-credential-lifecycle-analysis-design-and-implementation-guide.md — Published intern guide
 - /home/manuel/workspaces/2026-07-10/refresh-oauth-token-geppetto/pinocchio/ttmp/2026/07/10/PINOCCHIO-OAUTH-PROFILE-LIFECYCLE--profile-backed-oauth-credentials-and-browser-login/reference/01-implementation-diary.md — Validation and delivery evidence
+
+## 2026-07-10
+
+Implemented the versioned OAuth profile parser and locked atomic direct-YAML credential store; changed pre-commit lint targets to retain the active workspace while preserving pre-push GOWORK=off isolation (code commits adea466 and de6517c).
+
+### Related Files
+
+- /home/manuel/workspaces/2026-07-10/refresh-oauth-token-geppetto/pinocchio/Makefile — Workspace-compatible lint execution
+- /home/manuel/workspaces/2026-07-10/refresh-oauth-token-geppetto/pinocchio/pkg/oauthprofiles/store.go — Secure credential tuple persistence

@@ -2,7 +2,7 @@
 
 ## Phase 0 — Architecture discovery and design
 
-- [ ] Confirm direct Geppetto registry YAML versus inline Pinocchio config YAML formats and choose the writable OAuth profile source <!-- t:p0a1 -->
+- [x] Confirm direct Geppetto registry YAML versus inline Pinocchio config YAML formats and choose the writable OAuth profile source <!-- t:p0a1 -->
 - [x] Map profile extension transport, merge behavior, bootstrap engine construction, profile CLI inspection, and Geppetto OAuth/source APIs <!-- t:p0a2 -->
 - [x] Write the intern-oriented analysis/design/implementation guide and implementation diary <!-- t:p0a3 -->
 - [ ] Identify all list/show/provenance/debug output paths that require OAuth secret redaction <!-- t:p0a4 -->
@@ -10,7 +10,7 @@
 
 ## Phase 1 — Typed OAuth profile model and redaction
 
-- [ ] Add typed `extensions.pinocchio.oauth` parser/validator and profile identity model <!-- t:p1a1 -->
+- [x] Add typed `extensions."pinocchio.oauth@v1"` parser/validator and profile identity model <!-- t:p1a1 -->
 - [ ] Define static-key/OAuth conflict and migration behavior <!-- t:p1a2 -->
 - [ ] Add redacted profile display/provenance behavior and tests <!-- t:p1a3 -->
 - [ ] Test layered extension merge, clone behavior, invalid configuration, and secret-free errors <!-- t:p1a4 -->
@@ -18,8 +18,8 @@
 ## Phase 2 — Secret-safe YAML credential store
 
 - [ ] Implement explicit writable local registry selection and owner-only permission validation <!-- t:p2a1 -->
-- [ ] Implement locked read/patch/write with temporary `0600` file, fsync, rename, and cleanup <!-- t:p2a2 -->
-- [ ] Implement Geppetto `credentials.Store` with provider/base-URL identity checks <!-- t:p2a3 -->
+- [x] Implement locked read/patch/write with temporary `0600` file, fsync, rename, and cleanup <!-- t:p2a2 -->
+- [x] Implement Geppetto `credentials.Store` with provider/base-URL identity checks <!-- t:p2a3 -->
 - [ ] Test tuple rotation, concurrent saves, failed writes, unsafe permissions, and unrelated-profile preservation <!-- t:p2a4 -->
 
 ## Phase 3 — Runtime credential source integration

@@ -15,10 +15,16 @@ Owners:
 RelatedFiles:
     - Path: ws://geppetto/pkg/steps/ai/credentials/oauth/oauth.go
       Note: Observed sibling OAuth primitive
+    - Path: ws://pinocchio/lefthook.yml
+      Note: Pre-push remains intentionally standalone-module isolated
     - Path: ws://pinocchio/pkg/cmds/profilebootstrap/engine_settings.go
       Note: Observed engine construction boundary
     - Path: ws://pinocchio/pkg/configdoc/types.go
       Note: Observed profile extension boundary
+    - Path: ws://pinocchio/pkg/oauthprofiles/profile_test.go
+      Note: Typed extension and redaction validation coverage
+    - Path: ws://pinocchio/pkg/oauthprofiles/store_test.go
+      Note: Credential persistence security and rotation coverage
 ExternalSources:
     - https://github.com/go-go-golems/geppetto/issues/387
 Summary: Chronological investigation and implementation record for Pinocchio profile OAuth lifecycle work.
@@ -26,6 +32,7 @@ LastUpdated: 2026-07-10T23:35:00-04:00
 WhatFor: Continue the profile-backed OAuth, persistence, browser-login, and runtime-source work safely.
 WhenToUse: Use when resuming implementation or reviewing decisions and validation for this ticket.
 ---
+
 
 
 # Implementation diary
@@ -158,7 +165,7 @@ The delivery artifact needs to be complete enough for a review but cannot includ
 
 ### What warrants a second pair of eyes
 
-- Review the proposed `extensions.pinocchio.oauth` schema against the actual direct registry YAML codec before code begins.
+- Review the implemented `extensions."pinocchio.oauth@v1"` schema and its profile-output redaction before broader runtime integration.
 - Review whether plaintext owner-only YAML meets the intended local threat model.
 
 ### What should be done in the future
@@ -173,3 +180,145 @@ Review the uploaded PDF’s architecture and decision-record sections first, the
 ### Technical details
 
 Bundle destination: `/ai/2026/07/10/PINOCCHIO-OAUTH-PROFILE-LIFECYCLE/Pinocchio OAuth Profile Lifecycle Guide.pdf`.
+
+## Step 3: Add typed OAuth profile state and secure direct-YAML persistence
+
+The first code slice makes OAuth profile data concrete without placing any token in Geppetto inference settings. `pkg/oauthprofiles` parses the profile’s versioned extension, validates public PKCE-client policy, redacts secret fields for future inspection paths, and exposes a profile-bound Geppetto `credentials.Store` implementation.
+
+The persistence target is an explicit direct Geppetto YAML registry, not an inline/composed/SQLite registry. The store is bound to one registry slug, profile slug, and expected provider/base URL. It locks the registry, rereads it, updates only the credential tuple, writes a `0600` temporary sibling, fsyncs, renames, and syncs the parent directory before a renewable source would cache the replacement.
+
+### Prompt Context
+
+**User prompt (verbatim):** "Ok, implement it all, task by task, keeping a detailed diary as you work, committing at appropriate intervals."
+
+**Assistant interpretation:** Implement the planned Pinocchio OAuth lifecycle incrementally, test each slice, maintain ticket documentation, and create focused commits.
+
+**Inferred user intent:** Produce a reviewable, secure implementation rather than only a design, while retaining an auditable step-by-step engineering record.
+
+**Commit (code):** adea466b7ba14984bb16948b0390eba20461e5a6 — "feat: add secure OAuth profile YAML store"
+
+### What I did
+
+- Added `pkg/oauthprofiles/profile.go` with the typed `pinocchio.oauth@v1` extension parser, public-client validation, expiry parsing, explicit refresh-token policy, protocol-client configuration, and redaction helper.
+- Added `pkg/oauthprofiles/store.go` plus Unix/non-Unix lock implementations. `YAMLStore` implements Geppetto `credentials.Store` and verifies the exact selected registry/profile/provider/base URL before load or save.
+- Added focused parser, redaction, mode, request-identity, tuple-rotation, unrelated-profile-preservation, and race tests.
+- Ran `go test ./pkg/oauthprofiles -count=1`, `go test -race ./pkg/oauthprofiles -count=1`, `make lintmax`, and `make test` after the workspace issue was resolved.
+
+### Why
+
+- Geppetto validates extension identifiers as `namespace.feature@vN`; a nested unversioned `extensions.pinocchio.oauth` payload cannot be persisted in a direct registry.
+- Refresh state must have a single durable owner. Direct YAML provides a clear path and profile identity, unlike a composed runtime registry.
+- Binding storage to the outbound request prevents a source configured for one OpenAI-compatible provider endpoint from being reused for another.
+
+### What worked
+
+- The direct YAML codec preserves the extension payload through decode/encode and validates the versioned extension key.
+- The store enforces registry-file mode `0600`, rejects a group/world-writable directory, locks with `flock` on Unix, and atomically replaces the file after `fsync`.
+- Focused normal and race tests passed. The complete workspace lint/test commands also passed after Step 4's build change.
+
+### What didn't work
+
+The original schema draft used an invalid nested extension key. Geppetto rejected the test registry with this exact error:
+
+```text
+engine profile YAML registry validation failed: validation error (profile.extensions[pinocchio]): extension key "pinocchio" is invalid (expected namespace.feature@vN)
+```
+
+The implementation was changed to a single versioned key: `extensions."pinocchio.oauth@v1"`.
+
+### What I learned
+
+- Geppetto engine-profile YAML enforces a versioned extension-key grammar even when a host owns the payload schema.
+- Existing Geppetto `YAMLFileEngineProfileStore` writes `0644` and lacks the required cross-process locking/durability semantics, so it cannot be reused for secret-bearing profile state.
+- Direct registry persistence can be implemented without modifying Geppetto or storing refresh material in `InferenceSettings.APIKeys`.
+
+### What was tricky to build
+
+The hard edge was preventing a refresh write from racing with a profile edit or from silently updating a similarly shaped but different profile. The store treats a credential as a tuple and takes an advisory sibling lock before rereading the file. It then verifies the registry slug, profile slug, typed OAuth extension, and normalized request identity before encoding and atomically replacing the target. This avoids using stale in-memory YAML and prevents cross-provider credential release.
+
+### What warrants a second pair of eyes
+
+- Review the POSIX-only `flock` support policy and whether Windows needs a native lock implementation instead of the intentional unsupported error.
+- Review the plaintext-at-rest threat model despite the required `0600` file mode.
+- Review direct-registry source resolution when it is wired into runtime construction; the store currently receives an explicit path and must not be pointed at a composed source.
+
+### What should be done in the future
+
+- Wire typed profile resolution to profile bootstrap and Geppetto’s renewable bearer source.
+- Add profile-output redaction integration tests and direct-registry source selection.
+- Add browser login only after the runtime/store source has an explicit selected profile identity.
+
+### Code review instructions
+
+Start with `pkg/oauthprofiles/profile.go`, then review `YAMLStore.Save` and its request/file-security guards in `pkg/oauthprofiles/store.go`. Run the focused normal/race tests, followed by `make lintmax` and `make test` from the Pinocchio worktree.
+
+### Technical details
+
+The store uses fake credentials only in tests. No real token, authorization code, client secret, or local profile content was read or written during implementation.
+
+## Step 4: Keep the pre-commit validation in the active workspace
+
+Pinocchio’s pre-commit hook calls `make lintmax`, and that target forced one Glazed lint invocation outside the workspace. The new OAuth package depends on already-implemented Geppetto packages in the sibling workspace, so that forced module mode incorrectly made the staged code appear to have missing imports.
+
+The lint targets now inherit the caller’s workspace. This fixes local pre-commit validation without weakening the pre-push policy: `lefthook.yml` still explicitly runs the release/lint/test pre-push commands with `GOWORK=off`.
+
+### Prompt Context
+
+**User prompt (verbatim):** "remove the GOWORK=off from the pre-commit hook"
+
+**Assistant interpretation:** Make the pre-commit lint path use the workspace rather than forcing standalone module resolution.
+
+**Inferred user intent:** Allow the Pinocchio worktree to validate integrations with sibling workspace modules during normal local commits.
+
+**Commit (code):** de6517cd4dd0700a8dbc0889ad234c47cc3269c3 — "build: keep workspace active for lint"
+
+### What I did
+
+- Removed `GOWORK=off` from the Glazed-lint commands used by `lint`, `lintmax`, and `glazed-lint` in `Makefile`.
+- Kept the `GOWORK=off` pre-push/release commands in `lefthook.yml` unchanged.
+- Ran `make lintmax` and `make test`, then committed the build change before committing the OAuth-store code.
+
+### Why
+
+The pre-commit hook should validate the checked-out workspace composition. It must not claim a local sibling dependency is absent when that sibling is intentionally included in the repository’s checked-in `go.work`.
+
+### What worked
+
+The rerun passed all lint and test stages. The OAuth code commit then passed the actual pre-commit hook, including code generation, workspace build, golangci-lint, Geppetto lint, Glazed lint, and the full test suite.
+
+### What didn't work
+
+Before the change, the hook failed during Glazed lint with:
+
+```text
+pkg/oauthprofiles/profile.go:14:2: no required module provides package github.com/go-go-golems/geppetto/pkg/steps/ai/credentials; to add it:
+	go get github.com/go-go-golems/geppetto/pkg/steps/ai/credentials
+```
+
+This was a workspace-mode mismatch, not an absent local implementation.
+
+### What I learned
+
+`lefthook.yml` did not itself force workspace-off pre-commit execution; the failing command was inside the `lintmax` Makefile target. Removing that target-local override keeps pre-push’s stronger isolated-module check available.
+
+### What was tricky to build
+
+The sharp edge was scope: blindly removing every `GOWORK=off` occurrence would change release and pre-push guarantees. The implemented change is limited to the lint targets reached by pre-commit, leaving the explicit pre-push isolation unchanged.
+
+### What warrants a second pair of eyes
+
+- Confirm the intended policy is indeed workspace-based pre-commit and standalone-module pre-push.
+- Resolve/publish the Geppetto OAuth dependency before treating the pre-push check as expected to pass for this branch.
+
+### What should be done in the future
+
+- Continue runtime source injection and browser login implementation.
+- Before publishing Pinocchio independently, update the Geppetto module requirement to a released revision containing the credential/OAuth packages.
+
+### Code review instructions
+
+Inspect the three modified Makefile lint invocations and `lefthook.yml` pre-push section. Validate locally with `make lintmax && make test`.
+
+### Technical details
+
+No credential data was involved in the build change.
