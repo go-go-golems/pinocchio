@@ -17,6 +17,7 @@ import (
 	"github.com/go-go-golems/glazed/pkg/help"
 	help_cmd "github.com/go-go-golems/glazed/pkg/help/cmd"
 	pinocchio_cmds "github.com/go-go-golems/pinocchio/cmd/pinocchio/cmds"
+	"github.com/go-go-golems/pinocchio/cmd/pinocchio/cmds/auth"
 	"github.com/go-go-golems/pinocchio/cmd/pinocchio/cmds/catter"
 	catter_doc "github.com/go-go-golems/pinocchio/cmd/pinocchio/cmds/catter/pkg/doc"
 	"github.com/go-go-golems/pinocchio/cmd/pinocchio/cmds/profiles"
@@ -267,6 +268,12 @@ func initAllCommands(helpSystem *help.HelpSystem) error {
 		return err
 	}
 	rootCmd.AddCommand(profilesCmd)
+
+	authCmd, err := auth.NewAuthCommand()
+	if err != nil {
+		return err
+	}
+	rootCmd.AddCommand(authCmd)
 
 	catter.AddToRootCommand(rootCmd)
 
