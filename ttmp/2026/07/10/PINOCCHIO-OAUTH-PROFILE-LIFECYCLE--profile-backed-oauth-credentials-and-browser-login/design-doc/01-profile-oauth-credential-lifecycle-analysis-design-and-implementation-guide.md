@@ -3,10 +3,11 @@ Title: Profile OAuth credential lifecycle analysis design and implementation gui
 Ticket: PINOCCHIO-OAUTH-PROFILE-LIFECYCLE
 Status: active
 Topics:
-    - auth
+    - pinocchio
+    - oauth
+    - credentials
+    - profiles
     - security
-    - storage
-    - llm
 DocType: design-doc
 Intent: long-term
 Owners:

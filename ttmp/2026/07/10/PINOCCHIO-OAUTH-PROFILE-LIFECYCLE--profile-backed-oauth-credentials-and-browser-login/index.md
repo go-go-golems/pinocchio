@@ -3,10 +3,11 @@ Title: Profile-backed OAuth credentials and browser login
 Ticket: PINOCCHIO-OAUTH-PROFILE-LIFECYCLE
 Status: active
 Topics:
-    - auth
+    - pinocchio
+    - oauth
+    - credentials
+    - profiles
     - security
-    - storage
-    - llm
 DocType: index
 Intent: long-term
 Owners: []
@@ -35,10 +36,11 @@ Current status: **active**
 
 ## Topics
 
-- auth
+- pinocchio
+- oauth
+- credentials
+- profiles
 - security
-- storage
-- llm
 
 ## Tasks
 

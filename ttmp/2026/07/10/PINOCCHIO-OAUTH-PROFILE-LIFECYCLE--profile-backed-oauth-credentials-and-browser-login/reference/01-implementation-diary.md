@@ -3,10 +3,11 @@ Title: Implementation diary
 Ticket: PINOCCHIO-OAUTH-PROFILE-LIFECYCLE
 Status: active
 Topics:
-    - auth
+    - pinocchio
+    - oauth
+    - credentials
+    - profiles
     - security
-    - storage
-    - llm
 DocType: reference
 Intent: long-term
 Owners:
