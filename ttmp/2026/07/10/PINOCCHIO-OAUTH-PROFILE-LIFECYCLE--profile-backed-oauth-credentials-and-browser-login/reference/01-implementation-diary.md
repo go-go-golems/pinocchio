@@ -322,3 +322,71 @@ Inspect the three modified Makefile lint invocations and `lefthook.yml` pre-push
 ### Technical details
 
 No credential data was involved in the build change.
+
+## Step 5: Resolve direct OAuth profiles and inject renewable sources
+
+Pinocchio profile bootstrap now recognizes an OAuth extension on the selected raw engine profile and creates a source-aware Geppetto standard factory for it. The feature is intentionally narrow: it permits only a profile resolved from exactly one direct YAML registry file, because that file is the credential store’s durable, auditable owner.
+
+The integration derives the credential request from the final resolved OpenAI-compatible inference settings rather than a user-provided string. This makes the source identity identical to the provider request identity Geppetto uses, and it rejects a profile that also supplies a static API key for the same route.
+
+### Prompt Context
+
+**User prompt (verbatim):** "continue"
+
+**Assistant interpretation:** Continue the planned implementation after restoring workspace-compatible pre-commit validation.
+
+**Inferred user intent:** Deliver the remaining functional phases with the same secure boundaries, tests, commits, and diary detail.
+
+**Commit (code):** 457c65d337f34c07f6d6fce9a25bb923005acc32 — "feat: inject OAuth profile bearer sources"
+
+### What I did
+
+- Added `pkg/oauthprofiles/refresher.go`, the thin host adapter from Geppetto’s OAuth protocol client to `credentials.Refresher`.
+- Added `pkg/cmds/profilebootstrap/oauth.go` to locate an OAuth profile in exactly one direct YAML source, derive its OpenAI/OpenAI Responses request identity, reject static-key conflicts, construct `YAMLStore`, and create `RenewableBearerTokenSource`.
+- Changed `NewEngineFromResolvedCLIEngineSettings` to use the OAuth-aware standard factory while retaining the explicit custom-factory function for callers that own their factory.
+- Added normal and race-tested fixtures for direct-source resolution, functional non-expired bearer lookup, static-key conflict redaction, and composed-source rejection.
+
+### Why
+
+- The callback command and refresh path need the same exact profile/store identity; resolving an arbitrary composed registry would make safe persistence ambiguous.
+- The dynamic source must be authoritative. Allowing an OAuth profile to also carry a static provider key could silently mask refresh/login failures.
+- Geppetto already owns retry, singleflight, and persistence-before-cache mechanics, so Pinocchio supplies only host policy and persistence adapters.
+
+### What worked
+
+- The resolver returns a source for an explicit direct registry and a future-expiry test credential without contacting a provider.
+- `go test ./pkg/cmds/profilebootstrap ./pkg/oauthprofiles -count=1` and the focused race suite passed before commit.
+- The actual pre-commit hook ran full generation, build, golangci-lint, Geppetto/Glazed lint, and full tests successfully.
+
+### What didn't work
+
+N/A.
+
+### What I learned
+
+- Geppetto OpenAI Chat uses the selected API type and its `<type>-base-url`; Responses normalizes its source request provider to `open-responses` and applies its documented base-URL fallback order.
+- The resolved Geppetto profile does not expose extensions, so Pinocchio must load the selected raw profile through the registry reader before parsing the host-owned OAuth extension.
+
+### What was tricky to build
+
+A profile can be resolved through Pinocchio inline overlays or an imported registry chain, but only a direct external YAML source can be safely rewritten. The resolver first obtains the actual selected registry/profile slug, then parses configured registry source specs and accepts exactly one YAML document containing that exact OAuth profile. This prevents a refresh from writing through an alias, inline overlay, or duplicate registry source.
+
+### What warrants a second pair of eyes
+
+- Review whether the direct-source restriction should eventually gain an explicit controlled migration command for inline/imported OAuth profiles.
+- Review OpenAI Responses base URL/provider normalization against any provider added after the generic initial implementation.
+- The independently published Geppetto module still needs a release/revision before standalone pre-push validation can pass.
+
+### What should be done in the future
+
+- Implement the browser Authorization Code + PKCE command using `ResolvedOAuthProfile.NewOAuthClient` with the exact bound loopback URL.
+- Add profile inspection/provenance redaction integration tests.
+- Add fake-provider request tests for proactive refresh and bounded 401 behavior through the full Pinocchio construction path.
+
+### Code review instructions
+
+Read `ResolveOAuthProfile`, `directYAMLRegistryPath`, and `oauthCredentialRequest` first, then the default engine-construction change. Validate with the focused profilebootstrap/oauthprofiles normal and race tests and the repository pre-commit hook.
+
+### Technical details
+
+The runtime placeholder redirect URL is used only to initialize a refresh-only OAuth protocol client; browser login will bind and pass its own exact loopback redirect URL. No provider request was made during these tests.

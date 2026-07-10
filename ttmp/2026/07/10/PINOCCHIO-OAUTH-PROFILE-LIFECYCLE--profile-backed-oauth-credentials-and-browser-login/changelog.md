@@ -31,3 +31,12 @@ Implemented the versioned OAuth profile parser and locked atomic direct-YAML cre
 
 - /home/manuel/workspaces/2026-07-10/refresh-oauth-token-geppetto/pinocchio/Makefile — Workspace-compatible lint execution
 - /home/manuel/workspaces/2026-07-10/refresh-oauth-token-geppetto/pinocchio/pkg/oauthprofiles/store.go — Secure credential tuple persistence
+
+## 2026-07-10
+
+Resolved OAuth profiles only from direct YAML sources, rejected static-key conflicts, and injected Geppetto renewable bearer sources into default Pinocchio engine construction (commit 457c65d).
+
+### Related Files
+
+- /home/manuel/workspaces/2026-07-10/refresh-oauth-token-geppetto/pinocchio/pkg/cmds/profilebootstrap/engine_settings.go — Default runtime integration
+- /home/manuel/workspaces/2026-07-10/refresh-oauth-token-geppetto/pinocchio/pkg/cmds/profilebootstrap/oauth.go — OAuth source identity and factory wiring

@@ -13,6 +13,10 @@ Intent: long-term
 Owners:
     - manuel
 RelatedFiles:
+    - Path: repo://pkg/cmds/profilebootstrap/oauth.go
+      Note: Direct source resolution and renewable bearer-source construction
+    - Path: repo://pkg/oauthprofiles/refresher.go
+      Note: OAuth protocol refresher adapter
     - Path: ws://geppetto/pkg/steps/ai/credentials/bearer.go
       Note: Reusable renewable source/store/refresher contracts
     - Path: ws://geppetto/pkg/steps/ai/credentials/oauth/oauth.go
@@ -22,7 +26,9 @@ RelatedFiles:
     - Path: ws://pinocchio/cmd/pinocchio/main.go
       Note: CLI root command registration point for planned auth group
     - Path: ws://pinocchio/pkg/cmds/profilebootstrap/engine_settings.go
-      Note: Resolved profile and source-aware engine factory integration point
+      Note: |-
+        Resolved profile and source-aware engine factory integration point
+        Default OAuth-aware engine factory integration
     - Path: ws://pinocchio/pkg/configdoc/profiles.go
       Note: Copies extensions into Geppetto engine profiles
     - Path: ws://pinocchio/pkg/configdoc/types.go
@@ -38,6 +44,7 @@ LastUpdated: 2026-07-10T23:35:00-04:00
 WhatFor: Implement secure profile OAuth lifecycle support without placing secrets in Geppetto inference settings.
 WhenToUse: Use before changing Pinocchio profile schemas, CLI bootstrap, profile display, OAuth login, or credential refresh behavior.
 ---
+
 
 
 

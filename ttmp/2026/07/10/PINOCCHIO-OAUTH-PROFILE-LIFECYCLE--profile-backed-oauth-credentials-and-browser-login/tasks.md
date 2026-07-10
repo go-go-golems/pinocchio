@@ -11,22 +11,22 @@
 ## Phase 1 — Typed OAuth profile model and redaction
 
 - [x] Add typed `extensions."pinocchio.oauth@v1"` parser/validator and profile identity model <!-- t:p1a1 -->
-- [ ] Define static-key/OAuth conflict and migration behavior <!-- t:p1a2 -->
+- [x] Define static-key/OAuth conflict and migration behavior <!-- t:p1a2 -->
 - [ ] Add redacted profile display/provenance behavior and tests <!-- t:p1a3 -->
 - [ ] Test layered extension merge, clone behavior, invalid configuration, and secret-free errors <!-- t:p1a4 -->
 
 ## Phase 2 — Secret-safe YAML credential store
 
-- [ ] Implement explicit writable local registry selection and owner-only permission validation <!-- t:p2a1 -->
+- [x] Implement explicit writable local registry selection and owner-only permission validation <!-- t:p2a1 -->
 - [x] Implement locked read/patch/write with temporary `0600` file, fsync, rename, and cleanup <!-- t:p2a2 -->
 - [x] Implement Geppetto `credentials.Store` with provider/base-URL identity checks <!-- t:p2a3 -->
 - [ ] Test tuple rotation, concurrent saves, failed writes, unsafe permissions, and unrelated-profile preservation <!-- t:p2a4 -->
 
 ## Phase 3 — Runtime credential source integration
 
-- [ ] Bind typed profile config to Geppetto `credentials/oauth.Client` and a `credentials.Refresher` adapter <!-- t:p3a1 -->
-- [ ] Build/inject `RenewableBearerTokenSource` through the Pinocchio source-aware engine factory <!-- t:p3a2 -->
-- [ ] Ensure OAuth profiles never pass refresh material through `InferenceSettings.APIKeys` <!-- t:p3a3 -->
+- [x] Bind typed profile config to Geppetto `credentials/oauth.Client` and a `credentials.Refresher` adapter <!-- t:p3a1 -->
+- [x] Build/inject `RenewableBearerTokenSource` through the Pinocchio source-aware engine factory <!-- t:p3a2 -->
+- [x] Ensure OAuth profiles never pass refresh material through `InferenceSettings.APIKeys` <!-- t:p3a3 -->
 - [ ] Test proactive refresh, source precedence, first-401 replay, second-401 stop, and redaction <!-- t:p3a4 -->
 
 ## Phase 4 — Browser login command
