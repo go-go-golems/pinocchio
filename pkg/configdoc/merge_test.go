@@ -1,6 +1,10 @@
 package configdoc
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/go-go-golems/pinocchio/pkg/oauthprofiles"
+)
 
 func mustDecodeDocument(t *testing.T, body string) *Document {
 	t.Helper()
@@ -79,6 +83,56 @@ profile:
 	}
 	if merged.Profile.Registries != nil {
 		t.Fatalf("expected registries to be cleared by explicit empty list, got %#v", merged.Profile.Registries)
+	}
+}
+
+func TestMergeDocuments_MergesOAuthExtensionFieldByFieldAndClonesResult(t *testing.T) {
+	low := mustDecodeDocument(t, `
+profiles:
+  assistant:
+    extensions:
+      "pinocchio.oauth@v1":
+        kind: oauth_bearer
+        authorization_url: https://issuer.example.test/authorize
+        token_url: https://issuer.example.test/token
+        client_id: public-client
+        scopes: [inference]
+        access_token: old-access
+        refresh_token: old-refresh
+`)
+	high := mustDecodeDocument(t, `
+profiles:
+  assistant:
+    extensions:
+      "pinocchio.oauth@v1":
+        scopes: [inference, offline_access]
+        access_token: new-access
+        refresh_token: new-refresh
+`)
+
+	merged, err := MergeDocuments(low, high)
+	if err != nil {
+		t.Fatalf("MergeDocuments failed: %v", err)
+	}
+	profile, err := oauthprofiles.Parse(merged.Profiles["assistant"].Extensions)
+	if err != nil {
+		t.Fatalf("Parse merged OAuth extension: %v", err)
+	}
+	if profile.AuthorizationURL != "https://issuer.example.test/authorize" || profile.TokenURL != "https://issuer.example.test/token" {
+		t.Fatal("expected low-layer protocol fields to survive")
+	}
+	if profile.Credential.AccessToken != "new-access" || profile.Credential.RefreshToken != "new-refresh" {
+		t.Fatal("expected high-layer credential tuple")
+	}
+	if len(profile.Scopes) != 2 || profile.Scopes[1] != "offline_access" {
+		t.Fatalf("expected high-layer scopes replacement, got %#v", profile.Scopes)
+	}
+
+	highOAuth := high.Profiles["assistant"].Extensions[oauthprofiles.ExtensionKey].(map[string]any)
+	highOAuth["client_id"] = "mutated-after-merge"
+	mergedOAuth := merged.Profiles["assistant"].Extensions[oauthprofiles.ExtensionKey].(map[string]any)
+	if mergedOAuth["client_id"] != "public-client" {
+		t.Fatalf("merge result aliases high-layer extension: %#v", mergedOAuth)
 	}
 }
 

@@ -57,6 +57,37 @@ func TestParseRejectsMalformedPolicyAndURL(t *testing.T) {
 	}
 }
 
+func TestParseRejectsMalformedCredentialFieldsWithoutLeakingValues(t *testing.T) {
+	for name, mutate := range map[string]func(map[string]any){
+		"access token":  func(raw map[string]any) { raw["access_token"] = 42 },
+		"refresh token": func(raw map[string]any) { raw["refresh_token"] = []string{"secret-must-not-appear"} },
+		"expiry":        func(raw map[string]any) { raw["expires_at"] = "not-a-timestamp" },
+	} {
+		t.Run(name, func(t *testing.T) {
+			extensions := testExtensions("", "", time.Time{})
+			raw := extensions[ExtensionKey].(map[string]any)
+			mutate(raw)
+
+			_, err := Parse(extensions)
+			require.Error(t, err)
+			require.NotContains(t, err.Error(), "secret-must-not-appear")
+		})
+	}
+}
+
+func TestRedactedExtensionsDeepCopiesOAuthExtension(t *testing.T) {
+	extensions := testExtensions("access-for-test", "refresh-for-test", time.Time{})
+	redacted := RedactedExtensions(extensions)
+
+	redactedOAuth := redacted[ExtensionKey].(map[string]any)
+	redactedOAuth["client_id"] = "changed-client"
+
+	originalOAuth := extensions[ExtensionKey].(map[string]any)
+	require.Equal(t, "public-client", originalOAuth["client_id"])
+	require.Equal(t, "access-for-test", originalOAuth["access_token"])
+	require.Equal(t, "refresh-for-test", originalOAuth["refresh_token"])
+}
+
 func testExtensions(accessToken, refreshToken string, expiresAt time.Time) map[string]any {
 	raw := map[string]any{
 		"kind":                 OAuthBearerKind,
