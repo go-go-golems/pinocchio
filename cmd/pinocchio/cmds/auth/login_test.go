@@ -94,6 +94,34 @@ func TestRunLoginRejectsStateMismatchWithoutTokenLeak(t *testing.T) {
 	require.NotContains(t, err.Error(), "must-not-leak")
 }
 
+func TestRunLoginRejectsProviderErrorAndTimeout(t *testing.T) {
+	server := httptest.NewServer(http.NotFoundHandler())
+	defer server.Close()
+	profile, _, _ := loginProfileFixture(t, server.URL)
+
+	providerErrorDeps := defaultLoginDependencies()
+	providerErrorDeps.openBrowser = func(rawURL string) error {
+		parsed, err := url.Parse(rawURL)
+		require.NoError(t, err)
+		callback, err := url.Parse(parsed.Query().Get("redirect_uri"))
+		require.NoError(t, err)
+		query := callback.Query()
+		query.Set("state", parsed.Query().Get("state"))
+		query.Set("error", "access_denied")
+		callback.RawQuery = query.Encode()
+		response, err := http.Get(callback.String())
+		require.NoError(t, err)
+		defer response.Body.Close()
+		require.Equal(t, http.StatusBadRequest, response.StatusCode)
+		return nil
+	}
+	require.EqualError(t, runLogin(context.Background(), profile, time.Second, providerErrorDeps), "OAuth provider returned an authorization error")
+
+	timeoutDeps := defaultLoginDependencies()
+	timeoutDeps.openBrowser = func(string) error { return nil }
+	require.EqualError(t, runLogin(context.Background(), profile, 10*time.Millisecond, timeoutDeps), "OAuth browser callback timed out or was cancelled")
+}
+
 func TestCallbackHandlerRejectsWrongPathAndReplay(t *testing.T) {
 	result := make(chan callbackResult, 1)
 	handler := callbackHandler("expected-state", result)

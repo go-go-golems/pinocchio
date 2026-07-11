@@ -2,8 +2,10 @@ package oauthprofiles
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -59,6 +61,40 @@ func TestYAMLStoreRejectsUnsafePermissionsAndMismatchedRequest(t *testing.T) {
 	loaded, err := store.Load(context.Background(), testRequest())
 	require.NoError(t, err)
 	require.Equal(t, "old-access", loaded.AccessToken)
+}
+
+func TestYAMLStoreConcurrentSavesLeaveOneCompleteTuple(t *testing.T) {
+	path := writeRegistryFixture(t, 0o600)
+	request := testRequest()
+	const writers = 8
+	stores := make([]*YAMLStore, writers)
+	for i := range stores {
+		stores[i] = newTestStore(t, path)
+	}
+	var wait sync.WaitGroup
+	errors := make(chan error, writers)
+	for i, store := range stores {
+		i, store := i, store
+		wait.Add(1)
+		go func() {
+			defer wait.Done()
+			errors <- store.Save(context.Background(), request, credentials.Credential{
+				AccessToken:  fmt.Sprintf("access-%d", i),
+				RefreshToken: fmt.Sprintf("refresh-%d", i),
+				ExpiresAt:    time.Now().Add(time.Hour),
+			})
+		}()
+	}
+	wait.Wait()
+	close(errors)
+	for err := range errors {
+		require.NoError(t, err)
+	}
+
+	credential, err := newTestStore(t, path).Load(context.Background(), request)
+	require.NoError(t, err)
+	require.Regexp(t, `^access-[0-7]$`, credential.AccessToken)
+	require.Regexp(t, `^refresh-[0-7]$`, credential.RefreshToken)
 }
 
 func TestYAMLStoreRequiresCompleteReplacementTuple(t *testing.T) {
