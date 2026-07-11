@@ -40,3 +40,21 @@ Resolved OAuth profiles only from direct YAML sources, rejected static-key confl
 
 - /home/manuel/workspaces/2026-07-10/refresh-oauth-token-geppetto/pinocchio/pkg/cmds/profilebootstrap/engine_settings.go — Default runtime integration
 - /home/manuel/workspaces/2026-07-10/refresh-oauth-token-geppetto/pinocchio/pkg/cmds/profilebootstrap/oauth.go — OAuth source identity and factory wiring
+
+## 2026-07-10
+
+Added the Glazed auth login verb with loopback PKCE/state/code exchange and secret-safe persistence; redacted OAuth extensions from config provenance and web profile API output; expanded concurrency and login-failure tests (commits e078a41, c307235, 839e8c2).
+
+### Related Files
+
+- /home/manuel/workspaces/2026-07-10/refresh-oauth-token-geppetto/pinocchio/cmd/pinocchio/cmds/auth/login.go — Glazed browser login
+- /home/manuel/workspaces/2026-07-10/refresh-oauth-token-geppetto/pinocchio/pkg/configdoc/explain.go — Provenance redaction
+
+## 2026-07-10
+
+Validated OAuth work with logcopter and gosec; added a 5-second callback ReadHeaderTimeout after gosec G112. Full repository race remains blocked by unrelated web-chat/sessionstream races (commit 9265a71).
+
+### Related Files
+
+- /home/manuel/workspaces/2026-07-10/refresh-oauth-token-geppetto/pinocchio/cmd/pinocchio/cmds/auth/login.go — Bound loopback callback header reads
+- /home/manuel/workspaces/2026-07-10/refresh-oauth-token-geppetto/pinocchio/cmd/web-chat/internal/appserver/server_test.go — Existing full-race blocker

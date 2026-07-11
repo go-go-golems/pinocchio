@@ -13,6 +13,14 @@ Intent: long-term
 Owners:
     - manuel
 RelatedFiles:
+    - Path: repo://cmd/pinocchio/cmds/auth/login.go
+      Note: Glazed PKCE loopback browser login implementation
+    - Path: repo://cmd/pinocchio/cmds/auth/login_test.go
+      Note: Successful and failed browser-flow coverage
+    - Path: repo://cmd/web-chat/internal/profiles/api_models.go
+      Note: OAuth extension web API redaction
+    - Path: repo://pkg/configdoc/explain.go
+      Note: OAuth extension provenance redaction
     - Path: ws://geppetto/pkg/steps/ai/credentials/oauth/oauth.go
       Note: Observed sibling OAuth primitive
     - Path: ws://pinocchio/lefthook.yml
@@ -32,6 +40,7 @@ LastUpdated: 2026-07-10T23:35:00-04:00
 WhatFor: Continue the profile-backed OAuth, persistence, browser-login, and runtime-source work safely.
 WhenToUse: Use when resuming implementation or reviewing decisions and validation for this ticket.
 ---
+
 
 
 
@@ -390,3 +399,137 @@ Read `ResolveOAuthProfile`, `directYAMLRegistryPath`, and `oauthCredentialReques
 ### Technical details
 
 The runtime placeholder redirect URL is used only to initialize a refresh-only OAuth protocol client; browser login will bind and pass its own exact loopback redirect URL. No provider request was made during these tests.
+
+## Step 6: Add the Glazed browser-login verb and redact inspection surfaces
+
+`pinocchio auth login` is now a Glazed command, not a raw Cobra command. It uses shared profile/config sections, declares its own fields through `cmds.WithFlags`, and produces one non-secret structured completion row. The flagless Cobra `auth` node only groups Glazed verbs.
+
+The login flow binds `127.0.0.1:0` before it constructs the authorization URL, uses Geppetto PKCE S256 and state, accepts one exact callback path, exchanges the code, and persists the replacement tuple through the profile-bound YAML store. In parallel, OAuth credential fields are redacted at the actual inspection boundaries found during the audit: inline-config provenance and web-chat profile API payloads.
+
+### Prompt Context
+
+**User prompt (verbatim):** "it shouldn't allow cobra flags to be written, right? it should flag the command you wrote at first?"
+
+**Assistant interpretation:** Ensure the new user-facing verb conforms to the repository’s Glazed CLI policy and verify the existing analyzer would prevent raw Cobra flag definitions.
+
+**Inferred user intent:** Prevent future CLI regressions by using the intended framework and enforcing it through the already-wired Glazed lint tooling.
+
+**Commit (code):** e078a41a9c67c5daefcbcd6159f52eec03192bcd — "feat: add Glazed OAuth browser login"
+
+### What I did
+
+- Replaced the initial raw Cobra login draft before it was committed with `LoginCommand`, a `cmds.GlazeCommand` using `fields.New`, shared Glazed/profile sections, `values.Values` decoding, and `cli.BuildCobraCommand` registration.
+- Registered the flagless `auth` group in `cmd/pinocchio/main.go`.
+- Implemented loopback listener, PKCE, state constant-time comparison, one-callback replay rejection, code exchange, token-free structured result, and owner-only store save.
+- Added fake-provider tests for PKCE/code exchange/save, state mismatch, provider error, callback timeout, wrong callback path, and replay.
+- Ran `make glazed-lint`; the command passes the analyzer. The earlier raw Cobra `cmd.Flags().StringVar/...` form is exactly the policy described in Glazed’s lint documentation as a violation.
+
+### Why
+
+- Command verbs must be declarative Glazed commands so profile/config/output handling remains consistent and the repository lint policy can detect direct Cobra flag definitions.
+- Browser login must never put authorization codes, access tokens, refresh tokens, or client secrets in Glazed rows or terminal messages.
+
+### What worked
+
+- `go run ./cmd/pinocchio auth login --help` displays the Glazed output controls and command fields.
+- Focused normal/race browser tests passed, as did the actual pre-commit Glazed analyzer and full repository test/lint hook.
+
+### What didn't work
+
+The first pre-commit attempt identified an unchecked listener close:
+
+```text
+cmd/pinocchio/cmds/auth/login.go:170:22: Error return value of `listener.Close` is not checked
+```
+
+The listener close was changed to an explicit ignored-error deferred closure, and the retry passed all hooks.
+
+### What I learned
+
+- Pinocchio already had Glazed lint wired through `make glazed-lint`; the raw draft was not yet committed or linted when the correction was made.
+- The runtime’s direct profile extension is not automatically safe merely because CLI list/show does not render it; provenance and web API cloning were concrete leak surfaces.
+
+### What was tricky to build
+
+The command’s successful callback must be acknowledged to the browser yet must not expose the authorization code or exchange result. The handler sends an in-memory code result once, returns only a generic browser success page, and main command flow performs the exchange/save. A repeated callback receives HTTP 409, while a state mismatch/provider error receives a generic HTTP 400 and a token-free command error.
+
+### What warrants a second pair of eyes
+
+- Review the deliberate policy that `--open-browser=false` is rejected rather than printing an authorization URL containing temporary state to arbitrary output destinations.
+- Review whether a future device-code flow is needed for headless environments; it must be a separately designed provider capability.
+- Verify provider-specific loopback redirect registration before any real login.
+
+### What should be done in the future
+
+- Publish Geppetto’s OAuth revision before independent Pinocchio release validation.
+- Add a provider-specific contract only after authoritative provider documentation and a safe test account are available.
+
+### Code review instructions
+
+Start with `cmd/pinocchio/cmds/auth/login.go`, then read `login_test.go`, `pkg/configdoc/explain.go`, and `cmd/web-chat/internal/profiles/api_models.go`. Run focused normal/race tests and `make glazed-lint`.
+
+### Technical details
+
+No real browser, provider, authorization code, or credential was used. Fake-provider tests use synthetic values and assert that errors/output omit them.
+
+## Step 7: Exercise concurrent store writes and remaining login failures
+
+The credential-store test suite now runs several independent YAML store instances against one direct registry concurrently. Every writer acquires the owner-only sibling lock and the final file remains a complete tuple from one writer, rather than a partially interleaved YAML document.
+
+The browser tests now cover provider-declared error and timeout paths in addition to successful exchange, state mismatch, wrong path, and callback replay. This closes the local lifecycle coverage without requiring a real provider account.
+
+### Prompt Context
+
+**User prompt (verbatim):** (see Step 6)
+
+**Assistant interpretation:** Extend validation so the persistence and browser lifecycle handle concurrency and expected failure paths safely.
+
+**Inferred user intent:** Make the implementation robust under normal operational races and OAuth callback failures.
+
+**Commit (code):** 839e8c27ebacc7f5ad41d81884f354546765d08a — "test: cover OAuth persistence and login failures"
+
+### What I did
+
+- Added concurrent multi-store save coverage with race detection.
+- Added provider-error and timeout coverage to the browser-login tests.
+- Re-ran focused normal/race tests and the full pre-commit hook.
+
+### Why
+
+Refresh can be requested concurrently, and browser redirects can fail before a token exchange. Both need deterministic, secret-safe behavior.
+
+### What worked
+
+Concurrent saves completed without errors and left one parseable complete credential tuple. The provider error and timeout tests returned fixed, token-free errors.
+
+### What didn't work
+
+The full command `go test -race ./... -count=1` failed outside the OAuth packages. It reported a close-versus-send race in `github.com/go-go-golems/sessionstream@v0.0.6/pkg/sessionstream/transport/ws/server.go` while `cmd/web-chat` was active, and several unsynchronized test-engine/turn reads in `cmd/web-chat/internal/appserver/server_test.go:344-352`. The failing packages were `cmd/web-chat` and `cmd/web-chat/internal/appserver`; focused OAuth/browser race suites passed.
+
+`make gosec` initially reported G112 at `cmd/pinocchio/cmds/auth/login.go:190`: the loopback `http.Server` did not set `ReadHeaderTimeout`. I added `ReadHeaderTimeout: 5 * time.Second`; the rerun passed with zero issues (commit `9265a71dcc2170d6a1aa6b467ce569f982c60fe0`).
+
+### What I learned
+
+The sibling lock persists across atomic registry replacement, so separate store instances coordinate correctly even though each rereads the registry on every operation.
+
+### What was tricky to build
+
+The test must avoid calling `testing.T` assertion helpers from worker goroutines. Stores are constructed before spawning workers, and workers report only errors through a channel for assertions on the test goroutine.
+
+### What warrants a second pair of eyes
+
+- The lock strategy is advisory and POSIX-specific; evaluate native Windows support before claiming cross-platform persistence.
+- The tests do not replace a real provider compatibility smoke.
+
+### What should be done in the future
+
+- Run the documented real-provider smoke once a selected provider/test account exists.
+- Complete release dependency publication and standalone-module validation.
+
+### Code review instructions
+
+Review `TestYAMLStoreConcurrentSavesLeaveOneCompleteTuple` and the `runLogin` failure tests. Run their normal and race commands.
+
+### Technical details
+
+The callback/provider fixtures contain synthetic values only.

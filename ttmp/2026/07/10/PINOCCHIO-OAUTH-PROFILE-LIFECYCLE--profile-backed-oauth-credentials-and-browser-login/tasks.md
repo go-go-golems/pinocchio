@@ -5,14 +5,14 @@
 - [x] Confirm direct Geppetto registry YAML versus inline Pinocchio config YAML formats and choose the writable OAuth profile source <!-- t:p0a1 -->
 - [x] Map profile extension transport, merge behavior, bootstrap engine construction, profile CLI inspection, and Geppetto OAuth/source APIs <!-- t:p0a2 -->
 - [x] Write the intern-oriented analysis/design/implementation guide and implementation diary <!-- t:p0a3 -->
-- [ ] Identify all list/show/provenance/debug output paths that require OAuth secret redaction <!-- t:p0a4 -->
+- [x] Identify all list/show/provenance/debug output paths that require OAuth secret redaction <!-- t:p0a4 -->
 - [ ] Select the initial provider and document authorization/token endpoint, loopback redirect, scopes, client auth, and refresh-token rotation contract <!-- t:p0a5 -->
 
 ## Phase 1 — Typed OAuth profile model and redaction
 
 - [x] Add typed `extensions."pinocchio.oauth@v1"` parser/validator and profile identity model <!-- t:p1a1 -->
 - [x] Define static-key/OAuth conflict and migration behavior <!-- t:p1a2 -->
-- [ ] Add redacted profile display/provenance behavior and tests <!-- t:p1a3 -->
+- [x] Add redacted profile display/provenance behavior and tests <!-- t:p1a3 -->
 - [ ] Test layered extension merge, clone behavior, invalid configuration, and secret-free errors <!-- t:p1a4 -->
 
 ## Phase 2 — Secret-safe YAML credential store
@@ -31,10 +31,10 @@
 
 ## Phase 4 — Browser login command
 
-- [ ] Add and register `pinocchio auth` command group <!-- t:p4a1 -->
-- [ ] Implement `auth login --profile` PKCE/state/loopback callback flow <!-- t:p4a2 -->
-- [ ] Exchange authorization code, persist tuple, and show sanitized success/recovery output <!-- t:p4a3 -->
-- [ ] Test timeout, cancellation, wrong path, duplicate callback, provider error, state mismatch, and success <!-- t:p4a4 -->
+- [x] Add and register `pinocchio auth` command group <!-- t:p4a1 -->
+- [x] Implement `auth login --profile` PKCE/state/loopback callback flow <!-- t:p4a2 -->
+- [x] Exchange authorization code, persist tuple, and show sanitized success/recovery output <!-- t:p4a3 -->
+- [x] Test timeout, cancellation, wrong path, duplicate callback, provider error, state mismatch, and success <!-- t:p4a4 -->
 
 ## Phase 5 — Operations, validation, and delivery
 
