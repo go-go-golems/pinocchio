@@ -596,3 +596,61 @@ Review commits `adea466`, `457c65d`, `e078a41`, `c307235`, `839e8c2`, and `9265a
 ### Technical details
 
 Bundle path: `/ai/2026/07/10/PINOCCHIO-OAUTH-PROFILE-LIFECYCLE/Pinocchio OAuth Profile Lifecycle Implementation Update.pdf`.
+
+## Step 9: Cover layered OAuth extension safety
+
+Layered configuration now has direct regression coverage for OAuth extension merging and clone isolation. Parser coverage also confirms malformed credential values return field-only errors without echoing a supplied secret-shaped value.
+
+The first commit hook attempt encountered an existing concurrent `golangci-lint` invocation; after waiting for it to finish, the unmodified staged change passed the full lint and test hooks.
+
+### Prompt Context
+
+**User prompt (verbatim):** "continue"
+
+**Assistant interpretation:** Continue the remaining implementation and validation tasks without widening scope to an unselected real provider.
+
+**Inferred user intent:** Close concrete, locally verifiable lifecycle gaps while preserving the established secret-safety constraints.
+
+**Commit (code):** 467ab31a5cda075658f34f6481df31083de85194 — "test: cover OAuth extension merge and redaction"
+
+### What I did
+
+- Added layered OAuth extension merge and clone-isolation coverage in `pkg/configdoc/merge_test.go`.
+- Added malformed token/expiry and redaction copy-isolation coverage in `pkg/oauthprofiles/profile_test.go`.
+- Ran focused normal and race suites, then the full pre-commit lint/test hook.
+
+### Why
+
+A profile extension can traverse config layering before the direct-YAML restriction rejects it for persistence. The merge and redaction boundaries must remain independently safe and non-aliasing.
+
+### What worked
+
+`go test ./pkg/oauthprofiles ./pkg/configdoc -count=1`, its `-race` form, and the retried full hook all passed.
+
+### What didn't work
+
+The first hook attempt failed only because another `golangci-lint` process was running: `Error: parallel golangci-lint is running`. No source issue was reported; waiting and retrying succeeded.
+
+### What I learned
+
+The config document merger recursively merges the versioned extension mapping and deep-copies the result, so later mutation of a source document cannot alter the resolved profile extension.
+
+### What was tricky to build
+
+The tests need to verify credential behavior without printing credential structs on failure. Assertions deliberately use token-free failure messages and only use synthetic fixture values for equality checks.
+
+### What warrants a second pair of eyes
+
+- Decide whether an inline OAuth extension should be rejected earlier during config-document validation rather than only by runtime source selection.
+
+### What should be done in the future
+
+- Complete failed-write and real-provider coverage once their test seams/provider contract are available.
+
+### Code review instructions
+
+Read `TestMergeDocuments_MergesOAuthExtensionFieldByFieldAndClonesResult` and `TestParseRejectsMalformedCredentialFieldsWithoutLeakingValues`; rerun the focused normal and race commands.
+
+### Technical details
+
+Task `p1a4` is complete. The ticket still deliberately leaves provider selection, real-provider smoke, standalone validation, and unrelated full-race remediation open.

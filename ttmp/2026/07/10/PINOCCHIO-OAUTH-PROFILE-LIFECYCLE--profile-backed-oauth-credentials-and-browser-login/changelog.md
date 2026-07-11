@@ -58,3 +58,12 @@ Validated OAuth work with logcopter and gosec; added a 5-second callback ReadHea
 
 - /home/manuel/workspaces/2026-07-10/refresh-oauth-token-geppetto/pinocchio/cmd/pinocchio/cmds/auth/login.go — Bound loopback callback header reads
 - /home/manuel/workspaces/2026-07-10/refresh-oauth-token-geppetto/pinocchio/cmd/web-chat/internal/appserver/server_test.go — Existing full-race blocker
+
+## 2026-07-10
+
+Completed OAuth extension merge, clone-isolation, malformed credential, and secret-free-error coverage (commit 467ab31).
+
+### Related Files
+
+- /home/manuel/workspaces/2026-07-10/refresh-oauth-token-geppetto/pinocchio/pkg/configdoc/merge_test.go — Layered extension merge coverage
+- /home/manuel/workspaces/2026-07-10/refresh-oauth-token-geppetto/pinocchio/pkg/oauthprofiles/profile_test.go — Parser and redaction coverage

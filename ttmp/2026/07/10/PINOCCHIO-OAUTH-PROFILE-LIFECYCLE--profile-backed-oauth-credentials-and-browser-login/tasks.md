@@ -13,7 +13,7 @@
 - [x] Add typed `extensions."pinocchio.oauth@v1"` parser/validator and profile identity model <!-- t:p1a1 -->
 - [x] Define static-key/OAuth conflict and migration behavior <!-- t:p1a2 -->
 - [x] Add redacted profile display/provenance behavior and tests <!-- t:p1a3 -->
-- [ ] Test layered extension merge, clone behavior, invalid configuration, and secret-free errors <!-- t:p1a4 -->
+- [x] Test layered extension merge, clone behavior, invalid configuration, and secret-free errors <!-- t:p1a4 -->
 
 ## Phase 2 — Secret-safe YAML credential store
 
