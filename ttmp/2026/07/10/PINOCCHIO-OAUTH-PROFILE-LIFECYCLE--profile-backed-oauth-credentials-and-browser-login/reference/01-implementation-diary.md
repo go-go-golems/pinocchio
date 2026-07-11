@@ -533,3 +533,66 @@ Review `TestYAMLStoreConcurrentSavesLeaveOneCompleteTuple` and the `runLogin` fa
 ### Technical details
 
 The callback/provider fixtures contain synthetic values only.
+
+## Step 8: Validate and publish the implementation update
+
+The implementation update was validated with the repository lint/test hook, focused OAuth/browser race suites, logcopter, and gosec. The complete repository race suite remains blocked by documented unrelated web-chat/sessionstream races; no OAuth package race was found.
+
+A second PDF bundle now captures the implemented profile parser/store, runtime source integration, Glazed browser login, redaction audit, task state, and chronological diary without live credential material.
+
+### Prompt Context
+
+**User prompt (verbatim):** (see Step 5)
+
+**Assistant interpretation:** Complete the implementation workflow with validation evidence and an updated review artifact.
+
+**Inferred user intent:** Leave a continuation-ready, reviewable implementation record in both docmgr and reMarkable.
+
+### What I did
+
+- Ran `make logcopter-check` successfully.
+- Ran `make gosec`; fixed G112 with a five-second callback `ReadHeaderTimeout`, then reran successfully with zero issues.
+- Ran a successful dry-run and uploaded the revised ticket bundle.
+
+### Why
+
+- Security and generated-log validation are required before publishing a credential lifecycle implementation guide.
+- A distinct update bundle preserves the original design-only review artifact.
+
+### What worked
+
+Uploaded successfully:
+
+```text
+OK: uploaded Pinocchio OAuth Profile Lifecycle Implementation Update.pdf -> /ai/2026/07/10/PINOCCHIO-OAUTH-PROFILE-LIFECYCLE
+```
+
+### What didn't work
+
+The unrelated full-race failure remains as recorded in Step 7.
+
+### What I learned
+
+The Glazed analyzer, logcopter check, gosec, and normal full tests all pass with the new command/source/store code; full race needs separate web-chat/sessionstream remediation.
+
+### What was tricky to build
+
+The update needed to distinguish a real security defect (G112, fixed) from existing race failures outside the OAuth change. The diary records both exact outcomes so reviewers do not mistake the race blocker for OAuth validation success.
+
+### What warrants a second pair of eyes
+
+- Review the unresolved full-race failures separately from this ticket.
+- Review a provider contract before enabling a real login smoke.
+
+### What should be done in the future
+
+- Publish the Geppetto dependency revision and run standalone-module pre-push validation.
+- Select a documented provider and perform a secret-safe real-provider login/refresh smoke.
+
+### Code review instructions
+
+Review commits `adea466`, `457c65d`, `e078a41`, `c307235`, `839e8c2`, and `9265a71`, then rerun the documented focused and repository validation commands.
+
+### Technical details
+
+Bundle path: `/ai/2026/07/10/PINOCCHIO-OAUTH-PROFILE-LIFECYCLE/Pinocchio OAuth Profile Lifecycle Implementation Update.pdf`.
