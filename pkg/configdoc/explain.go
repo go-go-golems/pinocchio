@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	glazedconfig "github.com/go-go-golems/glazed/pkg/config"
+	"github.com/go-go-golems/pinocchio/pkg/oauthprofiles"
 )
 
 type ProvenanceOperation string
@@ -119,7 +120,7 @@ func recordDocumentExplain(explain *DocumentExplain, low, high *Document, file g
 			explain.Add("profiles."+slug+".inference_settings", ProvenanceOperationMerge, file, highProfile.InferenceSettings, baseMetadata)
 		}
 		if highProfile.hasExtensions {
-			explain.Add("profiles."+slug+".extensions", ProvenanceOperationMerge, file, highProfile.Extensions, baseMetadata)
+			explain.Add("profiles."+slug+".extensions", ProvenanceOperationMerge, file, oauthprofiles.RedactedExtensions(highProfile.Extensions), baseMetadata)
 		}
 	}
 }

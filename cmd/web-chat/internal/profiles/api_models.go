@@ -7,6 +7,7 @@ import (
 	gepprofiles "github.com/go-go-golems/geppetto/pkg/engineprofiles"
 	aisettings "github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
+	"github.com/go-go-golems/pinocchio/pkg/oauthprofiles"
 )
 
 func profileDocFromModel(registrySlug gepprofiles.RegistrySlug, registry *gepprofiles.EngineProfileRegistry, p *gepprofiles.EngineProfile) ProfileDocument {
@@ -80,7 +81,7 @@ func cloneExtensionMap(in map[string]any) map[string]any {
 	if err := json.Unmarshal(b, &out); err != nil {
 		return nil
 	}
-	return out
+	return oauthprofiles.RedactedExtensions(out)
 }
 
 func mockParityProfileListItem(registrySlug gepprofiles.RegistrySlug) ProfileListItem {
