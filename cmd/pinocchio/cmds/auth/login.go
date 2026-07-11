@@ -187,7 +187,10 @@ func runLogin(parent context.Context, profile *profilebootstrap.ResolvedOAuthPro
 	ctx, cancel := context.WithTimeout(parent, timeout)
 	defer cancel()
 	result := make(chan callbackResult, 1)
-	server := &http.Server{Handler: callbackHandler(state, result)}
+	server := &http.Server{
+		Handler:           callbackHandler(state, result),
+		ReadHeaderTimeout: 5 * time.Second,
+	}
 	serveDone := make(chan error, 1)
 	go func() { serveDone <- server.Serve(listener) }()
 	defer func() {
