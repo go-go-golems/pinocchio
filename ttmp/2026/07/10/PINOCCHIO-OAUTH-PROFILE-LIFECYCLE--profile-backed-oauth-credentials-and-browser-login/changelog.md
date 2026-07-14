@@ -75,3 +75,12 @@ Published OAuth login/migration help that prohibits refresh material in inferenc
 ### Related Files
 
 - /home/manuel/workspaces/2026-07-10/refresh-oauth-token-geppetto/pinocchio/pkg/doc/topics/oauth-profile-login.md — OAuth operator guide
+
+## 2026-07-14
+
+Consumed Geppetto v0.13.6; focused and full standalone non-race Pinocchio tests now pass (commit ef035f5).
+
+### Related Files
+
+- /home/manuel/workspaces/2026-07-10/refresh-oauth-token-geppetto/pinocchio/go.mod — Published Geppetto renewable bearer dependency
+- /home/manuel/workspaces/2026-07-10/refresh-oauth-token-geppetto/pinocchio/pkg/cmds/profilebootstrap/oauth.go — Runtime source integration validated against release

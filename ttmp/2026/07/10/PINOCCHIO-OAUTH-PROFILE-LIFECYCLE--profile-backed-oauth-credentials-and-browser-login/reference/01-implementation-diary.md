@@ -19,6 +19,10 @@ RelatedFiles:
       Note: Successful and failed browser-flow coverage
     - Path: repo://cmd/web-chat/internal/profiles/api_models.go
       Note: OAuth extension web API redaction
+    - Path: repo://go.mod
+      Note: Geppetto v0.13.6 dependency (commit ef035f5)
+    - Path: repo://go.sum
+      Note: Resolved release dependency graph (commit ef035f5)
     - Path: repo://pkg/configdoc/explain.go
       Note: OAuth extension provenance redaction
     - Path: ws://geppetto/pkg/steps/ai/credentials/oauth/oauth.go
@@ -40,6 +44,7 @@ LastUpdated: 2026-07-10T23:35:00-04:00
 WhatFor: Continue the profile-backed OAuth, persistence, browser-login, and runtime-source work safely.
 WhenToUse: Use when resuming implementation or reviewing decisions and validation for this ticket.
 ---
+
 
 
 
@@ -710,3 +715,81 @@ Read `pkg/doc/topics/oauth-profile-login.md`, then the modified profile-resoluti
 ### Technical details
 
 No live OAuth provider, authorization code, access token, or refresh token appears in the documentation.
+
+## Step 11: Consume the published Geppetto bearer release
+
+Geppetto `v0.13.6` now contains the merged renewable bearer source, reviewed cancellation behavior, keyed rejected-bearer coordination, and Go-host-only JavaScript injection API. Pinocchio has moved from its workspace-only Geppetto dependency to that published module version, so the OAuth lifecycle can be compiled and tested under standalone module resolution.
+
+The dependency bump also resolves the earlier validation blocker recorded in Steps 8 and 10. The full non-race Pinocchio suite now passes with `GOWORK=off`; remaining work is provider-specific smoke and the unrelated repository-wide race baseline, not an inability to fetch the Geppetto APIs.
+
+### Prompt Context
+
+**User prompt (verbatim):** "ok, tag-patch release geppetto, then let's focus on pinocchio. Will we need new verbs / functionality in pinocchio to manage oauth / bearert okens?"
+
+**Assistant interpretation:** Release Geppetto, consume the release from Pinocchio, and identify the minimal safe command surface for OAuth credential operations.
+
+**Inferred user intent:** Make the established OAuth lifecycle independently buildable and avoid adding commands that duplicate automatic runtime renewal or expose credential material.
+
+**Commit (code):** `ef035f5` — "deps: use Geppetto renewable bearer release"
+
+### What I did
+
+- Released Geppetto `v0.13.6` from merged `origin/main`; the module resolves through `proxy.golang.org`.
+- Updated Pinocchio’s direct Geppetto dependency from `v0.13.3` to `v0.13.6` and accepted the minimum-version-selection transitive module updates required by the released graph.
+- Ran `GOWORK=off go test ./pkg/oauthprofiles ./pkg/cmds/profilebootstrap ./cmd/pinocchio/cmds/auth -count=1`.
+- Ran `GOWORK=off go test ./... -count=1` successfully.
+- Committed the isolated dependency update.
+
+### Why
+
+The OAuth source implementation imports Geppetto credential APIs unavailable in the previously published dependency. Workspace resolution had hidden that gap during implementation; a release dependency is required for ordinary consumers and release validation.
+
+### What worked
+
+- Geppetto `v0.13.6` resolved with `GOPROXY=proxy.golang.org go list -m github.com/go-go-golems/geppetto@v0.13.6`.
+- Focused OAuth, profile-bootstrap, and Glazed login tests passed standalone.
+- The full standalone non-race Pinocchio suite passed with `GOWORK=off`.
+
+### What didn't work
+
+No dependency-resolution or test failure occurred in this step. The module update changed indirect dependency versions through Go minimum version selection; this is expected from consuming the released Geppetto module graph and was retained with `go.mod`/`go.sum` together.
+
+### What I learned
+
+Pinocchio already has the essential runtime and first-login verbs: `auth login` obtains/replaces a tuple through PKCE, and the profile bootstrap injects a `RenewableBearerTokenSource` for ordinary inference. A manual `auth refresh` verb would duplicate request-time refresh and create a new operational path that can fail or leak state independently of inference.
+
+### What was tricky to build
+
+The important distinction is between credential **lifecycle management** and credential **inspection**. A user needs to initiate login and remove local state, but should not need to copy a bearer or manually refresh it. Any command that reports state must provide only non-secret metadata such as profile selection, direct-registry eligibility, and whether a local credential tuple is present or expired; it must not print token material or call a remote endpoint merely to render status.
+
+### What warrants a second pair of eyes
+
+- Design `auth status` so it reports redacted local state and validates the selected direct-YAML owner without becoming a credential inspection command.
+- Design `auth logout` as an atomic local tuple removal operation. Do not call it `revoke` unless a selected provider’s documented revocation endpoint has been implemented and tested.
+- Keep manual refresh out of the command surface unless a concrete offline recovery requirement demonstrates that request-time refresh is insufficient.
+
+### What should be done in the future
+
+- Add `pinocchio auth status --profile` with secret-free local readiness/expiry metadata.
+- Add `pinocchio auth logout --profile` to atomically remove the stored local credential tuple from its direct YAML owner.
+- Add provider-specific `auth revoke` only after selecting a provider and documenting its endpoint/authentication contract; it should revoke remotely before removing local state and report no secret data.
+- Run full standalone race/lint/security validation and a secret-safe provider smoke after the provider contract is selected.
+
+### Code review instructions
+
+- Review `go.mod` and `go.sum` for the Geppetto `v0.13.6` release dependency and the resulting MVS updates.
+- Run `GOWORK=off go test ./... -count=1` from the Pinocchio repository root.
+- For the existing behavior, read `cmd/pinocchio/cmds/auth/login.go` and `pkg/cmds/profilebootstrap/oauth.go`; confirm login and runtime renewal remain separate and secret-free.
+
+### Technical details
+
+Recommended command surface:
+
+```text
+pinocchio auth login   # existing; browser PKCE flow and durable local save
+pinocchio auth status  # proposed; local, redacted readiness/expiry report
+pinocchio auth logout  # proposed; local atomic tuple removal
+pinocchio auth revoke  # deferred; only with a provider-specific revocation contract
+```
+
+`pinocchio auth refresh` is intentionally not recommended. `RenewableBearerTokenSource` refreshes at inference request time and performs the bounded provider-401 recovery path when applicable.
