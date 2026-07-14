@@ -67,3 +67,11 @@ Completed OAuth extension merge, clone-isolation, malformed credential, and secr
 
 - /home/manuel/workspaces/2026-07-10/refresh-oauth-token-geppetto/pinocchio/pkg/configdoc/merge_test.go — Layered extension merge coverage
 - /home/manuel/workspaces/2026-07-10/refresh-oauth-token-geppetto/pinocchio/pkg/oauthprofiles/profile_test.go — Parser and redaction coverage
+
+## 2026-07-13
+
+Published OAuth login/migration help that prohibits refresh material in inference settings and documents the direct-YAML owner rule.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-07-10/refresh-oauth-token-geppetto/pinocchio/pkg/doc/topics/oauth-profile-login.md — OAuth operator guide

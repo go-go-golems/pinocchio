@@ -288,7 +288,7 @@ export ANTHROPIC_API_KEY=...
 
 This is usually cleaner than repeating credentials inside multiple inline profiles.
 
-If you truly need profile-specific credentials, keep them under that profile's `inference_settings`. But avoid committing secrets to repository-local `.pinocchio.yml` files.
+For static profile-specific credentials, use the profile's normal static-key configuration and avoid committing secrets to repository-local `.pinocchio.yml` files. For renewable OAuth credentials, do not use `inference_settings` or `APIKeys`: place the versioned `pinocchio.oauth@v1` extension in one explicit direct owner-only YAML registry so refresh can be atomically persisted. See [OAuth profile login and renewable credentials](../topics/oauth-profile-login.md).
 
 ## Concrete Before-and-After Examples
 

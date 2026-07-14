@@ -654,3 +654,59 @@ Read `TestMergeDocuments_MergesOAuthExtensionFieldByFieldAndClonesResult` and `T
 ### Technical details
 
 Task `p1a4` is complete. The ticket still deliberately leaves provider selection, real-provider smoke, standalone validation, and unrelated full-race remediation open.
+
+## Step 10: Publish OAuth profile operator guidance
+
+Pinocchio’s Glazed help now distinguishes ordinary inline profiles from OAuth profiles that must persist renewable state. The migration guide no longer suggests placing OAuth credentials in inference settings or API-key maps.
+
+The companion Geppetto review hardening also confirms that JavaScript-created engines have no bearer-source injection point. Pinocchio must retain its Go-host injection boundary and must not move OAuth credential state into JavaScript.
+
+### Prompt Context
+
+**User prompt (verbatim):** "ok, go ahead. Also, how is the geppetto JS support for the bearer, do we need to change something there?"
+
+**Assistant interpretation:** Publish the reviewed lifecycle behavior and document the JavaScript integration limitation.
+
+**Inferred user intent:** Give operators a safe, discoverable login/migration path and prevent accidental credential exposure through JavaScript.
+
+### What I did
+
+- Added the `oauth-profile-login` Glazed help topic.
+- Updated profile-resolution and migration help with the direct-YAML OAuth ownership rule.
+- Documented the JavaScript builder limitation and safe Go-engine workaround.
+
+### Why
+
+The existing migration advice was correct for static keys but unsafe for renewable OAuth material.
+
+### What worked
+
+The documentation matches the implemented direct YAML store, Glazed login command, and Geppetto host-injected source boundary.
+
+### What didn't work
+
+Standalone Pinocchio validation remains blocked until the reviewed Geppetto APIs are published as a fetchable dependency revision.
+
+### What I learned
+
+OAuth profile persistence and JavaScript engine construction have different ownership models; keeping OAuth refresh state on the Go host preserves the security boundary.
+
+### What was tricky to build
+
+The distinction is subtle because both static and renewable credentials select the same provider. The help explicitly separates static configuration from the versioned OAuth extension and its writable-registry requirement.
+
+### What warrants a second pair of eyes
+
+- Review the future host-only JavaScript bearer injection API before implementing it.
+
+### What should be done in the future
+
+- Publish Geppetto and add source injection to its JavaScript engine builder without exposing token values to JavaScript.
+
+### Code review instructions
+
+Read `pkg/doc/topics/oauth-profile-login.md`, then the modified profile-resolution and migration guides.
+
+### Technical details
+
+No live OAuth provider, authorization code, access token, or refresh token appears in the documentation.
