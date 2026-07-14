@@ -18,6 +18,7 @@ import (
 	geptools "github.com/go-go-golems/geppetto/pkg/inference/tools"
 	gp "github.com/go-go-golems/geppetto/pkg/js/modules/geppetto"
 	geppettosections "github.com/go-go-golems/geppetto/pkg/sections"
+	"github.com/go-go-golems/geppetto/pkg/steps/ai/credentials"
 	aisettings "github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 	"github.com/go-go-golems/glazed/pkg/cli"
 	"github.com/go-go-golems/glazed/pkg/cmds"
@@ -210,6 +211,7 @@ func (c *JSCommand) RunIntoWriter(ctx context.Context, parsed *values.Values, w 
 		DefaultProfileResolve:    runtimeBootstrap.DefaultProfileResolve,
 		GoMiddlewareFactories:    middlewareFactories,
 		MiddlewareDefinitions:    middlewareDefs,
+		BearerTokenSource:        runtimeBootstrap.BearerTokenSource,
 		TurnStore:                turnStore,
 		Stdout:                   w,
 		Stderr:                   os.Stderr,
@@ -253,6 +255,7 @@ func resolveJSScriptPath(settings *JSSettings) (string, error) {
 type pinocchioJSRuntimeBootstrap struct {
 	DefaultInferenceSettings *aisettings.InferenceSettings
 	ResolvedEngineSettings   *profilebootstrap.ResolvedCLIEngineSettings
+	BearerTokenSource        credentials.BearerTokenSource
 	ProfileRegistry          gepprofiles.RegistryReader
 	UseDefaultProfileResolve bool
 	DefaultProfileResolve    gepprofiles.ResolveInput
@@ -278,9 +281,15 @@ func resolvePinocchioJSRuntimeBootstrap(ctx context.Context, parsed *values.Valu
 		defaultProfileResolve = registryChain.DefaultProfileResolve
 	}
 
+	bearerTokenSource, err := profilebootstrap.NewBearerTokenSourceForResolvedSettings(ctx, resolved)
+	if err != nil {
+		return nil, err
+	}
+
 	return &pinocchioJSRuntimeBootstrap{
 		DefaultInferenceSettings: resolved.FinalInferenceSettings,
 		ResolvedEngineSettings:   resolved,
+		BearerTokenSource:        bearerTokenSource,
 		ProfileRegistry:          profileRegistry,
 		UseDefaultProfileResolve: useDefaultProfileResolve,
 		DefaultProfileResolve:    defaultProfileResolve,
@@ -297,9 +306,12 @@ type pinocchioJSRuntimeOptions struct {
 	DefaultProfileResolve    gepprofiles.ResolveInput
 	GoMiddlewareFactories    map[string]gp.MiddlewareFactory
 	MiddlewareDefinitions    middlewarecfg.DefinitionRegistry
-	TurnStore                gp.TurnStore
-	Stdout                   io.Writer
-	Stderr                   io.Writer
+	// BearerTokenSource is a host-owned Go capability. It is forwarded to
+	// native modules but never converted into a JavaScript value.
+	BearerTokenSource credentials.BearerTokenSource
+	TurnStore         gp.TurnStore
+	Stdout            io.Writer
+	Stderr            io.Writer
 }
 
 func newPinocchioJSRuntime(ctx context.Context, opts pinocchioJSRuntimeOptions) (*gojengine.Runtime, error) {
@@ -332,6 +344,7 @@ func newPinocchioJSRuntime(ctx context.Context, opts pinocchioJSRuntimeOptions) 
 		UseDefaultProfileResolve: opts.UseDefaultProfileResolve,
 		DefaultProfileResolve:    opts.DefaultProfileResolve,
 		MiddlewareSchemas:        opts.MiddlewareDefinitions,
+		BearerTokenSource:        opts.BearerTokenSource,
 	}
 	if opts.TurnStore != nil {
 		gpOptions.EnableStorage = true
@@ -342,6 +355,7 @@ func newPinocchioJSRuntime(ctx context.Context, opts pinocchioJSRuntimeOptions) 
 	gp.Register(reg, gpOptions)
 	pjs.Register(reg, pjs.Options{
 		DefaultInferenceSettings: opts.DefaultInferenceSettings,
+		BearerTokenSource:        opts.BearerTokenSource,
 	})
 	req := reg.Enable(rt.VM)
 	rt.Require = req

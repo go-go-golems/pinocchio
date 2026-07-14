@@ -100,20 +100,27 @@ func (r *ResolvedOAuthProfile) NewBearerTokenSource() (credentials.BearerTokenSo
 	return credentials.NewRenewableBearerTokenSource(r.Store, refresher)
 }
 
+// NewBearerTokenSourceForResolvedSettings returns the selected profile's
+// host-owned renewable source. Static-key profiles return nil. Callers must
+// keep this Go interface out of inference settings and JavaScript values.
+func NewBearerTokenSourceForResolvedSettings(ctx context.Context, resolved *ResolvedCLIEngineSettings) (credentials.BearerTokenSource, error) {
+	oauthProfile, err := ResolveOAuthProfile(ctx, resolved)
+	if err != nil || oauthProfile == nil {
+		return nil, err
+	}
+	return oauthProfile.NewBearerTokenSource()
+}
+
 // NewEngineFactoryForResolvedSettings returns a standard factory with a
 // renewable bearer source only when the selected profile explicitly opts into
 // OAuth. Static-key profiles retain existing behavior.
 func NewEngineFactoryForResolvedSettings(ctx context.Context, resolved *ResolvedCLIEngineSettings) (factory.EngineFactory, error) {
-	oauthProfile, err := ResolveOAuthProfile(ctx, resolved)
+	source, err := NewBearerTokenSourceForResolvedSettings(ctx, resolved)
 	if err != nil {
 		return nil, err
 	}
-	if oauthProfile == nil {
+	if source == nil {
 		return factory.NewStandardEngineFactory(), nil
-	}
-	source, err := oauthProfile.NewBearerTokenSource()
-	if err != nil {
-		return nil, err
 	}
 	return factory.NewStandardEngineFactory(factory.WithBearerTokenSource(source)), nil
 }
