@@ -47,3 +47,12 @@ Validated standalone normal/race/security behavior; deferred Umans/OpenAI/Claude
 
 Ticket closed
 
+
+## 2026-07-14
+
+Post-close build security correction: advanced the Go toolchain to 1.26.5 after pre-push govulncheck identified reachable fixed standard-library advisories.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-07-10/refresh-oauth-token-geppetto/pinocchio/go.mod — Toolchain security patch
+

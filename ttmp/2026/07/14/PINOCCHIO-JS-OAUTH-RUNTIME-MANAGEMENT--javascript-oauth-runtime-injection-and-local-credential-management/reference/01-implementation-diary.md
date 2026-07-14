@@ -20,6 +20,8 @@ RelatedFiles:
       Note: Forwards opaque source to both native modules (commit 6315889)
     - Path: repo://cmd/pinocchio/cmds/js_test.go
       Note: Both JavaScript builders source injection coverage (commit 6315889)
+    - Path: repo://go.mod
+      Note: Go 1.26.5 toolchain patch required by reachable-standard-library vulnerability validation
     - Path: repo://pkg/cmds/profilebootstrap/oauth.go
       Note: Shared selected-profile source helper (commit 6315889)
     - Path: repo://pkg/js/modules/pinocchio/module.go
@@ -34,6 +36,7 @@ LastUpdated: 2026-07-14T16:41:00-04:00
 WhatFor: Implement, review, and validate host-only OAuth behavior in Pinocchio JavaScript runtimes.
 WhenToUse: When continuing this ticket or reviewing OAuth source ownership.
 ---
+
 
 
 
@@ -347,3 +350,64 @@ Validation has two separate meanings here. Code validation confirms the local ab
 ### Technical details
 
 The provider smoke task is recorded as **not applicable until a compatible public contract is verified**. This session did not emit, copy, inspect, or persist access tokens, refresh tokens, authorization codes, client secrets, or provider credential files.
+
+## Step 5: Apply the Go security patch surfaced by the pre-push gate
+
+The first push attempt ran the complete repository hook successfully through lint, release snapshot, tests, web checks, and gosec, but its vulnerability gate rejected the branch because the pinned Go toolchain was one patch release behind. The failure affected standard-library symbol paths including the new OAuth login server and refresh client, so the toolchain was advanced to the fixed Go patch rather than bypassing or suppressing the check.
+
+The standalone suite and `govulncheck` then passed under Go 1.26.5. This is a small build-metadata correction, but it preserves the security claim of the OAuth work and lets the normal push gate remain authoritative.
+
+### Prompt Context
+
+**User prompt (verbatim):** (see Step 1)
+
+**Assistant interpretation:** Complete the ticket incrementally with robust validation and publish a reviewable branch without weakening security gates.
+
+**Inferred user intent:** Deliver the OAuth runtime work with its dependency/toolchain security posture verified, not merely unit-tested.
+
+**Commit (code):** d1e40edf2e423fd11ab76c9387e03ff3f78615e6 — "build: update Go toolchain security patch"
+
+### What I did
+
+- Ran the normal pre-push hook; it completed lint, a GoReleaser snapshot, tests, web checks, and gosec before `govulncheck` failed.
+- Updated `go.mod` from `toolchain go1.26.4` to `toolchain go1.26.5`.
+- Verified `GOWORK=off go version` reports `go1.26.5 linux/amd64`.
+- Reran `GOWORK=off go test ./... -count=1` and `GOWORK=off make govulncheck` successfully.
+
+### Why
+
+The hook reported reachable standard-library vulnerabilities in the toolchain used to build the OAuth loopback listener and token-refresh HTTP client. A fixed Go patch is the correct remediation; bypassing the hook would create an unreviewable exception.
+
+### What worked
+
+- `govulncheck` reported: `No vulnerabilities found.` after the toolchain change.
+- The full standalone test suite remained green on Go 1.26.5.
+
+### What didn't work
+
+The initial push was blocked by `make: *** [Makefile:82: govulncheck] Error 3` with reachable Go 1.26.4 standard-library advisories `GO-2026-5856` (fixed in Go 1.26.5) and `GO-2026-4970` (fixed in Go 1.26.5). No remote update occurred because the pre-push hook failed before Git could push refs.
+
+### What I learned
+
+A patch-level Go toolchain pin is part of the release security boundary. Repository-local gosec passing does not replace symbol-level vulnerability analysis of the standard library.
+
+### What was tricky to build
+
+The push error initially appeared as a generic Git ref failure after the hook summary, but the saved hook output showed the actual cause was `govulncheck`, not branch divergence. Fetching the fork confirmed there was no remote branch of this name to rebase onto; reading the hook output avoided an unnecessary force-push or merge.
+
+### What warrants a second pair of eyes
+
+- Confirm project policy accepts the Go 1.26.5 toolchain patch for all supported developer and CI environments.
+
+### What should be done in the future
+
+- Keep the toolchain patch current when `govulncheck` reports a reachable Go standard-library advisory.
+
+### Code review instructions
+
+- Inspect `go.mod` for the one-line toolchain update.
+- Run `GOWORK=off make govulncheck` and `GOWORK=off go test ./... -count=1`.
+
+### Technical details
+
+`go.mod` keeps its language-version line at `go 1.26.3`; only the selected compiler/runtime patch changed from `go1.26.4` to `go1.26.5`.
