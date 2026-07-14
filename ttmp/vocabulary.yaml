@@ -79,6 +79,10 @@ topics:
       description: Debugging instrumentation, traces, diagnostics, and troubleshooting artifacts
     - slug: chatapp
       description: Pinocchio chat application runtime, projections, runners, and UI integration
+    - slug: javascript
+      description: JavaScript and Goja runtime integration
+    - slug: inference
+      description: Inference engine construction and provider request behavior
 docTypes:
     - slug: index
       description: Ticket index / overall plan
