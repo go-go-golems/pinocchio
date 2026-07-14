@@ -11,18 +11,25 @@ DocType: design-doc
 Intent: long-term
 Owners:
     - manuel
-RelatedFiles: []
+RelatedFiles:
+    - Path: repo://cmd/pinocchio/cmds/auth/logout.go
+      Note: Local credential tuple removal behavior
+    - Path: repo://cmd/pinocchio/cmds/auth/status.go
+      Note: Secret-free local readiness behavior
+    - Path: repo://pkg/oauthprofiles/store.go
+      Note: Atomic tuple deletion and source store identity validation
 ExternalSources:
     - https://developers.openai.com/apps-sdk/build/auth
     - https://developers.openai.com/api/docs/quickstart
     - https://claude.com/docs/connectors/building/authentication
     - https://platform.claude.com/docs/en/manage-claude/authentication
     - https://app.umans.ai/home
-Summary: "Design for injecting Pinocchio-owned OAuth bearer sources into both JavaScript engine construction paths and adding safe local status/logout operations."
+Summary: Design for injecting Pinocchio-owned OAuth bearer sources into both JavaScript engine construction paths and adding safe local status/logout operations.
 LastUpdated: 2026-07-14T16:41:00-04:00
-WhatFor: "Complete source-aware Pinocchio JavaScript engine construction without exposing credentials, and define a minimal local OAuth lifecycle CLI."
-WhenToUse: "When a Pinocchio OAuth profile is used by Go or JavaScript inference construction."
+WhatFor: Complete source-aware Pinocchio JavaScript engine construction without exposing credentials, and define a minimal local OAuth lifecycle CLI.
+WhenToUse: When a Pinocchio OAuth profile is used by Go or JavaScript inference construction.
 ---
+
 
 # Host-owned OAuth sources in Pinocchio JavaScript runtimes and local lifecycle commands
 
@@ -279,7 +286,7 @@ Until then, fake-provider tests are the appropriate executable proof for Pinocch
 - **Decision:** Add a reusable profilebootstrap helper and call it from the Go command before module registration.
 - **Rationale:** It retains one direct-owner/static-key validation implementation and prevents JS modules from interpreting secret profile extensions.
 - **Consequences:** All builders in one runtime share one selected source. Multi-identity routing remains a future host-authorized design.
-- **Status:** proposed.
+- **Status:** accepted.
 
 ### Decision: reject source-incompatible JS endpoint overrides
 
@@ -288,7 +295,7 @@ Until then, fake-provider tests are the appropriate executable proof for Pinocch
 - **Decision:** Reject provider/base URL changes that differ from a source-backed resolved profile.
 - **Rationale:** Silent fallback weakens source authority; allowing arbitrary overrides risks sending a bearer to the wrong endpoint.
 - **Consequences:** Scripts can still override model and safe inference parameters. A future multi-endpoint policy needs a host resolver.
-- **Status:** proposed.
+- **Status:** deferred. The profile-bound YAML store validates the request identity before it releases a credential, so incompatible JavaScript endpoint overrides fail closed. Add earlier override rejection only if a future script API requires a clearer error before source resolution.
 
 ### Decision: status and logout, not refresh and revoke
 
@@ -297,7 +304,7 @@ Until then, fake-provider tests are the appropriate executable proof for Pinocch
 - **Decision:** Add status and local logout. Defer manual refresh and remote revoke.
 - **Rationale:** Request-time source refresh is the authoritative lifecycle path. Remote revoke has provider-specific semantics and needs a documented contract.
 - **Consequences:** Logout removes local state only. Users who need remote revocation use provider tooling until a provider adapter exists.
-- **Status:** proposed.
+- **Status:** accepted.
 
 ## 6. Implementation phases
 

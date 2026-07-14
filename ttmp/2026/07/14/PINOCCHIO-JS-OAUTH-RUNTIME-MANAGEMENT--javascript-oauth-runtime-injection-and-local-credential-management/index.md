@@ -36,7 +36,9 @@ WhenToUse: ""
 
 ## Overview
 
-<!-- Provide a brief overview of the ticket, its goals, and current status -->
+This ticket completes OAuth source-aware JavaScript engine construction in Pinocchio and adds local secret-free credential lifecycle operations. The selected OAuth source is created once by the Go host, injected into both JavaScript native modules as an opaque capability, and never exposed to settings or scripts. `auth status` and `auth logout` provide local readiness and credential removal without duplicating runtime refresh behavior.
+
+The local implementation and standalone validation are complete. A real Umans/OpenAI/Claude browser smoke is intentionally deferred because the archived public documents do not establish a compatible inference-resource OAuth PKCE/refresh contract.
 
 ## Key Links
 
@@ -45,7 +47,7 @@ WhenToUse: ""
 
 ## Status
 
-Current status: **active**
+Current status: **implemented; awaiting a compatible provider contract for external smoke testing**
 
 ## Topics
 

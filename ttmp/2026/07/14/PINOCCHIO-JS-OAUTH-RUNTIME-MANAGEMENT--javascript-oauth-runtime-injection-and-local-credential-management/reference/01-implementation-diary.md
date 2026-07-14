@@ -272,3 +272,78 @@ pinocchio auth logout
 ```
 
 There is intentionally no `auth refresh` or `auth revoke` verb.
+
+## Step 4: Validate standalone behavior and decline undocumented provider smoke
+
+The completed code passes the standalone module suite, focused race coverage for every changed subsystem, generated-log validation, Go security scanning, and command-help checks. The provider review does not authorize a real Umans, OpenAI, or Claude login attempt: the archived public documents identify API-key, workload-identity, or third-party MCP connector flows rather than the public PKCE refresh contract required by this OpenAI-compatible bearer implementation.
+
+This is a completed validation decision rather than an untried task. Attempting a browser flow with inferred endpoints, unregistered loopback redirects, or a copied local credential would violate the profile ownership and secret-handling constraints that this ticket exists to preserve.
+
+### Prompt Context
+
+**User prompt (verbatim):** (see Step 1)
+
+**Assistant interpretation:** Validate the completed source and lifecycle work thoroughly, then try a real provider only if the documented contract supports a safe, compatible flow.
+
+**Inferred user intent:** Obtain practical OAuth confidence while keeping actual credentials and provider-specific assumptions out of implementation artifacts.
+
+### What I did
+
+- Ran `GOWORK=off go test ./... -count=1` successfully.
+- Ran `GOWORK=off go test -race ./pkg/oauthprofiles ./pkg/cmds/profilebootstrap ./pkg/js/modules/pinocchio ./cmd/pinocchio/cmds ./cmd/pinocchio/cmds/auth -count=1` successfully.
+- Ran `GOWORK=off make logcopter-check` successfully.
+- Ran `GOWORK=off make gosec` successfully with zero issues.
+- Ran `GOWORK=off go run ./cmd/pinocchio auth status --help` and `auth logout --help`; both expose the expected non-secret descriptions.
+- Read the ticket-local Umans, OpenAI, and Claude source material and applied the documented compatibility gate.
+
+### Why
+
+The JavaScript injection and logout changes are security-sensitive despite their small size. Standalone testing proves the published Geppetto release is sufficient; focused race testing proves shared source/store command paths do not introduce a local race; security and generated-code checks prove repository contracts still hold.
+
+### What worked
+
+- Full standalone non-race Pinocchio tests passed.
+- All changed OAuth/profilebootstrap/JavaScript/auth packages passed focused race tests.
+- Logcopter and gosec passed.
+- The new commands are discoverable through the Glazed help surface.
+- The official OpenAI quickstart documents API-key authentication, Claude Platform documents API key or workload federation, and Umans public setup documents API keys. The Apps SDK and Claude connector OAuth documents describe clients authenticating to third-party MCP servers, not Pinocchio receiving a provider inference bearer.
+
+### What didn't work
+
+No compatible public real-provider contract was available for a smoke. The specific blockers are:
+
+- Umans: no public authorization endpoint, token endpoint, PKCE client contract, refresh policy, or loopback redirect contract was found.
+- OpenAI: the public Apps SDK OAuth material has the opposite role relationship; ChatGPT is the OAuth client for an external MCP resource server, while public API quickstart material specifies API keys.
+- Claude: connector OAuth makes Claude the OAuth client for external MCP servers, while Claude Platform inference access documents API keys or workload identity federation rather than local user refresh credentials and OpenAI-compatible bearer headers.
+
+No browser was opened and no local credential storage was inspected or modified during provider triage.
+
+### What I learned
+
+A provider name plus the word OAuth is not enough to define a usable contract. The required evidence is resource-specific: the authorization server must authorize the exact inference resource, issue a refreshable bearer accepted by the selected OpenAI-compatible provider path, permit the registered loopback callback, and document rotation. Connector OAuth documentation cannot be repurposed as an inference API login specification.
+
+### What was tricky to build
+
+Validation has two separate meanings here. Code validation confirms the local abstraction and security boundaries. A provider smoke would validate an external contract. The local tests can complete without the external smoke, but they cannot justify guessing a provider integration. The ticket records this boundary explicitly so future work can add an adapter only when a provider meets the gate.
+
+### What warrants a second pair of eyes
+
+- Review whether a future supported provider should use this OpenAI-compatible source path or a separate Claude/WIF adapter.
+- Review early JavaScript override rejection if endpoint override functionality becomes a primary workflow; current profile-bound store validation fails closed before a bearer is released.
+- Review remote revocation only alongside a provider-specific endpoint, client-auth, and rotation design.
+
+### What should be done in the future
+
+- Obtain an authorized provider contract/test tenant meeting all seven compatibility conditions in the design document, then add a secret-safe browser login and refresh smoke.
+- Consider a provider-specific Claude workload identity integration separately; it does not fit this local browser PKCE profile model.
+- Push the completed Pinocchio branch and open a review after final ticket bookkeeping.
+
+### Code review instructions
+
+- Run the standalone and focused-race commands above.
+- Read `sources/01-openai-apps-sdk-auth.md`, `02-claude-connectors-authentication.md`, `03-umans-ai-home.md`, `05-claude-platform-api-authentication.md`, and `06-openai-api-quickstart.md` before evaluating the smoke decision.
+- Confirm `auth status` and `auth logout` help contain no token-bearing options or output semantics.
+
+### Technical details
+
+The provider smoke task is recorded as **not applicable until a compatible public contract is verified**. This session did not emit, copy, inspect, or persist access tokens, refresh tokens, authorization codes, client secrets, or provider credential files.

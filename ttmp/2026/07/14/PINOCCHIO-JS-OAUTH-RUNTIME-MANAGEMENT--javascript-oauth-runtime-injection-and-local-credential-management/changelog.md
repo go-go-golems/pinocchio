@@ -33,3 +33,12 @@ Added local secret-free OAuth status and atomic logout lifecycle commands (commi
 - /home/manuel/workspaces/2026-07-10/refresh-oauth-token-geppetto/pinocchio/cmd/pinocchio/cmds/auth/status.go — Readiness-only command output
 - /home/manuel/workspaces/2026-07-10/refresh-oauth-token-geppetto/pinocchio/pkg/oauthprofiles/store.go — Tuple deletion persistence operation
 
+
+## 2026-07-14
+
+Validated standalone normal/race/security behavior; deferred Umans/OpenAI/Claude browser smoke because archived public contracts are incompatible or incomplete for this inference OAuth flow.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-07-10/refresh-oauth-token-geppetto/pinocchio/ttmp/2026/07/14/PINOCCHIO-JS-OAUTH-RUNTIME-MANAGEMENT--javascript-oauth-runtime-injection-and-local-credential-management/reference/01-implementation-diary.md — Validation evidence and provider-contract decision
+
