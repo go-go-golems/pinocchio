@@ -23,3 +23,13 @@ Injected the selected host bearer source into both Pinocchio JavaScript engine c
 - /home/manuel/workspaces/2026-07-10/refresh-oauth-token-geppetto/pinocchio/cmd/pinocchio/cmds/js.go — Native-module source forwarding
 - /home/manuel/workspaces/2026-07-10/refresh-oauth-token-geppetto/pinocchio/pkg/js/modules/pinocchio/module.go — Source-aware default engine factory
 
+
+## 2026-07-14
+
+Added local secret-free OAuth status and atomic logout lifecycle commands (commit d67c64d).
+
+### Related Files
+
+- /home/manuel/workspaces/2026-07-10/refresh-oauth-token-geppetto/pinocchio/cmd/pinocchio/cmds/auth/status.go — Readiness-only command output
+- /home/manuel/workspaces/2026-07-10/refresh-oauth-token-geppetto/pinocchio/pkg/oauthprofiles/store.go — Tuple deletion persistence operation
+

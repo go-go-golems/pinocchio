@@ -12,6 +12,10 @@ Intent: long-term
 Owners:
     - manuel
 RelatedFiles:
+    - Path: repo://cmd/pinocchio/cmds/auth/logout.go
+      Note: Local atomic logout command (commit d67c64d)
+    - Path: repo://cmd/pinocchio/cmds/auth/status.go
+      Note: Secret-free readiness command (commit d67c64d)
     - Path: repo://cmd/pinocchio/cmds/js.go
       Note: Forwards opaque source to both native modules (commit 6315889)
     - Path: repo://cmd/pinocchio/cmds/js_test.go
@@ -20,12 +24,17 @@ RelatedFiles:
       Note: Shared selected-profile source helper (commit 6315889)
     - Path: repo://pkg/js/modules/pinocchio/module.go
       Note: Source-aware defaults builder (commit 6315889)
+    - Path: repo://pkg/oauthprofiles/store.go
+      Note: Atomic local credential tuple deletion (commit d67c64d)
+    - Path: repo://pkg/oauthprofiles/store_test.go
+      Note: Delete idempotence and unrelated-profile preservation (commit d67c64d)
 ExternalSources: []
 Summary: Chronological evidence for JavaScript OAuth source injection and Pinocchio credential lifecycle operations.
 LastUpdated: 2026-07-14T16:41:00-04:00
 WhatFor: Implement, review, and validate host-only OAuth behavior in Pinocchio JavaScript runtimes.
 WhenToUse: When continuing this ticket or reviewing OAuth source ownership.
 ---
+
 
 
 # Diary
@@ -182,3 +191,84 @@ There were two independent factory bypasses. Fixing only `gp.Options` would leav
 ### Technical details
 
 The JavaScript surface has not changed. The new fields exist only in Go option structs and are never assigned to Goja values, module exports, settings, or engine metadata.
+
+## Step 3: Add secret-free local status and atomic logout
+
+Pinocchio now exposes two additional Glazed verbs under `auth`. `auth status` classifies only local credential readiness for the selected OAuth profile, while `auth logout` atomically removes the locally stored tuple and retains the non-secret protocol configuration needed for a future login. Neither verb contacts a provider, triggers a refresh, or prints bearer/refresh values.
+
+The store deletion reuses the owner-only file check, sibling lock, read/patch/encode flow, temporary `0600` file, fsync, rename, and directory sync already used for refresh-token rotation. Local logout is therefore the same persistence operation class as saving a refreshed credential, not an ad hoc YAML edit.
+
+### Prompt Context
+
+**User prompt (verbatim):** (see Step 1)
+
+**Assistant interpretation:** Add the minimal local management commands identified in the design without introducing manual refresh or undocumented remote revocation behavior.
+
+**Inferred user intent:** Let users safely inspect readiness and clear local OAuth state while preserving automatic request-time renewal and the direct-YAML security boundary.
+
+**Commit (code):** `d67c64d` — "feat: add Pinocchio OAuth status and logout"
+
+### What I did
+
+- Added `YAMLStore.Delete`, which removes only `access_token`, `refresh_token`, and `expires_at` under the existing trusted atomic-write path.
+- Added the shared selected-OAuth-profile resolver for auth lifecycle commands.
+- Added Glazed `pinocchio auth status` and `pinocchio auth logout` commands and registered them under the existing flagless Cobra group.
+- Added lifecycle command registration/readiness classification tests and YAML deletion/idempotence/unrelated-profile preservation tests.
+- Ran focused store/auth tests and the complete pre-commit hook.
+
+### Why
+
+Users need a local recovery action after account changes or suspected credential loss, but they do not need a command that prints or manually refreshes bearer state. Logout retains the profile policy so the existing secure login command can repopulate a tuple without reauthoring provider configuration.
+
+### What worked
+
+- `go test ./pkg/oauthprofiles ./cmd/pinocchio/cmds/auth -count=1` passed.
+- The successful pre-commit retry passed frontend generation/build, `go build ./...`, golangci-lint, Geppetto lint, Glazed lint, and `go test ./...`.
+- `YAMLStore.Delete` is idempotent and the test proves the selected tuple is empty while an unrelated OAuth profile retains its tuple.
+
+### What didn't work
+
+The first pre-commit attempt failed lint because the new `decodeAuthLifecycleSettings` helper was unused:
+
+```text
+cmd/pinocchio/cmds/auth/profile.go:59:6: func decodeAuthLifecycleSettings is unused (unused)
+```
+
+I removed the dead helper and its import, reran focused tests, then retried the full hook successfully. No behavior or security policy changed in the correction.
+
+### What I learned
+
+Credential tuple fields are optional in the typed profile parser. Removing them leaves a valid OAuth profile containing authorization URL, token URL, public client ID, scopes, and refresh policy. This makes logout/re-login a coherent lifecycle rather than a destructive profile removal.
+
+### What was tricky to build
+
+Status output must be useful without becoming secret inspection. The command emits `profile`, `registry`, `storage=direct_yaml`, and a categorical `credential_state` only. It deliberately omits credential values, expiry timestamps, registry filesystem path, and raw source/store error data. The state calculation operates on the loaded credential in Go and never serializes it into a Glazed row.
+
+### What warrants a second pair of eyes
+
+- Review whether `missing_or_expired` should be split into two public categories; combining them currently reveals less local credential timing information.
+- Review a future `--verbose` status mode only if its field-level disclosure policy is specified first.
+- Review remote revocation separately; local logout intentionally does not imply provider-side token invalidation.
+
+### What should be done in the future
+
+- Run focused race tests for store/auth/JavaScript packages and standalone module validation.
+- Do not add `auth revoke` or a real browser provider smoke until a provider passes the documented compatibility gate.
+
+### Code review instructions
+
+- Read `pkg/oauthprofiles/store.go` `Delete` alongside `Save` and confirm both use the same trusted write path.
+- Inspect `status.go` and `logout.go` for Glazed sections and row fields.
+- Run `go test ./pkg/oauthprofiles ./cmd/pinocchio/cmds/auth -count=1` and the repository pre-commit hook.
+
+### Technical details
+
+The lifecycle command surface is now:
+
+```text
+pinocchio auth login
+pinocchio auth status
+pinocchio auth logout
+```
+
+There is intentionally no `auth refresh` or `auth revoke` verb.
