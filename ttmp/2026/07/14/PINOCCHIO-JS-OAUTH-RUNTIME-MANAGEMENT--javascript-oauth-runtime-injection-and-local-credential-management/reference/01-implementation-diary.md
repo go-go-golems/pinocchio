@@ -11,13 +11,22 @@ DocType: reference
 Intent: long-term
 Owners:
     - manuel
-RelatedFiles: []
+RelatedFiles:
+    - Path: repo://cmd/pinocchio/cmds/js.go
+      Note: Forwards opaque source to both native modules (commit 6315889)
+    - Path: repo://cmd/pinocchio/cmds/js_test.go
+      Note: Both JavaScript builders source injection coverage (commit 6315889)
+    - Path: repo://pkg/cmds/profilebootstrap/oauth.go
+      Note: Shared selected-profile source helper (commit 6315889)
+    - Path: repo://pkg/js/modules/pinocchio/module.go
+      Note: Source-aware defaults builder (commit 6315889)
 ExternalSources: []
-Summary: "Chronological evidence for JavaScript OAuth source injection and Pinocchio credential lifecycle operations."
+Summary: Chronological evidence for JavaScript OAuth source injection and Pinocchio credential lifecycle operations.
 LastUpdated: 2026-07-14T16:41:00-04:00
-WhatFor: "Implement, review, and validate host-only OAuth behavior in Pinocchio JavaScript runtimes."
-WhenToUse: "When continuing this ticket or reviewing OAuth source ownership."
+WhatFor: Implement, review, and validate host-only OAuth behavior in Pinocchio JavaScript runtimes.
+WhenToUse: When continuing this ticket or reviewing OAuth source ownership.
 ---
+
 
 # Diary
 
@@ -107,3 +116,69 @@ pinocchio auth revoke  # deferred pending provider-specific contract
 ```
 
 There is no proposed `auth refresh` verb. Runtime inference refresh remains the sole path that obtains a bearer.
+
+## Step 2: Inject the resolved source into both JavaScript engine paths
+
+The JavaScript command runtime now resolves the selected OAuth profile once in Go and passes its opaque `BearerTokenSource` to both native modules before any script executes. Geppetto’s fluent builder and Pinocchio’s `engines.fromDefaults()` builder can therefore construct source-backed OpenAI-compatible engines without adding a static API key or exposing credentials to JavaScript.
+
+The construction paths retain their old behavior for static profiles. A nil source still uses the no-options factory helper, while a non-nil source uses the standard factory with `WithBearerTokenSource`. This keeps provider routing and source authority centralized in Geppetto.
+
+### Prompt Context
+
+**User prompt (verbatim):** (see Step 1)
+
+**Assistant interpretation:** Implement the host-only source forwarding as the first code phase and protect it with behavioral JavaScript tests.
+
+**Inferred user intent:** Make OAuth-backed profile behavior consistent for ordinary Go and JavaScript-built engines without granting scripts credential capabilities.
+
+**Commit (code):** `6315889` — "feat: inject OAuth sources into Pinocchio JS engines"
+
+### What I did
+
+- Added `profilebootstrap.NewBearerTokenSourceForResolvedSettings` and made the existing source-aware factory use it.
+- Resolved the source during Pinocchio JS runtime bootstrap and passed it through `pinocchioJSRuntimeOptions`.
+- Set the released `gp.Options.BearerTokenSource` option when registering Geppetto’s native module.
+- Added the same opaque source field to `pkg/js/modules/pinocchio.Options` and used `factory.WithBearerTokenSource` in `engines.fromDefaults()`.
+- Added a JS runtime regression test that builds engines through both modules with an empty static-key map and asserts neither module exports a source property.
+- Ran focused tests, then the complete repository pre-commit lint/test hook.
+
+### Why
+
+Both JavaScript builders previously used a no-options factory helper even though the trusted host had already resolved an OAuth profile. Forwarding the interface at registration is the smallest change that preserves the source boundary and lets Geppetto perform its existing request-time refresh behavior.
+
+### What worked
+
+- `go test ./pkg/cmds/profilebootstrap ./pkg/js/modules/pinocchio ./cmd/pinocchio/cmds -count=1` passed.
+- The complete pre-commit hook passed `go generate ./...`, the frontend build, `go build ./...`, golangci-lint, custom lint, Glazed lint, and `go test ./...`.
+- The test double returns no credential material because engine construction must not invoke the source. It proves source-aware factory validation without adding a bearer-shaped fixture value.
+
+### What didn't work
+
+No implementation or validation failure occurred in this step.
+
+### What I learned
+
+The Pinocchio command runtime is the correct place to resolve the source because it already owns selected profile resolution and module registration. Native modules need only receive an interface; they do not need access to registry file paths, OAuth extensions, or provider protocol configuration.
+
+### What was tricky to build
+
+There were two independent factory bypasses. Fixing only `gp.Options` would leave `require("pinocchio").engines.fromDefaults()` static-key-only. The regression test constructs one engine through each module under the same host source so future refactors cannot restore either bypass unnoticed.
+
+### What warrants a second pair of eyes
+
+- The source’s profile-bound YAML store rejects an unexpected provider/base URL before releasing a credential. Consider a future earlier rejection for JavaScript API/base-URL overrides if product requirements make that error clearer.
+- Review future source-sharing across multiple profiles as a host authorization problem; do not add a JavaScript source selector.
+
+### What should be done in the future
+
+- Implement local status and logout using the selected profile/store path.
+- Add source-compatible override validation if scripts gain richer endpoint override features.
+
+### Code review instructions
+
+- Start with `pkg/cmds/profilebootstrap/oauth.go`, then follow the source through `cmd/pinocchio/cmds/js.go` into both native module registrations.
+- Run the focused command above and inspect `TestPinocchioJSRuntimeForwardsHostBearerSourceToBothEngineBuilders`.
+
+### Technical details
+
+The JavaScript surface has not changed. The new fields exist only in Go option structs and are never assigned to Goja values, module exports, settings, or engine metadata.
