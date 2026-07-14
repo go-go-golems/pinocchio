@@ -97,6 +97,28 @@ func TestYAMLStoreConcurrentSavesLeaveOneCompleteTuple(t *testing.T) {
 	require.Regexp(t, `^refresh-[0-7]$`, credential.RefreshToken)
 }
 
+func TestYAMLStoreDeleteClearsOnlySelectedCredentialTuple(t *testing.T) {
+	path := writeRegistryFixture(t, 0o600)
+	store := newTestStore(t, path)
+	require.NoError(t, store.Delete(context.Background(), testRequest()))
+	require.NoError(t, store.Delete(context.Background(), testRequest()), "logout must be idempotent")
+
+	registry := readRegistry(t, path)
+	assistant, err := Parse(registry.Profiles[gepprofiles.MustEngineProfileSlug("assistant")].Extensions)
+	require.NoError(t, err)
+	require.Empty(t, assistant.Credential.AccessToken)
+	require.Empty(t, assistant.Credential.RefreshToken)
+	require.True(t, assistant.Credential.ExpiresAt.IsZero())
+	require.NotEmpty(t, assistant.AuthorizationURL)
+	require.NotEmpty(t, assistant.TokenURL)
+	require.NotEmpty(t, assistant.ClientID)
+
+	other, err := Parse(registry.Profiles[gepprofiles.MustEngineProfileSlug("other")].Extensions)
+	require.NoError(t, err)
+	require.Equal(t, "other-access", other.Credential.AccessToken)
+	require.Equal(t, "other-refresh", other.Credential.RefreshToken)
+}
+
 func TestYAMLStoreRequiresCompleteReplacementTuple(t *testing.T) {
 	path := writeRegistryFixture(t, 0o600)
 	store := newTestStore(t, path)

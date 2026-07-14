@@ -3,6 +3,7 @@ package auth
 
 import (
 	"github.com/go-go-golems/glazed/pkg/cli"
+	"github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/spf13/cobra"
 )
 
@@ -17,10 +18,20 @@ func NewAuthCommand() (*cobra.Command, error) {
 	if err != nil {
 		return nil, err
 	}
-	cobraLogin, err := cli.BuildCobraCommand(login)
+	status, err := NewStatusCommand()
 	if err != nil {
 		return nil, err
 	}
-	root.AddCommand(cobraLogin)
+	logout, err := NewLogoutCommand()
+	if err != nil {
+		return nil, err
+	}
+	for _, command := range []cmds.GlazeCommand{login, status, logout} {
+		cobraCommand, err := cli.BuildCobraCommand(command)
+		if err != nil {
+			return nil, err
+		}
+		root.AddCommand(cobraCommand)
+	}
 	return root, nil
 }

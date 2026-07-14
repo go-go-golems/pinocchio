@@ -118,6 +118,39 @@ func (s *YAMLStore) Save(ctx context.Context, request credentials.Request, crede
 	})
 }
 
+// Delete atomically removes the credential tuple while preserving the OAuth
+// protocol configuration and all unrelated profiles. It is idempotent so local
+// logout can be retried safely after an interrupted command.
+func (s *YAMLStore) Delete(ctx context.Context, request credentials.Request) error {
+	if err := s.validateRequest(request); err != nil {
+		return err
+	}
+	if err := contextErr(ctx); err != nil {
+		return err
+	}
+
+	return withRegistryLock(s.path, true, func() error {
+		registry, profile, err := s.loadRegistryAndProfile()
+		if err != nil {
+			return err
+		}
+		parsed, err := Parse(profile.Extensions)
+		if err != nil {
+			return err
+		}
+		if parsed == nil {
+			return errors.New("OAuth profile extension is missing")
+		}
+		clearCredential(profile.Extensions)
+		registry.Profiles[s.profile] = profile
+		data, err := gepprofiles.EncodeEngineProfileYAMLSingleRegistry(registry)
+		if err != nil {
+			return fmt.Errorf("encode OAuth profile registry: %w", err)
+		}
+		return atomicWriteOwnerOnly(s.path, data)
+	})
+}
+
 // Path returns the direct YAML registry path, for diagnostics that must never
 // include credential values.
 func (s *YAMLStore) Path() string {
@@ -165,6 +198,17 @@ func (s *YAMLStore) loadRegistryAndProfile() (*gepprofiles.EngineProfileRegistry
 		return nil, nil, errors.New("OAuth profile does not exist in selected registry")
 	}
 	return registry, profile, nil
+}
+
+func clearCredential(extensions map[string]any) {
+	oauth, ok := stringAnyMap(extensions[ExtensionKey])
+	if !ok {
+		return
+	}
+	delete(oauth, "access_token")
+	delete(oauth, "refresh_token")
+	delete(oauth, "expires_at")
+	extensions[ExtensionKey] = oauth
 }
 
 func setCredential(extensions map[string]any, credential credentials.Credential) {
