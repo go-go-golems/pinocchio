@@ -1,7 +1,7 @@
 ---
 Title: JavaScript OAuth runtime injection and local credential management
 Ticket: PINOCCHIO-JS-OAUTH-RUNTIME-MANAGEMENT
-Status: active
+Status: complete
 Topics:
     - oauth
     - javascript
@@ -26,10 +26,11 @@ RelatedFiles:
       Note: Released Go-only bearer source injection API
 ExternalSources: []
 Summary: ""
-LastUpdated: 2026-07-14T12:41:38.093893645-04:00
+LastUpdated: 2026-07-14T13:00:44.5724855-04:00
 WhatFor: ""
 WhenToUse: ""
 ---
+
 
 
 # JavaScript OAuth runtime injection and local credential management
