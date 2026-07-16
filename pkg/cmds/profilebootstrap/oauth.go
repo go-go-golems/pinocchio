@@ -191,6 +191,12 @@ func oauthCredentialRequest(settings *aisettings.InferenceSettings) (credentials
 			}
 		}
 		return credentials.Request{Provider: string(types.ApiTypeOpenResponses), BaseURL: baseURL}, nil
+	case string(types.ApiTypeClaude), "anthropic":
+		baseURL := strings.TrimSpace(settings.API.BaseUrls[string(types.ApiTypeClaude)+"-base-url"])
+		if baseURL == "" {
+			return credentials.Request{}, errors.New("OAuth profile requires claude-base-url")
+		}
+		return credentials.Request{Provider: string(types.ApiTypeClaude), BaseURL: baseURL}, nil
 	default:
 		return credentials.Request{}, fmt.Errorf("OAuth profile does not support chat API type %q", apiType)
 	}
