@@ -146,7 +146,22 @@ func resolveHiddenBaseInferenceSettings(cfg bootstrap.AppBootstrapConfig) (*aise
 func NewEngineFromResolvedCLIEngineSettings(
 	resolved *ResolvedCLIEngineSettings,
 ) (engine.Engine, error) {
-	return NewEngineFromResolvedCLIEngineSettingsWithFactory(nil, resolved)
+	return NewEngineFromResolvedCLIEngineSettingsWithOAuth(context.Background(), resolved)
+}
+
+// NewEngineFromResolvedCLIEngineSettingsWithOAuth creates the standard engine
+// factory with an injected renewable bearer source when the selected profile is
+// an explicit OAuth profile. Callers providing their own factory retain full
+// control through NewEngineFromResolvedCLIEngineSettingsWithFactory.
+func NewEngineFromResolvedCLIEngineSettingsWithOAuth(
+	ctx context.Context,
+	resolved *ResolvedCLIEngineSettings,
+) (engine.Engine, error) {
+	engineFactory, err := NewEngineFactoryForResolvedSettings(ctx, resolved)
+	if err != nil {
+		return nil, err
+	}
+	return NewEngineFromResolvedCLIEngineSettingsWithFactory(engineFactory, resolved)
 }
 
 func NewEngineFromResolvedCLIEngineSettingsWithFactory(

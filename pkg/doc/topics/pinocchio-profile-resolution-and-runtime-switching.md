@@ -372,7 +372,7 @@ pinocchio profiles list \
   --output json
 ```
 
-Pinocchio routes these commands through its application-specific profile bootstrap path, so local `.pinocchio.yml` inline profiles are included alongside imported Geppetto registries.
+Pinocchio routes these commands through its application-specific profile bootstrap path, so local `.pinocchio.yml` inline profiles are included alongside imported Geppetto registries. OAuth credential profiles are the deliberate exception: inspection can include them, but refresh persistence requires one explicit direct owner-only YAML registry rather than an inline or composed source. See [OAuth profile login and renewable credentials](oauth-profile-login.md).
 
 ## Troubleshooting
 

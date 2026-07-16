@@ -54,7 +54,7 @@ glazed-lint-build:
 	fi
 
 glazed-lint: glazed-lint-build
-	GOWORK=off go vet -vettool=$(GLAZED_LINT_BIN) $(GLAZED_LINT_FLAGS) $(GLAZED_LINT_DIRS)
+	go vet -vettool=$(GLAZED_LINT_BIN) $(GLAZED_LINT_FLAGS) $(GLAZED_LINT_DIRS)
 
 docker-lint:
 	docker run --rm -v $(shell pwd):/app -w /app golangci/golangci-lint:$(GOLANGCI_LINT_VERSION) golangci-lint run -v
@@ -66,12 +66,12 @@ golangci-lint-install:
 lint: build geppetto-lint-build glazed-lint-build golangci-lint-install
 	$(GOLANGCI_LINT_BIN) run -v
 	go vet -vettool=$(GEPPETTO_LINT_BIN) ./...
-	GOWORK=off go vet -vettool=$(GLAZED_LINT_BIN) $(GLAZED_LINT_FLAGS) $(GLAZED_LINT_DIRS)
+	go vet -vettool=$(GLAZED_LINT_BIN) $(GLAZED_LINT_FLAGS) $(GLAZED_LINT_DIRS)
 
 lintmax: build geppetto-lint-build glazed-lint-build golangci-lint-install
 	$(GOLANGCI_LINT_BIN) run -v --max-same-issues=100
 	go vet -vettool=$(GEPPETTO_LINT_BIN) ./...
-	GOWORK=off go vet -vettool=$(GLAZED_LINT_BIN) $(GLAZED_LINT_FLAGS) $(GLAZED_LINT_DIRS)
+	go vet -vettool=$(GLAZED_LINT_BIN) $(GLAZED_LINT_FLAGS) $(GLAZED_LINT_DIRS)
 
 gosec:
 	go install github.com/securego/gosec/v2/cmd/gosec@latest

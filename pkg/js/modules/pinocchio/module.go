@@ -8,6 +8,7 @@ import (
 	"github.com/dop251/goja"
 	"github.com/dop251/goja_nodejs/require"
 	"github.com/go-go-golems/geppetto/pkg/inference/engine/factory"
+	"github.com/go-go-golems/geppetto/pkg/steps/ai/credentials"
 	aisettings "github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 	aitypes "github.com/go-go-golems/geppetto/pkg/steps/ai/types"
 )
@@ -16,6 +17,9 @@ const ModuleName = "pinocchio"
 
 type Options struct {
 	DefaultInferenceSettings *aisettings.InferenceSettings
+	// BearerTokenSource is supplied by the embedding Go host. It remains an
+	// opaque Go capability and is never exported to JavaScript.
+	BearerTokenSource credentials.BearerTokenSource
 }
 
 func Register(reg *require.Registry, opts Options) {
@@ -60,11 +64,12 @@ func (m *module) engineFromDefaults(call goja.FunctionCall) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	eng, err := factory.NewEngineFromSettings(ss)
-	if err != nil {
-		return nil, err
+	if m.opts.BearerTokenSource == nil {
+		return factory.NewEngineFromSettings(ss)
 	}
-	return eng, nil
+	return factory.NewStandardEngineFactory(
+		factory.WithBearerTokenSource(m.opts.BearerTokenSource),
+	).CreateEngine(ss)
 }
 
 func (m *module) inspectEngineDefaults(call goja.FunctionCall) (map[string]any, error) {

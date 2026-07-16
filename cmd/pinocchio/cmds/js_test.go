@@ -6,6 +6,9 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/go-go-golems/geppetto/pkg/steps/ai/credentials"
+	aisettings "github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
+	aitypes "github.com/go-go-golems/geppetto/pkg/steps/ai/types"
 	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	profilebootstrap "github.com/go-go-golems/pinocchio/pkg/cmds/profilebootstrap"
 )
@@ -58,6 +61,67 @@ func TestNewJSCommand_ExposesProfileFlags(t *testing.T) {
 	}
 	if cmd.Flags().Lookup("turns-db") == nil {
 		t.Fatal("expected --turns-db flag on js command")
+	}
+}
+
+type jsHostOnlyBearerSource struct{}
+
+func (jsHostOnlyBearerSource) BearerToken(context.Context, credentials.Request) (string, error) {
+	// Construction must not resolve a bearer. Returning no credential material
+	// keeps this wiring test independent of secret-shaped fixture values.
+	return "", nil
+}
+
+func TestPinocchioJSRuntimeForwardsHostBearerSourceToBothEngineBuilders(t *testing.T) {
+	defaults, err := aisettings.NewInferenceSettings()
+	if err != nil {
+		t.Fatalf("NewInferenceSettings: %v", err)
+	}
+	apiType := aitypes.ApiTypeOpenAI
+	model := "test-model"
+	defaults.Chat.ApiType = &apiType
+	defaults.Chat.Engine = &model
+	defaults.API.APIKeys = map[string]string{}
+
+	profilePath := filepath.Join(t.TempDir(), "profiles.yaml")
+	if err := os.WriteFile(profilePath, []byte(`slug: workspace
+profiles:
+  assistant:
+    inference_settings:
+      api:
+        api_keys: {}
+      chat:
+        api_type: openai
+        engine: test-model
+`), 0o600); err != nil {
+		t.Fatalf("write profiles: %v", err)
+	}
+
+	rt, err := newPinocchioJSRuntime(context.Background(), pinocchioJSRuntimeOptions{
+		ScriptDir:                t.TempDir(),
+		DefaultInferenceSettings: defaults,
+		BearerTokenSource:        jsHostOnlyBearerSource{},
+	})
+	if err != nil {
+		t.Fatalf("newPinocchioJSRuntime: %v", err)
+	}
+	defer func() { _ = rt.Close(context.Background()) }()
+	if err := rt.VM.Set("profilePath", profilePath); err != nil {
+		t.Fatalf("set profilePath: %v", err)
+	}
+
+	_, err = rt.VM.RunString(`
+		const gp = require("geppetto");
+		const pp = require("pinocchio");
+		const registry = gp.inferenceProfiles.load(globalThis.profilePath);
+		const settings = registry.resolve("assistant");
+		gp.engine().inference(settings).build();
+		pp.engines.fromDefaults();
+		if (Object.prototype.hasOwnProperty.call(gp, "bearerTokenSource")) throw new Error("geppetto source exposed");
+		if (Object.prototype.hasOwnProperty.call(pp, "bearerTokenSource")) throw new Error("pinocchio source exposed");
+	`)
+	if err != nil {
+		t.Fatalf("source-aware JS engine construction failed: %v", err)
 	}
 }
 
