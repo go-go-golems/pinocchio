@@ -26,6 +26,7 @@ type YAMLStore struct {
 }
 
 var _ credentials.Store = (*YAMLStore)(nil)
+var _ credentials.Deleter = (*YAMLStore)(nil)
 
 // NewYAMLStore creates a store bound to one registry/profile and exactly one
 // outbound provider/base URL pair.

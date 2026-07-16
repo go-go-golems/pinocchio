@@ -60,7 +60,7 @@ func (c *StatusCommand) RunIntoGlazeProcessor(ctx context.Context, parsed *value
 	if err != nil {
 		return err
 	}
-	credential, err := oauthProfile.Store.Load(ctx, oauthProfile.Request)
+	status, err := credentials.StatusOf(ctx, oauthProfile.Store, oauthProfile.Request, time.Now(), 5*time.Minute)
 	if err != nil {
 		return fmt.Errorf("read local OAuth credential state: %w", err)
 	}
@@ -68,13 +68,27 @@ func (c *StatusCommand) RunIntoGlazeProcessor(ctx context.Context, parsed *value
 		types.MRP("profile", profile),
 		types.MRP("registry", registry),
 		types.MRP("storage", "direct_yaml"),
-		types.MRP("credential_state", credentialState(credential, time.Now())),
+		types.MRP("credential_state", credentialStatusState(status)),
 	))
 }
 
-func credentialState(credential credentials.Credential, now time.Time) string {
+func credentialStatusState(status credentials.Status) string {
 	// This classification deliberately returns readiness only. Callers must not
 	// add credential fields or expiry values to command rows.
+	switch status.State {
+	case credentials.StateReady:
+		return "usable"
+	case credentials.StateExpiring:
+		return "expiring"
+	case credentials.StateMissing, credentials.StateExpired:
+		return "missing_or_expired"
+	}
+	return "missing_or_expired"
+}
+
+// credentialState retains the local readiness mapping used by command tests;
+// command execution obtains the redacted state through credentials.StatusOf.
+func credentialState(credential credentials.Credential, now time.Time) string {
 	if !credential.Usable(now, 0) {
 		return "missing_or_expired"
 	}

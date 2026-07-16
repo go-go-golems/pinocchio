@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 
+	"github.com/go-go-golems/geppetto/pkg/steps/ai/credentials"
 	"github.com/go-go-golems/glazed/pkg/cli"
 	"github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/cmds/values"
@@ -57,7 +58,7 @@ func (c *LogoutCommand) RunIntoGlazeProcessor(ctx context.Context, parsed *value
 	if err != nil {
 		return err
 	}
-	if err := oauthProfile.Store.Delete(ctx, oauthProfile.Request); err != nil {
+	if err := credentials.Logout(ctx, oauthProfile.Store, oauthProfile.Request); err != nil {
 		return err
 	}
 	return gp.AddRow(ctx, types.NewRow(
