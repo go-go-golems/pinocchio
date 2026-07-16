@@ -38,6 +38,6 @@
 
 ## Phase 5 — Operations, validation, and delivery
 
-- [ ] Document permissions, backup/recovery, revoke/re-login, migration, and plaintext-at-rest tradeoffs <!-- t:p5a1 -->
+- [x] Document permissions, backup/recovery, revoke/re-login, migration, and plaintext-at-rest tradeoffs <!-- t:p5a1 -->
 - [ ] Run focused/full/race/lint/logcopter/security validation and a secret-safe real-provider smoke <!-- t:p5a2 -->
 - [ ] Relate files, update diary/changelog, run `docmgr doctor`, and deliver an updated review bundle <!-- t:p5a3 -->

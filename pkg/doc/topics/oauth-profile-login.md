@@ -37,9 +37,17 @@ The command binds an exact loopback callback, uses PKCE S256 and state validatio
 
 ## Runtime behavior
 
-At runtime Pinocchio resolves the typed extension, rejects an overlapping static provider key, creates Geppetto's renewable bearer source, and injects it into the factory. Proactive renewal and one bounded pre-stream 401 replay remain inside the Geppetto provider path.
+At runtime Pinocchio resolves the typed extension, rejects an overlapping static provider key, creates Geppetto's renewable bearer source, and injects it into the factory. Proactive renewal and one bounded pre-stream 401 replay remain inside the Geppetto provider path. This integration targets Geppetto `v0.13.7` or newer.
+
+The profile extension is deliberately provider-configured rather than a claim that every provider shares one OAuth contract. Before enabling a real provider, document its authorization endpoint, token endpoint, exact registered loopback redirect, scopes, public-client policy, and refresh-token rotation behavior. The repository's offline tests use synthetic issuers only; no real provider smoke is implied by this help entry.
 
 The current JavaScript engine builder cannot receive this host-owned bearer source. Pinocchio must inject a Go-created engine for JavaScript execution rather than passing credential material through JavaScript.
+
+## Backup, recovery, and migration
+
+The direct registry is plaintext secret storage protected by filesystem ownership and mode `0600`; it is not encryption. Back up the file only through an equally protected private channel, never into logs, tickets, shell history, or shared configuration. Restore the file with the same owner-only permissions before using it.
+
+`pinocchio auth logout --profile workspace/assistant` removes only the selected local credential tuple. It does not revoke a provider grant. If a provider-side revocation contract is later approved, perform that provider operation separately; otherwise use logout followed by browser login to recover locally. Static API-key-to-OAuth migration is explicit: remove the overlapping static key and add the typed OAuth extension rather than relying on automatic conversion.
 
 ## Troubleshooting
 

@@ -20,11 +20,17 @@ RelatedFiles:
     - Path: repo://cmd/web-chat/internal/profiles/api_models.go
       Note: OAuth extension web API redaction
     - Path: repo://go.mod
-      Note: Geppetto v0.13.6 dependency (commit ef035f5)
+      Note: |-
+        Geppetto v0.13.6 dependency (commit ef035f5)
+        Consumes released Geppetto v0.13.7 (Step 12)
     - Path: repo://go.sum
       Note: Resolved release dependency graph (commit ef035f5)
+    - Path: repo://pkg/cmds/profilebootstrap/oauth_test.go
+      Note: Verifies OAuth source injection without a static key (Step 12)
     - Path: repo://pkg/configdoc/explain.go
       Note: OAuth extension provenance redaction
+    - Path: repo://pkg/doc/topics/oauth-profile-login.md
+      Note: Documents operations, recovery, migration, and provider-contract boundaries (Step 12)
     - Path: ws://geppetto/pkg/steps/ai/credentials/oauth/oauth.go
       Note: Observed sibling OAuth primitive
     - Path: ws://pinocchio/lefthook.yml
@@ -44,6 +50,7 @@ LastUpdated: 2026-07-10T23:35:00-04:00
 WhatFor: Continue the profile-backed OAuth, persistence, browser-login, and runtime-source work safely.
 WhenToUse: Use when resuming implementation or reviewing decisions and validation for this ticket.
 ---
+
 
 
 
@@ -793,3 +800,77 @@ pinocchio auth revoke  # deferred; only with a provider-specific revocation cont
 ```
 
 `pinocchio auth refresh` is intentionally not recommended. `RenewableBearerTokenSource` refreshes at inference request time and performs the bounded provider-401 recovery path when applicable.
+
+## Step 12: Consume Geppetto v0.13.7 and prepare the Pinocchio release
+
+Geppetto PR #395 is now merged and released as `v0.13.7`. Pinocchio’s OAuth implementation was still depending on `v0.13.6` in `go.mod`, while the checked-in workspace supplied the newer sibling source during local development. This step removes that workspace masking: Pinocchio now resolves the released Geppetto module under standalone module mode, and the runtime factory has a regression test proving an OAuth profile can construct an engine without a static API key.
+
+The remaining provider decision is deliberately contract-gated. The offline profile/store/login machinery is provider-configurable, but a real provider cannot be selected merely because its OAuth record has familiar field names. The exact authorization endpoint, token endpoint, registered loopback redirect, scopes, public-client policy, and refresh-token rotation behavior must be recorded from an approved source before a real smoke. No real account or credential was used in this step.
+
+### Prompt Context
+
+**User prompt (verbatim):** "do all of priority 1."
+
+**Assistant interpretation:** Finish the Pinocchio-side integration after the Geppetto v0.13.7 release: consume the released dependency, close the remaining offline OAuth lifecycle validation tasks, prepare a PR/release, and publish the resulting help documentation.
+
+**Inferred user intent:** Move the reusable Geppetto work into a reproducible Pinocchio release without allowing workspace dependencies or unapproved provider smoke tests to hide integration gaps.
+
+### What I did
+
+- Rebases the Pinocchio worktree on `origin/main`.
+- Updated `go.mod` and `go.sum` from Geppetto `v0.13.6` to `v0.13.7`.
+- Added `TestOAuthFactoryAcceptsSourceWithoutStaticKey` to `pkg/cmds/profilebootstrap/oauth_test.go`.
+- Updated the OAuth help entry and design guide to identify the released Geppetto minimum and keep provider enablement contract-gated.
+- Ran standalone full tests with `GOWORK=off`.
+- Ran focused OAuth/profile race tests.
+- Ran full repository race testing and recorded the existing web-chat/appserver baseline race rather than suppressing it.
+
+### Why
+
+A release dependency is the boundary between “works in the local multi-repository workspace” and “works for a Pinocchio consumer.” The source-precedence regression test protects the key host invariant: an OAuth profile must use the injected source and must not require or fall back to a static provider key.
+
+### What worked
+
+- `GOWORK=off go test ./... -count=1` passed with Geppetto `v0.13.7`.
+- Focused race tests passed for `cmd/pinocchio/cmds/auth`, `pkg/oauthprofiles`, `pkg/cmds/profilebootstrap`, and `pkg/configdoc`.
+- The new source-precedence test passed.
+- The help entry now documents owner-only persistence, request-time renewal, Geppetto `v0.13.7`, backup/recovery/migration, and the provider-contract gate.
+- `GOWORK=off make lint logcopter-check gosec govulncheck` passed with zero lint, logcopter, gosec, and reported code-reachable vulnerability findings.
+- `docmgr doctor --ticket PINOCCHIO-OAUTH-PROFILE-LIFECYCLE --stale-after 30` passed all checks.
+
+### What didn't work
+
+`GOWORK=off go test -race ./... -count=1` still fails in the existing `cmd/web-chat/internal/appserver.TestSubmitAndSnapshot_WiresSessionIDAndTurnStoreIntoRuntime` test. The race is between the test thread reading the fake engine’s cloned turn and the asynchronous session inference goroutine mutating that clone. No OAuth package is involved. The focused OAuth race suites pass.
+
+A real provider smoke was not run. The task requires explicit provider and account approval, and the current work only has offline evidence for provider-specific contracts.
+
+### What I learned
+
+The module-version bump is necessary even when a workspace makes local compilation succeed. It also exposes the correct validation split: full standalone non-race validation can pass while the repository-wide race baseline remains independently actionable.
+
+### What was tricky to build
+
+The OAuth profile schema is intentionally generic, but provider registration is not. Pi’s installed Anthropic and Codex flows use fixed registered loopback redirects, while Pinocchio currently binds an ephemeral loopback port. This means the profile/runtime machinery can be released as offline infrastructure, but a provider-specific live login must not be declared supported until its exact redirect contract is implemented and tested.
+
+### What warrants a second pair of eyes
+
+- Review the exact dependency and generated-doc changes before the Pinocchio PR.
+- Review whether the first real provider should be Claude subscription OAuth or Codex, since both require provider-specific registered redirects and transport policy.
+- Review the existing appserver race separately; do not attribute it to the Geppetto release bump without reproducing under the prior dependency.
+
+### What should be done in the future
+
+- Commit and push the Pinocchio integration PR, then release Pinocchio only after CI passes.
+- Publish the Pinocchio help database through the release workflow and verify the package/version on docs.yolo.
+- Create a separate approval-gated provider-contract/live-smoke task; do not mark the offline infrastructure as a successful real-provider login.
+- Close the completed Geppetto bearer ticket and update the Pinocchio ticket status after the release bookkeeping is complete.
+
+### Code review instructions
+
+- Start with `go.mod`, `go.sum`, `pkg/cmds/profilebootstrap/oauth.go`, and the new source-precedence test.
+- Review `pkg/doc/topics/oauth-profile-login.md` for the user-facing release and provider-contract caveats.
+- Validate with `GOWORK=off go test ./... -count=1`, focused OAuth race tests, `make lint`, `make logcopter-check`, `make gosec`, and `make govulncheck`.
+
+### Technical details
+
+Geppetto release consumed: `v0.13.7`. The full-race failure is recorded from `/tmp/pinocchio-full-race-v0137.log`; no credential values or provider account metadata were included in the diary.

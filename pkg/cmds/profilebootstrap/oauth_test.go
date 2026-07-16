@@ -32,6 +32,14 @@ func TestResolveOAuthProfileFromOneDirectYAMLRegistry(t *testing.T) {
 	require.Equal(t, "access-for-test", token)
 }
 
+func TestOAuthFactoryAcceptsSourceWithoutStaticKey(t *testing.T) {
+	resolved := oauthResolvedFixture(t, "")
+	engineFactory, err := NewEngineFactoryForResolvedSettings(context.Background(), resolved)
+	require.NoError(t, err)
+	_, err = engineFactory.CreateEngine(resolved.FinalInferenceSettings)
+	require.NoError(t, err)
+}
+
 func TestResolveOAuthProfileRejectsStaticKey(t *testing.T) {
 	resolved := oauthResolvedFixture(t, "static-key-must-not-appear")
 

@@ -84,3 +84,13 @@ Consumed Geppetto v0.13.6; focused and full standalone non-race Pinocchio tests 
 
 - /home/manuel/workspaces/2026-07-10/refresh-oauth-token-geppetto/pinocchio/go.mod — Published Geppetto renewable bearer dependency
 - /home/manuel/workspaces/2026-07-10/refresh-oauth-token-geppetto/pinocchio/pkg/cmds/profilebootstrap/oauth.go — Runtime source integration validated against release
+
+## 2026-07-16
+
+Consumed released Geppetto v0.13.7, added OAuth source-precedence factory coverage, documented secure backup/recovery/migration and provider-contract boundaries, and validated standalone tests plus lint/logcopter/gosec/govulncheck.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-07-10/refresh-oauth-token-geppetto/pinocchio/go.mod — Release dependency update
+- /home/manuel/workspaces/2026-07-10/refresh-oauth-token-geppetto/pinocchio/pkg/cmds/profilebootstrap/oauth_test.go — Runtime integration regression test
+- /home/manuel/workspaces/2026-07-10/refresh-oauth-token-geppetto/pinocchio/pkg/doc/topics/oauth-profile-login.md — Operator lifecycle documentation
