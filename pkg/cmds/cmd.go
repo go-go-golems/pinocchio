@@ -349,12 +349,20 @@ func (g *PinocchioCommand) RunIntoWriter(
 		return err
 	}
 
+	engineFactory := g.EngineFactory
+	if engineFactory == nil && resolvedEngineSettings != nil {
+		engineFactory, err = profilebootstrap.NewEngineFactoryForResolvedSettings(ctx, resolvedEngineSettings)
+		if err != nil {
+			return errors.Wrap(err, "create engine factory for command run")
+		}
+	}
+
 	// Run with options
 	_, err = g.RunWithOptions(ctx,
 		run.WithInferenceSettings(stepSettings),
 		run.WithBaseSettings(baseSettings),
 		run.WithProfileSelection(profileSettings.Profile, strings.Join(profileSettings.ProfileRegistries, ",")),
-		run.WithEngineFactory(g.EngineFactory),
+		run.WithEngineFactory(engineFactory),
 		run.WithWriter(w),
 		run.WithReader(os.Stdin),
 		run.WithRunMode(runMode),
