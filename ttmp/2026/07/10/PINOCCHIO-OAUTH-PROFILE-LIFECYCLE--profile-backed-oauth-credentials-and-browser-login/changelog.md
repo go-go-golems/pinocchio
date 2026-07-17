@@ -94,3 +94,12 @@ Consumed released Geppetto v0.13.7, added OAuth source-precedence factory covera
 - /home/manuel/workspaces/2026-07-10/refresh-oauth-token-geppetto/pinocchio/go.mod — Release dependency update
 - /home/manuel/workspaces/2026-07-10/refresh-oauth-token-geppetto/pinocchio/pkg/cmds/profilebootstrap/oauth_test.go — Runtime integration regression test
 - /home/manuel/workspaces/2026-07-10/refresh-oauth-token-geppetto/pinocchio/pkg/doc/topics/oauth-profile-login.md — Operator lifecycle documentation
+
+## 2026-07-16
+
+Addressed PR #184 P1 review findings: inject the OAuth-aware factory into normal Pinocchio command execution and implement Windows OAuth registry locking; Linux tests and Windows cross-compilation pass.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-07-10/refresh-oauth-token-geppetto/pinocchio/pkg/cmds/cmd.go — Normal command runtime factory injection
+- /home/manuel/workspaces/2026-07-10/refresh-oauth-token-geppetto/pinocchio/pkg/oauthprofiles/lock_windows.go — Windows persistence lock

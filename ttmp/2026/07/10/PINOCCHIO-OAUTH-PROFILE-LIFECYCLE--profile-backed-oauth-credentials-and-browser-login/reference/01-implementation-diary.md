@@ -25,12 +25,16 @@ RelatedFiles:
         Consumes released Geppetto v0.13.7 (Step 12)
     - Path: repo://go.sum
       Note: Resolved release dependency graph (commit ef035f5)
+    - Path: repo://pkg/cmds/cmd.go
+      Note: 'Normal RunIntoWriter path now receives the OAuth-aware engine factory (PR #184 review fix)'
     - Path: repo://pkg/cmds/profilebootstrap/oauth_test.go
       Note: Verifies OAuth source injection without a static key (Step 12)
     - Path: repo://pkg/configdoc/explain.go
       Note: OAuth extension provenance redaction
     - Path: repo://pkg/doc/topics/oauth-profile-login.md
       Note: Documents operations, recovery, migration, and provider-contract boundaries (Step 12)
+    - Path: repo://pkg/oauthprofiles/lock_windows.go
+      Note: 'Windows shared/exclusive registry locking via LockFileEx (PR #184 review fix)'
     - Path: ws://geppetto/pkg/steps/ai/credentials/oauth/oauth.go
       Note: Observed sibling OAuth primitive
     - Path: ws://pinocchio/lefthook.yml
@@ -50,6 +54,7 @@ LastUpdated: 2026-07-10T23:35:00-04:00
 WhatFor: Continue the profile-backed OAuth, persistence, browser-login, and runtime-source work safely.
 WhenToUse: Use when resuming implementation or reviewing decisions and validation for this ticket.
 ---
+
 
 
 
@@ -874,3 +879,72 @@ The OAuth profile schema is intentionally generic, but provider registration is 
 ### Technical details
 
 Geppetto release consumed: `v0.13.7`. The full-race failure is recorded from `/tmp/pinocchio-full-race-v0137.log`; no credential values or provider account metadata were included in the diary.
+
+## Step 13: Address PR #184 review findings
+
+The merged PR received two concrete P1 review findings immediately before merge. One identified that the ordinary `PinocchioCommand.RunIntoWriter` path resolved profiles but passed a nil factory into `RunWithOptions`, which then created an unconfigured standard factory. The other identified that the `!unix` lock stub made Windows login/logout fail at every persistence operation. Both findings were valid and were not already addressed by PR #184.
+
+This follow-up adds the missing normal-command factory injection and a Windows `LockFileEx` implementation, while retaining the existing no-lock behavior only for non-Unix, non-Windows platforms. The follow-up was validated on Linux and by compiling the OAuth package as a Windows PE test binary; no real credentials or provider calls were used.
+
+### Prompt Context
+
+**User prompt (verbatim):** "https://github.com/go-go-golems/pinocchio/pull/184\n\nAddress the code review comments? or did you already)"
+
+**Assistant interpretation:** Inspect PR #184’s review feedback, determine whether each comment was already fixed, and implement any missing corrections.
+
+**Inferred user intent:** Ensure the merged OAuth integration does not leave a P1 runtime path unprotected or claim Windows support while persistence is deliberately disabled there.
+
+### What I did
+
+- Queried PR #184 review and inline comments through GitHub.
+- Confirmed the two Codex P1 comments were not already addressed.
+- Updated `PinocchioCommand.RunIntoWriter` to create the profile-aware engine factory whenever no caller-owned factory is supplied.
+- Added `pkg/oauthprofiles/lock_windows.go` using Windows `LockFileEx`/`UnlockFileEx` for shared and exclusive registry locking.
+- Restricted the old error-only lock stub to `!unix && !windows` targets.
+- Promoted `golang.org/x/sys` to a direct dependency because the Windows implementation imports `golang.org/x/sys/windows`.
+- Ran focused and full standalone tests.
+- Cross-compiled `pkg/oauthprofiles` for `windows/amd64` and verified the output as a PE32+ executable.
+
+### Why
+
+The host-owned OAuth source must be selected at the last point where the resolved profile and command context are both available. The regular command path is the critical production path; helper and agent-only factory tests do not prove that path. Windows needs a real OS file lock because atomic tuple persistence and concurrent logout/save semantics depend on mutual exclusion.
+
+### What worked
+
+- Both review findings were reproducible from the code and fixed directly.
+- `GOWORK=off go test ./... -count=1` passed.
+- `GOOS=windows GOARCH=amd64 GOWORK=off go test -c ./pkg/oauthprofiles` passed and produced a Windows executable.
+
+### What didn't work
+
+PR #184 was already merged before the review comments were inspected, so these corrections require a follow-up PR rather than an update to PR #184. The local `gh pr merge` command also could not run because another worktree already used the local `main` branch; the merge was completed through the GitHub API instead.
+
+### What I learned
+
+A green helper-level factory test does not guarantee that every host command path passes the factory through. Review the complete call graph from profile resolution to `RunWithOptions`, especially where nil defaults are applied. Platform build-tag stubs also need to be checked against advertised CLI behavior, not just the host platform.
+
+### What was tricky to build
+
+The Unix implementation uses `syscall.Flock`, but Windows requires handle-based byte-range locking. The Windows file must be separated from the generic non-Unix fallback so packages for other operating systems do not import `golang.org/x/sys/windows`; the fallback build tag is therefore `!unix && !windows`.
+
+### What warrants a second pair of eyes
+
+- Review whether the regular command factory injection should also be centralized for other entrypoints that call `RunWithOptions` directly.
+- Review Windows lock-file ACL behavior and whether `Chmod(0600)` is sufficient for the project’s first Windows support policy.
+- Review the follow-up PR independently of PR #184 because the original PR is already merged.
+
+### What should be done in the future
+
+- Open and merge a follow-up PR containing these two review fixes.
+- Add a Windows CI compilation job if Windows is a supported release target.
+- Add a command-level OAuth runtime regression that exercises the normal `RunIntoWriter` path against a synthetic local provider.
+
+### Code review instructions
+
+- Start with `pkg/cmds/cmd.go` at the `RunIntoWriter` factory selection and `pkg/oauthprofiles/lock_windows.go` plus its build tags.
+- Validate with `GOWORK=off go test ./... -count=1` and `GOOS=windows GOARCH=amd64 GOWORK=off go test -c ./pkg/oauthprofiles -o /tmp/pinocchio-oauthprofiles-windows.test.exe`.
+- Confirm no credential values, authorization codes, or account metadata are present in diffs or test output.
+
+### Technical details
+
+Review comments addressed: Codex inline comments `3599482302` (normal command factory injection) and `3599482306` (Windows registry locking). Follow-up base: merged PR #184 commit `9b3c86f26bfe4e44c11fd02c7381a3b5baa21a48`.
