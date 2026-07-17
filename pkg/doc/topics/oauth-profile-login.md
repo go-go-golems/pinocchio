@@ -23,6 +23,8 @@ Pinocchio owns the browser, loopback callback, and persistence lifecycle for OAu
 
 An OAuth profile uses `extensions."pinocchio.oauth@v1"` in exactly one explicit direct YAML registry. The registry file must be mode `0600` and its parent must not be group- or world-writable. Inline Pinocchio profiles, composed registries, SQLite registries, and remote sources cannot own OAuth credentials because a refresh needs one auditable atomic-write target.
 
+OAuth profile YAML persistence is not supported on Windows. Pinocchio rejects the store before browser login begins rather than relying on POSIX mode bits or an untested Windows ACL policy. Static-key profiles remain unaffected.
+
 Do not put access tokens, refresh tokens, client secrets, or OAuth state in `inference_settings.api.api_keys`.
 
 ## Start browser login
@@ -56,6 +58,7 @@ The direct registry is plaintext secret storage protected by filesystem ownershi
 | Login rejects the profile source | Profile is inline, composed, or non-YAML | Move the OAuth extension to one direct owner-only YAML registry. |
 | Runtime rejects a static key | OAuth source and static key overlap | Remove the provider API key; the dynamic source is authoritative. |
 | Login cannot persist credentials | File mode or parent directory is unsafe | Set the registry to `0600` and secure its parent directory. |
+| Windows rejects the OAuth profile store | OAuth YAML persistence is unsupported on Windows | Use a supported POSIX host; do not weaken the storage checks. |
 | JavaScript-built engine lacks OAuth | JS builder has no host bearer-source hook | Use a Go-created, source-injected engine. |
 
 ## See Also

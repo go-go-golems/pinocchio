@@ -31,6 +31,9 @@ var _ credentials.Deleter = (*YAMLStore)(nil)
 // NewYAMLStore creates a store bound to one registry/profile and exactly one
 // outbound provider/base URL pair.
 func NewYAMLStore(path string, registry gepprofiles.RegistrySlug, profile gepprofiles.EngineProfileSlug, expected credentials.Request) (*YAMLStore, error) {
+	if err := validateYAMLPersistencePlatform(); err != nil {
+		return nil, err
+	}
 	if strings.TrimSpace(path) == "" {
 		return nil, errors.New("OAuth profile registry path is required")
 	}

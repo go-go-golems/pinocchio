@@ -32,9 +32,15 @@ RelatedFiles:
     - Path: repo://pkg/configdoc/explain.go
       Note: OAuth extension provenance redaction
     - Path: repo://pkg/doc/topics/oauth-profile-login.md
-      Note: Documents operations, recovery, migration, and provider-contract boundaries (Step 12)
-    - Path: repo://pkg/oauthprofiles/lock_windows.go
-      Note: 'Windows shared/exclusive registry locking via LockFileEx (PR #184 review fix)'
+      Note: |-
+        Documents operations, recovery, migration, and provider-contract boundaries (Step 12)
+        Documents POSIX-only OAuth YAML persistence
+    - Path: repo://pkg/oauthprofiles/platform_windows.go
+      Note: Explicit early fail-closed policy for unsupported Windows YAML persistence
+    - Path: repo://pkg/oauthprofiles/platform_windows_test.go
+      Note: Asserts Windows rejects OAuth YAML store construction
+    - Path: repo://pkg/oauthprofiles/store.go
+      Note: Enforces platform support at store construction before browser login
     - Path: ws://geppetto/pkg/steps/ai/credentials/oauth/oauth.go
       Note: Observed sibling OAuth primitive
     - Path: ws://pinocchio/lefthook.yml
@@ -54,6 +60,9 @@ LastUpdated: 2026-07-10T23:35:00-04:00
 WhatFor: Continue the profile-backed OAuth, persistence, browser-login, and runtime-source work safely.
 WhenToUse: Use when resuming implementation or reviewing decisions and validation for this ticket.
 ---
+
+
+
 
 
 
@@ -948,3 +957,70 @@ The Unix implementation uses `syscall.Flock`, but Windows requires handle-based 
 ### Technical details
 
 Review comments addressed: Codex inline comments `3599482302` (normal command factory injection) and `3599482306` (Windows registry locking). Follow-up base: merged PR #184 commit `9b3c86f26bfe4e44c11fd02c7381a3b5baa21a48`.
+
+## Step 14: Fail closed on Windows OAuth YAML persistence
+
+The ACL-aware experiment in draft PR #186 accumulated three additional valid security findings: it did not enforce credential confidentiality against non-owner readers, omitted `GENERIC_ALL`, and omitted parent-directory `FILE_DELETE_CHILD`. Rather than continue implementing an untested Windows authorization evaluator, this step resets the draft to the merged main branch and adopts the explicit product policy that OAuth YAML persistence is unsupported on Windows.
+
+The rejection now happens when the YAML store is constructed, before browser login starts and before any provider interaction. POSIX behavior remains unchanged. The Windows lock implementation and direct Windows package dependency are removed, and the operator/design documentation now states the fail-closed boundary.
+
+### Prompt Context
+
+**User prompt (verbatim):** "ok, we don't support windows, fail closed. i don't think this was ever tested on windows anyway."
+
+**Assistant interpretation:** Remove the speculative Windows ACL/locking support, reject OAuth YAML persistence explicitly and early on Windows, preserve POSIX behavior, and leave the follow-up PR for manual review and merge.
+
+**Inferred user intent:** Prefer a small, auditable security boundary over claiming unsupported and untested Windows behavior.
+
+### What I did
+
+- Reset draft PR #186’s branch to merged `origin/main`, removing the ACL experiment.
+- Added build-tagged platform validation invoked by `NewYAMLStore`.
+- Made Windows return `OAuth profile YAML persistence is not supported on Windows` before store construction and browser login.
+- Removed `lock_windows.go`; restored the generic non-Unix lock fallback build tag.
+- Returned `golang.org/x/sys` to an indirect dependency via `GOWORK=off go mod tidy`.
+- Updated operator and design documentation with the POSIX-only support policy.
+- After Codex review, marked POSIX persistence/login tests `!windows` and added a Windows-specific constructor rejection test so a real Windows `go test` run asserts the supported boundary rather than failing unrelated success fixtures.
+
+### Why
+
+Windows support had never been validated on a Windows runtime. Failing closed is safer than maintaining hand-written ACL interpretation that can accidentally permit credential disclosure or replacement.
+
+### What worked
+
+- Existing POSIX tests continue to exercise mode `0600`, directory permissions, atomic writes, and locking without policy changes.
+- The Windows OAuth store, profile bootstrap, and auth test packages cross-compile as PE32+ test executables, including the Windows-only unsupported-platform assertion.
+- Login resolves the YAML store before opening the callback listener or browser, so rejection occurs before provider interaction.
+
+### What didn't work
+
+The prior ACL experiment was abandoned rather than patched. Cross-compilation cannot prove runtime Windows filesystem behavior, which is precisely why support is now rejected.
+
+### What I learned
+
+Unsupported-platform behavior should be explicit at the public construction boundary, not an incidental failure deep inside a permission check or lock implementation.
+
+### What was tricky to build
+
+The rejection had to occur early enough to avoid launching a browser and obtaining an authorization code that could not be stored. `ResolveOAuthProfile` constructs `YAMLStore` before `runLogin`, so validating in `NewYAMLStore` provides the correct ordering while leaving static-key profiles unaffected.
+
+### What warrants a second pair of eyes
+
+- Confirm every OAuth YAML entrypoint constructs `YAMLStore` before external provider interaction.
+- Confirm the unsupported-platform error is acceptable user-facing wording.
+- Confirm release documentation does not imply Windows OAuth support elsewhere.
+
+### What should be done in the future
+
+- Add Windows OAuth storage only as a separately designed and Windows-tested feature.
+- Keep PR #186 unmerged until the user reviews and merges it.
+
+### Code review instructions
+
+- Start with `pkg/oauthprofiles/store.go`, `platform_windows.go`, `platform_nonwindows.go`, and the removal of `lock_windows.go`.
+- Validate with `GOWORK=off go test ./... -count=1` and a Windows cross-compile of `pkg/oauthprofiles`.
+- Verify the login call order in `cmd/pinocchio/cmds/auth/login.go`.
+
+### Technical details
+
+The superseded ACL findings were comments `3599576308`, `3599576312`, and `3599576315` on draft PR #186. Follow-up test-boundary comment `3599619596` was addressed by Windows-specific and non-Windows test build tags. Windows fails closed before any credential load, save, delete, browser launch, or provider exchange.
