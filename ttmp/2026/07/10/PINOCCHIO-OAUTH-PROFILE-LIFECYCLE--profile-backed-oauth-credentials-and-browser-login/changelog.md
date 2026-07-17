@@ -103,3 +103,12 @@ Addressed PR #184 P1 review findings: inject the OAuth-aware factory into normal
 
 - /home/manuel/workspaces/2026-07-10/refresh-oauth-token-geppetto/pinocchio/pkg/cmds/cmd.go — Normal command runtime factory injection
 - /home/manuel/workspaces/2026-07-10/refresh-oauth-token-geppetto/pinocchio/pkg/oauthprofiles/lock_windows.go — Windows persistence lock
+
+## 2026-07-16
+
+Replaced untested Windows OAuth YAML locking/ACL support with an explicit fail-closed platform policy. Windows is rejected at store construction before browser login; POSIX behavior is unchanged. Draft PR #186 remains unmerged.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-07-10/refresh-oauth-token-geppetto/pinocchio/pkg/oauthprofiles/platform_windows.go — Unsupported-platform rejection
+- /home/manuel/workspaces/2026-07-10/refresh-oauth-token-geppetto/pinocchio/pkg/oauthprofiles/store.go — Early platform validation

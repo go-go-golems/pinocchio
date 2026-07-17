@@ -266,7 +266,7 @@ return f.CreateEngine(withoutStaticProviderKey(resolved.FinalInferenceSettings))
 
 ### 6.1 File security invariants
 
-1. A secret-bearing OAuth registry YAML must be mode `0600` on POSIX systems.
+1. A secret-bearing OAuth registry YAML must be mode `0600` on POSIX systems. Windows YAML persistence is unsupported and rejected before login until a Windows-native storage policy has real-platform tests.
 2. Its parent directory must not permit unsafe replacement by another user.
 3. Temporary files and lock files must be owner-only.
 4. Token tuples are written atomically: parse → modify only targeted fields → write temporary sibling → fsync → rename → parent fsync where supported.
@@ -438,7 +438,7 @@ GOWORK=off make gosec
 ## 11. Risks, alternatives, and open questions
 
 1. **YAML comment/order preservation:** The chosen codec may rewrite formatting. Determine whether this is acceptable before using it as the secret store.
-2. **OS portability:** `0600`, file locks, and directory fsync have different behavior outside POSIX. Define an explicit first-platform support policy.
+2. **OS portability:** The first-platform policy is POSIX-only for OAuth YAML persistence. Windows fails closed before login; adding support requires a Windows-native owner-only storage design and real-platform tests.
 3. **Provider variation:** Standard OAuth support does not prove a provider permits loopback redirects or public clients. Do not guess endpoint parameters.
 4. **External registry sources:** A profile may be resolved from a read-only/imported/stacked source. The first release must fail clearly rather than silently create an override elsewhere.
 5. **Static-key migration:** A migration needs an explicit command/operator action; automatic conversion could leave duplicate credentials.
