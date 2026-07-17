@@ -37,6 +37,8 @@ RelatedFiles:
         Documents POSIX-only OAuth YAML persistence
     - Path: repo://pkg/oauthprofiles/platform_windows.go
       Note: Explicit early fail-closed policy for unsupported Windows YAML persistence
+    - Path: repo://pkg/oauthprofiles/platform_windows_test.go
+      Note: Asserts Windows rejects OAuth YAML store construction
     - Path: repo://pkg/oauthprofiles/store.go
       Note: Enforces platform support at store construction before browser login
     - Path: ws://geppetto/pkg/steps/ai/credentials/oauth/oauth.go
@@ -58,6 +60,7 @@ LastUpdated: 2026-07-10T23:35:00-04:00
 WhatFor: Continue the profile-backed OAuth, persistence, browser-login, and runtime-source work safely.
 WhenToUse: Use when resuming implementation or reviewing decisions and validation for this ticket.
 ---
+
 
 
 
@@ -977,6 +980,7 @@ The rejection now happens when the YAML store is constructed, before browser log
 - Removed `lock_windows.go`; restored the generic non-Unix lock fallback build tag.
 - Returned `golang.org/x/sys` to an indirect dependency via `GOWORK=off go mod tidy`.
 - Updated operator and design documentation with the POSIX-only support policy.
+- After Codex review, marked POSIX persistence/login tests `!windows` and added a Windows-specific constructor rejection test so a real Windows `go test` run asserts the supported boundary rather than failing unrelated success fixtures.
 
 ### Why
 
@@ -985,7 +989,7 @@ Windows support had never been validated on a Windows runtime. Failing closed is
 ### What worked
 
 - Existing POSIX tests continue to exercise mode `0600`, directory permissions, atomic writes, and locking without policy changes.
-- The Windows package can still be cross-compiled, proving the unsupported-platform path is build-complete.
+- The Windows OAuth store, profile bootstrap, and auth test packages cross-compile as PE32+ test executables, including the Windows-only unsupported-platform assertion.
 - Login resolves the YAML store before opening the callback listener or browser, so rejection occurs before provider interaction.
 
 ### What didn't work
@@ -1019,4 +1023,4 @@ The rejection had to occur early enough to avoid launching a browser and obtaini
 
 ### Technical details
 
-The superseded ACL findings were comments `3599576308`, `3599576312`, and `3599576315` on draft PR #186. Windows fails closed before any credential load, save, delete, browser launch, or provider exchange.
+The superseded ACL findings were comments `3599576308`, `3599576312`, and `3599576315` on draft PR #186. Follow-up test-boundary comment `3599619596` was addressed by Windows-specific and non-Windows test build tags. Windows fails closed before any credential load, save, delete, browser launch, or provider exchange.
