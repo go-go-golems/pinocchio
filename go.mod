@@ -7,7 +7,7 @@ toolchain go1.26.5
 require (
 	charm.land/lipgloss/v2 v2.0.0
 	github.com/ThreeDotsLabs/watermill v1.5.1
-	github.com/ThreeDotsLabs/watermill-redisstream v1.4.3
+	github.com/ThreeDotsLabs/watermill-redisstream v1.4.5
 	github.com/atotto/clipboard v0.1.4
 	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/charmbracelet/glamour v1.0.0
@@ -17,9 +17,9 @@ require (
 	github.com/go-go-golems/clay v0.4.11
 	github.com/go-go-golems/geppetto v0.13.7
 	github.com/go-go-golems/glazed v1.3.6
-	github.com/go-go-golems/go-go-goja v0.8.3
-	github.com/go-go-golems/logcopter v0.1.0
-	github.com/go-go-golems/sessionstream v0.0.6
+	github.com/go-go-golems/go-go-goja v0.9.6
+	github.com/go-go-golems/logcopter v0.1.1
+	github.com/go-go-golems/sessionstream v0.1.0
 	github.com/go-go-golems/uhoh v0.0.9
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.4-0.20250319132907-e064f32e3674
@@ -159,7 +159,7 @@ require (
 	github.com/aymerick/douceur v0.2.0 // indirect
 	github.com/bahlo/generic-list-go v0.2.0 // indirect
 	github.com/bmatcuk/doublestar/v4 v4.10.0 // indirect
-	github.com/buger/jsonparser v1.1.2 // indirect
+	github.com/buger/jsonparser v1.2.0 // indirect
 	github.com/catppuccin/go v0.3.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/charmbracelet/bubbles v1.0.0
