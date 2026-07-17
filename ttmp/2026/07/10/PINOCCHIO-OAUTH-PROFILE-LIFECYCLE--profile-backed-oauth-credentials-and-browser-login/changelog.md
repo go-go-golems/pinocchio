@@ -113,3 +113,13 @@ Replaced untested Windows OAuth YAML locking/ACL support with an explicit fail-c
 - /home/manuel/workspaces/2026-07-10/refresh-oauth-token-geppetto/pinocchio/pkg/oauthprofiles/platform_windows.go — Unsupported-platform rejection
 - /home/manuel/workspaces/2026-07-10/refresh-oauth-token-geppetto/pinocchio/pkg/oauthprofiles/store.go — Early platform validation
 - /home/manuel/workspaces/2026-07-10/refresh-oauth-token-geppetto/pinocchio/pkg/oauthprofiles/platform_windows_test.go — Windows unsupported-platform contract test
+
+## 2026-07-17
+
+Reconciled completed offline OAuth lifecycle coverage, separated approval-gated live smoke, added failed-write cleanup coverage, and prepared a validated Pinocchio v0.11.6 release handoff without tagging or publishing.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-07-10/refresh-oauth-token-geppetto/pinocchio/changelog.md — Release notes
+- /home/manuel/workspaces/2026-07-10/refresh-oauth-token-geppetto/pinocchio/pkg/oauthprofiles/store_test.go — Persistence failure coverage
+- /home/manuel/workspaces/2026-07-10/refresh-oauth-token-geppetto/pinocchio/ttmp/2026/07/10/PINOCCHIO-OAUTH-PROFILE-LIFECYCLE--profile-backed-oauth-credentials-and-browser-login/reference/02-pinocchio-v0-11-6-release-handoff.md — Release checklist

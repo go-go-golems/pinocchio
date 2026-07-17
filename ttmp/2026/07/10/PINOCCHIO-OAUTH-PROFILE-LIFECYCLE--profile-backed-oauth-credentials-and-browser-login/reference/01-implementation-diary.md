@@ -13,6 +13,8 @@ Intent: long-term
 Owners:
     - manuel
 RelatedFiles:
+    - Path: repo://changelog.md
+      Note: v0.11.6 candidate scope and validation boundary
     - Path: repo://cmd/pinocchio/cmds/auth/login.go
       Note: Glazed PKCE loopback browser login implementation
     - Path: repo://cmd/pinocchio/cmds/auth/login_test.go
@@ -41,6 +43,8 @@ RelatedFiles:
       Note: Asserts Windows rejects OAuth YAML store construction
     - Path: repo://pkg/oauthprofiles/store.go
       Note: Enforces platform support at store construction before browser login
+    - Path: repo://ttmp/2026/07/10/PINOCCHIO-OAUTH-PROFILE-LIFECYCLE--profile-backed-oauth-credentials-and-browser-login/reference/02-pinocchio-v0-11-6-release-handoff.md
+      Note: Manual release and verification checklist
     - Path: ws://geppetto/pkg/steps/ai/credentials/oauth/oauth.go
       Note: Observed sibling OAuth primitive
     - Path: ws://pinocchio/lefthook.yml
@@ -52,7 +56,9 @@ RelatedFiles:
     - Path: ws://pinocchio/pkg/oauthprofiles/profile_test.go
       Note: Typed extension and redaction validation coverage
     - Path: ws://pinocchio/pkg/oauthprofiles/store_test.go
-      Note: Credential persistence security and rotation coverage
+      Note: |-
+        Credential persistence security and rotation coverage
+        Failed replacement cleanup and original-target preservation coverage
 ExternalSources:
     - https://github.com/go-go-golems/geppetto/issues/387
 Summary: Chronological investigation and implementation record for Pinocchio profile OAuth lifecycle work.
@@ -60,6 +66,7 @@ LastUpdated: 2026-07-10T23:35:00-04:00
 WhatFor: Continue the profile-backed OAuth, persistence, browser-login, and runtime-source work safely.
 WhenToUse: Use when resuming implementation or reviewing decisions and validation for this ticket.
 ---
+
 
 
 
@@ -1024,3 +1031,77 @@ The rejection had to occur early enough to avoid launching a browser and obtaini
 ### Technical details
 
 The superseded ACL findings were comments `3599576308`, `3599576312`, and `3599576315` on draft PR #186. Follow-up test-boundary comment `3599619596` was addressed by Windows-specific and non-Windows test build tags. Windows fails closed before any credential load, save, delete, browser launch, or provider exchange.
+
+## Step 15: Reconcile offline completion and prepare v0.11.6
+
+PR #186 was merged by the user as `322d07f`. This step reconciles the ticket with the implementation and prepares a manual `v0.11.6` release handoff without creating or pushing a tag. The ticket now distinguishes completed synthetic/offline validation from the separately approval-gated provider contract and live smoke.
+
+Release preparation covers the full delta since `v0.11.5`, not only OAuth. The candidate also contains dependency and GitHub Actions updates, so the release notes and checklist call those out explicitly. A local snapshot and help export succeeded; publication remains a manual user action.
+
+### Prompt Context
+
+**User prompt (verbatim):** "go ahead."
+
+**Assistant interpretation:** Complete ticket bookkeeping and prepare Pinocchio `v0.11.6` for review, but do not tag, publish, or merge on the user’s behalf.
+
+**Inferred user intent:** Produce a trustworthy release-ready handoff after the merged OAuth work while preserving control over irreversible release actions.
+
+### What I did
+
+- Created `chore/pinocchio-oauth-release-prep` from merged `origin/main`.
+- Added a deterministic failed-replacement cleanup test for atomic credential writes.
+- Marked persistence and runtime integration coverage complete using Pinocchio tests plus released Geppetto `v0.13.7` tests.
+- Split offline validation from the approval-gated real-provider smoke task.
+- Added an `Unreleased — v0.11.6` section to the repository changelog.
+- Added `reference/02-pinocchio-v0-11-6-release-handoff.md` with candidate scope, commands, verification, and rollback boundaries.
+- Exported the help database and verified the `oauth-profile-login` section exists.
+- Ran the GoReleaser snapshot dry run.
+
+### Why
+
+The ticket’s remaining checkboxes mixed host integration work with provider/account approval. Separating those concerns prevents a complete offline implementation from claiming unperformed live-provider validation. The release handoff also makes the tag-triggered docs publication path explicit.
+
+### What worked
+
+- `svu current` returned `v0.11.5`; `svu patch` returned `v0.11.6`.
+- Focused OAuth, profile bootstrap, and auth tests passed.
+- The help export produced a valid SQLite database with 56 sections and the `oauth-profile-login` entry.
+- `GOWORK=off make goreleaser` completed a `0.11.6-next` snapshot with archive, DEB, and RPM artifacts.
+
+### What didn't work
+
+No tag or production release was attempted by design. GoReleaser reported existing deprecation warnings for `snapshot.name_template` and `brews`; they did not block the snapshot. The snapshot also reported a dirty tree because release-preparation docs and tests were intentionally uncommitted at that point.
+
+The full repository race baseline remains blocked by the unrelated web-chat/appserver race previously recorded. Focused OAuth race tests passed.
+
+### What I learned
+
+The release workflow publishes docs only after the merged GoReleaser jobs succeed for a `v*` tag. A standalone docs push is unnecessary for this candidate if the release workflow completes normally.
+
+### What was tricky to build
+
+The task list originally bundled synthetic validation and real-provider smoke into one checkbox. It had to be split without weakening the security gate or falsely leaving completed offline work open. Release preparation also had to include dependency/workflow changes merged after `v0.11.5` rather than presenting the release as OAuth-only.
+
+### What warrants a second pair of eyes
+
+- Review `changelog.md` against `git log v0.11.5..HEAD` for release-note completeness.
+- Review the tag and post-publish commands in the release handoff before use.
+- Confirm the unrelated race baseline is acceptable for this patch release.
+- Confirm no documentation claims a real-provider OAuth login.
+
+### What should be done in the future
+
+- Merge the release-preparation PR after review.
+- From a clean updated `main`, manually tag and release `v0.11.6`.
+- Verify GitHub artifacts and docs.yolo publication.
+- Select and document the first provider contract before requesting live-smoke approval.
+
+### Code review instructions
+
+- Start with `changelog.md`, `pkg/oauthprofiles/store_test.go`, `tasks.md`, and `reference/02-pinocchio-v0-11-6-release-handoff.md`.
+- Validate using the commands in the release handoff.
+- Do not run `make tag-patch` or `make release` during review.
+
+### Technical details
+
+Candidate version: `v0.11.6`. Merged OAuth/fail-closed base: `322d07f3cbe09c1d6bc78990d3a037aad09f2f36`. Help export: `/tmp/pinocchio-docs-export/help.sqlite`. Snapshot log: `/tmp/pinocchio-v0116-release-dry-run.log`.
