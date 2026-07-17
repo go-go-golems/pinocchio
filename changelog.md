@@ -1,5 +1,25 @@
 # Changelog
 
+## Unreleased — v0.11.6
+
+### OAuth profile lifecycle
+
+- Added typed `pinocchio.oauth@v1` profiles with redacted status, local logout, and browser Authorization Code + PKCE login.
+- Added locked, atomic, owner-only YAML credential persistence on supported POSIX hosts.
+- Injected Geppetto renewable bearer sources into normal commands and Go-hosted JavaScript engines without copying credentials into inference settings or JavaScript values.
+- Added explicit Claude OAuth profile binding and source precedence over static API keys.
+- Upgraded Geppetto to `v0.13.7` for request-time renewal, bounded pre-stream 401 replay, and credential lifecycle primitives.
+- OAuth YAML persistence now fails closed on Windows before browser or provider interaction; Windows storage remains unsupported.
+
+### Maintenance
+
+- Updated Go dependencies including go-go-goja, sessionstream, Redis, tokenizer, and `golang.org/x` modules.
+- Updated GitHub Actions used by release, security, dependency, lint, and Buf workflows.
+
+### Validation boundary
+
+- Offline tests use synthetic issuers and credentials only. This release does not claim a successful real-provider OAuth login; live smoke remains provider-contract and approval gated.
+
 ## Streamlined Interactive and Chat Mode
 Improved the interactive and chat mode flow by consolidating router management and using RunMode to determine whether to run an initial blocking step. This change makes the interactive mode a special case of chat mode where we first run a blocking step before potentially entering chat mode.
 

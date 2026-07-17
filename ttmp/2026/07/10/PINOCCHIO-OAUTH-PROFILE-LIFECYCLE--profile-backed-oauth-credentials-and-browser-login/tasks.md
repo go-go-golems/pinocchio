@@ -20,14 +20,14 @@
 - [x] Implement explicit writable local registry selection and owner-only permission validation <!-- t:p2a1 -->
 - [x] Implement locked read/patch/write with temporary `0600` file, fsync, rename, and cleanup <!-- t:p2a2 -->
 - [x] Implement Geppetto `credentials.Store` with provider/base-URL identity checks <!-- t:p2a3 -->
-- [ ] Test tuple rotation, concurrent saves, failed writes, unsafe permissions, and unrelated-profile preservation <!-- t:p2a4 -->
+- [x] Test tuple rotation, concurrent saves, failed writes, unsafe permissions, and unrelated-profile preservation <!-- t:p2a4 -->
 
 ## Phase 3 — Runtime credential source integration
 
 - [x] Bind typed profile config to Geppetto `credentials/oauth.Client` and a `credentials.Refresher` adapter <!-- t:p3a1 -->
 - [x] Build/inject `RenewableBearerTokenSource` through the Pinocchio source-aware engine factory <!-- t:p3a2 -->
 - [x] Ensure OAuth profiles never pass refresh material through `InferenceSettings.APIKeys` <!-- t:p3a3 -->
-- [ ] Test proactive refresh, source precedence, first-401 replay, second-401 stop, and redaction <!-- t:p3a4 -->
+- [x] Test proactive refresh, source precedence, first-401 replay, second-401 stop, and redaction <!-- t:p3a4 -->
 
 ## Phase 4 — Browser login command
 
@@ -39,5 +39,6 @@
 ## Phase 5 — Operations, validation, and delivery
 
 - [x] Document permissions, backup/recovery, revoke/re-login, migration, and plaintext-at-rest tradeoffs <!-- t:p5a1 -->
-- [ ] Run focused/full/race/lint/logcopter/security validation and a secret-safe real-provider smoke <!-- t:p5a2 -->
-- [ ] Relate files, update diary/changelog, run `docmgr doctor`, and deliver an updated review bundle <!-- t:p5a3 -->
+- [x] Run focused/full/race/lint/logcopter/security validation with synthetic providers <!-- t:p5a2 -->
+- [ ] Run a secret-safe real-provider smoke only after provider-contract and account approval <!-- t:6ruj -->
+- [x] Relate files, update diary/changelog, run docmgr doctor, and prepare the v0.11.6 review handoff <!-- t:p5a3 -->

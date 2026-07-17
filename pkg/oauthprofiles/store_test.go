@@ -129,6 +129,23 @@ func TestYAMLStoreRequiresCompleteReplacementTuple(t *testing.T) {
 	require.EqualError(t, err, "OAuth credential refresh token is required")
 }
 
+func TestAtomicWriteOwnerOnlyCleansTemporaryFileAfterReplaceFailure(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "profiles.yaml")
+	require.NoError(t, os.Mkdir(target, 0o700))
+	require.NoError(t, os.WriteFile(filepath.Join(target, "marker"), []byte("keep"), 0o600))
+
+	err := atomicWriteOwnerOnly(target, []byte("replacement"))
+	require.ErrorContains(t, err, "replace OAuth profile registry")
+
+	marker, readErr := os.ReadFile(filepath.Join(target, "marker"))
+	require.NoError(t, readErr)
+	require.Equal(t, "keep", string(marker))
+	temporaryFiles, globErr := filepath.Glob(filepath.Join(dir, ".profiles.yaml.oauth-*"))
+	require.NoError(t, globErr)
+	require.Empty(t, temporaryFiles)
+}
+
 func newTestStore(t *testing.T, path string) *YAMLStore {
 	t.Helper()
 	store, err := NewYAMLStore(
