@@ -10,7 +10,6 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	"github.com/go-go-golems/glazed/pkg/middlewares"
-	glazedsettings "github.com/go-go-golems/glazed/pkg/settings"
 	"github.com/go-go-golems/glazed/pkg/types"
 	"github.com/go-go-golems/pinocchio/pkg/cmds/profilebootstrap"
 )
@@ -22,10 +21,7 @@ type StatusCommand struct {
 var _ cmds.GlazeCommand = (*StatusCommand)(nil)
 
 func NewStatusCommand() (*StatusCommand, error) {
-	glazedSection, err := glazedsettings.NewGlazedSection()
-	if err != nil {
-		return nil, err
-	}
+
 	commandSettingsSection, err := cli.NewCommandSettingsSection()
 	if err != nil {
 		return nil, err
@@ -42,7 +38,7 @@ func NewStatusCommand() (*StatusCommand, error) {
 The command reads only the owner direct-YAML profile registry. It does not call a
 provider, trigger refresh, or print access tokens, refresh tokens, expiry values,
 client secrets, or registry paths.`),
-		cmds.WithSections(glazedSection, commandSettingsSection, profileSettingsSection),
+		cmds.WithSections(commandSettingsSection, profileSettingsSection),
 	)}, nil
 }
 

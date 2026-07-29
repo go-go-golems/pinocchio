@@ -13,7 +13,6 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cmds/fields"
 	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	"github.com/go-go-golems/glazed/pkg/middlewares"
-	"github.com/go-go-golems/glazed/pkg/settings"
 )
 
 type CatterPrintSettings struct {
@@ -36,10 +35,6 @@ type CatterPrintCommand struct {
 }
 
 func NewCatterPrintCommand() (*CatterPrintCommand, error) {
-	glazedParameterLayer, err := settings.NewGlazedSection()
-	if err != nil {
-		return nil, fmt.Errorf("could not create Glazed parameter layer: %w", err)
-	}
 
 	fileFilterLayer, err := filefilter.NewFileFilterParameterLayer()
 	if err != nil {
@@ -129,7 +124,6 @@ func NewCatterPrintCommand() (*CatterPrintCommand, error) {
 				),
 			),
 			cmds.WithSections(
-				glazedParameterLayer,
 				fileFilterLayer,
 			),
 		),

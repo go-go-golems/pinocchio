@@ -17,7 +17,6 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cmds/schema"
 	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	"github.com/go-go-golems/glazed/pkg/middlewares"
-	"github.com/go-go-golems/glazed/pkg/settings"
 	"github.com/go-go-golems/glazed/pkg/types"
 	"github.com/go-go-golems/pinocchio/pkg/cmds/profilebootstrap"
 	"gopkg.in/yaml.v3"
@@ -40,10 +39,7 @@ type ListSettings struct {
 var _ cmds.GlazeCommand = (*ListCommand)(nil)
 
 func NewListCommand() (*ListCommand, error) {
-	glazedSection, err := settings.NewGlazedSection()
-	if err != nil {
-		return nil, err
-	}
+
 	commandSettingsSection, err := cli.NewCommandSettingsSection()
 	if err != nil {
 		return nil, err
@@ -73,7 +69,7 @@ Examples:
 					fields.WithHelp("Amount of profile detail to include: default, detailed, full"),
 				),
 			),
-			cmds.WithSections(glazedSection, commandSettingsSection, profileSettingsSection),
+			cmds.WithSections(commandSettingsSection, profileSettingsSection),
 		),
 	}, nil
 }
