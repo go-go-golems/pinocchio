@@ -14,7 +14,7 @@ require (
 	github.com/dop251/goja v0.0.0-20251103141225-af2ceb9156d7
 	github.com/dop251/goja_nodejs v0.0.0-20250409162600-f7acab6894b0
 	github.com/go-go-golems/bobatea v0.1.6
-	github.com/go-go-golems/clay v0.4.11
+	github.com/go-go-golems/clay v0.4.12
 	github.com/go-go-golems/geppetto v0.13.7
 	github.com/go-go-golems/glazed v1.4.2
 	github.com/go-go-golems/go-go-goja v0.10.3
