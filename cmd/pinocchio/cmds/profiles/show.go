@@ -14,7 +14,6 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cmds/schema"
 	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	"github.com/go-go-golems/glazed/pkg/middlewares"
-	"github.com/go-go-golems/glazed/pkg/settings"
 	"github.com/go-go-golems/pinocchio/pkg/cmds/profilebootstrap"
 )
 
@@ -31,10 +30,7 @@ type ShowSettings struct {
 var _ cmds.GlazeCommand = (*ShowCommand)(nil)
 
 func NewShowCommand() (*ShowCommand, error) {
-	glazedSection, err := settings.NewGlazedSection()
-	if err != nil {
-		return nil, err
-	}
+
 	commandSettingsSection, err := cli.NewCommandSettingsSection()
 	if err != nil {
 		return nil, err
@@ -81,7 +77,7 @@ Examples:
 					fields.WithDefault(""),
 				),
 			),
-			cmds.WithSections(glazedSection, commandSettingsSection, profileSettingsSection),
+			cmds.WithSections(commandSettingsSection, profileSettingsSection),
 		),
 	}, nil
 }

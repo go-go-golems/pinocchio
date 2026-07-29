@@ -8,7 +8,6 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	"github.com/go-go-golems/glazed/pkg/middlewares"
-	glazedsettings "github.com/go-go-golems/glazed/pkg/settings"
 	"github.com/go-go-golems/glazed/pkg/types"
 	"github.com/go-go-golems/pinocchio/pkg/cmds/profilebootstrap"
 )
@@ -20,10 +19,7 @@ type LogoutCommand struct {
 var _ cmds.GlazeCommand = (*LogoutCommand)(nil)
 
 func NewLogoutCommand() (*LogoutCommand, error) {
-	glazedSection, err := glazedsettings.NewGlazedSection()
-	if err != nil {
-		return nil, err
-	}
+
 	commandSettingsSection, err := cli.NewCommandSettingsSection()
 	if err != nil {
 		return nil, err
@@ -40,7 +36,7 @@ func NewLogoutCommand() (*LogoutCommand, error) {
 The command retains the profile's authorization URL, token URL, client ID, scopes,
 and refresh policy so a later auth login can reuse the same profile. It does not
 call a provider revocation endpoint or print credential material.`),
-		cmds.WithSections(glazedSection, commandSettingsSection, profileSettingsSection),
+		cmds.WithSections(commandSettingsSection, profileSettingsSection),
 	)}, nil
 }
 

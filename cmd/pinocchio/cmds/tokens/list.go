@@ -5,7 +5,6 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	"github.com/go-go-golems/glazed/pkg/middlewares"
-	"github.com/go-go-golems/glazed/pkg/settings"
 	"github.com/go-go-golems/glazed/pkg/types"
 	"github.com/tiktoken-go/tokenizer"
 )
@@ -65,15 +64,12 @@ func (c *ListModelsCommand) RunIntoGlazeProcessor(
 }
 
 func NewListModelsCommand() (*ListModelsCommand, error) {
-	glazedLayer, err := settings.NewGlazedSection()
-	if err != nil {
-		return nil, err
-	}
+
 	return &ListModelsCommand{
 		CommandDescription: cmds.NewCommandDescription(
 			"list-models",
 			cmds.WithShort("List available models"),
-			cmds.WithSections(glazedLayer),
+			cmds.WithSections(),
 		),
 	}, nil
 }
@@ -112,15 +108,12 @@ func (l *ListCodecsCommand) RunIntoGlazeProcessor(
 var _ cmds.GlazeCommand = (*ListCodecsCommand)(nil)
 
 func NewListCodecsCommand() (*ListCodecsCommand, error) {
-	glazedLayer, err := settings.NewGlazedSection()
-	if err != nil {
-		return nil, err
-	}
+
 	return &ListCodecsCommand{
 		CommandDescription: cmds.NewCommandDescription(
 			"list-codecs",
 			cmds.WithShort("List available codecs"),
-			cmds.WithSections(glazedLayer),
+			cmds.WithSections(),
 		),
 	}, nil
 }

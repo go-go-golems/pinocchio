@@ -24,7 +24,6 @@ import (
 	"github.com/go-go-golems/glazed/pkg/cmds/schema"
 	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	"github.com/go-go-golems/glazed/pkg/middlewares"
-	glazedsettings "github.com/go-go-golems/glazed/pkg/settings"
 	"github.com/go-go-golems/glazed/pkg/types"
 	"github.com/go-go-golems/pinocchio/pkg/cmds/profilebootstrap"
 )
@@ -59,10 +58,7 @@ var _ cmds.GlazeCommand = (*LoginCommand)(nil)
 // fields come from Pinocchio's shared profile/bootstrap sections, while the
 // command emits only non-secret structured success metadata.
 func NewLoginCommand() (*LoginCommand, error) {
-	glazedSection, err := glazedsettings.NewGlazedSection()
-	if err != nil {
-		return nil, err
-	}
+
 	commandSettingsSection, err := cli.NewCommandSettingsSection()
 	if err != nil {
 		return nil, err
@@ -91,7 +87,7 @@ credential tuple without printing it.`),
 					fields.WithHelp("Open the authorization URL in the system browser; must remain enabled"),
 				),
 			),
-			cmds.WithSections(glazedSection, commandSettingsSection, profileSettingsSection),
+			cmds.WithSections(commandSettingsSection, profileSettingsSection),
 		),
 		deps: defaultLoginDependencies(),
 	}, nil
