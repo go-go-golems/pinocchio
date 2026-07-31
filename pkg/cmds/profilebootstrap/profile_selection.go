@@ -115,10 +115,14 @@ func ResolveCLIProfileRuntime(ctx context.Context, parsed *values.Values) (*Reso
 	}
 
 	defaultResolve := gepprofiles.ResolveInput{}
-	if !defaultRegistrySlug.IsZero() {
-		defaultResolve.RegistrySlug = defaultRegistrySlug
-	}
 	if selection.Profile != "" {
+		// A named profile must be findable in ANY configured registry: leave
+		// RegistrySlug zero so ChainedRegistry.ResolveEngineProfile searches
+		// registries in precedence order. Pinning the default registry here
+		// made every bare profile name outside the top-of-stack registry fail
+		// with "profile not found" as soon as a second registry was
+		// configured (observed 2026-07-31 with a user registry plus a
+		// project registry).
 		profileSlug, err := gepprofiles.ParseEngineProfileSlug(selection.Profile)
 		if err != nil {
 			if imported != nil && imported.Close != nil {
@@ -127,6 +131,8 @@ func ResolveCLIProfileRuntime(ctx context.Context, parsed *values.Values) (*Reso
 			return nil, err
 		}
 		defaultResolve.EngineProfileSlug = profileSlug
+	} else if !defaultRegistrySlug.IsZero() {
+		defaultResolve.RegistrySlug = defaultRegistrySlug
 	}
 
 	registryChain := &bootstrap.ResolvedProfileRegistryChain{

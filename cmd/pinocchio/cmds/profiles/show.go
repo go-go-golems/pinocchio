@@ -148,6 +148,12 @@ func resolveShowTarget(report *profilebootstrap.ProfileRegistryReport, registryF
 	}
 
 	selectedRegistry, selectedProfile := selectedProfileRef(report)
+	if registryFlag == "" && profileRef != "" {
+		// An unqualified profile name is looked up across every configured
+		// registry (mirroring engine resolution): prefer the selected/default
+		// registry when it has the profile, else the first registry that does.
+		registryFlag = registryContainingProfile(report, selectedRegistry, profileRef)
+	}
 	if registryFlag == "" {
 		registryFlag = selectedRegistry
 	}
@@ -166,6 +172,28 @@ func resolveShowTarget(report *profilebootstrap.ProfileRegistryReport, registryF
 		return "", "", fmt.Errorf("profiles show requires a profile argument or selected/default profile")
 	}
 	return registryFlag, profileRef, nil
+}
+
+// registryContainingProfile returns the registry to show an unqualified
+// profile from: the preferred (selected/default) registry when it contains the
+// profile, otherwise the first listed registry that does, otherwise empty.
+func registryContainingProfile(report *profilebootstrap.ProfileRegistryReport, preferred, profileRef string) string {
+	if report == nil {
+		return ""
+	}
+	first := ""
+	for _, profile := range report.Profiles {
+		if profile.Slug != profileRef {
+			continue
+		}
+		if profile.Registry == preferred {
+			return preferred
+		}
+		if first == "" {
+			first = profile.Registry
+		}
+	}
+	return first
 }
 
 func defaultProfileForRegistry(report *profilebootstrap.ProfileRegistryReport, registrySlug string) string {
