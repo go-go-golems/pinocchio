@@ -31,5 +31,15 @@ func NewProfilesCommand() (*cobra.Command, error) {
 	}
 	root.AddCommand(cobraShowCmd)
 
+	debugCmd, err := NewDebugCommand()
+	if err != nil {
+		return nil, err
+	}
+	cobraDebugCmd, err := cli.BuildCobraCommand(debugCmd)
+	if err != nil {
+		return nil, err
+	}
+	root.AddCommand(cobraDebugCmd)
+
 	return root, nil
 }
