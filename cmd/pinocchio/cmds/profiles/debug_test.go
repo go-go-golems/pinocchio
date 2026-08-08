@@ -7,12 +7,14 @@ import (
 
 	gepprofiles "github.com/go-go-golems/geppetto/pkg/engineprofiles"
 	geppettosections "github.com/go-go-golems/geppetto/pkg/sections"
+	"github.com/go-go-golems/geppetto/pkg/steps/ai/credentials"
 	openaisettings "github.com/go-go-golems/geppetto/pkg/steps/ai/settings/openai"
 	"github.com/go-go-golems/glazed/pkg/cmds/values"
 	glazedconfig "github.com/go-go-golems/glazed/pkg/config"
 	"github.com/go-go-golems/glazed/pkg/types"
 	profilebootstrap "github.com/go-go-golems/pinocchio/pkg/cmds/profilebootstrap"
 	"github.com/go-go-golems/pinocchio/pkg/configdoc"
+	"github.com/go-go-golems/pinocchio/pkg/oauthprofiles"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -43,6 +45,14 @@ profiles:
       chat:
         api_type: openai-responses
         engine: gpt-5
+    extensions:
+      pinocchio.oauth@v1:
+        kind: oauth_bearer
+        authorization_url: https://auth.example.com/authorize
+        token_url: https://auth.example.com/token
+        client_id: pinocchio-test
+        access_token: oauth-access-token-must-not-appear
+        refresh_token: ""
 `)
 
 	cmd, err := NewDebugCommand()
@@ -56,6 +66,8 @@ profiles:
 	assertStringSliceCellContains(t, base, "api_key_status", "openai-api-key=present")
 	final := findDebugRow(t, processor.rows, "final", "assistant")
 	assertStringSliceCellContains(t, final, "api_key_status", "openai-api-key=present")
+	assertStringSliceCellContains(t, final, "oauth_credential_status", "access_token=present")
+	assertStringSliceCellContains(t, final, "oauth_credential_status", "refresh_token=empty")
 	assertCell(t, final, "embedding_type", "openai")
 	assertCell(t, final, "embedding_engine", "text-embedding-3-small")
 	assertCell(t, final, "embedding_dimensions", 1536)
@@ -64,7 +76,23 @@ profiles:
 	require.NoError(t, err)
 	assert.NotContains(t, string(encoded), "test-openai-key-must-not-appear", "debug output leaked a profile API key")
 	assert.NotContains(t, string(encoded), "base-openai-key-must-not-appear", "debug output leaked a base API key")
+	assert.NotContains(t, string(encoded), "oauth-access-token-must-not-appear", "debug output leaked an OAuth access token")
 	assert.Contains(t, string(encoded), "***REDACTED***", "expected --include-settings to contain a redaction marker")
+}
+
+func TestAddOAuthCredentialStatusReportsPresenceWithoutValues(t *testing.T) {
+	row := types.NewRow()
+	addOAuthCredentialStatus(row, &oauthprofiles.Profile{Credential: credentials.Credential{
+		AccessToken:  "access-token-must-not-appear",
+		RefreshToken: "",
+	}})
+
+	status, ok := row.Get("oauth_credential_status")
+	require.True(t, ok)
+	assert.Equal(t, []string{"access_token=present", "refresh_token=empty"}, status)
+	encoded, err := json.Marshal(row)
+	require.NoError(t, err)
+	assert.NotContains(t, string(encoded), "access-token-must-not-appear")
 }
 
 func TestDebugProfileLayerRowIncludesLineageProvenance(t *testing.T) {

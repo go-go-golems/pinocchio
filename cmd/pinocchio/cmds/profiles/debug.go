@@ -17,6 +17,7 @@ import (
 	"github.com/go-go-golems/glazed/pkg/middlewares"
 	"github.com/go-go-golems/glazed/pkg/types"
 	profilebootstrap "github.com/go-go-golems/pinocchio/pkg/cmds/profilebootstrap"
+	"github.com/go-go-golems/pinocchio/pkg/oauthprofiles"
 	"github.com/pkg/errors"
 )
 
@@ -118,13 +119,26 @@ func (c *DebugCommand) RunIntoGlazeProcessor(
 		}
 	}
 
-	if err := gp.AddRow(ctx, debugSettingsRow("profile-stack-effective", profile.RegistrySlug.String(), profile.EngineProfileSlug.String(), profile.InferenceSettings, settings.IncludeSettings)); err != nil {
+	selectedProfile, err := registry.GetEngineProfile(ctx, profile.RegistrySlug, profile.EngineProfileSlug)
+	if err != nil {
+		return errors.Wrapf(err, "load selected profile %s/%s", profile.RegistrySlug, profile.EngineProfileSlug)
+	}
+	oauthProfile, err := oauthprofiles.Parse(selectedProfile.Extensions)
+	if err != nil {
+		return errors.Wrap(err, "parse selected profile OAuth credentials")
+	}
+
+	stackEffectiveRow := debugSettingsRow("profile-stack-effective", profile.RegistrySlug.String(), profile.EngineProfileSlug.String(), profile.InferenceSettings, settings.IncludeSettings)
+	addOAuthCredentialStatus(stackEffectiveRow, oauthProfile)
+	if err := gp.AddRow(ctx, stackEffectiveRow); err != nil {
 		return err
 	}
 	if err := gp.AddRow(ctx, debugSettingsRow("base", "", "", resolved.BaseInferenceSettings, settings.IncludeSettings)); err != nil {
 		return err
 	}
-	return gp.AddRow(ctx, debugSettingsRow("final", profile.RegistrySlug.String(), profile.EngineProfileSlug.String(), resolved.FinalInferenceSettings, settings.IncludeSettings))
+	finalRow := debugSettingsRow("final", profile.RegistrySlug.String(), profile.EngineProfileSlug.String(), resolved.FinalInferenceSettings, settings.IncludeSettings)
+	addOAuthCredentialStatus(finalRow, oauthProfile)
+	return gp.AddRow(ctx, finalRow)
 }
 
 func debugSourceRows(runtime *profilebootstrap.ResolvedCLIProfileRuntime) []types.Row {
@@ -165,6 +179,23 @@ func debugSourceRows(runtime *profilebootstrap.ResolvedCLIProfileRuntime) []type
 		}
 	}
 	return rows
+}
+
+func addOAuthCredentialStatus(row types.Row, profile *oauthprofiles.Profile) {
+	if row == nil || profile == nil {
+		return
+	}
+	row.Set("oauth_credential_status", []string{
+		"access_token=" + credentialValueStatus(profile.Credential.AccessToken),
+		"refresh_token=" + credentialValueStatus(profile.Credential.RefreshToken),
+	})
+}
+
+func credentialValueStatus(value string) string {
+	if strings.TrimSpace(value) == "" {
+		return "empty"
+	}
+	return "present"
 }
 
 func debugProfileLayerRow(lineage gepprofiles.ResolvedProfileStackEntry, settings any, includeSettings bool) types.Row {
