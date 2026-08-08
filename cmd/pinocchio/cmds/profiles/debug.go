@@ -17,6 +17,7 @@ import (
 	"github.com/go-go-golems/glazed/pkg/middlewares"
 	"github.com/go-go-golems/glazed/pkg/types"
 	profilebootstrap "github.com/go-go-golems/pinocchio/pkg/cmds/profilebootstrap"
+	"github.com/pkg/errors"
 )
 
 // DebugCommand reports the source, stack, and final settings selected for a
@@ -39,7 +40,7 @@ func NewDebugCommand() (*DebugCommand, error) {
 	if err != nil {
 		return nil, err
 	}
-	profileSettingsSection, err := geppettosections.NewProfileSettingsSection()
+	geppettoSections, err := geppettosections.CreateGeppettoSections()
 	if err != nil {
 		return nil, err
 	}
@@ -67,7 +68,7 @@ Examples:
 					fields.WithHelp("Include redacted settings JSON for each resolution stage"),
 				),
 			),
-			cmds.WithSections(commandSettingsSection, profileSettingsSection),
+			cmds.WithSections(append([]schema.Section{commandSettingsSection}, geppettoSections...)...),
 		),
 	}, nil
 }
@@ -80,13 +81,13 @@ func (c *DebugCommand) RunIntoGlazeProcessor(
 	settings := &DebugSettings{}
 	if parsedLayers != nil {
 		if err := parsedLayers.DecodeSectionInto(schema.DefaultSlug, settings); err != nil {
-			return fmt.Errorf("decode profiles debug settings: %w", err)
+			return errors.Wrap(err, "decode profiles debug settings")
 		}
 	}
 
 	resolved, err := profilebootstrap.ResolveCLIEngineSettings(ctx, parsedLayers)
 	if err != nil {
-		return fmt.Errorf("resolve profile engine settings: %w", err)
+		return errors.Wrap(err, "resolve profile engine settings")
 	}
 	if resolved != nil && resolved.Close != nil {
 		defer resolved.Close()
@@ -95,7 +96,7 @@ func (c *DebugCommand) RunIntoGlazeProcessor(
 		return fmt.Errorf("no profile registry configured")
 	}
 
-	for _, source := range debugSourceRows(resolved.ProfileRuntime.ProfileSettings.ProfileRegistries) {
+	for _, source := range debugSourceRows(resolved.ProfileRuntime) {
 		if err := gp.AddRow(ctx, source); err != nil {
 			return err
 		}
@@ -109,9 +110,10 @@ func (c *DebugCommand) RunIntoGlazeProcessor(
 	for _, lineage := range profile.StackLineage {
 		layer, err := registry.GetEngineProfile(ctx, lineage.RegistrySlug, lineage.EngineProfileSlug)
 		if err != nil {
-			return fmt.Errorf("load profile-stack layer %s/%s: %w", lineage.RegistrySlug, lineage.EngineProfileSlug, err)
+			return errors.Wrapf(err, "load profile-stack layer %s/%s", lineage.RegistrySlug, lineage.EngineProfileSlug)
 		}
-		if err := gp.AddRow(ctx, debugSettingsRow("profile-layer", lineage.RegistrySlug.String(), lineage.EngineProfileSlug.String(), layer.InferenceSettings, settings.IncludeSettings)); err != nil {
+		row := debugProfileLayerRow(lineage, layer.InferenceSettings, settings.IncludeSettings)
+		if err := gp.AddRow(ctx, row); err != nil {
 			return err
 		}
 	}
@@ -125,7 +127,8 @@ func (c *DebugCommand) RunIntoGlazeProcessor(
 	return gp.AddRow(ctx, debugSettingsRow("final", profile.RegistrySlug.String(), profile.EngineProfileSlug.String(), resolved.FinalInferenceSettings, settings.IncludeSettings))
 }
 
-func debugSourceRows(entries []string) []types.Row {
+func debugSourceRows(runtime *profilebootstrap.ResolvedCLIProfileRuntime) []types.Row {
+	entries := runtime.ProfileSettings.ProfileRegistries
 	specs, err := gepprofiles.ParseRegistrySourceSpecs(entries)
 	if err != nil {
 		return []types.Row{types.NewRow(
@@ -149,7 +152,30 @@ func debugSourceRows(entries []string) []types.Row {
 		}
 		rows = append(rows, row)
 	}
+	if runtime.Documents != nil {
+		for _, file := range runtime.Documents.Files {
+			rows = append(rows, types.NewRow(
+				types.MRP("stage", "source"),
+				types.MRP("source_kind", "config-document"),
+				types.MRP("source", file.Path),
+				types.MRP("source_path", file.Path),
+				types.MRP("source_layer", string(file.Layer)),
+				types.MRP("source_name", file.SourceName),
+			))
+		}
+	}
 	return rows
+}
+
+func debugProfileLayerRow(lineage gepprofiles.ResolvedProfileStackEntry, settings any, includeSettings bool) types.Row {
+	row := debugSettingsRow("profile-layer", lineage.RegistrySlug.String(), lineage.EngineProfileSlug.String(), settings, includeSettings)
+	if lineage.Source != "" {
+		row.Set("source", lineage.Source)
+	}
+	if lineage.Version != 0 {
+		row.Set("version", lineage.Version)
+	}
+	return row
 }
 
 func debugSettingsRow(stage, registry, profile string, settings any, includeSettings bool) types.Row {

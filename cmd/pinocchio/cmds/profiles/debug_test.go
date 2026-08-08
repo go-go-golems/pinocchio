@@ -3,12 +3,18 @@ package profiles
 import (
 	"context"
 	"encoding/json"
-	"strings"
 	"testing"
 
+	gepprofiles "github.com/go-go-golems/geppetto/pkg/engineprofiles"
 	geppettosections "github.com/go-go-golems/geppetto/pkg/sections"
+	openaisettings "github.com/go-go-golems/geppetto/pkg/steps/ai/settings/openai"
 	"github.com/go-go-golems/glazed/pkg/cmds/values"
+	glazedconfig "github.com/go-go-golems/glazed/pkg/config"
 	"github.com/go-go-golems/glazed/pkg/types"
+	profilebootstrap "github.com/go-go-golems/pinocchio/pkg/cmds/profilebootstrap"
+	"github.com/go-go-golems/pinocchio/pkg/configdoc"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestDebugCommandShowsStackAndRedactsCredentialValues(t *testing.T) {
@@ -40,16 +46,14 @@ profiles:
 `)
 
 	cmd, err := NewDebugCommand()
-	if err != nil {
-		t.Fatalf("NewDebugCommand: %v", err)
-	}
+	require.NoError(t, err)
 	processor := &captureProcessor{}
-	if err := cmd.RunIntoGlazeProcessor(context.Background(), parsedDebugValues(t, registryPath, "assistant", true), processor); err != nil {
-		t.Fatalf("RunIntoGlazeProcessor: %v", err)
-	}
+	require.NoError(t, cmd.RunIntoGlazeProcessor(context.Background(), parsedDebugValues(t, registryPath, "assistant", true), processor))
 
 	baseLayer := findDebugRow(t, processor.rows, "profile-layer", "openai-base")
 	assertStringSliceCellContains(t, baseLayer, "api_key_status", "openai-api-key=present")
+	base := findDebugRow(t, processor.rows, "base", "")
+	assertStringSliceCellContains(t, base, "api_key_status", "openai-api-key=present")
 	final := findDebugRow(t, processor.rows, "final", "assistant")
 	assertStringSliceCellContains(t, final, "api_key_status", "openai-api-key=present")
 	assertCell(t, final, "embedding_type", "openai")
@@ -57,52 +61,66 @@ profiles:
 	assertCell(t, final, "embedding_dimensions", 1536)
 
 	encoded, err := json.Marshal(processor.rows)
-	if err != nil {
-		t.Fatalf("marshal debug output: %v", err)
+	require.NoError(t, err)
+	assert.NotContains(t, string(encoded), "test-openai-key-must-not-appear", "debug output leaked a profile API key")
+	assert.NotContains(t, string(encoded), "base-openai-key-must-not-appear", "debug output leaked a base API key")
+	assert.Contains(t, string(encoded), "***REDACTED***", "expected --include-settings to contain a redaction marker")
+}
+
+func TestDebugProfileLayerRowIncludesLineageProvenance(t *testing.T) {
+	row := debugProfileLayerRow(gepprofiles.ResolvedProfileStackEntry{
+		RegistrySlug:      gepprofiles.MustRegistrySlug("workspace"),
+		EngineProfileSlug: gepprofiles.MustEngineProfileSlug("assistant"),
+		Source:            "/profiles/workspace.yaml",
+		Version:           42,
+	}, nil, false)
+
+	assertCell(t, row, "source", "/profiles/workspace.yaml")
+	assertCell(t, row, "version", uint64(42))
+}
+
+func TestDebugSourceRowsIncludeConfigDocuments(t *testing.T) {
+	runtime := &profilebootstrap.ResolvedCLIProfileRuntime{
+		Documents: &configdoc.ResolvedDocuments{Files: []glazedconfig.ResolvedConfigFile{{
+			Path:       "/workspace/.pinocchio.yml",
+			Layer:      glazedconfig.LayerCWD,
+			SourceName: "cwd-local-profile",
+		}}},
 	}
-	if strings.Contains(string(encoded), "test-openai-key-must-not-appear") {
-		t.Fatalf("debug output leaked an API key: %s", encoded)
-	}
-	if !strings.Contains(string(encoded), "***REDACTED***") {
-		t.Fatalf("expected --include-settings to contain a redaction marker, got %s", encoded)
-	}
+
+	rows := debugSourceRows(runtime)
+	require.Len(t, rows, 1)
+	assertCell(t, rows[0], "source_kind", "config-document")
+	assertCell(t, rows[0], "source_path", "/workspace/.pinocchio.yml")
+	assertCell(t, rows[0], "source_name", "cwd-local-profile")
 }
 
 func parsedDebugValues(t *testing.T, registryPath, profile string, includeSettings bool) *values.Values {
 	t.Helper()
 	cmd, err := NewDebugCommand()
-	if err != nil {
-		t.Fatalf("NewDebugCommand: %v", err)
-	}
+	require.NoError(t, err)
 	parsed := values.New()
 	defaultSection, ok := cmd.GetDefaultSection()
-	if !ok {
-		t.Fatal("missing default section")
-	}
+	require.True(t, ok, "missing default section")
 	defaultValues, err := values.NewSectionValues(defaultSection)
-	if err != nil {
-		t.Fatalf("default values: %v", err)
-	}
-	if err := values.WithFieldValue("include-settings", includeSettings)(defaultValues); err != nil {
-		t.Fatalf("set include-settings: %v", err)
-	}
+	require.NoError(t, err)
+	require.NoError(t, values.WithFieldValue("include-settings", includeSettings)(defaultValues))
 	parsed.Set(values.DefaultSlug, defaultValues)
 
 	profileSection, err := geppettosections.NewProfileSettingsSection()
-	if err != nil {
-		t.Fatalf("profile section: %v", err)
-	}
+	require.NoError(t, err)
 	profileValues, err := values.NewSectionValues(profileSection)
-	if err != nil {
-		t.Fatalf("profile values: %v", err)
-	}
-	if err := values.WithFieldValue("profile-registries", []string{registryPath})(profileValues); err != nil {
-		t.Fatalf("set profile registries: %v", err)
-	}
-	if err := values.WithFieldValue("profile", profile)(profileValues); err != nil {
-		t.Fatalf("set profile: %v", err)
-	}
+	require.NoError(t, err)
+	require.NoError(t, values.WithFieldValue("profile-registries", []string{registryPath})(profileValues))
+	require.NoError(t, values.WithFieldValue("profile", profile)(profileValues))
 	parsed.Set(geppettosections.ProfileSettingsSectionSlug, profileValues)
+
+	openAISection, err := openaisettings.NewValueSection()
+	require.NoError(t, err)
+	openAIValues, err := values.NewSectionValues(openAISection)
+	require.NoError(t, err)
+	require.NoError(t, values.WithFieldValue("openai-api-key", "base-openai-key-must-not-appear")(openAIValues))
+	parsed.Set(openaisettings.OpenAiChatSlug, openAIValues)
 	return parsed
 }
 
@@ -113,30 +131,15 @@ func findDebugRow(t *testing.T, rows []types.Row, stage, profile string) types.R
 			return row
 		}
 	}
-	t.Fatalf("debug row stage=%q profile=%q not found in %#v", stage, profile, rows)
+	require.FailNowf(t, "debug row not found", "stage=%q profile=%q rows=%#v", stage, profile, rows)
 	return nil
 }
 
 func assertStringSliceCellContains(t *testing.T, row types.Row, key, want string) {
 	t.Helper()
 	got, ok := row.Get(types.FieldName(key))
-	if !ok {
-		t.Fatalf("missing cell %q", key)
-	}
+	require.Truef(t, ok, "missing cell", "%q", key)
 	values, ok := got.([]string)
-	if !ok {
-		t.Fatalf("cell %q: expected []string, got %T (%#v)", key, got, got)
-	}
-	if !containsString(values, want) {
-		t.Fatalf("cell %q: expected %#v to contain %q", key, values, want)
-	}
-}
-
-func containsString(values []string, want string) bool {
-	for _, value := range values {
-		if value == want {
-			return true
-		}
-	}
-	return false
+	require.Truef(t, ok, "unexpected cell type", "%q: expected []string, got %T (%#v)", key, got, got)
+	assert.Contains(t, values, want, "cell %q", key)
 }
