@@ -120,7 +120,10 @@ func TestWebChatUnifiedProfileConfig_AllowsInlineProfilesWithoutExternalRegistri
 	require.NotNil(t, runtime.ProfileRegistryChain.Registry)
 	require.NotNil(t, runtime.ProfileRegistryChain.Reader)
 	require.Equal(t, "config-inline", runtime.ProfileRegistryChain.DefaultRegistrySlug.String())
-	require.Equal(t, "config-inline", runtime.ProfileRegistryChain.DefaultProfileResolve.RegistrySlug.String())
+	// A named profile leaves RegistrySlug empty so the chained registry
+	// searches every configured registry in precedence order; pinning the
+	// default registry here broke bare profile names in secondary registries.
+	require.Empty(t, runtime.ProfileRegistryChain.DefaultProfileResolve.RegistrySlug.String())
 	require.Equal(t, "analyst", runtime.ProfileRegistryChain.DefaultProfileResolve.EngineProfileSlug.String())
 	if runtime.Close != nil {
 		defer runtime.Close()
