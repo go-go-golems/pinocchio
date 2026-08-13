@@ -10,7 +10,14 @@ import (
 	gepevents "github.com/go-go-golems/geppetto/pkg/events"
 	chatappv1 "github.com/go-go-golems/pinocchio/pkg/chatapp/pb/proto/pinocchio/chatapp/v1"
 	sessionstream "github.com/go-go-golems/sessionstream/pkg/sessionstream"
+	"google.golang.org/protobuf/proto"
 )
+
+type pendingStreamPatch struct {
+	name    string
+	key     string
+	payload proto.Message
+}
 
 type runtimeEventSink struct {
 	mu                  sync.Mutex
@@ -28,9 +35,8 @@ type runtimeEventSink struct {
 	textSegment         int32
 	textActive          bool
 	batchInterval       time.Duration
-	batchSegmentID      string
-	batchFirstSent      bool
-	batchPending        *chatappv1.ChatTextPatch
+	batchFirstSent      map[string]bool
+	batchPending        *pendingStreamPatch
 	batchTimer          *time.Timer
 	batchGeneration     uint64
 	batchErr            error
@@ -45,8 +51,8 @@ func (s *runtimeEventSink) PublishEvent(event gepevents.Event) error {
 	if err := s.batchingError(); err != nil {
 		return err
 	}
-	if _, isTextDelta := event.(*gepevents.EventTextDelta); !isTextDelta {
-		if err := s.flushTextPatch(); err != nil {
+	if !isBatchableRuntimeDelta(event) {
+		if err := s.flushStreamPatch(); err != nil {
 			return err
 		}
 	}
@@ -95,7 +101,16 @@ func (s *runtimeEventSink) PublishEvent(event gepevents.Event) error {
 		}
 		return s.engine.publish(s.publishContext(), s.sessionID, s.pub, EventChatRunStopped, &chatappv1.ChatRunStopped{MessageId: s.messageID, Status: "stopped", Error: ev.Text})
 	default:
-		return s.engine.handleFeatureRuntimeEvent(s.publishContext(), s.sessionID, s.messageID, s.pub, event)
+		return s.engine.handleFeatureRuntimeEvent(s.publishContext(), s.sessionID, s.messageID, s.pub, s.publishOrBatchFeaturePatch, event)
+	}
+}
+
+func isBatchableRuntimeDelta(event gepevents.Event) bool {
+	switch event.(type) {
+	case *gepevents.EventTextDelta, *gepevents.EventReasoningDelta, *gepevents.EventToolCallArgumentsDelta:
+		return true
+	default:
+		return false
 	}
 }
 
@@ -109,34 +124,108 @@ func (s *runtimeEventSink) publishOrBatchTextDelta(ev *gepevents.EventTextDelta)
 	s.lastTextMessageID = textMessageID
 	s.lastTextCorrelation = corr
 	s.textActive = true
-	if s.batchInterval <= 0 {
-		s.mu.Unlock()
-		return s.publishTextPatch(patch)
+	s.mu.Unlock()
+	return s.publishOrBatchStreamPatch(EventChatTextPatch, "text:"+textMessageID, patch)
+}
+
+func (s *runtimeEventSink) publishOrBatchFeaturePatch(ctx context.Context, eventName string, payload proto.Message) error {
+	key := ""
+	switch patch := payload.(type) {
+	case *chatappv1.ChatReasoningPatch:
+		key = "reasoning:" + patch.GetMessageId()
+	case *chatappv1.ChatToolArgumentsPatch:
+		key = "tool-arguments:" + patch.GetToolCallId()
+	default:
+		if err := s.flushStreamPatch(); err != nil {
+			return err
+		}
+		return s.engine.publish(ctx, s.sessionID, s.pub, eventName, payload)
 	}
-	if s.batchSegmentID != textMessageID {
-		pending := s.detachPendingTextPatchLocked()
-		s.batchSegmentID = textMessageID
-		s.batchFirstSent = false
+	return s.publishOrBatchStreamPatch(eventName, key, payload)
+}
+
+func (s *runtimeEventSink) publishOrBatchStreamPatch(eventName, key string, payload proto.Message) error {
+	if s.batchInterval <= 0 || strings.TrimSpace(key) == "" || !isAppendStreamPatch(payload) {
+		if err := s.flushStreamPatch(); err != nil {
+			return err
+		}
+		return s.publishStreamPatch(&pendingStreamPatch{name: eventName, key: key, payload: payload})
+	}
+
+	s.mu.Lock()
+	if s.batchFirstSent == nil {
+		s.batchFirstSent = map[string]bool{}
+	}
+	if s.batchPending != nil && s.batchPending.key != key {
+		pending := s.detachPendingStreamPatchLocked()
 		s.mu.Unlock()
-		if err := s.publishTextPatch(pending); err != nil {
+		if err := s.publishStreamPatch(pending); err != nil {
 			return err
 		}
 		s.mu.Lock()
 	}
-	if !s.batchFirstSent {
-		s.batchFirstSent = true
+	if !s.batchFirstSent[key] {
+		s.batchFirstSent[key] = true
 		s.mu.Unlock()
-		return s.publishTextPatch(patch)
+		return s.publishStreamPatch(&pendingStreamPatch{name: eventName, key: key, payload: payload})
 	}
 	if s.batchPending == nil {
-		s.batchPending = patch
+		s.batchPending = &pendingStreamPatch{name: eventName, key: key, payload: payload}
 		s.armBatchTimerLocked()
-	} else {
-		s.batchPending.Text += patch.GetText()
-		s.batchPending.Sequence = patch.GetSequence()
-		s.batchPending.Correlation = patch.GetCorrelation()
+	} else if err := mergeStreamPatch(s.batchPending.payload, payload); err != nil {
+		pending := s.detachPendingStreamPatchLocked()
+		s.mu.Unlock()
+		if publishErr := s.publishStreamPatch(pending); publishErr != nil {
+			return publishErr
+		}
+		return s.publishStreamPatch(&pendingStreamPatch{name: eventName, key: key, payload: payload})
 	}
 	s.mu.Unlock()
+	return nil
+}
+
+func isAppendStreamPatch(payload proto.Message) bool {
+	switch patch := payload.(type) {
+	case *chatappv1.ChatTextPatch:
+		return patch.GetMode() == chatappv1.ChatStreamPatchMode_CHAT_STREAM_PATCH_MODE_APPEND
+	case *chatappv1.ChatReasoningPatch:
+		return patch.GetMode() == chatappv1.ChatStreamPatchMode_CHAT_STREAM_PATCH_MODE_APPEND
+	case *chatappv1.ChatToolArgumentsPatch:
+		return patch.GetMode() == chatappv1.ChatStreamPatchMode_CHAT_STREAM_PATCH_MODE_APPEND
+	default:
+		return false
+	}
+}
+
+func mergeStreamPatch(pending, next proto.Message) error {
+	switch current := pending.(type) {
+	case *chatappv1.ChatTextPatch:
+		update, ok := next.(*chatappv1.ChatTextPatch)
+		if !ok || current.GetMode() != chatappv1.ChatStreamPatchMode_CHAT_STREAM_PATCH_MODE_APPEND || update.GetMode() != chatappv1.ChatStreamPatchMode_CHAT_STREAM_PATCH_MODE_APPEND {
+			return fmt.Errorf("incompatible text stream patch")
+		}
+		current.Text += update.GetText()
+		current.Sequence = update.GetSequence()
+		current.Correlation = update.GetCorrelation()
+	case *chatappv1.ChatReasoningPatch:
+		update, ok := next.(*chatappv1.ChatReasoningPatch)
+		if !ok || current.GetMode() != chatappv1.ChatStreamPatchMode_CHAT_STREAM_PATCH_MODE_APPEND || update.GetMode() != chatappv1.ChatStreamPatchMode_CHAT_STREAM_PATCH_MODE_APPEND {
+			return fmt.Errorf("incompatible reasoning stream patch")
+		}
+		current.Text += update.GetText()
+		current.Sequence = update.GetSequence()
+		current.Correlation = update.GetCorrelation()
+	case *chatappv1.ChatToolArgumentsPatch:
+		update, ok := next.(*chatappv1.ChatToolArgumentsPatch)
+		if !ok || current.GetMode() != chatappv1.ChatStreamPatchMode_CHAT_STREAM_PATCH_MODE_APPEND || update.GetMode() != chatappv1.ChatStreamPatchMode_CHAT_STREAM_PATCH_MODE_APPEND {
+			return fmt.Errorf("incompatible tool-argument stream patch")
+		}
+		current.Arguments += update.GetArguments()
+		current.Sequence = update.GetSequence()
+		current.Correlation = update.GetCorrelation()
+	default:
+		return fmt.Errorf("unsupported stream patch %T", pending)
+	}
 	return nil
 }
 
@@ -154,9 +243,9 @@ func (s *runtimeEventSink) armBatchTimerLocked() {
 			s.mu.Unlock()
 			return
 		}
-		pending := s.detachPendingTextPatchLocked()
+		pending := s.detachPendingStreamPatchLocked()
 		s.mu.Unlock()
-		if err := s.publishTextPatch(pending); err != nil {
+		if err := s.publishStreamPatch(pending); err != nil {
 			s.mu.Lock()
 			if s.batchErr == nil {
 				s.batchErr = err
@@ -166,7 +255,7 @@ func (s *runtimeEventSink) armBatchTimerLocked() {
 	})
 }
 
-func (s *runtimeEventSink) detachPendingTextPatchLocked() *chatappv1.ChatTextPatch {
+func (s *runtimeEventSink) detachPendingStreamPatchLocked() *pendingStreamPatch {
 	pending := s.batchPending
 	s.batchPending = nil
 	s.batchGeneration++
@@ -177,18 +266,18 @@ func (s *runtimeEventSink) detachPendingTextPatchLocked() *chatappv1.ChatTextPat
 	return pending
 }
 
-func (s *runtimeEventSink) flushTextPatch() error {
+func (s *runtimeEventSink) flushStreamPatch() error {
 	s.mu.Lock()
-	pending := s.detachPendingTextPatchLocked()
+	pending := s.detachPendingStreamPatchLocked()
 	s.mu.Unlock()
-	return s.publishTextPatch(pending)
+	return s.publishStreamPatch(pending)
 }
 
-func (s *runtimeEventSink) publishTextPatch(patch *chatappv1.ChatTextPatch) error {
-	if patch == nil {
+func (s *runtimeEventSink) publishStreamPatch(pending *pendingStreamPatch) error {
+	if pending == nil || pending.payload == nil {
 		return nil
 	}
-	return s.engine.publish(s.publishContext(), s.sessionID, s.pub, EventChatTextPatch, patch)
+	return s.engine.publish(s.publishContext(), s.sessionID, s.pub, pending.name, pending.payload)
 }
 
 func (s *runtimeEventSink) batchingError() error {

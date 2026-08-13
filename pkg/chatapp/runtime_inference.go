@@ -73,7 +73,7 @@ func (e *Engine) runRuntimeInference(ctx context.Context, sid sessionstream.Sess
 		return
 	}
 
-	baseSink := gepevents.EventSink(&runtimeEventSink{publishCtx: publishContext(ctx), sessionID: sid, messageID: messageID, prompt: prompt, pub: pub, engine: e, batchInterval: e.textPatchBatch.Interval})
+	baseSink := gepevents.EventSink(&runtimeEventSink{publishCtx: publishContext(ctx), sessionID: sid, messageID: messageID, prompt: prompt, pub: pub, engine: e, batchInterval: e.streamPatchBatch.Interval})
 	eventSink := baseSink
 	if runtime.WrapSink != nil {
 		wrapped, err := runtime.WrapSink(baseSink)

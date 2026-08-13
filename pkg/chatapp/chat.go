@@ -58,7 +58,7 @@ type Engine struct {
 	hooks               Hooks
 	features            []ChatPlugin
 	turnStore           chatstore.TurnStore
-	textPatchBatch      TextPatchBatchConfig
+	streamPatchBatch    StreamPatchBatchConfig
 	uiEventTransformers []UIEventTransformer
 }
 
@@ -74,18 +74,25 @@ func WithChunkDelay(delay time.Duration) Option {
 	}
 }
 
-// TextPatchBatchConfig controls bounded batching of assistant text deltas before
-// they become canonical ChatTextPatch events. A non-positive interval disables
-// batching. The first patch in each text segment is always published immediately.
-type TextPatchBatchConfig struct {
+// StreamPatchBatchConfig controls bounded batching of append-only text,
+// reasoning, and tool-argument deltas before they become canonical patch events.
+// A non-positive interval disables batching. The first patch in each logical
+// stream is always published immediately.
+type StreamPatchBatchConfig struct {
 	Interval time.Duration
 }
 
-// WithTextPatchBatching enables fixed-window assistant text patch batching.
-func WithTextPatchBatching(interval time.Duration) Option {
+// WithStreamPatchBatching enables fixed-window stream patch batching.
+func WithStreamPatchBatching(interval time.Duration) Option {
 	return func(e *Engine) {
-		e.textPatchBatch.Interval = interval
+		e.streamPatchBatch.Interval = interval
 	}
+}
+
+// WithTextPatchBatching is retained as an alias for callers that configured the
+// original text-only batcher. It now batches all supported stream patch classes.
+func WithTextPatchBatching(interval time.Duration) Option {
+	return WithStreamPatchBatching(interval)
 }
 
 // WithUIEventTransformers configures transformations applied to projected UI
