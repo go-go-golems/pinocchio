@@ -147,6 +147,10 @@ func (e *Engine) runRuntimeInference(ctx context.Context, sid sessionstream.Sess
 	if err != nil {
 		if errors.Is(err, context.Canceled) || ctx.Err() != nil {
 			if !sink.IsTerminal() {
+				if drainErr := sink.drainStreamPatches(); drainErr != nil {
+					e.publishRunFailed(publishContext(ctx), sid, pub, messageID, fmt.Sprintf("flush stream patches before stop: %v", drainErr))
+					return
+				}
 				_ = sink.finishActiveTextSegment("stopped", "stopped", "")
 				_ = e.publish(publishContext(ctx), sid, pub, EventChatRunStopped, &chatappv1.ChatRunStopped{MessageId: messageID, Status: "stopped", Correlation: runCorrelationInfo(sid, messageID)})
 			}
@@ -154,6 +158,10 @@ func (e *Engine) runRuntimeInference(ctx context.Context, sid sessionstream.Sess
 		}
 		e.persistRuntimeTurnSnapshot(publishContext(ctx), sid, runtime.RuntimeKey, "failed", sess.Latest())
 		if !sink.IsTerminal() {
+			if drainErr := sink.drainStreamPatches(); drainErr != nil {
+				e.publishRunFailed(publishContext(ctx), sid, pub, messageID, fmt.Sprintf("flush stream patches before failure: %v", drainErr))
+				return
+			}
 			_ = sink.finishActiveTextSegment("failed", "error", "")
 			if isMaxIterationsError(err) {
 				_ = e.publish(publishContext(ctx), sid, pub, EventChatTextSegmentFinished, &chatappv1.ChatTextSegmentFinished{MessageId: runtimeWarningMessageID(messageID), Role: "warning", Prompt: prompt, Text: maxIterationsWarningText(err), Content: maxIterationsWarningText(err), Status: "finished", Streaming: false, Final: true})
@@ -166,6 +174,10 @@ func (e *Engine) runRuntimeInference(ctx context.Context, sid sessionstream.Sess
 		pending.OnFinalTurn(output.Clone())
 	}
 	if sink.IsTerminal() {
+		return
+	}
+	if drainErr := sink.drainStreamPatches(); drainErr != nil {
+		e.publishRunFailed(publishContext(ctx), sid, pub, messageID, fmt.Sprintf("flush stream patches before finish: %v", drainErr))
 		return
 	}
 	if sink.HasActiveTextSegment() {

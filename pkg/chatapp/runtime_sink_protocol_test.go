@@ -241,6 +241,46 @@ func TestRuntimeEventSinkFlushesPendingPatchBeforeCrossStreamEvent(t *testing.T)
 	require.Equal(t, " pending", published[1].Payload.(*chatappv1.ChatReasoningPatch).GetText())
 }
 
+func TestRuntimeEventSinkDrainPreventsPendingPatchAfterFallbackFinish(t *testing.T) {
+	metadata := gepevents.EventMetadata{SessionID: "session-1", InferenceID: "inference-1", TurnID: "turn-1"}
+	corr := runtimeSinkTextCorrelation()
+	pub := &recordingEventPublisher{}
+	sink := newRuntimeSinkForProtocolTest(pub)
+	sink.batchInterval = 25 * time.Millisecond
+
+	require.NoError(t, sink.PublishEvent(gepevents.NewTextSegmentStartedEvent(metadata, corr, "assistant")))
+	require.NoError(t, sink.PublishEvent(gepevents.NewTextDeltaEvent(metadata, corr, "Hello", "Hello", 1)))
+	require.NoError(t, sink.PublishEvent(gepevents.NewTextDeltaEvent(metadata, corr, " world", "Hello world", 2)))
+
+	require.NoError(t, sink.drainStreamPatches())
+	require.NoError(t, sink.finishActiveTextSegment("finished", "stop", ""))
+	require.NoError(t, sink.engine.publish(context.Background(), sink.sessionID, sink.pub, EventChatRunFinished, &chatappv1.ChatRunFinished{MessageId: sink.messageID, Status: "finished"}))
+
+	require.Equal(t, []string{EventChatTextSegmentStarted, EventChatTextPatch, EventChatTextPatch, EventChatTextSegmentFinished, EventChatRunFinished}, runtimeSinkEventNames(pub.Events()))
+	time.Sleep(2 * sink.batchInterval)
+	require.Equal(t, []string{EventChatTextSegmentStarted, EventChatTextPatch, EventChatTextPatch, EventChatTextSegmentFinished, EventChatRunFinished}, runtimeSinkEventNames(pub.Events()))
+}
+
+func TestRuntimeEventSinkDrainPreventsPendingPatchAfterFallbackStop(t *testing.T) {
+	metadata := gepevents.EventMetadata{SessionID: "session-1", InferenceID: "inference-1", TurnID: "turn-1"}
+	corr := runtimeSinkTextCorrelation()
+	pub := &recordingEventPublisher{}
+	sink := newRuntimeSinkForProtocolTest(pub)
+	sink.batchInterval = 25 * time.Millisecond
+
+	require.NoError(t, sink.PublishEvent(gepevents.NewTextSegmentStartedEvent(metadata, corr, "assistant")))
+	require.NoError(t, sink.PublishEvent(gepevents.NewTextDeltaEvent(metadata, corr, "Partial", "Partial", 1)))
+	require.NoError(t, sink.PublishEvent(gepevents.NewTextDeltaEvent(metadata, corr, " answer", "Partial answer", 2)))
+
+	require.NoError(t, sink.drainStreamPatches())
+	require.NoError(t, sink.finishActiveTextSegment("stopped", "stopped", ""))
+	require.NoError(t, sink.engine.publish(context.Background(), sink.sessionID, sink.pub, EventChatRunStopped, &chatappv1.ChatRunStopped{MessageId: sink.messageID, Status: "stopped"}))
+
+	require.Equal(t, []string{EventChatTextSegmentStarted, EventChatTextPatch, EventChatTextPatch, EventChatTextSegmentFinished, EventChatRunStopped}, runtimeSinkEventNames(pub.Events()))
+	time.Sleep(2 * sink.batchInterval)
+	require.Equal(t, []string{EventChatTextSegmentStarted, EventChatTextPatch, EventChatTextPatch, EventChatTextSegmentFinished, EventChatRunStopped}, runtimeSinkEventNames(pub.Events()))
+}
+
 func TestRuntimeEventSinkFlushesPendingPatchBeforeTextFinish(t *testing.T) {
 	metadata := gepevents.EventMetadata{SessionID: "session-1", InferenceID: "inference-1", TurnID: "turn-1"}
 	corr := runtimeSinkTextCorrelation()

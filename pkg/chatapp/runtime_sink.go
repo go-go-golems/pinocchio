@@ -273,6 +273,21 @@ func (s *runtimeEventSink) flushStreamPatch() error {
 	return s.publishStreamPatch(pending)
 }
 
+// drainStreamPatches serializes with provider events and timer callbacks, stops
+// the active timer, and publishes any accepted pending patch. Runtime terminal
+// paths that publish outside PublishEvent must call this before terminal events.
+func (s *runtimeEventSink) drainStreamPatches() error {
+	if s == nil {
+		return nil
+	}
+	s.publishMu.Lock()
+	defer s.publishMu.Unlock()
+	if err := s.batchingError(); err != nil {
+		return err
+	}
+	return s.flushStreamPatch()
+}
+
 func (s *runtimeEventSink) publishStreamPatch(pending *pendingStreamPatch) error {
 	if pending == nil || pending.payload == nil {
 		return nil

@@ -68,7 +68,8 @@ The sink flushes a pending patch before:
 - publishing a lifecycle event such as segment finish or tool-call request;
 - publishing the first patch for a different logical stream;
 - publishing a non-append patch;
-- handling terminal error or interrupt paths.
+- handling terminal error or interrupt paths;
+- publishing fallback terminal events after inference returns or cancellation is observed.
 
 For example, if a pending reasoning patch is followed by the first tool-argument patch, publication order is:
 
@@ -165,6 +166,8 @@ The focused tests cover:
 - flush before tool-call request;
 - flush before text segment finish;
 - cross-stream ordering.
+
+Fallback terminal paths in `runRuntimeInference` call `drainStreamPatches` before publishing segment/run terminal events. The drain serializes with provider events and timer callbacks, stops the active timer, and publishes accepted pending data. Without this explicit drain, a timer could publish a patch after `ChatTextSegmentFinished` or a run terminal event.
 
 For application-level acceptance, capture decoded WebSocket frames and compare the final rendered content with hydrated timeline entities. Batching may change patch boundaries, but it must not change accumulated text, reasoning, tool arguments, lifecycle order, or final snapshots.
 
