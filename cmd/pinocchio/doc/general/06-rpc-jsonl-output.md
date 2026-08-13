@@ -182,6 +182,8 @@ Common payload types include:
 - `pinocchio.chatapp.v1.ChatRunFailed`
 - `pinocchio.chatapp.v1.ChatMessageEntity`
 
+Chatapp hosts may opt into fixed-window patch batching. Consumers must treat patch boundaries as transport/runtime details: one append patch may represent several consecutive provider deltas. Accumulate patches according to `mode`, `offset`, and stream identity rather than assuming one UI event per provider token. See [`docs/chatapp-stream-patch-batching.md`](../../../../docs/chatapp-stream-patch-batching.md).
+
 ## Protobuf JSON Numbers
 
 Protobuf JSON encodes `uint64` fields as strings. Ordinals therefore look like this:
