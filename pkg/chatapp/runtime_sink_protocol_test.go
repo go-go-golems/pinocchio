@@ -3,7 +3,9 @@ package chatapp
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
+	"time"
 
 	gepevents "github.com/go-go-golems/geppetto/pkg/events"
 	chatappv1 "github.com/go-go-golems/pinocchio/pkg/chatapp/pb/proto/pinocchio/chatapp/v1"
@@ -12,12 +14,21 @@ import (
 )
 
 type recordingEventPublisher struct {
+	mu     sync.Mutex
 	events []sessionstream.Event
 }
 
 func (p *recordingEventPublisher) Publish(_ context.Context, ev sessionstream.Event) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
 	p.events = append(p.events, ev)
 	return nil
+}
+
+func (p *recordingEventPublisher) Events() []sessionstream.Event {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return append([]sessionstream.Event(nil), p.events...)
 }
 
 func TestRuntimeEventSinkProtocolMatrix(t *testing.T) {
@@ -134,11 +145,199 @@ func TestRuntimeEventSinkProtocolMatrix(t *testing.T) {
 			for _, ev := range tt.events {
 				require.NoError(t, sink.PublishEvent(ev))
 			}
-			require.Equal(t, tt.wantNames, runtimeSinkEventNames(pub.events))
+			published := pub.Events()
+			require.Equal(t, tt.wantNames, runtimeSinkEventNames(published))
 			if tt.check != nil {
-				tt.check(t, pub.events, sink)
+				tt.check(t, published, sink)
 			}
 		})
+	}
+}
+
+func TestRuntimeEventSinkBatchesTextPatchesAfterImmediateFirst(t *testing.T) {
+	metadata := gepevents.EventMetadata{SessionID: "session-1", InferenceID: "inference-1", TurnID: "turn-1"}
+	corr := runtimeSinkTextCorrelation()
+	pub := &recordingEventPublisher{}
+	sink := newRuntimeSinkForProtocolTest(pub)
+	sink.batchInterval = 20 * time.Millisecond
+
+	require.NoError(t, sink.PublishEvent(gepevents.NewTextSegmentStartedEvent(metadata, corr, "assistant")))
+	require.NoError(t, sink.PublishEvent(gepevents.NewTextDeltaEvent(metadata, corr, "The", "The", 1)))
+	require.Equal(t, []string{EventChatTextSegmentStarted, EventChatTextPatch}, runtimeSinkEventNames(pub.Events()))
+
+	require.NoError(t, sink.PublishEvent(gepevents.NewTextDeltaEvent(metadata, corr, " ", "The ", 2)))
+	require.NoError(t, sink.PublishEvent(gepevents.NewTextDeltaEvent(metadata, corr, "Morgan", "The Morgan", 3)))
+	require.Eventually(t, func() bool { return len(pub.Events()) == 3 }, time.Second, 5*time.Millisecond)
+
+	patch := pub.Events()[2].Payload.(*chatappv1.ChatTextPatch)
+	require.Equal(t, " Morgan", patch.GetText())
+	require.Equal(t, uint64(3), patch.GetSequence())
+	require.Equal(t, uint64(3), patch.GetOffset())
+}
+
+func TestRuntimeEventSinkBatchesReasoningPatchesAfterImmediateFirst(t *testing.T) {
+	metadata := gepevents.EventMetadata{SessionID: "session-1", InferenceID: "inference-1", TurnID: "turn-1"}
+	corr := runtimeSinkProviderCorrelation()
+	corr.SegmentID = "reasoning-1"
+	pub := &recordingEventPublisher{}
+	sink := newRuntimeSinkForProtocolTest(pub)
+	sink.engine = NewEngine(WithPlugins(runtimeSinkReasoningPlugin{}))
+	sink.batchInterval = 20 * time.Millisecond
+
+	require.NoError(t, sink.PublishEvent(gepevents.NewReasoningSegmentStartedEvent(metadata, corr, "thinking")))
+	require.NoError(t, sink.PublishEvent(gepevents.NewReasoningDeltaEvent(metadata, corr, "Look", "Look", 1)))
+	require.Equal(t, []string{EventChatReasoningSegmentStarted, EventChatReasoningPatch}, runtimeSinkEventNames(pub.Events()))
+
+	require.NoError(t, sink.PublishEvent(gepevents.NewReasoningDeltaEvent(metadata, corr, " up", "Look up", 2)))
+	require.NoError(t, sink.PublishEvent(gepevents.NewReasoningDeltaEvent(metadata, corr, " stock", "Look up stock", 3)))
+	require.Eventually(t, func() bool { return len(pub.Events()) == 3 }, time.Second, 5*time.Millisecond)
+
+	patch := pub.Events()[2].Payload.(*chatappv1.ChatReasoningPatch)
+	require.Equal(t, " up stock", patch.GetText())
+	require.Equal(t, uint64(3), patch.GetSequence())
+	require.Equal(t, uint64(4), patch.GetOffset())
+}
+
+func TestRuntimeEventSinkBatchesToolArgumentPatchesAndFlushesBeforeRequest(t *testing.T) {
+	metadata := gepevents.EventMetadata{SessionID: "session-1", InferenceID: "inference-1", TurnID: "turn-1"}
+	corr := runtimeSinkProviderCorrelation()
+	corr.ToolCallID = "call-1"
+	pub := &recordingEventPublisher{}
+	sink := newRuntimeSinkForProtocolTest(pub)
+	sink.engine = NewEngine(WithPlugins(runtimeSinkToolPlugin{}))
+	sink.batchInterval = time.Hour
+
+	require.NoError(t, sink.PublishEvent(gepevents.NewToolCallStartedEvent(metadata, corr, "call-1", "sql_query")))
+	require.NoError(t, sink.PublishEvent(gepevents.NewToolCallArgumentsDeltaEvent(metadata, corr, "call-1", `{`, `{`, 1)))
+	require.NoError(t, sink.PublishEvent(gepevents.NewToolCallArgumentsDeltaEvent(metadata, corr, "call-1", `"sql":`, `{"sql":`, 2)))
+	require.NoError(t, sink.PublishEvent(gepevents.NewToolCallArgumentsDeltaEvent(metadata, corr, "call-1", `"select 1"}`, `{"sql":"select 1"}`, 3)))
+	require.NoError(t, sink.PublishEvent(gepevents.NewToolCallRequestedEvent(metadata, corr, "call-1", "sql_query", `{"sql":"select 1"}`)))
+
+	published := pub.Events()
+	require.Equal(t, []string{EventChatToolCallStarted, EventChatToolArgumentsPatch, EventChatToolArgumentsPatch, EventChatToolCallRequested}, runtimeSinkEventNames(published))
+	patch := published[2].Payload.(*chatappv1.ChatToolArgumentsPatch)
+	require.Equal(t, `"sql":"select 1"}`, patch.GetArguments())
+	require.Equal(t, uint64(3), patch.GetSequence())
+	require.Equal(t, uint64(1), patch.GetOffset())
+}
+
+func TestRuntimeEventSinkFlushesPendingPatchBeforeCrossStreamEvent(t *testing.T) {
+	metadata := gepevents.EventMetadata{SessionID: "session-1", InferenceID: "inference-1", TurnID: "turn-1"}
+	reasoningCorr := runtimeSinkProviderCorrelation()
+	reasoningCorr.SegmentID = "reasoning-1"
+	toolCorr := runtimeSinkProviderCorrelation()
+	toolCorr.ToolCallID = "call-1"
+	pub := &recordingEventPublisher{}
+	sink := newRuntimeSinkForProtocolTest(pub)
+	sink.engine = NewEngine(WithPlugins(runtimeSinkReasoningPlugin{}, runtimeSinkToolPlugin{}))
+	sink.batchInterval = time.Hour
+
+	require.NoError(t, sink.PublishEvent(gepevents.NewReasoningDeltaEvent(metadata, reasoningCorr, "First", "First", 1)))
+	require.NoError(t, sink.PublishEvent(gepevents.NewReasoningDeltaEvent(metadata, reasoningCorr, " pending", "First pending", 2)))
+	require.NoError(t, sink.PublishEvent(gepevents.NewToolCallArgumentsDeltaEvent(metadata, toolCorr, "call-1", `{`, `{`, 1)))
+
+	published := pub.Events()
+	require.Equal(t, []string{EventChatReasoningPatch, EventChatReasoningPatch, EventChatToolArgumentsPatch}, runtimeSinkEventNames(published))
+	require.Equal(t, " pending", published[1].Payload.(*chatappv1.ChatReasoningPatch).GetText())
+}
+
+func TestRuntimeEventSinkDrainPreventsPendingPatchAfterFallbackFinish(t *testing.T) {
+	metadata := gepevents.EventMetadata{SessionID: "session-1", InferenceID: "inference-1", TurnID: "turn-1"}
+	corr := runtimeSinkTextCorrelation()
+	pub := &recordingEventPublisher{}
+	sink := newRuntimeSinkForProtocolTest(pub)
+	sink.batchInterval = 25 * time.Millisecond
+
+	require.NoError(t, sink.PublishEvent(gepevents.NewTextSegmentStartedEvent(metadata, corr, "assistant")))
+	require.NoError(t, sink.PublishEvent(gepevents.NewTextDeltaEvent(metadata, corr, "Hello", "Hello", 1)))
+	require.NoError(t, sink.PublishEvent(gepevents.NewTextDeltaEvent(metadata, corr, " world", "Hello world", 2)))
+
+	require.NoError(t, sink.drainStreamPatches())
+	require.NoError(t, sink.finishActiveTextSegment("finished", "stop", ""))
+	require.NoError(t, sink.engine.publish(context.Background(), sink.sessionID, sink.pub, EventChatRunFinished, &chatappv1.ChatRunFinished{MessageId: sink.messageID, Status: "finished"}))
+
+	require.Equal(t, []string{EventChatTextSegmentStarted, EventChatTextPatch, EventChatTextPatch, EventChatTextSegmentFinished, EventChatRunFinished}, runtimeSinkEventNames(pub.Events()))
+	time.Sleep(2 * sink.batchInterval)
+	require.Equal(t, []string{EventChatTextSegmentStarted, EventChatTextPatch, EventChatTextPatch, EventChatTextSegmentFinished, EventChatRunFinished}, runtimeSinkEventNames(pub.Events()))
+}
+
+func TestRuntimeEventSinkDrainPreventsPendingPatchAfterFallbackStop(t *testing.T) {
+	metadata := gepevents.EventMetadata{SessionID: "session-1", InferenceID: "inference-1", TurnID: "turn-1"}
+	corr := runtimeSinkTextCorrelation()
+	pub := &recordingEventPublisher{}
+	sink := newRuntimeSinkForProtocolTest(pub)
+	sink.batchInterval = 25 * time.Millisecond
+
+	require.NoError(t, sink.PublishEvent(gepevents.NewTextSegmentStartedEvent(metadata, corr, "assistant")))
+	require.NoError(t, sink.PublishEvent(gepevents.NewTextDeltaEvent(metadata, corr, "Partial", "Partial", 1)))
+	require.NoError(t, sink.PublishEvent(gepevents.NewTextDeltaEvent(metadata, corr, " answer", "Partial answer", 2)))
+
+	require.NoError(t, sink.drainStreamPatches())
+	require.NoError(t, sink.finishActiveTextSegment("stopped", "stopped", ""))
+	require.NoError(t, sink.engine.publish(context.Background(), sink.sessionID, sink.pub, EventChatRunStopped, &chatappv1.ChatRunStopped{MessageId: sink.messageID, Status: "stopped"}))
+
+	require.Equal(t, []string{EventChatTextSegmentStarted, EventChatTextPatch, EventChatTextPatch, EventChatTextSegmentFinished, EventChatRunStopped}, runtimeSinkEventNames(pub.Events()))
+	time.Sleep(2 * sink.batchInterval)
+	require.Equal(t, []string{EventChatTextSegmentStarted, EventChatTextPatch, EventChatTextPatch, EventChatTextSegmentFinished, EventChatRunStopped}, runtimeSinkEventNames(pub.Events()))
+}
+
+func TestRuntimeEventSinkFlushesPendingPatchBeforeTextFinish(t *testing.T) {
+	metadata := gepevents.EventMetadata{SessionID: "session-1", InferenceID: "inference-1", TurnID: "turn-1"}
+	corr := runtimeSinkTextCorrelation()
+	pub := &recordingEventPublisher{}
+	sink := newRuntimeSinkForProtocolTest(pub)
+	sink.batchInterval = time.Hour
+
+	require.NoError(t, sink.PublishEvent(gepevents.NewTextSegmentStartedEvent(metadata, corr, "assistant")))
+	require.NoError(t, sink.PublishEvent(gepevents.NewTextDeltaEvent(metadata, corr, "Hello", "Hello", 1)))
+	require.NoError(t, sink.PublishEvent(gepevents.NewTextDeltaEvent(metadata, corr, " world", "Hello world", 2)))
+	require.NoError(t, sink.PublishEvent(gepevents.NewTextSegmentFinishedEvent(metadata, corr, "Hello world", "stop")))
+
+	published := pub.Events()
+	require.Equal(t, []string{EventChatTextSegmentStarted, EventChatTextPatch, EventChatTextPatch, EventChatTextSegmentFinished}, runtimeSinkEventNames(published))
+	require.Equal(t, " world", published[2].Payload.(*chatappv1.ChatTextPatch).GetText())
+	require.Equal(t, "Hello world", published[3].Payload.(*chatappv1.ChatTextSegmentFinished).GetText())
+}
+
+type runtimeSinkReasoningPlugin struct{}
+
+func (runtimeSinkReasoningPlugin) RegisterSchemas(*sessionstream.SchemaRegistry) error { return nil }
+func (runtimeSinkReasoningPlugin) ProjectUI(context.Context, sessionstream.Event, *sessionstream.Session, sessionstream.TimelineView) ([]sessionstream.UIEvent, bool, error) {
+	return nil, false, nil
+}
+func (runtimeSinkReasoningPlugin) ProjectTimeline(context.Context, sessionstream.Event, *sessionstream.Session, sessionstream.TimelineView) ([]sessionstream.TimelineEntity, bool, error) {
+	return nil, false, nil
+}
+func (runtimeSinkReasoningPlugin) HandleRuntimeEvent(ctx context.Context, runtime RuntimeEventContext, event gepevents.Event) (bool, error) {
+	switch ev := event.(type) {
+	case *gepevents.EventReasoningSegmentStarted:
+		return true, runtime.Publish(ctx, EventChatReasoningSegmentStarted, &chatappv1.ChatReasoningSegmentStarted{MessageId: "reason-1", ParentMessageId: runtime.MessageID})
+	case *gepevents.EventReasoningDelta:
+		return true, runtime.Publish(ctx, EventChatReasoningPatch, &chatappv1.ChatReasoningPatch{MessageId: "reason-1", ParentMessageId: runtime.MessageID, StreamId: "reason-1", Sequence: Uint64FromInt64(ev.Sequence), Offset: PatchOffset(ev.Text, ev.Delta), Text: ev.Delta, Mode: chatappv1.ChatStreamPatchMode_CHAT_STREAM_PATCH_MODE_APPEND, Correlation: CorrelationInfoFromEvent(ev)})
+	default:
+		return false, nil
+	}
+}
+
+type runtimeSinkToolPlugin struct{}
+
+func (runtimeSinkToolPlugin) RegisterSchemas(*sessionstream.SchemaRegistry) error { return nil }
+func (runtimeSinkToolPlugin) ProjectUI(context.Context, sessionstream.Event, *sessionstream.Session, sessionstream.TimelineView) ([]sessionstream.UIEvent, bool, error) {
+	return nil, false, nil
+}
+func (runtimeSinkToolPlugin) ProjectTimeline(context.Context, sessionstream.Event, *sessionstream.Session, sessionstream.TimelineView) ([]sessionstream.TimelineEntity, bool, error) {
+	return nil, false, nil
+}
+func (runtimeSinkToolPlugin) HandleRuntimeEvent(ctx context.Context, runtime RuntimeEventContext, event gepevents.Event) (bool, error) {
+	switch ev := event.(type) {
+	case *gepevents.EventToolCallStarted:
+		return true, runtime.Publish(ctx, EventChatToolCallStarted, &chatappv1.ChatToolCallStarted{MessageId: runtime.MessageID, ToolCallId: ev.ToolCallID, ToolName: ev.ToolName})
+	case *gepevents.EventToolCallArgumentsDelta:
+		return true, runtime.Publish(ctx, EventChatToolArgumentsPatch, &chatappv1.ChatToolArgumentsPatch{MessageId: runtime.MessageID, ToolCallId: ev.ToolCallID, ToolName: "sql_query", StreamId: ev.ToolCallID, Sequence: Uint64FromInt64(ev.Sequence), Offset: PatchOffset(ev.Arguments, ev.Delta), Arguments: ev.Delta, Mode: chatappv1.ChatStreamPatchMode_CHAT_STREAM_PATCH_MODE_APPEND, Correlation: CorrelationInfoFromEvent(ev)})
+	case *gepevents.EventToolCallRequested:
+		return true, runtime.Publish(ctx, EventChatToolCallRequested, &chatappv1.ChatToolCallRequested{MessageId: runtime.MessageID, ToolCallId: ev.ToolCallID, ToolName: ev.ToolName, Input: ev.Input})
+	default:
+		return false, nil
 	}
 }
 

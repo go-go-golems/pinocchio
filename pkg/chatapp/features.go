@@ -44,14 +44,12 @@ func (e *Engine) activePlugins() []ChatPlugin {
 	return out
 }
 
-func (e *Engine) handleFeatureRuntimeEvent(ctx context.Context, sid sessionstream.SessionId, messageID string, pub sessionstream.EventPublisher, event gepevents.Event) error {
+func (e *Engine) handleFeatureRuntimeEvent(ctx context.Context, sid sessionstream.SessionId, messageID string, pub sessionstream.EventPublisher, publish func(context.Context, string, proto.Message) error, event gepevents.Event) error {
 	for _, feature := range e.activePlugins() {
 		handled, err := feature.HandleRuntimeEvent(ctx, RuntimeEventContext{
 			SessionID: sid,
 			MessageID: messageID,
-			Publish: func(ctx context.Context, eventName string, payload proto.Message) error {
-				return e.publish(ctx, sid, pub, eventName, payload)
-			},
+			Publish:   publish,
 		}, event)
 		if err != nil {
 			return err
@@ -77,7 +75,7 @@ func (e *Engine) uiProjection(ctx context.Context, ev sessionstream.Event, sess 
 			projected = append(projected, featureEvents...)
 		}
 	}
-	return projected, nil
+	return applyUIEventTransformers(ctx, ev, projected, e.uiEventTransformers)
 }
 
 func (e *Engine) timelineProjection(ctx context.Context, ev sessionstream.Event, sess *sessionstream.Session, view sessionstream.TimelineView) ([]sessionstream.TimelineEntity, error) {

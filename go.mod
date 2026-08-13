@@ -1,8 +1,6 @@
 module github.com/go-go-golems/pinocchio
 
-go 1.26.3
-
-toolchain go1.26.5
+go 1.26.5
 
 require (
 	charm.land/lipgloss/v2 v2.0.0
@@ -15,11 +13,11 @@ require (
 	github.com/dop251/goja_nodejs v0.0.0-20250409162600-f7acab6894b0
 	github.com/go-go-golems/bobatea v0.1.6
 	github.com/go-go-golems/clay v0.4.12
-	github.com/go-go-golems/geppetto v0.13.7
-	github.com/go-go-golems/glazed v1.4.2
-	github.com/go-go-golems/go-go-goja v0.10.3
+	github.com/go-go-golems/geppetto v0.13.9
+	github.com/go-go-golems/glazed v1.4.3
+	github.com/go-go-golems/go-go-goja v0.10.6
 	github.com/go-go-golems/logcopter v0.1.1
-	github.com/go-go-golems/sessionstream v0.1.0
+	github.com/go-go-golems/sessionstream v0.1.1
 	github.com/go-go-golems/uhoh v0.0.9
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.4-0.20250319132907-e064f32e3674
@@ -129,19 +127,19 @@ require (
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.67.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.67.0 // indirect
-	go.opentelemetry.io/otel v1.43.0 // indirect
-	go.opentelemetry.io/otel/metric v1.43.0 // indirect
-	go.opentelemetry.io/otel/trace v1.43.0 // indirect
+	go.opentelemetry.io/otel v1.44.0 // indirect
+	go.opentelemetry.io/otel/metric v1.44.0 // indirect
+	go.opentelemetry.io/otel/trace v1.44.0 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	go.yaml.in/yaml/v4 v4.0.0-rc.2 // indirect
 	golang.org/x/mod v0.38.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
-	golang.org/x/tools v0.47.0 // indirect
+	golang.org/x/tools v0.48.0 // indirect
 	google.golang.org/api v0.287.0 // indirect
 	google.golang.org/appengine v1.6.8 // indirect
-	google.golang.org/genai v1.62.0 // indirect
+	google.golang.org/genai v1.63.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260414002931-afd174a4e478 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260622175928-b703f567277d // indirect
 	google.golang.org/grpc v1.82.1 // indirect
@@ -218,11 +216,11 @@ require (
 	github.com/yuin/goldmark v1.8.2 // indirect
 	github.com/yuin/goldmark-emoji v1.0.6 // indirect
 	go.mongodb.org/mongo-driver v1.17.7 // indirect
-	golang.org/x/crypto v0.53.0 // indirect
-	golang.org/x/net v0.56.0 // indirect
+	golang.org/x/crypto v0.54.0 // indirect
+	golang.org/x/net v0.57.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/term v0.45.0
-	golang.org/x/text v0.39.0 // indirect
+	golang.org/x/text v0.40.0 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )

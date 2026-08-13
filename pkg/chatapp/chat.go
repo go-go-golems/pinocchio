@@ -26,6 +26,9 @@ const (
 	EventChatProviderCallFinished        = "ChatProviderCallFinished"
 	EventChatTextSegmentStarted          = "ChatTextSegmentStarted"
 	EventChatTextPatch                   = "ChatTextPatch"
+	UIEventChatTextDelta                 = "ChatTextDelta"
+	UIEventChatReasoningDelta            = "ChatReasoningDelta"
+	UIEventChatToolArgumentsDelta        = "ChatToolArgumentsDelta"
 	EventChatTextSegmentFinished         = "ChatTextSegmentFinished"
 	EventChatReasoningSegmentStarted     = "ChatReasoningSegmentStarted"
 	EventChatReasoningPatch              = "ChatReasoningPatch"
@@ -47,14 +50,16 @@ type Hooks struct {
 type Option func(*Engine)
 
 type Engine struct {
-	mu         sync.Mutex
-	nextID     int
-	active     map[sessionstream.SessionId]*activeRun
-	pending    map[string]PromptRequest
-	chunkDelay time.Duration
-	hooks      Hooks
-	features   []ChatPlugin
-	turnStore  chatstore.TurnStore
+	mu                  sync.Mutex
+	nextID              int
+	active              map[sessionstream.SessionId]*activeRun
+	pending             map[string]PromptRequest
+	chunkDelay          time.Duration
+	hooks               Hooks
+	features            []ChatPlugin
+	turnStore           chatstore.TurnStore
+	streamPatchBatch    StreamPatchBatchConfig
+	uiEventTransformers []UIEventTransformer
 }
 
 type activeRun struct {
@@ -66,6 +71,36 @@ type activeRun struct {
 func WithChunkDelay(delay time.Duration) Option {
 	return func(e *Engine) {
 		e.chunkDelay = delay
+	}
+}
+
+// StreamPatchBatchConfig controls bounded batching of append-only text,
+// reasoning, and tool-argument deltas before they become canonical patch events.
+// A non-positive interval disables batching. The first patch in each logical
+// stream is always published immediately.
+type StreamPatchBatchConfig struct {
+	Interval time.Duration
+}
+
+// WithStreamPatchBatching enables fixed-window stream patch batching.
+func WithStreamPatchBatching(interval time.Duration) Option {
+	return func(e *Engine) {
+		e.streamPatchBatch.Interval = interval
+	}
+}
+
+// WithTextPatchBatching is retained as an alias for callers that configured the
+// original text-only batcher. It now batches all supported stream patch classes.
+func WithTextPatchBatching(interval time.Duration) Option {
+	return WithStreamPatchBatching(interval)
+}
+
+// WithUIEventTransformers configures transformations applied to projected UI
+// events before they are published to a fanout. Transformers never alter the
+// canonical backend event or timeline projection.
+func WithUIEventTransformers(transformers ...UIEventTransformer) Option {
+	return func(e *Engine) {
+		e.uiEventTransformers = append([]UIEventTransformer(nil), transformers...)
 	}
 }
 
@@ -120,6 +155,9 @@ func RegisterSchemas(reg *sessionstream.SchemaRegistry, features ...ChatPlugin) 
 		reg.RegisterUIEvent(EventChatProviderCallFinished, &chatappv1.ChatProviderCallFinished{}),
 		reg.RegisterUIEvent(EventChatTextSegmentStarted, &chatappv1.ChatTextSegmentStarted{}),
 		reg.RegisterUIEvent(EventChatTextPatch, &chatappv1.ChatTextPatch{}),
+		reg.RegisterUIEvent(UIEventChatTextDelta, &chatappv1.ChatTextDelta{}),
+		reg.RegisterUIEvent(UIEventChatReasoningDelta, &chatappv1.ChatReasoningDelta{}),
+		reg.RegisterUIEvent(UIEventChatToolArgumentsDelta, &chatappv1.ChatToolArgumentsDelta{}),
 		reg.RegisterUIEvent(EventChatTextSegmentFinished, &chatappv1.ChatTextSegmentFinished{}),
 		reg.RegisterTimelineEntity(TimelineEntityChatMessage, &chatappv1.ChatMessageEntity{}),
 	} {

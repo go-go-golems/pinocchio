@@ -21,6 +21,8 @@ buf.build/go-go-golems/pinocchio-chatapp
 
 Use this module when another repository needs authoritative chatapp schemas without depending on the whole Pinocchio repository.
 
+For runtime publication behavior—including fixed-window batching of text, reasoning, and tool-call argument patches—see [Chatapp stream patch batching](chatapp-stream-patch-batching.md). Batching changes patch boundaries, not protobuf message definitions.
+
 ## Local validation
 
 Run these commands before committing proto or Buf configuration changes:

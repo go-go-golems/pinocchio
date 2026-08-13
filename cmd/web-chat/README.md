@@ -113,6 +113,12 @@ The web-chat command has both middleware definitions and chat plugins:
 - `internal/plugins/agentmode` translates agent-mode runtime events into app-visible sessionstream events, UI events, and timeline entities.
 - Shared reasoning, tool-call, frontend-tool, and widget plugins come from `pkg/chatapp/...`.
 
+## Stream patch batching
+
+`pkg/chatapp` supports opt-in fixed-window batching for append-only assistant text, reasoning, and streamed tool-call argument patches through `chatapp.WithStreamPatchBatching(interval)`. Batching is disabled unless the application passes this engine option. The first patch for each logical stream is immediate; later patches are accumulated within the configured window and flushed before lifecycle or cross-stream events.
+
+The example server currently does not set a batching interval. Applications embedding chatapp may choose an interval based on transport and rendering measurements. See [`docs/chatapp-stream-patch-batching.md`](../../docs/chatapp-stream-patch-batching.md) for semantics, ordering guarantees, compact UI-event interaction, and validation guidance.
+
 ## Durable stores
 
 Timeline store:
