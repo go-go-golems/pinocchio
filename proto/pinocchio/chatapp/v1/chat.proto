@@ -107,6 +107,15 @@ message ChatTextPatch {
   CorrelationInfo correlation = 12;
 }
 
+// ChatTextDelta is the compact, ephemeral UI representation of a
+// ChatTextPatch. It is not a canonical backend event or timeline entity.
+message ChatTextDelta {
+  string message_id = 1;
+  string text = 2;
+  ChatStreamPatchMode mode = 3;
+  bool final = 4;
+}
+
 message ChatTextSegmentFinished {
   string message_id = 1;
   string role = 2;

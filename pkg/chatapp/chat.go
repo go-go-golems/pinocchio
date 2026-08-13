@@ -26,6 +26,7 @@ const (
 	EventChatProviderCallFinished        = "ChatProviderCallFinished"
 	EventChatTextSegmentStarted          = "ChatTextSegmentStarted"
 	EventChatTextPatch                   = "ChatTextPatch"
+	UIEventChatTextDelta                 = "ChatTextDelta"
 	EventChatTextSegmentFinished         = "ChatTextSegmentFinished"
 	EventChatReasoningSegmentStarted     = "ChatReasoningSegmentStarted"
 	EventChatReasoningPatch              = "ChatReasoningPatch"
@@ -47,15 +48,16 @@ type Hooks struct {
 type Option func(*Engine)
 
 type Engine struct {
-	mu             sync.Mutex
-	nextID         int
-	active         map[sessionstream.SessionId]*activeRun
-	pending        map[string]PromptRequest
-	chunkDelay     time.Duration
-	hooks          Hooks
-	features       []ChatPlugin
-	turnStore      chatstore.TurnStore
-	textPatchBatch TextPatchBatchConfig
+	mu                  sync.Mutex
+	nextID              int
+	active              map[sessionstream.SessionId]*activeRun
+	pending             map[string]PromptRequest
+	chunkDelay          time.Duration
+	hooks               Hooks
+	features            []ChatPlugin
+	turnStore           chatstore.TurnStore
+	textPatchBatch      TextPatchBatchConfig
+	uiEventTransformers []UIEventTransformer
 }
 
 type activeRun struct {
@@ -81,6 +83,15 @@ type TextPatchBatchConfig struct {
 func WithTextPatchBatching(interval time.Duration) Option {
 	return func(e *Engine) {
 		e.textPatchBatch.Interval = interval
+	}
+}
+
+// WithUIEventTransformers configures transformations applied to projected UI
+// events before they are published to a fanout. Transformers never alter the
+// canonical backend event or timeline projection.
+func WithUIEventTransformers(transformers ...UIEventTransformer) Option {
+	return func(e *Engine) {
+		e.uiEventTransformers = append([]UIEventTransformer(nil), transformers...)
 	}
 }
 
@@ -135,6 +146,7 @@ func RegisterSchemas(reg *sessionstream.SchemaRegistry, features ...ChatPlugin) 
 		reg.RegisterUIEvent(EventChatProviderCallFinished, &chatappv1.ChatProviderCallFinished{}),
 		reg.RegisterUIEvent(EventChatTextSegmentStarted, &chatappv1.ChatTextSegmentStarted{}),
 		reg.RegisterUIEvent(EventChatTextPatch, &chatappv1.ChatTextPatch{}),
+		reg.RegisterUIEvent(UIEventChatTextDelta, &chatappv1.ChatTextDelta{}),
 		reg.RegisterUIEvent(EventChatTextSegmentFinished, &chatappv1.ChatTextSegmentFinished{}),
 		reg.RegisterTimelineEntity(TimelineEntityChatMessage, &chatappv1.ChatMessageEntity{}),
 	} {

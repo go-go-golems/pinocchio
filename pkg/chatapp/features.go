@@ -77,7 +77,7 @@ func (e *Engine) uiProjection(ctx context.Context, ev sessionstream.Event, sess 
 			projected = append(projected, featureEvents...)
 		}
 	}
-	return projected, nil
+	return applyUIEventTransformers(ctx, ev, projected, e.uiEventTransformers)
 }
 
 func (e *Engine) timelineProjection(ctx context.Context, ev sessionstream.Event, sess *sessionstream.Session, view sessionstream.TimelineView) ([]sessionstream.TimelineEntity, error) {
