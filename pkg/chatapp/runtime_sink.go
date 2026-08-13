@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	gepevents "github.com/go-go-golems/geppetto/pkg/events"
 	chatappv1 "github.com/go-go-golems/pinocchio/pkg/chatapp/pb/proto/pinocchio/chatapp/v1"
@@ -13,6 +14,7 @@ import (
 
 type runtimeEventSink struct {
 	mu                  sync.Mutex
+	publishMu           sync.Mutex
 	publishCtx          context.Context
 	sessionID           sessionstream.SessionId
 	messageID           string
@@ -25,11 +27,28 @@ type runtimeEventSink struct {
 	terminal            bool
 	textSegment         int32
 	textActive          bool
+	batchInterval       time.Duration
+	batchSegmentID      string
+	batchFirstSent      bool
+	batchPending        *chatappv1.ChatTextPatch
+	batchTimer          *time.Timer
+	batchGeneration     uint64
+	batchErr            error
 }
 
 func (s *runtimeEventSink) PublishEvent(event gepevents.Event) error {
 	if s == nil || s.pub == nil || s.engine == nil {
 		return nil
+	}
+	s.publishMu.Lock()
+	defer s.publishMu.Unlock()
+	if err := s.batchingError(); err != nil {
+		return err
+	}
+	if _, isTextDelta := event.(*gepevents.EventTextDelta); !isTextDelta {
+		if err := s.flushTextPatch(); err != nil {
+			return err
+		}
 	}
 	switch ev := event.(type) {
 	case *gepevents.EventProviderCallStarted:
@@ -48,15 +67,7 @@ func (s *runtimeEventSink) PublishEvent(event gepevents.Event) error {
 		s.mu.Unlock()
 		return s.engine.publish(s.publishContext(), s.sessionID, s.pub, EventChatTextSegmentStarted, &chatappv1.ChatTextSegmentStarted{MessageId: textMessageID, Role: firstNonEmpty(ev.Role, "assistant"), Prompt: s.prompt, Status: "streaming", Streaming: true, Correlation: correlationInfoFromEvent(ev)})
 	case *gepevents.EventTextDelta:
-		corr := ev.Correlation()
-		textMessageID, _ := s.textSegmentIDForCorrelation(corr)
-		s.mu.Lock()
-		s.lastText = ev.Text
-		s.lastTextMessageID = textMessageID
-		s.lastTextCorrelation = corr
-		s.textActive = true
-		s.mu.Unlock()
-		return s.engine.publish(s.publishContext(), s.sessionID, s.pub, EventChatTextPatch, &chatappv1.ChatTextPatch{MessageId: textMessageID, Role: "assistant", Prompt: s.prompt, StreamId: textMessageID, Sequence: Uint64FromInt64(ev.Sequence), Offset: PatchOffset(ev.Text, ev.Delta), Text: ev.Delta, Mode: chatappv1.ChatStreamPatchMode_CHAT_STREAM_PATCH_MODE_APPEND, Status: "streaming", Correlation: correlationInfoFromEvent(ev)})
+		return s.publishOrBatchTextDelta(ev)
 	case *gepevents.EventTextSegmentFinished:
 		corr := ev.Correlation()
 		textMessageID, _ := s.textSegmentIDForCorrelation(corr)
@@ -86,6 +97,104 @@ func (s *runtimeEventSink) PublishEvent(event gepevents.Event) error {
 	default:
 		return s.engine.handleFeatureRuntimeEvent(s.publishContext(), s.sessionID, s.messageID, s.pub, event)
 	}
+}
+
+func (s *runtimeEventSink) publishOrBatchTextDelta(ev *gepevents.EventTextDelta) error {
+	corr := ev.Correlation()
+	textMessageID, _ := s.textSegmentIDForCorrelation(corr)
+	patch := &chatappv1.ChatTextPatch{MessageId: textMessageID, Role: "assistant", Prompt: s.prompt, StreamId: textMessageID, Sequence: Uint64FromInt64(ev.Sequence), Offset: PatchOffset(ev.Text, ev.Delta), Text: ev.Delta, Mode: chatappv1.ChatStreamPatchMode_CHAT_STREAM_PATCH_MODE_APPEND, Status: "streaming", Correlation: correlationInfoFromEvent(ev)}
+
+	s.mu.Lock()
+	s.lastText = ev.Text
+	s.lastTextMessageID = textMessageID
+	s.lastTextCorrelation = corr
+	s.textActive = true
+	if s.batchInterval <= 0 {
+		s.mu.Unlock()
+		return s.publishTextPatch(patch)
+	}
+	if s.batchSegmentID != textMessageID {
+		pending := s.detachPendingTextPatchLocked()
+		s.batchSegmentID = textMessageID
+		s.batchFirstSent = false
+		s.mu.Unlock()
+		if err := s.publishTextPatch(pending); err != nil {
+			return err
+		}
+		s.mu.Lock()
+	}
+	if !s.batchFirstSent {
+		s.batchFirstSent = true
+		s.mu.Unlock()
+		return s.publishTextPatch(patch)
+	}
+	if s.batchPending == nil {
+		s.batchPending = patch
+		s.armBatchTimerLocked()
+	} else {
+		s.batchPending.Text += patch.GetText()
+		s.batchPending.Sequence = patch.GetSequence()
+		s.batchPending.Correlation = patch.GetCorrelation()
+	}
+	s.mu.Unlock()
+	return nil
+}
+
+func (s *runtimeEventSink) armBatchTimerLocked() {
+	s.batchGeneration++
+	generation := s.batchGeneration
+	if s.batchTimer != nil {
+		s.batchTimer.Stop()
+	}
+	s.batchTimer = time.AfterFunc(s.batchInterval, func() {
+		s.publishMu.Lock()
+		defer s.publishMu.Unlock()
+		s.mu.Lock()
+		if generation != s.batchGeneration {
+			s.mu.Unlock()
+			return
+		}
+		pending := s.detachPendingTextPatchLocked()
+		s.mu.Unlock()
+		if err := s.publishTextPatch(pending); err != nil {
+			s.mu.Lock()
+			if s.batchErr == nil {
+				s.batchErr = err
+			}
+			s.mu.Unlock()
+		}
+	})
+}
+
+func (s *runtimeEventSink) detachPendingTextPatchLocked() *chatappv1.ChatTextPatch {
+	pending := s.batchPending
+	s.batchPending = nil
+	s.batchGeneration++
+	if s.batchTimer != nil {
+		s.batchTimer.Stop()
+		s.batchTimer = nil
+	}
+	return pending
+}
+
+func (s *runtimeEventSink) flushTextPatch() error {
+	s.mu.Lock()
+	pending := s.detachPendingTextPatchLocked()
+	s.mu.Unlock()
+	return s.publishTextPatch(pending)
+}
+
+func (s *runtimeEventSink) publishTextPatch(patch *chatappv1.ChatTextPatch) error {
+	if patch == nil {
+		return nil
+	}
+	return s.engine.publish(s.publishContext(), s.sessionID, s.pub, EventChatTextPatch, patch)
+}
+
+func (s *runtimeEventSink) batchingError() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.batchErr
 }
 
 func (s *runtimeEventSink) finishActiveTextSegment(status, finishReason, text string) error {

@@ -3,7 +3,9 @@ package chatapp
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
+	"time"
 
 	gepevents "github.com/go-go-golems/geppetto/pkg/events"
 	chatappv1 "github.com/go-go-golems/pinocchio/pkg/chatapp/pb/proto/pinocchio/chatapp/v1"
@@ -12,12 +14,21 @@ import (
 )
 
 type recordingEventPublisher struct {
+	mu     sync.Mutex
 	events []sessionstream.Event
 }
 
 func (p *recordingEventPublisher) Publish(_ context.Context, ev sessionstream.Event) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
 	p.events = append(p.events, ev)
 	return nil
+}
+
+func (p *recordingEventPublisher) Events() []sessionstream.Event {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return append([]sessionstream.Event(nil), p.events...)
 }
 
 func TestRuntimeEventSinkProtocolMatrix(t *testing.T) {
@@ -134,12 +145,52 @@ func TestRuntimeEventSinkProtocolMatrix(t *testing.T) {
 			for _, ev := range tt.events {
 				require.NoError(t, sink.PublishEvent(ev))
 			}
-			require.Equal(t, tt.wantNames, runtimeSinkEventNames(pub.events))
+			published := pub.Events()
+			require.Equal(t, tt.wantNames, runtimeSinkEventNames(published))
 			if tt.check != nil {
-				tt.check(t, pub.events, sink)
+				tt.check(t, published, sink)
 			}
 		})
 	}
+}
+
+func TestRuntimeEventSinkBatchesTextPatchesAfterImmediateFirst(t *testing.T) {
+	metadata := gepevents.EventMetadata{SessionID: "session-1", InferenceID: "inference-1", TurnID: "turn-1"}
+	corr := runtimeSinkTextCorrelation()
+	pub := &recordingEventPublisher{}
+	sink := newRuntimeSinkForProtocolTest(pub)
+	sink.batchInterval = 20 * time.Millisecond
+
+	require.NoError(t, sink.PublishEvent(gepevents.NewTextSegmentStartedEvent(metadata, corr, "assistant")))
+	require.NoError(t, sink.PublishEvent(gepevents.NewTextDeltaEvent(metadata, corr, "The", "The", 1)))
+	require.Equal(t, []string{EventChatTextSegmentStarted, EventChatTextPatch}, runtimeSinkEventNames(pub.Events()))
+
+	require.NoError(t, sink.PublishEvent(gepevents.NewTextDeltaEvent(metadata, corr, " ", "The ", 2)))
+	require.NoError(t, sink.PublishEvent(gepevents.NewTextDeltaEvent(metadata, corr, "Morgan", "The Morgan", 3)))
+	require.Eventually(t, func() bool { return len(pub.Events()) == 3 }, time.Second, 5*time.Millisecond)
+
+	patch := pub.Events()[2].Payload.(*chatappv1.ChatTextPatch)
+	require.Equal(t, " Morgan", patch.GetText())
+	require.Equal(t, uint64(3), patch.GetSequence())
+	require.Equal(t, uint64(3), patch.GetOffset())
+}
+
+func TestRuntimeEventSinkFlushesPendingPatchBeforeTextFinish(t *testing.T) {
+	metadata := gepevents.EventMetadata{SessionID: "session-1", InferenceID: "inference-1", TurnID: "turn-1"}
+	corr := runtimeSinkTextCorrelation()
+	pub := &recordingEventPublisher{}
+	sink := newRuntimeSinkForProtocolTest(pub)
+	sink.batchInterval = time.Hour
+
+	require.NoError(t, sink.PublishEvent(gepevents.NewTextSegmentStartedEvent(metadata, corr, "assistant")))
+	require.NoError(t, sink.PublishEvent(gepevents.NewTextDeltaEvent(metadata, corr, "Hello", "Hello", 1)))
+	require.NoError(t, sink.PublishEvent(gepevents.NewTextDeltaEvent(metadata, corr, " world", "Hello world", 2)))
+	require.NoError(t, sink.PublishEvent(gepevents.NewTextSegmentFinishedEvent(metadata, corr, "Hello world", "stop")))
+
+	published := pub.Events()
+	require.Equal(t, []string{EventChatTextSegmentStarted, EventChatTextPatch, EventChatTextPatch, EventChatTextSegmentFinished}, runtimeSinkEventNames(published))
+	require.Equal(t, " world", published[2].Payload.(*chatappv1.ChatTextPatch).GetText())
+	require.Equal(t, "Hello world", published[3].Payload.(*chatappv1.ChatTextSegmentFinished).GetText())
 }
 
 func newRuntimeSinkForProtocolTest(pub sessionstream.EventPublisher) *runtimeEventSink {

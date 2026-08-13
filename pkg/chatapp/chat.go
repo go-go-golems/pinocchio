@@ -47,14 +47,15 @@ type Hooks struct {
 type Option func(*Engine)
 
 type Engine struct {
-	mu         sync.Mutex
-	nextID     int
-	active     map[sessionstream.SessionId]*activeRun
-	pending    map[string]PromptRequest
-	chunkDelay time.Duration
-	hooks      Hooks
-	features   []ChatPlugin
-	turnStore  chatstore.TurnStore
+	mu             sync.Mutex
+	nextID         int
+	active         map[sessionstream.SessionId]*activeRun
+	pending        map[string]PromptRequest
+	chunkDelay     time.Duration
+	hooks          Hooks
+	features       []ChatPlugin
+	turnStore      chatstore.TurnStore
+	textPatchBatch TextPatchBatchConfig
 }
 
 type activeRun struct {
@@ -66,6 +67,20 @@ type activeRun struct {
 func WithChunkDelay(delay time.Duration) Option {
 	return func(e *Engine) {
 		e.chunkDelay = delay
+	}
+}
+
+// TextPatchBatchConfig controls bounded batching of assistant text deltas before
+// they become canonical ChatTextPatch events. A non-positive interval disables
+// batching. The first patch in each text segment is always published immediately.
+type TextPatchBatchConfig struct {
+	Interval time.Duration
+}
+
+// WithTextPatchBatching enables fixed-window assistant text patch batching.
+func WithTextPatchBatching(interval time.Duration) Option {
+	return func(e *Engine) {
+		e.textPatchBatch.Interval = interval
 	}
 }
 
