@@ -31,24 +31,58 @@ func CompactChatTextDeltaTransformer() UIEventTransformer {
 		}
 		out := make([]sessionstream.UIEvent, 0, len(events))
 		for _, event := range events {
-			if event.Name != EventChatTextPatch {
+			switch event.Name {
+			case EventChatTextPatch:
+				patch, ok := event.Payload.(*chatappv1.ChatTextPatch)
+				if !ok || patch == nil {
+					out = append(out, event)
+					continue
+				}
+				out = append(out, sessionstream.UIEvent{
+					Name: UIEventChatTextDelta,
+					Payload: &chatappv1.ChatTextDelta{
+						MessageId: patch.GetMessageId(),
+						Text:      patch.GetText(),
+						Mode:      patch.GetMode(),
+						Final:     patch.GetFinal(),
+					},
+				})
+			case EventChatReasoningPatch:
+				patch, ok := event.Payload.(*chatappv1.ChatReasoningPatch)
+				if !ok || patch == nil {
+					out = append(out, event)
+					continue
+				}
+				out = append(out, sessionstream.UIEvent{
+					Name: UIEventChatReasoningDelta,
+					Payload: &chatappv1.ChatReasoningDelta{
+						MessageId:       patch.GetMessageId(),
+						ParentMessageId: patch.GetParentMessageId(),
+						Text:            patch.GetText(),
+						Mode:            patch.GetMode(),
+						Final:           patch.GetFinal(),
+					},
+				})
+			case EventChatToolArgumentsPatch:
+				patch, ok := event.Payload.(*chatappv1.ChatToolArgumentsPatch)
+				if !ok || patch == nil {
+					out = append(out, event)
+					continue
+				}
+				out = append(out, sessionstream.UIEvent{
+					Name: UIEventChatToolArgumentsDelta,
+					Payload: &chatappv1.ChatToolArgumentsDelta{
+						MessageId:  patch.GetMessageId(),
+						ToolCallId: patch.GetToolCallId(),
+						ToolName:   patch.GetToolName(),
+						Arguments:  patch.GetArguments(),
+						Mode:       patch.GetMode(),
+						Final:      patch.GetFinal(),
+					},
+				})
+			default:
 				out = append(out, event)
-				continue
 			}
-			patch, ok := event.Payload.(*chatappv1.ChatTextPatch)
-			if !ok || patch == nil {
-				out = append(out, event)
-				continue
-			}
-			out = append(out, sessionstream.UIEvent{
-				Name: UIEventChatTextDelta,
-				Payload: &chatappv1.ChatTextDelta{
-					MessageId: patch.GetMessageId(),
-					Text:      patch.GetText(),
-					Mode:      patch.GetMode(),
-					Final:     patch.GetFinal(),
-				},
-			})
 		}
 		return out, nil
 	})

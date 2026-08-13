@@ -27,6 +27,8 @@ const (
 	EventChatTextSegmentStarted          = "ChatTextSegmentStarted"
 	EventChatTextPatch                   = "ChatTextPatch"
 	UIEventChatTextDelta                 = "ChatTextDelta"
+	UIEventChatReasoningDelta            = "ChatReasoningDelta"
+	UIEventChatToolArgumentsDelta        = "ChatToolArgumentsDelta"
 	EventChatTextSegmentFinished         = "ChatTextSegmentFinished"
 	EventChatReasoningSegmentStarted     = "ChatReasoningSegmentStarted"
 	EventChatReasoningPatch              = "ChatReasoningPatch"
@@ -147,6 +149,8 @@ func RegisterSchemas(reg *sessionstream.SchemaRegistry, features ...ChatPlugin) 
 		reg.RegisterUIEvent(EventChatTextSegmentStarted, &chatappv1.ChatTextSegmentStarted{}),
 		reg.RegisterUIEvent(EventChatTextPatch, &chatappv1.ChatTextPatch{}),
 		reg.RegisterUIEvent(UIEventChatTextDelta, &chatappv1.ChatTextDelta{}),
+		reg.RegisterUIEvent(UIEventChatReasoningDelta, &chatappv1.ChatReasoningDelta{}),
+		reg.RegisterUIEvent(UIEventChatToolArgumentsDelta, &chatappv1.ChatToolArgumentsDelta{}),
 		reg.RegisterUIEvent(EventChatTextSegmentFinished, &chatappv1.ChatTextSegmentFinished{}),
 		reg.RegisterTimelineEntity(TimelineEntityChatMessage, &chatappv1.ChatMessageEntity{}),
 	} {

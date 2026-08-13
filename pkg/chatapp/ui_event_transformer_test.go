@@ -52,6 +52,31 @@ func TestCompactChatTextDeltaTransformerLeavesCanonicalPatchUnchanged(t *testing
 	require.Equal(t, original, patch.String())
 }
 
+func TestCompactChatReasoningAndToolArgumentDeltas(t *testing.T) {
+	reasoning := &chatappv1.ChatReasoningPatch{
+		MessageId: "reason-1", ParentMessageId: "message-1", Role: "thinking", StreamId: "stream-1",
+		Sequence: 7, Offset: 8, Text: "lookup inventory", Mode: chatappv1.ChatStreamPatchMode_CHAT_STREAM_PATCH_MODE_APPEND,
+		Status: "streaming", Source: "provider", Correlation: &chatappv1.CorrelationInfo{RunId: "run-1"},
+	}
+	arguments := &chatappv1.ChatToolArgumentsPatch{
+		MessageId: "message-1", ToolCallId: "call-1", ToolName: "sql_query", StreamId: "stream-2",
+		Sequence: 9, Offset: 10, Arguments: `{"sql":"select 1"}`, Mode: chatappv1.ChatStreamPatchMode_CHAT_STREAM_PATCH_MODE_APPEND,
+		Status: "streaming_args", Correlation: &chatappv1.CorrelationInfo{RunId: "run-1"},
+	}
+	got, err := CompactChatTextDeltaTransformer().TransformUIEvents(context.Background(), sessionstream.Event{}, []sessionstream.UIEvent{
+		{Name: EventChatReasoningPatch, Payload: reasoning},
+		{Name: EventChatToolArgumentsPatch, Payload: arguments},
+	})
+	require.NoError(t, err)
+	require.Len(t, got, 2)
+	require.Equal(t, UIEventChatReasoningDelta, got[0].Name)
+	require.Equal(t, UIEventChatToolArgumentsDelta, got[1].Name)
+	require.Equal(t, &chatappv1.ChatReasoningDelta{MessageId: "reason-1", ParentMessageId: "message-1", Text: "lookup inventory", Mode: reasoning.GetMode()}, got[0].Payload)
+	require.Equal(t, &chatappv1.ChatToolArgumentsDelta{MessageId: "message-1", ToolCallId: "call-1", ToolName: "sql_query", Arguments: `{"sql":"select 1"}`, Mode: arguments.GetMode()}, got[1].Payload)
+	require.Equal(t, "thinking", reasoning.GetRole())
+	require.Equal(t, "streaming_args", arguments.GetStatus())
+}
+
 func TestEngineUIProjectionAppliesConfiguredTransformers(t *testing.T) {
 	engine := NewEngine(WithUIEventTransformers(CompactChatTextDeltaTransformer()))
 	patch := &chatappv1.ChatTextPatch{MessageId: "message-1", Text: "hello", Mode: chatappv1.ChatStreamPatchMode_CHAT_STREAM_PATCH_MODE_APPEND}

@@ -129,6 +129,16 @@ message ChatTextSegmentFinished {
   CorrelationInfo correlation = 10;
 }
 
+// ChatReasoningDelta is the compact, ephemeral UI representation of a
+// ChatReasoningPatch. It is not a canonical backend event or timeline entity.
+message ChatReasoningDelta {
+  string message_id = 1;
+  string parent_message_id = 2;
+  string text = 3;
+  ChatStreamPatchMode mode = 4;
+  bool final = 5;
+}
+
 message ChatReasoningSegmentStarted {
   string message_id = 1;
   string parent_message_id = 2;
@@ -176,6 +186,17 @@ message ChatToolCallStarted {
   bool executing = 5;
   string status = 6;
   CorrelationInfo correlation = 7;
+}
+
+// ChatToolArgumentsDelta is the compact, ephemeral UI representation of a
+// ChatToolArgumentsPatch. It is not a canonical backend event or timeline entity.
+message ChatToolArgumentsDelta {
+  string message_id = 1;
+  string tool_call_id = 2;
+  string tool_name = 3;
+  string arguments = 4;
+  ChatStreamPatchMode mode = 5;
+  bool final = 6;
 }
 
 message ChatToolArgumentsPatch {
