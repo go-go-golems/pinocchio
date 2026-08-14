@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strconv"
+	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -222,7 +224,9 @@ func TestMySQLTurnStore_SaveRollsBackOnError(t *testing.T) {
 	require.Contains(t, snap.Payload, "first")
 }
 
-// sanitizeTurnID turns a test name into a conv-safe string.
+// sanitizeTurnID turns a test name into a conv-safe string with a unique
+// per-invocation suffix so re-running against a populated shared database never
+// collides with this test's assertions.
 func sanitizeTurnID(s string) string {
 	out := make([]byte, 0, len(s))
 	for _, r := range s {
@@ -233,8 +237,10 @@ func sanitizeTurnID(s string) string {
 			out = append(out, '_')
 		}
 	}
-	return string(out)
+	return string(out) + "-" + strconv.FormatUint(turnUniqueSeq.Add(1), 36)
 }
+
+var turnUniqueSeq atomic.Uint64
 
 // validTurnPayloadTwoBlocks builds a payload with two blocks for the
 // membership-replacement test.
