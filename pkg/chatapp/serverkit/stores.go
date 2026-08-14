@@ -11,6 +11,7 @@ import (
 
 	"github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
 	"github.com/go-go-golems/sessionstream/pkg/sessionstream"
+	storemysql "github.com/go-go-golems/sessionstream/pkg/sessionstream/hydration/mysql"
 	storesqlite "github.com/go-go-golems/sessionstream/pkg/sessionstream/hydration/sqlite"
 )
 
@@ -65,6 +66,16 @@ func OpenHydrationStore(dsn, dbPath string, reg *sessionstream.SchemaRegistry) (
 	dbPath = strings.TrimSpace(dbPath)
 	if dsn == "" && dbPath == "" {
 		store, err := storesqlite.NewInMemory(reg)
+		if err != nil {
+			return nil, nil, err
+		}
+		return store, store.Close, nil
+	}
+	// DSN-gated selection: a non-empty DSN that is not a SQLite file: DSN opens
+	// the MySQL hydration store; otherwise it is a SQLite file DSN. An empty DSN
+	// derives a SQLite file DSN from dbPath (the existing local/CI path).
+	if dsn != "" && !isSQLiteFileDSN(dsn) {
+		store, err := storemysql.Open(context.Background(), dsn, reg)
 		if err != nil {
 			return nil, nil, err
 		}
