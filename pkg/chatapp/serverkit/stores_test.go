@@ -2,6 +2,7 @@ package serverkit
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -78,5 +79,61 @@ func TestOpenHydrationStoreSQLiteCreatesParentDirectory(t *testing.T) {
 	}
 	if err := closeFn(); err != nil {
 		t.Fatalf("close hydration store: %v", err)
+	}
+}
+
+// mysqlTurnSelectionDSN returns a DSN for the local docker-compose MySQL when
+// configured; tests skip (not fail) without it so `go test ./...` stays green.
+func mysqlTurnSelectionDSN(t *testing.T) string {
+	t.Helper()
+	dsn := os.Getenv("PINOCCHIO_MYSQL_TURNS_DSN")
+	if dsn == "" {
+		t.Skipf("PINOCCHIO_MYSQL_TURNS_DSN not set; skipping OpenTurnStore MySQL selection test")
+	}
+	return dsn
+}
+
+func TestOpenTurnStoreMySQLDSNSelectsMySQLTurnStore(t *testing.T) {
+	dsn := mysqlTurnSelectionDSN(t)
+	store, closeFn, err := OpenTurnStore(StoreOptions{TurnsDSN: dsn})
+	if err != nil {
+		t.Fatalf("open mysql turn store: %v", err)
+	}
+	defer func() { _ = closeFn() }()
+	if _, ok := store.(*chatstore.MySQLTurnStore); !ok {
+		t.Fatalf("expected *chatstore.MySQLTurnStore, got %T", store)
+	}
+}
+
+func TestOpenTurnStoreSQLiteFileDSNStillSelectsSQLite(t *testing.T) {
+	// A file: DSN must keep selecting SQLite, not be misrouted to MySQL. The
+	// parent dir must exist (OpenTurnStore only creates it when deriving a DSN
+	// from TurnsDB, matching the original behavior for a caller-supplied DSN).
+	dbPath := filepath.Join(t.TempDir(), "chat-turns.db")
+	sqliteDSN, err := chatstore.SQLiteTurnDSNForFile(dbPath)
+	if err != nil {
+		t.Fatalf("build sqlite dsn: %v", err)
+	}
+	store, closeFn, err := OpenTurnStore(StoreOptions{TurnsDSN: sqliteDSN})
+	if err != nil {
+		t.Fatalf("open sqlite turn store: %v", err)
+	}
+	defer func() { _ = closeFn() }()
+	if _, ok := store.(*chatstore.SQLiteTurnStore); !ok {
+		t.Fatalf("expected *chatstore.SQLiteTurnStore, got %T", store)
+	}
+}
+
+func TestIsSQLiteFileDSN(t *testing.T) {
+	for dsn, want := range map[string]bool{
+		"file:./var/turns.db?_journal_mode=WAL":          true,
+		"file:/abs/turns.db":                             true,
+		"gec:pass@tcp(127.0.0.1:3306)/db?parseTime=true": false,
+		"gec:pass@unix(/tmp/mysql.sock)/db":              false,
+		"":                                               true, // empty handled by caller; treat as non-mysql
+	} {
+		if got := isSQLiteFileDSN(dsn); got != want {
+			t.Errorf("isSQLiteFileDSN(%q) = %v, want %v", dsn, got, want)
+		}
 	}
 }

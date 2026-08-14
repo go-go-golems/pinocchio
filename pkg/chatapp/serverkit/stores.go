@@ -97,6 +97,17 @@ func OpenTurnStore(opts StoreOptions) (chatstore.TurnStore, func() error, error)
 		}
 		return nil, func() error { return nil }, nil
 	}
+	// DSN-gated selection: a non-empty TurnsDSN is treated as a MySQL DSN when it
+	// is not a SQLite file: DSN (file:... is SQLite); otherwise it is a
+	// go-sql-driver/mysql DSN and uses MySQLTurnStore. An empty DSN falls back to
+	// SQLiteTurnStore from the turns-db file path (the existing local/CI path).
+	if dsn != "" && !isSQLiteFileDSN(dsn) {
+		store, err := chatstore.NewMySQLTurnStore(context.Background(), dsn)
+		if err != nil {
+			return nil, nil, fmt.Errorf("open turns store: %w", err)
+		}
+		return store, store.Close, nil
+	}
 	if dsn == "" {
 		if err := ensureParentDir(dbPath); err != nil {
 			return nil, nil, err
@@ -138,6 +149,18 @@ func ensureParentDir(path string) error {
 		}
 	}
 	return nil
+}
+
+// isSQLiteFileDSN reports whether a DSN is a SQLite file DSN ("file:..." or a
+// bare path) rather than a go-sql-driver/mysql DSN. The MySQL driver DSN
+// always contains "@tcp(" or "@unix("; a SQLite DSN starts with "file:" or is a
+// plain filesystem path with no "@" scheme.
+func isSQLiteFileDSN(dsn string) bool {
+	if strings.HasPrefix(dsn, "file:") {
+		return true
+	}
+	// MySQL DSNs contain a user@host scheme; SQLite file DSNs do not.
+	return !strings.Contains(dsn, "@tcp(") && !strings.Contains(dsn, "@unix(")
 }
 
 type MemoryTurnStore struct {
