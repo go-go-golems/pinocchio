@@ -159,3 +159,66 @@ make web-check                                             # ok after import reo
 
 - Turn image map: `{"attachment_id","media_type","url": turn_url|url,"detail"?}`.
 - Empty prompt + attachments ⇒ user entity with empty content and populated `attachments`.
+
+## Step 2: Strip runtime-internal metadata from the client-facing echo
+
+While integrating in CoinVault, the end-to-end test showed the
+`turn_url` metadata (an internal `coinvault-attachment://` reference that only
+the app runtime can resolve) leaking into `ChatUserMessageAccepted` and thus
+into the hydrated `ChatMessageEntity`. It is harmless (not fetchable) but it
+is runtime-internal by definition, so the engine now drops that key when
+echoing attachments to clients while keeping it on the command payload.
+
+### Prompt Context
+
+**User prompt (verbatim):** (see Step 1)
+
+**Assistant interpretation:** Keep client-facing payloads free of runtime-only hints discovered during downstream integration.
+
+**Inferred user intent:** Clean protocol boundaries between app runtime and browsers.
+
+**Commit (code):** 17dac76 — "chatapp: strip runtime-internal turn_url metadata from client-facing attachment echo"
+
+### What I did
+
+- `pkg/chatapp/attachments.go`: `clientAttachmentsToProto` (deletes
+  `AttachmentMetadataTurnURL`, nils empty maps).
+- `pkg/chatapp/runtime_inference.go`: use it for `ChatUserMessageAccepted`.
+- `pkg/chatapp/attachments_test.go`: assert the snapshot's user entity has no `turn_url`.
+
+### Why
+
+- The projection copies `ChatUserMessageAccepted.attachments` verbatim into the
+  timeline entity, so the echo is the single place to sanitize.
+
+### What worked
+
+- Test-first from the CoinVault side (`TestSubmitMessageWithAttachmentReachesEngineAndSnapshot`) caught it immediately.
+
+### What didn't work
+
+- N/A.
+
+### What I learned
+
+- Anything placed on `PromptRequest.Attachments[].Metadata` reaches clients unless filtered here; document that for future keys.
+
+### What was tricky to build
+
+- N/A (small change).
+
+### What warrants a second pair of eyes
+
+- Whether other future metadata keys should be allowlisted rather than the current single-key denylist.
+
+### What should be done in the future
+
+- Consider an explicit `ClientVisible` split if more runtime-only keys appear.
+
+### Code review instructions
+
+- `pkg/chatapp/attachments.go:clientAttachmentsToProto`; run `go test ./pkg/chatapp/ -run Attachments -count=1`.
+
+### Technical details
+
+- Command payload (`StartInferenceCommand`) still carries full metadata; it is persisted as an event but never sent to browsers.

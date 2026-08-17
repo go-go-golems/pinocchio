@@ -13,3 +13,8 @@ Implemented attachment references through protocol, PromptRequest, engine, proje
 
 - /home/manuel/workspaces/2026-08-12/deploy-dev-indexer/pinocchio/pkg/chatapp/attachments.go — new
 
+
+## 2026-08-17
+
+Strip turn_url metadata from client-facing attachment echo (commit 17dac76)
+
