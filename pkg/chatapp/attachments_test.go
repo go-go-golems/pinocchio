@@ -93,6 +93,20 @@ func TestRuntimeInferenceAppendsMultimodalUserBlockForAttachments(t *testing.T) 
 	require.Equal(t, "coinvault-attachment://sess/att-9", imgs[0]["url"])
 	require.Equal(t, "image/jpeg", imgs[0]["media_type"])
 	require.Equal(t, "att-9", imgs[0]["attachment_id"])
+
+	// The client-facing echo must not carry the runtime-internal turn_url.
+	svc, err := NewService(hub, engine)
+	require.NoError(t, err)
+	snap, err := svc.Snapshot(ctx, sessionstream.SessionId("chat-att"))
+	require.NoError(t, err)
+	for _, entity := range snap.Entities {
+		if m, ok := entity.Payload.(*chatappv1.ChatMessageEntity); ok && m.GetRole() == "user" {
+			require.Len(t, m.GetAttachments(), 1)
+			require.Equal(t, "https://example.com/coin.jpg", m.GetAttachments()[0].GetUrl())
+			_, has := m.GetAttachments()[0].GetMetadata()[AttachmentMetadataTurnURL]
+			require.False(t, has, "turn_url must be stripped from client-facing attachments")
+		}
+	}
 }
 
 func TestHandleStartInferenceFallsBackToWireAttachments(t *testing.T) {

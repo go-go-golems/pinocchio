@@ -115,6 +115,22 @@ func AttachmentsToProto(atts []Attachment) []*chatappv1.ChatAttachment {
 	return out
 }
 
+// clientAttachmentsToProto is AttachmentsToProto minus runtime-internal metadata
+// (AttachmentMetadataTurnURL), for messages that are projected to clients.
+func clientAttachmentsToProto(atts []Attachment) []*chatappv1.ChatAttachment {
+	out := AttachmentsToProto(atts)
+	for _, pb := range out {
+		if pb == nil || pb.Metadata == nil {
+			continue
+		}
+		delete(pb.Metadata, AttachmentMetadataTurnURL)
+		if len(pb.Metadata) == 0 {
+			pb.Metadata = nil
+		}
+	}
+	return out
+}
+
 // AttachmentsFromProto converts protobuf attachments back into Attachment values.
 func AttachmentsFromProto(pbs []*chatappv1.ChatAttachment) []Attachment {
 	if len(pbs) == 0 {

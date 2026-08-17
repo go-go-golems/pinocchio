@@ -38,7 +38,7 @@ func (e *Engine) handleStartInference(ctx context.Context, cmd sessionstream.Com
 	}
 	messageID := e.nextMessageID()
 	userMessageID := messageID + "-user"
-	if err := e.publish(ctx, cmd.SessionId, pub, EventUserMessageAccepted, &chatappv1.ChatUserMessageAccepted{MessageId: userMessageID, Role: "user", Text: prompt, Content: prompt, Status: "accepted", Attachments: AttachmentsToProto(pending.Attachments)}); err != nil {
+	if err := e.publish(ctx, cmd.SessionId, pub, EventUserMessageAccepted, &chatappv1.ChatUserMessageAccepted{MessageId: userMessageID, Role: "user", Text: prompt, Content: prompt, Status: "accepted", Attachments: clientAttachmentsToProto(pending.Attachments)}); err != nil {
 		return err
 	}
 	runCtx, cancel := context.WithCancel(publishContext(ctx))
