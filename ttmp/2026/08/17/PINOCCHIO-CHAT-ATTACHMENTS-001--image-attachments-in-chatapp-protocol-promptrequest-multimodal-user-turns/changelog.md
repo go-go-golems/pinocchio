@@ -18,3 +18,8 @@ Implemented attachment references through protocol, PromptRequest, engine, proje
 
 Strip turn_url metadata from client-facing attachment echo (commit 17dac76)
 
+
+## 2026-08-17
+
+Feature branch + geppetto pin (5f3e54b4); PR https://github.com/go-go-golems/pinocchio/pull/199
+
