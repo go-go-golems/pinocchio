@@ -12,13 +12,24 @@ DocType: design-doc
 Intent: long-term
 Owners:
     - manuel
-RelatedFiles: []
+RelatedFiles:
+    - Path: repo://pkg/chatapp/projections.go
+      Note: projection
+    - Path: repo://pkg/chatapp/runtime_inference.go
+      Note: engine
+    - Path: repo://pkg/chatapp/serverkit/contracts.go
+      Note: HTTP contract
+    - Path: repo://pkg/chatapp/service.go
+      Note: PromptRequest
+    - Path: repo://proto/pinocchio/chatapp/v1/chat.proto
+      Note: protocol
 ExternalSources: []
 Summary: Add image attachments (by reference) to the chatapp protocol, PromptRequest and HTTP contract, echo them to clients, and build multimodal user turns via geppetto.
 LastUpdated: 2026-08-17T14:55:28.405225119-04:00
 WhatFor: ""
 WhenToUse: ""
 ---
+
 
 # Chat attachments design
 
