@@ -39,6 +39,12 @@ func baseTimelineProjection(_ context.Context, ev sessionstream.Event, _ *sessio
 			Status:    firstNonEmpty(payload.GetStatus(), "accepted"),
 			Streaming: false,
 		}
+		if atts := payload.GetAttachments(); len(atts) > 0 {
+			entity.Attachments = make([]*chatappv1.ChatAttachment, 0, len(atts))
+			for _, a := range atts {
+				entity.Attachments = append(entity.Attachments, proto.Clone(a).(*chatappv1.ChatAttachment))
+			}
+		}
 		entity.Text = entity.Content
 		return []sessionstream.TimelineEntity{{Kind: TimelineEntityChatMessage, Id: messageID, Payload: entity}}, nil
 	case *chatappv1.ChatRunFailed:

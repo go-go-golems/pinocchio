@@ -15,7 +15,12 @@ import (
 
 // PromptRequest is the app-facing prompt submission input.
 type PromptRequest struct {
-	Prompt         string
+	Prompt string
+	// Attachments are user-provided attachments (images) referenced by URL. They
+	// are echoed to clients in ChatUserMessageAccepted / ChatMessageEntity and,
+	// for image kinds, appended to the user turn block as geppetto image entries.
+	// A request may have attachments and an empty Prompt.
+	Attachments    []Attachment
 	IdempotencyKey string
 	Runtime        *infruntime.ComposedRuntime
 	// InitialTurn optionally seeds the Geppetto runtime with a fully rendered
@@ -64,8 +69,8 @@ func (s *Service) SubmitPromptRequest(ctx context.Context, sid sessionstream.Ses
 		return fmt.Errorf("session id is empty")
 	}
 	req.Prompt = strings.TrimSpace(req.Prompt)
-	if req.Prompt == "" {
-		return fmt.Errorf("prompt is empty")
+	if req.Prompt == "" && len(req.Attachments) == 0 {
+		return fmt.Errorf("prompt is empty and no attachments were provided")
 	}
 	requestID := uuid.NewString()
 	if s.engine != nil {
@@ -75,6 +80,7 @@ func (s *Service) SubmitPromptRequest(ctx context.Context, sid sessionstream.Ses
 		Prompt:         req.Prompt,
 		RequestId:      requestID,
 		IdempotencyKey: req.IdempotencyKey,
+		Attachments:    AttachmentsToProto(req.Attachments),
 	}
 	if err := s.hub.Submit(ctx, sid, CommandStartInference, payload); err != nil {
 		s.engine.clearPendingRequest(requestID)

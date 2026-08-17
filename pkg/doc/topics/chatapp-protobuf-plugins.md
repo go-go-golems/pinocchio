@@ -68,6 +68,17 @@ The base chatapp registers these command messages:
 | `ChatStartInference` | `StartInferenceCommand` | Start an assistant run for a prompt. |
 | `ChatStopInference` | `StopInferenceCommand` | Stop the active assistant run for a session. |
 
+`StartInferenceCommand` carries the prompt text plus `repeated ChatAttachment attachments`
+(images referenced by URL, never bytes). A submission may consist of attachments
+only; `Service.SubmitPromptRequest` rejects a request only when both the prompt
+and the attachments are empty. Attachments are echoed in `ChatUserMessageAccepted`
+and projected into `ChatMessageEntity.attachments`, and image attachments are
+appended to the geppetto user block via `session.AppendNewTurnFromUserMessage`
+(see `chatapp.AttachmentsToTurnImages`). Applications that own an upload endpoint
+resolve `serverkit.SubmitMessageRequest.Attachments` (ids) into `chatapp.Attachment`
+values; `Attachment.Metadata["turn_url"]` may override the URL placed into the turn
+when the runtime resolves images itself.
+
 It registers these backend events and UI events with `ChatMessageUpdate` payloads:
 
 | Backend event | UI event | Purpose |
