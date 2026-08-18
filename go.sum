@@ -211,8 +211,8 @@ github.com/go-go-golems/logcopter v0.1.1 h1:/zrfmA7057hZyBoes+X9EpASP+aZQJx3kip8
 github.com/go-go-golems/logcopter v0.1.1/go.mod h1:GUB5A7JwPVdYAu/8CKURcIaJb0h16nz8mKbkf5opzqo=
 github.com/go-go-golems/sanitize v0.0.2 h1:a1wImzNrhRMyY/1ujqkc7JD2OwdwMxGkMeY4EXwWD/M=
 github.com/go-go-golems/sanitize v0.0.2/go.mod h1:uw5CwHkswHW9VW3szX3eN1ndM8BHMDLYJpfaE/VpRqc=
-github.com/go-go-golems/sessionstream v0.1.1 h1:g//YAK1+tSZOte1ZqTG2nJOydzYCKLz2xvp5IPtefEo=
-github.com/go-go-golems/sessionstream v0.1.1/go.mod h1:wiAMnC6kiSN2pFOHjqdRJqtkvfqY9seSG8ErI5j8i10=
+github.com/go-go-golems/sessionstream v0.1.2 h1:aUthVFD8f8M08s6zH0Y42z9DsDtInGgetyNm7taVEM8=
+github.com/go-go-golems/sessionstream v0.1.2/go.mod h1:1PWviVKm2Xi7fNfX2Pk0eQOLmNOBFl0Ubjced3B8xfs=
 github.com/go-go-golems/uhoh v0.0.9 h1:uAx/ZQA89cwOz/o6w7MhtmwwZwEpEER3P1HbA0qWLtg=
 github.com/go-go-golems/uhoh v0.0.9/go.mod h1:MjtNDHbEcQ1ApUhfYDJPBlTvIWy/YKgX+zLqRihkuzE=
 github.com/go-jose/go-jose/v4 v4.1.4 h1:moDMcTHmvE6Groj34emNPLs/qtYXRVcd6S7NHbHz3kA=

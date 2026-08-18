@@ -17,7 +17,7 @@ require (
 	github.com/go-go-golems/glazed v1.4.3
 	github.com/go-go-golems/go-go-goja v0.10.6
 	github.com/go-go-golems/logcopter v0.1.1
-	github.com/go-go-golems/sessionstream v0.1.1
+	github.com/go-go-golems/sessionstream v0.1.2
 	github.com/go-go-golems/uhoh v0.0.9
 	github.com/go-sql-driver/mysql v1.9.3
 	github.com/google/uuid v1.6.0
