@@ -2,12 +2,15 @@ package chatstore
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"sync/atomic"
 	"testing"
 
+	_ "github.com/go-sql-driver/mysql"
 	"github.com/stretchr/testify/require"
 )
 
@@ -26,6 +29,22 @@ func mysqlTurnTestDSN(t *testing.T) string {
 // newTestMySQLTurnStore opens a store against the shared coinvault_chat_dev
 // database. Each test inserts distinct (convID, sessionID, turnID) tuples so
 // they do not collide; the membership rows are scoped by snapshot timestamp.
+func mysqlTurnTestAdminDB(t *testing.T) *sql.DB {
+	t.Helper()
+	dsn := os.Getenv("PINOCCHIO_MYSQL_TEST_ADMIN_DSN")
+	if dsn == "" {
+		if os.Getenv("CI") == "true" || os.Getenv("PINOCCHIO_MYSQL_TESTCONTAINERS") == "1" {
+			t.Fatal("PINOCCHIO_MYSQL_TEST_ADMIN_DSN is required for rollback integration coverage")
+		}
+		t.Skip("PINOCCHIO_MYSQL_TEST_ADMIN_DSN not set; skipping admin-only rollback integration test")
+	}
+	db, err := sql.Open("mysql", dsn)
+	require.NoError(t, err, "open MySQL test admin connection")
+	require.NoError(t, db.PingContext(context.Background()), "ping MySQL test admin connection")
+	t.Cleanup(func() { _ = db.Close() })
+	return db
+}
+
 func newTestMySQLTurnStore(t *testing.T) *MySQLTurnStore {
 	t.Helper()
 	s, err := NewMySQLTurnStore(context.Background(), mysqlTurnTestDSN(t))
@@ -46,12 +65,17 @@ func chatRowCount(t *testing.T, s *MySQLTurnStore, query string, args ...any) in
 // across tests, so this also confirms migrate is idempotent on re-open).
 func mysqlTurnTablesExist(t *testing.T, s *MySQLTurnStore) {
 	t.Helper()
-	for _, table := range []string{"turns", "blocks", "turn_block_membership"} {
+	for _, table := range []string{"pinocchio_schema_version", "turns", "blocks", "turn_block_membership"} {
 		var n int64
 		require.NoError(t, s.db.QueryRowContext(context.Background(),
 			`SELECT COUNT(1) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = ?`, table).Scan(&n))
 		require.Equal(t, int64(1), n, "table %s must exist", table)
 	}
+	var version int64
+	require.NoError(t, s.db.QueryRowContext(context.Background(), `
+		SELECT schema_version FROM pinocchio_schema_version WHERE component = ?
+	`, mysqlTurnSchemaComponent).Scan(&version))
+	require.Equal(t, mysqlTurnSchemaVersion, version)
 }
 
 func TestMySQLTurnStore_SaveAndList(t *testing.T) {
@@ -148,6 +172,30 @@ func TestMySQLTurnStore_Validation(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestMySQLTurnStore_ExactOpaqueIdentity(t *testing.T) {
+	s := newTestMySQLTurnStore(t)
+	ctx := context.Background()
+	base := "exact-" + sanitizeTurnID(t.Name())
+	identities := []string{base + "-Case", base + "-case", base + "-café", base + "-café", base + "-id", base + "-id "}
+	for i, conv := range identities {
+		turnID := fmt.Sprintf("exact-turn-%d", i)
+		require.NoError(t, s.Save(ctx, conv, "session", turnID, "final", int64(100+i), validTurnPayload(turnID, conv), TurnSaveOptions{}))
+	}
+	for i, conv := range identities {
+		items, err := s.List(ctx, TurnQuery{ConvID: conv, Limit: 10})
+		require.NoError(t, err)
+		require.Len(t, items, 1, "identity %q must select only its own row", conv)
+		require.Equal(t, fmt.Sprintf("exact-turn-%d", i), items[0].TurnID)
+	}
+}
+
+func TestMySQLTurnStore_RejectsOpaqueValuesOverByteLimit(t *testing.T) {
+	s := newTestMySQLTurnStore(t)
+	tooLong := strings.Repeat("x", 256)
+	err := s.Save(context.Background(), tooLong, "session", "turn", "final", 1, validTurnPayload("turn", "value"), TurnSaveOptions{})
+	require.ErrorContains(t, err, "convID exceeds 255-byte limit")
+}
+
 func TestMySQLTurnStore_ReSaveReplacesMembershipRowset(t *testing.T) {
 
 	s := newTestMySQLTurnStore(t)
@@ -177,14 +225,15 @@ func TestMySQLTurnStore_BlockDedupByContentHash(t *testing.T) {
 	convA := sanitizeTurnID("conv-dedup-a-" + t.Name())
 	convB := sanitizeTurnID("conv-dedup-b-" + t.Name())
 
-	// Two different turns in different conversations, same block content.
-	require.NoError(t, s.Save(ctx, convA, "sess-1", "turn-1", "final", 100, validTurnPayload("turn-1", "same-text"), TurnSaveOptions{}))
-	require.NoError(t, s.Save(ctx, convB, "sess-1", "turn-2", "final", 200, validTurnPayload("turn-2", "same-text"), TurnSaveOptions{}))
+	// The same block ID and canonical content in two snapshots must reuse one
+	// blocks row while retaining two membership references.
+	payload := validTurnPayload("shared-turn", "same-text")
+	require.NoError(t, s.Save(ctx, convA, "sess-1", "shared-turn", "final", 100, payload, TurnSaveOptions{}))
+	require.NoError(t, s.Save(ctx, convB, "sess-1", "shared-turn", "final", 200, payload, TurnSaveOptions{}))
 
-	// One block row: the same (block_id, content_hash) upserts to one row.
-	n := chatRowCount(t, s, "SELECT COUNT(1) FROM blocks WHERE block_id = ? AND content_hash = ?", "turn-1-b1", contentHashForText(t, "same-text"))
-	// turn-2 has a different block_id, so this specific row is from turn-1 only.
+	n := chatRowCount(t, s, "SELECT COUNT(1) FROM blocks WHERE block_id = ? AND content_hash = ?", "shared-turn-b1", contentHashForText(t, "same-text"))
 	require.Equal(t, int64(1), n)
+	require.Equal(t, int64(2), chatRowCount(t, s, "SELECT COUNT(1) FROM turn_block_membership WHERE turn_id = ? AND (conv_id = ? OR conv_id = ?)", "shared-turn", convA, convB))
 }
 
 func TestMySQLTurnStore_SurvivesRestart(t *testing.T) {
@@ -215,13 +264,34 @@ func TestMySQLTurnStore_SaveRollsBackOnError(t *testing.T) {
 	ctx := context.Background()
 	conv := sanitizeTurnID("conv-mysql-rollback-" + t.Name())
 	require.NoError(t, s.Save(ctx, conv, "sess-1", "turn-1", "final", 100, validTurnPayload("turn-1", "first"), TurnSaveOptions{}))
-	// A malformed payload triggers a parse error before any write; the turn is
-	// not updated and the prior row is intact.
-	require.Error(t, s.Save(ctx, conv, "sess-1", "turn-1", "final", 100, "not: valid: yaml: [", TurnSaveOptions{}))
+
+	adminDB := mysqlTurnTestAdminDB(t)
+	trigger := fmt.Sprintf("pinocchio_rb_%d", turnUniqueSeq.Add(1))
+	sentinel := fmt.Sprintf("rollback-sentinel-%d", turnUniqueSeq.Add(1))
+	quotedTrigger := "`" + trigger + "`"
+	_, err := adminDB.ExecContext(ctx, fmt.Sprintf(`
+		CREATE TRIGGER %s BEFORE INSERT ON blocks
+		FOR EACH ROW
+		BEGIN
+			IF NEW.block_id = '%s' THEN
+				SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'forced rollback';
+			END IF;
+		END
+	`, quotedTrigger, sentinel))
+	require.NoError(t, err)
+	t.Cleanup(func() { _, _ = adminDB.ExecContext(context.Background(), "DROP TRIGGER IF EXISTS "+quotedTrigger) })
+
+	// The trigger fires after the turn upsert and membership delete have begun,
+	// proving that the previous committed rowset survives a real transaction
+	// rollback rather than only a pre-transaction YAML validation error.
+	require.Error(t, s.Save(ctx, conv, "sess-1", "turn-1", "final", 100, validTurnPayloadWithBlockID("turn-1", sentinel, "replacement"), TurnSaveOptions{}))
+	_, err = adminDB.ExecContext(ctx, "DROP TRIGGER IF EXISTS "+quotedTrigger)
+	require.NoError(t, err)
 	snap, err := s.LoadLatestTurn(ctx, conv, "final")
 	require.NoError(t, err)
 	require.NotNil(t, snap)
 	require.Contains(t, snap.Payload, "first")
+	require.NotContains(t, snap.Payload, "replacement")
 }
 
 // sanitizeTurnID turns a test name into a conv-safe string with a unique
@@ -244,6 +314,10 @@ var turnUniqueSeq atomic.Uint64
 
 // validTurnPayloadTwoBlocks builds a payload with two blocks for the
 // membership-replacement test.
+func validTurnPayloadWithBlockID(turnID, blockID, text string) string {
+	return fmt.Sprintf("id: %s\\nblocks:\\n  - id: %s\\n    kind: llm_text\\n    role: assistant\\n    payload:\\n      text: %s\\n", turnID, blockID, text)
+}
+
 func validTurnPayloadTwoBlocks(turnID string) string {
 	return "id: " + turnID + "\nblocks:\n  - id: " + turnID + "-b1\n    kind: llm_text\n    role: assistant\n    payload:\n      text: one\n  - id: " + turnID + "-b2\n    kind: llm_text\n    role: assistant\n    payload:\n      text: two\n"
 }
