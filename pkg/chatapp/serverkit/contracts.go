@@ -18,12 +18,20 @@ type CreateSessionResponse struct {
 
 // SubmitMessageRequest is the common JSON body for adding a user prompt to an
 // existing chat session.
+// AttachmentRef references an attachment previously uploaded through an
+// application-owned endpoint. The application resolves ids to chatapp.Attachment
+// values (URL, media type, dimensions) before submitting the prompt.
+type AttachmentRef struct {
+	AttachmentID string `json:"attachment_id"`
+}
+
 type SubmitMessageRequest struct {
-	Prompt             string `json:"prompt"`
-	ApplicationProfile string `json:"application_profile,omitempty"`
-	Profile            string `json:"profile,omitempty"`
-	Registry           string `json:"registry,omitempty"`
-	IdempotencyKey     string `json:"idempotencyKey,omitempty"`
+	Prompt             string          `json:"prompt"`
+	Attachments        []AttachmentRef `json:"attachments,omitempty"`
+	ApplicationProfile string          `json:"application_profile,omitempty"`
+	Profile            string          `json:"profile,omitempty"`
+	Registry           string          `json:"registry,omitempty"`
+	IdempotencyKey     string          `json:"idempotencyKey,omitempty"`
 }
 
 type SubmitMessageResponse struct {

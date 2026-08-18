@@ -28,12 +28,17 @@ func (e *Engine) handleStartInference(ctx context.Context, cmd sessionstream.Com
 	if prompt == "" {
 		prompt = strings.TrimSpace(payload.GetPrompt())
 	}
-	if prompt == "" {
+	if len(pending.Attachments) == 0 && len(payload.GetAttachments()) > 0 {
+		// Command submitted without an in-process pending request (e.g. replay or
+		// external submitter): reconstruct attachments from the wire payload.
+		pending.Attachments = AttachmentsFromProto(payload.GetAttachments())
+	}
+	if prompt == "" && len(pending.Attachments) == 0 {
 		prompt = "Explain evtstream"
 	}
 	messageID := e.nextMessageID()
 	userMessageID := messageID + "-user"
-	if err := e.publish(ctx, cmd.SessionId, pub, EventUserMessageAccepted, &chatappv1.ChatUserMessageAccepted{MessageId: userMessageID, Role: "user", Text: prompt, Content: prompt, Status: "accepted"}); err != nil {
+	if err := e.publish(ctx, cmd.SessionId, pub, EventUserMessageAccepted, &chatappv1.ChatUserMessageAccepted{MessageId: userMessageID, Role: "user", Text: prompt, Content: prompt, Status: "accepted", Attachments: clientAttachmentsToProto(pending.Attachments)}); err != nil {
 		return err
 	}
 	runCtx, cancel := context.WithCancel(publishContext(ctx))
@@ -130,7 +135,12 @@ func (e *Engine) runRuntimeInference(ctx context.Context, sid sessionstream.Sess
 			}
 		}
 
-		_, err := sess.AppendNewTurnFromUserPrompt(prompt)
+		var err error
+		if images := AttachmentsToTurnImages(pending.Attachments); len(images) > 0 {
+			_, err = sess.AppendNewTurnFromUserMessage(prompt, images)
+		} else {
+			_, err = sess.AppendNewTurnFromUserPrompt(prompt)
+		}
 		if err != nil {
 			e.publishRunFailed(publishContext(ctx), sid, pub, messageID, err.Error())
 			return

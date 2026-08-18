@@ -4,10 +4,27 @@ package pinocchio.chatapp.v1;
 
 option go_package = "github.com/go-go-golems/pinocchio/pkg/chatapp/pb/proto/pinocchio/chatapp/v1;chatappv1";
 
+// ChatAttachment describes a user-provided attachment (currently images) by
+// reference. Bytes never travel through the chat protocol: the hosting
+// application stores them and exposes a URL that browsers can fetch.
+message ChatAttachment {
+  string attachment_id = 1;
+  string kind = 2;
+  string media_type = 3;
+  string url = 4;
+  uint64 size_bytes = 5;
+  uint32 width = 6;
+  uint32 height = 7;
+  string filename = 8;
+  string detail = 9;
+  map<string, string> metadata = 10;
+}
+
 message StartInferenceCommand {
   string prompt = 1;
   string idempotency_key = 2;
   string request_id = 3;
+  repeated ChatAttachment attachments = 4;
 }
 
 message StopInferenceCommand {}
@@ -257,6 +274,7 @@ message ChatUserMessageAccepted {
   string text = 4;
   string content = 5;
   string status = 6;
+  repeated ChatAttachment attachments = 7;
 }
 
 message ChatMessageEntity {
@@ -273,6 +291,7 @@ message ChatMessageEntity {
   string segment_type = 11;
   bool final = 12;
   CorrelationInfo correlation = 13;
+  repeated ChatAttachment attachments = 14;
 }
 
 message AgentModePreviewUpdate {
