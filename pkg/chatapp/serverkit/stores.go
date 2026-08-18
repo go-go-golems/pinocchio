@@ -11,6 +11,7 @@ import (
 
 	"github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
 	"github.com/go-go-golems/sessionstream/pkg/sessionstream"
+	storemysql "github.com/go-go-golems/sessionstream/pkg/sessionstream/hydration/mysql"
 	storesqlite "github.com/go-go-golems/sessionstream/pkg/sessionstream/hydration/sqlite"
 )
 
@@ -70,6 +71,16 @@ func OpenHydrationStore(dsn, dbPath string, reg *sessionstream.SchemaRegistry) (
 		}
 		return store, store.Close, nil
 	}
+	// DSN-gated selection: a non-empty DSN that is not a SQLite file: DSN opens
+	// the MySQL hydration store; otherwise it is a SQLite file DSN. An empty DSN
+	// derives a SQLite file DSN from dbPath (the existing local/CI path).
+	if dsn != "" && !isSQLiteFileDSN(dsn) {
+		store, err := storemysql.Open(context.Background(), dsn, reg)
+		if err != nil {
+			return nil, nil, err
+		}
+		return store, store.Close, nil
+	}
 	if dsn == "" {
 		if err := ensureParentDir(dbPath); err != nil {
 			return nil, nil, err
@@ -96,6 +107,17 @@ func OpenTurnStore(opts StoreOptions) (chatstore.TurnStore, func() error, error)
 			return store, store.Close, nil
 		}
 		return nil, func() error { return nil }, nil
+	}
+	// DSN-gated selection: a non-empty TurnsDSN is treated as a MySQL DSN when it
+	// is not a SQLite file: DSN (file:... is SQLite); otherwise it is a
+	// go-sql-driver/mysql DSN and uses MySQLTurnStore. An empty DSN falls back to
+	// SQLiteTurnStore from the turns-db file path (the existing local/CI path).
+	if dsn != "" && !isSQLiteFileDSN(dsn) {
+		store, err := chatstore.NewMySQLTurnStore(context.Background(), dsn)
+		if err != nil {
+			return nil, nil, fmt.Errorf("open turns store: %w", err)
+		}
+		return store, store.Close, nil
 	}
 	if dsn == "" {
 		if err := ensureParentDir(dbPath); err != nil {
@@ -138,6 +160,18 @@ func ensureParentDir(path string) error {
 		}
 	}
 	return nil
+}
+
+// isSQLiteFileDSN reports whether a DSN is a SQLite file DSN ("file:..." or a
+// bare path) rather than a go-sql-driver/mysql DSN. The MySQL driver DSN
+// always contains "@tcp(" or "@unix("; a SQLite DSN starts with "file:" or is a
+// plain filesystem path with no "@" scheme.
+func isSQLiteFileDSN(dsn string) bool {
+	if strings.HasPrefix(dsn, "file:") {
+		return true
+	}
+	// MySQL DSNs contain a user@host scheme; SQLite file DSNs do not.
+	return !strings.Contains(dsn, "@tcp(") && !strings.Contains(dsn, "@unix(")
 }
 
 type MemoryTurnStore struct {

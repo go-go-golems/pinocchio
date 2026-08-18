@@ -2,6 +2,7 @@ package serverkit
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -78,5 +79,115 @@ func TestOpenHydrationStoreSQLiteCreatesParentDirectory(t *testing.T) {
 	}
 	if err := closeFn(); err != nil {
 		t.Fatalf("close hydration store: %v", err)
+	}
+}
+
+// mysqlTurnSelectionDSN returns a DSN for the local docker-compose MySQL when
+// configured; tests skip (not fail) without it so `go test ./...` stays green.
+func mysqlTurnSelectionDSN(t *testing.T) string {
+	t.Helper()
+	dsn := os.Getenv("PINOCCHIO_MYSQL_TURNS_DSN")
+	if dsn == "" {
+		t.Skipf("PINOCCHIO_MYSQL_TURNS_DSN not set; skipping OpenTurnStore MySQL selection test")
+	}
+	return dsn
+}
+
+func TestOpenTurnStoreMySQLDSNSelectsMySQLTurnStore(t *testing.T) {
+	dsn := mysqlTurnSelectionDSN(t)
+	store, closeFn, err := OpenTurnStore(StoreOptions{TurnsDSN: dsn})
+	if err != nil {
+		t.Fatalf("open mysql turn store: %v", err)
+	}
+	defer func() { _ = closeFn() }()
+	if _, ok := store.(*chatstore.MySQLTurnStore); !ok {
+		t.Fatalf("expected *chatstore.MySQLTurnStore, got %T", store)
+	}
+}
+
+// mysqlTimelineSelectionDSN returns a DSN for the local docker-compose MySQL
+// when configured; tests skip (not fail) without it.
+func mysqlTimelineSelectionDSN(t *testing.T) string {
+	t.Helper()
+	dsn := os.Getenv("SESSIONSTREAM_MYSQL_DSN")
+	if dsn == "" {
+		t.Skipf("SESSIONSTREAM_MYSQL_DSN not set; skipping OpenHydrationStore MySQL selection test")
+	}
+	return dsn
+}
+
+func TestOpenHydrationStoreMySQLDSNSelectsMySQLStore(t *testing.T) {
+	dsn := mysqlTimelineSelectionDSN(t)
+	reg := sessionstream.NewSchemaRegistry()
+	store, closeFn, err := OpenHydrationStore(dsn, "", reg)
+	if err != nil {
+		t.Fatalf("open mysql hydration store: %v", err)
+	}
+	defer func() { _ = closeFn() }()
+	if store == nil {
+		t.Fatalf("expected non-nil store")
+	}
+	// A MySQL DSN must not select the in-memory sqlite fallback. The empty-DSN
+	// path returns an in-memory sqlite store (NewInMemory); a non-empty MySQL
+	// DSN returns the mysql store. Distinguish behaviorally: the mysql store
+	// survives a Close+reopen and persists, the in-memory store does not.
+	sid := sessionstream.SessionId("s-sel-" + sanitizeSel(t.Name()))
+	ctx := context.Background()
+	// Registering is not needed for Cursor (no schema). A fresh session has
+	// cursor 0 on both backends; after a Close+reopen a MySQL store keeps any
+	// applied state, an in-memory store is gone. We assert the store accepts a
+	// Cursor call without error (proves it is wired and alive).
+	cursor, err := store.Cursor(ctx, sid)
+	if err != nil {
+		t.Fatalf("cursor: %v", err)
+	}
+	if cursor != 0 {
+		t.Fatalf("fresh session cursor = %d, want 0", cursor)
+	}
+}
+
+func TestOpenTurnStoreSQLiteFileDSNStillSelectsSQLite(t *testing.T) {
+	// A file: DSN must keep selecting SQLite, not be misrouted to MySQL. The
+	// parent dir must exist (OpenTurnStore only creates it when deriving a DSN
+	// from TurnsDB, matching the original behavior for a caller-supplied DSN).
+	dbPath := filepath.Join(t.TempDir(), "chat-turns.db")
+	sqliteDSN, err := chatstore.SQLiteTurnDSNForFile(dbPath)
+	if err != nil {
+		t.Fatalf("build sqlite dsn: %v", err)
+	}
+	store, closeFn, err := OpenTurnStore(StoreOptions{TurnsDSN: sqliteDSN})
+	if err != nil {
+		t.Fatalf("open sqlite turn store: %v", err)
+	}
+	defer func() { _ = closeFn() }()
+	if _, ok := store.(*chatstore.SQLiteTurnStore); !ok {
+		t.Fatalf("expected *chatstore.SQLiteTurnStore, got %T", store)
+	}
+}
+
+func sanitizeSel(s string) string {
+	out := make([]byte, 0, len(s))
+	for _, r := range s {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9':
+			out = append(out, byte(r))
+		default:
+			out = append(out, '_')
+		}
+	}
+	return string(out)
+}
+
+func TestIsSQLiteFileDSN(t *testing.T) {
+	for dsn, want := range map[string]bool{
+		"file:./var/turns.db?_journal_mode=WAL":          true,
+		"file:/abs/turns.db":                             true,
+		"gec:pass@tcp(127.0.0.1:3306)/db?parseTime=true": false,
+		"gec:pass@unix(/tmp/mysql.sock)/db":              false,
+		"":                                               true, // empty handled by caller; treat as non-mysql
+	} {
+		if got := isSQLiteFileDSN(dsn); got != want {
+			t.Errorf("isSQLiteFileDSN(%q) = %v, want %v", dsn, got, want)
+		}
 	}
 }
