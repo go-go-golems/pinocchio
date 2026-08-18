@@ -17,7 +17,13 @@ import (
 // dialect translation of SQLiteTurnStore: the same three tables (turns, blocks,
 // turn_block_membership), the same columns, and the same single-transaction
 // Save (upsert turn -> replace membership rowset -> upsert blocks + membership).
-// It is selected by a non-empty --turns-dsn; an empty DSN keeps SQLiteTurnStore.
+// Its schema is component-versioned independently from sessionstream hydration.
+const mysqlTurnSchemaVersion int64 = 1
+
+const mysqlTurnSchemaComponent = "chatstore.turns"
+
+// MySQLTurnStore is selected only by an explicit MySQL StoreSpec in the
+// serverkit composition layer.
 //
 // The shared chatstore helpers (block content hashing, JSON marshaling,
 // metadata extraction, payload YAML reconstruction) are reused unchanged, so
@@ -67,52 +73,130 @@ func (s *MySQLTurnStore) migrate(ctx context.Context) error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	createTableStmts := []string{
-		`CREATE TABLE IF NOT EXISTS turns (
-			conv_id VARCHAR(191) NOT NULL,
-			session_id VARCHAR(191) NOT NULL,
-			turn_id VARCHAR(191) NOT NULL,
-			turn_created_at_ms BIGINT NOT NULL,
-			turn_metadata_json MEDIUMTEXT NOT NULL,
-			turn_data_json MEDIUMTEXT NOT NULL,
-			runtime_key VARCHAR(191) NOT NULL DEFAULT '',
-			inference_id VARCHAR(191) NOT NULL DEFAULT '',
-			updated_at_ms BIGINT NOT NULL,
-			PRIMARY KEY (conv_id, session_id, turn_id),
-			KEY turns_by_conv_session (conv_id, session_id, updated_at_ms),
-			KEY turns_by_session (session_id, updated_at_ms),
-			KEY turns_by_conv_runtime (conv_id, runtime_key, updated_at_ms),
-			KEY turns_by_conv_inference (conv_id, inference_id, updated_at_ms)
-		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`,
-		`CREATE TABLE IF NOT EXISTS blocks (
-			block_id VARCHAR(191) NOT NULL,
-			content_hash CHAR(64) NOT NULL,
-			hash_algorithm VARCHAR(64) NOT NULL DEFAULT 'sha256-canonical-json-v1',
-			kind VARCHAR(128) NOT NULL,
-			role VARCHAR(128) NOT NULL DEFAULT '',
-			payload_json MEDIUMTEXT NOT NULL,
-			block_metadata_json MEDIUMTEXT NOT NULL,
-			first_seen_at_ms BIGINT NOT NULL,
-			PRIMARY KEY (block_id, content_hash),
-			KEY blocks_by_kind_role (kind, role)
-		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`,
-		`CREATE TABLE IF NOT EXISTS turn_block_membership (
-			conv_id VARCHAR(191) NOT NULL,
-			session_id VARCHAR(191) NOT NULL,
-			turn_id VARCHAR(191) NOT NULL,
-			phase VARCHAR(64) NOT NULL,
-			snapshot_created_at_ms BIGINT NOT NULL,
-			ordinal INT NOT NULL,
-			block_id VARCHAR(191) NOT NULL,
-			content_hash CHAR(64) NOT NULL,
-			PRIMARY KEY (conv_id, session_id, turn_id, phase, snapshot_created_at_ms, ordinal),
-			KEY tmem_by_block (block_id, content_hash)
-		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`,
+
+	versionTableExists, err := s.tableExists(ctx, "pinocchio_schema_version")
+	if err != nil {
+		return errors.Wrap(err, "inspect schema version table")
 	}
-	for _, st := range createTableStmts {
-		if _, err := s.db.ExecContext(ctx, st); err != nil {
-			return err
+	managedTablesExist, err := s.anyManagedTurnTableExists(ctx)
+	if err != nil {
+		return errors.Wrap(err, "inspect turn tables")
+	}
+
+	if !versionTableExists {
+		if managedTablesExist {
+			return errors.New("mysql turn store: unversioned prototype schema detected; recreate the database or migrate it explicitly")
 		}
+		if _, err := s.db.ExecContext(ctx, `
+			CREATE TABLE pinocchio_schema_version (
+				component VARBINARY(64) NOT NULL PRIMARY KEY,
+				schema_version BIGINT NOT NULL
+			) ENGINE=InnoDB;
+		`); err != nil {
+			return errors.Wrap(err, "create schema version table")
+		}
+		for _, st := range mysqlTurnCreateTableStatements {
+			if _, err := s.db.ExecContext(ctx, st); err != nil {
+				return errors.Wrap(err, "create turn schema")
+			}
+		}
+		if _, err := s.db.ExecContext(ctx, `
+			INSERT INTO pinocchio_schema_version(component, schema_version) VALUES(?, ?)
+		`, mysqlTurnSchemaComponent, mysqlTurnSchemaVersion); err != nil {
+			return errors.Wrap(err, "record turn schema version")
+		}
+		return nil
+	}
+
+	var version int64
+	if err := s.db.QueryRowContext(ctx, `
+		SELECT schema_version FROM pinocchio_schema_version WHERE component = ?
+	`, mysqlTurnSchemaComponent).Scan(&version); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return errors.New("mysql turn store: schema version component chatstore.turns is missing")
+		}
+		return errors.Wrap(err, "read turn schema version")
+	}
+	if version != mysqlTurnSchemaVersion {
+		return errors.Errorf("mysql turn store: unsupported chatstore.turns schema version %d (want %d)", version, mysqlTurnSchemaVersion)
+	}
+	for _, table := range []string{"turns", "blocks", "turn_block_membership"} {
+		exists, err := s.tableExists(ctx, table)
+		if err != nil {
+			return errors.Wrapf(err, "inspect managed table %s", table)
+		}
+		if !exists {
+			return errors.Errorf("mysql turn store: schema version %d is recorded but managed table %s is missing", version, table)
+		}
+	}
+	return nil
+}
+
+var mysqlTurnCreateTableStatements = []string{
+	`CREATE TABLE turns (
+		conv_id VARBINARY(255) NOT NULL,
+		session_id VARBINARY(255) NOT NULL,
+		turn_id VARBINARY(255) NOT NULL,
+		turn_created_at_ms BIGINT NOT NULL,
+		turn_metadata_json MEDIUMTEXT NOT NULL,
+		turn_data_json MEDIUMTEXT NOT NULL,
+		runtime_key VARBINARY(255) NOT NULL DEFAULT '',
+		inference_id VARBINARY(255) NOT NULL DEFAULT '',
+		updated_at_ms BIGINT NOT NULL,
+		PRIMARY KEY (conv_id, session_id, turn_id),
+		KEY turns_by_conv_session (conv_id, session_id, updated_at_ms),
+		KEY turns_by_session (session_id, updated_at_ms),
+		KEY turns_by_conv_runtime (conv_id, runtime_key, updated_at_ms),
+		KEY turns_by_conv_inference (conv_id, inference_id, updated_at_ms)
+	) ENGINE=InnoDB;`,
+	`CREATE TABLE blocks (
+		block_id VARBINARY(255) NOT NULL,
+		content_hash VARBINARY(64) NOT NULL,
+		hash_algorithm VARBINARY(64) NOT NULL DEFAULT 'sha256-canonical-json-v1',
+		kind VARBINARY(128) NOT NULL,
+		role VARBINARY(128) NOT NULL DEFAULT '',
+		payload_json MEDIUMTEXT NOT NULL,
+		block_metadata_json MEDIUMTEXT NOT NULL,
+		first_seen_at_ms BIGINT NOT NULL,
+		PRIMARY KEY (block_id, content_hash),
+		KEY blocks_by_kind_role (kind, role)
+	) ENGINE=InnoDB;`,
+	`CREATE TABLE turn_block_membership (
+		conv_id VARBINARY(255) NOT NULL,
+		session_id VARBINARY(255) NOT NULL,
+		turn_id VARBINARY(255) NOT NULL,
+		phase VARBINARY(64) NOT NULL,
+		snapshot_created_at_ms BIGINT NOT NULL,
+		ordinal INT NOT NULL,
+		block_id VARBINARY(255) NOT NULL,
+		content_hash VARBINARY(64) NOT NULL,
+		PRIMARY KEY (conv_id, session_id, turn_id, phase, snapshot_created_at_ms, ordinal),
+		KEY tmem_by_block (block_id, content_hash)
+	) ENGINE=InnoDB;`,
+}
+
+func (s *MySQLTurnStore) tableExists(ctx context.Context, table string) (bool, error) {
+	var count int
+	err := s.db.QueryRowContext(ctx, `
+		SELECT COUNT(1) FROM information_schema.tables
+		WHERE table_schema = DATABASE() AND table_name = ?
+	`, table).Scan(&count)
+	return count > 0, err
+}
+
+func (s *MySQLTurnStore) anyManagedTurnTableExists(ctx context.Context) (bool, error) {
+	var count int
+	err := s.db.QueryRowContext(ctx, `
+		SELECT COUNT(1) FROM information_schema.tables
+		WHERE table_schema = DATABASE()
+		  AND table_name IN ('turns', 'blocks', 'turn_block_membership')
+	`).Scan(&count)
+	return count > 0, err
+}
+
+func validateMySQLOpaqueField(name, value string, maxBytes int) error {
+	if len([]byte(value)) > maxBytes {
+		return errors.Errorf("mysql turn store: %s exceeds %d-byte limit", name, maxBytes)
 	}
 	return nil
 }
@@ -136,6 +220,24 @@ func (s *MySQLTurnStore) Save(ctx context.Context, convID, sessionID, turnID, ph
 	if ctx == nil {
 		return errors.New("mysql turn store: ctx is nil")
 	}
+	if err := validateMySQLOpaqueField("convID", convID, 255); err != nil {
+		return err
+	}
+	if err := validateMySQLOpaqueField("sessionID", sessionID, 255); err != nil {
+		return err
+	}
+	if err := validateMySQLOpaqueField("turnID", turnID, 255); err != nil {
+		return err
+	}
+	if err := validateMySQLOpaqueField("phase", phase, 64); err != nil {
+		return err
+	}
+	if err := validateMySQLOpaqueField("runtimeKey", opts.RuntimeKey, 255); err != nil {
+		return err
+	}
+	if err := validateMySQLOpaqueField("inferenceID", opts.InferenceID, 255); err != nil {
+		return err
+	}
 	if createdAtMs <= 0 {
 		createdAtMs = time.Now().UnixMilli()
 	}
@@ -153,8 +255,8 @@ func (s *MySQLTurnStore) Save(ctx context.Context, convID, sessionID, turnID, ph
 		sessionID:   sessionID,
 		turnID:      turnID,
 		phase:       phase,
-		runtimeKey:  strings.TrimSpace(opts.RuntimeKey),
-		inferenceID: strings.TrimSpace(opts.InferenceID),
+		runtimeKey:  opts.RuntimeKey,
+		inferenceID: opts.InferenceID,
 		createdAtMs: createdAtMs,
 	}
 	if row.runtimeKey == "" {
@@ -162,6 +264,12 @@ func (s *MySQLTurnStore) Save(ctx context.Context, convID, sessionID, turnID, ph
 	}
 	if row.inferenceID == "" {
 		row.inferenceID = inferenceIDFromTurnMetadata(t.Metadata)
+	}
+	if err := validateMySQLOpaqueField("runtimeKey", row.runtimeKey, 255); err != nil {
+		return err
+	}
+	if err := validateMySQLOpaqueField("inferenceID", row.inferenceID, 255); err != nil {
+		return err
 	}
 	_, err = s.persistNormalizedSnapshot(ctx, row, t)
 	return err
@@ -183,12 +291,15 @@ func (s *MySQLTurnStore) persistNormalizedSnapshot(ctx context.Context, row snap
 		}
 	}()
 
-	turnID := strings.TrimSpace(row.turnID)
-	if tid := strings.TrimSpace(t.ID); tid != "" {
-		turnID = tid
+	turnID := row.turnID
+	if t.ID != "" {
+		turnID = t.ID
 	}
 	if turnID == "" {
 		turnID = "turn"
+	}
+	if err := validateMySQLOpaqueField("turnID", turnID, 255); err != nil {
+		return 0, err
 	}
 
 	turnMetadataJSON, err := marshalJSONObject(turnMetadataToMap(t.Metadata))
@@ -231,9 +342,18 @@ func (s *MySQLTurnStore) persistNormalizedSnapshot(ctx context.Context, row snap
 
 	membershipInserted := 0
 	for i, block := range t.Blocks {
-		blockID := normalizeBlockID(block.ID, turnID, i)
+		blockID := normalizeMySQLBlockID(block.ID, turnID, i)
+		if err := validateMySQLOpaqueField("blockID", blockID, 255); err != nil {
+			return 0, err
+		}
 		payloadMap := cloneStringAnyMap(block.Payload)
 		blockMetadata := blockMetadataToMap(block.Metadata)
+		if err := validateMySQLOpaqueField("kind", block.Kind.String(), 128); err != nil {
+			return 0, err
+		}
+		if err := validateMySQLOpaqueField("role", block.Role, 128); err != nil {
+			return 0, err
+		}
 
 		contentHash, err := ComputeBlockContentHash(block.Kind.String(), block.Role, payloadMap, blockMetadata)
 		if err != nil {
@@ -259,7 +379,7 @@ func (s *MySQLTurnStore) persistNormalizedSnapshot(ctx context.Context, row snap
 				payload_json = new.payload_json,
 				block_metadata_json = new.block_metadata_json,
 				first_seen_at_ms = LEAST(blocks.first_seen_at_ms, new.first_seen_at_ms)
-		`, blockID, contentHash, BlockContentHashAlgorithmV1, strings.TrimSpace(block.Kind.String()), strings.TrimSpace(block.Role), payloadJSON, blockMetadataJSON, row.createdAtMs); err != nil {
+		`, blockID, contentHash, BlockContentHashAlgorithmV1, block.Kind.String(), block.Role, payloadJSON, blockMetadataJSON, row.createdAtMs); err != nil {
 			return 0, errors.Wrap(err, "mysql turn store: upsert blocks row")
 		}
 
@@ -301,15 +421,15 @@ func (s *MySQLTurnStore) List(ctx context.Context, q TurnQuery) ([]TurnSnapshot,
 
 	clauses := []string{}
 	args := []any{}
-	if v := strings.TrimSpace(q.ConvID); v != "" {
+	if v := q.ConvID; strings.TrimSpace(v) != "" {
 		clauses = append(clauses, "m.conv_id = ?")
 		args = append(args, v)
 	}
-	if v := strings.TrimSpace(q.SessionID); v != "" {
+	if v := q.SessionID; strings.TrimSpace(v) != "" {
 		clauses = append(clauses, "m.session_id = ?")
 		args = append(args, v)
 	}
-	if v := strings.TrimSpace(q.Phase); v != "" {
+	if v := q.Phase; strings.TrimSpace(v) != "" {
 		clauses = append(clauses, "m.phase = ?")
 		args = append(args, v)
 	}
@@ -400,15 +520,12 @@ func (s *MySQLTurnStore) LoadLatestTurn(ctx context.Context, convID, phase strin
 	if s == nil || s.db == nil {
 		return nil, errors.New("mysql turn store: db is nil")
 	}
-	convID = strings.TrimSpace(convID)
-	if convID == "" {
+	if strings.TrimSpace(convID) == "" {
 		return nil, errors.New("mysql turn store: convID is empty")
 	}
 	if ctx == nil {
 		return nil, errors.New("mysql turn store: ctx is nil")
 	}
-	phase = strings.TrimSpace(phase)
-
 	clauses := []string{"m.conv_id = ?"}
 	args := []any{convID}
 	if phase != "" {
@@ -556,6 +673,13 @@ func (s *MySQLTurnStore) loadSnapshotBlocks(ctx context.Context, convID string, 
 		return nil, errors.Wrap(err, "mysql turn store: iterate snapshot blocks")
 	}
 	return blocks, nil
+}
+
+func normalizeMySQLBlockID(blockID string, turnID string, ordinal int) string {
+	if blockID != "" {
+		return blockID
+	}
+	return fmt.Sprintf("%s#%d", turnID, ordinal)
 }
 
 // openChatstoreMySQLPool opens a bounded database/sql pool for the mysql
