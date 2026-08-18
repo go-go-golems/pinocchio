@@ -1,0 +1,35 @@
+name: mysql-integration
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  mysql:
+    name: MySQL 8.4 disposable integration tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Run real MySQL integration tests
+        env:
+          PINOCCHIO_MYSQL_TESTCONTAINERS: "1"
+        run: |
+          set -euo pipefail
+          GOWORK=off go test -p 1 -count=2 \
+            ./pkg/persistence/chatstore \
+            ./pkg/chatapp/serverkit \
+            ./pkg/cmds
