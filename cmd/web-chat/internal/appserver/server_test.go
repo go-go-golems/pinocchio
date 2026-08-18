@@ -564,3 +564,22 @@ func writeClientFrame(t *testing.T, conn *websocket.Conn, payload map[string]any
 	require.NoError(t, err)
 	require.NoError(t, conn.WriteMessage(websocket.TextMessage, body))
 }
+
+func TestSubmitMessageRejectsBlankAttachmentReferences(t *testing.T) {
+	_, httpSrv := newTestMux(t)
+
+	for _, body := range []string{
+		`{"prompt":"","attachments":[{"attachment_id":"  "}]}`,
+		`{"prompt":"hi","attachments":[{"attachment_id":""}]}`,
+	} {
+		resp, err := http.Post(httpSrv.URL+"/api/chat/sessions/sess-blank-att/messages", "application/json", bytes.NewReader([]byte(body)))
+		require.NoError(t, err)
+		_ = resp.Body.Close()
+		require.Equal(t, http.StatusBadRequest, resp.StatusCode, body)
+	}
+
+	resp, err := http.Post(httpSrv.URL+"/api/chat/sessions/sess-blank-att/messages", "application/json", bytes.NewReader([]byte(`{"prompt":"","attachments":[]}`)))
+	require.NoError(t, err)
+	_ = resp.Body.Close()
+	require.Equal(t, http.StatusBadRequest, resp.StatusCode)
+}

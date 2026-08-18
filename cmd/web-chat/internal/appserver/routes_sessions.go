@@ -100,20 +100,23 @@ func (s *Server) handleSubmitMessage(w http.ResponseWriter, r *http.Request, sid
 		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "bad request"})
 		return
 	}
-	if strings.TrimSpace(in.Prompt) == "" && len(in.Attachments) == 0 {
-		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "missing prompt or attachments"})
-		return
-	}
 	// web-chat has no attachment store: references are passed through by id only
 	// (no URL), so they are echoed to clients but not sent to the model. Apps
 	// that own an upload endpoint resolve ids into full chatapp.Attachment values.
+	// Blank ids are rejected up front so an attachment-only request with only
+	// blank references fails as a 400, not as a 500 from the service.
 	attachments := make([]chatapp.Attachment, 0, len(in.Attachments))
 	for _, ref := range in.Attachments {
 		id := strings.TrimSpace(ref.AttachmentID)
 		if id == "" {
-			continue
+			writeJSON(w, http.StatusBadRequest, errorResponse{Error: "attachment_id must not be empty"})
+			return
 		}
 		attachments = append(attachments, chatapp.Attachment{ID: id, Kind: chatapp.AttachmentKindImage})
+	}
+	if strings.TrimSpace(in.Prompt) == "" && len(attachments) == 0 {
+		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "missing prompt or attachments"})
+		return
 	}
 	var runtime *infruntime.ComposedRuntime
 	if s.runtimeResolver != nil {
