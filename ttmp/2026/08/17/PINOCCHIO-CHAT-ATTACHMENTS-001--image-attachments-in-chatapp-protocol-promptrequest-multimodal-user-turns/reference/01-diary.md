@@ -290,3 +290,67 @@ make proto-gen-core          # verified: only header/import churn vs committed f
 ### Technical details
 
 - Branch: `feature/chat-attachments` (from `origin/main`).
+
+## Step 4: Address PR #199 review, pin released geppetto, bump toolchain
+
+The Codex reviewer noted that in `cmd/web-chat` an attachment-only request
+whose references are all blank passed the "prompt or attachments" length check,
+was normalised to zero attachments, and then failed inside
+`Service.SubmitPromptRequest` — surfacing as a 500 instead of the 400 an empty
+request gets. Blank ids are now rejected up front and the emptiness check runs
+on the normalised slice. With geppetto v0.13.10 released, the pseudo-version
+pin was replaced by the tag, and go.mod moved to go 1.26.6 so the pre-push
+`govulncheck` passes without bypass.
+
+### Prompt Context
+
+**User prompt (verbatim):** "ok, released geppetto 1.3.10, I guess the next is to address https://github.com/go-go-golems/pinocchio/pull/199 and its comment and go toolchain update in the same way"
+
+**Assistant interpretation:** Fix the review finding with a test, pin geppetto v0.13.10, bump go to 1.26.6, tidy, push with hooks, reply on the thread.
+
+**Inferred user intent:** Make #199 mergeable next in the dependency chain.
+
+**Commit (code):** c2a3a48 — "web-chat: reject blank attachment ids; geppetto v0.13.10; go 1.26.6"
+
+### What I did
+
+- `cmd/web-chat/internal/appserver/routes_sessions.go`: blank `attachment_id` → 400 `attachment_id must not be empty`; prompt-or-attachments check moved after normalisation.
+- `server_test.go`: `TestSubmitMessageRejectsBlankAttachmentReferences`.
+- `go.mod`: `go 1.26.6`; `geppetto v0.13.10`; `go mod tidy`.
+- Pushed with hooks enabled (goreleaser, lintmax, gosec, govulncheck, test, web-check all green); replied on the review.
+
+### Why
+
+- Client mistakes should be 4xx; the service-level error is a last line of defence, not the API contract.
+
+### What worked
+
+- Hooks now pass end to end on 1.26.6.
+
+### What didn't work
+
+- N/A (workspace `go.work` had already been bumped to 1.26.6, so no `GOWORK=off` was needed for the build; used it for hooks out of habit).
+
+### What I learned
+
+- The reviewer's scenario (`[{"attachment_id":" "}]`) is a good regression case for any "prompt or attachments" gate; CoinVault's resolver already rejects blank/duplicate ids with 400.
+
+### What was tricky to build
+
+- N/A.
+
+### What warrants a second pair of eyes
+
+- Whether web-chat should reject unresolvable attachment ids entirely rather than pass them through by id (it has no store); left as pass-through, documented in code.
+
+### What should be done in the future
+
+- Tag pinocchio after merge; bump CoinVault to the tag.
+
+### Code review instructions
+
+- `GOWORK=off go test ./cmd/web-chat/internal/appserver/ -run BlankAttachment -count=1`.
+
+### Technical details
+
+- geppetto pin: `v0.13.10-0.20260817193606-0454465b4ff3` → `v0.13.10`.

@@ -23,3 +23,8 @@ Strip turn_url metadata from client-facing attachment echo (commit 17dac76)
 
 Feature branch + geppetto pin (5f3e54b4); PR https://github.com/go-go-golems/pinocchio/pull/199
 
+
+## 2026-08-18
+
+Review fix (blank attachment ids → 400), geppetto v0.13.10, go 1.26.6 (commit c2a3a48)
+
