@@ -1,12 +1,15 @@
 package appserver
 
 import (
+	"context"
 	"strings"
 	"time"
 
 	chatapp "github.com/go-go-golems/pinocchio/pkg/chatapp"
 	"github.com/go-go-golems/pinocchio/pkg/chatapp/frontendtools"
+	"github.com/go-go-golems/pinocchio/pkg/chatapp/serverkit"
 	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
+	sessionstream "github.com/go-go-golems/sessionstream/pkg/sessionstream"
 )
 
 type Option func(*Server)
@@ -26,21 +29,25 @@ func WithChunkDelay(delay time.Duration) Option {
 	}
 }
 
-func WithSQLiteDSN(dsn string) Option {
+// HydrationStoreFactory constructs the timeline store after the app server
+// has registered all protobuf schemas.
+type HydrationStoreFactory func(context.Context, *sessionstream.SchemaRegistry) (sessionstream.HydrationStore, func() error, error)
+
+func WithHydrationStoreSpec(spec serverkit.StoreSpec) Option {
 	return func(s *Server) {
 		if s == nil {
 			return
 		}
-		s.sqliteDSN = strings.TrimSpace(dsn)
+		s.timelineSpec = spec
 	}
 }
 
-func WithSQLiteDBPath(path string) Option {
+func WithHydrationStoreFactory(factory HydrationStoreFactory) Option {
 	return func(s *Server) {
 		if s == nil {
 			return
 		}
-		s.sqliteDBPath = strings.TrimSpace(path)
+		s.hydrationFactory = factory
 	}
 }
 

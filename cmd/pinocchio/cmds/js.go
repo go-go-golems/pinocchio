@@ -47,12 +47,13 @@ func NewJSCommand() *cobra.Command {
 }
 
 type JSSettings struct {
-	ScriptPath  string `glazed:"script"`
-	ScriptArg   string `glazed:"script_path"`
-	PrintResult bool   `glazed:"print-result"`
-	ListGoTools bool   `glazed:"list-go-tools"`
-	TurnsDSN    string `glazed:"turns-dsn"`
-	TurnsDB     string `glazed:"turns-db"`
+	ScriptPath   string `glazed:"script"`
+	ScriptArg    string `glazed:"script_path"`
+	PrintResult  bool   `glazed:"print-result"`
+	ListGoTools  bool   `glazed:"list-go-tools"`
+	TurnsBackend string `glazed:"turns-backend"`
+	TurnsDSN     string `glazed:"turns-dsn"`
+	TurnsDB      string `glazed:"turns-db"`
 }
 
 type JSCommand struct {
@@ -92,10 +93,17 @@ func newJSCommand() (*JSCommand, error) {
 				fields.WithHelp("List built-in Go tools exposed to JS and exit"),
 			),
 			fields.New(
+				"turns-backend",
+				fields.TypeChoice,
+				fields.WithDefault(""),
+				fields.WithChoices("", "disabled", "memory", "sqlite", "mysql"),
+				fields.WithHelp("Turn persistence backend; required when turns-dsn is set"),
+			),
+			fields.New(
 				"turns-dsn",
 				fields.TypeString,
 				fields.WithDefault(""),
-				fields.WithHelp("SQLite DSN for durable Geppetto JS turn snapshots (preferred over turns-db)"),
+				fields.WithHelp("SQLite or MySQL DSN for durable JS turn snapshots; interpreted only by turns-backend"),
 			),
 			fields.New(
 				"turns-db",
@@ -195,7 +203,7 @@ func (c *JSCommand) RunIntoWriter(ctx context.Context, parsed *values.Values, w 
 		return err
 	}
 	middlewareFactories := buildPinocchioJSMiddlewareFactories(buildDeps)
-	turnStore, closeTurnStore, err := openPinocchioJSTurnStore(settings.TurnsDSN, settings.TurnsDB)
+	turnStore, closeTurnStore, err := openPinocchioJSTurnStore(ctx, settings.TurnsBackend, settings.TurnsDSN, settings.TurnsDB)
 	if err != nil {
 		return err
 	}
