@@ -14,7 +14,7 @@ import (
 )
 
 func TestOpenCLISessionstreamHydrationStore_NoneConfigured(t *testing.T) {
-	store, cleanup, err := openCLISessionstreamHydrationStore(run.PersistenceSettings{}, sessionstream.NewSchemaRegistry())
+	store, cleanup, err := openCLISessionstreamHydrationStore(context.Background(), run.PersistenceSettings{}, sessionstream.NewSchemaRegistry())
 	require.NoError(t, err)
 	require.Nil(t, store)
 	require.NotNil(t, cleanup)
@@ -25,7 +25,7 @@ func TestOpenCLISessionstreamHydrationStore_OpenFromDBPath(t *testing.T) {
 	dir := t.TempDir()
 	timelineDB := filepath.Join(dir, "timeline", "timeline.db")
 
-	store, cleanup, err := openCLISessionstreamHydrationStore(run.PersistenceSettings{TimelineDB: timelineDB}, sessionstream.NewSchemaRegistry())
+	store, cleanup, err := openCLISessionstreamHydrationStore(context.Background(), run.PersistenceSettings{TimelineDB: timelineDB}, sessionstream.NewSchemaRegistry())
 	require.NoError(t, err)
 	require.NotNil(t, store)
 	t.Cleanup(cleanup)
@@ -79,7 +79,7 @@ func TestLoadLatestCLIFinalTurnRequiresStoreAndSession(t *testing.T) {
 }
 
 func TestOpenCLITurnStore_NoneConfigured(t *testing.T) {
-	turnStore, cleanup, err := openCLITurnStore(run.PersistenceSettings{})
+	turnStore, cleanup, err := openCLITurnStore(context.Background(), run.PersistenceSettings{})
 	require.NoError(t, err)
 	require.Nil(t, turnStore)
 	require.NotNil(t, cleanup)
@@ -90,7 +90,7 @@ func TestOpenCLITurnStore_OpenFromDBPath(t *testing.T) {
 	dir := t.TempDir()
 	turnsDB := filepath.Join(dir, "turns", "turns.db")
 
-	turnStore, cleanup, err := openCLITurnStore(run.PersistenceSettings{
+	turnStore, cleanup, err := openCLITurnStore(context.Background(), run.PersistenceSettings{
 		TurnsDB: turnsDB,
 	})
 	require.NoError(t, err)

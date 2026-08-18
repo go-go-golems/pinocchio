@@ -368,10 +368,12 @@ func (g *PinocchioCommand) RunIntoWriter(
 		run.WithRunMode(runMode),
 		run.WithUISettings(uiSettings),
 		run.WithPersistenceSettings(run.PersistenceSettings{
-			TimelineDSN: helpersSettings.TimelineDSN,
-			TimelineDB:  helpersSettings.TimelineDB,
-			TurnsDSN:    helpersSettings.TurnsDSN,
-			TurnsDB:     helpersSettings.TurnsDB,
+			TimelineBackend: helpersSettings.TimelineBackend,
+			TimelineDSN:     helpersSettings.TimelineDSN,
+			TimelineDB:      helpersSettings.TimelineDB,
+			TurnsBackend:    helpersSettings.TurnsBackend,
+			TurnsDSN:        helpersSettings.TurnsDSN,
+			TurnsDB:         helpersSettings.TurnsDB,
 		}),
 		run.WithRouter(router),
 		run.WithVariables(getDefaultTemplateVariables(parsedValues)),
@@ -1437,12 +1439,12 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) (*tu
 	}
 	sid := commandSessionID(seed)
 	reg := sessionstream.NewSchemaRegistry()
-	hydrationStore, closeHydrationStore, err := openCLISessionstreamHydrationStore(rc.Persistence, reg)
+	hydrationStore, closeHydrationStore, err := openCLISessionstreamHydrationStore(ctx, rc.Persistence, reg)
 	if err != nil {
 		return nil, err
 	}
 	defer closeHydrationStore()
-	turnStore, closeTurnStore, err := openCLITurnStore(rc.Persistence)
+	turnStore, closeTurnStore, err := openCLITurnStore(ctx, rc.Persistence)
 	if err != nil {
 		return nil, err
 	}

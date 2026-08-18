@@ -13,26 +13,41 @@ import (
 	"github.com/go-go-golems/sessionstream/pkg/sessionstream"
 	storemysql "github.com/go-go-golems/sessionstream/pkg/sessionstream/hydration/mysql"
 	storesqlite "github.com/go-go-golems/sessionstream/pkg/sessionstream/hydration/sqlite"
+	"github.com/go-sql-driver/mysql"
 )
 
-type EmptyTurnStoreMode string
+// StoreBackend identifies the persistence implementation selected by a
+// StoreSpec. Backend selection is explicit; a DSN is never classified by its
+// punctuation.
+type StoreBackend string
 
 const (
-	EmptyTurnStoreDisabled EmptyTurnStoreMode = "disabled"
-	EmptyTurnStoreMemory   EmptyTurnStoreMode = "memory"
+	StoreBackendDisabled StoreBackend = "disabled"
+	StoreBackendMemory   StoreBackend = "memory"
+	StoreBackendSQLite   StoreBackend = "sqlite"
+	StoreBackendMySQL    StoreBackend = "mysql"
 )
 
-type StoreOptions struct {
-	TimelineDSN string
-	TimelineDB  string
-	TurnsDSN    string
-	TurnsDB     string
+// StoreSpec describes one persistence component. Path is the SQLite file-path
+// convenience; DSN is used by SQLite or MySQL according to Backend.
+type StoreSpec struct {
+	Backend StoreBackend
+	DSN     string
+	Path    string
+}
 
-	// EmptyTurnStore controls what OpenTurnStore returns when neither TurnsDSN
-	// nor TurnsDB is set. The zero value preserves web-chat/CoinVault behavior:
-	// no turn store. Chat overlay uses EmptyTurnStoreMemory so real-runtime
-	// history works without an explicit SQLite file.
-	EmptyTurnStore EmptyTurnStoreMode
+type StoreOptions struct {
+	Timeline StoreSpec
+	Turns    StoreSpec
+}
+
+// StoreFactory owns persistence construction so every composition root can use
+// the same backend policy and tests can inject constructor spies.
+type StoreFactory struct {
+	OpenSQLiteTurn      func(string) (chatstore.TurnStore, error)
+	OpenMySQLTurn       func(context.Context, string) (chatstore.TurnStore, error)
+	OpenSQLiteHydration func(string, *sessionstream.SchemaRegistry) (sessionstream.HydrationStore, error)
+	OpenMySQLHydration  func(context.Context, string, *sessionstream.SchemaRegistry) (sessionstream.HydrationStore, error)
 }
 
 type Stores struct {
@@ -41,12 +56,143 @@ type Stores struct {
 	Close    func() error
 }
 
-func OpenStores(opts StoreOptions, reg *sessionstream.SchemaRegistry) (*Stores, error) {
-	timeline, closeTimeline, err := OpenHydrationStore(opts.TimelineDSN, opts.TimelineDB, reg)
+func hydrationClose(store sessionstream.HydrationStore) func() error {
+	if closer, ok := store.(interface{ Close() error }); ok {
+		return closer.Close
+	}
+	return func() error { return nil }
+}
+
+func turnClose(store chatstore.TurnStore) func() error {
+	if closer, ok := store.(interface{ Close() error }); ok {
+		return closer.Close
+	}
+	return func() error { return nil }
+}
+
+func (f StoreFactory) OpenHydration(ctx context.Context, spec StoreSpec, reg *sessionstream.SchemaRegistry) (sessionstream.HydrationStore, func() error, error) {
+	if reg == nil {
+		return nil, nil, fmt.Errorf("schema registry is nil")
+	}
+	if ctx == nil {
+		return nil, nil, fmt.Errorf("context is nil")
+	}
+	backend, err := resolveBackend(spec)
+	if err != nil {
+		return nil, nil, err
+	}
+	spec.DSN = strings.TrimSpace(spec.DSN)
+	spec.Path = strings.TrimSpace(spec.Path)
+	switch backend {
+	case StoreBackendDisabled:
+		return nil, func() error { return nil }, nil
+	case StoreBackendMemory:
+		open := f.OpenSQLiteHydration
+		if open == nil {
+			open = func(dsn string, reg *sessionstream.SchemaRegistry) (sessionstream.HydrationStore, error) {
+				return storesqlite.NewInMemory(reg)
+			}
+		}
+		store, err := open("", reg)
+		if err != nil {
+			return nil, nil, fmt.Errorf("open in-memory hydration store: %w", err)
+		}
+		return store, hydrationClose(store), nil
+	case StoreBackendSQLite:
+		dsn, err := sqliteDSN(spec)
+		if err != nil {
+			return nil, nil, err
+		}
+		open := f.OpenSQLiteHydration
+		if open == nil {
+			open = func(dsn string, reg *sessionstream.SchemaRegistry) (sessionstream.HydrationStore, error) {
+				return storesqlite.New(dsn, reg)
+			}
+		}
+		store, err := open(dsn, reg)
+		if err != nil {
+			return nil, nil, fmt.Errorf("open sqlite hydration store: %w", err)
+		}
+		return store, hydrationClose(store), nil
+	case StoreBackendMySQL:
+		if err := validateMySQLDSN(spec.DSN); err != nil {
+			return nil, nil, err
+		}
+		open := f.OpenMySQLHydration
+		if open == nil {
+			open = func(ctx context.Context, dsn string, reg *sessionstream.SchemaRegistry) (sessionstream.HydrationStore, error) {
+				return storemysql.Open(ctx, dsn, reg)
+			}
+		}
+		store, err := open(ctx, spec.DSN, reg)
+		if err != nil {
+			return nil, nil, fmt.Errorf("open mysql hydration store: %w", err)
+		}
+		return store, hydrationClose(store), nil
+	default:
+		return nil, nil, fmt.Errorf("unsupported persistence backend %q", backend)
+	}
+}
+
+func (f StoreFactory) OpenTurn(ctx context.Context, spec StoreSpec) (chatstore.TurnStore, func() error, error) {
+	if ctx == nil {
+		return nil, nil, fmt.Errorf("context is nil")
+	}
+	backend, err := resolveBackend(spec)
+	if err != nil {
+		return nil, nil, err
+	}
+	spec.DSN = strings.TrimSpace(spec.DSN)
+	spec.Path = strings.TrimSpace(spec.Path)
+	switch backend {
+	case StoreBackendDisabled:
+		return nil, func() error { return nil }, nil
+	case StoreBackendMemory:
+		store := NewMemoryTurnStore()
+		return store, store.Close, nil
+	case StoreBackendSQLite:
+		dsn, err := sqliteTurnDSN(spec)
+		if err != nil {
+			return nil, nil, err
+		}
+		open := f.OpenSQLiteTurn
+		if open == nil {
+			open = func(dsn string) (chatstore.TurnStore, error) {
+				return chatstore.NewSQLiteTurnStore(dsn)
+			}
+		}
+		store, err := open(dsn)
+		if err != nil {
+			return nil, nil, fmt.Errorf("open sqlite turn store: %w", err)
+		}
+		return store, turnClose(store), nil
+	case StoreBackendMySQL:
+		if err := validateMySQLDSN(spec.DSN); err != nil {
+			return nil, nil, err
+		}
+		open := f.OpenMySQLTurn
+		if open == nil {
+			open = func(ctx context.Context, dsn string) (chatstore.TurnStore, error) {
+				return chatstore.NewMySQLTurnStore(ctx, dsn)
+			}
+		}
+		store, err := open(ctx, spec.DSN)
+		if err != nil {
+			return nil, nil, fmt.Errorf("open mysql turn store: %w", err)
+		}
+		return store, turnClose(store), nil
+	default:
+		return nil, nil, fmt.Errorf("unsupported persistence backend %q", backend)
+	}
+}
+
+func OpenStores(ctx context.Context, opts StoreOptions, reg *sessionstream.SchemaRegistry) (*Stores, error) {
+	factory := StoreFactory{}
+	timeline, closeTimeline, err := factory.OpenHydration(ctx, opts.Timeline, reg)
 	if err != nil {
 		return nil, err
 	}
-	turns, closeTurns, err := OpenTurnStore(opts)
+	turns, closeTurns, err := factory.OpenTurn(ctx, opts.Turns)
 	if err != nil {
 		_ = closeTimeline()
 		return nil, err
@@ -58,82 +204,86 @@ func OpenStores(opts StoreOptions, reg *sessionstream.SchemaRegistry) (*Stores, 
 	}, nil
 }
 
-func OpenHydrationStore(dsn, dbPath string, reg *sessionstream.SchemaRegistry) (sessionstream.HydrationStore, func() error, error) {
-	if reg == nil {
-		return nil, nil, fmt.Errorf("schema registry is nil")
-	}
-	dsn = strings.TrimSpace(dsn)
-	dbPath = strings.TrimSpace(dbPath)
-	if dsn == "" && dbPath == "" {
-		store, err := storesqlite.NewInMemory(reg)
-		if err != nil {
-			return nil, nil, err
-		}
-		return store, store.Close, nil
-	}
-	// DSN-gated selection: a non-empty DSN that is not a SQLite file: DSN opens
-	// the MySQL hydration store; otherwise it is a SQLite file DSN. An empty DSN
-	// derives a SQLite file DSN from dbPath (the existing local/CI path).
-	if dsn != "" && !isSQLiteFileDSN(dsn) {
-		store, err := storemysql.Open(context.Background(), dsn, reg)
-		if err != nil {
-			return nil, nil, err
-		}
-		return store, store.Close, nil
-	}
-	if dsn == "" {
-		if err := ensureParentDir(dbPath); err != nil {
-			return nil, nil, err
-		}
-		var err error
-		dsn, err = storesqlite.FileDSN(dbPath)
-		if err != nil {
-			return nil, nil, err
-		}
-	}
-	store, err := storesqlite.New(dsn, reg)
-	if err != nil {
-		return nil, nil, err
-	}
-	return store, store.Close, nil
+func OpenHydrationStore(ctx context.Context, spec StoreSpec, reg *sessionstream.SchemaRegistry) (sessionstream.HydrationStore, func() error, error) {
+	return (StoreFactory{}).OpenHydration(ctx, spec, reg)
 }
 
-func OpenTurnStore(opts StoreOptions) (chatstore.TurnStore, func() error, error) {
-	dsn := strings.TrimSpace(opts.TurnsDSN)
-	dbPath := strings.TrimSpace(opts.TurnsDB)
-	if dsn == "" && dbPath == "" {
-		if opts.EmptyTurnStore == EmptyTurnStoreMemory {
-			store := NewMemoryTurnStore()
-			return store, store.Close, nil
+func OpenTurnStore(ctx context.Context, opts StoreOptions) (chatstore.TurnStore, func() error, error) {
+	return (StoreFactory{}).OpenTurn(ctx, opts.Turns)
+}
+
+func resolveBackend(spec StoreSpec) (StoreBackend, error) {
+	backend := StoreBackend(strings.ToLower(strings.TrimSpace(string(spec.Backend))))
+	dsn := strings.TrimSpace(spec.DSN)
+	path := strings.TrimSpace(spec.Path)
+	if backend == "" {
+		if dsn != "" {
+			return "", fmt.Errorf("persistence DSN requires an explicit backend")
 		}
-		return nil, func() error { return nil }, nil
-	}
-	// DSN-gated selection: a non-empty TurnsDSN is treated as a MySQL DSN when it
-	// is not a SQLite file: DSN (file:... is SQLite); otherwise it is a
-	// go-sql-driver/mysql DSN and uses MySQLTurnStore. An empty DSN falls back to
-	// SQLiteTurnStore from the turns-db file path (the existing local/CI path).
-	if dsn != "" && !isSQLiteFileDSN(dsn) {
-		store, err := chatstore.NewMySQLTurnStore(context.Background(), dsn)
-		if err != nil {
-			return nil, nil, fmt.Errorf("open turns store: %w", err)
-		}
-		return store, store.Close, nil
-	}
-	if dsn == "" {
-		if err := ensureParentDir(dbPath); err != nil {
-			return nil, nil, err
-		}
-		var err error
-		dsn, err = chatstore.SQLiteTurnDSNForFile(dbPath)
-		if err != nil {
-			return nil, nil, err
+		if path != "" {
+			backend = StoreBackendSQLite
+		} else {
+			backend = StoreBackendDisabled
 		}
 	}
-	store, err := chatstore.NewSQLiteTurnStore(dsn)
+	switch backend {
+	case StoreBackendDisabled, StoreBackendMemory:
+		if dsn != "" || path != "" {
+			return "", fmt.Errorf("persistence backend %q does not accept DSN or path", backend)
+		}
+	case StoreBackendSQLite:
+		if dsn != "" && path != "" {
+			return "", fmt.Errorf("sqlite persistence accepts exactly one of DSN or path")
+		}
+		if dsn == "" && path == "" {
+			return "", fmt.Errorf("sqlite persistence requires DSN or path")
+		}
+	case StoreBackendMySQL:
+		if dsn == "" {
+			return "", fmt.Errorf("mysql persistence requires DSN")
+		}
+		if path != "" {
+			return "", fmt.Errorf("mysql persistence does not accept a path")
+		}
+	default:
+		return "", fmt.Errorf("unsupported persistence backend %q", backend)
+	}
+	return backend, nil
+}
+
+func sqliteDSN(spec StoreSpec) (string, error) {
+	if strings.TrimSpace(spec.DSN) != "" {
+		return strings.TrimSpace(spec.DSN), nil
+	}
+	if err := ensureParentDir(spec.Path); err != nil {
+		return "", err
+	}
+	dsn, err := storesqlite.FileDSN(strings.TrimSpace(spec.Path))
 	if err != nil {
-		return nil, nil, fmt.Errorf("open turns store: %w", err)
+		return "", err
 	}
-	return store, store.Close, nil
+	return dsn, nil
+}
+
+func sqliteTurnDSN(spec StoreSpec) (string, error) {
+	if strings.TrimSpace(spec.DSN) != "" {
+		return strings.TrimSpace(spec.DSN), nil
+	}
+	if err := ensureParentDir(spec.Path); err != nil {
+		return "", err
+	}
+	dsn, err := chatstore.SQLiteTurnDSNForFile(strings.TrimSpace(spec.Path))
+	if err != nil {
+		return "", err
+	}
+	return dsn, nil
+}
+
+func validateMySQLDSN(dsn string) error {
+	if _, err := mysql.ParseDSN(strings.TrimSpace(dsn)); err != nil {
+		return fmt.Errorf("invalid mysql DSN: %w", err)
+	}
+	return nil
 }
 
 func CloseAll(fns ...func() error) error {
@@ -160,18 +310,6 @@ func ensureParentDir(path string) error {
 		}
 	}
 	return nil
-}
-
-// isSQLiteFileDSN reports whether a DSN is a SQLite file DSN ("file:..." or a
-// bare path) rather than a go-sql-driver/mysql DSN. The MySQL driver DSN
-// always contains "@tcp(" or "@unix("; a SQLite DSN starts with "file:" or is a
-// plain filesystem path with no "@" scheme.
-func isSQLiteFileDSN(dsn string) bool {
-	if strings.HasPrefix(dsn, "file:") {
-		return true
-	}
-	// MySQL DSNs contain a user@host scheme; SQLite file DSNs do not.
-	return !strings.Contains(dsn, "@tcp(") && !strings.Contains(dsn, "@unix(")
 }
 
 type MemoryTurnStore struct {

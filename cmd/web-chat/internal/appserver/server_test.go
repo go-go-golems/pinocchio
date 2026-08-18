@@ -20,6 +20,7 @@ import (
 	"github.com/go-go-golems/pinocchio/pkg/chatapp/frontendtools"
 	toolv1 "github.com/go-go-golems/pinocchio/pkg/chatapp/pb/proto/pinocchio/chatapp/frontendtools/v1"
 	"github.com/go-go-golems/pinocchio/pkg/chatapp/plugins"
+	"github.com/go-go-golems/pinocchio/pkg/chatapp/serverkit"
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
 	sessionstreamv1 "github.com/go-go-golems/sessionstream/pkg/sessionstream/pb/proto/sessionstream/v1"
@@ -451,7 +452,7 @@ func TestFullExportOmitsTurnsWhenStoreUnavailable(t *testing.T) {
 
 func TestSQLiteSnapshotPersistsAcrossRestart(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "evtstream-web-chat.db")
-	serverA, httpSrvA := newTestMux(t, WithSQLiteDBPath(dbPath))
+	serverA, httpSrvA := newTestMux(t, WithHydrationStoreSpec(serverkit.StoreSpec{Backend: serverkit.StoreBackendSQLite, Path: dbPath}))
 
 	body := []byte(`{"prompt":"persist across restart","profile":"gpt-5-nano-low"}`)
 	resp, err := http.Post(httpSrvA.URL+"/api/chat/sessions/sess-sql-1/messages", "application/json", bytes.NewReader(body))
@@ -478,7 +479,7 @@ func TestSQLiteSnapshotPersistsAcrossRestart(t *testing.T) {
 	httpSrvA.Close()
 	require.NoError(t, serverA.Close())
 
-	serverB, httpSrvB := newTestMux(t, WithSQLiteDBPath(dbPath))
+	serverB, httpSrvB := newTestMux(t, WithHydrationStoreSpec(serverkit.StoreSpec{Backend: serverkit.StoreBackendSQLite, Path: dbPath}))
 	defer func() {
 		httpSrvB.Close()
 		_ = serverB.Close()

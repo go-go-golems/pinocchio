@@ -2,14 +2,13 @@ package cmds
 
 import (
 	"context"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
 	gp "github.com/go-go-golems/geppetto/pkg/js/modules/geppetto"
 	"github.com/go-go-golems/geppetto/pkg/turns"
 	"github.com/go-go-golems/geppetto/pkg/turns/serde"
+	"github.com/go-go-golems/pinocchio/pkg/chatapp/serverkit"
 	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
 	"github.com/pkg/errors"
 )
@@ -107,32 +106,20 @@ func (s *pinocchioJSTurnStore) Close() error {
 	return s.store.Close()
 }
 
-func openPinocchioJSTurnStore(turnsDSN, turnsDB string) (*pinocchioJSTurnStore, func(), error) {
-	noop := func() {}
-	turnsDSN = strings.TrimSpace(turnsDSN)
-	turnsDB = strings.TrimSpace(turnsDB)
-	if turnsDSN == "" && turnsDB == "" {
-		return nil, noop, nil
+func openPinocchioJSTurnStore(ctx context.Context, backend, turnsDSN, turnsDB string) (*pinocchioJSTurnStore, func(), error) {
+	if strings.TrimSpace(backend) == "" && strings.TrimSpace(turnsDSN) == "" && strings.TrimSpace(turnsDB) == "" {
+		return nil, func() {}, nil
 	}
-	dsn := turnsDSN
-	if dsn == "" {
-		if dir := filepath.Dir(turnsDB); dir != "" && dir != "." {
-			if err := os.MkdirAll(dir, 0o755); err != nil {
-				return nil, noop, errors.Wrap(err, "create turns db dir")
-			}
-		}
-		var err error
-		dsn, err = chatstore.SQLiteTurnDSNForFile(turnsDB)
-		if err != nil {
-			return nil, noop, err
-		}
-	}
-	store, err := chatstore.NewSQLiteTurnStore(dsn)
+	store, closeStore, err := serverkit.OpenTurnStore(ctx, serverkit.StoreOptions{Turns: serverkit.StoreSpec{
+		Backend: serverkit.StoreBackend(backend),
+		DSN:     turnsDSN,
+		Path:    turnsDB,
+	}})
 	if err != nil {
-		return nil, noop, err
+		return nil, func() {}, errors.Wrap(err, "open JS turn store")
 	}
 	wrapped := newPinocchioJSTurnStore(store)
-	return wrapped, func() { _ = wrapped.Close() }, nil
+	return wrapped, func() { _ = closeStore() }, nil
 }
 
 func convertPinocchioTurnSnapshot(item chatstore.TurnSnapshot) (gp.TurnStoreSnapshot, error) {

@@ -21,17 +21,20 @@ import (
 	"github.com/go-go-golems/pinocchio/pkg/chatapp/widgets"
 	profilebootstrap "github.com/go-go-golems/pinocchio/pkg/cmds/profilebootstrap"
 	agentmode "github.com/go-go-golems/pinocchio/pkg/middlewares/agentmode"
+	sessionstream "github.com/go-go-golems/sessionstream/pkg/sessionstream"
 	"github.com/pkg/errors"
 	zlog "github.com/rs/zerolog/log"
 )
 
 type ServerSettings struct {
-	Addr        string `glazed:"addr"`
-	Root        string `glazed:"root"`
-	TimelineDSN string `glazed:"timeline-dsn"`
-	TimelineDB  string `glazed:"timeline-db"`
-	TurnsDSN    string `glazed:"turns-dsn"`
-	TurnsDB     string `glazed:"turns-db"`
+	Addr            string `glazed:"addr"`
+	Root            string `glazed:"root"`
+	TimelineBackend string `glazed:"timeline-backend"`
+	TimelineDSN     string `glazed:"timeline-dsn"`
+	TimelineDB      string `glazed:"timeline-db"`
+	TurnsBackend    string `glazed:"turns-backend"`
+	TurnsDSN        string `glazed:"turns-dsn"`
+	TurnsDB         string `glazed:"turns-db"`
 }
 
 func Run(ctx context.Context, parsed *values.Values, staticFS fs.FS) error {
@@ -74,7 +77,11 @@ func Run(ctx context.Context, parsed *values.Values, staticFS fs.FS) error {
 	if err != nil {
 		return errors.Wrap(err, "resolve web-chat base inference settings from hidden base and parsed values")
 	}
-	turnStore, closeTurnStore, err := serverkit.OpenTurnStore(serverkit.StoreOptions{TurnsDSN: s.TurnsDSN, TurnsDB: s.TurnsDB})
+	turnStore, closeTurnStore, err := serverkit.OpenTurnStore(ctx, serverkit.StoreOptions{Turns: serverkit.StoreSpec{
+		Backend: serverkit.StoreBackend(s.TurnsBackend),
+		DSN:     s.TurnsDSN,
+		Path:    s.TurnsDB,
+	}})
 	if err != nil {
 		return err
 	}
@@ -98,9 +105,18 @@ func Run(ctx context.Context, parsed *values.Values, staticFS fs.FS) error {
 	canonicalRuntimeResolver := webchatruntime.NewCanonicalRuntimeResolver(requestResolver, runtimeComposer)
 
 	frontendToolManager := frontendtools.NewManager()
+	timelineBackend := serverkit.StoreBackend(s.TimelineBackend)
+	if timelineBackend == "" && s.TimelineDSN == "" && s.TimelineDB == "" {
+		timelineBackend = serverkit.StoreBackendMemory
+	}
 	canonicalApp, err := appserver.NewServer(
-		appserver.WithSQLiteDSN(s.TimelineDSN),
-		appserver.WithSQLiteDBPath(s.TimelineDB),
+		appserver.WithHydrationStoreFactory(func(factoryCtx context.Context, reg *sessionstream.SchemaRegistry) (sessionstream.HydrationStore, func() error, error) {
+			return serverkit.OpenHydrationStore(factoryCtx, serverkit.StoreSpec{
+				Backend: timelineBackend,
+				DSN:     s.TimelineDSN,
+				Path:    s.TimelineDB,
+			}, reg)
+		}),
 		appserver.WithRuntimeResolver(canonicalRuntimeResolver),
 		appserver.WithTurnStore(turnStore),
 		appserver.WithTurnsDBPath(s.TurnsDB),

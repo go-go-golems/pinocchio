@@ -6,6 +6,7 @@ import (
 	chatapp "github.com/go-go-golems/pinocchio/pkg/chatapp"
 	chatexport "github.com/go-go-golems/pinocchio/pkg/chatapp/export"
 	"github.com/go-go-golems/pinocchio/pkg/chatapp/frontendtools"
+	"github.com/go-go-golems/pinocchio/pkg/chatapp/serverkit"
 	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
 	sessionstream "github.com/go-go-golems/sessionstream/pkg/sessionstream"
 	wstransport "github.com/go-go-golems/sessionstream/pkg/sessionstream/transport/ws"
@@ -16,8 +17,8 @@ type Server struct {
 	ws                  *wstransport.Server
 	defaultProfile      string
 	chunkDelay          time.Duration
-	sqliteDSN           string
-	sqliteDBPath        string
+	timelineSpec        serverkit.StoreSpec
+	hydrationFactory    HydrationStoreFactory
 	runtimeResolver     RuntimeResolver
 	turnStore           chatstore.TurnStore
 	turnsDBPath         string
@@ -28,7 +29,10 @@ type Server struct {
 }
 
 func NewServer(opts ...Option) (*Server, error) {
-	s := &Server{chunkDelay: 20 * time.Millisecond}
+	s := &Server{
+		chunkDelay:   20 * time.Millisecond,
+		timelineSpec: serverkit.StoreSpec{Backend: serverkit.StoreBackendMemory},
+	}
 	for _, opt := range opts {
 		if opt != nil {
 			opt(s)
