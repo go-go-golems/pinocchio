@@ -39,10 +39,12 @@ type UISettings struct {
 }
 
 type PersistenceSettings struct {
-	TimelineDSN string
-	TimelineDB  string
-	TurnsDSN    string
-	TurnsDB     string
+	TimelineBackend string
+	TimelineDSN     string
+	TimelineDB      string
+	TurnsBackend    string
+	TurnsDSN        string
+	TurnsDB         string
 }
 
 // RunContext encapsulates all the settings and state needed for a single command run

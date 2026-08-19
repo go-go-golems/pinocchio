@@ -2,17 +2,15 @@ package cmds
 
 import (
 	"context"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/go-go-golems/geppetto/pkg/turns"
 	"github.com/go-go-golems/geppetto/pkg/turns/serde"
+	"github.com/go-go-golems/pinocchio/pkg/chatapp/serverkit"
 	"github.com/go-go-golems/pinocchio/pkg/cmds/run"
 	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
 	sessionstream "github.com/go-go-golems/sessionstream/pkg/sessionstream"
-	storesqlite "github.com/go-go-golems/sessionstream/pkg/sessionstream/hydration/sqlite"
 	"github.com/pkg/errors"
 )
 
@@ -88,35 +86,19 @@ func toString(v any) string {
 	return ""
 }
 
-func openCLISessionstreamHydrationStore(settings run.PersistenceSettings, reg *sessionstream.SchemaRegistry) (sessionstream.HydrationStore, func(), error) {
-	noop := func() {}
-	if strings.TrimSpace(settings.TimelineDSN) == "" && strings.TrimSpace(settings.TimelineDB) == "" {
-		return nil, noop, nil
+func openCLISessionstreamHydrationStore(ctx context.Context, settings run.PersistenceSettings, reg *sessionstream.SchemaRegistry) (sessionstream.HydrationStore, func(), error) {
+	if strings.TrimSpace(settings.TimelineDSN) == "" && strings.TrimSpace(settings.TimelineDB) == "" && strings.TrimSpace(settings.TimelineBackend) == "" {
+		return nil, func() {}, nil
 	}
-	if reg == nil {
-		return nil, noop, errors.New("sessionstream schema registry is nil")
-	}
-
-	dsn := strings.TrimSpace(settings.TimelineDSN)
-	if dsn == "" {
-		timelineDB := strings.TrimSpace(settings.TimelineDB)
-		if dir := filepath.Dir(timelineDB); dir != "" && dir != "." {
-			if err := os.MkdirAll(dir, 0o755); err != nil {
-				return nil, noop, errors.Wrap(err, "create timeline db dir")
-			}
-		}
-		var err error
-		dsn, err = storesqlite.FileDSN(timelineDB)
-		if err != nil {
-			return nil, noop, err
-		}
-	}
-
-	store, err := storesqlite.New(dsn, reg)
+	store, closeStore, err := serverkit.OpenHydrationStore(ctx, serverkit.StoreSpec{
+		Backend: serverkit.StoreBackend(settings.TimelineBackend),
+		DSN:     settings.TimelineDSN,
+		Path:    settings.TimelineDB,
+	}, reg)
 	if err != nil {
-		return nil, noop, err
+		return nil, func() {}, errors.Wrap(err, "open CLI hydration store")
 	}
-	return store, func() { _ = store.Close() }, nil
+	return store, func() { _ = closeStore() }, nil
 }
 
 func loadLatestCLIFinalTurn(ctx context.Context, store chatstore.TurnStore, sessionID string) (*turns.Turn, error) {
@@ -145,39 +127,17 @@ func loadLatestCLIFinalTurn(ctx context.Context, store chatstore.TurnStore, sess
 	return t, nil
 }
 
-func openCLITurnStore(settings run.PersistenceSettings) (chatstore.TurnStore, func(), error) {
-	var turnStore chatstore.TurnStore
-
-	cleanup := func() {
-		if turnStore != nil {
-			_ = turnStore.Close()
-		}
+func openCLITurnStore(ctx context.Context, settings run.PersistenceSettings) (chatstore.TurnStore, func(), error) {
+	if strings.TrimSpace(settings.TurnsDSN) == "" && strings.TrimSpace(settings.TurnsDB) == "" && strings.TrimSpace(settings.TurnsBackend) == "" {
+		return nil, func() {}, nil
 	}
-
-	openTurns := strings.TrimSpace(settings.TurnsDSN) != "" || strings.TrimSpace(settings.TurnsDB) != ""
-	if !openTurns {
-		return nil, cleanup, nil
-	}
-
-	dsn := strings.TrimSpace(settings.TurnsDSN)
-	if dsn == "" {
-		turnsDB := strings.TrimSpace(settings.TurnsDB)
-		if dir := filepath.Dir(turnsDB); dir != "" && dir != "." {
-			if err := os.MkdirAll(dir, 0o755); err != nil {
-				return nil, cleanup, errors.Wrap(err, "create turns db dir")
-			}
-		}
-		var err error
-		dsn, err = chatstore.SQLiteTurnDSNForFile(turnsDB)
-		if err != nil {
-			return nil, cleanup, err
-		}
-	}
-	s, err := chatstore.NewSQLiteTurnStore(dsn)
+	store, closeStore, err := serverkit.OpenTurnStore(ctx, serverkit.StoreOptions{Turns: serverkit.StoreSpec{
+		Backend: serverkit.StoreBackend(settings.TurnsBackend),
+		DSN:     settings.TurnsDSN,
+		Path:    settings.TurnsDB,
+	}})
 	if err != nil {
-		return nil, cleanup, err
+		return nil, func() {}, errors.Wrap(err, "open CLI turn store")
 	}
-	turnStore = s
-
-	return turnStore, cleanup, nil
+	return store, func() { _ = closeStore() }, nil
 }

@@ -23,8 +23,10 @@ type HelpersSettings struct {
 	StartInChat            bool               `glazed:"chat"`
 	Interactive            bool               `glazed:"interactive"`
 	ForceInteractive       bool               `glazed:"force-interactive"`
+	TimelineBackend        string             `glazed:"timeline-backend"`
 	TimelineDSN            string             `glazed:"timeline-dsn"`
 	TimelineDB             string             `glazed:"timeline-db"`
+	TurnsBackend           string             `glazed:"turns-backend"`
 	TurnsDSN               string             `glazed:"turns-dsn"`
 	TurnsDB                string             `glazed:"turns-db"`
 	Images                 []*fields.FileData `glazed:"images"`
@@ -93,10 +95,17 @@ func NewHelpersParameterLayer() (schema.Section, error) {
 				fields.WithDefault(false),
 			),
 			fields.New(
+				"timeline-backend",
+				fields.TypeChoice,
+				fields.WithDefault(""),
+				fields.WithChoices("", "disabled", "memory", "sqlite", "mysql"),
+				fields.WithHelp("Persistence backend for durable timeline snapshots; required when timeline-dsn is set"),
+			),
+			fields.New(
 				"timeline-dsn",
 				fields.TypeString,
 				fields.WithDefault(""),
-				fields.WithHelp("SQLite DSN for durable timeline snapshots (preferred over timeline-db)"),
+				fields.WithHelp("SQLite or MySQL DSN for durable timeline snapshots; interpreted only by timeline-backend"),
 			),
 			fields.New(
 				"timeline-db",
@@ -105,10 +114,17 @@ func NewHelpersParameterLayer() (schema.Section, error) {
 				fields.WithHelp("SQLite DB file path for durable timeline snapshots (DSN derived with WAL/busy_timeout)"),
 			),
 			fields.New(
+				"turns-backend",
+				fields.TypeChoice,
+				fields.WithDefault(""),
+				fields.WithChoices("", "disabled", "memory", "sqlite", "mysql"),
+				fields.WithHelp("Persistence backend for durable turn snapshots; required when turns-dsn is set"),
+			),
+			fields.New(
 				"turns-dsn",
 				fields.TypeString,
 				fields.WithDefault(""),
-				fields.WithHelp("SQLite DSN for durable turn snapshots (preferred over turns-db)"),
+				fields.WithHelp("SQLite or MySQL DSN for durable turn snapshots; interpreted only by turns-backend"),
 			),
 			fields.New(
 				"turns-db",
