@@ -36,6 +36,61 @@ func TestMemoryTurnStoreLoadLatestFinalTurn(t *testing.T) {
 	}
 }
 
+// TestMemoryTurnStorePreservesSnapshotsPerTimestamp guards against the
+// regression flagged in the PR #200 review: the in-memory store must key
+// snapshots on (conv, session, turn, phase, createdAtMs), exactly like the
+// SQLite and MySQL backends (whose turn_block_membership primary key includes
+// snapshot_created_at_ms). Otherwise repeated final-turn persistence that
+// reuses the turn ID collapses the history to a single record per phase.
+func TestMemoryTurnStorePreservesSnapshotsPerTimestamp(t *testing.T) {
+	store := NewMemoryTurnStore()
+	ctx := context.Background()
+	const conv, sess, turn, phase = "sess-1", "sess-1", "turn-1", "final"
+
+	if err := store.Save(ctx, conv, sess, turn, phase, 100, "first", chatstore.TurnSaveOptions{}); err != nil {
+		t.Fatalf("save first: %v", err)
+	}
+	if err := store.Save(ctx, conv, sess, turn, phase, 200, "second", chatstore.TurnSaveOptions{}); err != nil {
+		t.Fatalf("save second: %v", err)
+	}
+
+	snapshots, err := store.List(ctx, chatstore.TurnQuery{ConvID: conv, SessionID: sess})
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(snapshots) != 2 {
+		t.Fatalf("expected 2 snapshots preserved across timestamps, got %d: %#v", len(snapshots), snapshots)
+	}
+	if snapshots[0].CreatedAtMs != 100 || snapshots[0].Payload != "first" {
+		t.Fatalf("unexpected first snapshot: %#v", snapshots[0])
+	}
+	if snapshots[1].CreatedAtMs != 200 || snapshots[1].Payload != "second" {
+		t.Fatalf("unexpected second snapshot: %#v", snapshots[1])
+	}
+
+	// Re-saving the exact same identity (incl. createdAtMs) replaces the row,
+	// matching the SQLite/MySQL DELETE-then-reinsert for that snapshot_created_at_ms.
+	if err := store.Save(ctx, conv, sess, turn, phase, 100, "first-updated", chatstore.TurnSaveOptions{}); err != nil {
+		t.Fatalf("resave: %v", err)
+	}
+	snapshots, err = store.List(ctx, chatstore.TurnQuery{ConvID: conv, SessionID: sess})
+	if err != nil {
+		t.Fatalf("list after resave: %v", err)
+	}
+	if len(snapshots) != 2 {
+		t.Fatalf("expected 2 snapshots after idempotent resave, got %d: %#v", len(snapshots), snapshots)
+	}
+	var first *chatstore.TurnSnapshot
+	for i := range snapshots {
+		if snapshots[i].CreatedAtMs == 100 {
+			first = &snapshots[i]
+		}
+	}
+	if first == nil || first.Payload != "first-updated" {
+		t.Fatalf("expected t=100 snapshot replaced with first-updated, got %#v", first)
+	}
+}
+
 func TestOpenTurnStoreSQLitePersistsAcrossReopen(t *testing.T) {
 	ctx := context.Background()
 	dbPath := filepath.Join(t.TempDir(), "turns", "chat-turns.db")

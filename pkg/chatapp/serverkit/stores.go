@@ -336,7 +336,7 @@ func (s *MemoryTurnStore) Save(_ context.Context, convID, sessionID, turnID, pha
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for i := range s.turns {
-		if s.turns[i].ConvID == snap.ConvID && s.turns[i].SessionID == snap.SessionID && s.turns[i].TurnID == snap.TurnID && s.turns[i].Phase == snap.Phase {
+		if s.turns[i].ConvID == snap.ConvID && s.turns[i].SessionID == snap.SessionID && s.turns[i].TurnID == snap.TurnID && s.turns[i].Phase == snap.Phase && s.turns[i].CreatedAtMs == snap.CreatedAtMs {
 			s.turns[i] = snap
 			return nil
 		}
