@@ -477,3 +477,217 @@ links and a changelog for review.
 
 ### Technical details
 - Ticket dir: `pinocchio/ttmp/2026/08/19/PIN-20260819-PR200-CI-FIXES--address-pr-200-ci-failures-and-review-glazed-docs-export-mode-dependency-review-vuln-in-memory-turn-snapshot`.
+
+## Step 7: Roll out --export-mode across the go-go-golems repos (cross-repo sweep)
+
+After fixing pinocchio, the user asked which other repos under
+`~/code/wesen/go-go-golems` need the same glazed docs export fix, then asked
+to update all repos that need an update and open PRs — adding a simple binary
+to flowkit/go-go-wm (updating the `cmd/XXX` placeholder), skipping judgekit's
+binary (release.yaml only), and leaving go-template's `cmd/XXX` intact. I
+discovered a critical constraint: `--export-mode` only exists in glazed v1.4.0+,
+so I empirically classified every affected repo by glazed version before
+changing anything, and verified a glazed bump is NOT API-compatible (it breaks
+builds on v1.3.x repos), which scoping the safe set.
+
+### Prompt Context
+
+**User prompt (verbatim):** "Update all repos that needs an update and open PR. Add a simple binary (if missing) / update the XXX for build for judgekit, flowkit, go-go-wm. Also go-template (don't update the XXX there, that's the base repo)"
+**Later refinement (verbatim):** "skip judgekit actually, just do the release.yaml"
+**Assistant interpretation:** Migrate the docs-export flag across all repos
+that actually need it, add a buildable CLI to flowkit and go-go-wm (fixing the
+`cmd/XXX` placeholder), leave judgekit/go-template's `cmd/XXX` as-is, and open a
+PR per repo.
+**Inferred user intent:** Make the glazed docs export use `--export-mode` repo
+by repo, with the binary scaffolding needed for the export to actually run.
+
+### What I did
+- Inventoried all `release.y*ml`/`publish-docs.y*ml` under
+  `~/code/wesen/go-go-golems`: 43 files still on `--format sqlite`, none yet
+  migrated. Split into 34 real-binary repos + 9 `cmd/XXX` placeholder repos
+  + the infra-tooling template.
+- **Version-gated the scope**: `--export-mode` only exists in glazed v1.4.0+.
+  Classified each repo's glazed version from `go.mod`. Found 6 repos already
+  on glazed >= v1.4.0 with the old (now-invalid) flag — those are genuinely
+  broken: flowkit (v1.4.1), go-template (v1.4.1), judgekit (v1.4.1), ragopt
+  (v1.4.1), remarquee (v1.4.2), pinocchio (v1.4.3). The other 32 are on
+  glazed v1.3.x where `--format sqlite` still works.
+- **Empirically confirmed a glazed bump breaks v1.3.x repos**: bumped docmgr
+  v1.3.6 → v1.4.3 and go-go-wm v1.3.8 → v1.4.3; both failed to build because
+  glazed v1.4.x removed `settings.NewGlazedSection`,
+  `WithOutputSectionOptions`, `GlazedSlug`, and `settings.NewGlazedSchema`.
+  So the 32 v1.3.x repos need a real per-repo glazed v1.4 API migration (not a
+  flag-only change); left them untouched to avoid breaking working builds.
+- **go-go-wm** (user-requested): migrated to glazed v1.4.3 via
+  `settings.NewGlazedSchema()` → `settings.NewStructuredOutputSection()` (4
+  sites in `pkg/cmds/query*.go`, mirroring remarquee's v1.4.2 pattern;
+  `WithSections`/`DecodeSectionInto` unchanged). Fixed `release.yaml`
+  `cmd/XXX` → `cmd/go-go-wm` and `--format sqlite` → `--export-mode sqlite`.
+  Verified `go build ./...`, `go vet`, and `help export --export-mode sqlite`
+  (sections table produced).
+- **flowkit** (no `cmd/` at all): added `doc_embed.go` (`//go:embed docs` +
+  `AddDocToHelpSystem`) at the root `flowkit` package, and `cmd/flowkit/main.go`
+  (minimal glazed CLI wiring `help_cmd.SetupCobraRootCommand`). Fixed
+  `release.yaml` `cmd/XXX` → `cmd/flowkit` + flag. Verified `go build ./...`,
+  `go test ./...`, and `help export --export-mode sqlite` (sections table with
+  `flowkit-developer-guide`).
+- **Flag-only (v1.4.0+)**: remarquee (`publish-docs.yaml`), pinocchio
+  (wesen checkout `release.yml`), ragopt, judgekit, go-template, and the
+  infra-tooling `publish-docsctl.template.yml`. Left `cmd/XXX` intact in
+  judgekit/go-template (template placeholder / user instruction).
+- **ragopt caveat**: its `cmd/ragopt/main.go` never wires
+  `help_cmd.SetupCobraRootCommand`, so `help export` isn't registered and
+  publish-docs was already broken pre-migration; flagged as a separate
+  follow-up in the PR body (no help sections exist to export yet).
+- Forked the repos without a `wesen` remote (judgekit, go-template, ragopt,
+  infra-tooling) via `gh repo fork`, added `wesen` remotes, and opened one PR
+  per repo (8 PRs total).
+
+### Why
+Only glazed v1.4.0+ repos are actually broken by the flag migration; changing
+the flag on v1.3.x repos would break their builds (glazed v1.4 has breaking
+API changes). So "all repos that need an update" = the broken v1.4.0+ set plus
+go-go-wm (user-requested) plus the infra template (so future repos are correct).
+
+### What worked
+- go-go-wm's glazed v1.4.3 migration compiled and exported on the first try
+  (mechanical `NewGlazedSchema` → `NewStructuredOutputSection`).
+- flowkit binary + embed: `go mod tidy` pulled in `lumberjack.v2`
+  (transitive from `logging`), after which build + full test suite + export
+  all passed.
+- All 8 PRs opened and confirmed OPEN.
+
+### What didn't work
+- `gh repo fork --remote --remote-name wesen` created the forks but did NOT
+  add the `wesen` remote; worked around by `git remote add wesen <fork-url>`
+  manually (go-template's fork is named `wesen/wesen-go-template`).
+
+### What I learned
+- glazed v1.4.x is NOT backward-compatible with v1.3.x at the Go API level
+  (removed `settings.NewGlazedSchema/NewGlazedSection/GlazedSlug/
+  WithOutputSectionOptions`), despite being a semver-minor bump. A flag-only
+  sweep is impossible across the v1.3.x repos without per-repo code migration.
+- `gh pr create` warns about uncommitted working-tree changes even when the
+  pushed branch is correct (cosmetic only).
+
+### What was tricky to build
+- flowkit's `//go:embed docs` had to live in the root `flowkit` package (embed
+  paths are relative to the package dir; the `docs/` dir is at the repo root),
+  not in a new `pkg/doc/` (which couldn't reach `../../docs`).
+- go-go-wm: the decode call `vals.DecodeSectionInto(schema.DefaultSlug, s)`
+  stays identical across v1.3.8 → v1.4.3; only the section-constructor name
+  changed, which kept the migration to a single `sed`.
+
+### What warrants a second pair of eyes
+- The 32 v1.3.x repos are intentionally NOT changed here; migrating them is a
+  separate, larger effort (per-repo glazed v1.4 API migration + build/test).
+- go-go-wm now requires glazed v1.4.3 (was v1.3.8) — confirm no other consumer
+  of go-go-wm pins an incompatible glazed.
+- ragopt's publish-docs will still fail until `help export` is wired in
+  `main.go` (noted in its PR).
+
+### What should be done in the future
+- A follow-up batch to migrate the 32 v1.3.x repos to glazed v1.4.3 + the new
+  flag, repo by repo (each needs the `settings` API migration + build/test).
+- Add a shared glazed "export flag" lint / template check so the
+  `export_command` can't drift from the supported flag again.
+
+### Code review instructions
+- PRs: flowkit#8, go-go-wm#3, remarquee#25, pinocchio#201, judgekit#1,
+  go-template#3, ragopt#2, infra-tooling#33.
+- For the working-export repos (flowkit, go-go-wm, remarquee, pinocchio),
+  validate `go build ./...` + `go run ./cmd/<bin> help export --export-mode
+  sqlite --output-path /tmp/x.sqlite` + `sqlite3 /tmp/x.sqlite ".tables"`.
+
+### Technical details
+- glazed `--export-mode` added in commit `cdb5537` (contained in v1.4.0+).
+- v1.3.x→v1.4.3 build breakages seen: `settings.NewGlazedSchema`,
+  `settings.NewGlazedSection`, `WithOutputSectionOptions`, `GlazedSlug`.
+
+## Step 8: Address infra-tooling PR #33 code review (migrate active docsctl rollout paths)
+
+The Codex review on infra-tooling PR #33 (P1) noted that fixing only the
+`publish-docsctl.template.yml` left the *active* docsctl rollout paths still
+using the removed `--format sqlite`: `internal/cli/rollout/docsctl.go`
+generates and executes that command (so `ggg rollout docsctl validate/plan`
+fails on Glazed v1.4+), and the playbook tells users to run the removed
+syntax. I migrated the active command sources and their tests together.
+
+### Prompt Context
+
+**User prompt (verbatim):** "Address code review comments: https://github.com/go-go-golems/infra-tooling/pull/33"
+**Assistant interpretation:** Read the PR review and fix the flagged
+incompleteness (active rollout paths still on `--format sqlite`).
+**Inferred user intent:** Make PR #33 actually complete, not just the template.
+
+### What I did
+- `gh api .../pulls/33/comments` → one P1 review comment naming
+  `docs/.../docsctl-docs-publishing-rollout-playbook.md:190-214` and
+  `internal/cli/rollout/docsctl.go:146,183`.
+- Grepped live (non-`ttmp/`) sources for `--format sqlite`:
+  - `internal/cli/rollout/docsctl.go` (2 generator call sites: inventory +
+    validate fallback).
+  - `internal/cli/rollout/docsctl_test.go` (4: inputs + expected `want`s for
+    `rewriteDocsctlOutputPath`).
+  - `internal/cli/release/preflight_test.go` (2 workflow YAML fixtures).
+  - `docs/.../docsctl-docs-publishing-rollout-playbook.md` (7 command
+    snippets + the "Prove local help export" checklist item).
+- Edited all to `--export-mode sqlite` (precise `edit` for the Go source;
+  `sed` for the test fixtures and playbook). `gofmt -w` the Go files.
+- Verified: `go build ./...`, `go test ./...` (rollout, release, pkg/rollout
+  all `ok`). No `--format sqlite` remains in live sources (only in `ttmp/`
+  historical ticket artifacts, which are out of scope).
+- Committed `1b237c4` on `ci/docs-export-mode`, pushed (non-force), and
+  replied in-thread to the review comment via `gh api POST .../pulls/33/comments`
+  (`in_reply_to` the original review comment).
+
+### Why
+The review was correct: a template-only fix leaves the CLI tooling emitting
+the removed flag, so the rollout command would fail at runtime even with the
+template fixed. Migrating generator + tests + docs together makes the change
+end-to-end consistent.
+
+### What worked
+- All edits landed in one commit; `rewriteDocsctlOutputPath` is flag-agnostic
+  (it only rewrites `--output-path`), so only the input/`want` strings in its
+  tests needed updating — no logic change.
+- `go test ./...` green on first run after the edits.
+
+### What didn't work
+- (none)
+
+### What I learned
+- infra-tooling's `ggg rollout docsctl` is the active generator for per-repo
+  `publish-docs` workflows; it (not just the template) is the real source of
+  the `export_command`, so both had to move in lockstep.
+- `ttmp/` ticket workspaces hold many historical `--format sqlite` strings
+  (INFRA-003/004/006 sources/logs); those are frozen investigation artifacts
+  and intentionally left unchanged.
+
+### What was tricky to build
+- Distinguishing "active" vs "historical" occurrences: the grep returned ~60
+  hits, but only ~15 in non-`ttmp/` paths were live. Filtering out `ttmp/`
+  isolated the real work to 4 files.
+
+### What warrants a second pair of eyes
+- Confirm `rewriteDocsctlOutputPath` truly doesn't depend on the flag token
+  (it pattern-matches `--output-path`, not `--format`/`--export-mode`), so the
+  migration is purely a string swap in the generator. Tests passing is strong
+  evidence but a glance at the regex (`docsctlOutputPathPattern`) is worth it.
+
+### What should be done in the future
+- The `ttmp/` historical artifacts still say `--format sqlite`; if those
+  tickets are ever re-opened/re-run, their scripts would need the same
+  migration. Out of scope (frozen artifacts).
+
+### Code review instructions
+- Start: `internal/cli/rollout/docsctl.go` (the 2 `fmt.Sprintf` call sites),
+  `internal/cli/rollout/docsctl_test.go`, `internal/cli/release/preflight_test.go`,
+  `docs/go-go-golems/playbooks/docsctl-docs-publishing-rollout-playbook.md`.
+- Validate: `go test ./internal/cli/rollout/... ./internal/cli/release/...`;
+  `grep -rn --format sqlite . | grep -v /ttmp/` → none.
+
+### Technical details
+- Review comment: https://github.com/go-go-golems/infra-tooling/pull/33#discussion_r3816749643
+- Reply: https://github.com/go-go-golems/infra-tooling/pull/33#discussion_r3817130436
+- PR #33 now has 2 commits (template + active paths), head `1b237c4`.

@@ -19,6 +19,16 @@ RelatedFiles:
     - Path: /home/manuel/workspaces/2026-08-13/ragkit-coinvault-mysql/pinocchio/pkg/chatapp/serverkit/stores_test.go:Added regression test for per-timestamp snapshot preservation
     - Path: /home/manuel/workspaces/2026-08-13/ragkit-coinvault-mysql/pinocchio/pkg/persistence/chatstore/mysql_turn_store.go:MySQL turn_block_membership PK includes snapshot_created_at_ms (identity reference)
     - Path: /home/manuel/workspaces/2026-08-13/ragkit-coinvault-mysql/pinocchio/pkg/persistence/chatstore/turn_store_sqlite.go:SQLite turn_block_membership PK includes snapshot_created_at_ms (identity reference)
+    - Path: abs:///home/manuel/code/wesen/go-go-golems/flowkit/cmd/flowkit/main.go
+      Note: New minimal glazed CLI so flowkit help export works (PR flowkit#8)
+    - Path: abs:///home/manuel/code/wesen/go-go-golems/flowkit/doc_embed.go
+      Note: Embeds docs/ for the flowkit help system (PR flowkit#8)
+    - Path: abs:///home/manuel/code/wesen/go-go-golems/go-go-wm/.github/workflows/release.yaml
+      Note: cmd/XXX -> cmd/go-go-wm + --export-mode sqlite (PR go-go-wm#3)
+    - Path: abs:///home/manuel/code/wesen/go-go-golems/go-go-wm/pkg/cmds/query.go
+      Note: settings.NewGlazedSchema -> NewStructuredOutputSection migration for glazed v1.4.3 (PR go-go-wm#3)
+    - Path: abs:///home/manuel/code/wesen/go-go-golems/infra-tooling/templates/github/publish-docsctl.template.yml
+      Note: Template flag --format sqlite -> --export-mode sqlite (PR infra-tooling#33)
     - Path: repo://.github/workflows/release.yml
       Note: Changed export_command from --format sqlite to --export-mode sqlite (Fix 1)
     - Path: repo://go.mod
@@ -42,6 +52,11 @@ LastUpdated: 2026-08-19T16:20:00-04:00
 WhatFor: 'Fixing the Publish docs, Dependency Review, and Codex P2 review blockers on pinocchio PR #200'
 WhenToUse: Reference for the exact CI fixes and the in-memory snapshot identity correction
 ---
+
+
+
+
+
 
 
 
