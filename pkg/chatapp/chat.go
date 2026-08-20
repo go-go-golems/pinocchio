@@ -49,9 +49,13 @@ type Hooks struct {
 
 type Option func(*Engine)
 
+// MessageIDGenerator creates opaque root message IDs. Implementations must be
+// safe for concurrent use when an Engine can handle commands concurrently.
+type MessageIDGenerator func() (string, error)
+
 type Engine struct {
 	mu                  sync.Mutex
-	nextID              int
+	messageIDGenerator  MessageIDGenerator
 	active              map[sessionstream.SessionId]*activeRun
 	pending             map[string]PromptRequest
 	chunkDelay          time.Duration
@@ -71,6 +75,15 @@ type activeRun struct {
 func WithChunkDelay(delay time.Duration) Option {
 	return func(e *Engine) {
 		e.chunkDelay = delay
+	}
+}
+
+// WithMessageIDGenerator overrides root message ID generation. It is primarily
+// useful for deterministic tests and deployments with an external identity
+// policy. Invalid or nil generators fail when a start command is handled.
+func WithMessageIDGenerator(generate MessageIDGenerator) Option {
+	return func(e *Engine) {
+		e.messageIDGenerator = generate
 	}
 }
 
@@ -118,9 +131,10 @@ func WithTurnStore(ts chatstore.TurnStore) Option {
 
 func NewEngine(opts ...Option) *Engine {
 	engine := &Engine{
-		active:     map[sessionstream.SessionId]*activeRun{},
-		pending:    map[string]PromptRequest{},
-		chunkDelay: 20 * time.Millisecond,
+		active:             map[sessionstream.SessionId]*activeRun{},
+		pending:            map[string]PromptRequest{},
+		chunkDelay:         20 * time.Millisecond,
+		messageIDGenerator: defaultMessageIDGenerator,
 	}
 	for _, opt := range opts {
 		if opt != nil {
@@ -210,13 +224,6 @@ func (e *Engine) WaitIdle(ctx context.Context, sid sessionstream.SessionId) erro
 			return ctx.Err()
 		}
 	}
-}
-
-func (e *Engine) nextMessageID() string {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	e.nextID++
-	return fmt.Sprintf("chat-msg-%d", e.nextID)
 }
 
 func (e *Engine) swapRun(sid sessionstream.SessionId, run *activeRun) *activeRun {

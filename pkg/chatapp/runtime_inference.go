@@ -36,7 +36,10 @@ func (e *Engine) handleStartInference(ctx context.Context, cmd sessionstream.Com
 	if prompt == "" && len(pending.Attachments) == 0 {
 		prompt = "Explain evtstream"
 	}
-	messageID := e.nextMessageID()
+	messageID, err := e.newMessageID()
+	if err != nil {
+		return err
+	}
 	userMessageID := messageID + "-user"
 	if err := e.publish(ctx, cmd.SessionId, pub, EventUserMessageAccepted, &chatappv1.ChatUserMessageAccepted{MessageId: userMessageID, Role: "user", Text: prompt, Content: prompt, Status: "accepted", Attachments: clientAttachmentsToProto(pending.Attachments)}); err != nil {
 		return err
