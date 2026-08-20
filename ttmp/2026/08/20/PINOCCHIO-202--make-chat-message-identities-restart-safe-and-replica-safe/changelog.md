@@ -31,3 +31,12 @@ Step 4: replaced the process-local root message counter with validated, injectab
 - /home/manuel/workspaces/2026-08-12/deploy-dev-indexer/pinocchio/pkg/chatapp/message_id.go — Restart-safe root identity implementation
 - /home/manuel/workspaces/2026-08-12/deploy-dev-indexer/pinocchio/pkg/chatapp/message_id_test.go — Identity and atomic-failure regressions
 
+
+## 2026-08-20
+
+Step 5: validated Pinocchio commit 6f4e946 through CoinVault canonical HTTP handlers and a persisted SQLite timeline across server reconstruction; full CoinVault suite passed (CoinVault commit 612b0df).
+
+### Related Files
+
+- /home/manuel/workspaces/2026-08-12/deploy-dev-indexer/coinvault/internal/webchat/sessionstream/sessionstream_server_test.go — Application-level restart identity regression
+

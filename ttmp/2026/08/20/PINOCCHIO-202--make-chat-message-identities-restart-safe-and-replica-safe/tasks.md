@@ -9,7 +9,7 @@
 - [x] Relate the design to implementation files and record the changelog <!-- t:w2aa -->
 - [x] Validate the ticket with docmgr doctor <!-- t:0u2l -->
 - [x] Upload the design package to reMarkable <!-- t:lqce -->
-- [ ] Phase 0: complete the consumer audit and capture the baseline test suite <!-- t:vhu7 -->
+- [x] Phase 0: complete the consumer audit and capture the baseline test suite <!-- t:vhu7 -->
 - [x] Phase 1: add the MessageIDGenerator API and UUIDv4 default <!-- t:hksv -->
 - [x] Phase 2: integrate allocation into user-message handling and remove nextID <!-- t:30wd -->
 - [x] Phase 3: migrate exact-ID tests to deterministic injected generators <!-- t:2xcv -->

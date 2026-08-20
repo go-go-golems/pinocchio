@@ -24,6 +24,8 @@ RelatedFiles:
       Note: Covers UUID format, restart uniqueness, validation, and atomic failure (commit 6f4e946)
     - Path: repo://pkg/chatapp/runtime_inference.go
       Note: Allocates a validated root before publishing the first event (commit 6f4e946)
+    - Path: ws://coinvault/internal/webchat/sessionstream/sessionstream_server_test.go
+      Note: CoinVault restart and SQLite hydration regression proving distinct post-restart entities (commit 612b0df)
 ExternalSources:
     - https://github.com/go-go-golems/pinocchio/issues/202
 Summary: Chronological evidence and design diary for restart-safe Pinocchio chat identities.
@@ -31,6 +33,7 @@ LastUpdated: 2026-08-20T11:20:00-04:00
 WhatFor: Preserve reproduction evidence, decisions, commands, failures, and continuation guidance for issue 202.
 WhenToUse: Read before implementing or reviewing PINOCCHIO-202.
 ---
+
 
 
 # Diary
@@ -345,3 +348,77 @@ Allocation still occurs in the command handler immediately before the first user
 - Production chronology remains `sessionstream.Event.Ordinal`.
 - Custom generators are documented as concurrency-safe responsibilities of their implementations.
 - No protobuf, storage schema, sessionstream API, React contract, or compatibility adapter changed.
+
+## Step 5: Prove the behavior through CoinVault persistence
+
+This step added an application-level regression in CoinVault, which is where the restart collision was originally observed. The test uses CoinVault's canonical HTTP handlers and SQLite hydration store rather than calling Pinocchio's allocator directly.
+
+The test submits a turn, closes the canonical server, reopens a new server over the same timeline database, and submits another turn to the same session. It requires the hydrated snapshot to contain all four distinct user and assistant entities and verifies that the original identities remain present.
+
+### Prompt Context
+
+**User prompt (verbatim):** (same as Step 4)
+
+**Assistant interpretation:** Validate the committed Pinocchio behavior at CoinVault's real server and persistence boundary.
+
+**Inferred user intent:** Obtain direct evidence that restarting CoinVault no longer causes a new turn to overwrite an earlier user bubble or assistant response.
+
+**Commit (code):** `612b0dfe094fd212e27244d0cc129aa3f0ec8456` — "test(chat): cover message identity across restart"
+
+### What I did
+
+- Confirmed the workspace `go.work` links CoinVault to the modified local Pinocchio module.
+- Added `TestCanonicalServerRestartKeepsNewTurnSeparate` to CoinVault.
+- Used one persistent SQLite timeline path across two independently constructed `CanonicalServer` instances.
+- Submitted through `/api/chat/sessions/{session}/messages` and read through the snapshot HTTP route.
+- Verified the first snapshot has two entities and the post-restart snapshot has four unique IDs while preserving both original IDs.
+- Ran the focused restart test, CoinVault's complete `go test ./... -count=1`, and the repository pre-commit validation.
+
+### Why
+
+- A Pinocchio unit test proves generator behavior, but not CoinVault's hydration, handler, projection, or server-reconstruction path.
+- The regression directly models the lifecycle that produced the missing bubble and response-merging symptom.
+
+### What worked
+
+- `GOCACHE=/tmp/coinvault-gocache go test ./internal/webchat/sessionstream -run TestCanonicalServerRestartKeepsNewTurnSeparate -count=1` passed.
+- `GOCACHE=/tmp/coinvault-gocache go test ./... -count=1` passed across CoinVault.
+- CoinVault's hook passed generation, embedded frontend construction, build, golangci-lint, custom vet, and all command/internal tests.
+
+### What didn't work
+
+- N/A. Both the focused integration test and complete CoinVault suite passed on their first completed runs.
+
+### What I learned
+
+- CoinVault consumes Pinocchio from the repository-level Go workspace, so no temporary `replace` directive or dependency-file edit was necessary.
+- `CanonicalServer.Close` cleanly releases the hydration store, allowing the test to model an actual process reconstruction over the same SQLite file.
+- The application symptom can be guarded entirely at the HTTP and snapshot boundary without exposing the engine for test-only configuration.
+
+### What was tricky to build
+
+- The assertion must not depend on projection slice order. The final test indexes all restarted entity IDs, rejects duplicates, and verifies that every pre-restart ID survives; the required entity count proves that two additional identities were created.
+- A test that reused one server would not reproduce the old defect because its in-memory counter continued increasing. Constructing a second server is the essential condition.
+
+### What warrants a second pair of eyes
+
+- Whether the CoinVault test should also assert the two prompt contents to make its user-visible intent more explicit.
+- Whether a future browser test should cover React reconciliation in addition to the canonical snapshot contract.
+
+### What should be done in the future
+
+- Release the Pinocchio change and bump CoinVault from its tagged `v0.11.12` dependency when this workspace-only integration is ready to publish.
+- Run the existing-conversation browser scenario after deploying the bumped dependency.
+
+### Code review instructions
+
+- In CoinVault, review `internal/webchat/sessionstream/sessionstream_server_test.go` at `TestCanonicalServerRestartKeepsNewTurnSeparate`.
+- Confirm that `go env GOWORK` resolves to the workspace containing the committed Pinocchio checkout before reproducing locally.
+- Run the focused test and then `go test ./... -count=1`.
+
+### Technical details
+
+- CoinVault code commit: `612b0dfe094fd212e27244d0cc129aa3f0ec8456`.
+- Pinocchio code commit under test: `6f4e946ede198f9c2d9a9d7a5f72d29820565729`.
+- Persistent boundary: `CanonicalServerOptions.TimelineDB` backed by the sessionstream SQLite hydration store.
+- CoinVault's `go.mod` still declares Pinocchio `v0.11.12`; the local `go.work` intentionally selects the modified checkout for this validation.
