@@ -51,6 +51,8 @@ type Option func(*Engine)
 
 // MessageIDGenerator creates opaque root message IDs. Implementations must be
 // safe for concurrent use when an Engine can handle commands concurrently.
+// Generated roots must not occupy namespaces reserved for derived user, text,
+// reasoning, or warning message entities; Engine validates this before publish.
 type MessageIDGenerator func() (string, error)
 
 type Engine struct {

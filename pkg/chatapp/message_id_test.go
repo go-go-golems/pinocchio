@@ -58,7 +58,11 @@ func TestNewMessageIDValidation(t *testing.T) {
 		{name: "valid and trimmed", generator: func() (string, error) { return "  chat-msg-test  ", nil }, want: "chat-msg-test"},
 		{name: "nil", generator: nil, wantError: "generator is not configured"},
 		{name: "empty", generator: func() (string, error) { return "  ", nil }, wantError: "ID is empty"},
-		{name: "reserved delimiter", generator: func() (string, error) { return "chat-msg:text:test", nil }, wantError: "reserved text delimiter"},
+		{name: "reserved text namespace", generator: func() (string, error) { return "chat-msg:text:test", nil }, wantError: `reserved derived namespace ":text:"`},
+		{name: "reserved reasoning namespace", generator: func() (string, error) { return "chat-msg:thinking:test", nil }, wantError: `reserved derived namespace ":thinking:"`},
+		{name: "reserved user namespace", generator: func() (string, error) { return "chat-msg-user", nil }, wantError: `reserved derived namespace "-user"`},
+		{name: "reserved warning namespace", generator: func() (string, error) { return "chat-msg:warning", nil }, wantError: `reserved derived namespace ":warning"`},
+		{name: "namespace words without structural position", generator: func() (string, error) { return "chat-msg-user-defined-warning", nil }, want: "chat-msg-user-defined-warning"},
 		{name: "generator error", generator: func() (string, error) { return "", errors.New("entropy unavailable") }, wantError: "generate chat message ID: entropy unavailable"},
 	}
 

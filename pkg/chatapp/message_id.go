@@ -7,7 +7,12 @@ import (
 	"github.com/pkg/errors"
 )
 
-const reservedTextMessageIDDelimiter = ":text:"
+const (
+	userMessageIDSuffix         = "-user"
+	textMessageIDDelimiter      = ":text:"
+	reasoningMessageIDDelimiter = ":thinking:"
+	warningMessageIDSuffix      = ":warning"
+)
 
 func defaultMessageIDGenerator() (string, error) {
 	return "chat-msg-" + uuid.NewString(), nil
@@ -26,8 +31,22 @@ func (e *Engine) newMessageID() (string, error) {
 	if id == "" {
 		return "", errors.New("generated chat message ID is empty")
 	}
-	if strings.Contains(id, reservedTextMessageIDDelimiter) {
-		return "", errors.New("generated chat message ID contains reserved text delimiter")
+	if reserved := reservedDerivedMessageIDNamespace(id); reserved != "" {
+		return "", errors.Errorf("generated chat message ID occupies reserved derived namespace %q", reserved)
 	}
 	return id, nil
+}
+
+func reservedDerivedMessageIDNamespace(id string) string {
+	for _, delimiter := range []string{textMessageIDDelimiter, reasoningMessageIDDelimiter} {
+		if strings.Contains(id, delimiter) {
+			return delimiter
+		}
+	}
+	for _, suffix := range []string{userMessageIDSuffix, warningMessageIDSuffix} {
+		if strings.HasSuffix(id, suffix) {
+			return suffix
+		}
+	}
+	return ""
 }
