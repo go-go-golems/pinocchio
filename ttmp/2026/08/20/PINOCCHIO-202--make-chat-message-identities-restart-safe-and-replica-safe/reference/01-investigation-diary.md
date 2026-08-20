@@ -22,8 +22,14 @@ RelatedFiles:
       Note: Implements UUID generation and root validation (commit 6f4e946)
     - Path: repo://pkg/chatapp/message_id_test.go
       Note: Covers UUID format, restart uniqueness, validation, and atomic failure (commit 6f4e946)
+    - Path: repo://pkg/chatapp/messages.go
+      Note: Uses the centralized warning suffix (commit 1961984)
+    - Path: repo://pkg/chatapp/projections.go
+      Note: Uses the centralized parsed text delimiter (commit 1961984)
     - Path: repo://pkg/chatapp/runtime_inference.go
       Note: Allocates a validated root before publishing the first event (commit 6f4e946)
+    - Path: repo://pkg/chatapp/runtime_sink.go
+      Note: Uses the centralized text child delimiter (commit 1961984)
     - Path: ws://coinvault/internal/webchat/sessionstream/sessionstream_server_test.go
       Note: CoinVault restart and SQLite hydration regression proving distinct post-restart entities (commit 612b0df)
 ExternalSources:
@@ -33,6 +39,7 @@ LastUpdated: 2026-08-20T11:20:00-04:00
 WhatFor: Preserve reproduction evidence, decisions, commands, failures, and continuation guidance for issue 202.
 WhenToUse: Read before implementing or reviewing PINOCCHIO-202.
 ---
+
 
 
 
@@ -422,3 +429,75 @@ The test submits a turn, closes the canonical server, reopens a new server over 
 - Pinocchio code commit under test: `6f4e946ede198f9c2d9a9d7a5f72d29820565729`.
 - Persistent boundary: `CanonicalServerOptions.TimelineDB` backed by the sessionstream SQLite hydration store.
 - CoinVault's `go.mod` still declares Pinocchio `v0.11.12`; the local `go.work` intentionally selects the modified checkout for this validation.
+
+## Step 6: Reserve every root-derived message namespace
+
+PR #203 review identified that the custom generator contract was only partially protected. A generator could emit `x` for one run and `x:thinking:1`, `x-user`, or `x:warning` for another, allowing a later root entity to occupy a key already used by a derived entity.
+
+The fix remains within the existing generator design. Root validation now rejects every namespace currently derived by chatapp, and shared constants keep validation aligned with the user, text, and warning ID constructors.
+
+### Prompt Context
+
+**User prompt (verbatim):** "Address code review issues: https://github.com/go-go-golems/pinocchio/pull/203"
+
+**Assistant interpretation:** Inspect unresolved review threads on PR #203, implement all actionable fixes, validate them, and update the working branch.
+
+**Inferred user intent:** Make the restart-safe identity API robust enough for external generators and ready for another review round.
+
+**Commit (code):** `196198454781491a5e322f6875761a786fce7c44` — "fix(chatapp): reserve derived message namespaces"
+
+### What I did
+
+- Queried PR #203's unresolved review threads with GitHub GraphQL.
+- Confirmed one actionable P2 thread concerning derived-namespace collisions.
+- Added centralized root validation for `-user`, `:text:`, `:thinking:`, and `:warning`.
+- Reused constants in user, text, warning, and projection construction paths.
+- Added table cases for every reserved namespace plus a valid identifier containing non-structural namespace words.
+- Expanded the exported generator documentation with the namespace constraint.
+
+### Why
+
+- Global uniqueness among generated roots is insufficient if a root can equal another root's deterministically derived child ID.
+- Rejecting the structural delimiters and terminal suffixes preserves disjoint root and child keyspaces without changing schemas or introducing coordination.
+
+### What worked
+
+- `GOCACHE=/tmp/pinocchio-gocache go test ./pkg/chatapp/... -count=1` passed.
+- `GOCACHE=/tmp/pinocchio-gocache go test ./... -count=1` passed.
+- The pre-commit hook passed generation, frontend build, Go build, lint, custom vet tools, and the full test suite.
+
+### What didn't work
+
+- The bundled review-thread script resolved the cross-fork PR as `wesen/pinocchio#203` and failed with `Could not resolve to a PullRequest with the number of 203`. Querying the same GraphQL thread fields directly against `go-go-golems/pinocchio#203` succeeded.
+- An initial GraphQL shell invocation expanded `$owner`, `$repo`, and `$number`, producing `Expected VAR_SIGN, actual: COLON`. Passing the query in single quotes preserved GraphQL variables.
+
+### What I learned
+
+- The relevant invariant is disjoint namespaces, not merely unique root outputs.
+- `:text:` and `:thinking:` are internal delimiters, while `-user` and `:warning` are terminal suffixes; validation reflects those distinct structural roles.
+
+### What was tricky to build
+
+- Rejecting every occurrence of `-user` or `:warning` would unnecessarily reject safe IDs such as `chat-msg-user-defined-warning`. Only terminal suffix matches can equal those derived entities, whereas text and reasoning delimiters must be rejected anywhere in a root.
+- The reasoning plugin is a child package, so its literal delimiter cannot consume an unexported parent-package constant without widening public API surface. The validation test now guards that known contract.
+
+### What warrants a second pair of eyes
+
+- Whether derived namespace constants should become exported API for plugins, or remain internal implementation details guarded by tests.
+- Whether future child entity types should register namespaces rather than extending the validation function manually.
+
+### What should be done in the future
+
+- Any new root-derived message kind must add its namespace to `reservedDerivedMessageIDNamespace` and its validation table in the same change.
+
+### Code review instructions
+
+- Start with `reservedDerivedMessageIDNamespace` in `pkg/chatapp/message_id.go`.
+- Compare its entries with derivation sites in `runtime_inference.go`, `runtime_sink.go`, `messages.go`, and `plugins/reasoning.go`.
+- Run the package suite and full repository suite.
+
+### Technical details
+
+- Review thread: `PRRT_kwDOL9fJN86a5nBl` on `pkg/chatapp/message_id.go`.
+- Root rejection rules: contains `:text:` or `:thinking:`; ends with `-user` or `:warning`.
+- The default UUID root format remains valid and unaffected.

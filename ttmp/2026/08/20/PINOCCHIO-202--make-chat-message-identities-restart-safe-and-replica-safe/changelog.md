@@ -40,3 +40,13 @@ Step 5: validated Pinocchio commit 6f4e946 through CoinVault canonical HTTP hand
 
 - /home/manuel/workspaces/2026-08-12/deploy-dev-indexer/coinvault/internal/webchat/sessionstream/sessionstream_server_test.go — Application-level restart identity regression
 
+
+## 2026-08-20
+
+Step 6: addressed PR #203 review by reserving every root-derived user, text, reasoning, and warning namespace for custom message generators (commit 1961984).
+
+### Related Files
+
+- /home/manuel/workspaces/2026-08-12/deploy-dev-indexer/pinocchio/pkg/chatapp/message_id.go — Central derived-namespace validation
+- /home/manuel/workspaces/2026-08-12/deploy-dev-indexer/pinocchio/pkg/chatapp/message_id_test.go — Collision-focused namespace test matrix
+
