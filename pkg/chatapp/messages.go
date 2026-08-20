@@ -13,7 +13,7 @@ func runtimeWarningMessageID(messageID string) string {
 	if messageID == "" {
 		return "chat-warning"
 	}
-	return messageID + ":warning"
+	return messageID + warningMessageIDSuffix
 }
 
 func isMaxIterationsError(err error) bool {

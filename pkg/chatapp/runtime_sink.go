@@ -343,7 +343,7 @@ func (s *runtimeEventSink) textSegmentIDForCorrelation(corr gepevents.Correlatio
 		return "", 0
 	}
 	if suffix := sanitizeCorrelationID(corr.SegmentID); suffix != "" {
-		return fmt.Sprintf("%s:text:%s", strings.TrimSpace(s.messageID), suffix), 0
+		return fmt.Sprintf("%s%s%s", strings.TrimSpace(s.messageID), textMessageIDDelimiter, suffix), 0
 	}
 	return s.ensureTextSegmentID()
 }
@@ -353,7 +353,7 @@ func textSegmentMessageID(messageID string, segment int32) string {
 	if messageID == "" || segment <= 0 {
 		return ""
 	}
-	return fmt.Sprintf("%s:text:%d", messageID, segment)
+	return fmt.Sprintf("%s%s%d", messageID, textMessageIDDelimiter, segment)
 }
 
 func sanitizeCorrelationID(id string) string {

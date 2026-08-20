@@ -133,7 +133,7 @@ func baseTimelineProjection(_ context.Context, ev sessionstream.Event, _ *sessio
 
 func parentMessageIDFromSegmentMessageID(messageID string) string {
 	messageID = strings.TrimSpace(messageID)
-	idx := strings.LastIndex(messageID, ":text:")
+	idx := strings.LastIndex(messageID, textMessageIDDelimiter)
 	if idx <= 0 {
 		return ""
 	}
