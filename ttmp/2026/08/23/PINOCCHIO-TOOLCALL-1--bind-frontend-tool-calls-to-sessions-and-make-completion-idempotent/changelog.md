@@ -14,3 +14,13 @@ Wrote and validated the frontend-tool bridge invocation identity/result completi
 - /home/manuel/workspaces/2026-08-20/add-pbui-agent/pinocchio/ttmp/2026/08/23/PINOCCHIO-TOOLCALL-1--bind-frontend-tool-calls-to-sessions-and-make-completion-idempotent/design-doc/01-pinocchio-frontend-tool-bridge-hardening-invocation-identity-result-validation-implementation-guide.md — Primary intern implementation guide
 - /home/manuel/workspaces/2026-08-20/add-pbui-agent/pinocchio/ttmp/2026/08/23/PINOCCHIO-TOOLCALL-1--bind-frontend-tool-calls-to-sessions-and-make-completion-idempotent/reference/01-diary.md — Investigation and validation record
 
+
+## 2026-08-23
+
+Dry-ran, uploaded, and verified the Pinocchio guide at /ai/2026/08/23-deliveries/PINOCCHIO-TOOLCALL-1; recorded rmapi duplicate-parent recovery
+
+### Related Files
+
+- /home/manuel/workspaces/2026-08-20/add-pbui-agent/pinocchio/ttmp/2026/08/23/PINOCCHIO-TOOLCALL-1--bind-frontend-tool-calls-to-sessions-and-make-completion-idempotent/reference/01-diary.md — Delivery failure/recovery record
+- /home/manuel/workspaces/2026-08-20/add-pbui-agent/pinocchio/ttmp/2026/08/23/PINOCCHIO-TOOLCALL-1--bind-frontend-tool-calls-to-sessions-and-make-completion-idempotent/various/02-remarkable-delivery.md — Canonical upload and listing evidence
+

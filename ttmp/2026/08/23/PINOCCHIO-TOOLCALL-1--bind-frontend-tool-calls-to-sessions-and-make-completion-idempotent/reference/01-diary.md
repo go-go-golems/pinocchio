@@ -170,3 +170,69 @@ The renderer needs Chromium `--no-sandbox` in this environment. The corrected co
 ### Technical details
 
 Validation commands are recorded above; the rendering evidence is `various/01-mermaid-render.txt`.
+
+## Step 3: Deliver the guide to a canonical reMarkable path
+
+The initial upload returned success but could not be verified by exact path because parallel rmapi directory creation produced duplicate `23` collections. I repeated dry-run/upload sequentially under the unique `23-deliveries` root and verified the exact guide listing.
+
+### Prompt Context
+
+**User prompt (verbatim):** (same as Step 1)
+
+**Assistant interpretation:** Deliver the Pinocchio guide to reMarkable with evidence that the path actually resolves.
+
+**Inferred user intent:** Provide a dependable offline implementation handoff, not merely an upload success line.
+
+### What I did
+
+- Performed initial and canonical dry runs.
+- Uploaded the guide sequentially to the canonical unique parent.
+- Verified the exact remote listing.
+- Added `various/02-remarkable-delivery.md`.
+
+### Why
+
+- The first exact-path listing returned `no matches` despite upload success.
+- Duplicate named remote collections cannot be safely resolved or deleted by name.
+
+### What worked
+
+```text
+OK: uploaded PINOCCHIO-TOOLCALL-1 Frontend Tool Bridge Guide.pdf -> /ai/2026/08/23-deliveries/PINOCCHIO-TOOLCALL-1
+[f] PINOCCHIO-TOOLCALL-1 Frontend Tool Bridge Guide
+```
+
+### What didn't work
+
+The first verification failed exactly with:
+
+```text
+Error: no matches for 'PINOCCHIO-TOOLCALL-1'
+```
+
+Parent listing showed three `[d] 23` entries after warnings `remote tree has changed, refresh the file tree`.
+
+### What I learned
+
+- Serialize cloud directory creation and use unique parents for batch delivery.
+- Treat remote listing as a required acceptance check.
+
+### What was tricky to build
+
+The uploader's duplicate detection found the inaccessible first copy and skipped re-upload, while path lookup selected another same-named parent. Changing to an unambiguous parent resolved both behaviors without deleting data.
+
+### What warrants a second pair of eyes
+
+- Optional duplicate collection cleanup should use structured listing IDs and deliberate operator confirmation.
+
+### What should be done in the future
+
+- Read/deliver from the canonical `23-deliveries` path.
+
+### Code review instructions
+
+- Inspect both rendered diagrams and phase/test tables on device.
+
+### Technical details
+
+Canonical path: `/ai/2026/08/23-deliveries/PINOCCHIO-TOOLCALL-1`.
