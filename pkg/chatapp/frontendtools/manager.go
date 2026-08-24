@@ -238,9 +238,7 @@ func (m *Manager) HandleResult(ctx context.Context, cmd sessionstream.Command, _
 	delete(m.pending, key)
 	m.terminal.add(&terminalCall{
 		key:         key,
-		messageID:   pending.messageID,
 		toolName:    pending.toolName,
-		status:      payload.Status,
 		digest:      digest,
 		origin:      terminalOriginResult,
 		completedAt: now,
@@ -372,9 +370,7 @@ func (m *Manager) terminalizeContext(ctx context.Context, pub sessionstream.Even
 	delete(m.pending, pending.key)
 	m.terminal.add(&terminalCall{
 		key:         pending.key,
-		messageID:   pending.messageID,
 		toolName:    pending.toolName,
-		status:      status,
 		digest:      frontendToolResultDigest(payload, resultBytes),
 		origin:      terminalOriginContext,
 		completedAt: now,

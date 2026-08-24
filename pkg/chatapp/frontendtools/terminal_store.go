@@ -14,9 +14,7 @@ const (
 
 type terminalCall struct {
 	key         pendingKey
-	messageID   string
 	toolName    string
-	status      string
 	digest      [32]byte
 	origin      terminalOrigin
 	completedAt time.Time

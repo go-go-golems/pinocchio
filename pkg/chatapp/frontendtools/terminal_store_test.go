@@ -58,7 +58,6 @@ func terminalRecord(sessionID, toolCallID string, completedAt time.Time) *termin
 	return &terminalCall{
 		key:         pendingKey{sessionID: sessionstream.SessionId(sessionID), toolCallID: toolCallID},
 		toolName:    "tool",
-		status:      "success",
 		origin:      terminalOriginResult,
 		completedAt: completedAt,
 	}
