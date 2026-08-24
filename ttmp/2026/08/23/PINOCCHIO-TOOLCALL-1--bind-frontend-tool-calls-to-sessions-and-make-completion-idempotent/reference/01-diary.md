@@ -16,6 +16,8 @@ RelatedFiles:
       Note: Stable HTTP mapping for invocation rejection codes (commit 8cdc9af)
     - Path: repo://cmd/web-chat/internal/appserver/server_test.go
       Note: Unsolicited result rejection contract (commit 8cdc9af)
+    - Path: repo://pkg/chatapp/frontendtools/bridge_test.go
+      Note: All non-success terminal statuses map to model-visible errors (commit d1e1741)
     - Path: repo://pkg/chatapp/frontendtools/manager.go
       Note: Session-bound pending identity and strict result validation (commit 8cdc9af)
     - Path: repo://pkg/chatapp/frontendtools/manager_test.go
@@ -30,6 +32,7 @@ LastUpdated: 2026-08-23T17:25:00-04:00
 WhatFor: Let an implementer or reviewer retrace why the design binds pending calls to full invocation identity and how to validate the change.
 WhenToUse: When implementing, reviewing, resuming, or testing PINOCCHIO-TOOLCALL-1.
 ---
+
 
 
 
@@ -449,3 +452,77 @@ validate -> lock -> pending-to-terminal -> unlock -> publish -> wake once
 ```
 
 Terminal retention is bounded by both count and age and does not store arbitrary result payloads—only trusted identity metadata and a SHA-256 digest.
+
+## Step 6: Audit bridge behavior and complete the server-only validation gate
+
+I performed a final pass against the design's Phase 0/1 test matrix, removed terminal fields that were stored but never read, and added a table-driven bridge test for every accepted non-success status. Focused, 20-iteration race, chatapp-wide, build, lint/vet, frontend generation, and repository-wide tests all pass.
+
+The design now has an implementation-status section that names the landed commits, actual error codes, retention defaults, and the explicit Phase 2–4 boundary. The ticket remains active because protocol-v2 and executor ownership require coordinated PBUI/react-chat changes.
+
+### Prompt Context
+
+**User prompt (verbatim):** (same as Step 4)
+
+**Assistant interpretation:** Close out the safe Pinocchio-only implementation slice with broad validation and accurate continuation docs.
+
+**Inferred user intent:** Leave reviewable commits and a clear account of what is fixed versus what still depends on other repositories.
+
+**Commit (code):** `d1e1741d90210701c357415c51db7b92cb455f6d` — "test(frontendtools): cover terminal bridge statuses"
+
+### What I did
+
+- Removed unused `messageID` and `status` fields from terminal records.
+- Added bridge tests for `failed`, `cancelled`, `denied`, and `timeout` model-error mapping.
+- Re-ran the 20-iteration race suite after the cleanup.
+- Ran `make build` and `go test ./pkg/chatapp/... -count=1` explicitly.
+- Added implementation status and residual scope to the design guide.
+
+### Why
+
+- The ticket forbids dead code/data and requires an intern to distinguish implemented containment from future protocol work.
+- Manager-level status acceptance is insufficient unless the bridge consistently translates every non-success terminal result for Geppetto.
+
+### What worked
+
+```text
+go test ./pkg/chatapp/frontendtools -count=1             # PASS
+go test -race ./pkg/chatapp/frontendtools -count=20      # PASS
+go test ./pkg/chatapp/... -count=1                       # PASS
+make build                                                # PASS
+pre-commit: generation + frontend build + lint/vet + ./... # PASS
+```
+
+### What didn't work
+
+N/A in this interval. The Vite build continued to emit its pre-existing non-fatal warning that `app-config.js` cannot be bundled without `type="module"`; build output completed successfully.
+
+### What I learned
+
+- The default bridge already had correct generic non-success behavior, but the contract was untested outside one manager-level denied result.
+- The server-only slice is independently releasable; message/run/manifest/executor identity is not, because current consumers cannot send those fields.
+
+### What was tricky to build
+
+The validation boundary had to avoid claiming the full ticket design was implemented. `(session, call)` plus bounded retention closes the reproduced cross-session defect and duplicate-completion races, but after terminal eviction v1 still cannot distinguish a very late same-session reused call id from a new invocation. Protocol-v2 identity/capability is the required durable solution.
+
+### What warrants a second pair of eyes
+
+- Review the residual same-session/id reuse window after terminal eviction.
+- Confirm the protocol-v2 rollout order before adding protobuf fields.
+- Decide whether terminal retention configuration belongs in web-chat/PBUI command-line configuration or can remain at defaults initially.
+
+### What should be done in the future
+
+- Implement task `7xay` only with matching chat-provider/PBUI protocol changes.
+- Implement client-scoped manifests/executor leases under task `bu4j` after protocol identity exists.
+- Add operations metrics and result-size policy in the later hardening phase.
+
+### Code review instructions
+
+- Review commits in order: `8cdc9af`, `84c6e63`, then `d1e1741`.
+- Start with the manager regression names, then follow the corresponding state transitions in `manager.go`.
+- Re-run the five validation commands above; inspect `git status --short` afterward for generated noise.
+
+### Technical details
+
+Implemented HTTP outcomes are 400 for invalid status, 404 for unknown result, 410 for late result, 409 for identity/terminal/key conflicts, and 500 for operational publication failure.

@@ -53,6 +53,18 @@ The immediate correction is to key and validate pending calls with at least `(se
 
 This document explains the entire subsystem for an intern, then gives file-level implementation steps, protobuf/API sketches, migration ordering, locking rules, and tests.
 
+## Implementation status (2026-08-24)
+
+The server-only phases that do not require a coordinated consumer protocol change are implemented:
+
+- **Phase 0 complete** in `8cdc9af`: `(session_id, tool_call_id)` pending keys, duplicate insertion rejection, exact-record cleanup, strict session/tool/status validation, trusted timeline identity, and stable HTTP rejection mapping.
+- **Phase 1 complete** in `84c6e63`: atomic pending-to-terminal completion, bounded count/age retention, deterministic result digests, identical retry acknowledgement, conflicting/late/key-reuse rejection, cancellation/timeout terminalization, and deterministic publisher-failure completion.
+- **Bridge/status validation complete** in `d1e1741`: all accepted non-success statuses map to model-visible tool errors; unused terminal fields were removed.
+
+Current stable rejection codes are `duplicate_pending`, `unknown_result`, `session_mismatch`, `tool_mismatch`, `invalid_status`, `terminal_conflict`, `late_result`, and `key_reuse`. Defaults retain at most 4,096 terminal digests for 15 minutes; `NewManagerWithConfig` requires positive count and TTL values.
+
+Phases 2–4 remain open. Protocol-v2 run/manifest/executor/capability identity must be coordinated with `REACT-CHAT-TOOL-RUNTIME-1` and `PBUI-TOOLCALL-1`; this implementation intentionally does not add a hidden dual-identity compatibility path.
+
 ## 1. Scope and non-goals
 
 ### In scope

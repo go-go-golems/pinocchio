@@ -8,6 +8,6 @@
 - [x] Implement Phase 0 session-scoped pending identity, strict tool/status validation, and duplicate protection <!-- t:rlx9 -->
 - [x] Implement bounded terminal idempotency, cancellation/timeout terminalization, and deterministic publication-failure behavior <!-- t:7tnb -->
 - [x] Add cross-session, collision, retry, cancellation, publication-failure, and race regression tests <!-- t:ssrz -->
-- [ ] Validate focused/race/chatapp/build checks and update implementation diary <!-- t:rwbb -->
+- [x] Validate focused/race/chatapp/build checks and update implementation diary <!-- t:rwbb -->
 - [ ] Coordinate and implement protocol v2 invocation identity with PBUI and react-chat <!-- t:7xay -->
 - [ ] Implement client-scoped manifests and executor ownership after protocol v2 <!-- t:bu4j -->

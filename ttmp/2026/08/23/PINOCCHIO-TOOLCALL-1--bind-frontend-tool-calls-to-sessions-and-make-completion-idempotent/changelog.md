@@ -45,3 +45,13 @@ Phase 1: added atomic terminal completion, identical-retry idempotency, cancella
 - /home/manuel/workspaces/2026-08-20/add-pbui-agent/pinocchio/pkg/chatapp/frontendtools/manager_test.go — Replay, cancellation, publication failure, and concurrency matrix
 - /home/manuel/workspaces/2026-08-20/add-pbui-agent/pinocchio/pkg/chatapp/frontendtools/terminal_store.go — Bounded terminal ledger
 
+
+## 2026-08-24
+
+Completed server-only Phase 0/1 validation: focused tests, 20x race suite, chatapp suite, make build, lint/vet, frontend build, and full repository tests pass (commit d1e1741)
+
+### Related Files
+
+- /home/manuel/workspaces/2026-08-20/add-pbui-agent/pinocchio/pkg/chatapp/frontendtools/bridge_test.go — Terminal status bridge coverage
+- /home/manuel/workspaces/2026-08-20/add-pbui-agent/pinocchio/ttmp/2026/08/23/PINOCCHIO-TOOLCALL-1--bind-frontend-tool-calls-to-sessions-and-make-completion-idempotent/design-doc/01-pinocchio-frontend-tool-bridge-hardening-invocation-identity-result-validation-implementation-guide.md — Implementation status and remaining coordinated phases
+
