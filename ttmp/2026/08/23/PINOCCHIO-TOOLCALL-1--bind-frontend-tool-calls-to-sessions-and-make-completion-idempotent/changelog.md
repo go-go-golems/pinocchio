@@ -34,3 +34,14 @@ Phase 0: bound pending frontend calls to session/call identity, added strict res
 - /home/manuel/workspaces/2026-08-20/add-pbui-agent/pinocchio/pkg/chatapp/frontendtools/manager.go — Critical containment implementation
 - /home/manuel/workspaces/2026-08-20/add-pbui-agent/pinocchio/pkg/chatapp/frontendtools/manager_test.go — Security and collision regression matrix
 
+
+## 2026-08-24
+
+Phase 1: added atomic terminal completion, identical-retry idempotency, cancellation/timeout terminalization, bounded retention, and concurrency regressions (commit 84c6e63)
+
+### Related Files
+
+- /home/manuel/workspaces/2026-08-20/add-pbui-agent/pinocchio/pkg/chatapp/frontendtools/manager.go — Atomic pending-to-terminal completion
+- /home/manuel/workspaces/2026-08-20/add-pbui-agent/pinocchio/pkg/chatapp/frontendtools/manager_test.go — Replay, cancellation, publication failure, and concurrency matrix
+- /home/manuel/workspaces/2026-08-20/add-pbui-agent/pinocchio/pkg/chatapp/frontendtools/terminal_store.go — Bounded terminal ledger
+
