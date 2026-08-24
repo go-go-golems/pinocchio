@@ -130,7 +130,7 @@ func TestFrontendToolManifestEndpointPublishesTimelineEntity(t *testing.T) {
 	require.True(t, desc.Available)
 }
 
-func TestFrontendToolResultEndpointPublishesTimelineEntity(t *testing.T) {
+func TestFrontendToolResultEndpointRejectsUnsolicitedResult(t *testing.T) {
 	manager := frontendtools.NewManager()
 	_, httpSrv := newTestMux(t, WithFrontendToolManager(manager), WithChatPlugins(frontendtools.NewPlugin()))
 
@@ -138,21 +138,17 @@ func TestFrontendToolResultEndpointPublishesTimelineEntity(t *testing.T) {
 	resp, err := http.Post(httpSrv.URL+"/api/chat/sessions/sess-tools/tools/results", "application/json", bytes.NewReader(body))
 	require.NoError(t, err)
 	defer func() { _ = resp.Body.Close() }()
-	require.Equal(t, http.StatusOK, resp.StatusCode)
+	require.Equal(t, http.StatusNotFound, resp.StatusCode)
+	responseBody, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	require.Contains(t, string(responseBody), string(frontendtools.InvocationErrorUnknownResult))
 
 	snapResp, err := http.Get(httpSrv.URL + "/api/chat/sessions/sess-tools")
 	require.NoError(t, err)
 	defer func() { _ = snapResp.Body.Close() }()
 	var snap SessionSnapshotResponse
 	require.NoError(t, json.NewDecoder(snapResp.Body).Decode(&snap))
-	require.Len(t, snap.Entities, 1)
-	toolEntity := snap.Entities[0]
-	require.Equal(t, "ChatFrontendToolCall", toolEntity.Kind)
-	require.Equal(t, "call-1", toolEntity.ID)
-	payload, ok := toolEntity.Payload.(map[string]any)
-	require.True(t, ok)
-	require.Equal(t, "app.confirm_action", payload["toolName"])
-	require.Equal(t, "success", payload["status"])
+	require.Empty(t, snap.Entities)
 }
 
 func TestSubmitAndSnapshot(t *testing.T) {
