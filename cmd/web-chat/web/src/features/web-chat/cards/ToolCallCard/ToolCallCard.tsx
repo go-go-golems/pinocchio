@@ -1,5 +1,5 @@
 import { logWarn } from '../../../../utils/logger';
-import { submitFrontendToolResult } from '../../../../ws/frontendTools';
+import { isTerminalFrontendToolResultStatus, submitFrontendToolResult } from '../../../../ws/frontendTools';
 import { fmtSentAt } from '../../format';
 import { asRecord } from '../utils';
 import type { ToolCallCardProps } from './types';
@@ -11,7 +11,7 @@ export function ToolCallCard({ e }: ToolCallCardProps) {
   const status = String(e.props?.status ?? '');
   const sessionId = String(e.props?.sessionId ?? '');
   const toolCallId = String(e.props?.toolCallId ?? e.id ?? '');
-  const done = !!e.props?.done || !!result || status === 'success' || status === 'denied' || status === 'failed';
+  const done = !!e.props?.done || !!result || isTerminalFrontendToolResultStatus(status);
   const inputRecord = asRecord(input);
   const isHumanConfirm = !done && !!sessionId && !!toolCallId && (typeof inputRecord.title === 'string' || typeof inputRecord.confirmLabel === 'string' || typeof inputRecord.cancelLabel === 'string');
   const title = done ? `${name} (done)` : name;

@@ -25,8 +25,9 @@ const (
 
 	TimelineEntityFrontendToolCall = "ChatFrontendToolCall"
 
-	defaultTerminalMaxEntries = 4096
-	defaultTerminalTTL        = 15 * time.Minute
+	defaultTerminalMaxEntries     = 4096
+	defaultTerminalTTL            = 15 * time.Minute
+	defaultTerminalPublishTimeout = 5 * time.Second
 )
 
 // InvocationErrorCode identifies a stable frontend-tool request or result
@@ -92,11 +93,12 @@ func DefaultManagerConfig() ManagerConfig {
 }
 
 type Manager struct {
-	mu        sync.Mutex
-	manifests map[sessionstream.SessionId]*toolv1.FrontendToolManifestUpdated
-	pending   map[pendingKey]*pendingCall
-	terminal  *boundedTerminalStore
-	now       func() time.Time
+	mu                     sync.Mutex
+	manifests              map[sessionstream.SessionId]*toolv1.FrontendToolManifestUpdated
+	pending                map[pendingKey]*pendingCall
+	terminal               *boundedTerminalStore
+	terminalPublishTimeout time.Duration
+	now                    func() time.Time
 }
 
 func NewManager() *Manager {
@@ -117,10 +119,11 @@ func NewManagerWithConfig(config ManagerConfig) (*Manager, error) {
 
 func newManager(config ManagerConfig) *Manager {
 	return &Manager{
-		manifests: map[sessionstream.SessionId]*toolv1.FrontendToolManifestUpdated{},
-		pending:   map[pendingKey]*pendingCall{},
-		terminal:  newBoundedTerminalStore(config.TerminalMaxEntries, config.TerminalTTL),
-		now:       time.Now,
+		manifests:              map[sessionstream.SessionId]*toolv1.FrontendToolManifestUpdated{},
+		pending:                map[pendingKey]*pendingCall{},
+		terminal:               newBoundedTerminalStore(config.TerminalMaxEntries, config.TerminalTTL),
+		terminalPublishTimeout: defaultTerminalPublishTimeout,
+		now:                    time.Now,
 	}
 }
 
@@ -377,7 +380,9 @@ func (m *Manager) terminalizeContext(ctx context.Context, pub sessionstream.Even
 	}, now)
 	m.mu.Unlock()
 
-	return pub.Publish(context.WithoutCancel(ctx), frontendToolResultEvent(pending, payload))
+	publishCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), m.terminalPublishTimeout)
+	defer cancel()
+	return pub.Publish(publishCtx, frontendToolResultEvent(pending, payload))
 }
 
 func (m *Manager) hasToolCallInOtherSession(key pendingKey, now time.Time) bool {

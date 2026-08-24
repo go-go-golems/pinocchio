@@ -270,6 +270,29 @@ func TestManagerContextCancellationBecomesTerminalAndRejectsLateResult(t *testin
 	}
 }
 
+func TestManagerContextCancellationPublicationIsBounded(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	manager := NewManager()
+	manager.terminalPublishTimeout = 20 * time.Millisecond
+	publisher := &contextBlockingResultPublisher{events: make(chan sessionstream.Event, 1)}
+	sid := sessionstream.SessionId("bounded-cancellation-session")
+	outcome := startManagerRequest(ctx, manager, publisher, sid, Request{
+		MessageID:  "msg-1",
+		ToolCallID: "call-1",
+		ToolName:   "browser.wait",
+	})
+	waitCtx, waitCancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer waitCancel()
+	requireRequestedEvent(t, waitCtx, &capturePublisher{events: publisher.events}, sid, "msg-1", "call-1", "browser.wait")
+
+	cancel()
+	requireRequestError(t, outcome, context.Canceled)
+	require.True(t, publisher.resultPublishTimedOut(), "terminal publication must stop at its bounded context deadline")
+
+	err := manager.HandleResult(context.Background(), resultCommand(sid, "call-1", "browser.wait", "success", nil), nil, publisher)
+	requireInvocationErrorCode(t, err, InvocationErrorLateResult)
+}
+
 func TestManagerResultPublicationFailureCompletesWaiterWithFailure(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
@@ -318,6 +341,30 @@ func TestManagerConcurrentTerminalDeliveryPublishesAndCompletesOnce(t *testing.T
 	requireResultEvent(t, ctx, &capturePublisher{events: publisher.events}, sid, "msg-1", "call-1", "browser.write")
 	require.Equal(t, "success", requireRequestOutcome(t, ctx, outcome).GetStatus())
 	requireNoEvent(t, &capturePublisher{events: publisher.events})
+}
+
+type contextBlockingResultPublisher struct {
+	events chan sessionstream.Event
+	mu     sync.Mutex
+	err    error
+}
+
+func (p *contextBlockingResultPublisher) Publish(ctx context.Context, event sessionstream.Event) error {
+	if event.Name != EventResultReceived {
+		p.events <- event
+		return nil
+	}
+	<-ctx.Done()
+	p.mu.Lock()
+	p.err = ctx.Err()
+	p.mu.Unlock()
+	return ctx.Err()
+}
+
+func (p *contextBlockingResultPublisher) resultPublishTimedOut() bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return errors.Is(p.err, context.DeadlineExceeded)
 }
 
 type resultFailPublisher struct {
