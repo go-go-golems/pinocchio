@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -128,6 +129,29 @@ func TestFrontendToolManifestEndpointPublishesTimelineEntity(t *testing.T) {
 	require.Equal(t, "app.confirm_action", desc.Name)
 	require.Equal(t, toolv1.ToolExecutionMode_TOOL_EXECUTION_MODE_FRONTEND_HUMAN, desc.Mode)
 	require.True(t, desc.Available)
+}
+
+func TestFrontendToolResultErrorStatus(t *testing.T) {
+	tests := []struct {
+		name     string
+		err      error
+		expected int
+	}{
+		{name: "invalid status", err: &frontendtools.InvocationError{Code: frontendtools.InvocationErrorInvalidStatus}, expected: http.StatusBadRequest},
+		{name: "unknown", err: &frontendtools.InvocationError{Code: frontendtools.InvocationErrorUnknownResult}, expected: http.StatusNotFound},
+		{name: "late", err: &frontendtools.InvocationError{Code: frontendtools.InvocationErrorLateResult}, expected: http.StatusGone},
+		{name: "duplicate", err: &frontendtools.InvocationError{Code: frontendtools.InvocationErrorDuplicatePending}, expected: http.StatusConflict},
+		{name: "wrong session", err: &frontendtools.InvocationError{Code: frontendtools.InvocationErrorSessionMismatch}, expected: http.StatusConflict},
+		{name: "wrong tool", err: &frontendtools.InvocationError{Code: frontendtools.InvocationErrorToolMismatch}, expected: http.StatusConflict},
+		{name: "terminal conflict", err: &frontendtools.InvocationError{Code: frontendtools.InvocationErrorTerminalConflict}, expected: http.StatusConflict},
+		{name: "key reuse", err: &frontendtools.InvocationError{Code: frontendtools.InvocationErrorKeyReuse}, expected: http.StatusConflict},
+		{name: "internal", err: errors.New("boom"), expected: http.StatusInternalServerError},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.expected, frontendToolResultErrorStatus(tt.err))
+		})
+	}
 }
 
 func TestFrontendToolResultEndpointRejectsUnsolicitedResult(t *testing.T) {

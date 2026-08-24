@@ -140,9 +140,13 @@ func frontendToolResultErrorStatus(err error) int {
 		return http.StatusBadRequest
 	case frontendtools.InvocationErrorUnknownResult:
 		return http.StatusNotFound
+	case frontendtools.InvocationErrorLateResult:
+		return http.StatusGone
 	case frontendtools.InvocationErrorDuplicatePending,
 		frontendtools.InvocationErrorSessionMismatch,
-		frontendtools.InvocationErrorToolMismatch:
+		frontendtools.InvocationErrorToolMismatch,
+		frontendtools.InvocationErrorTerminalConflict,
+		frontendtools.InvocationErrorKeyReuse:
 		return http.StatusConflict
 	default:
 		return http.StatusInternalServerError

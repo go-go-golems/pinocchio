@@ -2,6 +2,8 @@ package frontendtools
 
 import (
 	"context"
+	"errors"
+	"sync"
 	"testing"
 	"time"
 
@@ -174,6 +176,187 @@ func TestManagerRejectsUnknownResultWithoutPublishing(t *testing.T) {
 	requireNoEvent(t, publisher)
 }
 
+func TestManagerRemovePendingDoesNotDeleteReplacement(t *testing.T) {
+	manager := NewManager()
+	key := pendingKey{sessionID: "session", toolCallID: "call"}
+	oldPending := &pendingCall{key: key}
+	replacement := &pendingCall{key: key}
+	manager.pending[key] = replacement
+
+	manager.removePending(oldPending)
+
+	require.Same(t, replacement, manager.pending[key])
+}
+
+func TestManagerTerminalResultRetriesAreIdempotentAndConflictsAreRejected(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	manager := NewManager()
+	publisher := &capturePublisher{events: make(chan sessionstream.Event, 16)}
+	sid := sessionstream.SessionId("terminal-session")
+	outcome := startManagerRequest(ctx, manager, publisher, sid, Request{MessageID: "msg-1", ToolCallID: "call-1", ToolName: "browser.write"})
+	requireRequestedEvent(t, ctx, publisher, sid, "msg-1", "call-1", "browser.write")
+
+	result, err := structpb.NewStruct(map[string]any{"revision": 7})
+	require.NoError(t, err)
+	accepted := resultCommand(sid, "call-1", "browser.write", "success", result)
+	require.NoError(t, manager.HandleResult(ctx, accepted, nil, publisher))
+	requireResultEvent(t, ctx, publisher, sid, "msg-1", "call-1", "browser.write")
+	require.Equal(t, float64(7), requireRequestOutcome(t, ctx, outcome).GetResult().AsMap()["revision"])
+
+	require.NoError(t, manager.HandleResult(ctx, accepted, nil, publisher), "identical terminal retry must be acknowledged")
+	requireNoEvent(t, publisher)
+
+	conflictingResult, err := structpb.NewStruct(map[string]any{"revision": 8})
+	require.NoError(t, err)
+	err = manager.HandleResult(ctx, resultCommand(sid, "call-1", "browser.write", "success", conflictingResult), nil, publisher)
+	requireInvocationErrorCode(t, err, InvocationErrorTerminalConflict)
+	requireNoEvent(t, publisher)
+
+	reused, err := manager.Request(ctx, sid, publisher, Request{MessageID: "msg-2", ToolCallID: "call-1", ToolName: "browser.write"})
+	require.Nil(t, reused)
+	requireInvocationErrorCode(t, err, InvocationErrorKeyReuse)
+}
+
+func TestManagerContextCancellationBecomesTerminalAndRejectsLateResult(t *testing.T) {
+	tests := []struct {
+		name           string
+		newContext     func() (context.Context, context.CancelFunc)
+		trigger        func(context.CancelFunc)
+		expectedStatus string
+		expectedError  error
+	}{
+		{
+			name: "cancelled",
+			newContext: func() (context.Context, context.CancelFunc) {
+				return context.WithCancel(context.Background())
+			},
+			trigger:        func(cancel context.CancelFunc) { cancel() },
+			expectedStatus: "cancelled",
+			expectedError:  context.Canceled,
+		},
+		{
+			name: "timeout",
+			newContext: func() (context.Context, context.CancelFunc) {
+				return context.WithDeadline(context.Background(), time.Unix(1, 0))
+			},
+			trigger:        func(context.CancelFunc) {},
+			expectedStatus: "timeout",
+			expectedError:  context.DeadlineExceeded,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx, cancel := tt.newContext()
+			defer cancel()
+			manager := NewManager()
+			publisher := &capturePublisher{events: make(chan sessionstream.Event, 8)}
+			sid := sessionstream.SessionId("context-" + tt.name)
+			outcome := startManagerRequest(ctx, manager, publisher, sid, Request{MessageID: "msg-1", ToolCallID: "call-1", ToolName: "browser.wait"})
+			waitCtx, waitCancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer waitCancel()
+			requireRequestedEvent(t, waitCtx, publisher, sid, "msg-1", "call-1", "browser.wait")
+			tt.trigger(cancel)
+
+			requireRequestError(t, outcome, tt.expectedError)
+			requireResultEventStatus(t, publisher, sid, "msg-1", "call-1", "browser.wait", tt.expectedStatus)
+
+			err := manager.HandleResult(context.Background(), resultCommand(sid, "call-1", "browser.wait", "success", nil), nil, publisher)
+			requireInvocationErrorCode(t, err, InvocationErrorLateResult)
+			requireNoEvent(t, publisher)
+		})
+	}
+}
+
+func TestManagerResultPublicationFailureCompletesWaiterWithFailure(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	publishErr := errors.New("timeline unavailable")
+	publisher := &resultFailPublisher{events: make(chan sessionstream.Event, 4), err: publishErr}
+	manager := NewManager()
+	sid := sessionstream.SessionId("publish-failure-session")
+	outcome := startManagerRequest(ctx, manager, publisher, sid, Request{MessageID: "msg-1", ToolCallID: "call-1", ToolName: "browser.write"})
+	requireRequestedEvent(t, ctx, &capturePublisher{events: publisher.events}, sid, "msg-1", "call-1", "browser.write")
+
+	err := manager.HandleResult(ctx, resultCommand(sid, "call-1", "browser.write", "success", nil), nil, publisher)
+	require.ErrorIs(t, err, publishErr)
+	completed := requireRequestOutcome(t, ctx, outcome)
+	require.Equal(t, "failed", completed.GetStatus())
+	require.Contains(t, completed.GetError(), "timeline unavailable")
+	require.Empty(t, publisher.events)
+
+	require.NoError(t, manager.HandleResult(ctx, resultCommand(sid, "call-1", "browser.write", "success", nil), nil, publisher))
+}
+
+func TestManagerConcurrentTerminalDeliveryPublishesAndCompletesOnce(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	publisher := newBlockingResultPublisher()
+	manager := NewManager()
+	sid := sessionstream.SessionId("concurrent-session")
+	outcome := startManagerRequest(ctx, manager, publisher, sid, Request{MessageID: "msg-1", ToolCallID: "call-1", ToolName: "browser.write"})
+	requireRequestedEvent(t, ctx, &capturePublisher{events: publisher.events}, sid, "msg-1", "call-1", "browser.write")
+
+	accepted := resultCommand(sid, "call-1", "browser.write", "success", nil)
+	firstErr := make(chan error, 1)
+	go func() { firstErr <- manager.HandleResult(ctx, accepted, nil, publisher) }()
+	select {
+	case <-publisher.resultEntered:
+	case <-ctx.Done():
+		t.Fatalf("timed out waiting for first result publication")
+	}
+
+	require.NoError(t, manager.HandleResult(ctx, accepted, nil, publisher), "retry while first publish is blocked must be idempotent")
+	conflicting := resultCommand(sid, "call-1", "browser.write", "failed", nil)
+	requireInvocationErrorCode(t, manager.HandleResult(ctx, conflicting, nil, publisher), InvocationErrorTerminalConflict)
+	close(publisher.releaseResult)
+	require.NoError(t, <-firstErr)
+	requireResultEvent(t, ctx, &capturePublisher{events: publisher.events}, sid, "msg-1", "call-1", "browser.write")
+	require.Equal(t, "success", requireRequestOutcome(t, ctx, outcome).GetStatus())
+	requireNoEvent(t, &capturePublisher{events: publisher.events})
+}
+
+type resultFailPublisher struct {
+	events chan sessionstream.Event
+	err    error
+}
+
+func (p *resultFailPublisher) Publish(_ context.Context, event sessionstream.Event) error {
+	if event.Name == EventResultReceived {
+		return p.err
+	}
+	p.events <- event
+	return nil
+}
+
+type blockingResultPublisher struct {
+	events        chan sessionstream.Event
+	resultEntered chan struct{}
+	releaseResult chan struct{}
+	once          sync.Once
+}
+
+func newBlockingResultPublisher() *blockingResultPublisher {
+	return &blockingResultPublisher{
+		events:        make(chan sessionstream.Event, 8),
+		resultEntered: make(chan struct{}),
+		releaseResult: make(chan struct{}),
+	}
+}
+
+func (p *blockingResultPublisher) Publish(_ context.Context, event sessionstream.Event) error {
+	if event.Name == EventResultReceived {
+		p.once.Do(func() { close(p.resultEntered) })
+		<-p.releaseResult
+	}
+	p.events <- event
+	return nil
+}
+
 type managerRequestOutcome struct {
 	result *toolv1.FrontendToolResultCommand
 	err    error
@@ -198,6 +381,17 @@ func requireRequestOutcome(t *testing.T, ctx context.Context, outcomes <-chan ma
 	case <-ctx.Done():
 		t.Fatalf("timed out waiting for request outcome: %v", ctx.Err())
 		return nil
+	}
+}
+
+func requireRequestError(t *testing.T, outcomes <-chan managerRequestOutcome, expected error) {
+	t.Helper()
+	select {
+	case outcome := <-outcomes:
+		require.Nil(t, outcome.result)
+		require.ErrorIs(t, outcome.err, expected)
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for request error")
 	}
 }
 
@@ -228,6 +422,25 @@ func requireResultEvent(t *testing.T, ctx context.Context, publisher *capturePub
 		require.Equal(t, messageID, payload.GetMessageId())
 		require.Equal(t, toolCallID, payload.GetToolCallId())
 		require.Equal(t, toolName, payload.GetToolName())
+	case <-ctx.Done():
+		t.Fatalf("timed out waiting for result event: %v", ctx.Err())
+	}
+}
+
+func requireResultEventStatus(t *testing.T, publisher *capturePublisher, sid sessionstream.SessionId, messageID, toolCallID, toolName, status string) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	select {
+	case event := <-publisher.events:
+		require.Equal(t, EventResultReceived, event.Name)
+		require.Equal(t, sid, event.SessionId)
+		payload, ok := event.Payload.(*toolv1.FrontendToolResultReceived)
+		require.True(t, ok)
+		require.Equal(t, messageID, payload.GetMessageId())
+		require.Equal(t, toolCallID, payload.GetToolCallId())
+		require.Equal(t, toolName, payload.GetToolName())
+		require.Equal(t, status, payload.GetStatus())
 	case <-ctx.Done():
 		t.Fatalf("timed out waiting for result event: %v", ctx.Err())
 	}
