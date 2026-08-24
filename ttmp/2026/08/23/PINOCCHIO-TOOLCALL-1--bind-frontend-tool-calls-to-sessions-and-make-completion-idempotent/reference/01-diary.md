@@ -16,12 +16,24 @@ RelatedFiles:
       Note: Stable HTTP mapping for invocation rejection codes (commit 8cdc9af)
     - Path: repo://cmd/web-chat/internal/appserver/server_test.go
       Note: Unsolicited result rejection contract (commit 8cdc9af)
+    - Path: repo://cmd/web-chat/web/src/features/web-chat/cards/ToolCallCard/ToolCallCard.test.tsx
+      Note: Cancelled and timeout card rendering regressions (commit c9e8255)
+    - Path: repo://cmd/web-chat/web/src/features/web-chat/cards/ToolCallCard/ToolCallCard.tsx
+      Note: Terminal cards suppress stale human controls (commit c9e8255)
+    - Path: repo://cmd/web-chat/web/src/ws/frontendTools.test.ts
+      Note: Accepted terminal-status contract tests (commit c9e8255)
+    - Path: repo://cmd/web-chat/web/src/ws/frontendTools.ts
+      Note: Canonical terminal frontend-tool status predicate (commit c9e8255)
     - Path: repo://pkg/chatapp/frontendtools/bridge_test.go
       Note: All non-success terminal statuses map to model-visible errors (commit d1e1741)
     - Path: repo://pkg/chatapp/frontendtools/manager.go
-      Note: Session-bound pending identity and strict result validation (commit 8cdc9af)
+      Note: |-
+        Session-bound pending identity and strict result validation (commit 8cdc9af)
+        Bounded detached cancellation publication context (commit c9e8255)
     - Path: repo://pkg/chatapp/frontendtools/manager_test.go
-      Note: Cross-session, duplicate, mismatch, and unknown-result regressions (commit 8cdc9af)
+      Note: |-
+        Cross-session, duplicate, mismatch, and unknown-result regressions (commit 8cdc9af)
+        Blocking-publisher cancellation deadline regression (commit c9e8255)
     - Path: repo://pkg/chatapp/frontendtools/terminal_store.go
       Note: Bounded count/age terminal retention (commit 84c6e63)
     - Path: repo://pkg/chatapp/frontendtools/terminal_store_test.go
@@ -32,6 +44,7 @@ LastUpdated: 2026-08-23T17:25:00-04:00
 WhatFor: Let an implementer or reviewer retrace why the design binds pending calls to full invocation identity and how to validate the change.
 WhenToUse: When implementing, reviewing, resuming, or testing PINOCCHIO-TOOLCALL-1.
 ---
+
 
 
 
@@ -526,3 +539,89 @@ The validation boundary had to avoid claiming the full ticket design was impleme
 ### Technical details
 
 Implemented HTTP outcomes are 400 for invalid status, 404 for unknown result, 410 for late result, 409 for identity/terminal/key conflicts, and 500 for operational publication failure.
+
+## Step 7: Bound cancellation publication and close terminal UI states
+
+PR 207 review identified two integration gaps in cancellation handling. A detached cancellation-event publication could wait indefinitely after the request context ended, and the web card did not recognize the server's new `cancelled` and `timeout` states as terminal.
+
+I bounded detached terminal publication to five seconds and added a context-aware blocking-publisher regression. I also centralized the browser terminal-status predicate, added `timeout` to the shared result type, and directly verified that cancelled/timed-out confirmation cards render as done without Approve or Deny controls.
+
+### Prompt Context
+
+**User prompt (verbatim):** "Address code review issues: https://github.com/go-go-golems/pinocchio/pull/207
+
+[REMINDER] Output a <summary>...</summary> block at the VERY END of your response. This is mandatory."
+
+**Assistant interpretation:** Inspect every PR 207 review thread, implement the actionable backend and frontend fixes, test them at the package and repository levels, and update the ticket record.
+
+**Inferred user intent:** Make PR 207 safe to merge by resolving the review findings with executable regression coverage rather than comment-only responses.
+
+**Commit (code):** `c9e8255aa8bf58d881b25a88e1f4e3e94ec6a8aa` — "fix(frontendtools): bound cancellation publication"
+
+### What I did
+
+- Queried PR reviews and inline comments through `gh api` and found two P2 findings.
+- Added a five-second detached-context deadline around cancellation/timeout timeline publication.
+- Added a publisher that blocks until `ctx.Done()` and verified a cancelled request still returns while retaining terminal late-result rejection.
+- Added a canonical TypeScript predicate for all five accepted terminal statuses.
+- Updated `ToolCallCard` to hide human controls for `cancelled` and `timeout`.
+- Added predicate and rendered-card regression tests.
+- Ran focused race tests, all frontend tests/checks, and the full pre-commit pipeline.
+
+### Why
+
+- Cancellation must bound the request's remaining work; detaching cancellation without adding a new deadline defeats that invariant.
+- A backend terminal transition and its UI completion predicate are one cross-layer contract. Leaving approval controls active invites guaranteed HTTP 410 responses.
+
+### What worked
+
+```text
+go test ./pkg/chatapp/frontendtools -count=1          # PASS
+go test -race ./pkg/chatapp/frontendtools -count=20   # PASS
+frontend npm test                                      # 36 PASS
+frontend typecheck + Biome lint                        # PASS
+pre-commit generation/build/lint/vet/go test ./...     # PASS
+```
+
+### What didn't work
+
+`gh pr view 207 --comments` failed because GitHub's GraphQL response still references deprecated classic project cards:
+
+```text
+GraphQL: Projects (classic) is being deprecated in favor of the new Projects experience
+```
+
+I recovered by querying `/pulls/207/comments` and `/pulls/207/reviews` through `gh api --paginate`, which returned both inline findings and the parent review without using the failing field.
+
+### What I learned
+
+- `context.WithoutCancel` is appropriate for best-effort terminal publication only when immediately wrapped in a fresh bounded context.
+- Pinocchio's status union had already included `cancelled` but omitted `timeout`, while the renderer independently hard-coded only three terminal states; one shared predicate prevents another drift.
+- Static React rendering is sufficient to verify that dead approval controls are absent without adding a browser testing dependency.
+
+### What was tricky to build
+
+Terminalization deliberately mutates pending state before external I/O, so a publication timeout must not roll the invocation back. The regression therefore verifies both escape behavior and the durable semantic outcome: `Request` returns `context.Canceled`, publication observes `context.DeadlineExceeded`, and a subsequent browser success remains a `late_result`.
+
+The test publisher also needed synchronization around its observed error so the 20-iteration race suite could validate the assertion without introducing a test-only data race.
+
+### What warrants a second pair of eyes
+
+- Confirm five seconds is an appropriate operational bound for the current sessionstream storage/fanout path.
+- Confirm terminal publication failures should remain returned as wrapped cancellation errors rather than moving to asynchronous observability.
+- Review whether other timeline renderers duplicate terminal-status lists outside this card.
+
+### What should be done in the future
+
+- Add publication timeout/error metrics when the control-plane observability phase lands.
+- Carry terminal status as a generated protocol enum in protocol v2 instead of maintaining a TypeScript string union.
+
+### Code review instructions
+
+- Start at `Manager.terminalizeContext` and `TestManagerContextCancellationPublicationIsBounded`.
+- Then review `isTerminalFrontendToolResultStatus` and the static-render card test.
+- Re-run the five validation commands listed above.
+
+### Technical details
+
+The bounded context preserves request values with `context.WithoutCancel(ctx)` but replaces cancellation and the expired request deadline using `context.WithTimeout(..., 5*time.Second)`. Terminal state continues to win before publication, preserving the existing idempotency contract.

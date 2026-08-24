@@ -55,3 +55,13 @@ Completed server-only Phase 0/1 validation: focused tests, 20x race suite, chata
 - /home/manuel/workspaces/2026-08-20/add-pbui-agent/pinocchio/pkg/chatapp/frontendtools/bridge_test.go — Terminal status bridge coverage
 - /home/manuel/workspaces/2026-08-20/add-pbui-agent/pinocchio/ttmp/2026/08/23/PINOCCHIO-TOOLCALL-1--bind-frontend-tool-calls-to-sessions-and-make-completion-idempotent/design-doc/01-pinocchio-frontend-tool-bridge-hardening-invocation-identity-result-validation-implementation-guide.md — Implementation status and remaining coordinated phases
 
+
+## 2026-08-24
+
+Addressed PR 207 review: bounded cancellation publication and terminal cancelled/timeout card rendering (commit c9e8255)
+
+### Related Files
+
+- /home/manuel/workspaces/2026-08-20/add-pbui-agent/pinocchio/cmd/web-chat/web/src/features/web-chat/cards/ToolCallCard/ToolCallCard.tsx — Shared terminal-status handling
+- /home/manuel/workspaces/2026-08-20/add-pbui-agent/pinocchio/pkg/chatapp/frontendtools/manager.go — Fresh five-second publication deadline
+
