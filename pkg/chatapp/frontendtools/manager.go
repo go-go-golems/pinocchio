@@ -2,11 +2,15 @@ package frontendtools
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
+	"strings"
 	"sync"
+	"time"
 
 	toolv1 "github.com/go-go-golems/pinocchio/pkg/chatapp/pb/proto/pinocchio/chatapp/frontendtools/v1"
 	"github.com/go-go-golems/sessionstream/pkg/sessionstream"
+	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/structpb"
 )
@@ -20,24 +24,106 @@ const (
 	EventResultReceived  = "ChatFrontendToolResultReceived"
 
 	TimelineEntityFrontendToolCall = "ChatFrontendToolCall"
+
+	defaultTerminalMaxEntries     = 4096
+	defaultTerminalTTL            = 15 * time.Minute
+	defaultTerminalPublishTimeout = 5 * time.Second
 )
 
+// InvocationErrorCode identifies a stable frontend-tool request or result
+// rejection reason without exposing result payload data.
+type InvocationErrorCode string
+
+const (
+	InvocationErrorDuplicatePending InvocationErrorCode = "duplicate_pending"
+	InvocationErrorUnknownResult    InvocationErrorCode = "unknown_result"
+	InvocationErrorSessionMismatch  InvocationErrorCode = "session_mismatch"
+	InvocationErrorToolMismatch     InvocationErrorCode = "tool_mismatch"
+	InvocationErrorInvalidStatus    InvocationErrorCode = "invalid_status"
+	InvocationErrorTerminalConflict InvocationErrorCode = "terminal_conflict"
+	InvocationErrorLateResult       InvocationErrorCode = "late_result"
+	InvocationErrorKeyReuse         InvocationErrorCode = "key_reuse"
+)
+
+// InvocationError describes a rejected frontend-tool request or result.
+type InvocationError struct {
+	Code       InvocationErrorCode
+	SessionID  sessionstream.SessionId
+	ToolCallID string
+	ToolName   string
+}
+
+func (e *InvocationError) Error() string {
+	if e == nil {
+		return "frontend tool invocation rejected"
+	}
+	return fmt.Sprintf("frontend tool invocation rejected: code=%s session_id=%q tool_call_id=%q tool_name=%q", e.Code, e.SessionID, e.ToolCallID, e.ToolName)
+}
+
+// InvocationErrorCodeOf returns the stable code carried by an InvocationError.
+func InvocationErrorCodeOf(err error) (InvocationErrorCode, bool) {
+	var invocationErr *InvocationError
+	if !errors.As(err, &invocationErr) {
+		return "", false
+	}
+	return invocationErr.Code, true
+}
+
+type pendingKey struct {
+	sessionID  sessionstream.SessionId
+	toolCallID string
+}
+
 type pendingCall struct {
+	key       pendingKey
 	messageID string
 	toolName  string
 	ch        chan *toolv1.FrontendToolResultCommand
 }
 
+// ManagerConfig controls bounded frontend-tool terminal retention.
+type ManagerConfig struct {
+	TerminalMaxEntries int
+	TerminalTTL        time.Duration
+}
+
+// DefaultManagerConfig returns production-safe bounded terminal retention.
+func DefaultManagerConfig() ManagerConfig {
+	return ManagerConfig{TerminalMaxEntries: defaultTerminalMaxEntries, TerminalTTL: defaultTerminalTTL}
+}
+
 type Manager struct {
-	mu        sync.Mutex
-	manifests map[sessionstream.SessionId]*toolv1.FrontendToolManifestUpdated
-	pending   map[string]*pendingCall
+	mu                     sync.Mutex
+	manifests              map[sessionstream.SessionId]*toolv1.FrontendToolManifestUpdated
+	pending                map[pendingKey]*pendingCall
+	terminal               *boundedTerminalStore
+	terminalPublishTimeout time.Duration
+	now                    func() time.Time
 }
 
 func NewManager() *Manager {
+	return newManager(DefaultManagerConfig())
+}
+
+// NewManagerWithConfig creates a manager with explicit terminal count and age
+// limits. Both limits must be positive.
+func NewManagerWithConfig(config ManagerConfig) (*Manager, error) {
+	if config.TerminalMaxEntries <= 0 {
+		return nil, fmt.Errorf("frontend tool terminal max entries must be positive")
+	}
+	if config.TerminalTTL <= 0 {
+		return nil, fmt.Errorf("frontend tool terminal TTL must be positive")
+	}
+	return newManager(config), nil
+}
+
+func newManager(config ManagerConfig) *Manager {
 	return &Manager{
-		manifests: map[sessionstream.SessionId]*toolv1.FrontendToolManifestUpdated{},
-		pending:   map[string]*pendingCall{},
+		manifests:              map[sessionstream.SessionId]*toolv1.FrontendToolManifestUpdated{},
+		pending:                map[pendingKey]*pendingCall{},
+		terminal:               newBoundedTerminalStore(config.TerminalMaxEntries, config.TerminalTTL),
+		terminalPublishTimeout: defaultTerminalPublishTimeout,
+		now:                    time.Now,
 	}
 }
 
@@ -90,45 +176,86 @@ func (m *Manager) HandleManifest(ctx context.Context, cmd sessionstream.Command,
 }
 
 func (m *Manager) HandleResult(ctx context.Context, cmd sessionstream.Command, _ *sessionstream.Session, pub sessionstream.EventPublisher) error {
+	if m == nil {
+		return fmt.Errorf("frontend tools manager is nil")
+	}
+	if pub == nil {
+		return fmt.Errorf("frontend tool result publisher is nil")
+	}
 	payload, ok := cmd.Payload.(*toolv1.FrontendToolResultCommand)
 	if !ok || payload == nil {
 		return fmt.Errorf("frontend tool result payload must be %T, got %T", &toolv1.FrontendToolResultCommand{}, cmd.Payload)
 	}
+	payload = proto.Clone(payload).(*toolv1.FrontendToolResultCommand)
 	if payload.ToolCallId == "" {
 		return fmt.Errorf("frontend tool result is missing tool_call_id")
 	}
+	status, ok := canonicalResultStatus(payload.Status)
+	if !ok {
+		return newInvocationError(InvocationErrorInvalidStatus, cmd.SessionId, payload.ToolCallId, payload.ToolName)
+	}
+	payload.Status = status
+	resultBytes, err := proto.MarshalOptions{Deterministic: true}.Marshal(payload.Result)
+	if err != nil {
+		return errors.Wrap(err, "encode frontend tool result for idempotency")
+	}
 
+	key := pendingKey{sessionID: cmd.SessionId, toolCallID: payload.ToolCallId}
 	m.mu.Lock()
-	pending := m.pending[payload.ToolCallId]
-	m.mu.Unlock()
-	messageID := ""
-	if pending != nil {
+	now := m.now()
+	if terminal, exists := m.terminal.get(key, now); exists {
 		if payload.ToolName == "" {
-			payload.ToolName = pending.toolName
+			payload.ToolName = terminal.toolName
+		} else if payload.ToolName != terminal.toolName {
+			m.mu.Unlock()
+			return newInvocationError(InvocationErrorToolMismatch, cmd.SessionId, payload.ToolCallId, payload.ToolName)
 		}
-		messageID = pending.messageID
-	}
-	if payload.Status == "" {
-		payload.Status = "success"
+		digest := frontendToolResultDigest(payload, resultBytes)
+		m.mu.Unlock()
+		if terminal.origin == terminalOriginContext && digest != terminal.digest {
+			return newInvocationError(InvocationErrorLateResult, cmd.SessionId, payload.ToolCallId, payload.ToolName)
+		}
+		if digest == terminal.digest {
+			return nil
+		}
+		return newInvocationError(InvocationErrorTerminalConflict, cmd.SessionId, payload.ToolCallId, payload.ToolName)
 	}
 
-	if err := pub.Publish(ctx, sessionstream.Event{Name: EventResultReceived, SessionId: cmd.SessionId, Payload: &toolv1.FrontendToolResultReceived{
-		MessageId:  messageID,
-		ToolCallId: payload.ToolCallId,
-		ToolName:   payload.ToolName,
-		Result:     payload.Result,
-		Status:     payload.Status,
-		Error:      payload.Error,
-	}}); err != nil {
-		return err
-	}
-
-	if pending != nil {
-		select {
-		case pending.ch <- proto.Clone(payload).(*toolv1.FrontendToolResultCommand):
-		default:
+	pending := m.pending[key]
+	if pending == nil {
+		wrongSession := m.hasToolCallInOtherSession(key, now)
+		m.mu.Unlock()
+		code := InvocationErrorUnknownResult
+		if wrongSession {
+			code = InvocationErrorSessionMismatch
 		}
+		return newInvocationError(code, cmd.SessionId, payload.ToolCallId, payload.ToolName)
 	}
+	if payload.ToolName == "" {
+		payload.ToolName = pending.toolName
+	} else if payload.ToolName != pending.toolName {
+		m.mu.Unlock()
+		return newInvocationError(InvocationErrorToolMismatch, cmd.SessionId, payload.ToolCallId, payload.ToolName)
+	}
+	digest := frontendToolResultDigest(payload, resultBytes)
+	delete(m.pending, key)
+	m.terminal.add(&terminalCall{
+		key:         key,
+		toolName:    pending.toolName,
+		digest:      digest,
+		origin:      terminalOriginResult,
+		completedAt: now,
+	}, now)
+	m.mu.Unlock()
+
+	if err := pub.Publish(ctx, frontendToolResultEvent(pending, payload)); err != nil {
+		failure := proto.Clone(payload).(*toolv1.FrontendToolResultCommand)
+		failure.Status = "failed"
+		failure.Error = fmt.Sprintf("frontend tool result timeline publication failed: %v", err)
+		deliverCompletion(pending, failure)
+		return errors.Wrap(err, "publish frontend tool result")
+	}
+	deliverCompletion(pending, payload)
 	return nil
 }
 
@@ -144,6 +271,12 @@ func (m *Manager) Request(ctx context.Context, sid sessionstream.SessionId, pub 
 	if m == nil {
 		return nil, fmt.Errorf("frontend tools manager is nil")
 	}
+	if sid == "" {
+		return nil, fmt.Errorf("frontend tool request requires session id")
+	}
+	if pub == nil {
+		return nil, fmt.Errorf("frontend tool request publisher is nil")
+	}
 	if req.ToolCallID == "" || req.ToolName == "" {
 		return nil, fmt.Errorf("frontend tool request requires tool call id and tool name")
 	}
@@ -154,16 +287,21 @@ func (m *Manager) Request(ctx context.Context, sid sessionstream.SessionId, pub 
 	if req.Mode == toolv1.ToolExecutionMode_TOOL_EXECUTION_MODE_UNSPECIFIED {
 		req.Mode = toolv1.ToolExecutionMode_TOOL_EXECUTION_MODE_FRONTEND_AUTO
 	}
-	ch := make(chan *toolv1.FrontendToolResultCommand, 1)
+	key := pendingKey{sessionID: sid, toolCallID: req.ToolCallID}
+	pending := &pendingCall{key: key, messageID: req.MessageID, toolName: req.ToolName, ch: make(chan *toolv1.FrontendToolResultCommand, 1)}
 
 	m.mu.Lock()
-	m.pending[req.ToolCallID] = &pendingCall{messageID: req.MessageID, toolName: req.ToolName, ch: ch}
-	m.mu.Unlock()
-	defer func() {
-		m.mu.Lock()
-		delete(m.pending, req.ToolCallID)
+	if _, exists := m.pending[key]; exists {
 		m.mu.Unlock()
-	}()
+		return nil, newInvocationError(InvocationErrorDuplicatePending, sid, req.ToolCallID, req.ToolName)
+	}
+	if _, exists := m.terminal.get(key, m.now()); exists {
+		m.mu.Unlock()
+		return nil, newInvocationError(InvocationErrorKeyReuse, sid, req.ToolCallID, req.ToolName)
+	}
+	m.pending[key] = pending
+	m.mu.Unlock()
+	defer m.removePending(pending)
 
 	if err := pub.Publish(context.WithoutCancel(ctx), sessionstream.Event{Name: EventCallRequested, SessionId: sid, Payload: &toolv1.FrontendToolCallRequested{
 		MessageId:  req.MessageID,
@@ -177,9 +315,12 @@ func (m *Manager) Request(ctx context.Context, sid sessionstream.SessionId, pub 
 	}
 
 	select {
-	case result := <-ch:
+	case result := <-pending.ch:
 		return result, nil
 	case <-ctx.Done():
+		if err := m.terminalizeContext(ctx, pub, pending); err != nil {
+			return nil, errors.Wrapf(ctx.Err(), "publish frontend tool cancellation: %v", err)
+		}
 		return nil, ctx.Err()
 	}
 }
@@ -202,6 +343,114 @@ func (m *Manager) Descriptor(sid sessionstream.SessionId, name string) (*toolv1.
 func (m *Manager) HasAvailableTool(sid sessionstream.SessionId, name string) bool {
 	descriptor, ok := m.Descriptor(sid, name)
 	return ok && descriptor.GetAvailable()
+}
+
+func (m *Manager) terminalizeContext(ctx context.Context, pub sessionstream.EventPublisher, pending *pendingCall) error {
+	if m == nil || pending == nil {
+		return nil
+	}
+	status := "cancelled"
+	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		status = "timeout"
+	}
+	payload := &toolv1.FrontendToolResultCommand{
+		ToolCallId: pending.key.toolCallID,
+		ToolName:   pending.toolName,
+		Status:     status,
+		Error:      ctx.Err().Error(),
+	}
+	resultBytes, err := proto.MarshalOptions{Deterministic: true}.Marshal(payload.Result)
+	if err != nil {
+		return errors.Wrap(err, "encode frontend tool cancellation for idempotency")
+	}
+
+	m.mu.Lock()
+	if current := m.pending[pending.key]; current != pending {
+		m.mu.Unlock()
+		return nil
+	}
+	now := m.now()
+	delete(m.pending, pending.key)
+	m.terminal.add(&terminalCall{
+		key:         pending.key,
+		toolName:    pending.toolName,
+		digest:      frontendToolResultDigest(payload, resultBytes),
+		origin:      terminalOriginContext,
+		completedAt: now,
+	}, now)
+	m.mu.Unlock()
+
+	publishCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), m.terminalPublishTimeout)
+	defer cancel()
+	return pub.Publish(publishCtx, frontendToolResultEvent(pending, payload))
+}
+
+func (m *Manager) hasToolCallInOtherSession(key pendingKey, now time.Time) bool {
+	for candidate := range m.pending {
+		if candidate.sessionID != key.sessionID && candidate.toolCallID == key.toolCallID {
+			return true
+		}
+	}
+	return m.terminal.hasToolCallInOtherSession(key, now)
+}
+
+func (m *Manager) removePending(pending *pendingCall) {
+	if m == nil || pending == nil {
+		return
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if current := m.pending[pending.key]; current == pending {
+		delete(m.pending, pending.key)
+	}
+}
+
+func frontendToolResultEvent(pending *pendingCall, payload *toolv1.FrontendToolResultCommand) sessionstream.Event {
+	return sessionstream.Event{Name: EventResultReceived, SessionId: pending.key.sessionID, Payload: &toolv1.FrontendToolResultReceived{
+		MessageId:  pending.messageID,
+		ToolCallId: pending.key.toolCallID,
+		ToolName:   pending.toolName,
+		Result:     payload.Result,
+		Status:     payload.Status,
+		Error:      payload.Error,
+	}}
+}
+
+func frontendToolResultDigest(payload *toolv1.FrontendToolResultCommand, resultBytes []byte) [32]byte {
+	hash := sha256.New()
+	for _, field := range []string{payload.GetToolCallId(), payload.GetToolName(), payload.GetStatus(), payload.GetError()} {
+		_, _ = fmt.Fprintf(hash, "%d:", len(field))
+		_, _ = hash.Write([]byte(field))
+	}
+	_, _ = fmt.Fprintf(hash, "%d:", len(resultBytes))
+	_, _ = hash.Write(resultBytes)
+	var digest [32]byte
+	copy(digest[:], hash.Sum(nil))
+	return digest
+}
+
+func deliverCompletion(pending *pendingCall, payload *toolv1.FrontendToolResultCommand) {
+	select {
+	case pending.ch <- payload:
+	default:
+	}
+}
+
+func canonicalResultStatus(status string) (string, bool) {
+	status = strings.ToLower(strings.TrimSpace(status))
+	if status == "" {
+		return "success", true
+	}
+	switch status {
+	case "success", "failed", "denied", "cancelled", "timeout":
+		return status, true
+	default:
+		return "", false
+	}
+}
+
+func newInvocationError(code InvocationErrorCode, sid sessionstream.SessionId, toolCallID, toolName string) error {
+	return &InvocationError{Code: code, SessionID: sid, ToolCallID: toolCallID, ToolName: toolName}
 }
 
 func cloneDescriptors(in []*toolv1.FrontendToolDescriptor) []*toolv1.FrontendToolDescriptor {

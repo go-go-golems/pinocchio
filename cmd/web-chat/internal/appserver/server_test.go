@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -130,7 +131,30 @@ func TestFrontendToolManifestEndpointPublishesTimelineEntity(t *testing.T) {
 	require.True(t, desc.Available)
 }
 
-func TestFrontendToolResultEndpointPublishesTimelineEntity(t *testing.T) {
+func TestFrontendToolResultErrorStatus(t *testing.T) {
+	tests := []struct {
+		name     string
+		err      error
+		expected int
+	}{
+		{name: "invalid status", err: &frontendtools.InvocationError{Code: frontendtools.InvocationErrorInvalidStatus}, expected: http.StatusBadRequest},
+		{name: "unknown", err: &frontendtools.InvocationError{Code: frontendtools.InvocationErrorUnknownResult}, expected: http.StatusNotFound},
+		{name: "late", err: &frontendtools.InvocationError{Code: frontendtools.InvocationErrorLateResult}, expected: http.StatusGone},
+		{name: "duplicate", err: &frontendtools.InvocationError{Code: frontendtools.InvocationErrorDuplicatePending}, expected: http.StatusConflict},
+		{name: "wrong session", err: &frontendtools.InvocationError{Code: frontendtools.InvocationErrorSessionMismatch}, expected: http.StatusConflict},
+		{name: "wrong tool", err: &frontendtools.InvocationError{Code: frontendtools.InvocationErrorToolMismatch}, expected: http.StatusConflict},
+		{name: "terminal conflict", err: &frontendtools.InvocationError{Code: frontendtools.InvocationErrorTerminalConflict}, expected: http.StatusConflict},
+		{name: "key reuse", err: &frontendtools.InvocationError{Code: frontendtools.InvocationErrorKeyReuse}, expected: http.StatusConflict},
+		{name: "internal", err: errors.New("boom"), expected: http.StatusInternalServerError},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.expected, frontendToolResultErrorStatus(tt.err))
+		})
+	}
+}
+
+func TestFrontendToolResultEndpointRejectsUnsolicitedResult(t *testing.T) {
 	manager := frontendtools.NewManager()
 	_, httpSrv := newTestMux(t, WithFrontendToolManager(manager), WithChatPlugins(frontendtools.NewPlugin()))
 
@@ -138,21 +162,17 @@ func TestFrontendToolResultEndpointPublishesTimelineEntity(t *testing.T) {
 	resp, err := http.Post(httpSrv.URL+"/api/chat/sessions/sess-tools/tools/results", "application/json", bytes.NewReader(body))
 	require.NoError(t, err)
 	defer func() { _ = resp.Body.Close() }()
-	require.Equal(t, http.StatusOK, resp.StatusCode)
+	require.Equal(t, http.StatusNotFound, resp.StatusCode)
+	responseBody, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	require.Contains(t, string(responseBody), string(frontendtools.InvocationErrorUnknownResult))
 
 	snapResp, err := http.Get(httpSrv.URL + "/api/chat/sessions/sess-tools")
 	require.NoError(t, err)
 	defer func() { _ = snapResp.Body.Close() }()
 	var snap SessionSnapshotResponse
 	require.NoError(t, json.NewDecoder(snapResp.Body).Decode(&snap))
-	require.Len(t, snap.Entities, 1)
-	toolEntity := snap.Entities[0]
-	require.Equal(t, "ChatFrontendToolCall", toolEntity.Kind)
-	require.Equal(t, "call-1", toolEntity.ID)
-	payload, ok := toolEntity.Payload.(map[string]any)
-	require.True(t, ok)
-	require.Equal(t, "app.confirm_action", payload["toolName"])
-	require.Equal(t, "success", payload["status"])
+	require.Empty(t, snap.Entities)
 }
 
 func TestSubmitAndSnapshot(t *testing.T) {

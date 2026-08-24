@@ -9,6 +9,7 @@ import (
 	geptools "github.com/go-go-golems/geppetto/pkg/inference/tools"
 	toolv1 "github.com/go-go-golems/pinocchio/pkg/chatapp/pb/proto/pinocchio/chatapp/frontendtools/v1"
 	"github.com/go-go-golems/sessionstream/pkg/sessionstream"
+	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
@@ -111,6 +112,61 @@ func TestBridgeExecutorRoutesFrontendToolAndReturnsBrowserResult(t *testing.T) {
 		}
 	case <-ctx.Done():
 		t.Fatalf("timed out waiting for executor result")
+	}
+}
+
+func TestBridgeExecutorMapsEveryNonSuccessStatusToToolError(t *testing.T) {
+	for _, status := range []string{"failed", "cancelled", "denied", "timeout"} {
+		t.Run(status, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+
+			manager := NewManager()
+			publisher := &capturePublisher{events: make(chan sessionstream.Event, 8)}
+			sid := sessionstream.SessionId("bridge-" + status)
+			require.NoError(t, manager.HandleManifest(ctx, sessionstream.Command{SessionId: sid, Name: CommandManifest, Payload: &toolv1.FrontendToolManifestCommand{
+				Revision: 1,
+				Tools: []*toolv1.FrontendToolDescriptor{{
+					Name:      "browser_action",
+					Mode:      toolv1.ToolExecutionMode_TOOL_EXECUTION_MODE_FRONTEND_AUTO,
+					Available: true,
+				}},
+			}}, nil, publisher))
+
+			executor := NewBridgeExecutor(manager, nil)
+			bridgeCtx := WithBridgeContext(ctx, BridgeContext{SessionID: sid, MessageID: "msg-1", Publisher: publisher})
+			resultCh := make(chan *geptools.ToolResult, 1)
+			errCh := make(chan error, 1)
+			go func() {
+				result, err := executor.ExecuteToolCall(bridgeCtx, geptools.ToolCall{ID: "call-1", Name: "browser_action"}, geptools.NewInMemoryToolRegistry())
+				resultCh <- result
+				errCh <- err
+			}()
+
+			requested := false
+			for !requested {
+				select {
+				case event := <-publisher.events:
+					requested = event.Name == EventCallRequested
+				case <-ctx.Done():
+					t.Fatalf("timed out waiting for frontend request: %v", ctx.Err())
+				}
+			}
+
+			require.NoError(t, manager.HandleResult(ctx, resultCommand(sid, "call-1", "browser_action", status, nil), nil, publisher))
+			select {
+			case err := <-errCh:
+				require.NoError(t, err)
+			case <-ctx.Done():
+				t.Fatalf("timed out waiting for bridge error: %v", ctx.Err())
+			}
+			select {
+			case result := <-resultCh:
+				require.Equal(t, "frontend tool returned status "+status, result.Error)
+			case <-ctx.Done():
+				t.Fatalf("timed out waiting for bridge result: %v", ctx.Err())
+			}
+		})
 	}
 }
 

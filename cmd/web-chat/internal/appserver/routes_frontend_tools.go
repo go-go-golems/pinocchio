@@ -124,10 +124,33 @@ func (s *Server) handleFrontendToolResult(w http.ResponseWriter, r *http.Request
 		in.Result = map[string]any{}
 	}
 	if err := s.publishFrontendToolResult(r.Context(), sid, in); err != nil {
-		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: err.Error()})
+		writeJSON(w, frontendToolResultErrorStatus(err), errorResponse{Error: err.Error()})
 		return
 	}
 	writeJSON(w, http.StatusOK, frontendToolResultResponse{Accepted: true, Status: in.Status})
+}
+
+func frontendToolResultErrorStatus(err error) int {
+	code, ok := frontendtools.InvocationErrorCodeOf(err)
+	if !ok {
+		return http.StatusInternalServerError
+	}
+	switch code {
+	case frontendtools.InvocationErrorInvalidStatus:
+		return http.StatusBadRequest
+	case frontendtools.InvocationErrorUnknownResult:
+		return http.StatusNotFound
+	case frontendtools.InvocationErrorLateResult:
+		return http.StatusGone
+	case frontendtools.InvocationErrorDuplicatePending,
+		frontendtools.InvocationErrorSessionMismatch,
+		frontendtools.InvocationErrorToolMismatch,
+		frontendtools.InvocationErrorTerminalConflict,
+		frontendtools.InvocationErrorKeyReuse:
+		return http.StatusConflict
+	default:
+		return http.StatusInternalServerError
+	}
 }
 
 func (s *Server) publishFrontendToolResult(ctx context.Context, sid sessionstream.SessionId, result frontendToolResultRequest) error {
