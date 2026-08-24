@@ -2,17 +2,31 @@
 Title: Diary
 Ticket: PINOCCHIO-TOOLCALL-1
 Status: active
-Topics: [security, chatapp, backend, runtime]
+Topics:
+    - security
+    - chatapp
+    - backend
+    - runtime
 DocType: reference
 Intent: long-term
-Owners: [manuel]
-RelatedFiles: []
+Owners:
+    - manuel
+RelatedFiles:
+    - Path: repo://cmd/web-chat/internal/appserver/routes_frontend_tools.go
+      Note: Stable HTTP mapping for invocation rejection codes (commit 8cdc9af)
+    - Path: repo://cmd/web-chat/internal/appserver/server_test.go
+      Note: Unsolicited result rejection contract (commit 8cdc9af)
+    - Path: repo://pkg/chatapp/frontendtools/manager.go
+      Note: Session-bound pending identity and strict result validation (commit 8cdc9af)
+    - Path: repo://pkg/chatapp/frontendtools/manager_test.go
+      Note: Cross-session, duplicate, mismatch, and unknown-result regressions (commit 8cdc9af)
 ExternalSources: []
-Summary: 'Chronological investigation, design, validation, and delivery record for Pinocchio frontend-tool invocation/result hardening.'
+Summary: Chronological investigation, design, validation, and delivery record for Pinocchio frontend-tool invocation/result hardening.
 LastUpdated: 2026-08-23T17:25:00-04:00
-WhatFor: 'Let an implementer or reviewer retrace why the design binds pending calls to full invocation identity and how to validate the change.'
-WhenToUse: 'When implementing, reviewing, resuming, or testing PINOCCHIO-TOOLCALL-1.'
+WhatFor: Let an implementer or reviewer retrace why the design binds pending calls to full invocation identity and how to validate the change.
+WhenToUse: When implementing, reviewing, resuming, or testing PINOCCHIO-TOOLCALL-1.
 ---
+
 
 # Diary
 
@@ -236,3 +250,97 @@ The uploader's duplicate detection found the inaccessible first copy and skipped
 ### Technical details
 
 Canonical path: `/ai/2026/08/23-deliveries/PINOCCHIO-TOOLCALL-1`.
+
+## Step 4: Land session-bound pending identity and strict result containment
+
+I implemented the Critical containment phase as a focused server change. Pending calls are now keyed by `(session_id, tool_call_id)`, duplicate insertion cannot overwrite the first waiter, cleanup compares the exact record pointer, and result handling rejects wrong-session, wrong-tool, unknown, and invalid-status commands before publishing normal timeline events.
+
+The web-chat HTTP boundary now maps stable invocation error codes to 400/404/409 rather than treating every rejection as an internal failure. This interval deliberately does not claim terminal idempotency yet; simultaneous same-key results still require the next phase's atomic pending-to-terminal transition.
+
+### Prompt Context
+
+**User prompt (verbatim):** "Work on PINOCCHIO-TOOLCALL-1, commit at appropriate intervals and keep a detailed diary as you work (using the diary format from the skill)\n\n[REMINDER] Output a <summary>...</summary> block at the VERY END of your response. This is mandatory."
+
+**Assistant interpretation:** Implement the Pinocchio-owned phases in focused commits, preserve a continuation-quality diary, and validate each interval.
+
+**Inferred user intent:** Move the security design into reviewed production behavior without losing rationale, failures, or cross-repository sequencing.
+
+**Commit (code):** `8cdc9af1d3597c054566cf0f3a7d50846fba1b8d` — "fix(frontendtools): bind pending calls to sessions"
+
+### What I did
+
+- Replaced `map[string]*pendingCall` with `map[pendingKey]*pendingCall`.
+- Added stable `InvocationErrorCode`/`InvocationError` classification.
+- Cloned command payloads before canonicalization instead of mutating caller-owned protobufs.
+- Validated the five accepted statuses and used trusted pending identity for result events.
+- Rejected unknown results instead of projecting them into the conversation timeline.
+- Added deterministic tests for same-id/different-session independence, cross-session rejection, wrong tool, invalid status, duplicate insertion, and unknown results.
+- Changed web-chat result errors to 400/404/409 and replaced the unsolicited-result projection test.
+
+### Why
+
+- The reproduced attacker-session result could previously wake a victim-session waiter.
+- Silent map overwrite and bare-key deferred deletion made benign collisions unsafe.
+- Rejected payloads must not look like accepted conversation history.
+
+### What worked
+
+- Focused normal and race tests passed.
+- The successful pre-commit rerun passed repository lint, build generation, and `go test ./...`.
+- The cross-session test proves the victim remains pending after rejection and accepts its owner's later result.
+
+### What didn't work
+
+The first commit attempt was blocked by the repository-wide test hook:
+
+```text
+--- FAIL: TestFrontendToolResultEndpointPublishesTimelineEntity (0.01s)
+    server_test.go:141:
+        Error:       Not equal:
+                     expected: 200
+                     actual  : 500
+make: *** [Makefile:85: test] Error 1
+```
+
+That test intentionally submitted an unsolicited result and expected a timeline entity. I replaced it with `TestFrontendToolResultEndpointRejectsUnsolicitedResult`, added stable HTTP error mapping, reran focused tests, then reran the complete hook successfully.
+
+### What I learned
+
+- The old insecure behavior had become an integration-test contract, so containment requires an explicit behavior-change test rather than only manager unit tests.
+- Session mismatch can be diagnosed without exposing another session's tool details by scanning only pending keys for the same call id.
+- The pre-commit hook runs generation, frontend build, lint/vet, and the full Go test suite; this is useful but makes focused validation before commit important.
+
+### What was tricky to build
+
+The manager must read immutable pending metadata after unlocking while ensuring old cleanup cannot delete replacement state. Pending records are immutable after insertion, and `removePending` deletes only when `m.pending[key] == pending`. The next phase must atomically remove pending and create terminal state before unlocking; otherwise concurrent results can both publish.
+
+### What warrants a second pair of eyes
+
+- Verify that 404 for unknown results and 409 for identity conflicts are the desired public web-chat semantics.
+- Review the O(n) wrong-session diagnostic scan; it is only on rejected unknown keys, but high pending volume may justify a secondary index later.
+- Confirm blank tool names should remain accepted at the internal manager boundary; HTTP already requires a tool name.
+
+### What should be done in the future
+
+- Add bounded terminal storage and an atomic pending-to-terminal transition.
+- Make cancellation/timeout terminal and reject late browser completions deterministically.
+- Coordinate protocol-v2 run/manifest/executor identity before implementing those fields.
+
+### Code review instructions
+
+- Start at `manager.go` types and `HandleResult`, then inspect `Request`/`removePending`.
+- Read the cross-session and duplicate tests before reviewing HTTP mapping.
+- Validate with `go test -race ./pkg/chatapp/frontendtools -count=1` and `go test ./cmd/web-chat/internal/appserver -count=1`.
+
+### Technical details
+
+```go
+type pendingKey struct {
+    sessionID  sessionstream.SessionId
+    toolCallID string
+}
+
+if current := m.pending[pending.key]; current == pending {
+    delete(m.pending, pending.key)
+}
+```

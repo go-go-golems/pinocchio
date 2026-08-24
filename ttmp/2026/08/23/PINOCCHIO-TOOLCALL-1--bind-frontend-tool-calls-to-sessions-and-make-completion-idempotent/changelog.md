@@ -24,3 +24,13 @@ Dry-ran, uploaded, and verified the Pinocchio guide at /ai/2026/08/23-deliveries
 - /home/manuel/workspaces/2026-08-20/add-pbui-agent/pinocchio/ttmp/2026/08/23/PINOCCHIO-TOOLCALL-1--bind-frontend-tool-calls-to-sessions-and-make-completion-idempotent/reference/01-diary.md — Delivery failure/recovery record
 - /home/manuel/workspaces/2026-08-20/add-pbui-agent/pinocchio/ttmp/2026/08/23/PINOCCHIO-TOOLCALL-1--bind-frontend-tool-calls-to-sessions-and-make-completion-idempotent/various/02-remarkable-delivery.md — Canonical upload and listing evidence
 
+
+## 2026-08-24
+
+Phase 0: bound pending frontend calls to session/call identity, added strict result validation and stable HTTP rejection mapping (commit 8cdc9af)
+
+### Related Files
+
+- /home/manuel/workspaces/2026-08-20/add-pbui-agent/pinocchio/pkg/chatapp/frontendtools/manager.go — Critical containment implementation
+- /home/manuel/workspaces/2026-08-20/add-pbui-agent/pinocchio/pkg/chatapp/frontendtools/manager_test.go — Security and collision regression matrix
+
