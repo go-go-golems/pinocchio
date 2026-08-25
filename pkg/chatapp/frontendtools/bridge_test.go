@@ -27,13 +27,14 @@ func TestBridgeExecutorRoutesFrontendToolAndReturnsBrowserResult(t *testing.T) {
 	defer cancel()
 
 	manager := NewManager()
+	manager.newAssignmentID = func() string { return "assignment-test" }
 	publisher := &capturePublisher{events: make(chan sessionstream.Event, 8)}
 	sid := sessionstream.SessionId("bridge-session")
 	schema, err := structpb.NewStruct(map[string]any{"type": "object"})
 	if err != nil {
 		t.Fatalf("schema struct: %v", err)
 	}
-	if err := manager.HandleManifest(ctx, sessionstream.Command{SessionId: sid, Name: CommandManifest, Payload: &toolv1.FrontendToolManifestCommand{Revision: 1, Tools: []*toolv1.FrontendToolDescriptor{{
+	if err := manager.HandleManifest(ctx, sessionstream.Command{SessionId: sid, Name: CommandManifest, Payload: &toolv1.FrontendToolManifestCommand{Revision: 1, ClientInstanceId: "client-test", ConnectionId: "connection-test", Tools: []*toolv1.FrontendToolDescriptor{{
 		Name:        "cart.add",
 		Description: "Add to browser cart",
 		InputSchema: schema,
@@ -89,6 +90,7 @@ func TestBridgeExecutorRoutesFrontendToolAndReturnsBrowserResult(t *testing.T) {
 		ToolName:   "cart.add",
 		Status:     "success",
 		Result:     resultStruct,
+		Executor:   testExecutor(),
 	}}, nil, publisher); err != nil {
 		t.Fatalf("HandleResult: %v", err)
 	}
@@ -122,10 +124,13 @@ func TestBridgeExecutorMapsEveryNonSuccessStatusToToolError(t *testing.T) {
 			defer cancel()
 
 			manager := NewManager()
+			manager.newAssignmentID = func() string { return "assignment-test" }
 			publisher := &capturePublisher{events: make(chan sessionstream.Event, 8)}
 			sid := sessionstream.SessionId("bridge-" + status)
 			require.NoError(t, manager.HandleManifest(ctx, sessionstream.Command{SessionId: sid, Name: CommandManifest, Payload: &toolv1.FrontendToolManifestCommand{
-				Revision: 1,
+				Revision:         1,
+				ClientInstanceId: "client-test",
+				ConnectionId:     "connection-test",
 				Tools: []*toolv1.FrontendToolDescriptor{{
 					Name:      "browser_action",
 					Mode:      toolv1.ToolExecutionMode_TOOL_EXECUTION_MODE_FRONTEND_AUTO,
@@ -173,13 +178,14 @@ func TestBridgeExecutorMapsEveryNonSuccessStatusToToolError(t *testing.T) {
 func TestRegisterManifestToolsRejectsProviderAliasCollision(t *testing.T) {
 	ctx := context.Background()
 	manager := NewManager()
+	manager.newAssignmentID = func() string { return "assignment-test" }
 	publisher := &capturePublisher{events: make(chan sessionstream.Event, 8)}
 	sid := sessionstream.SessionId("collision-session")
 	schema, err := structpb.NewStruct(map[string]any{"type": "object"})
 	if err != nil {
 		t.Fatalf("schema struct: %v", err)
 	}
-	if err := manager.HandleManifest(ctx, sessionstream.Command{SessionId: sid, Name: CommandManifest, Payload: &toolv1.FrontendToolManifestCommand{Revision: 1, Tools: []*toolv1.FrontendToolDescriptor{
+	if err := manager.HandleManifest(ctx, sessionstream.Command{SessionId: sid, Name: CommandManifest, Payload: &toolv1.FrontendToolManifestCommand{Revision: 1, ClientInstanceId: "client-test", ConnectionId: "connection-test", Tools: []*toolv1.FrontendToolDescriptor{
 		{Name: "cart.add", InputSchema: schema, Available: true},
 		{Name: "cart_add", InputSchema: schema, Available: true},
 	}}}, nil, publisher); err != nil {

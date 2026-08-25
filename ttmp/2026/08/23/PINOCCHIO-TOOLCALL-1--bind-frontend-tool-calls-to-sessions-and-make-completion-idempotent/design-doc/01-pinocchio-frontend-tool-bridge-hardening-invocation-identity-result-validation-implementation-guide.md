@@ -23,12 +23,15 @@ RelatedFiles:
       Note: Frontend tool UI and timeline projection
     - Path: repo://proto/pinocchio/chatapp/frontendtools/v1/frontend_tool.proto
       Note: Current frontend-tool wire contract
+    - Path: ws://react-chat/ttmp/2026/08/23/REACT-CHAT-TOOL-RUNTIME-1--make-browser-tool-execution-idempotent-single-owner-and-manifest-safe/design-doc/02-concise-frontend-tool-executor-ownership-protocol.md
+      Note: Authoritative concise executor contract superseding the broad immediate lease scope
 ExternalSources: []
 Summary: Intern-oriented architecture, threat analysis, API design, implementation plan, and test strategy for binding Pinocchio frontend tool requests/results to the correct session, message, tool, manifest, and browser executor while making completion idempotent.
 LastUpdated: 2026-08-23T17:10:00-04:00
 WhatFor: Guide implementation of the critical frontend-tool result-binding fix and the supporting manifest, completion, cancellation, and observability contracts.
 WhenToUse: Before modifying pkg/chatapp/frontendtools, its protobuf protocol, web-chat frontend-tool routes, or any runtime that bridges Geppetto tool calls through a browser.
 ---
+
 
 
 # Pinocchio frontend-tool bridge hardening: invocation identity, result validation, implementation guide
@@ -63,7 +66,7 @@ The server-only phases that do not require a coordinated consumer protocol chang
 
 Current stable rejection codes are `duplicate_pending`, `unknown_result`, `session_mismatch`, `tool_mismatch`, `invalid_status`, `terminal_conflict`, `late_result`, and `key_reuse`. Defaults retain at most 4,096 terminal digests for 15 minutes; `NewManagerWithConfig` requires positive count and TTL values.
 
-Phases 2–4 remain open. Protocol-v2 run/manifest/executor/capability identity must be coordinated with `REACT-CHAT-TOOL-RUNTIME-1` and `PBUI-TOOLCALL-1`; this implementation intentionally does not add a hidden dual-identity compatibility path.
+Phases 2–4 remain open. The first executor-ownership increment is now specified by `REACT-CHAT-TOOL-RUNTIME-1/design-doc/02-concise-frontend-tool-executor-ownership-protocol.md`: Pinocchio assigns and binds `(client_instance_id, connection_id, assignment_id)` across manifests, requests, pending calls, results, terminal digests, and timeline entities. Timed leases, heartbeats, run/capability identity, and automatic in-flight reassignment are explicitly deferred. This implementation must remain a coordinated strict migration; it must not add a hidden dual-identity compatibility path.
 
 ## 1. Scope and non-goals
 
@@ -593,7 +596,9 @@ This phase closes the demonstrated cross-session path and collision race.
 5. Represent cancellation/timeout as terminal states.
 6. Ensure late results cannot wake reused calls.
 
-### Phase 2 — Protocol v2 identity
+### Phase 2 — Concise executor identity
+
+> The authoritative first-release contract is the companion react-chat design `02-concise-frontend-tool-executor-ownership-protocol.md`. Where the older steps below request full run/manifest/capability identity or timed leasing, implement only the accepted three-part executor tuple first and leave broader identity work open.
 
 **Files:** protobuf, generated code, manager, bridge, plugin, tests.
 

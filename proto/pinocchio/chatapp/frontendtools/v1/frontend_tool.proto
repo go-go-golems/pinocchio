@@ -23,16 +23,28 @@ message FrontendToolDescriptor {
   bool available = 5;
 }
 
+// FrontendToolExecutor identifies one server-selected browser connection and
+// the assignment epoch under which it may execute frontend tools.
+message FrontendToolExecutor {
+  string client_instance_id = 1;
+  string connection_id = 2;
+  string assignment_id = 3;
+}
+
 // FrontendToolManifestCommand replaces the known browser-side tool manifest for a session.
 message FrontendToolManifestCommand {
   repeated FrontendToolDescriptor tools = 1;
   uint64 revision = 2;
+  string client_instance_id = 3;
+  string connection_id = 4;
 }
 
-// FrontendToolManifestUpdated records the backend-accepted tool manifest.
+// FrontendToolManifestUpdated records the backend-accepted tool manifest and
+// the executor assignment created or retained by that acceptance.
 message FrontendToolManifestUpdated {
   repeated FrontendToolDescriptor tools = 1;
   uint64 revision = 2;
+  FrontendToolExecutor executor = 3;
 }
 
 // FrontendToolCallRequested asks a browser to execute or present one named tool call.
@@ -43,6 +55,7 @@ message FrontendToolCallRequested {
   google.protobuf.Struct input = 4;
   ToolExecutionMode mode = 5;
   string status = 6;
+  FrontendToolExecutor executor = 7;
 }
 
 // FrontendToolResultCommand is submitted by the browser after it executes or rejects a tool call.
@@ -52,6 +65,7 @@ message FrontendToolResultCommand {
   google.protobuf.Struct result = 3;
   string status = 4;
   string error = 5;
+  FrontendToolExecutor executor = 6;
 }
 
 // FrontendToolResultReceived records the accepted browser result and unblocks the waiting run.
@@ -62,6 +76,7 @@ message FrontendToolResultReceived {
   google.protobuf.Struct result = 4;
   string status = 5;
   string error = 6;
+  FrontendToolExecutor executor = 7;
 }
 
 // FrontendToolCallEntity is the durable timeline representation of a frontend tool call.
@@ -74,4 +89,5 @@ message FrontendToolCallEntity {
   google.protobuf.Struct input = 6;
   google.protobuf.Struct result = 7;
   string error = 8;
+  FrontendToolExecutor executor = 9;
 }

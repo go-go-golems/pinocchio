@@ -14,8 +14,10 @@ import (
 )
 
 type frontendToolManifestRequest struct {
-	Revision uint64                      `json:"revision"`
-	Tools    []frontendToolManifestEntry `json:"tools"`
+	ClientInstanceID string                      `json:"clientInstanceId"`
+	ConnectionID     string                      `json:"connectionId"`
+	Revision         uint64                      `json:"revision"`
+	Tools            []frontendToolManifestEntry `json:"tools"`
 }
 
 type frontendToolManifestEntry struct {
@@ -26,17 +28,25 @@ type frontendToolManifestEntry struct {
 	Available   bool           `json:"available"`
 }
 
+type frontendToolExecutor struct {
+	ClientInstanceID string `json:"clientInstanceId"`
+	ConnectionID     string `json:"connectionId"`
+	AssignmentID     string `json:"assignmentId"`
+}
+
 type frontendToolManifestResponse struct {
-	Accepted bool   `json:"accepted"`
-	Revision uint64 `json:"revision"`
+	Accepted bool                 `json:"accepted"`
+	Revision uint64               `json:"revision"`
+	Executor frontendToolExecutor `json:"executor"`
 }
 
 type frontendToolResultRequest struct {
-	ToolCallID string         `json:"toolCallId"`
-	ToolName   string         `json:"toolName"`
-	Status     string         `json:"status"`
-	Result     map[string]any `json:"result"`
-	Error      string         `json:"error"`
+	ToolCallID string               `json:"toolCallId"`
+	ToolName   string               `json:"toolName"`
+	Status     string               `json:"status"`
+	Result     map[string]any       `json:"result"`
+	Error      string               `json:"error"`
+	Executor   frontendToolExecutor `json:"executor"`
 }
 
 type frontendToolResultResponse struct {
@@ -73,14 +83,56 @@ func (s *Server) handleFrontendToolManifest(w http.ResponseWriter, r *http.Reque
 			Available:   tool.Available,
 		})
 	}
-	if err := s.service.SubmitCommand(r.Context(), sid, frontendtools.CommandManifest, &toolv1.FrontendToolManifestCommand{
-		Tools:    descriptors,
-		Revision: in.Revision,
-	}); err != nil {
-		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: err.Error()})
+	if s.frontendToolManager == nil || s.hub == nil {
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "frontend tools are not configured"})
 		return
 	}
-	writeJSON(w, http.StatusOK, frontendToolManifestResponse{Accepted: true, Revision: in.Revision})
+	updated, err := s.frontendToolManager.AcceptManifest(r.Context(), sid, s.hub, &toolv1.FrontendToolManifestCommand{
+		Tools:            descriptors,
+		Revision:         in.Revision,
+		ClientInstanceId: strings.TrimSpace(in.ClientInstanceID),
+		ConnectionId:     strings.TrimSpace(in.ConnectionID),
+	})
+	if err != nil {
+		writeJSON(w, frontendToolManifestErrorStatus(err), errorResponse{Error: err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, frontendToolManifestResponse{
+		Accepted: true,
+		Revision: updated.GetRevision(),
+		Executor: frontendToolExecutorFromProto(updated.GetExecutor()),
+	})
+}
+
+func frontendToolManifestErrorStatus(err error) int {
+	code, ok := frontendtools.ManifestErrorCodeOf(err)
+	if !ok {
+		return http.StatusInternalServerError
+	}
+	switch code {
+	case frontendtools.ManifestErrorIdentityMissing, frontendtools.ManifestErrorIdentityTooLong:
+		return http.StatusBadRequest
+	case frontendtools.ManifestErrorRevisionRegression, frontendtools.ManifestErrorRevisionConflict:
+		return http.StatusConflict
+	default:
+		return http.StatusInternalServerError
+	}
+}
+
+func (executor frontendToolExecutor) toProto() *toolv1.FrontendToolExecutor {
+	return &toolv1.FrontendToolExecutor{
+		ClientInstanceId: strings.TrimSpace(executor.ClientInstanceID),
+		ConnectionId:     strings.TrimSpace(executor.ConnectionID),
+		AssignmentId:     strings.TrimSpace(executor.AssignmentID),
+	}
+}
+
+func frontendToolExecutorFromProto(executor *toolv1.FrontendToolExecutor) frontendToolExecutor {
+	return frontendToolExecutor{
+		ClientInstanceID: executor.GetClientInstanceId(),
+		ConnectionID:     executor.GetConnectionId(),
+		AssignmentID:     executor.GetAssignmentId(),
+	}
 }
 
 func frontendToolMode(mode string) toolv1.ToolExecutionMode {
@@ -136,7 +188,8 @@ func frontendToolResultErrorStatus(err error) int {
 		return http.StatusInternalServerError
 	}
 	switch code {
-	case frontendtools.InvocationErrorInvalidStatus:
+	case frontendtools.InvocationErrorInvalidStatus,
+		frontendtools.InvocationErrorExecutorMissing:
 		return http.StatusBadRequest
 	case frontendtools.InvocationErrorUnknownResult:
 		return http.StatusNotFound
@@ -146,7 +199,9 @@ func frontendToolResultErrorStatus(err error) int {
 		frontendtools.InvocationErrorSessionMismatch,
 		frontendtools.InvocationErrorToolMismatch,
 		frontendtools.InvocationErrorTerminalConflict,
-		frontendtools.InvocationErrorKeyReuse:
+		frontendtools.InvocationErrorKeyReuse,
+		frontendtools.InvocationErrorExecutorMismatch,
+		frontendtools.InvocationErrorExecutorUnavailable:
 		return http.StatusConflict
 	default:
 		return http.StatusInternalServerError
@@ -167,5 +222,6 @@ func (s *Server) publishFrontendToolResult(ctx context.Context, sid sessionstrea
 		Result:     resultPayload,
 		Status:     result.Status,
 		Error:      result.Error,
+		Executor:   result.Executor.toProto(),
 	})
 }

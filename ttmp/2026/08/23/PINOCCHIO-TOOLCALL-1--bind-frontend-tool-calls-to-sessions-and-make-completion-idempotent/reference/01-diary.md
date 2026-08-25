@@ -12,10 +12,16 @@ Intent: long-term
 Owners:
     - manuel
 RelatedFiles:
+    - Path: repo://Makefile
+      Note: Reproducible generated TypeScript formatting (commit 7279126)
     - Path: repo://cmd/web-chat/internal/appserver/routes_frontend_tools.go
-      Note: Stable HTTP mapping for invocation rejection codes (commit 8cdc9af)
+      Note: |-
+        Stable HTTP mapping for invocation rejection codes (commit 8cdc9af)
+        Strict HTTP acknowledgement and result boundary (commit 7279126)
     - Path: repo://cmd/web-chat/internal/appserver/server_test.go
-      Note: Unsolicited result rejection contract (commit 8cdc9af)
+      Note: |-
+        Unsolicited result rejection contract (commit 8cdc9af)
+        HTTP regressions and race-safe runtime observation (commit 7279126)
     - Path: repo://cmd/web-chat/web/src/features/web-chat/cards/ToolCallCard/ToolCallCard.test.tsx
       Note: Cancelled and timeout card rendering regressions (commit c9e8255)
     - Path: repo://cmd/web-chat/web/src/features/web-chat/cards/ToolCallCard/ToolCallCard.tsx
@@ -26,24 +32,35 @@ RelatedFiles:
       Note: Canonical terminal frontend-tool status predicate (commit c9e8255)
     - Path: repo://pkg/chatapp/frontendtools/bridge_test.go
       Note: All non-success terminal statuses map to model-visible errors (commit d1e1741)
+    - Path: repo://pkg/chatapp/frontendtools/executor_test.go
+      Note: Assignment state-machine and race regressions (commit 7279126)
     - Path: repo://pkg/chatapp/frontendtools/manager.go
       Note: |-
         Session-bound pending identity and strict result validation (commit 8cdc9af)
         Bounded detached cancellation publication context (commit c9e8255)
+        Atomic assignment pending and terminal ownership (commit 7279126)
     - Path: repo://pkg/chatapp/frontendtools/manager_test.go
       Note: |-
         Cross-session, duplicate, mismatch, and unknown-result regressions (commit 8cdc9af)
         Blocking-publisher cancellation deadline regression (commit c9e8255)
+    - Path: repo://pkg/chatapp/frontendtools/plugin.go
+      Note: Durable executor provenance (commit 7279126)
     - Path: repo://pkg/chatapp/frontendtools/terminal_store.go
       Note: Bounded count/age terminal retention (commit 84c6e63)
     - Path: repo://pkg/chatapp/frontendtools/terminal_store_test.go
       Note: Deterministic count/TTL eviction tests (commit 84c6e63)
+    - Path: repo://proto/pinocchio/chatapp/frontendtools/v1/frontend_tool.proto
+      Note: Executor identity wire contract (commit 7279126)
+    - Path: ws://react-chat/ttmp/2026/08/23/REACT-CHAT-TOOL-RUNTIME-1--make-browser-tool-execution-idempotent-single-owner-and-manifest-safe/design-doc/02-concise-frontend-tool-executor-ownership-protocol.md
+      Note: Cross-repository design adopted in Diary Step 8
 ExternalSources: []
 Summary: Chronological investigation, design, validation, and delivery record for Pinocchio frontend-tool invocation/result hardening.
 LastUpdated: 2026-08-23T17:25:00-04:00
 WhatFor: Let an implementer or reviewer retrace why the design binds pending calls to full invocation identity and how to validate the change.
 WhenToUse: When implementing, reviewing, resuming, or testing PINOCCHIO-TOOLCALL-1.
 ---
+
+
 
 
 
@@ -625,3 +642,180 @@ The test publisher also needed synchronization around its observed error so the 
 ### Technical details
 
 The bounded context preserves request values with `context.WithoutCancel(ctx)` but replaces cancellation and the expired request deadline using `context.WithTimeout(..., 5*time.Second)`. Terminal state continues to win before publication, preserving the existing idempotency contract.
+
+## Step 8: Narrow executor ownership to the concise assignment tuple
+
+This design interval updated Pinocchio's implementation guide to point at the new authoritative cross-repository protocol. The immediate server work is no longer coupled to timed leases or every aspirational protocol-v2 field: Pinocchio will assign and bind a client, connection, and assignment epoch through manifest acceptance, pending calls, results, terminal digests, and timeline entities.
+
+No Go implementation changed in this step. The value is a precise boundary for the next implementation phase and an explicit statement that in-flight calls are never silently reassigned.
+
+### Prompt Context
+
+**User prompt (verbatim):** (same as react-chat Diary Step 10)
+
+**Assistant interpretation:** Update the server companion guide so Pinocchio implementers follow the concise accepted contract rather than the earlier full lease proposal.
+
+**Inferred user intent:** Keep all three repository plans coherent and immediately implementable.
+
+**Commit (docs):** `042c2fdef5ee5beb131dac81a38caaafe441b1eb` — "PINOCCHIO-TOOLCALL-1: adopt concise executor protocol"
+
+### What I did
+
+- Reviewed `frontend_tool.proto`, `manager.go`, and `plugin.go` against the new contract.
+- Updated the Pinocchio guide's status and Phase 2 heading/scope.
+- Assigned atomic manifest acknowledgement, pending executor capture, strict result comparison, terminal digesting, and projection ownership to Pinocchio.
+
+### Why
+
+- Pinocchio is the only layer that can select one server-visible executor and bind it to pending completion state.
+
+### What worked
+
+- Existing manager locking, bounded terminal state, context terminalization, and Hub publisher APIs provide suitable extension points.
+
+### What didn't work
+
+- The old guide's full run/manifest/capability/lease target was too broad for the requested first release. It is retained as future context but superseded for immediate executor work.
+
+### What I learned
+
+- PBUI can call a new acknowledgement-returning manager operation with its Hub as publisher, avoiding a submit-then-query race.
+
+### What was tricky to build
+
+Manifest publication failure needs compare-before-rollback so a failed older publish cannot restore state over a newer accepted assignment.
+
+### What warrants a second pair of eyes
+
+- Review stable error codes and HTTP mapping for missing/mismatched executor identity.
+- Review same-revision semantic manifest comparison and deterministic encoding.
+
+### What should be done in the future
+
+- Implement the concise schema/manager/projection changes and race matrix before publishing the next Pinocchio version.
+
+### Code review instructions
+
+- Read react-chat design 02, then trace Pinocchio `HandleManifest`, `Request`, `HandleResult`, `terminalizeContext`, and plugin projection.
+
+### Technical details
+
+The accepted tuple is `(client_instance_id, connection_id, assignment_id)`. Timed expiry and automatic pending-call takeover are deliberately absent.
+
+## Step 9: Implement server-owned executor assignment
+
+This phase implemented the concise executor tuple at Pinocchio's authoritative boundary. Client-scoped manifests now receive a server-generated assignment; requests capture it immutably; results, retries, cancellation, terminal digests, live events, and durable entities all carry and validate the same tuple. A changed connection owns future calls only, while already-pending calls retain their original executor.
+
+The built-in web-chat HTTP adapter now returns the exact manifest acknowledgement through one manager operation instead of submitting and then querying mutable state. The phase also made generated TypeScript formatting part of deterministic protocol generation and repaired a pre-existing test-only race exposed by the required race run.
+
+### Prompt Context
+
+**User prompt (verbatim):** `go ahead, commit at appropriate intervals and keep a detailed diary as you work (using the diary format from the skill). Print out a brutalist work slip with the plan / different phases for the ticket. then before stsarting a phase, plrint a split about the phase, and print one when the phase is done.`
+
+**Assistant interpretation:** Implement the concise executor protocol across repositories in gated phases, print an overall plan plus start/completion slips, commit coherent intervals, and record exact implementation/validation evidence in the ticket diaries.
+
+**Inferred user intent:** Ship the feature rather than leave it as design, while preserving reviewability and refusing to claim a phase complete until its protocol, tests, generated artifacts, and release boundary are verified.
+
+**Commit (code):** `7279126741694247c2e3a78e5e80a6be6dc994b8` — "feat(frontendtools): assign one browser executor"
+
+### What I did
+
+- Added generated `FrontendToolExecutor` protobuf identity and fields on manifest, request, result, event, and timeline entity messages.
+- Implemented serialized `Manager.AcceptManifest` with strict identity bounds, monotonic per-connection revisions, idempotent same-revision equality, server UUID assignments, assignment retention/replacement, exact acknowledgement, and publication rollback.
+- Replaced bare session manifests with immutable assigned manifests.
+- Captured executor identity in pending and terminal calls and included it in deterministic result digests.
+- Rejected missing/mismatched result executors with stable error codes.
+- Preserved executor provenance through context cancellation and plugin projection.
+- Updated bridge lookups and all existing frontend-tool tests for strict manifests/results.
+- Added `executor_test.go` covering assignment transitions, revision conflict/regression, rollback, in-flight ownership immutability, mismatch rejection, and concurrent acceptance.
+- Updated Pinocchio's web-chat HTTP adapter to use exact acknowledgement and strict result identity.
+- Made generated TypeScript Biome formatting part of `proto-gen-core`.
+- Replaced unsynchronized test observation pointers with a channel, making the appserver race suite clean.
+
+### Why
+
+- Browser filtering is only trustworthy for honest concurrency when the server first creates a unique assignment and binds pending completion to it.
+- A manifest POST followed by a separate state query can acknowledge the wrong racing tab.
+- Executor provenance must survive snapshot hydration or a reload can turn an old request into an unassigned executable call.
+
+### What worked
+
+- `make proto-gen-core` produced identical diff hashes on consecutive runs: `b2b899224ded92b81e5772bb340ad9bbcee7630816e577fe2ad2a0f63e48a8c4`.
+- Focused frontend-tools tests and race tests passed.
+- Full uncached `GOWORK=off go test ./... -count=1` passed.
+- `GOWORK=off make build` passed.
+- The successful pre-commit gate passed Go generation/build, golangci-lint, custom vet analyzers, full tests, web typecheck, and web lint.
+
+### What didn't work
+
+1. The first focused compile failed exactly with:
+
+   ```text
+   pkg/chatapp/frontendtools/bridge.go:167:32: manifest.Tools undefined (type *assignedManifest has no field or method Tools)
+   pkg/chatapp/frontendtools/bridge.go:239:32: manifest.Tools undefined (type *assignedManifest has no field or method Tools)
+   ```
+
+   `RegisterManifestTools` and `ResolveProviderToolName` still referenced the old map value. Both now read the immutable assigned manifest's `updated.Tools`.
+
+2. The next focused run failed because legacy tests posted manifests/results without strict identity and direct requests lacked an available assigned manifest. Test helpers now install deterministic client/connection/assignment fixtures, and bridge tests echo the request assignment.
+
+3. A new executor test used `require.Equal` on protobuf messages. Protobuf runtime message-state initialization made semantically equal messages appear structurally different with a huge internal diff. The test now uses `proto.Equal`.
+
+4. The first full race command exposed a pre-existing appserver test race between an inference goroutine writing `**turns.Turn` and the test polling/reading it. The exact race began at `runtimeBackedTestEngine.RunInference` (`server_test.go:40`) versus `TestSubmitAndSnapshot_WiresSessionIDAndTurnStoreIntoRuntime` (`server_test.go:374`). Replacing the shared pointers/poll loop with one buffered `runtimeObservation` channel made the rerun pass.
+
+5. The first commit gate failed web lint because regenerated Buf TypeScript imports were not Biome-sorted:
+
+   ```text
+   The imports and exports are not sorted.
+   Found 4 errors.
+   make: *** [Makefile:95: web-lint] Error 1
+   ```
+
+   Adding a pinned Biome formatting step to `proto-gen-core` made generation reproducible and the second complete commit gate passed.
+
+### What I learned
+
+- Assignment event publication and HTTP acknowledgement need one serialized state transition; otherwise event order and returned ownership can diverge.
+- Same-connection manifest updates should retain assignment, while a different connection always starts a new epoch.
+- Generated-source reproducibility includes repository formatting requirements, not merely raw generator stability.
+- Required race validation can expose unrelated test harness defects even when production synchronization is correct.
+
+### What was tricky to build
+
+Manifest acceptance combines ordering, idempotency, rollback, and external publication. `manifestMu` serializes acceptance through publication; `Manager.mu` protects state; a failed publication restores the previous pointer only if its candidate is still current. Pending calls clone the assignment under the manager lock before publishing. Later ownership changes cannot mutate that clone, and terminal retries compare executor before digest/idempotency handling.
+
+The reconnect semantics also required distinguishing current assignment from pending assignment. `Manager.Request` captures current ownership, but `HandleResult` validates against pending/terminal ownership rather than the manager's latest manifest, so an old owner can legitimately finish its old call after a new connection owns future calls.
+
+### What warrants a second pair of eyes
+
+- Review `AcceptManifest` lock ordering, publication rollback, and global manifest serialization.
+- Review strict revision equality based on deterministic descriptor bytes.
+- Confirm `executor_unavailable` should cover both missing assignment and unavailable tool at request time.
+- Review HTTP status mappings and the explicit honest-client—not cryptographic authorization—boundary.
+- Review the generated-file formatting step and unrelated generator-version churn committed with the schema.
+
+### What should be done in the future
+
+- Publish this Pinocchio contract before react-chat consumes it.
+- Add cryptographic/channel-bound executor proof only if hostile authorized tabs become part of the threat model.
+- Do not add timed reassignment of pending effects without an explicit effect-replay policy.
+
+### Code review instructions
+
+1. Start with `frontend_tool.proto`, then `Manager.AcceptManifest` and `Manager.Request`.
+2. Trace `pending.executor` through `HandleResult`, `terminalizeContext`, terminal digest, and plugin projection.
+3. Review `executor_test.go` as the state-machine specification.
+4. Review appserver manifest acknowledgement and result error mapping.
+5. Run:
+
+   ```text
+   make proto-gen-core
+   GOWORK=off go test ./pkg/chatapp/frontendtools -count=1
+   GOWORK=off go test -race ./pkg/chatapp/frontendtools ./cmd/web-chat/internal/appserver -count=1
+   GOWORK=off go test ./... -count=1
+   GOWORK=off make build
+   ```
+
+### Technical details
+
+The full executor tuple is bounded to 128 bytes per opaque field. Assignment IDs use UUIDs by default and an injected generator in tests. Identical same-revision manifests publish no duplicate event. Different connections may start at any revision because revisions are connection-scoped. Result digest order is client, connection, assignment, call, tool, status, error, then deterministic result bytes.
