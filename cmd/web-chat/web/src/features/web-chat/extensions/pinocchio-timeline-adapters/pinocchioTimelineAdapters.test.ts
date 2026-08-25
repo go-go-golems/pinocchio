@@ -1,6 +1,6 @@
 import { createTimelineAdapterRegistry } from '@go-go-golems/chat-provider';
 import { describe, expect, it } from 'vitest';
-import { pinocchioAgentModeAdapter, pinocchioBackendToolAdapter } from './pinocchioTimelineAdapters';
+import { pinocchioAgentModeAdapter, pinocchioBackendToolAdapter, pinocchioFrontendToolAdapter } from './pinocchioTimelineAdapters';
 
 describe('pinocchio timeline adapters baseline parity', () => {
   it('projects live and hydrated AgentMode entities to agent_mode cards', () => {
@@ -39,6 +39,35 @@ describe('pinocchio timeline adapters baseline parity', () => {
     expect(snapshot?.mutation.upsert?.kind).toBe('agent_mode');
     expect(live?.mutation.upsert?.props.data).toMatchObject({ to: 'research' });
     expect(snapshot?.mutation.upsert?.props.data).toMatchObject({ to: 'research' });
+  });
+
+  it('retains frontend executor identity in live and hydrated cards', () => {
+    const registry = createTimelineAdapterRegistry();
+    registry.register(pinocchioFrontendToolAdapter);
+    const executor = { clientInstanceId: 'client-a', connectionId: 'connection-a', assignmentId: 'assignment-a' };
+
+    const live = registry.projectLive(
+      {
+        name: 'ChatFrontendToolCallRequested',
+        sessionId: 's1',
+        payload: { messageId: 'm1', toolCallId: 'call-1', toolName: 'confirm', status: 'requested', input: {}, executor },
+      },
+      { sessionId: 's1' },
+    );
+    const snapshot = registry.projectSnapshot(
+      {
+        id: 'call-1',
+        kind: 'ChatFrontendToolCall',
+        payload: { parentMessageId: 'm1', toolCallId: 'call-1', toolName: 'confirm', status: 'requested', input: {}, executor },
+      },
+      { sessionId: 's1' },
+    );
+
+    expect(live?.adapterName).toBe('pinocchio.frontend-tools');
+    expect(snapshot?.adapterName).toBe('pinocchio.frontend-tools');
+    expect(live?.mutation.upsert?.props.executor).toEqual(executor);
+    expect(snapshot?.mutation.upsert?.props.executor).toEqual(executor);
+    expect(snapshot?.mutation.upsert?.props.sessionId).toBe('s1');
   });
 
   it('hydrates backend tool call/result snapshots to card-compatible kinds', () => {

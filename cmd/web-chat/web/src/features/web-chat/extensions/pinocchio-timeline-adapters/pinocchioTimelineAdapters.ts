@@ -182,6 +182,70 @@ export const pinocchioAgentModeAdapter = defineLiveAndHydrateAdapter({
   },
 });
 
+export const pinocchioFrontendToolAdapter = defineLiveAndHydrateAdapter({
+  name: 'pinocchio.frontend-tools',
+  priority: -20,
+  live: {
+    accepts: (frame) => ['ChatFrontendToolCallRequested', 'ChatFrontendToolResultReceived'].includes(asString(frame.name)),
+    project(frame): TimelineMutation | null {
+      const name = asString(frame.name);
+      const payload = payloadRecord(frame.payload);
+      const toolCallId = asString(payload.toolCallId);
+      if (!toolCallId) return null;
+      if (name === 'ChatFrontendToolCallRequested') {
+        return {
+          upsert: toolCallEntity(toolCallId, {
+            sessionId: asString(frame.sessionId),
+            messageId: payload.messageId,
+            toolCallId,
+            name: payload.toolName,
+            toolName: payload.toolName,
+            mode: payload.mode,
+            status: payload.status || 'requested',
+            input: payload.input || {},
+            executor: payload.executor || {},
+          }),
+        };
+      }
+      return {
+        upsert: toolCallEntity(toolCallId, {
+          sessionId: asString(frame.sessionId),
+          messageId: payload.messageId,
+          toolCallId,
+          name: payload.toolName,
+          toolName: payload.toolName,
+          status: payload.status || 'success',
+          result: payload.result || {},
+          error: payload.error,
+          executor: payload.executor || {},
+        }),
+      };
+    },
+  },
+  hydrate: {
+    kind: 'supported',
+    project(entity, context) {
+      if (asString(entity.kind) !== 'ChatFrontendToolCall') return null;
+      const id = asString(entity.id);
+      const payload = payloadRecord(entity.payload);
+      if (!id) return null;
+      return toolCallEntity(id, {
+        sessionId: context.sessionId,
+        messageId: payload.parentMessageId,
+        toolCallId: asString(payload.toolCallId) || id,
+        name: payload.toolName,
+        toolName: payload.toolName,
+        mode: payload.mode,
+        status: payload.status || 'requested',
+        input: payload.input || {},
+        result: payload.result || undefined,
+        error: payload.error,
+        executor: payload.executor || {},
+      });
+    },
+  },
+});
+
 export const pinocchioBackendToolAdapter = defineLiveAndHydrateAdapter({
   name: 'pinocchio.backend-tools',
   priority: -10,
@@ -287,5 +351,5 @@ export const pinocchioBackendToolAdapter = defineLiveAndHydrateAdapter({
 
 export const pinocchioWebChatTimelineAdapters = defineChatExtensions({
   name: 'pinocchio.web-chat.timeline-adapters',
-  timelineAdapters: [pinocchioReasoningAdapter, pinocchioAgentModeAdapter, pinocchioBackendToolAdapter],
+  timelineAdapters: [pinocchioFrontendToolAdapter, pinocchioReasoningAdapter, pinocchioAgentModeAdapter, pinocchioBackendToolAdapter],
 });

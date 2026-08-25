@@ -93,3 +93,23 @@ Phase 2: PR 208 passed all eleven checks, merged as 806f449, and immutable v0.11
 
 - /home/manuel/workspaces/2026-08-20/add-pbui-agent/pinocchio/ttmp/2026/08/23/PINOCCHIO-TOOLCALL-1--bind-frontend-tool-calls-to-sessions-and-make-completion-idempotent/reference/01-diary.md — Release and proxy verification evidence
 
+
+## 2026-08-25
+
+Addressed both late PR 208 P1 reviews in b056b6a/PR 210: unpublished candidates stay hidden and built-in approval results carry executor provenance. PR 210 is left for maintainer merge; v0.11.15 must not be consumed.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-08-20/add-pbui-agent/pinocchio/cmd/web-chat/web/src/ws/frontendTools.ts — Built-in result executor forwarding
+- /home/manuel/workspaces/2026-08-20/add-pbui-agent/pinocchio/pkg/chatapp/frontendtools/manager.go — Publish-before-install assignment fix
+
+
+## 2026-08-25
+
+Further PR 210 review exposed duplicate UI authority. Commit 04b5479 removes direct card submissions, makes generic cards read-only, routes frontend modes through ToolRuntime/ToolCallOutlet, and fixes hydrated session context; both threads resolved.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-08-20/add-pbui-agent/pinocchio/cmd/web-chat/web/src/features/web-chat/WebChatApp/ProviderToolCallRenderer.tsx — Central runtime authority
+- /home/manuel/workspaces/2026-08-20/add-pbui-agent/pinocchio/cmd/web-chat/web/src/features/web-chat/extensions/pinocchio-timeline-adapters/pinocchioTimelineAdapters.ts — Hydration context and provenance
+

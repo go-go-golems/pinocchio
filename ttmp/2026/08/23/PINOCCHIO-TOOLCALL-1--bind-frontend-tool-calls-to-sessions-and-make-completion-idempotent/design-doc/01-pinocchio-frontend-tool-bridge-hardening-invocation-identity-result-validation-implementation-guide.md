@@ -68,6 +68,8 @@ Current stable rejection codes are `duplicate_pending`, `unknown_result`, `sessi
 
 Phases 2–4 remain open. The first executor-ownership increment is now specified by `REACT-CHAT-TOOL-RUNTIME-1/design-doc/02-concise-frontend-tool-executor-ownership-protocol.md`: Pinocchio assigns and binds `(client_instance_id, connection_id, assignment_id)` across manifests, requests, pending calls, results, terminal digests, and timeline entities. Timed leases, heartbeats, run/capability identity, and automatic in-flight reassignment are explicitly deferred. This implementation must remain a coordinated strict migration; it must not add a hidden dual-identity compatibility path.
 
+A single-authority rule now accompanies that contract: timeline adapters/cards are read-only projections, while chat-provider `ToolRuntime` is the only browser component allowed to decide actionability or submit frontend results. A generic renderer cannot infer local ownership from broadcast executor fields—all tabs can see them. Applications register automatic/human tools with the shared runtime and render actionable human controls through `ToolCallOutlet`; direct card-to-result HTTP helpers are prohibited.
+
 ## 1. Scope and non-goals
 
 ### In scope
