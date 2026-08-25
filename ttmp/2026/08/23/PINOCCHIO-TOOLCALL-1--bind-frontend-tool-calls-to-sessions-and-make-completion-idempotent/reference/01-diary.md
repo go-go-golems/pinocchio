@@ -819,3 +819,68 @@ The reconnect semantics also required distinguishing current assignment from pen
 ### Technical details
 
 The full executor tuple is bounded to 128 bytes per opaque field. Assignment IDs use UUIDs by default and an injected generator in tests. Identical same-revision manifests publish no duplicate event. Different connections may start at any revision because revisions are connection-scoped. Result digest order is client, connection, assignment, call, tool, status, error, then deterministic result bytes.
+
+## Step 10: Merge and publish Pinocchio v0.11.15
+
+This phase moved the server contract from a workspace commit to an immutable downstream-consumable module release. The full local push gate and all eleven GitHub checks passed, PR 208 merged, and lightweight tag `v0.11.15` now resolves through the public Go module proxy to the authoritative merge commit.
+
+The release preserves upstream-first ordering: react-chat can now implement against a real module version rather than a workspace replacement or unpublished branch.
+
+### Prompt Context
+
+**User prompt (verbatim):** (same as Step 9)
+
+**Assistant interpretation:** Treat publication as its own gated phase and do not begin the browser runtime until the server contract is merged, tagged, and independently resolvable.
+
+**Inferred user intent:** Keep cross-repository integration reproducible and prevent consumers from depending on local workspace state.
+
+### What I did
+
+- Pushed `task/add-pbui-agent` through the complete pre-push gate.
+- Opened and documented PR 208.
+- Waited for Buf, full tests, webchat, lint, MySQL, GoSec, govulncheck, secret scan, dependency review, CodeQL Analyze, and CodeQL checks.
+- Merged PR 208 to upstream `main`.
+- Tagged merge commit `806f449f0ac8a7ee9c52d459103e29ec8f4b533e` as `v0.11.15` and pushed the tag to upstream.
+- Verified `GOWORK=off GOPROXY=https://proxy.golang.org go list -m -json github.com/go-go-golems/pinocchio@v0.11.15`.
+
+### Why
+
+- React-chat and PBUI release validation must consume the immutable server API outside `go.work`.
+
+### What worked
+
+- PR: `https://github.com/go-go-golems/pinocchio/pull/208` merged at `2026-08-25T21:40:16Z`.
+- All eleven GitHub checks passed.
+- The public Go proxy immediately resolved `v0.11.15` to merge commit `806f449`.
+- The pre-push gate included GoSec with zero issues, govulncheck with no called vulnerabilities, full tests, lint, web checks, and a GoReleaser snapshot.
+
+### What didn't work
+
+- N/A. The branch push, review gate, merge, tag push, and proxy resolution all succeeded.
+
+### What I learned
+
+- The repository uses lightweight module tags on authoritative merge commits; preserving that convention avoids unnecessary tag-object differences.
+
+### What was tricky to build
+
+The release had to tag the upstream merge commit rather than the feature branch head. GitHub created merge commit `806f449`, while implementation/docs heads were `7279126`/`e7ed165`; tagging the branch head would have omitted the canonical merge topology used by prior releases.
+
+### What warrants a second pair of eyes
+
+- Confirm downstream modules select `v0.11.15` with `GOWORK=off` and do not accidentally resolve the sibling workspace checkout.
+
+### What should be done in the future
+
+- Consume `v0.11.15` in react-chat and PBUI.
+- Keep tag `v0.11.15` immutable.
+
+### Code review instructions
+
+1. Inspect PR 208's merged diff and checks.
+2. Run the exact proxy query above.
+3. Confirm `Origin.Hash` is `806f449f0ac8a7ee9c52d459103e29ec8f4b533e` and `Ref` is `refs/tags/v0.11.15`.
+
+### Technical details
+
+The release timestamp reported by the Go proxy is `2026-08-25T21:40:15Z`. No compatibility fallback was introduced; manifests/results without complete executor identity are rejected by the new contract.

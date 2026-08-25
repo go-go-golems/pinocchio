@@ -12,4 +12,4 @@
 - [ ] Coordinate and implement protocol v2 invocation identity with PBUI and react-chat <!-- t:7xay -->
 - [x] Implement client-scoped manifests and executor ownership after protocol v2 <!-- t:bu4j -->
 - [x] Address PR 207 bounded cancellation publication and terminal-status renderer review findings <!-- t:qh5r -->
-- [ ] Publish and verify the concise executor Pinocchio release for downstream react-chat consumption <!-- t:fdpv -->
+- [x] Publish and verify the concise executor Pinocchio release for downstream react-chat consumption <!-- t:fdpv -->
