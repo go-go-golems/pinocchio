@@ -38,12 +38,15 @@ RelatedFiles:
       Note: Bounded count/age terminal retention (commit 84c6e63)
     - Path: repo://pkg/chatapp/frontendtools/terminal_store_test.go
       Note: Deterministic count/TTL eviction tests (commit 84c6e63)
+    - Path: ws://react-chat/ttmp/2026/08/23/REACT-CHAT-TOOL-RUNTIME-1--make-browser-tool-execution-idempotent-single-owner-and-manifest-safe/design-doc/02-concise-frontend-tool-executor-ownership-protocol.md
+      Note: Cross-repository design adopted in Diary Step 8
 ExternalSources: []
 Summary: Chronological investigation, design, validation, and delivery record for Pinocchio frontend-tool invocation/result hardening.
 LastUpdated: 2026-08-23T17:25:00-04:00
 WhatFor: Let an implementer or reviewer retrace why the design binds pending calls to full invocation identity and how to validate the change.
 WhenToUse: When implementing, reviewing, resuming, or testing PINOCCHIO-TOOLCALL-1.
 ---
+
 
 
 
@@ -625,3 +628,60 @@ The test publisher also needed synchronization around its observed error so the 
 ### Technical details
 
 The bounded context preserves request values with `context.WithoutCancel(ctx)` but replaces cancellation and the expired request deadline using `context.WithTimeout(..., 5*time.Second)`. Terminal state continues to win before publication, preserving the existing idempotency contract.
+
+## Step 8: Narrow executor ownership to the concise assignment tuple
+
+This design interval updated Pinocchio's implementation guide to point at the new authoritative cross-repository protocol. The immediate server work is no longer coupled to timed leases or every aspirational protocol-v2 field: Pinocchio will assign and bind a client, connection, and assignment epoch through manifest acceptance, pending calls, results, terminal digests, and timeline entities.
+
+No Go implementation changed in this step. The value is a precise boundary for the next implementation phase and an explicit statement that in-flight calls are never silently reassigned.
+
+### Prompt Context
+
+**User prompt (verbatim):** (same as react-chat Diary Step 10)
+
+**Assistant interpretation:** Update the server companion guide so Pinocchio implementers follow the concise accepted contract rather than the earlier full lease proposal.
+
+**Inferred user intent:** Keep all three repository plans coherent and immediately implementable.
+
+### What I did
+
+- Reviewed `frontend_tool.proto`, `manager.go`, and `plugin.go` against the new contract.
+- Updated the Pinocchio guide's status and Phase 2 heading/scope.
+- Assigned atomic manifest acknowledgement, pending executor capture, strict result comparison, terminal digesting, and projection ownership to Pinocchio.
+
+### Why
+
+- Pinocchio is the only layer that can select one server-visible executor and bind it to pending completion state.
+
+### What worked
+
+- Existing manager locking, bounded terminal state, context terminalization, and Hub publisher APIs provide suitable extension points.
+
+### What didn't work
+
+- The old guide's full run/manifest/capability/lease target was too broad for the requested first release. It is retained as future context but superseded for immediate executor work.
+
+### What I learned
+
+- PBUI can call a new acknowledgement-returning manager operation with its Hub as publisher, avoiding a submit-then-query race.
+
+### What was tricky to build
+
+Manifest publication failure needs compare-before-rollback so a failed older publish cannot restore state over a newer accepted assignment.
+
+### What warrants a second pair of eyes
+
+- Review stable error codes and HTTP mapping for missing/mismatched executor identity.
+- Review same-revision semantic manifest comparison and deterministic encoding.
+
+### What should be done in the future
+
+- Implement the concise schema/manager/projection changes and race matrix before publishing the next Pinocchio version.
+
+### Code review instructions
+
+- Read react-chat design 02, then trace Pinocchio `HandleManifest`, `Request`, `HandleResult`, `terminalizeContext`, and plugin projection.
+
+### Technical details
+
+The accepted tuple is `(client_instance_id, connection_id, assignment_id)`. Timed expiry and automatic pending-call takeover are deliberately absent.
