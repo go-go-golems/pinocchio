@@ -4,27 +4,23 @@ import { toolCallEntity } from '../fixtures';
 import { ToolCallCard } from './ToolCallCard';
 
 describe('ToolCallCard', () => {
-  it('renders human controls only with a complete assigned executor', () => {
-    const props = {
-      name: 'app.confirm_action',
-      status: 'requested',
-      sessionId: 'session-1',
-      toolCallId: 'call-1',
-      input: { title: 'Confirm action', confirmLabel: 'Approve', cancelLabel: 'Deny' },
-    };
-    const missing = renderToStaticMarkup(<ToolCallCard e={toolCallEntity('missing', props)} />);
-    const assigned = renderToStaticMarkup(
+  it('keeps generic timeline cards read-only even when input resembles an approval', () => {
+    const html = renderToStaticMarkup(
       <ToolCallCard
         e={toolCallEntity('assigned', {
-          ...props,
+          name: 'app.confirm_action',
+          status: 'requested',
+          sessionId: 'session-1',
+          toolCallId: 'call-1',
+          input: { title: 'Confirm action', confirmLabel: 'Approve', cancelLabel: 'Deny' },
           executor: { clientInstanceId: 'client-a', connectionId: 'connection-a', assignmentId: 'assignment-a' },
         })}
       />,
     );
 
-    expect(missing).not.toContain('>Approve<');
-    expect(assigned).toContain('>Approve<');
-    expect(assigned).toContain('>Deny<');
+    expect(html).not.toContain('>Approve<');
+    expect(html).not.toContain('>Deny<');
+    expect(html).toContain('confirmLabel');
   });
 
   it.each(['cancelled', 'timeout'])('hides human controls for terminal %s calls', (status) => {

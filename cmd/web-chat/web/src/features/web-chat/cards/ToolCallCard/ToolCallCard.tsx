@@ -1,7 +1,6 @@
 import { logWarn } from '../../../../utils/logger';
-import { isTerminalFrontendToolResultStatus, submitFrontendToolResult } from '../../../../ws/frontendTools';
+import { isTerminalFrontendToolResultStatus } from '../../../../ws/frontendTools';
 import { fmtSentAt } from '../../format';
-import { asRecord } from '../utils';
 import type { ToolCallCardProps } from './types';
 
 export function ToolCallCard({ e }: ToolCallCardProps) {
@@ -9,37 +8,8 @@ export function ToolCallCard({ e }: ToolCallCardProps) {
   const input = e.props?.input ?? {};
   const result = e.props?.result;
   const status = String(e.props?.status ?? '');
-  const sessionId = String(e.props?.sessionId ?? '');
-  const toolCallId = String(e.props?.toolCallId ?? e.id ?? '');
   const done = !!e.props?.done || !!result || isTerminalFrontendToolResultStatus(status);
-  const inputRecord = asRecord(input);
-  const executorRecord = asRecord(e.props?.executor);
-  const executor = {
-    clientInstanceId: String(executorRecord.clientInstanceId ?? ''),
-    connectionId: String(executorRecord.connectionId ?? ''),
-    assignmentId: String(executorRecord.assignmentId ?? ''),
-  };
-  const hasExecutor = !!executor.clientInstanceId && !!executor.connectionId && !!executor.assignmentId;
-  const isHumanConfirm = !done && !!sessionId && !!toolCallId && hasExecutor && (typeof inputRecord.title === 'string' || typeof inputRecord.confirmLabel === 'string' || typeof inputRecord.cancelLabel === 'string');
   const title = done ? `${name} (done)` : name;
-  const confirmTitle = String(inputRecord.title ?? 'Confirm action');
-  const confirmBody = String(inputRecord.body ?? 'The assistant is asking the browser to approve an action.');
-  const confirmLabel = String(inputRecord.confirmLabel ?? 'Approve');
-  const cancelLabel = String(inputRecord.cancelLabel ?? 'Deny');
-  const respond = (approved: boolean) => {
-    void submitFrontendToolResult({
-      sessionId,
-      toolCallId,
-      toolName: name,
-      status: approved ? 'success' : 'denied',
-      executor,
-      result: {
-        approved,
-        decision: approved ? 'approved' : 'denied',
-        decidedAt: new Date().toISOString(),
-      },
-    }).catch((err) => logWarn('frontend tool result submission failed', { scope: 'tool.frontend.result', extra: { toolCallId, name } }, err));
-  };
   return (
     <div data-part="card">
       <div data-part="card-header">
@@ -64,20 +34,6 @@ export function ToolCallCard({ e }: ToolCallCardProps) {
             Copy args
           </button>
         </div>
-        {isHumanConfirm ? (
-          <div data-part="callout" data-variant="warning" data-spacing="bottom">
-            <strong>{confirmTitle}</strong>
-            <div data-part="callout-body">{confirmBody}</div>
-            <div data-part="toolbar" data-spacing="top">
-              <button type="button" data-part="button" data-variant="primary" onClick={() => respond(true)}>
-                {confirmLabel}
-              </button>
-              <button type="button" data-part="button" data-variant="ghost" onClick={() => respond(false)}>
-                {cancelLabel}
-              </button>
-            </div>
-          </div>
-        ) : null}
         {result ? (
           <pre data-part="mono" data-spacing="bottom">
             {JSON.stringify(result, null, 2)}

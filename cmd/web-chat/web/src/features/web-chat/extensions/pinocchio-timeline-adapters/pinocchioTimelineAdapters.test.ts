@@ -67,6 +67,7 @@ describe('pinocchio timeline adapters baseline parity', () => {
     expect(snapshot?.adapterName).toBe('pinocchio.frontend-tools');
     expect(live?.mutation.upsert?.props.executor).toEqual(executor);
     expect(snapshot?.mutation.upsert?.props.executor).toEqual(executor);
+    expect(snapshot?.mutation.upsert?.props.sessionId).toBe('s1');
   });
 
   it('hydrates backend tool call/result snapshots to card-compatible kinds', () => {

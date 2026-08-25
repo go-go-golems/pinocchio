@@ -224,13 +224,13 @@ export const pinocchioFrontendToolAdapter = defineLiveAndHydrateAdapter({
   },
   hydrate: {
     kind: 'supported',
-    project(entity) {
+    project(entity, context) {
       if (asString(entity.kind) !== 'ChatFrontendToolCall') return null;
       const id = asString(entity.id);
       const payload = payloadRecord(entity.payload);
       if (!id) return null;
       return toolCallEntity(id, {
-        sessionId: payload.sessionId,
+        sessionId: context.sessionId,
         messageId: payload.parentMessageId,
         toolCallId: asString(payload.toolCallId) || id,
         name: payload.toolName,
