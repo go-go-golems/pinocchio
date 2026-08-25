@@ -643,6 +643,8 @@ No Go implementation changed in this step. The value is a precise boundary for t
 
 **Inferred user intent:** Keep all three repository plans coherent and immediately implementable.
 
+**Commit (docs):** `042c2fdef5ee5beb131dac81a38caaafe441b1eb` — "PINOCCHIO-TOOLCALL-1: adopt concise executor protocol"
+
 ### What I did
 
 - Reviewed `frontend_tool.proto`, `manager.go`, and `plugin.go` against the new contract.
