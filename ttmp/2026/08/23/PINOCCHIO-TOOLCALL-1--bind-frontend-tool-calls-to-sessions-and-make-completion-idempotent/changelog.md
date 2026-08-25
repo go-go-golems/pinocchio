@@ -84,3 +84,12 @@ Phase 1: implemented concise server-owned executor assignments across protobufs,
 - /home/manuel/workspaces/2026-08-20/add-pbui-agent/pinocchio/pkg/chatapp/frontendtools/manager.go — Core assignment state machine
 - /home/manuel/workspaces/2026-08-20/add-pbui-agent/pinocchio/proto/pinocchio/chatapp/frontendtools/v1/frontend_tool.proto — Wire contract
 
+
+## 2026-08-25
+
+Phase 2: PR 208 passed all eleven checks, merged as 806f449, and immutable v0.11.15 resolves through proxy.golang.org for GOWORK=off consumers.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-08-20/add-pbui-agent/pinocchio/ttmp/2026/08/23/PINOCCHIO-TOOLCALL-1--bind-frontend-tool-calls-to-sessions-and-make-completion-idempotent/reference/01-diary.md — Release and proxy verification evidence
+
