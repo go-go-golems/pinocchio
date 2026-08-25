@@ -13,3 +13,4 @@
 - [x] Implement client-scoped manifests and executor ownership after protocol v2 <!-- t:bu4j -->
 - [x] Address PR 207 bounded cancellation publication and terminal-status renderer review findings <!-- t:qh5r -->
 - [x] Publish and verify the concise executor Pinocchio release for downstream react-chat consumption <!-- t:fdpv -->
+- [ ] After maintainer merge of PR 210, publish and verify an immutable Pinocchio hotfix superseding v0.11.15 <!-- t:6iig -->
