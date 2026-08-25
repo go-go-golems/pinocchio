@@ -103,3 +103,13 @@ Addressed both late PR 208 P1 reviews in b056b6a/PR 210: unpublished candidates 
 - /home/manuel/workspaces/2026-08-20/add-pbui-agent/pinocchio/cmd/web-chat/web/src/ws/frontendTools.ts — Built-in result executor forwarding
 - /home/manuel/workspaces/2026-08-20/add-pbui-agent/pinocchio/pkg/chatapp/frontendtools/manager.go — Publish-before-install assignment fix
 
+
+## 2026-08-25
+
+Further PR 210 review exposed duplicate UI authority. Commit 04b5479 removes direct card submissions, makes generic cards read-only, routes frontend modes through ToolRuntime/ToolCallOutlet, and fixes hydrated session context; both threads resolved.
+
+### Related Files
+
+- /home/manuel/workspaces/2026-08-20/add-pbui-agent/pinocchio/cmd/web-chat/web/src/features/web-chat/WebChatApp/ProviderToolCallRenderer.tsx — Central runtime authority
+- /home/manuel/workspaces/2026-08-20/add-pbui-agent/pinocchio/cmd/web-chat/web/src/features/web-chat/extensions/pinocchio-timeline-adapters/pinocchioTimelineAdapters.ts — Hydration context and provenance
+

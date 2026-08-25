@@ -22,12 +22,15 @@ RelatedFiles:
       Note: |-
         Unsolicited result rejection contract (commit 8cdc9af)
         HTTP regressions and race-safe runtime observation (commit 7279126)
+    - Path: repo://cmd/web-chat/web/src/features/web-chat/WebChatApp/ProviderToolCallRenderer.tsx
+      Note: Single actionable frontend-tool routing boundary (04b5479)
     - Path: repo://cmd/web-chat/web/src/features/web-chat/cards/ToolCallCard/ToolCallCard.test.tsx
       Note: Cancelled and timeout card rendering regressions (commit c9e8255)
     - Path: repo://cmd/web-chat/web/src/features/web-chat/cards/ToolCallCard/ToolCallCard.tsx
       Note: |-
         Terminal cards suppress stale human controls (commit c9e8255)
         Strict assigned human controls (b056b6a)
+        Generic timeline projection is now read-only (04b5479)
     - Path: repo://cmd/web-chat/web/src/features/web-chat/extensions/pinocchio-timeline-adapters/pinocchioTimelineAdapters.ts
       Note: Live and hydrated executor provenance hotfix (b056b6a)
     - Path: repo://cmd/web-chat/web/src/ws/frontendTools.test.ts
@@ -63,6 +66,7 @@ LastUpdated: 2026-08-23T17:25:00-04:00
 WhatFor: Let an implementer or reviewer retrace why the design binds pending calls to full invocation identity and how to validate the change.
 WhenToUse: When implementing, reviewing, resuming, or testing PINOCCHIO-TOOLCALL-1.
 ---
+
 
 
 
@@ -971,3 +975,82 @@ The built-in UI used chat-provider `0.2.1`, whose generic frontend-tool adapter 
 ### Technical details
 
 The two original review comments are `discussion_r3857682073` and `discussion_r3857682087`. Replies are `discussion_r3857798761` and `discussion_r3857798935`. No new release tag was created for the hotfix because the maintainer merge is pending.
+
+## Step 12: Remove the duplicate UI authority exposed by PR 210 review
+
+Further review correctly showed that forwarding a broadcast request's executor tuple into a generic approval card did not establish local ownership. Every tab could copy the same visible tuple. This was not another missing-field bug; it exposed a duplicated-authority design pattern: the timeline card independently inferred actionability and posted results outside chat-provider's assignment-aware runtime.
+
+The fix removes that authority rather than adding another local identity store. Generic timeline cards are now read-only. All automatic and human frontend interactions must pass through `ToolCallOutlet` and the single chat-provider `ToolRuntime`, which owns assignment matching, human completion CAS, cancellation, terminal retention, and retries. Hydrated session identity now comes from the adapter's snapshot context as intended.
+
+### Prompt Context
+
+**User prompt (verbatim):** `Address further https://github.com/go-go-golems/pinocchio/pull/210 . Is this somehow a design pattern issue, if you take a step back? Is therea better architecture that would address these issues?`
+
+**Assistant interpretation:** Fix both new review findings, but step back from incremental field threading and remove the second browser completion authority that keeps generating ownership bugs.
+
+**Inferred user intent:** Prefer a durable architecture with one execution state machine over repeated local patches that make every renderer responsible for protocol correctness.
+
+**Commit (code):** `04b54790affa7ba7292503000229b22fd66da811` — "fix(web-chat): centralize frontend tool authority"
+
+### What I did
+
+- Removed direct result submission and heuristic approval controls from generic `ToolCallCard`.
+- Removed Pinocchio web-chat's bespoke `submitFrontendToolResult` function.
+- Kept timeline cards read-only even when input resembles an approval and carries an executor tuple.
+- Routed all frontend modes through `ProviderToolCallRenderer -> ToolCallOutlet`; added numeric and enum mode normalization.
+- Preserved executor provenance in the Pinocchio adapter for the shared runtime/outlet.
+- Read hydrated session ID from `SnapshotProjectionContext.sessionId`.
+- Added mode classification, read-only card, and hydrated context tests.
+- Passed web typecheck, 23 focused tests, Biome lint, and the complete pre-push gate.
+- Replied to and resolved both PR 210 threads; left PR 210 unmerged.
+- Added the single-authority decision to the authoritative concise protocol design.
+
+### Why
+
+- Broadcast executor fields are provenance, not proof that the current tab owns them.
+- Only the runtime has local acknowledged assignment state and can compare it before rendering/completing.
+- UI projection should describe what happened; it should not independently become a command authority based on payload shape.
+
+### What worked
+
+- Commit `04b5479` deletes more duplicated authority code than it adds: 130 lines removed, 37 added.
+- Web typecheck and lint pass.
+- Four focused files / 23 tests pass.
+- The complete push gate passes Go build/lint/vet, GoSec, govulncheck, full tests, web checks, and release snapshot.
+- Both PR 210 review threads are resolved with architectural explanations.
+
+### What didn't work
+
+- The prior `b056b6a` approach only checked that executor fields were non-empty. Because all session subscribers see the same broadcast fields, every tab could still render and submit. It correctly transported provenance but incorrectly treated provenance as local authority.
+
+### What I learned
+
+- “Carry the field everywhere” is not sufficient when authority depends on private local state. The renderer must ask the authority-owning runtime, not reconstruct eligibility from the event.
+- Timeline projection and command execution are separate responsibilities. Combining them produces confused-deputy behavior.
+- Removing a legacy interaction is safer than maintaining two partially synchronized state machines during a strict protocol migration.
+
+### What was tricky to build
+
+Pinocchio's provider renderer already routed recognized frontend modes into `ToolCallOutlet`, but numeric enum values could miss the string-based `includes('FRONTEND')` test and fall into the generic card. Explicitly normalizing both protobuf JSON enum names and numeric values closes that accidental bypass. Unknown/unregistered tools remain visible through the outlet's read-only fallback.
+
+### What warrants a second pair of eyes
+
+- Confirm all frontend mode encodings are covered by `isFrontendToolMode`.
+- Confirm no other card/helper posts frontend results outside `ToolRuntime`.
+- Review whether Pinocchio should upgrade its embedded chat-provider only after executor-aware `0.6.0` is published.
+
+### What should be done in the future
+
+- Register supported built-in human tools explicitly through chat-provider rather than inferring approval UI from arbitrary input fields.
+- Add an architectural guard/test that no timeline renderer imports a frontend result submission transport.
+
+### Code review instructions
+
+1. Review the deletion in `ToolCallCard` and `frontendTools.ts` first.
+2. Review `ProviderToolCallRenderer` as the single routing boundary.
+3. Verify hydrated `sessionId` comes from projection context.
+4. Search for `/tools/results` and ensure only the shared runtime/client transport owns browser submission after the eventual package upgrade.
+
+### Technical details
+
+The new PR 210 comments are `discussion_r3857844822` and `discussion_r3857844830`; replies are `discussion_r3857898379` and `discussion_r3857898685`. Both threads are resolved. PR 210 remains open for maintainer merge.
