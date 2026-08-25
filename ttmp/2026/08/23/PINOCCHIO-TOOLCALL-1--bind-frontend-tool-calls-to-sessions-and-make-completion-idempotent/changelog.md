@@ -74,3 +74,13 @@ Narrowed the immediate executor phase to the authoritative client, connection, a
 
 - /home/manuel/workspaces/2026-08-20/add-pbui-agent/react-chat/ttmp/2026/08/23/REACT-CHAT-TOOL-RUNTIME-1--make-browser-tool-execution-idempotent-single-owner-and-manifest-safe/design-doc/02-concise-frontend-tool-executor-ownership-protocol.md — Authoritative cross-repository protocol
 
+
+## 2026-08-25
+
+Phase 1: implemented concise server-owned executor assignments across protobufs, manifests, pending/terminal state, HTTP adapters, and durable projections; full tests/build/lint and focused race checks pass (7279126).
+
+### Related Files
+
+- /home/manuel/workspaces/2026-08-20/add-pbui-agent/pinocchio/pkg/chatapp/frontendtools/manager.go — Core assignment state machine
+- /home/manuel/workspaces/2026-08-20/add-pbui-agent/pinocchio/proto/pinocchio/chatapp/frontendtools/v1/frontend_tool.proto — Wire contract
+
