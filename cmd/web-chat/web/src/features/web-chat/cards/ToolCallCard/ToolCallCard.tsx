@@ -13,7 +13,14 @@ export function ToolCallCard({ e }: ToolCallCardProps) {
   const toolCallId = String(e.props?.toolCallId ?? e.id ?? '');
   const done = !!e.props?.done || !!result || isTerminalFrontendToolResultStatus(status);
   const inputRecord = asRecord(input);
-  const isHumanConfirm = !done && !!sessionId && !!toolCallId && (typeof inputRecord.title === 'string' || typeof inputRecord.confirmLabel === 'string' || typeof inputRecord.cancelLabel === 'string');
+  const executorRecord = asRecord(e.props?.executor);
+  const executor = {
+    clientInstanceId: String(executorRecord.clientInstanceId ?? ''),
+    connectionId: String(executorRecord.connectionId ?? ''),
+    assignmentId: String(executorRecord.assignmentId ?? ''),
+  };
+  const hasExecutor = !!executor.clientInstanceId && !!executor.connectionId && !!executor.assignmentId;
+  const isHumanConfirm = !done && !!sessionId && !!toolCallId && hasExecutor && (typeof inputRecord.title === 'string' || typeof inputRecord.confirmLabel === 'string' || typeof inputRecord.cancelLabel === 'string');
   const title = done ? `${name} (done)` : name;
   const confirmTitle = String(inputRecord.title ?? 'Confirm action');
   const confirmBody = String(inputRecord.body ?? 'The assistant is asking the browser to approve an action.');
@@ -25,6 +32,7 @@ export function ToolCallCard({ e }: ToolCallCardProps) {
       toolCallId,
       toolName: name,
       status: approved ? 'success' : 'denied',
+      executor,
       result: {
         approved,
         decision: approved ? 'approved' : 'denied',

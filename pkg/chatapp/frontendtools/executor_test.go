@@ -90,6 +90,45 @@ func TestAcceptManifestPublicationFailureRestoresPreviousAssignment(t *testing.T
 	require.True(t, proto.Equal(first.GetExecutor(), current.GetExecutor()))
 }
 
+func TestRequestCannotObserveManifestBeforePublicationCommits(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	manager := NewManager()
+	ids := []string{"assignment-a", "assignment-b"}
+	manager.newAssignmentID = func() string {
+		id := ids[0]
+		ids = ids[1:]
+		return id
+	}
+	sid := sessionstream.SessionId("session-1")
+	publisher := &capturePublisher{events: make(chan sessionstream.Event, 8)}
+	assignmentA, err := manager.AcceptManifest(ctx, sid, publisher, executorManifest("client-a", "connection-a", 1, "lookup"))
+	require.NoError(t, err)
+	<-publisher.events
+
+	blocked := newBlockingManifestPublisher(errors.New("timeline unavailable"))
+	acceptErr := make(chan error, 1)
+	go func() {
+		_, err := manager.AcceptManifest(ctx, sid, blocked, executorManifest("client-b", "connection-b", 1, "lookup"))
+		acceptErr <- err
+	}()
+	select {
+	case <-blocked.entered:
+	case <-ctx.Done():
+		t.Fatal("timed out waiting for manifest publication")
+	}
+
+	outcome := startManagerRequest(ctx, manager, publisher, sid, Request{MessageID: "msg-1", ToolCallID: "call-1", ToolName: "lookup"})
+	requested := requireExecutorRequestEvent(t, ctx, publisher)
+	require.True(t, proto.Equal(assignmentA.GetExecutor(), requested.GetExecutor()))
+
+	close(blocked.release)
+	require.ErrorIs(t, <-acceptErr, blocked.err)
+	require.NoError(t, manager.HandleResult(ctx, executorResultCommand(sid, "call-1", "lookup", assignmentA.GetExecutor()), nil, publisher))
+	<-publisher.events
+	require.Equal(t, "success", requireRequestOutcome(t, ctx, outcome).GetStatus())
+}
+
 func TestRequestCapturesAssignmentAndOwnershipChangeAffectsFutureCallsOnly(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
@@ -215,4 +254,24 @@ func (p failManifestPublisher) Publish(_ context.Context, event sessionstream.Ev
 		return p.err
 	}
 	return nil
+}
+
+type blockingManifestPublisher struct {
+	err     error
+	entered chan struct{}
+	release chan struct{}
+	once    sync.Once
+}
+
+func newBlockingManifestPublisher(err error) *blockingManifestPublisher {
+	return &blockingManifestPublisher{err: err, entered: make(chan struct{}), release: make(chan struct{})}
+}
+
+func (p *blockingManifestPublisher) Publish(_ context.Context, event sessionstream.Event) error {
+	if event.Name != EventManifestUpdated {
+		return nil
+	}
+	p.once.Do(func() { close(p.entered) })
+	<-p.release
+	return p.err
 }

@@ -282,21 +282,16 @@ func (m *Manager) AcceptManifest(ctx context.Context, sid sessionstream.SessionI
 		Executor: &toolv1.FrontendToolExecutor{ClientInstanceId: clientID, ConnectionId: connectionID, AssignmentId: assignmentID},
 	}
 	candidate := &assignedManifest{updated: cloneManifestUpdated(updated), digest: digest}
-	m.manifests[sid] = candidate
 	m.mu.Unlock()
 
+	// The candidate is intentionally not visible to Request, Descriptor, or
+	// bridge registration until its durable event publication succeeds.
 	if err := pub.Publish(ctx, sessionstream.Event{Name: EventManifestUpdated, SessionId: sid, Payload: cloneManifestUpdated(updated)}); err != nil {
-		m.mu.Lock()
-		if m.manifests[sid] == candidate {
-			if previous == nil {
-				delete(m.manifests, sid)
-			} else {
-				m.manifests[sid] = previous
-			}
-		}
-		m.mu.Unlock()
 		return nil, errors.Wrap(err, "publish frontend tool manifest")
 	}
+	m.mu.Lock()
+	m.manifests[sid] = candidate
+	m.mu.Unlock()
 	return cloneManifestUpdated(updated), nil
 }
 

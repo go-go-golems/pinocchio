@@ -2,6 +2,12 @@ import { basePrefixFromLocation } from '../utils/basePrefix';
 
 export type FrontendToolResultStatus = 'success' | 'failed' | 'cancelled' | 'denied' | 'timeout';
 
+export type FrontendToolExecutor = {
+  clientInstanceId: string;
+  connectionId: string;
+  assignmentId: string;
+};
+
 const terminalFrontendToolResultStatuses = new Set<FrontendToolResultStatus>(['success', 'failed', 'cancelled', 'denied', 'timeout']);
 
 export function isTerminalFrontendToolResultStatus(status: string): status is FrontendToolResultStatus {
@@ -15,6 +21,7 @@ export async function submitFrontendToolResult(args: {
   status?: FrontendToolResultStatus;
   result?: Record<string, unknown>;
   error?: string;
+  executor: FrontendToolExecutor;
 }) {
   const basePrefix = basePrefixFromLocation();
   const response = await fetch(`${basePrefix}/api/chat/sessions/${encodeURIComponent(args.sessionId)}/tools/results`, {
@@ -26,6 +33,7 @@ export async function submitFrontendToolResult(args: {
       status: args.status ?? 'success',
       result: args.result ?? {},
       error: args.error ?? '',
+      executor: args.executor,
     }),
   });
   if (!response.ok) {
