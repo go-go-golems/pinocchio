@@ -30,14 +30,20 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 )
 
+type runtimeObservation struct {
+	sessionID string
+	turn      *turns.Turn
+}
+
 type runtimeBackedTestEngine struct {
 	completion string
-	seen       **turns.Turn
+	sessionID  string
+	seen       chan<- runtimeObservation
 }
 
 func (e runtimeBackedTestEngine) RunInference(ctx context.Context, t *turns.Turn) (*turns.Turn, error) {
 	if e.seen != nil && t != nil {
-		*e.seen = t.Clone()
+		e.seen <- runtimeObservation{sessionID: e.sessionID, turn: t.Clone()}
 	}
 	completion := strings.TrimSpace(e.completion)
 	if completion == "" {
@@ -59,16 +65,12 @@ func (mockRuntimeResolver) Resolve(context.Context, *http.Request, string, strin
 }
 
 type staticRuntimeResolver struct {
-	completion    string
-	seenSessionID *string
-	seenTurn      **turns.Turn
+	completion string
+	seen       chan<- runtimeObservation
 }
 
 func (r staticRuntimeResolver) Resolve(_ context.Context, _ *http.Request, sessionID string, _ string, _ string) (*infruntime.ComposedRuntime, error) {
-	if r.seenSessionID != nil {
-		*r.seenSessionID = sessionID
-	}
-	return &infruntime.ComposedRuntime{Engine: runtimeBackedTestEngine{completion: r.completion, seen: r.seenTurn}}, nil
+	return &infruntime.ComposedRuntime{Engine: runtimeBackedTestEngine{completion: r.completion, sessionID: sessionID, seen: r.seen}}, nil
 }
 
 func newTestMux(t *testing.T, opts ...Option) (*Server, *httptest.Server) {
@@ -118,11 +120,18 @@ func TestFrontendToolManifestEndpointPublishesTimelineEntity(t *testing.T) {
 	manager := frontendtools.NewManager()
 	_, httpSrv := newTestMux(t, WithFrontendToolManager(manager), WithChatPlugins(frontendtools.NewPlugin()))
 
-	body := []byte(`{"revision":7,"tools":[{"name":"app.confirm_action","description":"Confirm an action","mode":"human","inputSchema":{"type":"object"},"available":true}]}`)
+	body := []byte(`{"clientInstanceId":"client-a","connectionId":"connection-a","revision":7,"tools":[{"name":"app.confirm_action","description":"Confirm an action","mode":"human","inputSchema":{"type":"object"},"available":true}]}`)
 	resp, err := http.Post(httpSrv.URL+"/api/chat/sessions/sess-tools/tools/manifest", "application/json", bytes.NewReader(body))
 	require.NoError(t, err)
 	defer func() { _ = resp.Body.Close() }()
 	require.Equal(t, http.StatusOK, resp.StatusCode)
+	var manifestResponse frontendToolManifestResponse
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&manifestResponse))
+	require.True(t, manifestResponse.Accepted)
+	require.Equal(t, uint64(7), manifestResponse.Revision)
+	require.Equal(t, "client-a", manifestResponse.Executor.ClientInstanceID)
+	require.Equal(t, "connection-a", manifestResponse.Executor.ConnectionID)
+	require.NotEmpty(t, manifestResponse.Executor.AssignmentID)
 
 	desc, ok := manager.Descriptor("sess-tools", "app.confirm_action")
 	require.True(t, ok)
@@ -138,6 +147,8 @@ func TestFrontendToolResultErrorStatus(t *testing.T) {
 		expected int
 	}{
 		{name: "invalid status", err: &frontendtools.InvocationError{Code: frontendtools.InvocationErrorInvalidStatus}, expected: http.StatusBadRequest},
+		{name: "missing executor", err: &frontendtools.InvocationError{Code: frontendtools.InvocationErrorExecutorMissing}, expected: http.StatusBadRequest},
+		{name: "wrong executor", err: &frontendtools.InvocationError{Code: frontendtools.InvocationErrorExecutorMismatch}, expected: http.StatusConflict},
 		{name: "unknown", err: &frontendtools.InvocationError{Code: frontendtools.InvocationErrorUnknownResult}, expected: http.StatusNotFound},
 		{name: "late", err: &frontendtools.InvocationError{Code: frontendtools.InvocationErrorLateResult}, expected: http.StatusGone},
 		{name: "duplicate", err: &frontendtools.InvocationError{Code: frontendtools.InvocationErrorDuplicatePending}, expected: http.StatusConflict},
@@ -158,7 +169,7 @@ func TestFrontendToolResultEndpointRejectsUnsolicitedResult(t *testing.T) {
 	manager := frontendtools.NewManager()
 	_, httpSrv := newTestMux(t, WithFrontendToolManager(manager), WithChatPlugins(frontendtools.NewPlugin()))
 
-	body := []byte(`{"toolCallId":"call-1","toolName":"app.confirm_action","status":"success","result":{"approved":true,"decision":"approved"}}`)
+	body := []byte(`{"toolCallId":"call-1","toolName":"app.confirm_action","status":"success","result":{"approved":true,"decision":"approved"},"executor":{"clientInstanceId":"client-a","connectionId":"connection-a","assignmentId":"assignment-a"}}`)
 	resp, err := http.Post(httpSrv.URL+"/api/chat/sessions/sess-tools/tools/results", "application/json", bytes.NewReader(body))
 	require.NoError(t, err)
 	defer func() { _ = resp.Body.Close() }()
@@ -342,8 +353,7 @@ func TestSubmitAndSnapshot_WiresSessionIDAndTurnStoreIntoRuntime(t *testing.T) {
 	payload, err := serde.ToYAML(prior, serde.Options{})
 	require.NoError(t, err)
 
-	var seenSessionID string
-	var seenTurn *turns.Turn
+	seen := make(chan runtimeObservation, 1)
 	_, httpSrv := newTestMux(t,
 		WithTurnStore(&fakeTurnStore{snapshot: &chatstore.TurnSnapshot{
 			ConvID:    "sess-history-app",
@@ -352,7 +362,7 @@ func TestSubmitAndSnapshot_WiresSessionIDAndTurnStoreIntoRuntime(t *testing.T) {
 			Phase:     "final",
 			Payload:   string(payload),
 		}}),
-		WithRuntimeResolver(staticRuntimeResolver{completion: "history-aware response", seenSessionID: &seenSessionID, seenTurn: &seenTurn}),
+		WithRuntimeResolver(staticRuntimeResolver{completion: "history-aware response", seen: seen}),
 	)
 
 	body := []byte(`{"prompt":"follow up","profile":"gpt-5-nano-low"}`)
@@ -361,16 +371,17 @@ func TestSubmitAndSnapshot_WiresSessionIDAndTurnStoreIntoRuntime(t *testing.T) {
 	defer func() { _ = resp.Body.Close() }()
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
-	deadline := time.Now().Add(2 * time.Second)
-	for seenTurn == nil && time.Now().Before(deadline) {
-		time.Sleep(10 * time.Millisecond)
+	select {
+	case observation := <-seen:
+		require.Equal(t, "sess-history-app", observation.sessionID)
+		require.NotNil(t, observation.turn)
+		require.Len(t, observation.turn.Blocks, 3)
+		require.Equal(t, "previous question", observation.turn.Blocks[0].Payload[turns.PayloadKeyText])
+		require.Equal(t, "previous answer", observation.turn.Blocks[1].Payload[turns.PayloadKeyText])
+		require.Equal(t, "follow up", observation.turn.Blocks[2].Payload[turns.PayloadKeyText])
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for runtime observation")
 	}
-	require.NotNil(t, seenTurn)
-	require.Equal(t, "sess-history-app", seenSessionID)
-	require.Len(t, seenTurn.Blocks, 3)
-	require.Equal(t, "previous question", seenTurn.Blocks[0].Payload[turns.PayloadKeyText])
-	require.Equal(t, "previous answer", seenTurn.Blocks[1].Payload[turns.PayloadKeyText])
-	require.Equal(t, "follow up", seenTurn.Blocks[2].Payload[turns.PayloadKeyText])
 }
 
 func TestTimelineExportJSONDownload(t *testing.T) {

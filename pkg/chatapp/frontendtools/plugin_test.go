@@ -15,7 +15,7 @@ func TestPluginProjectsFrontendToolTimeline(t *testing.T) {
 	if err != nil {
 		t.Fatalf("input struct: %v", err)
 	}
-	entities, handled, err := plugin.ProjectTimeline(context.Background(), sessionstream.Event{Name: EventCallRequested, Payload: &toolv1.FrontendToolCallRequested{MessageId: "msg-1", ToolCallId: "call-1", ToolName: "cart.add", Input: input, Mode: toolv1.ToolExecutionMode_TOOL_EXECUTION_MODE_FRONTEND_AUTO, Status: "requested"}}, nil, nil)
+	entities, handled, err := plugin.ProjectTimeline(context.Background(), sessionstream.Event{Name: EventCallRequested, Payload: &toolv1.FrontendToolCallRequested{MessageId: "msg-1", ToolCallId: "call-1", ToolName: "cart.add", Input: input, Mode: toolv1.ToolExecutionMode_TOOL_EXECUTION_MODE_FRONTEND_AUTO, Status: "requested", Executor: testExecutor()}}, nil, nil)
 	if err != nil || !handled {
 		t.Fatalf("ProjectTimeline request handled=%v err=%v", handled, err)
 	}
@@ -23,7 +23,7 @@ func TestPluginProjectsFrontendToolTimeline(t *testing.T) {
 		t.Fatalf("unexpected request entities: %#v", entities)
 	}
 	payload, ok := entities[0].Payload.(*toolv1.FrontendToolCallEntity)
-	if !ok || payload.GetToolName() != "cart.add" || payload.GetStatus() != "requested" {
+	if !ok || payload.GetToolName() != "cart.add" || payload.GetStatus() != "requested" || !sameExecutor(payload.GetExecutor(), testExecutor()) {
 		t.Fatalf("unexpected request payload: %#v", entities[0].Payload)
 	}
 
@@ -32,12 +32,12 @@ func TestPluginProjectsFrontendToolTimeline(t *testing.T) {
 		t.Fatalf("result struct: %v", err)
 	}
 	view := fakeTimelineView{entity: entities[0]}
-	updated, handled, err := plugin.ProjectTimeline(context.Background(), sessionstream.Event{Name: EventResultReceived, Payload: &toolv1.FrontendToolResultReceived{MessageId: "msg-1", ToolCallId: "call-1", ToolName: "cart.add", Result: result, Status: "success"}}, nil, view)
+	updated, handled, err := plugin.ProjectTimeline(context.Background(), sessionstream.Event{Name: EventResultReceived, Payload: &toolv1.FrontendToolResultReceived{MessageId: "msg-1", ToolCallId: "call-1", ToolName: "cart.add", Result: result, Status: "success", Executor: testExecutor()}}, nil, view)
 	if err != nil || !handled {
 		t.Fatalf("ProjectTimeline result handled=%v err=%v", handled, err)
 	}
 	updatedPayload, ok := updated[0].Payload.(*toolv1.FrontendToolCallEntity)
-	if !ok || updatedPayload.GetStatus() != "success" || updatedPayload.GetResult() == nil {
+	if !ok || updatedPayload.GetStatus() != "success" || updatedPayload.GetResult() == nil || !sameExecutor(updatedPayload.GetExecutor(), testExecutor()) {
 		t.Fatalf("unexpected result payload: %#v", updated[0].Payload)
 	}
 }

@@ -14,6 +14,7 @@ import (
 
 type Server struct {
 	service             *chatapp.Service
+	hub                 *sessionstream.Hub
 	ws                  *wstransport.Server
 	defaultProfile      string
 	chunkDelay          time.Duration
@@ -76,6 +77,7 @@ func NewServer(opts ...Option) (*Server, error) {
 	}
 
 	s.service = service
+	s.hub = hub
 	s.exportService = chatexport.NewService(service, chatexport.WithTurnStore(s.turnStore), chatexport.WithTurnsDBPath(s.turnsDBPath))
 	s.ws = ws
 	s.closeFn = cleanup

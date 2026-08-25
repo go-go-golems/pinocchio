@@ -22,7 +22,7 @@ func TestManagerManifestDescriptorAndAvailability(t *testing.T) {
 	if err != nil {
 		t.Fatalf("schema struct: %v", err)
 	}
-	if err := manager.HandleManifest(ctx, sessionstream.Command{SessionId: sid, Name: CommandManifest, Payload: &toolv1.FrontendToolManifestCommand{Revision: 2, Tools: []*toolv1.FrontendToolDescriptor{{Name: "cart.add", InputSchema: schema, Available: true}}}}, nil, publisher); err != nil {
+	if err := manager.HandleManifest(ctx, sessionstream.Command{SessionId: sid, Name: CommandManifest, Payload: &toolv1.FrontendToolManifestCommand{Revision: 2, ClientInstanceId: "client-test", ConnectionId: "connection-test", Tools: []*toolv1.FrontendToolDescriptor{{Name: "cart.add", InputSchema: schema, Available: true}}}}, nil, publisher); err != nil {
 		t.Fatalf("HandleManifest: %v", err)
 	}
 	desc, ok := manager.Descriptor(sid, "cart.add")
@@ -41,6 +41,7 @@ func TestManagerRequestReceivesDeniedResult(t *testing.T) {
 	publisher := &capturePublisher{events: make(chan sessionstream.Event, 4)}
 	sid := sessionstream.SessionId("denied-session")
 
+	ensureTestManifest(t, manager, sid, "checkout.confirm")
 	resultCh := make(chan *toolv1.FrontendToolResultCommand, 1)
 	errCh := make(chan error, 1)
 	go func() {
@@ -58,7 +59,7 @@ func TestManagerRequestReceivesDeniedResult(t *testing.T) {
 		t.Fatalf("timed out waiting for request event")
 	}
 
-	if err := manager.HandleResult(ctx, sessionstream.Command{SessionId: sid, Name: CommandResult, Payload: &toolv1.FrontendToolResultCommand{ToolCallId: "call-1", ToolName: "checkout.confirm", Status: "denied", Error: "user declined"}}, nil, publisher); err != nil {
+	if err := manager.HandleResult(ctx, sessionstream.Command{SessionId: sid, Name: CommandResult, Payload: &toolv1.FrontendToolResultCommand{ToolCallId: "call-1", ToolName: "checkout.confirm", Status: "denied", Error: "user declined", Executor: testExecutor()}}, nil, publisher); err != nil {
 		t.Fatalf("HandleResult: %v", err)
 	}
 	select {
@@ -410,6 +411,7 @@ type managerRequestOutcome struct {
 }
 
 func startManagerRequest(ctx context.Context, manager *Manager, publisher sessionstream.EventPublisher, sid sessionstream.SessionId, req Request) <-chan managerRequestOutcome {
+	ensureTestManifest(nil, manager, sid, req.ToolName)
 	out := make(chan managerRequestOutcome, 1)
 	go func() {
 		result, err := manager.Request(ctx, sid, publisher, req)
@@ -516,5 +518,45 @@ func resultCommand(sid sessionstream.SessionId, toolCallID, toolName, status str
 		ToolName:   toolName,
 		Status:     status,
 		Result:     result,
+		Executor:   testExecutor(),
 	}}
 }
+
+func testExecutor() *toolv1.FrontendToolExecutor {
+	return &toolv1.FrontendToolExecutor{
+		ClientInstanceId: "client-test",
+		ConnectionId:     "connection-test",
+		AssignmentId:     "assignment-test",
+	}
+}
+
+func ensureTestManifest(t *testing.T, manager *Manager, sid sessionstream.SessionId, toolName string) {
+	if t != nil {
+		t.Helper()
+	}
+	manager.mu.Lock()
+	existing := manager.manifests[sid]
+	manager.mu.Unlock()
+	if existing != nil {
+		return
+	}
+	manager.newAssignmentID = func() string { return "assignment-test" }
+	_, err := manager.AcceptManifest(context.Background(), sid, discardPublisher{}, &toolv1.FrontendToolManifestCommand{
+		Revision:         1,
+		ClientInstanceId: "client-test",
+		ConnectionId:     "connection-test",
+		Tools: []*toolv1.FrontendToolDescriptor{{
+			Name:      toolName,
+			Available: true,
+		}},
+	})
+	if t != nil {
+		require.NoError(t, err)
+	} else if err != nil {
+		panic(err)
+	}
+}
+
+type discardPublisher struct{}
+
+func (discardPublisher) Publish(context.Context, sessionstream.Event) error { return nil }

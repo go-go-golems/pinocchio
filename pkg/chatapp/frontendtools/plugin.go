@@ -52,6 +52,7 @@ func (p *Plugin) ProjectTimeline(_ context.Context, ev sessionstream.Event, _ *s
 				Mode:            payload.Mode,
 				Status:          firstNonEmpty(payload.Status, "requested"),
 				Input:           payload.Input,
+				Executor:        cloneExecutor(payload.Executor),
 			},
 		}}, true, nil
 
@@ -71,6 +72,7 @@ func (p *Plugin) ProjectTimeline(_ context.Context, ev sessionstream.Event, _ *s
 		entity.Result = payload.Result
 		entity.Status = firstNonEmpty(payload.Status, "success")
 		entity.Error = payload.Error
+		entity.Executor = cloneExecutor(payload.Executor)
 		return []sessionstream.TimelineEntity{{
 			Kind:    TimelineEntityFrontendToolCall,
 			Id:      payload.ToolCallId,

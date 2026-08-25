@@ -3,6 +3,8 @@ package frontendtools
 import (
 	"container/list"
 	"time"
+
+	toolv1 "github.com/go-go-golems/pinocchio/pkg/chatapp/pb/proto/pinocchio/chatapp/frontendtools/v1"
 )
 
 type terminalOrigin uint8
@@ -15,6 +17,7 @@ const (
 type terminalCall struct {
 	key         pendingKey
 	toolName    string
+	executor    *toolv1.FrontendToolExecutor
 	digest      [32]byte
 	origin      terminalOrigin
 	completedAt time.Time

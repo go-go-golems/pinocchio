@@ -10,6 +10,7 @@ import (
 
 	toolv1 "github.com/go-go-golems/pinocchio/pkg/chatapp/pb/proto/pinocchio/chatapp/frontendtools/v1"
 	"github.com/go-go-golems/sessionstream/pkg/sessionstream"
+	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/structpb"
@@ -35,15 +36,54 @@ const (
 type InvocationErrorCode string
 
 const (
-	InvocationErrorDuplicatePending InvocationErrorCode = "duplicate_pending"
-	InvocationErrorUnknownResult    InvocationErrorCode = "unknown_result"
-	InvocationErrorSessionMismatch  InvocationErrorCode = "session_mismatch"
-	InvocationErrorToolMismatch     InvocationErrorCode = "tool_mismatch"
-	InvocationErrorInvalidStatus    InvocationErrorCode = "invalid_status"
-	InvocationErrorTerminalConflict InvocationErrorCode = "terminal_conflict"
-	InvocationErrorLateResult       InvocationErrorCode = "late_result"
-	InvocationErrorKeyReuse         InvocationErrorCode = "key_reuse"
+	InvocationErrorDuplicatePending    InvocationErrorCode = "duplicate_pending"
+	InvocationErrorUnknownResult       InvocationErrorCode = "unknown_result"
+	InvocationErrorSessionMismatch     InvocationErrorCode = "session_mismatch"
+	InvocationErrorToolMismatch        InvocationErrorCode = "tool_mismatch"
+	InvocationErrorInvalidStatus       InvocationErrorCode = "invalid_status"
+	InvocationErrorTerminalConflict    InvocationErrorCode = "terminal_conflict"
+	InvocationErrorLateResult          InvocationErrorCode = "late_result"
+	InvocationErrorKeyReuse            InvocationErrorCode = "key_reuse"
+	InvocationErrorExecutorMissing     InvocationErrorCode = "executor_missing"
+	InvocationErrorExecutorMismatch    InvocationErrorCode = "executor_mismatch"
+	InvocationErrorExecutorUnavailable InvocationErrorCode = "executor_unavailable"
 )
+
+// ManifestErrorCode identifies a stable manifest acceptance rejection.
+type ManifestErrorCode string
+
+const (
+	ManifestErrorIdentityMissing    ManifestErrorCode = "identity_missing"
+	ManifestErrorIdentityTooLong    ManifestErrorCode = "identity_too_long"
+	ManifestErrorRevisionRegression ManifestErrorCode = "revision_regression"
+	ManifestErrorRevisionConflict   ManifestErrorCode = "revision_conflict"
+)
+
+const maxExecutorIdentityBytes = 128
+
+// ManifestError describes a rejected client-scoped manifest without exposing
+// descriptor contents.
+type ManifestError struct {
+	Code      ManifestErrorCode
+	SessionID sessionstream.SessionId
+	Revision  uint64
+}
+
+func (e *ManifestError) Error() string {
+	if e == nil {
+		return "frontend tool manifest rejected"
+	}
+	return fmt.Sprintf("frontend tool manifest rejected: code=%s session_id=%q revision=%d", e.Code, e.SessionID, e.Revision)
+}
+
+// ManifestErrorCodeOf returns the stable code carried by a ManifestError.
+func ManifestErrorCodeOf(err error) (ManifestErrorCode, bool) {
+	var manifestErr *ManifestError
+	if !errors.As(err, &manifestErr) {
+		return "", false
+	}
+	return manifestErr.Code, true
+}
 
 // InvocationError describes a rejected frontend-tool request or result.
 type InvocationError struct {
@@ -78,7 +118,13 @@ type pendingCall struct {
 	key       pendingKey
 	messageID string
 	toolName  string
+	executor  *toolv1.FrontendToolExecutor
 	ch        chan *toolv1.FrontendToolResultCommand
+}
+
+type assignedManifest struct {
+	updated *toolv1.FrontendToolManifestUpdated
+	digest  [32]byte
 }
 
 // ManagerConfig controls bounded frontend-tool terminal retention.
@@ -93,12 +139,14 @@ func DefaultManagerConfig() ManagerConfig {
 }
 
 type Manager struct {
+	manifestMu             sync.Mutex
 	mu                     sync.Mutex
-	manifests              map[sessionstream.SessionId]*toolv1.FrontendToolManifestUpdated
+	manifests              map[sessionstream.SessionId]*assignedManifest
 	pending                map[pendingKey]*pendingCall
 	terminal               *boundedTerminalStore
 	terminalPublishTimeout time.Duration
 	now                    func() time.Time
+	newAssignmentID        func() string
 }
 
 func NewManager() *Manager {
@@ -119,11 +167,12 @@ func NewManagerWithConfig(config ManagerConfig) (*Manager, error) {
 
 func newManager(config ManagerConfig) *Manager {
 	return &Manager{
-		manifests:              map[sessionstream.SessionId]*toolv1.FrontendToolManifestUpdated{},
+		manifests:              map[sessionstream.SessionId]*assignedManifest{},
 		pending:                map[pendingKey]*pendingCall{},
 		terminal:               newBoundedTerminalStore(config.TerminalMaxEntries, config.TerminalTTL),
 		terminalPublishTimeout: defaultTerminalPublishTimeout,
 		now:                    time.Now,
+		newAssignmentID:        uuid.NewString,
 	}
 }
 
@@ -163,16 +212,92 @@ func (m *Manager) HandleManifest(ctx context.Context, cmd sessionstream.Command,
 	if !ok || payload == nil {
 		return fmt.Errorf("frontend tool manifest payload must be %T, got %T", &toolv1.FrontendToolManifestCommand{}, cmd.Payload)
 	}
-	updated := &toolv1.FrontendToolManifestUpdated{
-		Tools:    cloneDescriptors(payload.Tools),
-		Revision: payload.Revision,
+	_, err := m.AcceptManifest(ctx, cmd.SessionId, pub, payload)
+	return err
+}
+
+// AcceptManifest atomically selects the submitting browser connection as the
+// executor for future calls and returns the exact assignment acknowledged by
+// this acceptance. Same-connection updates retain their assignment.
+func (m *Manager) AcceptManifest(ctx context.Context, sid sessionstream.SessionId, pub sessionstream.EventPublisher, payload *toolv1.FrontendToolManifestCommand) (*toolv1.FrontendToolManifestUpdated, error) {
+	if m == nil {
+		return nil, fmt.Errorf("frontend tools manager is nil")
+	}
+	if sid == "" {
+		return nil, fmt.Errorf("frontend tool manifest requires session id")
+	}
+	if pub == nil {
+		return nil, fmt.Errorf("frontend tool manifest publisher is nil")
+	}
+	if payload == nil {
+		return nil, fmt.Errorf("frontend tool manifest payload is nil")
+	}
+	clientID := strings.TrimSpace(payload.GetClientInstanceId())
+	connectionID := strings.TrimSpace(payload.GetConnectionId())
+	if clientID == "" || connectionID == "" {
+		return nil, &ManifestError{Code: ManifestErrorIdentityMissing, SessionID: sid, Revision: payload.GetRevision()}
+	}
+	if len(clientID) > maxExecutorIdentityBytes || len(connectionID) > maxExecutorIdentityBytes {
+		return nil, &ManifestError{Code: ManifestErrorIdentityTooLong, SessionID: sid, Revision: payload.GetRevision()}
+	}
+	tools := cloneDescriptors(payload.GetTools())
+	digest, err := frontendToolManifestDigest(payload.GetRevision(), tools)
+	if err != nil {
+		return nil, errors.Wrap(err, "encode frontend tool manifest")
 	}
 
+	// Serialize acceptance through publication so acknowledgement and event
+	// ordering cannot diverge under racing tabs.
+	m.manifestMu.Lock()
+	defer m.manifestMu.Unlock()
+
 	m.mu.Lock()
-	m.manifests[cmd.SessionId] = proto.Clone(updated).(*toolv1.FrontendToolManifestUpdated)
+	previous := m.manifests[sid]
+	assignmentID := ""
+	if previous != nil && sameManifestConnection(previous.updated.GetExecutor(), clientID, connectionID) {
+		if payload.GetRevision() < previous.updated.GetRevision() {
+			m.mu.Unlock()
+			return nil, &ManifestError{Code: ManifestErrorRevisionRegression, SessionID: sid, Revision: payload.GetRevision()}
+		}
+		if payload.GetRevision() == previous.updated.GetRevision() {
+			if digest != previous.digest {
+				m.mu.Unlock()
+				return nil, &ManifestError{Code: ManifestErrorRevisionConflict, SessionID: sid, Revision: payload.GetRevision()}
+			}
+			ack := cloneManifestUpdated(previous.updated)
+			m.mu.Unlock()
+			return ack, nil
+		}
+		assignmentID = previous.updated.GetExecutor().GetAssignmentId()
+	} else {
+		assignmentID = strings.TrimSpace(m.newAssignmentID())
+		if assignmentID == "" || len(assignmentID) > maxExecutorIdentityBytes {
+			m.mu.Unlock()
+			return nil, fmt.Errorf("generate frontend tool assignment id")
+		}
+	}
+	updated := &toolv1.FrontendToolManifestUpdated{
+		Tools:    tools,
+		Revision: payload.GetRevision(),
+		Executor: &toolv1.FrontendToolExecutor{ClientInstanceId: clientID, ConnectionId: connectionID, AssignmentId: assignmentID},
+	}
+	candidate := &assignedManifest{updated: cloneManifestUpdated(updated), digest: digest}
+	m.manifests[sid] = candidate
 	m.mu.Unlock()
 
-	return pub.Publish(ctx, sessionstream.Event{Name: EventManifestUpdated, SessionId: cmd.SessionId, Payload: updated})
+	if err := pub.Publish(ctx, sessionstream.Event{Name: EventManifestUpdated, SessionId: sid, Payload: cloneManifestUpdated(updated)}); err != nil {
+		m.mu.Lock()
+		if m.manifests[sid] == candidate {
+			if previous == nil {
+				delete(m.manifests, sid)
+			} else {
+				m.manifests[sid] = previous
+			}
+		}
+		m.mu.Unlock()
+		return nil, errors.Wrap(err, "publish frontend tool manifest")
+	}
+	return cloneManifestUpdated(updated), nil
 }
 
 func (m *Manager) HandleResult(ctx context.Context, cmd sessionstream.Command, _ *sessionstream.Session, pub sessionstream.EventPublisher) error {
@@ -190,6 +315,9 @@ func (m *Manager) HandleResult(ctx context.Context, cmd sessionstream.Command, _
 	if payload.ToolCallId == "" {
 		return fmt.Errorf("frontend tool result is missing tool_call_id")
 	}
+	if !validExecutor(payload.GetExecutor()) {
+		return newInvocationError(InvocationErrorExecutorMissing, cmd.SessionId, payload.ToolCallId, payload.ToolName)
+	}
 	status, ok := canonicalResultStatus(payload.Status)
 	if !ok {
 		return newInvocationError(InvocationErrorInvalidStatus, cmd.SessionId, payload.ToolCallId, payload.ToolName)
@@ -204,6 +332,10 @@ func (m *Manager) HandleResult(ctx context.Context, cmd sessionstream.Command, _
 	m.mu.Lock()
 	now := m.now()
 	if terminal, exists := m.terminal.get(key, now); exists {
+		if !sameExecutor(payload.GetExecutor(), terminal.executor) {
+			m.mu.Unlock()
+			return newInvocationError(InvocationErrorExecutorMismatch, cmd.SessionId, payload.ToolCallId, payload.ToolName)
+		}
 		if payload.ToolName == "" {
 			payload.ToolName = terminal.toolName
 		} else if payload.ToolName != terminal.toolName {
@@ -231,6 +363,10 @@ func (m *Manager) HandleResult(ctx context.Context, cmd sessionstream.Command, _
 		}
 		return newInvocationError(code, cmd.SessionId, payload.ToolCallId, payload.ToolName)
 	}
+	if !sameExecutor(payload.GetExecutor(), pending.executor) {
+		m.mu.Unlock()
+		return newInvocationError(InvocationErrorExecutorMismatch, cmd.SessionId, payload.ToolCallId, payload.ToolName)
+	}
 	if payload.ToolName == "" {
 		payload.ToolName = pending.toolName
 	} else if payload.ToolName != pending.toolName {
@@ -242,6 +378,7 @@ func (m *Manager) HandleResult(ctx context.Context, cmd sessionstream.Command, _
 	m.terminal.add(&terminalCall{
 		key:         key,
 		toolName:    pending.toolName,
+		executor:    cloneExecutor(pending.executor),
 		digest:      digest,
 		origin:      terminalOriginResult,
 		completedAt: now,
@@ -288,7 +425,6 @@ func (m *Manager) Request(ctx context.Context, sid sessionstream.SessionId, pub 
 		req.Mode = toolv1.ToolExecutionMode_TOOL_EXECUTION_MODE_FRONTEND_AUTO
 	}
 	key := pendingKey{sessionID: sid, toolCallID: req.ToolCallID}
-	pending := &pendingCall{key: key, messageID: req.MessageID, toolName: req.ToolName, ch: make(chan *toolv1.FrontendToolResultCommand, 1)}
 
 	m.mu.Lock()
 	if _, exists := m.pending[key]; exists {
@@ -298,6 +434,18 @@ func (m *Manager) Request(ctx context.Context, sid sessionstream.SessionId, pub 
 	if _, exists := m.terminal.get(key, m.now()); exists {
 		m.mu.Unlock()
 		return nil, newInvocationError(InvocationErrorKeyReuse, sid, req.ToolCallID, req.ToolName)
+	}
+	manifest := m.manifests[sid]
+	if manifest == nil || !validExecutor(manifest.updated.GetExecutor()) || !manifestHasAvailableTool(manifest.updated, req.ToolName) {
+		m.mu.Unlock()
+		return nil, newInvocationError(InvocationErrorExecutorUnavailable, sid, req.ToolCallID, req.ToolName)
+	}
+	pending := &pendingCall{
+		key:       key,
+		messageID: req.MessageID,
+		toolName:  req.ToolName,
+		executor:  cloneExecutor(manifest.updated.GetExecutor()),
+		ch:        make(chan *toolv1.FrontendToolResultCommand, 1),
 	}
 	m.pending[key] = pending
 	m.mu.Unlock()
@@ -310,6 +458,7 @@ func (m *Manager) Request(ctx context.Context, sid sessionstream.SessionId, pub 
 		Input:      input,
 		Mode:       req.Mode,
 		Status:     "requested",
+		Executor:   cloneExecutor(pending.executor),
 	}}); err != nil {
 		return nil, err
 	}
@@ -332,7 +481,7 @@ func (m *Manager) Descriptor(sid sessionstream.SessionId, name string) (*toolv1.
 	if manifest == nil {
 		return nil, false
 	}
-	for _, tool := range manifest.Tools {
+	for _, tool := range manifest.updated.GetTools() {
 		if tool.GetName() == name {
 			return proto.Clone(tool).(*toolv1.FrontendToolDescriptor), true
 		}
@@ -358,6 +507,7 @@ func (m *Manager) terminalizeContext(ctx context.Context, pub sessionstream.Even
 		ToolName:   pending.toolName,
 		Status:     status,
 		Error:      ctx.Err().Error(),
+		Executor:   cloneExecutor(pending.executor),
 	}
 	resultBytes, err := proto.MarshalOptions{Deterministic: true}.Marshal(payload.Result)
 	if err != nil {
@@ -374,6 +524,7 @@ func (m *Manager) terminalizeContext(ctx context.Context, pub sessionstream.Even
 	m.terminal.add(&terminalCall{
 		key:         pending.key,
 		toolName:    pending.toolName,
+		executor:    cloneExecutor(pending.executor),
 		digest:      frontendToolResultDigest(payload, resultBytes),
 		origin:      terminalOriginContext,
 		completedAt: now,
@@ -413,12 +564,17 @@ func frontendToolResultEvent(pending *pendingCall, payload *toolv1.FrontendToolR
 		Result:     payload.Result,
 		Status:     payload.Status,
 		Error:      payload.Error,
+		Executor:   cloneExecutor(pending.executor),
 	}}
 }
 
 func frontendToolResultDigest(payload *toolv1.FrontendToolResultCommand, resultBytes []byte) [32]byte {
 	hash := sha256.New()
-	for _, field := range []string{payload.GetToolCallId(), payload.GetToolName(), payload.GetStatus(), payload.GetError()} {
+	executor := payload.GetExecutor()
+	for _, field := range []string{
+		executor.GetClientInstanceId(), executor.GetConnectionId(), executor.GetAssignmentId(),
+		payload.GetToolCallId(), payload.GetToolName(), payload.GetStatus(), payload.GetError(),
+	} {
 		_, _ = fmt.Fprintf(hash, "%d:", len(field))
 		_, _ = hash.Write([]byte(field))
 	}
@@ -462,4 +618,61 @@ func cloneDescriptors(in []*toolv1.FrontendToolDescriptor) []*toolv1.FrontendToo
 		out = append(out, proto.Clone(descriptor).(*toolv1.FrontendToolDescriptor))
 	}
 	return out
+}
+
+func cloneExecutor(in *toolv1.FrontendToolExecutor) *toolv1.FrontendToolExecutor {
+	if in == nil {
+		return nil
+	}
+	return proto.Clone(in).(*toolv1.FrontendToolExecutor)
+}
+
+func cloneManifestUpdated(in *toolv1.FrontendToolManifestUpdated) *toolv1.FrontendToolManifestUpdated {
+	if in == nil {
+		return nil
+	}
+	return proto.Clone(in).(*toolv1.FrontendToolManifestUpdated)
+}
+
+func validExecutor(executor *toolv1.FrontendToolExecutor) bool {
+	if executor == nil {
+		return false
+	}
+	for _, field := range []string{executor.GetClientInstanceId(), executor.GetConnectionId(), executor.GetAssignmentId()} {
+		if strings.TrimSpace(field) == "" || len(field) > maxExecutorIdentityBytes {
+			return false
+		}
+	}
+	return true
+}
+
+func sameExecutor(left, right *toolv1.FrontendToolExecutor) bool {
+	return validExecutor(left) && validExecutor(right) &&
+		left.GetClientInstanceId() == right.GetClientInstanceId() &&
+		left.GetConnectionId() == right.GetConnectionId() &&
+		left.GetAssignmentId() == right.GetAssignmentId()
+}
+
+func sameManifestConnection(executor *toolv1.FrontendToolExecutor, clientID, connectionID string) bool {
+	return executor != nil && executor.GetClientInstanceId() == clientID && executor.GetConnectionId() == connectionID
+}
+
+func frontendToolManifestDigest(revision uint64, tools []*toolv1.FrontendToolDescriptor) ([32]byte, error) {
+	encoded, err := proto.MarshalOptions{Deterministic: true}.Marshal(&toolv1.FrontendToolManifestUpdated{Tools: tools, Revision: revision})
+	if err != nil {
+		return [32]byte{}, err
+	}
+	return sha256.Sum256(encoded), nil
+}
+
+func manifestHasAvailableTool(manifest *toolv1.FrontendToolManifestUpdated, name string) bool {
+	if manifest == nil {
+		return false
+	}
+	for _, descriptor := range manifest.GetTools() {
+		if descriptor.GetName() == name && descriptor.GetAvailable() {
+			return true
+		}
+	}
+	return false
 }

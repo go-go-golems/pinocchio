@@ -164,7 +164,7 @@ func (m *Manager) RegisterManifestTools(sid sessionstream.SessionId, registry ge
 		return nil
 	}
 	providerNames := map[string]string{}
-	for _, desc := range manifest.Tools {
+	for _, desc := range manifest.updated.GetTools() {
 		if desc == nil || !desc.GetAvailable() || desc.GetName() == "" {
 			continue
 		}
@@ -236,7 +236,7 @@ func (m *Manager) ResolveProviderToolName(sid sessionstream.SessionId, providerN
 	if manifest == nil {
 		return ""
 	}
-	for _, desc := range manifest.Tools {
+	for _, desc := range manifest.updated.GetTools() {
 		if desc == nil || !desc.GetAvailable() || desc.GetName() == "" {
 			continue
 		}

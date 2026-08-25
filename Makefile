@@ -99,6 +99,7 @@ web-check: web-typecheck web-lint
 proto-gen-core:
 	buf generate --template buf.chatapp.gen.yaml --path proto/pinocchio
 	buf generate --template buf.chatapp.web.gen.yaml --path proto/pinocchio
+	cd cmd/web-chat/web && npx --yes @biomejs/biome@2.3.8 check --write src/generated/chatapp/proto/pinocchio/chatapp
 
 proto-gen: proto-gen-core
 
