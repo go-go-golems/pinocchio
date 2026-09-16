@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/go-go-golems/pinocchio/cmd/pinocchio/cmds/catter/pkg"
-	"github.com/go-go-golems/pinocchio/pkg/filefilter"
+	"github.com/go-go-golems/clay/pkg/filefilter"
 
 	"github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/cmds/fields"
@@ -36,7 +36,7 @@ type CatterPrintCommand struct {
 
 func NewCatterPrintCommand() (*CatterPrintCommand, error) {
 
-	fileFilterLayer, err := filefilter.NewFileFilterParameterLayer()
+	fileFilterLayer, err := filefilter.NewFileFilterSection()
 	if err != nil {
 		return nil, fmt.Errorf("could not create file filter parameter layer: %w", err)
 	}

@@ -16,7 +16,7 @@ import (
 
 	"github.com/go-go-golems/glazed/pkg/middlewares"
 	"github.com/go-go-golems/glazed/pkg/types"
-	"github.com/go-go-golems/pinocchio/pkg/filefilter"
+	"github.com/go-go-golems/clay/pkg/filefilter"
 	"github.com/weaviate/tiktoken-go"
 )
 
