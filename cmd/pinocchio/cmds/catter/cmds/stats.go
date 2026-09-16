@@ -6,8 +6,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/go-go-golems/pinocchio/cmd/pinocchio/cmds/catter/pkg"
 	"github.com/go-go-golems/clay/pkg/filefilter"
+	"github.com/go-go-golems/pinocchio/cmd/pinocchio/cmds/catter/pkg"
 
 	"github.com/go-go-golems/glazed/pkg/cmds"
 	"github.com/go-go-golems/glazed/pkg/cmds/fields"
