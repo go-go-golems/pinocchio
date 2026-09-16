@@ -32,3 +32,7 @@ Implementation: clay commit 4350e72 (glob-per-segment dir matching, include-dirs
 ## 2026-09-16
 
 Clay PR opened: go-go-golems/clay#149 (branch task/filefilter-glob-segment-matching pushed to tulip fork), title/body follow create-pull-request prompt conventions; awaiting review/merge, then tag + pinocchio bump
+
+## 2026-09-16
+
+Fixed make lint: clay gofmt violation amended into PR commit 2fa673d (CI lint+test now green), pinocchio gofmt import-block fix 279a1ffe (make lint exits 0). Local lint needs GOTOOLCHAIN pinned to go.mod toolchain (golangci-lint 2.11.2 is built with go1.26 and panics on go1.27 export data); watcher test failures blocking clay hooks are pre-existing on macOS and unrelated
