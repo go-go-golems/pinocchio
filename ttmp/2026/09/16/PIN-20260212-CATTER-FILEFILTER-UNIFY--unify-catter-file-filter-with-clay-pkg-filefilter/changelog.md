@@ -40,3 +40,7 @@ Fixed make lint: clay gofmt violation amended into PR commit 2fa673d (CI lint+te
 ## 2026-09-16
 
 Clay stdlib vulns fixed by toolchain bump: go.mod go/toolchain 1.26.6 (commit 4610cde on PR #149), local govulncheck 0 affecting vulns; CI runs pending approval by org admin (manuel-tulip lacks workflow approval rights)
+
+## 2026-09-16
+
+Consumed clay v0.4.14 (go get bump + regression tests, commit a87b823e); clay local main rebased to merge commit 1704175; pinocchio PR #214 opened from new fork manuel-tulip/pinocchio (changelog section dropped from body per request); CI pending org-admin approval

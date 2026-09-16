@@ -345,3 +345,36 @@ vulnerabilities"
 ### Code review instructions
 - Validate: in clay, `go run golang.org/x/vuln/cmd/govulncheck@latest ./...` →
   0 affecting vulnerabilities; CI Go Vulnerability Check green after approval.
+
+## Step 8: Consume clay v0.4.14, pinocchio PR
+
+### Prompt Context
+**User prompt (verbatim):** "merged, you can rebase locally, I already pushed 0.4.14. update pinocchio and PR as well (drop the changelog part of the body)"
+**Assistant interpretation:** clay PR #149 is merged and tagged v0.4.14; rebase local clay onto merged main, bump pinocchio to v0.4.14, and open a pinocchio PR for the accumulated work with a body per the create-pull-request conventions minus the changelog section.
+**Commit (code):** pinocchio a87b823e "feat(catter): bump clay to v0.4.14, add builder-api regression tests"
+
+### What I did
+- Clay: reset local main to the merge commit 1704175 (the stale pre-amend 4350e72
+  commit on local main was superseded by the merged 2fa673d/4610cde); fetched tag
+  v0.4.14; deleted the task branch.
+- Pinocchio: `go get github.com/go-go-golems/clay@v0.4.14 && go mod tidy`
+  (v0.4.12 -> v0.4.14; also fsnotify 1.9.0->1.10.1, mysql 1.9.3->1.10.0),
+  `go build ./...` OK.
+- Added `cmd/pinocchio/cmds/catter/pkg/fileprocessor_test.go`:
+  TestProcessPaths_DefaultFilters (builder-api included, build excluded through the
+  real FileProcessor) and TestProcessPaths_IncludeDirsWins — both pass against
+  released v0.4.14 without any replace directive.
+- Re-ran the CLI checklist: `catter print --list` includes builder-api and
+  src/rebuild, excludes build; `--include-dirs build` re-includes build.
+- Created fork manuel-tulip/pinocchio (`gh repo fork`), pushed branch
+  task/catter-filefilter-unification, opened PR go-go-golems/pinocchio#214
+  (body per create-pull-request conventions, changelog section dropped per
+  user request).
+
+### What didn't work
+- PR #214 CI runs are `action_required`, same fork-approval policy as clay: needs
+  org-admin (wesen) approval in the GitHub UI; manuel-tulip cannot self-approve.
+
+### Code review instructions
+- Validate: `go test ./cmd/pinocchio/cmds/catter/pkg/ -run TestProcessPaths -v`;
+  CLI checks above; PR #214 diff.
