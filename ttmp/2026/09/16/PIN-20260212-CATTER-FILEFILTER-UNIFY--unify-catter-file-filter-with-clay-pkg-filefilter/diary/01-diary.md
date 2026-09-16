@@ -303,3 +303,45 @@ without committing the replace directive.
   GOTOOLCHAIN=go1.26.3; PR #149 checks lint/test green.
 - Pinocchio: `GOCACHE=$(pwd)/.cache/go-build GOTOOLCHAIN=go1.26.6 make lint`
   exits 0.
+
+## Step 7: Clay stdlib vulnerability fixes (Go Vulnerability Check)
+
+### Prompt Context
+**User prompt (verbatim):** "Handle these in clay as well (make gosec I think?)" (with the
+pasted govulncheck output: 6 stdlib vulnerabilities at go1.26.3, fixed in go1.26.4-1.26.6)
+**Assistant interpretation:** fix the failing Go Vulnerability Check CI job on clay —
+not gosec (which passes), but the govulncheck job in dependency-scanning.yml.
+**Commit (code):** clay 4610cde "fix: bump Go toolchain to 1.26.6 to fix stdlib
+vulnerabilities"
+
+### What I did
+- Diagnosed: all 6 vulns (GO-2026-6090/6088/5972/5856/5039/5037) are Go standard
+  library issues in crypto/tls, encoding/xml, encoding/asn1, net/textproto,
+  crypto/x509; govulncheck attributed them to the go1.26.3 toolchain installed via
+  `go-version-file: go.mod`. No clay code change can fix stdlib vulns — the fix is
+  the patched toolchain.
+- Bumped clay go.mod from `go 1.26.1` / `toolchain go1.26.3` to
+  `go 1.26.6` / `toolchain go1.26.6` (mirrors pinocchio, already at 1.26.6).
+- `go mod tidy`, `go build ./...` OK; local
+  `go run golang.org/x/vuln/cmd/govulncheck@latest ./...` →
+  "Your code is affected by 0 vulnerabilities" (5 informational module-level
+  entries remain, not called by clay code, do not fail the check).
+
+### What didn't work
+- CI runs for 4610cde are stuck in `action_required`: PR workflows from the
+  manuel-tulip fork require approval by an org admin. The previous (2fa673d)
+  runs show triggering_actor=wesen — i.e. they had been approved in the UI.
+  `gh run rerun` fails: "Must have admin rights to Repository". Needs wesen to
+  approve the 5 pending runs in the GitHub UI.
+
+### What I learned
+- The vuln failures pre-date this PR (scheduled dependency-scanning on main has
+  been red since at least 2026-09-02); the toolchain bump fixes main once merged.
+
+### What should be done in the future
+- Consider granting manuel-tulip workflow-accessible membership in go-go-golems
+  to avoid manual approvals on every PR push.
+
+### Code review instructions
+- Validate: in clay, `go run golang.org/x/vuln/cmd/govulncheck@latest ./...` →
+  0 affecting vulnerabilities; CI Go Vulnerability Check green after approval.

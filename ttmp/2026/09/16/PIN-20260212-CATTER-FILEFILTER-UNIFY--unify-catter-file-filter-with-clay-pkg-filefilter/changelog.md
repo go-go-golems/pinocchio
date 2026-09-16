@@ -36,3 +36,7 @@ Clay PR opened: go-go-golems/clay#149 (branch task/filefilter-glob-segment-match
 ## 2026-09-16
 
 Fixed make lint: clay gofmt violation amended into PR commit 2fa673d (CI lint+test now green), pinocchio gofmt import-block fix 279a1ffe (make lint exits 0). Local lint needs GOTOOLCHAIN pinned to go.mod toolchain (golangci-lint 2.11.2 is built with go1.26 and panics on go1.27 export data); watcher test failures blocking clay hooks are pre-existing on macOS and unrelated
+
+## 2026-09-16
+
+Clay stdlib vulns fixed by toolchain bump: go.mod go/toolchain 1.26.6 (commit 4610cde on PR #149), local govulncheck 0 affecting vulns; CI runs pending approval by org admin (manuel-tulip lacks workflow approval rights)
