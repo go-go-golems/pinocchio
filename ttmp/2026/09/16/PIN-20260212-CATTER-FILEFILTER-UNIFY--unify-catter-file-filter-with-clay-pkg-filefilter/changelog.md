@@ -28,3 +28,7 @@ Implementation: clay commit 4350e72 (glob-per-segment dir matching, include-dirs
 
 - /Users/manuel.odendahl/code/go-go-golems/clay/pkg/filefilter/filefilter.go — glob-per-segment isExcludedDir, Validate, IncludeDirs
 - /Users/manuel.odendahl/code/go-go-golems/pinocchio/cmd/pinocchio/cmds/catter/cmds/print.go — import switch to clay filefilter
+
+## 2026-09-16
+
+Clay PR opened: go-go-golems/clay#149 (branch task/filefilter-glob-segment-matching pushed to tulip fork), title/body follow create-pull-request prompt conventions; awaiting review/merge, then tag + pinocchio bump

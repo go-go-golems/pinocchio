@@ -215,3 +215,30 @@ without committing the replace directive.
 ### Code review instructions
 - Validate: recreate the fixture above; run the four `catter print --list` commands
   with the local replace in place (see Step 4), or after the clay release bump.
+
+## Step 5: Clay PR
+
+### Prompt Context
+**User prompt (verbatim):** "push the branch to my fork in clay (remote \"tulip\") and create the PR."
+(with follow-up: "Look at the pinocchio @cmd/pinocchio/prompts/code/create-pull-request.yaml instructions on how to create the PR body and title")
+**Assistant interpretation:** push the clay fix commit to the manuel-tulip fork (remote tulip) and open a PR against go-go-golems/clay main, with title/body following the repo's create-pull-request prompt conventions (bullets, keyword sentences, no title case, changelog + release notes sections, 80-char wrap).
+**Commit (code):** clay 4350e72 (unchanged)
+
+### What I did
+- `git switch -c task/filefilter-glob-segment-matching` at 4350e72; pushed to
+  `tulip` (git@github.com:manuel-tulip/clay.git).
+- `gh pr create --repo go-go-golems/clay --base main --head manuel-tulip:task/filefilter-glob-segment-matching`
+  with title "fix filefilter directory matching to use globs per path segment,
+  add include-dirs" and a body structured per the create-pull-request prompt
+  (Problem / Changes / Behavior change / Changelog / Release notes).
+
+### What worked
+- PR created: https://github.com/go-go-golems/clay/pull/149
+
+### What should be done in the future
+- After PR #149 merges: tag clay release (v0.4.14), bump pinocchio go.mod, rerun
+  the Step 4 validations without the replace directive, add the builder-api
+  regression test, close this ticket.
+
+### Code review instructions
+- Review PR diff: https://github.com/go-go-golems/clay/pull/149/files

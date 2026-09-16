@@ -8,3 +8,4 @@
 - [x] Implement pinocchio unification (Phase 1) <!-- t:fhko -->
 - [x] Validate Phase 3 integration via local replace <!-- t:imel -->
 - [ ] Release clay, bump pinocchio go.mod (pending release) <!-- t:bw00 -->
+- [x] Push clay branch to tulip fork and create PR <!-- t:cuce -->
