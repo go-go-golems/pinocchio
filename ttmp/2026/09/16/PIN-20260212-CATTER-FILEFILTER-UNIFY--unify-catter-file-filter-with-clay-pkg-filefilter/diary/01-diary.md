@@ -378,3 +378,29 @@ vulnerabilities"
 ### Code review instructions
 - Validate: `go test ./cmd/pinocchio/cmds/catter/pkg/ -run TestProcessPaths -v`;
   CLI checks above; PR #214 diff.
+
+## Step 9: Pinocchio govulncheck fixes
+
+### Prompt Context
+**User prompt (verbatim):** "Address the vulncheck findings" (with pasted govulncheck
+output: GO-2026-6355/GO-2026-6354 in golang.org/x/crypto@v0.54.0 via testcontainers,
+GO-2026-6348 in google.golang.org/grpc@v1.82.1)
+**Assistant interpretation:** bump the two flagged modules so the Go Vulnerability
+Check passes on PR #214.
+**Commit (code):** pinocchio f4f3fefe "fix: bump x/crypto and grpc to fix govulncheck findings"
+
+### What I did
+- `go get golang.org/x/crypto@v0.56.0 google.golang.org/grpc@v1.83.1` +
+  `go mod tidy` (also pulled x/text v0.41.0, genproto bump); both modules are
+  indirect requirements in pinocchio.
+- `go build ./...` OK; catter tests ok; local
+  `govulncheck ./...` → "Your code is affected by 0 vulnerabilities" (1 imported /
+  3 required-not-called informational entries remain, non-failing).
+- Committed and pushed to the PR #214 branch (main:task/catter-filefilter-unification).
+
+### What I learned
+- The catter fileprocessor.go:156 trace into grpc is via fmt.Fprintf -> logging
+  (logcopter/grpc transport), i.e. dependency-level fix, no code change needed.
+
+### Code review instructions
+- Validate: `go run golang.org/x/vuln/cmd/govulncheck@latest ./...` → 0 affecting.

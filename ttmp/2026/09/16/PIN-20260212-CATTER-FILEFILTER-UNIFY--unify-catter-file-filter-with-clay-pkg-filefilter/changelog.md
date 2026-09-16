@@ -44,3 +44,7 @@ Clay stdlib vulns fixed by toolchain bump: go.mod go/toolchain 1.26.6 (commit 46
 ## 2026-09-16
 
 Consumed clay v0.4.14 (go get bump + regression tests, commit a87b823e); clay local main rebased to merge commit 1704175; pinocchio PR #214 opened from new fork manuel-tulip/pinocchio (changelog section dropped from body per request); CI pending org-admin approval
+
+## 2026-09-16
+
+Fixed pinocchio govulncheck findings: x/crypto v0.56.0 + grpc v1.83.1 (commit f4f3fefe), govulncheck 0 affecting vulns; pushed to PR #214

@@ -9,3 +9,4 @@
 - [x] Validate Phase 3 integration via local replace <!-- t:imel -->
 - [x] Release clay, bump pinocchio go.mod (pending release) <!-- t:bw00 -->
 - [x] Push clay branch to tulip fork and create PR <!-- t:cuce -->
+- [ ] Fix pinocchio govulncheck findings (x/crypto, grpc) <!-- t:jncu -->
