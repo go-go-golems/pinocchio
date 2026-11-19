@@ -50,16 +50,10 @@ pinocchio tokens count \
   prompt.txt
 ```
 
-OpenAI Responses API count with explicit flags:
-
-```bash
-pinocchio tokens count \
-  --count-mode api \
-  --model gpt-4o-mini \
-  --ai-api-type openai-responses \
-  --openai-api-key "$OPENAI_API_KEY" \
-  prompt.txt
-```
+OpenAI Responses API counts (`--ai-api-type open-responses`) read only the
+`open-responses-api-key` and `open-responses-base-url` settings slots. The
+`--openai-api-key` and `--openai-base-url` flags do not apply to Responses, and
+Geppetto has no CLI flags for the `open-responses` slots.
 
 Anthropic count with explicit flags:
 

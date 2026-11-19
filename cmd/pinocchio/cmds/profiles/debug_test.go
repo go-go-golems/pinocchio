@@ -43,7 +43,7 @@ profiles:
       - profile_slug: embedding-small
     inference_settings:
       chat:
-        api_type: openai-responses
+        api_type: open-responses
         engine: gpt-5
     extensions:
       pinocchio.oauth@v1:
