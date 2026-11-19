@@ -246,7 +246,7 @@ func TestResolveCLIEngineSettings_UsesMergedDocumentSelectionAndInlineProfiles(t
 		path    string
 		content string
 	}{
-		{repoFile, "profile:\n  active: assistant\nprofiles:\n  default:\n    inference_settings:\n      chat:\n        api_type: openai-responses\n        engine: gpt-5\n"},
+		{repoFile, "profile:\n  active: assistant\nprofiles:\n  default:\n    inference_settings:\n      chat:\n        api_type: open-responses\n        engine: gpt-5\n"},
 		{cwdFile, "profiles:\n  assistant:\n    stack:\n      - profile_slug: default\n    inference_settings:\n      chat:\n        engine: gpt-5-mini\n"},
 	} {
 		if err := os.WriteFile(entry.path, []byte(entry.content), 0o644); err != nil {
@@ -276,7 +276,7 @@ func TestResolveCLIEngineSettings_UsesMergedDocumentSelectionAndInlineProfiles(t
 	if got := *resolved.FinalInferenceSettings.Chat.Engine; got != "gpt-5-mini" {
 		t.Fatalf("expected inline profile engine, got %q", got)
 	}
-	if resolved.FinalInferenceSettings.Chat.ApiType == nil || string(*resolved.FinalInferenceSettings.Chat.ApiType) != "openai-responses" {
+	if resolved.FinalInferenceSettings.Chat.ApiType == nil || string(*resolved.FinalInferenceSettings.Chat.ApiType) != "open-responses" {
 		t.Fatalf("expected stacked api_type to be preserved, got %#v", resolved.FinalInferenceSettings.Chat.ApiType)
 	}
 }

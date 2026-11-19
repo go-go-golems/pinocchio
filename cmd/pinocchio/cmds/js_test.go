@@ -138,7 +138,7 @@ profiles:
   default:
     inference_settings:
       chat:
-        api_type: openai-responses
+        api_type: open-responses
         engine: gpt-5-mini
 `
 	if err := os.WriteFile(configPath, []byte(configYAML), 0o644); err != nil {

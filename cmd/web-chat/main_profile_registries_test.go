@@ -109,7 +109,7 @@ func TestWebChatUnifiedProfileConfig_AllowsInlineProfilesWithoutExternalRegistri
 
 	configPath := filepath.Join(tmpDir, ".pinocchio.yml")
 	require.NoError(t, os.WriteFile(configPath, []byte(
-		"profile:\n  active: analyst\nprofiles:\n  analyst:\n    inference_settings:\n      chat:\n        api_type: openai-responses\n        engine: gpt-5-mini\n",
+		"profile:\n  active: analyst\nprofiles:\n  analyst:\n    inference_settings:\n      chat:\n        api_type: open-responses\n        engine: gpt-5-mini\n",
 	), 0o644))
 
 	runtime, err := profilebootstrap.ResolveCLIProfileRuntime(context.Background(), values.New())
@@ -139,7 +139,7 @@ func TestResolveBaseInferenceSettings_UsesEnvAndReturnsResolvedUnifiedConfigFile
 	require.NoError(t, os.MkdirAll(defaultDir, 0o755))
 	defaultConfig := filepath.Join(defaultDir, "config.yaml")
 	require.NoError(t, os.WriteFile(defaultConfig, []byte(
-		"profile:\n  active: default\nprofiles:\n  default:\n    inference_settings:\n      chat:\n        api_type: openai-responses\n        engine: gpt-5-mini\n",
+		"profile:\n  active: default\nprofiles:\n  default:\n    inference_settings:\n      chat:\n        api_type: open-responses\n        engine: gpt-5-mini\n",
 	), 0o644))
 
 	explicitConfig := filepath.Join(tmpDir, "override.yaml")

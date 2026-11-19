@@ -60,13 +60,13 @@ func TestResolveRuntimePlan_MergesBaseRuntimeAndResolvedStackRuntimes(t *testing
 				{Name: "audit", ID: "main", Config: map[string]any{"phase": "leaf"}},
 			},
 			Tools: []string{"summarize"},
-		}, testInferenceSettings(t, aitypes.ApiTypeOpenAIResponses, "gpt-5-mini")),
+		}, testInferenceSettings(t, aitypes.ApiTypeOpenResponses, "gpt-5-mini")),
 	)
 
 	resolved := &gepprofiles.ResolvedEngineProfile{
 		RegistrySlug:      gepprofiles.MustRegistrySlug("default"),
 		EngineProfileSlug: gepprofiles.MustEngineProfileSlug("leaf"),
-		InferenceSettings: testInferenceSettings(t, aitypes.ApiTypeOpenAIResponses, "gpt-5-mini"),
+		InferenceSettings: testInferenceSettings(t, aitypes.ApiTypeOpenResponses, "gpt-5-mini"),
 		StackLineage: []gepprofiles.ResolvedProfileStackEntry{
 			{RegistrySlug: gepprofiles.MustRegistrySlug("default"), EngineProfileSlug: gepprofiles.MustEngineProfileSlug("base"), Version: 1},
 			{RegistrySlug: gepprofiles.MustRegistrySlug("default"), EngineProfileSlug: gepprofiles.MustEngineProfileSlug("leaf"), Version: 2},
