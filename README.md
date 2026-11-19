@@ -272,6 +272,8 @@ profiles:
       api:
         api_keys:
           openai-api-key: your-api-key
+        base_urls:
+          openai-base-url: https://api.openai.com/v1
       chat:
         api_type: openai
         engine: gpt-4o-mini
