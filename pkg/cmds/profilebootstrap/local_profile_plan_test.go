@@ -209,7 +209,7 @@ func TestResolveCLIEngineSettings_InlineProfileKeepsBaseValuesWhenOmittingFields
 	t.Setenv("PINOCCHIO_AI_ENGINE", "env-model")
 
 	cwdFile := filepath.Join(cwdDir, ".pinocchio.yml")
-	if err := os.WriteFile(cwdFile, []byte("profile:\n  active: analyst\nprofiles:\n  analyst:\n    inference_settings:\n      api:\n        api_keys:\n          openai-api-key: inline-key\n"), 0o644); err != nil {
+	if err := os.WriteFile(cwdFile, []byte("profile:\n  active: analyst\nprofiles:\n  analyst:\n    inference_settings:\n      api:\n        api_keys:\n          openai-api-key: inline-key\n        base_urls:\n          openai-base-url: https://api.openai.com/v1\n"), 0o644); err != nil {
 		t.Fatalf("write %s: %v", cwdFile, err)
 	}
 

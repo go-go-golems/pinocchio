@@ -28,6 +28,8 @@ profiles:
       api:
         api_keys:
           openai-api-key: test-openai-key-must-not-appear
+        base_urls:
+          openai-base-url: https://api.openai.com/v1
   embedding-small:
     slug: embedding-small
     stack:
