@@ -28,6 +28,8 @@ profiles:
       api:
         api_keys:
           openai-api-key: test-openai-key-must-not-appear
+        base_urls:
+          openai-base-url: https://api.openai.com/v1
   embedding-small:
     slug: embedding-small
     stack:
@@ -43,7 +45,7 @@ profiles:
       - profile_slug: embedding-small
     inference_settings:
       chat:
-        api_type: openai-responses
+        api_type: open-responses
         engine: gpt-5
     extensions:
       pinocchio.oauth@v1:

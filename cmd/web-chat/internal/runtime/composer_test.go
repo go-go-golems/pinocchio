@@ -319,7 +319,9 @@ func TestWebChatRuntimeComposer_ResolvedInferenceSettingsOverrideBase(t *testing
 		ProfileKey: "analyst",
 		ResolvedInferenceSettings: testResolvedInferenceSettings(t, func(ss *settings.InferenceSettings) {
 			ss.Chat.Engine = ptr("gpt-5-nano")
-			ss.Chat.ApiType = apiTypePtr(aitypes.ApiTypeOpenAIResponses)
+			ss.Chat.ApiType = apiTypePtr(aitypes.ApiTypeOpenResponses)
+			ss.API.APIKeys["open-responses-api-key"] = "base-api-key"
+			ss.API.BaseUrls["open-responses-base-url"] = "https://api.openai.com/v1"
 		}),
 		ResolvedProfileRuntime: &infruntime.ProfileRuntime{},
 	})
@@ -338,7 +340,7 @@ func TestWebChatRuntimeComposer_ResolvedInferenceSettingsOverrideBase(t *testing
 	if got, want := stepMeta["ai-engine"], "gpt-5-nano"; got != want {
 		t.Fatalf("resolved inference settings did not drive ai-engine: got=%#v want=%#v", got, want)
 	}
-	if got, want := stepMeta["ai-api-type"], "openai-responses"; got != want {
+	if got, want := stepMeta["ai-api-type"], "open-responses"; got != want {
 		t.Fatalf("resolved inference settings did not drive ai-api-type: got=%#v want=%#v", got, want)
 	}
 }

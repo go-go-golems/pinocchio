@@ -18,7 +18,7 @@ profiles:
     slug: default
     inference_settings:
       chat:
-        api_type: openai-responses
+        api_type: open-responses
         engine: gpt-5
       inference:
         reasoning_effort: medium
@@ -38,7 +38,7 @@ profiles:
 	assertCell(t, row, "profile", "mini")
 	assertCell(t, row, "override_chat_engine", "gpt-5-mini")
 	assertCell(t, row, "override_inference_reasoning_effort", "low")
-	assertCell(t, row, "effective_chat_api_type", "openai-responses")
+	assertCell(t, row, "effective_chat_api_type", "open-responses")
 	assertCell(t, row, "effective_reasoning_effort", "low")
 }
 
@@ -49,7 +49,7 @@ profiles:
     slug: default
     inference_settings:
       chat:
-        api_type: openai-responses
+        api_type: open-responses
         engine: gpt-5
   mini:
     slug: mini
@@ -110,7 +110,7 @@ profiles:
     slug: default
     inference_settings:
       chat:
-        api_type: openai-responses
+        api_type: open-responses
         engine: gpt-5
   mini:
     slug: mini
@@ -129,7 +129,7 @@ profiles:
 		t.Fatalf("expected override settings JSON to include raw override fields, got %q", overrides)
 	}
 	effective := cellString(t, row, "effective_settings_json")
-	if !strings.Contains(effective, "openai-responses") || !strings.Contains(effective, "gpt-5-mini") {
+	if !strings.Contains(effective, "open-responses") || !strings.Contains(effective, "gpt-5-mini") {
 		t.Fatalf("expected effective settings JSON to include inherited and raw fields, got %q", effective)
 	}
 }

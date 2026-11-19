@@ -122,9 +122,6 @@ func applyEngineOverrides(ss *aisettings.InferenceSettings, opts map[string]any)
 			ss.API.BaseUrls = map[string]string{}
 		}
 		ss.API.BaseUrls[string(*ss.Chat.ApiType)+"-base-url"] = baseURL
-		if *ss.Chat.ApiType == aitypes.ApiTypeOpenAIResponses {
-			ss.API.BaseUrls["openai-base-url"] = baseURL
-		}
 	}
 	if timeoutMS, ok := asPositiveInt(opts["timeoutMs"]); ok {
 		d := time.Duration(timeoutMS) * time.Millisecond
@@ -137,11 +134,8 @@ func applyEngineOverrides(ss *aisettings.InferenceSettings, opts map[string]any)
 			ss.API.APIKeys = map[string]string{}
 		}
 		ss.API.APIKeys[string(*ss.Chat.ApiType)+"-api-key"] = apiKey
-		if *ss.Chat.ApiType == aitypes.ApiTypeOpenAI || *ss.Chat.ApiType == aitypes.ApiTypeOpenAIResponses {
+		if *ss.Chat.ApiType == aitypes.ApiTypeOpenAI {
 			ss.API.APIKeys["openai-api-key"] = apiKey
-		}
-		if *ss.Chat.ApiType == aitypes.ApiTypeOpenAIResponses {
-			ss.API.APIKeys["openai-responses-api-key"] = apiKey
 		}
 	}
 }
@@ -154,7 +148,7 @@ func inferAPIType(model string) aitypes.ApiType {
 	case strings.Contains(m, "claude"):
 		return aitypes.ApiTypeClaude
 	case strings.HasPrefix(m, "o1"), strings.HasPrefix(m, "o3"), strings.HasPrefix(m, "o4"), strings.HasPrefix(m, "gpt-5"):
-		return aitypes.ApiTypeOpenAIResponses
+		return aitypes.ApiTypeOpenResponses
 	default:
 		return aitypes.ApiTypeOpenAI
 	}
@@ -189,35 +183,14 @@ func resolveBaseURL(ss *aisettings.InferenceSettings, apiType string) string {
 	if ss == nil || ss.API.BaseUrls == nil || apiType == "" {
 		return ""
 	}
-	keys := []string{apiType + "-base-url"}
-	if apiType == string(aitypes.ApiTypeOpenAIResponses) {
-		keys = append(keys, "openai-base-url")
-	}
-	for _, key := range keys {
-		if v := strings.TrimSpace(ss.API.BaseUrls[key]); v != "" {
-			return v
-		}
-	}
-	return ""
+	return strings.TrimSpace(ss.API.BaseUrls[apiType+"-base-url"])
 }
 
 func resolveHasAPIKey(ss *aisettings.InferenceSettings, apiType string) bool {
 	if ss == nil || ss.API.APIKeys == nil || apiType == "" {
 		return false
 	}
-	keys := []string{apiType + "-api-key"}
-	switch apiType {
-	case string(aitypes.ApiTypeOpenAI):
-		keys = append(keys, "openai-api-key")
-	case string(aitypes.ApiTypeOpenAIResponses):
-		keys = append(keys, "openai-api-key", "openai-responses-api-key")
-	}
-	for _, key := range keys {
-		if strings.TrimSpace(ss.API.APIKeys[key]) != "" {
-			return true
-		}
-	}
-	return false
+	return strings.TrimSpace(ss.API.APIKeys[apiType+"-api-key"]) != ""
 }
 
 func asString(v any) string {
