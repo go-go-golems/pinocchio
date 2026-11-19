@@ -178,19 +178,12 @@ func oauthCredentialRequest(settings *aisettings.InferenceSettings) (credentials
 			return credentials.Request{}, fmt.Errorf("OAuth profile requires %s-base-url", apiType)
 		}
 		return credentials.Request{Provider: apiType, BaseURL: baseURL}, nil
-	case string(types.ApiTypeOpenResponses), string(types.ApiTypeOpenAIResponses):
-		baseURL := "https://api.openai.com/v1"
-		for _, key := range []string{
-			string(types.ApiTypeOpenResponses) + "-base-url",
-			string(types.ApiTypeOpenAIResponses) + "-base-url",
-			string(types.ApiTypeOpenAI) + "-base-url",
-		} {
-			if value := strings.TrimSpace(settings.API.BaseUrls[key]); value != "" {
-				baseURL = value
-				break
-			}
+	case string(types.ApiTypeOpenResponses):
+		baseURL := strings.TrimSpace(settings.API.BaseUrls[apiType+"-base-url"])
+		if baseURL == "" {
+			return credentials.Request{}, fmt.Errorf("OAuth profile requires %s-base-url", apiType)
 		}
-		return credentials.Request{Provider: string(types.ApiTypeOpenResponses), BaseURL: baseURL}, nil
+		return credentials.Request{Provider: apiType, BaseURL: baseURL}, nil
 	case string(types.ApiTypeClaude), "anthropic":
 		baseURL := strings.TrimSpace(settings.API.BaseUrls[string(types.ApiTypeClaude)+"-base-url"])
 		if baseURL == "" {
@@ -206,18 +199,8 @@ func rejectStaticOAuthCredential(settings *aisettings.InferenceSettings, request
 	if settings == nil || settings.API == nil {
 		return errors.New("OAuth profile requires API settings")
 	}
-	keys := []string{request.Provider + "-api-key"}
-	if request.Provider == string(types.ApiTypeOpenResponses) {
-		keys = []string{
-			string(types.ApiTypeOpenResponses) + "-api-key",
-			string(types.ApiTypeOpenAIResponses) + "-api-key",
-			string(types.ApiTypeOpenAI) + "-api-key",
-		}
-	}
-	for _, key := range keys {
-		if strings.TrimSpace(settings.API.APIKeys[key]) != "" {
-			return errors.New("OAuth profile cannot also configure a static provider API key")
-		}
+	if strings.TrimSpace(settings.API.APIKeys[request.Provider+"-api-key"]) != "" {
+		return errors.New("OAuth profile cannot also configure a static provider API key")
 	}
 	return nil
 }
