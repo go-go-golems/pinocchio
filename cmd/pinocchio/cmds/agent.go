@@ -25,62 +25,16 @@ import (
 	"github.com/go-go-golems/glazed/pkg/middlewares"
 	"github.com/go-go-golems/glazed/pkg/types"
 	"github.com/go-go-golems/pinocchio/pkg/agentd"
+	"github.com/go-go-golems/pinocchio/pkg/agentd/agentcli"
 	pinocchiocmds "github.com/go-go-golems/pinocchio/pkg/cmds"
 	"github.com/spf13/cobra"
 )
-
-// The model-source flags shared by `agent serve` and `agent models` live in
-// their own sections. The Pi section's prefix makes its one field read Pi's
-// own environment variable, PI_CODING_AGENT_DIR (see piEnvMiddleware).
-const (
-	agentModelsSlug = "agent-models"
-	agentPiSlug     = "pi"
-	agentPiPrefix   = "pi-coding-agent-"
-)
-
-type agentModelSettings struct {
-	ProfileRegistries []string `glazed:"profile-registries"`
-	AppName           string   `glazed:"app-name"`
-	NoPi              bool     `glazed:"no-pi"`
-	NoProfiles        bool     `glazed:"no-profiles"`
-}
-
-type agentPiSettings struct {
-	Dir string `glazed:"dir"`
-}
 
 type agentServeSettings struct {
 	Address  string `glazed:"address"`
 	Agents   string `glazed:"agents"`
 	StateDir string `glazed:"state-dir"`
 	Engine   string `glazed:"engine"`
-}
-
-func newAgentModelSections() ([]schema.Section, error) {
-	models, err := schema.NewSection(agentModelsSlug, "Model sources",
-		schema.WithFields(
-			fields.New("profile-registries", fields.TypeStringList,
-				fields.WithHelp("Engine profile registries (yaml:PATH, sqlite:PATH); default <config dir>/<app-name>/profiles.yaml")),
-			fields.New("app-name", fields.TypeString, fields.WithDefault("pinocchio"),
-				fields.WithHelp("Application name for the default profiles.yaml location")),
-			fields.New("no-pi", fields.TypeBool, fields.WithDefault(false),
-				fields.WithHelp("Do not load models from Pi's agent directory")),
-			fields.New("no-profiles", fields.TypeBool, fields.WithDefault(false),
-				fields.WithHelp("Do not load engine profiles")),
-		))
-	if err != nil {
-		return nil, err
-	}
-	pi, err := schema.NewSection(agentPiSlug, "Pi coding agent",
-		schema.WithPrefix(agentPiPrefix),
-		schema.WithFields(
-			fields.New("dir", fields.TypeString,
-				fields.WithHelp("Pi agent directory (env PI_CODING_AGENT_DIR; default ~/.pi/agent)")),
-		))
-	if err != nil {
-		return nil, err
-	}
-	return []schema.Section{models, pi}, nil
 }
 
 // agentMiddlewares is pinocchio's standard chain (flags, args, PINOCCHIO_*
@@ -90,48 +44,11 @@ func agentMiddlewares(parsed *values.Values, cmd *cobra.Command, args []string) 
 	if err != nil {
 		return nil, err
 	}
-	if len(base) < 2 {
-		return append(base, piEnvMiddleware()), nil
-	}
-	out := append([]sources.Middleware{}, base[:2]...)
-	out = append(out, piEnvMiddleware())
-	return append(out, base[2:]...), nil
-}
-
-// piEnvMiddleware applies Glazed's env source without an app prefix to the Pi
-// section alone: its field `dir` with prefix `pi-coding-agent-` reads
-// PI_CODING_AGENT_DIR, and no other section reads unprefixed variables.
-func piEnvMiddleware() sources.Middleware {
-	return func(next sources.HandlerFunc) sources.HandlerFunc {
-		return func(s *schema.Schema, parsed *values.Values) error {
-			if err := next(s, parsed); err != nil {
-				return err
-			}
-			sec, ok := s.Get(agentPiSlug)
-			if !ok {
-				return nil
-			}
-			only := schema.NewSchema(schema.WithSections(sec))
-			identity := func(*schema.Schema, *values.Values) error { return nil }
-			return sources.FromEnv("", fields.WithSource("env"))(identity)(only, parsed)
-		}
-	}
-}
-
-func decodeModelOptions(parsed *values.Values) (modelsource.LoadOptions, error) {
-	m := &agentModelSettings{}
-	if err := parsed.DecodeSectionInto(agentModelsSlug, m); err != nil {
-		return modelsource.LoadOptions{}, fmt.Errorf("decode model source settings: %w", err)
-	}
-	p := &agentPiSettings{}
-	if err := parsed.DecodeSectionInto(agentPiSlug, p); err != nil {
-		return modelsource.LoadOptions{}, fmt.Errorf("decode pi settings: %w", err)
-	}
-	return modelsource.LoadOptions{PiDir: p.Dir, SkipPi: m.NoPi, ProfileSources: m.ProfileRegistries, AppName: m.AppName, SkipProfiles: m.NoProfiles}, nil
+	return agentcli.WithPiEnv(base), nil
 }
 
 func loadModelSet(ctx context.Context, o modelsource.LoadOptions) (*modelsource.Set, error) {
-	set, notes, err := modelsource.Load(ctx, o)
+	set, notes, err := agentcli.LoadModels(ctx, o)
 	for _, n := range notes {
 		log.Info().Msg("model source skipped: " + n)
 	}
@@ -147,7 +64,7 @@ var _ cmds.BareCommand = (*AgentServeCommand)(nil)
 
 // NewAgentServeCommand describes `pinocchio agent serve`.
 func NewAgentServeCommand() (*AgentServeCommand, error) {
-	sections, err := newAgentModelSections()
+	sections, err := agentcli.ModelSections("pinocchio")
 	if err != nil {
 		return nil, err
 	}
@@ -222,7 +139,7 @@ func (c *AgentServeCommand) Run(ctx context.Context, parsed *values.Values) erro
 		opts.Engine = func() (engine.Engine, error) { return &agentd.FakeEngine{Delay: 15 * time.Millisecond}, nil }
 		opts.EngineModel = agentd.FakeModel
 	default:
-		lo, err := decodeModelOptions(parsed)
+		lo, err := agentcli.DecodeModelOptions(parsed)
 		if err != nil {
 			return err
 		}
@@ -274,7 +191,7 @@ var _ cmds.GlazeCommand = (*AgentModelsCommand)(nil)
 
 // NewAgentModelsCommand describes `pinocchio agent models`.
 func NewAgentModelsCommand() (*AgentModelsCommand, error) {
-	sections, err := newAgentModelSections()
+	sections, err := agentcli.ModelSections("pinocchio")
 	if err != nil {
 		return nil, err
 	}
@@ -288,7 +205,7 @@ func NewAgentModelsCommand() (*AgentModelsCommand, error) {
 // RunIntoGlazeProcessor emits one row per model: ref, source, api, context
 // window, output limit, reasoning support and thinking levels.
 func (c *AgentModelsCommand) RunIntoGlazeProcessor(ctx context.Context, parsed *values.Values, gp middlewares.Processor) error {
-	lo, err := decodeModelOptions(parsed)
+	lo, err := agentcli.DecodeModelOptions(parsed)
 	if err != nil {
 		return err
 	}
@@ -328,7 +245,7 @@ func NewAgentCommand() (*cobra.Command, error) {
 	for _, c := range []cmds.Command{serve, models} {
 		cc, err := cli.BuildCobraCommandFromCommand(c,
 			cli.WithCobraMiddlewaresFunc(agentMiddlewares),
-			cli.WithCobraShortHelpSections(schema.DefaultSlug, agentModelsSlug, agentPiSlug))
+			cli.WithCobraShortHelpSections(schema.DefaultSlug, agentcli.ModelsSlug, agentcli.PiSlug))
 		if err != nil {
 			return nil, err
 		}

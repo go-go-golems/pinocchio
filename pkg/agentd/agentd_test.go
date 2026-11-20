@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -15,6 +16,8 @@ import (
 	"time"
 
 	"github.com/go-go-golems/geppetto/pkg/inference/engine"
+	geptools "github.com/go-go-golems/geppetto/pkg/inference/tools"
+	"github.com/invopop/jsonschema"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -205,7 +208,7 @@ func TestToolTimeoutAndCancel(t *testing.T) {
 	start := time.Now()
 	c.do("POST", "/v1/sessions/"+s.ID+"/turns", map[string]any{"text": `/tool eval {"code":"never answered"}`}, nil)
 	evs := c.events(s.ID, 0, 10*time.Second, runEnded)
-	assert.Contains(t, evs[len(evs)-1].Data.(map[string]any)["text"], "did not answer within 2s")
+	assert.Contains(t, evs[len(evs)-1].Data.(map[string]any)["text"], "step ran for 2s and was stopped")
 	assert.Less(t, time.Since(start), 8*time.Second)
 
 	seq := evs[len(evs)-1].Seq
@@ -275,4 +278,169 @@ func TestManifestHumanModeAndRejections(t *testing.T) {
 	assert.Equal(t, 404, c.do("GET", "/v1/sessions/missing", nil, nil))
 	var models map[string]any
 	assert.Equal(t, 200, c.do("GET", "/v1/models", nil, &models))
+}
+
+// A turn that uses all its rounds ends with an answer: one more model call
+// with tools disabled, and the run reports reason max_rounds.
+func TestMaxRoundsEndsWithAnAnswer(t *testing.T) {
+	c, _ := newServer(t, testAgent(t, ""), nil)
+	s := create(t, c)
+	exec := manifest(t, c, s.ID, evalTool)
+	require.Equal(t, 202, c.do("POST", "/v1/sessions/"+s.ID+"/turns", map[string]any{"text": `/tools 50 eval {"code":"poll()"}`}, nil))
+	var seq int64
+	answered := 0
+	for {
+		evs := c.events(s.ID, seq, 10*time.Second, func(e Event) bool { return e.Type == EvToolRequested || runEnded(e) })
+		last := evs[len(evs)-1]
+		seq = last.Seq
+		if runEnded(last) {
+			require.Equal(t, EvRunFinished, last.Type, "%v", types(evs))
+			d := last.Data.(map[string]any)
+			assert.Equal(t, "max_rounds", d["reason"])
+			assert.Equal(t, true, d["truncated"])
+			assert.Contains(t, d["text"], "final answer after 6 tool calls")
+			break
+		}
+		callID := last.Data.(map[string]any)["callId"].(string)
+		require.Equal(t, 204, c.do("POST", "/v1/sessions/"+s.ID+"/tools/"+callID+"/result", map[string]any{"status": "success", "value": "pending", "executor": exec, "toolName": "eval"}, nil))
+		answered++
+	}
+	assert.Equal(t, 6, answered, "maxRounds tool calls, then none")
+
+	// the hidden instruction does not survive into the next turn
+	var v SessionView
+	c.do("GET", "/v1/sessions/"+s.ID, nil, &v)
+	for _, m := range v.Messages {
+		if m.Kind == "context" {
+			assert.Contains(t, m.Text, "Do not call tools")
+		}
+	}
+	require.Equal(t, 202, c.do("POST", "/v1/sessions/"+s.ID+"/turns", map[string]any{"text": "thanks"}, nil))
+	c.events(s.ID, seq, 5*time.Second, runEnded)
+	c.do("GET", "/v1/sessions/"+s.ID, nil, &v)
+	for _, m := range v.Messages {
+		assert.NotContains(t, m.Text, "Do not call tools", "the final-round instruction is dropped like any context block")
+	}
+}
+
+// A call the page marks awaiting-person outlives the step limit until the
+// person decides; "running" restarts the step limit.
+func TestAwaitingPersonPausesTheStepLimit(t *testing.T) {
+	c, _ := newServer(t, testAgent(t, "personTimeout: 6s\n"), nil)
+	s := create(t, c)
+	exec := manifest(t, c, s.ID, evalTool)
+	c.do("POST", "/v1/sessions/"+s.ID+"/turns", map[string]any{"text": `/tool eval {"code":"sel.run('stage0.full')"}`}, nil)
+	evs := c.events(s.ID, 0, 5*time.Second, func(e Event) bool { return e.Type == EvToolRequested })
+	callID := evs[len(evs)-1].Data.(map[string]any)["callId"].(string)
+	assert.Equal(t, 409, c.do("POST", "/v1/sessions/"+s.ID+"/tools/"+callID+"/progress", map[string]any{"state": "thinking"}, nil))
+	assert.Equal(t, 409, c.do("POST", "/v1/sessions/"+s.ID+"/tools/nope/progress", map[string]any{"state": "running"}, nil))
+	require.Equal(t, 204, c.do("POST", "/v1/sessions/"+s.ID+"/tools/"+callID+"/progress", map[string]any{"state": "awaiting-person"}, nil))
+	time.Sleep(3 * time.Second) // past the 2 s step limit
+	require.Equal(t, 204, c.do("POST", "/v1/sessions/"+s.ID+"/tools/"+callID+"/result", map[string]any{"status": "success", "value": "approved; job j_1", "executor": exec, "toolName": "eval"}, nil))
+	evs = c.events(s.ID, 0, 5*time.Second, runEnded)
+	last := evs[len(evs)-1]
+	assert.Equal(t, `eval returned: "approved; job j_1"`, last.Data.(map[string]any)["text"])
+	assert.Contains(t, types(evs), EvToolProgress)
+}
+
+func TestCostCountsCachedPromptTokensOnce(t *testing.T) {
+	// 1000 input of which 900 cached (OpenAI style), 100 output; $1/M in, $0.1/M cache read, $2/M out
+	assert.InDelta(t, (100*1.0+900*0.1+100*2.0)/1e6, costUSD(Usage{Input: 1000, Cached: 900, Output: 100}, 1, 2, 0.1, 1.25), 1e-12)
+	// Claude style: cache reads/writes reported apart from input
+	assert.InDelta(t, (100*1.0+900*0.1+50*1.25+100*2.0)/1e6, costUSD(Usage{Input: 100, CacheRead: 900, CacheCreation: 50, Output: 100}, 1, 2, 0.1, 1.25), 1e-12)
+}
+
+func newServerWith(t *testing.T, agents map[string]*AgentConfig, store *Store, mod func(*Options)) *client {
+	t.Helper()
+	o := Options{Agents: agents, Engine: func() (engine.Engine, error) { return &FakeEngine{}, nil }, EngineModel: FakeModel, Store: store, Heartbeat: 200 * time.Millisecond}
+	mod(&o)
+	srv, err := NewServer(context.Background(), o)
+	require.NoError(t, err)
+	hs := httptest.NewServer(srv.Handler())
+	t.Cleanup(hs.Close)
+	return &client{t: t, base: hs.URL}
+}
+
+// A host tool runs in process with the session (labels included), emits the
+// usual tool events with its result, and needs no page; hooks supply the
+// instructions and each turn's context.
+func TestHostToolsAndHooks(t *testing.T) {
+	var gotRoom, gotCode string
+	turns := 0
+	evalTool := Tool{
+		Definition: geptools.ToolDefinition{Name: "eval", Description: "run code", Parameters: &jsonschema.Schema{Type: "object"}},
+		Run: func(ctx context.Context, s *Session, call ToolCall) (any, error) {
+			gotRoom, gotCode = s.Labels["room"], call.Input["code"].(string)
+			if gotCode == "boom" {
+				return nil, errors.New("ReferenceError: boom is not defined")
+			}
+			return "→ 42", nil
+		},
+	}
+	c := newServerWith(t, testAgent(t, "hostTools: [eval]\n"), nil, func(o *Options) {
+		o.Tools = []Tool{evalTool}
+		o.Instructions = func(ctx context.Context, s *Session) (string, error) { return "API for room " + s.Labels["room"], nil }
+		o.Context = func(ctx context.Context, s *Session) (string, error) {
+			turns++
+			return fmt.Sprintf("turn %d in %s", turns, s.Labels["room"]), nil
+		}
+	})
+	var s SessionView
+	require.Equal(t, 201, c.do("POST", "/v1/sessions", map[string]any{"agent": "test", "labels": map[string]string{"room": "main"}}, &s))
+	assert.Equal(t, "main", s.Labels["room"])
+
+	require.Equal(t, 202, c.do("POST", "/v1/sessions/"+s.ID+"/turns", map[string]any{"text": `/tool eval {"code":"6*7"}`}, nil))
+	evs := c.events(s.ID, 0, 5*time.Second, runEnded)
+	last := evs[len(evs)-1]
+	require.Equal(t, EvRunFinished, last.Type, "%v", types(evs))
+	assert.Equal(t, `eval returned: "→ 42"`, last.Data.(map[string]any)["text"], "no page registered anything")
+	assert.Equal(t, "main", gotRoom)
+	var fin map[string]any
+	for _, e := range evs {
+		if e.Type == EvToolFinished {
+			fin = e.Data.(map[string]any)
+		}
+	}
+	require.NotNil(t, fin)
+	assert.Equal(t, "success", fin["status"])
+	assert.Equal(t, "→ 42", fin["result"])
+
+	seq := last.Seq
+	require.Equal(t, 202, c.do("POST", "/v1/sessions/"+s.ID+"/turns", map[string]any{"text": `/tool eval {"code":"boom"}`}, nil))
+	evs = c.events(s.ID, seq, 5*time.Second, runEnded)
+	assert.Contains(t, evs[len(evs)-1].Data.(map[string]any)["text"], "ReferenceError: boom", "a tool error reaches the model as a failed call")
+
+	var v SessionView
+	c.do("GET", "/v1/sessions/"+s.ID, nil, &v)
+	ctxs := []string{}
+	for _, m := range v.Messages {
+		if m.Kind == "context" {
+			ctxs = append(ctxs, m.Text)
+		}
+	}
+	assert.Equal(t, []string{"turn 2 in main"}, ctxs, "the hook supplied each turn's context; the old one was replaced")
+
+	var list []SessionView
+	c.do("GET", "/v1/sessions?label=room:main", nil, &list)
+	assert.Len(t, list, 1)
+	c.do("GET", "/v1/sessions?label=room:other", nil, &list)
+	assert.Len(t, list, 0)
+}
+
+// An agent that does not list a host tool cannot call it.
+func TestHostToolsAreOptIn(t *testing.T) {
+	called := false
+	c := newServerWith(t, testAgent(t, ""), nil, func(o *Options) {
+		o.Tools = []Tool{{Definition: geptools.ToolDefinition{Name: "eval", Parameters: &jsonschema.Schema{Type: "object"}},
+			Run: func(context.Context, *Session, ToolCall) (any, error) { called = true; return "x", nil }}}
+	})
+	s := create(t, c)
+	c.do("POST", "/v1/sessions/"+s.ID+"/turns", map[string]any{"text": `/tool eval {"code":"1"}`}, nil)
+	evs := c.events(s.ID, 0, 5*time.Second, runEnded)
+	assert.False(t, called)
+	for _, e := range evs {
+		if e.Type == EvRunStarted {
+			assert.Equal(t, []any{}, e.Data.(map[string]any)["tools"], "eval is not offered to the model")
+		}
+	}
 }
