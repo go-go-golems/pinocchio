@@ -28,6 +28,7 @@ const ContextPrefix = "[context]\n"
 // Session is one conversation with one agent and one model.
 type Session struct {
 	ID      string
+	Labels  map[string]string
 	Agent   *AgentConfig
 	Model   modelsource.Model
 	Created time.Time
@@ -74,6 +75,7 @@ type callDeadline struct {
 // SessionView is the JSON description of a session.
 type SessionView struct {
 	ID       string            `json:"id"`
+	Labels   map[string]string `json:"labels,omitempty"`
 	Agent    string            `json:"agent"`
 	Model    modelsource.Model `json:"model"`
 	Title    string            `json:"title,omitempty"`
@@ -114,7 +116,7 @@ func (s *Session) limits() Limits {
 // View describes the session; withMessages includes the conversation.
 func (s *Session) View(withMessages bool) SessionView {
 	s.mu.Lock()
-	v := SessionView{ID: s.ID, Agent: s.Agent.Name, Model: s.Model, Title: s.title, Created: s.Created, Updated: s.updated, Usage: s.usage, Limits: s.limits()}
+	v := SessionView{ID: s.ID, Labels: s.Labels, Agent: s.Agent.Name, Model: s.Model, Title: s.title, Created: s.Created, Updated: s.updated, Usage: s.usage, Limits: s.limits()}
 	if s.active != nil {
 		v.Running = s.active.id
 	}
@@ -211,6 +213,9 @@ func (s *Session) StartTurn(text, contextText string) (string, error) {
 	if err := s.srv.tools.RegisterManifestTools(sessionstream.SessionId(s.ID), reg); err != nil {
 		return "", err
 	}
+	if err := s.srv.registerHostTools(s.Agent, reg); err != nil {
+		return "", err
+	}
 	var registry geptools.ToolRegistry
 	if len(reg.ListTools()) > 0 {
 		registry = reg
@@ -227,7 +232,7 @@ func (s *Session) StartTurn(text, contextText string) (string, error) {
 		Registry:     registry,
 		LoopConfig:   &loopCfg,
 		ToolConfig:   &toolCfg,
-		ToolExecutor: &boundedExecutor{s: s, inner: frontendtools.NewBridgeExecutor(s.srv.tools, missingTool{}), cut: s.Agent.ResultCut, timeout: s.Agent.ToolTimeoutDuration()},
+		ToolExecutor: &boundedExecutor{s: s, inner: &hostExecutor{s: s, next: frontendtools.NewBridgeExecutor(s.srv.tools, missingTool{})}, cut: s.Agent.ResultCut, timeout: s.Agent.ToolTimeoutDuration()},
 		EventSinks:   []gepevents.EventSink{sink},
 	}
 	s.appendTurnLocked(text, contextText)
