@@ -42,6 +42,14 @@ type Options struct {
 	EngineModel modelsource.Model
 	// Heartbeat is the SSE comment interval (default 15 s).
 	Heartbeat time.Duration
+	// Tools are in-process tools of the embedding program; an agent offers the
+	// ones its YAML lists under hostTools.
+	Tools []Tool
+	// Instructions, when set, is appended to the system prompt when a session
+	// is created (after the agent's own prompt and any page instructions).
+	Instructions TextHook
+	// Context, when set, supplies a turn's context block when the request has none.
+	Context TextHook
 }
 
 // Server is the agent service.
@@ -111,6 +119,7 @@ func (s *Server) restore(ctx context.Context, rec storedSession) (*Session, erro
 		return nil, err
 	}
 	sess := s.newSession(rec.ID, a, m, eng, rec.System, rec.Thinking)
+	sess.Labels = rec.Labels
 	sess.Created, sess.updated, sess.title, sess.usage, sess.contextIDs = rec.Created, rec.Updated, rec.Title, rec.Usage, rec.ContextIDs
 	if rec.TurnYAML != "" {
 		t, err := serde.FromYAML([]byte(rec.TurnYAML))
@@ -140,7 +149,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /v1/sessions", func(w http.ResponseWriter, r *http.Request) {
 		out := []SessionView{}
 		for _, ss := range s.list() {
-			if a := r.URL.Query().Get("agent"); a == "" || a == ss.Agent.Name {
+			want := parseLabelFilter(r.URL.Query()["label"])
+			if a := r.URL.Query().Get("agent"); (a == "" || a == ss.Agent.Name) && labelsMatch(ss.Labels, want) {
 				out = append(out, ss.View(false))
 			}
 		}
@@ -229,10 +239,11 @@ func (s *Server) handleModels(w http.ResponseWriter, r *http.Request) {
 }
 
 type createReq struct {
-	Agent        string `json:"agent"`
-	Model        string `json:"model,omitempty"`
-	Thinking     string `json:"thinking,omitempty"`
-	Instructions string `json:"instructions,omitempty"`
+	Agent        string            `json:"agent"`
+	Model        string            `json:"model,omitempty"`
+	Thinking     string            `json:"thinking,omitempty"`
+	Instructions string            `json:"instructions,omitempty"`
+	Labels       map[string]string `json:"labels,omitempty"`
 }
 
 func (s *Server) handleCreate(w http.ResponseWriter, r *http.Request) {
@@ -274,7 +285,24 @@ func (s *Server) handleCreate(w http.ResponseWriter, r *http.Request) {
 		fail(w, 503, "authentication_error", "the model "+ref+" cannot be used with the server's credentials")
 		return
 	}
+	for k, v := range in.Labels {
+		if k == "" || len(k) > 64 || len(v) > 256 {
+			fail(w, 400, "invalid_request", "labels: keys are 1-64 characters, values at most 256")
+			return
+		}
+	}
 	ss := s.newSession(uuid.NewString(), a, m, eng, system, thinking)
+	ss.Labels = in.Labels
+	if s.opts.Instructions != nil {
+		text, err := s.opts.Instructions(r.Context(), ss)
+		if err != nil {
+			fail(w, 502, "host_unavailable", "instructions: "+err.Error())
+			return
+		}
+		if strings.TrimSpace(text) != "" {
+			ss.system = strings.TrimRight(ss.system, "\n") + "\n\n" + text
+		}
+	}
 	s.mu.Lock()
 	s.byID[ss.ID] = ss
 	s.mu.Unlock()
@@ -337,6 +365,14 @@ func (s *Server) handleTurn(w http.ResponseWriter, r *http.Request, ss *Session)
 	}
 	if !readJSON(w, r, &in, 4<<20) {
 		return
+	}
+	if in.Context == "" && s.opts.Context != nil {
+		text, err := s.opts.Context(r.Context(), ss)
+		if err != nil {
+			fail(w, 502, "host_unavailable", "context: "+err.Error())
+			return
+		}
+		in.Context = text
 	}
 	run, err := ss.StartTurn(in.Text, in.Context)
 	switch {

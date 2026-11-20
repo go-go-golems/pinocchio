@@ -59,6 +59,8 @@ type AgentConfig struct {
 	ResultCut int `yaml:"resultCut,omitempty" json:"resultCut"`
 	// Tools sets the approval mode per tool name: "auto" (default) or "human".
 	Tools map[string]string `yaml:"tools,omitempty" json:"tools,omitempty"`
+	// HostTools names the in-process tools of the embedding program this agent offers.
+	HostTools []string `yaml:"hostTools,omitempty" json:"hostTools,omitempty"`
 	// Budget limits tokens per session (input + output, all rounds); 0 = none.
 	Budget struct {
 		TokensPerSession int `yaml:"tokensPerSession,omitempty" json:"tokensPerSession,omitempty"`
@@ -85,6 +87,15 @@ func (c *AgentConfig) ToolTimeoutDuration() time.Duration { return time.Duration
 
 // PersonTimeoutDuration returns the limit of a call awaiting a person's decision.
 func (c *AgentConfig) PersonTimeoutDuration() time.Duration { return time.Duration(c.PersonTimeout) }
+
+func (c *AgentConfig) hasHostTool(name string) bool {
+	for _, n := range c.HostTools {
+		if n == name {
+			return true
+		}
+	}
+	return false
+}
 
 // ToolMode returns "auto" or "human" for a tool name.
 func (c *AgentConfig) ToolMode(name string) string {

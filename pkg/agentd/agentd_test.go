@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -15,6 +16,8 @@ import (
 	"time"
 
 	"github.com/go-go-golems/geppetto/pkg/inference/engine"
+	geptools "github.com/go-go-golems/geppetto/pkg/inference/tools"
+	"github.com/invopop/jsonschema"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -377,4 +380,99 @@ func TestCostCountsCachedPromptTokensOnce(t *testing.T) {
 	assert.InDelta(t, (100*1.0+900*0.1+100*2.0)/1e6, costUSD(Usage{Input: 1000, Cached: 900, Output: 100}, 1, 2, 0.1, 1.25), 1e-12)
 	// Claude style: cache reads/writes reported apart from input
 	assert.InDelta(t, (100*1.0+900*0.1+50*1.25+100*2.0)/1e6, costUSD(Usage{Input: 100, CacheRead: 900, CacheCreation: 50, Output: 100}, 1, 2, 0.1, 1.25), 1e-12)
+}
+
+func newServerWith(t *testing.T, agents map[string]*AgentConfig, store *Store, mod func(*Options)) *client {
+	t.Helper()
+	o := Options{Agents: agents, Engine: func() (engine.Engine, error) { return &FakeEngine{}, nil }, EngineModel: FakeModel, Store: store, Heartbeat: 200 * time.Millisecond}
+	mod(&o)
+	srv, err := NewServer(context.Background(), o)
+	require.NoError(t, err)
+	hs := httptest.NewServer(srv.Handler())
+	t.Cleanup(hs.Close)
+	return &client{t: t, base: hs.URL}
+}
+
+// A host tool runs in process with the session (labels included), emits the
+// usual tool events with its result, and needs no page; hooks supply the
+// instructions and each turn's context.
+func TestHostToolsAndHooks(t *testing.T) {
+	var gotRoom, gotCode string
+	turns := 0
+	evalTool := Tool{
+		Definition: geptools.ToolDefinition{Name: "eval", Description: "run code", Parameters: &jsonschema.Schema{Type: "object"}},
+		Run: func(ctx context.Context, s *Session, call ToolCall) (any, error) {
+			gotRoom, gotCode = s.Labels["room"], call.Input["code"].(string)
+			if gotCode == "boom" {
+				return nil, errors.New("ReferenceError: boom is not defined")
+			}
+			return "→ 42", nil
+		},
+	}
+	c := newServerWith(t, testAgent(t, "hostTools: [eval]\n"), nil, func(o *Options) {
+		o.Tools = []Tool{evalTool}
+		o.Instructions = func(ctx context.Context, s *Session) (string, error) { return "API for room " + s.Labels["room"], nil }
+		o.Context = func(ctx context.Context, s *Session) (string, error) {
+			turns++
+			return fmt.Sprintf("turn %d in %s", turns, s.Labels["room"]), nil
+		}
+	})
+	var s SessionView
+	require.Equal(t, 201, c.do("POST", "/v1/sessions", map[string]any{"agent": "test", "labels": map[string]string{"room": "main"}}, &s))
+	assert.Equal(t, "main", s.Labels["room"])
+
+	require.Equal(t, 202, c.do("POST", "/v1/sessions/"+s.ID+"/turns", map[string]any{"text": `/tool eval {"code":"6*7"}`}, nil))
+	evs := c.events(s.ID, 0, 5*time.Second, runEnded)
+	last := evs[len(evs)-1]
+	require.Equal(t, EvRunFinished, last.Type, "%v", types(evs))
+	assert.Equal(t, `eval returned: "→ 42"`, last.Data.(map[string]any)["text"], "no page registered anything")
+	assert.Equal(t, "main", gotRoom)
+	var fin map[string]any
+	for _, e := range evs {
+		if e.Type == EvToolFinished {
+			fin = e.Data.(map[string]any)
+		}
+	}
+	require.NotNil(t, fin)
+	assert.Equal(t, "success", fin["status"])
+	assert.Equal(t, "→ 42", fin["result"])
+
+	seq := last.Seq
+	require.Equal(t, 202, c.do("POST", "/v1/sessions/"+s.ID+"/turns", map[string]any{"text": `/tool eval {"code":"boom"}`}, nil))
+	evs = c.events(s.ID, seq, 5*time.Second, runEnded)
+	assert.Contains(t, evs[len(evs)-1].Data.(map[string]any)["text"], "ReferenceError: boom", "a tool error reaches the model as a failed call")
+
+	var v SessionView
+	c.do("GET", "/v1/sessions/"+s.ID, nil, &v)
+	ctxs := []string{}
+	for _, m := range v.Messages {
+		if m.Kind == "context" {
+			ctxs = append(ctxs, m.Text)
+		}
+	}
+	assert.Equal(t, []string{"turn 2 in main"}, ctxs, "the hook supplied each turn's context; the old one was replaced")
+
+	var list []SessionView
+	c.do("GET", "/v1/sessions?label=room:main", nil, &list)
+	assert.Len(t, list, 1)
+	c.do("GET", "/v1/sessions?label=room:other", nil, &list)
+	assert.Len(t, list, 0)
+}
+
+// An agent that does not list a host tool cannot call it.
+func TestHostToolsAreOptIn(t *testing.T) {
+	called := false
+	c := newServerWith(t, testAgent(t, ""), nil, func(o *Options) {
+		o.Tools = []Tool{{Definition: geptools.ToolDefinition{Name: "eval", Parameters: &jsonschema.Schema{Type: "object"}},
+			Run: func(context.Context, *Session, ToolCall) (any, error) { called = true; return "x", nil }}}
+	})
+	s := create(t, c)
+	c.do("POST", "/v1/sessions/"+s.ID+"/turns", map[string]any{"text": `/tool eval {"code":"1"}`}, nil)
+	evs := c.events(s.ID, 0, 5*time.Second, runEnded)
+	assert.False(t, called)
+	for _, e := range evs {
+		if e.Type == EvRunStarted {
+			assert.Equal(t, []any{}, e.Data.(map[string]any)["tools"], "eval is not offered to the model")
+		}
+	}
 }

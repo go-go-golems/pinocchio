@@ -31,6 +31,7 @@ type Store struct {
 
 type storedSession struct {
 	ID         string            `json:"id"`
+	Labels     map[string]string `json:"labels,omitempty"`
 	Agent      string            `json:"agent"`
 	Model      modelsource.Model `json:"model"`
 	Thinking   string            `json:"thinking,omitempty"`
@@ -57,7 +58,7 @@ func (st *Store) path(id string) string { return filepath.Join(st.Dir, id+".json
 // Save writes a session atomically. Saving a deleted session does nothing.
 func (st *Store) Save(s *Session) error {
 	s.mu.Lock()
-	rec := storedSession{ID: s.ID, Agent: s.Agent.Name, Model: s.Model, Thinking: s.thinking, System: s.system, Title: s.title,
+	rec := storedSession{ID: s.ID, Labels: s.Labels, Agent: s.Agent.Name, Model: s.Model, Thinking: s.thinking, System: s.system, Title: s.title,
 		Created: s.Created, Updated: s.updated, Usage: s.usage, ContextIDs: append([]string(nil), s.contextIDs...)}
 	s.mu.Unlock()
 	if t := s.gs.Latest(); t != nil {
