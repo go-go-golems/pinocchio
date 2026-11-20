@@ -45,12 +45,30 @@ type Session struct {
 	usage      Usage
 	contextIDs []string
 	active     *activeRun
+	calls      map[string]*callDeadline
 }
 
 type activeRun struct {
 	id        string
+	ctx       context.Context
 	handle    *gepsession.ExecutionHandle
 	cancelled bool
+}
+
+// FinalRoundInstruction is added (as a hidden context block) when a turn has
+// used all its rounds; the model then answers once more with tools disabled.
+const FinalRoundInstruction = "You have used all %d tool rounds of this turn. Do not call tools. Answer the person now: " +
+	"what you found, what is still running (with ids), and what you would do next. Do not claim anything you did not check."
+
+// errStepTimeout is the cancel cause of a tool call that ran out of time.
+var errStepTimeout = errors.New("tool step timed out")
+
+// callDeadline is the resettable time limit of one running tool call.
+type callDeadline struct {
+	mu      sync.Mutex
+	timer   *time.Timer
+	state   string // running, awaiting-person
+	started time.Time
 }
 
 // SessionView is the JSON description of a session.
@@ -70,10 +88,11 @@ type SessionView struct {
 
 // Limits are the agent limits a page should know.
 type Limits struct {
-	MaxRounds     int   `json:"maxRounds"`
-	ToolTimeoutMs int64 `json:"toolTimeoutMs"`
-	ResultCut     int   `json:"resultCut"`
-	TokenBudget   int   `json:"tokenBudget,omitempty"`
+	MaxRounds       int   `json:"maxRounds"`
+	ToolTimeoutMs   int64 `json:"toolTimeoutMs"`
+	PersonTimeoutMs int64 `json:"personTimeoutMs"`
+	ResultCut       int   `json:"resultCut"`
+	TokenBudget     int   `json:"tokenBudget,omitempty"`
 }
 
 // MessageView is one block of the conversation, for hydrating a page.
@@ -89,7 +108,7 @@ type MessageView struct {
 }
 
 func (s *Session) limits() Limits {
-	return Limits{MaxRounds: s.Agent.MaxRounds, ToolTimeoutMs: s.Agent.ToolTimeoutDuration().Milliseconds(), ResultCut: s.Agent.ResultCut, TokenBudget: s.Agent.Budget.TokensPerSession}
+	return Limits{MaxRounds: s.Agent.MaxRounds, ToolTimeoutMs: s.Agent.ToolTimeoutDuration().Milliseconds(), PersonTimeoutMs: s.Agent.PersonTimeoutDuration().Milliseconds(), ResultCut: s.Agent.ResultCut, TokenBudget: s.Agent.Budget.TokensPerSession}
 }
 
 // View describes the session; withMessages includes the conversation.
@@ -147,10 +166,21 @@ func (s *Session) addUsage(u *gepevents.Usage) (Usage, Usage) {
 	defer s.mu.Unlock()
 	s.usage.add(u)
 	if c := s.Model.Cost; c != nil {
-		usd := (float64(s.usage.Input)*c.Input + float64(s.usage.Output)*c.Output + float64(s.usage.CacheRead)*c.CacheRead + float64(s.usage.CacheCreation)*c.CacheWrite) / 1e6
+		usd := costUSD(s.usage, c.Input, c.Output, c.CacheRead, c.CacheWrite)
 		s.usage.USD = &usd
 	}
 	return round, s.usage
+}
+
+// costUSD prices usage per million tokens. OpenAI-style providers report
+// cached prompt tokens inside Input (as Cached); Claude reports cache reads
+// and writes separately from Input.
+func costUSD(u Usage, in, out, cacheRead, cacheWrite float64) float64 {
+	uncached := u.Input - u.Cached
+	if uncached < 0 {
+		uncached = 0
+	}
+	return (float64(uncached)*in + float64(u.Cached+u.CacheRead)*cacheRead + float64(u.CacheCreation)*cacheWrite + float64(u.Output)*out) / 1e6
 }
 
 // ErrRunActive is returned when a turn is sent while a run is in progress.
@@ -197,7 +227,7 @@ func (s *Session) StartTurn(text, contextText string) (string, error) {
 		Registry:     registry,
 		LoopConfig:   &loopCfg,
 		ToolConfig:   &toolCfg,
-		ToolExecutor: &boundedExecutor{inner: frontendtools.NewBridgeExecutor(s.srv.tools, missingTool{}), cut: s.Agent.ResultCut, timeout: s.Agent.ToolTimeoutDuration()},
+		ToolExecutor: &boundedExecutor{s: s, inner: frontendtools.NewBridgeExecutor(s.srv.tools, missingTool{}), cut: s.Agent.ResultCut, timeout: s.Agent.ToolTimeoutDuration()},
 		EventSinks:   []gepevents.EventSink{sink},
 	}
 	s.appendTurnLocked(text, contextText)
@@ -212,7 +242,7 @@ func (s *Session) StartTurn(text, contextText string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	s.active = &activeRun{id: runID, handle: handle}
+	s.active = &activeRun{id: runID, ctx: ctx, handle: handle}
 	s.updated = time.Now().UTC()
 	s.log.Append(EvRunStarted, runID, map[string]any{"model": s.Model.Ref, "tools": toolNames(registry)})
 	go s.wait(runID, handle, sink)
@@ -265,6 +295,16 @@ func (s *Session) appendTurnLocked(text, contextText string) {
 
 func (s *Session) wait(runID string, h *gepsession.ExecutionHandle, sink *runSink) {
 	out, err := h.Wait()
+	maxRounds := err != nil && strings.Contains(err.Error(), "max iterations")
+	if maxRounds {
+		if o, ferr := s.finalRound(); ferr != nil {
+			if !errors.Is(ferr, errCancelledBeforeFinal) {
+				log.Warn().Err(ferr).Str("session", s.ID).Str("run", runID).Msg("agentd: final round failed")
+			}
+		} else if o != nil {
+			out = o
+		}
+	}
 	s.mu.Lock()
 	cancelled := s.active != nil && s.active.cancelled
 	s.active = nil
@@ -277,7 +317,7 @@ func (s *Session) wait(runID string, h *gepsession.ExecutionHandle, sink *runSin
 	switch {
 	case cancelled || errors.Is(err, context.Canceled):
 		s.log.Append(EvRunCancelled, runID, map[string]any{"text": text})
-	case err != nil && strings.Contains(err.Error(), "max iterations"):
+	case maxRounds:
 		s.log.Append(EvRunFinished, runID, map[string]any{"text": text, "truncated": true, "reason": "max_rounds"})
 	case err != nil:
 		code, msg := classify(err)
@@ -291,6 +331,122 @@ func (s *Session) wait(runID string, h *gepsession.ExecutionHandle, sink *runSin
 			log.Warn().Err(err).Str("session", s.ID).Msg("agentd: save session")
 		}
 	}
+}
+
+var errCancelledBeforeFinal = errors.New("cancelled before the final round")
+
+// finalRound asks the model for an answer after the turn used all its rounds:
+// one more inference with tool choice "none", a hidden instruction, and an
+// executor that refuses calls (for engines that ignore tool choice).
+func (s *Session) finalRound() (*turns.Turn, error) {
+	s.mu.Lock()
+	if s.active == nil || s.active.cancelled {
+		s.mu.Unlock()
+		return nil, errCancelledBeforeFinal
+	}
+	b, ok := s.gs.Builder.(*enginebuilder.Builder)
+	if !ok {
+		s.mu.Unlock()
+		return nil, errors.New("unexpected builder")
+	}
+	one := toolloop.DefaultLoopConfig().WithMaxIterations(1)
+	cfg := *b.ToolConfig
+	cfg.ToolChoice = geptools.ToolChoiceNone
+	s.gs.Builder = &enginebuilder.Builder{Base: b.Base, Registry: b.Registry, LoopConfig: &one, ToolConfig: &cfg,
+		ToolExecutor: refuseTools{}, EventSinks: b.EventSinks}
+	seed := s.gs.Latest().Clone()
+	blk := turns.NewUserTextBlock(ContextPrefix + fmt.Sprintf(FinalRoundInstruction, s.Agent.MaxRounds))
+	turns.AppendBlock(seed, blk)
+	s.contextIDs = append(s.contextIDs, blk.ID)
+	seed.ID = uuid.NewString()
+	s.gs.Append(seed)
+	ctx := s.active.ctx
+	s.mu.Unlock()
+
+	h, err := s.gs.StartInference(ctx)
+	if err != nil {
+		return nil, err
+	}
+	s.mu.Lock()
+	if s.active == nil || s.active.cancelled {
+		s.mu.Unlock()
+		h.Cancel()
+		return nil, errCancelledBeforeFinal
+	}
+	s.active.handle = h
+	s.mu.Unlock()
+	out, err := h.Wait()
+	if err != nil && !strings.Contains(err.Error(), "max iterations") {
+		return out, err
+	}
+	return out, nil
+}
+
+// refuseTools answers every call in the final round.
+type refuseTools struct{}
+
+func (refuseTools) ExecuteToolCall(_ context.Context, call geptools.ToolCall, _ geptools.ToolRegistry) (*geptools.ToolResult, error) {
+	return &geptools.ToolResult{ID: call.ID, Error: "no more tool calls in this turn; answer the person"}, nil
+}
+
+func (r refuseTools) ExecuteToolCalls(ctx context.Context, calls []geptools.ToolCall, reg geptools.ToolRegistry) ([]*geptools.ToolResult, error) {
+	out := make([]*geptools.ToolResult, 0, len(calls))
+	for _, c := range calls {
+		x, _ := r.ExecuteToolCall(ctx, c, reg)
+		out = append(out, x)
+	}
+	return out, nil
+}
+
+// SetCallState changes a running tool call's time limit: "awaiting-person"
+// pauses the step limit (up to the agent's person timeout) while the page
+// waits for a decision; "running" restarts the step limit from now.
+func (s *Session) SetCallState(callID, state string) error {
+	s.mu.Lock()
+	d := s.calls[callID]
+	s.mu.Unlock()
+	if d == nil {
+		return fmt.Errorf("no running tool call %q", callID)
+	}
+	var limit time.Duration
+	switch state {
+	case "awaiting-person":
+		limit = s.Agent.PersonTimeoutDuration()
+	case "running":
+		limit = s.Agent.ToolTimeoutDuration()
+	default:
+		return fmt.Errorf("state must be awaiting-person or running, got %q", state)
+	}
+	d.mu.Lock()
+	d.state = state
+	d.timer.Reset(limit)
+	d.mu.Unlock()
+	s.log.Append(EvToolProgress, s.runID(), map[string]any{"callId": callID, "state": state, "limitMs": limit.Milliseconds()})
+	return nil
+}
+
+func (s *Session) runID() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.active == nil {
+		return ""
+	}
+	return s.active.id
+}
+
+func (s *Session) trackCall(id string, d *callDeadline) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.calls == nil {
+		s.calls = map[string]*callDeadline{}
+	}
+	s.calls[id] = d
+}
+
+func (s *Session) untrackCall(id string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.calls, id)
 }
 
 // Cancel stops the active run, if any.
@@ -348,16 +504,29 @@ func firstLine(s string, n int) string {
 	return s
 }
 
-// boundedExecutor adds a per-call timeout and cuts large results.
+// boundedExecutor adds a resettable per-call time limit and cuts large results.
 type boundedExecutor struct {
+	s       *Session
 	inner   geptools.ToolExecutor
 	cut     int
 	timeout time.Duration
 }
 
+// TimeoutMessage is the tool error when a call runs out of time.
+const TimeoutMessage = "The %s step ran for %s and was stopped: that is the limit for one tool call. " +
+	"Work it started in the page (jobs, timers) may still be running. Do not wait in loops: " +
+	"start long work, tell the person what you started, and end the turn, or check progress with a short call."
+
 func (e *boundedExecutor) ExecuteToolCall(ctx context.Context, call geptools.ToolCall, reg geptools.ToolRegistry) (*geptools.ToolResult, error) {
-	cctx, cancel := context.WithTimeout(ctx, e.timeout)
-	defer cancel()
+	cctx, cancel := context.WithCancelCause(ctx)
+	defer cancel(nil)
+	d := &callDeadline{state: "running", started: time.Now()}
+	d.timer = time.AfterFunc(e.timeout, func() { cancel(errStepTimeout) })
+	defer d.timer.Stop()
+	if e.s != nil {
+		e.s.trackCall(call.ID, d)
+		defer e.s.untrackCall(call.ID)
+	}
 	res, err := e.inner.ExecuteToolCall(cctx, call, reg)
 	if err != nil {
 		return res, err
@@ -365,8 +534,9 @@ func (e *boundedExecutor) ExecuteToolCall(ctx context.Context, call geptools.Too
 	if res == nil {
 		res = &geptools.ToolResult{ID: call.ID}
 	}
-	if errors.Is(cctx.Err(), context.DeadlineExceeded) && ctx.Err() == nil {
-		res.Result, res.Error = nil, fmt.Sprintf("The tool %s did not answer within %s; the page may be busy or closed. Ask for less, or try again.", call.Name, e.timeout)
+	if errors.Is(context.Cause(cctx), errStepTimeout) && ctx.Err() == nil {
+		ran := time.Since(d.started).Round(time.Second)
+		res.Result, res.Error = nil, fmt.Sprintf(TimeoutMessage, call.Name, ran)
 	}
 	// Pages wrap non-object results as {value: x}; the model gets x.
 	res.Result = unwrapValue(res.Result)

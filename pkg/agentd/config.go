@@ -52,6 +52,9 @@ type AgentConfig struct {
 	MaxTokens   int      `yaml:"maxTokens,omitempty" json:"maxTokens,omitempty"`
 	MaxRounds   int      `yaml:"maxRounds,omitempty" json:"maxRounds"`
 	ToolTimeout Duration `yaml:"toolTimeout,omitempty" json:"-"`
+	// PersonTimeout limits a tool call the page marked awaiting-person
+	// (an approval the person has to decide).
+	PersonTimeout Duration `yaml:"personTimeout,omitempty" json:"-"`
 	// ResultCut is the maximum characters of one tool result sent to the model.
 	ResultCut int `yaml:"resultCut,omitempty" json:"resultCut"`
 	// Tools sets the approval mode per tool name: "auto" (default) or "human".
@@ -69,6 +72,7 @@ type AgentConfig struct {
 const (
 	DefaultMaxRounds                = 40
 	DefaultToolTimeout              = 120 * time.Second
+	DefaultPersonTimeout            = 10 * time.Minute
 	DefaultResultCut                = 9000
 	DefaultMaxPageInstructionsBytes = 64 << 10
 )
@@ -78,6 +82,9 @@ func (c *AgentConfig) SystemText() string { return c.systemText }
 
 // ToolTimeoutDuration returns the per-call tool timeout.
 func (c *AgentConfig) ToolTimeoutDuration() time.Duration { return time.Duration(c.ToolTimeout) }
+
+// PersonTimeoutDuration returns the limit of a call awaiting a person's decision.
+func (c *AgentConfig) PersonTimeoutDuration() time.Duration { return time.Duration(c.PersonTimeout) }
 
 // ToolMode returns "auto" or "human" for a tool name.
 func (c *AgentConfig) ToolMode(name string) string {
@@ -117,6 +124,9 @@ func LoadAgentFile(path string) (*AgentConfig, error) {
 	}
 	if c.ToolTimeout <= 0 {
 		c.ToolTimeout = Duration(DefaultToolTimeout)
+	}
+	if c.PersonTimeout <= 0 {
+		c.PersonTimeout = Duration(DefaultPersonTimeout)
 	}
 	if c.ResultCut <= 0 {
 		c.ResultCut = DefaultResultCut
