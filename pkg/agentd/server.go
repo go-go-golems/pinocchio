@@ -164,6 +164,19 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /v1/sessions/{id}/turns", s.withSession(s.handleTurn))
 	mux.HandleFunc("GET /v1/sessions/{id}/events", s.withSession(s.handleEvents))
 	mux.HandleFunc("POST /v1/sessions/{id}/tools/{callId}/result", s.withSession(s.handleResult))
+	mux.HandleFunc("POST /v1/sessions/{id}/tools/{callId}/progress", s.withSession(func(w http.ResponseWriter, r *http.Request, ss *Session) {
+		var in struct {
+			State string `json:"state"`
+		}
+		if !readJSON(w, r, &in, 4<<10) {
+			return
+		}
+		if err := ss.SetCallState(r.PathValue("callId"), in.State); err != nil {
+			fail(w, 409, "invalid_state", err.Error())
+			return
+		}
+		w.WriteHeader(204)
+	}))
 	mux.HandleFunc("POST /v1/sessions/{id}/cancel", s.withSession(func(w http.ResponseWriter, r *http.Request, ss *Session) {
 		writeJSON(w, 202, map[string]any{"cancelled": ss.Cancel()})
 	}))

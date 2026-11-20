@@ -205,7 +205,7 @@ func TestToolTimeoutAndCancel(t *testing.T) {
 	start := time.Now()
 	c.do("POST", "/v1/sessions/"+s.ID+"/turns", map[string]any{"text": `/tool eval {"code":"never answered"}`}, nil)
 	evs := c.events(s.ID, 0, 10*time.Second, runEnded)
-	assert.Contains(t, evs[len(evs)-1].Data.(map[string]any)["text"], "did not answer within 2s")
+	assert.Contains(t, evs[len(evs)-1].Data.(map[string]any)["text"], "step ran for 2s and was stopped")
 	assert.Less(t, time.Since(start), 8*time.Second)
 
 	seq := evs[len(evs)-1].Seq
@@ -275,4 +275,74 @@ func TestManifestHumanModeAndRejections(t *testing.T) {
 	assert.Equal(t, 404, c.do("GET", "/v1/sessions/missing", nil, nil))
 	var models map[string]any
 	assert.Equal(t, 200, c.do("GET", "/v1/models", nil, &models))
+}
+
+// A turn that uses all its rounds ends with an answer: one more model call
+// with tools disabled, and the run reports reason max_rounds.
+func TestMaxRoundsEndsWithAnAnswer(t *testing.T) {
+	c, _ := newServer(t, testAgent(t, ""), nil)
+	s := create(t, c)
+	exec := manifest(t, c, s.ID, evalTool)
+	require.Equal(t, 202, c.do("POST", "/v1/sessions/"+s.ID+"/turns", map[string]any{"text": `/tools 50 eval {"code":"poll()"}`}, nil))
+	var seq int64
+	answered := 0
+	for {
+		evs := c.events(s.ID, seq, 10*time.Second, func(e Event) bool { return e.Type == EvToolRequested || runEnded(e) })
+		last := evs[len(evs)-1]
+		seq = last.Seq
+		if runEnded(last) {
+			require.Equal(t, EvRunFinished, last.Type, "%v", types(evs))
+			d := last.Data.(map[string]any)
+			assert.Equal(t, "max_rounds", d["reason"])
+			assert.Equal(t, true, d["truncated"])
+			assert.Contains(t, d["text"], "final answer after 6 tool calls")
+			break
+		}
+		callID := last.Data.(map[string]any)["callId"].(string)
+		require.Equal(t, 204, c.do("POST", "/v1/sessions/"+s.ID+"/tools/"+callID+"/result", map[string]any{"status": "success", "value": "pending", "executor": exec, "toolName": "eval"}, nil))
+		answered++
+	}
+	assert.Equal(t, 6, answered, "maxRounds tool calls, then none")
+
+	// the hidden instruction does not survive into the next turn
+	var v SessionView
+	c.do("GET", "/v1/sessions/"+s.ID, nil, &v)
+	for _, m := range v.Messages {
+		if m.Kind == "context" {
+			assert.Contains(t, m.Text, "Do not call tools")
+		}
+	}
+	require.Equal(t, 202, c.do("POST", "/v1/sessions/"+s.ID+"/turns", map[string]any{"text": "thanks"}, nil))
+	c.events(s.ID, seq, 5*time.Second, runEnded)
+	c.do("GET", "/v1/sessions/"+s.ID, nil, &v)
+	for _, m := range v.Messages {
+		assert.NotContains(t, m.Text, "Do not call tools", "the final-round instruction is dropped like any context block")
+	}
+}
+
+// A call the page marks awaiting-person outlives the step limit until the
+// person decides; "running" restarts the step limit.
+func TestAwaitingPersonPausesTheStepLimit(t *testing.T) {
+	c, _ := newServer(t, testAgent(t, "personTimeout: 6s\n"), nil)
+	s := create(t, c)
+	exec := manifest(t, c, s.ID, evalTool)
+	c.do("POST", "/v1/sessions/"+s.ID+"/turns", map[string]any{"text": `/tool eval {"code":"sel.run('stage0.full')"}`}, nil)
+	evs := c.events(s.ID, 0, 5*time.Second, func(e Event) bool { return e.Type == EvToolRequested })
+	callID := evs[len(evs)-1].Data.(map[string]any)["callId"].(string)
+	assert.Equal(t, 409, c.do("POST", "/v1/sessions/"+s.ID+"/tools/"+callID+"/progress", map[string]any{"state": "thinking"}, nil))
+	assert.Equal(t, 409, c.do("POST", "/v1/sessions/"+s.ID+"/tools/nope/progress", map[string]any{"state": "running"}, nil))
+	require.Equal(t, 204, c.do("POST", "/v1/sessions/"+s.ID+"/tools/"+callID+"/progress", map[string]any{"state": "awaiting-person"}, nil))
+	time.Sleep(3 * time.Second) // past the 2 s step limit
+	require.Equal(t, 204, c.do("POST", "/v1/sessions/"+s.ID+"/tools/"+callID+"/result", map[string]any{"status": "success", "value": "approved; job j_1", "executor": exec, "toolName": "eval"}, nil))
+	evs = c.events(s.ID, 0, 5*time.Second, runEnded)
+	last := evs[len(evs)-1]
+	assert.Equal(t, `eval returned: "approved; job j_1"`, last.Data.(map[string]any)["text"])
+	assert.Contains(t, types(evs), EvToolProgress)
+}
+
+func TestCostCountsCachedPromptTokensOnce(t *testing.T) {
+	// 1000 input of which 900 cached (OpenAI style), 100 output; $1/M in, $0.1/M cache read, $2/M out
+	assert.InDelta(t, (100*1.0+900*0.1+100*2.0)/1e6, costUSD(Usage{Input: 1000, Cached: 900, Output: 100}, 1, 2, 0.1, 1.25), 1e-12)
+	// Claude style: cache reads/writes reported apart from input
+	assert.InDelta(t, (100*1.0+900*0.1+50*1.25+100*2.0)/1e6, costUSD(Usage{Input: 100, CacheRead: 900, CacheCreation: 50, Output: 100}, 1, 2, 0.1, 1.25), 1e-12)
 }
