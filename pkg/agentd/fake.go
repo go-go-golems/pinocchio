@@ -174,7 +174,10 @@ func repeatPlan(user string) (int, map[string]any, bool) {
 	if _, err := fmt.Sscanf(f[0], "%d", &n); err != nil {
 		return 0, nil, false
 	}
-	rest := strings.TrimSpace(strings.SplitN(strings.TrimPrefix(user, "/tools "), " ", 3)[2:][0])
+	rest := ""
+	if parts := strings.SplitN(strings.TrimPrefix(user, "/tools "), " ", 3); len(parts) == 3 {
+		rest = strings.TrimSpace(parts[2])
+	}
 	_, input := parseToolCommand(f[1] + " " + rest)
 	return n, input, true
 }

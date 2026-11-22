@@ -113,24 +113,23 @@ func messagesOf(t *turns.Turn) []MessageView {
 	}
 	out := []MessageView{}
 	for _, b := range t.Blocks {
-		str := func(k string) string { v, _ := b.Payload[k].(string); return v }
 		m := MessageView{ID: b.ID}
 		switch b.Kind {
 		case turns.BlockKindSystem:
 			continue
 		case turns.BlockKindUser:
-			m.Kind, m.Text = "user", str(turns.PayloadKeyText)
+			m.Kind, m.Text = "user", str(b.Payload, turns.PayloadKeyText)
 			if strings.HasPrefix(m.Text, ContextPrefix) {
 				m.Kind, m.Text = "context", strings.TrimPrefix(m.Text, ContextPrefix)
 			}
 		case turns.BlockKindLLMText:
-			m.Kind, m.Text = "assistant", str(turns.PayloadKeyText)
+			m.Kind, m.Text = "assistant", str(b.Payload, turns.PayloadKeyText)
 		case turns.BlockKindReasoning:
-			m.Kind, m.Text = "reasoning", str(turns.PayloadKeyText)
+			m.Kind, m.Text = "reasoning", str(b.Payload, turns.PayloadKeyText)
 		case turns.BlockKindToolCall:
-			m.Kind, m.CallID, m.Name, m.Input = "tool_call", str(turns.PayloadKeyID), str(turns.PayloadKeyName), b.Payload[turns.PayloadKeyArgs]
+			m.Kind, m.CallID, m.Name, m.Input = "tool_call", str(b.Payload, turns.PayloadKeyID), str(b.Payload, turns.PayloadKeyName), b.Payload[turns.PayloadKeyArgs]
 		case turns.BlockKindToolUse:
-			m.Kind, m.CallID, m.Result, m.Error = "tool_result", str(turns.PayloadKeyID), b.Payload[turns.PayloadKeyResult], str(turns.PayloadKeyError)
+			m.Kind, m.CallID, m.Result, m.Error = "tool_result", str(b.Payload, turns.PayloadKeyID), b.Payload[turns.PayloadKeyResult], str(b.Payload, turns.PayloadKeyError)
 		case turns.BlockKindOther:
 			continue
 		default:

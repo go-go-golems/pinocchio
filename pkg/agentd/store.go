@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-go-golems/geppetto/pkg/inference/modelsource"
@@ -14,10 +15,18 @@ import (
 
 // Store keeps sessions as JSON files in a directory: metadata, the latest
 // turn (the whole conversation, as geppetto turn YAML) and the recent events.
+//
+// Writes and deletes of one store are serialized, and a deleted session is
+// never written again: a run that ends after its session was deleted (DELETE
+// cancels the run, the run's goroutine saves when it returns) cannot bring the
+// file back.
 type Store struct {
 	Dir string
 	// KeepEvents bounds the events saved per session.
 	KeepEvents int
+
+	mu      sync.Mutex
+	deleted map[string]bool
 }
 
 type storedSession struct {
@@ -45,7 +54,7 @@ func NewStore(dir string) (*Store, error) {
 
 func (st *Store) path(id string) string { return filepath.Join(st.Dir, id+".json") }
 
-// Save writes a session atomically.
+// Save writes a session atomically. Saving a deleted session does nothing.
 func (st *Store) Save(s *Session) error {
 	s.mu.Lock()
 	rec := storedSession{ID: s.ID, Agent: s.Agent.Name, Model: s.Model, Thinking: s.thinking, System: s.system, Title: s.title,
@@ -66,6 +75,11 @@ func (st *Store) Save(s *Session) error {
 	if err != nil {
 		return err
 	}
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	if st.deleted[s.ID] {
+		return nil
+	}
 	tmp := st.path(s.ID) + ".tmp"
 	if err := os.WriteFile(tmp, b, 0o600); err != nil {
 		return err
@@ -73,8 +87,14 @@ func (st *Store) Save(s *Session) error {
 	return os.Rename(tmp, st.path(s.ID))
 }
 
-// Delete removes a saved session.
+// Delete removes a saved session; later saves of it are ignored.
 func (st *Store) Delete(id string) error {
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	if st.deleted == nil {
+		st.deleted = map[string]bool{}
+	}
+	st.deleted[id] = true
 	err := os.Remove(st.path(id))
 	if os.IsNotExist(err) {
 		return nil

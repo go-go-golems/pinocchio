@@ -276,3 +276,35 @@ func TestManifestHumanModeAndRejections(t *testing.T) {
 	var models map[string]any
 	assert.Equal(t, 200, c.do("GET", "/v1/models", nil, &models))
 }
+
+func TestDeletedSessionIsNotSavedAgain(t *testing.T) {
+	store, err := NewStore(t.TempDir())
+	require.NoError(t, err)
+	agents := testAgent(t, "")
+	c, srv := newServer(t, agents, store)
+	s := create(t, c)
+	ss := srv.session(s.ID)
+	require.NotNil(t, ss)
+	c.do("POST", "/v1/sessions/"+s.ID+"/turns", map[string]any{"text": "/sleep 5000 late"}, nil)
+	time.Sleep(100 * time.Millisecond)
+	require.Equal(t, 204, c.do("DELETE", "/v1/sessions/"+s.ID, nil, nil))
+	// the cancelled run's goroutine saves when it returns; so does any late writer
+	require.Eventually(t, func() bool { return ss.View(false).Running == "" }, 5*time.Second, 10*time.Millisecond)
+	require.NoError(t, store.Save(ss))
+	_, err = os.Stat(store.path(s.ID))
+	assert.True(t, os.IsNotExist(err), "the deleted session's file is gone")
+
+	c2, _ := newServer(t, agents, store)
+	assert.Equal(t, 404, c2.do("GET", "/v1/sessions/"+s.ID, nil, nil), "a restart does not restore it")
+}
+
+func TestRepeatPlanWithoutInput(t *testing.T) {
+	n, input, ok := repeatPlan("/tools 2 eval")
+	assert.True(t, ok)
+	assert.Equal(t, 2, n)
+	assert.Empty(t, input)
+	n, input, ok = repeatPlan(`/tools 3 eval {"code":"1"}`)
+	assert.True(t, ok)
+	assert.Equal(t, 3, n)
+	assert.Equal(t, "1", input["code"])
+}
