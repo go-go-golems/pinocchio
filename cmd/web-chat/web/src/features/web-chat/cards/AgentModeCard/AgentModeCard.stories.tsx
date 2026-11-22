@@ -1,4 +1,4 @@
-import type { Meta, StoryObj } from '@storybook/react';
+import type { Meta, StoryObj } from '@storybook/react-vite';
 import { agentModeEntity } from '../fixtures';
 import { CardStoryFrame } from '../storyDecorators';
 import { AgentModeCard } from './AgentModeCard';

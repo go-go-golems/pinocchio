@@ -1,4 +1,4 @@
-import type { Meta, StoryObj } from '@storybook/react';
+import type { Meta, StoryObj } from '@storybook/react-vite';
 import { widgetEntity } from '../fixtures';
 import { CardStoryFrame } from '../storyDecorators';
 import { WidgetInstanceCard } from './WidgetInstanceCard';

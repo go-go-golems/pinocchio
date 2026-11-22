@@ -1,4 +1,4 @@
-import type { Preview } from '@storybook/react';
+import type { Preview } from '@storybook/react-vite';
 import React from 'react';
 import { Provider } from 'react-redux';
 import { store as chatStore } from '../src/store/store';
