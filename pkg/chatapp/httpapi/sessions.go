@@ -325,6 +325,17 @@ func writeCodedError(w http.ResponseWriter, status int, fallback string, err err
 	var coded chatapp.CodedError
 	if errors.As(err, &coded) {
 		code = coded.Code()
+		// a hook's code that has a status of its own answers with it
+		switch code {
+		case CodeSessionExists, CodeRunActive:
+			status = http.StatusConflict
+		case CodeSessionNotFound:
+			status = http.StatusNotFound
+		case CodeForbidden:
+			status = http.StatusForbidden
+		case CodeUnauthenticated:
+			status = http.StatusUnauthorized
+		}
 	}
 	writeError(w, status, code, err)
 }
