@@ -606,3 +606,92 @@ limits it relied on, without any of them being chatapp's content.
 - Installing everything with httpapi:
   `httpapi.New(httpapi.WithFrontendTools(m), httpapi.WithEngineOptions(chatapp.WithRunTools(toolexec.RunTools(toolexec.Deadline(2*time.Minute, msg), toolexec.CutResults(9000, note)))), ...)`
   and per run `ComposedRuntime{RoundGuard: budget.SessionTokens(srv.Sessions(), limit)}`.
+
+## Step 7: Phase 5 — `pinocchio agent serve` on chatapp, agentd deleted
+
+This step rebuilt `pinocchio agent serve` as an application of chatapp and deleted `pkg/agentd`. A new package,
+`pkg/chatapp/agentserver`, is an httpapi server whose sessions each run one preset; agentd's scripted test engine
+moved to `pkg/chatapp/toolkit/scripted`. Getting there needed four small additions to the mechanism: opaque session
+data, a create hook, a runtime-level executor wrapper, and a default in-memory turn store.
+
+Commits db83f65 (the additions) and e67e8e1 (agent serve, agentd deleted). `go test ./...` passes; `golangci-lint
+run ./pkg/... ./cmd/...` reports `0 issues`; `scripts/02-agent-serve-smoke.sh` runs the real binary end to end.
+
+### Prompt Context
+**User prompt (verbatim):** see Step 1.
+**Assistant interpretation:** Phase 5: "`pinocchio agent serve` on httpapi + presets + modelsource; delete pkg/agentd; docs".
+**Inferred user intent:** One agent runtime in pinocchio; homolog-bench moves to it with a playbook.
+**Commit (code):** db83f65 — "chatapp: session data, a create hook, running in listings, runtime executor wrapper";
+e67e8e1 — "agent serve runs on chatapp; pkg/agentd is deleted"
+
+### What I did
+- Checked how homolog-bench uses agentd (`~/code/wesen/homolog-bench`, main at b058c23): it runs `pinocchio agent serve
+  --agents configs/agent` as a separate process behind its own proxy (`/api/v1/agent`), its UI test starts it with
+  `--engine fake`, and its preset uses `pageInstructions: true` to append the page's API reference to the system
+  prompt at session creation.
+- `sessions.Info.Data` (SQLite column `data`), `CreateSessionRequest.Data`, `httpapi.WithCreateHook` (POST and
+  auto-creation; the hook cannot change the id), `SessionSummary` with `running` in `GET /sessions`,
+  `ComposedRuntime.WrapToolExecutor` applied after the run-tools functions, `toolexec.Compose`.
+- httpapi defaults to `serverkit.NewMemoryTurnStore()`; new test `TestASessionRemembersItsConversation`.
+- `pkg/chatapp/agentserver`: `New(presets, opts...)` with `WithModels`, `WithEngine`, `WithStateDir`,
+  `WithDefaultPreset`, `WithPrefix`, `WithTexts`, `WithToolRegistry`, `WithHTTPOptions`; the create hook
+  (`completeSession`) and the resolver (`resolve`); `GET /health`, `/presets`, `/models`; error codes
+  `unknown_preset`, `unknown_model`, `instructions_not_allowed`, `prompt_too_large`.
+- `pkg/chatapp/toolkit/scripted`: agentd's `FakeEngine` as `scripted.Engine`, plus a `TextSegmentFinished` event.
+- `cmd/pinocchio/cmds/agent.go`: flags `--presets`, `--default-preset`, `--prefix`; state dir
+  `~/.local/state/pinocchio/agent`. `pkg/agentd/agentcli` → `pkg/cmds/agentcli`; `pkg/agentd` deleted.
+- `pkg/doc/topics/pinocchio-agent-serve.md`: the help topic the command's long help points to.
+- `scripts/02-agent-serve-smoke.sh`: build, start with `--engine fake`, create with instructions, register `eval`,
+  message `/tool eval {"code":"6*7"}`, answer 42, read the conversation and the SSE event names.
+
+### Why
+- Page instructions stay, but in agentserver: they are content, and agentserver is an application. They go into the
+  session's system prompt once, at creation (session data), so the prefix is the same every turn.
+- `WrapToolExecutor` on the runtime: a preset's tool timeout is per session, but `WithRunTools` is engine-wide, and a
+  wrapper set as `ComposedRuntime.ToolExecutor` would sit behind the browser-tool bridge and not cover browser calls.
+- The default turn store: without one, chatapp has no history (it loads history only from a store), so every message
+  of an httpapi session started a new conversation; web-chat always passed one, which hid this.
+- The scripted engine now finds "the person's message" as the first user block of the turn's last run of user blocks,
+  because caller blocks after the message would otherwise be read as the script.
+
+### What worked
+- The smoke test against the binary: `eval returned: 42`; SSE carried `ChatFrontendToolCallRequested`,
+  `ChatFrontendToolResultReceived`, `ChatRunFinished`, and the session's usage was recorded (1772 input tokens, the
+  system prompt included).
+- The restart test: a second server on the same state dir continues the conversation.
+
+### What didn't work
+- homolog-bench's preset as-is: `homolog-bench.yaml: yaml: unmarshal errors: line 14: cannot unmarshal !!map into
+  []string` — its `tools: {eval: auto}` approval map. The page declares a tool's mode in its manifest now, so the
+  playbook says to delete it. I left the YAML error as it is.
+- First agentserver test run, two failures, both in my tests: the system-prompt assertion looked for an escaped `\n`
+  in YAML that has real line breaks; and a 1-token budget stopped the first message between rounds
+  (`error: the session used 9 of its 1 tokens`), which is the guard working, so the budget got its own preset and test.
+- `TestFullExportOmitsTurnsWhenStoreUnavailable` failed after the turn-store default (the export now has turns);
+  renamed and inverted.
+
+### What I learned
+- agentd's package comment points to a `pkg/doc/topics` page about agentd that never existed; there was no help page
+  to migrate.
+
+### What was tricky to build
+- Keeping agentd's behavior without its mechanisms: the final-round instruction was a context block agentd removed on
+  the next turn; now it is an ordinary block that stays in the conversation (append-only), which is also what the
+  turn export shows.
+
+### What warrants a second pair of eyes
+- agentserver defaults: tool retries 0 (a retried browser call runs page code twice), one tool at a time,
+  geppetto's own execution timeout = preset timeout + 5 s so the deadline wrapper acts first.
+- `pageInstructions` and `maxPageInstructionsBytes` are read from `Preset.Extra`, not typed fields.
+
+### What should be done in the future
+- homolog-bench's migration (the playbook).
+
+### Code review instructions
+- `pkg/chatapp/agentserver/agentserver.go` (`completeSession`, `resolve`), `cmd/pinocchio/cmds/agent.go`.
+- `go test ./pkg/chatapp/agentserver ./pkg/chatapp/toolkit/scripted`; `ttmp/.../scripts/02-agent-serve-smoke.sh`
+
+### Technical details
+- Removed flags: `--agents` → `--presets`. Removed routes: `/v1/agents` (→ `/v1/presets`), `/v1/sessions/{id}/turns`
+  (→ `/messages`), `/tools/{callId}/result` (→ `/tools/results`), `/tools/{callId}/progress` (gone), `/cancel`
+  (→ `/stop`).

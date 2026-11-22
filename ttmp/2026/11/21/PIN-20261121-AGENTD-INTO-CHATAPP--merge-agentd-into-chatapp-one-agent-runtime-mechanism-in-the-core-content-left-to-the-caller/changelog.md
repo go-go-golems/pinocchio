@@ -46,3 +46,12 @@ Phase 4 (11da2fa, 7cbef6f): chatapp.WithRunTools + frontendtools.Manager.RunTool
 
 - /home/manuel/workspaces/2026-10-28/slop-computer/pinocchio/pkg/chatapp/frontendtools/bridge.go — Manager.RunTools wires browser tools into runs
 - /home/manuel/workspaces/2026-10-28/slop-computer/pinocchio/pkg/chatapp/toolkit/toolexec/toolexec.go — deadline and result-cut middlewares
+
+## 2026-11-22
+
+Phase 5 (db83f65, e67e8e1): agent serve on chatapp/agentserver (presets, modelsource, scripted engine); pkg/agentd deleted; session Data, create hook, WrapToolExecutor, default memory turn store; help topic pinocchio-agent-serve
+
+### Related Files
+
+- /home/manuel/workspaces/2026-10-28/slop-computer/pinocchio/pkg/chatapp/agentserver/agentserver.go — agent serve's runtime from a preset
+- /home/manuel/workspaces/2026-10-28/slop-computer/pinocchio/pkg/doc/topics/pinocchio-agent-serve.md — user-facing API documentation
