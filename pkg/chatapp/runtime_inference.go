@@ -144,13 +144,14 @@ func (e *Engine) runRuntimeInference(ctx context.Context, sid sessionstream.Sess
 
 	sess := gepsession.NewSessionWithID(string(sid))
 	sess.Builder = &enginebuilder.Builder{
-		Base:         runtime.Engine,
+		// The guard wraps the engine, not the tool loop: geppetto makes a
+		// plain call without a registry, which would skip a loop's guard.
+		Base:         guardEngine(runtime.Engine, runtime.RoundGuard),
 		Registry:     tools.Registry,
 		ToolExecutor: tools.Executor,
 		EventSinks:   []gepevents.EventSink{eventSink},
 		LoopConfig:   runtime.Loop,
 		ToolConfig:   runtime.ToolConfig,
-		RoundGuard:   runtime.RoundGuard,
 	}
 
 	if pending.InitialTurn != nil {

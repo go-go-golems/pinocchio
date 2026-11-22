@@ -42,6 +42,10 @@ tools: [noop]
 budget:
   tokensPerSession: 1
 `,
+		"toolless.yaml": `name: toolless
+budget:
+  tokensPerSession: 1
+`,
 	}
 	for name, content := range files {
 		require.NoError(t, os.WriteFile(filepath.Join(dir, name), []byte(content), 0o600))
@@ -132,13 +136,13 @@ func TestInfoRoutes(t *testing.T) {
 	base := start(t, writePresets(t), t.TempDir()).URL
 	status, out := call(t, http.MethodGet, base+"/v1/health", "")
 	require.Equal(t, http.StatusOK, status)
-	require.JSONEq(t, `{"ok":true,"presets":3}`, string(out))
+	require.JSONEq(t, `{"ok":true,"presets":4}`, string(out))
 
 	status, out = call(t, http.MethodGet, base+"/v1/presets", "")
 	require.Equal(t, http.StatusOK, status)
 	var ps struct{ Presets []PresetView }
 	require.NoError(t, json.Unmarshal(out, &ps))
-	require.Len(t, ps.Presets, 3)
+	require.Len(t, ps.Presets, 4)
 	require.Equal(t, PresetView{Name: "bench", Description: "Workbench agent", Model: "fake:scripted", MaxRounds: 2, PageInstructions: true, Default: true}, ps.Presets[0])
 
 	status, out = call(t, http.MethodGet, base+"/v1/models", "")
@@ -250,6 +254,27 @@ func TestTheBudgetStopsARunBetweenRounds(t *testing.T) {
 	require.Len(t, texts(got), 2)
 	require.True(t, strings.HasPrefix(texts(got)[1], "error: the session used "), texts(got))
 	require.True(t, strings.HasSuffix(texts(got)[1], " of its 1 tokens"), texts(got))
+}
+
+// A session with no tools at all (no in-process tools, no browser tools)
+// makes plain model calls; the budget guard must run before those too.
+func TestTheBudgetStopsASessionWithoutTools(t *testing.T) {
+	base := start(t, writePresets(t), t.TempDir()).URL
+	status, out := call(t, http.MethodPost, base+"/v1/sessions", `{"labels":{"preset":"toolless"}}`)
+	require.Equal(t, http.StatusCreated, status, string(out))
+	var created httpapi.SessionResponse
+	require.NoError(t, json.Unmarshal(out, &created))
+	sess := base + "/v1/sessions/" + created.SessionID
+
+	status, _ = call(t, http.MethodPost, sess+"/messages", `{"prompt":"first"}`)
+	require.Equal(t, http.StatusAccepted, status)
+	require.Equal(t, []string{"user: first", "assistant: echo: first"}, texts(waitIdle(t, base, created.SessionID)), "the first call is within budget")
+
+	status, _ = call(t, http.MethodPost, sess+"/messages", `{"prompt":"second"}`)
+	require.Equal(t, http.StatusAccepted, status)
+	got := texts(waitIdle(t, base, created.SessionID))
+	require.NotContains(t, got, "assistant: echo: second", "over budget: the engine is not called")
+	require.True(t, strings.HasPrefix(got[len(got)-1], "error: the session used "), got)
 }
 
 func TestARestartKeepsSessionsAndTheirConversations(t *testing.T) {
