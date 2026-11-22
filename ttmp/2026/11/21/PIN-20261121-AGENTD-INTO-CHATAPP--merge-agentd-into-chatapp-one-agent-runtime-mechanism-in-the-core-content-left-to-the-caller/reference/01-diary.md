@@ -160,3 +160,174 @@ can build on, with a hand-off document so the homolog-bench side can move indepe
 ### Technical details
 
 - Revisions: pinocchio `22a0e56`, geppetto `b35d0275`, sessionstream `v0.1.2`, Go `1.26.11`.
+
+## Step 2: The design guide, and its upload
+
+I wrote the intern guide (`design-doc/01-…`), reviewed it once end to end, and uploaded it to reMarkable. The guide
+teaches the system before proposing changes: geppetto turns, the tool loop and tools; sessionstream's hub, ordinals,
+projections and snapshots; chatapp's run path with line references; frontendtools; web-chat's server; agentd; then the
+rule (mechanism in the core, content with the caller), the target design, an API sketch, a feature-by-feature mapping,
+phases, tests and decision records.
+
+### Prompt Context
+**User prompt (verbatim):** see Step 1.
+**Assistant interpretation:** Deliver the guide in the ticket and on the reMarkable before implementing.
+**Inferred user intent:** A document someone new can learn the system from, and a plan to review.
+**Commit (code):** 94066a3 — "PIN-20261121-AGENTD-INTO-CHATAPP: ticket, intern design guide, diary step 1"
+
+### What I did
+- First draft, then a review pass against the code. Corrections made in the review:
+  - agentd's size: about 2,100 lines without tests (it includes the scripted engine), not 1,900.
+  - The section 6 sketch used types from section 7 without saying so, and set `req.Blocks` on a request type that
+    has no such field; it now says where the types are defined and uses httpapi's `Blocks` hook.
+  - "geppetto's executor publishes tool events" was checked: `pkg/inference/tools/base_executor.go:112` publishes
+    the execution events, which chatapp's tool-call plugin projects.
+  - "nothing outside agentd wires the browser-tool executor" was checked with a repository-wide grep for
+    `BridgeExecutor|RuntimeContext|WithBridgeContext` outside `pkg/agentd` and `pkg/chatapp/{frontendtools,service.go,runtime_inference.go}`: no hits.
+- `docmgr doctor --ticket PIN-20261121-AGENTD-INTO-CHATAPP --stale-after 30`: all checks passed.
+- `remarquee upload bundle <guide> --name "PIN-20261121 Merging agentd into chatapp - intern guide" --remote-dir "/ai/2026/11/21/PIN-20261121-AGENTD-INTO-CHATAPP" --toc-depth 2 --non-interactive`
+  → `OK: uploaded PIN-20261121 Merging agentd into chatapp - intern guide.pdf -> /ai/2026/11/21/PIN-20261121-AGENTD-INTO-CHATAPP`.
+
+### Why
+- ASCII diagrams instead of mermaid: the reMarkable pipeline renders Markdown through pandoc, which does not draw
+  mermaid.
+
+### What worked
+- Upload on the first attempt.
+
+### What didn't work
+- I checked the "uploaded" task before uploading; unchecked it (`docmgr task uncheck --id rzci`) and checked it after
+  the upload succeeded.
+
+### What I learned
+- N/A beyond Step 1.
+
+### What was tricky to build
+- Keeping current, proposed and decided statements apart; the guide labels each.
+
+### What warrants a second pair of eyes
+- Decisions D3–D8 in section 12 are proposals I made while writing; D1, D2 and D9 come from the user.
+
+### What should be done in the future
+- Update the guide's section 10 with what was built once the phases land.
+
+### Code review instructions
+- Read the guide sections 4.3 (feature sorting) and 7.2–7.3 (runs and history) first.
+
+### Technical details
+- Upload destination: `/ai/2026/11/21/PIN-20261121-AGENTD-INTO-CHATAPP`.
+
+## Step 3: Phase 1 — chatapp runs are mechanism only
+
+This step changed chatapp's run so that it provides mechanism and nothing else. A caller now configures the round
+limit, the final answer and a round guard through `ComposedRuntime`; a busy session is refused or replaced by policy;
+every run ends with an outcome decided in one place, published with a code; the caller can append its own blocks to
+a turn; and chatapp keeps every run's turn as the conversation, closing tool calls that never got a result. The
+content chatapp used to write itself is gone.
+
+The outcome is commit 0ac7b5e. All pinocchio tests pass (`go test ./...`), and the pre-commit hook's `make lintmax`,
+`make test` and `make web-check` passed on the second attempt.
+
+### Prompt Context
+**User prompt (verbatim):** see Step 1.
+**Assistant interpretation:** Implement phase 1 of the guide's plan (section 10).
+**Inferred user intent:** chatapp becomes the runtime agentd's features can live in.
+**Commit (code):** 0ac7b5e — "chatapp: runs are mechanism only (limits, busy policy, outcome codes, kept history)"
+
+### What I did
+- `pkg/inference/runtime/composer.go`: `ComposedRuntime.Loop *toolloop.LoopConfig`, `ToolConfig *geptools.ToolConfig`,
+  `RoundGuard toolloop.RoundGuard`, passed into the run's `enginebuilder.Builder`.
+- `pkg/chatapp/chat.go`: `BusyPolicy` (`BusyReject` default, `BusyReplace`), `ErrRunActive`, `ErrNoRuntime`,
+  `WithBusyPolicy`, `WithErrorClassifier`, `WithErrorText`, `WithUnansweredToolResult` /
+  `DefaultUnansweredToolResult`; `swapRun` became `reserveRun`, which refuses under `BusyReject`. Removed
+  `WithChunkDelay` and the engine's `chunkDelay`.
+- `pkg/chatapp/run_outcome.go` (new): `decideOutcome` (finished / stopped / failed; truncated when the final answer
+  was given), `CodedError`, the code constants, `ClassifyError` (agentd's text matching, moved), `failureText`,
+  `closeUnansweredToolCalls` (geppetto's `toolblocks.ExtractPendingToolCalls` + `AppendToolResultsBlocks`).
+- `pkg/chatapp/runtime_inference.go`: the start handler validates first (no empty prompt; `ErrNoRuntime`), reserves
+  the run before publishing anything, cancels and awaits a replaced run, then publishes the user message;
+  `runRuntimeInference` appends `PromptRequest.Blocks` after the user block, decides the outcome, and `endRun` closes
+  unanswered calls, saves the turn as `"final"` and calls `OnFinalTurn` for every outcome. Failed saves are now
+  logged.
+- `pkg/chatapp/runtime_sink.go`: the failure the sink publishes on geppetto's `EventError` carries a code and the
+  configured text.
+- `proto/pinocchio/chatapp/v1/chat.proto`: `ChatRunFinished.truncated` (6), `.reason` (7); `ChatRunFailed.code` (5).
+  Regenerated Go and TypeScript (see What didn't work).
+- `pkg/chatapp/service.go`: `PromptRequest.Blocks []turns.Block`.
+- Deleted `pkg/chatapp/demo.go`; removed the max-rounds warning helpers from `messages.go`; `RunnerOptions.ChunkDelay`
+  became `RunnerOptions.EngineOptions []Option`.
+- Removed the persisters that chatapp now replaces: `pkg/ui` `TurnPersister`/`WithTurnPersister`, the CLI's
+  `cliTurnStorePersister` (`pkg/cmds/chat_persistence.go`), web-chat's composer `Persister` (its `SnapshotHook`
+  stays) and its `turnStorePersister`.
+- Tests: `answer_engine_test.go` (a streaming engine that answers "Answer: <prompt>", replacing the demo);
+  `run_outcome_test.go` (busy reject publishes nothing; busy replace stops the first run; no runtime is rejected;
+  round limit with and without a final answer; a guard's coded error; classifier and text options; the default
+  classifier; a stopped turn keeps the person's message and its unanswered call is closed; caller blocks follow the
+  message and the second turn's prompt starts with the first turn's prompt). Existing tests were moved off the demo,
+  and the two "persists failed turn" tests now expect phase `"final"`. web-chat's appserver tests got a default
+  resolver that answers like the demo did.
+
+### Why
+- Rejecting by default: a silent replacement loses the person's running turn; agentd's 409 was the safer contract.
+  The CLI and TUI never send while running (the TUI backend refuses itself), so the default does not change them.
+- Saving in chatapp: chatapp is the one that loads `"final"`, and there were three savers with different behavior.
+- Using geppetto's `toolblocks` for closing calls: the same code geppetto's loop uses to find pending calls.
+
+### What worked
+- `go test ./...` in pinocchio: all packages ok.
+- `go test ./pkg/chatapp -run Busy -count=20`: ok (the busy tests are not flaky).
+- Pre-commit on the second attempt: `✔️ lint (33.51 seconds)`, test and web-check passed; commit created.
+
+### What didn't work
+- `buf generate --template buf.chatapp.gen.yaml --path proto/pinocchio` failed with
+  `Failure: your Buf API token for buf.build is invalid. Run "buf registry login" using a valid Buf API token.`
+  The templates use buf.build remote plugins. I installed the plugin versions the committed files were generated with
+  (`protoc-gen-go v1.36.12`; `protoc-gen-es v2.14.0`, from the generated headers) into the scratchpad and ran buf with
+  local templates; only the chat files changed. The procedure is `scripts/01-proto-gen-local.sh`.
+- The editor's language server reported `go: go.work requires go >= 1.26.11 (running go 1.25.5)` on every edit; it runs
+  an older Go than the shell (1.26.11). Ignored.
+- First test run after the core change: `TestBusyReplaceCancelsTheRunningTurn` failed with
+  `"[]" should have 1 item(s), but has 0` for `ChatRunStopped`. Cause: the replaced run had not started yet; it
+  published `ChatRunStarted` with its already-cancelled context, the publish failed, and the run returned without any
+  terminal event. Fix: the start event and the history load use `publishContext(ctx)` (non-cancellable); a
+  `StartInference` error goes through `decideOutcome` like any other, so a cancelled run ends `ChatRunStopped` and its
+  turn is kept.
+- `go vet` on the test: `conversion from BlockKind (int) to string yields a string of one rune` — used
+  `b.Kind.String()`.
+- First commit attempt: the hook's lint failed with three issues — `exhaustive` on the outcome switch and on a
+  `BlockKind` switch in a test, and `gofmt` on the new test file. Added the missing cases and ran gofmt;
+  `golangci-lint run` on the touched packages then reported `0 issues`, and both vet tools (`/tmp/geppetto-lint`,
+  `/tmp/glazed-lint`) exited 0.
+- web-chat's appserver tests submitted messages without a runtime resolver and failed with HTTP 500 once the demo was
+  gone; they now use a default resolver.
+
+### What I learned
+- geppetto sets `MaxIterationsError.Answered` only when the final answer succeeded; a failed final answer wraps its
+  cause next to `Answered: false` (`toolloop/limits.go:18-22`, `loop.go:248`).
+- The appserver tests and several CLI paths relied on the demo without saying so.
+
+### What was tricky to build
+- Ordering in the start handler. The busy check must happen before anything is published, so the refused prompt leaves
+  no trace; the replaced run must be cancelled and awaited before the new run loads history, or the new run would read
+  a history the old one is still writing. The handler now: validate → reserve (refuse here) → cancel and await the
+  replaced run → publish the user message (on failure: clear the reservation, cancel, close `done`) → start the run.
+
+### What warrants a second pair of eyes
+- `OnFinalTurn` now fires for every outcome, not only success. The TUI's accumulator therefore keeps stopped and failed
+  turns, matching the saved history.
+- A save failure is logged, not returned; the TUI used to show a persistence error.
+- `ClassifyError` matches text, as agentd did; it should become `errors.As` on typed geppetto errors.
+
+### What should be done in the future
+- Typed provider errors in geppetto's OpenAI and Responses engines.
+
+### Code review instructions
+- `pkg/chatapp/runtime_inference.go` (`handleStartInference`, `runRuntimeInference`, `endRun`), `pkg/chatapp/run_outcome.go`,
+  `pkg/chatapp/run_outcome_test.go`.
+- `go test ./pkg/chatapp/... ./pkg/ui/... ./pkg/cmds/... ./cmd/web-chat/...`
+
+### Technical details
+- Outcome table as implemented: no error → finished; cancelled → stopped; `MaxIterationsError{Answered: true}` →
+  finished, `truncated`, `reason: "max_rounds"`; `CodedError` → failed with its code; `MaxIterationsError` otherwise →
+  failed `max_rounds`; anything else → failed with the classifier's code. History load failures → failed
+  `history_error`.
