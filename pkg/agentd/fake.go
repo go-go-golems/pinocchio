@@ -30,6 +30,9 @@ var FakeModel = modelsource.Model{Ref: "fake:scripted", Source: "fake", Label: "
 type FakeEngine struct {
 	// Delay between streamed chunks.
 	Delay time.Duration
+	// FinalError, when set, fails the final answer (tool choice "none"), as a
+	// provider error at the round limit would (tests).
+	FinalError error
 }
 
 var _ engine.Engine = (*FakeEngine)(nil)
@@ -47,6 +50,9 @@ func (f *FakeEngine) RunInference(ctx context.Context, t *turns.Turn) (*turns.Tu
 	// Tool choice "none" (the final round of a turn that used all its rounds):
 	// answer with a summary, as a real model would.
 	if cfg, ok, _ := engine.KeyToolConfig.Get(t.Data); ok && cfg.ToolChoice == engine.ToolChoiceNone {
+		if f.FinalError != nil {
+			return t, f.FinalError
+		}
 		return f.say(ctx, t, fmt.Sprintf("final answer after %d tool calls", countAllToolCalls(t)))
 	}
 	switch {

@@ -51,13 +51,13 @@ type Session struct {
 
 type activeRun struct {
 	id        string
-	ctx       context.Context
 	handle    *gepsession.ExecutionHandle
 	cancelled bool
 }
 
 // FinalRoundInstruction is added (as a hidden context block) when a turn has
-// used all its rounds; the model then answers once more with tools disabled.
+// used all its rounds; the model then answers once more with tools disabled
+// (geppetto's toolloop FinalAnswer).
 const FinalRoundInstruction = "You have used all %d tool rounds of this turn. Do not call tools. Answer the person now: " +
 	"what you found, what is still running (with ids), and what you would do next. Do not claim anything you did not check."
 
@@ -223,7 +223,8 @@ func (s *Session) StartTurn(text, contextText string) (string, error) {
 	if len(reg.ListTools()) > 0 {
 		registry = reg
 	}
-	loopCfg := toolloop.DefaultLoopConfig().WithMaxIterations(s.Agent.MaxRounds)
+	loopCfg := toolloop.DefaultLoopConfig().WithMaxIterations(s.Agent.MaxRounds).
+		WithFinalAnswer(toolloop.FinalAnswer{Prompt: s.finalPrompt, RefusedToolResult: RefusedToolMessage})
 	toolCfg := geptools.DefaultToolConfig()
 	toolCfg.ExecutionTimeout = s.Agent.ToolTimeoutDuration() + 5*time.Second
 	toolCfg.MaxParallelTools = 1
@@ -237,6 +238,7 @@ func (s *Session) StartTurn(text, contextText string) (string, error) {
 		ToolConfig:   &toolCfg,
 		ToolExecutor: &boundedExecutor{s: s, inner: &hostExecutor{s: s, next: frontendtools.NewBridgeExecutor(s.srv.tools, missingTool{})}, cut: s.Agent.ResultCut, timeout: s.Agent.ToolTimeoutDuration()},
 		EventSinks:   []gepevents.EventSink{sink},
+		RoundGuard:   s.budgetGuard,
 	}
 	s.appendTurnLocked(text, contextText)
 	if s.title == "" {
@@ -250,7 +252,7 @@ func (s *Session) StartTurn(text, contextText string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	s.active = &activeRun{id: runID, ctx: ctx, handle: handle}
+	s.active = &activeRun{id: runID, handle: handle}
 	s.updated = time.Now().UTC()
 	s.log.Append(EvRunStarted, runID, map[string]any{"model": s.Model.Ref, "tools": toolNames(registry)})
 	go s.wait(runID, handle, sink)
@@ -303,16 +305,6 @@ func (s *Session) appendTurnLocked(text, contextText string) {
 
 func (s *Session) wait(runID string, h *gepsession.ExecutionHandle, sink *runSink) {
 	out, err := h.Wait()
-	maxRounds := err != nil && strings.Contains(err.Error(), "max iterations")
-	if maxRounds {
-		if o, ferr := s.finalRound(); ferr != nil {
-			if !errors.Is(ferr, errCancelledBeforeFinal) {
-				log.Warn().Err(ferr).Str("session", s.ID).Str("run", runID).Msg("agentd: final round failed")
-			}
-		} else if o != nil {
-			out = o
-		}
-	}
 	s.mu.Lock()
 	cancelled := s.active != nil && s.active.cancelled
 	s.active = nil
@@ -322,18 +314,12 @@ func (s *Session) wait(runID string, h *gepsession.ExecutionHandle, sink *runSin
 	if text == "" {
 		text = lastAssistantText(out)
 	}
-	switch {
-	case cancelled || errors.Is(err, context.Canceled):
-		s.log.Append(EvRunCancelled, runID, map[string]any{"text": text})
-	case maxRounds:
-		s.log.Append(EvRunFinished, runID, map[string]any{"text": text, "truncated": true, "reason": "max_rounds"})
-	case err != nil:
-		code, msg := classify(err)
-		log.Warn().Err(err).Str("session", s.ID).Str("run", runID).Str("code", code).Msg("agentd run failed")
-		s.log.Append(EvRunFailed, runID, map[string]any{"code": code, "message": msg, "text": text})
-	default:
-		s.log.Append(EvRunFinished, runID, map[string]any{"text": text, "truncated": false})
+	ev, data := runOutcome(err, cancelled)
+	data["text"] = text
+	if ev == EvRunFailed {
+		log.Warn().Err(err).Str("session", s.ID).Str("run", runID).Any("code", data["code"]).Msg("agentd run failed")
 	}
+	s.log.Append(ev, runID, data)
 	if s.srv.store != nil {
 		if err := s.srv.store.Save(s); err != nil {
 			log.Warn().Err(err).Str("session", s.ID).Msg("agentd: save session")
@@ -341,70 +327,60 @@ func (s *Session) wait(runID string, h *gepsession.ExecutionHandle, sink *runSin
 	}
 }
 
-var errCancelledBeforeFinal = errors.New("cancelled before the final round")
+// runOutcome is the one place that decides how a run ended, from the tool
+// loop's error: the terminal event and its data (without the answer text).
+//
+//   - cancelled (by the client, or the context): run.cancelled
+//   - no error: run.finished
+//   - the token budget stopped the loop between rounds: run.failed quota_exceeded
+//   - all rounds used and the final answer given: run.finished, truncated, max_rounds
+//   - anything else, including a failed final answer: run.failed with the
+//     provider error's code
+func runOutcome(err error, cancelled bool) (string, map[string]any) {
+	var limit *toolloop.MaxIterationsError
+	switch {
+	case cancelled || errors.Is(err, context.Canceled):
+		return EvRunCancelled, map[string]any{}
+	case err == nil:
+		return EvRunFinished, map[string]any{"truncated": false}
+	case errors.Is(err, ErrQuota):
+		return EvRunFailed, map[string]any{"code": "quota_exceeded", "message": ErrQuota.Error() + "; the answer so far is above."}
+	case errors.As(err, &limit) && limit.Answered:
+		return EvRunFinished, map[string]any{"truncated": true, "reason": "max_rounds"}
+	default:
+		code, msg := classify(err)
+		return EvRunFailed, map[string]any{"code": code, "message": msg}
+	}
+}
 
-// finalRound asks the model for an answer after the turn used all its rounds:
-// one more inference with tool choice "none", a hidden instruction, and an
-// executor that refuses calls (for engines that ignore tool choice).
-func (s *Session) finalRound() (*turns.Turn, error) {
+// finalPrompt builds the hidden instruction of the final answer at the round
+// limit; it is a context block, so the next turn drops it.
+func (s *Session) finalPrompt(maxRounds int) turns.Block {
+	b := turns.NewUserTextBlock(ContextPrefix + fmt.Sprintf(FinalRoundInstruction, maxRounds))
 	s.mu.Lock()
-	if s.active == nil || s.active.cancelled {
-		s.mu.Unlock()
-		return nil, errCancelledBeforeFinal
-	}
-	b, ok := s.gs.Builder.(*enginebuilder.Builder)
-	if !ok {
-		s.mu.Unlock()
-		return nil, errors.New("unexpected builder")
-	}
-	one := toolloop.DefaultLoopConfig().WithMaxIterations(1)
-	cfg := *b.ToolConfig
-	cfg.ToolChoice = geptools.ToolChoiceNone
-	s.gs.Builder = &enginebuilder.Builder{Base: b.Base, Registry: b.Registry, LoopConfig: &one, ToolConfig: &cfg,
-		ToolExecutor: refuseTools{}, EventSinks: b.EventSinks}
-	seed := s.gs.Latest().Clone()
-	blk := turns.NewUserTextBlock(ContextPrefix + fmt.Sprintf(FinalRoundInstruction, s.Agent.MaxRounds))
-	turns.AppendBlock(seed, blk)
-	s.contextIDs = append(s.contextIDs, blk.ID)
-	seed.ID = uuid.NewString()
-	s.gs.Append(seed)
-	ctx := s.active.ctx
+	s.contextIDs = append(s.contextIDs, b.ID)
 	s.mu.Unlock()
+	return b
+}
 
-	h, err := s.gs.StartInference(ctx)
-	if err != nil {
-		return nil, err
+// budgetGuard stops a run before its next model call once the session's
+// token budget is used up (checked between rounds, not only at turn start).
+func (s *Session) budgetGuard(context.Context, *turns.Turn, int) error {
+	b := s.Agent.Budget.TokensPerSession
+	if b <= 0 {
+		return nil
 	}
 	s.mu.Lock()
-	if s.active == nil || s.active.cancelled {
-		s.mu.Unlock()
-		h.Cancel()
-		return nil, errCancelledBeforeFinal
-	}
-	s.active.handle = h
+	used := s.usage.Input + s.usage.Output
 	s.mu.Unlock()
-	out, err := h.Wait()
-	if err != nil && !strings.Contains(err.Error(), "max iterations") {
-		return out, err
+	if used >= b {
+		return ErrQuota
 	}
-	return out, nil
+	return nil
 }
 
-// refuseTools answers every call in the final round.
-type refuseTools struct{}
-
-func (refuseTools) ExecuteToolCall(_ context.Context, call geptools.ToolCall, _ geptools.ToolRegistry) (*geptools.ToolResult, error) {
-	return &geptools.ToolResult{ID: call.ID, Error: "no more tool calls in this turn; answer the person"}, nil
-}
-
-func (r refuseTools) ExecuteToolCalls(ctx context.Context, calls []geptools.ToolCall, reg geptools.ToolRegistry) ([]*geptools.ToolResult, error) {
-	out := make([]*geptools.ToolResult, 0, len(calls))
-	for _, c := range calls {
-		x, _ := r.ExecuteToolCall(ctx, c, reg)
-		out = append(out, x)
-	}
-	return out, nil
-}
+// RefusedToolMessage is the tool error for calls the model makes in the final answer.
+const RefusedToolMessage = "no more tool calls in this turn; answer the person"
 
 // SetCallState changes a running tool call's time limit: "awaiting-person"
 // pauses the step limit (up to the agent's person timeout) while the page

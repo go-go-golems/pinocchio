@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/go-go-golems/geppetto/pkg/inference/toolloop"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -482,5 +483,92 @@ func TestHostToolsAreOptIn(t *testing.T) {
 		if e.Type == EvRunStarted {
 			assert.Equal(t, []any{}, e.Data.(map[string]any)["tools"], "eval is not offered to the model")
 		}
+	}
+}
+
+// answerAll answers every eval call of the running turn with "pending" until
+// the run ends; it returns the number of calls answered and the terminal event.
+func answerAll(t *testing.T, c *client, sid string, exec map[string]any, seq int64) (int, Event) {
+	t.Helper()
+	answered := 0
+	for {
+		evs := c.events(sid, seq, 10*time.Second, func(e Event) bool { return e.Type == EvToolRequested || runEnded(e) })
+		last := evs[len(evs)-1]
+		seq = last.Seq
+		if runEnded(last) {
+			return answered, last
+		}
+		callID := last.Data.(map[string]any)["callId"].(string)
+		require.Equal(t, 204, c.do("POST", "/v1/sessions/"+sid+"/tools/"+callID+"/result", map[string]any{"status": "success", "value": "pending", "executor": exec, "toolName": "eval"}, nil))
+		answered++
+	}
+}
+
+// The token budget is checked before every model call, not only when a turn
+// starts: a run that crosses it stops at the next round.
+func TestBudgetStopsARunBetweenRounds(t *testing.T) {
+	c, _ := newServer(t, testAgent(t, "budget:\n  tokensPerSession: 60\n"), nil)
+	s := create(t, c)
+	exec := manifest(t, c, s.ID, evalTool)
+	require.Equal(t, 202, c.do("POST", "/v1/sessions/"+s.ID+"/turns", map[string]any{"text": `/tools 50 eval {"code":"poll()"}`}, nil))
+	answered, last := answerAll(t, c, s.ID, exec, 0)
+	require.Equal(t, EvRunFailed, last.Type)
+	assert.Equal(t, "quota_exceeded", last.Data.(map[string]any)["code"])
+	assert.GreaterOrEqual(t, answered, 1)
+	assert.Less(t, answered, 6, "stopped before using all rounds")
+
+	var v SessionView
+	require.Equal(t, 200, c.do("GET", "/v1/sessions/"+s.ID, nil, &v))
+	assert.GreaterOrEqual(t, v.Usage.Input+v.Usage.Output, 60)
+	assert.Equal(t, 429, c.do("POST", "/v1/sessions/"+s.ID+"/turns", map[string]any{"text": "more"}, nil), "the next turn is refused up front")
+}
+
+// A provider failure in the final answer at the round limit is a failed run,
+// not a finished one with reason max_rounds.
+func TestFailedFinalAnswerIsAFailedRun(t *testing.T) {
+	srv, err := NewServer(context.Background(), Options{Agents: testAgent(t, ""), EngineModel: FakeModel, Heartbeat: 200 * time.Millisecond,
+		Engine: func() (engine.Engine, error) {
+			return &FakeEngine{FinalError: errors.New("HTTP 429: rate limit reached")}, nil
+		}})
+	require.NoError(t, err)
+	hs := httptest.NewServer(srv.Handler())
+	t.Cleanup(hs.Close)
+	c := &client{t: t, base: hs.URL}
+	s := create(t, c)
+	exec := manifest(t, c, s.ID, evalTool)
+	require.Equal(t, 202, c.do("POST", "/v1/sessions/"+s.ID+"/turns", map[string]any{"text": `/tools 50 eval {"code":"poll()"}`}, nil))
+	answered, last := answerAll(t, c, s.ID, exec, 0)
+	assert.Equal(t, 6, answered)
+	require.Equal(t, EvRunFailed, last.Type, "not run.finished/max_rounds")
+	assert.Equal(t, "rate_limited", last.Data.(map[string]any)["code"])
+}
+
+func TestRunOutcome(t *testing.T) {
+	limit := &toolloop.MaxIterationsError{MaxIterations: 3}
+	answered := &toolloop.MaxIterationsError{MaxIterations: 3, Answered: true}
+	cases := []struct {
+		name      string
+		err       error
+		cancelled bool
+		ev        string
+		code      any
+		reason    any
+	}{
+		{"finished", nil, false, EvRunFinished, nil, nil},
+		{"cancelled flag", nil, true, EvRunCancelled, nil, nil},
+		{"context cancelled at the limit", fmt.Errorf("%w; final answer: %w", limit, context.Canceled), false, EvRunCancelled, nil, nil},
+		{"budget between rounds", ErrQuota, false, EvRunFailed, "quota_exceeded", nil},
+		{"budget before the final answer", fmt.Errorf("%w; final answer: %w", limit, ErrQuota), false, EvRunFailed, "quota_exceeded", nil},
+		{"answered at the limit", answered, false, EvRunFinished, nil, "max_rounds"},
+		{"final answer failed", fmt.Errorf("%w; final answer: %w", limit, errors.New("401 unauthorized")), false, EvRunFailed, "authentication_error", nil},
+		{"provider error", errors.New("boom"), false, EvRunFailed, "upstream_error", nil},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ev, data := runOutcome(tc.err, tc.cancelled)
+			assert.Equal(t, tc.ev, ev)
+			assert.Equal(t, tc.code, data["code"])
+			assert.Equal(t, tc.reason, data["reason"])
+		})
 	}
 }
