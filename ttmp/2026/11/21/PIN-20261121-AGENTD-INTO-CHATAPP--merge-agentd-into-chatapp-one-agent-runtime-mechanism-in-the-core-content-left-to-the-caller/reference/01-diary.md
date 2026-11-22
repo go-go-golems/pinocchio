@@ -767,3 +767,128 @@ pinocchio history, after the API it describes exists.
 
 ### Technical details
 - Branch state: `task/merge-agentd-into-chatapp` in the pinocchio worktree, code commits 0ac7b5e → e84a616.
+
+## Step 9: Review of #221: deleted ids, anonymous listings, and run outcomes in the snapshot
+
+This step fixed the two P1 findings of the Codex review of #221, and added a `ChatRun` timeline entity plus a run id in
+the `202`, which slop-computer#56's review needed. First the PRs were opened: #221 here and slop-computer#56. The
+first push was blocked by the pre-push hook (gosec G118 on agent serve's shutdown context), fixed in 7f7ea2f.
+
+Commits: 7f7ea2f (gosec), 3e97df3 (sessions), b7b64ca (ChatRun entity, 202 messageId).
+
+### Prompt Context
+**User prompt (verbatim):** "ok, PRs?", then "Address code review issues, tell me if it would be possible to tighten
+our design / architecture / API design to make them impossible eto express"
+**Assistant interpretation:** Open PRs; fix what the review found; say how to make each bug class unexpressible.
+**Inferred user intent:** Mergeable PRs, and design feedback that prevents repeats.
+**Commit (code):** 7f7ea2f, 3e97df3, b7b64ca
+
+### What I did
+- `git push` → pre-push `GOWORK=off make lintmax gosec govulncheck`: gosec `G118 (CWE-400): Goroutine uses
+  context.Background/TODO while request-scoped context is available` at `cmd/pinocchio/cmds/agent.go:179`. The
+  shutdown timeout now derives from `context.WithoutCancel(ctx)`. PR #221 opened from the origin branch.
+- Review P1 (sessions.go:220): delete freed the id while the turns and timeline stayed, so a new principal could
+  create the id (or auto-create it) and read them. `Store.Delete` is now a tombstone in both stores: memory keeps a
+  `deleted` set; SQLite gets `deleted_ms` (an `ALTER TABLE` for older files). `Get`/`List`/`Update` skip tombstones,
+  and `Create` answers `ErrExists`.
+- Review P1 (sessions.go:164): `Filter{Owner: ""}` matched every owner. `Owner` is now exact, `Filter.AllOwners`
+  lists everyone, and the listing authorizes each row as a read.
+- For slop#56's reconnect finding: `ChatRunEntity` (kind `ChatRun`), projected from the four run events;
+  `PromptRequest.MessageID` and `Service.NewMessageID`; httpapi answers the `202` with `messageId`. Protos regenerated
+  with `scripts/01-proto-gen-local.sh`.
+- Replied on both review threads; commented on #221 about Buf's breaking check.
+
+### Why
+- Tombstones rather than purging: neither the turn store nor sessionstream's hydration store can delete a session;
+  never reusing ids makes the leftover data unreachable without touching them.
+
+### What worked
+- Both new HTTP tests (`TestAnonymousListingShowsNoOnesSessions`, `TestADeletedSessionsIDCannotBeTakenOver`) fail
+  with the store and handler changes reverse-applied (`git apply -R`), and pass with them.
+- `buf breaking proto --against '.git#branch=origin/main,subdir=proto'` lists exactly the three `result` fields
+  (`Struct` → `Value`): intended, and explained on the PR.
+
+### What didn't work
+- Adding the run entity broke six tests that assumed every entity is a `ChatMessage` (`panic: interface conversion:
+  protoreflect.ProtoMessage is *chatappv1.ChatRunEntity, not *chatappv1.ChatMessageEntity`, and `should have 2
+  item(s), but has 3`). They now switch on the kind; the stop-path tests assert that the stopped run is in the snapshot.
+
+### What I learned
+- web-chat's hydration adapters return `null` for kinds they don't know, so a new entity kind is ignored there, not
+  an error.
+
+### What was tricky to build
+- `ChatRunFailed` already projected a `ChatMessage` error entity under the run's id; the run entity has the same id
+  but another kind, so both coexist.
+
+### What warrants a second pair of eyes
+- The SQLite tombstone clears labels, title, usage and data, but keeps the owner and the timestamps.
+
+### What should be done in the future
+- Purging deleted sessions' turns and timelines (needs store support, including in sessionstream).
+
+### Code review instructions
+- `pkg/chatapp/sessions/{sessions,memory,sqlite}.go`, `pkg/chatapp/httpapi/sessions.go` (`handleList`,
+  `handleMessage`), `pkg/chatapp/projections.go` (`runEntity`).
+
+## Step 10: The session guard (handlers cannot reach the store unauthorized)
+
+This step makes the class of #221's anonymous-listing bug unexpressible in httpapi. Handlers no longer hold a session
+store. They hold an `Access` bound to the request's principal, from `internal/sessionguard`, and every operation on it
+authorizes first. Design: slop-computer `ttmp/2026/11/22/SLOP3-025--…/design-doc/02-design-making-the-review-s-bug-classes-impossible-to-express.md`, section 2.
+
+Commit: cedda17.
+
+### Prompt Context
+**User prompt (verbatim):** "ok, do the three changes", then mid-turn "make a design doc, then cocommit at
+appropriate intervals and keep a detailed diary as you work (using the diary format from the skill) then retrigger
+@codex review once pushed"
+**Assistant interpretation:** Implement the guard, the grant and the reducer, after a design doc; commit and keep the
+diary per milestone; push; ask Codex to review again.
+**Inferred user intent:** The bug classes, not only the instances, are closed, and the reasoning is on record.
+**Commit (code):** cedda17
+
+### What I did
+- `pkg/chatapp/httpapi/internal/sessionguard`: `Guard` (store, authorizer, create hook, auto-create: unexported),
+  `For(p) Access`, `Unchecked()`. `Access.Create`, `Open(id, action)`, `List(filter)`. `Session` with `Info`,
+  `Update` (only if opened for send, tools or stop) and `Delete` (only if opened for delete); typed
+  `ForbiddenError` and `CreateRejectedError`.
+- httpapi: `Principal`, `Action`, the action constants, `Authorizer` and `CreateHook` are aliases of the guard's.
+  `lookup`, `runCreateHook`, `forbiddenError` and `createRejectedError` are gone. `call` carries the `Session`. The
+  server's store field became `storeOpt`, used only in `New` (for the guard and `RecordUsage`) and in
+  `WithSessionStore`; `Sessions()` returns `guard.Unchecked()`.
+- Tests: sessionguard unit tests (a read-opened session cannot be updated or deleted; the owner survives `Update` and
+  a create hook; `List` ignores `AllOwners`/`Owner` from the caller); `TestOnlySessionsReachesTheStoreUnchecked`
+  (`go/ast`, httpapi's non-test files).
+
+### Why
+- An internal package, so the compiler keeps httpapi's handlers from reaching the store fields. The only two escape
+  hatches in the same package are named and pinned by the AST test.
+
+### What worked
+- All httpapi, agentserver and web-chat tests pass unchanged, as do slop's `pkg/doors/pages/agent` tests (the public
+  types are aliases).
+- The AST test, with `_ = s.guard.Unchecked()` planted in `handleStop`, fails with `sessions.go:189:6: handleStop
+  uses .Unchecked; handlers reach sessions through s.guard.For(p)`; it passes with the line removed.
+
+### What didn't work
+- The first commit was refused by the pre-commit lint: `sessionguard.go:194:2: missing cases in switch of type
+  sessionguard.Action: … (exhaustive)`. The switch now names every action, plus a default for unknown ones.
+
+### What I learned
+- Type aliases (`type Principal = sessionguard.Principal`) moved the types without breaking any caller, including
+  slop's agent package, which names `httpapi.Principal` and `httpapi.Action`.
+
+### What was tricky to build
+- Auto-creation inside `Open` goes through `Create`, so it gets the same authorization and hook. A concurrent
+  creation (`ErrExists`) is read back instead of failing.
+
+### What warrants a second pair of eyes
+- `Session.Update` holds the owner fixed but allows every other field; the title update is its only caller today.
+
+### What should be done in the future
+- Nothing for the guard.
+
+### Code review instructions
+- `pkg/chatapp/httpapi/internal/sessionguard/sessionguard.go`, `pkg/chatapp/httpapi/sessions.go` (`session`,
+  `handleCreate`, `handleList`, `handleDelete`), `pkg/chatapp/httpapi/guard_test.go`.
