@@ -70,6 +70,20 @@ type Engine struct {
 	classifyError        func(error) string
 	errorText            func(code string, err error) string
 	unansweredToolResult string
+	usageObserver        UsageObserver
+}
+
+// UsageObserver receives the token usage of every finished provider call of a
+// run, before chatapp publishes ChatProviderCallFinished. geppetto calls event
+// sinks inline, so an observer's effect (e.g. a session's usage total) is
+// visible to the run's RoundGuard before the next model call.
+type UsageObserver func(ctx context.Context, sid sessionstream.SessionId, usage *chatappv1.UsageInfo)
+
+// WithUsageObserver sets the usage observer (see sessions.RecordUsage).
+func WithUsageObserver(fn UsageObserver) Option {
+	return func(e *Engine) {
+		e.usageObserver = fn
+	}
 }
 
 // BusyPolicy decides what happens when a prompt arrives for a session whose
