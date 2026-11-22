@@ -892,3 +892,62 @@ diary per milestone; push; ask Codex to review again.
 ### Code review instructions
 - `pkg/chatapp/httpapi/internal/sessionguard/sessionguard.go`, `pkg/chatapp/httpapi/sessions.go` (`session`,
   `handleCreate`, `handleList`, `handleDelete`), `pkg/chatapp/httpapi/guard_test.go`.
+
+## Step 11: Second review of #221: the round guard wraps the engine
+
+The second Codex review of #221 found one more P1: a session with no tools at all skipped its token budget. This step
+fixes the class rather than the instance. The round guard now wraps each run's engine, so it runs before every model
+call whatever path geppetto takes. Design: slop-computer `ttmp/2026/11/22/SLOP3-025--…/design-doc/02-…md`,
+section 7, change 4.
+
+Commit: ecae347.
+
+### Prompt Context
+**User prompt (verbatim):** "did codex bring up anything new?", "any of these warranting some refactor like we did
+previously? or are these more like one offs", then "ok, add to the design doc, then implement, ccommit at
+appropriate intervals and keep a detailed diary as you work (using the diary format from the skill) and then ask for
+rereview"
+**Assistant interpretation:** Treat the new findings as classes; design, implement, commit, record, push, re-request
+review.
+**Inferred user intent:** Each review round should leave the code unable to express the bug.
+**Commit (code):** ecae347
+
+### What I did
+- Confirmed the finding in geppetto: `enginebuilder/builder.go:197` (`if r.registry == nil` → a plain
+  `RunInferenceWithResult`) and line 214 (the guard is installed only as a loop option).
+- `pkg/chatapp/round_guard.go`: `guardEngine(inner, guard)` returns a per-run wrapper that counts model calls from 0,
+  runs the guard first, and returns `(t, err)` when it stops. `runtime_inference.go` builds `Base:
+  guardEngine(runtime.Engine, runtime.RoundGuard)` and no longer sets the builder's `RoundGuard`.
+- agentserver test preset `toolless` (budget 1, no tools) and `TestTheBudgetStopsASessionWithoutTools`; a unit test
+  `TestTheGuardRunsBeforeEveryModelCallAndCanStopOne`.
+
+### Why
+- In chatapp, not geppetto: it holds for every path geppetto has or adds, and needs no geppetto release before #221
+  merges. slop's metered engine already had this shape and was not affected.
+
+### What worked
+- Before the fix the new test failed with `[]string{"user: first", "assistant: echo: first", "user: second",
+  "assistant: echo: second"} should not contain "assistant: echo: second"`; after it, it passes, as does
+  `TestTheBudgetStopsARunBetweenRounds` unchanged (the turn so far is still the conversation).
+- `go test ./...` passes; the pre-commit lint and test hooks pass.
+
+### What didn't work
+- `TestInfoRoutes` broke twice on my new preset: first its count (`"presets":3` → 4), then its order (presets sort by
+  name, and `bare` came before `bench`). The preset is now `toolless`, and the counts are 4.
+
+### What I learned
+- The tool loop passes `maxIterations` as the final answer's round index, which is the number of calls made before
+  it, so a call counter gives the same indices.
+
+### What was tricky to build
+- Returning `t` with the guard's error: the loop returns `nil` on engine errors, and chatapp then falls back to the
+  session's latest turn. Engines append in place, so the earlier rounds stay in it; the between-rounds test confirms.
+
+### What warrants a second pair of eyes
+- A geppetto follow-up should make its builder's single-call path honour `RoundGuard` too, for other callers.
+
+### What should be done in the future
+- The geppetto follow-up above.
+
+### Code review instructions
+- `pkg/chatapp/round_guard.go`, `pkg/chatapp/runtime_inference.go` (the builder), `pkg/chatapp/agentserver/agentserver_test.go`.
