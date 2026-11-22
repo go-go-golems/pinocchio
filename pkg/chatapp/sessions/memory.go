@@ -10,16 +10,17 @@ import (
 
 // MemoryStore keeps sessions in memory.
 type MemoryStore struct {
-	mu   sync.Mutex
-	byID map[string]Info
-	now  func() time.Time
+	mu      sync.Mutex
+	byID    map[string]Info
+	deleted map[string]bool // tombstones: ids never given out again
+	now     func() time.Time
 }
 
 var _ Store = (*MemoryStore)(nil)
 
 // NewMemoryStore returns an empty in-memory store.
 func NewMemoryStore() *MemoryStore {
-	return &MemoryStore{byID: map[string]Info{}, now: func() time.Time { return time.Now().UTC() }}
+	return &MemoryStore{byID: map[string]Info{}, deleted: map[string]bool{}, now: func() time.Time { return time.Now().UTC() }}
 }
 
 func (s *MemoryStore) Create(_ context.Context, info Info) error {
@@ -28,7 +29,7 @@ func (s *MemoryStore) Create(_ context.Context, info Info) error {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if _, ok := s.byID[info.ID]; ok {
+	if _, ok := s.byID[info.ID]; ok || s.deleted[info.ID] {
 		return ErrExists
 	}
 	now := s.now()
@@ -92,6 +93,7 @@ func (s *MemoryStore) Delete(_ context.Context, id string) error {
 		return ErrNotFound
 	}
 	delete(s.byID, id)
+	s.deleted[id] = true
 	return nil
 }
 

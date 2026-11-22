@@ -188,6 +188,11 @@ func (s *Server) handleList(w http.ResponseWriter, r *http.Request) {
 	}
 	out := make([]SessionSummary, 0, len(list))
 	for _, info := range list {
+		// A listing never shows what a read of the session would refuse,
+		// whatever the store's filter matched.
+		if s.authorize(ctx, p, ActionRead, &info) != nil {
+			continue
+		}
 		out = append(out, SessionSummary{Info: info, Running: s.service.Running(sessionstream.SessionId(info.ID))})
 	}
 	writeJSON(w, http.StatusOK, SessionListResponse{Sessions: out})
@@ -205,7 +210,9 @@ func (s *Server) handleGet(w http.ResponseWriter, r *http.Request, c *call) {
 
 // handleDelete stops a running turn, waits for it to end, closes the
 // session's event streams and deletes the metadata. The conversation in the
-// turn store and the timeline in the hydration store remain.
+// turn store and the timeline in the hydration store remain; the session
+// store keeps the id taken (a tombstone), so no one can create it again and
+// read them.
 func (s *Server) handleDelete(w http.ResponseWriter, r *http.Request, c *call) {
 	if err := s.service.Stop(r.Context(), c.sid); err != nil {
 		writeError(w, http.StatusInternalServerError, CodeInternal, err)

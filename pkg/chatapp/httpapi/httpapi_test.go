@@ -25,6 +25,7 @@ import (
 	"github.com/go-go-golems/pinocchio/pkg/chatapp/sessions"
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
+	sessionstream "github.com/go-go-golems/sessionstream/pkg/sessionstream"
 	sessionstreamv1 "github.com/go-go-golems/sessionstream/pkg/sessionstream/pb/proto/sessionstream/v1"
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/require"
@@ -450,6 +451,41 @@ func TestAuthenticationAndOwnership(t *testing.T) {
 	frame := readServerFrame(t, conn)
 	require.NotNil(t, frame.GetError())
 	require.Equal(t, "subscribe_denied", frame.GetError().GetCode())
+}
+
+// An authenticator that lets anonymous requests through (empty principal):
+// they see only ownerless sessions, never another person's.
+func TestAnonymousListingShowsNoOnesSessions(t *testing.T) {
+	anonymousOK := func(r *http.Request) (Principal, error) { return Principal{ID: r.Header.Get("X-User")}, nil }
+	_, httpSrv := newTestServer(t, WithAuthenticator(anonymousOK))
+	base := httpSrv.URL
+	alice := createSession(t, base, `{"title":"alice's secrets"}`, "X-User", "alice")
+	open := createSession(t, base, `{}`)
+
+	resp, out := do(t, http.MethodGet, base+"/api/chat/sessions", "")
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	require.NotContains(t, string(out), alice.SessionID)
+	require.NotContains(t, string(out), "alice's secrets")
+	require.Contains(t, string(out), open.SessionID)
+}
+
+// A deleted session's conversation outlives it, so its id is never given
+// out again: no one can re-create it and read the old timeline.
+func TestADeletedSessionsIDCannotBeTakenOver(t *testing.T) {
+	srv, httpSrv := newTestServer(t, WithAuthenticator(headerAuth), WithAutoCreateSessions(true))
+	base := httpSrv.URL
+	alice := createSession(t, base, `{"id":"s-alice"}`, "X-User", "alice")
+	resp, _ := do(t, http.MethodPost, base+"/api/chat/sessions/"+alice.SessionID+"/messages", `{"prompt":"my secret"}`, "X-User", "alice")
+	require.Equal(t, http.StatusAccepted, resp.StatusCode)
+	require.NoError(t, srv.Service().WaitIdle(context.Background(), sessionstream.SessionId(alice.SessionID)))
+	resp, _ = do(t, http.MethodDelete, base+"/api/chat/sessions/"+alice.SessionID, "", "X-User", "alice")
+	require.Equal(t, http.StatusNoContent, resp.StatusCode)
+
+	resp, out := do(t, http.MethodPost, base+"/api/chat/sessions", `{"id":"s-alice"}`, "X-User", "mallory")
+	require.Equal(t, http.StatusConflict, resp.StatusCode, string(out))
+	resp, out = do(t, http.MethodGet, base+"/api/chat/sessions/s-alice", "", "X-User", "mallory")
+	require.NotEqual(t, http.StatusOK, resp.StatusCode, "auto-creation does not reopen it either")
+	require.NotContains(t, string(out), "my secret")
 }
 
 // --- transports -------------------------------------------------------------

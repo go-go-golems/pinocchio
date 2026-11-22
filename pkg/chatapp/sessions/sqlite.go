@@ -36,10 +36,14 @@ CREATE TABLE IF NOT EXISTS chatapp_sessions (
 	created_ms INTEGER NOT NULL,
 	updated_ms INTEGER NOT NULL,
 	usage      TEXT NOT NULL DEFAULT '{}',
-	data       TEXT NOT NULL DEFAULT ''
+	data       TEXT NOT NULL DEFAULT '',
+	deleted_ms INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS chatapp_sessions_owner ON chatapp_sessions(owner, created_ms);
 `
+
+// A database from before tombstones gets the column.
+const sqliteAddDeleted = `ALTER TABLE chatapp_sessions ADD COLUMN deleted_ms INTEGER NOT NULL DEFAULT 0`
 
 // NewSQLiteStore opens (and creates if needed) a store at dsn, e.g.
 // "file:/path/sessions.db?_journal_mode=WAL&_busy_timeout=5000".
@@ -49,6 +53,10 @@ func NewSQLiteStore(dsn string) (*SQLiteStore, error) {
 		return nil, err
 	}
 	if _, err := db.Exec(sqliteSchema); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+	if _, err := db.Exec(sqliteAddDeleted); err != nil && !strings.Contains(err.Error(), "duplicate column") {
 		_ = db.Close()
 		return nil, err
 	}
@@ -88,7 +96,7 @@ func (s *SQLiteStore) Create(ctx context.Context, info Info) error {
 }
 
 func (s *SQLiteStore) Get(ctx context.Context, id string) (Info, error) {
-	row := s.db.QueryRowContext(ctx, `SELECT `+sqliteColumns+` FROM chatapp_sessions WHERE id = ?`, id)
+	row := s.db.QueryRowContext(ctx, `SELECT `+sqliteColumns+` FROM chatapp_sessions WHERE id = ? AND deleted_ms = 0`, id)
 	info, err := scanInfo(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Info{}, ErrNotFound
@@ -97,10 +105,10 @@ func (s *SQLiteStore) Get(ctx context.Context, id string) (Info, error) {
 }
 
 func (s *SQLiteStore) List(ctx context.Context, f Filter) ([]Info, error) {
-	query := `SELECT ` + sqliteColumns + ` FROM chatapp_sessions`
+	query := `SELECT ` + sqliteColumns + ` FROM chatapp_sessions WHERE deleted_ms = 0`
 	args := []any{}
-	if f.Owner != "" {
-		query += ` WHERE owner = ?`
+	if !f.AllOwners {
+		query += ` AND owner = ?`
 		args = append(args, f.Owner)
 	}
 	query += ` ORDER BY created_ms DESC, id ASC`
@@ -150,7 +158,9 @@ func (s *SQLiteStore) Update(ctx context.Context, id string, fn func(*Info) erro
 func (s *SQLiteStore) Delete(ctx context.Context, id string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	res, err := s.db.ExecContext(ctx, `DELETE FROM chatapp_sessions WHERE id = ?`, id)
+	// The row stays as a tombstone (owner kept, metadata cleared), so the
+	// id is never created again.
+	res, err := s.db.ExecContext(ctx, `UPDATE chatapp_sessions SET deleted_ms = ?, labels = '{}', title = '', usage = '{}', data = '' WHERE id = ? AND deleted_ms = 0`, s.now().UnixMilli(), id)
 	if err != nil {
 		return err
 	}

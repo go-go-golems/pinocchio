@@ -42,16 +42,19 @@ func TestStoreContract(t *testing.T) {
 			_, err = store.Get(ctx, "missing")
 			require.ErrorIs(t, err, sessions.ErrNotFound)
 
-			all, err := store.List(ctx, sessions.Filter{})
+			all, err := store.List(ctx, sessions.Filter{AllOwners: true})
 			require.NoError(t, err)
 			require.Equal(t, []string{"c", "b", "a"}, ids(all), "newest first")
+			anonymous, err := store.List(ctx, sessions.Filter{})
+			require.NoError(t, err)
+			require.Empty(t, anonymous, "an empty owner lists ownerless sessions only, not everyone's")
 			mine, err := store.List(ctx, sessions.Filter{Owner: "alice"})
 			require.NoError(t, err)
 			require.Equal(t, []string{"c", "a"}, ids(mine))
-			main, err := store.List(ctx, sessions.Filter{Labels: map[string]string{"room": "main"}})
+			main, err := store.List(ctx, sessions.Filter{AllOwners: true, Labels: map[string]string{"room": "main"}})
 			require.NoError(t, err)
 			require.Equal(t, []string{"b", "a"}, ids(main))
-			one, err := store.List(ctx, sessions.Filter{Limit: 1})
+			one, err := store.List(ctx, sessions.Filter{AllOwners: true, Limit: 1})
 			require.NoError(t, err)
 			require.Equal(t, []string{"c"}, ids(one))
 
@@ -71,6 +74,13 @@ func TestStoreContract(t *testing.T) {
 
 			require.NoError(t, store.Delete(ctx, "a"))
 			require.ErrorIs(t, store.Delete(ctx, "a"), sessions.ErrNotFound)
+			_, err = store.Get(ctx, "a")
+			require.ErrorIs(t, err, sessions.ErrNotFound)
+			mine, err = store.List(ctx, sessions.Filter{Owner: "alice"})
+			require.NoError(t, err)
+			require.Equal(t, []string{"c"}, ids(mine))
+			require.ErrorIs(t, store.Create(ctx, sessions.Info{ID: "a", Owner: "mallory"}), sessions.ErrExists, "a deleted id is never given out again")
+			require.ErrorIs(t, store.Update(ctx, "a", func(*sessions.Info) error { return nil }), sessions.ErrNotFound)
 		})
 	}
 }

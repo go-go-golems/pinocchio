@@ -64,16 +64,19 @@ func (u Usage) Add(v Usage) Usage {
 // Tokens is Input + Output, the quantity token budgets usually count.
 func (u Usage) Tokens() int { return u.Input + u.Output }
 
-// Filter selects sessions in List. Zero values match everything.
+// Filter selects sessions in List. Owner always matches exactly: the zero
+// Filter lists the sessions without an owner, not everyone's. Listing every
+// owner's sessions takes AllOwners, so it cannot happen by an empty id.
 type Filter struct {
-	Owner  string
-	Labels map[string]string // every key must match exactly
-	Limit  int               // 0: no limit
+	Owner     string
+	AllOwners bool              // ignore Owner: every owner's sessions (administration)
+	Labels    map[string]string // every key must match exactly
+	Limit     int               // 0: no limit
 }
 
 // Matches reports whether info passes the filter.
 func (f Filter) Matches(info Info) bool {
-	if f.Owner != "" && info.Owner != f.Owner {
+	if !f.AllOwners && info.Owner != f.Owner {
 		return false
 	}
 	for k, v := range f.Labels {
@@ -87,7 +90,8 @@ func (f Filter) Matches(info Info) bool {
 var (
 	// ErrNotFound is returned for an unknown session id.
 	ErrNotFound = errors.New("sessions: session not found")
-	// ErrExists is returned by Create for an id that is already taken.
+	// ErrExists is returned by Create for an id that is already taken,
+	// including the id of a deleted session.
 	ErrExists = errors.New("sessions: session already exists")
 )
 
@@ -102,7 +106,9 @@ type Store interface {
 	// Update applies fn to the stored session atomically and sets Updated.
 	// fn must not change ID; an error from fn aborts the update.
 	Update(ctx context.Context, id string, fn func(*Info) error) error
-	// Delete removes a session or returns ErrNotFound.
+	// Delete removes a session or returns ErrNotFound. The id stays taken:
+	// a tombstone keeps Create from giving it to anyone again, since a
+	// session's conversation and timeline (other stores) outlive it.
 	Delete(ctx context.Context, id string) error
 }
 
