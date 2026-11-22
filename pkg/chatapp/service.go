@@ -16,6 +16,9 @@ import (
 // PromptRequest is the app-facing prompt submission input.
 type PromptRequest struct {
 	Prompt string
+	// MessageID, when set, is the run's message id (Service.NewMessageID):
+	// the caller knows the run before any event names it. Empty: generated.
+	MessageID string
 	// Attachments are user-provided attachments (images) referenced by URL. They
 	// are echoed to clients in ChatUserMessageAccepted / ChatMessageEntity and,
 	// for image kinds, appended to the user turn block as geppetto image entries.
@@ -64,6 +67,15 @@ func NewService(hub *sessionstream.Hub, engine *Engine) (*Service, error) {
 
 func (s *Service) SubmitPrompt(ctx context.Context, sid sessionstream.SessionId, prompt string) error {
 	return s.SubmitPromptRequest(ctx, sid, PromptRequest{Prompt: prompt})
+}
+
+// NewMessageID returns a fresh run message id from the engine's generator,
+// for PromptRequest.MessageID.
+func (s *Service) NewMessageID() (string, error) {
+	if s == nil || s.engine == nil {
+		return "", fmt.Errorf("chat service is not initialized")
+	}
+	return s.engine.newMessageID()
 }
 
 func (s *Service) SubmitPromptRequest(ctx context.Context, sid sessionstream.SessionId, req PromptRequest) error {

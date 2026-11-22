@@ -40,9 +40,12 @@ func (e *Engine) handleStartInference(ctx context.Context, cmd sessionstream.Com
 	if pending.Runtime == nil || pending.Runtime.Engine == nil {
 		return ErrNoRuntime
 	}
-	messageID, err := e.newMessageID()
-	if err != nil {
-		return err
+	messageID := strings.TrimSpace(pending.MessageID)
+	if messageID == "" {
+		var err error
+		if messageID, err = e.newMessageID(); err != nil {
+			return err
+		}
 	}
 	runCtx, cancel := context.WithCancel(publishContext(ctx))
 	run := &activeRun{messageID: messageID, cancel: cancel, done: make(chan struct{})}

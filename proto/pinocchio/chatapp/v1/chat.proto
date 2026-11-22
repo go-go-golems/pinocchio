@@ -286,6 +286,23 @@ message ChatUserMessageAccepted {
   repeated ChatAttachment attachments = 7;
 }
 
+// ChatRunEntity is a run's lifecycle in the timeline, so a snapshot holds
+// every run's outcome (a client that missed the terminal event, or a run
+// stopped before any output, is still visible). Its id is the run's message
+// id.
+message ChatRunEntity {
+  string message_id = 1;
+  // running, finished, failed or stopped
+  string status = 2;
+  string prompt = 3;
+  // failed: ChatRunFailed.code; error: the failure's text
+  string code = 4;
+  string error = 5;
+  // finished at the round limit with a final answer (ChatRunFinished)
+  bool truncated = 6;
+  string reason = 7;
+}
+
 message ChatMessageEntity {
   string message_id = 1;
   string role = 2;

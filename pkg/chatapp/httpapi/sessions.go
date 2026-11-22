@@ -276,7 +276,13 @@ func (s *Server) handleMessage(w http.ResponseWriter, r *http.Request, c *call) 
 			return
 		}
 	}
+	runID, err := s.service.NewMessageID()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, CodeInternal, err)
+		return
+	}
 	err = s.service.SubmitPromptRequest(r.Context(), c.sid, chatapp.PromptRequest{
+		MessageID:      runID,
 		Prompt:         msg.Prompt,
 		Attachments:    attachments,
 		IdempotencyKey: msg.IdempotencyKey,
@@ -305,7 +311,7 @@ func (s *Server) handleMessage(w http.ResponseWriter, r *http.Request, c *call) 
 			log.Warn().Err(err).Str("session", string(c.sid)).Msg("httpapi: set session title")
 		}
 	}
-	writeJSON(w, http.StatusAccepted, AcceptedResponse{SessionID: string(c.sid), Accepted: true})
+	writeJSON(w, http.StatusAccepted, AcceptedResponse{SessionID: string(c.sid), Accepted: true, MessageID: runID})
 }
 
 func (s *Server) runCreateHook(ctx context.Context, p Principal, info *sessions.Info) error {

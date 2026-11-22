@@ -43,9 +43,14 @@ func TestChatExampleHappyPath(t *testing.T) {
 	snap, err := hub.Snapshot(context.Background(), sessionstream.SessionId("chat-1"))
 	require.NoError(t, err)
 	require.Equal(t, uint64(8), snap.SnapshotOrdinal)
-	require.Len(t, snap.Entities, 2)
+	require.Len(t, snap.Entities, 3)
 	userEntity := snap.Entities[0]
-	assistantEntity := snap.Entities[1]
+	runEntity := snap.Entities[1]
+	assistantEntity := snap.Entities[2]
+	require.Equal(t, TimelineEntityChatRun, runEntity.Kind)
+	run := runEntity.Payload.(*chatappv1.ChatRunEntity)
+	require.Equal(t, "chat-msg-1", run.GetMessageId())
+	require.Equal(t, "finished", run.GetStatus(), "the run's outcome is in the snapshot")
 	user := userEntity.Payload.(*chatappv1.ChatMessageEntity)
 	assistant := assistantEntity.Payload.(*chatappv1.ChatMessageEntity)
 	require.Equal(t, "user", user.GetRole())
@@ -611,12 +616,19 @@ func TestChatExampleStopPath(t *testing.T) {
 	require.NoError(t, err)
 	require.GreaterOrEqual(t, len(snap.Entities), 1)
 	var assistant *chatappv1.ChatMessageEntity
+	var run *chatappv1.ChatRunEntity
 	for _, entity := range snap.Entities {
-		payloadMsg := entity.Payload.(*chatappv1.ChatMessageEntity)
-		if payloadMsg.GetRole() == "assistant" {
-			assistant = payloadMsg
+		switch p := entity.Payload.(type) {
+		case *chatappv1.ChatRunEntity:
+			run = p
+		case *chatappv1.ChatMessageEntity:
+			if p.GetRole() == "assistant" {
+				assistant = p
+			}
 		}
 	}
+	require.NotNil(t, run, "a stopped run is in the snapshot even without output")
+	require.Equal(t, "stopped", run.GetStatus())
 	if assistant != nil {
 		require.Equal(t, "stopped", assistant.GetStatus())
 		require.Equal(t, false, assistant.GetStreaming())

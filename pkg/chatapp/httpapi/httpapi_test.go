@@ -453,6 +453,25 @@ func TestAuthenticationAndOwnership(t *testing.T) {
 	require.Equal(t, "subscribe_denied", frame.GetError().GetCode())
 }
 
+// The 202 names the run; the snapshot holds its outcome, so a client that
+// missed the terminal event still learns how the run ended.
+func TestAMessageNamesItsRunAndTheSnapshotHoldsItsOutcome(t *testing.T) {
+	_, httpSrv := newTestServer(t)
+	base := httpSrv.URL
+	id := createSession(t, base, `{}`).SessionID
+	resp, out := do(t, http.MethodPost, base+"/api/chat/sessions/"+id+"/messages", `{"prompt":"hello"}`)
+	require.Equal(t, http.StatusAccepted, resp.StatusCode)
+	var accepted AcceptedResponse
+	require.NoError(t, json.Unmarshal(out, &accepted))
+	require.NotEmpty(t, accepted.MessageID)
+	got := waitForFinished(t, base, id)
+	raw, err := json.Marshal(got.Snapshot)
+	require.NoError(t, err)
+	require.Contains(t, string(raw), `"kind":"ChatRun"`)
+	require.Contains(t, string(raw), `"id":"`+accepted.MessageID+`"`)
+	require.Contains(t, string(raw), `"status":"finished"`)
+}
+
 // An authenticator that lets anonymous requests through (empty principal):
 // they see only ownerless sessions, never another person's.
 func TestAnonymousListingShowsNoOnesSessions(t *testing.T) {
@@ -754,7 +773,7 @@ func TestTimelineExportJSONDownload(t *testing.T) {
 	var payload map[string]any
 	require.NoError(t, json.Unmarshal(out, &payload))
 	require.Equal(t, "sess-export-1", payload["session_id"])
-	require.Len(t, payload["entities"], 2)
+	require.Len(t, payload["entities"], 3) // the user message, the run, the answer
 }
 
 func TestTurnsExportMinitraceWithFileBackedDB(t *testing.T) {

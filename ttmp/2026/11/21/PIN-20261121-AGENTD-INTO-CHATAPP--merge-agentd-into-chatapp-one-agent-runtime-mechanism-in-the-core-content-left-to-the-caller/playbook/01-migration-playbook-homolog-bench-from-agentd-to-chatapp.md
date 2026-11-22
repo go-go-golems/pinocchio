@@ -114,7 +114,7 @@ All paths below are under the service's prefix `/v1`, i.e. under `BASE = /api/v1
 | `GET /sessions/{id}` → view (`messages`, `seq`, `running`, `usage`, `limits`) | `GET /sessions/{id}` → `{sessionId, session, running, snapshot}` | see step 4 for the snapshot |
 | `DELETE /sessions/{id}` | same → `204` | |
 | `POST /sessions/{id}/tools/manifest {revision, clientInstanceId, connectionId, tools}` | same → `{accepted, revision, executor}` | unchanged; `executor` is what `mine` holds |
-| `POST /sessions/{id}/turns {text, context}` | `POST /sessions/{id}/messages {prompt, context}` → `202` | `409 run_active` while an answer runs, as before |
+| `POST /sessions/{id}/turns {text, context}` | `POST /sessions/{id}/messages {prompt, context}` → `202 {messageId}` | `409 run_active` while an answer runs, as before. `messageId` is the run's id: match events and the `ChatRun` entity to it |
 | `POST /sessions/{id}/tools/{callId}/result {toolName, status, value, error, executor}` | `POST /sessions/{id}/tools/results {toolCallId, toolName, status, result, error, executor}` | `result` is any JSON value: send the string itself, no `{value: x}` wrapping |
 | `POST /sessions/{id}/tools/{callId}/progress {state}` | removed | see step 6 |
 | `POST /sessions/{id}/cancel` | `POST /sessions/{id}/stop` → `202` | |
@@ -201,6 +201,7 @@ the page's messages. The snapshot has timeline entities instead, in order:
 | `ChatMessage`, `role: "thinking"` | `text` | reasoning |
 | `ChatMessage`, `role: "error"` | `text` (the failure text), `status: "failed"` | a failed run |
 | `ChatFrontendToolCall` | `toolCallId`, `toolName`, `input`, `result`, `status`, `error`, `executor`, `parentMessageId` | an eval record (`code` = `input.code`) |
+| `ChatRun` | `messageId`, `status` (running/finished/failed/stopped), `code`, `error`, `truncated`, `reason` | the run's outcome: use it after a reconnect instead of waiting for a terminal event you may have missed |
 | `ChatToolCall` (tool-call plugin) | `toolCallId`, `toolName`, `input` (JSON text), `status` | the model's side of the same call, when the provider streams it; key records by `toolCallId` and merge, or ignore this kind |
 
 Rewrite `toDisplay()` over `snapshot.entities`, grouping by run (`parentMessageId`, or the user message that precedes

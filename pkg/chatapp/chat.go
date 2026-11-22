@@ -43,6 +43,7 @@ const (
 	EventChatToolCallFinished            = "ChatToolCallFinished"
 
 	TimelineEntityChatMessage = "ChatMessage"
+	TimelineEntityChatRun     = "ChatRun"
 )
 
 type Hooks struct {
@@ -297,6 +298,7 @@ func RegisterSchemas(reg *sessionstream.SchemaRegistry, features ...ChatPlugin) 
 		reg.RegisterUIEvent(UIEventChatToolArgumentsDelta, &chatappv1.ChatToolArgumentsDelta{}),
 		reg.RegisterUIEvent(EventChatTextSegmentFinished, &chatappv1.ChatTextSegmentFinished{}),
 		reg.RegisterTimelineEntity(TimelineEntityChatMessage, &chatappv1.ChatMessageEntity{}),
+		reg.RegisterTimelineEntity(TimelineEntityChatRun, &chatappv1.ChatRunEntity{}),
 	} {
 		if err != nil {
 			return err

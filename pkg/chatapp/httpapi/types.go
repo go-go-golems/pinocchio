@@ -89,6 +89,9 @@ type MessageRequest struct {
 type AcceptedResponse struct {
 	SessionID string `json:"sessionId"`
 	Accepted  bool   `json:"accepted"`
+	// MessageID is the run a message started: its events and its ChatRun
+	// timeline entity carry this id.
+	MessageID string `json:"messageId,omitempty"`
 }
 
 func writeJSON(w http.ResponseWriter, status int, payload any) {

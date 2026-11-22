@@ -21,11 +21,14 @@ func TestServiceSubmitPromptHappyPath(t *testing.T) {
 
 	snap, err := svc.Snapshot(context.Background(), sessionstream.SessionId("svc-chat-1"))
 	require.NoError(t, err)
-	require.Len(t, snap.Entities, 2)
+	require.Len(t, snap.Entities, 3) // the user message, the run, the answer
 	var assistant *chatappv1.ChatMessageEntity
 	var user *chatappv1.ChatMessageEntity
 	for _, entity := range snap.Entities {
-		payloadMsg := entity.Payload.(*chatappv1.ChatMessageEntity)
+		payloadMsg, ok := entity.Payload.(*chatappv1.ChatMessageEntity)
+		if !ok {
+			continue
+		}
 		switch payloadMsg.GetRole() {
 		case "assistant":
 			assistant = payloadMsg
@@ -54,8 +57,8 @@ func TestServiceStopPath(t *testing.T) {
 	require.GreaterOrEqual(t, len(snap.Entities), 1)
 	var assistant *chatappv1.ChatMessageEntity
 	for _, entity := range snap.Entities {
-		payloadMsg := entity.Payload.(*chatappv1.ChatMessageEntity)
-		if payloadMsg.GetRole() == "assistant" {
+		payloadMsg, ok := entity.Payload.(*chatappv1.ChatMessageEntity)
+		if ok && payloadMsg.GetRole() == "assistant" {
 			assistant = payloadMsg
 		}
 	}

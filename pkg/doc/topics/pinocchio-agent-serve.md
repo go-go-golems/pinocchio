@@ -85,7 +85,7 @@ All routes are under the prefix (`/v1` for agent serve, `/api/chat` by default f
 | `GET /sessions/{id}` | → `{sessionId, session, running, snapshot}` |
 | `DELETE /sessions/{id}` | stops the run, deletes the metadata → `204` |
 | `POST /sessions/{id}/tools/manifest` | `{clientInstanceId, connectionId, revision, tools: [{name, description, mode, inputSchema, available}]}` → `{accepted, revision, executor}` |
-| `POST /sessions/{id}/messages` | `{prompt, context?, attachments?, idempotencyKey?}` → `202`; `409 run_active` while a run is active. agent serve appends `context` as a block after the message |
+| `POST /sessions/{id}/messages` | `{prompt, context?, attachments?, idempotencyKey?}` → `202 {sessionId, accepted, messageId}` (the run's id); `409 run_active` while a run is active. agent serve appends `context` as a block after the message |
 | `POST /sessions/{id}/stop` | → `202` |
 | `GET /sessions/{id}/events` | server-sent events (below) |
 | `POST /sessions/{id}/tools/results` | `{toolCallId, toolName, status, result, error?, executor}`; `result` is any JSON value |
@@ -107,6 +107,10 @@ id: 13
 event: ui
 data: {"sessionId":"…","ordinal":"13","name":"ChatTextPatch","payload":{…}}
 ```
+
+Every run is a `ChatRun` entity in the snapshot (id = the run's `messageId`; `status` running, finished, failed or
+stopped; `code`, `error`, `truncated`, `reason`), so a client that reconnects learns how a run ended even when it
+missed the terminal event, and a run stopped before any output is visible.
 
 The stream never skips or repeats an event between the snapshot and the live events. A reconnecting client reads a
 new snapshot; `Last-Event-ID` is ignored. A client that falls too far behind gets `event: error` with
