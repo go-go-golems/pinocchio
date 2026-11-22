@@ -462,10 +462,14 @@ func (m *Manager) Request(ctx context.Context, sid sessionstream.SessionId, pub 
 	case result := <-pending.ch:
 		return result, nil
 	case <-ctx.Done():
+		// The cause, not ctx.Err(): a caller that enforces its own (resettable)
+		// limit cancels with a cause wrapping context.DeadlineExceeded, and
+		// ctx.Err() reports only context.Canceled for that.
+		cause := context.Cause(ctx)
 		if err := m.terminalizeContext(ctx, pub, pending); err != nil {
-			return nil, errors.Wrapf(ctx.Err(), "publish frontend tool cancellation: %v", err)
+			return nil, errors.Wrapf(cause, "publish frontend tool cancellation: %v", err)
 		}
-		return nil, ctx.Err()
+		return nil, cause
 	}
 }
 
@@ -493,15 +497,18 @@ func (m *Manager) terminalizeContext(ctx context.Context, pub sessionstream.Even
 	if m == nil || pending == nil {
 		return nil
 	}
+	// A call is "timeout" when its context ended by a deadline, including a
+	// cancel cause that wraps context.DeadlineExceeded; otherwise "cancelled".
+	cause := context.Cause(ctx)
 	status := "cancelled"
-	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+	if errors.Is(cause, context.DeadlineExceeded) {
 		status = "timeout"
 	}
 	payload := &toolv1.FrontendToolResultCommand{
 		ToolCallId: pending.key.toolCallID,
 		ToolName:   pending.toolName,
 		Status:     status,
-		Error:      ctx.Err().Error(),
+		Error:      cause.Error(),
 		Executor:   cloneExecutor(pending.executor),
 	}
 	resultBytes, err := proto.MarshalOptions{Deterministic: true}.Marshal(payload.Result)

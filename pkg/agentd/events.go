@@ -15,6 +15,7 @@ const (
 	EvReasoningDelta = "reasoning.delta"
 	EvToolRequested  = "tool.requested"
 	EvToolFinished   = "tool.finished"
+	EvToolProgress   = "tool.progress"
 	EvToolsManifest  = "tools.manifest"
 	EvUsage          = "usage"
 	EvUserMessage    = "user.message"

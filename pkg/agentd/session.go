@@ -28,6 +28,7 @@ const ContextPrefix = "[context]\n"
 // Session is one conversation with one agent and one model.
 type Session struct {
 	ID      string
+	Labels  map[string]string
 	Agent   *AgentConfig
 	Model   modelsource.Model
 	Created time.Time
@@ -45,6 +46,7 @@ type Session struct {
 	usage      Usage
 	contextIDs []string
 	active     *activeRun
+	calls      map[string]*callDeadline
 }
 
 type activeRun struct {
@@ -53,9 +55,30 @@ type activeRun struct {
 	cancelled bool
 }
 
+// FinalRoundInstruction is added (as a hidden context block) when a turn has
+// used all its rounds; the model then answers once more with tools disabled
+// (geppetto's toolloop FinalAnswer).
+const FinalRoundInstruction = "You have used all %d tool rounds of this turn. Do not call tools. Answer the person now: " +
+	"what you found, what is still running (with ids), and what you would do next. Do not claim anything you did not check."
+
+// errStepTimeout is the cancel cause of a tool call that ran out of time. It
+// wraps context.DeadlineExceeded so that code below the executor that checks
+// context.Cause (frontendtools reports status "timeout") sees a deadline, even
+// though the resettable limit is a cancel and ctx.Err() is context.Canceled.
+var errStepTimeout = fmt.Errorf("tool step timed out: %w", context.DeadlineExceeded)
+
+// callDeadline is the resettable time limit of one running tool call.
+type callDeadline struct {
+	mu      sync.Mutex
+	timer   *time.Timer
+	state   string // running, awaiting-person
+	started time.Time
+}
+
 // SessionView is the JSON description of a session.
 type SessionView struct {
 	ID       string            `json:"id"`
+	Labels   map[string]string `json:"labels,omitempty"`
 	Agent    string            `json:"agent"`
 	Model    modelsource.Model `json:"model"`
 	Title    string            `json:"title,omitempty"`
@@ -70,10 +93,11 @@ type SessionView struct {
 
 // Limits are the agent limits a page should know.
 type Limits struct {
-	MaxRounds     int   `json:"maxRounds"`
-	ToolTimeoutMs int64 `json:"toolTimeoutMs"`
-	ResultCut     int   `json:"resultCut"`
-	TokenBudget   int   `json:"tokenBudget,omitempty"`
+	MaxRounds       int   `json:"maxRounds"`
+	ToolTimeoutMs   int64 `json:"toolTimeoutMs"`
+	PersonTimeoutMs int64 `json:"personTimeoutMs"`
+	ResultCut       int   `json:"resultCut"`
+	TokenBudget     int   `json:"tokenBudget,omitempty"`
 }
 
 // MessageView is one block of the conversation, for hydrating a page.
@@ -89,13 +113,13 @@ type MessageView struct {
 }
 
 func (s *Session) limits() Limits {
-	return Limits{MaxRounds: s.Agent.MaxRounds, ToolTimeoutMs: s.Agent.ToolTimeoutDuration().Milliseconds(), ResultCut: s.Agent.ResultCut, TokenBudget: s.Agent.Budget.TokensPerSession}
+	return Limits{MaxRounds: s.Agent.MaxRounds, ToolTimeoutMs: s.Agent.ToolTimeoutDuration().Milliseconds(), PersonTimeoutMs: s.Agent.PersonTimeoutDuration().Milliseconds(), ResultCut: s.Agent.ResultCut, TokenBudget: s.Agent.Budget.TokensPerSession}
 }
 
 // View describes the session; withMessages includes the conversation.
 func (s *Session) View(withMessages bool) SessionView {
 	s.mu.Lock()
-	v := SessionView{ID: s.ID, Agent: s.Agent.Name, Model: s.Model, Title: s.title, Created: s.Created, Updated: s.updated, Usage: s.usage, Limits: s.limits()}
+	v := SessionView{ID: s.ID, Labels: s.Labels, Agent: s.Agent.Name, Model: s.Model, Title: s.title, Created: s.Created, Updated: s.updated, Usage: s.usage, Limits: s.limits()}
 	if s.active != nil {
 		v.Running = s.active.id
 	}
@@ -147,10 +171,21 @@ func (s *Session) addUsage(u *gepevents.Usage) (Usage, Usage) {
 	defer s.mu.Unlock()
 	s.usage.add(u)
 	if c := s.Model.Cost; c != nil {
-		usd := (float64(s.usage.Input)*c.Input + float64(s.usage.Output)*c.Output + float64(s.usage.CacheRead)*c.CacheRead + float64(s.usage.CacheCreation)*c.CacheWrite) / 1e6
+		usd := costUSD(s.usage, c.Input, c.Output, c.CacheRead, c.CacheWrite)
 		s.usage.USD = &usd
 	}
 	return round, s.usage
+}
+
+// costUSD prices usage per million tokens. OpenAI-style providers report
+// cached prompt tokens inside Input (as Cached); Claude reports cache reads
+// and writes separately from Input.
+func costUSD(u Usage, in, out, cacheRead, cacheWrite float64) float64 {
+	uncached := u.Input - u.Cached
+	if uncached < 0 {
+		uncached = 0
+	}
+	return (float64(uncached)*in + float64(u.Cached+u.CacheRead)*cacheRead + float64(u.CacheCreation)*cacheWrite + float64(u.Output)*out) / 1e6
 }
 
 // ErrRunActive is returned when a turn is sent while a run is in progress.
@@ -181,11 +216,15 @@ func (s *Session) StartTurn(text, contextText string) (string, error) {
 	if err := s.srv.tools.RegisterManifestTools(sessionstream.SessionId(s.ID), reg); err != nil {
 		return "", err
 	}
+	if err := s.srv.registerHostTools(s.Agent, reg); err != nil {
+		return "", err
+	}
 	var registry geptools.ToolRegistry
 	if len(reg.ListTools()) > 0 {
 		registry = reg
 	}
-	loopCfg := toolloop.DefaultLoopConfig().WithMaxIterations(s.Agent.MaxRounds)
+	loopCfg := toolloop.DefaultLoopConfig().WithMaxIterations(s.Agent.MaxRounds).
+		WithFinalAnswer(toolloop.FinalAnswer{Prompt: s.finalPrompt, RefusedToolResult: RefusedToolMessage})
 	toolCfg := geptools.DefaultToolConfig()
 	toolCfg.ExecutionTimeout = s.Agent.ToolTimeoutDuration() + 5*time.Second
 	toolCfg.MaxParallelTools = 1
@@ -197,8 +236,9 @@ func (s *Session) StartTurn(text, contextText string) (string, error) {
 		Registry:     registry,
 		LoopConfig:   &loopCfg,
 		ToolConfig:   &toolCfg,
-		ToolExecutor: &boundedExecutor{inner: frontendtools.NewBridgeExecutor(s.srv.tools, missingTool{}), cut: s.Agent.ResultCut, timeout: s.Agent.ToolTimeoutDuration()},
+		ToolExecutor: &boundedExecutor{s: s, inner: &hostExecutor{s: s, next: frontendtools.NewBridgeExecutor(s.srv.tools, missingTool{})}, cut: s.Agent.ResultCut, timeout: s.Agent.ToolTimeoutDuration()},
 		EventSinks:   []gepevents.EventSink{sink},
+		RoundGuard:   s.budgetGuard,
 	}
 	s.appendTurnLocked(text, contextText)
 	if s.title == "" {
@@ -274,23 +314,123 @@ func (s *Session) wait(runID string, h *gepsession.ExecutionHandle, sink *runSin
 	if text == "" {
 		text = lastAssistantText(out)
 	}
-	switch {
-	case cancelled || errors.Is(err, context.Canceled):
-		s.log.Append(EvRunCancelled, runID, map[string]any{"text": text})
-	case err != nil && strings.Contains(err.Error(), "max iterations"):
-		s.log.Append(EvRunFinished, runID, map[string]any{"text": text, "truncated": true, "reason": "max_rounds"})
-	case err != nil:
-		code, msg := classify(err)
-		log.Warn().Err(err).Str("session", s.ID).Str("run", runID).Str("code", code).Msg("agentd run failed")
-		s.log.Append(EvRunFailed, runID, map[string]any{"code": code, "message": msg, "text": text})
-	default:
-		s.log.Append(EvRunFinished, runID, map[string]any{"text": text, "truncated": false})
+	ev, data := runOutcome(err, cancelled)
+	data["text"] = text
+	if ev == EvRunFailed {
+		log.Warn().Err(err).Str("session", s.ID).Str("run", runID).Any("code", data["code"]).Msg("agentd run failed")
 	}
+	s.log.Append(ev, runID, data)
 	if s.srv.store != nil {
 		if err := s.srv.store.Save(s); err != nil {
 			log.Warn().Err(err).Str("session", s.ID).Msg("agentd: save session")
 		}
 	}
+}
+
+// runOutcome is the one place that decides how a run ended, from the tool
+// loop's error: the terminal event and its data (without the answer text).
+//
+//   - cancelled (by the client, or the context): run.cancelled
+//   - no error: run.finished
+//   - the token budget stopped the loop between rounds: run.failed quota_exceeded
+//   - all rounds used and the final answer given: run.finished, truncated, max_rounds
+//   - anything else, including a failed final answer: run.failed with the
+//     provider error's code
+func runOutcome(err error, cancelled bool) (string, map[string]any) {
+	var limit *toolloop.MaxIterationsError
+	switch {
+	case cancelled || errors.Is(err, context.Canceled):
+		return EvRunCancelled, map[string]any{}
+	case err == nil:
+		return EvRunFinished, map[string]any{"truncated": false}
+	case errors.Is(err, ErrQuota):
+		return EvRunFailed, map[string]any{"code": "quota_exceeded", "message": ErrQuota.Error() + "; the answer so far is above."}
+	case errors.As(err, &limit) && limit.Answered:
+		return EvRunFinished, map[string]any{"truncated": true, "reason": "max_rounds"}
+	default:
+		code, msg := classify(err)
+		return EvRunFailed, map[string]any{"code": code, "message": msg}
+	}
+}
+
+// finalPrompt builds the hidden instruction of the final answer at the round
+// limit; it is a context block, so the next turn drops it.
+func (s *Session) finalPrompt(maxRounds int) turns.Block {
+	b := turns.NewUserTextBlock(ContextPrefix + fmt.Sprintf(FinalRoundInstruction, maxRounds))
+	s.mu.Lock()
+	s.contextIDs = append(s.contextIDs, b.ID)
+	s.mu.Unlock()
+	return b
+}
+
+// budgetGuard stops a run before its next model call once the session's
+// token budget is used up (checked between rounds, not only at turn start).
+func (s *Session) budgetGuard(context.Context, *turns.Turn, int) error {
+	b := s.Agent.Budget.TokensPerSession
+	if b <= 0 {
+		return nil
+	}
+	s.mu.Lock()
+	used := s.usage.Input + s.usage.Output
+	s.mu.Unlock()
+	if used >= b {
+		return ErrQuota
+	}
+	return nil
+}
+
+// RefusedToolMessage is the tool error for calls the model makes in the final answer.
+const RefusedToolMessage = "no more tool calls in this turn; answer the person"
+
+// SetCallState changes a running tool call's time limit: "awaiting-person"
+// pauses the step limit (up to the agent's person timeout) while the page
+// waits for a decision; "running" restarts the step limit from now.
+func (s *Session) SetCallState(callID, state string) error {
+	s.mu.Lock()
+	d := s.calls[callID]
+	s.mu.Unlock()
+	if d == nil {
+		return fmt.Errorf("no running tool call %q", callID)
+	}
+	var limit time.Duration
+	switch state {
+	case "awaiting-person":
+		limit = s.Agent.PersonTimeoutDuration()
+	case "running":
+		limit = s.Agent.ToolTimeoutDuration()
+	default:
+		return fmt.Errorf("state must be awaiting-person or running, got %q", state)
+	}
+	d.mu.Lock()
+	d.state = state
+	d.timer.Reset(limit)
+	d.mu.Unlock()
+	s.log.Append(EvToolProgress, s.runID(), map[string]any{"callId": callID, "state": state, "limitMs": limit.Milliseconds()})
+	return nil
+}
+
+func (s *Session) runID() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.active == nil {
+		return ""
+	}
+	return s.active.id
+}
+
+func (s *Session) trackCall(id string, d *callDeadline) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.calls == nil {
+		s.calls = map[string]*callDeadline{}
+	}
+	s.calls[id] = d
+}
+
+func (s *Session) untrackCall(id string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.calls, id)
 }
 
 // Cancel stops the active run, if any.
@@ -348,16 +488,29 @@ func firstLine(s string, n int) string {
 	return s
 }
 
-// boundedExecutor adds a per-call timeout and cuts large results.
+// boundedExecutor adds a resettable per-call time limit and cuts large results.
 type boundedExecutor struct {
+	s       *Session
 	inner   geptools.ToolExecutor
 	cut     int
 	timeout time.Duration
 }
 
+// TimeoutMessage is the tool error when a call runs out of time.
+const TimeoutMessage = "The %s step ran for %s and was stopped: that is the limit for one tool call. " +
+	"Work it started in the page (jobs, timers) may still be running. Do not wait in loops: " +
+	"start long work, tell the person what you started, and end the turn, or check progress with a short call."
+
 func (e *boundedExecutor) ExecuteToolCall(ctx context.Context, call geptools.ToolCall, reg geptools.ToolRegistry) (*geptools.ToolResult, error) {
-	cctx, cancel := context.WithTimeout(ctx, e.timeout)
-	defer cancel()
+	cctx, cancel := context.WithCancelCause(ctx)
+	defer cancel(nil)
+	d := &callDeadline{state: "running", started: time.Now()}
+	d.timer = time.AfterFunc(e.timeout, func() { cancel(errStepTimeout) })
+	defer d.timer.Stop()
+	if e.s != nil {
+		e.s.trackCall(call.ID, d)
+		defer e.s.untrackCall(call.ID)
+	}
 	res, err := e.inner.ExecuteToolCall(cctx, call, reg)
 	if err != nil {
 		return res, err
@@ -365,8 +518,9 @@ func (e *boundedExecutor) ExecuteToolCall(ctx context.Context, call geptools.Too
 	if res == nil {
 		res = &geptools.ToolResult{ID: call.ID}
 	}
-	if errors.Is(cctx.Err(), context.DeadlineExceeded) && ctx.Err() == nil {
-		res.Result, res.Error = nil, fmt.Sprintf("The tool %s did not answer within %s; the page may be busy or closed. Ask for less, or try again.", call.Name, e.timeout)
+	if errors.Is(context.Cause(cctx), errStepTimeout) && ctx.Err() == nil {
+		ran := time.Since(d.started).Round(time.Second)
+		res.Result, res.Error = nil, fmt.Sprintf(TimeoutMessage, call.Name, ran)
 	}
 	// Pages wrap non-object results as {value: x}; the model gets x.
 	res.Result = unwrapValue(res.Result)

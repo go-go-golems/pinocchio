@@ -30,6 +30,9 @@ var FakeModel = modelsource.Model{Ref: "fake:scripted", Source: "fake", Label: "
 type FakeEngine struct {
 	// Delay between streamed chunks.
 	Delay time.Duration
+	// FinalError, when set, fails the final answer (tool choice "none"), as a
+	// provider error at the round limit would (tests).
+	FinalError error
 }
 
 var _ engine.Engine = (*FakeEngine)(nil)
@@ -44,6 +47,14 @@ func (f *FakeEngine) RunInference(ctx context.Context, t *turns.Turn) (*turns.Tu
 		tail = last[len(last)-1]
 	}
 	user := lastUserText(t)
+	// Tool choice "none" (the final round of a turn that used all its rounds):
+	// answer with a summary, as a real model would.
+	if cfg, ok, _ := engine.KeyToolConfig.Get(t.Data); ok && cfg.ToolChoice == engine.ToolChoiceNone {
+		if f.FinalError != nil {
+			return t, f.FinalError
+		}
+		return f.say(ctx, t, fmt.Sprintf("final answer after %d tool calls", countAllToolCalls(t)))
+	}
 	switch {
 	case tail.Kind == turns.BlockKindToolUse:
 		name := toolNameFor(t, str(tail.Payload, turns.PayloadKeyID))
@@ -192,4 +203,14 @@ func parseToolCommand(s string) (string, map[string]any) {
 		}
 	}
 	return name, input
+}
+
+func countAllToolCalls(t *turns.Turn) int {
+	n := 0
+	for _, b := range t.Blocks {
+		if b.Kind == turns.BlockKindToolCall {
+			n++
+		}
+	}
+	return n
 }

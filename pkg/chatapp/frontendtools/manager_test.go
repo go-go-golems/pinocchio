@@ -3,6 +3,7 @@ package frontendtools
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -243,6 +244,17 @@ func TestManagerContextCancellationBecomesTerminalAndRejectsLateResult(t *testin
 				return context.WithDeadline(context.Background(), time.Unix(1, 0))
 			},
 			trigger:        func(context.CancelFunc) {},
+			expectedStatus: "timeout",
+			expectedError:  context.DeadlineExceeded,
+		},
+		{
+			// a caller's own (resettable) limit: cancelled with a cause that wraps DeadlineExceeded
+			name: "timeout-cause",
+			newContext: func() (context.Context, context.CancelFunc) {
+				ctx, cancel := context.WithCancelCause(context.Background())
+				return ctx, func() { cancel(fmt.Errorf("step limit: %w", context.DeadlineExceeded)) }
+			},
+			trigger:        func(cancel context.CancelFunc) { cancel() },
 			expectedStatus: "timeout",
 			expectedError:  context.DeadlineExceeded,
 		},
