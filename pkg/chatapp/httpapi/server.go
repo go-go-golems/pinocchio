@@ -140,7 +140,8 @@ func WithHydrationStoreFactory(factory HydrationStoreFactory) Option {
 	return func(s *Server) { s.hydrationFactory = factory }
 }
 
-// WithTurnStore sets where conversations are kept (chatapp.WithTurnStore).
+// WithTurnStore sets where conversations are kept (chatapp.WithTurnStore;
+// default: in memory).
 func WithTurnStore(store chatstore.TurnStore) Option {
 	return func(s *Server) { s.turnStore = store }
 }
@@ -228,6 +229,11 @@ func New(opts ...Option) (*Server, error) {
 	}
 	if s.sessionStore == nil {
 		s.sessionStore = sessions.NewMemoryStore()
+	}
+	if s.turnStore == nil {
+		// Without a turn store chatapp has no history: every message would
+		// start a new conversation.
+		s.turnStore = serverkit.NewMemoryTurnStore()
 	}
 	if s.authorize == nil {
 		s.authorize = OwnerOnly

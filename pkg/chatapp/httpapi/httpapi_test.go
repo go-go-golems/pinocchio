@@ -755,7 +755,8 @@ func TestTurnsExportYAMLAndMinitraceMissingPath(t *testing.T) {
 	require.Equal(t, http.StatusConflict, resp.StatusCode)
 }
 
-func TestFullExportOmitsTurnsWhenStoreUnavailable(t *testing.T) {
+// The default in-memory turn store means a full export always has the turns.
+func TestFullExportHasTheTimelineAndTheTurns(t *testing.T) {
 	_, httpSrv := newTestServer(t, WithAutoCreateSessions(true))
 	resp, _ := do(t, http.MethodPost, httpSrv.URL+"/api/chat/sessions/sess-full-export/messages", `{"prompt":"export bundle"}`)
 	require.Equal(t, http.StatusAccepted, resp.StatusCode)
@@ -765,7 +766,7 @@ func TestFullExportOmitsTurnsWhenStoreUnavailable(t *testing.T) {
 	var payload map[string]any
 	require.NoError(t, json.Unmarshal(out, &payload))
 	require.Contains(t, payload, "timeline")
-	require.NotContains(t, payload, "turns")
+	require.Contains(t, payload, "turns")
 }
 
 func TestSQLiteStoresSurviveARestart(t *testing.T) {
@@ -962,4 +963,24 @@ func TestListShowsWhetherASessionRuns(t *testing.T) {
 	require.Equal(t, map[string]bool{busy: true, idle: false}, running)
 	resp, _ = do(t, http.MethodPost, httpSrv.URL+"/api/chat/sessions/"+busy+"/stop", "")
 	require.Equal(t, http.StatusAccepted, resp.StatusCode)
+}
+
+func TestASessionRemembersItsConversation(t *testing.T) {
+	seen := make(chan *turns.Turn, 2)
+	_, httpSrv := newTestServer(t, WithRuntimeResolver(engineResolver(answerEngine{seen: seen})))
+	id := createSession(t, httpSrv.URL, ``).SessionID
+	for _, prompt := range []string{"first", "second"} {
+		resp, _ := do(t, http.MethodPost, httpSrv.URL+"/api/chat/sessions/"+id+"/messages", `{"prompt":"`+prompt+`"}`)
+		require.Equal(t, http.StatusAccepted, resp.StatusCode)
+		<-seen
+		waitForFinished(t, httpSrv.URL, id)
+		for getSession(t, httpSrv.URL, id).Running {
+			time.Sleep(5 * time.Millisecond)
+		}
+	}
+	resp, _ := do(t, http.MethodPost, httpSrv.URL+"/api/chat/sessions/"+id+"/messages", `{"prompt":"third"}`)
+	require.Equal(t, http.StatusAccepted, resp.StatusCode)
+	turn := <-seen
+	require.Len(t, turn.Blocks, 5, "first, its answer, second, its answer, third")
+	require.Equal(t, "third", turn.Blocks[4].Payload[turns.PayloadKeyText])
 }

@@ -1,7 +1,7 @@
 // Package agentcli holds the command-line pieces shared by programs that run
 // an agent service: the model-source flag sections, the Pi environment source
 // and model loading. `pinocchio agent serve` uses it, and so can a program
-// that embeds agentd.Server.
+// that embeds pkg/chatapp/agentserver.
 package agentcli
 
 import (
