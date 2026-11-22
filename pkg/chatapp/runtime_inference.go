@@ -135,6 +135,9 @@ func (e *Engine) runRuntimeInference(ctx context.Context, sid sessionstream.Sess
 		nextTools.Config = tools.Config
 		tools = nextTools
 	}
+	if runtime.WrapToolExecutor != nil {
+		tools.Executor = runtime.WrapToolExecutor(tools.ExecutorOrDefault())
+	}
 
 	sess := gepsession.NewSessionWithID(string(sid))
 	sess.Builder = &enginebuilder.Builder{

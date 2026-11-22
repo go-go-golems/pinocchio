@@ -28,7 +28,7 @@ func TestStoreContract(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			ctx := context.Background()
 			base := time.Date(2026, 11, 21, 12, 0, 0, 0, time.UTC)
-			require.NoError(t, store.Create(ctx, sessions.Info{ID: "a", Owner: "alice", Labels: map[string]string{"room": "main"}, Created: base}))
+			require.NoError(t, store.Create(ctx, sessions.Info{ID: "a", Owner: "alice", Labels: map[string]string{"room": "main"}, Created: base, Data: []byte(`{"instructions":"be brief"}`)}))
 			require.NoError(t, store.Create(ctx, sessions.Info{ID: "b", Owner: "bob", Labels: map[string]string{"room": "main"}, Created: base.Add(time.Minute)}))
 			require.NoError(t, store.Create(ctx, sessions.Info{ID: "c", Owner: "alice", Labels: map[string]string{"room": "t-1"}, Created: base.Add(2 * time.Minute)}))
 			require.ErrorIs(t, store.Create(ctx, sessions.Info{ID: "a"}), sessions.ErrExists)
@@ -38,6 +38,7 @@ func TestStoreContract(t *testing.T) {
 			require.Equal(t, "alice", got.Owner)
 			require.Equal(t, "main", got.Labels["room"])
 			require.True(t, got.Created.Equal(base))
+			require.JSONEq(t, `{"instructions":"be brief"}`, string(got.Data))
 			_, err = store.Get(ctx, "missing")
 			require.ErrorIs(t, err, sessions.ErrNotFound)
 
@@ -64,6 +65,7 @@ func TestStoreContract(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, "first", got.Title)
 			require.Equal(t, 12, got.Usage.Tokens())
+			require.JSONEq(t, `{"instructions":"be brief"}`, string(got.Data), "data survives updates")
 			require.True(t, got.Updated.After(got.Created) || got.Updated.Equal(got.Created))
 			require.ErrorIs(t, store.Update(ctx, "missing", func(*sessions.Info) error { return nil }), sessions.ErrNotFound)
 

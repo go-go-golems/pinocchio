@@ -14,6 +14,8 @@ import (
 
 var errEmptyID = errors.New("sessions: session id is empty")
 
+const sqliteColumns = "id, owner, labels, title, created_ms, updated_ms, usage, data"
+
 // SQLiteStore keeps sessions in a SQLite database (table chatapp_sessions).
 // Updates are serialized in-process, which is sufficient for one server
 // process per database file.
@@ -33,7 +35,8 @@ CREATE TABLE IF NOT EXISTS chatapp_sessions (
 	title      TEXT NOT NULL DEFAULT '',
 	created_ms INTEGER NOT NULL,
 	updated_ms INTEGER NOT NULL,
-	usage      TEXT NOT NULL DEFAULT '{}'
+	usage      TEXT NOT NULL DEFAULT '{}',
+	data       TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS chatapp_sessions_owner ON chatapp_sessions(owner, created_ms);
 `
@@ -79,13 +82,13 @@ func (s *SQLiteStore) Create(ctx context.Context, info Info) error {
 	if exists > 0 {
 		return ErrExists
 	}
-	_, err = s.db.ExecContext(ctx, `INSERT INTO chatapp_sessions (id, owner, labels, title, created_ms, updated_ms, usage) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		info.ID, info.Owner, labels, info.Title, info.Created.UnixMilli(), info.Updated.UnixMilli(), usage)
+	_, err = s.db.ExecContext(ctx, `INSERT INTO chatapp_sessions (id, owner, labels, title, created_ms, updated_ms, usage, data) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		info.ID, info.Owner, labels, info.Title, info.Created.UnixMilli(), info.Updated.UnixMilli(), usage, string(info.Data))
 	return err
 }
 
 func (s *SQLiteStore) Get(ctx context.Context, id string) (Info, error) {
-	row := s.db.QueryRowContext(ctx, `SELECT id, owner, labels, title, created_ms, updated_ms, usage FROM chatapp_sessions WHERE id = ?`, id)
+	row := s.db.QueryRowContext(ctx, `SELECT `+sqliteColumns+` FROM chatapp_sessions WHERE id = ?`, id)
 	info, err := scanInfo(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Info{}, ErrNotFound
@@ -94,7 +97,7 @@ func (s *SQLiteStore) Get(ctx context.Context, id string) (Info, error) {
 }
 
 func (s *SQLiteStore) List(ctx context.Context, f Filter) ([]Info, error) {
-	query := `SELECT id, owner, labels, title, created_ms, updated_ms, usage FROM chatapp_sessions`
+	query := `SELECT ` + sqliteColumns + ` FROM chatapp_sessions`
 	args := []any{}
 	if f.Owner != "" {
 		query += ` WHERE owner = ?`
@@ -139,8 +142,8 @@ func (s *SQLiteStore) Update(ctx context.Context, id string, fn func(*Info) erro
 	if err != nil {
 		return err
 	}
-	_, err = s.db.ExecContext(ctx, `UPDATE chatapp_sessions SET owner = ?, labels = ?, title = ?, updated_ms = ?, usage = ? WHERE id = ?`,
-		info.Owner, labels, info.Title, info.Updated.UnixMilli(), usage, id)
+	_, err = s.db.ExecContext(ctx, `UPDATE chatapp_sessions SET owner = ?, labels = ?, title = ?, updated_ms = ?, usage = ?, data = ? WHERE id = ?`,
+		info.Owner, labels, info.Title, info.Updated.UnixMilli(), usage, string(info.Data), id)
 	return err
 }
 
@@ -164,11 +167,14 @@ type rowScanner interface {
 func scanInfo(row rowScanner) (Info, error) {
 	var (
 		info                 Info
-		labels, usage        string
+		labels, usage, data  string
 		createdMs, updatedMs int64
 	)
-	if err := row.Scan(&info.ID, &info.Owner, &labels, &info.Title, &createdMs, &updatedMs, &usage); err != nil {
+	if err := row.Scan(&info.ID, &info.Owner, &labels, &info.Title, &createdMs, &updatedMs, &usage, &data); err != nil {
 		return Info{}, err
+	}
+	if data != "" {
+		info.Data = json.RawMessage(data)
 	}
 	info.Created = time.UnixMilli(createdMs).UTC()
 	info.Updated = time.UnixMilli(updatedMs).UTC()

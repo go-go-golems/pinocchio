@@ -906,3 +906,60 @@ func TestBrowserToolRoundTripThroughHTTP(t *testing.T) {
 	got := waitForFinished(t, httpSrv.URL, id)
 	require.Equal(t, `the page says: "Hello from the page"`, entityTexts(got.Snapshot)["assistant"])
 }
+
+type unknownPresetError struct{ name string }
+
+func (e unknownPresetError) Error() string { return "unknown preset " + e.name }
+func (unknownPresetError) Code() string    { return "unknown_preset" }
+
+func TestCreateHookCompletesOrRejectsSessions(t *testing.T) {
+	hook := func(_ context.Context, p Principal, info *sessions.Info) error {
+		if info.Labels == nil {
+			info.Labels = map[string]string{}
+		}
+		if info.Labels["preset"] == "" {
+			info.Labels["preset"] = "coder"
+		}
+		if info.Labels["preset"] != "coder" {
+			return unknownPresetError{info.Labels["preset"]}
+		}
+		info.ID = "hooks-cannot-change-ids"
+		return nil
+	}
+	srv, httpSrv := newTestServer(t, WithCreateHook(hook), WithAutoCreateSessions(true))
+
+	created := createSession(t, httpSrv.URL, `{"data":{"instructions":"be brief"}}`)
+	require.Equal(t, "coder", created.Session.Labels["preset"])
+	require.NotEqual(t, "hooks-cannot-change-ids", created.SessionID)
+	require.JSONEq(t, `{"instructions":"be brief"}`, string(created.Session.Data))
+
+	resp, out := do(t, http.MethodPost, httpSrv.URL+"/api/chat/sessions", `{"labels":{"preset":"poet"}}`)
+	require.Equal(t, http.StatusBadRequest, resp.StatusCode)
+	require.Equal(t, "unknown_preset", errorCode(t, out))
+
+	resp, _ = do(t, http.MethodPost, httpSrv.URL+"/api/chat/sessions/auto-1/messages", `{"prompt":"hi"}`)
+	require.Equal(t, http.StatusAccepted, resp.StatusCode)
+	info, err := srv.Sessions().Get(context.Background(), "auto-1")
+	require.NoError(t, err)
+	require.Equal(t, "coder", info.Labels["preset"], "auto-created sessions pass through the hook too")
+}
+
+func TestListShowsWhetherASessionRuns(t *testing.T) {
+	_, httpSrv := newTestServer(t, WithRuntimeResolver(engineResolver(answerEngine{chunk: 1, delay: 20 * time.Millisecond})))
+	busy := createSession(t, httpSrv.URL, ``).SessionID
+	idle := createSession(t, httpSrv.URL, ``).SessionID
+	resp, _ := do(t, http.MethodPost, httpSrv.URL+"/api/chat/sessions/"+busy+"/messages", `{"prompt":"take your time"}`)
+	require.Equal(t, http.StatusAccepted, resp.StatusCode)
+
+	resp, out := do(t, http.MethodGet, httpSrv.URL+"/api/chat/sessions", "")
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	var list SessionListResponse
+	require.NoError(t, json.Unmarshal(out, &list))
+	running := map[string]bool{}
+	for _, s := range list.Sessions {
+		running[s.ID] = s.Running
+	}
+	require.Equal(t, map[string]bool{busy: true, idle: false}, running)
+	resp, _ = do(t, http.MethodPost, httpSrv.URL+"/api/chat/sessions/"+busy+"/stop", "")
+	require.Equal(t, http.StatusAccepted, resp.StatusCode)
+}

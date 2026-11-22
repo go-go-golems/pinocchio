@@ -10,6 +10,7 @@ package sessions
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"time"
@@ -30,6 +31,9 @@ type Info struct {
 	Updated time.Time `json:"updated"`
 	// Usage is summed over every provider call of the session (RecordUsage).
 	Usage Usage `json:"usage"`
+	// Data is the application's own JSON for this session, opaque to chatapp
+	// (e.g. instructions an application adds to its system prompt).
+	Data json.RawMessage `json:"data,omitempty"`
 }
 
 // Usage counts tokens. Input includes cached input for providers that report
@@ -122,6 +126,9 @@ func TitleFrom(text string, maxRunes int) string {
 
 func cloneInfo(in Info) Info {
 	out := in
+	if in.Data != nil {
+		out.Data = append(json.RawMessage(nil), in.Data...)
+	}
 	if in.Labels != nil {
 		out.Labels = make(map[string]string, len(in.Labels))
 		for k, v := range in.Labels {

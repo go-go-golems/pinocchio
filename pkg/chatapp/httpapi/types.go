@@ -39,6 +39,8 @@ type CreateSessionRequest struct {
 	ID     string            `json:"id,omitempty"`
 	Title  string            `json:"title,omitempty"`
 	Labels map[string]string `json:"labels,omitempty"`
+	// Data is stored as sessions.Info.Data, for the application.
+	Data json.RawMessage `json:"data,omitempty"`
 }
 
 // SessionResponse answers POST /sessions (no snapshot) and GET /sessions/{id}.
@@ -53,7 +55,13 @@ type SessionResponse struct {
 
 // SessionListResponse answers GET /sessions.
 type SessionListResponse struct {
-	Sessions []sessions.Info `json:"sessions"`
+	Sessions []SessionSummary `json:"sessions"`
+}
+
+// SessionSummary is a listed session: its metadata and whether it runs.
+type SessionSummary struct {
+	sessions.Info
+	Running bool `json:"running"`
 }
 
 // AttachmentRef references an attachment by id. The server passes ids through

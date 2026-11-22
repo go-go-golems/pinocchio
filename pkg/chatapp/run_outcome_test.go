@@ -393,3 +393,47 @@ func TestRunToolsFuncErrorFailsTheRun(t *testing.T) {
 	require.Len(t, failed, 1)
 	require.Equal(t, CodeToolsError, failed[0]["code"])
 }
+
+// labelExecutor records which executor ran a call.
+type labelExecutor struct {
+	label string
+	next  geptools.ToolExecutor
+	seen  *[]string
+}
+
+func (l labelExecutor) ExecuteToolCall(ctx context.Context, call geptools.ToolCall, reg geptools.ToolRegistry) (*geptools.ToolResult, error) {
+	*l.seen = append(*l.seen, l.label)
+	return l.next.ExecuteToolCall(ctx, call, reg)
+}
+
+func (l labelExecutor) ExecuteToolCalls(ctx context.Context, calls []geptools.ToolCall, reg geptools.ToolRegistry) ([]*geptools.ToolResult, error) {
+	out := []*geptools.ToolResult{}
+	for _, c := range calls {
+		r, err := l.ExecuteToolCall(ctx, c, reg)
+		if err != nil {
+			return out, err
+		}
+		out = append(out, r)
+	}
+	return out, nil
+}
+
+func TestWrapToolExecutorWrapsWhatTheRunToolsSetUp(t *testing.T) {
+	var seen []string
+	hook := func(ctx context.Context, _ RunScope, tools RunTools) (context.Context, RunTools, error) {
+		tools.Executor = labelExecutor{label: "hook", next: tools.ExecutorOrDefault(), seen: &seen}
+		return ctx, tools, nil
+	}
+	e := newTestEngine(WithRunTools(hook))
+	hub := newTestHub(t, e)
+	require.NoError(t, submit(t, e, hub, "wrap", PromptRequest{Prompt: "go", Runtime: &infruntime.ComposedRuntime{
+		Engine:   &toolCallingEngine{},
+		Registry: noopRegistry(t),
+		Loop:     &toolloop.LoopConfig{MaxIterations: 1},
+		WrapToolExecutor: func(next geptools.ToolExecutor) geptools.ToolExecutor {
+			return labelExecutor{label: "runtime", next: next, seen: &seen}
+		},
+	}}))
+	waitIdle(t, e, "wrap")
+	require.Equal(t, []string{"runtime", "hook"}, seen, "the runtime's wrapper is outermost")
+}

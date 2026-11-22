@@ -66,6 +66,12 @@ func (f RuntimeResolverFunc) Resolve(ctx context.Context, r *http.Request, s ses
 // blocks stay in the conversation; they are never removed later.
 type BlocksFunc func(ctx context.Context, s sessions.Info, msg MessageRequest) ([]turns.Block, error)
 
+// CreateHook runs before a session is stored (POST /sessions and
+// auto-creation): it may fill in or change the session (labels, title, data)
+// or reject it. An error answers 400 with its chatapp.CodedError code, or
+// "invalid_request".
+type CreateHook func(ctx context.Context, p Principal, info *sessions.Info) error
+
 // HydrationStoreFactory constructs the timeline store after the server has
 // registered all protobuf schemas.
 type HydrationStoreFactory func(context.Context, *sessionstream.SchemaRegistry) (sessionstream.HydrationStore, func() error, error)
@@ -86,6 +92,7 @@ type Server struct {
 	authenticate     Authenticator
 	authorize        Authorizer
 	blocks           BlocksFunc
+	createHook       CreateHook
 	sseConfig        SSEConfig
 	maxBodyBytes     int64
 
@@ -182,6 +189,11 @@ func WithAuthorizer(fn Authorizer) Option {
 // WithBlocks sets the hook that adds the application's blocks to each message.
 func WithBlocks(fn BlocksFunc) Option {
 	return func(s *Server) { s.blocks = fn }
+}
+
+// WithCreateHook sets the hook that validates or completes new sessions.
+func WithCreateHook(fn CreateHook) Option {
+	return func(s *Server) { s.createHook = fn }
 }
 
 // WithSSEConfig tunes the server-sent events transport.

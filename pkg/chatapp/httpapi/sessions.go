@@ -71,7 +71,11 @@ func (s *Server) lookup(ctx context.Context, p Principal, id string, action Acti
 		if err := s.authorize(ctx, p, ActionCreate, nil); err != nil {
 			return sessions.Info{}, forbiddenError{err}
 		}
-		if err := s.sessionStore.Create(ctx, sessions.Info{ID: id, Owner: p.ID}); err != nil && !errors.Is(err, sessions.ErrExists) {
+		created := sessions.Info{ID: id, Owner: p.ID}
+		if err := s.runCreateHook(ctx, p, &created); err != nil {
+			return sessions.Info{}, createRejectedError{err}
+		}
+		if err := s.sessionStore.Create(ctx, created); err != nil && !errors.Is(err, sessions.ErrExists) {
 			return sessions.Info{}, err
 		}
 		info, err = s.sessionStore.Get(ctx, id)
@@ -94,6 +98,8 @@ func writeLookupError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusForbidden, CodeForbidden, err)
 	case errors.Is(err, errInvalidSessionID):
 		writeError(w, http.StatusBadRequest, CodeInvalidSessionID, err)
+	case errors.As(err, new(createRejectedError)):
+		writeCodedError(w, http.StatusBadRequest, CodeInvalidRequest, err)
 	default:
 		writeError(w, http.StatusInternalServerError, CodeInternal, err)
 	}
@@ -121,7 +127,12 @@ func (s *Server) handleCreate(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, CodeInvalidSessionID, errInvalidSessionID)
 		return
 	}
-	err := s.sessionStore.Create(ctx, sessions.Info{ID: id, Owner: p.ID, Title: strings.TrimSpace(in.Title), Labels: in.Labels})
+	info := sessions.Info{ID: id, Owner: p.ID, Title: strings.TrimSpace(in.Title), Labels: in.Labels, Data: in.Data}
+	if err := s.runCreateHook(ctx, p, &info); err != nil {
+		writeCodedError(w, http.StatusBadRequest, CodeInvalidRequest, err)
+		return
+	}
+	err := s.sessionStore.Create(ctx, info)
 	if errors.Is(err, sessions.ErrExists) {
 		writeError(w, http.StatusConflict, CodeSessionExists, err)
 		return
@@ -130,12 +141,12 @@ func (s *Server) handleCreate(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, CodeInternal, err)
 		return
 	}
-	info, err := s.sessionStore.Get(ctx, id)
+	created, err := s.sessionStore.Get(ctx, id)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, CodeInternal, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, SessionResponse{SessionID: id, Session: info})
+	writeJSON(w, http.StatusCreated, SessionResponse{SessionID: id, Session: created})
 }
 
 // handleList answers GET /sessions. An authenticated principal sees only its
@@ -175,10 +186,11 @@ func (s *Server) handleList(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, CodeInternal, err)
 		return
 	}
-	if list == nil {
-		list = []sessions.Info{}
+	out := make([]SessionSummary, 0, len(list))
+	for _, info := range list {
+		out = append(out, SessionSummary{Info: info, Running: s.service.Running(sessionstream.SessionId(info.ID))})
 	}
-	writeJSON(w, http.StatusOK, SessionListResponse{Sessions: list})
+	writeJSON(w, http.StatusOK, SessionListResponse{Sessions: out})
 }
 
 func (s *Server) handleGet(w http.ResponseWriter, r *http.Request, c *call) {
@@ -246,12 +258,7 @@ func (s *Server) handleMessage(w http.ResponseWriter, r *http.Request, c *call) 
 	}
 	runtime, err := s.resolver.Resolve(r.Context(), r, c.info, msg)
 	if err != nil {
-		code := CodeRuntimeError
-		var coded chatapp.CodedError
-		if errors.As(err, &coded) {
-			code = coded.Code()
-		}
-		writeError(w, http.StatusBadRequest, code, err)
+		writeCodedError(w, http.StatusBadRequest, CodeRuntimeError, err)
 		return
 	}
 	var blocks []turns.Block
@@ -292,6 +299,34 @@ func (s *Server) handleMessage(w http.ResponseWriter, r *http.Request, c *call) 
 		}
 	}
 	writeJSON(w, http.StatusAccepted, AcceptedResponse{SessionID: string(c.sid), Accepted: true})
+}
+
+func (s *Server) runCreateHook(ctx context.Context, p Principal, info *sessions.Info) error {
+	if s.createHook == nil {
+		return nil
+	}
+	id := info.ID
+	if err := s.createHook(ctx, p, info); err != nil {
+		return err
+	}
+	info.ID = id
+	return nil
+}
+
+// createRejectedError marks a CreateHook's rejection during auto-creation.
+type createRejectedError struct{ err error }
+
+func (e createRejectedError) Error() string { return e.err.Error() }
+func (e createRejectedError) Unwrap() error { return e.err }
+
+// writeCodedError answers with err's chatapp.CodedError code, or fallback.
+func writeCodedError(w http.ResponseWriter, status int, fallback string, err error) {
+	code := fallback
+	var coded chatapp.CodedError
+	if errors.As(err, &coded) {
+		code = coded.Code()
+	}
+	writeError(w, status, code, err)
 }
 
 func readBody(w http.ResponseWriter, r *http.Request, limit int64) ([]byte, error) {

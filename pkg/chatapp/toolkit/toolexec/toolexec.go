@@ -40,6 +40,12 @@ func Chain(next geptools.ToolExecutor, mws ...Middleware) geptools.ToolExecutor 
 	return next
 }
 
+// Compose returns one middleware applying mws (the first is the outermost);
+// it fits infruntime.ComposedRuntime.WrapToolExecutor.
+func Compose(mws ...Middleware) Middleware {
+	return func(next geptools.ToolExecutor) geptools.ToolExecutor { return Chain(next, mws...) }
+}
+
 // RunTools returns a chatapp.RunToolsFunc that wraps each run's executor (or
 // geppetto's default one, built from the run's tool config) with mws.
 func RunTools(mws ...Middleware) chatapp.RunToolsFunc {
