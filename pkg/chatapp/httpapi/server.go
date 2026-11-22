@@ -63,7 +63,8 @@ func (f RuntimeResolverFunc) Resolve(ctx context.Context, r *http.Request, s ses
 
 // BlocksFunc returns blocks to append after the person's message in the turn
 // (chatapp.PromptRequest.Blocks), e.g. the current state of the page. The
-// blocks stay in the conversation; they are never removed later.
+// blocks stay in the conversation; they are never removed later. An error
+// answers 400 with its chatapp.CodedError code, or "invalid_request".
 type BlocksFunc func(ctx context.Context, s sessions.Info, msg MessageRequest) ([]turns.Block, error)
 
 // CreateHook runs before a session is stored (POST /sessions and

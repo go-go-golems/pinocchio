@@ -61,7 +61,9 @@ pageInstructions: true                 # the page may append instructions at ses
 maxPageInstructionsBytes: 65536
 maxRounds: 40                          # default 40
 toolTimeout: 120s                      # per tool call, browser tools included; default 120s
+personTimeout: 10m                     # browser tools a person approves (mode "human"); default 10m
 resultCut: 9000                        # characters of one tool result; default 9000
+maxContextBytes: 65536                 # a message's "context"; default 64 KiB
 budget:
   tokensPerSession: 2000000            # input + output over the session; 0 = none
 ```
@@ -83,7 +85,7 @@ All routes are under the prefix (`/v1` for agent serve, `/api/chat` by default f
 | `GET /sessions/{id}` | → `{sessionId, session, running, snapshot}` |
 | `DELETE /sessions/{id}` | stops the run, deletes the metadata → `204` |
 | `POST /sessions/{id}/tools/manifest` | `{clientInstanceId, connectionId, revision, tools: [{name, description, mode, inputSchema, available}]}` → `{accepted, revision, executor}` |
-| `POST /sessions/{id}/messages` | `{prompt, attachments?, idempotencyKey?}` → `202`; `409 run_active` while a run is active |
+| `POST /sessions/{id}/messages` | `{prompt, context?, attachments?, idempotencyKey?}` → `202`; `409 run_active` while a run is active. agent serve appends `context` as a block after the message |
 | `POST /sessions/{id}/stop` | → `202` |
 | `GET /sessions/{id}/events` | server-sent events (below) |
 | `POST /sessions/{id}/tools/results` | `{toolCallId, toolName, status, result, error?, executor}`; `result` is any JSON value |
@@ -133,12 +135,14 @@ For each message agent serve builds a runtime from the session's preset:
 2. The system prompt middleware with the preset's prompt plus the session's `data.instructions`. It is the same text
    for every turn of the session, so the prompt prefix stays the same (prompt caching).
 3. The tool loop with the preset's round limit and a final answer at the limit.
-4. A per-call deadline and a result cut around the run's final executor, so browser tools are covered.
+4. A per-call deadline (`toolTimeout`; `personTimeout` for browser tools in `human` mode) and a result cut around
+   the run's final executor, so browser tools are covered.
 5. A round guard over the session's token usage.
 
-The conversation is append-only: chatapp never edits or removes earlier blocks. A program that wants to give the
-model per-message state (for example the page's current state) adds blocks after the person's message with
-`httpapi.WithBlocks`; they stay in the conversation.
+The conversation is append-only: chatapp never edits or removes earlier blocks. agent serve turns a message's
+`context` into a block after the person's message; a program embedding `httpapi` does the same with
+`httpapi.WithBlocks`. Those blocks stay in the conversation, so send what changed rather than the whole state each
+time, or let the model ask for the state through a tool.
 
 ## Embedding the API
 

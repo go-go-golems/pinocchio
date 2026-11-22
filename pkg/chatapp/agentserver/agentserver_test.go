@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/go-go-golems/geppetto/pkg/inference/engine"
+	gepsession "github.com/go-go-golems/geppetto/pkg/inference/session"
 	geptools "github.com/go-go-golems/geppetto/pkg/inference/tools"
 	"github.com/go-go-golems/pinocchio/pkg/chatapp/httpapi"
 	"github.com/go-go-golems/pinocchio/pkg/chatapp/toolkit/presets"
@@ -277,4 +278,47 @@ func TestARestartKeepsSessionsAndTheirConversations(t *testing.T) {
 	status, out = call(t, http.MethodGet, second.URL+"/v1/sessions/"+created.SessionID+"/turns?format=yaml", "")
 	require.Equal(t, http.StatusOK, status)
 	require.Contains(t, string(out), "remember me", "the second run saw the first one's history")
+}
+
+func TestAMessagesContextFollowsItInTheConversation(t *testing.T) {
+	base := start(t, writePresets(t), t.TempDir()).URL
+	status, out := call(t, http.MethodPost, base+"/v1/sessions", `{}`)
+	require.Equal(t, http.StatusCreated, status, string(out))
+	var created httpapi.SessionResponse
+	require.NoError(t, json.Unmarshal(out, &created))
+	sess := base + "/v1/sessions/" + created.SessionID
+
+	status, out = call(t, http.MethodPost, sess+"/messages", `{"prompt":"what is open?","context":"[page] tab: workspace"}`)
+	require.Equal(t, http.StatusAccepted, status, string(out))
+	require.Contains(t, texts(waitIdle(t, base, created.SessionID)), "assistant: echo: what is open?", "the script is the message, not the context")
+	status, out = call(t, http.MethodGet, sess+"/turns?format=yaml", "")
+	require.Equal(t, http.StatusOK, status)
+	require.Less(t, strings.Index(string(out), "what is open?"), strings.Index(string(out), "[page] tab: workspace"))
+
+	status, out = call(t, http.MethodPost, sess+"/messages", `{"prompt":"x","context":"`+strings.Repeat("y", DefaultMaxContextBytes+1)+`"}`)
+	require.Equal(t, http.StatusBadRequest, status)
+	require.Equal(t, CodePromptTooLarge, codeOf(t, out))
+}
+
+func TestToolsThePersonApprovesGetThePersonTimeout(t *testing.T) {
+	ps, err := presets.Load(writePresets(t))
+	require.NoError(t, err)
+	srv, err := New(ps, WithEngine(scripted.Model, func() (engine.Engine, error) { return &scripted.Engine{}, nil }), WithDefaultPreset("bench"), WithToolRegistry(noopRegistry(t)))
+	require.NoError(t, err)
+	defer func() { _ = srv.Close() }()
+	httpSrv := httptest.NewServer(srv.Handler())
+	defer httpSrv.Close()
+
+	status, out := call(t, http.MethodPost, httpSrv.URL+"/v1/sessions", `{"id":"s1"}`)
+	require.Equal(t, http.StatusCreated, status, string(out))
+	status, out = call(t, http.MethodPost, httpSrv.URL+"/v1/sessions/s1/tools/manifest", `{"clientInstanceId":"tab","connectionId":"c","revision":1,"tools":[
+		{"name":"page.approve","mode":"human","inputSchema":{"type":"object"},"available":true},
+		{"name":"eval","mode":"frontend","inputSchema":{"type":"object"},"available":true}]}`)
+	require.Equal(t, http.StatusOK, status, string(out))
+
+	limit := srv.callLimit(ps["bench"], 2*time.Minute)
+	ctx := gepsession.WithSessionMeta(context.Background(), "s1", "inference-1")
+	require.Equal(t, DefaultPersonTimeout, limit(ctx, geptools.ToolCall{Name: "page_approve"}))
+	require.Equal(t, 2*time.Minute, limit(ctx, geptools.ToolCall{Name: "eval"}))
+	require.Equal(t, 2*time.Minute, limit(ctx, geptools.ToolCall{Name: "noop"}), "in-process tools")
 }

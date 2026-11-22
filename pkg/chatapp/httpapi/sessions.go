@@ -265,7 +265,7 @@ func (s *Server) handleMessage(w http.ResponseWriter, r *http.Request, c *call) 
 	if s.blocks != nil {
 		blocks, err = s.blocks(r.Context(), c.info, msg)
 		if err != nil {
-			writeError(w, http.StatusBadRequest, CodeInvalidRequest, err)
+			writeCodedError(w, http.StatusBadRequest, CodeInvalidRequest, err)
 			return
 		}
 	}

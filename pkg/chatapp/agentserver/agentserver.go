@@ -34,11 +34,14 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/inference/engine"
 	"github.com/go-go-golems/geppetto/pkg/inference/middleware"
 	"github.com/go-go-golems/geppetto/pkg/inference/modelsource"
+	gepsession "github.com/go-go-golems/geppetto/pkg/inference/session"
 	"github.com/go-go-golems/geppetto/pkg/inference/toolloop"
 	geptools "github.com/go-go-golems/geppetto/pkg/inference/tools"
 	"github.com/go-go-golems/geppetto/pkg/turns"
 	"github.com/go-go-golems/pinocchio/pkg/chatapp/frontendtools"
 	"github.com/go-go-golems/pinocchio/pkg/chatapp/httpapi"
+	toolv1 "github.com/go-go-golems/pinocchio/pkg/chatapp/pb/proto/pinocchio/chatapp/frontendtools/v1"
+	"github.com/go-go-golems/pinocchio/pkg/chatapp/plugins"
 	"github.com/go-go-golems/pinocchio/pkg/chatapp/serverkit"
 	"github.com/go-go-golems/pinocchio/pkg/chatapp/sessions"
 	"github.com/go-go-golems/pinocchio/pkg/chatapp/toolkit/budget"
@@ -46,6 +49,7 @@ import (
 	"github.com/go-go-golems/pinocchio/pkg/chatapp/toolkit/toolexec"
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
 	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
+	"github.com/go-go-golems/sessionstream/pkg/sessionstream"
 	"github.com/pkg/errors"
 )
 
@@ -56,6 +60,8 @@ const (
 	DefaultToolTimeout              = 120 * time.Second
 	DefaultResultCut                = 9000
 	DefaultMaxPageInstructionsBytes = 64 << 10
+	DefaultMaxContextBytes          = 64 << 10
+	DefaultPersonTimeout            = 10 * time.Minute
 )
 
 // Error codes of rejected sessions and messages.
@@ -98,6 +104,15 @@ func DefaultTexts() Texts {
 	}
 }
 
+// MessageExtra is the part of a message body this server reads besides the
+// prompt.
+type MessageExtra struct {
+	// Context is appended as a user block after the person's message (e.g.
+	// the page's state). It stays in the conversation: send what changed, not
+	// the whole state every time.
+	Context string `json:"context,omitempty"`
+}
+
 // SessionData is the session data this server reads (sessions.Info.Data).
 type SessionData struct {
 	// Instructions are appended to the preset's system prompt (presets with
@@ -123,6 +138,7 @@ type Server struct {
 	texts         Texts
 	stateDir      string
 	tools         geptools.ToolRegistry
+	browserTools  *frontendtools.Manager
 	httpOptions   []httpapi.Option
 	closers       []func() error
 }
@@ -168,7 +184,7 @@ func New(ps map[string]*presets.Preset, opts ...Option) (*Server, error) {
 	if len(ps) == 0 {
 		return nil, errors.New("agentserver: no presets")
 	}
-	s := &Server{presets: ps, prefix: DefaultPrefix, texts: DefaultTexts(), registries: map[string]geptools.ToolRegistry{}}
+	s := &Server{presets: ps, prefix: DefaultPrefix, texts: DefaultTexts(), registries: map[string]geptools.ToolRegistry{}, browserTools: frontendtools.NewManager()}
 	for _, opt := range opts {
 		if opt != nil {
 			opt(s)
@@ -209,8 +225,9 @@ func New(ps map[string]*presets.Preset, opts ...Option) (*Server, error) {
 		httpapi.WithPrefix(s.prefix),
 		httpapi.WithRuntimeResolver(httpapi.RuntimeResolverFunc(s.resolve)),
 		httpapi.WithCreateHook(s.completeSession),
-		httpapi.WithFrontendTools(frontendtools.NewManager()),
-		httpapi.WithChatPlugins(frontendtools.NewPlugin()),
+		httpapi.WithBlocks(s.contextBlocks),
+		httpapi.WithFrontendTools(s.browserTools),
+		httpapi.WithChatPlugins(frontendtools.NewPlugin(), plugins.NewReasoningPlugin(), plugins.NewToolCallPlugin()),
 	}
 	if s.stateDir != "" {
 		stores, err := s.openStores()
@@ -405,7 +422,7 @@ func (s *Server) resolve(ctx context.Context, _ *http.Request, info sessions.Inf
 		ToolConfig: &toolCfg,
 		RoundGuard: budget.SessionTokens(s.api.Sessions(), p.Budget.TokensPerSession),
 		WrapToolExecutor: toolexec.Compose(
-			toolexec.Deadline(timeout, s.texts.ToolTimeout),
+			toolexec.DeadlineBy(s.callLimit(p, timeout), s.texts.ToolTimeout),
 			toolexec.CutResults(orInt(p.ResultCut, DefaultResultCut), s.texts.ResultCut),
 		),
 		RuntimeKey:         p.Name,
@@ -435,6 +452,55 @@ func (s *Server) engineFor(ctx context.Context, p *presets.Preset, info sessions
 	}
 	eng, err := resolved.Engine()
 	return eng, resolved.Model.Ref, err
+}
+
+// callLimit is a call's time limit: the preset's personTimeout for browser
+// tools the person approves (mode "human"), its toolTimeout for the others.
+func (s *Server) callLimit(p *presets.Preset, timeout time.Duration) func(context.Context, geptools.ToolCall) time.Duration {
+	person := extraDuration(p, "personTimeout", DefaultPersonTimeout)
+	return func(ctx context.Context, call geptools.ToolCall) time.Duration {
+		sid := sessionstream.SessionId(gepsession.SessionIDFromContext(ctx))
+		if name := s.browserTools.ResolveProviderToolName(sid, call.Name); name != "" {
+			if desc, ok := s.browserTools.Descriptor(sid, name); ok && desc.GetMode() == toolv1.ToolExecutionMode_TOOL_EXECUTION_MODE_FRONTEND_HUMAN {
+				return person
+			}
+		}
+		return timeout
+	}
+}
+
+// contextBlocks is the BlocksFunc: a message's "context" becomes a user
+// block after the person's message.
+func (s *Server) contextBlocks(_ context.Context, info sessions.Info, msg httpapi.MessageRequest) ([]turns.Block, error) {
+	if len(msg.Raw) == 0 {
+		return nil, nil
+	}
+	var extra MessageExtra
+	if err := json.Unmarshal(msg.Raw, &extra); err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(extra.Context) == "" {
+		return nil, nil
+	}
+	limit := DefaultMaxContextBytes
+	if p := s.presets[info.Labels["preset"]]; p != nil {
+		if v, ok := p.Extra["maxContextBytes"].(int); ok && v > 0 {
+			limit = v
+		}
+	}
+	if len(extra.Context) > limit {
+		return nil, codedError{CodePromptTooLarge, fmt.Sprintf("a message's context is at most %d bytes", limit)}
+	}
+	return []turns.Block{turns.NewUserTextBlock(extra.Context)}, nil
+}
+
+func extraDuration(p *presets.Preset, key string, def time.Duration) time.Duration {
+	if s, ok := p.Extra[key].(string); ok {
+		if d, err := time.ParseDuration(strings.TrimSpace(s)); err == nil && d > 0 {
+			return d
+		}
+	}
+	return def
 }
 
 type engineWithMiddleware struct{ handler middleware.HandlerFunc }

@@ -71,26 +71,33 @@ var errDeadline = errors.New("toolexec: tool call deadline")
 // run was stopped keeps the executor's result. A batch runs one call at a
 // time, each with its own deadline.
 func Deadline(d time.Duration, message DeadlineMessage) Middleware {
+	return DeadlineBy(func(context.Context, geptools.ToolCall) time.Duration { return d }, message)
+}
+
+// DeadlineBy is Deadline with a limit per call (e.g. longer for tools that
+// wait for a person); a limit <= 0 means none for that call.
+func DeadlineBy(limit func(ctx context.Context, call geptools.ToolCall) time.Duration, message DeadlineMessage) Middleware {
 	if message == nil {
 		message = DefaultDeadlineMessage
 	}
 	return func(next geptools.ToolExecutor) geptools.ToolExecutor {
-		return &deadlineExecutor{next: next, d: d, message: message}
+		return &deadlineExecutor{next: next, limit: limit, message: message}
 	}
 }
 
 type deadlineExecutor struct {
 	next    geptools.ToolExecutor
-	d       time.Duration
+	limit   func(ctx context.Context, call geptools.ToolCall) time.Duration
 	message DeadlineMessage
 }
 
 func (e *deadlineExecutor) ExecuteToolCall(ctx context.Context, call geptools.ToolCall, registry geptools.ToolRegistry) (*geptools.ToolResult, error) {
-	if e.d <= 0 {
+	d := e.limit(ctx, call)
+	if d <= 0 {
 		return e.next.ExecuteToolCall(ctx, call, registry)
 	}
 	started := time.Now()
-	callCtx, cancel := context.WithTimeoutCause(ctx, e.d, errDeadline)
+	callCtx, cancel := context.WithTimeoutCause(ctx, d, errDeadline)
 	defer cancel()
 	res, err := e.next.ExecuteToolCall(callCtx, call, registry)
 	if ctx.Err() == nil && errors.Is(context.Cause(callCtx), errDeadline) {
