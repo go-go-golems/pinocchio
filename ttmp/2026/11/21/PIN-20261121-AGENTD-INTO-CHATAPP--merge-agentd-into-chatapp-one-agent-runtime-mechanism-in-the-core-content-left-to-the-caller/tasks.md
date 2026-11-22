@@ -14,5 +14,5 @@
 - [x] Phase 4: chatapp wires browser tools; frontendtools results as any JSON value <!-- t:4wjv -->
 - [x] Phase 4: toolkit: toolexec WithDeadline/CutResults, budget.SessionTokens, presets loader <!-- t:timy -->
 - [x] Phase 5: pinocchio agent serve on httpapi + presets + modelsource; delete pkg/agentd <!-- t:pigi -->
-- [ ] Migration playbook for homolog-bench written <!-- t:6h9p -->
-- [ ] Final validation: go test ./..., make lint, docmgr doctor <!-- t:b246 -->
+- [x] Migration playbook for homolog-bench written <!-- t:6h9p -->
+- [x] Final validation: go test ./..., make lint, docmgr doctor <!-- t:b246 -->

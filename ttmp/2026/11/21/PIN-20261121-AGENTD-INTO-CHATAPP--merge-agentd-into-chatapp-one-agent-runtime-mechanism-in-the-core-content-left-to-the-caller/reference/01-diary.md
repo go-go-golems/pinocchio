@@ -695,3 +695,75 @@ e67e8e1 — "agent serve runs on chatapp; pkg/agentd is deleted"
 - Removed flags: `--agents` → `--presets`. Removed routes: `/v1/agents` (→ `/v1/presets`), `/v1/sessions/{id}/turns`
   (→ `/messages`), `/tools/{callId}/result` (→ `/tools/results`), `/tools/{callId}/progress` (gone), `/cancel`
   (→ `/stop`).
+
+## Step 8: Mapping homolog-bench's client, the playbook, the guide as built, final validation
+
+This step wrote the migration playbook for the homolog-bench developer. Writing it meant reading homolog-bench's
+agent page (`web/js/agent.js`, 531 lines) call by call against the new API. That reading found three things agent
+serve lacked, which I fixed first; then the playbook, the guide's "as built" section, and the final checks.
+
+Commit e84a616 for the code; this step's ticket commit for the documents. Final validation: `go test ./...` (no
+failures), `make lint` (`0 issues`, both vet tools), `docmgr doctor --ticket PIN-20261121-AGENTD-INTO-CHATAPP`
+(`All checks passed`).
+
+### Prompt Context
+**User prompt (verbatim):** "keepa detailed diary and also write a migration playbook so that we can hand it off to our homolog-bench colleague"
+(mid-turn, before Step 1's work started); later "ok, how far are we?", "what are we spending time on?" and "continue".
+**Assistant interpretation:** Hand homolog-bench's side over as a document precise enough to follow without the
+pinocchio history, after the API it describes exists.
+**Inferred user intent:** The homolog-bench developer ports the page alone.
+**Commit (code):** e84a616 — "agentserver: message context blocks, person timeout for approved tools, reasoning and tool-call plugins"
+
+### What I did
+- Read agent.js: its `api()` error parsing (`data.error.{code,message,fix}`), the 11 SSE event types it listens to,
+  hydration from `view.messages`/`view.seq`/`view.running`, `POST /turns {text, context: snapshot()}`,
+  `/tools/{callId}/result` with `{value}` unwrapping, `/cancel`, `?agent=` listing, executor tracking through
+  `tools.manifest` events, and the human-mode Run/Decline path.
+- Fixed in agentserver (e84a616): message `context` → a block after the message (`httpapi.WithBlocks`,
+  `maxContextBytes`); `personTimeout` for `human`-mode browser tools via the new `toolexec.DeadlineBy`; the reasoning
+  and tool-call plugins; httpapi answers a BlocksFunc's `CodedError` code. Tests for the first two.
+- Captured the real SSE stream of the smoke script to document the payload fields (`messageId` of the run, text
+  segment ids `<run>:text:<segment>`, `CHAT_STREAM_PATCH_MODE_APPEND` deltas with `offset`, tool modes as
+  `TOOL_EXECUTION_MODE_FRONTEND_*`).
+- `playbook/01-…`: seven steps (preset, route/field map, errors, event stream and event map, hydration from entities,
+  creating and sending with the append-only consequence for `context`, tools/approval/timing, the UI test), exit
+  criteria, notes.
+- Guide: status paragraph in section 0, notes in 7.4/7.6, commit list in 10, decision statuses in 12, new section 14
+  (differences table with reasons, API as built, known gaps), RelatedFiles moved off deleted files.
+
+### Why
+- The three fixes before the playbook: without them the playbook would have had to say "this no longer works"
+  for the page's reasoning display, its per-turn page state, and approvals longer than 120 s.
+
+### What worked
+- The playbook's claims were checked against the code: status codes (`late_result` → 410), result statuses
+  (`success|failed|denied|cancelled|timeout`), error code strings, entity fields from the protos.
+
+### What didn't work
+- One claim was wrong in my first draft: I wrote the tool-call plugin's entity kind as `ToolCall`; it is
+  `ChatToolCall` (`pkg/chatapp/plugins/toolcall.go:29`) with `toolName`/`input`. Corrected.
+- `gepsession` and `toolv1` imports were missing twice after scripted edits (`undefined: gepsession`); added by hand.
+
+### What I learned
+- homolog-bench's page sends its whole page state with every turn. Under agentd that was cheap for the conversation
+  (deleted next turn) but broke caching; under chatapp it is kept, so the playbook tells the page to send changes or
+  let the model read state through `eval`.
+
+### What was tricky to build
+- Deciding what of agentd's "content" features to keep. They stay out of chatapp and httpapi, but agentserver is an
+  application, so page instructions, context and the person timeout live there as preset options.
+
+### What warrants a second pair of eyes
+- The playbook's event table is the contract the page will be rewritten against; a review by the homolog-bench
+  developer before they start would catch anything the page uses that I missed.
+- A run stopped before output is invisible in snapshots (guide 14, known gaps).
+
+### What should be done in the future
+- homolog-bench's port (phase 6). Then decide whether `ChatRunStopped` gets a timeline entity.
+
+### Code review instructions
+- Read the playbook with agent.js side by side; run `scripts/02-agent-serve-smoke.sh` with homolog-bench's
+  `configs/agent` after removing its `tools:` map.
+
+### Technical details
+- Branch state: `task/merge-agentd-into-chatapp` in the pinocchio worktree, code commits 0ac7b5e → e84a616.

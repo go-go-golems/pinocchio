@@ -55,3 +55,11 @@ Phase 5 (db83f65, e67e8e1): agent serve on chatapp/agentserver (presets, modelso
 
 - /home/manuel/workspaces/2026-10-28/slop-computer/pinocchio/pkg/chatapp/agentserver/agentserver.go — agent serve's runtime from a preset
 - /home/manuel/workspaces/2026-10-28/slop-computer/pinocchio/pkg/doc/topics/pinocchio-agent-serve.md — user-facing API documentation
+
+## 2026-11-22
+
+e84a616: agentserver context blocks, personTimeout for human-mode tools, reasoning/tool-call plugins. Migration playbook for homolog-bench written; guide marked as built (section 14). Final validation: go test ./..., make lint (0 issues), docmgr doctor passed
+
+### Related Files
+
+- /home/manuel/workspaces/2026-10-28/slop-computer/pinocchio/ttmp/2026/11/21/PIN-20261121-AGENTD-INTO-CHATAPP--merge-agentd-into-chatapp-one-agent-runtime-mechanism-in-the-core-content-left-to-the-caller/playbook/01-migration-playbook-homolog-bench-from-agentd-to-chatapp.md — homolog-bench handoff

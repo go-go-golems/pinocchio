@@ -14,19 +14,19 @@ Intent: long-term
 Owners:
     - manuel
 RelatedFiles:
-    - Path: repo://cmd/web-chat/internal/appserver/server.go
-      Note: web-chat HTTP stack to be promoted to pkg/chatapp/httpapi
-    - Path: repo://pkg/agentd/session.go
-      Note: agentd's run, context-block and tool-policy code being merged or removed
-    - Path: repo://pkg/chatapp/frontendtools/manager.go
-      Note: browser-tool manager chatapp will wire directly
+    - Path: repo://pkg/chatapp/httpapi/server.go
+      Note: the HTTP API that replaced web-chat's appserver and agentd's server (as built)
+    - Path: repo://pkg/chatapp/agentserver/agentserver.go
+      Note: agent serve's runtime from a preset (as built; replaces pkg/agentd)
+    - Path: repo://pkg/chatapp/frontendtools/bridge.go
+      Note: Manager.RunTools wires browser tools into every run (as built)
     - Path: repo://pkg/chatapp/runtime_inference.go
       Note: the run lifecycle the merge changes (start handler, history, builder, outcomes)
     - Path: repo://pkg/inference/runtime/composer.go
       Note: ComposedRuntime gains Loop/ToolConfig/RoundGuard
 ExternalSources: []
 Summary: How pinocchio's two agent runtimes (chatapp and agentd) work today, why agentd is merged into chatapp, the rule that the core holds mechanism while the caller owns everything in the context window, the target design with API sketches, and the phased implementation and test plan.
-LastUpdated: 2026-11-21T23:30:00-05:00
+LastUpdated: 2026-11-22T08:00:00-05:00
 WhatFor: Onboard a new engineer to pinocchio's agent runtime and guide the agentd → chatapp merge.
 WhenToUse: Before changing pkg/chatapp, pkg/agentd, cmd/web-chat or the homolog-bench integration.
 ---
@@ -48,6 +48,10 @@ Three kinds of statements appear below and are kept apart:
 - **Proposed behavior**, marked as such. API sketches are sketches: names may change during implementation, and the
   implementation status in section 10 says what has landed.
 - **Decisions**, collected as short records in section 12.
+
+**Status (2026-11-22): phases 1–5 are implemented** on `task/merge-agentd-into-chatapp`; `pkg/agentd` is deleted.
+Sections 1–4 describe the code *before* the merge (pinocchio `22a0e56`). Where the implementation differs from the
+proposal in sections 7–9, section 14 says how, and its API list is the one to trust.
 
 ## 1. The system in one page
 
@@ -597,7 +601,7 @@ type Store interface {
     Delete(ctx context.Context, id string) error
 }
 func NewMemoryStore() Store
-func NewUsagePlugin(store Store) chatapp.ChatPlugin   // adds each ChatProviderCallFinished's usage to Info.Usage
+func NewUsagePlugin(store Store) chatapp.ChatPlugin   // as built: RecordUsage(store) chatapp.UsageObserver, see 14
 ```
 
 The conversation itself stays in the `TurnStore` and the timeline in the hydration store; `sessions` holds only
@@ -626,8 +630,9 @@ remain until those interfaces gain one (noted in section 12).
 
 ### 7.6 HTTP and transports
 
-**Proposed.** `cmd/web-chat/internal/appserver` moves to `pkg/chatapp/httpapi` and gains what agentd had. The server
-builds the stack (registry, stores, engine, hub, service, transports) from options:
+**Proposed** (as built: functional options `httpapi.New(opts ...Option)` instead of this struct, and a few more
+hooks; see section 14). `cmd/web-chat/internal/appserver` moves to `pkg/chatapp/httpapi` and gains what agentd had.
+The server builds the stack (registry, stores, engine, hub, service, transports) from options:
 
 ```go
 type Options struct {
@@ -792,6 +797,9 @@ tests passing, and is recorded in the diary.
 | 5. agent serve, delete agentd | `pinocchio agent serve` on `httpapi` + presets + modelsource; delete `pkg/agentd`; docs | `cmd/pinocchio/cmds/agent.go`, `pkg/agentd` (deleted), `pkg/doc` | command smoke test with a fake engine |
 | 6. homolog-bench | hb-server and the page move to chatapp | homolog-bench (separate repo) | by the homolog-bench developer, following the playbook |
 
+Status: phases 1–5 landed — 1: `0ac7b5e`; 2: `057330b`; 3: `9a08f24`; 4: `11da2fa`, `7cbef6f`; 5: `db83f65`,
+`e67e8e1`, `e84a616`. Phase 6 is handed over with the playbook.
+
 The phases are ordered so that each one is useful alone. Phase 1 already gives the CLI and TUI an answer at the round
 limit instead of a failure, and fixes the lost stopped turn.
 
@@ -817,11 +825,11 @@ limit instead of a failure, and fixes the lost stopped turn.
 |---|---|---|---|
 | D1 | chatapp is the only runtime; agentd is deleted | keep both (duplication), or move chatapp onto agentd (agentd lacks plugins, stores, CLI/TUI) | decided by the user |
 | D2 | Mechanism in the core, content with the caller | agentd's hooks and defaults put homolog-bench's prompt design into a shared library | decided by the user |
-| D3 | Append-only history; stopped and failed turns kept, unanswered calls closed | today stopped turns vanish (chatapp) or are kept with a dangling call (web-chat composer) | proposed; the closing text is an option |
-| D4 | Busy policy is an option, default reject | today chatapp replaces silently; agentd rejects | proposed |
-| D5 | Clients reconnect by hydrating again (snapshot, then live); no sequence replay | agentd replayed from a sequence number; sessionstream's model is snapshot-based and already gap-free | proposed |
-| D6 | Agent presets are a toolkit helper, not part of engine profiles | earlier idea: extend `ProfileRuntime`; but prompts are caller content (D2) | proposed |
-| D7 | Error codes in the core; error text replaceable | agentd hid provider text; chatapp shows it | proposed |
+| D3 | Append-only history; stopped and failed turns kept, unanswered calls closed | today stopped turns vanish (chatapp) or are kept with a dangling call (web-chat composer) | implemented (`WithUnansweredToolResult`) |
+| D4 | Busy policy is an option, default reject | today chatapp replaces silently; agentd rejects | implemented (`WithBusyPolicy`) |
+| D5 | Clients reconnect by hydrating again (snapshot, then live); no sequence replay | agentd replayed from a sequence number; sessionstream's model is snapshot-based and already gap-free | implemented (SSE and websocket) |
+| D6 | Agent presets are a toolkit helper, not part of engine profiles | earlier idea: extend `ProfileRuntime`; but prompts are caller content (D2) | implemented (`toolkit/presets`, used by `agentserver`) |
+| D7 | Error codes in the core; error text replaceable | agentd hid provider text; chatapp shows it | implemented (`WithErrorClassifier`, `WithErrorText`) |
 | D8 | Cost is computed in one place | geppetto `ModelInfo.ComputeCost` and agentd `costUSD` treat cached tokens differently | open; agentd's formula is dropped with agentd, the usage plugin records tokens only until this is settled |
 | D9 | homolog-bench adapts to chatapp's protocol; no compatibility shim | a shim would keep agentd's event names alive | decided by the user |
 
@@ -855,3 +863,71 @@ Current code (pinocchio `22a0e56` unless noted):
 - sessionstream `pkg/sessionstream/{hub,hydration,projection,types}.go`, `transport/ws/server.go` — hub and transport.
 
 Start here: `go test ./pkg/chatapp/...` in the pinocchio worktree, then read `runtime_inference.go` top to bottom.
+
+## 14. As built
+
+The implementation followed sections 7–10 with these differences. Each is recorded with its reason in the diary
+(`reference/01-diary.md`, steps 3–8).
+
+| Proposed | Built | Why |
+|---|---|---|
+| `sessions.NewUsagePlugin(store)` | `chatapp.WithUsageObserver(fn)` + `sessions.RecordUsage(store)` | geppetto calls event sinks inline, so a round guard sees the new total before the next model call; a plugin sees it only after projection |
+| `httpapi.New(Options)` | `httpapi.New(opts ...Option)` | pinocchio's AGENTS.md asks for functional options |
+| `RuntimeResolver.Resolve(ctx, r, s, req)` | the same, with `MessageRequest.Raw` (the whole body) | applications read their own fields (`agent serve` reads `context`) |
+| `WithBrowserTools(m)` on the chatapp engine | `chatapp.WithRunTools(RunToolsFunc...)` + `frontendtools.Manager.RunTools()`; `httpapi.WithFrontendTools` installs it | `frontendtools` imports `chatapp`, so chatapp cannot import it |
+| browser tools only | `ComposedRuntime.WrapToolExecutor` | a per-session deadline must wrap the executor after the browser-tool bridge |
+| — | `chatapp.Service.Running`, `running` on session answers | the snapshot cannot show a run stopped before any output |
+| — | `httpapi.WithAutoCreateSessions` | chat-provider (web-chat) reuses a stored session id after a restart |
+| — | `httpapi.WithCreateHook`, `sessions.Info.Data` | agent serve validates presets and keeps the page's instructions per session |
+| — | httpapi defaults to an in-memory turn store | without one, chatapp has no history between messages |
+| `toolexec.WithDeadline(next, d, msg)`, `CutResults(next, max, note)` | `toolexec.Deadline`, `DeadlineBy`, `CutResults` as `Middleware`; `Chain`, `Compose`, `RunTools` | middlewares compose for both `WithRunTools` and `WrapToolExecutor` |
+| agent serve inside `cmd/pinocchio` | `pkg/chatapp/agentserver` + `pkg/chatapp/toolkit/scripted`; `pkg/cmds/agentcli` | testable without the command; embeddable |
+| page instructions removed (P1) | kept in agentserver as a preset option (`pageInstructions`), set once per session | agentserver is an application; the system prompt is still fixed per session (stable prefix) |
+| per-message context removed | agentserver's `context` message field → a block after the message (append-only) | homolog-bench sends page state; agentd's deletion of old context blocks broke caching |
+| awaiting-a-person removed | `personTimeout` for `human`-mode browser tools in agentserver | agent serve imposes a tool timeout, and an approval waits for a person |
+
+### API as built
+
+```go
+// pkg/chatapp
+WithBusyPolicy(BusyReject|BusyReplace), ErrRunActive, ErrNoRuntime
+WithErrorClassifier(func(error) string), WithErrorText(func(code string, err error) string), ClassifyError
+WithUnansweredToolResult(text), WithUsageObserver(UsageObserver), WithRunTools(RunToolsFunc...)
+type RunScope{SessionID, MessageID, Publisher}; type RunTools{Registry, Executor, Config}; RunTools.ExecutorOrDefault()
+type CodedError interface{ error; Code() string }
+codes: max_rounds, authentication_error, rate_limited, prompt_too_large, upstream_error, history_error, tools_error
+PromptRequest{..., Blocks []turns.Block}; Service.Running(sid)
+
+// pkg/inference/runtime
+ComposedRuntime{..., Loop, ToolConfig, RoundGuard, WrapToolExecutor}
+
+// pkg/chatapp/sessions
+Info{ID, Owner, Labels, Title, Created, Updated, Usage, Data}; Usage; Filter; Store; NewMemoryStore; NewSQLiteStore
+RecordUsage(store) chatapp.UsageObserver; TitleFrom
+
+// pkg/chatapp/httpapi
+New(opts...) / Register(mux) / Handler() / Service() / Sessions() / Hub() / Close()
+WithPrefix, WithRuntimeResolver, WithSessionStore, WithAutoCreateSessions, WithHydrationStoreSpec/Factory,
+WithTurnStore, WithTurnsDBPath, WithChatPlugins, WithFrontendTools, WithEngineOptions, WithAuthenticator,
+WithAuthorizer (default OwnerOnly), WithBlocks, WithCreateHook, WithSSEConfig, WithMaxBodyBytes
+Principal, Action, PrincipalFromContext; ErrorResponse{error, code}; SessionResponse; SessionSummary; MessageRequest
+
+// pkg/chatapp/toolkit
+toolexec.{Middleware, Chain, Compose, RunTools, Deadline, DeadlineBy, CutResults}
+budget.{SessionTokens, All, QuotaExceededError}   // code quota_exceeded
+presets.{Preset, Load, LoadFile, Names}
+scripted.{Engine, Model}
+
+// pkg/chatapp/agentserver
+New(presets, WithModels|WithEngine, WithStateDir, WithDefaultPreset, WithPrefix, WithTexts, WithToolRegistry, WithHTTPOptions)
+```
+
+The user-facing reference is `pinocchio help pinocchio-agent-serve` (`pkg/doc/topics/pinocchio-agent-serve.md`).
+
+### Known gaps
+
+- `ChatRunStopped` makes no timeline entity, so a run stopped before any output is invisible in a snapshot
+  (`running` answers whether it still runs).
+- `ClassifyError` matches error text; geppetto's engines should return typed errors.
+- Session delete leaves turns and timeline rows; tab liveness for browser calls; cost (D8).
+
