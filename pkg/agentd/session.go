@@ -61,8 +61,11 @@ type activeRun struct {
 const FinalRoundInstruction = "You have used all %d tool rounds of this turn. Do not call tools. Answer the person now: " +
 	"what you found, what is still running (with ids), and what you would do next. Do not claim anything you did not check."
 
-// errStepTimeout is the cancel cause of a tool call that ran out of time.
-var errStepTimeout = errors.New("tool step timed out")
+// errStepTimeout is the cancel cause of a tool call that ran out of time. It
+// wraps context.DeadlineExceeded so that code below the executor that checks
+// context.Cause (frontendtools reports status "timeout") sees a deadline, even
+// though the resettable limit is a cancel and ctx.Err() is context.Canceled.
+var errStepTimeout = fmt.Errorf("tool step timed out: %w", context.DeadlineExceeded)
 
 // callDeadline is the resettable time limit of one running tool call.
 type callDeadline struct {

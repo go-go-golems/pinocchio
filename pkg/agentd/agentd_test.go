@@ -210,6 +210,14 @@ func TestToolTimeoutAndCancel(t *testing.T) {
 	evs := c.events(s.ID, 0, 10*time.Second, runEnded)
 	assert.Contains(t, evs[len(evs)-1].Data.(map[string]any)["text"], "step ran for 2s and was stopped")
 	assert.Less(t, time.Since(start), 8*time.Second)
+	finished := 0
+	for _, e := range evs {
+		if e.Type == EvToolFinished {
+			finished++
+			assert.Equal(t, "timeout", e.Data.(map[string]any)["status"], "the step limit is a timeout on the wire, not a cancel")
+		}
+	}
+	assert.Equal(t, 1, finished)
 
 	seq := evs[len(evs)-1].Seq
 	c.do("POST", "/v1/sessions/"+s.ID+"/turns", map[string]any{"text": "/sleep 5000 late"}, nil)
