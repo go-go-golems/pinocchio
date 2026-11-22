@@ -178,7 +178,7 @@ func (c *AgentServeCommand) Run(ctx context.Context, parsed *values.Values) erro
 	defer stop()
 	go func() {
 		<-sig.Done()
-		sctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		sctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second) // ctx may already be done
 		defer cancel()
 		_ = hs.Shutdown(sctx)
 	}()
