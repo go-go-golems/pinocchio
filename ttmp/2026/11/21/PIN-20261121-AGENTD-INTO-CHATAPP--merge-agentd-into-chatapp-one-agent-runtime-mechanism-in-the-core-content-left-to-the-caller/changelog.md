@@ -20,3 +20,20 @@ Phase 1 (0ac7b5e): chatapp runs are mechanism only — ComposedRuntime Loop/Tool
 
 - /home/manuel/workspaces/2026-10-28/slop-computer/pinocchio/pkg/chatapp/run_outcome.go — outcome decision, classifier, closing unanswered calls
 - /home/manuel/workspaces/2026-10-28/slop-computer/pinocchio/pkg/chatapp/runtime_inference.go — run lifecycle
+
+## 2026-11-22
+
+Phase 2 (057330b): chatapp/sessions (Info, Store, memory and SQLite stores) and chatapp.WithUsageObserver + sessions.RecordUsage (replaces the guide's NewUsagePlugin)
+
+### Related Files
+
+- /home/manuel/workspaces/2026-10-28/slop-computer/pinocchio/pkg/chatapp/sessions/sessions.go — session metadata types and Store
+
+## 2026-11-22
+
+Phase 3 (9a08f24): pkg/chatapp/httpapi replaces web-chat's appserver: session routes, 409 run_active, stop, SSE transport, auth hooks, Running; serverkit trimmed to snapshot types
+
+### Related Files
+
+- /home/manuel/workspaces/2026-10-28/slop-computer/pinocchio/pkg/chatapp/httpapi/server.go — server options, route table, transports fanout
+- /home/manuel/workspaces/2026-10-28/slop-computer/pinocchio/pkg/chatapp/httpapi/sse.go — SSE hydration buffer and live delivery

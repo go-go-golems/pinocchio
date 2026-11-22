@@ -331,3 +331,181 @@ The outcome is commit 0ac7b5e. All pinocchio tests pass (`go test ./...`), and t
   finished, `truncated`, `reason: "max_rounds"`; `CodedError` → failed with its code; `MaxIterationsError` otherwise →
   failed `max_rounds`; anything else → failed with the classifier's code. History load failures → failed
   `history_error`.
+
+## Step 4: Phase 2 — session metadata and usage
+
+This step added `pkg/chatapp/sessions`: who owns a session, its labels and title, and the tokens it used. It holds
+only metadata; the conversation stays in the turn store and the timeline in the hydration store. chatapp gained one
+hook, `WithUsageObserver`, so the package can count tokens without chatapp knowing about it.
+
+Commit 057330b. `go test ./pkg/chatapp/sessions` passes; the pre-commit hook passed on the second attempt.
+
+### Prompt Context
+**User prompt (verbatim):** see Step 1.
+**Assistant interpretation:** Implement phase 2 of the guide's plan.
+**Inferred user intent:** agentd's session list, labels and usage survive the merge as chatapp mechanism.
+**Commit (code):** 057330b — "chatapp/sessions: session metadata (owner, labels, title, usage) with memory and SQLite stores"
+
+### What I did
+- `sessions.go`: `Info{ID, Owner, Labels, Title, Created, Updated, Usage}`, `Usage{Input, Output, Cached,
+  CacheCreation, CacheRead, Calls}` with `Add` and `Tokens`, `Filter{Owner, Labels, Limit}`, the `Store` interface
+  (`Create`, `Get`, `List` newest first, atomic `Update`, `Delete`), `ErrNotFound`, `ErrExists`, `TitleFrom`.
+- `memory.go` (`MemoryStore`) and `sqlite.go` (`SQLiteStore`, table `chatapp_sessions`, labels and usage as JSON
+  columns, mattn/go-sqlite3, which pinocchio already uses).
+- `pkg/chatapp/chat.go`: `type UsageObserver func(ctx, sid, *chatappv1.UsageInfo)` and `WithUsageObserver`;
+  `runtime_sink.go` calls it on `EventProviderCallFinished` before publishing `ChatProviderCallFinished`.
+- `usage.go`: `RecordUsage(store) chatapp.UsageObserver` and `UsageFromProto`.
+- Tests: one contract test run against both stores; `TitleFrom`; a chatapp run whose engine reports usage twice adds
+  up on the session.
+
+### Why
+- An observer, not a plugin as the guide proposed (`NewUsagePlugin`). A plugin sees usage only after the event is
+  stored and projected. The observer runs inside geppetto's event sink, which geppetto calls inline, so a round
+  guard reading the session's total (phase 4's budget) sees the new value before the next model call.
+- A SQLite store next to the memory one: agentd kept sessions in JSON files across restarts, and `pinocchio agent
+  serve` needs the same.
+
+### What worked
+- Both stores passed the same contract test unchanged.
+
+### What didn't work
+- The test first built the event wrongly: `unknown field Usage in struct literal of type events.EventMetadata` and
+  `cannot use 0 (untyped int constant) as *int64 value`. Usage is an argument of `NewProviderCallFinishedEvent`,
+  and the duration is `*int64`.
+- Lint on the first commit attempt: `pkg/chatapp/sessions/sessions.go:108:29: param max has same name as predeclared
+  identifier (predeclared)`. My shell command chained the commit after the lint run, so the hook ran and refused the
+  commit. Renamed the parameter to `maxRunes`.
+
+### What I learned
+- geppetto's `EventProviderCallFinished` carries usage as a field set by the constructor, not through metadata.
+
+### What was tricky to build
+- Nothing beyond the hook placement described in Why.
+
+### What warrants a second pair of eyes
+- `SQLiteStore.Update` serializes in-process with a mutex; two server processes on one file could interleave a
+  read-modify-write. Fine for one `agent serve` process; a shared deployment needs a transaction.
+- Deleting a session leaves its turns and timeline rows; `TurnStore` and `HydrationStore` have no delete.
+
+### What should be done in the future
+- Update the guide's 7.4 and 8.1: `RecordUsage` and `WithUsageObserver` replace `NewUsagePlugin`.
+
+### Code review instructions
+- `pkg/chatapp/sessions/*.go`, `pkg/chatapp/runtime_sink.go` (the `EventProviderCallFinished` case).
+- `go test ./pkg/chatapp/sessions`
+
+### Technical details
+- SQLite schema: `chatapp_sessions(id PRIMARY KEY, owner, labels JSON, title, created_ms, updated_ms, usage JSON)`,
+  index on `(owner, created_ms)`.
+
+## Step 5: Phase 3 — the HTTP API
+
+This step moved web-chat's `internal/appserver` to a public package, `pkg/chatapp/httpapi`, and gave it what
+agentd's server had: session routes backed by the sessions store, 409 for a busy session, stop, server-sent events,
+and authentication hooks. web-chat now runs on it. The SSE transport hydrates like the websocket does: snapshot
+first, then only the events after the snapshot, with no gap and no duplicate.
+
+Commit 9a08f24. `go test ./...` passes in pinocchio (httpapi and sessions also under `-race`); `golangci-lint run
+./pkg/... ./cmd/...` reports `0 issues`; the pre-commit hook passed on the first attempt.
+
+### Prompt Context
+**User prompt (verbatim):** see Step 1.
+**Assistant interpretation:** Implement phase 3, then use the resulting API names in the playbook.
+**Inferred user intent:** One server package that web-chat, `pinocchio agent serve` and homolog-bench can all use.
+**Commit (code):** 9a08f24 — "chatapp/httpapi: the HTTP API (sessions, messages, stop, SSE, auth) replaces web-chat's appserver"
+
+### What I did
+- `git mv` of appserver's `server.go`, `snapshot.go`, `routes_exports.go` → `exports.go`, `routes_frontend_tools.go` →
+  `tools.go`, `server_test.go` → `httpapi_test.go`; the rest of appserver deleted.
+- `server.go`: functional options (`WithRuntimeResolver` (required), `WithSessionStore`, `WithAutoCreateSessions`,
+  `WithHydrationStoreSpec/Factory`, `WithTurnStore`, `WithTurnsDBPath`, `WithChatPlugins`, `WithFrontendTools`,
+  `WithEngineOptions`, `WithAuthenticator`, `WithAuthorizer`, `WithBlocks`, `WithSSEConfig`, `WithMaxBodyBytes`,
+  `WithPrefix`), `New`, `Register(mux)` with Go 1.22 method patterns, `Handler()`, `Service()`, `Sessions()`, `Hub()`.
+  `RuntimeResolver.Resolve(ctx, r, sessions.Info, MessageRequest)`. A `transports` fanout over the websocket server
+  and the SSE hub.
+- `auth.go`: `Principal`, `Action` (`create`, `list`, `read`, `send`, `stop`, `delete`, `tools`), `Authenticator`,
+  `Authorizer`, `OwnerOnly` (default), `PrincipalFromContext`.
+- `sessions.go`: the `session(action, handler)` wrapper (authenticate → validate id → look up or auto-create →
+  authorize), create/list/get/delete/stop/message handlers.
+- `sse.go`: `sseHub` (a `UIFanout`), per-stream hydration buffer and bounded live queue, `handleEvents`,
+  `SSEConfig`.
+- `types.go`: `ErrorResponse{error, code}` and the code constants, `CreateSessionRequest`, `SessionResponse`,
+  `SessionListResponse`, `MessageRequest` (with `Raw`), `AcceptedResponse`.
+- chatapp: `Engine.Running` and `Service.Running`.
+- web-chat: `webapp/routes.go` calls `Register`; `webchatcmd/run.go` builds `httpapi.New(...)` with
+  `WithAutoCreateSessions(true)`; `runtime/canonical_resolver.go` takes the new signature. Its tests moved to the new
+  API; the mock-parity HTTP test moved to `cmd/web-chat/main_runtime_test.go`, because `pkg/` cannot import web-chat's
+  internal mock runtime.
+- serverkit: removed the request/response contracts, `DecodeJSON`, `WriteError`, `ParseSessionPath*` and their test;
+  only `SnapshotEntity` and `SessionSnapshotResponse` remain.
+- Docs: `cmd/web-chat/README.md` route list; `pkg/doc/topics/chatapp-protobuf-plugins.md` names `httpapi.MessageRequest`.
+
+### Why
+- Functional options instead of the guide's `Options` struct: pinocchio's `AGENTS.md` says "Use functional options
+  pattern for configurable components", and appserver already used them.
+- Auto-creation as an option: chat-provider (`node_modules/@go-go-golems/chat-provider/core/createChatClient.js`)
+  stores the session id in the URL and session storage and reuses it without creating it again. With an in-memory
+  session store, a restarted server would answer 404 for every message.
+- `sessionId` in the create answer: chat-provider reads `data.sessionId`.
+- The fanout logs delivery errors instead of returning them: sessionstream's hub treats a fanout error as a failed
+  publish (`hub.go:510`), but the event is already stored, and one closed browser tab must not fail the run.
+- `running` on `GET /sessions/{id}`: the snapshot's `status` is inferred from entities and cannot see a run that was
+  stopped before any output (below).
+
+### What worked
+- The SSE no-gap test: a stream opened before the message sees every UI event; a second stream opened mid-run gets a
+  snapshot ordinal > 0 and then exactly the first stream's events with higher ordinals, in order.
+- `go test -race ./pkg/chatapp/httpapi ./pkg/chatapp/sessions`: ok.
+
+### What didn't work
+- `use of internal package github.com/go-go-golems/pinocchio/cmd/web-chat/internal/mockruntime not allowed` once the
+  test file sat in `pkg/`. Moved that one test to web-chat.
+- Two mistakes in my first draft, caught when building: a placeholder type `[]turnsBlock` and a drain loop whose
+  `break` only left the `select`, which would have looped forever after an overflow.
+- `TestSecondMessageWhileRunningIsRefusedWith409` timed out: `run did not stop; status "streaming"`. The snapshot
+  held only the user entity (`"status": "accepted"`). The stop reached the run before its first text segment, and
+  chatapp projects nothing for `ChatRunStopped` (only `ChatRunFailed` gets an entity, role `error`). Segment entities
+  use ids derived from the run's message id (`<messageID><delimiter><segment>`), so the projection cannot tell
+  whether a stopped run produced output. I did not change the projection; I added `Service.Running` and a `running`
+  field, and the test waits on that.
+
+### What I learned
+- chat-provider already calls `POST /sessions/{id}/stop`; appserver never had that route, so web-chat's stop button
+  only cancelled frontend tools.
+- sessionstream's websocket server runs its subscribe authorizer with a context derived from the upgrade request, so a
+  principal put into the request context reaches it.
+
+### What was tricky to build
+- The SSE hand-over from snapshot to live. The stream must register before reading the snapshot (otherwise an event
+  published in between is lost), keep what arrives meanwhile, drop what the snapshot already contains (ordinal ≤
+  snapshot ordinal; the hub stores before it fans out, so an event in the snapshot may still be delivered after
+  registration), then switch to live under the same lock. Batches queued after the switch come after the buffered
+  ones because one goroutine writes both.
+- The hub calls the fanout inside its publish, so the SSE fanout must never block: a full queue closes the stream with
+  an `error` event (`stream_overflow`), and the client reconnects.
+
+### What warrants a second pair of eyes
+- A run stopped before any output leaves no assistant entity; a client that hydrates later sees the person's message
+  as "accepted". `running` covers the "is it still going" question, but the timeline itself shows nothing.
+- Auto-created sessions get the requesting principal as owner. With authentication, whoever first uses an unknown id
+  owns it; ids are uuids by default.
+- Each SSE write sets its own deadline (`SSEConfig.WriteTimeout`, 10 s) through `http.ResponseController`, which
+  replaces web-chat's 60 s server `WriteTimeout` for the stream.
+
+### What should be done in the future
+- Project `ChatRunStopped` into the timeline (needs to know whether the run had output, e.g. a field on the event).
+- The SSE transport could move into sessionstream next to the websocket transport.
+
+### Code review instructions
+- Start with `pkg/chatapp/httpapi/server.go` (route table), then `sessions.go` (`session`, `lookup`,
+  `handleMessage`), then `sse.go` (`offer`, `goLive`, `handleEvents`).
+- `go test -race ./pkg/chatapp/httpapi`; `go test ./cmd/web-chat/...`
+
+### Technical details
+- SSE wire format: `event: snapshot` + `data: SessionSnapshotResponse`; per UI event `id: <ordinal>`, `event: ui`,
+  `data: {"sessionId","ordinal","name","payload"}` (payload is protojson); `event: error` + `data: {"code","error"}`
+  before the server ends a stream (`hydration_buffer_overflow`, `stream_overflow`, `session_deleted`,
+  `server_closed`); `: ping` every 15 s.
+- Error answers: `{"error": "...", "code": "..."}` with codes `invalid_request`, `request_too_large`,
+  `invalid_session_id`, `session_not_found`, `session_exists`, `unauthenticated`, `forbidden`, `run_active`,
+  `runtime_error` (or the resolver's `CodedError` code), `no_runtime`, `frontend_tools_disabled`, `internal_error`.

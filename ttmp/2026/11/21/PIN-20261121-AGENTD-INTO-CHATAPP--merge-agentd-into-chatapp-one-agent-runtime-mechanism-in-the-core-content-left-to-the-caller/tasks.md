@@ -8,9 +8,9 @@
 - [x] Phase 1: PromptRequest.Blocks appended after the user message <!-- t:5gis -->
 - [x] Phase 1: chatapp saves the final turn on every outcome, closing unanswered tool calls; composers stop persisting <!-- t:0fag -->
 - [x] Phase 1: remove chatapp content defaults (Explain evtstream, silent demo fallback, max-rounds warning text) <!-- t:aobr -->
-- [ ] Phase 2: sessions package (Info, Store, memory store) and usage plugin <!-- t:p3xi -->
-- [ ] Phase 3: pkg/chatapp/httpapi promoted from web-chat appserver, session routes, stop, auth hooks <!-- t:wz8o -->
-- [ ] Phase 3: SSE transport (snapshot then live, gap-free) and fanout multiplexer; web-chat switched <!-- t:fxol -->
+- [x] Phase 2: sessions package (Info, Store, memory store) and usage plugin <!-- t:p3xi -->
+- [x] Phase 3: pkg/chatapp/httpapi promoted from web-chat appserver, session routes, stop, auth hooks <!-- t:wz8o -->
+- [x] Phase 3: SSE transport (snapshot then live, gap-free) and fanout multiplexer; web-chat switched <!-- t:fxol -->
 - [ ] Phase 4: chatapp wires browser tools; frontendtools results as any JSON value <!-- t:4wjv -->
 - [ ] Phase 4: toolkit: toolexec WithDeadline/CutResults, budget.SessionTokens, presets loader <!-- t:timy -->
 - [ ] Phase 5: pinocchio agent serve on httpapi + presets + modelsource; delete pkg/agentd <!-- t:pigi -->
