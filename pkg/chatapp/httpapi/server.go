@@ -34,6 +34,7 @@ import (
 	chatapp "github.com/go-go-golems/pinocchio/pkg/chatapp"
 	chatexport "github.com/go-go-golems/pinocchio/pkg/chatapp/export"
 	"github.com/go-go-golems/pinocchio/pkg/chatapp/frontendtools"
+	"github.com/go-go-golems/pinocchio/pkg/chatapp/httpapi/internal/sessionguard"
 	"github.com/go-go-golems/pinocchio/pkg/chatapp/serverkit"
 	"github.com/go-go-golems/pinocchio/pkg/chatapp/sessions"
 	infruntime "github.com/go-go-golems/pinocchio/pkg/inference/runtime"
@@ -71,7 +72,7 @@ type BlocksFunc func(ctx context.Context, s sessions.Info, msg MessageRequest) (
 // auto-creation): it may fill in or change the session (labels, title, data)
 // or reject it. An error answers 400 with its chatapp.CodedError code, or
 // "invalid_request".
-type CreateHook func(ctx context.Context, p Principal, info *sessions.Info) error
+type CreateHook = sessionguard.CreateHook
 
 // HydrationStoreFactory constructs the timeline store after the server has
 // registered all protobuf schemas.
@@ -81,7 +82,8 @@ type HydrationStoreFactory func(context.Context, *sessionstream.SchemaRegistry) 
 type Server struct {
 	prefix           string
 	resolver         RuntimeResolver
-	sessionStore     sessions.Store
+	storeOpt         sessions.Store // WithSessionStore; New hands it to the guard and the usage observer only
+	guard            *sessionguard.Guard
 	autoCreate       bool
 	hydrationSpec    serverkit.StoreSpec
 	hydrationFactory HydrationStoreFactory
@@ -120,7 +122,7 @@ func WithRuntimeResolver(resolver RuntimeResolver) Option {
 
 // WithSessionStore sets where session metadata is kept (default: in memory).
 func WithSessionStore(store sessions.Store) Option {
-	return func(s *Server) { s.sessionStore = store }
+	return func(s *Server) { s.storeOpt = store }
 }
 
 // WithAutoCreateSessions makes a request for an unknown session id create the
@@ -228,8 +230,8 @@ func New(opts ...Option) (*Server, error) {
 	if s.prefix == "/" {
 		s.prefix = ""
 	}
-	if s.sessionStore == nil {
-		s.sessionStore = sessions.NewMemoryStore()
+	if s.storeOpt == nil {
+		s.storeOpt = sessions.NewMemoryStore()
 	}
 	if s.turnStore == nil {
 		// Without a turn store chatapp has no history: every message would
@@ -239,6 +241,7 @@ func New(opts ...Option) (*Server, error) {
 	if s.authorize == nil {
 		s.authorize = OwnerOnly
 	}
+	s.guard = sessionguard.New(s.storeOpt, s.authorize, sessionguard.WithCreateHook(s.createHook), sessionguard.WithAutoCreate(s.autoCreate))
 	s.sseConfig = s.sseConfig.withDefaults()
 
 	reg := sessionstream.NewSchemaRegistry()
@@ -266,7 +269,7 @@ func New(opts ...Option) (*Server, error) {
 	engineOptions := []chatapp.Option{
 		chatapp.WithPlugins(s.plugins...),
 		chatapp.WithTurnStore(s.turnStore),
-		chatapp.WithUsageObserver(sessions.RecordUsage(s.sessionStore)),
+		chatapp.WithUsageObserver(sessions.RecordUsage(s.storeOpt)), // the engine's own bookkeeping, not a request
 	}
 	if s.frontendTools != nil {
 		engineOptions = append(engineOptions, chatapp.WithRunTools(s.frontendTools.RunTools()))
@@ -342,8 +345,9 @@ func (s *Server) Handler() http.Handler {
 // submit prompts or read snapshots without HTTP.
 func (s *Server) Service() *chatapp.Service { return s.service }
 
-// Sessions is the session metadata store.
-func (s *Server) Sessions() sessions.Store { return s.sessionStore }
+// Sessions is the session metadata store, unguarded: for the program that
+// embeds the server, never for request handlers.
+func (s *Server) Sessions() sessions.Store { return s.guard.Unchecked() }
 
 // Hub is the sessionstream hub.
 func (s *Server) Hub() *sessionstream.Hub { return s.hub }
@@ -371,7 +375,7 @@ func (s *Server) authorizeSubscribe(ctx context.Context, sid sessionstream.Sessi
 	if !validSessionID(string(sid)) {
 		return errInvalidSessionID
 	}
-	_, err := s.lookup(ctx, p, string(sid), ActionRead)
+	_, err := s.guard.For(p).Open(ctx, string(sid), ActionRead)
 	return err
 }
 

@@ -13,13 +13,17 @@ import (
 	"github.com/go-go-golems/geppetto/pkg/turns"
 
 	chatapp "github.com/go-go-golems/pinocchio/pkg/chatapp"
+	"github.com/go-go-golems/pinocchio/pkg/chatapp/httpapi/internal/sessionguard"
 	"github.com/go-go-golems/pinocchio/pkg/chatapp/sessions"
 	sessionstream "github.com/go-go-golems/sessionstream/pkg/sessionstream"
 )
 
 // call is one authorized request on one session.
+// call is one authorized request on a session: sess is what the guard
+// opened for the route's action; info is its metadata.
 type call struct {
 	principal Principal
+	sess      sessionguard.Session
 	info      sessions.Info
 	sid       sessionstream.SessionId
 }
@@ -54,51 +58,24 @@ func (s *Server) session(action Action, fn func(http.ResponseWriter, *http.Reque
 			writeError(w, http.StatusBadRequest, CodeInvalidSessionID, errInvalidSessionID)
 			return
 		}
-		info, err := s.lookup(r.Context(), p, id, action)
+		sess, err := s.guard.For(p).Open(r.Context(), id, action)
 		if err != nil {
 			writeLookupError(w, err)
 			return
 		}
-		fn(w, r, &call{principal: p, info: info, sid: sessionstream.SessionId(id)})
+		fn(w, r, &call{principal: p, sess: sess, info: sess.Info(), sid: sessionstream.SessionId(id)})
 	}
-}
-
-// lookup returns the session for an action, creating it first when
-// auto-creation is on and the action may create.
-func (s *Server) lookup(ctx context.Context, p Principal, id string, action Action) (sessions.Info, error) {
-	info, err := s.sessionStore.Get(ctx, id)
-	if errors.Is(err, sessions.ErrNotFound) && s.autoCreate && action != ActionDelete && action != ActionStop {
-		if err := s.authorize(ctx, p, ActionCreate, nil); err != nil {
-			return sessions.Info{}, forbiddenError{err}
-		}
-		created := sessions.Info{ID: id, Owner: p.ID}
-		if err := s.runCreateHook(ctx, p, &created); err != nil {
-			return sessions.Info{}, createRejectedError{err}
-		}
-		if err := s.sessionStore.Create(ctx, created); err != nil && !errors.Is(err, sessions.ErrExists) {
-			return sessions.Info{}, err
-		}
-		info, err = s.sessionStore.Get(ctx, id)
-	}
-	if err != nil {
-		return sessions.Info{}, err
-	}
-	if err := s.authorize(ctx, p, action, &info); err != nil {
-		return sessions.Info{}, forbiddenError{err}
-	}
-	return info, nil
 }
 
 func writeLookupError(w http.ResponseWriter, err error) {
-	var forbidden forbiddenError
 	switch {
 	case errors.Is(err, sessions.ErrNotFound):
 		writeError(w, http.StatusNotFound, CodeSessionNotFound, err)
-	case errors.As(err, &forbidden):
+	case errors.As(err, new(sessionguard.ForbiddenError)):
 		writeError(w, http.StatusForbidden, CodeForbidden, err)
 	case errors.Is(err, errInvalidSessionID):
 		writeError(w, http.StatusBadRequest, CodeInvalidSessionID, err)
-	case errors.As(err, new(createRejectedError)):
+	case errors.As(err, new(sessionguard.CreateRejectedError)):
 		writeCodedError(w, http.StatusBadRequest, CodeInvalidRequest, err)
 	default:
 		writeError(w, http.StatusInternalServerError, CodeInternal, err)
@@ -111,10 +88,6 @@ func (s *Server) handleCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := withPrincipal(r.Context(), p)
-	if err := s.authorize(ctx, p, ActionCreate, nil); err != nil {
-		writeError(w, http.StatusForbidden, CodeForbidden, err)
-		return
-	}
 	var in CreateSessionRequest
 	if _, ok := s.decodeBody(w, r, &in); !ok {
 		return
@@ -127,26 +100,16 @@ func (s *Server) handleCreate(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, CodeInvalidSessionID, errInvalidSessionID)
 		return
 	}
-	info := sessions.Info{ID: id, Owner: p.ID, Title: strings.TrimSpace(in.Title), Labels: in.Labels, Data: in.Data}
-	if err := s.runCreateHook(ctx, p, &info); err != nil {
-		writeCodedError(w, http.StatusBadRequest, CodeInvalidRequest, err)
-		return
-	}
-	err := s.sessionStore.Create(ctx, info)
+	sess, err := s.guard.For(p).Create(ctx, sessions.Info{ID: id, Title: strings.TrimSpace(in.Title), Labels: in.Labels, Data: in.Data})
 	if errors.Is(err, sessions.ErrExists) {
 		writeError(w, http.StatusConflict, CodeSessionExists, err)
 		return
 	}
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, CodeInternal, err)
+		writeLookupError(w, err)
 		return
 	}
-	created, err := s.sessionStore.Get(ctx, id)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, CodeInternal, err)
-		return
-	}
-	writeJSON(w, http.StatusCreated, SessionResponse{SessionID: id, Session: created})
+	writeJSON(w, http.StatusCreated, SessionResponse{SessionID: id, Session: sess.Info()})
 }
 
 // handleList answers GET /sessions. An authenticated principal sees only its
@@ -157,11 +120,7 @@ func (s *Server) handleList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := withPrincipal(r.Context(), p)
-	if err := s.authorize(ctx, p, ActionList, nil); err != nil {
-		writeError(w, http.StatusForbidden, CodeForbidden, err)
-		return
-	}
-	filter := sessions.Filter{Owner: p.ID}
+	var filter sessions.Filter // the guard limits it to the principal's own sessions
 	for _, raw := range r.URL.Query()["label"] {
 		k, v, found := strings.Cut(raw, ":")
 		if !found || strings.TrimSpace(k) == "" {
@@ -181,18 +140,13 @@ func (s *Server) handleList(w http.ResponseWriter, r *http.Request) {
 		}
 		filter.Limit = n
 	}
-	list, err := s.sessionStore.List(ctx, filter)
+	list, err := s.guard.For(p).List(ctx, filter)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, CodeInternal, err)
+		writeLookupError(w, err)
 		return
 	}
 	out := make([]SessionSummary, 0, len(list))
 	for _, info := range list {
-		// A listing never shows what a read of the session would refuse,
-		// whatever the store's filter matched.
-		if s.authorize(ctx, p, ActionRead, &info) != nil {
-			continue
-		}
 		out = append(out, SessionSummary{Info: info, Running: s.service.Running(sessionstream.SessionId(info.ID))})
 	}
 	writeJSON(w, http.StatusOK, SessionListResponse{Sessions: out})
@@ -224,7 +178,7 @@ func (s *Server) handleDelete(w http.ResponseWriter, r *http.Request, c *call) {
 		log.Warn().Err(err).Str("session", string(c.sid)).Msg("httpapi: delete: run did not end in time")
 	}
 	s.sse.closeSession(c.sid)
-	if err := s.sessionStore.Delete(r.Context(), string(c.sid)); err != nil && !errors.Is(err, sessions.ErrNotFound) {
+	if err := c.sess.Delete(r.Context()); err != nil && !errors.Is(err, sessions.ErrNotFound) {
 		writeError(w, http.StatusInternalServerError, CodeInternal, err)
 		return
 	}
@@ -302,7 +256,7 @@ func (s *Server) handleMessage(w http.ResponseWriter, r *http.Request, c *call) 
 	}
 	if c.info.Title == "" && strings.TrimSpace(msg.Prompt) != "" {
 		title := sessions.TitleFrom(msg.Prompt, 80)
-		if err := s.sessionStore.Update(r.Context(), string(c.sid), func(info *sessions.Info) error {
+		if err := c.sess.Update(r.Context(), func(info *sessions.Info) error {
 			if info.Title == "" {
 				info.Title = title
 			}
@@ -313,24 +267,6 @@ func (s *Server) handleMessage(w http.ResponseWriter, r *http.Request, c *call) 
 	}
 	writeJSON(w, http.StatusAccepted, AcceptedResponse{SessionID: string(c.sid), Accepted: true, MessageID: runID})
 }
-
-func (s *Server) runCreateHook(ctx context.Context, p Principal, info *sessions.Info) error {
-	if s.createHook == nil {
-		return nil
-	}
-	id := info.ID
-	if err := s.createHook(ctx, p, info); err != nil {
-		return err
-	}
-	info.ID = id
-	return nil
-}
-
-// createRejectedError marks a CreateHook's rejection during auto-creation.
-type createRejectedError struct{ err error }
-
-func (e createRejectedError) Error() string { return e.err.Error() }
-func (e createRejectedError) Unwrap() error { return e.err }
 
 // writeCodedError answers with err's chatapp.CodedError code, or fallback.
 func writeCodedError(w http.ResponseWriter, status int, fallback string, err error) {

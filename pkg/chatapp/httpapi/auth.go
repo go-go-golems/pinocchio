@@ -5,34 +5,33 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/go-go-golems/pinocchio/pkg/chatapp/httpapi/internal/sessionguard"
 	"github.com/go-go-golems/pinocchio/pkg/chatapp/sessions"
 )
 
 // Principal is who makes a request. An empty ID is anonymous.
-type Principal struct {
-	ID    string
-	Attrs map[string]string
-}
+type Principal = sessionguard.Principal
 
 // Action is what a request does to a session.
-type Action string
+type Action = sessionguard.Action
 
 const (
-	ActionCreate Action = "create" // session is nil
-	ActionList   Action = "list"   // session is nil
-	ActionRead   Action = "read"   // snapshot, events, websocket, exports
-	ActionSend   Action = "send"   // a message
-	ActionStop   Action = "stop"
-	ActionDelete Action = "delete"
-	ActionTools  Action = "tools" // browser-tool manifest and results
+	ActionCreate = sessionguard.ActionCreate // session is nil
+	ActionList   = sessionguard.ActionList   // session is nil
+	ActionRead   = sessionguard.ActionRead   // snapshot, events, websocket, exports
+	ActionSend   = sessionguard.ActionSend   // a message
+	ActionStop   = sessionguard.ActionStop
+	ActionDelete = sessionguard.ActionDelete
+	ActionTools  = sessionguard.ActionTools // browser-tool manifest and results
 )
 
 // Authenticator turns a request into a Principal. An error answers 401.
 type Authenticator func(r *http.Request) (Principal, error)
 
 // Authorizer allows or denies an action. s is nil for ActionCreate and
-// ActionList. An error answers 403.
-type Authorizer func(ctx context.Context, p Principal, a Action, s *sessions.Info) error
+// ActionList. An error answers 403. Handlers reach sessions only through the
+// guard (internal/sessionguard), which runs it before every store operation.
+type Authorizer = sessionguard.Authorizer
 
 // ErrForbidden is OwnerOnly's denial.
 var ErrForbidden = errors.New("httpapi: forbidden")
@@ -71,9 +70,3 @@ func (s *Server) authenticateRequest(w http.ResponseWriter, r *http.Request) (Pr
 	}
 	return p, true
 }
-
-// forbiddenError marks an Authorizer's denial.
-type forbiddenError struct{ err error }
-
-func (e forbiddenError) Error() string { return e.err.Error() }
-func (e forbiddenError) Unwrap() error { return e.err }
