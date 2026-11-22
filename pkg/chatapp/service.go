@@ -23,6 +23,11 @@ type PromptRequest struct {
 	Attachments    []Attachment
 	IdempotencyKey string
 	Runtime        *infruntime.ComposedRuntime
+	// Blocks are appended to the turn after the person's message, in order, for
+	// this turn only. They stay in the history afterwards (chatapp never edits
+	// blocks it has sent). Use them for caller-owned content such as a block
+	// describing the application's current state.
+	Blocks []turns.Block
 	// InitialTurn optionally seeds the Geppetto runtime with a fully rendered
 	// turn instead of appending Prompt as a new user-only turn. This is used by
 	// Pinocchio verbs whose inputs can include system prompts, pre-seeded blocks,

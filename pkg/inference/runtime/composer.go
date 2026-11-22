@@ -5,6 +5,7 @@ import (
 
 	"github.com/go-go-golems/geppetto/pkg/events"
 	"github.com/go-go-golems/geppetto/pkg/inference/engine"
+	"github.com/go-go-golems/geppetto/pkg/inference/toolloop"
 	geptools "github.com/go-go-golems/geppetto/pkg/inference/tools"
 	aisettings "github.com/go-go-golems/geppetto/pkg/steps/ai/settings"
 )
@@ -39,6 +40,18 @@ type ComposedRuntime struct {
 	WrapSink           EventSinkWrapper
 	RuntimeFingerprint string
 	RuntimeKey         string
+
+	// Loop configures the tool loop: the round limit and an optional final
+	// answer at the limit. nil uses geppetto's default (20 rounds, no final
+	// answer). The final answer's instruction block is the caller's content.
+	Loop *toolloop.LoopConfig
+	// ToolConfig configures tool execution (timeouts, parallelism, retries).
+	// nil uses geppetto's default.
+	ToolConfig *geptools.ToolConfig
+	// RoundGuard runs before every model call of a run; an error stops the run
+	// before that call. Budgets and quotas are implemented here. An error with
+	// a Code() string method fails the run with that code.
+	RoundGuard toolloop.RoundGuard
 }
 
 // RuntimeBuilder composes an engine/sink runtime for a conversation request.

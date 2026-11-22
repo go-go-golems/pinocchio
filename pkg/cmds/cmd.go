@@ -1479,11 +1479,8 @@ func (g *PinocchioCommand) runChat(ctx context.Context, rc *run.RunContext) (*tu
 	}
 	defer func() { _ = runner.Close() }()
 
-	var turnPersister pinui.TurnPersister
-	if turnStore != nil {
-		turnPersister = newCLITurnStorePersister(turnStore, string(sid), string(sid), "final")
-	}
-	backend, err := pinui.NewChatAppBackend(runner.Service, sid, &infruntime.ComposedRuntime{Engine: eng}, seed, pinui.WithTurnPersister(turnPersister))
+	// chatapp saves the conversation turn to turnStore at the end of every run.
+	backend, err := pinui.NewChatAppBackend(runner.Service, sid, &infruntime.ComposedRuntime{Engine: eng}, seed)
 	if err != nil {
 		return nil, err
 	}

@@ -5,8 +5,10 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/go-go-golems/geppetto/pkg/turns"
+	"github.com/go-go-golems/geppetto/pkg/turns/serde"
 	"github.com/go-go-golems/pinocchio/pkg/cmds/run"
 	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
 	sessionstream "github.com/go-go-golems/sessionstream/pkg/sessionstream"
@@ -45,9 +47,10 @@ func TestLoadLatestCLIFinalTurn(t *testing.T) {
 	turn := &turns.Turn{ID: "turn-resume"}
 	turns.AppendBlock(turn, turns.NewUserTextBlock("first prompt"))
 	turns.AppendBlock(turn, turns.NewAssistantTextBlock("first answer"))
-	persister := newCLITurnStorePersister(store, "resume-session", "resume-session", "final")
-	require.NotNil(t, persister)
-	require.NoError(t, persister.PersistTurn(context.Background(), turn))
+	require.NoError(t, turns.KeyTurnMetaSessionID.Set(&turn.Metadata, "resume-session"))
+	payload, err := serde.ToYAML(turn, serde.Options{})
+	require.NoError(t, err)
+	require.NoError(t, store.Save(context.Background(), "resume-session", "resume-session", turn.ID, "final", time.Now().UnixMilli(), string(payload), chatstore.TurnSaveOptions{}))
 
 	loaded, err := loadLatestCLIFinalTurn(context.Background(), store, "resume-session")
 	require.NoError(t, err)
@@ -99,31 +102,4 @@ func TestOpenCLITurnStore_OpenFromDBPath(t *testing.T) {
 
 	_, err = os.Stat(filepath.Dir(turnsDB))
 	require.NoError(t, err)
-}
-
-func TestCLITurnStorePersister_PersistTurn(t *testing.T) {
-	dir := t.TempDir()
-	dsn, err := chatstore.SQLiteTurnDSNForFile(filepath.Join(dir, "turns.db"))
-	require.NoError(t, err)
-	store, err := chatstore.NewSQLiteTurnStore(dsn)
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = store.Close() })
-
-	persister := newCLITurnStorePersister(store, "conv-a", "", "final")
-	require.NotNil(t, persister)
-
-	turn := &turns.Turn{ID: "turn-a"}
-	err = turns.KeyTurnMetaSessionID.Set(&turn.Metadata, "session-a")
-	require.NoError(t, err)
-	turns.AppendBlock(turn, turns.NewUserTextBlock("hello"))
-
-	err = persister.PersistTurn(context.Background(), turn)
-	require.NoError(t, err)
-
-	items, err := store.List(context.Background(), chatstore.TurnQuery{ConvID: "conv-a", Limit: 10})
-	require.NoError(t, err)
-	require.Len(t, items, 1)
-	require.Equal(t, "session-a", items[0].SessionID)
-	require.Equal(t, "turn-a", items[0].TurnID)
-	require.Equal(t, "final", items[0].Phase)
 }

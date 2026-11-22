@@ -1,8 +1,6 @@
 package appserver
 
 import (
-	"time"
-
 	chatapp "github.com/go-go-golems/pinocchio/pkg/chatapp"
 	chatexport "github.com/go-go-golems/pinocchio/pkg/chatapp/export"
 	"github.com/go-go-golems/pinocchio/pkg/chatapp/frontendtools"
@@ -17,7 +15,6 @@ type Server struct {
 	hub                 *sessionstream.Hub
 	ws                  *wstransport.Server
 	defaultProfile      string
-	chunkDelay          time.Duration
 	timelineSpec        serverkit.StoreSpec
 	hydrationFactory    HydrationStoreFactory
 	runtimeResolver     RuntimeResolver
@@ -31,7 +28,6 @@ type Server struct {
 
 func NewServer(opts ...Option) (*Server, error) {
 	s := &Server{
-		chunkDelay:   20 * time.Millisecond,
 		timelineSpec: serverkit.StoreSpec{Backend: serverkit.StoreBackendMemory},
 	}
 	for _, opt := range opts {
@@ -53,7 +49,7 @@ func NewServer(opts ...Option) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	engine := chatapp.NewEngine(chatapp.WithChunkDelay(s.chunkDelay), chatapp.WithPlugins(s.chatPlugins...), chatapp.WithTurnStore(s.turnStore))
+	engine := chatapp.NewEngine(chatapp.WithPlugins(s.chatPlugins...), chatapp.WithTurnStore(s.turnStore))
 	hubOptions := []sessionstream.HubOption{
 		sessionstream.WithSchemaRegistry(reg),
 		sessionstream.WithHydrationStore(store),

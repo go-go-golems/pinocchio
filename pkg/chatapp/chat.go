@@ -2,6 +2,7 @@ package chatapp
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -56,28 +57,83 @@ type Option func(*Engine)
 type MessageIDGenerator func() (string, error)
 
 type Engine struct {
-	mu                  sync.Mutex
-	messageIDGenerator  MessageIDGenerator
-	active              map[sessionstream.SessionId]*activeRun
-	pending             map[string]PromptRequest
-	chunkDelay          time.Duration
-	hooks               Hooks
-	features            []ChatPlugin
-	turnStore           chatstore.TurnStore
-	streamPatchBatch    StreamPatchBatchConfig
-	uiEventTransformers []UIEventTransformer
+	mu                   sync.Mutex
+	messageIDGenerator   MessageIDGenerator
+	active               map[sessionstream.SessionId]*activeRun
+	pending              map[string]PromptRequest
+	hooks                Hooks
+	features             []ChatPlugin
+	turnStore            chatstore.TurnStore
+	streamPatchBatch     StreamPatchBatchConfig
+	uiEventTransformers  []UIEventTransformer
+	busyPolicy           BusyPolicy
+	classifyError        func(error) string
+	errorText            func(code string, err error) string
+	unansweredToolResult string
+}
+
+// BusyPolicy decides what happens when a prompt arrives for a session whose
+// previous run has not ended.
+type BusyPolicy int
+
+const (
+	// BusyReject refuses the new prompt with ErrRunActive. Nothing is published.
+	BusyReject BusyPolicy = iota
+	// BusyReplace cancels the running turn, waits for it to end, and starts the
+	// new one.
+	BusyReplace
+)
+
+// ErrRunActive is returned (through Service.SubmitPromptRequest) when a prompt
+// arrives for a busy session under BusyReject.
+var ErrRunActive = errors.New("chatapp: a run is already active in this session")
+
+// ErrNoRuntime is returned when a prompt arrives without a runtime engine.
+var ErrNoRuntime = errors.New("chatapp: the prompt request has no runtime engine")
+
+// DefaultUnansweredToolResult is the error recorded for a tool call that had
+// no result when its run ended (see WithUnansweredToolResult).
+const DefaultUnansweredToolResult = "not run: the turn ended before this tool call finished"
+
+// WithBusyPolicy sets the policy for prompts that arrive while a run is
+// active. The default is BusyReject.
+func WithBusyPolicy(p BusyPolicy) Option {
+	return func(e *Engine) {
+		e.busyPolicy = p
+	}
+}
+
+// WithErrorClassifier replaces the function that maps a failed run's error to
+// the code published in ChatRunFailed.code. Errors with a Code() string method
+// and round-limit errors are classified before this function is called.
+func WithErrorClassifier(fn func(error) string) Option {
+	return func(e *Engine) {
+		e.classifyError = fn
+	}
+}
+
+// WithErrorText replaces the error text published in ChatRunFailed.error. The
+// default publishes err.Error(); applications that expose events to untrusted
+// clients should replace provider text here.
+func WithErrorText(fn func(code string, err error) string) Option {
+	return func(e *Engine) {
+		e.errorText = fn
+	}
+}
+
+// WithUnansweredToolResult sets the error text recorded in the history for a
+// tool call that had no result when its run ended. Closing such calls keeps the
+// next provider request valid. The default is DefaultUnansweredToolResult.
+func WithUnansweredToolResult(text string) Option {
+	return func(e *Engine) {
+		e.unansweredToolResult = text
+	}
 }
 
 type activeRun struct {
 	messageID string
 	cancel    context.CancelFunc
 	done      chan struct{}
-}
-
-func WithChunkDelay(delay time.Duration) Option {
-	return func(e *Engine) {
-		e.chunkDelay = delay
-	}
 }
 
 // WithMessageIDGenerator overrides root message ID generation. It is primarily
@@ -133,10 +189,11 @@ func WithTurnStore(ts chatstore.TurnStore) Option {
 
 func NewEngine(opts ...Option) *Engine {
 	engine := &Engine{
-		active:             map[sessionstream.SessionId]*activeRun{},
-		pending:            map[string]PromptRequest{},
-		chunkDelay:         20 * time.Millisecond,
-		messageIDGenerator: defaultMessageIDGenerator,
+		active:               map[sessionstream.SessionId]*activeRun{},
+		pending:              map[string]PromptRequest{},
+		messageIDGenerator:   defaultMessageIDGenerator,
+		busyPolicy:           BusyReject,
+		unansweredToolResult: DefaultUnansweredToolResult,
 	}
 	for _, opt := range opts {
 		if opt != nil {
@@ -228,12 +285,18 @@ func (e *Engine) WaitIdle(ctx context.Context, sid sessionstream.SessionId) erro
 	}
 }
 
-func (e *Engine) swapRun(sid sessionstream.SessionId, run *activeRun) *activeRun {
+// reserveRun makes run the session's active run. Under BusyReject it refuses
+// when another run is active; under BusyReplace it returns the run it replaced,
+// which the caller cancels and waits for.
+func (e *Engine) reserveRun(sid sessionstream.SessionId, run *activeRun) (*activeRun, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	prev := e.active[sid]
+	if prev != nil && e.busyPolicy == BusyReject {
+		return nil, ErrRunActive
+	}
 	e.active[sid] = run
-	return prev
+	return prev, nil
 }
 
 func (e *Engine) currentRun(sid sessionstream.SessionId) *activeRun {

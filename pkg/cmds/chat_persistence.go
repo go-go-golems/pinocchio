@@ -3,7 +3,6 @@ package cmds
 import (
 	"context"
 	"strings"
-	"time"
 
 	"github.com/go-go-golems/geppetto/pkg/turns"
 	"github.com/go-go-golems/geppetto/pkg/turns/serde"
@@ -13,78 +12,6 @@ import (
 	sessionstream "github.com/go-go-golems/sessionstream/pkg/sessionstream"
 	"github.com/pkg/errors"
 )
-
-type cliTurnStorePersister struct {
-	store             chatstore.TurnStore
-	convID            string
-	fallbackSessionID string
-	phase             string
-}
-
-func newCLITurnStorePersister(store chatstore.TurnStore, convID string, sessionID string, phase string) *cliTurnStorePersister {
-	if store == nil {
-		return nil
-	}
-	return &cliTurnStorePersister{
-		store:             store,
-		convID:            strings.TrimSpace(convID),
-		fallbackSessionID: strings.TrimSpace(sessionID),
-		phase:             strings.TrimSpace(phase),
-	}
-}
-
-func (p *cliTurnStorePersister) PersistTurn(ctx context.Context, t *turns.Turn) error {
-	if p == nil || p.store == nil || t == nil {
-		return nil
-	}
-	if p.convID == "" {
-		return errors.New("cli turn persister: convID is empty")
-	}
-	sessionID := p.fallbackSessionID
-	if sessionID == "" {
-		if v, ok, err := turns.KeyTurnMetaSessionID.Get(t.Metadata); err == nil && ok {
-			sessionID = strings.TrimSpace(v)
-		}
-	}
-	if sessionID == "" {
-		return errors.New("cli turn persister: sessionID is empty")
-	}
-	turnID := strings.TrimSpace(t.ID)
-	if turnID == "" {
-		turnID = "turn"
-	}
-	phase := p.phase
-	if phase == "" {
-		phase = "final"
-	}
-	payload, err := serde.ToYAML(t, serde.Options{})
-	if err != nil {
-		return errors.Wrap(err, "cli turn persister: serialize")
-	}
-	runtimeKey := ""
-	if v, ok, err := turns.KeyTurnMetaRuntime.Get(t.Metadata); err == nil && ok {
-		runtimeKey = strings.TrimSpace(toString(v))
-	}
-	inferenceID := ""
-	if v, ok, err := turns.KeyTurnMetaInferenceID.Get(t.Metadata); err == nil && ok {
-		inferenceID = strings.TrimSpace(v)
-	}
-	return p.store.Save(ctx, p.convID, sessionID, turnID, phase, time.Now().UnixMilli(), string(payload), chatstore.TurnSaveOptions{
-		RuntimeKey:  runtimeKey,
-		InferenceID: inferenceID,
-	})
-}
-
-func toString(v any) string {
-	if v == nil {
-		return ""
-	}
-	s, ok := v.(string)
-	if ok {
-		return s
-	}
-	return ""
-}
 
 func openCLISessionstreamHydrationStore(ctx context.Context, settings run.PersistenceSettings, reg *sessionstream.SchemaRegistry) (sessionstream.HydrationStore, func(), error) {
 	if strings.TrimSpace(settings.TimelineDSN) == "" && strings.TrimSpace(settings.TimelineDB) == "" && strings.TrimSpace(settings.TimelineBackend) == "" {

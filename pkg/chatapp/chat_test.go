@@ -33,9 +33,10 @@ func newTestEngine(opts ...Option) *Engine {
 }
 
 func TestChatExampleHappyPath(t *testing.T) {
-	engine := newTestEngine(WithChunkDelay(time.Millisecond))
+	engine := newTestEngine()
 	hub := newTestHub(t, engine)
-	payload := &chatappv1.StartInferenceCommand{Prompt: "Explain ordinals"}
+	engine.setPendingRequest("request-happy", PromptRequest{Prompt: "Explain ordinals", Runtime: answerRuntime()})
+	payload := &chatappv1.StartInferenceCommand{RequestId: "request-happy"}
 	require.NoError(t, hub.Submit(context.Background(), sessionstream.SessionId("chat-1"), CommandStartInference, payload))
 	require.NoError(t, engine.WaitIdle(context.Background(), sessionstream.SessionId("chat-1")))
 
@@ -118,7 +119,7 @@ func TestRuntimeInferenceLoadsLatestTurnHistory(t *testing.T) {
 		Payload:     string(payload),
 	}}
 	recorder := &recordingHistoryEngine{}
-	engine := newTestEngine(WithChunkDelay(time.Millisecond), WithTurnStore(store))
+	engine := newTestEngine(WithTurnStore(store))
 	hub := newTestHub(t, engine)
 	engine.setPendingRequest("request-history", PromptRequest{
 		Prompt: "Tell me more about the first one",
@@ -151,7 +152,7 @@ func TestRuntimeInferenceUsesInitialTurnWhenProvided(t *testing.T) {
 	recorder := &recordingHistoryEngine{}
 	var finalMu sync.Mutex
 	var final *turns.Turn
-	engine := newTestEngine(WithChunkDelay(time.Millisecond))
+	engine := newTestEngine()
 	hub := newTestHub(t, engine)
 	engine.setPendingRequest("request-initial-turn", PromptRequest{
 		Prompt:      "Rendered verb prompt",
@@ -197,7 +198,7 @@ func TestRuntimeInferenceInitialTurnSkipsTurnStoreHistory(t *testing.T) {
 
 	store := &fakeTurnStore{err: errors.New("history should not be loaded")}
 	recorder := &recordingHistoryEngine{}
-	engine := newTestEngine(WithChunkDelay(time.Millisecond), WithTurnStore(store))
+	engine := newTestEngine(WithTurnStore(store))
 	hub := newTestHub(t, engine)
 	engine.setPendingRequest("request-initial-turn-no-history", PromptRequest{
 		Prompt:      "Use this explicit turn",
@@ -221,7 +222,7 @@ func TestRuntimeInferenceStartsFreshWhenNoHistoryExists(t *testing.T) {
 	ctx := context.Background()
 	store := &fakeTurnStore{}
 	recorder := &recordingHistoryEngine{}
-	engine := newTestEngine(WithChunkDelay(time.Millisecond), WithTurnStore(store))
+	engine := newTestEngine(WithTurnStore(store))
 	hub := newTestHub(t, engine)
 	engine.setPendingRequest("request-no-history", PromptRequest{
 		Prompt: "First message",
@@ -242,7 +243,7 @@ func TestRuntimeInferenceStartsFreshWhenNoHistoryExists(t *testing.T) {
 }
 
 func TestRuntimeInferencePublishesFallbackAssistantTextFromReturnedTurn(t *testing.T) {
-	engine := newTestEngine(WithChunkDelay(time.Millisecond))
+	engine := newTestEngine()
 	hub := newTestHub(t, engine)
 	engine.setPendingRequest("request-nonstreaming-output", PromptRequest{
 		Prompt: "Return text without events",
@@ -279,7 +280,7 @@ func TestRuntimeInferenceStopsWhenHistoryLoadFails(t *testing.T) {
 	store := &fakeTurnStore{err: errors.New("database unavailable")}
 	recorder := &recordingHistoryEngine{}
 	backendEvents := map[string]map[string]any{}
-	engine := newTestEngine(WithChunkDelay(time.Millisecond), WithTurnStore(store), WithHooks(Hooks{OnBackendEvent: func(_, eventName string, payload map[string]any) {
+	engine := newTestEngine(WithTurnStore(store), WithHooks(Hooks{OnBackendEvent: func(_, eventName string, payload map[string]any) {
 		backendEvents[eventName] = payload
 	}}))
 	hub := newTestHub(t, engine)
@@ -312,7 +313,7 @@ func TestRuntimeInferenceStopsWhenHistoryDecodeFails(t *testing.T) {
 	}}
 	recorder := &recordingHistoryEngine{}
 	backendEvents := map[string]map[string]any{}
-	engine := newTestEngine(WithChunkDelay(time.Millisecond), WithTurnStore(store), WithHooks(Hooks{OnBackendEvent: func(_, eventName string, payload map[string]any) {
+	engine := newTestEngine(WithTurnStore(store), WithHooks(Hooks{OnBackendEvent: func(_, eventName string, payload map[string]any) {
 		backendEvents[eventName] = payload
 	}}))
 	hub := newTestHub(t, engine)
@@ -334,7 +335,7 @@ func TestRuntimeInferenceStopsWhenHistoryDecodeFails(t *testing.T) {
 }
 
 func TestRuntimeInterleavedTextToolTextUsesDistinctTextSegments(t *testing.T) {
-	engine := newTestEngine(WithChunkDelay(time.Millisecond))
+	engine := newTestEngine()
 	hub := newTestHub(t, engine)
 	engine.setPendingRequest("request-interleaved", PromptRequest{
 		Prompt: "Use tools and explain",
@@ -365,7 +366,7 @@ func TestRuntimeInterleavedTextToolTextUsesDistinctTextSegments(t *testing.T) {
 }
 
 func TestRuntimeErrorAfterPartialStopsActiveTextSegment(t *testing.T) {
-	engine := newTestEngine(WithChunkDelay(time.Millisecond))
+	engine := newTestEngine()
 	hub := newTestHub(t, engine)
 	engine.setPendingRequest("request-partial-error", PromptRequest{
 		Prompt: "Fail after a partial",
@@ -403,9 +404,9 @@ func TestRuntimeErrorAfterPartialStopsActiveTextSegment(t *testing.T) {
 	require.Contains(t, failure.GetContent(), "provider failed after partial")
 }
 
-func TestRuntimeFailureWithoutTextProjectsRunFailureAndPersistsFailedTurn(t *testing.T) {
+func TestRuntimeFailureWithoutTextProjectsRunFailureAndKeepsTheTurn(t *testing.T) {
 	store := &fakeTurnStore{}
-	engine := newTestEngine(WithChunkDelay(time.Millisecond), WithTurnStore(store))
+	engine := newTestEngine(WithTurnStore(store))
 	hub := newTestHub(t, engine)
 	engine.setPendingRequest("request-immediate-error", PromptRequest{
 		Prompt: "Fail before text",
@@ -438,15 +439,15 @@ func TestRuntimeFailureWithoutTextProjectsRunFailureAndPersistsFailedTurn(t *tes
 	require.True(t, failure.GetFinal())
 
 	require.Len(t, store.saves, 1)
-	require.Equal(t, "failed", store.saves[0].phase)
+	require.Equal(t, "final", store.saves[0].phase)
 	require.Equal(t, "chat-immediate-error", store.saves[0].sessionID)
 	require.Equal(t, "runtime-test", store.saves[0].opts.RuntimeKey)
 	require.Contains(t, store.saves[0].payload, "Fail before text")
 }
 
-func TestRuntimeEventErrorPersistsFailedTurnAfterTerminalSink(t *testing.T) {
+func TestRuntimeEventErrorKeepsTheTurnAfterTerminalSink(t *testing.T) {
 	store := &fakeTurnStore{}
-	engine := newTestEngine(WithChunkDelay(time.Millisecond), WithTurnStore(store))
+	engine := newTestEngine(WithTurnStore(store))
 	hub := newTestHub(t, engine)
 	engine.setPendingRequest("request-event-error", PromptRequest{
 		Prompt: "Fail through event sink",
@@ -477,14 +478,14 @@ func TestRuntimeEventErrorPersistsFailedTurnAfterTerminalSink(t *testing.T) {
 	require.Contains(t, failure.GetContent(), "stream sink reported provider failure")
 
 	require.Len(t, store.saves, 1)
-	require.Equal(t, "failed", store.saves[0].phase)
+	require.Equal(t, "final", store.saves[0].phase)
 	require.Equal(t, "chat-event-error", store.saves[0].sessionID)
 	require.Equal(t, "runtime-event-error", store.saves[0].opts.RuntimeKey)
 	require.Contains(t, store.saves[0].payload, "Fail through event sink")
 }
 
 func TestRuntimeInterruptAfterPartialStopsActiveTextSegment(t *testing.T) {
-	engine := newTestEngine(WithChunkDelay(time.Millisecond))
+	engine := newTestEngine()
 	hub := newTestHub(t, engine)
 	engine.setPendingRequest("request-partial-interrupt", PromptRequest{
 		Prompt: "Stop after a partial",
@@ -517,7 +518,7 @@ func TestRuntimeInterruptAfterPartialStopsActiveTextSegment(t *testing.T) {
 }
 
 func TestRuntimeCancellationErrorStopsActiveTextSegment(t *testing.T) {
-	engine := newTestEngine(WithChunkDelay(time.Millisecond))
+	engine := newTestEngine()
 	hub := newTestHub(t, engine)
 	cancelEngine := &partialThenContextCanceledEngine{started: make(chan struct{})}
 	engine.setPendingRequest("request-partial-cancel", PromptRequest{
@@ -560,7 +561,7 @@ func TestRuntimeCancellationErrorStopsActiveTextSegment(t *testing.T) {
 }
 
 func TestRuntimeErrorAfterClosedTextSegmentDoesNotDuplicateSegmentContent(t *testing.T) {
-	engine := newTestEngine(WithChunkDelay(time.Millisecond))
+	engine := newTestEngine()
 	hub := newTestHub(t, engine)
 	engine.setPendingRequest("request-boundary-error", PromptRequest{
 		Prompt: "Fail after a boundary",
@@ -596,45 +597,11 @@ func TestRuntimeErrorAfterClosedTextSegmentDoesNotDuplicateSegmentContent(t *tes
 	require.Contains(t, failure.GetContent(), "provider failed after boundary")
 }
 
-func TestRuntimeMaxIterationsErrorPublishesWarningMessage(t *testing.T) {
-	engine := newTestEngine(WithChunkDelay(time.Millisecond))
-	hub := newTestHub(t, engine)
-	engine.setPendingRequest("request-max-iterations", PromptRequest{
-		Prompt: "Run many tools",
-		Runtime: &infruntime.ComposedRuntime{
-			Engine: maxIterationsErrorEngine{},
-		},
-	})
-
-	require.NoError(t, hub.Submit(context.Background(), sessionstream.SessionId("chat-max-iterations"), CommandStartInference, &chatappv1.StartInferenceCommand{RequestId: "request-max-iterations"}))
-	require.NoError(t, engine.WaitIdle(context.Background(), sessionstream.SessionId("chat-max-iterations")))
-
-	snap, err := hub.Snapshot(context.Background(), sessionstream.SessionId("chat-max-iterations"))
-	require.NoError(t, err)
-
-	var warning *chatappv1.ChatMessageEntity
-	var assistant *chatappv1.ChatMessageEntity
-	for _, entity := range snap.Entities {
-		payloadMsg := entity.Payload.(*chatappv1.ChatMessageEntity)
-		switch payloadMsg.GetRole() {
-		case "warning":
-			warning = payloadMsg
-		case "assistant":
-			assistant = payloadMsg
-		}
-	}
-	require.NotNil(t, warning)
-	require.Contains(t, warning.GetContent(), "max iterations (20) reached")
-	require.Contains(t, warning.GetContent(), "answer may be incomplete")
-	require.Equal(t, "finished", warning.GetStatus())
-	require.False(t, warning.GetStreaming())
-	require.Nil(t, assistant)
-}
-
 func TestChatExampleStopPath(t *testing.T) {
-	engine := newTestEngine(WithChunkDelay(10 * time.Millisecond))
+	engine := newTestEngine()
 	hub := newTestHub(t, engine)
-	payload := &chatappv1.StartInferenceCommand{Prompt: "Stop me"}
+	engine.setPendingRequest("request-stop", PromptRequest{Prompt: "Stop me", Runtime: slowAnswerRuntime()})
+	payload := &chatappv1.StartInferenceCommand{RequestId: "request-stop"}
 	require.NoError(t, hub.Submit(context.Background(), sessionstream.SessionId("chat-2"), CommandStartInference, payload))
 	time.Sleep(12 * time.Millisecond)
 	require.NoError(t, hub.Submit(context.Background(), sessionstream.SessionId("chat-2"), CommandStopInference, &chatappv1.StopInferenceCommand{}))
@@ -715,12 +682,6 @@ type boundaryThenErrorEngine struct{}
 func (boundaryThenErrorEngine) RunInference(ctx context.Context, t *turns.Turn) (*turns.Turn, error) {
 	publishCanonicalTextSegment(ctx, 1, "first text")
 	return t, errors.New("provider failed after boundary")
-}
-
-type maxIterationsErrorEngine struct{}
-
-func (maxIterationsErrorEngine) RunInference(context.Context, *turns.Turn) (*turns.Turn, error) {
-	return nil, errors.New("max iterations (20) reached")
 }
 
 type immediateErrorEngine struct{}

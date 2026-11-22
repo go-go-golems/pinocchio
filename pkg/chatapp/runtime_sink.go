@@ -2,6 +2,7 @@ package chatapp
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -91,7 +92,9 @@ func (s *runtimeEventSink) PublishEvent(event gepevents.Event) error {
 		if err := s.finishActiveTextSegment("failed", "error", ""); err != nil {
 			return err
 		}
-		return s.engine.publish(s.publishContext(), s.sessionID, s.pub, EventChatRunFailed, &chatappv1.ChatRunFailed{MessageId: s.messageID, Status: "failed", Error: ev.ErrorString})
+		providerErr := errors.New(ev.ErrorString)
+		code := s.engine.classify(providerErr)
+		return s.engine.publish(s.publishContext(), s.sessionID, s.pub, EventChatRunFailed, &chatappv1.ChatRunFailed{MessageId: s.messageID, Status: "failed", Code: code, Error: s.engine.failureText(code, providerErr)})
 	case *gepevents.EventInterrupt:
 		s.mu.Lock()
 		s.terminal = true

@@ -3,7 +3,6 @@ package appserver
 import (
 	"context"
 	"strings"
-	"time"
 
 	chatapp "github.com/go-go-golems/pinocchio/pkg/chatapp"
 	"github.com/go-go-golems/pinocchio/pkg/chatapp/frontendtools"
@@ -17,15 +16,6 @@ type Option func(*Server)
 func WithDefaultProfile(profile string) Option {
 	return func(s *Server) {
 		s.defaultProfile = strings.TrimSpace(profile)
-	}
-}
-
-func WithChunkDelay(delay time.Duration) Option {
-	return func(s *Server) {
-		if s == nil {
-			return
-		}
-		s.chunkDelay = delay
 	}
 }
 

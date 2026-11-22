@@ -517,12 +517,17 @@ func (x *ChatRunStarted) GetCorrelation() *CorrelationInfo {
 }
 
 type ChatRunFinished struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	MessageId     string                 `protobuf:"bytes,1,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
-	Status        string                 `protobuf:"bytes,2,opt,name=status,proto3" json:"status,omitempty"`
-	Error         string                 `protobuf:"bytes,3,opt,name=error,proto3" json:"error,omitempty"`
-	DurationMs    *int64                 `protobuf:"varint,4,opt,name=duration_ms,json=durationMs,proto3,oneof" json:"duration_ms,omitempty"`
-	Correlation   *CorrelationInfo       `protobuf:"bytes,5,opt,name=correlation,proto3" json:"correlation,omitempty"`
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	MessageId   string                 `protobuf:"bytes,1,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
+	Status      string                 `protobuf:"bytes,2,opt,name=status,proto3" json:"status,omitempty"`
+	Error       string                 `protobuf:"bytes,3,opt,name=error,proto3" json:"error,omitempty"`
+	DurationMs  *int64                 `protobuf:"varint,4,opt,name=duration_ms,json=durationMs,proto3,oneof" json:"duration_ms,omitempty"`
+	Correlation *CorrelationInfo       `protobuf:"bytes,5,opt,name=correlation,proto3" json:"correlation,omitempty"`
+	// truncated is true when the run hit its round limit and the model gave the
+	// final answer with tools disabled (geppetto toolloop FinalAnswer).
+	Truncated bool `protobuf:"varint,6,opt,name=truncated,proto3" json:"truncated,omitempty"`
+	// reason says why a truncated run ended, e.g. "max_rounds".
+	Reason        string `protobuf:"bytes,7,opt,name=reason,proto3" json:"reason,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -590,6 +595,20 @@ func (x *ChatRunFinished) GetCorrelation() *CorrelationInfo {
 		return x.Correlation
 	}
 	return nil
+}
+
+func (x *ChatRunFinished) GetTruncated() bool {
+	if x != nil {
+		return x.Truncated
+	}
+	return false
+}
+
+func (x *ChatRunFinished) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
 }
 
 type ChatRunStopped struct {
@@ -661,11 +680,15 @@ func (x *ChatRunStopped) GetCorrelation() *CorrelationInfo {
 }
 
 type ChatRunFailed struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	MessageId     string                 `protobuf:"bytes,1,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
-	Status        string                 `protobuf:"bytes,2,opt,name=status,proto3" json:"status,omitempty"`
-	Error         string                 `protobuf:"bytes,3,opt,name=error,proto3" json:"error,omitempty"`
-	Correlation   *CorrelationInfo       `protobuf:"bytes,4,opt,name=correlation,proto3" json:"correlation,omitempty"`
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	MessageId   string                 `protobuf:"bytes,1,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
+	Status      string                 `protobuf:"bytes,2,opt,name=status,proto3" json:"status,omitempty"`
+	Error       string                 `protobuf:"bytes,3,opt,name=error,proto3" json:"error,omitempty"`
+	Correlation *CorrelationInfo       `protobuf:"bytes,4,opt,name=correlation,proto3" json:"correlation,omitempty"`
+	// code is a stable machine-readable failure class: max_rounds,
+	// authentication_error, rate_limited, prompt_too_large, upstream_error, or a
+	// code supplied by the caller's error (an error with a Code() string method).
+	Code          string `protobuf:"bytes,5,opt,name=code,proto3" json:"code,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -726,6 +749,13 @@ func (x *ChatRunFailed) GetCorrelation() *CorrelationInfo {
 		return x.Correlation
 	}
 	return nil
+}
+
+func (x *ChatRunFailed) GetCode() string {
+	if x != nil {
+		return x.Code
+	}
+	return ""
 }
 
 type ChatProviderCallStarted struct {
@@ -3143,7 +3173,7 @@ const file_pinocchio_chatapp_v1_chat_proto_rawDesc = "" +
 	"\n" +
 	"message_id\x18\x01 \x01(\tR\tmessageId\x12\x16\n" +
 	"\x06prompt\x18\x02 \x01(\tR\x06prompt\x12G\n" +
-	"\vcorrelation\x18\x03 \x01(\v2%.pinocchio.chatapp.v1.CorrelationInfoR\vcorrelation\"\xdd\x01\n" +
+	"\vcorrelation\x18\x03 \x01(\v2%.pinocchio.chatapp.v1.CorrelationInfoR\vcorrelation\"\x93\x02\n" +
 	"\x0fChatRunFinished\x12\x1d\n" +
 	"\n" +
 	"message_id\x18\x01 \x01(\tR\tmessageId\x12\x16\n" +
@@ -3151,20 +3181,23 @@ const file_pinocchio_chatapp_v1_chat_proto_rawDesc = "" +
 	"\x05error\x18\x03 \x01(\tR\x05error\x12$\n" +
 	"\vduration_ms\x18\x04 \x01(\x03H\x00R\n" +
 	"durationMs\x88\x01\x01\x12G\n" +
-	"\vcorrelation\x18\x05 \x01(\v2%.pinocchio.chatapp.v1.CorrelationInfoR\vcorrelationB\x0e\n" +
+	"\vcorrelation\x18\x05 \x01(\v2%.pinocchio.chatapp.v1.CorrelationInfoR\vcorrelation\x12\x1c\n" +
+	"\ttruncated\x18\x06 \x01(\bR\ttruncated\x12\x16\n" +
+	"\x06reason\x18\a \x01(\tR\x06reasonB\x0e\n" +
 	"\f_duration_ms\"\xa6\x01\n" +
 	"\x0eChatRunStopped\x12\x1d\n" +
 	"\n" +
 	"message_id\x18\x01 \x01(\tR\tmessageId\x12\x16\n" +
 	"\x06status\x18\x02 \x01(\tR\x06status\x12\x14\n" +
 	"\x05error\x18\x03 \x01(\tR\x05error\x12G\n" +
-	"\vcorrelation\x18\x04 \x01(\v2%.pinocchio.chatapp.v1.CorrelationInfoR\vcorrelation\"\xa5\x01\n" +
+	"\vcorrelation\x18\x04 \x01(\v2%.pinocchio.chatapp.v1.CorrelationInfoR\vcorrelation\"\xb9\x01\n" +
 	"\rChatRunFailed\x12\x1d\n" +
 	"\n" +
 	"message_id\x18\x01 \x01(\tR\tmessageId\x12\x16\n" +
 	"\x06status\x18\x02 \x01(\tR\x06status\x12\x14\n" +
 	"\x05error\x18\x03 \x01(\tR\x05error\x12G\n" +
-	"\vcorrelation\x18\x04 \x01(\v2%.pinocchio.chatapp.v1.CorrelationInfoR\vcorrelation\"b\n" +
+	"\vcorrelation\x18\x04 \x01(\v2%.pinocchio.chatapp.v1.CorrelationInfoR\vcorrelation\x12\x12\n" +
+	"\x04code\x18\x05 \x01(\tR\x04code\"b\n" +
 	"\x17ChatProviderCallStarted\x12G\n" +
 	"\vcorrelation\x18\x01 \x01(\v2%.pinocchio.chatapp.v1.CorrelationInfoR\vcorrelation\"\xc2\x01\n" +
 	"\x1fChatProviderCallMetadataUpdated\x12\x1f\n" +

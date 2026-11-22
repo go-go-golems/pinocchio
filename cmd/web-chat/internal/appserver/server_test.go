@@ -57,6 +57,34 @@ func (e runtimeBackedTestEngine) RunInference(ctx context.Context, t *turns.Turn
 	return t, nil
 }
 
+// answerRuntimeResolver answers "Answer: <prompt>", as chatapp's removed demo
+// inference did.
+type answerRuntimeResolver struct{}
+
+func (answerRuntimeResolver) Resolve(context.Context, *http.Request, string, string, string) (*infruntime.ComposedRuntime, error) {
+	return &infruntime.ComposedRuntime{Engine: answerEngine{}}, nil
+}
+
+type answerEngine struct{}
+
+func (answerEngine) RunInference(ctx context.Context, t *turns.Turn) (*turns.Turn, error) {
+	prompt := ""
+	for i := len(t.Blocks) - 1; i >= 0; i-- {
+		if t.Blocks[i].Kind == turns.BlockKindUser {
+			prompt, _ = t.Blocks[i].Payload[turns.PayloadKeyText].(string)
+			break
+		}
+	}
+	answer := "Answer: " + prompt
+	meta := gepevents.EventMetadata{}
+	corr := gepevents.Correlation{RunID: "run-1", ProviderCallID: "provider-call-1", SegmentID: "segment-1"}
+	gepevents.PublishEventToContext(ctx, gepevents.NewTextSegmentStartedEvent(meta, corr, "assistant"))
+	gepevents.PublishEventToContext(ctx, gepevents.NewTextDeltaEvent(meta, corr, answer, answer, 1))
+	gepevents.PublishEventToContext(ctx, gepevents.NewTextSegmentFinishedEvent(meta, corr, answer, "stop"))
+	turns.AppendBlock(t, turns.NewAssistantTextBlock(answer))
+	return t, nil
+}
+
 type mockRuntimeResolver struct{}
 
 func (mockRuntimeResolver) Resolve(context.Context, *http.Request, string, string, string) (*infruntime.ComposedRuntime, error) {
@@ -75,7 +103,9 @@ func (r staticRuntimeResolver) Resolve(_ context.Context, _ *http.Request, sessi
 
 func newTestMux(t *testing.T, opts ...Option) (*Server, *httptest.Server) {
 	t.Helper()
-	baseOpts := []Option{WithDefaultProfile("gpt-5-nano-low"), WithChunkDelay(time.Millisecond)}
+	// Tests that pass their own WithRuntimeResolver override this default:
+	// options are applied in order.
+	baseOpts := []Option{WithDefaultProfile("gpt-5-nano-low"), WithRuntimeResolver(answerRuntimeResolver{})}
 	baseOpts = append(baseOpts, opts...)
 	srv, err := NewServer(baseOpts...)
 	require.NoError(t, err)

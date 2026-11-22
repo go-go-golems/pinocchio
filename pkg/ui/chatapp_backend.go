@@ -15,18 +15,11 @@ import (
 	sessionstream "github.com/go-go-golems/sessionstream/pkg/sessionstream"
 )
 
-// TurnPersister stores successful final turns produced by a chat backend run.
-type TurnPersister interface {
-	PersistTurn(ctx context.Context, t *turns.Turn) error
-}
-
 // ChatAppBackend is the Bubble Tea chat backend backed by chatapp/sessionstream.
 type ChatAppBackend struct {
 	service *chatapp.Service
 	sid     sessionstream.SessionId
 	runtime *infruntime.ComposedRuntime
-
-	turnPersister TurnPersister
 
 	mu          sync.Mutex
 	currentTurn *turns.Turn
@@ -37,12 +30,6 @@ type ChatAppBackend struct {
 var _ boba_chat.Backend = (*ChatAppBackend)(nil)
 
 type ChatAppBackendOption func(*ChatAppBackend)
-
-func WithTurnPersister(p TurnPersister) ChatAppBackendOption {
-	return func(b *ChatAppBackend) {
-		b.turnPersister = p
-	}
-}
 
 func NewChatAppBackend(service *chatapp.Service, sid sessionstream.SessionId, runtime *infruntime.ComposedRuntime, seed *turns.Turn, opts ...ChatAppBackendOption) (*ChatAppBackend, error) {
 	if service == nil {
@@ -114,14 +101,6 @@ func (b *ChatAppBackend) Start(ctx context.Context, prompt string) (tea.Cmd, err
 		finalTurnMu.Lock()
 		updatedTurn := finalTurn
 		finalTurnMu.Unlock()
-		if updatedTurn != nil && b.turnPersister != nil {
-			if err := b.turnPersister.PersistTurn(ctx, updatedTurn.Clone()); err != nil {
-				b.mu.Lock()
-				b.running = false
-				b.mu.Unlock()
-				return boba_chat.ErrorMsg(err)
-			}
-		}
 
 		b.mu.Lock()
 		if updatedTurn != nil {

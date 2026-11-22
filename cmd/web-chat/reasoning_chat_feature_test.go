@@ -217,7 +217,6 @@ func newReasoningTestMux(t *testing.T) (*appserver.Server, *httptest.Server) {
 	t.Helper()
 	srv, err := appserver.NewServer(
 		appserver.WithDefaultProfile("gpt-5-low"),
-		appserver.WithChunkDelay(time.Millisecond),
 		appserver.WithRuntimeResolver(reasoningRuntimeResolver{}),
 		appserver.WithChatPlugins(plugins.NewReasoningPlugin()),
 	)
