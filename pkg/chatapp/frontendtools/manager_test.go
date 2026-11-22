@@ -94,18 +94,18 @@ func TestManagerSameToolCallIDInDifferentSessionsIsIndependent(t *testing.T) {
 	outcomeB := startManagerRequest(ctx, manager, publisher, sessionB, Request{MessageID: "msg-b", ToolCallID: "shared-call", ToolName: "browser.read"})
 	requireRequestedEvent(t, ctx, publisher, sessionB, "msg-b", "shared-call", "browser.read")
 
-	resultA, err := structpb.NewStruct(map[string]any{"source": "a"})
+	resultA, err := structpb.NewValue(map[string]any{"source": "a"})
 	require.NoError(t, err)
 	require.NoError(t, manager.HandleResult(ctx, resultCommand(sessionA, "shared-call", "browser.read", "success", resultA), nil, publisher))
 	requireResultEvent(t, ctx, publisher, sessionA, "msg-a", "shared-call", "browser.read")
 
-	resultB, err := structpb.NewStruct(map[string]any{"source": "b"})
+	resultB, err := structpb.NewValue(map[string]any{"source": "b"})
 	require.NoError(t, err)
 	require.NoError(t, manager.HandleResult(ctx, resultCommand(sessionB, "shared-call", "browser.read", "success", resultB), nil, publisher))
 	requireResultEvent(t, ctx, publisher, sessionB, "msg-b", "shared-call", "browser.read")
 
-	require.Equal(t, "a", requireRequestOutcome(t, ctx, outcomeA).GetResult().AsMap()["source"])
-	require.Equal(t, "b", requireRequestOutcome(t, ctx, outcomeB).GetResult().AsMap()["source"])
+	require.Equal(t, "a", requireRequestOutcome(t, ctx, outcomeA).GetResult().GetStructValue().AsMap()["source"])
+	require.Equal(t, "b", requireRequestOutcome(t, ctx, outcomeB).GetResult().GetStructValue().AsMap()["source"])
 }
 
 func TestManagerRejectsCrossSessionResultAndKeepsOwnerPending(t *testing.T) {
@@ -200,17 +200,17 @@ func TestManagerTerminalResultRetriesAreIdempotentAndConflictsAreRejected(t *tes
 	outcome := startManagerRequest(ctx, manager, publisher, sid, Request{MessageID: "msg-1", ToolCallID: "call-1", ToolName: "browser.write"})
 	requireRequestedEvent(t, ctx, publisher, sid, "msg-1", "call-1", "browser.write")
 
-	result, err := structpb.NewStruct(map[string]any{"revision": 7})
+	result, err := structpb.NewValue(map[string]any{"revision": 7})
 	require.NoError(t, err)
 	accepted := resultCommand(sid, "call-1", "browser.write", "success", result)
 	require.NoError(t, manager.HandleResult(ctx, accepted, nil, publisher))
 	requireResultEvent(t, ctx, publisher, sid, "msg-1", "call-1", "browser.write")
-	require.Equal(t, float64(7), requireRequestOutcome(t, ctx, outcome).GetResult().AsMap()["revision"])
+	require.Equal(t, float64(7), requireRequestOutcome(t, ctx, outcome).GetResult().GetStructValue().AsMap()["revision"])
 
 	require.NoError(t, manager.HandleResult(ctx, accepted, nil, publisher), "identical terminal retry must be acknowledged")
 	requireNoEvent(t, publisher)
 
-	conflictingResult, err := structpb.NewStruct(map[string]any{"revision": 8})
+	conflictingResult, err := structpb.NewValue(map[string]any{"revision": 8})
 	require.NoError(t, err)
 	err = manager.HandleResult(ctx, resultCommand(sid, "call-1", "browser.write", "success", conflictingResult), nil, publisher)
 	requireInvocationErrorCode(t, err, InvocationErrorTerminalConflict)
@@ -524,7 +524,7 @@ func requireInvocationErrorCode(t *testing.T, err error, expected InvocationErro
 	require.Equal(t, expected, code)
 }
 
-func resultCommand(sid sessionstream.SessionId, toolCallID, toolName, status string, result *structpb.Struct) sessionstream.Command {
+func resultCommand(sid sessionstream.SessionId, toolCallID, toolName, status string, result *structpb.Value) sessionstream.Command {
 	return sessionstream.Command{SessionId: sid, Name: CommandResult, Payload: &toolv1.FrontendToolResultCommand{
 		ToolCallId: toolCallID,
 		ToolName:   toolName,

@@ -82,6 +82,9 @@ func (e *Engine) runPrompt(ctx context.Context, sid sessionstream.SessionId, mes
 // not be loaded or decoded.
 const CodeHistoryError = "history_error"
 
+// CodeToolsError: a RunToolsFunc failed before the run started.
+const CodeToolsError = "tools_error"
+
 func (e *Engine) runRuntimeInference(ctx context.Context, sid sessionstream.SessionId, messageID, prompt string, pending PromptRequest, pub sessionstream.EventPublisher) {
 	runtime := pending.Runtime
 	// ctx is the run's context and may already be cancelled (Stop, or a
@@ -115,11 +118,24 @@ func (e *Engine) runRuntimeInference(ctx context.Context, sid sessionstream.Sess
 		}
 	}
 
+	tools := RunTools{Registry: runtime.Registry, Executor: runtime.ToolExecutor}
+	for _, fn := range e.runTools {
+		nextCtx, nextTools, err := fn(runCtx, RunScope{SessionID: sid, MessageID: messageID, Publisher: pub}, tools)
+		if err != nil {
+			e.publishRunFailed(publishContext(ctx), sid, pub, messageID, CodeToolsError, fmt.Errorf("prepare run tools: %w", err))
+			return
+		}
+		if nextCtx != nil {
+			runCtx = nextCtx
+		}
+		tools = nextTools
+	}
+
 	sess := gepsession.NewSessionWithID(string(sid))
 	sess.Builder = &enginebuilder.Builder{
 		Base:         runtime.Engine,
-		Registry:     runtime.Registry,
-		ToolExecutor: runtime.ToolExecutor,
+		Registry:     tools.Registry,
+		ToolExecutor: tools.Executor,
 		EventSinks:   []gepevents.EventSink{eventSink},
 		LoopConfig:   runtime.Loop,
 		ToolConfig:   runtime.ToolConfig,

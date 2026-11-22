@@ -356,3 +356,40 @@ func TestCallerBlocksFollowTheMessageAndHistoryIsAppendOnly(t *testing.T) {
 	// then the new message and its block: nothing earlier was edited or removed.
 	require.Equal(t, append(blockTexts(rec.calls[0]), "llm_text:ok", "user:second", "user:[state] 10:05"), blockTexts(rec.calls[1]))
 }
+
+func TestRunToolsFuncSuppliesTheRunsTools(t *testing.T) {
+	rec := &eventRecorder{}
+	var scope RunScope
+	hook := func(ctx context.Context, run RunScope, tools RunTools) (context.Context, RunTools, error) {
+		scope = run
+		require.Nil(t, tools.Registry, "the runtime has no registry")
+		return ctx, RunTools{Registry: noopRegistry(t)}, nil
+	}
+	e := newTestEngine(rec.hooks(), WithRunTools(hook))
+	hub := newTestHub(t, e)
+	tooling := &toolCallingEngine{}
+
+	require.NoError(t, submit(t, e, hub, "run-tools", PromptRequest{Prompt: "go", Runtime: &infruntime.ComposedRuntime{
+		Engine: tooling,
+		Loop:   &toolloop.LoopConfig{MaxIterations: 2},
+	}}))
+	waitIdle(t, e, "run-tools")
+
+	require.Equal(t, sessionstream.SessionId("run-tools"), scope.SessionID)
+	require.NotEmpty(t, scope.MessageID)
+	require.NotNil(t, scope.Publisher)
+	require.Equal(t, 2, tooling.calls, "the hook's registry made it a tool loop")
+}
+
+func TestRunToolsFuncErrorFailsTheRun(t *testing.T) {
+	rec := &eventRecorder{}
+	e := newTestEngine(rec.hooks(), WithRunTools(func(ctx context.Context, _ RunScope, tools RunTools) (context.Context, RunTools, error) {
+		return ctx, tools, errors.New("manifest broken")
+	}))
+	hub := newTestHub(t, e)
+	require.NoError(t, submit(t, e, hub, "run-tools-err", PromptRequest{Prompt: "go", Runtime: answerRuntime()}))
+	waitIdle(t, e, "run-tools-err")
+	failed := rec.named(EventChatRunFailed)
+	require.Len(t, failed, 1)
+	require.Equal(t, CodeToolsError, failed[0]["code"])
+}

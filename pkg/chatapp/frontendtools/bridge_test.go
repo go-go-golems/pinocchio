@@ -81,7 +81,7 @@ func TestBridgeExecutorRoutesFrontendToolAndReturnsBrowserResult(t *testing.T) {
 		t.Fatalf("unexpected request: %#v", requested)
 	}
 
-	resultStruct, err := structpb.NewStruct(map[string]any{"ok": true, "cartCount": 1})
+	resultStruct, err := structpb.NewValue(map[string]any{"ok": true, "cartCount": 1})
 	if err != nil {
 		t.Fatalf("result struct: %v", err)
 	}

@@ -62,7 +62,8 @@ message FrontendToolCallRequested {
 message FrontendToolResultCommand {
   string tool_call_id = 1;
   string tool_name = 2;
-  google.protobuf.Struct result = 3;
+  // Any JSON value the tool returned (object, array, string, number, bool, null).
+  google.protobuf.Value result = 3;
   string status = 4;
   string error = 5;
   FrontendToolExecutor executor = 6;
@@ -73,7 +74,7 @@ message FrontendToolResultReceived {
   string message_id = 1;
   string tool_call_id = 2;
   string tool_name = 3;
-  google.protobuf.Struct result = 4;
+  google.protobuf.Value result = 4;
   string status = 5;
   string error = 6;
   FrontendToolExecutor executor = 7;
@@ -87,7 +88,7 @@ message FrontendToolCallEntity {
   ToolExecutionMode mode = 4;
   string status = 5;
   google.protobuf.Struct input = 6;
-  google.protobuf.Struct result = 7;
+  google.protobuf.Value result = 7;
   string error = 8;
   FrontendToolExecutor executor = 9;
 }

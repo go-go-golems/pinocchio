@@ -154,7 +154,10 @@ func WithChatPlugins(plugins ...chatapp.ChatPlugin) Option {
 	}
 }
 
-// WithFrontendTools enables the browser-tool routes with this manager.
+// WithFrontendTools enables browser tools: the manifest and result routes,
+// and every run gets the tools its session's page registered
+// (frontendtools.Manager.RunTools). Add frontendtools.NewPlugin() to project
+// browser tool calls into the timeline.
 func WithFrontendTools(manager *frontendtools.Manager) Option {
 	return func(s *Server) { s.frontendTools = manager }
 }
@@ -245,6 +248,9 @@ func New(opts ...Option) (*Server, error) {
 		chatapp.WithPlugins(s.plugins...),
 		chatapp.WithTurnStore(s.turnStore),
 		chatapp.WithUsageObserver(sessions.RecordUsage(s.sessionStore)),
+	}
+	if s.frontendTools != nil {
+		engineOptions = append(engineOptions, chatapp.WithRunTools(s.frontendTools.RunTools()))
 	}
 	engine := chatapp.NewEngine(append(engineOptions, s.engineOptions...)...)
 	hub, err := sessionstream.NewHub(

@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	geptools "github.com/go-go-golems/geppetto/pkg/inference/tools"
 	chatappv1 "github.com/go-go-golems/pinocchio/pkg/chatapp/pb/proto/pinocchio/chatapp/v1"
 	chatstore "github.com/go-go-golems/pinocchio/pkg/persistence/chatstore"
 	sessionstream "github.com/go-go-golems/sessionstream/pkg/sessionstream"
@@ -71,6 +72,43 @@ type Engine struct {
 	errorText            func(code string, err error) string
 	unansweredToolResult string
 	usageObserver        UsageObserver
+	runTools             []RunToolsFunc
+}
+
+// RunScope identifies the run a RunToolsFunc prepares.
+type RunScope struct {
+	SessionID sessionstream.SessionId
+	MessageID string
+	// Publisher publishes into the session's event stream for this run.
+	Publisher sessionstream.EventPublisher
+}
+
+// RunTools is the tool setup of one run: the registry the model sees and the
+// executor that runs its calls. A nil Registry means a single model call
+// without tools.
+type RunTools struct {
+	Registry geptools.ToolRegistry
+	Executor geptools.ToolExecutor
+}
+
+// RunToolsFunc adjusts the tools of one run before it starts. It receives the
+// runtime's registry and executor (or what earlier functions returned) and
+// returns the ones to use, plus the run's context (e.g. with values the
+// executor needs). It must not modify the registry it receives: the runtime's
+// registry is shared between runs; clone it to add tools. An error fails the
+// run with code "tools_error".
+type RunToolsFunc func(ctx context.Context, run RunScope, tools RunTools) (context.Context, RunTools, error)
+
+// WithRunTools adds functions that adjust every run's tools, applied in
+// order. frontendtools.Manager.RunTools gives runs the page's browser tools.
+func WithRunTools(fns ...RunToolsFunc) Option {
+	return func(e *Engine) {
+		for _, fn := range fns {
+			if fn != nil {
+				e.runTools = append(e.runTools, fn)
+			}
+		}
+	}
 }
 
 // UsageObserver receives the token usage of every finished provider call of a

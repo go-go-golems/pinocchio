@@ -9,6 +9,7 @@ import (
 	"time"
 
 	geptools "github.com/go-go-golems/geppetto/pkg/inference/tools"
+	chatapp "github.com/go-go-golems/pinocchio/pkg/chatapp"
 	toolv1 "github.com/go-go-golems/pinocchio/pkg/chatapp/pb/proto/pinocchio/chatapp/frontendtools/v1"
 	"github.com/go-go-golems/sessionstream/pkg/sessionstream"
 	"github.com/invopop/jsonschema"
@@ -110,9 +111,10 @@ func (e *BridgeExecutor) ExecuteToolCall(ctx context.Context, call geptools.Tool
 		zlog.Error().Err(err).Str("session_id", string(bridge.SessionID)).Str("tool", frontendToolName).Str("provider_tool", call.Name).Str("tool_call_id", call.ID).Msg("frontend tool bridge request failed")
 		return &geptools.ToolResult{ID: call.ID, Error: err.Error(), Duration: time.Since(start)}, nil
 	}
-	out := map[string]any{}
+	// The page's result reaches the model as the JSON value it returned.
+	var out any
 	if result.GetResult() != nil {
-		out = result.GetResult().AsMap()
+		out = result.GetResult().AsInterface()
 	}
 	status := result.GetStatus()
 	if status == "" {
@@ -245,4 +247,45 @@ func (m *Manager) ResolveProviderToolName(sid sessionstream.SessionId, providerN
 		}
 	}
 	return ""
+}
+
+// RunTools returns a chatapp.RunToolsFunc that gives every run of a session
+// the browser tools its page registered (the session's manifest): it adds them
+// to a copy of the run's registry, routes their calls through a BridgeExecutor
+// (other calls go to the run's executor) and sets the BridgeContext. A
+// session without browser tools runs unchanged.
+//
+//	engine := chatapp.NewEngine(chatapp.WithRunTools(manager.RunTools()))
+//
+// httpapi.WithFrontendTools installs it.
+func (m *Manager) RunTools() chatapp.RunToolsFunc {
+	return func(ctx context.Context, run chatapp.RunScope, tools chatapp.RunTools) (context.Context, chatapp.RunTools, error) {
+		if m == nil || !m.hasAvailableTools(run.SessionID) {
+			return ctx, tools, nil
+		}
+		var registry geptools.ToolRegistry = geptools.NewInMemoryToolRegistry()
+		if tools.Registry != nil {
+			registry = tools.Registry.Clone()
+		}
+		if err := m.RegisterManifestTools(run.SessionID, registry); err != nil {
+			return ctx, tools, err
+		}
+		ctx = WithBridgeContext(ctx, BridgeContext{SessionID: run.SessionID, MessageID: run.MessageID, Publisher: run.Publisher})
+		return ctx, chatapp.RunTools{Registry: registry, Executor: NewBridgeExecutor(m, tools.Executor)}, nil
+	}
+}
+
+func (m *Manager) hasAvailableTools(sid sessionstream.SessionId) bool {
+	m.mu.Lock()
+	manifest := m.manifests[sid]
+	m.mu.Unlock()
+	if manifest == nil {
+		return false
+	}
+	for _, desc := range manifest.updated.GetTools() {
+		if desc != nil && desc.GetAvailable() && desc.GetName() != "" {
+			return true
+		}
+	}
+	return false
 }

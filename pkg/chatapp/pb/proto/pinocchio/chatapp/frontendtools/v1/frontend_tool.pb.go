@@ -440,13 +440,14 @@ func (x *FrontendToolCallRequested) GetExecutor() *FrontendToolExecutor {
 
 // FrontendToolResultCommand is submitted by the browser after it executes or rejects a tool call.
 type FrontendToolResultCommand struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	ToolCallId    string                 `protobuf:"bytes,1,opt,name=tool_call_id,json=toolCallId,proto3" json:"tool_call_id,omitempty"`
-	ToolName      string                 `protobuf:"bytes,2,opt,name=tool_name,json=toolName,proto3" json:"tool_name,omitempty"`
-	Result        *structpb.Struct       `protobuf:"bytes,3,opt,name=result,proto3" json:"result,omitempty"`
-	Status        string                 `protobuf:"bytes,4,opt,name=status,proto3" json:"status,omitempty"`
-	Error         string                 `protobuf:"bytes,5,opt,name=error,proto3" json:"error,omitempty"`
-	Executor      *FrontendToolExecutor  `protobuf:"bytes,6,opt,name=executor,proto3" json:"executor,omitempty"`
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	ToolCallId string                 `protobuf:"bytes,1,opt,name=tool_call_id,json=toolCallId,proto3" json:"tool_call_id,omitempty"`
+	ToolName   string                 `protobuf:"bytes,2,opt,name=tool_name,json=toolName,proto3" json:"tool_name,omitempty"`
+	// Any JSON value the tool returned (object, array, string, number, bool, null).
+	Result        *structpb.Value       `protobuf:"bytes,3,opt,name=result,proto3" json:"result,omitempty"`
+	Status        string                `protobuf:"bytes,4,opt,name=status,proto3" json:"status,omitempty"`
+	Error         string                `protobuf:"bytes,5,opt,name=error,proto3" json:"error,omitempty"`
+	Executor      *FrontendToolExecutor `protobuf:"bytes,6,opt,name=executor,proto3" json:"executor,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -495,7 +496,7 @@ func (x *FrontendToolResultCommand) GetToolName() string {
 	return ""
 }
 
-func (x *FrontendToolResultCommand) GetResult() *structpb.Struct {
+func (x *FrontendToolResultCommand) GetResult() *structpb.Value {
 	if x != nil {
 		return x.Result
 	}
@@ -529,7 +530,7 @@ type FrontendToolResultReceived struct {
 	MessageId     string                 `protobuf:"bytes,1,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
 	ToolCallId    string                 `protobuf:"bytes,2,opt,name=tool_call_id,json=toolCallId,proto3" json:"tool_call_id,omitempty"`
 	ToolName      string                 `protobuf:"bytes,3,opt,name=tool_name,json=toolName,proto3" json:"tool_name,omitempty"`
-	Result        *structpb.Struct       `protobuf:"bytes,4,opt,name=result,proto3" json:"result,omitempty"`
+	Result        *structpb.Value        `protobuf:"bytes,4,opt,name=result,proto3" json:"result,omitempty"`
 	Status        string                 `protobuf:"bytes,5,opt,name=status,proto3" json:"status,omitempty"`
 	Error         string                 `protobuf:"bytes,6,opt,name=error,proto3" json:"error,omitempty"`
 	Executor      *FrontendToolExecutor  `protobuf:"bytes,7,opt,name=executor,proto3" json:"executor,omitempty"`
@@ -588,7 +589,7 @@ func (x *FrontendToolResultReceived) GetToolName() string {
 	return ""
 }
 
-func (x *FrontendToolResultReceived) GetResult() *structpb.Struct {
+func (x *FrontendToolResultReceived) GetResult() *structpb.Value {
 	if x != nil {
 		return x.Result
 	}
@@ -625,7 +626,7 @@ type FrontendToolCallEntity struct {
 	Mode            ToolExecutionMode      `protobuf:"varint,4,opt,name=mode,proto3,enum=pinocchio.chatapp.frontendtools.v1.ToolExecutionMode" json:"mode,omitempty"`
 	Status          string                 `protobuf:"bytes,5,opt,name=status,proto3" json:"status,omitempty"`
 	Input           *structpb.Struct       `protobuf:"bytes,6,opt,name=input,proto3" json:"input,omitempty"`
-	Result          *structpb.Struct       `protobuf:"bytes,7,opt,name=result,proto3" json:"result,omitempty"`
+	Result          *structpb.Value        `protobuf:"bytes,7,opt,name=result,proto3" json:"result,omitempty"`
 	Error           string                 `protobuf:"bytes,8,opt,name=error,proto3" json:"error,omitempty"`
 	Executor        *FrontendToolExecutor  `protobuf:"bytes,9,opt,name=executor,proto3" json:"executor,omitempty"`
 	unknownFields   protoimpl.UnknownFields
@@ -704,7 +705,7 @@ func (x *FrontendToolCallEntity) GetInput() *structpb.Struct {
 	return nil
 }
 
-func (x *FrontendToolCallEntity) GetResult() *structpb.Struct {
+func (x *FrontendToolCallEntity) GetResult() *structpb.Value {
 	if x != nil {
 		return x.Result
 	}
@@ -758,25 +759,25 @@ const file_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_rawDesc = "" +
 	"\x05input\x18\x04 \x01(\v2\x17.google.protobuf.StructR\x05input\x12I\n" +
 	"\x04mode\x18\x05 \x01(\x0e25.pinocchio.chatapp.frontendtools.v1.ToolExecutionModeR\x04mode\x12\x16\n" +
 	"\x06status\x18\x06 \x01(\tR\x06status\x12T\n" +
-	"\bexecutor\x18\a \x01(\v28.pinocchio.chatapp.frontendtools.v1.FrontendToolExecutorR\bexecutor\"\x8f\x02\n" +
+	"\bexecutor\x18\a \x01(\v28.pinocchio.chatapp.frontendtools.v1.FrontendToolExecutorR\bexecutor\"\x8e\x02\n" +
 	"\x19FrontendToolResultCommand\x12 \n" +
 	"\ftool_call_id\x18\x01 \x01(\tR\n" +
 	"toolCallId\x12\x1b\n" +
-	"\ttool_name\x18\x02 \x01(\tR\btoolName\x12/\n" +
-	"\x06result\x18\x03 \x01(\v2\x17.google.protobuf.StructR\x06result\x12\x16\n" +
+	"\ttool_name\x18\x02 \x01(\tR\btoolName\x12.\n" +
+	"\x06result\x18\x03 \x01(\v2\x16.google.protobuf.ValueR\x06result\x12\x16\n" +
 	"\x06status\x18\x04 \x01(\tR\x06status\x12\x14\n" +
 	"\x05error\x18\x05 \x01(\tR\x05error\x12T\n" +
-	"\bexecutor\x18\x06 \x01(\v28.pinocchio.chatapp.frontendtools.v1.FrontendToolExecutorR\bexecutor\"\xaf\x02\n" +
+	"\bexecutor\x18\x06 \x01(\v28.pinocchio.chatapp.frontendtools.v1.FrontendToolExecutorR\bexecutor\"\xae\x02\n" +
 	"\x1aFrontendToolResultReceived\x12\x1d\n" +
 	"\n" +
 	"message_id\x18\x01 \x01(\tR\tmessageId\x12 \n" +
 	"\ftool_call_id\x18\x02 \x01(\tR\n" +
 	"toolCallId\x12\x1b\n" +
-	"\ttool_name\x18\x03 \x01(\tR\btoolName\x12/\n" +
-	"\x06result\x18\x04 \x01(\v2\x17.google.protobuf.StructR\x06result\x12\x16\n" +
+	"\ttool_name\x18\x03 \x01(\tR\btoolName\x12.\n" +
+	"\x06result\x18\x04 \x01(\v2\x16.google.protobuf.ValueR\x06result\x12\x16\n" +
 	"\x06status\x18\x05 \x01(\tR\x06status\x12\x14\n" +
 	"\x05error\x18\x06 \x01(\tR\x05error\x12T\n" +
-	"\bexecutor\x18\a \x01(\v28.pinocchio.chatapp.frontendtools.v1.FrontendToolExecutorR\bexecutor\"\xb2\x03\n" +
+	"\bexecutor\x18\a \x01(\v28.pinocchio.chatapp.frontendtools.v1.FrontendToolExecutorR\bexecutor\"\xb1\x03\n" +
 	"\x16FrontendToolCallEntity\x12 \n" +
 	"\ftool_call_id\x18\x01 \x01(\tR\n" +
 	"toolCallId\x12\x1b\n" +
@@ -784,8 +785,8 @@ const file_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_rawDesc = "" +
 	"\x11parent_message_id\x18\x03 \x01(\tR\x0fparentMessageId\x12I\n" +
 	"\x04mode\x18\x04 \x01(\x0e25.pinocchio.chatapp.frontendtools.v1.ToolExecutionModeR\x04mode\x12\x16\n" +
 	"\x06status\x18\x05 \x01(\tR\x06status\x12-\n" +
-	"\x05input\x18\x06 \x01(\v2\x17.google.protobuf.StructR\x05input\x12/\n" +
-	"\x06result\x18\a \x01(\v2\x17.google.protobuf.StructR\x06result\x12\x14\n" +
+	"\x05input\x18\x06 \x01(\v2\x17.google.protobuf.StructR\x05input\x12.\n" +
+	"\x06result\x18\a \x01(\v2\x16.google.protobuf.ValueR\x06result\x12\x14\n" +
 	"\x05error\x18\b \x01(\tR\x05error\x12T\n" +
 	"\bexecutor\x18\t \x01(\v28.pinocchio.chatapp.frontendtools.v1.FrontendToolExecutorR\bexecutor*\xa8\x01\n" +
 	"\x11ToolExecutionMode\x12#\n" +
@@ -819,6 +820,7 @@ var file_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_goTypes = []any{
 	(*FrontendToolResultReceived)(nil),  // 7: pinocchio.chatapp.frontendtools.v1.FrontendToolResultReceived
 	(*FrontendToolCallEntity)(nil),      // 8: pinocchio.chatapp.frontendtools.v1.FrontendToolCallEntity
 	(*structpb.Struct)(nil),             // 9: google.protobuf.Struct
+	(*structpb.Value)(nil),              // 10: google.protobuf.Value
 }
 var file_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_depIdxs = []int32{
 	9,  // 0: pinocchio.chatapp.frontendtools.v1.FrontendToolDescriptor.input_schema:type_name -> google.protobuf.Struct
@@ -829,13 +831,13 @@ var file_pinocchio_chatapp_frontendtools_v1_frontend_tool_proto_depIdxs = []int3
 	9,  // 5: pinocchio.chatapp.frontendtools.v1.FrontendToolCallRequested.input:type_name -> google.protobuf.Struct
 	0,  // 6: pinocchio.chatapp.frontendtools.v1.FrontendToolCallRequested.mode:type_name -> pinocchio.chatapp.frontendtools.v1.ToolExecutionMode
 	2,  // 7: pinocchio.chatapp.frontendtools.v1.FrontendToolCallRequested.executor:type_name -> pinocchio.chatapp.frontendtools.v1.FrontendToolExecutor
-	9,  // 8: pinocchio.chatapp.frontendtools.v1.FrontendToolResultCommand.result:type_name -> google.protobuf.Struct
+	10, // 8: pinocchio.chatapp.frontendtools.v1.FrontendToolResultCommand.result:type_name -> google.protobuf.Value
 	2,  // 9: pinocchio.chatapp.frontendtools.v1.FrontendToolResultCommand.executor:type_name -> pinocchio.chatapp.frontendtools.v1.FrontendToolExecutor
-	9,  // 10: pinocchio.chatapp.frontendtools.v1.FrontendToolResultReceived.result:type_name -> google.protobuf.Struct
+	10, // 10: pinocchio.chatapp.frontendtools.v1.FrontendToolResultReceived.result:type_name -> google.protobuf.Value
 	2,  // 11: pinocchio.chatapp.frontendtools.v1.FrontendToolResultReceived.executor:type_name -> pinocchio.chatapp.frontendtools.v1.FrontendToolExecutor
 	0,  // 12: pinocchio.chatapp.frontendtools.v1.FrontendToolCallEntity.mode:type_name -> pinocchio.chatapp.frontendtools.v1.ToolExecutionMode
 	9,  // 13: pinocchio.chatapp.frontendtools.v1.FrontendToolCallEntity.input:type_name -> google.protobuf.Struct
-	9,  // 14: pinocchio.chatapp.frontendtools.v1.FrontendToolCallEntity.result:type_name -> google.protobuf.Struct
+	10, // 14: pinocchio.chatapp.frontendtools.v1.FrontendToolCallEntity.result:type_name -> google.protobuf.Value
 	2,  // 15: pinocchio.chatapp.frontendtools.v1.FrontendToolCallEntity.executor:type_name -> pinocchio.chatapp.frontendtools.v1.FrontendToolExecutor
 	16, // [16:16] is the sub-list for method output_type
 	16, // [16:16] is the sub-list for method input_type

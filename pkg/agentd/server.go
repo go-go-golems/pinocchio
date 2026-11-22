@@ -400,11 +400,7 @@ func (s *Server) handleResult(w http.ResponseWriter, r *http.Request, ss *Sessio
 	if !readJSON(w, r, &in, 1<<20) {
 		return
 	}
-	value := map[string]any{"value": in.Value}
-	if m, ok := in.Value.(map[string]any); ok {
-		value = m
-	}
-	st, err := structpb.NewStruct(value)
+	st, err := structpb.NewValue(in.Value)
 	if err != nil {
 		fail(w, 400, "invalid_request", "value: "+err.Error())
 		return

@@ -44,7 +44,7 @@ type frontendToolResultRequest struct {
 	ToolCallID string               `json:"toolCallId"`
 	ToolName   string               `json:"toolName"`
 	Status     string               `json:"status"`
-	Result     map[string]any       `json:"result"`
+	Result     any                  `json:"result"`
 	Error      string               `json:"error"`
 	Executor   frontendToolExecutor `json:"executor"`
 }
@@ -164,9 +164,6 @@ func (s *Server) handleFrontendToolResult(w http.ResponseWriter, r *http.Request
 	if in.Status == "" {
 		in.Status = "success"
 	}
-	if in.Result == nil {
-		in.Result = map[string]any{}
-	}
 	if err := s.publishFrontendToolResult(r.Context(), sid, in); err != nil {
 		writeError(w, frontendToolResultErrorStatus(err), frontendToolErrorCode(err), err)
 		return
@@ -204,7 +201,7 @@ func (s *Server) publishFrontendToolResult(ctx context.Context, sid sessionstrea
 	if s == nil || s.service == nil {
 		return fmt.Errorf("server is not initialized")
 	}
-	resultPayload, err := structpb.NewStruct(result.Result)
+	resultPayload, err := structpb.NewValue(result.Result)
 	if err != nil {
 		return fmt.Errorf("encode frontend tool result: %w", err)
 	}

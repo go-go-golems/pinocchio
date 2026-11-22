@@ -837,3 +837,72 @@ func writeClientFrame(t *testing.T, conn *websocket.Conn, payload map[string]any
 	require.NoError(t, err)
 	require.NoError(t, conn.WriteMessage(websocket.TextMessage, bytes.TrimSpace(body)))
 }
+
+// pageToolEngine calls the page's "page.read" browser tool (provider name
+// "page_read") once, then answers with what the page returned.
+type pageToolEngine struct{}
+
+func (pageToolEngine) RunInference(_ context.Context, t *turns.Turn) (*turns.Turn, error) {
+	for _, b := range t.Blocks {
+		if b.Kind == turns.BlockKindToolUse {
+			turns.AppendBlock(t, turns.NewAssistantTextBlock(fmt.Sprintf("the page says: %v", b.Payload[turns.PayloadKeyResult])))
+			return t, nil
+		}
+	}
+	turns.AppendBlock(t, turns.NewToolCallBlock("call-page-1", "page_read", map[string]any{"selector": "#title"}))
+	return t, nil
+}
+
+func TestBrowserToolRoundTripThroughHTTP(t *testing.T) {
+	_, httpSrv := newTestServer(t,
+		WithFrontendTools(frontendtools.NewManager()),
+		WithChatPlugins(frontendtools.NewPlugin()),
+		// No registry of its own: the page's tools are the run's only tools.
+		WithRuntimeResolver(RuntimeResolverFunc(func(context.Context, *http.Request, sessions.Info, MessageRequest) (*infruntime.ComposedRuntime, error) {
+			return &infruntime.ComposedRuntime{Engine: pageToolEngine{}}, nil
+		})))
+	base := httpSrv.URL + "/api/chat/sessions/"
+	id := createSession(t, httpSrv.URL, ``).SessionID
+
+	resp, out := do(t, http.MethodPost, base+id+"/tools/manifest", `{"clientInstanceId":"tab-1","connectionId":"conn-1","revision":1,"tools":[{"name":"page.read","description":"Read the page","mode":"frontend","inputSchema":{"type":"object","properties":{"selector":{"type":"string"}}},"available":true}]}`)
+	require.Equal(t, http.StatusOK, resp.StatusCode, string(out))
+	var manifest frontendToolManifestResponse
+	require.NoError(t, json.Unmarshal(out, &manifest))
+	executor, err := json.Marshal(manifest.Executor)
+	require.NoError(t, err)
+
+	events, cancel := readSSE(t, base+id+"/events")
+	defer cancel()
+	resp, _ = do(t, http.MethodPost, base+id+"/messages", `{"prompt":"what is the title?"}`)
+	require.Equal(t, http.StatusAccepted, resp.StatusCode)
+
+	var requested map[string]any
+	timeout := time.After(3 * time.Second)
+	for requested == nil {
+		select {
+		case ev := <-events:
+			if ev.event != "ui" {
+				continue
+			}
+			var msg struct {
+				Name    string         `json:"name"`
+				Payload map[string]any `json:"payload"`
+			}
+			require.NoError(t, json.Unmarshal([]byte(ev.data), &msg))
+			if msg.Name == frontendtools.EventCallRequested {
+				requested = msg.Payload
+			}
+		case <-timeout:
+			t.Fatal("the browser tool call was never requested")
+		}
+	}
+	require.Equal(t, "call-page-1", requested["toolCallId"])
+	require.Equal(t, "page.read", requested["toolName"])
+
+	// A string result, not an object: the model gets exactly that JSON value.
+	resp, out = do(t, http.MethodPost, base+id+"/tools/results", fmt.Sprintf(`{"toolCallId":"call-page-1","toolName":"page.read","status":"success","result":"Hello from the page","executor":%s}`, executor))
+	require.Equal(t, http.StatusOK, resp.StatusCode, string(out))
+
+	got := waitForFinished(t, httpSrv.URL, id)
+	require.Equal(t, `the page says: "Hello from the page"`, entityTexts(got.Snapshot)["assistant"])
+}
