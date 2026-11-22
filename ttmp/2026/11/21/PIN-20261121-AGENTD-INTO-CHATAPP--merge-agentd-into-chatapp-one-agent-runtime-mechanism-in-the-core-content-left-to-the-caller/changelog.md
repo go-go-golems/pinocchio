@@ -37,3 +37,12 @@ Phase 3 (9a08f24): pkg/chatapp/httpapi replaces web-chat's appserver: session ro
 
 - /home/manuel/workspaces/2026-10-28/slop-computer/pinocchio/pkg/chatapp/httpapi/server.go — server options, route table, transports fanout
 - /home/manuel/workspaces/2026-10-28/slop-computer/pinocchio/pkg/chatapp/httpapi/sse.go — SSE hydration buffer and live delivery
+
+## 2026-11-22
+
+Phase 4 (11da2fa, 7cbef6f): chatapp.WithRunTools + frontendtools.Manager.RunTools (runs get the page's browser tools); frontendtools results are google.protobuf.Value; toolkit/toolexec, toolkit/budget, toolkit/presets
+
+### Related Files
+
+- /home/manuel/workspaces/2026-10-28/slop-computer/pinocchio/pkg/chatapp/frontendtools/bridge.go — Manager.RunTools wires browser tools into runs
+- /home/manuel/workspaces/2026-10-28/slop-computer/pinocchio/pkg/chatapp/toolkit/toolexec/toolexec.go — deadline and result-cut middlewares

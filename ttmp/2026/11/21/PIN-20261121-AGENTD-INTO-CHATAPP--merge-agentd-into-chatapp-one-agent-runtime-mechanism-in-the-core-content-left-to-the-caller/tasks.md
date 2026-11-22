@@ -11,8 +11,8 @@
 - [x] Phase 2: sessions package (Info, Store, memory store) and usage plugin <!-- t:p3xi -->
 - [x] Phase 3: pkg/chatapp/httpapi promoted from web-chat appserver, session routes, stop, auth hooks <!-- t:wz8o -->
 - [x] Phase 3: SSE transport (snapshot then live, gap-free) and fanout multiplexer; web-chat switched <!-- t:fxol -->
-- [ ] Phase 4: chatapp wires browser tools; frontendtools results as any JSON value <!-- t:4wjv -->
-- [ ] Phase 4: toolkit: toolexec WithDeadline/CutResults, budget.SessionTokens, presets loader <!-- t:timy -->
+- [x] Phase 4: chatapp wires browser tools; frontendtools results as any JSON value <!-- t:4wjv -->
+- [x] Phase 4: toolkit: toolexec WithDeadline/CutResults, budget.SessionTokens, presets loader <!-- t:timy -->
 - [ ] Phase 5: pinocchio agent serve on httpapi + presets + modelsource; delete pkg/agentd <!-- t:pigi -->
 - [ ] Migration playbook for homolog-bench written <!-- t:6h9p -->
 - [ ] Final validation: go test ./..., make lint, docmgr doctor <!-- t:b246 -->

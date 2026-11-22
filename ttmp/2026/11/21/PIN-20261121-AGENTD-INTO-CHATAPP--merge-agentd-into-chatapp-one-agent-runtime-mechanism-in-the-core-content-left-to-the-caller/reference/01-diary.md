@@ -509,3 +509,100 @@ Commit 9a08f24. `go test ./...` passes in pinocchio (httpapi and sessions also u
 - Error answers: `{"error": "...", "code": "..."}` with codes `invalid_request`, `request_too_large`,
   `invalid_session_id`, `session_not_found`, `session_exists`, `unauthenticated`, `forbidden`, `run_active`,
   `runtime_error` (or the resolver's `CodedError` code), `no_runtime`, `frontend_tools_disabled`, `internal_error`.
+
+## Step 6: Phase 4 — browser tools in every run, results of any JSON type, the toolkit
+
+This step made chatapp's runs use the page's browser tools, which until now only agentd wired, and let a browser
+tool return any JSON value. It also added three optional helper packages: per-call deadlines and result cuts, a
+session token budget, and agentd's preset files as plain data.
+
+Commits 11da2fa (tools) and 7cbef6f (toolkit). `go test ./...` passes; the hook passed both times on the first
+attempt, including `web-check` for the regenerated TypeScript.
+
+### Prompt Context
+**User prompt (verbatim):** see Step 1.
+**Assistant interpretation:** Implement phase 4: "chatapp wires browser tools; frontendtools results as any JSON value"
+and "toolkit: toolexec WithDeadline/CutResults, budget.SessionTokens, presets loader".
+**Inferred user intent:** homolog-bench gets the same browser-tool behavior from chatapp that agentd gave it, plus the
+limits it relied on, without any of them being chatapp's content.
+**Commit (code):** 11da2fa — "chatapp: runs get the page's browser tools; tool results are any JSON value";
+7cbef6f — "chatapp/toolkit: tool deadlines and result cuts, session token budgets, presets"
+
+### What I did
+- `pkg/chatapp/chat.go`: `RunScope{SessionID, MessageID, Publisher}`, `RunTools{Registry, Executor, Config}` with
+  `ExecutorOrDefault()`, `RunToolsFunc`, `WithRunTools`. `runtime_inference.go` applies the functions after
+  `PromptRequest.RuntimeContext` and before building the run; an error fails the run with `CodeToolsError`
+  (`"tools_error"`).
+- `pkg/chatapp/frontendtools/bridge.go`: `(*Manager).RunTools()`; sessions without available tools run unchanged.
+  `httpapi.WithFrontendTools` installs it.
+- `proto/pinocchio/chatapp/frontendtools/v1/frontend_tool.proto`: the three `result` fields became
+  `google.protobuf.Value`; regenerated with `scripts/01-proto-gen-local.sh` (only the frontendtools Go and TS files
+  changed). `BridgeExecutor` gives the model `AsInterface()`; httpapi's result route accepts `result` of any JSON type;
+  agentd's result route passes its value through (agentd is deleted in phase 5).
+- `pkg/chatapp/toolkit/toolexec`: `Middleware`, `Chain`, `Deadline`, `CutResults`, `RunTools`,
+  `DefaultDeadlineMessage`, `DefaultCutNote`.
+- `pkg/chatapp/toolkit/budget`: `SessionTokens(store, limit)`, `QuotaExceededError` (`Code() == "quota_exceeded"`),
+  `All`.
+- `pkg/chatapp/toolkit/presets`: `Preset`, `LoadFile`, `Load`, `Names`, `Duration`.
+- Tests: `TestBrowserToolRoundTripThroughHTTP` (manifest → message → `ChatFrontendToolCallRequested` over SSE →
+  string result posted → answer `the page says: "Hello from the page"`); chatapp hook tests; toolexec, budget (a real
+  chatapp tool loop stopped by the guard after two model calls) and presets tests.
+
+### Why
+- A hook in chatapp rather than chatapp calling frontendtools: `pkg/chatapp/frontendtools/plugin.go` imports
+  `chatapp` (`chatapp.ChatPlugin`), so the other direction would be an import cycle. The hook is also what any other
+  tool source needs.
+- `RunTools.Config` and `ExecutorOrDefault`: geppetto's loop builds its default executor from the run's
+  `ToolConfig` only when the executor is nil (`toolloop/loop.go:361-363`). A wrapper around a nil executor has to
+  build that default itself, and `NewBridgeExecutor(m, nil)` used `DefaultToolConfig()`, dropping the runtime's
+  timeouts and parallelism.
+- `Value` instead of the guide's fallback (wrapping inside frontendtools): chat-provider posts objects
+  (`normalizeRecord` in `tools/toolRuntime.js`) and reads `payload.result` from JSON, not through generated types, and
+  web-chat's own source does not import the generated frontendtools types. An object encodes the same as a `Struct`
+  or a `Value`, so nothing on the wire changed for them.
+- The toolkit's messages are parameters: agentd's `TimeoutMessage` and cut note told the model how to behave ("Do not
+  wait in loops…"), which is content.
+
+### What worked
+- The browser-tool round trip passed on its first run.
+- The budget test confirmed that the loop's context carries the geppetto session id (`WithSessionMeta` in
+  `session.go:282`), so a single guard serves every session.
+
+### What didn't work
+- `go build` after the proto change: `result.GetResult().AsMap undefined (type *structpb.Value has no field or method
+  AsMap)` in `bridge.go:115`, then `cannot use st (variable of type *structpb.Struct) as *structpb.Value` in
+  `pkg/agentd/server.go:413`, then the frontendtools tests (`resultCommand` helper and `AsMap` reads). Fixed each.
+- `pkg/chatapp/runtime_inference.go:121:88: undefined: geptools` after adding `RunTools.Config`: goimports did not
+  add the import (two candidates with the same name); added it by hand.
+- `TestCutResults` failed with `expected: "{\"a\":1|++"`, `actual: "{\"a\":|++"`: my expectation was wrong
+  (`{"a":1}` is 7 characters; 5 kept, 2 cut).
+
+### What I learned
+- geppetto's loop JSON-encodes every tool result into the `tool_use` block (`toolloop/loop.go:177-182`), so a string
+  result reaches the model with quotes: exactly the JSON value.
+- web-chat accepted browser-tool manifests, but its runs never offered those tools to the model: nothing outside
+  agentd set the bridge context.
+
+### What was tricky to build
+- Order of executor wrappers. frontendtools routes browser calls before the runtime's executor, so a deadline set on
+  `ComposedRuntime.ToolExecutor` would not cover them. `toolexec.RunTools` wraps the run's final executor and has to
+  be installed after `Manager.RunTools`; with httpapi that holds because httpapi's own engine options come before
+  `WithEngineOptions`.
+
+### What warrants a second pair of eyes
+- `Deadline` runs a batch one call at a time (as `BridgeExecutor` already does); with in-process tools that are
+  normally run in parallel, adding a deadline makes them sequential.
+- `SessionTokens` fails closed on store errors other than not-found.
+
+### What should be done in the future
+- `frontendtools` tab liveness (fail a browser call whose executor connection is gone), noted in the guide's 7.5.
+
+### Code review instructions
+- `pkg/chatapp/chat.go` (`RunTools` types), `pkg/chatapp/runtime_inference.go` (the loop over `e.runTools`),
+  `pkg/chatapp/frontendtools/bridge.go` (`RunTools`), `pkg/chatapp/toolkit/*`.
+- `go test ./pkg/chatapp/... -run 'RunTools|BrowserTool|Budget|Cut|Deadline|Load'`
+
+### Technical details
+- Installing everything with httpapi:
+  `httpapi.New(httpapi.WithFrontendTools(m), httpapi.WithEngineOptions(chatapp.WithRunTools(toolexec.RunTools(toolexec.Deadline(2*time.Minute, msg), toolexec.CutResults(9000, note)))), ...)`
+  and per run `ComposedRuntime{RoundGuard: budget.SessionTokens(srv.Sessions(), limit)}`.
